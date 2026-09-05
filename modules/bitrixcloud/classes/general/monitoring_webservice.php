@@ -11,7 +11,7 @@ class CBitrixCloudMonitoringWebService extends CBitrixCloudWebService
 	/**
 	 * Returns URL to backup webservice
 	 *
-	 * @param array[string]string $arParams
+	 * @param array $arParams
 	 * @return string
 	 *
 	 */
@@ -83,7 +83,7 @@ class CBitrixCloudMonitoringWebService extends CBitrixCloudWebService
 
 	/**
 	 *
-	 * @return CDataXML
+	 * @return void
 	 * @throws CBitrixCloudException
 	 */
 	public function actionStart($domain, $is_https, $language_id, $emails, $tests)
@@ -123,12 +123,10 @@ class CBitrixCloudMonitoringWebService extends CBitrixCloudWebService
 		$devices = $option->getArrayValue();
 		foreach ($devices as $domain_device)
 		{
-			if (list ($myDomain, $myDevice) = explode('|', $domain_device, 2))
+			list ($myDomain, $myDevice) = explode('|', $domain_device, 2);
+			if ($myDomain === $domain)
 			{
-				if ($myDomain === $domain)
-				{
-					$this->addStr .= '&ar_devices[]=' . urlencode($myDevice);
-				}
+				$this->addStr .= '&ar_devices[]=' . urlencode($myDevice);
 			}
 		}
 
@@ -156,8 +154,13 @@ class CBitrixCloudMonitoringWebService extends CBitrixCloudWebService
 	 * @return CDataXML
 	 * @throws CBitrixCloudException
 	 */
-	public function actionGetInfo()
+	public function actionGetInfo($interval = false)
 	{
+		if ($interval === false)
+		{
+			$interval = COption::GetOptionString('bitrixcloud', 'monitoring_interval');
+		}
+
 		$this->addStr = '';
 		$this->addParams = [
 			'lang' => LANGUAGE_ID,

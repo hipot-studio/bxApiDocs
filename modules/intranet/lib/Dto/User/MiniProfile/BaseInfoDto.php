@@ -10,12 +10,13 @@ class BaseInfoDto implements \JsonSerializable
 		public int $id,
 		public string $name,
 		public string $workPosition,
-		public int $utcOffset,
-		public array $status,
+		public ?int $utcOffset,
+		public ?array $status,
 		public string $role,
 		public string $url,
 		public ?string $avatar = null,
 		public ?string $personalGender = null,
+		public bool $isSystemUser = false,
 	) {}
 
 	public function jsonSerialize(): array
@@ -30,6 +31,7 @@ class BaseInfoDto implements \JsonSerializable
 			'role' => $this->role,
 			'url' => $this->url,
 			'personalGender' => $this->personalGender,
+			'isSystemUser' => $this->isSystemUser,
 		];
 	}
 }

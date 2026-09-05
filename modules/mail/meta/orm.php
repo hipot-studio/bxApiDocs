@@ -1988,6 +1988,396 @@ namespace Bitrix\Mail\Internals {
 	 */
 	class EO_UserSignature_Entity extends \Bitrix\Main\ORM\Entity {}
 }
+/* ORMENTITYANNOTATION:Bitrix\Mail\Internals\SharedSignatureTable:mail/lib/internals/sharedsignature.php */
+namespace Bitrix\Mail\Internals {
+	/**
+	 * SharedSignature
+	 * @see \Bitrix\Mail\Internals\SharedSignatureTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getCreatedBy()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature setCreatedBy(\int|\Bitrix\Main\DB\SqlExpression $createdBy)
+	 * @method bool hasCreatedBy()
+	 * @method bool isCreatedByFilled()
+	 * @method bool isCreatedByChanged()
+	 * @method \int remindActualCreatedBy()
+	 * @method \int requireCreatedBy()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature resetCreatedBy()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature unsetCreatedBy()
+	 * @method \int fillCreatedBy()
+	 * @method \int getOwnerId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature setOwnerId(\int|\Bitrix\Main\DB\SqlExpression $ownerId)
+	 * @method bool hasOwnerId()
+	 * @method bool isOwnerIdFilled()
+	 * @method bool isOwnerIdChanged()
+	 * @method \int remindActualOwnerId()
+	 * @method \int requireOwnerId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature resetOwnerId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature unsetOwnerId()
+	 * @method \int fillOwnerId()
+	 * @method \string getScope()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature setScope(\string|\Bitrix\Main\DB\SqlExpression $scope)
+	 * @method bool hasScope()
+	 * @method bool isScopeFilled()
+	 * @method bool isScopeChanged()
+	 * @method \string remindActualScope()
+	 * @method \string requireScope()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature resetScope()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature unsetScope()
+	 * @method \string fillScope()
+	 * @method \string getSignature()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature setSignature(\string|\Bitrix\Main\DB\SqlExpression $signature)
+	 * @method bool hasSignature()
+	 * @method bool isSignatureFilled()
+	 * @method bool isSignatureChanged()
+	 * @method \string remindActualSignature()
+	 * @method \string requireSignature()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature resetSignature()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature unsetSignature()
+	 * @method \string fillSignature()
+	 * @method \int getLegacyId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature setLegacyId(\int|\Bitrix\Main\DB\SqlExpression $legacyId)
+	 * @method bool hasLegacyId()
+	 * @method bool isLegacyIdFilled()
+	 * @method bool isLegacyIdChanged()
+	 * @method \int remindActualLegacyId()
+	 * @method \int requireLegacyId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature resetLegacyId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature unsetLegacyId()
+	 * @method \int fillLegacyId()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature resetDateCreate()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime getDateModify()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature setDateModify(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateModify)
+	 * @method bool hasDateModify()
+	 * @method bool isDateModifyFilled()
+	 * @method bool isDateModifyChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateModify()
+	 * @method \Bitrix\Main\Type\DateTime requireDateModify()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature resetDateModify()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature unsetDateModify()
+	 * @method \Bitrix\Main\Type\DateTime fillDateModify()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature set($fieldName, $value)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature reset($fieldName)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Mail\Internals\Entity\SharedSignature wakeUp($data)
+	 */
+	class EO_SharedSignature extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Mail\Internals\SharedSignatureTable */
+		static public $dataClass = '\Bitrix\Mail\Internals\SharedSignatureTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Mail\Internals {
+	/**
+	 * EO_SharedSignature_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getCreatedByList()
+	 * @method \int[] fillCreatedBy()
+	 * @method \int[] getOwnerIdList()
+	 * @method \int[] fillOwnerId()
+	 * @method \string[] getScopeList()
+	 * @method \string[] fillScope()
+	 * @method \string[] getSignatureList()
+	 * @method \string[] fillSignature()
+	 * @method \int[] getLegacyIdList()
+	 * @method \int[] fillLegacyId()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateModifyList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateModify()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Mail\Internals\Entity\SharedSignature $object)
+	 * @method bool has(\Bitrix\Mail\Internals\Entity\SharedSignature $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature getByPrimary($primary)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature[] getAll()
+	 * @method bool remove(\Bitrix\Mail\Internals\Entity\SharedSignature $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Mail\Internals\EO_SharedSignature_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignature_Collection merge(?\Bitrix\Mail\Internals\EO_SharedSignature_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature|null find(callable $callback)
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignature_Collection filter(callable $callback)
+	 */
+	class EO_SharedSignature_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Mail\Internals\SharedSignatureTable */
+		static public $dataClass = '\Bitrix\Mail\Internals\SharedSignatureTable';
+	}
+}
+namespace Bitrix\Mail\Internals {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_SharedSignature_Result exec()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature fetchObject()
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignature_Collection fetchCollection()
+	 */
+	class EO_SharedSignature_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature fetchObject()
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignature_Collection fetchCollection()
+	 */
+	class EO_SharedSignature_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature createObject($setDefaultValues = true)
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignature_Collection createCollection()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignature wakeUpObject($row)
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignature_Collection wakeUpCollection($rows)
+	 */
+	class EO_SharedSignature_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Mail\Internals\SharedSignatureAssignmentTable:mail/lib/internals/sharedsignatureassignment.php */
+namespace Bitrix\Mail\Internals {
+	/**
+	 * SharedSignatureAssignment
+	 * @see \Bitrix\Mail\Internals\SharedSignatureAssignmentTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getSignatureId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment setSignatureId(\int|\Bitrix\Main\DB\SqlExpression $signatureId)
+	 * @method bool hasSignatureId()
+	 * @method bool isSignatureIdFilled()
+	 * @method bool isSignatureIdChanged()
+	 * @method \int remindActualSignatureId()
+	 * @method \int requireSignatureId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment resetSignatureId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment unsetSignatureId()
+	 * @method \int fillSignatureId()
+	 * @method \string getTargetType()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment setTargetType(\string|\Bitrix\Main\DB\SqlExpression $targetType)
+	 * @method bool hasTargetType()
+	 * @method bool isTargetTypeFilled()
+	 * @method bool isTargetTypeChanged()
+	 * @method \string remindActualTargetType()
+	 * @method \string requireTargetType()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment resetTargetType()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment unsetTargetType()
+	 * @method \string fillTargetType()
+	 * @method \int getTargetId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment setTargetId(\int|\Bitrix\Main\DB\SqlExpression $targetId)
+	 * @method bool hasTargetId()
+	 * @method bool isTargetIdFilled()
+	 * @method bool isTargetIdChanged()
+	 * @method \int remindActualTargetId()
+	 * @method \int requireTargetId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment resetTargetId()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment unsetTargetId()
+	 * @method \int fillTargetId()
+	 * @method \string getTargetValue()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment setTargetValue(\string|\Bitrix\Main\DB\SqlExpression $targetValue)
+	 * @method bool hasTargetValue()
+	 * @method bool isTargetValueFilled()
+	 * @method bool isTargetValueChanged()
+	 * @method \string remindActualTargetValue()
+	 * @method \string requireTargetValue()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment resetTargetValue()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment unsetTargetValue()
+	 * @method \string fillTargetValue()
+	 * @method \boolean getIsFlat()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment setIsFlat(\boolean|\Bitrix\Main\DB\SqlExpression $isFlat)
+	 * @method bool hasIsFlat()
+	 * @method bool isIsFlatFilled()
+	 * @method bool isIsFlatChanged()
+	 * @method \boolean remindActualIsFlat()
+	 * @method \boolean requireIsFlat()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment resetIsFlat()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment unsetIsFlat()
+	 * @method \boolean fillIsFlat()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment resetDateCreate()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment set($fieldName, $value)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment reset($fieldName)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method mixed fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment wakeUp($data)
+	 */
+	class EO_SharedSignatureAssignment extends \Bitrix\Main\ORM\Objectify\EntityObject {
+		/* @var \Bitrix\Mail\Internals\SharedSignatureAssignmentTable */
+		static public $dataClass = '\Bitrix\Mail\Internals\SharedSignatureAssignmentTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Mail\Internals {
+	/**
+	 * EO_SharedSignatureAssignment_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getSignatureIdList()
+	 * @method \int[] fillSignatureId()
+	 * @method \string[] getTargetTypeList()
+	 * @method \string[] fillTargetType()
+	 * @method \int[] getTargetIdList()
+	 * @method \int[] fillTargetId()
+	 * @method \string[] getTargetValueList()
+	 * @method \string[] fillTargetValue()
+	 * @method \boolean[] getIsFlatList()
+	 * @method \boolean[] fillIsFlat()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Mail\Internals\Entity\SharedSignatureAssignment $object)
+	 * @method bool has(\Bitrix\Mail\Internals\Entity\SharedSignatureAssignment $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment getByPrimary($primary)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment[] getAll()
+	 * @method bool remove(\Bitrix\Mail\Internals\Entity\SharedSignatureAssignment $object)
+	 * @method void removeByPrimary($primary)
+	 * @method array|\Bitrix\Main\ORM\Objectify\Collection|null fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Mail\Internals\EO_SharedSignatureAssignment_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignatureAssignment_Collection merge(?\Bitrix\Mail\Internals\EO_SharedSignatureAssignment_Collection $collection)
+	 * @method bool isEmpty()
+	 * @method array collectValues(int $valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, int $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL, bool $recursive = false)
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment|null find(callable $callback)
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignatureAssignment_Collection filter(callable $callback)
+	 */
+	class EO_SharedSignatureAssignment_Collection extends \Bitrix\Main\ORM\Objectify\Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Mail\Internals\SharedSignatureAssignmentTable */
+		static public $dataClass = '\Bitrix\Mail\Internals\SharedSignatureAssignmentTable';
+	}
+}
+namespace Bitrix\Mail\Internals {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_SharedSignatureAssignment_Result exec()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment fetchObject()
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignatureAssignment_Collection fetchCollection()
+	 */
+	class EO_SharedSignatureAssignment_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment fetchObject()
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignatureAssignment_Collection fetchCollection()
+	 */
+	class EO_SharedSignatureAssignment_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment createObject($setDefaultValues = true)
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignatureAssignment_Collection createCollection()
+	 * @method \Bitrix\Mail\Internals\Entity\SharedSignatureAssignment wakeUpObject($row)
+	 * @method \Bitrix\Mail\Internals\EO_SharedSignatureAssignment_Collection wakeUpCollection($rows)
+	 */
+	class EO_SharedSignatureAssignment_Entity extends \Bitrix\Main\ORM\Entity {}
+}
 /* ORMENTITYANNOTATION:Bitrix\Mail\Internals\MailCounterTable:mail/lib/internals/mailcounter.php */
 namespace Bitrix\Mail\Internals {
 	/**

@@ -50,6 +50,7 @@ class UnconfirmBookingCommandHandler
 
 				// update booking with unconfirmed flag
 				$booking->setConfirmed(false);
+				$booking->setConfirmedAt(null);
 				$this->bookingRepository->save($booking);
 
 				// fire new BookingUnconfirmed event

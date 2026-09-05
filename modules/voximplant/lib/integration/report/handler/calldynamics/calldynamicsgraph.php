@@ -98,11 +98,7 @@ class CallDynamicsGraph extends Base implements IReportMultipleData
 			return [];
 		}
 
-		\CTimeZone::Disable();
-		$result = $this->getQueryForReport()->exec()->fetchAll();
-		\CTimeZone::Enable();
-
-		return $result;
+		return $this->getQueryForReport()->exec()->fetchAll();
 	}
 
 	/**

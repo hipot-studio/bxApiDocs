@@ -19,10 +19,12 @@ abstract class BaseAnalyticEvent
 
 	abstract public function getEventName(): string;
 
-	public function send(Status $status): void
+	public function send(Status $status, int $userId): void
 	{
 		$event = $this->getAnalyticEvent()
-			->setStatus($status->value);
+			->setStatus($status->value)
+			->setUserId($userId)
+		;
 
 		if (!empty($this->shareType))
 		{

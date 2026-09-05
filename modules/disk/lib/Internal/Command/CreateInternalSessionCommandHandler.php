@@ -7,6 +7,7 @@ use Bitrix\Disk\Document\DocumentSessionResult;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionContext;
+use Bitrix\Disk\Document\SessionManager;
 use Bitrix\Disk\File;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main\Application;
@@ -45,7 +46,7 @@ class CreateInternalSessionCommandHandler
 		$command->sessionManager
 			->setUserId((int)CurrentUser::get()->getId())
 			->setSessionType($command->type)
-			->setService($this->getSessionServiceByFile($fileFromSource))
+			->setService($this->resolveSessionService($command->sessionManager, $fileFromSource))
 			->setSessionContext($documentSessionContext)
 			->setFile($command->documentSource->getFile())
 			->setVersion($command->documentSource->getVersion())
@@ -86,14 +87,16 @@ class CreateInternalSessionCommandHandler
 		return $result;
 	}
 
-	private function getSessionServiceByFile(File $file): DocumentService
+	private function resolveSessionService(SessionManager $sessionManager, File $file): DocumentService
 	{
-		$typeFile = (int)$file->getTypeFile();
-
-		return match ($typeFile)
+		// Flipchart files keep their dedicated service regardless of the manager (board editing).
+		if ((int)$file->getTypeFile() === TypeFile::FLIPCHART)
 		{
-			TypeFile::FLIPCHART => DocumentService::FlipChart,
-			default => DocumentService::OnlyOffice,
-		};
+			return DocumentService::FlipChart;
+		}
+
+		// Honor the manager's declared engine (OnlyOffice/Vibeoffice); default to OnlyOffice
+		// to preserve historical behavior for the OnlyOffice manager.
+		return $sessionManager->getService() ?? DocumentService::OnlyOffice;
 	}
 }

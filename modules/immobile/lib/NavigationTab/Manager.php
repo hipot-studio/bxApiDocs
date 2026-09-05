@@ -2,7 +2,6 @@
 
 namespace Bitrix\ImMobile\NavigationTab;
 
-use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Folder\FolderCollection;
 use Bitrix\Im\V2\Folder\FolderProvider;
 use Bitrix\Im\V2\Folder\System\SystemFolder;
@@ -127,21 +126,18 @@ class Manager
 
 	private function getCacheId($additionalString = ''): string
 	{
-		if (Features::get()->isChatFoldersAvailable)
+		$folders = $this->getFolderCollection();
+		if ($folders->count() > 0)
 		{
-			$folders = $this->getFolderCollection();
-			if ($folders->count() > 0)
+			$folderIds = [];
+			foreach ($folders as $folder)
 			{
-				$folderIds = [];
-				foreach ($folders as $folder)
+				if ($folder->getId() !== null)
 				{
-					if ($folder->getId() !== null)
-					{
-						$folderIds[] = $folder->getId();
-					}
+					$folderIds[] = $folder->getId();
 				}
-				return 'chat_tabs_folders_' . hash('sha256', implode(',', $folderIds) . $additionalString);
 			}
+			return 'chat_tabs_folders_' . hash('sha256', implode(',', $folderIds) . $additionalString);
 		}
 
 		// fallback: preset-mode
@@ -181,11 +177,6 @@ class Manager
 		if ($this->context->isGuest)
 		{
 			return $this->getGuestPreset();
-		}
-
-		if (!Features::get()->isChatFoldersAvailable)
-		{
-			return $this->getDefaultPresetByContext();
 		}
 
 		$folders = $this->getFolderCollection();
@@ -411,8 +402,6 @@ class Manager
 			'IS_CHAT_LOCAL_STORAGE_AVAILABLE' => Settings::isChatLocalStorageAvailable(),
 			'IS_MARKDOWN_PARSER_ENABLED' => Settings::isMarkdownParserEnabled(),
 			'IS_OPENLINES_IN_MESSENGER_V2_AVAILABLE' => Settings::isOpenlinesInMessengerV2Available(),
-			'IS_RECENT_FILTER_AVAILABLE' => Settings::isRecentFilterAvailable(),
-			'IS_EXTERNAL_CHAT_MESSAGE_FORWARDING_AVAILABLE' => Settings::isExternalChatMessageForwardingAvailable(),
 			'IS_TASKS_RECENT_LIST_AVAILABLE' => Settings::isTasksRecentListAvailable(),
 			'IS_MARKET_AVAILABLE' => Settings::isMarketAvailable(),
 			'IS_VIBECODE_BUTTON_AVAILABLE' => Settings::isVibecodeButtonAvailable(),
@@ -454,6 +443,14 @@ class Manager
 			return $this->folderCollectionCache;
 		}
 
+		// guests never see folder tabs; skip folder bootstrap (ensureSystemFolders) for them
+		if ($this->context->isGuest)
+		{
+			$this->folderCollectionCache = new FolderCollection();
+
+			return $this->folderCollectionCache;
+		}
+
 		$userId = (int)$this->context->userId;
 		$this->folderCollectionCache = ServiceLocator::getInstance()
 			->get(FolderProvider::class)
@@ -466,11 +463,6 @@ class Manager
 
 	private function getStartupFolderList(): array
 	{
-		if (!Features::get()->isChatFoldersAvailable)
-		{
-			return [];
-		}
-
 		return $this->getFolderCollection()->toRestFormat();
 	}
 

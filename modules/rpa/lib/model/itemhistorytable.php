@@ -153,7 +153,7 @@ class ItemHistoryTable extends ORM\Data\DataManager
 	{
 		$result = new ORM\EventResult();
 
-		$result->addError(new Orm\EntityError('You cannot update history records'));
+		$result->addError(new ORM\EntityError('You cannot update history records'));
 
 		return $result;
 	}

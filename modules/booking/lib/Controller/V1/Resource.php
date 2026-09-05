@@ -57,6 +57,13 @@ class Resource extends BaseController
 		try
 		{
 			$resource = $repository->getById($id, $this->userId);
+			if (!$resource)
+			{
+				$this->addError(ErrorBuilder::build('Resource has not been found.'));
+
+				return null;
+			}
+
 			$repository->withSkus(new Entity\Resource\ResourceCollection($resource));
 
 			return $resource;

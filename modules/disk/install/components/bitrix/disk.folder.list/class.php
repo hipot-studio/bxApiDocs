@@ -33,6 +33,7 @@ use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\SharingTable;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Sharing;
+use Bitrix\Disk\SpecificFolder;
 use Bitrix\Disk\Ui;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -407,12 +408,32 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				// trigger unified link set
 				$attr->toDataSet();
 
-				$this->arResult['SHOW_FILE'] = [
+				$showFileResult = [
 					'url' => $attr->getAttribute(FileAttributes::ATTRIBUTE_UNIFIED_LINK),
 					'downloadUrl' => (string)$downloadUrl,
 					'type' => $attr->getViewerType(),
 					'name' => $fileForShow->getName(),
 				];
+
+				$viewerTypeClass = $attr->getAttribute('data-viewer-type-class');
+				if (is_string($viewerTypeClass) && $viewerTypeClass !== '')
+				{
+					$showFileResult['viewerTypeClass'] = $viewerTypeClass;
+				}
+
+				$markdownUrl = $attr->getAttribute(FileAttributes::ATTRIBUTE_MARKDOWN_URL);
+				if (is_string($markdownUrl) && $markdownUrl !== '')
+				{
+					$markdownUri = new Uri($markdownUrl);
+
+					$markdownUri->addParams([
+						'_uls' => $uls,
+					]);
+
+					$showFileResult['markdownUrl'] = (string)$markdownUri;
+				}
+
+				$this->arResult['SHOW_FILE'] = $showFileResult;
 			}
 		}
 
@@ -437,7 +458,9 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					'name' => $object->getName(),
 					'isFolder' => $object instanceof Folder,
 					'isFile' => $object instanceof File,
+					'isMailAttachments' => ($object instanceof Folder) && $object->getCode() === SpecificFolder::CODE_FOR_MAIL_ATTACHMENTS,
 					'canAdd' => ($object instanceof Folder) && $object->canAdd($securityContext),
+					'canDelete' => $object->canDelete($securityContext),
 					'link' => $row['data']['OPEN_URL'],
 					'isSymlink' => !empty($row['data']['SHARED']) || $object->isLink(),
 					'isLocked' => $isEnabledObjectLock && ($object instanceof File) && $object->getLock(),
@@ -641,6 +664,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			$supportsSharingAccessPopup = $supportsUnifiedLink;
 			$fileType = $isFile ? (int)$object->getTypeFile() : null;
 			$isBoard = $fileType === TypeFile::FLIPCHART;
+			$canMarkDeleted = $object->canMarkDeleted($securityContext);
+			$canDelete = $object->canDelete($securityContext);
 
 			$actions = $columns = [];
 
@@ -666,7 +691,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 			if (
 				$onlyRead
-				&& ($object->canUpdate($securityContext) || $object->canMarkDeleted($securityContext))
+				&& ($object->canUpdate($securityContext) || $canMarkDeleted)
 			)
 			{
 				$onlyRead = false;
@@ -937,7 +962,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 						});",
 					];
 
-					if ($object->canMarkDeleted($securityContext))
+					if ($canMarkDeleted)
 					{
 						$actions[] = [
 							"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_MOVE'),
@@ -1013,41 +1038,49 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				);
 			}
 
-			if ($object->canMarkDeleted($securityContext))
+			if (!$object->isDeleted() && $canMarkDeleted && $object->isLink())
 			{
-				if ($object->isLink())
-				{
-					$actions[] = [
-						"id" => "detach",
-						'className' => 'disk-folder-list-context-menu-item',
-						"text" => Loc::getMessage('DISK_FOLDER_LIST_DETACH_BUTTON'),
-						'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_disconnect.svg',
-						"onclick" => "BX.Disk['FolderListClass_{$this->componentId}'].openConfirmDetach({
+				$actions[] = [
+					"id" => "detach",
+					'className' => 'disk-folder-list-context-menu-item',
+					"text" => Loc::getMessage('DISK_FOLDER_LIST_DETACH_BUTTON'),
+					'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_disconnect.svg',
+					"onclick" => "BX.Disk['FolderListClass_{$this->componentId}'].openConfirmDetach({
 								object: {
 									id: {$objectId},
 									name: '" . CUtil::JSEscape($name) . "',
 									isFolder: " . ($isFolder ? 'true' : 'false') . "
 								 }
 							})",
-					];
-				}
-				elseif ($object->getCode() !== Folder::CODE_FOR_UPLOADED_FILES)
-				{
-					$actions[] = [
-						"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_MARK_DELETED'),
-						'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_remove.svg',
-						'className' => 'disk-folder-list-context-menu-item',
-						"onclick" => "BX.Disk['FolderListClass_{$this->componentId}'].openConfirmDelete({
+				];
+			}
+			elseif (
+				$object->getCode() !== Folder::CODE_FOR_UPLOADED_FILES
+				&& (
+					(
+						!$object->isDeleted()
+						&& !$object->isLink()
+						&& ($canMarkDeleted || $canDelete)
+					)
+					|| ($object->isDeleted() && $canDelete)
+				)
+			)
+			{
+				$actions[] = [
+					"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_MARK_DELETED'),
+					'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_remove.svg',
+					'className' => 'disk-folder-list-context-menu-item',
+					"onclick" => "BX.Disk['FolderListClass_{$this->componentId}'].openConfirmDelete({
 							object: {
 								id: {$objectId},
 								name: '" . CUtil::JSEscape($name) . "',
 								isDeleted: " . ($object->isDeleted() ? 'true' : 'false') . ",
 								isFolder: " . ($isFolder ? 'true' : 'false') . "
 							 },
-							canDelete: " . ($object->canDelete($securityContext) ? 'true' : 'false') . "
+							canMarkDeleted: " . ($canMarkDeleted ? 'true' : 'false') . ",
+							canDelete: " . ($canDelete ? 'true' : 'false') . "
 						})",
-					];
-				}
+				];
 			}
 			$iconClass = Ui\Icon::getIconClassByObject($object, !empty($sharedObjectIds[$objectId]));
 			if ($isFolder)
@@ -1273,7 +1306,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				'data' => $exportData,
 				'columns' => $columns,
 				'attrs' => [
-					'data-can-destroy' => $object->canDelete($securityContext),
+					'data-can-destroy' => (int)$canDelete,
 					'data-is-folder' => $isFolder,
 					'data-is-file' => !$isFolder,
 				],
@@ -2168,17 +2201,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			return [];
 		}
 
-		$list = [];
-		$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
-		foreach ($documentHandlersManager->getHandlers() as $handler)
-		{
-			if ($handler instanceof Contract\FileCreatable)
-			{
-				$list[] = $handler;
-			}
-		}
-
-		return $list;
+		return array_values(Driver::getInstance()->getDocumentHandlersManager()->getHandlersForCreatingFile());
 	}
 
 	private function buildPathToDiskVolume()

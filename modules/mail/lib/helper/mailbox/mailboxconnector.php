@@ -9,6 +9,7 @@ use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxConnectDTO;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Mail\Helper\Enum\CrmEntityType;
 use Bitrix\Mail\Helper\Enum\CrmFlag;
+use Bitrix\Mail\Helper\Enum\CrmImapFilterContext;
 use Bitrix\Mail\Helper\Enum\CrmOption;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\MailboxAccess;
@@ -46,6 +47,8 @@ final class MailboxConnector
 	public const SMTP_SENDER_ERROR_KEY = 'SMTP_SENDER_ERROR';
 	// Plan limit for shared mailboxes is reached, cannot add new shared users
 	public const SHARED_LIMIT_EXCEEDED_ERROR_KEY = 'SHARED_LIMIT_EXCEEDED';
+	// CRM settings came with the request, but the current user cannot edit CRM integration
+	public const CRM_ACCESS_DENIED_ERROR_KEY = 'CRM_ACCESS_DENIED';
 
 	public const DEFAULT_IMAP_PORT = '993';
 	public const DEFAULT_SMTP_PORT = '587';
@@ -100,6 +103,14 @@ final class MailboxConnector
 		}
 
 		$this->errorCollection[] = new Main\Error($error, $code, $customData);
+	}
+
+	private function addResultErrors(Main\Result $result): void
+	{
+		foreach ($result->getErrors() as $error)
+		{
+			$this->errorCollection[] = $error;
+		}
 	}
 
 	private function prepareErrorCustomData(?string $errorType = null, ?string $details = null): array
@@ -505,6 +516,7 @@ final class MailboxConnector
 		$mailboxConnectDTO->email = trim($mailboxConnectDTO->email ?? '');
 		$mailboxConnectDTO->login = trim($mailboxConnectDTO->login ?? '');
 		$mailboxConnectDTO->password = trim($mailboxConnectDTO->password ?? '');
+		$this->normalizeEmptyPorts($mailboxConnectDTO);
 		$mailboxConnectDTO->port ??= self::DEFAULT_IMAP_PORT;
 		$mailboxConnectDTO->ssl ??= true;
 		$mailboxConnectDTO->portSmtp ??= self::DEFAULT_SMTP_PORT;
@@ -858,7 +870,32 @@ final class MailboxConnector
 			$messageMaxAge = $syncOldLimit;
 		}
 
-		$mailboxData['OPTIONS']['sync_from'] = strtotime('today UTC 00:00' . sprintf('-%u days', $messageMaxAge));
+		$mailboxData['OPTIONS']['sync_from'] = SyncPeriodBoundary::dayStartUtcMinusDays($messageMaxAge);
+	}
+
+	/**
+	 * Zero is treated the same as null ("period not changed").
+	 */
+	private function applySyncFromOnUpdate(array $mailboxData, array $existingOptions, ?int $messageMaxAge): array
+	{
+		if ($messageMaxAge !== null && $messageMaxAge !== 0)
+		{
+			$this->applyMessageSyncFrom($mailboxData, $messageMaxAge);
+
+			return $mailboxData;
+		}
+
+		if (array_key_exists('sync_from', $existingOptions))
+		{
+			$mailboxData['OPTIONS']['sync_from'] = $existingOptions['sync_from'];
+
+			return $mailboxData;
+		}
+
+		// A missing key is the valid "no boundary" state of an unlimited mailbox: keep it missing.
+		unset($mailboxData['OPTIONS']['sync_from']);
+
+		return $mailboxData;
 	}
 
 	private function applyCrmSyncFrom(array &$mailboxData, ?int $syncDays = null): void
@@ -905,13 +942,12 @@ final class MailboxConnector
 
 	private function isCrmIntegrationAvailableForCurrentUser(): bool
 	{
-		static $isCrmAvailable = null;
-		if ($isCrmAvailable !== null)
-		{
-			return $isCrmAvailable;
-		}
+		// Keyed by user: one process may serve several of them (agents, CLI, tests).
+		static $isCrmAvailable = [];
 
-		return $isCrmAvailable =
+		$userId = (int)Main\Engine\CurrentUser::get()->getId();
+
+		return $isCrmAvailable[$userId] ??=
 			Loader::includeModule('crm')
 			&& MailboxAccess::hasCurrentUserAccessToEditMailboxIntegrationCrm()
 			&& Feature::isCrmAvailable()
@@ -950,9 +986,9 @@ final class MailboxConnector
 		}
 	}
 
-	private function validateSenderName(string $newName, string $existingName): bool
+	private function validateSenderName(string $newName, ?string $existingName): bool
 	{
-		if (empty($newName) || $newName === $existingName)
+		if (empty($newName) || $newName === (string)$existingName)
 		{
 			return true;
 		}
@@ -1160,34 +1196,24 @@ final class MailboxConnector
 			return [];
 		}
 
+		if (!$this->syncNewMailboxCrmImapFilter(
+			(int)$mailboxId,
+			$mailboxData['OPTIONS']['flags'] ?? [],
+		))
+		{
+			addEventToStatFile('mail', 'add_mailbox', $mailboxData['SERVICE_NAME'], 'failed');
+
+			return [];
+		}
+
 		addEventToStatFile('mail', 'add_mailbox', $mailboxData['SERVICE_NAME'], 'success');
 
 		if (!empty($senderFields))
 		{
-			$result = self::appendSender($senderFields, '', (int)$mailboxId);
-
-			if (!empty($result['errors']) && $result['errors'] instanceof Main\ErrorCollection)
-			{
-				$this->addErrors($result['errors'], $isOAuth, true);
-
-				return [];
-			}
-
-			if (!empty($result['error']))
-			{
-				$this->addError($result['error'], self::SMTP_SENDER_ERROR_KEY);
-
-				return [];
-			}
-
-			if (empty($result['confirmed']))
-			{
-				$this->addError('MAIL_CLIENT_CONFIG_SMTP_CONFIRM', self::SMTP_SENDER_ERROR_KEY);
-
-				return [];
-			}
+			$this->createMailboxSender((int)$mailboxId, $senderFields, $isOAuth);
 		}
 
+		// The mailbox already exists, so these side effects must run even when the sender was rejected.
 		$accessState = $this->applyMailboxShareAccess($access, (int)$mailboxData['USER_ID'], $mailboxId);
 		if ($accessState !== null)
 		{
@@ -1201,22 +1227,15 @@ final class MailboxConnector
 			);
 		}
 
-		if (in_array(CrmFlag::Connect->value, $mailboxData['OPTIONS']['flags'] ?? [], true))
-		{
-			\CMailFilter::add([
-				'MAILBOX_ID' => $mailboxId,
-				'NAME' => sprintf('CRM IMAP %u', $mailboxId),
-				'ACTION_TYPE' => 'crm_imap',
-				'WHEN_MAIL_RECEIVED' => 'Y',
-				'WHEN_MANUALLY_RUN' => 'Y',
-			]);
-		}
-
-
 		$mailboxInstance = Mailbox::createInstance($mailboxId);
 		if ($mailboxInstance)
 		{
 			$mailboxInstance->cacheDirs();
+		}
+
+		if ($this->hasErrors())
+		{
+			return [];
 		}
 
 		$this->setSuccess();
@@ -1236,6 +1255,48 @@ final class MailboxConnector
 			'email' => trim((string)$mailboxData['EMAIL']),
 			'senderName' => $senderName,
 		];
+	}
+
+	private function syncNewMailboxCrmImapFilter(int $mailboxId, array $flags): bool
+	{
+		$crmFilterResult = $this->syncCrmImapFilter(
+			$mailboxId,
+			$flags,
+			CrmImapFilterContext::MailboxConnect,
+		);
+		if ($crmFilterResult->isSuccess())
+		{
+			return true;
+		}
+
+		$this->addResultErrors($crmFilterResult);
+		\CMailbox::delete($mailboxId);
+
+		return false;
+	}
+
+	private function createMailboxSender(int $mailboxId, array $senderFields, bool $isOAuth): void
+	{
+		$result = self::appendSender($senderFields, '', $mailboxId);
+
+		if (!empty($result['errors']) && $result['errors'] instanceof Main\ErrorCollection)
+		{
+			$this->addErrors($result['errors'], $isOAuth, true);
+
+			return;
+		}
+
+		if (!empty($result['error']))
+		{
+			$this->addError($result['error'], self::SMTP_SENDER_ERROR_KEY);
+
+			return;
+		}
+
+		if (empty($result['confirmed']))
+		{
+			$this->addError('MAIL_CLIENT_CONFIG_SMTP_CONFIRM', self::SMTP_SENDER_ERROR_KEY);
+		}
 	}
 
 	private function mergeWithExistingData(MailboxConnectDTO $dto, array $existingData): void
@@ -1276,6 +1337,23 @@ final class MailboxConnector
 		$dto->useSenderName ??= $existingData['useSenderName'];
 		$dto->link ??= $existingData['mailbox']['link'] ?? null;
 		$dto->uploadOutgoing ??= !in_array('deny_upload', (array)($existingData['options']['flags'] ?? []), true);
+	}
+
+	/**
+	 * Clients may send an empty string instead of omitting a port (e.g. a form with a blank
+	 * port field). Treat it as "not provided" so that defaults or stored values apply.
+	 */
+	private function normalizeEmptyPorts(MailboxConnectDTO $dto): void
+	{
+		if ($dto->port !== null && trim($dto->port) === '')
+		{
+			$dto->port = null;
+		}
+
+		if ($dto->portSmtp !== null && trim($dto->portSmtp) === '')
+		{
+			$dto->portSmtp = null;
+		}
 	}
 
 	private function hasCredentialsChanged(MailboxConnectDTO $dto): bool
@@ -1334,7 +1412,7 @@ final class MailboxConnector
 	 *     senderName: string,
 	 *     useSenderName: bool,
 	 *     iCalAccess: string,
-	 *     crmOptions: array{enabled: 'Y'|'N', config: array<string, mixed>},
+	 *     crmOptions: array{enabled: 'Y'|'N', filterActive?: bool, config: array<string, mixed>},
 	 *     mailSyncIntervals: array<array{value: int, label: string}>,
 	 *     crmSyncIntervals: array<array{value: int, label: string}>,
 	 *     crmEntities: array<array{value: string, label: string}>,
@@ -1366,8 +1444,9 @@ final class MailboxConnector
 	}
 
 	/**
+	 * @param bool $withCrmFilterState Include the actual gate state as crmOptions.filterActive
 	 * @return array{
-	 *     imap: array{email: string, login: string, password: string, serviceId: int, server: string, port: string, ssl: string, isOAuth: bool, oauthUid: string|null},
+	 *     imap: array{email: string, login: string, password: string, serviceId: int, server: string, port: string, ssl: string, isOAuth: bool, oauthUid: string|null, oauthUser: array|null},
 	 *     smtp: array{enabled: 'Y'|'N', server: string, port: string, ssl: 'Y'|'N', login: string, useLimit: bool, limit: int|null},
 	 *     service: array{name: string|null, type: string|null, link: string|null, isOAuth: bool, oauthSmtpEnabled: bool, smtpServer: string, smtpLoginAsImap: bool, smtpPasswordAsImap: bool},
 	 *     mailbox: array{link: string},
@@ -1377,7 +1456,7 @@ final class MailboxConnector
 	 *     defaultSenderName: string,
 	 *     useSenderName: bool,
 	 *     iCalAccess: string,
-	 *     crmOptions: array{enabled: 'Y'|'N', config: array<string, mixed>},
+	 *     crmOptions: array{enabled: 'Y'|'N', filterActive?: bool, config: array<string, mixed>},
 	 *     shareAccess: string[],
 	 *     shareAccessUsers: array<array{id: int, title: string, imageUrl: string|null}>,
 	 *     userId: int,
@@ -1387,7 +1466,7 @@ final class MailboxConnector
 	 *     options: array,
 	 * }|null
 	 */
-	public function getMailboxData(int $mailboxId): ?array
+	public function getMailboxData(int $mailboxId, bool $withCrmFilterState = true): ?array
 	{
 		if (!MailboxAccess::hasCurrentUserAnyAccessToMailbox($mailboxId))
 		{
@@ -1451,12 +1530,12 @@ final class MailboxConnector
 				'link' => (string)($mailbox['LINK'] ?? ''),
 			],
 			'denyUpload' => in_array('deny_upload', (array)($options['flags'] ?? []), true),
-			'mailboxName' => $mailbox['NAME'],
+			'mailboxName' => (string)($mailbox['NAME'] ?? ''),
 			'senderName' => $senderName,
 			'defaultSenderName' => $this->getDefaultSenderName(),
 			'useSenderName' => $this->resolveUseSenderName($mailbox, $mailboxId),
 			'iCalAccess' => $options['ical_access'] ?? 'N',
-			'crmOptions' => $this->getCrmData($options),
+			'crmOptions' => $this->getCrmData($mailboxId, $options, $withCrmFilterState),
 			'shareAccess' => $shareAccess,
 			'shareAccessUsers' => $this->resolveShareAccessUsers($shareAccess),
 			'userId' => (int)$mailbox['USER_ID'],
@@ -1632,6 +1711,9 @@ final class MailboxConnector
 	 *     server: string,
 	 *     port: string,
 	 *     ssl: string,
+	 *     isOAuth: bool,
+	 *     oauthUid: string|null,
+	 *     oauthUser: array|null,
 	 * }
 	 */
 	private function getImapData(array $mailbox): array
@@ -1648,11 +1730,11 @@ final class MailboxConnector
 		}
 
 		return [
-			'email' => $mailbox['EMAIL'],
-			'login' => $mailbox['LOGIN'],
-			'password' => $mailbox['PASSWORD'],
+			'email' => (string)($mailbox['EMAIL'] ?? ''),
+			'login' => (string)($mailbox['LOGIN'] ?? ''),
+			'password' => (string)($mailbox['PASSWORD'] ?? ''),
 			'serviceId' => (int)$mailbox['SERVICE_ID'],
-			'server' => $mailbox['SERVER'],
+			'server' => (string)($mailbox['SERVER'] ?? ''),
 			'port' => (string)$mailbox['PORT'],
 			'ssl' => $mailbox['USE_TLS'] ?: 'N',
 			'isOAuth' => $oauthMeta !== null,
@@ -1693,6 +1775,7 @@ final class MailboxConnector
 	/**
 	 * @return array{
 	 *     enabled: 'Y'|'N',
+	 *     filterActive?: bool,
 	 *     config: array{
 	 *         crm_sync_days: int|null,
 	 *         crm_new_entity_in: string,
@@ -1706,13 +1789,18 @@ final class MailboxConnector
 	 *     }|array{},
 	 * }
 	 */
-	private function getCrmData(array $options): array
+	private function getCrmData(int $mailboxId, array $options, bool $withFilterState = true): array
 	{
 		$crmEnabled = in_array(CrmFlag::Connect->value, $options['flags'] ?? [], true) ? 'Y' : 'N';
-		$crmOptions = [
-			'enabled' => $crmEnabled,
-			'config' => [],
-		];
+		$crmOptions = ['enabled' => $crmEnabled];
+
+		// The actual gate state is read for the settings form only: write paths sync the gate anyway.
+		if ($withFilterState)
+		{
+			$crmOptions['filterActive'] = CrmImapFilter::isConnected($mailboxId);
+		}
+
+		$crmOptions['config'] = [];
 
 		if ($crmEnabled !== 'Y')
 		{
@@ -1943,7 +2031,7 @@ final class MailboxConnector
 			return [];
 		}
 
-		$existingData = $this->getMailboxData($mailboxId);
+		$existingData = $this->getMailboxData($mailboxId, withCrmFilterState: false);
 		if ($existingData === null)
 		{
 			$this->addErrorWithMessage();
@@ -1951,7 +2039,10 @@ final class MailboxConnector
 			return [];
 		}
 
+		$this->normalizeEmptyPorts($dto);
 		$credentialsChanged = $this->hasCredentialsChanged($dto);
+		// Must be read before the merge fills crmOptions from the stored state.
+		$crmSettingsRequested = $dto->crmOptions !== null;
 		$this->mergeWithExistingData($dto, $existingData);
 
 		$originalOwnerId = $existingData['userId'];
@@ -2021,14 +2112,7 @@ final class MailboxConnector
 			$preservedFlags[] = 'deny_upload';
 		}
 		$mailboxData['OPTIONS']['flags'] = $preservedFlags;
-		if ($dto->messageMaxAge !== null && $dto->messageMaxAge > 0)
-		{
-			$this->applyMessageSyncFrom($mailboxData, $dto->messageMaxAge);
-		}
-		else
-		{
-			$mailboxData['OPTIONS']['sync_from'] = $existingOptions['sync_from'] ?? $mailboxData['OPTIONS']['sync_from'];
-		}
+		$mailboxData = $this->applySyncFromOnUpdate($mailboxData, $existingOptions, $dto->messageMaxAge);
 		$mailboxData['OPTIONS'][CrmOption::SyncFrom->value] = $existingOptions[CrmOption::SyncFrom->value]
 			?? $mailboxData['OPTIONS'][CrmOption::SyncFrom->value];
 		$mailboxData['OPTIONS']['name'] = $mailboxData['USERNAME'];
@@ -2057,16 +2141,27 @@ final class MailboxConnector
 			CrmFlag::values(),
 		));
 
-		if ($this->isCrmIntegrationAvailableForCurrentUser())
-		{
-			if ($dto->crmOptions?->enabled)
-			{
-				$mailboxData = $this->applyCrmOptions($mailboxData, $dto->crmOptions);
-			}
-		}
-		else
+		if (!$crmSettingsRequested)
 		{
 			$this->preserveMailboxCrmSettings($mailboxData, $existingData);
+		}
+		elseif (!$this->isCrmIntegrationAvailableForCurrentUser())
+		{
+			if (!$this->isCrmStateUnchanged($dto->crmOptions, $existingData))
+			{
+				$this->addError(
+					(string)Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CRM_ACCESS_DENIED'),
+					self::CRM_ACCESS_DENIED_ERROR_KEY,
+				);
+
+				return [];
+			}
+
+			$this->preserveMailboxCrmSettings($mailboxData, $existingData);
+		}
+		elseif ($dto->crmOptions?->enabled)
+		{
+			$mailboxData = $this->applyCrmOptions($mailboxData, $dto->crmOptions);
 		}
 
 		if (Loader::includeModule('calendar'))
@@ -2227,17 +2322,17 @@ final class MailboxConnector
 			self::rebindMailboxSendersToOwner($mailboxId, $newOwnerId);
 		}
 
-		if (!$skipConnectionValidation && !$this->updateMailboxSender($mailboxId, $senderFields, $isOAuth))
-		{
-			return [];
-		}
+		$senderRejected = !$skipConnectionValidation
+			&& !$this->updateMailboxSender($mailboxId, $senderFields, $isOAuth);
 
+		// The mailbox row is already updated, so these side effects must run even when the sender was rejected.
 		$accessState = $this->updateMailboxShareAccess($mailboxId, $mailboxData, $shareAccess);
-		$this->syncCrmImapFilter(
+		$crmFilterResult = $this->syncCrmImapFilter(
 			$mailboxId,
 			$mailboxData['OPTIONS']['flags'] ?? [],
-			$existingData['options']['flags'] ?? [],
+			CrmImapFilterContext::SettingsSave,
 		);
+		$this->addResultErrors($crmFilterResult);
 
 		if ($accessState !== null)
 		{
@@ -2265,6 +2360,11 @@ final class MailboxConnector
 				$existingData['userId'],
 				(int)$mailboxData['USER_ID'],
 			);
+		}
+
+		if ($senderRejected || $this->hasErrors())
+		{
+			return [];
 		}
 
 		$this->setSuccess();
@@ -2357,39 +2457,9 @@ final class MailboxConnector
 		return $this->applyMailboxShareAccess($shareAccess, (int)$mailboxData['USER_ID'], $mailboxId);
 	}
 
-	private function syncCrmImapFilter(int $mailboxId, array $newFlags, array $oldFlags): void
+	private function syncCrmImapFilter(int $mailboxId, array $flags, CrmImapFilterContext $context): Main\Result
 	{
-		$hasCrmConnect = in_array(CrmFlag::Connect->value, $newFlags, true);
-		$hadCrmConnect = in_array(CrmFlag::Connect->value, $oldFlags, true);
-
-		if ($hasCrmConnect === $hadCrmConnect)
-		{
-			return;
-		}
-
-		$res = Mail\MailFilterTable::getList([
-			'select' => ['ID'],
-			'filter' => [
-				'=MAILBOX_ID' => $mailboxId,
-				'=ACTION_TYPE' => 'crm_imap',
-			],
-		]);
-
-		while ($filter = $res->fetch())
-		{
-			\CMailFilter::delete($filter['ID']);
-		}
-
-		if ($hasCrmConnect)
-		{
-			\CMailFilter::add([
-				'MAILBOX_ID' => $mailboxId,
-				'NAME' => sprintf('CRM IMAP %u', $mailboxId),
-				'ACTION_TYPE' => 'crm_imap',
-				'WHEN_MAIL_RECEIVED' => 'Y',
-				'WHEN_MANUALLY_RUN' => 'Y',
-			]);
-		}
+		return CrmImapFilter::sync($mailboxId, in_array(CrmFlag::Connect->value, $flags, true), $context);
 	}
 
 	private function hasErrors(): bool
@@ -2406,6 +2476,23 @@ final class MailboxConnector
 			Main\Mail\Sender::delete([$sender['ID']]);
 			Main\Mail\Sender::clearCustomSmtpCache($email);
 		}
+	}
+
+	/**
+	 * A client that may not edit CRM integration still submits its current state: the form renders the
+	 * switch read-only, and a read-only checkbox is still sent. Repeating the stored state is not an
+	 * attempt to change it, so only a different state must be refused.
+	 *
+	 * Compared by the integration switch alone: the read-only block sends its inner fields disabled,
+	 * so they never match what is stored, and their values are dropped by preserveMailboxCrmSettings
+	 * anyway.
+	 */
+	private function isCrmStateUnchanged(?CrmOptions $requestedCrmOptions, array $existingData): bool
+	{
+		$existingFlags = (array)($existingData['options']['flags'] ?? []);
+		$storedEnabled = in_array(CrmFlag::Connect->value, $existingFlags, true);
+
+		return ($requestedCrmOptions?->enabled ?? false) === $storedEnabled;
 	}
 
 	private function preserveMailboxCrmSettings(array &$mailboxData, array $existingData): void
@@ -2604,8 +2691,8 @@ final class MailboxConnector
 		if (!$this->isCrmIntegrationAvailableForCurrentUser())
 		{
 			return $result->addError(new Error(
-				'CRM integration is not available for current user',
-				'CRM_ACCESS_DENIED',
+				(string)Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CRM_ACCESS_DENIED'),
+				self::CRM_ACCESS_DENIED_ERROR_KEY,
 			));
 		}
 
@@ -2686,8 +2773,6 @@ final class MailboxConnector
 			$options['flags'] = $nonCrmFlags;
 		}
 
-		$existingDataForFilter = ['options' => $mailbox['OPTIONS'] ?? []];
-
 		$periodCheck = (int)$mailbox['PERIOD_CHECK'];
 		if ($crmOptions->enabled && $crmOptions->public)
 		{
@@ -2706,13 +2791,13 @@ final class MailboxConnector
 			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_FORM_ERROR')));
 		}
 
-		$this->syncCrmImapFilter(
+		$crmFilterResult = $this->syncCrmImapFilter(
 			$mailboxId,
 			$options['flags'] ?? [],
-			$existingDataForFilter['options']['flags'] ?? [],
+			CrmImapFilterContext::SettingsSave,
 		);
 
-		return $result;
+		return $result->addErrors($crmFilterResult->getErrors());
 	}
 
 	public function enableCrmWithDefaults(int $mailboxId): Main\Result
@@ -2739,43 +2824,49 @@ final class MailboxConnector
 
 		if (!$this->isCrmIntegrationAvailableForCurrentUser())
 		{
-			return $result->addError(new Error('CRM integration is not available for current user'));
+			return $result->addError(new Error(
+				(string)Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CRM_ACCESS_DENIED'),
+				self::CRM_ACCESS_DENIED_ERROR_KEY,
+			));
 		}
 
-		$existingFlags = (array)($mailbox['OPTIONS']['flags'] ?? []);
-		if (in_array(CrmFlag::Connect->value, $existingFlags, true))
+		$options = (array)($mailbox['OPTIONS'] ?? []);
+		$existingFlags = (array)($options['flags'] ?? []);
+		$isFlagSet = in_array(CrmFlag::Connect->value, $existingFlags, true);
+
+		if ($isFlagSet && CrmImapFilter::isConnected($mailboxId))
 		{
 			return $result->setData(['skipped' => true, 'reason' => 'CRM already enabled']);
 		}
 
-		$options = (array)($mailbox['OPTIONS'] ?? []);
-
-		$allCrmFlagValues = CrmFlag::values();
-		$nonCrmFlags = array_values(array_filter(
-			$existingFlags,
-			static fn(string $flag): bool => !in_array($flag, $allCrmFlagValues, true),
-		));
-		$options['flags'] = array_values(array_merge($nonCrmFlags, [CrmFlag::Connect->value]));
-
-		foreach ($this->defaultCrmOptionValues((int)$mailbox['USER_ID']) as $k => $v)
+		// Defaults belong to a mailbox that had no CRM at all; a mailbox with the flag only needs its gate back.
+		if (!$isFlagSet)
 		{
-			$options[$k] = $v;
+			$allCrmFlagValues = CrmFlag::values();
+			$nonCrmFlags = array_values(array_filter(
+				$existingFlags,
+				static fn(string $flag): bool => !in_array($flag, $allCrmFlagValues, true),
+			));
+			$options['flags'] = array_values(array_merge($nonCrmFlags, [CrmFlag::Connect->value]));
+
+			foreach ($this->defaultCrmOptionValues((int)$mailbox['USER_ID']) as $k => $v)
+			{
+				$options[$k] = $v;
+			}
+
+			if (!\CMailbox::update($mailboxId, ['OPTIONS' => $options]))
+			{
+				return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_FORM_ERROR')));
+			}
 		}
 
-		$existingDataForFilter = ['options' => (array)($mailbox['OPTIONS'] ?? [])];
-
-		if (!\CMailbox::update($mailboxId, ['OPTIONS' => $options]))
-		{
-			return $result->addError(new Error(Loc::getMessage('MAIL_MAILBOX_CONNECTOR_CLIENT_FORM_ERROR')));
-		}
-
-		$this->syncCrmImapFilter(
+		$crmFilterResult = $this->syncCrmImapFilter(
 			$mailboxId,
 			$options['flags'] ?? [],
-			$existingDataForFilter['options']['flags'] ?? [],
+			CrmImapFilterContext::SettingsSave,
 		);
 
-		return $result;
+		return $result->addErrors($crmFilterResult->getErrors());
 	}
 
 	/**

@@ -4,6 +4,7 @@ namespace Bitrix\Location\Service;
 
 use Bitrix\Location\Exception\RuntimeException;
 use Bitrix\Location\Common\BaseService;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Result;
 use Bitrix\Location\Entity;
 use Bitrix\Location\Repository\LocationRepository;
@@ -20,6 +21,9 @@ use Bitrix\Location\Common\RepositoryTrait;
 final class LocationService extends BaseService
 {
 	use RepositoryTrait;
+
+	/** Maximum number of coordinates allowed in a single findByCoordsList batch. */
+	public const MAX_BATCH_SIZE = 20;
 
 	/** @var LocationService */
 	protected static $instance;
@@ -60,7 +64,12 @@ final class LocationService extends BaseService
 	 * @param int $searchScope
 	 * @return Entity\Location|bool|null
 	 */
-	public function findByExternalId(string $externalId, string $sourceCode, string $languageId, int $searchScope = LOCATION_SEARCH_SCOPE_ALL)
+	public function findByExternalId(
+		string $externalId,
+		string $sourceCode,
+		string $languageId,
+		int $searchScope = LOCATION_SEARCH_SCOPE_ALL
+	)
 	{
 		$result = false;
 
@@ -108,6 +117,66 @@ final class LocationService extends BaseService
 		}
 
 		return null;
+	}
+
+	/**
+	 * Find locations by a list of coordinates (batch reverse geocoding).
+	 *
+	 * Result is aligned by input index; not found coordinates yield null in their position.
+	 *
+	 * @param array $coordsList Index-aligned list of ['lat' => float, 'lng' => float].
+	 * @param int $zoom Shared zoom for the whole batch.
+	 * @param string $languageId Shared language for the whole batch.
+	 * @return array<int, Entity\Location|null>
+	 * @throws ArgumentException If the batch size exceeds self::MAX_BATCH_SIZE or an element lacks numeric lat/lng.
+	 */
+	public function findByCoordsList(array $coordsList, int $zoom, string $languageId): array
+	{
+		if (!$coordsList)
+		{
+			return [];
+		}
+
+		if (count($coordsList) > self::MAX_BATCH_SIZE)
+		{
+			throw new ArgumentException(
+				'Batch size exceeds the maximum of ' . self::MAX_BATCH_SIZE,
+				'coordsList'
+			);
+		}
+
+		foreach ($coordsList as $coords)
+		{
+			if (
+				!is_array($coords)
+				|| !isset($coords['lat'], $coords['lng'])
+				|| !is_numeric($coords['lat'])
+				|| !is_numeric($coords['lng'])
+			)
+			{
+				throw new ArgumentException(
+					'Each coordinate must contain numeric "lat" and "lng"',
+					'coordsList'
+				);
+			}
+		}
+
+		try
+		{
+			return $this->repository->findByCoordsList(
+				$coordsList,
+				$zoom,
+				$languageId,
+				LOCATION_SEARCH_SCOPE_EXTERNAL
+			);
+		}
+		catch (RuntimeException $exception)
+		{
+			$this->processException($exception);
+		}
+
+		// Keep the index-aligned contract on operational failure: null per input position.
+		return array_fill_keys(array_keys($coordsList), null);
 	}
 
 	/**

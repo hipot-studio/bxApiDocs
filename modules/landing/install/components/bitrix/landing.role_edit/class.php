@@ -34,9 +34,9 @@ class LandingRoleEditComponent extends LandingBaseFormComponent
 	 */
 	protected function actionMode()
 	{
-		if (\Bitrix\Landing\Rights::isAdmin())
+		if (Rights::isAdmin() && Rights::canSwitchMode())
 		{
-			\Bitrix\Landing\Rights::switchMode();
+			Rights::switchMode();
 			return true;
 		}
 		$this->addError(
@@ -74,6 +74,25 @@ class LandingRoleEditComponent extends LandingBaseFormComponent
 			);
 
 			$this->id = $this->arParams['ROLE_EDIT'];
+
+			// deny reading/renaming a role that belongs to another scope;
+			// getRow() reads the role by the direct id or, when it is missing, by the copy id,
+			// so the guard checks that same id to also close the copy read path;
+			// FATAL blocks the parent save-path (updateRow -> Role::update)
+			$checkId = $this->id > 0 ? (int)$this->id : (int)$this->getCopyId();
+			if ($checkId > 0 && !Role::isInCurrentScope($checkId))
+			{
+				$init = false;
+				$this->addError(
+					'LANDING_ERROR_ACCESS_DENIED',
+					'',
+					true
+				);
+			}
+		}
+
+		if ($init)
+		{
 			$this->redirectAfterSave = true;
 			$this->successSavePage = $this->arParams['PAGE_URL_ROLES'];
 			$this->arResult['EXTENDED'] = Rights::isExtendedMode();

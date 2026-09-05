@@ -351,7 +351,7 @@ class Scenarist
 			return;
 		}
 
-		if ($this->stepId === $this->scenario->getFirstStepId())
+		if ($this->stepId === $this->scenario->getFirstStepId() && $this->scenario->isAnalyticStartEnabled())
 		{
 			$this->sendMetrikaStart();
 		}

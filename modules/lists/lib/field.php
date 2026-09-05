@@ -8,6 +8,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\Type\RandomSequence;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 
@@ -796,10 +797,13 @@ class Field
 		{
 			if($urlTemplate)
 			{
-				$sectionUrl = \CHTTP::URN2URI(\CHTTP::urlAddParams(
-					str_replace(array("#list_id#", "#section_id#", "#group_id#"),
-					array($section['IBLOCK_ID'], 0, $socnetGroupId),
-					$urlTemplate), array('list_section_id' => $section['ID'])));
+				$url = (string)(new Uri(str_replace(
+						array("#list_id#", "#section_id#", "#group_id#"),
+						array($section['IBLOCK_ID'], 0, $socnetGroupId),
+						$urlTemplate
+					)))->addParams(['list_section_id' => $section['ID']])
+				;
+				$sectionUrl = (string)(new Uri($url))->toAbsolute();
 
 				$html = '<a href="'.HtmlFilter::encode($sectionUrl).'"  target="_blank">'.
 					HtmlFilter::encode($section['~NAME']).'</a>';
@@ -941,9 +945,9 @@ class Field
 			[$iblockId, $sectionId, $elementId, $socnetGroupId],
 			$urlTemplate
 		);
-		$url = \CHTTP::urlAddParams($url, ['list_section_id' => ($sectionId ? $sectionId : '')]);
+		$url = (string)(new Uri($url))->addParams(['list_section_id' => ($sectionId ?: '')]);
 
-		$result = '<a href="'.\CHTTP::URN2URI(HtmlFilter::encode($url)).'">'.HtmlFilter::encode($field['VALUE']).'</a>';
+		$result = '<a href="'.HtmlFilter::encode((string)(new Uri($url))->toAbsolute()).'">'.HtmlFilter::encode($field['VALUE']).'</a>';
 		return $result;
 	}
 
@@ -1003,7 +1007,7 @@ class Field
 				array($element['IBLOCK_ID'], '0', $element['ID']),
 				$urlTemplate
 			);
-			$elementUrl = \CHTTP::urlAddParams($elementUrl, array("list_section_id" => ""));
+			$elementUrl = (string)(new Uri($elementUrl))->addParams(["list_section_id" => ""]);
 			$result[] = '<a href="'.HtmlFilter::encode($elementUrl).'" target="_blank">'.HtmlFilter::encode(
 				$element['~NAME']).'</a>';
 

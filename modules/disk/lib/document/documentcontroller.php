@@ -21,6 +21,7 @@ use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 
@@ -118,10 +119,12 @@ class DocumentController extends Internals\Controller
 		if($actionName != 'start' && $this->request->getQuery('document_action') != 'start')
 		{
 			//todo hack. SocServ set backurl!
-			if(mb_strpos($_SERVER['HTTP_REFERER'], 'tools/oauth') !== false)
+			if (str_contains($_SERVER['HTTP_REFERER'], 'tools/oauth'))
 			{
-				$uri = \CHTTP::urlDeleteParams($this->request->getRequestUri(), array("sessid", "document_action"));
-				$uri = \CHTTP::urlAddParams($uri, array('document_action' => 'start'));
+				$uri = (string)(new Uri($this->request->getRequestUri()))
+					->deleteParams(['sessid'])
+					->addParams(['document_action' => 'start'])
+				;
 				//restart process after authorization in social services
 				LocalRedirect($uri);
 			}
@@ -262,9 +265,9 @@ class DocumentController extends Internals\Controller
 		{
 			$this->sendJsonErrorResponse();
 		}
-		$currentUrl = $this->getApplication()->getCurUri();
-		$currentUrl = \CHTTP::urlDeleteParams($currentUrl, array('document_action'));
-		$currentUrl = \CHTTP::urlAddParams($currentUrl, array('document_action' => $this->request->getQuery('primaryAction')), array('encode' => true));
+		$currentUrl = (string)(new Uri($this->getApplication()->getCurUri()))
+			->addParams(['document_action' => $this->request->getQuery('primaryAction')])
+		;
 		$this->renderStartPage(array(
 			'action' => $this->request->getQuery('primaryAction'),
 			'url' => $currentUrl,

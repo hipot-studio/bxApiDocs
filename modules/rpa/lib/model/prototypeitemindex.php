@@ -38,7 +38,7 @@ abstract class PrototypeItemIndex extends ORM\Data\DataManager
 		$sqlSha1 = $helper->getSha1Function('?v');
 
 		$updateData['SEARCH_CONTENT'] = new SqlExpression(
-			"case when {$sqlSha1} = '{$encryptedSearchContent}' then ?v else '{$preparedSearchContent}' end",
+			'case when ' . $sqlSha1 . " = '" . $encryptedSearchContent . "' then ?v else '" . $preparedSearchContent . "' end",
 			'SEARCH_CONTENT',
 			'SEARCH_CONTENT',
 		);

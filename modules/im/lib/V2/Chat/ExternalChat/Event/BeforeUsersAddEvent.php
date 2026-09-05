@@ -5,11 +5,11 @@ namespace Bitrix\Im\V2\Chat\ExternalChat\Event;
 use Bitrix\Im\V2\Chat\ExternalChat;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 
-class BeforeUsersAddEvent extends ChatEvent
+class BeforeUsersAddEvent extends ChatEvent implements InitiatedByUserInterface
 {
-	public function __construct(ExternalChat $chat, array $userIds, AddUsersConfig $config)
+	public function __construct(ExternalChat $chat, int $initiatorId, array $userIds, AddUsersConfig $config)
 	{
-		$parameters = ['userIds' => $userIds, 'config' => $config];
+		$parameters = ['initiatorId' => $initiatorId, 'userIds' => $userIds, 'config' => $config];
 
 		parent::__construct($chat, $parameters);
 	}
@@ -17,6 +17,11 @@ class BeforeUsersAddEvent extends ChatEvent
 	protected function getActionName(): string
 	{
 		return 'BeforeUsersAdd';
+	}
+
+	public function getInitiatorId(): int
+	{
+		return $this->parameters['initiatorId'];
 	}
 
 	public function getUserIds(): array

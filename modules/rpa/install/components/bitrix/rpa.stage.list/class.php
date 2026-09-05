@@ -84,7 +84,7 @@ class RpaStageListComponent extends Bitrix\Rpa\Components\Base
 		$this->arResult['messages'] = static::loadBaseLanguageMessages();
 		$this->arResult['params'] = [
 			'analyticsLabel' => 'rpaStagesSave',
-			'method' => 'rpa.stage.saveAll',
+			'method' => 'rpa.Stage.saveAll',
 			'typeId' => $this->type->getId(),
 			'stages' => [],
 		];

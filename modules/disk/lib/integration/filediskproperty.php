@@ -15,6 +15,35 @@ Loc::loadMessages(__FILE__);
 
 class FileDiskProperty
 {
+	private static int $workflowWriteContextDepth = 0;
+
+	private static function enableWorkflowWriteContext(): void
+	{
+		self::$workflowWriteContextDepth++;
+	}
+
+	private static function disableWorkflowWriteContext(): void
+	{
+		if (self::$workflowWriteContextDepth > 0)
+		{
+			self::$workflowWriteContextDepth--;
+		}
+	}
+
+	public static function runInWorkflowWriteContext(callable $writer): mixed
+	{
+		self::enableWorkflowWriteContext();
+
+		try
+		{
+			return $writer();
+		}
+		finally
+		{
+			self::disableWorkflowWriteContext();
+		}
+	}
+
 	public static function getUserTypeDescription()
 	{
 		$className = get_called_class();
@@ -57,7 +86,7 @@ class FileDiskProperty
 			$userId = SystemUser::SYSTEM_USER_ID;
 		}
 
-		if(isset($value['DESCRIPTION']) && $value['DESCRIPTION'] == 'workflow')
+		if(self::isWorkflowWriteContext() && isset($value['DESCRIPTION']) && $value['DESCRIPTION'] == 'workflow')
 		{
 			$workFlow = true;
 		}
@@ -589,5 +618,10 @@ class FileDiskProperty
 		ob_end_clean();
 
 		return $html;
+	}
+
+	private static function isWorkflowWriteContext(): bool
+	{
+		return self::$workflowWriteContextDepth > 0;
 	}
 }

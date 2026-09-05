@@ -6,6 +6,8 @@ use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\RightTable;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ModuleManager;
+use Bitrix\Main\UserTable;
 
 class SocialnetworkHandlers
 {
@@ -37,35 +39,58 @@ class SocialnetworkHandlers
 	 */
 	public static function onAfterUserUpdate($fields)
 	{
-		if(!Loader::includeModule('socialnetwork') || empty($fields['ID']))
+		if(empty($fields['ID']))
 		{
 			return;
 		}
 
-		if(!empty($fields['NAME']) || !empty($fields['LAST_NAME']) || !empty($fields['SECOND_NAME']))
+		if(empty($fields['NAME']) && empty($fields['LAST_NAME']) && empty($fields['SECOND_NAME']))
 		{
-			$user = User::loadById($fields['ID']);
-			if (!($user instanceof User))// || $user->isEmptyName())
-			{
-				return;
-			}
+			return;
+		}
 
-			$userName = $user->getFormattedName();
-			if (empty($userName))
-			{
-				return;
-			}
+		if(self::isExternalAuthId($fields['EXTERNAL_AUTH_ID'] ?? null))
+		{
+			return;
+		}
 
-			$userStorage = Driver::getInstance()->getStorageByUserId($user->getId());
-			if (!($userStorage instanceof Storage))
-			{
-				return;
-			}
+		if (!ModuleManager::isModuleInstalled('socialnetwork'))
+		{
+			return;
+		}
 
-			if ($userName != $userStorage->getName())
-			{
-				$userStorage->rename($userName);
-			}
+		$user = User::loadById($fields['ID']);
+		if (!($user instanceof User))
+		{
+			return;
+		}
+
+		if (self::isExternalAuthId($user->getExternalAuthId()))
+		{
+			return;
+		}
+
+		// keep the bootstrap below the checks above: open lines rewrite contact names on every incoming message
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return;
+		}
+
+		$userName = $user->getFormattedName();
+		if (empty($userName))
+		{
+			return;
+		}
+
+		$userStorage = Driver::getInstance()->getStorageByUserId($user->getId());
+		if (!($userStorage instanceof Storage))
+		{
+			return;
+		}
+
+		if ($userName != $userStorage->getName())
+		{
+			$userStorage->rename($userName);
 		}
 	}
 
@@ -79,7 +104,7 @@ class SocialnetworkHandlers
 
 		try
 		{
-			$storage->delete(self::getActivityUserId());
+			$storage->delete(self::getActivityUserId(), bypassDeletionRestriction: true);
 		}
 		catch(\Exception $e)
 		{
@@ -445,5 +470,10 @@ class SocialnetworkHandlers
 		}
 
 		return SystemUser::SYSTEM_USER_ID;
+	}
+
+	private static function isExternalAuthId(?string $externalAuthId): bool
+	{
+		return in_array((string)$externalAuthId, UserTable::getExternalUserTypes(), true);
 	}
 }

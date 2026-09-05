@@ -76,13 +76,14 @@ class MenuItemProvider
 			new MenuItem(
 				id: 'chat',
 				text: Loc::getMessage('IM_NAVIGATION_MENU_CHATS'),
+				isVisible: !$this->applicationFeatures->isChatFoldersWebAvailable,
 				sort: self::SORT_CHAT,
 			),
 			// TODO: replace with event
 			new MenuItem(
 				id: 'tasksTask',
 				text: Loc::getMessage('IM_NAVIGATION_MENU_TASKS_MSGVER_1'),
-				isVisible: $this->applicationFeatures->isTasksRecentListAvailable,
+				isVisible: $this->applicationFeatures->isTasksRecentListAvailable && !$this->applicationFeatures->isChatFoldersWebAvailable,
 				sort: self::SORT_TASKS,
 			),
 			new MenuItem(
@@ -91,7 +92,7 @@ class MenuItemProvider
 					'IM_NAVIGATION_MENU_COPILOT_MSGVER_1',
 					['#COPILOT_NAME#' => CopilotNameResolver::getInstance()->getName()]
 				),
-				isVisible: $this->applicationFeatures->copilotAvailable,
+				isVisible: $this->applicationFeatures->copilotAvailable && !$this->applicationFeatures->isChatFoldersWebAvailable,
 				sort: self::SORT_COPILOT,
 			),
 			new MenuItem(
@@ -100,13 +101,13 @@ class MenuItemProvider
 					$this->applicationFeatures->isNestedChatAvailable
 						? Loc::getMessage('IM_NAVIGATION_MENU_PROJECTS')
 						: Loc::getMessage('IM_NAVIGATION_MENU_COLLAB'),
-				isVisible: $this->applicationFeatures->collabAvailable,
+				isVisible: $this->applicationFeatures->collabAvailable && !$this->applicationFeatures->isChatFoldersWebAvailable,
 				sort: self::SORT_COLLAB,
 			),
 			new MenuItem(
 				id: 'channel',
 				text: Loc::getMessage('IM_NAVIGATION_MENU_CHANNELS'),
-				isVisible: $this->isGlobalActionPermitted(GlobalAction::GetChannels),
+				isVisible: $this->isGlobalActionPermitted(GlobalAction::GetChannels) && !$this->applicationFeatures->isChatFoldersWebAvailable,
 				sort: self::SORT_CHANNEL,
 			),
 			new MenuItem(
@@ -115,6 +116,7 @@ class MenuItemProvider
 				isVisible: (
 					!$this->applicationFeatures->openLinesV2
 					&& $this->isGlobalActionPermitted(GlobalAction::GetOpenlines)
+					&& !$this->applicationFeatures->isChatFoldersWebAvailable
 				),
 				sort: self::SORT_OPENLINES,
 			),
@@ -124,6 +126,7 @@ class MenuItemProvider
 				isVisible: (
 					$this->applicationFeatures->openLinesV2
 					&& $this->isGlobalActionPermitted(GlobalAction::GetOpenlines)
+					&& !$this->applicationFeatures->isChatFoldersWebAvailable
 				),
 				sort: self::SORT_OPENLINESV2,
 			),

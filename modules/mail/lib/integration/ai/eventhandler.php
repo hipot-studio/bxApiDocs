@@ -11,6 +11,8 @@ final class EventHandler
 {
 	public const SETTINGS_ITEM_MAIL_CODE = 'mail_copilot_item_enabled';
 	public const SETTINGS_ITEM_MAIL_CRM_CODE = 'mail_crm_copilot_item_enabled';
+	public const SETTINGS_ITEM_MAIL_SUBJECT_CODE = 'mail_subject_copilot_item_enabled';
+	public const SETTINGS_ITEM_MAIL_SUBJECT_CRM_CODE = 'mail_subject_crm_copilot_item_enabled';
 
 	public static function onTuningLoad(): Main\Entity\EventResult
 	{
@@ -35,6 +37,15 @@ final class EventHandler
 			'sort' => 400,
 		];
 
+		$items[self::SETTINGS_ITEM_MAIL_SUBJECT_CODE] = [
+			'group' => AI\Tuning\Defaults::GROUP_TEXT,
+			'title' => Loc::getMessage('MAIL_INTEGRATION_AI_EVENTHANDLER_MAIL_SUBJECT_SETTINGS_TITLE'),
+			'header' => Loc::getMessage('MAIL_INTEGRATION_AI_EVENTHANDLER_MAIL_SUBJECT_SETTINGS_SUBTITLE'),
+			'type' => AI\Tuning\Type::BOOLEAN,
+			'default' => true,
+			'sort' => 420,
+		];
+
 		if (Loader::includeModule('crm') && class_exists('\Bitrix\Crm\Integration\AI\AIManager'))
 		{
 			$items[self::SETTINGS_ITEM_MAIL_CRM_CODE] = [
@@ -45,6 +56,15 @@ final class EventHandler
 				'default' => true,
 				'sort' => 410,
 			];
+
+			$items[self::SETTINGS_ITEM_MAIL_SUBJECT_CRM_CODE] = [
+				'group' => AI\Tuning\Defaults::GROUP_TEXT,
+				'title' => Loc::getMessage('MAIL_INTEGRATION_AI_EVENTHANDLER_MAIL_SUBJECT_CRM_SETTINGS_TITLE'),
+				'header' => Loc::getMessage('MAIL_INTEGRATION_AI_EVENTHANDLER_MAIL_SUBJECT_CRM_SETTINGS_SUBTITLE'),
+				'type' => AI\Tuning\Type::BOOLEAN,
+				'default' => true,
+				'sort' => 430,
+			];
 		}
 
 		$result->modifyFields([
@@ -54,8 +74,17 @@ final class EventHandler
 		return $result;
 	}
 
-	private static function checkTextCategory():bool
+	public static function isTextCategoryAvailable(): bool
 	{
-		return !empty(AI\Engine::getByCategory('text', AI\Context::getFake()));
+		static $isAvailable = null;
+
+		$isAvailable ??= !empty(AI\Engine::getByCategory('text', AI\Context::getFake()));
+
+		return $isAvailable;
+	}
+
+	private static function checkTextCategory(): bool
+	{
+		return self::isTextCategoryAvailable();
 	}
 }

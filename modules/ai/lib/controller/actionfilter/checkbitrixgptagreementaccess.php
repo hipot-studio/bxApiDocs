@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\AI\Controller\ActionFilter;
 
+use Bitrix\AI\Facade\User;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
@@ -15,9 +16,13 @@ class CheckBitrixGptAgreementAccess extends Base
 {
 	public function onBeforeAction(Event $event): ?EventResult
 	{
-		global $USER;
+		$user = User::getInstance();
 
-		$isAdmin = Loader::includeModule('bitrix24') ? CBitrix24::IsPortalAdmin((int)$USER->GetID()) : $USER->isAdmin();
+		$isAdmin =
+			$user !== null
+			&& (Loader::includeModule('bitrix24')
+				? CBitrix24::IsPortalAdmin((int)$user->GetID())
+				: $user->isAdmin());
 
 		if (!$isAdmin)
 		{
@@ -28,4 +33,5 @@ class CheckBitrixGptAgreementAccess extends Base
 
 		return null;
 	}
+
 }

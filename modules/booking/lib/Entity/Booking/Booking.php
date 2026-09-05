@@ -14,7 +14,6 @@ use Bitrix\Booking\Entity\EntityWithExternalDataRelationInterface;
 use Bitrix\Booking\Entity\EventInterface;
 use Bitrix\Booking\Entity\EventTrait;
 use Bitrix\Booking\Entity\ExternalData\ExternalDataCollection;
-use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessageCollection;
 use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
@@ -35,6 +34,7 @@ class Booking implements
 	private string|null $name = null;
 	private string|null $description = null;
 	private bool|null $isConfirmed = null;
+	private int|null $confirmedAt = null;
 	private bool|null $isDeleted = null;
 	private int $counter = 0;
 	private array $counters = [];
@@ -47,7 +47,7 @@ class Booking implements
 	private ClientCollection $clientCollection;
 	private BookingSkuCollection $skuCollection;
 	private ExternalDataCollection $externalDataCollection;
-	private BookingMessageCollection $messageCollection;
+	private bool|null $isConfirmationSent = null;
 
 	private string|null $rrule = null;
 	private Booking|null $parent = null;
@@ -70,7 +70,6 @@ class Booking implements
 		$this->clientCollection = new ClientCollection();
 		$this->skuCollection = new BookingSkuCollection();
 		$this->externalDataCollection = new ExternalDataCollection();
-		$this->messageCollection = new BookingMessageCollection();
 	}
 
 	public function getId(): int|null
@@ -117,6 +116,18 @@ class Booking implements
 	public function setConfirmed(bool $confirmed): self
 	{
 		$this->isConfirmed = $confirmed;
+
+		return $this;
+	}
+
+	public function getConfirmedAt(): int|null
+	{
+		return $this->confirmedAt;
+	}
+
+	public function setConfirmedAt(int|null $confirmedAt): self
+	{
+		$this->confirmedAt = $confirmedAt;
 
 		return $this;
 	}
@@ -269,9 +280,9 @@ class Booking implements
 		return $this;
 	}
 
-	public function setMessageCollection(BookingMessageCollection $messageCollection): self
+	public function setIsConfirmationSent(bool $isConfirmationSent): self
 	{
-		$this->messageCollection = $messageCollection;
+		$this->isConfirmationSent = $isConfirmationSent;
 
 		return $this;
 	}
@@ -434,6 +445,7 @@ class Booking implements
 			'name' => $this->name,
 			'description' => $this->description,
 			'isConfirmed' => $this->isConfirmed,
+			'confirmedAt' => $this->confirmedAt,
 			'isDeleted' => $this->isDeleted,
 			'datePeriod' =>
 				$this->datePeriod
@@ -453,7 +465,7 @@ class Booking implements
 			'clients' => $this->clientCollection->toArray(),
 			'skus' => $this->skuCollection->toArray(),
 			'externalData' => $this->externalDataCollection->toArray(),
-			'messages' => $this->messageCollection->toArray(),
+			'isConfirmationSent' => $this->isConfirmationSent,
 			'primaryClient' => $this->getPrimaryClient(),
 			'rrule' => $this->rrule,
 			'parent' => $this->parent?->toArray(),
@@ -494,6 +506,11 @@ class Booking implements
 		if (isset($props['isConfirmed']))
 		{
 			$result->setConfirmed((bool)$props['isConfirmed']);
+		}
+
+		if (isset($props['confirmedAt']))
+		{
+			$result->setConfirmedAt((int)$props['confirmedAt']);
 		}
 
 		if (isset($props['isDeleted']))
@@ -539,11 +556,9 @@ class Booking implements
 			);
 		}
 
-		if (isset($props['messages']))
+		if (isset($props['isConfirmationSent']))
 		{
-			$result->setMessageCollection(
-				BookingMessageCollection::mapFromArray((array)$props['messages'])
-			);
+			$result->setIsConfirmationSent((bool)$props['isConfirmationSent']);
 		}
 
 		if (isset($props['rrule']))

@@ -21,7 +21,11 @@ class MailsFoldersManager extends SyncInternalManager
 			return $result;
 		}
 
-		return $this->processDelete($this->getDirPathByType(MailboxDirectoryTable::TYPE_TRASH),$deleteImmediately);
+		$this->collectDeferredPushTargets();
+
+		return $this->cancelDeferredPushOnSuccess(
+			$this->processDelete($this->getDirPathByType(MailboxDirectoryTable::TYPE_TRASH), $deleteImmediately)
+		);
 	}
 
 	public function moveMails($folderToMoveName)
@@ -75,13 +79,25 @@ class MailsFoldersManager extends SyncInternalManager
 			return $this->restoreMailsFromSpam();
 		}
 
+		$this->collectDeferredPushTargets();
+
 		$result = $this->moveMailsToFolder($folderToMoveName);
 		if (!$result->isSuccess())
 		{
 			return (new Main\Result())->addError(new Main\Error(Loc::getMessage('MAIL_CLIENT_SYNC_ERROR'), 'MAIL_CLIENT_SYNC_ERROR'));
 		}
 
-		return (new Main\Result());
+		return $this->cancelDeferredPushOnSuccess(new Main\Result());
+	}
+
+	private function cancelDeferredPushOnSuccess(Main\Result $result): Main\Result
+	{
+		if ($result->isSuccess())
+		{
+			$this->cancelDeferredPush();
+		}
+
+		return $result;
 	}
 
 	public function restoreMailsFromSpam()
@@ -119,7 +135,11 @@ class MailsFoldersManager extends SyncInternalManager
 			return $result;
 		}
 
-		return $this->processSpam($this->getDirPathByType(MailboxDirectoryTable::TYPE_SPAM));
+		$this->collectDeferredPushTargets();
+
+		return $this->cancelDeferredPushOnSuccess(
+			$this->processSpam($this->getDirPathByType(MailboxDirectoryTable::TYPE_SPAM))
+		);
 	}
 
 	private function processDelete($folderTrashName, $deleteImmediately = false)

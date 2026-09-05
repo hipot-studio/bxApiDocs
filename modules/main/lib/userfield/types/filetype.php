@@ -8,6 +8,8 @@ use Bitrix\Main\UI\FileInputUtility;
 use Bitrix\Main\UserField\File\ManualUploadRegistry;
 use CUserTypeManager;
 use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
+use Bitrix\Main\Application;
+use Bitrix\Main\ORM\Fields\IntegerField;
 
 Loc::loadMessages(__FILE__);
 
@@ -42,9 +44,9 @@ class FileType extends BaseType
 	 */
 	public static function getDbColumnType(): string
 	{
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
-		return $helper->getColumnTypeByField(new \Bitrix\Main\ORM\Fields\IntegerField('x'));
+		return $helper->getColumnTypeByField(new IntegerField('x'));
 	}
 
 	/**
@@ -157,7 +159,7 @@ class FileType extends BaseType
 			{
 				$msg[] = [
 					'id' => $userField['FIELD_NAME'],
-					'text' => Loc::getMessage('USER_TYPE_FILE_MAX_SIZE_ERROR',
+					'text' => Loc::getMessage('USER_TYPE_FILE_MAX_SIZE_ERROR_MSGVER_1',
 						[
 							'#FIELD_NAME#' => $fieldName,
 							'#MAX_ALLOWED_SIZE#' => $userField['SETTINGS']['MAX_ALLOWED_SIZE']
@@ -173,7 +175,7 @@ class FileType extends BaseType
 				count($userField['SETTINGS']['EXTENSIONS'])
 			)
 			{
-				foreach($userField['SETTINGS']['EXTENSIONS'] as $ext => $tmp_val)
+				foreach($userField['SETTINGS']['EXTENSIONS'] as $ext => $tmp)
 				{
 					$userField['SETTINGS']['EXTENSIONS'][$ext] = $ext;
 				}
@@ -376,7 +378,6 @@ class FileType extends BaseType
 
 	public static function onSearchIndex(array $userField): ?string
 	{
-		static $max_file_size = null;
 		$result = '';
 
 		if(is_array($userField['VALUE']))

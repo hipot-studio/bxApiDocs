@@ -78,6 +78,7 @@ final class File extends BaseObject
 			folderId: $scope->getFolderId(),
 			proxyTypes: null,
 			folderExcludedProxyType: \Bitrix\Im\Disk\ProxyType\Im::class,
+			typeFileValues: $request->getFileTypeValues(),
 		);
 		$objects = (new StorageFileFinder($this->userId, options: $options))->findModelsByText($request->getQuery());
 		$hasNextPage = count($objects) > RestManager::LIST_LIMIT;

@@ -1185,15 +1185,43 @@ class CCalendarEvent
 								$openEventSection = self::getOpenEventSection($userId);
 								$joinOpenEvents = $joinOpenEvents && in_array($openEventSection?->getId(), $sections, true);
 								$sections = array_diff($sections, [$openEventSection?->getId()]);
+								$sectionField = Util::isSectionStructureConverted()
+									? 'SECTION_ID'
+									: 'EVENT_SECT.SECT_ID'
+								;
+								$sectionFilter = (new ConditionTree())
+									->logic(ConditionTree::LOGIC_OR)
+									->whereIn($sectionField, $sections)
+								;
 
-								if (Util::isSectionStructureConverted())
+								if (
+									(
+										!isset($filterFields['CAL_TYPE'])
+										|| in_array(
+											Dictionary::CALENDAR_TYPE['user'],
+											(array)$filterFields['CAL_TYPE'],
+											true
+										)
+									)
+									&& in_array((int)CCalendar::GetMeetingSection($userId), $sections, true)
+								)
 								{
-									$query->whereIn('SECTION_ID', $sections);
+									$sectionFilter->where(
+										(new ConditionTree())
+											->logic(ConditionTree::LOGIC_AND)
+											->where('CAL_TYPE', Dictionary::CALENDAR_TYPE['user'])
+											->where('OWNER_ID', $userId)
+											->where('IS_MEETING', 1)
+											->where(
+												(new ConditionTree())
+													->logic(ConditionTree::LOGIC_OR)
+													->whereNull($sectionField)
+													->where($sectionField, 0)
+											)
+									);
 								}
-								else
-								{
-									$query->whereIn('EVENT_SECT.SECT_ID', $sections);
-								}
+
+								$query->where($sectionFilter);
 							}
 						}
 						break;
@@ -1230,10 +1258,7 @@ class CCalendarEvent
 			}
 		}
 
-		if (empty($selectFields))
-		{
-			$selectFields = ['*'];
-		}
+		$selectFields = self::expandDefaultSelectFields($selectFields);
 
 		$attendeesQuery->setSelect([
 			...$selectFields,
@@ -1385,6 +1410,40 @@ class CCalendarEvent
 			array_unique($involvedUsersIdList),
 			array_unique($openEventParentMeetingIdList),
 		];
+	}
+
+	private static function expandDefaultSelectFields(array $selectFields): array
+	{
+		$defaultFields = Internals\EventTable::getDefaultSelectFieldNames();
+
+		if (empty($selectFields))
+		{
+			return $defaultFields;
+		}
+
+		if (!in_array('*', $selectFields, true))
+		{
+			return $selectFields;
+		}
+
+		$expandedFields = [];
+		foreach ($selectFields as $key => $field)
+		{
+			if ($field === '*')
+			{
+				$expandedFields = array_merge($expandedFields, $defaultFields);
+			}
+			else if (is_int($key))
+			{
+				$expandedFields[] = $field;
+			}
+			else
+			{
+				$expandedFields[$key] = $field;
+			}
+		}
+
+		return $expandedFields;
 	}
 
 	private static function prepareEventObject(
@@ -4503,6 +4562,14 @@ class CCalendarEvent
 			$event = self::GetById($params['parentId'], false);
 			$recurrenceId = $event['RECURRENCE_ID'] ?? $event['ID'];
 
+			// Snapshot related events BEFORE the split: SaveEventEx('next') rebinds detached
+			// exceptions to a new master (changes their RECURRENCE_ID), so a re-fetch by the
+			// original $recurrenceId after the split would miss them (Mantis #249047).
+			if ($reccurentMode === 'all' || $reccurentMode === 'next')
+			{
+				$recRelatedEvents = self::GetEventsByRecId($recurrenceId, false);
+			}
+
 			if ($reccurentMode !== 'all')
 			{
 				$res = CCalendar::SaveEventEx([
@@ -4535,8 +4602,6 @@ class CCalendarEvent
 
 			if ($reccurentMode === 'all' || $reccurentMode === 'next')
 			{
-				$recRelatedEvents = self::GetEventsByRecId($recurrenceId, false);
-
 				if ($reccurentMode === 'next')
 				{
 					$untilTimestamp = CCalendar::Timestamp($currentDateFrom);

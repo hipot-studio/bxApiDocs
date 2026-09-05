@@ -35,7 +35,7 @@ final class EntryBuilder
 			$serverRelativeUrl = $fileSrc;
 		}
 
-		$serverRelativeUrl = Uri::urnEncode($serverRelativeUrl, 'UTF-8');
+		$serverRelativeUrl = Uri::urnEncode($serverRelativeUrl);
 
 		return new FileEntry($path, $serverRelativeUrl, $size);
 	}

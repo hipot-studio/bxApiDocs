@@ -5,6 +5,7 @@ namespace Bitrix\Disk\Bitrix24Disk\Legacy;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Bitrix24Disk\Legacy\Exceptions\UnexpectedNextIdException;
 use Bitrix\Disk\Bitrix24Disk\PageState;
+use Bitrix\Disk\Bitrix24Disk\TreePathResolver;
 use Bitrix\Disk\Bitrix24Disk\TreeNode;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
@@ -20,6 +21,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Data;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\DateTime;
 use \Bitrix\Disk\Internals;
 
@@ -35,6 +37,7 @@ class NewDiskStorage extends DiskStorage
 	private int $treeVersion = 0;
 	/** @var bool */
 	private $isLoadedTree = false;
+	private ?TreePathResolver $pathResolver = null;
 
 	public function getSnapshot($version = 0, PageState $pageState = null, PageState &$nextPageState = null)
 	{
@@ -253,6 +256,12 @@ class NewDiskStorage extends DiskStorage
 			$fetchedItems = $query->exec()->fetchAll();
 		}
 
+		if ($this->isPathResolverEnabled() && $fetchedItems)
+		{
+			$this->preloadPathsForRows($fetchedItems);
+			$this->loadSharedData();
+		}
+
 		$count = 0;
 		foreach($fetchedItems as $item)
 		{
@@ -263,8 +272,11 @@ class NewDiskStorage extends DiskStorage
 					throw new UnexpectedNextIdException("{$expectedFirstId} vs {$item['ID']}");
 				}
 
-				$this->loadTree();
-				$this->loadSharedData();
+				if (!$this->isPathResolverEnabled())
+				{
+					$this->loadTree();
+					$this->loadSharedData();
+				}
 			}
 
 			$count++;
@@ -353,7 +365,14 @@ class NewDiskStorage extends DiskStorage
 	private function formatFolderRowToResponse(array $row)
 	{
 		$objectSyncVersion = $row['SYNC_UPDATE_TIME']->getTimestamp();
-		$path = $this->requireActualPathByObjectId($row['ID'], $objectSyncVersion, true);
+		if ($this->isPathResolverEnabled())
+		{
+			$path = $this->getPathResolver()->resolve((int)$row['ID'], true);
+		}
+		else
+		{
+			$path = $this->requireActualPathByObjectId($row['ID'], $objectSyncVersion, true);
+		}
 		if (!$path)
 		{
 			return [];
@@ -401,7 +420,14 @@ class NewDiskStorage extends DiskStorage
 		}
 
 		$syncUpdateTime = $row['SYNC_UPDATE_TIME']->getTimestamp();
-		$path = $this->getPath($row['PARENT_ID']);
+		if ($this->isPathResolverEnabled())
+		{
+			$path = $this->getPathResolver()->resolve((int)$row['PARENT_ID']);
+		}
+		else
+		{
+			$path = $this->getPath($row['PARENT_ID']);
+		}
 		if (!$path)
 		{
 			return [];
@@ -486,7 +512,11 @@ class NewDiskStorage extends DiskStorage
 		$countElementPushedFromLinks = 0;
 		$countBeforeStart = $items->getCountOfPushedElements();
 
-		foreach($this->getSymlinkFoldersSortedById() as $link)
+		$symlinks = $this->isPathResolverEnabled()
+			? $this->getPathResolver()->getSymlinkNodesSortedById()
+			: $this->getSymlinkFoldersSortedById();
+
+		foreach ($symlinks as $link)
 		{
 			if(empty($expectedFirstId) || $link->id >= $expectedFirstId)
 			{
@@ -603,6 +633,12 @@ class NewDiskStorage extends DiskStorage
 			$fetchedItems = $query->exec()->fetchAll();
 		}
 
+		if ($this->isPathResolverEnabled() && $fetchedItems)
+		{
+			$this->preloadPathsForRows($fetchedItems);
+			$this->loadSharedData();
+		}
+
 		$count = 0;
 		foreach($fetchedItems as $item)
 		{
@@ -613,8 +649,11 @@ class NewDiskStorage extends DiskStorage
 					throw new UnexpectedNextIdException("{$expectedFirstId} vs {$item['ID']}");
 				}
 
-				$this->loadTree();
-				$this->loadSharedData();
+				if (!$this->isPathResolverEnabled())
+				{
+					$this->loadTree();
+					$this->loadSharedData();
+				}
 			}
 
 			$count++;
@@ -922,6 +961,46 @@ class NewDiskStorage extends DiskStorage
 		TreeNode::$__pathNodes = [];
 
 		Driver::getInstance()->cleanCacheTreeBitrixDisk([$this->storage->getId()]);
+
+		if ($this->pathResolver !== null)
+		{
+			$this->pathResolver->reset();
+		}
+	}
+
+	private function isPathResolverEnabled(): bool
+	{
+		// Option::get already caches per (module, name) for the request lifetime, so no local
+		// cache field is needed. Reading it fresh also keeps the flag consistent across a
+		// flushTreeCache()/reset() cycle without a dedicated invalidation step.
+		return Option::get('disk', 'snapshot_path_resolver_enabled', 'N') === 'Y';
+	}
+
+	private function getPathResolver(): TreePathResolver
+	{
+		if ($this->pathResolver === null)
+		{
+			$this->pathResolver = new TreePathResolver(
+				(int)$this->storage->getId(),
+				(int)$this->storage->getRootObjectId(),
+				$this->storage->getSecurityContext($this->userId)
+			);
+		}
+		return $this->pathResolver;
+	}
+
+	private function preloadPathsForRows(array $rows): void
+	{
+		$ids = [];
+		foreach ($rows as $row)
+		{
+			$ids[] = (int)$row['ID'];
+			if (!empty($row['PARENT_ID']))
+			{
+				$ids[] = (int)$row['PARENT_ID'];
+			}
+		}
+		$this->getPathResolver()->preload($ids);
 	}
 
 	public function loadTree(): void

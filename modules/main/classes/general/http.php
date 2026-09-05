@@ -1,7 +1,8 @@
 <?php
 
 use Bitrix\Main;
-use Bitrix\Main\Web;
+use Bitrix\Main\Web\Uri;
+use Bitrix\Main\Config\Configuration;
 
 class CHTTP
 {
@@ -24,7 +25,7 @@ class CHTTP
 
 	public function __construct()
 	{
-		$defaultOptions = \Bitrix\Main\Config\Configuration::getValue("http_client_options");
+		$defaultOptions = Configuration::getValue("http_client_options");
 		if(isset($defaultOptions["socketTimeout"]))
 		{
 			$this->http_timeout = intval($defaultOptions["socketTimeout"]);
@@ -38,28 +39,14 @@ class CHTTP
 	 */
 	public static function URN2URI($urn, $server_name = '')
 	{
-		/** @global CMain $APPLICATION */
-		global $APPLICATION;
+		$url = (string)(new Uri($urn))->toAbsolute($server_name ?: null);
 
-		if(preg_match("/^[a-z]+:\\/\\//", $urn))
+		if ($urn == '')
 		{
-			$uri = $urn;
+			$url = rtrim($url, '/');
 		}
-		else
-		{
-			if($APPLICATION->IsHTTPS())
-				$proto = "https://";
-			else
-				$proto = "http://";
 
-			if($server_name <> '')
-				$server_name = preg_replace("/:(443|80)$/", "", $server_name);
-			else
-				$server_name = preg_replace("/:(443|80)$/", "", $_SERVER["HTTP_HOST"]);
-
-			$uri = $proto.$server_name.$urn;
-		}
-		return $uri;
+		return $url;
 	}
 
 	public function Download($url, $file)
@@ -507,7 +494,7 @@ class CHTTP
 		}
 	}
 
-	/*
+	/**
 	 * @deprecated Use \Bitrix\Main\Server::parseAuthRequest()
 	 */
 	public static function ParseAuthRequest()
@@ -595,7 +582,7 @@ class CHTTP
 	 */
 	public static function urnEncode($str, $charset = false)
 	{
-		return Web\Uri::urnEncode($str, $charset);
+		return Uri::urnEncode($str, $charset);
 	}
 
 	/**
@@ -603,7 +590,7 @@ class CHTTP
 	 */
 	public static function urnDecode($str, $charset = false)
 	{
-		return Web\Uri::urnDecode($str, $charset);
+		return Uri::urnDecode($str, $charset);
 	}
 
 	/**
@@ -611,7 +598,7 @@ class CHTTP
 	 */
 	public static function isPathTraversalUri($url)
 	{
-		$uri = new Web\Uri($url);
+		$uri = new Uri($url);
 		return $uri->isPathTraversal();
 	}
 }

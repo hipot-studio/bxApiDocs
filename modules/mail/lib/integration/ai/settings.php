@@ -10,6 +10,8 @@ final class Settings
 {
 	private const SETTINGS_ITEM_MAIL_CODE = EventHandler::SETTINGS_ITEM_MAIL_CODE;
 	private const SETTINGS_ITEM_MAIL_CRM_CODE = EventHandler::SETTINGS_ITEM_MAIL_CRM_CODE;
+	private const SETTINGS_ITEM_MAIL_SUBJECT_CODE = EventHandler::SETTINGS_ITEM_MAIL_SUBJECT_CODE;
+	private const SETTINGS_ITEM_MAIL_SUBJECT_CRM_CODE = EventHandler::SETTINGS_ITEM_MAIL_SUBJECT_CRM_CODE;
 	public const MAIL_NEW_MESSAGE_CONTEXT_ID = 'mail_new_message';
 	public const MAIL_REPLY_MESSAGE_CONTEXT_ID = 'mail_reply_message';
 	public const MAIL_CRM_NEW_MESSAGE_CONTEXT_ID = 'crm_mail_new_message';
@@ -49,6 +51,34 @@ final class Settings
 		$item = $manager->getItem(self::SETTINGS_ITEM_MAIL_CRM_CODE);
 
 		return (bool)$item?->getValue();
+	}
+
+	public function isMailSubjectCopilotEnabledInGlobalSettings(): bool
+	{
+		if (!Loader::includeModule('ai')
+			|| !$this->isAITurningManagerAvailable()
+			|| !EventHandler::isTextCategoryAvailable()
+		)
+		{
+			return false;
+		}
+
+		return $this->getExternalTuningValue(self::SETTINGS_ITEM_MAIL_SUBJECT_CODE, true);
+	}
+
+	public function isMailCrmSubjectCopilotEnabledInGlobalSettings(): bool
+	{
+		if (!Loader::includeModule('ai')
+			|| !Loader::includeModule('crm')
+			|| !$this->isAITurningManagerAvailable()
+			|| !class_exists('\Bitrix\Crm\Integration\AI\AIManager')
+			|| !EventHandler::isTextCategoryAvailable()
+		)
+		{
+			return false;
+		}
+
+		return $this->getExternalTuningValue(self::SETTINGS_ITEM_MAIL_SUBJECT_CRM_CODE, true);
 	}
 
 	public function getMailCopilotParams(string $contextId, ?array $contextParams = null): array
@@ -97,5 +127,17 @@ final class Settings
 	private function isAITurningManagerAvailable(): bool
 	{
 		return Loader::includeModule('ai') && class_exists('\Bitrix\AI\Tuning\Manager');
+	}
+
+	private function getExternalTuningValue(string $code, bool $default): bool
+	{
+		static $storage = null;
+
+		$storage ??= AI\Tuning\Manager::getTuningStorage();
+
+		return array_key_exists($code, $storage)
+			? (bool)$storage[$code]
+			: $default
+		;
 	}
 }

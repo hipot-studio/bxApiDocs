@@ -6,12 +6,11 @@ if(!CModule::IncludeModule('rest'))
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Rest\Exceptions\ArgumentTypeException;
-use Bitrix\Rest\OAuth;
 use Bitrix\Rest\APAuth;
-use Bitrix\Voximplant\Security;
-use Bitrix\Voximplant\Rest;
+use Bitrix\Rest\OAuth;
 use Bitrix\Voximplant\Integration;
+use Bitrix\Voximplant\Rest;
+use Bitrix\Voximplant\Security;
 use Bitrix\Voximplant\StatisticTable;
 
 \Bitrix\Main\Localization\Loc::loadMessages(__FILE__);
@@ -2153,7 +2152,7 @@ class CVoxImplantRestService extends IRestService
 			return $eventData;
 		}
 
-		throw new Exception('Wrong app!');
+		throw new \Bitrix\Main\SystemException('Wrong app!');
 	}
 
 	protected static function getCurrentUserId()

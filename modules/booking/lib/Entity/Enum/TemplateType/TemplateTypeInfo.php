@@ -12,4 +12,5 @@ enum TemplateTypeInfo: string
 
 	case Animate = 'animate';
 	case InAnimate = 'inanimate';
+	case InAnimateLong = 'inanimate_long';
 }

@@ -72,6 +72,7 @@ class Queue extends Http\Queue
 			}
 			catch (SkipBodyException)
 			{
+				// we don't want a body, just fulfil a promise with response headers
 				$fetchBody = false;
 			}
 
@@ -84,22 +85,25 @@ class Queue extends Http\Queue
 				$promise = $this->promises[$promiseId];
 				$handler = $promise->getHandler();
 
-				if (!$fetchBody)
-				{
-					// we don't want a body, just fulfil a promise with response headers
-					$promise->fulfill($handler->getResponse());
-				}
-				elseif ($info['result'] === CURLE_OK)
+				if ($info['result'] === CURLE_OK || !$fetchBody)
 				{
 					$response = $handler->getResponse();
 
-					if ($handler->getDebugLevel() & HttpDebug::RESPONSE_BODY)
+					if ($response === null)
 					{
-						$handler->log($response->getBody(), HttpDebug::RESPONSE_BODY);
+						$response = $handler->buildResponse();
 					}
 
-					// need to ajust the response headers (PSR-18)
-					$response->adjustHeaders();
+					if ($fetchBody)
+					{
+						if ($handler->getDebugLevel() & HttpDebug::RESPONSE_BODY)
+						{
+							$handler->log($response->getBody(), HttpDebug::RESPONSE_BODY);
+						}
+
+						// need to ajust the response headers (PSR-18)
+						$response->adjustHeaders();
+					}
 
 					$promise->fulfill($response);
 

@@ -6,7 +6,10 @@ use Bitrix\Disk;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Controller\Response\PreviewResponseBuilder;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Infrastructure\Controller\HtmlViewerRefusalResponse;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Service\HtmlViewerService;
+use Bitrix\Disk\Internal\Service\MarkdownRenderService;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Security\ParameterSigner;
@@ -14,6 +17,7 @@ use Bitrix\Disk\TypeFile;
 use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Response;
@@ -21,6 +25,8 @@ use Bitrix\Main\Localization\Loc;
 
 class File extends BaseObject
 {
+	use HtmlViewerRefusalResponse;
+
 	public function configureActions()
 	{
 		$configureActions = parent::configureActions();
@@ -38,7 +44,9 @@ class File extends BaseObject
 			]
 		];
 
-		$configureActions['download'] = [
+		$configureActions['download'] =
+		$configureActions['showMarkdown'] =
+		$configureActions['showHtml'] = [
 			'-prefilters' => [
 				Main\Engine\ActionFilter\Csrf::class,
 				Authentication::class,
@@ -301,6 +309,31 @@ class File extends BaseObject
 		$response->setCacheTime(Disk\Configuration::DEFAULT_CACHE_TIME);
 
 		return $response;
+	}
+
+	public function showMarkdownAction(Disk\File $file): ?array
+	{
+		if (!Configuration::isEnabledMarkdownViewer())
+		{
+			$this->addError(new Error('Markdown viewer is disabled by configuration.', MarkdownRenderService::ERROR_VIEWER_DISABLED));
+
+			return null;
+		}
+
+		$result = (new MarkdownRenderService())->renderByFile($file);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getData();
+	}
+
+	public function showHtmlAction(Disk\File $file): Main\HttpResponse
+	{
+		return ServiceLocator::getInstance()->get(HtmlViewerService::class)->showByFile($file);
 	}
 
 	public function copyToAction(Disk\File $file, Disk\Folder $toFolder)

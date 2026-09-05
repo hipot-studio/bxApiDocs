@@ -19,6 +19,7 @@ class HttpDebug
 	public const RESPONSE = 0b00001100;
 	public const CONNECT = 0b00010000;
 	public const DIAGNOSTICS = 0b00100000;
-	public const ALL = 0b00111111;
-	public const DEFAULT = self::CONNECT | self::REQUEST_HEADERS | self::RESPONSE_HEADERS;
+	public const BACKTRACE = 0b01000000;
+	public const ALL = 0b01111111;
+	public const DEFAULT = self::BACKTRACE | self::CONNECT | self::REQUEST_HEADERS | self::RESPONSE_HEADERS;
 }

@@ -4,8 +4,8 @@ namespace Bitrix\Pull;
 
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Web\HttpClient;
-use Bitrix\Pull\Protobuf;
 use Protobuf\MessageCollection;
+use Bitrix\Main\Web\Uri;
 
 class ProtobufTransport
 {
@@ -26,7 +26,7 @@ class ProtobufTransport
 		$queueServerUrl = $options['serverUrl'] ?? Config::getPublishUrl();
 		$result->withRemoteAddress($queueServerUrl);
 
-		$queueServerUrl = \CHTTP::urlAddParams($queueServerUrl, [
+		$queueServerUrl = (string)(new Uri($queueServerUrl))->addParams([
 			"binaryMode" => "true",
 			"hostname" => Config::getHostname(),
 		]);
@@ -38,7 +38,7 @@ class ProtobufTransport
 			if(\CPullOptions::IsServerShared())
 			{
 				$signature = \CPullChannel::GetSignature($bodyStream->getContents());
-				$urlWithSignature = \CHTTP::urlAddParams($urlWithSignature, ["signature" => $signature]);
+				$urlWithSignature = (string)(new Uri($urlWithSignature))->addParams(["signature" => $signature]);
 			}
 
 			$httpClient->disableSslVerification();
@@ -131,7 +131,7 @@ class ProtobufTransport
 			$requests[] = $request;
 		}
 
-		$queueServerUrl = \CHTTP::urlAddParams(Config::getPublishUrl(), [
+		$queueServerUrl = (string)(new Uri(Config::getPublishUrl()))->addParams([
 			"binaryMode" => "true",
 			"hostname" => Config::getHostname(),
 		]);
@@ -147,7 +147,7 @@ class ProtobufTransport
 			if(\CPullOptions::IsServerShared())
 			{
 				$signature = \CPullChannel::GetSignature($bodyStream->getContents());
-				$urlWithSignature = \CHTTP::urlAddParams($urlWithSignature, ["signature" => $signature]);
+				$urlWithSignature = (string)(new Uri($urlWithSignature))->addParams(["signature" => $signature]);
 			}
 
 			$binaryResponse = $http->post($urlWithSignature, $bodyStream);
@@ -165,7 +165,7 @@ class ProtobufTransport
 			{
 				$responseBatch = Protobuf\ResponseBatch::fromStream($binaryResponse);
 			}
-			catch (\Exception $e)
+			catch (\Exception)
 			{
 				return [];
 			}

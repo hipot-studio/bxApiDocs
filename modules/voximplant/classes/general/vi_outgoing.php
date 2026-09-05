@@ -593,7 +593,7 @@ class CVoxImplantOutgoing
 
 		$callId = $aiCallResult->call_id ?? '';
 
-		$call = VI\Call::create([
+		$callFields = [
 			'INCOMING' => CVoxImplantMain::CALL_OUTGOING,
 			'CALL_ID' => $callId,
 			'CALLER_ID' => $aiCallData['Number'] ?? '',
@@ -601,7 +601,15 @@ class CVoxImplantOutgoing
 			'DATE_CREATE' => new FieldType\DateTime(),
 			'LAST_PING' => null,
 			'QUEUE_ID' => null,
-		]);
+		];
+
+		$userId = (int)($aiCallData['UserId'] ?? 0);
+		if ($userId > 0)
+		{
+			$callFields['USER_ID'] = $userId;
+		}
+
+		$call = VI\Call::create($callFields);
 
 		$crmEntityType = $aiCallData['CrmEntityType'] ?? '';
 		$crmEntityId = (int)($aiCallData['CrmEntityId'] ?? 0);

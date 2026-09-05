@@ -101,13 +101,14 @@ class Analytics
 			->send();
 	}
 
-	public static function sendAiQueryLimitEvent(string $errorLimit, string $moduleId)
+	public static function sendAiQueryLimitEvent(string $errorLimit, string $moduleId, int $userId): void
 	{
 		$event = new AnalyticsEvent('limit_exceeded', self::DEFAULT_TOOL, 'limits');
 		$event
 			->setType('bitrixgpt_limit')
 			->setP1('moduleId_' . $moduleId)
 			->setSection(strtolower(str_replace('_', '-', $errorLimit)))
+			->setUserId($userId)
 			->send()
 		;
 	}

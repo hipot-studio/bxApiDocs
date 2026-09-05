@@ -48,7 +48,7 @@ class Listener
 		if ($item->getId())
 		{
 			$documentId = Document\Item::makeComplexId($item->getType()->getId(), $item->getId());
-			\CBPDocument::OnDocumentDelete($documentId, $errors);
+			\CBPDocument::onDocumentDelete($documentId, $errors);
 		}
 
 		return new Main\Result();

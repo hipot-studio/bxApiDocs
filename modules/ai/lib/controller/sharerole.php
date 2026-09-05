@@ -76,7 +76,7 @@ class ShareRole extends Controller
 
 		if (!$roleCreateResult->isSuccess())
 		{
-			$event->send(Status::Error);
+			$event->send(Status::Error, $requestDTO->userCreatorId);
 			$this->addErrors($roleCreateResult->getErrors());
 			return [];
 		}
@@ -87,12 +87,12 @@ class ShareRole extends Controller
 
 		if (!$shareCreateResult->isSuccess())
 		{
-			$event->send(Status::Error);
+			$event->send(Status::Error, $requestDTO->userCreatorId);
 			$this->addErrors($roleCreateResult->getErrors());
 			return [];
 		}
 
-		$event->send(Status::Success);
+		$event->send(Status::Success, $requestDTO->userCreatorId);
 
 		return [
 			'code' => $requestDTO->roleCode,
@@ -112,7 +112,7 @@ class ShareRole extends Controller
 
 		if (!$updateResult->isSuccess())
 		{
-			$event->send(Status::Error);
+			$event->send(Status::Error, $requestDTO->userCreatorId);
 
 			return;
 		}
@@ -122,12 +122,12 @@ class ShareRole extends Controller
 
 		if (!$createResult->isSuccess())
 		{
-			$event->send(Status::Error);
+			$event->send(Status::Error, $requestDTO->userCreatorId);
 
 			return;
 		}
 
-		$event->send(Status::Success);
+		$event->send(Status::Success, $requestDTO->userCreatorId);
 	}
 
 	public function getRoleByCodeForUpdateAction(

@@ -27,6 +27,8 @@ use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\SearchEmailsTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\SearchEmployeeEmailsTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\ListMailRecipientsTool;
 use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\SendEmailTool;
+use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\Classification\RemoveEmailClassificationTool;
+use Bitrix\Mail\Integration\AiAssistant\Service\Tool\Message\Classification\SetEmailClassificationTool;
 
 class MailboxToolSet extends BaseToolSet
 {
@@ -50,6 +52,8 @@ class MailboxToolSet extends BaseToolSet
 		SendEmailTool::class,
 		ForwardEmailTool::class,
 		ReplyToEmailTool::class,
+		SetEmailClassificationTool::class,
+		RemoveEmailClassificationTool::class,
 	];
 
 	public function getCode(): string

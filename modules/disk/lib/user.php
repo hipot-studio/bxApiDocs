@@ -40,6 +40,8 @@ class User extends Internals\Model
 	protected $personalPhoto;
 	/** @var string */
 	protected $isOnline;
+	/** @var string */
+	protected $externalAuthId;
 	/** @var bool */
 	private $isIntranetUser;
 	/** @var bool */
@@ -163,6 +165,27 @@ class User extends Internals\Model
 	}
 
 	/**
+	 * Returns type of external authorization.
+	 * The field is absent in {@see User::getFieldsForSelect()}, so for a model built from such a select it is read separately.
+	 * @return string|null
+	 */
+	public function getExternalAuthId(): ?string
+	{
+		if (!$this->isLoadedAttribute('externalAuthId') && !empty($this->getId()))
+		{
+			$row = UserTable::getRow([
+				'select' => ['EXTERNAL_AUTH_ID'],
+				'filter' => ['=ID' => $this->getId()],
+			]);
+
+			$this->externalAuthId = $row['EXTERNAL_AUTH_ID'] ?? null;
+			$this->setAsLoadedAttribute('externalAuthId');
+		}
+
+		return $this->externalAuthId;
+	}
+
+	/**
 	 * @return int
 	 */
 	public function getId()
@@ -257,6 +280,7 @@ class User extends Internals\Model
 			'PERSONAL_GENDER' => 'personalGender',
 			'PERSONAL_PHOTO' => 'personalPhoto',
 			'IS_ONLINE' => 'isOnline',
+			'EXTERNAL_AUTH_ID' => 'externalAuthId',
 		);
 	}
 

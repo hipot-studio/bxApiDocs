@@ -105,16 +105,6 @@ class Settings
 		return \Bitrix\Main\Config\Option::get('immobile', 'openlines_in_messenger_v2_available', 'Y') === 'Y';
 	}
 
-	public static function isRecentFilterAvailable(): bool
-	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'recent_filter_available', 'N') === 'Y';
-	}
-
-	public static function isExternalChatMessageForwardingAvailable(): bool
-	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'external_chat_message_forwarding_available', 'N') === 'Y';
-	}
-
 	public static function isAutoTaskEnabled(): bool
 	{
 		if (!Loader::includeModule('im'))

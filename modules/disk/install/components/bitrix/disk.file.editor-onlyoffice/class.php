@@ -593,17 +593,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			return [];
 		}
 
-		$list = [];
-		$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
-		foreach ($documentHandlersManager->getHandlers() as $handler)
-		{
-			if ($handler instanceof Disk\Document\Contract\FileCreatable)
-			{
-				$list[] = $handler;
-			}
-		}
-
-		return $list;
+		return array_values(Driver::getInstance()->getDocumentHandlersManager()->getHandlersForCreatingFile());
 	}
 
 	protected function getEditorJsonConfig(OnlyOffice\Editor\ConfigBuilder $configBuilder): Result

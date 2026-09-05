@@ -65,21 +65,26 @@ class Type extends Base
 		];
 	}
 
-	public function listAction(array $select = ['*'], array $order = null, array $filter = null, PageNavigation $pageNavigation = null): ?Page
+	public function listAction(
+		array $select = ['*'],
+		?array $order = null,
+		?array $filter = null,
+		?PageNavigation $pageNavigation = null
+	): ?Page
 	{
-		$converter = new Converter(Converter::TO_UPPER | Converter::KEYS | Converter::TO_SNAKE);
+		$filterConverter = new Converter(Converter::TO_UPPER | Converter::KEYS | Converter::TO_SNAKE);
 		if(is_array($filter))
 		{
-			$filter = $this->removeDotsFromKeys($converter->process($filter));
+			$filter = $this->filterOutFieldsFromListFilter($this->removeDotsFromKeys($filterConverter->process($filter)));
 		}
 		if(is_array($order))
 		{
-			$order = $converter->process($order);
+			$order = $this->filterOutFieldsFromListOrder($filterConverter->process($order));
 		}
 		if(is_array($select))
 		{
-			$converter = new Converter(Converter::TO_UPPER | Converter::VALUES | Converter::TO_SNAKE);
-			$select = $this->removeDotsFromValues($converter->process($select));
+			$selectConverter = new Converter(Converter::TO_UPPER | Converter::VALUES | Converter::TO_SNAKE);
+			$select = $this->filterOutFieldsFromListSelect($this->removeDotsFromValues($selectConverter->process($select)));
 		}
 
 		if(is_array($filter))
@@ -111,6 +116,57 @@ class Type extends Base
 		{
 			return TypeTable::getCount($filter);
 		});
+	}
+
+	protected function filterOutFieldsFromListFilter(array $filter): array
+	{
+		foreach($filter as $name => $value)
+		{
+			if(is_string($name) && $this->isFieldsFilterName($name))
+			{
+				unset($filter[$name]);
+				continue;
+			}
+
+			if(is_int($name) && is_array($value))
+			{
+				$filter[$name] = $this->filterOutFieldsFromListFilter($value);
+				if(empty($filter[$name]))
+				{
+					unset($filter[$name]);
+				}
+			}
+		}
+
+		return $filter;
+	}
+
+	protected function filterOutFieldsFromListOrder(array $order): array
+	{
+		unset($order['FIELDS']);
+
+		return $order;
+	}
+
+	protected function filterOutFieldsFromListSelect(array $select): array
+	{
+		if(!in_array('FIELDS', $select, true))
+		{
+			return $select;
+		}
+
+		$select = array_filter($select, static function($field)
+		{
+			return $field !== 'FIELDS';
+		});
+
+		return empty($select) ? ['*'] : $select;
+	}
+
+	protected function isFieldsFilterName(string $name): bool
+	{
+		// Base::isCorrectFieldName() does not cover the full ORM operator set used in filters.
+		return preg_replace('/^[=!%><@?*]+/u', '', mb_strtoupper($name)) === 'FIELDS';
 	}
 
 	public function addAction(array $fields, string $eventId = ''): ?array

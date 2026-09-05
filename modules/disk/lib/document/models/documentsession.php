@@ -57,6 +57,8 @@ final class DocumentSession extends Model
 	protected $type;
 	/** @var int */
 	protected $status;
+	/** @var int|null */
+	protected $externalLinkId;
 	/** @var string */
 	protected $context;
 	/** @var string|null */
@@ -73,6 +75,11 @@ final class DocumentSession extends Model
 
 	public static function add(array $data, ErrorCollection $errorCollection)
 	{
+		if (!array_key_exists('EXTERNAL_LINK_ID', $data))
+		{
+			$data['EXTERNAL_LINK_ID'] = self::extractExternalLinkId($data['CONTEXT'] ?? null);
+		}
+
 		self::trackFirstEditForLimitedEdit($data);
 
 		return parent::add($data, $errorCollection);
@@ -190,6 +197,25 @@ final class DocumentSession extends Model
 
 	public function isOutdatedByFileContent(): bool
 	{
+		// When the session recorded the file's content-version at creation time, compare
+		// by that monotonic version instead of the second-granular SYNC_UPDATE_TIME.
+		// `GLOBAL_CONTENT_VERSION` is bumped on every `uploadVersion`, so a strict `>`
+		// here is race-free (no "created in the same second as the save" blind spot that
+		// the timestamp comparison below suffers from). The snapshot is written only by
+		// the vibeoffice session manager; OnlyOffice sessions never carry it and fall
+		// through to the unchanged timestamp logic — keeping OnlyOffice behaviour intact.
+		$contentVersionSnapshot = $this->getContentVersionSnapshot();
+		if ($contentVersionSnapshot !== null)
+		{
+			$file = $this->getObject();
+			if (!$file)
+			{
+				return false;
+			}
+
+			return (int)$file->getGlobalContentVersion() > $contentVersionSnapshot;
+		}
+
 		$syncUpdateTime = $this->getObject()->getSyncUpdateTime();
 		if (!$syncUpdateTime)
 		{
@@ -197,6 +223,51 @@ final class DocumentSession extends Model
 		}
 
 		return ($syncUpdateTime->getTimestamp() - $this->getCreateTime()->getTimestamp()) > 0;
+	}
+
+	/**
+	 * The file `GLOBAL_CONTENT_VERSION` captured when the session was created, if any.
+	 *
+	 * Neutral reader over the session CONTEXT: it is written only by the vibeoffice
+	 * session manager (under its reserved `vo` key); for sessions that never stored it
+	 * (e.g. OnlyOffice/Flipchart) this returns null and the caller keeps the legacy
+	 * timestamp-based staleness check.
+	 */
+	public function getContentVersionSnapshot(): ?int
+	{
+		$context = self::decodeRawContext($this->getContextRaw());
+
+		$vo = $context['vo'] ?? null;
+		if (!is_array($vo))
+		{
+			return null;
+		}
+
+		$version = $vo['contentVersion'] ?? null;
+
+		return is_numeric($version) ? (int)$version : null;
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private static function decodeRawContext(?string $raw): array
+	{
+		if ($raw === null || $raw === '')
+		{
+			return [];
+		}
+
+		try
+		{
+			$decoded = \Bitrix\Main\Web\Json::decode($raw);
+		}
+		catch (\Throwable)
+		{
+			return [];
+		}
+
+		return is_array($decoded) ? $decoded : [];
 	}
 
 	/**
@@ -243,6 +314,11 @@ final class DocumentSession extends Model
 		return $this->context;
 	}
 
+	public function getExternalLinkId(): ?int
+	{
+		return $this->externalLinkId;
+	}
+
 	public function getServiceRaw(): ?string
 	{
 		return $this->service;
@@ -256,6 +332,17 @@ final class DocumentSession extends Model
 	public function getContext(): ?DocumentSessionContext
 	{
 		return DocumentSessionContext::buildFromJson($this->getContextRaw());
+	}
+
+	public function matchesExternalContext(DocumentSessionContext $requestedContext): bool
+	{
+		$requestedExternalLinkId = $requestedContext->getExternalLinkId();
+		if ($requestedExternalLinkId === null)
+		{
+			return true;
+		}
+
+		return $this->getExternalSessionContext()?->getExternalLinkId() === $requestedExternalLinkId;
 	}
 
 	public function isView(): bool
@@ -335,12 +422,21 @@ final class DocumentSession extends Model
 
 	public function createEditSession(): ?self
 	{
-		$currentEditSession = self::load([
+		$currentEditSessionFilter = [
 			'OBJECT_ID' => $this->getObjectId(),
 			'VERSION_ID' => $this->getVersionId(),
 			'TYPE' => self::TYPE_EDIT,
 			'STATUS' => self::STATUS_ACTIVE,
-		]);
+		];
+		if ($this->getServiceRaw() !== null)
+		{
+			$currentEditSessionFilter['SERVICE'] = $this->getServiceRaw();
+		}
+
+		$externalContext = $this->getExternalSessionContext();
+		$currentEditSession = $externalContext === null
+			? self::load($currentEditSessionFilter)
+			: $this->findEditSessionByExternalContext($currentEditSessionFilter, $externalContext);
 
 		if ($currentEditSession && $currentEditSession->belongsToUser($this->getUserId()))
 		{
@@ -367,6 +463,53 @@ final class DocumentSession extends Model
 			'CONTEXT' => $this->getContextRaw(),
 			'SERVICE' => $this->getServiceRaw(),
 		], $this->errorCollection);
+	}
+
+	private function findEditSessionByExternalContext(
+		array $filter,
+		DocumentSessionContext $context,
+	): ?self
+	{
+		$filter['=EXTERNAL_LINK_ID'] = $context->getExternalLinkId();
+		$sessions = self::getModelList([
+			'select' => ['*'],
+			'filter' => $filter,
+			'order' => ['ID' => 'DESC'],
+			'limit' => 1,
+		]);
+
+		return array_shift($sessions);
+	}
+
+	private static function extractExternalLinkId(mixed $context): ?int
+	{
+		if (!is_string($context) || $context === '')
+		{
+			return null;
+		}
+
+		try
+		{
+			return DocumentSessionContext::buildFromJson($context)?->getExternalLinkId();
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+	}
+
+	private function getExternalSessionContext(): ?DocumentSessionContext
+	{
+		try
+		{
+			$context = $this->getContext();
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+
+		return $context?->getExternalLinkId() === null ? null : $context;
 	}
 
 	/**
@@ -576,6 +719,7 @@ final class DocumentSession extends Model
 			'CREATE_TIME' => 'createTime',
 			'TYPE' => 'type',
 			'STATUS' => 'status',
+			'EXTERNAL_LINK_ID' => 'externalLinkId',
 			'CONTEXT' => 'context',
 			'SERVICE' => 'service',
 		];

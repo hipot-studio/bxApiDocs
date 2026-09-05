@@ -150,6 +150,11 @@ class ConfigTable extends Data\DataManager
 				'default_value' => 'voicemail',
 				'validation' => function (){ return array(new Entity\Validator\Length(null, 50));},
 			)),
+			'DTMF_TYPE' => new Entity\StringField('DTMF_TYPE', array(
+				'size' => 20,
+				'title' => Loc::getMessage('INCOMING_CONFIG_ENTITY_DTMF_TYPE_FIELD'),
+				'validation' => function (){ return array(new Entity\Validator\Length(null, 20));},
+			)),
 			'RECORDING' => new Entity\BooleanField('RECORDING', array(
 				'values' => array('N', 'Y'),
 				'title' => Loc::getMessage('INCOMING_CONFIG_ENTITY_RECORDING_FIELD'),

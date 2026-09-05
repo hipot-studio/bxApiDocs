@@ -1078,9 +1078,4 @@ class CPushManager
 	{
 		return self::$pushServices;
 	}
-
-	public function sendBadges($userId = null, $appId = self::DEFAULT_APP_ID)
-	{
-		return \Bitrix\Pull\MobileCounter::send($userId, $appId);
-	}
 }

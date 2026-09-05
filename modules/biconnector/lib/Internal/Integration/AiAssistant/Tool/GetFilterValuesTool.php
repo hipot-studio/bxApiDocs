@@ -136,8 +136,8 @@ final class GetFilterValuesTool extends BaseBiTool
 		$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById($externalId);
 		if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
 		{
-			throw self::unavailableDashboardException(
-				$dashboardDtoResp->getErrors(),
+			throw self::integratorFailureException(
+				$dashboardDtoResp,
 				['stage' => 'get_filter_values.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
 		}
@@ -189,8 +189,8 @@ final class GetFilterValuesTool extends BaseBiTool
 				throw self::toMcpException($columnCheck);
 			}
 
-			throw self::unavailableDashboardException(
-				$response->getErrors(),
+			throw self::integratorFailureException(
+				$response,
 				['stage' => 'get_filter_values.fetch', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
 		}

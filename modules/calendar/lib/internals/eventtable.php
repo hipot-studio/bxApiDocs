@@ -11,6 +11,7 @@ use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\ScalarField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
@@ -35,6 +36,14 @@ class EventTable extends Main\Entity\DataManager
 {
 	use DeleteByFilterTrait;
 	use UpdateByFilterTrait;
+
+	/**
+	 * Fields kept out of the default select set: the column is only read by the fulltext filter
+	 * and by the search index update, so the common read path must not fetch it.
+	 */
+	private const FIELDS_OUT_OF_DEFAULT_SELECT = [
+		'SEARCHABLE_CONTENT',
+	];
 
 	/**
 	 * Returns DB table name for entity.
@@ -234,6 +243,35 @@ class EventTable extends Main\Entity\DataManager
 			))
 			,
 		];
+	}
+
+	/**
+	 * Returns names of the fields selected when a caller does not ask for a certain set.
+	 * Matches what ORM expands the '*' placeholder to, minus FIELDS_OUT_OF_DEFAULT_SELECT.
+	 *
+	 * @return string[]
+	 * @throws Main\SystemException
+	 */
+	public static function getDefaultSelectFieldNames(): array
+	{
+		$names = [];
+
+		foreach (static::getEntity()->getFields() as $field)
+		{
+			if (!($field instanceof ScalarField) || $field->isPrivate())
+			{
+				continue;
+			}
+
+			if (in_array($field->getName(), self::FIELDS_OUT_OF_DEFAULT_SELECT, true))
+			{
+				continue;
+			}
+
+			$names[] = $field->getName();
+		}
+
+		return $names;
 	}
 
 	/**

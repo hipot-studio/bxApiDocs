@@ -15,10 +15,10 @@ class ExtranetUserDataProvider extends EntityDataProvider
 	private ExtranetUserSettings $settings;
 	private UserQueryModifier $userQueryModifier;
 
-	public function __construct(ExtranetUserSettings $settings)
+	public function __construct(ExtranetUserSettings $settings, ?UserQueryModifier $userQueryModifier = null)
 	{
 		$this->settings = $settings;
-		$this->userQueryModifier = new UserQueryModifier();
+		$this->userQueryModifier = $userQueryModifier ?? new UserQueryModifier();
 	}
 
 	public function getSettings(): ExtranetUserSettings
@@ -68,11 +68,17 @@ class ExtranetUserDataProvider extends EntityDataProvider
 		)
 		{
 			$employeeUserIdSubQuery = $this->userQueryModifier->createEmployeeUserIdSubQuery();
-			$hasDepartmentFilter = !empty($result['DEPARTMENT']);
+			$hasDepartmentFilter = $this->userQueryModifier->createDepartmentUserIdSubQueryFromFilter($result) !== null;
 			$isVisitorFilterEnabled
 				= !empty($result[ExtranetUserSettings::VISITOR_FIELD])
 				&& $result[ExtranetUserSettings::VISITOR_FIELD] === 'Y';
-			$workgroupIdList = $this->getSettings()->getWorkgroupIdList();
+			$workgroupIdList = (
+				$hasDepartmentFilter
+				&& !$isVisitorFilterEnabled
+				&& !$this->getSettings()->isCurrentUserExtranet()
+			)
+				? []
+				: $this->getSettings()->getWorkgroupIdList();
 
 			if (
 				!$hasDepartmentFilter
@@ -106,7 +112,10 @@ class ExtranetUserDataProvider extends EntityDataProvider
 					];
 				}
 			}
-			else
+			elseif (
+				$isVisitorFilterEnabled
+				|| $this->getSettings()->isCurrentUserExtranet()
+			)
 			{
 				$publicUserIdList = $this->getSettings()->getPublicUserIdList();
 
@@ -197,8 +206,7 @@ class ExtranetUserDataProvider extends EntityDataProvider
 		return
 			!empty($filterValue[ExtranetUserSettings::EXTRANET_FIELD])
 			&& $this->getSettings()->isFilterAvailable(ExtranetUserSettings::EXTRANET_FIELD)
-			&& $filterValue[ExtranetUserSettings::EXTRANET_FIELD] === 'Y'
-		;
+			&& $filterValue[ExtranetUserSettings::EXTRANET_FIELD] === 'Y';
 	}
 
 	public function getWorkgroupUsersSubQuery(array $workgroupIdList): string

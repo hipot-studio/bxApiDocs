@@ -4,6 +4,7 @@ namespace Bitrix\Disk;
 
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
+use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\ExternalLinkTable;
 use Bitrix\Main\DB\SqlExpression;
@@ -18,6 +19,7 @@ final class ExternalLink extends Internals\Model
 
 	public const ACCESS_RIGHT_VIEW = ExternalLinkTable::ACCESS_RIGHT_VIEW;
 	public const ACCESS_RIGHT_EDIT = ExternalLinkTable::ACCESS_RIGHT_EDIT;
+	public const ERROR_SETTINGS_EDIT_DENIED = 'DISK_EL_22001';
 
 	/** @var int */
 	protected $objectId;
@@ -51,6 +53,8 @@ final class ExternalLink extends Internals\Model
 	protected $createUser;
 	/** @var int */
 	protected $canDownloadWithReadAccess;
+	/** @var bool */
+	protected $canEditSettings;
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -296,9 +300,24 @@ final class ExternalLink extends Internals\Model
 
 	public function changeCanDownloadWithReadAccess($val)
 	{
+		if (!$this->canChangeSettings())
+		{
+			return false;
+		}
+
 		return $this->update([
 			'CAN_DOWNLOAD_WITH_READ_ACCESS' => $val ? 1 : 0,
 		]);
+	}
+
+	public function getCanEditSettings(): bool
+	{
+		return (bool)$this->canEditSettings;
+	}
+
+	public function canEditSettings(): bool
+	{
+		return $this->getCanEditSettings();
 	}
 
 	public function allowEdit(): bool
@@ -393,6 +412,7 @@ final class ExternalLink extends Internals\Model
 			'CREATED_BY' => 'createdBy',
 			'CREATE_USER' => 'createUser',
 			'CAN_DOWNLOAD_WITH_READ_ACCESS' => 'canDownloadWithReadAccess',
+			'CAN_EDIT_SETTINGS' => 'canEditSettings',
 		);
 	}
 
@@ -509,6 +529,11 @@ final class ExternalLink extends Internals\Model
 
 	public function revokeDeathTime()
 	{
+		if (!$this->canChangeSettings())
+		{
+			return false;
+		}
+
 		return $this->update(array(
 			'DEATH_TIME' => null,
 		));
@@ -516,6 +541,11 @@ final class ExternalLink extends Internals\Model
 
 	public function revokePassword()
 	{
+		if (!$this->canChangeSettings())
+		{
+			return false;
+		}
+
 		return $this->update(array(
 			'PASSWORD' => null,
 			'SALT' => null,
@@ -529,6 +559,11 @@ final class ExternalLink extends Internals\Model
 	 */
 	public function changeDeathTime(DateTime $dateTime)
 	{
+		if (!$this->canChangeSettings())
+		{
+			return false;
+		}
+
 		return $this->update(array(
 			'DEATH_TIME' => $dateTime,
 		));
@@ -541,6 +576,11 @@ final class ExternalLink extends Internals\Model
 	 */
 	public function changePassword($newPassword)
 	{
+		if (!$this->canChangeSettings())
+		{
+			return false;
+		}
+
 		$data = array();
 		list($data['PASSWORD'], $data['SALT']) = ExternalLink::generatePasswordAndSalt($newPassword);
 
@@ -549,9 +589,28 @@ final class ExternalLink extends Internals\Model
 
 	public function changeAccessRight(int $right): bool
 	{
+		if (!$this->canChangeSettings())
+		{
+			return false;
+		}
+
 		return $this->update([
 			'ACCESS_RIGHT' => $right,
 		]);
+	}
+
+	private function canChangeSettings(): bool
+	{
+		if ($this->canEditSettings())
+		{
+			return true;
+		}
+
+		$this->errorCollection->add([
+			new Error('External link settings editing is denied', self::ERROR_SETTINGS_EDIT_DENIED),
+		]);
+
+		return false;
 	}
 
 	/**

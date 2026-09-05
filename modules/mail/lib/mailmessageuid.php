@@ -4,6 +4,7 @@ namespace Bitrix\Mail;
 
 use Bitrix\Mail\Helper\Message\MessageInternalDateHandler;
 use Bitrix\Mail\Helper\MessageEventManager;
+use Bitrix\Mail\Internals\MailMessageMarkTable;
 use Bitrix\Mail\Internals\MessageUploadQueueTable;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\Entity;
@@ -51,6 +52,8 @@ class MailMessageUidTable extends Entity\DataManager
 		self::MOVING,
 		self::REMOTE,
 	];
+
+	private const REMAINING_MESSAGES_PORTION = 1000;
 
 	public static function getFilePath()
 	{
@@ -153,6 +156,10 @@ class MailMessageUidTable extends Entity\DataManager
 			$connection->query(sprintf('DELETE %s', $query));
 		}
 
+		$remainingRows = static::selectRemainingUidRows($messages);
+
+		static::removeMessageMarks($messages, $filter, $remainingRows);
+
 		$remains=[];
 
 		if($limit === false)
@@ -168,22 +175,7 @@ class MailMessageUidTable extends Entity\DataManager
 		}
 		else
 		{
-			if ($messagesIds = array_column($messages, 'MESSAGE_ID') )
-			{
-				$remains = array_column(
-					static::getList(
-						[
-							'select' => [
-								'MESSAGE_ID',
-							],
-							'filter' => [
-								'@MESSAGE_ID' => $messagesIds,
-							],
-						]
-					)->fetchAll(),
-					'MESSAGE_ID'
-				);
-			}
+			$remains = array_column($remainingRows, 'MESSAGE_ID');
 		}
 
 		if ($sendEvent)
@@ -211,6 +203,126 @@ class MailMessageUidTable extends Entity\DataManager
 		}
 
 		return true;
+	}
+
+	/**
+	 * Lives here and not in an onMailMessageDeleted handler: at $limit === false the event payload comes back
+	 * empty (see the early return of selectMessagesToBeDeleted), so a handler would have nothing to clean up.
+	 * Best effort: a broken cleanup must not break the deletion itself.
+	 */
+	private static function removeMessageMarks(array $messages, array $filter, array $remainingRows): void
+	{
+		try
+		{
+			$deletedMessages = static::groupDeletedMessageIdsByMailbox(
+				$messages,
+				$remainingRows,
+				$filter
+			);
+
+			foreach ($deletedMessages as $mailboxId => $messageIds)
+			{
+				MailMessageMarkTable::deleteByMessages($mailboxId, $messageIds);
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			AddMessage2Log(
+				sprintf(
+					'removeMessageMarks failed: messages=%d, error=%s',
+					count($messages),
+					$exception->getMessage()
+				),
+				'mail',
+				2,
+				false
+			);
+		}
+	}
+
+	/**
+	 * A message keeps its marks while any of its uid rows in the same mailbox survives - the same letter may
+	 * sit in another folder. Mailbox id is not guaranteed in the deleted rows: a caller may pass ready event
+	 * data without it (see the early return of selectMessagesToBeDeleted), and then the filter is the source.
+	 *
+	 * @return array<int, int[]> Mailbox id => ids of messages that are gone.
+	 */
+	protected static function groupDeletedMessageIdsByMailbox(array $messages, array $remainingRows, array $filter): array
+	{
+		// A non-scalar filter value would cast to 1 and point the cleanup at a foreign mailbox
+		$rawFilterMailboxId = $filter['=MAILBOX_ID'] ?? $filter['MAILBOX_ID'] ?? 0;
+		$filterMailboxId = is_numeric($rawFilterMailboxId) ? (int)$rawFilterMailboxId : 0;
+		$remaining = [];
+
+		foreach ($remainingRows as $remainingRow)
+		{
+			if (is_array($remainingRow))
+			{
+				$remaining[(int)($remainingRow['MAILBOX_ID'] ?? 0)][(int)($remainingRow['MESSAGE_ID'] ?? 0)] = true;
+			}
+		}
+
+		$grouped = [];
+
+		foreach ($messages as $message)
+		{
+			if (!is_array($message))
+			{
+				continue;
+			}
+
+			$mailboxId = (int)($message['MAILBOX_ID'] ?? $filterMailboxId);
+			$messageId = (int)($message['MESSAGE_ID'] ?? 0);
+
+			if ($mailboxId <= 0 || $messageId <= 0 || isset($remaining[$mailboxId][$messageId]))
+			{
+				continue;
+			}
+
+			$grouped[$mailboxId][$messageId] = $messageId;
+		}
+
+		return array_map('array_values', $grouped);
+	}
+
+	/**
+	 * @return array Uid rows that survived the deletion: MESSAGE_ID and MAILBOX_ID of each.
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	private static function selectRemainingUidRows(array $messages): array
+	{
+		$messageIds = [];
+
+		foreach ($messages as $message)
+		{
+			$messageId = is_array($message) ? (int)($message['MESSAGE_ID'] ?? 0) : 0;
+
+			if ($messageId > 0)
+			{
+				$messageIds[$messageId] = $messageId;
+			}
+		}
+
+		$remaining = [];
+
+		foreach (array_chunk($messageIds, self::REMAINING_MESSAGES_PORTION) as $portion)
+		{
+			$rows = static::getList([
+				'select' => [
+					'MESSAGE_ID',
+					'MAILBOX_ID',
+				],
+				'filter' => [
+					'@MESSAGE_ID' => $portion,
+				],
+			])->fetchAll();
+
+			$remaining = array_merge($remaining, $rows);
+		}
+
+		return $remaining;
 	}
 
 	public static function getLocalUID(int $mailboxId, string $dirPath, string $dirUIDv, string $order): int

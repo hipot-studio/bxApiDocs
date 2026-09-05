@@ -16,7 +16,6 @@ use Bitrix\Booking\Internals\Service\Time;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
 use Bitrix\Booking\Entity;
-use Bitrix\Main\Event;
 use DateTimeImmutable;
 use DateInterval;
 
@@ -32,8 +31,6 @@ class BookingEventProcessor extends AbstractEventProcessor
 			JournalType::BookingCanceled => $this->processBookingCanceledEvent($event),
 			JournalType::BookingComingSoonNotificationSent => $this->processBookingComingSoonNotificationSentEvent($event),
 			JournalType::BookingConfirmed => $this->processBookingConfirmedEvent($event),
-			JournalType::BookingDelayedCounterActivated => $this->processBookingDelayedCounterActivatedEvent($event),
-			JournalType::BookingConfirmCounterActivated => $this->processBookingConfirmCounterActivatedEvent($event),
 			default => '',
 		};
 	}
@@ -170,26 +167,6 @@ class BookingEventProcessor extends AbstractEventProcessor
 		$this->sendBitrixEvent(type: 'onBookingStatusUpdated', parameters: [
 			'booking' => $booking,
 			'status' => BookingStatusEnum::ComingSoon->value,
-		]);
-	}
-
-	private function processBookingDelayedCounterActivatedEvent(JournalEvent $journalEvent): void
-	{
-		$booking = Entity\Booking\Booking::mapFromArray($journalEvent->data['booking']);
-
-		$this->sendBitrixEvent(type: 'onBookingStatusUpdated', parameters: [
-			'booking' => $booking,
-			'status' => BookingStatusEnum::DelayedCounterActivated->value,
-		]);
-	}
-
-	private function processBookingConfirmCounterActivatedEvent(JournalEvent $journalEvent): void
-	{
-		$booking = Entity\Booking\Booking::mapFromArray($journalEvent->data['booking']);
-
-		$this->sendBitrixEvent(type: 'onBookingStatusUpdated', parameters: [
-			'booking' => $booking,
-			'status' => BookingStatusEnum::ConfirmCounterActivated->value,
 		]);
 	}
 
@@ -339,14 +316,5 @@ class BookingEventProcessor extends AbstractEventProcessor
 		}
 
 		return Container::getWorkingTimeService()->adjustToWorkingHours($date);
-	}
-
-	private function sendBitrixEvent(string $type, array $parameters): void
-	{
-		(new Event(
-			moduleId: 'booking',
-			type: $type,
-			parameters: $parameters,
-		))->send();
 	}
 }

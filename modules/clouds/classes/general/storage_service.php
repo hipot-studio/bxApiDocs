@@ -279,6 +279,35 @@ abstract class CCloudStorageService
 	}
 
 	/**
+	 * Reports whether the storage service can produce presigned URLs that allow
+	 * a client to upload directly to the cloud without proxying through PHP.
+	 * Subclasses backed by an S3-compatible API should override and return true.
+	 *
+	 * @return bool
+	 */
+	public function supportsPresignedUrls(): bool
+	{
+		return false;
+	}
+
+	/**
+	 * Generates a presigned URL for uploading a single part of an in-progress
+	 * multipart upload. Caller must have an active multipart session (see
+	 * InitiateMultipartUpload) and pass the session state as $uploadInfo.
+	 *
+	 * @param array $arBucket Bucket descriptor.
+	 * @param array $uploadInfo The same array filled by InitiateMultipartUpload
+	 *  (must contain UploadId and filePath).
+	 * @param int $partNumber 1-based part number (matches S3 PartNumber semantics).
+	 * @param int $expires Time-to-live in seconds.
+	 * @return string|null Full HTTPS URL or null if presigned URLs are not supported.
+	 */
+	public function PresignMultiPartUrl(array $arBucket, array $uploadInfo, int $partNumber, int $expires, ?int $contentLength = null): ?string
+	{
+		return null;
+	}
+
+	/**
 	 * @param string $name
 	 * @param string $value
 	 * @return void

@@ -5,7 +5,9 @@ namespace Bitrix\Location\Source\Google;
 use Bitrix\Location\Entity\Location;
 use Bitrix\Location\Entity\Generic\Collection;
 use Bitrix\Location\Exception\RuntimeException;
+use Bitrix\Location\Infrastructure\Service\ErrorService;
 use Bitrix\Location\Repository\Location\Capability\IFindByCoords;
+use Bitrix\Location\Repository\Location\Capability\IFindByCoordsList;
 use Bitrix\Location\Repository\Location\Capability\IFindByExternalId;
 use Bitrix\Location\Repository\Location\Capability\IFindByText;
 use Bitrix\Location\Repository\Location\IRepository;
@@ -16,6 +18,7 @@ use Bitrix\Location\Source\Google\Converters\BaseConverter;
 use Bitrix\Location\Source\Google\Requesters;
 use Bitrix\Location\Source\Google\Requesters\BaseRequester;
 use \Bitrix\Location\Common\CachedPool;
+use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\HttpClient;
 
@@ -29,6 +32,7 @@ class Repository extends BaseRepository implements
 	IRepository,
 	IFindByExternalId,
 	IFindByCoords,
+	IFindByCoordsList,
 	IFindByText,
 	ISource
 {
@@ -86,6 +90,43 @@ class Repository extends BaseRepository implements
 		);
 
 		return $foundLocations[0] ?? null;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function findByCoordsList(array $coordsList, int $zoom, string $languageId): array
+	{
+		if ($this->apiKey === '')
+		{
+			throw new RuntimeException(
+				Loc::getMessage('LOCATION_ADDRESS_REPOSITORY_API_KEY_ERROR'),
+				ErrorCodes::REPOSITORY_FIND_API_KEY_ERROR
+			);
+		}
+
+		$out = [];
+		foreach ($coordsList as $i => $coord)
+		{
+			try
+			{
+				$out[$i] = $this->findByCoords(
+					(float)$coord['lat'],
+					(float)$coord['lng'],
+					$zoom,
+					$languageId
+				);
+			}
+			catch (RuntimeException $exception)
+			{
+				ErrorService::getInstance()->addError(
+					new Error($exception->getMessage(), $exception->getCode())
+				);
+				$out[$i] = null;
+			}
+		}
+
+		return $out;
 	}
 
 	/**

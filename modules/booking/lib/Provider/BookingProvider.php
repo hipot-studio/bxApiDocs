@@ -98,14 +98,18 @@ class BookingProvider
 		return $this;
 	}
 
-	public function withMessages(BookingCollection $bookingCollection): self
+	public function withConfirmationFlag(BookingCollection $bookingCollection): self
 	{
-		$messageCollection = $this->messageRepository->getByBookingIds($bookingCollection->getEntityIds());
+		$bookingIdsWithConfirmation = array_flip(
+			$this->messageRepository->getBookingIdsWithSentConfirmation(
+				$bookingCollection->getEntityIds()
+			)
+		);
 
 		foreach ($bookingCollection as $booking)
 		{
-			$booking->setMessageCollection(
-				$messageCollection->filterByBookingId($booking->getId())
+			$booking->setIsConfirmationSent(
+				isset($bookingIdsWithConfirmation[$booking->getId()])
 			);
 		}
 

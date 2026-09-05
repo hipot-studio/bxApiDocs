@@ -150,12 +150,12 @@ class TemplateRepository
 			NotificationType::Info->value => [
 				NotificationTemplateType::Animate,
 				NotificationTemplateType::Inanimate,
-				//NotificationTemplateType::InanimateLong,
+				NotificationTemplateType::InanimateLong,
 			],
 			NotificationType::Confirmation->value => [
 				NotificationTemplateType::Animate,
 				NotificationTemplateType::Inanimate,
-				//NotificationTemplateType::InanimateLong,
+				NotificationTemplateType::InanimateLong,
 			],
 			NotificationType::Reminder->value => [
 				NotificationTemplateType::Base,

@@ -11,6 +11,7 @@ use Bitrix\Main\Event;
 use Bitrix\Main\ModuleManager;
 use Bitrix\ImBot\Bot\Partner24;
 use Bitrix\Bitrix24;
+use Bitrix\Main\Web\Uri;
 
 /**
  * Class InfoHelper
@@ -34,7 +35,7 @@ class InfoHelper
 		$notifyUrl = Util::getHelpdeskUrl($byLang) . $url;
 		$parameters = self::getParameters($currentUrl);
 
-		return \CHTTP::urlAddParams($notifyUrl, $parameters, array("encode" => true));
+		return (string)(new Uri($notifyUrl))->addParams($parameters);
 	}
 
 	public static function getParameters(?string $currentUrl = null): array

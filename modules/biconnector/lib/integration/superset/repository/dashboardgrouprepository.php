@@ -31,6 +31,9 @@ final class DashboardGroupRepository extends DashboardRepository
 	 */
 	public function getList(array $ormParams, bool $needLoadProxyData = false): array
 	{
+		$visibleDashboardIds = array_key_exists('DASHBOARD_ID', $ormParams['filter'] ?? [])
+			? array_map('intval', (array)$ormParams['filter']['DASHBOARD_ID'])
+			: null;
 		$query = $this->prepareUnionQuery($ormParams);
 
 		$items = $query->exec();
@@ -64,7 +67,7 @@ final class DashboardGroupRepository extends DashboardRepository
 
 		if (!empty($groupIds))
 		{
-			$groups = $this->getGroupRows($groupIds);
+			$groups = $this->getGroupRows($groupIds, $visibleDashboardIds);
 			foreach ($groups as $group)
 			{
 				$rows[$group['ID'] . '_' . self::TYPE_GROUP] = $group;
@@ -169,7 +172,7 @@ final class DashboardGroupRepository extends DashboardRepository
 		return $dashboardRows;
 	}
 
-	private function getGroupRows(array $ids): array
+	private function getGroupRows(array $ids, ?array $dashboardIds): array
 	{
 		$allowedIds = AccessController::getCurrent()->getAllowedGroupValue(
 			ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
@@ -178,8 +181,9 @@ final class DashboardGroupRepository extends DashboardRepository
 
 		$groupOrmParams = [
 			'filter' => ['ID' => $ids],
-			'select' => ['*', 'SCOPE', 'DASHBOARDS.ID'],
+			'select' => ['*', 'SCOPE'],
 		];
+		$dashboardCounts = $this->getDashboardCountsByGroupIds($ids, $dashboardIds);
 
 		$groupRows = [];
 		$emptyCommonColumns = [
@@ -216,7 +220,7 @@ final class DashboardGroupRepository extends DashboardRepository
 				"URL_PARAMS" => [],
 				"GROUPS" => [],
 				'ENTITY_TYPE' => self::TYPE_GROUP,
-				'COUNT_DASHBOARDS' => $group->getDashboards()->count(),
+				'COUNT_DASHBOARDS' => (int)($dashboardCounts[$group->getId()] ?? 0),
 			];
 
 			sort($row['SCOPE']);
@@ -229,6 +233,35 @@ final class DashboardGroupRepository extends DashboardRepository
 		}
 
 		return $groupRows;
+	}
+
+	private function getDashboardCountsByGroupIds(array $groupIds, ?array $dashboardIds): array
+	{
+		$groupIds = array_values(array_unique(array_map('intval', $groupIds)));
+		if (empty($groupIds) || $dashboardIds === [])
+		{
+			return [];
+		}
+
+		$query = SupersetDashboardGroupBindingTable::query()
+			->setSelect(['GROUP_ID', 'DASHBOARD_COUNT'])
+			->registerRuntimeField(new ExpressionField('DASHBOARD_COUNT', 'COUNT(1)'))
+			->whereIn('GROUP_ID', $groupIds)
+			->addGroup('GROUP_ID')
+		;
+		if ($dashboardIds !== null)
+		{
+			$query->whereIn('DASHBOARD_ID', $dashboardIds);
+		}
+
+		$counts = [];
+		$result = $query->exec();
+		while ($row = $result->fetch())
+		{
+			$counts[(int)$row['GROUP_ID']] = (int)$row['DASHBOARD_COUNT'];
+		}
+
+		return $counts;
 	}
 
 	/**

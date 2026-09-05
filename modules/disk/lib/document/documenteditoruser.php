@@ -106,11 +106,10 @@ final class DocumentEditorUser
 
 		if ($USER->isAuthorized())
 		{
-			$userFields = CUser::GetByID($USER->getId())->Fetch();
-
-			return $userFields['EXTERNAL_AUTH_ID'] === self::EXTERNAL_AUTH_ID;
+			// Authorization stores EXTERNAL_AUTH_ID in the session, so no user query is needed here.
+			return $USER->GetParam('EXTERNAL_AUTH_ID') === self::EXTERNAL_AUTH_ID;
 		}
-		
+
 		return false;
 	}
 }

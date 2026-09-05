@@ -43,7 +43,8 @@ final class MessageHistoryProvider
 	 * Returns a list of chat messages as lightweight DTOs.
 	 *
 	 * Messages are returned in chronological order (oldest first).
-	 * System messages are excluded.
+	 * System messages are excluded unless MessageHistoryFilter::shouldIncludeSystem() is set.
+	 * Deleted, welcome and error service messages are always excluded.
 	 *
 	 * @param MessageHistoryFilter $filter Query parameters.
 	 * @return MessageHistoryResult Messages, chat context and pagination metadata.
@@ -117,6 +118,10 @@ final class MessageHistoryProvider
 		// the feature flag for every message inside the loop below.
 		$cutForeignMention = $chat instanceof CopilotChat && !Features::isBitrixGptV2Available();
 
+		// Opt-in flag: when true, system messages are kept instead of being skipped.
+		// Resolved once per getList() and passed into shouldSkip(), mirroring $cutForeignMention.
+		$includeSystem = $filter->shouldIncludeSystem();
+
 		while ($messages->count() < $filter->getLimit())
 		{
 			$fetched = $this->fetchMessages($filter->getChatId(), $this->startId, $cursor, $filter->getLimit());
@@ -134,7 +139,7 @@ final class MessageHistoryProvider
 			{
 				$cursor = $message->getId();
 
-				if ($this->shouldSkip($message, $cutForeignMention))
+				if ($this->shouldSkip($message, $cutForeignMention, $includeSystem))
 				{
 					continue;
 				}
@@ -226,13 +231,13 @@ final class MessageHistoryProvider
 		return $result;
 	}
 
-	private function shouldSkip(Message $message, bool $cutForeignMention): bool
+	private function shouldSkip(Message $message, bool $cutForeignMention, bool $includeSystem = false): bool
 	{
-		return $message->isSystem()
+		return (!$includeSystem && $message->isSystem())
 			|| $message->getParams()->isSet(Params::IS_DELETED)
-			|| $this->isWelcomeMessage($message)
+			|| (!$includeSystem && $this->isWelcomeMessage($message))
 			|| $this->isErrorMessage($message)
-			|| $this->shouldCutForeignMention($message, $cutForeignMention)
+			|| (!$message->isSystem() && $this->shouldCutForeignMention($message, $cutForeignMention))
 		;
 	}
 

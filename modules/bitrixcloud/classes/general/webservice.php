@@ -10,7 +10,7 @@ abstract class CBitrixCloudWebService
 	/**
 	 * Returns URL to update policy
 	 *
-	 * @param array[string]string $arParams
+	 * @param array $arParams
 	 * @return string
 	 *
 	 */

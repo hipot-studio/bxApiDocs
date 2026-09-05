@@ -42,6 +42,21 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 		parent::executeComponent();
 	}
 
+	private function formatDemoDate(string $date, bool $isShort): ?string
+	{
+		$dateTime = \DateTime::createFromFormat('d.m.Y H:i:s', $date);
+		if ($dateTime === false)
+		{
+			return null;
+		}
+
+		$format = $isShort
+			? 'SHORT'
+			: 'FULL';
+
+		return FormatDate($format, $dateTime->getTimestamp());
+	}
+
 	protected function getData(): void
 	{
 		$useDemoData = false;
@@ -87,11 +102,8 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 				[
 					'AUTHOR_ID' => '1',
 					'TITLE' => Loc::getMessage('LANDING_WIDGET_CLASS_LIVEFEED_DEMO_DATA_POST_TITLE_1'),
-					'DATE_PUBLISH' => $this->convertDateFormat('12.01.2024 14:10:00'),
-					'DATE_PUBLISH_SHORT' => $this->convertDateFormat(
-						'12.01.2024 14:10:00',
-						'H:i d.m.Y',
-					),
+					'DATE_PUBLISH' => $this->formatDemoDate('12.01.2024 14:10:00', false),
+					'DATE_PUBLISH_SHORT' => $this->formatDemoDate('12.01.2024 14:10:00', true),
 					'RATING_TOTAL_VOTES' => '23',
 					'NUM_COMMENTS' => '2',
 					'IMG_SRC' => 'https://cdn.bitrix24.site/bitrix/images/landing/widget/livefeed/1.jpg',
@@ -100,11 +112,8 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 				[
 					'AUTHOR_ID' => '2',
 					'TITLE' => Loc::getMessage('LANDING_WIDGET_CLASS_LIVEFEED_DEMO_DATA_POST_TITLE_2'),
-					'DATE_PUBLISH' => $this->convertDateFormat('22.01.2024 13:10:00'),
-					'DATE_PUBLISH_SHORT' => $this->convertDateFormat(
-						'22.01.2024 13:10:00',
-						'H:i d.m.Y',
-					),
+					'DATE_PUBLISH' => $this->formatDemoDate('22.01.2024 13:10:00', false),
+					'DATE_PUBLISH_SHORT' =>  $this->formatDemoDate('22.01.2024 13:10:00', true),
 					'RATING_TOTAL_VOTES' => '23',
 					'NUM_COMMENTS' => '3',
 					'IMG_SRC' => 'https://cdn.bitrix24.site/bitrix/images/landing/widget/livefeed/2.jpg',
@@ -113,11 +122,8 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 				[
 					'AUTHOR_ID' => '3',
 					'TITLE' => Loc::getMessage('LANDING_WIDGET_CLASS_LIVEFEED_DEMO_DATA_POST_TITLE_3'),
-					'DATE_PUBLISH' => $this->convertDateFormat('13.02.2024 10:20:00'),
-					'DATE_PUBLISH_SHORT' => $this->convertDateFormat(
-						'13.02.2024 10:20:00',
-						'H:i d.m.Y',
-					),
+					'DATE_PUBLISH' => $this->formatDemoDate('13.02.2024 10:20:00', false),
+					'DATE_PUBLISH_SHORT' => $this->formatDemoDate('13.02.2024 10:20:00', true),
 					'RATING_TOTAL_VOTES' => '7',
 					'NUM_COMMENTS' => '7',
 					'IMG_SRC' => 'https://cdn.bitrix24.site/bitrix/images/landing/widget/livefeed/3.jpg',
@@ -126,11 +132,8 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 				[
 					'AUTHOR_ID' => '4',
 					'TITLE' => Loc::getMessage('LANDING_WIDGET_CLASS_LIVEFEED_DEMO_DATA_POST_TITLE_4'),
-					'DATE_PUBLISH' => $this->convertDateFormat('04.01.2024 15:35:00'),
-					'DATE_PUBLISH_SHORT' => $this->convertDateFormat(
-						'04.01.2024 15:35:00',
-						'H:i d.m.Y',
-					),
+					'DATE_PUBLISH' => $this->formatDemoDate('04.01.2024 15:35:00', false),
+					'DATE_PUBLISH_SHORT' => $this->formatDemoDate('04.01.2024 15:35:00', true),
 					'RATING_TOTAL_VOTES' => '12',
 					'NUM_COMMENTS' => '45',
 					'IMG_SRC' => 'https://cdn.bitrix24.site/bitrix/images/landing/widget/livefeed/4.jpg',
@@ -139,11 +142,8 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 				[
 					'AUTHOR_ID' => '1',
 					'TITLE' => Loc::getMessage('LANDING_WIDGET_CLASS_LIVEFEED_DEMO_DATA_POST_TITLE_5'),
-					'DATE_PUBLISH' => $this->convertDateFormat('15.03.2024 16:20:00'),
-					'DATE_PUBLISH_SHORT' => $this->convertDateFormat(
-						'15.03.2024 16:20:00',
-						'H:i d.m.Y',
-					),
+					'DATE_PUBLISH' => $this->formatDemoDate('15.03.2024 16:20:00', false),
+					'DATE_PUBLISH_SHORT' => $this->formatDemoDate('15.03.2024 16:20:00', true),
 					'RATING_TOTAL_VOTES' => '23',
 					'NUM_COMMENTS' => '3',
 					'IMG_SRC' => 'https://cdn.bitrix24.site/bitrix/images/landing/widget/livefeed/5.jpg',
@@ -152,11 +152,8 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 				[
 					'AUTHOR_ID' => '3',
 					'TITLE' => Loc::getMessage('LANDING_WIDGET_CLASS_LIVEFEED_DEMO_DATA_POST_TITLE_6'),
-					'DATE_PUBLISH' => $this->convertDateFormat('15.03.2024 16:20:00'),
-					'DATE_PUBLISH_SHORT' => $this->convertDateFormat(
-						'15.03.2024 16:20:00',
-						'H:i d.m.Y',
-					),
+					'DATE_PUBLISH' => $this->formatDemoDate('15.03.2024 16:20:00', false),
+					'DATE_PUBLISH_SHORT' => $this->formatDemoDate('15.03.2024 16:20:00', true),
 					'RATING_TOTAL_VOTES' => '11',
 					'NUM_COMMENTS' => '4',
 					'IMG_SRC' => 'https://cdn.bitrix24.site/bitrix/images/landing/widget/livefeed/6.jpg',
@@ -256,7 +253,11 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 					),
 					'user_id' => $post['AUTHOR_ID'],
 				]);
-			$post['DATE_PUBLISH_SHORT'] = $post['DATE_PUBLISH'];
+			$post['DATE_PUBLISH_SHORT'] = FormatDate(
+				'SHORT',
+				MakeTimeStamp($post['DATE_PUBLISH'])
+			);
+
 
 			$data['POSTS'][] = $post;
 			$data['USERS_ID'][$post['AUTHOR_ID']] = $post['AUTHOR_ID'];

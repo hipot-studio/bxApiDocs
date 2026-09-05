@@ -257,6 +257,11 @@ class Document
 	{
 		foreach($fields as $name => $field)
 		{
+			if(!is_array($field))
+			{
+				continue;
+			}
+
 			// do not let change these fields
 			if(
 				$name === Template::DOCUMENT_PROVIDER_PLACEHOLDER
@@ -1143,13 +1148,7 @@ class Document
 
 		// if this value has been overwritten - use it.
 		$externalValues = $this->getExternalValues();
-		if(
-			isset($externalValues[$name]) &&
-			$externalValues[$name] != $this->values[$name] &&
-			(
-				!is_array($this->values[$name]) && $externalValues[$name] != htmlspecialcharsbx($this->values[$name])
-			)
-		)
+		if(isset($externalValues[$name]) && $this->isOverrideKept($externalValues[$name], $this->values[$name]))
 		{
 			$value = $externalValues[$name];
 			$value = $this->resolveValue($value);
@@ -1443,20 +1442,43 @@ class Document
 			foreach($this->externalValues as $placeholder => $value)
 			{
 				$this->getValue($placeholder);
-				if($value != $this->values[$placeholder])
+				if($this->isOverrideKept($value, $this->values[$placeholder]))
 				{
-					if(is_array($this->values[$placeholder]) || $value != htmlspecialcharsbx($this->values[$placeholder]))
+					if(!is_object($value) || class_exists($value))
 					{
-						if(!is_object($value) || class_exists($value))
-						{
-							$result[$placeholder] = $value;
-						}
+						$result[$placeholder] = $value;
 					}
 				}
 			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Returns true if the stored override $overrideValue differs from the provider-computed $computedRaw
+	 * and should be kept as a manual override.
+	 *
+	 * Uses the same normalized display representation that getFields() exposes to the form,
+	 * so typed Value objects (Money, Date, etc.) are compared correctly instead of always
+	 * being treated as changed.
+	 *
+	 * @param mixed $overrideValue  Stored/submitted override (string as shown/sent by the form)
+	 * @param mixed $computedRaw   Provider-computed value (may be a Value object, array, or scalar)
+	 * @return bool
+	 */
+	private function isOverrideKept($overrideValue, $computedRaw): bool
+	{
+		if(is_array($computedRaw))
+		{
+			// Preserve existing comparison logic for multiple/select values.
+			return $overrideValue != $computedRaw;
+		}
+
+		// Normalize the computed value to the same display representation shown in the form.
+		$computedShown = $this->normalizeValue($computedRaw, true);
+
+		return (string)$overrideValue !== (string)$computedShown;
 	}
 
 	/**

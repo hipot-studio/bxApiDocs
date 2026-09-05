@@ -41,6 +41,13 @@ class CVoxImplantConfig
 	const BACKUP_NUMBER_COMMON = 'COMMON';
 	const BACKUP_NUMBER_SPECIFIC = 'SPECIFIC';
 
+	const DTMF_TYPE_ALL = 'all';
+	const DTMF_TYPE_INBAND = 'inband';
+	const DTMF_TYPE_RFC2833 = 'rfc2833';
+	const DTMF_TYPE_SIP_INFO = 'sipinfo';
+
+	const OPTION_DTMF_TYPE_ENABLED = 'dtmf_type_enabled';
+
 	const DOWNLOAD_RU = 'repos.1c-bitrix.ru';
 	const DOWNLOAD_OTHER = 'dl.bitrix24.com';
 
@@ -209,7 +216,7 @@ class CVoxImplantConfig
 		if($showRestApps || $showInboundOnly)
 		{
 			$externalNumbersCursor = VI\Model\ExternalLineTable::getList(array(
-				'select' => ['*', 'CONFIG_ID' => 'SIP.CONFIG_ID', 'SEARCH_ID' => 'SIP.CONFIG.SEARCH_ID'],
+				'select' => ['TYPE', 'NUMBER', 'NORMALIZED_NUMBER', 'NAME', 'REST_APP_ID', 'CRM_AUTO_CREATE', 'CONFIG_ID' => 'SIP.CONFIG_ID', 'SEARCH_ID' => 'SIP.CONFIG.SEARCH_ID'],
 				'cache' => array(
 					'ttl' => $cacheTtl,
 					'cache_joins' => true
@@ -343,7 +350,9 @@ class CVoxImplantConfig
 		$result = static::GetPortalNumbers(true, false);
 		$restApps = VI\Rest\Helper::getExternalCallbackHandlers();
 		$externalNumbers = array();
-		$externalNumbersCursor = VI\Model\ExternalLineTable::getList();
+		$externalNumbersCursor = VI\Model\ExternalLineTable::getList([
+			'select' => ['REST_APP_ID', 'NUMBER', 'NAME'],
+		]);
 		foreach ($externalNumbersCursor->getIterator() as $row)
 		{
 			$externalNumbers[$row['REST_APP_ID']][] = $row;
@@ -445,6 +454,11 @@ class CVoxImplantConfig
 		}
 
 		return true;
+	}
+
+	public static function isDtmfTypeEnabled()
+	{
+		return COption::GetOptionString("voximplant", self::OPTION_DTMF_TYPE_ENABLED, 'N') === 'Y';
 	}
 
 	public static function GetChatAction()

@@ -7,12 +7,11 @@ use Bitrix\Main\SystemException;
 
 class MetadataProvider
 {
+	const PARSED_METADATA_FILENAME = 'metadata.php';
+
 	protected $metadata;
 	protected $codeToCountries;
-
 	protected static $instance;
-
-	const PARSED_METADATA_FILENAME = 'metadata.php';
 
 	protected function __construct()
 	{
@@ -25,7 +24,7 @@ class MetadataProvider
 	 */
 	public static function getInstance()
 	{
-		if(is_null(static::$instance))
+		if (is_null(static::$instance))
 		{
 			static::$instance = new static();
 		}
@@ -40,7 +39,7 @@ class MetadataProvider
 	 */
 	public function getCountriesByCode($countryCode)
 	{
-		return is_array($this->codeToCountries[$countryCode]) ? $this->codeToCountries[$countryCode] : array();
+		return is_array($this->codeToCountries[$countryCode]) ? $this->codeToCountries[$countryCode] : [];
 	}
 
 	public function isValidCountryCode($countryCode)
@@ -61,10 +60,10 @@ class MetadataProvider
 
 	public function toArray()
 	{
-		return array(
+		return [
 			'codeToCountries' => $this->codeToCountries,
-			'metadata' => $this->metadata
-		);
+			'metadata' => $this->metadata,
+		];
 	}
 
 	/**
@@ -78,26 +77,30 @@ class MetadataProvider
 		$metadataBuilder = new \Bitrix\Main\PhoneNumber\Tools\MetadataBuilder($fileName);
 
 		$metadata = $metadataBuilder->build();
-		$codeToCountries = array();
+		$codeToCountries = [];
 
 		foreach ($metadata as $metadataRecord)
 		{
 			$country = mb_strtoupper($metadataRecord['id']);
-			if(!is_array($codeToCountries[$metadataRecord['countryCode']]))
+			if (!is_array($codeToCountries[$metadataRecord['countryCode']]))
 			{
-				$codeToCountries[$metadataRecord['countryCode']] = array();
+				$codeToCountries[$metadataRecord['countryCode']] = [];
 			}
 
-			if($metadataRecord['mainCountryForCode'])
+			if ($metadataRecord['mainCountryForCode'])
+			{
 				array_unshift($codeToCountries[$metadataRecord['countryCode']], $country);
+			}
 			else
+			{
 				$codeToCountries[$metadataRecord['countryCode']][] = $country;
+			}
 		}
 
-		return array(
+		return [
 			'codeToCountries' => $codeToCountries,
-			'metadata' => $metadata
-		);
+			'metadata' => $metadata,
+		];
 	}
 
 	/**
@@ -107,10 +110,14 @@ class MetadataProvider
 	 */
 	protected function loadMetadata()
 	{
-		if(File::isFileExists(static::PARSED_METADATA_FILENAME))
-			throw new SystemException("Metadata file is not found");
+		$dataFile = __DIR__ . '/' . static::PARSED_METADATA_FILENAME;
 
-		$parsedMetadata = include(static::PARSED_METADATA_FILENAME);
+		if (!File::isFileExists($dataFile))
+		{
+			throw new SystemException("Metadata file is not found");
+		}
+
+		$parsedMetadata = include($dataFile);
 
 		$this->codeToCountries = $parsedMetadata['codeToCountries'];
 		foreach ($parsedMetadata['metadata'] as $metadataRecord)

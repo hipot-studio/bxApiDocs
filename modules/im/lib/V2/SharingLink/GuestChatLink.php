@@ -20,13 +20,12 @@ use Bitrix\Main\Type\DateTime;
  * Guest chat sharing link implementation.
  *
  * Uses individual links for each guest user.
- * External URL format: https://b24.to/gi/{portalId}-{code}
+ * External URL format: https://{networkHost}/gi/{portalId}-{code}
  * Fallback (no portal id / network unavailable): {publicDomain}/guest/{code}
  * Both formats may carry optional query string: ?IM_DIALOG=...&name=...
  */
 class GuestChatLink extends ChatLink
 {
-	private const DEEPLINK_BASE_URL = 'https://b24.to/gi/';
 	private const DEFAULT_LIFETIME = '1 DAY';
 
 	public const SHARED_LINK_MAX_USES = 40;
@@ -90,10 +89,11 @@ class GuestChatLink extends ChatLink
 	{
 		$guestCode = $this->getCode();
 
-		$portalId = $this->getGuestNetworkPortalRegistry()->getPortalId();
+		$portalRegistry = $this->getGuestNetworkPortalRegistry();
+		$portalId = $portalRegistry->getPortalId();
 		if ($portalId !== null && $portalId !== '')
 		{
-			$url = self::DEEPLINK_BASE_URL . $portalId . '-' . $guestCode;
+			$url = $portalRegistry->getShortLinkBaseUrl() . $portalId . '-' . $guestCode;
 		}
 		else
 		{

@@ -89,7 +89,7 @@ class CBitrixCloudBackup
 	/**
 	 * Returns list of backup files
 	 *
-	 * @return array[int][string]string
+	 * @return array
 	 *
 	 */
 	public function listFiles() /*. throws CBitrixCloudException .*/
@@ -360,25 +360,22 @@ class CBitrixCloudBackup
 			}
 		}
 
-		if (isset($informerParams['ALERT']))
-		{
-			$PROGRESS_FREE_BAR = $PROGRESS_FREE < 0 ? 0 : $PROGRESS_FREE;
-			$informerParams['HTML'] = '
-				<div class="adm-informer-item-section">
-					<span class="adm-informer-item-l">
-						<span class="adm-informer-strong-text">' . GetMessage('BCL_BACKUP_AI_USAGE_TOTAL') . '</span> ' . $ALLOWED . '
-					</span>
-					<span class="adm-informer-item-r">
-							<span class="adm-informer-strong-text">' . GetMessage('BCL_BACKUP_AI_USAGE_AVAIL') . '</span> ' . CFile::FormatSize($AVAIL, 0) . '
-					</span>
-				</div>
-				<div class="adm-informer-status-bar-block" >
-					<div class="adm-informer-status-bar-indicator" style="width:' . (100 - $PROGRESS_FREE_BAR) . '%; "></div>
-					<div class="adm-informer-status-bar-text">' . (100 - $PROGRESS_FREE) . '%</div>
-				</div>
-			' . $MESS;
-			CAdminInformer::AddItem($informerParams);
-		}
+		$PROGRESS_FREE_BAR = $PROGRESS_FREE < 0 ? 0 : $PROGRESS_FREE;
+		$informerParams['HTML'] = '
+			<div class="adm-informer-item-section">
+				<span class="adm-informer-item-l">
+					<span class="adm-informer-strong-text">' . GetMessage('BCL_BACKUP_AI_USAGE_TOTAL') . '</span> ' . $ALLOWED . '
+				</span>
+				<span class="adm-informer-item-r">
+						<span class="adm-informer-strong-text">' . GetMessage('BCL_BACKUP_AI_USAGE_AVAIL') . '</span> ' . CFile::FormatSize($AVAIL, 0) . '
+				</span>
+			</div>
+			<div class="adm-informer-status-bar-block" >
+				<div class="adm-informer-status-bar-indicator" style="width:' . (100 - $PROGRESS_FREE_BAR) . '%; "></div>
+				<div class="adm-informer-status-bar-text">' . (100 - $PROGRESS_FREE) . '%</div>
+			</div>
+		' . $MESS;
+		CAdminInformer::AddItem($informerParams);
 	}
 
 	/**

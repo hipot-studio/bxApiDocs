@@ -672,7 +672,7 @@ class TaskInitChangeAiSiteTargetBlocks extends TaskStep
 		array $action = [],
 	): array
 	{
-		return [
+		$payload = [
 			'actionId' => trim((string)($action['actionId'] ?? '')),
 			'actionType' => trim((string)($action['type'] ?? ($blockId > 0 ? 'update_block' : ''))),
 			'blockId' => $blockId,
@@ -685,6 +685,14 @@ class TaskInitChangeAiSiteTargetBlocks extends TaskStep
 			'editMode' => $this->resolveEditMode($action),
 			'placement' => is_array($action['placement'] ?? null) ? $action['placement'] : [],
 		];
+		$selectedContext = ChangeAiSiteState::getSelectedElementContext($this->generation);
+		if ($selectedContext !== [])
+		{
+			$payload['selectedSelector'] = trim((string)($selectedContext['selector'] ?? ''));
+			$payload['selectedElementHtml'] = trim((string)($selectedContext['elementHtml'] ?? ''));
+		}
+
+		return $payload;
 	}
 
 	private function resolveEditMode(array $action): string

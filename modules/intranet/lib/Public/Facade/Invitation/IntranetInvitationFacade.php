@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Public\Facade\Invitation;
 
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
+use Bitrix\Intranet\Exception\InvitationFailedException;
 use Bitrix\Intranet\Public\Type\EmailInvitation;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Enum\InvitationType;
@@ -14,6 +15,8 @@ use Bitrix\Intranet\Public\Service\InvitationService;
 use Bitrix\Intranet\Public\Service\RegistrationService;
 use Bitrix\Intranet\Internal\Factory\Message\IntranetInvitationMessageFactory;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Error;
+use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\LoaderException;
@@ -88,7 +91,12 @@ class IntranetInvitationFacade extends InvitationFacade
 
 		if ($invitationType === InvitationType::EMAIL)
 		{
-			$transport->createEmailEvent()->sendImmediately();
+			if (!$transport->createEmailEvent()->sendImmediatelyWithResult())
+			{
+				throw new InvitationFailedException(
+					new ErrorCollection([new Error('Invitation email delivery failed.', 'delivery_unavailable')]),
+				);
+			}
 		}
 		elseif ($invitationType === InvitationType::PHONE && !$isFirstInvitation)
 		{

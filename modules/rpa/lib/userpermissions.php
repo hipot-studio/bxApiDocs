@@ -535,7 +535,7 @@ class UserPermissions
 	{
 		if($this->accessCodes === null)
 		{
-			$this->accessCodes = \CAccess::GetUserCodesArray($this->userId);
+			$this->accessCodes = \CAccess::getUserCodesArray($this->userId);
 			$this->accessCodes = $this->extendAccessCodes($this->accessCodes);
 		}
 

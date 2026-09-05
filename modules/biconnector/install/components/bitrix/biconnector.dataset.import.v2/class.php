@@ -554,9 +554,11 @@ class DatasetImportV2Component extends CBitrixComponent
 				(
 					$setting->getType() === FieldType::DateTime->value
 					&& Const\DateTime::tryFrom($format) === null
+					&& $format !== Const\DateTime::ISO_8601
 				)
 			)
 			{
+				// Custom formats are passed to the frontend in ISO 8601 notation, predefined ones as is.
 				$format = Const\DateTimeFormatConverter::phpToIso8601($format);
 			}
 
@@ -652,7 +654,7 @@ class DatasetImportV2Component extends CBitrixComponent
 		$dateTimeFormat[] = [
 			'title' => 'YYYY-MM-DDThh:mm:ss (ISO 8601)',
 			'type' => 'value',
-			'value' => 'Y-m-d\TH:i:s',
+			'value' => Const\DateTime::ISO_8601,
 		];
 
 		$this->arResult['appParams'] = [

@@ -408,42 +408,54 @@ class Message extends RestController
 	}
 
 	/**
-	 * Get the email thread (conversation chain) for a message.
+	 * Get a page of the conversation branch a message belongs to, paged from the newest end.
+	 * Parallel branches (other replies to the same message) are not included.
 	 *
 	 * @restMethod mail.message.thread
 	 * Request params:
-	 * - int id*    Message identifier (any message in the thread)
-	 * - int limit  Max messages to return (default 20, max 50)
+	 * - int  id*         Message identifier the branch is assembled around
+	 * - int  limit       Messages per page (default 20; max 50 with bodies, 100 in headers mode)
+	 * - int  offset      Messages to skip, counted from the newest (default 0)
+	 * - bool withBodies  Include message bodies in response (default true)
+	 *
+	 * @return ArrayResponse {result: MessageData[] in chronological order, total: int, hasMore: bool}
 	 */
 	public function threadAction(GetRequest $request): ArrayResponse
 	{
 		$userId = (int)CurrentUser::get()->getId();
 		$messageId = (int)$request->id;
 		$params = new RequestParams($this->getRequest()->getJsonList());
-		$limit = $params->getInt('limit', 20);
 
-		if ($limit <= 0)
-		{
-			$limit = 20;
-		}
-
-		if ($limit > 50)
-		{
-			$limit = 50;
-		}
+		// limit and offset are clamped by the service
+		$limit = (int)$params->getInt('limit', MessageSearch::THREAD_PAGE_SIZE_DEFAULT);
+		$offset = (int)$params->getInt('offset', 0);
+		$withBodies = $params->getBool('withBodies', true);
 
 		$provider = new MessageSearch();
 
 		try
 		{
-			$result = $provider->getMessageThread($messageId, $userId, $limit);
+			$result = $provider->getMessageThread($messageId, $userId, $limit, $offset, $withBodies);
 		}
 		catch (SystemException)
 		{
 			throw new EntityNotFoundException($messageId);
 		}
 
-		return new ArrayResponse($result['messages'] ?? []);
+		return self::buildThreadEnvelope($result);
+	}
+
+	/**
+	 * Raw data keeps total and hasMore beside the message list: without the flag
+	 * RestApiServer::processResponse would wrap the whole envelope into 'result' again.
+	 */
+	protected static function buildThreadEnvelope(array $threadResult): ArrayResponse
+	{
+		return (new ArrayResponse([
+			'result' => $threadResult['messages'] ?? [],
+			'total' => (int)($threadResult['total'] ?? 0),
+			'hasMore' => (bool)($threadResult['hasMore'] ?? false),
+		]))->setShowRawData(true);
 	}
 
 	/**

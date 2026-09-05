@@ -8,6 +8,7 @@ use Bitrix\Landing\Manager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Security\Random;
 
 class LandingBlocksTariffsComponent extends CBitrixComponent
 {
@@ -56,16 +57,11 @@ class LandingBlocksTariffsComponent extends CBitrixComponent
 			// 'currencyCode' => $currencyCode,
 			'catalogForNewCustomer' => false,
 			'partnerId' => $partnerId,
-			'replace' => [
-				'order' => [
-					'url' => [
-						'BASIC' => '#someId',
-						'STD' => '#someId2',
-						'PRO' => '/somefolder/someurl.php',
-					],
-				],
-			],
 		];
+
+		// lets the inline script of the template find its own script node regardless of how the
+		// browser executed it: the block may be inserted by ajax and evaluated via BX.evalGlobal
+		$this->arResult['INSTANCE_ID'] = Random::getString(8);
 
 		$this->IncludeComponentTemplate();
 	}

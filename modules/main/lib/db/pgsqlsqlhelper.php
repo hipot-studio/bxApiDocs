@@ -9,6 +9,7 @@ use Bitrix\Main\ORM\Fields\ScalarField;
 class PgsqlSqlHelper extends SqlHelper
 {
 	const FULLTEXT_MAXIMUM_LENGTH = 1000000;
+
 	/**
 	 * @inheritdoc
 	 */
@@ -85,7 +86,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function convertToFullText($value, $maxLength = 0)
 	{
-		$fulltextLength = $maxLength ? min($maxLength, static::FULLTEXT_MAXIMUM_LENGTH): static::FULLTEXT_MAXIMUM_LENGTH;
+		$fulltextLength = $maxLength ? min($maxLength, static::FULLTEXT_MAXIMUM_LENGTH) : static::FULLTEXT_MAXIMUM_LENGTH;
 		return "safe_text_for_tsvector('" . $this->forSql($value, $fulltextLength) . "')";
 	}
 
@@ -144,7 +145,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function getDatetimeToDateFunction($value)
 	{
-		return 'cast('.$value.' as date)';
+		return 'cast(' . $value . ' as date)';
 	}
 
 	/**
@@ -152,7 +153,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function formatDate($format, $field = null)
 	{
-		static $translation  = [
+		static $translation = [
 			'YYYY' => 'YYYY',
 			'MMMM' => 'FMMonth',
 			'MI' => 'MI',
@@ -178,7 +179,7 @@ class PgsqlSqlHelper extends SqlHelper
 		}
 		else
 		{
-			return "to_char(".$field.", '".$dbFormat."')";
+			return "to_char(" . $field . ", '" . $this->forSql($dbFormat) . "')";
 		}
 	}
 
@@ -227,7 +228,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function getIsNullFunction($expression, $result)
 	{
-		return "COALESCE(".$expression.", ".$result.")";
+		return "COALESCE(" . $expression . ", " . $result . ")";
 	}
 
 	/**
@@ -235,7 +236,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function getLengthFunction($field)
 	{
-		return "OCTET_LENGTH(".$field.")";
+		return "OCTET_LENGTH(" . $field . ")";
 	}
 
 	public function getMatchFunction($field, $value)
@@ -272,7 +273,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function getCharToDateFunction($value)
 	{
-		return "timestamp '".$value."'";
+		return "timestamp '" . $value . "'";
 	}
 
 	/**
@@ -280,7 +281,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function getDateToCharFunction($fieldName)
 	{
-		return "TO_CHAR(".$fieldName.", 'YYYY-MM-DD HH24:MI:SS')";
+		return "TO_CHAR(" . $fieldName . ", 'YYYY-MM-DD HH24:MI:SS')";
 	}
 
 	/**
@@ -288,13 +289,13 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function getConverter(ScalarField $field)
 	{
-		if($field instanceof ORM\Fields\DatetimeField)
+		if ($field instanceof ORM\Fields\DatetimeField)
 		{
-			return array($this, "convertFromDbDateTime");
+			return [$this, "convertFromDbDateTime"];
 		}
-		elseif($field instanceof ORM\Fields\DateField)
+		elseif ($field instanceof ORM\Fields\DateField)
 		{
-			return array($this, "convertFromDbDate");
+			return [$this, "convertFromDbDate"];
 		}
 		else
 		{
@@ -307,7 +308,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function convertFromDbDateTime($value)
 	{
-		if($value !== null && $value != '0000-00-00 00:00:00')
+		if ($value !== null && $value != '0000-00-00 00:00:00')
 		{
 			return new Type\DateTime($value, "Y-m-d H:i:s");
 		}
@@ -320,7 +321,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function convertFromDbDate($value)
 	{
-		if($value !== null && $value != '0000-00-00')
+		if ($value !== null && $value != '0000-00-00')
 		{
 			return new Type\Date($value, "Y-m-d");
 		}
@@ -333,7 +334,7 @@ class PgsqlSqlHelper extends SqlHelper
 	 */
 	public function castToChar($fieldName)
 	{
-		return 'CAST('.$fieldName.' AS varchar)';
+		return 'CAST(' . $fieldName . ' AS varchar)';
 	}
 
 	/**
@@ -415,7 +416,7 @@ class PgsqlSqlHelper extends SqlHelper
 		}
 		elseif ($field instanceof ORM\Fields\EnumField)
 		{
-			return 'varchar('.max(array_map('mb_strlen', $field->getValues())).')';
+			return 'varchar(' . max(array_map('mb_strlen', $field->getValues())) . ')';
 		}
 		else
 		{
@@ -431,7 +432,7 @@ class PgsqlSqlHelper extends SqlHelper
 					}
 				}
 			}
-			return 'varchar('.($defaultLength > 0? $defaultLength: 255).')';
+			return 'varchar(' . ($defaultLength > 0 ? $defaultLength : 255) . ')';
 		}
 	}
 
@@ -505,12 +506,12 @@ class PgsqlSqlHelper extends SqlHelper
 
 		if ($limit > 0)
 		{
-			$sql .= "\nLIMIT ".$limit;
+			$sql .= "\nLIMIT " . $limit;
 		}
 
 		if ($offset > 0)
 		{
-			$sql .= " OFFSET ".$offset;
+			$sql .= " OFFSET " . $offset;
 		}
 
 		$sql .= "\n";
@@ -556,7 +557,7 @@ class PgsqlSqlHelper extends SqlHelper
 			&& $primaryFields
 		)
 		{
-			$sql = 'INSERT INTO ' . $this->quote($tableName) . ' ('.$insert[0].')
+			$sql = 'INSERT INTO ' . $this->quote($tableName) . ' (' . $insert[0] . ')
 				VALUES (' . $insert[1] . ')
 				ON CONFLICT (' . implode(',', array_map([$this, 'quote'], $primaryFields)) . ')
 				DO UPDATE SET ' . $update[0];
@@ -566,10 +567,9 @@ class PgsqlSqlHelper extends SqlHelper
 			$sql = "";
 		}
 
-		return array(
-			$sql
-		);
-
+		return [
+			$sql,
+		];
 	}
 
 	/**
@@ -580,7 +580,7 @@ class PgsqlSqlHelper extends SqlHelper
 		$result = [];
 		$head = '';
 		$tail = '';
-		$maxBodySize = 1024*1024; //1 Mb
+		$maxBodySize = 1024 * 1024; //1 Mb
 		$body = [];
 		$bodySize = 0;
 		foreach ($insertRows as $insertFields)
@@ -589,7 +589,9 @@ class PgsqlSqlHelper extends SqlHelper
 			if (!$head && $insert && $insert[0])
 			{
 				$head = 'INSERT INTO ' . $this->quote($tableName) . ' (' . implode(', ', $insert[0]) . ') VALUES ';
-				$tail = ' ON CONFLICT (' . implode(',', array_map([$this, 'quote'], $primaryFields)) . ') DO UPDATE SET (' . implode(', ', $insert[0]) . ') = (' . implode(', ', array_map(function($f){return 'EXCLUDED.'.$f;}, $insert[0])) . ')';
+				$tail = ' ON CONFLICT (' . implode(',', array_map([$this, 'quote'], $primaryFields)) . ') DO UPDATE SET (' . implode(', ', $insert[0]) . ') = (' . implode(', ', array_map(function ($f) {
+						return 'EXCLUDED.' . $f;
+					}, $insert[0])) . ')';
 			}
 			if ($insert && $insert[1])
 			{
@@ -598,7 +600,7 @@ class PgsqlSqlHelper extends SqlHelper
 				$body[] = $values;
 				if ($bodySize > $maxBodySize)
 				{
-					$result[] = $head.implode(', ', $body).$tail;
+					$result[] = $head . implode(', ', $body) . $tail;
 					$body = [];
 					$bodySize = 0;
 				}
@@ -606,7 +608,7 @@ class PgsqlSqlHelper extends SqlHelper
 		}
 		if ($body)
 		{
-			$result[] = $head.implode(', ', $body).$tail;
+			$result[] = $head . implode(', ', $body) . $tail;
 		}
 
 		return $result;
@@ -642,7 +644,7 @@ class PgsqlSqlHelper extends SqlHelper
 		$sql .= ' ON CONFLICT (' . implode(',', array_map([$this, 'quote'], $primaryFields)) . ') DO UPDATE SET ';
 		if (count($updateColumns) === 1)
 		{
-			$sql .=  $updateColumns[0] . ' = ' . $updateValues[0];
+			$sql .= $updateColumns[0] . ' = ' . $updateValues[0];
 		}
 		else
 		{
@@ -693,7 +695,7 @@ class PgsqlSqlHelper extends SqlHelper
 		$set = '';
 		foreach ($fields as $fieldName => $fieldValue)
 		{
-			$set .= ($set ? ',' : '') . $fieldName . ' = ' .$fieldValue . "\n";
+			$set .= ($set ? ',' : '') . $fieldName . ' = ' . $fieldValue . "\n";
 		}
 		$dml .= $set;
 		$dml .= 'FROM ' . $from . "\n";

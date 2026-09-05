@@ -13,6 +13,8 @@ use Bitrix\Calendar\Core\Base\Date;
 use Bitrix\Calendar\Core;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
+use Bitrix\Calendar\Integration\HumanResources;
+use Bitrix\Calendar\Integration\HumanResources\TeamMemberService;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\CollabFeature;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\Collabs;
@@ -458,6 +460,7 @@ class CCalendar
 			'eventWithEmailGuestEnabled' => Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_EVENTS_WITH_EMAIL_GUESTS),
 			'sharingFeatureLimitEnable' => Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_SHARING),
 			'projectFeatureEnabled' => SocialNetwork\FeatureService::isProjectFeatureEnabled(),
+			'teamsAsAttendeeEnabled' => HumanResources\FeatureService::isTeamsAsAttendeeEnabled(),
 			'isSharingFeatureEnabled' => \Bitrix\Calendar\Sharing\SharingFeature::isEnabled(),
 			'payAttentionToNewSharingFeature' => \Bitrix\Calendar\Sharing\Helper::payAttentionToNewSharingFeature(),
 			'showAfterSyncAccent' => isset($_GET['googleAuthSuccess']) && $_GET['googleAuthSuccess'] === 'y',
@@ -2080,7 +2083,15 @@ class CCalendar
 
 			$eventModel = CCalendarEvent::getEventModelForPermissionCheck((int)($curEvent['ID'] ?? 0), $curEvent, $userId);
 
-			$accessCheckResult = $accessController->check(ActionDictionary::ACTION_EVENT_EDIT, $eventModel);
+			$accessCheckParams = ($params['checkCurrentEventPermission'] ?? false)
+				? ['checkCurrentEvent' => 'Y']
+				: null
+			;
+			$accessCheckResult = $accessController->check(
+				ActionDictionary::ACTION_EVENT_EDIT,
+				$eventModel,
+				$accessCheckParams,
+			);
 			$bChangeMeeting = !$checkPermission || $accessCheckResult;
 
 			if (!$bChangeMeeting)
@@ -4536,7 +4547,38 @@ class CCalendar
 			return [];
 		}
 
-		$users = \CSocNetLogDestination::getDestinationUsers($codes, $fetchUsers);
+		if (!is_array($codes))
+		{
+			return [];
+		}
+
+		// Team codes (SNT<id>) are unknown to the socialnetwork resolver: intercept them
+		// strictly before delegating and expand to direct team members (flat, no sub-teams).
+		// This is the single point of SNT expansion in the calendar module.
+		$teamNodeIds = [];
+		$passthroughCodes = [];
+		foreach ($codes as $code)
+		{
+			$nodeId = is_string($code)
+				? \Bitrix\Calendar\Integration\HumanResources\TeamAccessCode::extractNodeId($code)
+				: null;
+			if ($nodeId !== null)
+			{
+				$teamNodeIds[] = $nodeId;
+			}
+			else
+			{
+				$passthroughCodes[] = $code;
+			}
+		}
+
+		$users = \CSocNetLogDestination::getDestinationUsers($passthroughCodes, $fetchUsers);
+
+		if (!empty($teamNodeIds))
+		{
+			$users = self::mergeTeamMembersIntoDestination($users, $teamNodeIds, $fetchUsers);
+		}
+
 		if ($fetchUsers)
 		{
 			foreach ($users as $i => $user)
@@ -4552,6 +4594,50 @@ class CCalendar
 				if(is_numeric($user))
 				{
 					$user = (int)$user;
+				}
+			}
+		}
+
+		return $users;
+	}
+
+	/**
+	 * Merges direct members of the given team nodes into the socialnetwork destination result,
+	 * deduplicating by user id and preserving the result shape for both $fetchUsers modes.
+	 *
+	 * @param array $users result of CSocNetLogDestination::getDestinationUsers for passthrough codes
+	 * @param int[] $teamNodeIds
+	 * @param bool $fetchUsers
+	 * @return array
+	 */
+	private static function mergeTeamMembersIntoDestination(array $users, array $teamNodeIds, bool $fetchUsers): array
+	{
+		$teamUserIds = (new TeamMemberService())->getDirectMemberUserIds($teamNodeIds);
+		if (empty($teamUserIds))
+		{
+			return $users;
+		}
+
+		if ($fetchUsers)
+		{
+			// $users is a list of user records; reuse the resolver to fetch missing members
+			// in the exact same shape, then rely on dedup by user id.
+			$existingIds = array_map('intval', array_column($users, 'ID'));
+			$missingIds = array_values(array_diff($teamUserIds, $existingIds));
+			if (!empty($missingIds))
+			{
+				$codes = array_map(static fn($id) => 'U' . $id, $missingIds);
+				$users = array_merge($users, \CSocNetLogDestination::getDestinationUsers($codes, true));
+			}
+		}
+		else
+		{
+			// $users is an associative map keyed by user id.
+			foreach ($teamUserIds as $userId)
+			{
+				if (!array_key_exists($userId, $users))
+				{
+					$users[$userId] = $userId;
 				}
 			}
 		}
@@ -6568,6 +6654,9 @@ class CCalendar
 	}
 
 	/**
+	 * Does not check access to the passed sections: that list is taken on trust from the caller.
+	 * Per-event view rights are still applied by CCalendarEvent::GetList(): checkPermissions is on by default.
+	 *
 	 * @param array $params
 	 * @param array $arAttendees
 	 *
@@ -6584,6 +6673,10 @@ class CCalendar
 			return [];
 		}
 
+		// event_list cache key hashes the params: order, repeats and gaps in the caller's keys must not affect it
+		$sectionIds = array_unique(array_map('intval', (array)$params['section']));
+		sort($sectionIds);
+
 		$arFilter = [];
 		if (isset($params['fromLimit']))
 		{
@@ -6598,20 +6691,23 @@ class CCalendar
 
 		if ($type === 'user')
 		{
-			$fetchMeetings = in_array(self::GetMeetingSection($ownerId), $params['section'], true);
+			$fetchMeetings = in_array(self::GetMeetingSection($ownerId), $sectionIds, true);
 		}
 		else
 		{
-			$fetchMeetings = in_array(self::GetCurUserMeetingSection(), $params['section'], true);
+			$fetchMeetings = in_array(self::GetCurUserMeetingSection(), $sectionIds, true);
 			if ($type)
 			{
 				$arFilter['CAL_TYPE'] = $type;
 			}
 		}
 
+		$arFilter['SECTION'] = $sectionIds;
+
 		$res = CCalendarEvent::GetList([
 			'arFilter' => $arFilter,
 			'parseRecursion' => true,
+			'parseDescription' => false,
 			'fetchAttendees' => true,
 			'userId' => $userId,
 			'fetchMeetings' => $fetchMeetings,
@@ -6623,7 +6719,7 @@ class CCalendar
 		$result = [];
 		foreach ($res as $event)
 		{
-			if (in_array((int)$event['SECT_ID'], $params['section'], true))
+			if (in_array((int)$event['SECT_ID'], $sectionIds, true))
 			{
 				unset($event['~DESCRIPTION']);
 				$result[] = $event;

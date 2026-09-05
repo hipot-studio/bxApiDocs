@@ -30,6 +30,11 @@ class CCloudStorageService_Selectel_S3 extends CCloudStorageService_S3
 		];
 	}
 
+	public function supportsPresignedUrls(): bool
+	{
+		return false;
+	}
+
 	public function GetSettingsHTML($arBucket, $bServiceSet, $cur_SERVICE_ID, $bVarsFromForm)
 	{
 		if ($bVarsFromForm)

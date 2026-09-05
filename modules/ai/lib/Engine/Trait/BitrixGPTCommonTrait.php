@@ -146,27 +146,19 @@ trait BitrixGPTCommonTrait
 	public function isAvailable(): bool
 	{
 		$region = Application::getInstance()->getLicense()->getRegion();
-		$shouldUseB24 = Bitrix24::shouldUseB24();
-
 		$availableByRegion = $region === 'ru' || $region === 'by';
-		if (!$shouldUseB24)
+
+		if (!Bitrix24::shouldUseB24())
 		{
 			return $availableByRegion;
 		}
 
-		if ($region === 'by')
+		if ($availableByRegion)
 		{
 			return true;
 		}
 
-		$isBitrixGptEnabled = Config::getValue('bitrixgpt_enabled') === 'Y';
-
-		$moduleId = $this->getContext()->getModuleId();
-		$isAvailableByModuleId = $moduleId === 'fake' || in_array($moduleId, $this->availableForModules(), true);
-
-		return $isBitrixGptEnabled
-			&& $availableByRegion
-			&& $isAvailableByModuleId;
+		return Config::getValue('bitrixgpt_enabled_west') === 'Y';
 	}
 
 	/**

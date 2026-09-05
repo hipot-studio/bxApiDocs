@@ -44,6 +44,13 @@ abstract class BaseField
 		return $this->property['Name'] ?? '';
 	}
 
+	public function getDescription(): ?string
+	{
+		$description = trim((string)($this->property['Description'] ?? ''));
+
+		return $description === '' ? null : $description;
+	}
+
 	public function isMultiple(): bool
 	{
 		if ($this->fieldTypeObject)

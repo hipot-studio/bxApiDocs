@@ -5,6 +5,7 @@ namespace Bitrix\Calendar\ICal\MailInvitation;
 
 
 use Bitrix\Calendar\Core\Event\Tools;
+use Bitrix\Calendar\ICal\Basic;
 use Bitrix\Calendar\ICal\Parser\Calendar;
 use Bitrix\Calendar\ICal\Parser\Dictionary;
 use Bitrix\Calendar\ICal\Parser\Event;
@@ -13,6 +14,7 @@ use Bitrix\Calendar\Internals\EventTable;
 use Bitrix\Calendar\Util;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Mail\Address;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
@@ -33,13 +35,14 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 	public const MEETING_STATUS_QUESTION_CODE = 'question';
 	public const MEETING_STATUS_DECLINED_CODE = 'declined';
 	public const SAFE_DELETED_YES = 'Y';
+	private const ICAL_SEQUENCE_KEY = 'ICAL_SEQUENCE';
 
 	protected string $decision;
 	protected Calendar $icalComponent;
 	protected int $userId;
-	protected ?string $emailTo;
-	protected ?string $emailFrom;
-	protected ?array $organizer;
+	protected ?string $emailTo = null;
+	protected ?string $emailFrom = null;
+	protected ?array $organizer = null;
 
 	/**
 	 * @return IncomingInvitationRequestHandler
@@ -74,12 +77,31 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 	 */
 	public function handle(): bool
 	{
+		if (!$this->isUserContextAllowed())
+		{
+			return false;
+		}
+
 		$icalEvent = $this->icalComponent->getEvent();
-		$localEvent = Helper::getEventByUId($icalEvent->getUid());
+		$this->organizer = $this->parseOrganizer($icalEvent->getOrganizer());
+		if (!$this->normalizeAddressesByOrganizer())
+		{
+			return false;
+		}
+		if (!$this->isOrganizerEmailMatchingSender())
+		{
+			return false;
+		}
+		$localEvent = Helper::getEventByUId($icalEvent->getUid(), $this->userId, true);
 		if ($localEvent === null)
 		{
 			$preparedEvent = $this->prepareEventToSave($icalEvent);
 			$parentId = $this->saveEvent($preparedEvent);
+			if ($parentId <= 0)
+			{
+				return false;
+			}
+
 			$childEvent = EventTable::query()
 				->setSelect(['ID','PARENT_ID','OWNER_ID'])
 				->where('PARENT_ID', $parentId)
@@ -100,12 +122,33 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 				$this->eventId = $localEvent['ID'];
 				return true;
 			}
-
-			$preparedEvent = $this->prepareToUpdateEvent($icalEvent, $localEvent);
-			if ($this->updateEvent($preparedEvent, $localEvent))
+			if (!$this->isOrganizerMatchingMeetingHost($localEvent))
 			{
-				$this->eventId = $localEvent['ID'];
+				return false;
+			}
+			if ($this->isOutdatedRequest($icalEvent, $localEvent))
+			{
+				$this->eventId = (int)$localEvent['ID'];
+
 				return true;
+			}
+
+			$tempUser = CCalendar::TempUser();
+			try
+			{
+				$preparedEvent = $this->prepareToUpdateEvent($icalEvent, $localEvent);
+				if ($this->updateEvent($preparedEvent, $localEvent))
+				{
+					$this->eventId = $localEvent['ID'];
+					return true;
+				}
+			}
+			finally
+			{
+				if ($tempUser !== false)
+				{
+					CCalendar::TempUser($tempUser, false);
+				}
 			}
 		}
 
@@ -250,11 +293,6 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 				->format(Date::convertFormatToPhp(FORMAT_DATETIME));
 		}
 
-		if ($icalEvent->getSequence() !== null)
-		{
-			$event['VERSION'] = $icalEvent->getSequence()->getValue();
-		}
-
 		if ($icalEvent->getRRule() !== null)
 		{
 			$rrule = $this->parseRRule($icalEvent->getRRule());
@@ -314,7 +352,6 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 		;
 
 
-		$this->organizer = $this->parseOrganizer($icalEvent->getOrganizer());
 		$event['MEETING_HOST'] = Helper::getUserIdByEmail($this->organizer);
 
 		$event['OWNER_ID'] = $this->userId;
@@ -331,14 +368,13 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 			'count' => '15',
 		];
 		$event['MEETING'] = [
-			'HOST_NAME' => $icalEvent->getOrganizer() !== null
-				? $icalEvent->getOrganizer()->getParameterValueByName('cn')
-				: $this->organizer['EMAIL'],
+			'HOST_NAME' => $this->getOrganizerHostName($icalEvent),
 			'NOTIFY' => 1,
 			'REINVITE' => 0,
 			'ALLOW_INVITE' => 0,
 			'MEETING_CREATOR' => $event['MEETING_HOST'],
 			'EXTERNAL_TYPE' => 'mail',
+			self::ICAL_SEQUENCE_KEY => $this->getICalSequence($icalEvent),
 		];
 
 		if ($this->decision === 'declined')
@@ -381,7 +417,13 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 		$id = (int)CCalendar::SaveEvent([
 			'arFields' => $preparedEvent,
 			'autoDetectSection' => true,
+			'userId' => $this->userId,
+			'checkPermission' => !Basic\ICalUtil::isMailUser((int)$preparedEvent['MEETING_HOST']),
 		]);
+		if ($id <= 0)
+		{
+			return $id;
+		}
 
 		\CCalendarNotify::Send([
 			"mode" => 'invite',
@@ -461,6 +503,162 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 			$result['LAST_NAME'] = $parts[1];
 		}
 		return $result;
+	}
+
+	private function isUserContextAllowed(): bool
+	{
+		$currentUserId = CCalendar::GetCurUserId(true);
+
+		return $currentUserId <= 0 || $currentUserId === $this->userId;
+	}
+
+	private function isOrganizerEmailMatchingSender(): bool
+	{
+		$organizerEmail = $this->normalizeEmail($this->organizer['EMAIL'] ?? null);
+		$senderEmail = $this->normalizeEmail($this->emailTo);
+
+		return $organizerEmail !== null && $organizerEmail === $senderEmail;
+	}
+
+	private function normalizeAddressesByOrganizer(): bool
+	{
+		$organizerEmail = $this->normalizeEmail($this->organizer['EMAIL'] ?? null);
+		$emailFrom = $this->normalizeEmail($this->emailFrom);
+		$emailTo = $this->normalizeEmail($this->emailTo);
+
+		if ($organizerEmail === null)
+		{
+			return false;
+		}
+
+		if ($organizerEmail === $emailTo)
+		{
+			return true;
+		}
+
+		if ($organizerEmail !== $emailFrom)
+		{
+			return false;
+		}
+
+		[$this->emailFrom, $this->emailTo] = [$this->emailTo, $this->emailFrom];
+
+		return true;
+	}
+
+	private function normalizeEmail(?string $email): ?string
+	{
+		$address = new Address($email);
+
+		return $address->validate() ? mb_strtolower($address->getEmail()) : null;
+	}
+
+	private function getOrganizerHostName(Event $icalEvent): ?string
+	{
+		$organizerCn = trim((string)$icalEvent->getOrganizer()?->getParameterValueByName('cn'));
+		if ($organizerCn !== '')
+		{
+			return $organizerCn;
+		}
+
+		$senderName = trim((string)(new Address($this->emailTo))->getName());
+
+		return $senderName !== '' ? $senderName : ($this->organizer['EMAIL'] ?? null);
+	}
+
+	private function isOrganizerMatchingMeetingHost(array $localEvent): bool
+	{
+		$meetingHost = Helper::getUserById((int)($localEvent['MEETING_HOST'] ?? 0));
+		if ($meetingHost === null)
+		{
+			return false;
+		}
+
+		$organizerEmail = mb_strtolower(trim((string)($this->organizer['EMAIL'] ?? '')));
+		$meetingHostEmail = mb_strtolower(trim((string)($meetingHost['EMAIL'] ?? '')));
+
+		return $organizerEmail !== '' && $organizerEmail === $meetingHostEmail;
+	}
+
+	private function isOutdatedRequest(Event $icalEvent, array $localEvent): bool
+	{
+		$meeting = $this->getMeetingData($localEvent);
+		if (!array_key_exists(self::ICAL_SEQUENCE_KEY, $meeting))
+		{
+			return false;
+		}
+
+		return $this->getICalSequence($icalEvent) < (int)$meeting[self::ICAL_SEQUENCE_KEY];
+	}
+
+	private function getICalSequence(Event $icalEvent): int
+	{
+		$sequence = $icalEvent->getSequence();
+		if ($sequence === null)
+		{
+			return 0;
+		}
+
+		$value = trim((string)$sequence->getValue());
+
+		return $value !== '' && preg_match('/^[0-9]+$/D', $value) === 1 ? (int)$value : 0;
+	}
+
+	private function getMeetingData(array $event): array
+	{
+		if (is_array($event['MEETING'] ?? null))
+		{
+			return $event['MEETING'];
+		}
+		$meetingData = (string)($event['MEETING'] ?? '');
+		if ($meetingData === '')
+		{
+			return [];
+		}
+
+		$meeting = unserialize($meetingData, ['allowed_classes' => false]);
+
+		return is_array($meeting) ? $meeting : [];
+	}
+
+	private function getUpdatedAttendeesCodes(array $localEvent, int $meetingHost): array
+	{
+		$parentId = (int)($localEvent['PARENT_ID'] ?? 0);
+		if ($parentId <= 0)
+		{
+			$parentId = (int)($localEvent['ID'] ?? 0);
+		}
+		$attendeesCodes = $localEvent['ATTENDEES_CODES'] ?? '';
+		if ($parentId > 0 && $parentId !== (int)($localEvent['ID'] ?? 0))
+		{
+			$parentEvent = EventTable::query()
+				->setSelect(['ATTENDEES_CODES'])
+				->where('ID', $parentId)
+				->fetch()
+			;
+			if (is_array($parentEvent))
+			{
+				$attendeesCodes = $parentEvent['ATTENDEES_CODES'] ?? '';
+			}
+		}
+
+		if (is_string($attendeesCodes))
+		{
+			$attendeesCodes = explode(',', $attendeesCodes);
+		}
+		if (!is_array($attendeesCodes))
+		{
+			$attendeesCodes = [];
+		}
+
+		$attendeesCodes[] = 'U' . $this->userId;
+		$attendeesCodes[] = 'U' . $meetingHost;
+		$attendeesCodes = array_filter(
+			array_map('trim', $attendeesCodes),
+			static fn(string $code): bool => $code !== '',
+		);
+
+		return array_values(array_unique($attendeesCodes));
 	}
 
 	/**
@@ -561,11 +759,6 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 				->format(Date::convertFormatToPhp(FORMAT_DATETIME));
 		}
 
-		if ($icalEvent->getSequence() !== null && $icalEvent->getSequence()->getValue() > $localEvent['VERSION'])
-		{
-			$event['VERSION'] = $icalEvent->getSequence()->getValue();
-		}
-
 		$event['DESCRIPTION'] = $icalEvent->getDescription()?->getValue();
 
 		if ($icalEvent->getRRule() !== null)
@@ -621,20 +814,14 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 			}
 		}
 
-		$organizer = [];
-		if ($icalEvent->getOrganizer() !== null)
-		{
-			$organizer = $this->parseOrganizer($icalEvent->getOrganizer());
-		}
-
 		$event['OWNER_ID'] = $this->userId;
-		$event['MEETING_HOST'] = count($organizer)
-			? Helper::getUserIdByEmail($organizer)
-			: $localEvent['MEETING_HOST']
-		;
+		$event['MEETING_HOST'] = (int)$localEvent['MEETING_HOST'];
 		$event['IS_MEETING'] = 1;
 		$event['SECTION_CAL_TYPE'] = 'user';
-		$event['ATTENDEES_CODES'] = ['U'.$event['OWNER_ID'], 'U'.$event['MEETING_HOST']];
+		$event['ATTENDEES_CODES'] = $this->getUpdatedAttendeesCodes(
+			$localEvent,
+			$event['MEETING_HOST'],
+		);
 		$event['MEETING_STATUS'] = match ($this->decision) {
 			self::MEETING_STATUS_ACCEPTED_CODE => Tools\Dictionary::MEETING_STATUS['Yes'],
 			self::MEETING_STATUS_DECLINED_CODE => Tools\Dictionary::MEETING_STATUS['No'],
@@ -646,15 +833,15 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 			'type' => 'min',
 			'count' => '15',
 		];
-		$organizerCn = $icalEvent->getOrganizer()?->getParameterValueByName('cn');
-		$meeting = unserialize($localEvent['MEETING'], ['allowed_classes' => false]);
+		$meeting = $this->getMeetingData($localEvent);
 		$event['MEETING'] = [
-			'HOST_NAME' => $organizerCn ?? $organizer['EMAIL'] ?? $meeting['HOST_NAME'] ?? null,
+			'HOST_NAME' => $this->getOrganizerHostName($icalEvent),
 			'NOTIFY' => $meeting['NOTIFY'] ?? 1,
 			'REINVITE' => $meeting['REINVITE'] ?? 0,
 			'ALLOW_INVITE' => $meeting['ALLOW_INVITE'] ?? 0,
 			'MEETING_CREATOR' => $meeting['MEETING_CREATOR'] ?? $event['MEETING_HOST'],
 			'EXTERNAL_TYPE' => 'mail',
+			self::ICAL_SEQUENCE_KEY => $this->getICalSequence($icalEvent),
 		];
 		$event['PARENT_ID'] = $localEvent['PARENT_ID'] ?? null;
 		$event['ID'] = $localEvent['ID'] ?? null;
@@ -680,8 +867,8 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 	 */
 	protected function updateEvent(array $updatedEvent, array $localEvent): bool
 	{
-		$updatedEvent['ID'] = $updatedEvent['PARENT_ID'];
-		$updatedEvent['OWNER_ID'] = $updatedEvent['MEETING_HOST'];
+		$updatedEvent['ID'] = $localEvent['ID'];
+		$updatedEvent['OWNER_ID'] = $this->userId;
 		$updatedEvent['MEETING']['MAILTO'] = $this->organizer['EMAIL'] ?? $this->emailTo;
 		$updatedEvent['MEETING']['MAIL_FROM'] = $this->emailFrom;
 
@@ -699,9 +886,16 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 				. $this->parseAttachmentsForDescription($this->icalComponent->getEvent()->getAttachments());
 		}
 
-		\CCalendar::SaveEvent([
+		$id = (int)\CCalendar::SaveEvent([
 			'arFields' => $updatedEvent,
+			'userId' => $this->userId,
+			'checkPermission' => true,
+			'checkCurrentEventPermission' => true,
 		]);
+		if ($id <= 0)
+		{
+			return false;
+		}
 
 		$entryChanges = \CCalendarEvent::CheckEntryChanges($updatedEvent, $localEvent);
 

@@ -55,6 +55,7 @@ class BookingMapper
 			->setName($ormBooking->getName())
 			->setDescription($ormBooking->getDescription())
 			->setConfirmed($ormBooking->getIsConfirmed())
+			->setConfirmedAt($ormBooking->getConfirmedAt()?->getTimestamp())
 			->setDeleted($ormBooking->getIsDeleted())
 			->setDatePeriod(
 				new DatePeriod(
@@ -114,6 +115,11 @@ class BookingMapper
 			->setVisitStatus($booking->getVisitStatus()->value)
 			->setSource($booking->getSource()->value)
 			->setIsConfirmed($booking->isConfirmed())
+			->setConfirmedAt(
+				$booking->getConfirmedAt() !== null
+					? DateTime::createFromTimestamp($booking->getConfirmedAt())
+					: null
+			)
 			->setDateFrom($dateFrom?->getTimestamp())
 			->setTimezoneFrom($timezoneFrom?->getName())
 			->setTimezoneFromOffset($timezoneFrom?->getOffset($dateFrom))

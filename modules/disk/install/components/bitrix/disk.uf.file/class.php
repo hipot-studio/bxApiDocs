@@ -557,7 +557,25 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 					$attr->setUnifiedLinkOptions($unifiedLinkOptions);
 
-					if ($canUpdate)
+					if ($isBoard && $canUpdate)
+					{
+						$openUrl = $this->getUrlManager()->getUrlForViewAttachedBoard(
+							file: $file,
+							attachedFileId: (int)$attachedModel->getId(),
+							c_element: 'docs_attach',
+						);
+
+						$attr->addAction([
+							'type' => 'edit',
+							'buttonIconClass' => ' ',
+							'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
+							'params' => [
+								'attachedObjectId' => $attachedModel->getId(),
+								'url' => $openUrl,
+							],
+						]);
+					}
+					elseif ($canUpdate && $data['EDITABLE'])
 					{
 						$editUnifiedLink = $urlManager->getUnifiedEditLink($file, [
 							'attachedId' => $attachedModel->getId(),
@@ -680,17 +698,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 			return array();
 		}
 
-		$list = array();
-		$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
-		foreach ($documentHandlersManager->getHandlers() as $handler)
-		{
-			if ($handler instanceof \Bitrix\Disk\Document\Contract\FileCreatable)
-			{
-				$list[] = $handler;
-			}
-		}
-
-		return $list;
+		return array_values(Driver::getInstance()->getDocumentHandlersManager()->getHandlersForCreatingFile());
 	}
 
 	private function getDocumentHandlersForEditingFile()

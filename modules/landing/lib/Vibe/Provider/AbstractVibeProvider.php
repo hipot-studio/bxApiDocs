@@ -3,6 +3,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Vibe\Provider;
 
+use Bitrix\Landing\Manager;
+use Bitrix\Landing\Rights;
+use Bitrix\Landing\Site\Type;
 use Bitrix\Landing\Vibe\Provider\VibeContextDto;
 use Bitrix\Landing\Vibe\Facade\Portal;
 use Bitrix\Main\Loader;
@@ -81,8 +84,40 @@ abstract class AbstractVibeProvider
 
 		return
 			$this->canView()
-			&& $checker->isIntranetAdmin()
+			&& ($checker->isIntranetAdmin() || $this->hasExplicitVibeRight(Rights::ADDITIONAL_RIGHTS['admin']))
 			&& $checker->checkFeature(Portal::VIBE_FEATURE)
+		;
+	}
+
+	public function canCreate(): bool
+	{
+		if ($this->canEdit())
+		{
+			return true;
+		}
+
+		$checker = new Portal();
+
+		return
+			$this->canView()
+			&& $this->hasExplicitVibeRight(Rights::ADDITIONAL_RIGHTS['create'])
+			&& $checker->checkFeature(Portal::VIBE_FEATURE)
+		;
+	}
+
+	/**
+	 * Explicitly granted vibe right of the current user (strict mode).
+	 * With the landing permissions feature off hasAdditionalRight() allows any
+	 * registry code to everyone, so the feature gates the whole rights channel:
+	 * without it only the intranet administrator keeps the access.
+	 * @param string $code Code from Rights::ADDITIONAL_RIGHTS.
+	 * @return bool
+	 */
+	protected function hasExplicitVibeRight(string $code): bool
+	{
+		return
+			Manager::checkFeature(Manager::FEATURE_PERMISSIONS_AVAILABLE)
+			&& Rights::hasAdditionalRight($code, Type::SCOPE_CODE_VIBE, false, true)
 		;
 	}
 

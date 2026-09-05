@@ -583,17 +583,17 @@ abstract class Application
 	{
 		//TODO: Should be transfered to where GET parameter is defined in future
 		//magic parameters: show cache usage statistics
-		$show_cache_stat = "";
+		$showCacheStat = "";
 		if (isset($_GET["show_cache_stat"]))
 		{
-			$show_cache_stat = (strtoupper($_GET["show_cache_stat"]) == "Y" ? "Y" : "");
-			@setcookie("show_cache_stat", $show_cache_stat, false, "/");
+			$showCacheStat = (strtoupper($_GET["show_cache_stat"]) == "Y" ? "Y" : "");
+			@setcookie("show_cache_stat", $showCacheStat, false, "/");
 		}
 		elseif (isset($_COOKIE["show_cache_stat"]))
 		{
-			$show_cache_stat = $_COOKIE["show_cache_stat"];
+			$showCacheStat = $_COOKIE["show_cache_stat"];
 		}
-		Data\Cache::setShowCacheStat($show_cache_stat === "Y");
+		Data\Cache::setShowCacheStat($showCacheStat === "Y");
 
 		if (isset($_GET["clear_cache_session"]))
 		{

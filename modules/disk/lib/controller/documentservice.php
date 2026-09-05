@@ -7,6 +7,7 @@ use Bitrix\Disk\Document;
 use Bitrix\Disk\Document\OnlyOffice\Filters\DocumentSessionCheck;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Document\OnlyOffice\RestrictionManager;
+use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
@@ -81,7 +82,9 @@ final class DocumentService extends Engine\Controller
 			return null;
 		}
 
-		$sessionManager = new Document\OnlyOffice\DocumentSessionManager();
+		$sessionManager = $documentSession->getService() === Document\Models\DocumentService::Vibeoffice
+			? new Document\Vibeoffice\DocumentSessionManager()
+			: new Document\OnlyOffice\DocumentSessionManager();
 		$file = $documentSession->getFile();
 		$version = $documentSession->getVersion();
 		$sessionManager
@@ -126,12 +129,14 @@ final class DocumentService extends Engine\Controller
 		}
 		else
 		{
+			$handlersManager = Driver::getInstance()->getDocumentHandlersManager();
+
 			$content = $GLOBALS['APPLICATION']->includeComponent(
 				'bitrix:ui.sidepanel.wrapper',
 				'',
 				[
 					'RETURN_CONTENT' => true,
-					'POPUP_COMPONENT_NAME' => 'bitrix:disk.file.editor-onlyoffice',
+					'POPUP_COMPONENT_NAME' => $handlersManager->resolveShellComponentName($documentSession->getService()),
 					'POPUP_COMPONENT_TEMPLATE_NAME' => '',
 					'POPUP_COMPONENT_PARAMS' => [
 						'DOCUMENT_SESSION' => $forkedSession,
@@ -153,9 +158,38 @@ final class DocumentService extends Engine\Controller
 	public function viewDocumentAction(Document\Models\DocumentSession $documentSession): HttpResponse
 	{
 		$currentUser = $this->getCurrentUser();
+		if (
+			$documentSession->getService() === Document\Models\DocumentService::Vibeoffice
+			&& !$documentSession->isVersion()
+		)
+		{
+			try
+			{
+				$file = $documentSession->getFile();
+				if ($file)
+				{
+					(new Document\Vibeoffice\SavedContentSynchronizer())->synchronize($file);
+				}
+
+				$reloadedSession = Document\Models\DocumentSession::loadById($documentSession->getId());
+				if ($reloadedSession)
+				{
+					$documentSession = $reloadedSession;
+				}
+			}
+			catch (\Throwable)
+			{
+				// A delayed platform save must not turn a readable document into an error page.
+			}
+		}
+
 		if ($documentSession->isOutdatedByFileContent())
 		{
-			$forkedSession = $documentSession->cloneWithNewHash($currentUser->getId());
+			$forkedSession = $documentSession->getService() === Document\Models\DocumentService::Vibeoffice
+				? (new Document\Vibeoffice\DocumentSessionManager())
+					->cloneSessionWithCurrentContentVersion($documentSession, $currentUser->getId())
+				: $documentSession->cloneWithNewHash($currentUser->getId());
+
 			/** @see \Bitrix\Disk\Controller\DocumentService::viewDocumentAction() */
 			$viewUri = $this->getActionUri('viewDocument', ['documentSessionId' => $forkedSession->getId()]);
 
@@ -181,12 +215,14 @@ final class DocumentService extends Engine\Controller
 			return $response;
 		}
 
+		$handlersManager = Driver::getInstance()->getDocumentHandlersManager();
+
 		$content = $GLOBALS['APPLICATION']->includeComponent(
 			'bitrix:ui.sidepanel.wrapper',
 			'',
 			[
 				'RETURN_CONTENT' => true,
-				'POPUP_COMPONENT_NAME' => 'bitrix:disk.file.editor-onlyoffice',
+				'POPUP_COMPONENT_NAME' => $handlersManager->resolveShellComponentName($documentSession->getService()),
 				'POPUP_COMPONENT_TEMPLATE_NAME' => '',
 				'POPUP_COMPONENT_PARAMS' => [
 					'DOCUMENT_SESSION' => $documentSession,
@@ -218,15 +254,24 @@ final class DocumentService extends Engine\Controller
 	{
 		$driver = Driver::getInstance();
 		$handlersManager = $driver->getDocumentHandlersManager();
-		$documentHandler = $handlersManager->getHandlerByCode($serviceCode);
+		$documentHandler = $handlersManager->resolveEffectiveHandler(
+			$serviceCode,
+			Document\DocumentResolveContext::forObject(
+				$objectId !== null ? (int)$objectId : null,
+				$attachedObjectId !== null ? (int)$attachedObjectId : null,
+			),
+		);
 		if (!$documentHandler)
 		{
 			$this->addError(new Error('There is no document service by code'));
 		}
 
-		if (!($documentHandler instanceof OnlyOfficeHandler))
+		if (
+			!($documentHandler instanceof VibeofficeHandler)
+			&& !($documentHandler instanceof OnlyOfficeHandler)
+		)
 		{
-			$this->addError(new Error('Work only with OnlyOffice'));
+			$this->addError(new Error('Unsupported document service.'));
 		}
 
 		if ($this->getErrors())
@@ -265,8 +310,15 @@ final class DocumentService extends Engine\Controller
 			$file = $attachedObject?->getFile();
 			if ($attachedObject)
 			{
-				$canEdit = $canEdit || $attachedObject->canUpdate($this->getCurrentUser()->getId());
-				$canRead = $canRead || $attachedObject->canRead($this->getCurrentUser()->getId());
+				// When both $objectId and $attachedObjectId are passed, $file becomes the
+				// attached object's file. Keep the $objectId file's rights in the OR only
+				// when it points to the same object as the attached one; otherwise a foreign
+				// attached file used for the unified redirect would inherit access from an
+				// unrelated $objectId file (see #250817). The $canRead gate on the redirect
+				// still enforces read rights on the resulting file (see #248603).
+				$sameObject = $objectId && (int)$objectId === (int)$attachedObject->getObjectId();
+				$canEdit = ($sameObject && $canEdit) || $attachedObject->canUpdate((int)$this->getCurrentUser()?->getId());
+				$canRead = ($sameObject && $canRead) || $attachedObject->canRead((int)$this->getCurrentUser()?->getId());
 				$objectIdForSessionCheck = (int)$attachedObject->getObjectId();
 			}
 		}
@@ -311,10 +363,25 @@ final class DocumentService extends Engine\Controller
 	{
 		$driver = Driver::getInstance();
 		$handlersManager = $driver->getDocumentHandlersManager();
-		$documentHandler = $handlersManager->getHandlerByCode($serviceCode);
+		$documentHandler = $handlersManager->resolveEffectiveHandler(
+			$serviceCode,
+			Document\DocumentResolveContext::forObject(
+				$objectId !== null ? (int)$objectId : null,
+				$attachedObjectId !== null ? (int)$attachedObjectId : null,
+			),
+		);
 		if (!$documentHandler)
 		{
 			$this->addError(new Error('There is no document service by code'));
+		}
+
+		if ($documentHandler instanceof VibeofficeHandler)
+		{
+			return $this->forward(\Bitrix\Disk\Controller\Vibeoffice::class, 'loadDocumentViewer', [
+				'attachedObjectId' => $attachedObjectId,
+				'objectId' => $objectId,
+				'versionId' => $versionId,
+			]);
 		}
 
 		if ($documentHandler instanceof OnlyOfficeHandler)
@@ -328,14 +395,69 @@ final class DocumentService extends Engine\Controller
 		}
 	}
 
-	public function goToEditAction($serviceCode, $attachedObjectId = null, $objectId = null, $documentSessionId = null)
+	public function goToEditAction($serviceCode, $attachedObjectId = null, $objectId = null, $documentSessionId = null, $documentSessionHash = null)
 	{
+		if ($documentSessionId)
+		{
+			// An already-existing session must continue in the engine it was opened with
+			// ("one document — one engine"): route the view→edit transformation by the
+			// session's own SERVICE, not by the currently effective handler. Otherwise, after
+			// the vibeoffice flag is turned on, a live OnlyOffice-family session would be
+			// forwarded into the Vibeoffice controller, whose auto-wire filters by
+			// SERVICE=vibeoffice and fails to load the onlyoffice session.
+			$documentSession = Document\Models\DocumentSession::loadById((int)$documentSessionId);
+			if ($documentSession)
+			{
+				if ($documentSession->getService() === Document\Models\DocumentService::Vibeoffice)
+				{
+					/** @see \Bitrix\Disk\Controller\Vibeoffice::loadDocumentEditorByViewSessionAction() */
+					return $this->forward(\Bitrix\Disk\Controller\Vibeoffice::class, 'loadDocumentEditorByViewSession', [
+						'documentSessionId' => $documentSessionId,
+						'documentSessionHash' => $documentSessionHash,
+					]);
+				}
+
+				if ($documentSession->getService() === Document\Models\DocumentService::OnlyOffice)
+				{
+					/** @see \Bitrix\Disk\Controller\OnlyOffice::loadDocumentEditorByViewSessionAction() */
+					return $this->forward(OnlyOffice::class, 'loadDocumentEditorByViewSession', [
+						'documentSessionId' => $documentSessionId,
+						'documentSessionHash' => $documentSessionHash,
+					]);
+				}
+			}
+			// Session not found by id, or a non-office service (e.g. FlipChart): fall through
+			// to the effective-handler routing below to preserve prior behavior.
+		}
+
 		$driver = Driver::getInstance();
 		$handlersManager = $driver->getDocumentHandlersManager();
-		$documentHandler = $handlersManager->getHandlerByCode($serviceCode);
+		$documentHandler = $handlersManager->resolveEffectiveHandler(
+			$serviceCode,
+			Document\DocumentResolveContext::forObject(
+				$objectId !== null ? (int)$objectId : null,
+				$attachedObjectId !== null ? (int)$attachedObjectId : null,
+			),
+		);
 		if (!$documentHandler)
 		{
 			$this->addError(new Error('There is no document service by code'));
+		}
+
+		if ($documentHandler instanceof VibeofficeHandler)
+		{
+			if ($documentSessionId)
+			{
+				return $this->forward(\Bitrix\Disk\Controller\Vibeoffice::class, 'loadDocumentEditorByViewSession', [
+					'documentSessionId' => $documentSessionId,
+					'documentSessionHash' => $documentSessionHash,
+				]);
+			}
+
+			return $this->forward(\Bitrix\Disk\Controller\Vibeoffice::class, 'loadDocumentEditor', [
+				'attachedObjectId' => $attachedObjectId,
+				'objectId' => $objectId,
+			]);
 		}
 
 		if ($documentHandler instanceof OnlyOfficeHandler)
@@ -345,6 +467,7 @@ final class DocumentService extends Engine\Controller
 				/** @see \Bitrix\Disk\Controller\OnlyOffice::loadDocumentEditorByViewSessionAction() */
 				return $this->forward(OnlyOffice::class, 'loadDocumentEditorByViewSession', [
 					'documentSessionId' => $documentSessionId,
+					'documentSessionHash' => $documentSessionHash,
 				]);
 			}
 
@@ -378,10 +501,35 @@ final class DocumentService extends Engine\Controller
 	{
 		$driver = Driver::getInstance();
 		$handlersManager = $driver->getDocumentHandlersManager();
-		$documentHandler = $handlersManager->getHandlerByCode($serviceCode);
+		$documentHandler = $handlersManager->resolveEffectiveHandler(
+			$serviceCode,
+			Document\DocumentResolveContext::forObject(
+				null,
+				$attachedObjectId !== null ? (int)$attachedObjectId : null,
+			),
+		);
 		if (!$documentHandler)
 		{
 			$this->addError(new Error('There is no document service by code'));
+		}
+
+		if ($documentHandler instanceof VibeofficeHandler)
+		{
+			$unifiedLinkSupportService = ServiceLocator::getInstance()->get(UnifiedLinkSupportService::class);
+
+			$parameters = [
+				'typeFile' => $typeFile,
+				'targetFolderId' => $targetFolderId,
+				'analytics' => $analytics,
+			];
+
+			$onlyOfficeHandler = $handlersManager->getHandlerByCode(OnlyOfficeHandler::getCode()) ?? $documentHandler;
+			if ($createByUnifiedLink && $unifiedLinkSupportService->supportsDocumentHandler($onlyOfficeHandler))
+			{
+				return $this->forward(\Bitrix\Disk\Controller\Vibeoffice::class, 'createDocument', $parameters);
+			}
+
+			return $this->forward(\Bitrix\Disk\Controller\Vibeoffice::class, 'loadCreateDocumentEditor', $parameters);
 		}
 
 		if ($documentHandler instanceof OnlyOfficeHandler)

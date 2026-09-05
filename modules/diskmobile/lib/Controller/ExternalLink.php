@@ -5,10 +5,14 @@ namespace Bitrix\DiskMobile\Controller;
 use Bitrix\Disk\Driver;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Disk;
+use Bitrix\Main\Error;
 use Bitrix\Main\Web\Uri;
 
 class ExternalLink extends BaseFileList
 {
+	private const ERROR_EXTERNAL_LINK_NOT_FOUND = 'DISKMOBILE_EXTERNAL_LINK_NOT_FOUND';
+	private const ERROR_EXTERNAL_LINK_OBJECT_NOT_FOUND = 'DISKMOBILE_EXTERNAL_LINK_OBJECT_NOT_FOUND';
+
 	public function configureActions(): array
 	{
 		return [
@@ -28,7 +32,7 @@ class ExternalLink extends BaseFileList
 	public function generateAction(
 		int $objectId,
 		?string $newPassword = null,
-		bool $allowEditDocument = null,
+		?bool $allowEditDocument = null,
 		?int $deathTime = null,
 	)
 	{
@@ -75,7 +79,7 @@ class ExternalLink extends BaseFileList
 				[
 					'id' => $externalLinkId,
 					'deathTime' => $deathTime,
-				]
+				],
 			);
 		}
 
@@ -84,17 +88,43 @@ class ExternalLink extends BaseFileList
 			return null;
 		}
 
-		$extLink = Disk\ExternalLink::loadById($externalLinkId);
+		$extLink = $this->loadExternalLink($externalLinkId);
+		if (!$extLink)
+		{
+			$this->addError(new Error(
+				'Could not find external link.',
+				self::ERROR_EXTERNAL_LINK_NOT_FOUND,
+				['externalLinkId' => $externalLinkId],
+			));
+
+			return null;
+		}
 
 		return $this->parseExternalLinkObject($extLink);
 	}
 
-	private function parseExternalLinkObject(Disk\ExternalLink $extLink): array
+	protected function loadExternalLink(int $externalLinkId): ?Disk\ExternalLink
 	{
-		$driver = Driver::getInstance();
+		return Disk\ExternalLink::loadById($externalLinkId);
+	}
 
+	private function parseExternalLinkObject(Disk\ExternalLink $extLink): ?array
+	{
+		$object = $extLink->getObject();
+		if (!$object instanceof Disk\BaseObject)
+		{
+			$this->addError(new Error(
+				'Could not find object for external link.',
+				self::ERROR_EXTERNAL_LINK_OBJECT_NOT_FOUND,
+				['externalLinkId' => $extLink->getId()],
+			));
+
+			return null;
+		}
+
+		$driver = Driver::getInstance();
 		$link = new Uri($driver->getUrlManager()->getPublicExternalLink(
-			object: $extLink->getObject(),
+			object: $object,
 			hash: $extLink->getHash(),
 		));
 
@@ -115,7 +145,7 @@ class ExternalLink extends BaseFileList
 				'availableEdit' => $availableEdit,
 				'canEditDocument' => $canEditDocument,
 				'deathTime' => $extLink->getDeathTime(),
-				'deathTimeTimestamp' => $extLink->hasDeathTime()? $extLink->getDeathTime()->getTimestamp() : null,
+				'deathTimeTimestamp' => $extLink->hasDeathTime() ? $extLink->getDeathTime()->getTimestamp() : null,
 			],
 		];
 	}
@@ -130,7 +160,7 @@ class ExternalLink extends BaseFileList
 		int $id,
 		?string $newPassword = null,
 		bool $disablePassword = false,
-		bool $allowEditDocument = null,
+		?bool $allowEditDocument = null,
 		?int $deathTime = null,
 		bool $disableDeathTime = false,
 	)

@@ -550,7 +550,6 @@ class NotifyChat extends Chat
 					'extra' => \Bitrix\Im\Common::getPullExtra()
 				]
 			);
-			\Bitrix\Pull\MobileCounter::send($this->getContext()->getUserId());
 		}
 	}
 

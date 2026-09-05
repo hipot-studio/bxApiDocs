@@ -6,6 +6,8 @@ use Bitrix\Intranet\MainPage\Access;
 use Bitrix\Intranet\MainPage\Publisher;
 use Bitrix\Intranet\MainPage\Url;
 use Bitrix\Intranet\PortalSettings;
+use Bitrix\Landing;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 
@@ -29,7 +31,24 @@ class MainFirstPage implements FirstPage
 
 	public function isAvailable(): bool
 	{
-		return (new Access)->canView();
+		return (new Access)->canView() && $this->isAllowedInMenu();
+	}
+
+	/**
+	 * The vibe_menu24 right controls showing the main page section to the user:
+	 * the left menu item and the first page choice, not the page view itself.
+	 */
+	private function isAllowedInMenu(): bool
+	{
+		if (!Loader::includeModule('landing'))
+		{
+			return true;
+		}
+
+		return Landing\Rights::hasAdditionalRight(
+			Landing\Rights::ADDITIONAL_RIGHTS['menu24'],
+			Landing\Site\Type::SCOPE_CODE_VIBE
+		);
 	}
 
 	public function isEnabled(): bool

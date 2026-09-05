@@ -6,6 +6,7 @@ namespace Bitrix\Booking\Internals\Integration\Bizproc;
 
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Result\TemplateCreatedResult;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\SystemTemplateActivationService;
+use Bitrix\Bizproc\Public\Provider\WorkflowTemplate\AiAgentProvider;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -33,9 +34,21 @@ class AiAgentLauncher
 			return (new Result())->addError(new Error('Multiple user AI agent templates found'));
 		}
 
-		if (count($userTemplateIds) === 1)
+		$launchedTemplateId = $userTemplateIds[0] ?? null;
+
+		$provider = ServiceLocator::getInstance()->get(AiAgentProvider::class);
+		if (method_exists($provider, 'checkLaunchAccess'))
 		{
-			return $this->startExisting($userTemplateIds[0]);
+			$checkResult = $provider->checkLaunchAccess($launchedTemplateId);
+			if (!$checkResult->isSuccess())
+			{
+				return (new Result())->addErrors($checkResult->getErrors());
+			}
+		}
+
+		if ($launchedTemplateId !== null)
+		{
+			return $this->startExisting($launchedTemplateId);
 		}
 
 		$systemTemplateId = $this->templateQuery->findSystemTemplateId();

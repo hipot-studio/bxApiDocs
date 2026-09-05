@@ -2,6 +2,8 @@
 
 namespace Bitrix\Mail\Helper\Message\Loader;
 
+use Bitrix\Mail\Internals\MailboxDirectoryTable;
+use Bitrix\Mail\Internals\MailMessageMarkTable;
 use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Mail\Internals\MessageClosureTable;
 use Bitrix\Mail\MailboxTable;
@@ -22,6 +24,9 @@ class QueryBuilder
 {
 	public const FILTER_KEY_INCLUDE_BINDINGS = '__MAIL_INCLUDE_BINDINGS';
 	public const FILTER_KEY_EXCLUDE_BINDINGS = '__MAIL_EXCLUDE_BINDINGS';
+	public const FILTER_KEY_IS_FAVORITE = '__MAIL_IS_FAVORITE';
+	public const FILTER_KEY_UNANSWERED = '__MAIL_UNANSWERED';
+	public const FILTER_KEY_CLASSIFICATION = '__MAIL_CLASSIFICATION';
 
 	private const VISIBLE_UID_FILTERS = [
 		'==MESSAGE_UID.DELETE_TIME' => 0,
@@ -29,7 +34,9 @@ class QueryBuilder
 		'>MESSAGE_UID.MESSAGE_ID' => 0,
 	];
 
-	private const VISIBLE_UID_FILTERS_DRIVER = [
+	/* VISIBLE_UID_FILTERS for queries on b_mail_message_uid itself. Public so that actions
+	 * resolving a grid id see exactly the messages the list shows. */
+	public const VISIBLE_UID_FILTERS_DRIVER = [
 		'==DELETE_TIME' => 0,
 		'!@IS_OLD' => MailMessageUidTable::HIDDEN_STATUSES,
 		'>MESSAGE_ID' => 0,
@@ -75,6 +82,15 @@ class QueryBuilder
 	 *                      {@see self::FILTER_KEY_EXCLUDE_BINDINGS} (array of ENTITY_TYPE values)
 	 *                      excludes messages that have a binding of any listed type
 	 *                      via a NOT EXISTS subquery on b_mail_message_access.
+	 *                      Special pseudo-key
+	 *                      {@see self::FILTER_KEY_IS_FAVORITE} (user id) keeps only messages the
+	 *                      user marked as favorite via an EXISTS subquery on b_mail_message_mark.
+	 *                      Special pseudo-key
+	 *                      {@see self::FILTER_KEY_CLASSIFICATION} (array of classification mark
+	 *                      codes) keeps only messages that have any listed shared mark.
+	 *                      Special pseudo-key
+	 *                      {@see self::FILTER_KEY_UNANSWERED} (bool) keeps only messages with no
+	 *                      reply of the mailbox in their thread (true) or only answered ones (false).
 	 * @param int $limit
 	 * @param int $offset
 	 * @return Query
@@ -146,6 +162,45 @@ class QueryBuilder
 		return self::extractBindings($filter, self::FILTER_KEY_EXCLUDE_BINDINGS);
 	}
 
+	/**
+	 * @param array $filter passed by reference; the pseudo-key is removed.
+	 * @return int User id whose favorites are requested; 0 when not requested.
+	 */
+	private static function extractFavoriteUserId(array &$filter): int
+	{
+		$raw = $filter[self::FILTER_KEY_IS_FAVORITE] ?? null;
+		unset($filter[self::FILTER_KEY_IS_FAVORITE]);
+
+		return (int)$raw;
+	}
+
+	/**
+	 * @return bool|null null when the pseudo-key is absent.
+	 */
+	private static function extractUnanswered(array &$filter): ?bool
+	{
+		$raw = $filter[self::FILTER_KEY_UNANSWERED] ?? null;
+		unset($filter[self::FILTER_KEY_UNANSWERED]);
+
+		return is_bool($raw) ? $raw : null;
+	}
+
+	/**
+	 * @return int[] List of classification mark codes; empty when not requested.
+	 */
+	private static function extractClassificationCodes(array &$filter): array
+	{
+		$raw = $filter[self::FILTER_KEY_CLASSIFICATION] ?? null;
+		unset($filter[self::FILTER_KEY_CLASSIFICATION]);
+
+		if (!is_array($raw))
+		{
+			return [];
+		}
+
+		return array_values(array_filter($raw, 'is_int'));
+	}
+
 	private static function stripUidPrefix(array $filter): array
 	{
 		$result = [];
@@ -206,6 +261,9 @@ class QueryBuilder
 	{
 		$includeBindings = self::extractIncludeBindings($filter);
 		$excludeBindings = self::extractExcludeBindings($filter);
+		$favoriteUserId = self::extractFavoriteUserId($filter);
+		$unanswered = self::extractUnanswered($filter);
+		$classificationCodes = self::extractClassificationCodes($filter);
 
 		$accessSubquery = (new Query(MessageAccessTable::getEntity()))
 			->addFilter('=MAILBOX_ID', new SqlExpression('%s'))
@@ -315,6 +373,92 @@ class QueryBuilder
 			$finalFilter['==EXCLUDED_BINDING_EXISTS'] = false;
 		}
 
+		if ($favoriteUserId > 0)
+		{
+			$favoriteSubquery = (new Query(MailMessageMarkTable::getEntity()))
+				->addFilter('=MAILBOX_ID', new SqlExpression('%s'))
+				->addFilter('=MESSAGE_ID', new SqlExpression('%s'))
+				->addFilter('=USER_ID', $favoriteUserId)
+				->addFilter('=CODE', MailMessageMarkTable::CODE_FAVORITES)
+			;
+
+			$query->registerRuntimeField(
+				'IS_FAVORITE_EXISTS',
+				new ExpressionField(
+					'IS_FAVORITE_EXISTS',
+					"EXISTS(" . $favoriteSubquery->getQuery() . ")",
+					['MAILBOX_ID', 'ID'],
+				),
+			);
+
+			$finalFilter['==IS_FAVORITE_EXISTS'] = true;
+		}
+
+		if ($classificationCodes !== [])
+		{
+			$classificationSubquery = (new Query(MailMessageMarkTable::getEntity()))
+				->addFilter('=MAILBOX_ID', new SqlExpression('%s'))
+				->addFilter('=MESSAGE_ID', new SqlExpression('%s'))
+				->addFilter('==USER_ID', MailMessageMarkTable::SHARED_USER_ID)
+				->addFilter('@CODE', array_values($classificationCodes))
+			;
+
+			$query->registerRuntimeField(
+				'CLASSIFICATION_EXISTS',
+				new ExpressionField(
+					'CLASSIFICATION_EXISTS',
+					"EXISTS(" . $classificationSubquery->getQuery() . ")",
+					['MAILBOX_ID', 'ID'],
+				),
+			);
+
+			$finalFilter['==CLASSIFICATION_EXISTS'] = true;
+		}
+
+		if ($unanswered !== null)
+		{
+			$outgoingReplySubquery = (new Query(MailMessageUidTable::getEntity()))
+				->registerRuntimeField(
+					new Reference(
+						'CLOSURE',
+						MessageClosureTable::class,
+						[
+							'=this.MESSAGE_ID' => 'ref.MESSAGE_ID',
+						],
+						['join_type' => 'INNER'],
+					),
+				)
+				->registerRuntimeField(
+					new Reference(
+						'DIR',
+						MailboxDirectoryTable::class,
+						[
+							'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+							'=this.DIR_MD5' => 'ref.DIR_MD5',
+						],
+						['join_type' => 'INNER'],
+					),
+				)
+				->addFilter('=CLOSURE.PARENT_ID', new SqlExpression('%s'))
+				->addFilter('!=CLOSURE.MESSAGE_ID', new SqlExpression('%s'))
+				->addFilter('=MAILBOX_ID', new SqlExpression('%s'))
+				->addFilter('=DIR.IS_OUTCOME', MailboxDirectoryTable::ACTIVE)
+				->addFilter('==DELETE_TIME', 0)
+				->addFilter('!@IS_OLD', MailMessageUidTable::HIDDEN_STATUSES)
+			;
+
+			$query->registerRuntimeField(
+				'HAS_OUTGOING_REPLY',
+				new ExpressionField(
+					'HAS_OUTGOING_REPLY',
+					'EXISTS(' . $outgoingReplySubquery->getQuery() . ')',
+					['ID', 'ID', 'MAILBOX_ID'],
+				),
+			);
+
+			$finalFilter['==HAS_OUTGOING_REPLY'] = !$unanswered;
+		}
+
 		return $query
 			->setFilter($finalFilter)
 			->addGroup('ID')
@@ -356,6 +500,9 @@ class QueryBuilder
 	{
 		self::extractIncludeBindings($filter);
 		self::extractExcludeBindings($filter);
+		self::extractFavoriteUserId($filter);
+		self::extractUnanswered($filter);
+		self::extractClassificationCodes($filter);
 
 		$sqlHelper = Application::getConnection()->getSqlHelper();
 		$query = MailMessageTable::query()

@@ -67,7 +67,11 @@ final class ProjectCopilotChatProvider
 			$addParams['TITLE'] = $title;
 		}
 
-		$addResult = ChatFactory::getInstance()->withContextUser($userId)->addUniqueChatPerAuthor($addParams);
+		// A system context (user 0): the copilot bot is invisible to a collaber, so the visibility
+		// filters of the membership cascade would drop it before it reaches the project chat and the
+		// chat would be born without anyone to answer in it. AUTHOR_ID above keeps both the authorship
+		// and the uniqueness of the chat, neither of them depends on the context.
+		$addResult = ChatFactory::getInstance()->withContextUser(0)->addUniqueChatPerAuthor($addParams);
 
 		if (!$addResult->isSuccess())
 		{

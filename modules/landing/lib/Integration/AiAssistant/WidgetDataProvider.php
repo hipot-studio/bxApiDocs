@@ -60,11 +60,6 @@ final class WidgetDataProvider
 		return $dialogId;
 	}
 
-	public function getAiAssistantBotId(): int
-	{
-		return (new WidgetBotResolver())->resolve();
-	}
-
 	public function getImApplicationData(): array
 	{
 		return (new WidgetApplicationDataResolver())->resolve();

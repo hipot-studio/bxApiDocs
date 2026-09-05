@@ -156,7 +156,6 @@ class Landing
 		if ($landing->exist())
 		{
 			$metrikaParams = new Metrika\FieldsDto(
-				type: Metrika\Types::template,
 				subSection: 'from_editor',
 				element: 'auto',
 			);

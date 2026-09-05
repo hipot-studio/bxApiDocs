@@ -2,6 +2,7 @@
 namespace Bitrix\Landing\Internals;
 
 use Bitrix\Landing\Manager;
+use Bitrix\Landing\Rights;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Entity;
 
@@ -113,6 +114,17 @@ class FolderTable extends Entity\DataManager
 		$primary = $event->getParameter('primary');
 		$fields = $event->getParameter('fields');
 		$modifyFields = [];
+
+		if (!self::checkSiteChangeAllowed($actionType, $primary, $fields))
+		{
+			$result->setErrors([
+				new Entity\EntityError(
+					Loc::getMessage('LANDING_TABLE_ERROR_FOLDER_ACCESS_DENIED'),
+					'ACCESS_DENIED'
+				)
+			]);
+			return $result;
+		}
 
 		// check that index landing is exists in folder's site
 		/*if ($fields['INDEX_ID'] ?? 0)
@@ -235,11 +247,64 @@ class FolderTable extends Entity\DataManager
 				]);
 				return $result;
 			}
+			if (!\Bitrix\Landing\Security\SyspageUrl::isSafeCode((string)$fields['CODE']))
+			{
+				$result->setErrors([
+					new Entity\EntityError(
+						'Folder address contains forbidden characters.',
+						'WRONG_CODE_CHARS'
+					)
+				]);
+				return $result;
+			}
 		}
 
 		$result->modifyFields($modifyFields);
 
 		return $result;
+	}
+
+	/**
+	 * Taking existing folder away from its site requires rights on both sites,
+	 * the same way as Site::moveFolder() demands them.
+	 * @param string $actionType Action type: add / update.
+	 * @param array|null $primary Primary key of updated row.
+	 * @param array $fields Fields to save.
+	 * @return bool
+	 */
+	private static function checkSiteChangeAllowed(string $actionType, ?array $primary, array $fields): bool
+	{
+		if (
+			$actionType !== self::ACTION_TYPE_UPDATE ||
+			!isset($primary['ID']) ||
+			!array_key_exists('SITE_ID', $fields) ||
+			!Rights::isOn()
+		)
+		{
+			return true;
+		}
+
+		$row = self::getList([
+			'select' => [
+				'SITE_ID'
+			],
+			'filter' => [
+				'ID' => $primary['ID']
+			],
+			'limit' => 1
+		])->fetch();
+
+		$currentSiteId = (int)($row['SITE_ID'] ?? 0);
+		$newSiteId = (int)$fields['SITE_ID'];
+
+		if (!$currentSiteId || $currentSiteId === $newSiteId)
+		{
+			return true;
+		}
+
+		return
+			Rights::hasAccessForSite($currentSiteId, Rights::ACCESS_TYPES['delete'])
+			&& Rights::hasAccessForSite($newSiteId, Rights::ACCESS_TYPES['edit']);
 	}
 
 	/**

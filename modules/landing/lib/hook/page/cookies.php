@@ -2,6 +2,7 @@
 namespace Bitrix\Landing\Hook\Page;
 
 use \Bitrix\Landing\Help;
+use \Bitrix\Landing\Landing;
 use \Bitrix\Landing\Rights;
 use \Bitrix\Landing\Site;
 use \Bitrix\Landing\Field;
@@ -39,11 +40,11 @@ class Cookies extends \Bitrix\Landing\Hook\Page
 			]),
 			'COLOR_BG' => new Field\Text('COLOR_BG', [
 				'title' => Loc::getMessage('LANDING_HOOK_COOKIES_COLOR_BG'),
-				'default' => '#03c1fe'
+				'default' => self::getDefaultValues()['COLOR_BG']
 			]),
 			'COLOR_TEXT' => new Field\Text('COLOR_TEXT', [
 				'title' => Loc::getMessage('LANDING_HOOK_COOKIES_COLOR_TEXT'),
-				'default' => '#fff'
+				'default' => self::getDefaultValues()['COLOR_TEXT']
 			]),
 			'POSITION' => new Field\Select('POSITION', [
 				'title' => Loc::getMessage('LANDING_HOOK_COOKIES_POSITION'),
@@ -67,6 +68,36 @@ class Cookies extends \Bitrix\Landing\Hook\Page
 					: ''
 			])
 		];
+	}
+
+	protected static function getDefaultValues(): array
+	{
+		return [
+			'COLOR_BG' => '#03c1fe',
+			'COLOR_TEXT' => '#fff',
+		];
+	}
+
+	/**
+	 * Keeps the banner color a color before it goes into the style attribute.
+	 * A value of another form is replaced with the default instead of being cleaned up:
+	 * a cleaned up color would be another color silently applied to the banner.
+	 * An empty value is left empty - the banner then keeps the colors of its stylesheet, as before.
+	 * Every place which prints these fields into CSS must call this method.
+	 * @param string $fieldName Field name to take the default from.
+	 * @param string|null $value Field value.
+	 * @return string
+	 */
+	public static function sanitizeColor(string $fieldName, ?string $value): string
+	{
+		$value = trim((string)$value);
+
+		if ($value === '' || Theme::isHex($value))
+		{
+			return $value;
+		}
+
+		return self::getDefaultValues()[$fieldName] ?? '';
 	}
 
 	/**
@@ -102,6 +133,14 @@ class Cookies extends \Bitrix\Landing\Hook\Page
 	 */
 	public function enabled(): bool
 	{
+		// The consent UI cannot work inside the sandboxed device preview: its origin is opaque,
+		// so both the accept request and the agreements request are blocked as cross-origin, and
+		// storage there is in-memory anyway — nothing to record. Same reasoning as edit mode.
+		if (Landing::getDevicePreviewMode())
+		{
+			return false;
+		}
+
 		// this hook are enabled always
 		return !$this->isPage();
 	}

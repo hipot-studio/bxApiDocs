@@ -10,11 +10,19 @@ use Bitrix\Main\Loader;
 final class OpenLineFolder extends SystemFolder
 {
 	public const CODE = 'openlines';
-	public const RECENT_SECTION = 'openlines';
+	public const REST_CODE = 'lines';
+	/** Canonical recent section for open lines is 'lines' (matches REST_CODE), not the stored CODE 'openlines'. */
+	public const RECENT_SECTION = 'lines';
 
 	public function getCode(): string
 	{
 		return self::CODE;
+	}
+
+	/** Web expects the wire code 'lines' (REST_CODE); the domain/stored code stays 'openlines' (CODE). */
+	public function getRestCode(): string
+	{
+		return self::REST_CODE;
 	}
 
 	public function getRecentSection(): string

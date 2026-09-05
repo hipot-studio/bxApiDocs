@@ -3,6 +3,7 @@
 namespace Bitrix\Pull;
 
 use Bitrix\Main;
+use Bitrix\Main\Web\Uri;
 
 class JsonRpcTransport
 {
@@ -196,7 +197,7 @@ class JsonRpcTransport
 		{
 			$additionalParams['hostname'] = $this->hostname;
 		}
-		$urlWithSignature = \CHTTP::urlAddParams($queueServerUrl, $additionalParams);
+		$urlWithSignature = (string)(new Uri($queueServerUrl))->addParams($additionalParams);
 
 		$sendResult = $httpClient->query(Main\Web\HttpClient::HTTP_POST, $urlWithSignature, $body);
 		if (!$sendResult)
@@ -205,7 +206,7 @@ class JsonRpcTransport
 			$errorMsg = $httpClient->getError()[$errorCode];
 			return $result->addError(new Main\Error($errorMsg, $errorCode));
 		}
-		$responseCode = (int)$httpClient->getStatus();
+		$responseCode = $httpClient->getStatus();
 		if ($responseCode !== 200)
 		{
 			return $result->addError(new Main\Error("Unexpected server response code {$responseCode}"));

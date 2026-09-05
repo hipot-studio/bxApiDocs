@@ -4,6 +4,7 @@ namespace Bitrix\Mail\Helper\Message\Loader;
 
 use Bitrix\Mail\Helper\Dto\Message\SearchMessagesDto;
 use Bitrix\Mail\Helper\Message;
+use Bitrix\Mail\Internal\Service\Message\ClassificationLabel;
 use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Text\Emoji;
@@ -16,7 +17,9 @@ class MessageFilter
 	public function __construct(
 		private readonly array $mailboxIds,
 		array $filterData,
-		bool $checkFilterApplied = false
+		bool $checkFilterApplied = false,
+		private readonly ?int $userId = null,
+		private readonly bool $withAttachmentsStack = false,
 	)
 	{
 		$this->addMailboxIds($mailboxIds);
@@ -52,6 +55,11 @@ class MessageFilter
 			$this->addIsSeen($filterData['IS_SEEN'] === 'Y');
 		}
 
+		if (isset($filterData['IS_FAVORITE']) && $filterData['IS_FAVORITE'] !== '')
+		{
+			$this->addIsFavorite($filterData['IS_FAVORITE'] === 'Y');
+		}
+
 		if (isset($filterData['MD5_DIRS']) && is_array($filterData['MD5_DIRS']))
 		{
 			$this->filter['@MESSAGE_UID.DIR_MD5'] = $filterData['MD5_DIRS'];
@@ -59,6 +67,11 @@ class MessageFilter
 		elseif (isset($filterData['DIR']) && is_scalar($filterData['DIR']))
 		{
 			$this->addDir($filterData['DIR']);
+		}
+
+		if (isset($filterData['EXCLUDE_MD5_DIRS']) && is_array($filterData['EXCLUDE_MD5_DIRS']) && $filterData['EXCLUDE_MD5_DIRS'] !== [])
+		{
+			$this->filter['!@MESSAGE_UID.DIR_MD5'] = $filterData['EXCLUDE_MD5_DIRS'];
 		}
 
 		try
@@ -129,6 +142,16 @@ class MessageFilter
 			$this->addExcludeBindings($dto->excludeBindings);
 		}
 
+		if ($dto->classification !== null && trim($dto->classification) !== '')
+		{
+			$this->addClassification($dto->classification);
+		}
+
+		if ($dto->unanswered !== null)
+		{
+			$this->addUnanswered($dto->unanswered);
+		}
+
 		return $this;
 	}
 
@@ -189,6 +212,41 @@ class MessageFilter
 		return $this;
 	}
 
+	/**
+	 * An unknown label is ignored rather than rejected: the filter narrows a search, and a value the storage
+	 * has no code for narrows it to nothing anyway.
+	 */
+	public function addClassification(string $label): self
+	{
+		$parsed = ClassificationLabel::tryFrom($label);
+		if ($parsed === null)
+		{
+			return $this;
+		}
+
+		$existing = $this->filter[QueryBuilder::FILTER_KEY_CLASSIFICATION] ?? [];
+		$markCode = $parsed->markCode();
+
+		if (!in_array($markCode, $existing, true))
+		{
+			$existing[] = $markCode;
+		}
+
+		$this->filter[QueryBuilder::FILTER_KEY_CLASSIFICATION] = $existing;
+
+		return $this;
+	}
+
+	public function addIsFavorite(bool $isFavorite): self
+	{
+		if ($isFavorite && $this->userId !== null && $this->userId > 0)
+		{
+			$this->filter[QueryBuilder::FILTER_KEY_IS_FAVORITE] = $this->userId;
+		}
+
+		return $this;
+	}
+
 	public function addBind(string $entityType): self
 	{
 		$this->filter['=MESSAGE_ACCESS.ENTITY_TYPE'] = $entityType;
@@ -227,6 +285,18 @@ class MessageFilter
 		return $this;
 	}
 
+	/**
+	 * The predicate is evaluated over the whole mailbox: GROUP BY plus ORDER BY MAX() keep LIMIT from cutting
+	 * the scan short (0.67 s on 100k messages). That is why the assistant tool keeps the filter out of its
+	 * schema until the list query is reworked to stop at LIMIT.
+	 */
+	public function addUnanswered(bool $unanswered): self
+	{
+		$this->filter[QueryBuilder::FILTER_KEY_UNANSWERED] = $unanswered;
+
+		return $this;
+	}
+
 	public function addDir(string $dir): self
 	{
 		$this->filter['=MESSAGE_UID.DIR_MD5'] = md5($dir);
@@ -260,6 +330,16 @@ class MessageFilter
 		$this->filter = [];
 
 		return $this;
+	}
+
+	public function getUserId(): ?int
+	{
+		return $this->userId;
+	}
+
+	public function needsAttachmentsStack(): bool
+	{
+		return $this->withAttachmentsStack;
 	}
 
 	public function getArray(): array

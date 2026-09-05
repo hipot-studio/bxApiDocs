@@ -5,6 +5,7 @@ use \Bitrix\Landing\Block;
 use \Bitrix\Landing\Node;
 use \Bitrix\Landing\Config;
 use \Bitrix\Landing\Manager;
+use \Bitrix\Landing\Landing;
 use \Bitrix\Landing\Assets;
 use \Bitrix\Landing\Internals\BlockTable;
 use \Bitrix\Main\IO\File;
@@ -388,6 +389,101 @@ class Icon
 	}
 
 	/**
+	 * Returns the vendor stylesheet content with its own @font-face rule stripped out.
+	 * Used together with buildInlineFontFace(): linking the file as is would keep a networked
+	 * font URL on the page, which the opaque origin of the sandboxed preview turns into a
+	 * blocked cross-origin request even though the inlined font already renders the icons.
+	 * Vendor stylesheets carry no other url() references, so inlining needs no path rewriting.
+	 *
+	 * @param string $vendorName Vendor folder code.
+	 *
+	 * @return string|null
+	 */
+	protected static function buildInlineVendorStyles(string $vendorName): ?string
+	{
+		$iconsPath = self::getIconsPath($vendorName);
+		if (!$iconsPath)
+		{
+			return null;
+		}
+
+		$stylesFile = $iconsPath . '/' . self::RULE_ICON_FILE_NAME;
+		$cssContent = File::isFileExists($stylesFile) ? File::getFileContents($stylesFile) : '';
+		if (!$cssContent)
+		{
+			return null;
+		}
+
+		return preg_replace('/@font-face\s*{.+?}/is', '', $cssContent);
+	}
+
+	/**
+	 * Builds an inline data-URI @font-face override for device-preview mode.
+	 * The sandboxed preview iframe has an opaque origin, so a networked icon-font
+	 * fetch becomes cross-origin and is blocked; inlining the font avoids the fetch.
+	 * Returns null on any missing data to fall back to the normal preload path.
+	 *
+	 * @param string $vendorName Vendor folder code.
+	 * @param string $fontWebPath Web path of the preferred font file.
+	 *
+	 * @return string|null
+	 */
+	protected static function buildInlineFontFace(string $vendorName, string $fontWebPath): ?string
+	{
+		$fontFilePath = Manager::getDocRoot() . $fontWebPath;
+		if (!File::isFileExists($fontFilePath))
+		{
+			return null;
+		}
+
+		$iconsPath = self::getIconsPath($vendorName);
+		if (!$iconsPath)
+		{
+			return null;
+		}
+
+		$stylesFile = $iconsPath . '/' . self::RULE_ICON_FILE_NAME;
+		$cssContent = File::isFileExists($stylesFile) ? File::getFileContents($stylesFile) : '';
+		if (
+			!$cssContent
+			|| !preg_match('/@font-face\s*{(.+?)}/is', $cssContent, $face)
+			|| !preg_match('/font-family\s*:\s*([\'"])(.+?)\1/i', $face[1], $family)
+		)
+		{
+			return null;
+		}
+		// Keep the original weight/style: FontAwesome Pro sets share one family
+		// and differ only by font-weight (far 400, fas 900, fal 300, fat 100).
+		$fontWeight = preg_match('/font-weight\s*:\s*([^;]+);/i', $face[1], $fw) ? trim($fw[1]) : 'normal';
+		$fontStyle = preg_match('/font-style\s*:\s*([^;]+);/i', $face[1], $fs) ? trim($fs[1]) : 'normal';
+
+		if (substr($fontWebPath, -6) === '.woff2')
+		{
+			$mime = 'font/woff2';
+			$format = 'woff2';
+		}
+		elseif (substr($fontWebPath, -5) === '.woff')
+		{
+			$mime = 'font/woff';
+			$format = 'woff';
+		}
+		else
+		{
+			return null;
+		}
+
+		$fontData = File::getFileContents($fontFilePath);
+		if (!$fontData)
+		{
+			return null;
+		}
+
+		return '@font-face{font-family:\'' . $family[2] . '\';'
+			. 'src:url(\'data:' . $mime . ';base64,' . base64_encode($fontData) . '\') format(\'' . $format . '\');'
+			. 'font-weight:' . $fontWeight . ';font-style:' . $fontStyle . ';}';
+	}
+
+	/**
 	 * Parses icon file and returns content for each icon class.
 	 * @param string $vendorName Vendor folder code.
 	 * @return array
@@ -567,18 +663,38 @@ class Icon
 			{
 				return;
 			}
+			$devicePreview = Landing::getDevicePreviewMode();
 			$stylesString = '<style>';
 			$blockAssets['icon'] = self::updateIconsBeforeView($blockAssets['icon']);
 			foreach ($blockAssets['icon'] as $vendorName => $icons)
 			{
 				$fontFile = self::getPreferredFontPath($vendorName);
-				if ($fontFile)
-				{
-					$assetsManager->addAsset($fontFile);
-				}
-
 				$stylesFile = $iconSrc . $vendorName . '/' . self::RULE_ICON_FILE_NAME;
-				$assetsManager->addAsset($stylesFile);
+
+				// In device preview both the font and the vendor stylesheet go inline: the
+				// stylesheet carries its own @font-face with a networked src, which the opaque
+				// origin would still fetch (and the browser would block) next to the inlined
+				// font. Either both inline or neither — a half-applied override leaves the
+				// blocked request in place.
+				$inlineFontFace = ($devicePreview && $fontFile)
+					? self::buildInlineFontFace($vendorName, $fontFile)
+					: null;
+				$inlineStyles = $inlineFontFace !== null
+					? self::buildInlineVendorStyles($vendorName)
+					: null;
+
+				if ($inlineStyles !== null)
+				{
+					$stylesString .= $inlineFontFace . $inlineStyles;
+				}
+				else
+				{
+					if ($fontFile)
+					{
+						$assetsManager->addAsset($fontFile);
+					}
+					$assetsManager->addAsset($stylesFile);
+				}
 
 				foreach ($icons as $className => $content)
 				{

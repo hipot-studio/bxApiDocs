@@ -8,6 +8,7 @@ use Bitrix\Calendar\ICal\Builder\AttachCollection;
 use Bitrix\Calendar\ICal\Builder\Attendee;
 use Bitrix\Calendar\ICal\Builder\AttendeesCollection;
 use Bitrix\Calendar\ICal\Builder\Dictionary;
+use Bitrix\Calendar\ICal\Basic;
 use Bitrix\Calendar\ICal\Parser\ParserPropertyType;
 use Bitrix\Calendar\Util;
 use Bitrix\Disk\Uf\FileUserType;
@@ -20,6 +21,7 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Entity;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
@@ -184,17 +186,78 @@ class Helper
 	}
 
 	/**
-	 * @param $userId
-	 * @param $uid
+	 * @param string|null $uid
+	 * @param int|null $userId
+	 * @param bool $includeChildUid
 	 * @return array|null
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function getEventByUId(?string $uid): ?array
+	public static function getEventByUId(
+		?string $uid,
+		?int $userId = null,
+		bool $includeChildUid = false,
+	): ?array
 	{
 		if (is_null($uid))
 		{
+			return null;
+		}
+		if ($userId !== null)
+		{
+			$uidFilter = Query::filter()->where('PARENT.DAV_XML_ID', $uid);
+			if ($includeChildUid)
+			{
+				$uidFilter
+					->logic('or')
+					->where('DAV_XML_ID', $uid)
+				;
+			}
+
+			$events = EventTable::query()
+				->setSelect(['*'])
+				->registerRuntimeField(
+					'PARENT',
+					new ReferenceField(
+						'PARENT',
+						EventTable::getEntity(),
+						Join::on('this.PARENT_ID', 'ref.ID'),
+						['join_type' => Join::TYPE_INNER]
+					)
+				)
+				->where($uidFilter)
+				->where('PARENT.DELETED', 'N')
+				->where('OWNER_ID', $userId)
+				->where('IS_MEETING', 1)
+				->where('DELETED', 'N')
+				->setOrder(['ID' => 'DESC'])
+				->exec()
+			;
+			while ($event = $events->fetch())
+			{
+				$meetingHost = (int)($event['MEETING_HOST'] ?? 0);
+				$isMailHost = Basic\ICalUtil::isMailUser($meetingHost);
+				if ($meetingHost > 0 && !$isMailHost)
+				{
+					return $event;
+				}
+
+				$meetingData = (string)($event['MEETING'] ?? '');
+				$meeting = $meetingData !== ''
+					? unserialize($meetingData, ['allowed_classes' => false])
+					: null
+				;
+				if (
+					$isMailHost
+					&& is_array($meeting)
+					&& ($meeting['EXTERNAL_TYPE'] ?? null) === 'mail'
+				)
+				{
+					return $event;
+				}
+			}
+
 			return null;
 		}
 

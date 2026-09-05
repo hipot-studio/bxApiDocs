@@ -8,7 +8,6 @@ use Bitrix\AI\Engine;
 use Bitrix\AI\Engine\ThirdParty;
 use Bitrix\AI\Facade\Bitrix24;
 use Bitrix\AI\Tuning\Manager;
-use Bitrix\Main\Web\Json;
 use Bitrix\Bitrix24\Integration\AI\Engine as CloudEngine;
 
 class EngineSettingsService
@@ -35,30 +34,24 @@ class EngineSettingsService
 
 	public function resetToBitrixGPTInCloud(): void
 	{
-		$options = Config::getValue('bitrixgpt_options');
+		$options = Config::getValue('bitrixgpt_portalSettingsItemsToForceReset');
 		if (is_null($options))
 		{
 			return;
 		}
 
-		$decodedOptions = json_decode($options, true);
-		$itemsToForceChange = $decodedOptions['portalSettingsItemsToForceReset'];
+		$itemsToForceChange = json_decode($options, true);
+		$preferredEngine = Engine::getByCode(CloudEngine\Bitrix24::ENGINE_CODE, Context::getFake());
 		if (
 			empty($itemsToForceChange)
-			|| Config::getValue('bitrixgpt_enabled') !== 'Y'
-			|| !Bitrix24::shouldUseB24()
+			|| is_null($preferredEngine)
+			|| !$preferredEngine->getIEngine()->isAvailable()
 		)
 		{
 			return;
 		}
 
 		$manager = new Manager();
-
-		$preferredEngine = Engine::getByCode(CloudEngine\Bitrix24::ENGINE_CODE, Context::getFake());
-		if (is_null($preferredEngine))
-		{
-			return;
-		}
 
 		$preferredCode = $preferredEngine->getIEngine()->getCode();
 
@@ -69,8 +62,7 @@ class EngineSettingsService
 
 		$manager->save();
 
-		$decodedOptions['portalSettingsItemsToForceReset'] = [];
-		Config::setOptionsValue('bitrixgpt_options', Json::encode($decodedOptions));
+		Config::setOptionsValue('bitrixgpt_portalSettingsItemsToForceReset', json_encode([]));
 	}
 
 	public function resetToBitrixAudioInCloud(): void

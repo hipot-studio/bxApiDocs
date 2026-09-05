@@ -366,14 +366,19 @@ class Uri implements \JsonSerializable, UriInterface
 	 */
 	public function convertToPunycode()
 	{
-		$host = \CBXPunycode::ToASCII($this->getHost(), $encodingErrors);
+		$host = $this->getHost();
 
-		if (!empty($encodingErrors))
+		if (preg_match('/[^a-z0-9.-]/i', $host))
 		{
-			return new Main\Error(implode("\n", $encodingErrors));
-		}
+			$host = \CBXPunycode::ToASCII($host, $encodingErrors);
 
-		$this->setHost($host);
+			if (!empty($encodingErrors))
+			{
+				return new Main\Error(implode("\n", $encodingErrors));
+			}
+
+			$this->setHost($host);
+		}
 
 		return $host;
 	}
@@ -384,14 +389,19 @@ class Uri implements \JsonSerializable, UriInterface
 	 */
 	public function convertToUnicode()
 	{
-		$host = \CBXPunycode::ToUnicode($this->getHost(), $encodingErrors);
+		$host = $this->getHost();
 
-		if (!empty($encodingErrors))
+		if (str_contains($host, 'xn--'))
 		{
-			return new Main\Error(implode("\n", $encodingErrors));
-		}
+			$host = \CBXPunycode::ToUnicode($host, $encodingErrors);
 
-		$this->setHost($host);
+			if (!empty($encodingErrors))
+			{
+				return new Main\Error(implode("\n", $encodingErrors));
+			}
+
+			$this->setHost($host);
+		}
 
 		return $host;
 	}
@@ -406,28 +416,38 @@ class Uri implements \JsonSerializable, UriInterface
 
 	/**
 	 * Encodes the URI string without parsing it.
-	 * @param $str
-	 * @param $charset
+	 * @param string $str
+	 * @param string|false $charset
 	 * @return string
 	 */
-	public static function urnEncode($str, $charset = 'UTF-8')
+	public static function urnEncode($str, $charset = false)
 	{
 		$result = '';
 		$parts = preg_split("#(://|:\\d+/|/|\\?|=|&)#", $str, -1, PREG_SPLIT_DELIM_CAPTURE);
 
-		if ($charset === false)
+		$encode = false;
+		if ($charset !== false)
+		{
+			$currentCharset = Main\Context::getCurrent()->getCulture()->getCharset();
+			if (strcasecmp($charset, $currentCharset) != 0)
+			{
+				$encode = true;
+			}
+		}
+
+		if ($encode)
 		{
 			foreach ($parts as $i => $part)
 			{
-				$result .= ($i % 2) ? $part : rawurlencode($part);
+				/** @noinspection PhpUndefinedVariableInspection */
+				$result .= ($i % 2)	? $part	: rawurlencode(Encoding::convertEncoding($part, $currentCharset, $charset));
 			}
 		}
 		else
 		{
-			$currentCharset = Main\Context::getCurrent()->getCulture()->getCharset();
 			foreach ($parts as $i => $part)
 			{
-				$result .= ($i % 2)	? $part	: rawurlencode(Encoding::convertEncoding($part, $currentCharset, $charset));
+				$result .= ($i % 2) ? $part : rawurlencode($part);
 			}
 		}
 		return $result;
@@ -435,8 +455,8 @@ class Uri implements \JsonSerializable, UriInterface
 
 	/**
 	 * Decodes the URI string without parsing it.
-	 * @param $str
-	 * @param $charset
+	 * @param string $str
+	 * @param string|false $charset
 	 * @return string
 	 */
 	public static function urnDecode($str, $charset = false)
@@ -444,19 +464,29 @@ class Uri implements \JsonSerializable, UriInterface
 		$result = '';
 		$parts = preg_split("#(://|:\\d+/|/|\\?|=|&)#", $str, -1, PREG_SPLIT_DELIM_CAPTURE);
 
-		if ($charset === false)
+		$encode = false;
+		if ($charset !== false)
+		{
+			$currentCharset = Main\Context::getCurrent()->getCulture()->getCharset();
+			if (strcasecmp($charset, $currentCharset) != 0)
+			{
+				$encode = true;
+			}
+		}
+
+		if ($encode)
 		{
 			foreach ($parts as $i => $part)
 			{
-				$result .= ($i % 2) ? $part : rawurldecode($part);
+				/** @noinspection PhpUndefinedVariableInspection */
+				$result .= ($i % 2) ? $part : rawurldecode(Encoding::convertEncoding($part, $charset, $currentCharset));
 			}
 		}
 		else
 		{
-			$currentCharset = Main\Context::getCurrent()->getCulture()->getCharset();
 			foreach ($parts as $i => $part)
 			{
-				$result .= ($i % 2) ? $part : rawurldecode(Encoding::convertEncoding($part, $charset, $currentCharset));
+				$result .= ($i % 2) ? $part : rawurldecode($part);
 			}
 		}
 		return $result;

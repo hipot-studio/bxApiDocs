@@ -1,4 +1,7 @@
-<?
+<?php
+
+use Bitrix\Main\Web\Uri;
+
 IncludeModuleLangFile(__FILE__);
 
 class CEventCalendar
@@ -12,7 +15,7 @@ class CEventCalendar
 		if (CModule::IncludeModule('calendar') && COption::GetOptionString("intranet", "calendar_2", "N") == "Y")
 		{
 			$this->reserveMeetingReadonlyMode = $arParams['reserveMeetingReadonlyMode'];
-			$this->pathToReserveNew = CHTTP::urlAddParams(preg_replace("/#user_id#/i", $USER->GetID(), $arParams['pathToUserCalendar']), array('EVENT_ID' => 'NEW', 'CHOOSE_MR' => 'Y'));
+			$this->pathToReserveNew = (string)(new Uri(preg_replace("/#user_id#/i", $USER->GetID(), $arParams['pathToUserCalendar'])))->addParams(['EVENT_ID' => 'NEW', 'CHOOSE_MR' => 'Y']);
 		}
 
 		$this->ownerId = intval($arParams['ownerId']);

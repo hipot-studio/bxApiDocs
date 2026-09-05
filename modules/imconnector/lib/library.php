@@ -243,7 +243,7 @@ class Library
 			'deny' => [],
 		],
 		self::ID_MAX_CONNECTOR => [
-			'allow' => ['ru', 'by', 'kz', 'kg', 'tj', 'uz'],
+			'allow' => ['ru', 'by','az', 'am', 'kz', 'kg', 'md', 'tj', 'uz'],
 			'deny' => [],
 		],
 	];

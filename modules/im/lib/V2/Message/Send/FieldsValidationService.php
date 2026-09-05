@@ -115,7 +115,7 @@ class FieldsValidationService
 					$this->fields['PARAMS'][Params::COPILOT_PROMPT_CODE] = $item;
 				}
 
-				if ($key === 'reasoning' && Features::get()->isCopilotReasoningAvailable)
+				if ($key === 'reasoning')
 				{
 					$this->fields['PARAMS'][Params::COPILOT_REASONING] = $item === 'Y' ? 'Y' : 'N';
 				}

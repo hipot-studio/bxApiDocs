@@ -154,6 +154,10 @@ final class TypeFile
 			case 'flp':
 			case 'board':
 				return self::FLIPCHART;
+
+			case 'md':
+			case 'markdown':
+				return self::KNOWN;
 		}
 
 		return self::UNKNOWN;
@@ -343,6 +347,8 @@ final class TypeFile
 			'html' => 'text/html',
 			'htm' => 'text/html',
 			'txt' => 'text/plain',
+			'md' => 'text/markdown',
+			'markdown' => 'text/markdown',
 			'xml' => 'application/xml',
 			'pdf' => 'application/pdf',
 			'doc' => 'application/msword',

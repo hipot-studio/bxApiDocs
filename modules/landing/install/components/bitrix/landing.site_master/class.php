@@ -6,7 +6,6 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Landing\Manager;
 use Bitrix\Main;
-use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Iblock\Url\AdminPage;
@@ -28,18 +27,12 @@ class LandingSiteMasterComponent extends LandingBaseFormComponent implements Con
 	public const OPTION_SHOP_INSTALL_COUNT = '~shop_install_count_';
 
 	/**
-	 * Configures filter for ajax request.
+	 * Actions run with the default pre-filter set of the component controller.
 	 * @return array
 	 */
 	public function configureActions(): array
 	{
-		return [
-			'sendMessage' => [
-				'prefilters' => [
-					new ActionFilter\Authentication
-				],
-			],
-		];
+		return [];
 	}
 
 	/**

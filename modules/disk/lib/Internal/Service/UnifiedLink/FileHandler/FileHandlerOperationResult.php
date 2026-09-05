@@ -16,6 +16,7 @@ class FileHandlerOperationResult
 		private readonly ?ErrorCollection $errorCollection = null,
 		private readonly ?string $redirectUrl = null,
 		private readonly ?string $component = null,
+		private readonly array $headers = [],
 	)
 	{
 	}
@@ -24,12 +25,14 @@ class FileHandlerOperationResult
 		string $value,
 		?string $redirectUrl = null,
 		?string $component = null,
+		array $headers = [],
 	): static
 	{
 		return new static(
 			value: $value,
 			redirectUrl: $redirectUrl,
 			component: $component,
+			headers: $headers,
 		);
 	}
 
@@ -78,5 +81,10 @@ class FileHandlerOperationResult
 	public function getComponent(): ?string
 	{
 		return $this->component;
+	}
+
+	public function getHeaders(): array
+	{
+		return $this->headers;
 	}
 }

@@ -451,6 +451,29 @@ class CCloudStorageBucket
 	}
 
 	/**
+	 * Whether the underlying storage service can produce presigned URLs that
+	 * allow direct client uploads bypassing PHP.
+	 */
+	public function supportsPresignedUrls(): bool
+	{
+		return $this->service && $this->service->supportsPresignedUrls();
+	}
+
+	/**
+	 * Returns a presigned URL for uploading a single part of an active multipart session.
+	 *
+	 * @param array $uploadInfo Filled by InitiateMultipartUpload (UploadId + filePath).
+	 * @param int $partNumber 1-based part number.
+	 * @param int $expires Time-to-live in seconds.
+	 */
+	public function getPresignedMultiPartUrl(array $uploadInfo, int $partNumber, int $expires, ?int $contentLength = null): ?string
+	{
+		$this->service->SetLocation($this->arBucket['LOCATION'] ?? '');
+
+		return $this->service->PresignMultiPartUrl($this->getBucketArray(), $uploadInfo, $partNumber, $expires, $contentLength);
+	}
+
+	/**
 	 * @param mixed $arFile
 	 * @param string $filePath
 	 * @return bool

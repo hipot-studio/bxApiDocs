@@ -161,6 +161,17 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 		$this->arResult['EMAILS'] = array();//Mail\Helper\Recipient::loadMailContacts();
 		$this->arResult['COPILOT_PARAMS'] = self::prepareCopilotParams();
 		$this->arResult['ANALYTICS'] = $this->arParams['ANALYTICS'];
+		$this->arResult['LARGE_ATTACHMENT_LOCAL_FEATURE_AVAILABLE'] =
+			Mail\Helper\Config\Feature::isLargeAttachmentDiskUploadAvailable()
+		;
+		$this->arResult['LARGE_ATTACHMENT_FEATURE_AVAILABLE'] =
+			Mail\Helper\LicenseManager::isLargeAttachmentAutoUploadEnabled()
+		;
+		$this->arResult['LARGE_ATTACHMENT_SHOW_AHA'] = $this->arResult['LARGE_ATTACHMENT_FEATURE_AVAILABLE']
+			&& !Mail\Helper\Config\Guide::wasLargeAttachmentAhaShown();
+		$this->arResult['LARGE_ATTACHMENT_AHA_OPTION_NAME'] = Mail\Helper\Config\Guide::getLargeAttachmentAhaGuideOptionName();
+		$this->arResult['LARGE_ATTACHMENT_POST_SEND_SUPPRESSED'] = Mail\Helper\Config\Guide::wasLargeAttachmentPostSendPromptSuppressed();
+		$this->arResult['LARGE_ATTACHMENT_POST_SEND_OPTION_NAME'] = Mail\Helper\Config\Guide::getLargeAttachmentPostSendPromptOptionName();
 
 		$this->includeComponentTemplate();
 	}

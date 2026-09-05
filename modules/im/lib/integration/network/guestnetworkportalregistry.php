@@ -44,6 +44,25 @@ final class GuestNetworkPortalRegistry
 		return $this->syncWithNetwork();
 	}
 
+	public function getShortLinkBaseUrl(): string
+	{
+		$firstEndpoint = 'https://b24.to/gi/';
+		$secondEndpoint = 'https://bitrix24.net/gi/';
+
+		if (!Loader::includeModule('socialservices'))
+		{
+			return $firstEndpoint;
+		}
+
+		$networkHost = mb_strtolower(
+			(new \Bitrix\Main\Web\Uri(\CSocServBitrix24Net::NETWORK_URL))->getHost(),
+		);
+
+		return in_array($networkHost, ['www.bitrix24.net', 'bitrix24.net'], true)
+			? $secondEndpoint
+			: $firstEndpoint;
+	}
+
 	private function syncWithNetwork(): ?string
 	{
 		if (!Loader::includeModule('socialservices'))

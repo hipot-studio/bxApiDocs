@@ -12,15 +12,17 @@ use Bitrix\Main\Text\Emoji;
 class MailboxDirectoryHelper
 {
 	private int $mailboxId;
+	private ?int $userId;
 	private $storage = null;
 	/** @var  ErrorCollection */
 	private $errors = [];
 	private ?DirSortingHelper $sortingHelper = null;
 	private ?array $treeDirsCache = null;
 
-	public function __construct($mailboxId)
+	public function __construct($mailboxId, ?int $userId = null)
 	{
 		$this->mailboxId = (int)$mailboxId;
+		$this->userId = $userId;
 		$this->storage = new MailboxDirectoryStorage($mailboxId);
 		$this->errors = new ErrorCollection();
 	}
@@ -289,6 +291,34 @@ class MailboxDirectoryHelper
 	}
 
 	/**
+	 * @param int[] $mailboxIds
+	 * @return string[]
+	 */
+	public static function getSpamAndTrashDirsMd5ForMailboxes(array $mailboxIds): array
+	{
+		$result = [];
+		foreach ($mailboxIds as $mailboxId)
+		{
+			$helper = Mailbox::createInstance((int)$mailboxId, false);
+			if (!($helper instanceof Mailbox))
+			{
+				continue;
+			}
+
+			$dirsHelper = $helper->getDirsHelper();
+			foreach ([$dirsHelper->getSpam(), $dirsHelper->getTrash()] as $dir)
+			{
+				if ($dir)
+				{
+					$result[] = $dir->getDirMd5();
+				}
+			}
+		}
+
+		return array_values(array_unique($result));
+	}
+
+	/**
 	 * @return MailboxDirectoryEntity[]
 	 * @throws \Exception
 	 */
@@ -519,6 +549,7 @@ class MailboxDirectoryHelper
 			$this->sortingHelper = new DirSortingHelper(
 				$this->mailboxId,
 				$this->getProviderCode(),
+				$this->userId,
 			);
 		}
 

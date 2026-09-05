@@ -126,21 +126,6 @@ class CVoxImplantHistory
 			// infocalls have no responsible
 			$arFields["PORTAL_USER_ID"] = null;
 		}
-		elseif (
-			($params['IS_AI_CALL'] ?? 'N') === 'Y'
-			&& $call->getPrimaryEntityType() != ''
-			&& $call->getPrimaryEntityId() > 0
-			&& ($crmResponsibleId = CVoxImplantCrmHelper::getResponsible($call->getPrimaryEntityType(), $call->getPrimaryEntityId()))
-		)
-		{
-			// AI call with CRM binding: assign to CRM responsible so the activity has an owner.
-			$arFields["PORTAL_USER_ID"] = $crmResponsibleId;
-		}
-		elseif (($params['IS_AI_CALL'] ?? 'N') === 'Y')
-		{
-			// AI calls without CRM binding have no responsible
-			$arFields["PORTAL_USER_ID"] = null;
-		}
 		elseif ($arFields["CALL_FAILED_CODE"] == 304 && (int)$params["PORTAL_USER_ID"] > 0)
 		{
 			$arFields["PORTAL_USER_ID"] = (int)$params["PORTAL_USER_ID"];

@@ -224,8 +224,8 @@ final class GetChartDataTool extends BaseBiTool
 			$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById($externalId);
 			if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
 			{
-				throw self::unavailableDashboardException(
-					$dashboardDtoResp->getErrors(),
+				throw self::integratorFailureException(
+					$dashboardDtoResp,
 					['stage' => 'get_chart_data.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 				);
 			}
@@ -267,8 +267,8 @@ final class GetChartDataTool extends BaseBiTool
 		);
 		if ($response->hasErrors())
 		{
-			throw self::unavailableDashboardException(
-				$response->getErrors(),
+			throw self::integratorFailureException(
+				$response,
 				['stage' => 'get_chart_data.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
 		}

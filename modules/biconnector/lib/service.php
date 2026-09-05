@@ -12,6 +12,8 @@ abstract class Service
 {
 	protected $manager = null;
 	protected ?array $dataSourceConnectors = null;
+	/** Per-request memo of getDataSourceConnector() keyed by table name (event-built path). */
+	private array $dataSourceConnectorMemo = [];
 	protected static $serviceId = '';
 	public static $dateFormats = [];
 	protected $languageMap = null;
@@ -86,6 +88,10 @@ abstract class Service
 		{
 			$this->languageId = $dbLanguage['LID'];
 		}
+
+		// Connectors are built with the current language (localized fields/descriptions),
+		// so a language switch must invalidate the memoized ones.
+		$this->dataSourceConnectorMemo = [];
 	}
 
 	/**
@@ -122,9 +128,16 @@ abstract class Service
 	 */
 	public function getDataSourceConnector(string $name): ?Connector\Base
 	{
+		// The fully-loaded collection is authoritative: once getDataSourceConnectors() ran, its
+		// object wins over the memo so callers never see two connectors for the same table.
 		if (!empty($this->dataSourceConnectors[$name]) && $this->dataSourceConnectors[$name] instanceof Connector\Base)
 		{
 			return $this->dataSourceConnectors[$name];
+		}
+
+		if (isset($this->dataSourceConnectorMemo[$name]))
+		{
+			return $this->dataSourceConnectorMemo[$name];
 		}
 
 		$dataSources = [];
@@ -149,7 +162,7 @@ abstract class Service
 			$fields->add($this->prepareFieldDto($fieldName, $fieldInfo));
 		}
 
-		return new Connector\Sql($name, $fields, $source);
+		return $this->dataSourceConnectorMemo[$name] = new Connector\Sql($name, $fields, $source);
 	}
 
 	/**

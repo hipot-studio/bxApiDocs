@@ -104,6 +104,9 @@ final class BookingTable extends DataManager
 				->configureDefaultValue('N')
 				->configureRequired(),
 
+			(new DatetimeField('CONFIRMED_AT'))
+				->configureDefaultValue(null),
+
 			(new TextField('DESCRIPTION')),
 
 			(new StringField('VISIT_STATUS'))

@@ -12,8 +12,10 @@ use Bitrix\Calendar\Core\Event\Event;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Mappers\Factory;
 use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
+use Bitrix\Calendar\Integration\HumanResources\TeamAccessService;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\UserCollabs;
-use Bitrix\Calendar\Integration\SocialNetwork\FeatureService;
+use Bitrix\Calendar\Integration\HumanResources;
+use Bitrix\Calendar\Integration\SocialNetwork;
 use Bitrix\Calendar\OpenEvents\Service\DefaultCategoryService;
 use Bitrix\Calendar\OpenEvents\Service\OpenEventAttendeeService;
 use Bitrix\Calendar\Internals\SectionTable;
@@ -673,7 +675,8 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				$responseParams['defaultCategoryId'] = DefaultCategoryService::getInstance()->getCategoryId();
 			}
 
-			$responseParams['projectFeatureEnabled'] = FeatureService::isProjectFeatureEnabled();
+			$responseParams['projectFeatureEnabled'] = SocialNetwork\FeatureService::isProjectFeatureEnabled();
+			$responseParams['teamsAsAttendeeEnabled'] = HumanResources\FeatureService::isTeamsAsAttendeeEnabled();
 
 			$responseParams['isCollabUser'] = $isCollabUser;
 
@@ -744,7 +747,8 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		$responseParams['plannerFeatureEnabled'] = Bitrix24Manager::isPlannerFeatureEnabled();
 		$responseParams['eventWithEmailGuestEnabled'] = Bitrix24Manager::isFeatureEnabled(FeatureDictionary::CALENDAR_EVENTS_WITH_EMAIL_GUESTS);
 		$responseParams['isCollabFeatureEnabled'] = \Bitrix\Calendar\Integration\SocialNetwork\Collab\CollabFeature::isAvailable();
-		$responseParams['projectFeatureEnabled'] = FeatureService::isProjectFeatureEnabled();
+		$responseParams['projectFeatureEnabled'] = SocialNetwork\FeatureService::isProjectFeatureEnabled();
+		$responseParams['teamsAsAttendeeEnabled'] = HumanResources\FeatureService::isTeamsAsAttendeeEnabled();
 
 		return $responseParams;
 	}
@@ -966,6 +970,18 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 		foreach ($entities as $entity)
 		{
+			// Team codes (SNT<id>) expand into member lists, so gate them by node view
+			// permission, deny-by-default, symmetrically to the project branch below.
+			if ($entity['entityId'] === 'structure-node')
+			{
+				if ((new TeamAccessService())->canViewTeam((int)$entity['id'], (int)$currentUserId))
+				{
+					$filteredEntities[] = $entity;
+				}
+
+				continue;
+			}
+
 			if ($entity['entityId'] !== 'project')
 			{
 				$filteredEntities[] = $entity;

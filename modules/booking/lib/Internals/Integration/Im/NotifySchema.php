@@ -10,6 +10,7 @@ class NotifySchema
 	{
 		return [
 			'booking' => [
+				'NAME' => Loc::getMessage('BOOKING_IM_NOTIFY_SCHEMA_GROUP'),
 				'NOTIFY' => [
 					'info' => [
 						'NAME' => Loc::getMessage('BOOKING_IM_NOTIFY_SCHEMA_INFO'),

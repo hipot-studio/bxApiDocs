@@ -11,10 +11,10 @@ use Bitrix\Booking\Internals\Service\Notifications\BookingMessageStatus;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\BaseMessageSender;
 use Bitrix\Booking\Internals\Service\Notifications\MessageSender\MessageSenderNotification;
 use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
+use Bitrix\Booking\Internals\Service\Sql\SqlExpression;
 use Bitrix\Booking\Internals\Service\WorkingTimeService;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
-use Bitrix\Main\DB\PgsqlConnection;
 use Bitrix\Main\DB\SqlHelper;
 
 abstract class BaseDataSource
@@ -212,14 +212,7 @@ abstract class BaseDataSource
 
 	protected function convertTimestampToDbExpr(int|string $timestamp): string
 	{
-		$timestamp = (string)$timestamp;
-
-		if (Application::getConnection() instanceof PgsqlConnection)
-		{
-			return "TO_TIMESTAMP({$timestamp})";
-		}
-
-		return "FROM_UNIXTIME({$timestamp})";
+		return SqlExpression::fromUnixTime((string)$timestamp);
 	}
 
 	protected function getBookingIdFilterSql(array $bookingIds): string

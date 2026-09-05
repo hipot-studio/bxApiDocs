@@ -99,6 +99,9 @@ class MailMessageAttachmentTable extends Entity\DataManager
 			'IMAGE_HEIGHT' => array(
 				'data_type' => 'integer',
 			),
+			'EXTERNAL_LINK_ID' => array(
+				'data_type' => 'integer',
+			),
 		);
 	}
 

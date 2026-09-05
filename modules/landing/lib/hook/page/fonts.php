@@ -309,7 +309,7 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 			return '';
 		}
 
-		$fontName = self::resolveFontName($fontCode);
+		$fontName = self::resolveFontName($fontCode, self::extractClaimedFontName($content));
 		if ($fontName === null)
 		{
 			return '';
@@ -340,11 +340,27 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 	}
 
 	/**
-	 * Resolves human-readable font name by font code.
-	 * @param string $fontCode Font code.
+	 * Extracts the font-family name claimed by the snippet.
+	 * @param string $content Raw font HTML.
 	 * @return string|null
 	 */
-	protected static function resolveFontName(string $fontCode): ?string
+	protected static function extractClaimedFontName(string $content): ?string
+	{
+		if (!preg_match('#font-family:\s*"([^"]+)"#i', $content, $match))
+		{
+			return null;
+		}
+
+		return $match[1];
+	}
+
+	/**
+	 * Resolves human-readable font name by font code.
+	 * @param string $fontCode Font code.
+	 * @param string|null $claimedName Untrusted font name extracted from the snippet.
+	 * @return string|null
+	 */
+	protected static function resolveFontName(string $fontCode, ?string $claimedName = null): ?string
 	{
 		if (isset(self::DEFAULT_FONTS[$fontCode]))
 		{
@@ -357,7 +373,11 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 			return null;
 		}
 
-		$fontName = ucwords(str_replace('-', ' ', $slug));
+		// Google Fonts family names are case-sensitive; the claimed name is
+		// untrusted, so accept it only as a casing variant of the trusted slug
+		$fontName = ($claimedName !== null && self::isCasingVariantOfSlug($claimedName, $slug))
+			? $claimedName
+			: ucwords(str_replace('-', ' ', $slug));
 
 		$bad = false;
 		$fontName = (new Landing\Sanitizer())->sanitizeText($fontName, $bad);
@@ -367,6 +387,18 @@ class Fonts extends \Bitrix\Landing\Hook\Page
 		}
 
 		return $fontName;
+	}
+
+	/**
+	 * Checks that the font name differs from the slug only by letter casing.
+	 * @param string $fontName Font name to check.
+	 * @param string $slug Trusted slug from the font code.
+	 * @return bool
+	 */
+	private static function isCasingVariantOfSlug(string $fontName, string $slug): bool
+	{
+		return preg_match('/^[A-Za-z0-9 ]+$/', $fontName)
+			&& strtolower(str_replace(' ', '-', $fontName)) === $slug;
 	}
 
 	/**

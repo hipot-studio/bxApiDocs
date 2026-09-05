@@ -43,6 +43,9 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 {
 	private Disk\UrlManager $urlManager;
 
+	/** @var array<int, Disk\ObjectLock|null> Lock map keyed by disk object ID; populated by preloadLocks(). */
+	private array $lockMap = [];
+
 	public function __construct(array $options)
 	{
 		$controllerOptions = [
@@ -132,9 +135,14 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 
 	public function load(array $ids): LoadResultCollection
 	{
-		$results = new LoadResultCollection();
 		$userId = CurrentUser::get()->getId();
-		foreach ($ids as $id)
+
+		// Phase 1: resolve IDs to models, run permission checks, collect validated models.
+		/** @var LoadResult[] $loadResultByIndex Keyed by sequential index matching $ids. */
+		$loadResultByIndex = [];
+		/** @var (Disk\File|Disk\AttachedObject)[] $pendingModels Validated models, same index as $loadResultByIndex. */
+		$pendingModels = [];
+		foreach ($ids as $index => $id)
 		{
 			$loadResult = new LoadResult($id);
 			[$type, $realValue] = FileUserType::detectType($id);
@@ -151,8 +159,7 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				}
 				else
 				{
-					$fileInfo = $this->createFileInfo($fileModel);
-					$loadResult->setFile($fileInfo);
+					$pendingModels[$index] = $fileModel;
 				}
 			}
 			else
@@ -168,7 +175,31 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				}
 				else
 				{
-					$fileInfo = $this->createFileInfo($attachedModel);
+					$pendingModels[$index] = $attachedModel;
+				}
+			}
+
+			$loadResultByIndex[$index] = $loadResult;
+		}
+
+		// Phase 2: batch-load locks for all validated models in one query (when lock feature is on).
+		if (!empty($pendingModels))
+		{
+			$this->preloadLocks($pendingModels);
+		}
+
+		// Phase 3: build FileInfo for each validated model using the preloaded lock map.
+		// Reset the lock map in finally so a thrown createFileInfo() cannot leave stale
+		// entries for the next load() call on this controller instance.
+		try
+		{
+			foreach ($pendingModels as $index => $fileModel)
+			{
+				$loadResult = $loadResultByIndex[$index];
+
+				if ($fileModel instanceof Disk\AttachedObject)
+				{
+					$fileInfo = $this->createFileInfo($fileModel);
 					if ($fileInfo instanceof FileInfo)
 					{
 						$loadResult->setFile($fileInfo);
@@ -178,8 +209,21 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 						$loadResult->addError(new Error('File not found or failed to load'));
 					}
 				}
+				else
+				{
+					$fileInfo = $this->createFileInfo($fileModel);
+					$loadResult->setFile($fileInfo);
+				}
 			}
+		}
+		finally
+		{
+			$this->lockMap = [];
+		}
 
+		$results = new LoadResultCollection();
+		foreach ($loadResultByIndex as $loadResult)
+		{
 			$results->add($loadResult);
 		}
 
@@ -272,6 +316,87 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 	}
 
 	/**
+	 * Batch-loads ObjectLock records for a set of file models and populates $this->lockMap.
+	 * Skips the query when the portal lock feature is disabled (no DB hit, no behaviour change).
+	 * Handles auto-unlock: models whose lock has expired are unlocked immediately and removed from the map.
+	 *
+	 * @param array<int, Disk\File|Disk\AttachedObject> $fileModels
+	 */
+	private function preloadLocks(array $fileModels): void
+	{
+		if (!\Bitrix\Disk\Configuration::isEnabledObjectLock())
+		{
+			return;
+		}
+
+		// Resolve each model to the disk object ID used in b_disk_object_lock.
+		// Disk\File: objectId = file->getId()
+		// Disk\AttachedObject: objectId = underlying Disk\File->getId() (via getFile())
+		$objectIds = [];
+		foreach ($fileModels as $model)
+		{
+			$diskFile = $model instanceof Disk\File ? $model : $model->getFile();
+			if ($diskFile !== null)
+			{
+				$objectIds[] = (int)$diskFile->getRealObjectId();
+			}
+		}
+
+		if (empty($objectIds))
+		{
+			return;
+		}
+
+		$objectIds = array_unique($objectIds);
+		$rawLocks = [];
+		foreach (array_chunk($objectIds, 500) as $objectIdChunk)
+		{
+			$locks = Disk\Internals\ObjectLockTable::query()
+				->setSelect(['ID', 'TOKEN', 'OBJECT_ID', 'CREATED_BY', 'CREATE_TIME', 'EXPIRY_TIME', 'TYPE', 'IS_EXCLUSIVE'])
+				->whereIn('OBJECT_ID', $objectIdChunk)
+				->exec()
+			;
+
+			while ($row = $locks->fetch())
+			{
+				$rawLocks[(int)$row['OBJECT_ID']] = $row;
+			}
+		}
+
+		// Build the lock map; handle auto-unlock inline.
+		$this->lockMap = array_fill_keys($objectIds, null);
+		foreach ($rawLocks as $objectId => $row)
+		{
+			$lock = Disk\ObjectLock::buildFromArray($row);
+			if ($lock instanceof Disk\ObjectLock && $lock->shouldProcessAutoUnlock())
+			{
+				// Expired lock: unlock the file and treat it as unlocked.
+				$diskFile = null;
+				foreach ($fileModels as $model)
+				{
+					$candidate = $model instanceof Disk\File ? $model : $model->getFile();
+					if ($candidate !== null && (int)$candidate->getRealObjectId() === $objectId)
+					{
+						$diskFile = $candidate;
+						break;
+					}
+				}
+
+				if ($diskFile !== null)
+				{
+					$diskFile->unlock(\Bitrix\Disk\SystemUser::SYSTEM_USER_ID);
+				}
+
+				$this->lockMap[$objectId] = null;
+			}
+			else
+			{
+				$this->lockMap[$objectId] = $lock;
+			}
+		}
+	}
+
+	/**
 	 * @param AttachedObject | File $fileModel
 	 *
 	 * @return FileInfo|null
@@ -307,6 +432,8 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 			'objectId' => null,
 			'isEditable' => false,
 			'viewLink' => '',
+			'isLocked' => false,
+			'isLockedBySelf' => false,
 		];
 
 		$attachedObjectId = 0;
@@ -361,6 +488,11 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 			$userId = $user ? $user->getId() : \Bitrix\Disk\Security\SecurityContext::GUEST_USER;
 			$customData['canUpdate'] = $fileModel->canUpdate($userId);
 
+			$realFile = $fileModel->getFile();
+			$realFileStorage = $realFile?->getStorage();
+			$customData['canRename'] =
+				$realFile && $realFileStorage && $realFile->canRename($realFileStorage->getSecurityContext($userId));
+
 			$attachedObjectId = $fileModel->getId();
 		}
 
@@ -393,6 +525,21 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 
 			$supportsUnifiedLink = $file->supportsUnifiedLink();
 			$isBoard = (int)$file->getTypeFile() === Disk\TypeFile::FLIPCHART;
+
+			// Lock state is resolved here for ALL paths (Disk\File and AttachedObject alike),
+			// because $file is the underlying Disk\File in both cases.
+			if (\Bitrix\Disk\Configuration::isEnabledObjectLock())
+			{
+				$objectId = (int)$file->getRealObjectId();
+				$lock = array_key_exists($objectId, $this->lockMap)
+					? $this->lockMap[$objectId]
+					: $file->getLock();
+				if ($lock)
+				{
+					$customData['isLocked'] = true;
+					$customData['isLockedBySelf'] = ((int)$lock->getCreatedBy() === (int)CurrentUser::get()->getId());
+				}
+			}
 		}
 
 		if (!$isBoard && $supportsUnifiedLink)

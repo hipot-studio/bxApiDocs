@@ -7,7 +7,9 @@ namespace Bitrix\Intranet\Internal\Integration\Main;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Service\Otp\DeviceReconnect;
+use Bitrix\Main\Loader;
 use Bitrix\Main\UserAuthActionTable;
+use Bitrix\Pull\Model\ChannelTable;
 
 class LogoutService
 {
@@ -21,6 +23,7 @@ class LogoutService
 		$this->setDeviceLostFlag();
 		(new ApplicationPasswordService())->removeAllByUserId((int)$this->user->getId());
 		$this->addLogoutAction();
+		$this->dropPullChannel();
 	}
 
 	public function logoutAllExceptTrustedDevice(): void
@@ -39,6 +42,36 @@ class LogoutService
 		}
 
 		$this->addLogoutAction();
+		$this->dropPullChannel();
+	}
+
+	/**
+	 * The logout auth action closes the HTTP plane only, while a pull channel is issued per user
+	 * and keeps delivering until its own TTL expires. The row is read first because DeleteByUser()
+	 * signs a null channel id when the user has no channel, which raises E_USER_WARNING.
+	 */
+	private function dropPullChannel(): void
+	{
+		if (!Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		$userId = (int)$this->user->getId();
+		$channel = ChannelTable::getRow([
+			'filter' => [
+				'=USER_ID' => $userId,
+				'=CHANNEL_TYPE' => \CPullChannel::TYPE_PRIVATE,
+			],
+			'select' => ['CHANNEL_ID'],
+		]);
+
+		if ($channel === null)
+		{
+			return;
+		}
+
+		\CPullChannel::DeleteByUser($userId, $channel['CHANNEL_ID']);
 	}
 
 	private function addLogoutAction(): void

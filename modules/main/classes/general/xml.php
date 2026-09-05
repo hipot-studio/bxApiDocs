@@ -779,9 +779,17 @@ class CDataXML
 				$attrNode->name = $attributeName;
 				$attrNode->content = CDataXML::xmlspecialcharsback($attributeValue);
 
-				$ret[] = $attrNode;
+				if ($ret)
+				{
+					$ret[] = $attrNode;
+				}
+				else
+				{
+					$ret = [$attrNode];
+				}
 			}
 		}
+
 		return $ret;
 	}
 }

@@ -17,7 +17,6 @@ use Bitrix\Booking\Internals\Service\Journal\EventProcessor\AbstractEventProcess
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 use Bitrix\Booking\Internals\Service\ModuleOptions;
-use Bitrix\Main\Event;
 use Bitrix\Main\Update\Stepper;
 
 class ResourceEventProcessor extends AbstractEventProcessor
@@ -100,15 +99,6 @@ class ResourceEventProcessor extends AbstractEventProcessor
 			type: 'onResourceDelete',
 			parameters: ['resourceId' => $command->id],
 		);
-	}
-
-	private function sendBitrixEvent(string $type, array $parameters): void
-	{
-		(new Event(
-			moduleId: 'booking',
-			type: $type,
-			parameters: $parameters,
-		))->send();
 	}
 
 	private function ensureAiAgentForAiCallResource(string $senderCode, int $userId): void

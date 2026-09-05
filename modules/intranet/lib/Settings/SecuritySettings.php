@@ -392,18 +392,6 @@ class SecuritySettings extends AbstractSettings
 			);
 		}
 
-		$data['isWaterMarksEnabled'] = new Switcher(
-			id: 'settings-communication-field-isWaterMarksEnabled',
-			name: 'isWaterMarksEnabled',
-			label: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_WATER_MARKS_ENABLED'),
-			value: 'N',
-			hints: [
-				'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_WATER_MARKS_ENABLED'),
-			],
-			isEnable: false,
-			badge: Loc::getMessage('INTRANET_SETTINGS_FIELD_BADGE_WATER_MARKS_SOON'),
-		);
-
 		return new static($data);
 	}
 

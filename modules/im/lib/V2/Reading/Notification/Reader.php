@@ -12,8 +12,6 @@ use Bitrix\Im\V2\Reading\Counter\Notification\CountersUpdater;
 use Bitrix\Im\V2\Reading\Notification\Pull\ReadAllNotifications;
 use Bitrix\Im\V2\Reading\Notification\Pull\ReadNotifications;
 use Bitrix\Im\V2\Reading\ReadingError;
-use Bitrix\Main\Loader;
-use Bitrix\Pull\MobileCounter;
 
 class Reader
 {
@@ -42,7 +40,6 @@ class Reader
 		}
 
 		$multiReadResult = $this->readMulti($messages);
-		$this->sendMobileCounter($userId);
 
 		return ReadResult::fromMultiReadResult($multiReadResult, $userId, $chatId);
 	}
@@ -76,17 +73,8 @@ class Reader
 		$counter = $this->countersProvider->getForUsers([$userId])->getByUserId($userId);
 		$result = new ReadAllResult($userId, $chatId, $counter, $excludeMessageIds);
 		(new ReadAllNotifications($result))->send();
-		$this->sendMobileCounter($userId);
 
 		return $result;
-	}
-
-	private function sendMobileCounter(int $userId): void
-	{
-		if (Loader::includeModule('pull'))
-		{
-			MobileCounter::send($userId);
-		}
 	}
 
 	private function getMessagesByUsers(MessageCollection $messages): array

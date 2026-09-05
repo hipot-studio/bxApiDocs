@@ -13,6 +13,19 @@ final class AppliedFilters
 {
 	private const MAX_PERIOD_DAYS = 366;
 
+	/**
+	 * Filter types whose value is a column predicate the assistant may pass
+	 * back. Org structure is here because Superset resolves its nodes
+	 * (`user_12`, `all_department_5`) into employee ids itself, checking them
+	 * against the same structure dataset the on-screen selector uses.
+	 */
+	private const COLUMN_FILTER_TYPES = [
+		'filter_select',
+		'filter_company_structure',
+		'filter_tasks_flow',
+		'filter_bp_workflow_template',
+	];
+
 	public function __construct(private readonly int $userId)
 	{
 	}
@@ -130,7 +143,9 @@ final class AppliedFilters
 
 			if ($name === 'period' && is_array($value) && !empty($value['from']) && !empty($value['to']))
 			{
-				$extraFormData['time_range'] = $value['from'] . ' : ' . $value['to'];
+				$extraFormData['time_range'] =
+					$value['from'] . ' : ' . self::shiftToExclusiveEnd((string)$value['to'])
+				;
 
 				continue;
 			}
@@ -171,7 +186,7 @@ final class AppliedFilters
 		foreach ($dashboard->nativeFilterConfig as $nf)
 		{
 			$type = $nf['filterType'] ?? '';
-			if ($type === 'filter_select')
+			if (in_array($type, self::COLUMN_FILTER_TYPES, true))
 			{
 				$col = $nf['targets'][0]['column']['name'] ?? null;
 				if (is_string($col) && $col !== '')
@@ -239,19 +254,22 @@ final class AppliedFilters
 			));
 		}
 
-		$from = strtotime($fromStr);
-		$to = strtotime($toStr);
+		// UTC on both bounds: in a zone with DST the distance between two local
+		// midnights is not a whole number of days, so the day count below would
+		// floor one day short and let a 367-day window through the limit.
+		$from = strtotime($fromStr . ' UTC');
+		$to = strtotime($toStr . ' UTC');
 		// `strtotime("2026-02-30")` silently overflows to 2026-03-02 — the regex
 		// above only checks shape. Round-trip back to a date string and compare
 		// to reject impossible calendar dates explicitly.
-		if ($from === false || date('Y-m-d', $from) !== $fromStr)
+		if ($from === false || gmdate('Y-m-d', $from) !== $fromStr)
 		{
 			return $result->addError(new Error(
 				'Invalid period filter: `from` ("' . $fromStr . '") is not a real calendar date.',
 				'invalid_period_calendar',
 			));
 		}
-		if ($to === false || date('Y-m-d', $to) !== $toStr)
+		if ($to === false || gmdate('Y-m-d', $to) !== $toStr)
 		{
 			return $result->addError(new Error(
 				'Invalid period filter: `to` ("' . $toStr . '") is not a real calendar date.',
@@ -266,7 +284,10 @@ final class AppliedFilters
 			));
 		}
 
-		$days = (int)(($to - $from) / 86400);
+		// Both bounds are inclusive and the end is later shifted to a half-open
+		// `time_range`, so the window actually queried is one day longer than the
+		// distance between them.
+		$days = (int)(($to - $from) / 86400) + 1;
 		if ($days > self::MAX_PERIOD_DAYS)
 		{
 			return $result->addError(new Error(
@@ -278,6 +299,22 @@ final class AppliedFilters
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Superset treats `time_range` as a half-open interval, so the last day of an
+	 * inclusive range must be passed as the next day. The dashboard UI does the
+	 * same shift ({@see EmbeddedFilter\DateTime}); without it the agent answer is
+	 * one day short of the report.
+	 *
+	 * Applied here rather than in {@see resolve()} so that the period echoed back
+	 * to the agent keeps the inclusive end the caller asked for.
+	 */
+	private static function shiftToExclusiveEnd(string $date): string
+	{
+		$timestamp = strtotime($date . ' +1 day');
+
+		return $timestamp === false ? $date : date('Y-m-d', $timestamp);
 	}
 
 	/**
@@ -347,9 +384,15 @@ final class AppliedFilters
 		];
 		if (isset($lastDaysMap[$period]))
 		{
+			// The UI shifts the end for `range` and `current_*` only: a `last_N`
+			// period goes to Superset as `[today−N : today)`, without today.
+			// Its inclusive end is therefore yesterday, and the unconditional
+			// shift in {@see convertToSupersetExtraFormData} restores exactly
+			// the bound the dashboard uses.
 			$from = (clone $today)->add('-' . $lastDaysMap[$period] . ' days');
+			$to = (clone $today)->add('-1 day');
 
-			return ['from' => $from->format('Y-m-d'), 'to' => $today->format('Y-m-d')];
+			return ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d')];
 		}
 
 		return null;

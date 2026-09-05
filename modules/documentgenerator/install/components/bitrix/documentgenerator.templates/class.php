@@ -32,7 +32,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 		if(!$arParams['UPLOAD_URI'] && $this->includeModules())
 		{
 			$request = \Bitrix\Main\Application::getInstance()->getContext()->getRequest();
-			$uploadUri = new \Bitrix\Main\Web\Uri($request->getRequestUri());
+			$uploadUri = new Uri($request->getRequestUri());
 			$uploadUri->addParams(['UPLOAD' => 'Y']);
 			$arParams['UPLOAD_URI'] = $uploadUri->getLocator();
 		}
@@ -197,8 +197,8 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 			$componentPath = getLocalPath('components'.$componentPath.'/slider.php');
 			foreach(Driver::getInstance()->getDefaultRegions() as $region)
 			{
-				$uri = new \Bitrix\Main\Web\Uri($componentPath);
-				$uri->addParams(['REGION[]' => $region['CODE'], 'apply_filter' => 'Y']);
+				$uri = new Uri($componentPath);
+				$uri->addParams(['REGION' => [$region['CODE']], 'apply_filter' => 'Y']);
 				$menuItems[] = [
 					'text' => $region['TITLE'],
 					'uri' => $uri->getLocator(),
@@ -703,7 +703,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 		$componentPath = getLocalPath('components'.$componentPath.'/slider.php');
 		if($componentPath)
 		{
-			return new \Bitrix\Main\Web\Uri($componentPath);
+			return new Uri($componentPath);
 		}
 
 		return false;

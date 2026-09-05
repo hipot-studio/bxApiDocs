@@ -216,13 +216,21 @@ class Section implements Controllable, Errorable
 		$fields = [
 			"IBLOCK_ID" => $this->iblockId,
 			"CODE" => $this->params["SECTION_CODE"],
-			"IBLOCK_SECTION_ID" => $this->params["IBLOCK_SECTION_ID"] ? (int)$this->params["IBLOCK_SECTION_ID"] : 0,
-			"CHECK_PERMISSIONS" => "N"
+			"CHECK_PERMISSIONS" => "N",
 		];
+		if (!$this->sectionId || array_key_exists("IBLOCK_SECTION_ID", $this->params))
+		{
+			$fields["IBLOCK_SECTION_ID"] = !empty($this->params["IBLOCK_SECTION_ID"])
+				? (int)$this->params["IBLOCK_SECTION_ID"]
+				: 0;
+		}
 
 		foreach ($this->params["FIELDS"] as $fieldId => $fieldValue)
 		{
-			if (!in_array($fieldId, $this->fieldList))
+			if (
+				!in_array($fieldId, $this->fieldList)
+				|| in_array($fieldId, ["IBLOCK_ID", "CHECK_PERMISSIONS"])
+			)
 			{
 				continue;
 			}
@@ -252,11 +260,17 @@ class Section implements Controllable, Errorable
 
 		foreach ($this->params["FILTER"] as $fieldId => $fieldValue)
 		{
-			if (in_array($fieldId, $this->filterList))
+			if (
+				in_array($fieldId, $this->filterList)
+				&& !in_array($fieldId, ["IBLOCK_ID", "CHECK_PERMISSIONS", "PERMISSIONS_BY", "MIN_PERMISSION"])
+			)
 			{
 				$filter[$fieldId] = $fieldValue;
 			}
 		}
+
+		$filter["IBLOCK_ID"] = $iblockId;
+		$filter["CHECK_PERMISSIONS"] = $this->params["CHECK_PERMISSIONS"] ?? "Y";
 
 		return $filter;
 	}

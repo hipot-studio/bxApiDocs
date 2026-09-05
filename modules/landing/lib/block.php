@@ -804,13 +804,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 				$historyActivity ? History::activate() : History::deactivate();
 			}
 			Assets\PreProcessing::blockAddProcessing($block);
-			if (
-				isset($manifest['callbacks']['afteradd'])
-				&& is_callable($manifest['callbacks']['afteradd'])
-			)
-			{
-				$manifest['callbacks']['afteradd']($block);
-			}
+			$block->executeAfterAddCallback($manifest);
 			// calling class(es) of block
 			foreach ($block->getClass() as $class)
 			{
@@ -857,6 +851,47 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 
 			return false;
 		}
+	}
+
+	/**
+	 * Calls the `afteradd` callback of the manifest of this block, if it may be executed at all.
+	 *
+	 * Every place which adds a block calls the callback through this method: the check of the
+	 * callback belongs to the block itself, not to the callers.
+	 *
+	 * @param array $manifest Manifest of this block.
+	 * @return void
+	 */
+	public function executeAfterAddCallback(array $manifest): void
+	{
+		$callback = $manifest['callbacks']['afteradd'] ?? null;
+		if (self::isExecutableManifestCallback($this, $callback))
+		{
+			// the callbacks of the subtypes take the block by reference, and $this is not assignable
+			$block = $this;
+			$callback($block);
+		}
+	}
+
+	/**
+	 * Checks that the callback of the manifest may be executed.
+	 *
+	 * The manifest of a repo block is stored data, so a callable it names comes from outside and
+	 * is never run. The callbacks the subtypes of the block add in runtime are closures, which
+	 * storage cannot hold, so they keep working.
+	 *
+	 * @param Block $block Block the callback belongs to.
+	 * @param mixed $callback Callback from the manifest.
+	 * @return bool
+	 */
+	private static function isExecutableManifestCallback(self $block, mixed $callback): bool
+	{
+		if (!is_callable($callback))
+		{
+			return false;
+		}
+
+		return !$block->getRepoId() || $callback instanceof \Closure;
 	}
 
 	/**
@@ -2090,7 +2125,12 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			}
 		}
 
-		foreach (array_keys($asset) as $ass)
+		// the manifest of a repo block is stored data: `class` would be included as php
+		$manifestAssetKeys = $this->repoId
+			? ['css', 'js', 'ext']
+			: array_keys($asset);
+
+		foreach ($manifestAssetKeys as $ass)
 		{
 			if (!empty($manifest['assets'][$ass]))
 			{
@@ -2624,7 +2664,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 					{
 						if (isset($urls[$lid]))
 						{
-							$sysPages[$code] = \htmlspecialcharsbx($urls[$lid]);
+							$sysPages[$code] = \Bitrix\Landing\Security\SyspageUrl::sanitize($urls[$lid]);
 						}
 						else
 						{
@@ -4548,6 +4588,62 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
+	 * Collects, per selector, the attribute names whose manifest type is 'url'
+	 * (e.g. the search blocks' form `action`). Mirrors collectAllowedAttrs' walk
+	 * but keeps only url-typed leaves: their values are real hrefs and must pass
+	 * the scheme allow-list on save (Sanitizer::sanitizeHref), not be stored raw.
+	 * @param array $mixed Manifest attrs subtree.
+	 * @param array $urlAttrs Result map [selector => [attribute, ...]].
+	 * @param string|null $selector Current selector context.
+	 * @return void
+	 */
+	protected static function collectUrlAttrs(array $mixed, array &$urlAttrs, $selector = null): void
+	{
+		foreach ($mixed as $itemSelector => $item)
+		{
+			if (!is_string($itemSelector))
+			{
+				$itemSelector = $selector;
+			}
+			if (!is_array($item))
+			{
+				continue;
+			}
+			if (isset($item['attrs']) && is_array($item['attrs']))
+			{
+				self::collectUrlAttrs($item['attrs'], $urlAttrs, $itemSelector);
+			}
+			else if (isset($item['additional']['attrs']) && is_array($item['additional']['attrs']))
+			{
+				self::collectUrlAttrs($item['additional']['attrs'], $urlAttrs, $itemSelector);
+			}
+			else if (isset($item['additional']) && is_array($item['additional']))
+			{
+				self::collectUrlAttrs($item['additional'], $urlAttrs, $itemSelector);
+			}
+			else if (isset($item['attribute']) && is_string($item['attribute']))
+			{
+				if (($item['type'] ?? null) !== 'url')
+				{
+					continue;
+				}
+				if (isset($item['selector']) && is_string($item['selector']))
+				{
+					$itemSelector = trim($item['selector']);
+				}
+				if ($itemSelector)
+				{
+					$urlAttrs[$itemSelector][] = $item['attribute'];
+				}
+			}
+			else if (is_array($item))
+			{
+				self::collectUrlAttrs($item, $urlAttrs, $itemSelector);
+			}
+		}
+	}
+
+	/**
 	 * Set attributes to nodes of block.
 	 * @param array $data Attrs data array.
 	 * @return void
@@ -4575,12 +4671,25 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 		self::collectAllowedAttrs($manifest['cards'], $allowedAttrs);
 		self::collectAllowedAttrs($manifest['style']['block'], $allowedAttrs);
 
+		// url-typed attrs (manifest type=url, e.g. the search form action) carry a
+		// real href - collect them so their value passes the scheme allow-list.
+		// Walk the same sources as collectAllowedAttrs above, so a url-typed leaf can
+		// never be writable without also being routed through sanitizeHref.
+		$urlAttrs = [];
+		self::collectUrlAttrs($manifest['style']['nodes'] ?? [], $urlAttrs);
+		self::collectUrlAttrs($manifest['attrs'] ?? [], $urlAttrs);
+		self::collectUrlAttrs($manifest['cards'] ?? [], $urlAttrs);
+		self::collectUrlAttrs($manifest['style']['block'] ?? [], $urlAttrs);
+		$sanitizer = null;
+
 		// update attrs
 		if ($allowedAttrs)
 		{
 			// all allowed attrs from manifest with main selector ([selector] => [data-test, data-test2])
 			foreach ($allowedAttrs as $selector => $allowed)
 			{
+				// keep the manifest selector key: $selector is remapped below for #wrapper
+				$manifestSelector = $selector;
 				// it's not interesting for us, if there is no new data for this selector
 				if ((isset($data[$selector]) && is_array($data[$selector])) || isset($data[$wrapper]) )
 				{
@@ -4619,8 +4728,17 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 							{
 								continue;
 							}
+							$isUrlAttr =
+								isset($urlAttrs[$manifestSelector])
+								&& in_array($key, $urlAttrs[$manifestSelector], true);
 							$key = \htmlspecialcharsbx($key);
 							$value = is_array($value) ? json_encode($value) : $value;
+							// manifest type=url -> real href: scheme allow-list (default-deny)
+							if ($isUrlAttr && is_string($value))
+							{
+								$sanitizer ??= new Sanitizer();
+								$value = $sanitizer->sanitizeHref($value);
+							}
 
 							// result nodes by main selector
 							foreach ($resultList as $pos => $resultNode)
@@ -5256,57 +5374,98 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
-	 * Returns true if block's content contains needed string.
+	 * Returns id of the landing which owns the block, if the block content contains link to the file
+	 * and that landing is visible for the current user within the current scope.
 	 *
-	 * @param int $entityId Block or landing id.
-	 * @param string $needed String for search.
-	 * @param bool $isLanding Set to true, if entity id is landing id.
-	 * @return bool
+	 * @param int $blockId Block id.
+	 * @param int $fileId Disk file id.
+	 * @return int|null Null if there is no link to the file, or the landing is not visible.
 	 */
-	public static function isContains(int $entityId, string $needed, bool $isLanding = false): bool
+	public static function findVisibleLandingIdByFileInBlock(int $blockId, int $fileId): ?int
 	{
-		$filter = [
-			'=ACTIVE' => 'Y',
-			'=DELETED' => 'N',
-			'CONTENT' => '%' . $needed . '%',
-		];
-		if ($isLanding)
-		{
-			$filter['LID'] = $entityId;
-		}
-		else
-		{
-			$filter['ID'] = $entityId;
-		}
+		return self::findVisibleLandingIdByFileLink(['ID' => $blockId], $fileId);
+	}
+
+	/**
+	 * Returns id of the landing, if one of its blocks contains link to the file and the landing
+	 * is visible for the current user within the current scope.
+	 *
+	 * @param int $landingId Landing id.
+	 * @param int $fileId Disk file id.
+	 * @return int|null Null if there is no link to the file, or the landing is not visible.
+	 */
+	public static function findVisibleLandingIdByFileInLanding(int $landingId, int $fileId): ?int
+	{
+		return self::findVisibleLandingIdByFileLink(['LID' => $landingId], $fileId);
+	}
+
+	/**
+	 * Returns id of the first visible landing whose block contains link to the file.
+	 * Substring filter is just a prefilter, the exact id is confirmed within the selected content,
+	 * so that a numeric prefix of the linked id does not match (Mantis #252316).
+	 *
+	 * @param array $entityFilter Filter by block id or by landing id.
+	 * @param int $fileId Disk file id.
+	 * @return int|null Null if there is no link to the file, or the landing is not visible.
+	 */
+	private static function findVisibleLandingIdByFileLink(array $entityFilter, int $fileId): ?int
+	{
+		$needed = Connector\Disk::FILE_PREFIX_HREF . $fileId;
+		$exactLink = Connector\Disk::getExactFileHrefPattern($fileId);
 		$res = parent::getList([
 			'select' => [
 				'LID',
+				'CONTENT',
 				'SITE_ID' => 'LANDING.SITE_ID',
 			],
-			'filter' => $filter,
+			'filter' => $entityFilter + [
+				'=ACTIVE' => 'Y',
+				'=DELETED' => 'N',
+				'CONTENT' => '%' . $needed . '%',
+			],
 		]);
-		if ($row = $res->fetch())
+		$visibility = [];
+		while ($row = $res->fetch())
 		{
-			$res = Landing::getList([
-				'select' => [
-					'ID',
-				],
-				'filter' => [
-					'ID' => $row['LID'],
-				],
-			]);
-			if ($res->fetch())
+			if (!preg_match($exactLink, (string)$row['CONTENT']))
 			{
-				return true;
+				continue;
 			}
 
-			if (\Bitrix\Landing\Site\Scope\Group::getGroupIdBySiteId($row['SITE_ID'], true))
+			$landingId = (int)$row['LID'];
+			$visibility[$landingId] ??= self::isLandingVisible($landingId, (int)$row['SITE_ID']);
+			if ($visibility[$landingId])
 			{
-				return true;
+				return $landingId;
 			}
 		}
 
-		return false;
+		return null;
+	}
+
+	/**
+	 * Returns true if the landing is available for the current user within the current scope.
+	 *
+	 * @param int $landingId Landing id.
+	 * @param int $siteId Site id of the landing.
+	 * @return bool
+	 */
+	private static function isLandingVisible(int $landingId, int $siteId): bool
+	{
+		$res = Landing::getList([
+			'select' => [
+				'ID',
+			],
+			'filter' => [
+				'ID' => $landingId,
+			],
+		]);
+		if ($res->fetch())
+		{
+			return true;
+		}
+
+		return (bool)\Bitrix\Landing\Site\Scope\Group::getGroupIdBySiteId($siteId, true);
 	}
 
 	/**

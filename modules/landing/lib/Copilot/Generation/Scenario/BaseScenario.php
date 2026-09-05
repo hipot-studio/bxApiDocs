@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Scenario;
 
+use Bitrix\Landing\Copilot\Generation;
+use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\Step\Base\IStep;
 use Bitrix\Landing\Metrika;
 
@@ -33,6 +35,21 @@ abstract class BaseScenario implements IScenario
 	abstract public function getQuotaCalculateStep(): ?int;
 
 	abstract public function getAnalyticCategory(): Metrika\Categories;
+
+	/**
+	 * @inheritdoc
+	 */
+	public function isAnalyticStartEnabled(): bool
+	{
+		return true;
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function onGenerationError(Generation $generation, GenerationException $e): void
+	{
+	}
 
 	public function getAsyncRelations(): ?array
 	{

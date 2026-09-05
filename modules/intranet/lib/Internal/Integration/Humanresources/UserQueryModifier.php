@@ -120,6 +120,38 @@ final class UserQueryModifier
 		return $this->userIdSubQueryCache[$cacheKey];
 	}
 
+	public function createDepartmentUserIdSubQueryFromFilter(array $filterValue): ?string
+	{
+		$departmentFilterValue = null;
+		$withSubDepartments = true;
+
+		if (
+			!empty($filterValue['DEPARTMENT'])
+			&& is_scalar($filterValue['DEPARTMENT'])
+		)
+		{
+			$departmentFilterValue = (string)$filterValue['DEPARTMENT'];
+		}
+		elseif (
+			!empty($filterValue['DEPARTMENT_FLAT'])
+			&& is_scalar($filterValue['DEPARTMENT_FLAT'])
+		)
+		{
+			$departmentFilterValue = (string)$filterValue['DEPARTMENT_FLAT'];
+			$withSubDepartments = false;
+		}
+
+		if ($departmentFilterValue === null)
+		{
+			return null;
+		}
+
+		return $this->createDepartmentUserIdSubQuery(
+			$departmentFilterValue,
+			$withSubDepartments,
+		);
+	}
+
 	private function resolveDepartmentNodeIds(int $departmentId, bool $withSubDepartments): array
 	{
 		if (!$this->isAvailable)

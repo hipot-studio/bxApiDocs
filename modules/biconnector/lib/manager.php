@@ -16,6 +16,7 @@ class Manager
 	protected $connectionName = '';
 	protected $serviceId = '';
 	protected $keyId = 0;
+	protected $keyRevision = '';
 	protected $stime = [];
 
 	/**
@@ -135,6 +136,7 @@ class Manager
 				'select' => [
 					'ID',
 					'CONNECTION',
+					'TIMESTAMP_X',
 				],
 				'filter' => [
 					'=ACCESS_KEY' => $key,
@@ -152,11 +154,29 @@ class Manager
 					$this->connectionName .= '_' . __CLASS__;
 				}
 				$this->keyId = $dbKey['ID'];
+				$timestamp = $dbKey['TIMESTAMP_X'] ?? null;
+				$this->keyRevision = $timestamp instanceof \Bitrix\Main\Type\DateTime ? $timestamp->format('U') : (string)$timestamp;
 				return true;
 			}
 		}
 
 		return false;
+	}
+
+	/**
+	 * Connection bound to the access key resolved by the last checkAccessKey() call.
+	 */
+	public function getConnectionName(): string
+	{
+		return $this->connectionName;
+	}
+
+	/**
+	 * Revision (TIMESTAMP_X) of the access key resolved by the last checkAccessKey() call.
+	 */
+	public function getKeyRevision(): string
+	{
+		return $this->keyRevision;
 	}
 
 	/**

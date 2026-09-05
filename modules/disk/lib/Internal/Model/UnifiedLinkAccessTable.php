@@ -8,6 +8,8 @@ namespace Bitrix\Disk\Internal\Model;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use \Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\AddStrategy\Contract\AddStrategy;
+use Bitrix\Main\ORM\Data\AddStrategy\Merge;
 use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddMergeTrait;
 use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -33,6 +35,14 @@ use Bitrix\Main\SystemException;
 class UnifiedLinkAccessTable extends DataManager
 {
 	use AddMergeTrait;
+
+	/**
+	 * Conflict target must be the unique OBJECT_ID, otherwise it falls back to the autoincrement primary key.
+	 */
+	protected static function getMergeStrategy(): AddStrategy
+	{
+		return new Merge(static::getEntity(), ['OBJECT_ID']);
+	}
 
 	public static function getTableName(): string
 	{

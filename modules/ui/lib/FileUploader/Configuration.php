@@ -88,6 +88,76 @@ class Configuration implements \JsonSerializable
 		return static::$defaultChunkSize;
 	}
 
+	public static function isParallelChunkUploadEnabled(): bool
+	{
+		if (strncasecmp(PHP_OS, 'WIN', 3) === 0)
+		{
+			return false;
+		}
+
+		$settings = static::getGlobalSettings();
+
+		return isset($settings['parallelChunkUpload']) && (bool)$settings['parallelChunkUpload'];
+	}
+
+	public static function getMaxParallelChunks(): int
+	{
+		$settings = static::getGlobalSettings();
+		$value = isset($settings['maxParallelChunks']) ? (int)$settings['maxParallelChunks'] : 2;
+
+		return max(1, $value);
+	}
+
+	public static function isPresignedChunkUploadEnabled(): bool
+	{
+		if (!\Bitrix\Main\ModuleManager::isModuleInstalled('clouds'))
+		{
+			return false;
+		}
+
+		$settings = static::getGlobalSettings();
+
+		return isset($settings['presignedChunkUpload']) && (bool)$settings['presignedChunkUpload'];
+	}
+
+	public static function getPresignedThreshold(): ?int
+	{
+		$settings = static::getGlobalSettings();
+		if (!isset($settings['presignedThreshold']))
+		{
+			return null;
+		}
+
+		$value = Ini::unformatInt($settings['presignedThreshold']);
+
+		return $value > 0 ? $value : null;
+	}
+
+	public static function getPresignedUrlTtl(): int
+	{
+		$settings = static::getGlobalSettings();
+		$value = isset($settings['presignedUrlTtl']) ? (int)$settings['presignedUrlTtl'] : 1800;
+
+		// AWS allows up to 7 days for SigV4-signed URLs; cap to a sane range.
+		return max(60, min($value, 7 * 24 * 3600));
+	}
+
+	public static function getPresignedUrlBatchLimit(): int
+	{
+		$settings = static::getGlobalSettings();
+		$value = isset($settings['presignedUrlBatchLimit']) ? (int)$settings['presignedUrlBatchLimit'] : 100;
+
+		return max(1, $value);
+	}
+
+	public static function getPresignedRegisterInterval(): int
+	{
+		$settings = static::getGlobalSettings();
+		$value = isset($settings['presignedRegisterInterval']) ? (int)$settings['presignedRegisterInterval'] : 15000;
+
+		return max(0, $value);
+	}
+
 	public function __construct(array $options = [])
 	{
 		$optionNames = [

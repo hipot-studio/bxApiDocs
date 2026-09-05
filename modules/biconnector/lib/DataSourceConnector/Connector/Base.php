@@ -15,6 +15,9 @@ abstract class Base
 {
 	protected const ANALYTIC_TAG_DATASET = 'other';
 
+	/** Per-instance memo of getFormattedData() keyed by (parameters, dateFormats). */
+	private array $formattedDataMemo = [];
+
 	public function __construct(
 		protected string $name,
 		protected FieldCollection $fields,
@@ -58,17 +61,23 @@ abstract class Base
 	 */
 	public function getFormattedData(array $parameters, array $dateFormats = []): array
 	{
+		$memoKey = md5(serialize([$parameters, $dateFormats]));
+		if (isset($this->formattedDataMemo[$memoKey]))
+		{
+			return $this->formattedDataMemo[$memoKey];
+		}
+
 		$connectorDataResult = $this->getData($parameters, $dateFormats);
 		if (!$connectorDataResult->isSuccess())
 		{
-			return [
+			return $this->formattedDataMemo[$memoKey] = [
 				'error' => $connectorDataResult->getErrorMessages()[0],
 			];
 		}
 
 		$connectorData = $connectorDataResult->getConnectorData();
 
-		return [
+		return $this->formattedDataMemo[$memoKey] = [
 			'schema' => $connectorData->schema,
 			'sql' => $connectorData->query,
 			'onAfterFetch' => $connectorData->queryRowCallbacks,

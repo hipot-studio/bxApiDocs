@@ -36,21 +36,26 @@ class AdsProvider
 
 		foreach ($advertisingTypes as $advertisingType)
 		{
-			$relatedResource = null;
 			$relatedResourceTypeCode = $advTypeToResourceTypeCodeMap[$advertisingType['code']] ?? null;
-			if ($relatedResourceTypeCode)
+			if ($relatedResourceTypeCode === null)
 			{
-				$relatedResource = $resourceTypeList->findByCode(
-					$relatedResourceTypeCode,
-					ResourceType::INTERNAL_MODULE_ID
-				);
+				continue;
+			}
+
+			$relatedResource = $resourceTypeList->findByCode(
+				$relatedResourceTypeCode,
+				ResourceType::INTERNAL_MODULE_ID
+			);
+			if ($relatedResource === null)
+			{
+				continue;
 			}
 
 			$result[] = [
 				'code' => $advertisingType['code'],
 				'name' => $advertisingType['name'],
 				'description' => $advertisingType['description'],
-				'relatedResourceTypeId' => $relatedResource?->getId(),
+				'relatedResourceTypeId' => $relatedResource->getId(),
 			];
 		}
 

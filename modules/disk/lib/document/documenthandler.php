@@ -218,6 +218,17 @@ abstract class DocumentHandler implements IErrorable
 	}
 
 	/**
+	 * Whether this handler may be shown as a selectable engine in user-facing
+	 * "create/open with" pickers. Internal engines that are reached indirectly
+	 * (e.g. via {@see \Bitrix\Disk\Document\DocumentHandlersManager::resolveEffectiveHandler()})
+	 * return false so they never appear as a separate menu item.
+	 */
+	public static function isSelectableForCreation(): bool
+	{
+		return true;
+	}
+
+	/**
 	 * Create new blank file in cloud service.
 	 * It is not necessary set shared rights on file.
 	 * @param FileData $fileData

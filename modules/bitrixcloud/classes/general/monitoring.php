@@ -42,7 +42,7 @@ class CBitrixCloudMonitoring
 				if ($domainName != '')
 				{
 					$punyName = $converter->Encode($domainName);
-					if ($punyName !== false)
+					if ($punyName)
 					{
 						$result[$punyName] = $domainName;
 					}
@@ -118,12 +118,10 @@ class CBitrixCloudMonitoring
 		$devices = $option->getArrayValue();
 		foreach ($devices as $domain_device)
 		{
-			if (list ($myDomain, $myDevice) = explode('|', $domain_device, 2))
+			list ($myDomain, $myDevice) = explode('|', $domain_device, 2);
+			if ($myDomain === $domain)
 			{
-				if ($myDomain === $domain)
-				{
-					$result[] = $myDevice;
-				}
+				$result[] = $myDevice;
 			}
 		}
 		return $result;
@@ -315,7 +313,7 @@ class CBitrixCloudMonitoring
 							if ($testResult->getUptime())
 							{
 								$uptime = explode('/', $testResult->getUptime());
-								$diff = $uptime[1] - $uptime[0];
+								$diff = intval($uptime[1]) - intval($uptime[0]);
 								if ($diff > $maxDiff)
 								{
 									$maxDiff = $diff;
@@ -338,7 +336,7 @@ class CBitrixCloudMonitoring
 						if ($testResult->getUptime())
 						{
 							$uptime = explode('/', $testResult->getUptime());
-							$diff = $uptime[1] - $uptime[0];
+							$diff = intval($uptime[1]) - intval($uptime[0]);
 							if ($diff > $maxDiff)
 							{
 								$maxDiff = $diff;

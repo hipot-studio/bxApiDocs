@@ -11,6 +11,7 @@ use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Application;
+use Bitrix\Main\IO;
 
 class File
 {
@@ -733,48 +734,48 @@ class File
 
 		$fastDownload = (\COption::GetOptionString('main', 'bx_fast_download', 'N') == 'Y');
 
-		$attachment_name = "";
-		$content_type = (array_key_exists("type", $fileData) && !empty($fileData["type"]) ? $fileData["type"] : "");
-		$cache_time = 10800;
+		$attachmentName = "";
+		$contentType = (array_key_exists("type", $fileData) && !empty($fileData["type"]) ? $fileData["type"] : "");
+		$cacheTime = 10800;
 		$fromClouds = false;
 		$filetime = 0;
 
 		if(is_array($options))
 		{
 			if(isset($options["content_type"]))
-				$content_type = $options["content_type"];
+				$contentType = $options["content_type"];
 			if(isset($options["specialchars"]))
 				$specialchars = $options["specialchars"];
 			if(isset($options["force_download"]))
-				$force_download = $options["force_download"];
+				$forceDownload = $options["force_download"];
 			if(isset($options["cache_time"]))
-				$cache_time = intval($options["cache_time"]);
+				$cacheTime = intval($options["cache_time"]);
 			if(isset($options["attachment_name"]))
-				$attachment_name = $options["attachment_name"];
+				$attachmentName = $options["attachment_name"];
 		}
 
-		if($cache_time < 0)
-			$cache_time = 0;
+		if($cacheTime < 0)
+			$cacheTime = 0;
 
 		$name = str_replace(array("\n", "\r"), '', $fileData["name"]);
 
-		if ($attachment_name)
-			$attachment_name = str_replace(array("\n", "\r"), '', $attachment_name);
+		if ($attachmentName)
+			$attachmentName = str_replace(array("\n", "\r"), '', $attachmentName);
 		else
-			$attachment_name = $name;
+			$attachmentName = $name;
 
-		$content_type = Web\MimeType::normalize($content_type);
+		$contentType = Web\MimeType::normalize($contentType);
 
 		$src = null;
 		$file = null;
 		if (mb_strpos($fileData["tmp_name"], \CTempFile::GetAbsoluteRoot()) === 0)
 		{
-			$file = new \Bitrix\Main\IO\File($fileData["tmp_name"]);
+			$file = new IO\File($fileData["tmp_name"]);
 			try
 			{
-				$src = $file->open(\Bitrix\Main\IO\FileStreamOpenMode::READ);
+				$src = $file->open(IO\FileStreamOpenMode::READ);
 			}
-			catch(\Bitrix\Main\IO\IoException $e)
+			catch (IO\IoException)
 			{
 				return false;
 			}
@@ -787,7 +788,7 @@ class File
 
 		$APPLICATION->RestartBuffer();
 
-		$cur_pos = 0;
+		$curPos = 0;
 		$filesize = $fileData["size"];
 		$size = $filesize-1;
 		$server = Application::getInstance()->getContext()->getServer();
@@ -798,15 +799,15 @@ class File
 			$p = mb_strpos($bytes, "-");
 			if($p !== false)
 			{
-				$cur_pos = floatval(mb_substr($bytes, 0, $p));
+				$curPos = floatval(mb_substr($bytes, 0, $p));
 				$size = floatval(mb_substr($bytes, $p + 1));
 				if ($size <= 0)
 				{
 					$size = $filesize - 1;
 				}
-				if ($cur_pos > $size)
+				if ($curPos > $size)
 				{
-					$cur_pos = 0;
+					$curPos = 0;
 					$size = $filesize - 1;
 				}
 			}
@@ -816,8 +817,8 @@ class File
 		{
 			\CHTTP::SetStatus("200 OK");
 			header("Accept-Ranges: bytes");
-			header("Content-Type: ".$content_type);
-			header("Content-Length: ".($size-$cur_pos+1));
+			header("Content-Type: ".$contentType);
+			header("Content-Length: ".($size-$curPos+1));
 
 			if($filetime > 0)
 				header("Last-Modified: ".date("r", $filetime));
@@ -825,14 +826,14 @@ class File
 		else
 		{
 			$lastModified = '';
-			if($cache_time > 0)
+			if($cacheTime > 0)
 			{
 				//Handle ETag
 				$ETag = md5($fileData["tmp_name"].$filesize.$filetime);
 				if ($server->get("HTTP_IF_NONE_MATCH") === $ETag)
 				{
 					\CHTTP::SetStatus("304 Not Modified");
-					header("Cache-Control: private, max-age=".$cache_time.", pre-check=".$cache_time);
+					header("Cache-Control: private, max-age=".$cacheTime.", pre-check=".$cacheTime);
 					die();
 				}
 				header("ETag: ".$ETag);
@@ -844,14 +845,14 @@ class File
 					if ($server->get("HTTP_IF_NONE_MATCH") === $lastModified)
 					{
 						\CHTTP::SetStatus("304 Not Modified");
-						header("Cache-Control: private, max-age=".$cache_time.", pre-check=".$cache_time);
+						header("Cache-Control: private, max-age=".$cacheTime.", pre-check=".$cacheTime);
 						die();
 					}
 				}
 			}
 
-			$utfName = Uri::urnEncode($attachment_name, "UTF-8");
-			$translitName = \CUtil::translit($attachment_name, LANGUAGE_ID, array(
+			$utfName = Uri::urnEncode($attachmentName);
+			$translitName = \CUtil::translit($attachmentName, LANGUAGE_ID, array(
 				"max_len" => 1024,
 				"safe_chars" => ".",
 				"replace_space" => '-',
@@ -863,24 +864,24 @@ class File
 			if(ini_get('zlib.output_compression'))
 				ini_set('zlib.output_compression', 'Off');
 
-			if($cur_pos > 0)
+			if($curPos > 0)
 				\CHTTP::SetStatus("206 Partial Content");
 			else
 				\CHTTP::SetStatus("200 OK");
 
-			header("Content-Type: ".$content_type);
+			header("Content-Type: ".$contentType);
 			header("Content-Disposition: attachment; filename=\"".$translitName."\"; filename*=utf-8''".$utfName);
 			header("Content-Transfer-Encoding: binary");
-			header("Content-Length: ".($size-$cur_pos+1));
+			header("Content-Length: ".($size-$curPos+1));
 			if(is_resource($src))
 			{
 				header("Accept-Ranges: bytes");
-				header("Content-Range: bytes ".$cur_pos."-".$size."/".$filesize);
+				header("Content-Range: bytes ".$curPos."-".$size."/".$filesize);
 			}
 
-			if($cache_time > 0)
+			if($cacheTime > 0)
 			{
-				header("Cache-Control: private, max-age=".$cache_time.", pre-check=".$cache_time);
+				header("Cache-Control: private, max-age=".$cacheTime.", pre-check=".$cacheTime);
 				if($filetime > 0)
 					header('Last-Modified: '.$lastModified);
 			}
@@ -909,25 +910,25 @@ class File
 			else if ($src)
 			{
 				session_write_close();
-				$file->seek($cur_pos);
-				while(!feof($src) && ($cur_pos <= $size))
+				$file->seek($curPos);
+				while(!feof($src) && ($curPos <= $size))
 				{
 					$bufsize = 131072; //128K
-					if($cur_pos + $bufsize > $size)
-						$bufsize = $size - $cur_pos + 1;
-					$cur_pos += $bufsize;
+					if($curPos + $bufsize > $size)
+						$bufsize = $size - $curPos + 1;
+					$curPos += $bufsize;
 					echo fread($src, $bufsize);
 				}
 				$file->close();
 			}
 			else
 			{
-				$src = new \Bitrix\Main\Web\HttpClient();
+				$src = new HttpClient();
 				$fp = fopen("php://output", "wb");
 				$src->setOutputStream($fp);
 				$src->get($fileData["tmp_name"]);
 			}
 		}
 		\CMain::FinalActions();
-		die();
-	}}
+	}
+}

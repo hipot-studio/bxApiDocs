@@ -16,24 +16,28 @@ final class MessageHistoryFilter
 	private int $targetMessageId;
 	private int $limit;
 	private ?int $beforeMessageId;
+	private bool $includeSystem;
 
 	/**
 	 * @param int $chatId Target chat ID.
 	 * @param int $targetMessageId Anchor message ID; its author determines the startId visibility boundary.
 	 * @param int $limit Maximum number of messages to return.
 	 * @param int|null $beforeMessageId Return messages older than this ID (cursor pagination).
+	 * @param bool $includeSystem When true, system messages are included in the result (opt-in, default false).
 	 */
 	public function __construct(
 		int $chatId,
 		int $targetMessageId,
 		int $limit = self::DEFAULT_LIMIT,
 		?int $beforeMessageId = null,
+		bool $includeSystem = false,
 	)
 	{
 		$this->chatId = $chatId;
 		$this->targetMessageId = $targetMessageId;
 		$this->limit = min(max($limit, 1), self::MAX_LIMIT);
 		$this->beforeMessageId = $beforeMessageId;
+		$this->includeSystem = $includeSystem;
 	}
 
 	public function getChatId(): int
@@ -54,5 +58,10 @@ final class MessageHistoryFilter
 	public function getTargetMessageId(): int
 	{
 		return $this->targetMessageId;
+	}
+
+	public function shouldIncludeSystem(): bool
+	{
+		return $this->includeSystem;
 	}
 }

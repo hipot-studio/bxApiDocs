@@ -54,9 +54,9 @@ class DocumentButton extends Button
 
 	protected function listExtensions(): array
 	{
-		return [
+		return array_merge(parent::listExtensions(), [
 			'documentpreview',
-		];
+		]);
 	}
 
 	protected function renderJavascript(): string

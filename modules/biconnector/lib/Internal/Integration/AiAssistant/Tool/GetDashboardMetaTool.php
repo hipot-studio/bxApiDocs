@@ -114,8 +114,8 @@ final class GetDashboardMetaTool extends BaseBiTool
 			$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById($externalId);
 			if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
 			{
-				throw self::unavailableDashboardException(
-					$dashboardDtoResp->getErrors(),
+				throw self::integratorFailureException(
+					$dashboardDtoResp,
 					['stage' => 'get_dashboard_meta.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 				);
 			}
@@ -147,8 +147,8 @@ final class GetDashboardMetaTool extends BaseBiTool
 		);
 		if ($response->hasErrors())
 		{
-			throw self::unavailableDashboardException(
-				$response->getErrors(),
+			throw self::integratorFailureException(
+				$response,
 				['stage' => 'get_dashboard_meta.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
 		}

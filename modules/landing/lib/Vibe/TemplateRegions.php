@@ -35,23 +35,6 @@ enum TemplateRegions: string
 	//Templates::Automation
 	case AutomationRu = 'bitrix.vibe_automation_ru';
 	case AutomationEn = 'alaio.vibe_automation_en';
-	case AutomationDe = 'alaio.vibe_automation_de';
-	case AutomationLa = 'alaio.vibe_automation_la';
-	case AutomationBr = 'alaio.vibe_automation_br';
-	case AutomationFr = 'alaio.vibe_automation_fr';
-	case AutomationPl = 'alaio.vibe_automation_pl';
-	case AutomationIt = 'alaio.vibe_automation_it';
-	case AutomationTr = 'alaio.vibe_automation_tr';
-	case AutomationJa = 'alaio.vibe_automation_ja';
-	case AutomationVn = 'alaio.vibe_automation_vn';
-	case AutomationAr = 'alaio.vibe_automation_ar';
-	case AutomationId = 'alaio.vibe_automation_id';
-	case AutomationKz = 'alaio.vibe_automation_kz';
-	case AutomationMs = 'alaio.vibe_automation_ms';
-	case AutomationTh = 'alaio.vibe_automation_th';
-	case AutomationChineseSc = 'alaio.vibe_automation_chinese_sc';
-	case AutomationChineseTc = 'alaio.vibe_automation_chinese_tc';
-	case AutomationChineseEn = 'alaio.vibe_automation_chinese_en';
 	//Templates::Collaboration
 	case CollaborationRu = 'bitrix.vibe_collaboration_ru';
 	case CollaborationEn = 'alaio.vibe_collaboration_en';
@@ -125,22 +108,34 @@ enum TemplateRegions: string
 	 * Attempt to resolve template based on the provided code.
 	 *
 	 * @param Templates $code
+	 * @param string|null $portalZone
+	 * @param string|null $language
 	 *
 	 * @return string|null
 	 */
-	public static function resolve(Templates $code): ?string
+	public static function resolve(
+		Templates $code,
+		?string $portalZone = null,
+		?string $language = null,
+	): ?string
 	{
-		return self::getTemplateCode($code->value)?->value;
+		return self::getTemplateCode($code->value, $portalZone, $language)?->value;
 	}
 
 	/**
 	 * Get template code for specified template section.
 	 *
 	 * @param string $code
+	 * @param string|null $portalZone
+	 * @param string|null $language
 	 *
 	 * @return self|null
 	 */
-	private static function getTemplateCode(string $code): ?self
+	private static function getTemplateCode(
+		string $code,
+		?string $portalZone = null,
+		?string $language = null,
+	): ?self
 	{
 		$templateConfig = self::getTemplateConfig($code);
 		if (!$templateConfig)
@@ -148,7 +143,7 @@ enum TemplateRegions: string
 			return null;
 		}
 
-		$portalZone = \CBitrix24::getPortalZone();
+		$portalZone = $portalZone ?? \CBitrix24::getPortalZone();
 
 		//is CIS zone
 		if (in_array($portalZone, self::CIS_ZONES, true))
@@ -158,16 +153,16 @@ enum TemplateRegions: string
 			return $cis[$portalZone] ?? $cis[self::DEFAULT_CIS_ZONE];
 		}
 
-		$lang = Application::getInstance()->getContext()->getLanguage();
+		$language = $language ?? Application::getInstance()->getContext()->getLanguage();
 
 		//is Chinese zone
 		if (in_array($portalZone, self::CHINESE_ZONES, true))
 		{
-			return $templateConfig[self::CONFIG_SECTION_CHINESE][$lang]
+			return $templateConfig[self::CONFIG_SECTION_CHINESE][$language]
 				?? $templateConfig[self::CONFIG_SECTION_CHINESE][self::DEFAULT_LANG];
 		}
 
-		return $templateConfig[self::CONFIG_SECTION_WEST][$lang]
+		return $templateConfig[self::CONFIG_SECTION_WEST][$language]
 			?? $templateConfig[self::CONFIG_SECTION_WEST][self::DEFAULT_LANG];
 	}
 
@@ -216,25 +211,9 @@ enum TemplateRegions: string
 					self::DEFAULT_CIS_ZONE => self::AutomationRu,
 				],
 				self::CONFIG_SECTION_CHINESE => [
-					'sc' => self::AutomationChineseSc,
-					'tc' => self::AutomationChineseTc,
-					self::DEFAULT_LANG => self::AutomationChineseEn,
+					self::DEFAULT_LANG => null,
 				],
 				self::CONFIG_SECTION_WEST => [
-					'de' => self::AutomationDe,
-					'la' => self::AutomationLa,
-					'br' => self::AutomationBr,
-					'fr' => self::AutomationFr,
-					'pl' => self::AutomationPl,
-					'it' => self::AutomationIt,
-					'tr' => self::AutomationTr,
-					'ja' => self::AutomationJa,
-					'vn' => self::AutomationVn,
-					'ar' => self::AutomationAr,
-					'id' => self::AutomationId,
-					'kz' => self::AutomationKz,
-					'ms' => self::AutomationMs,
-					'th' => self::AutomationTh,
 					self::DEFAULT_LANG => self::AutomationEn,
 				],
 			],

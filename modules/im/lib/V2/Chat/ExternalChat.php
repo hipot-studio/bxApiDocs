@@ -142,7 +142,8 @@ class ExternalChat extends GroupChat
 
 	public function addUsers(array $userIds, AddUsersConfig $config = new AddUsersConfig()): Chat
 	{
-		$event = new BeforeUsersAddEvent($this, $userIds, $config);
+		$initiatorId = $this->getContext()->getUserId();
+		$event = new BeforeUsersAddEvent($this, $initiatorId, $userIds, $config);
 		$event->send();
 		if ($event->isCancelled())
 		{
@@ -157,14 +158,17 @@ class ExternalChat extends GroupChat
 
 	protected function processUpdateStateOnRelationsChanged(RelationChangeSet $changes, ?AddUsersConfig $config = null): Result
 	{
-		(new Chat\ExternalChat\Event\AfterUsersAddEvent($this, $changes, $config))->send();
+		$initiatorId = $this->getContext()->getUserId();
+		(new Chat\ExternalChat\Event\AfterUsersAddEvent($this, $initiatorId, $changes, $config))->send();
 
 		return parent::processUpdateStateOnRelationsChanged($changes, $config);
 	}
 
 	public function deleteUser(int $userId, DeleteUserConfig $config = new DeleteUserConfig()): Result
 	{
-		$event = new BeforeUsersDeleteEvent($this, [$userId], $config);
+		$initiatorId = $this->getContext()->getUserId();
+
+		$event = new BeforeUsersDeleteEvent($this, $initiatorId, [$userId], $config);
 		$event->send();
 
 		if ($event->isCancelled())
@@ -184,7 +188,7 @@ class ExternalChat extends GroupChat
 
 		if ($result->isSuccess())
 		{
-			(new AfterUsersDeleteEvent($this, [$userId], $config))->send();
+			(new AfterUsersDeleteEvent($this, $initiatorId, [$userId], $config))->send();
 		}
 
 		return $result;
@@ -192,7 +196,9 @@ class ExternalChat extends GroupChat
 
 	public function hideUser(int $userId): Result
 	{
-		$event = new BeforeUsersHideEvent($this, [$userId]);
+		$initiatorId = $this->getContext()->getUserId();
+
+		$event = new BeforeUsersHideEvent($this, $initiatorId, [$userId]);
 		$event->send();
 
 		if ($event->isCancelled())
@@ -211,7 +217,7 @@ class ExternalChat extends GroupChat
 
 		if ($result->isSuccess())
 		{
-			(new AfterUsersHideEvent($this, [$userId]))->send();
+			(new AfterUsersHideEvent($this, $initiatorId, [$userId]))->send();
 		}
 
 		return $result;
@@ -247,28 +253,32 @@ class ExternalChat extends GroupChat
 
 	protected function onBeforeMessageSend(Message $message, SendingConfig $config): Result
 	{
-		(new Chat\ExternalChat\Event\BeforeMessageSendEvent($this, $message))->send();
+		$initiatorId = $this->getContext()->getUserId();
+		(new Chat\ExternalChat\Event\BeforeMessageSendEvent($this, $initiatorId, $message))->send();
 
 		return parent::onBeforeMessageSend($message, $config);
 	}
 
 	protected function onAfterMessageSend(Message $message, SendingService $sendingService): void
 	{
-		(new AfterSendMessageEvent($this, $message))->send();
+		$initiatorId = $this->getContext()->getUserId();
+		(new AfterSendMessageEvent($this, $initiatorId, $message))->send();
 
 		parent::onAfterMessageSend($message, $sendingService);
 	}
 
 	public function onAfterMessageUpdate(Message $message): Result
 	{
-		(new AfterUpdateMessageEvent($this, $message))->send();
+		$initiatorId = $this->getContext()->getUserId();
+		(new AfterUpdateMessageEvent($this, $initiatorId, $message))->send();
 
 		return parent::onAfterMessageUpdate($message);
 	}
 
 	public function onAfterMessagesDelete(MessageCollection $messages, DeletionMode $deletionMode): Result
 	{
-		(new AfterDeleteMessagesEvent($this, $messages, $deletionMode))->send();
+		$initiatorId = $this->getContext()->getUserId();
+		(new AfterDeleteMessagesEvent($this, $initiatorId, $messages, $deletionMode))->send();
 
 		return parent::onAfterMessagesDelete($messages, $deletionMode);
 	}

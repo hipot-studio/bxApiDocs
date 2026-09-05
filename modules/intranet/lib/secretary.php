@@ -7,6 +7,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail\Integration\Im\Chat;
 use Bitrix\Intranet\Service\CalendarParentChatResolver;
+use Bitrix\Main\Web\Uri;
 
 // workaround for ControlButton translations
 Loc::loadMessages(__DIR__ . '/controlbutton.php');
@@ -47,7 +48,7 @@ class Secretary
 		if ($chatId)
 		{
 			$pathToCalendar = \CCalendar::GetPathForCalendarEx($userId);
-			$pathToEvent = \CHTTP::urlAddParams($pathToCalendar, ['EVENT_ID' => $calendarData['ID']]);
+			$pathToEvent = (string)(new Uri($pathToCalendar))->addParams(['EVENT_ID' => $calendarData['ID']]);
 			$entryLinkTitle = '[url=' . $pathToEvent . ']' . $calendarData['TITLE'] . '[/url]';
 			$chatMessageFields = [
 				'FROM_USER_ID' => $userId,

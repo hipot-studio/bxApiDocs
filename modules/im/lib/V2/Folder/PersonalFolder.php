@@ -4,8 +4,10 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Folder;
 
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\ChatDialogIdResolver;
 use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
+use Bitrix\Main\DI\ServiceLocator;
 
 class PersonalFolder extends BaseFolder
 {
@@ -88,20 +90,60 @@ class PersonalFolder extends BaseFolder
 		return $scope === null || $scope === $chatParent;
 	}
 
+	/**
+	 * @param array $option supported keys:
+	 *  - 'dialogIdMap' array<int, string> chatId => dialogId — batch-resolved map injected by
+	 *    {@see FolderCollection::toRestFormat} to avoid N+1. When absent, this folder resolves
+	 *    its own chat ids via {@see ChatDialogIdResolver} (single-folder path: add/get/update/pull).
+	 */
 	public function toRestFormat(array $option = []): array
 	{
-		$chatIds = isset($option['chatIds']) && is_array($option['chatIds'])
-			? Normalizer::toUniquePositiveIntegers($option['chatIds'])
-			: $this->getChatIds();
-
 		return [
 			'id' => $this->getId(),
 			'type' => self::TYPE,
 			'title' => $this->getTitle(),
+			'sort' => $this->getSort(),
 			'displaysNestedInRoot' => $this->displaysNestedInRoot(),
 			'definition' => [
-				'chatIds' => $chatIds,
+				'chats' => $this->buildChats($option),
 			],
 		];
+	}
+
+	/**
+	 * Composition as identity pairs (chatId + dialogId), preserving {@see getChatIds} order.
+	 * Carries identity only — never the full chat entity. Empty composition yields [].
+	 *
+	 * @param array $option see {@see toRestFormat}
+	 * @return array<int, array{chatId: int, dialogId: string}>
+	 */
+	private function buildChats(array $option): array
+	{
+		$chatIds = $this->getChatIds();
+		if ($chatIds === [])
+		{
+			return [];
+		}
+
+		$dialogIdMap = isset($option['dialogIdMap']) && is_array($option['dialogIdMap'])
+			? $option['dialogIdMap']
+			: ServiceLocator::getInstance()
+				->get(ChatDialogIdResolver::class)
+				->resolve($chatIds, (int)$this->getUserId())
+		;
+
+		$chats = [];
+		foreach ($chatIds as $chatId)
+		{
+			$chatId = (int)$chatId;
+			$chats[] = [
+				'chatId' => $chatId,
+				// Map is complete (resolver returns an entry for every positive chat id); the
+				// fallback is a guard only and defers the "chatNNN" format to its single source.
+				'dialogId' => (string)($dialogIdMap[$chatId] ?? ChatDialogIdResolver::getGroupDialogId($chatId)),
+			];
+		}
+
+		return $chats;
 	}
 }

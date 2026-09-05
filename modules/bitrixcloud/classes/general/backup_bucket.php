@@ -66,7 +66,7 @@ class CBitrixCloudBackupBucket extends CCloudStorageBucket
 
 	/**
 	 *
-	 * @return array[string]string
+	 * @return string[]
 	 *
 	 */
 	public function getHeaders()
@@ -84,6 +84,7 @@ class CBitrixCloudBackupBucket extends CCloudStorageBucket
 			]
 		);
 		$headers['x-amz-security-token'] = $this->arBucket['SETTINGS']['SESSION_TOKEN'];
+
 		return $headers;
 	}
 
@@ -99,6 +100,6 @@ class CBitrixCloudBackupBucket extends CCloudStorageBucket
 
 	public function setCheckWordHeader()
 	{
-		$this->service->SetHeader('x-amz-meta-check-word' , $this->check_word);
+		$this->service->SetHeader('x-amz-meta-check-word', $this->check_word);
 	}
 }

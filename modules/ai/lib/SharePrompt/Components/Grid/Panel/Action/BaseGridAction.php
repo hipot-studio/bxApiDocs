@@ -58,15 +58,16 @@ abstract class BaseGridAction implements Action
 		{
 			return;
 		}
+		$userId = (int)$this->getCurrentUser()->getId();
 
 		if ($isSuccess)
 		{
-			$this->event->send(Status::SUCCESS);
+			$this->event->send(Status::SUCCESS, $userId);
 
 			return;
 		}
 
-		$this->event->send(Status::ERROR);
+		$this->event->send(Status::ERROR, $userId);
 	}
 
 	protected function logErrorFromCollection(ErrorCollectionException $collectionException): void

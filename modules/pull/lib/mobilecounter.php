@@ -194,25 +194,13 @@ class MobileCounter
 		return true;
 	}
 
+	/**
+	 * @deprecated use Bitrix\Pull\Push::add - push sending was moved to the Push service
+	 * @see Bitrix\Pull\Push::add
+	 */
 	public static function send($userId = null, $appId = self::MOBILE_APP)
 	{
-		if (is_null($userId) && is_object($GLOBALS['USER']))
-		{
-			$userId = $GLOBALS['USER']->getId();
-		}
-
-		$userId = intval($userId);
-		if ($userId <= 0)
-		{
-			return false;
-		}
-
-		\Bitrix\Pull\Push::add($userId, Array(
-			'module_id' => 'pull',
-			'push' => Array('badge' => 'Y')
-		));
-
-		return true;
+		return false;
 	}
 
 	public static function onSonetLogCounterClear($counterType = '', $timestamp = 0)
@@ -226,8 +214,6 @@ class MobileCounter
 		{
 			return false;
 		}
-
-		self::send($userId);
 
 		return true;
 	}

@@ -179,9 +179,11 @@ class StyleImg extends Node
 	 * Get data for this node.
 	 * @param Block $block Block instance.
 	 * @param string $selector Selector.
+	 * @param int[]|null $preloadedFiles File ids of the block, read once by the caller to avoid a query
+	 *        per selector; null means read them here on demand.
 	 * @return array
 	 */
-	public static function getNode(Block $block, $selector): array
+	public static function getNode(Block $block, $selector, ?array $preloadedFiles = null): array
 	{
 		if (!self::isCorrectNodeType($block, $selector))
 		{
@@ -191,6 +193,7 @@ class StyleImg extends Node
 		{
 			$data = [];
 			$resultList = Node\Style::getNodesBySelector($block, $selector);
+			$files = $preloadedFiles;
 
 			foreach ($resultList as $pos => $res)
 			{
@@ -216,7 +219,10 @@ class StyleImg extends Node
 					;
 					if ($nodeData)
 					{
-						$files = File::getFilesFromBlock($block->getId());
+						if ($files === null)
+						{
+							$files = File::getFilesFromBlock($block->getId());
+						}
 						if (!in_array($nodeData['id'], $files))
 						{
 							continue;

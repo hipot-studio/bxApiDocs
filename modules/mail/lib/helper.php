@@ -3,10 +3,13 @@
 namespace Bitrix\Mail;
 
 use Bitrix\Main;
+use Bitrix\Mail\Helper\Enum\CrmFlag;
+use Bitrix\Mail\Helper\Mailbox\CrmImapFilter;
 use Bitrix\Mail\Helper\Message\MessageInternalDateHandler;
 
 class Helper
 {
+	private const REPAIR_CRM_IMAP_FILTER_LOCK = 'mail_repair_crm_imap_filter';
 
 	public static function syncAllDirsInMailboxForTheFirstSyncDayAgent()
 	{
@@ -314,6 +317,62 @@ class Helper
 		}
 
 		return sprintf('Bitrix\Mail\Helper::removeUnattachedMessagesAgent(%u, %u);', $maxId, $packSize);
+	}
+
+	/**
+	 * One-shot pass that brings the actual 'crm_imap' filter of every active IMAP mailbox
+	 * in line with the stored CrmFlag::Connect intention. Removes itself when the pass is over.
+	 */
+	public static function repairCrmImapFilterAgent(int $lastMailboxId = 0, int $packSize = 100): string
+	{
+		if (!Main\Loader::includeModule('crm'))
+		{
+			return '';
+		}
+
+		$connection = Main\Application::getConnection();
+		if (!$connection->lock(self::REPAIR_CRM_IMAP_FILTER_LOCK))
+		{
+			return self::getRepairCrmImapFilterAgentCall($lastMailboxId, $packSize);
+		}
+
+		try
+		{
+			$mailboxes =
+				MailboxTable::query()
+					->setSelect(['ID', 'OPTIONS'])
+					->where('ID', '>', $lastMailboxId)
+					->where('ACTIVE', 'Y')
+					->where('SERVER_TYPE', 'imap')
+					->addOrder('ID')
+					->setLimit($packSize)
+					->fetchAll()
+			;
+
+			if (!$mailboxes)
+			{
+				return '';
+			}
+
+			foreach ($mailboxes as $mailbox)
+			{
+				$flags = (array)($mailbox['OPTIONS']['flags'] ?? []);
+				CrmImapFilter::sync((int)$mailbox['ID'], in_array(CrmFlag::Connect->value, $flags, true));
+			}
+
+			$maxId = max(array_map('intval', array_column($mailboxes, 'ID')));
+
+			return self::getRepairCrmImapFilterAgentCall($maxId, $packSize);
+		}
+		finally
+		{
+			$connection->unlock(self::REPAIR_CRM_IMAP_FILTER_LOCK);
+		}
+	}
+
+	private static function getRepairCrmImapFilterAgentCall(int $lastMailboxId, int $packSize): string
+	{
+		return sprintf('Bitrix\Mail\Helper::repairCrmImapFilterAgent(%d, %d);', $lastMailboxId, $packSize);
 	}
 
 	public static function cleanupMailboxAgent($id)

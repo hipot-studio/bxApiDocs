@@ -8,6 +8,7 @@ use Bitrix\AI\SharePrompt\Service\CategoryService;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
+use Bitrix\AI\Facade\User;
 
 class PromptCategoriesProvider extends BaseProvider
 {
@@ -23,7 +24,9 @@ class PromptCategoriesProvider extends BaseProvider
 	 */
 	public function isAvailable(): bool
     {
-        return $GLOBALS['USER']->isAuthorized();
+		$user = User::getInstance();
+
+		return $user !== null && $user->isAuthorized();
     }
 
     /**

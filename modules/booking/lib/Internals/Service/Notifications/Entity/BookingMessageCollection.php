@@ -31,21 +31,4 @@ class BookingMessageCollection extends BaseEntityCollection
 
 		return new self(...$result);
 	}
-
-	public function filterByBookingId(int $bookingId): self
-	{
-		$result = new self();
-
-		foreach ($this as $item)
-		{
-			if ($item->getBookingId() !== $bookingId)
-			{
-				continue;
-			}
-
-			$result->add($item);
-		}
-
-		return $result;
-	}
 }

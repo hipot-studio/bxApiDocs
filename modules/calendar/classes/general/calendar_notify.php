@@ -1,10 +1,11 @@
-<?
-/** var CMain $APPLICATION */
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Web\Uri;
 
 class CCalendarNotify
 {
@@ -80,16 +81,20 @@ class CCalendarNotify
 
 		if (!empty($params["pathToCalendar"]) && $eventId)
 		{
-			$params["pathToCalendar"] = CHTTP::urlDeleteParams($params["pathToCalendar"], ["action", "sessid", "bx_event_calendar_request", "EVENT_ID"]);
+			$uri = (new Uri($params["pathToCalendar"]))
+				->deleteParams(["action", "sessid", "bx_event_calendar_request", "EVENT_ID"])
+			;
+			$params["pathToCalendar"] = (string)$uri;
 
 			if (($params['isSharing'] ?? false) && $mode === 'cancel_sharing')
 			{
-				$params["pathToEvent"] = CHTTP::urlAddParams($params["pathToCalendar"], ['EVENT_ID' => $eventId, 'IS_SHARING' => 1]);
+				$uri->addParams(['EVENT_ID' => $eventId, 'IS_SHARING' => 1]);
 			}
 			else
 			{
-				$params["pathToEvent"] = CHTTP::urlAddParams($params["pathToCalendar"], ['EVENT_ID' => $eventId]);
+				$uri->addParams(['EVENT_ID' => $eventId]);
 			}
+			$params["pathToEvent"] = (string)$uri;
 		}
 
 		$notifyFields = [
@@ -899,7 +904,7 @@ class CCalendarNotify
 					}
 
 					$url = CCalendar::GetPathForCalendarEx($attendeeId);
-					$url = CHTTP::urlAddParams($url, ['EVENT_ID' => $eventId, 'EVENT_DATE' => $instanceDate]);
+					$url = (string)(new Uri($url))->addParams(['EVENT_ID' => $eventId, 'EVENT_DATE' => $instanceDate]);
 
 					if ($attendeeId !== $userId && $attendee["STATUS"] !== 'N')
 					{

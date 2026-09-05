@@ -34,7 +34,7 @@ class Item implements \IBPWorkflowDocument
 	{
 		global $USER_FIELD_MANAGER;
 
-		$result = \CBPHelper::GetDocumentFieldTypes();
+		$result = \CBPHelper::getDocumentFieldTypes();
 
 		$userTypes = $USER_FIELD_MANAGER->GetUserType();
 		foreach ($userTypes as $userType)
@@ -123,7 +123,7 @@ class Item implements \IBPWorkflowDocument
 	public static function getDocumentAdminPage($documentId): string
 	{
 		[$typeId, $itemId] = explode(':', $documentId);
-		return "/rpa/item/{$typeId}/{$itemId}/";
+		return '/rpa/item/' . $typeId . '/' . $itemId . '/';
 	}
 
 	public static function getDocumentFields($documentType): array
@@ -372,7 +372,7 @@ class Item implements \IBPWorkflowDocument
 	public static function getDocumentName($documentId): string
 	{
 		[$typeId, $itemId] = explode(':', $documentId);
-		return "#{$itemId}";
+		return '#' . $itemId;
 	}
 
 	public static function getDocumentTypeId($documentId): int

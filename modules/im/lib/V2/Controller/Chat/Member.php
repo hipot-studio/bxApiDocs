@@ -33,10 +33,14 @@ class Member extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.Member.tail
 	 */
-	public function tailAction(Chat $chat, int $limit = 50, ?RelationCursor $relationCursor = null): ?array
+	public function tailAction(Chat $chat, int $limit = 50, ?RelationCursor $relationCursor = null, bool $withGroupSort = false): ?array
 	{
-		$members = $chat->getRelationProvider()->getMembers($limit, $relationCursor);
-		$nextCursor = RelationCursor::getNext($members, $limit);
+		$provider = $chat->getRelationProvider();
+		$members = $provider->getMembers($limit, $relationCursor, $withGroupSort);
+		$nextCursor = $withGroupSort
+			? $provider->getNextGroupedCursor($members, $limit)
+			: RelationCursor::getNext($members, $limit)
+		;
 		$rest = $this->toRestFormat($members);
 		$rest['nextCursor'] = $nextCursor?->toRestFormat();
 

@@ -1,8 +1,16 @@
 <?php
 
+use Bitrix\Main\Application;
+use Bitrix\Main\UserTable;
+use Bitrix\Main\Result;
 use Bitrix\Main\Security\Sign;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UserTable;
+use Bitrix\Main\Web\HttpClient;
+use Bitrix\Main\Web\Uri;
+use Bitrix\Pull\Config;
+use Bitrix\Pull\JsonRpcTransport;
+use Bitrix\Pull\ProtobufTransport;
+use Bitrix\Pull\Model\ChannelTable;
 
 class CPullChannel
 {
@@ -57,7 +65,7 @@ class CPullChannel
 		$channelType = (string)$channelType ?: self::TYPE_PRIVATE;
 		$lockId = self::getLockKey($userId, $channelType);
 
-		$cached = self::$staticCache[$lockId];
+		$cached = self::$staticCache[$lockId] ?? null;
 		if ($cached && !self::isExpired($cached['CHANNEL_DT']))
 		{
 			return $cached;
@@ -78,7 +86,7 @@ class CPullChannel
 			return $result;
 		}
 
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		if (!$connection->lock($lockId, 2))
 		{
 			trigger_error("Could not get lock for creating a new channel", E_USER_WARNING);
@@ -187,7 +195,7 @@ class CPullChannel
 		// per-user Get(), which knows how to issue/renew shared channels.
 		$realUsers = array_values(array_filter($missing, static fn (int $uid): bool => $uid > 0));
 
-		$rows = $realUsers === [] ? [] : \Bitrix\Pull\Model\ChannelTable::getList([
+		$rows = $realUsers === [] ? [] : ChannelTable::getList([
 			'select' => [
 				'USER_ID',
 				'CHANNEL_ID',
@@ -300,7 +308,7 @@ class CPullChannel
 
 	public static function SignChannel($channelId)
 	{
-		$signatureKey = \Bitrix\Pull\Config::getSignatureKey();
+		$signatureKey = Config::getSignatureKey();
 		if (!is_string($channelId))
 		{
 			trigger_error("Channel ID must be the string", E_USER_WARNING);
@@ -317,7 +325,7 @@ class CPullChannel
 
 	public static function SignPublicChannel($channelId)
 	{
-		$signatureKey = \Bitrix\Pull\Config::getSignatureKey();
+		$signatureKey = Config::getSignatureKey();
 		if ($signatureKey === "" || !is_string($channelId))
 		{
 			return "";
@@ -335,7 +343,7 @@ class CPullChannel
 	{
 		if(!$signatureKey)
 		{
-			$signatureKey = \Bitrix\Pull\Config::getSignatureKey();
+			$signatureKey = Config::getSignatureKey();
 		}
 		$signatureAlgo = \CPullOptions::GetSignatureAlgorithm();
 		$hmac = new Sign\HmacAlgorithm();
@@ -347,9 +355,9 @@ class CPullChannel
 	}
 
 	// create a channel for the user
-	public static function Add(int $userId, string $channelId, string $publicChannelId, string $channelType = self::TYPE_PRIVATE): \Bitrix\Main\Result
+	public static function Add(int $userId, string $channelId, string $publicChannelId, string $channelType = self::TYPE_PRIVATE): Result
 	{
-		$result = new \Bitrix\Main\Result();
+		$result = new Result();
 
 		$channelFields = [
 			'USER_ID' => $userId,
@@ -369,9 +377,9 @@ class CPullChannel
 		return $result;
 	}
 
-	private static function Update(int $userId, string $prevChannelId, string $channelId, string $publicChannelId, string $channelType = self::TYPE_PRIVATE) :\Bitrix\Main\Result
+	private static function Update(int $userId, string $prevChannelId, string $channelId, string $publicChannelId, string $channelType = self::TYPE_PRIVATE) : Result
 	{
-		$result = new \Bitrix\Main\Result();
+		$result = new Result();
 		$updateResult = \Bitrix\Pull\ChannelTable::updateByFilter(
 			[
 				'=USER_ID' => $userId,
@@ -401,7 +409,7 @@ class CPullChannel
 	// before removing need to send a message to change channel
 	public static function Delete($channelId)
 	{
-		global $DB, $CACHE_MANAGER;
+		global $DB;
 
 		$strSql = "SELECT ID, USER_ID, CHANNEL_TYPE FROM b_pull_channel WHERE CHANNEL_ID = '".$DB->ForSQL($channelId)."'";
 		$res = $DB->Query($strSql);
@@ -446,7 +454,7 @@ class CPullChannel
 
 	public static function DeleteByUser($userId, $channelId = null, $channelType = self::TYPE_PRIVATE)
 	{
-		global $DB, $CACHE_MANAGER;
+		global $DB;
 
 		$userId = intval($userId);
 		if ($userId == 0 && $channelType == self::TYPE_PRIVATE)
@@ -527,7 +535,7 @@ class CPullChannel
 			return;
 		}
 
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$channelTypeSql = $channelType === ''
 			? "(CHANNEL_TYPE = '' OR CHANNEL_TYPE IS NULL)"
 			: "CHANNEL_TYPE = '" . $connection->getSqlHelper()->forSql($channelType) . "'";
@@ -651,9 +659,7 @@ class CPullChannel
 			}
 		}
 
-		$postdata = CHTTP::PrepareData($message);
-
-		$httpClient = new \Bitrix\Main\Web\HttpClient([
+		$httpClient = new HttpClient([
 			"socketTimeout" => (int)$options["timeout"],
 			"streamTimeout" => (int)$options["timeout"],
 			"waitResponse" => !$options["dont_wait_answer"]
@@ -662,16 +668,16 @@ class CPullChannel
 		{
 			$httpClient->setHeader("Message-Expiry", (int)$options["expiry"]);
 		}
-		$url = \Bitrix\Pull\Config::getPublishUrl($channelId);
+		$url = Config::getPublishUrl($channelId);
 		if(CPullOptions::IsServerShared())
 		{
-			$signature = static::GetSignature($postdata);
-			$url = \CHTTP::urlAddParams($url, ["signature" => $signature]);
+			$signature = static::GetSignature($message);
+			$url = (string)(new Uri($url))->addParams(["signature" => $signature]);
 		}
 
 		$httpClient->disableSslVerification();//todo: remove
 
-		$sendResult = $httpClient->query($options["method"], $url, $postdata);
+		$sendResult = $httpClient->query($options["method"], $url, $message);
 
 		if ($sendResult)
 		{
@@ -723,7 +729,7 @@ class CPullChannel
 	{
 		global $DB;
 
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$sqlHelper = $connection->getSqlHelper();
 		$sqlDateFunction = $sqlHelper->addSecondsToDateTime(-13 * 3600);
 
@@ -737,7 +743,7 @@ class CPullChannel
 		{
 			$lockId = self::getLockKey((int)$arRes['USER_ID'], $arRes['CHANNEL_TYPE']);
 
-			if ($connection->lock($lockId, 0))
+			if ($connection->lock($lockId))
 			{
 				self::DeleteByUser($arRes['USER_ID'], $arRes['CHANNEL_ID'], $arRes['CHANNEL_TYPE']);
 				$connection->unlock($lockId);
@@ -804,10 +810,10 @@ class CPullChannel
 			$arOnline[$agentUserId] = $agentUserId;
 		}
 
-		if (\Bitrix\Pull\Config::isJsonRpcUsed())
+		if (Config::isJsonRpcUsed())
 		{
 			$userList = array_map("intval", array_values($channels));
-			$result = (new \Bitrix\Pull\JsonRpcTransport())->getUsersLastSeen($userList);
+			$result = (new JsonRpcTransport())->getUsersLastSeen($userList);
 			if (!$result->isSuccess())
 			{
 				return [];
@@ -822,9 +828,9 @@ class CPullChannel
 		}
 		else
 		{
-			if (\Bitrix\Pull\Config::isProtobufUsed())
+			if (Config::isProtobufUsed())
 			{
-				$channelsStatus = \Bitrix\Pull\ProtobufTransport::getOnlineChannels(array_keys($channels));
+				$channelsStatus = ProtobufTransport::getOnlineChannels(array_keys($channels));
 			}
 			else
 			{
@@ -854,7 +860,7 @@ class CPullChannel
 	 * Deprecated method, use \Bitrix\Pull\Config::get() insted.
 	 *
 	 * @deprecated
-	 * @see \Bitrix\Pull\Config::get()
+	 * @see Config::get
 	 */
 	public static function GetConfig($userId, $cache = true, $reopen = false, $mobile = false)
 	{

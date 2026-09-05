@@ -753,6 +753,93 @@ class UrlManager implements IErrorable
 	}
 
 	/**
+	 * Gets url to show rendered markdown of the file.
+	 * Direct read access is assumed (the regular grid). When the file is opened by a unified link,
+	 * the caller appends the `_uls` signature itself, the same way it does for the download url.
+	 * @param File $file Target file.
+	 * @return string
+	 */
+	public function getUrlForShowMarkdown(File $file): string
+	{
+		return (string)\Bitrix\Main\Engine\UrlManager::getInstance()->create(
+			'disk.file.showMarkdown',
+			['fileId' => $file->getId()]
+		);
+	}
+
+	/**
+	 * Gets url to show rendered markdown of the concrete version.
+	 * Access is enforced by the version endpoint, so no signature is needed.
+	 * @param int $versionId Target version id.
+	 * @return string
+	 */
+	public function getUrlForShowMarkdownVersion(int $versionId): string
+	{
+		return (string)\Bitrix\Main\Engine\UrlManager::getInstance()->create(
+			'disk.version.showMarkdown',
+			['versionId' => $versionId]
+		);
+	}
+
+	/**
+	 * Gets url to show rendered markdown of the attached object (revision is intrinsic to it).
+	 * Access is granted by the attachment, so no signature is needed.
+	 * @param int $attachedObjectId Target attached object id.
+	 * @return string
+	 */
+	public function getUrlForShowMarkdownAttached(int $attachedObjectId): string
+	{
+		return (string)\Bitrix\Main\Engine\UrlManager::getInstance()->create(
+			'disk.attachedObject.showMarkdown',
+			['attachedObjectId' => $attachedObjectId]
+		);
+	}
+
+	/**
+	 * Gets url to show the html file as an isolated document (the source of the viewer page iframe).
+	 * A reader who holds unified link access only has no direct rights, so the caller appends the
+	 * `_uls` signature itself, as for the download url.
+	 * @param int $fileId Target file id.
+	 * @return string
+	 */
+	public function getUrlForShowHtml(int $fileId): string
+	{
+		return (string)\Bitrix\Main\Engine\UrlManager::getInstance()->create(
+			'disk.file.showHtml',
+			['fileId' => $fileId]
+		);
+	}
+
+	/**
+	 * Gets url to show the html of the concrete version as an isolated document.
+	 * A reader who holds unified link access only has no direct rights on the file the version belongs
+	 * to, so the caller appends the `_uls` signature of that pair itself, as for the download url.
+	 * @param int $versionId Target version id.
+	 * @return string
+	 */
+	public function getUrlForShowHtmlVersion(int $versionId): string
+	{
+		return (string)\Bitrix\Main\Engine\UrlManager::getInstance()->create(
+			'disk.version.showHtml',
+			['versionId' => $versionId]
+		);
+	}
+
+	/**
+	 * Gets url to show the html of the attached object (revision is intrinsic to it).
+	 * Access is granted by the attachment, so no signature is needed.
+	 * @param int $attachedObjectId Target attached object id.
+	 * @return string
+	 */
+	public function getUrlForShowHtmlAttached(int $attachedObjectId): string
+	{
+		return (string)\Bitrix\Main\Engine\UrlManager::getInstance()->create(
+			'disk.attachedObject.showHtml',
+			['attachedObjectId' => $attachedObjectId]
+		);
+	}
+
+	/**
 	 * Get url to show preview of the file.
 	 * @param File $file
 	 * @param array $params
@@ -1101,7 +1188,7 @@ class UrlManager implements IErrorable
 		$attachedId = $options['attachedId'] ?? null;
 		$versionId = $options['versionId'] ?? null;
 		$noRedirect = $options['noRedirect'] ?? false;
-		$additionalQueryParams = is_array($options['additionalQueryParams']) ? $options['additionalQueryParams'] : [];
+		$additionalQueryParams = is_array($options['additionalQueryParams'] ?? null) ? $options['additionalQueryParams'] : [];
 
 		return $this->unifiedUrlGenerator
 			->forEditing($editMode)

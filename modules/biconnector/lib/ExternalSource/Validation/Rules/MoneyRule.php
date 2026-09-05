@@ -22,12 +22,14 @@ final class MoneyRule extends Rule
 
 		$stringValue = (string)$number;
 
-		if ($stringValue === '')
+		if (trim((string)$value) === '')
 		{
 			return new RuleValidationResult();
 		}
 
-		if (mb_substr_count($stringValue, '.') > 1)
+		// What is left after dropping currency signs and separators has to be a number:
+		// otherwise the value would be imported as 0 without a word.
+		if (!is_numeric($stringValue))
 		{
 			return new RuleValidationResult(false, str_replace('#VALUE#', $this->getValueForError($value), $this->invalidErrorTemplate));
 		}

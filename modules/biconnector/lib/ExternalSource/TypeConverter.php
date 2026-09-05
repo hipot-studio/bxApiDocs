@@ -197,7 +197,81 @@ final class TypeConverter
 		return self::convertToDouble($value, $precision, $delimiter);
 	}
 
+	/**
+	 * Tells whether the value is an integer and not just castable to one.
+	 * Conversion itself is lossy: any text becomes 0, so callers that must not lose the
+	 * original value (data preview) ask first.
+	 *
+	 * @param mixed $value
+	 * @return bool
+	 */
+	public static function isIntValue(mixed $value): bool
+	{
+		if (is_int($value))
+		{
+			return true;
+		}
+
+		return is_string($value) && preg_match('/^\s*-?\d+\s*$/', $value) === 1;
+	}
+
+	/**
+	 * Tells whether the value is a number written with the given decimal delimiter.
+	 *
+	 * @param mixed $value
+	 * @param string $delimiter
+	 * @return bool
+	 */
+	public static function isDoubleValue(mixed $value, string $delimiter = '.'): bool
+	{
+		if (is_int($value) || is_float($value))
+		{
+			return true;
+		}
+
+		if (!is_string($value))
+		{
+			return false;
+		}
+
+		// A foreign decimal separator is a mismatch, same as in DoubleIsNumericRule.
+		if ($delimiter !== '.' && str_contains($value, '.'))
+		{
+			return false;
+		}
+
+		return is_numeric(trim(self::prepareNumberForDouble($value, $delimiter)));
+	}
+
+	/**
+	 * Tells whether the value holds a money amount. Unlike a plain number it may carry
+	 * currency signs and separators, but digits have to be there.
+	 *
+	 * @param mixed $value
+	 * @param string $delimiter
+	 * @return bool
+	 */
+	public static function isMoneyValue(mixed $value, string $delimiter = '.'): bool
+	{
+		if (is_int($value) || is_float($value))
+		{
+			return true;
+		}
+
+		if (!is_string($value))
+		{
+			return false;
+		}
+
+		return is_numeric(self::extractMoneyNumber($value, $delimiter));
+	}
+
 	private static function prepareNumberForMoney(string $value, string $delimiter = '.'): float
+	{
+		return (double)self::extractMoneyNumber($value, $delimiter);
+	}
+
+	private static function extractMoneyNumber(string $value, string $delimiter = '.'): string
 	{
 		$decodedValue = html_entity_decode($value);
 
@@ -207,7 +281,7 @@ final class TypeConverter
 			$number = str_replace($delimiter, '.', $number);
 		}
 
-		return (double)$number;
+		return (string)$number;
 	}
 
 	private static function prepareNumberForDouble(string $value, string $delimiter = '.'): string

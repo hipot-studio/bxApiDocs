@@ -473,6 +473,57 @@ class Form
 		return $fields;
 	}
 
+	public function getFieldInfoForSystemUser()
+	{
+		global $USER;
+
+		$isAdminRights = (
+			Loader::includeModule("bitrix24") && \CBitrix24::IsPortalAdmin($USER->GetID())
+			|| $USER->IsAdmin()
+		)
+			? true : false;
+
+		$departmentList = [];
+
+		$departmentRepository = new HrDepartmentRepository();
+		$departmentCollection = $departmentRepository->getAllTree();
+
+		foreach ($departmentCollection as $department)
+		{
+			$departmentList[] = [
+				'NAME' => $department->getName(),
+				'VALUE' => $department->getId(),
+			];
+		}
+
+		return [
+			[
+				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_NAME"),
+				"name" => "NAME",
+				"type" => "text",
+				"editable" => true,
+				"showAlways" => true,
+			],
+			[
+				"title" => Loc::getMessage("INTRANET_USER_PROFILE_FIELD_UF_DEPARTMENT_MSGVER_1"),
+				"name" => "UF_DEPARTMENT",
+				"type" => "multilist",
+				'data' => [
+					'items' => $departmentList,
+					'class' => "ui-ctl-lg",
+				],
+				"editable" => $isAdminRights,
+			],
+			[
+				'title' => Loc::getMessage('INTRANET_USER_PROFILE_FIELD_DEPARTMENT_HEAD'),
+				'name' => 'DEPARTMENT_HEAD',
+				'type' => 'text',
+				'editable' => false,
+				'multiple' => true,
+			],
+		];
+	}
+
 	public function getReservedUfFields()
 	{
 		return [

@@ -14,6 +14,7 @@ use Bitrix\UI\FileUploader\Chunk;
 use Bitrix\UI\FileUploader\Configuration;
 use Bitrix\UI\FileUploader\ChunkFactory;
 use Bitrix\UI\FileUploader\ControllerResolver;
+use Bitrix\UI\FileUploader\FileData;
 use Bitrix\UI\FileUploader\Uploader;
 use Bitrix\UI\FileUploader\UploaderController;
 use Bitrix\UI\FileUploader\UploaderError;
@@ -135,6 +136,36 @@ class FileUploader extends Controller
 					}
 				}
 			),
+			new Parameter(
+				FileData::class,
+				function ($className) use ($request) {
+					$name = trim((string)$request->get('name'));
+					$type = (string)$request->get('type');
+					$size = (int)$request->get('size');
+
+					if ($name === '' || $size <= 0)
+					{
+						$this->addError(new UploaderError(UploaderError::INVALID_CONTENT_NAME));
+
+						return null;
+					}
+
+					$fileData = new FileData($name, $type, $size);
+
+					$width = (int)$request->get('width');
+					if ($width > 0)
+					{
+						$fileData->setWidth($width);
+					}
+					$height = (int)$request->get('height');
+					if ($height > 0)
+					{
+						$fileData->setHeight($height);
+					}
+
+					return $fileData;
+				}
+			),
 		];
 	}
 
@@ -156,10 +187,106 @@ class FileUploader extends Controller
 		return parent::processBeforeAction($action);
 	}
 
-	public function uploadAction(UploaderController $controller, Chunk $chunk, string $token = null): array
+	public function uploadAction(UploaderController $controller, Chunk $chunk, ?string $token = null, ?string $strategy = null): array
 	{
 		$uploader = new Uploader($controller);
-		$uploadResult = $uploader->upload($chunk, $token);
+		$uploadResult = $uploader->upload($chunk, $token, $strategy);
+		if ($uploadResult->isSuccess())
+		{
+			return $uploadResult->jsonSerialize();
+		}
+		else
+		{
+			$this->addErrors($uploadResult->getErrors());
+		}
+
+		return [];
+	}
+
+	public function uploadPartAction(UploaderController $controller, Chunk $chunk, string $token, int $partNo): array
+	{
+		$uploader = new Uploader($controller);
+		$uploadResult = $uploader->uploadPart($chunk, $token, $partNo);
+		if ($uploadResult->isSuccess())
+		{
+			return $uploadResult->jsonSerialize();
+		}
+		else
+		{
+			$this->addErrors($uploadResult->getErrors());
+		}
+
+		return [];
+	}
+
+	public function initPresignedAction(UploaderController $controller, FileData $fileData, ?int $partSize = null): array
+	{
+		$uploader = new Uploader($controller);
+		$uploadResult = $uploader->initPresigned($fileData, $partSize);
+		if ($uploadResult->isSuccess())
+		{
+			return $uploadResult->jsonSerialize();
+		}
+		else
+		{
+			$this->addErrors($uploadResult->getErrors());
+		}
+
+		return [];
+	}
+
+	public function refreshPresignedAction(UploaderController $controller, string $token, array $partNumbers): array
+	{
+		$uploader = new Uploader($controller);
+		$result = $uploader->refreshPresignedUrls($token, $partNumbers);
+		if ($result->isSuccess())
+		{
+			return $result->getData();
+		}
+		else
+		{
+			$this->addErrors($result->getErrors());
+		}
+
+		return [];
+	}
+
+	public function registerPartAction(UploaderController $controller, string $token, int $partNo, string $etag): array
+	{
+		$uploader = new Uploader($controller);
+		$result = $uploader->registerPresignedPart($token, $partNo, $etag);
+		if ($result->isSuccess())
+		{
+			return $result->getData();
+		}
+		else
+		{
+			$this->addErrors($result->getErrors());
+		}
+
+		return [];
+	}
+
+	public function registerPartsAction(UploaderController $controller, string $token, array $parts): array
+	{
+		$uploader = new Uploader($controller);
+		$result = $uploader->registerPresignedParts($token, $parts);
+		if ($result->isSuccess())
+		{
+			return $result->getData();
+		}
+		else
+		{
+			$this->addErrors($result->getErrors());
+		}
+
+		return [];
+	}
+
+	public function completePresignedAction(UploaderController $controller, string $token, array $parts = []): array
+	{
+		$uploader = new Uploader($controller);
+		$uploadResult = $uploader->completePresigned($token, $parts);
 		if ($uploadResult->isSuccess())
 		{
 			return $uploadResult->jsonSerialize();

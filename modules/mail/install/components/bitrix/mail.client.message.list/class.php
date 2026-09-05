@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Mail;
+use Bitrix\Mail\Helper\Enum\Mailbox\FolderSortMode;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\Mailbox\Options\EntityDataHelper;
 use Bitrix\Mail\Helper\MailboxAccess;
@@ -51,6 +52,7 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 	protected $mailboxHelper;
 	/** @var Main\ErrorCollection */
 	private $errorCollection;
+	private ?bool $listImprovementsEnabled = null;
 
 	private bool $isAllMailMode = false;
 
@@ -91,6 +93,52 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 		}
 
 		return (new Mail\Helper\Mailbox\MailboxSyncManager($userId))->getLastMailboxSyncIsSuccessStatus($mailboxId);
+	}
+
+	public function getAttachmentsArchiveUrlAction(int $messageId): ?array
+	{
+		if (!$this->isListImprovementsEnabled())
+		{
+			$this->errorCollection->add([new Main\Error('Feature is not available.', 'MAIL_LIST_IMPROVEMENTS_DISABLED')]);
+
+			return null;
+		}
+
+		$userId = (int)Main\Engine\CurrentUser::get()->getId();
+
+		$result = (new Mail\Internal\Service\Attachment\ArchiveService())->getMessageArchiveUrl($messageId, $userId);
+
+		if (!$result->isSuccess())
+		{
+			$this->errorCollection->add($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getData();
+	}
+
+	public function getAttachmentsAction(int $messageId): ?array
+	{
+		if (!$this->isListImprovementsEnabled())
+		{
+			$this->errorCollection->add([new Main\Error('Feature is not available.', 'MAIL_LIST_IMPROVEMENTS_DISABLED')]);
+
+			return null;
+		}
+
+		$userId = (int)Main\Engine\CurrentUser::get()->getId();
+
+		$result = (new Mail\Internal\Service\Attachment\ListingService())->getMessageAttachments($messageId, $userId);
+
+		if (!$result->isSuccess())
+		{
+			$this->errorCollection->add($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getData();
 	}
 
 	private function getDateLastOpening($mailboxID)
@@ -324,9 +372,20 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			$this->applyAllMailFilter($filterData, $mailboxIdsForFilter);
 		}
 
+		if ($this->isListImprovementsEnabled() && !empty($filterData['IS_FAVORITE']))
+		{
+			$filterData['EXCLUDE_MD5_DIRS'] = MailboxDirectoryHelper::getSpamAndTrashDirsMd5ForMailboxes($mailboxIdsForFilter);
+		}
+
 		if ($canFetchMessages)
 		{
-			$filter = new MessageFilter($mailboxIdsForFilter, $filterData, true);
+			$filter = new MessageFilter(
+				$mailboxIdsForFilter,
+				$filterData,
+				true,
+				$this->isListImprovementsEnabled() ? $userId : null,
+				withAttachmentsStack: $this->isListImprovementsEnabled(),
+			);
 			$items = MessageLoader::getMessageList($filter, $pageNavigation);
 			$this->arResult['ROWS'] = $this->getRows($items, $pageNavigation);
 		}
@@ -366,11 +425,35 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			[
 				EntityDataHelper::FOLDER_SORT_MODE,
 				EntityDataHelper::FOLDER_EXPAND_STATE,
+				EntityDataHelper::FOLDER_CUSTOM_ORDER,
 			],
 		);
 
-		$this->arResult['folderSortMode'] = $folderOptions[EntityDataHelper::FOLDER_SORT_MODE] ?? 'default';
+		$isFolderManualSortingAvailable = Mail\Helper\Config\Feature::isFolderManualSortingAvailable();
+		$this->arResult['FOLDER_MANUAL_SORTING_AVAILABLE'] = $isFolderManualSortingAvailable;
+
+		$folderSortMode = $folderOptions[EntityDataHelper::FOLDER_SORT_MODE] ?? 'default';
+		$this->arResult['folderSortMode']
+			= !$isFolderManualSortingAvailable && $folderSortMode === FolderSortMode::Manual->value
+				? FolderSortMode::Default->value
+				: $folderSortMode;
 		$this->arResult['folderExpandState'] = $folderOptions[EntityDataHelper::FOLDER_EXPAND_STATE] ?? '{}';
+		$this->arResult['folderCustomOrder'] = $isFolderManualSortingAvailable
+			? ($folderOptions[EntityDataHelper::FOLDER_CUSTOM_ORDER] ?? '{}')
+			: '{}';
+		$this->arResult['folderDefaultOrder'] = array_values(array_map(
+			static fn ($dir): int => (int)$dir->getId(),
+			array_filter(
+				$this->mailboxHelper->getDirsHelper()->getSyncDirsOrdered(),
+				static fn ($dir): bool => !$dir->isVirtualFolder(),
+			),
+		));
+
+		$this->arResult['IS_MAIL_LIST_IMPROVEMENTS_AVAILABLE'] = Mail\Helper\Config\Feature::isMailListImprovementsAvailable();
+		$this->arResult['IS_FAVORITE_COLUMN_AVAILABLE'] = $this->arResult['IS_MAIL_LIST_IMPROVEMENTS_AVAILABLE']
+			&& $this->isFavoriteAvailableInDir(
+				$this->mailboxHelper->getDirsHelper()->getDirByPath($this->arResult['currentDir']),
+			);
 
 		$this->arResult['defaultDir'] = $this->mailboxHelper->getDirsHelper()->getDefaultDirPath(true);
 		$this->arResult['spamDir'] = $this->mailboxHelper->getDirsHelper()->getSpamPath(true);
@@ -432,7 +515,8 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 
 		$this->arResult['NEED_SHOW_MAILBOX_GRID_HINT'] = $this->needShowMailboxGridHint();
 		$this->arParams['MAILBOX_GRID_GUIDE_NAME'] = Mail\Helper\Config\Guide::getMailboxGridGuideOptionName();
-		$this->arResult['NEED_SHOW_FOLDER_SORT_GUIDE'] = !Mail\Helper\Config\Guide::wasFolderSortGuideShown();
+		$this->arResult['NEED_SHOW_FOLDER_SORT_GUIDE'] = $isFolderManualSortingAvailable
+			&& !Mail\Helper\Config\Guide::wasFolderSortGuideShown();
 
 		$this->arResult['NEED_SHOW_DISCUSS_IN_CHAT_GUIDE'] = $this->needShowDiscussInChatGuide();
 		$this->arParams['DISCUSS_IN_CHAT_GUIDE_NAME'] = Mail\Helper\Config\Guide::getDiscussInChatGuideOptionName();
@@ -614,16 +698,23 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 					. htmlspecialcharsbx($displayText, ENT_QUOTES) . "</a>";
 			}
 
-			$columns['FROM'] = $this->getSenderColumnCell($avatarParams);
+			$columns['FROM'] = $this->buildUnseenIndicator() . $this->getSenderColumnCell($avatarParams);
 			$columns['FROM'] .= implode(Loc::getMessage('MAIL_MESSAGE_SEPARATOR_OF_NAMES_AND_EMAILS_IN_LISTS'), $fromValues);
 
 			$columns['SUBJECT'] = "<a class='mail-msg-list-subject' onclick='" . $onclickEventOpenMessageMethod . $onclickOpenMessageViewMethod . "' title='" . $columns['SUBJECT'] . "'>" . $columns['SUBJECT'] . "</a>";
 
-			if ($item['OPTIONS']['attachments'] > 0 || $item['ATTACHMENTS'] > 0)
+			$attachmentsBlock = '';
+			if ($this->isListImprovementsEnabled())
 			{
-				$columns['SUBJECT'] .= '<span class="mail-msg-list-attach-icon" title="'
-					. Loc::getMessage('MAIL_MESSAGE_LIST_ATTACH_ICON_HINT')
-				. '"></span>';
+				$attachmentsBlock = $this->buildAttachmentsBlock($item);
+				if ($attachmentsBlock === '' && $this->hasAttachments($item))
+				{
+					$attachmentsBlock = $this->buildAttachmentIcon();
+				}
+			}
+			elseif ($this->hasAttachments($item))
+			{
+				$columns['SUBJECT'] .= $this->buildAttachmentIcon();
 			}
 
 			$dir = $this->mailboxHelper->getDirsHelper()->getDirByHash($item['DIR_MD5']);
@@ -634,6 +725,12 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			$columns['FROM'] = "<span data-message-id='" . $item['MESSAGE_ID'] . "' class='" . $jsFromClassNames . "mail-name-block mail-msg-list-cell-" . $item['MESSAGE_ID'] . " mail-msg-list-cell-nowrap mail-msg-list-cell-flex " . (!in_array($item['IS_SEEN'], ['Y', 'S']) ? 'mail-msg-list-cell-unseen' : '') . "'>" . $columns['FROM'] . "</span>";
 
 			$columns['SUBJECT'] = "<span class='mail-title-block mail-msg-list-cell-" . $item['ID'] . " " . (!in_array($item['IS_SEEN'], ['Y', 'S']) ? 'mail-msg-list-cell-unseen' : '') . " " . ($item['IS_OLD'] === 'Y' ? 'mail-msg-list-cell-old' : '') . " mail-msg-list-cell-flex'>" . $columns['SUBJECT'] . "</span>";
+
+			if ($this->isListImprovementsEnabled())
+			{
+				$columns['FAVORITE'] = $this->buildFavoriteCell($item, $dir);
+				$columns['ATTACH'] = $attachmentsBlock;
+			}
 
 			$taskUri = new Uri(
 				\CComponentEngine::makePathFromTemplate(
@@ -717,6 +814,141 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 		}
 
 		return $rows;
+	}
+
+	private function isListImprovementsEnabled(): bool
+	{
+		if ($this->listImprovementsEnabled === null)
+		{
+			$this->listImprovementsEnabled = Mail\Helper\Config\Feature::isMailListImprovementsAvailable();
+		}
+
+		return $this->listImprovementsEnabled;
+	}
+
+	private function buildUnseenIndicator(): string
+	{
+		if (!$this->isListImprovementsEnabled())
+		{
+			return '';
+		}
+
+		$dot = '<span class="mail-msg-list-unseen-dot" data-testid="mail-list-unseen-dot"><span class="mail-msg-list-unseen-dot-label">'
+			. Loc::getMessage('MAIL_MESSAGE_LIST_UNSEEN_DOT_LABEL')
+			. '</span></span>';
+
+		return '<span class="mail-msg-list-unseen-gutter">' . $dot . '</span>';
+	}
+
+	private function isFavoriteAvailableInDir(?Mail\Internals\Entity\MailboxDirectory $dir): bool
+	{
+		return $dir === null || (!$dir->isSpam() && !$dir->isTrash());
+	}
+
+	private function buildFavoriteCell(array $item, ?Mail\Internals\Entity\MailboxDirectory $dir): string
+	{
+		if (!$this->isFavoriteAvailableInDir($dir))
+		{
+			return '';
+		}
+
+		$isFavorite = !empty($item['__is_favorite']);
+		$activeClass = $isFavorite ? ' --active' : '';
+		$pressed = $isFavorite ? 'true' : 'false';
+
+		return '<button type="button" class="mail-msg-list-favorite' . $activeClass . '" data-role="mail-list-favorite" data-testid="mail-list-favorite-btn" data-favorite-id="'
+			. $item['ID'] . '" aria-pressed="' . $pressed . '" aria-label="'
+			. htmlspecialcharsbx(Loc::getMessage('MAIL_MESSAGE_LIST_FAVORITE_LABEL'), ENT_QUOTES)
+			. '"><span class="mail-msg-list-favorite__icon"></span></button>';
+	}
+
+	private function buildAttachmentsBlock(array $item): string
+	{
+		$stack = $item['__attachments_stack'] ?? null;
+		if (!is_array($stack))
+		{
+			return '';
+		}
+
+		$count = (int)($stack['count'] ?? 0);
+		$icons = is_array($stack['icons'] ?? null) ? $stack['icons'] : [];
+		if ($count <= 0 || empty($icons))
+		{
+			return '';
+		}
+
+		$badges = '';
+		foreach ($icons as $icon)
+		{
+			$badges .= $this->buildAttachmentBadge(is_array($icon) ? $icon : []);
+		}
+
+		$moreCount = $count - count($icons);
+		if ($moreCount > 0)
+		{
+			$badges .= '<span class="mail-msg-list-attachments__badge mail-msg-list-attachments__badge--more">+'
+				. $moreCount . '</span>';
+		}
+
+		$title = htmlspecialcharsbx(
+			Loc::getMessagePlural('MAIL_MESSAGE_LIST_ATTACHMENTS_COUNT_LABEL', $count, ['#COUNT#' => $count]),
+			ENT_QUOTES,
+		);
+
+		$label = htmlspecialcharsbx(
+			Loc::getMessage('MAIL_MESSAGE_LIST_ATTACHMENTS_STACK_TITLE', ['#COUNT#' => $count]),
+			ENT_QUOTES,
+		);
+
+		return '<div class="mail-msg-list-attachments">'
+			. '<button type="button" class="mail-msg-list-attachments__stack" data-message-id="' . (int)$item['MESSAGE_ID'] . '"'
+			. ' data-role="mail-list-attachments-stack" data-testid="mail-list-attachments-stack" title="' . $title . '" aria-label="' . $label . '"'
+			. ' aria-haspopup="dialog" aria-expanded="false">'
+			. $badges . '</button></div>';
+	}
+
+	private function hasAttachments(array $item): bool
+	{
+		$options = is_array($item['OPTIONS'] ?? null) ? $item['OPTIONS'] : [];
+
+		return (int)($options['attachments'] ?? 0) > 0 || (int)($item['ATTACHMENTS'] ?? 0) > 0;
+	}
+
+	private function buildAttachmentIcon(): string
+	{
+		$hint = htmlspecialcharsbx(Loc::getMessage('MAIL_MESSAGE_LIST_ATTACH_ICON_HINT'), ENT_QUOTES);
+
+		return '<span class="mail-msg-list-attach-icon" role="img" data-testid="mail-list-attach-icon" title="' . $hint . '"></span>';
+	}
+
+	private function buildAttachmentBadge(array $icon): string
+	{
+		$name = (string)($icon['name'] ?? '');
+		$iconModifier = $this->getAttachmentIconModifier((string)($icon['extension'] ?? ''));
+
+		return '<span class="mail-msg-list-attachments__badge" title="' . htmlspecialcharsbx($name, ENT_QUOTES) . '">'
+			. '<span class="mail-msg-list-attachments__icon --' . $iconModifier . '"></span>'
+			. '</span>';
+	}
+
+	private function getAttachmentIconModifier(string $extension): string
+	{
+		static $extensionGroups = [
+			'image' => ['jpg', 'jpeg', 'jpe', 'png', 'gif', 'bmp', 'webp', 'svg', 'svgz', 'heic', 'heif', 'tif', 'tiff', 'ico'],
+			'spreadsheet' => ['xls', 'xlsx', 'xlsm', 'csv', 'ods'],
+			'archive' => ['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz'],
+		];
+
+		$extension = mb_strtolower($extension);
+		foreach ($extensionGroups as $modifier => $extensions)
+		{
+			if (in_array($extension, $extensions, true))
+			{
+				return $modifier;
+			}
+		}
+
+		return 'document';
 	}
 
 	/**
@@ -1370,6 +1602,19 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 		];
 
 		array_push($this->arResult['FILTER'], ...$commonFilterFields);
+
+		if ($this->isListImprovementsEnabled())
+		{
+			$this->arResult['FILTER'][] = [
+				'id' => 'IS_FAVORITE',
+				'name' => Loc::getMessage('MAIL_MESSAGE_LIST_FAVORITES_FILTER'),
+				'type' => 'list',
+				'params' => ['multiple' => 'N'],
+				'items' => [
+					'Y' => Loc::getMessage('MAIL_MESSAGE_LIST_FILTER_OPTION_Y'),
+				],
+			];
+		}
 	}
 
 	private function setFilterPresets(): void
@@ -1534,10 +1779,14 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 
 		$directoriesWithNumberOfUnreadMessages = $mailboxHelper->getDirsMd5WithCounter($mailboxId);
 
-		return static::buildDirectoryTreeForContextMenu($mailboxHelper, $directoriesWithNumberOfUnreadMessages);
+		$currentUserId = Mail\Helper\Config\Feature::isFolderManualSortingAvailable()
+			? (int)Main\Engine\CurrentUser::get()->getId()
+			: null;
+
+		return static::buildDirectoryTreeForContextMenu($mailboxHelper, $directoriesWithNumberOfUnreadMessages, $currentUserId);
 	}
 
-	private static function buildDirectoryTreeForContextMenu($mailboxHelper, array $directoriesWithNumberOfUnreadMessages)
+	private static function buildDirectoryTreeForContextMenu($mailboxHelper, array $directoriesWithNumberOfUnreadMessages, ?int $currentUserId = null)
 	{
 		static $directoryTreeForContextMenu;
 
@@ -1549,7 +1798,7 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 		$flat = [];
 		$list = [];
 
-		$dirs = $mailboxHelper->getDirsHelper()->getSyncDirsOrdered();
+		$dirs = $mailboxHelper->getDirsHelper($currentUserId)->getSyncDirsOrdered();
 
 		foreach ($dirs as $dir)
 		{
@@ -1565,6 +1814,8 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 			$flat[$dir->getId()] = [
 				'id' => $path,
 				'path' => $path,
+				'dirId' => (int)$dir->getId(),
+				'isSystem' => $dir->isSystem(),
 				'delimiter' => $dir->getDelimiter(),
 				'name' => htmlspecialcharsbx($dir->getName()),
 				// @TODO: transfer to template
@@ -1591,6 +1842,16 @@ class CMailClientMessageListComponent extends CBitrixComponent implements Contro
 					],
 				] : [],
 			];
+		}
+
+		// Attach nodes in a second pass so nesting does not depend on the parent
+		// preceding its child in the sort order (a child may be ordered first).
+		foreach ($dirs as $dir)
+		{
+			if ($dir->isVirtualFolder())
+			{
+				continue;
+			}
 
 			if (!empty($flat[$dir->getParentId()]))
 			{

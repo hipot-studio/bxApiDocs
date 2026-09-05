@@ -13,6 +13,7 @@ final class PromptCodeCatalog
 	public const CHANGE_AI_SITE_BLOCK_HTML = 'landing_ai_change_site_block_html';
 	public const CHANGE_AI_SITE_ADD_BLOCK_HTML = 'landing_ai_change_site_add_block_html';
 	public const CHANGE_AI_SITE_BLOCK_HTML_IMPROVE = 'landing_ai_change_site_block_html_improve';
+	public const CHANGE_AI_SITE_SELECTED_ELEMENT_HTML = 'landing_ai_change_site_selected_element_html';
 	public const CREATE_AI_SITE_MODERATION = 'landing_ai_site_moderation';
 
 	public static function all(): array
@@ -26,6 +27,7 @@ final class PromptCodeCatalog
 			self::CHANGE_AI_SITE_BLOCK_HTML,
 			self::CHANGE_AI_SITE_ADD_BLOCK_HTML,
 			self::CHANGE_AI_SITE_BLOCK_HTML_IMPROVE,
+			self::CHANGE_AI_SITE_SELECTED_ELEMENT_HTML,
 			self::CREATE_AI_SITE_MODERATION,
 		];
 	}
@@ -41,6 +43,7 @@ final class PromptCodeCatalog
 			self::CHANGE_AI_SITE_BLOCK_HTML => 'ai-change-site-block-html.txt',
 			self::CHANGE_AI_SITE_ADD_BLOCK_HTML => 'ai-change-site-add-block-html.txt',
 			self::CHANGE_AI_SITE_BLOCK_HTML_IMPROVE => 'ai-change-site-block-html-improve.txt',
+			self::CHANGE_AI_SITE_SELECTED_ELEMENT_HTML => 'ai-change-site-selected-element-html.txt',
 			self::CREATE_AI_SITE_MODERATION => 'ai-moderate-topic.txt',
 		];
 	}

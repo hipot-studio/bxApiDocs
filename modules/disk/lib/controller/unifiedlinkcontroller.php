@@ -7,6 +7,7 @@ namespace Bitrix\Disk\Controller;
 use Bitrix\Disk\Controller\ActionFilter\RequiredParameter;
 use Bitrix\Disk\File;
 use Bitrix\Disk\TypeFile;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkFileRenderer;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\{FileTypeControl, RedirectToCorrectPrefix};
@@ -79,8 +80,41 @@ class UnifiedLinkController extends Controller
 					{
 						return null;
 					}
-					$attachedObject = AttachedObject::loadById((int)$this->request->get('attachedId'));
-					$version = Version::loadById((int)$this->request->get('versionId'));
+					$attachedId = (int)$this->request->get('attachedId');
+					$versionId = (int)$this->request->get('versionId');
+					$attachedObject = AttachedObject::loadById($attachedId);
+					$version = Version::loadById($versionId);
+					$externalLink = null;
+					$externalLinkContext = $this->request->getQuery(ExternalLinkContext::getParameterName());
+
+					if ($externalLinkContext !== null)
+					{
+						if (
+							!is_string($externalLinkContext)
+							|| !$this->isContextObjectMatch(
+								$file,
+								$attachedId,
+								$versionId,
+								$attachedObject,
+								$version,
+							)
+						)
+						{
+							return null;
+						}
+
+						$externalLink = ExternalLinkContext::resolve(
+							$externalLinkContext,
+							$file,
+							$attachedId,
+							$versionId,
+						);
+						if ($externalLink === null)
+						{
+							return null;
+						}
+					}
+
 					$analytics = $this->request->getQuery('analytics') ?? [];
 					$currentUser = $this->getCurrentUser();
 					$isDeferred = $this->request->get('immediate_load') !== 'Y';
@@ -92,10 +126,52 @@ class UnifiedLinkController extends Controller
 						analytics: $analytics,
 						currentUser: $currentUser,
 						deferred: $isDeferred,
+						externalLink: $externalLink,
 					);
 				},
 			),
 		];
+	}
+
+	private function isContextObjectMatch(
+		File $file,
+		int $attachedId,
+		int $versionId,
+		?AttachedObject $attachedObject,
+		?Version $version,
+	): bool
+	{
+		$realObjectId = (int)$file->getRealObjectId();
+
+		if ($attachedId > 0)
+		{
+			$attachedFile = $attachedObject?->getFile();
+			if (
+				!$attachedObject instanceof AttachedObject
+				|| (int)$attachedObject->getId() !== $attachedId
+				|| !$attachedFile instanceof File
+				|| (int)$attachedFile->getRealObjectId() !== $realObjectId
+			)
+			{
+				return false;
+			}
+		}
+
+		if ($versionId > 0)
+		{
+			$versionFile = $version?->getObject();
+			if (
+				!$version instanceof Version
+				|| (int)$version->getId() !== $versionId
+				|| !$versionFile instanceof File
+				|| (int)$versionFile->getRealObjectId() !== $realObjectId
+			)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	#[LevelAccess(UnifiedLinkAccessLevel::Read)]
@@ -167,9 +243,16 @@ class UnifiedLinkController extends Controller
 			return $this->renderComponent($component, withSiteTemplate: false);
 		}
 
-		return (new HttpResponse())
+		$response = (new HttpResponse())
 			->setStatus($result->getStatus())
 			->setContent($result->getContent())
 		;
+
+		foreach ($result->getHeaders() as $name => $value)
+		{
+			$response->addHeader($name, $value);
+		}
+
+		return $response;
 	}
 }

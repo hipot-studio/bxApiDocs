@@ -121,7 +121,7 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 		$userTypeManager = UserFieldHelper::getInstance()->getManager();
 		if ($userTypeManager instanceof \CUserTypeManager)
 		{
-			$userFields = $userTypeManager->GetUserFields(static::getItemUserFieldEntityId());
+			$userFields = $userTypeManager->getUserFields(static::getItemUserFieldEntityId());
 			foreach($userFields as $userField)
 			{
 				$item->set($userField['FIELD_NAME'], null);
@@ -213,7 +213,7 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 		{
 			return new Result();
 		}
-		$userFieldsSearchIndex = $manager->OnSearchIndex(Driver::getInstance()->getFactory()->getUserFieldEntityId($typeData['ID']), $item->getId());
+		$userFieldsSearchIndex = $manager->onSearchIndex(Driver::getInstance()->getFactory()->getUserFieldEntityId($typeData['ID']), $item->getId());
 		$searchContent = Main\Search\MapBuilder::create()
 			->addText($userFieldsSearchIndex)
 			->addInteger($item->getId());
@@ -280,6 +280,13 @@ abstract class PrototypeItem extends Main\UserField\Internal\PrototypeItemDataMa
 		if($isUpdate)
 		{
 			$oldData = static::getByPrimary($id)->fetch();
+			if ($oldData === false)
+			{
+				$result->addError(new Main\ORM\EntityError('Item was not found'));
+				static::$isCheckUserFields = true;
+
+				return $result;
+			}
 			static::getTemporaryStorage()->saveData($id, $oldData);
 			if (
 				static::$isCheckUserFields

@@ -84,6 +84,14 @@ class CIntranetUserProfileComponent extends UserProfile
 
 		$userEntity = User::initByArray($this->arResult['User']);
 
+		$profileView = \Bitrix\Intranet\Service\ServiceContainer::getInstance()
+			->profileViewResolver()
+			->resolve($userEntity);
+		$this->arResult['ProfileView'] = [
+			'hasInfoBanner' => $profileView->hasInfoBanner(),
+			'secondaryBadge' => $profileView->getSecondaryBadge(),
+		];
+
 		if (!$isAdminRights)
 		{
 			if ($userEntity->isImGuest() || $this->isCurrentUserImGuest())
@@ -139,6 +147,10 @@ class CIntranetUserProfileComponent extends UserProfile
 		if ($this->arResult["User"]["STATUS"] === "email")
 		{
 			$this->arResult["FormFields"] = $this->getFormInstance()->getFieldInfoForEmailUser();
+		}
+		elseif ($profileView->hasReducedFields())
+		{
+			$this->arResult["FormFields"] = $this->getFormInstance()->getFieldInfoForSystemUser();
 		}
 		else
 		{
@@ -216,7 +228,14 @@ class CIntranetUserProfileComponent extends UserProfile
 
 		$this->arResult['PARTNER_URL'] = $this->getPartnerUrl();
 
-		$this->includeComponentTemplate();
+		if ($profileView->isSystemUser())
+		{
+			$this->includeComponentTemplate('system-user');
+		}
+		else
+		{
+			$this->includeComponentTemplate();
+		}
 	}
 
 	private function isCurrentUserImGuest(): bool

@@ -26,7 +26,7 @@ class Extranet
 			return false;
 		}
 
-		$cacheId = 'im_sonet_extranet_v3_'.$userId;
+		$cacheId = 'im_sonet_extranet_v3_'.$userId.($filterActiveUser ? '_active' : '_all');
 		$cachePath = '/bx/imc/sonet/extranet'.\Bitrix\Im\Common::getCacheUserPostfix($userId);
 
 		$cache = \Bitrix\Main\Application::getInstance()->getCache();
@@ -128,7 +128,7 @@ class Extranet
 		return isset($extranetUsers[$userId]);
 	}
 
-	public static function filterUserList(array $userList, $currentUserId = null)
+	public static function filterUserList(array $userList, $currentUserId = null, bool $filterActiveUser = true)
 	{
 		$currentUserId = \Bitrix\Im\Common::getUserId($currentUserId);
 		if ($currentUserId <= 0)
@@ -143,21 +143,21 @@ class Extranet
 
 		return
 			User::getInstance((int)$currentUserId)->isExtranet()
-				? self::filterByExtranet((int)$currentUserId, $userList)
-				: self::filterByIntranet((int)$currentUserId, $userList)
+				? self::filterByExtranet((int)$currentUserId, $userList, $filterActiveUser)
+				: self::filterByIntranet((int)$currentUserId, $userList, $filterActiveUser)
 		;
 	}
 
-	protected static function filterByExtranet(int $currentUserId, array $userList): array
+	protected static function filterByExtranet(int $currentUserId, array $userList, bool $filterActiveUser = true): array
 	{
-		$extranetUsers = self::getAccessibleExtranetUsers($currentUserId);
+		$extranetUsers = self::getAccessibleExtranetUsers($currentUserId, $filterActiveUser);
 
 		return array_filter($userList, static function($userId) use ($extranetUsers) {
 			return isset($extranetUsers[$userId]);
 		});
 	}
 
-	protected static function filterByIntranet(int $currentUserId, array $userList): array
+	protected static function filterByIntranet(int $currentUserId, array $userList, bool $filterActiveUser = true): array
 	{
 		$intranetUsers = [];
 		$extranetUsers = [];
@@ -179,7 +179,7 @@ class Extranet
 			return $intranetUsers;
 		}
 
-		$accessibleExtranetUsers = self::getAccessibleExtranetUsers($currentUserId);
+		$accessibleExtranetUsers = self::getAccessibleExtranetUsers($currentUserId, $filterActiveUser);
 		$extranetUsers = array_filter($extranetUsers, static function($userId) use ($accessibleExtranetUsers) {
 			return isset($accessibleExtranetUsers[$userId]);
 		});

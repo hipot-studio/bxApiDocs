@@ -30,9 +30,11 @@ class GetEmailContentTool extends ToolContract
 	public function getDescription(): string
 	{
 		return
-			"Returns a single email message with subject, from, to, cc, date, and "
-			. "body (sanitized plain text). Use when you need the body, not just "
-			. "metadata from search_emails. "
+			"Returns a single email message with subject, from, to, cc, date (from the message's "
+			. "Date header), and body (plain text, capped; truncated=true means it was cut, "
+			. "bodyLength is the length the original had). "
+			. "Use when you need the body, not just metadata from search_emails, or after "
+			. "get_email_thread in headers mode. "
 			. "Requires the message identifier from the search_emails tool."
 		;
 	}
@@ -74,7 +76,7 @@ class GetEmailContentTool extends ToolContract
 
 		try
 		{
-			$result = $this->messageSearch->getMessageContent(
+			$result = $this->messageSearch->getMessageContentCompact(
 				messageId: $messageId,
 				userId: $userId,
 			);

@@ -131,9 +131,11 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 
 			if ($this->file->canRestore($securityContext))
 			{
-				$actions[] = [
-					"text" => Loc::getMessage('DISK_FILE_VIEW_HISTORY_ACT_RESTORE'),
-					"onclick" => "BX.Disk['FileHistoryComponent_{$this->getComponentId()}'].openRestoreConfirm({
+				if ((int)$this->file->getTypeFile() !== TypeFile::FLIPCHART)
+				{
+					$actions[] = [
+						"text" => Loc::getMessage('DISK_FILE_VIEW_HISTORY_ACT_RESTORE'),
+						"onclick" => "BX.Disk['FileHistoryComponent_{$this->getComponentId()}'].openRestoreConfirm({
 							object: {
 								id: {$this->file->getId()},
 								name: '{$this->file->getName()}'
@@ -142,7 +144,8 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 								id: {$version->getId()}
 							}
 						})",
-				];
+					];
+				}
 
 				if ($this->file->canDelete($securityContext))
 				{
@@ -164,7 +167,7 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 
 			$fileFromVersion = $version->getObject();
 
-			$attr = FileAttributes::tryBuildByFileId($version->getFileId(), new Uri($urlManager->getUrlForDownloadVersion($version)), $fileFromVersion)
+			$attr = FileAttributes::tryBuildByFileId($version->getFileId(), new Uri($urlManager->getUrlForDownloadVersion($version)), $fileFromVersion, $version)
 				->setTitle($version->getName())
 				->setGroupBy($this->componentId)
 				->setVersionId($version->getId())

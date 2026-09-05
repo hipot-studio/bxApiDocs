@@ -54,15 +54,23 @@ final class AiBlockHtmlPayloadProcessor
 		}
 	}
 
+	/**
+	 * Normalizes the payload and passes it through the markup allow-list. The allow-list runs
+	 * last: it is the gate the stored markup goes through, so nothing a normalization step
+	 * emits can get around it.
+	 */
 	public static function sanitizeHtml(string $html): string
 	{
-		$html = self::removeDangerousTags($html);
-		$html = self::removeEventHandlerAttributes($html);
-		$html = self::sanitizeJavascriptUrls($html);
 		$html = AiFontPolicy::normalizeHtmlFontClasses($html);
 		$html = AiFontAwesomeIconNormalizer::normalizeHtml($html);
+		$html = self::removeInternalImageAttributesFromHtml($html);
 
-		$html = preg_replace_callback('/<img\b[^>]*>/iu', static function (array $matches): string
+		return AiBlockHtmlSanitizer::sanitize($html);
+	}
+
+	private static function removeInternalImageAttributesFromHtml(string $html): string
+	{
+		return preg_replace_callback('/<img\b[^>]*>/iu', static function (array $matches): string
 		{
 			$imageTag = (string)($matches[0] ?? '');
 			foreach ([self::PROMPT_ATTR, self::ASPECT_ATTR, 'width', 'height'] as $attribute)
@@ -72,57 +80,6 @@ final class AiBlockHtmlPayloadProcessor
 
 			return $imageTag;
 		}, $html) ?? $html;
-
-		return trim($html);
-	}
-
-	private static function removeDangerousTags(string $html): string
-	{
-		$patterns = [
-			'/<script\b[^>]*>.*?<\/script>/is',
-			'/<script\b[^>]*\/?>/is',
-			'/<style\b[^>]*>.*?<\/style>/is',
-			'/<style\b[^>]*\/?>/is',
-		];
-		$result = preg_replace($patterns, '', $html);
-
-		return is_string($result) ? $result : $html;
-	}
-
-	private static function removeEventHandlerAttributes(string $html): string
-	{
-		$result = preg_replace(
-			'/\s+on[a-z0-9:_-]+\s*=\s*(\"[^\"]*\"|\'[^\']*\'|[^\s>]+)/iu',
-			'',
-			$html,
-		);
-
-		return is_string($result) ? $result : $html;
-	}
-
-	private static function sanitizeJavascriptUrls(string $html): string
-	{
-		$result = preg_replace_callback(
-			'/\b(href|src)\s*=\s*(\"[^\"]*\"|\'[^\']*\'|[^\s>]+)/iu',
-			static function (array $matches): string
-			{
-				$attribute = (string)($matches[1] ?? '');
-				$rawValue = trim((string)($matches[2] ?? ''));
-				$value = trim($rawValue, "\"' \t\n\r\0\x0B");
-
-				if (!preg_match('/^javascript\s*:/iu', $value))
-				{
-					return (string)($matches[0] ?? '');
-				}
-
-				$fallback = mb_strtolower($attribute) === 'href' ? '#' : '';
-
-				return $attribute . '="' . $fallback . '"';
-			},
-			$html,
-		);
-
-		return is_string($result) ? $result : $html;
 	}
 
 	private static function removeAttributeFromHtmlTag(string $htmlTag, string $attribute): string

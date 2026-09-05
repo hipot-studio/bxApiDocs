@@ -10,6 +10,7 @@ use Bitrix\Intranet\Service;
 use Bitrix\Intranet\Integration;
 use Bitrix\Intranet\Enum\UserRole;
 use Bitrix\Intranet\Dto\User\MiniProfile;
+use Bitrix\Intranet\Entity;
 use Bitrix\Intranet\Result\Service\User\MiniProfileDataResult;
 
 use Bitrix\Intranet\Service\ServiceContainer;
@@ -57,27 +58,42 @@ class MiniProfileService
 			return $this->makeAccessDeniedResult();
 		}
 
+		$isSystemUser = $this->isSystemUser($userModel);
+
 		$accessDto = $this->makeAccessDto($currentUserId, $userModel);
-		$baseInfo = $this->makeBaseInfoDto($userModel);
-		if ($this->showOnlyBaseInfo($currentUserId, $userModel))
+		$baseInfo = $this->makeBaseInfoDto($userModel, $isSystemUser);
+
+		if ($this->isAccessRestrictedToBaseInfo($currentUserId, $userModel))
 		{
+			return $this->makeBaseInfoResult($baseInfo, $accessDto);
+		}
+
+		if ($isSystemUser)
+		{
+			$structureDto = $this->makeStructureDto($userId, withUserHeadsAndTeams: false);
+			if (!$structureDto)
+			{
+				return $this->makeBaseInfoResult($baseInfo, $accessDto);
+			}
+
 			return new MiniProfileDataResult(
 				new MiniProfile\UserMiniProfileDto(
 					baseInfo: $baseInfo,
 					access: $accessDto,
+					structure: $structureDto,
 				),
 			);
+		}
+
+		if ($this->isRoleRestrictedToBaseInfo($userModel))
+		{
+			return $this->makeBaseInfoResult($baseInfo, $accessDto);
 		}
 
 		$structureDto = $this->makeStructureDto($userId);
 		if (!$structureDto)
 		{
-			return new MiniProfileDataResult(
-				new MiniProfile\UserMiniProfileDto(
-					baseInfo: $baseInfo,
-					access: $accessDto,
-				),
-			);
+			return $this->makeBaseInfoResult($baseInfo, $accessDto);
 		}
 
 		return new MiniProfileDataResult(
@@ -90,7 +106,25 @@ class MiniProfileService
 		);
 	}
 
-	private function makeStructureDto(int $userId): ?MiniProfile\StructureDto
+	private function makeBaseInfoResult(
+		MiniProfile\BaseInfoDto $baseInfo,
+		MiniProfile\AccessDto $accessDto,
+	): MiniProfileDataResult
+	{
+		return new MiniProfileDataResult(
+			new MiniProfile\UserMiniProfileDto(
+				baseInfo: $baseInfo,
+				access: $accessDto,
+			),
+		);
+	}
+
+	private function isSystemUser(EO_User $userModel): bool
+	{
+		return (new Entity\User(externalAuthId: $userModel->getExternalAuthId()))->isSystemUser();
+	}
+
+	private function makeStructureDto(int $userId, bool $withUserHeadsAndTeams = true): ?MiniProfile\StructureDto
 	{
 		// Department
 		$departmentBranchCollection = $this->departmentService->getUserDepartmentBranchCollection(
@@ -144,7 +178,7 @@ class MiniProfileService
 			}
 		}
 
-		$userHeadIds = $this->getUserHeadIds($userId, $headDictionaryDto);
+		$userHeadIds = $withUserHeadsAndTeams ? $this->getUserHeadIds($userId, $headDictionaryDto) : [];
 
 		$departmentDictionaryDto = [];
 		foreach ($nodeDictionary as $id => $node)
@@ -159,17 +193,20 @@ class MiniProfileService
 		}
 
 		// Team
-		$teamCollection = $this->teamService->getAllByUserId($userId);
 		$teamDtoList = [];
 
-		if ($teamCollection)
+		if ($withUserHeadsAndTeams)
 		{
-			foreach ($teamCollection as $team)
+			$teamCollection = $this->teamService->getAllByUserId($userId);
+			if ($teamCollection)
 			{
-				$teamDtoList[] = new MiniProfile\Structure\TeamDto(
-					id: $team->id,
-					title: $team->name,
-				);
+				foreach ($teamCollection as $team)
+				{
+					$teamDtoList[] = new MiniProfile\Structure\TeamDto(
+						id: $team->id,
+						title: $team->name,
+					);
+				}
 			}
 		}
 
@@ -183,7 +220,7 @@ class MiniProfileService
 		);
 	}
 
-	private function makeBaseInfoDto(EO_User $userModel): MiniProfile\BaseInfoDto
+	private function makeBaseInfoDto(EO_User $userModel, bool $isSystemUser): MiniProfile\BaseInfoDto
 	{
 		$userId = $userModel->getId();
 
@@ -191,12 +228,13 @@ class MiniProfileService
 			id: $userId,
 			name: $this->formatName($userModel),
 			workPosition: $userModel->getWorkPosition(),
-			utcOffset: $this->userService->getUtcOffset($userId),
-			status: $this->getStatus($userModel),
+			utcOffset: $isSystemUser ? null : $this->userService->getUtcOffset($userId),
+			status: $isSystemUser ? null : $this->getStatus($userModel),
 			role: $this->getUserRole($userId),
 			url: $this->userService->getDetailUrl($userId),
 			avatar: $this->getAvatarUrl($userModel->getPersonalPhoto(), self::AVATAR_SIZE),
 			personalGender: $userModel->getPersonalGender(),
+			isSystemUser: $isSystemUser,
 		);
 	}
 
@@ -230,20 +268,20 @@ class MiniProfileService
 		);
 	}
 
-	private function showOnlyBaseInfo(int $userId, Main\EO_User $targetUserModel): bool
+	private function isAccessRestrictedToBaseInfo(int $currentUserId, Main\EO_User $targetUserModel): bool
 	{
 		if ($targetUserModel->getActive() === false)
 		{
 			return true;
 		}
 
-		$isUserIntranet = (new User($userId))->isIntranet();
-		if (!$isUserIntranet)
-		{
-			return true;
-		}
+		return !(new User($currentUserId))->isIntranet();
+	}
 
+	private function isRoleRestrictedToBaseInfo(Main\EO_User $targetUserModel): bool
+	{
 		$targetUserRole = (new User($targetUserModel->getId()))->getUserRole();
+
 		return !in_array($targetUserRole, [UserRole::ADMIN, UserRole::INTRANET], true);
 	}
 
@@ -278,6 +316,7 @@ class MiniProfileService
 				'ACTIVE',
 				'LAST_ACTIVITY_DATE',
 				'PERSONAL_GENDER',
+				'EXTERNAL_AUTH_ID',
 			],
 		])->fetchObject();
 	}

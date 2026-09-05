@@ -2,15 +2,15 @@
 
 namespace Bitrix\Mail\Helper\Message;
 
-use Bitrix\Main\ArgumentException;
-use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\SystemException;
 use Bitrix\Mail\Internals\MessageClosureTable;
 
-final class MessageThreadLoader
+class MessageThreadLoader
 {
-	private array $threadBeforeMessageId = [];
-	private array $threadAfterMessageId = [];
+	/** Ceiling for the ids assembled from closure; legitimate threads are far smaller. */
+	public const MAX_THREAD_MESSAGE_IDS = 500;
+
+	/** @var int[] branch members other than the anchor */
+	private array $branchMessageIds = [];
 
 	public function __construct(
 		private int $messageId,
@@ -21,82 +21,94 @@ final class MessageThreadLoader
 		return $this->messageId;
 	}
 
-	/**
-	 * returns an array of message ids sorted in ascending order
-	 * @return int[]
-	 */
+	/** @return int[] ascending, the anchor always among them */
 	public function getThreadMessageIds(): array
 	{
-		$threadMessageIds = [$this->messageId];
-		if ($this->threadBeforeMessageId)
-		{
-			$threadMessageIds = array_merge($this->threadBeforeMessageId, $threadMessageIds);
-		}
-		if ($this->threadAfterMessageId)
-		{
-			$threadMessageIds = array_merge($threadMessageIds, $this->threadAfterMessageId);
-		}
+		$threadMessageIds = $this->branchMessageIds;
+		$threadMessageIds[] = $this->messageId;
+		sort($threadMessageIds);
 
 		return $threadMessageIds;
 	}
 
-	/**
-	 * clears the message id array if you need to separately load the previous or next messages relative to the set messageId
-	 * @return void
-	 */
+	/** drops the assembled branch, leaving getThreadMessageIds() with the anchor alone */
 	public function clearThreadMessageIds(): void
 	{
-		$this->threadBeforeMessageId = [];
-		$this->threadAfterMessageId = [];
+		$this->branchMessageIds = [];
 	}
 
-	public function loadBeforeThreadMessageIds(?int $limit = null): void
+	/**
+	 * The branch of the conversation the anchor belongs to - its ancestors and the replies to it,
+	 * without the parallel branches. Ids are never compared with one another: a message resynced
+	 * out of order carries an id smaller than its own parent's, so an id-based filter would drop it.
+	 */
+	public function loadThreadBranchMessageIds(): void
 	{
-		$this->threadBeforeMessageId = [];
+		$this->clearThreadMessageIds();
 
-		$query = MessageClosureTable::query()
+		$anchorId = $this->messageId;
+
+		$branchIds = [];
+		foreach ($this->selectAncestorIds($anchorId) as $id)
+		{
+			$branchIds[$id] = true;
+		}
+		foreach ($this->selectDescendantIds($anchorId) as $id)
+		{
+			$branchIds[$id] = true;
+		}
+
+		// getThreadMessageIds() always serves the anchor back, so leave it a slot under the ceiling
+		unset($branchIds[$anchorId]);
+
+		$ids = array_keys($branchIds);
+		rsort($ids);
+
+		$this->branchMessageIds = array_slice($ids, 0, self::MAX_THREAD_MESSAGE_IDS - 1);
+	}
+
+	/**
+	 * The limit is not a property of the thread: MSG_ID is not unique and comes from the remote
+	 * sender, so CMail::makeMessageClosureChain writes an ancestor row per message carrying that
+	 * MSG_ID and the row count becomes external input. Newest ids first, so a branch over the
+	 * ceiling keeps its recent part.
+	 */
+	protected function selectAncestorIds(int $anchorId): array
+	{
+		$rows = MessageClosureTable::query()
 			->setSelect(['PARENT_ID'])
-			->where('MESSAGE_ID', $this->messageId)
-			->where('PARENT_ID', '<', $this->messageId)
-			->setOrder(['PARENT_ID' => 'ASC'])
+			->where('MESSAGE_ID', $anchorId)
+			->setOrder(['PARENT_ID' => 'DESC'])
+			->setLimit(self::MAX_THREAD_MESSAGE_IDS)
+			->fetchAll()
 		;
 
-		if ($limit)
+		$ids = [];
+		foreach ($rows as $row)
 		{
-			$query->setLimit($limit);
+			$ids[] = (int)$row['PARENT_ID'];
 		}
 
-		foreach ($query->fetchAll() as $item)
-		{
-			$this->threadBeforeMessageId[] = (int)$item['PARENT_ID'];
-		}
+		return $ids;
 	}
 
-	public function loadAfterThreadMessageIds(?int $limit = null): void
+	/** The same closure rows read the other way round, over IX_MAIL_MESSAGE_CL_R. */
+	protected function selectDescendantIds(int $anchorId): array
 	{
-		$this->threadAfterMessageId = [];
-
-		$query = MessageClosureTable::query()
+		$rows = MessageClosureTable::query()
 			->setSelect(['MESSAGE_ID'])
-			->where('PARENT_ID', $this->messageId)
-			->where('MESSAGE_ID', '>', $this->messageId)
-			->setOrder(['PARENT_ID' => 'ASC'])
+			->where('PARENT_ID', $anchorId)
+			->setOrder(['MESSAGE_ID' => 'DESC'])
+			->setLimit(self::MAX_THREAD_MESSAGE_IDS)
+			->fetchAll()
 		;
 
-		if ($limit)
+		$ids = [];
+		foreach ($rows as $row)
 		{
-			$query->setLimit($limit);
+			$ids[] = (int)$row['MESSAGE_ID'];
 		}
 
-		foreach ($query->fetchAll() as $item)
-		{
-			$this->threadAfterMessageId[] = (int)$item['MESSAGE_ID'];
-		}
-	}
-
-	public function loadFullThreadMessageIds(?int $limit = null): void
-	{
-		$this->loadBeforeThreadMessageIds($limit);
-		$this->loadAfterThreadMessageIds($limit);
+		return $ids;
 	}
 }

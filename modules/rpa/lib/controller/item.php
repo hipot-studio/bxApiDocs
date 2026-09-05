@@ -166,7 +166,7 @@ class Item extends Base
 		{
 			if($fileId > 0)
 			{
-				\CFile::Delete($fileId);
+				\CFile::delete($fileId);
 			}
 		}
 	}
@@ -372,7 +372,7 @@ class Item extends Base
 				unset($filter[$name]);
 				continue;
 			}
-			if(is_numeric($name))
+			if(is_numeric($name) && is_array($filter[$name]))
 			{
 				$filter[$name] = $this->prepareFilter($type, $filter[$name]);
 			}

@@ -4,6 +4,9 @@ namespace Bitrix\Landing;
 use Bitrix\Main\Application;
 use Bitrix\Rest\AppTable;
 use Bitrix\Landing\Site\Type;
+use Bitrix\Main\Config\Configuration;
+use Bitrix\Main\Data\Cache;
+use Bitrix\Main\Diag\ExceptionHandlerFormatter;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 
@@ -30,6 +33,32 @@ class PublicAction
 	 * Code indicating used pages in REST statistics.
 	 */
 	public const REST_USAGE_TYPE_PAGE = 'pages';
+
+	/**
+	 * Max count of commands in one batch request.
+	 */
+	public const MAX_BATCH_ITEMS = 500;
+
+	/**
+	 * Event log type for exceptions thrown by actions.
+	 */
+	private const LOG_TYPE_ACTION_EXCEPTION = 'LANDING_ACTION_EXCEPTION';
+
+	/**
+	 * How long the same exception is logged only once, in seconds.
+	 */
+	private const LOG_THROTTLE_TTL = 600;
+
+	/**
+	 * Cache dir keeping the marks of already logged exceptions.
+	 */
+	private const LOG_THROTTLE_CACHE_DIR = '/landing/action_exception_log';
+
+	/**
+	 * Exceptions already handled by the logger within the current hit.
+	 * @var array<string, true>
+	 */
+	private static array $loggedExceptionKeys = [];
 
 	/**
 	 * REST application.
@@ -193,9 +222,18 @@ class PublicAction
 			$data = array();
 		}
 
-		if (isset($data['scope']))
+		// the scope is process-static and a batch runs all its commands in a single PHP process,
+		// so a command that passes no scope must not inherit the one left by its neighbour.
+		// Both gateways (ajaxProcessing and restGateway) come through here, so this is the only
+		// place where the scope of a command is decided; ajaxProcessing puts the request-level
+		// baseline into the data of every command it dispatches.
+		if (isset($data['scope']) && is_string($data['scope']) && $data['scope'] !== '')
 		{
 			Type::setScope($data['scope']);
+		}
+		else
+		{
+			Type::clearScope();
 		}
 
 		$error = new Error;
@@ -220,8 +258,9 @@ class PublicAction
 				Loc::getMessage('LANDING_ACCESS_DENIED2')
 			);
 		}
-		// check common permission
+		// check common permission; menu24 of VIBE only controls the navigation, its actions keep their own checks
 		else if (
+			Type::getCurrentScopeId() !== Type::SCOPE_CODE_VIBE &&
 			!Rights::hasAdditionalRight(
 				Rights::ADDITIONAL_RIGHTS['menu24'],
 				null,
@@ -320,14 +359,14 @@ class PublicAction
 				{
 					$error->addError(
 						'TYPE_ERROR',
-						$e->getMessage()
+						self::processActionException($e, $action, Loc::getMessage('LANDING_TYPE_ERROR'))
 					);
 				}
 				catch (\Exception $e)
 				{
 					$error->addError(
 						'SYSTEM_ERROR',
-						$e->getMessage()
+						self::processActionException($e, $action, Loc::getMessage('LANDING_SYSTEM_ERROR'))
 					);
 				}
 			}
@@ -359,12 +398,124 @@ class PublicAction
 	}
 
 	/**
+	 * Writes the exception to the event log and returns the message allowed for the client.
+	 * Exception details are exposed only in debug mode, because they may contain
+	 * SQL, class names and file paths.
+	 * @param \Throwable $e Exception thrown by the action.
+	 * @param array $action Action info from getMethodInfo().
+	 * @param string $publicMessage Generic message for the client.
+	 * @return string
+	 */
+	private static function processActionException(\Throwable $e, array $action, string $publicMessage): string
+	{
+		self::logActionException($e, $action);
+
+		$exceptionHandling = Configuration::getValue('exception_handling');
+
+		return empty($exceptionHandling['debug']) ? $publicMessage : $e->getMessage();
+	}
+
+	/**
+	 * Writes exception details to the event log, skipping repeats of the same failure.
+	 * Never throws: actions fail exactly when the storage is broken, and a failed log
+	 * must not replace the generic error with an unhandled exception.
+	 * @param \Throwable $e Exception thrown by the action.
+	 * @param array $action Action info from getMethodInfo().
+	 * @return void
+	 */
+	private static function logActionException(\Throwable $e, array $action): void
+	{
+		try
+		{
+			$key = md5(implode('|', [
+				(string)($action['action'] ?? ''),
+				get_class($e),
+				$e->getFile(),
+				(string)$e->getLine(),
+			]));
+
+			// one attempt per failure kind per hit, whatever happens below
+			if (isset(self::$loggedExceptionKeys[$key]))
+			{
+				return;
+			}
+			self::$loggedExceptionKeys[$key] = true;
+
+			$cache = Cache::createInstance();
+			$cache->noOutput();
+			if (!$cache->startDataCache(self::LOG_THROTTLE_TTL, $key, self::LOG_THROTTLE_CACHE_DIR))
+			{
+				return;
+			}
+
+			static::writeExceptionToLog(
+				(string)($action['action'] ?? ''),
+				ExceptionHandlerFormatter::format($e),
+			);
+
+			// the mark is left only after the record is really written
+			$cache->endDataCache(['loggedAt' => time()]);
+		}
+		catch (\Throwable $logFailure)
+		{
+			// nothing can be done here: the message for the client matters more
+		}
+	}
+
+	/**
+	 * Writes the record about the exception to the event log.
+	 * @param string $itemId Name of the action.
+	 * @param string $description Formatted exception.
+	 * @return void
+	 */
+	protected static function writeExceptionToLog(string $itemId, string $description): void
+	{
+		Debug::log($itemId, $description, self::LOG_TYPE_ACTION_EXCEPTION);
+	}
+
+	/**
 	 * Get raw data of curring processing.
 	 * @return mixed
 	 */
 	public static function getRawData()
 	{
 		return self::$rawData;
+	}
+
+	/**
+	 * Returns the scope which the commands of the current request fall back to.
+	 * @param mixed $requestType Root type of the request.
+	 * @return string|null
+	 */
+	protected static function getBaselineScope($requestType): ?string
+	{
+		if (is_string($requestType) && $requestType !== '')
+		{
+			return $requestType;
+		}
+
+		// the caller (landing.base) may have set the scope before the dispatcher was reached
+		return Type::getCurrentScopeId();
+	}
+
+	/**
+	 * Builds ajax answer with the single error, in the same format as actionProcessing().
+	 * @param string $code Error code.
+	 * @param string $message Error description.
+	 * @return array
+	 */
+	private static function getAjaxErrorResponse(string $code, string $message): array
+	{
+		return [
+			'sessid' => bitrix_sessid(),
+			'type' => 'error',
+			'result' => [
+				[
+					'error' => $code,
+					'error_description' => $message
+				]
+			]
+		];
 	}
 
 	/**
@@ -376,10 +527,14 @@ class PublicAction
 	{
 		$context = Application::getInstance()->getContext();
 		$request = $context->getRequest();
-		$files = $request->getFileList();
+		$files = $request->getFileList()->toArray();
 		$postlist = $context->getRequest()->getPostList();
 
 		Type::setScope($request->get('type'));
+
+		// actionProcessing() decides the scope of every command by its own data, so the
+		// request-level baseline has to travel with that data
+		$baseScope = self::getBaselineScope($request->get('type'));
 
 		// multiple commands
 		if (
@@ -387,13 +542,32 @@ class PublicAction
 			&& is_array($request->get('batch'))
 		)
 		{
+			$batch = $request->get('batch');
+			if (count($batch) > self::MAX_BATCH_ITEMS)
+			{
+				return self::getAjaxErrorResponse(
+					'BATCH_LIMIT_EXCEEDED',
+					Loc::getMessage('LANDING_BATCH_LIMIT_EXCEEDED', [
+						'#LIMIT#' => self::MAX_BATCH_ITEMS
+					])
+				);
+			}
+			// an uploaded file has no addressee among the batch items
+			if ($files)
+			{
+				return self::getAjaxErrorResponse(
+					'BATCH_FILES_NOT_ALLOWED',
+					Loc::getMessage('LANDING_BATCH_FILES_NOT_ALLOWED')
+				);
+			}
+
 			$result = array();
 			// additional site id detect
 			if ($request->offsetExists('site_id'))
 			{
 				$siteId = $request->get('site_id');
 			}
-			foreach ($request->get('batch') as $key => $batchItem)
+			foreach ($batch as $key => $batchItem)
 			{
 				if (
 					isset($batchItem['action']) &&
@@ -401,23 +575,20 @@ class PublicAction
 				)
 				{
 					$batchItem['data'] = (array)$batchItem['data'];
+					if ($baseScope !== null && !isset($batchItem['data']['scope']))
+					{
+						$batchItem['data']['scope'] = $baseScope;
+					}
 					if (isset($siteId))
 					{
 						$batchItem['data']['siteId'] = $siteId;
-					}
-					if ($files)
-					{
-						foreach ($files as $code => $file)
-						{
-							$batchItem['data'][$code] = $file;
-						}
 					}
 					$rawData = $postlist->getRaw('batch');
 					if (isset($rawData[$key]['data']))
 					{
 						self::$rawData = $rawData[$key]['data'];
 					}
-					$result[$key] = self::actionProcessing(
+					$result[$key] = static::actionProcessing(
 						$batchItem['action'],
 						$batchItem['data']
 					);
@@ -435,6 +606,10 @@ class PublicAction
 		)
 		{
 			$data = $request->get('data');
+			if ($baseScope !== null && !isset($data['scope']))
+			{
+				$data['scope'] = $baseScope;
+			}
 			// additional site id detect
 			if ($request->offsetExists('site_id'))
 			{
@@ -442,6 +617,16 @@ class PublicAction
 			}
 			if ($files)
 			{
+				$conflicts = array_intersect(array_keys($files), array_keys($data));
+				if ($conflicts)
+				{
+					return self::getAjaxErrorResponse(
+						'FILE_KEY_CONFLICT',
+						Loc::getMessage('LANDING_FILE_KEY_CONFLICT', [
+							'#KEYS#' => implode(', ', $conflicts)
+						])
+					);
+				}
 				foreach ($files as $code => $file)
 				{
 					$data[$code] = $file;
@@ -452,7 +637,7 @@ class PublicAction
 			{
 				self::$rawData = $rawData['data'];
 			}
-			return self::actionProcessing(
+			return static::actionProcessing(
 				$request->get('action'),
 				$data
 			);

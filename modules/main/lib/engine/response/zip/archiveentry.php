@@ -181,7 +181,7 @@ class ArchiveEntry
 		{
 			$zipEntry->path = $filename;
 		}
-		$zipEntry->path = Uri::urnEncode($zipEntry->path, 'UTF-8');
+		$zipEntry->path = Uri::urnEncode($zipEntry->path);
 
 		return $zipEntry;
 	}

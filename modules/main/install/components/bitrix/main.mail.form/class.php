@@ -561,7 +561,7 @@ class MainMailFormComponent extends CBitrixComponent implements Controllerable
 		{
 			$params['allUserSignatures'] = empty($mailboxes) ? [] : $this->getSignaturesFromDb();
 			$params['signatureSelectTitle'] = Loc::getMessage('MAIN_MAIL_FORM_EDITOR_SIGNATURE_SELECT');
-			$params['signatureConfigureTitle'] = Loc::getMessage('MAIN_MAIL_FORM_EDITOR_SIGNATURE_CONFIGURE');
+			$params['signatureConfigureTitle'] = Loc::getMessage('MAIN_MAIL_FORM_EDITOR_SIGNATURE_CONFIGURE_MSGVER_1');
 			$params['pathToMailSignatures'] = $signaturesUrl;
 		}
 

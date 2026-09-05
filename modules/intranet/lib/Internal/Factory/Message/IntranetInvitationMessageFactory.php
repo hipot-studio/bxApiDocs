@@ -2,7 +2,6 @@
 
 namespace Bitrix\Intranet\Internal\Factory\Message;
 
-use Bitrix\Intranet\Contract\SendableContract;
 use Bitrix\Intranet\Contract\Strategy\InvitationMessageFactoryContract;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
@@ -26,7 +25,7 @@ class IntranetInvitationMessageFactory implements InvitationMessageFactoryContra
 	{}
 
 
-	public function createEmailEvent(): SendableContract
+	public function createEmailEvent(): EmailMessage
 	{
 		Loc::loadLanguageFile($_SERVER["DOCUMENT_ROOT"] . '/bitrix/modules/intranet/lib/invitation/register.php');
 		$isCloud = Loader::includeModule('bitrix24');
@@ -77,7 +76,7 @@ class IntranetInvitationMessageFactory implements InvitationMessageFactoryContra
 		);
 	}
 
-	public function createSmsEvent(): SendableContract
+	public function createSmsEvent(): PhoneMessage
 	{
 		return new PhoneMessage($this->user, true);
 	}

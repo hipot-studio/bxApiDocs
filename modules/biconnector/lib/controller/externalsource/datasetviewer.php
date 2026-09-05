@@ -313,18 +313,25 @@ final class DatasetViewer
 				switch ($type)
 				{
 					case FieldType::Int:
-						$data[$rowIndex][$columnIndex] = TypeConverter::convertToInt($columnValue);
+						// A value the type cannot represent stays visible as is: conversion would
+						// turn it into 0 and hide what has to be fixed. Same for the types below.
+						$data[$rowIndex][$columnIndex] = TypeConverter::isIntValue($columnValue)
+							? TypeConverter::convertToInt($columnValue)
+							: TypeConverter::convertToString($columnValue)
+						;
 
 						break;
 
 					case FieldType::Double:
 						$delimiter = $formats[FieldType::Double->value];
-						$data[$rowIndex][$columnIndex] = TypeConverter::convertToDouble($columnValue, delimiter: $delimiter);
+						$data[$rowIndex][$columnIndex] = TypeConverter::isDoubleValue($columnValue, $delimiter)
+							? TypeConverter::convertToDouble($columnValue, delimiter: $delimiter)
+							: TypeConverter::convertToString($columnValue)
+						;
 
 						break;
 
 					case FieldType::Date:
-						$data[$rowIndex][$columnIndex] = '';
 						$format = $formats[FieldType::Date->value];
 						if ($columnValue instanceof Date)
 						{
@@ -333,16 +340,17 @@ final class DatasetViewer
 						else
 						{
 							$value = TypeConverter::convertToDate($columnValue, $format);
-							if ($value)
-							{
-								$data[$rowIndex][$columnIndex] = $value->format('Y-m-d');
-							}
+							// A value that does not match the format stays visible as is:
+							// the cell is reported as invalid anyway, and an empty one hides what to fix.
+							$data[$rowIndex][$columnIndex] = $value
+								? $value->format('Y-m-d')
+								: TypeConverter::convertToString($columnValue)
+							;
 						}
 
 						break;
 
 					case FieldType::DateTime:
-						$data[$rowIndex][$columnIndex] = '';
 						$format = $formats[FieldType::DateTime->value];
 
 						if ($columnValue instanceof Date)
@@ -367,14 +375,19 @@ final class DatasetViewer
 
 							$data[$rowIndex][$columnIndex] = $value->format('Y-m-d H:i:s');
 						}
+						else
+						{
+							$data[$rowIndex][$columnIndex] = TypeConverter::convertToString($columnValue);
+						}
 
 						break;
 
 					case FieldType::Money:
 						$delimiter = $formats[FieldType::Money->value];
-						$data[$rowIndex][$columnIndex] = self::formatMoney(
-							TypeConverter::convertToMoney($columnValue, delimiter: $delimiter)
-						);
+						$data[$rowIndex][$columnIndex] = TypeConverter::isMoneyValue($columnValue, $delimiter)
+							? self::formatMoney(TypeConverter::convertToMoney($columnValue, delimiter: $delimiter))
+							: TypeConverter::convertToString($columnValue)
+						;
 
 						break;
 

@@ -173,7 +173,8 @@ class Link extends \Bitrix\Landing\Node
 
 			$sanitized[$pos] = [
 				'text' => $sanitizer->sanitizeText($text),
-				'href' => $sanitizer->sanitizeText($href),
+				// real href -> scheme allow-list (default-deny), not just the text auditor
+				'href' => $sanitizer->sanitizeHref($href),
 				'query' => $sanitizer->sanitizeText($query),
 				'target' => $sanitizer->sanitizeHrefTarget($target),
 				'attrs' => $attrs,

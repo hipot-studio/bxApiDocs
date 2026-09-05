@@ -30,7 +30,7 @@ class CBitrixCloudOption
 
 	/**
 	 *
-	 * @return array[string]string
+	 * @return array
 	 *
 	 */
 	private function _read_db()
@@ -48,12 +48,13 @@ class CBitrixCloudOption
 			$key = $ar['PARAM_KEY'];
 			$result[$key] = $ar['PARAM_VALUE'];
 		}
+
 		return $result;
 	}
 
 	/**
 	 *
-	 * @return array[string][string]string
+	 * @return array
 	 *
 	 */
 	private function _read_all_db()
@@ -71,52 +72,13 @@ class CBitrixCloudOption
 			$key = $ar['PARAM_KEY'];
 			$result[$name][$key] = $ar['PARAM_VALUE'];
 		}
+
 		return $result;
 	}
 
 	/**
 	 *
-	 * @return void
-	 *
-	 */
-	private function _delete_db()
-	{
-		global $DB;
-		$DB->Query("
-			delete
-			from b_bitrixcloud_option
-			where NAME = '" . $DB->ForSQL($this->name) . "'
-		");
-	}
-
-	/**
-	 *
-	 * @param array[string]string $value
-	 * @return void
-	 *
-	 */
-	private function _write_db($value)
-	{
-		global $DB;
-		if (is_array($value))
-		{
-			$sort = 0;
-			foreach ($value as $key => $val)
-			{
-				$DB->Add('b_bitrixcloud_option', [
-					'NAME' => $this->name,
-					'SORT' => (string)$sort,
-					'PARAM_KEY' => $key,
-					'PARAM_VALUE' => $val,
-				]);
-				$sort++;
-			}
-		}
-	}
-
-	/**
-	 *
-	 * @param array[string]string $value
+	 * @param array|false $value
 	 * @return void
 	 *
 	 */
@@ -190,7 +152,7 @@ class CBitrixCloudOption
 
 	/**
 	 *
-	 * @return array[string]string
+	 * @return array
 	 *
 	 */
 	public function getArrayValue()
@@ -254,7 +216,7 @@ class CBitrixCloudOption
 	}
 
 	/**
-	 * @param array[string]string $value
+	 * @param array $value
 	 * @return void
 	 *
 	 */

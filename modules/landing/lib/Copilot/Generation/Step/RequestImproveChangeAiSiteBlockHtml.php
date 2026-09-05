@@ -15,12 +15,12 @@ use Bitrix\Landing\Copilot\Generation\Step\Base\RuntimeRequestQuotaProvider;
 use Bitrix\Landing\Copilot\Generation\Step\Helper\ChangeAiSiteHtmlContractValidator;
 use Bitrix\Landing\Copilot\Generation\Step\Helper\ChangeAiSiteHtmlQualityDiagnostics;
 use Bitrix\Landing\Copilot\Generation\Step\Helper\ChangeAiSitePlacementContextBuilder;
+use Bitrix\Landing\Copilot\Generation\Step\Helper\ChangeAiSiteStructuralDiff;
 use Bitrix\Landing\Copilot\Generation\Step\Request\RequestMultiple;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntities;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntityDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Model\RequestToEntitiesTable;
-use Bitrix\Landing\Metrika;
 use Bitrix\Main\ORM\Query\Query;
 
 class RequestImproveChangeAiSiteBlockHtml extends RequestMultiple implements RuntimeRequestQuotaProvider
@@ -29,6 +29,9 @@ class RequestImproveChangeAiSiteBlockHtml extends RequestMultiple implements Run
 	private const ACTION_ADD = 'add_block';
 	private const IMPROVE_STATUS_SUCCESS = 'success';
 	private const IMPROVE_STATUS_FALLBACK = 'fallback_base_html';
+	private const STRUCTURE_REGRESSION_DIAGNOSTIC = 'structure_regression';
+	// shadow mode: structural regression is only logged, rollback is armed after calibration
+	private const STRUCTURE_ROLLBACK_ENABLED = false;
 
 	public function __construct()
 	{
@@ -64,11 +67,6 @@ class RequestImproveChangeAiSiteBlockHtml extends RequestMultiple implements Run
 			? new RequestQuotaDto(static::getConnectorClass(), $requestCount)
 			: null
 		;
-	}
-
-	public function getAnalyticEvent(): ?Metrika\Events
-	{
-		return Metrika\Events::textsGeneration;
 	}
 
 	protected function getEntitiesToRequest(): array
@@ -175,6 +173,9 @@ class RequestImproveChangeAiSiteBlockHtml extends RequestMultiple implements Run
 		$htmlBlocks = $this->getHtmlBlocksIndexed();
 		$relations = $this->loadRequestRelations();
 		$updated = false;
+		$editIntent = ChangeAiSiteState::resolveStructuralIntent($this->generation);
+		$rollbackEnabled = $this->isStructureRollbackEnabled();
+		$isStructureGateUsed = $rollbackEnabled || $this->isStructureDiagnosticsEnabled();
 
 		foreach ($this->requests as $request)
 		{
@@ -211,6 +212,43 @@ class RequestImproveChangeAiSiteBlockHtml extends RequestMultiple implements Run
 					$htmlBlocks[$position],
 					'Improve response is invalid.',
 					$contractValidation['blockingDiagnostics'],
+				);
+				$this->markRequestApplied($request);
+				$updated = true;
+				continue;
+			}
+
+			$isRollback = false;
+			if ($isStructureGateUsed)
+			{
+				$structure = ChangeAiSiteStructuralDiff::compare(
+					trim((string)($htmlBlocks[$position]['generatedHtml'] ?? '')),
+					$html,
+				);
+				$hasRegression = $structure['regression'];
+				$isRollback = self::shouldRollbackImprove($hasRegression, $editIntent, $rollbackEnabled);
+				if ($hasRegression)
+				{
+					$this->logStructureRegression([
+						'blockId' => (int)($htmlBlocks[$position]['blockId'] ?? 0),
+						'position' => (int)$position,
+						'containersBefore' => $structure['before'],
+						'containersAfter' => $structure['after'],
+						'containersLost' => $structure['before'] - $structure['after'],
+						'editIntent' => $editIntent,
+						'rollbackEnabled' => $rollbackEnabled,
+						'wouldRollback' => self::shouldRollbackImprove($hasRegression, $editIntent, true),
+						'rollbackApplied' => $isRollback,
+					]);
+				}
+			}
+
+			if ($isRollback)
+			{
+				$this->applyFallback(
+					$htmlBlocks[$position],
+					'Improve regressed structure.',
+					[self::STRUCTURE_REGRESSION_DIAGNOSTIC],
 				);
 				$this->markRequestApplied($request);
 				$updated = true;
@@ -477,6 +515,43 @@ class RequestImproveChangeAiSiteBlockHtml extends RequestMultiple implements Run
 		{
 			unset($item['contractDiagnostics']);
 		}
+	}
+
+	private static function shouldRollbackImprove(
+		bool $hasRegression,
+		string $editIntent,
+		bool $rollbackEnabled,
+	): bool
+	{
+		if (!$rollbackEnabled || !$hasRegression)
+		{
+			return false;
+		}
+
+		return ChangeAiSiteState::normalizeEditIntent($editIntent) !== ChangeAiSiteState::EDIT_INTENT_STRUCTURAL;
+	}
+
+	protected function isStructureRollbackEnabled(): bool
+	{
+		return self::STRUCTURE_ROLLBACK_ENABLED;
+	}
+
+	protected function isStructureDiagnosticsEnabled(): bool
+	{
+		return Log::isEnabled();
+	}
+
+	protected function logStructureRegression(array $summary): void
+	{
+		if (!$this->isStructureDiagnosticsEnabled())
+		{
+			return;
+		}
+
+		(new Log($this->generation->getId()))->addStructureDiagnostics((int)$this->stepId, [
+			'failed' => [self::STRUCTURE_REGRESSION_DIAGNOSTIC],
+			'summary' => $summary,
+		]);
 	}
 
 	private function extractHtmlFromRequestResult(mixed $result): string

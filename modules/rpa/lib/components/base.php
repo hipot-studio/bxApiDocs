@@ -107,11 +107,11 @@ abstract class Base extends \CBitrixComponent implements Errorable
 		while($user = $userList->fetch())
 		{
 			$userId = (int) $user['ID'];
-			$user['FULL_NAME'] = \CUser::FormatName($nameFormat, $user, false, false);
+			$user['FULL_NAME'] = \CUser::formatName($nameFormat, $user, false, false);
 			$user['LINK'] = $urlManager->getUserPersonalUrl($userId);
 			if($user['PERSONAL_PHOTO'] > 0)
 			{
-				$photo = \CFile::ResizeImageGet($user['PERSONAL_PHOTO'], [
+				$photo = \CFile::resizeImageGet($user['PERSONAL_PHOTO'], [
 					'width' => 63,
 					'height' => 63,
 				], BX_RESIZE_IMAGE_EXACT, true, false, true);

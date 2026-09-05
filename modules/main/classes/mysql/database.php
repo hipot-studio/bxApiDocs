@@ -89,6 +89,8 @@ class CDatabaseMysql extends CAllDatabase
 			$field = "#FIELD#";
 		}
 
+		$format = $this->ForSql($format);
+
 		if ($lowerAmPm)
 		{
 			return "REPLACE(REPLACE(DATE_FORMAT(" . $field . ", '" . $format . "'), 'PM', 'pm'), 'AM', 'am')";
@@ -108,7 +110,7 @@ class CDatabaseMysql extends CAllDatabase
 				$diff = CTimeZone::GetOffset();
 			}
 
-			if ($diff <> 0)
+			if ($diff != 0)
 			{
 				$timeZone = $diff > 0 ? "+" . $diff : $diff;
 			}
@@ -363,18 +365,18 @@ class CDatabaseMysql extends CAllDatabase
 		$str2 = "";
 		foreach ($arFields as $field => $value)
 		{
-			$str1 .= ($str1 <> "" ? ", " : "") . $this->quote($field);
+			$str1 .= ($str1 != "" ? ", " : "") . $this->quote($field);
 			if ((string)$value == '')
 			{
-				$str2 .= ($str2 <> "" ? ", " : "") . "''";
+				$str2 .= ($str2 != "" ? ", " : "") . "''";
 			}
 			else
 			{
-				$str2 .= ($str2 <> "" ? ", " : "") . $value;
+				$str2 .= ($str2 != "" ? ", " : "") . $value;
 			}
 		}
 
-		if ($EXIST_ID <> '')
+		if ($EXIST_ID != '')
 		{
 			$strSql = "INSERT INTO " . $table . "(ID," . $str1 . ") VALUES ('" . $this->ForSql($EXIST_ID) . "'," . $str2 . ")";
 		}
@@ -395,7 +397,7 @@ class CDatabaseMysql extends CAllDatabase
 			return false;
 		}
 
-		if ($EXIST_ID <> '')
+		if ($EXIST_ID != '')
 		{
 			return $EXIST_ID;
 		}

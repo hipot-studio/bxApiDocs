@@ -336,7 +336,8 @@ class Img extends Node
 			$newFile = Landing\Manager::savePicture(
 				$fileArray,
 				false,
-				$params
+				$params,
+				true
 			);
 
 			if ($newFile)

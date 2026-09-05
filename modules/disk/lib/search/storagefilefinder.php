@@ -181,6 +181,12 @@ class StorageFileFinder
 			$filter['!=PATH_CHILD.OBJECT_ID'] = $this->options->getFolderId();
 		}
 
+		$typeFileValues = $this->options->getTypeFileValues();
+		if (!empty($typeFileValues))
+		{
+			$filter['@TYPE_FILE'] = $typeFileValues;
+		}
+
 		$filter[] = $this->buildObjectTypeFilter($objectTypes);
 
 		$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck(

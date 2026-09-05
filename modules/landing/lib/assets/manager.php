@@ -332,25 +332,28 @@ class Manager
 	protected function createStringFromPath(string $path, string $type): string
 	{
 		$externalLink = '';
+		// the tag is printed on the page as is, and the path of an asset of a repository block
+		// is stored data: without escaping it ends the attribute and brings own markup along
+		$attribute = htmlspecialcharsbx($path, ENT_QUOTES);
 
 		switch ($type)
 		{
 			case Types::TYPE_CSS:
 			{
-				$externalLink = "<link href=\"$path\" type=\"text/css\" rel=\"stylesheet\">";
+				$externalLink = "<link href=\"$attribute\" type=\"text/css\" rel=\"stylesheet\">";
 				break;
 			}
 
 			case Types::TYPE_JS:
 			{
-				$externalLink = "<script src=\"$path\"></script>";
+				$externalLink = "<script src=\"$attribute\"></script>";
 				break;
 			}
 
 			case Types::TYPE_FONT:
 			{
 				$fontType = self::checkFontLinkType($path);
-				$externalLink = '<link rel="preload" href="' . $path
+				$externalLink = '<link rel="preload" href="' . $attribute
 					. '" as="font" crossorigin="anonymous" type="' . $fontType . '" crossorigin>';
 				break;
 			}

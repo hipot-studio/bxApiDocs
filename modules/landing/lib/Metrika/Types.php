@@ -7,6 +7,7 @@ enum Types: string
 {
 	case ai = 'ai';
 	case template = 'template';
+	case manual = 'manual';
 	case widgetSystem = 'system';
 	case widgetPartner = 'partner';
 	case widgetLocal = 'local';

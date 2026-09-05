@@ -8,14 +8,14 @@ use Bitrix\Main\UpdateSystem\Migration\Tools\SourceCode;
 
 class Agent
 {
-	private readonly string $CAgentClass;
+	private readonly string $agentClass;
 
 	public function __construct(
 		private readonly Context $context,
-		?string $cAgentClass = null,
+		?string $agentClass = null,
 	)
 	{
-		$this->CAgentClass = $cAgentClass ?? \CAgent::class;
+		$this->agentClass = $agentClass ?? \CAgent::class;
 	}
 
 	/**
@@ -109,8 +109,8 @@ class Agent
 			);
 		}
 
-		$cAgent = $this->CAgentClass;
-		$cAgent::RemoveAgent($agentName, $this->context->getModuleId());
+		$agentClass = $this->agentClass;
+		$agentClass::RemoveAgent($agentName, $this->context->getModuleId());
 
 		return $this;
 	}
@@ -177,8 +177,8 @@ class Agent
 			: ''
 		;
 
-		$CAgent = $this->CAgentClass;
-		$CAgent::AddAgent(
+		$agentClass = $this->agentClass;
+		$agentClass::AddAgent(
 			$agentName,
 			$this->context->getModuleId(),
 			$isPeriod ? 'Y' : 'N',

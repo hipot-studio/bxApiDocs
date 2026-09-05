@@ -95,9 +95,15 @@ interface IntegratorInterface
 	 * If response is OK - the token was changed successfully.
 	 *
 	 * @param string $biconnectorToken
+	 * @param bool $arbitrateInstanceStatus Whether the response is allowed to move the local instance
+	 *        status. Background synchronization passes false: a gateway failure on a token push must
+	 *        not drop a live instance out of READY.
 	 * @return IntegratorResponse<Dto\Dashboard>
 	 */
-	public function changeBiconnectorToken(string $biconnectorToken): IntegratorResponse;
+	public function changeBiconnectorToken(
+		string $biconnectorToken,
+		bool $arbitrateInstanceStatus = true,
+	): IntegratorResponse;
 
 	/**
 	 * Returns response with result of clear cache superset.

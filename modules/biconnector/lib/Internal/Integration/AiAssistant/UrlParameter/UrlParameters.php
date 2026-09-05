@@ -30,20 +30,13 @@ final class UrlParameters
 			'select' => ['CODE'],
 		])->fetchAll();
 
-		$urlParams = [];
+		$urlParams = $this->resolveGlobals();
 		foreach ($registered as $param)
 		{
 			$code = $param['CODE'];
 			$parameter = Parameter::tryFrom($code);
-			if ($parameter === null)
+			if ($parameter === null || isset($urlParams[$code]))
 			{
-				continue;
-			}
-
-			if (in_array($parameter, ScopeMap::getGlobals(), true))
-			{
-				$urlParams[$code] = (string)ScopeMap::loadGlobalValue($parameter, $this->userId);
-
 				continue;
 			}
 
@@ -83,6 +76,27 @@ final class UrlParameters
 		}
 
 		return $result->setData(['urlParams' => $urlParams]);
+	}
+
+	/**
+	 * Global parameters go in regardless of registration. They are registered
+	 * when a report is created or saved through the edit form, but there is no
+	 * migration for reports created earlier, and market reports get them only
+	 * with a scope in the manifest. Without `current_user` Superset cannot tell
+	 * on whose behalf it counts: the org-structure filter loses its default and
+	 * the system filter datasets fall back to the whole portal.
+	 *
+	 * @return array<string, string>
+	 */
+	private function resolveGlobals(): array
+	{
+		$urlParams = [];
+		foreach (ScopeMap::getGlobals() as $parameter)
+		{
+			$urlParams[$parameter->code()] = (string)ScopeMap::loadGlobalValue($parameter, $this->userId);
+		}
+
+		return $urlParams;
 	}
 
 	/**

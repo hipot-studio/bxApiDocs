@@ -7,6 +7,7 @@ use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Configuration\Feature;
@@ -24,6 +25,11 @@ use Bitrix\Main\Result;
 abstract class BaseBiTool extends ToolContract
 {
 	private const UNAVAILABLE_DASHBOARD_MESSAGE = 'Dashboard is temporarily unavailable. Try again in a moment, or pick another report.';
+	// Longest refusal the API composes is a couple of sentences plus a value list.
+	private const MAX_REFUSAL_LENGTH = 500;
+	// {@see Integrator\Sender::parseJsonResponse()} wraps a body it could not
+	// decode into an error of its own, carrying that body verbatim.
+	private const UNPARSED_RESPONSE_PREFIX = 'Could not parse server response';
 
 	private static function isBiAvailable(): bool
 	{
@@ -237,6 +243,58 @@ abstract class BaseBiTool extends ToolContract
 		}
 
 		return new McpException($message);
+	}
+
+	/**
+	 * Translate a failed Integrator response for the agent. A `400` carries its
+	 * reason through: what has to change is the request itself, so answering
+	 * "try again later" both hides the cause and advises the wrong action.
+	 * Everything else — transport, instance status, upstream failure — stays
+	 * masked by {@see unavailableDashboardException()}. `403`/`404` are masked
+	 * too: access and existence are decided locally before any Integrator call,
+	 * so a remote one speaks about our sync state, not about the user's request.
+	 */
+	protected static function integratorFailureException(
+		IntegratorResponse $response,
+		array $context,
+	): McpException
+	{
+		$errors = $response->getErrors();
+		// A response can fail by carrying no data at all, with no error attached.
+		$message = trim(($errors[0] ?? null)?->getMessage() ?? '');
+		if (
+			$response->getStatus() !== IntegratorResponse::STATUS_BAD_REQUEST
+			|| !self::isRecognizedRefusal($message)
+		)
+		{
+			return self::unavailableDashboardException($errors, $context);
+		}
+
+		AiToolsLogger::logWarning($errors, $context);
+
+		return new McpException($message);
+	}
+
+	/**
+	 * Whether a `400` text is a refusal formulated by the API rather than an
+	 * arbitrary response body. Anything the remote side did not phrase for the
+	 * agent — a proxy error page, an unparsed body wrapped by the Integrator —
+	 * lands verbatim in the model context, so it is both noise and an indirect
+	 * prompt-injection channel, and gets masked instead.
+	 */
+	private static function isRecognizedRefusal(string $message): bool
+	{
+		if ($message === '' || mb_strlen($message) > self::MAX_REFUSAL_LENGTH)
+		{
+			return false;
+		}
+
+		if (str_contains($message, '<'))
+		{
+			return false;
+		}
+
+		return !str_starts_with($message, self::UNPARSED_RESPONSE_PREFIX);
 	}
 
 	/**

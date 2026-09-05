@@ -5,6 +5,7 @@ namespace Bitrix\Intranet\Service;
 use Bitrix\Intranet\Contract\Repository\DepartmentRepository;
 use Bitrix\Intranet\Contract\Repository\InvitationLinkRepository;
 use Bitrix\Intranet\Internal\Repository\InvitationRepository;
+use Bitrix\Intranet\Profile\View\ProfileViewResolver;
 use Bitrix\Intranet\Service\User\MiniProfileService;
 use Bitrix\Intranet\Public\Service\InvitationService;
 use Bitrix\Main\DI\ServiceLocator;
@@ -110,5 +111,10 @@ class ServiceContainer implements ContainerInterface
 	public function getUserMiniProfileService(): MiniProfileService
 	{
 		return $this->get('service.user.mini-profile');
+	}
+
+	public function profileViewResolver(): ProfileViewResolver
+	{
+		return $this->get('profile.view.resolver');
 	}
 }

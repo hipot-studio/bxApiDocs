@@ -170,12 +170,26 @@ class Block
 			if (isset($blocks[$block]))
 			{
 				$currBlock = $blocks[$block];
+				$changeDetector = new Metrika\BlockContentChangeDetector();
+				$manifest = $currBlock->getManifest();
+				$contentBefore = self::takeBlockContentSnapshot($changeDetector, $currBlock, null, $manifest);
 				$currBlock->updateCards((array)$data);
 				$result->setResult($currBlock->save());
 				$result->setError($currBlock->getError());
 				if ($currBlock->getError()->isEmpty())
 				{
 					$landing->touch();
+					if ($contentBefore !== null)
+					{
+						self::sendBlockEditAnalytics(
+							$changeDetector,
+							$currBlock,
+							$contentBefore,
+							null,
+							$manifest,
+							$landing->getSiteTypeCode()
+						);
+					}
 				}
 			}
 			else
@@ -455,6 +469,20 @@ class Block
 				$blocks = $landing->getBlocks();
 				if (isset($blocks[$block]))
 				{
+					$changeDetector = new Metrika\BlockContentChangeDetector();
+					$editedSelectors = array_merge(
+						array_keys($content),
+						array_keys($attributes),
+						array_keys($components)
+					);
+					// manifest is parsed once for the whole save - it is the same for every step below
+					$manifest = $blocks[$block]->getManifest();
+					$contentBefore = self::takeBlockContentSnapshot(
+						$changeDetector,
+						$blocks[$block],
+						$editedSelectors,
+						$manifest
+					);
 					if (!empty($content))
 					{
 						$blocks[$block]->updateNodes($content, $additional);
@@ -468,7 +496,6 @@ class Block
 						// fix for security waf
 						if (!$blocks[$block]->getRepoId())
 						{
-							$manifest = $blocks[$block]->getManifest();
 							foreach ($components as $selector => &$attrs)
 							{
 								if (
@@ -504,6 +531,17 @@ class Block
 					if ($blocks[$block]->getError()->isEmpty())
 					{
 						$landing->touch();
+						if ($contentBefore !== null)
+						{
+							self::sendBlockEditAnalytics(
+								$changeDetector,
+								$blocks[$block],
+								$contentBefore,
+								$editedSelectors,
+								$manifest,
+								$landing->getSiteTypeCode()
+							);
+						}
 					}
 				}
 				else
@@ -527,6 +565,81 @@ class Block
 		$result->setError($error);
 
 		return $result;
+	}
+
+	/**
+	 * Reads the content of the block for the analytics before the save changes it.
+	 * @param Metrika\BlockContentChangeDetector $changeDetector Detector holding the rules of the comparison.
+	 * @param BlockCore $block Block with the DOM already loaded for the save.
+	 * @param array|null $selectors Selectors touched by the save, null means all of them.
+	 * @param array $manifest Manifest of the saved block, read once for the whole save.
+	 * @return array|null Snapshot of the content, null when it cannot be read.
+	 */
+	private static function takeBlockContentSnapshot(
+		Metrika\BlockContentChangeDetector $changeDetector,
+		BlockCore $block,
+		?array $selectors,
+		array $manifest
+	): ?array
+	{
+		try
+		{
+			return $changeDetector->takeSnapshot($block, $selectors, $manifest);
+		}
+		catch (\Throwable)
+		{
+			// analytics must never break the save of the user; a content that was not read is not an
+			// empty one - comparing with it would report every selector of the block as changed,
+			// so the caller drops the event instead of comparing
+			return null;
+		}
+	}
+
+	/**
+	 * Sends one analytic event per kind of content the save has changed by hand.
+	 * Applying of generated HTML (updateContent) is not a manual edit and is never marked here.
+	 * Is called only when the snapshot before the save has really been read.
+	 * @param Metrika\BlockContentChangeDetector $changeDetector Detector holding the rules of the comparison.
+	 * @param BlockCore $block Saved block.
+	 * @param array $contentBefore Snapshot taken before the save.
+	 * @param array|null $selectors Selectors touched by the save, null means all of them.
+	 * @param array $manifest Manifest of the saved block, read once for the whole save.
+	 * @param string $siteType Type of the site of the edited landing, taken from the instance of the
+	 * landing itself: the static Landing::getSiteType() is overwritten by any landing loaded later,
+	 * including the ones loaded by handlers of the save events of other modules.
+	 * @return void
+	 */
+	private static function sendBlockEditAnalytics(
+		Metrika\BlockContentChangeDetector $changeDetector,
+		BlockCore $block,
+		array $contentBefore,
+		?array $selectors,
+		array $manifest,
+		string $siteType
+	): void
+	{
+		try
+		{
+			$changedKinds = $changeDetector->detect(
+				$contentBefore,
+				$changeDetector->takeSnapshot($block, $selectors, $manifest),
+				$manifest
+			);
+			if (!$changedKinds)
+			{
+				return;
+			}
+
+			$sender = new Metrika\BlockEditMetrikaSender();
+			foreach ($changedKinds as $changedKind)
+			{
+				$sender->sendManualEdit($siteType, $changedKind);
+			}
+		}
+		catch (\Throwable)
+		{
+			// analytics must never break the save that has already succeeded
+		}
 	}
 
 	/**
@@ -806,7 +919,6 @@ class Block
 			if ($landing->exist())
 			{
 				$metrikaParams = new Metrika\FieldsDto(
-					type: Metrika\Types::template,
 					subSection: 'from_editor',
 					element: 'auto',
 				);

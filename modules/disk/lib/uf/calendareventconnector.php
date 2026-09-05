@@ -5,6 +5,7 @@ namespace Bitrix\Disk\Uf;
 use Bitrix\Disk\Integration\Calendar\EventConnectorHelperHandler;
 use Bitrix\Disk\Ui;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 
@@ -127,7 +128,7 @@ final class CalendarEventConnector extends StubConnector
 
 		return array(
 			'TITLE' => Loc::getMessage('DISK_UF_CAL_EVENT_CONNECTOR_TITLE').": ".$event['NAME'],
-			'DETAIL_URL' => \CHTTP::urlAddParams(\CCalendar::GetPath($event['CAL_TYPE'], $event['OWNER_ID'], true), array('EVENT_ID' => $event['ID'])),
+			'DETAIL_URL' => (string)(new Uri(\CCalendar::GetPath($event['CAL_TYPE'], $event['OWNER_ID'], true)))->addParams(['EVENT_ID' => $event['ID']]),
 			'DESCRIPTION' => Ui\Text::killTags($event['DESCRIPTION']),
 			'MEMBERS' => $members
 		);

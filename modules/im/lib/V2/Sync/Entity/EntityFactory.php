@@ -7,11 +7,12 @@ use Bitrix\Im\V2\Sync\Event;
 
 class EntityFactory
 {
-	public function createEntities(array $logEvents): Entities
+	public function createEntities(array $logEvents, int $currentUserId = 0): Entities
 	{
 		$messages = new Messages();
 		$chats = new Chats();
 		$pins = new PinMessages();
+		$users = new Users();
 
 		foreach ($logEvents as $logEvent)
 		{
@@ -29,11 +30,14 @@ class EntityFactory
 				case Event::PIN_MESSAGE_ENTITY:
 					$pins->add($event);
 					break;
+				case Event::USER_ENTITY:
+					$users->add($event);
+					break;
 			}
 		}
 
 		$dialogIds = new DialogIds($chats);
 
-		return new Entities($chats, $messages, $pins, $dialogIds);
+		return new Entities($chats, $messages, $pins, $dialogIds, $users, $currentUserId);
 	}
 }

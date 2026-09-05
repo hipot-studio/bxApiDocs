@@ -5,11 +5,11 @@ namespace Bitrix\Im\V2\Chat\ExternalChat\Event;
 use Bitrix\Im\V2\Chat\ExternalChat;
 use Bitrix\Im\V2\Message;
 
-class AfterSendMessageEvent extends ChatEvent
+class AfterSendMessageEvent extends ChatEvent implements InitiatedByUserInterface
 {
-	public function __construct(ExternalChat $chat, Message $message)
+	public function __construct(ExternalChat $chat, int $initiatorId, Message $message)
 	{
-		$parameters = ['message' => $message];
+		$parameters = ['initiatorId' => $initiatorId, 'message' => $message];
 
 		parent::__construct($chat, $parameters);
 	}
@@ -17,6 +17,11 @@ class AfterSendMessageEvent extends ChatEvent
 	protected function getActionName(): string
 	{
 		return 'AfterSendMessage';
+	}
+
+	public function getInitiatorId(): int
+	{
+		return $this->parameters['initiatorId'];
 	}
 
 	public function getMessage(): Message

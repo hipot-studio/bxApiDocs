@@ -6,6 +6,8 @@ namespace Bitrix\Landing\Integration\AiAssistant;
 
 use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteErrorMessages;
+use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteSelectedElement;
+use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteSelectedElementErrorMessages;
 use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteState;
 use Bitrix\Landing\Copilot\Generation\Type\StepStatuses;
 use Bitrix\Landing\Copilot\Model\StepsTable;
@@ -199,7 +201,24 @@ final class AiSiteChangeGenerationHelper
 			}
 		}
 
-		return ChangeAiSiteErrorMessages::resolve($stepId);
+		return self::resolveErrorMessage($generation, $stepId);
+	}
+
+	private static function resolveErrorMessage(Generation $generation, int $stepId): string
+	{
+		$scenario = $generation->getScenario();
+		if ($scenario instanceof ChangeAiSiteSelectedElement)
+		{
+			return ChangeAiSiteSelectedElementErrorMessages::resolve(
+				$stepId,
+				ChangeAiSiteState::getSelectionDebug($generation),
+			);
+		}
+
+		return ChangeAiSiteErrorMessages::resolve(
+			$stepId,
+			ChangeAiSiteState::getSelectionDebug($generation),
+		);
 	}
 
 	private static function resolveSelectionReason(Generation $generation): string
@@ -209,6 +228,17 @@ final class AiSiteChangeGenerationHelper
 		if ($reason === '')
 		{
 			return '';
+		}
+
+		$detail = trim((string)($selectionDebug['detail'] ?? ''));
+		if ($detail !== '')
+		{
+			$reason .= ' (' . $detail . ')';
+		}
+
+		if ($generation->getScenario() instanceof ChangeAiSiteSelectedElement)
+		{
+			return 'Failed to resolve selected element for update: ' . $reason;
 		}
 
 		return 'Failed to select blocks for update: ' . $reason;

@@ -5,7 +5,12 @@ namespace Bitrix\Disk\Document;
 
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\Contract\CloudImportInterface;
+use Bitrix\Disk\Document\Contract\FileCreatable;
+use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
+use Bitrix\Disk\Document\Vibeoffice\Configuration as VibeofficeConfiguration;
+use Bitrix\Disk\Document\Vibeoffice\ProjectCohort;
+use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Enum\CustomServerTypes;
 use Bitrix\Disk\Internal\Interface\CustomServerInterface;
@@ -18,6 +23,7 @@ use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Public\Provider\CustomServerAvailabilityProvider;
 use Bitrix\Disk\Public\Provider\CustomServerProvider;
 use Bitrix\Disk\UI\Viewer\Renderer\Board;
+use Bitrix\Disk\UI\Viewer\Renderer\Markdown;
 use Bitrix\Disk\User;
 use Bitrix\Disk\UserConfiguration;
 use Bitrix\Main\DI\ServiceLocator;
@@ -115,6 +121,83 @@ class DocumentHandlersManager
 	}
 
 	/**
+	 * Resolves the effective document handler for a dispatch request.
+	 *
+	 * When the resolved handler is an OnlyOfficeHandler (including its custom-server subclasses) and
+	 * vibeoffice is enabled on the portal, the office engine is translated to the {@see VibeofficeHandler}.
+	 * Otherwise the handler is returned as is (including null for an unknown code). This is the single
+	 * seam where the engine is chosen.
+	 *
+	 * The translation is additionally narrowed by the project cohort: with an allowlist of workgroup
+	 * ids configured ({@see VibeofficeConfiguration::getEnabledGroupIds()}) only opens whose file lives
+	 * in the disk of an allowlisted workgroup are translated (see {@see isVibeofficeAllowedForContext()}).
+	 * An empty allowlist keeps the feature portal-wide (current behaviour).
+	 *
+	 * @param string $serviceCode
+	 * @param DocumentResolveContext|null $context
+	 * @return DocumentHandler|null
+	 * @throws SystemException
+	 */
+	public function resolveEffectiveHandler(string $serviceCode, ?DocumentResolveContext $context = null): ?DocumentHandler
+	{
+		$handler = $this->getHandlerByCode($serviceCode);
+
+		if (
+			$handler instanceof OnlyOfficeHandler
+			&& VibeofficeHandler::isEnabled()
+			&& $this->isVibeofficeAllowedForContext($context)
+		)
+		{
+			return $this->getHandlerByCode(VibeofficeHandler::getCode());
+		}
+
+		return $handler;
+	}
+
+	/**
+	 * Decides whether an eligible office open may be narrowed to vibeoffice for the given context.
+	 *
+	 * An empty allowlist keeps the feature portal-wide (current behaviour) and skips the object
+	 * lookup. Otherwise the open is allowed only when its file lives in the disk of an allowlisted
+	 * workgroup; every fail-closed case (no context / no object id / non-group storage) keeps the
+	 * open on OnlyOffice. External access is intentionally not special-cased — the engine is a
+	 * property of the file's storage, identical on every access path.
+	 */
+	private function isVibeofficeAllowedForContext(?DocumentResolveContext $context): bool
+	{
+		$allowed = $this->getVibeofficeConfiguration()->getEnabledGroupIds();
+		if (empty($allowed))
+		{
+			return true;
+		}
+
+		return ProjectCohort::isAllowed(ProjectCohort::resolveGroupId($context), $allowed);
+	}
+
+	private function getVibeofficeConfiguration(): VibeofficeConfiguration
+	{
+		return ServiceLocator::getInstance()->get('disk.vibeofficeConfiguration');
+	}
+
+	/**
+	 * Maps the SERVICE of an already existing document session to the editor shell component name.
+	 *
+	 * The source of truth is the session's own SERVICE, NOT {@see VibeofficeHandler::isEnabled()}:
+	 * this keeps rendering by an existing session correct even when the portal flag was just turned
+	 * off after the session had been created as vibeoffice. With the flag off no vibeoffice session
+	 * can exist, so the SERVICE is never vibeoffice and the onlyoffice shell is chosen (zero regression).
+	 *
+	 * @param DocumentService|null $service
+	 * @return string
+	 */
+	public static function resolveShellComponentName(?DocumentService $service): string
+	{
+		return $service === DocumentService::Vibeoffice
+			? 'bitrix:disk.file.editor-vibeoffice'
+			: 'bitrix:disk.file.editor-onlyoffice';
+	}
+
+	/**
 	 * Returns all list of document handlers.
 	 * @return DocumentHandler[]
 	 */
@@ -141,6 +224,27 @@ class DocumentHandlersManager
 	private function shouldHideGoogleFromImport(DocumentHandler $handler): bool
 	{
 		return false;
+	}
+
+	/**
+	 * Handlers eligible for user-facing "create/open with" pickers:
+	 * {@see FileCreatable} handlers minus internal engines
+	 * ({@see DocumentHandler::isSelectableForCreation()}).
+	 *
+	 * @return DocumentHandler[] keyed by handler code
+	 */
+	public function getHandlersForCreatingFile(): array
+	{
+		$list = [];
+		foreach ($this->getHandlers() as $code => $handler)
+		{
+			if ($handler instanceof FileCreatable && $handler::isSelectableForCreation())
+			{
+				$list[$code] = $handler;
+			}
+		}
+
+		return $list;
 	}
 
 	/**
@@ -217,6 +321,10 @@ class DocumentHandlersManager
 				(
 					$code !== OnlyOfficeHandler::getCode() ||
 					OnlyOfficeHandler::isEnabled(true)
+				) &&
+				(
+					$code !== VibeofficeHandler::getCode() ||
+					VibeofficeHandler::isEnabled()
 				)
 			)
 			{
@@ -290,6 +398,11 @@ class DocumentHandlersManager
 		if(Flipchart\Configuration::isBoardsEnabled())
 		{
 			$this->documentHandlerList[BoardsHandler::getCode()] = BoardsHandler::class;
+		}
+
+		if (VibeofficeHandler::isEnabled())
+		{
+			$this->documentHandlerList[VibeofficeHandler::getCode()] = VibeofficeHandler::class;
 		}
 
 		$this->documentHandlerList[BitrixHandler::getCode()] = BitrixHandler::class;
@@ -396,6 +509,11 @@ class DocumentHandlersManager
 		$renderersList = [
 			Board::class,
 		];
+
+		if (Configuration::isEnabledMarkdownViewer())
+		{
+			$renderersList[] = Markdown::class;
+		}
 
 		$event->addResult(new EventResult(EventResult::SUCCESS, $renderersList));
 	}

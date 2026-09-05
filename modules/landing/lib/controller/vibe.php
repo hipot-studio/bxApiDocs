@@ -13,12 +13,17 @@ use Bitrix\Main\Web\HttpClient;
 use Bitrix\Landing;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\Assets;
-use Bitrix\Landing\Copilot\Connector;
 use Bitrix\Rest;
 
 class Vibe extends Controller
 {
 	private const SUBTYPE_WIDGET = 'widgetvue';
+	// seconds of inactivity, not of the whole request
+	private const HANDLER_TIMEOUT = 5;
+	private const HANDLER_BODY_LENGTH_MAX = 1024 * 1024;
+
+	// codes HttpClient reports when it refuses the destination itself, see HttpClient::checkRequest()
+	private const HANDLER_ADDRESS_ERROR_CODES = ['PRIVATE_IP', 'URI_SCHEME', 'URI_HOST', 'URI_PUNICODE'];
 
 	/**
 	 * Get core extensions and styles configs, load relations, load lang phrases
@@ -37,8 +42,8 @@ class Vibe extends Controller
 			->addAsset($coreExts)
 		;
 
-		$siteTemplatePath =
-			(defined('SITE_TEMPLATE_PATH') ? SITE_TEMPLATE_PATH : '/bitrix/templates/bitrix24');
+		$siteTemplatePath
+			= (defined('SITE_TEMPLATE_PATH') ? SITE_TEMPLATE_PATH : '/bitrix/templates/bitrix24');
 		$style = $siteTemplatePath . '/dist/bitrix24.bundle.css';
 		$assetsManager->addAsset($style);
 
@@ -73,7 +78,7 @@ class Vibe extends Controller
 		if (!$block->getId())
 		{
 			$this->addError(
-				new Error(Loc::getMessage('LANDING_WIDGET_BLOCK_NOT_FOUND'), 'BLOCK_NOT_FOUND')
+				new Error(Loc::getMessage('LANDING_WIDGET_BLOCK_NOT_FOUND'), 'BLOCK_NOT_FOUND'),
 			);
 
 			return null;
@@ -82,7 +87,7 @@ class Vibe extends Controller
 		if (!Loader::includeModule('rest'))
 		{
 			$this->addError(
-				new Error(Loc::getMessage('LANDING_WIDGET_REST_NOT_FOUND'), 'REST_NOT_FOUND')
+				new Error(Loc::getMessage('LANDING_WIDGET_REST_NOT_FOUND'), 'REST_NOT_FOUND'),
 			);
 
 			return null;
@@ -98,7 +103,7 @@ class Vibe extends Controller
 		)
 		{
 			$this->addError(
-				new Error(Loc::getMessage('LANDING_WIDGET_APP_NOT_FOUND'), 'APP_NOT_FOUND')
+				new Error(Loc::getMessage('LANDING_WIDGET_APP_NOT_FOUND'), 'APP_NOT_FOUND'),
 			);
 
 			return null;
@@ -109,7 +114,7 @@ class Vibe extends Controller
 		if (!$appHasAccess)
 		{
 			$this->addError(
-				new Error(Loc::getMessage('LANDING_WIDGET_APP_NO_ACCESS'), 'APP_NO_ACCESS')
+				new Error(Loc::getMessage('LANDING_WIDGET_APP_NO_ACCESS'), 'APP_NO_ACCESS'),
 			);
 
 			return null;
@@ -119,20 +124,22 @@ class Vibe extends Controller
 			$app['CLIENT_ID'],
 			'landing',
 			[],
-			Manager::getUserId()
+			Manager::getUserId(),
 		);
 		if ($auth && isset($auth['error']))
 		{
 			$this->addError(
 				new Error(
 					$auth['error_description'] ?? '',
-					'APP_AUTH_ERROR__' . $auth['error']
-				)
+					'APP_AUTH_ERROR__' . $auth['error'],
+				),
 			);
 
 			return null;
 		}
-		$params['auth'] = $auth;
+		// auth goes to the handler only: $params keeps what the caller sent, the usage stat type below reads it
+		$requestParams = $params;
+		$requestParams['auth'] = $auth;
 
 		// check subtype
 		$manifest = $block->getManifest();
@@ -143,26 +150,19 @@ class Vibe extends Controller
 		)
 		{
 			$this->addError(
-				new Error(Loc::getMessage('LANDING_WIDGET_HANDLER_NOT_FOUND_2'), 'HANDLER_NOT_FOUND')
+				new Error(Loc::getMessage('LANDING_WIDGET_HANDLER_NOT_FOUND_2'), 'HANDLER_NOT_FOUND'),
 			);
 
 			return null;
 		}
 
 		// request
-		$url = (string)$manifest['block']['subtype_params']['handler'];
-		$http = new HttpClient();
-		$data = $http->post(
-			$url,
-			$params
+		$data = $this->requestWidgetHandler(
+			(string)$manifest['block']['subtype_params']['handler'],
+			$requestParams,
 		);
-
-		if ($http->getStatus() !== 200)
+		if ($data === null)
 		{
-			$this->addError(
-				new Error(Loc::getMessage('LANDING_WIDGET_HANDLER_NOT_ALLOW'), 'HANDLER_NOT_ALLOW')
-			);
-
 			return null;
 		}
 
@@ -170,16 +170,103 @@ class Vibe extends Controller
 		Rest\UsageStatTable::logLandingWidget($app['CLIENT_ID'], $type);
 		Rest\UsageStatTable::finalize();
 
-		if (isset($data['error']))
+		return $data;
+	}
+
+	/**
+	 * Requests the widget handler; adds an error and returns null when there is no answer to return.
+	 *
+	 * @param string $handler Handler url from the block manifest
+	 * @param array $params Request payload
+	 * @return string|null Raw response body, the caller of the action parses it
+	 */
+	protected function requestWidgetHandler(string $handler, array $params): ?string
+	{
+		// manifests saved before the handler validation appeared are checked here, not on write
+		$url = Landing\Sanitizer::sanitizeWidgetHandlerUrl($handler);
+		if ($url === '')
+		{
+			$this->addError($this->createHandlerAddressError());
+
+			return null;
+		}
+
+		$httpClient = $this->createHandlerHttpClient();
+		$data = $httpClient->post($url, $params);
+
+		if ($data === false)
 		{
 			$this->addError(
-				new Error($data['error'], $data['error_description'] ?? '')
+				$this->isAddressRefused($httpClient)
+					? $this->createHandlerAddressError()
+					: new Error(Loc::getMessage('LANDING_WIDGET_HANDLER_NOT_ALLOW'), 'HANDLER_NOT_ALLOW'),
+			);
+
+			return null;
+		}
+
+		$status = $httpClient->getStatus();
+		if ($status !== 200)
+		{
+			$this->addError(
+				new Error(
+					Loc::getMessage('LANDING_WIDGET_HANDLER_ANSWER_STATUS', ['#status#' => $status]),
+					'HANDLER_ANSWER_STATUS'
+				),
+			);
+
+			return null;
+		}
+
+		// an empty body reaches the client as a parse error of its own, which tells nothing
+		if ($data === '')
+		{
+			$this->addError(
+				new Error(Loc::getMessage('LANDING_WIDGET_HANDLER_ANSWER_EMPTY'), 'HANDLER_ANSWER_EMPTY'),
 			);
 
 			return null;
 		}
 
 		return $data;
+	}
+
+	/**
+	 * Builds the client for the handler url: it comes from a REST application, so private
+	 * addresses must be refused on every redirect hop and a slow answer must not hold a worker.
+	 *
+	 * @return HttpClient
+	 */
+	protected function createHandlerHttpClient(): HttpClient
+	{
+		return (new HttpClient())
+			->setPrivateIp(false)
+			->setTimeout(self::HANDLER_TIMEOUT)
+			->setStreamTimeout(self::HANDLER_TIMEOUT)
+			->setBodyLengthMax(self::HANDLER_BODY_LENGTH_MAX)
+		;
+	}
+
+	private function isAddressRefused(HttpClient $httpClient): bool
+	{
+		$errors = $httpClient->getError();
+		foreach (self::HANDLER_ADDRESS_ERROR_CODES as $code)
+		{
+			if (isset($errors[$code]))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function createHandlerAddressError(): Error
+	{
+		return new Error(
+			Loc::getMessage('LANDING_WIDGET_HANDLER_ADDRESS_NOT_ALLOWED'),
+			'HANDLER_ADDRESS_NOT_ALLOWED',
+		);
 	}
 
 	public function publishAction(string $moduleId, string $embedId): Response\AjaxJson

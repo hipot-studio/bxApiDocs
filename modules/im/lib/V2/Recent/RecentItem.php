@@ -33,11 +33,17 @@ class RecentItem implements RestConvertible
 	public static function initByEntity(EO_Recent $entity): self
 	{
 		$recentItem = new static();
+		// Derive fields from the entity's own data (see initByArray): type from ITEM_TYPE, a user-type item resolves to
+		// the companion (ITEM_ID); any chat-type item resolves to 'chat'.ITEM_CID, id 0.
+		$type = RecentType::tryFromChatType($entity->getItemType());
+		$isUser = $type === RecentType::User;
 		$recentItem
 			->setMessageId($entity->getItemMid())
 			->setOwnMessageId($entity->getItemMid())
 			->setChatId($entity->getItemCid())
-			->setDialogId('chat' . $entity->getItemCid()) // TODO: replace
+			->setDialogId($isUser ? self::formDialogId($entity->getItemId(), $entity->getItemType()) : 'chat' . $entity->getItemCid())
+			->setType($type)
+			->setId($isUser ? $entity->getItemId() : 0)
 			->setUnread($entity->getUnread())
 			->setPinned($entity->getPinned())
 			->setLastReadMessageId((int)$entity->getRelation()?->getLastId())
@@ -54,11 +60,26 @@ class RecentItem implements RestConvertible
 	{
 		$recentItem = new static();
 
+		// Derive dialogId/type/id from the row's own data when we have it (ITEM_TYPE + ITEM_ID present); otherwise fall
+		// back to the exact pre-existing (master) behavior. type is derived from ITEM_TYPE for EVERY type via
+		// RecentType::tryFromChatType (private -> User, all others -> Chat). Only a user-type item resolves to a person:
+		// dialogId = companion userId (ITEM_ID; self-chat -> own userId), id = ITEM_ID. Any chat-type item — and any
+		// source lacking ITEM_TYPE/ITEM_ID (sibling fetches / RecentChannel) — resolves to dialogId = 'chat'.ITEM_CID
+		// (chatId, NOT ITEM_ID: no dependency on the ITEM_ID == chatId invariant, so open lines/channels/collabs are
+		// byte-identical to master), type = Chat, id = 0.
+		// NOTE: id is not serialized — it only feeds Recent::getPopupData's User branch (companion hydration).
+		$type = isset($entity['ITEM_TYPE'], $entity['ITEM_ID'])
+			? RecentType::tryFromChatType((string)$entity['ITEM_TYPE'])
+			: RecentType::Chat;
+		$isUser = $type === RecentType::User;
+
 		$recentItem
 			->setMessageId($entity["ITEM_MID"] ?? 0)
 			->setOwnMessageId($entity["ITEM_MID"] ?? 0)
 			->setChatId($entity["ITEM_CID"] ?? 0)
-			->setDialogId('chat' . $entity["ITEM_CID"]) // TODO: replace
+			->setDialogId($isUser ? self::formDialogId((int)$entity['ITEM_ID'], (string)$entity['ITEM_TYPE']) : 'chat' . $entity["ITEM_CID"])
+			->setType($type)
+			->setId($isUser ? (int)$entity['ITEM_ID'] : 0)
 			->setUnread($entity["UNREAD"] === 'Y')
 			->setPinned($entity["PINNED"] === 'Y')
 			->setLastReadMessageId((int)$entity['RELATION.LAST_ID'])

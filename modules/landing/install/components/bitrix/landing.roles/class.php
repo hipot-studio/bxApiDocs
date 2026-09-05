@@ -4,8 +4,12 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\Rights;
 use \Bitrix\Landing\Role;
+use \Bitrix\Main\Localization\Loc;
+
+Loc::loadMessages(__FILE__);
 
 \CBitrixComponent::includeComponentClass('bitrix:landing.base');
 
@@ -17,7 +21,7 @@ class LandingRolesComponent extends LandingBaseComponent
 	 */
 	protected function actionMode()
 	{
-		if (\Bitrix\Landing\Rights::isAdmin())
+		if (Rights::isAdmin() && Rights::canSwitchMode())
 		{
 			Rights::switchMode();
 			return true;
@@ -34,16 +38,31 @@ class LandingRolesComponent extends LandingBaseComponent
 	 */
 	protected function actionSaveExtended()
 	{
-		if (\Bitrix\Landing\Rights::isAdmin())
+		if ($this->canChangeRoles())
 		{
 			$rights = (array)$this->request('rights');
+			// the whole set is checked before the first write: the form is filled before the action
+			// runs, so a partly written set would be shown by the values it had before the save
+			foreach ($rights as $code => $access)
+			{
+				if (!is_string($code) || !Rights::isExtendedGrantAcceptable($code))
+				{
+					// the codes themselves are not named: the message must not describe the rights of
+					// another scope. false keeps the dispatcher from redirecting past the error
+					$this->addError(
+						'LANDING_ERROR_RIGHTS_SCOPE_MISMATCH'
+					);
+					return false;
+				}
+			}
 			foreach ($rights as $code => $access)
 			{
 				Rights::setAdditionalRightExtended(
 					$code,
-					$access
+					(array)$access
 				);
 			}
+
 			return true;
 		}
 
@@ -59,7 +78,7 @@ class LandingRolesComponent extends LandingBaseComponent
 	 */
 	protected function actionSave()
 	{
-		if (\Bitrix\Landing\Rights::isAdmin())
+		if ($this->canChangeRoles())
 		{
 			$rights = $this->request('rights');
 			$roles = (array)$this->request('roles');
@@ -117,6 +136,18 @@ class LandingRolesComponent extends LandingBaseComponent
 			'ACCESS_DENIED'
 		);
 		return false;
+	}
+
+	/**
+	 * May the current user change the roles?
+	 * Role::setRights() and Role::setAccessCodes() refuse to write without the permissions feature,
+	 * but Role::delete() has no gate of its own, so the saving actions check the feature themselves,
+	 * the same way PublicAction\Role::init() does.
+	 * @return bool
+	 */
+	protected function canChangeRoles(): bool
+	{
+		return Rights::isAdmin() && Manager::checkFeature(Manager::FEATURE_PERMISSIONS_AVAILABLE);
 	}
 
 	/**

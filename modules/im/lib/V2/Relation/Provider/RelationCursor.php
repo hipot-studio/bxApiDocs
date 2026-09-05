@@ -12,8 +12,24 @@ use Bitrix\Main\Validation\Rule\PositiveNumber;
 
 class RelationCursor implements RestConvertible
 {
+	/**
+	 * Pseudo-role used only by the cursor to address the "guest = collaber" group in grouped
+	 * sort. It never collides with UserType::GUEST and never appears in the relation rest role.
+	 */
+	public const ROLE_GUEST_GROUP = 'GUEST_GROUP';
+
+	/**
+	 * Maps a cursor role (real role or the guest_group pseudo-role) to the ALG-01 group rank.
+	 */
+	public const RANK_BY_ROLE_MAP = [
+		Chat::ROLE_OWNER => RelationProvider::GROUP_RANK_OWNER,
+		Chat::ROLE_MANAGER => RelationProvider::GROUP_RANK_MANAGER,
+		self::ROLE_GUEST_GROUP => RelationProvider::GROUP_RANK_GUEST,
+		Chat::ROLE_MEMBER => RelationProvider::GROUP_RANK_MEMBER,
+	];
+
 	public function __construct(
-		#[InArray([Chat::ROLE_MEMBER, Chat::ROLE_MANAGER, Chat::ROLE_OWNER])]
+		#[InArray([Chat::ROLE_MEMBER, Chat::ROLE_MANAGER, Chat::ROLE_OWNER, self::ROLE_GUEST_GROUP])]
 		public readonly string $role,
 		#[PositiveNumber]
 		public readonly int $relationId,
@@ -35,6 +51,15 @@ class RelationCursor implements RestConvertible
 	public static function createFromArray(array $parameters): static
 	{
 		return new static(mb_strtoupper($parameters['role'] ?? ''), (int)($parameters['relationId'] ?? 0));
+	}
+
+	/**
+	 * Group rank for grouped applyCursor. Unknown roles fall back to the "member" group so a
+	 * guest_group cursor passed into the default (flag off) call never crashes the public REST.
+	 */
+	public static function rankByRole(string $role): int
+	{
+		return self::RANK_BY_ROLE_MAP[$role] ?? RelationProvider::GROUP_RANK_MEMBER;
 	}
 
 	public static function getNext(RelationCollection $relations, int $limit): ?static

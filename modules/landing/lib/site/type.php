@@ -51,6 +51,17 @@ class Type
 	];
 
 	/**
+	 * Closed list of scope codes having own class in the Scope namespace.
+	 * Scope code comes from untrusted input, so the class is taken from here
+	 * and never built by concatenating the input with a namespace prefix.
+	 */
+	private const SCOPE_CLASSES = [
+		self::SCOPE_CODE_GROUP => Scope\Group::class,
+		self::SCOPE_CODE_KNOWLEDGE => Scope\Knowledge::class,
+		self::SCOPE_CODE_VIBE => Scope\Vibe::class,
+	];
+
+	/**
 	 * Current scope class name.
 	 * @var Scope
 	 */
@@ -64,32 +75,18 @@ class Type
 
 	/**
 	 * Returns scope class, if exist.
+	 * Unknown code gives null, the caller falls back to the default scope.
 	 * @param string $scope Scope code.
-	 * @return string|null
+	 * @return class-string<Scope>|null
 	 */
 	protected static function getScopeClass(string $scope): ?string
 	{
 		$scope = trim($scope);
-		$class = self::getFullScopeClass($scope);
-		if (class_exists($class))
-		{
-			return $class;
-		}
 
-		$scopeAlias = self::getFullScopeClass(
-			self::getCompatibilityScopeClass($scope)
-		);
-
-		return class_exists($scopeAlias) ? $scopeAlias : null;
-	}
-
-	/**
-	 * @param class-string<Scope> $scope
-	 * @return string
-	 */
-	private static function getFullScopeClass(string $scope): string
-	{
-		return __NAMESPACE__ . '\\Scope\\' . $scope;
+		// scope code is matched case insensitively, the compatibility alias is not
+		return self::SCOPE_CLASSES[mb_strtoupper($scope)]
+			?? self::SCOPE_CLASSES[mb_strtoupper(self::getCompatibilityScopeClass($scope))]
+			?? null;
 	}
 
 	/**
@@ -138,6 +135,15 @@ class Type
 		{
 			self::$scopeInit = true;
 			self::$currentScopeClass::init($params);
+			// init() may return without entering the scope (a tariff restriction closes the section).
+			// The scope id is one static shared by every scope class, so a half entered scope would
+			// keep answering with the id of the section entered before it - in a batch that is the
+			// section of another command. An unentered scope is rolled back to no scope at all.
+			$requestedScope = array_search(self::$currentScopeClass, self::SCOPE_CLASSES, true);
+			if (self::getCurrentScopeId() !== $requestedScope)
+			{
+				self::clearScope();
+			}
 		}
 	}
 
@@ -147,8 +153,33 @@ class Type
 	 */
 	public static function clearScope(): void
 	{
+		// symmetric with setScope(): a scope transition must reset the role state atomically,
+		// otherwise a scope-less command keeps the expected roles (and their cached ids) of the
+		// previous scoped command and applies them to the base section
+		Role::setExpectedType(null);
 		self::$scopeInit = false;
 		self::$currentScopeClass = null;
+	}
+
+	/**
+	 * Is the section of the code the one the process is in? init() of a section may return without
+	 * entering it (a tariff closes the knowledge base of a project), and setScope() rolls such a
+	 * section back to no section at all, so everything after it answers for the base section.
+	 * A type carrying no section class of its own belongs to no section, and that is its normal
+	 * state, so it answers true.
+	 * @param string $scope Scope code.
+	 * @return bool
+	 */
+	public static function isScopeEntered(string $scope): bool
+	{
+		$scopeClass = self::getScopeClass($scope);
+		if ($scopeClass === null)
+		{
+			return true;
+		}
+
+		// the id of the requested section is taken the way setScope() takes it to compare
+		return self::getCurrentScopeId() === array_search($scopeClass, self::SCOPE_CLASSES, true);
 	}
 
 	/**

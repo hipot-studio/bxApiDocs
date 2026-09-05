@@ -6,7 +6,6 @@ use Bitrix\Call\Recent;
 use Bitrix\Im\Department;
 use Bitrix\Im\Promotion;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
-use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Folder\FolderProvider;
 use Bitrix\Im\V2\Folder\FolderRecentProvider;
@@ -405,11 +404,6 @@ abstract class Tab extends BaseController
 
 	private function getFolderList(): array
 	{
-		if (!Features::get()->isChatFoldersAvailable)
-		{
-			return [];
-		}
-
 		$userId = (int)$this->currentUser->getId();
 		if ($userId <= 0)
 		{
@@ -426,11 +420,6 @@ abstract class Tab extends BaseController
 
 	private function getFolderRecentList(): array
 	{
-		if (!Features::get()->isChatFoldersAvailable)
-		{
-			return $this->toRestFormatWithPaginationData([], self::LIMIT, 0);
-		}
-
 		$userId = (int)$this->currentUser->getId();
 		$folderId = (int)($this->options['folderId'] ?? 0);
 		if ($userId <= 0 || $folderId <= 0)

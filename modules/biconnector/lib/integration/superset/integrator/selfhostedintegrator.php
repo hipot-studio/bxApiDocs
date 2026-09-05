@@ -191,8 +191,13 @@ class SelfHostedIntegrator implements IntegratorInterface
 
 	/**
 	 * @inheritDoc
+	 *
+	 * Self-hosted requests never arbitrate the instance status, so $arbitrateInstanceStatus has no effect here.
 	 */
-	public function changeBiconnectorToken(string $biconnectorToken): IntegratorResponse
+	public function changeBiconnectorToken(
+		string $biconnectorToken,
+		bool $arbitrateInstanceStatus = true,
+	): IntegratorResponse
 	{
 		$handler = function () use ($biconnectorToken): IntegratorResponse {
 			$server = $this->getServer();

@@ -689,7 +689,7 @@ class Message
 	public static function isolateStylesInTheBody($html)
 	{
 		$prefix = 'mail-message-';
-		$html = preg_replace('%((?:^|\s)(?:class|id)(?:^|\s*)(?:=)(?:^|\s*)(\"|\'))((?:.*?)(?:\2))%', '$1'.$prefix.'$3', $html);
+		$html = preg_replace('%((?:^|\s)(?:class|id)(?:^|\s*)(?:=)(?:^|\s*)("|\'))((?:.*?)(?:\2))%', '$1'.$prefix.'$3', $html);
 		return $html;
 	}
 
@@ -704,7 +704,7 @@ class Message
 		$messageHtmlAfterClearingFromMedia = preg_replace('%@media\b[^{]*({((?:[^{}]+|(?1))*)})%mi', '', $messageHtml);
 
 		/*
-		 	If due to strong nesting it was not possible to delete media,
+			If due to strong nesting it was not possible to delete media,
 			then we make them invalid for the browser by deactivating them.
 		*/
 		if (is_null($messageHtmlAfterClearingFromMedia))
@@ -730,11 +730,58 @@ class Message
 		return preg_replace_callback('|(?<openingTag><style[^>]*>)(?<styles>.*)(?<closingTag><\/style>)|isU', 'static::isolateStylesInTheTag', $messageHtml);
 	}
 
+	private static function neutralizeViewportUnits($messageHtml)
+	{
+		Ini::adjustPcreBacktrackLimit(strlen($messageHtml) * 2);
+
+		$viewportUnitsPattern = '/(\d+(?:\.\d+)?)\s*(vh|vw|vmin|vmax|svh|svw|lvh|lvw|dvh|dvw)\b/i';
+
+		$messageHtml = static::replaceWithCallbackOrKeep(
+			'/style\s*=\s*"(?<styles>[^"]*)"/i',
+			static function (array $matches) use ($viewportUnitsPattern): string
+			{
+				$styles = preg_replace($viewportUnitsPattern, '0px', $matches['styles']);
+
+				return 'style="' . ($styles ?? $matches['styles']) . '"';
+			},
+			$messageHtml
+		);
+		$messageHtml = static::replaceWithCallbackOrKeep(
+			"/style\\s*=\\s*'(?<styles>[^']*)'/i",
+			static function (array $matches) use ($viewportUnitsPattern): string
+			{
+				$styles = preg_replace($viewportUnitsPattern, '0px', $matches['styles']);
+
+				return "style='" . ($styles ?? $matches['styles']) . "'";
+			},
+			$messageHtml
+		);
+
+		return static::replaceWithCallbackOrKeep(
+			'|(?<openingTag><style[^>]*>)(?<styles>.*?)(?<closingTag><\/style>)|is',
+			static function (array $matches) use ($viewportUnitsPattern): string
+			{
+				$styles = preg_replace($viewportUnitsPattern, '0px', $matches['styles']);
+
+				return $matches['openingTag'] . ($styles ?? $matches['styles']) . $matches['closingTag'];
+			},
+			$messageHtml
+		);
+	}
+
+	private static function replaceWithCallbackOrKeep(string $pattern, callable $callback, string $subject): string
+	{
+		return preg_replace_callback($pattern, $callback, $subject) ?? $subject;
+	}
+
 	public static function sanitizeHtml($html, $isolateStyles = false)
 	{
-		$cleared = preg_replace('/<!--.*?-->/is', '', $html);
-		$cleared = preg_replace('/<script[^>]*>.*?<\/script>/is', '', $cleared);
-		$cleared = preg_replace('/<title[^>]*>.*?<\/title>/is', '', $cleared);
+		$cleared = (string)$html;
+		foreach (['/<!--.*?-->/is', '/<script[^>]*>.*?<\/script>/is', '/<title[^>]*>.*?<\/title>/is'] as $pattern)
+		{
+			$result = preg_replace($pattern, '', $cleared);
+			$cleared = $result ?? $cleared;
+		}
 		$sanitizer = new \CBXSanitizer();
 		$sanitizer->setLevel(\CBXSanitizer::SECURE_LEVEL_LOW);
 		$sanitizer->applyDoubleEncode(false);
@@ -747,6 +794,16 @@ class Message
 		}
 
 		return $cleared;
+	}
+
+	/**
+	 * Sanitizes HTML for rendering inside the sandboxed mail message iframe.
+	 *
+	 * @internal
+	 */
+	public static function sanitizeHtmlForMessageView($html)
+	{
+		return static::neutralizeViewportUnits(static::sanitizeHtml($html));
 	}
 
 	public static function reSyncBody($mailboxId, $messageIds)

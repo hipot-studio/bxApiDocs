@@ -54,7 +54,9 @@ class OracleSqlHelper extends SqlHelper
 	function forSql($value, $maxLength = 0)
 	{
 		if ($maxLength <= 0 || $maxLength > 2000)
+		{
 			$maxLength = 2000;
+		}
 
 		$value = mb_substr($value, 0, $maxLength);
 
@@ -71,9 +73,13 @@ class OracleSqlHelper extends SqlHelper
 			|[\xF1-\xF3][\x80-\xBF]{3}         # planes 4-15
 			|\xF4[\x80-\x8F][\x80-\xBF]{2}     # plane 16
 		)+%x', $value, $match))
+		{
 			$value = implode(' ', $match[0]);
+		}
 		else
-			return ''; //There is no valid utf at all
+		{
+			return '';
+		} //There is no valid utf at all
 
 		return str_replace("'", "''", $value);
 	}
@@ -104,7 +110,7 @@ class OracleSqlHelper extends SqlHelper
 			$from = static::getCurrentDateTimeFunction();
 		}
 
-		return '('.$from.'+'.$seconds.'/86400)';
+		return '(' . $from . '+' . $seconds . '/86400)';
 	}
 
 	/**
@@ -112,7 +118,7 @@ class OracleSqlHelper extends SqlHelper
 	 */
 	public function getDatetimeToDateFunction($value)
 	{
-		return 'TRUNC('.$value.')';
+		return 'TRUNC(' . $value . ')';
 	}
 
 	/**
@@ -152,7 +158,7 @@ class OracleSqlHelper extends SqlHelper
 		}
 		else
 		{
-			return "TO_CHAR(".$field.", '".$format."')";
+			return "TO_CHAR(" . $field . ", '" . $this->forSql($format) . "')";
 		}
 	}
 
@@ -169,7 +175,7 @@ class OracleSqlHelper extends SqlHelper
 	 */
 	public function getIsNullFunction($expression, $result)
 	{
-		return "NVL(".$expression.", ".$result.")";
+		return "NVL(" . $expression . ", " . $result . ")";
 	}
 
 	/**
@@ -177,7 +183,7 @@ class OracleSqlHelper extends SqlHelper
 	 */
 	public function getLengthFunction($field)
 	{
-		return "LENGTH(".$field.")";
+		return "LENGTH(" . $field . ")";
 	}
 
 	/**
@@ -185,7 +191,7 @@ class OracleSqlHelper extends SqlHelper
 	 */
 	public function getCharToDateFunction($value)
 	{
-		return "TO_DATE('".$value."', 'YYYY-MM-DD HH24:MI:SS')";
+		return "TO_DATE('" . $value . "', 'YYYY-MM-DD HH24:MI:SS')";
 	}
 
 	/**
@@ -193,7 +199,7 @@ class OracleSqlHelper extends SqlHelper
 	 */
 	public function getDateToCharFunction($fieldName)
 	{
-		return "TO_CHAR(".$fieldName.", 'YYYY-MM-DD HH24:MI:SS')";
+		return "TO_CHAR(" . $fieldName . ", 'YYYY-MM-DD HH24:MI:SS')";
 	}
 
 	/**
@@ -201,13 +207,13 @@ class OracleSqlHelper extends SqlHelper
 	 */
 	protected function prepareBinds(array $tableFields, array $fields)
 	{
-		$binds = array();
+		$binds = [];
 
 		foreach ($tableFields as $columnName => $tableField)
 		{
 			if (isset($fields[$columnName]) && !($fields[$columnName] instanceof SqlExpression))
 			{
-				if ($tableField instanceof ORM\Fields\TextField && $fields[$columnName] <> '')
+				if ($tableField instanceof ORM\Fields\TextField && $fields[$columnName] != '')
 				{
 					$binds[$columnName] = $fields[$columnName];
 				}
@@ -224,15 +230,15 @@ class OracleSqlHelper extends SqlHelper
 	{
 		if ($field instanceof ORM\Fields\DatetimeField)
 		{
-			return array($this, "convertFromDbDateTime");
+			return [$this, "convertFromDbDateTime"];
 		}
 		elseif ($field instanceof ORM\Fields\TextField)
 		{
-			return array($this, "convertFromDbText");
+			return [$this, "convertFromDbText"];
 		}
 		elseif ($field instanceof ORM\Fields\StringField)
 		{
-			return array($this, "convertFromDbString");
+			return [$this, "convertFromDbString"];
 		}
 		else
 		{
@@ -255,7 +261,7 @@ class OracleSqlHelper extends SqlHelper
 			else
 			{
 				//default Oracle date format: 03-MAR-14
-				$value = new Type\DateTime($value." 00:00:00", "d-M-y H:i:s");
+				$value = new Type\DateTime($value . " 00:00:00", "d-M-y H:i:s");
 			}
 		}
 
@@ -305,7 +311,7 @@ class OracleSqlHelper extends SqlHelper
 	 */
 	public function castToChar($fieldName)
 	{
-		return 'TO_CHAR('.$fieldName.')';
+		return 'TO_CHAR(' . $fieldName . ')';
 	}
 
 	/**
@@ -313,7 +319,7 @@ class OracleSqlHelper extends SqlHelper
 	 */
 	public function softCastTextToChar($fieldName)
 	{
-		return 'dbms_lob.substr('.$fieldName.', 4000, 1)';
+		return 'dbms_lob.substr(' . $fieldName . ', 4000, 1)';
 	}
 
 	/**
@@ -328,7 +334,7 @@ class OracleSqlHelper extends SqlHelper
 		elseif ($field instanceof ORM\Fields\FloatField)
 		{
 			$scale = $field->getScale();
-			return 'number'.($scale !== null? "(*,".$scale.")": "");
+			return 'number' . ($scale !== null ? "(*," . $scale . ")" : "");
 		}
 		elseif ($field instanceof ORM\Fields\DatetimeField)
 		{
@@ -363,7 +369,7 @@ class OracleSqlHelper extends SqlHelper
 		}
 		elseif ($field instanceof ORM\Fields\EnumField)
 		{
-			return 'varchar2('.max(array_map('mb_strlen', $field->getValues())).' char)';
+			return 'varchar2(' . max(array_map('mb_strlen', $field->getValues())) . ' char)';
 		}
 		else
 		{
@@ -379,7 +385,7 @@ class OracleSqlHelper extends SqlHelper
 					}
 				}
 			}
-			return 'varchar2('.($defaultLength > 0? $defaultLength: 255).' char)';
+			return 'varchar2(' . ($defaultLength > 0 ? $defaultLength : 255) . ' char)';
 		}
 	}
 
@@ -390,33 +396,33 @@ class OracleSqlHelper extends SqlHelper
 	{
 		switch ($type)
 		{
-		case "DATE":
-			return new ORM\Fields\DatetimeField($name);
+			case "DATE":
+				return new ORM\Fields\DatetimeField($name);
 
-		case "NCLOB":
-		case "CLOB":
-		case "BLOB":
-			return new ORM\Fields\TextField($name);
+			case "NCLOB":
+			case "CLOB":
+			case "BLOB":
+				return new ORM\Fields\TextField($name);
 
-		case "FLOAT":
-		case "BINARY_FLOAT":
-		case "BINARY_DOUBLE":
-			return new ORM\Fields\FloatField($name);
-
-		case "NUMBER":
-			if ($parameters["precision"] == 0 && $parameters["scale"] == -127)
-			{
-				//NUMBER
+			case "FLOAT":
+			case "BINARY_FLOAT":
+			case "BINARY_DOUBLE":
 				return new ORM\Fields\FloatField($name);
-			}
-			if (intval($parameters["scale"]) <= 0)
-			{
-				//NUMBER(18)
-				//NUMBER(18,-2)
-				return new ORM\Fields\IntegerField($name);
-			}
-			//NUMBER(*,2)
-			return new ORM\Fields\FloatField($name, array("scale" => $parameters["scale"]));
+
+			case "NUMBER":
+				if ($parameters["precision"] == 0 && $parameters["scale"] == -127)
+				{
+					//NUMBER
+					return new ORM\Fields\FloatField($name);
+				}
+				if (intval($parameters["scale"]) <= 0)
+				{
+					//NUMBER(18)
+					//NUMBER(18,-2)
+					return new ORM\Fields\IntegerField($name);
+				}
+				//NUMBER(*,2)
+				return new ORM\Fields\FloatField($name, ["scale" => $parameters["scale"]]);
 		}
 		//LONG
 		//VARCHAR2(size [BYTE | CHAR])
@@ -433,7 +439,7 @@ class OracleSqlHelper extends SqlHelper
 		//CHAR [(size [BYTE | CHAR])]
 		//NCHAR[(size)]
 		//BFILE
-		return new ORM\Fields\StringField($name, array("size" => $parameters["size"]));
+		return new ORM\Fields\StringField($name, ["size" => $parameters["size"]]);
 	}
 
 	/**
@@ -445,7 +451,9 @@ class OracleSqlHelper extends SqlHelper
 		$limit = intval($limit);
 
 		if ($offset > 0 && $limit <= 0)
+		{
 			throw new \Bitrix\Main\ArgumentException("Limit must be set if offset is set");
+		}
 
 		if ($limit > 0)
 		{
@@ -453,20 +461,20 @@ class OracleSqlHelper extends SqlHelper
 			if ($offset <= 0)
 			{
 				$sql =
-					"SELECT * ".
-					"FROM (".$sql.") ".
-					"WHERE ROWNUM <= ".$limit;
+					"SELECT * " .
+					"FROM (" . $sql . ") " .
+					"WHERE ROWNUM <= " . $limit;
 			}
 			else
 			{
 				$sql =
-					"SELECT * ".
-					"FROM (".
-					"   SELECT rownum_query_alias.*, ROWNUM rownum_alias ".
-					"   FROM (".$sql.") rownum_query_alias ".
-					"   WHERE ROWNUM <= ".($offset + $limit)." ".
-					") ".
-					"WHERE rownum_alias >= ".($offset + 1);
+					"SELECT * " .
+					"FROM (" .
+					"   SELECT rownum_query_alias.*, ROWNUM rownum_alias " .
+					"   FROM (" . $sql . ") rownum_query_alias " .
+					"   WHERE ROWNUM <= " . ($offset + $limit) . " " .
+					") " .
+					"WHERE rownum_alias >= " . ($offset + 1);
 			}
 		}
 		return $sql;
@@ -495,30 +503,30 @@ class OracleSqlHelper extends SqlHelper
 	{
 		$insert = $this->prepareInsert($tableName, $insertFields);
 
-		$updateColumns = array();
-		$sourceSelectColumns = array();
-		$targetConnectColumns = array();
+		$updateColumns = [];
+		$sourceSelectColumns = [];
+		$targetConnectColumns = [];
 		$tableFields = $this->connection->getTableFields($tableName);
-		foreach($tableFields as $columnName => $tableField)
+		foreach ($tableFields as $columnName => $tableField)
 		{
 			$quotedName = $this->quote($columnName);
 			if (in_array($columnName, $primaryFields))
 			{
-				$sourceSelectColumns[] = $this->convertToDb($insertFields[$columnName], $tableField)." AS ".$quotedName;
-				if($insertFields[$columnName] === null)
+				$sourceSelectColumns[] = $this->convertToDb($insertFields[$columnName], $tableField) . " AS " . $quotedName;
+				if ($insertFields[$columnName] === null)
 				{
 					//can't just compare NULLs
-					$targetConnectColumns[] = "(source.".$quotedName." IS NULL AND target.".$quotedName." IS NULL)";
+					$targetConnectColumns[] = "(source." . $quotedName . " IS NULL AND target." . $quotedName . " IS NULL)";
 				}
 				else
 				{
-					$targetConnectColumns[] = "(source.".$quotedName." = target.".$quotedName.")";
+					$targetConnectColumns[] = "(source." . $quotedName . " = target." . $quotedName . ")";
 				}
 			}
 
 			if (isset($updateFields[$columnName]) || array_key_exists($columnName, $updateFields))
 			{
-				$updateColumns[] = "target.".$quotedName.' = '.$this->convertToDb($updateFields[$columnName], $tableField);
+				$updateColumns[] = "target." . $quotedName . ' = ' . $this->convertToDb($updateFields[$columnName], $tableField);
 			}
 		}
 
@@ -529,18 +537,18 @@ class OracleSqlHelper extends SqlHelper
 		)
 		{
 			$sql = "
-				MERGE INTO ".$this->quote($tableName)." target USING (
-					SELECT ".implode(", ", $sourceSelectColumns)." FROM dual
+				MERGE INTO " . $this->quote($tableName) . " target USING (
+					SELECT " . implode(", ", $sourceSelectColumns) . " FROM dual
 				)
 				source ON
 				(
-					".implode(" AND ", $targetConnectColumns)."
+					" . implode(" AND ", $targetConnectColumns) . "
 				)
 				WHEN MATCHED THEN
-					UPDATE SET ".implode(", ", $updateColumns)."
+					UPDATE SET " . implode(", ", $updateColumns) . "
 				WHEN NOT MATCHED THEN
-					INSERT (".$insert[0].")
-					VALUES (".$insert[1].")
+					INSERT (" . $insert[0] . ")
+					VALUES (" . $insert[1] . ")
 			";
 		}
 		else
@@ -548,8 +556,8 @@ class OracleSqlHelper extends SqlHelper
 			$sql = "";
 		}
 
-		return array(
-			$sql
-		);
+		return [
+			$sql,
+		];
 	}
 }

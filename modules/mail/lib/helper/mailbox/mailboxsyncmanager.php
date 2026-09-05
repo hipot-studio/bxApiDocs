@@ -4,7 +4,6 @@ namespace Bitrix\Mail\Helper\Mailbox;
 use COption;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\Internals\MailEntityOptionsTable;
-use Bitrix\Mail\MailFilterTable;
 use Bitrix\Main\Loader;
 use Bitrix\Mail\Helper;
 
@@ -24,15 +23,7 @@ class MailboxSyncManager
 
 	public static function checkSyncWithCrm(int $mailboxId): bool
 	{
-		if (Loader::includeModule('crm'))
-		{
-			return (bool)MailFilterTable::getCount([
-				'=MAILBOX_ID' => $mailboxId,
-				'=ACTION_TYPE' => 'crm_imap',
-			]);
-		}
-
-		return false;
+		return Loader::includeModule('crm') && CrmImapFilter::isConnected($mailboxId);
 	}
 
 	public function getFailedToSyncMailboxes()

@@ -13,6 +13,7 @@ use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Helper\Mailbox\PasswordlessConnectHelper;
 use Bitrix\Mail\Helper\MailboxSettingsGridHelper;
+use Bitrix\Mail\Service\SharedSignature\SharedSignatureService;
 use Bitrix\Main\Localization\Loc;
 
 class CMailMailboxListComponent extends CBitrixComponent
@@ -48,6 +49,7 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$this->arResult['NEED_HIGHLIGHT_GEAR_BUTTON'] = Feature::isPasswordlessConnectAvailable()
 			&& !Guide::wasMailboxListGearHighlightShown();
 		$this->arResult['HIGHLIGHT_GEAR_BUTTON_OPTION_NAME'] = Guide::getMailboxListGearHighlightOptionName();
+		$this->arResult['HAS_ACCESS_TO_SHARED_SIGNATURES'] = $this->hasAccessToSharedSignatures();
 
 		$this->includeComponentTemplate();
 	}
@@ -142,6 +144,18 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$accessValues['HAS_ACCESS_TO_EDIT_PERMISSIONS'] = MailAccess::hasCurrentUserAccessToPermission();
 
 		return $accessValues;
+	}
+
+	/**
+	 * Whether the way into the shared signatures is offered in the gear menu: the opt-in interface
+	 * option of the shared signatures plus the right to manage them. Missing either of the two hides
+	 * the item altogether — behind it there would be a screen the user may not manage anyway.
+	 */
+	private function hasAccessToSharedSignatures(): bool
+	{
+		return SharedSignatureService::isSharedInterfaceEnabled()
+			&& SharedSignatureService::canManageSharedScope()
+		;
 	}
 
 	private function getPasswordlessSentTotalCount(): int

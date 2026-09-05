@@ -761,7 +761,7 @@ var FD_MESS =
 		$arTypes = array_keys($arAllItems);
 		$strTypes="";
 		$strItems="";
-		for($i = 0; $i < count($arTypes); $i++)
+		for ($i = 0, $n = count($arTypes); $i < $n; $i++)
 		{
 			if($i>0)
 			{
@@ -771,7 +771,7 @@ var FD_MESS =
 			$strTypes.="'".CUtil::JSEscape($arTypes[$i])."'";
 			$arItems = $arAllItems[$arTypes[$i]];
 			$strItems .= "[";
-			for($j = 0; $j < count($arItems); $j++)
+			for ($j = 0, $itemsCount = count($arItems); $j < $itemsCount; $j++)
 			{
 				if($j>0)$strItems .= ",";
 				$strItems.="'".CUtil::JSEscape($arItems[$j])."'";

@@ -639,14 +639,28 @@ class ProxyIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function changeBiconnectorToken(string $biconnectorToken): IntegratorResponse
+	public function changeBiconnectorToken(
+		string $biconnectorToken,
+		bool $arbitrateInstanceStatus = true,
+	): IntegratorResponse
 	{
 		return
 			$this
-				->createDefaultRequest(self::PROXY_ACTION_CHANGE_BI_TOKEN_SUPERSET)
+				->createChangeBiconnectorTokenRequest($arbitrateInstanceStatus)
 				->setParams(['biconnectorToken' => $biconnectorToken])
 				->perform()
 		;
+	}
+
+	private function createChangeBiconnectorTokenRequest(bool $arbitrateInstanceStatus): IntegratorRequest
+	{
+		$request = $this->createDefaultRequest(self::PROXY_ACTION_CHANGE_BI_TOKEN_SUPERSET);
+		if (!$arbitrateInstanceStatus)
+		{
+			$request->removeAfter(Middleware\StatusArbiter::getMiddlewareId());
+		}
+
+		return $request;
 	}
 
 	/**

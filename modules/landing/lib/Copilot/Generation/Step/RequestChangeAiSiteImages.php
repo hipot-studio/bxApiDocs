@@ -17,7 +17,6 @@ use Bitrix\Landing\Copilot\Generation\Type\RequestEntities;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntityDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Model\RequestToEntitiesTable;
-use Bitrix\Landing\Metrika;
 use Bitrix\Landing\Rights;
 use Bitrix\Main\ORM\Query\Query;
 
@@ -45,11 +44,6 @@ class RequestChangeAiSiteImages extends AbstractAiImageRequest
 	public static function getRequestQuota(Site $siteData): ?RequestQuotaDto
 	{
 		return null;
-	}
-
-	public function getAnalyticEvent(): ?Metrika\Events
-	{
-		return Metrika\Events::imagesGeneration;
 	}
 
 	protected function getEntitiesToRequest(): array

@@ -92,6 +92,42 @@ class RoleTable extends Entity\DataManager
 	}
 
 	/**
+	 * After add handler.
+	 * @param Entity\Event $event Event instance.
+	 * @return Entity\EventResult
+	 */
+	public static function onAfterAdd(Entity\Event $event)
+	{
+		\Bitrix\Landing\Role::clearCache();
+
+		return new Entity\EventResult();
+	}
+
+	/**
+	 * After update handler.
+	 * @param Entity\Event $event Event instance.
+	 * @return Entity\EventResult
+	 */
+	public static function onAfterUpdate(Entity\Event $event)
+	{
+		$fields = (array)$event->getParameter('fields');
+
+		// only a written type moves a role between types, so the ids of a type survive the common
+		// case: saving the roles rewrites their access codes one by one, and every row of the loop
+		// would otherwise cost the readers after it a new read of the whole list
+		if (array_key_exists('TYPE', $fields))
+		{
+			\Bitrix\Landing\Role::clearCache();
+		}
+		else
+		{
+			\Bitrix\Landing\Role::clearRolesCache();
+		}
+
+		return new Entity\EventResult();
+	}
+
+	/**
 	 * After delete handler.
 	 * @param Entity\Event $event Event instance.
 	 * @return Entity\EventResult
@@ -100,6 +136,9 @@ class RoleTable extends Entity\DataManager
 	{
 		$result = new Entity\EventResult();
 		$primary = $event->getParameter('primary');
+
+		// the caches of the role list must not outlive the row that was just removed
+		\Bitrix\Landing\Role::clearCache();
 
 		// delete all inner landings
 		if ($primary)

@@ -26,6 +26,8 @@ final class ChangeAiSiteState
 	public const EDIT_MODE_TARGETED = 'targeted_edit';
 	public const EDIT_MODE_BALANCED = 'balanced_edit';
 	public const EDIT_MODE_GLOBAL = 'global_edit';
+	public const EDIT_INTENT_STRUCTURAL = 'structural_edit';
+	public const EDIT_INTENT_CONTENT = 'content_edit';
 	public const APPLIED_STATUS_APPLIED = 'applied';
 	public const APPLIED_STATUS_SKIPPED = 'skipped';
 	private const HTML_CONTRACT_VALIDATION_ENABLED = false;
@@ -229,6 +231,13 @@ final class ChangeAiSiteState
 		$instructions = self::getBlockInstructions($generation);
 
 		return trim((string)($instructions['designBrief'] ?? ''));
+	}
+
+	public static function resolveStructuralIntent(Generation $generation): string
+	{
+		$instructions = self::getBlockInstructions($generation);
+
+		return self::normalizeEditIntent($instructions['editIntent'] ?? '');
 	}
 
 	public static function resolveActionEditMode(Generation $generation, string $actionId, int $blockId = 0): string
@@ -540,10 +549,56 @@ final class ChangeAiSiteState
 			return [];
 		}
 
-		return [
+		$normalized = [
 			'blockId' => $blockId,
 			'selector' => $selector,
 		];
+		// only a client-built "<tag>|<childCount>|<textHash>" value is kept: anything else
+		// (e.g. a model-invented string) must not fail the fingerprint check downstream
+		$fingerprint = self::normalizeText((string)($value['fingerprint'] ?? ''));
+		if (preg_match('/^[a-z][a-z0-9-]*\|\d+\|[0-9a-f]{8}$/', $fingerprint))
+		{
+			$normalized['fingerprint'] = $fingerprint;
+		}
+		$elementHtml = self::normalizeText((string)($value['elementHtml'] ?? ''));
+		if ($elementHtml !== '')
+		{
+			$normalized['elementHtml'] = $elementHtml;
+		}
+
+		$elements = [];
+		foreach (is_array($value['elements'] ?? null) ? $value['elements'] : [] as $item)
+		{
+			if (!is_array($item))
+			{
+				continue;
+			}
+
+			$itemBlockId = self::normalizeLandingId($item['blockId'] ?? null);
+			$itemSelector = self::normalizeText((string)($item['selector'] ?? ''));
+			if ($itemBlockId <= 0 || $itemSelector === '')
+			{
+				continue;
+			}
+
+			$element = [
+				'blockId' => $itemBlockId,
+				'selector' => $itemSelector,
+			];
+			$itemElementHtml = self::normalizeText((string)($item['elementHtml'] ?? ''));
+			if ($itemElementHtml !== '')
+			{
+				$element['elementHtml'] = $itemElementHtml;
+			}
+
+			$elements[] = $element;
+		}
+		if ($elements !== [])
+		{
+			$normalized['elements'] = $elements;
+		}
+
+		return $normalized;
 	}
 
 	private static function normalizeIds(mixed $value): array
@@ -988,6 +1043,7 @@ final class ChangeAiSiteState
 		return [
 			'mode' => trim((string)($data['mode'] ?? '')),
 			'reason' => trim((string)($data['reason'] ?? '')),
+			'detail' => trim((string)($data['detail'] ?? '')),
 		];
 	}
 
@@ -1034,6 +1090,7 @@ final class ChangeAiSiteState
 			'globalConstraints' => self::normalizeText((string)($data['globalConstraints'] ?? '')),
 			'imageStyleBrief' => self::normalizeText((string)($data['imageStyleBrief'] ?? '')),
 			'designBrief' => self::normalizeText((string)($data['designBrief'] ?? '')),
+			'editIntent' => self::normalizeEditIntent($data['editIntent'] ?? ''),
 		];
 	}
 
@@ -1085,6 +1142,16 @@ final class ChangeAiSiteState
 		], true)
 			? $mode
 			: self::EDIT_MODE_BALANCED
+		;
+	}
+
+	public static function normalizeEditIntent(mixed $intent): string
+	{
+		$intent = mb_strtolower(self::normalizeText((string)$intent));
+
+		return $intent === self::EDIT_INTENT_STRUCTURAL
+			? self::EDIT_INTENT_STRUCTURAL
+			: self::EDIT_INTENT_CONTENT
 		;
 	}
 

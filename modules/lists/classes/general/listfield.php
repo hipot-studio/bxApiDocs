@@ -2,6 +2,7 @@
 
 IncludeModuleLangFile(__FILE__);
 
+use Bitrix\Main\Application;
 use Bitrix\Iblock\PropertyTable;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\NotSupportedException;
@@ -23,8 +24,6 @@ abstract class CListField
 
 	public function __construct($iblock_id, $field_id, $label, $sort)
 	{
-		global $DB;
-
 		$this->_iblock_id = intval($iblock_id);
 		$this->_field_id = $field_id;
 		$this->_label = $label;
@@ -35,30 +34,60 @@ abstract class CListField
 			$arField = $this->_read_from_cache($this->_field_id);
 			if(!$arField)
 			{
-				$DB->Add("b_lists_field", array(
-					"ID" => 1, //This makes Oracle version happy
-					"IBLOCK_ID" => $this->_iblock_id,
-					"FIELD_ID" => $this->_field_id,
-					"SORT" => $this->_sort,
-					"NAME" => $this->_label,
-				));
-				$this->_clear_cache();
+				$this->mergeToStorage();
 			}
-			elseif(
-				$arField["SORT"] != $this->_sort
-				|| $arField["NAME"] != $this->_label
-			)
+			elseif ($this->isDifferentMetadata($arField))
 			{
-				$DB->Query("
-					UPDATE b_lists_field
-					SET SORT = ".$this->_sort."
-					,NAME = '".$DB->ForSQL($this->_label)."'
-					WHERE IBLOCK_ID = ".$this->_iblock_id."
-					AND FIELD_ID = '".$DB->ForSQL($this->_field_id)."'
-				");
-				$this->_clear_cache();
+				$this->updateMetadata();
 			}
 		}
+	}
+
+	private function isDifferentMetadata(array $arField): bool
+	{
+		return $arField['SORT'] != $this->_sort || $arField['NAME'] != $this->_label;
+	}
+
+	private function mergeToStorage(): void
+	{
+		$connection = Application::getConnection();
+		$merge = $connection->getSqlHelper()->prepareMerge(
+			'b_lists_field',
+			['IBLOCK_ID', 'FIELD_ID'],
+			[
+				'IBLOCK_ID' => $this->_iblock_id,
+				'FIELD_ID' => $this->_field_id,
+				'SORT' => $this->_sort,
+				'NAME' => $this->_label,
+			],
+			[
+				'SORT' => $this->_sort,
+				'NAME' => $this->_label,
+			]
+		);
+
+		if (empty($merge[0]))
+		{
+			return;
+		}
+
+		$connection->queryExecute($merge[0]);
+
+		$this->_clear_cache();
+	}
+
+	private function updateMetadata(): void
+	{
+		global $DB;
+
+		$DB->Query("
+			UPDATE b_lists_field
+			SET SORT = ".$this->_sort."
+			,NAME = '".$DB->ForSQL($this->_label)."'
+			WHERE IBLOCK_ID = ".$this->_iblock_id."
+			AND FIELD_ID = '".$DB->ForSQL($this->_field_id)."'
+		");
+		$this->_clear_cache();
 	}
 
 	private function _read_from_cache($field_id)

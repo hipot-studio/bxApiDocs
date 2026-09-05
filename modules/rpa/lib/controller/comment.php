@@ -336,14 +336,14 @@ class Comment extends Base
 		$processName = $item->getType()->getTitle();
 
 		$messageSimple = Loc::getMessage(
-			"RPA_COMMENT_MENTION_NOTIFY_SIMPLE{$userSuffix}",
+			'RPA_COMMENT_MENTION_NOTIFY_SIMPLE' . $userSuffix,
 			[
 				'#PROCESS_NAME#' => $processName,
 				'#COMMENT#' => $text,
 			]
 		);
 
-		$message = Loc::getMessage("RPA_COMMENT_MENTION_NOTIFY_DEFAULT{$userSuffix}");
+		$message = Loc::getMessage('RPA_COMMENT_MENTION_NOTIFY_DEFAULT' . $userSuffix);
 
 		if (!$messageSimple)
 		{

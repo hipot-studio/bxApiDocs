@@ -15,6 +15,7 @@ final class SearchRequest
 	private const FILTER_FIELDS = [
 		'STORAGE_ID',
 		'FOLDER_ID',
+		'FILE_TYPE',
 	];
 
 	private function __construct(
@@ -22,6 +23,7 @@ final class SearchRequest
 		private readonly SearchType $type,
 		private readonly ?int $storageId,
 		private readonly ?int $folderId,
+		private readonly ?array $fileTypeValues,
 		private readonly int $offset,
 	)
 	{
@@ -69,12 +71,28 @@ final class SearchRequest
 			return $result->addError(SearchError::notFound());
 		}
 
+		$fileTypeValues = null;
+		if (array_key_exists('FILE_TYPE', $filter))
+		{
+			if ($type !== SearchType::File)
+			{
+				return $result->addError(SearchError::incompatibleFileType());
+			}
+
+			$fileTypeValues = self::normalizeFileTypeValues($filter['FILE_TYPE']);
+			if ($fileTypeValues === null)
+			{
+				return $result->addError(SearchError::invalidFileType());
+			}
+		}
+
 		return $result->setData([
 			'request' => new self(
 				$query,
 				$type,
 				$storageId,
 				$folderId,
+				$fileTypeValues,
 				min(max(0, $offset), self::MAX_OFFSET),
 			),
 		]);
@@ -98,6 +116,11 @@ final class SearchRequest
 	public function getFolderId(): ?int
 	{
 		return $this->folderId;
+	}
+
+	public function getFileTypeValues(): ?array
+	{
+		return $this->fileTypeValues;
 	}
 
 	public function getOffset(): int
@@ -142,6 +165,33 @@ final class SearchRequest
 		}
 
 		return is_string($type) ? SearchType::tryFrom($type) : null;
+	}
+
+	/**
+	 * @return int[]|null Stored TypeFile values, null when the value does not match the contract.
+	 */
+	private static function normalizeFileTypeValues(mixed $value): ?array
+	{
+		$rawValues = is_array($value) ? $value : [$value];
+		if ($rawValues === [] || !array_is_list($rawValues))
+		{
+			return null;
+		}
+
+		$typeFileValues = [];
+		foreach ($rawValues as $rawValue)
+		{
+			$fileType = is_string($rawValue) ? SearchFileType::tryFrom($rawValue) : null;
+			if ($fileType === null)
+			{
+				return null;
+			}
+
+			$typeFileValue = $fileType->getTypeFileValue();
+			$typeFileValues[$typeFileValue] = $typeFileValue;
+		}
+
+		return array_values($typeFileValues);
 	}
 
 	private static function getFilterId(array $filter, string $field): ?int

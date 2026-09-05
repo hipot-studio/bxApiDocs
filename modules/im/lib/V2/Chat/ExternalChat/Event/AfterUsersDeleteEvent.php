@@ -5,11 +5,11 @@ namespace Bitrix\Im\V2\Chat\ExternalChat\Event;
 use Bitrix\Im\V2\Chat\ExternalChat;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;
 
-class AfterUsersDeleteEvent extends ChatEvent
+class AfterUsersDeleteEvent extends ChatEvent implements InitiatedByUserInterface
 {
-	public function __construct(ExternalChat $chat, array $userIds, DeleteUserConfig $config)
+	public function __construct(ExternalChat $chat, int $initiatorId, array $userIds, DeleteUserConfig $config)
 	{
-		$parameters = ['userIds' => $userIds, 'config' => $config];
+		$parameters = ['initiatorId' => $initiatorId, 'userIds' => $userIds, 'config' => $config];
 
 		parent::__construct($chat, $parameters);
 	}
@@ -17,6 +17,11 @@ class AfterUsersDeleteEvent extends ChatEvent
 	protected function getActionName(): string
 	{
 		return 'AfterUsersDelete';
+	}
+
+	public function getInitiatorId(): int
+	{
+		return $this->parameters['initiatorId'];
 	}
 
 	public function getUserIds(): array

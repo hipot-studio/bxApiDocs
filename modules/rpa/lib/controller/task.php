@@ -18,7 +18,7 @@ class Task extends Base
 		$isRobotDeleted = false;
 		$documentType = \Bitrix\Rpa\Integration\Bizproc\Document\Item::makeComplexType($typeId);
 
-		$canDelete = \CBPDocument::CanUserOperateDocumentType(
+		$canDelete = \CBPDocument::canUserOperateDocumentType(
 			\CBPCanUserOperateOperation::CreateAutomation,
 			$this->getCurrentUser()->getId(),
 			$documentType
@@ -64,7 +64,7 @@ class Task extends Base
 		$updatedRobot = null;
 		$documentType = \Bitrix\Rpa\Integration\Bizproc\Document\Item::makeComplexType($typeId);
 
-		$canModify = \CBPDocument::CanUserOperateDocumentType(
+		$canModify = \CBPDocument::canUserOperateDocumentType(
 			\CBPCanUserOperateOperation::CreateAutomation,
 			$this->getCurrentUser()->getId(),
 			$documentType

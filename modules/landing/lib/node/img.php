@@ -55,9 +55,7 @@ class Img extends \Bitrix\Landing\Node
 
 			if (isset($value['url']))
 			{
-				$url = is_array($value['url'])
-					? json_encode($value['url'])
-					: $value['url'];
+				$url = (new Sanitizer())->sanitizePseudoUrl($value['url']);
 			}
 			else
 			{

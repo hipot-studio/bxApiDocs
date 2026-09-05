@@ -11,6 +11,7 @@ use Bitrix\Booking\Entity\Booking\Booking;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\CounterDictionary;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\AbstractEventProcessor;
+use Bitrix\Booking\Internals\Service\Journal\EventProcessor\Booking\BookingStatusEnum;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
 
@@ -81,7 +82,13 @@ class CounterEventProcessor extends AbstractEventProcessor
 			return;
 		}
 
+		$this->sendBitrixEvent(type: 'onBookingStatusUpdated', parameters: [
+			'booking' => $booking,
+			'status' => BookingStatusEnum::DelayedCounterActivated->value,
+		]);
+
 		$booking->setConfirmed(false);
+		$booking->setConfirmedAt(null);
 		Container::getBookingRepository()->save($booking);
 
 		$this->runUpCounterCommand(
@@ -99,6 +106,11 @@ class CounterEventProcessor extends AbstractEventProcessor
 		{
 			return;
 		}
+
+		$this->sendBitrixEvent(type: 'onBookingStatusUpdated', parameters: [
+			'booking' => $booking,
+			'status' => BookingStatusEnum::ConfirmCounterActivated->value,
+		]);
 
 		$this->runUpCounterCommand(
 			$booking->getId(),

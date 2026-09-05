@@ -139,6 +139,8 @@ class Recent extends Registry implements PopupDataAggregatable, PopupDataItem
 		$query = RecentTable::query();
 
 		$query->setSelect([
+			'ITEM_TYPE',
+			'ITEM_ID',
 			'ITEM_CID',
 			'ITEM_MID',
 			'UNREAD',

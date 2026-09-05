@@ -28,8 +28,14 @@ enum NotificationTemplateType: string
 
 		foreach (self::cases() as $case)
 		{
+			$messageCode = match ($case)
+			{
+				self::InanimateLong => 'BOOKING_NOTIFICATION_TEMPLATE_TYPE_INANIMATE_LONG_MSGVER_1',
+				default => 'BOOKING_NOTIFICATION_TEMPLATE_TYPE_' . mb_strtoupper($case->value),
+			};
+
 			$result[$case->name] = [
-				'name' => Loc::getMessage('BOOKING_NOTIFICATION_TEMPLATE_TYPE_' . mb_strtoupper($case->value)),
+				'name' => Loc::getMessage($messageCode),
 				'value' => $case->value,
 			];
 		}

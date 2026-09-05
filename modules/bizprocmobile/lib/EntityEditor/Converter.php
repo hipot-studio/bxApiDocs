@@ -92,6 +92,15 @@ final class Converter
 			{
 				$value = $field->convertValueToMobile();
 
+				$data = $field->getConfig();
+				$description = $field->getDescription();
+				if ($description !== null)
+				{
+					// `hint` and not `description`: BooleanField already reads `config.description`
+					// with a different meaning — it replaces the rendered value.
+					$data = array_merge($data, ['hint' => $description]);
+				}
+
 				$this->convertedProperties[$id] = [
 					'name' => $field->getName(),
 					'type' => $field->getType(),
@@ -99,7 +108,7 @@ final class Converter
 					'editable' => $field->isEditable(),
 					'required' => $field->isRequired(),
 					'multiple' => $field->isMultiple(),
-					'data' => $field->getConfig(),
+					'data' => $data,
 					'custom' => [
 						'default' => $value,
 					],

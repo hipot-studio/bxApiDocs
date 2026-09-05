@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Transfer\Script\Action;
 
 use Bitrix\Landing\Block\BlockRepo;
+use Bitrix\Landing\Subtype\Form;
+use Bitrix\Landing\Transfer\Requisite\Dictionary\RatioPart;
 use Bitrix\Landing\Transfer\Requisite\Dictionary\RunDataPart;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
@@ -14,7 +16,20 @@ use Bitrix\Landing\Manager;
 
 class PrepareBlocksData extends Blank
 {
+	/**
+	 * Node and menu keys holding a link: only a value that is entirely a marker is a binding, the
+	 * same boundary the public render draws (Subtype\Form::replaceFormMarkers), so an external url
+	 * merely ending with such an anchor stays as it was exported.
+	 */
+	private const WHOLE_MARKER_KEYS = ['href'];
+
+	/**
+	 * Node and menu keys holding a pseudo-url json: there the marker sits inside the value.
+	 */
+	private const EMBEDDED_MARKER_KEYS = ['url', 'data-pseudo-url'];
+
 	private array $data;
+	private array $activeFormIdCache = [];
 
 	public function action(): void
 	{
@@ -27,6 +42,7 @@ class PrepareBlocksData extends Blank
 		$this->fixWrapperClasses();
 		$this->deleteCopyrightBlock();
 		$this->fixContactDataAndCountdown();
+		$this->normalizeCrmFormBinding();
 		$this->enableHiddenBlocksForCreatingPage();
 
 		$this->context->setData($this->data);
@@ -227,6 +243,400 @@ class PrepareBlocksData extends Blank
 				}
 			}
 		}
+	}
+
+	/**
+	 * Rebind imported CRM form markers to the portal target form when the source form is not
+	 * active here (archive brought from another portal). Same-portal transfers keep their binding.
+	 */
+	private function normalizeCrmFormBinding(): void
+	{
+		if (!$this->hasCrmFormMarker())
+		{
+			return;
+		}
+
+		$targetId = $this->getTargetFormId();
+		if ($targetId === null)
+		{
+			return;
+		}
+		$this->loadFormActivityCache();
+
+		foreach ($this->data['BLOCKS'] as &$block)
+		{
+			if (isset($block['full_content']))
+			{
+				$block['full_content'] = $this->normalizeFormContent((string)$block['full_content'], $targetId);
+			}
+
+			foreach (['nodes', 'menu'] as $part)
+			{
+				if (isset($block[$part]) && is_array($block[$part]))
+				{
+					$block[$part] = $this->normalizeFormMarkersDeep($block[$part], $targetId);
+				}
+			}
+
+			if (isset($block['attrs']) && is_array($block['attrs']))
+			{
+				$block['attrs'] = $this->normalizeAttrsBinding($block['attrs'], $targetId);
+			}
+		}
+		unset($block);
+
+		$this->saveFormActivityCache();
+	}
+
+	/**
+	 * Attrs are applied last on import (Block::saveDataToBlock), so a marker left here overwrites
+	 * the already normalized content. They arrive in two shapes the import accepts:
+	 * attrs[selector][position][attribute] and the compatibility one without a position,
+	 * attrs[selector][attribute] (Block::setAttributes), so the attribute is looked up at any depth.
+	 */
+	private function normalizeAttrsBinding(array $attrs, int $targetId): array
+	{
+		foreach ($attrs as $key => $value)
+		{
+			if (is_array($value))
+			{
+				$attrs[$key] = $this->normalizeAttrsBinding($value, $targetId);
+			}
+			elseif ($key === 'data-b24form' && is_string($value))
+			{
+				$attrs[$key] = $this->normalizeFormMarker($value, $targetId);
+			}
+		}
+
+		return $attrs;
+	}
+
+	/**
+	 * Early exit for archives without any form binding: it must cover every place the pass
+	 * normalizes, otherwise the target form is never resolved and bindings stay broken.
+	 */
+	private function hasCrmFormMarker(): bool
+	{
+		foreach ($this->data['BLOCKS'] as $block)
+		{
+			if (
+				isset($block['full_content'])
+				&& $this->containsFormBindingInContent((string)$block['full_content'])
+			)
+			{
+				return true;
+			}
+
+			foreach (['nodes', 'menu'] as $part)
+			{
+				if (
+					isset($block[$part])
+					&& is_array($block[$part])
+					&& $this->hasStructuredFormMarker($block[$part])
+				)
+				{
+					return true;
+				}
+			}
+
+			if (
+				isset($block['attrs'])
+				&& is_array($block['attrs'])
+				&& $this->hasAttrFormMarker($block['attrs'])
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function hasStructuredFormMarker(array $values): bool
+	{
+		foreach ($values as $key => $value)
+		{
+			if (is_array($value))
+			{
+				if ($this->hasStructuredFormMarker($value))
+				{
+					return true;
+				}
+
+				continue;
+			}
+
+			if (!is_string($value))
+			{
+				continue;
+			}
+
+			if (
+				in_array($key, self::WHOLE_MARKER_KEYS, true)
+				&& $this->isWholeFormMarker($value)
+			)
+			{
+				return true;
+			}
+
+			if (
+				in_array($key, self::EMBEDDED_MARKER_KEYS, true)
+				&& $this->containsFormMarker($value)
+			)
+			{
+				return true;
+			}
+
+			if (
+				// ctype extension is unavailable on the cloud, preg is the ctype_digit equivalent
+				(is_int($key) || preg_match('/^[0-9]+$/D', (string)$key))
+				&& $this->containsFormBindingInContent($value)
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function hasAttrFormMarker(array $values): bool
+	{
+		foreach ($values as $key => $value)
+		{
+			if (is_array($value))
+			{
+				if ($this->hasAttrFormMarker($value))
+				{
+					return true;
+				}
+
+				continue;
+			}
+
+			if (
+				$key === 'data-b24form'
+				&& is_string($value)
+				&& $this->isWholeFormMarker($value)
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function containsFormMarker(string $value): bool
+	{
+		return (bool)preg_match('/' . self::getMarkerPattern() . '/i', $value);
+	}
+
+	private function isWholeFormMarker(string $value): bool
+	{
+		return (bool)preg_match('/^' . self::getMarkerPattern() . '$/i', $value);
+	}
+
+	private function containsFormBindingInContent(string $content): bool
+	{
+		if ((bool)preg_match(
+			'/(?<attr>(?<![-\w])(?:data-b24form|href)\s*=\s*)(?<quote>["\'])'
+			. self::getMarkerPattern()
+			. '(?P=quote)/i',
+			$content
+		))
+		{
+			return true;
+		}
+
+		return (bool)preg_match(
+			'/(?<attr>(?<![-\w])data-pseudo-url\s*=\s*)(?<quote>["\'])(?<value>(?:(?!(?P=quote)).)*)'
+			. self::getMarkerPattern()
+			. '(?:(?!(?P=quote)).)*(?P=quote)/i',
+			$content
+		);
+	}
+
+	/**
+	 * Markers reach the content in the three shapes the public render understands
+	 * (Subtype\Form::replaceFormMarkers): the binding attribute, a link href and a pseudo-url json.
+	 * The lookbehind keeps data-orig-href and the like out of the match: \b does not stop at a dash.
+	 */
+	private function normalizeFormContent(string $content, int $targetId): string
+	{
+		$replaced = preg_replace_callback(
+			'/(?<attr>(?<![-\w])(?:data-b24form|href)\s*=\s*)(?<quote>["\'])' . self::getMarkerPattern() . '(?P=quote)/i',
+			fn(array $matches): string => $matches['attr'] . $matches['quote']
+				. $this->rebindMarker($matches, $targetId)
+				. $matches['quote'],
+			$content
+		);
+		$content = $replaced ?? $content;
+
+		$replaced = preg_replace_callback(
+			'/(?<attr>(?<![-\w])data-pseudo-url\s*=\s*)(?<quote>["\'])(?<value>(?:(?!(?P=quote)).)*)(?P=quote)/i',
+			fn(array $matches): string => $matches['attr'] . $matches['quote']
+				. $this->normalizeFormMarkersInText($matches['value'], $targetId)
+				. $matches['quote'],
+			$content
+		);
+
+		return $replaced ?? $content;
+	}
+
+	/**
+	 * Node values carry the binding in several shapes depending on the node type: link href,
+	 * icon/img pseudo-url json, plain text html. A node item is an array or a scalar string.
+	 * Menu items are the same shape one level deeper: href plus nested children.
+	 *
+	 * An href is a binding only when the whole value is the marker, a pseudo-url json carries it
+	 * inside. Everything else is content the user typed (menu text is the visible text of the item,
+	 * a text node is its html), so there a marker is rebound inside a known attribute only and a
+	 * marker-looking word of the text stays as it was written.
+	 */
+	private function normalizeFormMarkersDeep(array $values, int $targetId): array
+	{
+		foreach ($values as $key => $value)
+		{
+			if (is_array($value))
+			{
+				$values[$key] = $this->normalizeFormMarkersDeep($value, $targetId);
+			}
+			elseif (is_string($value))
+			{
+				if (in_array($key, self::WHOLE_MARKER_KEYS, true))
+				{
+					$values[$key] = $this->normalizeFormMarker($value, $targetId);
+				}
+				elseif (in_array($key, self::EMBEDDED_MARKER_KEYS, true))
+				{
+					$values[$key] = $this->normalizeFormMarkersInText($value, $targetId);
+				}
+				else
+				{
+					$values[$key] = $this->normalizeFormContent($value, $targetId);
+				}
+			}
+		}
+
+		return $values;
+	}
+
+	private function normalizeFormMarkersInText(string $value, int $targetId): string
+	{
+		$replaced = preg_replace_callback(
+			'/' . self::getMarkerPattern() . '/i',
+			fn(array $matches): string => $this->rebindMarker($matches, $targetId),
+			$value
+		);
+
+		return $replaced ?? $value;
+	}
+
+	/**
+	 * A binding stored as the whole value: anything the marker syntax does not describe completely
+	 * is not a binding and is left alone.
+	 */
+	private function normalizeFormMarker(string $value, int $targetId): string
+	{
+		if (!preg_match('/^' . self::getMarkerPattern() . '$/i', $value, $matches))
+		{
+			return $value;
+		}
+
+		return $this->rebindMarker($matches, $targetId);
+	}
+
+	/**
+	 * Keeps the marker type and the optional link scheme, replaces the id only.
+	 */
+	private function rebindMarker(array $matches, int $targetId): string
+	{
+		$sourceId = (int)$matches['id'];
+		$sourceActivity = $this->getSourceFormActivity($sourceId);
+		$id = $sourceActivity === null
+			? $sourceId
+			: ($sourceActivity ? $sourceId : $targetId);
+
+		return ($matches['scheme'] ?? '') . $matches['prefix'] . $id;
+	}
+
+	private static function getMarkerPattern(): string
+	{
+		return '(?<scheme>form:)?(?<prefix>'
+			. preg_quote(Form::INLINE_MARKER_PREFIX, '/')
+			. '|' . preg_quote(Form::POPUP_MARKER_PREFIX, '/')
+			. ')(?<id>\d+)';
+	}
+
+	private function getSourceFormActivity(int $formId): ?bool
+	{
+		if (!array_key_exists($formId, $this->activeFormIdCache))
+		{
+			$activity = $this->getFormActivityState($formId);
+			if ($activity === null)
+			{
+				return null;
+			}
+
+			$this->activeFormIdCache[$formId] = $activity;
+		}
+
+		return $this->activeFormIdCache[$formId];
+	}
+
+	/**
+	 * The action runs once per imported page and each page closes its own Core episode, so the ratio
+	 * is the only state left to reuse: on a connector portal the target form costs a REST call and
+	 * must be asked for once per import, not once per page. Id 0 means "asked, portal has no active
+	 * form", which is remembered too, otherwise every next page would ask again.
+	 */
+	private function getTargetFormId(): ?int
+	{
+		$ratio = $this->context->getRatio();
+		$stored = $ratio->get(RatioPart::CrmFormTargetId);
+		if ($stored !== null)
+		{
+			$storedId = (int)$stored;
+
+			return $storedId > 0 ? $storedId : null;
+		}
+
+		$targetId = $this->resolveTargetFormId();
+		if ($targetId === null && !$this->isTargetFormSnapshotAvailable())
+		{
+			return null;
+		}
+
+		$ratio->set(RatioPart::CrmFormTargetId, $targetId ?? 0);
+
+		return $targetId;
+	}
+
+	private function loadFormActivityCache(): void
+	{
+		$stored = $this->context->getRatio()->get(RatioPart::CrmFormActivity);
+		$this->activeFormIdCache = is_array($stored) ? array_map('boolval', $stored) : [];
+	}
+
+	private function saveFormActivityCache(): void
+	{
+		$this->context->getRatio()->set(RatioPart::CrmFormActivity, $this->activeFormIdCache);
+	}
+
+	protected function resolveTargetFormId(): ?int
+	{
+		return Form::resolveImportFormId();
+	}
+
+	protected function isTargetFormSnapshotAvailable(): bool
+	{
+		return Form::isFormsSnapshotAvailable();
+	}
+
+	protected function getFormActivityState(int $formId): ?bool
+	{
+		return Form::getFormActivityState($formId);
 	}
 
 	/**

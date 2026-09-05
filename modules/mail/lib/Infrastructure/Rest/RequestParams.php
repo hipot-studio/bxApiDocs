@@ -76,14 +76,21 @@ class RequestParams
 
 	public function getBool(string $name, bool $default = false): bool
 	{
-		return (bool)($this->json->get($name) ?? $default);
+		$value = $this->json->get($name);
+
+		return $value === null ? $default : self::toBool($value);
 	}
 
 	public function getNullableBool(string $name): ?bool
 	{
 		$value = $this->json->get($name);
 
-		return $value === null ? null : (bool)$value;
+		return $value === null ? null : self::toBool($value);
+	}
+
+	private static function toBool(mixed $value): bool
+	{
+		return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? (bool)$value;
 	}
 
 	public function getArray(string $name, array $default = []): array

@@ -68,8 +68,9 @@ class LandingFilterComponent extends LandingBaseComponent implements Controllera
 	{
 		return [
 			'createMenuItemClick' => [
-				'prefilters' => [
-					new ActionFilter\Authentication(),
+				// base pre-filters (authentication, csrf) are kept, the action only narrows them to POST
+				'+prefilters' => [
+					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),
 				],
 			],
 		];

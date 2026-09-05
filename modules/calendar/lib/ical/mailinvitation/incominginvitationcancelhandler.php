@@ -53,7 +53,7 @@ class IncomingInvitationCancelHandler extends IncomingInvitationHandler
 	public function handle(): bool
 	{
 		$icalEvent = $this->icalComponent->getEvent();
-		$event = Helper::getEventByUId($icalEvent->getUid());
+		$event = Helper::getEventByUId($icalEvent->getUid(), (int)$this->userId);
 
 		if ($event)
 		{

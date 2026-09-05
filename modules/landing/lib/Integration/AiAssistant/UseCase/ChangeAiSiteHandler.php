@@ -124,18 +124,32 @@ class ChangeAiSiteHandler
 		return (new CreateAiSiteChecker())->isLandingCreated($landingId);
 	}
 
+	protected function isAiSiteSelectedElementEditEnabled(): bool
+	{
+		return CopilotManager::isAiSiteSelectedElementEditEnabled();
+	}
+
+	protected function createBaseGeneration(): Generation
+	{
+		return (new Generation())
+			->setSiteData(new CopilotSiteData())
+		;
+	}
+
 	protected function createGeneration(ChangeAiSiteDto $dto, int $userId): Generation
 	{
-		$selectedElementContext = $this->resolveSelectedElementContext($dto->selectedElement);
+		$selectedElementContext = $this->isAiSiteSelectedElementEditEnabled()
+			? $this->resolveSelectedElementContext($dto->selectedElement)
+			: []
+		;
 		$scenario = $selectedElementContext !== []
 			? new ChangeAiSiteSelectedElement()
 			: new ChangeAiSite()
 		;
 
-		$generation = (new Generation())
+		$generation = $this->createBaseGeneration()
 			->setAuthorId($userId)
 			->setScenario($scenario)
-			->setSiteData(new CopilotSiteData())
 		;
 		ChangeAiSiteState::setInput($generation, [
 			'landingId' => $dto->pageId,
@@ -160,10 +174,18 @@ class ChangeAiSiteHandler
 			return [];
 		}
 
-		return [
+		$context = [
 			'blockId' => $blockId,
 			'selector' => $selector,
 		];
+
+		$fingerprint = trim((string)($selectedElement['fingerprint'] ?? ''));
+		if ($fingerprint !== '')
+		{
+			$context['fingerprint'] = $fingerprint;
+		}
+
+		return $context;
 	}
 
 	private function buildStartResponse(Generation $generation, string $jobId, int $requestedPageId, bool $started): array

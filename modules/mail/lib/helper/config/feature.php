@@ -11,7 +11,6 @@ use Bitrix\Main\ModuleManager;
 
 class Feature
 {
-
 	public static function isMailboxGridAvailable(): bool
 	{
 		return true;
@@ -42,6 +41,11 @@ class Feature
 		return true;
 	}
 
+	public static function isMailListImprovementsAvailable(): bool
+	{
+		return Option::get('mail', 'enable_list_improvements', 'N') === 'Y';
+	}
+
 	public static function isCrmAvailable(): bool
 	{
 		return MailAccess::hasCurrentUserAdminAccess()
@@ -52,5 +56,20 @@ class Feature
 	public static function isUnlimitedMailSyncPeriodAvailable(): bool
 	{
 		return !ModuleManager::isModuleInstalled('bitrix24');
+	}
+
+	public static function isHistorySyncByDateSearchEnabled(): bool
+	{
+		return Option::get('mail', 'sync_history_by_date_search', 'Y') === 'Y';
+	}
+
+	public static function isFolderManualSortingAvailable(): bool
+	{
+		return Option::get('mail', 'folder_sorting_enabled', 'N') === 'Y';
+	}
+
+	public static function isLargeAttachmentDiskUploadAvailable(): bool
+	{
+		return Option::get('mail', 'large_attachment_disk_upload_enabled', 'N') === 'Y';
 	}
 }

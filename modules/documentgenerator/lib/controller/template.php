@@ -739,6 +739,7 @@ class Template extends Base
 			}
 		}
 
+		$users = $this->filterAccessCodes($users);
 		if (!empty($users))
 		{
 			TemplateUserTable::deleteByTemplateIds([$templateId]);
@@ -761,6 +762,27 @@ class Template extends Base
 		$result->setData($this->getAction($template));
 
 		return $result;
+	}
+
+	private function filterAccessCodes(array $users): array
+	{
+		$accessCodes = [];
+
+		foreach ($users as $code)
+		{
+			if (!is_string($code))
+			{
+				continue;
+			}
+
+			$code = trim($code);
+			if ($code !== '')
+			{
+				$accessCodes[] = $code;
+			}
+		}
+
+		return array_values(array_unique($accessCodes));
 	}
 
 	/**

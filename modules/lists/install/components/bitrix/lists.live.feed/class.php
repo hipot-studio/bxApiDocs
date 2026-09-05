@@ -71,8 +71,8 @@ class ListsSelectElementComponent extends CBitrixComponent
 				}
 				else
 				{
-					$this->arResult['LIST_DATA']['PICTURE'] = "<img src=\"/bitrix/images/lists/default.png\" width=\"36\" height=\"30\" border=\"0\" />";
-					$this->arResult['LIST_DATA']['PICTURE_SMALL'] = "<img src=\"/bitrix/images/lists/default.png\" width=\"19\" height=\"16\" border=\"0\" />";
+					$this->arResult['LIST_DATA']['PICTURE'] = "<img src=\"/bitrix/images/lists/default.webp\" width=\"36\" height=\"30\" border=\"0\" />";
+					$this->arResult['LIST_DATA']['PICTURE_SMALL'] = "<img src=\"/bitrix/images/lists/default.webp\" width=\"19\" height=\"16\" border=\"0\" />";
 				}
 			}
 		}

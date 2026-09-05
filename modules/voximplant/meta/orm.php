@@ -1,6 +1,6 @@
 <?php
 
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\BlacklistTable:voximplant\lib\blacklist.php:c1e6cbb42ddef3152c26defb3bbe424c */
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\BlacklistTable:voximplant/lib/blacklist.php */
 namespace Bitrix\Voximplant {
 	/**
 	 * EO_Blacklist
@@ -131,6 +131,8 @@ namespace Bitrix\Voximplant {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_Blacklist_Collection merge(?EO_Blacklist_Collection $collection)
+	 * @method bool isEmpty()
 	 */
 	class EO_Blacklist_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Voximplant\BlacklistTable */
@@ -164,7 +166,7 @@ namespace Bitrix\Voximplant {
 	 */
 	class EO_Blacklist_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\ConfigTable:voximplant\lib\config.php:4758ce434e7f3ba46a43a38d06631ef4 */
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\ConfigTable:voximplant/lib/config.php */
 namespace Bitrix\Voximplant {
 	/**
 	 * EO_Config
@@ -378,6 +380,16 @@ namespace Bitrix\Voximplant {
 	 * @method \Bitrix\Voximplant\EO_Config resetRecordingNotice()
 	 * @method \Bitrix\Voximplant\EO_Config unsetRecordingNotice()
 	 * @method \boolean fillRecordingNotice()
+	 * @method \boolean getRecordingStereo()
+	 * @method \Bitrix\Voximplant\EO_Config setRecordingStereo(\boolean|\Bitrix\Main\DB\SqlExpression $recordingStereo)
+	 * @method bool hasRecordingStereo()
+	 * @method bool isRecordingStereoFilled()
+	 * @method bool isRecordingStereoChanged()
+	 * @method \boolean remindActualRecordingStereo()
+	 * @method \boolean requireRecordingStereo()
+	 * @method \Bitrix\Voximplant\EO_Config resetRecordingStereo()
+	 * @method \Bitrix\Voximplant\EO_Config unsetRecordingStereo()
+	 * @method \boolean fillRecordingStereo()
 	 * @method \string getForwardLine()
 	 * @method \Bitrix\Voximplant\EO_Config setForwardLine(\string|\Bitrix\Main\DB\SqlExpression $forwardLine)
 	 * @method bool hasForwardLine()
@@ -910,6 +922,8 @@ namespace Bitrix\Voximplant {
 	 * @method \int[] fillRecordingTime()
 	 * @method \boolean[] getRecordingNoticeList()
 	 * @method \boolean[] fillRecordingNotice()
+	 * @method \boolean[] getRecordingStereoList()
+	 * @method \boolean[] fillRecordingStereo()
 	 * @method \string[] getForwardLineList()
 	 * @method \string[] fillForwardLine()
 	 * @method \boolean[] getVoicemailList()
@@ -1032,6 +1046,8 @@ namespace Bitrix\Voximplant {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_Config_Collection merge(?EO_Config_Collection $collection)
+	 * @method bool isEmpty()
 	 */
 	class EO_Config_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Voximplant\ConfigTable */
@@ -1065,1136 +1081,412 @@ namespace Bitrix\Voximplant {
 	 */
 	class EO_Config_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\CallTable:voximplant\lib\model\call.php:115634cb398a41beb6292b151199763e */
-namespace Bitrix\Voximplant\Model {
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\StatisticTable:voximplant/lib/statistic.php */
+namespace Bitrix\Voximplant {
 	/**
-	 * EO_Call
-	 * @see \Bitrix\Voximplant\Model\CallTable
+	 * EO_Statistic
+	 * @see \Bitrix\Voximplant\StatisticTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Voximplant\EO_Statistic setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \int getConfigId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setConfigId(\int|\Bitrix\Main\DB\SqlExpression $configId)
-	 * @method bool hasConfigId()
-	 * @method bool isConfigIdFilled()
-	 * @method bool isConfigIdChanged()
-	 * @method \int remindActualConfigId()
-	 * @method \int requireConfigId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetConfigId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetConfigId()
-	 * @method \int fillConfigId()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetUserId()
-	 * @method \int fillUserId()
+	 * @method \int getAccountId()
+	 * @method \Bitrix\Voximplant\EO_Statistic setAccountId(\int|\Bitrix\Main\DB\SqlExpression $accountId)
+	 * @method bool hasAccountId()
+	 * @method bool isAccountIdFilled()
+	 * @method bool isAccountIdChanged()
+	 * @method \int remindActualAccountId()
+	 * @method \int requireAccountId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetAccountId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetAccountId()
+	 * @method \int fillAccountId()
+	 * @method \int getApplicationId()
+	 * @method \Bitrix\Voximplant\EO_Statistic setApplicationId(\int|\Bitrix\Main\DB\SqlExpression $applicationId)
+	 * @method bool hasApplicationId()
+	 * @method bool isApplicationIdFilled()
+	 * @method bool isApplicationIdChanged()
+	 * @method \int remindActualApplicationId()
+	 * @method \int requireApplicationId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetApplicationId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetApplicationId()
+	 * @method \int fillApplicationId()
+	 * @method \string getApplicationName()
+	 * @method \Bitrix\Voximplant\EO_Statistic setApplicationName(\string|\Bitrix\Main\DB\SqlExpression $applicationName)
+	 * @method bool hasApplicationName()
+	 * @method bool isApplicationNameFilled()
+	 * @method bool isApplicationNameChanged()
+	 * @method \string remindActualApplicationName()
+	 * @method \string requireApplicationName()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetApplicationName()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetApplicationName()
+	 * @method \string fillApplicationName()
 	 * @method \int getPortalUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setPortalUserId(\int|\Bitrix\Main\DB\SqlExpression $portalUserId)
+	 * @method \Bitrix\Voximplant\EO_Statistic setPortalUserId(\int|\Bitrix\Main\DB\SqlExpression $portalUserId)
 	 * @method bool hasPortalUserId()
 	 * @method bool isPortalUserIdFilled()
 	 * @method bool isPortalUserIdChanged()
 	 * @method \int remindActualPortalUserId()
 	 * @method \int requirePortalUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetPortalUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetPortalUserId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetPortalUserId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetPortalUserId()
 	 * @method \int fillPortalUserId()
-	 * @method \string getCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
-	 * @method bool hasCallId()
-	 * @method bool isCallIdFilled()
-	 * @method bool isCallIdChanged()
-	 * @method \string remindActualCallId()
-	 * @method \string requireCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCallId()
-	 * @method \string fillCallId()
-	 * @method \string getExternalCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setExternalCallId(\string|\Bitrix\Main\DB\SqlExpression $externalCallId)
-	 * @method bool hasExternalCallId()
-	 * @method bool isExternalCallIdFilled()
-	 * @method bool isExternalCallIdChanged()
-	 * @method \string remindActualExternalCallId()
-	 * @method \string requireExternalCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetExternalCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetExternalCallId()
-	 * @method \string fillExternalCallId()
-	 * @method \string getIncoming()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setIncoming(\string|\Bitrix\Main\DB\SqlExpression $incoming)
-	 * @method bool hasIncoming()
-	 * @method bool isIncomingFilled()
-	 * @method bool isIncomingChanged()
-	 * @method \string remindActualIncoming()
-	 * @method \string requireIncoming()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetIncoming()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetIncoming()
-	 * @method \string fillIncoming()
-	 * @method \string getCallerId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setCallerId(\string|\Bitrix\Main\DB\SqlExpression $callerId)
-	 * @method bool hasCallerId()
-	 * @method bool isCallerIdFilled()
-	 * @method bool isCallerIdChanged()
-	 * @method \string remindActualCallerId()
-	 * @method \string requireCallerId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetCallerId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCallerId()
-	 * @method \string fillCallerId()
-	 * @method \string getStatus()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
-	 * @method bool hasStatus()
-	 * @method bool isStatusFilled()
-	 * @method bool isStatusChanged()
-	 * @method \string remindActualStatus()
-	 * @method \string requireStatus()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetStatus()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetStatus()
-	 * @method \string fillStatus()
-	 * @method \boolean getCrm()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setCrm(\boolean|\Bitrix\Main\DB\SqlExpression $crm)
-	 * @method bool hasCrm()
-	 * @method bool isCrmFilled()
-	 * @method bool isCrmChanged()
-	 * @method \boolean remindActualCrm()
-	 * @method \boolean requireCrm()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetCrm()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCrm()
-	 * @method \boolean fillCrm()
-	 * @method \int getCrmActivityId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setCrmActivityId(\int|\Bitrix\Main\DB\SqlExpression $crmActivityId)
-	 * @method bool hasCrmActivityId()
-	 * @method bool isCrmActivityIdFilled()
-	 * @method bool isCrmActivityIdChanged()
-	 * @method \int remindActualCrmActivityId()
-	 * @method \int requireCrmActivityId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetCrmActivityId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCrmActivityId()
-	 * @method \int fillCrmActivityId()
-	 * @method \int getCrmCallList()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setCrmCallList(\int|\Bitrix\Main\DB\SqlExpression $crmCallList)
-	 * @method bool hasCrmCallList()
-	 * @method bool isCrmCallListFilled()
-	 * @method bool isCrmCallListChanged()
-	 * @method \int remindActualCrmCallList()
-	 * @method \int requireCrmCallList()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetCrmCallList()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCrmCallList()
-	 * @method \int fillCrmCallList()
-	 * @method \string getCrmBindings()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setCrmBindings(\string|\Bitrix\Main\DB\SqlExpression $crmBindings)
-	 * @method bool hasCrmBindings()
-	 * @method bool isCrmBindingsFilled()
-	 * @method bool isCrmBindingsChanged()
-	 * @method \string remindActualCrmBindings()
-	 * @method \string requireCrmBindings()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetCrmBindings()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCrmBindings()
-	 * @method \string fillCrmBindings()
-	 * @method \string getAccessUrl()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setAccessUrl(\string|\Bitrix\Main\DB\SqlExpression $accessUrl)
-	 * @method bool hasAccessUrl()
-	 * @method bool isAccessUrlFilled()
-	 * @method bool isAccessUrlChanged()
-	 * @method \string remindActualAccessUrl()
-	 * @method \string requireAccessUrl()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetAccessUrl()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetAccessUrl()
-	 * @method \string fillAccessUrl()
-	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
-	 * @method bool hasDateCreate()
-	 * @method bool isDateCreateFilled()
-	 * @method bool isDateCreateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetDateCreate()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
-	 * @method \int getRestAppId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setRestAppId(\int|\Bitrix\Main\DB\SqlExpression $restAppId)
-	 * @method bool hasRestAppId()
-	 * @method bool isRestAppIdFilled()
-	 * @method bool isRestAppIdChanged()
-	 * @method \int remindActualRestAppId()
-	 * @method \int requireRestAppId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetRestAppId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetRestAppId()
-	 * @method \int fillRestAppId()
-	 * @method \int getExternalLineId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setExternalLineId(\int|\Bitrix\Main\DB\SqlExpression $externalLineId)
-	 * @method bool hasExternalLineId()
-	 * @method bool isExternalLineIdFilled()
-	 * @method bool isExternalLineIdChanged()
-	 * @method \int remindActualExternalLineId()
-	 * @method \int requireExternalLineId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetExternalLineId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetExternalLineId()
-	 * @method \int fillExternalLineId()
 	 * @method \string getPortalNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setPortalNumber(\string|\Bitrix\Main\DB\SqlExpression $portalNumber)
+	 * @method \Bitrix\Voximplant\EO_Statistic setPortalNumber(\string|\Bitrix\Main\DB\SqlExpression $portalNumber)
 	 * @method bool hasPortalNumber()
 	 * @method bool isPortalNumberFilled()
 	 * @method bool isPortalNumberChanged()
 	 * @method \string remindActualPortalNumber()
 	 * @method \string requirePortalNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetPortalNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetPortalNumber()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetPortalNumber()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetPortalNumber()
 	 * @method \string fillPortalNumber()
-	 * @method \string getStage()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setStage(\string|\Bitrix\Main\DB\SqlExpression $stage)
-	 * @method bool hasStage()
-	 * @method bool isStageFilled()
-	 * @method bool isStageChanged()
-	 * @method \string remindActualStage()
-	 * @method \string requireStage()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetStage()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetStage()
-	 * @method \string fillStage()
-	 * @method \int getIvrActionId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setIvrActionId(\int|\Bitrix\Main\DB\SqlExpression $ivrActionId)
-	 * @method bool hasIvrActionId()
-	 * @method bool isIvrActionIdFilled()
-	 * @method bool isIvrActionIdChanged()
-	 * @method \int remindActualIvrActionId()
-	 * @method \int requireIvrActionId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetIvrActionId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetIvrActionId()
-	 * @method \int fillIvrActionId()
-	 * @method \int getQueueId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setQueueId(\int|\Bitrix\Main\DB\SqlExpression $queueId)
-	 * @method bool hasQueueId()
-	 * @method bool isQueueIdFilled()
-	 * @method bool isQueueIdChanged()
-	 * @method \int remindActualQueueId()
-	 * @method \int requireQueueId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetQueueId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetQueueId()
-	 * @method \int fillQueueId()
-	 * @method \string getQueueHistory()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setQueueHistory(\string|\Bitrix\Main\DB\SqlExpression $queueHistory)
-	 * @method bool hasQueueHistory()
-	 * @method bool isQueueHistoryFilled()
-	 * @method bool isQueueHistoryChanged()
-	 * @method \string remindActualQueueHistory()
-	 * @method \string requireQueueHistory()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetQueueHistory()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetQueueHistory()
-	 * @method \string fillQueueHistory()
-	 * @method \int getSessionId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setSessionId(\int|\Bitrix\Main\DB\SqlExpression $sessionId)
-	 * @method bool hasSessionId()
-	 * @method bool isSessionIdFilled()
-	 * @method bool isSessionIdChanged()
-	 * @method \int remindActualSessionId()
-	 * @method \int requireSessionId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetSessionId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetSessionId()
-	 * @method \int fillSessionId()
-	 * @method \string getCallbackParameters()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setCallbackParameters(\string|\Bitrix\Main\DB\SqlExpression $callbackParameters)
-	 * @method bool hasCallbackParameters()
-	 * @method bool isCallbackParametersFilled()
-	 * @method bool isCallbackParametersChanged()
-	 * @method \string remindActualCallbackParameters()
-	 * @method \string requireCallbackParameters()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetCallbackParameters()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCallbackParameters()
-	 * @method \string fillCallbackParameters()
-	 * @method \string getComment()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setComment(\string|\Bitrix\Main\DB\SqlExpression $comment)
-	 * @method bool hasComment()
-	 * @method bool isCommentFilled()
-	 * @method bool isCommentChanged()
-	 * @method \string remindActualComment()
-	 * @method \string requireComment()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetComment()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetComment()
-	 * @method \string fillComment()
-	 * @method \boolean getWorktimeSkipped()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setWorktimeSkipped(\boolean|\Bitrix\Main\DB\SqlExpression $worktimeSkipped)
-	 * @method bool hasWorktimeSkipped()
-	 * @method bool isWorktimeSkippedFilled()
-	 * @method bool isWorktimeSkippedChanged()
-	 * @method \boolean remindActualWorktimeSkipped()
-	 * @method \boolean requireWorktimeSkipped()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetWorktimeSkipped()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetWorktimeSkipped()
-	 * @method \boolean fillWorktimeSkipped()
-	 * @method \string getSipHeaders()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setSipHeaders(\string|\Bitrix\Main\DB\SqlExpression $sipHeaders)
-	 * @method bool hasSipHeaders()
-	 * @method bool isSipHeadersFilled()
-	 * @method bool isSipHeadersChanged()
-	 * @method \string remindActualSipHeaders()
-	 * @method \string requireSipHeaders()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetSipHeaders()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetSipHeaders()
-	 * @method \string fillSipHeaders()
-	 * @method \string getGatheredDigits()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setGatheredDigits(\string|\Bitrix\Main\DB\SqlExpression $gatheredDigits)
-	 * @method bool hasGatheredDigits()
-	 * @method bool isGatheredDigitsFilled()
-	 * @method bool isGatheredDigitsChanged()
-	 * @method \string remindActualGatheredDigits()
-	 * @method \string requireGatheredDigits()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetGatheredDigits()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetGatheredDigits()
-	 * @method \string fillGatheredDigits()
-	 * @method \string getParentCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setParentCallId(\string|\Bitrix\Main\DB\SqlExpression $parentCallId)
-	 * @method bool hasParentCallId()
-	 * @method bool isParentCallIdFilled()
-	 * @method bool isParentCallIdChanged()
-	 * @method \string remindActualParentCallId()
-	 * @method \string requireParentCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetParentCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetParentCallId()
-	 * @method \string fillParentCallId()
-	 * @method \Bitrix\Main\Type\DateTime getLastPing()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setLastPing(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $lastPing)
-	 * @method bool hasLastPing()
-	 * @method bool isLastPingFilled()
-	 * @method bool isLastPingChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualLastPing()
-	 * @method \Bitrix\Main\Type\DateTime requireLastPing()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetLastPing()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetLastPing()
-	 * @method \Bitrix\Main\Type\DateTime fillLastPing()
-	 * @method \string getExecutionGraph()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setExecutionGraph(\string|\Bitrix\Main\DB\SqlExpression $executionGraph)
-	 * @method bool hasExecutionGraph()
-	 * @method bool isExecutionGraphFilled()
-	 * @method bool isExecutionGraphChanged()
-	 * @method \string remindActualExecutionGraph()
-	 * @method \string requireExecutionGraph()
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetExecutionGraph()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetExecutionGraph()
-	 * @method \string fillExecutionGraph()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue getQueue()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue remindActualQueue()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue requireQueue()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setQueue(\Bitrix\Voximplant\Model\EO_Queue $object)
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetQueue()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetQueue()
-	 * @method bool hasQueue()
-	 * @method bool isQueueFilled()
-	 * @method bool isQueueChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue fillQueue()
-	 * @method \Bitrix\Voximplant\EO_Config getConfig()
-	 * @method \Bitrix\Voximplant\EO_Config remindActualConfig()
-	 * @method \Bitrix\Voximplant\EO_Config requireConfig()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setConfig(\Bitrix\Voximplant\EO_Config $object)
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetConfig()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetConfig()
-	 * @method bool hasConfig()
-	 * @method bool isConfigFilled()
-	 * @method bool isConfigChanged()
-	 * @method \Bitrix\Voximplant\EO_Config fillConfig()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine getExternalLine()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine remindActualExternalLine()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine requireExternalLine()
-	 * @method \Bitrix\Voximplant\Model\EO_Call setExternalLine(\Bitrix\Voximplant\Model\EO_ExternalLine $object)
-	 * @method \Bitrix\Voximplant\Model\EO_Call resetExternalLine()
-	 * @method \Bitrix\Voximplant\Model\EO_Call unsetExternalLine()
-	 * @method bool hasExternalLine()
-	 * @method bool isExternalLineFilled()
-	 * @method bool isExternalLineChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine fillExternalLine()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Call set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_Call reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Call unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_Call wakeUp($data)
-	 */
-	class EO_Call {
-		/* @var \Bitrix\Voximplant\Model\CallTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\CallTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_Call_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getConfigIdList()
-	 * @method \int[] fillConfigId()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \int[] getPortalUserIdList()
-	 * @method \int[] fillPortalUserId()
-	 * @method \string[] getCallIdList()
-	 * @method \string[] fillCallId()
-	 * @method \string[] getExternalCallIdList()
-	 * @method \string[] fillExternalCallId()
-	 * @method \string[] getIncomingList()
-	 * @method \string[] fillIncoming()
-	 * @method \string[] getCallerIdList()
-	 * @method \string[] fillCallerId()
-	 * @method \string[] getStatusList()
-	 * @method \string[] fillStatus()
-	 * @method \boolean[] getCrmList()
-	 * @method \boolean[] fillCrm()
-	 * @method \int[] getCrmActivityIdList()
-	 * @method \int[] fillCrmActivityId()
-	 * @method \int[] getCrmCallListList()
-	 * @method \int[] fillCrmCallList()
-	 * @method \string[] getCrmBindingsList()
-	 * @method \string[] fillCrmBindings()
-	 * @method \string[] getAccessUrlList()
-	 * @method \string[] fillAccessUrl()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
-	 * @method \int[] getRestAppIdList()
-	 * @method \int[] fillRestAppId()
-	 * @method \int[] getExternalLineIdList()
-	 * @method \int[] fillExternalLineId()
-	 * @method \string[] getPortalNumberList()
-	 * @method \string[] fillPortalNumber()
-	 * @method \string[] getStageList()
-	 * @method \string[] fillStage()
-	 * @method \int[] getIvrActionIdList()
-	 * @method \int[] fillIvrActionId()
-	 * @method \int[] getQueueIdList()
-	 * @method \int[] fillQueueId()
-	 * @method \string[] getQueueHistoryList()
-	 * @method \string[] fillQueueHistory()
-	 * @method \int[] getSessionIdList()
-	 * @method \int[] fillSessionId()
-	 * @method \string[] getCallbackParametersList()
-	 * @method \string[] fillCallbackParameters()
-	 * @method \string[] getCommentList()
-	 * @method \string[] fillComment()
-	 * @method \boolean[] getWorktimeSkippedList()
-	 * @method \boolean[] fillWorktimeSkipped()
-	 * @method \string[] getSipHeadersList()
-	 * @method \string[] fillSipHeaders()
-	 * @method \string[] getGatheredDigitsList()
-	 * @method \string[] fillGatheredDigits()
-	 * @method \string[] getParentCallIdList()
-	 * @method \string[] fillParentCallId()
-	 * @method \Bitrix\Main\Type\DateTime[] getLastPingList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillLastPing()
-	 * @method \string[] getExecutionGraphList()
-	 * @method \string[] fillExecutionGraph()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue[] getQueueList()
-	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection getQueueCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection fillQueue()
-	 * @method \Bitrix\Voximplant\EO_Config[] getConfigList()
-	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection getConfigCollection()
-	 * @method \Bitrix\Voximplant\EO_Config_Collection fillConfig()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine[] getExternalLineList()
-	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection getExternalLineCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection fillExternalLine()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_Call $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_Call $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Call getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Call[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Call $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_Call_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_Call current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_Call_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\CallTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\CallTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Call_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_Call fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Call_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Call fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection fetchCollection()
-	 */
-	class EO_Call_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Call createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Call wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection wakeUpCollection($rows)
-	 */
-	class EO_Call_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\CallCrmEntityTable:voximplant\lib\model\callcrmentity.php:8210837b4213920b0ef6202aa0e5729c */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_CallCrmEntity
-	 * @see \Bitrix\Voximplant\Model\CallCrmEntityTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
+	 * @method \string getPhoneNumber()
+	 * @method \Bitrix\Voximplant\EO_Statistic setPhoneNumber(\string|\Bitrix\Main\DB\SqlExpression $phoneNumber)
+	 * @method bool hasPhoneNumber()
+	 * @method bool isPhoneNumberFilled()
+	 * @method bool isPhoneNumberChanged()
+	 * @method \string remindActualPhoneNumber()
+	 * @method \string requirePhoneNumber()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetPhoneNumber()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetPhoneNumber()
+	 * @method \string fillPhoneNumber()
+	 * @method \string getIncoming()
+	 * @method \Bitrix\Voximplant\EO_Statistic setIncoming(\string|\Bitrix\Main\DB\SqlExpression $incoming)
+	 * @method bool hasIncoming()
+	 * @method bool isIncomingFilled()
+	 * @method bool isIncomingChanged()
+	 * @method \string remindActualIncoming()
+	 * @method \string requireIncoming()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetIncoming()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetIncoming()
+	 * @method \string fillIncoming()
 	 * @method \string getCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
 	 * @method bool hasCallId()
 	 * @method bool isCallIdFilled()
 	 * @method bool isCallIdChanged()
-	 * @method \string getEntityType()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setEntityType(\string|\Bitrix\Main\DB\SqlExpression $entityType)
-	 * @method bool hasEntityType()
-	 * @method bool isEntityTypeFilled()
-	 * @method bool isEntityTypeChanged()
-	 * @method \int getEntityId()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setEntityId(\int|\Bitrix\Main\DB\SqlExpression $entityId)
-	 * @method bool hasEntityId()
-	 * @method bool isEntityIdFilled()
-	 * @method bool isEntityIdChanged()
-	 * @method \boolean getIsPrimary()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setIsPrimary(\boolean|\Bitrix\Main\DB\SqlExpression $isPrimary)
-	 * @method bool hasIsPrimary()
-	 * @method bool isIsPrimaryFilled()
-	 * @method bool isIsPrimaryChanged()
-	 * @method \boolean remindActualIsPrimary()
-	 * @method \boolean requireIsPrimary()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity resetIsPrimary()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity unsetIsPrimary()
-	 * @method \boolean fillIsPrimary()
-	 * @method \boolean getIsCreated()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setIsCreated(\boolean|\Bitrix\Main\DB\SqlExpression $isCreated)
-	 * @method bool hasIsCreated()
-	 * @method bool isIsCreatedFilled()
-	 * @method bool isIsCreatedChanged()
-	 * @method \boolean remindActualIsCreated()
-	 * @method \boolean requireIsCreated()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity resetIsCreated()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity unsetIsCreated()
-	 * @method \boolean fillIsCreated()
-	 * @method \Bitrix\Voximplant\EO_Statistic getCall()
-	 * @method \Bitrix\Voximplant\EO_Statistic remindActualCall()
-	 * @method \Bitrix\Voximplant\EO_Statistic requireCall()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setCall(\Bitrix\Voximplant\EO_Statistic $object)
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity resetCall()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity unsetCall()
-	 * @method bool hasCall()
-	 * @method bool isCallFilled()
-	 * @method bool isCallChanged()
-	 * @method \Bitrix\Voximplant\EO_Statistic fillCall()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_CallCrmEntity wakeUp($data)
-	 */
-	class EO_CallCrmEntity {
-		/* @var \Bitrix\Voximplant\Model\CallCrmEntityTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\CallCrmEntityTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_CallCrmEntity_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \string[] getCallIdList()
-	 * @method \string[] getEntityTypeList()
-	 * @method \int[] getEntityIdList()
-	 * @method \boolean[] getIsPrimaryList()
-	 * @method \boolean[] fillIsPrimary()
-	 * @method \boolean[] getIsCreatedList()
-	 * @method \boolean[] fillIsCreated()
-	 * @method \Bitrix\Voximplant\EO_Statistic[] getCallList()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection getCallCollection()
-	 * @method \Bitrix\Voximplant\EO_Statistic_Collection fillCall()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_CallCrmEntity $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_CallCrmEntity $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_CallCrmEntity $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_CallCrmEntity_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\CallCrmEntityTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\CallCrmEntityTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_CallCrmEntity_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_CallCrmEntity_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection fetchCollection()
-	 */
-	class EO_CallCrmEntity_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection wakeUpCollection($rows)
-	 */
-	class EO_CallCrmEntity_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\CallerIdTable:voximplant\lib\model\callerid.php:6b2c099146885e3f3cca01f804f9fa4c */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_CallerId
-	 * @see \Bitrix\Voximplant\Model\CallerIdTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId setNumber(\string|\Bitrix\Main\DB\SqlExpression $number)
-	 * @method bool hasNumber()
-	 * @method bool isNumberFilled()
-	 * @method bool isNumberChanged()
-	 * @method \string remindActualNumber()
-	 * @method \string requireNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetNumber()
-	 * @method \string fillNumber()
-	 * @method \boolean getVerified()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId setVerified(\boolean|\Bitrix\Main\DB\SqlExpression $verified)
-	 * @method bool hasVerified()
-	 * @method bool isVerifiedFilled()
-	 * @method bool isVerifiedChanged()
-	 * @method \boolean remindActualVerified()
-	 * @method \boolean requireVerified()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetVerified()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetVerified()
-	 * @method \boolean fillVerified()
-	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
-	 * @method bool hasDateCreate()
-	 * @method bool isDateCreateFilled()
-	 * @method bool isDateCreateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetDateCreate()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
-	 * @method \Bitrix\Main\Type\Date getVerifiedUntil()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId setVerifiedUntil(\Bitrix\Main\Type\Date|\Bitrix\Main\DB\SqlExpression $verifiedUntil)
-	 * @method bool hasVerifiedUntil()
-	 * @method bool isVerifiedUntilFilled()
-	 * @method bool isVerifiedUntilChanged()
-	 * @method \Bitrix\Main\Type\Date remindActualVerifiedUntil()
-	 * @method \Bitrix\Main\Type\Date requireVerifiedUntil()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetVerifiedUntil()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetVerifiedUntil()
-	 * @method \Bitrix\Main\Type\Date fillVerifiedUntil()
-	 * @method \int getConfigId()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId setConfigId(\int|\Bitrix\Main\DB\SqlExpression $configId)
-	 * @method bool hasConfigId()
-	 * @method bool isConfigIdFilled()
-	 * @method bool isConfigIdChanged()
-	 * @method \int remindActualConfigId()
-	 * @method \int requireConfigId()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetConfigId()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetConfigId()
-	 * @method \int fillConfigId()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_CallerId wakeUp($data)
-	 */
-	class EO_CallerId {
-		/* @var \Bitrix\Voximplant\Model\CallerIdTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\CallerIdTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_CallerId_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getNumberList()
-	 * @method \string[] fillNumber()
-	 * @method \boolean[] getVerifiedList()
-	 * @method \boolean[] fillVerified()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
-	 * @method \Bitrix\Main\Type\Date[] getVerifiedUntilList()
-	 * @method \Bitrix\Main\Type\Date[] fillVerifiedUntil()
-	 * @method \int[] getConfigIdList()
-	 * @method \int[] fillConfigId()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_CallerId $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_CallerId $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_CallerId $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_CallerId_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_CallerId_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\CallerIdTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\CallerIdTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_CallerId_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_CallerId_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId_Collection fetchCollection()
-	 */
-	class EO_CallerId_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_CallerId_Collection wakeUpCollection($rows)
-	 */
-	class EO_CallerId_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\CallUserTable:voximplant\lib\model\calluser.php:051049f7ded27784bf4b35072f4901a3 */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_CallUser
-	 * @see \Bitrix\Voximplant\Model\CallUserTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \string getCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
-	 * @method bool hasCallId()
-	 * @method bool isCallIdFilled()
-	 * @method bool isCallIdChanged()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \string getRole()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser setRole(\string|\Bitrix\Main\DB\SqlExpression $role)
-	 * @method bool hasRole()
-	 * @method bool isRoleFilled()
-	 * @method bool isRoleChanged()
-	 * @method \string remindActualRole()
-	 * @method \string requireRole()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser resetRole()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser unsetRole()
-	 * @method \string fillRole()
-	 * @method \string getStatus()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
-	 * @method bool hasStatus()
-	 * @method bool isStatusFilled()
-	 * @method bool isStatusChanged()
-	 * @method \string remindActualStatus()
-	 * @method \string requireStatus()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser resetStatus()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser unsetStatus()
-	 * @method \string fillStatus()
-	 * @method \string getDevice()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser setDevice(\string|\Bitrix\Main\DB\SqlExpression $device)
-	 * @method bool hasDevice()
-	 * @method bool isDeviceFilled()
-	 * @method bool isDeviceChanged()
-	 * @method \string remindActualDevice()
-	 * @method \string requireDevice()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser resetDevice()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser unsetDevice()
-	 * @method \string fillDevice()
-	 * @method \Bitrix\Main\Type\DateTime getInserted()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser setInserted(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $inserted)
-	 * @method bool hasInserted()
-	 * @method bool isInsertedFilled()
-	 * @method bool isInsertedChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualInserted()
-	 * @method \Bitrix\Main\Type\DateTime requireInserted()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser resetInserted()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser unsetInserted()
-	 * @method \Bitrix\Main\Type\DateTime fillInserted()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_CallUser wakeUp($data)
-	 */
-	class EO_CallUser {
-		/* @var \Bitrix\Voximplant\Model\CallUserTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\CallUserTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_CallUser_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \string[] getCallIdList()
-	 * @method \int[] getUserIdList()
-	 * @method \string[] getRoleList()
-	 * @method \string[] fillRole()
-	 * @method \string[] getStatusList()
-	 * @method \string[] fillStatus()
-	 * @method \string[] getDeviceList()
-	 * @method \string[] fillDevice()
-	 * @method \Bitrix\Main\Type\DateTime[] getInsertedList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillInserted()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_CallUser $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_CallUser $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_CallUser $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_CallUser_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_CallUser_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\CallUserTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\CallUserTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_CallUser_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_CallUser_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser_Collection fetchCollection()
-	 */
-	class EO_CallUser_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_CallUser_Collection wakeUpCollection($rows)
-	 */
-	class EO_CallUser_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\ExternalLineTable:voximplant\lib\model\externalline.php:3908ee82901a6172ba6b0e78fb12cfd4 */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_ExternalLine
-	 * @see \Bitrix\Voximplant\Model\ExternalLineTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getType()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setType(\string|\Bitrix\Main\DB\SqlExpression $type)
-	 * @method bool hasType()
-	 * @method bool isTypeFilled()
-	 * @method bool isTypeChanged()
-	 * @method \string remindActualType()
-	 * @method \string requireType()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetType()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetType()
-	 * @method \string fillType()
-	 * @method \string getNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setNumber(\string|\Bitrix\Main\DB\SqlExpression $number)
-	 * @method bool hasNumber()
-	 * @method bool isNumberFilled()
-	 * @method bool isNumberChanged()
-	 * @method \string remindActualNumber()
-	 * @method \string requireNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetNumber()
-	 * @method \string fillNumber()
-	 * @method \string getNormalizedNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setNormalizedNumber(\string|\Bitrix\Main\DB\SqlExpression $normalizedNumber)
-	 * @method bool hasNormalizedNumber()
-	 * @method bool isNormalizedNumberFilled()
-	 * @method bool isNormalizedNumberChanged()
-	 * @method \string remindActualNormalizedNumber()
-	 * @method \string requireNormalizedNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetNormalizedNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetNormalizedNumber()
-	 * @method \string fillNormalizedNumber()
-	 * @method \string getName()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetName()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetName()
-	 * @method \string fillName()
+	 * @method \string remindActualCallId()
+	 * @method \string requireCallId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallId()
+	 * @method \string fillCallId()
+	 * @method \string getExternalCallId()
+	 * @method \Bitrix\Voximplant\EO_Statistic setExternalCallId(\string|\Bitrix\Main\DB\SqlExpression $externalCallId)
+	 * @method bool hasExternalCallId()
+	 * @method bool isExternalCallIdFilled()
+	 * @method bool isExternalCallIdChanged()
+	 * @method \string remindActualExternalCallId()
+	 * @method \string requireExternalCallId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetExternalCallId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetExternalCallId()
+	 * @method \string fillExternalCallId()
+	 * @method \string getCallCategory()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallCategory(\string|\Bitrix\Main\DB\SqlExpression $callCategory)
+	 * @method bool hasCallCategory()
+	 * @method bool isCallCategoryFilled()
+	 * @method bool isCallCategoryChanged()
+	 * @method \string remindActualCallCategory()
+	 * @method \string requireCallCategory()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallCategory()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallCategory()
+	 * @method \string fillCallCategory()
+	 * @method \string getCallLog()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallLog(\string|\Bitrix\Main\DB\SqlExpression $callLog)
+	 * @method bool hasCallLog()
+	 * @method bool isCallLogFilled()
+	 * @method bool isCallLogChanged()
+	 * @method \string remindActualCallLog()
+	 * @method \string requireCallLog()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallLog()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallLog()
+	 * @method \string fillCallLog()
+	 * @method \string getCallDirection()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallDirection(\string|\Bitrix\Main\DB\SqlExpression $callDirection)
+	 * @method bool hasCallDirection()
+	 * @method bool isCallDirectionFilled()
+	 * @method bool isCallDirectionChanged()
+	 * @method \string remindActualCallDirection()
+	 * @method \string requireCallDirection()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallDirection()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallDirection()
+	 * @method \string fillCallDirection()
+	 * @method \int getCallDuration()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallDuration(\int|\Bitrix\Main\DB\SqlExpression $callDuration)
+	 * @method bool hasCallDuration()
+	 * @method bool isCallDurationFilled()
+	 * @method bool isCallDurationChanged()
+	 * @method \int remindActualCallDuration()
+	 * @method \int requireCallDuration()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallDuration()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallDuration()
+	 * @method \int fillCallDuration()
+	 * @method \Bitrix\Main\Type\DateTime getCallStartDate()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallStartDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $callStartDate)
+	 * @method bool hasCallStartDate()
+	 * @method bool isCallStartDateFilled()
+	 * @method bool isCallStartDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCallStartDate()
+	 * @method \Bitrix\Main\Type\DateTime requireCallStartDate()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallStartDate()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallStartDate()
+	 * @method \Bitrix\Main\Type\DateTime fillCallStartDate()
+	 * @method \int getCallStatus()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallStatus(\int|\Bitrix\Main\DB\SqlExpression $callStatus)
+	 * @method bool hasCallStatus()
+	 * @method bool isCallStatusFilled()
+	 * @method bool isCallStatusChanged()
+	 * @method \int remindActualCallStatus()
+	 * @method \int requireCallStatus()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallStatus()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallStatus()
+	 * @method \int fillCallStatus()
+	 * @method \int getCallRecordId()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallRecordId(\int|\Bitrix\Main\DB\SqlExpression $callRecordId)
+	 * @method bool hasCallRecordId()
+	 * @method bool isCallRecordIdFilled()
+	 * @method bool isCallRecordIdChanged()
+	 * @method \int remindActualCallRecordId()
+	 * @method \int requireCallRecordId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallRecordId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallRecordId()
+	 * @method \int fillCallRecordId()
+	 * @method \string getCallRecordUrl()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallRecordUrl(\string|\Bitrix\Main\DB\SqlExpression $callRecordUrl)
+	 * @method bool hasCallRecordUrl()
+	 * @method bool isCallRecordUrlFilled()
+	 * @method bool isCallRecordUrlChanged()
+	 * @method \string remindActualCallRecordUrl()
+	 * @method \string requireCallRecordUrl()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallRecordUrl()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallRecordUrl()
+	 * @method \string fillCallRecordUrl()
+	 * @method \int getCallWebdavId()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallWebdavId(\int|\Bitrix\Main\DB\SqlExpression $callWebdavId)
+	 * @method bool hasCallWebdavId()
+	 * @method bool isCallWebdavIdFilled()
+	 * @method bool isCallWebdavIdChanged()
+	 * @method \int remindActualCallWebdavId()
+	 * @method \int requireCallWebdavId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallWebdavId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallWebdavId()
+	 * @method \int fillCallWebdavId()
+	 * @method \int getCallVote()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallVote(\int|\Bitrix\Main\DB\SqlExpression $callVote)
+	 * @method bool hasCallVote()
+	 * @method bool isCallVoteFilled()
+	 * @method bool isCallVoteChanged()
+	 * @method \int remindActualCallVote()
+	 * @method \int requireCallVote()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallVote()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallVote()
+	 * @method \int fillCallVote()
+	 * @method \float getCost()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCost(\float|\Bitrix\Main\DB\SqlExpression $cost)
+	 * @method bool hasCost()
+	 * @method bool isCostFilled()
+	 * @method bool isCostChanged()
+	 * @method \float remindActualCost()
+	 * @method \float requireCost()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCost()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCost()
+	 * @method \float fillCost()
+	 * @method \string getCostCurrency()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCostCurrency(\string|\Bitrix\Main\DB\SqlExpression $costCurrency)
+	 * @method bool hasCostCurrency()
+	 * @method bool isCostCurrencyFilled()
+	 * @method bool isCostCurrencyChanged()
+	 * @method \string remindActualCostCurrency()
+	 * @method \string requireCostCurrency()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCostCurrency()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCostCurrency()
+	 * @method \string fillCostCurrency()
+	 * @method \string getCallFailedCode()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallFailedCode(\string|\Bitrix\Main\DB\SqlExpression $callFailedCode)
+	 * @method bool hasCallFailedCode()
+	 * @method bool isCallFailedCodeFilled()
+	 * @method bool isCallFailedCodeChanged()
+	 * @method \string remindActualCallFailedCode()
+	 * @method \string requireCallFailedCode()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallFailedCode()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallFailedCode()
+	 * @method \string fillCallFailedCode()
+	 * @method \string getCallFailedReason()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCallFailedReason(\string|\Bitrix\Main\DB\SqlExpression $callFailedReason)
+	 * @method bool hasCallFailedReason()
+	 * @method bool isCallFailedReasonFilled()
+	 * @method bool isCallFailedReasonChanged()
+	 * @method \string remindActualCallFailedReason()
+	 * @method \string requireCallFailedReason()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCallFailedReason()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallFailedReason()
+	 * @method \string fillCallFailedReason()
+	 * @method \string getCrmEntityType()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCrmEntityType(\string|\Bitrix\Main\DB\SqlExpression $crmEntityType)
+	 * @method bool hasCrmEntityType()
+	 * @method bool isCrmEntityTypeFilled()
+	 * @method bool isCrmEntityTypeChanged()
+	 * @method \string remindActualCrmEntityType()
+	 * @method \string requireCrmEntityType()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCrmEntityType()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCrmEntityType()
+	 * @method \string fillCrmEntityType()
+	 * @method \int getCrmEntityId()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCrmEntityId(\int|\Bitrix\Main\DB\SqlExpression $crmEntityId)
+	 * @method bool hasCrmEntityId()
+	 * @method bool isCrmEntityIdFilled()
+	 * @method bool isCrmEntityIdChanged()
+	 * @method \int remindActualCrmEntityId()
+	 * @method \int requireCrmEntityId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCrmEntityId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCrmEntityId()
+	 * @method \int fillCrmEntityId()
+	 * @method \int getCrmActivityId()
+	 * @method \Bitrix\Voximplant\EO_Statistic setCrmActivityId(\int|\Bitrix\Main\DB\SqlExpression $crmActivityId)
+	 * @method bool hasCrmActivityId()
+	 * @method bool isCrmActivityIdFilled()
+	 * @method bool isCrmActivityIdChanged()
+	 * @method \int remindActualCrmActivityId()
+	 * @method \int requireCrmActivityId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCrmActivityId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCrmActivityId()
+	 * @method \int fillCrmActivityId()
 	 * @method \int getRestAppId()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setRestAppId(\int|\Bitrix\Main\DB\SqlExpression $restAppId)
+	 * @method \Bitrix\Voximplant\EO_Statistic setRestAppId(\int|\Bitrix\Main\DB\SqlExpression $restAppId)
 	 * @method bool hasRestAppId()
 	 * @method bool isRestAppIdFilled()
 	 * @method bool isRestAppIdChanged()
 	 * @method \int remindActualRestAppId()
 	 * @method \int requireRestAppId()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetRestAppId()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetRestAppId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetRestAppId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetRestAppId()
 	 * @method \int fillRestAppId()
-	 * @method \int getSipId()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setSipId(\int|\Bitrix\Main\DB\SqlExpression $sipId)
-	 * @method bool hasSipId()
-	 * @method bool isSipIdFilled()
-	 * @method bool isSipIdChanged()
-	 * @method \int remindActualSipId()
-	 * @method \int requireSipId()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetSipId()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetSipId()
-	 * @method \int fillSipId()
-	 * @method \boolean getIsManual()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setIsManual(\boolean|\Bitrix\Main\DB\SqlExpression $isManual)
-	 * @method bool hasIsManual()
-	 * @method bool isIsManualFilled()
-	 * @method bool isIsManualChanged()
-	 * @method \boolean remindActualIsManual()
-	 * @method \boolean requireIsManual()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetIsManual()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetIsManual()
-	 * @method \boolean fillIsManual()
-	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
-	 * @method bool hasDateCreate()
-	 * @method bool isDateCreateFilled()
-	 * @method bool isDateCreateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetDateCreate()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetDateCreate()
-	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
-	 * @method \Bitrix\Voximplant\EO_Sip getSip()
-	 * @method \Bitrix\Voximplant\EO_Sip remindActualSip()
-	 * @method \Bitrix\Voximplant\EO_Sip requireSip()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setSip(\Bitrix\Voximplant\EO_Sip $object)
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetSip()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetSip()
-	 * @method bool hasSip()
-	 * @method bool isSipFilled()
-	 * @method bool isSipChanged()
-	 * @method \Bitrix\Voximplant\EO_Sip fillSip()
+	 * @method \string getRestAppName()
+	 * @method \Bitrix\Voximplant\EO_Statistic setRestAppName(\string|\Bitrix\Main\DB\SqlExpression $restAppName)
+	 * @method bool hasRestAppName()
+	 * @method bool isRestAppNameFilled()
+	 * @method bool isRestAppNameChanged()
+	 * @method \string remindActualRestAppName()
+	 * @method \string requireRestAppName()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetRestAppName()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetRestAppName()
+	 * @method \string fillRestAppName()
+	 * @method \int getTranscriptId()
+	 * @method \Bitrix\Voximplant\EO_Statistic setTranscriptId(\int|\Bitrix\Main\DB\SqlExpression $transcriptId)
+	 * @method bool hasTranscriptId()
+	 * @method bool isTranscriptIdFilled()
+	 * @method bool isTranscriptIdChanged()
+	 * @method \int remindActualTranscriptId()
+	 * @method \int requireTranscriptId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetTranscriptId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetTranscriptId()
+	 * @method \int fillTranscriptId()
+	 * @method \boolean getTranscriptPending()
+	 * @method \Bitrix\Voximplant\EO_Statistic setTranscriptPending(\boolean|\Bitrix\Main\DB\SqlExpression $transcriptPending)
+	 * @method bool hasTranscriptPending()
+	 * @method bool isTranscriptPendingFilled()
+	 * @method bool isTranscriptPendingChanged()
+	 * @method \boolean remindActualTranscriptPending()
+	 * @method \boolean requireTranscriptPending()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetTranscriptPending()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetTranscriptPending()
+	 * @method \boolean fillTranscriptPending()
+	 * @method \int getSessionId()
+	 * @method \Bitrix\Voximplant\EO_Statistic setSessionId(\int|\Bitrix\Main\DB\SqlExpression $sessionId)
+	 * @method bool hasSessionId()
+	 * @method bool isSessionIdFilled()
+	 * @method bool isSessionIdChanged()
+	 * @method \int remindActualSessionId()
+	 * @method \int requireSessionId()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetSessionId()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetSessionId()
+	 * @method \int fillSessionId()
+	 * @method \int getRedialAttempt()
+	 * @method \Bitrix\Voximplant\EO_Statistic setRedialAttempt(\int|\Bitrix\Main\DB\SqlExpression $redialAttempt)
+	 * @method bool hasRedialAttempt()
+	 * @method bool isRedialAttemptFilled()
+	 * @method bool isRedialAttemptChanged()
+	 * @method \int remindActualRedialAttempt()
+	 * @method \int requireRedialAttempt()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetRedialAttempt()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetRedialAttempt()
+	 * @method \int fillRedialAttempt()
+	 * @method \string getComment()
+	 * @method \Bitrix\Voximplant\EO_Statistic setComment(\string|\Bitrix\Main\DB\SqlExpression $comment)
+	 * @method bool hasComment()
+	 * @method bool isCommentFilled()
+	 * @method bool isCommentChanged()
+	 * @method \string remindActualComment()
+	 * @method \string requireComment()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetComment()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetComment()
+	 * @method \string fillComment()
+	 * @method \int getRecordDuration()
+	 * @method \Bitrix\Voximplant\EO_Statistic setRecordDuration(\int|\Bitrix\Main\DB\SqlExpression $recordDuration)
+	 * @method bool hasRecordDuration()
+	 * @method bool isRecordDurationFilled()
+	 * @method bool isRecordDurationChanged()
+	 * @method \int remindActualRecordDuration()
+	 * @method \int requireRecordDuration()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetRecordDuration()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetRecordDuration()
+	 * @method \int fillRecordDuration()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex getSearchIndex()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex remindActualSearchIndex()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex requireSearchIndex()
+	 * @method \Bitrix\Voximplant\EO_Statistic setSearchIndex(\Bitrix\Voximplant\Model\EO_StatisticIndex $object)
+	 * @method \Bitrix\Voximplant\EO_Statistic resetSearchIndex()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetSearchIndex()
+	 * @method bool hasSearchIndex()
+	 * @method bool isSearchIndexFilled()
+	 * @method bool isSearchIndexChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex fillSearchIndex()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript getTranscript()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript remindActualTranscript()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript requireTranscript()
+	 * @method \Bitrix\Voximplant\EO_Statistic setTranscript(\Bitrix\Voximplant\Model\EO_Transcript $object)
+	 * @method \Bitrix\Voximplant\EO_Statistic resetTranscript()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetTranscript()
+	 * @method bool hasTranscript()
+	 * @method bool isTranscriptFilled()
+	 * @method bool isTranscriptChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript fillTranscript()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection getCrmBindings()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection requireCrmBindings()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection fillCrmBindings()
+	 * @method bool hasCrmBindings()
+	 * @method bool isCrmBindingsFilled()
+	 * @method bool isCrmBindingsChanged()
+	 * @method void addToCrmBindings(\Bitrix\Voximplant\Model\EO_CallCrmEntity $callCrmEntity)
+	 * @method void removeFromCrmBindings(\Bitrix\Voximplant\Model\EO_CallCrmEntity $callCrmEntity)
+	 * @method void removeAllCrmBindings()
+	 * @method \Bitrix\Voximplant\EO_Statistic resetCrmBindings()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetCrmBindings()
+	 * @method \string getHasRecord()
+	 * @method \string remindActualHasRecord()
+	 * @method \string requireHasRecord()
+	 * @method bool hasHasRecord()
+	 * @method bool isHasRecordFilled()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetHasRecord()
+	 * @method \string fillHasRecord()
+	 * @method \string getTotalDuration()
+	 * @method \string remindActualTotalDuration()
+	 * @method \string requireTotalDuration()
+	 * @method bool hasTotalDuration()
+	 * @method bool isTotalDurationFilled()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetTotalDuration()
+	 * @method \string fillTotalDuration()
+	 * @method \string getTotalCost()
+	 * @method \string remindActualTotalCost()
+	 * @method \string requireTotalCost()
+	 * @method bool hasTotalCost()
+	 * @method bool isTotalCostFilled()
+	 * @method \Bitrix\Voximplant\EO_Statistic unsetTotalCost()
+	 * @method \string fillTotalCost()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2210,9 +1502,9 @@ namespace Bitrix\Voximplant\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unset($fieldName)
+	 * @method \Bitrix\Voximplant\EO_Statistic set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\EO_Statistic reset($fieldName)
+	 * @method \Bitrix\Voximplant\EO_Statistic unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -2220,575 +1512,359 @@ namespace Bitrix\Voximplant\Model {
 	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_ExternalLine wakeUp($data)
+	 * @method static \Bitrix\Voximplant\EO_Statistic wakeUp($data)
 	 */
-	class EO_ExternalLine {
-		/* @var \Bitrix\Voximplant\Model\ExternalLineTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\ExternalLineTable';
+	class EO_Statistic {
+		/* @var \Bitrix\Voximplant\StatisticTable */
+		static public $dataClass = '\Bitrix\Voximplant\StatisticTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
 		public function __construct($setDefaultValues = true) {}
 	}
 }
-namespace Bitrix\Voximplant\Model {
+namespace Bitrix\Voximplant {
 	/**
-	 * EO_ExternalLine_Collection
+	 * EO_Statistic_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \string[] getTypeList()
-	 * @method \string[] fillType()
-	 * @method \string[] getNumberList()
-	 * @method \string[] fillNumber()
-	 * @method \string[] getNormalizedNumberList()
-	 * @method \string[] fillNormalizedNumber()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
+	 * @method \int[] getAccountIdList()
+	 * @method \int[] fillAccountId()
+	 * @method \int[] getApplicationIdList()
+	 * @method \int[] fillApplicationId()
+	 * @method \string[] getApplicationNameList()
+	 * @method \string[] fillApplicationName()
+	 * @method \int[] getPortalUserIdList()
+	 * @method \int[] fillPortalUserId()
+	 * @method \string[] getPortalNumberList()
+	 * @method \string[] fillPortalNumber()
+	 * @method \string[] getPhoneNumberList()
+	 * @method \string[] fillPhoneNumber()
+	 * @method \string[] getIncomingList()
+	 * @method \string[] fillIncoming()
+	 * @method \string[] getCallIdList()
+	 * @method \string[] fillCallId()
+	 * @method \string[] getExternalCallIdList()
+	 * @method \string[] fillExternalCallId()
+	 * @method \string[] getCallCategoryList()
+	 * @method \string[] fillCallCategory()
+	 * @method \string[] getCallLogList()
+	 * @method \string[] fillCallLog()
+	 * @method \string[] getCallDirectionList()
+	 * @method \string[] fillCallDirection()
+	 * @method \int[] getCallDurationList()
+	 * @method \int[] fillCallDuration()
+	 * @method \Bitrix\Main\Type\DateTime[] getCallStartDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCallStartDate()
+	 * @method \int[] getCallStatusList()
+	 * @method \int[] fillCallStatus()
+	 * @method \int[] getCallRecordIdList()
+	 * @method \int[] fillCallRecordId()
+	 * @method \string[] getCallRecordUrlList()
+	 * @method \string[] fillCallRecordUrl()
+	 * @method \int[] getCallWebdavIdList()
+	 * @method \int[] fillCallWebdavId()
+	 * @method \int[] getCallVoteList()
+	 * @method \int[] fillCallVote()
+	 * @method \float[] getCostList()
+	 * @method \float[] fillCost()
+	 * @method \string[] getCostCurrencyList()
+	 * @method \string[] fillCostCurrency()
+	 * @method \string[] getCallFailedCodeList()
+	 * @method \string[] fillCallFailedCode()
+	 * @method \string[] getCallFailedReasonList()
+	 * @method \string[] fillCallFailedReason()
+	 * @method \string[] getCrmEntityTypeList()
+	 * @method \string[] fillCrmEntityType()
+	 * @method \int[] getCrmEntityIdList()
+	 * @method \int[] fillCrmEntityId()
+	 * @method \int[] getCrmActivityIdList()
+	 * @method \int[] fillCrmActivityId()
 	 * @method \int[] getRestAppIdList()
 	 * @method \int[] fillRestAppId()
-	 * @method \int[] getSipIdList()
-	 * @method \int[] fillSipId()
-	 * @method \boolean[] getIsManualList()
-	 * @method \boolean[] fillIsManual()
-	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
-	 * @method \Bitrix\Voximplant\EO_Sip[] getSipList()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection getSipCollection()
-	 * @method \Bitrix\Voximplant\EO_Sip_Collection fillSip()
+	 * @method \string[] getRestAppNameList()
+	 * @method \string[] fillRestAppName()
+	 * @method \int[] getTranscriptIdList()
+	 * @method \int[] fillTranscriptId()
+	 * @method \boolean[] getTranscriptPendingList()
+	 * @method \boolean[] fillTranscriptPending()
+	 * @method \int[] getSessionIdList()
+	 * @method \int[] fillSessionId()
+	 * @method \int[] getRedialAttemptList()
+	 * @method \int[] fillRedialAttempt()
+	 * @method \string[] getCommentList()
+	 * @method \string[] fillComment()
+	 * @method \int[] getRecordDurationList()
+	 * @method \int[] fillRecordDuration()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex[] getSearchIndexList()
+	 * @method \Bitrix\Voximplant\EO_Statistic_Collection getSearchIndexCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection fillSearchIndex()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript[] getTranscriptList()
+	 * @method \Bitrix\Voximplant\EO_Statistic_Collection getTranscriptCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection fillTranscript()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection[] getCrmBindingsList()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection getCrmBindingsCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection fillCrmBindings()
+	 * @method \string[] getHasRecordList()
+	 * @method \string[] fillHasRecord()
+	 * @method \string[] getTotalDurationList()
+	 * @method \string[] fillTotalDuration()
+	 * @method \string[] getTotalCostList()
+	 * @method \string[] fillTotalCost()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_ExternalLine $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_ExternalLine $object)
+	 * @method void add(\Bitrix\Voximplant\EO_Statistic $object)
+	 * @method bool has(\Bitrix\Voximplant\EO_Statistic $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_ExternalLine $object)
+	 * @method \Bitrix\Voximplant\EO_Statistic getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\EO_Statistic[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\EO_Statistic $object)
 	 * @method void removeByPrimary($primary)
 	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_ExternalLine_Collection wakeUp($data)
+	 * @method static \Bitrix\Voximplant\EO_Statistic_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine current() Iterator
+	 * @method \Bitrix\Voximplant\EO_Statistic current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_Statistic_Collection merge(?EO_Statistic_Collection $collection)
+	 * @method bool isEmpty()
 	 */
-	class EO_ExternalLine_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\ExternalLineTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\ExternalLineTable';
+	class EO_Statistic_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\StatisticTable */
+		static public $dataClass = '\Bitrix\Voximplant\StatisticTable';
 	}
 }
-namespace Bitrix\Voximplant\Model {
+namespace Bitrix\Voximplant {
 	/**
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_ExternalLine_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection fetchCollection()
+	 * @method EO_Statistic_Result exec()
+	 * @method \Bitrix\Voximplant\EO_Statistic fetchObject()
+	 * @method \Bitrix\Voximplant\EO_Statistic_Collection fetchCollection()
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 */
-	class EO_ExternalLine_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_Statistic_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection fetchCollection()
+	 * @method \Bitrix\Voximplant\EO_Statistic fetchObject()
+	 * @method \Bitrix\Voximplant\EO_Statistic_Collection fetchCollection()
 	 */
-	class EO_ExternalLine_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_Statistic_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Voximplant\EO_Statistic createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\EO_Statistic_Collection createCollection()
+	 * @method \Bitrix\Voximplant\EO_Statistic wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\EO_Statistic_Collection wakeUpCollection($rows)
 	 */
-	class EO_ExternalLine_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_Statistic_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\IvrTable:voximplant\lib\model\ivr.php:f82dbdcd97e4a080f0898b1089261773 */
-namespace Bitrix\Voximplant\Model {
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\SipTable:voximplant/lib/sip.php */
+namespace Bitrix\Voximplant {
 	/**
-	 * EO_Ivr
-	 * @see \Bitrix\Voximplant\Model\IvrTable
+	 * EO_Sip
+	 * @see \Bitrix\Voximplant\SipTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Voximplant\EO_Sip setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \string getName()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr resetName()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr unsetName()
-	 * @method \string fillName()
-	 * @method \int getFirstItemId()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr setFirstItemId(\int|\Bitrix\Main\DB\SqlExpression $firstItemId)
-	 * @method bool hasFirstItemId()
-	 * @method bool isFirstItemIdFilled()
-	 * @method bool isFirstItemIdChanged()
-	 * @method \int remindActualFirstItemId()
-	 * @method \int requireFirstItemId()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr resetFirstItemId()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr unsetFirstItemId()
-	 * @method \int fillFirstItemId()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_Ivr wakeUp($data)
-	 */
-	class EO_Ivr {
-		/* @var \Bitrix\Voximplant\Model\IvrTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\IvrTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_Ivr_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \int[] getFirstItemIdList()
-	 * @method \int[] fillFirstItemId()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_Ivr $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_Ivr $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Ivr $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_Ivr_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_Ivr_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\IvrTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\IvrTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Ivr_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Ivr_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection fetchCollection()
-	 */
-	class EO_Ivr_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection wakeUpCollection($rows)
-	 */
-	class EO_Ivr_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\IvrActionTable:voximplant\lib\model\ivraction.php:d5acf17507d7b8c321b78ef256020a2d */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_IvrAction
-	 * @see \Bitrix\Voximplant\Model\IvrActionTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getItemId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setItemId(\int|\Bitrix\Main\DB\SqlExpression $itemId)
-	 * @method bool hasItemId()
-	 * @method bool isItemIdFilled()
-	 * @method bool isItemIdChanged()
-	 * @method \int remindActualItemId()
-	 * @method \int requireItemId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetItemId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetItemId()
-	 * @method \int fillItemId()
-	 * @method \string getDigit()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setDigit(\string|\Bitrix\Main\DB\SqlExpression $digit)
-	 * @method bool hasDigit()
-	 * @method bool isDigitFilled()
-	 * @method bool isDigitChanged()
-	 * @method \string remindActualDigit()
-	 * @method \string requireDigit()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetDigit()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetDigit()
-	 * @method \string fillDigit()
-	 * @method \string getAction()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setAction(\string|\Bitrix\Main\DB\SqlExpression $action)
-	 * @method bool hasAction()
-	 * @method bool isActionFilled()
-	 * @method bool isActionChanged()
-	 * @method \string remindActualAction()
-	 * @method \string requireAction()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetAction()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetAction()
-	 * @method \string fillAction()
-	 * @method \string getParameters()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setParameters(\string|\Bitrix\Main\DB\SqlExpression $parameters)
-	 * @method bool hasParameters()
-	 * @method bool isParametersFilled()
-	 * @method bool isParametersChanged()
-	 * @method \string remindActualParameters()
-	 * @method \string requireParameters()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetParameters()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetParameters()
-	 * @method \string fillParameters()
-	 * @method \string getLeadFields()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setLeadFields(\string|\Bitrix\Main\DB\SqlExpression $leadFields)
-	 * @method bool hasLeadFields()
-	 * @method bool isLeadFieldsFilled()
-	 * @method bool isLeadFieldsChanged()
-	 * @method \string remindActualLeadFields()
-	 * @method \string requireLeadFields()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetLeadFields()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetLeadFields()
-	 * @method \string fillLeadFields()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem getItem()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem remindActualItem()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem requireItem()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setItem(\Bitrix\Voximplant\Model\EO_IvrItem $object)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetItem()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetItem()
-	 * @method bool hasItem()
-	 * @method bool isItemFilled()
-	 * @method bool isItemChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem fillItem()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_IvrAction wakeUp($data)
-	 */
-	class EO_IvrAction {
-		/* @var \Bitrix\Voximplant\Model\IvrActionTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\IvrActionTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_IvrAction_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getItemIdList()
-	 * @method \int[] fillItemId()
-	 * @method \string[] getDigitList()
-	 * @method \string[] fillDigit()
-	 * @method \string[] getActionList()
-	 * @method \string[] fillAction()
-	 * @method \string[] getParametersList()
-	 * @method \string[] fillParameters()
-	 * @method \string[] getLeadFieldsList()
-	 * @method \string[] fillLeadFields()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem[] getItemList()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection getItemCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection fillItem()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_IvrAction $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_IvrAction $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_IvrAction $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_IvrAction_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_IvrAction_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\IvrActionTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\IvrActionTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_IvrAction_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_IvrAction_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection fetchCollection()
-	 */
-	class EO_IvrAction_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection wakeUpCollection($rows)
-	 */
-	class EO_IvrAction_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\IvrItemTable:voximplant\lib\model\ivritem.php:f4de50b860a0f9db8b1095070ed2d6f6 */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_IvrItem
-	 * @see \Bitrix\Voximplant\Model\IvrItemTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getCode()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
-	 * @method bool hasCode()
-	 * @method bool isCodeFilled()
-	 * @method bool isCodeChanged()
-	 * @method \string remindActualCode()
-	 * @method \string requireCode()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetCode()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetCode()
-	 * @method \string fillCode()
-	 * @method \int getIvrId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setIvrId(\int|\Bitrix\Main\DB\SqlExpression $ivrId)
-	 * @method bool hasIvrId()
-	 * @method bool isIvrIdFilled()
-	 * @method bool isIvrIdChanged()
-	 * @method \int remindActualIvrId()
-	 * @method \int requireIvrId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetIvrId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetIvrId()
-	 * @method \int fillIvrId()
-	 * @method \string getName()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetName()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetName()
-	 * @method \string fillName()
 	 * @method \string getType()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setType(\string|\Bitrix\Main\DB\SqlExpression $type)
+	 * @method \Bitrix\Voximplant\EO_Sip setType(\string|\Bitrix\Main\DB\SqlExpression $type)
 	 * @method bool hasType()
 	 * @method bool isTypeFilled()
 	 * @method bool isTypeChanged()
 	 * @method \string remindActualType()
 	 * @method \string requireType()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetType()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetType()
+	 * @method \Bitrix\Voximplant\EO_Sip resetType()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetType()
 	 * @method \string fillType()
-	 * @method \string getUrl()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setUrl(\string|\Bitrix\Main\DB\SqlExpression $url)
-	 * @method bool hasUrl()
-	 * @method bool isUrlFilled()
-	 * @method bool isUrlChanged()
-	 * @method \string remindActualUrl()
-	 * @method \string requireUrl()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetUrl()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetUrl()
-	 * @method \string fillUrl()
-	 * @method \string getMessage()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setMessage(\string|\Bitrix\Main\DB\SqlExpression $message)
-	 * @method bool hasMessage()
-	 * @method bool isMessageFilled()
-	 * @method bool isMessageChanged()
-	 * @method \string remindActualMessage()
-	 * @method \string requireMessage()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetMessage()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetMessage()
-	 * @method \string fillMessage()
-	 * @method \int getFileId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setFileId(\int|\Bitrix\Main\DB\SqlExpression $fileId)
-	 * @method bool hasFileId()
-	 * @method bool isFileIdFilled()
-	 * @method bool isFileIdChanged()
-	 * @method \int remindActualFileId()
-	 * @method \int requireFileId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetFileId()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetFileId()
-	 * @method \int fillFileId()
-	 * @method \int getTimeout()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTimeout(\int|\Bitrix\Main\DB\SqlExpression $timeout)
-	 * @method bool hasTimeout()
-	 * @method bool isTimeoutFilled()
-	 * @method bool isTimeoutChanged()
-	 * @method \int remindActualTimeout()
-	 * @method \int requireTimeout()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTimeout()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTimeout()
-	 * @method \int fillTimeout()
-	 * @method \string getTimeoutAction()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTimeoutAction(\string|\Bitrix\Main\DB\SqlExpression $timeoutAction)
-	 * @method bool hasTimeoutAction()
-	 * @method bool isTimeoutActionFilled()
-	 * @method bool isTimeoutActionChanged()
-	 * @method \string remindActualTimeoutAction()
-	 * @method \string requireTimeoutAction()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTimeoutAction()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTimeoutAction()
-	 * @method \string fillTimeoutAction()
-	 * @method \string getTtsVoice()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTtsVoice(\string|\Bitrix\Main\DB\SqlExpression $ttsVoice)
-	 * @method bool hasTtsVoice()
-	 * @method bool isTtsVoiceFilled()
-	 * @method bool isTtsVoiceChanged()
-	 * @method \string remindActualTtsVoice()
-	 * @method \string requireTtsVoice()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTtsVoice()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTtsVoice()
-	 * @method \string fillTtsVoice()
-	 * @method \string getTtsSpeed()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTtsSpeed(\string|\Bitrix\Main\DB\SqlExpression $ttsSpeed)
-	 * @method bool hasTtsSpeed()
-	 * @method bool isTtsSpeedFilled()
-	 * @method bool isTtsSpeedChanged()
-	 * @method \string remindActualTtsSpeed()
-	 * @method \string requireTtsSpeed()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTtsSpeed()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTtsSpeed()
-	 * @method \string fillTtsSpeed()
-	 * @method \string getTtsVolume()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTtsVolume(\string|\Bitrix\Main\DB\SqlExpression $ttsVolume)
-	 * @method bool hasTtsVolume()
-	 * @method bool isTtsVolumeFilled()
-	 * @method bool isTtsVolumeChanged()
-	 * @method \string remindActualTtsVolume()
-	 * @method \string requireTtsVolume()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTtsVolume()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTtsVolume()
-	 * @method \string fillTtsVolume()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr getIvr()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr remindActualIvr()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr requireIvr()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setIvr(\Bitrix\Voximplant\Model\EO_Ivr $object)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetIvr()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetIvr()
-	 * @method bool hasIvr()
-	 * @method bool isIvrFilled()
-	 * @method bool isIvrChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr fillIvr()
+	 * @method \string getTitle()
+	 * @method \string remindActualTitle()
+	 * @method \string requireTitle()
+	 * @method bool hasTitle()
+	 * @method bool isTitleFilled()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetTitle()
+	 * @method \string fillTitle()
+	 * @method \int getConfigId()
+	 * @method \Bitrix\Voximplant\EO_Sip setConfigId(\int|\Bitrix\Main\DB\SqlExpression $configId)
+	 * @method bool hasConfigId()
+	 * @method bool isConfigIdFilled()
+	 * @method bool isConfigIdChanged()
+	 * @method \int remindActualConfigId()
+	 * @method \int requireConfigId()
+	 * @method \Bitrix\Voximplant\EO_Sip resetConfigId()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetConfigId()
+	 * @method \int fillConfigId()
+	 * @method \int getRegId()
+	 * @method \Bitrix\Voximplant\EO_Sip setRegId(\int|\Bitrix\Main\DB\SqlExpression $regId)
+	 * @method bool hasRegId()
+	 * @method bool isRegIdFilled()
+	 * @method bool isRegIdChanged()
+	 * @method \int remindActualRegId()
+	 * @method \int requireRegId()
+	 * @method \Bitrix\Voximplant\EO_Sip resetRegId()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetRegId()
+	 * @method \int fillRegId()
+	 * @method \string getAppId()
+	 * @method \Bitrix\Voximplant\EO_Sip setAppId(\string|\Bitrix\Main\DB\SqlExpression $appId)
+	 * @method bool hasAppId()
+	 * @method bool isAppIdFilled()
+	 * @method bool isAppIdChanged()
+	 * @method \string remindActualAppId()
+	 * @method \string requireAppId()
+	 * @method \Bitrix\Voximplant\EO_Sip resetAppId()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetAppId()
+	 * @method \string fillAppId()
+	 * @method \string getServer()
+	 * @method \Bitrix\Voximplant\EO_Sip setServer(\string|\Bitrix\Main\DB\SqlExpression $server)
+	 * @method bool hasServer()
+	 * @method bool isServerFilled()
+	 * @method bool isServerChanged()
+	 * @method \string remindActualServer()
+	 * @method \string requireServer()
+	 * @method \Bitrix\Voximplant\EO_Sip resetServer()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetServer()
+	 * @method \string fillServer()
+	 * @method \string getLogin()
+	 * @method \Bitrix\Voximplant\EO_Sip setLogin(\string|\Bitrix\Main\DB\SqlExpression $login)
+	 * @method bool hasLogin()
+	 * @method bool isLoginFilled()
+	 * @method bool isLoginChanged()
+	 * @method \string remindActualLogin()
+	 * @method \string requireLogin()
+	 * @method \Bitrix\Voximplant\EO_Sip resetLogin()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetLogin()
+	 * @method \string fillLogin()
+	 * @method \string getPassword()
+	 * @method \Bitrix\Voximplant\EO_Sip setPassword(\string|\Bitrix\Main\DB\SqlExpression $password)
+	 * @method bool hasPassword()
+	 * @method bool isPasswordFilled()
+	 * @method bool isPasswordChanged()
+	 * @method \string remindActualPassword()
+	 * @method \string requirePassword()
+	 * @method \Bitrix\Voximplant\EO_Sip resetPassword()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetPassword()
+	 * @method \string fillPassword()
+	 * @method \string getIncomingServer()
+	 * @method \Bitrix\Voximplant\EO_Sip setIncomingServer(\string|\Bitrix\Main\DB\SqlExpression $incomingServer)
+	 * @method bool hasIncomingServer()
+	 * @method bool isIncomingServerFilled()
+	 * @method bool isIncomingServerChanged()
+	 * @method \string remindActualIncomingServer()
+	 * @method \string requireIncomingServer()
+	 * @method \Bitrix\Voximplant\EO_Sip resetIncomingServer()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetIncomingServer()
+	 * @method \string fillIncomingServer()
+	 * @method \string getIncomingLogin()
+	 * @method \Bitrix\Voximplant\EO_Sip setIncomingLogin(\string|\Bitrix\Main\DB\SqlExpression $incomingLogin)
+	 * @method bool hasIncomingLogin()
+	 * @method bool isIncomingLoginFilled()
+	 * @method bool isIncomingLoginChanged()
+	 * @method \string remindActualIncomingLogin()
+	 * @method \string requireIncomingLogin()
+	 * @method \Bitrix\Voximplant\EO_Sip resetIncomingLogin()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetIncomingLogin()
+	 * @method \string fillIncomingLogin()
+	 * @method \string getIncomingPassword()
+	 * @method \Bitrix\Voximplant\EO_Sip setIncomingPassword(\string|\Bitrix\Main\DB\SqlExpression $incomingPassword)
+	 * @method bool hasIncomingPassword()
+	 * @method bool isIncomingPasswordFilled()
+	 * @method bool isIncomingPasswordChanged()
+	 * @method \string remindActualIncomingPassword()
+	 * @method \string requireIncomingPassword()
+	 * @method \Bitrix\Voximplant\EO_Sip resetIncomingPassword()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetIncomingPassword()
+	 * @method \string fillIncomingPassword()
+	 * @method \string getAuthUser()
+	 * @method \Bitrix\Voximplant\EO_Sip setAuthUser(\string|\Bitrix\Main\DB\SqlExpression $authUser)
+	 * @method bool hasAuthUser()
+	 * @method bool isAuthUserFilled()
+	 * @method bool isAuthUserChanged()
+	 * @method \string remindActualAuthUser()
+	 * @method \string requireAuthUser()
+	 * @method \Bitrix\Voximplant\EO_Sip resetAuthUser()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetAuthUser()
+	 * @method \string fillAuthUser()
+	 * @method \string getOutboundProxy()
+	 * @method \Bitrix\Voximplant\EO_Sip setOutboundProxy(\string|\Bitrix\Main\DB\SqlExpression $outboundProxy)
+	 * @method bool hasOutboundProxy()
+	 * @method bool isOutboundProxyFilled()
+	 * @method bool isOutboundProxyChanged()
+	 * @method \string remindActualOutboundProxy()
+	 * @method \string requireOutboundProxy()
+	 * @method \Bitrix\Voximplant\EO_Sip resetOutboundProxy()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetOutboundProxy()
+	 * @method \string fillOutboundProxy()
+	 * @method \boolean getDetectLineNumber()
+	 * @method \Bitrix\Voximplant\EO_Sip setDetectLineNumber(\boolean|\Bitrix\Main\DB\SqlExpression $detectLineNumber)
+	 * @method bool hasDetectLineNumber()
+	 * @method bool isDetectLineNumberFilled()
+	 * @method bool isDetectLineNumberChanged()
+	 * @method \boolean remindActualDetectLineNumber()
+	 * @method \boolean requireDetectLineNumber()
+	 * @method \Bitrix\Voximplant\EO_Sip resetDetectLineNumber()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetDetectLineNumber()
+	 * @method \boolean fillDetectLineNumber()
+	 * @method \string getLineDetectHeaderOrder()
+	 * @method \Bitrix\Voximplant\EO_Sip setLineDetectHeaderOrder(\string|\Bitrix\Main\DB\SqlExpression $lineDetectHeaderOrder)
+	 * @method bool hasLineDetectHeaderOrder()
+	 * @method bool isLineDetectHeaderOrderFilled()
+	 * @method bool isLineDetectHeaderOrderChanged()
+	 * @method \string remindActualLineDetectHeaderOrder()
+	 * @method \string requireLineDetectHeaderOrder()
+	 * @method \Bitrix\Voximplant\EO_Sip resetLineDetectHeaderOrder()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetLineDetectHeaderOrder()
+	 * @method \string fillLineDetectHeaderOrder()
+	 * @method \Bitrix\Voximplant\EO_Config getConfig()
+	 * @method \Bitrix\Voximplant\EO_Config remindActualConfig()
+	 * @method \Bitrix\Voximplant\EO_Config requireConfig()
+	 * @method \Bitrix\Voximplant\EO_Sip setConfig(\Bitrix\Voximplant\EO_Config $object)
+	 * @method \Bitrix\Voximplant\EO_Sip resetConfig()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetConfig()
+	 * @method bool hasConfig()
+	 * @method bool isConfigFilled()
+	 * @method bool isConfigChanged()
+	 * @method \Bitrix\Voximplant\EO_Config fillConfig()
+	 * @method \int getRegistrationStatusCode()
+	 * @method \Bitrix\Voximplant\EO_Sip setRegistrationStatusCode(\int|\Bitrix\Main\DB\SqlExpression $registrationStatusCode)
+	 * @method bool hasRegistrationStatusCode()
+	 * @method bool isRegistrationStatusCodeFilled()
+	 * @method bool isRegistrationStatusCodeChanged()
+	 * @method \int remindActualRegistrationStatusCode()
+	 * @method \int requireRegistrationStatusCode()
+	 * @method \Bitrix\Voximplant\EO_Sip resetRegistrationStatusCode()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetRegistrationStatusCode()
+	 * @method \int fillRegistrationStatusCode()
+	 * @method \string getRegistrationErrorMessage()
+	 * @method \Bitrix\Voximplant\EO_Sip setRegistrationErrorMessage(\string|\Bitrix\Main\DB\SqlExpression $registrationErrorMessage)
+	 * @method bool hasRegistrationErrorMessage()
+	 * @method bool isRegistrationErrorMessageFilled()
+	 * @method bool isRegistrationErrorMessageChanged()
+	 * @method \string remindActualRegistrationErrorMessage()
+	 * @method \string requireRegistrationErrorMessage()
+	 * @method \Bitrix\Voximplant\EO_Sip resetRegistrationErrorMessage()
+	 * @method \Bitrix\Voximplant\EO_Sip unsetRegistrationErrorMessage()
+	 * @method \string fillRegistrationErrorMessage()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -2804,9 +1880,9 @@ namespace Bitrix\Voximplant\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unset($fieldName)
+	 * @method \Bitrix\Voximplant\EO_Sip set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\EO_Sip reset($fieldName)
+	 * @method \Bitrix\Voximplant\EO_Sip unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -2814,11 +1890,216 @@ namespace Bitrix\Voximplant\Model {
 	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_IvrItem wakeUp($data)
+	 * @method static \Bitrix\Voximplant\EO_Sip wakeUp($data)
 	 */
-	class EO_IvrItem {
-		/* @var \Bitrix\Voximplant\Model\IvrItemTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\IvrItemTable';
+	class EO_Sip {
+		/* @var \Bitrix\Voximplant\SipTable */
+		static public $dataClass = '\Bitrix\Voximplant\SipTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant {
+	/**
+	 * EO_Sip_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getTypeList()
+	 * @method \string[] fillType()
+	 * @method \string[] getTitleList()
+	 * @method \string[] fillTitle()
+	 * @method \int[] getConfigIdList()
+	 * @method \int[] fillConfigId()
+	 * @method \int[] getRegIdList()
+	 * @method \int[] fillRegId()
+	 * @method \string[] getAppIdList()
+	 * @method \string[] fillAppId()
+	 * @method \string[] getServerList()
+	 * @method \string[] fillServer()
+	 * @method \string[] getLoginList()
+	 * @method \string[] fillLogin()
+	 * @method \string[] getPasswordList()
+	 * @method \string[] fillPassword()
+	 * @method \string[] getIncomingServerList()
+	 * @method \string[] fillIncomingServer()
+	 * @method \string[] getIncomingLoginList()
+	 * @method \string[] fillIncomingLogin()
+	 * @method \string[] getIncomingPasswordList()
+	 * @method \string[] fillIncomingPassword()
+	 * @method \string[] getAuthUserList()
+	 * @method \string[] fillAuthUser()
+	 * @method \string[] getOutboundProxyList()
+	 * @method \string[] fillOutboundProxy()
+	 * @method \boolean[] getDetectLineNumberList()
+	 * @method \boolean[] fillDetectLineNumber()
+	 * @method \string[] getLineDetectHeaderOrderList()
+	 * @method \string[] fillLineDetectHeaderOrder()
+	 * @method \Bitrix\Voximplant\EO_Config[] getConfigList()
+	 * @method \Bitrix\Voximplant\EO_Sip_Collection getConfigCollection()
+	 * @method \Bitrix\Voximplant\EO_Config_Collection fillConfig()
+	 * @method \int[] getRegistrationStatusCodeList()
+	 * @method \int[] fillRegistrationStatusCode()
+	 * @method \string[] getRegistrationErrorMessageList()
+	 * @method \string[] fillRegistrationErrorMessage()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\EO_Sip $object)
+	 * @method bool has(\Bitrix\Voximplant\EO_Sip $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\EO_Sip getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\EO_Sip[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\EO_Sip $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\EO_Sip_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\EO_Sip current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_Sip_Collection merge(?EO_Sip_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Sip_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\SipTable */
+		static public $dataClass = '\Bitrix\Voximplant\SipTable';
+	}
+}
+namespace Bitrix\Voximplant {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Sip_Result exec()
+	 * @method \Bitrix\Voximplant\EO_Sip fetchObject()
+	 * @method \Bitrix\Voximplant\EO_Sip_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Sip_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\EO_Sip fetchObject()
+	 * @method \Bitrix\Voximplant\EO_Sip_Collection fetchCollection()
+	 */
+	class EO_Sip_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\EO_Sip createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\EO_Sip_Collection createCollection()
+	 * @method \Bitrix\Voximplant\EO_Sip wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\EO_Sip_Collection wakeUpCollection($rows)
+	 */
+	class EO_Sip_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\StatisticMissedTable:voximplant/lib/model/statisticmissed.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_StatisticMissed
+	 * @see \Bitrix\Voximplant\Model\StatisticMissedTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \Bitrix\Main\Type\DateTime getCallStartDate()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setCallStartDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $callStartDate)
+	 * @method bool hasCallStartDate()
+	 * @method bool isCallStartDateFilled()
+	 * @method bool isCallStartDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCallStartDate()
+	 * @method \Bitrix\Main\Type\DateTime requireCallStartDate()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetCallStartDate()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetCallStartDate()
+	 * @method \Bitrix\Main\Type\DateTime fillCallStartDate()
+	 * @method \string getPhoneNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setPhoneNumber(\string|\Bitrix\Main\DB\SqlExpression $phoneNumber)
+	 * @method bool hasPhoneNumber()
+	 * @method bool isPhoneNumberFilled()
+	 * @method bool isPhoneNumberChanged()
+	 * @method \string remindActualPhoneNumber()
+	 * @method \string requirePhoneNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetPhoneNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetPhoneNumber()
+	 * @method \string fillPhoneNumber()
+	 * @method \int getPortalUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setPortalUserId(\int|\Bitrix\Main\DB\SqlExpression $portalUserId)
+	 * @method bool hasPortalUserId()
+	 * @method bool isPortalUserIdFilled()
+	 * @method bool isPortalUserIdChanged()
+	 * @method \int remindActualPortalUserId()
+	 * @method \int requirePortalUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetPortalUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetPortalUserId()
+	 * @method \int fillPortalUserId()
+	 * @method \int getCallbackId()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setCallbackId(\int|\Bitrix\Main\DB\SqlExpression $callbackId)
+	 * @method bool hasCallbackId()
+	 * @method bool isCallbackIdFilled()
+	 * @method bool isCallbackIdChanged()
+	 * @method \int remindActualCallbackId()
+	 * @method \int requireCallbackId()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetCallbackId()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetCallbackId()
+	 * @method \int fillCallbackId()
+	 * @method \Bitrix\Main\Type\DateTime getCallbackCallStartDate()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setCallbackCallStartDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $callbackCallStartDate)
+	 * @method bool hasCallbackCallStartDate()
+	 * @method bool isCallbackCallStartDateFilled()
+	 * @method bool isCallbackCallStartDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualCallbackCallStartDate()
+	 * @method \Bitrix\Main\Type\DateTime requireCallbackCallStartDate()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetCallbackCallStartDate()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetCallbackCallStartDate()
+	 * @method \Bitrix\Main\Type\DateTime fillCallbackCallStartDate()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_StatisticMissed wakeUp($data)
+	 */
+	class EO_StatisticMissed {
+		/* @var \Bitrix\Voximplant\Model\StatisticMissedTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\StatisticMissedTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -2827,68 +2108,53 @@ namespace Bitrix\Voximplant\Model {
 }
 namespace Bitrix\Voximplant\Model {
 	/**
-	 * EO_IvrItem_Collection
+	 * EO_StatisticMissed_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \string[] getCodeList()
-	 * @method \string[] fillCode()
-	 * @method \int[] getIvrIdList()
-	 * @method \int[] fillIvrId()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \string[] getTypeList()
-	 * @method \string[] fillType()
-	 * @method \string[] getUrlList()
-	 * @method \string[] fillUrl()
-	 * @method \string[] getMessageList()
-	 * @method \string[] fillMessage()
-	 * @method \int[] getFileIdList()
-	 * @method \int[] fillFileId()
-	 * @method \int[] getTimeoutList()
-	 * @method \int[] fillTimeout()
-	 * @method \string[] getTimeoutActionList()
-	 * @method \string[] fillTimeoutAction()
-	 * @method \string[] getTtsVoiceList()
-	 * @method \string[] fillTtsVoice()
-	 * @method \string[] getTtsSpeedList()
-	 * @method \string[] fillTtsSpeed()
-	 * @method \string[] getTtsVolumeList()
-	 * @method \string[] fillTtsVolume()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr[] getIvrList()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection getIvrCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection fillIvr()
+	 * @method \Bitrix\Main\Type\DateTime[] getCallStartDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCallStartDate()
+	 * @method \string[] getPhoneNumberList()
+	 * @method \string[] fillPhoneNumber()
+	 * @method \int[] getPortalUserIdList()
+	 * @method \int[] fillPortalUserId()
+	 * @method \int[] getCallbackIdList()
+	 * @method \int[] fillCallbackId()
+	 * @method \Bitrix\Main\Type\DateTime[] getCallbackCallStartDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillCallbackCallStartDate()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_IvrItem $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_IvrItem $object)
+	 * @method void add(\Bitrix\Voximplant\Model\EO_StatisticMissed $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_StatisticMissed $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_IvrItem $object)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_StatisticMissed $object)
 	 * @method void removeByPrimary($primary)
 	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_IvrItem_Collection wakeUp($data)
+	 * @method static \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem current() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_StatisticMissed_Collection merge(?EO_StatisticMissed_Collection $collection)
+	 * @method bool isEmpty()
 	 */
-	class EO_IvrItem_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\IvrItemTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\IvrItemTable';
+	class EO_StatisticMissed_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\StatisticMissedTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\StatisticMissedTable';
 	}
 }
 namespace Bitrix\Voximplant\Model {
@@ -2896,29 +2162,220 @@ namespace Bitrix\Voximplant\Model {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_IvrItem_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection fetchCollection()
+	 * @method EO_StatisticMissed_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection fetchCollection()
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 */
-	class EO_IvrItem_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_StatisticMissed_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection fetchCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection fetchCollection()
 	 */
-	class EO_IvrItem_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_StatisticMissed_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection wakeUpCollection($rows)
 	 */
-	class EO_IvrItem_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_StatisticMissed_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\LineAccessTable:voximplant\lib\model\lineaccess.php:52cc06d9decb1716a4067ee031cabf30 */
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\TranscriptLineTable:voximplant/lib/model/transcriptline.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_TranscriptLine
+	 * @see \Bitrix\Voximplant\Model\TranscriptLineTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getTranscriptId()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setTranscriptId(\string|\Bitrix\Main\DB\SqlExpression $transcriptId)
+	 * @method bool hasTranscriptId()
+	 * @method bool isTranscriptIdFilled()
+	 * @method bool isTranscriptIdChanged()
+	 * @method \string remindActualTranscriptId()
+	 * @method \string requireTranscriptId()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetTranscriptId()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetTranscriptId()
+	 * @method \string fillTranscriptId()
+	 * @method \string getSide()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setSide(\string|\Bitrix\Main\DB\SqlExpression $side)
+	 * @method bool hasSide()
+	 * @method bool isSideFilled()
+	 * @method bool isSideChanged()
+	 * @method \string remindActualSide()
+	 * @method \string requireSide()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetSide()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetSide()
+	 * @method \string fillSide()
+	 * @method \int getStartTime()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setStartTime(\int|\Bitrix\Main\DB\SqlExpression $startTime)
+	 * @method bool hasStartTime()
+	 * @method bool isStartTimeFilled()
+	 * @method bool isStartTimeChanged()
+	 * @method \int remindActualStartTime()
+	 * @method \int requireStartTime()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetStartTime()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetStartTime()
+	 * @method \int fillStartTime()
+	 * @method \int getStopTime()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setStopTime(\int|\Bitrix\Main\DB\SqlExpression $stopTime)
+	 * @method bool hasStopTime()
+	 * @method bool isStopTimeFilled()
+	 * @method bool isStopTimeChanged()
+	 * @method \int remindActualStopTime()
+	 * @method \int requireStopTime()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetStopTime()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetStopTime()
+	 * @method \int fillStopTime()
+	 * @method \string getMessage()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setMessage(\string|\Bitrix\Main\DB\SqlExpression $message)
+	 * @method bool hasMessage()
+	 * @method bool isMessageFilled()
+	 * @method bool isMessageChanged()
+	 * @method \string remindActualMessage()
+	 * @method \string requireMessage()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetMessage()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetMessage()
+	 * @method \string fillMessage()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript getTranscript()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript remindActualTranscript()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript requireTranscript()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setTranscript(\Bitrix\Voximplant\Model\EO_Transcript $object)
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetTranscript()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetTranscript()
+	 * @method bool hasTranscript()
+	 * @method bool isTranscriptFilled()
+	 * @method bool isTranscriptChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript fillTranscript()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_TranscriptLine wakeUp($data)
+	 */
+	class EO_TranscriptLine {
+		/* @var \Bitrix\Voximplant\Model\TranscriptLineTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\TranscriptLineTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_TranscriptLine_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getTranscriptIdList()
+	 * @method \string[] fillTranscriptId()
+	 * @method \string[] getSideList()
+	 * @method \string[] fillSide()
+	 * @method \int[] getStartTimeList()
+	 * @method \int[] fillStartTime()
+	 * @method \int[] getStopTimeList()
+	 * @method \int[] fillStopTime()
+	 * @method \string[] getMessageList()
+	 * @method \string[] fillMessage()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript[] getTranscriptList()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection getTranscriptCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection fillTranscript()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_TranscriptLine $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_TranscriptLine $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_TranscriptLine $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_TranscriptLine_Collection merge(?EO_TranscriptLine_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_TranscriptLine_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\TranscriptLineTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\TranscriptLineTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_TranscriptLine_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_TranscriptLine_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection fetchCollection()
+	 */
+	class EO_TranscriptLine_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection wakeUpCollection($rows)
+	 */
+	class EO_TranscriptLine_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\LineAccessTable:voximplant/lib/model/lineaccess.php */
 namespace Bitrix\Voximplant\Model {
 	/**
 	 * EO_LineAccess
@@ -3038,6 +2495,8 @@ namespace Bitrix\Voximplant\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_LineAccess_Collection merge(?EO_LineAccess_Collection $collection)
+	 * @method bool isEmpty()
 	 */
 	class EO_LineAccess_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Voximplant\Model\LineAccessTable */
@@ -3071,7 +2530,137 @@ namespace Bitrix\Voximplant\Model {
 	 */
 	class EO_LineAccess_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\NumberTable:voximplant\lib\model\number.php:656dbcf75d7e2be59540a16ba5fc0ced */
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\StatisticIndexTable:voximplant/lib/model/statisticindex.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_StatisticIndex
+	 * @see \Bitrix\Voximplant\Model\StatisticIndexTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getStatisticId()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex setStatisticId(\int|\Bitrix\Main\DB\SqlExpression $statisticId)
+	 * @method bool hasStatisticId()
+	 * @method bool isStatisticIdFilled()
+	 * @method bool isStatisticIdChanged()
+	 * @method \string getContent()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex setContent(\string|\Bitrix\Main\DB\SqlExpression $content)
+	 * @method bool hasContent()
+	 * @method bool isContentFilled()
+	 * @method bool isContentChanged()
+	 * @method \string remindActualContent()
+	 * @method \string requireContent()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex resetContent()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex unsetContent()
+	 * @method \string fillContent()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_StatisticIndex wakeUp($data)
+	 */
+	class EO_StatisticIndex {
+		/* @var \Bitrix\Voximplant\Model\StatisticIndexTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\StatisticIndexTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_StatisticIndex_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getStatisticIdList()
+	 * @method \string[] getContentList()
+	 * @method \string[] fillContent()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_StatisticIndex $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_StatisticIndex $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_StatisticIndex $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_StatisticIndex_Collection merge(?EO_StatisticIndex_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_StatisticIndex_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\StatisticIndexTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\StatisticIndexTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_StatisticIndex_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_StatisticIndex_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection fetchCollection()
+	 */
+	class EO_StatisticIndex_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection wakeUpCollection($rows)
+	 */
+	class EO_StatisticIndex_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\NumberTable:voximplant/lib/model/number.php */
 namespace Bitrix\Voximplant\Model {
 	/**
 	 * EO_Number
@@ -3271,6 +2860,8 @@ namespace Bitrix\Voximplant\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_Number_Collection merge(?EO_Number_Collection $collection)
+	 * @method bool isEmpty()
 	 */
 	class EO_Number_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Voximplant\Model\NumberTable */
@@ -3304,555 +2895,7 @@ namespace Bitrix\Voximplant\Model {
 	 */
 	class EO_Number_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\QueueTable:voximplant\lib\model\queue.php:ecedb303c2f43b7047cb96751e99dc98 */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_Queue
-	 * @see \Bitrix\Voximplant\Model\QueueTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getName()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue resetName()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetName()
-	 * @method \string fillName()
-	 * @method \string getType()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue setType(\string|\Bitrix\Main\DB\SqlExpression $type)
-	 * @method bool hasType()
-	 * @method bool isTypeFilled()
-	 * @method bool isTypeChanged()
-	 * @method \string remindActualType()
-	 * @method \string requireType()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue resetType()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetType()
-	 * @method \string fillType()
-	 * @method \int getWaitTime()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue setWaitTime(\int|\Bitrix\Main\DB\SqlExpression $waitTime)
-	 * @method bool hasWaitTime()
-	 * @method bool isWaitTimeFilled()
-	 * @method bool isWaitTimeChanged()
-	 * @method \int remindActualWaitTime()
-	 * @method \int requireWaitTime()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue resetWaitTime()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetWaitTime()
-	 * @method \int fillWaitTime()
-	 * @method \string getNoAnswerRule()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue setNoAnswerRule(\string|\Bitrix\Main\DB\SqlExpression $noAnswerRule)
-	 * @method bool hasNoAnswerRule()
-	 * @method bool isNoAnswerRuleFilled()
-	 * @method bool isNoAnswerRuleChanged()
-	 * @method \string remindActualNoAnswerRule()
-	 * @method \string requireNoAnswerRule()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue resetNoAnswerRule()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetNoAnswerRule()
-	 * @method \string fillNoAnswerRule()
-	 * @method \int getNextQueueId()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue setNextQueueId(\int|\Bitrix\Main\DB\SqlExpression $nextQueueId)
-	 * @method bool hasNextQueueId()
-	 * @method bool isNextQueueIdFilled()
-	 * @method bool isNextQueueIdChanged()
-	 * @method \int remindActualNextQueueId()
-	 * @method \int requireNextQueueId()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue resetNextQueueId()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetNextQueueId()
-	 * @method \int fillNextQueueId()
-	 * @method \string getForwardNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue setForwardNumber(\string|\Bitrix\Main\DB\SqlExpression $forwardNumber)
-	 * @method bool hasForwardNumber()
-	 * @method bool isForwardNumberFilled()
-	 * @method bool isForwardNumberChanged()
-	 * @method \string remindActualForwardNumber()
-	 * @method \string requireForwardNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue resetForwardNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetForwardNumber()
-	 * @method \string fillForwardNumber()
-	 * @method \boolean getAllowIntercept()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue setAllowIntercept(\boolean|\Bitrix\Main\DB\SqlExpression $allowIntercept)
-	 * @method bool hasAllowIntercept()
-	 * @method bool isAllowInterceptFilled()
-	 * @method bool isAllowInterceptChanged()
-	 * @method \boolean remindActualAllowIntercept()
-	 * @method \boolean requireAllowIntercept()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue resetAllowIntercept()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetAllowIntercept()
-	 * @method \boolean fillAllowIntercept()
-	 * @method \string getPhoneNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue setPhoneNumber(\string|\Bitrix\Main\DB\SqlExpression $phoneNumber)
-	 * @method bool hasPhoneNumber()
-	 * @method bool isPhoneNumberFilled()
-	 * @method bool isPhoneNumberChanged()
-	 * @method \string remindActualPhoneNumber()
-	 * @method \string requirePhoneNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue resetPhoneNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetPhoneNumber()
-	 * @method \string fillPhoneNumber()
-	 * @method \string getCnt()
-	 * @method \string remindActualCnt()
-	 * @method \string requireCnt()
-	 * @method bool hasCnt()
-	 * @method bool isCntFilled()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetCnt()
-	 * @method \string fillCnt()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Queue set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_Queue reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Queue unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_Queue wakeUp($data)
-	 */
-	class EO_Queue {
-		/* @var \Bitrix\Voximplant\Model\QueueTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\QueueTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_Queue_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 * @method \string[] getTypeList()
-	 * @method \string[] fillType()
-	 * @method \int[] getWaitTimeList()
-	 * @method \int[] fillWaitTime()
-	 * @method \string[] getNoAnswerRuleList()
-	 * @method \string[] fillNoAnswerRule()
-	 * @method \int[] getNextQueueIdList()
-	 * @method \int[] fillNextQueueId()
-	 * @method \string[] getForwardNumberList()
-	 * @method \string[] fillForwardNumber()
-	 * @method \boolean[] getAllowInterceptList()
-	 * @method \boolean[] fillAllowIntercept()
-	 * @method \string[] getPhoneNumberList()
-	 * @method \string[] fillPhoneNumber()
-	 * @method \string[] getCntList()
-	 * @method \string[] fillCnt()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_Queue $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_Queue $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Queue getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Queue[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Queue $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_Queue_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_Queue current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_Queue_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\QueueTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\QueueTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Queue_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Queue_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Queue fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection fetchCollection()
-	 */
-	class EO_Queue_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Queue createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection wakeUpCollection($rows)
-	 */
-	class EO_Queue_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\QueueUserTable:voximplant\lib\model\queueuser.php:9ffb487268d8f3700f98c2ccdc23178e */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_QueueUser
-	 * @see \Bitrix\Voximplant\Model\QueueUserTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getQueueId()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setQueueId(\int|\Bitrix\Main\DB\SqlExpression $queueId)
-	 * @method bool hasQueueId()
-	 * @method bool isQueueIdFilled()
-	 * @method bool isQueueIdChanged()
-	 * @method \int remindActualQueueId()
-	 * @method \int requireQueueId()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetQueueId()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetQueueId()
-	 * @method \int fillQueueId()
-	 * @method \int getUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
-	 * @method bool hasUserId()
-	 * @method bool isUserIdFilled()
-	 * @method bool isUserIdChanged()
-	 * @method \int remindActualUserId()
-	 * @method \int requireUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetUserId()
-	 * @method \int fillUserId()
-	 * @method \string getStatus()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
-	 * @method bool hasStatus()
-	 * @method bool isStatusFilled()
-	 * @method bool isStatusChanged()
-	 * @method \string remindActualStatus()
-	 * @method \string requireStatus()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetStatus()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetStatus()
-	 * @method \string fillStatus()
-	 * @method \Bitrix\Main\Type\DateTime getLastActivityDate()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setLastActivityDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $lastActivityDate)
-	 * @method bool hasLastActivityDate()
-	 * @method bool isLastActivityDateFilled()
-	 * @method bool isLastActivityDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualLastActivityDate()
-	 * @method \Bitrix\Main\Type\DateTime requireLastActivityDate()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetLastActivityDate()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetLastActivityDate()
-	 * @method \Bitrix\Main\Type\DateTime fillLastActivityDate()
-	 * @method \Bitrix\Voximplant\Model\EO_User getUser()
-	 * @method \Bitrix\Voximplant\Model\EO_User remindActualUser()
-	 * @method \Bitrix\Voximplant\Model\EO_User requireUser()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setUser(\Bitrix\Voximplant\Model\EO_User $object)
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetUser()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetUser()
-	 * @method bool hasUser()
-	 * @method bool isUserFilled()
-	 * @method bool isUserChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_User fillUser()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue getQueue()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue remindActualQueue()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue requireQueue()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setQueue(\Bitrix\Voximplant\Model\EO_Queue $object)
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetQueue()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetQueue()
-	 * @method bool hasQueue()
-	 * @method bool isQueueFilled()
-	 * @method bool isQueueChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue fillQueue()
-	 * @method \string getIsOnlineCustom()
-	 * @method \string remindActualIsOnlineCustom()
-	 * @method \string requireIsOnlineCustom()
-	 * @method bool hasIsOnlineCustom()
-	 * @method bool isIsOnlineCustomFilled()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetIsOnlineCustom()
-	 * @method \string fillIsOnlineCustom()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_QueueUser wakeUp($data)
-	 */
-	class EO_QueueUser {
-		/* @var \Bitrix\Voximplant\Model\QueueUserTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\QueueUserTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_QueueUser_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getQueueIdList()
-	 * @method \int[] fillQueueId()
-	 * @method \int[] getUserIdList()
-	 * @method \int[] fillUserId()
-	 * @method \string[] getStatusList()
-	 * @method \string[] fillStatus()
-	 * @method \Bitrix\Main\Type\DateTime[] getLastActivityDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillLastActivityDate()
-	 * @method \Bitrix\Voximplant\Model\EO_User[] getUserList()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection getUserCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_User_Collection fillUser()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue[] getQueueList()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection getQueueCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection fillQueue()
-	 * @method \string[] getIsOnlineCustomList()
-	 * @method \string[] fillIsOnlineCustom()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_QueueUser $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_QueueUser $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_QueueUser $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_QueueUser_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_QueueUser_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\QueueUserTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\QueueUserTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_QueueUser_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_QueueUser_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection fetchCollection()
-	 */
-	class EO_QueueUser_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection wakeUpCollection($rows)
-	 */
-	class EO_QueueUser_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\RoleTable:voximplant\lib\model\role.php:a7f36d45e80214d64f68130097d3f3bf */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_Role
-	 * @see \Bitrix\Voximplant\Model\RoleTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_Role setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getName()
-	 * @method \Bitrix\Voximplant\Model\EO_Role setName(\string|\Bitrix\Main\DB\SqlExpression $name)
-	 * @method bool hasName()
-	 * @method bool isNameFilled()
-	 * @method bool isNameChanged()
-	 * @method \string remindActualName()
-	 * @method \string requireName()
-	 * @method \Bitrix\Voximplant\Model\EO_Role resetName()
-	 * @method \Bitrix\Voximplant\Model\EO_Role unsetName()
-	 * @method \string fillName()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Role set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_Role reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Role unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_Role wakeUp($data)
-	 */
-	class EO_Role {
-		/* @var \Bitrix\Voximplant\Model\RoleTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\RoleTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_Role_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getNameList()
-	 * @method \string[] fillName()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_Role $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_Role $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Role getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Role[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Role $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_Role_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_Role current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_Role_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\RoleTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\RoleTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Role_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_Role fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Role_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Role fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection fetchCollection()
-	 */
-	class EO_Role_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Role createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Role wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection wakeUpCollection($rows)
-	 */
-	class EO_Role_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\RoleAccessTable:voximplant\lib\model\roleaccess.php:31a47153a2b79f9fb3ba183a1aa42be9 */
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\RoleAccessTable:voximplant/lib/model/roleaccess.php */
 namespace Bitrix\Voximplant\Model {
 	/**
 	 * EO_RoleAccess
@@ -3972,6 +3015,8 @@ namespace Bitrix\Voximplant\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_RoleAccess_Collection merge(?EO_RoleAccess_Collection $collection)
+	 * @method bool isEmpty()
 	 */
 	class EO_RoleAccess_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Voximplant\Model\RoleAccessTable */
@@ -4005,80 +3050,70 @@ namespace Bitrix\Voximplant\Model {
 	 */
 	class EO_RoleAccess_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\RolePermissionTable:voximplant\lib\model\rolepermission.php:51213339c3b047105d1321f65bbdadfa */
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\CallerIdTable:voximplant/lib/model/callerid.php */
 namespace Bitrix\Voximplant\Model {
 	/**
-	 * EO_RolePermission
-	 * @see \Bitrix\Voximplant\Model\RolePermissionTable
+	 * EO_CallerId
+	 * @see \Bitrix\Voximplant\Model\CallerIdTable
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId setId(\int|\Bitrix\Main\DB\SqlExpression $id)
 	 * @method bool hasId()
 	 * @method bool isIdFilled()
 	 * @method bool isIdChanged()
-	 * @method \int getRoleId()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setRoleId(\int|\Bitrix\Main\DB\SqlExpression $roleId)
-	 * @method bool hasRoleId()
-	 * @method bool isRoleIdFilled()
-	 * @method bool isRoleIdChanged()
-	 * @method \int remindActualRoleId()
-	 * @method \int requireRoleId()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetRoleId()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetRoleId()
-	 * @method \int fillRoleId()
-	 * @method \string getEntity()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
-	 * @method bool hasEntity()
-	 * @method bool isEntityFilled()
-	 * @method bool isEntityChanged()
-	 * @method \string remindActualEntity()
-	 * @method \string requireEntity()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetEntity()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetEntity()
-	 * @method \string fillEntity()
-	 * @method \string getAction()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setAction(\string|\Bitrix\Main\DB\SqlExpression $action)
-	 * @method bool hasAction()
-	 * @method bool isActionFilled()
-	 * @method bool isActionChanged()
-	 * @method \string remindActualAction()
-	 * @method \string requireAction()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetAction()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetAction()
-	 * @method \string fillAction()
-	 * @method \string getPermission()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setPermission(\string|\Bitrix\Main\DB\SqlExpression $permission)
-	 * @method bool hasPermission()
-	 * @method bool isPermissionFilled()
-	 * @method bool isPermissionChanged()
-	 * @method \string remindActualPermission()
-	 * @method \string requirePermission()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetPermission()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetPermission()
-	 * @method \string fillPermission()
-	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess getRoleAccess()
-	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess remindActualRoleAccess()
-	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess requireRoleAccess()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setRoleAccess(\Bitrix\Voximplant\Model\EO_RoleAccess $object)
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetRoleAccess()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetRoleAccess()
-	 * @method bool hasRoleAccess()
-	 * @method bool isRoleAccessFilled()
-	 * @method bool isRoleAccessChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess fillRoleAccess()
-	 * @method \Bitrix\Voximplant\Model\EO_Role getRole()
-	 * @method \Bitrix\Voximplant\Model\EO_Role remindActualRole()
-	 * @method \Bitrix\Voximplant\Model\EO_Role requireRole()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setRole(\Bitrix\Voximplant\Model\EO_Role $object)
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetRole()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetRole()
-	 * @method bool hasRole()
-	 * @method bool isRoleFilled()
-	 * @method bool isRoleChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_Role fillRole()
+	 * @method \string getNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId setNumber(\string|\Bitrix\Main\DB\SqlExpression $number)
+	 * @method bool hasNumber()
+	 * @method bool isNumberFilled()
+	 * @method bool isNumberChanged()
+	 * @method \string remindActualNumber()
+	 * @method \string requireNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetNumber()
+	 * @method \string fillNumber()
+	 * @method \boolean getVerified()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId setVerified(\boolean|\Bitrix\Main\DB\SqlExpression $verified)
+	 * @method bool hasVerified()
+	 * @method bool isVerifiedFilled()
+	 * @method bool isVerifiedChanged()
+	 * @method \boolean remindActualVerified()
+	 * @method \boolean requireVerified()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetVerified()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetVerified()
+	 * @method \boolean fillVerified()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetDateCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \Bitrix\Main\Type\Date getVerifiedUntil()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId setVerifiedUntil(\Bitrix\Main\Type\Date|\Bitrix\Main\DB\SqlExpression $verifiedUntil)
+	 * @method bool hasVerifiedUntil()
+	 * @method bool isVerifiedUntilFilled()
+	 * @method bool isVerifiedUntilChanged()
+	 * @method \Bitrix\Main\Type\Date remindActualVerifiedUntil()
+	 * @method \Bitrix\Main\Type\Date requireVerifiedUntil()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetVerifiedUntil()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetVerifiedUntil()
+	 * @method \Bitrix\Main\Type\Date fillVerifiedUntil()
+	 * @method \int getConfigId()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId setConfigId(\int|\Bitrix\Main\DB\SqlExpression $configId)
+	 * @method bool hasConfigId()
+	 * @method bool isConfigIdFilled()
+	 * @method bool isConfigIdChanged()
+	 * @method \int remindActualConfigId()
+	 * @method \int requireConfigId()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId resetConfigId()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId unsetConfigId()
+	 * @method \int fillConfigId()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -4094,9 +3129,9 @@ namespace Bitrix\Voximplant\Model {
 	 * @method bool has($fieldName)
 	 * @method bool isFilled($fieldName)
 	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId unset($fieldName)
 	 * @method void addTo($fieldName, $value)
 	 * @method void removeFrom($fieldName, $value)
 	 * @method void removeAll($fieldName)
@@ -4104,11 +3139,11 @@ namespace Bitrix\Voximplant\Model {
 	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
 	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
 	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_RolePermission wakeUp($data)
+	 * @method static \Bitrix\Voximplant\Model\EO_CallerId wakeUp($data)
 	 */
-	class EO_RolePermission {
-		/* @var \Bitrix\Voximplant\Model\RolePermissionTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\RolePermissionTable';
+	class EO_CallerId {
+		/* @var \Bitrix\Voximplant\Model\CallerIdTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\CallerIdTable';
 		/**
 		 * @param bool|array $setDefaultValues
 		 */
@@ -4117,55 +3152,53 @@ namespace Bitrix\Voximplant\Model {
 }
 namespace Bitrix\Voximplant\Model {
 	/**
-	 * EO_RolePermission_Collection
+	 * EO_CallerId_Collection
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 * @method \int[] getIdList()
-	 * @method \int[] getRoleIdList()
-	 * @method \int[] fillRoleId()
-	 * @method \string[] getEntityList()
-	 * @method \string[] fillEntity()
-	 * @method \string[] getActionList()
-	 * @method \string[] fillAction()
-	 * @method \string[] getPermissionList()
-	 * @method \string[] fillPermission()
-	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess[] getRoleAccessList()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection getRoleAccessCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess_Collection fillRoleAccess()
-	 * @method \Bitrix\Voximplant\Model\EO_Role[] getRoleList()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection getRoleCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection fillRole()
+	 * @method \string[] getNumberList()
+	 * @method \string[] fillNumber()
+	 * @method \boolean[] getVerifiedList()
+	 * @method \boolean[] fillVerified()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \Bitrix\Main\Type\Date[] getVerifiedUntilList()
+	 * @method \Bitrix\Main\Type\Date[] fillVerifiedUntil()
+	 * @method \int[] getConfigIdList()
+	 * @method \int[] fillConfigId()
 	 *
 	 * Common methods:
 	 * ---------------
 	 *
 	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_RolePermission $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_RolePermission $object)
+	 * @method void add(\Bitrix\Voximplant\Model\EO_CallerId $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_CallerId $object)
 	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_RolePermission $object)
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_CallerId $object)
 	 * @method void removeByPrimary($primary)
 	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_RolePermission_Collection wakeUp($data)
+	 * @method static \Bitrix\Voximplant\Model\EO_CallerId_Collection wakeUp($data)
 	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
 	 * @method void offsetSet() ArrayAccess
 	 * @method void offsetExists() ArrayAccess
 	 * @method void offsetUnset() ArrayAccess
 	 * @method void offsetGet() ArrayAccess
 	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission current() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId current() Iterator
 	 * @method mixed key() Iterator
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_CallerId_Collection merge(?EO_CallerId_Collection $collection)
+	 * @method bool isEmpty()
 	 */
-	class EO_RolePermission_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\RolePermissionTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\RolePermissionTable';
+	class EO_CallerId_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\CallerIdTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\CallerIdTable';
 	}
 }
 namespace Bitrix\Voximplant\Model {
@@ -4173,710 +3206,29 @@ namespace Bitrix\Voximplant\Model {
 	 * Common methods:
 	 * ---------------
 	 *
-	 * @method EO_RolePermission_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection fetchCollection()
+	 * @method EO_CallerId_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId_Collection fetchCollection()
 	 *
 	 * Custom methods:
 	 * ---------------
 	 *
 	 */
-	class EO_RolePermission_Query extends \Bitrix\Main\ORM\Query\Query {}
+	class EO_CallerId_Query extends \Bitrix\Main\ORM\Query\Query {}
 	/**
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection fetchCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId_Collection fetchCollection()
 	 */
-	class EO_RolePermission_Result extends \Bitrix\Main\ORM\Query\Result {}
+	class EO_CallerId_Result extends \Bitrix\Main\ORM\Query\Result {}
 	/**
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection wakeUpCollection($rows)
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_CallerId_Collection wakeUpCollection($rows)
 	 */
-	class EO_RolePermission_Entity extends \Bitrix\Main\ORM\Entity {}
+	class EO_CallerId_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\StatisticIndexTable:voximplant\lib\model\statisticindex.php:e4b3fd52ade6297bbd67c0418f3e31b9 */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_StatisticIndex
-	 * @see \Bitrix\Voximplant\Model\StatisticIndexTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getStatisticId()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex setStatisticId(\int|\Bitrix\Main\DB\SqlExpression $statisticId)
-	 * @method bool hasStatisticId()
-	 * @method bool isStatisticIdFilled()
-	 * @method bool isStatisticIdChanged()
-	 * @method \string getContent()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex setContent(\string|\Bitrix\Main\DB\SqlExpression $content)
-	 * @method bool hasContent()
-	 * @method bool isContentFilled()
-	 * @method bool isContentChanged()
-	 * @method \string remindActualContent()
-	 * @method \string requireContent()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex resetContent()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex unsetContent()
-	 * @method \string fillContent()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_StatisticIndex wakeUp($data)
-	 */
-	class EO_StatisticIndex {
-		/* @var \Bitrix\Voximplant\Model\StatisticIndexTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\StatisticIndexTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_StatisticIndex_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getStatisticIdList()
-	 * @method \string[] getContentList()
-	 * @method \string[] fillContent()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_StatisticIndex $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_StatisticIndex $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_StatisticIndex $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_StatisticIndex_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\StatisticIndexTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\StatisticIndexTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_StatisticIndex_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_StatisticIndex_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection fetchCollection()
-	 */
-	class EO_StatisticIndex_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection wakeUpCollection($rows)
-	 */
-	class EO_StatisticIndex_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\StatisticMissedTable:voximplant\lib\model\statisticmissed.php:107526b4342e768d10ea1a6d1388b6ff */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_StatisticMissed
-	 * @see \Bitrix\Voximplant\Model\StatisticMissedTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \Bitrix\Main\Type\DateTime getCallStartDate()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setCallStartDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $callStartDate)
-	 * @method bool hasCallStartDate()
-	 * @method bool isCallStartDateFilled()
-	 * @method bool isCallStartDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCallStartDate()
-	 * @method \Bitrix\Main\Type\DateTime requireCallStartDate()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetCallStartDate()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetCallStartDate()
-	 * @method \Bitrix\Main\Type\DateTime fillCallStartDate()
-	 * @method \string getPhoneNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setPhoneNumber(\string|\Bitrix\Main\DB\SqlExpression $phoneNumber)
-	 * @method bool hasPhoneNumber()
-	 * @method bool isPhoneNumberFilled()
-	 * @method bool isPhoneNumberChanged()
-	 * @method \string remindActualPhoneNumber()
-	 * @method \string requirePhoneNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetPhoneNumber()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetPhoneNumber()
-	 * @method \string fillPhoneNumber()
-	 * @method \int getPortalUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setPortalUserId(\int|\Bitrix\Main\DB\SqlExpression $portalUserId)
-	 * @method bool hasPortalUserId()
-	 * @method bool isPortalUserIdFilled()
-	 * @method bool isPortalUserIdChanged()
-	 * @method \int remindActualPortalUserId()
-	 * @method \int requirePortalUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetPortalUserId()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetPortalUserId()
-	 * @method \int fillPortalUserId()
-	 * @method \int getCallbackId()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setCallbackId(\int|\Bitrix\Main\DB\SqlExpression $callbackId)
-	 * @method bool hasCallbackId()
-	 * @method bool isCallbackIdFilled()
-	 * @method bool isCallbackIdChanged()
-	 * @method \int remindActualCallbackId()
-	 * @method \int requireCallbackId()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetCallbackId()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetCallbackId()
-	 * @method \int fillCallbackId()
-	 * @method \Bitrix\Main\Type\DateTime getCallbackCallStartDate()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed setCallbackCallStartDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $callbackCallStartDate)
-	 * @method bool hasCallbackCallStartDate()
-	 * @method bool isCallbackCallStartDateFilled()
-	 * @method bool isCallbackCallStartDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCallbackCallStartDate()
-	 * @method \Bitrix\Main\Type\DateTime requireCallbackCallStartDate()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed resetCallbackCallStartDate()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unsetCallbackCallStartDate()
-	 * @method \Bitrix\Main\Type\DateTime fillCallbackCallStartDate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_StatisticMissed wakeUp($data)
-	 */
-	class EO_StatisticMissed {
-		/* @var \Bitrix\Voximplant\Model\StatisticMissedTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\StatisticMissedTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_StatisticMissed_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \Bitrix\Main\Type\DateTime[] getCallStartDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCallStartDate()
-	 * @method \string[] getPhoneNumberList()
-	 * @method \string[] fillPhoneNumber()
-	 * @method \int[] getPortalUserIdList()
-	 * @method \int[] fillPortalUserId()
-	 * @method \int[] getCallbackIdList()
-	 * @method \int[] fillCallbackId()
-	 * @method \Bitrix\Main\Type\DateTime[] getCallbackCallStartDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCallbackCallStartDate()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_StatisticMissed $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_StatisticMissed $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_StatisticMissed $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_StatisticMissed_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\StatisticMissedTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\StatisticMissedTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_StatisticMissed_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_StatisticMissed_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection fetchCollection()
-	 */
-	class EO_StatisticMissed_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticMissed_Collection wakeUpCollection($rows)
-	 */
-	class EO_StatisticMissed_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\TranscriptTable:voximplant\lib\model\transcript.php:bba45bb012c47e0762cecff00f6272a2 */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_Transcript
-	 * @see \Bitrix\Voximplant\Model\TranscriptTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \float getCost()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript setCost(\float|\Bitrix\Main\DB\SqlExpression $cost)
-	 * @method bool hasCost()
-	 * @method bool isCostFilled()
-	 * @method bool isCostChanged()
-	 * @method \float remindActualCost()
-	 * @method \float requireCost()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetCost()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetCost()
-	 * @method \float fillCost()
-	 * @method \string getCostCurrency()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript setCostCurrency(\string|\Bitrix\Main\DB\SqlExpression $costCurrency)
-	 * @method bool hasCostCurrency()
-	 * @method bool isCostCurrencyFilled()
-	 * @method bool isCostCurrencyChanged()
-	 * @method \string remindActualCostCurrency()
-	 * @method \string requireCostCurrency()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetCostCurrency()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetCostCurrency()
-	 * @method \string fillCostCurrency()
-	 * @method \int getSessionId()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript setSessionId(\int|\Bitrix\Main\DB\SqlExpression $sessionId)
-	 * @method bool hasSessionId()
-	 * @method bool isSessionIdFilled()
-	 * @method bool isSessionIdChanged()
-	 * @method \int remindActualSessionId()
-	 * @method \int requireSessionId()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetSessionId()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetSessionId()
-	 * @method \int fillSessionId()
-	 * @method \string getCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
-	 * @method bool hasCallId()
-	 * @method bool isCallIdFilled()
-	 * @method bool isCallIdChanged()
-	 * @method \string remindActualCallId()
-	 * @method \string requireCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetCallId()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetCallId()
-	 * @method \string fillCallId()
-	 * @method \string getContent()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript setContent(\string|\Bitrix\Main\DB\SqlExpression $content)
-	 * @method bool hasContent()
-	 * @method bool isContentFilled()
-	 * @method bool isContentChanged()
-	 * @method \string remindActualContent()
-	 * @method \string requireContent()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetContent()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetContent()
-	 * @method \string fillContent()
-	 * @method \string getUrl()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript setUrl(\string|\Bitrix\Main\DB\SqlExpression $url)
-	 * @method bool hasUrl()
-	 * @method bool isUrlFilled()
-	 * @method bool isUrlChanged()
-	 * @method \string remindActualUrl()
-	 * @method \string requireUrl()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetUrl()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetUrl()
-	 * @method \string fillUrl()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_Transcript wakeUp($data)
-	 */
-	class EO_Transcript {
-		/* @var \Bitrix\Voximplant\Model\TranscriptTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\TranscriptTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_Transcript_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \float[] getCostList()
-	 * @method \float[] fillCost()
-	 * @method \string[] getCostCurrencyList()
-	 * @method \string[] fillCostCurrency()
-	 * @method \int[] getSessionIdList()
-	 * @method \int[] fillSessionId()
-	 * @method \string[] getCallIdList()
-	 * @method \string[] fillCallId()
-	 * @method \string[] getContentList()
-	 * @method \string[] fillContent()
-	 * @method \string[] getUrlList()
-	 * @method \string[] fillUrl()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_Transcript $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_Transcript $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Transcript $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_Transcript_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_Transcript_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\TranscriptTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\TranscriptTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Transcript_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Transcript_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection fetchCollection()
-	 */
-	class EO_Transcript_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection wakeUpCollection($rows)
-	 */
-	class EO_Transcript_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\TranscriptLineTable:voximplant\lib\model\transcriptline.php:ffd3bde790e50d3e843c410fc84c2cf1 */
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_TranscriptLine
-	 * @see \Bitrix\Voximplant\Model\TranscriptLineTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getTranscriptId()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setTranscriptId(\string|\Bitrix\Main\DB\SqlExpression $transcriptId)
-	 * @method bool hasTranscriptId()
-	 * @method bool isTranscriptIdFilled()
-	 * @method bool isTranscriptIdChanged()
-	 * @method \string remindActualTranscriptId()
-	 * @method \string requireTranscriptId()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetTranscriptId()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetTranscriptId()
-	 * @method \string fillTranscriptId()
-	 * @method \string getSide()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setSide(\string|\Bitrix\Main\DB\SqlExpression $side)
-	 * @method bool hasSide()
-	 * @method bool isSideFilled()
-	 * @method bool isSideChanged()
-	 * @method \string remindActualSide()
-	 * @method \string requireSide()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetSide()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetSide()
-	 * @method \string fillSide()
-	 * @method \int getStartTime()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setStartTime(\int|\Bitrix\Main\DB\SqlExpression $startTime)
-	 * @method bool hasStartTime()
-	 * @method bool isStartTimeFilled()
-	 * @method bool isStartTimeChanged()
-	 * @method \int remindActualStartTime()
-	 * @method \int requireStartTime()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetStartTime()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetStartTime()
-	 * @method \int fillStartTime()
-	 * @method \int getStopTime()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setStopTime(\int|\Bitrix\Main\DB\SqlExpression $stopTime)
-	 * @method bool hasStopTime()
-	 * @method bool isStopTimeFilled()
-	 * @method bool isStopTimeChanged()
-	 * @method \int remindActualStopTime()
-	 * @method \int requireStopTime()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetStopTime()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetStopTime()
-	 * @method \int fillStopTime()
-	 * @method \string getMessage()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setMessage(\string|\Bitrix\Main\DB\SqlExpression $message)
-	 * @method bool hasMessage()
-	 * @method bool isMessageFilled()
-	 * @method bool isMessageChanged()
-	 * @method \string remindActualMessage()
-	 * @method \string requireMessage()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetMessage()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetMessage()
-	 * @method \string fillMessage()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript getTranscript()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript remindActualTranscript()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript requireTranscript()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine setTranscript(\Bitrix\Voximplant\Model\EO_Transcript $object)
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine resetTranscript()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unsetTranscript()
-	 * @method bool hasTranscript()
-	 * @method bool isTranscriptFilled()
-	 * @method bool isTranscriptChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript fillTranscript()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine reset($fieldName)
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\Model\EO_TranscriptLine wakeUp($data)
-	 */
-	class EO_TranscriptLine {
-		/* @var \Bitrix\Voximplant\Model\TranscriptLineTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\TranscriptLineTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * EO_TranscriptLine_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getTranscriptIdList()
-	 * @method \string[] fillTranscriptId()
-	 * @method \string[] getSideList()
-	 * @method \string[] fillSide()
-	 * @method \int[] getStartTimeList()
-	 * @method \int[] fillStartTime()
-	 * @method \int[] getStopTimeList()
-	 * @method \int[] fillStopTime()
-	 * @method \string[] getMessageList()
-	 * @method \string[] fillMessage()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript[] getTranscriptList()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection getTranscriptCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection fillTranscript()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\Model\EO_TranscriptLine $object)
-	 * @method bool has(\Bitrix\Voximplant\Model\EO_TranscriptLine $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\Model\EO_TranscriptLine $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_TranscriptLine_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\Model\TranscriptLineTable */
-		static public $dataClass = '\Bitrix\Voximplant\Model\TranscriptLineTable';
-	}
-}
-namespace Bitrix\Voximplant\Model {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_TranscriptLine_Result exec()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_TranscriptLine_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine fetchObject()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection fetchCollection()
-	 */
-	class EO_TranscriptLine_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection createCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\Model\EO_TranscriptLine_Collection wakeUpCollection($rows)
-	 */
-	class EO_TranscriptLine_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\UserTable:voximplant\lib\model\user.php:d656f801f5f209e2816f5cbfa8ce7b34 */
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\UserTable:voximplant/lib/model/user.php */
 namespace Bitrix\Voximplant\Model {
 	/**
 	 * EO_User
@@ -5516,6 +3868,23 @@ namespace Bitrix\Voximplant\Model {
 	 * @method void removeAllGroups()
 	 * @method \Bitrix\Voximplant\Model\EO_User resetGroups()
 	 * @method \Bitrix\Voximplant\Model\EO_User unsetGroups()
+	 * @method \Bitrix\Main\Localization\EO_Language getActiveLanguage()
+	 * @method \Bitrix\Main\Localization\EO_Language remindActualActiveLanguage()
+	 * @method \Bitrix\Main\Localization\EO_Language requireActiveLanguage()
+	 * @method \Bitrix\Voximplant\Model\EO_User setActiveLanguage(\Bitrix\Main\Localization\EO_Language $object)
+	 * @method \Bitrix\Voximplant\Model\EO_User resetActiveLanguage()
+	 * @method \Bitrix\Voximplant\Model\EO_User unsetActiveLanguage()
+	 * @method bool hasActiveLanguage()
+	 * @method bool isActiveLanguageFilled()
+	 * @method bool isActiveLanguageChanged()
+	 * @method \Bitrix\Main\Localization\EO_Language fillActiveLanguage()
+	 * @method \string getNotificationLanguageId()
+	 * @method \string remindActualNotificationLanguageId()
+	 * @method \string requireNotificationLanguageId()
+	 * @method bool hasNotificationLanguageId()
+	 * @method bool isNotificationLanguageIdFilled()
+	 * @method \Bitrix\Voximplant\Model\EO_User unsetNotificationLanguageId()
+	 * @method \string fillNotificationLanguageId()
 	 * @method \boolean getIsBusy()
 	 * @method \boolean remindActualIsBusy()
 	 * @method \boolean requireIsBusy()
@@ -5699,6 +4068,11 @@ namespace Bitrix\Voximplant\Model {
 	 * @method \Bitrix\Main\EO_UserGroup_Collection[] getGroupsList()
 	 * @method \Bitrix\Main\EO_UserGroup_Collection getGroupsCollection()
 	 * @method \Bitrix\Main\EO_UserGroup_Collection fillGroups()
+	 * @method \Bitrix\Main\Localization\EO_Language[] getActiveLanguageList()
+	 * @method \Bitrix\Voximplant\Model\EO_User_Collection getActiveLanguageCollection()
+	 * @method \Bitrix\Main\Localization\EO_Language_Collection fillActiveLanguage()
+	 * @method \string[] getNotificationLanguageIdList()
+	 * @method \string[] fillNotificationLanguageId()
 	 * @method \boolean[] getIsBusyList()
 	 * @method \boolean[] fillIsBusy()
 	 *
@@ -5726,6 +4100,8 @@ namespace Bitrix\Voximplant\Model {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_User_Collection merge(?EO_User_Collection $collection)
+	 * @method bool isEmpty()
 	 */
 	class EO_User_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Voximplant\Model\UserTable */
@@ -5759,7 +4135,2658 @@ namespace Bitrix\Voximplant\Model {
 	 */
 	class EO_User_Entity extends \Bitrix\Main\ORM\Entity {}
 }
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\PhoneTable:voximplant\lib\phone.php:59c52cc831025e5203131106f09aa8c7 */
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\RoleTable:voximplant/lib/model/role.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Role
+	 * @see \Bitrix\Voximplant\Model\RoleTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_Role setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getName()
+	 * @method \Bitrix\Voximplant\Model\EO_Role setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Voximplant\Model\EO_Role resetName()
+	 * @method \Bitrix\Voximplant\Model\EO_Role unsetName()
+	 * @method \string fillName()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Role set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_Role reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Role unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_Role wakeUp($data)
+	 */
+	class EO_Role {
+		/* @var \Bitrix\Voximplant\Model\RoleTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\RoleTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Role_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_Role $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_Role $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Role getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Role[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Role $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_Role_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_Role current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_Role_Collection merge(?EO_Role_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Role_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\RoleTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\RoleTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Role_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_Role fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Role_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Role fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection fetchCollection()
+	 */
+	class EO_Role_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Role createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Role wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection wakeUpCollection($rows)
+	 */
+	class EO_Role_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\TranscriptTable:voximplant/lib/model/transcript.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Transcript
+	 * @see \Bitrix\Voximplant\Model\TranscriptTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \float getCost()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript setCost(\float|\Bitrix\Main\DB\SqlExpression $cost)
+	 * @method bool hasCost()
+	 * @method bool isCostFilled()
+	 * @method bool isCostChanged()
+	 * @method \float remindActualCost()
+	 * @method \float requireCost()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetCost()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetCost()
+	 * @method \float fillCost()
+	 * @method \string getCostCurrency()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript setCostCurrency(\string|\Bitrix\Main\DB\SqlExpression $costCurrency)
+	 * @method bool hasCostCurrency()
+	 * @method bool isCostCurrencyFilled()
+	 * @method bool isCostCurrencyChanged()
+	 * @method \string remindActualCostCurrency()
+	 * @method \string requireCostCurrency()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetCostCurrency()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetCostCurrency()
+	 * @method \string fillCostCurrency()
+	 * @method \int getSessionId()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript setSessionId(\int|\Bitrix\Main\DB\SqlExpression $sessionId)
+	 * @method bool hasSessionId()
+	 * @method bool isSessionIdFilled()
+	 * @method bool isSessionIdChanged()
+	 * @method \int remindActualSessionId()
+	 * @method \int requireSessionId()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetSessionId()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetSessionId()
+	 * @method \int fillSessionId()
+	 * @method \string getCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
+	 * @method bool hasCallId()
+	 * @method bool isCallIdFilled()
+	 * @method bool isCallIdChanged()
+	 * @method \string remindActualCallId()
+	 * @method \string requireCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetCallId()
+	 * @method \string fillCallId()
+	 * @method \string getContent()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript setContent(\string|\Bitrix\Main\DB\SqlExpression $content)
+	 * @method bool hasContent()
+	 * @method bool isContentFilled()
+	 * @method bool isContentChanged()
+	 * @method \string remindActualContent()
+	 * @method \string requireContent()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetContent()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetContent()
+	 * @method \string fillContent()
+	 * @method \string getUrl()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript setUrl(\string|\Bitrix\Main\DB\SqlExpression $url)
+	 * @method bool hasUrl()
+	 * @method bool isUrlFilled()
+	 * @method bool isUrlChanged()
+	 * @method \string remindActualUrl()
+	 * @method \string requireUrl()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript resetUrl()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript unsetUrl()
+	 * @method \string fillUrl()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_Transcript wakeUp($data)
+	 */
+	class EO_Transcript {
+		/* @var \Bitrix\Voximplant\Model\TranscriptTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\TranscriptTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Transcript_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \float[] getCostList()
+	 * @method \float[] fillCost()
+	 * @method \string[] getCostCurrencyList()
+	 * @method \string[] fillCostCurrency()
+	 * @method \int[] getSessionIdList()
+	 * @method \int[] fillSessionId()
+	 * @method \string[] getCallIdList()
+	 * @method \string[] fillCallId()
+	 * @method \string[] getContentList()
+	 * @method \string[] fillContent()
+	 * @method \string[] getUrlList()
+	 * @method \string[] fillUrl()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_Transcript $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_Transcript $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Transcript $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_Transcript_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_Transcript_Collection merge(?EO_Transcript_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Transcript_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\TranscriptTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\TranscriptTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Transcript_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Transcript_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection fetchCollection()
+	 */
+	class EO_Transcript_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection wakeUpCollection($rows)
+	 */
+	class EO_Transcript_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\CallUserTable:voximplant/lib/model/calluser.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_CallUser
+	 * @see \Bitrix\Voximplant\Model\CallUserTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string getCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
+	 * @method bool hasCallId()
+	 * @method bool isCallIdFilled()
+	 * @method bool isCallIdChanged()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \string getRole()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser setRole(\string|\Bitrix\Main\DB\SqlExpression $role)
+	 * @method bool hasRole()
+	 * @method bool isRoleFilled()
+	 * @method bool isRoleChanged()
+	 * @method \string remindActualRole()
+	 * @method \string requireRole()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser resetRole()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser unsetRole()
+	 * @method \string fillRole()
+	 * @method \string getStatus()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser resetStatus()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser unsetStatus()
+	 * @method \string fillStatus()
+	 * @method \string getDevice()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser setDevice(\string|\Bitrix\Main\DB\SqlExpression $device)
+	 * @method bool hasDevice()
+	 * @method bool isDeviceFilled()
+	 * @method bool isDeviceChanged()
+	 * @method \string remindActualDevice()
+	 * @method \string requireDevice()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser resetDevice()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser unsetDevice()
+	 * @method \string fillDevice()
+	 * @method \Bitrix\Main\Type\DateTime getInserted()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser setInserted(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $inserted)
+	 * @method bool hasInserted()
+	 * @method bool isInsertedFilled()
+	 * @method bool isInsertedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualInserted()
+	 * @method \Bitrix\Main\Type\DateTime requireInserted()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser resetInserted()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser unsetInserted()
+	 * @method \Bitrix\Main\Type\DateTime fillInserted()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_CallUser wakeUp($data)
+	 */
+	class EO_CallUser {
+		/* @var \Bitrix\Voximplant\Model\CallUserTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\CallUserTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_CallUser_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string[] getCallIdList()
+	 * @method \int[] getUserIdList()
+	 * @method \string[] getRoleList()
+	 * @method \string[] fillRole()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
+	 * @method \string[] getDeviceList()
+	 * @method \string[] fillDevice()
+	 * @method \Bitrix\Main\Type\DateTime[] getInsertedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillInserted()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_CallUser $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_CallUser $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_CallUser $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_CallUser_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_CallUser_Collection merge(?EO_CallUser_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_CallUser_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\CallUserTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\CallUserTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_CallUser_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_CallUser_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser_Collection fetchCollection()
+	 */
+	class EO_CallUser_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_CallUser_Collection wakeUpCollection($rows)
+	 */
+	class EO_CallUser_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\QueueTable:voximplant/lib/model/queue.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Queue
+	 * @see \Bitrix\Voximplant\Model\QueueTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getName()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue resetName()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetName()
+	 * @method \string fillName()
+	 * @method \string getType()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue setType(\string|\Bitrix\Main\DB\SqlExpression $type)
+	 * @method bool hasType()
+	 * @method bool isTypeFilled()
+	 * @method bool isTypeChanged()
+	 * @method \string remindActualType()
+	 * @method \string requireType()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue resetType()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetType()
+	 * @method \string fillType()
+	 * @method \int getWaitTime()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue setWaitTime(\int|\Bitrix\Main\DB\SqlExpression $waitTime)
+	 * @method bool hasWaitTime()
+	 * @method bool isWaitTimeFilled()
+	 * @method bool isWaitTimeChanged()
+	 * @method \int remindActualWaitTime()
+	 * @method \int requireWaitTime()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue resetWaitTime()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetWaitTime()
+	 * @method \int fillWaitTime()
+	 * @method \string getNoAnswerRule()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue setNoAnswerRule(\string|\Bitrix\Main\DB\SqlExpression $noAnswerRule)
+	 * @method bool hasNoAnswerRule()
+	 * @method bool isNoAnswerRuleFilled()
+	 * @method bool isNoAnswerRuleChanged()
+	 * @method \string remindActualNoAnswerRule()
+	 * @method \string requireNoAnswerRule()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue resetNoAnswerRule()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetNoAnswerRule()
+	 * @method \string fillNoAnswerRule()
+	 * @method \int getNextQueueId()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue setNextQueueId(\int|\Bitrix\Main\DB\SqlExpression $nextQueueId)
+	 * @method bool hasNextQueueId()
+	 * @method bool isNextQueueIdFilled()
+	 * @method bool isNextQueueIdChanged()
+	 * @method \int remindActualNextQueueId()
+	 * @method \int requireNextQueueId()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue resetNextQueueId()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetNextQueueId()
+	 * @method \int fillNextQueueId()
+	 * @method \string getForwardNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue setForwardNumber(\string|\Bitrix\Main\DB\SqlExpression $forwardNumber)
+	 * @method bool hasForwardNumber()
+	 * @method bool isForwardNumberFilled()
+	 * @method bool isForwardNumberChanged()
+	 * @method \string remindActualForwardNumber()
+	 * @method \string requireForwardNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue resetForwardNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetForwardNumber()
+	 * @method \string fillForwardNumber()
+	 * @method \boolean getAllowIntercept()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue setAllowIntercept(\boolean|\Bitrix\Main\DB\SqlExpression $allowIntercept)
+	 * @method bool hasAllowIntercept()
+	 * @method bool isAllowInterceptFilled()
+	 * @method bool isAllowInterceptChanged()
+	 * @method \boolean remindActualAllowIntercept()
+	 * @method \boolean requireAllowIntercept()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue resetAllowIntercept()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetAllowIntercept()
+	 * @method \boolean fillAllowIntercept()
+	 * @method \string getPhoneNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue setPhoneNumber(\string|\Bitrix\Main\DB\SqlExpression $phoneNumber)
+	 * @method bool hasPhoneNumber()
+	 * @method bool isPhoneNumberFilled()
+	 * @method bool isPhoneNumberChanged()
+	 * @method \string remindActualPhoneNumber()
+	 * @method \string requirePhoneNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue resetPhoneNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetPhoneNumber()
+	 * @method \string fillPhoneNumber()
+	 * @method \string getCnt()
+	 * @method \string remindActualCnt()
+	 * @method \string requireCnt()
+	 * @method bool hasCnt()
+	 * @method bool isCntFilled()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unsetCnt()
+	 * @method \string fillCnt()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Queue set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_Queue reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Queue unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_Queue wakeUp($data)
+	 */
+	class EO_Queue {
+		/* @var \Bitrix\Voximplant\Model\QueueTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\QueueTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Queue_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getTypeList()
+	 * @method \string[] fillType()
+	 * @method \int[] getWaitTimeList()
+	 * @method \int[] fillWaitTime()
+	 * @method \string[] getNoAnswerRuleList()
+	 * @method \string[] fillNoAnswerRule()
+	 * @method \int[] getNextQueueIdList()
+	 * @method \int[] fillNextQueueId()
+	 * @method \string[] getForwardNumberList()
+	 * @method \string[] fillForwardNumber()
+	 * @method \boolean[] getAllowInterceptList()
+	 * @method \boolean[] fillAllowIntercept()
+	 * @method \string[] getPhoneNumberList()
+	 * @method \string[] fillPhoneNumber()
+	 * @method \string[] getCntList()
+	 * @method \string[] fillCnt()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_Queue $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_Queue $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Queue getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Queue[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Queue $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_Queue_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_Queue current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_Queue_Collection merge(?EO_Queue_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Queue_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\QueueTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\QueueTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Queue_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Queue_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Queue fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection fetchCollection()
+	 */
+	class EO_Queue_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Queue createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection wakeUpCollection($rows)
+	 */
+	class EO_Queue_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\QueueUserTable:voximplant/lib/model/queueuser.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_QueueUser
+	 * @see \Bitrix\Voximplant\Model\QueueUserTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getQueueId()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setQueueId(\int|\Bitrix\Main\DB\SqlExpression $queueId)
+	 * @method bool hasQueueId()
+	 * @method bool isQueueIdFilled()
+	 * @method bool isQueueIdChanged()
+	 * @method \int remindActualQueueId()
+	 * @method \int requireQueueId()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetQueueId()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetQueueId()
+	 * @method \int fillQueueId()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \string getStatus()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetStatus()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetStatus()
+	 * @method \string fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime getLastActivityDate()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setLastActivityDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $lastActivityDate)
+	 * @method bool hasLastActivityDate()
+	 * @method bool isLastActivityDateFilled()
+	 * @method bool isLastActivityDateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualLastActivityDate()
+	 * @method \Bitrix\Main\Type\DateTime requireLastActivityDate()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetLastActivityDate()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetLastActivityDate()
+	 * @method \Bitrix\Main\Type\DateTime fillLastActivityDate()
+	 * @method \Bitrix\Voximplant\Model\EO_User getUser()
+	 * @method \Bitrix\Voximplant\Model\EO_User remindActualUser()
+	 * @method \Bitrix\Voximplant\Model\EO_User requireUser()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setUser(\Bitrix\Voximplant\Model\EO_User $object)
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetUser()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetUser()
+	 * @method bool hasUser()
+	 * @method bool isUserFilled()
+	 * @method bool isUserChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_User fillUser()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue getQueue()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue remindActualQueue()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue requireQueue()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser setQueue(\Bitrix\Voximplant\Model\EO_Queue $object)
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser resetQueue()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetQueue()
+	 * @method bool hasQueue()
+	 * @method bool isQueueFilled()
+	 * @method bool isQueueChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue fillQueue()
+	 * @method \string getIsOnlineCustom()
+	 * @method \string remindActualIsOnlineCustom()
+	 * @method \string requireIsOnlineCustom()
+	 * @method bool hasIsOnlineCustom()
+	 * @method bool isIsOnlineCustomFilled()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unsetIsOnlineCustom()
+	 * @method \string fillIsOnlineCustom()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_QueueUser wakeUp($data)
+	 */
+	class EO_QueueUser {
+		/* @var \Bitrix\Voximplant\Model\QueueUserTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\QueueUserTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_QueueUser_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getQueueIdList()
+	 * @method \int[] fillQueueId()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
+	 * @method \Bitrix\Main\Type\DateTime[] getLastActivityDateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillLastActivityDate()
+	 * @method \Bitrix\Voximplant\Model\EO_User[] getUserList()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection getUserCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_User_Collection fillUser()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue[] getQueueList()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection getQueueCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection fillQueue()
+	 * @method \string[] getIsOnlineCustomList()
+	 * @method \string[] fillIsOnlineCustom()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_QueueUser $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_QueueUser $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_QueueUser $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_QueueUser_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_QueueUser_Collection merge(?EO_QueueUser_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_QueueUser_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\QueueUserTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\QueueUserTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_QueueUser_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_QueueUser_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection fetchCollection()
+	 */
+	class EO_QueueUser_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_QueueUser_Collection wakeUpCollection($rows)
+	 */
+	class EO_QueueUser_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\IvrTable:voximplant/lib/model/ivr.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Ivr
+	 * @see \Bitrix\Voximplant\Model\IvrTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getName()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr resetName()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr unsetName()
+	 * @method \string fillName()
+	 * @method \int getFirstItemId()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr setFirstItemId(\int|\Bitrix\Main\DB\SqlExpression $firstItemId)
+	 * @method bool hasFirstItemId()
+	 * @method bool isFirstItemIdFilled()
+	 * @method bool isFirstItemIdChanged()
+	 * @method \int remindActualFirstItemId()
+	 * @method \int requireFirstItemId()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr resetFirstItemId()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr unsetFirstItemId()
+	 * @method \int fillFirstItemId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_Ivr wakeUp($data)
+	 */
+	class EO_Ivr {
+		/* @var \Bitrix\Voximplant\Model\IvrTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\IvrTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Ivr_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \int[] getFirstItemIdList()
+	 * @method \int[] fillFirstItemId()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_Ivr $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_Ivr $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Ivr $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_Ivr_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_Ivr_Collection merge(?EO_Ivr_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Ivr_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\IvrTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\IvrTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Ivr_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Ivr_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection fetchCollection()
+	 */
+	class EO_Ivr_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection wakeUpCollection($rows)
+	 */
+	class EO_Ivr_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\CallCrmEntityTable:voximplant/lib/model/callcrmentity.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_CallCrmEntity
+	 * @see \Bitrix\Voximplant\Model\CallCrmEntityTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string getCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
+	 * @method bool hasCallId()
+	 * @method bool isCallIdFilled()
+	 * @method bool isCallIdChanged()
+	 * @method \string getEntityType()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setEntityType(\string|\Bitrix\Main\DB\SqlExpression $entityType)
+	 * @method bool hasEntityType()
+	 * @method bool isEntityTypeFilled()
+	 * @method bool isEntityTypeChanged()
+	 * @method \int getEntityId()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setEntityId(\int|\Bitrix\Main\DB\SqlExpression $entityId)
+	 * @method bool hasEntityId()
+	 * @method bool isEntityIdFilled()
+	 * @method bool isEntityIdChanged()
+	 * @method \boolean getIsPrimary()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setIsPrimary(\boolean|\Bitrix\Main\DB\SqlExpression $isPrimary)
+	 * @method bool hasIsPrimary()
+	 * @method bool isIsPrimaryFilled()
+	 * @method bool isIsPrimaryChanged()
+	 * @method \boolean remindActualIsPrimary()
+	 * @method \boolean requireIsPrimary()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity resetIsPrimary()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity unsetIsPrimary()
+	 * @method \boolean fillIsPrimary()
+	 * @method \boolean getIsCreated()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setIsCreated(\boolean|\Bitrix\Main\DB\SqlExpression $isCreated)
+	 * @method bool hasIsCreated()
+	 * @method bool isIsCreatedFilled()
+	 * @method bool isIsCreatedChanged()
+	 * @method \boolean remindActualIsCreated()
+	 * @method \boolean requireIsCreated()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity resetIsCreated()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity unsetIsCreated()
+	 * @method \boolean fillIsCreated()
+	 * @method \Bitrix\Voximplant\EO_Statistic getCall()
+	 * @method \Bitrix\Voximplant\EO_Statistic remindActualCall()
+	 * @method \Bitrix\Voximplant\EO_Statistic requireCall()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity setCall(\Bitrix\Voximplant\EO_Statistic $object)
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity resetCall()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity unsetCall()
+	 * @method bool hasCall()
+	 * @method bool isCallFilled()
+	 * @method bool isCallChanged()
+	 * @method \Bitrix\Voximplant\EO_Statistic fillCall()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_CallCrmEntity wakeUp($data)
+	 */
+	class EO_CallCrmEntity {
+		/* @var \Bitrix\Voximplant\Model\CallCrmEntityTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\CallCrmEntityTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_CallCrmEntity_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \string[] getCallIdList()
+	 * @method \string[] getEntityTypeList()
+	 * @method \int[] getEntityIdList()
+	 * @method \boolean[] getIsPrimaryList()
+	 * @method \boolean[] fillIsPrimary()
+	 * @method \boolean[] getIsCreatedList()
+	 * @method \boolean[] fillIsCreated()
+	 * @method \Bitrix\Voximplant\EO_Statistic[] getCallList()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection getCallCollection()
+	 * @method \Bitrix\Voximplant\EO_Statistic_Collection fillCall()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_CallCrmEntity $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_CallCrmEntity $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_CallCrmEntity $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_CallCrmEntity_Collection merge(?EO_CallCrmEntity_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_CallCrmEntity_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\CallCrmEntityTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\CallCrmEntityTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_CallCrmEntity_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_CallCrmEntity_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection fetchCollection()
+	 */
+	class EO_CallCrmEntity_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection wakeUpCollection($rows)
+	 */
+	class EO_CallCrmEntity_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\RolePermissionTable:voximplant/lib/model/rolepermission.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_RolePermission
+	 * @see \Bitrix\Voximplant\Model\RolePermissionTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getRoleId()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setRoleId(\int|\Bitrix\Main\DB\SqlExpression $roleId)
+	 * @method bool hasRoleId()
+	 * @method bool isRoleIdFilled()
+	 * @method bool isRoleIdChanged()
+	 * @method \int remindActualRoleId()
+	 * @method \int requireRoleId()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetRoleId()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetRoleId()
+	 * @method \int fillRoleId()
+	 * @method \string getEntity()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setEntity(\string|\Bitrix\Main\DB\SqlExpression $entity)
+	 * @method bool hasEntity()
+	 * @method bool isEntityFilled()
+	 * @method bool isEntityChanged()
+	 * @method \string remindActualEntity()
+	 * @method \string requireEntity()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetEntity()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetEntity()
+	 * @method \string fillEntity()
+	 * @method \string getAction()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setAction(\string|\Bitrix\Main\DB\SqlExpression $action)
+	 * @method bool hasAction()
+	 * @method bool isActionFilled()
+	 * @method bool isActionChanged()
+	 * @method \string remindActualAction()
+	 * @method \string requireAction()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetAction()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetAction()
+	 * @method \string fillAction()
+	 * @method \string getPermission()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setPermission(\string|\Bitrix\Main\DB\SqlExpression $permission)
+	 * @method bool hasPermission()
+	 * @method bool isPermissionFilled()
+	 * @method bool isPermissionChanged()
+	 * @method \string remindActualPermission()
+	 * @method \string requirePermission()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetPermission()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetPermission()
+	 * @method \string fillPermission()
+	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess getRoleAccess()
+	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess remindActualRoleAccess()
+	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess requireRoleAccess()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setRoleAccess(\Bitrix\Voximplant\Model\EO_RoleAccess $object)
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetRoleAccess()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetRoleAccess()
+	 * @method bool hasRoleAccess()
+	 * @method bool isRoleAccessFilled()
+	 * @method bool isRoleAccessChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess fillRoleAccess()
+	 * @method \Bitrix\Voximplant\Model\EO_Role getRole()
+	 * @method \Bitrix\Voximplant\Model\EO_Role remindActualRole()
+	 * @method \Bitrix\Voximplant\Model\EO_Role requireRole()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission setRole(\Bitrix\Voximplant\Model\EO_Role $object)
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission resetRole()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unsetRole()
+	 * @method bool hasRole()
+	 * @method bool isRoleFilled()
+	 * @method bool isRoleChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_Role fillRole()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_RolePermission wakeUp($data)
+	 */
+	class EO_RolePermission {
+		/* @var \Bitrix\Voximplant\Model\RolePermissionTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\RolePermissionTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_RolePermission_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getRoleIdList()
+	 * @method \int[] fillRoleId()
+	 * @method \string[] getEntityList()
+	 * @method \string[] fillEntity()
+	 * @method \string[] getActionList()
+	 * @method \string[] fillAction()
+	 * @method \string[] getPermissionList()
+	 * @method \string[] fillPermission()
+	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess[] getRoleAccessList()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection getRoleAccessCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_RoleAccess_Collection fillRoleAccess()
+	 * @method \Bitrix\Voximplant\Model\EO_Role[] getRoleList()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection getRoleCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Role_Collection fillRole()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_RolePermission $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_RolePermission $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_RolePermission $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_RolePermission_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_RolePermission_Collection merge(?EO_RolePermission_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_RolePermission_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\RolePermissionTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\RolePermissionTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_RolePermission_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_RolePermission_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection fetchCollection()
+	 */
+	class EO_RolePermission_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_RolePermission_Collection wakeUpCollection($rows)
+	 */
+	class EO_RolePermission_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\CallTable:voximplant/lib/model/call.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Call
+	 * @see \Bitrix\Voximplant\Model\CallTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getConfigId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setConfigId(\int|\Bitrix\Main\DB\SqlExpression $configId)
+	 * @method bool hasConfigId()
+	 * @method bool isConfigIdFilled()
+	 * @method bool isConfigIdChanged()
+	 * @method \int remindActualConfigId()
+	 * @method \int requireConfigId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetConfigId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetConfigId()
+	 * @method \int fillConfigId()
+	 * @method \int getUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setUserId(\int|\Bitrix\Main\DB\SqlExpression $userId)
+	 * @method bool hasUserId()
+	 * @method bool isUserIdFilled()
+	 * @method bool isUserIdChanged()
+	 * @method \int remindActualUserId()
+	 * @method \int requireUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetUserId()
+	 * @method \int fillUserId()
+	 * @method \int getPortalUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setPortalUserId(\int|\Bitrix\Main\DB\SqlExpression $portalUserId)
+	 * @method bool hasPortalUserId()
+	 * @method bool isPortalUserIdFilled()
+	 * @method bool isPortalUserIdChanged()
+	 * @method \int remindActualPortalUserId()
+	 * @method \int requirePortalUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetPortalUserId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetPortalUserId()
+	 * @method \int fillPortalUserId()
+	 * @method \string getCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
+	 * @method bool hasCallId()
+	 * @method bool isCallIdFilled()
+	 * @method bool isCallIdChanged()
+	 * @method \string remindActualCallId()
+	 * @method \string requireCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCallId()
+	 * @method \string fillCallId()
+	 * @method \string getExternalCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setExternalCallId(\string|\Bitrix\Main\DB\SqlExpression $externalCallId)
+	 * @method bool hasExternalCallId()
+	 * @method bool isExternalCallIdFilled()
+	 * @method bool isExternalCallIdChanged()
+	 * @method \string remindActualExternalCallId()
+	 * @method \string requireExternalCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetExternalCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetExternalCallId()
+	 * @method \string fillExternalCallId()
+	 * @method \string getIncoming()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setIncoming(\string|\Bitrix\Main\DB\SqlExpression $incoming)
+	 * @method bool hasIncoming()
+	 * @method bool isIncomingFilled()
+	 * @method bool isIncomingChanged()
+	 * @method \string remindActualIncoming()
+	 * @method \string requireIncoming()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetIncoming()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetIncoming()
+	 * @method \string fillIncoming()
+	 * @method \string getCallerId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setCallerId(\string|\Bitrix\Main\DB\SqlExpression $callerId)
+	 * @method bool hasCallerId()
+	 * @method bool isCallerIdFilled()
+	 * @method bool isCallerIdChanged()
+	 * @method \string remindActualCallerId()
+	 * @method \string requireCallerId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetCallerId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCallerId()
+	 * @method \string fillCallerId()
+	 * @method \string getStatus()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setStatus(\string|\Bitrix\Main\DB\SqlExpression $status)
+	 * @method bool hasStatus()
+	 * @method bool isStatusFilled()
+	 * @method bool isStatusChanged()
+	 * @method \string remindActualStatus()
+	 * @method \string requireStatus()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetStatus()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetStatus()
+	 * @method \string fillStatus()
+	 * @method \boolean getCrm()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setCrm(\boolean|\Bitrix\Main\DB\SqlExpression $crm)
+	 * @method bool hasCrm()
+	 * @method bool isCrmFilled()
+	 * @method bool isCrmChanged()
+	 * @method \boolean remindActualCrm()
+	 * @method \boolean requireCrm()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetCrm()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCrm()
+	 * @method \boolean fillCrm()
+	 * @method \int getCrmActivityId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setCrmActivityId(\int|\Bitrix\Main\DB\SqlExpression $crmActivityId)
+	 * @method bool hasCrmActivityId()
+	 * @method bool isCrmActivityIdFilled()
+	 * @method bool isCrmActivityIdChanged()
+	 * @method \int remindActualCrmActivityId()
+	 * @method \int requireCrmActivityId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetCrmActivityId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCrmActivityId()
+	 * @method \int fillCrmActivityId()
+	 * @method \int getCrmCallList()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setCrmCallList(\int|\Bitrix\Main\DB\SqlExpression $crmCallList)
+	 * @method bool hasCrmCallList()
+	 * @method bool isCrmCallListFilled()
+	 * @method bool isCrmCallListChanged()
+	 * @method \int remindActualCrmCallList()
+	 * @method \int requireCrmCallList()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetCrmCallList()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCrmCallList()
+	 * @method \int fillCrmCallList()
+	 * @method \string getCrmBindings()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setCrmBindings(\string|\Bitrix\Main\DB\SqlExpression $crmBindings)
+	 * @method bool hasCrmBindings()
+	 * @method bool isCrmBindingsFilled()
+	 * @method bool isCrmBindingsChanged()
+	 * @method \string remindActualCrmBindings()
+	 * @method \string requireCrmBindings()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetCrmBindings()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCrmBindings()
+	 * @method \string fillCrmBindings()
+	 * @method \string getAccessUrl()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setAccessUrl(\string|\Bitrix\Main\DB\SqlExpression $accessUrl)
+	 * @method bool hasAccessUrl()
+	 * @method bool isAccessUrlFilled()
+	 * @method bool isAccessUrlChanged()
+	 * @method \string remindActualAccessUrl()
+	 * @method \string requireAccessUrl()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetAccessUrl()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetAccessUrl()
+	 * @method \string fillAccessUrl()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetDateCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \int getRestAppId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setRestAppId(\int|\Bitrix\Main\DB\SqlExpression $restAppId)
+	 * @method bool hasRestAppId()
+	 * @method bool isRestAppIdFilled()
+	 * @method bool isRestAppIdChanged()
+	 * @method \int remindActualRestAppId()
+	 * @method \int requireRestAppId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetRestAppId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetRestAppId()
+	 * @method \int fillRestAppId()
+	 * @method \int getExternalLineId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setExternalLineId(\int|\Bitrix\Main\DB\SqlExpression $externalLineId)
+	 * @method bool hasExternalLineId()
+	 * @method bool isExternalLineIdFilled()
+	 * @method bool isExternalLineIdChanged()
+	 * @method \int remindActualExternalLineId()
+	 * @method \int requireExternalLineId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetExternalLineId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetExternalLineId()
+	 * @method \int fillExternalLineId()
+	 * @method \string getPortalNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setPortalNumber(\string|\Bitrix\Main\DB\SqlExpression $portalNumber)
+	 * @method bool hasPortalNumber()
+	 * @method bool isPortalNumberFilled()
+	 * @method bool isPortalNumberChanged()
+	 * @method \string remindActualPortalNumber()
+	 * @method \string requirePortalNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetPortalNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetPortalNumber()
+	 * @method \string fillPortalNumber()
+	 * @method \string getStage()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setStage(\string|\Bitrix\Main\DB\SqlExpression $stage)
+	 * @method bool hasStage()
+	 * @method bool isStageFilled()
+	 * @method bool isStageChanged()
+	 * @method \string remindActualStage()
+	 * @method \string requireStage()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetStage()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetStage()
+	 * @method \string fillStage()
+	 * @method \int getIvrActionId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setIvrActionId(\int|\Bitrix\Main\DB\SqlExpression $ivrActionId)
+	 * @method bool hasIvrActionId()
+	 * @method bool isIvrActionIdFilled()
+	 * @method bool isIvrActionIdChanged()
+	 * @method \int remindActualIvrActionId()
+	 * @method \int requireIvrActionId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetIvrActionId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetIvrActionId()
+	 * @method \int fillIvrActionId()
+	 * @method \int getQueueId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setQueueId(\int|\Bitrix\Main\DB\SqlExpression $queueId)
+	 * @method bool hasQueueId()
+	 * @method bool isQueueIdFilled()
+	 * @method bool isQueueIdChanged()
+	 * @method \int remindActualQueueId()
+	 * @method \int requireQueueId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetQueueId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetQueueId()
+	 * @method \int fillQueueId()
+	 * @method \string getQueueHistory()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setQueueHistory(\string|\Bitrix\Main\DB\SqlExpression $queueHistory)
+	 * @method bool hasQueueHistory()
+	 * @method bool isQueueHistoryFilled()
+	 * @method bool isQueueHistoryChanged()
+	 * @method \string remindActualQueueHistory()
+	 * @method \string requireQueueHistory()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetQueueHistory()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetQueueHistory()
+	 * @method \string fillQueueHistory()
+	 * @method \int getSessionId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setSessionId(\int|\Bitrix\Main\DB\SqlExpression $sessionId)
+	 * @method bool hasSessionId()
+	 * @method bool isSessionIdFilled()
+	 * @method bool isSessionIdChanged()
+	 * @method \int remindActualSessionId()
+	 * @method \int requireSessionId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetSessionId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetSessionId()
+	 * @method \int fillSessionId()
+	 * @method \string getCallbackParameters()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setCallbackParameters(\string|\Bitrix\Main\DB\SqlExpression $callbackParameters)
+	 * @method bool hasCallbackParameters()
+	 * @method bool isCallbackParametersFilled()
+	 * @method bool isCallbackParametersChanged()
+	 * @method \string remindActualCallbackParameters()
+	 * @method \string requireCallbackParameters()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetCallbackParameters()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetCallbackParameters()
+	 * @method \string fillCallbackParameters()
+	 * @method \string getComment()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setComment(\string|\Bitrix\Main\DB\SqlExpression $comment)
+	 * @method bool hasComment()
+	 * @method bool isCommentFilled()
+	 * @method bool isCommentChanged()
+	 * @method \string remindActualComment()
+	 * @method \string requireComment()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetComment()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetComment()
+	 * @method \string fillComment()
+	 * @method \boolean getWorktimeSkipped()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setWorktimeSkipped(\boolean|\Bitrix\Main\DB\SqlExpression $worktimeSkipped)
+	 * @method bool hasWorktimeSkipped()
+	 * @method bool isWorktimeSkippedFilled()
+	 * @method bool isWorktimeSkippedChanged()
+	 * @method \boolean remindActualWorktimeSkipped()
+	 * @method \boolean requireWorktimeSkipped()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetWorktimeSkipped()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetWorktimeSkipped()
+	 * @method \boolean fillWorktimeSkipped()
+	 * @method \string getSipHeaders()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setSipHeaders(\string|\Bitrix\Main\DB\SqlExpression $sipHeaders)
+	 * @method bool hasSipHeaders()
+	 * @method bool isSipHeadersFilled()
+	 * @method bool isSipHeadersChanged()
+	 * @method \string remindActualSipHeaders()
+	 * @method \string requireSipHeaders()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetSipHeaders()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetSipHeaders()
+	 * @method \string fillSipHeaders()
+	 * @method \string getGatheredDigits()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setGatheredDigits(\string|\Bitrix\Main\DB\SqlExpression $gatheredDigits)
+	 * @method bool hasGatheredDigits()
+	 * @method bool isGatheredDigitsFilled()
+	 * @method bool isGatheredDigitsChanged()
+	 * @method \string remindActualGatheredDigits()
+	 * @method \string requireGatheredDigits()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetGatheredDigits()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetGatheredDigits()
+	 * @method \string fillGatheredDigits()
+	 * @method \string getParentCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setParentCallId(\string|\Bitrix\Main\DB\SqlExpression $parentCallId)
+	 * @method bool hasParentCallId()
+	 * @method bool isParentCallIdFilled()
+	 * @method bool isParentCallIdChanged()
+	 * @method \string remindActualParentCallId()
+	 * @method \string requireParentCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetParentCallId()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetParentCallId()
+	 * @method \string fillParentCallId()
+	 * @method \Bitrix\Main\Type\DateTime getLastPing()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setLastPing(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $lastPing)
+	 * @method bool hasLastPing()
+	 * @method bool isLastPingFilled()
+	 * @method bool isLastPingChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualLastPing()
+	 * @method \Bitrix\Main\Type\DateTime requireLastPing()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetLastPing()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetLastPing()
+	 * @method \Bitrix\Main\Type\DateTime fillLastPing()
+	 * @method \string getExecutionGraph()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setExecutionGraph(\string|\Bitrix\Main\DB\SqlExpression $executionGraph)
+	 * @method bool hasExecutionGraph()
+	 * @method bool isExecutionGraphFilled()
+	 * @method bool isExecutionGraphChanged()
+	 * @method \string remindActualExecutionGraph()
+	 * @method \string requireExecutionGraph()
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetExecutionGraph()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetExecutionGraph()
+	 * @method \string fillExecutionGraph()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue getQueue()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue remindActualQueue()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue requireQueue()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setQueue(\Bitrix\Voximplant\Model\EO_Queue $object)
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetQueue()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetQueue()
+	 * @method bool hasQueue()
+	 * @method bool isQueueFilled()
+	 * @method bool isQueueChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue fillQueue()
+	 * @method \Bitrix\Voximplant\EO_Config getConfig()
+	 * @method \Bitrix\Voximplant\EO_Config remindActualConfig()
+	 * @method \Bitrix\Voximplant\EO_Config requireConfig()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setConfig(\Bitrix\Voximplant\EO_Config $object)
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetConfig()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetConfig()
+	 * @method bool hasConfig()
+	 * @method bool isConfigFilled()
+	 * @method bool isConfigChanged()
+	 * @method \Bitrix\Voximplant\EO_Config fillConfig()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine getExternalLine()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine remindActualExternalLine()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine requireExternalLine()
+	 * @method \Bitrix\Voximplant\Model\EO_Call setExternalLine(\Bitrix\Voximplant\Model\EO_ExternalLine $object)
+	 * @method \Bitrix\Voximplant\Model\EO_Call resetExternalLine()
+	 * @method \Bitrix\Voximplant\Model\EO_Call unsetExternalLine()
+	 * @method bool hasExternalLine()
+	 * @method bool isExternalLineFilled()
+	 * @method bool isExternalLineChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine fillExternalLine()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Call set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_Call reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_Call unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_Call wakeUp($data)
+	 */
+	class EO_Call {
+		/* @var \Bitrix\Voximplant\Model\CallTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\CallTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_Call_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getConfigIdList()
+	 * @method \int[] fillConfigId()
+	 * @method \int[] getUserIdList()
+	 * @method \int[] fillUserId()
+	 * @method \int[] getPortalUserIdList()
+	 * @method \int[] fillPortalUserId()
+	 * @method \string[] getCallIdList()
+	 * @method \string[] fillCallId()
+	 * @method \string[] getExternalCallIdList()
+	 * @method \string[] fillExternalCallId()
+	 * @method \string[] getIncomingList()
+	 * @method \string[] fillIncoming()
+	 * @method \string[] getCallerIdList()
+	 * @method \string[] fillCallerId()
+	 * @method \string[] getStatusList()
+	 * @method \string[] fillStatus()
+	 * @method \boolean[] getCrmList()
+	 * @method \boolean[] fillCrm()
+	 * @method \int[] getCrmActivityIdList()
+	 * @method \int[] fillCrmActivityId()
+	 * @method \int[] getCrmCallListList()
+	 * @method \int[] fillCrmCallList()
+	 * @method \string[] getCrmBindingsList()
+	 * @method \string[] fillCrmBindings()
+	 * @method \string[] getAccessUrlList()
+	 * @method \string[] fillAccessUrl()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \int[] getRestAppIdList()
+	 * @method \int[] fillRestAppId()
+	 * @method \int[] getExternalLineIdList()
+	 * @method \int[] fillExternalLineId()
+	 * @method \string[] getPortalNumberList()
+	 * @method \string[] fillPortalNumber()
+	 * @method \string[] getStageList()
+	 * @method \string[] fillStage()
+	 * @method \int[] getIvrActionIdList()
+	 * @method \int[] fillIvrActionId()
+	 * @method \int[] getQueueIdList()
+	 * @method \int[] fillQueueId()
+	 * @method \string[] getQueueHistoryList()
+	 * @method \string[] fillQueueHistory()
+	 * @method \int[] getSessionIdList()
+	 * @method \int[] fillSessionId()
+	 * @method \string[] getCallbackParametersList()
+	 * @method \string[] fillCallbackParameters()
+	 * @method \string[] getCommentList()
+	 * @method \string[] fillComment()
+	 * @method \boolean[] getWorktimeSkippedList()
+	 * @method \boolean[] fillWorktimeSkipped()
+	 * @method \string[] getSipHeadersList()
+	 * @method \string[] fillSipHeaders()
+	 * @method \string[] getGatheredDigitsList()
+	 * @method \string[] fillGatheredDigits()
+	 * @method \string[] getParentCallIdList()
+	 * @method \string[] fillParentCallId()
+	 * @method \Bitrix\Main\Type\DateTime[] getLastPingList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillLastPing()
+	 * @method \string[] getExecutionGraphList()
+	 * @method \string[] fillExecutionGraph()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue[] getQueueList()
+	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection getQueueCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Queue_Collection fillQueue()
+	 * @method \Bitrix\Voximplant\EO_Config[] getConfigList()
+	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection getConfigCollection()
+	 * @method \Bitrix\Voximplant\EO_Config_Collection fillConfig()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine[] getExternalLineList()
+	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection getExternalLineCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection fillExternalLine()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_Call $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_Call $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Call getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_Call[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_Call $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_Call_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_Call current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_Call_Collection merge(?EO_Call_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_Call_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\CallTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\CallTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_Call_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_Call fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_Call_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Call fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection fetchCollection()
+	 */
+	class EO_Call_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_Call createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Call wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_Call_Collection wakeUpCollection($rows)
+	 */
+	class EO_Call_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\ExternalLineTable:voximplant/lib/model/externalline.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_ExternalLine
+	 * @see \Bitrix\Voximplant\Model\ExternalLineTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getType()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setType(\string|\Bitrix\Main\DB\SqlExpression $type)
+	 * @method bool hasType()
+	 * @method bool isTypeFilled()
+	 * @method bool isTypeChanged()
+	 * @method \string remindActualType()
+	 * @method \string requireType()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetType()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetType()
+	 * @method \string fillType()
+	 * @method \string getNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setNumber(\string|\Bitrix\Main\DB\SqlExpression $number)
+	 * @method bool hasNumber()
+	 * @method bool isNumberFilled()
+	 * @method bool isNumberChanged()
+	 * @method \string remindActualNumber()
+	 * @method \string requireNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetNumber()
+	 * @method \string fillNumber()
+	 * @method \string getNormalizedNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setNormalizedNumber(\string|\Bitrix\Main\DB\SqlExpression $normalizedNumber)
+	 * @method bool hasNormalizedNumber()
+	 * @method bool isNormalizedNumberFilled()
+	 * @method bool isNormalizedNumberChanged()
+	 * @method \string remindActualNormalizedNumber()
+	 * @method \string requireNormalizedNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetNormalizedNumber()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetNormalizedNumber()
+	 * @method \string fillNormalizedNumber()
+	 * @method \string getName()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetName()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetName()
+	 * @method \string fillName()
+	 * @method \int getRestAppId()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setRestAppId(\int|\Bitrix\Main\DB\SqlExpression $restAppId)
+	 * @method bool hasRestAppId()
+	 * @method bool isRestAppIdFilled()
+	 * @method bool isRestAppIdChanged()
+	 * @method \int remindActualRestAppId()
+	 * @method \int requireRestAppId()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetRestAppId()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetRestAppId()
+	 * @method \int fillRestAppId()
+	 * @method \int getSipId()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setSipId(\int|\Bitrix\Main\DB\SqlExpression $sipId)
+	 * @method bool hasSipId()
+	 * @method bool isSipIdFilled()
+	 * @method bool isSipIdChanged()
+	 * @method \int remindActualSipId()
+	 * @method \int requireSipId()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetSipId()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetSipId()
+	 * @method \int fillSipId()
+	 * @method \boolean getIsManual()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setIsManual(\boolean|\Bitrix\Main\DB\SqlExpression $isManual)
+	 * @method bool hasIsManual()
+	 * @method bool isIsManualFilled()
+	 * @method bool isIsManualChanged()
+	 * @method \boolean remindActualIsManual()
+	 * @method \boolean requireIsManual()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetIsManual()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetIsManual()
+	 * @method \boolean fillIsManual()
+	 * @method \boolean getCrmAutoCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setCrmAutoCreate(\boolean|\Bitrix\Main\DB\SqlExpression $crmAutoCreate)
+	 * @method bool hasCrmAutoCreate()
+	 * @method bool isCrmAutoCreateFilled()
+	 * @method bool isCrmAutoCreateChanged()
+	 * @method \boolean remindActualCrmAutoCreate()
+	 * @method \boolean requireCrmAutoCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetCrmAutoCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetCrmAutoCreate()
+	 * @method \boolean fillCrmAutoCreate()
+	 * @method \Bitrix\Main\Type\DateTime getDateCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setDateCreate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateCreate)
+	 * @method bool hasDateCreate()
+	 * @method bool isDateCreateFilled()
+	 * @method bool isDateCreateChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime requireDateCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetDateCreate()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime getDateLastUsed()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setDateLastUsed(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $dateLastUsed)
+	 * @method bool hasDateLastUsed()
+	 * @method bool isDateLastUsedFilled()
+	 * @method bool isDateLastUsedChanged()
+	 * @method \Bitrix\Main\Type\DateTime remindActualDateLastUsed()
+	 * @method \Bitrix\Main\Type\DateTime requireDateLastUsed()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetDateLastUsed()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetDateLastUsed()
+	 * @method \Bitrix\Main\Type\DateTime fillDateLastUsed()
+	 * @method \Bitrix\Voximplant\EO_Sip getSip()
+	 * @method \Bitrix\Voximplant\EO_Sip remindActualSip()
+	 * @method \Bitrix\Voximplant\EO_Sip requireSip()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine setSip(\Bitrix\Voximplant\EO_Sip $object)
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine resetSip()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unsetSip()
+	 * @method bool hasSip()
+	 * @method bool isSipFilled()
+	 * @method bool isSipChanged()
+	 * @method \Bitrix\Voximplant\EO_Sip fillSip()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_ExternalLine wakeUp($data)
+	 */
+	class EO_ExternalLine {
+		/* @var \Bitrix\Voximplant\Model\ExternalLineTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\ExternalLineTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_ExternalLine_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getTypeList()
+	 * @method \string[] fillType()
+	 * @method \string[] getNumberList()
+	 * @method \string[] fillNumber()
+	 * @method \string[] getNormalizedNumberList()
+	 * @method \string[] fillNormalizedNumber()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \int[] getRestAppIdList()
+	 * @method \int[] fillRestAppId()
+	 * @method \int[] getSipIdList()
+	 * @method \int[] fillSipId()
+	 * @method \boolean[] getIsManualList()
+	 * @method \boolean[] fillIsManual()
+	 * @method \boolean[] getCrmAutoCreateList()
+	 * @method \boolean[] fillCrmAutoCreate()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateCreateList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateCreate()
+	 * @method \Bitrix\Main\Type\DateTime[] getDateLastUsedList()
+	 * @method \Bitrix\Main\Type\DateTime[] fillDateLastUsed()
+	 * @method \Bitrix\Voximplant\EO_Sip[] getSipList()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection getSipCollection()
+	 * @method \Bitrix\Voximplant\EO_Sip_Collection fillSip()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_ExternalLine $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_ExternalLine $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_ExternalLine $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_ExternalLine_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_ExternalLine_Collection merge(?EO_ExternalLine_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_ExternalLine_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\ExternalLineTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\ExternalLineTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_ExternalLine_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_ExternalLine_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection fetchCollection()
+	 */
+	class EO_ExternalLine_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_ExternalLine_Collection wakeUpCollection($rows)
+	 */
+	class EO_ExternalLine_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\IvrItemTable:voximplant/lib/model/ivritem.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_IvrItem
+	 * @see \Bitrix\Voximplant\Model\IvrItemTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \string getCode()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setCode(\string|\Bitrix\Main\DB\SqlExpression $code)
+	 * @method bool hasCode()
+	 * @method bool isCodeFilled()
+	 * @method bool isCodeChanged()
+	 * @method \string remindActualCode()
+	 * @method \string requireCode()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetCode()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetCode()
+	 * @method \string fillCode()
+	 * @method \int getIvrId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setIvrId(\int|\Bitrix\Main\DB\SqlExpression $ivrId)
+	 * @method bool hasIvrId()
+	 * @method bool isIvrIdFilled()
+	 * @method bool isIvrIdChanged()
+	 * @method \int remindActualIvrId()
+	 * @method \int requireIvrId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetIvrId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetIvrId()
+	 * @method \int fillIvrId()
+	 * @method \string getName()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setName(\string|\Bitrix\Main\DB\SqlExpression $name)
+	 * @method bool hasName()
+	 * @method bool isNameFilled()
+	 * @method bool isNameChanged()
+	 * @method \string remindActualName()
+	 * @method \string requireName()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetName()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetName()
+	 * @method \string fillName()
+	 * @method \string getType()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setType(\string|\Bitrix\Main\DB\SqlExpression $type)
+	 * @method bool hasType()
+	 * @method bool isTypeFilled()
+	 * @method bool isTypeChanged()
+	 * @method \string remindActualType()
+	 * @method \string requireType()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetType()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetType()
+	 * @method \string fillType()
+	 * @method \string getUrl()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setUrl(\string|\Bitrix\Main\DB\SqlExpression $url)
+	 * @method bool hasUrl()
+	 * @method bool isUrlFilled()
+	 * @method bool isUrlChanged()
+	 * @method \string remindActualUrl()
+	 * @method \string requireUrl()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetUrl()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetUrl()
+	 * @method \string fillUrl()
+	 * @method \string getMessage()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setMessage(\string|\Bitrix\Main\DB\SqlExpression $message)
+	 * @method bool hasMessage()
+	 * @method bool isMessageFilled()
+	 * @method bool isMessageChanged()
+	 * @method \string remindActualMessage()
+	 * @method \string requireMessage()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetMessage()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetMessage()
+	 * @method \string fillMessage()
+	 * @method \int getFileId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setFileId(\int|\Bitrix\Main\DB\SqlExpression $fileId)
+	 * @method bool hasFileId()
+	 * @method bool isFileIdFilled()
+	 * @method bool isFileIdChanged()
+	 * @method \int remindActualFileId()
+	 * @method \int requireFileId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetFileId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetFileId()
+	 * @method \int fillFileId()
+	 * @method \int getTimeout()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTimeout(\int|\Bitrix\Main\DB\SqlExpression $timeout)
+	 * @method bool hasTimeout()
+	 * @method bool isTimeoutFilled()
+	 * @method bool isTimeoutChanged()
+	 * @method \int remindActualTimeout()
+	 * @method \int requireTimeout()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTimeout()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTimeout()
+	 * @method \int fillTimeout()
+	 * @method \string getTimeoutAction()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTimeoutAction(\string|\Bitrix\Main\DB\SqlExpression $timeoutAction)
+	 * @method bool hasTimeoutAction()
+	 * @method bool isTimeoutActionFilled()
+	 * @method bool isTimeoutActionChanged()
+	 * @method \string remindActualTimeoutAction()
+	 * @method \string requireTimeoutAction()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTimeoutAction()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTimeoutAction()
+	 * @method \string fillTimeoutAction()
+	 * @method \string getTtsVoice()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTtsVoice(\string|\Bitrix\Main\DB\SqlExpression $ttsVoice)
+	 * @method bool hasTtsVoice()
+	 * @method bool isTtsVoiceFilled()
+	 * @method bool isTtsVoiceChanged()
+	 * @method \string remindActualTtsVoice()
+	 * @method \string requireTtsVoice()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTtsVoice()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTtsVoice()
+	 * @method \string fillTtsVoice()
+	 * @method \string getTtsSpeed()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTtsSpeed(\string|\Bitrix\Main\DB\SqlExpression $ttsSpeed)
+	 * @method bool hasTtsSpeed()
+	 * @method bool isTtsSpeedFilled()
+	 * @method bool isTtsSpeedChanged()
+	 * @method \string remindActualTtsSpeed()
+	 * @method \string requireTtsSpeed()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTtsSpeed()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTtsSpeed()
+	 * @method \string fillTtsSpeed()
+	 * @method \string getTtsVolume()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setTtsVolume(\string|\Bitrix\Main\DB\SqlExpression $ttsVolume)
+	 * @method bool hasTtsVolume()
+	 * @method bool isTtsVolumeFilled()
+	 * @method bool isTtsVolumeChanged()
+	 * @method \string remindActualTtsVolume()
+	 * @method \string requireTtsVolume()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetTtsVolume()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetTtsVolume()
+	 * @method \string fillTtsVolume()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr getIvr()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr remindActualIvr()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr requireIvr()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem setIvr(\Bitrix\Voximplant\Model\EO_Ivr $object)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem resetIvr()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unsetIvr()
+	 * @method bool hasIvr()
+	 * @method bool isIvrFilled()
+	 * @method bool isIvrChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr fillIvr()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_IvrItem wakeUp($data)
+	 */
+	class EO_IvrItem {
+		/* @var \Bitrix\Voximplant\Model\IvrItemTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\IvrItemTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_IvrItem_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \string[] getCodeList()
+	 * @method \string[] fillCode()
+	 * @method \int[] getIvrIdList()
+	 * @method \int[] fillIvrId()
+	 * @method \string[] getNameList()
+	 * @method \string[] fillName()
+	 * @method \string[] getTypeList()
+	 * @method \string[] fillType()
+	 * @method \string[] getUrlList()
+	 * @method \string[] fillUrl()
+	 * @method \string[] getMessageList()
+	 * @method \string[] fillMessage()
+	 * @method \int[] getFileIdList()
+	 * @method \int[] fillFileId()
+	 * @method \int[] getTimeoutList()
+	 * @method \int[] fillTimeout()
+	 * @method \string[] getTimeoutActionList()
+	 * @method \string[] fillTimeoutAction()
+	 * @method \string[] getTtsVoiceList()
+	 * @method \string[] fillTtsVoice()
+	 * @method \string[] getTtsSpeedList()
+	 * @method \string[] fillTtsSpeed()
+	 * @method \string[] getTtsVolumeList()
+	 * @method \string[] fillTtsVolume()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr[] getIvrList()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection getIvrCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_Ivr_Collection fillIvr()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_IvrItem $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_IvrItem $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_IvrItem $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_IvrItem_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_IvrItem_Collection merge(?EO_IvrItem_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_IvrItem_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\IvrItemTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\IvrItemTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_IvrItem_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_IvrItem_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection fetchCollection()
+	 */
+	class EO_IvrItem_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection wakeUpCollection($rows)
+	 */
+	class EO_IvrItem_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\Model\IvrActionTable:voximplant/lib/model/ivraction.php */
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_IvrAction
+	 * @see \Bitrix\Voximplant\Model\IvrActionTable
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int getId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setId(\int|\Bitrix\Main\DB\SqlExpression $id)
+	 * @method bool hasId()
+	 * @method bool isIdFilled()
+	 * @method bool isIdChanged()
+	 * @method \int getItemId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setItemId(\int|\Bitrix\Main\DB\SqlExpression $itemId)
+	 * @method bool hasItemId()
+	 * @method bool isItemIdFilled()
+	 * @method bool isItemIdChanged()
+	 * @method \int remindActualItemId()
+	 * @method \int requireItemId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetItemId()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetItemId()
+	 * @method \int fillItemId()
+	 * @method \string getDigit()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setDigit(\string|\Bitrix\Main\DB\SqlExpression $digit)
+	 * @method bool hasDigit()
+	 * @method bool isDigitFilled()
+	 * @method bool isDigitChanged()
+	 * @method \string remindActualDigit()
+	 * @method \string requireDigit()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetDigit()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetDigit()
+	 * @method \string fillDigit()
+	 * @method \string getAction()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setAction(\string|\Bitrix\Main\DB\SqlExpression $action)
+	 * @method bool hasAction()
+	 * @method bool isActionFilled()
+	 * @method bool isActionChanged()
+	 * @method \string remindActualAction()
+	 * @method \string requireAction()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetAction()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetAction()
+	 * @method \string fillAction()
+	 * @method \string getParameters()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setParameters(\string|\Bitrix\Main\DB\SqlExpression $parameters)
+	 * @method bool hasParameters()
+	 * @method bool isParametersFilled()
+	 * @method bool isParametersChanged()
+	 * @method \string remindActualParameters()
+	 * @method \string requireParameters()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetParameters()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetParameters()
+	 * @method \string fillParameters()
+	 * @method \string getLeadFields()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setLeadFields(\string|\Bitrix\Main\DB\SqlExpression $leadFields)
+	 * @method bool hasLeadFields()
+	 * @method bool isLeadFieldsFilled()
+	 * @method bool isLeadFieldsChanged()
+	 * @method \string remindActualLeadFields()
+	 * @method \string requireLeadFields()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetLeadFields()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetLeadFields()
+	 * @method \string fillLeadFields()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem getItem()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem remindActualItem()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem requireItem()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction setItem(\Bitrix\Voximplant\Model\EO_IvrItem $object)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction resetItem()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unsetItem()
+	 * @method bool hasItem()
+	 * @method bool isItemFilled()
+	 * @method bool isItemChanged()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem fillItem()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @property-read array $primary
+	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
+	 * @property-read \Bitrix\Main\Type\Dictionary $customData
+	 * @property \Bitrix\Main\Authentication\Context $authContext
+	 * @method mixed get($fieldName)
+	 * @method mixed remindActual($fieldName)
+	 * @method mixed require($fieldName)
+	 * @method bool has($fieldName)
+	 * @method bool isFilled($fieldName)
+	 * @method bool isChanged($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction set($fieldName, $value)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction reset($fieldName)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction unset($fieldName)
+	 * @method void addTo($fieldName, $value)
+	 * @method void removeFrom($fieldName, $value)
+	 * @method void removeAll($fieldName)
+	 * @method \Bitrix\Main\ORM\Data\Result delete()
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
+	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
+	 * @method static \Bitrix\Voximplant\Model\EO_IvrAction wakeUp($data)
+	 */
+	class EO_IvrAction {
+		/* @var \Bitrix\Voximplant\Model\IvrActionTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\IvrActionTable';
+		/**
+		 * @param bool|array $setDefaultValues
+		 */
+		public function __construct($setDefaultValues = true) {}
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * EO_IvrAction_Collection
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 * @method \int[] getIdList()
+	 * @method \int[] getItemIdList()
+	 * @method \int[] fillItemId()
+	 * @method \string[] getDigitList()
+	 * @method \string[] fillDigit()
+	 * @method \string[] getActionList()
+	 * @method \string[] fillAction()
+	 * @method \string[] getParametersList()
+	 * @method \string[] fillParameters()
+	 * @method \string[] getLeadFieldsList()
+	 * @method \string[] fillLeadFields()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem[] getItemList()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection getItemCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrItem_Collection fillItem()
+	 *
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @property-read \Bitrix\Main\ORM\Entity $entity
+	 * @method void add(\Bitrix\Voximplant\Model\EO_IvrAction $object)
+	 * @method bool has(\Bitrix\Voximplant\Model\EO_IvrAction $object)
+	 * @method bool hasByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction getByPrimary($primary)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction[] getAll()
+	 * @method bool remove(\Bitrix\Voximplant\Model\EO_IvrAction $object)
+	 * @method void removeByPrimary($primary)
+	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
+	 * @method static \Bitrix\Voximplant\Model\EO_IvrAction_Collection wakeUp($data)
+	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
+	 * @method void offsetSet() ArrayAccess
+	 * @method void offsetExists() ArrayAccess
+	 * @method void offsetUnset() ArrayAccess
+	 * @method void offsetGet() ArrayAccess
+	 * @method void rewind() Iterator
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction current() Iterator
+	 * @method mixed key() Iterator
+	 * @method void next() Iterator
+	 * @method bool valid() Iterator
+	 * @method int count() Countable
+	 * @method EO_IvrAction_Collection merge(?EO_IvrAction_Collection $collection)
+	 * @method bool isEmpty()
+	 */
+	class EO_IvrAction_Collection implements \ArrayAccess, \Iterator, \Countable {
+		/* @var \Bitrix\Voximplant\Model\IvrActionTable */
+		static public $dataClass = '\Bitrix\Voximplant\Model\IvrActionTable';
+	}
+}
+namespace Bitrix\Voximplant\Model {
+	/**
+	 * Common methods:
+	 * ---------------
+	 *
+	 * @method EO_IvrAction_Result exec()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection fetchCollection()
+	 *
+	 * Custom methods:
+	 * ---------------
+	 *
+	 */
+	class EO_IvrAction_Query extends \Bitrix\Main\ORM\Query\Query {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction fetchObject()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection fetchCollection()
+	 */
+	class EO_IvrAction_Result extends \Bitrix\Main\ORM\Query\Result {}
+	/**
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction createObject($setDefaultValues = true)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection createCollection()
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction wakeUpObject($row)
+	 * @method \Bitrix\Voximplant\Model\EO_IvrAction_Collection wakeUpCollection($rows)
+	 */
+	class EO_IvrAction_Entity extends \Bitrix\Main\ORM\Entity {}
+}
+/* ORMENTITYANNOTATION:Bitrix\Voximplant\PhoneTable:voximplant/lib/phone.php */
 namespace Bitrix\Voximplant {
 	/**
 	 * EO_Phone
@@ -5891,6 +6918,8 @@ namespace Bitrix\Voximplant {
 	 * @method void next() Iterator
 	 * @method bool valid() Iterator
 	 * @method int count() Countable
+	 * @method EO_Phone_Collection merge(?EO_Phone_Collection $collection)
+	 * @method bool isEmpty()
 	 */
 	class EO_Phone_Collection implements \ArrayAccess, \Iterator, \Countable {
 		/* @var \Bitrix\Voximplant\PhoneTable */
@@ -5923,913 +6952,4 @@ namespace Bitrix\Voximplant {
 	 * @method \Bitrix\Voximplant\EO_Phone_Collection wakeUpCollection($rows)
 	 */
 	class EO_Phone_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\SipTable:voximplant\lib\sip.php:9fd6e4ace3ac17a1c8e8dcdacbb559d6 */
-namespace Bitrix\Voximplant {
-	/**
-	 * EO_Sip
-	 * @see \Bitrix\Voximplant\SipTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\EO_Sip setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \string getType()
-	 * @method \Bitrix\Voximplant\EO_Sip setType(\string|\Bitrix\Main\DB\SqlExpression $type)
-	 * @method bool hasType()
-	 * @method bool isTypeFilled()
-	 * @method bool isTypeChanged()
-	 * @method \string remindActualType()
-	 * @method \string requireType()
-	 * @method \Bitrix\Voximplant\EO_Sip resetType()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetType()
-	 * @method \string fillType()
-	 * @method \string getTitle()
-	 * @method \string remindActualTitle()
-	 * @method \string requireTitle()
-	 * @method bool hasTitle()
-	 * @method bool isTitleFilled()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetTitle()
-	 * @method \string fillTitle()
-	 * @method \int getConfigId()
-	 * @method \Bitrix\Voximplant\EO_Sip setConfigId(\int|\Bitrix\Main\DB\SqlExpression $configId)
-	 * @method bool hasConfigId()
-	 * @method bool isConfigIdFilled()
-	 * @method bool isConfigIdChanged()
-	 * @method \int remindActualConfigId()
-	 * @method \int requireConfigId()
-	 * @method \Bitrix\Voximplant\EO_Sip resetConfigId()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetConfigId()
-	 * @method \int fillConfigId()
-	 * @method \int getRegId()
-	 * @method \Bitrix\Voximplant\EO_Sip setRegId(\int|\Bitrix\Main\DB\SqlExpression $regId)
-	 * @method bool hasRegId()
-	 * @method bool isRegIdFilled()
-	 * @method bool isRegIdChanged()
-	 * @method \int remindActualRegId()
-	 * @method \int requireRegId()
-	 * @method \Bitrix\Voximplant\EO_Sip resetRegId()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetRegId()
-	 * @method \int fillRegId()
-	 * @method \string getAppId()
-	 * @method \Bitrix\Voximplant\EO_Sip setAppId(\string|\Bitrix\Main\DB\SqlExpression $appId)
-	 * @method bool hasAppId()
-	 * @method bool isAppIdFilled()
-	 * @method bool isAppIdChanged()
-	 * @method \string remindActualAppId()
-	 * @method \string requireAppId()
-	 * @method \Bitrix\Voximplant\EO_Sip resetAppId()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetAppId()
-	 * @method \string fillAppId()
-	 * @method \string getServer()
-	 * @method \Bitrix\Voximplant\EO_Sip setServer(\string|\Bitrix\Main\DB\SqlExpression $server)
-	 * @method bool hasServer()
-	 * @method bool isServerFilled()
-	 * @method bool isServerChanged()
-	 * @method \string remindActualServer()
-	 * @method \string requireServer()
-	 * @method \Bitrix\Voximplant\EO_Sip resetServer()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetServer()
-	 * @method \string fillServer()
-	 * @method \string getLogin()
-	 * @method \Bitrix\Voximplant\EO_Sip setLogin(\string|\Bitrix\Main\DB\SqlExpression $login)
-	 * @method bool hasLogin()
-	 * @method bool isLoginFilled()
-	 * @method bool isLoginChanged()
-	 * @method \string remindActualLogin()
-	 * @method \string requireLogin()
-	 * @method \Bitrix\Voximplant\EO_Sip resetLogin()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetLogin()
-	 * @method \string fillLogin()
-	 * @method \string getPassword()
-	 * @method \Bitrix\Voximplant\EO_Sip setPassword(\string|\Bitrix\Main\DB\SqlExpression $password)
-	 * @method bool hasPassword()
-	 * @method bool isPasswordFilled()
-	 * @method bool isPasswordChanged()
-	 * @method \string remindActualPassword()
-	 * @method \string requirePassword()
-	 * @method \Bitrix\Voximplant\EO_Sip resetPassword()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetPassword()
-	 * @method \string fillPassword()
-	 * @method \string getIncomingServer()
-	 * @method \Bitrix\Voximplant\EO_Sip setIncomingServer(\string|\Bitrix\Main\DB\SqlExpression $incomingServer)
-	 * @method bool hasIncomingServer()
-	 * @method bool isIncomingServerFilled()
-	 * @method bool isIncomingServerChanged()
-	 * @method \string remindActualIncomingServer()
-	 * @method \string requireIncomingServer()
-	 * @method \Bitrix\Voximplant\EO_Sip resetIncomingServer()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetIncomingServer()
-	 * @method \string fillIncomingServer()
-	 * @method \string getIncomingLogin()
-	 * @method \Bitrix\Voximplant\EO_Sip setIncomingLogin(\string|\Bitrix\Main\DB\SqlExpression $incomingLogin)
-	 * @method bool hasIncomingLogin()
-	 * @method bool isIncomingLoginFilled()
-	 * @method bool isIncomingLoginChanged()
-	 * @method \string remindActualIncomingLogin()
-	 * @method \string requireIncomingLogin()
-	 * @method \Bitrix\Voximplant\EO_Sip resetIncomingLogin()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetIncomingLogin()
-	 * @method \string fillIncomingLogin()
-	 * @method \string getIncomingPassword()
-	 * @method \Bitrix\Voximplant\EO_Sip setIncomingPassword(\string|\Bitrix\Main\DB\SqlExpression $incomingPassword)
-	 * @method bool hasIncomingPassword()
-	 * @method bool isIncomingPasswordFilled()
-	 * @method bool isIncomingPasswordChanged()
-	 * @method \string remindActualIncomingPassword()
-	 * @method \string requireIncomingPassword()
-	 * @method \Bitrix\Voximplant\EO_Sip resetIncomingPassword()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetIncomingPassword()
-	 * @method \string fillIncomingPassword()
-	 * @method \string getAuthUser()
-	 * @method \Bitrix\Voximplant\EO_Sip setAuthUser(\string|\Bitrix\Main\DB\SqlExpression $authUser)
-	 * @method bool hasAuthUser()
-	 * @method bool isAuthUserFilled()
-	 * @method bool isAuthUserChanged()
-	 * @method \string remindActualAuthUser()
-	 * @method \string requireAuthUser()
-	 * @method \Bitrix\Voximplant\EO_Sip resetAuthUser()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetAuthUser()
-	 * @method \string fillAuthUser()
-	 * @method \string getOutboundProxy()
-	 * @method \Bitrix\Voximplant\EO_Sip setOutboundProxy(\string|\Bitrix\Main\DB\SqlExpression $outboundProxy)
-	 * @method bool hasOutboundProxy()
-	 * @method bool isOutboundProxyFilled()
-	 * @method bool isOutboundProxyChanged()
-	 * @method \string remindActualOutboundProxy()
-	 * @method \string requireOutboundProxy()
-	 * @method \Bitrix\Voximplant\EO_Sip resetOutboundProxy()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetOutboundProxy()
-	 * @method \string fillOutboundProxy()
-	 * @method \boolean getDetectLineNumber()
-	 * @method \Bitrix\Voximplant\EO_Sip setDetectLineNumber(\boolean|\Bitrix\Main\DB\SqlExpression $detectLineNumber)
-	 * @method bool hasDetectLineNumber()
-	 * @method bool isDetectLineNumberFilled()
-	 * @method bool isDetectLineNumberChanged()
-	 * @method \boolean remindActualDetectLineNumber()
-	 * @method \boolean requireDetectLineNumber()
-	 * @method \Bitrix\Voximplant\EO_Sip resetDetectLineNumber()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetDetectLineNumber()
-	 * @method \boolean fillDetectLineNumber()
-	 * @method \string getLineDetectHeaderOrder()
-	 * @method \Bitrix\Voximplant\EO_Sip setLineDetectHeaderOrder(\string|\Bitrix\Main\DB\SqlExpression $lineDetectHeaderOrder)
-	 * @method bool hasLineDetectHeaderOrder()
-	 * @method bool isLineDetectHeaderOrderFilled()
-	 * @method bool isLineDetectHeaderOrderChanged()
-	 * @method \string remindActualLineDetectHeaderOrder()
-	 * @method \string requireLineDetectHeaderOrder()
-	 * @method \Bitrix\Voximplant\EO_Sip resetLineDetectHeaderOrder()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetLineDetectHeaderOrder()
-	 * @method \string fillLineDetectHeaderOrder()
-	 * @method \Bitrix\Voximplant\EO_Config getConfig()
-	 * @method \Bitrix\Voximplant\EO_Config remindActualConfig()
-	 * @method \Bitrix\Voximplant\EO_Config requireConfig()
-	 * @method \Bitrix\Voximplant\EO_Sip setConfig(\Bitrix\Voximplant\EO_Config $object)
-	 * @method \Bitrix\Voximplant\EO_Sip resetConfig()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetConfig()
-	 * @method bool hasConfig()
-	 * @method bool isConfigFilled()
-	 * @method bool isConfigChanged()
-	 * @method \Bitrix\Voximplant\EO_Config fillConfig()
-	 * @method \int getRegistrationStatusCode()
-	 * @method \Bitrix\Voximplant\EO_Sip setRegistrationStatusCode(\int|\Bitrix\Main\DB\SqlExpression $registrationStatusCode)
-	 * @method bool hasRegistrationStatusCode()
-	 * @method bool isRegistrationStatusCodeFilled()
-	 * @method bool isRegistrationStatusCodeChanged()
-	 * @method \int remindActualRegistrationStatusCode()
-	 * @method \int requireRegistrationStatusCode()
-	 * @method \Bitrix\Voximplant\EO_Sip resetRegistrationStatusCode()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetRegistrationStatusCode()
-	 * @method \int fillRegistrationStatusCode()
-	 * @method \string getRegistrationErrorMessage()
-	 * @method \Bitrix\Voximplant\EO_Sip setRegistrationErrorMessage(\string|\Bitrix\Main\DB\SqlExpression $registrationErrorMessage)
-	 * @method bool hasRegistrationErrorMessage()
-	 * @method bool isRegistrationErrorMessageFilled()
-	 * @method bool isRegistrationErrorMessageChanged()
-	 * @method \string remindActualRegistrationErrorMessage()
-	 * @method \string requireRegistrationErrorMessage()
-	 * @method \Bitrix\Voximplant\EO_Sip resetRegistrationErrorMessage()
-	 * @method \Bitrix\Voximplant\EO_Sip unsetRegistrationErrorMessage()
-	 * @method \string fillRegistrationErrorMessage()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\EO_Sip set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\EO_Sip reset($fieldName)
-	 * @method \Bitrix\Voximplant\EO_Sip unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\EO_Sip wakeUp($data)
-	 */
-	class EO_Sip {
-		/* @var \Bitrix\Voximplant\SipTable */
-		static public $dataClass = '\Bitrix\Voximplant\SipTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant {
-	/**
-	 * EO_Sip_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \string[] getTypeList()
-	 * @method \string[] fillType()
-	 * @method \string[] getTitleList()
-	 * @method \string[] fillTitle()
-	 * @method \int[] getConfigIdList()
-	 * @method \int[] fillConfigId()
-	 * @method \int[] getRegIdList()
-	 * @method \int[] fillRegId()
-	 * @method \string[] getAppIdList()
-	 * @method \string[] fillAppId()
-	 * @method \string[] getServerList()
-	 * @method \string[] fillServer()
-	 * @method \string[] getLoginList()
-	 * @method \string[] fillLogin()
-	 * @method \string[] getPasswordList()
-	 * @method \string[] fillPassword()
-	 * @method \string[] getIncomingServerList()
-	 * @method \string[] fillIncomingServer()
-	 * @method \string[] getIncomingLoginList()
-	 * @method \string[] fillIncomingLogin()
-	 * @method \string[] getIncomingPasswordList()
-	 * @method \string[] fillIncomingPassword()
-	 * @method \string[] getAuthUserList()
-	 * @method \string[] fillAuthUser()
-	 * @method \string[] getOutboundProxyList()
-	 * @method \string[] fillOutboundProxy()
-	 * @method \boolean[] getDetectLineNumberList()
-	 * @method \boolean[] fillDetectLineNumber()
-	 * @method \string[] getLineDetectHeaderOrderList()
-	 * @method \string[] fillLineDetectHeaderOrder()
-	 * @method \Bitrix\Voximplant\EO_Config[] getConfigList()
-	 * @method \Bitrix\Voximplant\EO_Sip_Collection getConfigCollection()
-	 * @method \Bitrix\Voximplant\EO_Config_Collection fillConfig()
-	 * @method \int[] getRegistrationStatusCodeList()
-	 * @method \int[] fillRegistrationStatusCode()
-	 * @method \string[] getRegistrationErrorMessageList()
-	 * @method \string[] fillRegistrationErrorMessage()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\EO_Sip $object)
-	 * @method bool has(\Bitrix\Voximplant\EO_Sip $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\EO_Sip getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\EO_Sip[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\EO_Sip $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\EO_Sip_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\EO_Sip current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_Sip_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\SipTable */
-		static public $dataClass = '\Bitrix\Voximplant\SipTable';
-	}
-}
-namespace Bitrix\Voximplant {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Sip_Result exec()
-	 * @method \Bitrix\Voximplant\EO_Sip fetchObject()
-	 * @method \Bitrix\Voximplant\EO_Sip_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Sip_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\EO_Sip fetchObject()
-	 * @method \Bitrix\Voximplant\EO_Sip_Collection fetchCollection()
-	 */
-	class EO_Sip_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\EO_Sip createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\EO_Sip_Collection createCollection()
-	 * @method \Bitrix\Voximplant\EO_Sip wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\EO_Sip_Collection wakeUpCollection($rows)
-	 */
-	class EO_Sip_Entity extends \Bitrix\Main\ORM\Entity {}
-}
-/* ORMENTITYANNOTATION:Bitrix\Voximplant\StatisticTable:voximplant\lib\statistic.php:8858bfd7d5bd6ba373ded1017db389cc */
-namespace Bitrix\Voximplant {
-	/**
-	 * EO_Statistic
-	 * @see \Bitrix\Voximplant\StatisticTable
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int getId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setId(\int|\Bitrix\Main\DB\SqlExpression $id)
-	 * @method bool hasId()
-	 * @method bool isIdFilled()
-	 * @method bool isIdChanged()
-	 * @method \int getAccountId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setAccountId(\int|\Bitrix\Main\DB\SqlExpression $accountId)
-	 * @method bool hasAccountId()
-	 * @method bool isAccountIdFilled()
-	 * @method bool isAccountIdChanged()
-	 * @method \int remindActualAccountId()
-	 * @method \int requireAccountId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetAccountId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetAccountId()
-	 * @method \int fillAccountId()
-	 * @method \int getApplicationId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setApplicationId(\int|\Bitrix\Main\DB\SqlExpression $applicationId)
-	 * @method bool hasApplicationId()
-	 * @method bool isApplicationIdFilled()
-	 * @method bool isApplicationIdChanged()
-	 * @method \int remindActualApplicationId()
-	 * @method \int requireApplicationId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetApplicationId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetApplicationId()
-	 * @method \int fillApplicationId()
-	 * @method \string getApplicationName()
-	 * @method \Bitrix\Voximplant\EO_Statistic setApplicationName(\string|\Bitrix\Main\DB\SqlExpression $applicationName)
-	 * @method bool hasApplicationName()
-	 * @method bool isApplicationNameFilled()
-	 * @method bool isApplicationNameChanged()
-	 * @method \string remindActualApplicationName()
-	 * @method \string requireApplicationName()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetApplicationName()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetApplicationName()
-	 * @method \string fillApplicationName()
-	 * @method \int getPortalUserId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setPortalUserId(\int|\Bitrix\Main\DB\SqlExpression $portalUserId)
-	 * @method bool hasPortalUserId()
-	 * @method bool isPortalUserIdFilled()
-	 * @method bool isPortalUserIdChanged()
-	 * @method \int remindActualPortalUserId()
-	 * @method \int requirePortalUserId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetPortalUserId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetPortalUserId()
-	 * @method \int fillPortalUserId()
-	 * @method \string getPortalNumber()
-	 * @method \Bitrix\Voximplant\EO_Statistic setPortalNumber(\string|\Bitrix\Main\DB\SqlExpression $portalNumber)
-	 * @method bool hasPortalNumber()
-	 * @method bool isPortalNumberFilled()
-	 * @method bool isPortalNumberChanged()
-	 * @method \string remindActualPortalNumber()
-	 * @method \string requirePortalNumber()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetPortalNumber()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetPortalNumber()
-	 * @method \string fillPortalNumber()
-	 * @method \string getPhoneNumber()
-	 * @method \Bitrix\Voximplant\EO_Statistic setPhoneNumber(\string|\Bitrix\Main\DB\SqlExpression $phoneNumber)
-	 * @method bool hasPhoneNumber()
-	 * @method bool isPhoneNumberFilled()
-	 * @method bool isPhoneNumberChanged()
-	 * @method \string remindActualPhoneNumber()
-	 * @method \string requirePhoneNumber()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetPhoneNumber()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetPhoneNumber()
-	 * @method \string fillPhoneNumber()
-	 * @method \string getIncoming()
-	 * @method \Bitrix\Voximplant\EO_Statistic setIncoming(\string|\Bitrix\Main\DB\SqlExpression $incoming)
-	 * @method bool hasIncoming()
-	 * @method bool isIncomingFilled()
-	 * @method bool isIncomingChanged()
-	 * @method \string remindActualIncoming()
-	 * @method \string requireIncoming()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetIncoming()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetIncoming()
-	 * @method \string fillIncoming()
-	 * @method \string getCallId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallId(\string|\Bitrix\Main\DB\SqlExpression $callId)
-	 * @method bool hasCallId()
-	 * @method bool isCallIdFilled()
-	 * @method bool isCallIdChanged()
-	 * @method \string remindActualCallId()
-	 * @method \string requireCallId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallId()
-	 * @method \string fillCallId()
-	 * @method \string getExternalCallId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setExternalCallId(\string|\Bitrix\Main\DB\SqlExpression $externalCallId)
-	 * @method bool hasExternalCallId()
-	 * @method bool isExternalCallIdFilled()
-	 * @method bool isExternalCallIdChanged()
-	 * @method \string remindActualExternalCallId()
-	 * @method \string requireExternalCallId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetExternalCallId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetExternalCallId()
-	 * @method \string fillExternalCallId()
-	 * @method \string getCallCategory()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallCategory(\string|\Bitrix\Main\DB\SqlExpression $callCategory)
-	 * @method bool hasCallCategory()
-	 * @method bool isCallCategoryFilled()
-	 * @method bool isCallCategoryChanged()
-	 * @method \string remindActualCallCategory()
-	 * @method \string requireCallCategory()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallCategory()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallCategory()
-	 * @method \string fillCallCategory()
-	 * @method \string getCallLog()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallLog(\string|\Bitrix\Main\DB\SqlExpression $callLog)
-	 * @method bool hasCallLog()
-	 * @method bool isCallLogFilled()
-	 * @method bool isCallLogChanged()
-	 * @method \string remindActualCallLog()
-	 * @method \string requireCallLog()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallLog()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallLog()
-	 * @method \string fillCallLog()
-	 * @method \string getCallDirection()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallDirection(\string|\Bitrix\Main\DB\SqlExpression $callDirection)
-	 * @method bool hasCallDirection()
-	 * @method bool isCallDirectionFilled()
-	 * @method bool isCallDirectionChanged()
-	 * @method \string remindActualCallDirection()
-	 * @method \string requireCallDirection()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallDirection()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallDirection()
-	 * @method \string fillCallDirection()
-	 * @method \int getCallDuration()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallDuration(\int|\Bitrix\Main\DB\SqlExpression $callDuration)
-	 * @method bool hasCallDuration()
-	 * @method bool isCallDurationFilled()
-	 * @method bool isCallDurationChanged()
-	 * @method \int remindActualCallDuration()
-	 * @method \int requireCallDuration()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallDuration()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallDuration()
-	 * @method \int fillCallDuration()
-	 * @method \Bitrix\Main\Type\DateTime getCallStartDate()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallStartDate(\Bitrix\Main\Type\DateTime|\Bitrix\Main\DB\SqlExpression $callStartDate)
-	 * @method bool hasCallStartDate()
-	 * @method bool isCallStartDateFilled()
-	 * @method bool isCallStartDateChanged()
-	 * @method \Bitrix\Main\Type\DateTime remindActualCallStartDate()
-	 * @method \Bitrix\Main\Type\DateTime requireCallStartDate()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallStartDate()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallStartDate()
-	 * @method \Bitrix\Main\Type\DateTime fillCallStartDate()
-	 * @method \int getCallStatus()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallStatus(\int|\Bitrix\Main\DB\SqlExpression $callStatus)
-	 * @method bool hasCallStatus()
-	 * @method bool isCallStatusFilled()
-	 * @method bool isCallStatusChanged()
-	 * @method \int remindActualCallStatus()
-	 * @method \int requireCallStatus()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallStatus()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallStatus()
-	 * @method \int fillCallStatus()
-	 * @method \int getCallRecordId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallRecordId(\int|\Bitrix\Main\DB\SqlExpression $callRecordId)
-	 * @method bool hasCallRecordId()
-	 * @method bool isCallRecordIdFilled()
-	 * @method bool isCallRecordIdChanged()
-	 * @method \int remindActualCallRecordId()
-	 * @method \int requireCallRecordId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallRecordId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallRecordId()
-	 * @method \int fillCallRecordId()
-	 * @method \string getCallRecordUrl()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallRecordUrl(\string|\Bitrix\Main\DB\SqlExpression $callRecordUrl)
-	 * @method bool hasCallRecordUrl()
-	 * @method bool isCallRecordUrlFilled()
-	 * @method bool isCallRecordUrlChanged()
-	 * @method \string remindActualCallRecordUrl()
-	 * @method \string requireCallRecordUrl()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallRecordUrl()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallRecordUrl()
-	 * @method \string fillCallRecordUrl()
-	 * @method \int getCallWebdavId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallWebdavId(\int|\Bitrix\Main\DB\SqlExpression $callWebdavId)
-	 * @method bool hasCallWebdavId()
-	 * @method bool isCallWebdavIdFilled()
-	 * @method bool isCallWebdavIdChanged()
-	 * @method \int remindActualCallWebdavId()
-	 * @method \int requireCallWebdavId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallWebdavId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallWebdavId()
-	 * @method \int fillCallWebdavId()
-	 * @method \int getCallVote()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallVote(\int|\Bitrix\Main\DB\SqlExpression $callVote)
-	 * @method bool hasCallVote()
-	 * @method bool isCallVoteFilled()
-	 * @method bool isCallVoteChanged()
-	 * @method \int remindActualCallVote()
-	 * @method \int requireCallVote()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallVote()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallVote()
-	 * @method \int fillCallVote()
-	 * @method \float getCost()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCost(\float|\Bitrix\Main\DB\SqlExpression $cost)
-	 * @method bool hasCost()
-	 * @method bool isCostFilled()
-	 * @method bool isCostChanged()
-	 * @method \float remindActualCost()
-	 * @method \float requireCost()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCost()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCost()
-	 * @method \float fillCost()
-	 * @method \string getCostCurrency()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCostCurrency(\string|\Bitrix\Main\DB\SqlExpression $costCurrency)
-	 * @method bool hasCostCurrency()
-	 * @method bool isCostCurrencyFilled()
-	 * @method bool isCostCurrencyChanged()
-	 * @method \string remindActualCostCurrency()
-	 * @method \string requireCostCurrency()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCostCurrency()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCostCurrency()
-	 * @method \string fillCostCurrency()
-	 * @method \string getCallFailedCode()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallFailedCode(\string|\Bitrix\Main\DB\SqlExpression $callFailedCode)
-	 * @method bool hasCallFailedCode()
-	 * @method bool isCallFailedCodeFilled()
-	 * @method bool isCallFailedCodeChanged()
-	 * @method \string remindActualCallFailedCode()
-	 * @method \string requireCallFailedCode()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallFailedCode()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallFailedCode()
-	 * @method \string fillCallFailedCode()
-	 * @method \string getCallFailedReason()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCallFailedReason(\string|\Bitrix\Main\DB\SqlExpression $callFailedReason)
-	 * @method bool hasCallFailedReason()
-	 * @method bool isCallFailedReasonFilled()
-	 * @method bool isCallFailedReasonChanged()
-	 * @method \string remindActualCallFailedReason()
-	 * @method \string requireCallFailedReason()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCallFailedReason()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCallFailedReason()
-	 * @method \string fillCallFailedReason()
-	 * @method \string getCrmEntityType()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCrmEntityType(\string|\Bitrix\Main\DB\SqlExpression $crmEntityType)
-	 * @method bool hasCrmEntityType()
-	 * @method bool isCrmEntityTypeFilled()
-	 * @method bool isCrmEntityTypeChanged()
-	 * @method \string remindActualCrmEntityType()
-	 * @method \string requireCrmEntityType()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCrmEntityType()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCrmEntityType()
-	 * @method \string fillCrmEntityType()
-	 * @method \int getCrmEntityId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCrmEntityId(\int|\Bitrix\Main\DB\SqlExpression $crmEntityId)
-	 * @method bool hasCrmEntityId()
-	 * @method bool isCrmEntityIdFilled()
-	 * @method bool isCrmEntityIdChanged()
-	 * @method \int remindActualCrmEntityId()
-	 * @method \int requireCrmEntityId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCrmEntityId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCrmEntityId()
-	 * @method \int fillCrmEntityId()
-	 * @method \int getCrmActivityId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setCrmActivityId(\int|\Bitrix\Main\DB\SqlExpression $crmActivityId)
-	 * @method bool hasCrmActivityId()
-	 * @method bool isCrmActivityIdFilled()
-	 * @method bool isCrmActivityIdChanged()
-	 * @method \int remindActualCrmActivityId()
-	 * @method \int requireCrmActivityId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCrmActivityId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCrmActivityId()
-	 * @method \int fillCrmActivityId()
-	 * @method \int getRestAppId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setRestAppId(\int|\Bitrix\Main\DB\SqlExpression $restAppId)
-	 * @method bool hasRestAppId()
-	 * @method bool isRestAppIdFilled()
-	 * @method bool isRestAppIdChanged()
-	 * @method \int remindActualRestAppId()
-	 * @method \int requireRestAppId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetRestAppId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetRestAppId()
-	 * @method \int fillRestAppId()
-	 * @method \string getRestAppName()
-	 * @method \Bitrix\Voximplant\EO_Statistic setRestAppName(\string|\Bitrix\Main\DB\SqlExpression $restAppName)
-	 * @method bool hasRestAppName()
-	 * @method bool isRestAppNameFilled()
-	 * @method bool isRestAppNameChanged()
-	 * @method \string remindActualRestAppName()
-	 * @method \string requireRestAppName()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetRestAppName()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetRestAppName()
-	 * @method \string fillRestAppName()
-	 * @method \int getTranscriptId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setTranscriptId(\int|\Bitrix\Main\DB\SqlExpression $transcriptId)
-	 * @method bool hasTranscriptId()
-	 * @method bool isTranscriptIdFilled()
-	 * @method bool isTranscriptIdChanged()
-	 * @method \int remindActualTranscriptId()
-	 * @method \int requireTranscriptId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetTranscriptId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetTranscriptId()
-	 * @method \int fillTranscriptId()
-	 * @method \boolean getTranscriptPending()
-	 * @method \Bitrix\Voximplant\EO_Statistic setTranscriptPending(\boolean|\Bitrix\Main\DB\SqlExpression $transcriptPending)
-	 * @method bool hasTranscriptPending()
-	 * @method bool isTranscriptPendingFilled()
-	 * @method bool isTranscriptPendingChanged()
-	 * @method \boolean remindActualTranscriptPending()
-	 * @method \boolean requireTranscriptPending()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetTranscriptPending()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetTranscriptPending()
-	 * @method \boolean fillTranscriptPending()
-	 * @method \int getSessionId()
-	 * @method \Bitrix\Voximplant\EO_Statistic setSessionId(\int|\Bitrix\Main\DB\SqlExpression $sessionId)
-	 * @method bool hasSessionId()
-	 * @method bool isSessionIdFilled()
-	 * @method bool isSessionIdChanged()
-	 * @method \int remindActualSessionId()
-	 * @method \int requireSessionId()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetSessionId()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetSessionId()
-	 * @method \int fillSessionId()
-	 * @method \int getRedialAttempt()
-	 * @method \Bitrix\Voximplant\EO_Statistic setRedialAttempt(\int|\Bitrix\Main\DB\SqlExpression $redialAttempt)
-	 * @method bool hasRedialAttempt()
-	 * @method bool isRedialAttemptFilled()
-	 * @method bool isRedialAttemptChanged()
-	 * @method \int remindActualRedialAttempt()
-	 * @method \int requireRedialAttempt()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetRedialAttempt()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetRedialAttempt()
-	 * @method \int fillRedialAttempt()
-	 * @method \string getComment()
-	 * @method \Bitrix\Voximplant\EO_Statistic setComment(\string|\Bitrix\Main\DB\SqlExpression $comment)
-	 * @method bool hasComment()
-	 * @method bool isCommentFilled()
-	 * @method bool isCommentChanged()
-	 * @method \string remindActualComment()
-	 * @method \string requireComment()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetComment()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetComment()
-	 * @method \string fillComment()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex getSearchIndex()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex remindActualSearchIndex()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex requireSearchIndex()
-	 * @method \Bitrix\Voximplant\EO_Statistic setSearchIndex(\Bitrix\Voximplant\Model\EO_StatisticIndex $object)
-	 * @method \Bitrix\Voximplant\EO_Statistic resetSearchIndex()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetSearchIndex()
-	 * @method bool hasSearchIndex()
-	 * @method bool isSearchIndexFilled()
-	 * @method bool isSearchIndexChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex fillSearchIndex()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript getTranscript()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript remindActualTranscript()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript requireTranscript()
-	 * @method \Bitrix\Voximplant\EO_Statistic setTranscript(\Bitrix\Voximplant\Model\EO_Transcript $object)
-	 * @method \Bitrix\Voximplant\EO_Statistic resetTranscript()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetTranscript()
-	 * @method bool hasTranscript()
-	 * @method bool isTranscriptFilled()
-	 * @method bool isTranscriptChanged()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript fillTranscript()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection getCrmBindings()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection requireCrmBindings()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection fillCrmBindings()
-	 * @method bool hasCrmBindings()
-	 * @method bool isCrmBindingsFilled()
-	 * @method bool isCrmBindingsChanged()
-	 * @method void addToCrmBindings(\Bitrix\Voximplant\Model\EO_CallCrmEntity $callCrmEntity)
-	 * @method void removeFromCrmBindings(\Bitrix\Voximplant\Model\EO_CallCrmEntity $callCrmEntity)
-	 * @method void removeAllCrmBindings()
-	 * @method \Bitrix\Voximplant\EO_Statistic resetCrmBindings()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetCrmBindings()
-	 * @method \string getHasRecord()
-	 * @method \string remindActualHasRecord()
-	 * @method \string requireHasRecord()
-	 * @method bool hasHasRecord()
-	 * @method bool isHasRecordFilled()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetHasRecord()
-	 * @method \string fillHasRecord()
-	 * @method \string getTotalDuration()
-	 * @method \string remindActualTotalDuration()
-	 * @method \string requireTotalDuration()
-	 * @method bool hasTotalDuration()
-	 * @method bool isTotalDurationFilled()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetTotalDuration()
-	 * @method \string fillTotalDuration()
-	 * @method \string getTotalCost()
-	 * @method \string remindActualTotalCost()
-	 * @method \string requireTotalCost()
-	 * @method bool hasTotalCost()
-	 * @method bool isTotalCostFilled()
-	 * @method \Bitrix\Voximplant\EO_Statistic unsetTotalCost()
-	 * @method \string fillTotalCost()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @property-read array $primary
-	 * @property-read int $state @see \Bitrix\Main\ORM\Objectify\State
-	 * @property-read \Bitrix\Main\Type\Dictionary $customData
-	 * @property \Bitrix\Main\Authentication\Context $authContext
-	 * @method mixed get($fieldName)
-	 * @method mixed remindActual($fieldName)
-	 * @method mixed require($fieldName)
-	 * @method bool has($fieldName)
-	 * @method bool isFilled($fieldName)
-	 * @method bool isChanged($fieldName)
-	 * @method \Bitrix\Voximplant\EO_Statistic set($fieldName, $value)
-	 * @method \Bitrix\Voximplant\EO_Statistic reset($fieldName)
-	 * @method \Bitrix\Voximplant\EO_Statistic unset($fieldName)
-	 * @method void addTo($fieldName, $value)
-	 * @method void removeFrom($fieldName, $value)
-	 * @method void removeAll($fieldName)
-	 * @method \Bitrix\Main\ORM\Data\Result delete()
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method mixed[] collectValues($valuesType = \Bitrix\Main\ORM\Objectify\Values::ALL, $fieldsMask = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL)
-	 * @method \Bitrix\Main\ORM\Data\AddResult|\Bitrix\Main\ORM\Data\UpdateResult|\Bitrix\Main\ORM\Data\Result save()
-	 * @method static \Bitrix\Voximplant\EO_Statistic wakeUp($data)
-	 */
-	class EO_Statistic {
-		/* @var \Bitrix\Voximplant\StatisticTable */
-		static public $dataClass = '\Bitrix\Voximplant\StatisticTable';
-		/**
-		 * @param bool|array $setDefaultValues
-		 */
-		public function __construct($setDefaultValues = true) {}
-	}
-}
-namespace Bitrix\Voximplant {
-	/**
-	 * EO_Statistic_Collection
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 * @method \int[] getIdList()
-	 * @method \int[] getAccountIdList()
-	 * @method \int[] fillAccountId()
-	 * @method \int[] getApplicationIdList()
-	 * @method \int[] fillApplicationId()
-	 * @method \string[] getApplicationNameList()
-	 * @method \string[] fillApplicationName()
-	 * @method \int[] getPortalUserIdList()
-	 * @method \int[] fillPortalUserId()
-	 * @method \string[] getPortalNumberList()
-	 * @method \string[] fillPortalNumber()
-	 * @method \string[] getPhoneNumberList()
-	 * @method \string[] fillPhoneNumber()
-	 * @method \string[] getIncomingList()
-	 * @method \string[] fillIncoming()
-	 * @method \string[] getCallIdList()
-	 * @method \string[] fillCallId()
-	 * @method \string[] getExternalCallIdList()
-	 * @method \string[] fillExternalCallId()
-	 * @method \string[] getCallCategoryList()
-	 * @method \string[] fillCallCategory()
-	 * @method \string[] getCallLogList()
-	 * @method \string[] fillCallLog()
-	 * @method \string[] getCallDirectionList()
-	 * @method \string[] fillCallDirection()
-	 * @method \int[] getCallDurationList()
-	 * @method \int[] fillCallDuration()
-	 * @method \Bitrix\Main\Type\DateTime[] getCallStartDateList()
-	 * @method \Bitrix\Main\Type\DateTime[] fillCallStartDate()
-	 * @method \int[] getCallStatusList()
-	 * @method \int[] fillCallStatus()
-	 * @method \int[] getCallRecordIdList()
-	 * @method \int[] fillCallRecordId()
-	 * @method \string[] getCallRecordUrlList()
-	 * @method \string[] fillCallRecordUrl()
-	 * @method \int[] getCallWebdavIdList()
-	 * @method \int[] fillCallWebdavId()
-	 * @method \int[] getCallVoteList()
-	 * @method \int[] fillCallVote()
-	 * @method \float[] getCostList()
-	 * @method \float[] fillCost()
-	 * @method \string[] getCostCurrencyList()
-	 * @method \string[] fillCostCurrency()
-	 * @method \string[] getCallFailedCodeList()
-	 * @method \string[] fillCallFailedCode()
-	 * @method \string[] getCallFailedReasonList()
-	 * @method \string[] fillCallFailedReason()
-	 * @method \string[] getCrmEntityTypeList()
-	 * @method \string[] fillCrmEntityType()
-	 * @method \int[] getCrmEntityIdList()
-	 * @method \int[] fillCrmEntityId()
-	 * @method \int[] getCrmActivityIdList()
-	 * @method \int[] fillCrmActivityId()
-	 * @method \int[] getRestAppIdList()
-	 * @method \int[] fillRestAppId()
-	 * @method \string[] getRestAppNameList()
-	 * @method \string[] fillRestAppName()
-	 * @method \int[] getTranscriptIdList()
-	 * @method \int[] fillTranscriptId()
-	 * @method \boolean[] getTranscriptPendingList()
-	 * @method \boolean[] fillTranscriptPending()
-	 * @method \int[] getSessionIdList()
-	 * @method \int[] fillSessionId()
-	 * @method \int[] getRedialAttemptList()
-	 * @method \int[] fillRedialAttempt()
-	 * @method \string[] getCommentList()
-	 * @method \string[] fillComment()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex[] getSearchIndexList()
-	 * @method \Bitrix\Voximplant\EO_Statistic_Collection getSearchIndexCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_StatisticIndex_Collection fillSearchIndex()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript[] getTranscriptList()
-	 * @method \Bitrix\Voximplant\EO_Statistic_Collection getTranscriptCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_Transcript_Collection fillTranscript()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection[] getCrmBindingsList()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection getCrmBindingsCollection()
-	 * @method \Bitrix\Voximplant\Model\EO_CallCrmEntity_Collection fillCrmBindings()
-	 * @method \string[] getHasRecordList()
-	 * @method \string[] fillHasRecord()
-	 * @method \string[] getTotalDurationList()
-	 * @method \string[] fillTotalDuration()
-	 * @method \string[] getTotalCostList()
-	 * @method \string[] fillTotalCost()
-	 *
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @property-read \Bitrix\Main\ORM\Entity $entity
-	 * @method void add(\Bitrix\Voximplant\EO_Statistic $object)
-	 * @method bool has(\Bitrix\Voximplant\EO_Statistic $object)
-	 * @method bool hasByPrimary($primary)
-	 * @method \Bitrix\Voximplant\EO_Statistic getByPrimary($primary)
-	 * @method \Bitrix\Voximplant\EO_Statistic[] getAll()
-	 * @method bool remove(\Bitrix\Voximplant\EO_Statistic $object)
-	 * @method void removeByPrimary($primary)
-	 * @method void fill($fields = \Bitrix\Main\ORM\Fields\FieldTypeMask::ALL) flag or array of field names
-	 * @method static \Bitrix\Voximplant\EO_Statistic_Collection wakeUp($data)
-	 * @method \Bitrix\Main\ORM\Data\Result save($ignoreEvents = false)
-	 * @method void offsetSet() ArrayAccess
-	 * @method void offsetExists() ArrayAccess
-	 * @method void offsetUnset() ArrayAccess
-	 * @method void offsetGet() ArrayAccess
-	 * @method void rewind() Iterator
-	 * @method \Bitrix\Voximplant\EO_Statistic current() Iterator
-	 * @method mixed key() Iterator
-	 * @method void next() Iterator
-	 * @method bool valid() Iterator
-	 * @method int count() Countable
-	 */
-	class EO_Statistic_Collection implements \ArrayAccess, \Iterator, \Countable {
-		/* @var \Bitrix\Voximplant\StatisticTable */
-		static public $dataClass = '\Bitrix\Voximplant\StatisticTable';
-	}
-}
-namespace Bitrix\Voximplant {
-	/**
-	 * Common methods:
-	 * ---------------
-	 *
-	 * @method EO_Statistic_Result exec()
-	 * @method \Bitrix\Voximplant\EO_Statistic fetchObject()
-	 * @method \Bitrix\Voximplant\EO_Statistic_Collection fetchCollection()
-	 *
-	 * Custom methods:
-	 * ---------------
-	 *
-	 */
-	class EO_Statistic_Query extends \Bitrix\Main\ORM\Query\Query {}
-	/**
-	 * @method \Bitrix\Voximplant\EO_Statistic fetchObject()
-	 * @method \Bitrix\Voximplant\EO_Statistic_Collection fetchCollection()
-	 */
-	class EO_Statistic_Result extends \Bitrix\Main\ORM\Query\Result {}
-	/**
-	 * @method \Bitrix\Voximplant\EO_Statistic createObject($setDefaultValues = true)
-	 * @method \Bitrix\Voximplant\EO_Statistic_Collection createCollection()
-	 * @method \Bitrix\Voximplant\EO_Statistic wakeUpObject($row)
-	 * @method \Bitrix\Voximplant\EO_Statistic_Collection wakeUpCollection($rows)
-	 */
-	class EO_Statistic_Entity extends \Bitrix\Main\ORM\Entity {}
 }

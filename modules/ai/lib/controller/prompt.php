@@ -136,7 +136,7 @@ class Prompt extends Controller
 
 		if (!$promptCreateResult->isSuccess())
 		{
-			$event->send(Status::ERROR);
+			$event->send(Status::ERROR, $requestDTO->userCreatorId);
 			$this->addErrors($promptCreateResult->getErrors());
 
 			return [];
@@ -147,13 +147,13 @@ class Prompt extends Controller
 		$shareCreateResult = $shareService->create($requestDTO);
 		if (!$shareCreateResult->isSuccess())
 		{
-			$event->send(Status::ERROR);
+			$event->send(Status::ERROR, $requestDTO->userCreatorId);
 			$this->addErrors($shareCreateResult->getErrors());
 
 			return [];
 		}
 
-		$event->send(Status::SUCCESS);
+		$event->send(Status::SUCCESS, $requestDTO->userCreatorId);
 
 		return [
 			"code" => $requestDTO->promptCode
@@ -184,7 +184,7 @@ class Prompt extends Controller
 
 		if (!$updateResult->isSuccess())
 		{
-			$event->send(Status::ERROR);
+			$event->send(Status::ERROR, $requestDTO->userCreatorId);
 
 			return;
 		}
@@ -194,14 +194,14 @@ class Prompt extends Controller
 
 		if (!$createResult->isSuccess())
 		{
-			$event->send(Status::ERROR);
+			$event->send(Status::ERROR, $requestDTO->userCreatorId);
 
 			return;
 		}
 
 		$ownerService->unsetDeletedFlagsForUsers($requestDTO->usersIdsInAccessCodes, $requestDTO->promptId);
 
-		$event->send(Status::SUCCESS);
+		$event->send(Status::SUCCESS, $requestDTO->userCreatorId);
 	}
 
 	/**

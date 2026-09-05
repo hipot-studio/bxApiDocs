@@ -33,8 +33,6 @@ class AiCallAvailabilityService
 				&& Feature::isFeatureEnabled('crm_automation_designer')
 			)
 			&& (Application::getInstance()->getLicense()->getRegion() ?? 'en') === 'ru'
-			//@todo remove
-			&& Option::get('booking', 'ai_call_feature', 'N') === 'Y'
 		);
 	}
 }

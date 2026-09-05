@@ -910,6 +910,7 @@ class Engine
 		Analytics::sendAiQueryLimitEvent(
 			$reservedRequest->getErrorLimit()->value . '-' . $reservedRequest->getPromoLimitCode(),
 			$this->getIEngine()->getContext()->getModuleId(),
+			$this->getIEngine()->getContext()->getUserId(),
 		);
 
 		if ($reservedRequest->getErrorLimit() === ErrorLimit::BAAS_LIMIT)

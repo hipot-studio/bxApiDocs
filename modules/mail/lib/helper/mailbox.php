@@ -996,7 +996,7 @@ abstract class Mailbox
 				array(
 					'=MAILBOX_ID' => $this->mailbox['ID'],
 					'>MESSAGE_ID' => 0,
-					'<INTERNALDATE' => Main\Type\Date::createFromTimestamp(strtotime(sprintf('-%u days', Mail\Helper\LicenseManager::getSyncOldLimit()))),
+					'<INTERNALDATE' => Main\Type\Date::createFromTimestamp(Mailbox\SyncPeriodBoundary::dayStartUtcMinusDays(Mail\Helper\LicenseManager::getSyncOldLimit())),
 					'!=IS_OLD' => 'Y',
 				)
 			)
@@ -1015,7 +1015,7 @@ abstract class Mailbox
 				->setFilter([
 					'=MAILBOX_ID' => $this->mailbox['ID'],
 					'>MESSAGE_ID' => 0,
-					'<INTERNALDATE' => \Bitrix\Main\Type\Date::createFromTimestamp(strtotime(sprintf('-%u days', \Bitrix\Mail\Helper\LicenseManager::getSyncOldLimit()))),
+					'<INTERNALDATE' => \Bitrix\Main\Type\Date::createFromTimestamp(Mailbox\SyncPeriodBoundary::dayStartUtcMinusDays(\Bitrix\Mail\Helper\LicenseManager::getSyncOldLimit())),
 				])
 				->whereNotExists(
 					new \Bitrix\Main\DB\SqlExpression("
@@ -1685,6 +1685,7 @@ abstract class Mailbox
 			),
 			'filter' => array(
 				'=MESSAGE_ID' => $excerpt['__ID'],
+				'=EXTERNAL_LINK_ID' => null,
 			),
 		))->fetchAll();
 
@@ -2203,8 +2204,13 @@ abstract class Mailbox
 		$this->lastSyncResult = array_merge($this->lastSyncResult, $data);
 	}
 
-	public function getDirsHelper(): Mail\Helper\MailboxDirectoryHelper
+	public function getDirsHelper(?int $userId = null): Mail\Helper\MailboxDirectoryHelper
 	{
+		if ($userId !== null)
+		{
+			return new Mail\Helper\MailboxDirectoryHelper($this->mailbox['ID'], $userId);
+		}
+
 		if (!$this->dirsHelper)
 		{
 			$this->dirsHelper = new Mail\Helper\MailboxDirectoryHelper($this->mailbox['ID']);

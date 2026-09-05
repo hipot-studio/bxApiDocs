@@ -15,6 +15,8 @@ class DocxXml extends Xml
 {
 	protected const EMPTY_IMAGE_PLACEHOLDER = '{__SystemEmptyImage}';
 	protected const XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace';
+	protected const TEMPORARY_PLACEHOLDER_CONTEXT_TEXT = 'text';
+	protected const TEMPORARY_PLACEHOLDER_CONTEXT_DOCPR_ATTRIBUTE = 'docPrAttribute';
 
 	public const NUMBERING_TYPE_ORDERED = 'ordered';
 	public const NUMBERING_TYPE_UNORDERED = 'unordered';
@@ -77,6 +79,23 @@ class DocxXml extends Xml
 		return 'w';
 	}
 
+	public function getPlaceholders(): array
+	{
+		if (!$this->isFileProcessable() || !str_contains($this->content, '{'))
+		{
+			return [];
+		}
+
+		$placeholders = [];
+		foreach (array_keys($this->findImages()) as $placeholder)
+		{
+			$placeholders[$placeholder] = $placeholder;
+		}
+		$placeholders += $this->getTextPlaceholderNames();
+
+		return $placeholders;
+	}
+
 	/**
 	 * Normalizes content of the document, removing unnecessary tags between {}
 	 */
@@ -114,37 +133,37 @@ class DocxXml extends Xml
 	}
 
 	/**
-	 * Clears all placeholder-like strings that are inside attributes and not images
+	 * Attribute placeholders are left untouched during normalization.
+	 *
+	 * @deprecated Attribute cleanup is not part of the supported DOCX placeholder surface.
 	 */
 	protected function clearPlaceholdersInAttributes(): void
 	{
-		$placeholdersToClear = [];
-		$imagePlaceholders = $this->findImages();
-		$allPlaceholders = $this->getPlaceholders();
-		foreach ($allPlaceholders as $placeholder)
+		return;
+	}
+
+	protected function getTextPlaceholderNames(): array
+	{
+		$placeholders = [];
+		$textNodes = $this->xpath->query('//w:t[text()[contains(.,"{")]]');
+		foreach ($textNodes as $node)
 		{
-			$node = $this->findPlaceholderNode($placeholder);
-			if (!$node && !isset($imagePlaceholders[$placeholder]))
-			{
-				$placeholdersToClear[$placeholder] = $placeholder;
-			}
+			/** @var \DOMElement $node */
+			$placeholders += static::matchFieldNames($node->nodeValue);
 		}
 
-		if (!empty($placeholdersToClear))
-		{
-			$this->content = preg_replace_callback(
-				static::$valuesPattern,
-				static function ($matches) use ($placeholdersToClear) {
-					if ($matches[2] && isset($placeholdersToClear[$matches[2]]))
-					{
-						return '';
-					}
+		return $placeholders;
+	}
 
-					return $matches[0];
-				},
-				$this->content
-			);
+	protected function getPlaceholderNamesFromXml(string $content): array
+	{
+		$document = new static($content);
+		if (!$document->isFileProcessable())
+		{
+			return [];
 		}
+
+		return $document->getPlaceholders();
 	}
 
 	/**
@@ -346,6 +365,7 @@ class DocxXml extends Xml
 				while (isset($block['content']) && !empty($block['content']))
 				{
 					$this->processMultiplyingBlock($list, $placeholder, $block);
+					$this->saveContent();
 					$block = $this->collectMultiplyNodes($placeholder);
 				}
 				$this->saveContent();
@@ -362,6 +382,7 @@ class DocxXml extends Xml
 		{
 			$indexToPrint = 0;
 		}
+		$fieldNamesCache = [];
 		foreach ($dataProvider as $index => $value)
 		{
 			if ($indexToPrint !== null && $index !== $indexToPrint)
@@ -372,7 +393,11 @@ class DocxXml extends Xml
 			{
 				/** @var \DOMElement $node */
 				$content = $block['content'][$key];
-				$fieldNames = static::matchFieldNames($content);
+				if (!array_key_exists($content, $fieldNamesCache))
+				{
+					$fieldNamesCache[$content] = $this->getPlaceholderNamesFromXml($content);
+				}
+				$fieldNames = $fieldNamesCache[$content];
 				if (
 					$value instanceof DataProvider
 					&& isset($value->getOptions()['SHOW_MODIFIER'])
@@ -387,67 +412,46 @@ class DocxXml extends Xml
 					$multipleValues = array_fill_keys(array_keys($multipleValues), '');
 				}
 				$values = array_merge($this->values, $multipleValues);
-				$placeholdersWithHtmlValues = [];
-				$blockContent = preg_replace_callback(
-					static::$valuesPattern,
-					function ($matches) use ($values, &$placeholdersWithHtmlValues) {
-						if ($matches[2] && array_key_exists($matches[2], $values))
-						{
-							// multiply images
-							if ($this->isImageValue($matches[2], $values))
-							{
-								if ($values[$matches[2]])
-								{
-									// in case someone inserted image placeholder as text - prevent looping
-									$placeholder = $matches[1];
-									if (!$matches[3])
-									{
-										$placeholder .= '~';
-									}
-									$placeholder .= static::DO_NOT_INSERT_VALUE_MODIFIER;
-
-									return '{' . $placeholder . '}';
-								}
-
-								return static::EMPTY_IMAGE_PLACEHOLDER;
-							}
-
-							if (!static::detectHtml((string)$values[$matches[2]]))
-							{
-								return $this->printValue($values[$matches[2]], $matches[2], $matches[3]);
-							}
-							$placeholdersWithHtmlValues[$matches[0]] = $matches;
-
-							return $matches[0];
-						}
-
-						return '';
-					},
-					$content
+				$innerXml = new DocxXml($content);
+				$temporaryPlaceholdersWithNodes = $this->replaceWhitelistedPlaceholdersByTemporaryPlaceholders(
+					$innerXml,
+					false,
 				);
-				$innerXml = new DocxXml($blockContent);
 				$imageData = $innerXml->findImages(true);
+				$hasRemovedEmptyImages = false;
 				foreach ($imageData as $imagePlaceholder => $data)
 				{
-					if ($this->isImageValue($imagePlaceholder, $values))
+					if (!$this->isImageValue($imagePlaceholder, $values))
 					{
-						foreach ($data['innerIDs'] as $id)
+						continue;
+					}
+					if (empty($values[$imagePlaceholder]) || $values[$imagePlaceholder] === ' ')
+					{
+						foreach ($data['drawingNode'] as $drawingNode)
 						{
-							$this->arrayImageValues['values'][$id] = $values[$imagePlaceholder];
-							$this->arrayImageValues['originalId'][$id] = $data['originalId'][$id];
+							/** @var \DOMNode $drawingNode */
+							if ($drawingNode->parentNode)
+							{
+								$drawingNode->parentNode->removeChild($drawingNode);
+								$hasRemovedEmptyImages = true;
+							}
 						}
+						continue;
+					}
+					foreach ($data['innerIDs'] as $id)
+					{
+						$this->arrayImageValues['values'][$id] = $values[$imagePlaceholder];
+						$this->arrayImageValues['originalId'][$id] = $data['originalId'][$id];
 					}
 				}
-
-				$temporaryPlaceholdersWithNodes = $this->replaceRealByTemporaryPlaceholers(
-					$placeholdersWithHtmlValues,
-					$innerXml,
-				);
+				if ($hasRemovedEmptyImages)
+				{
+					$innerXml->saveContent();
+				}
 				$blockContent = $this->processContentWithTemporaryPlaceholders(
 					$innerXml->getContent(),
 					$temporaryPlaceholdersWithNodes,
 					$values,
-					false,
 				);
 				$nodeToLoad = $block['nodes'][count($block['nodes']) - 1];
 				$blockDocument = new \DOMDocument();
@@ -1242,31 +1246,15 @@ class DocxXml extends Xml
 	 */
 	protected function replacePlaceholders(array $params = [])
 	{
-		$placeholdersWithHtmlValues = [];
-
-		$this->content = preg_replace_callback(
-			static::$valuesPattern,
-			function (array $matches) use (&$placeholdersWithHtmlValues) {
-				$value = $this->values[$matches[2]] ?? null;
-				if (is_string($value) && static::detectHtml($value))
-				{
-					$placeholdersWithHtmlValues[$matches[0]] = $matches;
-
-					return $matches[0];
-				}
-
-				return $this->getReplaceValue($matches);
-			},
-			$this->content
+		$temporaryPlaceholdersWithNodes = $this->replaceWhitelistedPlaceholdersByTemporaryPlaceholders(
+			$this,
 		);
 
-		if (empty($placeholdersWithHtmlValues))
+		if (empty($temporaryPlaceholdersWithNodes))
 		{
 			return $this->content;
 		}
 
-		$this->initDomDocument();
-		$temporaryPlaceholdersWithNodes = $this->replaceRealByTemporaryPlaceholers($placeholdersWithHtmlValues, $this);
 		$this->content = $this->processContentWithTemporaryPlaceholders(
 			$this->content,
 			$temporaryPlaceholdersWithNodes,
@@ -1276,27 +1264,69 @@ class DocxXml extends Xml
 		return $this->content;
 	}
 
-	protected function replaceRealByTemporaryPlaceholers(
-		array $placeholdersMatches,
-		DocxXml $document
+	protected function replaceWhitelistedPlaceholdersByTemporaryPlaceholders(
+		DocxXml $document,
+		bool $includeImageAttributes = true
 	): array
 	{
-		$temporaryPlaceholdersWithNodes = [];
-		foreach ($placeholdersMatches as $matches)
+		$content = $document->getContent();
+		if (!str_contains($content, '{'))
 		{
-			$placeholderNodes = $document->getXPath()->query('//w:t[text()[contains(.,"' . $matches[0] . '")]]');
-			/** @var \DOMNode $placeholderNode */
-			foreach ($placeholderNodes as $placeholderNode)
+			return [];
+		}
+
+		$document->initDomDocument();
+		$temporaryPlaceholdersWithNodes = [];
+		$changed = false;
+
+		$textNodes = $document->getXPath()->query('//w:t[text()[contains(.,"{")]]');
+		foreach ($textNodes as $node)
+		{
+			/** @var \DOMElement $node */
+			$nodeValue = $this->replaceNodeValuePlaceholdersByTemporaryPlaceholders(
+				$node->nodeValue,
+				$node,
+				$temporaryPlaceholdersWithNodes,
+				$content,
+			);
+			if ($nodeValue !== $node->nodeValue)
 			{
-				$uniqId = '{' . static::getRandomId('SystemHtmlValues', true) . '}';
-				$temporaryPlaceholdersWithNodes[$uniqId] = [
-					'originalMatches' => $matches,
-					'node' => $placeholderNode,
-				];
-				$placeholderNode->nodeValue = str_replace($matches[0], $uniqId, $placeholderNode->nodeValue);
+				$node->nodeValue = $nodeValue;
+				$changed = true;
 			}
 		}
-		if (!empty($temporaryPlaceholdersWithNodes))
+
+		if ($includeImageAttributes)
+		{
+			$imageDescriptions = $document->getXPath()->query('//w:drawing//wp:docPr');
+			foreach ($imageDescriptions as $description)
+			{
+				/** @var \DOMElement $description */
+				foreach (['descr', 'name'] as $attributeName)
+				{
+					$attribute = $description->attributes?->getNamedItem($attributeName);
+					if (!$attribute)
+					{
+						continue;
+					}
+
+					$nodeValue = $this->replaceNodeValuePlaceholdersByTemporaryPlaceholders(
+						$attribute->nodeValue,
+						$description,
+						$temporaryPlaceholdersWithNodes,
+						$content,
+						static::TEMPORARY_PLACEHOLDER_CONTEXT_DOCPR_ATTRIBUTE,
+					);
+					if ($nodeValue !== $attribute->nodeValue)
+					{
+						$attribute->nodeValue = $nodeValue;
+						$changed = true;
+					}
+				}
+			}
+		}
+
+		if ($changed)
 		{
 			$document->saveContent();
 		}
@@ -1304,19 +1334,83 @@ class DocxXml extends Xml
 		return $temporaryPlaceholdersWithNodes;
 	}
 
-	protected function processContentWithTemporaryPlaceholders(
+	protected function replaceNodeValuePlaceholdersByTemporaryPlaceholders(
+		string $nodeValue,
+		\DOMNode $node,
+		array &$temporaryPlaceholdersWithNodes,
 		string $content,
-		array $temporaryPlaceholdersWithNodes,
-		array $values,
-		bool $isPurgeEmptyValue = true
+		string $context = self::TEMPORARY_PLACEHOLDER_CONTEXT_TEXT
 	): string
 	{
 		return (string)preg_replace_callback(
 			static::$valuesPattern,
-			function ($matches) use ($temporaryPlaceholdersWithNodes, $values, $isPurgeEmptyValue) {
+			function (array $matches) use (
+				$node,
+				&$temporaryPlaceholdersWithNodes,
+				$content,
+				$context
+			) {
+				if (!$matches[2])
+				{
+					return $matches[0];
+				}
+
+				$temporaryPlaceholder = $this->getTemporaryPlaceholder($content, $temporaryPlaceholdersWithNodes);
+				$temporaryPlaceholdersWithNodes[$temporaryPlaceholder] = [
+					'originalMatches' => $matches,
+					'node' => $node,
+					'context' => $context,
+				];
+
+				return $temporaryPlaceholder;
+			},
+			$nodeValue,
+		);
+	}
+
+	protected function getTemporaryPlaceholder(string $content, array $temporaryPlaceholdersWithNodes): string
+	{
+		do
+		{
+			$temporaryPlaceholder = '{SystemDocxValue' . bin2hex(random_bytes(16)) . '}';
+		}
+		while (
+			isset($temporaryPlaceholdersWithNodes[$temporaryPlaceholder])
+			|| str_contains($content, $temporaryPlaceholder)
+		);
+
+		return $temporaryPlaceholder;
+	}
+
+	protected function processContentWithTemporaryPlaceholders(
+		string $content,
+		array $temporaryPlaceholdersWithNodes,
+		array $values
+	): string
+	{
+		return (string)preg_replace_callback(
+			static::$valuesPattern,
+			function ($matches) use ($temporaryPlaceholdersWithNodes, $values) {
 				if ($matches[2] && array_key_exists($matches[0], $temporaryPlaceholdersWithNodes))
 				{
 					$originalMatches = $temporaryPlaceholdersWithNodes[$matches[0]]['originalMatches'];
+					if (!array_key_exists($originalMatches[2], $values))
+					{
+						return '';
+					}
+
+					if (
+						($temporaryPlaceholdersWithNodes[$matches[0]]['context'] ?? null)
+						=== static::TEMPORARY_PLACEHOLDER_CONTEXT_DOCPR_ATTRIBUTE
+					)
+					{
+						return '';
+					}
+
+					if (isset($this->excludedPlaceholders[$originalMatches[2]]))
+					{
+						return $originalMatches[0];
+					}
 
 					return $this->printValue(
 						$values[$originalMatches[2]],
@@ -1328,7 +1422,7 @@ class DocxXml extends Xml
 					);
 				}
 
-				return $isPurgeEmptyValue ? '' : $matches[0];
+				return $matches[0];
 			},
 			$content
 		);

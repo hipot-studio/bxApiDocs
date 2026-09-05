@@ -173,7 +173,11 @@ final class WorkflowService
 
 					foreach ($errors as $error)
 					{
-						$response->addError(new Error(!empty($error['message']) ? $error['message'] : ''));
+						$response->addError(new Error(
+							!empty($error['message']) ? $error['message'] : '',
+							0,
+							$this->makeValidationErrorData($error, (int)$state['TEMPLATE_ID'])
+						));
 					}
 				}
 			}
@@ -444,7 +448,11 @@ final class WorkflowService
 					{
 						if (!empty($error['message']))
 						{
-							$response->addError(new Error($error['message']));
+							$response->addError(new Error(
+								$error['message'],
+								0,
+								$this->makeValidationErrorData($error, $templateId)
+							));
 						}
 					}
 
@@ -469,5 +477,17 @@ final class WorkflowService
 		}
 
 		return $response;
+	}
+
+	/**
+	 * The parameter key travels to the client: the start wizard moves the focus to the control
+	 * with an error and binds the message to it. Errors of other kinds carry no key.
+	 */
+	private function makeValidationErrorData(array $error, int $templateId): ?array
+	{
+		return isset($error['parameter'])
+			? ['parameter' => $error['parameter'], 'templateId' => $templateId]
+			: null
+		;
 	}
 }

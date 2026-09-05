@@ -4,7 +4,11 @@ namespace Bitrix\Disk\Controller\Integration;
 
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Controller\OnlyOffice;
+use Bitrix\Disk\Controller\Vibeoffice;
 use Bitrix\Disk\Document;
+use Bitrix\Disk\Document\DocumentHandler;
+use Bitrix\Disk\Document\DocumentResolveContext;
+use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\FileLink;
@@ -101,9 +105,9 @@ final class MessengerCall extends Engine\Controller
 
 	protected function processBeforeAction(Action $action)
 	{
-		if (!Document\OnlyOffice\OnlyOfficeHandler::isEnabled())
+		if (!Document\OnlyOffice\OnlyOfficeHandler::isEnabled() && !VibeofficeHandler::isEnabled())
 		{
-			$this->addError(new Error('OnlyOffice handler is not configured.'));
+			$this->addError(new Error('Document editing service is not configured.'));
 
 			return false;
 		}
@@ -224,8 +228,36 @@ final class MessengerCall extends Engine\Controller
 		}
 	}
 
+	/**
+	 * Single engine-selection seam (the same one controller-dispatch #1 / unified-link #2 use):
+	 * an office open arrives under the 'onlyoffice' code and, with vibeoffice enabled on the portal,
+	 * is translated to the {@see VibeofficeHandler}; otherwise the OnlyOffice handler is returned as
+	 * is (zero regression). The object context is a no-op here (it does not affect the choice) but is
+	 * passed to honour the single resolver signature. {@see AttachedObject::getObjectId()} / getId()
+	 * return ORM ids as strings, so the null-safe (int) cast is required for the ?int context params.
+	 */
+	protected function resolveDocumentHandler(AttachedObject $attachedObject): ?DocumentHandler
+	{
+		return Driver::getInstance()->getDocumentHandlersManager()->resolveEffectiveHandler(
+			'onlyoffice',
+			DocumentResolveContext::forObject(
+				(int)$attachedObject->getObjectId(),
+				(int)$attachedObject->getId(),
+			),
+		);
+	}
+
 	protected function getUrlToEditAttachedObject(AttachedObject $attachedObject): Uri
 	{
+		if ($this->resolveDocumentHandler($attachedObject) instanceof VibeofficeHandler)
+		{
+			/** @see Vibeoffice::loadDocumentEditorAction() */
+			return UrlManager::getInstance()->createByController(new Vibeoffice(), 'loadDocumentEditor', [
+				'attachedObjectId' => $attachedObject->getId(),
+				'editorMode' => Document\OnlyOffice\Editor\ConfigBuilder::VISUAL_MODE_COMPACT,
+			]);
+		}
+
 		/** @see OnlyOffice::loadDocumentEditorAction() */
 		return UrlManager::getInstance()->createByController(new OnlyOffice(), 'loadDocumentEditor', [
 			'attachedObjectId' => $attachedObject->getId(),
@@ -235,6 +267,15 @@ final class MessengerCall extends Engine\Controller
 
 	protected function getUrlToViewAttachedObject(AttachedObject $attachedObject): Uri
 	{
+		if ($this->resolveDocumentHandler($attachedObject) instanceof VibeofficeHandler)
+		{
+			/** @see Vibeoffice::loadDocumentViewerAction() */
+			return UrlManager::getInstance()->createByController(new Vibeoffice(), 'loadDocumentViewer', [
+				'attachedObjectId' => $attachedObject->getId(),
+				'editorMode' => Document\OnlyOffice\Editor\ConfigBuilder::VISUAL_MODE_COMPACT,
+			]);
+		}
+
 		/** @see OnlyOffice::loadDocumentViewerAction() */
 		return UrlManager::getInstance()->createByController(new OnlyOffice(), 'loadDocumentViewer', [
 			'attachedObjectId' => $attachedObject->getId(),
@@ -244,6 +285,15 @@ final class MessengerCall extends Engine\Controller
 
 	protected function forwardToEditAttachedObject(AttachedObject $attachedObject)
 	{
+		if ($this->resolveDocumentHandler($attachedObject) instanceof VibeofficeHandler)
+		{
+			/** @see Vibeoffice::loadDocumentEditorAction() */
+			return $this->forward(Vibeoffice::class, 'loadDocumentEditor', [
+				'attachedObjectId' => $attachedObject->getId(),
+				'editorMode' => Document\OnlyOffice\Editor\ConfigBuilder::VISUAL_MODE_COMPACT,
+			]);
+		}
+
 		/** @see OnlyOffice::loadDocumentEditorAction() */
 		return $this->forward(OnlyOffice::class, 'loadDocumentEditor', [
 			'attachedObjectId' => $attachedObject->getId(),

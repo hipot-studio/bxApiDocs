@@ -336,13 +336,7 @@ class AiBlock
 
 		PreProcessing::blockAddProcessing($block);
 
-		if (
-			isset($manifest['callbacks']['afteradd']) &&
-			is_callable($manifest['callbacks']['afteradd'])
-		)
-		{
-			$manifest['callbacks']['afteradd']($block);
-		}
+		$block->executeAfterAddCallback($manifest);
 
 		if ($fields['SOURCE_PARAMS'])
 		{

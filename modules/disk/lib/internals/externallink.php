@@ -23,6 +23,7 @@ use Bitrix\Main\Type\DateTime;
  * <li> CREATE_TIME datetime mandatory
  * <li> CREATED_BY int mandatory
  * <li> CAN_DOWNLOAD_WITH_READ_ACCESS int mandatory
+ * <li> CAN_EDIT_SETTINGS bool mandatory
  * </ul>
  *
  * @package Bitrix\Disk
@@ -136,6 +137,10 @@ final class ExternalLinkTable extends DataManager
 			),
 			'CAN_DOWNLOAD_WITH_READ_ACCESS' => array(
 				'data_type' => 'integer',
+			),
+			'CAN_EDIT_SETTINGS' => array(
+				'data_type' => 'boolean',
+				'default_value' => true,
 			),
 			'CREATE_USER' => array(
 				'data_type' => 'Bitrix\Main\UserTable',

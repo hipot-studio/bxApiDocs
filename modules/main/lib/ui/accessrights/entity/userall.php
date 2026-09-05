@@ -9,6 +9,7 @@ use Bitrix\Main\Localization\Loc;
 
 class UserAll extends EntityBase
 {
+	use HrStructureModelTrait;
 
 	public function getType(): string
 	{
@@ -30,13 +31,8 @@ class UserAll extends EntityBase
 		return '';
 	}
 
-	protected function loadModel()
-	{
-		return null;
-	}
-
 	public function exists(): bool
 	{
-		return true;
+		return !$this->getId() || $this->model;
 	}
 }

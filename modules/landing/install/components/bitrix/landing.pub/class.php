@@ -128,6 +128,161 @@ class LandingPubComponent extends LandingBaseComponent
 	}
 
 	/**
+	 * Returns true when the editor will really sandbox the preview frame.
+	 *
+	 * The editor sandboxes it only for a preview sharing the portal origin (DeviceUI
+	 * .isSameOriginPreview): a cross-origin preview is isolated by the browser anyway. The marker
+	 * travels with every device preview though, so the same predicate has to be re-evaluated here
+	 * — otherwise the sandbox workarounds (storage shim, inlined fonts, suppressed cookie banner)
+	 * would be paid for on every cloud preview, where the public site lives on its own domain and
+	 * no sandbox is ever set.
+	 * @param string $parentOrigin Validated portal origin from MARKER-01.
+	 * @return bool
+	 */
+	private function isSandboxedDevicePreview(string $parentOrigin): bool
+	{
+		$ownOrigin = (Manager::isHttps() ? 'https://' : 'http://')
+			. mb_strtolower(Application::getInstance()->getContext()->getServer()->getHttpHost());
+
+		return $parentOrigin === $ownOrigin;
+	}
+
+	/**
+	 * Puts the storage shim at the very top of <head> for the sandboxed device preview.
+	 *
+	 * The shim has to run before ANY page script reaches for cookie or storage: inside the
+	 * sandbox both throw, and an uncaught DOMException aborts the whole surrounding script
+	 * block. Injected from the component rather than from its template because the template
+	 * runs after <head> is already built — a string added there ends up at the bottom of
+	 * <body>, behind the user head-block code and the page hooks it was meant to protect.
+	 * Inlined rather than linked to spare the preview a blocking request for 3 KB.
+	 * @return void
+	 */
+	private function injectDevicePreviewShim(): void
+	{
+		$shimFile = Manager::getDocRoot() . '/bitrix/js/landing/device_preview/sandbox_shim.js';
+		if (!\Bitrix\Main\IO\File::isFileExists($shimFile))
+		{
+			return;
+		}
+
+		$asset = \Bitrix\Main\Page\Asset::getInstance();
+		// data-skip-moving: the kernel relocates scripts to the bottom of the page, which for
+		// this one would defeat the whole point of injecting it first.
+		$asset->addString(
+			'<script data-skip-moving="true">'
+			. \Bitrix\Main\IO\File::getFileContents($shimFile)
+			. '</script>',
+			false,
+			\Bitrix\Main\Page\AssetLocation::BEFORE_CSS
+		);
+
+		// The conversion hit collector POSTs to the portal host unless its context cookie says
+		// the visit is already counted. From the opaque origin that request is cross-origin
+		// without CORS headers: the browser logs an error, and the hit is dropped anyway since
+		// session cookies are not sent. A preview must not count as a visit, so seed the
+		// in-memory jar and let the collector skip the request. Guarded by the shim flag: a real
+		// cookie store must never receive this cookie.
+		if (\Bitrix\Main\Loader::includeModule('conversion'))
+		{
+			$seed = json_encode(
+				\Bitrix\Conversion\DayContext::getVarName()
+					. '=' . rawurlencode(json_encode(['EXPIRE' => time() + 86400])),
+				JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
+			);
+			$asset->addString(
+				'<script data-skip-moving="true">'
+				. 'if (window.landingDevicePreviewSandboxed) { document.cookie = ' . $seed . '; }'
+				. '</script>',
+				false,
+				\Bitrix\Main\Page\AssetLocation::BEFORE_CSS
+			);
+		}
+	}
+
+	/**
+	 * Overrides the Open Sans @font-face rules with data-URI ones for the sandboxed device preview.
+	 *
+	 * The opaque origin turns a same-host font request into a cross-origin one, and the portal
+	 * serves fonts without Access-Control-Allow-Origin: the browser blocks the fetch and logs an
+	 * error on every preview reload. Text still renders, but with fallback metrics — which is
+	 * exactly what a device preview is looked at for. The rules are appended after the stylesheet
+	 * of the ui extension, so with identical descriptors they win and the networked src is never
+	 * fetched. Only the 'Open Sans' family is overridden: the legacy 'OpenSans*' aliases from the
+	 * same stylesheet are not used by public pages, and a family nothing matches is never fetched.
+	 * @return void
+	 */
+	private function injectDevicePreviewFontFaces(): void
+	{
+		$cssFile = Manager::getDocRoot() . '/bitrix/js/ui/fonts/opensans/ui.font.opensans.css';
+		$cssContent = \Bitrix\Main\IO\File::isFileExists($cssFile)
+			? \Bitrix\Main\IO\File::getFileContents($cssFile)
+			: '';
+		if (!$cssContent || !preg_match_all('/@font-face\s*{(.+?)}/is', $cssContent, $faces))
+		{
+			return;
+		}
+
+		$styles = '';
+		foreach ($faces[1] as $face)
+		{
+			if (!preg_match('/font-family\s*:\s*([\'"])Open Sans\1/i', $face))
+			{
+				continue;
+			}
+			$inlined = $this->inlineFontFaceSrc($face);
+			if ($inlined !== null)
+			{
+				$styles .= '@font-face{' . $inlined . '}';
+			}
+		}
+
+		if ($styles !== '')
+		{
+			\Bitrix\Main\Page\Asset::getInstance()->addString(
+				'<style data-role="landing-device-preview-fonts">' . $styles . '</style>',
+				false,
+				\Bitrix\Main\Page\AssetLocation::AFTER_CSS
+			);
+		}
+	}
+
+	/**
+	 * Replaces the woff url() of a single @font-face body with a data URI and drops the ttf
+	 * fallback declared next to it. Returns null when there is no local woff to inline.
+	 * @param string $face Body of the @font-face rule.
+	 * @return string|null
+	 */
+	private function inlineFontFaceSrc(string $face): ?string
+	{
+		if (!preg_match('/url\(([\'"])([^\'"]+\.woff)\1\)/i', $face, $url))
+		{
+			return null;
+		}
+
+		$fontFile = Manager::getDocRoot() . $url[2];
+		$fontData = \Bitrix\Main\IO\File::isFileExists($fontFile)
+			? \Bitrix\Main\IO\File::getFileContents($fontFile)
+			: '';
+		if (!$fontData)
+		{
+			return null;
+		}
+
+		$face = preg_replace(
+			'/,?\s*url\([\'"][^\'"]+\.ttf[\'"]\)\s*format\([\'"]truetype[\'"]\)/i',
+			'',
+			$face
+		);
+
+		return str_replace(
+			$url[0],
+			'url(\'data:font/woff;base64,' . base64_encode($fontData) . '\')',
+			$face
+		);
+	}
+
+	/**
 	 * Validates a string as a bare web origin (scheme://host[:port]) and returns it
 	 * normalized, or an empty string when it is not a well-formed origin.
 	 * @param string $value Raw candidate.
@@ -517,13 +672,13 @@ class LandingPubComponent extends LandingBaseComponent
 			// for base work
 			(
 				($requestedPageParts[0] ?? null) == 'preview' &&
-				($requestedPageParts[1] ?? null) == Site::getPublicHash($siteId)
+				Site::isPublicHashValid($siteId ?? 0, $requestedPageParts[1] ?? null)
 			)
 			||
 			// for cloud version
 			(
 				$this->request('landing_mode') == 'preview' &&
-				$this->request('hash') == Site::getPublicHash($siteId)
+				Site::isPublicHashValid($siteId ?? 0, $this->request('hash'))
 			)
 		)
 		{
@@ -1462,7 +1617,7 @@ class LandingPubComponent extends LandingBaseComponent
 				$domainName .= $landingUrlParts['host'];
 			}
 		}
-		$canonical = $domainName . Manager::getApplication()->getCurDir();
+		$canonical = htmlspecialcharsbx($domainName . Manager::getApplication()->getCurDir());
 		Manager::setPageView(
 			'MetaOG',
 			'<meta property="og:url" content="' . $canonical . '" />' . "\n" .
@@ -1657,7 +1812,18 @@ class LandingPubComponent extends LandingBaseComponent
 				$this->arResult['CAN_EDIT'] = 'N';
 				// MARKER-01: expose the validated parent portal origin so the template can inject
 				// the device-preview postMessage responder only for the editor device preview.
+				// The responder is needed by every device preview, sandboxed or not; the workarounds
+				// behind the device-preview mode are needed only by a sandboxed one.
 				$this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'] = $this->getDevicePreviewParentOrigin();
+				if (
+					$this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'] !== ''
+					&& $this->isSandboxedDevicePreview($this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'])
+				)
+				{
+					Landing::setDevicePreviewMode(true);
+					$this->injectDevicePreviewShim();
+					$this->injectDevicePreviewFontFaces();
+				}
 				// if landing found
 				if ($landing->exist())
 				{

@@ -67,6 +67,12 @@ class ExternalLineTable extends Base
 					return new DateTime();
 				}
 			]),
+			new Entity\DateTimeField('DATE_LAST_USED', [
+				'default_value' => function()
+				{
+					return new DateTime();
+				}
+			]),
 			new Reference('SIP', SipTable::class, Join::on('this.SIP_ID', 'ref.ID'), ['join_type' => 'left'])
 		];
 	}
@@ -84,7 +90,8 @@ class ExternalLineTable extends Base
 
 		$result->modifyFields([
 			"NORMALIZED_NUMBER" => PhoneNumber\Parser::getInstance()->parse($phoneNumber)->format(PhoneNumber\Format::E164),
-			"DATE_CREATE" => new DateTime()
+			"DATE_CREATE" => new DateTime(),
+			"DATE_LAST_USED" => new DateTime()
 		]);
 		return $result;
 	}

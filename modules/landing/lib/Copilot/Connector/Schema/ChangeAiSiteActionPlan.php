@@ -52,6 +52,12 @@ class ChangeAiSiteActionPlan extends Schema
 				new SchemaNodeDto('string', 'globalConstraints'),
 				new SchemaNodeDto('string', 'imageStyleBrief'),
 				new SchemaNodeDto('string', 'designBrief'),
+				new SchemaNodeDto('string', 'editIntent', [
+					'enum' => [
+						ChangeAiSiteState::EDIT_INTENT_STRUCTURAL,
+						ChangeAiSiteState::EDIT_INTENT_CONTENT,
+					],
+				]),
 			],
 		]);
 	}

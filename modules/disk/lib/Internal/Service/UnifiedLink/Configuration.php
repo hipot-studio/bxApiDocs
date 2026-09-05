@@ -18,19 +18,6 @@ class Configuration
 	 */
 	public static function supportsUnifiedLink(File $object): bool
 	{
-		$isEnabled = Option::get('disk', 'unified_link.enabled', 'N') === 'Y';
-		if (!$isEnabled)
-		{
-			return false;
-		}
-
-		$fileType = (int)$object->getTypeFile();
-		$isFileTypeAllowed = self::isFileTypeAllowed($fileType);
-		if (!$isFileTypeAllowed)
-		{
-			return false;
-		}
-
 		$uniqueCode = $object->getUniqueCode();
 
 		return !empty($uniqueCode);
@@ -59,12 +46,12 @@ class Configuration
 
 	public static function isEnabled(): bool
 	{
-		return Option::get('disk', 'unified_link.enabled', 'N') === 'Y';
+		return true;
 	}
 
 	public static function isFileTypeAllowed(int $fileType): bool
 	{
-		return Option::get('disk', self::getOptionNameForFileType($fileType), 'N') === 'Y';
+		return true;
 	}
 
 	private static function getOptionNameForFileType(int $fileType): string

@@ -64,6 +64,18 @@ class LocationRepository
 	}
 
 	/**
+	 * @param array $coordsList Index-aligned list of ['lat' => float, 'lng' => float].
+	 * @param int $zoom
+	 * @param string $languageId
+	 * @param int $searchScope
+	 * @return array<int, Entity\Location|null>
+	 */
+	public function findByCoordsList(array $coordsList, int $zoom, string $languageId, int $searchScope): array
+	{
+		return $this->findStrategy->findByCoordsList($coordsList, $zoom, $languageId, $searchScope);
+	}
+
+	/**
 	 * @param string $text
 	 * @param string $languageId
 	 * @param int $searchScope

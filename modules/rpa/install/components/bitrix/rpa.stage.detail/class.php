@@ -82,13 +82,13 @@ class RpaStageDetailComponent extends \Bitrix\Rpa\Components\Base
 		if($this->stage->getId() > 0)
 		{
 			$this->getApplication()->setTitle(Loc::getMessage('RPA_STAGE_DETAIL_TITLE', ['#TITLE#' => $this->stage->getName()]));
-			$method = 'rpa.stage.update';
+			$method = 'rpa.Stage.update';
 			$label = 'rpaStageUpdate';
 		}
 		else
 		{
 			$this->getApplication()->setTitle(Loc::getMessage('RPA_STAGE_CREATE_TITLE'));
-			$method = 'rpa.stage.add';
+			$method = 'rpa.Stage.add';
 			$label = 'rpaStageAdd';
 		}
 

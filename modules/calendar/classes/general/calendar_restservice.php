@@ -1584,18 +1584,9 @@ final class CCalendarRestService extends IRestService
 			]));
 		}
 
-		if (isset($params['ownerId']))
+		if (!isset($params['ownerId']) && $type !== 'user')
 		{
-			$ownerId = (int)$params['ownerId'];
-		}
-		elseif ($type === 'user')
-		{
-			$ownerId = $userId;
-		}
-		else
-		{
-			throw new RestException(Loc::getMessage('CAL_REST_PARAM_EXCEPTION', array('#REST_METHOD#' => $methodName, '#PARAM_NAME#' => 'ownerId')));
-
+			throw new RestException(Loc::getMessage('CAL_REST_PARAM_EXCEPTION', ['#REST_METHOD#' => $methodName, '#PARAM_NAME#' => 'ownerId']));
 		}
 
 		if (isset($params['id']) && (int)$params['id'] > 0)
@@ -1621,21 +1612,36 @@ final class CCalendarRestService extends IRestService
 			]));
 		}
 
-		$accessController = new SectionAccessController($userId);
-		$sectionModel =
-			SectionModel::createFromId($id)
-				->setType($type)
-				->setOwnerId($ownerId)
+		$storedSection = Internals\SectionTable::query()
+			->setSelect(['CAL_TYPE', 'OWNER_ID'])
+			->where('ID', $id)
+			->fetch()
 		;
+
+		$realType = is_array($storedSection) ? (string)$storedSection['CAL_TYPE'] : '';
+		$realOwnerId = is_array($storedSection) ? (int)$storedSection['OWNER_ID'] : 0;
+
+		$sectionModel = SectionModel::createNew()
+			->setId($id)
+			->setType($realType)
+			->setOwnerId($realOwnerId)
+		;
+
+		$accessController = new SectionAccessController($userId);
 		if (!$accessController->check(ActionDictionary::ACTION_SECTION_EDIT, $sectionModel))
 		{
 			throw new RestException(Loc::getMessage('CAL_REST_ACCESS_DENIED'));
 		}
 
+		if ($realType === '')
+		{
+			throw new RestException(Loc::getMessage('CAL_REST_SECT_ID_EXCEPTION'));
+		}
+
 		$arFields = [
 			'ID' => $id,
-			'CAL_TYPE' => $type,
-			'OWNER_ID' => $ownerId
+			'CAL_TYPE' => $realType,
+			'OWNER_ID' => $realOwnerId,
 		];
 
 		if (isset($params['name']) && trim($params['name']) !== '')

@@ -26,6 +26,16 @@ class FolderCascadeHandler
 		$this->pinService->clearByUserAndChat($userId, $chatId);
 	}
 
+	public function onChatAttachedToParent(int $chatId): void
+	{
+		if ($chatId <= 0)
+		{
+			return;
+		}
+
+		$this->folderChatLinker->clearByChat($chatId);
+	}
+
 	public function deleteByUser(int $userId): void
 	{
 		if ($userId <= 0)

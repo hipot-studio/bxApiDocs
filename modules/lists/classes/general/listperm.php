@@ -136,11 +136,17 @@ class CListPermissions
 	/**
 	 * @param $USER CUser
 	 * @param $iblockTypeId string
-	 * @return string
+	 * @return int|string
 	 */
 	static protected function _lists_type_check($USER, $iblockTypeId)
 	{
 		$listsPermission = CLists::GetPermission($iblockTypeId);
+		if (!CListPermissions::isListsType($iblockTypeId, $listsPermission))
+			return CListPermissions::WRONG_IBLOCK_TYPE;
+
+		if ($USER->IsAdmin())
+			return CListPermissions::IS_ADMIN;
+
 		if (!is_array($listsPermission) || !count($listsPermission))
 			return CListPermissions::ACCESS_DENIED;
 
@@ -164,6 +170,10 @@ class CListPermissions
 			return $iblock_check;
 
 		$arListsPerm = CLists::GetPermission($iblock_type_id);
+
+		if($USER->IsAdmin())
+			return CListPermissions::IS_ADMIN;
+
 		if(!$arListsPerm)
 		{
 			return CListPermissions::ACCESS_DENIED;
@@ -176,6 +186,17 @@ class CListPermissions
 		return CIBlock::GetPermission($iblock_id);
 	}
 
+	static protected function isListsType($iblockTypeId, $listsPermission)
+	{
+		$processTypeId = COption::GetOptionString('lists', 'livefeed_iblock_type_id');
+
+		return
+			$iblockTypeId === 'lists'
+			|| ($processTypeId !== '' && $iblockTypeId === $processTypeId)
+			|| (is_array($listsPermission) && count($listsPermission) > 0)
+		;
+	}
+
 	/**
 	 * @param $iblock_type_id string
 	 * @param $iblock_id int
@@ -183,11 +204,15 @@ class CListPermissions
 	 */
 	static protected function _iblock_check($iblock_type_id, $iblock_id)
 	{
+		$iblock_type = CIBlockType::GetByID($iblock_type_id)->Fetch();
+		if (!$iblock_type)
+			return CListPermissions::WRONG_IBLOCK_TYPE;
+
 		$iblock_id = intval($iblock_id);
 		if($iblock_id > 0)
 		{
-			$iblock_type = CIBlock::GetArrayByID($iblock_id, "IBLOCK_TYPE_ID");
-			if($iblock_type_id === $iblock_type)
+			$actual_iblock_type_id = CIBlock::GetArrayByID($iblock_id, "IBLOCK_TYPE_ID");
+			if($iblock_type_id === $actual_iblock_type_id)
 				return 0;
 			else
 				return CListPermissions::WRONG_IBLOCK_TYPE;

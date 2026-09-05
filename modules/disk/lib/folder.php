@@ -14,10 +14,12 @@ use Bitrix\Disk\Internals\RightTable;
 use Bitrix\Disk\Internals\SharingTable;
 use Bitrix\Disk\Internals\SimpleRightTable;
 use Bitrix\Disk\Internals\VersionTable;
+use Bitrix\Disk\Internal\Service\Folder\DeletionRestriction;
 use Bitrix\Disk\ProxyType\Group;
 use Bitrix\Disk\Security\SecurityContext;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Event;
@@ -44,6 +46,7 @@ class Folder extends BaseObject
 
 	/** @var bool */
 	protected $hasSubFolders;
+	private static ?DeletionRestriction $deletionRestriction = null;
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -73,6 +76,36 @@ class Folder extends BaseObject
 	public function canAdd(SecurityContext $securityContext)
 	{
 		return $securityContext->canAdd($this->id);
+	}
+
+	/**
+	 * Checks rights to delete current folder.
+	 * @param SecurityContext $securityContext Security context.
+	 * @return bool
+	 */
+	public function canDelete(SecurityContext $securityContext)
+	{
+		if ($this->isDeletionRestricted($this->normalizeDeletedBy($securityContext->getUserId())))
+		{
+			return false;
+		}
+
+		return parent::canDelete($securityContext);
+	}
+
+	/**
+	 * Checks rights to mark deleted current folder.
+	 * @param SecurityContext $securityContext Security context.
+	 * @return bool
+	 */
+	public function canMarkDeleted(SecurityContext $securityContext)
+	{
+		if ($this->isDeletionRestricted($this->normalizeDeletedBy($securityContext->getUserId())))
+		{
+			return false;
+		}
+
+		return parent::canMarkDeleted($securityContext);
 	}
 
 	/**
@@ -326,24 +359,27 @@ class Folder extends BaseObject
 		return $fileModel;
 	}
 
-	private function isDuplicateKeyError(SqlQueryException $exception)
-	{
-		return mb_strpos($exception->getDatabaseMessage(), '(1062)') !== false;
-	}
-
 	private function processAdd(array $data, ErrorCollection $errorCollection, bool $generateUniqueName = false, int $countStepsToGenerateName = 0): File|null
 	{
+		$connection = Application::getConnection();
+		$shouldUseTransaction = $generateUniqueName && $connection->getType() === 'pgsql';
+		if ($shouldUseTransaction)
+		{
+			$connection->startTransaction();
+		}
+
 		try
 		{
 			$fileModel = File::add($data, $errorCollection);
-			if (!$fileModel)
-			{
-				return null;
-			}
 		}
-		catch (SqlQueryException $exception)
+		catch (DuplicateEntryException $exception)
 		{
-			if ($generateUniqueName && $this->isDuplicateKeyError($exception))
+			if ($shouldUseTransaction)
+			{
+				$connection->rollbackTransaction();
+			}
+
+			if ($generateUniqueName)
 			{
 				$countStepsToGenerateName++;
 				if ($countStepsToGenerateName > 10)
@@ -371,6 +407,25 @@ class Folder extends BaseObject
 			}
 
 			throw $exception;
+		}
+		catch (\Throwable $exception)
+		{
+			if ($shouldUseTransaction)
+			{
+				$connection->rollbackTransaction();
+			}
+
+			throw $exception;
+		}
+
+		if ($shouldUseTransaction)
+		{
+			$connection->commitTransaction();
+		}
+
+		if (!$fileModel)
+		{
+			return null;
 		}
 
 		return $fileModel;
@@ -957,6 +1012,14 @@ class Folder extends BaseObject
 
 		$this->errorCollection->clear();
 
+		$restrictedFolder = $this->findDeletionRestrictedFolderInTree($this->normalizeDeletedBy($deletedBy));
+		if ($restrictedFolder !== null)
+		{
+			$this->addDeletionRestrictedError($restrictedFolder);
+
+			return false;
+		}
+
 		$driver = Driver::getInstance();
 		$driver->getSubscriberManager()->preloadSharingsForSubtree($this);
 
@@ -1001,6 +1064,16 @@ class Folder extends BaseObject
 			{
 				$success = $object->markDeletedInternal($deletedBy, ObjectTable::DELETED_TYPE_CHILD);
 			}
+
+			if (!$success)
+			{
+				if ($object !== $this)
+				{
+					$this->errorCollection->add($object->getErrors());
+				}
+
+				break;
+			}
 		}
 
 		$driver->getDeletedLogManager()->finalize();
@@ -1011,6 +1084,13 @@ class Folder extends BaseObject
 
 	protected function markDeletedNonRecursiveInternal($deletedBy, $deletedType = ObjectTable::DELETED_TYPE_ROOT)
 	{
+		if ($this->isDeletionRestricted($this->normalizeDeletedBy($deletedBy)))
+		{
+			$this->addDeletionRestrictedError($this);
+
+			return false;
+		}
+
 		$alreadyDeleted = $this->isDeleted();
 		$success = parent::markDeletedInternal($deletedBy, $deletedType);
 		if ($success && !$alreadyDeleted)
@@ -1092,13 +1172,25 @@ class Folder extends BaseObject
 	/**
 	 * Deletes folder and all descendants objects.
 	 * @param int $deletedBy Id of user (or SystemUser::SYSTEM_USER_ID).
+	 * @param bool $bypassDeletionRestriction Skip deletion restriction check (e.g. on owner teardown). $deletedBy is kept intact in events.
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 * @return bool
 	 */
-	public function deleteTree($deletedBy)
+	public function deleteTree($deletedBy, bool $bypassDeletionRestriction = false)
 	{
 		$this->errorCollection->clear();
+
+		if (!$bypassDeletionRestriction)
+		{
+			$restrictedFolder = $this->findDeletionRestrictedFolderInTree($this->normalizeDeletedBy($deletedBy));
+			if ($restrictedFolder !== null)
+			{
+				$this->addDeletionRestrictedError($restrictedFolder);
+
+				return false;
+			}
+		}
 
 		$parameters = array(
 			'select' => array(
@@ -1129,20 +1221,37 @@ class Folder extends BaseObject
 			if($object instanceof Folder)
 			{
 				/** @see \Bitrix\Disk\Folder::deleteNonRecursive */
-				$success = $object->deleteNonRecursive($deletedBy);
+				$success = $object->deleteNonRecursive($deletedBy, $bypassDeletionRestriction);
 			}
 			elseif($object instanceof File)
 			{
 				/** @see \Bitrix\Disk\File::delete */
 				$success = $object->delete($deletedBy);
 			}
+
+			if (!$success)
+			{
+				if ($object !== $this)
+				{
+					$this->errorCollection->add($object->getErrors());
+				}
+
+				break;
+			}
 		}
 
 		return $success;
 	}
 
-	protected function deleteNonRecursive($deletedBy)
+	protected function deleteNonRecursive($deletedBy, bool $bypassDeletionRestriction = false)
 	{
+		if (!$bypassDeletionRestriction && $this->isDeletionRestricted($this->normalizeDeletedBy($deletedBy)))
+		{
+			$this->addDeletionRestrictedError($this);
+
+			return false;
+		}
+
 		foreach($this->getSharingsAsReal() as $sharing)
 		{
 			$sharing->delete($deletedBy);
@@ -1182,7 +1291,7 @@ class Folder extends BaseObject
 			//todo potential - very hard operation.
 			foreach(Folder::getModelList(array('filter' => array('REAL_OBJECT_ID' => $this->id))) as $link)
 			{
-				$link->deleteTree($deletedBy);
+				$link->deleteTree($deletedBy, $bypassDeletionRestriction);
 			}
 		}
 
@@ -1190,6 +1299,83 @@ class Folder extends BaseObject
 		$event->send();
 
 		return true;
+	}
+
+	private function findDeletionRestrictedFolderInTree(?int $deletedBy): ?self
+	{
+		$restrictionFilters = self::getDeletionRestriction()->getRestrictedFolderFilters($deletedBy);
+
+		if (empty($restrictionFilters))
+		{
+			return null;
+		}
+
+		$filter = [
+			'PATH_CHILD.PARENT_ID' => $this->id,
+		];
+		if (count($restrictionFilters) === 1)
+		{
+			$filter = array_merge($filter, $restrictionFilters[0]);
+		}
+		else
+		{
+			$filter[] = array_merge(
+				['LOGIC' => 'OR'],
+				$restrictionFilters,
+			);
+		}
+
+		$parameters = [
+			'select' => [
+				'*',
+				'DEPTH_LEVEL' => 'PATH_CHILD.DEPTH_LEVEL',
+			],
+			'filter' => $filter,
+			'order' => ['DEPTH_LEVEL' => 'DESC'],
+			'limit' => 1,
+		];
+
+		$objectRow = FolderTable::getList(static::prepareGetListParameters($parameters))->fetch();
+
+		return $objectRow ? self::buildFromArray($objectRow) : null;
+	}
+
+	private function isDeletionRestricted(?int $deletedBy): bool
+	{
+		return self::getDeletionRestriction()->isRestricted($this, $deletedBy);
+	}
+
+	private function normalizeDeletedBy($deletedBy): ?int
+	{
+		if (!is_numeric($deletedBy))
+		{
+			return null;
+		}
+
+		return (int)$deletedBy;
+	}
+
+	private function addDeletionRestrictedError(self $folder): void
+	{
+		$this->errorCollection[] = new Error(
+			Loc::getMessage(
+				'DISK_FOLDER_MODEL_ERROR_COULD_NOT_DELETE_WITH_CODE',
+				[
+					'#CODE#' => $folder->getCode(),
+				],
+			),
+			self::ERROR_COULD_NOT_DELETE_WITH_CODE,
+		);
+	}
+
+	private static function getDeletionRestriction(): DeletionRestriction
+	{
+		if (self::$deletionRestriction === null)
+		{
+			self::$deletionRestriction = new DeletionRestriction();
+		}
+
+		return self::$deletionRestriction;
 	}
 
 	/**
@@ -1261,6 +1447,7 @@ final class SpecificFolder
 	const CODE_FOR_IMPORT_GDRIVE   = 'FOR_GDRIVE_FILES';
 	const CODE_FOR_IMPORT_BOX      = 'FOR_BOX_FILES';
 	const CODE_FOR_IMPORT_YANDEX   = 'FOR_YANDEXDISK_FILES';
+	const CODE_FOR_MAIL_ATTACHMENTS   = 'FOR_MAIL_ATTACHMENTS';
 
 	/**
 	 * Gets name for specific folder by code. If code is invalid, then return null.
@@ -1275,6 +1462,23 @@ final class SpecificFolder
 			return null;
 		}
 		return Loc::getMessage("DISK_FOLDER_SPECIFIC_{$code}_NAME");
+	}
+
+	public static function isSpecificFolder(Folder $folder, ?array $codes = null): bool
+	{
+		return self::isSpecificFolderCode($folder->getCode(), $codes);
+	}
+
+	public static function isSpecificFolderCode($code, ?array $codes = null): bool
+	{
+		if (!is_string($code))
+		{
+			return false;
+		}
+
+		$codes ??= self::getCodes();
+
+		return isset($codes[$code]) || in_array($code, $codes, true);
 	}
 
 	/**
@@ -1345,7 +1549,7 @@ final class SpecificFolder
 			static::CODE_FOR_IMPORT_GDRIVE === $code;
 	}
 
-	protected static function getCodes()
+	protected static function getCodes(): array
 	{
 		static $codes = null;
 		if($codes !== null)

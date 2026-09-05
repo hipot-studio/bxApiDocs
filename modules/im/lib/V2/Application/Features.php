@@ -48,7 +48,6 @@ class Features
 		public readonly bool $changeInviteLanguageAvailable,
 		public readonly bool $voteCreationAvailable,
 		public readonly bool $messagesAutoDeleteEnabled,
-		public readonly bool $isCopilotSelectModelAvailable,
 		public readonly bool $teamsInStructureAvailable,
 		public readonly bool $isDesktopRedirectAvailable,
 		public readonly bool $aiAssistantAvailable,
@@ -56,31 +55,27 @@ class Features
 		public readonly bool $aiFileTranscriptionAvailable,
 		public readonly bool $chatSharingLinkAvailable,
 		public readonly bool $isTasksRecentListAvailable,
-		public readonly bool $unreadRecentModeAvailable,
 		public readonly bool $aiAssistantMcpSelectorAvailable,
 		public readonly bool $videoNoteTranscriptionAvailable,
-		public readonly bool $isCopilotReasoningAvailable,
 		public readonly bool $isTextFormatToolbarAvailable,
 		public readonly bool $isCounterV3Available,
 		public readonly bool $isCopilotFileUploadAvailable,
 		public readonly bool $isMountedTasksCardAvailable,
 		public readonly bool $isBitrixGptV2Available,
-		public readonly bool $isMessageBuilderAvailable,
-		public readonly bool $isAddingUserByMentionAvailable,
 		public readonly bool $isNestedChatAvailable,
-		public readonly bool $isExternalChatMessageForwardingAvailable,
 		public readonly bool $isChatWithGuestsAvailable,
 		public readonly bool $isCopilotForceSearchAvailable,
 		public readonly bool $isCopilotWebSearchEnabledByAdmin,
 		public readonly bool $isCopilotWebSearchAllowedByTariff,
 		public readonly bool $isAiAssistantFeedbackAvailable,
 		public readonly bool $isAiAssistantAgentModeAvailable,
-		public readonly bool $isChatFoldersAvailable,
+		public readonly bool $isChatFoldersWebAvailable,
 		public readonly bool $isAiAssistantRegenerateAvailable,
 		public readonly bool $collabPreviewSourceEnabled,
 		public readonly bool $isMarkdownAvailable,
 		public readonly bool $isCopilotDraftChatAvailable,
 		public readonly bool $isAttachChatToProjectAvailable,
+		public readonly bool $isMessageDateNavigationAvailable,
 		public readonly bool $isReplyWithMediaAvailable,
 	){}
 
@@ -119,7 +114,6 @@ class Features
 			changeInviteLanguageAvailable: Invitation::isChangeLanguageAvailable(),
 			voteCreationAvailable: self::isVoteCreationAvailable(),
 			messagesAutoDeleteEnabled: self::isMessagesAutoDeleteEnabled(),
-			isCopilotSelectModelAvailable: self::isCopilotSelectModelAvailable(),
 			teamsInStructureAvailable: Structure::isTeamsAvailable(),
 			isDesktopRedirectAvailable: self::isDesktopRedirectAvailable(),
 			aiAssistantAvailable: self::isAiAssistantAvailable(),
@@ -127,18 +121,13 @@ class Features
 			aiFileTranscriptionAvailable: self::isAiFileTranscriptionAvailable(),
 			chatSharingLinkAvailable: self::isChatSharingLinkAvailable(),
 			isTasksRecentListAvailable: self::isTasksRecentListAvailable(),
-			unreadRecentModeAvailable: self::isUnreadRecentModeAvailable(),
 			aiAssistantMcpSelectorAvailable: self::isAiAssistantMcpSelectorAvailable(),
 			videoNoteTranscriptionAvailable: self::isVideoNoteTranscriptionAvailable(),
-			isCopilotReasoningAvailable: self::isCopilotReasoningAvailable(),
 			isTextFormatToolbarAvailable: self::isTextFormatToolbarAvailable(),
 			isCounterV3Available: self::isCounterV3Available(),
 			isCopilotFileUploadAvailable: self::isCopilotFileUploadAvailable(),
 			isMountedTasksCardAvailable: self::isMountedTasksCardAvailable(),
 			isBitrixGptV2Available: self::isBitrixGptV2Available(),
-			isMessageBuilderAvailable: self::isMessageBuilderAvailable(),
-			isAddingUserByMentionAvailable: self::isAddingUserByMentionAvailable(),
-			isExternalChatMessageForwardingAvailable: self::isExternalChatMessageForwardingAvailable(),
 			isNestedChatAvailable: Collab::isNewProjectsAvailable(),
 			isChatWithGuestsAvailable: self::isChatWithGuestsAvailable(GuestService::getInstance()->getCurrentInviterId()),
 			isCopilotForceSearchAvailable: self::isCopilotForceSearchAvailable(),
@@ -146,12 +135,13 @@ class Features
 			isCopilotWebSearchAllowedByTariff: self::isCopilotWebSearchAllowedByTariff(),
 			isAiAssistantFeedbackAvailable: self::isAiAssistantFeedbackAvailable(),
 			isAiAssistantAgentModeAvailable: self::isAiAssistantAgentModeAvailable(),
-			isChatFoldersAvailable: self::isChatFoldersAvailable(),
+			isChatFoldersWebAvailable: self::isChatFoldersWebAvailable(),
 			isAiAssistantRegenerateAvailable: self::isAiAssistantRegenerateAvailable(),
 			collabPreviewSourceEnabled: self::isCollabPreviewSourceEnabled(),
 			isMarkdownAvailable: self::isMarkdownAvailable(),
 			isCopilotDraftChatAvailable: self::isCopilotDraftChatAvailable(),
 			isAttachChatToProjectAvailable: self::isAttachChatToProjectAvailable(),
+			isMessageDateNavigationAvailable: self::isMessageDateNavigationAvailable(),
 			isReplyWithMediaAvailable: self::isReplyWithMediaAvailable(),
 		);
 	}
@@ -199,11 +189,6 @@ class Features
 		return Option::get('im', 'isAutoDeleteMessagesEnabled', 'Y') === 'Y';
 	}
 
-	public static function isCopilotSelectModelAvailable(): bool
-	{
-		return true;
-	}
-
 	public static function isDesktopRedirectAvailable(): bool
 	{
 		return Option::get('im', 'desktop_redirect_available', 'N') === 'Y';
@@ -244,19 +229,9 @@ class Features
 		return ServiceLocator::getInstance()->get(Restriction::class)->isTranscriptionActive();
 	}
 
-	public static function isUnreadRecentModeAvailable(): bool
-	{
-		return Option::get('im', 'unread_recent_mode_available', 'N') === 'Y';
-	}
-
 	public static function isTasksRecentListAvailable(): bool
 	{
 		return Loader::includeModule('tasks');
-	}
-
-	public static function isCopilotReasoningAvailable(): bool
-	{
-		return true;
 	}
 
 	public static function isAiAssistantMcpSelectorAvailable(): bool
@@ -310,6 +285,11 @@ class Features
 		return Option::get('im', 'adding_user_by_mention_available', 'N') === 'Y';
 	}
 
+	public static function isMessageDateNavigationAvailable(): bool
+	{
+		return Option::get('im', 'message_date_navigation_available', 'N') === 'Y';
+	}
+
 	public static function isExternalChatMessageForwardingAvailable(): bool
 	{
 		return Option::get('im', 'external_chat_message_forwarding_available', 'N') === 'Y';
@@ -355,9 +335,9 @@ class Features
 			&& !AiAssistantRestriction::getInstance()->isAvailable();
 	}
 
-	public static function isChatFoldersAvailable(): bool
+	public static function isChatFoldersWebAvailable(): bool
 	{
-		return Option::get('im', 'chat_folders_available', 'N') === 'Y';
+		return Option::get('im', 'chat_folders_web_available', 'N') === 'Y';
 	}
 
 	public static function isCopilotWebSearchEnabledByAdmin(): bool

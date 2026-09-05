@@ -103,9 +103,8 @@ class CBitrixCloudMonitoringDomainResult implements CBitrixCloudMonitoring_Acces
 {
 	/** @var string $name */
 	private $name = '';
-	/** @var array[int]CBitrixCloudMonitoringTest $tests */
-	private $tests = /*.(array[int]CBitrixCloudMonitoringTest.*/
-		[];
+	/** @var CBitrixCloudMonitoringTest[] $tests */
+	private $tests = [];
 
 	/**
 	 *
@@ -138,7 +137,7 @@ class CBitrixCloudMonitoringDomainResult implements CBitrixCloudMonitoring_Acces
 	/**
 	 *
 	 * @param string $name
-	 * @param array [int]CBitrixCloudMonitoringTest $tests
+	 * @param CBitrixCloudMonitoringTest[] $tests
 	 * @return void
 	 *
 	 */
@@ -161,7 +160,7 @@ class CBitrixCloudMonitoringDomainResult implements CBitrixCloudMonitoring_Acces
 
 	/**
 	 *
-	 * @return array[int]CBitrixCloudMonitoringTest
+	 * @return CBitrixCloudMonitoringTest[]
 	 *
 	 */
 	public function getTests()
@@ -171,7 +170,7 @@ class CBitrixCloudMonitoringDomainResult implements CBitrixCloudMonitoring_Acces
 
 	/**
 	 *
-	 * @param array [int]CBitrixCloudMonitoringTest $tests
+	 * @param CBitrixCloudMonitoringTest[] $tests
 	 * @return CBitrixCloudMonitoringDomainResult
 	 *
 	 */
@@ -179,14 +178,9 @@ class CBitrixCloudMonitoringDomainResult implements CBitrixCloudMonitoring_Acces
 	{
 		foreach ($tests as $test)
 		{
-			if (
-				is_object($test)
-				&& $test instanceof CBitrixCloudMonitoringTest
-			)
-			{
-				$this->tests[$test->getName()] = $test;
-			}
+			$this->tests[$test->getName()] = $test;
 		}
+
 		return $this;
 	}
 
@@ -244,32 +238,32 @@ class CBitrixCloudMonitoringDomainResult implements CBitrixCloudMonitoring_Acces
 		return new CBitrixCloudMonitoringDomainResult($name, $tests);
 	}
 
-	public function rewind()
+	public function rewind(): void
 	{
 		reset($this->tests);
 	}
 
-	public function current()
+	public function current(): mixed
 	{
 		return current($this->tests);
 	}
 
-	public function key()
+	public function key(): mixed
 	{
 		return key($this->tests);
 	}
 
-	public function next()
+	public function next(): void
 	{
 		next($this->tests);
 	}
 
-	public function valid()
+	public function valid(): bool
 	{
 		return key($this->tests) !== null;
 	}
 
-	public function offsetSet($offset, $value)
+	public function offsetSet($offset, $value): void
 	{
 		if (is_null($offset))
 		{
@@ -281,17 +275,17 @@ class CBitrixCloudMonitoringDomainResult implements CBitrixCloudMonitoring_Acces
 		}
 	}
 
-	public function offsetExists($offset)
+	public function offsetExists($offset): bool
 	{
 		return isset($this->tests[$offset]);
 	}
 
-	public function offsetUnset($offset)
+	public function offsetUnset($offset): void
 	{
 		unset($this->tests[$offset]);
 	}
 
-	public function offsetGet($offset)
+	public function offsetGet($offset): mixed
 	{
 		return $this->tests[$offset] ?? null;
 	}
@@ -370,7 +364,7 @@ class CBitrixCloudMonitoringResult implements CBitrixCloudMonitoring_Access
 		{
 			$domains->addDomainResult(CBitrixCloudMonitoringDomainResult::loadFromOptions(
 				$domainName,
-				CBitrixCloudOption::getOption("monitoring_result_" . $i)
+				CBitrixCloudOption::getOption('monitoring_result_' . $i)
 			));
 		}
 		return $domains;
@@ -383,7 +377,7 @@ class CBitrixCloudMonitoringResult implements CBitrixCloudMonitoring_Access
 		foreach ($domainNames as $i => $domainName)
 		{
 			$this->domains[$domainName]->saveToOptions(
-				CBitrixCloudOption::getOption("monitoring_result_" . $i)
+				CBitrixCloudOption::getOption('monitoring_result_' . $i)
 			);
 		}
 	}
@@ -407,32 +401,32 @@ class CBitrixCloudMonitoringResult implements CBitrixCloudMonitoring_Access
 		return $domains;
 	}
 
-	public function rewind()
+	public function rewind(): void
 	{
 		reset($this->domains);
 	}
 
-	public function current()
+	public function current(): mixed
 	{
 		return current($this->domains);
 	}
 
-	public function key()
+	public function key(): mixed
 	{
 		return key($this->domains);
 	}
 
-	public function next()
+	public function next(): void
 	{
 		next($this->domains);
 	}
 
-	public function valid()
+	public function valid(): bool
 	{
 		return key($this->domains) !== null;
 	}
 
-	public function offsetSet($offset, $value)
+	public function offsetSet($offset, $value): void
 	{
 		if (is_null($offset))
 		{
@@ -444,17 +438,17 @@ class CBitrixCloudMonitoringResult implements CBitrixCloudMonitoring_Access
 		}
 	}
 
-	public function offsetExists($offset)
+	public function offsetExists($offset): bool
 	{
 		return isset($this->domains[$offset]);
 	}
 
-	public function offsetUnset($offset)
+	public function offsetUnset($offset): void
 	{
 		unset($this->domains[$offset]);
 	}
 
-	public function offsetGet($offset)
+	public function offsetGet($offset): mixed
 	{
 		return $this->domains[$offset] ?? null;
 	}

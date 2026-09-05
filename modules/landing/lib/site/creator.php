@@ -31,6 +31,39 @@ class Creator
 			$siteType = SiteEntity::getDefaultType();
 		}
 
+		// every check of the creation, and everything the creation reaches, reads the section the
+		// process entered, while the ajax entrance is dispatched past executeComponent(), the place
+		// a component of a section enters it: the section of the operation is the one of the site.
+		// SCOPE_CODE_DEFAULT restores the state of no scope set, it has no scope class of its own
+		$previousScope = Type::getCurrentScopeId() ?? Type::SCOPE_CODE_DEFAULT;
+		Type::setScope($siteType);
+
+		try
+		{
+			// a section closed by the plan is not entered at all, and the checks after it answer for
+			// the base one. hasCreateRight() names the section itself, but the tariff feature of the
+			// rights is still read by the entered section (Restriction\Rights::isAllowed()), so on a
+			// plan without that feature the right of the section reads as allowed to everyone. What
+			// stops the creation today is the list of types the base section allows, and that list is
+			// a compatibility one, not a check of access
+			if (!Type::isScopeEntered($siteType))
+			{
+				$result = new Result();
+				$result->addError(new Error('Access denied.', 'ACCESS_DENIED'));
+
+				return $result;
+			}
+
+			return self::createSite($siteType, $siteTitle, $pageTitle);
+		}
+		finally
+		{
+			Type::setScope($previousScope);
+		}
+	}
+
+	private static function createSite(string $siteType, string $siteTitle, string $pageTitle): Result
+	{
 		$templateResult = null;
 		if (self::shouldCreateByTemplate($siteType))
 		{
@@ -45,7 +78,7 @@ class Creator
 		$landingResult = null;
 		$siteId = 0;
 
-		if (Rights::isOn() && !self::canCreateSite())
+		if (Rights::isOn() && !self::canCreateSite($siteType))
 		{
 			$result = new Result();
 			$result->addError(new Error('Access denied.', 'ACCESS_DENIED'));
@@ -157,6 +190,19 @@ class Creator
 		string $pageTitle
 	): Result
 	{
+		// the branch is able to create a site and still report a refusal, so the right goes first.
+		// only the soft create right of the section is asked here, while canCreateSite() of the
+		// direct branch also demands the edit operation: on a portal whose section was never
+		// configured the holder of the right can have no operation at all, and demanding one would
+		// close creating a site of the section for him again (regression 0242125)
+		if (Rights::isOn() && !self::hasCreateRight($siteType))
+		{
+			$result = new Result();
+			$result->addError(new Error('Access denied.', 'ACCESS_DENIED'));
+
+			return $result;
+		}
+
 		$maxSiteIdBeforeCreate = 0;
 		$beforeRow = SiteEntity::getList([
 			'select' => ['ID'],
@@ -265,12 +311,37 @@ class Creator
 		return in_array($siteType, [Type::SCOPE_CODE_KNOWLEDGE, Type::SCOPE_CODE_GROUP], true);
 	}
 
-	private static function canCreateSite(): bool
+	private static function canCreateSite(string $siteType): bool
 	{
 		$rights = Rights::getOperationsForSite(0);
 
-		return Rights::hasAdditionalRight(Rights::ADDITIONAL_RIGHTS['create'])
+		return self::hasCreateRight($siteType)
 			&& in_array(Rights::ACCESS_TYPES['edit'], $rights, true)
 		;
+	}
+
+	/**
+	 * Create right of the section the site belongs to. The entered scope alone would not do: a
+	 * section whose scope cannot be entered (a tariff closes it) would fall back to the right of
+	 * the base section, and that is the escalation this asks the section explicitly for.
+	 */
+	private static function hasCreateRight(string $siteType): bool
+	{
+		return Rights::hasAdditionalRight(
+			Rights::ADDITIONAL_RIGHTS['create'],
+			self::sectionOfSiteType($siteType)
+		);
+	}
+
+	/**
+	 * Section of the site type as the registry of the additional rights names it, or null when the
+	 * type carries no create right of its own and the base section answers for it: an unknown code
+	 * would be denied to everyone, and there is no page_create in the registry.
+	 */
+	private static function sectionOfSiteType(string $siteType): ?string
+	{
+		$section = Type::getCompatibilityScopeClass(mb_strtoupper($siteType));
+
+		return Rights::hasCodeInScope(Rights::ADDITIONAL_RIGHTS['create'], $section) ? $section : null;
 	}
 }

@@ -32,7 +32,7 @@ class TaskManager
 		$errors = [];
 		foreach ($tasks as $task)
 		{
-			\CBPDocument::SendExternalEvent(
+			\CBPDocument::sendExternalEvent(
 				$task['WORKFLOW_ID'],
 				$task['ACTIVITY_NAME'],
 				[
@@ -181,9 +181,13 @@ class TaskManager
 		{
 			$taskUsers = $this->getTaskUsers($taskId);
 			$task['USERS'] = array_column($taskUsers, 'id');
-			$task['INCOMPLETE_USERS'] = array_filter(array_map(function ($user) {
-				return ($user['status'] === \CBPTaskUserStatus::Waiting) ? $user['id'] : null;
-			}, $taskUsers));
+			$task['INCOMPLETE_USERS'] = array_filter(array_map(
+				function ($user)
+				{
+					return ($user['status'] === \CBPTaskUserStatus::Waiting) ? $user['id'] : null;
+				},
+				$taskUsers
+			));
 
 			return $task;
 		}

@@ -131,6 +131,8 @@ class CMail
 			CMailbox::delete($mailbox['ID']);
 		}
 
+		\Bitrix\Mail\Internals\MailMessageMarkTable::deleteByFilter(['=USER_ID' => (int)$id]);
+
 		\Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService::resetResponsibleAdminIfNeeded(
 			(int)$id,
 		);
@@ -768,6 +770,7 @@ class CAllMailBox
 			return false;
 
 		\Bitrix\Mail\Internals\MailboxAccessTable::deleteByFilter(['=MAILBOX_ID' => $ID,]);
+		\Bitrix\Mail\Internals\MailMessageMarkTable::deleteByFilter(['=MAILBOX_ID' => $ID]);
 		\Bitrix\Mail\Internals\MailEntityDataTable::deleteList(['=MAILBOX_ID' => $ID]);
 		$DB->query(sprintf('DELETE FROM b_mail_mailbox_dir WHERE MAILBOX_ID = %u', $ID));
 		$DB->query(sprintf('DELETE FROM b_mail_counter WHERE MAILBOX_ID = %u', $ID));
@@ -1775,6 +1778,10 @@ class CAllMailMessage
 			),
 			MailMessageTable::FIELD_SANITIZE_ON_VIEW => (int)($params[MailMessageTable::FIELD_SANITIZE_ON_VIEW] ?? 0)
 		);
+		if (array_key_exists('external_id', $params))
+		{
+			$arFields['EXTERNAL_ID'] = $params['external_id'];
+		}
 
 		if (
 			($arFields['OPTIONS']['attachments'] <= 0)
@@ -1947,7 +1954,7 @@ class CAllMailMessage
 
 					$arFields['BODY_BB'] = \Bitrix\Mail\Message::parseMessage($msg);
 
-					$arFields['BODY_HTML'] = \Bitrix\Mail\Helper\Message::sanitizeHtml($message_body_html, true);
+					$arFields['BODY_HTML'] = \Bitrix\Mail\Helper\Message::sanitizeHtmlForMessageView($message_body_html);
 				}
 
 				foreach ($arMessageParts as $part)
@@ -2272,6 +2279,8 @@ class CAllMailMessage
 		$DB->query(sprintf('DELETE FROM b_mail_message_access WHERE MESSAGE_ID = %u', $id));
 
 		$DB->query(sprintf('DELETE FROM b_mail_message_closure WHERE MESSAGE_ID = %1$u OR PARENT_ID = %1$u', $id));
+
+		\Bitrix\Mail\Internals\MailMessageMarkTable::deleteByFilter(['=MESSAGE_ID' => $id]);
 
 		$strSql = "DELETE FROM b_mail_message WHERE ID=".$id;
 		$DB->Query($strSql);

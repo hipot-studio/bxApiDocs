@@ -10,6 +10,10 @@ class UploadResult extends \Bitrix\Main\Result implements \JsonSerializable
 	protected ?FileInfo $file = null;
 	protected ?string $token = null;
 	protected bool $done = false;
+	protected ?string $strategy = null;
+	protected ?int $partSize = null;
+	protected ?int $partCount = null;
+	protected ?array $presignedParts = null;
 
 	public static function reject(Error $error): self
 	{
@@ -89,12 +93,66 @@ class UploadResult extends \Bitrix\Main\Result implements \JsonSerializable
 		return $this->done;
 	}
 
+	public function getStrategy(): ?string
+	{
+		return $this->strategy;
+	}
+
+	public function setStrategy(?string $strategy): void
+	{
+		$this->strategy = $strategy;
+	}
+
+	public function getPartSize(): ?int
+	{
+		return $this->partSize;
+	}
+
+	public function setPartSize(?int $partSize): void
+	{
+		$this->partSize = $partSize;
+	}
+
+	public function getPartCount(): ?int
+	{
+		return $this->partCount;
+	}
+
+	public function setPartCount(?int $partCount): void
+	{
+		$this->partCount = $partCount;
+	}
+
+	public function getPresignedParts(): ?array
+	{
+		return $this->presignedParts;
+	}
+
+	public function setPresignedParts(?array $parts): void
+	{
+		$this->presignedParts = $parts;
+	}
+
 	public function jsonSerialize(): array
 	{
-		return [
+		$data = [
 			'token' => $this->getToken(),
 			'done' => $this->isDone(),
 			'file' => $this->getFileInfo(),
 		];
+
+		if ($this->getStrategy() !== null)
+		{
+			$data['strategy'] = $this->getStrategy();
+			$data['partSize'] = $this->getPartSize();
+			$data['partCount'] = $this->getPartCount();
+		}
+
+		if ($this->getPresignedParts() !== null)
+		{
+			$data['parts'] = $this->getPresignedParts();
+		}
+
+		return $data;
 	}
 }

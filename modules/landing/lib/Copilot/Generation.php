@@ -14,6 +14,7 @@ use Bitrix\Landing\Copilot\Generation\Timer;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Model\GenerationsTable;
 use Bitrix\Landing\Copilot\Services\FirstSiteGenerationService;
+use Bitrix\Landing\Copilot\Services\GenerationErrorStatusMapper;
 use Bitrix\Landing\Metrika;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -384,6 +385,33 @@ class Generation
 	}
 
 	/**
+	 * Tells if a generation of the scenario exists for the site, without loading its data.
+	 * Answers like initBySiteId(), but does not read the heavy fields of the generation.
+	 *
+	 * @param int $siteId Site ID.
+	 * @param IScenario $scenario Scenario instance.
+	 *
+	 * @return bool True if such a generation exists, false otherwise.
+	 */
+	public static function existsBySiteId(int $siteId, IScenario $scenario): bool
+	{
+		$generation = GenerationsTable::query()
+			->where('SCENARIO', '=', $scenario::class)
+			->where('SITE_ID', '=', $siteId)
+			// SITE_DATA is written as a serialized array when the generation is created, so NULL there
+			// marks a record the initialization path cannot use: initExists() leaves siteData unset and
+			// initScenarist() gives up on it. The predicate keeps the answer of this method equal to the
+			// answer of initBySiteId() without reading the heavy fields of the generation
+			->whereNotNull('SITE_DATA')
+			->setSelect(['ID'])
+			->setLimit(1)
+			->fetch()
+		;
+
+		return (bool)$generation;
+	}
+
+	/**
 	 * Initializes this instance with data from an existing generation matching the filter.
 	 * @param Filter\ConditionTree $filter ORM filter for the query.
 	 *
@@ -531,8 +559,11 @@ class Generation
 		if ($e instanceof GenerationException)
 		{
 			$this->rememberLastError($e);
-			$this->save(false);
 			$this->sendMetrikaError($e);
+			// the scenario hook may mark the generation data (analytics idempotency across resumes),
+			// so the data is persisted after it, not before
+			$this->scenario->onGenerationError($this, $e);
+			$this->save(false);
 			$this->getEvent()->send(self::EVENT_GENERATION_ERROR);
 
 			return false;
@@ -660,6 +691,18 @@ class Generation
 		}
 
 		return $this->scenarist->isFinished();
+	}
+
+	/**
+	 * Tells if the finish mark was already in the base when this instance was initialized.
+	 * The mark is persisted after the hooks of the scenario are called, so during them the answer
+	 * is "yes" only for a repeated run of an already finished generation.
+	 *
+	 * @return bool
+	 */
+	public function isFinishedPersisted(): bool
+	{
+		return $this->dateFinished !== null;
 	}
 
 	/**
@@ -1005,6 +1048,7 @@ class Generation
 
 	/**
 	 * Sends metrika analytics for an error during generation.
+	 * Steps without an analytic event are not covered by analytics, errors included.
 	 *
 	 * @param GenerationException $e
 	 *
@@ -1012,25 +1056,14 @@ class Generation
 	 */
 	private function sendMetrikaError(GenerationException $e): void
 	{
-		$errorCode = $e->getErrorCode();
-		/**
-		 * @var Metrika\Statuses $status
-		 */
-		$status = match ($errorCode)
+		$analyticEvent = $this->scenarist->getCurrentStep()?->step->getAnalyticEvent();
+		if ($analyticEvent === null)
 		{
-			GenerationErrors::requestQuotaExceeded => $e->getParams()['metrikaStatus'] ?? Metrika\Statuses::ErrorB24,
-			GenerationErrors::restrictedRequest => $e->getParams()['metrikaStatus'] ?? Metrika\Statuses::ErrorContentPolicy,
-			GenerationErrors::notExistResponse,
-			GenerationErrors::notFullyResponse,
-			GenerationErrors::notCorrectResponse => Metrika\Statuses::ErrorProvider,
-			default => Metrika\Statuses::ErrorB24,
-		};
-
-		$step = $this->scenarist->getCurrentStep();
-		$analyticEvent = $step?->step->getAnalyticEvent() ?? Metrika\Events::unknown;
+			return;
+		}
 
 		$metrika = $this->getMetrika($analyticEvent);
-		$metrika->setStatus($status);
+		$metrika->setStatus(GenerationErrorStatusMapper::resolve($e));
 		$metrika->send();
 	}
 

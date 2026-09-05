@@ -10,7 +10,7 @@ class CBitrixCloudBackupWebService extends CBitrixCloudWebService
 	/**
 	 * Returns URL to backup webservice
 	 *
-	 * @param array[string]string $arParams
+	 * @param string[] $arParams
 	 * @return string
 	 *
 	 */
@@ -117,7 +117,7 @@ class CBitrixCloudBackupWebService extends CBitrixCloudWebService
 	 * @param string $secret_key
 	 * @param string $url
 	 * @param int $time
-	 * @param array $weekdays
+	 * @param array|false $weekdays
 	 * @return CDataXML
 	 *
 	 */
@@ -161,6 +161,7 @@ class CBitrixCloudBackupWebService extends CBitrixCloudWebService
 				}
 			}
 		}
+
 		if (!$weekdaysIsOk)
 		{
 			throw new CBitrixCloudException(GetMessage('BCL_BACKUP_WRONG_WEEKDAYS'), '');

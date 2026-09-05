@@ -417,7 +417,7 @@ class UrlManager
 
 	public function getFileUrlTemplate(int $typeId, int $itemId, string $fieldName): string
 	{
-		$uri = \Bitrix\Main\Engine\UrlManager::getInstance()->create('rpa.item.getfile', [
+		$uri = \Bitrix\Main\Engine\UrlManager::getInstance()->create('rpa.Item.getfile', [
 			'typeId' => $typeId,
 			'id' => $itemId,
 			'fieldName' => $fieldName,
@@ -428,7 +428,7 @@ class UrlManager
 
 	public function getFileUrl(int $typeId, int $itemId, string $fieldName, int $fileId): Uri
 	{
-		return new ContentUri(\Bitrix\Main\Engine\UrlManager::getInstance()->create('rpa.item.getfile', [
+		return new ContentUri(\Bitrix\Main\Engine\UrlManager::getInstance()->create('rpa.Item.getfile', [
 			'typeId' => $typeId,
 			'id' => $itemId,
 			'fieldName' => $fieldName,
@@ -573,7 +573,7 @@ class UrlManager
 		$userId = $this->getUserId();
 		if($userId > 0)
 		{
-			$view = \CUserOptions::GetOption(Driver::MODULE_ID, $optionName, null, $userId);
+			$view = \CUserOptions::getOption(Driver::MODULE_ID, $optionName, null, $userId);
 		}
 		if(!is_string($view))
 		{

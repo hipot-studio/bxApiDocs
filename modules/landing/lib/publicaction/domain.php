@@ -13,6 +13,7 @@ class Domain
 	protected const DOMAIN_MAX_LENGTH = 63;
 	protected const DOMAIN_SYMBOLS_REGEXP = '/^[a-z\d.-]+$/i';
 	protected const DOMAIN_WRONG_SYMBOLS_REGEXP = '/(--|-\.|\.\.|^\.|\.$|^-|-$)/i';
+	protected const CHECK_FILTER_ALLOWED_KEYS = ['ID', '=ID', '!ID', '!=ID'];
 
 	/**
 	 * Get available domains.
@@ -137,7 +138,7 @@ class Domain
 	/**
 	 * Checks if domain is available and puny it.
 	 * @param string $domain Domain name.
-	 * @param array $filter Additional filter for exclude in domain search.
+	 * @param array $filter Domain ids to exclude from the search, see self::prepareCheckFilter().
 	 * @return \Bitrix\Landing\PublicActionResult
 	 */
 	public static function check($domain, array $filter = [])
@@ -192,10 +193,7 @@ class Domain
 		}
 
 		// additional filter
-		if (!is_array($filter))
-		{
-			$filter = [];
-		}
+		$filter = self::prepareCheckFilter($filter);
 		$filter['=DOMAIN'] = $return['domain'];
 
 		// check domain
@@ -253,6 +251,42 @@ class Domain
 		// set result and return
 		$result->setResult($return);
 		return $result;
+	}
+
+	/**
+	 * Keeps in the client filter only the exclusion of domains by id.
+	 * The filter goes into ORM as is, so any other key lets the caller join foreign tables
+	 * by dot notation and turn the availability flag into an oracle over their fields.
+	 * @param array $filter Filter from the client.
+	 * @return array
+	 */
+	protected static function prepareCheckFilter(array $filter): array
+	{
+		$prepared = [];
+
+		foreach ($filter as $key => $value)
+		{
+			if (!in_array($key, self::CHECK_FILTER_ALLOWED_KEYS, true))
+			{
+				continue;
+			}
+
+			$ids = [];
+			foreach (is_array($value) ? $value : [$value] as $id)
+			{
+				if (is_scalar($id) && (int)$id > 0)
+				{
+					$ids[] = (int)$id;
+				}
+			}
+
+			if ($ids)
+			{
+				$prepared[$key] = count($ids) === 1 ? $ids[0] : $ids;
+			}
+		}
+
+		return $prepared;
 	}
 
 	/**

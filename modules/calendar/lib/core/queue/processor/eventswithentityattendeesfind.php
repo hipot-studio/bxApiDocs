@@ -3,6 +3,7 @@
 namespace Bitrix\Calendar\Core\Queue\Processor;
 
 use Bitrix\Calendar\Core\Queue\Interfaces;
+use Bitrix\Calendar\Integration\HumanResources\TeamAccessCode;
 use Bitrix\Calendar\Internals\EventTable;
 use Bitrix\Calendar\Watcher\Membership\Handler\Handler;
 use Bitrix\Main\Application;
@@ -13,6 +14,7 @@ class EventsWithEntityAttendeesFind implements Interfaces\Processor
 		Handler::WORK_GROUP_TYPE => 'SG',
 		Handler::DEPARTMENT_TYPE => 'DR',
 		Handler::ALL_USERS_TYPE => 'UA',
+		Handler::TEAM_TYPE => TeamAccessCode::PREFIX,
 	];
 
 	/**

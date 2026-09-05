@@ -10,7 +10,6 @@ use Bitrix\Booking\Command\ResourceType\UpdateResourceTypeCommand;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\AbstractEventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
-use Bitrix\Main\Event;
 
 class ResourceTypeEventProcessor extends AbstractEventProcessor
 {
@@ -54,13 +53,4 @@ class ResourceTypeEventProcessor extends AbstractEventProcessor
 			parameters: ['resourceTypeId' => $command->id],
 		);
     }
-
-	private function sendBitrixEvent(string $type, array $parameters): void
-	{
-		(new Event(
-			moduleId: 'booking',
-			type: $type,
-			parameters: $parameters,
-		))->send();
-	}
 }

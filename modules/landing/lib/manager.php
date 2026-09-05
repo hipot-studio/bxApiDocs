@@ -586,138 +586,244 @@ class Manager
 	 * @param mixed $file File array or path to file.
 	 * @param string $ext File extension (if can't detected by file name).
 	 * @param array $params Some file params.
+	 * @param bool $trustedSource File comes from the server side. Client input is never trusted:
+	 * only a trusted source may point to a file which already lies on the local file system.
+	 * The local path branch is kept for backward compatibility with callers outside the monorepo,
+	 * there is no such call inside it.
 	 * @return array|false Local file array or false on error.
 	 */
-	public static function savePicture($file, $ext = false, $params = array())
+	public static function savePicture($file, $ext = false, $params = array(), bool $trustedSource = false)
 	{
-		// local file
-		if (!is_array($file) && mb_substr($file, 0, 1) == '/')
-		{
-			$file = \CFile::makeFileArray($file);
-		}
-		// url of picture
-		else if (!is_array($file))
-		{
-			$httpClient = new \Bitrix\Main\Web\HttpClient();
-			$httpClient->setPrivateIp(false);
-			$httpClient->setTimeout(5);
-			$httpClient->setStreamTimeout(5);
-			$urlComponents = parse_url($file);
+		// temp file created below, must not be left on disk
+		$tempFilePath = null;
 
-			// detect tmp file name
-			if ($urlComponents && $urlComponents['path'] != '')
+		try
+		{
+			// local file
+			if (!is_array($file) && mb_substr($file, 0, 1) == '/')
 			{
-				$tempPath = \CFile::getTempName('', bx_basename(urldecode($urlComponents['path'])));
-			}
-			else
-			{
-				$tempPath = \CFile::getTempName('', bx_basename(urldecode($file)));
-			}
-			if ($ext !== false && in_array($ext, explode(',', \CFile::getImageExtensions())))
-			{
-				if (mb_substr($tempPath, -3) != $ext)
+				if (!$trustedSource)
 				{
-					$tempPath = $tempPath . '.' . $ext;
+					return false;
+				}
+
+				$file = \CFile::makeFileArray($file);
+			}
+			// url of picture
+			else if (!is_array($file))
+			{
+				$httpClient = new \Bitrix\Main\Web\HttpClient();
+				$httpClient->setPrivateIp(false);
+				$httpClient->setTimeout(5);
+				$httpClient->setStreamTimeout(5);
+				$urlComponents = parse_url($file);
+
+				// detect tmp file name
+				if ($urlComponents && $urlComponents['path'] != '')
+				{
+					$tempPath = \CFile::getTempName('', bx_basename(urldecode($urlComponents['path'])));
+				}
+				else
+				{
+					$tempPath = \CFile::getTempName('', bx_basename(urldecode($file)));
+				}
+				$normalizedExt = $ext === false ? '' : self::normalizeExtension((string)$ext);
+				if ($normalizedExt !== '' && in_array($normalizedExt, self::getImageExtensions(), true))
+				{
+					if (mb_substr($tempPath, -3) !== $normalizedExt)
+					{
+						$tempPath = $tempPath . '.' . $normalizedExt;
+					}
+				}
+
+				// download and save
+				if ($httpClient->download($file, $tempPath))
+				{
+					$tempFilePath = $tempPath;
+					$fileName = $httpClient->getHeaders()->getFilename();
+					$file = \CFile::makeFileArray($tempPath);
+					if ($file && $fileName)
+					{
+						$file['name'] = $fileName;
+					}
 				}
 			}
 
-			// download and save
-			if ($httpClient->download($file, $tempPath))
-			{
-				$fileName = $httpClient->getHeaders()->getFilename();
-				$file = \CFile::makeFileArray($tempPath);
-				if ($file && $fileName)
-				{
-					$file['name'] = $fileName;
-				}
-			}
-		}
-
-		// base64
-		elseif (
-			is_array($file) &&
-			isset($file[0]) &&
-			isset($file[1])
-		)
-		{
-			$fileParts = explode('.', $file[0]);
-			$ext = array_pop($fileParts);
-			$tempPath = \CFile::getTempName(
-				'',
-				\CUtil::translit(
-					implode('', $fileParts),
-					'ru'
-				) . '.' . $ext
-			);
-			$fileIO = new \Bitrix\Main\IO\File(
-				$tempPath
-			);
-			$fileIO->putContents(
-				base64_decode($file[1])
-			);
-			$file = \CFile::makeFileArray($tempPath);
-		}
-
-		$isSvg = false;
-		$isImage = \CFile::checkImageFile($file, 0, 0, 0, array('IMAGE')) === null;
-
-		if (!$isImage && (Manager::getOption('allow_svg_content') === 'Y'))
-		{
-			$extension = \getFileExtension(mb_strtolower($file['name']));
-			if ($extension === 'svg')
-			{
-				$isSvg = true;
-			}
-		}
-
-		// post array or file from prev. steps
-		if ($isImage || $isSvg)
-		{
-			// resize if needed
-			if (
-				$isImage &&
-				isset($params['width']) &&
-				isset($params['height'])
+			// base64
+			elseif (
+				is_array($file) &&
+				isset($file[0]) &&
+				isset($file[1])
 			)
 			{
-				\CFile::resizeImage(
-					$file,
-					$params,
-					isset($params['resize_type'])
-					? intval($params['resize_type'])
-					: BX_RESIZE_IMAGE_PROPORTIONAL);
-			}
-			// if duplicate change size little (bug #167903)
-			if ($isImage && self::isDuplicateExistsInAnotherModule($file['tmp_name'], $file['size']))
-			{
-				[$width, $height] = getimagesize($file['tmp_name']) ?: [0, 0];
-				if ($width && $height)
+				$fileParts = explode('.', $file[0]);
+				$ext = self::normalizeExtension((string)array_pop($fileParts));
+				if (!self::isAllowedImageExtension($ext))
 				{
-					\CFile::resizeImage($file, ['width' => $width-1, 'height' => $height-1]);
+					return false;
+				}
+
+				$tempPath = \CFile::getTempName(
+					'',
+					\CUtil::translit(
+						implode('', $fileParts),
+						'ru'
+					) . '.' . $ext
+				);
+				$fileIO = new \Bitrix\Main\IO\File(
+					$tempPath
+				);
+				$fileIO->putContents(
+					base64_decode($file[1])
+				);
+				$tempFilePath = $tempPath;
+				$file = \CFile::makeFileArray($tempPath);
+			}
+
+			// file array from the caller
+			elseif (!$trustedSource && !self::isUploadedFileArray($file))
+			{
+				$loggedKeys = array_slice(array_keys($file), 0, 20);
+				Debug::log(
+					'savePicture',
+					'file array keys: ' . mb_substr(implode(', ', $loggedKeys), 0, 200),
+					'LANDING_FILE_UNTRUSTED_SOURCE'
+				);
+
+				return false;
+			}
+
+			$isSvg = false;
+			$isImage = \CFile::checkImageFile($file, 0, 0, 0, array('IMAGE')) === null;
+
+			if (!$isImage && self::isSvgAllowed())
+			{
+				$extension = \getFileExtension(mb_strtolower($file['name'] ?? ''));
+				if ($extension === 'svg')
+				{
+					$isSvg = true;
 				}
 			}
-			// save
-			$module = 'landing';
-			$file['name'] = File::transliterateFileName($file['name']);
-			$file['name'] = File::sanitizeFileName($file['name']);
-			$file['MODULE_ID'] = $module;
-			$file = \CFile::saveFile($file, $module);
-			if ($file)
+
+			// post array or file from prev. steps
+			if ($isImage || $isSvg)
 			{
-				$file = \CFile::getFileArray($file);
+				// resize if needed
+				if (
+					$isImage &&
+					isset($params['width']) &&
+					isset($params['height'])
+				)
+				{
+					\CFile::resizeImage(
+						$file,
+						$params,
+						isset($params['resize_type'])
+						? intval($params['resize_type'])
+						: BX_RESIZE_IMAGE_PROPORTIONAL);
+				}
+				// if duplicate change size little (bug #167903)
+				if ($isImage && self::isDuplicateExistsInAnotherModule($file['tmp_name'], $file['size']))
+				{
+					[$width, $height] = getimagesize($file['tmp_name']) ?: [0, 0];
+					if ($width && $height)
+					{
+						\CFile::resizeImage($file, ['width' => $width-1, 'height' => $height-1]);
+					}
+				}
+				// save
+				$module = 'landing';
+				$file['name'] = File::transliterateFileName($file['name']);
+				$file['name'] = File::sanitizeFileName($file['name']);
+				$file['MODULE_ID'] = $module;
+				$file = \CFile::saveFile($file, $module);
+				if ($file)
+				{
+					$file = \CFile::getFileArray($file);
+				}
+				if ($file)
+				{
+					$file['SRC'] = str_replace(
+						'%',
+						'%25',
+						$file['SRC']
+					);
+					return $file;
+				}
 			}
-			if ($file)
+
+			return false;
+		}
+		finally
+		{
+			if ($tempFilePath !== null)
 			{
-				$file['SRC'] = str_replace(
-					'%',
-					'%25',
-					$file['SRC']
-				);
-				return $file;
+				\Bitrix\Main\IO\File::deleteFile($tempFilePath);
 			}
 		}
+	}
 
-		return false;
+	/**
+	 * Checks that the file array points to a file uploaded within the current request.
+	 * Client input may not point to any other file on the local file system.
+	 * @param array $file File array.
+	 * @return bool
+	 */
+	private static function isUploadedFileArray(array $file): bool
+	{
+		return isset($file['tmp_name'])
+			&& is_string($file['tmp_name'])
+			&& is_uploaded_file($file['tmp_name'])
+		;
+	}
+
+	/**
+	 * Checks normalized extension against the image extensions the method is able to save.
+	 * @param string $ext File extension, normalized by self::normalizeExtension().
+	 * @return bool
+	 */
+	private static function isAllowedImageExtension(string $ext): bool
+	{
+		if ($ext === '')
+		{
+			return false;
+		}
+
+		$allowedExtensions = self::getImageExtensions();
+		if (self::isSvgAllowed())
+		{
+			$allowedExtensions[] = 'svg';
+		}
+
+		return in_array($ext, $allowedExtensions, true);
+	}
+
+	/**
+	 * Gets normalized extensions of the image types the core is able to process.
+	 * @return string[]
+	 */
+	private static function getImageExtensions(): array
+	{
+		return array_map([self::class, 'normalizeExtension'], explode(',', \CFile::getImageExtensions()));
+	}
+
+	/**
+	 * Checks that svg files may be stored as pictures.
+	 * @return bool
+	 */
+	private static function isSvgAllowed(): bool
+	{
+		return self::getOption('allow_svg_content') === 'Y';
+	}
+
+	/**
+	 * Brings file extension to the form the check and the temp file name rely on.
+	 * @param string $ext File extension.
+	 * @return string
+	 */
+	private static function normalizeExtension(string $ext): string
+	{
+		return mb_strtolower(trim($ext));
 	}
 
 	/**
@@ -980,24 +1086,28 @@ class Manager
 	 */
 	public static function availableOnlyForZone(string $zone): bool
 	{
-		static $available = null;
+		// Memoize per $zone: a plain static scalar would freeze the first verdict for every
+		// subsequent call regardless of the requested zone.
+		static $available = [];
 
-		if ($available !== null)
+		if (isset($available[$zone]))
 		{
-			return $available;
+			return $available[$zone];
 		}
 
-		$available = true;
+		$result = true;
 
 		if ($zone === 'ru')
 		{
 			if (!in_array(self::getZone(), ['ru', 'by', 'kz', 'uz']))
 			{
-				$available = false;
+				$result = false;
 			}
 		}
 
-		return $available;
+		$available[$zone] = $result;
+
+		return $result;
 	}
 
 	/**

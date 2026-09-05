@@ -12,9 +12,6 @@ use Bitrix\Main\ORM\Query\Query;
 
 IncludeModuleLangFile(__FILE__);
 
-/**
- * @deprecated
- */
 class CEventMessage
 {
 	var $LAST_ERROR;

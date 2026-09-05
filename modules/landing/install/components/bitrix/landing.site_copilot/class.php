@@ -10,6 +10,7 @@ use Bitrix\Landing\Integration\AiAssistant\Contract\AiSiteChatBindingContract;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteBindingService;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatAvailabilityService;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteChatContextService;
+use Bitrix\Landing\Integration\AiAssistant\Trigger\AiSiteChatTriggerRegistrar;
 use Bitrix\Landing\Integration\AiAssistant\WidgetDataProvider;
 use Bitrix\Landing\Manager;
 use Bitrix\Landing\Metrika;
@@ -48,9 +49,9 @@ class SiteCopilotComponent extends LandingBaseComponent
 			Metrika\Events::open,
 			Metrika\Tools::Ai,
 		);
-		if ($this->request('st_section'))
+		if ($this->request(Metrika\Sections::URL_PARAM))
 		{
-			$metrika->setSection(Metrika\Sections::tryfrom((string)$this->request('st_section')));
+			$metrika->setSection(Metrika\Sections::tryfrom((string)$this->request(Metrika\Sections::URL_PARAM)));
 		}
 
 		$productAvailability = $this->getAiSiteChatAvailabilityService()->checkSitesAiProductAvailability();
@@ -83,6 +84,7 @@ class SiteCopilotComponent extends LandingBaseComponent
 
 		$this->arResult['INITIAL_PROMPT'] = $this->getInitialPrompt();
 		$this->arResult['HAS_INITIAL_PROMPT'] = $this->arResult['INITIAL_PROMPT'] !== '';
+		AiSiteChatTriggerRegistrar::ensureRegistered();
 		$this->prepareAiSiteTriggerData();
 
 		$this->arResult += (new WidgetDataProvider())->getData();

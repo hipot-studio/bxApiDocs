@@ -66,7 +66,7 @@ class CreateAiSite extends BaseScenario implements IStepMetaProvider
 			self::STEP_PREPARE_CREATED_MARKUP => new Step\TaskPrepareCreatedHtmlBlocksMarkup(),
 			self::STEP_GENERATE_IMAGES => new Step\RequestHtmlBlockImages(),
 			self::STEP_PUBLISH_SITE => new Step\TaskPublishAiSite(),
-			self::STEP_FINISH => new Step\Finish(),
+			self::STEP_FINISH => new Step\TaskFinishCreateAiSite(),
 		];
 	}
 

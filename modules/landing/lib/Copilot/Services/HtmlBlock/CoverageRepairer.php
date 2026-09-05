@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Services\HtmlBlock;
 
+use Bitrix\Landing\Copilot\Services\Manifest\NodeCollector;
 use Bitrix\Main\Web\DOM;
 
 /**
@@ -16,7 +17,6 @@ final class CoverageRepairer
 	private const ROOT_NODE_ID = 'ai-block-html-coverage-repairer-root';
 	private const TEXT_NODE_TYPE = 'text';
 	private const LINK_NODE_TYPE = 'link';
-	private const NODE_MARKUP_CLASS_PATTERN = '/^ai-node-[a-z]+-\d+$/u';
 	// inline-only allowlist: block-level text children (p, li) would break flow inside a span host
 	private const INLINE_RUN_TAGS = [
 		'a' => true,
@@ -168,7 +168,7 @@ final class CoverageRepairer
 
 		foreach ($classes as $className)
 		{
-			if (preg_match(self::NODE_MARKUP_CLASS_PATTERN, $className))
+			if (NodeCollector::parseNodeClass($className) !== null)
 			{
 				return true;
 			}

@@ -36,6 +36,8 @@ class TaskPublishAiSite extends TaskStep
 		$result = $this->runWithGlobalRightsOff(
 			fn(): Result => $this->publishSite($siteId, new Metrika\FieldsDto(
 				type: Metrika\Types::ai,
+				subSection: 'from_ai',
+				element: 'auto',
 			)),
 		);
 		$error = $result->getError();

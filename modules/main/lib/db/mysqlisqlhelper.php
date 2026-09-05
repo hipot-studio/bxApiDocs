@@ -76,7 +76,7 @@ class MysqliSqlHelper extends SqlHelper
 			$from = static::getCurrentDateTimeFunction();
 		}
 
-		return 'DATE_ADD('.$from.', INTERVAL '.$seconds.' SECOND)';
+		return 'DATE_ADD(' . $from . ', INTERVAL ' . $seconds . ' SECOND)';
 	}
 
 	/**
@@ -89,7 +89,7 @@ class MysqliSqlHelper extends SqlHelper
 			$from = static::getCurrentDateTimeFunction();
 		}
 
-		return 'DATE_ADD('.$from.', INTERVAL '.$days.' DAY)';
+		return 'DATE_ADD(' . $from . ', INTERVAL ' . $days . ' DAY)';
 	}
 
 	/**
@@ -97,7 +97,7 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function getDatetimeToDateFunction($value)
 	{
-		return 'DATE('.$value.')';
+		return 'DATE(' . $value . ')';
 	}
 
 	/**
@@ -105,7 +105,7 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function formatDate($format, $field = null)
 	{
-		static $search  = array(
+		static $search = [
 			"YYYY",
 			"MMMM",
 			"MM",
@@ -118,8 +118,8 @@ class MysqliSqlHelper extends SqlHelper
 			"TT",
 			"T",
 			"W",
-		);
-		static $replace = array(
+		];
+		static $replace = [
 			"%Y",
 			"%M",
 			"%m",
@@ -132,7 +132,7 @@ class MysqliSqlHelper extends SqlHelper
 			"%p",
 			"%p",
 			"%w",
-		);
+		];
 
 		$format = str_replace($search, $replace, $format);
 
@@ -146,13 +146,13 @@ class MysqliSqlHelper extends SqlHelper
 			$format = str_replace("M", "%b", $format);
 		}
 
-		if($field === null)
+		if ($field === null)
 		{
 			return $format;
 		}
 		else
 		{
-			return "DATE_FORMAT(".$field.", '".$format."')";
+			return "DATE_FORMAT(" . $field . ", '" . $this->forSql($format) . "')";
 		}
 	}
 
@@ -164,7 +164,7 @@ class MysqliSqlHelper extends SqlHelper
 		$str = implode(", ", func_get_args());
 		if ($str != '')
 		{
-			$str = "CONCAT(".$str.")";
+			$str = "CONCAT(" . $str . ")";
 		}
 		return $str;
 	}
@@ -174,7 +174,7 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function getIsNullFunction($expression, $result)
 	{
-		return "IFNULL(".$expression.", ".$result.")";
+		return "IFNULL(" . $expression . ", " . $result . ")";
 	}
 
 	/**
@@ -182,7 +182,7 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function getLengthFunction($field)
 	{
-		return "LENGTH(".$field.")";
+		return "LENGTH(" . $field . ")";
 	}
 
 	/**
@@ -190,7 +190,7 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function getCharToDateFunction($value)
 	{
-		return "'".$value."'";
+		return "'" . $value . "'";
 	}
 
 	/**
@@ -206,13 +206,13 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function getConverter(ScalarField $field)
 	{
-		if($field instanceof ORM\Fields\DatetimeField)
+		if ($field instanceof ORM\Fields\DatetimeField)
 		{
-			return array($this, "convertFromDbDateTime");
+			return [$this, "convertFromDbDateTime"];
 		}
-		elseif($field instanceof ORM\Fields\DateField)
+		elseif ($field instanceof ORM\Fields\DateField)
 		{
-			return array($this, "convertFromDbDate");
+			return [$this, "convertFromDbDate"];
 		}
 		else
 		{
@@ -225,7 +225,7 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function convertFromDbDateTime($value)
 	{
-		if($value !== null && $value != '0000-00-00 00:00:00')
+		if ($value !== null && $value != '0000-00-00 00:00:00')
 		{
 			return new Type\DateTime($value, "Y-m-d H:i:s");
 		}
@@ -238,7 +238,7 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function convertFromDbDate($value)
 	{
-		if($value !== null && $value != '0000-00-00')
+		if ($value !== null && $value != '0000-00-00')
 		{
 			return new Type\Date($value, "Y-m-d");
 		}
@@ -251,7 +251,7 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function castToChar($fieldName)
 	{
-		return 'CAST('.$fieldName.' AS char)';
+		return 'CAST(' . $fieldName . ' AS char)';
 	}
 
 	/**
@@ -333,7 +333,7 @@ class MysqliSqlHelper extends SqlHelper
 		}
 		elseif ($field instanceof ORM\Fields\EnumField)
 		{
-			return 'varchar('.max(array_map('mb_strlen', $field->getValues())).')';
+			return 'varchar(' . max(array_map('mb_strlen', $field->getValues())) . ')';
 		}
 		else
 		{
@@ -349,7 +349,7 @@ class MysqliSqlHelper extends SqlHelper
 					}
 				}
 			}
-			return 'varchar('.($defaultLength > 0? $defaultLength: 255).')';
+			return 'varchar(' . ($defaultLength > 0 ? $defaultLength : 255) . ')';
 		}
 	}
 
@@ -362,11 +362,13 @@ class MysqliSqlHelper extends SqlHelper
 		$limit = intval($limit);
 
 		if ($offset > 0 && $limit <= 0)
+		{
 			throw new \Bitrix\Main\ArgumentException("Limit must be set if offset is set");
+		}
 
 		if ($limit > 0)
 		{
-			$sql .= "\nLIMIT ".$offset.", ".$limit."\n";
+			$sql .= "\nLIMIT " . $offset . ", " . $limit . "\n";
 		}
 
 		return $sql;
@@ -383,9 +385,9 @@ class MysqliSqlHelper extends SqlHelper
 		if (!empty($insert[0]) && !empty($insert[1]) && !empty($update[0]))
 		{
 			$sql = "
-				INSERT INTO ".$this->quote($tableName)." (".$insert[0].")
-				VALUES (".$insert[1].")
-				ON DUPLICATE KEY UPDATE ".$update[0]."
+				INSERT INTO " . $this->quote($tableName) . " (" . $insert[0] . ")
+				VALUES (" . $insert[1] . ")
+				ON DUPLICATE KEY UPDATE " . $update[0] . "
 			";
 		}
 		else
@@ -393,9 +395,9 @@ class MysqliSqlHelper extends SqlHelper
 			$sql = "";
 		}
 
-		return array(
-			$sql
-		);
+		return [
+			$sql,
+		];
 	}
 
 	/**
@@ -404,7 +406,9 @@ class MysqliSqlHelper extends SqlHelper
 	public function forSql($value, $maxLength = 0)
 	{
 		if ($maxLength > 0)
+		{
 			$value = mb_substr($value, 0, $maxLength);
+		}
 
 		$con = $this->connection->getResource();
 
@@ -416,7 +420,7 @@ class MysqliSqlHelper extends SqlHelper
 	 */
 	public function getFieldByColumnType($name, $type, ?array $parameters = null)
 	{
-		switch($type)
+		switch ($type)
 		{
 			case MYSQLI_TYPE_TINY:
 			case MYSQLI_TYPE_SHORT:
@@ -534,7 +538,7 @@ class MysqliSqlHelper extends SqlHelper
 	{
 		$result = [];
 		$head = '';
-		$maxBodySize = 1024*1024; //1 Mb
+		$maxBodySize = 1024 * 1024; //1 Mb
 		$body = [];
 		$bodySize = 0;
 		foreach ($insertRows as $insertFields)
@@ -551,7 +555,7 @@ class MysqliSqlHelper extends SqlHelper
 				$body[] = $values;
 				if ($bodySize > $maxBodySize)
 				{
-					$result[] = $head.implode(', ', $body);
+					$result[] = $head . implode(', ', $body);
 					$body = [];
 					$bodySize = 0;
 				}
@@ -559,7 +563,7 @@ class MysqliSqlHelper extends SqlHelper
 		}
 		if ($body)
 		{
-			$result[] = $head.implode(', ', $body);
+			$result[] = $head . implode(', ', $body);
 		}
 
 		return $result;
@@ -580,7 +584,7 @@ class MysqliSqlHelper extends SqlHelper
 		{
 			if (isset($tableFields[$columnName]))
 			{
-				$update[] = $this->quote($columnName) . ' = '. $this->convertToDb($value, $tableFields[$columnName]);
+				$update[] = $this->quote($columnName) . ' = ' . $this->convertToDb($value, $tableFields[$columnName]);
 			}
 			else
 			{
@@ -630,7 +634,7 @@ class MysqliSqlHelper extends SqlHelper
 		$set = '';
 		foreach ($fields as $fieldName => $fieldValue)
 		{
-			$set .= ($set ? ',' : '') . $tableAlias . '.' . $fieldName . ' = ' .$fieldValue . "\n";
+			$set .= ($set ? ',' : '') . $tableAlias . '.' . $fieldName . ' = ' . $fieldValue . "\n";
 		}
 		$dml .= 'SET ' . $set;
 		$dml .= 'WHERE ' . $where . "\n";

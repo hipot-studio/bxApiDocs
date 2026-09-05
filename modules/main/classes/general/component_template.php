@@ -465,7 +465,11 @@ class CBitrixComponentTemplate
 	 */
 	public static function CheckName($name)
 	{
-		return preg_match("#^([A-Za-z0-9_.-]+)(/[A-Za-z0-9_.-]+)?$#i", $name) > 0;
+		if (preg_match("#^([a-z0-9_.-]+)(/[a-z0-9_.-]+)?$#i", $name) > 0)
+		{
+			return !str_starts_with($name, '../');
+		}
+		return false;
 	}
 
 	/**

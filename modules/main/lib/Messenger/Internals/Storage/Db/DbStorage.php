@@ -18,7 +18,7 @@ use Bitrix\Main\Type\DateTime;
 
 class DbStorage implements StorageInterface
 {
-	private const LOCK_KEY = 'queueLock';
+	private const LOCK_KEY_PREFIX = 'queueLock_';
 	private const REQUEUE_LOCK_PREFIX = 'main_messenger_requeue_';
 
 	private const REQUEUE_CACHE_TTL = 600;
@@ -28,12 +28,17 @@ class DbStorage implements StorageInterface
 
 	private QueueConfigRegistry $queueRegistry;
 
-	private static bool $locked = false;
+	private readonly string $lockKey;
+
+	/** @var array<string, bool> lock state per queue table */
+	private static array $locked = [];
 
 	public function __construct(Entity $tableEntity)
 	{
 		$this->repository = new MessageRepository($tableEntity);
 		$this->queueRegistry = ServiceLocator::getInstance()->get(QueueConfigRegistry::class);
+
+		$this->lockKey = self::LOCK_KEY_PREFIX . $tableEntity->getDBTableName();
 
 		$this->requeueStaleMessages($tableEntity);
 	}
@@ -153,21 +158,21 @@ class DbStorage implements StorageInterface
 
 	private function lock(): bool
 	{
-		if (self::$locked)
+		if (self::$locked[$this->lockKey] ?? false)
 		{
-			return self::$locked;
+			return true;
 		}
 
-		return self::$locked = Application::getConnection()->lock(self::LOCK_KEY);
+		return self::$locked[$this->lockKey] = Application::getConnection()->lock($this->lockKey);
 	}
 
 	private function unlock(): void
 	{
-		if (self::$locked)
+		if (self::$locked[$this->lockKey] ?? false)
 		{
-			Application::getConnection()->unlock(self::LOCK_KEY);
+			Application::getConnection()->unlock($this->lockKey);
 
-			self::$locked = false;
+			unset(self::$locked[$this->lockKey]);
 		}
 	}
 }

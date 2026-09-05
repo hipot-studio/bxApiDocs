@@ -88,8 +88,9 @@ abstract class SystemFolder extends BaseFolder
 		return [
 			'id' => $this->getId(),
 			'type' => self::TYPE,
-			'code' => $this->getCode(),
+			'code' => $this->getRestCode(),
 			'title' => $this->getTitle(),
+			'sort' => $this->getSort(),
 			'displaysNestedInRoot' => $this->displaysNestedInRoot(),
 			'definition' => [
 				'recentSection' => $this->getRecentSection(),

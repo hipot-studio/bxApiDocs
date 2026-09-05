@@ -30,9 +30,14 @@ class GetEmailThreadTool extends ToolContract
 	public function getDescription(): string
 	{
 		return
-			"Returns the full email thread (conversation chain) for a message. "
-			. "Each thread entry has subject, from, to, cc, date, and body "
-			. "(sanitized plain text), sorted chronologically. "
+			"Returns one page of the conversation branch a message belongs to: the messages it "
+			. "replies to, the message itself, and the replies to it. Parallel branches are not "
+			. "included, so this is not necessarily the whole conversation. "
+			. "Each entry has subject, from, to, cc, date, and body (plain text, capped; "
+			. "truncated=true means it was cut), sorted chronologically; withBodies=false "
+			. "returns headers only. "
+			. "Pages run from the newest end - keep paging with offset until hasMore=false before "
+			. "summarizing the branch. "
 			. "Requires the message identifier from the search_emails tool."
 		;
 	}
@@ -44,14 +49,26 @@ class GetEmailThreadTool extends ToolContract
 			'properties' => [
 				'messageId' => [
 					'type' => 'integer',
-					'description' => 'Identifier of any message in the thread.',
+					'description' => 'Identifier of the message the branch is assembled around.',
 					'minimum' => 1,
 				],
 				'limit' => [
 					'type' => 'integer',
-					'description' => 'Maximum number of messages in the thread to return. Defaults to 20.',
+					'description' => 'Number of messages per page. Defaults to '
+						. MessageSearch::THREAD_PAGE_SIZE_DEFAULT . '; capped at '
+						. MessageSearch::MAX_THREAD_PAGE_SIZE_WITH_BODIES . ' with bodies and at '
+						. MessageSearch::MAX_THREAD_PAGE_SIZE_HEADERS . ' in headers mode.',
 					'minimum' => 1,
-					'maximum' => 50,
+					'maximum' => MessageSearch::MAX_THREAD_PAGE_SIZE_HEADERS,
+				],
+				'offset' => [
+					'type' => 'integer',
+					'description' => 'Number of messages to skip, counted from the newest. Defaults to 0.',
+					'minimum' => 0,
+				],
+				'withBodies' => [
+					'type' => 'boolean',
+					'description' => 'true = include message bodies (capped); false = headers only (subject/from/to/date), cheaper for overview. Defaults to true.',
 				],
 			],
 			'required' => ['messageId'],
@@ -72,7 +89,12 @@ class GetEmailThreadTool extends ToolContract
 	protected function executeStructured(int $userId, ...$args): array
 	{
 		$messageId = (int)($args['messageId'] ?? 0);
-		$limit = isset($args['limit']) ? (int)$args['limit'] : 20;
+		$withBodies = isset($args['withBodies']) ? (bool)$args['withBodies'] : true;
+		$limit = MessageSearch::clampThreadPageSize(
+			isset($args['limit']) ? (int)$args['limit'] : MessageSearch::THREAD_PAGE_SIZE_DEFAULT,
+			$withBodies,
+		);
+		$offset = isset($args['offset']) ? max(0, (int)$args['offset']) : 0;
 
 		if ($messageId <= 0)
 		{
@@ -85,6 +107,8 @@ class GetEmailThreadTool extends ToolContract
 				messageId: $messageId,
 				userId: $userId,
 				limit: $limit,
+				offset: $offset,
+				withBodies: $withBodies,
 			);
 		}
 		catch (SystemException $e)

@@ -50,6 +50,7 @@ class ConfirmBookingCommandHandler
 
 				// update booking with confirmed flag
 				$booking->setConfirmed(true);
+				$booking->setConfirmedAt(time());
 				$this->bookingRepository->save($booking);
 
 				// fire new BookingConfirmed event

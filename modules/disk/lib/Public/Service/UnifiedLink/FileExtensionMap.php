@@ -15,6 +15,7 @@ enum FileExtensionMap: string
 	case Audio = 'audio';
 	case VectorImage = 'vectorImage';
 	case Board = 'board';
+	case Html = 'html';
 
 	public static function getByExtension(string $extension): ?FileExtensionMap
 	{
@@ -31,6 +32,7 @@ enum FileExtensionMap: string
 				'mp3', 'wav', 'ogg' => self::Audio,
 				'svg', 'svgz', 'cdr', 'swf', 'eps', 'ps', 'ai', 'sketch' => self::VectorImage,
 				'board', 'flp' => self::Board,
+				'html', 'htm' => self::Html,
 				'pdf' => self::Doc,
 				default => null,
 			},

@@ -15,6 +15,8 @@ class UrlGenerator
 	public const EXTENSIONS_TO_OPEN_WITHOUT_EDIT_SUFFIX = [
 		'board',
 		'flp',
+		'htm',
+		'html',
 		'pdf',
 	];
 	public const QUERY_PARAM_NO_REDIRECT = 'no_redirect';

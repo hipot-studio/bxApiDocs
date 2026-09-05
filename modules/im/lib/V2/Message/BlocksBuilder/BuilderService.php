@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Message\BlocksBuilder;
 
-use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlocksBuilder;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlockType;
@@ -27,11 +26,6 @@ class BuilderService
 	{
 		$builderResult = new BuilderResult();
 
-		if (!Features::isMessageBuilderAvailable())
-		{
-			return $builderResult->addError(new BuilderError(BuilderError::BLOCK_NOT_AVAILABLE));
-		}
-
 		$result = $this->validationService->validateNew($builderData, $chat);
 		if (!$result->isSuccess())
 		{
@@ -50,11 +44,6 @@ class BuilderService
 	public function get(array $builderData): BuilderResult
 	{
 		$builderResult = new BuilderResult();
-
-		if (!Features::isMessageBuilderAvailable())
-		{
-			return $builderResult->addError(new BuilderError(BuilderError::BLOCK_NOT_AVAILABLE));
-		}
 
 		$result = $this->validationService->validateExisting($builderData);
 		if (!$result->isSuccess())

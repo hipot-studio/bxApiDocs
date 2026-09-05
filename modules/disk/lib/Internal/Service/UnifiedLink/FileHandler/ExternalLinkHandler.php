@@ -1,10 +1,15 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
+use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Render\StandalonePageRenderer;
+use Bitrix\Disk\Version;
 
 class ExternalLinkHandler implements HtmlRenderableFileHandler
 {
@@ -13,6 +18,9 @@ class ExternalLinkHandler implements HtmlRenderableFileHandler
 	 */
 	public function __construct(
 		protected File $file,
+		protected ExternalLink $externalLink,
+		protected ?AttachedObject $attachedObject = null,
+		protected ?Version $version = null,
 	)
 	{
 	}
@@ -33,26 +41,16 @@ class ExternalLinkHandler implements HtmlRenderableFileHandler
 	 */
 	protected function renderComponent(UnifiedLinkAccessLevel $accessLevel): FileHandlerOperationResult
 	{
-		$content = $GLOBALS['APPLICATION']->includeComponent(
-			'bitrix:ui.sidepanel.wrapper',
+		$content = StandalonePageRenderer::render(
+			'bitrix:disk.external.link',
 			'',
 			[
-				'RETURN_CONTENT' => true,
-				'POPUP_COMPONENT_NAME' => 'bitrix:disk.external.link',
-				'POPUP_COMPONENT_TEMPLATE_NAME' => '',
-				'POPUP_COMPONENT_PARAMS' => [
-					'action' =>
-						$accessLevel === UnifiedLinkAccessLevel::Edit
-							? 'goToEdit'
-							: 'default'
-					,
-					'FROM_UNIFIED_LINK' => true,
-					'FILE' => $this->file,
-				],
-				'PLAIN_VIEW' => true,
-				'IFRAME_MODE' => true,
-				'PREVENT_LOADING_WITHOUT_IFRAME' => false,
-				'USE_PADDING' => false,
+				'action' => $accessLevel === UnifiedLinkAccessLevel::Edit ? 'goToEdit' : 'default',
+				'FROM_UNIFIED_LINK' => true,
+				'FILE' => $this->file,
+				'EXTERNAL_LINK' => $this->externalLink,
+				'ATTACHED_OBJECT' => $this->attachedObject,
+				'VERSION' => $this->version,
 			],
 		);
 

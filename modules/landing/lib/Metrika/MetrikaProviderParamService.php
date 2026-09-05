@@ -31,22 +31,23 @@ class MetrikaProviderParamService
 
 	/**
 	 * Tuning manager instance for retrieving provider codes.
-	 * @var Tuning\Manager
+	 * Stays null when the ai module is not available - then no event carries the provider param.
+	 * @var Tuning\Manager|null
 	 */
-	private Tuning\Manager $tuningManager;
+	private ?Tuning\Manager $tuningManager = null;
 
 	/**
 	 * MetrikaProviderParamService constructor.
 	 *
 	 * @param Tuning\Manager|null $tuningManager Optional tuning manager instance. If not provided, a new instance will
-	 *     be created.
+	 *     be created - but only when the ai module is available: the check guards the default branch alone,
+	 *     a manager given explicitly is used as is.
 	 */
 	public function __construct(?Tuning\Manager $tuningManager = null)
 	{
-		if (Loader::includeModule('ai'))
-		{
-			$this->tuningManager = $tuningManager ?? new Tuning\Manager();
-		}
+		$this->tuningManager = $tuningManager
+			?? (Loader::includeModule('ai') ? new Tuning\Manager() : null)
+		;
 	}
 
 	/**
@@ -93,6 +94,12 @@ class MetrikaProviderParamService
 	 */
 	private function getProviderCodeByEvent(Events $event): ?string
 	{
+		// without the ai module there is no tuning to read the provider from
+		if ($this->tuningManager === null)
+		{
+			return null;
+		}
+
 		$providerSetting = self::getProviderSettingName($event->value);
 		if (!isset($providerSetting))
 		{
@@ -125,7 +132,8 @@ class MetrikaProviderParamService
 		return match ($event)
 		{
 			Events::dataGeneration,
-			Events::textsGeneration => Ai::TUNING_CODE_SITE_TEXT_PROVIDER,
+			Events::textsGeneration,
+			Events::edit => Ai::TUNING_CODE_SITE_TEXT_PROVIDER,
 			Events::imagesGeneration => Ai::TUNING_CODE_SITE_IMAGE_PROVIDER,
 			default => null,
 		};

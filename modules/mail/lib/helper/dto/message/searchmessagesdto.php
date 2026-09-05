@@ -47,6 +47,8 @@ class SearchMessagesDto
 		public readonly ?array $excludeBindings = null,
 		public readonly int $limit = self::DEFAULT_LIMIT,
 		public readonly int $offset = 0,
+		public readonly ?string $classification = null,
+		public readonly ?bool $unanswered = null,
 	)
 	{
 	}
@@ -78,6 +80,8 @@ class SearchMessagesDto
 			),
 			limit: self::getInt($props, 'limit') ?? self::DEFAULT_LIMIT,
 			offset: max(0, self::getInt($props, 'offset') ?? 0),
+			classification: self::getString($props, 'classification'),
+			unanswered: self::getBool($props, 'unanswered'),
 		);
 	}
 

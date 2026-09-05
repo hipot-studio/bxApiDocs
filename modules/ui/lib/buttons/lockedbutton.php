@@ -46,9 +46,9 @@ class LockedButton extends Button
 	 */
 	protected function listExtensions()
 	{
-		return [
+		return array_merge(parent::listExtensions(), [
 			'ui.hint',
-		];
+		]);
 	}
 
 	/**

@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Internal\Access\UnifiedLink;
 
 use Bitrix\Disk\AttachedObject;
+use Bitrix\Disk\ExternalLink;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkPasswordService;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\User;
+use Bitrix\Disk\Version;
 use Bitrix\Main\Engine\CurrentUser;
 
 final class AccessCheckHandlerFactory
@@ -17,24 +20,48 @@ final class AccessCheckHandlerFactory
 
 	/**
 	 * @param ExternalLinkProvider $externalLinkProvider
+	 * @param ExternalLinkPasswordService $externalLinkPasswordService
 	 */
 	public function __construct(
 		protected readonly ExternalLinkProvider $externalLinkProvider,
+		protected readonly ExternalLinkPasswordService $externalLinkPasswordService,
 	)
 	{
 	}
 
-	public function create(?AttachedObject $attachedObject = null, int $userId = 0): AccessCheckHandler
+	public function create(
+		?AttachedObject $attachedObject = null,
+		int $userId = 0,
+		?ExternalLink $externalLink = null,
+		?Version $version = null,
+	): AccessCheckHandler
 	{
 		if ($userId === 0)
 		{
 			$userId = (int)CurrentUser::get()->getId();
 		}
 
+		$shouldCheckPassword = true;
 		if ($userId > 0)
 		{
 			$user = User::loadById($userId);
 			$shouldCheckPassword = $user->isExtranetUser() && !$user->isCollaber();
+		}
+
+		if ($externalLink instanceof ExternalLink)
+		{
+			return new ExternalLinkAccessCheckHandler(
+				externalLinkProvider: $this->externalLinkProvider,
+				externalLinkPasswordService: $this->externalLinkPasswordService,
+				shouldCheckPassword: $shouldCheckPassword,
+				externalLink: $externalLink,
+				attachedObject: $attachedObject,
+				version: $version,
+			);
+		}
+
+		if ($userId > 0)
+		{
 			$cacheKey = $this->getCacheKey($shouldCheckPassword, $attachedObject, $userId);
 
 			return $this->cacheForAuthorizedUser[$cacheKey] ??= $this->createForAuthorizedUser(
@@ -46,6 +73,7 @@ final class AccessCheckHandlerFactory
 
 		return $this->externalLinkAccessCheckHandler ??= new ExternalLinkAccessCheckHandler(
 			externalLinkProvider: $this->externalLinkProvider,
+			externalLinkPasswordService: $this->externalLinkPasswordService,
 			shouldCheckPassword: true,
 		);
 	}
@@ -62,6 +90,7 @@ final class AccessCheckHandlerFactory
 
 		return (new ExternalLinkAccessCheckHandler(
 			externalLinkProvider: $this->externalLinkProvider,
+			externalLinkPasswordService: $this->externalLinkPasswordService,
 			shouldCheckPassword: $shouldCheckPassword,
 		))
 			->setNext($unifiedLinkAccessCheckHandler

@@ -5,6 +5,7 @@ namespace Bitrix\Disk\Ui;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\SpecificFolder;
 use Bitrix\Disk\TypeFile;
 
 /**
@@ -15,7 +16,7 @@ use Bitrix\Disk\TypeFile;
  */
 final class Icon
 {
-	protected static $possibleIconClasses = array(
+	protected static array $possibleIconClasses = [
 		'pdf' => 'icon-pdf',
 		'doc' => 'icon-doc',
 		'flp' => 'icon-board',
@@ -38,14 +39,49 @@ final class Icon
 		'ods' => 'icon-ods',
 		'odp' => 'icon-odp',
 		'non' => 'icon-non',
-	);
+	];
+	private static array $specificFolderIcons = [
+		SpecificFolder::CODE_FOR_MAIL_ATTACHMENTS => 'icon-mail',
+	];
+	private static array $iconSetNames = [
+		'pdf' => 'pdf',
+		'doc' => 'doc',
+		'docx' => 'docx',
+		'flp' => 'board',
+		'board' => 'board',
+		'ppt' => 'ppt',
+		'pptx' => 'pptx',
+		'xls' => 'xls',
+		'xlsx' => 'xlsx',
+		'php' => 'php',
+		'txt' => 'txt',
+		'zip' => 'zip',
+		'rar' => 'rar',
+		'psd' => 'psd',
+		'odf' => 'odf',
+		'odt' => 'odt',
+		'ods' => 'ods',
+		'odp' => 'odp',
+	];
 
-	public static function getIconClassByObject(BaseObject $object, $appendSharedClass = false)
+	public static function getIconClassByObject(BaseObject $object, $appendSharedClass = false): string
 	{
 		$class = '';
 		if($object instanceof Folder)
 		{
 			$class = 'bx-disk-folder-icon';
+
+			$specificIcon = self::$specificFolderIcons[$object->getCode()] ?? null;
+			if($specificIcon !== null)
+			{
+				$class .= " $specificIcon";
+				if($appendSharedClass)
+				{
+					$class .= '-shared';
+				}
+
+				return $class;
+			}
 		}
 		elseif($object instanceof File)
 		{
@@ -55,7 +91,6 @@ final class Icon
 			{
 				$class .= ' ' . self::$possibleIconClasses[$ext];
 			}
-
 			elseif(TypeFile::isImage($object))
 			{
 				$class .= ' ' . self::$possibleIconClasses['img'];
@@ -76,5 +111,46 @@ final class Icon
 		}
 
 		return $class;
+	}
+
+	/**
+	 * Name of the object type icon in the ui.icon-set.disk set.
+	 */
+	public static function getIconSetNameByObject(BaseObject $object): string
+	{
+		if($object instanceof Folder)
+		{
+			return 'folder';
+		}
+
+		if($object instanceof File)
+		{
+			return self::getIconSetNameByFile($object);
+		}
+
+		return 'empty';
+	}
+
+	/**
+	 * Name of the file type icon in the ui.icon-set.disk set: the markup of such an icon is
+	 * <div class="ui-icon-set --{name} --fixed-color"></div>.
+	 */
+	public static function getIconSetNameByFile(File $file): string
+	{
+		$extension = mb_strtolower($file->getExtension());
+		if(isset(self::$iconSetNames[$extension]))
+		{
+			return self::$iconSetNames[$extension];
+		}
+
+		return match(true)
+		{
+			TypeFile::isImage($file) => 'image',
+			TypeFile::isVideo($file) => 'video',
+			TypeFile::isAudio($file) => 'audio',
+			TypeFile::isArchive($file) => 'archive',
+			TypeFile::isScript($file) => 'scripts',
+			default => 'empty',
+		};
 	}
 }

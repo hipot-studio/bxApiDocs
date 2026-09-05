@@ -200,6 +200,9 @@ class MicrosoftPowerBI extends Service
 
 		$databaseConnection->unlock('biconnector_data');
 
+		// Served row count, consumed by QueryResultCache on a cache hit for fixLimit().
+		$result->setData(['count' => $count]);
+
 		return $result;
 	}
 }

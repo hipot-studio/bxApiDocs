@@ -116,7 +116,7 @@ class Helper
 				{
 					$row = ExternalLineTable::getRow([
 						'cache' => ['ttl' => 0],
-						'select' => ['ID'],
+						'select' => ['ID', 'DATE_LAST_USED'],
 						'filter' => [
 							'=REST_APP_ID' => $fields['REST_APP_ID'],
 							'=NUMBER' => $lineNumber,
@@ -124,8 +124,23 @@ class Helper
 					]);
 					if ($row)
 					{
-						$lineId = $row['ID'];
-						break;
+						$todayStart = (new DateTime())->setTime(0, 0);
+						if ($row['DATE_LAST_USED'] !== null && $row['DATE_LAST_USED']->getTimestamp() >= $todayStart->getTimestamp())
+						{
+							// Already marked today: no write on the hot path, and the cleaner never
+							// deletes a line used today, so the id stays valid for this call.
+							$lineId = $row['ID'];
+							break;
+						}
+						if (self::touchExternalLine($row['ID']) !== 0)
+						{
+							$lineId = $row['ID'];
+							break;
+						}
+						// The conditional UPDATE matched no rows: between the select and the touch the
+						// cleaner deleted the line or a concurrent request stamped it. Retry the pass -
+						// it either finds the surviving row or recreates the line.
+						$retry++;
 					}
 					else
 					{
@@ -1398,6 +1413,27 @@ class Helper
 			return $result;
 		}
 
+		// App-level duplicate guard for portals where the unique index is missing.
+		// Best-effort only: without the DB constraint concurrent adds may still race past this check.
+		// Skipped for null app id (APAuth/webhook): the filter would match any NULL-scoped row
+		// (other webhooks, SIP lines), while the unique index allows NULL duplicates.
+		if ($restAppId !== null)
+		{
+			$existingLine = ExternalLineTable::getRow([
+				'select' => ['ID'],
+				'filter' => [
+					'=NUMBER' => $number,
+					'=REST_APP_ID' => $restAppId
+				]
+			]);
+
+			if ($existingLine)
+			{
+				$result->addError(new Error("Line already exists"));
+				return $result;
+			}
+		}
+
 		try
 		{
 			$insertResult = ExternalLineTable::add([
@@ -1703,6 +1739,41 @@ class Helper
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Marks external line as used today. Throttled to one write per line per day by the update
+	 * condition itself: the row is written only when DATE_LAST_USED predates the current day.
+	 * Best-effort: any failure is swallowed so it never affects call registration. Uses raw
+	 * updateBatch to avoid touching NORMALIZED_NUMBER in onBeforeUpdate and invalidating the
+	 * daily GetLinesEx cache.
+	 * @param int $lineId Id of the external line.
+	 * @return int|null Count of updated rows: 0 means the row is gone or was stamped concurrently,
+	 * null means the write failed and nothing is known about the row.
+	 */
+	protected static function touchExternalLine($lineId): ?int
+	{
+		try
+		{
+			$todayStart = (new DateTime())->setTime(0, 0);
+
+			return ExternalLineTable::updateBatch(
+				['DATE_LAST_USED' => new DateTime()],
+				[
+					'=ID' => (int)$lineId,
+					[
+						'LOGIC' => 'OR',
+						['=DATE_LAST_USED' => null],
+						['<DATE_LAST_USED' => $todayStart],
+					],
+				]
+			);
+		}
+		catch (\Throwable $e)
+		{
+			// touch is best-effort telemetry and must not break call registration
+			return null;
+		}
 	}
 
 	protected static function isIncomingCall(Call $call): bool

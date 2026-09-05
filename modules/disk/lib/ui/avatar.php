@@ -2,10 +2,42 @@
 
 namespace Bitrix\Disk\Ui;
 
+use Bitrix\Main\FileTable;
 use Bitrix\Main\Web\Uri;
 
 final class Avatar
 {
+	/** @var array<int, array<string, mixed>> */
+	private static array $preloadedFiles = [];
+
+	/**
+	 * Loads the avatar files of a whole list in one query, so a group of avatars does not turn into
+	 * a file lookup per person.
+	 *
+	 * @param int[] $avatarIds
+	 */
+	public static function preload(array $avatarIds): void
+	{
+		$avatarIds = array_filter(
+			array_unique(array_map('intval', $avatarIds)),
+			static fn(int $avatarId): bool => $avatarId > 0 && !isset(self::$preloadedFiles[$avatarId]),
+		);
+		if ($avatarIds === [])
+		{
+			return;
+		}
+
+		$files = FileTable::getList([
+			'filter' => ['@ID' => array_values($avatarIds)],
+		])->fetchAll();
+
+		foreach ($files as $file)
+		{
+			$file['SRC'] = \CFile::getFileSRC($file);
+			self::$preloadedFiles[(int)$file['ID']] = $file;
+		}
+	}
+
 	public static function getPerson($avatarId, $width = 58, $height = 58)
 	{
 		return self::getSrc($avatarId, $width, $height)?: self::getDefaultPerson();
@@ -44,7 +76,7 @@ final class Avatar
 			if ($avatarId > 0)
 			{
 
-				$imageFile = \CFile::getFileArray($avatarId);
+				$imageFile = self::$preloadedFiles[$avatarId] ?? \CFile::getFileArray($avatarId);
 				if ($imageFile !== false)
 				{
 

@@ -12,10 +12,10 @@ class IntegerUserDataProvider extends EntityDataProvider
 	private UserSettings $settings;
 	private UserQueryModifier $userQueryModifier;
 
-	public function __construct(UserSettings $settings)
+	public function __construct(UserSettings $settings, ?UserQueryModifier $userQueryModifier = null)
 	{
 		$this->settings = $settings;
-		$this->userQueryModifier = new UserQueryModifier();
+		$this->userQueryModifier = $userQueryModifier ?? new UserQueryModifier();
 	}
 
 	public function getSettings(): UserSettings
@@ -40,20 +40,20 @@ class IntegerUserDataProvider extends EntityDataProvider
 				'FILTER_FIELD_NAME' => 'ID',
 				'FIELD_NAME' => 'ID',
 				'OPERATION' => '=',
-				'VALUE' => $gridFilter['ID'] ?? null
+				'VALUE' => $gridFilter['ID'] ?? null,
 			],
 			[
 				'FILTER_FIELD_NAME' => 'PERSONAL_COUNTRY',
 				'FIELD_NAME' => 'PERSONAL_COUNTRY',
 				'OPERATION' => '@',
-				'VALUE' => $gridFilter['PERSONAL_COUNTRY'] ?? null
+				'VALUE' => $gridFilter['PERSONAL_COUNTRY'] ?? null,
 			],
 			[
 				'FILTER_FIELD_NAME' => 'WORK_COUNTRY',
 				'FIELD_NAME' => 'WORK_COUNTRY',
 				'OPERATION' => '@',
-				'VALUE' => $gridFilter['WORK_COUNTRY'] ?? null
-			]
+				'VALUE' => $gridFilter['WORK_COUNTRY'] ?? null,
+			],
 		];
 	}
 
@@ -74,7 +74,7 @@ class IntegerUserDataProvider extends EntityDataProvider
 		$operation = ($params['OPERATION'] ?? '=');
 
 		unset($filter[$fieldName]);
-		$filter[$operation.$fieldName] = $value;
+		$filter[$operation . $fieldName] = $value;
 	}
 
 	public function prepareFilterValue(array $rawFilterValue): array
@@ -104,7 +104,7 @@ class IntegerUserDataProvider extends EntityDataProvider
 					'FILTER_FIELD_NAME' => $field['FILTER_FIELD_NAME'],
 					'FIELD_NAME' => $field['FIELD_NAME'],
 					'OPERATION' => ($field['OPERATION'] ?? '='),
-					'VALUE' => $value
+					'VALUE' => $value,
 				]);
 			}
 		}
@@ -116,34 +116,7 @@ class IntegerUserDataProvider extends EntityDataProvider
 
 	private function checkDepartmentField(array &$filterValue): void
 	{
-		$departmentFilterValue = null;
-		$withSubDepartments = true;
-
-		if (
-			!empty($filterValue['DEPARTMENT'])
-			&& is_scalar($filterValue['DEPARTMENT'])
-		)
-		{
-			$departmentFilterValue = (string)$filterValue['DEPARTMENT'];
-		}
-		elseif (
-			!empty($filterValue['DEPARTMENT_FLAT'])
-			&& is_scalar($filterValue['DEPARTMENT_FLAT'])
-		)
-		{
-			$departmentFilterValue = (string)$filterValue['DEPARTMENT_FLAT'];
-			$withSubDepartments = false;
-		}
-
-		if ($departmentFilterValue === null)
-		{
-			return;
-		}
-
-		$subQuery = $this->userQueryModifier->createDepartmentUserIdSubQuery(
-			$departmentFilterValue,
-			$withSubDepartments,
-		);
+		$subQuery = $this->userQueryModifier->createDepartmentUserIdSubQueryFromFilter($filterValue);
 		if ($subQuery === null)
 		{
 			return;

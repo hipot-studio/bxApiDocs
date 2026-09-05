@@ -13,7 +13,9 @@ final class ForumMessageConnector extends StubConnector
 	protected static $messages = array();
 	protected static $topics = array();
 
-	private $canRead = null;
+	private static $meetingRoles = array();
+
+	private $canRead = array();
 
 	public function getDataToShow()
 	{
@@ -332,9 +334,10 @@ final class ForumMessageConnector extends StubConnector
 	 */
 	public function canRead($userId)
 	{
-		if($this->canRead !== null)
+		$userId = (int)$userId;
+		if(isset($this->canRead[$userId]))
 		{
-			return $this->canRead;
+			return $this->canRead[$userId];
 		}
 
 		if(($res = $this->getDataToCheck($this->entityId)) && !empty($res))
@@ -357,6 +360,17 @@ final class ForumMessageConnector extends StubConnector
 						$entityId = $XML_ID[1];
 					}
 				}
+
+				foreach (array("MEETING_ITEM", "MEETING") as $meetingEntityType)
+				{
+					if (mb_strpos($topic["XML_ID"], $meetingEntityType . "_") === 0)
+					{
+						$entityType = $meetingEntityType;
+						$entityId = mb_substr($topic["XML_ID"], mb_strlen($meetingEntityType) + 1);
+
+						break;
+					}
+				}
 			}
 
 			switch($entityType)
@@ -365,9 +379,9 @@ final class ForumMessageConnector extends StubConnector
 					if(Loader::includeModule("tasks"))
 					{
 						$connector = new \Bitrix\Tasks\Integration\Disk\Connector\Task($entityId);
-						$this->canRead = $connector->canRead($userId);
+						$this->canRead[$userId] = $connector->canRead($userId);
 
-						return $this->canRead;
+						return $this->canRead[$userId];
 					}
 					break;
 				case "EVENT":
@@ -375,9 +389,9 @@ final class ForumMessageConnector extends StubConnector
 					{
 						$connector = new CalendarEventConnector($entityId);
 						$connector->setXmlId($topic["XML_ID"] ?? '');
-						$this->canRead = $connector->canRead($userId);
+						$this->canRead[$userId] = $connector->canRead($userId);
 
-						return $this->canRead;
+						return $this->canRead[$userId];
 					}
 					break;
 				case "IBLOCK":
@@ -396,18 +410,28 @@ final class ForumMessageConnector extends StubConnector
 							while($res = $db_res->fetch())
 								$codes[] = $res["GROUP_CODE"];
 						}
-						$this->canRead = $this->canAccess($userId, $codes);
+						$this->canRead[$userId] = $this->canAccess($userId, $codes);
 
-						return $this->canRead;
+						return $this->canRead[$userId];
 					}
-					$this->canRead = true;
+					$this->canRead[$userId] = true;
 
-					return $this->canRead;
+					return $this->canRead[$userId];
 				case "MEETING":
 				case "MEETING_ITEM":
-					$this->canRead = ((int)$message["FORUM_ID"] == (int)\COption::getOptionInt('meeting', 'comments_forum_id', 0, SITE_ID));
+					$this->canRead[$userId] = false;
+					if (
+						(int)$message["FORUM_ID"] === (int)\COption::getOptionInt('meeting', 'comments_forum_id', 0, SITE_ID)
+						&& Loader::includeModule("meeting")
+					)
+					{
+						$this->canRead[$userId] = $entityType === "MEETING_ITEM"
+							? $this->hasAccessToMeetingItem((int)$entityId, (int)$userId)
+							: $this->hasAccessToMeeting((int)$entityId, (int)$userId)
+						;
+					}
 
-					return $this->canRead;
+					return $this->canRead[$userId];
 				case "TIMEMAN_ENTRY":
 					if(Loader::includeModule("timeman"))
 					{
@@ -425,22 +449,22 @@ final class ForumMessageConnector extends StubConnector
 						{
 							if ($arEntry["USER_ID"] == $userId)
 							{
-								$this->canRead = true;
+								$this->canRead[$userId] = true;
 
-								return $this->canRead;
+								return $this->canRead[$userId];
 							}
 							else
 							{
 								$arManagers = \CTimeMan::getUserManagers($arEntry["USER_ID"]);
-								$this->canRead = in_array($userId, $arManagers);
+								$this->canRead[$userId] = in_array($userId, $arManagers);
 
-								return $this->canRead;
+								return $this->canRead[$userId];
 							}
 						}
 					}
-					$this->canRead = false;
+					$this->canRead[$userId] = false;
 
-					return $this->canRead;
+					return $this->canRead[$userId];
 				case "TIMEMAN_REPORT":
 					if(Loader::includeModule("timeman"))
 					{
@@ -456,24 +480,25 @@ final class ForumMessageConnector extends StubConnector
 						{
 							if ($arReport["USER_ID"] == $userId)
 							{
-								$this->canRead = true;
+								$this->canRead[$userId] = true;
 
-								return $this->canRead;
+								return $this->canRead[$userId];
 							}
 							else
 							{
 								$arManagers = \CTimeMan::getUserManagers($arReport["USER_ID"]);
-								$this->canRead = in_array($userId, $arManagers);
+								$this->canRead[$userId] = in_array($userId, $arManagers);
 
-								return $this->canRead;
+								return $this->canRead[$userId];
 							}
 						}
 					}
-					$this->canRead = false;
+					$this->canRead[$userId] = false;
 
-					return $this->canRead;
+					return $this->canRead[$userId];
 				case "WF":
-					$this->canRead = false;
+					// the decision is made for the session user, so it is not memoized under the key of $userId
+					$canReadWorkflow = false;
 					if (Loader::includeModule("bizproc"))
 					{
 						if($this->getUser()->isAdmin() || $this->getUser()->canDoOperation('bitrix24_config'))
@@ -485,15 +510,15 @@ final class ForumMessageConnector extends StubConnector
 						$participants = \CBPTaskService::getWorkflowParticipants($entityId);
 						if (in_array($currentUserId, $participants))
 						{
-							$this->canRead = true;
+							$canReadWorkflow = true;
 						}
 						else
 						{
 							$state = \CBPStateService::getWorkflowStateInfo($entityId);
 							if ($state && $currentUserId === (int) $state['STARTED_BY'])
-								$this->canRead = true;
+								$canReadWorkflow = true;
 						}
-						if (!$this->canRead && Loader::includeModule("iblock"))
+						if (!$canReadWorkflow && Loader::includeModule("iblock"))
 						{
 							$documentId = \CBPStateService::GetStateDocumentId($entityId);
 							$elementQuery = \CIBlockElement::getList(array(), array("ID" => $documentId[2]),
@@ -501,30 +526,30 @@ final class ForumMessageConnector extends StubConnector
 							$element = $elementQuery->fetch();
 							if (!$element['IBLOCK_ID'])
 							{
-								$this->canRead = false;
+								$canReadWorkflow = false;
 							}
 
-							$this->canRead = \CIBlockElementRights::userHasRightTo($element["IBLOCK_ID"],
+							$canReadWorkflow = \CIBlockElementRights::userHasRightTo($element["IBLOCK_ID"],
 								$documentId[2], "element_read");
 						}
 					}
-					return $this->canRead;
+					return $canReadWorkflow;
 			}
 			if ((!empty($topic["SOCNET_GROUP_ID"]) || !empty($topic["OWNER_ID"])) && Loader::includeModule("socialnetwork"))
 			{
 				if (!empty($topic["SOCNET_GROUP_ID"]))
 				{
-					$this->canRead = \CSocNetFeatures::isActiveFeature(SONET_ENTITY_GROUP, $topic["SOCNET_GROUP_ID"], "forum") &&
+					$this->canRead[$userId] = \CSocNetFeatures::isActiveFeature(SONET_ENTITY_GROUP, $topic["SOCNET_GROUP_ID"], "forum") &&
 						\CSocNetFeaturesPerms::canPerformOperation($userId, SONET_ENTITY_GROUP, $topic["SOCNET_GROUP_ID"], "forum", "view");
 
-					return $this->canRead;
+					return $this->canRead[$userId];
 				}
 				else
 				{
-					$this->canRead = \CSocNetFeatures::isActiveFeature(SONET_ENTITY_USER, $topic["OWNER_ID"], "forum") &&
+					$this->canRead[$userId] = \CSocNetFeatures::isActiveFeature(SONET_ENTITY_USER, $topic["OWNER_ID"], "forum") &&
 						\CSocNetFeaturesPerms::canPerformOperation($userId, SONET_ENTITY_USER, $topic["OWNER_ID"], "forum", "view");
 
-					return $this->canRead;
+					return $this->canRead[$userId];
 				}
 			}
 			if($message)
@@ -542,34 +567,108 @@ final class ForumMessageConnector extends StubConnector
 
 				if(\CForumUser::isAdmin($userId, $userGroups))
 				{
-					$this->canRead = true;
+					$this->canRead[$userId] = true;
 
-					return $this->canRead;
+					return $this->canRead[$userId];
 				}
 
 				$perms = \CForumNew::getUserPermission($message["FORUM_ID"], $userGroups);
 				if($perms >= "Y")
 				{
-					$this->canRead = true;
+					$this->canRead[$userId] = true;
 
-					return $this->canRead;
+					return $this->canRead[$userId];
 				}
 				if($perms < "E" || ($perms < "Q" && $message["APPROVED"] != "Y"))
 				{
-					$this->canRead = false;
+					$this->canRead[$userId] = false;
 
-					return $this->canRead;
+					return $this->canRead[$userId];
 				}
 
 				$forum = \CForumNew::getByID($message["FORUM_ID"]);
-				$this->canRead = $forum["ACTIVE"] == "Y";
+				$this->canRead[$userId] = $forum["ACTIVE"] == "Y";
 
-				return $this->canRead;
+				return $this->canRead[$userId];
 			}
 		}
 
-		$this->canRead = false;
-		return $this->canRead;
+		$this->canRead[$userId] = false;
+		return $this->canRead[$userId];
+	}
+
+	private function hasAccessToMeeting(int $meetingId, int $userId): bool
+	{
+		if ($meetingId <= 0 || $userId <= 0)
+		{
+			return false;
+		}
+
+		return $this->hasMeetingRole($meetingId, $userId, false)
+			|| $this->hasMeetingRole($meetingId, $userId, true)
+		;
+	}
+
+	private function hasAccessToMeetingItem(int $itemId, int $userId): bool
+	{
+		if ($itemId <= 0 || $userId <= 0)
+		{
+			return false;
+		}
+
+		$meetingIds = array();
+		$instances = \CMeetingInstance::getList(
+			array(),
+			array("ITEM_ID" => $itemId),
+			false,
+			false,
+			array("MEETING_ID")
+		);
+		while ($instance = $instances->fetch())
+		{
+			$meetingId = (int)$instance["MEETING_ID"];
+			if ($meetingId > 0)
+			{
+				$meetingIds[$meetingId] = $meetingId;
+			}
+		}
+
+		foreach ($meetingIds as $meetingId)
+		{
+			if ($this->hasMeetingRole($meetingId, $userId, false))
+			{
+				return true;
+			}
+		}
+
+		foreach ($meetingIds as $meetingId)
+		{
+			if ($this->hasMeetingRole($meetingId, $userId, true))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * CMeeting::getUserRole() rebuilds the subordinate list of the user on every call with $checkSubordinates,
+	 * so the resolved role is reused within the hit. It also gives the member role to any session admin,
+	 * hence the session user belongs to the key of the cache.
+	 */
+	private function hasMeetingRole(int $meetingId, int $userId, bool $checkSubordinates): bool
+	{
+		$sessionUser = $this->getUser();
+		$sessionUserId = is_object($sessionUser) ? (int)$sessionUser->getId() : 0;
+
+		$roleKey = $meetingId . '|' . $userId . '|' . ($checkSubordinates ? 'Y' : 'N') . '|' . $sessionUserId;
+		if (!isset(self::$meetingRoles[$roleKey]))
+		{
+			self::$meetingRoles[$roleKey] = (bool)\CMeeting::getUserRole($meetingId, $userId, $checkSubordinates);
+		}
+
+		return self::$meetingRoles[$roleKey];
 	}
 
 	/**

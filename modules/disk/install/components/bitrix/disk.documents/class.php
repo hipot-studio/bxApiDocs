@@ -523,17 +523,13 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 		if (Disk\Configuration::canCreateFileByCloud())
 		{
 			$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
-			foreach ($documentHandlersManager->getHandlers() as $handler)
+			foreach ($documentHandlersManager->getHandlersForCreatingFile() as $handler)
 			{
-				if ($handler instanceof Disk\Document\Contract\FileCreatable)
-				{
-
-					$handlers[] = array(
-						'code' => $handler::getCode(),
-						'name' => $handler::getName(),
-						'supportsUnifiedLink' => $handler->supportsUnifiedLink(),
-					);
-				}
+				$handlers[] = array(
+					'code' => $handler::getCode(),
+					'name' => $handler::getName(),
+					'supportsUnifiedLink' => $handler->supportsUnifiedLink(),
+				);
 			}
 		}
 		$handlers[] = array(

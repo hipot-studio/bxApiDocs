@@ -10,7 +10,6 @@ use Bitrix\AI\Engine\IQueueOptional;
 use Bitrix\AI\Quality;
 use Bitrix\AI\Result;
 use Bitrix\AI\Tokenizer\GPT;
-use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 
 final class ItSolution extends CloudEngine implements IContext, IQueueOptional
@@ -177,9 +176,7 @@ final class ItSolution extends CloudEngine implements IContext, IQueueOptional
 
 	public function isAvailable(): bool
 	{
-		$region = Application::getInstance()->getLicense()->getRegion();
-
-		return $region === 'ru' || $region === 'by';
+		return false;
 	}
 
 	protected function getTokenizer(): GPT

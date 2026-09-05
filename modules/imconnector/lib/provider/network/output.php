@@ -18,6 +18,9 @@ use Bitrix\ImConnector\Connectors\Network;
 
 class Output extends Base\Output
 {
+	/** @var array<int, array{0: string, 1: array}> Session events of the current request. */
+	private static array $sessionEvents = [];
+
 	/**
 	 * Adds delayed execution of the session action.
 	 *
@@ -46,20 +49,74 @@ class Output extends Base\Output
 
 				if ($immediately)
 				{
+					// an immediate event must not overtake the ones already collected in this request
+					self::sendSessionEvents();
+
 					\Bitrix\ImBot\Service\Openlines::$eventName($args);
 				}
 				else
 				{
-					Application::getInstance()->addBackgroundJob(
-						[\Bitrix\ImBot\Service\Openlines::class, $eventName],
-						[$args],
-						Application::JOB_PRIORITY_LOW
-					);
+					self::queueSessionEvent($eventName, $args);
 				}
 			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Collects the session events of the request into a single background job.
+	 *
+	 * SplPriorityQueue does not order equally prioritized jobs, so separate jobs could deliver
+	 * the close before the reopen queued ahead of it in the same request.
+	 *
+	 * A request mixing the immediate and the deferred path gets more than one job: the immediate
+	 * send empties the buffer while its job stays queued. The jobs share the buffer, so the first
+	 * one sends everything and the others are no-op — the order holds either way.
+	 *
+	 * @param string $eventName Action type: sessionStart or sessionFinish.
+	 * @param array $args Command arguments.
+	 *
+	 * @return void
+	 */
+	private static function queueSessionEvent(string $eventName, array $args): void
+	{
+		self::$sessionEvents[] = [$eventName, $args];
+
+		if (count(self::$sessionEvents) === 1)
+		{
+			Application::getInstance()->addBackgroundJob(
+				[self::class, 'sendSessionEvents'],
+				[],
+				Application::JOB_PRIORITY_LOW
+			);
+		}
+	}
+
+	/**
+	 * Sends the collected session events keeping the order they were raised in.
+	 *
+	 * @internal Runs as the background job of the request and on the immediate path before an
+	 * event that has to be sent right away.
+	 * @return void
+	 */
+	public static function sendSessionEvents(): void
+	{
+		$events = self::$sessionEvents;
+		self::$sessionEvents = [];
+
+		foreach ($events as [$eventName, $args])
+		{
+			try
+			{
+				\Bitrix\ImBot\Service\Openlines::$eventName($args);
+			}
+			catch (\Throwable $exception)
+			{
+				// a failed event must not cancel the rest of the ordered chain
+				Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+			}
+		}
 	}
 
 	/**

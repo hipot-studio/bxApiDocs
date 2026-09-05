@@ -9,6 +9,7 @@ use Bitrix\Landing\Landing;
 use Bitrix\Landing\Repo;
 use Bitrix\Landing\Node;
 use Bitrix\Landing\Sanitizer;
+use Bitrix\Landing\Security\RepoNormalizer;
 use Bitrix\Landing\Transfer\AppConfiguration;
 use Bitrix\Landing\Transfer\Requisite\Context;
 use Bitrix\Landing\Transfer\Requisite\Dictionary\RatioPart;
@@ -108,17 +109,22 @@ trait BlockTrait
 
 				if ($appChecked[$appCode])
 				{
-					$repoInfo = $block['repo_info'];
-					$res = Repo::add([
-						'APP_CODE' => $block['repo_block']['app_code'],
-						'XML_ID' => $block['repo_block']['xml_id'],
-						'NAME' => $repoInfo['NAME'] ?? null,
-						'DESCRIPTION' => $repoInfo['DESCRIPTION'] ?? null,
-						'SECTIONS' => $repoInfo['SECTIONS'] ?? null,
-						'PREVIEW' => $repoInfo['PREVIEW'] ?? null,
-						'MANIFEST' => serialize(unserialize($repoInfo['MANIFEST'] ?? '', ['allowed_classes' => false])),
-						'CONTENT' => $repoInfo['CONTENT'] ?? null,
-					]);
+					$repoInfo = is_array($block['repo_info']) ? $block['repo_info'] : [];
+					// only a string is a serialized manifest; anything else in the archive is
+					// no manifest at all, and unserialize() would throw over it
+					$storedManifest = $repoInfo['MANIFEST'] ?? null;
+					$manifest = is_string($storedManifest)
+						? unserialize($storedManifest, ['allowed_classes' => false])
+						: null;
+					// the archive is already accepted for processing, so a rejected content is
+					// stored sanitized instead of losing the whole page to the pending branch
+					$normalized = RepoNormalizer::normalize(
+						$repoInfo,
+						$manifest,
+						$block['repo_block']['xml_id'],
+						$block['repo_block']['app_code']
+					);
+					$res = Repo::add($normalized->fields);
 					if ($res->isSuccess())
 					{
 						$block['code'] = 'repo_' . $res->getId();

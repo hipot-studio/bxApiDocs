@@ -15,6 +15,30 @@ use CVoxImplantConfig;
  */
 class Base extends Filter
 {
+	public function getStringList(): array
+	{
+		$result = parent::getStringList();
+		$popupIds = [
+			$this->getFilterId() . '_search_container',
+			$this->getFilterId() . '_fields_popup',
+		];
+
+		$result[] = '<script>
+	(function () {
+		var popupIds = ' . \CUtil::PhpToJSObject($popupIds) . ';
+
+		BX.Main.PopupManager.getPopups().slice().forEach(function (popup) {
+			if (popupIds.indexOf(popup.getId()) !== -1)
+			{
+				popup.destroy();
+			}
+		});
+	}());
+</script>';
+
+		return $result;
+	}
+
 	public static function getFieldsList(): array
 	{
 		$fieldsList = parent::getFieldsList();

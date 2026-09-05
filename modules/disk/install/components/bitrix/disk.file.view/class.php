@@ -184,6 +184,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			$externalLinkData['OBJECT_ID'] = $externalLink->getObjectId();
 			$externalLinkData['DOWNLOAD_COUNT'] = $externalLink->getDownloadCount();
 			$externalLinkData['HAS_PASSWORD'] = $externalLink->hasPassword();
+			$externalLinkData['CAN_EDIT_SETTINGS'] = $externalLink->canEditSettings();
 			$externalLinkData['HAS_DEATH_TIME'] = $externalLink->hasDeathTime();
 			$externalLinkData['DEATH_TIME_TIMESTAMP'] = $externalLink->hasDeathTime()? $externalLink->getDeathTime()->getTimestamp() : null;
 			$externalLinkData['DEATH_TIME'] = $externalLink->hasDeathTime()? $externalLink->getDeathTime()->toString() : null;
@@ -1127,16 +1128,6 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			return array();
 		}
 
-		$list = array();
-		$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
-		foreach ($documentHandlersManager->getHandlers() as $handler)
-		{
-			if ($handler instanceof \Bitrix\Disk\Document\Contract\FileCreatable)
-			{
-				$list[] = $handler;
-			}
-		}
-
-		return $list;
+		return array_values(Driver::getInstance()->getDocumentHandlersManager()->getHandlersForCreatingFile());
 	}
 }

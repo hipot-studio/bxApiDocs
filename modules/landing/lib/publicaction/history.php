@@ -9,12 +9,18 @@ use Bitrix\Landing;
 use Bitrix\Landing\PublicActionResult;
 use Bitrix\Landing\Template;
 use Bitrix\Landing\TemplateRef;
+use Bitrix\Main\Diag\ExceptionHandlerFormatter;
 
 /**
  * Work with history
  */
 class History
 {
+	/**
+	 * Event log type for Tailwind runtime failures after history commands.
+	 */
+	private const LOG_TYPE_TAILWIND_RUNTIME_ERROR = 'LANDING_TAILWIND_RUNTIME_ERROR';
+
 	public static function getForLanding(int $lid): PublicActionResult
 	{
 		$result = new PublicActionResult();
@@ -269,12 +275,17 @@ class History
 		}
 		catch (\Throwable $exception)
 		{
+			Landing\Debug::log(
+				'History::tailwindRuntimeInit',
+				ExceptionHandlerFormatter::format($exception),
+				self::LOG_TYPE_TAILWIND_RUNTIME_ERROR
+			);
+
 			return [
 				'rebuildRequired' => false,
 				'landingId' => $entityId,
 				'success' => false,
 				'error' => 'tailwind_runtime_init_failed',
-				'message' => trim((string)$exception->getMessage()),
 			];
 		}
 

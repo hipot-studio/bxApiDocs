@@ -5,7 +5,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Security\Random;
 use Bitrix\Pull\SharedServer\Client;
-
+use Bitrix\Main\Web\Uri;
 
 class Config
 {
@@ -212,7 +212,7 @@ class Config
 			$params["CHANNEL_ID"] = $channelId;
 		}
 
-		return \CHTTP::urlAddParams($result, $params);
+		return (string)(new Uri($result))->addParams($params);
 	}
 
 	public static function getJsonRpcUrl()
@@ -228,7 +228,7 @@ class Config
 			$result = \CPullOptions::GetJsonRpcUrl();
 		}
 
-		return \CHTTP::urlAddParams($result, $params);
+		return (string)(new Uri($result))->addParams($params);
 	}
 
 	public static function getHostname(): string

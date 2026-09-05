@@ -8,21 +8,15 @@ use Bitrix\Main\Engine;
 
 class Landing extends Controller
 {
+	/**
+	 * No Extranet filter here on purpose: the actions only read, rows are already limited by
+	 * Landing rights, and the caller of getById lives in group knowledge bases, which the module
+	 * keeps open for extranet users (PublicAction::checkForExtranet()).
+	 */
 	public function getDefaultPreFilters(): array
 	{
 		return [
 			new Engine\ActionFilter\Authentication(),
-		];
-	}
-
-	public function configureActions(): array
-	{
-		return [
-			'getByIdAction' => [
-				'+prefilters' => [
-					new ActionFilter\Extranet(),
-				],
-			]
 		];
 	}
 

@@ -56,10 +56,7 @@ class DatasetImportV2DataFormatsComponent extends CBitrixComponent
 
 	private function fillTemplates(): void
 	{
-		$dateFormat = [[
-			'type' => 'custom',
-			'value' => '',
-		]];
+		$dateFormat = [];
 		foreach (array_column(Const\Date::cases(), 'value') as $date)
 		{
 			$dateFormat[] = [
@@ -69,10 +66,7 @@ class DatasetImportV2DataFormatsComponent extends CBitrixComponent
 			];
 		}
 
-		$dateTimeFormat = [[
-			'type' => 'custom',
-			'value' => '',
-		]];
+		$dateTimeFormat = [];
 		foreach (array_column(Const\DateTime::cases(), 'value') as $dateTime)
 		{
 			$dateTimeFormat[] = [
@@ -84,12 +78,18 @@ class DatasetImportV2DataFormatsComponent extends CBitrixComponent
 		$dateTimeFormat[] = [
 			'title' => 'YYYY-MM-DDThh:mm:ss (ISO 8601)',
 			'type' => 'value',
-			'value' => 'Y-m-d\TH:i:s',
+			'value' => Const\DateTime::ISO_8601,
 		];
 
 		$this->arResult['templates'] = [
-			FieldType::Date->value => $dateFormat,
-			FieldType::DateTime->value => $dateTimeFormat,
+			FieldType::Date->value => [
+				$this->makeCustomTemplate(FieldType::Date, $dateFormat),
+				...$dateFormat,
+			],
+			FieldType::DateTime->value => [
+				$this->makeCustomTemplate(FieldType::DateTime, $dateTimeFormat),
+				...$dateTimeFormat,
+			],
 			FieldType::Double->value => [
 				['title' => '1,23', 'type' => 'value', 'value' => Const\DoubleDelimiter::COMMA->value],
 				['title' => '1.23', 'type' => 'value', 'value' => Const\DoubleDelimiter::DOT->value],
@@ -99,6 +99,26 @@ class DatasetImportV2DataFormatsComponent extends CBitrixComponent
 				['title' => '12345.67', 'type' => 'value', 'value' => Const\MoneyDelimiter::DOT->value],
 			],
 			FieldType::Timezone->value => $this->getTimezones(),
+		];
+	}
+
+	/**
+	 * Builds the "custom format" option. It carries the current format when the format does not match
+	 * any predefined one: such a format is passed to the frontend in ISO 8601 notation and is converted
+	 * back to the PHP one by the dataset controller.
+	 *
+	 * @param FieldType $fieldType Field the option belongs to.
+	 * @param array $predefinedTemplates Predefined format templates of the same field.
+	 * @return array
+	 */
+	private function makeCustomTemplate(FieldType $fieldType, array $predefinedTemplates): array
+	{
+		$current = (string)($this->arResult['current'][$fieldType->value] ?? '');
+		$isPredefined = in_array($current, array_column($predefinedTemplates, 'value'), true);
+
+		return [
+			'type' => 'custom',
+			'value' => $isPredefined ? '' : $current,
 		];
 	}
 

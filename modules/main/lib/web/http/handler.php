@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Web\Http;
@@ -28,7 +28,6 @@ abstract class Handler implements Log\LoggerAwareInterface, DebugInterface
 	protected $shouldFetchBody = null;
 	protected string $responseHeaders = '';
 	protected ?Response $response = null;
-	private bool $logStarted = false;
 
 	/**
 	 * @param RequestInterface $request
@@ -91,28 +90,28 @@ abstract class Handler implements Log\LoggerAwareInterface, DebugInterface
 	{
 		if (($logger = $this->getLogger()) && ($this->debugLevel & $level))
 		{
-			if (!$this->logStarted)
-			{
-				$this->logStarted = true;
-
-				$headMessage = "\n{delimiter}\n{date} - {host}\n{trace}";
-				$headContext =  ['trace' => Diag\Helper::getBackTrace(10, DEBUG_BACKTRACE_IGNORE_ARGS, 5)];
-
-				$logger->debug($headMessage, $headContext);
-			}
-
 			$logger->debug($logMessage, $context);
 		}
 	}
 
 	public function logDiagnostics(): void
 	{
-		if ($this->debugLevel & HttpDebug::DIAGNOSTICS)
+		if (($logger = $this->getLogger()) && ($this->debugLevel & HttpDebug::DIAGNOSTICS))
 		{
-			$this->log(
+			$logger->debug(
 				"\n***TIME connect={connect}, handshake={handshake}, request={request}, total={total}\n",
-				HttpDebug::DIAGNOSTICS,
 				$this->getDiagnostics()
+			);
+		}
+	}
+
+	protected function logBacktrace(): void
+	{
+		if (($logger = $this->getLogger()) && ($this->debugLevel & HttpDebug::BACKTRACE))
+		{
+			$logger->debug(
+				"\n{delimiter}\n{date} - {host}\n{trace}",
+				['trace' => Diag\Helper::getBackTrace(20, DEBUG_BACKTRACE_IGNORE_ARGS, 5)]
 			);
 		}
 	}

@@ -23,6 +23,8 @@ class Type extends UserField\Internal\Type implements Permission\Containable
 {
 	use Permission\ModelTrait;
 
+	private const EMPTY_STAGE_ID = 0;
+
 	public static $dataClass = TypeTable::class;
 	protected $stages;
 	protected $userFieldCollection;
@@ -208,6 +210,10 @@ class Type extends UserField\Internal\Type implements Permission\Containable
 	public function getItems(array $parameters = []): Collection
 	{
 		$itemDataClass = $this->getFactory()->getItemDataClass($this);
+		if(isset($parameters['filter']) && is_array($parameters['filter']))
+		{
+			$parameters['filter'] = self::normalizeStageIdFilter($parameters['filter']);
+		}
 		if (
 			isset($parameters['filter'])
 			&& is_array($parameters['filter'])
@@ -228,7 +234,7 @@ class Type extends UserField\Internal\Type implements Permission\Containable
 	{
 		$itemDataClass = $this->getFactory()->getItemDataClass($this);
 		$parameters = [
-			'filter' => $filter,
+			'filter' => self::normalizeStageIdFilter($filter),
 		];
 		if(array_key_exists('*FULL_TEXT.SEARCH_CONTENT', $parameters['filter']))
 		{
@@ -241,6 +247,23 @@ class Type extends UserField\Internal\Type implements Permission\Containable
 		$result = $itemDataClass::getList($parameters)->fetch();
 
 		return (int) $result['CNT'];
+	}
+
+	private static function normalizeStageIdFilter(array $filter): array
+	{
+		foreach($filter as $name => $value)
+		{
+			if($name === '@STAGE_ID' && $value === [])
+			{
+				$filter[$name] = [self::EMPTY_STAGE_ID];
+			}
+			elseif(is_array($value))
+			{
+				$filter[$name] = self::normalizeStageIdFilter($value);
+			}
+		}
+
+		return $filter;
 	}
 
 	public function getItemUserFieldsEntityId(): string
@@ -262,7 +285,7 @@ class Type extends UserField\Internal\Type implements Permission\Containable
 	{
 		global $USER_FIELD_MANAGER;
 		$fields = [];
-		$userFields = $USER_FIELD_MANAGER->GetUserFields($this->getItemUserFieldsEntityId(), 0, LANGUAGE_ID);
+		$userFields = $USER_FIELD_MANAGER->getUserFields($this->getItemUserFieldsEntityId(), 0, LANGUAGE_ID);
 		foreach($userFields as $field)
 		{
 			$field['ID'] = (int)$field['ID'];

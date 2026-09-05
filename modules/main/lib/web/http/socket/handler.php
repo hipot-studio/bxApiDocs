@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Web\Http\Socket;
@@ -74,12 +74,19 @@ class Handler extends Http\Handler
 			switch ($this->state)
 			{
 				case self::PENDING:
-					$this->initTimers();
+					if ($this->getLogger())
+					{
+						$this->initTimers();
+						$this->logBacktrace();
 
-					$logUri = new Web\Uri((string)$uri);
-					$logUri->convertToUnicode();
+						if ($this->debugLevel & HttpDebug::CONNECT)
+						{
+							$logUri = new Web\Uri((string)$uri);
+							$logUri->convertToUnicode();
 
-					$this->log("***CONNECT to {address} for URI {uri}\n", Web\HttpDebug::CONNECT, ['address' => $this->socket->getAddress(), 'uri' => $logUri]);
+							$this->log("***CONNECT to {address} for URI {uri}\n", Web\HttpDebug::CONNECT, ['address' => $this->socket->getAddress(), 'uri' => $logUri]);
+						}
+					}
 
 					// this is a new job - should connect asynchronously
 					try
@@ -347,6 +354,7 @@ class Handler extends Http\Handler
 			{
 				$part = $body->read(self::BUF_BODY_LEN);
 				$this->requestBodyPart .= $part;
+
 				$this->log($part, Web\HttpDebug::REQUEST_BODY);
 			}
 
@@ -523,19 +531,15 @@ class Handler extends Http\Handler
 
 	protected function initTimers(): void
 	{
-		// $this->debugLevel can be set from Diag\Logger::create()
-		if ($this->getLogger())
+		if ($this->debugLevel & HttpDebug::DIAGNOSTICS)
 		{
-			if ($this->debugLevel & HttpDebug::DIAGNOSTICS)
+			$this->connectTimer = (new StopWatch())->start();
+			if ($this->request->getUri()->getScheme() === 'https')
 			{
-				$this->connectTimer = (new StopWatch())->start();
-				if ($this->request->getUri()->getScheme() === 'https')
-				{
-					$this->handshakeTimer = (new StopWatch())->start();
-				}
-				$this->requestTimer = (new StopWatch())->start();
-				$this->totalTimer = (new StopWatch())->start();
+				$this->handshakeTimer = (new StopWatch())->start();
 			}
+			$this->requestTimer = (new StopWatch())->start();
+			$this->totalTimer = (new StopWatch())->start();
 		}
 	}
 

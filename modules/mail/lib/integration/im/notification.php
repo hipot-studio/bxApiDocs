@@ -20,6 +20,12 @@ class Notification
 	const notifyPushTagMailMessage = 'MAIL|MESSAGE|%u';
 	const notifyPushTagMailList = 'MAIL|LIST|%u';
 
+	/**
+	 * CPushManager::SendAgent() takes deferred push rows older than 15 seconds and is scheduled
+	 * every 30 seconds, so 15 minutes is a wide margin for delayed agents and sparse cron.
+	 */
+	const deferredPushCancelWindowSeconds = 900;
+
 	//region General methods
 
 	public static function getSchema()
@@ -180,7 +186,38 @@ class Notification
 			return sprintf(self::notifyPushTagMailList, $mailboxId);
 		}
 
-		return sprintf(self::notifyPushTagMailMessage, $message['ID']);
+		return self::getPushTagForMessageId((int)$message['ID']);
+	}
+
+	private static function getPushTagForMessageId(int $messageId): string
+	{
+		return sprintf(self::notifyPushTagMailMessage, $messageId);
+	}
+
+	/**
+	 * Notification and its cancellation must produce the same string, or the push is not found.
+	 */
+	private static function getNotifySubTag(string $notifyTag, int $userId): string
+	{
+		return $notifyTag . '|' . $userId;
+	}
+
+	public static function cancelDeferredPushForReadMessages(int $mailboxId, array $messageIds, int $userId): void
+	{
+		if (!Main\Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		foreach ($messageIds as $messageId)
+		{
+			\CIMNotify::DeleteBySubTag(
+				self::getNotifySubTag(self::getPushTagForMessageId((int)$messageId), $userId)
+			);
+		}
+
+		$aggregateTag = self::getPushTagForNewMessage([], $mailboxId);
+		\CIMNotify::DeleteBySubTag(self::getNotifySubTag($aggregateTag, $userId));
 	}
 
 	private static function getNotifyMessageForNewMessageInMail($message, $absoluteUrl = false): \Closure
@@ -252,15 +289,21 @@ class Notification
 			language: $languageId,
 		);
 
+		$notifyTag = self::getPushTagForNewMessage($message, $fields['mailboxId']);
+
 		\CIMNotify::add([
 			'MESSAGE_TYPE' => IM_MESSAGE_SYSTEM,
 			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
 			'NOTIFY_MODULE' => 'mail',
 			'NOTIFY_EVENT' => self::notifierSchemeTypeMail,
+			// NOTIFY_TAG is deliberately absent: it switches im to the deduplicating path, which would
+			// replace the previous notification and scan other recipients of a shared mailbox.
+			// Cancellation needs only the sub-tag - both the notification and the push queue are found by it.
+			'NOTIFY_SUB_TAG' => self::getNotifySubTag($notifyTag, $userId),
 			'NOTIFY_TITLE' => $notifyTitleCallback,
 			'PUSH_PARAMS' => [
 				'ACTION' => 'mail',
-				'TAG' => self::getPushTagForNewMessage($message, $fields['mailboxId']),
+				'TAG' => $notifyTag,
 				'ADVANCED_PARAMS' => [
 					'id' => 'im_notify',
 					'group' => 'im_notify',

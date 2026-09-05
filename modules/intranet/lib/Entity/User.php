@@ -21,6 +21,8 @@ use Bitrix\Socialnetwork\Collab\CollabFeature;
 
 class User
 {
+	public const EXTERNAL_AUTH_ID_SYSTEM = 'rest_system';
+
 	public function __construct(
 		private ?int $id = null,
 		private ?string $login = null,
@@ -227,6 +229,11 @@ class User
 	public function isShop(): bool
 	{
 		return in_array($this->externalAuthId, ['shop', 'sale', 'saleanonymous']);
+	}
+
+	public function isSystemUser(): bool
+	{
+		return $this->externalAuthId === self::EXTERNAL_AUTH_ID_SYSTEM;
 	}
 
 	public function isExternal(): bool

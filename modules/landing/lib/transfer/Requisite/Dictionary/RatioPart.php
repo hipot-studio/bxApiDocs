@@ -22,4 +22,6 @@ enum RatioPart: string
 	case TemplateLinkingBefore = 'templateLinkingBefore';
 	case FolderReferences = 'folderReferences';
 	case FoldersNew = 'foldersNew';
+	case CrmFormTargetId = 'crmFormTargetId';
+	case CrmFormActivity = 'crmFormActivity';
 }

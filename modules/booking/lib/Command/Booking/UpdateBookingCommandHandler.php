@@ -111,6 +111,18 @@ class UpdateBookingCommandHandler
 					$currentBooking->getSkuCollection(),
 				);
 
+				$confirmTransitionType = match (true) {
+					!$currentBooking->isConfirmed() && $command->booking->isConfirmed() => JournalType::BookingConfirmed,
+					$currentBooking->isConfirmed() && !$command->booking->isConfirmed() => JournalType::BookingUnconfirmed,
+					default => null,
+				};
+
+				$command->booking->setConfirmedAt(match ($confirmTransitionType) {
+					JournalType::BookingConfirmed => time(),
+					JournalType::BookingUnconfirmed => null,
+					default => $currentBooking->getConfirmedAt(),
+				});
+
 				$bookingId = $this->bookingRepository->save($command->booking);
 				$booking = $this->bookingRepository->getById($bookingId);
 				if (!$booking)
@@ -147,24 +159,12 @@ class UpdateBookingCommandHandler
 					$command->updatedBy,
 				);
 
-				if (!$currentBooking->isConfirmed() && $booking->isConfirmed())
+				if ($confirmTransitionType !== null)
 				{
 					$this->journalService->append(
 						new JournalEvent(
 							entityId: $command->booking->getId(),
-							type: JournalType::BookingConfirmed,
-							data: [
-								'booking' => $booking->toArray(),
-							],
-						)
-					);
-				}
-				elseif ($currentBooking->isConfirmed() && !$booking->isConfirmed())
-				{
-					$this->journalService->append(
-						new JournalEvent(
-							entityId: $command->booking->getId(),
-							type: JournalType::BookingUnconfirmed,
+							type: $confirmTransitionType,
 							data: [
 								'booking' => $booking->toArray(),
 							],

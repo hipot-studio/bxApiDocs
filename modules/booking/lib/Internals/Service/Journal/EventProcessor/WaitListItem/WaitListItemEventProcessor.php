@@ -10,7 +10,6 @@ use Bitrix\Booking\Entity\WaitListItem\WaitListItem;
 use Bitrix\Booking\Internals\Service\Journal\EventProcessor\AbstractEventProcessor;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
-use Bitrix\Main\Event;
 
 class WaitListItemEventProcessor extends AbstractEventProcessor
 {
@@ -54,14 +53,5 @@ class WaitListItemEventProcessor extends AbstractEventProcessor
 				'removedBy' => $journalEvent->data['removedBy'],
 			],
 		);
-	}
-
-	private function sendBitrixEvent(string $type, array $parameters): void
-	{
-		(new Event(
-			moduleId: 'booking',
-			type: $type,
-			parameters: $parameters,
-		))->send();
 	}
 }

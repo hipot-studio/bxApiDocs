@@ -21,6 +21,8 @@ use Bitrix\Main\Localization\Loc;
 class VendorPacks implements StickerPacks
 {
 	private const CIS_PACK_ORDER = [
+		VendorPackName::AiHelp,
+		VendorPackName::LadyBoss,
 		VendorPackName::UnstoppableOptimist,
 		VendorPackName::Celebration,
 		VendorPackName::OfficeRoutine,
@@ -248,6 +250,8 @@ class VendorPacks implements StickerPacks
 			VendorPackName::Animals => VendorConfig::getAnimals(),
 			VendorPackName::Celebration => VendorConfig::getCelebration(),
 			VendorPackName::UnstoppableOptimist => VendorConfig::getUnstoppableOptimist(),
+			VendorPackName::AiHelp => VendorConfig::getAiHelp(),
+			VendorPackName::LadyBoss => VendorConfig::getLadyBoss(),
 		};
 
 		foreach ($files as $id => $file)
@@ -302,6 +306,8 @@ class VendorPacks implements StickerPacks
 			VendorPackName::Animals => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_ANIMALS') ?? '',
 			VendorPackName::Celebration => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_CELEBRATION') ?? '',
 			VendorPackName::UnstoppableOptimist => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_UNSTOPPABLE_OPTIMIST') ?? '',
+			VendorPackName::AiHelp => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_AI_HELP') ?? '',
+			VendorPackName::LadyBoss => Loc::getMessage('IM_MESSAGE_STICKER_VENDOR_LADY_BOSS') ?? '',
 		};
 	}
 

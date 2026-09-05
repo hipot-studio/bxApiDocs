@@ -33,4 +33,14 @@ final class RoleRelationService
 	{
 		return RoleRelationTable::deleteList(['=ROLE_ID' => $roleId]);
 	}
+
+	public function deleteByRelations(array $accessCodes): void
+	{
+		if (empty($accessCodes))
+		{
+			return;
+		}
+
+		RoleRelationTable::deleteList(['=RELATION' => $accessCodes]);
+	}
 }

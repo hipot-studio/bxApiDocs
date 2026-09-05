@@ -53,6 +53,12 @@ class SearchEmailsTool extends ToolContract
 		;
 	}
 
+	/*
+	 * 'unanswered' and 'classification' are deliberately left out of the schema: the first scans the whole
+	 * mailbox (see MessageFilter::addUnanswered), the second has nothing to match until labelling ships.
+	 * Hiding a filter only keeps it away from the model: arguments are not validated against the schema, so
+	 * an explicitly passed key still reaches SearchMessagesDto.
+	 */
 	public function getInputSchema(): array
 	{
 		return [

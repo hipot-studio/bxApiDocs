@@ -37,16 +37,20 @@ final class UserManager
 		$filterSettings = ModuleManager::isModuleInstalled('extranet')
 			? new ExtranetUserSettings($filterParams)
 			: new IntranetUserSettings($filterParams);
+		$userQueryModifier = new UserQueryModifier();
 
 		$extraProviders = [
 			new IntranetUserDataProvider($filterSettings),
-			new IntegerUserDataProvider($filterSettings),
+			new IntegerUserDataProvider($filterSettings, $userQueryModifier),
 			new PhoneUserDataProvider($filterSettings),
 		];
 
 		if (ModuleManager::isModuleInstalled('extranet'))
 		{
-			$extraProviders[] = new \Bitrix\Intranet\User\Filter\Provider\ExtranetUserDataProvider($filterSettings);
+			$extraProviders[] = new \Bitrix\Intranet\User\Filter\Provider\ExtranetUserDataProvider(
+				$filterSettings,
+				$userQueryModifier,
+			);
 		}
 
 		$this->filter = new UserFilter(

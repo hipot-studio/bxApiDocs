@@ -22,7 +22,6 @@ use Bitrix\Landing\Copilot\Generation\Type\RequestEntities;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntityDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Model\RequestToEntitiesTable;
-use Bitrix\Landing\Metrika;
 use Bitrix\Main\ORM\Query\Query;
 
 abstract class AbstractRequestTailwindBlockHtml extends RequestMultiple implements RuntimeRequestQuotaProvider
@@ -56,11 +55,6 @@ abstract class AbstractRequestTailwindBlockHtml extends RequestMultiple implemen
 		}
 
 		return new RequestQuotaDto(static::getConnectorClass(), $requestCount);
-	}
-
-	public function getAnalyticEvent(): ?Metrika\Events
-	{
-		return Metrika\Events::textsGeneration;
 	}
 
 	protected function sendRequests(): bool

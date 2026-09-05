@@ -191,6 +191,8 @@ class Repository
 			$mailFieldsForEvent
 		);
 
+		Mail\Internals\MailMessageMarkTable::deleteByMessages((int)$this->mailboxId, $ids);
+
 		return $this->deleteMailMessageRows($ids);
 	}
 

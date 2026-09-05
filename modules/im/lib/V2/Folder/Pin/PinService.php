@@ -23,6 +23,7 @@ class PinService
 {
 	private const LIMIT_GLOBAL_PINS = 45;
 	public const LIMIT_PINS_PER_FOLDER = 45;
+	private const REMOVE_FOLDER_CHUNK_SIZE = 500;
 
 	public function __construct(
 		private readonly FolderProvider $folderProvider,
@@ -132,6 +133,42 @@ class PinService
 		]);
 
 		if ($userId !== null && $userId > 0)
+		{
+			$this->pinCache->clearByUser($userId);
+		}
+	}
+
+	/**
+	 * Batch counterpart of {@see self::syncShadowsOnRemove()} for detaching a single chat from
+	 * many personal folders at once: one chunked DELETE over (CHAT_ID, FOLDER_ID IN ...) plus one
+	 * pin-cache reset per unique user. Only shadows in the passed folders are removed; shadows in
+	 * default/system folders (whose FOLDER_ID is not in $folderIds) stay intact.
+	 *
+	 * @param int[] $folderIds
+	 * @param int[] $userIds
+	 */
+	public function syncShadowsOnRemoveForFolders(array $folderIds, int $chatId, array $userIds = []): void
+	{
+		if ($chatId <= 0)
+		{
+			return;
+		}
+
+		$folderIds = Normalizer::toUniquePositiveIntegers($folderIds);
+		if (empty($folderIds))
+		{
+			return;
+		}
+
+		foreach (array_chunk($folderIds, self::REMOVE_FOLDER_CHUNK_SIZE) as $chunk)
+		{
+			FolderPinTable::deleteBatch([
+				'=CHAT_ID' => $chatId,
+				'=FOLDER_ID' => $chunk,
+			]);
+		}
+
+		foreach (Normalizer::toUniquePositiveIntegers($userIds) as $userId)
 		{
 			$this->pinCache->clearByUser($userId);
 		}

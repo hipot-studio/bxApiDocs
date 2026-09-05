@@ -9,7 +9,11 @@ use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
+use Bitrix\BIConnector\Integration\Superset\Recovery\StatusRecoveryScheduler;
+use Bitrix\BIConnector\Integration\Superset\Recovery\StatusRecoveryWindow;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
+use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
+use Bitrix\BIConnector\Superset\Selfhost\SupersetHostMode;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
 use Bitrix\Main\Config\Option;
@@ -297,6 +301,118 @@ class Agent
 		Option::set('biconnector', 'stuck_deleted_status_recovered', 'Y');
 
 		return '';
+	}
+
+	/**
+	 * Scheduled recovery attempt for a portal stuck in ERROR.
+	 * Performs at most one startup attempt — the one due at the reached mark of the series — and
+	 * reschedules itself to the next mark (see Recovery\StatusRecoveryWindow) until the instance
+	 * is back or the 48-hour limit is spent.
+	 *
+	 * The series is started by a user visit, not by this agent.
+	 * @see SupersetInitializer::initializeOrCheckSupersetStatus()
+	 *
+	 * @return string Agent name to run the next attempt, or an empty string to unschedule.
+	 */
+	public static function recoverSupersetStatus(): string
+	{
+		$window = new StatusRecoveryWindow();
+		if (!$window->isTracked())
+		{
+			return '';
+		}
+
+		if (SupersetHostMode::isSelfHosted())
+		{
+			$window->clear();
+
+			return '';
+		}
+
+		$status = Superset\SupersetInitializer::getSupersetStatus();
+		$recoverableStatuses = [
+			Superset\SupersetInitializer::SUPERSET_STATUS_ERROR,
+			Superset\SupersetInitializer::SUPERSET_STATUS_LOAD,
+		];
+
+		if (
+			!in_array($status, $recoverableStatuses, true)
+			|| Superset\SupersetInitializer::isRebindRequired()
+			|| !Feature::isBuilderEnabled()
+		)
+		{
+			SupersetInitializerLogger::logInfo('Superset recovery series stopped', [
+				'current_status' => $status,
+			]);
+			$window->clear();
+
+			return '';
+		}
+
+		$now = time();
+		if ($window->getAttempt() === 0 && $window->isExpired($now))
+		{
+			// Agents did not run at all while the window was open, so the series spent no attempts.
+			// Keeping the state would block automatic recovery for this portal forever.
+			SupersetInitializerLogger::logInfo('Superset recovery window expired without attempts', [
+				'current_status' => $status,
+			]);
+			$window->clear();
+
+			return '';
+		}
+
+		$dueAttempt = $window->resolveDueAttempt($now);
+		if ($dueAttempt === null)
+		{
+			$pendingAttempt = $window->resolveNextAttempt($now);
+			if ($pendingAttempt === null)
+			{
+				// State is kept: an exhausted series must not restart on the next user visit.
+				SupersetInitializerLogger::logInfo('Superset recovery series exhausted', [
+					'current_status' => $status,
+				]);
+
+				return '';
+			}
+
+			// Woken up before the mark of the pending attempt (a manual run, for instance):
+			// there is nothing to perform yet, only rescheduling.
+			StatusRecoveryScheduler::setExecutionPeriod($pendingAttempt['delay']);
+
+			return StatusRecoveryScheduler::getAgentName();
+		}
+
+		$window->registerAttempt($dueAttempt);
+		Superset\SupersetInitializer::startupSuperset();
+
+		$statusAfterAttempt = Superset\SupersetInitializer::getSupersetStatus();
+		SupersetInitializerLogger::logInfo('Superset recovery attempt finished', [
+			'attempt' => $dueAttempt,
+			'status_before' => $status,
+			'status_after' => $statusAfterAttempt,
+		]);
+
+		if ($statusAfterAttempt === Superset\SupersetInitializer::SUPERSET_STATUS_READY)
+		{
+			Superset\Recovery\StatusRecoveryListener::resetRecoveryState();
+
+			return '';
+		}
+
+		$nextAttempt = $window->resolveNextAttempt(time());
+		if ($nextAttempt === null)
+		{
+			SupersetInitializerLogger::logInfo('Superset recovery series exhausted', [
+				'current_status' => $statusAfterAttempt,
+			]);
+
+			return '';
+		}
+
+		StatusRecoveryScheduler::setExecutionPeriod($nextAttempt['delay']);
+
+		return StatusRecoveryScheduler::getAgentName();
 	}
 
 	/**

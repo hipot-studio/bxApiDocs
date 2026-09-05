@@ -16,8 +16,6 @@ use Bitrix\Im\V2\Result;
  */
 class FolderChatLinker
 {
-	private const LIMIT_CHATS_PER_FOLDER = 50;
-
 	public function __construct(
 		private readonly PinService $pinService,
 		private readonly FolderCache $folderCache,
@@ -145,6 +143,47 @@ class FolderChatLinker
 		$this->folderCache->clearByUser($userId);
 	}
 
+	/**
+	 * Removes a chat from every personal folder of every user. b_im_folder_chat holds
+	 * personal-folder membership only, so a CHAT_ID-wide delete detaches it everywhere.
+	 * Used by the cascade when a root chat becomes nested (personal folders keep root chats only).
+	 */
+	public function clearByChat(int $chatId): void
+	{
+		if ($chatId <= 0)
+		{
+			return;
+		}
+
+		$rows = FolderChatTable::query()
+			->setSelect(['FOLDER_ID', 'USER_ID' => 'FOLDER.USER_ID'])
+			->where('CHAT_ID', $chatId)
+			->fetchAll()
+		;
+		if (empty($rows))
+		{
+			return;
+		}
+
+		$folderIds = [];
+		$userIds = [];
+		foreach ($rows as $row)
+		{
+			$folderIds[] = (int)$row['FOLDER_ID'];
+			$userIds[(int)$row['USER_ID']] = true;
+		}
+		$userIds = array_keys($userIds);
+
+		$this->pinService->syncShadowsOnRemoveForFolders($folderIds, $chatId, $userIds);
+
+		FolderChatTable::deleteBatch(['=CHAT_ID' => $chatId]);
+
+		foreach ($userIds as $userId)
+		{
+			$this->folderCache->clearByUser($userId);
+		}
+	}
+
 	private function filterEligibleChats(PersonalFolder $folder, array $chatIds): array
 	{
 		$chats = $this->getChats($chatIds, (int)$folder->getUserId());
@@ -174,14 +213,14 @@ class FolderChatLinker
 
 	private function ensureCapacity(PersonalFolder $folder, int $additional): ?Error
 	{
-		if (count($folder->getChatIds()) + $additional <= self::LIMIT_CHATS_PER_FOLDER)
+		if (count($folder->getChatIds()) + $additional <= FolderLimits::MAX_CHATS_PER_FOLDER)
 		{
 			return null;
 		}
 
 		$this->lazyCleanupAtLimit($folder);
 
-		if (count($folder->getChatIds()) + $additional <= self::LIMIT_CHATS_PER_FOLDER)
+		if (count($folder->getChatIds()) + $additional <= FolderLimits::MAX_CHATS_PER_FOLDER)
 		{
 			return null;
 		}

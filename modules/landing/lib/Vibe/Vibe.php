@@ -663,6 +663,14 @@ class Vibe
 		;
 	}
 
+	public function canCreate(): bool
+	{
+		return
+			$this->canView()
+			&& $this->getProvider()?->canCreate()
+		;
+	}
+
 	public function getTitle(): ?string
 	{
 		return $this->getProvider()?->getTitle();

@@ -986,7 +986,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 		}
 		if (!$this->isSanitizeHtmlCanBeLong($message['BODY_HTML']))
 		{
-			$message['MESSAGE_HTML'] = \Bitrix\Mail\Helper\Message::sanitizeHtml($message['BODY_HTML'], true);
+			$message['MESSAGE_HTML'] = \Bitrix\Mail\Helper\Message::sanitizeHtmlForMessageView($message['BODY_HTML']);
 			return;
 		}
 
@@ -1024,8 +1024,11 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 			return [];
 		}
 
-		$messageHtml = \Bitrix\Mail\Helper\Message::sanitizeHtml($message['BODY_HTML'], true);
-		(new SanitizedBodyCache())->set($id, $messageHtml);
+		$messageHtml = \Bitrix\Mail\Helper\Message::sanitizeHtmlForMessageView($message['BODY_HTML']);
+		if (trim((string)$message['BODY_HTML']) === '' || trim($messageHtml) !== '')
+		{
+			(new SanitizedBodyCache())->set($id, $messageHtml);
+		}
 
 		$quote = Message::wrapTheMessageWithAQuote(
 			$messageHtml,

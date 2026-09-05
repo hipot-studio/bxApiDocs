@@ -426,6 +426,7 @@ final class MessageSender
 		$rows = MailMessageAttachmentTable::query()
 			->setSelect(['ID', 'FILE_ID', 'FILE_NAME', 'FILE_SIZE', 'CONTENT_TYPE'])
 			->where('MESSAGE_ID', $messageId)
+			->whereNull('EXTERNAL_LINK_ID')
 			->fetchAll()
 		;
 

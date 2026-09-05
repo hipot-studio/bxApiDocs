@@ -260,6 +260,125 @@ class CCloudStorageUpload
 		return false;
 	}
 
+	protected function getProgressLockName(): string
+	{
+		return 'CCloudStorageUpload::progress(' . $this->_ID . ')';
+	}
+
+	/**
+	 * Replaces the Parts state of an active multipart session with the supplied
+	 * (partNumber → ETag) map. Used by direct-to-cloud (presigned) uploads — the
+	 * client PUTs each part itself and collects ETags out-of-band, so by the time
+	 * Finish() is called NEXT_STEP.Parts must be repopulated from the application's
+	 * own tracking.
+	 *
+	 * @param array<int, string> $partsMap 1-based partNumber → ETag (as returned by S3).
+	 * @return bool true on success.
+	 */
+	public function setParts(array $partsMap): bool
+	{
+		global $DB;
+
+		if (!$this->isStarted())
+		{
+			return false;
+		}
+
+		$lockId = $this->getProgressLockName();
+		$connection = \Bitrix\Main\Application::getConnection();
+
+		if (!$connection->lock($lockId, -1))
+		{
+			return false;
+		}
+
+		try
+		{
+			// Re-read NEXT_STEP under the lock and merge so concurrent mutations
+			// outside of Parts (PART_NO, fail counters, etc.) are preserved.
+			$dbUploadInfo = $connection->queryScalar(
+				"SELECT NEXT_STEP FROM b_clouds_file_upload WHERE ID = '" . $this->_ID . "'"
+			);
+
+			$arUploadInfo = $dbUploadInfo ? unserialize($dbUploadInfo, ['allowed_classes' => false]) : null;
+			if (!is_array($arUploadInfo))
+			{
+				return false;
+			}
+
+			// CompleteMultipartUpload computes PartNumber = key + 1, so we store with
+			// 0-based keys to stay binary-compatible with the rest of the flow.
+			$arUploadInfo['Parts'] = [];
+			foreach ($partsMap as $partNumber => $etag)
+			{
+				$arUploadInfo['Parts'][(int)$partNumber - 1] = (string)$etag;
+			}
+
+			$next = serialize($arUploadInfo);
+			$strUpdate = $DB->PrepareUpdate('b_clouds_file_upload', ['NEXT_STEP' => $next]);
+			if ($strUpdate === '')
+			{
+				return false;
+			}
+
+			try
+			{
+				$connection->query("UPDATE b_clouds_file_upload SET {$strUpdate} WHERE ID = '" . $this->_ID . "'");
+			}
+			catch (\Bitrix\Main\DB\SqlQueryException $_)
+			{
+				return false;
+			}
+
+			return true;
+		}
+		finally
+		{
+			$connection->unlock($lockId);
+			unset($this->_cache);
+		}
+	}
+
+	/**
+	 * Returns a presigned URL that lets the client PUT a single part directly to S3,
+	 * bypassing PHP. Requires an active multipart session (Start() called).
+	 * 1-based partNumber matches S3 PartNumber semantics.
+	 *
+	 * @param int $partNumber 1-based.
+	 * @param int $expires Time-to-live in seconds.
+	 * @param CCloudStorageBucket|null $obBucket Optional bucket (loaded from BUCKET_ID if null).
+	 * @param int|null $contentLength Optional expected part size; when set it is signed into
+	 *        the URL so S3 rejects a part PUT whose body size differs.
+	 * @return string|null Null if the session is not active or the service has no presigned support.
+	 */
+	public function presignPart(int $partNumber, int $expires, $obBucket = null, ?int $contentLength = null): ?string
+	{
+		if (!$this->isStarted())
+		{
+			return null;
+		}
+
+		$ar = $this->GetArray();
+
+		if ($obBucket === null)
+		{
+			$obBucket = new CCloudStorageBucket((int)$ar['BUCKET_ID']);
+		}
+
+		if (!$obBucket->Init() || !$obBucket->supportsPresignedUrls())
+		{
+			return null;
+		}
+
+		$arUploadInfo = unserialize($ar['NEXT_STEP'], ['allowed_classes' => false]);
+		if (!is_array($arUploadInfo))
+		{
+			return null;
+		}
+
+		return $obBucket->getPresignedMultiPartUrl($arUploadInfo, $partNumber, $expires, $contentLength);
+	}
+
 	/**
 	 * @return bool
 	*/
@@ -401,57 +520,66 @@ class CCloudStorageUpload
 		global $DB;
 		$connection = \Bitrix\Main\Application::getConnection();
 		$lockId = '';
+		$locked = false;
 
 		if ($bSuccess)
 		{
-			$lockId = 'CCloudStorageUpload::UpdateProgress(' . $this->_ID . ')';
-			$connection->lock($lockId, -1);
-
-			$dbUploadInfo = $connection->queryScalar("SELECT NEXT_STEP FROM b_clouds_file_upload WHERE ID = '" . $this->_ID . "'");
-			if ($dbUploadInfo)
+			$lockId = $this->getProgressLockName();
+			if (!$connection->lock($lockId, -1))
 			{
-				$arUploadInfo = array_replace_recursive(unserialize($dbUploadInfo, ['allowed_classes' => false]), $arUploadInfo);
-			}
-
-			$arFields = [
-				'NEXT_STEP' => serialize($arUploadInfo),
-				'~PART_NO' => 'PART_NO + 1',
-				'PART_FAIL_COUNTER' => 0,
-			];
-		}
-		else
-		{
-			$arFields = [
-				'~PART_FAIL_COUNTER' => 'PART_FAIL_COUNTER + 1',
-			];
-		}
-
-		$strUpdate = $DB->PrepareUpdate('b_clouds_file_upload', $arFields);
-		if ($strUpdate !== '')
-		{
-			try
-			{
-				$connection->query('UPDATE b_clouds_file_upload SET ' . $strUpdate . " WHERE ID = '" . $this->_ID . "'");
-			}
-			catch (\Bitrix\Main\DB\SqlQueryException $_)
-			{
-				if ($bSuccess)
-				{
-					$connection->unlock($lockId);
-				}
 				unset($this->_cache);
 
 				return false;
 			}
+			$locked = true;
 		}
 
-		if ($bSuccess)
+		try
 		{
-			$connection->unlock($lockId);
-		}
-		unset($this->_cache);
+			if ($bSuccess)
+			{
+				$dbUploadInfo = $connection->queryScalar("SELECT NEXT_STEP FROM b_clouds_file_upload WHERE ID = '" . $this->_ID . "'");
+				if ($dbUploadInfo)
+				{
+					$arUploadInfo = array_replace_recursive(unserialize($dbUploadInfo, ['allowed_classes' => false]), $arUploadInfo);
+				}
 
-		return true;
+				$arFields = [
+					'NEXT_STEP' => serialize($arUploadInfo),
+					'~PART_NO' => 'PART_NO + 1',
+					'PART_FAIL_COUNTER' => 0,
+				];
+			}
+			else
+			{
+				$arFields = [
+					'~PART_FAIL_COUNTER' => 'PART_FAIL_COUNTER + 1',
+				];
+			}
+
+			$strUpdate = $DB->PrepareUpdate('b_clouds_file_upload', $arFields);
+			if ($strUpdate !== '')
+			{
+				try
+				{
+					$connection->query('UPDATE b_clouds_file_upload SET ' . $strUpdate . " WHERE ID = '" . $this->_ID . "'");
+				}
+				catch (\Bitrix\Main\DB\SqlQueryException $_)
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+		finally
+		{
+			if ($locked)
+			{
+				$connection->unlock($lockId);
+			}
+			unset($this->_cache);
+		}
 	}
 
 	public static function CleanUp($ID = '')

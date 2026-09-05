@@ -88,7 +88,7 @@ class Archive extends HttpResponse
 
 	protected function setContentDispositionHeader(): void
 	{
-		$utfName = Uri::urnEncode($this->name, 'UTF-8');
+		$utfName = Uri::urnEncode($this->name);
 		$translitName = \CUtil::translit($this->name, LANGUAGE_ID, [
 			'max_len' => 1024,
 			'safe_chars' => '.',

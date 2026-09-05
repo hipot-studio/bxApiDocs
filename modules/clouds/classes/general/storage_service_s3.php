@@ -261,6 +261,226 @@ class CCloudStorageService_S3 extends CCloudStorageService
 		];
 	}
 
+	public function supportsPresignedUrls(): bool
+	{
+		return true;
+	}
+
+	/**
+	 * Builds a presigned URL using AWS Signature Version 4 with credentials carried
+	 * in the query string (X-Amz-* parameters). Unlike SignRequest(), the payload is
+	 * unknown at signing time, so HashedPayload is the literal 'UNSIGNED-PAYLOAD'.
+	 *
+	 * Host/scheme/PREFIX/CNAME composition is delegated to GetFileSRC() — that way
+	 * the signed origin is guaranteed to match the URL the same bucket gives out for
+	 * downloads, and there is a single source of truth for endpoint composition.
+	 *
+	 * @param array $arBucket Bucket descriptor (with SETTINGS, BUCKET, CNAME, PREFIX).
+	 * @param string $verb HTTP method the client will use (PUT/POST/GET).
+	 * @param string $objectPath Object key inside the bucket; no PREFIX/encoding/bucket
+	 *  prefix needed — GetFileSRC takes care of all that.
+	 * @param array $queryParams Extra query parameters that participate in the signature
+	 *  (e.g. partNumber, uploadId).
+	 * @param int $expires Time-to-live in seconds.
+	 * @param array $extraSignedHeaders Additional headers (other than host) that the
+	 *  client commits to send: ['content-type' => 'image/png']. They are added both to
+	 *  CanonicalHeaders and to SignedHeaders.
+	 * @param string $service AWS service name; defaults to 's3'.
+	 * @return string Full URL with embedded signature.
+	 */
+	protected function PresignUrl(
+		array $arBucket,
+		string $verb,
+		string $objectPath,
+		array $queryParams,
+		int $expires,
+		array $extraSignedHeaders = [],
+		string $service = 's3'
+	): string
+	{
+		$arSettings = is_array($arBucket['SETTINGS'] ?? null) ? $arBucket['SETTINGS'] : [];
+
+		// trim() on credentials guards against a trailing newline/space in the
+		// stored value — otherwise the HMAC key includes those bytes and the
+		// signature silently diverges from what the provider computes.
+		$accessKey = trim((string)($arSettings['ACCESS_KEY'] ?? ''));
+		$secretKey = trim((string)($arSettings['SECRET_KEY'] ?? ''));
+		if ($accessKey === '' || $secretKey === '')
+		{
+			return '';
+		}
+
+		// URL that the client actually hits — honors CNAME, PREFIX, USE_HTTPS,
+		// everything that GetFileSRC encodes for a normal download URL.
+		$baseUrl = $this->GetFileSRC($arBucket, ltrim($objectPath, '/'), true);
+		$parts = parse_url($baseUrl);
+		if (!is_array($parts) || empty($parts['host']))
+		{
+			return '';
+		}
+
+		// S3 always answers over HTTPS in production; over HTTP it sends a 301 to
+		// https://, which makes browsers downgrade PUT to GET — and the cached
+		// signature is verb-bound. Honor USE_HTTPS=N only when the bucket settings
+		// explicitly opted out (MinIO without TLS in dev).
+		$useHttp = (
+			isset($parts['scheme'])
+			&& $parts['scheme'] === 'http'
+			&& (($arSettings['USE_HTTPS'] ?? 'Y') === 'N')
+		);
+		$scheme = $useHttp ? 'http' : 'https';
+		$clientHost = (string)$parts['host'];
+
+		// Re-normalize each path segment via rawurlencode(rawurldecode(...)) so the
+		// canonical URI is always RFC 3986 (e.g. unreserved characters never come
+		// percent-encoded; reserved ones always do). Belt-and-suspenders against
+		// any encoding quirks in GetFileSRC / CCloudUtil::URLEncode.
+		$canonicalUri = $this->normalizePresignedCanonicalUri((string)($parts['path'] ?? '/'));
+
+		$time = time();
+		$requestDate = gmdate('Ymd', $time);
+		$requestTime = gmdate('Ymd', $time) . 'T' . gmdate('His', $time) . 'Z';
+
+		// Region is taken directly from bucket settings — not from $this->location
+		// — so the signature does not depend on an earlier SetLocation() call.
+		$region = trim((string)($arBucket['LOCATION'] ?? ''));
+		if ($region === '')
+		{
+			$region = 'us-east-1';
+		}
+
+		$scope = $requestDate . '/' . $region . '/' . $service . '/aws4_request';
+		$credential = $accessKey . '/' . $scope;
+
+		$signingHost = $this->GetRequestHost($arBucket['BUCKET'] ?? '', $arSettings);
+		$host = $clientHost !== '' ? $clientHost : $signingHost;
+		if (isset($parts['port']))
+		{
+			$defaultPort = $scheme === 'https' ? 443 : 80;
+			if ((int)$parts['port'] !== $defaultPort)
+			{
+				$host .= ':' . $parts['port'];
+				// Sigv4 requires the port in the Host header when non-default;
+				// keep them in lockstep so signed host == header on the wire.
+				$signingHost .= ':' . $parts['port'];
+			}
+		}
+
+		// host is always signed; any extra headers the client commits to send (e.g.
+		// content-type) extend SignedHeaders so the client cannot substitute them.
+		$headerKeys = ['host'];
+		$canonicalHeaders = ['host' => 'host:' . $signingHost];
+		foreach ($extraSignedHeaders as $name => $value)
+		{
+			$key = mb_strtolower((string)$name);
+			$headerKeys[] = $key;
+			$canonicalHeaders[$key] = $key . ':' . trim((string)$value, " \t\n\r");
+		}
+
+		sort($headerKeys);
+		ksort($canonicalHeaders);
+		$signedHeaders = implode(';', $headerKeys);
+		$canonicalHeadersString = implode("\n", $canonicalHeaders);
+
+		// X-Amz-* values participate in the signature itself.
+		$signedQuery = $queryParams + [
+			'X-Amz-Algorithm' => 'AWS4-HMAC-SHA256',
+			'X-Amz-Credential' => $credential,
+			'X-Amz-Date' => $requestTime,
+			'X-Amz-Expires' => $expires,
+			'X-Amz-SignedHeaders' => $signedHeaders,
+		];
+
+		// STS temporary credentials carry a session token that AWS verifies
+		// alongside the signature. Without it temp creds always return
+		// SignatureDoesNotMatch / InvalidAccessKeyId.
+		$securityToken = trim((string)($arSettings['SESSION_TOKEN'] ?? ''));
+		if ($securityToken !== '')
+		{
+			$signedQuery['X-Amz-Security-Token'] = $securityToken;
+		}
+
+		ksort($signedQuery);
+		$canonicalQueryString = http_build_query($signedQuery, '', '&', PHP_QUERY_RFC3986);
+
+		$hashedPayload = 'UNSIGNED-PAYLOAD';
+		$canonicalRequest = (
+			$verb . "\n"
+			. $canonicalUri . "\n"
+			. $canonicalQueryString . "\n"
+			. $canonicalHeadersString . "\n\n"
+			. $signedHeaders . "\n"
+			. $hashedPayload
+		);
+
+		$stringToSign = (
+			"AWS4-HMAC-SHA256\n"
+			. $requestTime . "\n"
+			. $scope . "\n"
+			. hash('sha256', $canonicalRequest)
+		);
+
+		$kDate = hash_hmac('sha256', $requestDate, 'AWS4' . $secretKey, true);
+		$kRegion = hash_hmac('sha256', $region, $kDate, true);
+		$kService = hash_hmac('sha256', $service, $kRegion, true);
+		$kSigning = hash_hmac('sha256', 'aws4_request', $kService, true);
+		$signature = hash_hmac('sha256', $stringToSign, $kSigning);
+
+		$signedQuery['X-Amz-Signature'] = $signature;
+		$finalQuery = http_build_query($signedQuery, '', '&', PHP_QUERY_RFC3986);
+
+		return $scheme . '://' . $host . $canonicalUri . '?' . $finalQuery;
+	}
+
+	public function PresignMultiPartUrl(array $arBucket, array $uploadInfo, int $partNumber, int $expires, ?int $contentLength = null): ?string
+	{
+		if (!isset($uploadInfo['filePath'], $uploadInfo['UploadId']))
+		{
+			return null;
+		}
+
+		$extraSignedHeaders = [];
+		if ($contentLength !== null)
+		{
+			$extraSignedHeaders['Content-Length'] = (string)$contentLength;
+		}
+
+		return $this->PresignUrl(
+			$arBucket,
+			'PUT',
+			$uploadInfo['filePath'],
+			[
+				'partNumber' => $partNumber,
+				'uploadId' => $uploadInfo['UploadId'],
+			],
+			$expires,
+			$extraSignedHeaders
+		);
+	}
+
+	/**
+	 * RFC 3986 canonical URI: each segment is decoded then re-encoded via rawurlencode,
+	 * so reserved characters end up percent-encoded and unreserved ones never do.
+	 * `~` gets a special case for PHP versions that historically encoded it as %7E.
+	 */
+	protected function normalizePresignedCanonicalUri(string $path): string
+	{
+		$trimmed = trim($path);
+		if ($trimmed === '' || $trimmed === '/')
+		{
+			return '/';
+		}
+
+		$segments = explode('/', trim($trimmed, '/'));
+		$encoded = [];
+		foreach ($segments as $segment)
+		{
+			$encoded[] = str_replace('%7E', '~', rawurlencode(rawurldecode($segment)));
+		}
+
+		return '/' . implode('/', $encoded);
+	}
+
 	/**
 	 * @param string $location
 	 * @return void
@@ -1541,7 +1761,7 @@ class CCloudStorageService_S3 extends CCloudStorageService
 		$data = '';
 		foreach ($NS['Parts'] as $PartNumber => $ETag)
 		{
-			$data .= '<Part><PartNumber>' . ($PartNumber + 1) . '</PartNumber><ETag>' . $ETag . "</ETag></Part>\n";
+			$data .= '<Part><PartNumber>' . ($PartNumber + 1) . '</PartNumber><ETag>' . htmlspecialcharsbx($ETag) . "</ETag></Part>\n";
 		}
 
 		if (

@@ -81,7 +81,7 @@ class Iblock extends IblockImplementer
 	private function copyLockFeature(int $iblockId, int $copiedIblockId): void
 	{
 		$option = Option::get("lists", "iblock_lock_feature");
-		$iblockIdsWithLockFeature = ($option !== "" ? unserialize($option) : []);
+		$iblockIdsWithLockFeature = ($option !== "" ? unserialize($option, ['allowed_classes' => false]) : []);
 		if (isset($iblockIdsWithLockFeature[$iblockId]))
 		{
 			$iblockIdsWithLockFeature[$copiedIblockId] = $copiedIblockId;

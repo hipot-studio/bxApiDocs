@@ -24,6 +24,9 @@ class Imap extends Mail\Helper\Mailbox
 		3,
 		1
 	];
+	const HISTORY_SYNC_COVERAGE_PROPERTY = 'SYNC_HISTORY_COVERAGE';
+	// 2 days: one for the RFC 3501 date truncation, one for the server-side timezone interpretation
+	const HISTORY_SYNC_BOUNDARY_MARGIN = 172800;
 
 	protected function getMaximumSynchronizationLengthsOfIntervals($num)
 	{
@@ -928,11 +931,25 @@ class Imap extends Mail\Helper\Mailbox
 	 * @param $mailboxID
 	 * @param $dirPath
 	 * @param $UIDs
+	 * @param bool $ignoreSyncFrom - false applies the period boundary while receiving each message
+	 * @param bool $stopOnEmptyChunk - true aborts the whole run once a fetch chunk comes back empty.
+	 *        Callers passing the entire list in one call must set it to false: aborting would leave the
+	 *        tail unsynced while the run still reports success, so the caller would mark the period as
+	 *        covered and the tail would never be fetched again.
+	 * @param bool $failOnLocalError - false preserves the legacy best-effort behavior
 	 * @return bool - success status
 	 * @throws Main\DB\SqlQueryException
 	 * @throws Main\SystemException
 	 */
-	public function syncMessages($mailboxID, $dirPath, $UIDs, $isRecovered = false)
+	public function syncMessages(
+		$mailboxID,
+		$dirPath,
+		$UIDs,
+		$isRecovered = false,
+		bool $ignoreSyncFrom = true,
+		bool $stopOnEmptyChunk = true,
+		bool $failOnLocalError = false,
+	)
 	{
 		$meta = $this->client->select($dirPath, $error);
 		$uidtoken = $meta['uidvalidity'];
@@ -948,6 +965,10 @@ class Imap extends Mail\Helper\Mailbox
 		$dir = $dirsHelper->getDirByPath($dirPath);
 
 		$chunks = array_chunk($UIDs, 10);
+		$retryUids = $failOnLocalError
+			? $this->collectRetryUids($dir, (int)$uidtoken, $UIDs)
+			: []
+		;
 
 		$entity = Mail\MailMessageUidTable::getEntity();
 		$connection = $entity->getConnection();
@@ -984,14 +1005,26 @@ class Imap extends Mail\Helper\Mailbox
 					$this->warnings->add($this->client->getErrors()->toArray());
 					return true;
 				}
-				break;
+
+				if ($stopOnEmptyChunk)
+				{
+					break;
+				}
+
+				// the whole chunk vanished from the server: skip it, the rest of the list is still expected
+				continue;
 			}
 
 			$this->parseHeaders($messages);
 
 			$this->blacklistMessages($dir->getPath(), $messages);
 
-			$this->removeExistingMessagesFromSynchronizationList($dir->getPath(), $uidtoken, $messages);
+			$this->removeExistingMessagesFromSynchronizationList(
+				$dir->getPath(),
+				$uidtoken,
+				$messages,
+				$failOnLocalError,
+			);
 
 			foreach ($messages as &$message)
 			{
@@ -1016,7 +1049,21 @@ class Imap extends Mail\Helper\Mailbox
 				}
 
 				$hashesMap = [];
-				$this->syncMessage($dir->getPath(), $item, $hashesMap, true, $isOutgoing, $isRecovered);
+				$syncResult = $this->syncMessage(
+					$dir->getPath(),
+					$item,
+					$hashesMap,
+					$ignoreSyncFrom,
+					$isOutgoing,
+					$isRecovered,
+					$failOnLocalError,
+					$failOnLocalError && isset($retryUids[(int)$item['UID']]),
+				);
+
+				if ($failOnLocalError && $syncResult === false)
+				{
+					return false;
+				}
 
 				if ($this->isTimeQuotaExceeded())
 				{
@@ -1026,6 +1073,47 @@ class Imap extends Mail\Helper\Mailbox
 
 		}
 		return true;
+	}
+
+	protected function collectRetryUids(
+		Mail\Internals\Entity\MailboxDirectory $dir,
+		int $uidValidity,
+		array $uids,
+	): array
+	{
+		$retryUids = [];
+		foreach (array_chunk($uids, 1000) as $chunk)
+		{
+			$retryRows = $this->loadRetryUidRows($dir, $uidValidity, $chunk);
+			while ($retryRow = $retryRows->fetch())
+			{
+				$retryUids[(int)$retryRow['MSG_UID']] = true;
+			}
+		}
+
+		return $retryUids;
+	}
+
+	protected function loadRetryUidRows(
+		Mail\Internals\Entity\MailboxDirectory $dir,
+		int $uidValidity,
+		array $uids,
+	)
+	{
+		return $this->listMessages(
+			[
+				'select' => ['MSG_UID'],
+				'filter' => [
+					'@MSG_UID' => $uids,
+					'=MESSAGE_ID' => 0,
+					'=IS_OLD' => Mail\MailMessageUidTable::DOWNLOADED,
+					'=MAILBOX_ID' => $this->mailbox['ID'],
+					'=DIR_MD5' => $dir->getDirMd5(),
+					'=DIR_UIDV' => $uidValidity,
+				],
+			],
+			false,
+		);
 	}
 
 	public function isAuthenticated(): bool
@@ -1082,6 +1170,32 @@ class Imap extends Mail\Helper\Mailbox
 		}
 
 		$this->getDirsHelper()->updateMessageCount($dir->getId(), $meta['exists']);
+		$historySyncRequired = $this->isHistorySyncRequired(
+			$dir,
+			(int)$meta['uidvalidity'],
+		);
+		// The upper UID is valid only for the UIDVALIDITY observed by the same SELECT.
+		$snapshotUidValidity = $historySyncRequired ? (int)$meta['uidvalidity'] : null;
+		$maximumUid = null;
+		if ($historySyncRequired && isset($meta['uidnext']))
+		{
+			$maximumUid = max(0, (int)$meta['uidnext'] - 1);
+		}
+		elseif ($historySyncRequired && (int)$meta['exists'] === 0)
+		{
+			$maximumUid = 0;
+		}
+		elseif ($historySyncRequired)
+		{
+			$lastMessage = $this->client->fetch(
+				false,
+				$dir->getPath(),
+				(string)$meta['exists'],
+				'(UID)',
+				$error,
+			);
+			$maximumUid = isset($lastMessage['UID']) ? (int)$lastMessage['UID'] : null;
+		}
 
 		$intervalSynchronizationAttempts = 0;
 
@@ -1216,6 +1330,11 @@ class Imap extends Mail\Helper\Mailbox
 			$this->warnings->add($this->client->getErrors()->toArray());
 
 			return false;
+		}
+
+		if (!$this->isTimeQuotaExceeded() && $historySyncRequired && $maximumUid !== null)
+		{
+			$this->syncDirHistoryByPeriod($dir, $maximumUid, $snapshotUidValidity);
 		}
 
 		return $messagesSynced;
@@ -1651,7 +1770,12 @@ class Imap extends Mail\Helper\Mailbox
 	}
 
 
-	protected function removeExistingMessagesFromSynchronizationList($dirPath, $uidToken, &$messages)
+	protected function removeExistingMessagesFromSynchronizationList(
+		$dirPath,
+		$uidToken,
+		&$messages,
+		bool $onlyCompleted = false,
+	)
 	{
 		$existingMessagesId = [];
 
@@ -1661,16 +1785,23 @@ class Imap extends Mail\Helper\Mailbox
 		);
 		sort($range);
 
+		$filter = array(
+			'=DIR_MD5'  => md5(Emoji::encode($dirPath)),
+			'=DIR_UIDV' => $uidToken,
+			'>=MSG_UID' => $range[0],
+			'<=MSG_UID' => $range[1],
+		);
+		if ($onlyCompleted)
+		{
+			$filter['>MESSAGE_ID'] = 0;
+			$filter['=IS_OLD'] = Mail\MailMessageUidTable::RECENT;
+		}
+
 		$result = $this->listMessages(array(
 			'select' => [
 				'ID'
 			],
-			'filter' => array(
-				'=DIR_MD5'  => md5(Emoji::encode($dirPath)),
-				'=DIR_UIDV' => $uidToken,
-				'>=MSG_UID' => $range[0],
-				'<=MSG_UID' => $range[1],
-			),
+			'filter' => $filter,
 		), false);
 
 		while ($item = $result->fetch())
@@ -1981,7 +2112,16 @@ class Imap extends Mail\Helper\Mailbox
 		return $result->isSuccess();
 	}
 
-	protected function syncMessage($dirPath, array $message, &$hashesMap = [], $ignoreSyncFrom = false, $isOutgoing = false, $isRecovered = false)
+	protected function syncMessage(
+		$dirPath,
+		array $message,
+		&$hashesMap = [],
+		$ignoreSyncFrom = false,
+		$isOutgoing = false,
+		$isRecovered = false,
+		bool $storeRetryState = false,
+		bool $reuseCachedMessage = false,
+	)
 	{
 		$fields = $message['__fields'];
 
@@ -2030,30 +2170,32 @@ class Imap extends Mail\Helper\Mailbox
 
 		$minimumSyncDate = $this->getMinimumSyncDate();
 
-		if($minimumSyncDate !== false && !$ignoreSyncFrom && $message['__internaldate']->getTimestamp() < $this->getMinimumSyncDate())
+		if($minimumSyncDate !== false && !$ignoreSyncFrom && $message['__internaldate']->getTimestamp() < $minimumSyncDate)
 		{
-			$this->completeMessageSync($fields['ID']);
-			return false;
+			return $this->completeMessageSync($fields['ID']) ? null : false;
 		}
 
 		if (!empty($message['__created']) && !empty($this->mailbox['OPTIONS']['resync_from']))
 		{
 			if ($message['__created']->getTimestamp() < $this->mailbox['OPTIONS']['resync_from'])
 			{
-				$this->completeMessageSync($fields['ID']);
-				return false;
+				return $this->completeMessageSync($fields['ID']) ? null : false;
 			}
 		}
 
 		if ($fields['MESSAGE_ID'] > 0)
 		{
-			$this->completeMessageSync($fields['ID']);
-			return true;
+			return $this->completeMessageSync($fields['ID']);
 		}
 
 		$messageId = 0;
+		$retryExternalId = $storeRetryState ? $this->buildRetryExternalId($fields['ID']) : null;
+		if ($reuseCachedMessage && $retryExternalId !== null)
+		{
+			$messageId = $this->findRetryMessageId($retryExternalId);
+		}
 
-		if (!empty($message['BODYSTRUCTURE']) && !empty($message['BODY[HEADER]']))
+		if ($messageId === 0 && !empty($message['BODYSTRUCTURE']) && !empty($message['BODY[HEADER]']))
 		{
 			$message['__bodystructure'] = new Mail\Imap\BodyStructure($message['BODYSTRUCTURE']);
 
@@ -2072,13 +2214,13 @@ class Imap extends Mail\Helper\Mailbox
 				}
 			}
 		}
-		else
+		elseif ($messageId === 0)
 		{
 			// fallback
 			$message['__parts'] = $this->downloadMessage($message['__fields']) ?: false;
 		}
 
-		if (false !== $message['__parts'])
+		if ($messageId === 0 && false !== $message['__parts'])
 		{
 			$dir = $this->getDirsHelper()->getDirByPath($dirPath);
 
@@ -2096,6 +2238,7 @@ class Imap extends Mail\Helper\Mailbox
 					'hash' => $fields['HEADER_MD5'],
 					'lazy_attachments' => $this->isSupportLazyAttachments(),
 					'excerpt' => $fields,
+					'external_id' => $retryExternalId,
 					MailMessageTable::FIELD_SANITIZE_ON_VIEW => $this->isSupportSanitizeOnView(),
 				],
 			);
@@ -2105,12 +2248,37 @@ class Imap extends Mail\Helper\Mailbox
 		{
 			$hashesMap[$fields['HEADER_MD5']] = $messageId;
 
-			$this->linkMessage($fields['ID'], $messageId);
+			if (!$this->linkMessage($fields['ID'], $messageId))
+			{
+				return false;
+			}
 		}
 
-		$this->completeMessageSync($fields['ID']);
+		if (!$this->completeMessageSync($fields['ID']))
+		{
+			return false;
+		}
 
 		return $messageId > 0;
+	}
+
+	protected function buildRetryExternalId(string $uidId): string
+	{
+		return sprintf('imap-history-retry:%u:%s', $this->mailbox['ID'], $uidId);
+	}
+
+	protected function findRetryMessageId(string $externalId): int
+	{
+		$row = MailMessageTable::getRow([
+			'select' => ['ID'],
+			'filter' => [
+				'=MAILBOX_ID' => $this->mailbox['ID'],
+				'=EXTERNAL_ID' => $externalId,
+			],
+			'order' => ['ID' => 'ASC'],
+		]);
+
+		return (int)($row['ID'] ?? 0);
 	}
 
 	public function downloadAttachments(array &$excerpt)
@@ -2346,7 +2514,7 @@ class Imap extends Mail\Helper\Mailbox
 
 		if($syncOldLimit > 0)
 		{
-			$syncOldLimit = strtotime(sprintf('-%u days', $syncOldLimit));
+			$syncOldLimit = SyncPeriodBoundary::dayStartUtcMinusDays($syncOldLimit);
 
 			/*
 				Checking in case of changes in tariff limits
@@ -2523,6 +2691,20 @@ class Imap extends Mail\Helper\Mailbox
 
 		$takeFromDown = true;
 
+		/*
+			For period-bounded dirs the history is loaded by syncDirHistoryByPeriod
+			from the server-side date search, so the legacy UID descent stays off:
+			deriving the period boundary from the minimal UID date is unreliable
+			when the UID order does not match the date order (migrated mailboxes).
+		*/
+		$historySyncByDateSearch = $minimumSyncDate !== false
+			&& Mail\Helper\Config\Feature::isHistorySyncByDateSearchEnabled();
+
+		if ($historySyncByDateSearch)
+		{
+			$takeFromDown = false;
+		}
+
 		$min = $this->listMessages(
 			array(
 				'select' => array(
@@ -2537,7 +2719,7 @@ class Imap extends Mail\Helper\Mailbox
 			false
 		)->fetch();
 
-		if(isset($min['INTERNALDATE']) && $minimumSyncDate !== false && $min['INTERNALDATE']->getTimestamp() < $minimumSyncDate)
+		if(!$historySyncByDateSearch && isset($min['INTERNALDATE']) && $minimumSyncDate !== false && $min['INTERNALDATE']->getTimestamp() < $minimumSyncDate)
 		{
 			$takeFromDown = false;
 		}
@@ -2566,6 +2748,232 @@ class Imap extends Mail\Helper\Mailbox
 		}
 
 		return null;
+	}
+
+	/*
+		Loads the dir history from the working list returned by the server-side date search
+		instead of the legacy UID descent. The UID rows (paired with UIDVALIDITY) are the only
+		progress state: every processed UID either gets a row or disappears from the next
+		search response, so the remainder strictly shrinks between sessions.
+	*/
+	protected function syncDirHistoryByPeriod(
+		Mail\Internals\Entity\MailboxDirectory $dir,
+		?int $maximumUid = null,
+		?int $expectedUidValidity = null,
+	): void
+	{
+		if (!Mail\Helper\Config\Feature::isHistorySyncByDateSearchEnabled())
+		{
+			return;
+		}
+
+		$boundary = $this->getMinimumSyncDate();
+
+		if ($boundary === false)
+		{
+			// unlimited period: the legacy flow covers the whole dir
+			return;
+		}
+
+		$boundary = (int) $boundary;
+
+		$error = [];
+		$meta = $this->client->select($dir->getPath(), $error);
+
+		if (false === $meta)
+		{
+			$this->warnings->add($this->client->getErrors()->toArray());
+
+			return;
+		}
+
+		$uidValidity = (int) $meta['uidvalidity'];
+		if ($expectedUidValidity !== null && $uidValidity !== $expectedUidValidity)
+		{
+			return;
+		}
+
+		if (static::isHistoryCoverageMarkerActual($this->readHistoryCoverageMarker($dir), $uidValidity, $boundary))
+		{
+			return;
+		}
+
+		$clientErrorsBefore = count($this->client->getErrors());
+
+		$uids = $maximumUid === 0
+			? []
+			: $this->client->getUidsSince(
+				$dir->getPath(),
+				$boundary - self::HISTORY_SYNC_BOUNDARY_MARGIN,
+				$maximumUid,
+			)
+		;
+
+		if (false === $uids)
+		{
+			$this->warnings->add($this->client->getErrors()->toArray());
+
+			return;
+		}
+
+		$remaining = $this->excludeRegisteredUids($dir, $uidValidity, $uids);
+
+		if (count($this->client->getErrors()) > $clientErrorsBefore)
+		{
+			return;
+		}
+
+		if ($remaining === [])
+		{
+			$this->writeHistoryCoverageMarker($dir, $uidValidity, $boundary);
+
+			return;
+		}
+
+		$syncSucceeded = $this->syncMessages(
+			$this->mailbox['ID'],
+			$dir->getPath(),
+			$remaining,
+			false,
+			false,
+			stopOnEmptyChunk: false,
+			failOnLocalError: true,
+		);
+
+		if (!$syncSucceeded)
+		{
+			return;
+		}
+
+		if ($this->isTimeQuotaExceeded())
+		{
+			// the rest of the list continues next session
+			return;
+		}
+
+		if (count($this->client->getErrors()) > $clientErrorsBefore)
+		{
+			// a batch failed to load: leave the dir uncovered so the next session retries
+			return;
+		}
+
+		$this->writeHistoryCoverageMarker($dir, $uidValidity, $boundary);
+	}
+
+	protected function isHistorySyncRequired(
+		Mail\Internals\Entity\MailboxDirectory $dir,
+		int $uidValidity,
+	): bool
+	{
+		if (!Mail\Helper\Config\Feature::isHistorySyncByDateSearchEnabled())
+		{
+			return false;
+		}
+
+		$boundary = $this->getMinimumSyncDate();
+		if ($boundary === false)
+		{
+			return false;
+		}
+
+		return !static::isHistoryCoverageMarkerActual(
+			$this->readHistoryCoverageMarker($dir),
+			$uidValidity,
+			(int)$boundary,
+		);
+	}
+
+	protected function excludeRegisteredUids(Mail\Internals\Entity\MailboxDirectory $dir, int $uidValidity, array $uids): array
+	{
+		$remaining = [];
+
+		foreach (array_chunk($uids, 1000) as $chunk)
+		{
+			$result = $this->listMessages(
+				array(
+					'select' => array('MSG_UID'),
+					'filter' => array(
+						'=DIR_MD5'  => $dir->getDirMd5(),
+						'=DIR_UIDV' => $uidValidity,
+						'>MESSAGE_ID' => 0,
+						'=IS_OLD' => Mail\MailMessageUidTable::RECENT,
+						'@MSG_UID'  => $chunk,
+					),
+				),
+				false
+			);
+
+			$registered = [];
+			while ($item = $result->fetch())
+			{
+				$registered[(int) $item['MSG_UID']] = true;
+			}
+
+			foreach ($chunk as $uid)
+			{
+				if (!isset($registered[(int) $uid]))
+				{
+					$remaining[] = $uid;
+				}
+			}
+		}
+
+		return $remaining;
+	}
+
+	protected function readHistoryCoverageMarker(Mail\Internals\Entity\MailboxDirectory $dir): ?string
+	{
+		$row = Mail\Internals\MailEntityOptionsTable::getRow([
+			'select' => ['VALUE'],
+			'filter' => [
+				'=MAILBOX_ID' => $this->mailbox['ID'],
+				'=ENTITY_TYPE' => 'DIR',
+				'=ENTITY_ID' => $dir->getId(),
+				'=PROPERTY_NAME' => self::HISTORY_SYNC_COVERAGE_PROPERTY,
+			],
+		]);
+
+		return $row['VALUE'] ?? null;
+	}
+
+	protected function writeHistoryCoverageMarker(Mail\Internals\Entity\MailboxDirectory $dir, int $uidValidity, int $boundary): void
+	{
+		$keyRow = [
+			'MAILBOX_ID' => $this->mailbox['ID'],
+			'ENTITY_TYPE' => 'DIR',
+			'ENTITY_ID' => $dir->getId(),
+			'PROPERTY_NAME' => self::HISTORY_SYNC_COVERAGE_PROPERTY,
+		];
+
+		$value = static::buildHistoryCoverageMarkerValue($uidValidity, $boundary);
+
+		if ($this->readHistoryCoverageMarker($dir) !== null)
+		{
+			Mail\Internals\MailEntityOptionsTable::update($keyRow, ['VALUE' => $value]);
+		}
+		else
+		{
+			Mail\Internals\MailEntityOptionsTable::add($keyRow + ['VALUE' => $value]);
+		}
+	}
+
+	protected static function buildHistoryCoverageMarkerValue(int $uidValidity, int $boundary): string
+	{
+		return sprintf('covered_%u_%u', $uidValidity, $boundary);
+	}
+
+	protected static function isHistoryCoverageMarkerActual(?string $marker, int $uidValidity, int $currentBoundary): bool
+	{
+		if ($marker === null || !preg_match('/^covered_(\d+)_(\d+)$/', $marker, $matches))
+		{
+			return false;
+		}
+
+		/*
+			The boundary only moves forward day by day; it becomes smaller only when the period
+			is extended or the license limit grows - then the coverage has to be rebuilt.
+		*/
+		return (int) $matches[1] === $uidValidity && $currentBoundary >= (int) $matches[2];
 	}
 
 }

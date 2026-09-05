@@ -117,6 +117,48 @@ class Storage
 	}
 
 	/**
+	 * @param int[] $fileIds File IDs.
+	 * @return \Bitrix\Disk\File[] Map of file ID to disk object.
+	 */
+	public static function getObjectsByFileIds(array $fileIds)
+	{
+		$storage = static::getStorage();
+
+		if (!$storage)
+		{
+			return array();
+		}
+
+		$fileIds = array_values(array_unique(array_filter(array_map('intval', $fileIds))));
+
+		if (empty($fileIds))
+		{
+			return array();
+		}
+
+		$objects = \Bitrix\Disk\File::getModelList(array(
+			'filter' => array(
+				'=STORAGE_ID' => $storage->getId(),
+				'=TYPE' => \Bitrix\Disk\Internals\ObjectTable::TYPE_FILE,
+				'@FILE_ID' => $fileIds,
+			),
+		));
+
+		$objectsByFileId = array();
+
+		foreach ($objects as $object)
+		{
+			$fileId = (int)$object->getFileId();
+			if (!isset($objectsByFileId[$fileId]))
+			{
+				$objectsByFileId[$fileId] = $object;
+			}
+		}
+
+		return $objectsByFileId;
+	}
+
+	/**
 	 * Returns disk object by attachment file data (creates one if not exists)
 	 *
 	 * @param array $attachment Attachment file data.

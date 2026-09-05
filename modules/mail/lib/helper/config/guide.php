@@ -18,6 +18,8 @@ class Guide
 	public const USER_OPTION_CONNECTION_REQUEST_NAME = 'connection_request_guide_shown';
 	public const USER_OPTION_FOLDER_SORT_GUIDE_NAME = 'folder_sort_guide_shown';
 	public const USER_OPTION_ALL_MAIL_MODE_GUIDE_NAME = 'all_mail_mode_guide_shown';
+	public const USER_OPTION_LARGE_ATTACHMENT_AHA_NAME = 'large_attachment_aha_shown';
+	public const USER_OPTION_LARGE_ATTACHMENT_POST_SEND_NAME = 'large_attachment_post_send_prompt_suppressed';
 
 	public static function wasMailboxGridGuideShown(): bool
 	{
@@ -105,6 +107,34 @@ class Guide
 	public static function getAllMailModeGuideOptionName(): string
 	{
 		return self::USER_OPTION_ALL_MAIL_MODE_GUIDE_NAME;
+	}
+
+	public static function wasLargeAttachmentAhaShown(): bool
+	{
+		return \CUserOptions::GetOption(
+			self::USER_OPTION_CATEGORY,
+			self::USER_OPTION_LARGE_ATTACHMENT_AHA_NAME,
+			null,
+		) === 'Y';
+	}
+
+	public static function getLargeAttachmentAhaGuideOptionName(): string
+	{
+		return self::USER_OPTION_LARGE_ATTACHMENT_AHA_NAME;
+	}
+
+	public static function wasLargeAttachmentPostSendPromptSuppressed(): bool
+	{
+		return \CUserOptions::GetOption(
+			self::USER_OPTION_CATEGORY,
+			self::USER_OPTION_LARGE_ATTACHMENT_POST_SEND_NAME,
+			null,
+		) === 'Y';
+	}
+
+	public static function getLargeAttachmentPostSendPromptOptionName(): string
+	{
+		return self::USER_OPTION_LARGE_ATTACHMENT_POST_SEND_NAME;
 	}
 
 	private static function isCisLicense(): bool

@@ -1,6 +1,7 @@
-<?
+<?php
 
 use Bitrix\Calendar\UserSettings;
+use Bitrix\Main\Web\Uri;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -63,12 +64,6 @@ class CCalendarEventHandlers
 		}
 
 		$CACHE_MANAGER->RegisterTag('calendar_user_'.$userId);
-		$pathToCalendar = CHTTP::urlDeleteParams(CCalendar::GetPathForCalendarEx($userId), [
-			'action',
-			'sessid',
-			'bx_event_calendar_request',
-			'EVENT_ID'
-		]);
 
 		$date_from = CCalendar::Date(time() - date('Z') + CCalendar::GetCurrentOffsetUTC($userId), false);
 		$ts_date_from = CCalendar::Timestamp($date_from) - CCalendar::GetCurrentOffsetUTC($userId);
@@ -84,7 +79,7 @@ class CCalendarEventHandlers
 				'TO_LIMIT' => $date_to,
 				'ACTIVE_SECTION' => 'Y'
 			],
-			'arSelect' => \CCalendarEvent::$defaultSelectEvent,
+			'arSelect' => CCalendarEvent::$defaultSelectEvent,
 			'parseRecursion' => true,
 			'preciseLimits' => true,
 			'userId' => $userId,
@@ -96,7 +91,7 @@ class CCalendarEventHandlers
 
 		if (!empty($arNewEvents))
 		{
-			$today = ConvertTimeStamp($now, 'SHORT');
+			$today = ConvertTimeStamp($now);
 
 			$format = $DB::dateFormatToPHP(IsAmPmMode() ? 'H:MI T' : 'HH:MI');
 
@@ -132,10 +127,17 @@ class CCalendarEventHandlers
 
 				if($params['FULL'])
 				{
-					$eventPath = CHTTP::urlAddParams($pathToCalendar, [
-						'EVENT_ID' => $arEvent['ID'],
-						'EVENT_DATE' => $today
-					]);
+					$eventPath = (new Uri(CCalendar::GetPathForCalendarEx($userId)))
+						->deleteParams([
+							'action',
+							'sessid',
+							'bx_event_calendar_request',
+						])
+						->addParams([
+							'EVENT_ID' => $arEvent['ID'],
+							'EVENT_DATE' => $today,
+						])
+					;
 					$arEvents[] = [
 						'ID' => $arEvent['ID'],
 						'CAL_TYPE' => 'user',
@@ -148,10 +150,10 @@ class CCalendarEventHandlers
 						'TIME_TO' => FormatDate($format, $fromTo['TS_TO']),
 						'IMPORTANCE' => $arEvent['IMPORTANCE'],
 						'ACCESSIBILITY' => $arEvent['ACCESSIBILITY'],
-						'DATE_FROM_TODAY' => $today === ConvertTimeStamp($fromTo['TS_FROM'], 'SHORT'),
-						'DATE_TO_TODAY' => $today === ConvertTimeStamp($fromTo['TS_TO'], 'SHORT'),
+						'DATE_FROM_TODAY' => $today === ConvertTimeStamp($fromTo['TS_FROM']),
+						'DATE_TO_TODAY' => $today === ConvertTimeStamp($fromTo['TS_TO']),
 						'SORT' => $fromTo['TS_FROM'],
-						'EVENT_PATH' => $eventPath
+						'EVENT_PATH' => (string)$eventPath
 					];
 				}
 			}
@@ -417,7 +419,7 @@ class CCalendarEventHandlers
 	protected static function plannerActionAdd($arParams)
 	{
 		global $USER;
-		$today = ConvertTimeStamp(time() + CCalendar::GetOffset(), 'SHORT');
+		$today = ConvertTimeStamp(time() + CCalendar::GetOffset());
 		$userId = $USER->GetID();
 		$userSettings = UserSettings::get($userId);
 		$reminderList = $userSettings['defaultReminders']['withTime'];
@@ -460,7 +462,7 @@ class CCalendarEventHandlers
 			
 			if ($event)
 			{
-				$today = ConvertTimeStamp(time() + \CCalendar::GetOffset(), 'SHORT');
+				$today = ConvertTimeStamp(time() + CCalendar::GetOffset());
 				$now = time();
 
 				$res = array(
@@ -473,8 +475,8 @@ class CCalendarEventHandlers
 					'STATUS' => $event['STATUS'],
 				);
 
-				$res['DATE_FROM_TODAY'] = ConvertTimeStamp($res['DATE_FROM'],'SHORT') == $today;
-				$res['DATE_TO_TODAY'] = ConvertTimeStamp($res['DATE_TO'], 'SHORT') == $today;
+				$res['DATE_FROM_TODAY'] = ConvertTimeStamp($res['DATE_FROM']) == $today;
+				$res['DATE_TO_TODAY'] = ConvertTimeStamp($res['DATE_TO']) == $today;
 
 				if ($res['DATE_FROM_TODAY'])
 				{
@@ -495,7 +497,7 @@ class CCalendarEventHandlers
 					if ($res['DATE_FROM'] > $now)
 					{
 
-						$res['DATE_F_TO'] = GetMessage('TM_IN').' '.FormatDate('Hdiff', time()*2-($res['DATE_FROM'] - \CCalendar::GetOffset()));
+						$res['DATE_F_TO'] = GetMessage('TM_IN').' '.FormatDate('Hdiff', time()*2-($res['DATE_FROM'] - CCalendar::GetOffset()));
 					}
 				}
 				else if ($res['DATE_TO_TODAY'])
@@ -508,7 +510,7 @@ class CCalendarEventHandlers
 				}
 				else
 				{
-					$fmt = preg_replace('/:s$/', '', $DB::DateFormatToPHP(CSite::GetDateFormat("FULL")));
+					$fmt = preg_replace('/:s$/', '', $DB::DateFormatToPHP(CSite::GetDateFormat()));
 					$res['DATE_F'] = FormatDate($fmt, $res['DATE_FROM']);
 					$res['DATE_F_TO'] = FormatDate($fmt, $res['DATE_TO']);
 				}
@@ -516,12 +518,12 @@ class CCalendarEventHandlers
 				if ($event['IS_MEETING'] === 'Y')
 				{
 					$arGuests = array('Y' => array(), 'N' => array(), 'Q' => array());
-					foreach ($event['GUESTS'] as $key => $guest)
+					foreach ($event['GUESTS'] as $guest)
 					{
 						$guest['url'] = str_replace(
 							array('#ID#', '#USER_ID#'),
 							$guest['id'],
-							\COption::GetOptionString('intranet', 'path_user', '/company/personal/user/#USER_ID#/', $arParams['SITE_ID'])
+							COption::GetOptionString('intranet', 'path_user', '/company/personal/user/#USER_ID#/', $arParams['SITE_ID'])
 						);
 
 						if ($guest['bHost'])
@@ -566,4 +568,3 @@ class CCalendarEventHandlers
 		return 1;
 	}
 }
-?>

@@ -13,35 +13,15 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 
 class IntranetReleaseComponent extends \CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable
 {
-	protected string $id = 'vibecode';
-	protected string $eastReleaseDate = '15.05.2026';
-	protected string $westReleaseDate = '28.05.2026';
+	protected string $id = 'cowork-code-2026';
+	protected string $eastReleaseDate = '13.08.2026';
+	protected int $campaignDurationDays = 7;
+	protected int $sliderWidth = 1300;
+	protected bool $showEar = false;
+	protected bool $allowThemeChange = false;
 
 	protected array $releaseMap = [
-		'ru' => ['https://vibe-release.bitrix24.tech', '10:00'],
-		'by' => ['https://vibe-release.bitrix24promo.by', '10:00'],
-		'kz' => ['https://vibe-release.bitrix24kz.works', '10:00'],
-		'uz' => ['https://vibe-release.bitrix24uz.events', '10:00'],
-
-		'uk' => ['https://www.bitrix24.uk/promo/spring-2026-release-slider/', '13:00'],
-		'in' => ['https://www.bitrix24.in/promo/spring-2026-release-slider/', '11:00'],
-		'eu' => ['https://www.bitrix24.eu/promo/spring-2026-release-slider/', '13:00'],
-		'br' => ['https://www.bitrix24.com.br/promo/spring-2026-release-slider/', '17:00'],
-		'la' => ['https://www.bitrix24.es/promo/spring-2026-release-slider/', '14:00'],
-		'mx' => ['https://www.bitrix24.mx/promo/spring-2026-release-slider/', '18:00'],
-		'co' => ['https://www.bitrix24.co/promo/spring-2026-release-slider/', '18:00'],
-		'tr' => ['https://www.bitrix24.com.tr/promo/spring-2026-release-slider/', '12:00'],
-		'fr' => ['https://www.bitrix24.fr/promo/spring-2026-release-slider/', '12:00'],
-		'it' => ['https://www.bitrix24.it/promo/spring-2026-release-slider/', '16:00'],
-		'pl' => ['https://www.bitrix24.pl/promo/spring-2026-release-slider/', '16:00'],
-		'de' => ['https://www.bitrix24.de/promo/spring-2026-release-slider/', '15:00'],
-
-		'en' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '13:00'],
-		'cn' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
-		'vn' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
-		'jp' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
-		'id' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
-		'ae' => ['https://www.bitrix24.com/promo/spring-2026-release-slider/', '11:00'],
+		'ru' => ['https://cowork-code.bitrix24.tech', '10:00'],
 	];
 
 	public function __construct($component = null)
@@ -68,7 +48,7 @@ class IntranetReleaseComponent extends \CBitrixComponent implements \Bitrix\Main
 			if ($this->getSliderModeCnt() === -1)
 			{
 				$this->incSliderModeCnt();
-				if ($this->setDefaultTheme())
+				if ($this->allowThemeChange && $this->setDefaultTheme())
 				{
 					if (Loader::includeModule('intranet'))
 					{
@@ -128,8 +108,9 @@ class IntranetReleaseComponent extends \CBitrixComponent implements \Bitrix\Main
 		$now = time();
 		$customDate = $this->getCustomReleaseDate();
 		$startDate = $customDate === null ? static::createDate($release['releaseDate']) : $customDate;
-		$endDate = $startDate + 24 * 3600 * 14;
-		if ($now < $startDate || $now > $endDate)
+		$campaignDurationSeconds = $this->campaignDurationDays * 24 * 3600;
+		$endDate = $startDate + $campaignDurationSeconds;
+		if ($now < $startDate || $now >= $endDate)
 		{
 			return false;
 		}
@@ -154,7 +135,7 @@ class IntranetReleaseComponent extends \CBitrixComponent implements \Bitrix\Main
 		}
 
 		$spotlight = new \Bitrix\Main\UI\Spotlight("release_{$this->id}");
-		$spotlight->setUserTimeSpan(3600 * 24 * 14);
+		$spotlight->setUserTimeSpan($campaignDurationSeconds);
 		$isAvailable = $spotlight->isAvailable();
 		if (!$isAvailable)
 		{
@@ -170,35 +151,32 @@ class IntranetReleaseComponent extends \CBitrixComponent implements \Bitrix\Main
 			'url' => $this->getUrl(),
 			'zone' => $this->getZone(),
 			'id' => $this->id,
+			'showEar' => $this->showEar,
+			'sliderOptions' => [
+				'width' => $this->sliderWidth,
+			],
 		];
 	}
 
 	protected function getRelease($zone = null): ?array
 	{
 		$zone = $zone === null ? $this->getZone() : $zone;
-		if (in_array($zone, ['ua', 'ur']))
+		if (!is_string($zone) || !array_key_exists($zone, $this->releaseMap))
 		{
 			return null;
 		}
 
-		$zone = isset($this->releaseMap[$zone]) ? $zone : 'en';
-		$eastZone = in_array($zone, ['ru', 'by', 'kz', 'uz']);
-
-		$releaseDate = $eastZone ? $this->eastReleaseDate : $this->westReleaseDate;
 		$releaseTime = $this->releaseMap[$zone][1];
-		if ($eastZone)
+		$eastReleaseTime = $this->getEastReleaseTime();
+		if ($eastReleaseTime !== null)
 		{
-			$eastReleaseTime = $this->getEastReleaseTime();
-			if ($eastReleaseTime !== null)
-			{
-				$releaseTime = $eastReleaseTime;
-			}
+			$releaseTime = $eastReleaseTime;
 		}
 
 		return [
 			'zone' => $zone,
 			'url' => $this->releaseMap[$zone][0],
-			'releaseDate' => $releaseDate . ' ' . $releaseTime,
+			'releaseDate' => $this->eastReleaseDate . ' ' . $releaseTime,
 		];
 	}
 

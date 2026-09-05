@@ -2,6 +2,7 @@
 namespace Bitrix\Landing\Node;
 
 use Bitrix\Landing\History;
+use Bitrix\Landing\Sanitizer;
 
 class Icon extends \Bitrix\Landing\Node
 {
@@ -37,9 +38,7 @@ class Icon extends \Bitrix\Landing\Node
 
 			if (isset($value['url']))
 			{
-				$url = is_array($value['url'])
-						? json_encode($value['url'])
-						: $value['url'];
+				$url = (new Sanitizer())->sanitizePseudoUrl($value['url']);
 			}
 			else
 			{

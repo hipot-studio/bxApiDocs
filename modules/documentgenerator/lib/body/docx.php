@@ -216,7 +216,11 @@ class Docx extends ZipDocument
 			{
 				continue;
 			}
+			$document->normalizeContent();
 			$document->setNodes($documentNodes->nodes);
+			$this->addContentToZip($document->getContent(), $path);
+			$this->zip->close();
+			$this->content = $this->file->getContents();
 		}
 
 		return true;

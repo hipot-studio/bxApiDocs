@@ -431,7 +431,7 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 				$domainName .= $landingUrlParts['host'];
 			}
 		}
-		$canonical = $domainName . Manager::getApplication()->getCurDir();
+		$canonical = htmlspecialcharsbx($domainName . Manager::getApplication()->getCurDir());
 		Manager::setPageView(
 			'MetaOG',
 			'<meta property="og:url" content="' . $canonical . '" />' . "\n" .

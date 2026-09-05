@@ -50,7 +50,8 @@ abstract class Base extends Controller
 			new ExactParameter(
 				\Bitrix\Rpa\Model\Type::class,
 				'type',
-				static function ($className, $typeId) {
+				static function ($className, $typeId)
+				{
 					return TypeTable::getById($typeId)->fetchObject();
 				}
 			),
@@ -80,7 +81,8 @@ abstract class Base extends Controller
 			new ExactParameter(
 				\Bitrix\Rpa\Model\Timeline::class,
 				'timeline',
-				static function ($className, $id) {
+				static function ($className, $id)
+				{
 					return TimelineTable::getById($id)->fetchObject();
 				}
 			),
@@ -162,7 +164,7 @@ abstract class Base extends Controller
 	{
 		if ($this->getScope() === Scope::REST)
 		{
-			return \CRestUtil::ConvertDateTime($dateTime);
+			return \CRestUtil::convertDateTime($dateTime);
 		}
 
 		return $dateTime->format(DateTime::getFormat());
@@ -265,7 +267,7 @@ abstract class Base extends Controller
 		}
 		$fileArray['MODULE_ID'] = Driver::MODULE_ID;
 		$filePath = Driver::MODULE_ID;
-		$fileId = \CFile::SaveFile($fileArray, $filePath);
+		$fileId = \CFile::saveFile($fileArray, $filePath);
 		if ($fileId > 0)
 		{
 			return (int)$fileId;

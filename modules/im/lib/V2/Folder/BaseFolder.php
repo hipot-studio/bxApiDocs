@@ -132,6 +132,12 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 		return $this->code;
 	}
 
+	/** REST code; defaults to the domain getCode(). Subclasses override when the wire code must differ from the stored one. */
+	public function getRestCode(): ?string
+	{
+		return $this->getCode();
+	}
+
 	public function setCode(?string $code): self
 	{
 		$this->code = $code;

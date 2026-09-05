@@ -155,8 +155,6 @@ class UnifiedLinkActions extends BaseObject
 			return null;
 		}
 
-		$_SESSION['DISK_DATA']['EXT_LINK_PASSWORD'] = $password;
-
 		return $this->get($resolvedFile);
 	}
 

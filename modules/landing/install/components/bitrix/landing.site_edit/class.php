@@ -206,6 +206,8 @@ class LandingSiteEditComponent extends LandingBaseFormComponent
 			$this->arResult['IS_INTRANET'] = $this->isIntranet();
 			$this->arResult['SHOW_RIGHTS'] = Rights::isAdmin() && Rights::isExtendedMode();
 			$this->arResult['SETTINGS'] = [];
+			$this->arResult['HOOKS'] = [];
+			$this->arResult['TEMPLATES_REF'] = [];
 			$this->arResult['REGISTER'] = Register::getInstance();
 			$this->arResult['SITE_INCLUDES_SCRIPT'] = Cookies::isSiteIncludesScript($this->id);
 			$this->arResult['COOKIES_AGREEMENT'] = Cookies::getMainAgreement();
@@ -311,12 +313,13 @@ class LandingSiteEditComponent extends LandingBaseFormComponent
 
 			$this->arResult['COLORS'] = Theme::getColorCodes();
 			$this->arResult['PREPARE_COLORS'] = self::prepareColors($this->arResult['COLORS']);
-			$themeHookFields = $this->arResult['HOOKS']['THEME']->getPageFields();
-			if ($themeHookFields['THEME_CODE'])
+			$themeHook = $this->arResult['HOOKS']['THEME'] ?? null;
+			$themeHookFields = $themeHook ? $themeHook->getPageFields() : [];
+			if (isset($themeHookFields['THEME_CODE']))
 			{
 				$this->arResult['LANDING_VALUE_CODE'] = $themeHookFields['THEME_CODE']->getValue();
 			}
-			if ($themeHookFields['THEME_COLOR'])
+			if (isset($themeHookFields['THEME_COLOR']))
 			{
 				$this->arResult['LANDING_VALUE_COLOR'] = $themeHookFields['THEME_COLOR']->getValue();
 			}
@@ -324,8 +327,10 @@ class LandingSiteEditComponent extends LandingBaseFormComponent
 			{
 				$themeHookFields['THEME_USE']->setValue('Y');
 			}
-			$this->arResult['CURRENT_COLORS']['value'] = htmlspecialcharsbx(trim($themeHookFields['THEME_COLOR']->getValue()));
-			if (!$this->arResult['CURRENT_COLORS']['value'])
+			$this->arResult['CURRENT_COLORS']['value'] = isset($themeHookFields['THEME_COLOR'])
+				? htmlspecialcharsbx(trim($themeHookFields['THEME_COLOR']->getValue()))
+				: '';
+			if (!$this->arResult['CURRENT_COLORS']['value'] && isset($themeHookFields['THEME_CODE']))
 			{
 				$this->arResult['CURRENT_COLORS']['theme'] = htmlspecialcharsbx(trim($themeHookFields['THEME_CODE']->getValue()));
 			}
@@ -533,6 +538,11 @@ class LandingSiteEditComponent extends LandingBaseFormComponent
 	 */
 	public static function getCurrentTheme(array $hooks, array $colors): string
 	{
+		if (!isset($hooks['THEME']))
+		{
+			return self::DEFAULT_SITE_COLOR;
+		}
+
 		$themeHookFields = $hooks['THEME']->getPageFields();
 		$themeCurr = htmlspecialcharsbx(trim($themeHookFields['THEME_COLOR']->getValue()));
 		if (!$themeCurr)

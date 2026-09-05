@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Booking\Controller\V1\CrmForm;
 
+use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Entity\Resource\ResourceCollection;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
@@ -11,10 +12,12 @@ use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Service\CrmForm\CrmFormService;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Booking\Entity\Resource\Resource;
+use Bitrix\Main\Web\Uri;
 
 class PublicForm extends Controller
 {
+	private const RESOURCE_ICON_PATH = '/bitrix/js/booking/crm-forms/field/images/resource-icon.svg';
+
 	private CrmFormService $crmFormService;
 
 	protected function init(): void
@@ -43,12 +46,12 @@ class PublicForm extends Controller
 	 * } $resources
 	 * @return array|null
 	 */
-	public function getResourcesWithSkusAction(array $resources): array|null
+	public function getResourcesWithSkusAction(array $resources, int $formId = 0, string $sec = ''): array|null
 	{
 		try
 		{
 			return $this->getResponseByResourceCollection(
-				$this->crmFormService->getResourceCollectionWithSkus($resources)
+				$this->crmFormService->getPublicResourceCollectionWithSkus($formId, $sec, $resources),
 			);
 		}
 		catch (Exception $exception)
@@ -59,12 +62,12 @@ class PublicForm extends Controller
 		}
 	}
 
-	public function getResourcesAction(array $ids = []): array|null
+	public function getResourcesAction(array $ids = [], int $formId = 0, string $sec = ''): array|null
 	{
 		try
 		{
 			return $this->getResponseByResourceCollection(
-				$this->crmFormService->getResourceCollection($ids)
+				$this->crmFormService->getPublicResourceCollection($formId, $sec, $ids),
 			);
 		}
 		catch (Exception $exception)
@@ -75,11 +78,19 @@ class PublicForm extends Controller
 		}
 	}
 
-	public function getAutoSelectionDataAction(string $timezone, array $resourceIds = []): array|null
+	public function getAutoSelectionDataAction(
+		string $timezone,
+		array $resourceIds = [],
+		int $formId = 0,
+		string $sec = '',
+	): array|null
 	{
 		try
 		{
-			return $this->crmFormService->getAutoSelectionData($timezone, $resourceIds)->toArray();
+			return $this->crmFormService
+				->getPublicAutoSelectionData($formId, $sec, $timezone, $resourceIds)
+				->toArray()
+			;
 		}
 		catch (Exception $exception)
 		{
@@ -89,11 +100,16 @@ class PublicForm extends Controller
 		}
 	}
 
-	public function getOccupancyAction(array $ids, int $dateTs): array|null
+	public function getOccupancyAction(array $ids, int $dateTs, int $formId = 0, string $sec = ''): array|null
 	{
 		try
 		{
-			$bookingCollection = $this->crmFormService->getBookingCollectionForOccupancy($ids, $dateTs);
+			$bookingCollection = $this->crmFormService->getPublicBookingCollectionForOccupancy(
+				$formId,
+				$sec,
+				$ids,
+				$dateTs,
+			);
 
 			$response = [];
 			foreach ($bookingCollection as $booking)
@@ -107,9 +123,9 @@ class PublicForm extends Controller
 
 			return $response;
 		}
-		catch (Exception $e)
+		catch (Exception $exception)
 		{
-			$this->addError(ErrorBuilder::buildFromException($e));
+			$this->addError(ErrorBuilder::buildFromException($exception));
 
 			return null;
 		}
@@ -127,12 +143,22 @@ class PublicForm extends Controller
 				'name' => $resource->getName(),
 				'typeName' => $resource->getType()?->getName(),
 				'slotRanges' => $resource->getSlotRanges(),
-				'avatarUrl' => $resource->getAvatar()?->getUrl(),
+				'avatarUrl' => $this->normalizeAvatarUrl($resource->getAvatar()?->getUrl()),
 				'description' => $resource->getDescription(),
 				'skus' => $resource->getSkuCollection(),
 			];
 		}
 
 		return $response;
+	}
+
+	private function normalizeAvatarUrl(string|null $avatarUrl): string
+	{
+		if ($avatarUrl === null || $avatarUrl === '')
+		{
+			$avatarUrl = self::RESOURCE_ICON_PATH;
+		}
+
+		return (string)(new Uri($avatarUrl))->toAbsolute();
 	}
 }

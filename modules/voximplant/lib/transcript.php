@@ -5,7 +5,6 @@ namespace Bitrix\Voximplant;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Text\Encoding;
-use Bitrix\Main\Web\HttpClient;
 use Bitrix\Voximplant\Model\TranscriptLineTable;
 use Bitrix\Voximplant\Model\TranscriptTable;
 
@@ -259,12 +258,10 @@ class Transcript
 			'TRANSCRIPT_ID' => $transcript->getId(),
 			'TRANSCRIPT_PENDING' => 'N'
 		));
-		
 		if ($statisticRecord['CRM_ACTIVITY_ID'] > 0)
 		{
 			\CVoxImplantCrmHelper::createActivityUpdateEvent($statisticRecord['CRM_ACTIVITY_ID']);
 		}
-		
 		if(Loader::includeModule('pull'))
 		{
 			\CPullWatch::AddToStack(

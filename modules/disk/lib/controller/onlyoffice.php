@@ -897,7 +897,7 @@ final class OnlyOffice extends Engine\Controller
 	): ?Disk\File
 	{
 		$createBlankDocumentScenario = new Document\OnlyOffice\CreateBlankDocumentScenario(
-			$this->getCurrentUser()?->getId(),
+			(int)($this->getCurrentUser()?->getId() ?? 0),
 			Context::getCurrent()?->getLanguage(),
 		);
 

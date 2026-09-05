@@ -292,17 +292,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 
 		$securityContext = $realObject->getStorage()?->getCurrentUserSecurityContext();
 
-		if (!$securityContext || !$realObject->canRead($securityContext))
-		{
-			return false;
-		}
-
-		if ($realObject->canUpdate($securityContext))
-		{
-			return true;
-		}
-
-		return $realObject->isAllowManagePublicAccessOnRead();
+		return $securityContext && $realObject->canManageExternalLink($securityContext);
 	}
 
 	/**
@@ -346,6 +336,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 				'hasDeathTime' => $extLink->hasDeathTime(),
 				'availableEdit' => $availableEdit,
 				'canEditDocument' => $canEditDocument,
+				'canEditSettings' => $extLink->canEditSettings(),
 				'deathTime' => $extLink->getDeathTime(),
 				'deathTimeTimestamp' => $extLink->hasDeathTime()? $extLink->getDeathTime()->getTimestamp() : null,
 				'isBoard' => $isBoard,

@@ -19,6 +19,8 @@ enum VendorPackName: string
 	case Animals = 'animals';
 	case Celebration = 'celebration';
 	case UnstoppableOptimist = 'unstoppableOptimist';
+	case AiHelp = 'aiHelp';
+	case LadyBoss = 'ladyBoss';
 
 	private static function getIdMap(): array
 	{
@@ -36,6 +38,8 @@ enum VendorPackName: string
 			self::Animals->value => 11,
 			self::Celebration->value => 12,
 			self::UnstoppableOptimist->value => 13,
+			self::AiHelp->value => 14,
+			self::LadyBoss->value => 15,
 		];
 	}
 

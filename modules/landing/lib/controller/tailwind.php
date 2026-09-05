@@ -12,8 +12,21 @@ class Tailwind extends Controller
 	public function getDefaultPreFilters(): array
 	{
 		return [
-			new Engine\ActionFilter\Authentication(),
+			...parent::getDefaultPreFilters(),
 			new ActionFilter\Extranet(),
+		];
+	}
+
+	public function configureActions(): array
+	{
+		return [
+			'saveCss' => [
+				'+prefilters' => [
+					new Engine\ActionFilter\HttpMethod([
+						Engine\ActionFilter\HttpMethod::METHOD_POST,
+					]),
+				],
+			],
 		];
 	}
 

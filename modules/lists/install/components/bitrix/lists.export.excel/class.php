@@ -5,6 +5,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Web\Uri;
 
 class ListExportExcelComponent extends CBitrixComponent
 {
@@ -45,9 +46,12 @@ class ListExportExcelComponent extends CBitrixComponent
 		$this->arResult["ANY_SECTION"] =
 			$params['ANY_SECTION'] ?? (isset($_GET["list_section_id"]) && $_GET["list_section_id"] == '')
 		;
-		$sectionUpperUrl = CHTTP::urlAddParams(str_replace(array("#list_id#", "#section_id#", "#group_id#"),
+		$sectionUpperUrl = (string)(new Uri(str_replace(
+			array("#list_id#", "#section_id#", "#group_id#"),
 			array($this->arResult["IBLOCK_ID"], 0, $params["SOCNET_GROUP_ID"] ?? 0),
-			$params['LIST_URL']), array('list_section_id' => ""));
+			$params['LIST_URL']
+		)))->addParams(['list_section_id' => ""]);
+
 		$this->arResult["SECTIONS"] = array(
 			array(
 				"NAME" => GetMessage("CC_BLL_UPPER_LEVEL"),
@@ -93,9 +97,14 @@ class ListExportExcelComponent extends CBitrixComponent
 			$this->arResult["~LIST_SECTIONS"][$arSection["ID"]] = str_repeat(" . ",
 					$arSection["DEPTH_LEVEL"]).$arSection["~NAME"];
 
-			$sectionUrl = CHTTP::URN2URI(CHTTP::urlAddParams(str_replace(array("#list_id#", "#section_id#", "#group_id#"),
+			$sectionUrl = (string)(new Uri(str_replace(
+				array("#list_id#", "#section_id#", "#group_id#"),
 				array($this->arResult["IBLOCK_ID"], 0, $params["SOCNET_GROUP_ID"] ?? 0),
-				$params['LIST_URL']), array('list_section_id' => $arSection["ID"])));
+				$params['LIST_URL']
+			)))
+				->addParams(['list_section_id' => $arSection["ID"]])
+				->toAbsolute()
+			;
 
 			$this->arResult["SECTIONS"][$arSection["ID"]] = array(
 				"ID" => $arSection["ID"],
@@ -547,7 +556,7 @@ class ListExportExcelComponent extends CBitrixComponent
 				{
 					foreach($matches as $match)
 					{
-						$fullLink = CHTTP::URN2URI($match[1]);
+						$fullLink = (string)(new Uri($match[1]))->toAbsolute();
 						$data[$id] = str_replace($match[1], $fullLink, $data[$id]);
 					}
 				}

@@ -7,6 +7,7 @@ use Bitrix\Location\Geometry\Converter\Manager;
 use Bitrix\Location\Geometry\Type\Point;
 use Bitrix\Location\Infrastructure\Service\CustomFieldsService;
 use Bitrix\Location\Repository\Location\Capability\IFindByCoords;
+use Bitrix\Location\Repository\Location\Capability\IFindByCoordsList;
 use Bitrix\Location\Repository\Location\Capability\IFindByExternalId;
 use Bitrix\Location\Repository\Location\Capability\ISupportAutocomplete;
 use Bitrix\Location\Repository\Location\IRepository;
@@ -24,6 +25,7 @@ final class Repository extends BaseRepository implements
 	IRepository,
 	IFindByExternalId,
 	IFindByCoords,
+	IFindByCoordsList,
 	ISupportAutocomplete,
 	ISource
 {
@@ -69,6 +71,17 @@ final class Repository extends BaseRepository implements
 			]
 		);
 
+		return $this->buildLocationFromDetails($details, $languageId);
+	}
+
+	/**
+	 * Builds a Location from a raw Nominatim "details" response and applies regional custom fields.
+	 * @param array $details
+	 * @param string $languageId
+	 * @return Location|null
+	 */
+	private function buildLocationFromDetails(array $details, string $languageId): ?Location
+	{
 		$location = Factory::make($details)->convert(
 			$languageId, $details
 		);
@@ -135,6 +148,67 @@ final class Repository extends BaseRepository implements
 			self::$sourceCode,
 			$languageId
 		);
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function findByCoordsList(array $coordsList, int $zoom, string $languageId): array
+	{
+		$reverseList = $this->api->reverseBatch(
+			[
+				'coords' => $coordsList,
+				'zoom' => $zoom,
+				'addressdetails' => 0,
+				'accept-language' => $this->osmSource->convertLang($languageId),
+			]
+		);
+
+		$items = [];
+		$detailsIndexByCoord = [];
+		foreach ($coordsList as $i => $coord)
+		{
+			$rev = $reverseList[$i] ?? null;
+			if ($rev === null || !(isset($rev['osm_type']) && isset($rev['osm_id'])))
+			{
+				continue;
+			}
+
+			$osmType = NodeTypeMap::getShortNodeTypeCode($rev['osm_type']);
+			if (!$osmType)
+			{
+				continue;
+			}
+
+			$detailsIndexByCoord[$i] = count($items);
+			$items[] = [
+				'osmtype' => $osmType,
+				'osmid' => (int)$rev['osm_id'],
+			];
+		}
+
+		// Single batch details request instead of one request per found coordinate.
+		$detailsList = $items
+			? $this->api->detailsBatch([
+				'items' => $items,
+				'addressdetails' => 1,
+				'accept-language' => $this->osmSource->convertLang($languageId),
+			])
+			: [];
+
+		$out = [];
+		foreach ($coordsList as $i => $coord)
+		{
+			$details = isset($detailsIndexByCoord[$i])
+				? ($detailsList[$detailsIndexByCoord[$i]] ?? null)
+				: null;
+
+			$out[$i] = is_array($details)
+				? $this->buildLocationFromDetails($details, $languageId)
+				: null;
+		}
+
+		return $out;
 	}
 
 	/**

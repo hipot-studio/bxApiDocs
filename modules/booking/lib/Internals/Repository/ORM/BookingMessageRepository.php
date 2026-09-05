@@ -8,6 +8,7 @@ use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Service\Notifications\BookingMessageStatus;
 use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessage;
 use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessageCollection;
+use Bitrix\Booking\Internals\Service\Notifications\NotificationType;
 use Bitrix\Booking\Internals\Model\BookingMessageTable;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
 use Bitrix\Booking\Internals\Repository\ORM\Mapper\BookingMessageMapper;
@@ -140,21 +141,25 @@ class BookingMessageRepository implements BookingMessageRepositoryInterface
 		return $this->mapper->convertFromRow($row);
 	}
 
-	public function getByBookingIds(array $bookingIds): BookingMessageCollection
+	public function getBookingIdsWithSentConfirmation(array $bookingIds): array
 	{
-		$result = new BookingMessageCollection();
+		if (empty($bookingIds))
+		{
+			return [];
+		}
 
 		$queryResult = BookingMessageTable::query()
-			->setSelect(['*'])
+			->setSelect(['BOOKING_ID'])
 			->whereIn('BOOKING_ID', $bookingIds)
+			->where('NOTIFICATION_TYPE', '=', NotificationType::Confirmation->value)
+			->setGroup(['BOOKING_ID'])
 			->exec()
 		;
 
+		$result = [];
 		while ($row = $queryResult->fetch())
 		{
-			$result->add(
-				$this->mapper->convertFromRow($row)
-			);
+			$result[] = (int)$row['BOOKING_ID'];
 		}
 
 		return $result;

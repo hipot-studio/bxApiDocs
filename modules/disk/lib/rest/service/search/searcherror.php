@@ -29,6 +29,16 @@ final class SearchError extends Error
 		return new self('Search filter contains an unknown field.', self::INVALID_FILTER);
 	}
 
+	public static function invalidFileType(): self
+	{
+		return new self('Search filter contains an unknown file type.', self::INVALID_FILTER);
+	}
+
+	public static function incompatibleFileType(): self
+	{
+		return new self('Search filter by file type is allowed only for files.', self::INVALID_FILTER);
+	}
+
 	public static function notFound(): self
 	{
 		return new self('Search scope was not found.', self::NOT_FOUND);

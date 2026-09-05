@@ -1,13 +1,13 @@
 <?
 IncludeModuleLangFile(__FILE__);
 
+use Bitrix\Crm\Activity\Provider;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
+use Bitrix\Crm\Tracking;
 use Bitrix\Main\Event;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\PhoneNumber\Parser;
 use Bitrix\Voximplant as VI;
-use Bitrix\Crm\Activity\Provider;
-use Bitrix\Crm\Tracking;
-use Bitrix\Main\Localization\Loc;
 
 class CVoxImplantCrmHelper
 {
@@ -332,13 +332,21 @@ class CVoxImplantCrmHelper
 			)
 		);
 
+		// crm below 26.900.0 has no Dictionary::SECTION_TELEPHONY yet, but already accepts the ANALYTICS option
+		$analyticsSection = defined('\Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_TELEPHONY')
+			? \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_TELEPHONY
+			: 'telephony';
+
 		$isSuccessful = $entityManager->registerTouch(
 			CCrmOwnerType::Lead,
 			$arFields,
 			true,
 			[
 				'CURRENT_USER' => $call->getUserId(),
-				'DISABLE_USER_FIELD_CHECK' => true
+				'DISABLE_USER_FIELD_CHECK' => true,
+				'ANALYTICS' => [
+					'c_section' => $analyticsSection,
+				],
 			]
 		);
 

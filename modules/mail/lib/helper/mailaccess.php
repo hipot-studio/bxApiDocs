@@ -20,9 +20,18 @@ class MailAccess
 		return self::checkGridAction(MailActionDictionary::ACTION_MAILBOX_LIST_VIEW);
 	}
 
-	public static function hasCurrentUserAccessToMassConnect(): bool
+	/**
+	 * Managing employee mailboxes portal-wide: MAIL_MAILBOX_LIST_ITEM_EDIT, deliberately separate
+	 * from the right to see the mailbox grid. Mass connect is one of the scenarios behind it.
+	 */
+	public static function hasCurrentUserAccessToMailboxManagement(): bool
 	{
 		return self::checkGridAction(MailActionDictionary::ACTION_MAILBOX_MASS_CONNECT_ENTER);
+	}
+
+	public static function hasCurrentUserAccessToMassConnect(): bool
+	{
+		return self::hasCurrentUserAccessToMailboxManagement();
 	}
 
 	public static function hasCurrentUserAccessToPermission(): bool

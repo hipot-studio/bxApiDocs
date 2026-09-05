@@ -4,7 +4,7 @@ namespace Bitrix\Main\DB;
 
 class MysqliResult extends Result
 {
-	/** @var \mysqli_result */
+	/** @var \mysqli_result|bool */
 	protected $resource;
 
 	/** @var \Bitrix\Main\ORM\Fields\ScalarField[]  */
@@ -27,7 +27,12 @@ class MysqliResult extends Result
 	 */
 	public function getSelectedRowsCount()
 	{
-		return $this->resource->num_rows;
+		if (is_object($this->resource))
+		{
+			return (int)$this->resource->num_rows;
+		}
+
+		return 0;
 	}
 
 	/**
@@ -37,7 +42,12 @@ class MysqliResult extends Result
 	 */
 	public function getFieldsCount(): int
 	{
-		return (int) $this->resource->field_count;
+		if (is_object($this->resource))
+		{
+			return (int)$this->resource->field_count;
+		}
+
+		return 0;
 	}
 
 	/**

@@ -253,17 +253,7 @@ class CDiskUfCommentsAttachesComponent extends BaseComponent
 			return array();
 		}
 
-		$list = array();
-		$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
-		foreach ($documentHandlersManager->getHandlers() as $handler)
-		{
-			if ($handler instanceof \Bitrix\Disk\Document\Contract\FileCreatable)
-			{
-				$list[] = $handler;
-			}
-		}
-
-		return $list;
+		return array_values(Driver::getInstance()->getDocumentHandlersManager()->getHandlersForCreatingFile());
 	}
 
 	private function getDocumentHandlersForEditingFile()

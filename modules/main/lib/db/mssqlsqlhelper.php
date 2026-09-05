@@ -81,7 +81,7 @@ class MssqlSqlHelper extends SqlHelper
 			$from = static::getCurrentDateTimeFunction();
 		}
 
-		return 'DATEADD(second, '.$seconds.', '.$from.')';
+		return 'DATEADD(second, ' . $seconds . ', ' . $from . ')';
 	}
 
 	/**
@@ -89,7 +89,7 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function getDatetimeToDateFunction($value)
 	{
-		return 'DATEADD(dd, DATEDIFF(dd, 0, '.$value.'), 0)';
+		return 'DATEADD(dd, DATEDIFF(dd, 0, ' . $value . '), 0)';
 	}
 
 	/**
@@ -102,7 +102,7 @@ class MssqlSqlHelper extends SqlHelper
 			return '';
 		}
 
-		$result = array();
+		$result = [];
 
 		foreach (preg_split("#(YYYY|MMMM|MM|MI|M|DD|HH|H|GG|G|SS|TT|T)#", $format, -1, PREG_SPLIT_DELIM_CAPTURE) as $part)
 		{
@@ -142,7 +142,7 @@ class MssqlSqlHelper extends SqlHelper
 					$result[] = "\n\tCASE WHEN DATEPART(HH, $field) < 12 THEN 'AM' ELSE 'PM' END";
 					break;
 				default:
-					$result[] = "'".$part."'";
+					$result[] = "'" . $this->forSql($part) . "'";
 					break;
 			}
 		}
@@ -155,14 +155,18 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function getSubstrFunction($str, $from, $length = null)
 	{
-		$sql = 'SUBSTRING('.$str.', '.$from;
+		$sql = 'SUBSTRING(' . $str . ', ' . $from;
 
 		if (!is_null($length))
-			$sql .= ', '.$length;
+		{
+			$sql .= ', ' . $length;
+		}
 		else
-			$sql .= ', LEN('.$str.') + 1 - '.$from;
+		{
+			$sql .= ', LEN(' . $str . ') + 1 - ' . $from;
+		}
 
-		return $sql.')';
+		return $sql . ')';
 	}
 
 	/**
@@ -178,7 +182,7 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function getIsNullFunction($expression, $result)
 	{
-		return "ISNULL(".$expression.", ".$result.")";
+		return "ISNULL(" . $expression . ", " . $result . ")";
 	}
 
 	/**
@@ -186,7 +190,7 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function getLengthFunction($field)
 	{
-		return "LEN(".$field.")";
+		return "LEN(" . $field . ")";
 	}
 
 	/**
@@ -194,7 +198,7 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function getCharToDateFunction($value)
 	{
-		return "CONVERT(datetime, '".$value."', 120)";
+		return "CONVERT(datetime, '" . $value . "', 120)";
 	}
 
 	/**
@@ -202,7 +206,7 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function getDateToCharFunction($fieldName)
 	{
-		return "CONVERT(varchar(19), ".$fieldName.", 120)";
+		return "CONVERT(varchar(19), " . $fieldName . ", 120)";
 	}
 
 	/**
@@ -210,7 +214,7 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function castToChar($fieldName)
 	{
-		return 'CAST('.$fieldName.' AS varchar)';
+		return 'CAST(' . $fieldName . ' AS varchar)';
 	}
 
 	/**
@@ -218,7 +222,7 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function softCastTextToChar($fieldName)
 	{
-		return 'CONVERT(VARCHAR(8000), '.$fieldName.')';
+		return 'CONVERT(VARCHAR(8000), ' . $fieldName . ')';
 	}
 
 	/**
@@ -228,15 +232,15 @@ class MssqlSqlHelper extends SqlHelper
 	{
 		if ($field instanceof ORM\Fields\DatetimeField)
 		{
-			return array($this, "convertFromDbDateTime");
+			return [$this, "convertFromDbDateTime"];
 		}
 		elseif ($field instanceof ORM\Fields\DateField)
 		{
-			return array($this, "convertFromDbDate");
+			return [$this, "convertFromDbDate"];
 		}
 		elseif ($field instanceof ORM\Fields\StringField)
 		{
-			return array($this, "convertFromDbString");
+			return [$this, "convertFromDbString"];
 		}
 		else
 		{
@@ -262,7 +266,7 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function convertFromDbDate($value)
 	{
-		if($value !== null)
+		if ($value !== null)
 		{
 			$value = new Type\Date($value, "Y-m-d");
 		}
@@ -277,7 +281,7 @@ class MssqlSqlHelper extends SqlHelper
 	{
 		if ($value !== null)
 		{
-			if(preg_match("#^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\$#", $value))
+			if (preg_match("#^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\$#", $value))
 			{
 				return new Type\DateTime($value, "Y-m-d H:i:s");
 			}
@@ -332,7 +336,7 @@ class MssqlSqlHelper extends SqlHelper
 		}
 		elseif ($field instanceof ORM\Fields\EnumField)
 		{
-			return 'varchar('.max(array_map('strlen', $field->getValues())).')';
+			return 'varchar(' . max(array_map('strlen', $field->getValues())) . ')';
 		}
 		else
 		{
@@ -348,7 +352,7 @@ class MssqlSqlHelper extends SqlHelper
 					}
 				}
 			}
-			return 'varchar('.($defaultLength > 0? $defaultLength: 255).')';
+			return 'varchar(' . ($defaultLength > 0 ? $defaultLength : 255) . ')';
 		}
 	}
 
@@ -357,7 +361,7 @@ class MssqlSqlHelper extends SqlHelper
 	 */
 	public function getFieldByColumnType($name, $type, ?array $parameters = null)
 	{
-		switch($type)
+		switch ($type)
 		{
 			case 4:
 			case 5:
@@ -377,7 +381,7 @@ class MssqlSqlHelper extends SqlHelper
 				//money SQL_DECIMAL (3)
 				//float SQL_FLOAT (6)
 				//real SQL_REAL (7)
-				return new ORM\Fields\FloatField($name, array("scale" => $parameters["scale"]));
+				return new ORM\Fields\FloatField($name, ["scale" => $parameters["scale"]]);
 
 			case 93:
 				//datetime - SQL_TYPE_TIMESTAMP (93)
@@ -406,7 +410,7 @@ class MssqlSqlHelper extends SqlHelper
 		//varbinary SQL_VARBINARY (-3)
 		//varchar SQL_VARCHAR (12)
 		//xml SQL_SS_XML (-152)
-		return new ORM\Fields\StringField($name, array("size" => $parameters["size"]));
+		return new ORM\Fields\StringField($name, ["size" => $parameters["size"]]);
 	}
 
 	/**
@@ -418,13 +422,15 @@ class MssqlSqlHelper extends SqlHelper
 		$limit = intval($limit);
 
 		if ($offset > 0 && $limit <= 0)
+		{
 			throw new Main\ArgumentException("Limit must be set if offset is set");
+		}
 
 		if ($limit > 0)
 		{
 			if ($offset <= 0)
 			{
-				$sql = preg_replace("/^\\s*SELECT/i", "SELECT TOP ".$limit, $sql);
+				$sql = preg_replace("/^\\s*SELECT/i", "SELECT TOP " . $limit, $sql);
 			}
 			else
 			{
@@ -452,15 +458,15 @@ class MssqlSqlHelper extends SqlHelper
 				// ROW_NUMBER() Returns the sequential number of a row within a partition of a result set, starting at 1 for the first row in each partition.
 				$sqlTmp = preg_replace(
 					"/^\\s*SELECT/i",
-					"SELECT ROW_NUMBER() OVER (".$orderBy.") AS ROW_NUMBER_ALIAS,",
+					"SELECT ROW_NUMBER() OVER (" . $orderBy . ") AS ROW_NUMBER_ALIAS,",
 					$sqlTmp
 				);
 
 				$sql =
-					"WITH ROW_NUMBER_QUERY_ALIAS AS (".$sqlTmp.") ".
-					"SELECT * ".
-					"FROM ROW_NUMBER_QUERY_ALIAS ".
-					"WHERE ROW_NUMBER_ALIAS BETWEEN ".($offset + 1)." AND ".($offset + $limit);
+					"WITH ROW_NUMBER_QUERY_ALIAS AS (" . $sqlTmp . ") " .
+					"SELECT * " .
+					"FROM ROW_NUMBER_QUERY_ALIAS " .
+					"WHERE ROW_NUMBER_ALIAS BETWEEN " . ($offset + 1) . " AND " . ($offset + $limit);
 			}
 		}
 		return $sql;
@@ -473,32 +479,32 @@ class MssqlSqlHelper extends SqlHelper
 	{
 		$insert = $this->prepareInsert($tableName, $insertFields);
 
-		$updateColumns = array();
-		$sourceSelectValues = array();
-		$sourceSelectColumns = array();
-		$targetConnectColumns = array();
+		$updateColumns = [];
+		$sourceSelectValues = [];
+		$sourceSelectColumns = [];
+		$targetConnectColumns = [];
 		$tableFields = $this->connection->getTableFields($tableName);
-		foreach($tableFields as $columnName => $tableField)
+		foreach ($tableFields as $columnName => $tableField)
 		{
 			$quotedName = $this->quote($columnName);
 			if (in_array($columnName, $primaryFields))
 			{
 				$sourceSelectValues[] = $this->convertToDb($insertFields[$columnName], $tableField);
 				$sourceSelectColumns[] = $quotedName;
-				if($insertFields[$columnName] === null)
+				if ($insertFields[$columnName] === null)
 				{
 					//can't just compare NULLs
-					$targetConnectColumns[] = "(source.".$quotedName." IS NULL AND target.".$quotedName." IS NULL)";
+					$targetConnectColumns[] = "(source." . $quotedName . " IS NULL AND target." . $quotedName . " IS NULL)";
 				}
 				else
 				{
-					$targetConnectColumns[] = "(source.".$quotedName." = target.".$quotedName.")";
+					$targetConnectColumns[] = "(source." . $quotedName . " = target." . $quotedName . ")";
 				}
 			}
 
 			if (isset($updateFields[$columnName]) || array_key_exists($columnName, $updateFields))
 			{
-				$updateColumns[] = "target.".$quotedName.' = '.$this->convertToDb($updateFields[$columnName], $tableField);
+				$updateColumns[] = "target." . $quotedName . ' = ' . $this->convertToDb($updateFields[$columnName], $tableField);
 			}
 		}
 
@@ -509,20 +515,20 @@ class MssqlSqlHelper extends SqlHelper
 		)
 		{
 			$sql = "
-				MERGE INTO ".$this->quote($tableName)." AS target USING (
-					SELECT ".implode(", ", $sourceSelectValues)."
+				MERGE INTO " . $this->quote($tableName) . " AS target USING (
+					SELECT " . implode(", ", $sourceSelectValues) . "
 				) AS source (
-					".implode(", ", $sourceSelectColumns)."
+					" . implode(", ", $sourceSelectColumns) . "
 				)
 				ON
 				(
-					".implode(" AND ", $targetConnectColumns)."
+					" . implode(" AND ", $targetConnectColumns) . "
 				)
 				WHEN MATCHED THEN
-					UPDATE SET ".implode(", ", $updateColumns)."
+					UPDATE SET " . implode(", ", $updateColumns) . "
 				WHEN NOT MATCHED THEN
-					INSERT (".$insert[0].")
-					VALUES (".$insert[1].")
+					INSERT (" . $insert[0] . ")
+					VALUES (" . $insert[1] . ")
 				;
 			";
 		}
@@ -531,8 +537,8 @@ class MssqlSqlHelper extends SqlHelper
 			$sql = "";
 		}
 
-		return array(
-			$sql
-		);
+		return [
+			$sql,
+		];
 	}
 }

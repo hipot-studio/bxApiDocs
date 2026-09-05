@@ -63,20 +63,28 @@ readonly class ChangeAiSiteDto
 		}
 
 		$blockId = self::normalizePageId($value['blockId'] ?? null);
-		$selector = self::normalizeSelector($value['selector'] ?? null);
+		$selector = self::normalizeString($value['selector'] ?? null);
 
 		if ($blockId <= 0 || $selector === '')
 		{
 			return [];
 		}
 
-		return [
+		$normalized = [
 			'blockId' => $blockId,
 			'selector' => $selector,
 		];
+
+		$fingerprint = self::normalizeString($value['fingerprint'] ?? null);
+		if ($fingerprint !== '')
+		{
+			$normalized['fingerprint'] = $fingerprint;
+		}
+
+		return $normalized;
 	}
 
-	private static function normalizeSelector(mixed $value): string
+	private static function normalizeString(mixed $value): string
 	{
 		if (!is_string($value))
 		{

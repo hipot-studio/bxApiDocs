@@ -3,24 +3,27 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
+use Bitrix\Disk\Internal\Service\UnifiedLink\Render\DeferredDocumentLoaderRenderer;
+
 class DeferredOnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 {
-	private const COMPONENT = 'bitrix:disk.deferred.doc.load';
-
 	public function view(): FileHandlerOperationResult
 	{
-		return FileHandlerOperationResult::createSuccess(
-			value: '',
-			component: self::COMPONENT,
-		);
+		return $this->render();
 	}
 
 	public function edit(): FileHandlerOperationResult
 	{
-		return FileHandlerOperationResult::createSuccess(
-			value: '',
-			component: self::COMPONENT,
-		);
+		return $this->render();
 	}
 
+	private function render(): FileHandlerOperationResult
+	{
+		$renderer = new DeferredDocumentLoaderRenderer();
+
+		return FileHandlerOperationResult::createSuccess(
+			value: $renderer->render(),
+			headers: $renderer->getHeaders(),
+		);
+	}
 }

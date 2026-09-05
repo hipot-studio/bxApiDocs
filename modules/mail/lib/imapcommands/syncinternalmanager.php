@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mail\ImapCommands;
 
+use Bitrix\Mail;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Internals\MailboxDirectoryTable;
 use Bitrix\Main;
@@ -24,6 +25,9 @@ class SyncInternalManager
 	protected $mailboxUserId;
 	protected $messagesIds;
 	protected $messages;
+	protected bool $deferredPushCancelled = false;
+	/** @var int[]|null message ids captured before the operation */
+	protected ?array $deferredPushTargets = null;
 	private $isInit;
 	/** @var Repository */
 	protected $repository;
@@ -111,6 +115,84 @@ class SyncInternalManager
 				'MAIL_CLIENT_MESSAGES_MULTIPLE_FOLDERS'));
 		}
 		return $result;
+	}
+
+	/**
+	 * Must run before a destructive operation: permanent deletion drops the uid rows,
+	 * and after that the messages can no longer be resolved.
+	 */
+	protected function collectDeferredPushTargets(): void
+	{
+		if ($this->deferredPushTargets === null)
+		{
+			$this->deferredPushTargets = $this->getRecentlyDeliveredMessageIds((int)$this->mailboxId);
+		}
+	}
+
+	/**
+	 * Once the user has dealt with a message in web, a push about it is a duplicate.
+	 * Drops it while it is still deferred; runs at most once per manager.
+	 */
+	protected function cancelDeferredPush(): void
+	{
+		if ($this->deferredPushCancelled)
+		{
+			return;
+		}
+		$this->collectDeferredPushTargets();
+		$this->deferredPushCancelled = true;
+
+		if (empty($this->deferredPushTargets))
+		{
+			return;
+		}
+
+		Mail\Integration\Im\Notification::cancelDeferredPushForReadMessages(
+			(int)$this->mailboxId,
+			$this->deferredPushTargets,
+			$this->getActingUserId(),
+		);
+	}
+
+	/**
+	 * @return int[]
+	 */
+	protected function getRecentlyDeliveredMessageIds(int $mailboxId): array
+	{
+		if (empty($this->messagesIds))
+		{
+			return [];
+		}
+
+		$deliveredAfter = (new Main\Type\DateTime())->add(
+			'- ' . Mail\Integration\Im\Notification::deferredPushCancelWindowSeconds . ' seconds'
+		);
+
+		$messageIds = [];
+		$res = Mail\MailMessageUidTable::getList([
+			'select' => ['MESSAGE_ID'],
+			'filter' => [
+				'=MAILBOX_ID' => $mailboxId,
+				'@ID' => $this->messagesIds,
+				'>=DATE_INSERT' => $deliveredAfter,
+			],
+		]);
+		while ($row = $res->fetch())
+		{
+			$messageId = (int)$row['MESSAGE_ID'];
+			if ($messageId > 0)
+			{
+				$messageIds[$messageId] = $messageId;
+			}
+		}
+
+		return array_values($messageIds);
+	}
+
+	protected function getActingUserId(): int
+	{
+		// delete/spam/move from MCP pass the acting user through setMailboxUserId(), not the constructor
+		return (int)($this->userId ?: $this->mailboxUserId ?: Main\Engine\CurrentUser::get()->getId());
 	}
 
 	protected function getDirPathByType($dirType)

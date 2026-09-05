@@ -28,11 +28,15 @@ class CDatabasePgSql extends CAllDatabase
 	public function DateFormatToDB($format, $field = false)
 	{
 		$this->DoConnect();
+
 		if ($field === false)
 		{
 			$field = "#FIELD#";
 		}
-		return "to_char(".$field.", '".$this->connection->getSqlHelper()->formatDate($format)."')";
+
+		$helper = $this->connection->getSqlHelper();
+
+		return "to_char(" . $field . ", '" . $helper->forSql($helper->formatDate($format)) . "')";
 	}
 
 	public static function CurrentTimeFunction()
@@ -51,13 +55,17 @@ class CDatabasePgSql extends CAllDatabase
 		if (CTimeZone::Enabled())
 		{
 			static $diff = false;
-			if($diff === false)
+			if ($diff === false)
+			{
 				$diff = CTimeZone::GetOffset();
+			}
 
-			if($diff <> 0)
-				$timeZone = $diff > 0? "+".$diff: $diff;
+			if ($diff != 0)
+			{
+				$timeZone = $diff > 0 ? "+" . $diff : $diff;
+			}
 		}
-		return "extract(epoch FROM $fieldName)".$timeZone;
+		return "extract(epoch FROM $fieldName)" . $timeZone;
 	}
 
 	public function DatetimeToDateFunction($strValue)
@@ -68,7 +76,9 @@ class CDatabasePgSql extends CAllDatabase
 	public function ForSqlLike($strValue, $iMaxLength = 0)
 	{
 		if ($iMaxLength > 0)
+		{
 			$strValue = mb_substr($strValue ?? '', 0, $iMaxLength);
+		}
 
 		$this->DoConnect();
 		return pg_escape_string($this->db_Conn, str_replace("\\", "\\\\", $strValue ?? ''));
@@ -181,12 +191,12 @@ class CDatabasePgSql extends CAllDatabase
 						break;
 				}
 
-				$this->column_cache[$table][$fieldName] = array(
+				$this->column_cache[$table][$fieldName] = [
 					"NAME" => $fieldName,
 					"TYPE" => $type,
 					"MAX_LENGTH" => $field['CHARACTER_MAXIMUM_LENGTH'],
 					"INT_SIZE" => $size,
-				);
+				];
 			}
 		}
 		return $this->column_cache[$table];
@@ -225,15 +235,23 @@ class CDatabasePgSql extends CAllDatabase
 					{
 						case "datetime":
 							if ($value == '')
+							{
 								$strInsert2 .= "NULL";
+							}
 							else
+							{
 								$strInsert2 .= CDatabase::CharToDateFunction($value);
+							}
 							break;
 						case "date":
 							if ($value == '')
+							{
 								$strInsert2 .= "NULL";
+							}
 							else
+							{
 								$strInsert2 .= CDatabase::CharToDateFunction($value, "SHORT");
+							}
 							break;
 						case "int":
 							$value = intval($value);
@@ -253,13 +271,13 @@ class CDatabasePgSql extends CAllDatabase
 							{
 								$value = 0;
 							}
-							$strInsert2 .= "'".$value."'";
+							$strInsert2 .= "'" . $value . "'";
 							break;
 						case "bytes":
-							$strInsert2 .= "decode('".bin2hex($value)."', 'hex')";
+							$strInsert2 .= "decode('" . bin2hex($value) . "', 'hex')";
 							break;
 						case "fulltext":
-							$strInsert2 .= "safe_text_for_tsvector('".$sqlHelper->forSql($value, (int)$arColumnInfo['MAX_LENGTH'])."')";
+							$strInsert2 .= "safe_text_for_tsvector('" . $sqlHelper->forSql($value, (int)$arColumnInfo['MAX_LENGTH']) . "')";
 							break;
 						default:
 							if ($arColumnInfo['MAX_LENGTH'])
@@ -273,7 +291,7 @@ class CDatabasePgSql extends CAllDatabase
 					}
 				}
 			}
-			elseif (array_key_exists("~".$strColumnName, $arFields))
+			elseif (array_key_exists("~" . $strColumnName, $arFields))
 			{
 				if ($strInsert1 != '')
 				{
@@ -281,24 +299,26 @@ class CDatabasePgSql extends CAllDatabase
 					$strInsert2 .= ', ';
 				}
 				$strInsert1 .= $sqlHelper->quote($strColumnName);
-				$strInsert2 .= $arFields["~".$strColumnName];
+				$strInsert2 .= $arFields["~" . $strColumnName];
 			}
 		}
 
-		return array($strInsert1, $strInsert2);
+		return [$strInsert1, $strInsert2];
 	}
 
-	public function PrepareUpdate($strTableName, $arFields, $strFileDir="", $lang = false, $strTableAlias = "")
+	public function PrepareUpdate($strTableName, $arFields, $strFileDir = "", $lang = false, $strTableAlias = "")
 	{
-		$arBinds = array();
+		$arBinds = [];
 		return $this->PrepareUpdateBind($strTableName, $arFields, $strFileDir, $lang, $arBinds, $strTableAlias);
 	}
 
 	public function PrepareUpdateBind($strTableName, $arFields, $strFileDir, $lang, &$arBinds, $strTableAlias = "")
 	{
-		$arBinds = array();
+		$arBinds = [];
 		if ($strTableAlias != "")
+		{
 			$strTableAlias .= ".";
+		}
 		$strUpdate = "";
 
 		$this->DoConnect();
@@ -341,28 +361,36 @@ class CDatabasePgSql extends CAllDatabase
 							break;
 						case "real":
 							$value = doubleval($value);
-							if(!is_finite($value))
+							if (!is_finite($value))
 							{
 								$value = 0;
 							}
 							break;
 						case "datetime":
-							if($value == '')
+							if ($value == '')
+							{
 								$value = "NULL";
+							}
 							else
+							{
 								$value = CDatabase::CharToDateFunction($value, "FULL", $lang);
+							}
 							break;
 						case "date":
-							if($value == '')
+							if ($value == '')
+							{
 								$value = "NULL";
+							}
 							else
+							{
 								$value = CDatabase::CharToDateFunction($value, "SHORT", $lang);
+							}
 							break;
 						case "bytes":
-							$value = "decode('".bin2hex($value)."', 'hex')";
+							$value = "decode('" . bin2hex($value) . "', 'hex')";
 							break;
 						case "fulltext":
-							$value = "safe_text_for_tsvector('".$sqlHelper->forSql($value, (int)$arColumnInfo['MAX_LENGTH'])."')";
+							$value = "safe_text_for_tsvector('" . $sqlHelper->forSql($value, (int)$arColumnInfo['MAX_LENGTH']) . "')";
 							break;
 						default:
 							if ($arColumnInfo['MAX_LENGTH'])
@@ -377,13 +405,13 @@ class CDatabasePgSql extends CAllDatabase
 					$strUpdate .= $strTableAlias . $sqlHelper->quote($strColumnName) . " = " . $value;
 				}
 			}
-			elseif (is_set($arFields, "~".$strColumnName))
+			elseif (is_set($arFields, "~" . $strColumnName))
 			{
 				if ($strUpdate != '')
 				{
 					$strUpdate .= ', ';
 				}
-				$strUpdate .= $strTableAlias . $sqlHelper->quote($strColumnName) . " = " . $arFields["~".$strColumnName];
+				$strUpdate .= $strTableAlias . $sqlHelper->quote($strColumnName) . " = " . $arFields["~" . $strColumnName];
 			}
 		}
 
@@ -406,54 +434,63 @@ class CDatabasePgSql extends CAllDatabase
 		$update = 'UPDATE ' . $strTableName . "\n"
 			. "SET\n  " . $fields . "\n"
 			. $tables
-			. ($where ? "\nWHERE" . $where : "")
-		;
+			. ($where ? "\nWHERE" . $where : "");
 		return $update;
 	}
 
-	public function Insert($table, $arFields, $error_position="", $DEBUG=false, $EXIST_ID="", $ignore_errors=false)
+	public function Insert($table, $arFields, $error_position = "", $DEBUG = false, $EXIST_ID = "", $ignore_errors = false)
 	{
 		if (!is_array($arFields))
+		{
 			return false;
+		}
 
 		$str1 = "";
 		$str2 = "";
 		foreach ($arFields as $field => $value)
 		{
-			$str1 .= ($str1 <> ""? ", ":"") . $this->quote($field);
+			$str1 .= ($str1 != "" ? ", " : "") . $this->quote($field);
 			if ((string)$value == '')
-				$str2 .= ($str2 <> ""? ", ":"")."''";
+			{
+				$str2 .= ($str2 != "" ? ", " : "") . "''";
+			}
 			else
-				$str2 .= ($str2 <> ""? ", ":"").$value;
+			{
+				$str2 .= ($str2 != "" ? ", " : "") . $value;
+			}
 		}
 
-		if ($EXIST_ID <> '')
+		if ($EXIST_ID != '')
 		{
-			$strSql = "INSERT INTO ".$table."(ID,".$str1.") VALUES ('".$this->ForSql($EXIST_ID)."',".$str2.") RETURNING ID";
+			$strSql = "INSERT INTO " . $table . "(ID," . $str1 . ") VALUES ('" . $this->ForSql($EXIST_ID) . "'," . $str2 . ") RETURNING ID";
 		}
 		else
 		{
-			$strSql = "INSERT INTO ".$table."(".$str1.") VALUES (".$str2.") RETURNING ID";
+			$strSql = "INSERT INTO " . $table . "(" . $str1 . ") VALUES (" . $str2 . ") RETURNING ID";
 		}
 
 		if ($DEBUG)
-			echo "<br>".htmlspecialcharsEx($strSql)."<br>";
+		{
+			echo "<br>" . htmlspecialcharsEx($strSql) . "<br>";
+		}
 
 		$res = $this->Query($strSql, $ignore_errors, $error_position);
 
 		if ($res === false)
+		{
 			return false;
+		}
 
 		$row = $res->Fetch();
 
 		return intval(array_shift($row));
 	}
 
-	public function Add($tablename, $arFields, $arCLOBFields = Array(), $strFileDir="", $ignore_errors=false, $error_position="", $arOptions=array())
+	public function Add($tablename, $arFields, $arCLOBFields = [], $strFileDir = "", $ignore_errors = false, $error_position = "", $arOptions = [])
 	{
 		global $DB;
 
-		if(!isset($this) || !is_object($this) || !isset($this->type))
+		if (!isset($this) || !is_object($this) || !isset($this->type))
 		{
 			return $DB->Add($tablename, $arFields, $arCLOBFields, $strFileDir, $ignore_errors, $error_position, $arOptions);
 		}
@@ -462,13 +499,13 @@ class CDatabasePgSql extends CAllDatabase
 			$arInsert = $this->PrepareInsert($tablename, $arFields);
 			if (!isset($arFields["ID"]) || intval($arFields["ID"]) <= 0)
 			{
-				$strSql = "INSERT INTO ".$tablename."(".$arInsert[0].") VALUES (".$arInsert[1].") RETURNING ID";
+				$strSql = "INSERT INTO " . $tablename . "(" . $arInsert[0] . ") VALUES (" . $arInsert[1] . ") RETURNING ID";
 				$row = $this->Query($strSql, $ignore_errors, $error_position, $arOptions)->Fetch();
 				return intval(array_shift($row));
 			}
 			else
 			{
-				$strSql ="INSERT INTO ".$tablename."(".$arInsert[0].") VALUES(".$arInsert[1].")";
+				$strSql = "INSERT INTO " . $tablename . "(" . $arInsert[0] . ") VALUES(" . $arInsert[1] . ")";
 				$this->Query($strSql, $ignore_errors, $error_position, $arOptions);
 				return intval($arFields["ID"]);
 			}

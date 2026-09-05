@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Chat\Converter;
 use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
 use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Entity\File\ChatAvatar;
+use Bitrix\Im\V2\Folder\FolderCascadeHandler;
 use Bitrix\Im\V2\Guest\GuestLinkService;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\V2\Recent\AncestorContextSender;
@@ -86,6 +87,16 @@ class UpdateService
 		CopilotChat::activateDraftIfNeeded($this->chat);
 
 		$this->promoteMembersToParentOnAttach($membersToPromoteOnAttach);
+
+		// On attach (root -> parent) a nested chat must leave every personal folder:
+		// personal folders keep root chats only.
+		$newParentChatId = (int)($this->updateFields->getParentChatId() ?? 0);
+		if ($oldParentChatId === 0 && $newParentChatId > 0)
+		{
+			ServiceLocator::getInstance()->get(FolderCascadeHandler::class)
+				->onChatAttachedToParent($this->chat->getChatId())
+			;
+		}
 
 		$this->sendPushUpdateChat($oldParentChatId);
 		$this->markCopilotTitleAsCustom();

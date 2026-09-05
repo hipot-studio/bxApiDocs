@@ -10,6 +10,7 @@ use Bitrix\Booking\Internals\Integration\Crm\CrmBindingsBuilder;
 use Bitrix\Booking\Internals\Integration\Pull\PushService;
 use Bitrix\Booking\Internals\Repository\BookingMessageRepositoryInterface;
 use Bitrix\Booking\Internals\Service\Notifications\AiCallAvailabilityService;
+use Bitrix\Booking\Internals\Service\Notifications\Analytics\AiCallAnalytics;
 use Bitrix\Booking\Internals\Service\Notifications\BookingMessageStatus;
 use Bitrix\Booking\Internals\Service\Notifications\Entity\BookingMessage;
 use Bitrix\Booking\Internals\Service\AiAssistant\ContextProvider;
@@ -27,7 +28,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
 
 Loc::loadMessages(
-	$_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/booking/lib/Integration/Booking/Message/MessageStatus.php'
+	$_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/booking/lib/Integration/Booking/Message/MessageStatus.php',
 );
 
 class AiCallMessageSender extends BaseMessageSender
@@ -45,6 +46,7 @@ class AiCallMessageSender extends BaseMessageSender
 		private readonly CrmBindingsBuilder $crmBindingsBuilder,
 		private readonly AiCallAvailabilityService $aiCallAvailabilityService,
 		private readonly AiAgentProvider $aiAgentProvider,
+		private readonly AiCallAnalytics $aiCallAnalytics,
 	)
 	{
 		parent::__construct($bookingMessageRepository, $pushService);
@@ -53,8 +55,7 @@ class AiCallMessageSender extends BaseMessageSender
 	public function canUse(): bool
 	{
 		return $this->aiCallAvailabilityService->isAvailable()
-			&& $this->aiAgentProvider->getAiAgentData() !== null
-		;
+			&& $this->aiAgentProvider->getAiAgentData() !== null;
 	}
 
 	public function getCode(): string
@@ -189,6 +190,8 @@ class AiCallMessageSender extends BaseMessageSender
 
 		$bookingMessage->setStatus(BookingMessageStatus::Success);
 		$this->bookingMessageRepository->save($bookingMessage);
+
+		$this->aiCallAnalytics->sendSuccess($bookingMessage);
 	}
 
 	public function markFailed(int $bookingMessageId, int $retryAfterSeconds = self::FAILURE_RETRY_AFTER_SECONDS): void
@@ -204,6 +207,8 @@ class AiCallMessageSender extends BaseMessageSender
 			->setNextRetryAt(time() + $retryAfterSeconds)
 		;
 		$this->bookingMessageRepository->save($bookingMessage);
+
+		$this->aiCallAnalytics->sendError($bookingMessage);
 	}
 
 	private function processStartResult(StartResult $startResult): MessageSendResult

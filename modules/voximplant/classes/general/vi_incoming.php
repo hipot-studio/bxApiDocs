@@ -91,6 +91,20 @@ class CVoxImplantIncoming
 			$result["NO_ANSWER_RULE"] = self::RULE_VOICEMAIL;
 		}
 
+		$allowedDtmfTypes = [
+			CVoxImplantConfig::DTMF_TYPE_ALL,
+			CVoxImplantConfig::DTMF_TYPE_INBAND,
+			CVoxImplantConfig::DTMF_TYPE_RFC2833,
+			CVoxImplantConfig::DTMF_TYPE_SIP_INFO,
+		];
+		if (
+			!CVoxImplantConfig::isDtmfTypeEnabled()
+			|| !in_array($result["DTMF_TYPE"] ?? '', $allowedDtmfTypes, true)
+		)
+		{
+			$result["DTMF_TYPE"] = CVoxImplantConfig::DTMF_TYPE_ALL;
+		}
+
 		foreach(GetModuleEvents("voximplant", "onCallInit", true) as $arEvent)
 		{
 			ExecuteModuleEventEx($arEvent, Array(Array(

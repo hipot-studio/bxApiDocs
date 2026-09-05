@@ -39,6 +39,7 @@ class MailsFlagsManager extends SyncInternalManager
 		if ($result->isSuccess())
 		{
 			$this->updateLeftMenuCounter();
+			$this->cancelDeferredPush();
 		}
 		return $result;
 	}

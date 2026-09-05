@@ -135,6 +135,7 @@ class AuthorizationPrefilter extends Base
 			Controller\Chat\Mention::class => true,
 			Controller\Chat\Message::class => true,
 			Controller\Chat\Message\CommentInfo::class => true,
+			Controller\Chat\Message\DateNavigation::class => true,
 			Controller\Chat\Message\Reaction::class => true,
 			Controller\Chat\Pin::class => true,
 			Controller\Chat\User::class => true,

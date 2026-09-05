@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Bitrix\Booking\Provider\Params\Booking;
 
 use Bitrix\Booking\Internals\Model\ScorerTable;
+use Bitrix\Booking\Internals\Service\Sql\SqlExpression;
 use Bitrix\Booking\Internals\Service\Time;
 use Bitrix\Booking\Provider\Params\Filter;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
-use Bitrix\Main\DB\PgsqlConnection;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 
 class SpecialBookingFilter extends Filter
@@ -71,9 +71,9 @@ class SpecialBookingFilter extends Filter
 				AND s.TYPE IN ('" . implode("', '", $escapedTypes) . "')
 			)
 			AND (
-				EXTRACT(DAY FROM " . $sqlHelper->addSecondsToDateTime('%4$s', $this->fromUnixTimeSqlFn('%2$s')) . ")
+				EXTRACT(DAY FROM " . $sqlHelper->addSecondsToDateTime('%4$s', SqlExpression::fromUnixTime('%2$s')) . ")
 				!=
-				EXTRACT(DAY FROM " . $sqlHelper->addSecondsToDateTime('%4$s', $this->fromUnixTimeSqlFn($currentTimestamp)) . ")
+				EXTRACT(DAY FROM " . $sqlHelper->addSecondsToDateTime('%4$s', SqlExpression::fromUnixTime((string)$currentTimestamp)) . ")
 			)
 		";
 
@@ -89,15 +89,5 @@ class SpecialBookingFilter extends Filter
 		$result->whereExpr($expr, $args);
 
 		return $result;
-	}
-
-	private function fromUnixTimeSqlFn($timestamp): string
-	{
-		if ($this->connection instanceof PgsqlConnection)
-		{
-			return 'to_timestamp(' . $timestamp . ')';
-		}
-
-		return 'FROM_UNIXTIME(' . $timestamp . ')';
 	}
 }

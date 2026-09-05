@@ -1,11 +1,13 @@
 <?php
 
 use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Controller\Integration\Flipchart;
 use Bitrix\Disk\Document\BoardsHandler;
 use Bitrix\Disk\Document\DocumentEditorUser;
 use Bitrix\Disk\Document\DocumentHandler;
+use Bitrix\Disk\Document\DocumentResolveContext;
 use Bitrix\Disk\Document\FileData;
 use Bitrix\Disk\Document\GoogleViewerHandler;
 use Bitrix\Disk\Document\Models\DocumentService;
@@ -13,26 +15,36 @@ use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\DocumentSessionContext;
 use Bitrix\Disk\Document\Models\GuestUser;
 use Bitrix\Disk\Document\OnlyOffice;
+use Bitrix\Disk\Document\SessionManager;
+use Bitrix\Disk\Document\Vibeoffice;
+use Bitrix\Disk\Document\Vibeoffice\PullInitializationSuppressor;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Service\HtmlViewerPageService;
+use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internal\Service\HtmlViewerService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
 use Bitrix\Disk\Internals\DiskComponent;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\ObjectTable;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkPasswordService;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Disk\Ui\Icon;
 use Bitrix\Disk\Ui;
+use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\ZipNginx;
+use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
-use Bitrix\Disk\Internals\Grid;
 use Bitrix\Main\Context;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\Redirect;
+use Bitrix\Main\HttpResponse;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\SystemException;
@@ -53,33 +65,49 @@ class CDiskExternalLinkComponent extends DiskComponent
 	protected const EXCEPTION_CODE_ACCESS_DENIED = 221880;
 
 	const PAGE_SIZE = 25;
+	// An offset built from a larger page number overflows int and turns the LIMIT of the query into
+	// a negative number, so the page number is capped before it reaches the offset.
+	private const MAX_PAGE_NUMBER = 100000;
+	// 44 hours: below it a change is shown as "yesterday at 13:48", above it as a full date.
+	private const RELATIVE_UPDATE_TIME_THRESHOLD = 158400;
 	const MAX_SIZE_TO_PREVIEW = 15728640; //1024 * 1024 * 15 bytes
 
 	private const ONLYOFFICE_FILE_VIEWER = 'onlyoffice';
+	private const VIBEOFFICE_FILE_VIEWER = 'vibeoffice';
 	private const BOARD_FILE_VIEWER = 'board';
+	private const HTML_FILE_VIEWER = 'html';
 	private const FILE_VIEWERS = [
 		self::ONLYOFFICE_FILE_VIEWER,
+		self::VIBEOFFICE_FILE_VIEWER,
 		self::BOARD_FILE_VIEWER,
+		self::HTML_FILE_VIEWER,
 	];
 
 	protected ExternalLinkProvider $externalLinkProvider;
+	protected ExternalLinkPasswordService $externalLinkPasswordService;
 	/** @var ExternalLink */
 	protected $externalLink;
 	protected ?string $hash = null;
 	protected bool $fromUnifiedLink = false;
 	protected ?File $file;
+	protected ?AttachedObject $attachedObject = null;
+	protected ?Version $version = null;
 	protected ?string $unifiedLink = null;
+	private ?array $unifiedLinkOptions = null;
 	/** @var string */
 	protected $downloadToken;
 	/** @var DocumentHandler  */
 	protected $defaultHandlerForView;
 	protected $langId;
+	private ?string $fullDateFormat = null;
 
 	public function __construct($component = null)
 	{
 		parent::__construct($component);
 
-		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
+		$serviceLocator = ServiceLocator::getInstance();
+		$this->externalLinkProvider = $serviceLocator->get(ExternalLinkProvider::class);
+		$this->externalLinkPasswordService = $serviceLocator->get(ExternalLinkPasswordService::class);
 	}
 
 	/**
@@ -89,6 +117,8 @@ class CDiskExternalLinkComponent extends DiskComponent
 	 */
 	protected function processBeforeAction($actionName)
 	{
+		PullInitializationSuppressor::suppressForDocumentEditor(DocumentEditorUser::isCurrentUserDocumentEditor());
+
 		$this->findLink();
 		$this->maybeGenerateUnifiedLink($actionName);
 		$this->maybeRedirectToUnifiedLink($actionName);
@@ -102,6 +132,8 @@ class CDiskExternalLinkComponent extends DiskComponent
 			(!$isBoardsHandler && !$this->externalLink->isAutomatic() && !Configuration::isEnabledManualExternalLink())
 		)
 		{
+			$this->maybeRefuseHtmlViewerContent();
+
 			$this->arResult = array(
 				'ERROR_MESSAGE' => $this->getMessage('DISK_EXTERNAL_LINK_ERROR_DISABLED_MODE'),
 			);
@@ -140,11 +172,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 				!$this->checkDownloadToken($this->request->getQuery('token'))
 			)
 			{
+				$this->maybeRefuseHtmlViewerContent();
 				$this->redirectToAction('default', ['session' => 'expired']);
 			}
 
 			if ($this->validatePassword() !== true)
 			{
+				$this->maybeRefuseHtmlViewerContent();
 				$this->showAccessDenied();
 
 				return false;
@@ -180,9 +214,55 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return $this->defaultHandlerForView instanceof BoardsHandler;
 	}
 
-	private function isOnlyOfficeHandler(): bool
+	/**
+	 * Keeps the html viewer speaking html, the same way the engine endpoints do
+	 * ({@see \Bitrix\Disk\Infrastructure\Controller\HtmlViewerRefusalResponse}): the content is loaded
+	 * into a plain iframe, so the redirect and the error pages the caller falls back to would render a
+	 * portal page inside the frame instead of stating the reason.
+	 *
+	 * Guards every refusal of a content request: the token and password rubicons, and showNotFoundPage()
+	 * for the rest — the trashed object, and the unresolvable link the exception handler lands on.
+	 */
+	private function maybeRefuseHtmlViewerContent(): void
 	{
-		return $this->defaultHandlerForView instanceof OnlyOffice\OnlyOfficeHandler;
+		if ($this->getAction() !== 'showHtml')
+		{
+			return;
+		}
+
+		$this->sendHtmlViewerResponse(
+			ServiceLocator::getInstance()->get(HtmlViewerService::class)->unavailableResponse()
+		);
+	}
+
+	#[NoReturn]
+	private function sendHtmlViewerResponse(HttpResponse $response): void
+	{
+		$this->restartBuffer();
+		Application::getInstance()->end(0, $response);
+	}
+
+	/**
+	 * Maps the resolved office handler to the external-link file viewer name (ALG-EXTERNAL-VIEWER-DISPATCH).
+	 *
+	 * The engine decision is the single seam {@see \Bitrix\Disk\Document\DocumentHandlersManager::resolveEffectiveHandler()},
+	 * NOT a local `instanceof` / {@see Vibeoffice\VibeofficeHandler::isEnabled()} check (principle 11.1):
+	 * vibeoffice when the resolver picked it (flag ON), onlyoffice when it did not (flag OFF / vibeoffice not
+	 * registered), and null for a non-office handler (board/google) so the caller behaves exactly as before.
+	 */
+	private function resolveDocumentViewer(?DocumentHandler $handler): ?string
+	{
+		if ($handler instanceof Vibeoffice\VibeofficeHandler)
+		{
+			return self::VIBEOFFICE_FILE_VIEWER;
+		}
+
+		if ($handler instanceof OnlyOffice\OnlyOfficeHandler)
+		{
+			return self::ONLYOFFICE_FILE_VIEWER;
+		}
+
+		return null;
 	}
 
 	protected function listActions()
@@ -202,6 +282,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				'method' => ['GET', 'POST'],
 			],
 			'showViewHtml',
+			'showHtml',
 			'showFile',
 			'showPreview',
 			'showView',
@@ -230,8 +311,10 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$this->hash = $hash;
 		}
 
-		$this->fromUnifiedLink = $this->arParams['FROM_UNIFIED_LINK'] ?? false;
+		$this->fromUnifiedLink = ($this->arParams['FROM_UNIFIED_LINK'] ?? false) === true;
 		$this->file = $this->arParams['FILE'] ?? null;
+		$this->attachedObject = $this->arParams['ATTACHED_OBJECT'] ?? null;
+		$this->version = $this->arParams['VERSION'] ?? null;
 
 		if (!is_string($this->hash) && !$this->file instanceof File)
 		{
@@ -246,6 +329,39 @@ class CDiskExternalLinkComponent extends DiskComponent
 	private function isViewableDocument(string $ext): bool
 	{
 		return DocumentHandler::isEditable($ext) || (mb_strtolower($ext) === 'pdf');
+	}
+
+	/**
+	 * The revision a version-pinned link serves — the very one processActionDownload() hands out, loaded
+	 * within the file so an id belonging elsewhere resolves to nothing. Null on a link that is not pinned.
+	 */
+	private function resolvePinnedVersion(File $file): ?Version
+	{
+		return $this->externalLink->isSpecificVersion()
+			? $file->getVersion($this->externalLink->getVersionId())
+			: null
+		;
+	}
+
+	/**
+	 * Asks about the very content {@see buildHtmlViewerContentResponse()} serves, not about the file
+	 * standing next to it: a version-pinned link serves that revision, and a version keeps the name it
+	 * was saved under, so renaming the file cannot open the viewer page over a version it would refuse.
+	 *
+	 * The same split the content side makes, stated here as a verdict: HtmlViewerService answers a file
+	 * by HtmlViewerPolicy::isViewable() and a version by its extension alone, a version carrying no
+	 * stored type of its own.
+	 */
+	private function isHtmlViewerTarget(File $file, ?Version $pinnedVersion): bool
+	{
+		if (!$this->externalLink->isSpecificVersion())
+		{
+			return HtmlViewerPolicy::isViewable($file);
+		}
+
+		return Configuration::isEnabledHtmlViewer()
+			&& HtmlViewerPolicy::isViewableExtension($pinnedVersion?->getExtension())
+		;
 	}
 
 	private function storeDownloadToken($token)
@@ -264,6 +380,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	protected function processActionGoToEdit()
 	{
+		// Html has no editor, so edit is the view page, exactly as on the authenticated path.
+		$file = $this->externalLink->getFile();
+		if ($file instanceof File && HtmlViewerPolicy::isViewable($file))
+		{
+			$this->redirectToAction('default');
+		}
+
 		if (!$this->externalLink->getFile() || !$this->externalLink->allowEdit())
 		{
 			$this->showNotFoundPage();
@@ -272,11 +395,19 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$isDocument = $this->isViewableDocument($this->externalLink->getFile()->getExtension());
-		$isOnlyOfficeDocument = $this->isOnlyOfficeHandler() && $isDocument;
+		$documentViewer = $this->resolveDocumentViewer($this->defaultHandlerForView);
+		$isOfficeDocument = $documentViewer !== null && $isDocument;
 		$isBoard = $this->isBoardsHandler();
-		if ($isOnlyOfficeDocument || $isBoard)
+		if ($isOfficeDocument || $isBoard)
 		{
 			$documentSession = $this->generateDocumentSession($this->externalLink->getFile());
+			if (!$documentSession)
+			{
+				$this->showNotFoundPage();
+
+				return false;
+			}
+
 			if ($documentSession->canTransformUserToEdit(CurrentUser::get()))
 			{
 				$fieldsToCreateUser = [
@@ -304,7 +435,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				$this->setParamsForBoard($documentSession, $this->externalLink->getFile());
 			}
 
-			$this->showFileViewer($isOnlyOfficeDocument ? self::ONLYOFFICE_FILE_VIEWER : self::BOARD_FILE_VIEWER);
+			$this->showFileViewer($isBoard ? self::BOARD_FILE_VIEWER : $documentViewer);
 		}
 		else
 		{
@@ -338,6 +469,40 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$passwordPassed = !$this->arResult['PROTECTED_BY_PASSWORD'] || $this->arResult['VALID_PASSWORD'];
 			$isDocument = $this->isViewableDocument($this->externalLink->getFile()?->getExtension());
 
+			// Html is answered before the board and office branches, the order the unified link keeps in
+			// HtmlRenderableFileHandlerFactory: the same decision is made twice, so it is made the same
+			// way. Shown right here instead of the download card: the same viewer page a portal user
+			// gets, minus the access popup. The card stays the fallback while the viewer is switched
+			// off, which is what the policy answers.
+			$file = $this->externalLink->getFile();
+			if ($passwordPassed && $file instanceof File)
+			{
+				// Resolved once and handed on: the gate and the header name the same revision, and the
+				// page costs a single version load.
+				$pinnedVersion = $this->resolvePinnedVersion($file);
+
+				if ($this->isHtmlViewerTarget($file, $pinnedVersion))
+				{
+					$pageService = ServiceLocator::getInstance()->get(HtmlViewerPageService::class);
+					$this->arResult['HTML_VIEWER'] = $pageService->buildParamsByExternalLink(
+						$file,
+						$this->externalLink,
+						$this->downloadToken,
+						$pinnedVersion,
+					);
+					// The card this page replaces carried the link preview, so the page carries it too; its
+					// head belongs to the wrapper, hence the values here and the meta in file-viewers/html.php.
+					$this->arResult['OPEN_GRAPH'] = [
+						'URL' => $this->getUrlManager()->getPublicExternalLink($file, $this->externalLink->getHash()),
+						'TITLE' => $file->getName(),
+					];
+
+					$this->showFileViewer(self::HTML_FILE_VIEWER);
+
+					return;
+				}
+			}
+
 			if ($this->isBoardsHandler() && $passwordPassed && $isDocument)
 			{
 				$documentSession = $this->generateDocumentSession($this->externalLink->getFile());
@@ -355,20 +520,26 @@ class CDiskExternalLinkComponent extends DiskComponent
 				return;
 			}
 
-			if ($this->isOnlyOfficeHandler() && $passwordPassed && $isDocument)
+			$documentViewer = $this->resolveDocumentViewer($this->defaultHandlerForView);
+			if ($documentViewer !== null && $passwordPassed && $isDocument)
 			{
-				$this->arResult['DOCUMENT_SESSION'] = $this->generateDocumentSession($this->externalLink->getFile());
+				$documentSession = $this->generateDocumentSession($this->externalLink->getFile());
+				if (!$documentSession)
+				{
+					$this->showNotFoundPage();
 
-				$linkToEdit = Driver::getInstance()->getUrlManager()->getUrlExternalLink(
-					[
-						'hash' => $this->externalLink->getHash(),
-						'action' => 'goToEdit',
-					]
+					return;
+				}
+
+				$this->arResult['DOCUMENT_SESSION'] = $documentSession;
+
+				$this->arResult['LINK_TO_EDIT'] = $this->buildEditLink(
+					$this->externalLink->getFile(),
+					Driver::getInstance()->getUrlManager(),
 				);
-				$this->arResult['LINK_TO_EDIT'] = $linkToEdit;
 				$this->arResult['LINK_TO_DOWNLOAD'] = $this->getDownloadUrl();
 
-				$this->showFileViewer(self::ONLYOFFICE_FILE_VIEWER);
+				$this->showFileViewer($documentViewer);
 
 				return;
 			}
@@ -400,7 +571,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 				$this->arResult['DISABLE_DOCUMENT_VIEWER'] = true;
 			}
 
-			$this->arResult['GRID'] = $this->getGridData($rootFolder, $targetFolder, $path, 'external_folder');
+			$this->arResult['FOLDER_LIST'] = $this->getFolderListData($rootFolder, $targetFolder, $path);
+			$this->arResult['FOLDER_META'] = $this->getFolderMeta(
+				$rootFolder,
+				$targetFolder,
+				(int)$this->arResult['FOLDER_LIST']['TOTAL_COUNT'],
+			);
+			$this->arResult['SHARE_URL'] = $this->getShareUrl($relativeItems);
 			$this->arResult['BREADCRUMBS'] = $this->getBreadcrumbs($path, $relativeItems);
 			$this->arResult['BREADCRUMBS_ROOT'] = array(
 				'NAME' => $rootFolder->getName(),
@@ -433,8 +610,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return true;
 		}
 
-		// Get password from POST or session
-		$password = $_POST['PASSWORD'] ?? $_SESSION['DISK_DATA']['EXT_LINK_PASSWORD'] ?? null;
+		if ($this->externalLinkPasswordService->isConfirmed($this->externalLink))
+		{
+			return true;
+		}
+
+		$password = $this->request->getPost('PASSWORD');
 
 		// If no password
 		if (!$password)
@@ -444,29 +625,65 @@ class CDiskExternalLinkComponent extends DiskComponent
 				: null; // show form
 		}
 
-		if ($this->externalLink->checkPassword($password))
-		{
-			$_SESSION['DISK_DATA']['EXT_LINK_PASSWORD'] = $password;
-
-			return true;
-		}
-
-		return false;
+		return $this->externalLinkPasswordService->validateAndConfirm($this->externalLink, $password);
 	}
 
 	private function generateDocumentSession(File $file): ?DocumentSession
 	{
 		$documentSessionContext = new DocumentSessionContext($file->getId(), null, $this->externalLink->getId());
-		$sessionManager = new OnlyOffice\DocumentSessionManager();
+		$service = $this->getSessionServiceByFile($file);
+
+		// Session manager per engine (ALG-EXTERNAL-VIEWER-DISPATCH): the vibeoffice manager writes
+		// SERVICE='vibeoffice' when the resolver picked vibeoffice (flag ON); otherwise (flag OFF, and
+		// flipchart, which keeps going through the OnlyOffice manager) the OnlyOffice manager is used —
+		// so with the flag off this is byte-for-byte the pre-vibeoffice path (zero regression).
+		$sessionManager = $service === DocumentService::Vibeoffice
+			? new Vibeoffice\DocumentSessionManager()
+			: new OnlyOffice\DocumentSessionManager();
 		$sessionManager
 			->setUserId($this->getUser()->getId() ?: GuestUser::GUEST_USER_ID)
 			->setSessionType($this->getSessionType())
 			->setSessionContext($documentSessionContext)
-			->setService($this->getSessionServiceByFile($file))
-			->setFile($file)
+			->setService($service)
 		;
+		if (!$this->setDocumentSessionSource($sessionManager, $file))
+		{
+			return null;
+		}
 
-		return $sessionManager->findOrCreateSession();
+		if (!$sessionManager->lock())
+		{
+			return null;
+		}
+
+		try
+		{
+			return $sessionManager->findOrCreateSession();
+		}
+		finally
+		{
+			$sessionManager->unlock();
+		}
+	}
+
+	protected function setDocumentSessionSource(SessionManager $sessionManager, File $file): bool
+	{
+		if (!$this->externalLink->isSpecificVersion())
+		{
+			$sessionManager->setFile($file);
+
+			return true;
+		}
+
+		$version = $file->getVersion($this->externalLink->getVersionId());
+		if (!$version || $version->getObjectId() !== $file->getRealObjectId())
+		{
+			return false;
+		}
+
+		$sessionManager->setVersion($version);
+
+		return true;
 	}
 
 	private function getSessionType(): int
@@ -535,234 +752,217 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return $crumbs;
 	}
 
-	private function getGridData(Folder $rootFolder, Folder $targetFolder, $path, $gridId)
+	/**
+	 * Numbers of the folder the crumbs point at, shown above its file list. The count comes from the
+	 * paged query, so it covers the whole folder and not the page on the screen.
+	 */
+	private function getFolderMeta(Folder $rootFolder, Folder $targetFolder, int $itemCount): array
 	{
-		$grid = array(
-			'ID' => $gridId,
-			'MODE' => Grid\FolderListOptions::VIEW_MODE_GRID,
-			'SORT_MODE' => Grid\FolderListOptions::SORT_MODE_ORDINARY,
+		// At the root the size is the one already counted for the archive button; a subfolder needs
+		// its own count, which is a single query over the whole subtree.
+		$size = $targetFolder->getRealObjectId() === $rootFolder->getRealObjectId()
+			? (int)$this->arResult['FOLDER']['SIZE']
+			: (int)$targetFolder->getRealObject()->countSizeOfFiles()
+		;
+
+		return [
+			'ITEM_COUNT' => $itemCount,
+			'SIZE' => $size,
+			'FORMATTED_SIZE' => CFile::formatSize($size),
+			'UPDATE_TIME' => $this->formatUpdateTime(
+				$targetFolder->getUpdateTime()->toUserTime()->getTimestamp(),
+				time() + CTimeZone::getOffset(),
+			),
+		];
+	}
+
+	/**
+	 * Public address of the folder currently open, the way a crumb of it addresses it. Only the path of
+	 * the request is kept and the query is rebuilt from the resolved folder names, so neither a foreign
+	 * parameter nor the number of the page reaches the address that goes to the clipboard.
+	 */
+	private function getShareUrl(array $relativeItems): string
+	{
+		$context = Context::getCurrent();
+		$scheme = $context->getRequest()->isHttps() ? 'https' : 'http';
+		$requestPath = (new Uri($this->request->getRequestUri()))->getPath();
+
+		$uri = new Uri($scheme . '://' . $context->getServer()->getHttpHost() . $requestPath);
+
+		$segments = [];
+		foreach ($relativeItems as $item)
+		{
+			if (!empty($item['NAME']))
+			{
+				$segments[] = $item['NAME'];
+			}
+		}
+
+		if ($segments)
+		{
+			$uri->addParams(['path' => implode('/', $segments)]);
+		}
+
+		return $uri->getLocator();
+	}
+
+	private function formatUpdateTime(int $timestampUpdate, int $nowTime): string
+	{
+		$this->fullDateFormat ??= preg_replace(
+			'/:s$/',
+			'',
+			CDatabase::dateFormatToPHP(CSite::GetDateFormat('FULL')),
 		);
 
+		return ($nowTime - $timestampUpdate > self::RELATIVE_UPDATE_TIME_THRESHOLD)
+			? formatDate($this->fullDateFormat, $timestampUpdate, $nowTime)
+			: formatDate('x', $timestampUpdate, $nowTime)
+		;
+	}
+
+	private function getFolderListData(Folder $rootFolder, Folder $targetFolder, string $path): array
+	{
 		$driver = Driver::getInstance();
 		$storage = $rootFolder->getStorage();
 		$securityContext = $storage->getSecurityContext($this->externalLink->getCreatedBy());
-		$parameters = array(
-			'filter' => array(
+		$parameters = [
+			'filter' => [
 				'PARENT_ID' => $targetFolder->getRealObjectId(),
 				'DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,
-			),
-		);
+			],
+		];
 
-		$parameters = $driver->getRightsManager()->addRightsCheck($securityContext, $parameters, array('ID', 'CREATED_BY'));
+		$parameters = $driver->getRightsManager()->addRightsCheck($securityContext, $parameters, ['ID', 'CREATED_BY']);
 
 		$pageSize = self::PAGE_SIZE;
-		$pageNumber = (int)$this->request->getQuery('pageNumber');
-		if ($pageNumber <= 0)
-		{
-			$pageNumber = 1;
-		}
+		$pageNumber = min(max((int)$this->request->getQuery('pageNumber'), 1), self::MAX_PAGE_NUMBER);
 		$parameters['count_total'] = true;
-		$parameters['limit'] = $pageSize + 1; // +1 because we want to know about existence next page
 		$parameters['offset'] = $pageSize * ($pageNumber - 1);
 
+		$relativePath = trim($path, '/');
+
+		$page = $this->getFolderListPage($rootFolder, $parameters, $relativePath, $pageSize);
+		// A page number over the last page returns nothing, which is indistinguishable from an empty
+		// folder: a count over a page that fetched less rows than the limit is the offset itself, not
+		// the total. The query of the first page is what tells the two apart and gives the true total.
+		if (empty($page['ITEMS']) && $pageNumber > 1)
+		{
+			$pageNumber = 1;
+			$parameters['offset'] = 0;
+			$page = $this->getFolderListPage($rootFolder, $parameters, $relativePath, $pageSize);
+		}
+
+		return [
+			'ITEMS' => $page['ITEMS'],
+			'TOTAL_COUNT' => $page['TOTAL_COUNT'],
+			'CURRENT_PAGE' => $pageNumber,
+			'HAS_NEXT_PAGE' => $page['HAS_NEXT_PAGE'],
+		];
+	}
+
+	private function getFolderListPage(Folder $rootFolder, array $parameters, string $relativePath, int $pageSize): array
+	{
+		// +1 because the row over the page is what tells about the existence of the next page
+		$parameters['limit'] = $pageSize + 1;
+
 		$nowTime = time() + CTimeZone::getOffset();
-		$fullFormatWithoutSec = preg_replace('/:s$/', '', CDatabase::dateFormatToPHP(CSite::GetDateFormat("FULL")));
 
-		$urlManager = $driver->getUrlManager();
-		$rows = array();
+		$urlManager = Driver::getInstance()->getUrlManager();
 
+		$items = [];
 		$countObjectsOnPage = 0;
-		$needShowNextPagePagination = false;
+		$hasNextPage = false;
 		$cursor = $rootFolder->getList($parameters);
 		foreach ($cursor as $row)
 		{
 			$countObjectsOnPage++;
-
 			if ($countObjectsOnPage > $pageSize)
 			{
-				$needShowNextPagePagination = true;
+				$hasNextPage = true;
 				break;
 			}
 
-			$object = BaseObject::buildFromArray($row);
 			/** @var File|Folder $object */
+			$object = BaseObject::buildFromArray($row);
 			$name = $object->getName();
-			$objectId = $object->getId();
-			$exportData = array(
-				'TYPE' => $object->getType(),
-				'NAME' => $name,
-				'ID' => $objectId,
-			);
-
-			$relativePath = trim($path, '/');
-
 			$isFolder = $object instanceof Folder;
-			$isFile = $object instanceof File;
-			$actions = $tileActions = $columns = array();
+			$timestampUpdate = $object->getUpdateTime()->toUserTime()->getTimestamp();
+
+			// A folder shortcut carries its own icon in the set, as in the file list of the portal.
+			$iconName = $isFolder && $object->isLink()
+				? 'folder-shared'
+				: Ui\Icon::getIconSetNameByObject($object)
+			;
+
+			$item = [
+				'NAME' => $name,
+				'IS_FOLDER' => $isFolder,
+				'ICON_NAME' => $iconName,
+				'FORMATTED_SIZE' => $isFolder ? '' : CFile::formatSize($object->getSize()),
+				'UPDATE_TIME' => $this->formatUpdateTime($timestampUpdate, $nowTime),
+				'VIEWER_ATTRIBUTES' => '',
+			];
 
 			if ($isFolder)
 			{
 				$uri = new Uri($this->request->getRequestUri());
 				$uri->deleteParams(array_merge(
 					\Bitrix\Main\HttpRequest::getSystemParameters(),
-					array('path', 'pageNumber')
+					['path', 'pageNumber']
 				));
-				$uri->addParams(array(
+				$uri->addParams([
 					'path' => $relativePath . '/' . $name . '/',
-				));
+				]);
 
-				$exportData['OPEN_URL'] = $uri->getPathQuery();
-				$actions[] = array(
-					"PSEUDO_NAME" => "open",
-					"DEFAULT" => true,
-					"ICONCLASS" => "show",
-					"TEXT" => $this->getMessage('DISK_EXTERNAL_OBJECT_ACT_OPEN'),
-					"ONCLICK" => "jsUtils.Redirect(arguments, '" . $exportData['OPEN_URL'] . "')",
-				);
-			}
-
-			if ($isFile)
-			{
-				$downloadUrl = $urlManager->getUrlExternalLink(
-					array(
-						'hash' => $this->externalLink->getHash(),
-						'action' => 'downloadFileUnderFolder',
-						'token' => $this->downloadToken,
-						'path' => $relativePath?: '/',
-						'fileId' => $object->getId(),
-					)
-				);
-
-				$exportData['OPEN_URL'] = $downloadUrl;
-				$actions[] = array(
-					"PSEUDO_NAME" => "download",
-					"DEFAULT" => true,
-					"ICONCLASS" => "download",
-					"TEXT" => $this->getMessage('DISK_EXTERNAL_OBJECT_ACT_DOWNLOAD'),
-					"ONCLICK" => "jsUtils.Redirect(arguments, '" . $downloadUrl . "')",
-				);
-			}
-
-			$iconClass = Ui\Icon::getIconClassByObject($object, !empty($sharedObjectIds[$objectId]));
-			if ($isFolder)
-			{
-				$nameSpecialChars = htmlspecialcharsbx($name);
-				$columnName = "
-					<table class=\"bx-disk-object-name\"><tr>
-							<td style=\"width: 45px;\"><div data-object-id=\"{$objectId}\" class=\"bx-file-icon-container-small {$iconClass}\"></div></td>
-							<td><a class=\"bx-disk-folder-title\" id=\"disk_obj_{$objectId}\" href=\"{$exportData['OPEN_URL']}\">{$nameSpecialChars}</a></td>
-					</tr></table>
-				";
+				$item['URL'] = $uri->getPathQuery();
 			}
 			else
 			{
-				$viewUrl = $urlManager->getUrlExternalLink(
-					[
-						'hash' => $this->externalLink->getHash(),
-						'action' => $this->getViewActionNameForJs($object),
-						'token' => $this->downloadToken,
-						'path' => $relativePath?: '/',
-						'fileId' => $object->getId(),
-					]
-				);
+				$downloadUrl = $urlManager->getUrlExternalLink([
+					'hash' => $this->externalLink->getHash(),
+					'action' => 'downloadFileUnderFolder',
+					'token' => $this->downloadToken,
+					'path' => $relativePath ?: '/',
+					'fileId' => $object->getId(),
+				]);
+				$viewUrl = $urlManager->getUrlExternalLink([
+					'hash' => $this->externalLink->getHash(),
+					'action' => $this->getViewActionNameForJs($object),
+					'token' => $this->downloadToken,
+					'path' => $relativePath ?: '/',
+					'fileId' => $object->getId(),
+				]);
 
-				$attr = Ui\ExternalLinkAttributes::tryBuildByFileId($object->getFileId(), new Uri($exportData['OPEN_URL']))
-					->setTitle($object->getName())
+				$attributes = Ui\ExternalLinkAttributes::tryBuildByFileId($object->getFileId(), new Uri($downloadUrl))
+					->setTitle($name)
 					->setDocumentViewUrl($viewUrl)
 					->setGroupBy($this->componentId)
 				;
 
 				if ($this->getHandlerForViewByFile($object) instanceof BoardsHandler)
 				{
-					$attr
-						->addAction([
-							'type' => 'edit',
-							'buttonIconClass' => ' ',
-							'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
-							'params' => [
-								'url' => $viewUrl,
-							],
-						])
-					;
+					$attributes->addAction([
+						'type' => 'edit',
+						'buttonIconClass' => ' ',
+						'action' => 'BX.Disk.Viewer.Actions.openInNewTab',
+						'params' => [
+							'url' => $viewUrl,
+						],
+					]);
 				}
 
-				$nameSpecialChars = htmlspecialcharsbx($name);
-				$columnName = "
-					<table class=\"bx-disk-object-name\"><tr>
-						<td style=\"width: 45px;\"><div data-object-id=\"{$objectId}\" class=\"bx-file-icon-container-small {$iconClass}\"></div></td>
-						<td><a class=\"bx-disk-folder-title\" id=\"disk_obj_{$objectId}\" href=\"{$exportData['OPEN_URL']}\" {$attr}>{$nameSpecialChars}</a></td>
-						<td></td>
-					</tr></table>
-				";
+				$item['URL'] = $downloadUrl;
+				$item['VIEWER_ATTRIBUTES'] = (string)$attributes;
 			}
 
-			$timestampCreate = $object->getCreateTime()->toUserTime()->getTimestamp();
-			$timestampUpdate = $object->getUpdateTime()->toUserTime()->getTimestamp();
-			$columns = array(
-				'CREATE_TIME' => ($nowTime - $timestampCreate > 158400)? formatDate($fullFormatWithoutSec, $timestampCreate, $nowTime) : formatDate('x', $timestampCreate, $nowTime),
-				'UPDATE_TIME' => ($nowTime - $timestampCreate > 158400)? formatDate($fullFormatWithoutSec, $timestampUpdate, $nowTime) : formatDate('x', $timestampUpdate, $nowTime),
-				'NAME' => $columnName,
-				'FORMATTED_SIZE' => $isFolder? '' : CFile::formatSize($object->getSize()),
-			);
-
-			$exportData['ICON_CLASS'] = $iconClass;
-			$tildaExportData = array();
-			foreach ($exportData as $exportName => $exportValue)
-			{
-				$tildaExportData['~' . $exportName] = $exportValue;
-			}
-
-			$rows[] = array(
-				'data' => array_merge($exportData, $tildaExportData),
-				'columns' => $columns,
-				'actions' => $actions,
-				'tileActions' => $tileActions,
-			);
+			$items[] = $item;
 		}
 
-		$grid['HEADERS'] = array(
-			array(
-				'id' => 'ID',
-				'name' => 'ID',
-				'sort' => false,
-				'default' => false,
-			),
-			array(
-				'id' => 'NAME',
-				'name' => $this->getMessage('DISK_EXTERNAL_OBJECT_COLUMN_NAME'),
-				'sort' => false,
-				'default' => true,
-			),
-			array(
-				'id' => 'CREATE_TIME',
-				'name' => $this->getMessage('DISK_EXTERNAL_OBJECT_COLUMN_CREATE_TIME'),
-				'sort' => false,
-				'default' => false,
-			),
-			array(
-				'id' => 'UPDATE_TIME',
-				'name' => $this->getMessage('DISK_EXTERNAL_OBJECT_COLUMN_UPDATE_TIME'),
-				'sort' => false,
-				'order' => 'desc',
-				'default' => true,
-			),
-			array(
-				'id' => 'FORMATTED_SIZE',
-				'name' => $this->getMessage('DISK_EXTERNAL_OBJECT_COLUMN_FORMATTED_SIZE'),
-				'sort' => false,
-				'default' => true,
-			),
-		);
-		$grid['DATA_FOR_PAGINATION'] = array(
-			'ENABLED' => true,
-			'SHOW_NEXT_PAGE' => $needShowNextPagePagination,
-			'CURRENT_PAGE' => $pageNumber,
-		);
-		$grid['COLUMN_FOR_SORTING'] = array();
-		$grid['ROWS'] = $rows;
-		$grid['ROWS_COUNT'] = $cursor->getCount();
-
-		return $grid;
+		return [
+			'ITEMS' => $items,
+			'TOTAL_COUNT' => $cursor->getCount(),
+			'HAS_NEXT_PAGE' => $hasNextPage,
+		];
 	}
 
 	private function getViewActionNameForJs(BaseObject $object): string
@@ -835,9 +1035,16 @@ class CDiskExternalLinkComponent extends DiskComponent
 			'IS_IMAGE' => TypeFile::isImage($file),
 			'IS_DOCUMENT' => TypeFile::isDocument($file->getName()),
 			'ICON_CLASS' => Icon::getIconClassByObject($file),
+			'ICON_NAME' => Icon::getIconSetNameByFile($file),
 			'UPDATE_TIME' => $file->getUpdateTime(),
+			// The head of the page tells about the file the way the head of the folder page does.
+			'FORMATTED_UPDATE_TIME' => $this->formatUpdateTime(
+				$file->getUpdateTime()->toUserTime()->getTimestamp(),
+				time() + CTimeZone::getOffset(),
+			),
 			'NAME' => $file->getName(),
 			'SIZE' => $file->getSize(),
+			'FORMATTED_SIZE' => CFile::formatSize($file->getSize()),
 			'DOWNLOAD_URL' => $this->getDownloadUrl(),
 			'ABSOLUTE_SHOW_FILE_URL' => $this->getUrlManager()->getUrlExternalLink(array(
 				'hash' => $this->externalLink->getHash(),
@@ -913,7 +1120,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				;
 
 
-				$result['VIEWER'] = "<div id=\"test-content\" style=\"width: 50vw;\" class=\"disk-external-link-wrapper\" {$attributes}></div>";
+				$result['VIEWER'] = "<div id=\"test-content\" class=\"disk-external-link-wrapper\" {$attributes}></div>";
 			}
 			else
 			{
@@ -1058,7 +1265,8 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		$passwordPassed = !$this->arResult['PROTECTED_BY_PASSWORD'] || $this->arResult['VALID_PASSWORD'];
 		$isDocument = $this->isViewableDocument($file->getExtension());
-		if (!$passwordPassed || !$isDocument || !$this->isOnlyOfficeHandler())
+		$documentViewer = $this->resolveDocumentViewer($this->defaultHandlerForView);
+		if (!$passwordPassed || !$isDocument || $documentViewer === null)
 		{
 			$this->sendJsonErrorResponse();
 		}
@@ -1083,7 +1291,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$this->arResult['LINK_TO_EDIT'] = '';
 		$this->arResult['LINK_TO_DOWNLOAD'] = $downloadUrl;
 
-		$this->showFileViewer(self::ONLYOFFICE_FILE_VIEWER);
+		$this->showFileViewer($documentViewer);
 	}
 
 	protected function processActionShowByGoogleViewer($path, $fileId)
@@ -1198,6 +1406,50 @@ class CDiskExternalLinkComponent extends DiskComponent
 		CFile::viewByUser($targetFile->getFile(), array('force_download' => !$showFile, 'attachment_name' => $targetFile->getName()));
 	}
 
+	/**
+	 * Feeds the iframe of the html viewer page: the document itself, served as an isolated response.
+	 * The service answers a file outside the policy with the same stub it uses everywhere else, so a
+	 * hand-made url tells nothing about the file behind the link.
+	 */
+	protected function processActionShowHtml(): void
+	{
+		// The password and the download token are both settled in processBeforeAction(), and nothing below
+		// writes to the session: the lock is released before the content is read — a read that fetches the
+		// blob first on cloud storage — so it does not stall the parallel requests of the same reader. The
+		// engine says the same with the CloseSession filter, which a component of this base cannot declare.
+		session_write_close();
+
+		$this->sendHtmlViewerResponse($this->buildHtmlViewerContentResponse());
+	}
+
+	/**
+	 * Routes to what the link publishes and leaves the policy to the service, which asks it of that very
+	 * thing: the file by HtmlViewerPolicy::isViewable(), the version by its extension. Asking about the
+	 * file here as well would refuse the page {@see isHtmlViewerTarget()} has already opened — a link
+	 * pinned to an html revision of a file since renamed to .txt is exactly that.
+	 */
+	private function buildHtmlViewerContentResponse(): HttpResponse
+	{
+		$file = $this->externalLink->getFile();
+		$service = ServiceLocator::getInstance()->get(HtmlViewerService::class);
+
+		if (!($file instanceof File))
+		{
+			return $service->unavailableResponse();
+		}
+
+		if (!$this->externalLink->isSpecificVersion())
+		{
+			return $service->showByFile($file);
+		}
+
+		// A version-pinned link serves that revision, the very one processActionDownload() hands out:
+		// otherwise the page would show the current content next to a download of the pinned version.
+		$version = $this->resolvePinnedVersion($file);
+
+		return $version ? $service->showByVersion($version) : $service->unavailableResponse();
+	}
+
 	protected function processActionShowFile()
 	{
 		$this->processActionDownload(true);
@@ -1257,7 +1509,16 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	protected function findLink()
 	{
-		if (is_string($this->hash))
+		if ($this->fromUnifiedLink)
+		{
+			// An injected link is already loaded and validated by ExternalLinkContext::resolve() in the
+			// same request, so reloading it would only repeat the link and object queries.
+			$externalLink = $this->arParams['EXTERNAL_LINK'] ?? null;
+			$this->externalLink = $externalLink instanceof ExternalLink
+				? $externalLink
+				: null;
+		}
+		elseif (is_string($this->hash))
 		{
 			$this->externalLink = $this->externalLinkProvider->getForComponentByHash($this->hash);
 		}
@@ -1266,7 +1527,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$this->externalLink = $this->externalLinkProvider->getForComponent($this->file->getId());
 		}
 
-		if(!$this->externalLink || $this->externalLink->isExpired() || !$this->externalLink->getObject())
+		if(
+			!$this->externalLink
+			|| $this->externalLink->isExpired()
+			|| !$this->externalLink->getObject()
+			|| ($this->fromUnifiedLink && !$this->isExternalLinkContextValid())
+		)
 		{
 			throw new SystemException('Invalid external link', self::EXCEPTION_CODE_ACCESS_DENIED);
 		}
@@ -1274,8 +1540,53 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return $this;
 	}
 
+	private function isExternalLinkContextValid(): bool
+	{
+		if (!$this->file instanceof File)
+		{
+			return false;
+		}
+
+		$linkFile = $this->externalLink->getFile();
+		if (
+			!$linkFile instanceof File
+			|| (int)$linkFile->getRealObjectId() !== (int)$this->file->getRealObjectId()
+		)
+		{
+			return false;
+		}
+
+		if ($this->attachedObject instanceof AttachedObject)
+		{
+			$attachedFile = $this->attachedObject->getFile();
+			if (
+				!$attachedFile instanceof File
+				|| (int)$attachedFile->getRealObjectId() !== (int)$this->file->getRealObjectId()
+			)
+			{
+				return false;
+			}
+		}
+
+		if ($this->version instanceof Version)
+		{
+			$versionFile = $this->version->getObject();
+			if (
+				!$versionFile instanceof File
+				|| (int)$versionFile->getRealObjectId() !== (int)$this->file->getRealObjectId()
+			)
+			{
+				return false;
+			}
+		}
+
+		return (int)$this->externalLink->getVersionId() === (int)($this->version?->getId() ?? 0);
+	}
+
 	protected function showNotFoundPage()
 	{
+		$this->maybeRefuseHtmlViewerContent();
+
 		\CHTTP::SetStatus('404 Not Found');
 
 		$this->includeComponentTemplate('error');
@@ -1326,6 +1637,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return Loc::getMessage($id, $replace, $this->langId);
 	}
 
+	public function getMessagePlural(string $id, int $value, ?array $replace = null): string
+	{
+		return (string)Loc::getMessagePlural($id, $value, $replace, $this->langId);
+	}
+
 	private function showFileViewer(string $fileViewerType): void
 	{
 		$this->arResult['FILE_VIEWER'] = $fileViewerType;
@@ -1345,20 +1661,44 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
 
-		return match ($typeFile) {
-			TypeFile::FLIPCHART => $documentHandlersManager->getHandlerByCode(BoardsHandler::getCode()),
-			default => $documentHandlersManager->getDefaultHandlerForView(),
-		};
+		if ($typeFile === TypeFile::FLIPCHART)
+		{
+			return $documentHandlersManager->getHandlerByCode(BoardsHandler::getCode());
+		}
+
+		// Office branch: take the current default view handler, then run it through the single
+		// engine-selection seam (ALG-EXTERNAL-VIEWER-DISPATCH). Passing the handler's own code keeps
+		// a non-office default (google-viewer/bitrix) untouched — the resolver only translates an
+		// OnlyOffice(-derived) handler — so the office viewer becomes VibeofficeHandler when the
+		// portal flag is on and stays OnlyOfficeHandler when it is off (zero regression), while the
+		// google-viewer preview path is preserved. The external-link identity is carried in the
+		// context (no-op today).
+		$defaultHandler = $documentHandlersManager->getDefaultHandlerForView();
+		if ($defaultHandler === null)
+		{
+			return null;
+		}
+
+		return $documentHandlersManager->resolveEffectiveHandler(
+			$defaultHandler::getCode(),
+			DocumentResolveContext::forExternalLink($this->externalLink->getId(), $file?->getId()),
+		);
 	}
 
 	private function getSessionServiceByFile(File $file): DocumentService
 	{
 		$typeFile = (int)$file->getTypeFile();
 
-		return match ($typeFile) {
-			TypeFile::FLIPCHART => DocumentService::FlipChart,
-			default => DocumentService::OnlyOffice,
-		};
+		if ($typeFile === TypeFile::FLIPCHART)
+		{
+			return DocumentService::FlipChart;
+		}
+
+		// The office session SERVICE follows the resolved engine (ALG-EXTERNAL-VIEWER-DISPATCH):
+		// vibeoffice when the resolver picked it (flag ON), OnlyOffice otherwise (flag OFF).
+		return $this->defaultHandlerForView instanceof Vibeoffice\VibeofficeHandler
+			? DocumentService::Vibeoffice
+			: DocumentService::OnlyOffice;
 	}
 
 	private function setParamsForBoard(DocumentSession $documentSession, File $file): void
@@ -1413,6 +1753,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	private function maybeGenerateUnifiedLink(string $actionName): void
 	{
+		if (!in_array($actionName, ['default', 'goToEdit'], true))
+		{
+			return;
+		}
+
 		$file = $this->externalLink->getFile();
 
 		if (!$file instanceof File || !$file->supportsUnifiedLink())
@@ -1421,15 +1766,59 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$urlManager = Driver::getInstance()->getUrlManager();
+		$options = $this->getUnifiedLinkOptions($file);
 
 		if ($actionName === 'goToEdit')
 		{
-			$this->unifiedLink = $urlManager->getUnifiedEditLink($file);
+			$this->unifiedLink = $urlManager->getUnifiedEditLink($file, $options);
 		}
 		else
 		{
-			$this->unifiedLink = $urlManager->getUnifiedLink($file);
+			$this->unifiedLink = $urlManager->getUnifiedLink($file, $options);
 		}
+	}
+
+	private function buildEditLink(?File $file, UrlManager $urlManager): string
+	{
+		if ($this->fromUnifiedLink && $file?->supportsUnifiedLink())
+		{
+			return $urlManager->getUnifiedEditLink($file, $this->getUnifiedLinkOptions($file));
+		}
+
+		return $urlManager->getUrlExternalLink([
+			'hash' => $this->externalLink->getHash(),
+			'action' => 'goToEdit',
+		]);
+	}
+
+	private function getUnifiedLinkOptions(File $file): array
+	{
+		if ($this->unifiedLinkOptions !== null)
+		{
+			return $this->unifiedLinkOptions;
+		}
+
+		$attachedId = $this->attachedObject?->getId();
+		$versionId = $this->version?->getId() ?? (
+			$this->externalLink->isSpecificVersion()
+				? $this->externalLink->getVersionId()
+				: null
+		);
+		$additionalQueryParams = [
+			ExternalLinkContext::getParameterName() => ExternalLinkContext::create(
+				$this->externalLink,
+				$file,
+				$attachedId,
+				$versionId,
+			),
+		];
+		$this->unifiedLinkOptions = [
+			'attachedId' => $attachedId,
+			'versionId' => $versionId,
+			'additionalQueryParams' => $additionalQueryParams,
+		];
+
+		return $this->unifiedLinkOptions;
 	}
 
 	private function maybeRedirectToUnifiedLink(string $actionName, bool $skipPostCheck = false): void

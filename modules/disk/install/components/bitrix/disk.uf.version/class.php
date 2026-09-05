@@ -107,7 +107,7 @@ class CDiskUfVersionComponent extends BaseComponent
 			}
 
 			$sourceUri = new \Bitrix\Main\Web\Uri($urlManager->getUrlUfController('download', array('attachedId' => $attachedModel->getId())));
-			$attr = FileAttributes::buildByFileId($attachedModel->getFileId(), $sourceUri, $file)
+			$attr = FileAttributes::buildByFileId($attachedModel->getFileId(), $sourceUri, $file, $version)
 				->setObjectId($attachedModel->getObjectId())
 				->setAttachedObjectId($attachedModel->getId())
 				->setVersionId($attachedModel->getVersionId())
@@ -188,17 +188,7 @@ class CDiskUfVersionComponent extends BaseComponent
 			return array();
 		}
 
-		$list = array();
-		$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
-		foreach ($documentHandlersManager->getHandlers() as $handler)
-		{
-			if ($handler instanceof \Bitrix\Disk\Document\Contract\FileCreatable)
-			{
-				$list[] = $handler;
-			}
-		}
-
-		return $list;
+		return array_values(Driver::getInstance()->getDocumentHandlersManager()->getHandlersForCreatingFile());
 	}
 
 	private function getDocumentHandlersForEditingFile()

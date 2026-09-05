@@ -11,6 +11,9 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorRespons
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
+use Bitrix\BIConnector\Integration\Superset\Recovery\StatusRecoveryListener;
+use Bitrix\BIConnector\Integration\Superset\Recovery\StatusRecoveryScheduler;
+use Bitrix\BIConnector\Integration\Superset\Recovery\StatusRecoveryWindow;
 use Bitrix\BIConnector\Superset\ActionFilter\ProxyAuth;
 use Bitrix\BIConnector\Superset\Config\DatasetSettings;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
@@ -74,6 +77,12 @@ final class SupersetInitializer
 	private const SUPERSET_INSTANCE_EXISTS_OPTION = '~superset_instance_exists';
 
 	/**
+	 * Guards the critical section that opens a recovery series: exactly one series state and exactly
+	 * one recovery agent row must exist per portal.
+	 */
+	private const RECOVERY_START_LOCK_NAME = 'biconnector_superset_recovery_start';
+
+	/**
 	 * Container for superset status. Used for tests mocking
 	 *
 	 * @var SupersetStatusOptionContainer
@@ -99,10 +108,19 @@ final class SupersetInitializer
 		}
 
 		$newStatus = self::startSupersetInitialize();
-		if (self::getSupersetStatus() !== $newStatus)
+		if (self::getSupersetStatus() === $newStatus)
 		{
-			self::setSupersetStatus($newStatus);
+			return $status;
 		}
+
+		if (!self::isStartupOutcomeApplicable())
+		{
+			self::logOutdatedStartupOutcome($newStatus);
+
+			return $status;
+		}
+
+		self::setSupersetStatus($newStatus);
 
 		return $status;
 	}
@@ -118,10 +136,221 @@ final class SupersetInitializer
 
 		if (!in_array($status, $touchStatuses))
 		{
+			self::dropStaleRecoveryState();
+
 			return $status;
 		}
 
-		return self::startupSuperset();
+		$statusBeforeStartup = self::startupSuperset();
+		self::ensureRecoveryStarted();
+
+		return $statusBeforeStartup;
+	}
+
+	/**
+	 * Drops the recovery series state left over from a finished incident.
+	 *
+	 * The state normally dies on the status event, but a portal that has not run the client updater
+	 * yet has no listener registered, and then a leftover state would block any further series.
+	 */
+	private static function dropStaleRecoveryState(): void
+	{
+		if (SupersetHostMode::isSelfHosted())
+		{
+			return;
+		}
+
+		if ((new StatusRecoveryWindow())->isTracked())
+		{
+			StatusRecoveryListener::resetRecoveryState();
+		}
+	}
+
+	/**
+	 * Starts the recovery series if the portal is still in ERROR after a user-initiated startup.
+	 *
+	 * This is the only place that opens a series. Attempts must be spread over real user visits:
+	 * a gateway incident puts hundreds of portals into ERROR at the same moment, so opening
+	 * a series on the ERROR transition itself would send synchronous bursts of attempts
+	 * to the proxy. Portals where BI is never opened do not retry at all.
+	 *
+	 * A series that is already running or already exhausted is not restarted by a visit, otherwise
+	 * active users would extend automatic retries indefinitely. The one-shot startup attempt above
+	 * stays available on every visit regardless of the series state. A running series that has lost
+	 * its agent row is an exception: the visit restores the agent, see ensureRecoveryAgentScheduled().
+	 *
+	 * Restoring the agent is allowed in both ERROR and LOAD, matching the statuses the agent itself keeps
+	 * working in. A running series survives LOAD: the startup above answers with LOAD whenever the proxy
+	 * reports the instance as unavailable (555, 502, 503, 504), so the very visit that could restore the
+	 * agent is also the one that moves the portal out of ERROR. Restricting the restore to ERROR would
+	 * leave such a series without attempts forever. Opening a new series stays ERROR-only: a portal in
+	 * an ordinary loading state has not failed and needs no series.
+	 *
+	 * Opening the series is serialized by a named lock: CAgent::AddAgent() is a separate SELECT and
+	 * INSERT with no unique key on the agent name, so parallel hits could otherwise leave two recovery
+	 * agent rows in b_agent and double every attempt.
+	 */
+	private static function ensureRecoveryStarted(): void
+	{
+		if (SupersetHostMode::isSelfHosted())
+		{
+			return;
+		}
+
+		$status = self::getSupersetStatus();
+		if ($status === self::SUPERSET_STATUS_READY)
+		{
+			self::dropStaleRecoveryState();
+
+			return;
+		}
+
+		$seriesStatuses = [
+			self::SUPERSET_STATUS_ERROR,
+			self::SUPERSET_STATUS_LOAD,
+		];
+
+		if (!in_array($status, $seriesStatuses, true))
+		{
+			return;
+		}
+
+		if (self::isRebindRequired() || !\Bitrix\BIConnector\Configuration\Feature::isBuilderEnabled())
+		{
+			return;
+		}
+
+		$window = new StatusRecoveryWindow();
+		if ($window->isTracked())
+		{
+			self::ensureRecoveryAgentScheduled($window);
+
+			return;
+		}
+
+		if ($status !== self::SUPERSET_STATUS_ERROR)
+		{
+			return;
+		}
+
+		self::openRecoverySeries($window);
+	}
+
+	/**
+	 * Opens a series: the state of the window and the agent row appear together or not at all.
+	 * A state left without an agent would make every further visit see a running series and never
+	 * schedule an attempt again.
+	 */
+	private static function openRecoverySeries(StatusRecoveryWindow $window): void
+	{
+		$connection = Application::getConnection();
+		if (!$connection->lock(self::RECOVERY_START_LOCK_NAME))
+		{
+			// A parallel hit is opening the series right now, nothing left to do here.
+			return;
+		}
+
+		try
+		{
+			if ($window->isTracked())
+			{
+				return;
+			}
+
+			$now = time();
+			$window->open($now);
+
+			$attempt = $window->resolveNextAttempt($now);
+			if ($attempt === null || !self::scheduleRecoveryAttempt($attempt['delay']))
+			{
+				$window->clear();
+
+				return;
+			}
+
+			SupersetInitializerLogger::logInfo('Superset recovery series started', [
+				'next_attempt_in' => $attempt['delay'],
+			]);
+		}
+		finally
+		{
+			$connection->unlock(self::RECOVERY_START_LOCK_NAME);
+		}
+	}
+
+	/**
+	 * Restores the agent of a running series that has lost its row: the process may die between
+	 * open() and the scheduling call, and the rollback above cannot cover that. Without the agent
+	 * the portal would keep a series that never performs an attempt.
+	 *
+	 * An exhausted series is left alone: its state is deliberately kept as a mark of a finished
+	 * incident, so there is nothing to reschedule. The b_agent read happens only for a live series
+	 * of a portal in ERROR or LOAD, which is a rare branch by itself.
+	 *
+	 * A failed restore keeps the state as is: the next visit repeats the check.
+	 */
+	private static function ensureRecoveryAgentScheduled(StatusRecoveryWindow $window): void
+	{
+		if ($window->resolveNextAttempt(time()) === null || StatusRecoveryScheduler::isScheduled())
+		{
+			return;
+		}
+
+		$connection = Application::getConnection();
+		if (!$connection->lock(self::RECOVERY_START_LOCK_NAME))
+		{
+			return;
+		}
+
+		try
+		{
+			$attempt = $window->resolveNextAttempt(time());
+			if ($attempt === null || StatusRecoveryScheduler::isScheduled())
+			{
+				return;
+			}
+
+			if (!self::scheduleRecoveryAttempt($attempt['delay']))
+			{
+				return;
+			}
+
+			SupersetInitializerLogger::logInfo('Superset recovery agent restored', [
+				'next_attempt_in' => $attempt['delay'],
+			]);
+		}
+		finally
+		{
+			$connection->unlock(self::RECOVERY_START_LOCK_NAME);
+		}
+	}
+
+	/**
+	 * Puts the agent row of the series in place, reporting a failure instead of throwing: recovery
+	 * bookkeeping is a side effect of a page visit and must not break the page.
+	 */
+	private static function scheduleRecoveryAttempt(int $delaySeconds): bool
+	{
+		try
+		{
+			if (StatusRecoveryScheduler::schedule($delaySeconds))
+			{
+				return true;
+			}
+
+			SupersetInitializerLogger::logErrors(
+				[new Error('Cannot schedule superset recovery agent')],
+			);
+		}
+		catch (\Throwable $exception)
+		{
+			SupersetInitializerLogger::logErrors(
+				[new Error($exception->getMessage())],
+				['message' => 'error while scheduling superset recovery agent'],
+			);
+		}
+
+		return false;
 	}
 
 	/**
@@ -200,6 +429,50 @@ final class SupersetInitializer
 			$logParams['superset_address'] = $supersetAddress;
 		}
 		SupersetInitializerLogger::logInfo('Superset successfully started', $logParams);
+	}
+
+	/**
+	 * Pushes the current biconnector access key to the proxy.
+	 *
+	 * Runs on a READY transition only: the underlying proxy action is guarded by a middleware that
+	 * requires the READY status, so a call made during LOAD or ERROR would be rejected. Repeating
+	 * the call with the same key is safe, therefore no "already synchronized" flag is kept.
+	 *
+	 * The push explicitly opts out of status arbitration: it is a background follow-up, so a gateway
+	 * failure must stay in the log instead of dropping a live instance back to ERROR or LOAD.
+	 */
+	public static function syncBiconnectorTokenToProxy(): void
+	{
+		if (SupersetHostMode::isSelfHosted() || !self::isSupersetReady())
+		{
+			return;
+		}
+
+		$accessKey = KeyManager::getAccessKey();
+		if ($accessKey === null)
+		{
+			SupersetInitializerLogger::logErrors(
+				[new Error('Cannot sync biconnector token: access key is missing')],
+			);
+
+			return;
+		}
+
+		$response = IntegratorFactory::getInstance()->changeBiconnectorToken(
+			$accessKey,
+			arbitrateInstanceStatus: false,
+		);
+		if ($response->hasErrors())
+		{
+			SupersetInitializerLogger::logErrors(
+				$response->getErrors(),
+				['message' => 'error while syncing biconnector token after recovery'],
+			);
+
+			return;
+		}
+
+		SupersetInitializerLogger::logInfo('Biconnector token synchronized with proxy');
 	}
 
 	public static function freezeSuperset(array $params = []): void
@@ -325,9 +598,18 @@ final class SupersetInitializer
 		$status = self::SUPERSET_STATUS_LOAD;
 		if ($responseStatus === IntegratorResponse::STATUS_CREATED)
 		{
-			$responseData = $response->getData();
-			self::enableSuperset($responseData['superset_address'] ?? '');
-			$status = self::SUPERSET_STATUS_READY;
+			// BI may have been disabled while the request was in flight: a portal that is being deleted
+			// must not be pulled back to READY by a finished attempt.
+			if (self::isSuccessfulStartupOutcomeApplicable())
+			{
+				$responseData = $response->getData();
+				self::enableSuperset($responseData['superset_address'] ?? '');
+				$status = self::SUPERSET_STATUS_READY;
+			}
+			else
+			{
+				$status = self::logOutdatedStartupOutcome(self::SUPERSET_STATUS_READY);
+			}
 		}
 		else if ($response->hasErrors())
 		{
@@ -379,6 +661,66 @@ final class SupersetInitializer
 		;
 	}
 
+	/**
+	 * Whether an unsuccessful outcome of a startup attempt — ERROR, LOAD or LIMIT_EXCEEDED — may still be
+	 * applied to the instance status.
+	 *
+	 * The startup request is not instant: while it is in flight, an activation callback may promote the
+	 * portal to READY, the instance may be dropped by the user or blocked by a limit. Such a state belongs
+	 * to a newer decision, so only a portal that is still inside the startup set may be moved.
+	 *
+	 * @see isSuccessfulStartupOutcomeApplicable() for the wider set a 201 response is applied from.
+	 */
+	private static function isStartupOutcomeApplicable(): bool
+	{
+		$startupStatuses = [
+			self::SUPERSET_STATUS_DOESNT_EXISTS,
+			self::SUPERSET_STATUS_LOAD,
+			self::SUPERSET_STATUS_ERROR,
+		];
+
+		return in_array(self::getSupersetStatus(), $startupStatuses, true);
+	}
+
+	/**
+	 * Whether a successful startup response (201) may still be applied to the instance status.
+	 *
+	 * The set is wider than the startup one: a 201 answered to a portal blocked by a tariff limit is the
+	 * normal way back to READY once the limit is lifted, and the same call is the only route out of
+	 * LIMIT_EXCEEDED. Excluded are the deletion statuses only — a portal whose instance is being dropped
+	 * must not be restored by a response of an attempt that started before the deletion.
+	 */
+	private static function isSuccessfulStartupOutcomeApplicable(): bool
+	{
+		$applicableStatuses = [
+			self::SUPERSET_STATUS_DOESNT_EXISTS,
+			self::SUPERSET_STATUS_LOAD,
+			self::SUPERSET_STATUS_ERROR,
+			self::SUPERSET_STATUS_LIMIT_EXCEEDED,
+			self::SUPERSET_STATUS_READY,
+		];
+
+		return in_array(self::getSupersetStatus(), $applicableStatuses, true);
+	}
+
+	/**
+	 * Reports a startup outcome dropped as outdated.
+	 *
+	 * @param string $outcomeStatus Status the finished attempt would have applied.
+	 *
+	 * @return string Status the portal has actually reached meanwhile.
+	 */
+	private static function logOutdatedStartupOutcome(string $outcomeStatus): string
+	{
+		$currentStatus = self::getSupersetStatus();
+		SupersetInitializerLogger::logInfo('Skip outdated superset startup outcome', [
+			'current_status' => $currentStatus,
+			'startup_status' => $outcomeStatus,
+		]);
+
+		return $currentStatus;
+	}
+
 	public static function isSupersetReady(): bool
 	{
 		return self::getSupersetStatus() === self::SUPERSET_STATUS_READY;
@@ -424,6 +766,35 @@ final class SupersetInitializer
 		return self::getSupersetStatus() === self::SUPERSET_STATUS_ERROR;
 	}
 
+	/**
+	 * Whether a successful activation callback from the proxy may be applied right now.
+	 *
+	 * ERROR is accepted alongside LOAD: an instance may finish starting up asynchronously after
+	 * the portal has already flipped to ERROR, and dropping such a callback used to leave the
+	 * portal stuck until support intervened.
+	 */
+	public static function isActivationCallbackApplicable(): bool
+	{
+		$applicableStatuses = [
+			self::SUPERSET_STATUS_LOAD,
+			self::SUPERSET_STATUS_ERROR,
+		];
+
+		if (!in_array(self::getSupersetStatus(), $applicableStatuses, true))
+		{
+			return false;
+		}
+
+		return !self::isRebindRequired() && !self::isSupersetPendingDelete();
+	}
+
+	/**
+	 * Applies a failed startup outcome, whether it came from the startup response or from a callback.
+	 *
+	 * The failure is always logged, but the status is moved only while the portal is still inside the
+	 * startup set: a failure reported after the instance became READY, was dropped or hit a tariff
+	 * limit belongs to a finished attempt and must not overwrite the newer state.
+	 */
 	public static function onUnsuccessfulSupersetStartup(Error ...$errors): void
 	{
 		if (!empty($errors))
@@ -438,13 +809,36 @@ final class SupersetInitializer
 			);
 		}
 
+		if (!self::isStartupOutcomeApplicable())
+		{
+			SupersetInitializerLogger::logInfo('Skip outdated superset startup failure', [
+				'current_status' => self::getSupersetStatus(),
+			]);
+
+			return;
+		}
+
 		self::setSupersetStatus(self::SUPERSET_STATUS_ERROR);
 		DashboardManager::notifySupersetStatus(self::SUPERSET_STATUS_ERROR);
 	}
 
+	/**
+	 * Applies a tariff limit reported by a startup response.
+	 *
+	 * Like a failed startup, the limit is always logged, but the status is moved only while the portal is
+	 * still inside the startup set: a limit that arrived after the instance became READY or was dropped
+	 * belongs to a finished attempt and must not overwrite the newer state.
+	 */
 	public static function onLimitExceeded(Error ...$errors): void
 	{
 		SupersetInitializerLogger::logErrors($errors, ['message' => 'error while startup superset']);
+
+		if (!self::isStartupOutcomeApplicable())
+		{
+			self::logOutdatedStartupOutcome(self::SUPERSET_STATUS_LIMIT_EXCEEDED);
+
+			return;
+		}
 
 		self::setSupersetStatus(self::SUPERSET_STATUS_LIMIT_EXCEEDED);
 		DashboardManager::notifySupersetStatus(self::SUPERSET_STATUS_LIMIT_EXCEEDED);
@@ -452,6 +846,10 @@ final class SupersetInitializer
 
 	public static function onBitrix24LicenseChange(): void
 	{
+		// A tariff change may not move the instance status, so the status event is not enough
+		// to drop the recovery series here.
+		StatusRecoveryListener::resetRecoveryState();
+
 		$status = self::getSupersetStatus();
 		if (
 			$status === self::SUPERSET_STATUS_DOESNT_EXISTS

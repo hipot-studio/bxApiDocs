@@ -8,7 +8,6 @@ use Bitrix\Im\V2\Error;
 
 class BuilderError extends Error
 {
-	public const BLOCK_NOT_AVAILABLE = 'BLOCK_NOT_AVAILABLE';
 	public const BLOCK_LENGTH_EXCEEDED = 'BLOCK_LENGTH_EXCEEDED';
 	public const EMPTY_REQUIRED_FIELD = 'EMPTY_REQUIRED_FIELD';
 	public const INVALID_ELEMENTS = 'INVALID_ELEMENTS';

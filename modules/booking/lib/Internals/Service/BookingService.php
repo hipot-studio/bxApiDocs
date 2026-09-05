@@ -121,6 +121,7 @@ class BookingService
 		if ($this->bookingAutoConfirmService->shouldAutoConfirm($booking))
 		{
 			$booking->setConfirmed(true);
+			$booking->setConfirmedAt(time());
 		}
 	}
 
@@ -134,9 +135,9 @@ class BookingService
 
 		if ($this->bookingAutoConfirmService->shouldRecalculateOnUpdate($bookingBefore, $bookingAfter))
 		{
-			$bookingAfter->setConfirmed(
-				$this->bookingAutoConfirmService->shouldAutoConfirm($bookingAfter)
-			);
+			$shouldBeConfirmed = $this->bookingAutoConfirmService->shouldAutoConfirm($bookingAfter);
+			$bookingAfter->setConfirmed($shouldBeConfirmed);
+			$bookingAfter->setConfirmedAt($shouldBeConfirmed ? time() : null);
 		}
 	}
 

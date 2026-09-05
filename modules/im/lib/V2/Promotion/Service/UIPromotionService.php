@@ -207,62 +207,28 @@ class UIPromotionService implements PromotionServiceInterface
 			];
 		}
 
-		if (Features::isCopilotSelectModelAvailable())
-		{
-			$result[] = [
-				"ID" => 'im:chat-header-change-copilot-engine-and-role:20052025:all',
-				"USER_TYPE" =>  UserType::ALL->value,
-				"DEVICE_TYPE" => DeviceType::ALL->value,
-				"LIFETIME" => self::ENDLESS_LIFETIME,
-				"END_DATE" => (new DateTime('30.04.2027', 'd.m.Y'))->getTimestamp(),
-			];
+		$result[] = [
+			"ID" => 'im:chat-header-change-copilot-engine-and-role:20052025:all',
+			"USER_TYPE" =>  UserType::ALL->value,
+			"DEVICE_TYPE" => DeviceType::ALL->value,
+			"LIFETIME" => self::ENDLESS_LIFETIME,
+			"END_DATE" => (new DateTime('30.04.2027', 'd.m.Y'))->getTimestamp(),
+		];
 
-			$result[] = [
-				"ID" => 'im:chat-sidebar-change-copilot-engine-and-role:20052025:all',
-				"USER_TYPE" =>  UserType::ALL->value,
-				"DEVICE_TYPE" => DeviceType::ALL->value,
-				"LIFETIME" => self::ENDLESS_LIFETIME,
-				"END_DATE" => (new DateTime('30.04.2027', 'd.m.Y'))->getTimestamp(),
-			];
-		}
-		else
-		{
-			$result[] = [
-				"ID" => 'im:add-users-to-copilot-chat:09042024:all',
-				"USER_TYPE" =>  UserType::ALL->value,
-				"DEVICE_TYPE" => DeviceType::ALL->value,
-				"LIFETIME" => self::ENDLESS_LIFETIME,
-				"END_DATE" => (new DateTime('01.11.2025', 'd.m.Y'))->getTimestamp()
-			];
+		$result[] = [
+			"ID" => 'im:chat-sidebar-change-copilot-engine-and-role:20052025:all',
+			"USER_TYPE" =>  UserType::ALL->value,
+			"DEVICE_TYPE" => DeviceType::ALL->value,
+			"LIFETIME" => self::ENDLESS_LIFETIME,
+			"END_DATE" => (new DateTime('30.04.2027', 'd.m.Y'))->getTimestamp(),
+		];
 
-			$result[] = [
-				"ID" => 'im:change-role-copilot-chat:09042024:all',
-				"USER_TYPE" =>  UserType::ALL->value,
-				"DEVICE_TYPE" => DeviceType::ALL->value,
-				"LIFETIME" => self::ENDLESS_LIFETIME,
-				"END_DATE" => (new DateTime('01.11.2025', 'd.m.Y'))->getTimestamp()
-			];
-		}
-
-		if (Features::get()->videoNoteAvailable)
-		{
-			$result[] = [
-				"ID" => 'immobile:video-note:24102025:mobile',
-				"USER_TYPE" => UserType::ALL->value,
-				"DEVICE_TYPE" => DeviceType::MOBILE->value,
-				"LIFETIME" => self::ENDLESS_LIFETIME,
-			];
-		}
-
-		if (Features::get()->unreadRecentModeAvailable)
-		{
-			$result[] = [
-				"ID" => 'im:unread-recent-mode:10112025:all',
-				"USER_TYPE" => UserType::ALL->value,
-				"DEVICE_TYPE" => DeviceType::ALL->value,
-				"LIFETIME" => self::ENDLESS_LIFETIME,
-			];
-		}
+		$result[] = [
+			"ID" => 'im:unread-recent-mode:10112025:all',
+			"USER_TYPE" => UserType::ALL->value,
+			"DEVICE_TYPE" => DeviceType::ALL->value,
+			"LIFETIME" => self::ENDLESS_LIFETIME,
+		];
 
 		if (Features::get()->isTasksRecentListAvailable)
 		{
@@ -270,16 +236,6 @@ class UIPromotionService implements PromotionServiceInterface
 				"ID" => 'immobile:tasks-recent-list:18112025:mobile',
 				"USER_TYPE" => UserType::ALL->value,
 				"DEVICE_TYPE" => DeviceType::MOBILE->value,
-				"LIFETIME" => self::ENDLESS_LIFETIME,
-			];
-		}
-
-		if (Features::get()->stickersAvailable)
-		{
-			$result[] = [
-				"ID" => 'im:stickers-available:27112025:all',
-				"USER_TYPE" => UserType::ALL->value,
-				"DEVICE_TYPE" => DeviceType::ALL->value,
 				"LIFETIME" => self::ENDLESS_LIFETIME,
 			];
 		}
@@ -304,6 +260,16 @@ class UIPromotionService implements PromotionServiceInterface
 			"DEVICE_TYPE" => DeviceType::WEB->value,
 			"LIFETIME" => self::ENDLESS_LIFETIME,
 		];
+
+		if (Features::isMountedTasksCardAvailable())
+		{
+			$result[] = [
+				"ID" => 'im:task-chat-side-card:24062026:all',
+				"USER_TYPE" => UserType::ALL->value,
+				"DEVICE_TYPE" => DeviceType::WEB->value,
+				"LIFETIME" => self::ENDLESS_LIFETIME,
+			];
+		}
 
 		$settings = Configuration::getValue('im');
 		if (isset($settings['promotion']) && is_array($settings['promotion']))

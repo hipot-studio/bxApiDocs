@@ -7,6 +7,8 @@ use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Application\Config\PreloadedEntities;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Folder\FolderLimits;
+use Bitrix\Im\V2\Folder\FolderProvider;
 use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Integration\AI\EngineManager;
 use Bitrix\Im\V2\Integration\AI\SuggestProvider;
@@ -64,6 +66,8 @@ class Config implements \JsonSerializable
 			'serviceHealthUrl' => $this->getServiceHealthUrl(),
 			'videoCallsTermsUrl' => $this->getVideoCallsTermsUrl(),
 			'aiSettings' => $this->getAiSettings(),
+			'folders' => $this->getFolders(),
+			'folderLimits' => $this->getFolderLimits(),
 		];
 	}
 
@@ -257,6 +261,41 @@ class Config implements \JsonSerializable
 	{
 		return [
 			'maxTranscribableFileSize' => TranscribeManager::MAX_TRANSCRIBABLE_FILE_SIZE,
+		];
+	}
+
+	/**
+	 * Preloaded folder list for web startup — same provider/order as im.v2.Folder.list (via FolderCache, no extra SQL).
+	 *
+	 * @return array<int, array>
+	 */
+	protected function getFolders(): array
+	{
+		if (!Features::get()->isChatFoldersWebAvailable)
+		{
+			return [];
+		}
+
+		$userId = (int)$this->getCurrentUser()->getId();
+		if ($userId <= 0)
+		{
+			return [];
+		}
+
+		$folderProvider = ServiceLocator::getInstance()->get(FolderProvider::class);
+
+		return $folderProvider->getByUser($userId)->onlyAvailable($userId)->toRestFormat();
+	}
+
+	/**
+	 * @return array{maxFolders: int, maxChatsPerFolder: int, maxTitleLength: int}
+	 */
+	protected function getFolderLimits(): array
+	{
+		return [
+			'maxFolders' => FolderLimits::MAX_FOLDERS_PER_USER,
+			'maxChatsPerFolder' => FolderLimits::MAX_CHATS_PER_FOLDER,
+			'maxTitleLength' => FolderLimits::MAX_TITLE_LENGTH,
 		];
 	}
 

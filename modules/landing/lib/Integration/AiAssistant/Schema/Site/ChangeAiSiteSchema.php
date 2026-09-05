@@ -32,6 +32,10 @@ class ChangeAiSiteSchema extends BaseSchema
 					'selector' => [
 						'type' => 'string',
 					],
+					'fingerprint' => [
+						'type' => 'string',
+						'description' => 'Opaque client-built fingerprint of the selected element; pass through verbatim and omit unless the client provided it.',
+					],
 				],
 			],
 		];

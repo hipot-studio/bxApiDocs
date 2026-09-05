@@ -68,7 +68,7 @@ class CopilotNameResolver implements NameResolverInterface
 		/** @see \Bitrix\Ui\Public\Enum\Copilot\CopilotName */
 		return $this->isWestZone()
 			? 'CoPilot Agent'
-			: 'BitrixGPT 5.5 Agent'
+			: 'BitrixGPT 5.6 Agent 1M'
 		;
 	}
 

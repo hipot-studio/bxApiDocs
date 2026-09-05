@@ -94,6 +94,19 @@ class CBPVoximplantAiCallActivity extends CBPActivity
 		$triggerEventData = CBPDocument::PARAM_TRIGGER_EVENT_DATA;
 		$context = $this->getRootActivity()->{$triggerEventData} ?? [];
 		$this->PromptScenario = $context['PromptScenario'] ?? '';
+
+		if (CBPHelper::isEmptyValue($this->PromptScenario))
+		{
+			$this->trackError(
+				'AI call requires a prompt scenario, which is provided only inside the online-booking AI agent.'
+				. ' Add this action there instead of a robot or business process.'
+			);
+
+			$this->Result = false;
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
 		$this->PromptContext = $context['PromptContext'] ?? '';
 		$this->Mcp = $context['Mcp'] ?? [];
 
@@ -101,6 +114,27 @@ class CBPVoximplantAiCallActivity extends CBPActivity
 		$mcpContext['workflowInstanceId'] = $this->getWorkflowInstanceId();
 
 		$mcpUserId = isset($this->Mcp['UserId']) ? (int)$this->Mcp['UserId'] : 0;
+
+		$crmEntityType = (string)($context['CrmEntityType'] ?? '');
+		$crmEntityId = (int)($context['CrmEntityId'] ?? 0);
+
+		// Resolve the responsible user before placing the call so the resulting statistic record
+		// and CRM activity always have an owner. Mirror the regular outgoing-call flow that sets
+		// USER_ID up front (vi_outgoing.php StartCall), instead of patching PORTAL_USER_ID later
+		// inside CVoxImplantHistory::Add.
+		$responsibleUserId = 0;
+		if ($crmEntityType !== '' && $crmEntityId > 0)
+		{
+			$crmResponsibleId = (int)\CVoxImplantCrmHelper::getResponsible($crmEntityType, $crmEntityId);
+			if ($crmResponsibleId > 0)
+			{
+				$responsibleUserId = $crmResponsibleId;
+			}
+		}
+		if ($responsibleUserId <= 0 && $mcpUserId > 0)
+		{
+			$responsibleUserId = $mcpUserId;
+		}
 
 		$apiCallData = [
 			'Number' => $this->Number,
@@ -114,9 +148,10 @@ class CBPVoximplantAiCallActivity extends CBPActivity
 			// CrmEntityType: string CCrmOwnerType name (e.g. 'DEAL', 'CONTACT'), CrmEntityId: int entity ID.
 			// CrmBindings: array of ['OWNER_TYPE_ID' => int, 'OWNER_ID' => int] for multiple entity links
 			// (e.g. deal + contact). Passed through to CRM activity creation via AddCallHistory.
-			'CrmEntityType' => $context['CrmEntityType'] ?? '',
-			'CrmEntityId' => (int)($context['CrmEntityId'] ?? 0),
+			'CrmEntityType' => $crmEntityType,
+			'CrmEntityId' => $crmEntityId,
 			'CrmBindings' => $context['CrmBindings'] ?? [],
+			'UserId' => $responsibleUserId,
 		];
 
 		$callResult = \CVoxImplantOutgoing::StartAiCall($apiCallData);

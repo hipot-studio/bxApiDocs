@@ -23,6 +23,7 @@ final class MessageActions
 {
 	public const DATE_FORMAT = 'Y-m-d H:i:s';
 	public const MAX_BATCH_MESSAGE_IDS = 100;
+	public const ERROR_CRM_ACCESS_DENIED = 'MAIL_MESSAGE_CRM_ACCESS_DENIED';
 
 	/**
 	 * @param string[] $ids Composite IDs in "{messageId}-{mailboxId}" format, e.g. ["123-1", "456-1", "789-2"]
@@ -460,7 +461,7 @@ final class MessageActions
 			&& !empty($message[MailMessageTable::FIELD_SANITIZE_ON_VIEW])
 			&& !empty($message['BODY_HTML']))
 		{
-			$message['BODY_HTML'] = \Bitrix\Mail\Helper\Message::sanitizeHtml($message['BODY_HTML'], true);
+			$message['BODY_HTML'] = \Bitrix\Mail\Helper\Message::sanitizeHtmlForMessageView($message['BODY_HTML']);
 		}
 	}
 
@@ -471,6 +472,16 @@ final class MessageActions
 		if (!Loader::includeModule('crm'))
 		{
 			$result->addError(new \Bitrix\Main\Error(Loc::getMessage('MAIL_MESSAGE_ACTIONS_NO_CRM')));
+			return $result;
+		}
+
+		if (!Integration\Crm\Permissions::getInstance()->hasAccessToCrm($userId))
+		{
+			$result->addError(new \Bitrix\Main\Error(
+				Loc::getMessage('MAIL_MESSAGE_ACTIONS_NO_CRM_ACCESS'),
+				self::ERROR_CRM_ACCESS_DENIED,
+			));
+
 			return $result;
 		}
 
@@ -641,7 +652,10 @@ final class MessageActions
 
 		if (!\Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm($userId))
 		{
-			$result->addError(new \Bitrix\Main\Error('Access denied: no access to CRM'));
+			$result->addError(new \Bitrix\Main\Error(
+				Loc::getMessage('MAIL_MESSAGE_ACTIONS_NO_CRM_ACCESS'),
+				self::ERROR_CRM_ACCESS_DENIED,
+			));
 
 			return $result;
 		}

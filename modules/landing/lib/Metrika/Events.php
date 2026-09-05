@@ -28,5 +28,8 @@ enum Events: string
 	case imagesGeneration = 'images_generation';
 	case addFavourite = 'add_to_favorites';
 	case deleteFavourite = 'remove_from_favorites';
+	case edit = 'edit';
+	case autopub = 'autopub';
+	case openAiEditor = 'open_ai_editor';
 	case unknown = 'unknown';
 }

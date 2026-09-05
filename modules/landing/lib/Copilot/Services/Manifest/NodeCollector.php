@@ -6,6 +6,8 @@ use Bitrix\Main\Web\DOM\Document;
 class NodeCollector
 {
 	private const AUTO_NODE_CLASS_PREFIX = 'ai-node';
+	// the index length is bounded on purpose: a longer digit run overflows the int counters built on top of it
+	private const AUTO_NODE_CLASS_PATTERN = '/^ai-node-([a-z]+)-(\d{1,9})$/u';
 
 	private array $nodeTypes;
 
@@ -137,25 +139,45 @@ class NodeCollector
 
 		foreach ($classes as $className)
 		{
-			if (preg_match('/^ai-node-([a-z]+)-(\d+)$/u', $className, $matches))
+			$node = self::parseNodeClass($className);
+			if ($node === null)
 			{
-				$type = $this->normalizeNodeType((string)($matches[1] ?? ''));
-				if ($type === null)
-				{
-					continue;
-				}
-
-				$index = (int)($matches[2] ?? 0);
-
-				return [
-					'code' => self::buildAutoNodeCode($type, $index),
-					'type' => $type,
-					'index' => $index,
-				];
+				continue;
 			}
+
+			$type = $this->normalizeNodeType($node['type']);
+			if ($type === null)
+			{
+				continue;
+			}
+
+			return [
+				'code' => self::buildAutoNodeCode($type, $node['index']),
+				'type' => $type,
+				'index' => $node['index'],
+			];
 		}
 
 		return null;
+	}
+
+	/**
+	 * Canonical parser of the auto node class `ai-node-<type>-<index>`.
+	 * A class with an out of range index is not a code this collector can build, so it is not a node code.
+	 *
+	 * @return array{type: string, index: int}|null
+	 */
+	public static function parseNodeClass(string $className): ?array
+	{
+		if (!preg_match(self::AUTO_NODE_CLASS_PATTERN, trim($className), $matches))
+		{
+			return null;
+		}
+
+		return [
+			'type' => (string)$matches[1],
+			'index' => (int)$matches[2],
+		];
 	}
 
 	public function buildCards(array $cardCodes, array $cardLabels): array

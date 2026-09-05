@@ -97,6 +97,7 @@ final class DocumentSessionTable extends DataManager
 			(new IntegerField('STATUS'))
 				->configureDefaultValue(self::STATUS_ACTIVE)
 			,
+			new IntegerField('EXTERNAL_LINK_ID'),
 			new TextField('CONTEXT'),
 		];
 	}

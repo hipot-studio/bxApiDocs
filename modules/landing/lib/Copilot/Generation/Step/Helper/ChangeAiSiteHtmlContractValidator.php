@@ -85,6 +85,12 @@ final class ChangeAiSiteHtmlContractValidator
 			return $this->buildResult(['empty_html']);
 		}
 
+		// DOM parsing below auto-closes tags, so a truncated response can only be caught on the raw string
+		if (!preg_match('/<\/section\s*>$/i', $html))
+		{
+			$blockingDiagnostics[] = 'truncated_html';
+		}
+
 		$blockingDiagnostics = array_merge($blockingDiagnostics, $this->inspectRawTokens($html));
 
 		try

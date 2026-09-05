@@ -14,8 +14,10 @@ use Bitrix\Booking\Internals\Exception\Exception;
 use Bitrix\Booking\Internals\Integration\Catalog\ServiceSkuProvider;
 use Bitrix\Booking\Internals\Integration\Catalog\Sku;
 use Bitrix\Booking\Internals\Integration\Catalog\SkuProviderConfig;
-use Bitrix\Booking\Internals\Repository\ORM\BookingRepository;
-use Bitrix\Booking\Internals\Repository\ORM\ResourceRepository;
+use Bitrix\Booking\Internals\Integration\Crm\WebForm\ResourceAccess;
+use Bitrix\Booking\Internals\Integration\Crm\WebForm\ResourceAccessProvider;
+use Bitrix\Booking\Internals\Repository\BookingRepositoryInterface;
+use Bitrix\Booking\Internals\Repository\ResourceRepositoryInterface;
 use Bitrix\Booking\Internals\Service\Time;
 use Bitrix\Booking\Provider\Params\Booking\BookingFilter;
 use Bitrix\Booking\Provider\Params\Booking\BookingSelect;
@@ -27,12 +29,104 @@ class CrmFormService
 	private const LOOK_AHEAD_DAYS_AUTO_SELECTION = 60;
 
 	public function __construct(
-		private readonly ResourceRepository $resourceRepository,
-		private readonly BookingRepository $bookingRepository,
+		private readonly ResourceRepositoryInterface $resourceRepository,
+		private readonly BookingRepositoryInterface $bookingRepository,
 		private readonly ResourceAutoSelectionService $resourceAutoSelectionService,
 		private readonly ServiceSkuProvider $serviceSkuProvider,
+		private readonly ResourceAccessProvider $resourceAccessProvider,
 	)
 	{
+	}
+
+	public function getPublicResourceCollection(int $formId, string $securityCode, array $ids): ResourceCollection
+	{
+		if (!$this->hasFormContext($formId, $securityCode))
+		{
+			return $this->getResourceCollection($ids);
+		}
+
+		$resourceAccess = $this->resourceAccessProvider->get($formId, $securityCode);
+
+		return $this->getResourceCollection($resourceAccess->filterResourceIds($ids));
+	}
+
+	/**
+	 * @param array{
+	 *     "id": string,
+	 *     "skus": string[]
+	 * } $resources
+	 * @return ResourceCollection
+	 * @throws Exception
+	 */
+	public function getPublicResourceCollectionWithSkus(
+		int $formId,
+		string $securityCode,
+		array $resources,
+	): ResourceCollection
+	{
+		if (!$this->hasFormContext($formId, $securityCode))
+		{
+			return $this->getResourceCollectionWithSkus($resources);
+		}
+
+		$resourceAccess = $this->resourceAccessProvider->get($formId, $securityCode);
+		$resources = $resourceAccess->filterResourcesWithSkus($resources);
+		if (empty($resources))
+		{
+			return new ResourceCollection();
+		}
+
+		return $this->getResourceCollectionWithSkus($resources);
+	}
+
+	public function getPublicAutoSelectionData(
+		int $formId,
+		string $securityCode,
+		string $timezone,
+		array $resourceIds = [],
+	): ResourceAutoSelectionSearchResult
+	{
+		if (!$this->hasFormContext($formId, $securityCode))
+		{
+			return $this->getAutoSelectionData($timezone, $resourceIds);
+		}
+
+		$resourceAccess = $this->resourceAccessProvider->get($formId, $securityCode);
+		$resourceIds = empty($resourceIds)
+			? $resourceAccess->getResourceIds()
+			: $resourceAccess->filterResourceIds($resourceIds);
+
+		if (empty($resourceIds))
+		{
+			return new ResourceAutoSelectionSearchResult();
+		}
+
+		return $this->getAutoSelectionData($timezone, $resourceIds);
+	}
+
+	public function getPublicBookingCollectionForOccupancy(
+		int $formId,
+		string $securityCode,
+		array $ids,
+		int $dateTs,
+	): BookingCollection
+	{
+		if (!$this->hasFormContext($formId, $securityCode))
+		{
+			return $this->getBookingCollectionForOccupancy($ids, $dateTs);
+		}
+
+		$resourceAccess = $this->resourceAccessProvider->get($formId, $securityCode);
+		$ids = $resourceAccess->filterResourceIds($ids);
+		if (empty($ids))
+		{
+			return new BookingCollection();
+		}
+
+		$bookingCollection = $this->getBookingCollectionForOccupancy($ids, $dateTs);
+		$this->filterBookingResources($bookingCollection, $resourceAccess);
+
+		return $bookingCollection;
 	}
 
 	public function getResourceCollection(array $ids): ResourceCollection
@@ -187,6 +281,11 @@ class CrmFormService
 		);
 	}
 
+	private function hasFormContext(int $formId, string $securityCode): bool
+	{
+		return $formId > 0 && $securityCode !== '';
+	}
+
 	private function getResourceSkusMap(array $resources): array
 	{
 		$result = [];
@@ -235,5 +334,26 @@ class CrmFormService
 		}
 
 		return $result;
+	}
+
+	private function filterBookingResources(
+		BookingCollection $bookingCollection,
+		ResourceAccess $resourceAccess,
+	): void
+	{
+		foreach ($bookingCollection as $booking)
+		{
+			$allowedResources = [];
+			foreach ($booking->getResourceCollection() as $resource)
+			{
+				$resourceId = $resource->getId();
+				if ($resourceId !== null && $resourceAccess->isResourceAllowed($resourceId))
+				{
+					$allowedResources[] = $resource;
+				}
+			}
+
+			$booking->setResourceCollection(new ResourceCollection(...$allowedResources));
+		}
 	}
 }

@@ -3,6 +3,7 @@
 namespace Bitrix\Intranet\Service;
 
 use Bitrix\Intranet\Contract\SendableContract;
+use Bitrix\Main\Mail\Event as MailEvent;
 
 class EmailMessage implements SendableContract
 {
@@ -20,7 +21,21 @@ class EmailMessage implements SendableContract
 
 	public function sendImmediately(): void
 	{
-		\CEvent::SendImmediate(
+		$this->sendImmediatelyWithResult();
+	}
+
+	public function sendImmediatelyWithResult(): bool
+	{
+		return in_array(
+			$this->sendImmediateEvent(),
+			[MailEvent::SEND_RESULT_SUCCESS, MailEvent::SEND_RESULT_PARTLY],
+			true,
+		);
+	}
+
+	protected function sendImmediateEvent(): string|bool
+	{
+		return \CEvent::SendImmediate(
 			$this->eventName,
 			$this->siteId,
 			$this->templateParams,

@@ -14,7 +14,6 @@ use Bitrix\Main\Type\DateTime;
 class CustomServerAvailabilityProvider
 {
 	protected const OPTIONS_MAIN_EXPIRED_AT = '~custom_servers_expired_at';
-	protected const OPTIONS_DISK_IS_ENABLED = 'custom_servers_enabled';
 
 	protected ?bool $isAvailable = null;
 	protected ?bool $isAvailableForEdit = null;
@@ -41,7 +40,6 @@ class CustomServerAvailabilityProvider
 			$this->isAvailable =
 				$this->isValidPortalRegion()
 				&& !$this->environment->isCloudPortal()
-				&& $this->isEnabledByOption()
 			;
 		}
 
@@ -149,14 +147,6 @@ class CustomServerAvailabilityProvider
 		}
 
 		return in_array($this->boxLicense->getRegion(), $regions, true);
-	}
-
-	/**
-	 * @return bool
-	 */
-	protected function isEnabledByOption(): bool
-	{
-		return Option::get('disk', static::OPTIONS_DISK_IS_ENABLED) === 'Y';
 	}
 
 	/**

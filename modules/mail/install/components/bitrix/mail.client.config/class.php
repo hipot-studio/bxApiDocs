@@ -1098,6 +1098,27 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		{
 			Toolbar::addButton($button);
 		}
+
+		Toolbar::addButton($this->createSignaturesButton());
+	}
+
+	/**
+	 * The way into the single list of signatures — personal and shared alike. Every user has
+	 * signatures of his own, so neither a right nor a tariff gates the button.
+	 */
+	private function createSignaturesButton(): Button
+	{
+		return new Button([
+			'color' => Color::LIGHT_BORDER,
+			'tag' => Tag::BUTTON,
+			'text' => Loc::getMessage('MAIL_CLIENT_CONFIG_TOOLBAR_SIGNATURES'),
+			'onclick' => new JsCode("BX.SidePanel.Instance.open('/mail/signatures', {cacheable: false})"),
+			'dataset' => [
+				'toolbar-collapsed-icon' => Icon::EDIT,
+				'id' => 'mail-signatures-button',
+				'test-id' => 'mail-signatures-button',
+			],
+		]);
 	}
 
 	private function createMailboxGridButton(): ?Button

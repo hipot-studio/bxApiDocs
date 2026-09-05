@@ -2,14 +2,11 @@
 
 namespace Bitrix\Mail\Integration\AI;
 
-use Bitrix\Mail\MailMessageTable;
-use Bitrix\Main\ArgumentException;
+use Bitrix\Mail\Integration\AI\Context\Subject;
 use Bitrix\Main\Event;
 use Bitrix\Mail\Helper\Message\MessageThreadLoader;
-use Bitrix\Mail;
+use Bitrix\Mail\Helper\Message\MessageSearch;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\ObjectPropertyException;
-use Bitrix\Main\SystemException;
 
 final class Controller
 {
@@ -20,26 +17,45 @@ final class Controller
 		$contextId = $event->getParameter('id');
 		$contextParameters = $event->getParameter('params');
 
-		$isAddedQuote = filter_var(($contextParameters['isAddedQuote'] ?? null), FILTER_VALIDATE_BOOLEAN);
-		$messageId = $contextParameters['messageId'];
-		$messageIds = $contextParameters['messageIds'];
-
 		if (!$moduleId || !$contextId)
 		{
 			return ['messages' => []];
 		}
+
+		if ($moduleId === 'mail' && Subject::isSubjectContext((string)$contextId))
+		{
+			return Subject::buildMessages(
+				(string)$contextId,
+				is_array($contextParameters) ? $contextParameters : [],
+				(int)CurrentUser::get()->getId(),
+			);
+		}
+
+		$isAddedQuote = filter_var(($contextParameters['isAddedQuote'] ?? null), FILTER_VALIDATE_BOOLEAN);
+		$messageId = $contextParameters['messageId'];
+		$messageIds = $contextParameters['messageIds'];
 
 		if (!self::isNeededMailMessageContext($moduleId, $contextId, $isAddedQuote, $messageId, $messageIds))
 		{
 			return ['messages' => []];
 		}
 
-		if (!$messageIds)
+		// the client-supplied list serves only as an anchor: the branch is assembled server-side, so
+		// ids the caller did not obtain legitimately never reach the ranking below
+		$anchorId = (int)$messageId;
+		if ($anchorId <= 0 && is_array($messageIds) && $messageIds)
 		{
-			$messageThreadLoader = new MessageThreadLoader($messageId);
-			$messageThreadLoader->loadFullThreadMessageIds();
-			$messageIds = $messageThreadLoader->getThreadMessageIds();
+			$anchorId = (int)reset($messageIds);
 		}
+
+		if ($anchorId <= 0)
+		{
+			return ['messages' => []];
+		}
+
+		$messageThreadLoader = new MessageThreadLoader($anchorId);
+		$messageThreadLoader->loadThreadBranchMessageIds();
+		$messageIds = $messageThreadLoader->getThreadMessageIds();
 
 		if (!$messageIds)
 		{
@@ -81,7 +97,6 @@ final class Controller
 	 */
 	private static function loadMessages(array $messageIds): array
 	{
-		$userId = CurrentUser::get()->getId();
 		$messageIds = array_filter($messageIds, function ($item) {
 			return filter_var($item, FILTER_VALIDATE_INT) !== false;
 		});
@@ -91,24 +106,25 @@ final class Controller
 			return ['messages' => []];
 		}
 
-		$message = MailMessageTable::query()
-			->setSelect(['*'])
-			->where('ID', end($messageIds))
-			->exec()
-			->fetch()
-		;
+		$userId = (int)CurrentUser::get()->getId();
 
-		if (!$message || !Mail\Helper\Message::hasAccess($message, $userId))
+		$messageSearch = new MessageSearch();
+		$latestMessageId = $messageSearch->getLatestVisibleMessageId($messageIds, $userId) ?? (int)end($messageIds);
+
+		$content = $messageSearch->getReplyContextBody(
+			$latestMessageId,
+			$userId,
+		);
+
+		if ($content === null)
 		{
 			return ['messages' => []];
 		}
 
-		$messages[] = [
-			'content' => $message['BODY']]
-		;
-
 		return [
-			'messages' => $messages,
+			'messages' => [
+				['content' => $content],
+			],
 		];
 	}
 }

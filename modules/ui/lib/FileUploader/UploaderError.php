@@ -50,9 +50,22 @@ class UploaderError extends \Bitrix\Main\Error
 	public const CLOUD_START_UPLOAD_FAILED = 'CLOUD_START_UPLOAD_FAILED';
 	public const CLOUD_FINISH_UPLOAD_FAILED = 'CLOUD_FINISH_UPLOAD_FAILED';
 	public const CLOUD_UPLOAD_FAILED = 'CLOUD_UPLOAD_FAILED';
+	public const CLOUD_UPLOAD_PART_FAILED = 'CLOUD_UPLOAD_PART_FAILED';
+	public const PART_WRITE_FAILED = 'PART_WRITE_FAILED';
 	public const EMPTY_TOKEN = 'EMPTY_TOKEN';
 	public const UNKNOWN_TOKEN = 'UNKNOWN_TOKEN';
 	public const INVALID_SIGNATURE = 'INVALID_SIGNATURE';
+
+	public const WRONG_STRATEGY = 'WRONG_STRATEGY';
+	public const INVALID_PART_NO = 'INVALID_PART_NO';
+	public const INVALID_PART_SIZE = 'INVALID_PART_SIZE';
+
+	public const PRESIGNED_UNSUPPORTED = 'PRESIGNED_UNSUPPORTED';
+	public const PRESIGNED_INIT_FAILED = 'PRESIGNED_INIT_FAILED';
+	public const PRESIGNED_URL_FAILED = 'PRESIGNED_URL_FAILED';
+	public const INVALID_ETAG = 'INVALID_ETAG';
+	public const FINALIZATION_NOT_READY = 'FINALIZATION_NOT_READY';
+	public const FINALIZATION_IN_PROGRESS = 'FINALIZATION_IN_PROGRESS';
 
 	private static array $systemErrors = [
 		self::INVALID_CONTENT_RANGE => 'Content-Range header is invalid',
@@ -76,11 +89,22 @@ class UploaderError extends \Bitrix\Main\Error
 		self::CLOUD_INVALID_CHUNK_SIZE => 'Cannot upload file to cloud. The size of the chunk (#chunkSize#) must be more than #minUploadSize#. Check "post_max_size" (#postMaxSize#) and "upload_max_filesize" (#uploadMaxFileSize#) options in php.ini.',
 		self::CLOUD_GET_CONTENTS_FAILED => 'Could not get file contents.',
 		self::CLOUD_START_UPLOAD_FAILED => 'Could not start cloud upload.',
-		self::CLOUD_FINISH_UPLOAD_FAILED => 'Could not finish cloud upload.',
+		self::CLOUD_FINISH_UPLOAD_FAILED => 'Could not finish cloud upload. #detail#',
 		self::CLOUD_UPLOAD_FAILED => 'Could not upload file for #fails# times.',
+		self::CLOUD_UPLOAD_PART_FAILED => 'Could not upload part #partNo# to cloud.',
+		self::PART_WRITE_FAILED => 'Could not write part #partNo# to local file.',
 		self::EMPTY_TOKEN => 'Could not append content to file. Have to set token parameter.',
 		self::UNKNOWN_TOKEN => 'Could not find file by token.',
 		self::INVALID_SIGNATURE => 'Token signature is invalid.',
+		self::WRONG_STRATEGY => 'The upload session does not support parallel parts.',
+		self::INVALID_PART_NO => 'Part number #partNo# is out of range [1, #partCount#].',
+		self::INVALID_PART_SIZE => 'Part #partNo# size #actualSize# does not match expected size #expectedSize#.',
+		self::PRESIGNED_UNSUPPORTED => 'The bucket does not support presigned uploads; fall back to the parallel strategy.',
+		self::PRESIGNED_INIT_FAILED => 'Could not initialize the presigned multipart session.',
+		self::PRESIGNED_URL_FAILED => 'Could not produce a presigned URL for part #partNo#.',
+		self::INVALID_ETAG => 'ETag value for part #partNo# is missing or malformed.',
+		self::FINALIZATION_NOT_READY => 'Cannot finalize the upload: not all parts have been registered yet.',
+		self::FINALIZATION_IN_PROGRESS => 'Another request is finalizing this upload; retry shortly.',
 	];
 
 	public function __construct(string $code, ...$args)

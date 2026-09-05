@@ -10,6 +10,7 @@ use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Service\CounterDictionary;
 use Bitrix\Booking\Internals\Service\Journal\JournalEvent;
 use Bitrix\Booking\Internals\Service\Journal\JournalType;
+use Bitrix\Booking\Internals\Service\Sql\SqlExpression;
 use Bitrix\Booking\Internals\Service\Time;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
@@ -51,6 +52,7 @@ class DelayedCounterAgent
 	{
 		$currentTimestamp = time();
 		$oneDayBehindTimestamp = $currentTimestamp - Time::SECONDS_IN_DAY;
+		$dateFromAsTimestamp = SqlExpression::fromUnixTime('b.DATE_FROM');
 
 		return "
 			SELECT b.ID
@@ -70,6 +72,7 @@ class DelayedCounterAgent
 			  	AND b.DATE_TO > $currentTimestamp
 			  	AND b.VISIT_STATUS = '" . self::$sqlHelper->forSql(BookingVisitStatus::Unknown->value) . "'
 				AND b.DATE_FROM + rns.DELAYED_COUNTER_DELAY <= $currentTimestamp
+				AND (b.CONFIRMED_AT IS NULL OR b.CONFIRMED_AT < $dateFromAsTimestamp)
 		";
 	}
 }

@@ -22,6 +22,35 @@ class RepoWidget extends Repo
 	private const SUBTYPE_WIDGET = 'widgetvue';
 
 	/**
+	 * Code of the item being registered. The handler check needs the identity of the row to
+	 * read the handler stored for it, while the hook of the parent takes the fields and the
+	 * manifest only.
+	 * @var string|null
+	 */
+	private static ?string $registeringCode = null;
+
+	/**
+	 * Registers the widget - @see parent
+	 * @param string $code Unique code of block (unique within app).
+	 * @param array $fields Block data.
+	 * @param array $manifest Manifest data.
+	 * @return PublicActionResult
+	 */
+	public static function register(string $code, array $fields, array $manifest = []): PublicActionResult
+	{
+		self::$registeringCode = trim($code);
+
+		try
+		{
+			return parent::register($code, $fields, $manifest);
+		}
+		finally
+		{
+			self::$registeringCode = null;
+		}
+	}
+
+	/**
 	 * Some fixes in fields and manifest, specific by scope (mainpage widget or any)
 	 * @param array $fields
 	 * @param array $manifest
@@ -30,7 +59,7 @@ class RepoWidget extends Repo
 	 */
 	protected static function onRegisterBefore(array &$fields, array &$manifest, Error $error): void
 	{
-		if (!isset($fields['WIDGET_PARAMS']) && !is_array($fields['WIDGET_PARAMS']))
+		if (!is_array($fields['WIDGET_PARAMS'] ?? null))
 		{
 			$error->addError(
 				'REQUIRED_FIELD_NO_EXISTS',
@@ -58,6 +87,11 @@ class RepoWidget extends Repo
 			}
 		}
 
+		if (!self::checkWidgetHandler($fields['WIDGET_PARAMS']['handler'], $error))
+		{
+			return;
+		}
+
 		// Can set only available fields to manifest. Security!
 		$manifest = [];
 
@@ -72,6 +106,69 @@ class RepoWidget extends Repo
 		];
 
 		$manifest = Scope\Vibe::prepareBlockManifest($manifest);
+	}
+
+	/**
+	 * Checks the address the portal sends the widget data requests to.
+	 * https is demanded of an address the item does not carry yet: an application registers
+	 * itself again on every update, so demanding it of an unchanged handler would break a
+	 * working http widget on the next update of the application.
+	 * @param mixed $handler Handler from the widget params.
+	 * @param Error $error - object for set errors
+	 * @return bool
+	 */
+	private static function checkWidgetHandler(mixed $handler, Error $error): bool
+	{
+		if (is_string($handler))
+		{
+			$requireHttps = $handler !== self::getStoredHandler();
+			if (Landing\Sanitizer::sanitizeWidgetHandlerUrl($handler, $requireHttps) !== '')
+			{
+				return true;
+			}
+		}
+
+		$error->addError(
+			'WIDGET_HANDLER_INVALID',
+			Loc::getMessage('LANDING_WIDGET_HANDLER_INVALID', ['#param#' => 'WIDGET_PARAMS.handler'])
+		);
+
+		return false;
+	}
+
+	/**
+	 * Handler already stored for the widget being registered, null when the widget is not
+	 * registered yet or carries no readable handler. The item is identified by its code and
+	 * its owner application - the same pair the parent uses to tell an update from an add.
+	 * @return string|null
+	 */
+	private static function getStoredHandler(): ?string
+	{
+		if (empty(self::$registeringCode))
+		{
+			return null;
+		}
+
+		$app = PublicAction::restApplication();
+		$row = Landing\Repo::getList([
+			'select' => ['MANIFEST'],
+			'filter' => [
+				'=XML_ID' => self::$registeringCode,
+				'=APP_CODE' => $app['CODE'] ?? false,
+			],
+		])->fetch();
+		if (!$row)
+		{
+			return null;
+		}
+
+		// broken data leaves the stored handler unknown, and unknown means changed
+		$manifest = unserialize($row['MANIFEST'], ['allowed_classes' => false]);
+		$block = is_array($manifest) ? ($manifest['block'] ?? null) : null;
+		$subtypeParams = is_array($block) ? ($block['subtype_params'] ?? null) : null;
+		$handler = is_array($subtypeParams) ? ($subtypeParams['handler'] ?? null) : null;
+
+		return is_string($handler) ? $handler : null;
 	}
 
 	/**

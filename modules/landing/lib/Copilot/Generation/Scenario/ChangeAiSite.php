@@ -4,8 +4,12 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Copilot\Generation\Scenario;
 
 use Bitrix\Landing\Copilot\Generation;
+use Bitrix\Landing\Copilot\Generation\GenerationException;
 use Bitrix\Landing\Copilot\Generation\Step;
+use Bitrix\Landing\Copilot\Services\GenerationErrorStatusMapper;
+use Bitrix\Landing\Landing;
 use Bitrix\Landing\Metrika;
+use Bitrix\Landing\Site\Type;
 
 class ChangeAiSite extends BaseScenario implements IStepMetaProvider
 {
@@ -26,6 +30,22 @@ class ChangeAiSite extends BaseScenario implements IStepMetaProvider
 	private const STEP_GENERATE_IMAGES = 140;
 	private const STEP_SAVE_HISTORY = 150;
 	private const STEP_FINISH = 1000;
+
+	/**
+	 * Site type of the landing of this generation, read from the base once per instance.
+	 */
+	private ?string $siteType = null;
+
+	/**
+	 * Key of the generation data that keeps the fact of the sent edit event across the runs of the
+	 * generation, so a resume of a generation that has already reported this edit sends nothing again.
+	 */
+	private const BLOCK_EDIT_ANALYTICS_SENT_KEY = 'block_edit_analytics_sent';
+
+	/**
+	 * The event of the edit has already been sent by this instance of the scenario.
+	 */
+	private bool $blockEditAnalyticsSent = false;
 
 	protected function buildMap(): array
 	{
@@ -129,6 +149,11 @@ class ChangeAiSite extends BaseScenario implements IStepMetaProvider
 		return Metrika\Categories::SiteGeneration;
 	}
 
+	public function isAnalyticStartEnabled(): bool
+	{
+		return false;
+	}
+
 	public function getAsyncRelations(): ?array
 	{
 		$map = $this->getMap();
@@ -199,6 +224,121 @@ class ChangeAiSite extends BaseScenario implements IStepMetaProvider
 	}
 
 	public function onFinish(Generation $generation): void
+	{
+		// the analytics goes first and is guarded on its own: the pull event below is not, and a throw
+		// from it would take the mark of a successful edit out of the funnel - and a GenerationException
+		// thrown there would turn the successful edit into a mark of an error
+		$this->sendBlockEditAnalytics($generation);
+		$this->sendFinishEvent($generation);
+	}
+
+	/**
+	 * @inheritdoc
+	 */
+	public function onGenerationError(Generation $generation, GenerationException $e): void
+	{
+		$this->sendBlockEditAnalytics(
+			$generation,
+			GenerationErrorStatusMapper::resolve($e),
+			$e->getErrorCode()->name,
+		);
+	}
+
+	/**
+	 * One user edit makes at most one event, whatever amount of blocks the change has touched.
+	 * The first sent outcome, successful or not, is remembered both in the instance and in the data of
+	 * the generation, so neither a repeated execute() of the same run nor a resume of a generation that
+	 * has already reported this edit - a new instance of the scenario, where the instance flag is empty -
+	 * sends a second event. The finish before this run still guards a re-run of an already finished
+	 * generation. The step that applies the generated HTML never sends the event.
+	 */
+	private function sendBlockEditAnalytics(
+		Generation $generation,
+		?Metrika\Statuses $status = null,
+		?string $errorCode = null,
+	): void
+	{
+		if ($this->isBlockEditAnalyticsSent($generation) || $this->isFinishedBeforeThisRun($generation))
+		{
+			return;
+		}
+
+		$this->markBlockEditAnalyticsSent($generation);
+
+		try
+		{
+			(new Metrika\BlockEditMetrikaSender())->sendAiEdit(
+				$this->resolveSiteType($generation),
+				$status,
+				$errorCode,
+			);
+		}
+		catch (\Throwable)
+		{
+			// analytics must never break the outcome of the generation
+		}
+	}
+
+	private function isBlockEditAnalyticsSent(Generation $generation): bool
+	{
+		return $this->blockEditAnalyticsSent
+			|| $generation->getData(self::BLOCK_EDIT_ANALYTICS_SENT_KEY) === true;
+	}
+
+	/**
+	 * Marks the edit event as sent both for this run and for the resumes of the generation. The
+	 * persisted mark reaches the base with the next save of the generation - on the error path the
+	 * generation is saved right after this hook, so a later resume of the errored generation sees it.
+	 */
+	private function markBlockEditAnalyticsSent(Generation $generation): void
+	{
+		$this->blockEditAnalyticsSent = true;
+		$generation->setData(self::BLOCK_EDIT_ANALYTICS_SENT_KEY, true);
+	}
+
+	/**
+	 * Tells a repeated run of an already finished generation from the run that has finished it.
+	 * The mark of the finish is persisted by the generation after the hooks of this scenario are
+	 * called, so on the run that really finishes the generation the mark loaded with the generation
+	 * is still empty, and on every run after it - a public action of the controller, a job of the
+	 * queue - it is filled.
+	 */
+	private function isFinishedBeforeThisRun(Generation $generation): bool
+	{
+		return $generation->isFinishedPersisted();
+	}
+
+	private function resolveSiteType(Generation $generation): string
+	{
+		if ($this->siteType !== null)
+		{
+			return $this->siteType;
+		}
+
+		$landingId = ChangeAiSiteState::resolveLandingId($generation);
+		if ($landingId <= 0)
+		{
+			return Type::SCOPE_CODE_DEFAULT;
+		}
+
+		$landing = Landing::getList([
+			'select' => [
+				'SITE_TYPE' => 'SITE.TYPE',
+			],
+			'filter' => [
+				'=ID' => $landingId,
+				// the generation runs in the background, where the rights are not the ones of the author:
+				// the type of the site is not a secret and only tells which tool the event belongs to
+				'CHECK_PERMISSIONS' => 'N',
+			],
+		])->fetch();
+
+		$this->siteType = (string)($landing['SITE_TYPE'] ?? Type::SCOPE_CODE_DEFAULT);
+
+		return $this->siteType;
+	}
+
+	private function sendFinishEvent(Generation $generation): void
 	{
 		$landingId = ChangeAiSiteState::resolveLandingId($generation);
 		if ($landingId <= 0)

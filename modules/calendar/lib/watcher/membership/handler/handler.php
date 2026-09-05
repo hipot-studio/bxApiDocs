@@ -7,6 +7,7 @@ abstract class Handler
 	const WORK_GROUP_TYPE = 'project';
 	const DEPARTMENT_TYPE = 'department';
 	const ALL_USERS_TYPE = 'all-users';
+	const TEAM_TYPE = 'team';
 
 	protected static array $storedData = [];
 

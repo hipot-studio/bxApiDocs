@@ -11,6 +11,7 @@ final class RenderResult
 		private readonly int $status,
 		private readonly ?string $redirectUrl = null,
 		private readonly ?string $component = null,
+		private readonly array $headers = [],
 	) {
 	}
 
@@ -32,5 +33,10 @@ final class RenderResult
 	public function getComponent(): ?string
 	{
 		return $this->component;
+	}
+
+	public function getHeaders(): array
+	{
+		return $this->headers;
 	}
 }

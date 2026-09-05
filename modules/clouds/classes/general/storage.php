@@ -1,4 +1,7 @@
 <?php
+
+use Bitrix\Main\Web\Uri;
+
 IncludeModuleLangFile(__FILE__);
 
 class CCloudStorage
@@ -1975,7 +1978,7 @@ class CCloudStorage
 								header('Cache-Control: max-age=' . $cache_time);
 								header('Expires: ' . gmdate('D, d M Y H:i:s', time() + $cache_time) . ' GMT');
 								header_remove('Pragma');
-								LocalRedirect(\Bitrix\Main\Web\Uri::urnEncode($to_file, 'UTF-8'), true, '301 Moved Permanently');
+								LocalRedirect(Uri::urnEncode($to_file), true, '301 Moved Permanently');
 							}
 						}
 						elseif (

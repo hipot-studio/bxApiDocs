@@ -367,6 +367,7 @@ class Imap
 			'name'        => $mailbox,
 			'exists'      => null,
 			'uidvalidity' => null,
+			'uidnext'     => null,
 		);
 
 		$regex = '/^ \* \x20 ( \d+ ) \x20 EXISTS /ix';
@@ -376,6 +377,10 @@ class Imap
 		$regex = '/^ \* \x20 OK \x20 \[ UIDVALIDITY \x20 ( \d+ ) \] /ix';
 		foreach ($this->getUntagged($regex, true) as $item)
 			$this->sessMailbox['uidvalidity'] = $item[1][1];
+
+		$regex = '/^ \* \x20 OK \x20 \[ UIDNEXT \x20 ( \d+ ) \] /ix';
+		foreach ($this->getUntagged($regex, true) as $item)
+			$this->sessMailbox['uidnext'] = $item[1][1];
 
 		$regex = sprintf(
 			'/^ \* \x20 OK \x20 \[ PERMANENTFLAGS \x20 \( ( ( \x5c? %1$s | \x5c \* ) ( \x20 (?2) )* )? \) \] /ix',
@@ -709,6 +714,47 @@ class Imap
 		}
 
 		return $UIDs[0];
+	}
+
+	public function getUidsSince(string $dirPath, int $sinceTimestamp, ?int $maximumUid = null): array|false
+	{
+		$error = [];
+
+		if (!$this->select($dirPath, $error))
+		{
+			return false;
+		}
+
+		// open upper bound on purpose: the exact cutoff is applied on receive by INTERNALDATE
+		$command = 'UID SEARCH ';
+		if ($maximumUid !== null)
+		{
+			$command .= sprintf('UID 1:%u ', $maximumUid);
+		}
+		$command .= 'SINCE '.gmdate('j-M-Y', $sinceTimestamp);
+
+		$response = $this->executeCommand($command, $error);
+
+		if ($error)
+		{
+			$error = $error == Imap::ERR_COMMAND_REJECTED ? null : $error;
+			$error = $this->errorMessage(array(Imap::ERR_SEARCH, $error), $response);
+
+			return false;
+		}
+
+		// RFC 3501 allows the result to span several untagged SEARCH lines
+		$UIDs = [];
+		$regex = '/^ \* \x20 SEARCH \x20 ( .+ ) \r\n $ /ix';
+		foreach ($this->getUntagged($regex, true) as $item)
+		{
+			if (preg_match_all('/\d+/', $item[1][1], $matches))
+			{
+				$UIDs = array_merge($UIDs, $matches[0]);
+			}
+		}
+
+		return $UIDs;
 	}
 
 	/**

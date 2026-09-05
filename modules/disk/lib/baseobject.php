@@ -542,6 +542,15 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 
 		$data['OBJECT_ID'] = $this->id;
 
+		$parent = $this->getParent();
+		if ($parent && SpecificFolder::isSpecificFolder($parent, [SpecificFolder::CODE_FOR_MAIL_ATTACHMENTS]))
+		{
+			// Invariant: links to objects inside the mail attachments folder always keep
+			// their settings locked. The client-supplied CAN_EDIT_SETTINGS is ignored so the
+			// flag cannot be reset on link re-creation or by passing an explicit value in the request.
+			$data['CAN_EDIT_SETTINGS'] = false;
+		}
+
 		$addResult = ExternalLink::add($data, $this->errorCollection);
 
 		if ($addResult)
@@ -1718,6 +1727,16 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	public function isAllowManagePublicAccessOnRead(): bool
 	{
 		return (bool)$this->getObjectOptions()[ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ];
+	}
+
+	public function canManageExternalLink(SecurityContext $securityContext): bool
+	{
+		if (!$this->canRead($securityContext))
+		{
+			return false;
+		}
+
+		return $this->canUpdate($securityContext) || $this->isAllowManagePublicAccessOnRead();
 	}
 
 	public function setObjectOption($name, $value): self

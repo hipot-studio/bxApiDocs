@@ -233,11 +233,10 @@ class LandingTable extends Entity\DataManager
 		//$tasks = Rights::getAccessTasksReferences();
 		//$readCode = Rights::ACCESS_TYPES['read'];
 		$extendedRights = Rights::isExtendedMode();
-		static $expectedRoles = null;
-		if ($expectedRoles === null)
-		{
-			$expectedRoles = Role::getExpectedRoleIds();
-		}
+		// no local cache of the ids: the scope is switched per command inside a single process
+		// (REST / AJAX batch), and a method-static copy would survive the switch and join the next
+		// section against the role ids of the previous one. Role keeps its own cache per type.
+		$expectedRoles = Role::getExpectedRoleIds();
 
 		// create runtime fields
 		$runtimeParams = [];
@@ -347,6 +346,16 @@ class LandingTable extends Entity\DataManager
 					new Entity\EntityError(
 						Loc::getMessage('LANDING_TABLE_ERROR_WRONG_CODE_FORMAT'),
 						'WRONG_CODE_FORMAT'
+					)
+				));
+				return $result;
+			}
+			if (!\Bitrix\Landing\Security\SyspageUrl::isSafeCode((string)$fields['CODE']))
+			{
+				$result->setErrors(array(
+					new Entity\EntityError(
+						'Page address contains forbidden characters.',
+						'WRONG_CODE_CHARS'
 					)
 				));
 				return $result;

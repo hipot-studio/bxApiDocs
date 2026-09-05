@@ -3,17 +3,17 @@
 namespace Bitrix\Rpa\Model;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Entity;
+use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\EventResult;
 use Bitrix\Main\Result;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UserField;
-use Bitrix\Main\ArgumentNullException;
-use Bitrix\Main\ORM;
-use Bitrix\Main\ORM\Event;
 use Bitrix\Rpa\Components\Base;
 use Bitrix\Rpa\Driver;
 use Bitrix\Rpa\UserPermissions;
@@ -216,14 +216,17 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			TimelineTable::removeByTypeId($id);
 			ItemHistoryTable::removeByTypeId($id);
 			$typeData = static::getTemporaryStorage()->getData($id);
-			static::getTemporaryStorage()->saveData($id, $typeData);
-			$itemIndexEntity = static::compileItemIndexEntity($typeData);
-			if($itemIndexEntity)
+			if ($typeData !== null)
 			{
-				$tableName = $itemIndexEntity->getDBTableName();
-				if(Application::getConnection()->isTableExists($tableName))
+				static::getTemporaryStorage()->saveData($id, $typeData);
+				$itemIndexEntity = static::compileItemIndexEntity($typeData);
+				if ($itemIndexEntity)
 				{
-					Application::getConnection()->dropTable($tableName);
+					$tableName = $itemIndexEntity->getDBTableName();
+					if (Application::getConnection()->isTableExists($tableName))
+					{
+						Application::getConnection()->dropTable($tableName);
+					}
 				}
 			}
 		}

@@ -288,7 +288,10 @@ class Crm
 		{
 			$companyTitle = 'Company24';
 		}
-		$replace['#requisiteCompanyTitle'] = $companyTitle;
+		// block content is executed through eval() in Block::view(), so the title must be escaped (Mantis #253063)
+		// default ENT_COMPAT is enough: the marker lands in a text node, attributes are serialized in double quotes
+		// guarded by CrmRequisiteCompanyTitleEscapeTest
+		$replace['#requisiteCompanyTitle'] = \htmlspecialcharsbx($companyTitle);
 
 		return $replace;
 	}

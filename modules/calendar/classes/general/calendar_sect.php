@@ -2191,7 +2191,7 @@ class CCalendarSect
 			self::$authHashiCal[$path] = $hitHash;
 		}
 
-		return self::$authHashiCal[$path];
+		return self::$authHashiCal[$path] ?? null;
 	}
 
 	public static function CheckAuthHash()

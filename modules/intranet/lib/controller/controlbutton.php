@@ -170,7 +170,7 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 		}
 
 		$pathToCalendar = \CCalendar::GetPathForCalendarEx($USER->GetID());
-		$pathToEvent = \CHTTP::urlAddParams($pathToCalendar, ['EVENT_ID' => $entry['ID']]);
+		$pathToEvent = (string)(new Uri($pathToCalendar))->addParams(['EVENT_ID' => $entry['ID']]);
 
 		$notDeclinedIds = null;
 		if (is_array($entry['ATTENDEE_LIST']))

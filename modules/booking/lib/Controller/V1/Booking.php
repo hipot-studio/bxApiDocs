@@ -39,6 +39,12 @@ class Booking extends BaseController
 		bool $withSkus = false,
 	): Entity\Booking\BookingCollection
 	{
+		if (isset($filter['WITHIN']['DATE_FROM'], $filter['WITHIN']['DATE_TO']))
+		{
+			$navigation->allowAllRecords(true);
+		}
+		$navigation->initFromUri();
+
 		$userId = (int)CurrentUser::get()->getId();
 		$provider = new BookingProvider();
 

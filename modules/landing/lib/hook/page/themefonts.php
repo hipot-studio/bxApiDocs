@@ -24,6 +24,20 @@ class ThemeFonts extends Hook\Page
 	protected const BASE_HTML_SIZE = '14px';
 
 	/**
+	 * Font name charset: letters, digits, space, hyphen and underscore.
+	 * '\z' instead of '$' because '$' would also accept a trailing line break.
+	 */
+	private const FONT_NAME_PATTERN = '/^[A-Za-z0-9 _-]{1,64}\z/';
+
+	/**
+	 * Plain non-negative decimal number, without sign, unit, exponent or space.
+	 * Digit limits keep the form of the values the hook really works with (font size in rem,
+	 * unitless line height) and leave no room for anything else.
+	 * '\z' instead of '$' because '$' would also accept a trailing line break.
+	 */
+	private const NUMBER_PATTERN = '/^\d{1,3}(?:\.\d{1,10})?\z/';
+
+	/**
 	 * Map of the field.
 	 * @return array
 	 */
@@ -186,7 +200,7 @@ class ThemeFonts extends Hook\Page
 	protected function setThemeFont(): void
 	{
 		$font = $this->getField('CODE');
-		$font = self::convertFontName($font);
+		$font = self::sanitizeFontName(self::convertFontName($font));
 
 		$assets = Assets\Manager::getInstance();
 		if ($this->fields['CODE']->getValue() !== null)
@@ -221,7 +235,7 @@ class ThemeFonts extends Hook\Page
 	protected function setHFontTheme(): void
 	{
 		$font = $this->getField('CODE_H');
-		$font = self::convertFontName($font);
+		$font = self::sanitizeFontName(self::convertFontName($font));
 
 		$assets = Assets\Manager::getInstance();
 		$assets->addString(self::getFontLink($font));
@@ -261,6 +275,58 @@ class ThemeFonts extends Hook\Page
 		return $fontName;
 	}
 
+	/**
+	 * Keeps the font name a font name before it goes into CSS.
+	 * A value with any other character is not a font name, so it is replaced with the default font
+	 * instead of being cleaned up: partial cleanup would silently point to another font.
+	 * Every place which prints the font name into a style tag or a font link must call this method.
+	 * @param string $fontName Font name.
+	 * @return string
+	 */
+	public static function sanitizeFontName(string $fontName): string
+	{
+		if (preg_match(self::FONT_NAME_PATTERN, $fontName) === 1)
+		{
+			return $fontName;
+		}
+
+		return self::getDefaultValues()['CODE'];
+	}
+
+	/**
+	 * Keeps a numeric setting a number before it goes into CSS.
+	 * As with the font name, a value of another form is replaced with the default instead of being
+	 * cleaned up: a cleaned up number would be another setting silently applied to the page.
+	 * @param string $fieldName Field name to take the default from.
+	 * @param string|null $value Field value.
+	 * @return string
+	 */
+	private static function sanitizeNumber(string $fieldName, ?string $value): string
+	{
+		if ($value !== null && preg_match(self::NUMBER_PATTERN, $value) === 1)
+		{
+			return $value;
+		}
+
+		return self::getDefaultValues()[$fieldName];
+	}
+
+	/**
+	 * Keeps the font weight a value of the weight scale before it goes into CSS.
+	 * @param string $fieldName Field name to take the default from.
+	 * @param string|null $value Field value.
+	 * @return string
+	 */
+	private static function sanitizeFontWeight(string $fieldName, ?string $value): string
+	{
+		if ($value !== null && isset(self::getFontWeightOptions()[$value]))
+		{
+			return $value;
+		}
+
+		return self::getDefaultValues()[$fieldName];
+	}
+
 	protected static function getFontLink(string $font): string
 	{
 		$domain = 'fonts.googleapis.com';
@@ -281,7 +347,7 @@ class ThemeFonts extends Hook\Page
 	 */
 	protected function setSize(): void
 	{
-		$size = $this->getField('SIZE');
+		$size = self::sanitizeNumber('SIZE', $this->getField('SIZE'));
 
 		$assets = Assets\Manager::getInstance();
 		$assets->addString(
@@ -327,9 +393,9 @@ class ThemeFonts extends Hook\Page
 	 */
 	protected function setTypo(): void
 	{
-		$lineHeight = $this->getField('LINE_HEIGHT');
-		$fontWeight = $this->getField('FONT_WEIGHT');
-		$hFontWeight = $this->getField('FONT_WEIGHT_H');
+		$lineHeight = self::sanitizeNumber('LINE_HEIGHT', $this->getField('LINE_HEIGHT'));
+		$fontWeight = self::sanitizeFontWeight('FONT_WEIGHT', $this->getField('FONT_WEIGHT'));
+		$hFontWeight = self::sanitizeFontWeight('FONT_WEIGHT_H', $this->getField('FONT_WEIGHT_H'));
 
 		$mainClass = Landing::getEditMode() ? '.landing-edit-mode' : '.landing-public-mode';
 		$assets = Assets\Manager::getInstance();

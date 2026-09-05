@@ -176,6 +176,76 @@ class LandingSiteTileComponent extends LandingBaseComponent implements Controlle
 	}
 
 	/**
+	 * Returns domain status and its message for the site tile.
+	 * @param array $item Site's data.
+	 * @param bool $published Site is published.
+	 * @param bool $isAiSite Site is created by AI scenario and AI sites are enabled.
+	 * @return array{status: string, message: string|null}
+	 */
+	private function getDomainStatus(array $item, bool $published, bool $isAiSite): array
+	{
+		$domainStatusMessage = null;
+		$domainStatus = $this::DOMAIN_STATUS['unknown'];
+
+		if ($item['DOMAIN_PROVIDER'] ?? null)
+		{
+			$tariffTtl = Restriction\Site::getFreeDomainSuspendedTime();
+			if ($tariffTtl)
+			{
+				if ($tariffTtl <= time())
+				{
+					$domainStatus = $this::DOMAIN_STATUS['danger'];
+					$domainStatusMessage = Loc::getMessage('LANDING_CMP_DOMAIN_NEED_PAY');
+				}
+				else
+				{
+					$domainStatus = $this::DOMAIN_STATUS['alert'];
+					$domainStatusMessage = Loc::getMessage('LANDING_CMP_DOMAIN_NEED_PAY_SOON_UNTIL', [
+						'#DATE#' => Date::createFromTimestamp($tariffTtl)
+					]);
+				}
+			}
+			if (!$domainStatusMessage)
+			{
+				if (Domain\Register::isDomainActive($item['DOMAIN_NAME']))
+				{
+					$domainStatus = $this::DOMAIN_STATUS['success'];
+				}
+				else
+				{
+					$domainStatus = $this::DOMAIN_STATUS['clock'];
+					$domainStatusMessage = Loc::getMessage('LANDING_CMP_DOMAIN_WAIT_ACTIVATION');
+				}
+			}
+		}
+		// AI site gets its domain automatically, so an untouched address is not something to fix
+		else if ($isAiSite)
+		{
+			if ($published)
+			{
+				$domainStatus = $this::DOMAIN_STATUS['success'];
+			}
+		}
+		else
+		{
+			if (!$item['DOMAIN_PREV'])
+			{
+				$domainStatus = $this::DOMAIN_STATUS['alert'];
+				$domainStatusMessage = Loc::getMessage('LANDING_CMP_DOMAIN_CREATE_DOMAIN_NAME');
+			}
+			else if ($published)
+			{
+				$domainStatus = $this::DOMAIN_STATUS['success'];
+			}
+		}
+
+		return [
+			'status' => $domainStatus,
+			'message' => $domainStatusMessage,
+		];
+	}
+
+	/**
 	 * Prepares item for transfer to js.
 	 * @param array $items Item's array.
 	 * @param array $menuItems Menu item's array.
@@ -235,6 +305,7 @@ class LandingSiteTileComponent extends LandingBaseComponent implements Controlle
 
 			$published = $item['ACTIVE'] === 'Y' && $item['DELETED'] === 'N';
 			$deleted = $item['DELETED'] === 'Y';
+			$isAiSite = ($item['IS_CREATED_BY_AI_SCENARIO'] ?? false) && $aiSitesEnabled;
 
 			// check paths for sidepanel
 			$menuBottomItems = [];
@@ -285,60 +356,14 @@ class LandingSiteTileComponent extends LandingBaseComponent implements Controlle
 			$sidepanelShort = $this->prepareSideLink($sidepanelShort);
 
 			// domain status
-			$domainStatusMessage = null;
-			$domainStatus = $this::DOMAIN_STATUS['unknown'];
-			if ($item['DOMAIN_PROVIDER'] ?? null)
-			{
-				$tariffTtl = Restriction\Site::getFreeDomainSuspendedTime();
-				if ($tariffTtl)
-				{
-					if ($tariffTtl <= time())
-					{
-						$domainStatus = $this::DOMAIN_STATUS['danger'];
-						$domainStatusMessage = Loc::getMessage('LANDING_CMP_DOMAIN_NEED_PAY');
-					}
-					else
-					{
-						$domainStatus = $this::DOMAIN_STATUS['alert'];
-						$domainStatusMessage = Loc::getMessage('LANDING_CMP_DOMAIN_NEED_PAY_SOON_UNTIL', [
-							'#DATE#' => Date::createFromTimestamp($tariffTtl)
-						]);
-					}
-				}
-				if (!$domainStatusMessage)
-				{
-					if (Domain\Register::isDomainActive($item['DOMAIN_NAME']))
-					{
-						$domainStatus = $this::DOMAIN_STATUS['success'];
-					}
-					else
-					{
-						$domainStatus = $this::DOMAIN_STATUS['clock'];
-						$domainStatusMessage = Loc::getMessage('LANDING_CMP_DOMAIN_WAIT_ACTIVATION');
-					}
-				}
-			}
-			else
-			{
-				if (!$item['DOMAIN_PREV'])
-				{
-					$domainStatus = $this::DOMAIN_STATUS['alert'];
-					$domainStatusMessage = Loc::getMessage('LANDING_CMP_DOMAIN_CREATE_DOMAIN_NAME');
-				}
-				else if ($published)
-				{
-					$domainStatus = $this::DOMAIN_STATUS['success'];
-				}
-			}
+			$domainStatusData = $this->getDomainStatus($item, $published, $isAiSite);
+			$domainStatus = $domainStatusData['status'];
+			$domainStatusMessage = $domainStatusData['message'];
 
 			$accessPublication = $item['ACCESS_PUBLICATION'] === 'Y';
 			$indexEditUrl = ($item['INDEX_EDIT_URI'] ?? '') ?: '';
 			$pagesUrl = $this->replaceLink($this->arParams['PAGE_URL_SITE'], $item);
-			if (
-				($item['IS_CREATED_BY_AI_SCENARIO'] ?? false)
-				&& $aiSitesEnabled
-				&& $indexEditUrl !== ''
-			)
+			if ($isAiSite && $indexEditUrl !== '')
 			{
 				$pagesUrl = $indexEditUrl;
 			}
@@ -393,7 +418,7 @@ class LandingSiteTileComponent extends LandingBaseComponent implements Controlle
 					'publication' => $publicationError,
 				],
 				'copilotProcess' => $aiSitesEnabled ? $item['COPILOT_PROCESS'] : null,
-				'isCreatedByAiScenario' => $aiSitesEnabled && (bool)($item['IS_CREATED_BY_AI_SCENARIO'] ?? false),
+				'isCreatedByAiScenario' => $isAiSite,
 			];
 		}
 
@@ -423,6 +448,7 @@ class LandingSiteTileComponent extends LandingBaseComponent implements Controlle
 		$this->checkParam('MENU_ITEMS', []);
 		$this->checkParam('~AGREEMENT', []);
 		$this->checkParam('DELETE_LOCKED', []);
+		$this->checkParam('IS_DELETED', false);
 
 		if (Manager::isB24())
 		{

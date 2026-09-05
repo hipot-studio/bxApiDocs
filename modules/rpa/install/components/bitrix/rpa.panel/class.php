@@ -342,7 +342,7 @@ class RpaPanelComponent extends Bitrix\Rpa\Components\Base implements Controller
 					var data = sliderData.get(\'type\');
 					if(BX.Type.isPlainObject(data) && data.typeId && data.typeId > 0)
 					{
-						BX.ajax.runAction(\'rpa.type.delete\', {
+						BX.ajax.runAction(\'rpa.Type.delete\', {
 							data: {
 								id: data.typeId,
 							}

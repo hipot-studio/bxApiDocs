@@ -382,7 +382,7 @@ class PullManager
 	{
 		if($this->isEnabled && !empty($eventName))
 		{
-			$addResult = \CPullWatch::Add(Driver::getInstance()->getUserId(), $eventName, $immediate);
+			$addResult = \CPullWatch::add(Driver::getInstance()->getUserId(), $eventName, $immediate);
 			if($addResult)
 			{
 				return $eventName;

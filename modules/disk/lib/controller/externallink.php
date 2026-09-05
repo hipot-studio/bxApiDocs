@@ -4,16 +4,13 @@ namespace Bitrix\Disk\Controller;
 
 use Bitrix\Disk;
 use Bitrix\Disk\Internals\Engine;
-use Bitrix\Disk\Internals\Error\Error;
-use Bitrix\Main\Engine\ActionFilter\ClosureWrapper;
+use Bitrix\Disk\Internals\Engine\ActionFilter\CheckExternalLinkSettingsPermission;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
-use Bitrix\Main\Event;
-use Bitrix\Main\EventResult;
 use Bitrix\Main\Type\DateTime;
 
 final class ExternalLink extends Engine\Controller
 {
-	public function getPrimaryAutoWiredParameter()
+	public function getPrimaryAutoWiredParameter(): ExactParameter
 	{
 		return new ExactParameter(Disk\ExternalLink::class, 'externalLink', function($className, $id){
 			return Disk\ExternalLink::loadById($id);
@@ -24,43 +21,15 @@ final class ExternalLink extends Engine\Controller
 	 * Returns default pre-filters for action.
 	 * @return array
 	 */
-	protected function getDefaultPreFilters()
+	protected function getDefaultPreFilters(): array
 	{
-		$defaultPreFilters = parent::getDefaultPreFilters();
-
-		$defaultPreFilters[] = function(Event $event) {
-			/** @var ClosureWrapper $this */
-			foreach ($this->getAction()->getArguments() as $argument)
-			{
-				if (!($argument instanceof Disk\ExternalLink))
-				{
-					continue;
-				}
-
-				$object = $argument->getObject();
-
-				if (!$object instanceof Disk\BaseObject)
-				{
-					$this->errorCollection->add([new Error('object not found')]);
-
-					return new EventResult(EventResult::ERROR, null, null, $this);
-				}
-
-				$securityContext = $object->getStorage()?->getCurrentUserSecurityContext();
-
-				if (!$securityContext || !$object->canRead($securityContext))
-				{
-					$this->errorCollection->add([new Error('invalid rights')]);
-
-					return new EventResult(EventResult::ERROR, null, null, $this);
-				}
-			}
-		};
-
-		return $defaultPreFilters;
+		return [
+			...parent::getDefaultPreFilters(),
+			new CheckExternalLinkSettingsPermission(),
+		];
 	}
 
-	public function allowEditDocumentAction(Disk\ExternalLink $externalLink)
+	public function allowEditDocumentAction(Disk\ExternalLink $externalLink): void
 	{
 		if ($externalLink->availableEdit())
 		{
@@ -74,7 +43,7 @@ final class ExternalLink extends Engine\Controller
 		}
 	}
 
-	public function disallowEditDocumentAction(Disk\ExternalLink $externalLink)
+	public function disallowEditDocumentAction(Disk\ExternalLink $externalLink): void
 	{
 		if ($externalLink->availableEdit())
 		{
@@ -82,12 +51,12 @@ final class ExternalLink extends Engine\Controller
 		}
 	}
 
-	public function setPasswordAction(Disk\ExternalLink $externalLink, $newPassword)
+	public function setPasswordAction(Disk\ExternalLink $externalLink, $newPassword): void
 	{
 		$externalLink->changePassword($newPassword);
 	}
 
-	public function setDeathTimeAction(Disk\ExternalLink $externalLink, $deathTime)
+	public function setDeathTimeAction(Disk\ExternalLink $externalLink, $deathTime): array
 	{
 		$deathTime = (int)$deathTime;
 		$deathTime = DateTime::createFromTimestamp($deathTime);
@@ -99,17 +68,17 @@ final class ExternalLink extends Engine\Controller
 				'id' => $externalLink->getId(),
 				'hasDeathTime' => $externalLink->hasDeathTime(),
 				'deathTime' => $externalLink->getDeathTime(),
-				'deathTimeTimestamp' => $externalLink->hasDeathTime()? $externalLink->getDeathTime()->getTimestamp() : null,
+				'deathTimeTimestamp' => $externalLink->hasDeathTime() ? $externalLink->getDeathTime()->getTimestamp() : null,
 			],
 		];
 	}
 
-	public function revokeDeathTimeAction(Disk\ExternalLink $externalLink)
+	public function revokeDeathTimeAction(Disk\ExternalLink $externalLink): void
 	{
 		$externalLink->revokeDeathTime();
 	}
 
-	public function revokePasswordAction(Disk\ExternalLink $externalLink)
+	public function revokePasswordAction(Disk\ExternalLink $externalLink): void
 	{
 		$externalLink->revokePassword();
 	}

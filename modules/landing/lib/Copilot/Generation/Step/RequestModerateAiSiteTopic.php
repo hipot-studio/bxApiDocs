@@ -50,11 +50,6 @@ class RequestModerateAiSiteTopic extends RequestSingle
 		return null;
 	}
 
-	public function getAnalyticEvent(): ?Metrika\Events
-	{
-		return Metrika\Events::dataGeneration;
-	}
-
 	protected function getPrompt(): Prompt
 	{
 		$prompt = new Prompt(PromptCodeCatalog::CREATE_AI_SITE_MODERATION);

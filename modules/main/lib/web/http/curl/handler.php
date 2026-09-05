@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\Web\Http\Curl;
@@ -180,13 +180,23 @@ class Handler extends Http\Handler
 	 */
 	public function receiveHeaders($handle, $data)
 	{
-		if ($data === "\r\n")
+		if ($data !== "\r\n")
 		{
-			// got all headers
-			$this->log("\n<<<RESPONSE\n{headers}\n", HttpDebug::RESPONSE_HEADERS, ['headers' => $this->responseHeaders]);
+			$this->responseHeaders .= $data;
+		}
 
-			// build the response for the next stage
-			$this->response = $this->responseBuilder->createFromString($this->responseHeaders);
+		return strlen($data);
+	}
+
+	/**
+	 * @internal Callback
+	 */
+	public function receiveBody($handle, $data)
+	{
+		if ($this->response === null)
+		{
+			// first time here, create a response
+			$this->buildResponse();
 
 			$fetchBody = $this->waitResponse;
 
@@ -201,26 +211,8 @@ class Handler extends Http\Handler
 				throw new SkipBodyException();
 			}
 		}
-		else
-		{
-			$this->responseHeaders .= $data;
-		}
 
-		return strlen($data);
-	}
-
-	/**
-	 * @internal Callback
-	 */
-	public function receiveBody($handle, $data)
-	{
-		$body = $this->response?->getBody();
-
-		if ($body === null)
-		{
-			// incorrect headers, response was never created
-			return false;
-		}
+		$body = $this->response->getBody();
 
 		try
 		{
@@ -239,6 +231,16 @@ class Handler extends Http\Handler
 		return $result;
 	}
 
+	public function buildResponse(): Http\Response
+	{
+		// got all headers
+		$this->log("\n<<<RESPONSE\n{headers}\n", HttpDebug::RESPONSE_HEADERS, ['headers' => $this->responseHeaders]);
+
+		$this->response = $this->responseBuilder->createFromString($this->responseHeaders);
+
+		return $this->response;
+	}
+
 	protected function buildHeaders(): array
 	{
 		$headers = [];
@@ -251,17 +253,25 @@ class Handler extends Http\Handler
 			}
 		}
 
-		if ($this->getLogger() && $this->debugLevel)
+		if ($this->getLogger())
 		{
-			$logUri = new Uri((string)$this->request->getUri());
-			$logUri->convertToUnicode();
+			$this->logBacktrace();
 
-			$this->log("***CONNECT to {uri}\n", HttpDebug::CONNECT, ['uri' => $logUri]);
+			if ($this->debugLevel & HttpDebug::CONNECT)
+			{
+				$logUri = new Uri((string)$this->request->getUri());
+				$logUri->convertToUnicode();
 
-			$request = $this->request->getMethod() . ' ' . $this->request->getRequestTarget() . ' HTTP/' . $this->request->getProtocolVersion() . "\n"
-				. implode("\n", $headers) . "\n";
+				$this->log("***CONNECT to {uri}\n", HttpDebug::CONNECT, ['uri' => $logUri]);
+			}
 
-			$this->log(">>>REQUEST\n{request}", HttpDebug::REQUEST_HEADERS, ['request' => $request]);
+			if ($this->debugLevel & HttpDebug::REQUEST_HEADERS)
+			{
+				$request = $this->request->getMethod() . ' ' . $this->request->getRequestTarget() . ' HTTP/' . $this->request->getProtocolVersion() . "\n"
+					. implode("\n", $headers) . "\n";
+
+				$this->log(">>>REQUEST\n{request}", HttpDebug::REQUEST_HEADERS, ['request' => $request]);
+			}
 		}
 
 		return $headers;
@@ -307,6 +317,12 @@ class Handler extends Http\Handler
 
 		if ($status !== false)
 		{
+			if ($this->response === null)
+			{
+				// receiveBody() was never called
+				$this->buildResponse();
+			}
+
 			if ($fetchBody)
 			{
 				if ($this->debugLevel & HttpDebug::RESPONSE_BODY)

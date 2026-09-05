@@ -175,6 +175,11 @@ class MailboxDirectory extends \Bitrix\Mail\Internals\EO_MailboxDirectory implem
 		return false;
 	}
 
+	public function isSystem(): bool
+	{
+		return $this->isIncome() || $this->isOutcome() || $this->isDraft() || $this->isTrash() || $this->isSpam();
+	}
+
 	public function hasChildren()
 	{
 		return !empty($this->children);

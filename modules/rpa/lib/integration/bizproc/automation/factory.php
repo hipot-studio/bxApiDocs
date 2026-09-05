@@ -165,7 +165,7 @@ class Factory
 		])->fetch();
 		if ($template)
 		{
-			\CBPDocument::DeleteWorkflowTemplate($template['ID'], $documentType, $errors);
+			\CBPDocument::deleteWorkflowTemplate($template['ID'], $documentType, $errors);
 		}
 	}
 }

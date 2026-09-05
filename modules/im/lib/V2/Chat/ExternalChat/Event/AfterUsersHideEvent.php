@@ -4,11 +4,11 @@ namespace Bitrix\Im\V2\Chat\ExternalChat\Event;
 
 use Bitrix\Im\V2\Chat\ExternalChat;
 
-class AfterUsersHideEvent extends ChatEvent
+class AfterUsersHideEvent extends ChatEvent implements InitiatedByUserInterface
 {
-	public function __construct(ExternalChat $chat, array $userIds)
+	public function __construct(ExternalChat $chat, int $initiatorId, array $userIds)
 	{
-		$parameters = ['userIds' => $userIds];
+		$parameters = ['initiatorId' => $initiatorId, 'userIds' => $userIds];
 
 		parent::__construct($chat, $parameters);
 	}
@@ -16,6 +16,11 @@ class AfterUsersHideEvent extends ChatEvent
 	protected function getActionName(): string
 	{
 		return 'AfterUsersHide';
+	}
+
+	public function getInitiatorId(): int
+	{
+		return $this->parameters['initiatorId'];
 	}
 
 	public function getUserIds(): array

@@ -6,6 +6,7 @@ namespace Bitrix\Booking\Controller\V1\CrmForm;
 
 use Bitrix\Booking\Controller\V1\BaseController;
 use Bitrix\Booking\Controller\V1\Response\ResourceSkuRelationsService\GetResponse;
+use Bitrix\Booking\Entity\Resource\Resource;
 use Bitrix\Booking\Internals\Container;
 use Bitrix\Booking\Internals\Exception\ErrorBuilder;
 use Bitrix\Booking\Internals\Exception\Exception;
@@ -67,6 +68,32 @@ class SettingsForm extends BaseController
 				],
 				resources: $this->crmFormService->getDefaultResourceCollectionWithSkus(),
 			);
+		}
+		catch (Exception $exception)
+		{
+			$this->addError(ErrorBuilder::buildFromException($exception));
+
+			return null;
+		}
+	}
+
+	public function getResourcesAction(array $ids = []): array|null
+	{
+		try
+		{
+			$resources = [];
+			/** @var Resource $resource */
+			foreach ($this->crmFormService->getResourceCollection($ids) as $resource)
+			{
+				$resources[] = [
+					'id' => $resource->getId(),
+					'name' => $resource->getName(),
+					'typeName' => $resource->getType()?->getName(),
+					'slotRanges' => $resource->getSlotRanges(),
+				];
+			}
+
+			return $resources;
 		}
 		catch (Exception $exception)
 		{

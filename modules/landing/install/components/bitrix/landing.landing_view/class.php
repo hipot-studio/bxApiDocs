@@ -42,6 +42,12 @@ class LandingViewComponent extends LandingBaseComponent
 	private const PHONE_VERIFY_ENTITY_FORM = 'crm_webform';
 
 	/**
+	 * Elements of the auto publication switching event.
+	 */
+	private const METRIKA_ELEMENT_AUTO_PUBLICATION_ON = 'on';
+	private const METRIKA_ELEMENT_AUTO_PUBLICATION_OFF = 'off';
+
+	/**
 	 * Total this type sites count.
 	 * @deprecated since 19.0.0
 	 * @var int
@@ -147,7 +153,22 @@ class LandingViewComponent extends LandingBaseComponent
 	 */
 	protected function actionChangeAutoPublication(string $check): void
 	{
-		\CUserOptions::setOption('landing', 'auto_publication', ($check === 'Y') ? 'Y' : 'N');
+		$isEnabled = $check === 'Y';
+		\CUserOptions::setOption('landing', 'auto_publication', $isEnabled ? 'Y' : 'N');
+
+		$metrika = new Metrika\Metrika(
+			Metrika\Categories::getBySiteType($this->arParams['TYPE']),
+			Metrika\Events::autopub,
+			Metrika\Tools::getBySiteType($this->arParams['TYPE']),
+		);
+		$metrika
+			->setElement(
+				$isEnabled
+					? self::METRIKA_ELEMENT_AUTO_PUBLICATION_ON
+					: self::METRIKA_ELEMENT_AUTO_PUBLICATION_OFF
+			)
+			->send()
+		;
 	}
 
 	/**
@@ -328,7 +349,6 @@ class LandingViewComponent extends LandingBaseComponent
 				\localRedirect($uriSave->getUri(), true);
 			}
 			$metrikaParams = new Metrika\FieldsDto(
-				type: Metrika\Types::template,
 				subSection: 'from_editor',
 				element: 'manual',
 			);
@@ -702,6 +722,8 @@ class LandingViewComponent extends LandingBaseComponent
 				$options['version'] = Manager::getVersion();
 				$options['default_section'] = $this->getCurrentBlockSection($type);
 				$options['blockControlsEnabled'] = !Copilot\Manager::isAiSitesEnabled() || !$isAiSiteCreated;
+				$options['aiSiteSelectedElementEditEnabled'] =
+					Copilot\Manager::isAiSiteSelectedElementEditEnabled() && $isAiSiteCreated;
 				$options['tailwindRuntimeEnabled'] = (new TailwindRuntimeEligibilityService())->isLandingSupported((int)$landing->getId());
 				$options['specialType'] = $this->arResult['SPECIAL_TYPE'];
 				$options['autoPublicationEnabled'] =
@@ -1098,10 +1120,22 @@ class LandingViewComponent extends LandingBaseComponent
 				'IFRAME' => 'Y'
 			]);
 		}
-			if (isset($_GET['newLanding']) && $_GET['newLanding'] === 'Y')
-			{
+		if (isset($_GET['newLanding']) && $_GET['newLanding'] === 'Y')
+		{
 			$urls['landingFrame']->addParams([
 				'newLanding' => 'Y'
+			]);
+		}
+		// the editor frame is loaded by its own request: the analytics mark of the transition
+		// from the AI generation lives on the outer address and reaches the frame only here
+		if (
+			$this->request(Metrika\EditorOpenEventResolver::FROM_GENERATOR_PARAM)
+			=== Metrika\EditorOpenEventResolver::FROM_GENERATOR_PARAM_VALUE
+		)
+		{
+			$urls['landingFrame']->addParams([
+				Metrika\EditorOpenEventResolver::FROM_GENERATOR_PARAM
+					=> Metrika\EditorOpenEventResolver::FROM_GENERATOR_PARAM_VALUE
 			]);
 		}
 

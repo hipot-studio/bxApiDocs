@@ -165,8 +165,9 @@ class CFile
 			return GetMessage("MAIN_BAD_FILENAME1");
 		}
 
-		if (mb_strlen($strFileName) > 255)
+		if (strlen($strFileName) > 255)
 		{
+			// 255 bytes (not symbols) for xfs, ext* file systems
 			return GetMessage("MAIN_BAD_FILENAME_LEN");
 		}
 

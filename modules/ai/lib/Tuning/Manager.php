@@ -320,6 +320,7 @@ class Manager
 							->setP1('isAdmin_' . (\Bitrix\AI\Facade\User::isAdmin() ? 'Y' : 'N'))
 							->setP2(static::formatSettingValue($value))
 							->setP3(static::formatSettingValue($savedConfig[$key]))
+							->setUserId(\Bitrix\AI\Facade\User::getCurrentUserId())
 							->send();
 					}
 				}

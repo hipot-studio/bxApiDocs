@@ -11,10 +11,13 @@ class Event
 	public const ADD_EVENT = 'add';
 	public const READ_ALL_EVENT = 'readAll';
 	public const READ_ALL_BY_TYPE_EVENT = 'readAllByType';
+	public const USER_FIRED_EVENT = 'userFired';
+	public const USER_RESTORED_EVENT = 'userRestored';
 	public const CHAT_ENTITY = 'chat';
 	public const PIN_MESSAGE_ENTITY = 'pin';
 	public const MESSAGE_ENTITY = 'message';
 	public const UPDATED_MESSAGE_ENTITY = 'updatedMessage';
+	public const USER_ENTITY = 'user';
 
 	private ?int $id;
 	private DateTime $dateCreate;

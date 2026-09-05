@@ -224,7 +224,9 @@ class RoleManager
 
 		if ($chat instanceof Chat\CopilotChat)
 		{
-			$chat->sendBanner(null, false, $roleData[$roleCode]['name'], true);
+			// The role is resolved for the actor who changes it. The boundary of that rule is a system
+			// context (user 0): it names no actor, and sendBanner falls back to the chat author there.
+			$chat->sendBanner($this->getContext()->getUserId(), false, $roleData[$roleCode]['name'], true);
 		}
 
 		return $result;

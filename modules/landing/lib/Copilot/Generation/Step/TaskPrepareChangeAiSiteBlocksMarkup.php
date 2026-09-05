@@ -8,7 +8,10 @@ use Bitrix\Landing\Copilot\Generation\Step\Base\TaskStep;
 
 use Bitrix\Landing\AI\SiteBuilder\Font\AiFontPolicy;
 use Bitrix\Landing\AI\SiteBuilder\Html\AiBlockHtmlPayloadProcessor;
+use Bitrix\Landing\AI\SiteBuilder\Html\AiFontAwesomeIconNormalizer;
+use Bitrix\Landing\Copilot\Generation\Log;
 use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteState;
+use Bitrix\Landing\Copilot\Services\HtmlBlock\AdditiveNodeTagger;
 use Bitrix\Landing\Copilot\Services\Manifest\NodeCollector;
 use Bitrix\Main\Web\DOM;
 
@@ -22,6 +25,7 @@ class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
 	private const SUPPORTED_ASPECTS = ['landscape', 'portrait', 'square'];
 	private const ACTION_ADD = 'add_block';
 	private const ACTION_UPDATE = 'update_block';
+	private const NODE_REPAIR_DIAGNOSTIC = 'node_repair_failed';
 
 	public function execute(): bool
 	{
@@ -35,7 +39,7 @@ class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
 
 		$changed = false;
 		$emptyAiMeta = AiBlockHtmlPayloadProcessor::getEmptyAiMeta();
-		foreach ($htmlBlocks as &$item)
+		foreach ($htmlBlocks as $position => &$item)
 		{
 			if (!is_array($item))
 			{
@@ -65,6 +69,8 @@ class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
 				$html,
 				trim((string)($item['actionType'] ?? '')),
 				(string)($item['originalHtml'] ?? ''),
+				(int)($item['blockId'] ?? 0),
+				(int)$position,
 			);
 			$preparedHtml = (string)($prepared['html'] ?? $html);
 			$preparedAiMeta = AiBlockHtmlPayloadProcessor::normalizeAiMeta($prepared['aiMeta'] ?? null);
@@ -103,7 +109,13 @@ class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
 		;
 	}
 
-	private function prepareGeneratedHtml(string $html, string $actionType = '', string $originalHtml = ''): array
+	private function prepareGeneratedHtml(
+		string $html,
+		string $actionType = '',
+		string $originalHtml = '',
+		int $blockId = 0,
+		int $position = -1,
+	): array
 	{
 		if (trim($html) === '')
 		{
@@ -113,13 +125,16 @@ class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
 			];
 		}
 
+		// icons must be normalized before parsing: NodeTagger recognizes only the `fa fa-<icon>` form
+		$html = AiFontAwesomeIconNormalizer::normalizeHtml($html);
+
 		try
 		{
 			$doc = new DOM\Document();
 			$doc->loadHTML('<div id="' . self::ROOT_NODE_ID . '">' . $html . '</div>');
 
 			$root = $doc->querySelector('#' . self::ROOT_NODE_ID);
-			if (!$root)
+			if (!$root instanceof DOM\Element)
 			{
 				throw new \RuntimeException('DOM root not found.');
 			}
@@ -164,6 +179,16 @@ class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
 				$this->clearInternalImageAttributes($imageNode);
 			}
 
+			try
+			{
+				(new AdditiveNodeTagger())->repair($root);
+			}
+			catch (\Throwable $error)
+			{
+				// text/link/icon repair is best effort: image tagging above must survive its failure
+				$this->logNodeRepairFailure($error, $blockId, $position);
+			}
+
 			$preparedHtml = ChangeAiSiteDomHelper::extractRootHtml($root);
 			if ($preparedHtml === '')
 			{
@@ -184,6 +209,24 @@ class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
 				'aiMeta' => AiBlockHtmlPayloadProcessor::getEmptyAiMeta(),
 			];
 		}
+	}
+
+	protected function logNodeRepairFailure(\Throwable $error, int $blockId, int $position): void
+	{
+		if (!Log::isEnabled())
+		{
+			return;
+		}
+
+		(new Log($this->generation->getId()))->addStructureDiagnostics((int)$this->stepId, [
+			'failed' => [self::NODE_REPAIR_DIAGNOSTIC],
+			'summary' => [
+				'blockId' => $blockId,
+				'position' => $position,
+				'error' => $error::class,
+				'message' => $error->getMessage(),
+			],
+		]);
 	}
 
 	private function normalizeAspect(string $aspect): string

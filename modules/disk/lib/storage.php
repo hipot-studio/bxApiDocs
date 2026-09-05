@@ -544,6 +544,11 @@ final class Storage extends Internals\Model implements \JsonSerializable
 		return $this->getSpecificFolderByCode(SpecificFolder::CODE_FOR_RECORDED_FILES);
 	}
 
+	public function getFolderForMailAttachments(): ?Folder
+	{
+		return $this->getSpecificFolderByCode(SpecificFolder::CODE_FOR_MAIL_ATTACHMENTS);
+	}
+
 	/**
 	 * Creates or loads specific folder by symbolic code.
 	 * @param string $code Code of specific folder.
@@ -924,9 +929,9 @@ final class Storage extends Internals\Model implements \JsonSerializable
 		return $this->update(array('NAME' => $name));
 	}
 
-	public function delete($deletedBy): bool
+	public function delete($deletedBy, bool $bypassDeletionRestriction = false): bool
 	{
-		if ($this->getRootObject() && !$this->getRootObject()->deleteTree($deletedBy))
+		if ($this->getRootObject() && !$this->getRootObject()->deleteTree($deletedBy, $bypassDeletionRestriction))
 		{
 			return false;
 		}

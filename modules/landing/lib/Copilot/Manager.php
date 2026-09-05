@@ -17,6 +17,7 @@ use Bitrix\Rest\Marketplace\Client;
 class Manager
 {
 	private const OPTION_AI_SITES_ENABLED = 'landing_ai_sites_enabled';
+	private const OPTION_AI_SITE_SELECTED_ELEMENT_ENABLED = 'landing_ai_site_selected_element_enabled';
 
 	/**
 	 * Check is feature available (by option, tariff etc.)
@@ -43,6 +44,11 @@ class Manager
 	public static function getAiSitesDisabledErrorCode(): string
 	{
 		return 'ai_sites_disabled_by_option';
+	}
+
+	public static function isAiSiteSelectedElementEditEnabled(): bool
+	{
+		return Option::get('landing', self::OPTION_AI_SITE_SELECTED_ELEMENT_ENABLED, 'N', '') === 'Y';
 	}
 
 	/**

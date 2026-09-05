@@ -292,7 +292,7 @@ class MainPage extends BaseController
 			->withCounters($bookings, $userId)
 			->withClientsData($bookings)
 			->withExternalData($bookings)
-			->withMessages($bookings)
+			->withConfirmationFlag($bookings)
 			->withSkus($bookings)
 		;
 

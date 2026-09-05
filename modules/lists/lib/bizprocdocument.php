@@ -1351,6 +1351,7 @@ class BizprocDocument extends CIBlockDocument
 		CIBlockElement::WF_CleanUpHistoryCopies($documentId, 0);
 
 		$arFieldsPropertyValues = [];
+		$hasDiskFileWorkflow = false;
 
 		$dbResult = CIBlockElement::GetList(
 			[],
@@ -1468,6 +1469,7 @@ class BizprocDocument extends CIBlockDocument
 					}
 				}
 				$arFields[$key] = ['VALUE' => $arFields[$key], 'DESCRIPTION' => 'workflow'];
+				$hasDiskFileWorkflow = true;
 			}
 			elseif ($arDocumentFields[$key]['Type'] == 'S:HTML')
 			{
@@ -1519,7 +1521,16 @@ class BizprocDocument extends CIBlockDocument
 		$iblockElement = new CIBlockElement();
 		if (isset($arFields['PROPERTY_VALUES']) && count($arFields['PROPERTY_VALUES']) > 0)
 		{
-			$iblockElement->SetPropertyValuesEx($documentId, $arResult['IBLOCK_ID'], $arFields['PROPERTY_VALUES']);
+			$writePropertyValues = static fn() => $iblockElement->SetPropertyValuesEx($documentId, $arResult['IBLOCK_ID'], $arFields['PROPERTY_VALUES']);
+
+			if ($hasDiskFileWorkflow && Loader::includeModule('disk') && class_exists('Bitrix\Disk\Integration\FileDiskProperty'))
+			{
+				\Bitrix\Disk\Integration\FileDiskProperty::runInWorkflowWriteContext($writePropertyValues);
+			}
+			else
+			{
+				$writePropertyValues();
+			}
 			$propertyValuesUpdated = true;
 		}
 

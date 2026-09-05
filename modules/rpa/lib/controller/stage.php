@@ -31,6 +31,11 @@ class Stage extends Base
 				new CheckPermissions(UserPermissions::ENTITY_STAGE, UserPermissions::ACTION_MODIFY),
 			],
 		];
+		$configureActions['saveAll'] = [
+			'+prefilters' => [
+				new CheckPermissions(UserPermissions::ENTITY_TYPE, UserPermissions::ACTION_MODIFY),
+			],
+		];
 		$configureActions['getTasks'] =
 		$configureActions['get'] = [
 			'+prefilters' => [
@@ -76,12 +81,14 @@ class Stage extends Base
 	public function updateAction(\Bitrix\Rpa\Model\Stage $stage, array $fields, string $eventId = ''): ?array
 	{
 		$isNew = (!($stage->getId() > 0));
-		unset($fields['id']);
-		if($stage->getId() > 0)
-		{
-			unset($fields['typeId']);
-		}
 		$converter = new Converter(Converter::TO_UPPER | Converter::KEYS | Converter::TO_SNAKE);
+		$fields = $this->removeCollidingKeys($fields, $converter, 'id');
+		$typeId = $fields['typeId'] ?? null;
+		$fields = $this->removeCollidingKeys($fields, $converter, 'typeId');
+		if($isNew && $typeId !== null)
+		{
+			$fields['typeId'] = $typeId;
+		}
 		$previousStageId = null;
 		if(isset($fields['previousStageId']))
 		{
@@ -154,6 +161,24 @@ class Stage extends Base
 			$this->addErrors($result->getErrors());
 			return null;
 		}
+	}
+
+	/**
+	 * Removes every key which the converter turns into the same name as $canonicalKey:
+	 * such keys collide after the conversion and the last one of them silently wins.
+	 */
+	protected function removeCollidingKeys(array $fields, Converter $converter, string $canonicalKey): array
+	{
+		$convertedKey = $converter->process($canonicalKey);
+		foreach(array_keys($fields) as $key)
+		{
+			if($converter->process($key) === $convertedKey)
+			{
+				unset($fields[$key]);
+			}
+		}
+
+		return $fields;
 	}
 
 	public function deleteAction(\Bitrix\Rpa\Model\Stage $stage): void
@@ -336,6 +361,7 @@ class Stage extends Base
 		foreach($stages as $fields)
 		{
 			$fields['id'] = (int)$fields['id'];
+			$fields['typeId'] = $type->getId();
 			if($fields['id'] > 0)
 			{
 				$stage = $currentStages->getByPrimary($fields['id']);

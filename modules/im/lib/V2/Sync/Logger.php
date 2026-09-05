@@ -64,6 +64,35 @@ class Logger
 		}
 	}
 
+	/**
+	 * Writes a global lifecycle event with USER_ID = 0, bypassing the active-user filter.
+	 * Used for user lifecycle events (fired, restored, deleted) visible to all mobile clients.
+	 *
+	 * @param Event $event    The event to record.
+	 * @param bool  $deferred When true (default), write is scheduled as a background job (safe for
+	 *                        kernel hook handlers). When false, write is immediate (for agent/cron callers).
+	 */
+	public function addGlobal(Event $event, bool $deferred = true): void
+	{
+		if (!SyncService::isEnable())
+		{
+			return;
+		}
+
+		if ($deferred)
+		{
+			Application::getInstance()->addBackgroundJob(
+				fn () => $this->addGlobalDeferred($event),
+				[],
+				Application::JOB_PRIORITY_LOW
+			);
+		}
+		else
+		{
+			$this->writeGlobalEvent($event);
+		}
+	}
+
 	public function updateDateDelete(EO_Log_Collection $logs, ?DateTime $dateDelete = null): void
 	{
 		Application::getInstance()->addBackgroundJob(fn () => $this->updateDateDeleteDeferred($logs, $dateDelete));
@@ -123,6 +152,70 @@ class Logger
 		}
 		$this->events = [];
 		$this->isAlreadyPlanned = false;
+	}
+
+	private function addGlobalDeferred(Event $event): void
+	{
+		$this->writeGlobalEvent($event);
+	}
+
+	private function writeGlobalEvent(Event $event): void
+	{
+		LogTable::multiplyMerge(
+			...$this->getMultiplyMergeParam($event, [0 => 0])
+		);
+	}
+
+	/**
+	 * Writes a batch of global lifecycle events (USER_ID = 0) in a SINGLE multiplyMerge upsert.
+	 *
+	 * Each event becomes one (0, ENTITY_TYPE, ENTITY_ID) row; the DB matches and updates each row
+	 * independently by the unique key, so one shared update clause is correct. Used by agents that
+	 * backfill many events of the same kind (e.g. userFired) without N separate SQL round-trips.
+	 *
+	 * @param Event[] $events Events to record. No-op when empty.
+	 */
+	public function writeGlobalEvents(array $events): void
+	{
+		if (empty($events))
+		{
+			return;
+		}
+
+		if (!SyncService::isEnable())
+		{
+			return;
+		}
+
+		$insertFields = [];
+		foreach ($events as $event)
+		{
+			$insertFields[] = [
+				'USER_ID' => 0,
+				'ENTITY_TYPE' => $event->entityType,
+				'ENTITY_ID' => $event->entityId,
+				'EVENT' => $event->eventName,
+				'DATE_CREATE' => $event->getDateCreate(),
+				'DATE_DELETE' => $event->getDateDelete(),
+			];
+		}
+
+		$lastEvent = $events[array_key_last($events)];
+
+		LogTable::multiplyMerge(
+			$insertFields,
+			[
+				'EVENT' => $lastEvent->eventName,
+				'DATE_CREATE' => $lastEvent->getDateCreate(),
+				'DATE_DELETE' => $lastEvent->getDateDelete(),
+			],
+			[
+				'USER_ID',
+				'ENTITY_TYPE',
+				'ENTITY_ID',
+			],
+			['DEADLOCK_SAFE' => true]
+		);
 	}
 
 	private function updateDateDeleteDeferred(EO_Log_Collection $logs, ?DateTime $dateDelete): void

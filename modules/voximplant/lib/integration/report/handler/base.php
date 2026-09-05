@@ -259,10 +259,8 @@ abstract class Base extends BaseReport
 	protected function getDateExpressionWithTimeShiftForQuery($placeholder = '%s'): string
 	{
 		$offset = \CTimeZone::GetOffset();
-		$sign = ($offset > 0 ? -1 : 1);
-		$difference = abs($offset);
 
-		return Application::getConnection()->getSqlHelper()->addSecondsToDateTime($sign * $difference, $placeholder);
+		return Application::getConnection()->getSqlHelper()->addSecondsToDateTime($offset, $placeholder);
 	}
 
 	/**
@@ -311,7 +309,8 @@ abstract class Base extends BaseReport
 	private function getExpressionForDateWithInterval($timePeriodDatasel, int $dateDifference): string
 	{
 		$helper = Application::getConnection()->getSqlHelper();
-		$date = $helper->getDatetimeToDateFunction('%s');
+		// Period compare keys are joined with DATE, so they must be built from the same date shifted to the user's time zone.
+		$date = $helper->getDatetimeToDateFunction($this->getDateExpressionWithTimeShiftForQuery());
 
 		switch ($timePeriodDatasel)
 		{
@@ -335,7 +334,7 @@ abstract class Base extends BaseReport
 	 *
 	 * @param Query $query
 	 * @param $timePeriodDatasel
-	 * @param int $secondDifference - разница в секундах между периодами
+	 * @param int $dateDifference Difference between periods in seconds.
 	 */
 	protected function addDateForJoinField(Query $query, $timePeriodDatasel, int $dateDifference): void
 	{
@@ -840,7 +839,7 @@ abstract class Base extends BaseReport
 	{
 		$query->registerRuntimeField(new ExpressionField(
 			$fieldName,
-			$this::getExpressionForDateWithInterval($timePeriodDatasel, $dateDifference),
+			$this->getExpressionForDateWithInterval($timePeriodDatasel, $dateDifference),
 			['CALL_START_DATE']
 		));
 	}

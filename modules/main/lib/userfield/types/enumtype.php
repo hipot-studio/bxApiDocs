@@ -8,6 +8,8 @@ use CDBResult;
 use CUserFieldEnum;
 use CUserTypeManager;
 use Bitrix\Main\Context;
+use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\Application;
 
 Loc::loadMessages(__FILE__);
 
@@ -138,9 +140,9 @@ class EnumType extends BaseType
 	 */
 	public static function getDbColumnType(): string
 	{
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
-		return $helper->getColumnTypeByField(new \Bitrix\Main\ORM\Fields\IntegerField('x'));
+		return $helper->getColumnTypeByField(new IntegerField('x'));
 	}
 
 	/**
@@ -151,8 +153,8 @@ class EnumType extends BaseType
 	{
 		$height = (int)($userField['SETTINGS']['LIST_HEIGHT'] ?? 0);
 		$display = $userField['SETTINGS']['DISPLAY'] ?? '';
-		$caption_no_value = trim($userField['SETTINGS']['CAPTION_NO_VALUE'] ?? '');
-		$show_no_value = (isset($userField['SETTINGS']['SHOW_NO_VALUE']) && $userField['SETTINGS']['SHOW_NO_VALUE'] === 'N' ? 'N' : 'Y');
+		$captionNoValue = trim($userField['SETTINGS']['CAPTION_NO_VALUE'] ?? '');
+		$showNoValue = (isset($userField['SETTINGS']['SHOW_NO_VALUE']) && $userField['SETTINGS']['SHOW_NO_VALUE'] === 'N' ? 'N' : 'Y');
 
 		$displays = [
 			self::DISPLAY_CHECKBOX,
@@ -168,8 +170,8 @@ class EnumType extends BaseType
 		return [
 			'DISPLAY' => $display,
 			'LIST_HEIGHT' => ($height < 1 ? 1 : $height),
-			'CAPTION_NO_VALUE' => $caption_no_value, // no default value - only in output
-			'SHOW_NO_VALUE' => $show_no_value, // no default value - only in output
+			'CAPTION_NO_VALUE' => $captionNoValue, // no default value - only in output
+			'SHOW_NO_VALUE' => $showNoValue, // no default value - only in output
 		];
 	}
 
@@ -366,29 +368,11 @@ class EnumType extends BaseType
 	{
 		if (!isset($userField['ENUM']))
 		{
-			$userField['ENUM'] = [];
-			$enumValuesManager = new CUserFieldEnum();
-			$dbRes = $enumValuesManager->getList(
-				[],
-				[
-					'USER_FIELD_ID' => $userField['ID'],
-					'DEF' => 'Y',
-				]
-			);
-
-			while ($enumValue = $dbRes->fetch())
-			{
-				$userField['ENUM'][] = [
-					'ID' => $enumValue['ID'],
-					'VALUE' => $enumValue['VALUE'],
-					'DEF' => $enumValue['DEF'],
-					'SORT' => $enumValue['SORT'],
-					'XML_ID' => $enumValue['XML_ID'],
-				];
-			}
+			$userField['ENUM'] = CUserFieldEnum::getDefaultValue($userField['ID']);
 		}
 
 		$userField['ENTITY_VALUE_ID'] = 0;
+
 		return static::getFieldValue($userField, $additionalParameters);
 	}
 
@@ -399,9 +383,9 @@ class EnumType extends BaseType
 
 	public static function getFieldValue(array $userField, array $additionalParameters = [])
 	{
-		$bVarsFromForm = ($additionalParameters['bVarsFromForm'] ?? false);
+		$varsFromForm = ($additionalParameters['bVarsFromForm'] ?? false);
 		$forceUseValueInsteadOfDefault = ($additionalParameters['FORCE_USE_VALUE'] ?? 'N') === 'Y';
-		if (!$bVarsFromForm && !isset($additionalParameters['VALUE']))
+		if (!$varsFromForm && !isset($additionalParameters['VALUE']))
 		{
 			if (
 				isset($userField['ENTITY_VALUE_ID'], $userField['ENUM'])

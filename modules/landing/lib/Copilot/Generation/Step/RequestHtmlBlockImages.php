@@ -22,7 +22,6 @@ use Bitrix\Landing\Copilot\Model\RequestToEntitiesTable;
 use Bitrix\Landing\AI\SiteBuilder\Dto\EnhancedInputDto;
 use Bitrix\Landing\AI\SiteBuilder\ImageStyle\ImageStyleBriefResolver;
 use Bitrix\Landing\Landing;
-use Bitrix\Landing\Metrika;
 use Bitrix\Landing\Rights;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Web\Uri;
@@ -48,11 +47,6 @@ class RequestHtmlBlockImages extends AbstractAiImageRequest
 	public static function getRequestQuota(Site $siteData): ?RequestQuotaDto
 	{
 		return null;
-	}
-
-	public function getAnalyticEvent(): ?Metrika\Events
-	{
-		return Metrika\Events::imagesGeneration;
 	}
 
 	protected function getEntitiesToRequest(): array

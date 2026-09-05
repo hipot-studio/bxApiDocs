@@ -2,6 +2,7 @@
 namespace Bitrix\Calendar;
 
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
+use Bitrix\Calendar\Integration\HumanResources\TeamAccessCode;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
 use Bitrix\Calendar\Integration\Pull\PushService;
 use Bitrix\Calendar\Sync\Util\MsTimezoneConverter;
@@ -154,6 +155,11 @@ class Util
 				{
 					$codeList[] = 'DR'.$entity['id'];
 				}
+				elseif ($entity['entityId'] === 'structure-node')
+				{
+					// humanresources team: flat membership access code (CODE-01)
+					$codeList[] = TeamAccessCode::fromNodeId((int)$entity['id']);
+				}
 			}
 		}
 		return $codeList;
@@ -200,6 +206,14 @@ class Util
 					$entityList[] = [
 						'entityId' => 'project',
 						'id' => (int)mb_substr($code, 2)
+					];
+				}
+				// strict SNT<id> only, so SNTR<id> (recursive) is not caught here (CODE-01)
+				elseif (($nodeId = TeamAccessCode::extractNodeId($code)) !== null)
+				{
+					$entityList[] = [
+						'entityId' => 'structure-node',
+						'id' => $nodeId,
 					];
 				}
 			}

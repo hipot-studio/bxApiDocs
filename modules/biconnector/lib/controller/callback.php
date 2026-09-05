@@ -31,6 +31,13 @@ class Callback extends Controller
 		$responseBody = $context->getRequest()->getJsonList();
 		$status = $responseBody->get('status');
 
+		if (!SupersetInitializer::isActivationCallbackApplicable())
+		{
+			$this->logSkippedActivationCallback(is_string($status) ? $status : 'success');
+
+			return;
+		}
+
 		if (isset($status) && $status === 'error')
 		{
 			$errorMsg = $responseBody->get('error') ?? 'Unknown server error';
@@ -40,10 +47,17 @@ class Callback extends Controller
 			return;
 		}
 
-		if (SupersetInitializer::getSupersetStatus() === SupersetInitializer::SUPERSET_STATUS_LOAD)
-		{
-			SupersetInitializer::enableSuperset($responseBody->get('superset_address') ?? '');
-		}
+		SupersetInitializer::enableSuperset($responseBody->get('superset_address') ?? '');
+	}
+
+	private function logSkippedActivationCallback(string $callbackStatus): void
+	{
+		SupersetInitializerLogger::logInfo('Superset activation callback skipped', [
+			'callback_status' => $callbackStatus,
+			'current_status' => SupersetInitializer::getSupersetStatus(),
+			'rebind_required' => SupersetInitializer::isRebindRequired() ? 'Y' : 'N',
+			'pending_delete' => SupersetInitializer::isSupersetPendingDelete() ? 'Y' : 'N',
+		]);
 	}
 
 	public function freezeAction(): void

@@ -28,7 +28,7 @@ class CMailClientMassconnectComponent extends CBitrixComponent
 		$this->arResult['TITLE'] = Loc::getMessage('MAIL_CLIENT_MASSCONNECT_TITLE_MSGVER_1');
 		$this->arResult['IS_SMTP_AVAILABLE'] = $this->isSmtpAvailable();
 		$this->arResult['IS_PASSWORDLESS_CONNECT_AVAILABLE'] = Feature::isPasswordlessConnectAvailable();
-		$this->arResult['SETTINGS_CONFIG'] = MailboxSettingsConfig::getConfig();
+		$this->arResult['SETTINGS_CONFIG'] = MailboxSettingsConfig::getClientConfig();
 		$this->includeComponentTemplate();
 	}
 

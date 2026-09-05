@@ -26,10 +26,6 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 	protected const TEMPERATURE = 0.12;
 	protected const REQUIRES_PERSONAL_DATA_OBFUSCATION = false;
 
-	protected const ABSENT_QUALITIES = [
-//		Quality::QUALITIES['ai_site'],
-	];
-
 	protected int $modelContextLimit = 15745;
 
 
@@ -45,12 +41,7 @@ final class Bitrix24 extends CloudEngine implements IContext, IQueueOptional
 
 	public function hasQuality(Quality $quality): bool
 	{
-		return !array_intersect($quality->getRequired(), self::ABSENT_QUALITIES);
-	}
-
-	protected function availableForModules(): array
-	{
-		return [];
+		return true;
 	}
 
 	protected function getCompletionsUrl(): string

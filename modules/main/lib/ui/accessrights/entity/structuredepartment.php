@@ -2,16 +2,12 @@
 
 namespace Bitrix\Main\UI\AccessRights\Entity;
 
-use Bitrix\HumanResources\Builder\Structure\Filter\Column\IdFilter;
-use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
-use Bitrix\HumanResources\Builder\Structure\NodeDataBuilder;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\Main\Access\AccessCode;
-use Bitrix\Main\Loader;
 
 class StructureDepartment extends EntityBase
 {
-	private static array $modelsCache = [];
+	use HrStructureModelTrait;
 
 	/**
 	 * @return ?Node
@@ -39,32 +35,5 @@ class StructureDepartment extends EntityBase
 	public function getAvatar(int $width = 58, int $height = 58): ?string
 	{
 		return '';
-	}
-
-	protected function loadModel(): void
-	{
-		if ($this->model)
-		{
-			return;
-		}
-
-		if (array_key_exists($this->getId(), self::$modelsCache))
-		{
-			$this->model = self::$modelsCache[$this->getId()];
-
-			return;
-		}
-
-		if (Loader::includeModule('humanresources'))
-		{
-			$this->model =
-				NodeDataBuilder::createWithFilter(
-					new NodeFilter(IdFilter::fromId($this->getId()))
-				)
-				->get()
-			;
-
-			self::$modelsCache[$this->getId()] = $this->model;
-		}
 	}
 }

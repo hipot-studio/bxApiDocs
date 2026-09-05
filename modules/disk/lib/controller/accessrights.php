@@ -194,6 +194,7 @@ final class AccessRights extends Engine\Controller
 			'link' => $extLink ? $extLink->generateUrl() : null,
 			'rights' => $extLink ? AccessRight::tryFromExternalLinkRights($extLink->getAccessRight())?->value : null,
 			'canDownloadWithReadAccess' => $extLink ? $extLink->isCanDownloadWithReadAccess() : null,
+			'canEditSettings' => $extLink ? $extLink->canEditSettings() : true,
 			'publicLinkTtl' => $ttl,
 			'password' => $extLink ? $extLink->hasPassword() : null,
 			'disableReason' => $this->checkManageExternalLink($realFile, $onlyRead),
@@ -264,6 +265,7 @@ final class AccessRights extends Engine\Controller
 		$extLink = $this->externalLinkProvider->getForUse($realFile->getId());
 		$enabled = boolval($data['enabled'] ?? false);
 		$isObjectEditable = $canEdit && $this->isObjectEditable($realFile);
+		$settingsFields = ['rights', 'canDownloadWithReadAccess', 'newPassword', 'publicLinkTtl'];
 
 		if (!$enabled)
 		{
@@ -275,17 +277,76 @@ final class AccessRights extends Engine\Controller
 			return $this->getPublicLinkData($realFile, $onlyRead, $isObjectEditable); // todo: work on return values
 		}
 
+		if ($extLink && array_key_exists('canEditSettings', $data))
+		{
+			$this->addError(new Error(
+				'External link settings edit permission cannot be changed',
+				Disk\ExternalLink::ERROR_SETTINGS_EDIT_DENIED,
+			));
+
+			return null;
+		}
+
+		if ($extLink && !$extLink->canEditSettings() && $this->hasAnyKey($data, $settingsFields))
+		{
+			$this->addError(new Error(
+				'External link settings editing is denied',
+				Disk\ExternalLink::ERROR_SETTINGS_EDIT_DENIED,
+			));
+
+			return null;
+		}
+
 		if (!$extLink)
 		{
-			$extLink = $realFile->addExternalLink([
+			$addData = [
 				'CREATED_BY' => $this->getUser()->getId(),
 				'TYPE' => ExternalLinkTable::TYPE_MANUAL,
-			]);
+			];
+
+			if (array_key_exists('canEditSettings', $data))
+			{
+				$addData['CAN_EDIT_SETTINGS'] = (bool)$data['canEditSettings'];
+			}
+
+			if ($isObjectEditable && isset($data['rights']))
+			{
+				$rights = AccessRight::tryFrom($data['rights']);
+				if ($rights)
+				{
+					$addData['ACCESS_RIGHT'] = $rights->toExternalLinkRight();
+				}
+			}
+
+			if (isset($data['canDownloadWithReadAccess']))
+			{
+				$addData['CAN_DOWNLOAD_WITH_READ_ACCESS'] = $data['canDownloadWithReadAccess'] ? 1 : 0;
+			}
+
+			if (isset($data['newPassword']) && $data['newPassword'] !== false)
+			{
+				$addData['PASSWORD'] = (string)$data['newPassword'];
+			}
+
+			$publicLinkTtl = $data['publicLinkTtl'] ?? null;
+			if (is_int($publicLinkTtl) && $publicLinkTtl > time())
+			{
+				$addData['DEATH_TIME'] = DateTime::createFromTimestamp($publicLinkTtl);
+			}
+
+			$extLink = $realFile->addExternalLink($addData);
+			if (!$extLink)
+			{
+				$this->addErrors($realFile->getErrors());
+
+				return null;
+			}
+
+			return $this->getPublicLinkData($realFile, $onlyRead, $isObjectEditable);
 		}
 
 		if ($isObjectEditable && isset($data['rights']))
 		{
-
 			$rights = AccessRight::tryFrom($data['rights']);
 			if ($rights)
 			{
@@ -310,7 +371,7 @@ final class AccessRights extends Engine\Controller
 			}
 		}
 
-		$publicLinkTtl = $data['publicLinkTtl'];
+		$publicLinkTtl = $data['publicLinkTtl'] ?? null;
 
 		if (is_int($publicLinkTtl) || $publicLinkTtl === false)
 		{
@@ -327,6 +388,19 @@ final class AccessRights extends Engine\Controller
 		}
 
 		return $this->getPublicLinkData($realFile, $onlyRead, $isObjectEditable);
+	}
+
+	private function hasAnyKey(array $data, array $keys): bool
+	{
+		foreach ($keys as $key)
+		{
+			if (array_key_exists($key, $data))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private function getUser()
@@ -719,8 +793,11 @@ final class AccessRights extends Engine\Controller
 	 */
 	private function terminateSessionsWithInsufficientRights(BaseObject $object): void
 	{
-		$sessionTerminationService = (new Disk\Document\SessionTerminationServiceFactory($object))->create();
-		$sessionTerminationService->terminateSessionsWithInsufficientRights();
+		$sessionTerminationServices = (new Disk\Document\SessionTerminationServiceFactory($object))->createAll();
+		foreach ($sessionTerminationServices as $sessionTerminationService)
+		{
+			$sessionTerminationService->terminateSessionsWithInsufficientRights();
+		}
 	}
 
 	protected function terminateSessionsForAllBoardsInFolder(Folder $object, Disk\Security\SecurityContext $securityContext): void

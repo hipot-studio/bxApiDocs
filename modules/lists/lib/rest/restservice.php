@@ -276,11 +276,21 @@ class RestService extends \IRestService
 	{
 		$param = new Param($params);
 		$params = $param->getParams();
+		$iblockId = Utils::getIblockId($params);
+		self::checkFieldsIblockId($params, $iblockId);
+		$sectionId = self::getDestinationSectionId($params);
+		self::checkSectionIblock($iblockId, $sectionId);
+		$fields = is_array($params['FIELDS'] ?? null) ? $params['FIELDS'] : [];
+		$fields['IBLOCK_SECTION_ID'] = $sectionId;
+		$param->setParam([
+			'IBLOCK_SECTION_ID' => $sectionId,
+			'FIELDS' => $fields,
+		]);
 
 		global $USER;
 		$rightParam = new RightParam($param);
 		$rightParam->setUser($USER);
-		$rightParam->setEntityId($params["IBLOCK_SECTION_ID"]);
+		$rightParam->setEntityId($sectionId);
 
 		if (!\CLists::isListFeatureEnabled($rightParam->getIblockTypeId()))
 		{
@@ -342,11 +352,14 @@ class RestService extends \IRestService
 		}
 
 		$right = new Right($rightParam, new SectionRight($rightParam));
-		$right->checkPermission(SectionRight::READ);
+		$right->checkPermission((int)$params['IBLOCK_SECTION_ID'] > 0 ? SectionRight::READ : '');
 		if ($right->hasErrors())
 		{
 			self::throwError($right->getErrors());
 		}
+		$param->setParam([
+			'CHECK_PERMISSIONS' => self::shouldCheckNativePermissions($right->getPermission()) ? 'Y' : 'N',
+		]);
 
 		$section = new Section($param);
 		list ($sections, $queryObject) = $section->get(self::getNavData($n));
@@ -364,6 +377,8 @@ class RestService extends \IRestService
 	{
 		$param = new Param($params);
 		$params = $param->getParams();
+		$iblockId = Utils::getIblockId($params);
+		self::checkFieldsIblockId($params, $iblockId);
 
 		$section = new Section($param);
 		if (!$section->isExist())
@@ -374,7 +389,7 @@ class RestService extends \IRestService
 		global $USER;
 		$rightParam = new RightParam($param);
 		$rightParam->setUser($USER);
-		$rightParam->setEntityId($params["IBLOCK_SECTION_ID"]);
+		$rightParam->setEntityId(Utils::getSectionId($params));
 
 		if (!\CLists::isListFeatureEnabled($rightParam->getIblockTypeId()))
 		{
@@ -386,6 +401,26 @@ class RestService extends \IRestService
 		if ($right->hasErrors())
 		{
 			self::throwError($right->getErrors());
+		}
+
+		if (self::hasDestinationSectionId($params))
+		{
+			$destinationSectionId = self::getDestinationSectionId($params);
+			$currentParentSectionId = self::getCurrentSectionParentId(
+				$iblockId,
+				Utils::getSectionId($params),
+			);
+			if ($destinationSectionId === $currentParentSectionId)
+			{
+				$params = self::removeDestinationSectionId($params);
+				$param = new Param($params);
+				$section = new Section($param);
+			}
+			else
+			{
+				self::checkSectionIblock($iblockId, $destinationSectionId);
+				self::checkSectionPermission($param, $USER, $destinationSectionId, SectionRight::ADD);
+			}
 		}
 
 		$conn = Application::getConnection();
@@ -432,7 +467,7 @@ class RestService extends \IRestService
 		global $USER;
 		$rightParam = new RightParam($param);
 		$rightParam->setUser($USER);
-		$rightParam->setEntityId($params["IBLOCK_SECTION_ID"]);
+		$rightParam->setEntityId(Utils::getSectionId($params));
 
 		if (!\CLists::isListFeatureEnabled($rightParam->getIblockTypeId()))
 		{
@@ -534,7 +569,7 @@ class RestService extends \IRestService
 		}
 
 		$right = new Right($rightParam, new IblockRight($rightParam));
-		$right->checkPermission();
+		$right->checkPermission(IblockRight::READ);
 		if ($right->hasErrors())
 		{
 			self::throwError($right->getErrors());
@@ -647,6 +682,15 @@ class RestService extends \IRestService
 	{
 		$param = new Param($params);
 		$params = $param->getParams();
+		$iblockId = Utils::getIblockId($params);
+		$sectionId = self::getDestinationSectionId($params);
+		self::checkSectionIblock($iblockId, $sectionId);
+		$fields = is_array($params['FIELDS'] ?? null) ? $params['FIELDS'] : [];
+		$fields['IBLOCK_SECTION_ID'] = $sectionId;
+		$param->setParam([
+			'IBLOCK_SECTION_ID' => $sectionId,
+			'FIELDS' => $fields,
+		]);
 
 		$iblock = new Iblock($param);
 		if (!$iblock->isExist())
@@ -657,7 +701,7 @@ class RestService extends \IRestService
 		global $USER;
 		$rightParam = new RightParam($param);
 		$rightParam->setUser($USER);
-		$rightParam->setEntityId($params["IBLOCK_SECTION_ID"]);
+		$rightParam->setEntityId($sectionId);
 
 		if (!\CLists::isListFeatureEnabled($rightParam->getIblockTypeId()))
 		{
@@ -733,11 +777,16 @@ class RestService extends \IRestService
 		$param->setParam(["CAN_FULL_EDIT" => ($elementRight->canFullEdit() ? "Y" : "N")]);
 
 		$right = new Right($rightParam, $elementRight);
-		$right->checkPermission(ElementRight::READ);
+		$hasExplicitElement = array_key_exists('ELEMENT_ID', $params)
+			|| array_key_exists('ELEMENT_CODE', $params);
+		$right->checkPermission($hasExplicitElement ? ElementRight::READ : '');
 		if ($right->hasErrors())
 		{
 			self::throwError($right->getErrors());
 		}
+		$param->setParam([
+			'CHECK_PERMISSIONS' => self::shouldCheckNativePermissions($right->getPermission()) ? 'Y' : 'N',
+		]);
 
 		$element = new Element($param);
 		if (is_array($params["FILTER"] ?? null))
@@ -760,6 +809,7 @@ class RestService extends \IRestService
 	public static function updateElement(array $params, $n, \CRestServer $server)
 	{
 		$param = new Param($params);
+		$params = $param->getParams();
 
 		$iblock = new Iblock($param);
 		if (!$iblock->isExist())
@@ -783,6 +833,23 @@ class RestService extends \IRestService
 		if ($right->hasErrors())
 		{
 			self::throwError($right->getErrors());
+		}
+
+		if (self::hasFieldsDestinationSectionId($params))
+		{
+			$destinationSectionId = self::getDestinationSectionId($params);
+			$destinationSectionIds = $destinationSectionId > 0 ? [$destinationSectionId] : [];
+			$currentSectionIds = self::getCurrentElementSectionIds($rightParam->getEntityId());
+			if ($destinationSectionIds === $currentSectionIds)
+			{
+				$params = self::removeDestinationSectionId($params);
+				$param = new Param($params);
+			}
+			else
+			{
+				self::checkSectionIblock($rightParam->getIblockId(), $destinationSectionId);
+				self::checkElementDestinationPermission($param, $USER, $destinationSectionId);
+			}
 		}
 
 		$element = new Element($param);
@@ -926,6 +993,176 @@ class RestService extends \IRestService
 		}
 
 		return $element->getFileUrl();
+	}
+
+	private static function checkFieldsIblockId(array $params, int $iblockId): void
+	{
+		$fields = is_array($params['FIELDS'] ?? null) ? $params['FIELDS'] : [];
+		if (!array_key_exists('IBLOCK_ID', $fields))
+		{
+			return;
+		}
+
+		$fieldsIblockId = $fields['IBLOCK_ID'];
+		if (!is_numeric($fieldsIblockId) || (int)$fieldsIblockId !== $iblockId)
+		{
+			throw new RestException('Access denied', Right::ACCESS_DENIED);
+		}
+	}
+
+	private static function getDestinationSectionId(array $params): int
+	{
+		$fields = is_array($params['FIELDS'] ?? null) ? $params['FIELDS'] : [];
+		if (array_key_exists('IBLOCK_SECTION_ID', $fields))
+		{
+			$value = $fields['IBLOCK_SECTION_ID'];
+		}
+		else
+		{
+			$value = $params['IBLOCK_SECTION_ID'] ?? 0;
+		}
+
+		if (!is_numeric($value))
+		{
+			throw new RestException('Access denied', Right::ACCESS_DENIED);
+		}
+
+		return (int)$value;
+	}
+
+	private static function hasDestinationSectionId(array $params): bool
+	{
+		return self::hasFieldsDestinationSectionId($params)
+			|| array_key_exists('IBLOCK_SECTION_ID', $params);
+	}
+
+	private static function hasFieldsDestinationSectionId(array $params): bool
+	{
+		$fields = is_array($params['FIELDS'] ?? null) ? $params['FIELDS'] : [];
+
+		return array_key_exists('IBLOCK_SECTION_ID', $fields);
+	}
+
+	private static function getCurrentSectionParentId(int $iblockId, int $sectionId): int
+	{
+		$section = \CIBlockSection::getList(
+			[],
+			[
+				'ID' => $sectionId,
+				'IBLOCK_ID' => $iblockId,
+				'CHECK_PERMISSIONS' => 'N',
+			],
+			false,
+			['IBLOCK_SECTION_ID'],
+		)->fetch();
+		if (!$section)
+		{
+			throw new RestException('Access denied', Right::ACCESS_DENIED);
+		}
+
+		return (int)$section['IBLOCK_SECTION_ID'];
+	}
+
+	private static function removeDestinationSectionId(array $params): array
+	{
+		unset($params['IBLOCK_SECTION_ID']);
+		if (is_array($params['FIELDS'] ?? null))
+		{
+			unset($params['FIELDS']['IBLOCK_SECTION_ID']);
+		}
+
+		return $params;
+	}
+
+	private static function getCurrentElementSectionIds(int $elementId): array
+	{
+		$sectionIds = [];
+		$sections = \CIBlockElement::GetElementGroups($elementId, true, ['ID']);
+		while ($section = $sections->fetch())
+		{
+			$sectionIds[] = (int)$section['ID'];
+		}
+		sort($sectionIds);
+
+		return $sectionIds;
+	}
+
+	private static function shouldCheckNativePermissions(int|string $permission): bool
+	{
+		return !in_array(
+			$permission,
+			[
+				\CListPermissions::CAN_READ,
+				\CListPermissions::CAN_BIZPROC,
+				\CListPermissions::CAN_WRITE,
+				\CListPermissions::IS_ADMIN,
+			],
+			true,
+		);
+	}
+
+	private static function checkSectionIblock(int $iblockId, int $sectionId): void
+	{
+		if ($sectionId === 0)
+		{
+			return;
+		}
+		if ($sectionId < 0)
+		{
+			throw new RestException('Access denied', Right::ACCESS_DENIED);
+		}
+
+		$section = \CIBlockSection::getList(
+			[],
+			[
+				'ID' => $sectionId,
+				'IBLOCK_ID' => $iblockId,
+				'CHECK_PERMISSIONS' => 'N',
+			],
+			false,
+			['ID'],
+		)->fetch();
+		if (!$section)
+		{
+			throw new RestException('Access denied', Right::ACCESS_DENIED);
+		}
+	}
+
+	private static function checkSectionPermission(
+		Param $param,
+		\CUser $user,
+		int $sectionId,
+		string $permission,
+	): void
+	{
+		$rightParam = new RightParam($param);
+		$rightParam->setUser($user);
+		$rightParam->setEntityId($sectionId);
+
+		$right = new Right($rightParam, new SectionRight($rightParam));
+		$right->checkPermission($permission);
+		if ($right->hasErrors())
+		{
+			self::throwError($right->getErrors());
+		}
+	}
+
+	private static function checkElementDestinationPermission(
+		Param $param,
+		\CUser $user,
+		int $sectionId,
+	): void
+	{
+		$rightParam = new RightParam($param);
+		$rightParam->setUser($user);
+		$rightParam->setEntityId($sectionId);
+
+		$right = new Right($rightParam, new ElementRight($rightParam));
+		$right->checkPermission(ElementRight::ADD);
+		if ($right->hasErrors())
+		{
+			self::throwError($right->getErrors());
+		}
 	}
 
 	private static function throwError(array $errors, $message = "", $code = "")

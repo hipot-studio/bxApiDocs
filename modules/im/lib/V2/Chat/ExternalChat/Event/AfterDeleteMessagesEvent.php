@@ -6,11 +6,16 @@ use Bitrix\Im\V2\Chat\ExternalChat;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\MessageCollection;
 
-class AfterDeleteMessagesEvent extends ChatEvent
+class AfterDeleteMessagesEvent extends ChatEvent implements InitiatedByUserInterface
 {
-	public function __construct(ExternalChat $chat, MessageCollection $messages, DeletionMode $deletionMode)
+	public function __construct(
+		ExternalChat $chat,
+		int $initiatorId,
+		MessageCollection $messages,
+		DeletionMode $deletionMode
+	)
 	{
-		$parameters = ['messages' => $messages, 'deletionMode' => $deletionMode];
+		$parameters = ['initiatorId' => $initiatorId, 'messages' => $messages, 'deletionMode' => $deletionMode];
 
 		parent::__construct($chat, $parameters);
 	}
@@ -18,6 +23,11 @@ class AfterDeleteMessagesEvent extends ChatEvent
 	protected function getActionName(): string
 	{
 		return 'AfterDeleteMessages';
+	}
+
+	public function getInitiatorId(): int
+	{
+		return $this->parameters['initiatorId'];
 	}
 
 	public function getMessages(): MessageCollection

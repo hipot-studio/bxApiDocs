@@ -112,7 +112,7 @@ class CListsLiveFeed
 				);
 			}
 			if(empty($imageFile['src']))
-				$imageFile['src'] = '/bitrix/images/lists/default.png';
+				$imageFile['src'] = '/bitrix/images/lists/default.webp';
 
 			$soFields['TEXT_MESSAGE'] = '
 				<span class="bp-title-desc">

@@ -22,6 +22,7 @@ final class Api
 	private const HTTP_VERSION = HttpClient::HTTP_1_1;
 	private const HTTP_SOCKET_TIMEOUT = 10;
 	private const HTTP_STREAM_TIMEOUT = 10;
+	private const HTTP_BATCH_TIMEOUT = 60;
 
 	/**
 	 * Method related constants
@@ -165,6 +166,81 @@ final class Api
 		return $this->getResponse($client, $body);
 	}
 
+	public function reverseBatch(array $options): array
+	{
+		$coords = [];
+		foreach ($options['coords'] as $idx => $coord)
+		{
+			$coords[$idx] = [
+				'lat' => (float)$coord['lat'],
+				'lon' => (float)$coord['lng'],
+			];
+		}
+
+		$queryData = [
+			'coords' => $coords,
+			'zoom' => isset($options['zoom']) ? (int)$options['zoom'] : null,
+			'addressdetails' => isset($options['addressdetails']) ? (int)$options['addressdetails'] : 0,
+			'accept-language' => $options['accept-language'] ?? '',
+			'format' => 'json',
+		];
+
+		$serviceUrl = $this->source->getOsmApiUrl();
+		if (!$serviceUrl)
+		{
+			throw new RuntimeException('Service url is not specified');
+		}
+
+		$url = sprintf(
+			'%s/?%s',
+			$serviceUrl,
+			http_build_query(['action' => 'osmgateway.location.reverseBatch'])
+		);
+
+		$client = $this->makeHttpClientWithTimeout(self::HTTP_BATCH_TIMEOUT, self::HTTP_BATCH_TIMEOUT);
+		$body = $client->post($url, $this->wrapQueryData($queryData));
+
+		return $this->getResponse($client, $body);
+	}
+
+	public function detailsBatch(array $options): array
+	{
+		$items = [];
+		foreach ($options['items'] as $idx => $item)
+		{
+			$items[$idx] = [
+				'osmtype' => $item['osmtype'] ?? '',
+				'osmid' => isset($item['osmid']) ? (int)$item['osmid'] : null,
+			];
+		}
+
+		$queryData = [
+			'items' => $items,
+			'addressdetails' => isset($options['addressdetails']) ? (int)$options['addressdetails'] : 1,
+			'linkedplaces' => isset($options['linkedplaces']) ? (int)$options['linkedplaces'] : 0,
+			'hierarchy' => isset($options['hierarchy']) ? (int)$options['hierarchy'] : 0,
+			'accept-language' => $options['accept-language'] ?? '',
+			'format' => 'json',
+		];
+
+		$serviceUrl = $this->source->getOsmApiUrl();
+		if (!$serviceUrl)
+		{
+			throw new RuntimeException('Service url is not specified');
+		}
+
+		$url = sprintf(
+			'%s/?%s',
+			$serviceUrl,
+			http_build_query(['action' => 'osmgateway.location.detailsBatch'])
+		);
+
+		$client = $this->makeHttpClientWithTimeout(self::HTTP_BATCH_TIMEOUT, self::HTTP_BATCH_TIMEOUT);
+		$body = $client->post($url, $this->wrapQueryData($queryData));
+
+		return $this->getResponse($client, $body);
+	}
+
 	public function getStaticMap(
 		float $latitude,
 		float $longitude,
@@ -224,13 +300,18 @@ final class Api
 
 	private function makeHttpClient(): HttpClient
 	{
+		return $this->makeHttpClientWithTimeout(self::HTTP_SOCKET_TIMEOUT, self::HTTP_STREAM_TIMEOUT);
+	}
+
+	private function makeHttpClientWithTimeout(int $socketTimeout, int $streamTimeout): HttpClient
+	{
 		$token = $this->source->getOsmToken();
 
 		$result = new HttpClient(
 			[
 				'version' => self::HTTP_VERSION,
-				'socketTimeout' => self::HTTP_SOCKET_TIMEOUT,
-				'streamTimeout' => self::HTTP_STREAM_TIMEOUT,
+				'socketTimeout' => $socketTimeout,
+				'streamTimeout' => $streamTimeout,
 			]
 		);
 

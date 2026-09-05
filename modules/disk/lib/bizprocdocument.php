@@ -8,6 +8,7 @@ use Bitrix\Bizproc\Starter\Dto\StarterConfigDto;
 use Bitrix\Bizproc\Starter\Dto\StarterDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Starter;
+use Bitrix\Bizproc\Public\Service\Trigger\TriggerService;
 use Bitrix\Disk\Internals\FileHelper;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -61,6 +62,11 @@ class BizProcDocument implements \IBPWorkflowDocument
 			get_called_class(),
 			$documentId
 		);
+	}
+
+	public static function getStarterModuleSettings(array $complexDocumentType): ?\Bitrix\Bizproc\Starter\ModuleSettings
+	{
+		return new \Bitrix\Disk\Integration\Bizproc\Starter\DiskModuleSettings($complexDocumentType);
 	}
 
 	public static function getStorageIdByType($documentType)
@@ -2268,6 +2274,7 @@ class BizProcDocument implements \IBPWorkflowDocument
 
 	public static function runAfterCreate($storageId, $fileId)
 	{
+		static::runCreateTrigger((int)$storageId, (int)$fileId);
 		static::startAutoBizProc((int)$storageId, (int)$fileId, \CBPDocumentEventType::Create);
 	}
 
@@ -2392,6 +2399,50 @@ class BizProcDocument implements \IBPWorkflowDocument
 
 			$starter->start();
 		}
+	}
+
+	private static function runCreateTrigger(int $storageId, int $fileId): void
+	{
+		if (!class_exists(TriggerService::class))
+		{
+			return;
+		}
+
+		$documentId = self::getDocumentComplexId($fileId);
+		$documentType = self::generateDocumentComplexType($storageId);
+
+		if (!(new TriggerService())->hasStartTrigger('DiskFileCreateTrigger', $documentType))
+		{
+			return;
+		}
+
+		(new Starter(new StarterDto(
+			process: new StarterConfigDto(
+				scenario: Scenario::onEvent,
+			)
+		)))
+			->setDocument(new DocumentDto(
+				complexDocumentId: $documentId,
+				complexDocumentType: $documentType,
+			))
+			->setContext(new ContextDto(Driver::INTERNAL_MODULE_ID))
+			->setUser((int)\Bitrix\Main\Engine\CurrentUser::get()->getId())
+			->addEvent(
+				'DiskFileCreateTrigger',
+				[
+					new DocumentDto(
+						complexDocumentId: $documentId,
+						complexDocumentType: $documentType,
+					),
+				],
+				[
+					'Document' => $documentId,
+					'StorageId' => $storageId,
+				],
+				\CBPDocumentEventType::Create,
+			)
+			->start()
+		;
 	}
 
 	private static function getAutoStartTemplateIds(

@@ -6,9 +6,12 @@ IncludeModuleLangFile(__FILE__);
 
 class CUserFieldEnum
 {
+	protected static ?array $defaultValues = null;
+
 	public function SetEnumValues($FIELD_ID, $values)
 	{
-		global $DB, $CACHE_MANAGER, $APPLICATION;
+		global $DB, $APPLICATION;
+
 		$aMsg = [];
 		$originalValues = $values;
 
@@ -162,10 +165,7 @@ class CUserFieldEnum
 			}
 		}
 
-		if (CACHED_b_user_field_enum !== false)
-		{
-			$CACHE_MANAGER->CleanDir("b_user_field_enum");
-		}
+		static::cleanCache();
 
 		$event = new \Bitrix\Main\Event('main', 'onAfterSetEnumValues', [$FIELD_ID, $originalValues, $previousValues]);
 		$event->send();
@@ -304,13 +304,45 @@ class CUserFieldEnum
 
 	public function DeleteFieldEnum($FIELD_ID)
 	{
-		global $DB, $CACHE_MANAGER;
+		global $DB;
 
 		$DB->Query("DELETE FROM b_user_field_enum WHERE USER_FIELD_ID = " . intval($FIELD_ID));
+
+		static::cleanCache();
+	}
+
+	public static function getDefaultValue(int $fieldId): array
+	{
+		if (static::$defaultValues === null)
+		{
+			static::$defaultValues = [];
+
+			$dbRes = static::GetList([], ['DEF' => 'Y']);
+
+			while ($enumValue = $dbRes->fetch())
+			{
+				static::$defaultValues[(int)$enumValue['USER_FIELD_ID']][] = [
+					'ID' => $enumValue['ID'],
+					'VALUE' => $enumValue['VALUE'],
+					'DEF' => $enumValue['DEF'],
+					'SORT' => $enumValue['SORT'],
+					'XML_ID' => $enumValue['XML_ID'],
+				];
+			}
+		}
+
+		return static::$defaultValues[$fieldId] ?? [];
+	}
+
+	protected static function cleanCache()
+	{
+		global $CACHE_MANAGER;
 
 		if (CACHED_b_user_field_enum !== false)
 		{
 			$CACHE_MANAGER->CleanDir("b_user_field_enum");
 		}
+
+		static::$defaultValues = null;
 	}
 }

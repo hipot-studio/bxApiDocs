@@ -369,8 +369,11 @@ class Utils
 			{
 				return $urls[$key];
 			}
-			// build url
-			$urls[$key] .= 'item/' . $element['CODE'] . '/';
+			// build url only from a CODE that cannot break out of the eval()'d block content (Mantis 253734)
+			if (\Bitrix\Landing\Security\SyspageUrl::isSafeCode((string)$element['CODE']))
+			{
+				$urls[$key] .= 'item/' . $element['CODE'] . '/';
+			}
 		}
 		elseif ($urlType == 'section')
 		{
@@ -378,11 +381,25 @@ class Utils
 				$iblockId,
 				$elementId
 			);
+			$path = '';
+			$safe = true;
 			while ($row = $res->fetch())
 			{
-				$urls[$key] .= $row['CODE'] . '/';
+				if (!\Bitrix\Landing\Security\SyspageUrl::isSafeCode((string)$row['CODE']))
+				{
+					$safe = false;
+					break;
+				}
+				$path .= $row['CODE'] . '/';
+			}
+			// one unsafe segment degrades the whole nav-chain URL to the base
+			if ($safe)
+			{
+				$urls[$key] .= $path;
 			}
 		}
+
+		$urls[$key] = \Bitrix\Landing\Security\SyspageUrl::sanitize($urls[$key]);
 
 		return $urls[$key];
 	}

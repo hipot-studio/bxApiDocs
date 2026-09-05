@@ -364,7 +364,7 @@ class MailboxTable extends Entity\DataManager
 		$mailbox = $event->getParameter('fields');
 		if (isset($mailbox['USER_ID']))
 		{
-			self::cleanOwnerCacheByUserId($mailbox['USER_ID']);
+			self::cleanOwnerCacheByUserId((int)$mailbox['USER_ID']);
 		}
 	}
 

@@ -10,6 +10,7 @@ use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Enum\CustomServerTypes;
 use Bitrix\Disk\Internal\Enum\ServersTypesEnum;
+use Bitrix\Disk\Internal\Service\MarkdownRenderService;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Viewer\Transformation\Document;
@@ -54,6 +55,82 @@ final class Configuration
 		}
 
 		return $isAllow;
+	}
+
+	public static function isEnabledMarkdownViewer(): bool
+	{
+		// The viewer renders markdown via Parsedown, which ships with the "ui" module. Without a
+		// working renderer it cannot work, so it is treated as unavailable even when the option is enabled.
+		return 'Y' === Option::get(Driver::INTERNAL_MODULE_ID, 'disk_enable_markdown_viewer', 'N')
+			&& MarkdownRenderService::isAvailable();
+	}
+
+	/**
+	 * Returns maximum size (in bytes) of a markdown file that the viewer renders.
+	 * Single source of truth for the markdown render size limit.
+	 *
+	 * @return int
+	 */
+	public static function getMaxSizeForMarkdownRender(): int
+	{
+		return 2097152; // 2 MB
+	}
+
+	public static function isEnabledHtmlViewer(): bool
+	{
+		// Unlike the markdown viewer there is no renderer dependency: the html is served as-is,
+		// so the option alone decides whether the viewer is on.
+		return 'Y' === Option::get(Driver::INTERNAL_MODULE_ID, 'disk_enable_html_viewer', 'N');
+	}
+
+	/**
+	 * Returns maximum size (in bytes) of an html file that the viewer serves.
+	 * Single source of truth for the html viewer size limit; checked only when the content is served.
+	 *
+	 * A non-positive option value would turn the viewer off for every file, including an empty one,
+	 * with a "too large" stub. Turning the viewer off is what disk_enable_html_viewer is for, so such
+	 * a value is read as "no limit set" and falls back to the default.
+	 *
+	 * @return int
+	 */
+	public static function getMaxSizeForHtmlViewer(): int
+	{
+		$defaultMaxSize = 10485760; // 10 MB
+		$maxSize = (int)Option::get(Driver::INTERNAL_MODULE_ID, 'disk_html_viewer_max_size', $defaultMaxSize);
+
+		return $maxSize > 0 ? $maxSize : $defaultMaxSize;
+	}
+
+	/**
+	 * Extra hosts a portal may allow for the html viewer's passive subresources (styles, fonts, images),
+	 * on top of the built-in CDN allowlist. Lets an operator whitelist a generator's CDN without a release.
+	 *
+	 * The value goes straight into a Content-Security-Policy header, so every entry is validated against a
+	 * strict https-origin pattern (no port, path, wildcard or CSP delimiter): anything else is dropped to
+	 * keep an operator from injecting a directive. Script hosts are intentionally not configurable here —
+	 * external script execution would defeat the isolation (ADR § 6).
+	 *
+	 * @return string[] validated `https://host` origins, deduplicated
+	 */
+	public static function getHtmlViewerAllowedHosts(): array
+	{
+		$raw = (string)Option::get(Driver::INTERNAL_MODULE_ID, 'disk_html_viewer_csp_hosts', '');
+		if ($raw === '')
+		{
+			return [];
+		}
+
+		$hosts = [];
+		foreach (preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) as $host)
+		{
+			$host = mb_strtolower($host);
+			if (preg_match('#^https://[a-z0-9.-]+$#', $host) === 1)
+			{
+				$hosts[$host] = true;
+			}
+		}
+
+		return array_keys($hosts);
 	}
 
 	public static function isEnabledStorageSizeRestriction()

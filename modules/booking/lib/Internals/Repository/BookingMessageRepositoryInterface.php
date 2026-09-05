@@ -14,6 +14,6 @@ interface BookingMessageRepositoryInterface
 	public function getById(int $id): BookingMessage|null;
 	public function getByExternalId(string $senderCode, string $externalId): BookingMessage|null;
 	public function getLastByBookingId(int $bookingId): BookingMessage|null;
-	public function getByBookingIds(array $bookingIds): BookingMessageCollection;
+	public function getBookingIdsWithSentConfirmation(array $bookingIds): array;
 	public function getFailedForRetry(int $maxRetries, int $limit): BookingMessageCollection;
 }

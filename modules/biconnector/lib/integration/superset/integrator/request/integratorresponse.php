@@ -11,6 +11,7 @@ final class IntegratorResponse
 	public const STATUS_OK = 200;
 	public const STATUS_CREATED = 201;
 	public const STATUS_IN_PROGRESS = 202;
+	public const STATUS_BAD_REQUEST = 400;
 	public const STATUS_NO_ACCESS = 403;
 	public const STATUS_NOT_FOUND = 404;
 	public const STATUS_LIMIT_EXCEEDED = 409;

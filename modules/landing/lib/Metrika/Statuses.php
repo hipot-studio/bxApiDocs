@@ -11,6 +11,7 @@ enum Statuses: string
 	case SoftBlockContentPolicy = 'soft_block_content_policy';
 	case ErrorB24 = 'error_b24';
 	case ErrorProvider = 'error_provider';
+	case ErrorLimit = 'error_limit';
 	case ErrorLimitDaily = 'error_limit_daily';
 	case ErrorLimitMonthly = 'error_limit_monthly';
 	case ErrorLimitBaas = 'error_limit_baas';

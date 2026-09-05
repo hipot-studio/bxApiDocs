@@ -66,6 +66,35 @@ class NodeMemberService
 	}
 
 	/**
+	 * Returns member user IDs of the given departments (flat, no sub-departments), without name/avatar.
+	 *
+	 * @param int[] $departmentIds
+	 * @return int[]
+	 */
+	public static function getMemberIdsByDepartmentIds(array $departmentIds): array
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return [];
+		}
+
+		$members = (new NodeMemberDataBuilder())
+			->addFilter(
+				new NodeMemberFilter(
+					nodeFilter: new NodeFilter(
+						idFilter: IdFilter::fromIds(array_map('intval', $departmentIds)),
+						entityTypeFilter: NodeTypeFilter::fromNodeType(NodeEntityType::DEPARTMENT),
+						depthLevel: 0,
+					),
+				),
+			)
+			->getAll()
+		;
+
+		return array_values(array_unique($members->getEntityIds()));
+	}
+
+	/**
 	 * @param int[] $departmentIds
 	 * @return int[]
 	 */

@@ -5,6 +5,7 @@ namespace Bitrix\Location\Repository\Location\Strategy;
 use Bitrix\Location\Entity\Location;
 use Bitrix\Location\Entity\Generic\Collection;
 use Bitrix\Location\Repository\Location\Capability\IFindByCoords;
+use Bitrix\Location\Repository\Location\Capability\IFindByCoordsList;
 use Bitrix\Location\Repository\Location\Capability\IFindByExternalId;
 use Bitrix\Location\Repository\Location\Capability\IFindById;
 use Bitrix\Location\Repository\Location\Capability\IFindByText;
@@ -58,6 +59,37 @@ class Find extends Base
 			],
 			$searchScope
 		);
+	}
+
+	public function findByCoordsList(
+		array $coordsList,
+		int $zoom,
+		string $languageId,
+		int $searchScope
+	): array
+	{
+		if (!$coordsList)
+		{
+			return [];
+		}
+
+		foreach ($this->locationRepositories as $repository)
+		{
+			if ($repository instanceof IScope)
+			{
+				if (!$repository->isScopeSatisfy($searchScope))
+				{
+					continue;
+				}
+			}
+
+			if ($repository instanceof IFindByCoordsList)
+			{
+				return $repository->findByCoordsList($coordsList, $zoom, $languageId);
+			}
+		}
+
+		return [];
 	}
 
 	public function findByText(string $text, string $languageId, int $searchScope)

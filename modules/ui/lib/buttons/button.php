@@ -2,10 +2,14 @@
 
 namespace Bitrix\UI\Buttons;
 
+use Bitrix\Main\UI\Extension;
+
 class Button extends BaseButton
 {
 	/** @var array  */
 	protected $properties = [];
+	/** @var bool whether the arrow was added by the system menu setter and may be taken back by it */
+	private bool $dropdownBySystemMenu = false;
 
 	protected function init(array $params = [])
 	{
@@ -118,6 +122,11 @@ class Button extends BaseButton
 			$this->setMenu($params['menu']);
 		}
 
+		if (isset($params['systemMenu']))
+		{
+			$this->setSystemMenu($params['systemMenu']);
+		}
+
 		if (isset($params['noCaps']))
 		{
 			$this->setNoCaps($params['noCaps']);
@@ -138,12 +147,20 @@ class Button extends BaseButton
 		}
 
 		$isDropdown = $params['dropdown'] ?? null;
-		if ($isDropdown || (isset($params['menu']) && $isDropdown !== false))
+		$hasMenu = isset($params['menu']) || $this->hasSystemMenu();
+		if ($isDropdown || ($hasMenu && $isDropdown !== false))
 		{
 			$this->setDropdown();
 		}
 		elseif ($isDropdown === false)
 		{
+			// only the arrow of a system menu is taken back, an arrow class of the caller stays untouched
+			if ($this->hasSystemMenu())
+			{
+				$this->setDropdown(false);
+				$this->dropdownBySystemMenu = false;
+			}
+
 			$this->getAttributeCollection()->addJsonOption('dropdown', false);
 		}
 	}
@@ -518,14 +535,162 @@ class Button extends BaseButton
 	}
 
 	/**
+	 * Sets a menu rendered by the main.popup extension. Only a payload that really sets a menu replaces
+	 * a system one, as in the JS setter. The arrow is never touched.
+	 *
 	 * @param array $options
 	 *
 	 * @return $this
 	 */
 	public function setMenu($options)
 	{
+		if (self::hasMenuItems($options))
+		{
+			$this->removeSystemMenu();
+		}
+
 		$this->getAttributeCollection()->addJsonOption('menu', $options);
 
 		return $this;
+	}
+
+	/**
+	 * Sets a menu rendered by the ui.system.menu extension instead of the main.popup one.
+	 * Options without a non-empty list of items are ignored and reported to the log for a developer,
+	 * null removes the system menu only.
+	 *
+	 * @param array|null $options
+	 *
+	 * @return static
+	 */
+	public function setSystemMenu(?array $options): static
+	{
+		if ($options === null)
+		{
+			if (!$this->removeSystemMenu())
+			{
+				return $this;
+			}
+
+			// the arrow of a system menu is added by this setter, so it is removed by this setter too
+			return $this->syncDropdownWithSystemMenu();
+		}
+
+		if (!self::hasMenuItems($options))
+		{
+			// the payload never reaches the client, so its own warning cannot fire: the reason is named here
+			AddMessage2Log(
+				'Button::setSystemMenu() expects a non-empty list of "items", the menu is not set',
+				'ui',
+			);
+
+			return $this;
+		}
+
+		$attributes = $this->getAttributeCollection();
+		if (self::hasMenuItems($attributes->getJsonOptions()['menu'] ?? null))
+		{
+			// the same reason: the dropped "menu" option cannot warn about itself on the client
+			AddMessage2Log(
+				'Button::setSystemMenu() drops the "menu" option: a button has one menu, the system one wins',
+				'ui',
+			);
+		}
+
+		$attributes
+			->addJsonOption('systemMenu', $options)
+			->removeJsonOption('menu')
+		;
+
+		// early load keeps the menu instant, listExtensions() is the fallback for a deferred render
+		Extension::load('ui.system.menu');
+
+		return $this->syncDropdownWithSystemMenu();
+	}
+
+	/**
+	 * Removes the system menu options, the arrow is a caller's concern.
+	 *
+	 * @return bool whether there was a system menu to remove
+	 */
+	private function removeSystemMenu(): bool
+	{
+		if (!$this->hasSystemMenu())
+		{
+			return false;
+		}
+
+		$attributes = $this->getAttributeCollection();
+		$attributes->removeJsonOption('systemMenu');
+		if (empty($attributes->getJsonOptions()))
+		{
+			unset($attributes[ButtonAttributes::JSON_OPTIONS_DATA_ATTR]);
+		}
+
+		return true;
+	}
+
+	/**
+	 * Keeps the arrow in sync with the system menu, an explicit "dropdown" option always wins.
+	 */
+	private function syncDropdownWithSystemMenu(): static
+	{
+		if (($this->getAttributeCollection()->getJsonOptions()['dropdown'] ?? null) === false)
+		{
+			return $this;
+		}
+
+		if (!$this->hasSystemMenu())
+		{
+			return $this->takeBackSystemMenuDropdown();
+		}
+
+		// an arrow that was already there belongs to the caller, so it is never taken back
+		$this->dropdownBySystemMenu = $this->dropdownBySystemMenu || !$this->isDropdown();
+
+		return $this->setDropdown();
+	}
+
+	/**
+	 * Removes the arrow only when it was added by the system menu setter itself.
+	 */
+	private function takeBackSystemMenuDropdown(): static
+	{
+		if (!$this->dropdownBySystemMenu)
+		{
+			return $this;
+		}
+
+		$this->dropdownBySystemMenu = false;
+
+		return $this->setDropdown(false);
+	}
+
+	protected function hasSystemMenu(): bool
+	{
+		return isset($this->getAttributeCollection()->getJsonOptions()['systemMenu']);
+	}
+
+	/**
+	 * The single criterion of a payload that really sets a menu, both kinds of it: the client takes
+	 * a menu only from a non-empty list of items, an associative array is dropped there.
+	 */
+	private static function hasMenuItems($options): bool
+	{
+		$items = is_array($options) ? ($options['items'] ?? null) : null;
+
+		return is_array($items) && !empty($items) && array_is_list($items);
+	}
+
+	protected function listExtensions()
+	{
+		$extensions = parent::listExtensions();
+
+		if ($this->hasSystemMenu())
+		{
+			$extensions[] = 'ui.system.menu';
+		}
+
+		return $extensions;
 	}
 }

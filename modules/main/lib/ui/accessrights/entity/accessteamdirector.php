@@ -7,6 +7,8 @@ use Bitrix\Main\Localization\Loc;
 
 class AccessTeamDirector extends EntityBase
 {
+	use HrStructureModelTrait;
+
 	public function getType(): string
 	{
 		return AccessCode::TYPE_GROUP;
@@ -27,13 +29,8 @@ class AccessTeamDirector extends EntityBase
 		return '';
 	}
 
-	protected function loadModel()
-	{
-		return null;
-	}
-
 	public function exists(): bool
 	{
-		return true;
+		return !$this->getId() || $this->model;
 	}
 }

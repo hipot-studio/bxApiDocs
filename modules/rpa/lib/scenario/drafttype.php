@@ -59,7 +59,7 @@ class DraftType extends Scenario
 
 			$fieldName = $type->getItemUfNameFieldName();
 			$ufEntity = new \CUserTypeEntity();
-			$id = $ufEntity->Add([
+			$id = $ufEntity->add([
 				'ENTITY_ID' => $type->getItemUserFieldsEntityId(),
 				'FIELD_NAME' => $fieldName,
 				'USER_TYPE_ID' => \CUserTypeManager::BASE_TYPE_STRING,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Folder;
 
 use Bitrix\Im\Model\FolderTable;
+use Bitrix\Im\V2\Chat\ChatIds;
 use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Folder\Cache\FolderCache;
 use Bitrix\Im\V2\Folder\Create\CreateResult;
@@ -20,8 +21,6 @@ use Bitrix\Main\Validation\ValidationService;
 
 class FolderService
 {
-	private const LIMIT_FOLDERS_PER_USER = 20;
-
 	public function __construct(
 		private readonly FolderChatLinker $folderChatLinker,
 		private readonly PinService $pinService,
@@ -49,7 +48,7 @@ class FolderService
 
 		// Per-user folder limit (personal only — system folders are bootstrapped lazily).
 		$folders = $this->folderProvider->getByUser($userId);
-		if ($folders->countPersonal() >= self::LIMIT_FOLDERS_PER_USER)
+		if ($folders->countPersonal() >= FolderLimits::MAX_FOLDERS_PER_USER)
 		{
 			return $result->addError(new Error(FolderError::FOLDER_LIMIT_EXCEEDED));
 		}
@@ -103,12 +102,32 @@ class FolderService
 
 		$userId = (int)$folder->getUserId();
 
-		$folder->setTitle($fields->title);
-
-		$saveResult = $folder->save();
-		if (!$saveResult->isSuccess())
+		// Partial update: title is optional (uninitialized when omitted), composition is optional (null).
+		$titleProvided = isset($fields->title);
+		if (!$titleProvided && $fields->chatIds === null)
 		{
-			return $result->addErrors($saveResult->getErrors());
+			// Nothing to change — no-op, no folderUpdate noise.
+			return $result->setFolder($folder);
+		}
+
+		if ($fields->chatIds !== null)
+		{
+			$setResult = $this->applyChatComposition($folder, $fields->chatIds);
+			if (!$setResult->isSuccess())
+			{
+				return $result->addErrors($setResult->getErrors());
+			}
+		}
+
+		if ($titleProvided)
+		{
+			$folder->setTitle($fields->title);
+
+			$saveResult = $folder->save();
+			if (!$saveResult->isSuccess())
+			{
+				return $result->addErrors($saveResult->getErrors());
+			}
 		}
 
 		$this->folderCache->clearByUser($userId);
@@ -116,6 +135,60 @@ class FolderService
 		(new FolderUpdate($folder, $userId))->send();
 
 		return $result->setFolder($folder);
+	}
+
+	/**
+	 * Precondition: called only for a PersonalFolder (system folders are rejected earlier in
+	 * update()). An empty set clears the whole composition.
+	 */
+	private function applyChatComposition(PersonalFolder $folder, ChatIds $composition): UpdateResult
+	{
+		$result = new UpdateResult();
+
+		$target = $composition->values;
+
+		// Empty set — clear the whole composition.
+		if ($target === [])
+		{
+			$deleteResult = $this->folderChatLinker->deleteChats($folder, $folder->getChatIds());
+
+			return $deleteResult->isSuccess()
+				? $result
+				: $result->addErrors($deleteResult->getErrors());
+		}
+
+		// Reject an over-limit target up front, before any membership mutation (so a too-large
+		// set never leaves a partial state). lazyCleanup of stale shadows still runs inside addChats.
+		if (count($target) > FolderLimits::MAX_CHATS_PER_FOLDER)
+		{
+			return $result->addError(new Error(FolderError::FOLDER_CHATS_LIMIT_EXCEEDED));
+		}
+
+		$current = $folder->getChatIds();
+		$toAdd = array_values(array_diff($target, $current));
+		$toRemove = array_values(array_diff($current, $target));
+
+		// Remove before add so a set that swaps chats on a folder at the limit is not rejected:
+		// the incremental capacity check would otherwise count current + toAdd before the removal.
+		if (!empty($toRemove))
+		{
+			$removeResult = $this->folderChatLinker->deleteChats($folder, $toRemove);
+			if (!$removeResult->isSuccess())
+			{
+				return $result->addErrors($removeResult->getErrors());
+			}
+		}
+
+		if (!empty($toAdd))
+		{
+			$addResult = $this->folderChatLinker->addChats($folder, $toAdd);
+			if (!$addResult->isSuccess())
+			{
+				return $result->addErrors($addResult->getErrors());
+			}
+		}
+
+		return $result;
 	}
 
 	public function delete(Folder $folder): DeleteResult

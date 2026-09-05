@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Helper;
 
 use Bitrix\Mail\Helper\Dto\DirSortingData;
+use Bitrix\Mail\Helper\Enum\Mailbox\EntityOptionsType;
+use Bitrix\Mail\Helper\Enum\Mailbox\FolderSortMode;
+use Bitrix\Mail\Helper\Mailbox\Options\EntityDataHelper;
 use Bitrix\Mail\Internals\Entity\MailboxDirectory;
 use Bitrix\Mail\Internals\MailboxDirectoryTable;
 
@@ -75,11 +78,13 @@ class DirSortingHelper
 
 	private int $mailboxId;
 	private string $providerCode;
+	private ?int $userId;
 
-	public function __construct(int $mailboxId, string $providerCode = 'default')
+	public function __construct(int $mailboxId, string $providerCode = 'default', ?int $userId = null)
 	{
 		$this->mailboxId = $mailboxId;
 		$this->providerCode = $providerCode;
+		$this->userId = $userId;
 	}
 
 	/**
@@ -89,7 +94,7 @@ class DirSortingHelper
 	 */
 	public function order(array $dirs, string $strategy = self::STRATEGY_PRESET): array
 	{
-		$sortedDirsByDbData = $this->sortByDbData();
+		$sortedDirsByDbData = $this->sortByDbData($dirs);
 
 		if (!empty($sortedDirsByDbData))
 		{
@@ -194,6 +199,7 @@ class DirSortingHelper
 
 	private function extractDirSortingData(MailboxDirectory $dir): DirSortingData
 	{
+		// type !== null is equivalent to MailboxDirectory::isSystem(); the concrete type is kept here to drive weight.
 		$type = match (true)
 		{
 			$dir->isIncome() => MailboxDirectoryTable::TYPE_INCOME,
@@ -262,7 +268,7 @@ class DirSortingHelper
 	{
 		$isRootLevel = $data->level <= 1;
 		$hasNoRoot = $data->rootId === null || $data->rootId === $data->id;
-		$rootFolder = $dirsMap[$data->rootId];
+		$rootFolder = $dirsMap[$data->rootId] ?? null;
 
 		if ($isRootLevel || $hasNoRoot || $rootFolder?->isVirtual)
 		{
@@ -281,35 +287,187 @@ class DirSortingHelper
 	}
 
 	/**
+	 * @param MailboxDirectory[] $dirs
 	 * @return MailboxDirectory[]
 	 */
-	private function sortByDbData(): array
+	private function sortByDbData(array $dirs): array
 	{
-		if ($this->mailboxId > 0)
+		if ($this->mailboxId <= 0)
 		{
-			$userSortingDirs = $this->loadUserSortingDirs();
-			if (!empty($userSortingDirs))
-			{
-				return $this->sortByCustomConfig($userSortingDirs);
-			}
+			return [];
 		}
 
-		return [];
-	}
+		$order = $this->loadUserSortingDirs();
+		if ($order === null)
+		{
+			return [];
+		}
 
-	private function loadUserSortingDirs(): ?array
-	{
-		//ToDo
-		return null;
+		return $this->sortByCustomConfig($dirs, $order);
 	}
 
 	/**
-	 * @param array $dirs
+	 * @return array{all: int[]}|array{system: int[], custom: int[]}|null
+	 */
+	private function loadUserSortingDirs(): ?array
+	{
+		if ($this->userId === null)
+		{
+			return null;
+		}
+
+		$options = EntityDataHelper::getValues(
+			$this->mailboxId,
+			EntityOptionsType::User,
+			(string)$this->userId,
+			[
+				EntityDataHelper::FOLDER_SORT_MODE,
+				EntityDataHelper::FOLDER_CUSTOM_ORDER,
+			],
+		);
+
+		if (($options[EntityDataHelper::FOLDER_SORT_MODE] ?? null) !== FolderSortMode::Manual->value)
+		{
+			return null;
+		}
+
+		$decoded = json_decode((string)($options[EntityDataHelper::FOLDER_CUSTOM_ORDER] ?? ''), true);
+		if (!is_array($decoded))
+		{
+			return null;
+		}
+
+		$all = $this->normalizeIdList($decoded['all'] ?? null);
+		if ($all !== [])
+		{
+			return ['all' => $all];
+		}
+
+		$system = $this->normalizeIdList($decoded['system'] ?? null);
+		$custom = $this->normalizeIdList($decoded['custom'] ?? null);
+		if ($system === [] && $custom === [])
+		{
+			return null;
+		}
+
+		return ['system' => $system, 'custom' => $custom];
+	}
+
+	/**
+	 * @param MailboxDirectory[] $dirs
+	 * @param array{all: int[]}|array{system: int[], custom: int[]} $order
 	 * @return MailboxDirectory[]
 	 */
-	private function sortByCustomConfig(array $dirs): array
+	private function sortByCustomConfig(array $dirs, array $order): array
 	{
-		//ToDo
-		return [];
+		if (isset($order['all']))
+		{
+			return $this->applyOrder($dirs, $order['all']);
+		}
+
+		return $this->sortByLegacyCustomConfig($dirs, $order);
+	}
+
+	/**
+	 * Keeps settings saved before the unified order format readable.
+	 *
+	 * @param MailboxDirectory[] $dirs
+	 * @param array{system: int[], custom: int[]} $order
+	 * @return MailboxDirectory[]
+	 */
+	private function sortByLegacyCustomConfig(array $dirs, array $order): array
+	{
+		$dirsMap = $this->buildDirsMap($dirs);
+		$weights = $this->getProviderWeights();
+		$customWeight = $weights[self::DIR_TYPE_OTHER] ?? null;
+
+		$systemTop = [];
+		$custom = [];
+		$systemBottom = [];
+		foreach ($dirs as $dir)
+		{
+			$data = $dirsMap[$dir->getId()] ?? $this->extractDirSortingData($dir);
+			$effectiveData = $this->getEffectiveDataForWeight($data, $dirsMap);
+			$typeWeight = $effectiveData->type === null ? null : ($weights[$effectiveData->type] ?? null);
+
+			match (true)
+			{
+				$effectiveData->type === null => $custom[] = $dir,
+				$customWeight !== null && ($typeWeight === null || $typeWeight >= $customWeight) => $systemBottom[] = $dir,
+				default => $systemTop[] = $dir,
+			};
+		}
+
+		// Keep the former three-block layout for settings saved before the unified format.
+		$systemOrder = $order['system'] ?? [];
+		$systemTop = $this->applyOrder($systemTop, $systemOrder);
+		$systemBottom = $this->applyOrder($systemBottom, $systemOrder);
+		$custom = $this->applyOrder($custom, $order['custom'] ?? []);
+
+		// Blocks keep preset order (top system, then custom, then bottom system);
+		// only within-block order is user-defined.
+		return array_merge($systemTop, $custom, $systemBottom);
+	}
+
+	/**
+	 * Orders a group by the user-defined id list. Ids present in the list keep that order;
+	 * the rest go after them, sorted by preset weight (unchanged behaviour).
+	 *
+	 * @param MailboxDirectory[] $group
+	 * @param int[] $ids
+	 * @return MailboxDirectory[]
+	 */
+	private function applyOrder(array $group, array $ids): array
+	{
+		if (empty($group) || empty($ids))
+		{
+			return $this->sortByStrategy($group);
+		}
+
+		$positions = array_flip($ids);
+
+		$known = [];
+		$unknown = [];
+		foreach ($group as $dir)
+		{
+			if (isset($positions[$dir->getId()]))
+			{
+				$known[] = $dir;
+			}
+			else
+			{
+				$unknown[] = $dir;
+			}
+		}
+
+		usort(
+			$known,
+			static fn (MailboxDirectory $a, MailboxDirectory $b): int
+				=> $positions[$a->getId()] <=> $positions[$b->getId()],
+		);
+
+		return array_merge($known, $this->sortByStrategy($unknown));
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function normalizeIdList(mixed $ids): array
+	{
+		if (!is_array($ids))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($ids as $id)
+		{
+			if (is_numeric($id) && (int)$id > 0)
+			{
+				$result[] = (int)$id;
+			}
+		}
+
+		return $result;
 	}
 }

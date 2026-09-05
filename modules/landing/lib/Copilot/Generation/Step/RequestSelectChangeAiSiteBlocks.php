@@ -18,7 +18,6 @@ use Bitrix\Landing\Copilot\Generation\Step\Helper\ChangeAiSiteStyleContextExtrac
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Internals\BlockTable;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
-use Bitrix\Landing\Metrika;
 use Bitrix\Landing\Landing;
 use Bitrix\Main\Web\Json;
 
@@ -55,11 +54,6 @@ class RequestSelectChangeAiSiteBlocks extends RequestSingle
 	public static function getRequestQuota(Site $siteData): ?RequestQuotaDto
 	{
 		return new RequestQuotaDto(self::getConnectorClass(), 1);
-	}
-
-	public function getAnalyticEvent(): ?Metrika\Events
-	{
-		return Metrika\Events::dataGeneration;
 	}
 
 	public function execute(): bool
@@ -130,6 +124,7 @@ class RequestSelectChangeAiSiteBlocks extends RequestSingle
 			(string)$actionPlan['globalConstraints'],
 			(string)$actionPlan['imageStyleBrief'],
 			(string)$actionPlan['designBrief'],
+			(string)$actionPlan['editIntent'],
 		);
 		$this->setSelectionDebug(self::DEBUG_MODE_AI);
 		$this->changed = true;
@@ -224,6 +219,7 @@ class RequestSelectChangeAiSiteBlocks extends RequestSingle
 				'globalConstraints' => '',
 				'imageStyleBrief' => '',
 				'designBrief' => '',
+				'editIntent' => ChangeAiSiteState::EDIT_INTENT_CONTENT,
 			];
 		}
 
@@ -251,6 +247,7 @@ class RequestSelectChangeAiSiteBlocks extends RequestSingle
 			'globalConstraints' => trim((string)($result['globalConstraints'] ?? '')),
 			'imageStyleBrief' => trim((string)($result['imageStyleBrief'] ?? '')),
 			'designBrief' => trim((string)($result['designBrief'] ?? '')),
+			'editIntent' => ChangeAiSiteState::normalizeEditIntent($result['editIntent'] ?? ''),
 		];
 	}
 
@@ -619,6 +616,7 @@ class RequestSelectChangeAiSiteBlocks extends RequestSingle
 		string $globalConstraints,
 		string $imageStyleBrief,
 		string $designBrief,
+		string $editIntent,
 	): void
 	{
 		ChangeAiSiteState::setActions($this->generation, $actions);
@@ -627,6 +625,7 @@ class RequestSelectChangeAiSiteBlocks extends RequestSingle
 			'globalConstraints' => $globalConstraints,
 			'imageStyleBrief' => $imageStyleBrief,
 			'designBrief' => $designBrief,
+			'editIntent' => $editIntent,
 		]);
 
 		$resultState = ChangeAiSiteState::getResult($this->generation);

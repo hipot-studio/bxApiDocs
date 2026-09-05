@@ -591,10 +591,13 @@ class Element implements Controllable, Errorable
 		}
 		unset($elementFields["TIMESTAMP_X"]);
 
-		$elementFields["IBLOCK_SECTION_ID"] = (
-			is_numeric($values['IBLOCK_SECTION_ID'] ?? null)
-			? (int) $values['IBLOCK_SECTION_ID'] : 0
-		);
+		if (!$elementId || array_key_exists('IBLOCK_SECTION_ID', $values))
+		{
+			$elementFields["IBLOCK_SECTION_ID"] = (
+				is_numeric($values['IBLOCK_SECTION_ID'] ?? null)
+				? (int)$values['IBLOCK_SECTION_ID'] : 0
+			);
+		}
 
 		return $elementFields;
 	}
@@ -1084,6 +1087,18 @@ class Element implements Controllable, Errorable
 			"CHECK_PERMISSIONS" => "Y",
 		];
 		$filter = $this->getInputFilter($filter);
+		$filter["=IBLOCK_TYPE"] = $this->params["IBLOCK_TYPE_ID"];
+		$filter["IBLOCK_ID"] = $this->iblockId;
+		$filter["CHECK_PERMISSIONS"] = $this->params["CHECK_PERMISSIONS"] ?? "Y";
+		unset($filter["PERMISSIONS_BY"], $filter["MIN_PERMISSION"]);
+		if (!empty($this->params["ELEMENT_ID"]))
+		{
+			$filter["ID"] = (int)$this->params["ELEMENT_ID"];
+		}
+		if (isset($this->params["ELEMENT_CODE"]) && is_scalar($this->params["ELEMENT_CODE"]))
+		{
+			$filter["=CODE"] = $this->params["ELEMENT_CODE"];
+		}
 
 		$validator = RestValidator\Format\ElementFilterFieldValidator::getInstance();
 		$internalResult = $validator->run($filter);
@@ -1168,6 +1183,11 @@ class Element implements Controllable, Errorable
 			foreach ($this->resultSanitizeFilter as $key => $value)
 			{
 				$key = str_replace(["ACTIVE_FROM", "ACTIVE_TO"], ["DATE_ACTIVE_FROM", "DATE_ACTIVE_TO"], $key);
+				$fieldId = ltrim($key, "!%><=*@");
+				if (in_array($fieldId, ["CHECK_PERMISSIONS", "PERMISSIONS_BY", "MIN_PERMISSION"], true))
+				{
+					continue;
+				}
 				$filter[$key] = $value === '' ? false : $value;
 			}
 		}

@@ -121,14 +121,9 @@ class UserDataProvider extends EntityDataProvider
 
 		if ($result === null)
 		{
-			$result = (
-				$USER->canDoOperation('edit_all_users')
-				&& (
-					!ModuleManager::isModuleInstalled('extranet')
-					|| Option::get("extranet", "extranet_site", "") === ""
-					|| !self::extranetSite()
-				)
-			);
+			$result = !ModuleManager::isModuleInstalled('extranet')
+				|| Option::get('extranet', 'extranet_site', '') === ''
+				|| !self::extranetSite();
 		}
 
 		return $result;

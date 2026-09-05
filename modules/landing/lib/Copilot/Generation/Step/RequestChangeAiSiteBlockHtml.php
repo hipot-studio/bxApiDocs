@@ -21,7 +21,6 @@ use Bitrix\Landing\Copilot\Generation\Type\RequestEntities;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntityDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Model\RequestToEntitiesTable;
-use Bitrix\Landing\Metrika;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Web\DOM;
 
@@ -80,11 +79,6 @@ class RequestChangeAiSiteBlockHtml extends RequestMultiple implements RuntimeReq
 			? new RequestQuotaDto(static::getConnectorClass(), $requestCount)
 			: null
 		;
-	}
-
-	public function getAnalyticEvent(): ?Metrika\Events
-	{
-		return Metrika\Events::textsGeneration;
 	}
 
 	protected function getEntitiesToRequest(): array
@@ -301,9 +295,14 @@ class RequestChangeAiSiteBlockHtml extends RequestMultiple implements RuntimeReq
 		);
 	}
 
-	private function resolveBlockPromptCode(): string
+	protected function resolveBlockPromptCode(): string
 	{
 		return PromptCodeCatalog::CHANGE_AI_SITE_BLOCK_HTML;
+	}
+
+	protected function appendUpdateBlockSpecificMarkers(array $markers, array $item): array
+	{
+		return $markers;
 	}
 
 	private function buildBlockPromptMarkers(
@@ -369,12 +368,15 @@ class RequestChangeAiSiteBlockHtml extends RequestMultiple implements RuntimeReq
 				$globalConstraints,
 				$this->buildPlacementContext($item),
 			)
-			: $this->buildBlockPromptMarkers(
-				$blockId,
-				$currentHtml,
-				$effectiveInput,
-				$globalConstraints,
-				$this->resolveEditModeForItem($item),
+			: $this->appendUpdateBlockSpecificMarkers(
+				$this->buildBlockPromptMarkers(
+					$blockId,
+					$currentHtml,
+					$effectiveInput,
+					$globalConstraints,
+					$this->resolveEditModeForItem($item),
+				),
+				$item,
 			)
 		;
 		$promptCode = $this->isAddBlockItem($item)

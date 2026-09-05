@@ -21,7 +21,7 @@ final class DepartmentStructure
 
 	protected static array $instances = [];
 
-	protected function __constructor(string $siteId)
+	protected function __construct(string $siteId)
 	{
 		$this->siteId = $siteId;
 	}

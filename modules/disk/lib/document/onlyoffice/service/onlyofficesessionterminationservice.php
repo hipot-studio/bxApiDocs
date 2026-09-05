@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Disk\Document\OnlyOffice\Service;
 
 use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\OnlyOffice\Clients\CommandService\CommandServiceClientFactory;
 use Bitrix\Disk\Document\OnlyOffice\Clients\CommandService\CommandServiceClientInterface;
@@ -89,6 +90,7 @@ class OnlyOfficeSessionTerminationService implements SessionTerminationService
 
 		$sessions = DocumentSession::getModelList([
 			'filter' => [
+				'=SERVICE' => DocumentService::OnlyOffice->value,
 				'OBJECT_ID' => $this->object->getId(),
 				'STATUS' => DocumentSession::STATUS_ACTIVE,
 			],

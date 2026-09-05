@@ -290,12 +290,13 @@ final class FolderLink extends Folder
 
 	/**
 	 * Deletes folder and all descendants objects.
-	 * @param int $deletedBy Id of user (or SystemUser::SYSTEM_USER_ID).
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\ArgumentNullException
+	 * @param int $deletedBy
+	 * @param bool $bypassDeletionRestriction
 	 * @return bool
+	 * @throws \Bitrix\Main\ArgumentNullException
+	 * @throws \Bitrix\Main\ArgumentException
 	 */
-	public function deleteTree($deletedBy)
+	public function deleteTree($deletedBy, bool $bypassDeletionRestriction = false)
 	{
 		/** @var Sharing $sharing */
 		$sharing = Sharing::load(array(

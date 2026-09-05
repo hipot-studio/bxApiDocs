@@ -115,12 +115,12 @@ class RpaTypeDetailComponent extends \Bitrix\Rpa\Components\Base
 
 		if($this->getType()->getId() > 0)
 		{
-			$method = 'rpa.type.update';
+			$method = 'rpa.Type.update';
 			$analyticsLabel = 'rpaTypeUpdate';
 		}
 		else
 		{
-			$method = 'rpa.type.add';
+			$method = 'rpa.Type.add';
 			$analyticsLabel = 'rpaTypeAdd';
 		}
 

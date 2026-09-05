@@ -72,7 +72,7 @@ class Log
 
 			if (
 				!empty($logFieldList["PARAMS"])
-				&& ($logEntryParams = unserialize($logFieldList["PARAMS"]))
+				&& ($logEntryParams = unserialize($logFieldList["PARAMS"], ['allowed_classes' => false]))
 				&& !empty($logEntryParams["ELEMENT_NAME"])
 			)
 			{

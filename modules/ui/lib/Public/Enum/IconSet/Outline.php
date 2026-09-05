@@ -168,6 +168,7 @@ enum Outline: string
 	case HOURGLASS = 'o-hourglass';
 	case IDEA_LAMP = 'o-idea-lamp';
 	case IMAGE = 'o-image';
+	case IMAGE_PLUS = 'o-image-plus';
 	case INFO_CIRCLE = 'o-info-circle';
 	case INTERVAL = 'o-interval';
 	case INTRANET = 'o-intranet';
@@ -649,4 +650,5 @@ enum Outline: string
 	case EXCLAMATION_M = 'exclamation-m';
 	case EXCLAMATION_L = 'exclamation-l';
 	case EXCLAMATION_CIRCLE = 'o-exclamation-circle';
+	case NO_CLOUD_SYNC = 'o-no-cloud-sync';
 }

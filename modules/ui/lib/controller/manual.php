@@ -3,6 +3,7 @@
 namespace Bitrix\UI\Controller;
 
 use Bitrix\Main\Engine;
+use Bitrix\Main\Web\Uri;
 use Bitrix\UI\Util;
 
 class Manual extends Engine\Controller
@@ -11,7 +12,7 @@ class Manual extends Engine\Controller
 	{
 		$manualUrl = Util::getHelpdeskUrl(true) . '/manual/' . urlencode($manualCode) . '/';
 
-		$url = \CHTTP::urlAddParams($manualUrl, $urlParams, ['encode' => true]);
+		$url = (string)(new Uri($manualUrl))->addParams($urlParams);
 
 		return [
 			'url' => $url,

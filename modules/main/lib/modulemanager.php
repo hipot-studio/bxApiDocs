@@ -3,6 +3,7 @@
 namespace Bitrix\Main;
 
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\DB\DuplicateEntryException;
 
 class ModuleManager
 {
@@ -182,13 +183,19 @@ class ModuleManager
 
 	public static function add($moduleName)
 	{
-		ModuleTable::add(['ID' => $moduleName]);
+		try
+		{
+			ModuleTable::add(['ID' => $moduleName]);
 
-		$con = Application::getConnection();
-		$module = $con->getSqlHelper()->forSql($moduleName);
-		$con->queryExecute("UPDATE b_agent SET ACTIVE = 'Y' WHERE MODULE_ID = '" . $module . "' AND ACTIVE = 'N'");
+			$con = Application::getConnection();
+			$module = $con->getSqlHelper()->forSql($moduleName);
+			$con->queryExecute("UPDATE b_agent SET ACTIVE = 'Y' WHERE MODULE_ID = '" . $module . "' AND ACTIVE = 'N'");
 
-		static::clearCache($moduleName);
+			static::clearCache($moduleName);
+		}
+		catch (DuplicateEntryException)
+		{
+		}
 	}
 
 	public static function registerModule($moduleName)

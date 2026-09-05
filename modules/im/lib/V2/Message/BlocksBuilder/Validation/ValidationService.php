@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Message\BlocksBuilder\Validation;
 
-use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Message\BlocksBuilder\BuilderError;
 use Bitrix\Im\V2\Result;
@@ -20,25 +19,11 @@ class ValidationService
 
 	public function validateNew(array $builderData, Chat $chat): Result
 	{
-		$result = new Result();
-
-		if (!Features::isMessageBuilderAvailable())
-		{
-			return $result->addError((new BuilderError(BuilderError::BLOCK_NOT_AVAILABLE)));
-		}
-
 		return $this->validateInternal($builderData, $chat);
 	}
 
 	public function validateExisting(array $builderData): Result
 	{
-		$result = new Result();
-
-		if (!Features::isMessageBuilderAvailable())
-		{
-			return $result->addError((new BuilderError(BuilderError::BLOCK_NOT_AVAILABLE)));
-		}
-
 		return $this->validateInternal($builderData);
 	}
 

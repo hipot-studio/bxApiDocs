@@ -75,10 +75,37 @@ class Role
 	public static function getRights($id)
 	{
 		$id = (int)$id;
-		$result = new PublicActionResult();
+		$result = self::checkScope($id);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
 		$result->setResult(
 			RoleCore::getRights($id)
 		);
+		return $result;
+	}
+
+	/**
+	 * Checks that the role belongs to the current scope.
+	 * @param int $id Role id.
+	 * @return \Bitrix\Landing\PublicActionResult
+	 */
+	protected static function checkScope($id)
+	{
+		$result = new PublicActionResult();
+
+		if (!RoleCore::isInCurrentScope((int)$id))
+		{
+			$error = new \Bitrix\Landing\Error;
+			$error->addError(
+				'ROLE_SCOPE_MISMATCH',
+				Loc::getMessage('LANDING_ROLE_SCOPE_MISMATCH_ERROR')
+			);
+			$result->setError($error);
+		}
+
 		return $result;
 	}
 
@@ -94,7 +121,12 @@ class Role
 		static $mixedParams = ['additional'];
 
 		$id = (int)$id;
-		$result = new PublicActionResult();
+		$result = self::checkScope($id);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
 		$result->setResult(true);
 		RoleCore::setRights(
 			$id,
@@ -113,9 +145,15 @@ class Role
 	 */
 	public static function setAccessCodes($id, array $codes = array())
 	{
-		$result = new PublicActionResult();
+		$id = (int)$id;
+		$result = self::checkScope($id);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
 		$result->setResult(true);
-		RoleCore::setAccessCodes((int)$id, $codes);
+		RoleCore::setAccessCodes($id, $codes);
 		return $result;
 	}
 
@@ -140,6 +178,20 @@ class Role
 	public static function enable($mode)
 	{
 		$result = new PublicActionResult();
+
+		// init() also lets an admin of a scoped section in
+		if (!Rights::canSwitchMode())
+		{
+			$error = new \Bitrix\Landing\Error;
+			$error->addError(
+				'IS_NOT_ADMIN',
+				Loc::getMessage('LANDING_IS_NOT_ADMIN_ERROR')
+			);
+			$result->setError($error);
+
+			return $result;
+		}
+
 		$extended = Rights::isExtendedMode();
 		if (
 			$mode && $extended ||

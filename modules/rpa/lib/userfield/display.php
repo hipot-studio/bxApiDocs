@@ -42,7 +42,7 @@ class Display
 			$view->setAdditionalParameter('FILE_MAX_WIDTH', 300, true);
 			$view->setAdditionalParameter('FILE_SHOW_POPUP', 'Y', true);
 			$view->setAdditionalParameter('FILE_MAX_HEIGHT', 300, true);
-			\CFile::DisableJSFunction(true);
+			\CFile::disableJSFunction(true);
 
 			foreach($this->values as $id => $values)
 			{

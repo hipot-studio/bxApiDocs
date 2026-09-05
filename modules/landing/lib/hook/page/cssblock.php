@@ -11,6 +11,18 @@ class CssBlock extends \Bitrix\Landing\Hook\Page
 {
 	private const AI_TAILWIND_RUNTIME_CSS_MARKER = 'ai-tailwind-runtime=1';
 
+	/**
+	 * End tag open sequence which closes a raw text element: '</' + tag name + (whitespace | '/' | '>').
+	 * End of input is covered as a defensive case: it closes nothing by itself, but anything appended after would.
+	 */
+	private const STYLE_END_TAG_PATTERN = '#</style(?=[\s/>]|$)#i';
+
+	/**
+	 * '\3c ' is the CSS escape for '<', so the sequence keeps its CSS meaning
+	 * but is no longer an end tag for the HTML parser.
+	 */
+	private const ESCAPED_STYLE_END_TAG = '\3c /style';
+
 	private int $landingId = 0;
 
 	public function setLandingId(int $landingId): void
@@ -98,7 +110,8 @@ class CssBlock extends \Bitrix\Landing\Hook\Page
 
 		if ($cssCode != '')
 		{
-			echo '<style type="text/css">' . $cssCode . '</style>';
+			// user code, never print it without escapeCssForStyleTag()
+			echo '<style type="text/css">' . self::escapeCssForStyleTag($cssCode) . '</style>';
 		}
 		if ($cssFile != '')
 		{
@@ -109,6 +122,26 @@ class CssBlock extends \Bitrix\Landing\Hook\Page
 
 			echo '<link href="' . \htmlspecialcharsbx($cssFile) . '" type="text/css"  rel="stylesheet" />';
 		}
+	}
+
+	/**
+	 * Prevents the CSS from breaking out of the style tag; it does not make arbitrary CSS itself safe.
+	 * Valid CSS is kept untouched, except for the known limitation below.
+	 * Every place which prints the user CSS code into HTML must call this method.
+	 * Known limitation: a backslash right before the end tag sequence, as in 'content: "\</style>"',
+	 * merges with the inserted escape, so such CSS is altered.
+	 * @param string $css Raw CSS code.
+	 * @return string
+	 */
+	public static function escapeCssForStyleTag(string $css): string
+	{
+		$escaped = preg_replace_callback(
+			self::STYLE_END_TAG_PATTERN,
+			static fn(): string => self::ESCAPED_STYLE_END_TAG,
+			$css
+		);
+
+		return $escaped ?? '';
 	}
 
 	private function isTailwindRuntimeCssFile(string $cssFile): bool

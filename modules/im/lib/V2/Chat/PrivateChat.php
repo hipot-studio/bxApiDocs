@@ -537,13 +537,20 @@ class PrivateChat extends Chat
 			->setSelect(['CHAT_ID', 'USER_ID'])
 			->whereIn('CHAT_ID', $chatIds)
 			->where('MESSAGE_TYPE', Chat::IM_TYPE_PRIVATE)
-			->whereNot('USER_ID', $contextUserId)
 			->fetchAll()
 		;
 
 		foreach ($result as $row)
 		{
-			$dialogIds[(int)$row['CHAT_ID']] = $row['USER_ID'];
+			$chatId = (int)$row['CHAT_ID'];
+
+			// dialogId of a private chat is the companion — the participant other than the context user.
+			// A self-chat ("notes") has only the context user as its relation, so it stays mapped to the own
+			// userId. Prefer a real companion when present; the context user must never overwrite it.
+			if (!isset($dialogIds[$chatId]) || (int)$row['USER_ID'] !== $contextUserId)
+			{
+				$dialogIds[$chatId] = $row['USER_ID'];
+			}
 		}
 
 		return $dialogIds;

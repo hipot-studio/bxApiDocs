@@ -128,6 +128,8 @@ class RecentProvider
 	{
 		return RecentTable::query()
 			->setSelect([
+				'ITEM_TYPE',
+				'ITEM_ID',
 				'ITEM_CID',
 				'ITEM_MID',
 				'UNREAD',

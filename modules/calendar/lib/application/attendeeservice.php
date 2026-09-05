@@ -6,6 +6,7 @@ use Bitrix\Calendar\Application\Command\BusyAttendees;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Managers\Accessibility;
 use Bitrix\Calendar\Core\Section\Section;
+use Bitrix\Calendar\Integration\HumanResources\TeamAccessService;
 use Bitrix\Calendar\Internals\Exception\AttendeeBusy;
 use Bitrix\Calendar\UserSettings;
 use Bitrix\Calendar\Util;
@@ -17,9 +18,37 @@ class AttendeeService
 		$codes = [];
 		if (is_array($attendeesEntityList))
 		{
+			$attendeesEntityList = $this->filterViewableTeams($attendeesEntityList, $userId);
 			$codes = Util::convertEntitiesToCodes($attendeesEntityList);
 		}
+
 		return \CCalendarEvent::handleAccessCodes($codes, ['userId' => $userId]);
+	}
+
+	/**
+	 * Team codes (SNT<id>) expand into member lists, so a user must not attach a team they
+	 * cannot view. Gate structure-node entities by team-view permission for the event author
+	 * (deny-by-default), symmetrically to the planner branch in CalendarAjax.
+	 */
+	private function filterViewableTeams(array $attendeesEntityList, int $userId): array
+	{
+		$teamAccessService = null;
+		$filtered = [];
+		foreach ($attendeesEntityList as $entity)
+		{
+			if (is_array($entity) && ($entity['entityId'] ?? null) === 'structure-node')
+			{
+				$teamAccessService ??= new TeamAccessService();
+				if (!$teamAccessService->canViewTeam((int)($entity['id'] ?? 0), $userId))
+				{
+					continue;
+				}
+			}
+
+			$filtered[] = $entity;
+		}
+
+		return $filtered;
 	}
 
 	public function isMeeting(array $accessCodes, Section $section, int $userId): bool

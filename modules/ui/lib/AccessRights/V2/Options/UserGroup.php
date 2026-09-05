@@ -15,6 +15,8 @@ class UserGroup implements JsonSerializable, Arrayable
 	/** @var array<string, Member> */
 	protected array $members = [];
 
+	protected bool $isReadOnly = false;
+
 	public function __construct(
 		protected string|int $id,
 		protected string $title,
@@ -88,6 +90,18 @@ class UserGroup implements JsonSerializable, Arrayable
 		return $this;
 	}
 
+	public function isReadOnly(): bool
+	{
+		return $this->isReadOnly;
+	}
+
+	public function setIsReadOnly(bool $isReadOnly): static
+	{
+		$this->isReadOnly = $isReadOnly;
+
+		return $this;
+	}
+
 	public function toArray(): array
 	{
 		$members = [];
@@ -101,6 +115,7 @@ class UserGroup implements JsonSerializable, Arrayable
 			'title' => $this->getTitle(),
 			'accessRights' => array_map(static fn (Access $access) => $access->toArray(), $this->getAccessRights()),
 			'members' => $members,
+			'isReadOnly' => $this->isReadOnly(),
 		];
 	}
 
@@ -147,6 +162,11 @@ class UserGroup implements JsonSerializable, Arrayable
 				}
 			}
 			$userGroup->setMembers($members);
+		}
+
+		if (isset($data['isReadOnly']))
+		{
+			$userGroup->setIsReadOnly((bool)$data['isReadOnly']);
 		}
 
 		return $userGroup;

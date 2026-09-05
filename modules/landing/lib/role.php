@@ -21,6 +21,22 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 	protected static $expectedType = null;
 
 	/**
+	 * Cached role ids, keyed by the expected type they were read for. The scope is switched per
+	 * command inside a single process (e.g. a REST batch), so the ids are kept per type instead
+	 * of being dropped on every switch: a command cannot see the roles of another type, and
+	 * re-entering the same type reuses the ids instead of reading them again.
+	 * @var array
+	 */
+	protected static $expectedRoleIds = [];
+
+	/**
+	 * Roles of the process, keyed by scope. Same reason as $expectedRoleIds: the cache lives
+	 * longer than one scope, so it may not be shared between them.
+	 * @var array
+	 */
+	protected static $rolesCache = [];
+
+	/**
 	 * Internal class.
 	 * @var string
 	 */
@@ -36,15 +52,19 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 		'unexportable',
 		'knowledge_unexportable',
 		'knowledge_extension',
+		'vibe_admin',
 	];
 
 	/**
 	 * Set forbidden rights in default role admin.
+	 * On B24 the admin demo role is granted to the group of all employees,
+	 * so it must not carry the administrative right of the main page.
 	 * @var array
 	 */
 	public static $forbiddenAdminRights = [
 		'unexportable',
-		'knowledge_unexportable'
+		'knowledge_unexportable',
+		'vibe_admin',
 	];
 
 	/**
@@ -104,6 +124,9 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 			$keyDemoInstalled .= '_' . mb_strtolower($type);
 		}
 		Manager::setOption($keyDemoInstalled, 'N');
+		// the option is an input of fetchAll(): a list cached before it was reset was built under
+		// the previous value and would be returned before the demo roles are installed
+		self::clearCache();
 		self::fetchAll();
 	}
 
@@ -113,13 +136,15 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public static function fetchAll()
 	{
-		static $roles = null;
-
 		$type = Site\Type::getCurrentScopeId();
+		// the cache lives for the whole process while the scope is switched per command
+		// (REST / AJAX batch), so it is keyed by scope: otherwise the first command would
+		// fix its own roles for every later command whatever scope it runs under
+		$cacheKey = (string)$type;
 
-		if ($roles !== null)
+		if (isset(self::$rolesCache[$cacheKey]))
 		{
-			return $roles;
+			return self::$rolesCache[$cacheKey];
 		}
 
 		$roles = [];
@@ -185,13 +210,41 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 			Manager::getOption($keyDemoInstalled, 'N') == 'N'
 		)
 		{
-			$roles = null;
 			self::installDemo($type);
 			Manager::setOption($keyDemoInstalled, 'Y');
 			return self::fetchAll();
 		}
 
+		self::$rolesCache[$cacheKey] = $roles;
+
 		return $roles;
+	}
+
+	/**
+	 * Drops the process caches built from the role list. Called from RoleTable on every write,
+	 * so that a role added or removed inside the process is seen by the next read.
+	 * @return void
+	 */
+	public static function clearCache(): void
+	{
+		self::$rolesCache = [];
+		self::$expectedRoleIds = [];
+		// a role carrying a right of its section is a signal of a configured one
+		Rights::resetSectionConfiguredCache();
+	}
+
+	/**
+	 * Drops the cached role rows, keeping the ids of the expected type. Called from RoleTable on an
+	 * update: it rewrites the content of a row, but the ids of a type stay the same unless the type
+	 * itself is written, and saving the roles rewrites them one by one.
+	 * @return void
+	 */
+	public static function clearRolesCache(): void
+	{
+		self::$rolesCache = [];
+		// the criterion of a configured section reads the rights of the roles, and an update
+		// rewrites them without moving a role between the types
+		Rights::resetSectionConfiguredCache();
 	}
 
 	/**
@@ -219,16 +272,7 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 		$addRights = [];
 		foreach (Rights::ADDITIONAL_RIGHTS as $accessCode)
 		{
-			if (mb_strpos($accessCode, '_') > 0)
-			{
-				[$prefix, ] = explode('_', $accessCode);
-				$prefix = mb_strtoupper($prefix);
-				if ($prefix == $type)
-				{
-					$addRights[] = $accessCode;
-				}
-			}
-			else if ($type === null)
+			if (Rights::isRightInScope($accessCode, $type))
 			{
 				$addRights[] = $accessCode;
 			}
@@ -238,7 +282,7 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 		foreach (self::$forbiddenManagerRights as $rightCode)
 		{
 			$key = array_search($rightCode, $addRightsManager, true);
-			if ($key)
+			if ($key !== false)
 			{
 				array_splice($addRightsManager, $key, 1);
 			}
@@ -247,7 +291,7 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 		foreach (self::$forbiddenAdminRights as $rightCode)
 		{
 			$key = array_search($rightCode, $addRightsAdmin, true);
-			if ($key)
+			if ($key !== false)
 			{
 				array_splice($addRightsAdmin, $key, 1);
 			}
@@ -320,7 +364,53 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
+	 * Says whether the role belongs to the currently selected scope.
+	 * @param int $roleId Role id.
+	 * @return bool
+	 */
+	public static function isInCurrentScope(int $roleId): bool
+	{
+		$role = self::getList([
+			'select' => [
+				'TYPE'
+			],
+			'filter' => [
+				'ID' => $roleId
+			]
+		])->fetch();
+
+		if (!$role)
+		{
+			return false;
+		}
+
+		return (string)$role['TYPE'] === (string)Site\Type::getCurrentScopeId();
+	}
+
+	/**
+	 * Keeps only the registry rights of the currently selected scope.
+	 * @param array $rights Additional rights codes.
+	 * @return array
+	 */
+	protected static function filterRightsByCurrentScope(array $rights): array
+	{
+		$type = Site\Type::getCurrentScopeId();
+		$scopeRights = [];
+
+		foreach (Rights::ADDITIONAL_RIGHTS as $code)
+		{
+			if (Rights::isRightInScope($code, $type))
+			{
+				$scopeRights[] = $code;
+			}
+		}
+
+		return array_values(array_intersect($rights, $scopeRights));
+	}
+
+	/**
 	 * Set new access codes for role and refresh all rights.
+	 * Roles of another scope are left untouched.
 	 * @param int $roleId Role id.
 	 * @param array $codes Codes array.
 	 * @return void
@@ -333,6 +423,11 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 		}
 
 		$roleId = intval($roleId);
+
+		if (!self::isInCurrentScope($roleId))
+		{
+			return;
+		}
 
 		self::update($roleId, [
 			'ACCESS_CODES' => $codes
@@ -390,6 +485,8 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 
 	/**
 	 * Set rights for role.
+	 * Roles of another scope are left untouched, the additional
+	 * rights never leave the set of the current scope.
 	 * @param int $roleId Role id.
 	 * @param array $rights Rights array ([[site_id] => [right1, right2]]
 	 * @param array $additionalRights Additional rights array ([Rights::ADDITIONAL_RIGHTS]).
@@ -407,6 +504,12 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 			$rights = (array) $rights;
 		}
 		$roleId = intval($roleId);
+
+		if (!self::isInCurrentScope($roleId))
+		{
+			return;
+		}
+
 		$tasks = Rights::getAccessTasksReferences();
 
 		// func for setting additional rights
@@ -419,6 +522,7 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 				{
 					$additionalRights = [];
 				}
+				$additionalRights = self::filterRightsByCurrentScope($additionalRights);
 				self::update($roleId, [
 					'ADDITIONAL_RIGHTS' => $additionalRights
 				]);
@@ -557,24 +661,27 @@ class Role extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public static function getExpectedRoleIds()
 	{
-		static $ids = [];
+		$cacheKey = (string)self::$expectedType;
 
-		if (!$ids)
+		if (isset(self::$expectedRoleIds[$cacheKey]))
 		{
-			$ids[] = -1;
-			$res = self::getList([
-				'select' => [
-					'ID'
-				],
-				'filter' => [
-					'=TYPE' => self::$expectedType
-				]
-			]);
-			while ($row = $res->fetch())
-			{
-				$ids[] = $row['ID'];
-			}
+			return self::$expectedRoleIds[$cacheKey];
 		}
+
+		$ids = [-1];
+		$res = self::getList([
+			'select' => [
+				'ID'
+			],
+			'filter' => [
+				'=TYPE' => self::$expectedType
+			]
+		]);
+		while ($row = $res->fetch())
+		{
+			$ids[] = $row['ID'];
+		}
+		self::$expectedRoleIds[$cacheKey] = $ids;
 
 		return $ids;
 	}
