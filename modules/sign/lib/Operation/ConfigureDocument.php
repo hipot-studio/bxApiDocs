@@ -61,6 +61,7 @@ class ConfigureDocument implements Contract\Operation
 		?Service\Sign\MemberService $memberService = null,
 		?MemberRepository $memberRepository = null,
 		?RequiredFieldRepository $requiredFieldRepository = null,
+		?Service\Cache\Memory\Sign\UserCache $userCache = null,
 	) {
 		$container = Service\Container::instance();
 		$this->fieldsFillRequestValueFactory = new Factory\Api\Property\Request\Field\Fill\Value();
@@ -68,7 +69,7 @@ class ConfigureDocument implements Contract\Operation
 		$this->profileProvider = $container->getServiceProfileProvider();
 		$this->documentService = $documentService ?? $container->getDocumentService();
 		$this->memberService = $memberService ?? $container->getMemberService();
-		$this->userCache = new Service\Cache\Memory\Sign\UserCache();
+		$this->userCache = $userCache ?? new Service\Cache\Memory\Sign\UserCache();
 		$this->profileProvider->setCache($this->userCache);
 		$this->memberService->setProfileProviderCache($this->userCache);
 		$this->memberRepository = $memberRepository ?? $container->getMemberRepository();
@@ -193,6 +194,7 @@ class ConfigureDocument implements Contract\Operation
 				userId: $userId,
 				name: $this->getMemberNameToSend($member),
 				role: $member->role ?? Role::createByParty($member->party),
+				gender: $this->getMemberGenderToSend($userId),
 			);
 
 			if (DocumentScenario::isB2EScenario($document->scenario))
@@ -288,6 +290,9 @@ class ConfigureDocument implements Contract\Operation
 				$requestBlocks->addItem($requestBlock);
 			}
 		}
+
+		$this->appendFullNamePartFields($document, $members, $registeredFields, $requestFields);
+
 		$isB2eScenario = DocumentScenario::isB2eScenarioByDocument($document);
 		if ($isB2eScenario)
 		{
@@ -557,6 +562,37 @@ class ConfigureDocument implements Contract\Operation
 		return $fieldsCollection;
 	}
 
+	/**
+	 * When a role owns a full name field, register the legal name parts of that role that are not
+	 * present yet, so the service always receives the parts the full name is assembled from. Part
+	 * aliases are produced by the same alias layer as the placeholders (the blank has placeholders).
+	 */
+	private function appendFullNamePartFields(
+		Item\Document $document,
+		Item\MemberCollection $members,
+		Item\FieldCollection $registeredFields,
+		FieldCollection $requestFields,
+	): void
+	{
+		$partFields = $this->fieldFactory->createFullNamePartFields($document, $members, $registeredFields);
+		foreach ($partFields as $partField)
+		{
+			$memberForField = $members->findFirstByParty($partField->party);
+			if ($memberForField !== null)
+			{
+				$partField->alias = $this->generateFieldAlias($partField->name, $memberForField, $document);
+			}
+
+			if (!$requestFields->existWithName($partField->name))
+			{
+				$requestFields->addItem(
+					Item\Api\Property\Request\Signing\Configure\Field::createFromFieldItem($partField),
+				);
+				$registeredFields->add($partField);
+			}
+		}
+	}
+
 	private function getUserModelById(int $userId): ?Main\EO_User
 	{
 		$modelFromCache = $this->userCache->getLoadedModel($userId);
@@ -567,13 +603,7 @@ class ConfigureDocument implements Contract\Operation
 		$cachedFields = $this->userCache->getCachedFields();
 		if (empty($cachedFields))
 		{
-			$cachedFields = [
-				'ID',
-				'NAME',
-				'SECOND_NAME',
-				'LAST_NAME',
-				'LOGIN',
-			];
+			$cachedFields = MemberRepository::USER_CACHE_FIELDS;
 			$this->userCache->setCachedFields($cachedFields);
 		}
 
@@ -601,6 +631,23 @@ class ConfigureDocument implements Contract\Operation
 		}
 
 		return $this->memberService->getMemberRepresentedName($member);
+	}
+
+	/**
+	 * Unknown gender goes to the service as null instead of an empty string: null is read there as
+	 * unknown, so the service keeps deducing the gender from the patronymic while declining the name.
+	 */
+	private function getMemberGenderToSend(int $userId): ?string
+	{
+		if ($userId <= 0)
+		{
+			return null;
+		}
+
+		$profileGender = $this->getUserModelById($userId)?->getPersonalGender();
+		$gender = Type\User\Gender::tryFrom((string)$profileGender) ?? Type\User\Gender::DEFAULT;
+
+		return $gender === Type\User\Gender::DEFAULT ? null : $gender->value;
 	}
 
 	private function sendStatusChangedEvent(Item\Document $document): void

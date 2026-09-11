@@ -75,6 +75,11 @@ final class EntityService
 
 	public function getReviewerOrEditorMemberList(array $documentIds): ?MemberCollection
 	{
+		if (empty($documentIds))
+		{
+			return new MemberCollection();
+		}
+
 		return $this->memberRepository?->listByDocumentIdListAndRoles(
 			$documentIds,
 			[Role::EDITOR, Role::REVIEWER]

@@ -38,6 +38,11 @@ class InstallPresetTemplates implements Operation
 
 	public function launch(): Main\Result|InstallPresetTemplatesResult
 	{
+		if (!$this->isNeedInstall())
+		{
+			return new InstallPresetTemplatesResult();
+		}
+
 		if (!$this->getLock())
 		{
 			return Result::createByErrorMessage('Cant get install preset templates lock');
@@ -54,7 +59,7 @@ class InstallPresetTemplates implements Operation
 			return $result;
 		}
 
-		return new InstallPresetTemplatesResult(isOptionsReloaded: true);
+		return new InstallPresetTemplatesResult();
 	}
 
 	private function install(): Main\Result

@@ -29,6 +29,14 @@ class Copilot extends Controller
 	public function configureActions(): array
 	{
 		return [
+			'executeGeneration' => [
+				'+prefilters' => [
+					new Engine\ActionFilter\Csrf(),
+					new Engine\ActionFilter\HttpMethod([
+						Engine\ActionFilter\HttpMethod::METHOD_POST,
+					]),
+				],
+			],
 			'magicSiteStatus' => [
 				'+prefilters' => [
 					new Engine\ActionFilter\Csrf(),
@@ -41,11 +49,11 @@ class Copilot extends Controller
 	}
 
 	/**
-	 * Try to find and execute AI generation
+	 * Try to find and execute AI generation owned by the current user.
 	 * @param int $generationId
 	 * @return bool
 	 */
-	public static function executeGenerationAction(int $generationId): bool
+	public function executeGenerationAction(int $generationId): bool
 	{
 		if ($generationId <= 0)
 		{
@@ -55,6 +63,13 @@ class Copilot extends Controller
 		$generation = new Generation();
 		if (!$generation->initById($generationId))
 		{
+			return false;
+		}
+
+		if ($generation->getAuthorId() !== Manager::getUserId())
+		{
+			$this->addError(new Error('Insufficient permissions to execute generation.', 'ACCESS_DENIED'));
+
 			return false;
 		}
 

@@ -5,6 +5,7 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
@@ -50,6 +51,13 @@ class ApacheSupersetWorkspaceAnalyticController extends CBitrixComponent
 		if (SupersetInitializer::isRebindRequired())
 		{
 			LocalRedirect('/bi/dashboard');
+		}
+
+		// The workplace of the analyst is not offered by a finished term at all, so a direct link to it leads to
+		// the grid of dashboards - where the padlocks and the reason for them are.
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			LocalRedirect('/bi/dashboard/');
 		}
 
 		if (Loader::includeModule('intranet') && !ToolsManager::getInstance()->checkAvailabilityByToolId('crm_bi'))

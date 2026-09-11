@@ -17,6 +17,7 @@ use Bitrix\BIConnector\Superset\Dashboard\Metadata\MetadataSection\NativeFilterC
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\Main;
 use Bitrix\Main\Error;
@@ -123,6 +124,13 @@ class ApacheSupersetDashboardCreateComponent
 	private function checkAccess(): Main\Result
 	{
 		$result = new Main\Result();
+
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			$result->addError(new Error(SelfHostedLicenseLock::getRestrictionMessage()));
+
+			return $result;
+		}
 
 		if (!Feature::isBuilderEnabled())
 		{

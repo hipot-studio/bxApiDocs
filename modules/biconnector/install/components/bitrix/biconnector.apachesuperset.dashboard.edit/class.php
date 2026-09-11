@@ -25,6 +25,7 @@ use Bitrix\BIConnector\Superset\Dashboard\Metadata\DashboardMetadataBuilder;
 use Bitrix\BIConnector\Superset\Dashboard\Metadata\MetadataSection\NativeFilterConfigurationSection;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\BIConnector\Superset\UI\Period\DefaultPeriodLabelBuilder;
 use Bitrix\BIConnector\Integration\UI\FileUploader;
 use Bitrix\BIConnector\Integration\UI\FileUploaderController\DashboardInfoUploaderController;
@@ -468,6 +469,13 @@ class ApacheSupersetDashboardEditComponent
 	private function checkAccess(): Main\Result
 	{
 		$result = new Main\Result();
+
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			$result->addError(new Error(SelfHostedLicenseLock::getRestrictionMessage()));
+
+			return $result;
+		}
 
 		if (Loader::includeModule('bitrix24') && !Feature::isFeatureEnabled('bi_constructor'))
 		{

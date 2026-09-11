@@ -23,6 +23,8 @@ use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\BIConnector\Superset\Logger\SupersetInitializerLogger;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicense;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseState;
 use Bitrix\BIConnector\Superset\Selfhost\SupersetHostMode;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\DashboardManager;
@@ -105,6 +107,20 @@ final class SupersetInitializer
 			SupersetInitializerLogger::logInfo('Skip superset startup: bi_constructor feature is disabled by current tariff');
 
 			return $status;
+		}
+
+		if (SupersetHostMode::isSelfHosted())
+		{
+			$licenseState = SelfHostedLicense::getInstance()->getState();
+			if ($licenseState !== SelfHostedLicenseState::Active)
+			{
+				SupersetInitializerLogger::logInfo(
+					'Skip superset startup: self-hosted license extension is not active',
+					['license_state' => $licenseState->value],
+				);
+
+				return $status;
+			}
 		}
 
 		$newStatus = self::startSupersetInitialize();
@@ -1224,8 +1240,7 @@ final class SupersetInitializer
 			Option::delete('biconnector', ['name' => SystemDashboardManager::SYSTEM_DASHBOARDS_DELETED_CODES_OPTION]);
 			Option::delete('biconnector', ['name' => '~superset_init_required_dataset_table_hash']);
 			Option::delete('biconnector', ['name' => '~superset_init_required_dataset_last_attempt']);
-			Option::delete('biconnector', ['name' => DatasetSettings::TYPING_OPTION_NAME]);
-			Option::delete('biconnector', ['name' => DatasetSettings::TYPING_LOCK_OPTION_NAME]);
+			DatasetSettings::enableTypingForNewInstance();
 			Option::delete('biconnector', ['name' => DataTimezone::OPTION_NAME]);
 
 			\CUserOptions::DeleteOptionsByName('main.ui.filter', DashboardGrid::SUPERSET_DASHBOARD_GRID_ID);

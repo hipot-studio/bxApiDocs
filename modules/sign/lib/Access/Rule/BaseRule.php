@@ -16,12 +16,7 @@ use Bitrix\Sign\Service\Container;
 
 class BaseRule extends AbstractRule
 {
-	private const DOCUMENT_TO_TEMPLATE_PERMISSIONS_MAP = [
-		PermissionDictionary::SIGN_CRM_SMART_B2E_DOC_ADD => SignPermissionDictionary::SIGN_B2E_TEMPLATE_CREATE,
-		PermissionDictionary::SIGN_CRM_SMART_B2E_DOC_READ => SignPermissionDictionary::SIGN_B2E_TEMPLATE_READ,
-		PermissionDictionary::SIGN_CRM_SMART_B2E_DOC_WRITE => SignPermissionDictionary::SIGN_B2E_TEMPLATE_WRITE,
-		PermissionDictionary::SIGN_CRM_SMART_B2E_DOC_DELETE => SignPermissionDictionary::SIGN_B2E_TEMPLATE_DELETE,
-	];
+	private ?SafeFolderRule $safeFolderRule = null;
 
 	/**
 	 * check access permission
@@ -42,12 +37,17 @@ class BaseRule extends AbstractRule
 		}
 		$action = $params['action'];
 
-		$permissionId = ActionDictionary::getPermissionIdByAction($action);
-		if ($permissionId === null)
+		$rawPermissionId = ActionDictionary::getPermissionIdByAction($action);
+		if ($rawPermissionId === null)
 		{
 			return false;
 		}
-		$permissionId = (string)$permissionId;
+		$permissionId = (string)$rawPermissionId;
+
+		if ($this->isCrmEntityTypeMismatch($permissionId, $item))
+		{
+			return false;
+		}
 
 		$user = $this->user;
 		if (!$user instanceof UserModel)
@@ -55,9 +55,29 @@ class BaseRule extends AbstractRule
 			return false;
 		}
 
-		if ($item instanceof Document && $item->isTemplated())
+		if ($item instanceof Document)
 		{
-			return $this->checkDocumentTemplateAccess($action, $item, $user);
+			if ($item->isTemplated())
+			{
+				return $this->checkDocumentTemplateAccess($action, $item, $user);
+			}
+
+			// Template-action on a non-templated document — mirror of checkDocumentTemplateAccess.
+			if ($this->isTemplatePermission($rawPermissionId))
+			{
+				return false;
+			}
+		}
+
+		// Company safe folder actions are gated by SafeFolderRule (NORMATIVE ALG-01): the safe
+		// access toggle is a hard prerequisite, then the folder permission owner-scope applies.
+		if (SafeFolderRule::isSafeFolderAction($action))
+		{
+			return $this->getSafeFolderRule()->canAccessSafeFolderByOwner(
+				$user,
+				$item instanceof Contract\Access\AccessibleItemWithOwner ? $item->getOwnerId() : null,
+				$action,
+			);
 		}
 
 		if ($this->checkBinarySignPermission($permissionId))
@@ -110,11 +130,11 @@ class BaseRule extends AbstractRule
 	private function checkDocumentTemplateAccess(string $action, Document $item, UserModel $user): bool
 	{
 		$permissionId = ActionDictionary::getPermissionIdByAction($action);
-		$templatePermissionId = self::DOCUMENT_TO_TEMPLATE_PERMISSIONS_MAP[$permissionId] ?? null;
+		$templatePermissionId = PermissionDictionary::getB2eDocumentToTemplatePermissionMap()[$permissionId] ?? null;
 
 		if ($templatePermissionId === null)
 		{
-			if (!in_array($permissionId, self::DOCUMENT_TO_TEMPLATE_PERMISSIONS_MAP, true))
+			if (!$this->isTemplatePermission($permissionId))
 			{
 				return false;
 			}
@@ -124,6 +144,14 @@ class BaseRule extends AbstractRule
 		$ownerId = $item->getOwnerId();
 
 		return $this->checkSignPermission($templatePermissionId, $user, $ownerId);
+	}
+
+	/**
+	 * Whether the given permission id is a B2E template permission.
+	 */
+	private function isTemplatePermission(string|int|null $permissionId): bool
+	{
+		return in_array($permissionId, SignPermissionDictionary::getB2eTemplatePermissionIds(), true);
 	}
 
 	private function checkSignPermission(string|int $permissionId, UserModel $user, ?int $itemOwnerId = null): bool
@@ -163,6 +191,32 @@ class BaseRule extends AbstractRule
 		return false;
 	}
 
+	private function isCrmEntityTypeMismatch(string $permissionId, ?AccessibleItem $item): bool
+	{
+		if (!$item instanceof Contract\Item\ItemWithCrmEntity)
+		{
+			return false;
+		}
+
+		$crmPermissionMap = PermissionDictionary::getCrmPermissionMap();
+		$isCrmPermission = array_key_exists($permissionId, $crmPermissionMap);
+
+		$itemEntityTypeId = $item->getCrmEntityTypeId();
+		if ($itemEntityTypeId === null)
+		{
+			return $isCrmPermission;
+		}
+
+		if (!$isCrmPermission)
+		{
+			return false;
+		}
+
+		[, $expectedEntityTypeId] = $crmPermissionMap[$permissionId];
+
+		return $itemEntityTypeId !== $expectedEntityTypeId;
+	}
+
 	private function checkCrmEntityPermission(string $permissionId, ?AccessibleItem $item): bool
 	{
 		$crmPermissionMap = PermissionDictionary::getCrmPermissionMap();
@@ -191,7 +245,7 @@ class BaseRule extends AbstractRule
 			;
 		}
 
-		$id = $item instanceof Contract\Item\ItemWithCrmId ? $item->getCrmId() : 0;
+		$id = $item instanceof Contract\Item\ItemWithCrmEntity ? $item->getCrmId() : 0;
 
 		if ($id > 0)
 		{
@@ -243,5 +297,10 @@ class BaseRule extends AbstractRule
 	private function checkBinarySignPermission(string $permissionId): ?int
 	{
 		return $this->user->getPermission($permissionId);
+	}
+
+	private function getSafeFolderRule(): SafeFolderRule
+	{
+		return $this->safeFolderRule ??= new SafeFolderRule();
 	}
 }

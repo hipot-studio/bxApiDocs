@@ -19,6 +19,7 @@ use Bitrix\BIConnector\Superset\Cache\CacheManager;
 use Bitrix\BIConnector\Superset\Config\DatasetSettings;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Superset\KeyManager;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\Intranet\Portal;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Contract\Controllerable;
@@ -213,6 +214,13 @@ class ApacheSupersetSettingComponent
 	private function checkAccess(): Result
 	{
 		$result = new Result();
+
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			$result->addError(new Error(SelfHostedLicenseLock::getRestrictionMessage()));
+
+			return $result;
+		}
 
 		if (!Feature::isBuilderEnabled())
 		{

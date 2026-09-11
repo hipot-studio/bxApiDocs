@@ -22,5 +22,6 @@ class Row implements Contract\Item
 		public DateTime $dateCreate = new DateTime(),
 		public Visibility $visibility = Visibility::VISIBLE,
 		public ?Status $status = null,
+		public ?int $representativeId = null,
 	) {}
 }

@@ -69,6 +69,26 @@ class Chart
 	}
 
 	/**
+	 * Creates a new chart.
+	 *
+	 * Payload matches Superset ChartPostSchema:
+	 * - slice_name (required)
+	 * - datasource_id (required)
+	 * - datasource_type (required, e.g. "table")
+	 * - viz_type
+	 * - params (JSON-encoded string with viz form_data)
+	 * - query_context (JSON-encoded string, optional)
+	 * - description, owners, dashboards, cache_timeout, ... (optional)
+	 *
+	 * @param array $payload
+	 * @return RequestResult
+	 */
+	public function createChart(array $payload): RequestResult
+	{
+		return $this->connector->post(self::CHART_API_LINK, $payload);
+	}
+
+	/**
 	 * Imports chart to Superset
 	 * Overwrite flag supports only 'true' value
 	 *
@@ -137,8 +157,11 @@ class Chart
 
 		if ($query)
 		{
-			$query = Json::encode($query);
-			$url = self::CHART_API_LINK . '?q=' . $query;
+			// URL-encode the q payload (http_build_query) — otherwise spaces and
+			// non-ASCII characters in a name filter land raw in the request line
+			// and Superset/Werkzeug rejects it as "Bad request syntax" (400).
+			// Mirrors Dashboard::* which already build q this way.
+			$url = self::CHART_API_LINK . '?' . http_build_query(['q' => Json::encode($query)]);
 		}
 
 		return $this->connector->get($url);

@@ -1159,7 +1159,12 @@ class CVoxImplantCrmHelper
 		CVoxImplantHistory::WriteToLog($bindings, "Starting call trigger for call " . $call->getCallId() . "; bindings:");
 		if(!empty($bindings) && is_array($bindings))
 		{
-			\Bitrix\Crm\Automation\Trigger\CallTrigger::execute($bindings, ['LINE_NUMBER' => $call->getPortalNumber()]);
+			\Bitrix\Crm\Automation\Trigger\CallTrigger::execute($bindings, [
+				'LINE_NUMBER' => $call->getPortalNumber(),
+				'CALL_PHONE_NUMBER' => $call->getCallerId(),
+				'CALL_DIRECTION' => ((int)$call->getIncoming() === \CVoxImplantMain::CALL_OUTGOING ? 'outgoing' : 'incoming'),
+				'CALL_STATUS' => $call->getStatus(),
+			]);
 		}
 	}
 
@@ -1186,7 +1191,12 @@ class CVoxImplantCrmHelper
 		CVoxImplantHistory::WriteToLog($bindings, "Starting missed call trigger for call " . $call->getCallId() . "; bindings:");
 		if(!empty($bindings) && is_array($bindings))
 		{
-			\Bitrix\Crm\Automation\Trigger\MissedCallTrigger::execute($bindings, ['LINE_NUMBER' => $call->getPortalNumber()]);
+			\Bitrix\Crm\Automation\Trigger\MissedCallTrigger::execute($bindings, [
+				'LINE_NUMBER' => $call->getPortalNumber(),
+				'CALL_PHONE_NUMBER' => $call->getCallerId(),
+				'CALL_DIRECTION' => ((int)$call->getIncoming() === \CVoxImplantMain::CALL_OUTGOING ? 'outgoing' : 'incoming'),
+				'CALL_STATUS' => $call->getStatus(),
+			]);
 		}
 	}
 

@@ -3,7 +3,7 @@
 use Bitrix\Main\Config\Configuration;
 
 IncludeModuleLangFile(__FILE__);
-
+/*
 class memcache
 {
     public static $systemConfigurationUpdate;
@@ -293,3 +293,4 @@ $arList = array(
         return $arStats;
     }
 }
+*/

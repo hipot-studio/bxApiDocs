@@ -6,6 +6,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Compatibility\Role;
 use Bitrix\Sign\Exception\SignException;
 use Bitrix\Sign\Helper\Field\NameHelper;
+use Bitrix\Sign\Repository\BlockRepository;
 use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkFieldService;
@@ -20,20 +21,25 @@ class Factory
 	private Service\Sign\BlockService $blockService;
 	private readonly HcmLinkFieldService $hcmLinkFieldService;
 	private readonly LegalInfoProvider $legalInfoProvider;
+	private readonly BlockRepository $blockRepository;
 	/** @var array<string, Item\MemberCollection> */
 	private array $membersByDocumentParty = [];
+	/** @var array<int, list<string>> */
+	private array $regionalBlockCodesByBlankId = [];
 
 	public function __construct(
 		?MemberRepository $memberRepository = null,
 		?Service\Sign\BlockService $blockService = null,
 		?HcmLinkFieldService $hcmLinkFieldService = null,
 		?LegalInfoProvider $legalInfoProvider = null,
+		?BlockRepository $blockRepository = null,
 	)
 	{
 		$this->memberRepository = $memberRepository ?? Container::instance()->getMemberRepository();
 		$this->blockService = $blockService ?? Container::instance()->getSignBlockService();
 		$this->hcmLinkFieldService = $hcmLinkFieldService ?? Container::instance()->getHcmLinkFieldService();
 		$this->legalInfoProvider = $legalInfoProvider ?? Container::instance()->getLegalInfoProvider();
+		$this->blockRepository = $blockRepository ?? Container::instance()->getBlockRepository();
 	}
 
 	/**
@@ -181,10 +187,21 @@ class Factory
 			$code = Type\BlockCode::getB2eReferenceCodeByRole($requiredField->role);
 		}
 
-		if (Type\FieldType::isRegional($requiredField->type) && !$document->isInitiatedByEmployee())
+		if (Type\FieldType::isRegional($requiredField->type))
 		{
-			$code = static::getB2eRegionalBlockCodeByFieldType($requiredField->type);
-			$name = NameHelper::create($code, $requiredField->type, $party);
+			if ($this->shouldCreateRegionalBlock($document, $code, $requiredField->type))
+			{
+				$code = static::getB2eRegionalBlockCodeByFieldType($requiredField->type);
+				$name = NameHelper::create($code, $requiredField->type, $party);
+			}
+			elseif ($code !== Type\BlockCode::B2E_HCMLINK_REFERENCE)
+			{
+				// A declined regional field must produce nothing at all. Falling through to the legal
+				// branch would only stay harmless while LegalInfoProvider has no entry for the regional
+				// types: the moment it gains one, the field silently returns as a legal reference block.
+				// HCM keeps its own block, so it is the single exception here.
+				return null;
+			}
 		}
 
 		if (!$name)
@@ -202,6 +219,85 @@ class Factory
 		);
 	}
 
+	/**
+	 * Builds a legal reference stub block for a profile field type, always on the legal branch.
+	 * Used for the full name part dosend: parts are legal profile fields, so the HCM branch of
+	 * makeStubBlockByRequiredField is intentionally bypassed here (Q-1).
+	 */
+	public function makeStubLegalReferenceBlock(
+		Item\Document $document,
+		string $fieldType,
+		string $role,
+		int $party,
+	): ?Item\Block
+	{
+		$name = $this->legalInfoProvider->getFirstFieldNameByType($fieldType);
+		if (!$name)
+		{
+			return null;
+		}
+
+		return $this->makeItem(
+			document: $document,
+			code: Type\BlockCode::getB2eReferenceCodeByRole($role),
+			party: $party,
+			data: ['field' => $name],
+			skipSecurity: true,
+			role: $role,
+		);
+	}
+
+	/**
+	 * Decides whether the regional external-field block (registration number / creation date)
+	 * must be produced for the given document.
+	 *
+	 * Company-initiated documents always get the regional block: the send wizard has a regional
+	 * settings step where the company supplies the values.
+	 * Employee-initiated documents get it only when the blank really holds the matching placeholder
+	 * block, and never when an HCM link reference block was already resolved above (HCM keeps
+	 * priority). Each regional field is decided on its own: a blank carrying only the registration
+	 * number code must not produce the creation date block. The blank-level "has placeholders" flag
+	 * is not a usable signal here: it is one flag per blank, so it neither tells the two codes apart
+	 * nor distinguishes a blank authored from the placeholder tile with no codes typed into it.
+	 */
+	private function shouldCreateRegionalBlock(
+		Item\Document $document,
+		?string $currentCode,
+		string $fieldType,
+	): bool
+	{
+		if (!$document->isInitiatedByEmployee())
+		{
+			return true;
+		}
+
+		if ($currentCode === Type\BlockCode::B2E_HCMLINK_REFERENCE)
+		{
+			return false;
+		}
+
+		$regionalCode = static::getB2eRegionalBlockCodeByFieldType($fieldType);
+
+		return $regionalCode !== null
+			&& in_array($regionalCode, $this->getExistingRegionalBlockCodes($document), true);
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function getExistingRegionalBlockCodes(Item\Document $document): array
+	{
+		$blankId = $document->blankId;
+		if ($blankId === null)
+		{
+			return [];
+		}
+
+		return $this->regionalBlockCodesByBlankId[$blankId] ??= $this->blockRepository
+			->getExistingB2eRegionalBlockCodesByBlankId($blankId)
+		;
+	}
+
 	public static function getStaticLabelByBlockCode(string $blockCode): ?string
 	{
 		return match($blockCode)
@@ -212,7 +308,7 @@ class Factory
 		};
 	}
 
-	private static function getB2eRegionalBlockCodeByFieldType(string $type): string
+	private static function getB2eRegionalBlockCodeByFieldType(string $type): ?string
 	{
 		return match($type)
 		{

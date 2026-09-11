@@ -10,6 +10,7 @@ class UrlGeneratorService
 {
 	private const AJAX_ENDPOINT = "/bitrix/services/main/ajax.php";
 	private const B2E_WIZARD_URL = '/sign/b2e/doc/0/';
+	private const B2E_TEMPLATE_SEND_URL = '/sign/b2e/employee/templates/folder/';
 	public const B2E_KANBAN_URL = '/sign/b2e/';
 	public const B2E_LIST_URL = '/sign/b2e/list/';
 
@@ -104,6 +105,23 @@ class UrlGeneratorService
 			'noRedirect' => 'Y',
 			'mode' => 'template',
 		]);
+
+		return $uri->getUri();
+	}
+
+	/**
+	 * Address of the template send screen. Zero folder is what switches the template grid into
+	 * send mode, a positive signers list adds the group context of the send flow.
+	 */
+	public function makeTemplateSendUrl(int $signersListId = 0): string
+	{
+		$uri = new Uri(self::B2E_TEMPLATE_SEND_URL);
+		$uri->addParams(['folderId' => 0]);
+
+		if ($signersListId > 0)
+		{
+			$uri->addParams(['signersListId' => $signersListId]);
+		}
 
 		return $uri->getUri();
 	}

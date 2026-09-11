@@ -4,7 +4,9 @@ namespace Bitrix\Sign\Repository\Grid;
 
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Sign\Internal\Document\Template\TemplateFolderRelationCollection;
 use Bitrix\Sign\Internal\Document\Template\TemplateFolderRelationTable;
+use Bitrix\Sign\Internal\DocumentTable;
 use Bitrix\Sign\Item\DocumentTemplateGrid\QueryOptions;
 use Bitrix\Sign\Item\DocumentTemplateGrid\Row;
 use Bitrix\Sign\Item\DocumentTemplateGrid\RowCollection;
@@ -17,8 +19,9 @@ class TemplateGridRepository
 {
 	public function listFoldersAndTemplates(QueryOptions $options): RowCollection
 	{
-		$query = $this->selectTemplateFolderRelationQuery($options);
-		$collection = $query->fetchCollection();
+		$collection = $this->fetchTemplateFolderRelations($this->selectTemplateFolderRelationQuery($options));
+
+		$representativeIdsMap = $this->getRepresentativeIdsMap($collection);
 
 		$data = [];
 		foreach ($collection as $item)
@@ -39,12 +42,14 @@ class TemplateGridRepository
 						dateCreate: new DateTime($folder->getDateCreate()),
 						visibility: Visibility::tryFromInt((int)$folder->getVisibility()),
 						status: null,
+						representativeId: null,
 					);
 				}
 			}
 			elseif (EntityType::from($entityType)->isTemplate())
 			{
 				$template = $item->get('TEMPLATE');
+
 				if ($template !== null)
 				{
 					$data[] = new Row(
@@ -58,6 +63,7 @@ class TemplateGridRepository
 						dateCreate: new DateTime($template->getDateCreate()),
 						visibility: Visibility::tryFromInt((int)$template->getVisibility()),
 						status: Status::tryFromInt($template->getStatus()) ?? Status::NEW,
+						representativeId: $representativeIdsMap[$template->getId()] ?? null,
 					);
 				}
 			}
@@ -68,13 +74,21 @@ class TemplateGridRepository
 
 	public function listTemplatesByFolderId(int $folderId, QueryOptions $options): RowCollection
 	{
-		$query = $this->selectTemplateFolderRelationQueryByFolderId($folderId, $options);
-		$collection = $query->fetchCollection();
+		$collection = $this->fetchTemplateFolderRelations(
+			$this->selectTemplateFolderRelationQueryByFolderId($folderId, $options)
+		);
+
+		$representativeIdsMap = $this->getRepresentativeIdsMap($collection);
 
 		$data = [];
 		foreach ($collection as $item)
 		{
 			$template = $item->get('TEMPLATE');
+			if ($template === null)
+			{
+				continue;
+			}
+
 			$entityType = $item->get('ENTITY_TYPE');
 
 			$data[] = new Row(
@@ -88,10 +102,51 @@ class TemplateGridRepository
 				dateCreate: new DateTime($template->getDateCreate()),
 				visibility: Visibility::tryFromInt((int)$template->getVisibility()),
 				status: Status::tryFromInt($template->getStatus()) ?? Status::NEW,
+				representativeId: $representativeIdsMap[$template->getId()] ?? null,
 			);
 		}
 
 		return new RowCollection(...$data);
+	}
+
+	/**
+	 * @return array<int, int|null>
+	 */
+	private function getRepresentativeIdsMap(TemplateFolderRelationCollection $collection): array
+	{
+		$templateIds = [];
+		foreach ($collection as $item)
+		{
+			$entityType = $item->get('ENTITY_TYPE');
+			if (EntityType::from($entityType)->isTemplate())
+			{
+				$template = $item->get('TEMPLATE');
+				if ($template !== null)
+				{
+					$templateIds[] = $template->getId();
+				}
+			}
+		}
+
+		if (empty($templateIds))
+		{
+			return [];
+		}
+
+		$documents = $this->selectDocumentsByTemplateIds($templateIds)->fetchCollection();
+
+		$representativeIdsMap = [];
+		foreach ($documents as $document)
+		{
+			$representativeIdsMap[$document->getTemplateId()] = $document->getRepresentativeId();
+		}
+
+		return $representativeIdsMap;
+	}
+
+	private function fetchTemplateFolderRelations(Query $query): TemplateFolderRelationCollection
+	{
+		return $query->fetchCollection();
 	}
 
 	public function listByDepthAndEntityType(
@@ -188,5 +243,13 @@ class TemplateGridRepository
 			->setOffset($options->offset)
 			->addOrder('TEMPLATE.DATE_CREATE', 'DESC')
 		;
+	}
+
+	private function selectDocumentsByTemplateIds(array $templateIds): Query
+	{
+		return DocumentTable::query()
+			->addSelect('REPRESENTATIVE_ID')
+			->addSelect('TEMPLATE_ID')
+			->whereIn('TEMPLATE_ID', $templateIds);
 	}
 }

@@ -21,11 +21,7 @@ final class MenuItemCreatorShop extends BaseMenuItemCreator
 		{
 			$isMarketAvailable = MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType());
 
-			$onClick =
-				!$isMarketAvailable
-					? $this->getOpenTariffSliderScript()
-					: $this->createDashboardOpenEventFromMenu($dashboard, $params)
-			;
+			$onClick = $this->createDashboardOpenEventFromMenu($dashboard, $params, $isMarketAvailable);
 
 			$menuItems[] = [
 				'items_id' => "BIC_DASHBOARD_{$dashboard->getId()}",
@@ -33,7 +29,7 @@ final class MenuItemCreatorShop extends BaseMenuItemCreator
 				'text' => $dashboard->getTitle(),
 				'title' => $dashboard->getTitle(),
 				'on_click' => $onClick,
-				'is_locked' => !$this->isAvailableByTariff() || !$isMarketAvailable,
+				'is_locked' => $this->isDashboardLocked($isMarketAvailable),
 			];
 		}
 
@@ -91,6 +87,12 @@ final class MenuItemCreatorShop extends BaseMenuItemCreator
 		{
 			$item['on_click'] = $item['ON_CLICK'];
 			unset($item['ON_CLICK']);
+		}
+
+		if (isset($item['IS_LOCKED']))
+		{
+			$item['is_locked'] = $item['IS_LOCKED'];
+			unset($item['IS_LOCKED']);
 		}
 
 		if (isset($item['URL']))

@@ -199,6 +199,15 @@ class B24button extends \Bitrix\Landing\Hook\Page
 			return true;
 		}
 
+		// CODE is the url of the widget script and is stored as sent (Hook::saveData() checks no
+		// option list), so the widget is the code of the author as much as the head block and the
+		// GTM container are: under the sandboxed preview on the portal host it is off for the same
+		// reason (Hook\Page\HeadBlock::enabled(), Hook\Page\GTM::enabled()).
+		if (Landing\Landing::getDevicePreviewMode())
+		{
+			return false;
+		}
+
 		$isTelegramWebView = self::isTelegramWebView();
 
 		if ($this->fields['USE']->getValue() === null)

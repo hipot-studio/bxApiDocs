@@ -1029,7 +1029,110 @@ final class DashboardService extends AbstractSupersetContext
 			$resultFields['published'] = $fields['published'];
 		}
 
+		if (array_key_exists('position_json', $fields))
+		{
+			$resultFields['position_json'] = is_string($fields['position_json'])
+				? $fields['position_json']
+				: Json::encode($fields['position_json']);
+		}
+
+		if (array_key_exists('json_metadata', $fields))
+		{
+			$jsonMetadata = $fields['json_metadata'];
+			if (is_array($jsonMetadata))
+			{
+				$jsonMetadata = $this->normalizeJsonMetadataObjectFields($jsonMetadata);
+			}
+
+			$resultFields['json_metadata'] = is_string($jsonMetadata)
+				? $jsonMetadata
+				: Json::encode($jsonMetadata);
+		}
+
 		return $resultFields;
+	}
+
+	/**
+	 * Superset's DashboardJSONMetadataSchema types these keys as `fields.Dict()`,
+	 * so they must serialize as JSON objects ({}), not arrays ([]). A current
+	 * json_metadata fetched from Superset round-trips through PHP assoc arrays,
+	 * where an empty {} decodes to [] and re-encodes to [] — which Superset
+	 * rejects with "Not a valid mapping type." Cast the empties back to objects,
+	 * mirroring self::prepareJsonMetadata() (which guards the copy/import paths).
+	 */
+	private function normalizeJsonMetadataObjectFields(array $jsonMetadata): array
+	{
+		static $objectKeys = [
+			'chart_configuration',
+			'global_chart_configuration',
+			'filter_scopes',
+			'expanded_slices',
+			'label_colors',
+			'map_label_colors',
+			'native_filter_migration',
+		];
+
+		foreach ($objectKeys as $key)
+		{
+			if (isset($jsonMetadata[$key]) && is_array($jsonMetadata[$key]) && $jsonMetadata[$key] === [])
+			{
+				$jsonMetadata[$key] = new \ArrayObject();
+			}
+		}
+
+		// native_filter_configuration[] carries several Dict-typed members that
+		// round-trip through PHP as [] when empty (the same {}->[] corruption as
+		// above, but nested). Restore them to {} so Superset accepts the schema
+		// AND the frontend filter bar can read them:
+		//   - targets[i]: a global (time) filter uses a single empty object `{}`;
+		//     FilterValue.tsx destructures `targets[0]` and the /overview backend
+		//     calls `targets[0].get(...)` — both break on `[]`/missing element.
+		//   - controlValues, defaultDataMask.{extraFormData,filterState,ownState}:
+		//     all Dict fields that must serialize as {}.
+		// Mirrors self::prepareJsonMetadata() (copy/import path).
+		if (isset($jsonMetadata['native_filter_configuration']) && is_array($jsonMetadata['native_filter_configuration']))
+		{
+			foreach ($jsonMetadata['native_filter_configuration'] as $filterKey => $filter)
+			{
+				if (!is_array($filter))
+				{
+					continue;
+				}
+
+				if (is_array($filter['targets'] ?? null))
+				{
+					foreach ($filter['targets'] as $targetKey => $target)
+					{
+						if (is_array($target) && $target === [])
+						{
+							$jsonMetadata['native_filter_configuration'][$filterKey]['targets'][$targetKey] = new \ArrayObject();
+						}
+					}
+				}
+
+				if (isset($filter['controlValues']) && is_array($filter['controlValues']) && $filter['controlValues'] === [])
+				{
+					$jsonMetadata['native_filter_configuration'][$filterKey]['controlValues'] = new \ArrayObject();
+				}
+
+				if (is_array($filter['defaultDataMask'] ?? null))
+				{
+					foreach (['extraFormData', 'filterState', 'ownState'] as $maskKey)
+					{
+						if (
+							isset($filter['defaultDataMask'][$maskKey])
+							&& is_array($filter['defaultDataMask'][$maskKey])
+							&& $filter['defaultDataMask'][$maskKey] === []
+						)
+						{
+							$jsonMetadata['native_filter_configuration'][$filterKey]['defaultDataMask'][$maskKey] = new \ArrayObject();
+						}
+					}
+				}
+			}
+		}
+
+		return $jsonMetadata;
 	}
 
 	private function getRelatedEntitiesForDeletion(array $dashboardIds): Main\Result

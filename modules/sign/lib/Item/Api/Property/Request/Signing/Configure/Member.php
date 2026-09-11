@@ -19,6 +19,7 @@ class Member implements Contract\Item
 		public ?string $name,
 		public ?string $role = null,
 		public ?string $sesSigningLogin = null,
+		public ?string $gender = null,
 	)
 	{
 		$this->party = $party;

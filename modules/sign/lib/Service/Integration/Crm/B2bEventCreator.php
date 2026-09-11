@@ -8,6 +8,7 @@ use Bitrix\Crm\Timeline\SignDocument\DocumentData;
 use Bitrix\Crm\Timeline\SignDocument\MessageData;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
 use Bitrix\Crm\Automation\Trigger;
+use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Type\Member\Role;
 
 final class B2bEventCreator
@@ -46,18 +47,29 @@ final class B2bEventCreator
 				break;
 			case EventData::TYPE_ON_SIGN:
 				$crmController->onSigned($itemIdentifier, $documentData, $messageData);
+				$triggerInputData = $this->buildTriggerInputData($eventType, $eventData, $documentData);
 				if ($eventData->getMemberItem()->role === Role::ASSIGNEE)
 				{
-					Trigger\Sign\InitiatorSignedTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+					Trigger\Sign\InitiatorSignedTrigger::executeBySmartDocumentId(
+						$itemIdentifier->getEntityId(),
+						$triggerInputData,
+					);
 				}
 				else
 				{
-					Trigger\Sign\OtherMemberSignedTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+					Trigger\Sign\OtherMemberSignedTrigger::executeBySmartDocumentId(
+						$itemIdentifier->getEntityId(),
+						$triggerInputData,
+					);
 				}
 				break;
 			case EventData::TYPE_ON_SIGN_COMPLETED:
 				$crmController->onSignCompleted($itemIdentifier, $documentData);
-				Trigger\Sign\AllMembersSignedTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+				$triggerInputData = $this->buildTriggerInputData($eventType, $eventData, $documentData);
+				Trigger\Sign\AllMembersSignedTrigger::executeBySmartDocumentId(
+					$itemIdentifier->getEntityId(),
+					$triggerInputData,
+				);
 				break;
 			case EventData::TYPE_ON_INTEGRITY_SUCCESS:
 				$crmController->onIntegritySuccess($itemIdentifier, $documentData, $messageData);
@@ -90,5 +102,46 @@ final class B2bEventCreator
 				$crmController->onSignConfigureError($itemIdentifier, $documentData, $messageData);
 				break;
 		}
+	}
+
+	private function buildTriggerInputData(string $eventType, EventData $eventData, DocumentData $documentData): array
+	{
+		$inputData = [
+			'eventType' => $eventType,
+			'signDocumentId' => $documentData->getDocumentId(),
+			'signInitiatedByType' => $documentData->getInitiatedByType(),
+		];
+
+		$memberService = Container::instance()->getMemberService();
+		$memberItem = $eventData->getMemberItem();
+		if ($memberItem)
+		{
+			$inputData['signMemberRole'] = (string)$memberItem->role;
+
+			$signerUserId = $memberService->getUserIdForMember($memberItem, $eventData->getDocumentItem());
+			if ($signerUserId)
+			{
+				$inputData['signerUserId'] = $signerUserId;
+			}
+
+			$signerName = $memberService->getMemberRepresentedNameForTriggerPayload(
+				$memberItem,
+				$eventData->getDocumentItem(),
+				$signerUserId,
+			);
+			if ($signerName)
+			{
+				$inputData['signerName'] = $signerName;
+			}
+
+			// on the assignee's own signing the acting user is the assignee itself
+			$initiatorUserId = $documentData->getInitiatorUserId() ?? $signerUserId;
+			if ($memberItem->role === Role::ASSIGNEE && $initiatorUserId)
+			{
+				$inputData['initiatorUserId'] = $initiatorUserId;
+			}
+		}
+
+		return $inputData;
 	}
 }

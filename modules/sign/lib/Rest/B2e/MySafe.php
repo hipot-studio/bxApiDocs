@@ -5,7 +5,6 @@ namespace Bitrix\Sign\Rest\B2e;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\BFile;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Rest\AccessException;
@@ -14,8 +13,6 @@ use Bitrix\Rest\Oauth\Auth as OauthAuth;
 use Bitrix\Rest\RestException;
 use Bitrix\Sign\Access\AccessController;
 use Bitrix\Sign\Access\ActionDictionary;
-use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
-use Bitrix\Sign\Access\Service\RolePermissionService;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Controllers\V1\Document\B2eSignedFile;
 use Bitrix\Sign\Operation\GetSignedB2eFileUrl;
@@ -97,6 +94,11 @@ final class MySafe extends IRestService
 	{
 		self::checkAuth($restServer);
 
+		if (is_numeric(CurrentUser::get()->getId()) === false)
+		{
+			throw new AccessException('Access denied for user with malformed id');
+		}
+
 		//check access to MySafe action
 		$accessController = (new AccessController(CurrentUser::get()->getId()));
 		if ($accessController->check(ActionDictionary::ACTION_B2E_MY_SAFE) !== true)
@@ -108,6 +110,7 @@ final class MySafe extends IRestService
 		$documentRepository = Container::instance()->getDocumentRepository();
 		$documentService = Container::instance()->getDocumentService();
 		$memberService = Container::instance()->getMemberService();
+		$listService = Container::instance()->getSafeListService();
 
 		$limit = filter_var($query['limit'] ?? self::LIMIT_DEFAULT, FILTER_VALIDATE_INT, [
 			'options' => [
@@ -123,10 +126,22 @@ final class MySafe extends IRestService
 			],
 		]);
 
+		$user = $accessController->getUser();
+		$isFolderGroupingAllowed = \Bitrix\Sign\Config\Feature::instance()->isSafeFolderGroupingAllowed();
+
+		// The MySafe REST surface always returns a flat list of documents (backward compatible). With
+		// folder grouping on, the ACL is folder-aware: folderless documents keep the legacy
+		// owner-scope while documents inside readable folders are included too, and each row carries
+		// the name of the folder it lives in. With the feature off the shared owner-scope remains in
+		// effect and the response shape is preserved.
+		$documentFilter = $isFolderGroupingAllowed
+			? $listService->buildFlatDocumentFilter($user)
+			: $listService->buildOwnerScopeFilter($user);
+
 		$memberCollection = $memberRepository->listB2eMembersWithResultFilesForMySafe(
-			self::preparePermissionFilterForMySafe(),
+			$documentFilter,
 			$limit,
-			$offset
+			$offset,
 		);
 
 		if ($memberCollection->isEmpty())
@@ -140,24 +155,67 @@ final class MySafe extends IRestService
 			)
 		);
 		$documents = $documentCollection->getArrayByIds();
+		$folderNameByFolderId = $isFolderGroupingAllowed
+			? self::resolveFolderNamesByMembers($memberCollection)
+			: [];
 
 		$result = [];
 		foreach ($memberCollection as $member)
 		{
 			$document = $documents[$member->documentId];
-			$result[] = [
+			$row = [
 				'id' => $member->id,
 				'title' => $documentService->getTitleWithAutoNumber($document),
 				'create_date' => $document->dateCreate?->format(\DateTimeInterface::ATOM),
 				'signed_date' => $member->dateSigned?->format(\DateTimeInterface::ATOM),
 				'creator_id' => $document->createdById,
-				'member_id' => $memberService->getUserIdForMember($member),
+				'member_id' => $memberService->getUserIdForMember($member, $document),
 				'role' => $member->role,
 				'file_url' => CRestUtil::getDownloadUrl(['id' => $member->id], $restServer),
 			];
+
+			// Folder grouping adds the record's folder name (null for folderless records), keeping the
+			// legacy flat response shape otherwise unchanged.
+			if ($isFolderGroupingAllowed)
+			{
+				$folderId = $member->folderId;
+				$row['folderName'] = ($folderId !== null && $folderId > 0)
+					? ($folderNameByFolderId[$folderId] ?? null)
+					: null;
+			}
+
+			$result[] = $row;
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Batch-resolves the folder title for every folder referenced by the page members (no N+1): one
+	 * query for the unique FOLDER_IDs of the current page.
+	 *
+	 * @return array<int, string> folderId => title
+	 */
+	private static function resolveFolderNamesByMembers(
+		\Bitrix\Sign\Item\MemberCollection $members,
+	): array
+	{
+		$folderIds = [];
+		foreach ($members as $member)
+		{
+			$folderId = $member->folderId;
+			if ($folderId !== null && $folderId > 0)
+			{
+				$folderIds[$folderId] = $folderId;
+			}
+		}
+
+		if (empty($folderIds))
+		{
+			return [];
+		}
+
+		return Container::instance()->getSafeFolderRepository()->getTitlesByIds(array_values($folderIds));
 	}
 
 	/**
@@ -250,61 +308,4 @@ final class MySafe extends IRestService
 		}
 	}
 
-	/**
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws RestException
-	 */
-	private static function preparePermissionFilterForMySafe(): ConditionTree
-	{
-		$filter = Query::filter();
-
-		if (is_numeric(CurrentUser::get()->getId()) === false)
-		{
-			throw new AccessException('Access denied for user with malformed id');
-		}
-
-		$accessController = (new AccessController(CurrentUser::get()->getId()));
-		$user = $accessController->getUser();
-
-		if (CurrentUser::get()->isAdmin())
-		{
-			return $filter;
-		}
-
-		$permission = (new RolePermissionService())->getValueForPermission(
-			$user->getRoles(),
-			SignPermissionDictionary::SIGN_B2E_MY_SAFE_DOCUMENTS
-		);
-
-		switch ($permission)
-		{
-			case \Bitrix\Crm\Service\UserPermissions::PERMISSION_ALL:
-			{
-				break;
-			}
-			case \Bitrix\Crm\Service\UserPermissions::PERMISSION_SUBDEPARTMENT:
-			case \Bitrix\Crm\Service\UserPermissions::PERMISSION_DEPARTMENT:
-			{
-				$filter->whereIn(
-					'CREATED_BY_ID',
-					$user->getUserDepartmentMembers(
-						$permission === \Bitrix\Crm\Service\UserPermissions::PERMISSION_SUBDEPARTMENT
-					)
-				);
-				break;
-			}
-			case \Bitrix\Crm\Service\UserPermissions::PERMISSION_SELF:
-			{
-				$filter->where('CREATED_BY_ID', '=', $user->getUserId());
-				break;
-			}
-			case null:
-			{
-				$filter->where('CREATED_BY_ID', '=', null);
-				break;
-			}
-		}
-
-		return $filter;
-	}
 }

@@ -100,7 +100,7 @@ class Agent
 		self::notifyAllAdmins($titleCallback, $notificationCallback);
 	}
 
-	private static function notifyAllAdmins(callable $titleCallback, callable $messageCallback): void
+	public static function notifyAllAdmins(callable $titleCallback, callable $messageCallback): void
 	{
 		if (!Loader::includeModule('im'))
 		{

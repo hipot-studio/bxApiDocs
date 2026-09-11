@@ -111,6 +111,41 @@ class BlockRepository
 		return $this->extractItemCollectionFromModelCollection($collection);
 	}
 
+	/**
+	 * Returns which B2E regional block codes (registration number / creation date) exist for the blank,
+	 * regardless of role or party. A persistent regional block is a faithful signal that the matching
+	 * placeholder is present in the document, because such blocks are created only from real placeholders
+	 * (see Operation\Placeholder\AddPlaceholderBlocksToDocument). The party/role filter is intentionally
+	 * skipped: only the presence of a regional block with the given code matters, not the party that
+	 * authored it. In the employee placeholder flow these blocks are created on BlockParty::LAST_PARTY
+	 * (the SIGNER role).
+	 *
+	 * @return list<string> present regional block codes, a subset of
+	 *                      [BlockCode::B2E_EXTERNAL_ID, BlockCode::B2E_EXTERNAL_DATE_CREATE]
+	 */
+	public function getExistingB2eRegionalBlockCodesByBlankId(int $blankId): array
+	{
+		if ($blankId <= 0)
+		{
+			return [];
+		}
+
+		$rows = Internal\BlockTable::query()
+			->setSelect(['CODE'])
+			->where('BLANK_ID', $blankId)
+			->whereIn('CODE', [BlockCode::B2E_EXTERNAL_ID, BlockCode::B2E_EXTERNAL_DATE_CREATE])
+			->fetchAll()
+		;
+
+		$codes = [];
+		foreach ($rows as $row)
+		{
+			$codes[$row['CODE']] = true;
+		}
+
+		return array_keys($codes);
+	}
+
 	public function loadBlocks(Item\Blank $blank): ?Item\BlockCollection
 	{
 		if ($blank->id === null)

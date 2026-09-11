@@ -548,6 +548,8 @@ class Handler
 			return;
 		}
 
+		$wasNotSentBefore = $member->dateSend === null;
+
 		$member->dateSend = new Type\DateTime();
 		$this->memberRepository->update($member);
 
@@ -565,7 +567,25 @@ class Handler
 				$resultSendToChat = new Main\Result();
 				if (!$this->memberService->skipChatInvitationForMember($member, $document))
 				{
-					$resultSendToChat = $hrBotMessageService->sendInviteMessage($document, $member, $message->getProvider());
+					$isCompanyReceiptExpected =
+						$wasNotSentBefore
+						&& $member->role === Type\Member\Role::ASSIGNEE
+						&& $document->isInitiatedByEmployee()
+					;
+
+					// The receipt mark states that the company received the document, so it is registered
+					// after the invitation is sent, and only then.
+					$resultSendToChat = $isCompanyReceiptExpected
+						? $hrBotMessageService->sendInviteMessageExpectingCompanyReceipt($document, $member, $message->getProvider())
+						: $hrBotMessageService->sendInviteMessage($document, $member, $message->getProvider())
+					;
+
+					if ($isCompanyReceiptExpected)
+					{
+						$result->addErrors(
+							$hrBotMessageService->handleCompanyReceivedByEmployeeDocument($document, $member)->getErrors(),
+						);
+					}
 				}
 			}
 

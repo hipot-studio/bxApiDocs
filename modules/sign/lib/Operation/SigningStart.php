@@ -92,7 +92,10 @@ class SigningStart implements Contract\Operation
 	{
 		$eventData = new EventData();
 		$eventData->setEventType(EventData::TYPE_ON_STARTED)
-			->setDocumentItem($document);
+			->setDocumentItem($document)
+			// the signing is started by the author of the document
+			->setInitiatorUserId($document->createdById)
+		;
 
 		try
 		{

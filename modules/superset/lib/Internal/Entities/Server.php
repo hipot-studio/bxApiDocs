@@ -27,6 +27,10 @@ final class Server implements EntityInterface
 	/** @var \Bitrix\MicroService\Entity\Account|null */
 	private ?object $account = null;
 
+	public function __construct(private readonly bool $sslVerificationEnabled)
+	{
+	}
+
 	public function getId(): ?int
 	{
 		return $this->id;
@@ -299,6 +303,11 @@ final class Server implements EntityInterface
 		$this->dateStartAttempt = null;
 
 		return $this;
+	}
+
+	public function isSslVerificationEnabled(): bool
+	{
+		return $this->sslVerificationEnabled;
 	}
 
 	/** @param \Bitrix\MicroService\Entity\Account $account */

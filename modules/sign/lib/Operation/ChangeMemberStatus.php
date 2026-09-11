@@ -310,6 +310,7 @@ final class ChangeMemberStatus implements Contract\Operation
 		$eventData = new EventData();
 		$eventData->setEventType($eventType);
 		$eventData->setDocumentItem($this->document);
+		$eventData->setInitiatorUserId($this->memberService->getUserIdForMember($this->member, $this->document));
 		$result = false;
 
 		try
@@ -344,6 +345,7 @@ final class ChangeMemberStatus implements Contract\Operation
 			Type\ProviderCode::SES_COM,
 			Type\ProviderCode::SES_RU_EXPRESS => 'integration_bitrix24KEDO',
 			Type\ProviderCode::GOS_KEY => 'integration_Goskluch',
+			Type\ProviderCode::GOS_KEY_LITE => 'integration_Goskluch_Light',
 			Type\ProviderCode::EXTERNAL => 'integration_external',
 			default => 'integration_N',
 		};

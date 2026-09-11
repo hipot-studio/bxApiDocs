@@ -445,6 +445,11 @@ class DocumentService
 		$document->initiatedByType = $initiatedByType;
 		if ($initiatedByType === InitiatedByType::EMPLOYEE)
 		{
+			// Employee mirrors company here: any stale external registration number and creation date
+			// inherited from the company/HCM configuration are cleared (anti-leak), while
+			// the source types are kept MANUAL. The actual values are filled in later on the document
+			// creation step (see Operation\Document\Template\Send), which stores them as MANUAL so that
+			// FieldValue::getB2eRegionalFieldValue returns a trusted value and the placeholder is filled.
 			$document->externalId = null;
 			$document->externalDateCreate = null;
 			$document->externalDateCreateSourceType = Type\Document\ExternalDateCreateSourceType::MANUAL;

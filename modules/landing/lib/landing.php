@@ -74,8 +74,9 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	protected static $previewMode = false;
 
 	/**
-	 * Page is rendered inside the editor device preview (sandboxed frame), not visited for real.
-	 * Unrelated to $previewMode, which is the preview link of an unpublished page.
+	 * Page is rendered under a sandbox with an opaque origin — the editor device preview frame
+	 * or the signed preview link of the cloud (CSP sandbox) — and is not visited for real.
+	 * Not the same as $previewMode: that one only tells that an unpublished page is shown.
 	 * @var boolean
 	 */
 	protected static $devicePreviewMode = false;
@@ -473,7 +474,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
-	 * Set work mode to the editor device preview.
+	 * Set work mode to the sandboxed preview (editor device frame or signed preview link).
 	 * @param boolean $mode Device preview mode.
 	 * @return void
 	 */
@@ -483,7 +484,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
-	 * Get state of the editor device preview mode.
+	 * Get state of the sandboxed preview mode.
 	 * @return boolean
 	 */
 	public static function getDevicePreviewMode()
@@ -946,6 +947,21 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
+	 * May the preview url of a page of the given site carry the signed preview tail?
+	 *
+	 * The signed tail opens the whole draft of its site, so in preview mode this landing hands it
+	 * out only for its own site: a link marker (#landing<id>, #block<id>) pointing to a page of
+	 * another site is resolved to the plain public url of that page. A landing without a site
+	 * (createInstance(0)) is a bare url builder, its callers pass the pages of one site of their own.
+	 * @param int $siteId Site id of the page the url is built for.
+	 * @return bool
+	 */
+	protected function isPreviewSite(int $siteId): bool
+	{
+		return !$this->siteId || (int)$this->siteId === $siteId;
+	}
+
+	/**
 	 * Get full pubic URL for this landing.
 	 * @param int|array $id Landing id (id array), optional.
 	 * @param boolean $absolute Full url.
@@ -1056,17 +1072,22 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 					$row['SITE_ID'] = '/' . $row['SITE_ID'] . '/';
 				}
 			}
+			// the signed preview tail unlocks the draft of a site, so it is put only on the urls of
+			// the site of this landing: a link to a page of any other site stays its plain public url
+			$rowPreviewMode = $previewMode && $this->isPreviewSite((int)$row['SITE_ID_ORIG']);
 			$publicHash = '';
-			if ($previewMode)
+			$siteKey = null;
+			if ($rowPreviewMode)
 			{
 				if ($siteKeyCode == 'CODE')
 				{
-					$publicHash = Site::getPublicHash(trim($row['SITE_CODE'], '/'), $row['SITE_DOMAIN']);
+					$siteKey = trim($row['SITE_CODE'], '/');
 				}
 				else
 				{
-					$publicHash = Site::getPublicHash($row['SITE_ID_ORIG'], $row['SITE_DOMAIN']);
+					$siteKey = $row['SITE_ID_ORIG'];
 				}
+				$publicHash = Site::getPublicHash($siteKey, $row['SITE_DOMAIN']);
 			}
 			if ($row['CODE'])
 			{
@@ -1078,7 +1099,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				$fullUrl[$row['ID']] = ($absolute ? $hostUrl : '') .
 									$pubPath .
 									($bitrix24 ? $row['SITE_ID'] : '/') .
-									($previewMode ? 'preview/' . $publicHash . '/' : '') .
+									($rowPreviewMode ? 'preview/' . $publicHash . '/' : '') .
 									($row['FOLDER_ID'] ? ltrim(Folder::getFullPath($row['FOLDER_ID'], $row['SITE_ID_ORIG'], $lastFolderItem), '/') : '');
 				$folderIndex = $row['ID'] == ($lastFolderItem['INDEX_ID'] ?? 0)
 												||
@@ -1097,18 +1118,25 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 			else
 			{
 				$lastFolderItem = [];
+				$cloudPreview = $rowPreviewMode && Site\PreviewUrl::isCloudTarget($bitrix24, !$domainReplace, $disableCloud);
 				$fullUrl[$row['ID']] = (
-									$absolute
-										? (
-											$row['SITE_PROTOCOL'] . '://' .
-											$row['SITE_DOMAIN']
+									$cloudPreview
+										? Site\PreviewUrl::buildPreviewBase($siteKey, $publicHash, $absolute)
+										: (
+											(
+												$absolute
+													? (
+														$row['SITE_PROTOCOL'] . '://' .
+														$row['SITE_DOMAIN']
+													)
+													: ''
+											) .
+											(($domainReplace || !$bitrix24) ? $pubPath : '') .
+											(($rowPreviewMode && !$bitrix24) ? '/preview/' . $publicHash : '') .
+											(($domainReplace && $bitrix24) ? $row['SITE_ID'] : '/') .
+											(($rowPreviewMode && $bitrix24) ? 'preview/' . $publicHash . '/' : '')
 										)
-										: ''
 									) .
-									(($domainReplace || !$bitrix24) ? $pubPath : '') .
-									(($previewMode && !$bitrix24) ? '/preview/' . $publicHash : '') .
-									(($domainReplace && $bitrix24) ? $row['SITE_ID'] : '/') .
-									(($previewMode && $bitrix24) ? 'preview/' . $publicHash . '/' : '') .
 									($row['FOLDER_ID'] ? ltrim(Folder::getFullPath($row['FOLDER_ID'], $row['SITE_ID_ORIG'], $lastFolderItem), '/') : '');
 				$folderIndex = $row['ID'] == $lastFolderItem['INDEX_ID'] || !$lastFolderItem['INDEX_ID'] && trim($row['CODE'], '/') === $lastFolderItem['CODE'];
 				$data[$row['ID']] = $fullUrl[$row['ID']] .

@@ -1,8 +1,9 @@
 <?php
 namespace Bitrix\Landing\Hook\Page;
 
-use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\Field;
+use \Bitrix\Landing\Landing;
+use \Bitrix\Landing\Manager;
 use \Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
@@ -58,6 +59,15 @@ class GTM extends \Bitrix\Landing\Hook\Page
 	 */
 	public function enabled()
 	{
+		// The container is owned by the author and runs any script of theirs (custom html tags), so
+		// under the sandboxed preview on the portal host it is off for the same reason as the
+		// head-block hook (Hook\Page\HeadBlock::enabled()): a script drawn under the trusted portal
+		// address would still be believed by the visitor, whatever the opaque origin hides from it.
+		if (Landing::getDevicePreviewMode())
+		{
+			return false;
+		}
+
 		if ($this->isLocked())
 		{
 			return false;

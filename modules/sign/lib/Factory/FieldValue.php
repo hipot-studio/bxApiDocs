@@ -12,6 +12,7 @@ use Bitrix\Sign\Helper\Field\NameHelper;
 use Bitrix\Sign\Integration\CRM;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkFieldService;
+use Bitrix\Sign\Service\Providers\LegalInfoProvider;
 use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 use Bitrix\Sign\Service\Providers\ProfileProvider;
 use Bitrix\Sign\Type\BlockCode;
@@ -26,6 +27,10 @@ use CCrmOwnerType;
 
 class FieldValue
 {
+	// Full name order for Russian portals: last name, first name, patronymic. Non-RU portals use
+	// the portal culture name format instead (same source as nameFormat sent in ConfigureRequest).
+	private const FULL_NAME_RU_FORMAT = '#LAST_NAME# #NAME# #SECOND_NAME#';
+
 	private readonly ProfileProvider $profileProvider;
 	/**
 	 * @var array<int, <string, array>>
@@ -33,17 +38,20 @@ class FieldValue
 	private array $fieldSetMemoryCacheByMemberId = [];
 	private readonly MemberDynamicFieldInfoProvider $memberDynamicFieldProvider;
 	private readonly HcmLinkFieldService $hcmLinkFieldService;
+	private readonly LegalInfoProvider $legalInfoProvider;
 
 	public function __construct(
 		?ProfileProvider $profileProvider = null,
 		?MemberDynamicFieldInfoProvider $memberDynamicFieldProvider = null,
 		?HcmLinkFieldService $hcmLinkFieldService = null,
+		?LegalInfoProvider $legalInfoProvider = null,
 	)
 	{
 		$container = Container::instance();
 		$this->profileProvider = $profileProvider ?? $container->getServiceProfileProvider();
 		$this->memberDynamicFieldProvider = $memberDynamicFieldProvider ?? $container->getMemberDynamicFieldProvider();
 		$this->hcmLinkFieldService = $hcmLinkFieldService ?? $container->getHcmLinkFieldService();
+		$this->legalInfoProvider = $legalInfoProvider ?? $container->getLegalInfoProvider();
 	}
 
 	public function createByBlock(
@@ -246,6 +254,11 @@ class FieldValue
 			$fieldCode = mb_substr($fieldCode, mb_strlen(Field::USER_FIELD_CODE_PREFIX));
 		}
 
+		if ($fieldCode === LegalInfoProvider::VIRTUAL_FULL_NAME_FIELD)
+		{
+			return $this->getFullNameFieldValue($block, $member, $document);
+		}
+
 		if (!$this->profileProvider->isProfileField($fieldCode))
 		{
 			return $this->getCrmReferenceFieldValue($field, $member, $document);
@@ -270,6 +283,85 @@ class FieldValue
 		}
 
 		return new Item\Field\Value(0, text: $profileFieldData->value, trusted: $profileFieldData->isLegal);
+	}
+
+	/**
+	 * Builds the flat full name string from the three legal profile parts. This is degradation
+	 * material only: a new service assembles the name from the separate parts and ignores it.
+	 */
+	private function getFullNameFieldValue(
+		Item\Block $block,
+		Item\Member $member,
+		Item\Document $document,
+	): ?Item\Field\Value
+	{
+		$entityId = $block->role === Role::ASSIGNEE
+			? $document->representativeId
+			: $member->entityId
+		;
+		if ($entityId === null)
+		{
+			return null;
+		}
+
+		$firstName = $this->loadLegalPartValue($entityId, FieldType::FIRST_NAME);
+		$lastName = $this->loadLegalPartValue($entityId, FieldType::LAST_NAME);
+		$secondName = $this->loadLegalPartValue($entityId, FieldType::PATRONYMIC);
+
+		$format = $document->langId === 'ru'
+			? self::FULL_NAME_RU_FORMAT
+			: $this->profileProvider->getNameFormat()
+		;
+
+		$value = self::formatFullName($format, $firstName, $lastName, $secondName);
+		if ($value === '')
+		{
+			return null;
+		}
+
+		// Derived field assembled from the trusted legal name parts and always filtered out of the
+		// fill forms, so it never carries untrusted signer input: mark it trusted like the parts.
+		return new Item\Field\Value(0, text: $value, trusted: true);
+	}
+
+	private function loadLegalPartValue(int $entityId, string $fieldType): string
+	{
+		$fieldName = $this->legalInfoProvider->getFirstFieldNameByType($fieldType);
+		if ($fieldName === null)
+		{
+			return '';
+		}
+
+		return (string)$this->profileProvider->loadFieldData($entityId, $fieldName)->value;
+	}
+
+	/**
+	 * Fills a name format template with the profile parts, dropping empty parts without leaving
+	 * double spaces. Mirrors the token set of ProfileProvider::getFormattedName. Public and static
+	 * so the pure formatting rule (ALG-01) can be unit tested without the final ProfileProvider.
+	 */
+	public static function formatFullName(
+		string $format,
+		string $firstName,
+		string $lastName,
+		string $secondName,
+	): string
+	{
+		$shorten = static fn(string $part): string => $part === '' ? '' : mb_substr($part, 0, 1) . '.';
+
+		// Single-pass replacement: strtr never re-scans already substituted text, so a name part that
+		// itself contains a literal token (e.g. "#NAME#") is emitted verbatim instead of being expanded
+		// again by a later token. Longer tokens take precedence over their prefixes.
+		$value = strtr($format, [
+			'#LAST_NAME#' => $lastName,
+			'#NAME#' => $firstName,
+			'#SECOND_NAME#' => $secondName,
+			'#LAST_NAME_SHORT#' => $shorten($lastName),
+			'#NAME_SHORT#' => $shorten($firstName),
+			'#SECOND_NAME_SHORT#' => $shorten($secondName),
+		]);
+
+		return trim((string)preg_replace('/\s+/u', ' ', $value));
 	}
 
 	private function getDocumentFieldValue(

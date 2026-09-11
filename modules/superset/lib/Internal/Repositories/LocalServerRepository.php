@@ -151,7 +151,7 @@ final class LocalServerRepository
 
 	public function create(array $fields): Server
 	{
-		return $this->applyState(new Server(), $fields);
+		return $this->applyState(new Server(sslVerificationEnabled: false), $fields);
 	}
 
 	public function save(Server $server): Result

@@ -2621,6 +2621,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 				{
 					$errMessage = $this::getMessageBlock([
 						'MESSAGE' => Loc::getMessage('LANDING_BLOCK_MESSAGE_ERROR_EVAL'),
+						'MESSAGE_TYPE' => 'alert',
 					]);
 					if ($params['wrapper_show'])
 					{

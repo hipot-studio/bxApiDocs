@@ -208,11 +208,12 @@ class TemplateRef
 	/**
 	 * Delete all area-landing by id.
 	 * @param integer $lid Landing id.
-	 * @return void
+	 * @return array
 	 */
 	public static function deleteArea($lid)
 	{
 		$lid = intval($lid);
+		$areas = array();
 
 		$res = TemplateRefTable::getList(array(
 			'filter' => array(
@@ -221,7 +222,24 @@ class TemplateRef
 		));
 		while ($row = $res->fetch())
 		{
+			$areas[] = array_diff_key($row, array('ID' => true));
 			TemplateRefTable::delete($row['ID']);
+			BXClearCache(true, self::CACHE_DIR);
+		}
+
+		return $areas;
+	}
+
+	/**
+	 * Restore area-landings.
+	 * @param array $areas Template refs.
+	 * @return void
+	 */
+	public static function restoreArea(array $areas)
+	{
+		foreach ($areas as $area)
+		{
+			TemplateRefTable::add($area);
 			BXClearCache(true, self::CACHE_DIR);
 		}
 	}

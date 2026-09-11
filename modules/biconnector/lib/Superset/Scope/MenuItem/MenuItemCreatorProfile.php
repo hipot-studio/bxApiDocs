@@ -24,15 +24,12 @@ final class MenuItemCreatorProfile extends BaseMenuItemCreator
 			$marketAccessManager = MarketAccessManager::getInstance();
 			$isMarketAvailable = $marketAccessManager->isDashboardAvailableByType($dashboard->getType());
 
-			$onClick = $this->createDashboardOpenEventFromMenu($dashboard, $params);
+			$onClick = $this->createDashboardOpenEventFromMenu($dashboard, $params, $isMarketAvailable);
 
-			if (!$isMarketAvailable)
-			{
-				$onClick = $this->getOpenTariffSliderScript();
-			}
-
+			// Installing is offered by the availability of the report itself, the market aside: its own reaction to
+			// an unavailable market is decided above, and answering it here as well would change the cloud behaviour.
 			if (
-				$this->isAvailableByTariff()
+				!$this->isDashboardLocked()
 				&& $dashboard->getStatus() === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED
 			)
 			{
@@ -49,7 +46,7 @@ final class MenuItemCreatorProfile extends BaseMenuItemCreator
 				'TEXT' => $dashboard->getTitle(),
 				'ON_CLICK' => $onClick,
 				'IS_ACTIVE' => false,
-				'IS_LOCKED' => !$this->isAvailableByTariff() || !$isMarketAvailable,
+				'IS_LOCKED' => $this->isDashboardLocked($isMarketAvailable),
 			];
 		}
 

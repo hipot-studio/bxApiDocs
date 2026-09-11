@@ -2,6 +2,7 @@
 
 namespace Bitrix\Sign\Service;
 
+use Bitrix\Main\DB\Order;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\Result;
 use Bitrix\Sign\Config;
@@ -9,24 +10,32 @@ use Bitrix\Sign\Item\SignersList;
 use Bitrix\Sign\Item\SignersListUser;
 use Bitrix\Sign\Item\SignersListUserCollection;
 use Bitrix\Sign\Repository\SignersList\SignersListRepository;
+use Bitrix\Sign\Repository\SignersList\SignersListUserOptionRepository;
 use Bitrix\Sign\Repository\SignersList\SignersListUserRepository;
+use Bitrix\Sign\Type\SignersList\SortField;
+use Bitrix\Sign\Type\SignersList\UserOptionCode;
 
 class SignersListService
 {
 	private readonly SignersListRepository $signersListRepository;
 	private readonly SignersListUserRepository $signersListUserRepository;
 	private readonly Config\Storage $config;
+	private readonly SignersListUserOptionRepository $signersListUserOptionRepository;
 
 	public function __construct(
 		?SignersListRepository $signersListRepository = null,
 		?SignersListUserRepository $signersListUserRepository = null,
 		?Config\Storage $config = null,
+		?SignersListUserOptionRepository $signersListUserOptionRepository = null,
 	)
 	{
 		$container = Container::instance();
 		$this->signersListRepository = $signersListRepository ?? $container->getSignersListRepository();
 		$this->signersListUserRepository = $signersListUserRepository ?? $container->getSignersListUserRepository();
 		$this->config = $config ?? Config\Storage::instance();
+		$this->signersListUserOptionRepository =
+			$signersListUserOptionRepository ?? $container->getSignersListUserOptionRepository()
+		;
 	}
 
 	public function addUsersToList(int $listId, array $userIds, int $createdById, bool $ignoreDuplicates = false): Result
@@ -100,6 +109,59 @@ class SignersListService
 		return $delResult->addErrors($updateResult->getErrors());
 	}
 
+	/**
+	 * Drops the personal options (pins) of the user in every list. Only the deletion of the account
+	 * does this: a deactivated employee may be activated again and must keep the personal order of
+	 * the groups.
+	 */
+	public function deleteAllUserOptions(int $userId): void
+	{
+		$this->signersListUserOptionRepository->deleteAllByUser($userId);
+	}
+
+	/**
+	 * Pins the list for the given user personally. Repeated pinning is a successful no-op.
+	 */
+	public function pinList(int $listId, int $userId): Result
+	{
+		if ($listId <= 0 || $userId <= 0)
+		{
+			return (new Result())->addError(
+				new \Bitrix\Main\Error('List id and user id must be positive'),
+			);
+		}
+
+		return $this->signersListUserOptionRepository->add($listId, $userId, UserOptionCode::Pinned);
+	}
+
+	/**
+	 * Unpins the list for the given user personally. Unpinning a list which is not pinned is a no-op,
+	 * non-positive identifiers are ignored: there is nothing which can fail here.
+	 */
+	public function unpinList(int $listId, int $userId): void
+	{
+		if ($listId <= 0 || $userId <= 0)
+		{
+			return;
+		}
+
+		$this->signersListUserOptionRepository->delete($listId, $userId, UserOptionCode::Pinned);
+	}
+
+	/**
+	 * @param int[] $listIds
+	 *
+	 * @return int[] identifiers of the given lists pinned by the user
+	 */
+	public function listPinnedListIds(int $userId, array $listIds): array
+	{
+		return $this->signersListUserOptionRepository->listListIdsWithOption(
+			$userId,
+			$listIds,
+			UserOptionCode::Pinned,
+		);
+	}
+
 	public function renameList(int $listId, string $title, int $modifiedById): Result
 	{
 		if ($this->isRejectedList($listId))
@@ -157,10 +219,20 @@ class SignersListService
 		ConditionTree $filter,
 		int $limit = 0,
 		int $offset = 0,
+		?SortField $sortField = null,
+		Order $sortDirection = Order::Desc,
+		?int $pinnedForUserId = null,
 	): \Bitrix\Sign\Item\SignersListCollection
 	{
 		$filter = $this->prepareListsFilter($filter);
-		return $this->signersListRepository->list($filter, $limit, $offset);
+		return $this->signersListRepository->list(
+			$filter,
+			$limit,
+			$offset,
+			$sortField,
+			$sortDirection,
+			$pinnedForUserId,
+		);
 	}
 
 	public function listSigners(int $listId): SignersListUserCollection
@@ -201,6 +273,16 @@ class SignersListService
 	{
 		$filter->where('LIST_ID', $listId);
 		return $this->signersListUserRepository->count($filter);
+	}
+
+	/**
+	 * @param int[] $listIds
+	 *
+	 * @return list<int> identifiers of the given lists with at least one signer
+	 */
+	public function listNonEmptyListIds(array $listIds): array
+	{
+		return $this->signersListUserRepository->listNonEmptyListIds($listIds);
 	}
 
 	public function installRejectedList(?int $createdById = null, ?string $title = null): Result
@@ -269,6 +351,27 @@ class SignersListService
 		$filter = (new ConditionTree())->whereLike('TITLE', "%$query%");
 
 		return $this->listWithFilter($filter);
+	}
+
+	public function listNotEmptyListIds(array $listIds): array
+	{
+		$notEmptyListIds = $this->signersListUserRepository->listNotEmptyListIds($listIds);
+
+		if (empty($notEmptyListIds))
+		{
+			return [];
+		}
+
+		return array_map(
+			fn(array $raw): int => $raw['LIST_ID'],
+			$notEmptyListIds
+		);
+	}
+
+	public function isListEmpty(int $listId): bool
+	{
+		$users = $this->listSigners($listId);
+		return $users->isEmpty();
 	}
 
 	private function prepareListsFilter(?ConditionTree $filter = null): ConditionTree

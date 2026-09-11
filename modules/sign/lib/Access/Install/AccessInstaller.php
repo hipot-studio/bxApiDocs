@@ -13,6 +13,59 @@ use Bitrix\Crm\Service\UserPermissions;
 
 class AccessInstaller
 {
+	public static function installMissingSafeFolderPermissions(): void
+	{
+		if (!Loader::includeModule('crm'))
+		{
+			return;
+		}
+
+		$defaultValueByRoleCode = [
+			SignRolePermissionService::DEFAULT_ROLE_EMPLOYEE_CODE => UserPermissions::PERMISSION_SELF,
+			SignRolePermissionService::DEFAULT_ROLE_CHIEF_CODE => UserPermissions::PERMISSION_SUBDEPARTMENT,
+		];
+		$permissionIds = [
+			SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_CREATE,
+			SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_READ,
+			SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_WRITE,
+			SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_DELETE,
+		];
+		$roles = CCrmRole::GetList(
+			['ID' => 'DESC'],
+			['=GROUP_CODE' => RolePermissionService::ROLE_GROUP_CODE],
+		);
+
+		while ($role = $roles->Fetch())
+		{
+			$value = $defaultValueByRoleCode[$role['CODE']] ?? null;
+			if ($value === null)
+			{
+				continue;
+			}
+
+			$roleId = (int)$role['ID'];
+			$existingPermissionIds = PermissionTable::query()
+				->setSelect(['PERMISSION_ID'])
+				->where('ROLE_ID', $roleId)
+				->whereIn('PERMISSION_ID', array_map('strval', $permissionIds))
+				->fetchAll()
+			;
+			$existingPermissionIds = array_column($existingPermissionIds, 'PERMISSION_ID', 'PERMISSION_ID');
+
+			foreach ($permissionIds as $permissionId)
+			{
+				if (!isset($existingPermissionIds[(string)$permissionId]))
+				{
+					PermissionTable::add([
+						'ROLE_ID' => $roleId,
+						'PERMISSION_ID' => (string)$permissionId,
+						'VALUE' => $value,
+					]);
+				}
+			}
+		}
+	}
+
 	public static function install($removeAllPrevious = false): string
 	{
 		try
@@ -58,6 +111,22 @@ class AccessInstaller
 						],
 						[
 							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_DOCUMENTS,
+							'value' => UserPermissions::PERMISSION_SELF,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_CREATE,
+							'value' => UserPermissions::PERMISSION_SELF,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_READ,
+							'value' => UserPermissions::PERMISSION_SELF,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_WRITE,
+							'value' => UserPermissions::PERMISSION_SELF,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_DELETE,
 							'value' => UserPermissions::PERMISSION_SELF,
 						],
 						[
@@ -128,6 +197,22 @@ class AccessInstaller
 						],
 						[
 							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_DOCUMENTS,
+							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_CREATE,
+							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_READ,
+							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_WRITE,
+							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
+						],
+						[
+							'id' => SignPermissionDictionary::SIGN_B2E_MY_SAFE_FOLDER_DELETE,
 							'value' => UserPermissions::PERMISSION_SUBDEPARTMENT,
 						],
 						[

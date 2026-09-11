@@ -8,6 +8,7 @@ use Bitrix\Landing\Site;
 use Bitrix\Landing\TemplateRef;
 use Bitrix\Landing\Transfer\Requisite\Dictionary\AdditionalOptionPart;
 use Bitrix\Landing\Transfer\Requisite\Dictionary\RatioPart;
+use Bitrix\Landing\Transfer\TransferException;
 
 class UpdateReplacedSitePages extends Blank
 {
@@ -15,7 +16,7 @@ class UpdateReplacedSitePages extends Blank
 	{
 		$siteId = $this->context->getAdditionalOptions()->get(AdditionalOptionPart::ReplaceSiteId);
 		$siteId = (int)$siteId;
-		if ($siteId > 0)
+		if ($siteId <= 0)
 		{
 			return;
 		}
@@ -25,8 +26,13 @@ class UpdateReplacedSitePages extends Blank
 		$landings = $ratio->get(RatioPart::Landings) ?? [];
 		foreach ($landingsBefore as $lidToDelete)
 		{
-			TemplateRef::deleteArea($lidToDelete);
-			Landing::markDelete($lidToDelete);
+			$areas = TemplateRef::deleteArea($lidToDelete);
+			$result = Landing::markDelete($lidToDelete);
+			if (!$result->isSuccess())
+			{
+				TemplateRef::restoreArea($areas);
+				throw new TransferException(implode(', ', $result->getErrorMessages()));
+			}
 		}
 
 		$specialPages = $ratio->get(RatioPart::SpecialPages);

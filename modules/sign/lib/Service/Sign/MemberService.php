@@ -1020,6 +1020,24 @@ class MemberService
 		;
 	}
 
+	public function getMemberRepresentedNameForTriggerPayload(
+		Item\Member $member,
+		?Item\Document $document = null,
+		?int $userId = null,
+	): ?string
+	{
+		$userId ??= $this->getUserIdForMember($member, $document);
+
+		if ($userId)
+		{
+			return $this->getUserRepresentedName($userId);
+		}
+
+		return MemberDataPicker::createByMember($member)
+			->getName()
+		;
+	}
+
 	public function getUserRepresentedName(int $userId): string
 	{
 		$name = $this->profileProvider->loadFieldData($userId, 'UF_LEGAL_NAME')->value;
@@ -1243,5 +1261,22 @@ class MemberService
 	public function listAssigneesWithResultFileMissing(): Item\MemberCollection
 	{
 		return $this->memberRepository->listDoneAssigneesWithoutResultFile();
+	}
+
+	/**
+	 *@param int[] $documentIds
+	 *@return int[]
+	 */
+	public function getDocumentIdsForEntityTypeWithRole(array $documentIds, string $entityType, string $role): array
+	{
+		if (
+			!in_array($entityType, EntityType::getAll(), true) ||
+			!in_array($role, Role::getAll(), true)
+		)
+		{
+			return [];
+		}
+
+		return $this->memberRepository->getDocumentIdsForEntityTypeWithRole($documentIds, $entityType, $role);
 	}
 }

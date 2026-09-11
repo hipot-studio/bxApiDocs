@@ -4,6 +4,7 @@ namespace Bitrix\Sign\Internal\SignersList;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Fields;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\Entity;
 use Bitrix\Sign\Trait\ORM\UpdateByFilterTrait;
 
@@ -74,6 +75,19 @@ class SignersListTable extends DataManager
 		}
 
 		return $result;
+	}
+
+	// personal options are dropped here, not in onBeforeDelete: the deletion can no longer be cancelled
+	public static function onAfterDelete(Event $event): void
+	{
+		$primary = $event->getParameter('primary');
+
+		if ($primary['ID'] ?? null)
+		{
+			SignersListUserOptionTable::deleteByFilter(
+				(new ConditionTree())->where('LIST_ID', $primary['ID'])
+			);
+		}
 	}
 
 	public static function getMap()

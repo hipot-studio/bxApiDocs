@@ -417,7 +417,7 @@ class Storage
 
 	public function getMaxB2bDocumentsSignedWithoutRestriction(): int
 	{
-		return (int)\Bitrix\Main\Config\Option::get('sign', '~sign_b2b_max_documents_without_restriction', 2);
+		return (int)\Bitrix\Main\Config\Option::get('sign', '~sign_b2b_max_documents_without_restriction', 0);
 	}
 
 	public function isDemoTemplateInstalled(): ?bool
@@ -428,5 +428,10 @@ class Storage
 	public function setDemoTemplateInstalled(bool $value): void
 	{
 		Main\Config\Option::set('sign', '~sign_b2e_onboarding_template_installed', $value ? 'Y' : 'N');
+	}
+
+	public function isPlaceholderVerifiedAliasFilterDisabled(): bool
+	{
+		return Main\Config\Option::get('sign', '~disable_placeholder_verified_alias_filter', 'N') === 'Y';
 	}
 }

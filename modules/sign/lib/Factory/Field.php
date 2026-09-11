@@ -17,6 +17,7 @@ use Bitrix\Sign\Repository\BlockRepository;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Document;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkFieldService;
+use Bitrix\Sign\Service\Providers\LegalInfoProvider;
 use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 use Bitrix\Sign\Service\Result\Sign\Block\B2eRequiredFieldsResult;
 use Bitrix\Sign\Type;
@@ -65,6 +66,14 @@ final class Field
 	];
 
 	private const SNILS_FIELD_CODE = 'UF_LEGAL_SNILS';
+
+	// Legal name parts a full name field is assembled from downstream. Their values feed the
+	// name resolver on the service side; the full name field itself carries only a flat string.
+	public const FULL_NAME_PART_TYPES = [
+		FieldType::FIRST_NAME,
+		FieldType::LAST_NAME,
+		FieldType::PATRONYMIC,
+	];
 
 	private MemberConnectorFactory $memberConnectorFactory;
 	private readonly BlockRepository $blockRepository;
@@ -524,8 +533,13 @@ final class Field
 
 		$fieldCodeForCheck = UserFieldCodeHelper::removePrefix($fieldCode);
 
+		// The full name is a virtual profile field: it has no user field in the database, so
+		// isProfileField()/getDescriptionByFieldName() do not know it. Build its descriptor here
+		// with an explicit FULL_NAME type; the value is assembled from the legal parts later.
+		$isVirtualFullName = $fieldCodeForCheck === LegalInfoProvider::VIRTUAL_FULL_NAME_FIELD;
+
 		$profileProvider = Container::instance()->getServiceProfileProvider();
-		if (!$profileProvider->isProfileField($fieldCodeForCheck))
+		if (!$isVirtualFullName && !$profileProvider->isProfileField($fieldCodeForCheck))
 		{
 			return $this->createCrmReferenceFields($block, $registeredFields, $member, $document);
 		}
@@ -542,11 +556,22 @@ final class Field
 			return new Item\FieldCollection();
 		}
 
-		$fieldType = $this->fieldService->convertUserFieldType($sourceFieldType);
+		$fieldType = $isVirtualFullName
+			? FieldType::FULL_NAME
+			: $this->fieldService->convertUserFieldType($sourceFieldType);
 
 		if ($fieldCodeForCheck === self::SNILS_FIELD_CODE)
 		{
 			$fieldType = FieldType::SNILS;
+		}
+
+		if ($isVirtualFullName)
+		{
+			// The caption phrase lives in the ProfileProvider lang file, which is not auto-loaded here.
+			Main\Localization\Loc::loadMessages(__DIR__ . '/../Service/Providers/ProfileProvider.php');
+			$fieldDescription = [
+				'caption' => (string)Main\Localization\Loc::getMessage('SIGN_SERVICE_PROVIDER_PROFILE_FIELD_CAPTION_FULL_NAME'),
+			];
 		}
 
 		$fieldCodeWithPrefix = UserFieldCodeHelper::addPrefix($fieldCode);
@@ -560,6 +585,104 @@ final class Field
 			$member->party,
 			$registeredFields,
 		);
+	}
+
+	/**
+	 * For every role that owns a full name field, build the legal name part fields
+	 * (first name / last name / patronymic) that are not registered yet, so the service always
+	 * receives the parts a full name is assembled from. Deduplicated by field name against the
+	 * already collected fields; the appended parts are never required on their own.
+	 */
+	public function createFullNamePartFields(
+		Item\Document $document,
+		Item\MemberCollection $members,
+		Item\FieldCollection $existingFields,
+	): Item\FieldCollection
+	{
+		$result = new Item\FieldCollection();
+		if (!Type\DocumentScenario::isB2EScenario($document->scenario))
+		{
+			return $result;
+		}
+
+		foreach ($this->getRolesWithFullNameField($members, $existingFields) as $role)
+		{
+			foreach ($members->filterByRole($role) as $member)
+			{
+				foreach ($this->createFullNamePartFieldsForMember($member, $document) as $partField)
+				{
+					if (
+						!$existingFields->existWithName($partField->name)
+						&& !$result->existWithName($partField->name)
+					)
+					{
+						$result->add($partField);
+					}
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @return list<string> unique member roles that own a full name field
+	 */
+	private function getRolesWithFullNameField(
+		Item\MemberCollection $members,
+		Item\FieldCollection $fields,
+	): array
+	{
+		$roles = [];
+		foreach ($fields as $field)
+		{
+			if ($field->type !== FieldType::FULL_NAME)
+			{
+				continue;
+			}
+
+			$member = $members->findFirstByParty($field->party);
+			if ($member?->role !== null && !in_array($member->role, $roles, true))
+			{
+				$roles[] = $member->role;
+			}
+		}
+
+		return $roles;
+	}
+
+	private function createFullNamePartFieldsForMember(
+		Item\Member $member,
+		Item\Document $document,
+	): Item\FieldCollection
+	{
+		$result = new Item\FieldCollection();
+		if ($member->party === null || $member->role === null)
+		{
+			return $result;
+		}
+
+		foreach (self::FULL_NAME_PART_TYPES as $partType)
+		{
+			$block = $this->blockFactory->makeStubLegalReferenceBlock(
+				$document,
+				$partType,
+				$member->role,
+				$member->party,
+			);
+			if ($block === null)
+			{
+				continue;
+			}
+
+			foreach ($this->createByBlocks(new Item\BlockCollection($block), $member, $document) as $field)
+			{
+				$field->required = false;
+				$result->add($field);
+			}
+		}
+
+		return $result;
 	}
 
 	public function createByRequired(
@@ -632,6 +755,11 @@ final class Field
 			}
 
 			$block = $this->blockFactory->makeStubBlockByRequiredField($document, $requiredField, $member->party);
+			if ($block === null)
+			{
+				continue;
+			}
+
 			$fields = $this->createByBlocks(new Item\BlockCollection($block), $member, $document);
 			foreach ($fields as $field)
 			{
@@ -702,8 +830,13 @@ final class Field
 
 		$fields = $this->createDocumentMemberFields($document, $member, $withValues);
 
-		// don't show trusted fields
-		return $fields->filter(static fn(Item\Field $field) => !$field->values?->getFirst()?->trusted);
+		// Don't show trusted fields, and never offer the full name: it is a derived field whose
+		// value is built only by sign from the legal parts, so it is not filled in the send wizards.
+		return $fields->filter(
+			static fn(Item\Field $field) =>
+				$field->type !== FieldType::FULL_NAME
+				&& !$field->values?->getFirst()?->trusted
+		);
 	}
 
 	private function createDynamicMemberFields(

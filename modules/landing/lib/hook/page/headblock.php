@@ -2,6 +2,7 @@
 namespace Bitrix\Landing\Hook\Page;
 
 use \Bitrix\Landing\Field;
+use \Bitrix\Landing\Landing;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Main\ModuleManager;
 use \Bitrix\Main\Localization\Loc;
@@ -121,6 +122,15 @@ class HeadBlock extends \Bitrix\Landing\Hook\Page
 	 */
 	public function enabled()
 	{
+		// The sandboxed preview is served on the portal host: its opaque origin keeps the author's
+		// code away from the portal session, but not from the visitor — under the trusted portal
+		// address such a script could draw a login form and send what is typed anywhere. So the
+		// arbitrary code of the author never runs there, same as in edit mode.
+		if (Landing::getDevicePreviewMode())
+		{
+			return false;
+		}
+
 		if ($this->isLocked())
 		{
 			return false;

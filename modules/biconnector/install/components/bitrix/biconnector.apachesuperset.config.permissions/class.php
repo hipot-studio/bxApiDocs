@@ -10,6 +10,7 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Component\PermissionConfig;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\Main;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -44,6 +45,15 @@ class ApacheSupersetConfigPermissionsComponent
 		{
 			$analyticEvent->setStatus('blocked')->send();
 			$this->errorCollection->setError(new Error(Loc::getMessage('BICONNECTOR_APACHESUPERSET_CONFIG_PERMISSIONS_WRONG_PERMISSION')));
+			$this->printErrors();
+
+			return;
+		}
+
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			$analyticEvent->setStatus('blocked')->send();
+			$this->errorCollection->setError(new Error(SelfHostedLicenseLock::getRestrictionMessage()));
 			$this->printErrors();
 
 			return;

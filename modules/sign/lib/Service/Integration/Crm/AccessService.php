@@ -5,7 +5,9 @@ namespace Bitrix\Sign\Service\Integration\Crm;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory\SmartDocument;
 use Bitrix\Main\Loader;
+use Bitrix\Sign\Access\Permission\PermissionDictionary;
 use Bitrix\Sign\Item;
+use Bitrix\Sign\Operation\CheckDocumentAccess;
 use Bitrix\Sign\Type\Member\EntityType;
 
 final class AccessService
@@ -28,6 +30,30 @@ final class AccessService
 			->getUserPermissions()
 			->entityType()
 			->canReadItemsInCategory(\CCrmOwnerType::Contact, $category->getId());
+	}
+
+	public function canCurrentUserViewDocument(Item\Document $document): bool
+	{
+		if (!Loader::includeModule('crm'))
+		{
+			return false;
+		}
+
+		$permissionId = match ($document->entityTypeId)
+		{
+			\CCrmOwnerType::SmartB2eDocument => PermissionDictionary::SIGN_CRM_SMART_B2E_DOC_READ,
+			\CCrmOwnerType::SmartDocument => PermissionDictionary::SIGN_CRM_SMART_DOCUMENT_READ,
+			default => null,
+		};
+		if ($permissionId === null)
+		{
+			return false;
+		}
+
+		return (new CheckDocumentAccess($document, $permissionId))
+			->launch()
+			->isSuccess()
+		;
 	}
 
 	public function canReadContact(int $contactId): bool

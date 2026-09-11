@@ -117,6 +117,31 @@ class BlankRepository
 		return $model === null ? null : $this->extractItemFromModel($model);
 	}
 
+	/**
+	 * Light-weight placeholder flag lookup: reads only the HAS_PLACEHOLDERS column instead of
+	 * hydrating the whole blank (files and their content) through getById()/extractItemFromModel().
+	 *
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function hasPlaceholdersById(int $blankId): bool
+	{
+		if ($blankId < 1)
+		{
+			return false;
+		}
+
+		$blank = Internal\BlankTable::query()
+			->setSelect(['HAS_PLACEHOLDERS'])
+			->where('ID', $blankId)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $blank?->getHasPlaceholders() ?? false;
+	}
+
 	public function getByIdAndValidatePermissions(int $blankId): ?Item\Blank
 	{
 		if (!Loader::includeModule('crm'))

@@ -4,11 +4,6 @@ namespace Bitrix\Sign\Debug;
 
 use Bitrix\Main\Diag\Logger as BaseLogger;
 
-/**
- * Writes to Kibana (db_error) via AddMessage2Log with the 'sign' module.
- * Analogous to \Bitrix\Crm\Service\Logger\Message2LogLogger.
- * Log level threshold is applied by the inherited Diag\Logger::log() BEFORE logMessage().
- */
 class Message2LogLogger extends BaseLogger
 {
 	public function __construct(

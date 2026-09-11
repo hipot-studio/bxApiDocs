@@ -23,14 +23,18 @@ use Bitrix\Sign\Item\Document\TemplateCollection;
 use Bitrix\Sign\Item\DocumentTemplateGrid\QueryOptions;
 use Bitrix\Sign\Item\DocumentTemplateGrid\Row;
 use Bitrix\Sign\Item\DocumentTemplateGrid\RowCollection;
+use Bitrix\Sign\Item\MemberCollection;
 use Bitrix\Sign\Repository\Grid\TemplateGridRepository;
 use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Repository\UserRepository;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Integration\HumanResources\StructureNodeService;
 use Bitrix\Sign\Service\Sign\Document\Template\AccessService;
 use Bitrix\Sign\Service\Sign\Document\TemplateFolderService;
 use Bitrix\Sign\Service\Sign\Document\TemplateService;
+use Bitrix\Sign\Service\Sign\MemberService;
+use Bitrix\Sign\Service\Sign\SignersList\AccessService as SignersListAccessService;
 use Bitrix\Sign\Service\Sign\UrlGeneratorService;
 use Bitrix\Sign\Type\Document\InitiatedByType;
 use Bitrix\Sign\Type\Member\EntityType;
@@ -61,8 +65,12 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 	private readonly UserRepository $userRepository;
 	private readonly MemberRepository $memberRepository;
 	private readonly AccessService $templateAccessService;
+	private readonly SignersListAccessService $signersListAccessService;
 	private readonly UrlGeneratorService $urlGeneratorService;
+	private readonly StructureNodeService $structureNodeService;
+	private readonly MemberService $memberService;
 	private readonly int $folderId;
+	private ?int $preselectedSignersListId = null;
 
 	public function __construct($component = null)
 	{
@@ -74,8 +82,11 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 		$this->userRepository = Container::instance()->getUserRepository();
 		$this->memberRepository = Container::instance()->getMemberRepository();
 		$this->templateAccessService = Container::instance()->getTemplateAccessService();
+		$this->signersListAccessService = Container::instance()->getSignersListAccessService();
 		$this->pageNavigation = $this->getPageNavigation();
 		$this->urlGeneratorService = Container::instance()->getUrlGeneratorService();
+		$this->structureNodeService = Container::instance()->getHumanResourcesStructureNodeService();
+		$this->memberService = Container::instance()->getMemberService();
 		$this->folderId = $this->getCurrentFolderId();
 	}
 
@@ -172,6 +183,7 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 		$this->setResult('CAN_EXPORT_BLANK', $this->canExportBlank());
 		$this->setResult('FOLDER_ID', $this->folderId);
 		$this->setResult('IS_FOLDER_CONTENT_MODE', $this->isFolderContentMode());
+		$this->setResult('PRESELECTED_SIGNERS_LIST_ID', $this->getPreselectedSignersListId());
 		$this->setResult('CREATE_TEMPLATE_ENTITY_BUTTON', $this->getCreateTemplateEntityButton());
 		$this->collectAnalytics();
 	}
@@ -273,6 +285,27 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 		return Context::getCurrent()->getRequest()->getQuery("folderId") !== null;
 	}
 
+	/**
+	 * Signers list the send flow was started for, or zero when the screen is opened without a
+	 * group context. The identifier comes from the panel address, so read access to the list is
+	 * checked here: otherwise a foreign identifier substituted into the address would put a
+	 * group the user may not see into the signers step of the wizard.
+	 */
+	private function getPreselectedSignersListId(): int
+	{
+		if ($this->preselectedSignersListId !== null)
+		{
+			return $this->preselectedSignersListId;
+		}
+
+		$listId = (int)Context::getCurrent()->getRequest()->getQuery('signersListId');
+
+		return $this->preselectedSignersListId = $this->signersListAccessService->hasAccessToRead($listId)
+			? $listId
+			: 0
+		;
+	}
+
 	private function decrementCurrentPage(): void
 	{
 		$this->pageNavigation->setCurrentPage($this->pageNavigation->getCurrentPage() - 1);
@@ -283,11 +316,15 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 		$responsibleIds = [];
 		$templateIds = [];
 		$folderIds = [];
+		$representativeIds = [];
 
 		foreach ($templateEntities as $templateEntity)
 		{
 			$responsibleId = $this->getResponsibleByRow($templateEntity);
 			$responsibleIds[$responsibleId] = $responsibleId;
+			
+			$representativeId = $this->getRepresentativeByRow($templateEntity);
+			$representativeIds[$representativeId] = $representativeId;
 
 			if ($templateEntity->entityType->isFolder())
 			{
@@ -298,11 +335,31 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 		}
 
 		$responsibleUsers = $this->userRepository->getByIds($responsibleIds);
+		$representativeUsers = $this->userRepository->getByIds($representativeIds);
 		$companiesByTemplateIds = $this->getCompaniesByTemplateIds($templateIds);
 		$folderTemplateIdsMap = $this->templateFolderService->getTemplateIdsByIdsMap($folderIds);
 
 		$allTemplateIds = array_merge($templateIds, ...array_values($folderTemplateIdsMap));
 		$allTemplates = $this->templateService->getByIds($allTemplateIds);
+
+		$documents = $this->documentRepository->getByTemplateIds(...$allTemplateIds)->toArray();
+		$documentsMap = array_fill_keys($allTemplateIds, null);
+		foreach ($documents as $document)
+		{
+			$documentsMap[$document->templateId] = $document;
+		}
+		$documentIds = array_diff(array_map(fn($document) => $document?->id, array_values($documentsMap)), [null]);
+
+		$documentIdsWithAssigneeIsRole = $this->memberService->getDocumentIdsForEntityTypeWithRole(
+			$documentIds,
+			EntityType::ROLE,
+			Role::ASSIGNEE
+		);
+		$documentsWithRoleAssigneeMap = array_fill_keys($documentIds, null);
+		foreach  ($documentIdsWithAssigneeIsRole as $documentId)
+		{
+			$documentsWithRoleAssigneeMap[$documentId] = $documentId;
+		}
 
 		$rootAndNestedTemplatesMap = [];
 		foreach ($allTemplates as $template)
@@ -314,9 +371,12 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 			fn(Row $row): array => $this->mapTemplateToGridData(
 				$row,
 				$responsibleUsers,
+				$representativeUsers,
 				$companiesByTemplateIds,
 				$folderTemplateIdsMap,
-				$rootAndNestedTemplatesMap
+				$rootAndNestedTemplatesMap,
+				$documentsMap,
+				$documentsWithRoleAssigneeMap
 			),
 			$templateEntities->toArray(),
 		);
@@ -334,9 +394,12 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 	private function mapTemplateToGridData(
 		Row $row,
 		UserCollection $responsibleUsers,
+		UserCollection $representativeUsers,
 		array $companiesByTemplateIds,
 		array $folderTemplateIdsMap,
-		array $rootAndNestedTemplatesMap
+		array $rootAndNestedTemplatesMap,
+		array $documentsMap,
+		array $membersMap
 	): array
 	{
 		$responsibleData = $responsibleUsers->getByIdMap($this->getResponsibleByRow($row) ?? 0);
@@ -346,7 +409,34 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 		$responsibleLastName = $responsibleData?->lastName ?? '';
 		$responsibleFullName = htmlspecialcharsbx("$responsibleName $responsibleLastName");
 
-		$document = $this->documentRepository->getByTemplateId($row->id);
+		$representativeData = $representativeUsers->getByIdMap($this->getRepresentativeByRow($row) ?? 0);
+		$isRepresentativeChosen = $representativeData !== null;
+		$representativePersonalPhoto = $representativeData?->personalPhotoId;
+		$representativeAvatarPath = $representativePersonalPhoto ? CFile::GetPath($representativePersonalPhoto) : '';
+		$representativeName = $representativeData?->name ?? '';
+		$representativeLastName = $representativeData?->lastName ?? '';
+		$representativeFullName = "$representativeName $representativeLastName";
+
+		$document = $documentsMap[$row->id];
+
+		if ($document !== null)
+		{
+			$member = $membersMap[$document->id];
+
+			if ($member !== null)
+			{
+				$representativeAvatarPath = '';
+				$roleName = $this->structureNodeService->getRoleNameById($document->representativeId);
+				$representativeFullName = $this->structureNodeService->getRoleTitleById($document->representativeId);
+			}
+		}
+		else
+		{
+			$representativeAvatarPath = '';
+			$representativeFullName = '';
+			$isFolder = true;
+		}
+
 		$company = $this->getCompanies($companiesByTemplateIds, $row);
 
 		$isMultipleCompaniesInFolder = $company['COUNT'] > 0 && $row->entityType->isFolder();
@@ -389,6 +479,14 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 					'ID' => $row->modifiedById,
 					'FULL_NAME' => $responsibleFullName,
 					'AVATAR_PATH' => $responsibleAvatarPath,
+				],
+				'REPRESENTATIVE' => [
+					'ID' => $row->representativeId,
+					'FULL_NAME' => $representativeFullName,
+					'AVATAR_PATH' => $representativeAvatarPath,
+					'IS_FOLDER' => $isFolder ?? false,
+					'ROLE_NAME' => $roleName ?? '',
+					'IS_CHOSEN' => $isRepresentativeChosen,
 				],
 				'VISIBILITY' => $row->visibility,
 				'STATUS' => $row->status,
@@ -448,6 +546,11 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 			[
 				'id' => 'RESPONSIBLE',
 				'name' => (string)Loc::getMessage('SIGN_B2E_EMPLOYEE_TEMPLATE_LIST_COLUMN_RESPONSIBLE'),
+				'default' => true,
+			],
+			[
+				'id' => 'REPRESENTATIVE',
+				'name' => (string)Loc::getMessage('SIGN_B2E_EMPLOYEE_TEMPLATE_LIST_COLUMN_REPRESENTATIVE'),
 				'default' => true,
 			],
 			[
@@ -753,6 +856,11 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 	{
 		return $row->modifiedById ?? $row->createdById;
 	}
+	
+	private function getRepresentativeByRow(Row $row): ?int
+	{
+		return $row->representativeId;
+	}
 
 	/**
 	 * @param list<int> $templateIds
@@ -894,7 +1002,6 @@ final class SignB2eEmployeeTemplateListComponent extends SignBaseComponent
 
 		$operation = new \Bitrix\Sign\Operation\Document\Template\FixDismissalPresetTemplate(
 			createdById: $createdById,
-			isOptionsReloaded: $result->isOptionsReloaded,
 		);
 
 		$result = $operation->launch();

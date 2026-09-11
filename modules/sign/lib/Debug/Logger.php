@@ -5,10 +5,6 @@ namespace Bitrix\Sign\Debug;
 use Bitrix\Main\Diag;
 use Psr\Log;
 
-/**
- * Decorator on top of a PSR-3 logger. Adds non-PSR-3 methods dump()/trace().
- * Log level threshold and formatter are owned by the inner logger.
- */
 class Logger extends Diag\Logger implements Log\LoggerAwareInterface
 {
 	use Log\LoggerAwareTrait;

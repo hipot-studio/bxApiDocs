@@ -9,7 +9,7 @@ interface PreloadableStrategyInterface
 	/**
 	 * @param string[] $fieldNames
 	 */
-	public function preloadForFieldNames(array $fieldNames): void;
+	public function preloadForFieldNames(array $fieldNames, ?AliasContext $context = null): void;
 
 	/**
 	 * @param string[] $aliases

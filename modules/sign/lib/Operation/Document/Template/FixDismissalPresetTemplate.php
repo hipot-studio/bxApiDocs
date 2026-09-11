@@ -35,7 +35,6 @@ class FixDismissalPresetTemplate implements Operation
 
 	public function __construct(
 		private readonly int $createdById,
-		private readonly bool $isOptionsReloaded = false,
 		?TemplateRepository $templateRepository = null,
 		?DocumentRepository $documentRepository = null,
 		?MemberRepository $memberRepository = null,
@@ -55,6 +54,11 @@ class FixDismissalPresetTemplate implements Operation
 
 	public function launch(): Main\Result
 	{
+		if ($this->isDismissalTemplateFixed())
+		{
+			return new Main\Result();
+		}
+
 		if (!$this->getLock())
 		{
 			return Result::createByErrorMessage('Cant get install preset templates lock');
@@ -69,10 +73,7 @@ class FixDismissalPresetTemplate implements Operation
 
 	private function fixIfNeed(): Main\Result
 	{
-		if (!$this->isOptionsReloaded)
-		{
-			$this->presetTemplatesService->resetModuleOptionCache();
-		}
+		$this->presetTemplatesService->resetModuleOptionCache();
 
 		if ($this->isDismissalTemplateFixed())
 		{

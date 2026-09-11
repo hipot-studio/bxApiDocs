@@ -7,11 +7,19 @@ use Bitrix\Main\Web\Uri;
 use Bitrix\Superset\Internal\Api;
 use Bitrix\Superset\Internal\HttpStatus;
 use Bitrix\Superset\Internal\Entities\TrinoConnection;
-use Bitrix\Superset\Internal\Repositories\LocalServerRepository;
+use Bitrix\Superset\Internal\Repositories\ServerPersister\ServerPersisterFactory;
 use Bitrix\Superset\Internal\Support\AbstractSupersetContext;
 
 final class DatabaseService extends AbstractSupersetContext
 {
+	/**
+	 * Request-scoped cache of resolved Trino databaseId, keyed by server id.
+	 * The Trino connection does not change within a request for a given portal/server.
+	 *
+	 * @var array<int, int>
+	 */
+	private static array $trinoDatabaseIdCache = [];
+
 	public function changeToken(string $token): Main\Result
 	{
 		return $this->updateConnectionProperty('bi.secret_key', $token);
@@ -26,7 +34,7 @@ final class DatabaseService extends AbstractSupersetContext
 		}
 
 		$this->server->setPortalUrl($portalUrl);
-		$saveResult = (new LocalServerRepository())->save($this->server);
+		$saveResult = ServerPersisterFactory::forServer($this->server)->persist($this->server);
 		if (!$saveResult->isSuccess())
 		{
 			$failedResult = new Main\Result();
@@ -44,6 +52,17 @@ final class DatabaseService extends AbstractSupersetContext
 
 	public function getTrinoDatabaseId(): Main\Result
 	{
+		$serverId = $this->server->getId();
+		if ($serverId !== null && isset(self::$trinoDatabaseIdCache[$serverId]))
+		{
+			$result = new Main\Result();
+			$result->setData([
+				'id' => self::$trinoDatabaseIdCache[$serverId],
+			]);
+
+			return $result;
+		}
+
 		$requestResult = $this->getDatabaseApi()->getDatabaseByName(Api\Database::TRINO_DATABASE_NAME, ['id']);
 		if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 		{
@@ -60,6 +79,11 @@ final class DatabaseService extends AbstractSupersetContext
 				$requestResult,
 				HttpStatus::INTERNAL_SERVER_ERROR
 			);
+		}
+
+		if ($serverId !== null)
+		{
+			self::$trinoDatabaseIdCache[$serverId] = $databaseId;
 		}
 
 		$result = new Main\Result();

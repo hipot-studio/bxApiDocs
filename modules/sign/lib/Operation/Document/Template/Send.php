@@ -4,6 +4,7 @@ namespace Bitrix\Sign\Operation\Document\Template;
 
 use Bitrix\Main\Error;
 use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Helper\Field\NameHelper;
 use Bitrix\Sign\Item\Document;
@@ -14,6 +15,7 @@ use Bitrix\Sign\Item\Field;
 use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Item\MemberCollection;
 use Bitrix\Sign\Operation;
+use Bitrix\Sign\Repository\BlockRepository;
 use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Result\CreateDocumentResult;
@@ -24,6 +26,9 @@ use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 use Bitrix\Sign\Service\Providers\ProfileProvider;
 use Bitrix\Sign\Service\Sign\DocumentService;
 use Bitrix\Sign\Service\Sign\MemberService;
+use Bitrix\Sign\Type\BlockCode;
+use Bitrix\Sign\Type\Document\ExternalDateCreateSourceType;
+use Bitrix\Sign\Type\Document\ExternalIdSourceType;
 use Bitrix\Sign\Type\Document\InitiatedByType;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\Template\Status;
@@ -31,12 +36,20 @@ use Bitrix\Sign\Type\Template\Visibility;
 
 final class Send implements Contract\Operation
 {
+	// The client binds a failed regional field by error code, not by message text (see
+	// install/js/sign/v2/b2e/submit-document-info): the wording is translated, the code is not.
+	// The code doubles as the phrase code, so one identifier describes the error on both sides.
+	public const ERROR_CODE_EXTERNAL_ID_REQUIRED = 'SIGN_B2E_TEMPLATE_SEND_EXTERNAL_ID_REQUIRED';
+	public const ERROR_CODE_EXTERNAL_DATE_REQUIRED = 'SIGN_B2E_TEMPLATE_SEND_EXTERNAL_DATE_REQUIRED';
+	public const ERROR_CODE_EXTERNAL_DATE_INVALID = 'SIGN_B2E_TEMPLATE_SEND_EXTERNAL_DATE_INVALID';
+
 	private readonly DocumentService $documentService;
 	private readonly DocumentRepository $documentRepository;
 	private readonly MemberRepository $memberRepository;
 	private readonly MemberService $memberService;
 	private readonly ProfileProvider $profileProvider;
 	private readonly MemberDynamicFieldInfoProvider $dynamicFieldProvider;
+	private readonly BlockRepository $blockRepository;
 
 	/**
 	 * @var list<array{name: string, value: string}>
@@ -57,9 +70,12 @@ final class Send implements Contract\Operation
 		private readonly ?int $representativeUserId = null,
 		private readonly ?MemberCollection $memberList = null,
 		private readonly ?DocumentBlankReplacementConfig $blankReplacementConfig = null,
+		private readonly ?string $externalId = null,
+		private readonly ?string $externalDate = null,
 		?DocumentService $documentService = null,
 		?ProfileProvider $profileProvider = null,
 		?MemberDynamicFieldInfoProvider $dynamicFieldProvider = null,
+		?BlockRepository $blockRepository = null,
 	)
 	{
 		$this->documentService = $documentService ?? Container::instance()->getDocumentService();
@@ -68,6 +84,7 @@ final class Send implements Contract\Operation
 		$this->memberService = Container::instance()->getMemberService();
 		$this->profileProvider = $profileProvider ?? Container::instance()->getServiceProfileProvider();
 		$this->dynamicFieldProvider = $dynamicFieldProvider ?? Container::instance()->getMemberDynamicFieldProvider();
+		$this->blockRepository = $blockRepository ?? Container::instance()->getBlockRepository();
 	}
 
 	public function launch(): Main\Result|SendResult
@@ -120,6 +137,12 @@ final class Send implements Contract\Operation
 			{
 				return $result;
 			}
+
+			$result = $this->validateRegionalFields($document);
+			if (!$result->isSuccess())
+			{
+				return $result;
+			}
 		}
 
 		$createResult = (new CreateDocumentFromTemplate(
@@ -143,6 +166,12 @@ final class Send implements Contract\Operation
 		}
 
 		$result = $this->fillFields($newDocument->id);
+		if (!$result->isSuccess())
+		{
+			return $this->rollbackOnFailure($result, $newDocument);
+		}
+
+		$result = $this->applyRegionalFields($newDocument);
 		if (!$result->isSuccess())
 		{
 			return $this->rollbackOnFailure($result, $newDocument);
@@ -244,6 +273,140 @@ final class Send implements Contract\Operation
 		Container::instance()->getDocumentAgentService()->addConfigureAndStartAgent($newDocument->uid);
 
 		return new Main\Result();
+	}
+
+	/**
+	 * A regional field is mandatory for the employee exactly when the blank really contains the matching
+	 * placeholder block: the same condition that makes the UI render the input (see
+	 * Controllers\V1\B2e\Document\Template::getFieldsAction). The check runs on the template document before
+	 * CreateDocumentFromTemplate, so invalid input never creates a document that has to be rolled back.
+	 */
+	private function validateRegionalFields(Document $templateDocument): Main\Result
+	{
+		$result = new Main\Result();
+		$regionalBlockCodes = $this->getExistingRegionalBlockCodes($templateDocument->blankId);
+
+		if (in_array(BlockCode::B2E_EXTERNAL_ID, $regionalBlockCodes, true) && $this->getExternalIdValue() === '')
+		{
+			return $result->addError($this->makeRegionalFieldError(self::ERROR_CODE_EXTERNAL_ID_REQUIRED));
+		}
+
+		if (!in_array(BlockCode::B2E_EXTERNAL_DATE_CREATE, $regionalBlockCodes, true))
+		{
+			return $result;
+		}
+
+		$externalDate = $this->getExternalDateValue();
+		if ($externalDate === '')
+		{
+			return $result->addError($this->makeRegionalFieldError(self::ERROR_CODE_EXTERNAL_DATE_REQUIRED));
+		}
+
+		if (!$this->isValidManualExternalDate($externalDate))
+		{
+			return $result->addError($this->makeRegionalFieldError(self::ERROR_CODE_EXTERNAL_DATE_INVALID));
+		}
+
+		return $result;
+	}
+
+	private function makeRegionalFieldError(string $errorCode): Error
+	{
+		return new Error(Loc::getMessage($errorCode), $errorCode);
+	}
+
+	/**
+	 * Persists the regional external fields (registration number, creation date) entered on the document
+	 * creation step as MANUAL values, mirroring the company flow. The values are stored on the document
+	 * before configureAndStart schedules the configure agent; when that agent later runs, it reads the
+	 * trusted MANUAL value through FieldValue::getB2eRegionalFieldValue and substitutes the matching
+	 * placeholder. A value is stored only when the created document really has the matching regional block,
+	 * so that without such a block nothing is persisted (otherwise a stray externalId would leak into the
+	 * smart-document title as "No <externalId>"). Employee input is already checked by validateRegionalFields;
+	 * the date is re-checked here because the created document may carry a replaced blank.
+	 * The company flow keeps using its own per-document change calls.
+	 */
+	private function applyRegionalFields(Document $newDocument): Main\Result
+	{
+		if ($newDocument->initiatedByType !== InitiatedByType::EMPLOYEE)
+		{
+			return new Main\Result();
+		}
+
+		$regionalBlockCodes = $this->getExistingRegionalBlockCodes($newDocument->blankId);
+
+		$externalId = $this->getExternalIdValue();
+		if ($externalId !== '' && in_array(BlockCode::B2E_EXTERNAL_ID, $regionalBlockCodes, true))
+		{
+			$result = $this->documentService->modifyExternalId(
+				documentUid: $newDocument->uid,
+				externalId: $externalId,
+				sourceType: ExternalIdSourceType::MANUAL,
+				hcmLinkSettingId: null,
+			);
+			if (!$result->isSuccess())
+			{
+				return $result;
+			}
+		}
+
+		$externalDate = $this->getExternalDateValue();
+		if (
+			$externalDate !== ''
+			&& in_array(BlockCode::B2E_EXTERNAL_DATE_CREATE, $regionalBlockCodes, true)
+			&& $this->isValidManualExternalDate($externalDate)
+		)
+		{
+			$result = $this->documentService->modifyExternalDate(
+				documentUid: $newDocument->uid,
+				sourceType: ExternalDateCreateSourceType::MANUAL,
+				externalDate: $externalDate,
+				hcmLinkSettingId: null,
+			);
+			if (!$result->isSuccess())
+			{
+				return $result;
+			}
+		}
+
+		return new Main\Result();
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function getExistingRegionalBlockCodes(?int $blankId): array
+	{
+		if ($blankId === null)
+		{
+			return [];
+		}
+
+		return $this->blockRepository->getExistingB2eRegionalBlockCodesByBlankId($blankId);
+	}
+
+	private function getExternalIdValue(): string
+	{
+		return trim((string)$this->externalId);
+	}
+
+	private function getExternalDateValue(): string
+	{
+		return trim((string)$this->externalDate);
+	}
+
+	private function isValidManualExternalDate(string $externalDate): bool
+	{
+		try
+		{
+			Main\Type\DateTime::createFromUserTime($externalDate);
+		}
+		catch (Main\ObjectException)
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	private function fillFields(int $documentId): Main\Result

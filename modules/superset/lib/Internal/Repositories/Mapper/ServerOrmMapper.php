@@ -9,7 +9,7 @@ final class ServerOrmMapper
 {
 	public function convertFromOrm(EO_Server $ormServer): Server
 	{
-		return (new Server())
+		return (new Server(sslVerificationEnabled: false))
 			->setId($ormServer->getId())
 			->setHost($ormServer->getHost())
 			->setAccessPassword($ormServer->getAccessPassword())

@@ -252,7 +252,13 @@ class PropertyTable extends ORM\Data\DataManager
 				->addValidator(new ORM\Fields\Validators\LengthValidator(null, 255))
 				->configureTitle(Loc::getMessage('IBLOCK_PROPERTY_ENTITY_USER_TYPE_FIELD'))
 			,
-			'USER_TYPE_SETTINGS_LIST' => (new ORM\Fields\ArrayField('USER_TYPE_SETTINGS_LIST'))
+			'USER_TYPE_SETTINGS_LIST' => (new class('USER_TYPE_SETTINGS_LIST') extends ORM\Fields\ArrayField
+			{
+				public function decodePhp($value): mixed
+				{
+					return unserialize($value, ['allowed_classes' => false]);
+				}
+			})
 				->configureNullable(true)
 				->configureSerializationPhp()
 				->configureColumnName('USER_TYPE_SETTINGS')

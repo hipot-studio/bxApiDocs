@@ -133,6 +133,26 @@ final class StructureNodeService
 		Loc::loadLanguageFile($langFile, $language);
 	}
 
+	public function isHead(string $roleName): bool
+	{
+		if (!$this->isAvailable())
+		{
+			return false;
+		}
+
+		return $roleName === StructureRole::HEAD->name;
+	}
+
+	public function isDeputy(string $roleName): bool
+	{
+		if (!$this->isAvailable())
+		{
+			return false;
+		}
+
+		return $roleName === StructureRole::DEPUTY_HEAD->name;
+	}
+
 	public function isAvailable(): bool
 	{
 		return Loader::includeModule('humanresources') && class_exists(

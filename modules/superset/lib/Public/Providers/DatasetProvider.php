@@ -8,9 +8,9 @@ use Bitrix\Superset\Public\Support\AbstractPublicEntryPoint;
 
 final class DatasetProvider extends AbstractPublicEntryPoint
 {
-	public function list(array $ids = [], array $neqIds = []): Result
+	public function list(array $ids = [], array $neqIds = [], ?int $page = null, ?int $pageSize = null): Result
 	{
-		return $this->getService()->list($ids, $neqIds);
+		return $this->getService()->list($ids, $neqIds, $page, $pageSize);
 	}
 
 	public function listByTableName(string $tableName): Result

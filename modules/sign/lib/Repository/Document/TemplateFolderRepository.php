@@ -2,7 +2,9 @@
 
 namespace Bitrix\Sign\Repository\Document;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Sign\Helper\IterationHelper;
@@ -10,6 +12,7 @@ use Bitrix\Sign\Internal\Document\TemplateFolder;
 use Bitrix\Sign\Internal\Document\Template\TemplateFolderRelationTable;
 use Bitrix\Sign\Internal\Document\TemplateFolderCollection;
 use Bitrix\Sign\Internal\Document\TemplateFolderTable;
+use Bitrix\Sign\Internal\Document\TemplateTable;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Model\ItemBinder\BaseItemToModelBinder;
 use Bitrix\Sign\Result\Service\Sign\Template\UpdateTemplateFolderResult;
@@ -240,6 +243,66 @@ class TemplateFolderRepository
 	public function updateVisibility(int $folderId, Type\Template\Visibility $visibility): Result
 	{
 		return TemplateFolderTable::update($folderId, ['VISIBILITY' => $visibility->toInt()]);
+	}
+
+	/**
+	 * Sets folder visibility by the presence of a visible template in it within a single statement,
+	 * so a template becoming visible in parallel is never overwritten by a stale value.
+	 *
+	 * @param list<int> $folderIds
+	 */
+	public function updateVisibilitiesByVisibleTemplateExistence(array $folderIds): Result
+	{
+		$folderIds = array_values(array_unique($folderIds));
+		if (empty($folderIds))
+		{
+			return new Result();
+		}
+
+		$connection = Application::getConnection();
+		foreach ([Type\Template\Visibility::VISIBLE, Type\Template\Visibility::INVISIBLE] as $visibility)
+		{
+			$connection->queryExecute(
+				$this->getVisibilityByTemplateExistenceSql($folderIds, $visibility),
+			);
+		}
+
+		return new Result();
+	}
+
+	/**
+	 * @param list<int> $folderIds
+	 */
+	private function getVisibilityByTemplateExistenceSql(
+		array $folderIds,
+		Type\Template\Visibility $visibility,
+	): string
+	{
+		$existsOperator = $visibility === Type\Template\Visibility::VISIBLE ? 'EXISTS' : 'NOT EXISTS';
+		$folderTableName = TemplateFolderTable::getTableName();
+		$templateTableName = TemplateTable::getTableName();
+
+		// Folders already holding the target visibility are skipped to avoid pointless row locks and writes.
+		return (new SqlExpression(
+			'UPDATE ?# SET ?# = ?i WHERE ?# IN (?@) AND ?# <> ?i AND ' . $existsOperator . ' ('
+				. 'SELECT 1 FROM ?# WHERE ?#.?# = ?#.?# AND ?#.?# = ?i'
+			. ')',
+			$folderTableName,
+			'VISIBILITY',
+			$visibility->toInt(),
+			'ID',
+			$folderIds,
+			'VISIBILITY',
+			$visibility->toInt(),
+			$templateTableName,
+			$templateTableName,
+			'FOLDER_ID',
+			$folderTableName,
+			'ID',
+			$templateTableName,
+			'VISIBILITY',
+			Type\Template\Visibility::VISIBLE->toInt(),
+		))->compile();
 	}
 
 	private function extractModelFromItem(Item\Document\TemplateFolder $item): TemplateFolder

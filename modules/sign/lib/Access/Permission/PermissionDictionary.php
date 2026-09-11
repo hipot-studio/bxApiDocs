@@ -72,6 +72,21 @@ class PermissionDictionary extends \Bitrix\Main\Access\Permission\PermissionDict
 		];
 	}
 
+	/**
+	 * Maps B2E document permissions to their template counterparts.
+	 *
+	 * @return array<string, int>
+	 */
+	public static function getB2eDocumentToTemplatePermissionMap(): array
+	{
+		return [
+			self::SIGN_CRM_SMART_B2E_DOC_ADD => SignPermissionDictionary::SIGN_B2E_TEMPLATE_CREATE,
+			self::SIGN_CRM_SMART_B2E_DOC_READ => SignPermissionDictionary::SIGN_B2E_TEMPLATE_READ,
+			self::SIGN_CRM_SMART_B2E_DOC_WRITE => SignPermissionDictionary::SIGN_B2E_TEMPLATE_WRITE,
+			self::SIGN_CRM_SMART_B2E_DOC_DELETE => SignPermissionDictionary::SIGN_B2E_TEMPLATE_DELETE,
+		];
+	}
+
 	private static function getPermissionTitleLocCode($permissionId): ?string
 	{
 		return match ($permissionId)

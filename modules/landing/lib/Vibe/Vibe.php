@@ -790,7 +790,8 @@ class Vibe
 		$provider = $this->getProvider();
 		if (
 			!isset($provider)
-			|| !$this->isAvailable())
+			|| !$this->isAvailable()
+			|| !$this->canCreate())
 		{
 			return false;
 		}

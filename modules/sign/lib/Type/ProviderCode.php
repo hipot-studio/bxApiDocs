@@ -12,6 +12,7 @@ use Bitrix\Sign\Helper\StringHelper;
 final class ProviderCode
 {
 	public const GOS_KEY = 'GOS_KEY';
+	public const GOS_KEY_LITE = 'GOS_KEY_LITE';
 	public const TAXCOM = 'TAXCOM';
 	public const SES_RU = 'SES_RU';
 	public const SES_COM = 'SES_COM';
@@ -25,6 +26,7 @@ final class ProviderCode
 	{
 		return [
 			self::GOS_KEY,
+			self::GOS_KEY_LITE,
 			self::TAXCOM,
 			self::SES_RU,
 			self::SES_COM,
@@ -65,6 +67,10 @@ final class ProviderCode
 		{
 			$convertedProviderCode = self::GOS_KEY;
 		}
+		elseif ($providerLikeString === 'goskey-lite')
+		{
+			$convertedProviderCode = self::GOS_KEY_LITE;
+		}
 
 		return self::isValid($convertedProviderCode) ? $convertedProviderCode : null;
 	}
@@ -74,6 +80,7 @@ final class ProviderCode
 		return match ($providerCode)
 		{
 			self::GOS_KEY => 'goskey',
+			self::GOS_KEY_LITE => 'goskey-lite',
 			self::TAXCOM => 'taxcom',
 			self::SES_RU => 'ses-ru',
 			self::SES_COM => 'ses-com',
@@ -94,6 +101,7 @@ final class ProviderCode
 		{
 			self::SES_RU, self::SES_COM, self::SES_RU_EXPRESS => 'integration_bitrix24KEDO',
 			self::GOS_KEY => 'integration_Goskluch',
+			self::GOS_KEY_LITE => 'integration_Goskluch_Light',
 			self::EXTERNAL => 'integration_external',
 			default => 'integration_N',
 		};
@@ -103,6 +111,7 @@ final class ProviderCode
 	{
 		return match ($providerCode) {
 			'goskey' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_GOSKEY_NAME', language: $language) ?? '',
+			'goskey-lite' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_GOSKEY_LITE_NAME', language: $language) ?? '',
 			'taxcom' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_TAXCOM_NAME', language: $language) ?? '',
 			'ses-ru' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_SES_NAME', language: $language) ?? '',
 			'ses-com' => Loc::getMessage(code: 'SIGN_B2E_PROVIDER_SES_COM_NAME', language: $language) ?? '',

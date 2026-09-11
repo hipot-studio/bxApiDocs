@@ -8,7 +8,7 @@ use Bitrix\Sign\Exception\ObjectNotFoundException;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Service\Container;
 
-final class Document implements Contract\Item, AccessibleItem, Contract\Access\AccessibleItemWithOwner, Contract\Item\ItemWithCrmId
+final class Document implements Contract\Item, AccessibleItem, Contract\Access\AccessibleItemWithOwner, Contract\Item\ItemWithCrmEntity
 {
 	public function __construct(
 		private readonly Item\Document $document,
@@ -42,6 +42,11 @@ final class Document implements Contract\Item, AccessibleItem, Contract\Access\A
 	public function getCrmId(): int
 	{
 		return $this->document->getCrmId();
+	}
+
+	public function getCrmEntityTypeId(): ?int
+	{
+		return $this->document->getCrmEntityTypeId();
 	}
 
 	public function isTemplated(): bool

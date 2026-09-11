@@ -5,6 +5,9 @@ namespace Bitrix\Voximplant\Integration;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Text\Encoding;
 use Bitrix\Voximplant\ConfigTable;
+use Bitrix\Main\Localization\Loc;
+
+Loc::loadLanguageFile(__FILE__);
 
 /**
  * Class Im
@@ -15,15 +18,20 @@ class Im
 {
 	/**
 	 * Creates notification for portal admins of telephony events.
-	 * @param string $notification Notification message. May contain BBCode.
+	 * @param string|array|null $notification Notification message. May contain BBCode.
 	 * @return void.
 	 */
-	public static function notifyAdmins($notification, array $buttons = array())
+	public static function notifyAdmins(string|array|null $notification, array $buttons = array())
 	{
 		if(!Loader::includeModule('im'))
 			return;
 
-		$notification = Encoding::convertEncodingToCurrent($notification);
+		if ($notification === null || $notification === '' || $notification === [])
+		{
+			return;
+		}
+
+		$notification = static::normalizeNotification($notification);
 
 		$admins = array();
 		$cursor = \CGroup::GetGroupUserEx(1);
@@ -38,8 +46,16 @@ class Im
 			"NOTIFY_MODULE" => "voximplant",
 			"NOTIFY_EVENT" => "notifications",
 			//"NOTIFY_TAG" => "TELEPHONY_NOTIFICATION",
-			"NOTIFY_MESSAGE" => $notification,
-			"NOTIFY_MESSAGE_OUT" => strip_tags($notification)
+			'NOTIFY_TITLE' => $notification['NOTIFY_TITLE'],
+			"NOTIFY_MESSAGE" => $notification['NOTIFY_MESSAGE'],
+			"NOTIFY_MESSAGE_OUT" => strip_tags($notification['NOTIFY_MESSAGE']),
+			"PARAMS" => [
+				'COMPONENT_ID' => 'DefaultEntity',
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $notification['SUBJECT'],
+					'PLAIN_TEXT' => $notification['PLAIN_TEXT'],
+				],
+			],
 		);
 
 		$attach = new \CIMMessageParamAttach();
@@ -73,8 +89,13 @@ class Im
 		{
 			return;
 		}
-		
-		$notification = Encoding::convertEncodingToCurrent($notification);
+
+		if ($notification === null || $notification === '' || $notification === [])
+		{
+			return;
+		}
+
+		$notification = static::normalizeNotification($notification);
 
 		$admins = array();
 		$cursor = \CGroup::GetGroupUserEx(1);
@@ -89,8 +110,16 @@ class Im
 			"NOTIFY_MODULE" => "voximplant",
 			"NOTIFY_EVENT" => "status_notifications",
 			//"NOTIFY_TAG" => "TELEPHONY_NOTIFICATION",
-			"NOTIFY_MESSAGE" => $notification,
-			"NOTIFY_MESSAGE_OUT" => strip_tags($notification)
+			'NOTIFY_TITLE' => $notification['NOTIFY_TITLE'],
+			"NOTIFY_MESSAGE" => $notification['NOTIFY_MESSAGE'],
+			"NOTIFY_MESSAGE_OUT" => strip_tags($notification['NOTIFY_MESSAGE']),
+			"PARAMS" => [
+				'COMPONENT_ID' => 'DefaultEntity',
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $notification['SUBJECT'],
+					'PLAIN_TEXT' => $notification['PLAIN_TEXT'],
+				],
+			],
 		);
 
 		foreach ($admins as $adminId)
@@ -99,6 +128,44 @@ class Im
 			$message['TO_USER_ID'] = $adminId;
 			\CIMNotify::Add($message);
 		}
+	}
+
+	private static function normalizeNotification(string|array $notification): array
+	{
+		if (is_string($notification))
+		{
+			$notification = [
+				'NOTIFY_MESSAGE' => $notification,
+			];
+		}
+
+		$notification['NOTIFY_MESSAGE'] = Encoding::convertEncodingToCurrent($notification['NOTIFY_MESSAGE']);
+		if (isset($notification['PLAIN_TEXT']))
+		{
+			$notification['PLAIN_TEXT'] = Encoding::convertEncodingToCurrent($notification['PLAIN_TEXT']);
+		}
+		else
+		{
+			$notification['PLAIN_TEXT'] = \Bitrix\Im\Text::removeBbCodes($notification['NOTIFY_MESSAGE']);
+		}
+		if (isset($notification['NOTIFY_TITLE']))
+		{
+			$notification['NOTIFY_TITLE'] = Encoding::convertEncodingToCurrent($notification['NOTIFY_TITLE']);
+		}
+		else
+		{
+			$notification['NOTIFY_TITLE'] = Loc::getMessage("VOXIMPLANT_NOTIFICATION_TITLE");
+		}
+		if (isset($notification['SUBJECT']))
+		{
+			$notification['SUBJECT'] = Encoding::convertEncodingToCurrent($notification['SUBJECT']);
+		}
+		else
+		{
+			$notification['SUBJECT'] = Loc::getMessage("VOXIMPLANT_NOTIFICATION_TITLE");
+		}
+
+		return $notification;
 	}
 
 	/**

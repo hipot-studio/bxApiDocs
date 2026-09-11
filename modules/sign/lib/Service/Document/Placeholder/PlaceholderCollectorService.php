@@ -4,6 +4,7 @@ namespace Bitrix\Sign\Service\Document\Placeholder;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
+use Bitrix\Sign\Config;
 use Bitrix\Sign\Helper\Field\NameHelper;
 use Bitrix\Sign\Item\Document\Placeholder\HcmLinkCompany;
 use Bitrix\Sign\Item\Document\Placeholder\HcmLinkCompanyCollection;
@@ -19,6 +20,7 @@ use Bitrix\Sign\Service\Document\Placeholder\Strategy\CrmReferencePlaceholderCol
 use Bitrix\Sign\Service\Document\Placeholder\Strategy\EmployeeDynamicPlaceholderCollectorStrategy;
 use Bitrix\Sign\Service\Document\Placeholder\Strategy\HcmLinkPlaceholderCollectorStrategy;
 use Bitrix\Sign\Service\Document\Placeholder\Strategy\UserFieldsPlaceholderCollectorStrategy;
+use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Integration\Crm\MyCompanyService;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkFieldService;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkService;
@@ -27,10 +29,17 @@ use Bitrix\Sign\Service\Placeholder\FieldAlias\AliasContext;
 use Bitrix\Sign\Type\BlockCode;
 use Bitrix\Sign\Type\BlockParty;
 use Bitrix\Sign\Ui\PlaceholderGrid\SectionBuilder;
+use Psr\Log\LoggerInterface;
 
 class PlaceholderCollectorService
 {
 	private const PRESET_ID = 1;
+
+	private readonly LoggerInterface $logger;
+	private readonly Config\Storage $config;
+
+	private bool $verifiedAliasFilterDisabled = false;
+	private bool $hcmLinkCollectionFullyHidden = false;
 
 	public function __construct(
 		private readonly FieldService $fieldService,
@@ -40,8 +49,12 @@ class PlaceholderCollectorService
 		private readonly PlaceholderCacheService $placeholderCacheService,
 		private readonly SectionBuilder $sectionBuilder,
 		private readonly FieldAliasService $fieldAliasService,
+		?LoggerInterface $logger = null,
+		?Config\Storage $config = null,
 	)
 	{
+		$this->logger = $logger ?? Container::instance()->getLogger('Service');
+		$this->config = $config ?? Config\Storage::instance();
 	}
 
 	public function loadPlaceholdersByUserId(int $userId, bool $clearCache = false): Result
@@ -58,6 +71,8 @@ class PlaceholderCollectorService
 		{
 			return $loadPlaceholdersResult->setData($placeholdersFromCache);
 		}
+
+		$this->verifiedAliasFilterDisabled = $this->config->isPlaceholderVerifiedAliasFilterDisabled();
 
 		$fieldsDataResult = $this->fieldService->loadByUserId($userId, $this->getDocumentFieldOptions());
 		if (!$fieldsDataResult->isSuccess())
@@ -95,14 +110,46 @@ class PlaceholderCollectorService
 		{
 			return $loadPlaceholdersResult;
 		}
-		
-		$hcmLinkPlaceholders = $this->convertHcmLinkPlaceholdersToAliases($hcmLinkPlaceholders);
+
+		$this->verifiedAliasFilterDisabled = $this->config->isPlaceholderVerifiedAliasFilterDisabled();
+		$this->hcmLinkCollectionFullyHidden = false;
+
+		$baseContext = AliasContext::empty()->with(hcmLinkCompanyId: $hcmLinkCompanyId);
+
+		$rawFieldNames = $this->collectHcmLinkRawFieldNames($hcmLinkPlaceholders);
+		$this->fieldAliasService->preloadForFieldNames($rawFieldNames, $baseContext);
+
+		$hcmLinkPlaceholders = $this->convertHcmLinkPlaceholdersToAliases($hcmLinkPlaceholders, $baseContext);
 
 		$sections = $this->sectionBuilder->buildHcmLinkSections($hcmLinkPlaceholders);
 		$loadPlaceholdersResult->setData($sections);
-		$this->placeholderCacheService->setPlaceholderListByHcmLinkCompanyId($hcmLinkCompanyId, $sections);
+
+		if (!$this->hcmLinkCollectionFullyHidden)
+		{
+			$this->placeholderCacheService->setPlaceholderListByHcmLinkCompanyId($hcmLinkCompanyId, $sections);
+		}
 
 		return $loadPlaceholdersResult;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private function collectHcmLinkRawFieldNames(HcmLinkPlaceholders $hcmLinkPlaceholders): array
+	{
+		$rawFieldNames = [];
+		foreach ([$hcmLinkPlaceholders->employee, $hcmLinkPlaceholders->representative] as $companyCollection)
+		{
+			foreach ($companyCollection as $company)
+			{
+				foreach ($company->items as $placeholder)
+				{
+					$rawFieldNames[] = $placeholder->value;
+				}
+			}
+		}
+
+		return $rawFieldNames;
 	}
 
 	private function isHcmLinkAvailable(): bool
@@ -153,72 +200,141 @@ class PlaceholderCollectorService
 	 */
 	private function convertAllPlaceholdersToAliases(array $placeholdersMap): array
 	{
-		return array_map(function ($collection) {
-			return $this->convertPlaceholderCollection($collection);
-		}, $placeholdersMap);
+		$baseContext = AliasContext::empty();
+
+		$result = [];
+		foreach ($placeholdersMap as $sectionName => $collection)
+		{
+			$converted = $this->convertPlaceholderCollection($collection, $baseContext);
+			if (!$this->verifiedAliasFilterDisabled && $this->isSourceCollectionFullyHidden($collection, $converted))
+			{
+				$this->logFullyHiddenCollection(['section' => $sectionName]);
+			}
+
+			$result[$sectionName] = $converted;
+		}
+
+		return $result;
 	}
 
 	/**
 	 * Converts HcmLink placeholder collections to aliases
 	 * This method traverses the structure and applies alias conversion to all PlaceholderCollections
 	 * @param HcmLinkPlaceholders $hcmLinkPlaceholders HcmLink placeholders with full field names
+	 * @param AliasContext $baseContext Base context of the HcmLink path (carries hcmLinkCompanyId)
 	 * @return HcmLinkPlaceholders New HcmLinkPlaceholders with all placeholders converted to aliases
 	 */
-	private function convertHcmLinkPlaceholdersToAliases(HcmLinkPlaceholders $hcmLinkPlaceholders): HcmLinkPlaceholders
+	private function convertHcmLinkPlaceholdersToAliases(
+		HcmLinkPlaceholders $hcmLinkPlaceholders,
+		AliasContext $baseContext,
+	): HcmLinkPlaceholders
 	{
 		return new HcmLinkPlaceholders(
-			employee: $this->convertHcmLinkCompanyCollection($hcmLinkPlaceholders->employee),
-			representative: $this->convertHcmLinkCompanyCollection($hcmLinkPlaceholders->representative),
+			employee: $this->convertHcmLinkCompanyCollection($hcmLinkPlaceholders->employee, $baseContext),
+			representative: $this->convertHcmLinkCompanyCollection($hcmLinkPlaceholders->representative, $baseContext),
 		);
 	}
-	
+
 	/**
 	 * Converts a single HcmLinkCompanyCollection
 	 * Helper method that processes all companies in the collection
 	 * @param HcmLinkCompanyCollection $companyCollection Collection to convert
+	 * @param AliasContext $baseContext Base context of the HcmLink path (carries hcmLinkCompanyId)
 	 * @return HcmLinkCompanyCollection Converted collection
 	 */
-	private function convertHcmLinkCompanyCollection(HcmLinkCompanyCollection $companyCollection): HcmLinkCompanyCollection
+	private function convertHcmLinkCompanyCollection(
+		HcmLinkCompanyCollection $companyCollection,
+		AliasContext $baseContext,
+	): HcmLinkCompanyCollection
 	{
 		$result = new HcmLinkCompanyCollection();
-		
+
 		foreach ($companyCollection as $company)
 		{
-			$convertedItems = $this->convertPlaceholderCollection($company->items);
+			$convertedItems = $this->convertPlaceholderCollection($company->items, $baseContext);
+
+			if (!$this->verifiedAliasFilterDisabled && $this->isSourceCollectionFullyHidden($company->items, $convertedItems))
+			{
+				$this->hcmLinkCollectionFullyHidden = true;
+				$this->logFullyHiddenCollection([
+					'hcmLinkTitle' => $company->hcmLinkTitle,
+					'myCompanyTitle' => $company->myCompanyTitle,
+				]);
+			}
+
 			$result->add(new HcmLinkCompany(
 				$company->hcmLinkTitle,
 				$company->myCompanyTitle,
 				$convertedItems,
 			));
 		}
-		
+
 		return $result;
 	}
-	
+
 	/**
-	 * Converts a single PlaceholderCollection to aliases
+	 * Converts a single PlaceholderCollection to aliases.
+	 * When the verified alias filter is enabled, fields without a verified reversible alias are skipped.
 	 * @param PlaceholderCollection $collection Collection to convert
+	 * @param AliasContext $baseContext Base context; party is derived per-placeholder from the field name
 	 * @return PlaceholderCollection Converted collection
 	 */
-	private function convertPlaceholderCollection(PlaceholderCollection $collection): PlaceholderCollection
+	private function convertPlaceholderCollection(
+		PlaceholderCollection $collection,
+		AliasContext $baseContext,
+	): PlaceholderCollection
 	{
 		$result = new PlaceholderCollection();
-		
+
 		foreach ($collection as $placeholder)
 		{
 			$parsed = NameHelper::parse($placeholder->value);
 			$party = $parsed['party'] ?? BlockParty::LAST_PARTY;
-			$context = AliasContext::empty()->withParty($party);
-			$alias = $this->fieldAliasService->toAlias($placeholder->value, $context);
-			$aliasValue = $alias ?? $placeholder->value;
-			
+			$context = $baseContext->withParty($party);
+
+			if ($this->verifiedAliasFilterDisabled)
+			{
+				$alias = $this->fieldAliasService->toAlias($placeholder->value, $context);
+				$result->add(new Placeholder(
+					$placeholder->name,
+					$alias ?? $placeholder->value,
+				));
+
+				continue;
+			}
+
+			$alias = $this->fieldAliasService->toVerifiedAlias($placeholder->value, $context);
+			if ($alias === null)
+			{
+				continue;
+			}
+
 			$result->add(new Placeholder(
 				$placeholder->name,
-				$aliasValue,
+				$alias,
 			));
 		}
-		
+
 		return $result;
+	}
+
+	private function isSourceCollectionFullyHidden(
+		PlaceholderCollection $source,
+		PlaceholderCollection $converted,
+	): bool
+	{
+		return !$source->isEmpty() && $converted->isEmpty();
+	}
+
+	/**
+	 * @param array<string, string> $context
+	 */
+	private function logFullyHiddenCollection(array $context): void
+	{
+		$this->logger->warning(
+			'Placeholder collection fully hidden by verified alias filter',
+			$context,
+		);
 	}
 
 	/**

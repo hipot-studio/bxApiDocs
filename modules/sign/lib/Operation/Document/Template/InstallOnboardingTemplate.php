@@ -52,7 +52,7 @@ class InstallOnboardingTemplate implements Operation
 			return $result;
 		}
 
-		return new InstallPresetTemplatesResult(isOptionsReloaded: false);
+		return new InstallPresetTemplatesResult();
 	}
 
 	private function install(): Main\Result

@@ -9,7 +9,7 @@ use Bitrix\Sign\Type\Document\ExternalDateCreateSourceType;
 use Bitrix\Sign\Type\Document\ExternalIdSourceType;
 use Bitrix\Sign\Type\Document\InitiatedByType;
 
-class Document implements Contract\Item, Contract\Item\ItemWithOwner, Contract\Item\ItemWithCrmId, Contract\Item\TrackableItem
+class Document implements Contract\Item, Contract\Item\ItemWithOwner, Contract\Item\ItemWithCrmEntity, Contract\Item\TrackableItem
 {
 	use TrackableItemTrait;
 
@@ -81,6 +81,11 @@ class Document implements Contract\Item, Contract\Item\ItemWithOwner, Contract\I
 	public function getCrmId(): int
 	{
 		return (int)$this->entityId;
+	}
+
+	public function getCrmEntityTypeId(): ?int
+	{
+		return $this->entityTypeId;
 	}
 
 	public function getId(): int

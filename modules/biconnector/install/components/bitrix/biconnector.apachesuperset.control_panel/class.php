@@ -12,6 +12,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Errorable;
@@ -260,9 +261,38 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			];
 		}
 
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			$menuItems = self::lockMenuItems($menuItems);
+		}
+
 		$this->arResult['MENU_ITEMS'] = $menuItems;
 	}
 
+	/**
+	 * A finished term stops the whole section, so the padlock goes on every item of the menu and not only on the
+	 * dashboards: nothing behind them works either. An item with a submenu stays as it is - it opens the submenu,
+	 * whose own items already carry the padlock.
+	 */
+	private static function lockMenuItems(array $items): array
+	{
+		$openSlider = SelfHostedLicenseLock::getOpenSliderScript();
+
+		foreach ($items as &$item)
+		{
+			if (!empty($item['ITEMS']) && is_array($item['ITEMS']))
+			{
+				$item['ITEMS'] = self::lockMenuItems($item['ITEMS']);
+
+				continue;
+			}
+
+			$item['IS_LOCKED'] = true;
+			$item['ON_CLICK'] = $openSlider;
+		}
+
+		return $items;
+	}
 
 	private function canRenderMenuItems(): bool
 	{

@@ -138,18 +138,28 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 				$row['DOMAIN_PROTOCOL'] = \Bitrix\Landing\Internals\DomainTable::PROTOCOL_HTTPS;
 			}
 
+			$previewRequested = $previewForNotActive && ($row['ACTIVE'] === 'N' || $row['DELETED'] === 'Y');
+
 			if ($row['DOMAIN_ID'])
 			{
-				$paths[$row['ID']] = ($hostInclude ? ($disableCloud ? $hostUrl : $row['DOMAIN_PROTOCOL'] . '://' . $row['DOMAIN_NAME']) : '') . $pubPath;
-				if ($full)
+				if (Site\PreviewUrl::isCloudPreview($isB24localVar, (bool)$row['DOMAIN_ID'], $disableCloud, $previewRequested))
 				{
-					if ($disableCloud && $isB24localVar)
+					// preview link of a cloud site lives on the portal host, see Site\PreviewUrl
+					$paths[$row['ID']] = Site\PreviewUrl::buildSiteBase($row['ID'], $hostInclude);
+				}
+				else
+				{
+					$paths[$row['ID']] = ($hostInclude ? ($disableCloud ? $hostUrl : $row['DOMAIN_PROTOCOL'] . '://' . $row['DOMAIN_NAME']) : '') . $pubPath;
+					if ($full)
 					{
-						$paths[$row['ID']] .= $row['CODE'];
-					}
-					else if (!$isB24localVar)
-					{
-						$paths[$row['ID']] .= '/';
+						if ($disableCloud && $isB24localVar)
+						{
+							$paths[$row['ID']] .= $row['CODE'];
+						}
+						else if (!$isB24localVar)
+						{
+							$paths[$row['ID']] .= '/';
+						}
 					}
 				}
 			}
@@ -157,9 +167,10 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 			{
 				$paths[$row['ID']] = ($hostInclude ? $hostUrl : '') . $defaultPubPath . ($full ? $row['CODE'] : '');
 			}
-			if ($previewForNotActive && ($row['ACTIVE'] === 'N' || $row['DELETED'] === 'Y'))
+			if ($previewRequested)
 			{
-				$paths[$row['ID']] .= 'preview/' . self::getPublicHash($row['ID'], $row['DOMAIN_NAME']) . '/';
+				$paths[$row['ID']] = rtrim($paths[$row['ID']], '/')
+					. '/preview/' . self::getPublicHash($row['ID'], $row['DOMAIN_NAME']) . '/';
 			}
 		}
 

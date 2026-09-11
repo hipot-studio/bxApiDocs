@@ -43,6 +43,19 @@ final class DatasetSettings
 		return Option::get('biconnector', self::TYPING_LOCK_OPTION_NAME, 'N') === 'Y';
 	}
 
+	/**
+	 * The answer for a portal whose data has just been wiped: the instance it gets next is a new one and has no
+	 * legacy datasets, so the original types are passed from the start and the warning about them announces
+	 * nothing. Written right away and not left to the deferred initialization, because a wipe can raise the new
+	 * instance in the same request - and then that initialization, which asks whether an instance exists, would
+	 * answer for the new one and turn the typing off.
+	 */
+	public static function enableTypingForNewInstance(): void
+	{
+		Option::set('biconnector', self::TYPING_LOCK_OPTION_NAME, 'Y');
+		Option::set('biconnector', self::TYPING_OPTION_NAME, 'Y');
+	}
+
 	private static function initTypingOptionForNewPortal(): string
 	{
 		$isSupersetExist = SupersetInitializer::isSupersetExist();

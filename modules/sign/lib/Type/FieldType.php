@@ -27,6 +27,7 @@ final class FieldType
 	public const FIRST_NAME = 'firstname';
 	public const LAST_NAME = 'lastname';
 	public const PATRONYMIC = 'patronymic';
+	public const FULL_NAME = 'fullname';
 	public const POSITION = 'position';
 	public const ENUMERATION = 'enumeration';
 	public const EXTERNAL_ID = 'external_id';
@@ -64,6 +65,7 @@ final class FieldType
 			self::FIRST_NAME,
 			self::LAST_NAME,
 			self::PATRONYMIC,
+			self::FULL_NAME,
 			self::POSITION,
 			self::ENUMERATION,
 			self::EXTERNAL_ID,

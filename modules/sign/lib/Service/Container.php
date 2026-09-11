@@ -203,6 +203,11 @@ class Container
 		return self::getService('sign.service.integration.disk');
 	}
 
+	public function getFeedPostService(): Service\Integration\Socialnetwork\FeedPostService
+	{
+		return self::getService(Service\Integration\Socialnetwork\FeedPostService::class);
+	}
+
 	public function getHrBotMessageService(): Service\HrBotMessageService
 	{
 		return self::getService('sign.service.hrbotmessage');
@@ -530,10 +535,7 @@ class Container
 				returnDefaultLoggerIfNotExists: false,
 			);
 
-			if ($inner === null)
-			{
-				$inner = (new Debug\Message2LogLogger($id))->setLevel(\Psr\Log\LogLevel::ERROR);
-			}
+			$inner ??= $this->createFallbackLogger($id, $channel);
 
 			if ($inner instanceof \Bitrix\Main\Diag\Logger)
 			{
@@ -544,6 +546,21 @@ class Container
 		}
 
 		return $cache[$channel];
+	}
+
+	private function createFallbackLogger(string $id, string $channel): \Psr\Log\LoggerInterface
+	{
+		$level = \Bitrix\Main\Config\Option::get('sign', 'log_' . $channel . '_level');
+
+		if ($level === '' && !\Bitrix\Main\Loader::includeModule('bitrix24'))
+		{
+			return new \Psr\Log\NullLogger();
+		}
+
+		// ERROR by default; an invalid level is ignored by setLevel().
+		return (new Debug\Message2LogLogger($id))
+			->setLevel(\Psr\Log\LogLevel::ERROR)
+			->setLevel($level);
 	}
 
 	public function getPlaceholderBlockService(): Service\Sign\PlaceholderBlockService
@@ -569,6 +586,36 @@ class Container
 	public function getTemplateFolderRelationRepository(): Repository\Document\TemplateFolderRelationRepository
 	{
 		return static::getService('sign.repository.document.templateFolderRelation');
+	}
+
+	public function getSafeFolderRepository(): Repository\Document\SafeFolderRepository
+	{
+		return static::getService('sign.repository.document.safeFolder');
+	}
+
+	public function getSafeFolderRelationRepository(): Repository\Document\SafeFolderRelationRepository
+	{
+		return static::getService('sign.repository.document.safeFolderRelation');
+	}
+
+	public function getSafeFolderService(): Service\Sign\Document\SafeFolderService
+	{
+		return static::getService('sign.service.document.safeFolder');
+	}
+
+	public function getSafeAccessService(): Service\Sign\Document\Safe\AccessService
+	{
+		return static::getService('sign.service.document.safe.access');
+	}
+
+	public function getSafeListService(): Service\Sign\Document\Safe\ListService
+	{
+		return static::getService('sign.service.document.safe.list');
+	}
+
+	public function getSafeFolderAggregateService(): Service\Sign\Document\Safe\SafeFolderAggregateService
+	{
+		return static::getService('sign.service.document.safe.folderAggregate');
 	}
 
 	public function getTemplateGridRepository(): Repository\Grid\TemplateGridRepository
@@ -609,6 +656,11 @@ class Container
 	public function getSignersListUserRepository(): Repository\SignersList\SignersListUserRepository
 	{
 		return static::getService('sign.repository.signerslistuser');
+	}
+
+	public function getSignersListUserOptionRepository(): Repository\SignersList\SignersListUserOptionRepository
+	{
+		return static::getService('sign.repository.signerslistuseroption');
 	}
 
 	public function getSignersListService(): SignersListService

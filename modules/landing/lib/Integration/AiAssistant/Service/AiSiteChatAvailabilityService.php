@@ -8,6 +8,9 @@ use Bitrix\Landing\Copilot\Manager as CopilotManager;
 use Bitrix\Landing\Integration\AiAssistant\Dto\AiSiteChatAvailabilityResult;
 use Bitrix\Main\Loader;
 
+/**
+ * @internal
+ */
 class AiSiteChatAvailabilityService
 {
 	public const ERROR_TRIGGER_INACTIVE = 'trigger_inactive';
@@ -54,43 +57,15 @@ class AiSiteChatAvailabilityService
 			return AiSiteChatAvailabilityResult::unavailable(self::ERROR_ENTITY_REQUIRED);
 		}
 
-		if (!$this->isAiAssistantTriggerRuntimeAvailable())
-		{
-			return AiSiteChatAvailabilityResult::unavailable(self::ERROR_TRIGGER_UNAVAILABLE);
-		}
-
-		try
-		{
-			return $this->isLandingAiSitesEnabled()
-				? AiSiteChatAvailabilityResult::available()
-				: AiSiteChatAvailabilityResult::unavailable(self::ERROR_TRIGGER_INACTIVE)
-			;
-		}
-		catch (\Throwable)
-		{
-			return AiSiteChatAvailabilityResult::unavailable(self::ERROR_TRIGGER_UNAVAILABLE);
-		}
+		return $this->checkTriggerRuntimeAvailability();
 	}
 
-	public function checkSitesAiChatAvailability(int $bindingId): AiSiteChatAvailabilityResult
+	// Render/UI probe: not bound to any entity and not permission-aware.
+	// Guard actions on a concrete site with the binding-aware checks instead.
+	public function isSitesAiChatPotentiallyAvailable(): bool
 	{
-		$productAvailability = $this->checkSitesAiProductAvailability();
-		if (!$productAvailability->isAvailable())
-		{
-			return $productAvailability;
-		}
-
-		return $this->checkTriggerAvailability($bindingId);
-	}
-
-	public function isSitesAiChatAvailable(int $bindingId): bool
-	{
-		return $this->checkSitesAiChatAvailability($bindingId)->isAvailable();
-	}
-
-	public function getSitesAiChatUnavailableReason(int $bindingId): ?string
-	{
-		return $this->checkSitesAiChatAvailability($bindingId)->getReasonCode();
+		return $this->checkSitesAiProductAvailability()->isAvailable()
+			&& $this->checkTriggerRuntimeAvailability()->isAvailable();
 	}
 
 	public function isTriggerAvailable(int $bindingId): bool
@@ -187,6 +162,20 @@ class AiSiteChatAvailabilityService
 			$showAiAssistantPanel,
 			$bindingId,
 		)->getReasonCode();
+	}
+
+	// Single source of truth for the entity-independent part of the trigger gates.
+	protected function checkTriggerRuntimeAvailability(): AiSiteChatAvailabilityResult
+	{
+		if (!$this->isAiAssistantTriggerRuntimeAvailable())
+		{
+			return AiSiteChatAvailabilityResult::unavailable(self::ERROR_TRIGGER_UNAVAILABLE);
+		}
+
+		return $this->isLandingAiSitesEnabled()
+			? AiSiteChatAvailabilityResult::available()
+			: AiSiteChatAvailabilityResult::unavailable(self::ERROR_TRIGGER_INACTIVE)
+		;
 	}
 
 	protected function isAiAssistantTriggerRuntimeAvailable(): bool

@@ -42,6 +42,8 @@ class Member implements Contract\Item, Contract\Item\TrackableItem
 		public ?int $employeeId = null,
 		public ?int $hcmLinkJobId = null,
 		public ?DateTime $dateStatusChanged = null,
+		public ?int $folderId = null,
+		public ?int $createdById = null,
 	)
 	{
 		$this->reminder = $reminder ?? new Reminder(
@@ -78,6 +80,8 @@ class Member implements Contract\Item, Contract\Item\TrackableItem
 			'dateCreated',
 			'signatureFileId',
 			'role',
+			'folderId',
+			'createdById',
 		];
 	}
 }

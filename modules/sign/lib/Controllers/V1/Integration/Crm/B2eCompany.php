@@ -163,6 +163,7 @@ class B2eCompany extends Controller
 			}
 
 			$registeredByTaxId = $registeredCompanies[$company->rqInn] ?? [];
+			$company->goskeyLiteAvailable = (bool)($registeredByTaxId['goskey_lite_available'] ?? false);
 			if (!empty($registeredByTaxId['register_url']) && is_string($registeredByTaxId['register_url']))
 			{
 				$company->registerUrl = $registeredByTaxId['register_url'];

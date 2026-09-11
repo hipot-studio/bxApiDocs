@@ -42,6 +42,13 @@ class SignPermissionDictionary extends \Bitrix\Main\Access\Permission\Permission
 	public const SIGN_B2E_SIGNERS_LIST_DELETE = 21;
 	public const SIGN_B2E_SIGNERS_LIST_REFUSED = 22;
 
+	// Numeric ids are assigned sequentially from 1. Range 1..22 is fully used; id 11 is reserved
+	// and must not be reused. Company safe folder permissions occupy 23..26. Never reuse an id.
+	public const SIGN_B2E_MY_SAFE_FOLDER_READ = 23;
+	public const SIGN_B2E_MY_SAFE_FOLDER_CREATE = 24;
+	public const SIGN_B2E_MY_SAFE_FOLDER_WRITE = 25;
+	public const SIGN_B2E_MY_SAFE_FOLDER_DELETE = 26;
+
 	public static function isValid(string|int $permission): bool
 	{
 		return IterationHelper::any(self::getList(), fn($value, $id) => $permission === $id);
@@ -61,7 +68,45 @@ class SignPermissionDictionary extends \Bitrix\Main\Access\Permission\Permission
 			self::SIGN_B2E_SIGNERS_LIST_READ,
 			self::SIGN_B2E_SIGNERS_LIST_DELETE,
 			self::SIGN_B2E_SIGNERS_LIST_EDIT,
+			self::SIGN_B2E_MY_SAFE_FOLDER_READ,
+			self::SIGN_B2E_MY_SAFE_FOLDER_CREATE,
+			self::SIGN_B2E_MY_SAFE_FOLDER_WRITE,
+			self::SIGN_B2E_MY_SAFE_FOLDER_DELETE,
 		]);
+	}
+
+	/**
+	 * All company safe folder permission ids (owner-scoped variables).
+	 *
+	 * @return list<int>
+	 */
+	public static function getSafeFolderPermissionIds(): array
+	{
+		return [
+			self::SIGN_B2E_MY_SAFE_FOLDER_READ,
+			self::SIGN_B2E_MY_SAFE_FOLDER_CREATE,
+			self::SIGN_B2E_MY_SAFE_FOLDER_WRITE,
+			self::SIGN_B2E_MY_SAFE_FOLDER_DELETE,
+		];
+	}
+
+	/**
+	 * All B2E template permission ids.
+	 *
+	 * Source of truth for "is this a template permission" checks. Kept independent from
+	 * PermissionDictionary::getB2eDocumentToTemplatePermissionMap() on purpose: a template
+	 * permission may exist without a matching document permission, and must still be listed here.
+	 *
+	 * @return list<int>
+	 */
+	public static function getB2eTemplatePermissionIds(): array
+	{
+		return [
+			self::SIGN_B2E_TEMPLATE_CREATE,
+			self::SIGN_B2E_TEMPLATE_READ,
+			self::SIGN_B2E_TEMPLATE_WRITE,
+			self::SIGN_B2E_TEMPLATE_DELETE,
+		];
 	}
 
 	/**
@@ -139,6 +184,10 @@ class SignPermissionDictionary extends \Bitrix\Main\Access\Permission\Permission
 			self::SIGN_B2E_SIGNERS_LIST_EDIT => 'SIGN_B2E_SIGNERS_LIST_EDIT',
 			self::SIGN_B2E_SIGNERS_LIST_DELETE => 'SIGN_B2E_SIGNERS_LIST_DELETE',
 			self::SIGN_B2E_SIGNERS_LIST_REFUSED => 'SIGN_B2E_SIGNERS_LIST_REFUSED',
+			self::SIGN_B2E_MY_SAFE_FOLDER_READ => 'SIGN_B2E_MY_SAFE_FOLDER_READ',
+			self::SIGN_B2E_MY_SAFE_FOLDER_CREATE => 'SIGN_B2E_MY_SAFE_FOLDER_CREATE',
+			self::SIGN_B2E_MY_SAFE_FOLDER_WRITE => 'SIGN_B2E_MY_SAFE_FOLDER_WRITE',
+			self::SIGN_B2E_MY_SAFE_FOLDER_DELETE => 'SIGN_B2E_MY_SAFE_FOLDER_DELETE',
 			default => null,
 		};
 	}

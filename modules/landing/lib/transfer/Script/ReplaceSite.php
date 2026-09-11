@@ -50,8 +50,8 @@ class ReplaceSite implements IScript
 			new ActionConfig(SetScope::class),
 			(new ActionConfig(CheckDataExists::class))
 				->setAppearanceMode(AppearanceMode::NonFinish),
-			new ActionConfig(CheckReplacedSite::class),
 			new ActionConfig(SetContextUser::class),
+			new ActionConfig(CheckReplacedSite::class),
 			(new ActionConfig(PrepareSiteData::class))
 				->setAppearanceMode(AppearanceMode::Intro),
 			(new ActionConfig(PreparePageData::class))
@@ -98,8 +98,6 @@ class ReplaceSite implements IScript
 				->setAppearanceMode(AppearanceMode::Finish),
 			(new ActionConfig(DeactivateHistory::class))
 				->setAppearanceMode(AppearanceMode::Finish),
-			(new ActionConfig(UpdateReplacedSitePages::class))
-				->setAppearanceMode(AppearanceMode::Finish),
 			(new ActionConfig(UpdateReplacedSiteAdditionalFields::class))
 				->setAppearanceMode(AppearanceMode::Finish),
 			(new ActionConfig(SetHistoryReplaceSite::class))
@@ -111,6 +109,8 @@ class ReplaceSite implements IScript
 			(new ActionConfig(UpdateTemplates::class))
 				->setAppearanceMode(AppearanceMode::Finish),
 			(new ActionConfig(UpdateSpecialPages::class))
+				->setAppearanceMode(AppearanceMode::Finish),
+			(new ActionConfig(UpdateReplacedSitePages::class))
 				->setAppearanceMode(AppearanceMode::Finish),
 			(new ActionConfig(ActivateRights::class))
 				->setAppearanceMode(AppearanceMode::Finish),

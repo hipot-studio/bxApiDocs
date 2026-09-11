@@ -15,5 +15,10 @@ class Company implements Item
 		 * @var array|CompanyProvider[]
 		 */
 		public array $providers = [],
+		/**
+		 * Whether the simplified goskey (goskey-lite) is available to connect for this client
+		 * (global switch + allowlist). Source of truth for the "connect the new goskey" promo.
+		 */
+		public bool $goskeyLiteAvailable = false,
 	) {}
 }

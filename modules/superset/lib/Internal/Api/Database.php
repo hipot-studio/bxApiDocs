@@ -116,4 +116,65 @@ class Database
 		$url = self::DATABASE_API_LINK . $id;
 		return $this->connector->put($url, $payload);
 	}
+
+	/**
+	 * Gets list of tables for a database, optionally narrowed to a schema/catalog.
+	 *
+	 * @param int $databaseId
+	 * @param string|null $schema
+	 * @param string|null $catalog
+	 * @return RequestResult
+	 * @throws Main\ArgumentException
+	 */
+	public function getTables(int $databaseId, ?string $schema = null, ?string $catalog = null): RequestResult
+	{
+		$query = [];
+		if ($schema !== null && $schema !== '')
+		{
+			$query['schema_name'] = $schema;
+		}
+		if ($catalog !== null && $catalog !== '')
+		{
+			$query['catalog_name'] = $catalog;
+		}
+
+		$url = self::DATABASE_API_LINK . $databaseId . '/tables/';
+		if (!empty($query))
+		{
+			$url .= '?q=' . Main\Web\Json::encode($query);
+		}
+
+		return $this->connector->get($url);
+	}
+
+	/**
+	 * Gets metadata (columns, indexes, etc.) for a given table in a database.
+	 *
+	 * @param int $databaseId
+	 * @param string $tableName
+	 * @param string|null $schema
+	 * @param string|null $catalog
+	 * @return RequestResult
+	 */
+	public function getTableMetadata(
+		int $databaseId,
+		string $tableName,
+		?string $schema = null,
+		?string $catalog = null,
+	): RequestResult
+	{
+		$params = ['name' => $tableName];
+		if ($schema !== null && $schema !== '')
+		{
+			$params['schema'] = $schema;
+		}
+		if ($catalog !== null && $catalog !== '')
+		{
+			$params['catalog'] = $catalog;
+		}
+
+		$url = self::DATABASE_API_LINK . $databaseId . '/table_metadata/?' . http_build_query($params);
+
+		return $this->connector->get($url);
+	}
 }

@@ -17,6 +17,7 @@ use Bitrix\BIConnector\Public\Provider\UsageStat\Params\UsageStatSelect;
 use Bitrix\BIConnector\Public\Provider\UsageStat\Params\UsageStatSort;
 use Bitrix\BIConnector\Public\Provider\UsageStat\UsageStatProvider;
 use Bitrix\BIConnector\Services\ApacheSuperset;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseView;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
@@ -80,6 +81,7 @@ class BIConnectorUsageStatComponent extends CBitrixComponent
 		$this->arResult['GRID_STUB'] = $this->totalRowsCount === 0 && !$this->hasUserFilter ? $this->getStub() : null;
 		$this->arResult['IS_BI_BUILDER_SERVICE'] = $this->isBiBuilderService;
 		$this->arResult['BICONNECTOR_LIMIT'] = $this->getLimit();
+		$this->arResult['SELFHOST_LICENSE_NOTICE'] = SelfHostedLicenseView::createForCurrentUser()->getNoticeParams();
 
 		$this->includeComponentTemplate();
 	}

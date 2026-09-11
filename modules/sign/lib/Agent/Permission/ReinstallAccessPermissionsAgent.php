@@ -10,23 +10,23 @@ class ReinstallAccessPermissionsAgent
 	public static function run(): string
 	{
 		$documentRepository = Container::instance()->getDocumentRepository();
-		if ($documentRepository->existAnyDocument())
+		if (!$documentRepository->existAnyDocument())
 		{
-			return '';
+			$anyPermission = Access\Permission\PermissionTable::query()
+				->setSelect(['ID'])
+				->setLimit(1)
+				->fetchObject()
+			;
+
+			if ($anyPermission === null)
+			{
+				Access\Install\AccessInstaller::install();
+
+				return '';
+			}
 		}
 
-		$anyPermission = Access\Permission\PermissionTable::query()
-			->setSelect(['ID'])
-			->setLimit(1)
-			->fetchObject()
-		;
-
-		if ($anyPermission !== null)
-		{
-			return '';
-		}
-
-		\Bitrix\Sign\Access\Install\AccessInstaller::install();
+		Access\Install\AccessInstaller::installMissingSafeFolderPermissions();
 
 		return '';
 	}

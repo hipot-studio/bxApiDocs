@@ -20,17 +20,13 @@ final class MenuItemCreatorStore extends BaseMenuItemCreator
 		{
 			$isMarketAvailable = MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType());
 
-			$onClick =
-				!$isMarketAvailable
-					? $this->getOpenTariffSliderScript()
-					: $this->createDashboardOpenEventFromMenu($dashboard, $params)
-			;
+			$onClick = $this->createDashboardOpenEventFromMenu($dashboard, $params, $isMarketAvailable);
 
 			$menuItems[] = [
 				'ID' => "BIC_DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
 				'ON_CLICK' => $onClick,
-				'IS_LOCKED' => !$this->isAvailableByTariff() || !$isMarketAvailable,
+				'IS_LOCKED' => $this->isDashboardLocked($isMarketAvailable),
 			];
 		}
 

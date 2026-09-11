@@ -121,15 +121,24 @@ final class FillFields implements Contract\Operation
 			$roleBlocks = $blocks->filterByRole($member->role);
 
 			$requestFields = new Item\Api\Property\Request\Field\Fill\FieldCollection();
+			$hasFullNameField = false;
 			foreach ($roleBlocks as $block)
 			{
 				$fields = $this->fieldFactory->createByBlocks(new Item\BlockCollection($block), $member, $this->document);
 				foreach ($fields as $field)
 				{
+					if ($field->type === Type\FieldType::FULL_NAME)
+					{
+						$hasFullNameField = true;
+					}
 					$this->addFieldValueToRequest($block, $field, $member, $requestFields);
 				}
 			}
 			$this->appendB2eRequiredFields($member, $requestFields);
+			if ($hasFullNameField)
+			{
+				$this->appendFullNamePartFields($member, $requestFields);
+			}
 
 			if (!$requestFields->isEmpty())
 			{
@@ -519,6 +528,45 @@ final class FillFields implements Contract\Operation
 			}
 
 			$block = $this->blockFactory->makeStubBlockByRequiredField($this->document, $requiredField, $member->party);
+			if (!$block)
+			{
+				continue;
+			}
+
+			$fields = $this->fieldFactory->createByBlocks(new Item\BlockCollection($block), $member, $this->document);
+			foreach ($fields as $field)
+			{
+				if (!in_array($field->name, $requestFields->getNames(), true))
+				{
+					$this->addFieldValueToRequest($block, $field, $member, $requestFields);
+				}
+			}
+		}
+	}
+
+	/**
+	 * When a member owns a full name field, fill the legal name parts of that member so the
+	 * service receives the parts the full name is assembled from. Uses the legal reference stub
+	 * path explicitly (bypassing HCM, Q-1); already present fields are not filled twice.
+	 */
+	private function appendFullNamePartFields(
+		Item\Member $member,
+		Item\Api\Property\Request\Field\Fill\FieldCollection $requestFields,
+	): void
+	{
+		if ($member->party === null || $member->role === null)
+		{
+			return;
+		}
+
+		foreach (Factory\Field::FULL_NAME_PART_TYPES as $partType)
+		{
+			$block = $this->blockFactory->makeStubLegalReferenceBlock(
+				$this->document,
+				$partType,
+				$member->role,
+				$member->party,
+			);
 			if (!$block)
 			{
 				continue;

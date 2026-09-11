@@ -3,12 +3,15 @@
 namespace Bitrix\Sign\Repository\Document;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
 use Bitrix\Main\Security\Random;
 use Bitrix\Sign\Helper\IterationHelper;
+use Bitrix\Sign\Internal;
 use Bitrix\Sign\Internal\Document\Template as TemplateModel;
 use Bitrix\Sign\Internal\Document\TemplateCollection as TemplateCollectionModel;
 use Bitrix\Sign\Internal\Document\TemplateTable;
@@ -17,6 +20,8 @@ use Bitrix\Sign\Model\ItemBinder\BaseItemToModelBinder;
 use Bitrix\Sign\Result\Operation\Document\Template\CreateTemplateResult;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Type\Document\InitiatedByType;
+use Bitrix\Sign\Type\Member\EntityType;
+use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\Template\Status;
 use Bitrix\Sign\Type\Template\Visibility;
 
@@ -278,6 +283,71 @@ class TemplateRepository
 	public function updateVisibility(int $templateId, Type\Template\Visibility $visibility): Result
 	{
 		return TemplateTable::update($templateId, ['VISIBILITY' => $visibility->toInt()]);
+	}
+
+	/**
+	 * @param list<int> $templateIds
+	 */
+	public function updateStatusesAndVisibilitiesIfUserRelationExists(
+		array $templateIds,
+		Type\Template\Status $status,
+		Type\Template\Visibility $visibility,
+		int $userId,
+	): Result
+	{
+		if (empty($templateIds))
+		{
+			return new Result();
+		}
+
+		// A structure role assignee keeps a role id in REPRESENTATIVE_ID, so the representative branch
+		// also requires a company assignee member, the same way relations are discovered.
+		$sql = (new SqlExpression(
+			'UPDATE ?# SET ?# = ?i, ?# = ?i WHERE ?# IN (?@) AND EXISTS ('
+				. 'SELECT 1 FROM ?# D WHERE D.?# = ?#.?# AND D.?# = ?s AND ('
+				. '(D.?# = ?i AND EXISTS ('
+				. 'SELECT 1 FROM ?# C WHERE C.?# = D.?# AND C.?# = ?s AND C.?# = ?i'
+				. ')) OR EXISTS ('
+				. 'SELECT 1 FROM ?# M WHERE M.?# = D.?# AND M.?# = ?s AND M.?# = ?i AND M.?# IN (?@)'
+				. ')))',
+			TemplateTable::getTableName(),
+			'STATUS',
+			$status->toInt(),
+			'VISIBILITY',
+			$visibility->toInt(),
+			'ID',
+			array_values(array_unique($templateIds)),
+			Internal\DocumentTable::getTableName(),
+			'TEMPLATE_ID',
+			TemplateTable::getTableName(),
+			'ID',
+			'ENTITY_TYPE',
+			Type\Document\EntityType::SMART_B2E,
+			'REPRESENTATIVE_ID',
+			$userId,
+			Internal\MemberTable::getTableName(),
+			'DOCUMENT_ID',
+			'ID',
+			'ENTITY_TYPE',
+			EntityType::COMPANY,
+			'ROLE',
+			Role::convertRoleToInt(Role::ASSIGNEE),
+			Internal\MemberTable::getTableName(),
+			'DOCUMENT_ID',
+			'ID',
+			'ENTITY_TYPE',
+			EntityType::USER,
+			'ENTITY_ID',
+			$userId,
+			'ROLE',
+			[
+				Role::convertRoleToInt(Role::REVIEWER),
+				Role::convertRoleToInt(Role::EDITOR),
+			],
+		))->compile();
+		Application::getConnection()->queryExecute($sql);
+
+		return new Result();
 	}
 
 	/**

@@ -9,6 +9,7 @@ use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Repository\Document\TemplateFolderRelationRepository;
 use Bitrix\Sign\Repository\Document\TemplateRepository;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Sign\Document\TemplateService;
 use Bitrix\Sign\Service\Sign\PlaceholderBlockService;
 use Bitrix\Sign\Type\DateTime;
 use Bitrix\Sign\Type\Template\EntityType;
@@ -21,6 +22,7 @@ final class Complete implements Contract\Operation
 	private readonly TemplateFolderRelationRepository $templateFolderRelationRepository;
 	private readonly DocumentRepository $documentRepository;
 	private readonly PlaceholderBlockService $placeholderBlockService;
+	private readonly TemplateService $templateService;
 
 	public function __construct(
 		private readonly Item\Document\Template $template,
@@ -28,6 +30,7 @@ final class Complete implements Contract\Operation
 		?TemplateFolderRelationRepository $templateFolderRelationRepository = null,
 		?DocumentRepository $documentRepository = null,
 		?PlaceholderBlockService $placeholderBlockService = null,
+		?TemplateService $templateService = null,
 	)
 	{
 		$container = Container::instance();
@@ -35,6 +38,7 @@ final class Complete implements Contract\Operation
 		$this->templateFolderRelationRepository = $templateFolderRelationRepository ?? $container->getTemplateFolderRelationRepository();
 		$this->documentRepository = $documentRepository ?? $container->getDocumentRepository();
 		$this->placeholderBlockService = $placeholderBlockService ?? $container->getPlaceholderBlockService();
+		$this->templateService = $templateService ?? $container->getDocumentTemplateService();
 	}
 
 	public function launch(): Main\Result
@@ -70,14 +74,29 @@ final class Complete implements Contract\Operation
 			}
 		}
 
-		if ($this->template->status === Status::COMPLETED)
+		if ($this->template->status !== Status::COMPLETED)
 		{
-			return $this->templateRepository->update($this->template);
+			$this->template->status = Status::COMPLETED;
+			$this->template->visibility = Visibility::VISIBLE;
 		}
 
-		$this->template->status = Status::COMPLETED;
-		$this->template->visibility = Visibility::VISIBLE;
+		$updateResult = $this->templateRepository->update($this->template);
+		if (!$updateResult->isSuccess())
+		{
+			return $updateResult;
+		}
 
-		return $this->templateRepository->update($this->template);
+		return $updateResult->addErrors($this->makeFolderVisible()->getErrors());
+	}
+
+	private function makeFolderVisible(): Main\Result
+	{
+		$folderId = $this->template->folderId ?? 0;
+		if ($folderId < 1 || $this->template->visibility !== Visibility::VISIBLE)
+		{
+			return new Main\Result();
+		}
+
+		return $this->templateService->changeFolderVisibilityOnTemplateCompletion($folderId);
 	}
 }

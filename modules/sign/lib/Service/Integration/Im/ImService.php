@@ -7,6 +7,7 @@ use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Main;
 use Bitrix\Sign\Contract\Chat\GroupChatMessage;
 use Bitrix\Sign\Contract\Chat\Message\HasInitiator;
+use Bitrix\Sign\Contract\Chat\Message\HasRecipient;
 use Bitrix\Sign\Contract\Chat\Message;
 use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Service\Container;
@@ -224,6 +225,13 @@ class ImService
 		if ($member = $message->getMember())
 		{
 			$params['COMPONENT_PARAMS']['USER'] = $this->buildUserContext($member);
+		}
+		elseif ($message instanceof HasRecipient)
+		{
+			$params['COMPONENT_PARAMS']['USER'] = [
+				'ID' => $message->getRecipientUserId(),
+				'NAME' => $message->getRecipientName(),
+			];
 		}
 
 		if ($message instanceof HasInitiator)

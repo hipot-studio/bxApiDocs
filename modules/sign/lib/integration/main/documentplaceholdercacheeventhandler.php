@@ -32,6 +32,19 @@ class DocumentPlaceholderCacheEventHandler
 		}
 	}
 
+	/**
+	 * One-time updater agent that drops the cached placeholder list after an update.
+	 */
+	public static function invalidateDocumentPlaceholderListCacheAgent(): string
+	{
+		if (\Bitrix\Main\Loader::includeModule('sign'))
+		{
+			self::getPlaceholderCacheService()->invalidateDocumentPlaceholderListCache();
+		}
+
+		return '';
+	}
+
 	private static function isRelevantEntityId(array $fieldData): bool
 	{
 		return in_array($fieldData['ENTITY_ID'] ?? '', self::RELEVANT_ENTITY_IDS, true);

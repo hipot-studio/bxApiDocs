@@ -1206,7 +1206,30 @@ class Helper
 			}
 		}
 
-		$fileArray = \CFile::MakeFileArray($tempPath);
+		// Resolve the type from the content first. The response Content-Type is attacker-controlled
+		// (the remote server behind recordUrl is chosen by the caller), so it is trusted only when
+		// content-based detection is unavailable at all: with fileinfo present, octet-stream is a
+		// legitimate verdict for opaque binary data and must not be overridden by the header.
+		$fileType = \CFile::GetContentType($tempPath);
+		if (
+			!function_exists('mime_content_type')
+			&& ($fileType === '' || $fileType === 'application/octet-stream')
+		)
+		{
+			$fileType = $httpClient->getHeaders()->getContentType() ?: $fileType;
+		}
+
+		$fileArray = \CFile::MakeFileArray($tempPath, $fileType);
+
+		if (is_array($fileArray))
+		{
+			$fileArray['name'] = static::ensureRecordFileExtension(
+				(string)($fileArray['name'] ?? ''),
+				(string)($fileArray['type'] ?? '')
+			);
+			// The validated name must also be the stored one: Disk prefers NAME over fileArray['name'].
+			$fileName = $fileArray['name'];
+		}
 
 		$isCorrectFileResult = Security\RecordFile::isCorrectFromArray($fileArray);
 		if (!$isCorrectFileResult->isSuccess())
@@ -1243,6 +1266,34 @@ class Helper
 		]);
 
 		return $result;
+	}
+
+	/**
+	 * Ensures the record file name carries an allowed audio extension. The extension is derived from
+	 * the resolved type; a type outside the map leaves the name unchanged, so the extension whitelist
+	 * of the security gate rejects the file. Names whose current extension is already allowed are
+	 * left untouched, a disallowed extension is replaced instead of getting a second one appended.
+	 */
+	private static function ensureRecordFileExtension(string $name, string $type): string
+	{
+		$currentExtension = mb_strtolower(IO\Path::getExtension($name));
+		if (in_array($currentExtension, Security\RecordFile::getAvailableExtensions(), true))
+		{
+			return $name;
+		}
+
+		$extension = Security\RecordFile::resolveExtensionByType($type);
+		if ($extension === null)
+		{
+			return $name;
+		}
+
+		if ($currentExtension !== '')
+		{
+			$name = mb_substr($name, 0, mb_strlen($name) - mb_strlen($currentExtension) - 1);
+		}
+
+		return $name . '.' . $extension;
 	}
 
 	/**

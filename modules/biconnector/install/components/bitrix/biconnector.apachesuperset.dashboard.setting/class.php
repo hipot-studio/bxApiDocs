@@ -11,6 +11,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\IconController;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Section\EntityEditorSection;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\EntityEditorController;
@@ -172,6 +173,13 @@ class ApacheSupersetDashboardSettingComponent
 		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_MODIFY_SETTINGS, $this->dashboard))
 		{
 			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_NO_RIGHTS_DASHBOARD')));
+
+			return $result;
+		}
+
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			$result->addError(new Error(SelfHostedLicenseLock::getRestrictionMessage()));
 
 			return $result;
 		}

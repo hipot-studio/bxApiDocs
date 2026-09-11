@@ -168,7 +168,10 @@ class EventMessageTable extends DataManager
 		else
 		{
 			$replaceTemplateString = '';
-			foreach($ar as $k) $replaceTemplateString .= '|#'.$k.'#';
+			// a dot is legal in a name, so unescaped it matches any character
+			// and the branch captures a foreign fragment instead of the placeholder
+			// deduplication keeps repeated names from adding identical branches and wasting the pcre compile limit
+			foreach(array_unique($ar) as $k) $replaceTemplateString .= '|#'.preg_quote($k, '/').'#';
 
 			$replaceTags = array();
 			$openPhpTag = false;
@@ -188,6 +191,11 @@ class EventMessageTable extends DataManager
 				{
 					$placeHolderClear = mb_substr($placeHolder, 1, mb_strlen($placeHolder) - 2);
 
+					// defence in depth behind the escaping above: unreachable while it holds, and kept
+					// so that a future regression there cannot push a foreign fragment into the php literal
+					if(!preg_match('/^[0-9a-zA-Z_.]+\z/', $placeHolderClear))
+						continue;
+
 					$openQuote = (mb_substr($str, $placeHolderPosition - 2, 2) == '"{');
 					$closeQuote = (mb_substr($str, $placeHolderPosition + mb_strlen($placeHolder), 2) == '}"');
 					if($openPhpTag && $openQuote && $closeQuote)
@@ -204,9 +212,12 @@ class EventMessageTable extends DataManager
 			{
 				if(count($v)>1)
 				{
+					// $k is a matched tag, not a pattern - escape it
+					// for the same reason as the alternation above
+					$replaceFromPattern = '/'.preg_quote($k, '/').'/';
 					foreach($v as $replaceTo)
 					{
-						$resultReplace = preg_replace('/'.$k.'/', $replaceTo, $strResult, 1);
+						$resultReplace = preg_replace($replaceFromPattern, $replaceTo, $strResult, 1);
 						if($resultReplace !== null)
 							$strResult = $resultReplace;
 					}

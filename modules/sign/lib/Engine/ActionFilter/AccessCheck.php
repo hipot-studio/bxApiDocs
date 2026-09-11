@@ -7,10 +7,12 @@ use Bitrix\Sign\Access\AccessController;
 use Bitrix\Sign\Attribute\Access\LogicAnd;
 use Bitrix\Sign\Attribute\Access\LogicOr;
 use Bitrix\Sign\Attribute\ActionAccess;
+use Bitrix\Sign\Item\Document\SafeFolderCollection;
 use Bitrix\Sign\Item\Document\TemplateCollection;
 use Bitrix\Sign\Item\Document\TemplateFolderCollection;
 use Bitrix\Sign\Item\DocumentCollection;
 use Bitrix\Sign\Item\SignersListCollection;
+use Bitrix\Sign\Repository\Document\SafeFolderRepository;
 use Bitrix\Sign\Repository\Document\TemplateFolderRepository;
 use Bitrix\Sign\Repository\Document\TemplateRepository;
 use Bitrix\Sign\Repository\DocumentRepository;
@@ -31,6 +33,7 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 	private array $logicRules = [];
 	private readonly TemplateRepository $templateRepository;
 	private readonly TemplateFolderRepository $templateFolderRepository;
+	private readonly SafeFolderRepository $safeFolderRepository;
 	private readonly SignersListService $signersListService;
 
 	public function __construct()
@@ -40,6 +43,7 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 		$this->documentRepository = Container::instance()->getDocumentRepository();
 		$this->templateRepository = Container::instance()->getDocumentTemplateRepository();
 		$this->templateFolderRepository = Container::instance()->getTemplateFolderRepository();
+		$this->safeFolderRepository = Container::instance()->getSafeFolderRepository();
 		$this->signersListService = Container::instance()->getSignersListService();
 	}
 
@@ -119,7 +123,7 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 	{
 		Main\Context::getCurrent()->getResponse()->setStatus(401);
 		$this->addError(new Main\Error(
-			Main\Localization\Loc::getMessage("MAIN_ENGINE_FILTER_AUTHENTICATION_ERROR"),
+			Main\Localization\Loc::getMessage('SIGN_ENGINE_ACTION_FILTER_ACCESS_CHECK_ERROR_ACCESS_DENIED'),
 			self::ERROR_INVALID_AUTHENTICATION),
 		);
 
@@ -156,7 +160,19 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 	{
 		if (!isset($rule->passes))
 		{
-			$rule->passes = $this->checkPermission($rule->accessPermission,	$this->createAccessibleItems($rule));
+			if ($this->hasInvalidItemIdentifier($rule))
+			{
+				// An item-aware rule without the object identifier in the request (e.g. on a non-JSON transport)
+				// must not fall back to a global permission check — fail-closed against IDOR.
+				$rule->passes = false;
+			}
+			else
+			{
+				$rule->passes = $this->checkPermission(
+					$rule->accessPermission,
+					$this->createAccessibleItems($rule),
+				);
+			}
 		}
 
 		return $rule->passes;
@@ -175,7 +191,7 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 			return [];
 		}
 
-		$idOrUid = $this->getRequestJson()->get($rule->itemIdOrUidRequestKey);
+		$idOrUid = $this->resolveItemIdentifier($rule->itemIdOrUidRequestKey);
 		if ($idOrUid === null)
 		{
 			return [];
@@ -187,6 +203,7 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 			AccessibleItemType::DOCUMENT => $this->getDocumentByIds($idsOrUids),
 			AccessibleItemType::TEMPLATE => $this->getTemplatesByIds($idsOrUids),
 			AccessibleItemType::TEMPLATE_FOLDER => $this->getTemplateFoldersByIds($idsOrUids),
+			AccessibleItemType::SAFE_FOLDER => $this->getSafeFoldersByIds($idsOrUids),
 			AccessibleItemType::SIGNERS_LIST => $this->getSignersListsByIds($idsOrUids),
 			default => null,
 		};
@@ -214,16 +231,85 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 
 	private function hasInvalidItemIdentifier(RuleWithPayload $rule): bool
 	{
-		return $rule->itemType !== null &&
-			(
-				$rule->itemIdOrUidRequestKey === null
-				|| $this->getRequestJson()->get($rule->itemIdOrUidRequestKey) === null
-			);
+		if ($rule->itemType === null)
+		{
+			return false;
+		}
+
+		if ($rule->itemIdOrUidRequestKey === null)
+		{
+			return true;
+		}
+
+		// The object identifier must come from exactly one request source. A missing key
+		// (0 sources) must not let an item-aware rule degrade to a global permission check —
+		// fail-closed against IDOR (jabber #249372). Presence in several sources (>=2) means
+		// source spoofing: the filter would check one value while the action binder picks the
+		// value from another source by its own precedence — fail-closed (jabber #249595).
+		return $this->countParameterSources($rule->itemIdOrUidRequestKey) !== 1;
 	}
 
-	private function getRequestJson(): Main\Type\ParameterDictionary
+	/**
+	 * Counts how many request sources contain the key. It iterates the same source set the
+	 * action binder uses, and detects presence the same way as Binder::findParameterInSourceList:
+	 * array_key_exists for plain arrays, offsetExists for \ArrayAccess, plus isset. This enforces
+	 * the invariant that the identifier must come from exactly one source; presence in several
+	 * sources is spoofing (jabber #249595), fail-closed.
+	 *
+	 * @see Bitrix\Main\Engine\AutoWire\Binder::findParameterInSourceList
+	 */
+	private function countParameterSources(string $key): int
 	{
-		return $this->getAction()->getController()->getRequest()->getJsonList();
+		$count = 0;
+		foreach ($this->getAction()->getController()->getSourceParametersList() as $source)
+		{
+			if ($this->isKeyPresentInSource($source, $key))
+			{
+				$count++;
+			}
+		}
+
+		return $count;
+	}
+
+	/**
+	 * Returns the key value from the first source that contains it (same traversal as
+	 * countParameterSources), or null. For a valid item-aware rule there is exactly one
+	 * source, so "first" equals "the only one".
+	 *
+	 * @see Bitrix\Main\Engine\AutoWire\Binder::findParameterInSourceList
+	 */
+	private function resolveItemIdentifier(string $key): mixed
+	{
+		foreach ($this->getAction()->getController()->getSourceParametersList() as $source)
+		{
+			if ($this->isKeyPresentInSource($source, $key))
+			{
+				return $source[$key];
+			}
+		}
+
+		return null;
+	}
+
+	private function isKeyPresentInSource(mixed $source, string $key): bool
+	{
+		if (isset($source[$key]))
+		{
+			return true;
+		}
+
+		if ($source instanceof \ArrayAccess)
+		{
+			return $source->offsetExists($key);
+		}
+
+		if (is_array($source))
+		{
+			return array_key_exists($key, $source);
+		}
+
+		return false;
 	}
 
 
@@ -306,6 +392,24 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 		}
 
 		return new TemplateFolderCollection();
+	}
+
+	private function getSafeFoldersByIds(array $idsOrUids): SafeFolderCollection
+	{
+		$firstIdOrUid = $idsOrUids[array_key_first($idsOrUids)] ?? null;
+		if (empty($firstIdOrUid))
+		{
+			return new SafeFolderCollection();
+		}
+
+		if (is_numeric($firstIdOrUid))
+		{
+			$ids = array_map(static fn(mixed $value) => (int)$value, $idsOrUids);
+
+			return $this->safeFolderRepository->getByIds($ids);
+		}
+
+		return new SafeFolderCollection();
 	}
 
 	private function getSignersListsByIds(array $idsOrUids): SignersListCollection

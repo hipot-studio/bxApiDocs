@@ -18,23 +18,21 @@ final class MenuItemCreatorWorkflowTemplate extends BaseMenuItemCreator
 		$menuItems = [];
 		foreach ($dashboards as $dashboard)
 		{
-			$onClick =
-				!MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType())
-					? $this->getOpenTariffSliderScript()
-					: $this->createDashboardOpenEventFromMenu($dashboard, $params)
-			;
+			$isMarketAvailable = MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType());
+
+			$onClick = $this->createDashboardOpenEventFromMenu($dashboard, $params, $isMarketAvailable);
 
 			$menuItems[] = [
 				'ID' => "BIC_WORKFLOW_DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
-				'IS_LOCKED' => !$this->isAvailableByTariff(),
+				'IS_LOCKED' => $this->isDashboardLocked(),
 				'ON_CLICK' => $onClick,
 				'URL' => $this->getDetailUrl(
 					$dashboard,
 					$params,
 					['openFrom' => $this->getOpenFrom()]
 				),
-				'IS_AVAILABLE_WITHOUT_MARKET_SUB' => MarketAccessManager::getInstance()->isDashboardAvailableByType($dashboard->getType()),
+				'IS_AVAILABLE_WITHOUT_MARKET_SUB' => $isMarketAvailable,
 			];
 		}
 

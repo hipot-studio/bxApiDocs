@@ -52,6 +52,15 @@ class B2eSignedFile extends \Bitrix\Sign\Engine\Controller
 		if ($entityTypeId === \Bitrix\Sign\Type\EntityType::MEMBER)
 		{
 			$member = Service\Container::instance()->getMemberRepository()->getById($entityId);
+			if ($member === null)
+			{
+				$this->addError(new Main\Error(
+					'Entity not found',
+					'SIGN_DOCUMENT_NOT_FOUND',
+				));
+
+				return [];
+			}
 		}
 		else
 		{

@@ -8,9 +8,9 @@ use Bitrix\Superset\Public\Support\AbstractPublicEntryPoint;
 
 final class ChartProvider extends AbstractPublicEntryPoint
 {
-	public function list(array $ids = []): Result
+	public function list(array $ids = [], ?string $nameFilter = null, ?int $page = null, ?int $pageSize = null): Result
 	{
-		return $this->getService()->list($ids);
+		return $this->getService()->list($ids, $nameFilter, $page, $pageSize);
 	}
 
 	public function getById(int $id): Result

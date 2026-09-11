@@ -24,7 +24,7 @@ final class DatasetService extends AbstractSupersetContext
 		'DATETIME' => 'DATETIME',
 	];
 
-	public function list(array $ids = [], array $neqIds = []): Main\Result
+	public function list(array $ids = [], array $neqIds = [], ?int $page = null, ?int $pageSize = null): Main\Result
 	{
 		$filter = [];
 		if (!empty($ids))
@@ -47,13 +47,50 @@ final class DatasetService extends AbstractSupersetContext
 			}
 		}
 
-		$preparedDataset = [];
-		$page = 0;
 		$datasetApi = $this->getDatasetApi();
+
+		// Bounded mode: a single Superset page plus the total `count`, so the
+		// request cost does not grow with the number of datasets on the instance.
+		// Mirrors ChartService::list(). Without $pageSize the full list is walked
+		// (kept for the by-ids / idempotency callers that expect a flat list).
+		if ($pageSize !== null)
+		{
+			$requestResult = $datasetApi->getDatasetsList($filter, $page, $pageSize);
+			if ($requestResult->getHttpStatus() !== HttpStatus::OK)
+			{
+				return $this->createRequestErrorResult($requestResult, 'Getting dataset list');
+			}
+
+			$datasets = $this->decode($requestResult->getAnswer());
+			if (!is_array($datasets))
+			{
+				return $this->createErrorResult('Invalid dataset list response');
+			}
+
+			$preparedDataset = [];
+			foreach (($datasets['result'] ?? []) as $dataset)
+			{
+				if (is_array($dataset))
+				{
+					$preparedDataset[] = $this->prepareResultDataset($dataset);
+				}
+			}
+
+			$result = new Main\Result();
+			$result->setData([
+				'datasets' => $this->mapUsersToClientIds($preparedDataset),
+				'count' => (int)($datasets['count'] ?? count($preparedDataset)),
+			]);
+
+			return $result;
+		}
+
+		$preparedDataset = [];
+		$currentPage = 0;
 
 		do
 		{
-			$requestResult = $datasetApi->getDatasetsList($filter, $page, 100);
+			$requestResult = $datasetApi->getDatasetsList($filter, $currentPage, 100);
 			if ($requestResult->getHttpStatus() !== HttpStatus::OK)
 			{
 				return $this->createRequestErrorResult($requestResult, 'Getting dataset list');
@@ -74,7 +111,7 @@ final class DatasetService extends AbstractSupersetContext
 			}
 
 			$isRepeatRequest = count($datasets['ids'] ?? []) > 0;
-			$page++;
+			$currentPage++;
 		}
 		while ($isRepeatRequest);
 
@@ -139,6 +176,10 @@ final class DatasetService extends AbstractSupersetContext
 		}
 
 		$dataset = $this->prepareResultDataset($datasetResult->getData()['dataset']);
+		// Map raw Superset owner objects to CLIENT_IDs so callers get the same
+		// cross-mode owner identity as list() / ChartService::get() (used by the
+		// AI owner-scoping check). Only the `owners` key is rewritten.
+		$dataset = current($this->mapUsersToClientIds([$dataset])) ?: $dataset;
 
 		$result = new Main\Result();
 		$result->setData([
@@ -157,6 +198,10 @@ final class DatasetService extends AbstractSupersetContext
 		}
 
 		$dataset = $this->prepareResultDataset($datasetResult->getData()['dataset']);
+		// Map raw Superset owner objects to CLIENT_IDs, mirroring get() / list(), so
+		// the owners key carries the same cross-mode identity everywhere. Only the
+		// `owners` key is rewritten.
+		$dataset = current($this->mapUsersToClientIds([$dataset])) ?: $dataset;
 
 		$result = new Main\Result();
 		$result->setData([
@@ -653,6 +698,7 @@ final class DatasetService extends AbstractSupersetContext
 			'id' => (int)($supersetDataset['id'] ?? 0),
 			'table_name' => $tableName,
 			'description' => $supersetDataset['description'] ?? '',
+			'sql' => (string)($supersetDataset['sql'] ?? ''),
 			'owners' => $supersetDataset['owners'] ?? [],
 			'columns' => is_array($supersetDataset['columns'] ?? null) ? $supersetDataset['columns'] : [],
 			'metrics' => is_array($supersetDataset['metrics'] ?? null) ? $supersetDataset['metrics'] : [],

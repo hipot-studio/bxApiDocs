@@ -20,6 +20,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Public\Provider\DashboardDetailInfoProvider;
 use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightOptions;
@@ -112,6 +113,13 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		}
 
 		if (!Superset\DomainLinkService::getInstance()->isLinked())
+		{
+			return false;
+		}
+
+		// A report whose term is over is opened only from the grid, where it carries a padlock: a direct link
+		// must not be a way around it, so it leads back to the grid.
+		if (SelfHostedLicenseLock::isDashboardLocked())
 		{
 			return false;
 		}

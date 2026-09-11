@@ -484,6 +484,54 @@ class Icon
 	}
 
 	/**
+	 * Adds the inlined vendor font and stylesheet to the page for device-preview mode, once
+	 * per vendor for the whole render. Returns false when the vendor cannot be inlined, so the
+	 * caller falls back to the networked assets.
+	 *
+	 * Both the font and the vendor stylesheet go inline: the stylesheet carries its own
+	 * @font-face with a networked src, which the opaque origin would still fetch (and the
+	 * browser would block) next to the inlined font. Either both inline or neither — a
+	 * half-applied override leaves the blocked request in place.
+	 *
+	 * The string is built once per vendor and process: view() is called per block, and a page
+	 * with several icon blocks would otherwise re-read and re-encode the same font for each of
+	 * them. It is added apart from the per-block icon rules so that ResourceCollection sees the
+	 * very same string every time and keeps a single copy.
+	 *
+	 * @param string $vendorName Vendor folder code.
+	 * @param string|null $fontWebPath Web path of the preferred font file, if any.
+	 * @param Assets\Manager $assetsManager Collector of the page assets the string goes to.
+	 *
+	 * @return bool
+	 */
+	protected static function addInlineVendorAssets(
+		string $vendorName,
+		?string $fontWebPath,
+		Assets\Manager $assetsManager
+	): bool
+	{
+		static $inlineByVendor = [];
+
+		if (!array_key_exists($vendorName, $inlineByVendor))
+		{
+			$fontFace = $fontWebPath ? self::buildInlineFontFace($vendorName, $fontWebPath) : null;
+			$styles = $fontFace !== null ? self::buildInlineVendorStyles($vendorName) : null;
+			$inlineByVendor[$vendorName] = $styles !== null
+				? '<style>' . $fontFace . $styles . '</style>'
+				: null;
+		}
+
+		if ($inlineByVendor[$vendorName] === null)
+		{
+			return false;
+		}
+
+		$assetsManager->addString($inlineByVendor[$vendorName]);
+
+		return true;
+	}
+
+	/**
 	 * Parses icon file and returns content for each icon class.
 	 * @param string $vendorName Vendor folder code.
 	 * @return array
@@ -671,23 +719,7 @@ class Icon
 				$fontFile = self::getPreferredFontPath($vendorName);
 				$stylesFile = $iconSrc . $vendorName . '/' . self::RULE_ICON_FILE_NAME;
 
-				// In device preview both the font and the vendor stylesheet go inline: the
-				// stylesheet carries its own @font-face with a networked src, which the opaque
-				// origin would still fetch (and the browser would block) next to the inlined
-				// font. Either both inline or neither — a half-applied override leaves the
-				// blocked request in place.
-				$inlineFontFace = ($devicePreview && $fontFile)
-					? self::buildInlineFontFace($vendorName, $fontFile)
-					: null;
-				$inlineStyles = $inlineFontFace !== null
-					? self::buildInlineVendorStyles($vendorName)
-					: null;
-
-				if ($inlineStyles !== null)
-				{
-					$stylesString .= $inlineFontFace . $inlineStyles;
-				}
-				else
+				if (!$devicePreview || !self::addInlineVendorAssets($vendorName, $fontFile, $assetsManager))
 				{
 					if ($fontFile)
 					{

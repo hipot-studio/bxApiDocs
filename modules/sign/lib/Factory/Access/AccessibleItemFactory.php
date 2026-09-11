@@ -13,16 +13,27 @@ class AccessibleItemFactory
 		{
 			return new Item\Access\Document($item);
 		}
+		if ($item instanceof Item\Document\SafeFolder)
+		{
+			// Company safe folder is an owner-scoped access item (no CRM entity). The safe access
+			// hard gate is enforced by SafeFolderRule keyed on the safe folder action.
+			return new Item\Access\SimpleAccessibleItemWithOwner($item->getId(), $item->getOwnerId());
+		}
 		if (!$item instanceof Contract\Item\ItemWithOwner)
 		{
 			return null;
 		}
 
-		$crmId = $item instanceof Contract\Item\ItemWithCrmId
-			? $item->getCrmId()
-			: 0
-		;
+		if ($item instanceof Contract\Item\ItemWithCrmEntity)
+		{
+			return new Item\Access\SimpleAccessibleItemWithOwner(
+				$item->getId(),
+				$item->getOwnerId(),
+				$item->getCrmId(),
+				$item->getCrmEntityTypeId(),
+			);
+		}
 
-		return new Item\Access\SimpleAccessibleItemWithOwner($item->getId(), $item->getOwnerId(), $crmId);
+		return new Item\Access\SimpleAccessibleItemWithOwner($item->getId(), $item->getOwnerId());
 	}
 }

@@ -263,9 +263,7 @@ class BlankService
 	 */
 	public function hasPlaceholders(int $blankId): bool
 	{
-		$blank = $this->blankRepository->getById($blankId);
-
-		return $blank?->hasPlaceholders ?? false;
+		return $this->blankRepository->hasPlaceholdersById($blankId);
 	}
 
 	public function hasDownloadableFile(?Blank $blank): bool

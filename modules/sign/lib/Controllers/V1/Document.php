@@ -898,8 +898,16 @@ class Document extends Controller
 	}
 
 	#[Attribute\Access\LogicOr(
-		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT),
-		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_TEMPLATE_EDIT),
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		),
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		),
 	)]
 	public function modifyIntegrationIdAction(string $uid, ?int $integrationId = null): array
 	{

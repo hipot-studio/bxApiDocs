@@ -48,13 +48,13 @@ class StrategyRegistry
 	/**
 	 * @param string[] $fieldNames
 	 */
-	public function preloadForFieldNames(array $fieldNames): void
+	public function preloadForFieldNames(array $fieldNames, ?AliasContext $context = null): void
 	{
 		foreach ($this->allStrategies as $strategy)
 		{
 			if ($strategy instanceof PreloadableStrategyInterface)
 			{
-				$strategy->preloadForFieldNames($fieldNames);
+				$strategy->preloadForFieldNames($fieldNames, $context);
 			}
 		}
 	}

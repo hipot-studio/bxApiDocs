@@ -16,8 +16,12 @@ use Bitrix\Crm\Timeline\SignDocument\DocumentData;
 use Bitrix\Crm\Timeline\SignDocument\MessageData;
 use Bitrix\Main\Loader;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
+use Bitrix\Sign\Item\Document;
+use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type\Document\InitiatedByType;
+use Bitrix\Sign\Type\Member\Role;
 
 final class B2eEventCreator
 {
@@ -35,10 +39,7 @@ final class B2eEventCreator
 		}
 
 		$crmController = B2eController::getInstance();
-		$triggerInputData = [
-			'eventType' => $eventType,
-		];
-			
+
 		switch ($eventType)
 		{
 			case EventData::TYPE_ON_REGISTER:
@@ -54,7 +55,7 @@ final class B2eEventCreator
 				SigningStoppedTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
 				CompletedTrigger::executeBySmartDocumentId(
 					$itemIdentifier->getEntityId(),
-					$triggerInputData,
+					$this->buildTriggerInputData($eventType, $eventData, $documentData),
 				);
 				$this->completeActivity($crmController, $itemIdentifier);
 				$this->sendEvent($documentData, $eventType);
@@ -64,7 +65,7 @@ final class B2eEventCreator
 				SigningStoppedTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
 				CompletedTrigger::executeBySmartDocumentId(
 					$itemIdentifier->getEntityId(),
-					$triggerInputData,
+					$this->buildTriggerInputData($eventType, $eventData, $documentData),
 				);
 				$this->completeActivity($crmController, $itemIdentifier);
 				$this->sendEvent($documentData, $eventType);
@@ -78,7 +79,7 @@ final class B2eEventCreator
 				SigningStoppedTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
 				CompletedTrigger::executeBySmartDocumentId(
 					$itemIdentifier->getEntityId(),
-					$triggerInputData,
+					$this->buildTriggerInputData($eventType, $eventData, $documentData),
 				);
 				$this->completeActivity($crmController, $itemIdentifier);
 				$this->sendEvent($documentData, $eventType);
@@ -88,7 +89,7 @@ final class B2eEventCreator
 				SigningStoppedTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
 				CompletedTrigger::executeBySmartDocumentId(
 					$itemIdentifier->getEntityId(),
-					$triggerInputData,
+					$this->buildTriggerInputData($eventType, $eventData, $documentData),
 				);
 				$this->completeActivity($crmController, $itemIdentifier);
 				$this->sendEvent($documentData, $eventType);
@@ -96,7 +97,7 @@ final class B2eEventCreator
 			case EventData::TYPE_ON_SIGNED_BY_EMPLOYEE:
 				$crmController->onSignedByEmployee($itemIdentifier, $documentData, $messageData);
 				$this->notifyActivityChange($crmController, $itemIdentifier);
-				$this->executeTriggerOnSignedByEmployee($documentData, $itemIdentifier);
+				$this->executeTriggerOnSignedByEmployee($documentData, $itemIdentifier, $eventType, $eventData);
 				break;
 			case EventData::TYPE_ON_SIGNED_BY_RESPONSIBILITY_PERSON:
 				$crmController->onSignedByResponsiblePerson($itemIdentifier, $documentData, $messageData);
@@ -104,12 +105,15 @@ final class B2eEventCreator
 				break;
 			case EventData::TYPE_ON_SIGNED_BY_REVIEWER:
 				$crmController->onSignedByReviewer($itemIdentifier, $documentData, $messageData);
-				$this->executeTriggerOnSignedByReviewer($documentData, $itemIdentifier);
+				$this->executeTriggerOnSignedByReviewer($documentData, $itemIdentifier, $eventType, $eventData);
 				$this->notifyActivityChange($crmController, $itemIdentifier);
 				break;
 			case EventData::TYPE_ON_SIGNED_BY_EDITOR:
 				$crmController->onSignedByEditor($itemIdentifier, $documentData, $messageData);
-				SigningTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+				SigningTrigger::executeBySmartDocumentId(
+					$itemIdentifier->getEntityId(),
+					$this->buildTriggerInputData($eventType, $eventData, $documentData),
+				);
 				$this->notifyActivityChange($crmController, $itemIdentifier);
 				break;
 			case EventData::TYPE_ON_DONE:
@@ -117,7 +121,7 @@ final class B2eEventCreator
 				SigningDoneTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
 				CompletedTrigger::executeBySmartDocumentId(
 					$itemIdentifier->getEntityId(),
-					$triggerInputData,
+					$this->buildTriggerInputData($eventType, $eventData, $documentData),
 				);
 				$this->completeActivity($crmController, $itemIdentifier);
 				$this->sendEvent($documentData, $eventType);
@@ -125,7 +129,7 @@ final class B2eEventCreator
 			case EventData::TYPE_ON_STARTED:
 				$crmController->onSignStarted($itemIdentifier, $documentData);
 				SigningStartedTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
-				$this->executeTriggerOnStart($documentData, $itemIdentifier);
+				$this->executeTriggerOnStart($documentData, $itemIdentifier, $eventType, $eventData);
 				$this->notifyActivityChange($crmController, $itemIdentifier);
 				break;
 			case EventData::TYPE_ON_READY_BY_REVIEWER_OR_EDITOR:
@@ -134,11 +138,17 @@ final class B2eEventCreator
 				break;
 			case EventData::TYPE_ON_READY_BY_REVIEWER:
 				$crmController->onSignStarted($itemIdentifier, $documentData);
-				CoordinationTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+				CoordinationTrigger::executeBySmartDocumentId(
+					$itemIdentifier->getEntityId(),
+					$this->buildTriggerInputData($eventType, $eventData, $documentData),
+				);
 				break;
 			case EventData::TYPE_ON_READY_BY_EDITOR:
 				$crmController->onSignStarted($itemIdentifier, $documentData);
-				FillingTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+				FillingTrigger::executeBySmartDocumentId(
+					$itemIdentifier->getEntityId(),
+					$this->buildTriggerInputData($eventType, $eventData, $documentData),
+				);
 				break;
 			case EventData::TYPE_ON_DELIVERED:
 				$crmController->onMessageDelivered($itemIdentifier, $documentData, $messageData);
@@ -199,7 +209,87 @@ final class B2eEventCreator
 		}
 	}
 
-	private function executeTriggerOnSignedByReviewer(DocumentData $documentData, ItemIdentifier $itemIdentifier): void
+	private function buildTriggerInputData(string $eventType, EventData $eventData, DocumentData $documentData): array
+	{
+		$inputData = [
+			'eventType' => $eventType,
+			'signDocumentId' => $documentData->getDocumentId(),
+			'signInitiatedByType' => $documentData->getInitiatedByType(),
+		];
+
+		$memberService = Container::instance()->getMemberService();
+		$documentItem = $eventData->getDocumentItem();
+		$memberItem = $this->resolveMemberItem($eventType, $eventData, $documentItem, $memberService);
+		$signerUserId = null;
+		if ($memberItem)
+		{
+			$inputData['signMemberRole'] = (string)$memberItem->role;
+
+			$signerUserId = $memberService->getUserIdForMember($memberItem, $documentItem);
+			if ($signerUserId)
+			{
+				$inputData['signerUserId'] = $signerUserId;
+			}
+
+			$signerName = $memberService->getMemberRepresentedNameForTriggerPayload(
+				$memberItem,
+				$documentItem,
+				$signerUserId,
+			);
+			if ($signerName)
+			{
+				$inputData['signerName'] = $signerName;
+			}
+		}
+
+		// the event names an initiator only when a member was changed by someone else (a member stop);
+		// on its own status change the member who acted is the member itself
+		$initiatorUserId = $documentData->getInitiatorUserId() ?? $signerUserId;
+		if ($initiatorUserId)
+		{
+			$inputData['initiatorUserId'] = $initiatorUserId;
+		}
+
+		return $inputData;
+	}
+
+	private function resolveMemberItem(
+		string $eventType,
+		EventData $eventData,
+		?Document $documentItem,
+		MemberService $memberService,
+	): ?Member
+	{
+		$memberItem = $eventData->getMemberItem();
+		if ($memberItem)
+		{
+			return $memberItem;
+		}
+
+		if (!$documentItem)
+		{
+			return null;
+		}
+
+		$documentId = $documentItem->id;
+
+		return match ($eventType)
+		{
+			EventData::TYPE_ON_SIGNED_BY_EMPLOYEE,
+			EventData::TYPE_ON_SIGNED_BY_RESPONSIBILITY_PERSON,
+			EventData::TYPE_ON_DONE => $memberService->getSigner($documentItem),
+			EventData::TYPE_ON_READY_BY_REVIEWER => $memberService->getByDocumentIdWithRole($documentId, Role::REVIEWER),
+			EventData::TYPE_ON_READY_BY_EDITOR => $memberService->getByDocumentIdWithRole($documentId, Role::EDITOR),
+			default => null,
+		};
+	}
+
+	private function executeTriggerOnSignedByReviewer(
+		DocumentData $documentData,
+		ItemIdentifier $itemIdentifier,
+		string $eventType,
+		EventData $eventData,
+	): void
 	{
 		$hasEditor = Container::instance()
 			->getMemberRepository()
@@ -213,11 +303,19 @@ final class B2eEventCreator
 
 		if ($hasWaitReviewer === false && $hasEditor === false)
 		{
-			SigningTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+			SigningTrigger::executeBySmartDocumentId(
+				$itemIdentifier->getEntityId(),
+				$this->buildTriggerInputData($eventType, $eventData, $documentData),
+			);
 		}
 	}
 
-	private function executeTriggerOnStart(DocumentData $documentData, ItemIdentifier $itemIdentifier): void
+	private function executeTriggerOnStart(
+		DocumentData $documentData,
+		ItemIdentifier $itemIdentifier,
+		string $eventType,
+		EventData $eventData,
+	): void
 	{
 		$initiatedByType = InitiatedByType::tryFrom($documentData->getInitiatedByType());
 		if ($initiatedByType !== InitiatedByType::COMPANY)
@@ -237,11 +335,19 @@ final class B2eEventCreator
 
 		if (!$hasReviewer && !$hasEditor)
 		{
-			SigningTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+			SigningTrigger::executeBySmartDocumentId(
+				$itemIdentifier->getEntityId(),
+				$this->buildTriggerInputData($eventType, $eventData, $documentData),
+			);
 		}
 	}
 
-	private function executeTriggerOnSignedByEmployee(DocumentData $documentData, ItemIdentifier $itemIdentifier): void
+	private function executeTriggerOnSignedByEmployee(
+		DocumentData $documentData,
+		ItemIdentifier $itemIdentifier,
+		string $eventType,
+		EventData $eventData,
+	): void
 	{
 		$initiatedByType = InitiatedByType::tryFrom($documentData->getInitiatedByType());
 		if ($initiatedByType !== InitiatedByType::EMPLOYEE)
@@ -256,7 +362,10 @@ final class B2eEventCreator
 
 		if (!$hasReviewer)
 		{
-			SigningTrigger::executeBySmartDocumentId($itemIdentifier->getEntityId());
+			SigningTrigger::executeBySmartDocumentId(
+				$itemIdentifier->getEntityId(),
+				$this->buildTriggerInputData($eventType, $eventData, $documentData),
+			);
 		}
 	}
 

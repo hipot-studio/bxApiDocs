@@ -733,6 +733,43 @@ class DocxXml extends Xml
 	}
 
 	/**
+	 * @param string[] $imageIds
+	 */
+	public function removeImagesByRelationshipIds(array $imageIds): void
+	{
+		if (empty($imageIds))
+		{
+			return;
+		}
+
+		$this->initDomDocument();
+		$imageIds = array_fill_keys($imageIds, true);
+		$nodesToDelete = [];
+		foreach ($this->xpath->query('//w:drawing') as $drawingNode)
+		{
+			foreach ($this->xpath->query('.//a:blip', $drawingNode) as $blipNode)
+			{
+				/** @var \DOMElement $blipNode */
+				$imageId = $blipNode->getAttributeNS(static::getNamespaces()['r'], 'embed');
+				if (isset($imageIds[$imageId]))
+				{
+					$nodesToDelete[] = $drawingNode;
+					break;
+				}
+			}
+		}
+
+		foreach ($nodesToDelete as $node)
+		{
+			$node->parentNode->removeChild($node);
+		}
+		if (!empty($nodesToDelete))
+		{
+			$this->saveContent();
+		}
+	}
+
+	/**
 	 * Get all drawing nodes marked with placeholders.
 	 * If $generateNewImageIds is true - will replace relation ids to new values.
 	 *

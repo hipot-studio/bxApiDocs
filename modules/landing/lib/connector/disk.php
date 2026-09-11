@@ -7,7 +7,19 @@ class Disk
 	public const FILE_MASK_HREF = '(file:)?#diskFile([\d]+)';
 
 	/**
-	 * Check disk's files within content for read access. If not, remove file's marks.
+	 * Returns regexp for the link to the exact file. Unlike self::FILE_MASK_HREF, which matches a link
+	 * to any file, it matches the given id only, so a link to an id with the same prefix does not match.
+	 *
+	 * @param int $objectId Disk's object id (file id).
+	 * @return string
+	 */
+	public static function getExactFileHrefPattern(int $objectId): string
+	{
+		return '/' . preg_quote(self::FILE_PREFIX_HREF . $objectId, '/') . '(?![\d])/i';
+	}
+
+	/**
+	 * Checks disk's files within content for read access. If not, removes file's marks.
 	 *
 	 * @param string $content Content.
 	 * @param string|null $oldContent Old content (if exists, found old files will not be replaced).

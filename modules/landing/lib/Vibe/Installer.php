@@ -117,7 +117,7 @@ class Installer
 		$importComponent->arParams = [
 			'ZIP_ID' => $zipId,
 			'ADDITIONAL' => [
-				'siteId' => $this->siteId,
+				'replaceSiteId' => $this->siteId,
 			],
 			'MODE' => 'ZIP',
 			'SET_TITLE' => 'Y',

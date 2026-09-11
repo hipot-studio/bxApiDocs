@@ -8,6 +8,7 @@ final class AccessibleItemType
 	public const TEMPLATE = 'template';
 	public const TEMPLATE_FOLDER = 'templateFolder';
 	public const SIGNERS_LIST = 'signers_list';
+	public const SAFE_FOLDER = 'safeFolder';
 
 	/**
 	 * @return array<self::*>
@@ -19,6 +20,7 @@ final class AccessibleItemType
 			self::TEMPLATE,
 			self::TEMPLATE_FOLDER,
 			self::SIGNERS_LIST,
+			self::SAFE_FOLDER,
 		];
 	}
 }

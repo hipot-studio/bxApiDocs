@@ -23,7 +23,7 @@ class MenuItemCreatorTasksFlowsFlow extends BaseMenuItemCreator
 			$menuItems[] = [
 				'ID' => "BIC_TASKS_FLOWS_FLOW_DASHBOARD_{$dashboard->getId()}",
 				'TEXT' => $dashboard->getTitle(),
-				'IS_LOCKED' => !$this->isAvailableByTariff(),
+				'IS_LOCKED' => $this->isDashboardLocked(),
 				'URL' => $this->getDetailUrl(
 					$dashboard,
 					$params,

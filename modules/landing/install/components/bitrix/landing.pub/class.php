@@ -48,6 +48,13 @@ class LandingPubComponent extends LandingBaseComponent
 	protected $isPreviewMode = false;
 
 	/**
+	 * Preview opened by a valid signed link (Site::isPublicHashValid), as opposed to the
+	 * DRAFT_MODE preview of knowledge bases and groups.
+	 * @var boolean
+	 */
+	protected $isSignedPreview = false;
+
+	/**
 	 * SEF variables.
 	 * @var array
 	 */
@@ -134,8 +141,9 @@ class LandingPubComponent extends LandingBaseComponent
 	 * .isSameOriginPreview): a cross-origin preview is isolated by the browser anyway. The marker
 	 * travels with every device preview though, so the same predicate has to be re-evaluated here
 	 * — otherwise the sandbox workarounds (storage shim, inlined fonts, suppressed cookie banner)
-	 * would be paid for on every cloud preview, where the public site lives on its own domain and
-	 * no sandbox is ever set.
+	 * would be paid for by a preview opened on the site's own domain, where no sandbox is ever set.
+	 * A cloud preview is no longer such a case: its link is built on the portal host by
+	 * Site\PreviewUrl, so there the same-origin branch really runs.
 	 * @param string $parentOrigin Validated portal origin from MARKER-01.
 	 * @return bool
 	 */
@@ -145,6 +153,53 @@ class LandingPubComponent extends LandingBaseComponent
 			. mb_strtolower(Application::getInstance()->getContext()->getServer()->getHttpHost());
 
 		return $parentOrigin === $ownOrigin;
+	}
+
+	/**
+	 * Returns true when the signed preview is served on the portal origin and has to be
+	 * sandboxed by the page itself, not only by the editor frame around it.
+	 *
+	 * In Bitrix24 (cloud and box alike) that is every valid signed preview: Site::getPublicHash()
+	 * binds the signature to the host of the request and the link is built on that same host, so
+	 * a signature that checks out was issued for this very origin. The site manager is left as
+	 * is — there the signature is bound to the site domain, and a preview on a domain of its own
+	 * shares nothing with the portal.
+	 * @return bool
+	 */
+	private function isSandboxedSignedPreview(): bool
+	{
+		return $this->isSignedPreview && Manager::isB24();
+	}
+
+	/**
+	 * Gives the signed preview document an opaque origin via the CSP sandbox directive.
+	 *
+	 * In preview the hooks read their draft values (Hook::setEditMode()). Under the portal origin
+	 * a script of the page would run with the portal session of whoever opens the link: the
+	 * editor sandboxes its device frame for exactly this reason (DeviceUI), but the same page
+	 * opened by the direct link had no sandbox at all. Without allow-same-origin the page cannot
+	 * reach the portal cookies, storage or same-origin API; scripts, forms, popups and dialogs
+	 * stay allowed, so the page renders and behaves like the published one. The opaque origin
+	 * does not make the trusted portal address safe for arbitrary code of the author though —
+	 * a login form drawn by it would still be believed — so the arbitrary html and code of the
+	 * author are off in the sandboxed preview: the head-block hook (Hook\Page\HeadBlock::enabled()),
+	 * the Google Tag Manager container, which runs any script of the author as well
+	 * (Hook\Page\GTM::enabled()), the Bitrix24 widget, whose script url is stored as sent
+	 * (Hook\Page\B24button::enabled()), and the raw html of the html block
+	 * (LandingBlocksHtmlComponent::mustSanitize()); the block content itself is sanitized on save.
+	 * Downloads stay allowed: a download in the sandbox is
+	 * started by a click on a link of the page (the file links of the blocks point to
+	 * landing.api.diskFile.download and are left to the browser by public.js), and with the
+	 * author's code off there is nothing to start one by itself. The workarounds the sandbox
+	 * needs (storage shim, inlined fonts) are the same as for the device frame — see the caller.
+	 * @return void
+	 */
+	private function sandboxSignedPreview(): void
+	{
+		Application::getInstance()->getContext()->getResponse()->addHeader(
+			'Content-Security-Policy',
+			'sandbox allow-scripts allow-forms allow-popups allow-modals allow-popups-to-escape-sandbox allow-downloads'
+		);
 	}
 
 	/**
@@ -683,6 +738,7 @@ class LandingPubComponent extends LandingBaseComponent
 		)
 		{
 			$this->isPreviewMode = true;
+			$this->isSignedPreview = true;
 			if (($requestedPageParts[0] ?? null) == 'preview')
 			{
 				array_shift($requestedPageParts);
@@ -1712,6 +1768,43 @@ class LandingPubComponent extends LandingBaseComponent
 	}
 
 	/**
+	 * Target of the force reload of the editor (?forceLandingId=<id>) on the "page not found"
+	 * branch, or null when there is nothing to redirect to.
+	 *
+	 * The page has to exist and to belong to the resolved site: under the preview mode the url of
+	 * a page is signed, so a page of any other site would turn the signed preview of this one into
+	 * a signed link into a draft of that other site.
+	 * @return string|null
+	 */
+	protected function getForceReloadUrl(): ?string
+	{
+		$forceLandingId = (int)$this->request('forceLandingId');
+		if ($forceLandingId <= 0)
+		{
+			return null;
+		}
+
+		// the same rights gate the resolved page goes through (CHECK_PERMISSIONS of the component):
+		// the visitor of a signed preview needs no session of the portal, and the target is a page
+		// of the very site the signature opens
+		// the same flags as for the resolved page: under DRAFT_MODE (knowledge bases, groups) the
+		// preview mode is on as well, but the urls there must not carry the signed preview tail
+		$landingForce = Landing::createInstance($forceLandingId, [
+			'check_permissions' => $this->arParams['CHECK_PERMISSIONS'] == 'Y',
+			'disable_link_preview' => $this->arParams['DRAFT_MODE'] == 'Y',
+		]);
+		if (
+			!$landingForce->exist()
+			|| $landingForce->getSiteId() !== (int)($this->arParams['LOCAL_SITE_ID'] ?? 0)
+		)
+		{
+			return null;
+		}
+
+		return $landingForce->getPublicUrl(false, false) . '?IFRAME=Y';
+	}
+
+	/**
 	 * Base executable method.
 	 * @return void
 	 */
@@ -1813,11 +1906,20 @@ class LandingPubComponent extends LandingBaseComponent
 				// MARKER-01: expose the validated parent portal origin so the template can inject
 				// the device-preview postMessage responder only for the editor device preview.
 				// The responder is needed by every device preview, sandboxed or not; the workarounds
-				// behind the device-preview mode are needed only by a sandboxed one.
+				// behind the device-preview mode are needed only by a sandboxed one — the editor
+				// frame under a sandbox attribute, or the signed preview under the CSP sandbox.
 				$this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'] = $this->getDevicePreviewParentOrigin();
+				$sandboxedSignedPreview = $this->isSandboxedSignedPreview();
+				if ($sandboxedSignedPreview)
+				{
+					$this->sandboxSignedPreview();
+				}
 				if (
-					$this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'] !== ''
-					&& $this->isSandboxedDevicePreview($this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'])
+					$sandboxedSignedPreview
+					|| (
+						$this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'] !== ''
+						&& $this->isSandboxedDevicePreview($this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'])
+					)
 				)
 				{
 					Landing::setDevicePreviewMode(true);
@@ -2020,16 +2122,28 @@ class LandingPubComponent extends LandingBaseComponent
 
 					$this->arParams['CHECK_PERMISSIONS'] = 'Y';
 				}
-				// for 404 we need site url
+				// the page is not found, but the request itself is still inside the preview:
+				// the url builders below must keep the portal host and the preview hash
+				if ($this->isPreviewMode)
+				{
+					Landing::setPreviewMode(true);
+				}
+				// for 404 we need site url; inside the signed preview of a non published site the
+				// bare publication root is not found either, so the url keeps the signed preview form
 				if ($this->arParams['LOCAL_SITE_ID'] ?? null)
 				{
-					$this->arResult['SITE_URL'] = Site::getPublicUrl($this->arParams['LOCAL_SITE_ID']);
+					$this->arResult['SITE_URL'] = Site::getPublicUrl(
+						$this->arParams['LOCAL_SITE_ID'],
+						true,
+						true,
+						$this->isSignedPreview
+					);
 				}
 				// try force reload
-				if ($this->request('forceLandingId'))
+				$forceReloadUrl = $this->getForceReloadUrl();
+				if ($forceReloadUrl !== null)
 				{
-					$landingForce = Landing::createInstance($this->request('forceLandingId'));
-					\localRedirect($landingForce->getPublicUrl(false, false) . '?IFRAME=Y');
+					\localRedirect($forceReloadUrl);
 				}
 				// site is actual not exists
 				$this->setHttpStatusOnce($this::ERROR_STATUS_NOT_FOUND);

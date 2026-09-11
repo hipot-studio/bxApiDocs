@@ -8,6 +8,13 @@ class CReport
 		'SUM', 'COUNT_DISTINCT', 'AVG', 'MAX', 'MIN'
 	];
 
+	// Full set of aggregation functions the report engine may embed into SQL.
+	// Used to whitelist the user-supplied `aggr` before it is concatenated into
+	// a query, preventing SQL injection via imported/hand-crafted report settings.
+	protected static $allowedAggrFuncs = [
+		'SUM', 'AVG', 'MIN', 'MAX', 'COUNT_DISTINCT', 'GROUP_CONCAT'
+	];
+
 	protected static $alternateColumnPhrases = null;
 
 	public static $iBlockCompareVariations = array(
@@ -23,6 +30,285 @@ class CReport
 		'BETWEEN' => '><',
 		'NOT_BETWEEN' => '!><'
 	);
+
+	// classifyFilterDate() result types.
+	const FILTER_DATE_EMPTY = 'empty';            // no date entered (existing behaviour)
+	const FILTER_DATE_VALID = 'valid';            // a usable, storable date
+	const FILTER_DATE_INVALID = 'invalid';        // parsed, but the API cannot store it
+	const FILTER_DATE_UNRESOLVED = 'unresolved';  // not an absolute date (maybe relative)
+
+	/**
+	 * Classify a user-entered filter date through the Bitrix date API, without
+	 * parsing the string format manually (the format is portal-specific and only
+	 * the API knows it). Pure function: no side effects, never throws.
+	 *
+	 * @param mixed $rawValue Raw date string from the period or a filter field.
+	 * @param string|false $format Portal short date format; resolved if false.
+	 * @return array{type: string, timestamp: int|false}
+	 *   type = FILTER_DATE_EMPTY      - no date entered (existing behaviour),
+	 *          FILTER_DATE_VALID       - usable, timestamp is the parsed value,
+	 *          FILTER_DATE_INVALID     - parsed, but the API refuses to store it,
+	 *          FILTER_DATE_UNRESOLVED  - not an absolute date the API recognises
+	 *                                    (may be a legal relative keyword - decided
+	 *                                    by the caller's existing relative handling).
+	 */
+	public static function classifyFilterDate($rawValue, $format = false)
+	{
+		if ($format === false)
+		{
+			$format = CSite::GetDateFormat('SHORT');
+		}
+
+		// Empty input means "no date" and keeps the existing behaviour.
+		if (trim((string)$rawValue) === '')
+		{
+			return ['type' => self::FILTER_DATE_EMPTY, 'timestamp' => false];
+		}
+
+		// We never parse the string ourselves: the date API is the source of truth.
+		$timestamp = MakeTimeStamp((string)$rawValue, $format);
+		if ($timestamp === false)
+		{
+			// Not an absolute date the API recognises. It may still be a legal
+			// relative value (today/-1 week) resolved downstream by the existing
+			// relative-date handling, so we do not judge it here.
+			return ['type' => self::FILTER_DATE_UNRESOLVED, 'timestamp' => false];
+		}
+
+		// Parsed to a timestamp, but unusable when the API itself refuses to
+		// represent it as a date (e.g. a year beyond the storable DB range). We ask
+		// the API and react to its verdict instead of inspecting the value.
+		if (!self::isTimestampStorable($timestamp))
+		{
+			return ['type' => self::FILTER_DATE_INVALID, 'timestamp' => $timestamp];
+		}
+
+		return ['type' => self::FILTER_DATE_VALID, 'timestamp' => $timestamp];
+	}
+
+	/**
+	 * Whether a user-entered filter date is parsed but unusable (the API refuses to
+	 * store it, e.g. a year beyond the DB range). Empty input and unrecognised
+	 * strings are NOT invalid here: empty keeps the "no date" behaviour, and an
+	 * unrecognised string may be a legal relative keyword resolved downstream.
+	 *
+	 * @param mixed $rawValue
+	 * @param string|false $format
+	 * @return bool
+	 */
+	public static function isFilterDateInvalid($rawValue, $format = false)
+	{
+		return self::classifyFilterDate($rawValue, $format)['type'] === self::FILTER_DATE_INVALID;
+	}
+
+	/**
+	 * Whether a filter date value is unusable in any way: parsed but not storable
+	 * (out of the DB range), or an unrecognised string that does not resolve as a
+	 * relative date either. Mirrors the full chain of checks the view component
+	 * applies to a datetime filter value, so a caller can ask about a value taken
+	 * from saved settings without re-running the component's parse loop.
+	 *
+	 * @param mixed $rawValue Raw value from a filter condition; a single-element
+	 *   array is unwrapped the same way the view component normalises its filter.
+	 * @param string|false $format Portal short date format; resolved if false.
+	 * @return bool
+	 */
+	public static function isFilterDateUnusable($rawValue, $format = false)
+	{
+		if (is_array($rawValue))
+		{
+			foreach ($rawValue as $l => $value)
+			{
+				if ($value === '' || !is_numeric($l))
+				{
+					unset($rawValue[$l]);
+				}
+			}
+			if (count($rawValue) === 1)
+			{
+				$rawValue = reset($rawValue);
+			}
+		}
+		if (!is_scalar($rawValue))
+		{
+			// A multi-value condition never reaches the datetime checks in the view
+			// component, so there is nothing to judge here.
+			return false;
+		}
+
+		if ($format === false)
+		{
+			$format = CSite::GetDateFormat('SHORT');
+		}
+
+		$dateType = self::classifyFilterDate($rawValue, $format)['type'];
+		if ($dateType === self::FILTER_DATE_INVALID)
+		{
+			return true;
+		}
+		if ($dateType !== self::FILTER_DATE_UNRESOLVED)
+		{
+			return false;
+		}
+
+		// Not an absolute date: usable only when it resolves as a relative date
+		// whose resolution the API accepts (the same two checks the view component
+		// runs before using such a value).
+		$relativeTimestamp = strtotime((string)$rawValue);
+		if ($relativeTimestamp === false)
+		{
+			return true;
+		}
+
+		return !CheckDateTime(ConvertTimeStamp($relativeTimestamp, 'SHORT'), $format);
+	}
+
+	/**
+	 * Whether the date API can represent a parsed timestamp as a date. A value
+	 * beyond the storable DB range (e.g. a 5-digit year) makes the API throw; a
+	 * normal date does not. We react to the API verdict instead of computing the
+	 * year range ourselves.
+	 *
+	 * @param mixed $timestamp Result of MakeTimeStamp() or similar.
+	 * @return bool
+	 */
+	public static function isTimestampStorable($timestamp)
+	{
+		if (!is_numeric($timestamp))
+		{
+			return false;
+		}
+
+		try
+		{
+			new \Bitrix\Main\Type\DateTime(ConvertTimeStamp((int)$timestamp, 'FULL'));
+		}
+		catch (\Bitrix\Main\ObjectException $e)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Whether the period dates submitted for a given period type contain an
+	 * out-of-range value. Only the date fields actually used by the type are
+	 * checked (after -> F_DATE_TO, before -> F_DATE_FROM, interval -> both); other
+	 * types carry no user date, so they are never invalid here.
+	 *
+	 * @param string $type Period type (F_DATE_TYPE).
+	 * @param mixed $rawFrom Raw F_DATE_FROM value.
+	 * @param mixed $rawTo Raw F_DATE_TO value.
+	 * @param string|false $format Portal short date format; resolved if false.
+	 * @return bool
+	 */
+	public static function periodInputHasInvalidDate($type, $rawFrom, $rawTo, $format = false)
+	{
+		$checks = [];
+		if ($type === 'after')
+		{
+			$checks[] = $rawTo;
+		}
+		elseif ($type === 'before')
+		{
+			$checks[] = $rawFrom;
+		}
+		elseif ($type === 'interval')
+		{
+			$checks[] = $rawFrom;
+			$checks[] = $rawTo;
+		}
+
+		foreach ($checks as $value)
+		{
+			if ($value === null || $value === '')
+			{
+				continue;
+			}
+
+			// Period dates are always absolute (no relative keywords here), so both
+			// an unstorable date and an unrecognised string make the period invalid.
+			$dateType = self::classifyFilterDate((string)$value, $format)['type'];
+			if ($dateType === self::FILTER_DATE_INVALID || $dateType === self::FILTER_DATE_UNRESOLVED)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Whether a stored period definition holds a timestamp whose year is out of the
+	 * DB-storable range (set by the constructor before validation existed).
+	 *
+	 * @param mixed $period SETTINGS['period'] structure.
+	 * @return bool
+	 */
+	public static function periodHasUnstorableDate($period)
+	{
+		if (!is_array($period) || !isset($period['type']))
+		{
+			return false;
+		}
+
+		if ($period['type'] === 'after' || $period['type'] === 'before')
+		{
+			return isset($period['value'])
+				&& is_numeric($period['value'])
+				&& !self::isTimestampStorable($period['value']);
+		}
+
+		if ($period['type'] === 'interval' && is_array($period['value'] ?? null))
+		{
+			foreach ($period['value'] as $bound)
+			{
+				if (is_numeric($bound) && !self::isTimestampStorable($bound))
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Update only the SETTINGS column of a report, preserving title, description and
+	 * the default mark. Used to repair stored filter dates in place on read (a plain
+	 * Update() would reset MARK_DEFAULT and require title/description that are not
+	 * part of the unserialized settings).
+	 *
+	 * @param int $ID
+	 * @param array $settings Settings array (without title/description/owner).
+	 * @param int|null $viewParamsUserId Whose saved view params to clear after the
+	 *   write. Null (default) clears them for every user of the report, matching the
+	 *   plain Update(). Pass a user id for an on-read repair so only that user's views
+	 *   are dropped and other users' personal views stay intact (they repair on their
+	 *   own read).
+	 * @return bool
+	 */
+	public static function updateSettings($ID, $settings, $viewParamsUserId = null)
+	{
+		global $DB;
+
+		unset($settings['title'], $settings['description'], $settings['owner']);
+		$serialized = serialize($settings);
+
+		$strUpdate = $DB->PrepareUpdate('b_report', ['SETTINGS' => $serialized], 'report');
+		if ($strUpdate === '')
+		{
+			return false;
+		}
+
+		$strSql = "UPDATE b_report SET ".$strUpdate." WHERE ID=".(int)$ID;
+		$result = $DB->QueryBind($strSql, ['SETTINGS' => $serialized]);
+
+		self::clearViewParams((int)$ID, $viewParamsUserId);
+
+		return (bool)$result;
+	}
 
 	public static function Add($settings)
 	{
@@ -213,23 +499,35 @@ class CReport
 		return $result;
 	}
 
-	public static function clearViewParams($id)
+	/**
+	 * Drop saved view params for a report. By default clears them for every user of
+	 * the report; pass $onlyUserId to clear a single user's views (an on-read repair
+	 * triggered by one user must not wipe everyone else's personal views).
+	 *
+	 * @param int $id Report id.
+	 * @param int|null $onlyUserId Limit clearing to this user; null clears all users.
+	 * @return void
+	 */
+	public static function clearViewParams($id, $onlyUserId = null)
 	{
 		if ($id !== null && intval($id) >= 0)
 		{
-			$dbRes = CUserOptions::GetList(
-				array("ID" => "ASC"),
-				array('CATEGORY' => 'report', 'NAME_MASK' => 'view_params_'.$id.'_')
-			);
+			$filter = array('CATEGORY' => 'report', 'NAME_MASK' => 'view_params_'.$id.'_');
+			if ($onlyUserId !== null)
+			{
+				$filter['USER_ID'] = (int)$onlyUserId;
+			}
+			$dbRes = CUserOptions::GetList(array("ID" => "ASC"), $filter);
 			if (is_object($dbRes))
 			{
 				while ($row = $dbRes->fetch())
 				{
 					$userId = (int)$row['USER_ID'];
-					if ($userId > 0)
+					if ($userId > 0
+						&& ($onlyUserId === null || $userId === (int)$onlyUserId)
+						&& mb_strpos($row['NAME'], 'view_params_'.$id.'_') === 0)
 					{
-						if (mb_strpos($row['NAME'], 'view_params_'.$id.'_') === 0)
-							CUserOptions::DeleteOption('report', $row['NAME'], false, $userId);
+						CUserOptions::DeleteOption('report', $row['NAME'], false, $userId);
 					}
 				}
 			}
@@ -613,6 +911,15 @@ class CReport
 		$alias = null;
 
 		$prcnt = $elem['prcnt'] ?? '';
+
+		// Reject any aggregation function outside the whitelist before it reaches
+		// the SQL string. `aggr` comes from report settings that can bypass the UI
+		// validation (e.g. imported settings), so it must not be trusted here.
+		if (!empty($elem['aggr']) && !static::isAllowedAggregationFunction($elem['aggr']))
+		{
+			throw new BXUserException(GetMessage('REPORT_INVALID_AGGREGATION_FUNCTION'));
+		}
+
 		if (empty($elem['aggr']) && !mb_strlen($prcnt))
 		{
 			$selectElem = $elem['name'];
@@ -952,6 +1259,16 @@ class CReport
 		return in_array($aggr, static::getTotalCountableAggregationFunctions(), true);
 	}
 
+	public static function getAllowedAggregationFunctions()
+	{
+		return static::$allowedAggrFuncs;
+	}
+
+	public static function isAllowedAggregationFunction($aggr)
+	{
+		return in_array($aggr, static::getAllowedAggregationFunctions(), true);
+	}
+
 	public static function isColumnTotalCountable($view, $helperClassName)
 	{
 		/** @var Entity\Field[] $view */
@@ -1006,6 +1323,13 @@ class CReport
 						if (!empty($elem['href']['elements'][$match]['aggr']))
 						{
 							$fieldAggr = $elem['href']['elements'][$match]['aggr'];
+
+							// Same untrusted source as in prepareSelectViewElement:
+							// whitelist the aggregation before it goes into SQL.
+							if (!static::isAllowedAggregationFunction($fieldAggr))
+							{
+								throw new BXUserException(GetMessage('REPORT_INVALID_AGGREGATION_FUNCTION'));
+							}
 						}
 						else
 						{

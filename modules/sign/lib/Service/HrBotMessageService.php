@@ -16,6 +16,7 @@ use Bitrix\Sign\Service\Sign\UrlGeneratorService;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Service\Integration\Im\ImService;
 use Bitrix\Sign\Item\Integration\Im;
+use Bitrix\Sign\Service\B2e\ReceiptRecipientResolver;
 use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type\Member\Role;
 use Bitrix\Sign\Type\ProviderCode;
@@ -65,6 +66,33 @@ class HrBotMessageService
 		return new Result();
 	}
 
+	/**
+	 * SC-002: sends the company-side invitation of an employee-initiated document when the caller registers
+	 * the receipt mark right after it. The mark states that the company received the document, so it follows
+	 * a really sent invitation and replaces the "signed by employee" message suppressed on the
+	 * SIGNER -> DONE transition. When the invitation cannot be built, no mark follows it, so that suppressed
+	 * message is delivered here and the failure is rethrown to be handled as any invitation failure.
+	 *
+	 * @throws ObjectNotFoundException
+	 */
+	public function sendInviteMessageExpectingCompanyReceipt(
+		Document $document,
+		Member $assignee,
+		string $providerCode,
+	): Result
+	{
+		try
+		{
+			return $this->sendInviteMessage($document, $assignee, $providerCode);
+		}
+		catch (ObjectNotFoundException $exception)
+		{
+			$this->sendByEmployeeSignedFallbackMessage($document);
+
+			throw $exception;
+		}
+	}
+
 	public function handleDocumentStatusChangedMessage(Document $document, string $newStatus, ?int $initiatorUserId = null): Result
 	{
 		if ($this->isByEmployee($document))
@@ -110,6 +138,13 @@ class HrBotMessageService
 			switch (true)
 			{
 				case $member->role === Role::SIGNER && $member->status === Type\MemberStatus::DONE:
+					// SC-002: employee is notified when the company receives the document
+					// (on the assignee invitation), not on the "sent" event.
+					if ($this->isReceiptMarkExpectedForCompanySide($document))
+					{
+						return new Result();
+					}
+
 					$userIdFrom = $this->getBotUserId() ?? $document->representativeId;
 					$userIdTo = $this->memberService->getUserIdForMember($member);
 					return $this->byEmployeeSendEmployeeSignedMessageToEmployee($userIdFrom, $userIdTo, $document, $member);
@@ -129,7 +164,9 @@ class HrBotMessageService
 						? $this->sendRefusedMessage($memberUserId, $document->createdById, $document)
 						: new Result()
 					,
-					Type\MemberStatus::DONE => $this->sendDoneMessageToEmployee($this->getBotUserId() ?? $document->createdById, $member, $document),
+					// SC-001: the "document signed" message is sent on the result-file save (receipt) event
+					// instead of on this status change.
+					Type\MemberStatus::DONE => new Result(),
 					default => new Result(),
 				};
 		}
@@ -160,6 +197,102 @@ class HrBotMessageService
 		}
 
 		return $result;
+	}
+
+	/**
+	 * SC-002: notifies the employee that the company received the document initiated by the employee.
+	 * The message is addressed to the employee ($document->createdById); the name shown in the card
+	 * is the company side that received the document, resolved from the invited assignee.
+	 */
+	public function handleCompanyReceivedByEmployeeDocument(Document $document, Member $assignee): Result
+	{
+		$recipient = (new ReceiptRecipientResolver($this->memberService))->resolveRecipient(
+			$document,
+			$assignee,
+			Type\B2e\ReceiptScenario::EmployeeInitiated,
+		);
+
+		if ($recipient === null)
+		{
+			// N7 fallback: the company-side recipient could not be resolved (e.g. empty display name), but
+			// the old "signed by employee" message was already suppressed on the SIGNER -> DONE transition.
+			// Deliver that previous message (without a receipt line) so the employee is never left silent.
+			return $this->sendByEmployeeSignedFallbackMessage($document);
+		}
+
+		$userFrom = $this->getBotUserId() ?? $document->representativeId;
+		$userTo = $document->createdById;
+
+		if (!$userFrom || !$userTo)
+		{
+			return new Result();
+		}
+
+		// The employee opens the document by their own signing link, as in the replaced "signed by employee"
+		// message, which is not sent either when the signer does not resolve.
+		$signer = $this->memberService->getSigner($document);
+		if ($signer === null)
+		{
+			return (new Result())->addError(new Error('Signer not found'));
+		}
+
+		return $this->imService->sendMessage(
+			(new Im\Messages\ByEmployee\ReceivedByCompany(
+				fromUser: $userFrom,
+				toUser: $userTo,
+				recipientUserId: $recipient->id,
+				recipientName: $recipient->name,
+				document: $document,
+				link: $this->urlGenerator->makeSigningUrl($signer),
+			))->setLang($this->userService->getUserLanguage($userTo))
+		);
+	}
+
+	/**
+	 * SC-001: notifies the employee signer that the company-initiated document is signed and that the
+	 * company side received the signed result file. The message is addressed to the employee signer;
+	 * the name shown in the card is the company side ($document->createdById) that received the document.
+	 */
+	public function handleCompanyReceivedSignedByCompanyDocument(Document $document, Member $signerMember): Result
+	{
+		$recipient = (new ReceiptRecipientResolver($this->memberService))->resolveRecipient(
+			$document,
+			$signerMember,
+			Type\B2e\ReceiptScenario::CompanyInitiated,
+		);
+
+		if ($recipient === null)
+		{
+			// N7 fallback: the receiver could not be resolved (e.g. empty display name), but the old
+			// "document signed" message was already suppressed on the SIGNER -> DONE transition. Deliver
+			// that previous message (without a receipt line) so the employee signer is never left silent.
+			$userFrom = $this->getBotUserId() ?? $document->createdById;
+			if (!$userFrom)
+			{
+				return new Result();
+			}
+
+			return $this->sendDoneMessageToEmployee($userFrom, $signerMember, $document);
+		}
+
+		$userFrom = $this->getBotUserId() ?? $document->createdById;
+		$userTo = $this->memberService->getUserIdForMember($signerMember);
+
+		if (!$userFrom || !$userTo)
+		{
+			return new Result();
+		}
+
+		return $this->imService->sendMessage(
+			(new Im\Messages\ByCompany\ReceivedSignedByCompany(
+				fromUser: $userFrom,
+				toUser: $userTo,
+				recipientUserId: $recipient->id,
+				recipientName: $recipient->name,
+				document: $document,
+				link: $this->urlGenerator->makeSigningUrl($signerMember),
+			))->setLang($this->userService->getUserLanguage($userTo))
+		);
 	}
 
 	/**
@@ -459,6 +592,12 @@ class HrBotMessageService
 	{
 		// TODO Im\Messages\Done\ToEmployeeGoskey for goskey
 		$userIdTo = $this->memberService->getUserIdForMember($memberTo);
+
+		if (!$userIdTo)
+		{
+			return new Result();
+		}
+
 		return $this->imService->sendMessage(
 			(new Im\Messages\Done\ToEmployee(
 				fromUser: $userIdFrom,
@@ -484,6 +623,30 @@ class HrBotMessageService
 				link: $this->urlGenerator->makeSigningUrl($employee),
 			))->setLang($this->userService->getUserLanguage($userIdTo))
 		);
+	}
+
+	/**
+	 * SC-002 N7 fallback: sends the previous "signed by employee" message to the employee signer when the
+	 * receipt mark cannot be delivered -- its recipient did not resolve, or the invitation it follows could
+	 * not be built. Mirrors the send path that runs on the SIGNER -> DONE transition when no mark is expected.
+	 */
+	private function sendByEmployeeSignedFallbackMessage(Document $document): Result
+	{
+		$signer = $this->memberService->getSigner($document);
+		if ($signer === null)
+		{
+			return (new Result())->addError(new Error('Signer not found'));
+		}
+
+		$userIdFrom = $this->getBotUserId() ?? $document->representativeId;
+		$userIdTo = $this->memberService->getUserIdForMember($signer);
+
+		if (!$userIdFrom || !$userIdTo)
+		{
+			return new Result();
+		}
+
+		return $this->byEmployeeSendEmployeeSignedMessageToEmployee($userIdFrom, $userIdTo, $document, $signer);
 	}
 
 	private function byEmployeeSendDoneMessageToEmployee(Document $document): Result
@@ -687,6 +850,23 @@ class HrBotMessageService
 	private function isByEmployee(Document $document): bool
 	{
 		return $document->initiatedByType === Type\Document\InitiatedByType::EMPLOYEE;
+	}
+
+	/**
+	 * Whether the employee will receive an SC-002 receipt mark instead of the "document sent" message.
+	 * True only when a company assignee will actually be invited to sign (assignee exists and the chat
+	 * invitation is not skipped, e.g. not a self-send). Otherwise the employee keeps the previous
+	 * "document sent" message and is never left without a notification.
+	 */
+	private function isReceiptMarkExpectedForCompanySide(Document $document): bool
+	{
+		$assignee = $this->memberService->getAssignee($document);
+		if ($assignee === null)
+		{
+			return false;
+		}
+
+		return !$this->memberService->skipChatInvitationForMember($assignee, $document);
 	}
 
 	/**

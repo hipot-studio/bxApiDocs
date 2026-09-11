@@ -25,6 +25,7 @@ class FieldValueSerializer
 					FieldType::EMAIL,
 					FieldType::PHONE,
 					FieldType::NAME,
+					FieldType::FULL_NAME,
 					FieldType::DATE,
 				]
 			)

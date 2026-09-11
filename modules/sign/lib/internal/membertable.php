@@ -7,6 +7,7 @@ use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Sign\File;
+use Bitrix\Sign\Trait\ORM\UpdateByFilterTrait;
 
 /**
  * Class MemberTable
@@ -27,6 +28,7 @@ use Bitrix\Sign\File;
 class MemberTable extends Entity\DataManager
 {
 	use DeleteByFilterTrait;
+	use UpdateByFilterTrait;
 
 	public static function getObjectClass(): string
 	{

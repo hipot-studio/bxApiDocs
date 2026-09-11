@@ -49,6 +49,7 @@ class MemberBinder extends BaseItemToModelBinder
 	{
 		return match ($itemProperty)
 		{
+			'folderId' => '',
 			'party' => 'PART',
 			'status' => 'SIGNED',
 			'channelType' => 'COMMUNICATION_TYPE',

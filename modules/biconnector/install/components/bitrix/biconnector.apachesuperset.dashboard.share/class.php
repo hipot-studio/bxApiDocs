@@ -10,6 +10,7 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Superset\Dashboard\SharePullService;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 
@@ -22,6 +23,16 @@ final class BIConnectorSupersetDashboardPubComponent extends CBitrixComponent
 		$token = $this->arParams['TOKEN'] ?? '';
 		$this->arResult['TOKEN'] = $token;
 		$this->arResult['LANGUAGE_ID'] = CultureFormatter::getLanguageCode();
+
+		// A public link is a dashboard too, so a finished term closes it as well. A guest has no section to be
+		// sent to, so the answer is the same screen the component gives to a link that no longer works.
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			$this->arResult['STATUS'] = 'ERROR';
+			$this->includeComponentTemplate();
+
+			return;
+		}
 
 		$shareProvider = ServiceLocator::getInstance()->get('biconnector.provider.share');
 		$share = $shareProvider->getByToken($token);

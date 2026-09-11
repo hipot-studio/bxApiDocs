@@ -6,9 +6,11 @@ use Bitrix\Main\Result;
 use Bitrix\Main;
 use Bitrix\Sign\Item\Document\Template;
 use Bitrix\Sign\Item\Document\TemplateCollection;
+use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Repository\Document\TemplateFolderRelationRepository;
 use Bitrix\Sign\Repository\Document\TemplateFolderRepository;
 use Bitrix\Sign\Repository\Document\TemplateRepository;
+use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Sign\Document\Template\AccessService;
 use Bitrix\Sign\Type\Document\InitiatedByType;
@@ -18,16 +20,25 @@ use Bitrix\Sign\Type\Template\Visibility;
 
 final class TemplateService
 {
+	private const TEMPLATE_BATCH_SIZE = 300;
+	private const FOLDER_BATCH_SIZE = 300;
+	private const TEMPLATE_PROCESSING_ATTEMPTS = 3;
+	private const FOLDER_UPDATE_ATTEMPTS = 3;
+
 	private readonly TemplateRepository $templateRepository;
 	private readonly TemplateFolderRepository $templateFolderRepository;
 	private readonly TemplateFolderRelationRepository $templateFolderRelationRepository;
 	private readonly AccessService $accessService;
+	private readonly MemberRepository $memberRepository;
+	private readonly DocumentRepository $documentRepository;
 
 	public function __construct(
 		?TemplateRepository $templateRepository = null,
 		?TemplateFolderRepository $templateFolderRepository = null,
 		?TemplateFolderRelationRepository $templateFolderRelationRepository = null,
 		?AccessService $accessService = null,
+		?MemberRepository $memberRepository = null,
+		?DocumentRepository $documentRepository = null,
 	)
 	{
 		$container = Container::instance();
@@ -35,6 +46,295 @@ final class TemplateService
 		$this->templateFolderRepository = $templateFolderRepository ?? $container->getTemplateFolderRepository();
 		$this->templateFolderRelationRepository = $templateFolderRelationRepository ?? $container->getTemplateFolderRelationRepository();
 		$this->accessService = $accessService ?? $container->getTemplateAccessService();
+		$this->memberRepository = $memberRepository ?? $container->getMemberRepository();
+		$this->documentRepository = $documentRepository ?? $container->getDocumentRepository();
+	}
+
+	public function markTemplatesWithUserAsIncomplete(int $userId): Result
+	{
+		$result = new Result();
+		$affectedFolderIds = [];
+		$relationProcessingResult = new Result();
+		for ($attempt = 0; $attempt < self::TEMPLATE_PROCESSING_ATTEMPTS; $attempt++)
+		{
+			$relationProcessingResult = $this->processTemplateUserRelations($userId);
+			foreach ($relationProcessingResult->getData()['affectedFolderIds'] ?? [] as $folderId)
+			{
+				$affectedFolderIds[$folderId] = true;
+			}
+
+			if ($relationProcessingResult->isSuccess())
+			{
+				break;
+			}
+		}
+		$result->addErrors($relationProcessingResult->getErrors());
+		$result->addErrors(
+			$this->updateAffectedFolderVisibilities(array_keys($affectedFolderIds))->getErrors(),
+		);
+
+		return $result;
+	}
+
+	private function processTemplateUserRelations(int $userId): Result
+	{
+		$result = new Result();
+		$affectedFolderIds = [];
+		$relationBatch = [];
+		try
+		{
+			foreach ($this->iterateTemplateUserRelations($userId) as $relation)
+			{
+				$relationBatch[] = $relation;
+				if (count($relationBatch) < self::TEMPLATE_BATCH_SIZE)
+				{
+					continue;
+				}
+
+				$this->appendTemplateUserRelationBatchResult(
+					$result,
+					$affectedFolderIds,
+					$relationBatch,
+					$userId,
+				);
+				$relationBatch = [];
+			}
+
+			if (!empty($relationBatch))
+			{
+				$this->appendTemplateUserRelationBatchResult(
+					$result,
+					$affectedFolderIds,
+					$relationBatch,
+					$userId,
+				);
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			$result->addError(new Main\Error($exception->getMessage()));
+		}
+		$result->setData(['affectedFolderIds' => array_keys($affectedFolderIds)]);
+
+		return $result;
+	}
+
+	/**
+	 * @return \Generator<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}>
+	 */
+	private function iterateTemplateUserRelations(int $userId): \Generator
+	{
+		yield from $this->memberRepository->iterateDirectTemplateUserRelations($userId);
+		yield from $this->iterateRepresentativeTemplateUserRelations($userId);
+	}
+
+	/**
+	 * @return \Generator<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}>
+	 */
+	private function iterateRepresentativeTemplateUserRelations(int $userId): \Generator
+	{
+		$templateIdsByDocumentId = [];
+		$documents = $this->documentRepository->iterateB2eTemplateDocumentIdsByRepresentative($userId);
+		foreach ($documents as $document)
+		{
+			$templateIdsByDocumentId[$document['documentId']] = $document['templateId'];
+			if (count($templateIdsByDocumentId) < self::TEMPLATE_BATCH_SIZE)
+			{
+				continue;
+			}
+
+			yield from $this->getRepresentativeTemplateUserRelations($templateIdsByDocumentId);
+			$templateIdsByDocumentId = [];
+		}
+
+		if (!empty($templateIdsByDocumentId))
+		{
+			yield from $this->getRepresentativeTemplateUserRelations($templateIdsByDocumentId);
+		}
+	}
+
+	/**
+	 * Documents whose assignee is an HR role keep a role id in REPRESENTATIVE_ID instead of a user id,
+	 * so only documents with a company assignee are treated as a representative relation.
+	 *
+	 * @param array<int, int> $templateIdsByDocumentId
+	 * @return list<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}>
+	 */
+	private function getRepresentativeTemplateUserRelations(array $templateIdsByDocumentId): array
+	{
+		$documentIds = $this->memberRepository->filterDocumentIdsWithCompanyAssignee(
+			array_keys($templateIdsByDocumentId),
+		);
+
+		return array_map(
+			static fn(int $documentId): array => [
+				'templateId' => $templateIdsByDocumentId[$documentId],
+				'documentId' => $documentId,
+				'memberId' => 0,
+				'isRepresentative' => true,
+			],
+			$documentIds,
+		);
+	}
+
+	/**
+	 * @param array<int, true> $affectedFolderIds
+	 * @param list<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}> $relations
+	 */
+	private function appendTemplateUserRelationBatchResult(
+		Result $result,
+		array &$affectedFolderIds,
+		array $relations,
+		int $userId,
+	): void
+	{
+		$batchResult = $this->processTemplateUserRelationBatch($relations, $userId);
+		$result->addErrors($batchResult->getErrors());
+		foreach ($batchResult->getData()['affectedFolderIds'] ?? [] as $folderId)
+		{
+			$affectedFolderIds[$folderId] = true;
+		}
+	}
+
+	/**
+	 * @param list<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}> $relations
+	 */
+	private function processTemplateUserRelationBatch(array $relations, int $userId): Result
+	{
+		$result = new Result();
+		$affectedFolderIds = [];
+		try
+		{
+			$relations = $this->memberRepository->filterExistingTemplateUserRelations($relations, $userId);
+			if (empty($relations))
+			{
+				return $result;
+			}
+
+			$processedTemplateIds = [];
+			$updatableTemplateIds = [];
+			$templateIds = array_values(array_unique(array_column($relations, 'templateId')));
+			$templates = $this->templateRepository->getByIds($templateIds);
+			foreach ($templates as $template)
+			{
+				if ($template->status !== Status::NEW || $template->visibility !== Visibility::INVISIBLE)
+				{
+					$updatableTemplateIds[] = $template->getId();
+				}
+
+				$processedTemplateIds[$template->getId()] = true;
+				if ($template->folderId > 0)
+				{
+					$affectedFolderIds[$template->folderId] = true;
+				}
+			}
+
+			$updateResult = $this->templateRepository->updateStatusesAndVisibilitiesIfUserRelationExists(
+				$updatableTemplateIds,
+				Status::NEW,
+				Visibility::INVISIBLE,
+				$userId,
+			);
+			if (!$updateResult->isSuccess())
+			{
+				return $result->addErrors($updateResult->getErrors());
+			}
+
+			$memberIds = [];
+			$representativeDocumentIds = [];
+			foreach ($relations as $relation)
+			{
+				if (!isset($processedTemplateIds[$relation['templateId']]))
+				{
+					continue;
+				}
+
+				if ($relation['isRepresentative'])
+				{
+					$representativeDocumentIds[$relation['documentId']] = true;
+				}
+				else
+				{
+					$memberIds[$relation['memberId']] = true;
+				}
+			}
+
+			if (!empty($memberIds))
+			{
+				$result->addErrors(
+					$this->memberRepository
+						->deleteByIdsForUser(array_keys($memberIds), $userId)
+						->getErrors(),
+				);
+			}
+			if (!empty($representativeDocumentIds))
+			{
+				$result->addErrors(
+					$this->documentRepository
+						->resetRepresentativeByIds(array_keys($representativeDocumentIds), $userId)
+						->getErrors(),
+				);
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			$result->addError(new Main\Error($exception->getMessage()));
+		}
+
+		$result->setData(['affectedFolderIds' => array_keys($affectedFolderIds)]);
+
+		return $result;
+	}
+
+	/**
+	 * @param list<int> $folderIds
+	 */
+	private function updateAffectedFolderVisibilities(array $folderIds): Result
+	{
+		$result = new Result();
+		$folderIds = array_values(array_unique(array_filter(
+			$folderIds,
+			static fn(int $folderId): bool => $folderId > 0,
+		)));
+		foreach (array_chunk($folderIds, self::FOLDER_BATCH_SIZE) as $folderIdBatch)
+		{
+			$result->addErrors($this->updateAffectedFolderVisibilityBatch($folderIdBatch)->getErrors());
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param list<int> $folderIds
+	 */
+	private function updateAffectedFolderVisibilityBatch(array $folderIds): Result
+	{
+		$batchResult = new Result();
+		for ($attempt = 0; $attempt < self::FOLDER_UPDATE_ATTEMPTS; $attempt++)
+		{
+			$batchResult = $this->updateFolderVisibilitiesByVisibleTemplateExistence($folderIds);
+			if ($batchResult->isSuccess())
+			{
+				break;
+			}
+		}
+
+		return $batchResult;
+	}
+
+	/**
+	 * @param list<int> $folderIds
+	 */
+	private function updateFolderVisibilitiesByVisibleTemplateExistence(array $folderIds): Result
+	{
+		try
+		{
+			return $this->templateFolderRepository->updateVisibilitiesByVisibleTemplateExistence($folderIds);
+		}
+		catch (\Throwable $exception)
+		{
+			return (new Result())->addError(new Main\Error($exception->getMessage()));
+		}
 	}
 
 	/**
@@ -248,6 +548,16 @@ final class TemplateService
 		}
 
 		return $result;
+	}
+
+	public function changeFolderVisibilityOnTemplateCompletion(int $folderId): Result
+	{
+		if ($folderId < 1)
+		{
+			return new Result();
+		}
+
+		return $this->templateFolderRepository->updateVisibility($folderId, Visibility::VISIBLE);
 	}
 
 	public function changeVisibility(int $templateId, Visibility $visibility): Result

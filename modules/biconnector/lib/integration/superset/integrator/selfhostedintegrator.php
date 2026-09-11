@@ -37,6 +37,10 @@ use Bitrix\Superset\Public\Commands\Database\ChangeDatabaseTokenCommand;
 use Bitrix\Superset\Public\Commands\Dataset\CreateDatasetCommand;
 use Bitrix\Superset\Public\Commands\Dataset\DeleteDatasetCommand;
 use Bitrix\Superset\Public\Commands\Dataset\InitRequiredDatasetCommand;
+use Bitrix\Superset\Public\Commands\License\ResetSelfHostedLicenseCommand;
+use Bitrix\Superset\Public\Commands\License\SetBoxLicenseExpirationCommand;
+use Bitrix\Superset\Public\Commands\License\SetSelfHostedEditionVerdictCommand;
+use Bitrix\Superset\Public\Commands\License\SetSelfHostedLicenseExpirationCommand;
 use Bitrix\Superset\Public\Commands\Server\SetServerTimezoneCommand;
 use Bitrix\Superset\Public\Commands\Dataset\UpdateDatasetCommand;
 use Bitrix\Superset\Public\Commands\Subscription\SetSubscriptionExpirationCommand;
@@ -62,7 +66,15 @@ use Bitrix\Superset\Public\Providers\UserProvider;
  */
 class SelfHostedIntegrator implements IntegratorInterface
 {
-	static private self $instance;
+	/**
+	 * Timeouts of the delivery of a license term, short on purpose: a term is one date written by a background pass,
+	 * while the defaults of the connector are meant for requests that carry data. The stream bound limits a stalled
+	 * answer and not a slow one, so an instance that is merely busy is not cut off.
+	 */
+	private const LICENSE_DELIVERY_SOCKET_TIMEOUT = 5;
+	private const LICENSE_DELIVERY_STREAM_TIMEOUT = 15;
+
+	static private ?self $instance = null;
 
 	private IntegratorLogger $logger;
 	private SelfHostedConnectionService $connectionService;
@@ -70,12 +82,22 @@ class SelfHostedIntegrator implements IntegratorInterface
 
 	public static function getInstance(): self
 	{
-		if (!isset(self::$instance))
+		if (self::$instance === null)
 		{
 			self::$instance = new self();
 		}
 
 		return self::$instance;
+	}
+
+	/**
+	 * Drops the remembered integrator so that the record of the connected server is looked up again: the record is
+	 * read once, when the integrator is built, and an instance that outlived a change of it answers by a reference
+	 * to a row that may no longer be there. Useful for testing.
+	 */
+	public static function reset(): void
+	{
+		self::$instance = null;
 	}
 
 	private function __construct()
@@ -94,6 +116,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 	{
 		return (new IntegratorRequest())
 			->setAction($action)
+			->addBefore(new Middleware\SelfHostedLicenseRestriction())
 			->addBefore(new Middleware\TariffRestriction())
 			->addBefore(new Middleware\UserAccess())
 			->addBefore(new Middleware\RequiredDatasetSync())
@@ -1672,6 +1695,169 @@ class SelfHostedIntegrator implements IntegratorInterface
 
 		return $this
 			->createDefaultRequest('selfhosted/subscription/sync')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	// endregion
+
+	// region Self-hosted license
+
+	/**
+	 * @inheritDoc
+	 */
+	public function setSelfHostedLicenseExpiration(?DateTime $date): IntegratorResponse
+	{
+		$handler = function () use ($date): IntegratorResponse
+		{
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new SetSelfHostedLicenseExpirationCommand(
+				$server,
+				$date?->getTimestamp(),
+				self::LICENSE_DELIVERY_SOCKET_TIMEOUT,
+				self::LICENSE_DELIVERY_STREAM_TIMEOUT,
+			))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/license/expiration')
+			// The one call that must survive an inactive license: an instance learns that the term is over from
+			// this very request, and learns about a renewal the same way. Blocking it would leave the instance
+			// working on the term it still holds and, after a renewal, blocked with nothing able to unblock it.
+			->removeBefore(Middleware\SelfHostedLicenseRestriction::getMiddlewareId())
+			// Handing over a number needs neither the catalog of the tables nor a provisioned user of the instance,
+			// and this request is sent by an agent: the catalog alone costs tens of queries and its own request,
+			// and the user costs up to four more against an instance that may well be unreachable.
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	public function setBoxLicenseExpiration(?DateTime $date): IntegratorResponse
+	{
+		$handler = function () use ($date): IntegratorResponse
+		{
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new SetBoxLicenseExpirationCommand(
+				$server,
+				$date?->getTimestamp(),
+				self::LICENSE_DELIVERY_SOCKET_TIMEOUT,
+				self::LICENSE_DELIVERY_STREAM_TIMEOUT,
+			))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/license/box_expiration')
+			// Excluded from the license restriction for the same reason as the term of the extension: this request
+			// is how a blocked instance learns that the license of the product is renewed.
+			->removeBefore(Middleware\SelfHostedLicenseRestriction::getMiddlewareId())
+			// The catalog of the tables and the user of the instance are dropped for the same reason: this term is
+			// a number too, and the pass of the agent is its only occasion.
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	public function setSelfHostedEditionVerdict(bool $isAllowed): IntegratorResponse
+	{
+		$handler = function () use ($isAllowed): IntegratorResponse
+		{
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new SetSelfHostedEditionVerdictCommand(
+				$server,
+				$isAllowed,
+				self::LICENSE_DELIVERY_SOCKET_TIMEOUT,
+				self::LICENSE_DELIVERY_STREAM_TIMEOUT,
+			))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/license/edition')
+			// Excluded from the license restriction for the same reason as the terms: an instance closed by this
+			// verdict learns from this very request that the edition is back, and nothing else could open it.
+			->removeBefore(Middleware\SelfHostedLicenseRestriction::getMiddlewareId())
+			// The catalog of the tables and the user of the instance are dropped for the same reason: the request
+			// carries one boolean and its only occasion is the pass of the agent.
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function resetSelfHostedLicense(): IntegratorResponse
+	{
+		$handler = function (): IntegratorResponse
+		{
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new ResetSelfHostedLicenseCommand(
+				$server,
+				self::LICENSE_DELIVERY_SOCKET_TIMEOUT,
+				self::LICENSE_DELIVERY_STREAM_TIMEOUT,
+			))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/license/reset')
+			// The reset is asked of an instance that is blocked more often than not - a term that is over is the
+			// usual reason to leave the local mode - so the restriction of the license must not stop it.
+			->removeBefore(Middleware\SelfHostedLicenseRestriction::getMiddlewareId())
+			// Neither the catalog of the tables nor a provisioned user has anything to do with wiping two numbers,
+			// and the caller of this one is an administrator waiting for the page.
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
 			->setHandler($handler)
 			->perform()
 		;

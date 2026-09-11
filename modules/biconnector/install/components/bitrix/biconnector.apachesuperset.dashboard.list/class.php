@@ -21,6 +21,8 @@ use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseView;
 use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\UIHelper;
 use Bitrix\Main\Application;
@@ -39,6 +41,12 @@ use Bitrix\UI\Buttons\JsCode;
 
 class ApacheSupersetDashboardListComponent extends CBitrixComponent
 {
+	/**
+	 * Terms of the license whose warning popup this user has already closed. Kept per term and not as a single
+	 * flag: a renewed term is a new occasion to warn.
+	 */
+	private const SELFHOST_LICENSE_POPUP_OPTION = 'selfhost_license_expiry_popup';
+
 	private DashboardGrid $grid;
 	private SupersetController $supersetController;
 
@@ -105,6 +113,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$this->prepareSecondDbConnectWarning();
 		$this->prepareDeleteInstanceWarning();
 		$this->prepareDatasetTypingWarning();
+		$this->prepareSelfHostedLicenseNotice();
 		$this->arResult['NEED_SHOW_DRAFT_GUIDE'] = $this->isNeedShowGuide('draft_guide');
 		$this->preparePublishAhaMoment();
 		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
@@ -195,17 +204,37 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$this->grid->setRawRows($rows);
 	}
 
+	/**
+	 * Script of the restriction that replaces the creation of a dashboard, or null when there is nothing to
+	 * restrict. A finished term of the extension takes creation away the same way an unsuitable tariff does:
+	 * a dashboard created now would have nowhere to work.
+	 */
+	private function getCreationRestrictionScript(): ?string
+	{
+		if (!Feature::isBuilderEnabled())
+		{
+			return "top.BX.UI.InfoHelper.show('limit_crm_BI_constructor')";
+		}
+
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			return SelfHostedLicenseLock::getOpenSliderScript();
+		}
+
+		return null;
+	}
+
 	private function initCreateButton(): void
 	{
-		$isFeatureAvailable = Feature::isBuilderEnabled();
-		if (!$isFeatureAvailable)
+		$restrictionScript = $this->getCreationRestrictionScript();
+		if ($restrictionScript !== null)
 		{
 			$createButton = new Buttons\CreateButton([
 				'dataset' => [
 					'toolbar-collapsed-icon' => Buttons\Icon::LOCK,
 				],
 			]);
-			$createButton->getAttributeCollection()['onclick'] = "top.BX.UI.InfoHelper.show('limit_crm_BI_constructor')";
+			$createButton->getAttributeCollection()['onclick'] = $restrictionScript;
 			$createButton->setId('biconnector-creation-entity-button');
 			$createButton->setIcon(Buttons\Icon::LOCK);
 			Toolbar::addButton($createButton, ButtonLocation::AFTER_TITLE);
@@ -369,6 +398,30 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 	private function prepareDatasetTypingWarning(): void
 	{
 		$this->arResult['SHOW_DATASET_TYPING_WARNING'] = !DatasetSettings::isTypingEnabled();
+	}
+
+	private function prepareSelfHostedLicenseNotice(): void
+	{
+		$licenseView = SelfHostedLicenseView::createForCurrentUser();
+		$this->arResult['SELFHOST_LICENSE_NOTICE'] = $licenseView->getNoticeParams();
+		$this->arResult['SELFHOST_LICENSE_POPUP'] = $this->resolveSelfHostedLicensePopup($licenseView);
+	}
+
+	/**
+	 * The popup that meets an administrator with the term running out. Shown once per term: the key of the shown
+	 * term is remembered per user, so a renewal brings the popup back while a reload of the grid does not.
+	 */
+	private function resolveSelfHostedLicensePopup(SelfHostedLicenseView $licenseView): ?array
+	{
+		$popup = $licenseView->getExpiryPopupParams();
+		if ($popup === null)
+		{
+			return null;
+		}
+
+		$shownTerms = CUserOptions::GetOption('biconnector', self::SELFHOST_LICENSE_POPUP_OPTION, []);
+
+		return is_array($shownTerms) && isset($shownTerms[$popup['termKey']]) ? null : $popup;
 	}
 
 	private function prepareDeleteInstanceWarning(): void

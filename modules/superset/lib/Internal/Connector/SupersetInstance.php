@@ -9,7 +9,8 @@ use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Json;
 use Bitrix\Superset\Internal\Entities\Server;
 use Bitrix\Superset\Internal\HttpStatus;
-use Bitrix\Superset\Internal\Repositories\LocalServerRepository;
+use Bitrix\Superset\Internal\Repositories\ServerPersister\ServerPersisterFactory;
+use Bitrix\Superset\Internal\Repositories\ServerPersister\ServerPersisterInterface;
 use Bitrix\Superset\Internal\RequestResult;
 use Bitrix\Superset\Internal\Support\SupersetResultFactory;
 
@@ -18,13 +19,22 @@ class SupersetInstance extends BaseConnector
 	private const CSRF_TOKEN_URL = '/api/v1/security/csrf_token/';
 	private const AUTH_TOKEN_URL = '/api/v1/security/login';
 
+	private readonly ServerPersisterInterface $serverPersister;
+
 	/**
 	 * @param Server $server
 	 * @param array $options
+	 * @param ServerPersisterInterface|null $serverPersister
 	 * @throws ArgumentException
 	 */
-	public function __construct(protected Server $server, array $options = [])
+	public function __construct(
+		protected Server $server,
+		array $options = [],
+		?ServerPersisterInterface $serverPersister = null
+	)
 	{
+		$this->serverPersister = $serverPersister ?? ServerPersisterFactory::forServer($server);
+
 		parent::__construct($options);
 	}
 
@@ -36,7 +46,10 @@ class SupersetInstance extends BaseConnector
 	{
 		$this->httpClient = new HttpClient($this->httpClientOptions);
 		$this->httpClient->setHeader('Content-Type', 'application/json');
-		$this->httpClient->disableSslVerification();
+		if (!$this->server->isSslVerificationEnabled())
+		{
+			$this->httpClient->disableSslVerification();
+		}
 
 		try
 		{
@@ -127,7 +140,7 @@ class SupersetInstance extends BaseConnector
 		{
 			$this->server->setRefreshToken($refreshToken);
 		}
-		(new LocalServerRepository())->save($this->server);
+		$this->serverPersister->persist($this->server);
 
 		$result->setData(['access_token' => $accessToken]);
 

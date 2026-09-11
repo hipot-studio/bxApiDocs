@@ -93,7 +93,15 @@ class Docx extends ZipDocument
 				{
 					$documentData = $documentResult->getData();
 					$this->addContentToZip($document->getContent(), $path);
-					$this->replaceImages($data['relationships'], $documentData['imageData']);
+					$imageIdsToDelete = $this->replaceImages(
+						$data['relationships'],
+						$documentData['imageData'],
+					);
+					if (!empty($imageIdsToDelete))
+					{
+						$document->removeImagesByRelationshipIds($imageIdsToDelete);
+						$this->addContentToZip($document->getContent(), $path);
+					}
 					$this->addNumberings($documentData['numberingIds']);
 				}
 				else
@@ -373,15 +381,17 @@ class Docx extends ZipDocument
 	/**
 	 * @param array $relationshipsData
 	 * @param array $imageData
+	 * @return string[]
 	 * @throws \Bitrix\Main\IO\FileNotFoundException
 	 */
-	protected function replaceImages(array $relationshipsData, array $imageData = []): void
+	protected function replaceImages(array $relationshipsData, array $imageData = []): array
 	{
 		$isDocumentChanged = false;
 		$relData = $relationshipsData['data'];
 		/** @var \DOMDocument $document */
 		$document = $relationshipsData['document'];
 		$relFilesToDelete = $nodesToDelete = [];
+		$imageIdsToDelete = [];
 		foreach ($imageData as $fieldName => $data)
 		{
 			$isDeleteImages = true;
@@ -406,7 +416,12 @@ class Docx extends ZipDocument
 					/** @var \DOMElement $originalNode */
 					$originalNode = $relData[static::REL_TYPE_IMAGE][$originalImageID]['node'];
 					$image = $this->getImage($path);
-					if ($image && $image->isExists() && $image->isReadable() && $originalNode->parentNode)
+					if (!$image || !$image->isExists() || !$image->isReadable())
+					{
+						$imageIdsToDelete[] = $imageID;
+						continue;
+					}
+					if ($originalNode->parentNode)
 					{
 						$newNode = clone $originalNode;
 						$document->importNode($newNode);
@@ -428,56 +443,61 @@ class Docx extends ZipDocument
 			if (isset($this->values[$fieldName]) && !empty(trim($this->values[$fieldName])))
 			{
 				$isDeleteImages = false;
-				$image = $this->getImage($this->values[$fieldName]);
-				if (!$image && $this->isArrayValue($this->values[$fieldName], $fieldName))
+				$handledIDs = is_array($data['values'] ?? null) ? array_keys($data['values']) : [];
+				$unhandledIDs = array_diff($data['innerIDs'], $handledIDs);
+				if (!empty($unhandledIDs))
 				{
-					$placeholder = $data['placeholder'] ?? '';
-					$modifier = static::getModifierFromPlaceholder($placeholder);
-					$modifierData = Value::parseModifier($modifier);
-					$index = (int)$modifierData[static::ARRAY_INDEX_MODIFIER];
-					$value = $this->values[$fieldName];
-					$valueNameParts = explode('.', $value);
-					$name = implode('.', array_slice($valueNameParts, 2));
-					$arrayProvider = $this->values[$valueNameParts[0]];
-					$image = $this->getImage(
-						$this->printArrayValueByIndex(
-							$arrayProvider,
-							$fieldName,
-							$name,
-							$index,
-							$modifier
-						)
-					);
-				}
-				if ($image && $image->isExists() && $image->isReadable())
-				{
-					$originalImageID = $originalNode = false;
-					foreach ($data['innerIDs'] as $imageID)
+					$image = $this->getImage($this->values[$fieldName]);
+					if (!$image && $this->isArrayValue($this->values[$fieldName], $fieldName))
 					{
-						$originalImageID = $data['originalId'][$imageID];
-						if (!isset($relData[static::REL_TYPE_IMAGE][$originalImageID]))
-						{
-							continue;
-						}
-						$originalNode = $relData[static::REL_TYPE_IMAGE][$originalImageID]['node'];
-						if (!$originalNode->parentNode)
-						{
-							continue;
-						}
-						$newNode = clone $originalNode;
-						$document->importNode($newNode);
-						$originalNode->parentNode->insertBefore($newNode, $originalNode);
-						$this->importImage($image, $newNode, $imageID);
-						$isDocumentChanged = true;
-						$this->excludedPlaceholders[] = $fieldName;
+						$placeholder = $data['placeholder'] ?? '';
+						$modifier = static::getModifierFromPlaceholder($placeholder);
+						$modifierData = Value::parseModifier($modifier);
+						$index = (int)$modifierData[static::ARRAY_INDEX_MODIFIER];
+						$value = $this->values[$fieldName];
+						$valueNameParts = explode('.', $value);
+						$name = implode('.', array_slice($valueNameParts, 2));
+						$arrayProvider = $this->values[$valueNameParts[0]];
+						$image = $this->getImage(
+							$this->printArrayValueByIndex(
+								$arrayProvider,
+								$fieldName,
+								$name,
+								$index,
+								$modifier
+							)
+						);
 					}
-					if ($originalImageID)
+					if ($image && $image->isExists() && $image->isReadable())
 					{
-						$relFilesToDelete[] = 'word/' . $relData[static::REL_TYPE_IMAGE][$originalImageID]['target'];
-					}
-					if ($originalNode)
-					{
-						$nodesToDelete[] = $originalNode;
+						$originalImageID = $originalNode = false;
+						foreach ($unhandledIDs as $imageID)
+						{
+							$originalImageID = $data['originalId'][$imageID];
+							if (!isset($relData[static::REL_TYPE_IMAGE][$originalImageID]))
+							{
+								continue;
+							}
+							$originalNode = $relData[static::REL_TYPE_IMAGE][$originalImageID]['node'];
+							if (!$originalNode->parentNode)
+							{
+								continue;
+							}
+							$newNode = clone $originalNode;
+							$document->importNode($newNode);
+							$originalNode->parentNode->insertBefore($newNode, $originalNode);
+							$this->importImage($image, $newNode, $imageID);
+							$isDocumentChanged = true;
+							$this->excludedPlaceholders[] = $fieldName;
+						}
+						if ($originalImageID)
+						{
+							$relFilesToDelete[] = 'word/' . $relData[static::REL_TYPE_IMAGE][$originalImageID]['target'];
+						}
+						if ($originalNode)
+						{
+							$nodesToDelete[] = $originalNode;
+						}
 					}
 				}
 			}
@@ -508,6 +528,8 @@ class Docx extends ZipDocument
 		{
 			$this->zip->deleteName($path);
 		}
+
+		return array_values(array_unique($imageIdsToDelete));
 	}
 
 	/**

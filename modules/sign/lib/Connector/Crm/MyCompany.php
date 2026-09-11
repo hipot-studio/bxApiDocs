@@ -30,7 +30,7 @@ final class MyCompany extends Company
 
 		$items = $crmContainer->getFactory(\CCrmOwnerType::Company)?->getItems(
 			[
-				'select' => ['ID'],
+				'select' => ['ID', 'TITLE'],
 				'filter' => $filter,
 			] + $limitFilter,
 		);
@@ -38,13 +38,10 @@ final class MyCompany extends Company
 		$items ??= [];
 		foreach ($items as $item)
 		{
-			$id = $item->getId();
-
-			$myCompany = self::getById($id);
-			if ($myCompany !== null)
-			{
-				$result->add(self::getById($id));
-			}
+			$result->add(new Item\Integration\Crm\MyCompany(
+				name: (string)$item->getTitle(),
+				id: $item->getId(),
+			));
 		}
 
 		return $result;

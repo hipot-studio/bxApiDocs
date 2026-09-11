@@ -2,8 +2,9 @@
 namespace Bitrix\Landing\Controller;
 
 use Bitrix\Landing\Block;
-use Bitrix\Landing\Connector;
+use Bitrix\Landing\Rights;
 use Bitrix\Landing\Site\Type;
+use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\Response\BFile;
 use Bitrix\Main\Error;
@@ -17,7 +18,15 @@ class DiskFile extends Controller
 
 	public function getDefaultPreFilters(): array
 	{
-		return [];
+		// download link is opened by browser via GET, so the csrf filter is left to the base
+		// controller, which adds it for POST only
+		return [
+			new ActionFilter\Authentication(),
+			new ActionFilter\HttpMethod([
+				ActionFilter\HttpMethod::METHOD_GET,
+				ActionFilter\HttpMethod::METHOD_POST,
+			]),
+		];
 	}
 
 	/**
@@ -38,35 +47,51 @@ class DiskFile extends Controller
 	}
 
 	/**
-	 * Checks that current user has permissions for specified file.
+	 * Checks that current user is allowed to read the file linked in the block.
 	 *
 	 * @param string $scope Scope code (site type).
 	 * @param int $blockId Block id.
 	 * @param int $fileId File id.
 	 * @return bool
 	 */
-	private function blockContainsFile(string $scope, int $blockId, int $fileId): bool
+	private function canReadFileInBlock(string $scope, int $blockId, int $fileId): bool
 	{
-		if (Type::isPublicScope($scope))
+		if (!$this->switchToScope($scope))
 		{
 			return false;
 		}
 
-		Type::setScope($scope);
-		$needed = Connector\Disk::FILE_PREFIX_HREF . $fileId;
+		$landingId = Block::findVisibleLandingIdByFileInBlock($blockId, $fileId);
 
-		return Block::isContains($blockId, $needed);
+		return $landingId !== null && $this->canReadLanding($landingId);
 	}
 
 	/**
-	 * Checks that current user has permissions for specified file.
+	 * Checks that current user is allowed to read the file linked in the landing or in one of its areas.
 	 *
 	 * @param string $scope Scope code (site type).
 	 * @param int $landingId Landing id.
 	 * @param int $fileId File id.
 	 * @return bool
 	 */
-	private function landingContainsFile(string $scope, int $landingId, int $fileId): bool
+	private function canReadFileInLanding(string $scope, int $landingId, int $fileId): bool
+	{
+		if (!$this->switchToScope($scope))
+		{
+			return false;
+		}
+
+		// rights check is cheaper than the search through the content, so it goes first
+		return $this->canReadLanding($landingId) && $this->landingContainsFile($landingId, $fileId);
+	}
+
+	/**
+	 * Switches to the scope of the request. Public scopes are rejected: they keep no protected files.
+	 *
+	 * @param string $scope Scope code (site type).
+	 * @return bool
+	 */
+	private function switchToScope(string $scope): bool
 	{
 		if (Type::isPublicScope($scope))
 		{
@@ -74,9 +99,31 @@ class DiskFile extends Controller
 		}
 
 		Type::setScope($scope);
-		$needed = Connector\Disk::FILE_PREFIX_HREF . $fileId;
 
-		if (Block::isContains($landingId, $needed, true))
+		return true;
+	}
+
+	/**
+	 * Checks that current user is allowed to read the landing.
+	 *
+	 * @param int $landingId Landing id.
+	 * @return bool
+	 */
+	private function canReadLanding(int $landingId): bool
+	{
+		return $landingId > 0 && Rights::hasAccessForLanding($landingId, Rights::ACCESS_TYPES['read']);
+	}
+
+	/**
+	 * Checks that landing or one of its areas contains link to the specified file.
+	 *
+	 * @param int $landingId Landing id.
+	 * @param int $fileId File id.
+	 * @return bool
+	 */
+	private function landingContainsFile(int $landingId, int $fileId): bool
+	{
+		if (Block::findVisibleLandingIdByFileInLanding($landingId, $fileId) !== null)
 		{
 			return true;
 		}
@@ -92,7 +139,7 @@ class DiskFile extends Controller
 
 		foreach ($landing->getAreas() as $areaLandingId)
 		{
-			if (Block::isContains((int)$areaLandingId, $needed, true))
+			if (Block::findVisibleLandingIdByFileInLanding((int)$areaLandingId, $fileId) !== null)
 			{
 				return true;
 			}
@@ -102,7 +149,7 @@ class DiskFile extends Controller
 	}
 
 	/**
-	 * Downloads file after check permissions.
+	 * Downloads file after permissions check.
 	 *
 	 * @param string $scope Scope code (site type).
 	 * @param int $blockId Block id.
@@ -111,7 +158,7 @@ class DiskFile extends Controller
 	 */
 	public function downloadAction(string $scope, int $blockId, int $fileId): ?BFile
 	{
-		if ($this->blockContainsFile($scope, $blockId, $fileId))
+		if ($this->canReadFileInBlock($scope, $blockId, $fileId))
 		{
 			$fileInfo = \Bitrix\Landing\Connector\Disk::getFileInfo($fileId, false);
 			if ($fileInfo)
@@ -134,7 +181,7 @@ class DiskFile extends Controller
 	 */
 	public function viewAction(string $scope, int $blockId, int $fileId): ?array
 	{
-		if ($this->blockContainsFile($scope, $blockId, $fileId))
+		if ($this->canReadFileInBlock($scope, $blockId, $fileId))
 		{
 			$fileInfo = \Bitrix\Landing\Connector\Disk::getFileInfo($fileId, false);
 			if ($fileInfo)
@@ -154,15 +201,18 @@ class DiskFile extends Controller
 	 * Returns raw file info.
 	 *
 	 * @param int $fileId File id.
+	 * @param string $scope Scope code (site type).
+	 * @param int $landingId Landing id.
 	 * @return array|null
 	 */
 	public function infoAction(int $fileId, string $scope, int $landingId): ?array
 	{
-		if ($this->landingContainsFile($scope, $landingId, $fileId))
+		if ($this->canReadFileInLanding($scope, $landingId, $fileId))
 		{
 			return \Bitrix\Landing\Connector\Disk::getFileInfo($fileId, false);
 		}
 
+		$this->addError(new Error('Access denied.'));
 		return null;
 	}
 }

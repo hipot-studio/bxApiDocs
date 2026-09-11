@@ -10,6 +10,7 @@ use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Data\DeleteResult;
 use Bitrix\Main\ORM\Data\UpdateResult;
 use Bitrix\Main\ORM\Data\Result;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
@@ -30,6 +31,8 @@ class DocumentRepository
 {
 	private const INITIATOR_NAME_META_KEY = Document::META_KEYS['initiatorName'];
 	private const DOCUMENT_DEFAULT_PARTIES_COUNT = 2;
+	private const TEMPLATE_REPRESENTATIVE_BATCH_SIZE = 300;
+	private const SAFE_EXPORT_BATCH_SIZE = 300;
 
 	/** @var array<DocumentScenario::*, int> */
 	private const SCENARIO_NAME_TO_ID_MAP = [
@@ -152,6 +155,65 @@ class DocumentRepository
 		}
 		
 		return $result;
+	}
+
+	/**
+	 * @param list<int> $documentIds
+	 */
+	public function resetRepresentativeByIds(array $documentIds, int $expectedRepresentativeId): Main\Result
+	{
+		$result = new Main\Result();
+		if (empty($documentIds))
+		{
+			return $result;
+		}
+
+		$connection = Main\Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		$tableName = Internal\DocumentTable::getTableName();
+		[$update] = $helper->prepareUpdate($tableName, ['REPRESENTATIVE_ID' => null]);
+		$sql = (new SqlExpression(
+			'UPDATE ?# SET ' . $update . ' WHERE ?# IN (?@) AND ?# = ?i',
+			$tableName,
+			'ID',
+			array_values(array_unique($documentIds)),
+			'REPRESENTATIVE_ID',
+			$expectedRepresentativeId,
+		))->compile();
+		$connection->queryExecute($sql);
+
+		return $result;
+	}
+
+	/**
+	 * @return \Generator<array{documentId: int, templateId: int}>
+	 */
+	public function iterateB2eTemplateDocumentIdsByRepresentative(int $userId): \Generator
+	{
+		$lastDocumentId = 0;
+		do
+		{
+			$rows = Internal\DocumentTable::query()
+				->setSelect(['ID', 'TEMPLATE_ID'])
+				->where('REPRESENTATIVE_ID', $userId)
+				->where('TEMPLATE_ID', '>', 0)
+				->where('ENTITY_TYPE', EntityType::SMART_B2E)
+				->where('ID', '>', $lastDocumentId)
+				->setOrder(['ID' => 'ASC'])
+				->setLimit(self::TEMPLATE_REPRESENTATIVE_BATCH_SIZE)
+				->fetchAll()
+			;
+			foreach ($rows as $row)
+			{
+				$lastDocumentId = (int)$row['ID'];
+
+				yield [
+					'documentId' => $lastDocumentId,
+					'templateId' => (int)$row['TEMPLATE_ID'],
+				];
+			}
+		}
+		while (count($rows) === self::TEMPLATE_REPRESENTATIVE_BATCH_SIZE);
 	}
 
 	public function unsetEntityId(Item\Document $item): Result
@@ -535,6 +597,56 @@ class DocumentRepository
 			? new Item\DocumentCollection()
 			: $this->extractItemCollectionByModelCollection($models)
 		;
+	}
+
+	public function listForSafeExportByIds(array $ids): Item\DocumentCollection
+	{
+		$ids = array_values(array_unique(array_filter(
+			array_map('intval', $ids),
+			static fn(int $id): bool => $id > 0,
+		)));
+		if ($ids === [])
+		{
+			return new Item\DocumentCollection();
+		}
+
+		$documents = [];
+		foreach (array_chunk($ids, self::SAFE_EXPORT_BATCH_SIZE) as $batchIds)
+		{
+			$rows = Internal\DocumentTable::query()
+				->setSelect([
+					'ID',
+					'TITLE',
+					'SCENARIO',
+					'EXTERNAL_ID',
+					'ENTITY_TYPE',
+					'ENTITY_ID',
+					'CREATED_BY_ID',
+					'REPRESENTATIVE_ID',
+				])
+				->whereIn('ID', $batchIds)
+				->fetchAll()
+			;
+
+			foreach ($rows as $row)
+			{
+				$scenarioId = $row['SCENARIO'] === null ? null : (int)$row['SCENARIO'];
+				$entityType = $row['ENTITY_TYPE'];
+				$documents[] = new Item\Document(
+					scenario: $scenarioId === null ? null : $this->getScenarioNameById($scenarioId),
+					id: (int)$row['ID'],
+					title: $row['TITLE'],
+					entityType: $entityType,
+					entityTypeId: $entityType === null ? null : EntityType::getEntityTypeIdByType($entityType),
+					entityId: $row['ENTITY_ID'] === null ? null : (int)$row['ENTITY_ID'],
+					createdById: $row['CREATED_BY_ID'] === null ? null : (int)$row['CREATED_BY_ID'],
+					representativeId: $row['REPRESENTATIVE_ID'] === null ? null : (int)$row['REPRESENTATIVE_ID'],
+					externalId: $row['EXTERNAL_ID'],
+				);
+			}
+		}
+
+		return new Item\DocumentCollection(...$documents);
 	}
 
 	public function listByEntityIdsAndType(array $entityIds, string $entityType): Item\DocumentCollection

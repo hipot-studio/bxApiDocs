@@ -143,6 +143,21 @@ class EventData
 		return $this;
 	}
 
+	/**
+	 * User who caused the event, when the event names one.
+	 */
+	public function setInitiatorUserId(?int $initiatorUserId): EventData
+	{
+		return $this->addDataValue(self::DATA_KEY_INITIATOR, $initiatorUserId);
+	}
+
+	public function getInitiatorUserId(): ?int
+	{
+		$initiatorUserId = (int)($this->data[self::DATA_KEY_INITIATOR] ?? 0);
+
+		return $initiatorUserId > 0 ? $initiatorUserId : null;
+	}
+
 	public function getDocumentItem(): \Bitrix\Sign\Item\Document
 	{
 		return $this->documentItem;

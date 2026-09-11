@@ -7,6 +7,7 @@ use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Entity\UpdateResult;
 use Bitrix\Main\Error;
 use Bitrix\Main;
+use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Filter\Condition;
 use Bitrix\Main\ORM\Query\Join;
@@ -28,18 +29,32 @@ use Bitrix\Sign\Type\MemberStatus;
 class MemberRepository
 {
 	public const SIGN_DOCUMENT_LIST_QUERY_REF_FIELD_NAME_COMPANY = 'REF_COMPANY';
+	private const SAFE_FOLDER_PARENT_COLUMN = 'SAFE_FOLDER_RELATION.PARENT_ID';
 
-	private ?UserCache $userCache = null;
+	private const TEMPLATE_USER_RELATION_BATCH_SIZE = 300;
+
+	// lower bound of an "empty" signing date: SQL NULL or dates below this
+	// threshold (e.g. the zero seed date) are treated as an unset signing date.
+	private const MY_SAFE_EMPTY_SIGN_DATE_THRESHOLD = '1970-01-01 00:00:00';
+
+	// fail-safe order for the company safe grid: newest rows first.
+	private const MY_SAFE_DEFAULT_ORDER = ['ID' => 'DESC'];
+
 	/**
+	 * Fields preloaded into UserCache; unlisted fields silently read as null from cached models.
+	 *
 	 * @var list<string>
 	 */
-	private array $userCacheFields = [
+	public const USER_CACHE_FIELDS = [
 		'ID',
 		'NAME',
 		'SECOND_NAME',
 		'LAST_NAME',
 		'LOGIN',
+		'PERSONAL_GENDER',
 	];
+
+	private ?UserCache $userCache = null;
 
 	/**
 	 * @param \Bitrix\Sign\Item\Member $item
@@ -73,6 +88,36 @@ class MemberRepository
 	public function deleteById(int $id)
 	{
 		Internal\MemberTable::delete($id);
+	}
+
+	/**
+	 * @param list<int> $ids
+	 */
+	public function deleteByIdsForUser(array $ids, int $userId): Main\Result
+	{
+		if (empty($ids))
+		{
+			return new Main\Result();
+		}
+
+		try
+		{
+			Internal\MemberTable::deleteByFilter([
+				'@ID' => $ids,
+				'=ENTITY_TYPE' => EntityType::USER,
+				'=ENTITY_ID' => $userId,
+				'@ROLE' => [
+					$this->convertRoleToInt(Role::REVIEWER),
+					$this->convertRoleToInt(Role::EDITOR),
+				],
+			]);
+		}
+		catch (Main\ArgumentException $e)
+		{
+			return (new Main\Result())->addError(new Main\Error($e->getMessage()));
+		}
+
+		return new Main\Result();
 	}
 
 	public function deleteAllByDocumentId(int $documentId): Main\Result
@@ -157,6 +202,8 @@ class MemberRepository
 			employeeId: $model->getEmployeeId(),
 			hcmLinkJobId: $model->getHcmlinkJobId(),
 			dateStatusChanged: $model->getDateStatusChanged(),
+			folderId: $model->collectValues()['FOLDER_ID'] ?? null,
+			createdById: $model->getCreatedById(),
 		);
 	}
 
@@ -181,7 +228,7 @@ class MemberRepository
 
 		$users = $this->getUserModels($modelCollection);
 		$this->userCache?->setCache($users);
-		$this->userCache?->setCachedFields($this->userCacheFields);
+		$this->userCache?->setCachedFields(self::USER_CACHE_FIELDS);
 
 		$items = array_map(
 			fn(Internal\Member $member) => $this->extractItemFromModel($member,$users[$member->getEntityId()] ?? null),
@@ -283,6 +330,183 @@ class MemberRepository
 		;
 
 		return $this->extractItemCollectionFromModelCollection($models->fetchCollection());
+	}
+
+	/**
+	 * @return \Generator<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}>
+	 */
+	public function iterateDirectTemplateUserRelations(int $userId): \Generator
+	{
+		// Each role is walked separately: with ROLE fixed by equality the index
+		// (ENTITY_ID, ENTITY_TYPE, ROLE) also serves the keyset order, so no sorting is needed.
+		foreach ([Role::REVIEWER, Role::EDITOR] as $role)
+		{
+			yield from $this->iterateDirectTemplateUserRelationsByRole($userId, $role);
+		}
+	}
+
+	/**
+	 * @return \Generator<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}>
+	 */
+	private function iterateDirectTemplateUserRelationsByRole(int $userId, string $role): \Generator
+	{
+		$lastMemberId = 0;
+		do
+		{
+			$rows = Internal\MemberTable::query()
+				->setSelect([
+					'MEMBER_ID' => 'ID',
+					'DOCUMENT_ID',
+					'TEMPLATE_ID' => 'DOCUMENT.TEMPLATE_ID',
+				])
+				->where('ENTITY_TYPE', EntityType::USER)
+				->where('ENTITY_ID', $userId)
+				->where('ROLE', $this->convertRoleToInt($role))
+				->where('ID', '>', $lastMemberId)
+				->where('DOCUMENT.TEMPLATE_ID', '>', 0)
+				->where('DOCUMENT.ENTITY_TYPE', Type\Document\EntityType::SMART_B2E)
+				->setOrder(['ID' => 'ASC'])
+				->setLimit(self::TEMPLATE_USER_RELATION_BATCH_SIZE)
+				->fetchAll()
+			;
+			foreach ($rows as $row)
+			{
+				$lastMemberId = (int)$row['MEMBER_ID'];
+
+				yield $this->createTemplateUserRelation($row);
+			}
+		}
+		while (count($rows) === self::TEMPLATE_USER_RELATION_BATCH_SIZE);
+	}
+
+	/**
+	 * @param list<int> $documentIds
+	 * @return list<int>
+	 */
+	public function filterDocumentIdsWithCompanyAssignee(array $documentIds): array
+	{
+		if (empty($documentIds))
+		{
+			return [];
+		}
+
+		$rows = Internal\MemberTable::query()
+			->setSelect(['DOCUMENT_ID'])
+			->whereIn('DOCUMENT_ID', $documentIds)
+			->where('ENTITY_TYPE', EntityType::COMPANY)
+			->where('ROLE', $this->convertRoleToInt(Role::ASSIGNEE))
+			->setDistinct()
+			->fetchAll()
+		;
+
+		return array_map('intval', array_column($rows, 'DOCUMENT_ID'));
+	}
+
+	/**
+	 * @param list<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}> $relations
+	 * @return list<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}>
+	 */
+	public function filterExistingTemplateUserRelations(array $relations, int $userId): array
+	{
+		$memberIds = [];
+		$representativeDocumentIds = [];
+		foreach ($relations as $relation)
+		{
+			if ($relation['isRepresentative'])
+			{
+				$representativeDocumentIds[] = $relation['documentId'];
+			}
+			else
+			{
+				$memberIds[] = $relation['memberId'];
+			}
+		}
+
+		return [
+			...$this->getDirectTemplateUserRelationsByIds($memberIds, $userId),
+			...$this->getRepresentativeTemplateUserRelationsByDocumentIds($representativeDocumentIds, $userId),
+		];
+	}
+
+	/**
+	 * @param list<int> $memberIds
+	 * @return list<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}>
+	 */
+	private function getDirectTemplateUserRelationsByIds(array $memberIds, int $userId): array
+	{
+		if (empty($memberIds))
+		{
+			return [];
+		}
+
+		$rows = Internal\MemberTable::query()
+			->setSelect([
+				'MEMBER_ID' => 'ID',
+				'DOCUMENT_ID',
+				'TEMPLATE_ID' => 'DOCUMENT.TEMPLATE_ID',
+			])
+			->whereIn('ID', $memberIds)
+			->where('ENTITY_TYPE', EntityType::USER)
+			->where('ENTITY_ID', $userId)
+			->whereIn(
+				'ROLE',
+				[
+					$this->convertRoleToInt(Role::REVIEWER),
+					$this->convertRoleToInt(Role::EDITOR),
+				],
+			)
+			->where('DOCUMENT.TEMPLATE_ID', '>', 0)
+			->where('DOCUMENT.ENTITY_TYPE', Type\Document\EntityType::SMART_B2E)
+			->fetchAll()
+		;
+
+		return array_map($this->createTemplateUserRelation(...), $rows);
+	}
+
+	/**
+	 * @param list<int> $documentIds
+	 * @return list<array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}>
+	 */
+	private function getRepresentativeTemplateUserRelationsByDocumentIds(array $documentIds, int $userId): array
+	{
+		if (empty($documentIds))
+		{
+			return [];
+		}
+
+		$rows = Internal\MemberTable::query()
+			->setSelect([
+				'MEMBER_ID' => 'ID',
+				'DOCUMENT_ID',
+				'TEMPLATE_ID' => 'DOCUMENT.TEMPLATE_ID',
+			])
+			->whereIn('DOCUMENT_ID', $documentIds)
+			->where('ENTITY_TYPE', EntityType::COMPANY)
+			->where('ROLE', $this->convertRoleToInt(Role::ASSIGNEE))
+			->where('DOCUMENT.REPRESENTATIVE_ID', $userId)
+			->where('DOCUMENT.TEMPLATE_ID', '>', 0)
+			->where('DOCUMENT.ENTITY_TYPE', Type\Document\EntityType::SMART_B2E)
+			->fetchAll()
+		;
+
+		return array_map(
+			fn(array $row): array => $this->createTemplateUserRelation($row, true),
+			$rows,
+		);
+	}
+
+	/**
+	 * @param array{MEMBER_ID: int|string, DOCUMENT_ID: int|string, TEMPLATE_ID: int|string} $row
+	 * @return array{templateId: int, documentId: int, memberId: int, isRepresentative: bool}
+	 */
+	private function createTemplateUserRelation(array $row, bool $isRepresentative = false): array
+	{
+		return [
+			'templateId' => (int)$row['TEMPLATE_ID'],
+			'documentId' => (int)$row['DOCUMENT_ID'],
+			'memberId' => (int)$row['MEMBER_ID'],
+			'isRepresentative' => $isRepresentative,
+		];
 	}
 
 	private function prepareListB2eDocumentsByUserIdQuery(
@@ -482,6 +706,11 @@ class MemberRepository
 
 	public function listByDocumentIdListAndRoles(array $documentIds, array $roles): Item\MemberCollection
 	{
+		if (empty($documentIds) || empty($roles))
+		{
+			return new Item\MemberCollection();
+		}
+
 		$roleIds = array_map(fn(string $role) => $this->convertRoleToInt($role), $roles);
 		$models = Internal\MemberTable
 			::query()
@@ -836,7 +1065,7 @@ class MemberRepository
 		array $roleRelevance = [],
 		array $statusRelevance = [],
 		int $limit = 10,
-		int $offset = 0,
+		?int $offset = null,
 	): Item\MemberCollection
 	{
 		$roleRelevance = array_flip(
@@ -851,8 +1080,11 @@ class MemberRepository
 			->setSelect(['*'])
 			->where('DOCUMENT_ID', $documentId)
 			->setLimit($limit)
-			->setOffset($offset)
 		;
+		if ($offset !== null)
+		{
+			$query->setOffset($offset);
+		}
 		if (!empty($roleRelevance))
 		{
 			$query
@@ -974,15 +1206,16 @@ class MemberRepository
 		}
 	}
 
-	public function listB2eMembersWithResultFilesForMySafe(
-		ConditionTree $filter,
-		int $limit = 20,
-		int $offset = 0,
-	): Item\MemberCollection
+	/**
+	 * Base query for the company safe ("My Safe") member listing: only members with a signed result
+	 * file, whose document has reached an ending status, minus the signer's own result file when the
+	 * signer initiated the flow. Shared by the list/count/folder-id readers so the safe grid, the
+	 * pagination total and the folder gate all see the same member set.
+	 */
+	private function buildB2eMySafeBaseQuery(ConditionTree $filter): Query
 	{
 		$query = Internal\MemberTable
 			::query()
-			->setSelect(['*'])
 			// load members with result file only
 			->registerRuntimeField("",
 				(new Main\ORM\Fields\Relations\Reference(
@@ -997,6 +1230,35 @@ class MemberRepository
 					],
 				)),
 			)
+			->registerRuntimeField(
+				'SAFE_FOLDER_RELATION',
+				new Main\ORM\Fields\Relations\Reference(
+					'SAFE_FOLDER_RELATION',
+					Internal\Document\Folder\DocumentFolderRelationTable::getEntity(),
+					Join::on('this.ID', 'ref.ENTITY_ID')->where(
+						'ref.ENTITY_TYPE',
+						Type\Document\Folder\EntityType::MEMBER->value,
+					),
+					['join_type' => Join::TYPE_LEFT],
+				),
+			)
+			->registerRuntimeField(
+				'FOLDER_ID',
+				new Main\ORM\Fields\ExpressionField(
+					'FOLDER_ID',
+					'%s',
+					['SAFE_FOLDER_RELATION.PARENT_ID'],
+				),
+			)
+			->registerRuntimeField(
+				'SAFE_FOLDER',
+				new Main\ORM\Fields\Relations\Reference(
+					'SAFE_FOLDER',
+					Internal\Document\DocumentFolderTable::getEntity(),
+					Join::on('this.SAFE_FOLDER_RELATION.PARENT_ID', 'ref.ID'),
+					['join_type' => Join::TYPE_LEFT],
+				),
+			)
 			->whereIn('DOCUMENT.STATUS', DocumentStatus::getEnding())
 			->where($filter)
 			// exclude signer result file if the signer has initiated the process
@@ -1004,16 +1266,506 @@ class MemberRepository
 				->where('DOCUMENT.INITIATED_BY_TYPE', Type\Document\InitiatedByType::EMPLOYEE->toInt())
 				->where('ROLE', Role::convertRoleToInt(Role::SIGNER))
 			)
-			->setLimit($limit)
-			->setOffset($offset)
-			->setOrder(['ID' => 'desc'])
 		;
 
 		$this->updateQueryByRefFields($filter, $query);
 
-		return $this->extractItemCollectionFromModelCollection($query->fetchCollection())
-			->setQueryTotal((int)$query->queryCountTotal())
+		return $query;
+	}
+
+	public function listB2eMembersWithResultFilesForMySafe(
+		ConditionTree $filter,
+		int $limit = 20,
+		int $offset = 0,
+		?Type\MySafeSortField $orderField = null,
+		Main\DB\Order $orderDirection = Main\DB\Order::Desc,
+		bool $countTotal = true,
+	): Item\MemberCollection
+	{
+		$query = $this->buildB2eMySafeBaseQuery($filter)
+			->setSelect(['*', 'FOLDER_ID'])
+			->setLimit($limit)
+			->setOffset($offset)
 		;
+
+		$this->applyMySafeOrder($query, $orderField, $orderDirection);
+
+		$collection = $this->extractItemCollectionFromModelCollection($query->fetchCollection());
+		$this->fillSafeFolderIds($collection);
+
+		return $countTotal ? $collection->setQueryTotal((int)$query->queryCountTotal()) : $collection;
+	}
+
+	public function listB2eMembersWithResultFilesForMySafeExport(
+		ConditionTree $filter,
+		int $limit,
+	): Item\MemberCollection
+	{
+		if ($limit < 1)
+		{
+			return new Item\MemberCollection();
+		}
+
+		$query = $this->buildB2eMySafeBaseQuery($filter)
+			->setSelect([
+				'ID',
+				'DOCUMENT_ID',
+				'PART',
+				'SIGNED',
+				'ENTITY_TYPE',
+				'ENTITY_ID',
+				'DATE_SIGN',
+				'ROLE',
+				'FOLDER_ID',
+			])
+			->setLimit($limit)
+		;
+		$this->applyMySafeOrder($query, null, Main\DB\Order::Desc);
+
+		$members = [];
+		foreach ($query->fetchAll() as $row)
+		{
+			$party = (int)$row['PART'];
+			$role = $row['ROLE'] === null
+				? \Bitrix\Sign\Compatibility\Role::createByParty($party)
+				: $this->convertIntToRole((int)$row['ROLE'])
+			;
+			$folderId = (int)$row['FOLDER_ID'];
+
+			$members[] = new Item\Member(
+				documentId: (int)$row['DOCUMENT_ID'],
+				party: $party,
+				id: (int)$row['ID'],
+				status: (string)$row['SIGNED'],
+				dateSigned: $row['DATE_SIGN'],
+				entityType: $row['ENTITY_TYPE'],
+				entityId: $row['ENTITY_ID'] === null ? null : (int)$row['ENTITY_ID'],
+				role: $role,
+				folderId: $folderId > 0 ? $folderId : null,
+			);
+		}
+
+		return new Item\MemberCollection(...$members);
+	}
+
+	private function fillSafeFolderIds(Item\MemberCollection $members): void
+	{
+		$memberIds = array_values(array_filter(
+			$members->getIds(),
+			static fn(?int $id): bool => $id !== null && $id > 0,
+		));
+		if ($memberIds === [])
+		{
+			return;
+		}
+
+		$folderIdsByMemberId = [];
+		$rows = Internal\Document\Folder\DocumentFolderRelationTable::query()
+			->setSelect(['ENTITY_ID', 'PARENT_ID'])
+			->whereIn('ENTITY_ID', $memberIds)
+			->where('ENTITY_TYPE', Type\Document\Folder\EntityType::MEMBER->value)
+			->fetchAll()
+		;
+		foreach ($rows as $row)
+		{
+			$parentId = (int)$row['PARENT_ID'];
+			$folderIdsByMemberId[(int)$row['ENTITY_ID']] = $parentId > 0 ? $parentId : null;
+		}
+
+		foreach ($members as $member)
+		{
+			$member->folderId = $folderIdsByMemberId[$member->id] ?? null;
+		}
+	}
+
+	/**
+	 * Total number of safe members matching the filter, ignoring limit/offset. Feeds the combined
+	 * folder + member pagination total (P5.T1) without fetching the member rows.
+	 */
+	public function countB2eMembersForMySafe(ConditionTree $filter): int
+	{
+		return (int)$this->buildB2eMySafeBaseQuery($filter)->queryCountTotal();
+	}
+
+	public function countB2eMembersForMySafeUpTo(ConditionTree $filter, int $limit): int
+	{
+		if ($limit < 1)
+		{
+			return 0;
+		}
+
+		$limitedQuery = $this->buildB2eMySafeBaseQuery($filter)
+			->setSelect(['ID'])
+			->setLimit($limit)
+		;
+		$countQuery = new Query($limitedQuery);
+		$countQuery->setSelect([
+			new Main\ORM\Fields\ExpressionField(
+				'TOTAL',
+				'COUNT(%s)',
+				['ID'],
+			),
+		]);
+
+		return (int)($countQuery->fetch()['TOTAL'] ?? 0);
+	}
+
+	/**
+	 * @return array{userIds:list<int>, total:?int, nextCursor:?int}
+	 */
+	public function listSafeFolderPeopleIds(
+		int $folderId,
+		string $category,
+		int $limit,
+		?int $afterUserId,
+	): array
+	{
+		$userExpression = match ($category)
+		{
+			'participants' => new Main\ORM\Fields\ExpressionField(
+				'SAFE_USER_ID',
+				"CASE WHEN %s = 'user' THEN %s WHEN %s = 'company' THEN %s ELSE NULL END",
+				['ENTITY_TYPE', 'ENTITY_ID', 'ENTITY_TYPE', 'DOCUMENT.REPRESENTATIVE_ID'],
+			),
+			'representatives' => new Main\ORM\Fields\ExpressionField(
+				'SAFE_USER_ID',
+				'%s',
+				['DOCUMENT.REPRESENTATIVE_ID'],
+			),
+			'senders' => new Main\ORM\Fields\ExpressionField(
+				'SAFE_USER_ID',
+				'%s',
+				['DOCUMENT.CREATED_BY_ID'],
+			),
+			default => null,
+		};
+		if ($folderId <= 0 || $userExpression === null)
+		{
+			return ['userIds' => [], 'total' => 0, 'nextCursor' => null];
+		}
+
+		$query = $this->buildB2eMySafeBaseQuery(
+			Query::filter()->where(self::SAFE_FOLDER_PARENT_COLUMN, $folderId),
+		)
+			->registerRuntimeField('SAFE_USER_ID', $userExpression)
+			->setSelect(['SAFE_USER_ID'])
+			->where('SAFE_USER_ID', '>', 0)
+			->setGroup(['SAFE_USER_ID'])
+			->setOrder(['SAFE_USER_ID' => 'ASC'])
+		;
+		$afterUserId = $afterUserId !== null && $afterUserId > 0 ? $afterUserId : null;
+		$total = $afterUserId === null ? (int)$query->queryCountTotal() : null;
+		if ($afterUserId !== null)
+		{
+			$query->where('SAFE_USER_ID', '>', $afterUserId);
+		}
+
+		$limit = max(1, $limit);
+		$rows = [];
+		$dbResult = $query->setLimit($limit + 1)->exec();
+		while ($row = $dbResult->fetch())
+		{
+			$rows[] = $row;
+		}
+		$hasNextPage = count($rows) > $limit;
+		if ($hasNextPage)
+		{
+			array_pop($rows);
+		}
+		$userIds = array_map(static fn(array $row): int => (int)$row['SAFE_USER_ID'], $rows);
+		$nextCursor = $hasNextPage && $userIds !== [] ? $userIds[array_key_last($userIds)] : null;
+
+		return [
+			'userIds' => $userIds,
+			'total' => $total,
+			'nextCursor' => $nextCursor,
+		];
+	}
+
+	/**
+	 * Returns exact people counters, bounded previews and company document candidates for folder rows
+	 * using one streaming database pass. Company candidates are resolved later through the CRM factory.
+	 *
+	 * People counters stay exact, but the company document candidates per folder are capped at
+	 * $companyDocumentScanLimit so that a single large folder cannot force an unbounded number of
+	 * later CRM resolution rounds or accumulate an unbounded id list in memory.
+	 *
+	 * @param list<int> $folderIds
+	 * @param int $peoplePreviewLimit
+	 * @param int $companyDocumentScanLimit maximum company document candidates collected per folder
+	 * @return array<int, array{
+	 *     participantIds: list<int>,
+	 *     participantCount: int,
+	 *     representativeIds: list<int>,
+	 *     representativeCount: int,
+	 *     senderIds: list<int>,
+	 *     senderCount: int,
+	 *     roleCodes: list<string>,
+	 *     companyDocumentIds: list<int>,
+	 * }>
+	 */
+	public function getSafeFolderAggregates(
+		array $folderIds,
+		int $peoplePreviewLimit,
+		int $companyDocumentScanLimit,
+	): array
+	{
+		$companyDocumentScanLimit = max(1, $companyDocumentScanLimit);
+		$folderIds = array_values(array_unique(array_filter(
+			array_map('intval', $folderIds),
+			static fn(int $folderId): bool => $folderId > 0,
+		)));
+		if ($folderIds === [])
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach ($folderIds as $folderId)
+		{
+			$result[$folderId] = [
+				'participantIds' => [],
+				'participantCount' => 0,
+				'representativeIds' => [],
+				'representativeCount' => 0,
+				'senderIds' => [],
+				'senderCount' => 0,
+				'roleCodes' => [],
+				'companyDocumentIds' => [],
+			];
+		}
+
+		$query = $this->buildB2eMySafeBaseQuery(
+			Query::filter()->whereIn(self::SAFE_FOLDER_PARENT_COLUMN, $folderIds),
+		)
+			->registerRuntimeField(
+				'SAFE_FOLDER_ID',
+				new Main\ORM\Fields\ExpressionField(
+					'SAFE_FOLDER_ID',
+					'%s',
+					[self::SAFE_FOLDER_PARENT_COLUMN],
+				),
+			)
+			->registerRuntimeField(
+				'SAFE_PARTICIPANT_ID',
+				new Main\ORM\Fields\ExpressionField(
+					'SAFE_PARTICIPANT_ID',
+					"CASE WHEN %s = 'user' THEN %s WHEN %s = 'company' THEN %s ELSE NULL END",
+					['ENTITY_TYPE', 'ENTITY_ID', 'ENTITY_TYPE', 'DOCUMENT.REPRESENTATIVE_ID'],
+				),
+			)
+			->registerRuntimeField(
+				'SAFE_REPRESENTATIVE_ID',
+				new Main\ORM\Fields\ExpressionField(
+					'SAFE_REPRESENTATIVE_ID',
+					'%s',
+					['DOCUMENT.REPRESENTATIVE_ID'],
+				),
+			)
+			->registerRuntimeField(
+				'SAFE_SENDER_ID',
+				new Main\ORM\Fields\ExpressionField(
+					'SAFE_SENDER_ID',
+					'%s',
+					['DOCUMENT.CREATED_BY_ID'],
+				),
+			)
+			->setSelect([
+				'SAFE_FOLDER_ID',
+				'SAFE_PARTICIPANT_ID',
+				'SAFE_REPRESENTATIVE_ID',
+				'SAFE_SENDER_ID',
+				'ROLE',
+				'DOCUMENT_ID',
+			])
+		;
+
+		$valueSets = [];
+		$dbResult = $query->exec();
+		while ($row = $dbResult->fetch())
+		{
+			$folderId = (int)$row['SAFE_FOLDER_ID'];
+			if (!isset($result[$folderId]))
+			{
+				continue;
+			}
+
+			foreach ([
+				'participant' => (int)$row['SAFE_PARTICIPANT_ID'],
+				'representative' => (int)$row['SAFE_REPRESENTATIVE_ID'],
+				'sender' => (int)$row['SAFE_SENDER_ID'],
+			] as $key => $value)
+			{
+				if ($value > 0)
+				{
+					$valueSets[$folderId][$key][$value] = true;
+				}
+			}
+
+			$role = Role::tryFromInt((int)$row['ROLE']);
+			if ($role !== null)
+			{
+				$valueSets[$folderId]['role'][$role] = true;
+			}
+			$documentId = (int)$row['DOCUMENT_ID'];
+			if (
+				$documentId > 0
+				&& count($valueSets[$folderId]['document'] ?? []) < $companyDocumentScanLimit
+			)
+			{
+				$valueSets[$folderId]['document'][$documentId] = true;
+			}
+		}
+
+		$peoplePreviewLimit = max(1, $peoplePreviewLimit);
+		foreach ($folderIds as $folderId)
+		{
+			foreach (['participant', 'representative', 'sender'] as $key)
+			{
+				$ids = array_map('intval', array_keys($valueSets[$folderId][$key] ?? []));
+				sort($ids, SORT_NUMERIC);
+				$result[$folderId]["{$key}Count"] = count($ids);
+				$result[$folderId]["{$key}Ids"] = array_slice($ids, 0, $peoplePreviewLimit);
+			}
+			$result[$folderId]['roleCodes'] = array_keys($valueSets[$folderId]['role'] ?? []);
+			$documentIds = array_map('intval', array_keys($valueSets[$folderId]['document'] ?? []));
+			sort($documentIds, SORT_NUMERIC);
+			$result[$folderId]['companyDocumentIds'] = $documentIds;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Distinct folder ids that hold at least one safe member matching the filter (P5.T2 folder gate).
+	 * The caller passes the user filter already narrowed to the accessible folders, so the result is
+	 * a database count with no materialized folder id list.
+	 */
+	public function countFolderIdsWithMembersForMySafe(ConditionTree $filter): int
+	{
+		return (int)$this->buildFolderIdsWithMembersForMySafeQuery($filter)->queryCountTotal();
+	}
+
+	/**
+	 * When title order is provided, the matching folder page is ordered by folder title before
+	 * limit/offset, with the folder id as the deterministic tie-breaker. Without a title order the
+	 * page defaults to newest-first (folder id descending), matching the safe grid default.
+	 *
+	 * @return list<int>
+	 */
+	public function listFolderIdsWithMembersForMySafe(
+		ConditionTree $filter,
+		int $limit,
+		int $offset,
+		?Main\DB\Order $titleOrder = null,
+	): array
+	{
+		$query = $this->buildFolderIdsWithMembersForMySafeQuery($filter);
+		if ($titleOrder !== null)
+		{
+			$query
+				->setSelect([
+					'FOLDER_ID',
+					'FOLDER_TITLE' => 'SAFE_FOLDER.TITLE',
+				])
+				->setGroup([
+					self::SAFE_FOLDER_PARENT_COLUMN,
+					'SAFE_FOLDER.TITLE',
+				])
+				->setOrder([
+					'SAFE_FOLDER.TITLE' => $titleOrder->value,
+					'FOLDER_ID' => 'ASC',
+				])
+			;
+		}
+		else
+		{
+			$query->setOrder(['FOLDER_ID' => 'DESC']);
+		}
+
+		$query
+			->setLimit(max(1, $limit))
+			->setOffset(max(0, $offset))
+		;
+
+		$ids = [];
+		$dbResult = $query->exec();
+		while ($row = $dbResult->fetch())
+		{
+			$ids[] = (int)$row['FOLDER_ID'];
+		}
+
+		return $ids;
+	}
+
+	private function buildFolderIdsWithMembersForMySafeQuery(ConditionTree $filter): Query
+	{
+		return $this->buildB2eMySafeBaseQuery($filter)
+			->setSelect(['FOLDER_ID'])
+			->where(self::SAFE_FOLDER_PARENT_COLUMN, '>', 0)
+			->setGroup([self::SAFE_FOLDER_PARENT_COLUMN])
+		;
+	}
+
+	/**
+	 * Applies a deterministic ORDER BY to the company safe grid query.
+	 *
+	 * This method has a side effect: when sorting by the signing date it also
+	 * registers the DATE_SIGN_EMPTY runtime field on $query, so building the
+	 * order and mutating the query are done together here rather than split
+	 * across the caller.
+	 *
+	 * A null field keeps the historical default ('ID' => 'DESC') so existing
+	 * callers (e.g. the REST wrapper) are unaffected. 'ID' => 'DESC' is always
+	 * appended last as a stable pagination tie-breaker. When sorting by the
+	 * signing date, empty dates are pushed to the end in both directions via a
+	 * runtime CASE field that is used only in ORDER BY and never selected, so
+	 * it cannot leak into queryCountTotal().
+	 */
+	private function applyMySafeOrder(
+		Query $query,
+		?Type\MySafeSortField $orderField,
+		Main\DB\Order $orderDirection,
+	): void
+	{
+		// fail-safe default: independent of the caller
+		if ($orderField === null)
+		{
+			$query->setOrder(self::MY_SAFE_DEFAULT_ORDER);
+
+			return;
+		}
+
+		if ($orderField === Type\MySafeSortField::DateSign)
+		{
+			$sqlHelper = Main\Application::getConnection()->getSqlHelper();
+			// A real DateTime is bound through the SqlHelper so the comparison
+			// is portable across MySQL/PostgreSQL.
+			$emptyThreshold = new DateTime(self::MY_SAFE_EMPTY_SIGN_DATE_THRESHOLD, 'Y-m-d H:i:s');
+			$thresholdSql = $sqlHelper->convertToDbDateTime($emptyThreshold);
+
+			$query->registerRuntimeField(
+				'DATE_SIGN_EMPTY',
+				new Main\Entity\ExpressionField(
+					'DATE_SIGN_EMPTY',
+					"CASE WHEN %s IS NULL OR %s < {$thresholdSql} THEN 1 ELSE 0 END",
+					['DATE_SIGN', 'DATE_SIGN'],
+				),
+			);
+
+			$query->setOrder([
+				'DATE_SIGN_EMPTY' => 'ASC',
+				'DATE_SIGN' => $orderDirection->value,
+				'ID' => 'DESC',
+			]);
+
+			return;
+		}
+
+		$query->setOrder([
+			$orderField->value => $orderDirection->value,
+			'ID' => 'DESC',
+		]);
 	}
 
 	public function listByUids(array $uids): Item\MemberCollection
@@ -1786,7 +2538,7 @@ class MemberRepository
 
 		$userModels = Main\UserTable::query()
 			->whereIn('ID', $userIds)
-			->setSelect($this->userCacheFields)
+			->setSelect(self::USER_CACHE_FIELDS)
 			->fetchCollection()
 		;
 
@@ -2314,5 +3066,29 @@ class MemberRepository
 			->whereNull('RESULT_FILE.ID');
 
 		return $this->extractItemCollectionFromModelCollection($query->fetchCollection());
+	}
+
+	/**
+	 * @param int[] $documentIds
+	 * @return int[]
+	 */
+	public function getDocumentIdsForEntityTypeWithRole(array $documentIds, string $entityType, string $role): array
+	{
+		if ($documentIds === [])
+		{
+			return [];
+		}
+
+		$roleId = $this->convertRoleToInt($role);
+		$raws = Internal\MemberTable
+			::query()
+			->addSelect('DOCUMENT_ID')
+			->whereIn('DOCUMENT_ID', $documentIds)
+			->where('ENTITY_TYPE', $entityType)
+			->where('ROLE', $roleId)
+			->setDistinct()
+			->fetchAll();
+
+		return array_map(fn($item): int => (int) $item['DOCUMENT_ID'], $raws);
 	}
 }

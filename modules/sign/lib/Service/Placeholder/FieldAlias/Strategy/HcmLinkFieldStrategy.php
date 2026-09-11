@@ -57,8 +57,21 @@ class HcmLinkFieldStrategy extends AbstractAliasStrategy implements PreloadableS
 		}
 	}
 
-	public function preloadForFieldNames(array $fieldNames): void
+	public function preloadForFieldNames(array $fieldNames, ?AliasContext $context = null): void
 	{
+		if ($context?->hcmLinkCompanyId !== null)
+		{
+			foreach ($fieldNames as $fieldName)
+			{
+				if ($this->supportsFieldName($fieldName))
+				{
+					$this->hcmLinkFieldService->preloadByCompanyId($context->hcmLinkCompanyId);
+
+					return;
+				}
+			}
+		}
+
 		$ids = [];
 
 		foreach ($fieldNames as $fieldName)

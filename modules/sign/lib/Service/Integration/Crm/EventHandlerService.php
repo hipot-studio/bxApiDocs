@@ -248,7 +248,7 @@ class EventHandlerService
 			'memberHash' => $member?->uid,
 			'item' => $item,
 			'bindings' => $bindings,
-			'initiatorUserId' => $eventData->getData()[EventData::DATA_KEY_INITIATOR] ?? null,
+			'initiatorUserId' => $eventData->getInitiatorUserId(),
 			'initiatedByType' => $document->initiatedByType->value,
 		]);
 

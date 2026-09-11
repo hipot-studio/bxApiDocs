@@ -46,15 +46,19 @@ class CheckDocumentAccess implements Contract\Operation
 			return $result->addError(new Main\Error('Module `crm` is not installed'));
 		}
 
-		if (
-			in_array(
-				$this->document->entityTypeId,
-				[\CCrmOwnerType::SmartDocument, \CCrmOwnerType::SmartB2eDocument],
-				true
-			)
-			&& array_key_exists($this->permissionId, Permission\PermissionDictionary::getCrmPermissionMap())
-		)
+		if (array_key_exists($this->permissionId, Permission\PermissionDictionary::getCrmPermissionMap()))
 		{
+			if (
+				!in_array(
+					$this->document->entityTypeId,
+					[\CCrmOwnerType::SmartDocument, \CCrmOwnerType::SmartB2eDocument],
+					true
+				)
+			)
+			{
+				return $result->addError($this->createAccessError());
+			}
+
 			return $this->checkCrmPermission($this->permissionId);
 		}
 
@@ -101,6 +105,12 @@ class CheckDocumentAccess implements Contract\Operation
 		$result = new Main\Result();
 
 		[$permission, $entity] = PermissionDictionary::getCrmPermissionMap()[$permissionId];
+
+		if ($this->document->entityTypeId !== $entity)
+		{
+			return $result->addError($this->createAccessError());
+		}
+
 		$userPermissions = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions(Main\Engine\CurrentUser::get()->getId());
 
 		if (method_exists($userPermissions, $permission) && $userPermissions->{$permission}($entity, $this->document->entityId))

@@ -9,6 +9,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetDashboard_Collection;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter\Service;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\BIConnector\Superset\Scope\MarketCollectionUrlBuilder;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Loader;
@@ -46,11 +47,18 @@ abstract class BaseMenuItemCreator
 	{
 		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
 		{
+			// A finished term locks this item too: buying a dashboard for a section that does not work is pointless.
+			$isLocked = SelfHostedLicenseLock::isDashboardLocked();
+
 			return [
 				[
 					'ID' => 'SCOPE_MENU_MARKETPLACE',
 					'TEXT' => Loc::getMessage('BIC_SCOPE_MENU_ITEM_MARKETPLACE'),
-					'ON_CLICK' => $this->getOpenMarketScript(),
+					'ON_CLICK' => $isLocked
+						? SelfHostedLicenseLock::getOpenSliderScript()
+						: $this->getOpenMarketScript()
+					,
+					'IS_LOCKED' => $isLocked,
 				]
 			];
 		}
@@ -99,6 +107,15 @@ abstract class BaseMenuItemCreator
 		return Feature::isBuilderEnabled();
 	}
 
+	/**
+	 * A locked item is drawn with a padlock and does not open the report. Every zone asks the same question here,
+	 * so a new reason to lock a report is added in one place and not in each of the menus.
+	 */
+	protected function isDashboardLocked(bool $isMarketAvailable = true): bool
+	{
+		return !$this->isAvailableByTariff() || !$isMarketAvailable || SelfHostedLicenseLock::isDashboardLocked();
+	}
+
 	abstract protected function getOpenFormCode(): string;
 
 	protected function getOpenFrom(): string
@@ -109,8 +126,19 @@ abstract class BaseMenuItemCreator
 	protected function createDashboardOpenEventFromMenu(
 		SupersetDashboard $dashboard,
 		array $params = [],
+		bool $isMarketAvailable = true,
 	): string
 	{
+		if (SelfHostedLicenseLock::isDashboardLocked())
+		{
+			return SelfHostedLicenseLock::getOpenSliderScript();
+		}
+
+		if (!$isMarketAvailable)
+		{
+			return $this->getOpenTariffSliderScript();
+		}
+
 		if (!$this->isAvailableByTariff())
 		{
 			return 'top.BX.UI.InfoHelper.show("limit_crm_BI_constructor")';

@@ -112,6 +112,10 @@ final class Copy implements Contract\Operation
 		$newDocument->templateId = null;
 		$newDocument->createdById = $this->createdByUserId;
 		$newDocument->stoppedById = null;
+		// External fields (externalId, externalDateCreate and their *SourceType) are marked #[Copyable],
+		// so a copy inherits them from the source template, exactly like company. There is no
+		// employee-specific override here: the concrete regional values entered on the creation step are
+		// applied to the created document afterwards (see Operation\Document\Template\Send).
 		CloneHelper::copyPropertiesIfPossible($oldDocument, $newDocument);
 	}
 

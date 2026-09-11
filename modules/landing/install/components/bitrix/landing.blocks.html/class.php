@@ -28,6 +28,23 @@ class LandingBlocksHtmlComponent extends \CBitrixComponent
 	}
 
 	/**
+	 * Is the html of the block passed through the sanitizer before the output?
+	 *
+	 * Raw html is allowed on a site with a domain of its own only. The sandboxed preview
+	 * (signed link or device frame) is served on the portal host whatever the domain is: the
+	 * opaque origin hides the portal session from the code of the author, but a form or a
+	 * script drawn under the trusted portal address would still be believed by the visitor.
+	 * So there the html is sanitized the same way as without a domain — same as the head-block
+	 * hook, which is off in that mode (Hook\Page\HeadBlock::enabled()).
+	 * @param int $domainId Domain id of the site, 0 when the site has no domain of its own.
+	 * @return bool
+	 */
+	public function mustSanitize(int $domainId): bool
+	{
+		return !$domainId || Landing::getDevicePreviewMode();
+	}
+
+	/**
 	 * Local htmlspecialcharsback funciton.
 	 * @param string $code Code for decoding.
 	 * @return string

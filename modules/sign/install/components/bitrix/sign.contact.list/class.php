@@ -32,5 +32,6 @@ class SignContactListComponent extends SignBaseComponent
 	private function prepareResult(): void
 	{
 		$this->arResult['MENU_ITEMS'] = $this->arParams['MENU_ITEMS'] ?? [];
+		$this->arResult['PATH_TO'] = $this->arParams['PATH_TO'] ?? [];
 	}
 }

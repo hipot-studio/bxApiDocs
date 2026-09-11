@@ -7,6 +7,7 @@ final class TailwindRuntimeAssetPolicy
 		'assets/js/helpers/tailwind-runtime-save.js',
 		'assets/js/helpers/tailwind.js',
 	];
+
 	private const ASSET_SECTIONS = [
 		'content_ext',
 		'js',
