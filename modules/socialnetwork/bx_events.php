@@ -806,8 +806,19 @@ class _CEventsSocialnetwork
 	public static function OnAfterSocNetLogAdd($arFields)
 	{
 	}
-
-
+	
+	/**
+	 * @param \CSocServAuth      $service
+	 * @param array $fields
+	 * @param string  $errorCode
+	 *
+	 * @return bool
+	 * @see \CSocServAuth::AuthorizeUser
+	 */
+	public static function OnBeforeSocServUserAuthorize(\CSocServAuth $service, array &$fields, &$errorCode): bool
+	{
+		return true;
+	}
 }
 
 ?>

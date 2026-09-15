@@ -46,6 +46,9 @@ abstract class Engine
 	protected const URL_COMPLETIONS_QUEUE_PATH = '/api/v1/proxy/send';
 	protected const HTTP_STATUS_OK = 200;
 
+	// Wire contract with aiproxy: must match Bitrix\AiProxy\Controller\Query::ERROR_CODE_COULD_NOT_LOCK.
+	public const ERROR_CODE_COULD_NOT_LOCK = 'could_not_lock';
+
 	protected ImageService $imageService;
 	protected int $modelContextLimit = 0;
 	protected array $params = [];
@@ -61,6 +64,7 @@ abstract class Engine
 	protected $onSuccessCallback;
 	protected $onErrorCallback;
 	protected QueueJob|null $queueJob = null;
+	protected int $queueJobTtl = QueueJob::DEFAULT_TTL;
 	private ?array $contextMessages = null;
 	private array $analyticData = [
 		'category' => '',
@@ -76,6 +80,25 @@ abstract class Engine
 		protected Context $context,
 		mixed $data = null
 	){
+	}
+
+	public function setQueueJobTtl(int $ttl): static
+	{
+		if ($ttl <= 0 || $ttl > QueueJob::MAX_TTL)
+		{
+			throw new \InvalidArgumentException(
+				sprintf('Queue job TTL must be between 1 and %d seconds', QueueJob::MAX_TTL)
+			);
+		}
+
+		$this->queueJobTtl = $ttl;
+
+		return $this;
+	}
+
+	public function getQueueJobTtl(): int
+	{
+		return $this->queueJobTtl;
 	}
 
 	/**
@@ -612,8 +635,9 @@ abstract class Engine
 
 		if (is_callable($this->onErrorCallback))
 		{
-			$errorCode = (int)$error->getCode();
-			if ($errorCode == 100 || $errorCode >= 500)
+			$rawErrorCode = $error->getCode();
+			$errorCode = (int)$rawErrorCode;
+			if ($errorCode == 100 || $errorCode >= 500 || $rawErrorCode === self::ERROR_CODE_COULD_NOT_LOCK)
 			{
 				$errorForUser = new Error(Loc::getMessage('AI_ENGINE_ERROR_PROVIDER'), 'AI_ENGINE_ERROR_PROVIDER');
 			}
@@ -683,7 +707,7 @@ abstract class Engine
 			$this->setCache(true);
 		}
 		$params = $this->makeRequestParams();
-		$this->queueJob = QueueJob::createWithinFromEngine($this)->register();
+		$this->queueJob = QueueJob::createWithinFromEngine($this, $this->queueJobTtl)->register();
 
 		$url = $this->getCompletionsQueueUrl() . $this->getCompletionsQueueUrlPath();
 

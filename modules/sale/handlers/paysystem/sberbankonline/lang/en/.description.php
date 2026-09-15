@@ -13,7 +13,5 @@ $MESS["SALE_HPS_SBERBANK_RETURN_FAIL_URL"] = "Redirect customer to this page upo
 $MESS["SALE_HPS_SBERBANK_RETURN_FAIL_URL_DESC"] = "A fully qualified address including protocol is required. Leave this field empty to redirect customer to a page from which payment was initiated";
 $MESS["SALE_HPS_SBERBANK_RETURN_SUCCESS_URL"] = "Redirect customer to this page upon successful payment";
 $MESS["SALE_HPS_SBERBANK_RETURN_SUCCESS_URL_DESC"] = "A fully qualified address including protocol is required. Leave this field empty to redirect customer to a page from which payment was initiated";
-$MESS["SALE_HPS_SBERBANK_SECRET_KEY"] = "Secret key";
-$MESS["SALE_HPS_SBERBANK_SECRET_KEY_DESC"] = "Specify when using callback notifications with checksum";
 $MESS["SALE_HPS_SBERBANK_TEST_MODE"] = "Test mode";
 $MESS["SALE_HPS_SBERBANK_TEST_MODE_DESC"] = "Select this option to enable test mode.";

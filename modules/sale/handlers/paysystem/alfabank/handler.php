@@ -3,15 +3,14 @@
 namespace Sale\Handlers\PaySystem;
 
 use Bitrix\Sale\Payment;
-use Bitrix\Sale\PaySystem;
 
-PaySystem\Manager::includeHandler('SberbankOnline');
+require_once __DIR__ . '/legacyhandler.php';
 
 /**
  * Class AlfaBankHandler
  * @package Sale\Handlers\PaySystem
  */
-class AlfaBankHandler extends SberbankOnlineHandler
+class AlfaBankHandler extends AlfabankLegacyHandler
 {
 	/**
 	 * @return string[]

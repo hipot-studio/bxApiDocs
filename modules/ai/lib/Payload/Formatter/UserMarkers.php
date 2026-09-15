@@ -16,7 +16,7 @@ class UserMarkers extends Formatter implements IFormatter
 			if (!is_array($val))
 			{
 				$key = mb_strtolower($key);
-				$this->text = str_replace('{user.' . $key . '}', $val, $this->text);
+				$this->text = str_replace('{user.' . $key . '}', (string)$val, $this->text);
 			}
 		}
 

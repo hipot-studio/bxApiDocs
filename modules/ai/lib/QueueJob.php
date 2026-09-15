@@ -15,11 +15,14 @@ use Bitrix\AI\Limiter\LimitControlService;
 use Bitrix\AI\Model\QueueTable;
 use Bitrix\AI\Payload\IPayload;
 use Bitrix\AI\Role\RoleManager;
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
@@ -33,7 +36,8 @@ final class QueueJob
 	public const ERROR_INVALID_JSON = 'INVALID_JSON';
 	public const ERROR_FAIL_PROCESSING = 'FAIL_PROCESSING_ERROR';
 
-	private const TTL_SECONDS = 14400;
+	public const DEFAULT_TTL = 14400;
+	public const MAX_TTL = 86400;
 	private const CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.api.queue.callbackBody&hash={hash}';
 	private const CLOUD_CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.b24cloudai.callbackSuccess&hash={hash}';
 	private const THIRDPARTY_CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.thirdparty.callbackSuccess&hash={hash}';
@@ -46,6 +50,7 @@ final class QueueJob
 	private ?string $cacheHash = null;
 	private ?Error $error = null;
 	private bool $apiRequestCompleted = true;
+	private int $ttl = self::DEFAULT_TTL;
 	private Context $context;
 	private IEngine $engine;
 	protected LimitControlService $limitControlService;
@@ -59,41 +64,34 @@ final class QueueJob
 	 */
 	public static function clearOldAgent(): string
 	{
-		$date = new DateTime();
-		$date->add('-' . self::TTL_SECONDS . ' seconds');
 		$limit = 100;
 
+		// Rows can have EXPIRE_DATE = NULL (rolling deploy against an older writer,
+		// or an interrupted updater backfill), so a fallback on DATE_CREATE is required
+		// to still catch and clean up those rows.
 		$res = QueueTable::query()
-			->setSelect(['ID', 'HASH', 'DATE_CREATE'])
-			->where('DATE_CREATE', '<', $date)
+			->setSelect(['HASH'])
+			->where(
+				Query::filter()
+					->logic('or')
+					->where('EXPIRE_DATE', '<', new DateTime())
+					->where(
+						Query::filter()
+							->logic('and')
+							->whereNull('EXPIRE_DATE')
+							->where('DATE_CREATE', '<', DateTime::createFromTimestamp(time() - self::DEFAULT_TTL))
+					)
+			)
 			->setOrder('ID')
 			->setLimit($limit)
 			->exec();
 
-		$limiterControlService = new LimitControlService();
+		// Every selected row is expired, and createFromHash() handles both outcomes itself:
+		// a loadable job goes through expire(), a broken one (engine/payload failed to unpack)
+		// is deleted right away — no second delete needed here.
 		while ($row = $res->fetch())
 		{
-			$queueJob = self::createFromHash($row['HASH']);
-			if ($queueJob)
-			{
-				$result = new Result(null, null);
-
-				$queueJob->error = new Error('Hash expired', 'HASH_EXPIRED');
-				$queueJob->sendBackendEvent($result, self::EVENT_FAIL);
-				$queueJob->sendFrontendEvent($result, self::EVENT_FAIL);
-
-				$limiterControlService->rollbackConsumption(
-					new Limiter\Usage($queueJob->engine->getContext()),
-					$queueJob->engine->getPayload()->getCost(),
-					$queueJob->engine->getConsumptionId()
-				);
-
-				$queueJob->delete();
-			}
-			else
-			{
-				QueueTable::delete($row['ID'])->isSuccess();
-			}
+			self::createFromHash($row['HASH']);
 		}
 
 		return __CLASS__ . '::' . __FUNCTION__ . '();';
@@ -105,21 +103,51 @@ final class QueueJob
 	 * @param IEngine $engine Engine instance.
 	 * @return self
 	 */
-	public static function createWithinFromEngine(IEngine $engine): self
+	public static function createWithinFromEngine(IEngine $engine, ?int $ttl = null): self
 	{
+		if ($ttl !== null && ($ttl <= 0 || $ttl > self::MAX_TTL))
+		{
+			throw new \InvalidArgumentException(
+				sprintf('Queue job TTL must be between 1 and %d seconds', self::MAX_TTL)
+			);
+		}
+
 		$self = new self();
 		$self->engine = $engine;
+		$self->ttl = $ttl ?? (
+			method_exists($engine, 'getQueueJobTtl') ? $engine->getQueueJobTtl() : self::DEFAULT_TTL
+		);
 
 		return $self;
 	}
 
 	/**
+	 * Whether a queue row is expired: by EXPIRE_DATE, or (when EXPIRE_DATE is missing —
+	 * e.g. a row written before the column existed) by DATE_CREATE + DEFAULT_TTL as a fallback.
+	 *
+	 * @param DateTime|null $expireDate Row's EXPIRE_DATE, if set.
+	 * @param DateTime $dateCreate Row's DATE_CREATE.
+	 * @return bool
+	 */
+	private static function isRowExpired(?DateTime $expireDate, DateTime $dateCreate): bool
+	{
+		return $expireDate !== null
+			? $expireDate < new DateTime()
+			: $dateCreate < DateTime::createFromTimestamp(time() - self::DEFAULT_TTL);
+	}
+
+	/**
 	 * Creates Queue Job object by hash, and return it (if exists).
 	 *
+	 * An expired job is failed and removed instead of being returned, unless $allowExpired
+	 * is set — success callbacks pass true so a valid late result is still delivered while
+	 * the row is alive (the work is done and consumption is spent).
+	 *
 	 * @param string $hash Queue job hash.
+	 * @param bool $allowExpired Return the job even if its TTL has passed.
 	 * @return static|null
 	 */
-	public static function createFromHash(string $hash): ?self
+	public static function createFromHash(string $hash, bool $allowExpired = false): ?self
 	{
 		$row = QueueTable::query()
 			->setSelect(['*'])
@@ -149,6 +177,14 @@ final class QueueJob
 					'PAYLOAD_CLASS' => $row['PAYLOAD_CLASS'] ?: '-',
 					'CREATED_BY_ID' => $context?->getUserId() ?? 0,
 				]);
+
+				// A broken row cannot go through expire() (nothing to notify or refund),
+				// so an expired one is removed right away — this lets clearOldAgent() rely
+				// on this method without a second delete of its own.
+				if (!$allowExpired && self::isRowExpired($row['EXPIRE_DATE'], $row['DATE_CREATE']))
+				{
+					QueueTable::delete($row['ID']);
+				}
 
 				return null;
 			}
@@ -196,6 +232,22 @@ final class QueueJob
 			$queueJob->cacheHash = $row['CACHE_HASH'];
 			$queueJob->context = $context;
 			$queueJob->engine = $engine->getIEngine();
+
+			$expireDate = $row['EXPIRE_DATE'];
+			if ($expireDate !== null)
+			{
+				$queueJob->ttl = $expireDate->getTimestamp() - $row['DATE_CREATE']->getTimestamp();
+			}
+
+			// Callback endpoints load a job purely by hash, so an expired-but-not-yet-cleaned-up
+			// row must be rejected here too, not just by the periodic clearOldAgent() agent.
+			// Success callbacks opt out via $allowExpired: a delivered valid result wins over TTL.
+			if (!$allowExpired && self::isRowExpired($expireDate, $row['DATE_CREATE']))
+			{
+				$queueJob->expire();
+
+				return null;
+			}
 
 			return $queueJob;
 		}
@@ -247,6 +299,7 @@ final class QueueJob
 		$cacheHash = md5(serialize($data));
 		$data['HASH'] = $hash;
 		$data['CACHE_HASH'] = $cacheHash;
+		$data['EXPIRE_DATE'] = DateTime::createFromTimestamp(time() + $this->ttl);
 
 		$result = QueueTable::add($data);
 
@@ -462,11 +515,12 @@ final class QueueJob
 			$this->apiRequestCompleted = (bool)$rawError['api_request_completed'];
 		}
 
-		$errorCode = isset($rawError['code']) ? (int)$rawError['code'] : 0;
+		$rawErrorCode = $rawError['code'] ?? null;
+		$errorCode = (int)$rawErrorCode;
 
 		Loc::loadLanguageFile(__DIR__ . '/Engine.php');
 
-		if ($errorCode === 100 || $errorCode >= 500)
+		if ($errorCode === 100 || $errorCode >= 500 || $rawErrorCode === Engine\Engine::ERROR_CODE_COULD_NOT_LOCK)
 		{
 			$this->error = new Error(Loc::getMessage('AI_ENGINE_ERROR_PROVIDER'), 'AI_ENGINE_ERROR_PROVIDER');
 		}
@@ -497,7 +551,56 @@ final class QueueJob
 	 */
 	public function getTTL(): int
 	{
-		return self::TTL_SECONDS;
+		return $this->ttl;
+	}
+
+	/**
+	 * Fails Queue Job as expired, rolls back consumption and removes it.
+	 *
+	 * @return void
+	 */
+	private function expire(): void
+	{
+		// Delete is the claim: expire() is reachable from concurrent requests (a late callback
+		// racing the agent tick, or a retried callback), and only the caller that actually
+		// removed the row may send fail events and roll back consumption — otherwise both would.
+		if (!$this->tryDelete())
+		{
+			return;
+		}
+
+		$this->error = new Error('Hash expired', 'HASH_EXPIRED');
+
+		$result = new Result(null, null);
+		$this->sendBackendEvent($result, self::EVENT_FAIL);
+		$this->sendFrontendEvent($result, self::EVENT_FAIL);
+
+		$this->getLimitControlService()->rollbackConsumption(
+			new Limiter\Usage($this->engine->getContext()),
+			$this->engine->getPayload()->getCost(),
+			$this->engine->getConsumptionId()
+		);
+	}
+
+	/**
+	 * Removes the row and reports whether this call actually deleted it.
+	 * Raw DELETE is used because ORM delete() gives no affected-rows contract.
+	 *
+	 * @return bool
+	 */
+	private function tryDelete(): bool
+	{
+		if (!$this->id)
+		{
+			return false;
+		}
+
+		$connection = Application::getConnection();
+		$connection->queryExecute(
+			(new SqlExpression('DELETE FROM ?# WHERE ID = ?i', QueueTable::getTableName(), $this->id))->compile()
+		);
+
+		return $connection->getAffectedRowsCount() > 0;
 	}
 
 	/**

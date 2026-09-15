@@ -75,6 +75,7 @@ class QueueTable extends Entity\DataManager
 				'required' => true,
 			]),
 			new Entity\DatetimeField('DATE_CREATE'),
+			new Entity\DatetimeField('EXPIRE_DATE'),
 		];
 	}
 

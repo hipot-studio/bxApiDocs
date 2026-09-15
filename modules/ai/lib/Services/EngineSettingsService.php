@@ -182,6 +182,11 @@ class EngineSettingsService
 		}
 
 		$engineCode = $item->getValue();
+		if (!is_string($engineCode) || $engineCode === '')
+		{
+			return;
+		}
+
 		$engine = Engine::getByCode($engineCode, Context::getFake());
 		if (is_null($engine))
 		{

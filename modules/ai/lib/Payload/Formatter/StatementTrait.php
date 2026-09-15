@@ -73,7 +73,7 @@ trait StatementTrait
 				{
 					continue;
 				}
-				$conditionsData["{$this->currentResultKey}$key"] = trim(mb_strtolower($value));
+				$conditionsData["{$this->currentResultKey}$key"] = trim(mb_strtolower((string)$value));
 			}
 		}
 
@@ -87,7 +87,7 @@ trait StatementTrait
 			{
 				$key = strtolower(str_replace('_', '', $key));
 			}
-			$conditionsData[$key] = trim(mb_strtolower($value));
+			$conditionsData[$key] = trim(mb_strtolower((string)$value));
 		}
 
 		$this->conditionsData = $conditionsData;

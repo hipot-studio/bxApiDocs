@@ -278,7 +278,7 @@ class ThirdParty extends Engine implements IEngine, IQueue, IContext
 	{
 		if (!$this->queueJob)
 		{
-			$this->queueJob = QueueJob::createWithinFromEngine($this);
+			$this->queueJob = QueueJob::createWithinFromEngine($this, $this->queueJobTtl);
 		}
 		return $this->queueJob;
 	}

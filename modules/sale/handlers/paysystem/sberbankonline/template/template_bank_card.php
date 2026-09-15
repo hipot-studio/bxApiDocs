@@ -9,13 +9,13 @@ Loc::loadMessages(__FILE__);
 ?>
 <div class="mb-4" >
 	<p><?= Loc::getMessage('SALE_HANDLERS_PAY_SYSTEM_SBERBANK_DESCRIPTION')." ".SaleFormatCurrency($params['SUM'], $params['CURRENCY']); ?></p>
-	<form action="<?= $params['URL']; ?>" method="GET">
+	<form action="<?= htmlspecialcharsbx($params['FORM_ACTION']); ?>" method="GET">
 		<?php
 		if (isset($params['FORM_PARAMS']))
 		{
 			foreach ($params['FORM_PARAMS'] as $param => $value)
 			{
-				?><input type="hidden" name="<?= $param; ?>" value="<?= $value; ?>"><?php
+				?><input type="hidden" name="<?= htmlspecialcharsbx($param); ?>" value="<?= htmlspecialcharsbx($value); ?>"><?php
 			}
 		}
 		?>

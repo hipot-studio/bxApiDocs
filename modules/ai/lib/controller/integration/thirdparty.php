@@ -69,7 +69,8 @@ class Thirdparty extends Controller
 	 */
 	public function callbackSuccessAction(string $hash, JsonPayload $result): bool
 	{
-		$queueJob = QueueJob::createFromHash($hash);
+		// A valid late result is still delivered while the row is alive (allowExpired).
+		$queueJob = QueueJob::createFromHash($hash, allowExpired: true);
 		if (!$queueJob)
 		{
 			return false;

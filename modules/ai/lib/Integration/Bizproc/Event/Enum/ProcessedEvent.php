@@ -7,4 +7,5 @@ namespace Bitrix\Ai\Integration\Bizproc\Event\Enum;
 enum ProcessedEvent: string
 {
 	case OnAiAgentStart = 'OnAiAgentStart';
+	case OnAiAgentRestart = 'OnAiAgentRestart';
 }

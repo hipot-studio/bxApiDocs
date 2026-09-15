@@ -138,14 +138,14 @@ final class EngineSettings
 	{
 		self::getEngineSettingsService()->resetToBitrixGPTInCloud();
 
-		return '\Bitrix\AI\Agents\EngineSettings::resetToBitrixGPTInCloudAgent();';
+		return __METHOD__ . '();';
 	}
 
 	public static function resetToBitrixAudioInCloudAgent(): string
 	{
 		self::getEngineSettingsService()->resetToBitrixAudioInCloud();
 
-		return '\Bitrix\AI\Agents\EngineSettings::resetToBitrixAudioInCloudAgent();';
+		return __METHOD__ . '();';
 	}
 
 	public static function resetFollowUpTextStepsToBGPTAgent(): string

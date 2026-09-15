@@ -1,7 +1,8 @@
 <?php
-use Bitrix\Main\Loader,
-	Bitrix\Main\Localization\Loc,
-	Bitrix\Sale\PaySystem;
+
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Sale\PaySystem;
 
 Loc::loadMessages(__FILE__);
 
@@ -38,13 +39,7 @@ $data = [
 			'NAME' => Loc::getMessage('SALE_HPS_SBERBANK_PASSWORD'),
 			'DESCRIPTION' => Loc::getMessage('SALE_HPS_SBERBANK_PASSWORD_DESC'),
 			'SORT' => 200,
-			'GROUP' => 'CONNECT_SETTINGS_SBERBANK'
-		],
-		'SBERBANK_SECRET_KEY' => [
-			'NAME' => Loc::getMessage('SALE_HPS_SBERBANK_SECRET_KEY'),
-			'DESCRIPTION' => Loc::getMessage('SALE_HPS_SBERBANK_SECRET_KEY_DESC'),
-			'SORT' => 300,
-			'GROUP' => 'CONNECT_SETTINGS_SBERBANK'
+			'GROUP' => 'CONNECT_SETTINGS_SBERBANK',
 		],
 		'SBERBANK_RETURN_SUCCESS_URL' => [
 			'NAME' => Loc::getMessage('SALE_HPS_SBERBANK_RETURN_SUCCESS_URL'),
@@ -65,8 +60,8 @@ $data = [
 			'GROUP' => 'CONNECT_SETTINGS_SBERBANK',
 			'DEFAULT' => [
 				'PROVIDER_KEY' => 'VALUE',
-					'PROVIDER_VALUE' => Loc::getMessage('SALE_HPS_SBERBANK_ORDER_DESCRIPTION_TEMPLATE'),
-			]
+				'PROVIDER_VALUE' => Loc::getMessage('SALE_HPS_SBERBANK_ORDER_DESCRIPTION_TEMPLATE'),
+			],
 		],
 		'SBERBANK_TEST_MODE' => [
 			'NAME' => Loc::getMessage('SALE_HPS_SBERBANK_TEST_MODE'),
@@ -74,7 +69,7 @@ $data = [
 			'SORT' => 700,
 			'GROUP' => 'CONNECT_SETTINGS_SBERBANK',
 			'INPUT' => [
-				'TYPE' => 'Y/N'
+				'TYPE' => 'Y/N',
 			],
 		],
 		'PS_CHANGE_STATUS_PAY' => [
@@ -82,12 +77,12 @@ $data = [
 			'SORT' => 800,
 			'GROUP' => 'GENERAL_SETTINGS',
 			'INPUT' => [
-				'TYPE' => 'Y/N'
+				'TYPE' => 'Y/N',
 			],
 			'DEFAULT' => [
 				'PROVIDER_KEY' => 'INPUT',
 				'PROVIDER_VALUE' => 'Y',
-			]
+			],
 		],
-	]
+	],
 ];
