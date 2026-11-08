@@ -14,6 +14,12 @@ Loader::requireModule('ui');
 class FileField extends BaseField
 {
 	protected bool $isDiskFile;
+	private int $attemptUserId = 0;
+	private bool $accepted = false;
+	private bool $compensated = false;
+	private array $createdDiskIds = [];
+	private array $tokenValues = [];
+	private ?PendingFileCollection $sourceFiles = null;
 	protected ?array $configFileInfo = null;
 	protected string $endpoint = '';
 	protected array $controllerOptionNames = [];
@@ -28,6 +34,126 @@ class FileField extends BaseField
 		{
 			$this->fieldTypeObject->setTypeClass(DiskFile::class);
 		}
+	}
+
+	public function beginAttempt(int $userId): void
+	{
+		$this->attemptUserId = $userId;
+	}
+
+	public function acceptAttempt(): void
+	{
+		$this->accepted = true;
+	}
+
+	public function completeAttempt(): void
+	{
+		if (!$this->accepted || $this->sourceFiles === null)
+		{
+			return;
+		}
+
+		foreach ($this->sourceFiles as $pendingFile)
+		{
+			if ($this->isDiskFile)
+			{
+				$pendingFile->remove();
+			}
+			else
+			{
+				$pendingFile->makePersistent();
+			}
+		}
+	}
+
+	public function compensateAttempt(): \Bitrix\Main\Result
+	{
+		$result = new \Bitrix\Main\Result();
+		if ($this->accepted || $this->compensated)
+		{
+			return $result;
+		}
+
+		foreach ($this->createdDiskIds as $id)
+		{
+			try
+			{
+				$file = \Bitrix\Disk\File::loadById($id);
+				if ($file && !$file->delete($this->attemptUserId))
+				{
+					$result->addErrors($file->getErrors());
+					$result->addError(new \Bitrix\Main\Error('Could not remove task upload', 'TASK_UPLOAD_CLEANUP'));
+				}
+				elseif (\Bitrix\Disk\File::loadById($id) === null)
+				{
+					unset($this->createdDiskIds[$id]);
+				}
+				else
+				{
+					$result->addError(new \Bitrix\Main\Error('Task upload still exists', 'TASK_UPLOAD_CLEANUP'));
+				}
+			}
+			catch (\Throwable $exception)
+			{
+				$result->addError(new \Bitrix\Main\Error($exception->getMessage(), 'TASK_UPLOAD_CLEANUP'));
+			}
+		}
+
+		$this->compensated = !$this->createdDiskIds;
+
+		return $result;
+	}
+
+	private function copyPendingDiskFiles(PendingFileCollection $pendingFiles): array
+	{
+		Loader::requireModule('disk');
+		$storage = \Bitrix\Disk\Driver::getInstance()->getStorageByUserId($this->attemptUserId);
+		$folder = $storage ? $storage->getFolderForUploadedFiles() : null;
+		if (!$folder || !$folder->canAdd($storage->getSecurityContext($this->attemptUserId)))
+		{
+			throw new \Bitrix\Main\SystemException('Cannot add task upload to Disk');
+		}
+
+		$values = [];
+		foreach ($pendingFiles as $pendingFile)
+		{
+			if (!$pendingFile->isValid())
+			{
+				continue;
+			}
+			$token = $pendingFile->getId();
+			if (!array_key_exists($token, $this->tokenValues))
+			{
+				$fileArray = \CFile::MakeFileArray($pendingFile->getFileId());
+				$file = $folder->uploadFile(
+					$fileArray,
+					['NAME' => $fileArray['name'], 'CREATED_BY' => $this->attemptUserId],
+					[],
+					true,
+				);
+				if (!$file)
+				{
+					throw new \Bitrix\Main\SystemException('Could not copy task upload to Disk');
+				}
+				$id = (int)$file->getId();
+				$this->createdDiskIds[$id] = $id;
+				$property = \CIBlockProperty::getUserType('DiskFile');
+				$documentType = $this->fieldTypeObject->getDocumentType();
+				$type = explode('_', $documentType[2]);
+				$value = isset($property['AttachFilesWorkflow'])
+					? call_user_func($property['AttachFilesWorkflow'], (int)($type[1] ?? 0), 'n' . $id)
+					: $id
+				;
+				if (!$value)
+				{
+					throw new \Bitrix\Main\SystemException('Could not attach task upload to workflow');
+				}
+				$this->tokenValues[$token] = $value;
+			}
+			$values[] = $this->tokenValues[$token];
+		}
+
+		return $values;
 	}
 
 	public function setEndpoint(string $endpoint): void
@@ -109,6 +235,7 @@ class FileField extends BaseField
 				array_column(array_filter($value), 'token'),
 			);
 
+			$this->sourceFiles ??= $pendingFiles;
 			$value = $pendingFiles->getFileIds();
 			if (!$this->isDiskFile)
 			{
@@ -117,7 +244,10 @@ class FileField extends BaseField
 
 			if ($this->isDiskFile && $this->fieldTypeObject)
 			{
-				$value = $this->fieldTypeObject->internalizeValue(FieldType::VALUE_CONTEXT_JN_MOBILE, $value);
+				$value = $this->attemptUserId > 0
+					? $this->copyPendingDiskFiles($pendingFiles)
+					: $this->fieldTypeObject->internalizeValue(FieldType::VALUE_CONTEXT_JN_MOBILE, $value)
+				;
 				if (!is_array($value))
 				{
 					$value = empty($value) ? [] : [$value];

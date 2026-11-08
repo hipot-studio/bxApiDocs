@@ -139,7 +139,52 @@ final class LegacyMailTemplateRepository
 	}
 
 	/**
-	 * @return array{id: int, subject: string, body: string, bodyType: int}|null
+	 * @return list<array{
+	 *     id: int,
+	 *     title: string,
+	 *     subject: string,
+	 *     scope: int,
+	 *     entityTypeId: int,
+	 *     bodyType: int
+	 * }>
+	 */
+	public function getRecentlyCreated(
+		int $userId,
+		int $limit = 5,
+		bool $includeContextual = true,
+	): array
+	{
+		if ($userId <= 0)
+		{
+			return [];
+		}
+
+		$limit = min(max(1, $limit), self::MAX_LIMIT);
+		$filter = $this->buildAvailableFilter($userId);
+		if (!$includeContextual)
+		{
+			$filter['=ENTITY_TYPE_ID'] = 0;
+		}
+
+		$result = \CCrmMailTemplate::GetList(
+			['CREATED' => 'DESC', 'ID' => 'DESC'],
+			$filter,
+			false,
+			['nTopCount' => $limit],
+			['ID', 'TITLE', 'SUBJECT', 'SCOPE', 'ENTITY_TYPE_ID', 'BODY_TYPE'],
+		);
+
+		$rows = [];
+		while ($row = $result->Fetch())
+		{
+			$rows[] = $this->mapListRow($row);
+		}
+
+		return $rows;
+	}
+
+	/**
+	 * @return array{id: int, subject: string, body: string, bodyType: int, attachmentIds: list<int>}|null
 	 */
 	public function getUniversalForPreparation(int $templateId, int $userId): ?array
 	{
@@ -169,7 +214,47 @@ final class LegacyMailTemplateRepository
 			'subject' => (string)$row['SUBJECT'],
 			'body' => (string)$row['BODY'],
 			'bodyType' => (int)$row['BODY_TYPE'],
+			'attachmentIds' => $this->getAttachmentIds((int)$row['ID']),
 		];
+	}
+
+	/**
+	 * @param list<int> $diskObjectIds
+	 */
+	public function addPersonalUniversal(
+		string $subject,
+		string $bodyHtml,
+		string $emailFrom,
+		array $diskObjectIds,
+		int $userId,
+	): int
+	{
+		$fields = [
+			'TITLE' => $subject,
+			'IS_ACTIVE' => 'Y',
+			'OWNER_ID' => $userId,
+			'SCOPE' => \CCrmMailTemplateScope::Personal,
+			'ENTITY_TYPE_ID' => 0,
+			'EMAIL_FROM' => $emailFrom,
+			'SUBJECT' => $subject,
+			'BODY_TYPE' => \CCrmContentType::Html,
+			'BODY' => $bodyHtml,
+			'UF_ATTACHMENT' => $this->mapDiskObjectIdsToUserFieldValues($diskObjectIds),
+			'SORT' => 100,
+		];
+
+		return (int)\CCrmMailTemplate::add($fields, [
+			'CURRENT_USER_ID' => $userId,
+		]);
+	}
+
+	/** @return list<string> */
+	public function getLastErrorMessages(): array
+	{
+		return array_values(array_filter(
+			array_map('strval', \CCrmMailTemplate::getErrorMessages()),
+			static fn(string $errorMessage): bool => $errorMessage !== '',
+		));
 	}
 
 	/**
@@ -203,6 +288,55 @@ final class LegacyMailTemplateRepository
 			? (bool)($this->intranetLoader)()
 			: Loader::includeModule('intranet')
 		;
+	}
+
+	/**
+	 * @return list<int>
+	 */
+	private function getAttachmentIds(int $templateId): array
+	{
+		global $USER_FIELD_MANAGER;
+
+		$values = $USER_FIELD_MANAGER->getUserFieldValue('CRM_MAIL_TEMPLATE', 'UF_ATTACHMENT', $templateId);
+		if (!is_array($values))
+		{
+			$values = $values !== null && $values !== false && $values !== '' ? [$values] : [];
+		}
+
+		$attachmentIds = [];
+		foreach ($values as $value)
+		{
+			$attachmentId = (int)$value;
+			if ($attachmentId > 0)
+			{
+				$attachmentIds[] = $attachmentId;
+			}
+		}
+
+		return $attachmentIds;
+	}
+
+	/**
+	 * @param list<int> $diskObjectIds
+	 * @return list<string>
+	 */
+	private function mapDiskObjectIdsToUserFieldValues(array $diskObjectIds): array
+	{
+		$normalizedIds = [];
+		$seenIds = [];
+		foreach ($diskObjectIds as $diskObjectId)
+		{
+			$diskObjectId = (int)$diskObjectId;
+			if ($diskObjectId <= 0 || isset($seenIds[$diskObjectId]))
+			{
+				continue;
+			}
+
+			$normalizedIds[] = 'n' . $diskObjectId;
+			$seenIds[$diskObjectId] = true;
+		}
+
+		return $normalizedIds;
 	}
 
 	/**

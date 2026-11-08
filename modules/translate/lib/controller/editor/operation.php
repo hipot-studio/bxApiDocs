@@ -35,6 +35,36 @@ class Operation
 	}
 
 	/**
+	 * Resolves the file path for every language the operation is about to touch. Resolving
+	 * depends on the language code, so it has to happen before the first write: a language
+	 * rejected in the middle of the list would otherwise leave the previous ones saved.
+	 *
+	 * @param string $file Path of the language file, language placeholder included.
+	 * @param string[] $languageIds Languages to resolve the path for.
+	 *
+	 * @return Main\Result Carries the resolved paths keyed by the language code.
+	 */
+	protected function resolveLangFilePaths(string $file, array $languageIds): Main\Result
+	{
+		$result = new Main\Result();
+
+		$paths = [];
+		foreach ($languageIds as $langId)
+		{
+			$pathResult = Translate\IO\Path::resolveAllowedLangFile($file, $langId);
+			if (!$pathResult->isSuccess())
+			{
+				return $result->addErrors($pathResult->getErrors());
+			}
+
+			$paths[$langId] = $pathResult->getData()['path'];
+		}
+
+		return $result->setData($paths);
+	}
+
+
+	/**
 	 * Saves changed lang file.
 	 *
 	 * @param Translate\File $langFile File to update.

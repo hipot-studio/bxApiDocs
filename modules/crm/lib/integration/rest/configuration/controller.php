@@ -4,6 +4,7 @@
 namespace Bitrix\Crm\Integration\Rest\Configuration;
 
 
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Exception;
@@ -248,6 +249,23 @@ class Controller
 		if (static::check($event))
 		{
 			$data = $event->getParameters();
+			if (in_array(
+				$data['CODE'] ?? null,
+				[
+					Entity\AutomatedSolution::ENTITY_CODE,
+					Entity\DynamicTypes::ENTITY_CODE,
+				],
+				true,
+			))
+			{
+				$application = static::resolveApplicationAnalyticsData($data);
+				$data[Dictionary::CONTEXT_APPLICATION_SOURCE] = $application['source'];
+				if ($application['code'] !== null)
+				{
+					$data[Dictionary::CONTEXT_APPLICATION_CODE] = $application['code'];
+				}
+			}
+
 			try
 			{
 				switch ($data['CODE'])
@@ -299,5 +317,30 @@ class Controller
 		}
 
 		return $result;
+	}
+
+	private static function resolveApplicationAnalyticsData(array $data): array
+	{
+		$appId = (int)($data['APP_ID'] ?? 0);
+		if ($appId <= 0)
+		{
+			return ['source' => null, 'code' => null];
+		}
+
+		try
+		{
+			$app = \Bitrix\Rest\AppTable::getByClientId($appId);
+			$clientId = $app['CLIENT_ID'] ?? null;
+			$code = $app['CODE'] ?? null;
+
+			return [
+				'source' => is_string($clientId) ? Dictionary::getApplicationSource($clientId) : null,
+				'code' => is_string($code) && $code !== '' ? $code : null,
+			];
+		}
+		catch (\Throwable)
+		{
+			return ['source' => null, 'code' => null];
+		}
 	}
 }

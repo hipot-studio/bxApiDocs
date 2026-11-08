@@ -35,10 +35,9 @@ class MarkdownRenderService
 	private const CACHE_DIR = '/disk/markdown';
 	private const CACHE_TTL = 86400;
 
-	// Bump on any change to the cached payload shape (old caches stored a bare html string,
-	// not the html+diagrams array) so stale entries are dropped instead of misread.
-	// v3: the em tag is now allowed, so italic-less renders cached under v2 must be dropped.
-	private const RENDER_FORMAT_VERSION = 3;
+	// Bump on any change to the cached payload shape or stable sanitized html form.
+	// v4: stop double-encoding safe entities, so v3 markdown previews must be dropped.
+	private const RENDER_FORMAT_VERSION = 4;
 
 	private const MERMAID_PLACEHOLDER_PREFIX = '[[DISK_MERMAID_PLACEHOLDER::';
 	private const MERMAID_PLACEHOLDER_SUFFIX = ']]';
@@ -147,7 +146,7 @@ class MarkdownRenderService
 		}
 
 		// Only write when caching is actually allowed: startDataCache() returns false when the
-		// cache is disabled or another process already holds the lock for this key — in that
+		// cache is disabled or another process already holds the lock for this key; in that
 		// case endDataCache() must not be called. The html is returned regardless.
 		if ($cache->startDataCache())
 		{
@@ -176,6 +175,7 @@ class MarkdownRenderService
 		$sanitizer = new \CBXSanitizer();
 		$sanitizer->SetLevel(\CBXSanitizer::SECURE_LEVEL_MIDDLE);
 		$sanitizer->AddTags(['em' => []]);
+		$sanitizer->ApplyDoubleEncode(false);
 		$safeHtml = $sanitizer->SanitizeHtml($rawHtml);
 
 		$safeHtml = $this->rewriteLinks($safeHtml);

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Service\Operation\Action\Compatible\SocialNetwork;
 
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Operation\Action;
+use Bitrix\Crm\Settings;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
@@ -20,6 +21,12 @@ class ProcessDelete extends Action
 				new Error('itemBeforeSave is required in ' . static::class),
 			);
 
+			return $result;
+		}
+
+		if (!Settings\Crm::isLiveFeedRecordsGenerationEnabled())
+		{
+			// live feed records are neither generated nor displayed, there is nothing to clean up
 			return $result;
 		}
 

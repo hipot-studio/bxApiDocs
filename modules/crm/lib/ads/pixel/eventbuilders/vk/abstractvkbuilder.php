@@ -66,7 +66,7 @@ abstract class AbstractVkBuilder implements CrmConversionEventBuilderInterface
 		if (
 			$prefix !== Service::TYPE_VKONTAKTE
 			|| $leadId === ''
-			|| !ctype_digit($leadId)
+			|| preg_match('/^[0-9]+$/D', $leadId) !== 1
 			|| trim($leadId, '0') === ''
 		)
 		{

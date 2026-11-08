@@ -9,6 +9,7 @@
 
 namespace Bitrix\Rest\OAuth;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Encoding;
@@ -54,6 +55,7 @@ class Client
 	const METHOD_REST_CHECK = 'rest.check';
 	const METHOD_REST_CODE = 'rest.code';
 	const METHOD_REST_EVENT_CALL = 'rest.event.call';
+	const METHOD_REST_WEBHOOK_REQUEST = 'rest.webhook.request';
 
 	const HTTP_SOCKET_TIMEOUT = 15;
 	const HTTP_STREAM_TIMEOUT = 15;
@@ -314,5 +316,14 @@ class Client
 		return $this->call(static::METHOD_REST_EVENT_CALL, array(
 			"QUERY" => $eventItems,
 		));
+	}
+
+	public function sendWebHookRequest(array $request)
+	{
+		$request['IS_CIS'] = Application::getInstance()->getLicense()->isCis() ? 'Y' : 'N';
+
+		return $this->call(static::METHOD_REST_WEBHOOK_REQUEST, [
+			'REQUEST' => $request,
+		]);
 	}
 }

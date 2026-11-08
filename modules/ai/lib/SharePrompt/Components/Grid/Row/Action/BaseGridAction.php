@@ -23,7 +23,13 @@ abstract class BaseGridAction extends BaseAction
 			$result = $this->processRequestAction($request);
 			if ($result)
 			{
-				$this->sendEvent($result->isSuccess());
+				$isSuccess = $result->isSuccess();
+				$this->sendEvent($isSuccess);
+
+				if (!$isSuccess)
+				{
+					return $result;
+				}
 			}
 
 			return null;

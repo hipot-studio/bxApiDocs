@@ -23,6 +23,8 @@ use Bitrix\Crm\Restriction\AvailabilityManager;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Crm\Settings\InvoiceSettings;
 use Bitrix\Crm\UI\Tools\NavigationBar;
 use Bitrix\Intranet\CustomSection\Entity\CustomSectionTable;
@@ -278,10 +280,7 @@ abstract class ItemList extends Base
 			$categories = $this->userPermissions->category()->filterAvailableForReadingCategories(
 				$this->factory->getCategories()
 			);
-			if (
-				count($categories) > 1
-				|| Container::getInstance()->getUserPermissions()->isAdminForEntity($this->entityTypeId)
-			)
+			if (count($categories) > 1 || $this->canOpenSalesTunnels())
 			{
 				$buttonConfig = [
 					'icon' => defined('Bitrix\UI\Buttons\Icon::FUNNEL') ? Icon::FUNNEL : '',
@@ -499,15 +498,41 @@ abstract class ItemList extends Base
 		$userPermissions = $this->userPermissions;
 		if ($userPermissions->dynamicType()->canUpdate((int)$this->entityTypeId))
 		{
+			$typeDetailUrl = $this->router->getTypeDetailUrl($this->entityTypeId)->addParams([
+				'c_sub_section' => Integration\Analytics\Dictionary::ELEMENT_SETTINGS_BUTTON,
+			]);
+			$typeDetailListUrl = $this->getTypeDetailSliderFallbackUrl();
+			if ($typeDetailListUrl)
+			{
+				$typeDetailListUrl->addParams([
+					'openTypeDetailSlider' => 'Y',
+					'c_sub_section' => Integration\Analytics\Dictionary::ELEMENT_SETTINGS_BUTTON,
+				]);
+			}
+			$typeDetailOnClick = new Buttons\JsCode(
+				'arguments[0].preventDefault();'
+				. 'BX.Crm.Router.Instance.closeSettingsMenu(arguments[0], arguments[1]);'
+				. 'BX.Crm.Router.Instance.openTypeDetail(' . (int)$this->entityTypeId . ', null, {'
+				. 'c_sub_section: \''
+				. \CUtil::JSEscape(Integration\Analytics\Dictionary::ELEMENT_SETTINGS_BUTTON)
+				. '\'});'
+			);
+
 			$settingsItems[] = [
 				'text' => Loc::getMessage('CRM_TYPE_TYPE_SETTINGS'),
-				'href' => $this->router->getTypeDetailUrl($this->entityTypeId)->addParams([
-					'c_sub_section' => Integration\Analytics\Dictionary::ELEMENT_SETTINGS_BUTTON,
-				]),
-				'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
+				'href' => $typeDetailListUrl ?? $typeDetailUrl,
+				'onclick' => $typeDetailOnClick,
+				'dataset' => [
+					'testid' => 'crm-item-list-settings-type-settings',
+				],
 			];
 		}
-		if ($userPermissions->isAdminForEntity((int)$this->entityTypeId))
+		$configuration = $userPermissions->configuration();
+		$scope = ConfigurationScope::ofEntityType((int)$this->entityTypeId);
+		if (
+			$configuration->canManageFields(ConfigurationCallSite::FieldsSettingsMenu, $scope)
+			|| $configuration->canDeleteFields(ConfigurationCallSite::FieldsSettingsMenu, $scope)
+		)
 		{
 			$dynamicTypesLimit = RestrictionManager::getDynamicTypesLimitRestriction();
 			$isTypeSettingsRestricted = $dynamicTypesLimit->isTypeSettingsRestricted($this->entityTypeId);
@@ -516,6 +541,9 @@ abstract class ItemList extends Base
 				$settingsItems[] = [
 					'text' => Loc::getMessage('CRM_TYPE_TYPE_FIELDS_SETTINGS'),
 					'onclick' => $dynamicTypesLimit->getShowFeatureJsHandler(),
+					'dataset' => [
+						'testid' => 'crm-item-list-settings-fields',
+					],
 				];
 			}
 			else
@@ -524,11 +552,31 @@ abstract class ItemList extends Base
 					'text' => Loc::getMessage('CRM_TYPE_TYPE_FIELDS_SETTINGS'),
 					'href' => $this->router->getUserFieldListUrl($this->entityTypeId),
 					'onclick' => new Buttons\JsHandler('BX.Crm.Router.Instance.closeSettingsMenu'),
+					'dataset' => [
+						'testid' => 'crm-item-list-settings-fields',
+					],
 				];
 			}
 		}
 
 		return $settingsItems;
+	}
+
+	private function getTypeDetailSliderFallbackUrl(): ?Uri
+	{
+		if (
+			$this->router->getCurrentListView($this->entityTypeId) === Service\Router::LIST_VIEW_KANBAN
+			&& $this->factory->isStagesEnabled()
+		)
+		{
+			$url = $this->router->getKanbanUrl($this->entityTypeId, $this->getCategoryId());
+			if ($url !== null && $url->getUri() !== '')
+			{
+				return $url;
+			}
+		}
+
+		return $this->router->getItemListUrl($this->entityTypeId, $this->getCategoryId());
 	}
 
 	//@codingStandardsIgnoreStart
@@ -766,25 +814,19 @@ abstract class ItemList extends Base
 	{
 		$menu = parent::getToolbarCategories($categories);
 
-		if ($this->factory->isCountersEnabled())
+		foreach ($menu as &$item)
 		{
-			foreach ($menu as &$item)
+			$counterValue = 0;
+			if ($this->factory->isCountersEnabled())
 			{
 				$counterValue = $this->getCounterValue($item['categoryId']);
-				if ($counterValue <= 0)
-				{
-					continue;
-				}
-				$text = htmlspecialcharsbx($item['text']);
-				$item['html'] = sprintf(
-					'%s <span class="main-buttons-item-counter">%d</span>',
-					$text,
-					$counterValue
-				);
 			}
-		}
 
-		if ($this->userPermissions->isAdminForEntity($this->entityTypeId))
+			$item = $this->formatToolbarCategory($item, $counterValue);
+		}
+		unset($item);
+
+		if ($this->canOpenSalesTunnels())
 		{
 			$menu[] = [
 				'delimiter' => true,
@@ -808,6 +850,50 @@ abstract class ItemList extends Base
 		}
 
 		return $menu;
+	}
+
+	/**
+	 * Whether the funnel settings entry of the funnel menu is offered. The screen behind it,
+	 * `crm.sales.tunnels`, admits whoever may manage funnels, stages or tunnels; the entry is offered on
+	 * the first two, as the deal toolbar does - a full CRM administrator is not required.
+	 */
+	protected function canOpenSalesTunnels(): bool
+	{
+		$configuration = $this->userPermissions->configuration();
+		$scope = ConfigurationScope::ofEntityType((int)$this->entityTypeId);
+
+		return
+			$configuration->canManageFunnels(ConfigurationCallSite::SalesTunnelsComponent, $scope)
+			|| $configuration->canManageStages(ConfigurationCallSite::SalesTunnelsComponent, $scope)
+		;
+	}
+
+	protected function formatToolbarCategory(array $item, int $counterValue): array
+	{
+		if (!isset($item['name']))
+		{
+			return $item;
+		}
+
+		$item['title'] = $item['name'];
+		$item['html'] = sprintf(
+			'<span class="crm-toolbar-category-menu-item-name">%s</span>',
+			htmlspecialcharsbx($item['name']),
+		);
+		if ($counterValue > 0)
+		{
+			$item['html'] .= sprintf(
+				'<span class="crm-toolbar-category-menu-item-counter main-buttons-item-counter">%d</span>',
+				$counterValue,
+			);
+		}
+
+		unset($item['name'], $item['text']);
+		$item['className'] = trim(
+			'menu-popup-no-icon crm-toolbar-category-menu-item ' . ($item['className'] ?? '')
+		);
+
+		return $item;
 	}
 
 	abstract protected function getListViewType(): string;
@@ -946,8 +1032,7 @@ abstract class ItemList extends Base
 
 	protected function isDeadlinesModeSupported(): bool
 	{
-		$supported = [\CCrmOwnerType::SmartInvoice];
-		return in_array($this->entityTypeId, $supported);
+		return $this->factory->isListViewSupported(Service\Router::LIST_VIEW_DEADLINES);
 	}
 
 	protected function isActivitiesModeSupported(): bool

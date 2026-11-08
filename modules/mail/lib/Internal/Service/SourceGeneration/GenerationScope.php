@@ -102,11 +102,23 @@ final class GenerationScope
 		return $prepared === [] ? self::unfiltered() : new self(null, 0, $prepared);
 	}
 
+	/**
+	 * A regular synchronization of a mailbox without a pointer works with everything but the
+	 * generations it is preparing: the snapshot of a new source is accepted - its folders written -
+	 * before the pass that moves the pointer, and a run accepting every generation treated those
+	 * folders as its own, the folder sync of the old source removing the ones its server does not
+	 * list. The stamp stays the implicit zero.
+	 */
 	public static function fromContext(Context $context): self
 	{
-		return $context->isMigrationImport()
-			? self::exact($context->generationId)
-			: self::active($context->generationId)
+		if ($context->isMigrationImport())
+		{
+			return self::exact($context->generationId);
+		}
+
+		return $context->generationId > 0
+			? self::active($context->generationId)
+			: self::withoutPreparedGenerations($context->mailboxId)
 		;
 	}
 
@@ -116,9 +128,44 @@ final class GenerationScope
 	 */
 	public static function forMailbox(int $mailboxId): self
 	{
+		return self::active(self::readActivePointer($mailboxId));
+	}
+
+	/**
+	 * The scope of the generations serving the mailbox now, as the user is to see them: the
+	 * active generation while the mailbox has a pointer, and every generation except the ones
+	 * it is preparing while it has none. The default of the folders of a mailbox.
+	 *
+	 * It differs from {@see forMailbox()} over one window, and the window is real: the folders
+	 * of a new source are written when its snapshot is accepted, the pointer is moved by the
+	 * pass that follows, and in between an unfiltered read shows the folders of a source the
+	 * user has not been handed over to yet.
+	 *
+	 * A composition of two existing shapes and not a replacement by one of them, because
+	 * {@see withoutPreparedGenerations()} alone does not bound a read by the active generation:
+	 * on a mailbox that has been switched it would bring the folders of the generations retained
+	 * by earlier switches back into the tree.
+	 */
+	public static function servingMailbox(int $mailboxId): self
+	{
+		$pointer = self::readActivePointer($mailboxId);
+
+		return $pointer > 0
+			? self::active($pointer)
+			: self::withoutPreparedGenerations($mailboxId)
+		;
+	}
+
+	/**
+	 * ACTIVE_GENERATION_ID of the mailbox, cached for the process: a read path resolves it once
+	 * per request however many scopes it builds. Zero for a mailbox of an installation whose
+	 * database has not caught up with the files of the update yet.
+	 */
+	private static function readActivePointer(int $mailboxId): int
+	{
 		if ($mailboxId <= 0 || !self::isSchemaInstalled())
 		{
-			return self::unfiltered();
+			return 0;
 		}
 
 		if (!array_key_exists($mailboxId, self::$activePointers))
@@ -132,7 +179,7 @@ final class GenerationScope
 			));
 		}
 
-		return self::active(self::$activePointers[$mailboxId]);
+		return self::$activePointers[$mailboxId];
 	}
 
 	/**
@@ -198,6 +245,15 @@ final class GenerationScope
 		);
 	}
 
+	/**
+	 * Drops every process answer a scope of this mailbox is built from, and not the pointer alone:
+	 * the generations the mailbox is preparing {@see readPreparedGenerations()} go with it, and so
+	 * does the answer about the schema of the feature. The name says less than the method does,
+	 * and the two answers are dropped together on purpose: {@see servingMailbox()} composes a
+	 * scope out of both, so a caller invalidating one of them needs the other gone as well.
+	 *
+	 * @param int|null $mailboxId Null drops the answers of every mailbox of the process.
+	 */
 	public static function invalidateActivePointerCache(?int $mailboxId = null): void
 	{
 		self::$pointerColumnExists = null;
@@ -218,12 +274,9 @@ final class GenerationScope
 	 * above is: a migration prepares one source at a time, and a run of a synchronization
 	 * asks this once instead of once per batch of letters.
 	 *
-	 * The G1 backfill is none of them, whatever its status says: it adopts the source the
-	 * mailbox is already served by, so its rows are the history the user has been seeing all
-	 * along. Counted here, it hid that history from the only read of this shape - the lookup
-	 * of the logical identity of a letter - and a letter that gained a placement came back as
-	 * a second letter. Same exclusion for the same reason:
-	 * {@see MigrationService::findPreparingMigrationGeneration()}.
+	 * Which generations those are is one answer of the table itself
+	 * {@see MailboxSourceGenerationTable::preparedGenerationFilter()} - including why the
+	 * generation of the G1 backfill is not one of them.
 	 *
 	 * @return int[]
 	 */
@@ -238,11 +291,9 @@ final class GenerationScope
 		{
 			// Raw SQL for the same reason the pointer is read that way
 			$rows = Application::getConnection()->query(sprintf(
-				"SELECT ID FROM %s WHERE MAILBOX_ID = %u AND STATUS = '%s' AND OPERATION_ID <> '%s'",
+				'SELECT ID FROM %s WHERE %s',
 				MailboxSourceGenerationTable::getTableName(),
-				$mailboxId,
-				MailboxSourceGenerationTable::STATUS_PREPARING,
-				MailboxSourceGenerationTable::OPERATION_G1_BACKFILL,
+				MailboxSourceGenerationTable::preparedGenerationSqlCondition($mailboxId),
 			))->fetchAll();
 
 			self::$preparedGenerations[$mailboxId] = array_map(
@@ -268,6 +319,21 @@ final class GenerationScope
 	public function getStampGenerationId(): int
 	{
 		return $this->stampGenerationId;
+	}
+
+	/**
+	 * Whether the scope narrows nothing at all, i.e. every physical row of the mailbox belongs to
+	 * it. A read with preparatory work of its own asks this before doing it: the counters of the
+	 * folders carry no generation of their own, so a bounded read of them has to name the folders
+	 * it sums by their ids first.
+	 *
+	 * Not the same question as "is there a list of generations": the shape stating what it refuses
+	 * has no list either {@see withoutPreparedGenerations()}, and a caller reading
+	 * {@see getGenerationIds()} as this answer skips the condition exactly where it is needed.
+	 */
+	public function isUnfiltered(): bool
+	{
+		return $this->generationIds === null && $this->excludedGenerationIds === [];
 	}
 
 	public function includes(int $generationId): bool

@@ -16,7 +16,8 @@ final class AccessCheckHandlerFactory
 {
 	/** @var array<string, ChainableAccessCheckHandler> */
 	private array $cacheForAuthorizedUser = [];
-	private ?ExternalLinkAccessCheckHandler $externalLinkAccessCheckHandler = null;
+	/** @var array<string, AccessCheckHandler> */
+	private array $cacheForAnonymousUser = [];
 
 	/**
 	 * @param ExternalLinkProvider $externalLinkProvider
@@ -34,6 +35,7 @@ final class AccessCheckHandlerFactory
 		int $userId = 0,
 		?ExternalLink $externalLink = null,
 		?Version $version = null,
+		?array $operationsByObjectId = null,
 	): AccessCheckHandler
 	{
 		if ($userId === 0)
@@ -62,53 +64,107 @@ final class AccessCheckHandlerFactory
 
 		if ($userId > 0)
 		{
-			$cacheKey = $this->getCacheKey($shouldCheckPassword, $attachedObject, $userId);
+			if (is_array($operationsByObjectId))
+			{
+				return $this->createForAuthorizedUser(
+					userId: $userId,
+					shouldCheckPassword: $shouldCheckPassword,
+					attachedObject: $attachedObject,
+					operationsByObjectId: $operationsByObjectId,
+					version: $version,
+				);
+			}
+
+			$cacheKey = $this->getCacheKey($shouldCheckPassword, $attachedObject, $userId, $version);
 
 			return $this->cacheForAuthorizedUser[$cacheKey] ??= $this->createForAuthorizedUser(
 				userId: $userId,
 				shouldCheckPassword: $shouldCheckPassword,
 				attachedObject: $attachedObject,
+				version: $version,
 			);
 		}
 
-		return $this->externalLinkAccessCheckHandler ??= new ExternalLinkAccessCheckHandler(
-			externalLinkProvider: $this->externalLinkProvider,
-			externalLinkPasswordService: $this->externalLinkPasswordService,
-			shouldCheckPassword: true,
-		);
+		$cacheKey = $this->getCacheKey(true, $attachedObject, 0, $version);
+
+		return $this->cacheForAnonymousUser[$cacheKey] ??= $this->getForExternalLink(true, $attachedObject, $version);
 	}
 
 	private function createForAuthorizedUser(
 		int $userId,
 		bool $shouldCheckPassword,
 		?AttachedObject $attachedObject = null,
-	): ChainableAccessCheckHandler
+		?array $operationsByObjectId = null,
+		?Version $version = null,
+	): AccessCheckHandler
 	{
-		$unifiedLinkAccessCheckHandler = new UnifiedLinkAccessCheckHandler($userId);
+		$externalLink = $this->getForExternalLink($shouldCheckPassword, $attachedObject, $version);
+		$unifiedLink = $this->getForUnifiedLink($userId);
 		$attachedObjectsAccessCheckHandler = new AttachedObjectsAccessCheckHandler($userId, $attachedObject);
-		$permissionSystemAccessCheckHandler = new PermissionSystemAccessCheckHandler($userId);
+		$permissionSystemAccessCheckHandler = new PermissionSystemAccessCheckHandler($userId, $operationsByObjectId);
 
-		return (new ExternalLinkAccessCheckHandler(
-			externalLinkProvider: $this->externalLinkProvider,
-			externalLinkPasswordService: $this->externalLinkPasswordService,
-			shouldCheckPassword: $shouldCheckPassword,
-		))
-			->setNext($unifiedLinkAccessCheckHandler
-				->setNext($permissionSystemAccessCheckHandler
-					->setNext($attachedObjectsAccessCheckHandler),
-				),
-			)
+		return $externalLink
+			->append($unifiedLink)
+			->append($permissionSystemAccessCheckHandler)
+			->append($attachedObjectsAccessCheckHandler)
 		;
 	}
 
+	/**
+	 * The chain of handlers is cached here, never the answer it gives: doCheck() is handed the file on every
+	 * call and binds the attachment to it, so the file is left out of the key and a result kept by a handler
+	 * would hand the access of one file to the next.
+	 */
 	private function getCacheKey(
 		bool $shouldCheckPassword,
 		?AttachedObject $attachedObject = null,
 		int $userId = 0,
+		?Version $version = null,
 	): string
 	{
 		$attachedObjectId = (int)$attachedObject?->getId();
 
-		return 'attached_object_' . $attachedObjectId . '_user_' . $userId . '_scp_' . $shouldCheckPassword;
+		return 'attached_object_' . $attachedObjectId . '_user_' . $userId
+			. '_scp_' . $shouldCheckPassword . '_version_' . (int)$version?->getId()
+		;
+	}
+
+	/**
+	 * @param bool $shouldCheckPassword
+	 * @return AccessCheckHandler
+	 */
+	private function getForExternalLink(
+		bool $shouldCheckPassword,
+		?AttachedObject $attachedObject = null,
+		?Version $version = null,
+	): AccessCheckHandler
+	{
+		$externalLinkAccessCheckHandler = new ExternalLinkAccessCheckHandler(
+			externalLinkProvider: $this->externalLinkProvider,
+			externalLinkPasswordService: $this->externalLinkPasswordService,
+			shouldCheckPassword: $shouldCheckPassword,
+			attachedObject: $attachedObject,
+			version: $version,
+		);
+
+		if ($shouldCheckPassword)
+		{
+			return $externalLinkAccessCheckHandler;
+		}
+
+		$externalLinkParentFoldersAccessCheckHandler = new ExternalLinkParentFoldersAccessCheckHandler();
+
+		return $externalLinkParentFoldersAccessCheckHandler->append($externalLinkAccessCheckHandler);
+	}
+
+	/**
+	 * The unified-link chain alone: the parent folders and the record of the object itself.
+	 */
+	public function getForUnifiedLink(int $userId): AccessCheckHandler
+	{
+		$unifiedLinkParentFoldersAccessCheckHandler = new UnifiedLinkParentFoldersAccessCheckHandler($userId);
+		$unifiedLinkAccessCheckHandler = new UnifiedLinkAccessCheckHandler($userId);
+
+		return $unifiedLinkParentFoldersAccessCheckHandler->append($unifiedLinkAccessCheckHandler);
 	}
 }

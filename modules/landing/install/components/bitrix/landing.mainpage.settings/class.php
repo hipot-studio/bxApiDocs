@@ -1,4 +1,5 @@
 <?php
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -27,11 +28,38 @@ class LandingMainpageSettingsComponent extends \CBitrixComponent
 			}
 		}
 
+		$renderOptions = $this->arParams['renderOptions'] ?? new Vibe\VibeRenderOptions();
+		if (!$renderOptions instanceof Vibe\VibeRenderOptions)
+		{
+			$renderOptions = new Vibe\VibeRenderOptions();
+		}
+
 		$this->arResult['CONTAINER_ID'] = 'vibe-settings-' . Random::getString(8);
 		$this->arResult['VIBES_DATA_JSON'] = Json::encode([
-			'vibes' => (new Settings\Manager($vibes))->getData(),
+			'vibes' => $this->applyRenderOptions(
+				(new Settings\Manager($vibes))->getData(),
+				$renderOptions,
+			),
 		]);
 
 		$this->IncludeComponentTemplate();
+	}
+
+	/**
+	 * Applies VibeSection rendering options to each Vibe data item.
+	 *
+	 * @param array<int, array<string, mixed>> $vibesData
+	 * @param Vibe\VibeRenderOptions $renderOptions
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function applyRenderOptions(array $vibesData, Vibe\VibeRenderOptions $renderOptions): array
+	{
+		return array_map(
+			static fn(array $vibeData): array => [
+				...$vibeData,
+				...$renderOptions->toArray(),
+			],
+			$vibesData,
+		);
 	}
 }

@@ -16,6 +16,7 @@ enum ActionType: string
 	case JoinUser = 'join_user';
 	case LeaveUser = 'leave_user';
 	case ExcludeUser = 'exclude_user';
+	case ExcludeStructureNode = 'exclude_structure_node';
 	case CopyLink = 'copy_link';
 	case RegenerateLink = 'regenerate_link';
 	case ConvertGroupToCollab = 'convert_group_to_collab';

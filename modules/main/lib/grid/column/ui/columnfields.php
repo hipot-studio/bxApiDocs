@@ -46,17 +46,29 @@ trait ColumnFields
 	 */
 	protected bool $resizeable = true;
 	/**
+	 * Has the user dragged the column to its width?
+	 *
+	 * @var bool
+	 */
+	protected bool $resizedByUser = false;
+	/**
 	 * Cancels the row selection when clicking on a column cell (relevant for interactive content).
 	 *
 	 * @var bool
 	 */
 	protected bool $preventDefault = true;
 	/**
-	 * Anchors the column on the left, when scrolling horizontally.
+	 * Anchors the column when scrolling horizontally.
 	 *
 	 * @var bool
 	 */
 	protected bool $sticked = false;
+	/**
+	 * Side the column is anchored to when sticked: `left` (default) or `right`.
+	 *
+	 * @var string
+	 */
+	protected string $stickedSide = 'left';
 	/**
 	 * Column shift.
 	 *
@@ -269,6 +281,25 @@ trait ColumnFields
 		return $this;
 	}
 
+	public function isResizedByUser(): bool
+	{
+		return $this->resizedByUser;
+	}
+
+	/**
+	 * Marks the width of the column as the one the user dragged it to.
+	 *
+	 * @param bool $value
+	 *
+	 * @return self
+	 */
+	public function setResizedByUser(bool $value): self
+	{
+		$this->resizedByUser = $value;
+
+		return $this;
+	}
+
 	public function isPreventDefault(): bool
 	{
 		return $this->preventDefault ?? true;
@@ -301,6 +332,48 @@ trait ColumnFields
 	public function setSticked(bool $sticked): self
 	{
 		$this->sticked = $sticked;
+
+		return $this;
+	}
+
+	/**
+	 * @return string `left` or `right`
+	 */
+	public function getStickedSide(): string
+	{
+		return $this->stickedSide === 'right' ? 'right' : 'left';
+	}
+
+	/**
+	 * @param string $side `left` or `right`
+	 *
+	 * @return self
+	 */
+	public function setStickedSide(string $side): self
+	{
+		$this->stickedSide = $side === 'right' ? 'right' : 'left';
+
+		return $this;
+	}
+
+	public function isStickedRight(): bool
+	{
+		return $this->sticked && $this->getStickedSide() === 'right';
+	}
+
+	/**
+	 * Anchors the column on the right edge when scrolling horizontally.
+	 *
+	 * Convenience wrapper: enables sticking and sets the side to `right` in one call.
+	 *
+	 * @param bool $value
+	 *
+	 * @return self
+	 */
+	public function setStickedRight(bool $value): self
+	{
+		$this->setSticked($value);
+		$this->setStickedSide($value ? 'right' : 'left');
 
 		return $this;
 	}

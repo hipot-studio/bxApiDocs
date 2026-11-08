@@ -72,6 +72,14 @@ class SourceUnavailableException extends \Exception
 		);
 	}
 
+	public static function sourceNotAvailableToActor(string $module, string $entity): self
+	{
+		return new self(
+			sprintf('DataView source "%s.%s" is not available to the current actor', $module, $entity),
+			self::KIND_PROVIDER,
+		);
+	}
+
 	public static function sourceEntityUnknown(string $entity): self
 	{
 		return new self(

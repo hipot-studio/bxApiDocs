@@ -6,6 +6,7 @@ namespace Bitrix\Intranet\Internal\Integration\IBlock;
 
 use Bitrix\Intranet\Internal\Entity\AbsenceType;
 use Bitrix\Intranet\Internal\Entity\User\Absence;
+use Bitrix\Intranet\Internal\Enum\AbsenceTypeCode;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Entity\EntityCollection;
 use Bitrix\Main\Error;
@@ -44,13 +45,7 @@ class AbsenceRepository
 			return $collection;
 		}
 
-		$absenceTypeEnumXmlId = [];
-		$typesRes = $this->fetchAbsenceTypes($iblockId);
-
-		while ($enum = $typesRes->Fetch())
-		{
-			$absenceTypeEnumXmlId[$enum['ID']] = $enum['XML_ID'];
-		}
+		$absenceTypeEnumXmlId = $this->getTypeXmlIdsByEnumId($iblockId);
 
 		$res = \CIBlockElement::GetList(
 			[],
@@ -71,23 +66,199 @@ class AbsenceRepository
 
 		while ($absence = $res->Fetch())
 		{
-			$xmlId = $absenceTypeEnumXmlId[$absence['PROPERTY_ABSENCE_TYPE_ENUM_ID']] ?? '';
-
-			$collection->add(
-				new Absence(
-					$userId,
-					new DateTime($absence['ACTIVE_FROM']),
-					new DateTime($absence['ACTIVE_TO']),
-					$absence['NAME'],
-					$xmlId,
-					self::getTypeCaption($xmlId),
-					(int)$absence['ID'],
-					self::dateContainsTime($absence['ACTIVE_TO']),
-				)
-			);
+			$collection->add(self::createAbsence($userId, $absence, $absenceTypeEnumXmlId));
 		}
 
 		return $collection;
+	}
+
+	public function getCollectionOfEachUser(
+		array $userIds,
+		int $iblockId,
+		DateTime $dateFrom,
+		DateTime $dateTo,
+	): array
+	{
+		$collections = self::createEmptyCollections($userIds);
+		if ($userIds === [] || !$this->isModuleInstalled)
+		{
+			return $collections;
+		}
+
+		$absenceTypeEnumXmlId = $this->getTypeXmlIdsByEnumId($iblockId);
+
+		foreach ($this->fetchRowsByUserId($userIds, $iblockId, $dateFrom, $dateTo) as $userId => $row)
+		{
+			$collections[$userId]->add(self::createAbsence($userId, $row, $absenceTypeEnumXmlId));
+		}
+
+		return $collections;
+	}
+
+	/**
+	 * Loads absence collections for multiple users in a single query.
+	 *
+	 * @param int[] $userIds
+	 * @return array{
+	 *     collections: array<int, EntityCollection>,
+	 *     untrustedUserIds: array<int, true>
+	 * }
+	 */
+	public function getCollectionsByUserIds(
+		array $userIds,
+		int $iblockId,
+		DateTime $dateFrom,
+		DateTime $dateTo,
+	): array
+	{
+		$collections = self::createEmptyCollections($userIds);
+		if ($userIds === [])
+		{
+			return [
+				'collections' => $collections,
+				'untrustedUserIds' => [],
+			];
+		}
+		if (!$this->isModuleInstalled)
+		{
+			throw new \RuntimeException('Module iblock is not installed.');
+		}
+
+		$absenceTypeEnumXmlId = $this->getTypeXmlIdsByEnumId($iblockId);
+
+		$untrustedUserIds = [];
+		foreach ($this->fetchRowsByUserId($userIds, $iblockId, $dateFrom, $dateTo) as $userId => $row)
+		{
+			if (isset($untrustedUserIds[$userId]))
+			{
+				continue;
+			}
+
+			try
+			{
+				$typeEnumId = (string)($row['PROPERTY_ABSENCE_TYPE_ENUM_ID'] ?? '');
+				$typeXmlId = $absenceTypeEnumXmlId[$typeEnumId] ?? null;
+				if (
+					$typeXmlId === null
+					|| !is_string($row['ACTIVE_FROM'] ?? null)
+					|| $row['ACTIVE_FROM'] === ''
+					|| !is_string($row['ACTIVE_TO'] ?? null)
+					|| $row['ACTIVE_TO'] === ''
+				)
+				{
+					throw new \UnexpectedValueException('Invalid absence row.');
+				}
+
+				$collections[$userId]->add(new Absence(
+					$userId,
+					new DateTime($row['ACTIVE_FROM']),
+					new DateTime($row['ACTIVE_TO']),
+					(string)($row['NAME'] ?? ''),
+					$typeXmlId,
+					self::getTypeCaption($typeXmlId),
+					(int)($row['ID'] ?? 0),
+					self::dateContainsTime($row['ACTIVE_TO']),
+				));
+			}
+			catch (\Throwable)
+			{
+				$untrustedUserIds[$userId] = true;
+				$collections[$userId] = new EntityCollection();
+			}
+		}
+
+		return [
+			'collections' => $collections,
+			'untrustedUserIds' => $untrustedUserIds,
+		];
+	}
+
+	private static function createEmptyCollections(array $userIds): array
+	{
+		$collections = [];
+		foreach ($userIds as $userId)
+		{
+			$collections[$userId] = new EntityCollection();
+		}
+
+		return $collections;
+	}
+
+	private function fetchRowsByUserId(
+		array $userIds,
+		int $iblockId,
+		DateTime $dateFrom,
+		DateTime $dateTo,
+	): iterable
+	{
+		$isRequestedUserId = array_fill_keys($userIds, true);
+		$rows = $this->fetchCollectionsRows($userIds, $iblockId, $dateFrom, $dateTo);
+		while ($row = $rows->Fetch())
+		{
+			$userId = $this->extractUserId($row['PROPERTY_USER_VALUE'] ?? null);
+			if (isset($isRequestedUserId[$userId]))
+			{
+				yield $userId => $row;
+			}
+		}
+	}
+
+	protected function fetchCollectionsRows(
+		array $userIds,
+		int $iblockId,
+		DateTime $dateFrom,
+		DateTime $dateTo,
+	): object
+	{
+		return \CIBlockElement::GetList(
+			[],
+			[
+				'IBLOCK_ID' => $iblockId,
+				'ACTIVE' => 'Y',
+				'PROPERTY_USER' => $userIds,
+				[
+					'LOGIC' => 'AND',
+					['<=DATE_ACTIVE_FROM' => $dateTo->toString()],
+					['>=DATE_ACTIVE_TO' => $dateFrom->toString()],
+				],
+			],
+			false,
+			false,
+			[
+				'ID',
+				'NAME',
+				'ACTIVE_FROM',
+				'ACTIVE_TO',
+				'PROPERTY_USER',
+				'PROPERTY_ABSENCE_TYPE',
+			],
+		);
+	}
+
+	private function extractUserId(mixed $value): int
+	{
+		if (is_array($value))
+		{
+			$value = reset($value);
+		}
+
+		return is_numeric($value) ? (int)$value : 0;
+	}
+
+	private static function createAbsence(int $userId, array $row, array $absenceTypeEnumXmlId): Absence
+	{
+		$xmlId = $absenceTypeEnumXmlId[$row['PROPERTY_ABSENCE_TYPE_ENUM_ID']] ?? '';
+
+		return new Absence(
+			$userId,
+			new DateTime($row['ACTIVE_FROM']),
+			new DateTime($row['ACTIVE_TO']),
+			$row['NAME'],
+			$xmlId,
+			self::getTypeCaption($xmlId),
+			(int)$row['ID'],
+			self::dateContainsTime($row['ACTIVE_TO']),
+		);
 	}
 
 	public function set(
@@ -186,12 +357,34 @@ class AbsenceRepository
 		return $this->availableTypesByIblockId[$iblockId];
 	}
 
-	public static function getTypeCaption(string $type): string
+	/** @return array<string, string> */
+	private function getTypeXmlIdsByEnumId(int $iblockId): array
 	{
-		return Loc::getMessage('INTRANET_ABSENCE_REPOSITORY_TYPE_' . $type) ?? '';
+		$xmlIdsByEnumId = [];
+		foreach ($this->getAvailableTypes($iblockId) as $type)
+		{
+			if ($type instanceof AbsenceType)
+			{
+				$xmlIdsByEnumId[(string)$type->id] = $type->xmlId;
+			}
+		}
+
+		return $xmlIdsByEnumId;
 	}
 
-	private function fetchAbsenceTypes(int $iblockId): \CIBlockPropertyEnumResult
+	public static function getTypeCaption(string $type): string
+	{
+		try
+		{
+			return Loc::getMessage('INTRANET_ABSENCE_REPOSITORY_TYPE_' . $type) ?? '';
+		}
+		catch (\Throwable)
+		{
+			return '';
+		}
+	}
+
+	protected function fetchAbsenceTypes(int $iblockId): \CIBlockPropertyEnumResult
 	{
 		return \CIBlockPropertyEnum::GetList(
 			[
@@ -209,10 +402,10 @@ class AbsenceRepository
 		if (!is_array(self::$activeVacationTypes))
 		{
 			$defaultVacationTypes = [
-				'VACATION',
-				'LEAVESICK',
-				'LEAVEMATERINITY',
-				'LEAVEUNPAYED',
+				AbsenceTypeCode::Vacation->value,
+				AbsenceTypeCode::SickLeave->value,
+				AbsenceTypeCode::MaternityLeave->value,
+				AbsenceTypeCode::UnpaidLeave->value,
 			];
 
 			$vacationTypesOption = Option::get('intranet', 'vacation_types', null);

@@ -28,6 +28,17 @@ class CrmItemDeadlinesComponent extends Bitrix\Crm\Component\ItemList
 			return;
 		}
 
+		if (!$this->factory->isListViewSupported(Router::LIST_VIEW_DEADLINES))
+		{
+			$fallbackUrl = $this->router->getFallbackItemListUrl($this->entityTypeId, $this->getCategoryId());
+			if ($fallbackUrl !== null)
+			{
+				LocalRedirect($fallbackUrl->getUri());
+			}
+
+			return;
+		}
+
 		$restriction = RestrictionManager::getItemListRestriction($this->entityTypeId);
 		if (!$restriction->hasPermission())
 		{
@@ -62,9 +73,18 @@ class CrmItemDeadlinesComponent extends Bitrix\Crm\Component\ItemList
 	{
 		$views = parent::getToolbarViews();
 
-		$views[Service\Router::LIST_VIEW_KANBAN]['isActive'] = false;
-		$views[Service\Router::LIST_VIEW_LIST]['isActive'] = false;
-		$views[Service\Router::LIST_VIEW_DEADLINES]['isActive'] = true;
+		$activeByViewType = [
+			Service\Router::LIST_VIEW_KANBAN => false,
+			Service\Router::LIST_VIEW_LIST => false,
+			Service\Router::LIST_VIEW_DEADLINES => true,
+		];
+		foreach ($activeByViewType as $viewType => $isActive)
+		{
+			if (isset($views[$viewType]))
+			{
+				$views[$viewType]['isActive'] = $isActive;
+			}
+		}
 
 		return $views;
 	}
@@ -77,6 +97,11 @@ class CrmItemDeadlinesComponent extends Bitrix\Crm\Component\ItemList
 	protected function getListViewType(): string
 	{
 		return Router::LIST_VIEW_DEADLINES;
+	}
+
+	protected function isAutomationButtonAvailable(): bool
+	{
+		return false;
 	}
 
 	protected function configureAnalyticsEventBuilder(\Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder $builder): void

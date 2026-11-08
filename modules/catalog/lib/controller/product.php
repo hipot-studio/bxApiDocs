@@ -708,6 +708,13 @@ class Product extends Controller implements EventBindInterface
 		}
 
 		$element = $result->getData();
+		$result = $this->checkPermissionIBlockElementGet($element['IBLOCK_ID'], $element['ID']);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
 
 		if (
 			$this->checkFieldsDownload([
@@ -975,7 +982,7 @@ class Product extends Controller implements EventBindInterface
 				],
 			]);
 		}
-		if ($row === null)
+		if ($row === null || \CCatalogSku::GetInfoByIBlock((int)$row['IBLOCK_ID']) === false)
 		{
 			$result->addError($this->getErrorEntityNotExists());
 

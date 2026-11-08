@@ -27,6 +27,7 @@ class FilterPresetManager
 			new FiredPreset(),
 			new CollaberPreset(),
 			new IntegratorPreset(),
+			new SystemUserPreset(),
 			new AllPreset(),
 		];
 		$this->filterSettings = $filterSettings;

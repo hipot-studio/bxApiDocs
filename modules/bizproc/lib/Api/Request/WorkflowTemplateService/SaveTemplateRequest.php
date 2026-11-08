@@ -10,6 +10,9 @@ final class SaveTemplateRequest
 		public readonly array $fields,
 		public readonly \CBPWorkflowTemplateUser $user,
 		public readonly bool $checkAccess = true,
+		public readonly int $draftId = 0,
+		public readonly ?int $draftRevision = null,
+		public readonly bool $useEditConflictGuard = false,
 	)
 	{}
 }

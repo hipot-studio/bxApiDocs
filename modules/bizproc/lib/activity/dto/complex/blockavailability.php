@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Activity\Dto\Complex;
 
 use Bitrix\Bizproc\Activity\Enum\NodeBlockType;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Type\Contract\Arrayable;
 
 final class BlockAvailability implements Arrayable, \JsonSerializable
@@ -19,11 +20,11 @@ final class BlockAvailability implements Arrayable, \JsonSerializable
 		{
 			if ($type instanceof NodeBlockType)
 			{
-				$instance->map[$type->value] = $block;
+				$instance->map[$type->value] = self::normalizeBlock($type->value, $block);
 			}
 			elseif (is_string($type))
 			{
-				$instance->map[$type] = $block;
+				$instance->map[$type] = self::normalizeBlock($type, $block);
 			}
 		}
 
@@ -47,11 +48,11 @@ final class BlockAvailability implements Arrayable, \JsonSerializable
 
 			if ($block instanceof AvailableBlock)
 			{
-				$instance->map[$type] = $block;
+				$instance->map[$type] = self::normalizeBlock($type, $block);
 			}
 			elseif (is_array($block))
 			{
-				$instance->map[$type] = AvailableBlock::fromArray($block);
+				$instance->map[$type] = self::normalizeBlock($type, AvailableBlock::fromArray($block));
 			}
 		}
 
@@ -61,6 +62,8 @@ final class BlockAvailability implements Arrayable, \JsonSerializable
 	/**
 	 * The set bizproc offers a node that declares no availableBlocks: condition+action+output always
 	 * available, filter and relations by the runtime rules of their surfaces, the rest unavailable.
+	 * Base-settings is offered here but still gated by the node naming its action in
+	 * Properties.BaseSettingsAction - see CapabilityCatalogService::resolveAvailableBlocks().
 	 *
 	 * A declaration replaces this default as a whole, so a node that only needs to shift one surface
 	 * declares the default with that argument instead of repeating the full map: a new block type then
@@ -69,7 +72,7 @@ final class BlockAvailability implements Arrayable, \JsonSerializable
 	public static function legacyDefault(bool $filter = false, bool $relations = false): self
 	{
 		return self::fromMap([
-			NodeBlockType::BASE_SETTINGS->value => new AvailableBlock(available: false),
+			NodeBlockType::BASE_SETTINGS->value => new AvailableBlock(available: true),
 			NodeBlockType::CONDITION->value => new AvailableBlock(available: true),
 			NodeBlockType::ACTION->value => new AvailableBlock(available: true),
 			NodeBlockType::FILTER->value => new AvailableBlock(available: $filter),
@@ -82,7 +85,7 @@ final class BlockAvailability implements Arrayable, \JsonSerializable
 
 	public function set(NodeBlockType $type, AvailableBlock $block): self
 	{
-		$this->map[$type->value] = $block;
+		$this->map[$type->value] = self::normalizeBlock($type->value, $block);
 
 		return $this;
 	}
@@ -95,6 +98,38 @@ final class BlockAvailability implements Arrayable, \JsonSerializable
 	public function isAvailable(NodeBlockType $type): bool
 	{
 		return ($this->map[$type->value] ?? null)?->available ?? false;
+	}
+
+	public function getMaxItems(NodeBlockType $type): ?int
+	{
+		return $this->get($type)?->constraints['maxItems'] ?? null;
+	}
+
+	private static function normalizeBlock(string $type, AvailableBlock $block): AvailableBlock
+	{
+		$constraints = $block->constraints;
+		if ($constraints === null || !array_key_exists('maxItems', $constraints))
+		{
+			return $block;
+		}
+
+		$maxItems = $constraints['maxItems'];
+		if (is_int($maxItems) && $maxItems > 0)
+		{
+			return $block;
+		}
+
+		(new LoggerFactory(alwaysReturnLogger: false))
+			->createById('bizproc.activity.blockAvailability')
+			?->warning('Invalid block constraint {constraint} for {blockType}: {valueType}', [
+				'blockType' => $type,
+				'constraint' => 'maxItems',
+				'valueType' => get_debug_type($maxItems),
+			])
+		;
+		unset($constraints['maxItems']);
+
+		return new AvailableBlock($block->available, $constraints);
 	}
 
 	public function toArray(): array

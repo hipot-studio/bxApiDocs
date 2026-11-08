@@ -3,9 +3,12 @@
 namespace Bitrix\Superset\Internal\Connector;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Error;
+use Bitrix\Main\Diag\Logger;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\HttpClient;
+use Bitrix\Main\Web\HttpHeaders;
 use Bitrix\Main\Web\Json;
 use Bitrix\Superset\Internal\Entities\Server;
 use Bitrix\Superset\Internal\HttpStatus;
@@ -13,13 +16,23 @@ use Bitrix\Superset\Internal\Repositories\ServerPersister\ServerPersisterFactory
 use Bitrix\Superset\Internal\Repositories\ServerPersister\ServerPersisterInterface;
 use Bitrix\Superset\Internal\RequestResult;
 use Bitrix\Superset\Internal\Support\SupersetResultFactory;
+use Closure;
 
 class SupersetInstance extends BaseConnector
 {
 	private const CSRF_TOKEN_URL = '/api/v1/security/csrf_token/';
 	private const AUTH_TOKEN_URL = '/api/v1/security/login';
+	private const RETRY_PAUSE_MICROSECONDS = 1_000_000;
+	private const RETRY_FIRST_ATTEMPT_TIME_LIMIT = 5.0;
+	private const RETRY_SOCKET_TIMEOUT = 5;
+	private const RETRY_STREAM_TIMEOUT = 10;
+	private const MIN_REQUEST_TIME = 2;
 
 	private readonly ServerPersisterInterface $serverPersister;
+	private bool $isRetrySpent = false;
+	private bool $isGetRetryEnabled = true;
+	private ?float $deadline = null;
+	private ?int $lastTokenRefreshHttpStatus = null;
 
 	/**
 	 * @param Server $server
@@ -98,7 +111,8 @@ class SupersetInstance extends BaseConnector
 			'provider' => 'db',
 		];
 
-		$response = parent::post($this->getAccessTokenUrl(), $payload);
+		$response = $this->send(fn(): RequestResult => parent::post($this->getAccessTokenUrl(), $payload));
+		$this->lastTokenRefreshHttpStatus = $response->getHttpStatus();
 		if (!$response->isSuccess())
 		{
 			$result->addErrors($response->getErrors());
@@ -188,8 +202,9 @@ class SupersetInstance extends BaseConnector
 	 */
 	public function get(string $url): RequestResult
 	{
+		$this->lastTokenRefreshHttpStatus = null;
 		$this->initHttpClient();
-		$requestResult = parent::get($this->buildRequestUrl($url));
+		$requestResult = $this->send(fn(): RequestResult => parent::get($this->buildRequestUrl($url)));
 
 		if (
 			$requestResult->getHttpStatus() === HttpStatus::UNAUTHORIZED
@@ -207,10 +222,193 @@ class SupersetInstance extends BaseConnector
 				}
 			}
 
-			return parent::get($this->buildRequestUrl($url));
+			$requestResult = $this->send(fn(): RequestResult => parent::get($this->buildRequestUrl($url)));
+		}
+
+		if ($this->shouldRetry($requestResult))
+		{
+			$this->isRetrySpent = true;
+			$this->pauseBeforeRetry();
+			$retryResult = $this->send(
+				fn(): RequestResult => parent::get($this->buildRequestUrl($url)),
+				self::RETRY_SOCKET_TIMEOUT,
+				self::RETRY_STREAM_TIMEOUT,
+			);
+			$this->logRetry($url, $requestResult, $retryResult);
+
+			// A retry that did not reach the instance in time tells nothing new, the first server error is kept.
+			return $retryResult->getHttpStatus() === HttpStatus::SERVER_DOWN ? $requestResult : $retryResult;
 		}
 
 		return $requestResult;
+	}
+
+	/**
+	 * Limits the total time of the following requests of this connector, token refresh included.
+	 * Each request gets the time left as its timeouts; a request that does not fit is not sent
+	 * and ends with `521` (SERVER_DOWN).
+	 */
+	public function limitTotalTime(float $seconds): static
+	{
+		$this->deadline = $this->getCurrentTime() + $seconds;
+
+		return $this;
+	}
+
+	/**
+	 * HTTP status of the token refresh made by the last GET, or null when that GET did not refresh the token.
+	 */
+	public function getLastTokenRefreshHttpStatus(): ?int
+	{
+		return $this->lastTokenRefreshHttpStatus;
+	}
+
+	/**
+	 * @param Closure(): RequestResult $request
+	 */
+	private function send(
+		Closure $request,
+		?int $socketTimeoutLimit = null,
+		?int $streamTimeoutLimit = null,
+	): RequestResult
+	{
+		[$configuredSocketTimeout, $configuredStreamTimeout] = $this->getConfiguredTimeouts();
+		$socketTimeout = self::limitTimeout($configuredSocketTimeout, $socketTimeoutLimit);
+		$streamTimeout = self::limitTimeout($configuredStreamTimeout, $streamTimeoutLimit);
+
+		if ($this->deadline !== null)
+		{
+			$timeLeft = (int)floor($this->deadline - $this->getCurrentTime());
+			if ($timeLeft < self::MIN_REQUEST_TIME)
+			{
+				return $this->createTimeLimitExceededResult();
+			}
+
+			// Connection and reading are limited separately, so together they have to fit into the time left.
+			$socketTimeout = self::limitTimeout($socketTimeout, intdiv($timeLeft, 2));
+			$streamTimeout = self::limitTimeout($streamTimeout, $timeLeft - $socketTimeout);
+		}
+
+		if ($socketTimeout === $configuredSocketTimeout && $streamTimeout === $configuredStreamTimeout)
+		{
+			return $request();
+		}
+
+		$this->httpClient->setTimeout($socketTimeout);
+		$this->httpClient->setStreamTimeout($streamTimeout);
+		try
+		{
+			return $request();
+		}
+		finally
+		{
+			$this->httpClient->setTimeout($configuredSocketTimeout);
+			$this->httpClient->setStreamTimeout($configuredStreamTimeout);
+		}
+	}
+
+	/**
+	 * Timeouts the HTTP client gets on creation: the connector options complemented by the global
+	 * `http_client_options`, resolved the same way as the HttpClient constructor does.
+	 *
+	 * @return array{int, int} socket and stream timeouts
+	 */
+	private function getConfiguredTimeouts(): array
+	{
+		$options = $this->httpClientOptions + (Configuration::getValue('http_client_options') ?? []);
+
+		$streamTimeout = HttpClient::DEFAULT_STREAM_TIMEOUT;
+		if (isset($options['waitResponse']) && !$options['waitResponse'])
+		{
+			$streamTimeout = HttpClient::DEFAULT_STREAM_TIMEOUT_NO_WAIT;
+		}
+
+		return [
+			(int)($options['socketTimeout'] ?? HttpClient::DEFAULT_SOCKET_TIMEOUT),
+			(int)($options['streamTimeout'] ?? $streamTimeout),
+		];
+	}
+
+	private static function limitTimeout(int $timeout, ?int $limit): int
+	{
+		if ($limit === null)
+		{
+			return $timeout;
+		}
+
+		// A zero timeout means no timeout at all.
+		return $timeout > 0 ? min($timeout, $limit) : $limit;
+	}
+
+	private function createTimeLimitExceededResult(): RequestResult
+	{
+		$result = new RequestResult(HttpStatus::SERVER_DOWN, new HttpHeaders(), '', 0.0);
+		$result->addError(new Error('Superset request time limit exceeded'));
+
+		return $result;
+	}
+
+	protected function getCurrentTime(): float
+	{
+		return microtime(true);
+	}
+
+	/**
+	 * Makes every GET of this connector a single attempt: a server error is returned without the retry.
+	 */
+	public function disableGetRetry(): static
+	{
+		$this->isGetRetryEnabled = false;
+
+		return $this;
+	}
+
+	/**
+	 * A single fast 5xx answer is treated as transient and retried once per connector.
+	 * Slow failures, a failed connection and an unavailable instance are not retried to keep the overall wait bounded.
+	 */
+	private function shouldRetry(RequestResult $result): bool
+	{
+		if (!$this->isGetRetryEnabled || $this->isRetrySpent)
+		{
+			return false;
+		}
+
+		$status = $result->getHttpStatus();
+		if (
+			$status < HttpStatus::INTERNAL_SERVER_ERROR
+			|| $status === HttpStatus::DEACTIVATED_INSTANCE
+			|| $status === HttpStatus::SERVER_DOWN
+		)
+		{
+			return false;
+		}
+
+		return $result->getTime() < $this->getRetryFirstAttemptTimeLimit();
+	}
+
+	protected function pauseBeforeRetry(): void
+	{
+		usleep(self::RETRY_PAUSE_MICROSECONDS);
+	}
+
+	protected function getRetryFirstAttemptTimeLimit(): float
+	{
+		return self::RETRY_FIRST_ATTEMPT_TIME_LIMIT;
+	}
+
+	private function logRetry(string $url, RequestResult $firstResult, RequestResult $retryResult): void
+	{
+		Logger::create('superset.SupersetInstance')?->warning(
+			'Superset GET request was retried after a server error. Path: {path}, status: {status}, '
+			. 'retry status: {retryStatus}, first attempt time: {time}',
+			[
+				'path' => explode('?', $url, 2)[0],
+				'status' => $firstResult->getHttpStatus(),
+				'retryStatus' => $retryResult->getHttpStatus(),
+				'time' => $firstResult->getTime(),
+			],
+		);
 	}
 
 	/**
@@ -223,7 +421,7 @@ class SupersetInstance extends BaseConnector
 		$this->initHttpClient();
 		$this->addCsrfToken();
 
-		return parent::post($this->buildRequestUrl($url), $payload);
+		return $this->send(fn(): RequestResult => parent::post($this->buildRequestUrl($url), $payload));
 	}
 
 	/**
@@ -236,7 +434,7 @@ class SupersetInstance extends BaseConnector
 		$this->initHttpClient();
 		$this->addCsrfToken();
 
-		return parent::postMultipart($this->buildRequestUrl($url), $payload);
+		return $this->send(fn(): RequestResult => parent::postMultipart($this->buildRequestUrl($url), $payload));
 	}
 
 	/**
@@ -249,7 +447,7 @@ class SupersetInstance extends BaseConnector
 		$this->initHttpClient();
 		$this->addCsrfToken();
 
-		return parent::put($this->buildRequestUrl($url), $payload);
+		return $this->send(fn(): RequestResult => parent::put($this->buildRequestUrl($url), $payload));
 	}
 
 	/**
@@ -262,7 +460,7 @@ class SupersetInstance extends BaseConnector
 		$this->initHttpClient();
 		$this->addCsrfToken();
 
-		return parent::delete($this->buildRequestUrl($url), $payload);
+		return $this->send(fn(): RequestResult => parent::delete($this->buildRequestUrl($url), $payload));
 	}
 
 	protected static function buildRequestBody(array $payload = []): mixed

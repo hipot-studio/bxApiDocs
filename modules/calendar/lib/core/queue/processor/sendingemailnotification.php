@@ -8,8 +8,11 @@ use Bitrix\Calendar\Core\Queue\Message\Message;
 use Bitrix\Calendar\Core\Queue\Producer\Producer;
 use Bitrix\Calendar\ICal\MailInvitation\InvitationInfo;
 use Bitrix\Calendar\ICal\MailInvitation\SenderInvitation;
+use Bitrix\Calendar\Internal\Service\Invitation\InvitationQueueFeature;
+use Bitrix\Calendar\Internal\Service\Invitation\Messenger\Sender\EmailInvitationSender;
 use Bitrix\Calendar\Internals\Log\Logger;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
@@ -193,6 +196,13 @@ class SendingEmailNotification implements Interfaces\Processor
 	 */
 	public static function sendMessageToQueue(array $invitation): void
 	{
+		if (InvitationQueueFeature::isOn())
+		{
+			ServiceLocator::getInstance()->get(EmailInvitationSender::class)->send($invitation);
+
+			return;
+		}
+
 		$serializedData = str_replace("'", "\'", serialize($invitation));
 		$serializedData = Emoji::encode($serializedData);
 
@@ -205,13 +215,24 @@ class SendingEmailNotification implements Interfaces\Processor
 	}
 
 	/**
-	 * @param SenderInvitation[] $invitations
+	 * @param array[] $invitations Invitations in the shape of InvitationInfo::toArray().
 	 * @return void
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
 	public static function sendBatchOfMessagesToQueue(array $invitations): void
 	{
+		if (InvitationQueueFeature::isOn())
+		{
+			$sender = ServiceLocator::getInstance()->get(EmailInvitationSender::class);
+			foreach ($invitations as $invitation)
+			{
+				$sender->send($invitation);
+			}
+
+			return;
+		}
+
 		$messages = [];
 
 		if (!is_iterable($invitations))

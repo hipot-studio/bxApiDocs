@@ -107,7 +107,7 @@ class AccessRightsEntitySerializer
 		$options = [
 			'id' => $rightCode,
 			'title' => $rightName ?: $permission->name(),
-			'hint' => $permission->explanation(),
+			'hint' => $parentCode === null ? $permission->explanation() : null,
 			'group' => $parentCode,
 			'type' => $controlType->getType(),
 			'minValue' => $controlType->getMinValue(),

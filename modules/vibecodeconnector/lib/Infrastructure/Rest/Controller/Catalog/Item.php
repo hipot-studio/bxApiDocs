@@ -14,6 +14,7 @@ use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Interaction\Response\AddResponse;
 use Bitrix\Rest\V3\Interaction\Response\DeleteResponse;
 use Bitrix\Rest\V3\Interaction\Response\UpdateResponse;
+use Bitrix\Vibecodeconnector\Infrastructure\Rest\Auth\PairedIssuerResolver;
 use Bitrix\Vibecodeconnector\Infrastructure\Rest\Controller\CommandRunner;
 use Bitrix\Vibecodeconnector\Infrastructure\Rest\Dto\Catalog\CatalogItemDto;
 use Bitrix\Vibecodeconnector\Infrastructure\Rest\Request\Catalog\Item\AddRequest;
@@ -28,17 +29,24 @@ final class Item extends RestController
 {
 	use CommandRunner;
 
-	public function __construct(?Main\Request $request = null)
+	private readonly PairedIssuerResolver $pairedIssuerResolver;
+
+	public function __construct(
+		?Main\Request $request = null,
+		?PairedIssuerResolver $pairedIssuerResolver = null,
+	)
 	{
 		parent::__construct($request);
+		$this->pairedIssuerResolver = $pairedIssuerResolver ?? new PairedIssuerResolver();
 	}
 
 	#[Description('Creates a catalog item owned by the current REST user')]
 	#[Scope(RestDeveloper::SCOPE)]
 	public function addAction(AddRequest $request): AddResponse
 	{
+		$userId = $this->getCurrentUserId();
 		$result = $this->runCommand(new CreateCatalogItemCommand(
-			userId: $this->getCurrentUserId(),
+			userId: $userId,
 			title: $request->title,
 			type: $request->type,
 			accessType: $request->accessType,
@@ -48,7 +56,7 @@ final class Item extends RestController
 			iconUrl: $this->getOptionalRequestValue($request, 'iconUrl'),
 			chatId: $this->getOptionalRequestValue($request, 'chatId'),
 			externalId: $this->getOptionalRequestValue($request, 'externalId'),
-			iss: $this->getOptionalRequestValue($request, 'iss'),
+			iss: $this->pairedIssuerResolver->resolve($this->getServer(), $userId),
 		));
 		$item = $result->getData()['item'];
 
@@ -94,6 +102,6 @@ final class Item extends RestController
 
 	private function getOptionalRequestValue(AddRequest $request, string $propertyName): mixed
 	{
-		return isset($request->{$propertyName}) ? $request->{$propertyName} : null;
+		return $request->{$propertyName} ?? null;
 	}
 }

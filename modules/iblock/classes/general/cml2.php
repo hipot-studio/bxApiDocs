@@ -6,6 +6,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Iblock;
 use Bitrix\Catalog;
 use Bitrix\Catalog\Product;
+use Bitrix\Main\Web\Uri;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -5840,7 +5841,7 @@ class CIBlockCMLExport
 		{
 			$arFile = CFile::GetFileArray($FILE_ID);
 			if($arFile)
-				return CHTTP::URN2URI($arFile["SRC"]);
+				return (string)(new Uri($arFile["SRC"]))->toAbsolute();
 		}
 
 		return "";

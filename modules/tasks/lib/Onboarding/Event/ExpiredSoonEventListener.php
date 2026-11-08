@@ -17,7 +17,7 @@ final class ExpiredSoonEventListener extends AbstractEventListener
 	{
 		$eventResult = new EventResult(EventResult::SUCCESS);
 
-		if (!OnboardingFeature::isNewPortal())
+		if (!OnboardingFeature::isAvailable() || !OnboardingFeature::isNewPortal())
 		{
 			return $eventResult;
 		}

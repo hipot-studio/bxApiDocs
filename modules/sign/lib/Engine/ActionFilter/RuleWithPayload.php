@@ -8,6 +8,7 @@ class RuleWithPayload
 		public string $accessPermission,
 		public ?string $itemType = null,
 		public ?string $itemIdOrUidRequestKey = null,
+		public ?string $identifiedBy = null,
 		public ?bool $passes = null,
 	) {}
 }

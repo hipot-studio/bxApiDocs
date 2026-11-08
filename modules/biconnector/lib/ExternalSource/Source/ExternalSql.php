@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\ExternalSource\Source;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\IpAddress;
+use Bitrix\BIConnector\DB\BiTimeLimitInterface;
 use Bitrix\BIConnector\ExternalSource\Internal\EO_ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
@@ -41,7 +42,10 @@ abstract class ExternalSql extends Base
 	/**
 	 * @return int
 	 */
-	public function getConnection(?ExternalSourceSettingsCollection $settings = null): ?ExternalSqlConnectionInterface
+	public function getConnection(
+		?ExternalSourceSettingsCollection $settings = null,
+		?int $biTimeLimitSeconds = null,
+	): ?ExternalSqlConnectionInterface
 	{
 		$this->lastConnectionError = null;
 
@@ -98,6 +102,10 @@ abstract class ExternalSql extends Base
 		try
 		{
 			$connection = $this->buildConnection($config);
+			if ($biTimeLimitSeconds > 0 && $connection instanceof BiTimeLimitInterface)
+			{
+				$connection->setBiTimeLimitSeconds($biTimeLimitSeconds);
+			}
 			$connection->connect();
 		}
 		catch (Main\DB\ConnectionException $e)

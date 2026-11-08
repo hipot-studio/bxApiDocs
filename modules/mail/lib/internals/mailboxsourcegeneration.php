@@ -57,6 +57,57 @@ class MailboxSourceGenerationTable extends Entity\DataManager
 	}
 
 	/**
+	 * The generations the mailbox is preparing right now: the ones a migration fills with a source
+	 * the user has not been handed over to and may not see.
+	 *
+	 * The G1 backfill is none of them, whatever its status says. It adopts the source the mailbox
+	 * is already served by, so its rows are the history the user has been looking at all along -
+	 * the walk only stamps a column on them - and that generation can stay PREPARING for good,
+	 * because the rows are assigned before the sync lock is taken and a busy lock stops the
+	 * finalization. Counted as prepared, it was hidden from the read of the logical identity of a
+	 * letter, and a letter that gained a placement came back as a second letter.
+	 *
+	 * Two renderings of one condition, and both live here because neither can be had from the
+	 * other: {@see preparedGenerationSqlCondition()} serves a reader that must not touch the ORM
+	 * map of another release. Editing one means editing the other.
+	 */
+	public static function preparedGenerationFilter(int $mailboxId): array
+	{
+		return [
+			'=MAILBOX_ID' => $mailboxId,
+			'=STATUS' => self::STATUS_PREPARING,
+			'!=OPERATION_ID' => self::OPERATION_G1_BACKFILL,
+		];
+	}
+
+	/**
+	 * The same condition as a piece of SQL, for a query built without the ORM.
+	 *
+	 * Two of the three values it names are constants of this class; the third is the mailbox of
+	 * the caller, and what makes it safe is its own type - an int placed by %u, which renders
+	 * digits and nothing else. Escaping is therefore not what this condition rests on, and adding
+	 * a value of any other kind here would need a way of its own.
+	 *
+	 * Returned parenthesized: a chain of AND handed out as a string is a piece a caller may join
+	 * with an OR, and AND binds tighter - the condition on the mailbox would end up in one branch
+	 * of that OR alone.
+	 *
+	 * {@see preparedGenerationFilter()} tells why the two renderings exist and what keeps them one
+	 * answer.
+	 *
+	 * @internal Public for {@see \Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope} only.
+	 */
+	public static function preparedGenerationSqlCondition(int $mailboxId): string
+	{
+		return sprintf(
+			"(MAILBOX_ID = %u AND STATUS = '%s' AND OPERATION_ID <> '%s')",
+			$mailboxId,
+			self::STATUS_PREPARING,
+			self::OPERATION_G1_BACKFILL,
+		);
+	}
+
+	/**
 	 * The password of a generation is the password of the mailbox: the switch projects one
 	 * into the other, so the two are the same credential and must be protected alike.
 	 *

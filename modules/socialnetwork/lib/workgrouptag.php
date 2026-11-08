@@ -9,6 +9,9 @@ namespace Bitrix\Socialnetwork;
 
 use Bitrix\Main\Entity;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\ORM\Fields\Field;
+use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
+use Bitrix\Main\Text\Emoji;
 
 /**
  * Class WorkgroupTagTable
@@ -28,6 +31,8 @@ use Bitrix\Main\DB\SqlQueryException;
  */
 class WorkgroupTagTable extends Entity\DataManager
 {
+	public const NAME_MAX_LENGTH = 255;
+
 	public static function getTableName()
 	{
 		return 'b_sonet_group_tag';
@@ -46,9 +51,60 @@ class WorkgroupTagTable extends Entity\DataManager
 			),
 			'NAME' => array(
 				'data_type' => 'string',
-				'primary' => true
+				'primary' => true,
+				'validation' => [self::class, 'validateName'],
+				'save_data_modification' => [Emoji::class, 'getSaveModificator'],
+				'fetch_data_modification' => [Emoji::class, 'getFetchModificator'],
 			)
 		);
+	}
+
+	public static function prepareNameForSearch(string $name): string
+	{
+		return Emoji::encode(mb_strtolower(trim($name)));
+	}
+
+	/**
+	 * @param list<string|int|float> $tags
+	 * @return list<string>|null Normalized tags, or null when any tag exceeds storage length
+	 */
+	public static function prepareTagsForSave(array $tags): ?array
+	{
+		$prepared = [];
+		foreach ($tags as $tag)
+		{
+			$tag = mb_strtolower(trim(Emoji::decode((string)$tag)));
+			if ($tag === '')
+			{
+				continue;
+			}
+
+			if (mb_strlen(Emoji::encode($tag)) > self::NAME_MAX_LENGTH)
+			{
+				return null;
+			}
+
+			if (!in_array($tag, $prepared, true))
+			{
+				$prepared[] = $tag;
+			}
+		}
+
+		return $prepared;
+	}
+
+	public static function validateName(): array
+	{
+		return [
+			static function ($value, $primary, array $row, Field $field) {
+				return (new LengthValidator(null, self::NAME_MAX_LENGTH))->validate(
+					Emoji::encode((string)$value),
+					$primary,
+					$row,
+					$field,
+				);
+			},
+		];
 	}
 
 	public static function deleteByGroupId($params = array())
@@ -79,15 +135,21 @@ class WorkgroupTagTable extends Entity\DataManager
 			return false;
 		}
 
+		$tags = self::prepareTagsForSave($params['tags']);
+		if ($tags === null)
+		{
+			return false;
+		}
+
 		self::deleteByGroupId(array(
 			'groupId' => intval($params['groupId'])
 		));
 
-		foreach($params['tags'] as $tag)
+		foreach($tags as $tag)
 		{
 			self::processAdd(array(
 				'GROUP_ID' => intval($params['groupId']),
-				'NAME' => mb_strtolower($tag)
+				'NAME' => $tag
 			));
 		}
 

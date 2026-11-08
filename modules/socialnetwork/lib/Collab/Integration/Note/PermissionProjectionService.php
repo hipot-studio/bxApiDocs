@@ -8,8 +8,10 @@ use Bitrix\Main\Loader;
 use Bitrix\Note\Internal\Access\Service\CollectionAccessService;
 use Bitrix\Note\Public\Command\ReplaceCollectionPermissionsCommand;
 use Bitrix\Socialnetwork\Collab\Integration\Note\Service\BindingService;
+use Bitrix\Socialnetwork\Collab\Integration\Note\Service\CollectionExistenceGateway;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 
 /**
  * Phase 3 (P3.T1): проекция ролей коллаба в ACL коллекции note (owns ALG-01).
@@ -40,8 +42,13 @@ class PermissionProjectionService
 	private const LEVEL_MANAGE = 'manage';
 	private const LEVEL_VIEW = 'view';
 
+	/**
+	 * @param CollectionExistenceGateway|null $existenceGateway resolved from the container when
+	 *   omitted; the default value keeps autowiring away from it, tests pass their own.
+	 */
 	public function __construct(
 		private readonly BindingService $bindingService,
+		private readonly ?CollectionExistenceGateway $existenceGateway = null,
 	)
 	{
 	}
@@ -139,7 +146,9 @@ class PermissionProjectionService
 	 * не снимает.
 	 *
 	 * Guarded cross-module: без модуля note — no-op (успех). No-op (успех), если
-	 * у коллаба нет привязанной коллекции. Возвращает Result: вызывающий
+	 * у коллаба нет привязанной коллекции, а также если привязка пережила удалённую
+	 * коллекцию: ошибка заставила бы очередь бесконечно повторять невыполнимую
+	 * работу. Возвращает Result: вызывающий
 	 * (очередь {@see Async\CollabNoteAclReceiver}) на неуспех делает retry.
 	 * Идемпотентен: повторный вызов при том же состоянии даёт тот же ACL.
 	 *
@@ -162,30 +171,17 @@ class PermissionProjectionService
 				return $result; // нет привязки — no-op
 			}
 
-			$collab = Workgroup::getById($collabId);
-			if (!($collab instanceof Workgroup))
+			$existenceGateway = $this->existenceGateway ?? Container::getInstance()->get(CollectionExistenceGateway::class);
+			if ($existenceGateway->exists($collectionId) === false)
 			{
+				// The knowledge base is gone: writing permissions would only leave orphaned rows
+				// behind and make the dead collection look alive again. An unknown answer (null)
+				// does not stop the recalculation - a silently skipped one would let permissions
+				// drift after a membership change without leaving a trace.
 				return $result;
 			}
 
-			$members = $collab->getMemberIdsWithRole();
-			$projection = $this->projectMembers($collabId, $members);
-			if ($projection === [])
-			{
-				return $result;
-			}
-
-			$permissions = $this->mergeWithExisting(
-				$collectionId,
-				$projection,
-				$this->resolveRevokedSubjectCodes($members, $privilegedBeforeIds),
-			);
-
-			return (new ReplaceCollectionPermissionsCommand(
-				$collectionId,
-				$permissions,
-				$this->resolveActorId($collabId),
-			))->run();
+			return $this->projectOntoCollection($collabId, $collectionId, $privilegedBeforeIds);
 		}
 		catch (\Throwable $e)
 		{
@@ -193,6 +189,47 @@ class PermissionProjectionService
 
 			return $result;
 		}
+	}
+
+	/**
+	 * The write step of the recalculation, reached only for an existing knowledge base: the
+	 * current collab composition is merged into the ACL of the collection.
+	 *
+	 * Protected on purpose - replacing this step is the only way for a test to observe that
+	 * the guards of recalculate() stopped before the write.
+	 *
+	 * @param list<int> $privilegedBeforeIds
+	 */
+	protected function projectOntoCollection(
+		int $collabId,
+		int $collectionId,
+		array $privilegedBeforeIds
+	): \Bitrix\Main\Result
+	{
+		$collab = Workgroup::getById($collabId);
+		if (!($collab instanceof Workgroup))
+		{
+			return new \Bitrix\Main\Result();
+		}
+
+		$members = $collab->getMemberIdsWithRole();
+		$projection = $this->projectMembers($collabId, $members);
+		if ($projection === [])
+		{
+			return new \Bitrix\Main\Result();
+		}
+
+		$permissions = $this->mergeWithExisting(
+			$collectionId,
+			$projection,
+			$this->resolveRevokedSubjectCodes($members, $privilegedBeforeIds),
+		);
+
+		return (new ReplaceCollectionPermissionsCommand(
+			$collectionId,
+			$permissions,
+			$this->resolveActorId($collabId),
+		))->run();
 	}
 
 	/**

@@ -7,6 +7,7 @@ use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Result;
 use Bitrix\Main\UI\FileInputUtility;
 use Bitrix\Main\Web;
+use Bitrix\Main\Web\Http\Etag;
 use Bitrix\Main\Web\HttpClient;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Localization\Loc;
@@ -830,19 +831,21 @@ class File
 			{
 				//Handle ETag
 				$ETag = md5($fileData["tmp_name"].$filesize.$filetime);
-				if ($server->get("HTTP_IF_NONE_MATCH") === $ETag)
+				$ifNoneMatch = $server->get("HTTP_IF_NONE_MATCH");
+				if (Etag::matches($ifNoneMatch, $ETag))
 				{
 					\CHTTP::SetStatus("304 Not Modified");
 					header("Cache-Control: private, max-age=".$cacheTime.", pre-check=".$cacheTime);
 					die();
 				}
-				header("ETag: ".$ETag);
+				header("ETag: ".Etag::quote($ETag));
 
 				//Handle Last Modified
 				if($filetime > 0)
 				{
 					$lastModified = gmdate('D, d M Y H:i:s', $filetime).' GMT';
-					if ($server->get("HTTP_IF_NONE_MATCH") === $lastModified)
+					// If-Modified-Since is evaluated only without If-None-Match (RFC 7232, section 6)
+					if ($ifNoneMatch === null && $server->get("HTTP_IF_MODIFIED_SINCE") === $lastModified)
 					{
 						\CHTTP::SetStatus("304 Not Modified");
 						header("Cache-Control: private, max-age=".$cacheTime.", pre-check=".$cacheTime);

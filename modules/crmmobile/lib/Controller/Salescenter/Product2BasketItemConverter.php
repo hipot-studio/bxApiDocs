@@ -54,6 +54,8 @@ class Product2BasketItemConverter
 				'isCustomPrice' => 'Y',
 				'discountType' => $product['DISCOUNT_TYPE_ID'],
 				'quantity' => $product['QUANTITY'],
+				'measureCode' => $product['MEASURE_CODE'] ?? null,
+				'measureName' => $product['MEASURE_NAME'] ?? null,
 				'discountRate' => $product['DISCOUNT_RATE'],
 				'discount' => $product['DISCOUNT_SUM'],
 				'additionalFields' => [
@@ -61,6 +63,7 @@ class Product2BasketItemConverter
 					'originProductId' => $product['BASKET_ITEM_FIELDS']['ADDITIONAL_FIELDS']['ORIGIN_PRODUCT_ID'] ?? '',
 				],
 				'taxIncluded' => $taxIncluded,
+				'taxRate' => $product['TAX_RATE'],
 				'taxId' => VatTable::getActiveVatIdByRate($product['TAX_RATE']),
 				'type' => $product['TYPE'],
 			];

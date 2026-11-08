@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Link;
 
 use Bitrix\Socialnetwork\Collab\Integration\Extranet\Extranet;
 use Bitrix\Socialnetwork\Collab\User\User;
+use Bitrix\Socialnetwork\Helper\Analytics\Analytics;
 use Bitrix\Socialnetwork\Helper\InstanceTrait;
 
 final class LinkManager
@@ -29,12 +30,23 @@ final class LinkManager
 			LinkType::Tasks, LinkType::Calendar, LinkType::Disk, => implode('/', $parts) . '/',
 		};
 
-		if ($this->linkParts->entityId === null)
+		$link = $this->linkParts->entityId === null ? $baseLink : $this->getEntityLink($baseLink);
+
+		return $link . $this->getAnalyticsQuery();
+	}
+
+	/**
+	 * Marks the files section link so its landing page can send open_section. Tasks and Calendar carry their own
+	 * analytics and must stay untouched.
+	 */
+	private function getAnalyticsQuery(): string
+	{
+		if ($this->type !== LinkType::Disk)
 		{
-			return $baseLink;
+			return '';
 		}
 
-		return $this->getEntityLink($baseLink);
+		return '?c_element=' . Analytics::ELEMENT_FILES_BUTTON;
 	}
 
 	private function getEntityLink(string $baseLink): string

@@ -309,6 +309,7 @@ class Controller extends Engine\Controller
 	private function checkPermission($name)
 	{
 		$r = new Result();
+		$name = mb_strtolower($name);
 
 		if($name == 'add')
 		{

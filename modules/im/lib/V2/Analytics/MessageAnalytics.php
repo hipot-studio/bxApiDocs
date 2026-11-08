@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Analytics;
 
+use Bitrix\Im\V2\Analytics\Event\FileMessageEvent;
 use Bitrix\Im\V2\Analytics\Event\MessageEvent;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Chat\FavoriteChat;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Reaction\ReactionService;
 use Bitrix\Im\V2\Message\Sticker\StickerItem;
+use Bitrix\Imbot\Bot\CopilotChatBot;
+use Bitrix\Main\Loader;
 
 class MessageAnalytics extends ChatAnalytics
 {
@@ -41,14 +46,46 @@ class MessageAnalytics extends ChatAnalytics
 				return;
 			}
 
+			// Every emitter below (send_message / send_sticker / attach_file and the copilot
+			// v2 pair) is gated by the same base chat-type restriction, so bail out before
+			// classifying content and loading files for chats that emit nothing.
+			if (!$this->isChatTypeAllowed($this->chat))
+			{
+				return;
+			}
+
+			$componentName = (new MessageContent($this->message))->getComponentName();
+			$files = $this->message->getFiles();
+			$fileType = $files->count() > 0 ? FileMessageEvent::resolveFileType($files) : null;
+
 			$this
 				->createMessageEvent(self::SEND_MESSAGE)
-				?->setType((new MessageContent($this->message))->getComponentName())
+				?->setType($componentName)
 				?->send()
 			;
 
 			$this->addSendSticker($this->message->getSticker());
-			(new FileAnalytics($this->chat))->addAttachFilesEvent($this->message);
+			(new FileAnalytics($this->chat))->addAttachFilesEvent($this->message, $fileType);
+
+			// BitrixGPT v2 ai-labels: send_message and attach_file for copilot chats under flag.
+			// Bot replies are tracked separately (receive labels on the aiassistant side),
+			// so any bot author must stay out of the send funnel — see isMessageAuthorBot().
+			// The labels take the message context (pinned to the author in prepareMessage),
+			// not the lazy global one: for messages sent on behalf of an explicit user the
+			// background job must attribute the event to the actual author.
+			if (
+				$this->chat instanceof CopilotChat
+				&& Features::isBitrixGptV2Available()
+				&& !$this->isMessageAuthorBot()
+			)
+			{
+				$copilotAnalytics = (new CopilotAnalytics($this->chat))->withContext($this->message->getContext());
+				$copilotAnalytics->addSendMessage($this->message, $componentName);
+				if ($fileType !== null)
+				{
+					$copilotAnalytics->addAttachFile($this->message, $fileType);
+				}
+			}
 		});
 	}
 
@@ -64,6 +101,7 @@ class MessageAnalytics extends ChatAnalytics
 			$this
 				->createMessageEvent(self::ADD_REACTION)
 				?->setType($reaction)
+				?->setSection((new MessageContent($this->message))->getComponentName())
 				?->setReactionP3($reactionCount)
 				?->setReactionP4($this->message->getAuthorId())
 				?->send()
@@ -133,6 +171,31 @@ class MessageAnalytics extends ChatAnalytics
 			?->setP5(null)
 			?->send()
 		;
+	}
+
+	protected function getCopilotBotId(): int
+	{
+		return Loader::includeModule('imbot') ? (int)CopilotChatBot::getBotId() : 0;
+	}
+
+	/**
+	 * The copilot bot id comparison is the cheap fast path: the dominant excluded case —
+	 * the copilot reply — is filtered without loading the user entity. The isBot() fallback
+	 * closes the rest: the v2 pipeline may post the answer from the aiassistant bot, and
+	 * without the imbot module the copilot bot id resolves to 0, so any other bot author
+	 * must be excluded by the user entity check. The message context user is the author
+	 * (pinned in Chat::prepareMessage), so the v2 entity is used instead of the legacy one.
+	 */
+	protected function isMessageAuthorBot(): bool
+	{
+		$authorId = $this->message->getAuthorId();
+		$copilotBotId = $this->getCopilotBotId();
+		if ($copilotBotId !== 0 && $authorId === $copilotBotId)
+		{
+			return true;
+		}
+
+		return $this->message->getContext()->getUser()->isBot();
 	}
 
 	protected function createMessageEvent(

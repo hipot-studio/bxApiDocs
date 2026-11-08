@@ -69,6 +69,11 @@ class ShareRepository extends BaseRepository
 	 */
 	public function getInfoAccessRole(array $roleId, int $userId): array
 	{
+		if ($roleId === [])
+		{
+			return [];
+		}
+
 		return ShareTable::query()
 			->setSelect([
 				'SHARE_ID' => 'ID',

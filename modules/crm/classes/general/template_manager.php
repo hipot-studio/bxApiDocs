@@ -102,7 +102,11 @@ class CCrmTemplateManager
 			if (array_key_exists($key, $replacements) || empty($mapper))
 				continue;
 
-			$replacements[$key] = htmlspecialcharsback($mapper->mapPath(mb_substr($key, 1, -1)));
+			$mappedValue = $mapper->mapPath(mb_substr($key, 1, -1));
+			$replacements[$key] = $contentTypeID === \CCrmContentType::Html
+				? self::decodeDoubleEncodedEntities((string)$mappedValue)
+				: htmlspecialcharsback($mappedValue)
+			;
 		}
 
 		$template = str_replace(array_keys($replacements), array_values($replacements), $template);
@@ -117,5 +121,14 @@ class CCrmTemplateManager
 	private static function decodeApostrophe(string $template): string
 	{
 		return str_replace('&#039;', '\'', $template);
+	}
+
+	private static function decodeDoubleEncodedEntities(string $value): string
+	{
+		return preg_replace(
+			'/&amp;(?=(?:[a-z][a-z0-9]+|#[0-9]+|#x[0-9a-f]+);)/i',
+			'&',
+			$value
+		) ?? $value;
 	}
 }

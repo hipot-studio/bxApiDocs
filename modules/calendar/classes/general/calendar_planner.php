@@ -3,11 +3,17 @@
 use Bitrix\Calendar\Core\Managers\Accessibility;
 use Bitrix\Calendar\Rooms;
 use Bitrix\Calendar\Integration\Bitrix24Manager;
+use Bitrix\Calendar\Planner\AccessCodeFilter;
 use Bitrix\Calendar\Sharing\SharingUser;
 use Bitrix\Calendar\Util;
+use Bitrix\Main\UserTable;
 
 class CCalendarPlanner
 {
+	public const LIMIT_EXCEEDED_POLICY_OMIT_USERS = 'omit_users';
+
+	private const DESTINATION_USERS_STEP_COUNT = 500;
+
 	public static function Init($config = [], $initialParams = false)
 	{
 		self::InitJsCore($config, $initialParams);
@@ -87,23 +93,113 @@ class CCalendarPlanner
 		$resourceIdList = [];
 		$userIds = [];
 		$users = [];
+		$destinationUserIds = [];
+		$entryUserIds = [];
+		$hasDestinationCodes = isset($params['codes']) && is_array($params['codes']);
+		$limitExceededPolicy = $params['limitExceededPolicy'] ?? null;
+
+		if ($hasDestinationCodes)
+		{
+			$codes = (new AccessCodeFilter($curUserId))->filter($params['codes']);
+			// Use the legacy union for the count; expand code blocks below only until the visible prefix is full.
+			$destinationUserIds = CCalendar::GetDestinationUsers($codes);
+		}
+		elseif (isset($params['entries']) && is_array($params['entries']))
+		{
+			$entryUserIds = $params['entries'];
+		}
+
+		$allUserIds = $hasDestinationCodes ? $destinationUserIds : $entryUserIds;
+		$allUserIds = self::getExistingDestinationUserIds($allUserIds);
+		$hasHostOutsideLimit = $limitExceededPolicy !== self::LIMIT_EXCEEDED_POLICY_OMIT_USERS
+			&& $hostUserId > 0
+			&& in_array($hostUserId, $allUserIds, true);
+		if ($hasHostOutsideLimit)
+		{
+			$allUserIds = array_values(array_diff($allUserIds, [$hostUserId]));
+			array_unshift($allUserIds, $hostUserId);
+		}
+
+		if ($hasDestinationCodes)
+		{
+			$destinationUserIds = $allUserIds;
+		}
+		else
+		{
+			$entryUserIds = $allUserIds;
+		}
+
+		$limitUserIds = $hasHostOutsideLimit ? array_slice($allUserIds, 1) : $allUserIds;
+		$hasDestinationUsers = !empty($destinationUserIds);
+		$peopleCount = count($allUserIds);
+		$limitPeopleCount = count($limitUserIds);
+
+		$maxPlannerUsers = CCalendar::GetMaxPlannerUsers();
+		$isPlannerLimitExceeded = $maxPlannerUsers > 0 && $limitPeopleCount > $maxPlannerUsers;
+		$omitUsersOnLimitExceeded = $isPlannerLimitExceeded
+			&& $limitExceededPolicy === self::LIMIT_EXCEEDED_POLICY_OMIT_USERS
+		;
+		$visibleUserIds = $allUserIds;
+		if ($omitUsersOnLimitExceeded)
+		{
+			$visibleUserIds = [];
+		}
+		elseif (
+			$hasDestinationCodes
+			&& $limitExceededPolicy !== self::LIMIT_EXCEEDED_POLICY_OMIT_USERS
+			&& $maxPlannerUsers > 0
+		)
+		{
+			$visibleLimitUserIds = self::getOrderedDestinationUserIds(
+				$codes,
+				$limitUserIds,
+				min($limitPeopleCount, $maxPlannerUsers),
+			);
+			$visibleUserIds = $hasHostOutsideLimit
+				? array_merge([$hostUserId], $visibleLimitUserIds)
+				: $visibleLimitUserIds
+			;
+		}
+		elseif ($isPlannerLimitExceeded)
+		{
+			if ($hasHostOutsideLimit)
+			{
+				$visibleUserIds = array_merge(
+					[$hostUserId],
+					array_slice($limitUserIds, 0, $maxPlannerUsers),
+				);
+			}
+			else
+			{
+				$visibleUserIds = array_slice($limitUserIds, 0, $maxPlannerUsers);
+			}
+		}
+
 		$result = [
 			'users' => [],
 			'entries' => [],
-			'accessibility' => []
+			'accessibility' => [],
+			'plannerLimitExceeded' => $isPlannerLimitExceeded,
+			'maxPlannerUsers' => $maxPlannerUsers,
+			'plannerPeopleCount' => $peopleCount,
+			'plannerLimitPeopleCount' => $limitPeopleCount,
 		];
-
-		if (isset($params['codes']) && is_array($params['codes']))
-		{
-			$params['codes'] = array_unique($params['codes']);
-			$users = CCalendar::GetDestinationUsers($params['codes'], true);
-		}
 
 		$prevUsersId = (isset($params['prevUserList']) && is_array($params['prevUserList']))
 			? array_unique(array_map('intval', $params['prevUserList']))
 			: [];
 
-		if (!empty($users))
+		if ($hasDestinationUsers)
+		{
+			$users = self::getDestinationUserProfiles($visibleUserIds);
+
+			if ($isPlannerLimitExceeded)
+			{
+				$prevUsersId = [];
+			}
+		}
+
+		if ($hasDestinationUsers)
 		{
 			foreach($users as $user)
 			{
@@ -113,7 +209,11 @@ class CCalendarPlanner
 				}
 
 				$status = (($hostUserId && $hostUserId === (int)$user['USER_ID'])
-					|| (!$hostUserId && $curUserId === (int)$user['USER_ID']))
+					|| (
+						!$hostUserId
+						&& $limitExceededPolicy === self::LIMIT_EXCEEDED_POLICY_OMIT_USERS
+						&& $curUserId === (int)$user['USER_ID']
+					))
 					? 'h'
 					: '';
 
@@ -133,12 +233,9 @@ class CCalendarPlanner
 				];
 			}
 		}
-		elseif(isset($params['entries']) && is_array($params['entries']))
+		elseif (!$hasDestinationCodes && !empty($entryUserIds))
 		{
-			foreach($params['entries'] as $userId)
-			{
-				$userIds[] = (int)$userId;
-			}
+			$userIds = $visibleUserIds;
 		}
 
 		if (isset($params['resources']) && is_array($params['resources']))
@@ -165,9 +262,7 @@ class CCalendarPlanner
 			return $result;
 		}
 
-		$maxPlannerUsers = \CCalendar::GetMaxPlannerUsers();
-		$dontLoadAccessibility = $maxPlannerUsers > 0 && count($userIds) > $maxPlannerUsers;
-		if ($isPlannerFeatureEnabled && !$dontLoadAccessibility)
+		if ($isPlannerFeatureEnabled)
 		{
 			$accessibility = (new Accessibility())
 				->setSkipEventId($skipEntryId)
@@ -386,5 +481,145 @@ class CCalendarPlanner
 		}
 
 		return $result;
+	}
+
+	private static function getExistingDestinationUserIds(array $userIds): array
+	{
+		$normalizedUserIds = [];
+		foreach ($userIds as $userId)
+		{
+			if (
+				!is_int($userId)
+				&& (
+					!is_string($userId)
+					|| preg_match('/^[0-9]+$/D', $userId) !== 1
+					|| ltrim($userId, '0') !== (string)(int)$userId
+				)
+			)
+			{
+				continue;
+			}
+
+			$userId = (int)$userId;
+			if ($userId > 0)
+			{
+				$normalizedUserIds[$userId] = $userId;
+			}
+		}
+
+		if (empty($normalizedUserIds))
+		{
+			return [];
+		}
+
+		$existingUserIds = [];
+		foreach (array_chunk(array_values($normalizedUserIds), self::DESTINATION_USERS_STEP_COUNT) as $chunk)
+		{
+			$users = UserTable::getList([
+				'select' => ['ID'],
+				'filter' => ['@ID' => $chunk],
+			]);
+
+			foreach ($users as $user)
+			{
+				$existingUserIds[(int)$user['ID']] = true;
+			}
+		}
+
+		return array_values(array_filter(
+			$normalizedUserIds,
+			static fn (int $userId): bool => isset($existingUserIds[$userId]),
+		));
+	}
+
+	private static function getOrderedDestinationUserIds(
+		array $codes,
+		array $availableUserIds,
+		int $limit,
+	): array
+	{
+		if ($limit <= 0 || empty($availableUserIds))
+		{
+			return [];
+		}
+
+		$availableUserIds = array_fill_keys($availableUserIds, true);
+		$orderedUserIds = [];
+		foreach ($codes as $code)
+		{
+			if (count($orderedUserIds) >= $limit)
+			{
+				break;
+			}
+
+			if (is_string($code) && preg_match('/^U([1-9][0-9]*)\z/', $code, $match) === 1)
+			{
+				$codeUserIds = [(int)$match[1]];
+			}
+			else
+			{
+				$codeUserIds = array_values(array_filter(
+					array_map('intval', CCalendar::GetDestinationUsers([$code])),
+					static fn (int $userId): bool => $userId > 0,
+				));
+				sort($codeUserIds, SORT_NUMERIC);
+			}
+
+			foreach ($codeUserIds as $userId)
+			{
+				if (isset($availableUserIds[$userId]))
+				{
+					$orderedUserIds[$userId] = $userId;
+				}
+
+				if (count($orderedUserIds) >= $limit)
+				{
+					break 2;
+				}
+			}
+		}
+
+		if (count($orderedUserIds) < $limit)
+		{
+			foreach ($availableUserIds as $userId => $unused)
+			{
+				$orderedUserIds[$userId] = $userId;
+				if (count($orderedUserIds) >= $limit)
+				{
+					break;
+				}
+			}
+		}
+
+		return array_values($orderedUserIds);
+	}
+
+	private static function getDestinationUserProfiles(array $userIds): array
+	{
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$profiles = CCalendar::GetDestinationUsers(
+			array_map(static fn (int $userId): string => 'U' . $userId, $userIds),
+			true,
+		);
+		$profilesByUserId = [];
+		foreach ($profiles as $profile)
+		{
+			$profilesByUserId[(int)$profile['USER_ID']] = $profile;
+		}
+
+		$orderedProfiles = [];
+		foreach ($userIds as $userId)
+		{
+			if (isset($profilesByUserId[$userId]))
+			{
+				$orderedProfiles[] = $profilesByUserId[$userId];
+			}
+		}
+
+		return $orderedProfiles;
 	}
 }

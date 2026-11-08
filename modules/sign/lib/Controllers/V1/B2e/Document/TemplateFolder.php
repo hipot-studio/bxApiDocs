@@ -51,6 +51,11 @@ class TemplateFolder extends Controller
 		return $result->getData();
 	}
 
+	#[ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_TEMPLATE_DELETE,
+		itemType: AccessibleItemType::TEMPLATE_FOLDER,
+		itemIdOrUidRequestKey: 'folderId',
+	)]
 	public function deleteAction(int $folderId): array
 	{
 		if (!Feature::instance()->isTemplateFolderGroupingAllowed())
@@ -81,19 +86,23 @@ class TemplateFolder extends Controller
 		$templateAccessService = $container->getTemplateAccessService();
 
 		$templates = $templateFolderService->getTemplatesInFolders([$folder->id]);
-		if($templates->isEmpty() && !$templateAccessService->hasAccessToDelete($folder))
-		{
-			$this->addErrorByMessage('No access rights to delete folder');
-
-			return [];
-		}
-
 		if (!$templateAccessService->hasAccessToDeleteForCollection($templates))
 		{
 			$this->addError(new Error(
 				Loc::getMessage('SIGN_CONTROLLERS_V1_B2E_DOCUMENT_TEMPLATE_FOLDER_DELETE_ERROR_ACCESS_DENIED'),
 				'ACCESS_DENIED'
 			));
+
+			return [];
+		}
+
+		// The prefilter resolves the folder before the action loads it, and an unresolved id falls
+		// back to the general permission. Re-check the row the action actually works with. Goes after
+		// the templates: the access cache is keyed by id without the object type, so a folder checked
+		// first would hand its verdict to a template sharing that id.
+		if (!$templateAccessService->hasAccessToDelete($folder))
+		{
+			$this->addErrorByMessage('No access rights to delete folder');
 
 			return [];
 		}
@@ -144,6 +153,11 @@ class TemplateFolder extends Controller
 		return $result->getData();
 	}
 
+	#[ActionAccess(
+		permission: ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
+		itemType: AccessibleItemType::TEMPLATE_FOLDER,
+		itemIdOrUidRequestKey: 'folderId',
+	)]
 	public function changeVisibilityAction(int $folderId, string $visibility): array
 	{
 		if (!Feature::instance()->isTemplateFolderGroupingAllowed())
@@ -175,18 +189,23 @@ class TemplateFolder extends Controller
 		$templateAccessService = $container->getTemplateAccessService();
 
 		$templates = $templateFolderService->getTemplatesInFolders([$folderId]);
-		if($templates->isEmpty() && !$templateAccessService->hasAccessToEdit($folder))
-		{
-			$this->addErrorByMessage('No access rights to edit folder');
-
-			return [];
-		}
 		if (!$templateAccessService->hasAccessToEditForCollection($templates))
 		{
 			$this->addError(new Error(
 				Loc::getMessage('SIGN_CONTROLLERS_V1_B2E_DOCUMENT_TEMPLATE_FOLDER_EDIT_ERROR_ACCESS_DENIED'),
 				'ACCESS_DENIED'
 			));
+
+			return [];
+		}
+
+		// The prefilter resolves the folder before the action loads it, and an unresolved id falls
+		// back to the general permission. Re-check the row the action actually works with. Goes after
+		// the templates: the access cache is keyed by id without the object type, so a folder checked
+		// first would hand its verdict to a template sharing that id.
+		if (!$templateAccessService->hasAccessToEdit($folder))
+		{
+			$this->addErrorByMessage('No access rights to edit folder');
 
 			return [];
 		}

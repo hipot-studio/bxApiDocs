@@ -78,8 +78,21 @@ class TemplateTable extends FileModel
 					];
 				}
 			]),
+			new Main\Entity\StringField('TITLE_PATTERN', [
+				'nullable' => true,
+				'validation' => function()
+				{
+					return [
+						new Main\ORM\Fields\Validators\LengthValidator(null, 255),
+					];
+				},
+			]),
 			new Main\Entity\StringField('CODE'),
 			new Main\Entity\StringField('REGION'),
+			(new Main\ORM\Fields\StringField('TIMEZONE'))
+				->configureNullable()
+				->configureSize(255)
+			,
 			new Main\Entity\IntegerField('SORT', [
 				'default_value' => 500,
 			]),
@@ -267,6 +280,7 @@ class TemplateTable extends FileModel
 		{
 			$result = new Main\ORM\EventResult();
 		}
+		static::normalizeTimezone($event, $result);
 		$fileId = $event->getParameter('fields')['FILE_ID'];
 		$size = FileTable::getSize($fileId);
 		$maxSize = Bitrix24Manager::getMaximumTemplateFileSize();
@@ -274,6 +288,14 @@ class TemplateTable extends FileModel
 		{
 			$result->addError(new Main\ORM\EntityError(Loc::getMessage('DOCUMENTGENERATOR_MODEL_TEMPLATE_SIZE_IS_EXCEEDED', ['#SIZE#' => $maxSize])));
 		}
+
+		return $result;
+	}
+
+	public static function onBeforeUpdate(Event $event)
+	{
+		$result = parent::onBeforeUpdate($event);
+		static::normalizeTimezone($event, $result);
 
 		return $result;
 	}
@@ -407,6 +429,15 @@ class TemplateTable extends FileModel
 	protected static function getPullTagCommand()
 	{
 		return 'updateTemplate';
+	}
+
+	private static function normalizeTimezone(Event $event, Main\ORM\EventResult $result): void
+	{
+		$fields = $event->getParameter('fields');
+		if (array_key_exists('TIMEZONE', $fields) && $fields['TIMEZONE'] === '')
+		{
+			$result->modifyFields(['TIMEZONE' => null]);
+		}
 	}
 
 	/**

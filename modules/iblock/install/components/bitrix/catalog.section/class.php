@@ -1,12 +1,13 @@
-<?
+<?php
 
-use \Bitrix\Main;
-use \Bitrix\Main\Loader;
-use \Bitrix\Main\Error;
-use \Bitrix\Main\Type\DateTime;
-use \Bitrix\Main\Localization\Loc;
-use \Bitrix\Iblock;
-use \Bitrix\Iblock\Component\ElementList;
+use Bitrix\Main;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Error;
+use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Iblock;
+use Bitrix\Iblock\Component\ElementList;
+use Bitrix\Main\Web\Uri;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
@@ -542,7 +543,7 @@ class CatalogSectionComponent extends ElementList
 		{
 			$APPLICATION->SetPageProperty(
 				'backgroundImage',
-				'style="background-image: url(\''.\CHTTP::urnEncode($this->arResult['BACKGROUND_IMAGE']['SRC'], 'UTF-8').'\')"'
+				'style="background-image: url(\'' . Uri::urnEncode($this->arResult['BACKGROUND_IMAGE']['SRC']) . '\')"'
 			);
 		}
 

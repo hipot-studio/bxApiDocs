@@ -34,6 +34,15 @@ abstract class Base extends IRestService
 	abstract protected static function prepareFilter(array $filters, string $appId): array;
 	abstract protected static function prepareOrder(array $order): array;
 
+	/**
+	 * @return string[] Fields of getFields() that are not columns of the list and cannot be selected,
+	 *                  filtered or ordered by.
+	 */
+	protected static function getListExcludedFields(): array
+	{
+		return [];
+	}
+
 	public static function add(array $params, $n, CRestServer $server): array
 	{
 		Loc::setCurrentLang('en');
@@ -398,7 +407,10 @@ abstract class Base extends IRestService
 	private static function validateParamsForList(array $params): Result
 	{
 		$result = new Result();
-		$allowedColumns = array_column(static::getFields(), 'title');
+		$allowedColumns = array_values(array_diff(
+			array_column(static::getFields(), 'title'),
+			static::getListExcludedFields(),
+		));
 
 		if (isset($params['select']))
 		{
@@ -477,7 +489,9 @@ abstract class Base extends IRestService
 				continue;
 			}
 
-			if (is_array($value))
+			// only a numeric key opens a nested condition group; the ORM reads a named key as a field
+			// condition whatever its value, so a list of values must not skip the check of the field
+			if (is_array($value) && is_int($key))
 			{
 				$validateFilterRecursionResult = self::validateFilter($value, $allowedColumns);
 				if (!$validateFilterRecursionResult->isSuccess())
@@ -487,7 +501,7 @@ abstract class Base extends IRestService
 				continue;
 			}
 
-			$field = ltrim($key, self::ALLOWED_PREFIX_ORM_FILTER);
+			$field = ltrim((string)$key, self::ALLOWED_PREFIX_ORM_FILTER);
 
 			if (
 				!(is_numeric($value) && is_numeric($field))

@@ -1184,7 +1184,7 @@ class LandingViewComponent extends LandingBaseComponent
 	}
 
 	/**
-	 * Gets conditions for slider init, open in fullscrean
+	 * Gets conditions for slider init, open in fullscreen
 	 * @return array
 	 */
 	public function getSliderFullConditions(): array
@@ -1275,8 +1275,7 @@ class LandingViewComponent extends LandingBaseComponent
 	protected function isAiSiteProductAvailable(): bool
 	{
 		return $this->getAiSiteChatAvailabilityService()
-			->checkSitesAiProductAvailability()
-			->isAvailable()
+			->isAiSiteEditorChatProductAvailable()
 		;
 	}
 

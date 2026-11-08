@@ -8,6 +8,7 @@ use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumDefinition;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumRegistry;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumType;
+use Bitrix\Rest\V3\Dto\TypeHelper;
 
 class FieldsConverter
 {
@@ -48,7 +49,7 @@ class FieldsConverter
 					return Date::createFromPhp($correctDate);
 				}
 			}
-			elseif ($fieldType !== null && is_subclass_of($fieldType, \BackedEnum::class))
+			elseif (TypeHelper::isBackedEnum($fieldType))
 			{
 				if ($value instanceof $fieldType)
 				{

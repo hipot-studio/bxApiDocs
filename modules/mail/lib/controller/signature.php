@@ -9,6 +9,7 @@ use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Internals\SharedSignatureTable;
 use Bitrix\Mail\Service\SharedSignature\AssignmentResolver;
 use Bitrix\Mail\Service\SharedSignature\SharedSignatureService;
+use Bitrix\Mail\Service\SharedSignature\SignatureChoiceStorage;
 use Bitrix\Mail\Service\SharedSignature\SignatureContextService;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\ActionFilter\HttpMethod;
@@ -29,6 +30,7 @@ use Bitrix\Main\Result;
  *   delete POST {id}                                            → {ok: true}
  *   getAvailableForSenders POST {}                              -> {signatures, senders}
  *   setChoice POST {senderKey, signatureId}                     -> {senderKey, selectedSignatureId}
+ *   setSenderChoice POST {email, name?, signatureId?}            -> {senderKey, selectedSignatureId}
  *   addOwner POST {text, senderKey?, senderKeys?}                 -> {item: MobileSignature}
  *   deleteOwner POST {id}                                       -> {ok: true}
  *
@@ -36,8 +38,8 @@ use Bitrix\Main\Result;
  * needs the tariff and the mailbox-management right. Both checks live in SharedSignatureService.
  *
  * The four mobile actions — getAvailableForSenders, setChoice, addOwner, deleteOwner — are closed
- * by the mailmobile signatures feature flag. The web actions above them are not: they serve the
- * unified model for the desktop client.
+ * by the mailmobile signatures feature flag. The web actions are not: they serve the unified model
+ * for the desktop client, setSenderChoice among them.
  */
 class Signature extends Base
 {
@@ -53,6 +55,7 @@ class Signature extends Base
 			'delete' => $post,
 			'getAvailableForSenders' => $post,
 			'setChoice' => $post,
+			'setSenderChoice' => $post,
 			'addOwner' => $post,
 			'deleteOwner' => $post,
 		];
@@ -133,6 +136,43 @@ class Signature extends Base
 		}
 
 		$result = $service->deleteOwner($this->getUserId(), $id);
+		if (!$result->isSuccess())
+		{
+			$this->addSignatureContextErrors($result);
+
+			return false;
+		}
+
+		return $result->getData();
+	}
+
+	/**
+	 * POST {email, name?, signatureId?} -> {senderKey, selectedSignatureId}
+	 *
+	 * The web counterpart of setChoice: the caller hands over the sender as it knows it — an
+	 * address and a name — and the storage key is built here, so that the shape of the key stays
+	 * inside the mail module. Unlike the mobile actions this one is not behind the mobile
+	 * signatures flag, as the whole web half of the controller is not.
+	 */
+	public function setSenderChoiceAction(
+		SignatureContextService $service,
+		string $email,
+		?string $name = null,
+		?int $signatureId = null,
+	): array|false
+	{
+		$senderKey = SignatureChoiceStorage::buildSenderKey($email, (string)$name);
+		if ($senderKey === '')
+		{
+			$this->addValidationError(
+				Loc::getMessage('MAIL_SIGNATURE_ERROR_INVALID_SENDER_KEY'),
+				SignatureContextService::ERROR_INVALID_SENDER_KEY,
+			);
+
+			return false;
+		}
+
+		$result = $service->setChoice($this->getUserId(), $senderKey, $signatureId);
 		if (!$result->isSuccess())
 		{
 			$this->addSignatureContextErrors($result);
@@ -439,7 +479,7 @@ class Signature extends Base
 			$raw = $signature;
 		}
 
-		$sanitized = $this->sanitize($raw);
+		$sanitized = $this->sanitizeSignature($raw);
 		if ($sanitized === '')
 		{
 			$this->addValidationError(

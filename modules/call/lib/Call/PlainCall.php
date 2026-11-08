@@ -32,17 +32,14 @@ class PlainCall extends \Bitrix\Call\Call
 		parent::initCall();
 	}
 
-	public function finish(): void
+	protected function finishOnController(): \Bitrix\Main\Result
 	{
-		if (
-			$this->scheme !== self::SCHEME_JWT
-			&& $this->getState() != static::STATE_FINISHED
-		)
-		{
-			(new ControllerClient())->finishCall($this);
-		}
-
-		parent::finish();
+		// No SCHEME_JWT exception: the balancer keys rooms by chatId, so a room
+		// left open after finish swallows the next dial into a dead room (the
+		// repeat call never reaches the portal). Whoever finished the call
+		// closes the room; runs off-lock in finishSideEffects() with an
+		// idempotent retry on failure.
+		return (new ControllerClient())->finishCall($this);
 	}
 
 	public function getMaxUsers(): int

@@ -21,17 +21,19 @@ final class UsageStatDataProvider extends DataProvider
 		$result[] =
 			$this->createColumn('ID')
 				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_ID'))
+				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_ID_MSGVER_1'))
 				->setDefault(true)
 				->setSort('ID')
+				->setWidth(120)
 		;
 
 		$result[] =
 			$this->createColumn('TIMESTAMP_X')
 				->setType(Type::DATE)
-				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_TIMESTAMP_X'))
+				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_TIMESTAMP_X_MSGVER_1'))
 				->setDefault(true)
 				->setSort('TIMESTAMP_X')
+				->setWidth(180)
 		;
 
 		/** @var UsageStatSettings|null $settings */
@@ -45,6 +47,7 @@ final class UsageStatDataProvider extends DataProvider
 					->setType(Type::TEXT)
 					->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_DASHBOARD'))
 					->setDefault(true)
+					->setWidth(250)
 			;
 
 			$result[] =
@@ -52,6 +55,7 @@ final class UsageStatDataProvider extends DataProvider
 					->setType(Type::TEXT)
 					->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_CHART'))
 					->setDefault(true)
+					->setWidth(250)
 			;
 
 			$result[] =
@@ -86,21 +90,12 @@ final class UsageStatDataProvider extends DataProvider
 		;
 
 		$result[] =
-			$this->createColumn('ROW_NUM')
+			$this->createColumn('LOAD_LEVEL')
 				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_ROW_NUM'))
+				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_LOAD_LEVEL'))
 				->setDefault(true)
-				->setAlign('right')
-				->setSort('ROW_NUM')
-		;
-
-		$result[] =
-			$this->createColumn('DATA_SIZE')
-				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_DATA_SIZE'))
-				->setDefault(true)
-				->setSort('DATA_SIZE')
-				->setAlign('right')
+				->setSort('LOAD_LEVEL')
+				->setWidth(120)
 		;
 
 		$result[] =
@@ -110,21 +105,34 @@ final class UsageStatDataProvider extends DataProvider
 				->setDefault(true)
 				->setSort('REAL_TIME')
 				->setAlign('right')
+				->setWidth(180)
 		;
 
 		$result[] =
-			$this->createColumn('LOAD_LEVEL')
+			$this->createColumn('ROW_NUM')
 				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_LOAD_LEVEL'))
+				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_ROW_NUM'))
 				->setDefault(true)
-				->setSort('LOAD_LEVEL')
+				->setAlign('right')
+				->setSort('ROW_NUM')
+				->setWidth(180)
+		;
+
+		$result[] =
+			$this->createColumn('DATA_SIZE')
+				->setType(Type::TEXT)
+				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_DATA_SIZE'))
+				->setDefault(true)
+				->setSort('DATA_SIZE')
+				->setAlign('right')
+				->setWidth(180)
 		;
 
 		$result[] =
 			$this->createColumn('FILTERS')
 				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_FILTERS'))
-				->setDefault(false)
+				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_FILTERS_MSGVER_1'))
+				->setDefault(true)
 		;
 
 		$result[] =
@@ -138,7 +146,7 @@ final class UsageStatDataProvider extends DataProvider
 			$this->createColumn('DATASET_TYPE')
 				->setType(Type::TEXT)
 				->setName(Loc::getMessage('BIC_USAGE_STAT_GRID_COLUMN_TITLE_DATASET_TYPE'))
-				->setDefault(true)
+				->setDefault(false)
 		;
 
 		return $result;

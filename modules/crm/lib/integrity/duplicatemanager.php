@@ -264,12 +264,38 @@ class DuplicateManager
 	{
 		if ($isAutomatic)
 		{
+			$entityTypeId = $filter['ENTITY_TYPE_ID'] ?? null;
+			$userId = $filter['USER_ID'] ?? null;
+			$affectedKeys =
+				(is_scalar($entityTypeId) && is_scalar($userId))
+					? [['ENTITY_TYPE_ID' => $entityTypeId, 'USER_ID' => $userId]]
+					: self::getAutomaticIndexUserKeys($filter)
+			;
+
 			Entity\AutomaticDuplicateIndexTable::deleteByFilter($filter);
+
+			foreach ($affectedKeys as $key)
+			{
+				AutoSearchConflictCountCache::clean((int)$key['ENTITY_TYPE_ID'], (int)$key['USER_ID']);
+			}
 		}
 		else
 		{
 			Entity\DuplicateIndexTable::deleteByFilter($filter);
 		}
+	}
+
+	/**
+	 * Owners of the automatic index rows matched by a filter without a single user and entity type
+	 * (the volatile type handler), so that only their conflict counts are dropped.
+	 */
+	private static function getAutomaticIndexUserKeys(array $filter): array
+	{
+		return Entity\AutomaticDuplicateIndexTable::getList([
+			'select' => ['USER_ID', 'ENTITY_TYPE_ID'],
+			'filter' => $filter,
+			'group' => ['USER_ID', 'ENTITY_TYPE_ID'],
+		])->fetchAll();
 	}
 
 	public static function getExistedTypeScopeMap(int $entityTypeId, int $userId, bool $isAutomatic)

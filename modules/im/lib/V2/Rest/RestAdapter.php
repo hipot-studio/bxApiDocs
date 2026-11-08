@@ -38,6 +38,10 @@ class RestAdapter implements RestConvertible
 			$popupData->merge($this->additionalPopupData);
 		}
 
+		// TPL-01: the options are known here, while the items select their data later, inside
+		// the fill pass. Hand them over now, not during serialization.
+		$popupData->applyOptions($option);
+
 		$rest = $popupData->toRestFormat($option);
 
 		foreach ($this->entities as $entity)

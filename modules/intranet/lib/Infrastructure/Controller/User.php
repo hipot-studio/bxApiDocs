@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Infrastructure\Controller;
 
+use Bitrix\Intranet\Component\UserProfile;
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
+use Bitrix\Intranet\Enum\UserRole;
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\RequiredModule;
 use Bitrix\Intranet\Infrastructure\Controller\AutoWire\DepartmentParameterTrait;
-use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
+use Bitrix\Intranet\Infrastructure\Controller\AutoWire\FireWizardConfigParameterTrait;
 use Bitrix\Intranet\Infrastructure\Controller\AutoWire\UserParameterTrait;
+use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
+use Bitrix\Intranet\Internal\Integration\Humanresources\DepartmentRepository;
+use Bitrix\Intranet\Internal\Integration\Humanresources\UserDepartmentAssigner;
+use Bitrix\Intranet\Internal\Exception\PortalSetupIncompleteException;
 use Bitrix\Intranet\Internal\Integration\Bitrix24\Integrator\IntegratorGroup;
 use Bitrix\Intranet\Internal\Integration\Bitrix24\Integrator\PartnerInfo;
 use Bitrix\Intranet\Service\ServiceContainer;
@@ -22,17 +28,21 @@ use Bitrix\Intranet\User\Command\FireUserCommand;
 use Bitrix\Intranet\User\Command\RestoreUserCommand;
 use Bitrix\Main\Access\Exception\AccessException;
 use Bitrix\Main\Access\Exception\UnknownActionException;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Command\Exception\CommandException;
 use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
-use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Error;
+use Bitrix\Main\LoaderException;
+use Bitrix\Main\SystemException;
 use Bitrix\Rest\Public\Command\IncomingWebhook\ChangeOwnerCommand;
 
 class User extends \Bitrix\Main\Engine\Controller
 {
 	use UserParameterTrait;
 	use DepartmentParameterTrait;
+	use FireWizardConfigParameterTrait;
+	use SystemUserIntegrationTrait;
 
 	protected function getDefaultPreFilters()
 	{
@@ -50,18 +60,7 @@ class User extends \Bitrix\Main\Engine\Controller
 		return [
 			$this->createDepartmentCollectionParameter(),
 			$this->createUserParameter(),
-			new ExactParameter(
-				FireWizardConfig::class,
-				'fireWizardConfig',
-				function($className, array $options = []): FireWizardConfig {
-					$moveWebhooksToSystemUser = filter_var(
-						$options['moveWebhooksToSystemUser'] ?? false,
-						FILTER_VALIDATE_BOOLEAN,
-					);
-
-					return new FireWizardConfig($moveWebhooksToSystemUser);
-				},
-			),
+			$this->createFireWizardConfigParameter(),
 		];
 	}
 
@@ -80,13 +79,14 @@ class User extends \Bitrix\Main\Engine\Controller
 	/**
 	 * @ajaxAction intranet.v2.User.deleteOrFire
 	 * @param \Bitrix\Intranet\Entity\User $user
+	 * @param FireWizardConfig $fireWizardConfig
 	 * @return bool
 	 * @throws AccessException
 	 * @throws CommandException
 	 * @throws CommandValidationException
 	 * @throws UnknownActionException
 	 */
-	public function deleteOrFireAction(\Bitrix\Intranet\Entity\User $user): bool
+	public function deleteOrFireAction(\Bitrix\Intranet\Entity\User $user, FireWizardConfig $fireWizardConfig): bool
 	{
 		$access = UserAccessController::createByDefault();
 		$targetUser = TargetUserModel::createFromUserEntity($user);
@@ -97,6 +97,18 @@ class User extends \Bitrix\Main\Engine\Controller
 		)
 		{
 			$this->addError(new Error('no permissions', 403));
+
+			return false;
+		}
+
+		$deactivateResult = $this->getSystemUserIntegrationService()->deactivateIntegrationsIfNeeded(
+			$user,
+			$fireWizardConfig,
+		);
+
+		if (!$deactivateResult->isSuccess())
+		{
+			$this->addErrors($deactivateResult->getErrors());
 
 			return false;
 		}
@@ -117,13 +129,14 @@ class User extends \Bitrix\Main\Engine\Controller
 	/**
 	 * @ajaxAction intranet.v2.User.fire
 	 * @param \Bitrix\Intranet\Entity\User $user
+	 * @param FireWizardConfig $fireWizardConfig
 	 * @return bool
 	 * @throws AccessException
 	 * @throws CommandException
 	 * @throws CommandValidationException
 	 * @throws UnknownActionException
 	 */
-	public function fireAction(\Bitrix\Intranet\Entity\User $user): bool
+	public function fireAction(\Bitrix\Intranet\Entity\User $user, FireWizardConfig $fireWizardConfig): bool
 	{
 		$access = UserAccessController::createByDefault();
 		$targetUser = TargetUserModel::createFromUserEntity($user);
@@ -133,6 +146,18 @@ class User extends \Bitrix\Main\Engine\Controller
 		)
 		{
 			$this->addError(new Error('no permissions', 403));
+
+			return false;
+		}
+
+		$deactivateResult = $this->getSystemUserIntegrationService()->deactivateIntegrationsIfNeeded(
+			$user,
+			$fireWizardConfig,
+		);
+
+		if (!$deactivateResult->isSuccess())
+		{
+			$this->addErrors($deactivateResult->getErrors());
 
 			return false;
 		}
@@ -151,15 +176,92 @@ class User extends \Bitrix\Main\Engine\Controller
 	}
 
 	/**
+	 * @throws AccessException
+	 * @throws PortalSetupIncompleteException
+	 * @throws UnknownActionException
+	 */
+	public function getVisitorDataAction(\Bitrix\Intranet\Entity\User $user): ?array
+	{
+		$access = UserAccessController::createByDefault();
+		$targetUser = TargetUserModel::createFromUserEntity($user);
+
+		if (
+			!$access->check(UserActionDictionary::RESTORE, $targetUser)
+		)
+		{
+			$this->addError(new Error('no permissions', 403));
+
+			return null;
+		}
+
+		if ($user->getRole() === UserRole::VISITOR)
+		{
+			$rootDepartment = (new DepartmentRepository())->findFirstAvailableForAddMember();
+			$rootDepartmentInfo = null;
+
+			if ($rootDepartment)
+			{
+				$rootDepartmentInfo = [
+					'id' => $rootDepartment->getId(),
+					'name' => $rootDepartment->getName(),
+					'accessCode' => $rootDepartment->getAccessCode(),
+				];
+			}
+
+			return [
+				'userName' => $user->getFormattedName(),
+				'userPhoto' => UserProfile::getUserPhoto($user->getPersonalPhoto(), 40),
+				'rootDepartment' => $rootDepartmentInfo,
+			];
+		}
+
+		return null;
+	}
+
+	/**
+	 * @throws LoaderException
+	 * @throws ArgumentException
+	 * @throws PortalSetupIncompleteException
+	 * @throws SystemException
+	 */
+	protected function assignUserToDepartment(\Bitrix\Intranet\Entity\User $user, array $departmentIds): void
+	{
+		if ($user->getRole() !== UserRole::VISITOR)
+		{
+			return;
+		}
+
+		$departmentRepository = new DepartmentRepository();
+		$availableDepartmentIds = $departmentRepository->filterAvailableForAddMemberIds($departmentIds);
+
+		if (empty($availableDepartmentIds))
+		{
+			$fallbackDepartment = $departmentRepository->findFirstAvailableForAddMember();
+			if (!$fallbackDepartment)
+			{
+				return;
+			}
+
+			$availableDepartmentIds = [$fallbackDepartment->getId()];
+		}
+
+		(new UserDepartmentAssigner())->reassignToDepartments($user->getId(), $availableDepartmentIds);
+	}
+
+	/**
 	 * @ajaxAction intranet.v2.User.restore
 	 * @param \Bitrix\Intranet\Entity\User $user
 	 * @return bool
 	 * @throws AccessException
 	 * @throws CommandException
 	 * @throws CommandValidationException
+	 * @throws PortalSetupIncompleteException
 	 * @throws UnknownActionException
 	 */
-	public function restoreAction(\Bitrix\Intranet\Entity\User $user): bool
+	public function restoreAction(
+		\Bitrix\Intranet\Entity\User $user,
+		?array $departmentIds = null,
+	): bool
 	{
 		$access = UserAccessController::createByDefault();
 		$targetUser = TargetUserModel::createFromUserEntity($user);
@@ -181,6 +283,11 @@ class User extends \Bitrix\Main\Engine\Controller
 			$this->addErrors($result->getErrors());
 
 			return false;
+		}
+
+		if (is_array($departmentIds))
+		{
+			$this->assignUserToDepartment($user, $departmentIds);
 		}
 
 		return true;
@@ -243,6 +350,10 @@ class User extends \Bitrix\Main\Engine\Controller
 		return [
 			'integration' => [
 				'hasWebhook' => (new \Bitrix\Rest\Service\APAuth\PasswordService())->hasWebhooksByUserId($user->getId()),
+			],
+			'systemUser' => [
+				'isSystemUser' => $user->isSystemUser(),
+				'integrations' => $this->getSystemUserIntegrationService()->getIntegrations($user),
 			],
 		];
 	}

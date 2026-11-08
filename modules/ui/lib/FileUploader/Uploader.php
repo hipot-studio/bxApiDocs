@@ -38,7 +38,7 @@ class Uploader
 			if ($error !== '')
 			{
 				return $this->handleUploadError(
-					$uploadResult->addError(new UploaderError('CHECK_FILE_FAILED', $error)),
+					$uploadResult->addError($this->createCheckFileError($error)),
 					$controller
 				);
 			}
@@ -155,6 +155,12 @@ class Uploader
 
 		if ($uploadResult->isSuccess() && $chunk->isLast() && !$uploadResult->isDone())
 		{
+			$validationResult = $this->validateTempFileBeforeCommit($tempFile);
+			if (!$validationResult->isSuccess())
+			{
+				return $this->handleUploadError($uploadResult->addErrors($validationResult->getErrors()), $controller);
+			}
+
 			$commitResult = $tempFile->commit($controller->getCommitOptions());
 			if (!$commitResult->isSuccess())
 			{
@@ -258,7 +264,7 @@ class Uploader
 		$error = $this->checkFile($fileData->getName(), $fileData->getSize(), $fileData->getContentType());
 		if ($error !== '')
 		{
-			return $result->addError(new UploaderError('CHECK_FILE_FAILED', $error));
+			return $result->addError($this->createCheckFileError($error));
 		}
 
 		// Basic file-level validation (filename, MIME, size against config).
@@ -802,10 +808,16 @@ class Uploader
 		}
 
 		// commit() runs CFile::saveFile with tmp_name = public cloud URL — no real copy.
+		$validationResult = $this->validateTempFileBeforeCommit($tempFile);
+		if (!$validationResult->isSuccess())
+		{
+			return $this->handleUploadError($uploadResult->addErrors($validationResult->getErrors()), $controller);
+		}
+
 		$commitResult = $tempFile->commit($controller->getCommitOptions());
 		if (!$commitResult->isSuccess())
 		{
-			return $uploadResult->addErrors($commitResult->getErrors());
+			return $this->handleUploadError($uploadResult->addErrors($commitResult->getErrors()), $controller);
 		}
 
 		TempFilePartTable::deleteByFilter(['=TEMP_FILE_ID' => $tempFile->getId()]);
@@ -1118,11 +1130,17 @@ class Uploader
 		}
 
 		// CFile::saveFile. For cloud, tmp_name is the public URL — no copy is performed.
+		$validationResult = $this->validateTempFileBeforeCommit($tempFile);
+		if (!$validationResult->isSuccess())
+		{
+			return $this->handleUploadError($uploadResult->addErrors($validationResult->getErrors()), $controller);
+		}
+
 		$commitResult = $tempFile->commit($controller->getCommitOptions());
 		if (!$commitResult->isSuccess())
 		{
 			// commit() removes TempFile itself on saveFile failure — do not call delete again.
-			return $uploadResult->addErrors($commitResult->getErrors());
+			return $this->handleUploadError($uploadResult->addErrors($commitResult->getErrors()), $controller);
 		}
 
 		// Drop accepted-parts records: after commit they have no role. Late-arriving
@@ -1156,6 +1174,32 @@ class Uploader
 		}
 
 		return $uploadResult;
+	}
+
+	private function validateTempFileBeforeCommit(TempFile $tempFile): Result
+	{
+		$result = new Result();
+		// SaveFile repeats this validation but returns only false, losing whether quota,
+		// filename validation or another condition refused the commit.
+		$error = $this->checkFile($tempFile->getFilename(), $tempFile->getSize(), $tempFile->getMimetype());
+		if ($error !== '')
+		{
+			$result->addError($this->createCheckFileError($error));
+		}
+
+		return $result;
+	}
+
+	private function createCheckFileError(string $message): UploaderError
+	{
+		// CheckFile reports the reason only as a localized message, so the quota refusal
+		// is recognized by comparing it with the very phrase CheckFile returns.
+		$customData = $message === \GetMessage('FILE_BAD_QUOTA')
+			? ['reason' => UploaderError::FILE_VALIDATION_REASON_DISK_QUOTA]
+			: []
+		;
+
+		return new UploaderError(UploaderError::CHECK_FILE_FAILED, $message, $customData);
 	}
 
 	/**
@@ -1361,9 +1405,15 @@ class Uploader
 					],
 				])->fetchObject();
 
-				if ($tempFile)
+				if (!$tempFile)
 				{
-					$tempFile->delete();
+					continue;
+				}
+
+				$deleteResult = $tempFile->delete();
+				if (!$deleteResult->isSuccess())
+				{
+					$removeResult->addError(new UploaderError(UploaderError::FILE_REMOVE_FAILED));
 				}
 			}
 		}

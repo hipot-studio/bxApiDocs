@@ -32,6 +32,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedExcep
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\ConnectionManager;
+use Bitrix\Calendar\Synchronization\Internal\Service\Lock\ExportLock;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use Bitrix\Calendar\Synchronization\Internal\Service\Messenger\Sender\EventSender;
 use Bitrix\Calendar\Synchronization\Internal\Repository\EventConnectionRepository;
@@ -56,6 +57,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 		private readonly GoogleGatewayProvider $getawayProvider,
 		private readonly EventImportProcessor $importProcessor,
 		private readonly EventSender $eventSender,
+		private readonly ExportLock $exportLock,
 		ConnectionProvider $connectionProvider,
 		ConnectionManager $connectionManager,
 		RequestLogger $logger,
@@ -98,7 +100,7 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 
 		if (!$sectionConnection)
 		{
-			throw new SynchronizerException(
+			throw new NoLogSynchronizerException(
 				sprintf(
 					'Section connection for section "%s" not found (event: "%s")',
 					$event->getSection()->getId(),
@@ -114,6 +116,25 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 
 		$gateway = $this->getEventGateway($userId, $connection);
 
+		$this->exportLock->withEventLock(
+			(int)$connection->getId(),
+			$event,
+			fn() => $this->exportEventConnection($event, $connection, $sectionConnection, $gateway),
+		);
+	}
+
+	/**
+	 * @throws SynchronizerException
+	 * @throws PersistenceException
+	 * @throws RepositoryReadException
+	 */
+	private function exportEventConnection(
+		Event $event,
+		Connection $connection,
+		SectionConnection $sectionConnection,
+		GoogleEventGateway $gateway,
+	): void
+	{
 		$eventConnection = $this->getEventConnection($event->getId(), $connection->getId());
 
 		if ($eventConnection)
@@ -459,6 +480,26 @@ class GoogleEventSynchronizer extends AbstractGoogleSynchronizer implements Even
 
 		$this->configureLoggerContext($userId, $event->getId());
 
+		$this->exportLock->withEventLock(
+			(int)$connection->getId(),
+			$event,
+			fn() => $this->exportInstanceConnection($event, $connection, $sectionConnection, $gateway),
+		);
+	}
+
+	/**
+	 * @throws LogicException
+	 * @throws SynchronizerException
+	 * @throws PersistenceException
+	 * @throws RepositoryReadException
+	 */
+	private function exportInstanceConnection(
+		Event $event,
+		Connection $connection,
+		SectionConnection $sectionConnection,
+		GoogleEventGateway $gateway,
+	): void
+	{
 		$eventConnection = $this->getEventConnection($event->getId(), $connection->getId());
 
 		if ($eventConnection)

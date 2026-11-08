@@ -24,6 +24,7 @@ use Bitrix\Main\Type\DateTime;
  * <li> CREATED_BY int mandatory
  * <li> CAN_DOWNLOAD_WITH_READ_ACCESS int mandatory
  * <li> CAN_EDIT_SETTINGS bool mandatory
+ * <li> SCENARIO string(50) optional
  * </ul>
  *
  * @package Bitrix\Disk
@@ -141,6 +142,9 @@ final class ExternalLinkTable extends DataManager
 			'CAN_EDIT_SETTINGS' => array(
 				'data_type' => 'boolean',
 				'default_value' => true,
+			),
+			'SCENARIO' => array(
+				'data_type' => 'string',
 			),
 			'CREATE_USER' => array(
 				'data_type' => 'Bitrix\Main\UserTable',

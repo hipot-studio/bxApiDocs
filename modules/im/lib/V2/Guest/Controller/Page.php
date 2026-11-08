@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Guest\Controller;
 
+use Bitrix\Im\V2\Guest\Auth\AuthorizationService;
 use Bitrix\Im\V2\Guest\Auth\JoinStatus;
 use Bitrix\Im\V2\Guest\Auth\Token;
 use Bitrix\Im\V2\Guest\GuestService;
@@ -37,6 +38,13 @@ class Page extends Controller
 
 		if (!$result->isSuccess())
 		{
+			// A visitor of another contour is refused right here: the portal root would end the session they
+			// came with, and a mistyped invite code must not cost them a conversation held elsewhere.
+			if (GuestService::getInstance()->currentSessionBelongsToAnotherContour())
+			{
+				return $this->buildRefusalResponse();
+			}
+
 			return new Redirect('/');
 		}
 
@@ -50,9 +58,7 @@ class Page extends Controller
 
 		$isGuestWelcome = $this->consumeGuestWelcomeFlag($result->getUser()?->getId());
 
-		// Release the session flock before HTML render so the JS AJAX burst doesn't
-		// queue behind this request's OnAfterEpilog.
-		Application::getInstance()->getKernelSession()->save();
+		$this->releaseSessionLocks();
 
 		$APPLICATION->SetTitle(Loc::getMessage('IM_GUEST_PAGE_TITLE'));
 
@@ -73,6 +79,36 @@ class Page extends Controller
 		$response->setContent($content);
 
 		return $response;
+	}
+
+	/**
+	 * The answer the prolog gave on this path before the guest page joined the public scope, only not
+	 * with an empty body. Unstyled on purpose: a designed page for a refused link is a separate task.
+	 */
+	private function buildRefusalResponse(): HttpResponse
+	{
+		$message = htmlspecialcharsbx((string)Loc::getMessage('IM_GUEST_PAGE_LINK_UNAVAILABLE'));
+		$charset = defined('SITE_CHARSET') ? SITE_CHARSET : 'UTF-8';
+
+		$response = new HttpResponse();
+		$response->setStatus('403 Forbidden');
+		$response->setContent(
+			'<!DOCTYPE html><html><head><meta charset="' . htmlspecialcharsbx($charset) . '"/>'
+			. '<meta name="viewport" content="width=device-width, initial-scale=1.0"/>'
+			. '<title>' . $message . '</title></head><body><p>' . $message . '</p></body></html>'
+		);
+
+		return $response;
+	}
+
+	/**
+	 * Both locks go before the HTML render, so the JS AJAX burst doesn't queue behind OnAfterEpilog. In
+	 * the 'separated' mode the general session is a second lock the kernel save does not release.
+	 */
+	private function releaseSessionLocks(): void
+	{
+		Application::getInstance()->getKernelSession()->save();
+		AuthorizationService::getInstance()->releaseSessionLock();
 	}
 
 	private function consumeGuestWelcomeFlag(?int $guestUserId): bool

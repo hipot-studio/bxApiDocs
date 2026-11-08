@@ -2,8 +2,12 @@
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/socialnetwork/classes/general/group.php");
 
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
+use Bitrix\Socialnetwork\Provider\GroupProvider;
 use Bitrix\Socialnetwork\Util;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\WorkgroupSiteTable;
@@ -128,7 +132,15 @@ class CSocNetGroup extends CAllSocNetGroup
 
 				if(defined("BX_COMP_MANAGED_CACHE"))
 				{
-					$CACHE_MANAGER->ClearByTag("sonet_group");
+					$CACHE_MANAGER->ClearByTag("sonet_group_".$ID);
+					if (DeferredCacheFeature::isOn())
+					{
+						DeferredTagCleaner::getInstance()->clearByTag('sonet_group');
+					}
+					else
+					{
+						$CACHE_MANAGER->ClearByTag("sonet_group");
+					}
 				}
 
 				$USER_FIELD_MANAGER->Update("SONET_GROUP", $ID, $arFields);
@@ -172,7 +184,7 @@ class CSocNetGroup extends CAllSocNetGroup
 
 	public static function Update($ID, $arFields, $bAutoSubscribe = true, $bClearCommonTag = true, $bSync = true)
 	{
-		global $DB, $APPLICATION, $CACHE_MANAGER, $USER_FIELD_MANAGER;
+		global $DB, $APPLICATION, $USER_FIELD_MANAGER;
 
 		if (!CSocNetGroup::__ValidateID($ID))
 		{
@@ -188,7 +200,27 @@ class CSocNetGroup extends CAllSocNetGroup
 			return false;
 		}
 
-		$arFields['TYPE'] ??= static::getGroupTypeByFields($arFields, $arGroupOld)->value;
+		$preflight = ExternalMembershipValidator::validateFields($ID, $arFields, [], $arGroupOld);
+		if (!$preflight->isSuccess())
+		{
+			$APPLICATION->ThrowException(implode('; ', $preflight->getErrorMessages()));
+
+			return false;
+		}
+
+		$isTypeAffected =
+			isset($arFields['TYPE'])
+			|| isset($arFields['PROJECT'])
+			|| isset($arFields['SCRUM_MASTER_ID'])
+		;
+
+		$persistedFields = static::refreshPersistedTypeFields($ID);
+		$persistedType = (string)($persistedFields['TYPE'] ?? '');
+
+		if ($isTypeAffected)
+		{
+			$arFields['TYPE'] ??= static::getGroupTypeByFields($arFields, $persistedType)->value;
+		}
 
 		$arFields1 = Util::getEqualityFields($arFields);
 
@@ -196,6 +228,12 @@ class CSocNetGroup extends CAllSocNetGroup
 		{
 			return false;
 		}
+
+		// Subscribers have never been handed an empty TYPE, so it is restored here from the stored row
+		// rather than from the cached snapshot, which may predate a concurrent conversion. The column is
+		// left out of the written set below, so the restored value cannot roll the stored type back
+		$restoredType = static::resolvePersistedType($persistedFields)->value;
+		$arFields['TYPE'] ??= $restoredType;
 
 		$arSiteID = [];
 
@@ -246,10 +284,23 @@ class CSocNetGroup extends CAllSocNetGroup
 
 		CFile::SaveForDB($arFields, "IMAGE_ID", "socialnetwork");
 
-		$strUpdate = $DB->PrepareUpdate("b_sonet_group", $arFields);
+		// The column is dropped only while it still carries the value restored above, so an
+		// OnBeforeSocNetGroupUpdate handler which put a different type there still gets its write
+		$fieldsToWrite = $arFields;
+		if (
+			!$isTypeAffected
+			&& ($fieldsToWrite['TYPE'] ?? null) === $restoredType
+		)
+		{
+			unset($fieldsToWrite['TYPE']);
+		}
+
+		$strUpdate = $DB->PrepareUpdate("b_sonet_group", $fieldsToWrite);
 		Util::processEqualityFieldsToUpdate($arFields1, $strUpdate);
 
-		if ($strUpdate <> '')
+		$isRowUpdated = ($strUpdate <> '');
+
+		if ($isRowUpdated)
 		{
 			$strSql =
 				"UPDATE b_sonet_group SET ".
@@ -350,168 +401,185 @@ class CSocNetGroup extends CAllSocNetGroup
 					));
 				}
 			}
+		}
 
-			$sonetGroupCache = self::getStaticCache();
-			unset($sonetGroupCache[$ID]);
-			self::setStaticCache($sonetGroupCache);
+		// A row may hold no type at all, and it then drops out of every negative type filter that goes
+		// through ORM. The column is kept out of the written set above, so healing it takes a statement of
+		// its own, and the TYPE IS NULL condition is what keeps that safe: it cannot roll back a type
+		// stored meanwhile
+		$isTypeMaterialized = false;
 
-			if(defined("BX_COMP_MANAGED_CACHE"))
-			{
-				if ($bClearCommonTag)
-				{
-					$CACHE_MANAGER->ClearByTag("sonet_group");
-				}
-				$CACHE_MANAGER->ClearByTag("sonet_group_".$ID);
-				$CACHE_MANAGER->ClearByTag("sonet_user2group_G".$ID);
-				$CACHE_MANAGER->ClearByTag("sonet_user2group");
-			}
+		if ($persistedType === '')
+		{
+			$materializationResult = $DB->Query(
+				"UPDATE b_sonet_group SET TYPE = '".$DB->ForSql($restoredType)."' ".
+				"WHERE ID = ".$ID." AND TYPE IS NULL"
+			);
 
-			$USER_FIELD_MANAGER->Update("SONET_GROUP", $ID, $arFields);
+			$isTypeMaterialized = ($materializationResult->AffectedRowsCount() > 0);
+		}
 
-			$events = GetModuleEvents("socialnetwork", "OnSocNetGroupUpdate");
-			while ($arEvent = $events->Fetch())
-			{
-				ExecuteModuleEventEx($arEvent, array($ID, &$arFields));
-			}
+		if ($isRowUpdated || $isTypeMaterialized)
+		{
+			self::clearGroupCache($ID, $bClearCommonTag);
+		}
 
-			EventService\Service::addEvent(EventService\EventDictionary::EVENT_WORKGROUP_UPDATE, [
-				'GROUP_ID' => $ID,
-			]);
+		$isUserFieldUpdated = (bool)$USER_FIELD_MANAGER->Update("SONET_GROUP", $ID, $arFields);
+		GroupProvider::getInstance()->invalidate((int)$ID);
 
-			CSocNetGroup::SearchIndex($ID, false, $arGroupOld);
+		if (
+			!$isUserFieldUpdated
+			&& !$isRowUpdated
+			&& !$isTypeMaterialized
+		)
+		{
+			return false;
+		}
 
-			if (isset($arFields['KEYWORDS']))
-			{
-				$tagsList = explode(',', $arFields["KEYWORDS"]);
-				if (
-					!empty($tagsList)
-					&& is_array($tagsList)
-				)
-				{
-					$tagsList = array_map(function($a) { return trim($a, ' '); }, $tagsList);
-					$tagsList = array_filter($tagsList, function($a) { return ($a <> ''); });
-				}
+		if (
+			!$isRowUpdated
+			&& !$isTypeMaterialized
+		)
+		{
+			// Nothing reached the group row, so dropping the caches only after the user fields have landed
+			// keeps a concurrent read from refilling the year-long getById() cache with the values being
+			// replaced
+			self::clearGroupCache($ID, $bClearCommonTag);
+		}
 
-				WorkgroupTagTable::set([
-					'groupId' => $ID,
-					'tags' => $tagsList
-				]);
-			}
+		// Keep the legacy payload intact; expose write field names separately for selective invalidation.
+		$changedFields = $fieldsToWrite + $arFields1;
+		if ($isTypeMaterialized)
+		{
+			$changedFields['TYPE'] = $restoredType;
+		}
+		$changedFieldNames = array_keys($changedFields);
 
-			Workgroup::setIndex(array(
-				'fields' => array_merge($arFields, array('ID' => $ID))
-			));
+		$events = GetModuleEvents("socialnetwork", "OnSocNetGroupUpdate");
+		while ($arEvent = $events->Fetch())
+		{
+			ExecuteModuleEventEx($arEvent, array($ID, &$arFields, $changedFieldNames));
+		}
 
-			$arGroupNew = CSocNetGroup::GetByID($ID);
+		EventService\Service::addEvent(EventService\EventDictionary::EVENT_WORKGROUP_UPDATE, [
+			'GROUP_ID' => $ID,
+		]);
+
+		CSocNetGroup::SearchIndex($ID, false, $arGroupOld);
+
+		if (isset($arFields['KEYWORDS']))
+		{
+			$tagsList = explode(',', $arFields["KEYWORDS"]);
 			if (
-				$arGroupNew['OPENED'] === 'Y'
-				&& $arGroupOld['OPENED'] === 'N'
+				!empty($tagsList)
+				&& is_array($tagsList)
 			)
 			{
-				CSocNetGroup::ConfirmAllRequests($ID, $bAutoSubscribe, $arFields['INITIATED_BY_USER_ID'] ?? 0);
+				$tagsList = array_map(function($a) { return trim($a, ' '); }, $tagsList);
+				$tagsList = array_filter($tagsList, function($a) { return ($a <> ''); });
 			}
 
-			$isCollab = $arGroupNew['TYPE'] === Workgroup\Type::Collab->value;
+			WorkgroupTagTable::set([
+				'groupId' => $ID,
+				'tags' => $tagsList
+			]);
+		}
 
-			if ($isCollab)
+		Workgroup::setIndex(array(
+			'fields' => array_merge($arFields, array('ID' => $ID))
+		));
+
+		$arGroupNew = CSocNetGroup::GetByID($ID);
+		if (
+			$arGroupNew['OPENED'] === 'Y'
+			&& $arGroupOld['OPENED'] === 'N'
+		)
+		{
+			CSocNetGroup::ConfirmAllRequests($ID, $bAutoSubscribe, $arFields['INITIATED_BY_USER_ID'] ?? 0);
+		}
+
+		$isCollab = $arGroupNew['TYPE'] === Workgroup\Type::Collab->value;
+
+		if ($isCollab)
+		{
+			$chatData = Integration\Im\Chat\Workgroup::getChatData(['group_id' => $ID]);
+
+			$chatId = $chatData[$ID] ?? null;
+
+			if ($chatId > 0)
 			{
-				$chatData = Integration\Im\Chat\Workgroup::getChatData(['group_id' => $ID]);
-
-				$chatId = $chatData[$ID] ?? null;
-
-				if ($chatId > 0)
+				$fields = [];
+				if (array_key_exists('NAME', $arFields))
 				{
-					$fields = [];
-					if (array_key_exists('NAME', $arFields))
-					{
-						$fields['TITLE'] = $arFields['NAME'];
-					}
-					if (array_key_exists('DESCRIPTION', $arFields))
-					{
-						$fields['DESCRIPTION'] = $arFields['DESCRIPTION'];
-					}
-					if (array_key_exists('IMAGE_ID', $arFields))
-					{
-						$fields['AVATAR'] = (int)$arFields['IMAGE_ID'];
-					}
-					if (array_key_exists('OWNER_ID', $arFields))
-					{
-						$fields['OWNER_ID'] = $arFields['OWNER_ID'];
-					}
-
-					if (!empty($fields))
-					{
-						\Bitrix\Socialnetwork\Collab\Integration\IM\Messenger::synchronizeCollabChat($chatId, $fields);
-					}
+					$fields['TITLE'] = $arFields['NAME'];
 				}
-			}
-			elseif (
-				!empty($arFields["NAME"])
-				|| !empty($arFields["IMAGE_ID"])
-				|| !empty($arFields["OWNER_ID"])
-				|| !empty($arFields["DESCRIPTION"])
-			)
-			{
-				$chatData = Integration\Im\Chat\Workgroup::getChatData(array(
-					'group_id' => $ID
-				));
-
-				if (
-					!empty($chatData)
-					&& !empty($chatData[$ID])
-					&& intval($chatData[$ID]) > 0
-				)
+				if (array_key_exists('DESCRIPTION', $arFields))
 				{
-					$chatId = $chatData[$ID];
+					$fields['DESCRIPTION'] = $arFields['DESCRIPTION'];
+				}
+				if (array_key_exists('IMAGE_ID', $arFields))
+				{
+					$fields['AVATAR'] = (int)$arFields['IMAGE_ID'];
+				}
+				if (array_key_exists('OWNER_ID', $arFields))
+				{
+					$fields['OWNER_ID'] = $arFields['OWNER_ID'];
+				}
 
-					$chat = new CIMChat(0);
-
-					if(!empty($arFields["NAME"]))
-					{
-						$chat->rename(
-							$chatId,
-							Integration\Im\Chat\Workgroup::buildChatName($arFields["NAME"], [
-								'project' => $arGroupNew["PROJECT"] === 'Y',
-								'type' => $arGroupNew['TYPE'] ?? ''
-							]),
-							false,
-							false
-						);
-					}
-
-					if(!empty($arFields["IMAGE_ID"]))
-					{
-						$chat->setAvatarId($chatId, $arFields['IMAGE_ID']);
-					}
-
-					if(!empty($arFields["OWNER_ID"]))
-					{
-						$chat->setOwner($chatId, $arFields["OWNER_ID"], false);
-					}
-
-					if (!empty($arFields["DESCRIPTION"]))
-					{
-						$chat->SetDescription($chatId, $arFields["DESCRIPTION"]);
-					}
+				if (!empty($fields))
+				{
+					\Bitrix\Socialnetwork\Collab\Integration\IM\Messenger::synchronizeCollabChat($chatId, $fields);
 				}
 			}
 		}
-		else
+		elseif (
+			!empty($arFields["NAME"])
+			|| !empty($arFields["IMAGE_ID"])
+			|| !empty($arFields["OWNER_ID"])
+			|| !empty($arFields["DESCRIPTION"])
+		)
 		{
-			if($USER_FIELD_MANAGER->Update("SONET_GROUP", $ID, $arFields))
+			$chatData = Integration\Im\Chat\Workgroup::getChatData(array(
+				'group_id' => $ID
+			));
+
+			if (
+				!empty($chatData)
+				&& !empty($chatData[$ID])
+				&& intval($chatData[$ID]) > 0
+			)
 			{
-				if(defined("BX_COMP_MANAGED_CACHE"))
+				$chatId = $chatData[$ID];
+
+				$chat = new CIMChat(0);
+
+				if(!empty($arFields["NAME"]))
 				{
-					if ($bClearCommonTag)
-					{
-						$CACHE_MANAGER->ClearByTag("sonet_group");
-					}
-					$CACHE_MANAGER->ClearByTag("sonet_group_".$ID);
+					$chat->rename(
+						$chatId,
+						Integration\Im\Chat\Workgroup::buildChatName($arFields["NAME"], [
+							'project' => $arGroupNew["PROJECT"] === 'Y',
+							'type' => $arGroupNew['TYPE'] ?? ''
+						]),
+						false,
+						false
+					);
 				}
-			}
-			else
-			{
-				$ID = False;
+
+				if(!empty($arFields["IMAGE_ID"]))
+				{
+					$chat->setAvatarId($chatId, $arFields['IMAGE_ID']);
+				}
+
+				if(!empty($arFields["OWNER_ID"]))
+				{
+					$chat->setOwner($chatId, $arFields["OWNER_ID"], false);
+				}
+
+				if (!empty($arFields["DESCRIPTION"]))
+				{
+					$chat->SetDescription($chatId, $arFields["DESCRIPTION"]);
+				}
 			}
 		}
 
@@ -589,11 +657,14 @@ class CSocNetGroup extends CAllSocNetGroup
 				}
 			}
 
+			$arSelectFieldsUpper = array_map('mb_strtoupper', $arSelectFields);
 			foreach ($arOrder as $by => $order)
 			{
-				if (!in_array($by, $arSelectFields))
+				$by = mb_strtoupper($by);
+				if (!in_array($by, $arSelectFieldsUpper, true))
 				{
 					$arSelectFields[] = $by;
+					$arSelectFieldsUpper[] = $by;
 				}
 			}
 		}
@@ -783,9 +854,10 @@ class CSocNetGroup extends CAllSocNetGroup
 		return $dbRes;
 	}
 
-	private static function getGroupTypeByFields(array $fields, array $oldFields): Type
+	// The stored type has the last word: a cached group snapshot may be older than the current row
+	private static function getGroupTypeByFields(array $fields, string $persistedType): Type
 	{
-		if (($oldFields['TYPE'] ?? null) === Type::Collab->value)
+		if ($persistedType === Type::Collab->value)
 		{
 			return Type::Collab;
 		}
@@ -800,6 +872,64 @@ class CSocNetGroup extends CAllSocNetGroup
 			return $fields['PROJECT'] === 'Y' ? Type::Project : Type::Group;
 		}
 
-		return Type::tryFrom($oldFields['TYPE']) ?? Type::getDefault();
+		return Type::tryFrom($persistedType) ?? Type::getDefault();
+	}
+
+	// A row that holds no type is classified by the legacy markers the rest of the module reads, the way
+	// GroupProvider::getTypeByFields() reads such a row. The scrum master counts only while it is positive:
+	// that is what puts the row into the scrum grid (ScrumRepository::applyTypeFilter()), and a
+	// materialized type must not contradict it
+	private static function resolvePersistedType(array $persistedFields): Type
+	{
+		$storedType = Type::tryFrom((string)($persistedFields['TYPE'] ?? ''));
+		if ($storedType !== null)
+		{
+			return $storedType;
+		}
+
+		if ((int)($persistedFields['SCRUM_MASTER_ID'] ?? 0) > 0)
+		{
+			return Type::Scrum;
+		}
+
+		if (($persistedFields['PROJECT'] ?? 'N') === 'Y')
+		{
+			return Type::Project;
+		}
+
+		return Type::getDefault();
+	}
+
+	private static function clearGroupCache(int $groupId, bool $clearCommonTag): void
+	{
+		global $CACHE_MANAGER;
+
+		$sonetGroupCache = self::getStaticCache();
+		unset($sonetGroupCache[$groupId]);
+		self::setStaticCache($sonetGroupCache);
+		self::clearPersistedTypeFieldsCache($groupId);
+
+		if (defined("BX_COMP_MANAGED_CACHE"))
+		{
+			$CACHE_MANAGER->ClearByTag("sonet_group_".$groupId);
+			$CACHE_MANAGER->ClearByTag("sonet_user2group_G".$groupId);
+
+			if (DeferredCacheFeature::isOn())
+			{
+				if ($clearCommonTag)
+				{
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_group');
+				}
+				DeferredTagCleaner::getInstance()->clearByTag('sonet_user2group');
+			}
+			else
+			{
+				if ($clearCommonTag)
+				{
+					$CACHE_MANAGER->ClearByTag("sonet_group");
+				}
+				$CACHE_MANAGER->ClearByTag("sonet_user2group");
+			}
+		}
 	}
 }

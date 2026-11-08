@@ -2,17 +2,22 @@
 
 namespace Bitrix\Tasks\Integration\Bizproc;
 
+use Bitrix\Bizproc\Public\Service\Trigger\TriggerService;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Dto\DocumentDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Main;
 use Bitrix\Main\Application;
+use Bitrix\Main\Type\Date;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Integration\Bizproc\Document\Task;
+use Bitrix\Tasks\Integration\Bizproc\Starter\TasksCreateTriggerFeature;
 use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\Task\EO_Member_Collection;
 use Bitrix\Tasks\Internals\Task\Status;
+use Bitrix\Tasks\Internals\TaskTable;
+use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 
 /**
@@ -103,6 +108,64 @@ class Listener
 			$personalDocumentType = Document\Task::resolvePersonalTaskType($memberId);
 			$this->runOnAdd((int)$id, $personalDocumentType, $fields);
 		}
+
+		//Run create document trigger
+		if (TasksCreateTriggerFeature::isEnabled() && $this->hasCreateTrigger())
+		{
+			$starter = $this->getStarterOnEvent();
+			if ($starter)
+			{
+				$document = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexId($id);
+				$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
+				$starter->addEvent(
+					'TasksCreateTrigger',
+					[new DocumentDto($document, $documentType)],
+					[
+						'ID' => (int)($fields['ID'] ?? $id),
+						'TITLE' => (string)($fields['TITLE'] ?? ''),
+						'CREATED_DATE' => $this->resolveTaskCreatedDate((int)($fields['ID'] ?? $id), $fields),
+						'RESPONSIBLE_ID' => (int)($fields['RESPONSIBLE_ID'] ?? 0),
+						'CREATED_BY' => (int)($fields['CREATED_BY'] ?? 0),
+					],
+					\CBPDocumentEventType::Create,
+				);
+				$starter->start();
+			}
+		}
+	}
+
+	/**
+	 * Resolves the task creation date once, before the create event fans out to every trigger
+	 * template, so the activity does not run a per-template CREATED_DATE SELECT. The V2 add path
+	 * already carries CREATED_DATE in $fields; the legacy CTaskItem path (prepareLegacyData) does
+	 * not, so it is loaded from the task a single time here and normalized to the site date string.
+	 */
+	private function resolveTaskCreatedDate(int $taskId, array $fields): ?string
+	{
+		$createdDate = $fields['CREATED_DATE'] ?? null;
+		if (is_string($createdDate) && $createdDate !== '')
+		{
+			return $createdDate;
+		}
+		if ($createdDate instanceof Date)
+		{
+			return UI::formatDateTime($createdDate->getTimestamp());
+		}
+
+		if ($taskId <= 0)
+		{
+			return null;
+		}
+
+		$row = TaskTable::getList([
+			'select' => ['CREATED_DATE'],
+			'filter' => ['=ID' => $taskId],
+			'limit' => 1,
+		])->fetch();
+
+		$created = $row['CREATED_DATE'] ?? null;
+
+		return $created instanceof Date ? UI::formatDateTime($created->getTimestamp()) : null;
 	}
 
 	public function onTaskUpdateExecute($id, array $fields, array $previousFields)
@@ -734,6 +797,19 @@ class Listener
 		}
 
 		return null;
+	}
+
+	private function hasCreateTrigger(): bool
+	{
+		if (!class_exists(TriggerService::class))
+		{
+			return false;
+		}
+
+		return (new TriggerService())->hasStartTrigger(
+			'TasksCreateTrigger',
+			\Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType(),
+		);
 	}
 
 	private function isStarterEnabled(): bool

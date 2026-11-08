@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Infrastructure\Controller\Task;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Access\Task\Mark\Permission\Set;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Public\Command\Task\Mark\SetMarkCommand;
 
@@ -23,7 +24,7 @@ class Mark extends BaseController
 		$result = (new SetMarkCommand(
 			taskId: (int)$task->getId(),
 			mark: $task->mark ?? Task\Mark::None,
-			config: new UpdateConfig(userId: $this->userId, useConsistency: true)
+			config: new UpdateConfig(userId: $this->userId, useConsistency: true, origin: InteractionOrigin::Ui)
 		))->run();
 
 		if (!$result->isSuccess())

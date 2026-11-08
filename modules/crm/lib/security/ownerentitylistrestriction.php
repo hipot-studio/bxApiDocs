@@ -14,7 +14,9 @@ use CCrmOwnerType;
 
 /**
  * Builds ORM filter fragments that restrict a list query of entities bound to CRM owners
- * (leads, contacts, companies) according to read permissions of a user.
+ * according to read permissions of a user. Any owner type with a permission model is supported
+ * (leads, contacts, companies, as well as document types such as deals, invoices, quotes and
+ * dynamic type items); the caller passes the subset its binding table actually stores.
  */
 final class OwnerEntityListRestriction
 {
@@ -31,7 +33,8 @@ final class OwnerEntityListRestriction
 	 * Otherwise returns an ORM filter fragment to be combined with the current filter via AND
 	 * (including a deny fragment ['@{idField}' => [0]] when the user has no access at all).
 	 *
-	 * @param int[] $ownerTypeIds Subset of [CCrmOwnerType::Lead, ::Contact, ::Company].
+	 * @param int[] $ownerTypeIds Owner types stored by the target binding table; each must have a CRM
+	 *        permission model (e.g. Lead, Contact, Company, Deal, Invoice, Quote, dynamic type items).
 	 * @param string $typeFieldName Name of the owner type binding field of the target table.
 	 * @param string $idFieldName Name of the owner id binding field of the target table.
 	 * @return array|null

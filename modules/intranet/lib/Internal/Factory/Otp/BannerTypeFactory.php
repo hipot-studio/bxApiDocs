@@ -6,7 +6,6 @@ namespace Bitrix\Intranet\Internal\Factory\Otp;
 
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\User;
-use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Enum\Otp\OtpBannerType;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
@@ -44,7 +43,11 @@ class BannerTypeFactory
 		}
 
 		$deviceReconnect = new DeviceReconnect();
-		if ($deviceReconnect->shouldShowReconnect() && $this->getPersonalOtp()?->isActivated())
+		if (
+			$deviceReconnect->shouldShowReconnect()
+			&& $this->getPersonalOtp()?->isActivated()
+			&& $this->getPersonalOtp()?->hasConnectedPushDevice()
+		)
 		{
 			return OtpBannerType::RECONNECT_TRUSTED_DEVICE;
 		}
@@ -56,7 +59,7 @@ class BannerTypeFactory
 			return $type;
 		}
 
-		if ($this->getPersonalOtp()?->isPushType())
+		if ($this->getPersonalOtp()?->hasConnectedPushDevice())
 		{
 			$type = (new TrustDeviceConfirmation($this->getPersonalOtp()))->shouldShowConfirmation() ? OtpBannerType::TRUST_DEVICE_CONFIRMATION : null;
 
@@ -86,7 +89,8 @@ class BannerTypeFactory
 		if (
 			!$this->getPersonalOtp()?->isActivated()
 			&& $this->settingsOtp->isMandatoryUsing()
-			&& !$this->getPersonalOtp()?->canSkipMandatoryByRights()
+			&& !$this->getPersonalOtp()?->isMandatorySkippedIndefinitely()
+			&& $this->getPersonalOtp()?->isRequired()
 		) {
 			return OtpBannerType::MANDATORY_2FA;
 		}
@@ -98,30 +102,27 @@ class BannerTypeFactory
 			return OtpBannerType::ENABLED_OLD_2FA_AND_NEED_PUSH_2FA;
 		}
 
-		if ($this->pushOtp->getPromoteMode() !== PromoteMode::High)
-		{
-			if (
-				!$this->getPersonalOtp()?->isActivated()
-				&& $this->user->isIntranet()
-			) {
-				return OtpBannerType::DISABLED_ALL_2FA;
-			}
+		if (
+			!$this->getPersonalOtp()?->isActivated()
+			&& $this->user->isIntranet()
+		) {
+			return OtpBannerType::DISABLED_ALL_2FA;
+		}
 
-			if (
-				$this->isAdmin
-				&& $this->isActivatedPushTypeOtp()
-				&& !$this->pushOtp->isDefault()
-				&& !$this->pushOtp->gracePeriodEnabled()
-			) {
-				return OtpBannerType::ONLY_ADMIN_ENABLED_NEW_2FA;
-			}
+		if (
+			$this->isAdmin
+			&& $this->isActivatedPushTypeOtp()
+			&& !$this->pushOtp->isDefault()
+			&& !$this->pushOtp->gracePeriodEnabled()
+		) {
+			return OtpBannerType::ONLY_ADMIN_ENABLED_NEW_2FA;
+		}
 
-			if (
-				$this->isActivatedOldTypeOtp()
-				&& !$this->pushOtp->gracePeriodEnabled()
-			) {
-				return OtpBannerType::ENABLED_OLD_2FA;
-			}
+		if (
+			$this->isActivatedOldTypeOtp()
+			&& !$this->pushOtp->gracePeriodEnabled()
+		) {
+			return OtpBannerType::ENABLED_OLD_2FA;
 		}
 
 		return null;
@@ -145,18 +146,14 @@ class BannerTypeFactory
 		}
 
 		$lastShow = \CUserOptions::GetOption('intranet', 'push_otp_popup_last_show', null);
-
-		if (empty($lastShow) || !is_string($lastShow))
-		{
-			return true;
-		}
+		$hasLastShow = !empty($lastShow) && is_string($lastShow);
 
 		$lastShowType = \CUserOptions::GetOption('intranet', 'push_otp_popup_last_show_type', null);
 		$lastShowType = $lastShowType && is_int($lastShowType) ? OtpBannerType::tryFrom($lastShowType) : null;
 
 		if (
-			$lastShowType === $type
-			&& $this->pushOtp->getPromoteMode() !== PromoteMode::High
+			$hasLastShow
+			&& $lastShowType === $type
 			&& in_array($type, [
 				OtpBannerType::ONLY_ADMIN_ENABLED_NEW_2FA,
 				OtpBannerType::ENABLED_OLD_2FA,
@@ -166,27 +163,35 @@ class BannerTypeFactory
 			return false;
 		}
 
-		$lastShowDate = new Date($lastShow, 'd.m.Y');
-		$today = new Date();
-		$interval = $today->getDiff($lastShowDate);
-		$daysSinceLastShow = $interval->days;
-
 		if ($this->pushOtp->isGracePeriodEnded() && !$this->getPersonalOtp()?->canSkipMandatory())
 		{
 			return true;
 		}
 
+		$today = new Date();
+		$daysSinceLastShow = $hasLastShow
+			? $today->getDiff(new Date($lastShow, 'd.m.Y'))->days
+			: null
+		;
+
 		if ($this->pushOtp->gracePeriodEnabled())
 		{
 			$gracePeriodStartDate = $this->pushOtp->getGracePeriodStart();
 			$daysSinceGraceStart = $today->getDiff($gracePeriodStartDate)->days;
+			$personalDeadline = $this->getPersonalOtp()?->getDeactivateUntil();
+			$gracePeriodEnd = $this->pushOtp->getGracePeriod();
 
-			$requiredDaysBetweenShows = $this->pushOtp->getShowFrequencyForDay($daysSinceGraceStart);
+			if ($personalDeadline !== null && $personalDeadline->getTimestamp() < $gracePeriodEnd)
+			{
+				$personalDeadlineDate = Date::createFromTimestamp($personalDeadline->getTimestamp());
+				$gracePeriodEndDate = Date::createFromTimestamp($gracePeriodEnd);
+				$daysSinceGraceStart += $personalDeadlineDate->getDiff($gracePeriodEndDate)->days;
+			}
 
-			return $daysSinceLastShow >= $requiredDaysBetweenShows;
+			return $this->pushOtp->canShowByGracePeriodSchedule($daysSinceGraceStart, $daysSinceLastShow);
 		}
 
-		return $daysSinceLastShow > 0;
+		return $daysSinceLastShow === null || $daysSinceLastShow > 0;
 	}
 
 	private function getPersonalOtp(): ?PersonalOtp

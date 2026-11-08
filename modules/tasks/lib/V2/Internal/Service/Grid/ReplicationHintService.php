@@ -103,10 +103,12 @@ class ReplicationHintService
 
 		$replicationPeriodString = $this->getReplicationPeriod($replicateParams);
 
-		$hint = Loc::getMessage(
+		$periodMessage = Loc::getMessage(
 			code: 'TASKS_V2_REPLICATION_PERIOD_SERVICE_REGULAR_TOOLTIP_PERIOD_ONLY',
 			replace: ['#PERIOD#' => $replicationPeriodString],
 		);
+
+		$hint = $periodMessage;
 
 		if ($this->templateAccessService->canRead($userId, $templateId))
 		{
@@ -120,10 +122,13 @@ class ReplicationHintService
 		}
 
 		$hint = htmlspecialcharsbx('<div class="tasks-hint">' . $hint . '</div>');
+		$iconLabel = htmlspecialcharsbx($periodMessage, ENT_QUOTES);
 
 		return <<<HTML
 <div
 	class="task-regular-icon ui-icon-set --o-repeat"
+	role="img"
+	aria-label="{$iconLabel}"
 	data-tasks-hint="{$hint}"
 	data-hint-no-icon
 	data-hint-html

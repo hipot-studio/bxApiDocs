@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Rest\Public\Provider\Dto;
 
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 
 class IncomingWebhookDto
@@ -21,6 +22,7 @@ class IncomingWebhookDto
 		private readonly ?DateTime $dateCreate = null,
 		private readonly ?DateTime $dateLogin = null,
 		private readonly ?string $lastIp = null,
+		private readonly ?Date $dateExpire = null,
 	)
 	{
 	}
@@ -71,5 +73,10 @@ class IncomingWebhookDto
 	public function getLastIp(): ?string
 	{
 		return $this->lastIp;
+	}
+
+	public function getDateExpire(): ?Date
+	{
+		return $this->dateExpire;
 	}
 }

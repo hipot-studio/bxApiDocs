@@ -12,6 +12,7 @@ use Bitrix\Tasks\V2\Internal\Access\Task\Attachment;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Entity\DiskFileCollection;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Provider\DiskFileProvider;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Public\Command\Task\Attachment\AttachFilesCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Attachment\DetachFilesCommand;
 
@@ -73,6 +74,7 @@ class File extends BaseController
 			userId: $this->userId,
 			fileIds: $ids,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -102,6 +104,7 @@ class File extends BaseController
 			userId: $this->userId,
 			fileIds: $ids,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		))->run();
 
 		if (!$result->isSuccess())

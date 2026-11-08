@@ -78,7 +78,7 @@ $width = $pageWidth - $margin['left'] - $margin['right'];
 <div style="margin: 0pt; padding: <?=join('pt ', $margin); ?>pt; width: <?=$width; ?>pt; background: <?=$background; ?>">
 
 <?if ($params['BILL_HEADER_SHOW'] == 'Y'):?>
-	<table class="header">
+	<table class="header" role="presentation">
 		<tr>
 			<? if ($params["BILL_PATH_TO_LOGO"]) { ?>
 			<td style="padding-right: 5pt; padding-bottom: 5pt; ">
@@ -138,7 +138,7 @@ $width = $pageWidth - $margin['left'] - $margin['right'];
 	}
 
 	?>
-	<table class="acc" width="100%">
+	<table class="acc" width="100%" role="presentation">
 		<colgroup>
 			<col width="29%">
 			<col width="29%">
@@ -196,7 +196,7 @@ $width = $pageWidth - $margin['left'] - $margin['right'];
 <br>
 <br>
 
-<table width="100%">
+<table width="100%" role="presentation">
 	<colgroup>
 		<col width="50%">
 		<col width="0">
@@ -636,7 +636,7 @@ for ($n = 1; $n <= $rowsCnt; $n++):
 	<? } ?>
 
 	<div style="position: relative">
-		<table class="sign">
+		<table class="sign" role="presentation">
 			<? if ($params["SELLER_COMPANY_DIRECTOR_POSITION"]) { ?>
 			<tr>
 				<td style="width: 150pt; "><?=htmlspecialcharsbx($params["SELLER_COMPANY_DIRECTOR_POSITION"]); ?></td>

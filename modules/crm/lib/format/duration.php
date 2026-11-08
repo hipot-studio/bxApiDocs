@@ -13,18 +13,17 @@ class Duration
 			$duration = 0;
 		}
 
-		$now = new \DateTime();
-		$cloneNow = clone($now);
-		$now->add(new \DateInterval('PT' . $duration . 'S'));
-		$interval = $now->diff($cloneNow);
-		[$hours, $minutes, $seconds] = explode(' ', $interval->format('%H %I %S'));
-		$minutesStr = sprintf('%s %s', $minutes, Loc::getMessage('DURATION_MIN'));
-		$secondsStr = sprintf('%s %s', $seconds, Loc::getMessage('DURATION_SEC'));
+		$hours = intdiv($duration, 3600);
+		$minutes = intdiv($duration % 3600, 60);
+		$seconds = $duration % 60;
 
-		if ($hours !== '00')
+		$minutesStr = sprintf('%02d %s', $minutes, Loc::getMessage('DURATION_MIN'));
+		$secondsStr = sprintf('%02d %s', $seconds, Loc::getMessage('DURATION_SEC'));
+
+		if ($hours > 0)
 		{
 			return sprintf(
-				'%s %s %s %s',
+				'%02d %s %s %s',
 				$hours,
 				Loc::getMessage('DURATION_HOUR'),
 				$minutesStr,
@@ -32,7 +31,7 @@ class Duration
 			);
 		}
 
-		if ($minutes !== '00')
+		if ($minutes > 0)
 		{
 			return sprintf('%s %s', $minutesStr, $secondsStr);
 		}

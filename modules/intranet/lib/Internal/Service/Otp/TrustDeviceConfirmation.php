@@ -25,6 +25,11 @@ class TrustDeviceConfirmation
 
 	public function shouldShowConfirmation(): bool
 	{
+		if (!$this->personalOtpSettings->hasConnectedPushDevice())
+		{
+			return false;
+		}
+
 		$lastConfirmed = $this->getLastTrustDeviceConfirmationDate();
 		if ($lastConfirmed === null)
 		{

@@ -49,6 +49,62 @@ class DiskSection
 		return $items;
 	}
 
+	public static function getOnPremiseSubmenuItems(): array
+	{
+		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/intranet/public/docs/.left.menu.php');
+		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/intranet/public/docs/.left.menu_ext.php');
+
+		$userId = (int)CurrentUser::get()->getId();
+		$diskEnabled = static::isDiskEnabled();
+		$items = [];
+
+		if (\CBXFeatures::IsFeatureEnabled('PersonalFiles'))
+		{
+			$items[] = static::createMenuItem(
+				'menu_my_disk',
+				'MENU_DISK_USER',
+				static::getUserDiskPath($userId, $diskEnabled),
+				null,
+				null,
+				'',
+			);
+		}
+
+		if (\CBXFeatures::IsFeatureEnabled('CommonDocuments'))
+		{
+			foreach ([
+				'DOCS_MENU_ALL_DOCS' => SITE_DIR . 'docs/index.php',
+				'DOCS_MENU_SHARED' => SITE_DIR . 'docs/shared/',
+				'DOCS_MENU_SALE' => SITE_DIR . 'docs/sale/',
+				'DOCS_MENU_MANAGE' => SITE_DIR . 'docs/manage/',
+			] as $messageKey => $url)
+			{
+				$items[] = static::createMenuItem(
+					(string)crc32($url),
+					$messageKey,
+					$url,
+					null,
+					null,
+					'',
+				);
+			}
+		}
+
+		if ($diskEnabled)
+		{
+			$items[] = static::createMenuItem(
+				'menu_my_disk_volume',
+				'MENU_DISK_VOLUME',
+				SITE_DIR . "company/personal/user/{$userId}/disk/volume/",
+				null,
+				null,
+				'',
+			);
+		}
+
+		return $items;
+	}
+
 	protected static function isDiskEnabled(): bool
 	{
 		return Option::get('disk', 'successfully_converted', 'N') === 'Y';
@@ -64,11 +120,18 @@ class DiskSection
 		return SITE_DIR . "company/personal/user/{$userId}/files/lib/";
 	}
 
-	private static function createMenuItem(string $id, string $messageKey, string $url, ?string $counter = null, ?string $counterId = null): array
+	private static function createMenuItem(
+		string $id,
+		string $messageKey,
+		string $url,
+		?string $counter = null,
+		?string $counterId = null,
+		string $messagePrefix = 'DISK_SECTION_',
+	): array
 	{
 		return [
 			'ID' => $id,
-			'TEXT' => Loc::getMessage('DISK_SECTION_' . $messageKey) ?: '',
+			'TEXT' => Loc::getMessage($messagePrefix . $messageKey) ?: '',
 			'URL' => $url,
 			'COUNTER' => $counter ?? '',
 			'COUNTER_ID' => $counterId ?? '',

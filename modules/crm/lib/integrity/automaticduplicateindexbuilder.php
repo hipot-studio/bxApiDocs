@@ -176,6 +176,20 @@ class AutomaticDuplicateIndexBuilder extends DuplicateIndexBuilder
 			'=MATCH_HASH' => $matchHash,
 			'=SCOPE' => $scope
 		]);
+		AutoSearchConflictCountCache::clean($entityTypeID, $userID);
+	}
+
+	public function processMismatchRegistration(DuplicateCriterion $criterion, $entityID = 0)
+	{
+		parent::processMismatchRegistration($criterion, $entityID);
+		AutoSearchConflictCountCache::clean($this->getEntityTypeID(), $this->getUserID());
+	}
+
+	public function processEntityDeletion(DuplicateCriterion $criterion, $entityID, array $params = array())
+	{
+		parent::processEntityDeletion($criterion, $entityID, $params);
+		// unconditional: the parent may move the group to another root without deleting the row
+		AutoSearchConflictCountCache::clean($this->getEntityTypeID(), $this->getUserID());
 	}
 
 	protected function deleteDuplicateIndexByFilter(array $filter)
@@ -312,6 +326,7 @@ class AutomaticDuplicateIndexBuilder extends DuplicateIndexBuilder
 			$item
 				->setStatusId($statusID)
 				->save();
+			AutoSearchConflictCountCache::clean($entityTypeID, $userID);
 		}
 	}
 

@@ -42,7 +42,7 @@ class EventService
 					->disableAiAnalyze()
 					->save();
 
-				(new FollowUpAnalytics($call))->addErrorRecording(CallAIError::AI_RECORD_TOO_SHORT);
+				(new FollowUpAnalytics($call))->addErrorRecording(CallAIError::RECORD_TOO_SHORT);
 
 				return;
 			}
@@ -54,7 +54,13 @@ class EventService
 			if ($chat->getId() == $call->getChatId())
 			{
 				$message = ChatMessage::generateCallFinishedMessage($call, $chat);
-				if ($message)
+				// Claim-before-send on the shared (callId, AI_START) key unifies the three
+				// AI_START senders (here, CallFollowupBot::onCommandAdd, TaskAI::restartAction):
+				// only the first one across processes sends.
+				if (
+					$message
+					&& NotifyService::getInstance()->claim($call->getId(), NotifyService::MESSAGE_TYPE_AI_START)
+				)
 				{
 					$sendingConfig = (new SendingConfig())
 						->enableSkipCounterIncrements()
@@ -142,6 +148,13 @@ class EventService
 						$messageOutcome = ChatMessage::generateOverviewMessage($callId, $outcomeCollection, $chat);
 						if ($messageOutcome)
 						{
+							// Atomic serialization point across concurrent handlers: only the
+							// claim winner sends the overview and runs the one-shot side-effects.
+							if (!NotifyService::getInstance()->claim($callId, NotifyService::MESSAGE_TYPE_AI_OVERVIEW, (string)$transcriptionOutcomeId))
+							{
+								return;
+							}
+
 							$sendingConfig = (new SendingConfig())->enableSkipUrlIndex();
 							$context = (new Context())->setUser($call->getInitiatorId());
 							NotifyService::getInstance()->sendMessageDeferred($chat, $messageOutcome, $sendingConfig, $context);

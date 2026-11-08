@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\AI\Integration\Socialnetwork;
 
 use Bitrix\Main\LoaderException;
-use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\Internals\Registry\UserRegistry;
 use Bitrix\Main\Loader;
 
@@ -13,45 +12,56 @@ class GroupService
 {
 	protected bool $hasModule = false;
 	protected bool $hasCheckModule = false;
-	protected ?array $notVisibleGroupListInKeys = null;
 
-	public function getNotVisibleGroupListInKeys(): array
+	public function __construct(
+		protected GroupRepository $groupRepository
+	)
 	{
-		if (is_null($this->notVisibleGroupListInKeys))
-		{
-			if (!$this->hasSocialnetwork())
-			{
-				$this->notVisibleGroupListInKeys = [];
-
-				return [];
-			}
-
-			$this->notVisibleGroupListInKeys = $this->getPrepareNotVisibleGroupList();
-		}
-
-		return $this->notVisibleGroupListInKeys ?? [];
 	}
 
-	private function getPrepareNotVisibleGroupList(): array
+	/**
+	 * Returns the subset of the passed ids whose group is active and not closed.
+	 *
+	 * @param int[] $groupIds
+	 * @return list<int>
+	 * @throws LoaderException Callers drop every access code absent from the result, so a silent empty list would wipe the group sharings.
+	 */
+	public function getExistingGroupIds(array $groupIds): array
 	{
-		$list = WorkgroupTable::query()
-			->setSelect(['ID'])
-			->where('VISIBLE', '=', false)
-			->fetchCollection()
-		;
-
-		if ($list->isEmpty())
+		$ids = $this->normalizeIds($groupIds);
+		if (empty($ids))
 		{
 			return [];
 		}
 
-		$result = [];
-		foreach ($list as $item)
+		if (!$this->hasSocialnetwork())
 		{
-			$result[$item->getId()] = true;
+			throw new LoaderException('Module socialnetwork is not available, group existence cannot be checked.');
 		}
 
-		return $result;
+		return $this->groupRepository->getExistingIds($ids);
+	}
+
+	/**
+	 * Returns the subset of the passed ids whose group is not visible.
+	 *
+	 * @param int[] $groupIds
+	 * @return list<int>
+	 */
+	public function getNotVisibleGroupIds(array $groupIds): array
+	{
+		$ids = $this->normalizeIds($groupIds);
+		if (empty($ids))
+		{
+			return [];
+		}
+
+		if (!$this->hasSocialnetwork())
+		{
+			return [];
+		}
+
+		return $this->groupRepository->getNotVisibleIds($ids);
 	}
 
 	public function getGroupIdsForUser($userId): array
@@ -82,20 +92,22 @@ class GroupService
 		return $this->hasModule;
 	}
 
-	public function getAllGroupCodes(): array
+	/**
+	 * @param int[] $ids
+	 * @return list<int>
+	 */
+	private function normalizeIds(array $ids): array
 	{
-		$list = WorkgroupTable::query()
-			->setSelect(['ID'])
-			->where('ACTIVE', '=', true)
-			->where('CLOSED', '=', false)
-			->fetchCollection()
-		;
-
-		if ($list->isEmpty())
+		$result = [];
+		foreach ($ids as $id)
 		{
-			return [];
+			$id = (int)$id;
+			if ($id > 0)
+			{
+				$result[$id] = $id;
+			}
 		}
 
-		return $list->getIdList();
+		return array_values($result);
 	}
 }

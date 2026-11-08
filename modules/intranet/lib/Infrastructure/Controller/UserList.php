@@ -11,15 +11,15 @@ use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessC
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteLimitControl;
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\PortalCreatorEmailConfirmationControl;
 use Bitrix\Intranet\Infrastructure\Controller\AutoWire\DepartmentParameterTrait;
+use Bitrix\Intranet\Infrastructure\Controller\AutoWire\FireWizardConfigParameterTrait;
 use Bitrix\Intranet\Infrastructure\Controller\AutoWire\UserCollectionParameterTrait;
 use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
+use Bitrix\Intranet\Internal\Entity\FireWizardConfig;
 use Bitrix\Intranet\Internal\Integration\Im\ChatService;
-use Bitrix\Intranet\Invitation;
 use Bitrix\Intranet\Public\Facade\Invitation\ReInvitationFacade;
 use Bitrix\Intranet\Public\Type\Collection\InvitationCollection;
 use Bitrix\Intranet\Public\Type\EmailInvitation;
 use Bitrix\Intranet\Public\Type\PhoneInvitation;
-use Bitrix\Intranet\User;
 use Bitrix\Intranet\User\Access\UserAccessController;
 use Bitrix\Intranet\User\Access\UserActionDictionary;
 use Bitrix\Intranet\User\Command\DeleteOrFireUserCommand;
@@ -47,6 +47,8 @@ class UserList extends Controller
 {
 	use UserCollectionParameterTrait;
 	use DepartmentParameterTrait;
+	use FireWizardConfigParameterTrait;
+	use SystemUserIntegrationTrait;
 
 	private const DEFAULT_SELECT = ['ID', 'NAME', 'LAST_NAME', 'LOGIN', 'EMAIL', 'SECOND_NAME'];
 
@@ -62,7 +64,9 @@ class UserList extends Controller
 	{
 		return [
 			$this->createUserCollectionParameterFromGrid(),
+			$this->createSystemUserCollectionParameterFromGrid(),
 			$this->createDepartmentCollectionParameter(),
+			$this->createFireWizardConfigParameter(),
 		];
 	}
 
@@ -92,7 +96,7 @@ class UserList extends Controller
 	 * @throws CommandValidationException
 	 * @throws UnknownActionException
 	 */
-	public function fireAction(UserCollection $userCollection): Response
+	public function fireAction(UserCollection $userCollection, FireWizardConfig $fireWizardConfig): Response
 	{
 		$access = UserAccessController::createByDefault();
 
@@ -103,12 +107,21 @@ class UserList extends Controller
 			return AjaxJson::createError(($this->errorCollection));
 		}
 
-		$originatorUsers = [];
+		$integrationService = $this->getSystemUserIntegrationService();
 
 		foreach ($userCollection as $user)
 		{
 			if ($user->isCurrent())
 			{
+				continue;
+			}
+
+			$deactivationResult = $integrationService->deactivateIntegrationsIfNeeded($user, $fireWizardConfig);
+
+			if (!$deactivationResult->isSuccess())
+			{
+				$failedIntegrationUsers[$user->getId()] = $user->getFormattedName();
+
 				continue;
 			}
 
@@ -119,25 +132,11 @@ class UserList extends Controller
 			{
 				$skippedFiredUsers[$user->getId()] = $user->getFormattedName();
 			}
-			else
-			{
-				$deactivateUser = new User($user->getId());
-				$originatorUser = $deactivateUser->fetchOriginatorUser();
-
-				if (!in_array($originatorUser, $originatorUsers))
-				{
-					$originatorUsers[] = $originatorUser;
-				}
-			}
-		}
-
-		foreach ($originatorUsers as $originatorUser)
-		{
-			Invitation::fullSyncCounterByUser($originatorUser);
 		}
 
 		return AjaxJson::createSuccess([
 			'skippedFiredUsers' => $skippedFiredUsers ?? [],
+			'failedIntegrationUsers' => $failedIntegrationUsers ?? [],
 		]);
 	}
 
@@ -149,7 +148,7 @@ class UserList extends Controller
 	 * @throws CommandValidationException
 	 * @throws UnknownActionException
 	 */
-	public function deleteOrFireAction(UserCollection $userCollection): Response
+	public function deleteOrFireAction(UserCollection $userCollection, FireWizardConfig $fireWizardConfig): Response
 	{
 		$access = UserAccessController::createByDefault();
 
@@ -163,10 +162,21 @@ class UserList extends Controller
 			return AjaxJson::createError(($this->errorCollection));
 		}
 
+		$integrationService = $this->getSystemUserIntegrationService();
+
 		foreach ($userCollection as $user)
 		{
 			if ($user->isCurrent())
 			{
+				continue;
+			}
+
+			$deactivationResult = $integrationService->deactivateIntegrationsIfNeeded($user, $fireWizardConfig);
+
+			if (!$deactivationResult->isSuccess())
+			{
+				$failedIntegrationUsers[$user->getId()] = $user->getFormattedName();
+
 				continue;
 			}
 
@@ -181,6 +191,29 @@ class UserList extends Controller
 
 		return AjaxJson::createSuccess([
 			'skippedFiredUsers' => $skippedFiredUsers ?? [],
+			'failedIntegrationUsers' => $failedIntegrationUsers ?? [],
+		]);
+	}
+
+	/**
+	 * @ajaxAction intranet.v2.UserList.fireWizardConfig
+	 * @param UserCollection $systemUserCollection
+	 * @return Response
+	 * @throws UnknownActionException
+	 */
+	public function fireWizardConfigAction(UserCollection $systemUserCollection): Response
+	{
+		$access = UserAccessController::createByDefault();
+
+		if (!$access->check(UserActionDictionary::FIRE))
+		{
+			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROLLER_USER_LIST_NO_PERMISSIONS'), 403));
+
+			return AjaxJson::createError(($this->errorCollection));
+		}
+
+		return AjaxJson::createSuccess([
+			'systemUser' => $this->getSystemUserIntegrationService()->getCollectionIntegrations($systemUserCollection),
 		]);
 	}
 

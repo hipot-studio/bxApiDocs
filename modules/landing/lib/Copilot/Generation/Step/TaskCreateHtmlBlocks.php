@@ -57,7 +57,7 @@ class TaskCreateHtmlBlocks extends TaskStep
 
 		$existingByAnchor = $this->collectExistingBlocksByAnchor($landing);
 		$afterId = 0;
-		$rightsBefore = Rights::isOn();
+		$rightsBefore = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 		try
 		{

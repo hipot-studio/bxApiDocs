@@ -6,12 +6,12 @@ use Bitrix\Disk\Document\GoogleHandler;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Disk\Ui\FileAttributes;
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
@@ -258,6 +258,8 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 		{
 			$this->arResult['ATTACHED_IDS'] = array();
 			$this->arResult['COMMON_SIZE'] = 0;
+			$this->arResult['CAN_DOWNLOAD_ARCHIVE'] = true;
+
 			foreach($this->arResult['FILES'] as $fileData)
 			{
 				if ($fileData['IS_MARK_DELETED'])
@@ -265,19 +267,28 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 					continue;
 				}
 
+				if (!$fileData['CAN_DOWNLOAD'])
+				{
+					$this->arResult['CAN_DOWNLOAD_ARCHIVE'] = false;
+				}
+
 				$this->arResult['ATTACHED_IDS'][] = $fileData['ID'];
 				$this->arResult['COMMON_SIZE'] += $fileData['SIZE_BYTES'];
 			}
-			$this->arResult['DOWNLOAD_ARCHIVE_URL'] = $urlManager->getUrlUfController('downloadArchiveByEntity', array(
-				'entity' => $this->arParams['PARAMS']['arUserField']['ENTITY_ID'],
-				'entityId' => $this->arParams['PARAMS']['arUserField']['ENTITY_VALUE_ID'],
-				'fieldName' => $this->arParams['PARAMS']['arUserField']['FIELD_NAME'],
-				'signature' => \Bitrix\Disk\Security\ParameterSigner::getEntityArchiveSignature(
-					$this->arParams['PARAMS']['arUserField']['ENTITY_ID'],
-					$this->arParams['PARAMS']['arUserField']['ENTITY_VALUE_ID'],
-					$this->arParams['PARAMS']['arUserField']['FIELD_NAME']
-				),
-			));
+
+			if ($this->arResult['CAN_DOWNLOAD_ARCHIVE'])
+			{
+				$this->arResult['DOWNLOAD_ARCHIVE_URL'] = $urlManager->getUrlUfController('downloadArchiveByEntity', array(
+					'entity' => $this->arParams['PARAMS']['arUserField']['ENTITY_ID'],
+					'entityId' => $this->arParams['PARAMS']['arUserField']['ENTITY_VALUE_ID'],
+					'fieldName' => $this->arParams['PARAMS']['arUserField']['FIELD_NAME'],
+					'signature' => \Bitrix\Disk\Security\ParameterSigner::getEntityArchiveSignature(
+						$this->arParams['PARAMS']['arUserField']['ENTITY_ID'],
+						$this->arParams['PARAMS']['arUserField']['ENTITY_VALUE_ID'],
+						$this->arParams['PARAMS']['arUserField']['FIELD_NAME']
+					),
+				));
+			}
 		}
 
 		$this->includeComponentTemplate($this->editMode ? 'edit' : 'show'.($this->arParams['INLINE'] === 'Y' ? '_inline' : ''));
@@ -298,40 +309,47 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 			$values = array($values);
 		}
 		$files = array();
-		$driver = Driver::getInstance();
+		$driver = $this->getDriver();
 		$urlManager = $driver->getUrlManager();
 		$userFieldManager = $driver->getUserFieldManager();
 		$isEnabledObjectLock = Configuration::isEnabledObjectLock();
 
-		$scopeTokenService = ServiceLocator::getInstance()->get('disk.scopeTokenService');
+		$scopeTokenService = $this->getScopeTokenService();
 
-		$userFieldManager->loadBatchAttachedObject($values);
+		$fileItems = $this->prepareFileItems($values, $userFieldManager);
+		$securityContextsByFile = $this->preloadFileItemsDownloadAccess($fileItems, (int)$userId);
+
 		foreach($values as $id)
 		{
-			$attachedModel = null;
 			[$type, $realValue] = FileUserType::detectType($id);
 			if (empty($realValue) || $realValue <= 0)
 			{
 				continue;
 			}
 
-			if ($type == FileUserType::TYPE_NEW_OBJECT)
+			if (empty($fileItems[$id]))
 			{
-				/** @var File $fileModel */
-				$fileModel = File::loadById($realValue);
-				if(!$fileModel || !$fileModel->canRead($fileModel->getStorage()->getCurrentUserSecurityContext()))
-				{
-					continue;
-				}
+				continue;
 			}
-			else
+
+			$attachedModel = $fileItems[$id]['attachedModel'];
+			/** @var File $fileModel */
+			$fileModel = $fileItems[$id]['fileModel'];
+
+			$securityContext = $securityContextsByFile[spl_object_id($fileModel)] ?? null;
+
+			if (!$securityContext)
 			{
-				/** @var \Bitrix\Disk\AttachedObject $attachedModel */
-				$attachedModel = $userFieldManager->getAttachedObjectById($realValue);
-				if(!$attachedModel)
-				{
-					continue;
-				}
+				continue;
+			}
+
+			if ($type == FileUserType::TYPE_NEW_OBJECT && !$fileModel->canRead($securityContext))
+			{
+				continue;
+			}
+
+			if ($attachedModel)
+			{
 				if(!$this->editMode)
 				{
 					$attachedModel->setOperableEntity(array(
@@ -339,11 +357,14 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 						'ENTITY_VALUE_ID' => $this->arParams['PARAMS']['arUserField']['ENTITY_VALUE_ID'],
 					));
 				}
-				/** @var File $fileModel */
-				$fileModel = $attachedModel->getFile();
+
+				$canDownload = $attachedModel->canDownload($userId);
+			}
+			else
+			{
+				$canDownload = $fileModel->canDownload($securityContext);
 			}
 
-			$securityContext = $fileModel->getStorage()->getCurrentUserSecurityContext();
 			$name = $fileModel->getName();
 
 			$quickAccessGetParam = [];
@@ -360,6 +381,11 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 					$quickAccessGetParam['_esd'] = $result['encryptedScope'];
 				}
 			}
+
+			$downloadUrl = $canDownload
+				? $urlManager->getUrlUfController('download', ['attachedId' => $id, ...$quickAccessGetParam])
+				: null
+			;
 
 			$data = [
 				'ID' => $id,
@@ -381,8 +407,11 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				'VIEW_URL' => $urlManager->getUrlToShowAttachedFileByService($id, 'gvdrive'),
 				'EDIT_URL' => $urlManager->getUrlToStartEditUfFileByService($id, 'gdrive'),
-				'DOWNLOAD_URL' => $urlManager->getUrlUfController('download', ['attachedId' => $id, ...$quickAccessGetParam]),
-				'COPY_TO_ME_URL' => $urlManager->getUrlUfController('copyToMe', ['attachedId' => $id]),
+				'DOWNLOAD_URL' => $downloadUrl,
+				'CAN_DOWNLOAD' => $canDownload,
+				'COPY_TO_ME_URL' => $canDownload
+					? $urlManager->getUrlUfController('copyToMe', ['attachedId' => $id])
+					: null,
 
 				'DELETE_URL' => ''
 			];
@@ -498,10 +527,12 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 
 				}
 
-				$sourceUri = new Uri($urlManager->getUrlUfController('download', [
+				$sourceUrl = $downloadUrl ?? $urlManager->getUrlUfController('show', [
 					'attachedId' => $attachedModel->getId(),
 					...$quickAccessGetParam,
-				]));
+				]);
+
+				$sourceUri = new Uri($sourceUrl);
 
 				$groupId = $this->componentId;
 				if (!$this->editMode)
@@ -512,10 +543,15 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 				$attr = $this->buildItemAttributes($attachedModel, $sourceUri)
 					->setTitle($attachedModel->getName())
 					->setGroupBy($groupId)
-					->addAction([
-						'type' => 'download',
-					])
+					->setDownloadDisabled(!$canDownload)
 				;
+
+				if ($canDownload)
+				{
+					$attr->addAction([
+						'type' => 'download',
+					]);
+				}
 
 				if (!empty($sources) && method_exists($attr, 'setSources'))
 				{
@@ -527,7 +563,7 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 					}
 				}
 
-				if (!$this->arParams['DISABLE_LOCAL_EDIT'])
+				if (!$this->arParams['DISABLE_LOCAL_EDIT'] && $canDownload)
 				{
 					$attr->addAction([
 						'type' => 'copyToMe',
@@ -538,6 +574,9 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 						],
 						'extension' => 'disk.viewer.actions',
 						'buttonIconClass' => 'ui-btn-icon-cloud',
+						'attrs' => [
+							'data-testid' => 'disk-uf-file-copy-to-me-viewer-action',
+						],
 					]);
 				}
 
@@ -655,6 +694,136 @@ class CDiskUfFileComponent extends BaseComponent implements \Bitrix\Main\Engine\
 		unset($id);
 
 		return $files;
+	}
+
+	protected function getDriver()
+	{
+		return Driver::getInstance();
+	}
+
+	protected function getScopeTokenService()
+	{
+		return ServiceLocator::getInstance()->get('disk.scopeTokenService');
+	}
+
+	protected function prepareFileItems(array $values, $userFieldManager): array
+	{
+		$newObjectIds = [];
+		$attachedObjectIds = [];
+		$normalizedValues = [];
+
+		foreach ($values as $id)
+		{
+			[$type, $realValue] = FileUserType::detectType($id);
+			$realValue = (int)$realValue;
+
+			if ($realValue <= 0)
+			{
+				continue;
+			}
+
+			$normalizedValues[$id] = [
+				'type' => $type,
+				'realValue' => $realValue,
+			];
+
+			if ($type == FileUserType::TYPE_NEW_OBJECT)
+			{
+				$newObjectIds[] = $realValue;
+			}
+			else
+			{
+				$attachedObjectIds[] = $realValue;
+			}
+		}
+
+		$userFieldManager->loadBatchAttachedObject($attachedObjectIds);
+		$newFileModels = $this->loadNewFileModels($newObjectIds);
+		$fileItems = [];
+
+		foreach ($normalizedValues as $id => $value)
+		{
+			if ($value['type'] == FileUserType::TYPE_NEW_OBJECT)
+			{
+				$fileModel = $newFileModels[$value['realValue']] ?? null;
+				if ($fileModel instanceof File)
+				{
+					$fileItems[$id] = [
+						'attachedModel' => null,
+						'fileModel' => $fileModel,
+					];
+				}
+
+				continue;
+			}
+
+			$attachedModel = $userFieldManager->getAttachedObjectById($value['realValue']);
+			if (!$attachedModel instanceof AttachedObject)
+			{
+				continue;
+			}
+
+			$fileModel = $attachedModel->getFile();
+			if (!$fileModel instanceof File)
+			{
+				continue;
+			}
+
+			$fileItems[$id] = [
+				'attachedModel' => $attachedModel,
+				'fileModel' => $fileModel,
+			];
+		}
+
+		return $fileItems;
+	}
+
+	protected function loadNewFileModels(array $objectIds): array
+	{
+		$objectIds = array_values(array_unique(array_filter(array_map('intval', $objectIds))));
+
+		if (empty($objectIds))
+		{
+			return [];
+		}
+
+		$fileModels = [];
+
+		foreach (File::loadBatchById($objectIds, ['STORAGE']) as $fileModel)
+		{
+			if ($fileModel instanceof File)
+			{
+				$fileModels[(int)$fileModel->getId()] = $fileModel;
+			}
+		}
+
+		return $fileModels;
+	}
+
+	protected function preloadFileItemsDownloadAccess(array $fileItems, int $userId): array
+	{
+		$fileModels = [];
+
+		foreach ($fileItems as $fileItem)
+		{
+			$fileModel = $fileItem['fileModel'] ?? null;
+
+			if ($fileModel instanceof File)
+			{
+				$fileModels[] = $fileModel;
+			}
+		}
+
+		if (empty($fileModels))
+		{
+			return [];
+		}
+
+		/** @var DownloadAccess $downloadAccess */
+		$downloadAccess = ServiceLocator::getInstance()->get(DownloadAccess::class);
+		$downloadAccess->preload($fileModels);
+
+		return DownloadAccess::preloadForFilesBySecurityContext($fileModels, $userId);
 	}
 
 	private function buildItemAttributes(\Bitrix\Disk\AttachedObject $attachedObject, Uri $sourceUri)

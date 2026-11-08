@@ -20,6 +20,11 @@ final class Event
 		return $this->addParam('valueElementId', $valueElementId);
 	}
 
+	public function addGridId(string $gridId): self
+	{
+		return $this->addParam('gridId', $gridId);
+	}
+
 	public function addParam(string $paramName, int|float|string|bool|null $value): self
 	{
 		$this->params[$paramName] = $value;

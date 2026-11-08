@@ -6,6 +6,7 @@ namespace Bitrix\Bizproc\Internal\Service\StorageActivity;
 
 use Bitrix\Bizproc\Activity\Dto\ContentBlock;
 use Bitrix\Bizproc\Activity\Dto\ContentBlockContext;
+use Bitrix\Bizproc\Activity\Dto\ContentBlockItem;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\Entity\StorageField\StorageFieldCollection;
 use Bitrix\Bizproc\Internal\Repository\Mapper\StorageItemMapper;
@@ -40,6 +41,14 @@ final class StorageActivityService
 
 	/** @var array<string, int> */
 	private static array $storageIdByCodeCache = [];
+
+	/**
+	 * Memoized label of the storage name, keyed by the language it was resolved in. A miss is left
+	 * out, so a language switch or a late translation delivery is not frozen into an empty label.
+	 *
+	 * @var array<string, string>
+	 */
+	private static array $storageContentBlockLabelByLanguage = [];
 
 	private static function buildFieldEntry(string $id, string $name, string $type): array
 	{
@@ -151,6 +160,34 @@ final class StorageActivityService
 		return self::getReturnableSystemFields() + $fieldsMap;
 	}
 
+	/**
+	 * Types a column of a storage may be created with, as the field editor offers them: its allow-list
+	 * intersected with the field types the runtime actually carries, keyed by type id and named the way the
+	 * editor names them.
+	 *
+	 * One reading for the two authors of a column - the person filling the editor form and the AI schema of
+	 * `createstoragenode` - so a type offered to one of them is a type the other may use as well.
+	 *
+	 * @return array<string, string> type id => localized name
+	 */
+	public static function getFieldTypes(): array
+	{
+		$allowedTypes = \Bitrix\Bizproc\Public\Service\StorageField\FieldService::EDITABLE_TYPES;
+
+		$documentTypes = \CBPHelper::GetDocumentFieldTypes();
+
+		$fieldTypes = [];
+		foreach ($allowedTypes as $type)
+		{
+			if (isset($documentTypes[$type]))
+			{
+				$fieldTypes[$type] = (string)$documentTypes[$type]['Name'];
+			}
+		}
+
+		return $fieldTypes;
+	}
+
 	public static function getSystemFields(?array $supportedFields = null): array
 	{
 		$fieldService = new FieldService();
@@ -198,6 +235,12 @@ final class StorageActivityService
 		return $systemFields;
 	}
 
+	/**
+	 * Exact CODE resolve, never a substring one: a node names the single storage it was configured for, so a
+	 * LIKE '%code%' lookup would answer with any storage whose code merely contains it - and '%' or '_' written
+	 * into the code itself would turn the lookup into a wildcard matching foreign storage, picked by insertion
+	 * order because such a lookup takes the first row of an unsorted limit 1.
+	 */
 	public static function resolveStorageId(?int $storageId, ?string $storageCode): int
 	{
 		if ($storageId !== null && $storageId > 0)
@@ -216,7 +259,7 @@ final class StorageActivityService
 		}
 
 		$provider = new StorageTypeProvider();
-		$type = $provider->getType(['CODE' => $storageCode], ['ID']);
+		$type = $provider->getByCode($storageCode);
 
 		$id = (int)$type?->getId();
 		if ($id > 0)
@@ -240,8 +283,13 @@ final class StorageActivityService
 		];
 	}
 
-	public static function getContentBlock(array $properties, ?ContentBlockContext $context = null): ?ContentBlock
+	public static function getContentBlock(
+		array $properties,
+		?ContentBlockContext $context = null,
+	): ?ContentBlock
 	{
+		$valueLabel = self::resolveStorageContentBlockLabel();
+
 		$storageId = isset($properties['StorageId']) ? (int)$properties['StorageId'] : 0;
 		$storageCode = (string)($properties['StorageCode'] ?? '');
 		if ($storageId <= 0 && $storageCode !== '')
@@ -251,7 +299,7 @@ final class StorageActivityService
 
 		if ($storageId > 0)
 		{
-			return self::makeStorageContentBlock(self::resolveStorageTitleById($storageId));
+			return self::makeStorageContentBlock(self::resolveStorageTitleById($storageId), $valueLabel);
 		}
 
 		if ($storageCode !== '')
@@ -259,11 +307,11 @@ final class StorageActivityService
 			$dynamicTitle = $context?->scope?->resolve(self::CONTENT_BLOCK_SCOPE_NAMESPACE, $storageCode);
 			if ($dynamicTitle !== null)
 			{
-				return self::makeStorageContentBlock($dynamicTitle);
+				return self::makeStorageContentBlock($dynamicTitle, $valueLabel);
 			}
 		}
 
-		return self::makeStorageContentBlock('');
+		return self::makeStorageContentBlock('', $valueLabel);
 	}
 
 	private static function resolveStorageTitleById(int $storageId): string
@@ -278,13 +326,61 @@ final class StorageActivityService
 		return self::$storageTitleByIdCache[$storageId] = $title;
 	}
 
-	public static function makeStorageContentBlock(string $title): ContentBlock
+	/**
+	 * @param string $valueLabel Label the calling activity puts on the storage name in its settings
+	 *        summary. An empty label leaves the block with the joined string only, as before.
+	 */
+	public static function makeStorageContentBlock(string $title, string $valueLabel = ''): ContentBlock
 	{
 		$title = trim($title);
+		$text = $title !== '' ? $title : (string)Loc::getMessage('BIZPROC_STORAGE_ACTIVITY_CONTENT_BLOCK_EMPTY');
 
-		return new ContentBlock(
-			$title !== '' ? $title : (string)Loc::getMessage('BIZPROC_STORAGE_ACTIVITY_CONTENT_BLOCK_EMPTY'),
-		);
+		// The summary gets the title, not the joined string: a labelled placeholder would read as
+		// "Storage: no storage selected", and for the node creating one - as a plain untruth.
+		return new ContentBlock($text, self::makeContentBlockItems($valueLabel, $title));
+	}
+
+	/**
+	 * Label of the storage name for the settings summary of a node that reads, writes or deletes items.
+	 *
+	 * Resolved here rather than at the call sites: Loc loads a language file lazily by the file asking
+	 * for the phrase, so this one is only reachable from the file its lang folder belongs to.
+	 */
+	private static function resolveStorageContentBlockLabel(): string
+	{
+		$language = Loc::getCurrentLang();
+		if (isset(self::$storageContentBlockLabelByLanguage[$language]))
+		{
+			return self::$storageContentBlockLabelByLanguage[$language];
+		}
+
+		$label = (string)Loc::getMessage('BIZPROC_STORAGE_ACTIVITY_CONTENT_BLOCK_LABEL_STORAGE');
+		if ($label !== '')
+		{
+			self::$storageContentBlockLabelByLanguage[$language] = $label;
+		}
+
+		return $label;
+	}
+
+	/**
+	 * @return list<ContentBlockItem>
+	 */
+	private static function makeContentBlockItems(string $label, string $value): array
+	{
+		// Labels are activity property map phrases, and such a phrase may end with a colon; the
+		// settings panel puts its own separator between the label and the value.
+		$label = trim(rtrim(trim($label), ':'));
+		$value = trim($value);
+
+		// Either half missing leaves nothing worth showing: without a label the value has no name, and
+		// without a value there is nothing to name.
+		if ($label === '' || $value === '')
+		{
+			return [];
+		}
+
+		return [new ContentBlockItem($label, $value)];
 	}
 
 	public static function getFilteringFieldsMapByStorageIds(array $storageIds): array

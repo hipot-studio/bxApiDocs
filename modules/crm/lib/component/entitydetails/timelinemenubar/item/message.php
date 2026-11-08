@@ -6,42 +6,19 @@ namespace Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
-use Bitrix\Crm\Integration\SmsManager;
+use Bitrix\Crm\MessageSender\Availability;
+use Bitrix\Crm\MessageSender\CustomTemplate\CrmZone;
 use Bitrix\Crm\MessageSender\UI\Editor\Scene\ItemDetails;
-use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
 use Bitrix\MessageService\Public\UI\MessageEditor\Context;
 use Bitrix\MessageService\Public\UI\MessageEditor\Editor;
-use CCrmOwnerType;
 
 final class Message extends Item
 {
 	public function isAvailable(): bool
 	{
-		if (!SmsManager::canUse())
-		{
-			return false;
-		}
-
-		if ($this->isCatalogEntityType())
-		{
-			return false;
-		}
-
-		if ($this->isMyCompany())
-		{
-			return false;
-		}
-
-		if (CCrmOwnerType::isUseDynamicTypeBasedApproach($this->getEntityTypeId()))
-		{
-			$factory = Container::getInstance()->getFactory($this->getEntityTypeId());
-
-			return ($factory && $factory->isClientEnabled());
-		}
-
-		return true;
+		return Availability::isAvailableForEntityType($this->getEntityTypeId()) && !$this->isMyCompany();
 	}
 
 	public function getId(): string
@@ -83,6 +60,14 @@ final class Message extends Item
 		;
 
 		$editor->getLayout()->setPaddingTop('0');
+
+		if (CrmZone::isSupportedByMessageService())
+		{
+			$editor->getLayout()
+				->setCustomTemplateSelectorShown(true)
+				->setCustomTemplateCreateInSelectorShown(true)
+			;
+		}
 
 		return [
 			'shouldRender' => true,

@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Integration\UI\EntitySelector;
 
 use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
+use Bitrix\Bizproc\Workflow\Template\SystemValueCatalog;
 
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
 use Bitrix\UI\EntitySelector\BaseProvider;
@@ -21,9 +21,6 @@ class SystemProvider extends BaseProvider
 	protected const TAB_ID = 'bizproc-system-tab';
 	protected const ENTITY_ID = 'bizproc-system';
 	protected const ENTITY_TYPE_SYSTEM = 'System';
-	protected const ENTITY_TYPE_WORKFLOW = 'Workflow';
-	protected const ENTITY_TYPE_USER = 'User';
-	protected const ENTITY_TYPE_TEMPLATE = 'Template';
 	protected const ENTITY_TYPE_FUNCTION = 'Function';
 
 	public function __construct(array $options = [])
@@ -72,13 +69,13 @@ class SystemProvider extends BaseProvider
 		]);
 
 		$children = [];
-		foreach ($this->getSystemFields() as [$title, $entityType, $fieldId])
+		foreach (static::getSystemValues() as $value)
 		{
 			$children[] = [
-				'id' => $this->makeSystemId($entityType, $fieldId),
+				'id' => $value['expression'],
 				'entityId' => static::ENTITY_ID,
-				'entityType' => $entityType,
-				'title' => $title,
+				'entityType' => $value['object'],
+				'title' => $value['label'],
 			];
 		}
 
@@ -87,70 +84,28 @@ class SystemProvider extends BaseProvider
 		return [$item];
 	}
 
-	private function getSystemFields(): array
+	public static function getSystemValues(): array
 	{
-		$systemFields = [
-			[
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_WORKFLOW_ID'),
-				static::ENTITY_TYPE_WORKFLOW,
-				'ID',
-			],
-			[
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_WORKFLOW_TEMPLATE_ID'),
-				static::ENTITY_TYPE_WORKFLOW,
-				'TemplateId',
-			],
-			[
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_TARGET_USER'),
-				static::ENTITY_TYPE_TEMPLATE,
-				'TargetUser',
-			],
-			[
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_USER_ID'),
-				static::ENTITY_TYPE_USER,
-				'ID',
-			],
-			[
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_NOW'),
-				static::ENTITY_TYPE_SYSTEM,
-				'Now',
-			],
-			[
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_NOW_LOCAL'),
-				static::ENTITY_TYPE_SYSTEM,
-				'NowLocal',
-			],
-			[
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_DATE'),
-				static::ENTITY_TYPE_SYSTEM,
-				'Date',
-			],
-			[
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_EOL'),
-				static::ENTITY_TYPE_SYSTEM,
-				'Eol',
-			],
-			[
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_HOST_URL'),
-				static::ENTITY_TYPE_SYSTEM,
-				'HostUrl',
-			],
-		];
+		$systemValues = SystemValueCatalog::getSystemValues();
 
-		if(
-			Loader::includeModule('bizproc')
-			&& class_exists(AiAgentsFeature::class)
-			&& ServiceLocator::getInstance()->get(AiAgentsFeature::class)?->isAvailable()
-		)
+		if (ServiceLocator::getInstance()->get(AiAgentsFeature::class)?->isAvailable())
 		{
-			$systemFields[] = [
-				Loc::getMessage('BIZPROC_ENTITY_SELECTOR_SYSTEM_TEMPLATE_ACTIVATED_BY'),
-				static::ENTITY_TYPE_WORKFLOW,
-				'TemplateActivatedBy',
+			$systemValues[] = SystemValueCatalog::getAiAgentsSystemValue();
+		}
+
+		$result = [];
+		foreach ($systemValues as [$object, $field, $labelPhraseKey, $type])
+		{
+			$result[] = [
+				'object' => $object,
+				'field' => $field,
+				'expression' => self::makeSystemId($object, $field),
+				'label' => (string)Loc::getMessage($labelPhraseKey),
+				'type' => $type,
 			];
 		}
 
-		return $systemFields;
+		return $result;
 	}
 
 	protected function getFunctionItems(): array
@@ -182,7 +137,7 @@ class SystemProvider extends BaseProvider
 		return [$item];
 	}
 
-	private function makeSystemId(string $type, string $field): string
+	private static function makeSystemId(string $type, string $field): string
 	{
 		return "{={$type}:{$field}}";
 	}

@@ -11,6 +11,7 @@ use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
 use Bitrix\Bizproc\Public\Command\StorageField\StorageFieldDto;
 use Bitrix\Bizproc\Public\Provider\StorageFieldProvider;
 use Bitrix\Bizproc\Public\Service\StorageField\FieldService;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Provider\Params\GridParams;
 use Bitrix\Main\Provider\Params\Pager;
@@ -25,7 +26,7 @@ class StorageField extends Controller
 {
 	protected function processBeforeAction(\Bitrix\Main\Engine\Action $action): bool
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess())
 		{
 			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
 
@@ -74,13 +75,64 @@ class StorageField extends Controller
 		];
 	}
 
-	private function checkAdminAccess(): bool
+	private function checkStorageAccess(): bool
 	{
-		return (new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin();
+		return (new TemplateAccessService())->canAccessTemplates();
+	}
+
+	private function checkStorageTypeAccess(?int $storageTypeId): bool
+	{
+		if ((new TemplateAccessService())->canEditStorage((int)$storageTypeId))
+		{
+			return true;
+		}
+
+		$this->addError(ErrorMessage::ACCESS_DENIED->getError());
+
+		return false;
+	}
+
+	private function checkFieldType(?string $type, ?string $currentType = null): bool
+	{
+		if ($type === $currentType || FieldService::isEditableType($type))
+		{
+			return true;
+		}
+
+		$this->addError(ErrorMessage::INVALID_PARAM_ARG->getError(['#PARAM#' => 'type', '#VALUE#' => (string)$type]));
+
+		return false;
+	}
+
+	private function checkFieldAccess(int $fieldId): bool
+	{
+		return $this->checkStorageTypeAccess($this->storageTypeIdOfField($fieldId));
+	}
+
+	private function storageTypeIdOfField(int $fieldId): ?int
+	{
+		if ($fieldId <= 0)
+		{
+			return null;
+		}
+
+		try
+		{
+			return (new StorageFieldProvider())->getById($fieldId)?->getStorageId();
+		}
+		catch (Exception)
+		{
+			return null;
+		}
 	}
 
 	public function getPreparedFormAction(StorageFieldDto $storageFieldDto): ?Entity\StorageField\StorageField
 	{
+		if (!$this->checkStorageTypeAccess($storageFieldDto->storageId))
+		{
+			return null;
+		}
+
 		try
 		{
 			$fieldService = new FieldService();
@@ -109,6 +161,22 @@ class StorageField extends Controller
 		array $select = ['*'],
 	): ?Entity\StorageField\StorageFieldCollection
 	{
+		if (isset($filter['STORAGE_ID']))
+		{
+			if (!$this->checkStorageTypeAccess((int)$filter['STORAGE_ID']))
+			{
+				return null;
+			}
+		}
+		else
+		{
+			$closedIds = (new TemplateAccessService())->getClosedStorageTypeIds();
+			if ($closedIds !== [])
+			{
+				$filter['!STORAGE_ID'] = array_merge((array)($filter['!STORAGE_ID'] ?? []), $closedIds);
+			}
+		}
+
 		$provider = new StorageFieldProvider();
 
 		return $provider->getList(new GridParams(
@@ -121,6 +189,11 @@ class StorageField extends Controller
 
 	public function getAction(int $id): ?Entity\StorageField\StorageField
 	{
+		if (!$this->checkFieldAccess($id))
+		{
+			return null;
+		}
+
 		try
 		{
 			return (new StorageFieldProvider())->getById($id);
@@ -139,6 +212,11 @@ class StorageField extends Controller
 		bool $format = false
 	): Entity\StorageField\StorageFieldCollection|array|null
 	{
+		if (!$this->checkStorageTypeAccess($storageId))
+		{
+			return null;
+		}
+
 		try
 		{
 			$fieldCollection = (new StorageFieldProvider())->getByStorageId($storageId, $select);
@@ -171,11 +249,24 @@ class StorageField extends Controller
 	 */
 	public function getActivityFieldsMapAction(int $storageId): array
 	{
+		if (!$this->checkStorageTypeAccess($storageId))
+		{
+			return ['filterFields' => [], 'returnFields' => []];
+		}
+
 		return StorageActivityService::getActivityFieldsMaps($storageId);
 	}
 
 	public function addAction(StorageFieldDto $storageFieldDto): Entity\StorageField\StorageField|array|null
 	{
+		if (
+			!$this->checkStorageTypeAccess($storageFieldDto->storageId)
+			|| !$this->checkFieldType($storageFieldDto->type)
+		)
+		{
+			return null;
+		}
+
 		$storageFieldEntity = Entity\StorageField\StorageField::mapFromArray($storageFieldDto->toArray());
 
 		$addStorageFieldCommand = new Command\StorageField\AddStorageFieldCommand(
@@ -201,6 +292,18 @@ class StorageField extends Controller
 
 	public function updateAction(StorageFieldDto $storageFieldDto): Entity\StorageField\StorageField|array|null
 	{
+		if (
+			!$this->checkFieldAccess((int)$storageFieldDto->id)
+			|| !$this->checkStorageTypeAccess($storageFieldDto->storageId)
+			|| !$this->checkFieldType(
+				$storageFieldDto->type,
+				(new StorageFieldProvider())->getById((int)$storageFieldDto->id)?->getType(),
+			)
+		)
+		{
+			return null;
+		}
+
 		$storageFieldEntity = Entity\StorageField\StorageField::mapFromArray($storageFieldDto->toArray());
 
 		$updateStorageFieldCommand = new Command\StorageField\UpdateStorageFieldCommand(
@@ -226,6 +329,11 @@ class StorageField extends Controller
 
 	public function deleteAction(int $id): ?array
 	{
+		if (!$this->checkFieldAccess($id))
+		{
+			return null;
+		}
+
 		$command = new Command\StorageField\DeleteStorageFieldCommand($id);
 
 		$result = $command->run();

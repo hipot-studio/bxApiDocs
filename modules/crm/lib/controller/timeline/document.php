@@ -90,6 +90,8 @@ class Document extends \Bitrix\Crm\Controller\Base
 					else
 					{
 						$this->addError(ErrorCode::getAccessDeniedError());
+
+						return null;
 					}
 				}
 			}

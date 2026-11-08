@@ -11,12 +11,14 @@ class AiAssistantSearch extends AbstractBlock
 {
 	protected string $title;
 	protected string $text;
+	protected ?array $progress;
 
 	private function __construct(array $blockData)
 	{
 		parent::__construct($blockData);
 		$this->title = $blockData[Field::Title->value];
 		$this->text = $blockData[Field::Text->value];
+		$this->progress = $blockData[Field::Progress->value] ?? null;
 	}
 
 	public static function create(array $blockData): self
@@ -31,22 +33,22 @@ class AiAssistantSearch extends AbstractBlock
 
 	public function jsonSerialize(): array
 	{
-		return [
+		return $this->addProgress([
 			Field::Id->value => $this->id,
 			Field::Type->value => self::getType()->value,
 			Field::Title->value => \Bitrix\Im\Text::parse($this->title),
 			Field::Text->value => \Bitrix\Im\Text::parse($this->text),
-		];
+		]);
 	}
 
 	public function toArray(): array
 	{
-		return [
+		return $this->addProgress([
 			Field::Id->value => $this->id,
 			Field::Type->value => self::getType()->value,
 			Field::Title->value => $this->title,
 			Field::Text->value => $this->text,
-		];
+		]);
 	}
 
 	public function getPayloadText(): ?string
@@ -61,5 +63,18 @@ class AiAssistantSearch extends AbstractBlock
 			Field::Text->value,
 			Field::Title->value,
 		];
+	}
+
+	/**
+	 * A block without progress keeps the payload it had before the field was introduced.
+	 */
+	protected function addProgress(array $blockPayload): array
+	{
+		if ($this->progress !== null)
+		{
+			$blockPayload[Field::Progress->value] = $this->progress;
+		}
+
+		return $blockPayload;
 	}
 }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Landing\AI\SiteBuilder\Html;
 
 use Bitrix\Landing\Assets\PreProcessing;
-use Bitrix\Main\Web\DOM;
+use Bitrix\Landing\Html\DocumentFactory;
 
 final class AiFontAwesomeIconNormalizer
 {
@@ -111,7 +111,7 @@ final class AiFontAwesomeIconNormalizer
 
 	private static function normalizeWithDom(string $html): string
 	{
-		$doc = new DOM\Document();
+		$doc = DocumentFactory::createForUserHtml();
 		$doc->loadHTML('<div id="' . self::ROOT_NODE_ID . '">' . $html . '</div>');
 
 		$root = $doc->querySelector('#' . self::ROOT_NODE_ID);

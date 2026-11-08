@@ -22,6 +22,7 @@ use Bitrix\Main\Service\GeoIp\Internal\GeonameTable;
 use Bitrix\Main\Mail;
 use Bitrix\Main\Localization\LanguageTable;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\Callback;
 use Bitrix\ImBot\Bot\Marta;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Entity\User\User;
@@ -401,9 +402,9 @@ class Device
 	/**
 	 * @internal
 	 * @param int $lastId
-	 * @return string
+	 * @return Callback|null
 	 */
-	public static function deleteDuplicatesAgent(int $lastId = 0)
+	public static function deleteDuplicatesAgent(int $lastId = 0): ?Callback
 	{
 		$connection = Main\Application::getConnection();
 
@@ -465,9 +466,9 @@ class Device
 
 		if ($userId !== null)
 		{
-			return "\\Bitrix\\Main\\Authentication\\Device::deleteDuplicatesAgent({$userId});";
+			return new Callback([self::class, __FUNCTION__], [(int)$userId]);
 		}
 
-		return '';
+		return null;
 	}
 }

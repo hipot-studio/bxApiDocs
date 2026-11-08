@@ -47,10 +47,20 @@ final class SummaryDataProvider
 		]);
 	}
 
-	public function loadSummary(int $activityId, ?int $jobId = null): Result
+	public function loadSummary(
+		int $activityId,
+		?int $jobId = null,
+		?int $ownerTypeId = null,
+		?int $ownerId = null,
+	): Result
 	{
 		$result = new Result();
-		$summaryResult = $this->jobRepository->getSummarizeCallTranscriptionResultByActivity($activityId, $jobId);
+		$summaryResult = $this->jobRepository->getSummarizeCallTranscriptionResultByActivity(
+			$activityId,
+			$jobId,
+			$ownerTypeId,
+			$ownerId,
+		);
 		if ($summaryResult === null)
 		{
 			return $result->addError(new Error('Summary result is not found'));
@@ -77,9 +87,19 @@ final class SummaryDataProvider
 		]);
 	}
 
-	public function getSummaryAiLanguage(int $activityId, ?int $jobId = null): ?string
+	public function getSummaryAiLanguage(
+		int $activityId,
+		?int $jobId = null,
+		?int $ownerTypeId = null,
+		?int $ownerId = null,
+	): ?string
 	{
-		$summarizeResult = $this->jobRepository->getSummarizeCallTranscriptionResultByActivity($activityId, $jobId);
+		$summarizeResult = $this->jobRepository->getSummarizeCallTranscriptionResultByActivity(
+			$activityId,
+			$jobId,
+			$ownerTypeId,
+			$ownerId,
+		);
 		if ($summarizeResult === null)
 		{
 			return null;
@@ -105,9 +125,17 @@ final class SummaryDataProvider
 		return AiMessageProvider::getJobLanguageMessageData($language)['html'] ?? null;
 	}
 
-	public function loadSummaryHistory(int $activityId): array
+	public function loadSummaryHistory(
+		int $activityId,
+		?int $ownerTypeId = null,
+		?int $ownerId = null,
+	): array
 	{
-		$result = $this->jobRepository->getSummarizeCallTranscriptionHistoryByActivity($activityId);
+		$result = $this->jobRepository->getSummarizeCallTranscriptionHistoryByActivity(
+			$activityId,
+			ownerTypeId: $ownerTypeId,
+			ownerId: $ownerId,
+		);
 		foreach ($result as $index => $summary)
 		{
 			$languageId = $summary['languageId'] ?? null;

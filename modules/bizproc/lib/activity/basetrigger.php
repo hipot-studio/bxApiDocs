@@ -7,6 +7,8 @@ namespace Bitrix\Bizproc\Activity;
 use Bitrix\Bizproc\Activity\Enum\Joiner;
 use Bitrix\Bizproc\Activity\Trigger\TriggerParameters;
 use Bitrix\Bizproc\Activity\Trigger\TriggerRule;
+use Bitrix\Bizproc\Internal\Entity\Workflow\ExecutionPayload;
+use Bitrix\Bizproc\Internal\Entity\Workflow\TestRunContext;
 use Bitrix\Bizproc\Public\Entity\Document\DocumentComplexType;
 use Bitrix\Bizproc\Public\Entity\Trigger\Section;
 use Bitrix\Main\Loader;
@@ -196,5 +198,35 @@ abstract class BaseTrigger extends \CBPActivity implements \IBPTriggerActivity, 
 	protected function getEventData(): array
 	{
 		return $this->getRootActivity()->{\CBPDocument::PARAM_TRIGGER_EVENT_DATA} ?? [];
+	}
+
+	/**
+	 * A test run publishes the outputs of the trigger itself and never runs the logic of the node: no event
+	 * has happened, so there is nothing for {@see self::execute()} to read, subscribe to or wait for. That
+	 * holds for every trigger there is, of this module and of any other, without a line in the node.
+	 *
+	 * The chain of children is started the way the two phases of the engine start it
+	 * ({@see \CBPActivity::executeWithPayload()}).
+	 *
+	 * Only the node a test run was started from is served this way ({@see TestRunContext}); an empty set of
+	 * values is a legitimate one, a trigger may publish no outputs at all.
+	 */
+	public function executeWithPayload(ExecutionPayload $payload)
+	{
+		$testRun = $this->getTestRunContext();
+		if ($testRun === null || !$testRun->isStartNode($this))
+		{
+			return parent::executeWithPayload($payload);
+		}
+
+		$this->setProperties($testRun->values);
+		$this->setPropertiesTypes($testRun->types);
+
+		$this->childFlowInputPort = $payload->getInputPort();
+
+		return $this->startChildFlowOnce()
+			? \CBPActivityExecutionStatus::Executing
+			: \CBPActivityExecutionStatus::Closed
+		;
 	}
 }

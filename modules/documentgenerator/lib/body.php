@@ -21,6 +21,7 @@ abstract class Body
 	public const ARRAY_INDEX_MODIFIER = 'index';
 	public const BLOCK_START_PLACEHOLDER = 'BLOCK_START';
 	public const BLOCK_END_PLACEHOLDER = 'BLOCK_END';
+	/** @deprecated */
 	protected const DO_NOT_INSERT_VALUE_MODIFIER = '__SystemDeletePlaceholder';
 
 	/**
@@ -347,10 +348,6 @@ abstract class Body
 
 	protected function getStringValue($value, $placeholder, $modifier = '', array $params = []): string
 	{
-		if (mb_strpos($modifier, static::DO_NOT_INSERT_VALUE_MODIFIER) !== false)
-		{
-			return '';
-		}
 		if (is_object($value))
 		{
 			if ($value instanceof Value)

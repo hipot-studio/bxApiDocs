@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Internal\Config;
 
+use Bitrix\Bizproc\Public\Feature\Template\LastValuesCaptureFlag;
 use Bitrix\Main\Config\Option;
 
 /**
@@ -14,7 +15,6 @@ class LastValues
 {
 	private const MODULE_ID = 'bizproc';
 
-	private const CAPTURE_OPTION = 'last_values_capture';
 	private const THROTTLE_OPTION = 'last_values_throttle';
 	private const VALUE_LIMIT_OPTION = 'last_values_value_limit';
 	private const SNAPSHOT_LIMIT_OPTION = 'last_values_snapshot_limit';
@@ -35,7 +35,7 @@ class LastValues
 
 	public function isCaptureEnabled(): bool
 	{
-		return Option::get(self::MODULE_ID, self::CAPTURE_OPTION, 'N') === 'Y';
+		return \Bitrix\Main\Config\Feature::isEnabled(LastValuesCaptureFlag::class);
 	}
 
 	/**
@@ -49,6 +49,12 @@ class LastValues
 	/**
 	 * Bytes allowed for a single captured value: a single value never gets more room than the whole
 	 * snapshot, whatever the options say.
+	 *
+	 * A scalar is cut to the limit, a collection is closed on the item that no longer fits. For a
+	 * collection of document identifiers the limit is spent on item boundaries only: an identifier cut
+	 * in half addresses no document, so the first one is kept whole even when it alone is over the
+	 * limit. The bound that always holds is the snapshot one - an entry that does not fit the snapshot
+	 * is dropped by {@see \Bitrix\Bizproc\Internal\Service\LastValues\ValuesCollector::shrink()}.
 	 */
 	public function getValueSizeLimit(): int
 	{

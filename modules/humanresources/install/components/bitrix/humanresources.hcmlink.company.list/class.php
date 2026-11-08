@@ -32,6 +32,7 @@ class HumanResourcesHcmLinkCompanyList extends \CBitrixComponent
 	private function prepareResult(): void
 	{
 		$this->arResult['COMPANIES'] = $this->getCompanies();
+		$this->arResult['CAN_DISCONNECT'] = Service\Container::getHcmLinkAccessService()->canDisconnect();
 	}
 
 	private function getCompanies(): array

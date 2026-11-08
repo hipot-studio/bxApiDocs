@@ -12,6 +12,7 @@ use Bitrix\Crm\Security\Role\Manage\Permissions\Export;
 use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Import;
 use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
+use Bitrix\Crm\Security\Role\Manage\Permissions\ObserversWrite;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Permission;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Read;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
@@ -127,6 +128,7 @@ class RoleManagementModelBuilder
 			new Automation(),
 			new HideSum(),
 			new MyCardView(),
+			new ObserversWrite(),
 			new Transition(),
 			new Permissions\CopilotCallAssessment\Write(),
 			new Permissions\CopilotCallAssessment\Read(),

@@ -11,6 +11,7 @@ use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
 final class UserAccess extends Base
@@ -32,6 +33,13 @@ final class UserAccess extends Base
 			if ($userId)
 			{
 				$user = (new SupersetUserRepository())->getById($userId);
+			}
+			elseif (self::isOwnerFilterRequested($request))
+			{
+				return new IntegratorResponse(
+					status: IntegratorResponse::STATUS_NO_ACCESS,
+					errors: [new Error('Owner filtered request has no user of the request')],
+				);
 			}
 			else
 			{
@@ -93,6 +101,11 @@ final class UserAccess extends Base
 		$request->setUser($user);
 
 		return null;
+	}
+
+	private static function isOwnerFilterRequested(IntegratorRequest $request): bool
+	{
+		return !empty($request->getParams()['ownedByRequestUser']);
 	}
 
 	private static function updateUser(Dto\User $user): Result

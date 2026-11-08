@@ -132,10 +132,7 @@ final class DatabaseService extends AbstractSupersetContext
 			return $this->createErrorResult('Empty sqlalchemy uri');
 		}
 
-		$uri = Uri::urnDecode($loadedUri);
-		$uriObject = new Uri($uri);
-		mb_parse_str($uriObject->getQuery(), $params);
-		$properties = $this->decode((string)($params['session_properties'] ?? ''));
+		$properties = $this->parseSessionProperties($loadedUri);
 		if (!is_array($properties))
 		{
 			return $this->createErrorResult(
@@ -171,6 +168,42 @@ final class DatabaseService extends AbstractSupersetContext
 		]);
 
 		return $result;
+	}
+
+	/**
+	 * Reads one session property of the Trino connection - the values the instance was set up with, and
+	 * the ones its caches are keyed by.
+	 */
+	public function getConnectionProperty(string $propertyName): Main\Result
+	{
+		$connectionEntityResult = $this->getTrinoConnectionEntity();
+		if (!$connectionEntityResult->isSuccess())
+		{
+			return $connectionEntityResult;
+		}
+
+		/** @var TrinoConnection $connectionEntity */
+		$connectionEntity = $connectionEntityResult->getData()['entity'];
+		$properties = $this->parseSessionProperties(
+			(string)($connectionEntity->getConnection()['sqlalchemy_uri'] ?? '')
+		);
+		if (!is_array($properties) || !array_key_exists($propertyName, $properties))
+		{
+			return $this->createErrorResult("Property '{$propertyName}' was not found in session_properties");
+		}
+
+		$result = new Main\Result();
+		$result->setData(['value' => (string)$properties[$propertyName]]);
+
+		return $result;
+	}
+
+	private function parseSessionProperties(string $loadedUri): ?array
+	{
+		$uriObject = new Uri(Uri::urnDecode($loadedUri));
+		mb_parse_str($uriObject->getQuery(), $params);
+
+		return $this->decode((string)($params['session_properties'] ?? ''));
 	}
 
 	private function getTrinoConnectionEntity(): Main\Result

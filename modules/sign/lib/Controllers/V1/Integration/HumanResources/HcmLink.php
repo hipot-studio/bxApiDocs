@@ -109,10 +109,22 @@ class HcmLink extends \Bitrix\Sign\Engine\Controller
 			return [];
 		}
 
+		$companyId = (int)$document->hcmLinkCompanyId;
+		$excludedUserIds = $this->listExcludedUserIds($companyId, $result->userIds);
+
 		return [
 			'integrationId' => $document->hcmLinkCompanyId,
-			'userIds' => $result->userIds,
+			'userIds' => $this->subtractUserIds($result->userIds, $excludedUserIds),
 			'allUserIds' => $userIds,
+			// The banner this answer feeds opens the window of the preparation of the document and
+			// rewrites the composition of the members when the window asks to remove one, and the two
+			// keys below are what it needs for that. Nobody excluded means nothing to mark, and the
+			// profile is not read at all.
+			'representativeId' => (int)$document->representativeId,
+			'filledLegalDataUserIds' => $excludedUserIds === []
+				? []
+				: $container->getHcmLinkFieldService()->listUserIdsWithFilledLegalData($document, $excludedUserIds)
+			,
 		];
 	}
 
@@ -355,7 +367,10 @@ class HcmLink extends \Bitrix\Sign\Engine\Controller
 
 			$integrations[] = [
 				'integrationId' => $hcmLinkCompanyId,
-				'userIds' => $result->userIds,
+				'userIds' => $this->subtractUserIds(
+					$result->userIds,
+					$this->listExcludedUserIds((int)$hcmLinkCompanyId, $result->userIds),
+				),
 				'allUserIds' => $userIds,
 			];
 		}
@@ -457,6 +472,40 @@ class HcmLink extends \Bitrix\Sign\Engine\Controller
 		}
 
 		return $integrations;
+	}
+
+	/**
+	 * The facade of the integration is the only surface of sign the flag is taken from, and the set is
+	 * asked at once for the whole integration, not for a member at a time.
+	 *
+	 * @param list<int> $userIds those the matching is missing for
+	 *
+	 * @return list<int> the excluded among them
+	 */
+	private function listExcludedUserIds(int $companyId, array $userIds): array
+	{
+		return Container::instance()->getHcmLinkService()->filterExcludedUserIds($companyId, $userIds);
+	}
+
+	/**
+	 * A user excluded from the matching of the company does not block the send, so the interface must
+	 * not ask to match him: neither the banner of a single send nor the waiting loop of the send by
+	 * templates. The whole set of the members the actions return beside this one is left untouched -
+	 * the interface shows the composition of the document in full.
+	 *
+	 * @param list<int> $userIds those the matching is missing for
+	 * @param list<int> $excludedUserIds
+	 *
+	 * @return list<int> the same ones without the excluded
+	 */
+	private function subtractUserIds(array $userIds, array $excludedUserIds): array
+	{
+		if ($excludedUserIds === [])
+		{
+			return array_values($userIds);
+		}
+
+		return array_values(array_diff($userIds, $excludedUserIds));
 	}
 
 	/**

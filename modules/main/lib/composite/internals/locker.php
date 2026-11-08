@@ -14,18 +14,28 @@ class Locker
 	 * Supports only Mysql.
 	 *
 	 * @param string $id Lock Name.
+	 * @param int $timeout the seconds to wait for a lock held by another connection.
 	 * @return bool Returns true if lock was obtained.
 	 */
-	public static function lock($id)
+	public static function lock($id, $timeout = 0)
 	{
 		$result = true;
 		$connection = static::getConnection();
 		if ($connection instanceof MysqlCommonConnection)
 		{
-			$result = $connection->lock($id);
+			$result = $connection->lock($id, $timeout);
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Tells whether a lock is really held by the database: elsewhere lock() grants it to everyone at once
+	 * @return bool
+	 */
+	public static function isSupported(): bool
+	{
+		return static::getConnection() instanceof MysqlCommonConnection;
 	}
 
 	/**

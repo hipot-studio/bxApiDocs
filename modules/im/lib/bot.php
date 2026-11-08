@@ -354,7 +354,7 @@ class Bot
 		));
 		while ($row = $orm->fetch())
 		{
-			\Bitrix\Im\Command::unRegister(Array('COMMAND_ID' => $row['ID'], 'FORCE' => 'Y'));
+			\Bitrix\Im\Command::unRegister(Array('COMMAND_ID' => $row['ID'], 'BOT_ID' => $botId, 'FORCE' => 'Y'));
 		}
 
 		$orm = \Bitrix\Im\Model\AppTable::getList(Array(
@@ -1177,6 +1177,48 @@ class Bot
 		}
 
 		self::fireRestEvents('onImBotReactionChange', 'onImBotV2ReactionChange', [$botData, $message->getId(), $params, $v2Payload]);
+
+		return true;
+	}
+
+	public static function onFormSubmit(Message $message, array $params): bool
+	{
+		$bot = \Bitrix\Im\V2\Entity\User\User::getInstance($message->getAuthorId());
+
+		if (!$bot->isBot())
+		{
+			return false;
+		}
+
+		$dialogId = self::getDialogIdByChat($message->getChat());
+		if ($dialogId === null)
+		{
+			return false;
+		}
+
+		$params['DIALOG_ID'] = $dialogId;
+
+		$botData = BotData::getInstance($bot->getId())->toArray();
+		if (empty($botData))
+		{
+			return false;
+		}
+
+		$v2Payload = (new EventPayload())->formSubmit($message->getId(), $params, $message);
+
+		try
+		{
+			(new \Bitrix\Im\V2\EventLog\EventLogger())->logFormSubmit(
+				(int)$botData['BOT_ID'], 'ONIMBOTV2FORMSUBMIT', $v2Payload
+			);
+		}
+		catch (\Throwable $e)
+		{
+			// Log only the exception itself — never the submitted form values.
+			Main\Application::getInstance()->getExceptionHandler()->writeToLog($e);
+		}
+
+		self::fireRestEvents('onImBotFormSubmit', 'onImBotV2FormSubmit', [$botData, $message->getId(), $params, $v2Payload]);
 
 		return true;
 	}

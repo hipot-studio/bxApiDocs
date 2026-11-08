@@ -6,10 +6,10 @@ use Bitrix\Main;
 use Bitrix\Mail;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Mail\Helper\Config\Feature;
+use Bitrix\Mail\Helper\Config\Guide;
 use Bitrix\Mail\Helper\Label\LabelsFeature;
+use Bitrix\Mail\Service\UndoSend\UndoSendPreference;
 
-
-\Bitrix\Main\UI\Extension::load('mail.messagegrid');
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
@@ -91,6 +91,9 @@ class CMailClientComponent extends CBitrixComponent
 				'config_permissions' => 'permissions',
 				'sentrequests'     => 'sentrequests',
 				'drafts'           => 'drafts',
+				'scheduled_view'   => 'scheduled/#mailboxId#/#scheduledId#',
+				'scheduled'        => 'scheduled/#id#',
+				'vacation'         => 'vacation',
 			);
 		}
 		else
@@ -112,6 +115,9 @@ class CMailClientComponent extends CBitrixComponent
 				'config_permissions' => 'page=permissions',
 				'sentrequests'     => 'page=sentrequests',
 				'drafts'           => 'page=drafts',
+				'scheduled_view'   => 'page=scheduled_view&mailboxId=#mailboxId#&scheduledId=#scheduledId#',
+				'scheduled'        => 'page=scheduled&id=#id#',
+				'vacation'         => 'page=vacation',
 			);
 		}
 
@@ -155,7 +161,32 @@ class CMailClientComponent extends CBitrixComponent
 			$componentPage = 'home';
 		}
 
+		$hasUserContext = is_object($USER) && $USER->isAuthorized() && (int)$USER->getId() > 0;
+		$isScheduledMessageAvailable = $hasUserContext && Feature::isScheduledMessageAvailable();
+		$isUndoSendAvailable = $hasUserContext && Feature::isUndoSendAvailable();
+		$undoSendDelay = $isUndoSendAvailable
+			? (new UndoSendPreference())->get((int)$USER->getId())
+			: UndoSendPreference::DEFAULT_DELAY_SECONDS;
+		$this->arResult['UNDO_SEND'] = [
+			'available' => $isUndoSendAvailable,
+			'delaySeconds' => $undoSendDelay,
+			'showGuide' => $isUndoSendAvailable
+				&& $undoSendDelay > 0
+				&& Guide::shouldShowUndoSendGuide((int)$USER->getId()),
+			'guideOptionName' => Guide::getUndoSendGuideOptionName(),
+			'guideReady' => Guide::isUndoSendGuideReady((int)$USER->getId()),
+		];
+		if ($componentPage === 'scheduled' && !$isScheduledMessageAvailable)
+		{
+			$componentPage = 'home';
+		}
+
 		if ($componentPage === 'labels' && !LabelsFeature::isEnabled())
+		{
+			$componentPage = 'home';
+		}
+
+		if ($componentPage === 'vacation' && !Feature::isVacationAutoReplyAvailable())
 		{
 			$componentPage = 'home';
 		}
@@ -223,6 +254,18 @@ class CMailClientComponent extends CBitrixComponent
 			$this->arParams['PATH_TO_USER_BLOG_POST_EDIT'],
 			array('user_id' => $USER->getId())
 		);
+		$this->arResult['LEFT_PANEL_RESIZABLE'] = [
+			'INITIAL_WIDTH' => 260,
+			'MIN_WIDTH' => 240,
+			'MAX_WIDTH' => 480,
+			'MIN_CONTENT_WIDTH' => 800,
+			'KEYBOARD_STEP' => 10,
+			'STORAGE' => [
+				'TYPE' => 'localStorage',
+				'KEY' => 'bx-mail-message-list-left-panel-width-' . (int)$USER->getId(),
+				'VERSION' => 1,
+			],
+		];
 
 		$APPLICATION->setAdditionalCSS('/bitrix/components/bitrix/mail.client.config/templates/.default/style.css');
 		$APPLICATION->setAdditionalCSS('/bitrix/components/bitrix/mail.contact.avatar/templates/.default/style.css');
@@ -236,11 +279,22 @@ class CMailClientComponent extends CBitrixComponent
 		}
 
 		$templatePage = $componentPage;
-		if ($componentPage === 'drafts')
+		if (in_array($componentPage, ['drafts', 'scheduled'], true))
 		{
-			$this->arResult['VARIABLES']['list_mode'] = 'drafts';
+			$this->arResult['VARIABLES']['list_mode'] = $componentPage;
 			$templatePage = 'msg_list';
 		}
+
+		// The two screens that draw a list of messages load the extension of the old grid themselves, where
+		// they build it. The rest never build a grid, but lean on what came along with it.
+		if (!in_array($templatePage, ['home', 'msg_list'], true))
+		{
+			Main\UI\Extension::load('mail.messagegrid');
+		}
+
+		echo '<script>BX.message({MAIL_READ_REDESIGN_ENABLED: '
+			. (Feature::isReadRedesignAvailable() ? 'true' : 'false')
+			. '});</script>';
 
 		$this->includeComponentTemplate($templatePage);
 	}

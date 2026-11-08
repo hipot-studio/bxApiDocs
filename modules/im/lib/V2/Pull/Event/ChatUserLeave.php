@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Guest\GuestCounter;
 use Bitrix\Im\V2\Chat\OpenLineChat;
 use Bitrix\Im\V2\Pull\EventType;
+use Bitrix\Im\V2\Recent\Config\HiddenSectionsResolver;
 use Bitrix\Im\V2\Relation;
 use Bitrix\Im\V2\RelationCollection;
 
@@ -38,7 +39,20 @@ class ChatUserLeave extends BaseChatEvent
 			'guestCount' => $this->chat->containsGuest() ? (new GuestCounter($this->chat))->getGuestCount() : 0,
 			'chatExtranet' => $this->chat->getExtranet() ?? false,
 			'containsCollaber' => $this->chat->containsCollaber(),
+			'recentConfigToHide' => $this->getRecentConfig(),
 		];
+	}
+
+	/**
+	 * Same field and the same set as chatHide: leaving a chat removes the recent row from every
+	 * section the chat belongs to, so the client has no reason to derive sections on its own.
+	 */
+	protected function getRecentConfig(): array
+	{
+		$recentConfig = $this->chat->getRecentConfig()->toPullFormat();
+		$recentConfig['sections'] = HiddenSectionsResolver::resolve($this->chat);
+
+		return $recentConfig;
 	}
 
 	protected function getType(): EventType

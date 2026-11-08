@@ -28,7 +28,6 @@ use Bitrix\Crm\V2\Public\Entity\Item\PhoneValue;
 use Bitrix\Crm\V2\Public\Entity\Item\WebCollection;
 use Bitrix\Crm\V2\Public\Entity\Item\WebValue;
 use Bitrix\Crm\V2\Public\EntityTypeSettings;
-use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Crm\V2\Public\ItemId;
 use Bitrix\Crm\V2\Public\Provider\Item\ItemProvider;
 use Bitrix\Crm\V2\Public\Provider\Item\Param\ItemSelect;
@@ -136,6 +135,15 @@ final class DeleteFieldValueCommandHandler
 			{
 				return $accessResult;
 			}
+			$relationValidation = $this->validateRelationTarget(
+				$target,
+				$command->getFieldValueElement()->getFieldValue(),
+				$item,
+			);
+			if ($relationValidation instanceof Result)
+			{
+				return $relationValidation;
+			}
 
 			$removed = match ($target['kind'])
 			{
@@ -158,6 +166,14 @@ final class DeleteFieldValueCommandHandler
 			if ($removed instanceof Result)
 			{
 				return $removed;
+			}
+			$categoryResult = $this->operationRunner->validateChangedFields(
+				$updateCommand,
+				$preparedOperation->getLegacyItem(),
+			);
+			if (!$categoryResult->isSuccess())
+			{
+				return $categoryResult;
 			}
 
 			if ($target['kind'] === 'custom' && $target['descriptor']->type === Field::TYPE_FILE)
@@ -273,6 +289,29 @@ final class DeleteFieldValueCommandHandler
 		}
 
 		return $item;
+	}
+
+	/** @param array<string, mixed> $target */
+	private function validateRelationTarget(
+		array $target,
+		mixed $value,
+		Item $item,
+	): ?Result
+	{
+		if ($target['kind'] !== 'companies')
+		{
+			return null;
+		}
+
+		$companyBindings = $item->getCompanyBindings();
+		$exists = is_int($value)
+			&& $value > 0
+			&& $companyBindings?->filter(
+				static fn(CompanyBinding $binding): bool => $binding->getCompanyId() === $value,
+			)->isEmpty() === false
+		;
+
+		return $exists ? null : $this->error('The relation value does not exist.', 'CRM_FIELD_VALUE_INVALID');
 	}
 
 	/**

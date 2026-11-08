@@ -5,6 +5,7 @@ namespace Bitrix\Sign\Item;
 use Bitrix\Main;
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Attribute\Copyable;
+use Bitrix\Sign\Type\Document\CreationSourceType;
 use Bitrix\Sign\Type\Document\ExternalDateCreateSourceType;
 use Bitrix\Sign\Type\Document\ExternalIdSourceType;
 use Bitrix\Sign\Type\Document\InitiatedByType;
@@ -73,6 +74,13 @@ class Document implements Contract\Item, Contract\Item\ItemWithOwner, Contract\I
 		public ?int $hcmLinkDocumentTypeSettingId = null,
 		public ?Main\Type\DateTime $dateSignUntil = null,
 		public ?string $configuredDateFormat = null,
+		public ?CreationSourceType $creationSourceType = null,
+		public ?string $creationSourceId = null,
+		public ?int $creationSourceEntityTypeId = null,
+		public ?int $creationSourceEntityId = null,
+		/** @var array<string, int|string> keyed by CreationSourceMetaKey values */
+		public array $creationSourceSpecifics = [],
+		public ?string $inviteMessage = null,
 	)
 	{
 		$this->initOriginal();

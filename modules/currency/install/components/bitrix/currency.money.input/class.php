@@ -46,6 +46,7 @@ class CCurrencyMoneyInputComponent extends \CBitrixComponent
 			$params['FIELD_NAME'] = 'money_' . Random::getString(5);
 		}
 		$params['FIELD_NAME_CURRENCY'] = trim((string)($params['FIELD_NAME_CURRENCY'] ?? ''));
+		$params['CURRENCY'] = trim((string)($params['CURRENCY'] ?? ''));
 
 		$params['VALUE'] = trim((string)($params['VALUE'] ?? ''));
 
@@ -88,21 +89,27 @@ class CCurrencyMoneyInputComponent extends \CBitrixComponent
 		}
 
 		$value = '';
+		$currency = '';
 		if ($this->arParams['VALUE'] !== '')
 		{
 			list($value, $currency) = MoneyType::unFormatFromDb($this->arParams['VALUE']);
+		}
 
-			$value = $this->formatNumber($value, $currency);
-
-			if ($currency !== '' && !isset($this->arResult['CURRENCY_LIST'][$currency]))
+		if ($currency === '')
+		{
+			$currency = $this->arParams['CURRENCY'];
+			if ($currency === '' || !isset($this->arResult['CURRENCY_LIST'][$currency]))
 			{
-				$this->arResult['CURRENCY_LIST'][$currency] = $currency;
+				$currency = $defaultCurrency;
 			}
 		}
-		else
+
+		$value = $this->formatNumber($value, $currency);
+		if ($currency !== '' && !isset($this->arResult['CURRENCY_LIST'][$currency]))
 		{
-			$currency = $defaultCurrency;
+			$this->arResult['CURRENCY_LIST'][$currency] = $currency;
 		}
+
 		$this->arResult['VALUE_NUMBER'] = $value;
 		$this->arResult['VALUE_CURRENCY'] = $currency;
 	}

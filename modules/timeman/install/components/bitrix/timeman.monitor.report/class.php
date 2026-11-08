@@ -20,6 +20,8 @@ use Bitrix\Timeman\Monitor\Report\WorkingHoursReport;
 use Bitrix\Timeman\Monitor\Security\Permissions;
 use Bitrix\Timeman\Monitor\Utils\Department;
 use Bitrix\Timeman\Monitor\Utils\User;
+use Bitrix\Timeman\Integration\Intranet\Settings;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Type\DateTime;
@@ -39,6 +41,14 @@ class TimemanMonitorReportComponent extends CBitrixComponent implements Controll
 
 	public function executeComponent(): bool
 	{
+		$this->includeModules();
+		if (!$this->isToolAvailable())
+		{
+			$this->includeComponentTemplate('tool-disabled');
+
+			return true;
+		}
+
 		$this->init();
 
 		$report = $this->createReport();
@@ -55,6 +65,11 @@ class TimemanMonitorReportComponent extends CBitrixComponent implements Controll
 		$this->includeComponentTemplate();
 
 		return true;
+	}
+
+	private function isToolAvailable(): bool
+	{
+		return (new Settings())->isToolAvailable(Settings::TOOLS['worktime']);
 	}
 
 	protected function init(): void
@@ -587,6 +602,10 @@ class TimemanMonitorReportComponent extends CBitrixComponent implements Controll
 
 	public function configureActions(): array
 	{
-		return [];
+		return [
+			'getRowsCount' => [
+				'+prefilters' => [new ToolEnabledFilter()],
+			],
+		];
 	}
 }

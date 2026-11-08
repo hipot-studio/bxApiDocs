@@ -16,10 +16,24 @@ final class Portal
 
 	public function isOld(DateTime $cloudPortalCreationDate): bool
 	{
+		return $this->compareCreationDate($cloudPortalCreationDate, true);
+	}
+
+	public function isCreatedBeforeOrUnknown(DateTime $cloudPortalCreationDate): bool
+	{
+		return $this->compareCreationDate($cloudPortalCreationDate, false, true);
+	}
+
+	private function compareCreationDate(
+		DateTime $cloudPortalCreationDate,
+		bool $includeBoundary,
+		bool $allowUnknownDate = false,
+	): bool
+	{
 		$portalCreateDate = $this->getCreationDateTime();
 		if (!$portalCreateDate)
 		{
-			return false;
+			return $allowUnknownDate;
 		}
 
 		$boxPortalCreationDate = (clone $cloudPortalCreationDate)->add(self::MONTH_OFFSET . ' months');
@@ -30,7 +44,9 @@ final class Portal
 				: $boxPortalCreationDate
 		);
 
-		return ($portalCreateDate->getTimestamp() <= $suitablePortalCreationDate->getTimestamp());
+		return $includeBoundary
+			? $portalCreateDate->getTimestamp() <= $suitablePortalCreationDate->getTimestamp()
+			: $portalCreateDate->getTimestamp() < $suitablePortalCreationDate->getTimestamp();
 	}
 
 	private function getCreationDateTime(): ?DateTime
@@ -57,7 +73,8 @@ final class Portal
 			->where('ID', self::FIRST_ADMIN_ID)
 			->setLimit(1)
 			->setCacheTtl(self::CACHE_TTL)
-			->fetchObject();
+			->fetchObject()
+		;
 
 		return $firstUser?->getDateRegister();
 

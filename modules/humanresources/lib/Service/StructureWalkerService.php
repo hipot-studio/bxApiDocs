@@ -3,9 +3,11 @@
 namespace Bitrix\HumanResources\Service;
 
 use Bitrix\HumanResources\Builder\Structure\Filter\Column\IdFilter;
+use Bitrix\HumanResources\Builder\Structure\Filter\Column\EntityIdGreaterThanFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\NodeFilter;
 use Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter;
 use Bitrix\HumanResources\Builder\Structure\NodeMemberDataBuilder;
+use Bitrix\HumanResources\Builder\Structure\Sort\NodeMemberSort;
 use Bitrix\HumanResources\Command\Structure\Node\NodeOrderCommand;
 use Bitrix\HumanResources\Config\Feature;
 use Bitrix\HumanResources\Contract;
@@ -15,6 +17,7 @@ use Bitrix\HumanResources\Contract\Repository\StructureRepository;
 use Bitrix\HumanResources\Enum\Direction;
 use Bitrix\HumanResources\Enum\EventName;
 use Bitrix\HumanResources\Enum\NodeActiveFilter;
+use Bitrix\HumanResources\Enum\SortDirection;
 use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item\Collection\NodeRelationCollection;
@@ -277,7 +280,7 @@ class StructureWalkerService implements Contract\Service\StructureWalkerService
 	 */
 	private function moveMembers(Node $node): void
 	{
-		$offset = 0;
+		$lastEntityId = 0;
 		$limit = 1000;
 		$roleEmployee = $this->roleRepository->findByXmlId(NodeMember::DEFAULT_ROLE_XML_ID['EMPLOYEE']);
 
@@ -293,14 +296,16 @@ class StructureWalkerService implements Contract\Service\StructureWalkerService
 					withVirtualUsers: true,
 				),
 			)
+				->addFilter(new EntityIdGreaterThanFilter($lastEntityId))
+				->setSort(new NodeMemberSort(entityId: SortDirection::Asc))
 				->setLimit($limit)
-				->setOffset($offset)
 				->setCacheTtl(0)
 				->getAll()
 		) && !$memberCollection->empty())
 		{
 			foreach ($memberCollection as $member)
 			{
+				$lastEntityId = $member->entityId;
 				$member->nodeId = $node->parentId;
 				$member->role = $roleEmployee->id;
 
@@ -321,7 +326,6 @@ class StructureWalkerService implements Contract\Service\StructureWalkerService
 				{
 				}
 			}
-			$offset += $limit;
 		}
 
 		NodeMemberTable::cleanCache();

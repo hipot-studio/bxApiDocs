@@ -45,7 +45,7 @@ final class DebugSessionOrmMapper
 			'template_id' => $ormModel->getTemplateId(),
 			'start_time' => $ormModel->getStartTime(),
 			'end_time' => $ormModel->getEndTime(),
-			'metadata' => $ormModel->getMetadata(),
+			'metadata' => json_decode((string)$ormModel->getMetadata(), true),
 			'logs' => $ormModel->getLogs(),
 			'metrics' => $ormModel->getMetrics(),
 		]);

@@ -7,6 +7,7 @@ use Bitrix\Crm\Engine\ActionFilter\CheckReadPermission;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\Mode;
+use Bitrix\CrmMobile\Entity\ClientCreation;
 use Bitrix\Main\Engine\ActionFilter;
 
 class Conversion extends Base
@@ -60,6 +61,20 @@ class Conversion extends Base
 
 	public function getConversionMenuItemsAction(Item $entity): array
 	{
+		if (ClientCreation::isSourceTypeSupported($entity->getEntityTypeId()))
+		{
+			$container = Container::getInstance();
+			$clientCreation = new ClientCreation(
+				$container,
+				$container->getUserPermissions(),
+				$container->getIntranetToolsManager(),
+			);
+			$result = $clientCreation->getMenuItems($entity);
+			$this->addErrors($result->getErrors());
+
+			return $result->getData();
+		}
+
 		$conversionConfig = ConversionManager::getConfig($entity->getEntityTypeId());
 		$conversionConfig->deleteItemByEntityTypeId(\CCrmOwnerType::SmartDocument);
 		$conversionData = $conversionConfig->getScheme()->toJson(true);

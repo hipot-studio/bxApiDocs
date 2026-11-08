@@ -97,17 +97,17 @@ class ResourceCollection
 	}
 
 	/**
-	 * @param array|string $pathes - string or array of strings pathes to asset to delete from collection
+	 * @param array|string $paths - string or array of strings paths to asset to delete from collection
 	 * @return void
 	 */
-	public function remove(array|string $pathes): void
+	public function remove(array|string $paths): void
 	{
-		if (!is_array($pathes))
+		if (!is_array($paths))
 		{
-			$pathes = [$pathes];
+			$paths = [$paths];
 		}
 
-		foreach ($pathes as $path)
+		foreach ($paths as $path)
 		{
 			$this->removeOnce($path);
 		}
@@ -158,12 +158,21 @@ class ResourceCollection
 	}
 
 	/**
-	 * Return pathes of added resources
+	 * Return paths of added resources
+	 * @return array
+	 */
+	public function getPaths(): array
+	{
+		return array_keys($this->resources);
+	}
+
+	/**
+	 * @deprecated use getPaths()
 	 * @return array
 	 */
 	public function getPathes(): array
 	{
-		return array_keys($this->resources);
+		return $this->getPaths();
 	}
 
 	/**

@@ -105,7 +105,7 @@ class DtoValidatorHelper
 				continue;
 			}
 
-			if (is_subclass_of($field->getPropertyType(), Dto::class))
+			if (TypeHelper::isDto($field->getPropertyType()))
 			{
 				$dtoResult = self::validate($field->getValue(), $group);
 				if (!$dtoResult->isSuccess())

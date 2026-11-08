@@ -7,6 +7,7 @@ namespace Bitrix\Bizproc\Internal\Service\AiAgentGrid;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Visibility\HiddenAiAgentsRegistry;
 use Bitrix\Bizproc\Internal\Repository\WorkflowTemplate\AiAgentRepository;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Result;
 
 /**
@@ -17,6 +18,10 @@ use Bitrix\Main\Result;
  * A launchable template is a copy source - a Nodes template of the AI_AGENT section that has not
  * been activated yet - whose system code is not hidden by HiddenAiAgentsRegistry. The resolved
  * system code is returned in the result data, so consumers never need a second lookup.
+ *
+ * Admission then splits by system code. A system template of the catalogue stays a product feature:
+ * copying it is how an agent is activated, and no role ACL takes part. A user-created agent is an
+ * ordinary designer template, so copying it asks the template ACL for the write right.
  */
 final class LaunchableTemplateResolver
 {
@@ -33,6 +38,7 @@ final class LaunchableTemplateResolver
 	public function __construct(
 		private readonly AiAgentRepository $aiAgentRepository,
 		private readonly HiddenAiAgentsRegistry $hiddenAiAgents,
+		private readonly TemplateAccessService $templateAccessService,
 	) {}
 
 	/**
@@ -54,6 +60,14 @@ final class LaunchableTemplateResolver
 
 		$systemCode = $template['SYSTEM_CODE'] ?? null;
 		if ($systemCode !== null && in_array($systemCode, $this->hiddenAiAgents->getHiddenSystemCodes(), true))
+		{
+			return $this->denyAccess();
+		}
+
+		// canEdit, not authorship: a colleague who built an agent may let others copy it. The denial
+		// keeps the single accessDenied code, so a foreign agent stays indistinguishable from a
+		// missing one.
+		if ($systemCode === null && !$this->templateAccessService->canEdit($templateId))
 		{
 			return $this->denyAccess();
 		}

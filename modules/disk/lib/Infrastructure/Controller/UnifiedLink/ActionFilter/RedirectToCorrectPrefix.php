@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter;
 
-use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkFileRenderer;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Engine\Controller;
@@ -31,7 +31,7 @@ class RedirectToCorrectPrefix extends Base
 	public function onBeforeAction(Event $event): ?EventResult
 	{
 		$action = $this->getAction();
-		/** @var ?UnifiedLinkFileRenderer $service */
+		/** @var ?UnifiedLinkRenderer $service */
 		$service = $action->getArguments()['service'] ?? null;
 
 		if ($service === null)
@@ -57,20 +57,20 @@ class RedirectToCorrectPrefix extends Base
 		}
 	}
 
-	private function redirectToCorrectUrl(?UnifiedLinkFileRenderer $service): ?HttpResponse
+	private function redirectToCorrectUrl(?UnifiedLinkRenderer $service): ?HttpResponse
 	{
 		if ($service === null)
 		{
 			return (new HttpResponse())
 				->setStatus(404)
-				->setContent(UnifiedLinkFileRenderer::renderAccessDeniedPage())
+				->setContent(UnifiedLinkRenderer::renderAccessDeniedPage())
 				;
 		}
 
 		$request = $this->controller->getRequest();
-		$uniqueCode = $service->resolveFile()->getUniqueCode();
+		$uniqueCode = $service->resolveBaseObject()->getUniqueCode();
 		$uri = explode($uniqueCode, $request->getRequestUri());
-		$correctUri = explode($uniqueCode, (new UrlManager())->getUnifiedLink($service->resolveFile()));
+		$correctUri = explode($uniqueCode, (new UrlManager())->getUnifiedLink($service->resolveBaseObject()));
 
 		if ($uri[0] === $correctUri[0])
 		{

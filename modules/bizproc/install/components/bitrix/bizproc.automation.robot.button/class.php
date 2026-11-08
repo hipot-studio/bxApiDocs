@@ -31,7 +31,7 @@ class BizprocAutomationRobotButtonComponent extends \Bitrix\Bizproc\Automation\C
 
 	protected function getOnClick(): string
 	{
-		return $this->arParams['ON_CLICK'] ?? '';
+		return $this->arParams['~ON_CLICK'] ?? $this->arParams['ON_CLICK'] ?? '';
 	}
 
 	protected function getButtonTag(): string

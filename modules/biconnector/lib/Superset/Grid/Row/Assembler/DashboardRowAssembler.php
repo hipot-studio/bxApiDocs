@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler;
 
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
+use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\Main\Grid\Row\RowAssembler;
 
 class DashboardRowAssembler extends RowAssembler
@@ -24,6 +25,7 @@ class DashboardRowAssembler extends RowAssembler
 					'TITLE',
 				],
 				$this->settings,
+				MarketAccessManager::getInstance(),
 			),
 			new Field\Dashboard\StatusFieldAssembler(
 				[
@@ -60,9 +62,6 @@ class DashboardRowAssembler extends RowAssembler
 			]),
 			new Field\Dashboard\BasedOnFieldAssembler([
 				'SOURCE_ID',
-			]),
-			new Field\Dashboard\FilterPeriodFieldAssembler([
-				'FILTER_PERIOD',
 			]),
 			new Field\Dashboard\IdFieldAssembler(
 				[

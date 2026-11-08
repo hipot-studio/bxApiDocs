@@ -16,6 +16,12 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 	const BX_BASE_LIST = 'BL:';
 	const BX_INIT_DIR_LIST = 'IL:';
 
+	/** Paths sent to the delayed clean queue in a single call. */
+	protected const CLEAN_PATH_CHUNK = 1000;
+
+	/** Queue records taken off in a single delete. */
+	protected const DELETE_BATCH_SIZE = 1000;
+
 	protected static $engine = null;
 	protected static array $locks = [];
 	protected static bool $isConnected = false;
@@ -565,22 +571,7 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 				$this->useLock = false;
 				$baseListKey = $this->sid . '|' . $baseDirVersion . '|' . self::BX_BASE_LIST;
 
-				$partitionKeys = $this->getSet($baseListKey);
-				foreach ($partitionKeys as $partition)
-				{
-					$baseListKeyPartition = $baseListKey . $partition;
-					$paths = $this->getSet($baseListKeyPartition);
-					foreach ($paths as $path)
-					{
-						$this->addCleanPath([
-							'PREFIX' => $path,
-							'CLEAN_FROM' => (new DateTime()),
-							'CLUSTER_GROUP' => static::$clusterGroup,
-						]);
-					}
-
-					unset($paths);
-				}
+				$this->addCleanPaths($this->collectCleanPaths($baseListKey));
 
 				$this->set($this->sid . '|needClean', 3600, 'Y');
 				$this->del($baseListKey);
@@ -597,6 +588,59 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 	public function addCleanPath(array $data): void
 	{
 		CacheCleanPathTable::add($data);
+	}
+
+	public function addCleanPaths(iterable $items): void
+	{
+		foreach ($this->chunkCleanPaths($items) as $chunk)
+		{
+			CacheCleanPathTable::addMulti($chunk);
+		}
+	}
+
+	/**
+	 * Splits the stream of clean paths into batches of the engine limit.
+	 * A tail shorter than the limit is yielded too, so no path is left behind.
+	 */
+	protected function chunkCleanPaths(iterable $items): \Generator
+	{
+		$chunk = [];
+
+		foreach ($items as $item)
+		{
+			$chunk[] = $item;
+
+			if (count($chunk) >= static::CLEAN_PATH_CHUNK)
+			{
+				yield $chunk;
+				$chunk = [];
+			}
+		}
+
+		if ($chunk)
+		{
+			yield $chunk;
+		}
+	}
+
+	/**
+	 * Yields a clean path per cached prefix of the base list, one partition at a time.
+	 */
+	protected function collectCleanPaths(string $baseListKey): \Generator
+	{
+		$cleanFrom = new DateTime();
+
+		foreach ($this->getSet($baseListKey) as $partition)
+		{
+			foreach ($this->getSet($baseListKey . $partition) as $path)
+			{
+				yield [
+					'PREFIX' => $path,
+					'CLEAN_FROM' => $cleanFrom,
+					'CLUSTER_GROUP' => static::$clusterGroup,
+				];
+			}
+		}
 	}
 
 	public function delayedDelete(): void
@@ -627,8 +671,13 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 			->exec()
 		;
 
+		$cleaned = [];
+		$fetched = 0;
+
 		while ($path = $paths->fetch())
 		{
+			$fetched++;
+
 			$finished = true;
 			$partitionKeys = $this->getSet($path['PREFIX'] . '|' . static::BX_INIT_DIR_LIST);
 			foreach ($partitionKeys as $partition)
@@ -648,9 +697,10 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 				}
 			}
 
+			// an unfinished path keeps its record: the next run picks it up and counts nothing here
 			if ($finished)
 			{
-				CacheCleanPathTable::delete($path['ID']);
+				$cleaned[] = $path['ID'];
 				$deleted++;
 			}
 			if (time() > $etime)
@@ -658,6 +708,11 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 				$interrupted = true;
 				break;
 			}
+		}
+
+		foreach (array_chunk($cleaned, static::DELETE_BATCH_SIZE) as $batch)
+		{
+			CacheCleanPathTable::deleteByFilter(['@ID' => $batch]);
 		}
 
 		if ($deleted > $count)
@@ -669,7 +724,8 @@ abstract class KeyValueEngine implements CacheEngineInterface, CacheEngineStatIn
 			$this->set($this->sid . '|delCount', 604800, --$count);
 		}
 
-		if ($deleted == 0)
+		// the queue is idle only when it had nothing to offer: an unfinished path keeps the flag on
+		if ($fetched === 0)
 		{
 			$this->set($this->sid . '|needClean', 3600, 'N');
 		}

@@ -4,6 +4,9 @@ namespace Bitrix\Crm\Timeline\Entity;
 
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data\AddStrategy\Contract\AddStrategy;
+use Bitrix\Main\ORM\Data\AddStrategy\Merge;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\MergeByDefaultTrait;
 use Bitrix\Main\ORM\Fields\DateTimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
@@ -26,9 +29,16 @@ use Bitrix\Main\ORM\Fields\StringField;
  */
 class NoteTable extends Entity\DataManager
 {
+	use MergeByDefaultTrait;
+
 	public const NOTE_TYPE_HISTORY = 1;
 	public const NOTE_TYPE_ACTIVITY = 2;
 	public const NOTE_TYPE_SUSPENDED_ACTIVITY = 3;
+
+	protected static function getMergeStrategy(): AddStrategy
+	{
+		return new Merge(static::getEntity(), ['ITEM_ID', 'ITEM_TYPE']);
+	}
 
 	public static function getTableName()
 	{

@@ -2,6 +2,7 @@
 
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Data\AppCacheManifest;
+use Bitrix\Mobile\Tab\Preset\Service\PortalDefaultPresetCacheVersion;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
@@ -32,8 +33,11 @@ class MobileMenu extends \CBitrixComponent
 		$arResult = array();
 		$ttl = (defined("BX_COMP_MANAGED_CACHE") ? 2592000 : 600);
 		$extEnabled = IsModuleInstalled('extranet');
+		$portalDefaultPresetVersion = (new PortalDefaultPresetCacheVersion())
+			->get(defined('SITE_ID') ? (string)SITE_ID : '')
+		;
 
-		$cache_id = 'user_mobile_menu_' . $USER_ID . '_' . $extEnabled . '_' . LANGUAGE_ID . '_' . CSite::GetNameFormat(false);
+		$cache_id = 'user_mobile_menu_' . $USER_ID . '_' . $extEnabled . '_' . LANGUAGE_ID . '_' . CSite::GetNameFormat(false) . '_' . $portalDefaultPresetVersion;
 		$cache_dir = '/bx/mobile_menu/user_' . $USER_ID;
 		$obCache = new CPHPCache;
 
@@ -71,7 +75,7 @@ class MobileMenu extends \CBitrixComponent
 			$CACHE_MANAGER->RegisterTag('sonet_group');
 			$CACHE_MANAGER->RegisterTag('USER_CARD_' . intval($USER_ID / TAGGED_user_card_size));
 			$CACHE_MANAGER->RegisterTag('sonet_user2group_U' . $USER_ID);
-			$CACHE_MANAGER->RegisterTag('mobile_custom_menu');
+			$CACHE_MANAGER->RegisterTag('mobile_custom_menu' . $USER_ID);
 			$CACHE_MANAGER->EndTagCache();
 
 			if ($obCache->StartDataCache())

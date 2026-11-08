@@ -1736,7 +1736,7 @@ class CCrmOrderDetailsComponent extends Crm\Component\EntityDetails\BaseComponen
 			}
 
 			$deliveryServiceName = $shipment->getDeliveryName();
-			$logoPath = $this->getPath().'/images/delivery_logo.png';
+			$logoPath = $this->getPath().'/images/delivery_logo.webp';
 
 			$delivery = $shipment->getDelivery();
 			if($delivery)
@@ -1756,7 +1756,7 @@ class CCrmOrderDetailsComponent extends Crm\Component\EntityDetails\BaseComponen
 
 				if(empty($logoPath))
 				{
-					$logoPath = $this->getPath().'/images/delivery_logo.png';
+					$logoPath = $this->getPath().'/images/delivery_logo.webp';
 				}
 			}
 
@@ -1987,7 +1987,7 @@ class CCrmOrderDetailsComponent extends Crm\Component\EntityDetails\BaseComponen
 
 		if(empty($paySystemLogoPath))
 		{
-			$paySystemLogoPath = $this->getPath().'/images/pay_system_logo.png';
+			$paySystemLogoPath = $this->getPath().'/images/pay_system_logo.webp';
 		}
 
 		return $paySystemLogoPath;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Copilot\Generation\Step\Helper;
 
 use Bitrix\Landing\AI\SiteBuilder\Font\AiFontPolicy;
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Main\Web\DOM;
 
 final class ChangeAiSiteHtmlContractValidator
@@ -95,7 +96,7 @@ final class ChangeAiSiteHtmlContractValidator
 
 		try
 		{
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForUserHtml();
 			$doc->loadHTML('<div id="' . self::ROOT_NODE_ID . '">' . $html . '</div>');
 			$root = $doc->querySelector('#' . self::ROOT_NODE_ID);
 			if (!$root)

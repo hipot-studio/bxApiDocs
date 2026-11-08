@@ -130,7 +130,7 @@ final class CTaskCommentItem extends CTaskSubItemAbstract
 		$canRead = TaskAccessController::can(
 			$taskParams->userId,
 			ActionDictionary::ACTION_TASK_READ,
-			$taskParams->taskId
+			$taskParams->taskId,
 		);
 
 		if (!$canRead)
@@ -402,12 +402,28 @@ final class CTaskCommentItem extends CTaskSubItemAbstract
 		CTaskAssert::assertLaxIntegers($taskId, $itemId);
 		CTaskAssert::assert(CModule::IncludeModule('forum'));
 
-		$rsData = CForumMessage::GetList([], ['ID' => (int) $itemId]);
+		$topicId = self::getTaskForumTopicId((int) $taskId);
+
+		$rsData = null;
+		if ($topicId > 0)
+		{
+			$rsData = CForumMessage::GetList([], ['TOPIC_ID' => $topicId, 'ID' => (int) $itemId]);
+		}
 
 		if (is_object($rsData) && ($arData = $rsData->fetch()))
 			return ($arData);
 		else
 			throw new Exception();
+	}
+
+	private static function getTaskForumTopicId(int $taskId): int
+	{
+		$row = \Bitrix\Tasks\Internals\TaskTable::getList([
+			'select' => ['FORUM_TOPIC_ID'],
+			'filter' => ['=ID' => $taskId],
+		])->fetch();
+
+		return (int) ($row['FORUM_TOPIC_ID'] ?? 0);
 	}
 
 	/**

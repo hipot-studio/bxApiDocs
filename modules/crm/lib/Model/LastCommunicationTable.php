@@ -168,7 +168,7 @@ class LastCommunicationTable extends DataManager
 
 	public static function getEntityLastCommunication(ItemIdentifier $itemIdentifier): array
 	{
-		$cacheKay = $itemIdentifier->getHash();
+		$cacheKay = self::getEntityCacheKey($itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId());
 
 		if (isset(static::$entityCache[$cacheKay]))
 		{
@@ -191,6 +191,42 @@ class LastCommunicationTable extends DataManager
 		self::$entityCache[$cacheKay] = $communications;
 
 		return $communications;
+	}
+
+	/** @internal */
+	public static function warmupEntityCache(int $entityTypeId, array $entityIds): void
+	{
+		$idsToLoad = [];
+		foreach ($entityIds as $entityId)
+		{
+			$entityId = (int)$entityId;
+			if ($entityId > 0 && !isset(self::$entityCache[self::getEntityCacheKey($entityTypeId, $entityId)]))
+			{
+				$idsToLoad[$entityId] = $entityId;
+			}
+		}
+
+		if (empty($idsToLoad))
+		{
+			return;
+		}
+
+		$communicationsByEntity = array_fill_keys($idsToLoad, []);
+		$dbResult = static::getList([
+			'filter' => [
+				'=ENTITY_TYPE_ID' => $entityTypeId,
+				'@ENTITY_ID' => array_values($idsToLoad),
+			],
+		]);
+		while ($row = $dbResult->fetch())
+		{
+			$communicationsByEntity[(int)$row['ENTITY_ID']][self::FIELD_PREFIX . $row['TYPE']] = $row['LAST_COMMUNICATION_TIME'];
+		}
+
+		foreach ($communicationsByEntity as $entityId => $communications)
+		{
+			self::$entityCache[self::getEntityCacheKey($entityTypeId, $entityId)] = $communications;
+		}
 	}
 
 	public static function getLastStateFieldName(): string
@@ -218,6 +254,8 @@ class LastCommunicationTable extends DataManager
 				$result->addErrors($deleteResult->getErrors());
 			}
 		}
+
+		self::invalidateEntityCache($itemIdentifier);
 
 		return $result;
 	}
@@ -272,7 +310,7 @@ class LastCommunicationTable extends DataManager
 			$existingRow
 			&& ($forceUpdate || $existingRow['LAST_COMMUNICATION_TIME']->getTimestamp() <= $lastUpdated->getTimestamp())
 		) {
-			return self::update($existingRow['ID'], $fields);
+			return self::invalidateEntityCacheOnSuccess($itemIdentifier, self::update($existingRow['ID'], $fields));
 		}
 
 		if ($existingRow) //skip upsert if not forceUpdate or communication time earlier than stored one
@@ -286,7 +324,7 @@ class LastCommunicationTable extends DataManager
 
 		try
 		{
-			return self::add($fields);
+			return self::invalidateEntityCacheOnSuccess($itemIdentifier, self::add($fields));
 		}
 		catch (DuplicateEntryException $e)
 		{
@@ -315,7 +353,36 @@ class LastCommunicationTable extends DataManager
 			}
 		}
 
+		self::invalidateEntityCache($itemIdentifier);
+
 		return $result;
+	}
+
+	/** @internal */
+	public static function cleanRuntimeCache(): void
+	{
+		self::$entityCache = [];
+		self::$currentDataCache = [];
+	}
+
+	private static function invalidateEntityCache(ItemIdentifier $itemIdentifier): void
+	{
+		unset(self::$entityCache[self::getEntityCacheKey($itemIdentifier->getEntityTypeId(), $itemIdentifier->getEntityId())]);
+	}
+
+	private static function invalidateEntityCacheOnSuccess(ItemIdentifier $itemIdentifier, Result $result): Result
+	{
+		if ($result->isSuccess())
+		{
+			self::invalidateEntityCache($itemIdentifier);
+		}
+
+		return $result;
+	}
+
+	private static function getEntityCacheKey(int $entityTypeId, int $entityId): string
+	{
+		return $entityTypeId . '_' . $entityId;
 	}
 
 	private static function getCacheKey(string $type, ItemIdentifier $itemIdentifier): string

@@ -4,24 +4,17 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Public\Command\User;
 
-use Bitrix\Intranet\Integration\Socialnetwork\Collab\CollabProviderData;
 use Bitrix\Intranet\Internal\Entity\IntranetUser;
-use Bitrix\Intranet\Internal\Factory\Message\CollabJoinMessageFactory;
-use Bitrix\Intranet\Internal\Repository\IntranetUserRepository;
-use Bitrix\Intranet\Internals\InvitationTable;
-use Bitrix\Intranet\Repository\UserRepository;
-use Bitrix\Main\Application;
-use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Event;
-use Bitrix\Intranet\Integration;
+use Bitrix\Intranet\Internal\Service\User\InitializeUserCommandEffectService;
+use Bitrix\Intranet\Public\Type\User\InitializeUserMode;
 
 class InitializeUserCommandHandler
 {
-	private IntranetUserRepository $repository;
+	private InitializeUserCommandEffectService $effectService;
 
-	public function __construct()
+	public function __construct(?InitializeUserCommandEffectService $effectService = null)
 	{
-		$this->repository = ServiceLocator::getInstance()->get(IntranetUserRepository::class);
+		$this->effectService = $effectService ?? new InitializeUserCommandEffectService();
 	}
 
 	public function __invoke(InitializeUserCommand $command): IntranetUser
@@ -30,68 +23,26 @@ class InitializeUserCommandHandler
 		$intranetUser->setUserId($command->userId);
 		$intranetUser->setInitialized(true);
 
-		$this->repository->save($intranetUser);
+		$this->effectService->saveInitializedUser($intranetUser);
 		$userId = $command->userId;
 
-		if (IsModuleInstalled('bitrix24'))
+		if ($this->effectService->isCloud())
 		{
-			\CIntranetNotify::NewUserMessage($userId);
-			Integration\Tasks::createDemoTasksForUser($userId);
-
-			if (defined('BX_COMP_MANAGED_CACHE'))
-			{
-				Application::getInstance()->getTaggedCache()->clearByTag('USER_CARD');
-			}
+			$this->effectService->notifyNewUser($userId);
+			$this->effectService->createDemoTasks($userId);
+			$this->effectService->clearUserCardCache();
 		}
 		else
 		{
-			$dbUser = \CUser::GetByID($userId);
-			if ($arUser = $dbUser->Fetch())
+			if ($command->mode === InitializeUserMode::Standard)
 			{
-				\CIntranetEventHandlers::OnAfterUserAdd($arUser);
+				$this->effectService->initializeBoxUser($userId);
 			}
+
+			$this->effectService->createDemoTasks($userId);
 		}
 
-		$res = InvitationTable::query()
-			->setFilter([
-				'USER_ID' => $userId,
-				'INITIALIZED' => 'N',
-			])
-			->setSelect(['ID', 'INVITATION_TYPE', 'IS_MASS', 'IS_DEPARTMENT', 'IS_INTEGRATOR', 'IS_REGISTER'])
-			->setLimit(1)
-			->setOrder(['DATE_CREATE' => 'DESC'])
-		;
-
-		$invitationFields = $res->fetch();
-
-		if ($invitationFields)
-		{
-			InvitationTable::update($invitationFields['ID'], [
-				'INITIALIZED' => 'Y',
-			]);
-		}
-
-		$user = (new UserRepository())->getUserById($userId);
-
-		if ($user && $user->isCollaber())
-		{
-			$userCollab = (new CollabProviderData())->getUserCollabCollection($user);
-			foreach ($userCollab as $collab)
-			{
-				(new CollabJoinMessageFactory(
-					$user,
-					$collab,
-				))
-					->createEmailEvent()
-					->sendImmediately()
-				;
-			}
-		}
-
-		(new Event('intranet', 'onUserFirstInitialization', [
-			'invitationFields' => $invitationFields,
-			'userId' => $userId,
-		]))->send();
+		$this->effectService->handleAfterInitialization($userId);
 
 		return $intranetUser;
 	}

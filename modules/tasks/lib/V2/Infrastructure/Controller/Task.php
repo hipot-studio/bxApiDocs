@@ -6,6 +6,7 @@ namespace Bitrix\Tasks\V2\Infrastructure\Controller;
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\CloseSession;
+use Bitrix\Main\Error;
 use Bitrix\Main\Provider\Params\Pager;
 use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Main\Validation\ValidationException;
@@ -16,6 +17,7 @@ use Bitrix\Tasks\V2\Public\Command\Task\DeleteTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\UpdateTaskCommand;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Config\AddConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Delete\Config\DeleteConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
@@ -27,16 +29,58 @@ class Task extends BaseController
 {
 	/**
 	 * @ajaxAction tasks.V2.Task.get
+	 * @param mixed $task
+	 * @param mixed $taskId
 	 */
 	#[CloseSession]
 	public function getAction(
-		#[Permission\Read(returnTrueIfNotExist: true)]
-		Entity\Task $task,
 		TaskProvider $taskProvider,
 		TaskParams $taskSelect,
+		#[Permission\Read(returnTrueIfNotExist: true)]
+		$task = null,
+		#[Permission\Read(returnTrueIfNotExist: true)]
+		$taskId = null,
 		bool $view = true,
 	): ?Entity\Task
 	{
+		$requestData = array_merge(
+			$this->getRequest()->toArray(),
+			$this->getRequest()->getJsonList()->toArray(),
+		);
+		$taskProvided = array_key_exists('task', $requestData);
+		$accessParameterName = 'taskId';
+		if ($taskProvided)
+		{
+			$taskId = is_array($task) && array_key_exists('id', $task)
+				? $task['id']
+				: null
+			;
+			$accessParameterName = 'task';
+		}
+
+		$taskId = $this->normalizeTaskId($taskId);
+		if ($taskId === null)
+		{
+			$this->addError(
+				new Error(
+					'Task ID must be a positive integer',
+					'INVALID_TASK_ID',
+				),
+			);
+
+			return null;
+		}
+
+		$task = $this->getWithAccess(
+			$this,
+			$accessParameterName,
+			new Entity\Task(id: $taskId),
+		);
+		if (!$task instanceof Entity\Task)
+		{
+			return null;
+		}
+
 		return $taskProvider->get(
 			new TaskParams(
 				taskId: $task->getId(),
@@ -65,6 +109,37 @@ class Task extends BaseController
 		);
 	}
 
+
+	private function normalizeTaskId(mixed $taskId): ?int
+	{
+		if (is_int($taskId))
+		{
+			return $taskId > 0 ? $taskId : null;
+		}
+
+		if (!is_string($taskId) || $taskId === '' || preg_match('/^[0-9]+$/D', $taskId) !== 1)
+		{
+			return null;
+		}
+
+		$taskId = ltrim($taskId, '0');
+		if ($taskId === '')
+		{
+			return null;
+		}
+
+		$maxTaskId = (string)PHP_INT_MAX;
+		if (
+			strlen($taskId) > strlen($maxTaskId)
+			|| (strlen($taskId) === strlen($maxTaskId) && strcmp($taskId, $maxTaskId) > 0)
+		)
+		{
+			return null;
+		}
+
+		return (int)$taskId;
+	}
+
 	/**
 	 * @ajaxAction tasks.V2.Task.add
 	 */
@@ -73,11 +148,16 @@ class Task extends BaseController
 		Entity\Task $task,
 		TaskProvider $taskProvider,
 		bool $view = false,
+		// Nullable so an absent marker (mobile app, legacy, REST) stays
+		// distinct from an explicit false. Bound like $view above from the request.
+		?bool $deadlineManuallySet = null,
 	): ?Arrayable
 	{
 		$config = new AddConfig(
 			userId: $this->userId,
 			useConsistency: true,
+			manualDeadline: $deadlineManuallySet,
+			origin: InteractionOrigin::Ui,
 		);
 
 		$result = (new AddTaskCommand(
@@ -113,6 +193,7 @@ class Task extends BaseController
 		$config = new UpdateConfig(
 			userId: $this->userId,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		);
 
 		$result = (new UpdateTaskCommand(

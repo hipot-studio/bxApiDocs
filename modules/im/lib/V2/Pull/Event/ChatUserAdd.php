@@ -9,6 +9,7 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Guest\GuestCounter;
 use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Im\V2\Pull\EventType;
+use Bitrix\Im\V2\RelationCollection;
 
 class ChatUserAdd extends BaseChatEvent
 {
@@ -32,7 +33,7 @@ class ChatUserAdd extends BaseChatEvent
 			'containsCollaber' => $this->chat->containsCollaber(),
 			'users' => (new UserCollection($this->usersToAdd))->toRestFormat(['IDS_AS_KEY' => true]),
 			'newUsers' => array_values($this->usersToAdd),
-			'relations' => $this->chat->getRelationsByUserIds($this->usersToAdd)->toRestFormat(),
+			'relations' => $this->getRelationsForRest(),
 			'userCount' => $this->chat->getUserCount(),
 			'guestCount' => $this->chat->containsGuest() ? (new GuestCounter($this->chat))->getGuestCount() : 0,
 			'callToken' => $this->chat->getCallToken()->getToken(),
@@ -52,5 +53,36 @@ class ChatUserAdd extends BaseChatEvent
 	public function shouldSendToOnlySpecificRecipients(): bool
 	{
 		return false;
+	}
+
+	/**
+	 * Returns a relation per added user. On a fake add (relations not created) the frontend still
+	 * expects a relation for every newUser, so missing ones get a synthetic member relation.
+	 */
+	private function getRelationsForRest(): array
+	{
+		$realRelations = $this->chat->getRelationsByUserIds($this->usersToAdd);
+		$coveredUserIds = array_fill_keys($realRelations->getUserIds(), true);
+
+		$missingUserIds = [];
+		foreach ($this->usersToAdd as $userId)
+		{
+			$userId = (int)$userId;
+			if ($userId > 0 && !isset($coveredUserIds[$userId]))
+			{
+				$missingUserIds[] = $userId;
+			}
+		}
+
+		$relations = $realRelations->toRestFormat() ?? [];
+		if (!empty($missingUserIds))
+		{
+			$relations = array_merge(
+				$relations,
+				RelationCollection::createFake($missingUserIds, $this->chat)->toRestFormat() ?? [],
+			);
+		}
+
+		return $relations;
 	}
 }

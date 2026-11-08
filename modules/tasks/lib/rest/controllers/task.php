@@ -39,9 +39,11 @@ use Bitrix\Tasks\Internals\Task\Result\ResultManager;
 use Bitrix\Tasks\Internals\Task\Result\ResultTable;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Internals\TaskTable;
+use Bitrix\Tasks\Rest\TaskDurationPresenter;
 use Bitrix\Tasks\Scrum\Service\TaskService;
 use Bitrix\Tasks\Internals\UserOption;
 use Bitrix\Tasks\Manager;
+use Bitrix\Tasks\Rest\Controllers\Task\CrmItemGate;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
 use Bitrix\Tasks\Util\Type\DateTime;
@@ -75,6 +77,8 @@ use TasksTaskListComponent;
  */
 final class Task extends Base
 {
+	private ?TaskDurationPresenter $taskDurationPresenter = null;
+
 	public function configureActions(): array
 	{
 		return [
@@ -152,15 +156,21 @@ final class Task extends Base
 	 */
 	public function getAction(CTaskItem $task, array $select = [], array $params = []): array
 	{
+		$requestedSelect = $select;
 		if (!empty($select))
 		{
 			$select[] = 'FAVORITE';
 		}
 
 		$params['select'] = $this->prepareSelect($select);
+		[$params['select'], $temporaryDurationFields] = $this->prepareDurationSelect(
+			$requestedSelect,
+			$params['select'],
+		);
 		try
 		{
 			$row = $task->getData(false, $params);
+			$row = $this->presentTaskDuration($row, $requestedSelect, $temporaryDurationFields);
 			if (array_key_exists('STATUS', $row))
 			{
 				$row['STATUS'] = $row['REAL_STATUS'];
@@ -227,11 +237,10 @@ final class Task extends Base
 
 			if (in_array('NEW_COMMENTS_COUNT', $params['select'], true))
 			{
-				$taskId = $task->getId();
-				$userId = $this->getCurrentUser()->getId();
-
-				$newComments = Counter::getInstance((int)$userId)->getCommentsCount([$taskId]);
-				$row['NEW_COMMENTS_COUNT'] = $newComments[$taskId];
+				$row['NEW_COMMENTS_COUNT'] = $this->getNewCommentsCount(
+					(int)$this->getCurrentUser()->getId(),
+					(int)$task->getId()
+				);
 			}
 
 			$action = $this->getAccessAction($task);
@@ -271,6 +280,20 @@ final class Task extends Base
 			// special case for mobile
 			return [];
 		}
+	}
+
+	private function getNewCommentsCount(int $userId, int $taskId): int
+	{
+		if (!Counter\Loader::isNarrowReadAllowed($userId))
+		{
+			// Counters are not trustworthy yet: the full path recounts them or answers zeros when the
+			// counter state is disabled by the zero limit.
+			return Counter::getInstance($userId)->getCommentsCount([$taskId])[$taskId];
+		}
+
+		$repository = Container::getInstance()->getCounterRepository();
+
+		return $repository->getCommentsCountByUserAndTasks($userId, [$taskId])[$taskId];
 	}
 
 	/**
@@ -429,6 +452,7 @@ final class Task extends Base
 		}
 
 		$preparedSelect = $this->prepareSelect($select);
+		[$preparedSelect, $temporaryDurationFields] = $this->prepareDurationSelect($select, $preparedSelect);
 		$preparedFilter = $this->prepareFilter($filter, $select, $params);
 
 		$navParams = $this->prepareNavParams($pageNavigation, $params);
@@ -477,6 +501,7 @@ final class Task extends Base
 
 			foreach ($tasks as &$task)
 			{
+				$task = $this->presentTaskDuration($task, $select, $temporaryDurationFields);
 				if (array_key_exists('STATUS', $task))
 				{
 					$task['SUB_STATUS'] = $task['STATUS'];
@@ -568,6 +593,63 @@ final class Task extends Base
 		{
 			UserOption::delete($task->getId(), $this->getCurrentUser()->getId(), UserOption\Option::PINNED);
 			return $this->getAction($task);
+		}
+		catch (Exception $exception)
+		{
+			$this->addError(Error::createFromThrowable($exception));
+			return null;
+		}
+	}
+
+	/**
+	 * @restMethod tasks.task.bindCrmItem
+	 */
+	public function bindCrmItemAction(CTaskItem $task, string $crmItemId): ?array
+	{
+		if (!CRM\CrmInTasksFeature::isOn())
+		{
+			$this->addError(new Error(Main\Localization\Loc::getMessage('TASKS_ACTION_CRM_ITEM_ACCESS_DENIED'), 'ACCESS_DENIED'));
+			return null;
+		}
+
+		$taskId = $task->getId();
+		$userId = (int)$this->getCurrentUser()->getId();
+
+		if (!TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_EDIT, $taskId))
+		{
+			$this->addError(new Error(Main\Localization\Loc::getMessage('TASKS_ACTION_CRM_ITEM_ACCESS_DENIED'), 'ACCESS_DENIED'));
+			return null;
+		}
+
+		if (!CrmItemGate::isConcreteItem($crmItemId))
+		{
+			$this->addError(CrmItemGate::getInvalidItemError());
+			return null;
+		}
+
+		$crmAccessService = Container::getInstance()->getCrmAccessService();
+		if (count($crmAccessService->filterCrmItemsWithAccess([$crmItemId], $userId)) !== 1)
+		{
+			$this->addError(new Error(Main\Localization\Loc::getMessage('TASKS_ACTION_CRM_ITEM_ACCESS_DENIED'), 'ACCESS_DENIED'));
+			return null;
+		}
+
+		try
+		{
+			$result = (new \Bitrix\Tasks\V2\Internal\Integration\CRM\Command\AddItemsCommand(
+				taskId: $taskId,
+				userId: $userId,
+				crmItemIds: [$crmItemId],
+				useConsistency: true,
+			))->run();
+
+			if (!$result->isSuccess())
+			{
+				$this->addErrors($result->getErrors());
+				return null;
+			}
+
+			return ['success' => true];
 		}
 		catch (Exception $exception)
 		{
@@ -1941,6 +2023,66 @@ final class Task extends Base
 		}
 
 		return $select;
+	}
+
+	private function prepareDurationSelect(array $requestedSelect, array $preparedSelect): array
+	{
+		$includeDurationPlan = $this->isFieldSelected($requestedSelect, 'DURATION_PLAN');
+		$includeDurationType = $this->isFieldSelected($requestedSelect, 'DURATION_TYPE');
+		if (!$includeDurationPlan && !$includeDurationType)
+		{
+			return [$preparedSelect, []];
+		}
+
+		$requiredFields = [TaskDurationPresenter::DURATION_TYPE_ALL];
+		if ($includeDurationPlan)
+		{
+			$requiredFields = array_merge(
+				$requiredFields,
+				[
+					TaskDurationPresenter::DURATION_PLAN_SECONDS,
+					'MATCH_WORK_TIME',
+					'START_DATE_PLAN',
+					'END_DATE_PLAN',
+				],
+			);
+		}
+
+		$temporaryFields = [];
+		foreach ($requiredFields as $field)
+		{
+			if (!in_array($field, $preparedSelect, true))
+			{
+				$preparedSelect[] = $field;
+				$temporaryFields[] = $field;
+			}
+		}
+
+		return [$preparedSelect, $temporaryFields];
+	}
+
+	private function presentTaskDuration(array $task, array $requestedSelect, array $temporaryFields): array
+	{
+		$includeDurationPlan = $this->isFieldSelected($requestedSelect, 'DURATION_PLAN');
+		$includeDurationType = $this->isFieldSelected($requestedSelect, 'DURATION_TYPE');
+		if (!$includeDurationPlan && !$includeDurationType)
+		{
+			return $task;
+		}
+
+		$this->taskDurationPresenter ??= new TaskDurationPresenter(new \Bitrix\Tasks\Util\Calendar());
+
+		return $this->taskDurationPresenter->present(
+			$task,
+			$includeDurationPlan,
+			$includeDurationType,
+			$temporaryFields,
+		);
+	}
+
+	private function isFieldSelected(array $select, string $field): bool
+	{
+		return empty($select) || in_array('*', $select, true) || in_array($field, $select, true);
 	}
 
 	/**

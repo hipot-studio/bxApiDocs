@@ -10,6 +10,7 @@ use Bitrix\Catalog\StoreTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Catalog\Store\EnableWizard\Manager;
 use Bitrix\Main\UI\PageNavigation;
@@ -77,6 +78,16 @@ final class StoreProduct extends Controller
 			return null;
 		}
 
+		if (!$this->accessController->check(ActionDictionary::ACTION_CATALOG_SETTINGS_ACCESS))
+		{
+			$this->addError(new Error(
+				Loc::getMessage('CATALOG_CONTROLLER_STORE_PRODUCT_SETTINGS_ACCESS_DENIED'),
+				$this->getErrorCodeReadAccessDenied(),
+			));
+
+			return null;
+		}
+
 		$connection = Application::getConnection();
 		$sqlHelper = $connection->getSqlHelper();
 
@@ -89,6 +100,30 @@ final class StoreProduct extends Controller
 				])->fetchAll()
 			)
 		);
+
+		$requestedStoreIds = [];
+		foreach ($items as $item)
+		{
+			$storeId = (int)($item['storeId'] ?? 0);
+			if (isset($storeIds[$storeId]))
+			{
+				$requestedStoreIds[$storeId] = $storeId;
+			}
+		}
+
+		if (
+			$requestedStoreIds
+			&& !$this->accessController->check(
+				ActionDictionary::ACTION_STORE_VIEW,
+				null,
+				['value' => array_values($requestedStoreIds)],
+			)
+		)
+		{
+			$this->addError($this->getErrorReadAccessDenied());
+
+			return null;
+		}
 
 		foreach (array_chunk($items, self::BULK_SAVE_CHUNK_SIZE) as $chunkItems)
 		{

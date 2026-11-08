@@ -494,23 +494,27 @@ class File extends Volume\Base implements Volume\IVolumeIndicatorParent, Volume\
 			$whereSql = " AND {$whereSql} ";
 		}
 
-		$orderSql = Volume\QueryHelper::prepareOrder(
-			$this->getOrder([
-				'VERSION_COUNT' => 'DESC'
-			]),
-			[
-				'TITLE' => 'CNT_FILES.TITLE',
-				'SIZE_FILE' => 'CNT_FILES.SIZE_FILE',
-				'UPDATE_TIME' => 'CNT_FILES.UPDATE_TIME',
-				'VERSION_SIZE' => 'CNT_FILES.VERSION_SIZE',
-				'VERSION_COUNT' => 'CNT_FILES.VERSION_COUNT',
-				'UNNECESSARY_VERSION_SIZE' => 'CNT_FREE.UNNECESSARY_VERSION_SIZE',
-				'UNNECESSARY_VERSION_COUNT' => 'CNT_FREE.UNNECESSARY_VERSION_COUNT',
-			]
-		);
+		$orderAlias = [
+			'ID' => 'CNT_FILES.FID',
+			'TITLE' => 'CNT_FILES.TITLE',
+			'SIZE_FILE' => 'CNT_FILES.SIZE_FILE',
+			'UPDATE_TIME' => 'CNT_FILES.UPDATE_TIME',
+			'VERSION_SIZE' => 'CNT_FILES.VERSION_SIZE',
+			'VERSION_COUNT' => 'CNT_FILES.VERSION_COUNT',
+			'UNNECESSARY_VERSION_SIZE' => 'CNT_FREE.UNNECESSARY_VERSION_SIZE',
+			'UNNECESSARY_VERSION_COUNT' => 'CNT_FREE.UNNECESSARY_VERSION_COUNT',
+		];
 
-		$orderKeys = array_keys($this->getOrder());
-		$orderKey = array_shift($orderKeys);
+		// Order may come from user grid options and goes into raw SQL, so only known columns are kept
+		$order = $this->filterOrder($this->getOrder(), array_keys($orderAlias));
+		if (empty($order))
+		{
+			$order = ['VERSION_COUNT' => 'DESC'];
+		}
+
+		$orderSql = Volume\QueryHelper::prepareOrder($order, $orderAlias);
+
+		$orderKey = array_key_first($order);
 
 
 		$sqlHint = '';
@@ -905,6 +909,32 @@ class File extends Volume\Base implements Volume\IVolumeIndicatorParent, Volume\
 	}
 
 	/**
+	 * Keeps only allowed fields with ASC/DESC direction, preserving the order of pairs.
+	 * @param array $order Sort order as field => direction.
+	 * @param string[] $allowedFields List of sortable fields.
+	 * @return string[]
+	 */
+	private function filterOrder(array $order, array $allowedFields): array
+	{
+		$result = [];
+		foreach ($order as $field => $direction)
+		{
+			if (!is_string($field) || !in_array($field, $allowedFields, true) || !is_string($direction))
+			{
+				continue;
+			}
+
+			$direction = strtoupper(trim($direction));
+			if ($direction === 'ASC' || $direction === 'DESC')
+			{
+				$result[$field] = $direction;
+			}
+		}
+
+		return $result;
+	}
+
+	/**
 	 * @param string[] $filter Row from VolumeTable as a filter.
 	 * @return Volume\Fragment
 	 * @throws ObjectException
@@ -1078,5 +1108,4 @@ class File extends Volume\Base implements Volume\IVolumeIndicatorParent, Volume\
 		return $attached;
 	}
 }
-
 

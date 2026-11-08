@@ -424,9 +424,15 @@ class CIntranetContactCenterListComponent extends \CBitrixComponent implements C
 		{
 			if (Loader::includeModule('market'))
 			{
+				$region = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion();
+				$chatbotUrl = in_array($region, ['kz', 'uz'], true)
+					? '/market/category/chat_bots/'
+					: '/market/collection/openline_bot/'
+				;
+
 				$itemsList["ccplacement"]["ONCLICK"] = "BX.SidePanel.Instance.open('/market/?placement=CONTACT_CENTER', {allowChangeHistory: false});";
-				$itemsList["chatbot"]["ONCLICK"] = "BX.SidePanel.Instance.open('/market/collection/openline_bot/', {allowChangeHistory: false});";
-				if (in_array(\Bitrix\Main\Application::getInstance()->getLicense()->getRegion(), ['ru', 'by', 'kz'], true))
+				$itemsList["chatbot"]["ONCLICK"] = "BX.SidePanel.Instance.open('{$chatbotUrl}', {allowChangeHistory: false});";
+				if (in_array($region, ['ru', 'by', 'kz'], true))
 				{
 					$itemsList["telephonybot"]["ONCLICK"] = "BX.SidePanel.Instance.open('/market/collection/ivr_bot/', {allowChangeHistory: false});";
 				}

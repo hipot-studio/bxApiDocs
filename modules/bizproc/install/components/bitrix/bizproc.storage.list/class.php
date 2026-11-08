@@ -12,6 +12,7 @@ use Bitrix\Bizproc\Internal\Grid\StorageList\StorageListGrid;
 use Bitrix\Bizproc\Public\Provider\Params\StorageType\StorageTypeFilter;
 use Bitrix\Bizproc\Public\Provider\Params\StorageType\StorageTypeSort;
 use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Grid\Component\ComponentParams;
 use Bitrix\Main\Grid\Panel\Actions;
 use Bitrix\Main\Grid\Panel\Snippet;
@@ -23,6 +24,7 @@ use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Provider\Params\GridParams;
 use Bitrix\Main\Provider\Params\Pager;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\ButtonLocation;
@@ -67,7 +69,7 @@ class BizprocStorageListComponent extends CBitrixComponent
 			return;
 		}
 
-		if (!(new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin())
+		if (!(new TemplateAccessService())->canAccessTemplates())
 		{
 			$this->errorCollection->setError(ErrorMessage::ACCESS_DENIED->getError());
 			$this->arResult['errors'] = $this->getErrorMessages();
@@ -85,14 +87,21 @@ class BizprocStorageListComponent extends CBitrixComponent
 
 		$storageListFilter = new StorageListFilter(self::GRID_ID);
 		$filterOptions = new Options($storageListFilter->getId());
-		$filter = new StorageTypeFilter($filterOptions->getFilter($storageListFilter->getFields()));
+		$gridFilter = $filterOptions->getFilter($storageListFilter->getFields());
+		$closedIds = (new TemplateAccessService())->getClosedStorageTypeIds();
+		if ($closedIds !== [])
+		{
+			$gridFilter['!ID'] = $closedIds;
+		}
+
+		$filter = new StorageTypeFilter($gridFilter);
 
 		$provider = new StorageTypeProvider();
 
 		$totalCount = $provider->getCount($filter);
 
 		$gridSort = $grid->getOptions()->getSorting([
-			'sort' => ['ID' => 'ASC'],
+			'sort' => ['ID' => 'DESC'],
 		]);
 		$sort = new StorageTypeSort($gridSort['sort']);
 
@@ -130,6 +139,7 @@ class BizprocStorageListComponent extends CBitrixComponent
 				'TITLE' => $item->getTitle(),
 				'DESCRIPTION' => $item->getDescription(),
 				'CODE' => $item->getCode(),
+				'CREATED_TIME' => $this->formatCreatedTime($item->getCreatedAt()),
 			];
 		}
 
@@ -164,6 +174,16 @@ class BizprocStorageListComponent extends CBitrixComponent
 				'SHOW_ACTION_PANEL' => true,
 			];
 		$this->includeComponentTemplate();
+	}
+
+	private function formatCreatedTime(?int $timestamp): string
+	{
+		if ($timestamp === null)
+		{
+			return '';
+		}
+
+		return DateTime::createFromTimestamp($timestamp)->toString();
 	}
 
 	private function switchToCreatedStoragePage(

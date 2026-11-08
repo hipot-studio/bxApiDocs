@@ -14,6 +14,13 @@ use Bitrix\Main\Result;
 
 final class Dashboard
 {
+	/**
+	 * Read timeout of the request confirming that superset already keeps the dashboard as a draft,
+	 * in seconds. The answer only decides which error an already failed transition reports, so it
+	 * is given a fraction of the default budget instead of doubling the wait.
+	 */
+	private const REMOTE_DRAFT_CHECK_TIMEOUT = 5;
+
 	private ?Dto\DashboardEmbeddedCredentials $embeddedCredentials = null;
 
 	public function __construct(
@@ -79,6 +86,20 @@ final class Dashboard
 	public function isAvailableDashboard(): bool
 	{
 		return in_array($this->getStatus(), SupersetDashboard::getActiveDashboardStatuses(), true);
+	}
+
+	/**
+	 * Whether at least one other dashboard was copied from this one.
+	 */
+	public function hasCopies(): bool
+	{
+		$copy = SupersetDashboardTable::getList([
+			'select' => ['SOURCE_ID'],
+			'filter' => ['=SOURCE_ID' => $this->getId()],
+			'limit' => 1,
+		])->fetch();
+
+		return $copy !== false;
 	}
 
 	public function getUrl(): string
@@ -159,8 +180,6 @@ final class Dashboard
 	 */
 	public function toArray(): array
 	{
-		$embeddedFilterFields = $this->getNativeFilterFields();
-
 		return [
 			'ID' => $this->getId(),
 			'EXTERNAL_ID' => $this->getExternalId(),
@@ -177,10 +196,6 @@ final class Dashboard
 			'OWNER_ID' => $this->ormObject->get('OWNER_ID'),
 			'DATE_CREATE' => $this->ormObject->get('DATE_CREATE'),
 			'DATE_MODIFY' => $this->ormObject->get('DATE_MODIFY'),
-			'FILTER_PERIOD' => $embeddedFilterFields['FILTER_PERIOD'],
-			'DATE_FILTER_START' => $embeddedFilterFields['DATE_FILTER_START'],
-			'DATE_FILTER_END' => $embeddedFilterFields['DATE_FILTER_END'],
-			'INCLUDE_LAST_FILTER_DATE' => $embeddedFilterFields['INCLUDE_LAST_FILTER_DATE'],
 		];
 	}
 
@@ -197,18 +212,6 @@ final class Dashboard
 	public function isSupersetDashboardCredentialsLoad(): bool
 	{
 		return $this->embeddedCredentials !== null;
-	}
-
-	public function getNativeFilterFields(): array
-	{
-		$dateFilter = new EmbeddedFilter\DateTime($this);
-
-		return [
-			'FILTER_PERIOD' => $dateFilter->getPeriod(),
-			'DATE_FILTER_START' => $dateFilter->getDateStart(),
-			'DATE_FILTER_END' => $dateFilter->getDateEnd(),
-			'INCLUDE_LAST_FILTER_DATE' => $dateFilter->needIncludeLastFilterDate(),
-		];
 	}
 
 	/**
@@ -276,7 +279,12 @@ final class Dashboard
 			return $result->addError(new Error("Cannot change publish property without external id"));
 		}
 
-		$response = IntegratorFactory::getInstance()->updateDashboard($externalId, ['published' => $published]);
+		if (!$published)
+		{
+			return $this->unpublish((int)$externalId);
+		}
+
+		$response = IntegratorFactory::getInstance()->updateDashboard($externalId, ['published' => true]);
 		if ($response->getStatus() !== IntegratorResponse::STATUS_OK || $response->hasErrors())
 		{
 			return $result->addError(new Error("Error while changing publish property in superset"));
@@ -288,29 +296,95 @@ final class Dashboard
 			return $result->addError(new Error("Published property didn`t change while update fields"));
 		}
 
-		$status =
-			$published
-				? SupersetDashboardTable::DASHBOARD_STATUS_READY
-				: SupersetDashboardTable::DASHBOARD_STATUS_DRAFT
-		;
-
-		$this->ormObject->setStatus($status);
+		$this->ormObject->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_READY);
 		$this->ormObject->save();
 
-		// Delete all shares when dashboard becomes draft
-		if (!$published)
+		return $result;
+	}
+
+	/**
+	 * Moves dashboard to draft: public share links are revoked first, then the remote
+	 * publish flag is dropped, and only then the local status changes. A step starts
+	 * only after the previous one is confirmed, so a failure never leaves a dashboard
+	 * that looks unpublished while it is still reachable by a live link. The error of
+	 * an interrupted transition carries the steps that did complete.
+	 */
+	private function unpublish(int $externalId): Result
+	{
+		$result = new Result();
+
+		$revokeResult = (new DeleteSharesCommand(dashboardId: $this->ormObject->getId()))->run();
+		if (!$revokeResult->isSuccess())
 		{
-			$deleteResult = (new DeleteSharesCommand(dashboardId: $this->ormObject->getId()))->run();
-			if (!$deleteResult->isSuccess())
+			return $result->addError(new Error(
+				'Cannot revoke public share links of dashboard',
+				'shares_revoke_failed',
+				['completed' => []],
+			));
+		}
+
+		$completed = ['shares_revoked'];
+
+		if ($this->ormObject->getStatus() !== SupersetDashboardTable::DASHBOARD_STATUS_DRAFT)
+		{
+			if (!$this->unpublishRemote($externalId) && !$this->remoteAlreadyDraft($externalId))
 			{
-				foreach ($deleteResult->getErrors() as $error)
-				{
-					$result->addWarning($error);
-				}
+				return $result->addError(new Error(
+					'Error while changing publish property in superset',
+					'remote_unpublish_failed',
+					['completed' => $completed],
+				));
 			}
 		}
 
+		$completed[] = 'remote_unpublished';
+
+		$this->ormObject->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_DRAFT);
+		if (!$this->ormObject->save()->isSuccess())
+		{
+			return $result->addError(new Error(
+				'Cannot save draft status of dashboard',
+				'local_status_save_failed',
+				['completed' => $completed],
+			));
+		}
+
 		return $result;
+	}
+
+	/**
+	 * Whether superset confirmed the dashboard is not published anymore.
+	 */
+	private function unpublishRemote(int $externalId): bool
+	{
+		$response = IntegratorFactory::getInstance()->updateDashboard($externalId, ['published' => false]);
+		if ($response->getStatus() !== IntegratorResponse::STATUS_OK || $response->hasErrors())
+		{
+			return false;
+		}
+
+		$changedFields = $response->getData();
+
+		return is_array($changedFields)
+			&& array_key_exists('published', $changedFields)
+			&& $changedFields['published'] === false
+		;
+	}
+
+	private function remoteAlreadyDraft(int $externalId): bool
+	{
+		$response = IntegratorFactory::getInstance()->getDashboardById(
+			$externalId,
+			self::REMOTE_DRAFT_CHECK_TIMEOUT,
+		);
+		if ($response->hasErrors())
+		{
+			return false;
+		}
+
+		$dashboardData = $response->getData();
+
+		return $dashboardData instanceof Dto\Dashboard && !$dashboardData->published;
 	}
 
 	/**

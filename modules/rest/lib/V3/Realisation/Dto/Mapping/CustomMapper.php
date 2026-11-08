@@ -94,16 +94,36 @@ final class CustomMapper extends Mapper
 
 	public function getValuesForAdd(CustomDto $dto): array
 	{
+		$items = [];
+		foreach (array_keys(self::$fieldMapping) as $dtoField)
+		{
+			if (isset($dto->{$dtoField}))
+			{
+				$items[$dtoField] = $dto->{$dtoField};
+			}
+		}
+
+		return $this->getValuesForAddFromItems($items);
+	}
+
+	/**
+	 * The same description of a field to create, built from the raw items of the request instead
+	 * of a validated dto. An access check runs before the action converts the request, and it has
+	 * to name the field the way the storage names it without turning an invalid body into a
+	 * validation error of its own.
+	 */
+	public function getValuesForAddFromItems(array $items): array
+	{
 		$values = [];
 
 		foreach (self::$fieldMapping as $dtoField => $dataField)
 		{
-			if (!isset($dto->{$dtoField}))
+			if (!isset($items[$dtoField]))
 			{
 				continue;
 			}
 
-			$value = $dto->{$dtoField};
+			$value = $items[$dtoField];
 
 			switch ($dtoField)
 			{
@@ -122,10 +142,14 @@ final class CustomMapper extends Mapper
 
 				case 'settings':
 					$values[$dataField] = [];
-					foreach ($value as $key => $valueItem)
+					// a raw item is not typed by the dto yet, so it may be anything the client sent
+					if (is_iterable($value))
 					{
-						$mappedKey = StringHelper::camel2snake((string)$key);
-						$values[$dataField][$mappedKey] = is_bool($valueItem) ? ($valueItem ? 'Y' : 'N') : $valueItem;
+						foreach ($value as $key => $valueItem)
+						{
+							$mappedKey = StringHelper::camel2snake((string)$key);
+							$values[$dataField][$mappedKey] = is_bool($valueItem) ? ($valueItem ? 'Y' : 'N') : $valueItem;
+						}
 					}
 					break;
 

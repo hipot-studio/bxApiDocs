@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Rest\Internal\Repository;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Entity\EntityInterface;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Repository\Exception\PersistenceException;
+use Bitrix\Main\Type\Date;
 use Bitrix\Rest\APAuth\PasswordTable;
 use Bitrix\Rest\APAuth\PermissionTable;
 use Bitrix\Rest\Enum\APAuth\PasswordType;
@@ -17,6 +19,7 @@ use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhookAttributeCollecti
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhookCollection;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhookExternalAttribute;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhook;
+use Bitrix\Rest\Internal\Integration\Bitrix24\LicenseScannerStateInvalidator;
 use Bitrix\Rest\Internal\Model\IncomingWebhookAttributeTable;
 use Bitrix\Rest\Internal\Repository\IncomingWebhook\WebhookFilter;
 use Bitrix\Rest\Internal\Repository\IncomingWebhook\WebhookPager;
@@ -206,12 +209,6 @@ class IncomingWebhookRepository implements IncomingWebhookRepositoryInterface
 		if ($attributes !== null)
 		{
 			$query->whereIn('ID', $this->buildPasswordIdsByExternalAttributesQuery($attributes));
-		}
-
-		$excludedAttributes = $filter->getExcludedExternalAttributes();
-		if ($excludedAttributes !== null)
-		{
-			$query->whereNotIn('ID', $this->buildPasswordIdsByExternalAttributesQuery($excludedAttributes));
 		}
 
 		return $query;
@@ -426,5 +423,90 @@ class IncomingWebhookRepository implements IncomingWebhookRepositoryInterface
 			IncomingWebhookAttribute::TYPE_EXTERNAL,
 			$codes,
 		);
+	}
+
+	/**
+	 * The guard repeats the caller checks inside the statement, so a webhook deactivated or prolonged further
+	 * between the read and this write is left untouched.
+	 *
+	 * @return bool whether the row was updated
+	 * @throws ArgumentException
+	 * @throws PersistenceException
+	 */
+	public function prolong(int $passwordId, Date $dateExpire, Date $currentDate): bool
+	{
+		if ($passwordId <= 0)
+		{
+			throw new ArgumentException('Incoming webhook id must be a positive integer', 'passwordId');
+		}
+
+		$isProlongable = Query::filter()
+			->logic('or')
+			->where('ACTIVE', PasswordTable::ACTIVE)
+			->where('DATE_EXPIRE', '<', $currentDate)
+		;
+
+		$filter = Query::filter()
+			->where('ID', $passwordId)
+			->whereNotNull('DATE_EXPIRE')
+			->where('DATE_EXPIRE', '<=', $dateExpire)
+			->where($isProlongable)
+		;
+
+		try
+		{
+			$result = PasswordTable::updateByFilter($filter, [
+				'DATE_EXPIRE' => $dateExpire,
+				'ACTIVE' => PasswordTable::ACTIVE,
+			]);
+		}
+		catch (\Exception $e)
+		{
+			throw new PersistenceException($e->getMessage(), previous: $e);
+		}
+
+		// updateByFilter skips ORM events, so the ACTIVE change has to invalidate the scanner state on its own.
+		$affected = $result->getAffectedRowsCount() > 0;
+		if ($affected)
+		{
+			LicenseScannerStateInvalidator::reset();
+		}
+
+		return $affected;
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws PersistenceException
+	 */
+	public function deactivateIfExpired(int $passwordId, Date $currentDate): void
+	{
+		if ($passwordId <= 0)
+		{
+			throw new ArgumentException('Incoming webhook id must be a positive integer', 'passwordId');
+		}
+
+		$filter = Query::filter()
+			->where('ID', $passwordId)
+			->where('ACTIVE', PasswordTable::ACTIVE)
+			->whereNotNull('DATE_EXPIRE')
+			->where('DATE_EXPIRE', '<', $currentDate)
+		;
+
+		try
+		{
+			$result = PasswordTable::updateByFilter($filter, ['ACTIVE' => PasswordTable::INACTIVE]);
+		}
+		catch (\Exception $e)
+		{
+			throw new PersistenceException($e->getMessage(), previous: $e);
+		}
+
+		// updateByFilter skips ORM events, so the ACTIVE change has to invalidate the scanner state on its own.
+		// Called on every request of an expired webhook, hence the affected rows guard.
+		if ($result->getAffectedRowsCount() > 0)
+		{
+			LicenseScannerStateInvalidator::reset();
+		}
 	}
 }

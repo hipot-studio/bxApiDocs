@@ -3,10 +3,12 @@
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Timeman\Helper\TimeHelper;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 use Bitrix\Timeman\V2\Internal\Integration\HumanResources\Service\NodeSettingsService;
 use Bitrix\Timeman\V2\Internal\Entity\Report\RecordReportType;
 use Bitrix\Timeman\V2\Internal\Service\ReportTextHtmlRenderer;
 use Bitrix\Timeman\V2\Internal\Service\ReportTextNormalizerService;
+use Bitrix\Timeman\V2\Public\Event\OnFullReportSavedEvent;
 use Bitrix\Timeman\V2\Public\Provider\SettingsProvider;
 
 IncludeModuleLangFile(__FILE__);
@@ -112,6 +114,16 @@ class CTimeManReportFull
 			foreach(GetModuleEvents('timeman', 'OnAfterFullReportUpdate', true) as $a)
 			{
 				ExecuteModuleEventEx($a, array($ID, $arFields));
+			}
+
+			if (isset($arFields['ACTIVE']))
+			{
+				$report = self::GetByID($ID)->Fetch();
+				OnFullReportSavedEvent::sendEvent(
+					(int)($report['USER_ID'] ?? 0),
+					(int)$ID,
+					$arFields['ACTIVE'] === 'Y'
+				);
 			}
 
 			return $ID;
@@ -436,6 +448,12 @@ class CTimeManReportFull
 				{
 					ExecuteModuleEventEx($a, array($arFields));
 				}
+
+				OnFullReportSavedEvent::sendEvent(
+					(int)$arFields['USER_ID'],
+					(int)$ID,
+					($arFields['ACTIVE'] ?? 'Y') !== 'N'
+				);
 		}
 
 		return $ID;
@@ -1139,6 +1157,50 @@ class CUserReportFull
 		return $arReportInfo;
 	}
 
+	/**
+	 * Tells whether the report day of the user has come, by the report info of the day as GetReportInfo() caches it.
+	 *
+	 * Unlike GetReportInfo(), it does not drop the cache and calculate the period anew while the report form is
+	 * shown, so on a stale cache it may answer true where GetReportInfo() finds no report day. The cache is dropped
+	 * by the writes of reports, by the work day writes of CTimeManUser and RecordService (not by the
+	 * timeman.worktime.* actions) and by CReportSettings::onUserUpdate() after a successful CUser::Update().
+	 * A drop clears only the key built in the culture of its hit (date and date formats), so a drop from a hit with
+	 * other date formats (admin interface in another language, another site) misses the cache read by the user,
+	 * which stays until the next day or another drop. Department settings written outside the settings form of
+	 * timeman and user fields written bypassing CUser::Update() drop neither this cache nor the settings cache:
+	 * this method and GetReportInfo() keep to the old settings alike, even the next day, until the settings cache
+	 * is dropped, and differ only if it expires or is evicted while this cache lives.
+	 *
+	 * @return bool
+	 */
+	public function hasReportDayCome(): bool
+	{
+		global $CACHE_MANAGER;
+
+		$cacheId = self::getInfoCacheId($this->USER_ID);
+
+		if ($CACHE_MANAGER->Read(86400, $cacheId, 'timeman_report_info'))
+		{
+			$reportInfo = $CACHE_MANAGER->Get($cacheId);
+		}
+		else
+		{
+			$reportInfo = $this->_GetReportInfo();
+
+			$CACHE_MANAGER->Set($cacheId, $reportInfo);
+		}
+
+		if (!is_array($reportInfo))
+		{
+			return false;
+		}
+
+		return
+			($reportInfo['IS_REPORT_DAY'] ?? 'N') === 'Y'
+			|| $this->isReportDay((string)($reportInfo['DATE_SUBMIT'] ?? ''))
+		;
+	}
+
 	protected function _GetReportInfo()
 	{
 		global $DB,$USER;
@@ -1611,7 +1673,7 @@ class CUserReportFull
 		$text = preg_replace('/\[br\s*\/?]/i', "\n", $text) ?? $text;
 		$text = preg_replace('#\[/p]\s*\[p]#iu', "\n\n", $text) ?? $text;
 		$text = preg_replace('#\[/?p]#iu', '', $text) ?? $text;
-		$text = preg_replace('#\[/?(?:b|i|u)]#iu', '', $text) ?? $text;
+		$text = preg_replace('#\[/?(?:b|i|u|s)]#iu', '', $text) ?? $text;
 		$text = preg_replace('/\n{3,}/', "\n\n", $text) ?? $text;
 
 		return trim($text);
@@ -1948,6 +2010,7 @@ class CReportSettings
 		if($eventInfo['RESULT'])
 		{
 			static::clearCache($eventInfo['ID']);
+			CUserReportFull::clearReportCache($eventInfo['ID']);
 		}
 	}
 }
@@ -1995,7 +2058,10 @@ class CReportNotifications
 			$arSoFields["ENTITY_ID"] = $arReport["USER_ID"];
 			$arSoFields["USER_ID"] = $arReport["USER_ID"];
 //			CReportNotifications::Subscribe($arReport["USER_ID"]);
-			$logID = CSocNetLog::Add($arSoFields, false);
+			$logID = (new Settings())->isToolAvailable(Settings::TOOLS['worktime'])
+				? CSocNetLog::Add($arSoFields, false)
+				: false
+			;
 
 			if ((int)$logID > 0)
 			{
@@ -2037,6 +2103,10 @@ class CReportNotifications
 	protected static function NotifyIm($arReport)
 	{
 		if(!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return;
+		}
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
 		{
 			return;
 		}
@@ -2127,6 +2197,12 @@ class CReportNotifications
 	public static function MessageUpdate($REPORT_ID, $arReport = array(), $arFields = array())
 	{
 		global $DB,$USER;
+
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
+		{
+			return false;
+		}
+
 		$curUser = $USER->GetID();
 		if(CModule::IncludeModule("socialnetwork"))
 		{
@@ -2584,6 +2660,11 @@ class CReportNotifications
 		global $DB, $USER;
 		CModule::IncludeModule("socialnetwork");
 
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
+		{
+			return false;
+		}
+
 		$result = false;
 		$dbLog = CSocNetLog::GetList(Array(), Array("SOURCE_ID" => $arFields["REPORT_ID"], "EVENT_ID" => "report"));
 		if (!$arLog = $dbLog->Fetch())
@@ -2620,6 +2701,7 @@ class CReportNotifications
 	{
 		if (
 			CModule::IncludeModule("im")
+			&& (new Settings())->isToolAvailable(Settings::TOOLS['worktime'])
 			&& intval($arFields["USER_ID"]) > 0
 		)
 		{

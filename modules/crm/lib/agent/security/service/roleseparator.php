@@ -11,7 +11,7 @@ use Bitrix\Crm\Security\Role\Utils\RolePermissionChecker;
 
 abstract class RoleSeparator
 {
-	protected const SUPPORT_PERMS = ['HIDE_SUM', 'MYCARDVIEW', 'TRANSITION'];
+	protected const SUPPORT_PERMS = ['HIDE_SUM', 'MYCARDVIEW', 'OBSERVERS_WRITE', 'TRANSITION'];
 	/** @var PermissionExtender[] $extenders */
 	protected array $extenders = [];
 

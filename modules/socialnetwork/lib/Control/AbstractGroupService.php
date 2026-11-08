@@ -56,6 +56,12 @@ abstract class AbstractGroupService
 			return $this->finalizeAddResult($validationResult);
 		}
 
+		$preOperationResult = $this->validateAddBeforeOperation($command);
+		if (!$preOperationResult->isSuccess())
+		{
+			return $this->finalizeAddResult($preOperationResult);
+		}
+
 		$operationResult = $this->createAddOperation($command)->run();
 		if (!$operationResult->isSuccess())
 		{
@@ -105,6 +111,12 @@ abstract class AbstractGroupService
 			$result->addError(new Error('Group not found'));
 
 			return $this->finalizeUpdateResult($result);
+		}
+
+		$preOperationResult = $this->validateUpdateBeforeOperation($command, $entityBefore);
+		if (!$preOperationResult->isSuccess())
+		{
+			return $this->finalizeUpdateResult($preOperationResult);
 		}
 
 		$this->sendBeforeUpdateEvent($command, $entityBefore);
@@ -190,6 +202,16 @@ abstract class AbstractGroupService
 	}
 
 	protected function checkDeleteCommand(DeleteCommand $command): GroupResult
+	{
+		return new GroupResult();
+	}
+
+	protected function validateAddBeforeOperation(AddCommand $command): GroupResult
+	{
+		return new GroupResult();
+	}
+
+	protected function validateUpdateBeforeOperation(UpdateCommand $command, Workgroup $entityBefore): GroupResult
 	{
 		return new GroupResult();
 	}

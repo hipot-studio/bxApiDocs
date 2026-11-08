@@ -35,7 +35,14 @@ class TaskRightService
 
 	public function getTaskRightsBatch(int $userId, array $taskIds, array $rules = ActionDictionary::TASK_ACTIONS, array $params = []): array
 	{
-		$this->accessCacheLoader->preload($userId, $taskIds);
+		if (in_array(ActionDictionary::TASK_ACTIONS['read'], $rules, true))
+		{
+			$this->accessCacheLoader->preloadForReadAccess($userId, $taskIds);
+		}
+		else
+		{
+			$this->accessCacheLoader->preload($userId, $taskIds);
+		}
 
 		$access = [];
 		foreach ($taskIds as $taskId)

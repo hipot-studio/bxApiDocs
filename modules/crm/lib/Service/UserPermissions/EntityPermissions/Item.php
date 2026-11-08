@@ -327,13 +327,16 @@ class Item
 	/**
 	 * Preload data for permission attributes to increase performance in group mode permission checks
 	 *
+	 * Does nothing for an admin: {@see self::hasPermissions()} allows the operation before the
+	 * attributes are read, so the preloaded cache would never be used.
+	 *
 	 * @param int $entityTypeId
 	 * @param int[] $ids
 	 * @return void
 	 */
 	public function preloadPermissionAttributes(int $entityTypeId, array $ids): void
 	{
-		if (empty($ids))
+		if (empty($ids) || $this->admin->isAdmin())
 		{
 			return;
 		}
@@ -374,8 +377,16 @@ class Item
 		$entityAttrs = $securityController->getPermissionAttributes($permissionEntity, [$entityId]);
 		$entityAttrs = $entityAttrs[$entityId] ?? [];
 
-		return
+		$hasPermissionWithoutAttributes =
 			$this->permissionsManager->hasPermission($permissionEntity, $permissionType)
+			|| (
+				$permissionType === UserPermissions::OPERATION_UPDATE
+				&& $this->permissionsManager->isObserversWriteEnabled($permissionEntity)
+			)
+		;
+
+		return
+			$hasPermissionWithoutAttributes
 			&& $this->permissionsManager->doUserAttributesMatchesToEntityAttributes($permissionEntity, $permissionType, $entityAttrs)
 		;
 	}

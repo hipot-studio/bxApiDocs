@@ -19,6 +19,7 @@ use Bitrix\Bizproc\Internal\Service\Pilot\PilotPortalCache;
 use Bitrix\Bizproc\Internal\Service\Pilot\PilotPresence;
 use Bitrix\Bizproc\Internal\Service\Pilot\PilotTemplateSettings;
 use Bitrix\Bizproc\Internal\Service\Pilot\RestrictedTemplateArea;
+use Bitrix\Bizproc\Internal\Service\ProcessData\ProcessDataPublicationValidator;
 use Bitrix\Bizproc\Public\Service\Template\ActivityUsageAnalyzer;
 use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Bizproc\Public\Service\WorkflowTemplate\Dto\PilotPublicationRequest;
@@ -146,6 +147,12 @@ class PilotPublicationService
 			return PilotPublicationResult::createError(
 				$this->error(self::ERROR_AUDIENCE_EMPTY, 'BIZPROC_PILOT_AUDIENCE_EMPTY_ERROR', $request->accessCodes),
 			);
+		}
+
+		$processDataRefusal = $this->findProcessDataRefusal($request);
+		if ($processDataRefusal !== null)
+		{
+			return $processDataRefusal;
 		}
 
 		$revision = $this->revisionService->calculateRevision($request->executableFields['TEMPLATE'] ?? []);
@@ -515,6 +522,19 @@ class PilotPublicationService
 	}
 
 	/**
+	 * Takes the row lock every write of a pilot version takes, so that a caller deciding something about
+	 * the pilot of a template and then writing the template cannot be separated by a publication for an
+	 * audience. The lock belongs to the transaction of the caller and lives until that transaction ends -
+	 * outside a transaction it buys nothing.
+	 *
+	 * @return bool whether there is a row of the template to lock
+	 */
+	public function lockTemplateForPublication(int $templateId): bool
+	{
+		return $this->pilotRepository->lockTemplateForUpdate($templateId);
+	}
+
+	/**
 	 * @return array<string, mixed>|null null when there is no such template row
 	 */
 	private function loadTemplate(int $templateId): ?array
@@ -607,6 +627,34 @@ class PilotPublicationService
 			'VARIABLES' => $pilot->executableFields['VARIABLES'] ?? [],
 			'CONSTANTS' => $pilot->executableFields['CONSTANTS'] ?? [],
 		];
+	}
+
+	/**
+	 * The data elements of the scheme, held to what an ordinary publication holds them to: a pilot publishes
+	 * the very scheme of the very template, so a key conflict or a reference answered by no element is as
+	 * unrunnable under a pilot as it is under the common version. The refusal names the first of them and
+	 * marks the blocks by the whole list, the way the refusal of the settings does.
+	 */
+	private function findProcessDataRefusal(PilotPublicationRequest $request): ?PilotPublicationResult
+	{
+		$errors = (new ProcessDataPublicationValidator())->collectErrors(
+			$request->executableFields,
+			$request->templateId,
+		);
+
+		if ($errors === [])
+		{
+			return null;
+		}
+
+		$result = PilotPublicationResult::createError(new Error(
+			(string)($errors[0]['message'] ?? ''),
+			(string)($errors[0]['code'] ?? ''),
+			$errors[0]['customData'] ?? null,
+		));
+		$result->setData(['activityErrors' => $errors]);
+
+		return $result;
 	}
 
 	/**

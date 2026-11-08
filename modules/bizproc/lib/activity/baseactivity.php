@@ -40,7 +40,11 @@ abstract class BaseActivity extends \CBPActivity
 			$this->logError($error->getMessage());
 		}
 
-		return \CBPActivityExecutionStatus::Closed;
+		// A failed action must not report success: a succeeded one is what lets the flow follow its output link.
+		return $errorCollection->isEmpty()
+			? \CBPActivityExecutionStatus::Closed
+			: \CBPActivityExecutionStatus::Cancelled
+		;
 	}
 
 	protected function prepareProperties(): void

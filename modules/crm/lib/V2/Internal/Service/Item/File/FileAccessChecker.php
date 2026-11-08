@@ -10,6 +10,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\V2\Internal\Service\Item\CustomFieldRegistry;
 use Bitrix\Crm\V2\Internal\Service\Item\File\Value\FileFieldWriteRequest;
 use Bitrix\Crm\V2\Internal\Service\Item\File\Value\FileUploadInput;
+use Bitrix\Crm\V2\Public\Entity\Category\CategoryError;
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -99,7 +100,11 @@ final class FileAccessChecker
 
 		if ($legacyItem->isFieldDisabled($fieldName))
 		{
-			return $this->success($field, [], true);
+			return (new Result())->addError(new Error(
+				CategoryError::FIELD_NOT_WRITABLE->getMessage(),
+				CategoryError::FIELD_NOT_WRITABLE->value,
+				['field' => $fieldName],
+			));
 		}
 
 		$shapeError = $this->validateShape($request);

@@ -9,6 +9,7 @@ use Bitrix\Tasks\V2\Public\Command\Task\Audit\UnwatchTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Audit\WatchTaskCommand;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
 use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
 
@@ -27,6 +28,7 @@ class Audit extends BaseController
 			userId: $this->userId,
 			auditorId: $this->userId,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -53,6 +55,7 @@ class Audit extends BaseController
 			userId: $this->userId,
 			auditorId: $this->userId,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		))->run();
 
 		if (!$result->isSuccess())

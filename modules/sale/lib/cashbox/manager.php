@@ -209,21 +209,8 @@ final class Manager
 	{
 		$context = Main\Application::getInstance()->getContext();
 		$scheme = $context->getRequest()->isHttps() ? 'https' : 'http';
-		$server = $context->getServer();
-		$domain = $server->getServerName();
 
-		if (preg_match('/^(?<domain>.+):(?<port>\d+)$/', $domain, $matches))
-		{
-			$domain = $matches['domain'];
-			$port   = $matches['port'];
-		}
-		else
-		{
-			$port = $server->getServerPort();
-		}
-		$port = in_array($port, array(80, 443)) ? '' : ':'.$port;
-
-		return sprintf('%s://%s%s/bitrix/tools/sale_check_print.php?hash=%s', $scheme, $domain, $port, static::generateHash());
+		return sprintf('%s://%s/bitrix/tools/sale_check_print.php?hash=%s', $scheme, static::getSiteHost(), static::generateHash());
 	}
 
 	/**
@@ -235,6 +222,49 @@ final class Manager
 		CashboxConnectTable::add(array('HASH' => $hash, 'ACTIVE' => 'Y'));
 
 		return $hash;
+	}
+
+	/**
+	 * Returns site host with port suffix for non-standard ports, e.g. "site.ru" or "site.ru:8080".
+	 * Falls back to the main module "server_name" option when there is no HTTP request (cron, agents).
+	 *
+	 * @internal
+	 * @return string
+	 */
+	public static function getSiteHost(): string
+	{
+		$domain = static::getSiteServerName();
+
+		if (preg_match('/^(?<domain>.+):(?<port>\d+)$/', $domain, $matches))
+		{
+			$domain = $matches['domain'];
+			$port = (int)$matches['port'];
+		}
+		else
+		{
+			$port = (int)Main\Application::getInstance()->getContext()->getServer()->getServerPort();
+		}
+
+		$hasCustomPort = $port > 0 && !in_array($port, [80, 443], true);
+
+		return $hasCustomPort ? $domain . ':' . $port : $domain;
+	}
+
+	/**
+	 * Returns server name of the current request or the main module "server_name" option as a fallback.
+	 *
+	 * @internal
+	 * @return string
+	 */
+	public static function getSiteServerName(): string
+	{
+		$serverName = (string)Main\Application::getInstance()->getContext()->getServer()->getServerName();
+		if ($serverName === '')
+		{
+			$serverName = (string)Main\Config\Option::get('main', 'server_name');
+		}
+
+		return $serverName;
 	}
 
 	/**
@@ -390,7 +420,7 @@ final class Manager
 
 		$cacheManager->clean(Manager::CACHE_ID);
 
-		if (is_subclass_of($data['HANDLER'], '\Bitrix\Sale\Cashbox\ICheckable'))
+		if (isset($data['HANDLER']) && is_subclass_of($data['HANDLER'], '\Bitrix\Sale\Cashbox\ICheckable'))
 		{
 			static::addCheckStatusAgent();
 		}

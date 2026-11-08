@@ -16,7 +16,6 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Join;
-use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 
 class UserCountersCollector
@@ -24,7 +23,6 @@ class UserCountersCollector
 	private const LIMIT = 1000;
 
 	public function __construct(
-		protected readonly RecentConfigManager $recentConfigManager,
 		protected readonly TypeRegistry $typeRegistry,
 		protected readonly CountersCache $countersCache,
 		protected readonly CounterOverflowService $counterOverflowService,
@@ -114,9 +112,9 @@ class UserCountersCollector
 	{
 		$overflowedChatIds = $this->counterOverflowService->getOverflowedChatIdsByUserId(
 			$userId,
-			$this->getLimit(),
+			$this->getChatsLimit(),
 		);
-		$limit = $this->getLimit() - count($overflowedChatIds);
+		$limit = $this->getChatsLimit() - count($overflowedChatIds);
 		$query = MessageUnreadTable::query()
 			->setSelect([
 				'COUNT' => new ExpressionField('COUNT', 'COUNT(*)'),
@@ -275,15 +273,14 @@ class UserCountersCollector
 
 	protected function getRecentSections(Chat\Type $type, int $parentId = 0): array
 	{
-		if ($parentId > 0)
-		{
-			return $this->recentConfigManager->getAllRecentSectionsByType($type->getExtendedType(false));
-		}
-
-		return $this->recentConfigManager->getBaseRecentSections($type->getExtendedType(false));
+		return $this->typeRegistry->getRecentSectionsMinusExclusions($type, hasParent: $parentId > 0);
 	}
 
-	private function getLimit(): int
+	/**
+	 * Maximum number of chats whose message counters are collected (the most recently active ones);
+	 * counters of chats beyond this cap are not represented in UserCounters.
+	 */
+	public function getChatsLimit(): int
 	{
 		return (int)Option::get('im', 'counter_chats_limit', self::LIMIT);
 	}

@@ -128,6 +128,32 @@ abstract class AbstractEventImportProcessor
 			return;
 		}
 
+		$this->savePreparedEventData($externalData, $masterEventData);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws BaseException
+	 * @throws PersistenceException
+	 */
+	protected function saveEventData(EventData $externalData, ?EventData $masterEventData = null): void
+	{
+		if ($masterEventData !== null)
+		{
+			$externalData->getEvent()->setRecurrenceId($masterEventData->getEvent()->getParentId());
+		}
+
+		$this->enrichExternalData($externalData);
+		$this->savePreparedEventData($externalData, $masterEventData);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws BaseException
+	 * @throws PersistenceException
+	 */
+	private function savePreparedEventData(EventData $externalData, ?EventData $masterEventData): void
+	{
 		$this->saveEvent($externalData);
 
 		if (
@@ -301,6 +327,8 @@ abstract class AbstractEventImportProcessor
 			? $this->eventMapper->create($event, $this->buildSavingParams($externalEvent))
 			: $this->eventMapper->update($event, $this->buildSavingParams($externalEvent));
 
+		$this->onEventSaveResult($externalEvent, $event);
+
 		if ($event)
 		{
 			$externalEvent->eventConnection
@@ -310,6 +338,10 @@ abstract class AbstractEventImportProcessor
 
 			$this->eventConnectionRepository->save($externalEvent->eventConnection);
 		}
+	}
+
+	protected function onEventSaveResult(EventData $externalEvent, ?Event $savedEvent): void
+	{
 	}
 
 	protected function buildSavingParams(EventData $externalEvent): array
@@ -322,7 +354,7 @@ abstract class AbstractEventImportProcessor
 	/**
 	 * @throws PersistenceException
 	 */
-	private function deleteEvent(EventConnection $eventConnection): void
+	protected function deleteEvent(EventConnection $eventConnection): void
 	{
 		$event = $eventConnection->getEvent();
 
@@ -354,20 +386,31 @@ abstract class AbstractEventImportProcessor
 		if ($localEvent !== null && $localEvent->getId() === $localEvent->getParentId())
 		{
 			// todo handle meeting status
-			if ($event->isInstance())
+			if ($event->isInstance() && !$this->shouldDeferEventUnlink())
 			{
 				$this->handleDeleteInstance($eventConnection);
 			}
 
-			$this->eventMapper->delete(
-				$event,
-				[
-					'softDelete' => true,
-					'originalFrom' => $eventConnection->getConnection()->getVendor()->getCode(),
-				],
-			);
+			$deletedEvent = null;
+			try
+			{
+				$deletedEvent = $this->eventMapper->delete(
+					$event,
+					[
+						'softDelete' => true,
+						'originalFrom' => $eventConnection->getConnection()->getVendor()->getCode(),
+					],
+				);
+			}
+			finally
+			{
+				$this->onEventDeleteResult($eventConnection, $deletedEvent);
+			}
 
-			$this->unlinkEventConnection($eventConnection);
+			if (!$this->shouldDeferEventUnlink())
+			{
+				$this->unlinkEventConnection($eventConnection);
+			}
 
 			return;
 		}
@@ -386,7 +429,7 @@ abstract class AbstractEventImportProcessor
 	 *
 	 * @throws PersistenceException
 	 */
-	private function unlinkEventConnection(EventConnection $eventConnection): void
+	protected function unlinkEventConnection(EventConnection $eventConnection): void
 	{
 		$this->map->remove($eventConnection->getVendorEventId());
 
@@ -506,26 +549,42 @@ abstract class AbstractEventImportProcessor
 	 */
 	private function removeDeprecatedInstance(EventData $oldInstance, EventData $externalEventData): void
 	{
-		// @todo Query in loop!
-		$this->eventConnectionRepository->delete($oldInstance->eventConnection->getId());
+		$isOwner = $oldInstance->getEvent()->getId() === $oldInstance->getEvent()->getParentId();
+		if (!$isOwner || !$this->shouldDeferEventUnlink())
+		{
+			$this->eventConnectionRepository->delete($oldInstance->eventConnection->getId());
+		}
 
-		// Guest attendee copy (id !== parentId): scope removal to the copy itself,
-		// do not escalate to the master meeting event (see CCalendarEvent::Delete()).
-		// A master/owner instance (id === parentId), including a ResourceBooking master,
-		// falls through to the regular delete below.
-		if ($oldInstance->getEvent()->getId() !== $oldInstance->getEvent()->getParentId())
+		if (!$isOwner)
 		{
 			return;
 		}
 
-		$this->eventMapper->delete(
-			$oldInstance->getEvent(),
-			[
-				'softDelete' => false,
-				'originalFrom' => $externalEventData->eventConnection->getConnection()->getVendor()->getCode(),
-				'recursionMode' => 'this',
-			],
-		);
+		$deletedEvent = null;
+		try
+		{
+			$deletedEvent = $this->eventMapper->delete(
+				$oldInstance->getEvent(),
+				[
+					'softDelete' => false,
+					'originalFrom' => $externalEventData->eventConnection->getConnection()->getVendor()->getCode(),
+					'recursionMode' => 'this',
+				],
+			);
+		}
+		finally
+		{
+			$this->onEventDeleteResult($oldInstance->eventConnection, $deletedEvent);
+		}
+	}
+
+	protected function shouldDeferEventUnlink(): bool
+	{
+		return false;
+	}
+
+	protected function onEventDeleteResult(EventConnection $eventConnection, ?Event $deletedEvent): void
+	{
 	}
 
 	protected function getInstanceKey(EventData $instance, EventData $eventData): ?string

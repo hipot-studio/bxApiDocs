@@ -3,6 +3,7 @@
 namespace Bitrix\UI\UserField\Types;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\UserField\Types\StringType;
 use Bitrix\UI\Format\BBCode\Converter;
 use Bitrix\UI\Format\BBCode\Whitelist;
@@ -42,7 +43,12 @@ class RichTextType extends StringType
 
 	public static function onBeforeSave(array $userField, $value, $userId = null): string
 	{
-		return Whitelist::normalize((string)$value);
+		return Emoji::encode(Whitelist::normalize((string)$value));
+	}
+
+	public static function onAfterFetch(array $userField, array $fetched): string
+	{
+		return Emoji::decode((string)($fetched['VALUE'] ?? ''));
 	}
 
 	public static function onSearchIndex(array $userField): ?string

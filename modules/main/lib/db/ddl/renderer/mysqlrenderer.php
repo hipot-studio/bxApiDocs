@@ -126,6 +126,12 @@ final class MysqlRenderer implements RendererInterface
 			. ')';
 
 		$tableOptions = [];
+		// The counter is a table option in MySQL, hoisted here from the autoincrement column.
+		$startWith = $this->findAutoincrementStartWith($columns);
+		if ($startWith !== null)
+		{
+			$tableOptions[] = 'AUTO_INCREMENT=' . $startWith;
+		}
 		if ($data->isDelayKeyWrite())
 		{
 			$tableOptions[] = 'DELAY_KEY_WRITE=1';
@@ -144,38 +150,51 @@ final class MysqlRenderer implements RendererInterface
 
 	public function renderAlterTable(AlterTableData $data): array
 	{
-		$lines = [];
+		$allLines = [];
+		$columnLines = [];
 
 		if ($data->isDropPrimaryKey())
 		{
-			$lines[] = 'DROP PRIMARY KEY';
+			$allLines[] = 'DROP PRIMARY KEY';
+			$columnLines[] = 'DROP PRIMARY KEY';
 		}
 
+		$indexLines = [];
 		foreach ($data->getDropIndexNames() as $name)
 		{
-			$lines[] = 'DROP INDEX `' . $name . '`';
+			$line = 'DROP INDEX `' . $name . '`';
+			$allLines[] = $line;
+			$indexLines[] = $line;
 		}
 
 		foreach ($data->getDroppedColumns() as $name)
 		{
-			$lines[] = 'DROP COLUMN `' . $name . '`';
+			$line = 'DROP COLUMN `' . $name . '`';
+			$allLines[] = $line;
+			$columnLines[] = $line;
 		}
 
 		foreach ($data->getRenamedColumns() as $oldName => $newName)
 		{
-			$lines[] = 'RENAME COLUMN `' . $oldName . '` TO `' . $newName . '`';
+			$line = 'RENAME COLUMN `' . $oldName . '` TO `' . $newName . '`';
+			$allLines[] = $line;
+			$columnLines[] = $line;
 		}
 
 		$columnTypeMap = [];
 		foreach ($data->getAddedColumns() as $col)
 		{
-			$lines[] = 'ADD COLUMN ' . $this->renderColumnDefinition($col);
+			$line = 'ADD COLUMN ' . $this->renderColumnDefinition($col);
+			$allLines[] = $line;
+			$columnLines[] = $line;
 			$columnTypeMap[$col->getParams()->getName()] = $col;
 		}
 
 		foreach ($data->getModifiedColumns() as $col)
 		{
-			$lines[] = 'MODIFY COLUMN ' . $this->renderColumnDefinition($col);
+			$line = 'MODIFY COLUMN ' . $this->renderColumnDefinition($col);
+			$allLines[] = $line;
+			$columnLines[] = $line;
 			$columnTypeMap[$col->getParams()->getName()] = $col;
 		}
 
@@ -184,7 +203,20 @@ final class MysqlRenderer implements RendererInterface
 		{
 			$this->validatePrimaryKeyColumns($data->getTableName(), $primaryKeys, $columnTypeMap);
 			$keys = array_map(static fn(string $key): string => '`' . $key . '`', $primaryKeys);
-			$lines[] = 'ADD PRIMARY KEY (' . implode(', ', $keys) . ')';
+			$line = 'ADD PRIMARY KEY (' . implode(', ', $keys) . ')';
+			$allLines[] = $line;
+			$columnLines[] = $line;
+		}
+
+		// InnoDB never lowers the counter below MAX(id) + 1, so the clause is raising-only by itself.
+		$startWith = $this->findAutoincrementStartWith(
+			array_merge($data->getAddedColumns(), $data->getModifiedColumns()),
+		);
+		if ($startWith !== null)
+		{
+			$line = 'AUTO_INCREMENT = ' . $startWith;
+			$allLines[] = $line;
+			$columnLines[] = $line;
 		}
 
 		foreach ($data->getAddedIndexes() as $indexName => $index)
@@ -197,23 +229,103 @@ final class MysqlRenderer implements RendererInterface
 				'fulltext' => 'ADD FULLTEXT INDEX',
 				default => 'ADD INDEX',
 			};
-			$lines[] = $prefix . ' `' . $indexName . '` (' . implode(', ', $cols) . ')';
+			$line = $prefix . ' `' . $indexName . '` (' . implode(', ', $cols) . ')';
+			$allLines[] = $line;
+			$indexLines[] = $line;
 		}
 
-		if (empty($lines))
+		if (empty($allLines))
 		{
 			return [];
 		}
 
-		return [
-			'ALTER TABLE `' . $data->getTableName() . "`\n" . implode(",\n", $lines),
-			'ANALYZE TABLE `' . $data->getTableName() . '`',
-		];
+		$hasSecondaryIndexOperations = !empty($indexLines);
+		$hasDependentOperations = $data->isDropPrimaryKey()
+			|| !empty($primaryKeys)
+			|| !empty($data->getModifiedColumns())
+			|| !empty($data->getDroppedColumns())
+			|| !empty($data->getRenamedColumns())
+			|| $this->hasAutoincrementColumnSupportedByAddedSecondaryIndex($data)
+		;
+
+		$lineGroups = $hasSecondaryIndexOperations && $hasDependentOperations
+			? [$allLines]
+			: [$columnLines, $indexLines]
+		;
+
+		$queries = [];
+		foreach ($lineGroups as $lines)
+		{
+			if (!empty($lines))
+			{
+				$queries[] = 'ALTER TABLE `' . $data->getTableName() . "`\n" . implode(",\n", $lines);
+			}
+		}
+
+		$queries[] = 'ANALYZE TABLE `' . $data->getTableName() . '`';
+
+		return $queries;
+	}
+
+	private function hasAutoincrementColumnSupportedByAddedSecondaryIndex(AlterTableData $data): bool
+	{
+		$autoincrementColumnNames = [];
+		foreach (array_merge($data->getAddedColumns(), $data->getModifiedColumns()) as $column)
+		{
+			$params = $column->getParams();
+			if ($params->isAutoincrement())
+			{
+				$autoincrementColumnNames[] = $params->getName();
+			}
+		}
+
+		if (empty($autoincrementColumnNames))
+		{
+			return false;
+		}
+
+		foreach ($data->getAddedIndexes() as $index)
+		{
+			$firstColumn = $index['columns'][0] ?? null;
+			if ($firstColumn === null)
+			{
+				continue;
+			}
+
+			foreach ($autoincrementColumnNames as $columnName)
+			{
+				if (strcasecmp($firstColumn->getName(), $columnName) === 0)
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	public function renderDropTable(string $tableName): string
 	{
 		return 'DROP TABLE IF EXISTS `' . $tableName . '`';
+	}
+
+	/**
+	 * @param ColumnInterface[] $columns
+	 */
+	private function findAutoincrementStartWith(array $columns): ?int
+	{
+		foreach ($columns as $column)
+		{
+			$params = $column->getParams();
+			$startWith = $params->getAutoincrementStartWith();
+			// Unresolved closures are dropped: the value exists only when resolved against the live DB.
+			if ($params->isAutoincrement() && is_int($startWith))
+			{
+				return $startWith;
+			}
+		}
+
+		return null;
 	}
 
 	/**

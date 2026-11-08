@@ -16,6 +16,8 @@ class CreateShareCommand extends AbstractCommand
 		public readonly DateTime $dateExpire,
 		public readonly ?array $externalFilterValues = null,
 		public readonly ?array $urlParameterValues = null,
+		// Unlike an explicit switch-on, keeps off a link switched off by an administrator.
+		public readonly bool $isAutoSave = false,
 	)
 	{
 	}

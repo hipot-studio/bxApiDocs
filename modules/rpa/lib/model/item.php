@@ -102,7 +102,11 @@ class Item extends UserField\Internal\Item
 
 	public function isEmptyUserFieldValue($fieldName): bool
 	{
-		return empty($this->get($fieldName));
+		$userField = $this->getType()->getUserFieldCollection()->getByName($fieldName);
+
+		return $userField
+			? $userField->isValueEmpty($this->get($fieldName))
+			: empty($this->get($fieldName));
 	}
 
 	public function getChangedUserFieldNames(): array

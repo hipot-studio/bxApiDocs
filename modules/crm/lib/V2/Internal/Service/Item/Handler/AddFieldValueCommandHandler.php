@@ -179,6 +179,14 @@ final class AddFieldValueCommandHandler
 			{
 				return $appendResult;
 			}
+			$categoryResult = $this->operationRunner->validateChangedFields(
+				$updateCommand,
+				$preparedOperation->getLegacyItem(),
+			);
+			if (!$categoryResult->isSuccess())
+			{
+				return $categoryResult;
+			}
 
 			$preparedOperation->syncChangedFieldsFromV2Item();
 
@@ -612,7 +620,17 @@ final class AddFieldValueCommandHandler
 				$provider = $provider->withAccessCheck($userId);
 			}
 
-			return $provider->getById($itemId, ['id']) !== null;
+			$categoryRestricted = in_array(
+				$entityTypeId,
+				[EntityType::company()->getId(), EntityType::contact()->getId()],
+				true,
+			);
+			$select = $categoryRestricted ? ['id', 'categoryId'] : ['id'];
+			$item = $provider->getById($itemId, $select);
+
+			return $item !== null
+				&& (!$categoryRestricted || $item->getCategoryId() === 0)
+			;
 		}
 		catch (\Throwable)
 		{

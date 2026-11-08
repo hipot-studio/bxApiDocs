@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Superset\Import;
 
 use Bitrix\BIConnector\Access\Service\SystemGroupLocalizationService;
+use Bitrix\BIConnector\Access\Service\TableGroupLocalizationService;
 use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
@@ -36,6 +37,7 @@ final class DashboardReimportService extends Stepper
 	private static function updateSystemGroupNames(): void
 	{
 		SystemGroupLocalizationService::update(CultureFormatter::getLanguageCode());
+		TableGroupLocalizationService::update(CultureFormatter::getLanguageCode());
 	}
 
 	private static function updateSystemDashboardsNames(): void

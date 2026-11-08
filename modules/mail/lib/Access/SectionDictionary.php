@@ -21,6 +21,11 @@ class SectionDictionary
 			PermissionDictionary::MAIL_MAILBOX_LIST_ITEM_EDIT,
 			PermissionDictionary::MAIL_MAILBOX_CONNECT,
 		];
+		if (Feature::isSenderAvatarAvailable())
+		{
+			$mailPermissions[] = PermissionDictionary::MAIL_SENDER_AVATARS_MANAGE;
+		}
+
 		if (Feature::isSharedSignaturePermissionAvailable())
 		{
 			$mailPermissions[] = PermissionDictionary::MAIL_SHARED_SIGNATURES_MANAGE;
@@ -29,6 +34,11 @@ class SectionDictionary
 		if (Feature::isCrmAvailable())
 		{
 			$mailPermissions[] = PermissionDictionary::MAIL_MAILBOX_CRM_INTEGRATION_EDIT;
+		}
+
+		if (Feature::isMessageDeletePermissionAvailable())
+		{
+			$mailPermissions[] = PermissionDictionary::MAIL_MESSAGE_DELETE;
 		}
 
 		return [

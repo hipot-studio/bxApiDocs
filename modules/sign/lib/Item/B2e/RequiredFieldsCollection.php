@@ -101,7 +101,11 @@ class RequiredFieldsCollection implements Item, ItemCollection, \IteratorAggrega
 				&& Role::isValid((string)$field['role'])
 			)
 			{
-				$fields->add(new RequiredField((string)$field['type'], (string)$field['role']));
+				$fields->add(new RequiredField(
+					(string)$field['type'],
+					(string)$field['role'],
+					!isset($field['required']) || (bool)$field['required'],
+				));
 			}
 		}
 

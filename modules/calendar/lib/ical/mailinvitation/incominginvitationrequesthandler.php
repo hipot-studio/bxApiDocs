@@ -361,7 +361,7 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 
 		$event['MEETING_STATUS'] = Tools\Dictionary::MEETING_STATUS['Host'];
 
-		$event['ACCESSIBILITY'] = 'free';
+		$event['ACCESSIBILITY'] = $this->resolveAccessibility($icalEvent);
 		$event['IMPORTANCE'] = 'normal';
 		$event['REMIND'][] = [
 			'type' => 'min',
@@ -827,7 +827,7 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 			self::MEETING_STATUS_DECLINED_CODE => Tools\Dictionary::MEETING_STATUS['No'],
 			default => Tools\Dictionary::MEETING_STATUS['Question'],
 		};
-		$event['ACCESSIBILITY'] = 'free';
+		$event['ACCESSIBILITY'] = $this->resolveAccessibility($icalEvent, $localEvent['ACCESSIBILITY'] ?? null);
 		$event['IMPORTANCE'] = 'normal';
 		$event['REMIND'] = [
 			'type' => 'min',
@@ -934,6 +934,36 @@ class IncomingInvitationRequestHandler extends IncomingInvitationHandler
 		}
 
 		return implode(', ', $res);
+	}
+
+	/**
+	 * A missing TRANSP never overrides what the event already stores; it only decides a brand new
+	 * event, which acceptance books and an undecided invitation leaves free. An explicit TRANSP
+	 * does override: TRANSPARENT always frees the calendar, every other value books it once the
+	 * guest has accepted and otherwise falls back to the stored accessibility (free if none).
+	 *
+	 * Until the guest accepts, an invitation may only free the calendar: mailbox sync creates the
+	 * event on delivery (Bitrix\Mail\Integration\Calendar\ICal\ICalMailEventManager), so booking
+	 * on delivery would let any sender fill the guest's availability grid.
+	 */
+	private function resolveAccessibility(Event $icalEvent, ?string $currentAccessibility = null): string
+	{
+		$transparent = mb_strtoupper(trim($icalEvent->getTransparent()?->getValue() ?? ''));
+		$stored = $currentAccessibility ?: null;
+		$accepted = $this->decision === self::MEETING_STATUS_ACCEPTED_CODE;
+
+		if ($transparent === '')
+		{
+			return $stored ?? ($accepted ? 'busy' : 'free');
+		}
+
+		$fromInvitation = Basic\Dictionary::LOCAL_TRANSPARENT[$transparent] ?? 'busy';
+		if ($fromInvitation === 'busy' && !$accepted)
+		{
+			return $stored ?? 'free';
+		}
+
+		return $fromInvitation;
 	}
 
 	private function parseRRule(ParserPropertyType $icalRRule): array

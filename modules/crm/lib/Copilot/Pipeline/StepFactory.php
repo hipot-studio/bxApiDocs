@@ -199,6 +199,11 @@ final readonly class StepFactory
 	 */
 	private function createFillFields(StepContext $context): ?AbstractOperation
 	{
+		if ($context->getExtra('fillFieldsEntityAllowed') === false)
+		{
+			return null;
+		}
+
 		if (!AIManager::isEnabledInGlobalSettings(GlobalSetting::FillItemFromCall))
 		{
 			return null;
@@ -320,11 +325,15 @@ final readonly class StepFactory
 		}
 
 		$assessmentSettingsId = $context->getExtra('assessmentSettingsId');
+		$userId = $context->isManualLaunch()
+			? $context->getUserId()
+			: ($transcriptionResult->getUserId() ?? $context->getUserId())
+		;
 
 		return new ScoreCall(
 			new ItemIdentifier(CCrmOwnerType::Activity, $context->getActivityId()),
 			$transcription,
-			$transcriptionResult->getUserId() ?? $context->getUserId(),
+			$userId,
 			$transcriptionResult->getJobId(),
 			$assessmentSettingsId !== null ? (int)$assessmentSettingsId : null,
 		);

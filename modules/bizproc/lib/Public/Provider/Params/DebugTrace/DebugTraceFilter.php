@@ -29,6 +29,11 @@ class DebugTraceFilter implements FilterInterface
 			$result->where('DEBUG_SESSION_ID', '=', (int)$this->filter['DEBUG_SESSION_ID']);
 		}
 
+		if (isset($this->filter['>ID']))
+		{
+			$result->where('ID', '>', (int)$this->filter['>ID']);
+		}
+
 		return $result;
 	}
 }

@@ -17,6 +17,7 @@ abstract class CodedSystemException extends SystemException
 	public function __construct(
 		string $message = '',
 		private readonly ?string $errorCode = null,
+		private readonly ?array $customData = null,
 		?\Throwable $previous = null,
 	)
 	{
@@ -26,5 +27,10 @@ abstract class CodedSystemException extends SystemException
 	public function getErrorCode(): ?string
 	{
 		return $this->errorCode;
+	}
+
+	public function getCustomData(): ?array
+	{
+		return $this->customData;
 	}
 }

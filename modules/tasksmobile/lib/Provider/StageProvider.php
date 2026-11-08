@@ -9,6 +9,7 @@ use Bitrix\Main\Result;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Util\Type\DateTime;
+use Bitrix\TasksMobile\Cache\DeadlineCountersCache;
 use Bitrix\TasksMobile\Dto\Stage;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Integration\Socialnetwork;
@@ -57,12 +58,12 @@ final class StageProvider
 		$this->extra = $extra;
 	}
 
-	public function getPlannerStages(?int $projectId = null): Result
+	public function getPlannerStages(?int $projectId = null, bool $withCounters = true): Result
 	{
 		$this->workMode = StagesTable::WORK_MODE_USER;
 		$this->projectId = $projectId;
 
-		$stages = $this->getStages();
+		$stages = $this->getStages($withCounters);
 		$canEdit = $this->searchParams->ownerId === $this->userId;
 		$canMoveStage = $this->verifyCanMoveStage();
 
@@ -76,12 +77,12 @@ final class StageProvider
 		return $result;
 	}
 
-	public function getDeadlineStages(?int $projectId = null): Result
+	public function getDeadlineStages(?int $projectId = null, bool $withCounters = true): Result
 	{
 		$this->workMode = StagesTable::WORK_MODE_TIMELINE;
 		$this->projectId = $projectId;
 
-		$stages = $this->getStages();
+		$stages = $this->getStages($withCounters);
 		$canEdit = false;
 		$canMoveStage = $this->verifyCanMoveStage();
 
@@ -95,7 +96,7 @@ final class StageProvider
 		return $result;
 	}
 
-	public function getProjectStages(int $projectId, ?int $taskId): Result
+	public function getProjectStages(int $projectId, ?int $taskId, bool $withCounters = true): Result
 	{
 		if ($taskId)
 		{
@@ -114,7 +115,7 @@ final class StageProvider
 		$this->projectId = $projectId;
 		$this->taskId = $taskId;
 
-		$stages = $this->getStages();
+		$stages = $this->getStages($withCounters);
 		$canEdit = $this->hasEditProjectStagesPermission();
 		$canMoveStage = $this->verifyCanMoveStage();
 
@@ -128,21 +129,26 @@ final class StageProvider
 		return $result;
 	}
 
-	public function getKanbanInfoByWorkMode(int $projectId, int $taskId, string $workMode): Result
+	public function getKanbanInfoByWorkMode(
+		int $projectId,
+		int $taskId,
+		string $workMode,
+		bool $withCounters = true,
+	): Result
 	{
 		if ($workMode === StagesTable::WORK_MODE_GROUP)
 		{
-			return $this->getProjectStages($projectId, $taskId);
+			return $this->getProjectStages($projectId, $taskId, $withCounters);
 		}
 
 		if ($workMode === StagesTable::WORK_MODE_TIMELINE)
 		{
-			return $this->getDeadlineStages($projectId);
+			return $this->getDeadlineStages($projectId, $withCounters);
 		}
 
 		if ($workMode === StagesTable::WORK_MODE_USER)
 		{
-			return $this->getPlannerStages($projectId);
+			return $this->getPlannerStages($projectId, $withCounters);
 		}
 
 		return (new Result())->setData([]);
@@ -437,7 +443,7 @@ final class StageProvider
 	 * @return Stage[]
 	 * @throws \Bitrix\TasksMobile\Exception\ModuleNotFoundException
 	 */
-	private function getStages(): array
+	private function getStages(bool $withCounters = true): array
 	{
 		$stagesEntityId = $this->workMode === StagesTable::WORK_MODE_GROUP ? $this->projectId : $this->searchParams->ownerId;
 		if (!Socialnetwork::includeModule())
@@ -475,9 +481,10 @@ final class StageProvider
 
 		if (!empty($stages))
 		{
-			$filter = $this->getFilter();
-			$params = $this->getParams($stagesEntityId);
-			$stages = $this->fillCountersData($stages, $filter, $params, $isScrumTask);
+			// the filter and the params feed the counting alone, so a read without counters skips building them
+			$filter = $withCounters ? $this->getFilter() : [];
+			$params = $withCounters ? $this->getParams($stagesEntityId) : [];
+			$stages = $this->fillCountersData($stages, $filter, $params, $isScrumTask, $withCounters);
 		}
 
 		StagesTable::setWorkMode($prevWorkMode);
@@ -485,56 +492,28 @@ final class StageProvider
 		return array_values($stages);
 	}
 
-	private function fillCountersData(array $stages, array $filter = [], array $params = [], ?bool $isScrumTask = false): array
+	/**
+	 * @param bool $withCounters Counting the tasks of every stage is the expensive part of this read, and the
+	 * task card discards the numbers, so it asks for the stages without them: no counting, no cache, total 0.
+	 */
+	private function fillCountersData(
+		array $stages,
+		array $filter = [],
+		array $params = [],
+		?bool $isScrumTask = false,
+		bool $withCounters = true,
+	): array
 	{
-		$counts = [];
 		$stagesWithCounters = [];
 		$timeLineMode = $this->workMode === StagesTable::WORK_MODE_TIMELINE;
-		if (!$timeLineMode && !$isScrumTask)
-		{
-			$counts = StagesTable::getStagesCount(
-				$stages,
-				$filter,
-				$params['USER_ID'] ?? false,
-			);
-		}
+		$boardCounts = $withCounters ? $this->getBoardCounts($stages, $filter, $params, (bool)$isScrumTask) : [];
+		// a scrum board is left out of the counting at once, so resolving its stage codes would sum nothing
+		$stagesEntityId = $isScrumTask ? 0 : (int)($params['STAGES_ENTITY_ID'] ?? 0);
 
 		foreach ($stages as $index => $stage)
 		{
 			$isFirstStage = ($index === array_key_first($stages));
-			$count = 0;
-
-			if (!empty($stage['ADDITIONAL_FILTER']))
-			{
-				$filterTmp = array_merge(
-					$filter,
-					$stage['ADDITIONAL_FILTER']
-				);
-				$count = CTasks::GetCountInt($filterTmp);
-			}
-			else
-			{
-				$stageId = (int)($stage['ID'] ?? 0);
-				$stagesEntityId = (int)($params['STAGES_ENTITY_ID'] ?? 0);
-				if (
-					$stageId !== 0
-					&& $stagesEntityId !== 0
-					&& !$isScrumTask
-				)
-				{
-					$stages = (array)StagesTable::getStageIdByCode(
-						$stageId,
-						$stagesEntityId
-					);
-					foreach ($stages as $stId)
-					{
-						if (isset($counts[$stId]))
-						{
-							$count += $counts[$stId];
-						}
-					}
-				}
-			}
+			$count = $withCounters ? $this->resolveStageCount($stage, $boardCounts, $filter, $stagesEntityId) : 0;
 
 			$deadline = null;
 			$leftBorder = null;
@@ -574,6 +553,111 @@ final class StageProvider
 		}
 
 		return $stagesWithCounters;
+	}
+
+	/**
+	 * @return array<string|int, int> the counting the board does in one go: by SYSTEM_TYPE in timeline mode,
+	 * by stage id outside it. A stage counted by a query of its own is not in it.
+	 */
+	private function getBoardCounts(array $stages, array $filter, array $params, bool $isScrumTask): array
+	{
+		if ($this->workMode === StagesTable::WORK_MODE_TIMELINE)
+		{
+			return $this->getTimelineCounts($stages, $filter);
+		}
+
+		if ($isScrumTask)
+		{
+			return [];
+		}
+
+		return StagesTable::getStagesCount(
+			$stages,
+			$filter,
+			$params['USER_ID'] ?? false,
+		);
+	}
+
+	/**
+	 * @param array<string|int, int> $boardCounts the counting of the whole board, see getBoardCounts()
+	 */
+	private function resolveStageCount(array $stage, array $boardCounts, array $filter, int $stagesEntityId): int
+	{
+		if ($this->workMode === StagesTable::WORK_MODE_TIMELINE)
+		{
+			return (int)($boardCounts[(string)$stage['SYSTEM_TYPE']] ?? 0);
+		}
+
+		if (!empty($stage['ADDITIONAL_FILTER']))
+		{
+			return (int)CTasks::GetCountInt(array_merge($filter, $stage['ADDITIONAL_FILTER']));
+		}
+
+		$stageId = (int)($stage['ID'] ?? 0);
+		if ($stageId === 0 || $stagesEntityId === 0)
+		{
+			return 0;
+		}
+
+		$count = 0;
+		foreach ((array)StagesTable::getStageIdByCode($stageId, $stagesEntityId) as $stageIdByCode)
+		{
+			$count += (int)($boardCounts[$stageIdByCode] ?? 0);
+		}
+
+		return $count;
+	}
+
+	/**
+	 * @return array<string, int> SYSTEM_TYPE => count
+	 */
+	private function getTimelineCounts(array $stages, array $filter): array
+	{
+		$cache = new DeadlineCountersCache();
+		$ownerId = $this->searchParams->ownerId;
+		$cacheEnabled = $cache->isEnabled() && $this->canCacheCounts();
+		if ($cacheEnabled)
+		{
+			$cached = $cache->get($this->userId, $ownerId, $this->projectId, $filter);
+			if ($cached !== null)
+			{
+				return $cached;
+			}
+		}
+
+		$counts = [];
+		foreach ($stages as $stage)
+		{
+			if (!empty($stage['ADDITIONAL_FILTER']))
+			{
+				$filterTmp = array_merge($filter, $stage['ADDITIONAL_FILTER']);
+				$counts[(string)$stage['SYSTEM_TYPE']] = (int)CTasks::GetCountInt($filterTmp);
+			}
+		}
+
+		if ($cacheEnabled)
+		{
+			$cache->set($this->userId, $ownerId, $this->projectId, $filter, $counts);
+		}
+
+		return $counts;
+	}
+
+	/**
+	 * The numbers of a project board hold only because the counting itself checks the permissions of the
+	 * user, and a snapshot served from the cache skips that check. So the access is confirmed before the
+	 * cache is read or written: a board that cannot confirm it is counted for real every time, and losing
+	 * the project takes effect at once instead of at the end of the ttl. A personal board has none to confirm.
+	 */
+	private function canCacheCounts(): bool
+	{
+		$projectId = (int)$this->projectId;
+		if ($projectId <= 0)
+		{
+			return true;
+		}
+
+		return Group::canReadGroupTasks($this->userId, $projectId);
 	}
 
 	private function getStagesByEntityId(int $entityId): array

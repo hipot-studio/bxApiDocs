@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\CallList;
 
+use Bitrix\Crm\Activity\Provider\CallList as CallListActivityProvider;
+use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\CallList\Internals\CallListCreatedTable;
 use Bitrix\Crm\CallList\Internals\CallListItemTable;
 use Bitrix\Crm\CallList\Internals\CallListTable;
@@ -12,6 +14,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use CCrmOwnerType;
 
@@ -67,9 +70,17 @@ final class CallList
 		$callList->setFromArray($row);
 		$callList->new = false;
 
-		$userId = (int)($options['userId'] ?? Container::getInstance()->getContext()->getUserId());
 		$checkPermissions = (bool)($options['checkPermissions'] ?? true);
-		$userPermissions = Container::getInstance()->getUserPermissions($userId);
+		if ($checkPermissions)
+		{
+			$userId = (int)($options['userId'] ?? Container::getInstance()->getContext()->getUserId());
+			if (!self::canReadByOwner($row, $userId))
+			{
+				throw new SystemException('Access Denied', 403);
+			}
+
+			$userPermissions = Container::getInstance()->getUserPermissions($userId);
+		}
 
 		if ($checkPermissions && !$userPermissions->isAdmin() && (int)$callList->getEntityTypeId() !== 0)
 		{
@@ -144,6 +155,54 @@ final class CallList
 		}
 
 		return $callList;
+	}
+
+	public static function canReadByOwner(array $row, int $userId): bool
+	{
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		$userPermissions = Container::getInstance()->getUserPermissions($userId);
+		if ($userPermissions->isAdmin())
+		{
+			return true;
+		}
+
+		$createdById = (int)($row['CREATED_BY_ID'] ?? 0);
+		if ($createdById === $userId)
+		{
+			return true;
+		}
+
+		return self::isDelegatedOwner((int)($row['ID'] ?? 0), $createdById, $userId);
+	}
+
+	/**
+	 * A user is a delegated owner of the call list if they are RESPONSIBLE_ID of an activity that
+	 * carries the list (PROVIDER_ID = CALL_LIST, ASSOCIATED_ENTITY_ID = list id) and whose AUTHOR_ID
+	 * equals the list's creator. AUTHOR_ID is set by the server, is read-only in REST and is reset by
+	 * Update, so it cannot be forged; only whoever already passes this same check on the list may move
+	 * RESPONSIBLE_ID/ASSOCIATED_ENTITY_ID of such an activity.
+	 */
+	private static function isDelegatedOwner(int $listId, int $createdById, int $userId): bool
+	{
+		if ($listId <= 0 || $createdById <= 0)
+		{
+			return false;
+		}
+
+		return ActivityTable::getRow([
+			'select' => ['ID'],
+			'filter' => [
+				'=TYPE_ID' => \CCrmActivityType::Provider,
+				'=PROVIDER_ID' => CallListActivityProvider::PROVIDER_ID,
+				'=ASSOCIATED_ENTITY_ID' => $listId,
+				'=RESPONSIBLE_ID' => $userId,
+				'=AUTHOR_ID' => $createdById,
+			],
+		]) !== null;
 	}
 
 	/**

@@ -10,7 +10,7 @@ use Bitrix\Rest\V3\Interaction\Response\GetResponse;
 
 class InstallAppResponse extends GetResponse
 {
-	public function __construct(AppDto $app, public OAuthTokenDto $oauthToken)
+	public function __construct(AppDto $app, public ?OAuthTokenDto $oauthToken)
 	{
 		parent::__construct($app);
 	}

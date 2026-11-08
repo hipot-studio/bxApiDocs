@@ -77,6 +77,17 @@ class CopilotCallAssessmentTable extends Main\ORM\Data\DataManager
 				->addValidator(new Main\ORM\Fields\Validators\LengthValidator(0, 2000))
 			,
 			$promptField,
+			(new Main\ORM\Fields\BooleanField('IS_HINT_ENABLED', [
+				'validation' => static fn(): array => [
+					static fn(mixed $value): bool|string => $value === null
+						|| in_array($value, [false, true, 0, 1, '0', '1', 'false', 'true', 'N', 'Y'], true)
+						? true
+						: 'IS_HINT_ENABLED must be NULL, N or Y',
+				],
+			]))
+				->configureStorageValues('N', 'Y')
+				->configureNullable()
+			,
 			(new Main\ORM\Fields\StringField('GIST')),
 			(new Main\ORM\Fields\IntegerField('CALL_TYPE'))
 				->configureSize(1)

@@ -6,6 +6,7 @@ use Bitrix\Main\Error;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Dto\DtoField;
+use Bitrix\Rest\V3\Dto\TypeHelper;
 use Bitrix\Rest\V3\Exception\Validation\InvalidFileException;
 use Bitrix\Rest\V3\Realisation\Dto\FileDto;
 use Bitrix\UI\FileUploader\ChunkFactory;
@@ -68,7 +69,7 @@ final class FileDtoProcessor
 				continue;
 			}
 
-			if (is_subclass_of($field->getPropertyType(), Dto::class))
+			if (TypeHelper::isDto($field->getPropertyType()))
 			{
 				$this->processDto($field->getValue());
 				continue;

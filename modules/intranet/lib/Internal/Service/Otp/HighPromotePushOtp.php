@@ -16,11 +16,12 @@ class HighPromotePushOtp
 	) {
 	}
 
-	public function startStepper(): bool
+	public function startStepper(?int $days = null): bool
 	{
 		if ($this->canStartStepper())
 		{
-			HighPromotePushOtpSwitcher::bind($this->getSkipDaysMandatory() * 86400);
+			$delayDays = ($days !== null && $days > 0) ? $days : $this->getSkipDaysMandatory();
+			HighPromotePushOtpSwitcher::bind($delayDays * 86400);
 			$this->setStepperStatus(StepperStatus::Scheduled);
 
 			return true;

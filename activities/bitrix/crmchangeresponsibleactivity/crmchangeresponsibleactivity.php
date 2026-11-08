@@ -89,8 +89,7 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigur
 			// explicit ModifiedBy. method_exists guards bizproc being older than crm.
 			$modifiedBy = method_exists($this, 'getModifiedByOrStarter')
 				? $this->getModifiedByOrStarter()
-				: $this->ModifiedBy
-			;
+				: $this->ModifiedBy;
 			$ds->UpdateDocument(
 				$documentId,
 				[$responsibleFieldName => 'user_' . $newResponsibleId],
@@ -156,7 +155,7 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigur
 		}
 		elseif ($getterType === self::GETTER_TYPE_SEQUENCE)
 		{
-			$user = $this->getNextUser($target, $skipAbsent, $skipTimeMan);
+			$user = $this->getNextUser($current, $target, $skipAbsent, $skipTimeMan);
 		}
 		else // default self::GETTER_TYPE_RANDOM
 		{
@@ -170,15 +169,13 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigur
 	{
 		foreach ($target as $user)
 		{
-			if (
-				$skipAbsent && \CIntranetUtils::IsUserAbsent($user)
-				|| $skipTimeMan && !$this->isUserWorking($user)
-			)
+			$userId = (int)$user;
+			if (!$this->isUserAvailable($userId, $skipAbsent, $skipTimeMan))
 			{
 				continue;
 			}
 
-			return $user;
+			return $userId;
 		}
 
 		return null;
@@ -196,37 +193,131 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigur
 		return $this->getFirstUser($target, $skipAbsent, $skipTimeMan);
 	}
 
-	private function getNextUser(array $target, bool $skipAbsent, bool $skipTimeMan): ?int
+	private function getNextUser(?int $current, array $target, bool $skipAbsent, bool $skipTimeMan): ?int
 	{
-		$lastUserId = $this->getStorage()->getValue('lastUserId');
+		$checkedUserIds = [];
 
-		$hasTargetLastUserId = false;
-		if ($lastUserId && count($target) > 1)
+		foreach ($this->getSequenceStartUsers($current, $target) as $startUserId)
 		{
-			$searchKey = array_search($lastUserId, $target);
-			if ($searchKey !== false)
+			foreach ($this->getSequenceTarget($target, $startUserId) as $user)
 			{
-				$hasTargetLastUserId = true;
+				$userId = (int)$user;
+				if ($current !== null && $userId === $current)
+				{
+					continue;
+				}
 
-				$target = array_merge(
-					array_slice($target, $searchKey + 1),
-					array_slice($target, 0, $searchKey),
-				);
+				if (isset($checkedUserIds[$userId]))
+				{
+					continue;
+				}
+
+				$checkedUserIds[$userId] = true;
+				if (!$this->isUserAvailable($userId, $skipAbsent, $skipTimeMan))
+				{
+					continue;
+				}
+
+				$this->setLastResponsibleUserId($userId);
+
+				return $userId;
 			}
 		}
 
-		$nextUserId = $this->getFirstUser($target, $skipAbsent, $skipTimeMan);
-		if ($nextUserId === null && $hasTargetLastUserId)
+		return null;
+	}
+
+	private function getSequenceStartUsers(?int $current, array $target): array
+	{
+		$targetUserPositions = $this->getTargetUserPositions($target);
+		$startUserIds = [];
+		$usedUserIds = [];
+
+		foreach ([$this->getLastResponsibleUserId(), $current] as $userId)
 		{
-			$nextUserId = $this->getFirstUser([$lastUserId], $skipAbsent, $skipTimeMan);
+			if (
+				$userId === null
+				|| !isset($targetUserPositions[$userId])
+				|| isset($usedUserIds[$userId])
+			)
+			{
+				continue;
+			}
+
+			$startUserIds[] = $userId;
+			$usedUserIds[$userId] = true;
 		}
 
-		if ($nextUserId)
+		return $startUserIds ?: [null];
+	}
+
+	private function getSequenceTarget(array $target, ?int $startUserId): array
+	{
+		if ($startUserId === null)
 		{
-			$this->getStorage()->setValue('lastUserId', $nextUserId);
+			return $target;
 		}
 
-		return $nextUserId;
+		$targetUserPositions = $this->getTargetUserPositions($target);
+		if (!isset($targetUserPositions[$startUserId]))
+		{
+			return $target;
+		}
+
+		$startPosition = $targetUserPositions[$startUserId];
+
+		return array_merge(
+			array_slice($target, $startPosition + 1),
+			array_slice($target, 0, $startPosition),
+			[$target[$startPosition]],
+		);
+	}
+
+	private function getTargetUserPositions(array $target): array
+	{
+		$positions = [];
+		foreach ($target as $position => $user)
+		{
+			$userId = (int)$user;
+			if (!isset($positions[$userId]))
+			{
+				$positions[$userId] = $position;
+			}
+		}
+
+		return $positions;
+	}
+
+	private function getLastResponsibleUserId(): ?int
+	{
+		$userId = (int)$this->getStorage()->getValue('lastUserId');
+
+		return $userId > 0 ? $userId : null;
+	}
+
+	private function setLastResponsibleUserId(int $userId): void
+	{
+		$this->getStorage()->setValue('lastUserId', $userId);
+	}
+
+	protected function isUserAvailable(int $userId, bool $skipAbsent, bool $skipTimeMan): bool
+	{
+		if ($skipAbsent && $this->isUserAbsent($userId))
+		{
+			return false;
+		}
+
+		if ($skipTimeMan && !$this->isUserWorking($userId))
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	private function isUserAbsent(int $userId): bool
+	{
+		return \CIntranetUtils::IsUserAbsent($userId);
 	}
 
 	public static function ValidateProperties($arTestProperties = [], ?CBPWorkflowTemplateUser $user = null)
@@ -423,10 +514,9 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigur
 
 	private static function canUseAbsence(): bool
 	{
-		return (
+		return
 			(CModule::IncludeModule('bitrix24') === false)
-			|| (\Bitrix\Bitrix24\Feature::isFeatureEnabled('absence') === true)
-		);
+			|| (\Bitrix\Bitrix24\Feature::isFeatureEnabled('absence') === true);
 	}
 
 	private static function canUseTimeMan(): bool
@@ -439,6 +529,6 @@ class CBPCrmChangeResponsibleActivity extends CBPActivity implements IBPConfigur
 		$schedule = $this->workflow->getRuntime()->getUserService()->getUserSchedule($userId);
 		$status = $schedule->getWorkDayStatus();
 
-		return ($status === 'OPENED' || $status === 'PAUSED');
+		return $status === 'OPENED' || $status === 'PAUSED';
 	}
 }

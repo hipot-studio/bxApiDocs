@@ -5,12 +5,16 @@ namespace Bitrix\Im\V2\Application;
 use Bitrix\Call\Recent;
 use Bitrix\Im\V2\Anchor\DI\AnchorContainer;
 use Bitrix\Im\V2\Application\Config\PreloadedEntities;
+use Bitrix\Im\V2\Chat\CopilotChat;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Entity\File\Param\Duration;
 use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Folder\Eligibility\EligibleChatTypeDictionary;
 use Bitrix\Im\V2\Folder\FolderLimits;
 use Bitrix\Im\V2\Folder\FolderProvider;
 use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Integration\AI\EngineManager;
+use Bitrix\Im\V2\Integration\AI\GreetingProvider;
 use Bitrix\Im\V2\Integration\AI\SuggestProvider;
 use Bitrix\Im\V2\Integration\AI\Transcription\TranscribeManager;
 use Bitrix\Im\V2\Promotion\Internals\DeviceType;
@@ -67,7 +71,7 @@ class Config implements \JsonSerializable
 			'videoCallsTermsUrl' => $this->getVideoCallsTermsUrl(),
 			'aiSettings' => $this->getAiSettings(),
 			'folders' => $this->getFolders(),
-			'folderLimits' => $this->getFolderLimits(),
+			'voiceMessage' => $this->getVoiceMessageConfig(),
 		];
 	}
 
@@ -248,7 +252,10 @@ class Config implements \JsonSerializable
 			'availableEngines' => (new EngineManager())->getAvailableEnginesForRest(),
 			'botName' => CopilotNameResolver::getInstance()->getName(),
 			'suggests' => SuggestProvider::getList(),
+			'greetings' => GreetingProvider::getList(),
+			'greetingWeekHolidays' => GreetingProvider::getWeekHolidays(),
 			'agentName' => CopilotNameResolver::getInstance()->getAgentName(),
+			'fileUploadPolicy' => CopilotChat::getFileUploadPolicyPublicData(),
 		];
 	}
 
@@ -265,11 +272,27 @@ class Config implements \JsonSerializable
 	}
 
 	/**
+	 * Folder namespace of the web startup data. The limits are constants, while the allowed types
+	 * are computed by {@see EligibleChatTypeDictionary} and differ from portal to portal; both are served
+	 * regardless of the web folders flag, only the list hangs on it.
+	 *
+	 * @return array{list: array<int, array>, limits: array<string, int>, allowedTypes: string[]}
+	 */
+	protected function getFolders(): array
+	{
+		return [
+			'list' => $this->getFolderList(),
+			'limits' => $this->getFolderLimits(),
+			'allowedTypes' => EligibleChatTypeDictionary::forWeb(),
+		];
+	}
+
+	/**
 	 * Preloaded folder list for web startup — same provider/order as im.v2.Folder.list (via FolderCache, no extra SQL).
 	 *
 	 * @return array<int, array>
 	 */
-	protected function getFolders(): array
+	protected function getFolderList(): array
 	{
 		if (!Features::get()->isChatFoldersWebAvailable)
 		{
@@ -296,6 +319,17 @@ class Config implements \JsonSerializable
 			'maxFolders' => FolderLimits::MAX_FOLDERS_PER_USER,
 			'maxChatsPerFolder' => FolderLimits::MAX_CHATS_PER_FOLDER,
 			'maxTitleLength' => FolderLimits::MAX_TITLE_LENGTH,
+		];
+	}
+
+	/**
+	 * @return array{maxDurationSeconds: int, isServerConversionAvailable: bool}
+	 */
+	protected function getVoiceMessageConfig(): array
+	{
+		return [
+			'maxDurationSeconds' => Duration::getMaxSeconds(),
+			'isServerConversionAvailable' => Features::isVoiceMessageServerConversionAvailable(),
 		];
 	}
 

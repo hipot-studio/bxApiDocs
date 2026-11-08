@@ -3,8 +3,10 @@
 namespace Bitrix\Im\V2\Message;
 
 use Bitrix\Im\Text;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\PrivateChat;
+use Bitrix\Im\V2\Entity\File\FileCollection;
 use Bitrix\Im\V2\Entity\User\NullUser;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message;
@@ -204,6 +206,10 @@ class PushFormat
 		return $additionalEntitiesAdapter->toRestFormat([
 			'WITHOUT_OWN_REACTIONS' => true,
 			'MESSAGE_ONLY_COMMON_FIELDS' => true,
+			// the payload of an event is common to every recipient of the chat, while the title of the
+			// source is personal to the reader: without this exclusion it would reach all of them
+			// through additionalEntities.messages[].forward
+			'POPUP_DATA_EXCLUDE' => [Message\Forward\ForwardSourcePopupItem::class],
 		]);
 	}
 
@@ -223,25 +229,69 @@ class PushFormat
 		];
 	}
 
-	public function formatMessageUpdate(): array
+	/**
+	 * The entities of the files repeat the form of the event of the sending, so a client that already knows how to
+	 * read them there needs nothing new. FILE_ID is listed among the extra params on purpose: the list is not a white
+	 * list, it only fills in what the message no longer has, and without it a composition emptied by the edit would
+	 * simply disappear from the event and leave the previous one on the client. The entities travel only with an edit
+	 * that changed the composition: after an edit of the text alone the clients already hold the ones they need.
+	 */
+	public function formatMessageUpdate(bool $compositionUpdated = false): array
 	{
 		$message = $this->message;
+
+		$params = [
+			'id' => $message->getId(),
+			'type' => $message->getChat()->getType() === Chat::IM_TYPE_PRIVATE ? 'private' : 'chat',
+			'text' => $message->getParsedMessage(),
+			'textLegacy' => Text::parseLegacyFormat($message->getMessage()),
+			'chatId' => $message->getChatId(),
+			'senderId' => $message->getAuthorId(),
+			'params' => $message->getEnrichedParams()->toPullFormat([
+				'IS_EDITED',
+				'URL_ID',
+				'ATTACH',
+				'DATE_TEXT',
+				'DATE_TS',
+				Message\Params::FILE_ID,
+			]),
+			'block' => $message->getBlocksBuilder(),
+		];
+
+		// with the feature off the composition cannot change at all, and an edit that left it alone keeps the entities
+		// the clients already hold: in both cases the container would be dead weight
+		if ($compositionUpdated && Features::isEditMessageFilesAvailable())
+		{
+			$params['files'] = $this->getFilesOfComposition()->toRestFormat(['IDS_AS_KEY' => true]);
+		}
 
 		return [
 			'module_id' => 'im',
 			'command' => 'messageUpdate',
-			'params' => [
-				'id' => $message->getId(),
-				'type' => $message->getChat()->getType() === Chat::IM_TYPE_PRIVATE ? 'private' : 'chat',
-				'text' => $message->getParsedMessage(),
-				'textLegacy' => Text::parseLegacyFormat($message->getMessage()),
-				'chatId' => $message->getChatId(),
-				'senderId' => $message->getAuthorId(),
-				'params' => $message->getEnrichedParams()->toPullFormat(['IS_EDITED', 'URL_ID', 'ATTACH', 'DATE_TEXT', 'DATE_TS']),
-				'block' => $message->getBlocksBuilder(),
-			],
+			'params' => $params,
 			'extra' => \Bitrix\Im\Common::getPullExtra()
 		];
+	}
+
+	/**
+	 * Entities of the files the message keeps right now. The edit applies the new composition through
+	 * Message::setFiles(), and that writes the params only: a collection loaded earlier in the same edit (the
+	 * validation of the message type loads it) would still name the files of the previous composition. The
+	 * collection is rebuilt only when it disagrees with the composition, so a message without attachments and a
+	 * message whose files were never touched ask the storage nothing.
+	 */
+	private function getFilesOfComposition(): FileCollection
+	{
+		$fileIds = $this->message->getFileIds();
+		$files = $this->message->getFiles();
+		$loadedFileIds = array_values($files->getIds());
+
+		if (array_diff($fileIds, $loadedFileIds) === [] && array_diff($loadedFileIds, $fileIds) === [])
+		{
+			return $files;
+		}
+
+		return FileCollection::initByDiskFilesIds($fileIds, $this->message->getChatId());
 	}
 
 	public function validateDataForInform(): Result

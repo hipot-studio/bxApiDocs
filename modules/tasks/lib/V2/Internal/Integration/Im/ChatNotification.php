@@ -196,8 +196,8 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 			NotificationType::ResultAdded => new Action\NotifyResultAdded(
 				task: $task,
 				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
 				chatActionLinkService: $this->getChatActionLinkService(),
+				triggeredBy: $args['triggeredBy'] ?? null,
 				resultText: $args['resultText'] ?? '',
 				dateTs: $args['dateTs'] ?? '',
 				fileIds: $args['fileIds'] ?? [],
@@ -220,12 +220,13 @@ class ChatNotification implements ChatNotificationInterface, MessageSenderInterf
 			NotificationType::ResultFromMessage => new Action\NotifyResultFromMessage(
 				task: $task,
 				sender: $this,
-				triggeredBy: $args['triggeredBy'] ?? null,
 				chatActionLinkService: $this->getChatActionLinkService(),
+				triggeredBy: $args['triggeredBy'] ?? null,
 				messageId: $args['messageId'] ?? 0,
 				dateTs: $args['dateTs'] ?? 0,
 				resultId: $args['resultId'] ?? 0,
 				type: $args['type'] ?? null,
+				resultText: $args['resultText'] ?? '',
 			),
 			NotificationType::TaskPriorityChanged => new Action\NotifyPriorityChanged(
 				task: $task,

@@ -3,6 +3,7 @@
 namespace Bitrix\DocumentGenerator;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context\Culture;
 use Bitrix\Main\Localization\CultureTable;
 use Bitrix\Main\Localization\Loc;
@@ -15,9 +16,12 @@ class Context
 	protected $userId = 0;
 
 	private int $templateId = 0;
+	private string $timezone;
 
 	public function __construct()
-	{}
+	{
+		$this->timezone = date_default_timezone_get();
+	}
 
 	public static function createFromDocument(Document $document): Context
 	{
@@ -30,6 +34,15 @@ class Context
 		{
 			$context->setRegion($template->REGION);
 			$context->setTemplateId($template->ID ?? 0);
+			if (Timezone::isEnabled())
+			{
+				$context->setTimezone(
+					Timezone::resolve(
+						$template->TIMEZONE,
+						Option::get(Driver::MODULE_ID, Timezone::OPTION_NAME, date_default_timezone_get()),
+					),
+				);
+			}
 		}
 
 		return $context;
@@ -49,6 +62,18 @@ class Context
 	public function getUserId(): int
 	{
 		return $this->userId;
+	}
+
+	public function setTimezone(string $timezone): Context
+	{
+		$this->timezone = $timezone;
+
+		return $this;
+	}
+
+	public function getTimezone(): string
+	{
+		return $this->timezone;
 	}
 
 	public function setUserId(int $userId): Context

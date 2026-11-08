@@ -46,12 +46,12 @@ use Bitrix\Socialnetwork\V2\Public\Grid\PinMode;
 use Bitrix\Socialnetwork\V2\Public\Mapper\PinModeMapper;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Tasks\Service\ProjectEfficiencyService;
+use Bitrix\Socialnetwork\V2\Internal\Service\ProjectAnalytics;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Workgroup\WorkgroupPinMode;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork\Component\WorkgroupList\TasksCounter;
 use Bitrix\Socialnetwork\Helper\Workgroup\Access;
 use Bitrix\Socialnetwork\Promotion\ProjectAi;
-use Bitrix\Socialnetwork\V2\Internal\Entity\User\Role;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Workgroup\WorkgroupUserRelation;
 use Bitrix\UI\Buttons\Button;
 use Bitrix\UI\Buttons\Color;
@@ -241,8 +241,6 @@ class SocialnetworkProjectListComponent extends CBitrixComponent
 
 	public function executeComponent(): void
 	{
-		$isCompareMode = (($this->arParams['COMPARE_MODE'] ?? 'N') === 'Y');
-
 		$modeParam = $this->arParams['MODE'] ?? 'project';
 		$this->mode = match (true) {
 			in_array($modeParam, ['scrum', 'tasks_scrum'], true) => 'scrum',
@@ -329,10 +327,7 @@ class SocialnetworkProjectListComponent extends CBitrixComponent
 		$this->getGrid()->setRawRows($this->getRows($currentUserId, $isAdmin));
 
 		$this->initResult($currentUserId, $contextUserId, $taskRealtimeStrategy);
-		if (!$isCompareMode)
-		{
-			$this->initToolbar();
-		}
+		$this->initToolbar();
 
 		$this->subscribePull($contextUserId, $taskRealtimeStrategy);
 
@@ -342,6 +337,19 @@ class SocialnetworkProjectListComponent extends CBitrixComponent
 		}
 
 		$this->includeComponentTemplate();
+
+		if (!Context::getCurrent()->getRequest()->isAjaxRequest() && !$this->isCommonOrUser())
+		{
+			$analytics = Container::getInstance()->get(ProjectAnalytics::class);
+			if ($this->isScrum())
+			{
+				$analytics->trackScrumView();
+			}
+			else
+			{
+				$analytics->trackProjectsView();
+			}
+		}
 	}
 
 	private function subscribePull(int $contextUserId, string $taskRealtimeStrategy): void
@@ -1117,7 +1125,9 @@ class SocialnetworkProjectListComponent extends CBitrixComponent
 			}
 			else if (\Bitrix\Socialnetwork\V2\Feature::isNewProjectsOn())
 			{
-				$buttonOptions['click'] = new JsCode('BX.Messenger.Public.openChatCreation("collab");');
+				$buttonOptions['click'] = new JsCode(
+					'BX.Socialnetwork.V2.Lib.trackProjectCreateStart({ element: \'create_button\', kind: \'project\' }); BX.Messenger.Public.openChatCreation("collab");'
+				);
 			}
 			else
 			{
@@ -1127,6 +1137,7 @@ class SocialnetworkProjectListComponent extends CBitrixComponent
 
 		$button = new Button($buttonOptions);
 		$button->addAttribute('id', 'projectAddButton');
+		$button->addAttribute('data-testid', 'socialnetwork-project-list-create-button');
 
 		Toolbar::addButton($button, ButtonLocation::AFTER_TITLE);
 	}

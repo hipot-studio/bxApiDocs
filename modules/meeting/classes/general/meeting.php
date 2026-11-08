@@ -1,4 +1,7 @@
-<?
+<?php
+
+use Bitrix\Main\Web\Uri;
+
 abstract class CAllMeeting
 {
 	const STATE_PREPARE = 'P';
@@ -721,8 +724,7 @@ ORDER BY ins.INSTANCE_PARENT_ID, ins.SORT
 					'ID' => $arFile['ID'],
 					'ORIGINAL_NAME' => $arFile['ORIGINAL_NAME'],
 					'FILE_SIZE' => $arFile['FILE_SIZE'],
-					//'URL' => CHTTP::URN2URI($fileUrl),
-					'DOWNLOAD_URL' => CHTTP::URN2URI($fileLink),
+					'DOWNLOAD_URL' => (string)(new Uri($fileLink))->toAbsolute(),
 					'FILE_SIZE_FORMATTED' => CFile::FormatSize($arFile['FILE_SIZE']),
 					'FILE_SRC' => $fileSrc,
 				);

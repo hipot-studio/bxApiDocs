@@ -126,7 +126,7 @@ class DepartmentProviderOptions extends BaseProviderOptions
 	private function initSelectMode(array $options): void
 	{
 		$this->selectMode =
-			DepartmentProviderSelectMode::tryFrom($options['selectMode'])
+			self::readEnumOption($options, 'selectMode', DepartmentProviderSelectMode::class)
 			?? DepartmentProviderSelectMode::UsersOnly
 		;
 	}
@@ -336,15 +336,15 @@ class DepartmentProviderOptions extends BaseProviderOptions
 
 	private function initVisualOptions(array $options): void
 	{
-		$visualOptions = $options['visual'] ?? [];
+		$visualOptions = is_array($options['visual'] ?? null) ? $options['visual'] : [];
 
 		$this->avatarMode =
-			DepartmentProviderAvatarMode::tryFrom($visualOptions['avatarMode'])
+			self::readEnumOption($visualOptions, 'avatarMode', DepartmentProviderAvatarMode::class)
 			?? DepartmentProviderAvatarMode::Both
 		;
 
 		$this->tagStyle =
-			DepartmentProviderTagStyleMode::tryFrom($visualOptions['tagStyle'])
+			self::readEnumOption($visualOptions, 'tagStyle', DepartmentProviderTagStyleMode::class)
 			?? DepartmentProviderTagStyleMode::Default
 		;
 

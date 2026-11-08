@@ -33,16 +33,19 @@ interface NodeRelationService
 	/**
 	 * @param \Bitrix\HumanResources\Type\RelationEntityType $entityType
 	 * @param int $entityId
-	 * @param array<int> $usersToCompare
+	 * @param list<int> $usersToCompare
 	 *
-	 * @return array<int>
+	 * @return list<int>
 	 * @throws \Bitrix\HumanResources\Exception\TooMuchDataException
 	 */
 	public function getUsersNotInRelation(
 		RelationEntityType $entityType,
 		int $entityId,
 		array $usersToCompare,
-		NodeEntityTypeCollection $nodeEntityTypeCollection = new NodeEntityTypeCollection(NodeEntityType::DEPARTMENT),
+		NodeEntityTypeCollection $nodeEntityTypeCollection = new NodeEntityTypeCollection(
+			NodeEntityType::DEPARTMENT,
+			NodeEntityType::TEAM,
+		),
 	): array;
 
 	/**

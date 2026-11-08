@@ -18,6 +18,9 @@ use Bitrix\Security\Mfa\OtpType;
 
 class MobilePush
 {
+	private const SHOW_ONCE = PHP_INT_MAX - 1;
+	private const DO_NOT_SHOW = PHP_INT_MAX;
+
 	private bool $isAvailable;
 	private ?array $legacyOtpAllowedUserIds = null;
 	private ?array $legacyOtpAllowedUserIdsWithIntegrators = null;
@@ -220,6 +223,11 @@ class MobilePush
 		return PromoteMode::tryFrom(Option::get('intranet', 'security_mode', $defaultPromoteMode->value)) ?? PromoteMode::Disable;
 	}
 
+	public function isAnnouncesGracePeriodDate(): bool
+	{
+		return $this->getPromoteMode() === PromoteMode::High;
+	}
+
 	public function isGracePeriodEnded(): bool
 	{
 		$gracePeriodTs = $this->getGracePeriod();
@@ -240,20 +248,25 @@ class MobilePush
 		}
 
 		$this->otpSettings->setDefaultType(OtpType::Push);
-		$this->otpSettings->setMandatoryUsing(true);
 
-		if ($this->getPromoteMode() === PromoteMode::High)
+		$highPromoteService = $this->getPromoteMode() === PromoteMode::High
+			? new HighPromotePushOtp($this)
+			: null;
+
+		if ((new MandatoryOtpPolicy())->isTransitionPeriodOwnedByPortal())
 		{
-			$highPromoteService = new HighPromotePushOtp($this);
-			$this->otpSettings->setSkipMandatoryDays($highPromoteService->getSkipDaysMandatory());
-			$this->setMandatory($highPromoteService->getSkipDaysMandatory());
-			$highPromoteService->startStepper();
+			$days = (new MandatoryPeriodProvider($this->otpSettings))->getCurrentPeriod();
 		}
 		else
 		{
-			$days = $this->otpSettings->getSkipMandatoryDays();
-			$this->setMandatory($days);
+			$days = ($highPromoteService ?? new HighPromotePushOtp($this))->getSkipDaysMandatory();
+			$this->otpSettings->setSkipMandatoryDays($days);
 		}
+
+		$this->setMandatory($days);
+		$this->otpSettings->setMandatoryUsing(true);
+
+		$highPromoteService?->startStepper($days);
 	}
 
 	public function getGracePeriodSchedule(): array
@@ -305,9 +318,17 @@ class MobilePush
 
 	public function getDefaultGracePeriodSchedule(): array
 	{
-		return [
-			['daysFrom' => 0, 'daysTo' => null, 'showEveryDays' => 1],
-		];
+		$gracePeriodEnd = Date::createFromTimestamp($this->getGracePeriod());
+		$gracePeriodDays = $this->getGracePeriodStart()->getDiff($gracePeriodEnd)->days;
+		$firstShowDay = max(0, $gracePeriodDays - 30);
+		$secondShowDay = max(0, $gracePeriodDays - 7);
+		$dailyShowDay = max(0, $gracePeriodDays - 3);
+		return array_values(array_filter([
+			['daysFrom' => 0, 'daysTo' => $firstShowDay, 'showEveryDays' => self::DO_NOT_SHOW],
+			['daysFrom' => $firstShowDay, 'daysTo' => $secondShowDay, 'showEveryDays' => self::SHOW_ONCE],
+			['daysFrom' => $secondShowDay, 'daysTo' => $dailyShowDay, 'showEveryDays' => self::SHOW_ONCE],
+			['daysFrom' => $dailyShowDay, 'daysTo' => null, 'showEveryDays' => 1],
+		], static fn(array $rule): bool => $rule['daysTo'] === null || $rule['daysTo'] > $rule['daysFrom']));
 	}
 
 	public function getShowFrequencyForDay(int $daysSinceGraceStart): int
@@ -321,11 +342,36 @@ class MobilePush
 
 			if ($daysSinceGraceStart >= $from && $daysSinceGraceStart < $to)
 			{
-				return $rule['showEveryDays'] ?? 1;
+				$frequency = $rule['showEveryDays'] ?? 1;
+				return $frequency === self::SHOW_ONCE ? $daysSinceGraceStart - $from + 1 : $frequency;
 			}
 		}
 
 		return 1;
+	}
+
+	public function canShowByGracePeriodSchedule(int $daysSinceGraceStart, ?int $daysSinceLastShow): bool
+	{
+		if ($daysSinceLastShow === null)
+		{
+			try
+			{
+				$customSchedule = Json::decode(Option::get('intranet', 'push_otp_grace_period_schedule', ''));
+			}
+			catch (\Bitrix\Main\ArgumentException)
+			{
+				$customSchedule = null;
+			}
+
+			if (is_array($customSchedule) && $this->validateSchedule($customSchedule))
+			{
+				return true;
+			}
+
+			$daysSinceLastShow = $daysSinceGraceStart + 1;
+		}
+
+		return $daysSinceLastShow >= $this->getShowFrequencyForDay($daysSinceGraceStart);
 	}
 
 	private function validateSchedule(array $schedule): bool

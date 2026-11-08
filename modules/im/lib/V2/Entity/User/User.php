@@ -365,6 +365,9 @@ class User implements RestEntity, CacheableEntity
 			'bot' => $this->isBot(),
 			'connector' => $this->isConnector(),
 			'externalAuthId' => $this->getExternalAuthId(),
+			// a client cannot tell an internal auth id from its own default value, so the server states it
+			'internalAccount' => $this->isInternalType(),
+			'intranetUser' => $this->isIntranetUser(),
 			'status' => $this->getStatus(),
 			'idle' => $idle,
 			'lastActivityDate' => $lastActivityDate,
@@ -498,6 +501,23 @@ class User implements RestEntity, CacheableEntity
 		return !in_array($this->getExternalAuthId(), $externalTypes, true);
 	}
 
+	/**
+	 * Mirrors the visibility scope the server search filter applies to a plain viewer: the branch of
+	 * RecentProvider::getIntranetFilter() and the IS_INTRANET_USER expression it filters by.
+	 * The department comes from the raw UF_DEPARTMENT, the same source as that expression, and not from
+	 * the staff service behind isEmployee()/isExtranet()/getType(): the service answers by the membership
+	 * in the structure nodes, which diverges from the field on a converted structure.
+	 */
+	private function isIntranetUser(): bool
+	{
+		if (!static::$loader::includeModule('intranet'))
+		{
+			return $this->isInternalType(['bot']);
+		}
+
+		return $this->hasDepartment() && $this->isInternalType(['bot']);
+	}
+
 	public function getWebsite(): string
 	{
 		return $this->userData['PERSONAL_WWW'] ?? '';
@@ -620,6 +640,21 @@ class User implements RestEntity, CacheableEntity
 	public function getDepartments(): Departments
 	{
 		return new Departments(...$this->getDepartmentIds());
+	}
+
+	// UF_DEPARTMENT holds an empty value either as an empty list or as a list of a single zero,
+	// and IS_INTRANET_USER counts both as no department
+	private function hasDepartment(): bool
+	{
+		foreach ($this->getDepartmentIds() as $departmentId)
+		{
+			if ((int)$departmentId > 0)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public function isOnlineDataFilled(bool $withStatus): bool

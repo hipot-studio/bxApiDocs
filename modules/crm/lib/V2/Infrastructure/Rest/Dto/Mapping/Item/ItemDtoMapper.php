@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Mapping\Item;
 
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Crm\Settings\ContactSettings;
 use Bitrix\Crm\Settings\DealSettings;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\AddressDto;
@@ -35,12 +36,16 @@ use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\MultifieldDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\MultifieldValueTypeDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\MultifieldsDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\UtmDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\ItemDtoGenerator;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\ContactCompanyBindingsDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\SchemaProvider;
+use Bitrix\Crm\V2\Infrastructure\Rest\Request\Item\GetItemRequest;
 use Bitrix\Crm\V2\Infrastructure\Rest\Request\Structure\SelectStructure;
 use Bitrix\Crm\Multifield\TypeRepository;
 use Bitrix\Crm\V2\Internal\Integration\Rest\File\FileUrlBuilder;
 use Bitrix\Crm\V2\Internal\Integration\Rest\File\RestIntegrationFactory;
 use Bitrix\Crm\V2\Internal\Service\Loader\Value\FileMetadata;
+use Bitrix\Crm\V2\Internal\Service\Item\ItemFieldMapper;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\User\EmployeeDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Provider\PersonTypeIdProvider;
 use Bitrix\Crm\StatusTable;
@@ -103,6 +108,7 @@ use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Dto\DtoFieldsCollection;
+use Bitrix\Rest\V3\Dto\Generator;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Realisation\Dto\FileDto;
 use Bitrix\Rest\V3\Structure\Structure;
@@ -112,6 +118,7 @@ class ItemDtoMapper
 {
 	private const RELATED_CRM_OBJECT_FIELDS = [
 		'company',
+		'deal',
 		'myCompany',
 		'lead',
 		'quote',
@@ -138,6 +145,11 @@ class ItemDtoMapper
 	private ?FileUrlBuilder $fileUrlBuilder = null;
 	/** @var array<int, FileMetadata|null> */
 	private array $fileMetadataById = [];
+	/** @var array<int, string|null> */
+	private array $personTypeNameById = [];
+	/** @var array<string, array{mapper: self, context: array{Dto, array<string|int, mixed>, DtoFieldsCollection, array<string, true>}}> */
+	private array $relatedDtoMappingContexts = [];
+	private readonly ItemFieldMapper $itemFieldMapper;
 
 	public function __construct(
 		protected readonly EntityTypeSettings $entityTypeSettings,
@@ -146,6 +158,7 @@ class ItemDtoMapper
 	)
 	{
 		$this->customFieldValueConverter = $customFieldValueConverter ?? new CustomFieldValueConverter();
+		$this->itemFieldMapper = new ItemFieldMapper();
 	}
 
 	private readonly CustomFieldValueConverter $customFieldValueConverter;
@@ -165,16 +178,29 @@ class ItemDtoMapper
 			fn (string $fieldName) => $this->mapDtoFieldNameToItem($fieldName),
 			$fieldNames,
 		)));
+		$itemFields = array_values($itemFields);
 		if (
-			$this->entityTypeSettings->hasCategories()
-			&& array_intersect(['stage', 'previousStage'], array_keys($structuredList)) !== []
+			$this->entityTypeSettings->getEntityType()->getId() === OwnerType::CONTACT
+			&& in_array('title', $fieldNames, true)
 		)
 		{
-			$itemFields[] = 'categoryId';
+			$titleIndex = array_search('title', $itemFields, true);
+			if ($titleIndex !== false)
+			{
+				array_splice($itemFields, $titleIndex, 1, ['name', 'lastName', 'secondName']);
+			}
 		}
 		if (empty($itemFields))
 		{
 			$itemFields = ['id'];
+		}
+		$needsCategoryForStage = $this->entityTypeSettings->hasCategories()
+			&& array_intersect(['stage', 'previousStage'], array_keys($structuredList)) !== [];
+		$needsCategoryForUrl = $this->entityTypeSettings->isCategoriesSupported()
+			&& in_array('url', $fieldNames, true);
+		if (($needsCategoryForStage || $needsCategoryForUrl) && !in_array('categoryId', $itemFields, true))
+		{
+			$itemFields[] = 'categoryId';
 		}
 
 		$itemSelect = new ItemSelect(...$itemFields);
@@ -213,7 +239,12 @@ class ItemDtoMapper
 			$itemSelect->withUtm();
 		}
 
-		$relatedCrmObjectsSelect = $this->getRelatedCrmObjectsSelect($structuredList);
+		if ($this->entityTypeSettings->hasCrmTracking() && in_array(Item::trackingSourceId, $fieldNames, true))
+		{
+			$itemSelect->withTrackingSource();
+		}
+
+		$relatedCrmObjectsSelect = $this->getRelatedCrmObjectsSelect($structuredList, $request->getDtoClass());
 		if ($relatedCrmObjectsSelect !== [])
 		{
 			$itemSelect->withRelatedCrmObjects($relatedCrmObjectsSelect);
@@ -331,51 +362,83 @@ class ItemDtoMapper
 
 	public function mapDtoFieldNameToItem(string $fieldName): ?string
 	{
-		if ($this->isRelatedCrmObjectIdField($fieldName))
+		// Not a column of the item: it is loaded by its own loader and filtered by its own subquery.
+		if ($fieldName === Item::trackingSourceId)
 		{
 			return null;
 		}
 
-		if ($this->isCustomFieldDataField($fieldName))
+		return $this->itemFieldMapper->mapDtoFieldNameToItem($fieldName);
+	}
+
+	public function mapDtoFieldNameToItemForSort(string $fieldName): ?string
+	{
+		$itemFieldName = $this->mapDtoFieldNameToItem($fieldName);
+		if ($itemFieldName !== null)
 		{
-			return $this->getCustomFieldDataRelatedField($fieldName);
+			return $itemFieldName;
 		}
 
-		return match ($fieldName)
+		if (!$this->isRelatedCrmObjectIdField($fieldName))
 		{
-			'beginTime' => Item::beginDate,
-			'closeTime' => Item::closeDate,
-			'actualTime' => Quote::actualDate,
-			'birthdayTime' => Contact::birthdate,
-			'industryId', 'industry' => 'industry',
-			'employeesId', 'employees' => 'employees',
-			'type' => 'typeId',
-			'personType' => 'personTypeId',
-			'honorific', 'honorificId' => Contact::honorific,
-			'lastCommunication' => null,
-			'contactId', 'contactsId' => Item::contactBindings,
-			'companiesId' => Item::companyBindings,
-			'companies' => Item::companyBindings,
-			'phone' => Item::phones,
-			'hasPhone' => Item::phones,
-			'email' => Item::emails,
-			'hasEmail' => Item::emails,
-			'web' => Item::webs,
-			'hasWeb' => Item::webs,
-			'im' => Item::ims,
-			'hasIm' => Item::ims,
-			'observersId' => Item::observers,
-			'utm' => null,
-			default => $fieldName,
-		};
+			return null;
+		}
+
+		$entityCode = substr($fieldName, strlen('related'), -strlen('Id'));
+		$entityType = EntityType::fromCode($entityCode);
+		if ($entityType === null)
+		{
+			return null;
+		}
+
+		return ParentFieldManager::getParentFieldName($entityType->getId());
+	}
+
+	/**
+	 * @param string[] $dtoFieldNames
+	 */
+	public function getDtoFieldNameByItemFieldName(string $itemFieldName, array $dtoFieldNames): string
+	{
+		foreach ($dtoFieldNames as $dtoFieldName)
+		{
+			if ($this->mapDtoWriteFieldNameToItem($dtoFieldName) === $itemFieldName)
+			{
+				return $dtoFieldName;
+			}
+		}
+
+		return $itemFieldName;
+	}
+
+	private function mapDtoWriteFieldNameToItem(string $fieldName): ?string
+	{
+		if ($fieldName === Item::utm || $fieldName === Item::trackingSourceId)
+		{
+			return $fieldName;
+		}
+
+		if (!$this->isRelatedCrmObjectIdField($fieldName))
+		{
+			return $this->mapDtoFieldNameToItem($fieldName);
+		}
+
+		$requestEntityCode = substr($fieldName, strlen('related'), -strlen('Id'));
+		$requestEntityType = EntityType::fromCode($requestEntityCode);
+		$parentEntityType = $requestEntityType === null
+			? null
+			: $this->entityTypeSettings->getParentEntityTypesMap()[$requestEntityType->getId()] ?? null
+		;
+
+		return $parentEntityType === null ? null : 'parentId_' . $parentEntityType->getId();
 	}
 
 	/**
 	 * @param array<string|int, mixed> $structuredList
-	 * @return array<string, string[]>
+	 * @return array<string, array{entityTypeId: int|null, allowedCategoryIds?: int[], multiple: bool, dtoClass: string|null, select: string[]}>
 	 */
-	private function getRelatedCrmObjectsSelect(array $structuredList): array
+	private function getRelatedCrmObjectsSelect(array $structuredList, string $dtoClass): array
 	{
+		$dto = $dtoClass::create();
 		$result = [];
 		foreach ($structuredList as $fieldName => $structuredItem)
 		{
@@ -384,7 +447,49 @@ class ItemDtoMapper
 				continue;
 			}
 
-			$result[$fieldName] = (array)$structuredItem;
+			$field = $dto->getFields()[$fieldName] ?? null;
+			$targetDtoClass = $field === null
+				? null
+				: ($field->getElementType() ?? $field->getPropertyType())
+			;
+			$targetEntityType = $targetDtoClass === null
+				? null
+				: $this->getEntityTypeByGeneratedDtoClass($targetDtoClass)
+			;
+
+			$result[$fieldName] = [
+				'entityTypeId' => $targetEntityType?->getId(),
+				'multiple' => ($field?->isMultiple() ?? false) || ($field?->getRelation()?->multiple ?? false),
+				'dtoClass' => $targetDtoClass,
+				'select' => $this->normalizeRelatedCrmObjectSelect((array)$structuredItem),
+			];
+			$categoryId = $fieldName === 'myCompany' || $targetEntityType === null
+				? null
+				: SchemaProvider::getItemRouteCategoryId($targetEntityType);
+			if ($categoryId !== null)
+			{
+				$result[$fieldName]['allowedCategoryIds'] = [$categoryId];
+			}
+		}
+
+		return $result;
+	}
+
+	private function getEntityTypeByGeneratedDtoClass(string $dtoClass): ?EntityType
+	{
+		return (new ItemDtoGenerator())->getEntityTypeByGeneratedDtoClass($dtoClass);
+	}
+
+	/** @param array<int|string, mixed> $select */
+	private function normalizeRelatedCrmObjectSelect(array $select): array
+	{
+		$result = [];
+		foreach ($select as $fieldName)
+		{
+			if (is_string($fieldName) && !in_array($fieldName, $result, true))
+			{
+				$result[] = $fieldName;
+			}
 		}
 
 		return $result;
@@ -529,6 +634,7 @@ class ItemDtoMapper
 						$relatedDtoField,
 						$dtoFieldSelect,
 						isset($fullRelationFields[$dtoFieldName]),
+						$dtoField,
 					)
 					: $this->getItemFieldValue(
 						$item,
@@ -589,6 +695,8 @@ class ItemDtoMapper
 			if (!$fileMetadataPreloaded)
 			{
 				$this->preloadSystemFileMetadata($items, $dtoTemplate, $selectList);
+				$this->preloadPersonTypeNames($items, $selectList);
+				$this->preloadRelatedItemData($items, $dtoTemplate, $selectList);
 				$fileMetadataPreloaded = true;
 			}
 			$collection->add(
@@ -739,6 +847,12 @@ class ItemDtoMapper
 			return $value;
 		}
 
+		$value = $this->getItemTrackingSourceFieldValue($item, $dtoFieldName);
+		if ($value !== null)
+		{
+			return $value;
+		}
+
 		$value = $this->getItemObserversFieldValue($item, $dtoFieldName);
 		if ($value !== null)
 		{
@@ -754,13 +868,16 @@ class ItemDtoMapper
 		return match ($dtoFieldName)
 			{
 				'id' => $item->getId(),
+				'entityTypeId' => $item->getEntityType()->getId(),
+				'canRead' => $item->canRead(),
+				'url' => $this->getItemUrl($item),
 				'createdTime' => $item->getCreatedTime(),
 				'createdById' => $item->getCreatedById(),
 				'updatedTime' => $item->getUpdatedTime(),
 				'updatedById' => $item->getUpdatedById(),
 				'lastActivityTime' => $item->getLastActivityTime(),
 				'lastActivityById' => $item->getLastActivityById(),
-				'title' => $item->getTitle(),
+				'title' => $item->getCaption(),
 				'xmlId' => $item->getXmlId(),
 				'assignedById' => $item->getAssignedById(),
 				'opened' => $item->getOpened(),
@@ -798,6 +915,7 @@ class ItemDtoMapper
 		?DtoField $relatedDtoField,
 		array $relationSelect,
 		bool $isFullRelationSelected = false,
+		?DtoField $relationField = null,
 	): mixed
 	{
 		if ($this->isCustomFieldDataField($dtoFieldName))
@@ -846,7 +964,7 @@ class ItemDtoMapper
 			return $value;
 		}
 
-		$value = $this->getItemRelatedCrmObjectRelationValue($item, $dtoFieldName, $relationSelect);
+		$value = $this->getItemRelatedCrmObjectRelationValue($item, $dtoFieldName, $relationSelect, $relationField);
 		if ($value !== null)
 		{
 			return $value;
@@ -1021,6 +1139,10 @@ class ItemDtoMapper
 			return true;
 		}
 		if ($this->mapUtmFieldToItem($item, $fieldName, $value))
+		{
+			return true;
+		}
+		if ($this->mapTrackingSourceFieldToItem($item, $fieldName, $value))
 		{
 			return true;
 		}
@@ -1300,7 +1422,7 @@ class ItemDtoMapper
 		{
 			$dto->url = $urls['url'];
 		}
-		if (property_exists($dto, 'downloadUrl') && ($select === [] || in_array('downloadUrl', $select, true)))
+		if ($select === [] || in_array('downloadUrl', $select, true))
 		{
 			$dto->downloadUrl = $urls['downloadUrl'];
 		}
@@ -1544,7 +1666,7 @@ class ItemDtoMapper
 		}
 		if ($item instanceof Company)
 		{
-			return $this->getCompanyFieldValue($item, $fieldName);
+			return $this->getCompanyFieldValue($item, $fieldName, $select);
 		}
 		if ($item instanceof Quote)
 		{
@@ -1613,7 +1735,7 @@ class ItemDtoMapper
 		};
 	}
 
-	protected function getCompanyFieldValue(Company $item, string $fieldName): mixed
+	protected function getCompanyFieldValue(Company $item, string $fieldName, array $select = []): mixed
 	{
 		return match ($fieldName)
 		{
@@ -1622,9 +1744,28 @@ class ItemDtoMapper
 			'industryId' => $item->getIndustry(),
 			'employeesId' => $item->getEmployees(),
 			'revenue' => $item->getRevenue(),
+			'logo' => $this->getCompanyLogoValue($item, $select),
 			'typeId' => $item->getTypeId(),
 			default => null,
 		};
+	}
+
+	private function getCompanyLogoValue(Company $item, array $select = []): ?array
+	{
+		$file = $this->getItemFile($item, Company::logo);
+		$metadata = $file === null ? null : $this->getFileMetadata($file);
+		if ($file === null || $metadata === null)
+		{
+			return null;
+		}
+
+		return $this->convertFileValueFromItem(
+			$item,
+			Company::logo,
+			$file,
+			$metadata,
+			$select,
+		)?->toArray();
 	}
 
 	protected function mapFieldToQuote(Item $item, string $fieldName, mixed $value): bool
@@ -1873,6 +2014,131 @@ class ItemDtoMapper
 			foreach ($fileIdsChunk as $fileId)
 			{
 				$this->fileMetadataById[(int)$fileId] ??= null;
+			}
+		}
+	}
+
+	/**
+	 * @param array<string|int, mixed> $selectList
+	 */
+	private function preloadPersonTypeNames(ItemCollection $items, array $selectList): void
+	{
+		$hasPersonType = false;
+		foreach ($selectList as $key => $value)
+		{
+			$fieldName = is_string($key) ? $key : $value;
+			if ($fieldName === 'personType')
+			{
+				$hasPersonType = true;
+				break;
+			}
+		}
+		if (!$hasPersonType || !\Bitrix\Main\Loader::includeModule('sale'))
+		{
+			return;
+		}
+
+		$personTypeIds = [];
+		foreach ($items as $item)
+		{
+			if (!$item instanceof Quote)
+			{
+				continue;
+			}
+
+			$personTypeId = $item->getPersonTypeId();
+			if ($personTypeId !== null && $personTypeId > 0)
+			{
+				$personTypeIds[$personTypeId] = true;
+			}
+		}
+
+		$missingPersonTypeIds = array_diff_key($personTypeIds, $this->personTypeNameById);
+		foreach (array_chunk(array_keys($missingPersonTypeIds), 500) as $personTypeIdsChunk)
+		{
+			foreach (\Bitrix\Sale\Internals\PersonTypeTable::query()
+				->setSelect(['ID', 'NAME'])
+				->whereIn('ID', $personTypeIdsChunk)
+				->exec() as $personType)
+			{
+				$personTypeId = (int)($personType['ID'] ?? 0);
+				if ($personTypeId > 0)
+				{
+					$this->personTypeNameById[$personTypeId] = (string)($personType['NAME'] ?? '');
+				}
+			}
+
+			foreach ($personTypeIdsChunk as $personTypeId)
+			{
+				$this->personTypeNameById[(int)$personTypeId] ??= null;
+			}
+		}
+	}
+
+	/**
+	 * @param array<string|int, mixed> $selectList
+	 */
+	private function preloadRelatedItemData(ItemCollection $items, Dto $dtoTemplate, array $selectList): void
+	{
+		foreach ($selectList as $fieldName => $relationSelect)
+		{
+			if (!is_string($fieldName) || !is_array($relationSelect))
+			{
+				continue;
+			}
+
+			$relationField = $dtoTemplate->getFields()[$fieldName] ?? null;
+			if ($relationField === null)
+			{
+				continue;
+			}
+
+			$relatedItems = new ItemCollection();
+			foreach ($items as $item)
+			{
+				foreach ($this->getLoadedRelatedItems($item, $fieldName) as $relatedItem)
+				{
+					$relatedItems->add($relatedItem);
+				}
+			}
+			if (count($relatedItems) === 0)
+			{
+				continue;
+			}
+
+			$relatedItemsByMappingContext = [];
+			foreach ($relatedItems as $item)
+			{
+				$mappingContext = $this->getRelatedDtoMappingContext(
+					$item,
+					$relationSelect,
+					$relationField,
+					$fieldName === 'contacts' || $fieldName === 'companies',
+				);
+				$mappingContextKey = (string)spl_object_id($mappingContext['mapper']);
+				if (!isset($relatedItemsByMappingContext[$mappingContextKey]))
+				{
+					$relatedItemsByMappingContext[$mappingContextKey] = [
+						'mapper' => $mappingContext['mapper'],
+						'context' => $mappingContext['context'],
+						'items' => new ItemCollection(),
+					];
+				}
+				$relatedItemsByMappingContext[$mappingContextKey]['items']->add($item);
+			}
+
+			foreach ($relatedItemsByMappingContext as $mappingContext)
+			{
+				[$relatedDtoTemplate, $relatedSelectList] = $mappingContext['context'];
+				$mappingContext['mapper']->preloadSystemFileMetadata(
+					$mappingContext['items'],
+					$relatedDtoTemplate,
+					$relatedSelectList,
+				);
+				$mappingContext['mapper']->preloadPersonTypeNames(
+					$mappingContext['items'],
+					$relatedSelectList,
+				);
 			}
 		}
 	}
@@ -2544,25 +2810,24 @@ class ItemDtoMapper
 		{
 			return null;
 		}
+		if (array_key_exists($personTypeId, $this->personTypeNameById))
+		{
+			return $this->personTypeNameById[$personTypeId];
+		}
 
 		$personType = \Bitrix\Sale\Internals\PersonTypeTable::getById($personTypeId)->fetch();
 
-		return $personType['NAME'] ?? null;
+		return $this->personTypeNameById[$personTypeId] = $personType['NAME'] ?? null;
 	}
 
-	protected function getItemRelatedCrmObjectRelationValue(Item $item, string $fieldName, array $select): mixed
+	protected function getItemRelatedCrmObjectRelationValue(
+		Item $item,
+		string $fieldName,
+		array $select,
+		?DtoField $relationField,
+	): mixed
 	{
-		$loadedRelation = match ($fieldName)
-		{
-			'company' => $item instanceof HasCompanyInterface ? $item->getCompany() : null,
-			'companies' => $item instanceof Contact ? $item->getCompanies() : null,
-			'myCompany' => method_exists($item, 'getMyCompany') ? $item->getMyCompany() : null,
-			'lead' => method_exists($item, 'getLead') ? $item->getLead() : null,
-			'quote' => $item instanceof Deal ? $item->getQuote() : null,
-			'contact' => $item instanceof HasContactBindingsInterface ? $item->getContact() : null,
-			'contacts' => $item instanceof HasContactBindingsInterface ? $item->getContacts() : null,
-			default => $this->getRelatedParentItem($item, $fieldName),
-		};
+		$loadedRelation = $this->getLoadedRelatedItemRelation($item, $fieldName);
 		if ($loadedRelation === null)
 		{
 			return null;
@@ -2570,26 +2835,67 @@ class ItemDtoMapper
 
 		if ($fieldName === 'contacts' || $fieldName === 'companies')
 		{
-			$collection = new DtoCollection(ItemDto::class);
+			$collection = null;
 			foreach ($loadedRelation as $relatedItem)
 			{
 				if (!$relatedItem instanceof Item)
 				{
 					continue;
 				}
-
-				$collection->add($this->createRelatedItemDto($relatedItem, $select));
+				$relatedDto = $this->createRelatedItemDto($relatedItem, $select, $relationField, true);
+				$collection ??= new DtoCollection($relatedDto::class);
+				$collection->add($relatedDto);
 			}
 
-			return $collection;
+			return $collection ?? new DtoCollection(ItemDto::class);
 		}
 
 		if (!$loadedRelation instanceof Item)
 		{
 			return null;
 		}
+		return $this->createRelatedItemDto($loadedRelation, $select, $relationField);
+	}
 
-		return $this->createRelatedItemDto($loadedRelation, $select);
+	private function getLoadedRelatedItemRelation(Item $item, string $fieldName): mixed
+	{
+		return match ($fieldName)
+		{
+			'company' => $item instanceof HasCompanyInterface ? $item->getCompany() : null,
+			'companies' => $item instanceof Contact ? $item->getCompanies() : null,
+			'myCompany' => method_exists($item, 'getMyCompany') ? $item->getMyCompany() : null,
+			'deal' => method_exists($item, 'getDeal') ? $item->getDeal() : null,
+			'lead' => method_exists($item, 'getLead') ? $item->getLead() : null,
+			'quote' => $item instanceof Deal ? $item->getQuote() : null,
+			'contact' => $item instanceof HasContactBindingsInterface ? $item->getContact() : null,
+			'contacts' => $item instanceof HasContactBindingsInterface ? $item->getContacts() : null,
+			default => $this->getRelatedParentItem($item, $fieldName),
+		};
+	}
+
+	/** @return Item[] */
+	private function getLoadedRelatedItems(Item $item, string $fieldName): array
+	{
+		$loadedRelation = $this->getLoadedRelatedItemRelation($item, $fieldName);
+		if ($loadedRelation instanceof Item)
+		{
+			return [$loadedRelation];
+		}
+		if ($fieldName !== 'contacts' && $fieldName !== 'companies')
+		{
+			return [];
+		}
+
+		$relatedItems = [];
+		foreach ($loadedRelation ?? [] as $relatedItem)
+		{
+			if ($relatedItem instanceof Item)
+			{
+				$relatedItems[] = $relatedItem;
+			}
+		}
+
+		return $relatedItems;
 	}
 
 	private function getRelatedParentItem(Item $item, string $fieldName): ?Item
@@ -2642,38 +2948,76 @@ class ItemDtoMapper
 		return $dto;
 	}
 
-	private function createRelatedItemDto(Item $item, array $select): ItemDto
+	private function createRelatedItemDto(
+		Item $item,
+		array $select,
+		?DtoField $relationField = null,
+		bool $preserveRequestedDtoClass = false,
+	): Dto
 	{
-		$dto = new ItemDto();
+		$mappingContext = $this->getRelatedDtoMappingContext(
+			$item,
+			$select,
+			$relationField,
+			$preserveRequestedDtoClass,
+		);
+
+		return $mappingContext['mapper']->getDtoByItemAndContext($item, ...$mappingContext['context']);
+	}
+
+	/**
+	 * @return array{mapper: self, context: array{Dto, array<string|int, mixed>, DtoFieldsCollection, array<string, true>}}
+	 */
+	private function getRelatedDtoMappingContext(
+		Item $item,
+		array $select,
+		?DtoField $relationField = null,
+		bool $preserveRequestedDtoClass = false,
+	): array
+	{
+		$targetDtoClass = $relationField?->getElementType() ?? $relationField?->getPropertyType();
 		$entityTypeId = $item->getEntityType()->getId();
-		$isFullSelect = empty($select);
-		$canRead = $item->canRead();
-		if ($isFullSelect || in_array('id', $select, true))
+		$generatedDto = (new ItemDtoGenerator())->generate($entityTypeId);
+		$commonFields = ['id', 'entityTypeId', 'canRead', 'title', 'url'];
+		$requestedFields = $select === [] ? $commonFields : $select;
+		$selectedFields = $requestedFields;
+		if (!$item->canRead())
 		{
-			$dto->id = (int)$item->getId();
+			$selectedFields = array_values(array_intersect($selectedFields, $commonFields));
 		}
-		if ($isFullSelect || in_array('entityTypeId', $select, true))
+		$dtoClassFields = $preserveRequestedDtoClass ? $requestedFields : $selectedFields;
+		$dtoClass = array_diff($dtoClassFields, $commonFields) === []
+			? ItemDto::class
+			: (is_string($targetDtoClass) && is_subclass_of($targetDtoClass, Dto::class)
+			? $targetDtoClass
+			: $generatedDto->getFQCN());
+		if (!class_exists($dtoClass))
 		{
-			$dto->entityTypeId = $entityTypeId;
-		}
-		if ($isFullSelect || in_array('canRead', $select, true))
-		{
-			$dto->canRead = $canRead;
-		}
-
-		if ($isFullSelect || in_array('title', $select, true))
-		{
-			$dto->title = $item->getCaption();
-		}
-
-		if ($isFullSelect || in_array('url', $select, true))
-		{
-			$categoryId = $item instanceof HasCategoriesInterface ? $item->getCategoryId() : null;
-			$url = Container::getInstance()->getRouter()->getItemDetailUrl($entityTypeId, (int)$item->getId(), $categoryId);
-			$dto->url = is_object($url) && method_exists($url, 'getUri') ? $url->getUri() : (string)$url;
+			Generator::generateByDto($generatedDto);
 		}
 
-		return $dto;
+		$cacheKey = $dtoClass . ':' . serialize($selectedFields);
+		if (!isset($this->relatedDtoMappingContexts[$cacheKey]))
+		{
+			$request = new GetItemRequest($dtoClass);
+			$request->select = SelectStructure::create($selectedFields, $dtoClass, $request);
+			$mapper = new self(EntityTypeSettings::of($item->getEntityType()), restServer: $this->restServer);
+			$this->relatedDtoMappingContexts[$cacheKey] = [
+				'mapper' => $mapper,
+				'context' => $mapper->prepareDtoMappingContext($request),
+			];
+		}
+
+		return $this->relatedDtoMappingContexts[$cacheKey];
+	}
+
+	private function getItemUrl(Item $item): ?string
+	{
+		$entityTypeId = $item->getEntityType()->getId();
+		$categoryId = $item instanceof HasCategoriesInterface ? $item->getCategoryId() : null;
+		$url = Container::getInstance()->getRouter()->getItemDetailUrl($entityTypeId, (int)$item->getId(), $categoryId);
+
+		return $url?->getUri();
 	}
 
 	private function createStageDto(Stage $stage, array $select): StageDto
@@ -2916,6 +3260,28 @@ class ItemDtoMapper
 				'utm' => $item->setUtm($this->mapUtmDataToEntity($value)),
 				default => null,
 			};
+	}
+
+	protected function mapTrackingSourceFieldToItem(Item $item, string $fieldName, mixed $value): bool
+	{
+		if (!$this->entityTypeSettings->hasCrmTracking() || $fieldName !== Item::trackingSourceId)
+		{
+			return false;
+		}
+
+		$item->setTrackingSourceId($value === null ? null : (int)$value);
+
+		return true;
+	}
+
+	protected function getItemTrackingSourceFieldValue(Item $item, string $fieldName): ?int
+	{
+		if (!$this->entityTypeSettings->hasCrmTracking() || $fieldName !== Item::trackingSourceId)
+		{
+			return null;
+		}
+
+		return $item->getTrackingSourceId();
 	}
 
 	protected function mapUtmDataToEntity(mixed $utmData): ?Utm

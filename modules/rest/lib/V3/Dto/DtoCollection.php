@@ -74,6 +74,16 @@ class DtoCollection implements \IteratorAggregate, \Countable, Arrayable, \JsonS
 		return $this->items[array_key_last($this->items)];
 	}
 
+	public function removeLast(): ?Dto
+	{
+		if ($this->items === [])
+		{
+			return null;
+		}
+
+		return array_pop($this->items);
+	}
+
 	public function toArray(): array
 	{
 		$result = [];

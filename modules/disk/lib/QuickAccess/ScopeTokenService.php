@@ -7,12 +7,12 @@ namespace Bitrix\Disk\QuickAccess;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\QuickAccess\FileInfo\ProviderFactory;
+use Bitrix\Disk\QuickAccess\FileInfo\ProviderInterface;
 use Bitrix\Disk\QuickAccess\Storage\ScopeStorage;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Security\SecurityException;
 use Bitrix\Main\Web\Json;
-use LogicException;
 
 /**
  * Class ScopeTokenService
@@ -21,10 +21,13 @@ use LogicException;
 class ScopeTokenService
 {
 	private const PROBABILITY_CLEANUP = 5; // % chance of cleanup on each request
+	private const MAX_MEMOIZED_DESCRIPTORS = 1000;
 
 	private bool $cleanupTriggered = false;
 	private array $addedScopes = [];
 	private array $savedFileMetadata = [];
+	private array $memoizedDescriptors = [];
+	private ?DeterministicCipher $cipher = null;
 
 	/**
 	 * @param ScopeStorage $storage The scope-based storage
@@ -135,25 +138,26 @@ class ScopeTokenService
 	/**
 	 * Returns the encrypted scope for the given file object or fileId. Will be used as _esd={} in URL.
 	 *
-	 * @note Must be called only after grantAccessToScope() for the same scope within the same service instance,
-	 * otherwise a LogicException will be thrown.
+	 * The descriptor is built for any file: neither its type nor a failure to read or to store file metadata
+	 * affects the result. File metadata is saved to the storage only when grantAccessToScope() was called for
+	 * the same scope within the same service instance. Without file metadata in the storage the interceptor
+	 * falls back to the kernel with a full access check, so the URL parameter stays inert for such a file.
+	 *
+	 * @note The descriptor value is deterministic and equal with and without granted access.
 	 *
 	 * @param AttachedObject|BaseObject|int $file File object or file ID
 	 * @param string $scope Scope identifier (e.g. 'chat_123')
-	 * @return string|null Encrypted scope or null if failed
+	 * @return string|null Encrypted scope, or null when the subsystem is not ready
+	 * or the file provider could not be created
 	 * @throws ArgumentException
 	 * @throws SecurityException
+	 * @throws \RuntimeException When the file data is not available
 	 */
 	public function getEncryptedScopeForObject(mixed $file, string $scope): ?string
 	{
 		if (!$this->quickAccessReadinessChecker->isReady())
 		{
 			return null;
-		}
-
-		if (!isset($this->addedScopes[$scope]))
-		{
-			throw new LogicException('Scope access must be granted via grantAccessToScope() before generating encrypted scope data for scope: ' . $scope);
 		}
 
 		$provider = $this->fileInfoProviderFactory->createProvider($file);
@@ -163,27 +167,44 @@ class ScopeTokenService
 		}
 
 		$fileId = $provider->getBFileId();
-		if (!isset($this->savedFileMetadata[$fileId]))
-		{
-			$fileInfo = $provider->getFileInfo();
-			if ($fileInfo === null)
-			{
-				return null;
-			}
 
-			if (!$this->storage->saveFileMetadata($fileId, $fileInfo->toArray()))
-			{
-				return null;
-			}
-			
-			$this->savedFileMetadata[$fileId] = true;
+		if (isset($this->addedScopes[$scope]))
+		{
+			$this->saveFileMetadataOnce($provider, $fileId);
 		}
 
 		return $this->encryptScopeData($scope, $fileId, $provider->getFileName());
 	}
 
 	/**
-	 * Generate scope cipher for URL parameters
+	 * Save file metadata to the storage once per file within the service instance
+	 *
+	 * @param ProviderInterface $provider Provider of the file
+	 * @param int $bFileId File ID (b_file.ID)
+	 */
+	private function saveFileMetadataOnce(ProviderInterface $provider, int $bFileId): void
+	{
+		if (isset($this->savedFileMetadata[$bFileId]))
+		{
+			return;
+		}
+
+		$fileInfo = $provider->getFileInfo();
+		if ($fileInfo === null)
+		{
+			return;
+		}
+
+		if (!$this->storage->saveFileMetadata($bFileId, $fileInfo->toArray()))
+		{
+			return;
+		}
+
+		$this->savedFileMetadata[$bFileId] = true;
+	}
+
+	/**
+	 * Generate scope cipher for URL parameters. The result is memoized within the service instance
 	 *
 	 * @param string $scope Scope identifier
 	 * @param int $bFileId File ID (b_file.ID)
@@ -194,6 +215,14 @@ class ScopeTokenService
 	 */
 	private function encryptScopeData(string $scope, int $bFileId, string $filename): string
 	{
+		// Memoization is kept below the metadata block of the caller: the descriptor does not depend on granted
+		// access, while the metadata write does, so an earlier cache hit would silently skip a pending write.
+		$memoizationKey = Json::encode([$scope, $bFileId, $filename]);
+		if (isset($this->memoizedDescriptors[$memoizationKey]))
+		{
+			return $this->memoizedDescriptors[$memoizationKey];
+		}
+
 		$scopeData = [
 			'v' => 1,
 			'scope' => $scope,
@@ -202,16 +231,34 @@ class ScopeTokenService
 		];
 
 		$packedData = Json::encode($scopeData);
+		$encryptedData = $this->getCipher()->encrypt($packedData, $this->signerKey);
 
-		$cipher = new DeterministicCipher();
-		$cipher->setIvSalt(\CMain::GetServerUniqID());
-		$encryptedData = $cipher->encrypt($packedData, $this->signerKey);
-
-		return strtr(
+		$encryptedScope = strtr(
 			string: base64_encode($encryptedData),
 			from: '+/',
 			to: '-_',
 		);
+
+		if (count($this->memoizedDescriptors) < self::MAX_MEMOIZED_DESCRIPTORS)
+		{
+			$this->memoizedDescriptors[$memoizationKey] = $encryptedScope;
+		}
+
+		return $encryptedScope;
+	}
+
+	/**
+	 * Cipher is reused within the service instance: its construction is far more expensive than encryption itself
+	 */
+	private function getCipher(): DeterministicCipher
+	{
+		if ($this->cipher === null)
+		{
+			$this->cipher = new DeterministicCipher();
+			$this->cipher->setIvSalt(\CMain::GetServerUniqID());
+		}
+
+		return $this->cipher;
 	}
 
 	/**

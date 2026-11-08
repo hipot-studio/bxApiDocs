@@ -9,23 +9,26 @@ use Bitrix\Mobile\AppTabs\Menu;
 use Bitrix\Mobile\AppTabs\MenuNew;
 use Bitrix\Mobile\Config\Feature;
 use Bitrix\Mobile\Feature\MenuFeature;
-use Bitrix\Mobile\Tab\Manager;
+use Bitrix\Mobile\Context;
+use Bitrix\Mobile\Tab\Preset\Service\LegacyTabPresetCompatibilityService;
 
 class Tabs extends \Bitrix\Main\Engine\Controller
 {
 	public function setConfigAction(array $config = [])
 	{
-		$manager = new Manager();
+		$tabPresetService = LegacyTabPresetCompatibilityService::forContext(new Context());
 
-		return $manager->setCustomConfig($config, true);
+		return $tabPresetService->setConfig($config);
 	}
 
 	public function getDataAction()
 	{
-		$manager = new Manager();
+		$tabPresetService = LegacyTabPresetCompatibilityService::forContext(new Context());
+		$manager = $tabPresetService->getManager();
+		$resolvedState = $tabPresetService->getResolvedState();
 		$result = [
 			'presets' => [
-				'current' => $manager->getPresetName(),
+				'current' => $resolvedState['currentPresetName'],
 				'list' => $manager->getPresetList(),
 			],
 			'tabs' => [
@@ -33,7 +36,7 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 			],
 		];
 
-		$activeTabs = $manager->getActiveTabs();
+		$activeTabs = $resolvedState['activeTabs'];
 		$result['tabs']['current'] = array_reduce(
 			array_keys($activeTabs),
 			static function ($result, $tabId) use ($manager, $activeTabs) {
@@ -79,7 +82,6 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 				return $result;
 			}, []);
 
-
 		return $result;
 	}
 
@@ -89,9 +91,8 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 	 */
 	public function getCurrentPresetNameAction(): ?string
 	{
-		return (new Manager())->getPresetName();
+		return LegacyTabPresetCompatibilityService::forContext(new Context())->getCurrentPresetName();
 	}
-
 
 	/**
 	 * @throws ArgumentNullException
@@ -99,8 +100,9 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 	 */
 	public function getCurrentPresetItemsAction(): array
 	{
-		$manager = new Manager();
-		$activeTabs = $manager->getActiveTabs();
+		$tabPresetService = LegacyTabPresetCompatibilityService::forContext(new Context());
+		$manager = $tabPresetService->getManager();
+		$activeTabs = $tabPresetService->getActiveTabs();
 
 		if (!$activeTabs || !is_array($activeTabs))
 		{
@@ -124,10 +126,9 @@ class Tabs extends \Bitrix\Main\Engine\Controller
 
 	public function setPresetAction($name): ?array
 	{
-		$manager = new Manager();
-		$result = $manager->setPresetName($name, true);
+		$result = LegacyTabPresetCompatibilityService::forContext(new Context())->setPreset($name);
 
-		if ($result == null)
+		if ($result === null)
 		{
 			$this->addError(new Error('Preset not found', 404));
 		}

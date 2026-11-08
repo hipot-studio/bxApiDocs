@@ -5,19 +5,17 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Main\Engine\Contract\Controllerable;
-use Bitrix\Main\Entity\ExpressionField;
+use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Socialnetwork\Component\WorkgroupList;
 use Bitrix\Socialnetwork\UserToGroupTable;
-use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Integration\SocialNetwork\Group;
 use Bitrix\Tasks\Internals\Project\Filter\GridFilter;
 use Bitrix\Tasks\Internals\Project\Order;
 use Bitrix\Tasks\Internals\Project\Provider;
-use Bitrix\Tasks\Internals\Project\UserOption\UserOptionTypeDictionary;
-use Bitrix\Tasks\Internals\Task\ProjectUserOptionTable;
 use Bitrix\Tasks\TourGuide;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Error\Collection;
@@ -31,6 +29,10 @@ Loc::loadMessages(__FILE__);
  */
 class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 {
+	private const PAGE_SIZE = 10;
+	private const MAX_PAGE = 1000;
+	private const MAX_GROUP_IDS_PER_REQUEST = 100;
+
 	/** @var Collection */
 	private $errors;
 	/** @var GridFilter */
@@ -130,6 +132,8 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 		$this->provider = new Provider(
 			User::getId(),
 			($this->arResult['isScrumList'] || $this->arParams['SCRUM'] === 'Y')
+				? WorkgroupList::MODE_TASKS_SCRUM
+				: WorkgroupList::MODE_TASKS_PROJECT
 		);
 	}
 
@@ -214,7 +218,7 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 		{
 			$pageNum = (int)($this->arParams['PAGE_NUMBER'] ?? $_REQUEST['page']);
 
-			return ($pageNum < 0 ? 1 : $pageNum);
+			return max(1, $pageNum);
 		}
 
 		return 1;
@@ -234,6 +238,7 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 			'OPENED',
 			'CLOSED',
 			'USER_GROUP_ID',
+			'SCRUM_MASTER_ID',
 			'ACTIVITY_DATE',
 			'IS_PINNED',
 			'COUNTERS',
@@ -242,6 +247,105 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 			'TAGS',
 			'EFFICIENCY',
 		];
+	}
+
+	private function getGroups(): array
+	{
+		$nav = new PageNavigation('page');
+		$nav
+			->allowAllRecords(true)
+			->setPageSize(self::PAGE_SIZE)
+			->setCurrentPage($this->getCurrentPage())
+		;
+
+		$select = $this->getSelect();
+		$query = $this->getProjectsQuery($select);
+		$query
+			->setOrder($this->order->getOrder())
+			->setOffset($nav->getOffset())
+			->setLimit($nav->getLimit())
+			->countTotal(true)
+		;
+
+		$result = $query->exec();
+
+		$nav->setRecordCount($result->getCount());
+		$this->arResult['NAV'] = $nav;
+		$this->arResult['CURRENT_PAGE'] = $nav->getCurrentPage();
+		$this->arResult['ENABLE_NEXT_PAGE'] = (
+			($nav->getCurrentPage() * $nav->getPageSize() + 1) <= $nav->getRecordCount()
+		);
+
+		$groups = [];
+		while ($group = $result->fetch())
+		{
+			$group = $this->prepareGroupData($group);
+			$groups[$group['ID']] = $group;
+		}
+
+		return $this->fillGroupsData($groups, $select);
+	}
+
+	private function getProjectsQuery(array $select, bool $applyGridFilter = true): Query
+	{
+		$query = $this->provider->getPrimaryProjectsQuery($select);
+		if (in_array('USER_GROUP_ID', $select, true))
+		{
+			$query->addSelect('CONTEXT_RELATION.ID', 'USER_GROUP_ID');
+		}
+		$query = $this->provider->getQueryWithFilter($query, [], '');
+
+		return $applyGridFilter ? $this->filter->process($query) : $query;
+	}
+
+	private function prepareGroupData(array $group): array
+	{
+		$groupId = (int)$group['ID'];
+		$group['PATH'] = CComponentEngine::makePathFromTemplate(
+			$this->arParams['PATH_TO_GROUP_TASKS'],
+			['group_id' => $groupId]
+		);
+
+		if ($this->arResult['isScrumList'])
+		{
+			$group['PATH'] = (new Uri($group['PATH']))
+				->addParams(['scrum' => 'Y'])
+				->getUri()
+			;
+		}
+
+		return $group;
+	}
+
+	private function fillGroupsData(array $groups, array $select): array
+	{
+		if (empty($groups))
+		{
+			return $groups;
+		}
+
+		if (in_array('IMAGE_ID', $select, true))
+		{
+			$groups = $this->provider->fillAvatars($groups);
+		}
+		if (in_array('EFFICIENCY', $select, true))
+		{
+			$groups = $this->provider->fillEfficiencies($groups);
+		}
+		if (in_array('MEMBERS', $select, true))
+		{
+			$groups = $this->provider->fillMembers($groups);
+		}
+		if (in_array('TAGS', $select, true))
+		{
+			$groups = $this->provider->fillTags($groups);
+		}
+		if (in_array('COUNTERS', $select, true))
+		{
+			$groups = $this->provider->fillCounters($groups);
+		}
+
+		return $groups;
 	}
 
 	private function doPostAction(): void
@@ -405,11 +509,11 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 		switch ($action)
 		{
 			case 'pin':
-				$this->provider->pin($ids);
+				$this->provider->pin($this->getAvailableGroupIds($ids));
 				break;
 
 			case 'unpin':
-				$this->provider->unpin($ids);
+				$this->provider->unpin($this->getAvailableGroupIds($ids));
 				break;
 
 			case 'request':
@@ -453,8 +557,6 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 
 		$this->initForAjaxCalls();
 
-		$members = [];
-
 		$rolesMap = [
 			'all' => [
 				UserToGroupTable::ROLE_OWNER,
@@ -473,7 +575,18 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 				UserToGroupTable::ROLE_MODERATOR,
 			],
 		];
+		if (
+			$groupId <= 0
+			|| !array_key_exists($type, $rolesMap)
+			|| !$this->isGroupAvailable($groupId)
+		)
+		{
+			return [];
+		}
+
+		$members = [];
 		$limit = 10;
+		$page = max(1, min($page, self::MAX_PAGE));
 
 		$query = $this->provider->getPrimaryUsersQuery([$groupId]);
 		$query
@@ -511,7 +624,10 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 			$id = $member['USER_ID'];
 			$members[] = [
 				'ID' => $id,
-				'PHOTO' => $avatars[$imageIds[$id]],
+				'PHOTO' => isset($imageIds[$id], $avatars[$imageIds[$id]])
+					? $avatars[$imageIds[$id]]
+					: null
+				,
 				'HREF' => CComponentEngine::MakePathFromTemplate($this->arParams['PATH_TO_USER'], ['user_id' => $id]),
 				'FORMATTED_NAME' => CUser::FormatName($this->arParams['NAME_TEMPLATE'], $member, true),
 				'ROLE' => $isScrumMembers ? $this->getScrumRole($member) : $member['ROLE'],
@@ -520,13 +636,16 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 			if ($isScrumMembers)
 			{
 				if (
-					$member['USER_ID'] === $member['SCRUM_MASTER_ID']
+					(int)$member['USER_ID'] === (int)$member['SCRUM_MASTER_ID']
 					&& $member['ROLE'] === UserToGroupTable::ROLE_OWNER
 				)
 				{
 					$members[] = [
 						'ID' => $id,
-						'PHOTO' => $avatars[$imageIds[$id]],
+						'PHOTO' => isset($imageIds[$id], $avatars[$imageIds[$id]])
+							? $avatars[$imageIds[$id]]
+							: null
+						,
 						'HREF' => CComponentEngine::makePathFromTemplate(
 							$this->arParams['PATH_TO_USER'],
 							['user_id' => $id]
@@ -564,29 +683,8 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 
 		$select = $this->getSelect();
 		$groups = $this->getGroupsData($groupIds, $select);
-		if (!empty($groups))
-		{
-			if (in_array('IMAGE_ID', $select, true))
-			{
-				$groups = $this->provider->fillAvatars($groups);
-			}
-			if (in_array('EFFICIENCY', $select, true))
-			{
-				$groups = $this->provider->fillEfficiencies($groups);
-			}
-			if (in_array('MEMBERS', $select, true))
-			{
-				$groups = $this->provider->fillMembers($groups);
-			}
-			if (in_array('TAGS', $select, true))
-			{
-				$groups = $this->provider->fillTags($groups);
-			}
-			if (in_array('COUNTERS', $select, true))
-			{
-				$groups = $this->provider->fillCounters($groups);
-			}
-		}
+		$groups = array_filter($groups, 'is_array');
+		$groups = $this->fillGroupsData($groups, $select);
 
 		if ($this->provider->getIsScrum())
 		{
@@ -596,23 +694,163 @@ class TasksProjectsComponent extends CBitrixComponent implements Controllerable
 		return (new Bitrix\Tasks\Grid\Project\Grid($groups, $this->arParams))->prepareRows();
 	}
 
-	private function checkGroupId(int $groupId): bool
+	private function getGroupsData(array $groupIds, array $select): array
 	{
-		$isScrumList = ($this->arParams['SCRUM'] === 'Y');
+		$groupIds = $this->normalizeGroupIds($groupIds);
+		if (empty($groupIds))
+		{
+			return [];
+		}
 
-		$group = Workgroup::getById($groupId);
-		$isScrumProject = $group && $group->isScrumProject();
+		$groups = array_fill_keys($groupIds, false);
+		$query = $this->getProjectsQuery($select);
+		$query->whereIn('ID', $groupIds);
 
-		return (
-			($isScrumList && $isScrumProject)
-			|| (!$isScrumList && !$isScrumProject)
-		);
+		$result = $query->exec();
+		while ($group = $result->fetch())
+		{
+			$group = $this->prepareGroupData($group);
+			$groups[$group['ID']] = $group;
+		}
+
+		return $groups;
+	}
+
+	public function findProjectPlaceAction(int $groupId, int $currentPage): ?array
+	{
+		if (!$this->checkRequirementsForAjaxCalls())
+		{
+			return null;
+		}
+
+		$this->initForAjaxCalls();
+
+		if ($groupId <= 0)
+		{
+			return $this->getEmptyProjectPlace();
+		}
+
+		$currentPage = $this->normalizeProjectPlacePage($currentPage);
+		if ($currentPage === null)
+		{
+			return null;
+		}
+
+		$order = $this->order->getOrder();
+		$select = $this->getProjectPlaceSelect($order);
+		$query = $this->getProjectsQuery($select);
+		$query
+			->setOrder($order)
+			->setLimit($currentPage * self::PAGE_SIZE)
+		;
+
+		$projectBefore = 0;
+		$projectFound = false;
+		$result = $query->exec();
+		while ($project = $result->fetch())
+		{
+			$projectId = (int)$project['ID'];
+			if ($projectFound)
+			{
+				return [
+					'projectBefore' => $projectBefore,
+					'projectAfter' => $projectId,
+				];
+			}
+
+			if ($projectId === $groupId)
+			{
+				$projectFound = true;
+				continue;
+			}
+
+			$projectBefore = $projectId;
+		}
+
+		return $projectFound
+			? ['projectBefore' => $projectBefore, 'projectAfter' => 0]
+			: $this->getEmptyProjectPlace()
+		;
+	}
+
+	private function getProjectPlaceSelect(array $order): array
+	{
+		return array_values(array_unique([
+			'ID',
+			'ACTIVITY_DATE',
+			'IS_PINNED',
+			...array_keys($order),
+		]));
+	}
+
+	private function normalizeProjectPlacePage(int $currentPage): ?int
+	{
+		return $currentPage > self::MAX_PAGE ? null : max(1, $currentPage);
+	}
+
+	private function getEmptyProjectPlace(): array
+	{
+		return [
+			'projectBefore' => false,
+			'projectAfter' => false,
+		];
+	}
+
+	private function normalizeGroupIds(array $groupIds): array
+	{
+		$result = [];
+		foreach ($groupIds as $groupId)
+		{
+			if (!is_scalar($groupId))
+			{
+				continue;
+			}
+
+			$groupId = (int)$groupId;
+			if ($groupId <= 0)
+			{
+				continue;
+			}
+
+			$result[$groupId] = $groupId;
+			if (count($result) > self::MAX_GROUP_IDS_PER_REQUEST)
+			{
+				throw new \InvalidArgumentException('Too many group IDs');
+			}
+		}
+
+		return array_values($result);
+	}
+
+	private function getAvailableGroupIds(array $groupIds): array
+	{
+		$groupIds = $this->normalizeGroupIds($groupIds);
+		if (empty($groupIds))
+		{
+			return [];
+		}
+
+		$query = $this->getProjectsQuery(['ID'], false);
+		$query->whereIn('ID', $groupIds);
+
+		return array_map('intval', array_column($query->exec()->fetchAll(), 'ID'));
+	}
+
+	private function isGroupAvailable(int $groupId): bool
+	{
+		$query = $this->getProjectsQuery(['ID'], false);
+		$query
+			->where('ID', $groupId)
+			->setLimit(1)
+		;
+
+		return (bool)$query->exec()->fetch();
 	}
 
 	private function getScrumRole(array $member): string
 	{
 		if (
-			$member['USER_ID'] === $member['SCRUM_MASTER_ID']
+			(int)$member['USER_ID'] === (int)$member['SCRUM_MASTER_ID']
 			&& $member['ROLE'] !== UserToGroupTable::ROLE_OWNER
 		)
 		{

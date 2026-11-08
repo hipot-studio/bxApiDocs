@@ -15,8 +15,15 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Internal\Digest\Onboarding\DigestSetupOnboarding;
+use Bitrix\BIConnector\Internal\Digest\Service\DigestSetupAvailability;
+use Bitrix\BIConnector\Internal\Digest\Service\DigestSetupAvailabilityService;
+use Bitrix\BIConnector\Internal\Grid\FilterPresetSynchronizer;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\AiAgentsEntrySource;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\AiAgentsSection;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\BitrixGptBiAnnouncement;
 use Bitrix\BIConnector\Manager;
-use Bitrix\BIConnector\Superset\Config\DatasetSettings;
+use Bitrix\BIConnector\Superset\Filter\StaleConditionResolver;
 use Bitrix\BIConnector\Superset\Grid\DashboardGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
@@ -27,6 +34,7 @@ use Bitrix\BIConnector\Superset\SystemDashboardManager;
 use Bitrix\BIConnector\Superset\UI\UIHelper;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -38,6 +46,7 @@ use Bitrix\UI\Buttons\Color;
 use Bitrix\UI\Toolbar\ButtonLocation;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons\JsCode;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 
 class ApacheSupersetDashboardListComponent extends CBitrixComponent
 {
@@ -49,6 +58,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	private DashboardGrid $grid;
 	private SupersetController $supersetController;
+	private array $staleConditions = [];
 
 	public function onPrepareComponentParams($arParams)
 	{
@@ -97,6 +107,8 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 
 		$this->arResult['GRID'] = $this->grid;
+		$this->arResult['STALE_CONDITIONS'] = $this->staleConditions;
+		$this->arResult['STALE_CONDITION_NAMES'] = $this->getStaleConditionNames();
 
 		$this->includeComponentTemplate();
 
@@ -107,15 +119,20 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 
 	private function init(): void
 	{
+		FilterPresetSynchronizer::sync(DashboardGrid::SUPERSET_DASHBOARD_GRID_ID, DashboardGrid::getFilterPresets());
 		$this->initGrid();
 		$this->initGridFilter();
 		$this->initCreateButton();
+		$this->initConstructorButton();
 		$this->prepareSecondDbConnectWarning();
 		$this->prepareDeleteInstanceWarning();
-		$this->prepareDatasetTypingWarning();
 		$this->prepareSelfHostedLicenseNotice();
 		$this->arResult['NEED_SHOW_DRAFT_GUIDE'] = $this->isNeedShowGuide('draft_guide');
 		$this->preparePublishAhaMoment();
+		$this->prepareConstructorButtonHint();
+		$this->prepareBitrixGptAnnouncement();
+		$this->prepareDigestSetupOnboarding();
+		$this->prepareAiAgentsPromo();
 		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
 	}
 
@@ -141,6 +158,30 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		$grid->initPagination($superset->getUnionDashboardGroupRepository()->getCount($this->getOrmParams()));
 	}
 
+	private function canOpenConstructor(): bool
+	{
+		if (
+			!Feature::isBuilderEnabled()
+			|| !SupersetInitializer::isSupersetReady()
+		)
+		{
+			return false;
+		}
+
+		if (
+			Loader::includeModule('intranet')
+			&& !ToolsManager::getInstance()->checkAvailabilityByToolId('crm_bi')
+		)
+		{
+			return false;
+		}
+
+		$accessController = AccessController::getCurrent();
+
+		return $accessController->check(ActionDictionary::ACTION_BIC_ACCESS)
+			&& $accessController->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT);
+	}
+
 	private function initGridFilter(): void
 	{
 		$filter = $this->grid->getFilter();
@@ -150,6 +191,7 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 				$this->grid->getFilter(),
 				[
 					'GRID_ID' => $this->grid->getId(),
+					'FILTER_PRESETS' => DashboardGrid::getFilterPresets(),
 				],
 			);
 		}
@@ -163,10 +205,39 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		Toolbar::addFilter($options);
 	}
 
+	private function initConstructorButton(): void
+	{
+		if (!$this->canOpenConstructor())
+		{
+			return;
+		}
+
+		$button = new Button([
+			'id' => 'biconnector-open-constructor-button',
+			'text' => Loc::getMessage('BICONNECTOR_APACHE_SUPERSET_DASHBOARD_LIST_OPEN_CONSTRUCTOR'),
+			'color' => Color::LIGHT_BORDER,
+			'click' => new JsCode('BX.BIConnector.SupersetDashboardGridManager.Instance.openConstructorWorkspace();'),
+		]);
+
+		Toolbar::addButton($button);
+	}
+
 	private function getOrmParams(): array
 	{
 		$ormParams = $this->grid->getOrmParams();
 		$ormParams['runtime'] ??= [];
+
+		if (
+			Feature::isDashboardFilterPresetsEnabled()
+			&& !empty($ormParams['filter'])
+			&& is_array($ormParams['filter'])
+		)
+		{
+			// The same resolver runs on the mobile path, so one preset yields one result on both.
+			$resolved = (new StaleConditionResolver())->resolve($ormParams['filter']);
+			$ormParams['filter'] = $resolved->fields;
+			$this->staleConditions = $resolved->stale;
+		}
 
 		if (empty($ormParams['filter']) || !is_array($ormParams['filter']))
 		{
@@ -196,6 +267,35 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 
 		return $ormParams;
+	}
+
+	private function getStaleConditionNames(): array
+	{
+		$filter = $this->grid->getFilter();
+		if ($filter === null)
+		{
+			return [];
+		}
+
+		// Fields are keyed by a short name ('GROUPS'), while the preset addresses them
+		// by the field id ('GROUPS.ID'), so Filter::getField() misses four of the six.
+		$namesByFieldId = [];
+		foreach ($filter->getFields() as $field)
+		{
+			$namesByFieldId[$field->getId()] = $field->getName();
+		}
+
+		$names = [];
+		foreach ($this->staleConditions as $condition)
+		{
+			$name = $namesByFieldId[$condition['fieldId']] ?? null;
+			if ($name !== null)
+			{
+				$names[] = $name;
+			}
+		}
+
+		return array_values(array_unique($names));
 	}
 
 	private function loadRows(): void
@@ -395,11 +495,6 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 		}
 	}
 
-	private function prepareDatasetTypingWarning(): void
-	{
-		$this->arResult['SHOW_DATASET_TYPING_WARNING'] = !DatasetSettings::isTypingEnabled();
-	}
-
 	private function prepareSelfHostedLicenseNotice(): void
 	{
 		$licenseView = SelfHostedLicenseView::createForCurrentUser();
@@ -451,6 +546,67 @@ class ApacheSupersetDashboardListComponent extends CBitrixComponent
 			'laterButtonText' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_PUBLISH_AHA_MOMENT_LATER_BUTTON'),
 			'addButtonText' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_PUBLISH_AHA_MOMENT_ADD_BUTTON'),
 		];
+	}
+
+	private function prepareConstructorButtonHint(): void
+	{
+		$spotlightConfig = $this->getAhaMomentSpotlightResolver()->resolve(
+			new AhaMomentSpotlightOptions(
+				baseId: 'biconnector-apachesuperset-dashboard-list-constructor-button',
+				maxShows: 1,
+			),
+		);
+
+		$this->arResult['CONSTRUCTOR_BUTTON_HINT'] = [
+			'canShow' => $spotlightConfig->canShow(),
+			'id' => $spotlightConfig->getSpotlightId(),
+			'showDelaySeconds' => 0,
+			'compact' => true,
+			'title' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_CONSTRUCTOR_HINT_TITLE'),
+			'description' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_CONSTRUCTOR_HINT_TEXT'),
+		];
+	}
+
+	/**
+	 * The list surface gets the informing variant only: there is no launcher to open here.
+	 */
+	private function prepareBitrixGptAnnouncement(): void
+	{
+		$this->arResult['BITRIXGPT_BI_ANNOUNCEMENT'] = [
+			'canShow' => BitrixGptBiAnnouncement::canShowForCurrentUser(),
+			'surface' => 'list',
+		];
+	}
+
+	private function prepareDigestSetupOnboarding(): void
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		$locator = ServiceLocator::getInstance();
+		if ($locator->get(DigestSetupOnboarding::class)->isShown(DigestSetupOnboarding::CURRENT_VERSION, $userId))
+		{
+			$this->arResult['DIGEST_SETUP_ONBOARDING'] = ['canShow' => false];
+
+			return;
+		}
+
+		$availability = $locator->get(DigestSetupAvailabilityService::class)->check(null, $userId);
+
+		$this->arResult['DIGEST_SETUP_ONBOARDING'] = [
+			'canShow' => in_array(
+				$availability->state,
+				[DigestSetupAvailability::READY, DigestSetupAvailability::SUBSCRIPTION_REQUIRED],
+				true,
+			),
+			'availability' => $availability->toArray(),
+		];
+	}
+
+	private function prepareAiAgentsPromo(): void
+	{
+		if (AiAgentsSection::isAvailable())
+		{
+			$this->arResult['AI_AGENTS_PROMO'] = ['url' => AiAgentsSection::getUrl(AiAgentsEntrySource::SOURCE_PROMO)];
+		}
 	}
 
 	private function getAhaMomentSpotlightResolver(): AhaMomentSpotlightResolver

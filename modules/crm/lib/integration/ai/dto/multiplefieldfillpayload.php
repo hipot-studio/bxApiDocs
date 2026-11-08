@@ -6,6 +6,7 @@ use Bitrix\Crm\Dto\Caster;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Dto\Validator;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 
@@ -30,7 +31,9 @@ class MultipleFieldFillPayload extends Dto
 	protected function getValidators(array $fields): array
 	{
 		return [
+			new RequiredField($this, 'name'),
 			new NotEmptyField($this, 'name'),
+			new RequiredField($this, 'aiValues'),
 			new NotEmptyField($this, 'aiValues'),
 			new class($this) extends Validator {
 				public function validate(array $fields): Result

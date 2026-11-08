@@ -134,6 +134,7 @@ class Permission
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
+			Action::LinkStructureNode->value => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::OpenChannel->value] = [
@@ -142,6 +143,7 @@ class Permission
 			Action::DeleteCompleteOwnMessage->value => Chat::ROLE_MANAGER,
 			Action::Update->value => Chat::ROLE_OWNER,
 			Action::Delete->value => Chat::ROLE_OWNER,
+			Action::LinkStructureNode->value => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Comment->value] = [
@@ -243,6 +245,7 @@ class Permission
 			Action::ManageGuestLink->value => Chat::ROLE_MEMBER,
 			Action::AttachToParent->value => Chat::ROLE_OWNER,
 			Action::DetachFromParent->value => Chat::ROLE_OWNER,
+			Action::LinkStructureNode->value => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::OpenChat->value] = [
@@ -257,6 +260,7 @@ class Permission
 			//   then AttachToParent can be re-allowed here (mantis 250071).
 			Action::AttachToParent->value => Chat::ROLE_NONE,
 			Action::DetachFromParent->value => Chat::ROLE_OWNER,
+			Action::LinkStructureNode->value => Chat::ROLE_OWNER,
 		];
 
 		self::$permissionsByChatTypes[ExtendedType::Videoconference->value] = [
@@ -274,6 +278,8 @@ class Permission
 			Action::Mute->value => Chat::ROLE_NONE,
 			Action::PinChat->value => Chat::ROLE_NONE,
 			Action::HideChat->value => Chat::ROLE_NONE,
+			Action::UserList->value => Chat::ROLE_GUEST,
+			Action::OpenSidebarMenu->value => Chat::ROLE_GUEST,
 		];
 	}
 
@@ -312,6 +318,7 @@ class Permission
 			Action::DetachFromParent->value => Chat::ROLE_NONE,
 			Action::UpdateSharingLink->value => Chat::ROLE_NONE,
 			Action::ManageGuestLink->value => Chat::ROLE_NONE,
+			Action::OpenSidebarMenu->value => Chat::ROLE_MEMBER,
 		];
 	}
 
@@ -355,6 +362,7 @@ class Permission
 				GlobalAction::ChangeStickerPack->value => true,
 				GlobalAction::JoinChat->value => true,
 				GlobalAction::Extend->value => true,
+				GlobalAction::LinkStructureNode->value => true,
 			],
 			UserType::EXTRANET->value => [
 				GlobalAction::GetChannels->value => false,
@@ -371,6 +379,7 @@ class Permission
 				GlobalAction::ChangeStickerPack->value => false,
 				GlobalAction::JoinChat->value => true,
 				GlobalAction::Extend->value => true,
+				GlobalAction::LinkStructureNode->value => false,
 			],
 			UserType::COLLABER->value => [
 				GlobalAction::GetChannels->value => false,
@@ -387,6 +396,7 @@ class Permission
 				GlobalAction::ChangeStickerPack->value => false,
 				GlobalAction::JoinChat->value => true,
 				GlobalAction::Extend->value => true,
+				GlobalAction::LinkStructureNode->value => false,
 			],
 			UserType::GUEST->value => [
 				GlobalAction::GetChannels->value => false,
@@ -411,6 +421,7 @@ class Permission
 				GlobalAction::OpenProfile->value => false,
 				GlobalAction::OpenCalendar->value => false,
 				GlobalAction::BeChatManager->value => false,
+				GlobalAction::LinkStructureNode->value => false,
 			],
 		];
 

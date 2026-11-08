@@ -10,7 +10,6 @@ class TemplateUsageHistory
 {
 	public const OPTION_CATEGORY = 'mail';
 	public const HISTORY_OPTION_NAME = 'template_usage_history';
-	public const REMEMBER_OPTION_NAME = 'remember_last_template';
 
 	private const MAX_ITEMS = 5;
 
@@ -100,21 +99,6 @@ class TemplateUsageHistory
 		return $removed;
 	}
 
-	public function getRememberLast(int $userId): bool
-	{
-		return $userId > 0 && $this->readRememberOption($userId) === 'Y';
-	}
-
-	public function setRememberLast(int $userId, bool $enabled): void
-	{
-		if ($userId <= 0)
-		{
-			return;
-		}
-
-		$this->writeRememberOption($userId, $enabled ? 'Y' : 'N');
-	}
-
 	protected function readHistoryOption(int $userId): mixed
 	{
 		return \CUserOptions::GetOption(
@@ -134,27 +118,6 @@ class TemplateUsageHistory
 			self::OPTION_CATEGORY,
 			self::HISTORY_OPTION_NAME,
 			$history,
-			false,
-			$userId,
-		);
-	}
-
-	protected function readRememberOption(int $userId): mixed
-	{
-		return \CUserOptions::GetOption(
-			self::OPTION_CATEGORY,
-			self::REMEMBER_OPTION_NAME,
-			'N',
-			$userId,
-		);
-	}
-
-	protected function writeRememberOption(int $userId, string $value): void
-	{
-		\CUserOptions::SetOption(
-			self::OPTION_CATEGORY,
-			self::REMEMBER_OPTION_NAME,
-			$value,
 			false,
 			$userId,
 		);

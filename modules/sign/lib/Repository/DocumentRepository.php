@@ -18,6 +18,8 @@ use Bitrix\Sign\Document;
 use Bitrix\Sign\Internal;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Model\ItemBinder\DocumentBinder;
+use Bitrix\Sign\Type\Document\CreationSourceMetaKey;
+use Bitrix\Sign\Type\Document\CreationSourceType;
 use Bitrix\Sign\Type\Document\ExternalDateCreateSourceType;
 use Bitrix\Sign\Type\Document\EntityType;
 use Bitrix\Sign\Type\Document\ExternalIdSourceType;
@@ -93,6 +95,11 @@ class DocumentRepository
 			->setHcmlinkDateSettingId($item->hcmLinkDateSettingId)
 			->setHcmlinkExternalIdSettingId($item->hcmLinkExternalIdSettingId)
 			->setHcmlinkDocumentTypeSettingId($item->hcmLinkDocumentTypeSettingId)
+			->setCreationSourceType(($item->creationSourceType ?? CreationSourceType::UNKNOWN)->toInt())
+			->setCreationSourceId($item->creationSourceId)
+			->setCreationSourceEntityTypeId($item->creationSourceEntityTypeId)
+			->setCreationSourceEntityId($item->creationSourceEntityId)
+			->setInviteMessage($item->inviteMessage)
 			->save()
 		;
 
@@ -113,6 +120,20 @@ class DocumentRepository
 	 */
 	public function update(Item\Document $item): Result
 	{
+		return $this->updateAllowingNull($item);
+	}
+
+	/**
+	 * Updates the document and writes null for the listed item properties.
+	 * DocumentBinder skips null values for the most of the properties,
+	 * so they can not be emptied through a plain update.
+	 *
+	 * @param string ...$nullableProperties item property names allowed to be written as null
+	 *
+	 * @return UpdateResult
+	 */
+	public function updateAllowingNull(Item\Document $item, string ...$nullableProperties): Result
+	{
 		if (!$item->id)
 		{
 			return (new UpdateResult())->addError(new Error('Document not found'));
@@ -125,7 +146,7 @@ class DocumentRepository
 			return (new UpdateResult())->addError(new Error('Document not found'));
 		}
 
-		$binder = new DocumentBinder($item, $document, $this);
+		$binder = new DocumentBinder($item, $document, $this, $nullableProperties);
 		$binder->setChangedItemPropertiesToModel();
 
 		if ($document->isUidChanged())
@@ -240,6 +261,36 @@ class DocumentRepository
 			->where('UID', $uid)
 			->setLimit(1)
 			->fetchObject();
+
+		return $document === null ? null : $this->extractItemFromModel($document);
+	}
+
+	/**
+	 * Returns the document of the group that has been waiting in the status the longest.
+	 *
+	 * @param int $afterId Skips the documents up to and including this id: a document the caller has
+	 *                     given up on must not hold back the ones behind it.
+	 */
+	public function getFirstByGroupIdAndStatus(int $groupId, string $status, int $afterId = 0): ?Item\Document
+	{
+		if ($groupId < 1)
+		{
+			return null;
+		}
+
+		$query = Internal\DocumentTable::query()
+			->setSelect(['*'])
+			->where('GROUP_ID', $groupId)
+			->where('STATUS', $status)
+			->addOrder('ID')
+			->setLimit(1)
+		;
+		if ($afterId > 0)
+		{
+			$query->where('ID', '>', $afterId);
+		}
+
+		$document = $query->fetchObject();
 
 		return $document === null ? null : $this->extractItemFromModel($document);
 	}
@@ -371,6 +422,46 @@ class DocumentRepository
 		return $this->extractItemCollectionByModelCollection($models);
 	}
 
+	/**
+	 * Documents created from one source entity, narrowed by status. The pair of source columns is
+	 * the whole index IX_B_SIGN_DOCUMENT_CREATION_SRC, the status stays a plain condition of the query;
+	 * the specifics of the source live in the serialized META, so a caller that needs them compares
+	 * them itself.
+	 *
+	 * Returns the newest $limit documents of the entity, never its whole history: an entity holds a
+	 * handful of them, and the cap only guards against degenerate data. An older document beyond the
+	 * limit is not returned even when it matches the filter.
+	 *
+	 * @param array<string> $statuses
+	 * @see DocumentStatus
+	 */
+	public function listByCreationSourceEntity(
+		int $entityTypeId,
+		int $entityId,
+		array $statuses,
+		int $limit = 50,
+	): Item\DocumentCollection
+	{
+		// an empty list of statuses matches nothing: read as "no filter" it would return the whole
+		// history of the entity instead
+		if ($entityTypeId < 1 || $entityId < 1 || $statuses === [] || $limit < 1)
+		{
+			return new Item\DocumentCollection();
+		}
+
+		$models = Internal\DocumentTable::query()
+			->addSelect('*')
+			->where('CREATION_SOURCE_ENTITY_TYPE_ID', $entityTypeId)
+			->where('CREATION_SOURCE_ENTITY_ID', $entityId)
+			->whereIn('STATUS', $statuses)
+			->setLimit($limit)
+			->addOrder('ID', 'DESC')
+			->fetchCollection()
+		;
+
+		return $this->extractItemCollectionByModelCollection($models);
+	}
+
 	public function getCountByGroupId(int $groupId): int
 	{
 		if ($groupId < 1)
@@ -439,7 +530,31 @@ class DocumentRepository
 			externalIdSourceType:       ExternalIdSourceType::tryFromInt($model->getExternalIdSourceType()) ?? ExternalIdSourceType::MANUAL,
 			hcmLinkExternalIdSettingId: $model->getHcmlinkExternalIdSettingId(),
 			hcmLinkDocumentTypeSettingId: $model->getHcmlinkDocumentTypeSettingId(),
+			creationSourceType: CreationSourceType::tryFromInt($model->getCreationSourceType()) ?? CreationSourceType::UNKNOWN,
+			creationSourceId: $model->getCreationSourceId(),
+			creationSourceEntityTypeId: $model->getCreationSourceEntityTypeId(),
+			creationSourceEntityId: $model->getCreationSourceEntityId(),
+			creationSourceSpecifics: $this->extractCreationSourceSpecificsFromMeta($meta),
+			inviteMessage:         $model->getInviteMessage(),
 		);
+	}
+
+	/**
+	 * @return array<string, int|string>
+	 */
+	private function extractCreationSourceSpecificsFromMeta(?array $meta): array
+	{
+		$specifics = [];
+		foreach (CreationSourceMetaKey::cases() as $metaKey)
+		{
+			$value = $meta[$metaKey->value] ?? null;
+			if ($value !== null)
+			{
+				$specifics[$metaKey->value] = $value;
+			}
+		}
+
+		return $specifics;
 	}
 
 	public function getScenarioIdByName(string $scenarioName): ?int
@@ -534,6 +649,15 @@ class DocumentRepository
 		if ($item->initiator !== null)
 		{
 			$documentModelMeta[self::INITIATOR_NAME_META_KEY] = $item->initiator;
+		}
+
+		foreach (CreationSourceMetaKey::cases() as $metaKey)
+		{
+			$value = $item->creationSourceSpecifics[$metaKey->value] ?? null;
+			if ($value !== null)
+			{
+				$documentModelMeta[$metaKey->value] = $value;
+			}
 		}
 
 		return $documentModelMeta;
@@ -706,6 +830,98 @@ class DocumentRepository
 		}
 
 		return Internal\DocumentTable::updateMulti($documentIds, ['PROVIDER_CODE' => $providerCode]);
+	}
+
+	/**
+	 * Writes the message of the invitation only while the document may still be edited. The status is
+	 * part of the `WHERE` clause on purpose: the caller judges a document it read earlier, while
+	 * `ConfigureDocument` of the same document runs in parallel and moves it to `ready`. A check made
+	 * before the write cannot keep the text out of a document whose sending has already started, a
+	 * conditional write can.
+	 *
+	 * The write goes around the item binder: only the two columns below change, so the whole item does
+	 * not have to be read and written back to make the condition part of the same statement.
+	 *
+	 * @return bool true when the document carries the requested message after the call
+	 */
+	public function updateInviteMessageIfEditable(int $documentId, ?string $message): bool
+	{
+		return $this->updateInviteMessageForEditableDocuments([$documentId], $message);
+	}
+
+	/**
+	 * The same conditional write for a whole batch of a group send. The text of the batch is one, so
+	 * the documents share a single statement instead of one statement each: the batch is written while
+	 * the transaction of the caller holds the rows, and every statement saved there is lock time saved.
+	 * The id list stays short — the batch is capped by `GroupService::MAX_DOCUMENT_COUNT`.
+	 *
+	 * The write is refused as a whole: the caller learns that not every document took the text, and
+	 * rolls its transaction back. Which document refused it is not reported — the batch entry point
+	 * names no document in its errors either, it checks the whole batch before the first write.
+	 *
+	 * @param int[] $documentIds
+	 *
+	 * @return bool true only when every requested document carries the requested message after the call
+	 */
+	public function updateInviteMessageForEditableDocuments(array $documentIds, ?string $message): bool
+	{
+		$documentIds = array_values(array_unique(array_filter(
+			array_map('intval', $documentIds),
+			static fn(int $documentId): bool => $documentId > 0,
+		)));
+		if ($documentIds === [])
+		{
+			return false;
+		}
+
+		$connection = Main\Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableName = Internal\DocumentTable::getTableName();
+
+		// The message is user input and never reaches the query as anything but the escaped assignment
+		// prepareUpdate() builds; the statuses are module constants and the ids are integers.
+		[$update] = $sqlHelper->prepareUpdate($tableName, [
+			'INVITE_MESSAGE' => $message,
+			'DATE_MODIFY' => new DateTime(),
+		]);
+		$editableStatuses = implode(',', array_map(
+			static fn(string $status): string => "'" . $sqlHelper->forSql($status) . "'",
+			DocumentStatus::getEditable(),
+		));
+
+		$connection->queryExecute(
+			'UPDATE ' . $sqlHelper->quote($tableName) . " SET {$update}"
+			. ' WHERE ' . $sqlHelper->quote('ID') . ' IN (' . implode(',', $documentIds) . ')'
+			. ' AND ' . $sqlHelper->quote('STATUS') . " IN ({$editableStatuses})"
+		);
+
+		if ($connection->getAffectedRowsCount() === count($documentIds))
+		{
+			return true;
+		}
+
+		// MySQL counts changed rows, not matched ones: storing the very same text within the same
+		// second changes nothing and looks exactly like a refused write. Only the stored value tells
+		// the two apart, and a document that already carries the requested text needs no write at all.
+		$rows = Internal\DocumentTable::query()
+			->setSelect(['ID', 'INVITE_MESSAGE'])
+			->whereIn('ID', $documentIds)
+			->fetchAll()
+		;
+		if (count($rows) !== count($documentIds))
+		{
+			return false;
+		}
+
+		foreach ($rows as $row)
+		{
+			if (($row['INVITE_MESSAGE'] ?? null) !== $message)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**

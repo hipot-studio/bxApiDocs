@@ -5,10 +5,14 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\Localization\Loc;
 
-class CBPIMNotifyActivity extends \CBPActivity
+class CBPIMNotifyActivity extends \CBPActivity implements IBPConfigurableActivity
 {
+	// value of IM_NOTIFY_PERSONAL (im module constant is not available at edit time)
+	private const PERSONAL_NOTIFY_TYPE = 2;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -195,30 +199,49 @@ class CBPIMNotifyActivity extends \CBPActivity
 		&$arWorkflowParameters, &$arWorkflowVariables, $arCurrentValues, &$errors)
 	{
 		$errors = [];
-		$arMap = [
-			"from_user_id" => "MessageUserFrom",
-			"to_user_id" => "MessageUserTo",
-			"message_site" => "MessageSite",
-			"message_out" => "MessageOut",
-			"message_type" => "MessageType",
-		];
-
 		$properties = [];
-		foreach ($arMap as $key => $value)
-		{
-			if ($key == "from_user_id" || $key == "to_user_id")
-			{
-				continue;
-			}
+		$user = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
 
-			$properties[$value] = $arCurrentValues[$key];
+		if (!is_array($arCurrentValues))
+		{
+			$arCurrentValues = [];
 		}
 
-		$user = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
-		if ($user->isAdmin())
+		if (array_key_exists('to_user_id', $arCurrentValues))
 		{
-			$properties["MessageUserFrom"] = \CBPHelper::UsersStringToArray(
-				$arCurrentValues["from_user_id"],
+			$arMap = [
+				"from_user_id" => "MessageUserFrom",
+				"to_user_id" => "MessageUserTo",
+				"message_site" => "MessageSite",
+				"message_out" => "MessageOut",
+				"message_type" => "MessageType",
+			];
+
+			foreach ($arMap as $key => $value)
+			{
+				if ($key == "from_user_id" || $key == "to_user_id")
+				{
+					continue;
+				}
+
+				$properties[$value] = $arCurrentValues[$key];
+			}
+
+			if ($user->isAdmin())
+			{
+				$properties["MessageUserFrom"] = \CBPHelper::UsersStringToArray(
+					$arCurrentValues["from_user_id"],
+					$documentType,
+					$errors
+				);
+				if ($errors)
+				{
+					return false;
+				}
+			}
+
+			$properties["MessageUserTo"] = \CBPHelper::UsersStringToArray(
+				$arCurrentValues["to_user_id"],
 				$documentType,
 				$errors
 			);
@@ -229,17 +252,73 @@ class CBPIMNotifyActivity extends \CBPActivity
 		}
 		else
 		{
-			$properties["MessageUserFrom"] = $user->getBizprocId();
+			$propertiesMap = self::getPropertiesMap($documentType);
+			$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+			$request = $arCurrentValues;
+
+			foreach ($propertiesMap as $propertyName => $fieldProperties)
+			{
+				// sender of a non-admin is always replaced by the current user below
+				if ($propertyName === 'MessageUserFrom' && !$user->isAdmin())
+				{
+					continue;
+				}
+
+				$fieldName = (string)$fieldProperties['FieldName'];
+				$rawValue = $request[$fieldName] ?? null;
+
+				if (($fieldProperties['Type'] ?? null) === FieldType::USER && is_array($rawValue))
+				{
+					$errors[] = [
+						'code' => 'InvalidType',
+						'parameter' => $propertyName,
+						'message' => Loc::getMessage(
+							$propertyName === 'MessageUserFrom' ? 'BPIMNA_EMPTY_FROM' : 'BPIMNA_EMPTY_TO',
+						),
+					];
+
+					return false;
+				}
+
+				if (
+					($rawValue === null || $rawValue === '')
+					&& array_key_exists('Default', $fieldProperties)
+				)
+				{
+					$request[$fieldName] = $fieldProperties['Default'];
+				}
+
+				$fieldReference = ['Field' => $fieldName];
+				$field = $documentService->getFieldTypeObject($documentType, $fieldProperties);
+				if ($field)
+				{
+					$fieldErrors = [];
+					$properties[$propertyName] = $field->extractValue($fieldReference, $request, $fieldErrors);
+					if ($fieldErrors)
+					{
+						$errors = array_merge($errors, $fieldErrors);
+					}
+				}
+				else
+				{
+					$properties[$propertyName] = $documentService->getFieldInputValue(
+						$documentType,
+						$fieldProperties,
+						$fieldReference,
+						$request,
+						$errors,
+					);
+				}
+			}
+			if ($errors)
+			{
+				return false;
+			}
 		}
 
-		$properties["MessageUserTo"] = \CBPHelper::UsersStringToArray(
-			$arCurrentValues["to_user_id"],
-			$documentType,
-			$errors
-		);
-		if ($errors)
+		if (!$user->isAdmin())
 		{
-			return false;
+			$properties["MessageUserFrom"] = $user->getBizprocId();
 		}
 
 		$errors = self::ValidateProperties(
@@ -255,5 +334,44 @@ class CBPIMNotifyActivity extends \CBPActivity
 		$currentActivity["Properties"] = $properties;
 
 		return true;
+	}
+
+	public static function getPropertiesMap(array $documentType, array $context = []): array
+	{
+		return [
+			'MessageUserFrom' => [
+				'Name' => Loc::getMessage('BPIMNA_FIELD_FROM'),
+				'FieldName' => 'message_user_from',
+				'Type' => FieldType::USER,
+				'Required' => true,
+			],
+			'MessageUserTo' => [
+				'Name' => Loc::getMessage('BPIMNA_FIELD_TO'),
+				'FieldName' => 'message_user_to',
+				'Type' => FieldType::USER,
+				'Multiple' => true,
+				'Required' => true,
+			],
+			'MessageSite' => [
+				'Name' => Loc::getMessage('BPIMNA_FIELD_MESSAGE'),
+				'FieldName' => 'message_site',
+				'Type' => FieldType::TEXT,
+				'Required' => true,
+			],
+			'MessageOut' => [
+				'Name' => Loc::getMessage('BPIMNA_FIELD_MESSAGE_OUT'),
+				'FieldName' => 'message_out',
+				'Type' => FieldType::TEXT,
+				'Required' => false,
+			],
+			'MessageType' => [
+				'Name' => Loc::getMessage('BPIMNA_FIELD_NOTIFY_TYPE'),
+				'FieldName' => 'message_type',
+				'Type' => FieldType::INT,
+				'Hidden' => true,
+				'Default' => self::PERSONAL_NOTIFY_TYPE,
+				'AllowSelection' => false,
+			],
+		];
 	}
 }

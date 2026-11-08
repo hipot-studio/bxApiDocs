@@ -7,6 +7,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Disk\Internals\VolumeTable;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Internals\Error\Error;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Volume;
 
 
@@ -110,6 +111,50 @@ class CDiskVolumeComponent extends BaseComponent
 
 	/* Preform direct action or setup agent task */
 	const SETUP_CLEANER_FILE_THRESHOLD_COUNT = 20;
+
+	/* Volume diagram palette. Steps are matched with design tokens in templates/.default/style.css */
+	private const PALETTE_SIZE = 11;
+	private const STEP_OTHER = 12;
+	private const KEY_TO_STEP = [
+		TypeFile::IMAGE => 1,
+		TypeFile::VIDEO => 2,
+		TypeFile::DOCUMENT => 3,
+		TypeFile::ARCHIVE => 4,
+		TypeFile::SCRIPT => 5,
+		TypeFile::UNKNOWN => 6,
+		TypeFile::PDF => 7,
+		TypeFile::AUDIO => 8,
+		TypeFile::KNOWN => 9,
+		TypeFile::VECTOR_IMAGE => 10,
+		TypeFile::BOARD => 11,
+	];
+
+	/*
+	 * Module indicator ids of the admin mode diagram, ordered as they take the steps of the palette:
+	 * an id past PALETTE_SIZE wraps to its beginning, so the first eleven segments always differ.
+	 * The modules that usually carry files come first, leaving the wrap to the rarely measured ones.
+	 * An indicator added to Volume\Base::listIndicator() takes its step by being appended here.
+	 */
+	private const INDICATOR_ORDER = [
+		'Module_Disk',
+		'Module_DiskTrashcan',
+		'Module_Crm',
+		'Module_Tasks',
+		'Module_Im',
+		'Module_Mail',
+		'Module_Calendar',
+		'Module_Socialnetwork',
+		'Module_Bizproc',
+		'Module_Rest',
+		'Module_Voximplant',
+		'Module_Faceid',
+		'Module_Subscribe',
+		'Module_Timeman',
+		'Module_Webdav',
+		'Module_Iblock',
+		'Module_Lists',
+		'Module_Documentgenerator',
+	];
 
 	/**
 	 * Return component action command.
@@ -3305,7 +3350,8 @@ class CDiskVolumeComponent extends BaseComponent
 			if ($indicator instanceof \Bitrix\Disk\Volume\IVolumeIndicatorParent)
 			{
 				/** @var \Bitrix\Disk\Volume\IVolumeIndicatorParent $indicator */
-				$row['PARENTS'] = $indicator::getParents($fragment);
+				// Parent names are encoded here, as TITLE above: the template puts them into the grid html.
+				$row['PARENTS'] = array_map('htmlspecialcharsbx', $indicator::getParents($fragment));
 
 				/** @var \Bitrix\Disk\Volume\IVolumeIndicator $indicator */
 				/** @var \Bitrix\Main\Type\DateTime $dateCreate */
@@ -3523,46 +3569,33 @@ class CDiskVolumeComponent extends BaseComponent
 	}
 
 	/**
-	 * Returns pastel color for css rules.
+	 * Returns palette step of a diagram segment. Templates put it into a class modifier,
+	 * the step is matched with a design token in style.css.
 	 *
-	 * @param bool $isOther Fixed grey color for other item.
+	 * @param string|int $key File type or module indicator id the segment stands for.
+	 * @param bool $isOther Dedicated step of the "other" segment.
 	 *
-	 * @return string
+	 * @return int Step from 1 to 12.
 	 */
-	public function pastelColors($isOther = false)
+	public function paletteStep(string|int $key, bool $isOther = false): int
 	{
-		static $colors = array(
-			'rgba(123,213,0,.9)',
-			'rgba(247,204,0,.9)',
-			'rgba(0,180,172,.9)',
-			'rgba(0,99,198,.9)',
-			'rgba(183,235,129,.9)',
-			'rgba(255,123,119,.9)',
-			'rgba(142,228,255,.9)',
-			'rgba(250,243,138,.9)',
-			'rgba(255,121,156,.9)',
-			'rgba(202,89,222,.9)',
-			'rgba(175,109,77,.9)',
-			'rgba(62,211,179,.9)',
-			'rgba(47,198,246,.9)',
-			'rgba(178,187,204,.9)',
-			'rgba(124,236,148,.9)',
-			'rgba(168,173,180,.12)',
-		);
 		if ($isOther)
 		{
-			return 'rgba(100,100,100,.5)';
+			return self::STEP_OTHER;
 		}
-		if (count($colors) > 0)
+
+		if (isset(self::KEY_TO_STEP[$key]))
 		{
-			return array_shift($colors);
+			return self::KEY_TO_STEP[$key];
 		}
 
-		$r = round(mt_rand(0, 1) * 127) + 127;
-		$g = round(mt_rand(0, 1) * 127) + 127;
-		$b = round(mt_rand(0, 1) * 127) + 127;
+		$position = array_search((string)$key, self::INDICATOR_ORDER, true);
+		if ($position !== false)
+		{
+			return ($position % self::PALETTE_SIZE) + 1;
+		}
 
-		return "rgb({$r},{$g},{$b})";
+		return (abs(crc32((string)$key)) % self::PALETTE_SIZE) + 1;
 	}
 
 

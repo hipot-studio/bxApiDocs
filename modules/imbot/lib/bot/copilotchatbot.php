@@ -70,7 +70,12 @@ class CopilotChatBot extends Base
 		MESSAGE_COMPONENT_START = 'ChatCopilotCreationMessage',
 		MESSAGE_COMPONENT_COLLECTIVE = 'ChatCopilotAddedUsersMessage',
 		MESSAGE_PARAMS_ERROR = 'COPILOT_ERROR',
-		MESSAGE_PARAMS_MORE = 'COPILOT_HAS_MORE'
+		MESSAGE_PARAMS_MORE = 'COPILOT_HAS_MORE',
+		// Mirrors aiassistant \Bitrix\AiAssistant\Core\Im\ImBot::PARAM_SCHEDULED_TASK_RUN_ID as a
+		// literal on purpose: the marker is read on every incoming copilot message, and aiassistant
+		// is installed and updated on its own schedule - a portal without it, or with a version that
+		// predates the marker, must not get a fatal error out of this check.
+		MESSAGE_PARAMS_SCHEDULED_TASK_RUN_ID = 'SCHEDULED_TASK_RUN_ID'
 	;
 
 	public const ALL_COPILOT_MESSAGE_COMPONENTS = [
@@ -419,6 +424,11 @@ class CopilotChatBot extends Base
 			return false;
 		}
 
+		if (self::isScheduledTaskRequest($targetMessage->getParams()->toRestFormat()))
+		{
+			return false;
+		}
+
 		$context = self::getContext(self::CONTEXT_MODULE, self::CONTEXT_ID);
 		$engine = self::getEngineByChat($chat, $context);
 		$serviceRestriction = self::checkAiServeRestriction($engine, (int)$messageFields['FROM_USER_ID']);
@@ -593,6 +603,11 @@ class CopilotChatBot extends Base
 			return false;
 		}
 
+		if (self::isScheduledTaskRequest($targetMessage->getParams()->toRestFormat()))
+		{
+			return false;
+		}
+
 		$originalMessage = (new Message())
 			->setMessage($messageFields['MESSAGE_ORIGINAL'])
 			->setChatId($chat->getId())
@@ -630,8 +645,7 @@ class CopilotChatBot extends Base
 				? UserPlatform::Mobile->value
 				: UserPlatform::Web->value
 			,
-			'mcpAuthId' => $messageFields['PARAMS']['COPILOT_MCP_AUTH_ID'] ?? null,
-		];
+		] + self::buildAiAssistantParams($messageFields);
 		$messageDto = new MessageDto(
 			id: $messageId,
 			chatId: $chatId,
@@ -677,8 +691,7 @@ class CopilotChatBot extends Base
 				? UserPlatform::Mobile->value
 				: UserPlatform::Web->value
 			,
-			'mcpAuthId' => $messageFields['PARAMS']['COPILOT_MCP_AUTH_ID'] ?? null,
-		];
+		] + self::buildAiAssistantParams($messageFields);
 
 		$params = $persistentParams + [
 			'pageContext' => $messageFields['PARAMS']['COPILOT_PAGE_CONTEXT'] ?? null,
@@ -710,6 +723,76 @@ class CopilotChatBot extends Base
 		;
 
 		return true;
+	}
+
+	/**
+	 * A scheduled task run publishes its request as the task owner and submits that request to the
+	 * service itself, so the chat shows what was asked. Answering it here would put a second,
+	 * independent answer in the chat: the marker travels with the message and keeps this bot silent.
+	 */
+	private static function isScheduledTaskRequest(array $params): bool
+	{
+		return (int)($params[self::MESSAGE_PARAMS_SCHEDULED_TASK_RUN_ID] ?? 0) > 0;
+	}
+
+	/**
+	 * The params whose names belong to aiassistant: which MCP servers the message carries and
+	 * whether it was typed by a person or created by the server. Both handlers merge the same set,
+	 * so neither path can drift away from the other. `generationSource` is not decoration here:
+	 * without it a server created message looks to `AiBot::carriesClientChatSelection()` like a
+	 * fresh choice from the chat selector and overwrites the stored one.
+	 */
+	private static function buildAiAssistantParams(array $messageFields): array
+	{
+		return [
+			'generationSource' => $messageFields['PARAMS'][AiAssistantImBot::PARAM_GENERATION_SOURCE] ?? null,
+		] + self::buildMcpSelectionParams($messageFields);
+	}
+
+	/**
+	 * aiassistant is installed and updated on its own schedule, so having the module loaded does not
+	 * mean the operation is already published: in the version this bot was built against it is still
+	 * private, and `method_exists()` says yes to a private method too. Hence the callability check:
+	 * it answers the question that matters, whether this class may call it. On an older aiassistant
+	 * the transport keeps the behaviour that version has always had instead of a fatal error on
+	 * every incoming copilot message.
+	 *
+	 * Only the copilot source is accepted in scalar form. The other one, `AI_ASSISTANT_MCP_AUTH_ID`,
+	 * belongs to the selector of the assistant chat and reaches the message bypassing the rollout
+	 * flag that guards the copilot selector, so this chat must not become a way around that flag.
+	 */
+	private static function buildMcpSelectionParams(array $messageFields): array
+	{
+		if (!is_callable([AiAssistantImBot::class, 'extractMcpAuthParams']))
+		{
+			return self::buildSelectionParamsOfOlderAssistant($messageFields);
+		}
+
+		return AiAssistantImBot::extractMcpAuthParams(
+			$messageFields['PARAMS'] ?? [],
+			[AiAssistantImBot::MCP_AUTH_SOURCE_COPILOT],
+		);
+	}
+
+	/**
+	 * The set this transport built before the operation was published, and the only place where it
+	 * reads a param name of aiassistant itself. This is not a second reader of the current contract:
+	 * an assistant without the operation knows no plural param either, so the scalar name repeated
+	 * here is the whole contract of the version actually installed. Dropping it would make a staged
+	 * update, imbot ahead of aiassistant, silently lose the server from a message typed by hand —
+	 * the very thing this fix is about.
+	 */
+	private static function buildSelectionParamsOfOlderAssistant(array $messageFields): array
+	{
+		$mcpAuthId = $messageFields['PARAMS']['COPILOT_MCP_AUTH_ID'] ?? null;
+
+		return [
+			'mcpAuthId' => $mcpAuthId,
+			AiAssistantImBot::PARAM_MCP_AUTH_SOURCE => is_numeric($mcpAuthId) && (int)$mcpAuthId > 0
+				? AiAssistantImBot::MCP_AUTH_SOURCE_COPILOT
+				: null
+			,
+		];
 	}
 
 	private static function replaceAiMentions(?string $messageText, ?int $chatId): ?string

@@ -1,8 +1,10 @@
 <?php
 namespace Bitrix\Landing\Internals;
 
+use \Bitrix\Main\Application;
 use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Entity;
+use \Bitrix\Main\SystemException;
 use \Bitrix\Landing\Landing;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\Rights;
@@ -706,7 +708,8 @@ class LandingTable extends Entity\DataManager
 				// check delete access
 				$hasAccess = Rights::hasAccessForSite(
 					$site['SITE_ID'],
-					Rights::ACCESS_TYPES['delete']
+					Rights::ACCESS_TYPES['delete'],
+					true
 				);
 				if (!$hasAccess)
 				{
@@ -774,62 +777,119 @@ class LandingTable extends Entity\DataManager
 		{
 			$landingId = (int)$primary['ID'];
 			$updateCode = false;
+			// the instance below may switch the rights flag, the caller must get it back as it was
+			$rightsWereOn = Rights::isLocalOn();
 
 			Landing::disableCheckDeleted();
+			try
+			{
+				// only the address is read here, checking the rights would also cache them for the site
+				$landing = Landing::createInstance($landingId, [
+					'check_permissions' => false,
+				]);
 
-			$landing = Landing::createInstance($landingId);
+				if ($landing->getMeta()['RULE'])
+				{
+					return;
+				}
 
-			if ($landing->getMeta()['RULE'])
+				if ($landing->exist())
+				{
+					if ($fields['FOLDER_ID'] ?? null)
+					{
+						$res = self::getList([
+							'select' => [
+								'ID'
+							],
+							'filter' => [
+								'!ID' => $primary['ID'],
+								'FOLDER_ID' => $fields['FOLDER_ID'],
+								'=CODE' => $fields['CODE']
+							]
+						]);
+						if ($res->fetch())
+						{
+							$updateCode = true;
+						}
+					}
+					else
+					{
+						$landingUrl = $landing->getPublicUrl(false, false);
+						$resolvedId = Landing::resolveIdByPublicUrl($landingUrl, $landing->getSiteId());
+						if ($resolvedId && $landingId !== $resolvedId)
+						{
+							$updateCode = true;
+						}
+					}
+				}
+
+				if ($updateCode)
+				{
+					self::appendUniqueSuffixToCode($landingId, $fields['CODE']);
+				}
+			}
+			finally
 			{
 				Landing::enableCheckDeleted();
-				return;
+				self::restoreRights($rightsWereOn);
 			}
+		}
+	}
 
-			if ($landing->exist())
+	/**
+	 * Renames the landing to a unique CODE with the rights checks off: the suffix is a system
+	 * correction of a CODE the caller was already allowed to write, and edit alone may not change CODE.
+	 * @param int $landingId Landing id.
+	 * @param string $code Non unique code.
+	 * @return void
+	 */
+	protected static function appendUniqueSuffixToCode(int $landingId, string $code): void
+	{
+		$reUpdate = [
+			'CODE' => $code . '_' . Manager::getRandomString(4)
+		];
+		if (self::$additionalFields)
+		{
+			$reUpdate['ADDITIONAL_FIELDS'] = self::$additionalFields;
+		}
+
+		$rightsWereOn = Rights::isLocalOn();
+		Rights::setOff();
+		Landing::disableCheckUniqueAddress();
+		try
+		{
+			$result = parent::update($landingId, $reUpdate);
+			if (!$result->isSuccess())
 			{
-				if ($fields['FOLDER_ID'] ?? null)
-				{
-					$res = self::getList([
-						'select' => [
-							'ID'
-						],
-						'filter' => [
-							'!ID' => $primary['ID'],
-							'FOLDER_ID' => $fields['FOLDER_ID'],
-							'=CODE' => $fields['CODE']
-						]
-					]);
-					if ($res->fetch())
-					{
-						$updateCode = true;
-					}
-				}
-				else
-				{
-					$landingUrl = $landing->getPublicUrl(false, false);
-					$resolvedId = Landing::resolveIdByPublicUrl($landingUrl, $landing->getSiteId());
-					if ($resolvedId && $landingId !== $resolvedId)
-					{
-						$updateCode = true;
-					}
-				}
+				Application::getInstance()->getExceptionHandler()->writeToLog(
+					new SystemException(
+						'Landing ' . $landingId . ' keeps a non unique CODE: '
+						. implode('; ', $result->getErrorMessages())
+					)
+				);
 			}
+		}
+		finally
+		{
+			Landing::enableCheckUniqueAddress();
+			self::restoreRights($rightsWereOn);
+		}
+	}
 
-			Landing::enableCheckDeleted();
-
-			if ($updateCode)
-			{
-				Landing::disableCheckUniqueAddress();
-				$reUpdate = [
-					'CODE' => $fields['CODE'] . '_' . Manager::getRandomString(4)
-				];
-				if (self::$additionalFields)
-				{
-					$reUpdate['ADDITIONAL_FIELDS'] = self::$additionalFields;
-				}
-				parent::update($landingId, $reUpdate);
-				Landing::enableCheckUniqueAddress();
-			}
+	/**
+	 * Puts the local rights flag back to the state captured by Rights::isLocalOn().
+	 * @param bool $rightsWereOn Captured state.
+	 * @return void
+	 */
+	protected static function restoreRights(bool $rightsWereOn): void
+	{
+		if ($rightsWereOn)
+		{
+			Rights::setOn();
+		}
+		else
+		{
+			Rights::setOff();
 		}
 	}
 
@@ -858,11 +918,18 @@ class LandingTable extends Entity\DataManager
 			));
 			if (count($res->fetchAll()) == 1)
 			{
+				$rightsWereOn = Rights::isLocalOn();
 				Rights::setOff();
-				SiteTable::update($fields['SITE_ID'], array(
-					'LANDING_ID_INDEX' => $primary['ID']
-				));
-				Rights::setOn();
+				try
+				{
+					SiteTable::update($fields['SITE_ID'], array(
+						'LANDING_ID_INDEX' => $primary['ID']
+					));
+				}
+				finally
+				{
+					self::restoreRights($rightsWereOn);
+				}
 			}
 		}
 

@@ -6,6 +6,7 @@ namespace Bitrix\Disk\Document\OnlyOffice\Clients\CommandService;
 
 use Bitrix\Disk\Document\OnlyOffice\Clients\CommandService\Commands\BaseCommand;
 use Bitrix\Disk\Document\OnlyOffice\Clients\CommandService\Commands\DropCommand;
+use Bitrix\Disk\Document\OnlyOffice\Clients\CommandService\Commands\ForceSaveCommand;
 use Bitrix\Disk\Document\OnlyOffice\Clients\CommandService\Commands\MetaCommand;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
@@ -39,6 +40,11 @@ class DirectAccessCommandServiceClient implements CommandServiceClientInterface
 	public function drop(string $documentKey, array $userIds): Result
 	{
 		return $this->performRequest(new DropCommand($documentKey, $userIds));
+	}
+
+	public function forceSave(string $documentKey): Result
+	{
+		return $this->performRequest(new ForceSaveCommand($documentKey));
 	}
 
 	private function performRequest(BaseCommand $commandData): Result

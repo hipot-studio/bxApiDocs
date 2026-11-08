@@ -4,6 +4,7 @@ namespace Bitrix\AI\SharePrompt\Service;
 
 use Bitrix\AI\Entity\TranslateTrait;
 use Bitrix\AI\Prompt\Item;
+use Bitrix\AI\SharePrompt\Enums\Category;
 use Bitrix\AI\SharePrompt\Events\Enums\ShareType;
 use Bitrix\AI\SharePrompt\Dto\CreateDto;
 use Bitrix\AI\SharePrompt\Repository\ShareRepository;
@@ -28,7 +29,8 @@ class ShareService
 		protected ShareRepository $shareRepository,
 		protected OwnerService $ownerService,
 		protected OwnerOptionService $ownerOptionService,
-		protected PromptDisplayRuleService $promptDisplayRuleService
+		protected PromptDisplayRuleService $promptDisplayRuleService,
+		protected CategoryService $categoryService,
 	)
 	{
 	}
@@ -237,6 +239,11 @@ class ShareService
 	public function getAccessiblePrompts(int $userId, string $lang, string $category): FavoritePromptsDto
 	{
 		$promptListAll = $this->promptService->getAccessiblePromptList($userId, $lang, $category);
+		foreach ($this->categoryService->getRelatedCategoriesForUserPrompts($category) as $relatedCategory)
+		{
+			$promptListAll = $this->addUserPrompts($promptListAll, $userId, $lang, $relatedCategory);
+		}
+
 		$favoritePrompts = $this->getFavoritePrompts($promptListAll);
 
 		[$sortingInFavoriteListTable, $hasRowOption] = $this->ownerOptionService->getSortingInFavoriteList($userId);
@@ -257,6 +264,39 @@ class ShareService
 			$this->sortBySection($systemPrompts),
 			$this->sortFavoritePrompts($favoritePrompts, $sortingList)
 		);
+	}
+
+	/**
+	 * @param Item[] $promptList
+	 * @return Item[]
+	 */
+	private function addUserPrompts(array $promptList, int $userId, string $lang, Category $category): array
+	{
+		$promptListById = [];
+		foreach ($promptList as $prompt)
+		{
+			if (!isset($promptListById[$prompt->getId()]))
+			{
+				$promptListById[$prompt->getId()] = $prompt;
+			}
+		}
+
+		$relatedPrompts = $this->promptService->getAccessiblePromptList(
+			$userId,
+			$lang,
+			$category->value,
+		);
+		foreach ($relatedPrompts as $prompt)
+		{
+			if ($prompt->isSystem() || isset($promptListById[$prompt->getId()]))
+			{
+				continue;
+			}
+
+			$promptListById[$prompt->getId()] = $prompt;
+		}
+
+		return array_values($promptListById);
 	}
 
 	/**

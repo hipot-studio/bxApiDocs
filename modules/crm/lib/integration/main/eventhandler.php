@@ -12,7 +12,9 @@ use Bitrix\Crm\Integration\MailManager;
 use Bitrix\Crm\Integrity;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Synchronization\UserFieldSynchronizer;
 use Bitrix\Crm\Timeline;
+use Bitrix\Crm\UserField\UserFieldHistory;
 use Bitrix\Crm\WebForm;
 use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
@@ -35,7 +37,7 @@ class EventHandler
 	 */
 	public static function onAfterSetEnumValues(Event $event)
 	{
-		$fieldId = $event->getParameter(0);
+		$fieldId = (int)$event->getParameter(0);
 		$items = $event->getParameter(1);
 		$field = \CUserTypeEntity::GetByID($fieldId);
 		if(!is_array($field))
@@ -46,6 +48,17 @@ class EventHandler
 		if (substr($field['ENTITY_ID'], 0, 4) !== 'CRM_')
 		{
 			return;
+		}
+
+		UserFieldSynchronizer::clearEnumerationValueCache($fieldId);
+
+		if(!UserFieldHistory::consumeProcessedModificationInCurrentRequest($fieldId))
+		{
+			UserFieldHistory::processModification(
+				\CCrmOwnerType::ResolveIDByUFEntityID($field['ENTITY_ID']),
+				$fieldId,
+				false
+			);
 		}
 
 		WebForm\EntityFieldProvider::onUpdateUserFieldItems($field, $items);

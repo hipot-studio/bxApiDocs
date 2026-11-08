@@ -36,6 +36,14 @@ final class ChatCounterItem
 		);
 	}
 
+	/**
+	 * @internal
+	 */
+	public function getChildren(): ChatCounterCollection
+	{
+		return $this->children;
+	}
+
 	public function getSum(?ChatCounterAggregationOptions $options = null): int
 	{
 		$options ??= new ChatCounterAggregationOptions();

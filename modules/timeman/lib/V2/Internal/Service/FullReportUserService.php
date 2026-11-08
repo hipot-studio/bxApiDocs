@@ -9,6 +9,7 @@ use Bitrix\Main\Type\Collection;
 use Bitrix\Timeman\Integration\Humanresources\DepartmentUsersResolver;
 use Bitrix\Timeman\Integration\Humanresources\SubordinateAccessUsersResolver;
 use Bitrix\Timeman\Model\Security\TaskAccessCodeTable;
+use Bitrix\Timeman\Repository\Query\RealUserFilter;
 use Bitrix\Timeman\Security\UserPermissionsManager;
 use Bitrix\Timeman\V2\Internal\Entity\User;
 use Bitrix\Timeman\V2\Internal\Entity\UserCollection;
@@ -147,7 +148,7 @@ final class FullReportUserService
 			return $this->accessibleToReadUserIdsCache[$userId] = $this->getAllCompanyUserIds();
 		}
 
-		$accessibleUserIds = [$userId];
+		$accessibleUserIds = [];
 
 		if ($employeeReadLevel >= 1)
 		{
@@ -176,7 +177,13 @@ final class FullReportUserService
 			(new SubordinateAccessUsersResolver())->getSubordinateAccessUsers($userId),
 		);
 
-		return $this->accessibleToReadUserIdsCache[$userId] = $this->normalizeUserIds($accessibleUserIds);
+		// The reality criterion narrows the visible list only: the branches above decide access on the
+		// unfiltered subtree, exactly as CTimeMan::GetAccess() does, and the user themselves always stays.
+		$accessibleUserIds = RealUserFilter::filterRealUserIds($this->normalizeUserIds($accessibleUserIds));
+
+		return $this->accessibleToReadUserIdsCache[$userId] = $this->normalizeUserIds(
+			[$userId, ...$accessibleUserIds],
+		);
 	}
 
 	/**
@@ -373,10 +380,13 @@ final class FullReportUserService
 			return $this->companyUserIdsCache;
 		}
 
+		$query = UserTable::query()
+			->setSelect(['ID'])
+			->where('ACTIVE', 'Y')
+		;
+
 		$userIds = array_column(
-			UserTable::query()
-				->setSelect(['ID'])
-				->where('ACTIVE', 'Y')
+			RealUserFilter::applyToUserQuery($query)
 				->exec()
 				->fetchAll(),
 			'ID',

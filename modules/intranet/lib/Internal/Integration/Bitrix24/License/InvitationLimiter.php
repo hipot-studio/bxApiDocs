@@ -26,8 +26,14 @@ class InvitationLimiter
 			return false;
 		}
 
+		$edition = License::getCurrent()->getCode();
+		if ($edition === null)
+		{
+			return true;
+		}
+
 		$managedCache = Application::getInstance()->getManagedCache();
-		$cacheKey = self::getCacheKey();
+		$cacheKey = self::getCacheKey($edition);
 
 		if ($managedCache->read(86400, $cacheKey, 'intranet_invitation_limiter'))
 		{
@@ -38,7 +44,7 @@ class InvitationLimiter
 			$isExceeded =
 				Manager::getInstance()
 				->getInvitationDailyLimiter()
-				->isLimitReached(License::getCurrent()->getCode())
+				->isLimitReached($edition)
 			;
 
 			$managedCache->set($cacheKey, $isExceeded);
@@ -51,12 +57,19 @@ class InvitationLimiter
 	{
 		if (Loader::includeModule('bitrix24'))
 		{
-			Application::getInstance()->getManagedCache()->clean(self::getCacheKey(), 'intranet_invitation_limiter');
+			$edition = License::getCurrent()->getCode();
+			if ($edition !== null)
+			{
+				Application::getInstance()->getManagedCache()->clean(
+					self::getCacheKey($edition),
+					'intranet_invitation_limiter',
+				);
+			}
 		}
 	}
 
-	private static function getCacheKey(): string
+	private static function getCacheKey(string $edition): string
 	{
-		return 'invited_users_on_portal_' . License::getCurrent()->getCode() . '_' . (new Date())->format('Y-m-d');
+		return 'invited_users_on_portal_' . $edition . '_' . (new Date())->format('Y-m-d');
 	}
 }

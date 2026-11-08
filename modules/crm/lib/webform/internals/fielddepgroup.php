@@ -8,6 +8,7 @@
 namespace Bitrix\Crm\WebForm\Internals;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
@@ -31,6 +32,8 @@ Loc::loadMessages(__FILE__);
  */
 class FieldDepGroupTable extends Entity\DataManager
 {
+	use DeleteByFilterTrait;
+
 	const TYPE_DEF = 0;
 	const TYPE_OR = 1;
 	const TYPE_AND = 2;

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Public\Provider;
 
+use Bitrix\Bizproc\Internal\Service\DataView\ColumnResolver;
 use Bitrix\Bizproc\Public\DataView\Dto\SourceDescriptor;
 use Bitrix\Bizproc\Public\DataView\Dto\SourceField;
 use Bitrix\Bizproc\Public\DataView\Dto\SourceRef;
 use Bitrix\Bizproc\Public\DataView\Dto\SourceRelation;
 use Bitrix\Bizproc\Public\DataView\Exception\SourceUnavailableException;
 use Bitrix\Bizproc\Public\DataView\Interface\DataSourceProvider;
+use Bitrix\Bizproc\Public\DataView\Interface\SourceAvailabilityCapableProvider;
 use Bitrix\Bizproc\Public\DataView\Interface\StampConstantProvider;
 use Bitrix\Bizproc\Public\DataView\Interface\TemplateContextCapableProvider;
 use Bitrix\Bizproc\Public\DataView\Registry\DataSourceProviderRegistry;
@@ -71,11 +73,7 @@ final class SourceCatalogProvider
 	{
 		if (!$this->isSourceAvailableToActor($source, $actorId, $templateId))
 		{
-			throw new SourceUnavailableException(sprintf(
-				'DataView source "%s.%s" is not available to the current actor',
-				$source->module,
-				$source->entity,
-			));
+			throw SourceUnavailableException::sourceNotAvailableToActor($source->module, $source->entity);
 		}
 
 		$provider = $this->providerRegistry->get($source->module);
@@ -92,6 +90,29 @@ final class SourceCatalogProvider
 		];
 	}
 
+	/**
+	 * Reading rows of a definition is no weaker a right than reading the schema of a source: every
+	 * source the definition draws rows from is checked against the catalog of the very context the
+	 * definition belongs to.
+	 *
+	 * @param int|null $ownerTemplateId template the definition belongs to; null means no context
+	 * @throws SourceUnavailableException
+	 */
+	public function assertDefinitionSourcesAvailable(array $definition, int $actorId, ?int $ownerTemplateId): void
+	{
+		foreach (ColumnResolver::collectRowSourceRefs($definition) as $source)
+		{
+			if (!$this->isSourceAvailableToActor($source, $actorId, $ownerTemplateId))
+			{
+				throw SourceUnavailableException::sourceNotAvailableToActor($source->module, $source->entity);
+			}
+		}
+	}
+
+	/**
+	 * A provider able to answer about a single source is asked about it directly: building the whole
+	 * catalog to look one source up in it is what a provider of a large catalog cannot afford.
+	 */
 	private function isSourceAvailableToActor(SourceRef $source, int $actorId, ?int $templateId): bool
 	{
 		$provider = $this->providerRegistry->get($source->module);
@@ -100,11 +121,15 @@ final class SourceCatalogProvider
 			return false;
 		}
 
-		$requested = $this->sourceIdentity($source->module, $source->entity, $source->params);
+		if ($provider instanceof SourceAvailabilityCapableProvider)
+		{
+			return $provider->isSourceAvailable($source, $actorId, $templateId);
+		}
 
+		$identity = $source->identity();
 		foreach ($this->collectSources($provider, $actorId, $templateId) as $descriptor)
 		{
-			if ($this->sourceIdentity($descriptor->module, $descriptor->entity, $descriptor->params) === $requested)
+			if ($descriptor->toSourceRef()->identity() === $identity)
 			{
 				return true;
 			}
@@ -127,28 +152,5 @@ final class SourceCatalogProvider
 		}
 
 		return $provider->getAvailableSources($actorId);
-	}
-
-	private function sourceIdentity(string $module, string $entity, array $params): string
-	{
-		array_walk_recursive($params, static function (&$value): void {
-			$value = is_scalar($value) ? (string)$value : $value;
-		});
-		$this->ksortRecursive($params);
-
-		return $module . '::' . $entity . '::' . (string)json_encode($params);
-	}
-
-	private function ksortRecursive(array &$params): void
-	{
-		foreach ($params as &$value)
-		{
-			if (is_array($value))
-			{
-				$this->ksortRecursive($value);
-			}
-		}
-		unset($value);
-		ksort($params);
 	}
 }

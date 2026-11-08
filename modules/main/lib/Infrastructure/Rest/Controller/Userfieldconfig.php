@@ -3,23 +3,19 @@
 namespace Bitrix\Main\Infrastructure\Rest\Controller;
 
 use Bitrix\Intranet\ActionFilter;
-use Bitrix\Main;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Infrastructure\Rest\Dto\UserFieldConfigDto;
 use Bitrix\Main\Infrastructure\Rest\Support\LegacyQueryConverter;
-use Bitrix\Main\Infrastructure\Rest\Service\UserFieldConfigFacade;
 use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Attribute\Scope;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Exception;
-use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
 use Bitrix\Rest\V3\Interaction\Request\AddRequest;
 use Bitrix\Rest\V3\Interaction\Request\DeleteRequest;
 use Bitrix\Rest\V3\Interaction\Request\GetRequest;
 use Bitrix\Rest\V3\Interaction\Request\ListRequest;
 use Bitrix\Rest\V3\Interaction\Request\UpdateRequest;
-use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
 use Bitrix\Rest\V3\Interaction\Response\DeleteResponse;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
 use Bitrix\Rest\V3\Interaction\Response\ListResponse;
@@ -29,6 +25,8 @@ use Bitrix\Rest\V3\Structure\PaginationStructure;
 #[DtoType(UserFieldConfigDto::class)]
 class Userfieldconfig extends AbstractController
 {
+	use UserFieldConfigFacadeTrait;
+
 	private const YN_DTO_FIELDS = [
 		'multiple',
 		'mandatory',
@@ -55,16 +53,6 @@ class Userfieldconfig extends AbstractController
 		}
 
 		return $defaultPreFilters;
-	}
-
-	#[Scope('userfieldconfig')]
-	public function getTypesAction(string $moduleId): ArrayResponse
-	{
-		$result = $this->executeFacade(
-			fn() => $this->getFacade()->getTypes($moduleId, $this->getAuthScopes()),
-		);
-
-		return new ArrayResponse($result->getData()['types']);
 	}
 
 	#[Scope('userfieldconfig')]
@@ -167,46 +155,6 @@ class Userfieldconfig extends AbstractController
 		);
 
 		return new DeleteResponse();
-	}
-
-	private function executeFacade(callable $operation): Main\Result
-	{
-		try
-		{
-			$result = $operation();
-		}
-		catch (Main\Infrastructure\Rest\Exception\InsufficientScopeException $exception)
-		{
-			throw new Exception\InsufficientScopeException($exception);
-		}
-		catch (Main\AccessDeniedException $exception)
-		{
-			throw new Exception\AccessDeniedException($exception);
-		}
-		catch (Main\ObjectNotFoundException $exception)
-		{
-			throw new RequestValidationException([
-				new Main\Error($exception->getMessage(), 'moduleId'),
-			]);
-		}
-
-		if (!$result->isSuccess())
-		{
-			throw new RequestValidationException($result->getErrors());
-		}
-
-		return $result;
-	}
-
-	private function getAuthScopes(): array
-	{
-		$server = $this->getServer();
-		if (!$server instanceof \CRestServer)
-		{
-			throw new \RuntimeException('REST server is not initialized.');
-		}
-
-		return $server->getAuthScope();
 	}
 
 	private function prepareSelect(ListRequest $request): array
@@ -339,8 +287,4 @@ class Userfieldconfig extends AbstractController
 		return $dto;
 	}
 
-	private function getFacade(): UserFieldConfigFacade
-	{
-		return new UserFieldConfigFacade();
-	}
 }

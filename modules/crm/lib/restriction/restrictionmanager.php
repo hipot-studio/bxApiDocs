@@ -468,12 +468,25 @@ class RestrictionManager
 		}
 		//endregion
 		//region History View
+		$historyImageLang = LANGUAGE_ID;
+		if (!in_array($historyImageLang, ['ru', 'en', 'de'], true))
+		{
+			$historyImageLang = Main\Localization\Loc::getDefaultLang(LANGUAGE_ID);
+		}
+		if (!in_array($historyImageLang, ['ru', 'en', 'de'], true))
+		{
+			$historyImageLang = 'en';
+		}
+
+		$historyImageSrc = '/bitrix/js/crm/images/history-' . $historyImageLang . '.webp';
+		$historyImageTag = '<img alt="' . htmlspecialcharsbx(GetMessage('CRM_RESTR_MGR_HX_VIEW_MSG_IMAGE_ALT')) . '" class="crm-history-tab-img" src="' . $historyImageSrc . '"/>';
+
 		self::$historyViewRestriction = new Bitrix24AccessRestriction(
 			'crm_clr_cfg_hx',
 			false,
 			array(
 				'ID' => 'crm_history_view',
-				'CONTENT' => GetMessage('CRM_RESTR_MGR_HX_VIEW_MSG_CONTENT_2')
+				'CONTENT' => str_replace('#HISTORY_IMAGE#', $historyImageTag, GetMessage('CRM_RESTR_MGR_HX_VIEW_MSG_CONTENT_2'))
 			),
 			array(
 				'ID' => 'limit_crm_history_view',

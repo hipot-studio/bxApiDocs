@@ -2,6 +2,8 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
+use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Internals\Diag;
 use Bitrix\Disk\Internals\Error\Error;
@@ -13,13 +15,16 @@ use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Security\ParameterSigner;
 use Bitrix\Disk\Public\Service\UnifiedLink\UrlGenerator;
 use Bitrix\Disk\View\Video;
+use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
+use CBitrix24;
 
 class UrlManager implements IErrorable
 {
@@ -230,14 +235,14 @@ class UrlManager implements IErrorable
 	 * @param BaseObject|null $object
 	 * @param string $hash
 	 * @return string
+	 * @throws ArgumentNullException
+	 * @throws LoaderException
 	 */
 	public function getPublicExternalLink(?BaseObject $object, string $hash): string
 	{
-		if ($object instanceof File && $object->supportsUnifiedLink())
+		if ($object instanceof BaseObject && $object->supportsUnifiedLink())
 		{
-			return $this->getUnifiedLink($object, [
-				'absolute' => true,
-			]);
+			return $this->getPublicUnifiedLink($object, false);
 		}
 
 		// fallback
@@ -245,6 +250,57 @@ class UrlManager implements IErrorable
 			'hash' => $hash,
 			'action' => 'default',
 		], true);
+	}
+
+	/**
+	 * Returns the address to copy out of a public link. For a file under unified links it carries a signed
+	 * mark of the source link, so the opening starts at the access of that link. The mark is issued only
+	 * where vibeoffice is on; with it off the address stays the one the portal handed out before.
+	 *
+	 * @param ExternalLink $externalLink
+	 * @return string
+	 * @throws ArgumentNullException
+	 * @throws LoaderException
+	 */
+	public function getCopyablePublicExternalLink(ExternalLink $externalLink): string
+	{
+		$object = $externalLink->getObject();
+
+		if (
+			VibeofficeHandler::isEnabled()
+			&& $object instanceof File
+			&& $externalLink->getScenario() === null
+			&& $object->supportsUnifiedLink()
+		)
+		{
+			return $this->getPublicUnifiedLink(
+				$object,
+				false,
+				$this->getSourceMarkOptions($object, $externalLink),
+			);
+		}
+
+		return $this->getPublicExternalLink($object, (string)$externalLink->getHash());
+	}
+
+	/**
+	 * The mark is signed for the file and revision the address names, so an opening where they stop
+	 * agreeing is refused.
+	 */
+	private function getSourceMarkOptions(File $file, ExternalLink $externalLink): array
+	{
+		$versionId = $externalLink->isSpecificVersion() ? (int)$externalLink->getVersionId() : null;
+
+		return [
+			'versionId' => $versionId,
+			'additionalQueryParams' => [
+				ExternalLinkContext::getParameterName() => ExternalLinkContext::create(
+					$externalLink,
+					$file,
+					versionId: $versionId,
+				),
+			],
+		];
 	}
 
 	/**
@@ -275,7 +331,7 @@ class UrlManager implements IErrorable
 		}
 
 		$url = $this->buildUrl($rewriteCondition, $paramsUri);
-		if ($absolute && Loader::includeModule('bitrix24') && !\CBitrix24::isCustomDomain())
+		if ($absolute && Loader::includeModule('bitrix24') && !CBitrix24::isCustomDomain())
 		{
 			$host = parse_url($this->getHostUrl(), PHP_URL_HOST);
 
@@ -300,7 +356,7 @@ class UrlManager implements IErrorable
 	/**
 	 * Gets host url with port and scheme.
 	 * @return string
-	 * @throws \Bitrix\Main\ArgumentNullException
+	 * @throws ArgumentNullException
 	 */
 	public function getHostUrl()
 	{
@@ -695,6 +751,30 @@ class UrlManager implements IErrorable
 		}
 
 		return ($absolute ? $this->getHostUrl() : '') . '/disk/boards/' . $file->getId() . '/open' . ($c_element ? '?c_element=' . $c_element : '');
+	}
+
+	/**
+	 * Gets url to open a board on one of its elements.
+	 * @param File $file Board file.
+	 * @param string $elementId Identifier of the element the board scrolls to.
+	 * @param bool $absolute Generate absolute url with host url.
+	 * @return string
+	 */
+	public function getUrlForViewBoardElement(File $file, string $elementId, bool $absolute = true): string
+	{
+		if ($file->supportsUnifiedLink())
+		{
+			return $this->getUnifiedLink($file, [
+				'absolute' => $absolute,
+				'additionalQueryParams' => ['elementId' => $elementId],
+			]);
+		}
+
+		return
+			($absolute ? $this->getHostUrl() : '')
+			. '/disk/boards/' . $file->getId() . '/open?'
+			. http_build_query(['elementId' => $elementId])
+		;
 	}
 
 	public function getUrlForViewBoardVersion(File $file, int $versionId, $absolute = false): string
@@ -1188,7 +1268,24 @@ class UrlManager implements IErrorable
 	}
 
 	/**
-	 * @param File $file
+	 * @param BaseObject $baseObject
+	 * @param array{
+	 *     absolute?: bool,
+	 *     attachedId?: ?int,
+	 *     versionId?: ?int,
+	 *     noRedirect?: bool,
+	 *     exactMode?: bool,
+	 *     additionalQueryParams?: array
+	 * } $options
+	 * @return string
+	 */
+	public function getUnifiedLink(BaseObject $baseObject, array $options = []): string
+	{
+		return $this->buildUnifiedLink($baseObject, false, $options);
+	}
+
+	/**
+	 * @param BaseObject $baseObject
 	 * @param array{
 	 *     absolute?: bool,
 	 *     attachedId?: ?int,
@@ -1198,13 +1295,14 @@ class UrlManager implements IErrorable
 	 * } $options
 	 * @return string
 	 */
-	public function getUnifiedLink(File $file, array $options = []): string
+	public function getUnifiedEditLink(BaseObject $baseObject, array $options = []): string
 	{
-		return $this->buildUnifiedLink($file, false, $options);
+		return $this->buildUnifiedLink($baseObject, true, $options);
 	}
 
 	/**
-	 * @param File $file
+	 * @param BaseObject $baseObject
+	 * @param bool $isEdit
 	 * @param array{
 	 *     absolute?: bool,
 	 *     attachedId?: ?int,
@@ -1213,14 +1311,41 @@ class UrlManager implements IErrorable
 	 *     additionalQueryParams?: array
 	 * } $options
 	 * @return string
+	 * @throws ArgumentNullException
+	 * @throws LoaderException
 	 */
-	public function getUnifiedEditLink(File $file, array $options = []): string
+	public function getPublicUnifiedLink(BaseObject $baseObject, bool $isEdit, array $options = []): string
 	{
-		return $this->buildUnifiedLink($file, true, $options);
+		static $shouldBeExternal = null;
+		static $host = null;
+
+		if (!is_bool($shouldBeExternal))
+		{
+			$shouldBeExternal = Loader::includeModule('bitrix24') && !CBitrix24::isCustomDomain();
+		}
+
+		$options['absolute'] = !$shouldBeExternal;
+
+		$url = $isEdit
+			? $this->getUnifiedEditLink($baseObject, $options)
+			: $this->getUnifiedLink($baseObject, $options)
+		;
+
+		if ($shouldBeExternal)
+		{
+			if (!is_string($host))
+			{
+				$host = parse_url($this->getHostUrl(), PHP_URL_HOST);
+			}
+
+			$url = "https://bitrix24public.com/$host$url";
+		}
+
+		return $url;
 	}
 
 	/**
-	 * @param File $file
+	 * @param BaseObject $baseObject
 	 * @param bool $editMode
 	 * @param array{
 	 *     absolute?: bool,
@@ -1231,20 +1356,22 @@ class UrlManager implements IErrorable
 	 * } $options
 	 * @return string
 	 */
-	private function buildUnifiedLink(File $file, bool $editMode, array $options): string
+	private function buildUnifiedLink(BaseObject $baseObject, bool $editMode, array $options): string
 	{
 		$absolute = $options['absolute'] ?? false;
 		$attachedId = $options['attachedId'] ?? null;
 		$versionId = $options['versionId'] ?? null;
 		$noRedirect = $options['noRedirect'] ?? false;
+		$exactMode = $options['exactMode'] ?? false;
 		$additionalQueryParams = is_array($options['additionalQueryParams'] ?? null) ? $options['additionalQueryParams'] : [];
 
 		return $this->unifiedUrlGenerator
 			->forEditing($editMode)
 			->asAbsolute($absolute)
 			->withoutRedirect($noRedirect)
+			->withExactMode($exactMode)
 			->setAdditionalQueryParams($additionalQueryParams)
-			->build($file, $attachedId, $versionId)
+			->build($baseObject, $attachedId, $versionId)
 		;
 	}
 

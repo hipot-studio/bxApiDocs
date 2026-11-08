@@ -268,4 +268,22 @@ class Cookies extends \Bitrix\Landing\Hook\Page
 			? $fields['COOKIES_AGREEMENT_ID']->getValue()
 			: null;
 	}
+
+	/**
+	 * Returns agreement id selected in site settings regardless of cookies mode.
+	 * @param int $siteId Site id.
+	 * @return int|null
+	 */
+	public static function getSelectedAgreementIdBySiteId(int $siteId): ?int
+	{
+		Rights::setOff();
+		$fields = Site::getAdditionalFields($siteId);
+		Rights::setOn();
+
+		$agreementId = isset($fields['COOKIES_AGREEMENT_ID'])
+			? $fields['COOKIES_AGREEMENT_ID']->getValue()
+			: null;
+
+		return $agreementId ? (int)$agreementId : null;
+	}
 }

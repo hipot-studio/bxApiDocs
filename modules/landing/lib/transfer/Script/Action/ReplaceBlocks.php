@@ -23,7 +23,9 @@ class ReplaceBlocks extends Blank
 		// todo: but how set new template for page if old page have sidebar f.e.?
 		$data = $this->context->getData();
 		$replaceLid = (int)$this->context->getAdditionalOptions()->get(AdditionalOptionPart::ReplacePageId);
-		if (empty($data) || empty($data['BLOCKS']) || $replaceLid <= 0)
+		// a BLOCKS node which is not an array imports nothing (BlockTrait::importBlocks), so the
+		// blocks of the replaced page must stay: the deletion below has nothing to replace them with
+		if (empty($data) || empty($data['BLOCKS']) || !is_array($data['BLOCKS']) || $replaceLid <= 0)
 		{
 			return;
 		}

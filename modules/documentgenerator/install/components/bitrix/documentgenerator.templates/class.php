@@ -3,8 +3,12 @@
 use Bitrix\DocumentGenerator\CustomField;
 use Bitrix\DocumentGenerator\DataProviderManager;
 use Bitrix\DocumentGenerator\Driver;
+use Bitrix\DocumentGenerator\Feature\DocumentTitlePattern;
 use Bitrix\DocumentGenerator\Model\TemplateProviderTable;
 use Bitrix\DocumentGenerator\Model\TemplateTable;
+use Bitrix\DocumentGenerator\Template;
+use Bitrix\DocumentGenerator\Timezone;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\Response\AjaxJson;
 use Bitrix\Main\Error;
@@ -74,6 +78,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 			$this->arResult['PROVIDERS'] = $this->getProviders();
 			$this->arResult['REGIONS'] = Driver::getInstance()->getRegionsList();
 			$this->arResult['PRODUCTS_TABLE_VARIANT'] = TemplateTable::getProductsTableVariantList();
+			$this->prepareTitlePatternFormData(null);
 			if ($this->arParams['ID'] > 0)
 			{
 				$template = \Bitrix\DocumentGenerator\Template::loadById($this->arParams['ID']);
@@ -85,6 +90,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 					}
 					else
 					{
+						$this->prepareTitlePatternFormData($template);
 						if ($template->CODE)
 						{
 							$defaultTemplates = \Bitrix\DocumentGenerator\Controller\Template::getDefaultTemplateList(['CODE' => $template->CODE, 'NAME' => $template->NAME]);
@@ -101,6 +107,7 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 						$this->arResult['TEMPLATE']['ACTIVE'] = $template->ACTIVE;
 						$this->arResult['TEMPLATE']['ID'] = $template->ID;
 						$this->arResult['TEMPLATE']['REGION'] = $template->REGION;
+						$this->arResult['TEMPLATE']['TIMEZONE'] = $template->TIMEZONE;
 						$this->arResult['TEMPLATE']['FILE_ID'] = $template->FILE_ID;
 						$this->arResult['TEMPLATE']['NAME'] = $template->NAME;
 						$this->arResult['TEMPLATE']['NUMERATOR_ID'] = $template->NUMERATOR_ID;
@@ -156,6 +163,8 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 				$this->arResult['TEMPLATE']['CUSTOM_FIELDS'] = $fieldsManager->getFields();
 				$this->arResult['TEMPLATE']['CUSTOM_FIELDS_JS'] = $fieldsManager->getJavaScript();
 			}
+
+			$this->prepareTimezoneResult();
 		}
 		else
 		{
@@ -228,6 +237,36 @@ class DocumentsTemplateComponent extends CBitrixComponent implements Controllera
 	public function configureActions()
 	{
 		return [];
+	}
+
+	protected function prepareTitlePatternFormData(?Template $template): void
+	{
+		$isEnabled = Feature::isEnabled(DocumentTitlePattern::class);
+		$this->arResult['TITLE_PATTERN_ENABLED'] = $isEnabled;
+		$this->arResult['params']['titlePatternEnabled'] = $isEnabled;
+		if ($isEnabled)
+		{
+			$this->arResult['TEMPLATE']['TITLE_PATTERN'] = $template?->TITLE_PATTERN;
+		}
+		else
+		{
+			unset($this->arResult['TEMPLATE']['TITLE_PATTERN']);
+		}
+	}
+
+	protected function prepareTimezoneResult(): void
+	{
+		if (!Timezone::isEnabled())
+		{
+			unset($this->arResult['TEMPLATE']['TIMEZONE']);
+
+			return;
+		}
+
+		$timezone = $this->arResult['TEMPLATE']['TIMEZONE'] ?? null;
+		$this->arResult['TEMPLATE']['TIMEZONE'] = Timezone::isValid($timezone) ? $timezone : null;
+		$this->arResult['timezoneFeatureEnabled'] = true;
+		$this->arResult['timezoneItems'] = Timezone::getItems();
 	}
 
 	/**

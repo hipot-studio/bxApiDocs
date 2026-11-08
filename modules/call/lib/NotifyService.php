@@ -13,6 +13,7 @@ use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\MessageCollection;
 use Bitrix\Im\V2\Service\Context;
 use Bitrix\Main\Application;
+use Bitrix\Main\Security\Sign\Signer;
 
 
 class NotifyService
@@ -42,6 +43,11 @@ class NotifyService
 	;
 
 	public const ADMIN_NOTIFICATION_TAG = 'call_registration';
+
+	private const
+		SEND_GUARD_TTL = 10,
+		SEND_GUARD_SALT = 'call.notify.sendguard'
+	;
 
 	private static ?NotifyService $service = null;
 
@@ -80,6 +86,8 @@ class NotifyService
 				$message = ChatMessage::generateTaskFailedMessage($call->getId(), $error, $chat);
 				if ($message)
 				{
+					// No cross-process claim on AI_FAILED: the isAiGeneratedError() bypass above
+					// intentionally lets each parallel AI task surface its own error.
 					$sendingConfig = (new SendingConfig())
 						->enableSkipCounterIncrements()
 						->enableSkipUrlIndex()
@@ -146,6 +154,13 @@ class NotifyService
 			$message = ChatMessage::generateWaitMessage($call, $chat);
 			if ($message)
 			{
+				// Claim-before-send on the (callId, AI_WAIT) key: the DB check above is not
+				// atomic under concurrent wait-agent deliveries.
+				if (!$this->claim($call->getId(), self::MESSAGE_TYPE_AI_WAIT))
+				{
+					return $this;
+				}
+
 				$sendingConfig = (new SendingConfig())
 					->enableSkipCounterIncrements()
 					->enableSkipUrlIndex()
@@ -346,6 +361,17 @@ class NotifyService
 			}
 		}
 
+		// Cross-process claim-before-send: trackReady callbacks may be delivered more
+		// than once, and the DB check above is not atomic under concurrent delivery.
+		// Discriminated by TRACK_ID: a call legitimately has one record-ready message
+		// per track, so collapsing them would drop legitimate messages. Claimed after
+		// attachToDisk() so the short send-guard TTL spans only the enqueue->DB window,
+		// not the synchronous disk upload, which can outlast it.
+		if (!$this->claim($call->getId(), self::MESSAGE_TYPE_CLOUD_RECORD_READY, (string)$track->getId()))
+		{
+			return;
+		}
+
 		$message = CallChatMessage::makeCloudRecordReadyMessage($call, $chat, $track);
 
 		$sendingConfig = (new SendingConfig())
@@ -356,7 +382,14 @@ class NotifyService
 
 		$this->sendMessageDeferred($chat, $message, $sendingConfig, $context);
 
-		(new CloudRecordAnalytics($call))->addSendMessage($track);
+		(new CloudRecordAnalytics($call))
+			->addSendMessage($track)
+			->sendTelemetry(
+				source: $track,
+				status: 'success',
+				event: 'cloud_record_chat_sent',
+			)
+		;
 	}
 
 	public function sendAudioRecordMessage(Call $call): self
@@ -378,6 +411,15 @@ class NotifyService
 				$messages = ChatMessage::generateAudioRecordMessages($call, $chat);
 				if (!empty($messages))
 				{
+					// One claim for the whole batch on the (callId, AUDIO_RECORD) key, taken
+					// before the loop: the winner enqueues every track message, a concurrent
+					// repeat is suppressed as one unit. No per-track discriminator - the batch
+					// is gated together, matching the isMessageShown(AUDIO_RECORD) barrier above.
+					if (!$this->claim($call->getId(), self::MESSAGE_TYPE_AUDIO_RECORD))
+					{
+						return $this;
+					}
+
 					$sendingConfig = (new SendingConfig())->enableSkipCounterIncrements();
 					$context = (new Context())->setUser($call->getInitiatorId());
 					foreach ($messages as $message)
@@ -440,6 +482,77 @@ class NotifyService
 		$this->shownMessage[$messageType][$callId] = true;
 
 		return $this;
+	}
+
+	//endregion
+
+	//region Idempotent send guard
+	/**
+	 * Cross-process claim-before-send guard. Builds a deterministic idempotency key
+	 * from (callId, messageType, discriminator) and atomically claims it via
+	 * {@see Idempotence::addKey()}. Returns true when this caller won the right to
+	 * send (the first claim), false when the key was already taken - a concurrent or
+	 * repeated send of the same logical message. Mirrors the one-shot broadcast dedup
+	 * in {@see Signaling::sendFinishInternal()}.
+	 *
+	 * The claim is held for a short TTL (self::SEND_GUARD_TTL), not the 24h Idempotence
+	 * default: it only has to cover the concurrent-delivery race until the first send lands
+	 * in the DB, after which {@see self::findMessage()} backstops. A short TTL lets a send
+	 * that never materialised (a failed deferred job) self-heal on a later retry instead of
+	 * muting the message for a full day.
+	 *
+	 * Complements the in-memory {@see self::isMessageShown()} and DB-side
+	 * {@see self::findMessage()} barriers with correctness across PHP-FPM workers;
+	 * it does not replace them.
+	 *
+	 * @param int $callId
+	 * @param string $messageType one of self::MESSAGE_TYPE_*.
+	 * @param string|null $discriminator optional per-message qualifier (e.g. OUTCOME_ID
+	 *        or TRACK_ID) that splits several sends of the same type for one call into
+	 *        separate claims.
+	 * @return bool true if the claim was won, false if it was already held.
+	 */
+	public function claim(int $callId, string $messageType, ?string $discriminator = null): bool
+	{
+		$key = $this->buildSendGuardKey($callId, $messageType, $discriminator);
+
+		return Idempotence::addKey($key, self::SEND_GUARD_TTL);
+	}
+
+	/**
+	 * Releases a claim taken by {@see self::claim()} so a legitimate retry can win it
+	 * again. Call it when the send the claim guarded did not go through (e.g. the
+	 * enqueue failed), mirroring the clearKey-on-failure release in
+	 * {@see Signaling::sendFinish()}.
+	 *
+	 * @param int $callId
+	 * @param string $messageType one of self::MESSAGE_TYPE_*.
+	 * @param string|null $discriminator the same qualifier that was passed to claim().
+	 * @return void
+	 */
+	public function release(int $callId, string $messageType, ?string $discriminator = null): void
+	{
+		Idempotence::clearKey($this->buildSendGuardKey($callId, $messageType, $discriminator));
+	}
+
+	/**
+	 * Builds the deterministic send-guard idempotency key. The same arguments always
+	 * yield the same key; the optional discriminator splits distinct qualifiers into
+	 * separate claims. The identifying tuple is signed with the server signing key so the
+	 * key cannot be predicted - and thus cannot be pre-claimed - by a client that controls
+	 * a UniqueRequestFilter requestId sharing the same flat Idempotence keyspace. Namespaced
+	 * under `call:notify:` to stay disjoint from other Idempotence users (e.g. Signaling's
+	 * `call_finish_*`).
+	 */
+	private function buildSendGuardKey(int $callId, string $messageType, ?string $discriminator): string
+	{
+		$payload = $callId . ':' . $messageType;
+		if ($discriminator !== null)
+		{
+			$payload .= ':' . $discriminator;
+		}
+
+		return 'call:notify:' . (new Signer())->getSignature($payload, self::SEND_GUARD_SALT);
 	}
 
 	//endregion

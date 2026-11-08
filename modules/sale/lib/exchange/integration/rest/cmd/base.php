@@ -3,14 +3,18 @@ namespace Bitrix\Sale\Exchange\Integration\Rest\Cmd;
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sale\Exchange\Integration;
 use Bitrix\Sale\Internals\Fields;
 use Bitrix\Sale\Result;
 
+Loc::loadMessages(__FILE__);
+
 class Base
 {
 	const DIRECTORY_PAGE = '/rest/';
+	public const ERROR_TOKEN_NOT_FOUND = 1001;
 
 	protected $query;
 	protected $page;
@@ -75,9 +79,17 @@ class Base
 	public function call()
 	{
 		$r = new Result();
+		if ($this->token === null)
+		{
+			return $r->addError(new Error(
+				Loc::getMessage('SALE_EXCHANGE_INTEGRATION_REST_CMD_BASE_TOKEN_NOT_FOUND'),
+				self::ERROR_TOKEN_NOT_FOUND,
+			));
+		}
+
 		try
 		{
-			$response = (new Integration\Rest\Client\TokenClient($this->token))
+			$response = $this->createClient()
 				->call(
 					$this->buildDirectoryPage(), $this->getFieldsValues());
 		}
@@ -107,6 +119,11 @@ class Base
 	protected function buildDirectoryPage()
 	{
 		return $this->directory.$this->page;
+	}
+
+	protected function createClient(): Integration\Rest\Client\TokenClient
+	{
+		return new Integration\Rest\Client\TokenClient($this->token);
 	}
 
 	protected function initialize(Integration\App\Base $application)

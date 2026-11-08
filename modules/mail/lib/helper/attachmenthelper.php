@@ -37,6 +37,7 @@ class MessageStructure
 		public int $id,
 		public ?int $attachmentsCount = null,
 		public ?string $body = null,
+		public ?int $dirUidValidity = null,
 	)
 	{}
 }
@@ -103,6 +104,7 @@ class AttachmentHelper
 				'MSG_UID',
 				'MESSAGE_ID',
 				'DIR_MD5',
+				'DIR_UIDV',
 			],
 			$messageId,
 			$messageUid,
@@ -123,7 +125,13 @@ class AttachmentHelper
 
 			if (!is_null($dir))
 			{
-				$this->message = new MessageStructure($mailboxId, $dir['PATH'], $message['MSG_UID'], (int) $message['MESSAGE_ID']);
+				$this->message = new MessageStructure(
+					$mailboxId,
+					$dir['PATH'],
+					$message['MSG_UID'],
+					(int) $message['MESSAGE_ID'],
+					dirUidValidity: (int) $message['DIR_UIDV'],
+				);
 			}
 		}
 
@@ -611,9 +619,40 @@ class AttachmentHelper
 		return $extendedStructure;
 	}
 
+	/**
+	 * Whether the uid of the message is a uid of the folder as the mail service keeps it now.
+	 *
+	 * A folder the server has recreated answers with a version of its own, and every number written
+	 * under the previous one names another letter of that folder: what a download through such a
+	 * number brings back belongs to that letter, and it would be saved as the attachments of this
+	 * message. A message whose row carries no version is downloaded as before.
+	 */
+	private function servesFolderVersion(MessageStructure $messageStructure): bool
+	{
+		if ((int)$messageStructure->dirUidValidity <= 0)
+		{
+			return true;
+		}
+
+		$error = [];
+		$meta = $this->client->select($messageStructure->dirPath, $error);
+
+		if (empty($meta['uidvalidity']))
+		{
+			return false;
+		}
+
+		return (int)$meta['uidvalidity'] === (int)$messageStructure->dirUidValidity;
+	}
+
 	public function update(): bool
 	{
 		if (is_null($this->message) || is_null($this->client))
+		{
+			return false;
+		}
+
+		if (!$this->servesFolderVersion($this->message))
 		{
 			return false;
 		}

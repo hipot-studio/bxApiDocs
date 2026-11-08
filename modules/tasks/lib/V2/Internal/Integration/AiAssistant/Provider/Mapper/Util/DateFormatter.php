@@ -8,25 +8,53 @@ use Bitrix\Main\Type\DateTime;
 
 class DateFormatter
 {
-	private const ISO_8601_FORMAT = 'c';
+	public const FORMAT_WITH_TIMEZONE = 'c';
+	public const FORMAT_WITHOUT_TIMEZONE = 'Y-m-d\TH:i:s';
 
-	public static function formatTimestamp(?int $timestamp): ?string
+	public static function formatTimestamp(
+		?int $timestamp,
+		string $format = self::FORMAT_WITH_TIMEZONE,
+		?int $userId = null,
+	): ?string
 	{
 		if ($timestamp === null || $timestamp <= 0)
 		{
 			return null;
 		}
 
-		return DateTime::createFromTimestamp($timestamp)->format(self::ISO_8601_FORMAT);
+		return self::formatDateTime(DateTime::createFromTimestamp($timestamp), $format, $userId);
 	}
 
-	public static function formatDateTime(mixed $value): ?string
+	public static function formatDateTime(
+		mixed $value,
+		string $format = self::FORMAT_WITH_TIMEZONE,
+		?int $userId = null,
+	): ?string
 	{
 		if (!$value instanceof DateTime)
 		{
 			return null;
 		}
 
-		return $value->format(self::ISO_8601_FORMAT);
+		if ($userId !== null)
+		{
+			$value = clone $value;
+			$value->setTimeZone(UserTimeZoneResolver::resolve($userId, $value));
+		}
+
+		return $value->format($format);
+	}
+
+	public static function isSupportedDateTime(string $value): bool
+	{
+		return (bool)preg_match(
+			'/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(?:Z|[+\-]\d{2}:?\d{2})?$/',
+			$value,
+		);
+	}
+
+	public static function hasExplicitTimeZone(string $value): bool
+	{
+		return (bool)preg_match('/(?:Z|[+\-]\d{2}:?\d{2})$/', $value);
 	}
 }

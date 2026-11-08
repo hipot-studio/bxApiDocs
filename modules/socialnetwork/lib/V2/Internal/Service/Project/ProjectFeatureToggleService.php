@@ -31,24 +31,55 @@ class ProjectFeatureToggleService
 			return false;
 		}
 
-		return in_array(
-			$this->convertProgressRepository->getByGroupId($projectId)->getStatus(),
-			[ConvertStatus::CompletedFromGroup, ConvertStatus::CompletedFromCollab],
-			true,
-		);
+		return $this->isConversionCompleted($this->getConvertStatus($projectId));
 	}
 
 	/**
+	 * Tools the project settings may switch. A converted project may bring back the legacy tools it had before
+	 * conversion; lists is offered to every Project 2.0, converted or not, and therefore does not depend on the
+	 * snapshot a project that was never converted has no reason to hold. Availability is checked for the tools
+	 * that are merely off on create only — one this portal does not offer is left out, since the menu would
+	 * filter it away anyway. The tools restored from the conversion snapshot are deliberately not filtered:
+	 * they keep the rules they were converted under, and their availability is neither widened nor narrowed
+	 * here.
+	 *
 	 * @return string[]
 	 */
 	public function getToggleableFeatureIds(int $projectId): array
 	{
-		if (!$this->isAvailable($projectId))
+		if ($projectId <= 0)
 		{
 			return [];
 		}
 
-		return $this->getPersistedToggleableFeatureIds($projectId);
+		$status = $this->getConvertStatus($projectId);
+		if ($status?->isConverted() !== true)
+		{
+			return [];
+		}
+
+		$restorableFeatureIds = $this->isConversionCompleted($status)
+			? $this->getPersistedToggleableFeatureIds($projectId)
+			: [];
+
+		return [
+			...$restorableFeatureIds,
+			...$this->legacyProjectFeaturePolicy->getAvailableInactiveOnCreateFeatureIds(),
+		];
+	}
+
+	/**
+	 * Tools the create form may switch. A project that does not exist yet has no conversion snapshot to bring
+	 * anything back from, so only the tools that are merely off on create are left — and of those, only the ones
+	 * this portal offers. It is the same answer {@see getToggleableFeatureIds()} gives about an existing project,
+	 * and the same policy {@see ProjectCreateFeatures::filterRequestedFeatures()} accepts a request by, so the
+	 * form offers exactly what create would take.
+	 *
+	 * @return string[]
+	 */
+	public function getToggleableFeatureIdsForCreate(): array
+	{
+		return $this->legacyProjectFeaturePolicy->getAvailableInactiveOnCreateFeatureIds();
 	}
 
 	/**
@@ -57,12 +88,12 @@ class ProjectFeatureToggleService
 	 */
 	public function filterFeaturesForUpdate(int $projectId, ?array $features): array
 	{
-		if ($features === null || !$this->isAvailable($projectId))
+		if ($features === null)
 		{
 			return [];
 		}
 
-		$allowedFeatureIds = array_flip($this->getPersistedToggleableFeatureIds($projectId));
+		$allowedFeatureIds = array_flip($this->getToggleableFeatureIds($projectId));
 		$result = [];
 
 		foreach ($features as $featureId => $isActive)
@@ -76,6 +107,24 @@ class ProjectFeatureToggleService
 		}
 
 		return $result;
+	}
+
+	/**
+	 * A group with no conversion record at all reports no status: it has never been through the V2 create or
+	 * convert path, and is therefore not a Project 2.0.
+	 */
+	private function getConvertStatus(int $projectId): ?ConvertStatus
+	{
+		return $this->convertProgressRepository->getByGroupId($projectId)->getStatus();
+	}
+
+	private function isConversionCompleted(?ConvertStatus $status): bool
+	{
+		return in_array(
+			$status,
+			[ConvertStatus::CompletedFromGroup, ConvertStatus::CompletedFromCollab],
+			true,
+		);
 	}
 
 	/**

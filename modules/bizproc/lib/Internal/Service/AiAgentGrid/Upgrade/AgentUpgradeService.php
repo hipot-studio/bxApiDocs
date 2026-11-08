@@ -113,13 +113,20 @@ class AgentUpgradeService
 		$targetConstants = $this->applyProvidedValues($merge->target, $providedConstantValues ?? []);
 		$stillMissing = $this->stillMissingRequired($merge->newRequiredMissing, $targetConstants);
 
-		// Re-validate the submitted values against the reference (new version) setup blocks before
-		// the transaction: a value invalid for its field definition re-shows the review master and
-		// is never written, unlike the post-apply best-effort fill(). Empty values are covered by
-		// $stillMissing above, so this reports only non-empty values that fail their field type.
+		// Re-validate the values that are about to be written against the reference (new version) setup
+		// blocks before the transaction: a value invalid for its field definition re-shows the review
+		// master and is never written, unlike the post-apply best-effort fill(). The whole target set of
+		// values is checked, not the submitted part of it: the rest arrives from the merge with the previous
+		// values and a new field definition of the reference may well refuse it. The blocks come from the
+		// first setup screen of the reference only, so constants defined by its further screens stay
+		// unchecked (SDD Q-1). Empty values are covered by $stillMissing above, so this reports only
+		// non-empty values that fail their field type.
 		$invalidConstants = $providedConstantValues === null
 			? []
-			: $this->setupTemplateService->collectInvalidConstantValues((int)$system['ID'], $providedConstantValues)
+			: $this->setupTemplateService->collectInvalidConstantValues(
+				(int)$system['ID'],
+				$this->extractCurrentValues($targetConstants),
+			)
 		;
 
 		// Show the review master on the first call, or re-show it when a submit still leaves a

@@ -9,12 +9,10 @@
 namespace Bitrix\Rest;
 
 
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Context;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\SystemException;
-use Bitrix\Main\Web\HttpClient;
-use Bitrix\Main\Web\Json;
+use Bitrix\Rest\Internal\Service\OAuth\RegistrationService;
 use Bitrix\Rest\OAuth\Engine;
 use Bitrix\Rest\Public\Provider;
 
@@ -58,42 +56,10 @@ class OAuthService
 
 	public static function register()
 	{
-		$httpClient = new HttpClient();
-
-		$queryParams = array(
-			"redirect_uri" => static::getRedirectUri(),
-			"type" => static::CLIENT_TYPE,
-		);
-
-		$memberId = \CRestUtil::getMemberId();
-		if($memberId !== null)
-		{
-			$queryParams["member_id"] = $memberId;
-		}
-
-		$queryParams = \CRestUtil::signLicenseRequest($queryParams, static::getEngine()->getLicense());
-
-		$httpResult = $httpClient->post(static::SERVICE_URL.static::REGISTER, $queryParams);
-
-		try
-		{
-			$result = Json::decode($httpResult);
-		}
-		catch(ArgumentException $e)
-		{
-			$result = array(
-				"error" => "Wrong answer from service: ".$httpResult,
-			);
-		}
-
-		if (!empty($result["error"]))
-		{
-			throw new SystemException($result["error"]);
-		}
-		else
-		{
-			static::getEngine()->setAccess($result);
-		}
+		ServiceLocator::getInstance()
+			->get(RegistrationService::class)
+			->register(static::getRedirectUri(), \CRestUtil::getMemberId())
+		;
 	}
 
 	public static function unregister()

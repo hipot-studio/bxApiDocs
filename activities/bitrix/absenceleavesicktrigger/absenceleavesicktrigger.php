@@ -22,6 +22,8 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 	private const RETURN_PARAM_USER = 'USER';
 	private const RETURN_PARAM_ACTIVE_FROM = 'ACTIVE_FROM';
 	private const RETURN_PARAM_ACTIVE_TO = 'ACTIVE_TO';
+	private const RETURN_PARAM_ABSENCE_TYPE = 'ABSENCE_TYPE';
+	private const RETURN_PARAM_EVENT_DATE_TIME = 'EventDateTime';
 
 	public function execute(): int
 	{
@@ -30,10 +32,19 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		$this->{self::RETURN_PARAM_EVENT_DATE_TIME} = (new DateTime())->format(DateTime::getFormat());
+
 		$context = $this->getRootActivity()->{\CBPDocument::PARAM_TRIGGER_EVENT_DATA} ?? [];
 		$userId = (int)($context[AbsenceBaseTrigger::FIELD_USER_ID] ?? 0);
 		$activeFrom = (string)($context[AbsenceBaseTrigger::FIELD_ACTIVE_FROM] ?? '');
 		$activeTo = (string)($context[AbsenceBaseTrigger::FIELD_ACTIVE_TO] ?? '');
+
+		$absenceType = '';
+		// Modules are updated independently, so the installed bizproc may not know this field yet.
+		if (defined(AbsenceBaseTrigger::class . '::FIELD_ABSENCE_TYPE'))
+		{
+			$absenceType = (string)($context[AbsenceBaseTrigger::FIELD_ABSENCE_TYPE] ?? '');
+		}
 
 		if (!empty($userId))
 		{
@@ -50,6 +61,11 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 			$this->{self::RETURN_PARAM_ACTIVE_TO} = new DateTime($activeTo);
 		}
 
+		if ($absenceType !== '')
+		{
+			$this->{self::RETURN_PARAM_ABSENCE_TYPE} = $absenceType;
+		}
+
 		return CBPActivityExecutionStatus::Closed;
 	}
 
@@ -61,12 +77,16 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 			self::RETURN_PARAM_USER => null,
 			self::RETURN_PARAM_ACTIVE_FROM => null,
 			self::RETURN_PARAM_ACTIVE_TO => null,
+			self::RETURN_PARAM_ABSENCE_TYPE => null,
+			self::RETURN_PARAM_EVENT_DATE_TIME => null,
 		];
 
 		$this->SetPropertiesTypes([
 			self::RETURN_PARAM_USER => ['Type' => FieldType::USER],
 			self::RETURN_PARAM_ACTIVE_FROM => ['Type' => FieldType::DATETIME],
 			self::RETURN_PARAM_ACTIVE_TO => ['Type' => FieldType::DATETIME],
+			self::RETURN_PARAM_ABSENCE_TYPE => ['Type' => FieldType::STRING],
+			self::RETURN_PARAM_EVENT_DATE_TIME => ['Type' => FieldType::DATETIME],
 		]);
 	}
 
@@ -83,7 +103,7 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 		];
 	}
 
-	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null): array
+	public static function validateProperties($arTestProperties = [], ?CBPWorkflowTemplateUser $user = null): array
 	{
 		$errors = [];
 		foreach (self::getPropertiesMap([]) as $id => $property)
@@ -123,15 +143,15 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 	{
 		$dialog = new PropertiesDialog(
 			__FILE__, [
-			'documentType' => $documentType,
-			'activityName' => $activityName,
-			'workflowTemplate' => $arWorkflowTemplate,
-			'workflowParameters' => $arWorkflowParameters,
-			'workflowVariables' => $arWorkflowVariables,
-			'currentValues' => $arCurrentValues,
-			'formName' => $formName,
-			'siteId' => $siteId,
-		],
+				'documentType' => $documentType,
+				'activityName' => $activityName,
+				'workflowTemplate' => $arWorkflowTemplate,
+				'workflowParameters' => $arWorkflowParameters,
+				'workflowVariables' => $arWorkflowVariables,
+				'currentValues' => $arCurrentValues,
+				'formName' => $formName,
+				'siteId' => $siteId,
+			],
 		);
 
 		$dialog->setMap(static::getPropertiesMap($documentType));
@@ -160,7 +180,7 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 				$property,
 				$property['FieldName'],
 				$arCurrentValues,
-				$errors
+				$errors,
 			);
 
 			if (!empty($errors))
@@ -173,7 +193,7 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 
 		$errors = self::validateProperties(
 			$properties,
-			new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser)
+			new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser),
 		);
 
 		if ($errors)
@@ -193,13 +213,13 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 
 		$allowedUserIds = CBPHelper::ExtractUsers(
 			$this->{self::PARAM_USER_IDS},
-			$this->getDocumentId()
+			$this->getDocumentId(),
 		);
 
 		if (!$this->checkUsersUseAbility($allowedUserIds, $userId))
 		{
 			return Result::createError(
-				new Error(Loc::getMessage('TIMEMAN_ABSENCE_LEAVE_SICK_TRIGGER_PROPERTY_USER_IDS_INCORRECT'))
+				new Error(Loc::getMessage('TIMEMAN_ABSENCE_LEAVE_SICK_TRIGGER_PROPERTY_USER_IDS_INCORRECT')),
 			);
 		}
 
@@ -209,5 +229,10 @@ class CBPAbsenceLeaveSickTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 	private function checkUsersUseAbility(array $userIds, int $userId): bool
 	{
 		return in_array($userId, $userIds, true);
+	}
+
+	protected static function getModuleId(): ?string
+	{
+		return 'timeman';
 	}
 }

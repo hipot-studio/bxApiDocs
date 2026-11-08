@@ -34,6 +34,9 @@ class Param implements MessageParameter, RegistryEntry, ActiveRecord
 		TYPE_JSON = 'Json'
 	;
 
+	/** Length of PARAM_NAME in b_im_message_param: a longer name is cut here, on the write path. */
+	public const MAX_NAME_LENGTH = 100;
+
 	protected ?string $type = null;
 
 	protected ?int $paramId = null;
@@ -301,7 +304,7 @@ class Param implements MessageParameter, RegistryEntry, ActiveRecord
 
 	public function setName(string $name): self
 	{
-		$name = mb_substr(trim($name), 0, 100);
+		$name = mb_substr(trim($name), 0, self::MAX_NAME_LENGTH);
 		if ($this->name != $name)
 		{
 			$this->markChanged();
@@ -320,9 +323,9 @@ class Param implements MessageParameter, RegistryEntry, ActiveRecord
 	public function saveNameFilter($name): string
 	{
 		$name = $name ?? '';
-		if (is_string($name) && mb_strlen($name) > 100)
+		if (is_string($name) && mb_strlen($name) > self::MAX_NAME_LENGTH)
 		{
-			$name = mb_substr($name, 0, 100);
+			$name = mb_substr($name, 0, self::MAX_NAME_LENGTH);
 		}
 
 		return $name;

@@ -14,6 +14,10 @@ use Bitrix\Crm\Security\QueryBuilder\OptionsBuilder;
 use Bitrix\Crm\Service\Accounting;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings;
+use Bitrix\Crm\V2\Internal\Integration\Sale\CheckedPaySystemServiceFactory;
+use Bitrix\Crm\V2\Internal\Service\PaySystem\CheckedBusinessValueContext;
+use Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerCatalog;
+use Bitrix\Crm\V2\Internal\Service\PaySystem\PrintOperation;
 use Bitrix\Iblock;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
@@ -6021,8 +6025,6 @@ class CAllCrmInvoice
 			return false;
 		}
 
-		$pdfContent = '';
-
 		$dbOrder = Compatible\Helper::getList(
 			array("ID"=>"DESC"),
 			array("ID" => $invoice_id),
@@ -6042,59 +6044,91 @@ class CAllCrmInvoice
 		if ($arOrder["SUM_PAID"] <> '')
 			$arOrder["PRICE"] -= $arOrder["SUM_PAID"];
 
-		$service = \Bitrix\Sale\PaySystem\Manager::getObjectById($arOrder["PAY_SYSTEM_ID"]);
-		if ($service !== null)
+		$order = Invoice::load($invoice_id);
+		$payment = null;
+		if ($order)
 		{
-			$psa = new CSalePaySystemAction();
-			$psa->InitParamArrays(
-				$arOrder,
-				0,
-				"",
-				array(
-					'REQUISITE' => is_array($paymentData['REQUISITE']) ? $paymentData['REQUISITE'] : null,
-					'BANK_DETAIL' => is_array($paymentData['BANK_DETAIL']) ? $paymentData['BANK_DETAIL'] : null,
-					'CRM_COMPANY' => is_array($paymentData['CRM_COMPANY']) ? $paymentData['CRM_COMPANY'] : null,
-					'CRM_CONTACT' => is_array($paymentData['CRM_CONTACT']) ? $paymentData['CRM_CONTACT'] : null,
-					'MC_REQUISITE' => is_array($paymentData['MC_REQUISITE']) ? $paymentData['MC_REQUISITE'] : null,
-					'MC_BANK_DETAIL' => is_array($paymentData['MC_BANK_DETAIL']) ? $paymentData['MC_BANK_DETAIL'] : null,
-					'CRM_MYCOMPANY' => is_array($paymentData['CRM_MYCOMPANY']) ? $paymentData['CRM_MYCOMPANY'] : null
-				),
-				array(),
-				array(),
-				REGISTRY_TYPE_CRM_INVOICE
-			);
-			unset($psa);
-
-			\Bitrix\Sale\BusinessValue::redefineProviderField(
-				array(
-					'PROPERTY' => $paymentData['USER_FIELDS']
-				)
-			);
-
-			$order = Invoice::load($invoice_id);
-			if ($order)
+			foreach ($order->getPaymentCollection() as $candidate)
 			{
-				$collection = $order->getPaymentCollection();
-				if ($collection)
+				if (!$candidate->isInner())
 				{
-					/** @var \Bitrix\Sale\Payment $payment */
-					foreach ($collection as $payment)
-					{
-						if (!$payment->isInner() && $service->isAffordPdf())
-						{
-							$file = $service->getPdf($payment);
-							if ($file !== null)
-							{
-								return $file['ID'];
-							}
-						}
-					}
-
+					$payment = $candidate;
+					break;
 				}
 			}
 		}
+		$fields = $payment ? \Bitrix\Sale\PaySystem\Manager::getById($payment->getPaymentSystemId()) : false;
+		if (!is_array($fields))
+		{
+			$error = 'COULD NOT FIND PAYMENT SYSTEM!';
+			return false;
+		}
+		$created = (new CheckedPaySystemServiceFactory())->createFromFields(
+			$fields, HandlerCatalog::PURPOSE_LEGACY_PRINT, $payment,
+		);
+		if (!$created->isSuccess() || !$created->getData()['service']->isAffordPdf())
+		{
+			$error = 'COULD NOT GENERATE PDF!';
+			return false;
+		}
+		$service = $created->getData()['service'];
+		$handler = $created->getData()['handler'];
+		$operation = PrintOperation::getCurrent();
+		$ownsOperation = $operation === null;
+		$operation ??= new PrintOperation('invoice', 'email_attachment', 'invoice_save_pdf');
 
-		return false;
+		$render = static function () use (
+			$operation, $ownsOperation, $service, $handler, $payment, $arOrder, $paymentData, &$error,
+		) {
+			$rendered = $operation->capture(static function () use ($service, $payment, $arOrder, $paymentData) {
+				(new CheckedBusinessValueContext())->run(
+					$service->getConsumerName(),
+					static fn() => $service->getHandlerDescription(),
+					static fn() => CSalePaySystemAction::InitParamArrays(
+						$arOrder,
+						0,
+						'',
+						[
+							'REQUISITE' => $paymentData['REQUISITE'] ?? null,
+							'BANK_DETAIL' => $paymentData['BANK_DETAIL'] ?? null,
+							'CRM_COMPANY' => $paymentData['CRM_COMPANY'] ?? null,
+							'CRM_CONTACT' => $paymentData['CRM_CONTACT'] ?? null,
+							'MC_REQUISITE' => $paymentData['MC_REQUISITE'] ?? null,
+							'MC_BANK_DETAIL' => $paymentData['MC_BANK_DETAIL'] ?? null,
+							'CRM_MYCOMPANY' => $paymentData['CRM_MYCOMPANY'] ?? null,
+						],
+						[],
+						[],
+						REGISTRY_TYPE_CRM_INVOICE,
+					),
+				);
+				\Bitrix\Sale\BusinessValue::redefineProviderField(['PROPERTY' => $paymentData['USER_FIELDS']]);
+
+				return $service->getPdf($payment);
+			});
+			$file = $rendered['value'];
+			if (!is_array($file) || (int)($file['ID'] ?? 0) <= 0 || (int)($file['FILE_SIZE'] ?? 0) <= 0)
+			{
+				$error = 'COULD NOT GENERATE PDF!';
+				return false;
+			}
+			$operation->markGenerated($handler->getCode());
+			if ($ownsOperation)
+			{
+				$operation->complete();
+			}
+
+			return (int)$file['ID'];
+		};
+		try
+		{
+			return $operation->run($render);
+		}
+		catch (\Throwable)
+		{
+			$error = 'COULD NOT GENERATE PDF!';
+			return false;
+		}
 	}
 
 	public static function Search($query, $topCount = 5, $minWordLength = 2)

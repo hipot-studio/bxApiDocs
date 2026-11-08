@@ -146,6 +146,20 @@ class CBPForEachActivity extends CBPCompositeActivity implements IBPActivityEven
 		$this->Value = null;
 	}
 
+	/**
+	 * `ValueReturnProperties` is declared beside the two source bindings although the schema describes it as a
+	 * computed name: the declaration is what makes the derived descriptor the dialog's on the agent write path
+	 * ({@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AiAssistantDraftConverterService::applyAdditionalResult()}
+	 * owns a marker key only when the activity declares it), so a value an agent composed is dropped before the
+	 * server recomputes the descriptor or restores the published one. Without it the agent's own value would be
+	 * written to the template, and the blocks after the loop would read the fields of an element that is not
+	 * there.
+	 */
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		return ['Variable', 'Object', self::VALUE_RETURN_PROPERTIES];
+	}
+
 	public static function GetPropertiesDialog(
 		$documentType,
 		$activityName,

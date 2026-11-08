@@ -150,7 +150,7 @@ abstract class Dto implements Arrayable
 
 						foreach ($fieldValues as $value)
 						{
-							if (is_subclass_of($value, Dto::class))
+							if ($value instanceof Dto)
 							{
 								$fieldValue[] = $value->toArray($rawData);
 							}
@@ -169,11 +169,11 @@ abstract class Dto implements Arrayable
 				}
 				else
 				{
-					if (is_subclass_of($field->getPropertyType(), Dto::class))
+					if (TypeHelper::isDto($field->getPropertyType()))
 					{
 						$values[$field->getPropertyName()] = $field->getValue()?->toArray($rawData);
 					}
-					elseif (is_subclass_of($field->getPropertyType(), \BackedEnum::class))
+					elseif (TypeHelper::isBackedEnum($field->getPropertyType()))
 					{
 						$values[$field->getPropertyName()] = $field->getValue()?->value;
 					}
@@ -267,7 +267,7 @@ abstract class Dto implements Arrayable
 
 				if ($attributeInstance instanceof DynamicEnumAttribute)
 				{
-					if (is_subclass_of($propertyType, \BackedEnum::class))
+					if (TypeHelper::isBackedEnum($propertyType))
 					{
 						throw new SystemException(
 							'Property ' . $property->getName() . ' cannot combine BackedEnum type with #[DynamicEnum]'

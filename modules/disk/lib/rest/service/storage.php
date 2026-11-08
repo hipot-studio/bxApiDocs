@@ -3,9 +3,7 @@
 namespace Bitrix\Disk\Rest\Service;
 
 use Bitrix\Disk\User;
-use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Result;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\RestException;
@@ -219,34 +217,6 @@ final class Storage extends Base
 		return $storage;
 	}
 
-	private function validateRights(array $rights): Result
-	{
-		$result = new Result();
-		if (empty($rights))
-		{
-			return $result;
-		}
-
-		foreach ($rights as $right)
-		{
-			if (!\is_array($right))
-			{
-				$result->addError(new Error('Invalid format: Right should be array'));
-
-				return $result;
-			}
-
-			if (!isset($right['ACCESS_CODE'], $right['TASK_ID']))
-			{
-				$result->addError(new Error('Invalid format: Right should contain ACCESS_CODE and TASK_ID'));
-
-				return $result;
-			}
-		}
-
-		return $result;
-	}
-
 	/**
 	 * Creates folder in root of storage.
 	 * @param      int $id     Id of storage.
@@ -279,11 +249,7 @@ final class Storage extends Base
 			throw new AccessException;
 		}
 
-		$validationRights = $this->validateRights($rights);
-		if (!$validationRights->isSuccess())
-		{
-			throw new RestException('Invalid rights format');
-		}
+		$rights = $this->prepareRights($rights);
 
 		$folder = $storage->addFolder(array(
 			'NAME' => $data['NAME'],
@@ -366,11 +332,7 @@ final class Storage extends Base
 			throw new AccessException;
 		}
 
-		$validationRights = $this->validateRights($rights);
-		if (!$validationRights->isSuccess())
-		{
-			throw new RestException('Invalid rights format');
-		}
+		$rights = $this->prepareRights($rights);
 
 		$fileData = \CRestUtil::saveFile($fileContent);
 		if(!$fileData)

@@ -44,7 +44,7 @@ abstract class AbstractFunction implements AIFunction
 		];
 
 		$config = EntityEditorConfig::createWithCurrentScope($parameters->entityTypeId, $extras);
-		if (!$this->canUpdateView($config))
+		if (!$this->canUpdateView($config, $parameters))
 		{
 			return Result::failAccessDenied();
 		}
@@ -58,13 +58,16 @@ abstract class AbstractFunction implements AIFunction
 		return $this->doInvoke($parameters, $configuration);
 	}
 
-	protected function canUpdateView(EntityEditorConfig $config): bool
+	protected function canUpdateView(EntityEditorConfig $config, AbstractParameters $parameters): bool
 	{
 		$permissions = Container::getInstance()->getUserPermissions($this->currentUserId)->entityEditor();
 		$scopeAccess = ScopeAccess::getInstance('crm', $this->currentUserId);
 
 		return match ($config->getScope()) {
-			EntityEditorConfigScope::COMMON => $permissions->canEditCommonView(),
+			EntityEditorConfigScope::COMMON => $permissions->canEditCommonView(
+				$parameters->entityTypeId,
+				$parameters->categoryId,
+			),
 			EntityEditorConfigScope::PERSONAL => $permissions->canEditPersonalViewForUser($this->currentUserId),
 			EntityEditorConfigScope::CUSTOM => $scopeAccess->canUpdate($config->getUserScopeId()),
 			default => false,

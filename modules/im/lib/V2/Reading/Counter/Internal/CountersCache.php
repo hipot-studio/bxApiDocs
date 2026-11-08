@@ -10,7 +10,10 @@ use Bitrix\Main\Data\Cache;
 
 class CountersCache
 {
-	private const CACHE_DIR = '/bx/im/counter/v10/';
+	// Bumped to v11: the cached counters are split by recent section, now derived from the type
+	// literal minus exclusions. Entries written by v10 hold the old split and a module update does
+	// not clear them, so they would keep serving it until the TTL expires.
+	private const CACHE_DIR = '/bx/im/counter/v11/';
 	private const CACHE_KEY_PREFIX = 'user_counters_';
 	private const CACHE_TTL = 86400;
 

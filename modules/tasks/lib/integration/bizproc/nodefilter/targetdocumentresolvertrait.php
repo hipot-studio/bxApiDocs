@@ -44,18 +44,27 @@ trait TargetDocumentResolverTrait
 		return parent::getDocumentId();
 	}
 
+	public function setDocumentId($documentId)
+	{
+		$this->runtimeDocumentId = null;
+
+		parent::setDocumentId($documentId);
+	}
+
 	protected function resolveTargetDocumentId(): array
 	{
-		if (is_array($this->runtimeDocumentId))
-		{
-			return $this->runtimeDocumentId;
-		}
+		$this->runtimeDocumentId = null;
 
 		$resolver = $this->getTargetDocumentResolver();
 		$documentId = $resolver
 			? $resolver->resolveDocumentId($this)
 			: $this->resolveFallbackDocumentId()
 		;
+
+		if (is_array($documentId[0] ?? null))
+		{
+			$documentId = $documentId[0];
+		}
 
 		return $this->runtimeDocumentId = $documentId;
 	}
@@ -79,6 +88,17 @@ trait TargetDocumentResolverTrait
 		}
 
 		return $fallbackDocumentType;
+	}
+
+	protected function resolveTargetAccessActorId(): int
+	{
+		$modifiedBy = (int)\CBPHelper::ExtractUsers(
+			$this->ModifiedBy,
+			$this->getRootActivity()->getDocumentId(),
+			true,
+		);
+
+		return $modifiedBy > 0 ? $modifiedBy : (int)($this->workflow?->getStartedBy() ?? 0);
 	}
 
 	private function getTargetDocumentResolver(): ?TargetDocumentResolver

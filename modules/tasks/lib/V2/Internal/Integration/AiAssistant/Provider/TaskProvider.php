@@ -7,6 +7,8 @@ namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider;
 use Bitrix\Tasks\Provider\Exception\TaskListException;
 use Bitrix\Tasks\Provider\TaskList;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskAccessService;
+use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
+use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 use Bitrix\Tasks\V2\Internal\Entity\CheckList;
 use Bitrix\Tasks\V2\Internal\Entity\CheckList\CheckListItem;
 use Bitrix\Tasks\V2\Internal\Entity\CheckList\Type;
@@ -19,15 +21,25 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Task\SearchTask
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\GroupDisplayTypeResolver;
 use Bitrix\Tasks\V2\Internal\Repository\CheckListRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\TaskResultRepositoryInterface;
 
 class TaskProvider
 {
+	private const TASK_RIGHTS = [
+		'edit' => ActionDictionary::TASK_ACTIONS['edit'],
+		'checklistAdd' => ActionDictionary::TASK_ACTIONS['checklistAdd'],
+	];
+
+	public const MAX_RESULTS = 20;
+
 	public function __construct(
 		private readonly TaskAccessService $accessService,
+		private readonly TaskRightService $rightService,
 		private readonly TaskResponseMapper $taskResponseMapper,
 		private readonly TaskRepositoryInterface $taskRepository,
 		private readonly TaskList $taskProvider,
 		private readonly CheckListRepositoryInterface $checkListRepository,
+		private readonly TaskResultRepositoryInterface $resultRepository,
 		private readonly QueryBuilder $queryBuilder,
 		private readonly GroupDisplayTypeResolver $groupDisplayTypeResolver,
 	)
@@ -56,13 +68,15 @@ class TaskProvider
 			return null;
 		}
 
-		$checkList = $this->checkListRepository->getByEntity((int)$task->getId(), Type::Task);
+		$taskId = (int)$task->getId();
 
 		return $this->taskResponseMapper->mapFromEntity(
-			$task,
-			$checkList,
-			$userId,
-			$this->groupDisplayTypeResolver->resolveForGroup($task->group),
+			task: $task,
+			userId: $userId,
+			checkList: $this->checkListRepository->getByEntity($taskId, Type::Task),
+			results: $this->resultRepository->getByTask($taskId, limit: self::MAX_RESULTS),
+			permissions: $this->rightService->get(self::TASK_RIGHTS, $taskId, $userId),
+			groupDisplayType: $this->groupDisplayTypeResolver->resolveForGroup($task->group),
 		);
 	}
 
@@ -92,12 +106,12 @@ class TaskProvider
 			$taskId = (int)($task['ID'] ?? 0);
 			$groupId = (int)($task['GROUP_ID'] ?? 0);
 
-			$checkList = $checkListsByTaskId[$taskId] ?? new CheckList();
+			$checkList = $checkListsByTaskId[$taskId] ?? null;
 
 			$taskResponses[] = $this->taskResponseMapper->mapFromArray(
 				$task,
-				$checkList,
 				$userId,
+				$checkList,
 				$groupDisplayTypes[$groupId] ?? null,
 			);
 		}

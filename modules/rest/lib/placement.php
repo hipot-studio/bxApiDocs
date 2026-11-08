@@ -4,12 +4,12 @@ namespace Bitrix\Rest;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Fields\ArrayField;
+use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Event;
+use Bitrix\Rest\Internal\Service\Placement\HandlerReader;
 use Bitrix\Rest\UserField\Callback;
-use Bitrix\Rest\Lang;
-use CRestUtil;
 
 Loc::loadMessages(__FILE__);
 
@@ -49,6 +49,14 @@ class PlacementTable extends Main\Entity\DataManager
 
 	public const DEFAULT_USER_ID_VALUE = 0;
 
+	private const OWNER_TRIPLE_FIELDS = [
+		'MODULE_ID',
+		'ENTITY_TYPE',
+		'ENTITY_ID',
+	];
+
+	private const OWNER_VALUE_MAX_LENGTH = 50;
+
 	const PLACEMENT_DEFAULT = 'DEFAULT';
 
 	const ERROR_PLACEMENT_NOT_FOUND = 'ERROR_PLACEMENT_NOT_FOUND';
@@ -84,6 +92,7 @@ class PlacementTable extends Main\Entity\DataManager
 			),
 			'APP_ID' => array(
 				'data_type' => 'integer',
+				'nullable' => true,
 			),
 			'USER_ID' => array(
 				'data_type' => 'integer',
@@ -136,29 +145,10 @@ class PlacementTable extends Main\Entity\DataManager
 				\Bitrix\Rest\PlacementLangTable::class,
 				'PLACEMENT'
 			))->configureJoinType('left'),
+			'MODULE_ID' => new StringField('MODULE_ID'),
+			'ENTITY_TYPE' => new StringField('ENTITY_TYPE'),
+			'ENTITY_ID' => new StringField('ENTITY_ID'),
 		);
-	}
-
-	private static function getUserFilter($userId)
-	{
-		if (is_null($userId))
-		{
-			$userId = (int)(Internal\Entity\CurrentUser::getInstance()->getId() ?? 0);
-		}
-
-		if ($userId > 0)
-		{
-			$result = [
-				static::DEFAULT_USER_ID_VALUE,
-				$userId,
-			];
-		}
-		else
-		{
-			$result = static::DEFAULT_USER_ID_VALUE;
-		}
-
-		return $result;
 	}
 
 	/**
@@ -170,33 +160,10 @@ class PlacementTable extends Main\Entity\DataManager
 	 */
 	public static function getHandlers($placement, int $userId = null)
 	{
-		$dbRes = static::getList(
-			[
-				'filter' => [
-					'=PLACEMENT' => $placement,
-					'=REST_APP.ACTIVE' => AppTable::ACTIVE,
-					'=USER_ID' => static::getUserFilter($userId),
-				],
-				'select' => [
-					'ID',
-					'USER_ID',
-					'ICON_ID',
-					'TITLE',
-					'GROUP_NAME',
-					'OPTIONS',
-					'COMMENT',
-					'APP_ID',
-					'ADDITIONAL',
-					'PLACEMENT_HANDLER',
-					'INSTALLED' => 'REST_APP.INSTALLED',
-					'APP_NAME' => 'REST_APP.APP_NAME',
-					'APP_ACCESS' => 'REST_APP.ACCESS',
-				],
-				'order' => ['ID' => 'ASC'],
-			]
+		return (new Internal\Service\Placement\HandlerQuery())->getLegacyHandlers(
+			(string)$placement,
+			Internal\Service\Placement\HandlerReader::resolveUserId($userId),
 		);
-
-		return $dbRes;
 	}
 
 	/**
@@ -208,49 +175,123 @@ class PlacementTable extends Main\Entity\DataManager
 	 */
 	public static function deleteByApp($appId)
 	{
-		PlacementLangTable::deleteByApp((int) $appId);
-		$connection = Main\Application::getConnection();
+		$appId = (int)$appId;
 
-		$res = static::getList(
-			[
-				'filter' => [
-					'=APP_ID' => (int)$appId,
-				],
-				'select' => [
-					'ID',
-					'APP_ID',
-					'PLACEMENT',
-					'PLACEMENT_HANDLER',
-					'ICON_ID',
-					'ADDITIONAL',
-					'OPTIONS',
-				],
-				'limit' => 1,
-			]
-		);
-		$eventList = [];
-		while ($placement = $res->fetch())
+		if ($appId <= 0)
 		{
-			$eventList[] = new Event(
-				'rest',
-				static::PREFIX_EVENT_ON_AFTER_DELETE . $placement['PLACEMENT'],
-				[
-					'ID' => $placement['ID'],
-					'PLACEMENT' => $placement['PLACEMENT'],
-				]
+			throw new Main\ArgumentException(
+				'Deleting by non-positive application id is not allowed (' . static::getTableName() . ').',
+				'appId'
 			);
 		}
 
-		$queryResult = $connection->query("DELETE FROM ".static::getTableName()." WHERE APP_ID='".intval($appId)."'");
+		(new Internal\Service\Embedding\EmbeddingAccessSynchronizer())->deleteCodesOfApp($appId);
 
-		foreach ($eventList as $event)
+		return static::deleteByFilter(['=APP_ID' => $appId], notifySubscribers: true);
+	}
+
+	public static function deleteByFilter(
+		array|Main\ORM\Query\Filter\ConditionTree $filter,
+		bool $notifySubscribers = false,
+	): Main\DB\Result
+	{
+		$entity = static::getEntity();
+		$table = static::getTableName();
+
+		$where = Main\ORM\Query\Query::buildFilterSql($entity, $filter);
+		if ($where === '')
 		{
-			EventManager::getInstance()->send($event);
+			throw new Main\ArgumentException("Deleting by empty filter is not allowed, use truncate ({$table}).", 'filter');
 		}
 
-		static::clearHandlerCache();
+		$where = ' where ' . $where;
+		$rows = static::collectRowsToDelete($where);
+
+		static::onBeforeDeleteByFilter($rows);
+
+		$queryResult = $entity->getConnection()->query("delete from {$table} {$where}");
+
+		static::cleanCache();
+
+		try
+		{
+			static::onAfterDeleteByFilter($rows, $notifySubscribers);
+		}
+		finally
+		{
+			static::clearHandlerCache();
+		}
 
 		return $queryResult;
+	}
+
+	protected static function onBeforeDeleteByFilter(array $rows): void
+	{
+		PlacementLangTable::deleteByPlacementIds(array_column($rows, 'ID'));
+	}
+
+	protected static function onAfterDeleteByFilter(array $rows, bool $notifySubscribers): void
+	{
+		static::deleteIcons(array_column($rows, 'ICON_ID'));
+
+		(new Internal\Service\Embedding\EmbeddingAccessSynchronizer())
+			->deleteCodesOfEmbeddings(array_column($rows, 'ID'))
+		;
+
+		if ($notifySubscribers)
+		{
+			static::sendPlacementDeleteEvents($rows);
+		}
+	}
+
+	private static function collectRowsToDelete(string $where): array
+	{
+		$result = static::getEntity()->getConnection()->query(
+			'SELECT ID, ICON_ID, PLACEMENT FROM ' . static::getTableName() . $where
+		);
+
+		$rows = [];
+		while ($row = $result->fetch())
+		{
+			$rows[] = [
+				'ID' => (int)$row['ID'],
+				'ICON_ID' => (int)($row['ICON_ID'] ?? 0),
+				'PLACEMENT' => (string)$row['PLACEMENT'],
+			];
+		}
+
+		return $rows;
+	}
+
+	private static function sendPlacementDeleteEvents(array $rows): void
+	{
+		foreach ($rows as $row)
+		{
+			EventManager::getInstance()->send(
+				new Event(
+					'rest',
+					static::PREFIX_EVENT_ON_AFTER_DELETE . $row['PLACEMENT'],
+					[
+						'ID' => $row['ID'],
+						'PLACEMENT' => $row['PLACEMENT'],
+					]
+				)
+			);
+		}
+	}
+
+	/**
+	 * @param int[] $iconIds
+	 */
+	private static function deleteIcons(array $iconIds): void
+	{
+		foreach ($iconIds as $iconId)
+		{
+			if ($iconId > 0)
+			{
+				\CFile::Delete($iconId);
+			}
+		}
 	}
 
 	/**
@@ -263,151 +304,16 @@ class PlacementTable extends Main\Entity\DataManager
 	 */
 	public static function getHandlersList($placement, $skipInstallCheck = false, ?int $userId = null)
 	{
-		$userId ??= (int)(Internal\Entity\CurrentUser::getInstance()->getId() ?? self::DEFAULT_USER_ID_VALUE);
-
-		$cacheManager = Main\Application::getInstance()->getManagedCache();
-
-		$cacheId = static::getPlacementCacheId($placement, $userId);
-
-		$placementHandlers = [];
-		if ($cacheManager->read(static::CACHE_TTL, $cacheId, static::CACHE_DIR))
-		{
-			$placementHandlers = $cacheManager->get($cacheId);
-		}
-		else
-		{
-			$handlersQueryResult = static::getHandlers($placement, $userId);
-			foreach ($handlersQueryResult->fetchCollection() as $handler)
-			{
-				$placementHandlers[] = static::preparePlacementHandler($handler);
-			}
-
-			$cacheManager->set($cacheId, $placementHandlers);
-		}
-
-		foreach ($placementHandlers as $key => $handler)
-		{
-			if (!$skipInstallCheck && !$handler['INSTALLED'])
-			{
-				unset($placementHandlers[$key]);
-			}
-			elseif (
-				$placement !== Api\UserFieldType::PLACEMENT_UF_TYPE
-				&& !CRestUtil::checkAppAccess($handler['APP_ID'], ['ACCESS' => $handler['APP_ACCESS']])
-			)
-			{
-				unset($placementHandlers[$key]);
-			}
-			else
-			{
-				$placementHandlers[$key] = Lang::mergeFromLangAll($handler);
-				if (empty($placementHandlers[$key]['TITLE']))
-				{
-					$placementHandlers[$key]['TITLE'] = static::getDefaultTitle($handler['ID']);
-				}
-			}
-		}
-
-		return array_values($placementHandlers);
+		return (new HandlerReader())->readHandlers(
+			(string)$placement,
+			(bool)$skipInstallCheck,
+			$userId,
+		);
 	}
 
 	public static function getAccessibleHandlerIds($placement, ?int $userId = null): array
 	{
-		$userId ??= (int)(Internal\Entity\CurrentUser::getInstance()->getId() ?? self::DEFAULT_USER_ID_VALUE);
-
-		$cacheManager = Main\Application::getInstance()->getManagedCache();
-		$cacheId = static::getAccessibleHandlerCacheId($placement, $userId);
-
-		$candidates = [];
-		if ($cacheManager->read(static::CACHE_TTL, $cacheId, static::CACHE_DIR))
-		{
-			$candidates = $cacheManager->get($cacheId);
-		}
-		else
-		{
-			$handlersQueryResult = static::getHandlers($placement, $userId);
-			while ($handler = $handlersQueryResult->fetch())
-			{
-				$candidates[] = [
-					'ID' => (int)$handler['ID'],
-					'APP_ID' => $handler['APP_ID'],
-					'INSTALLED' => $handler['INSTALLED'],
-					'APP_ACCESS' => $handler['APP_ACCESS'],
-				];
-			}
-
-			$cacheManager->set($cacheId, $candidates);
-		}
-
-		$ids = [];
-		if (empty($candidates))
-		{
-			return $ids;
-		}
-
-		$isUserFieldPlacement = ($placement === Api\UserFieldType::PLACEMENT_UF_TYPE);
-		$userAccessCodes = null;
-		$isAdmin = null;
-
-		foreach ($candidates as $candidate)
-		{
-			if ($candidate['INSTALLED'] !== AppTable::INSTALLED)
-			{
-				continue;
-			}
-
-			if (!$isUserFieldPlacement)
-			{
-				$appAccess = (string)($candidate['APP_ACCESS'] ?? '');
-				if ($appAccess !== '')
-				{
-					$userAccessCodes ??= static::getUserAccessCodes($userId);
-					$isAdmin ??= CRestUtil::isAdmin($userId);
-
-					if (!static::isAccessGrantedByCodes($appAccess, $userAccessCodes, $isAdmin))
-					{
-						continue;
-					}
-				}
-			}
-
-			$ids[] = (int)$candidate['ID'];
-		}
-
-		return $ids;
-	}
-
-	/**
-	 * Access codes of the given user, with the same semantics as \CUser::GetAccessCodes().
-	 */
-	private static function getUserAccessCodes(int $userId): array
-	{
-		if ($userId <= 0)
-		{
-			return ['G2'];
-		}
-
-		$codes = \CAccess::GetUserCodesArray($userId);
-		$codes[] = 'AU';
-
-		return $codes;
-	}
-
-	private static function isAccessGrantedByCodes(string $appAccess, array $userAccessCodes, bool $isAdmin): bool
-	{
-		$rights = explode(',', $appAccess);
-
-		if (in_array('G2', $rights, true))
-		{
-			return true;
-		}
-
-		if (!empty(array_intersect($rights, $userAccessCodes)))
-		{
-			return true;
-		}
-
-		return $isAdmin;
+		return (new HandlerReader())->readAccessibleIds((string)$placement, $userId);
 	}
 
 	/**
@@ -430,8 +336,12 @@ class PlacementTable extends Main\Entity\DataManager
 
 	public static function clearHandlerCache()
 	{
-		$cache = Main\Application::getInstance()->getManagedCache();
-		$cache->cleanDir(static::CACHE_DIR);
+		(new Internal\Service\Placement\HandlerCache(
+			Main\Application::getInstance()->getManagedCache(),
+			static::CACHE_TTL,
+			static::CACHE_DIR,
+		))->clear();
+
 		if (defined('BX_COMP_MANAGED_CACHE'))
 		{
 			global $CACHE_MANAGER;
@@ -441,15 +351,23 @@ class PlacementTable extends Main\Entity\DataManager
 
 	public static function onBeforeUpdate(Main\Entity\Event $event)
 	{
-		$result = static::checkUniq($event);
+		$owner = static::resolveOwner($event);
+
+		$result = static::checkUniq($event, false, $owner->getData());
+		static::applyOwner($result, $owner);
 		static::modifyFields($event, $result);
+
 		return $result;
 	}
 
 	public static function onBeforeAdd(Main\Entity\Event $event)
 	{
-		$result = static::checkUniq($event, true);
+		$owner = static::resolveOwner($event);
+
+		$result = static::checkUniq($event, true, $owner->getData());
+		static::applyOwner($result, $owner);
 		static::modifyFields($event, $result);
+
 		return $result;
 	}
 
@@ -473,7 +391,7 @@ class PlacementTable extends Main\Entity\DataManager
 					'OPTIONS',
 				],
 				'limit' => 1,
-			]
+			],
 		);
 		if ($placement = $res->fetch())
 		{
@@ -491,8 +409,13 @@ class PlacementTable extends Main\Entity\DataManager
 	public static function onAfterAdd(Main\Entity\Event $event)
 	{
 		$fields = $event->getParameter('fields');
+
 		if (!empty($fields['PLACEMENT']) && (int)$fields['APP_ID'] > 0)
 		{
+			(new Internal\Service\Embedding\EmbeddingAccessSynchronizer())
+				->syncEmbedding((int)$event->getParameter('id'))
+			;
+
 			$app = AppTable::getByClientId((int)$fields['APP_ID']);
 			if ($app['ACTIVE'] === AppTable::ACTIVE && $app['INSTALLED'] === AppTable::INSTALLED)
 			{
@@ -513,6 +436,13 @@ class PlacementTable extends Main\Entity\DataManager
 
 	public static function onAfterUpdate(Main\Entity\Event $event)
 	{
+		if (static::isOwnerTouched($event->getParameter('fields')))
+		{
+			(new Internal\Service\Embedding\EmbeddingAccessSynchronizer())
+				->syncEmbedding(static::getEventRowId($event))
+			;
+		}
+
 		static::clearHandlerCache();
 	}
 
@@ -520,65 +450,52 @@ class PlacementTable extends Main\Entity\DataManager
 	{
 		$id = $event->getParameter('id');
 		$id = (int)$id['ID'];
-		if ($id > 0)
+
+		try
 		{
-			$data = new Event(
-				'rest',
-				static::PREFIX_EVENT_ON_AFTER_DELETE . static::$beforeDeleteList[$id]['PLACEMENT'],
-				[
-					'ID' => $id,
-					'PLACEMENT' => static::$beforeDeleteList[$id]['PLACEMENT'],
-				]
-			);
-			unset(static::$beforeDeleteList[$id]);
-			EventManager::getInstance()->send($data);
+			if ($id > 0)
+			{
+				(new Internal\Service\Embedding\EmbeddingAccessSynchronizer())->deleteCodesOfEmbedding($id);
+
+				$data = new Event(
+					'rest',
+					static::PREFIX_EVENT_ON_AFTER_DELETE . static::$beforeDeleteList[$id]['PLACEMENT'],
+					[
+						'ID' => $id,
+						'PLACEMENT' => static::$beforeDeleteList[$id]['PLACEMENT'],
+					]
+				);
+				unset(static::$beforeDeleteList[$id]);
+				EventManager::getInstance()->send($data);
+			}
 		}
-
-		static::clearHandlerCache();
+		finally
+		{
+			static::clearHandlerCache();
+		}
 	}
 
-	protected static function getPlacementCacheId($placement, int $userId): string
-	{
-		return 'rest_placement_list|' . $placement . '|' . LANGUAGE_ID . '|user_' . $userId;
-	}
-
-	protected static function getAccessibleHandlerCacheId($placement, int $userId): string
-	{
-		return 'rest_placement_access_ids|' . $placement . '|user_' . $userId;
-	}
-
-	protected static function checkUniq(Main\Entity\Event $event, $add = false)
+	protected static function checkUniq(Main\Entity\Event $event, $add = false, array $owner = [])
 	{
 		$result = new Main\Entity\EventResult();
 		$data = $event->getParameter('fields');
 
-		$filter = array(
-			'=APP_ID' => $data['APP_ID'],
-			'=PLACEMENT' => $data['PLACEMENT'],
-			'=PLACEMENT_HANDLER' => $data['PLACEMENT_HANDLER'],
-		);
-
-		if(!empty($data['ADDITIONAL']))
-		{
-			$filter = array(
-				'LOGIC' => 'OR',
-				array('=ADDITIONAL' => $data['ADDITIONAL']),
-				$filter
-			);
-		}
-
-		$dbRes = static::getList(array(
+		$filter = static::getUniqFilter($data, $owner);
+		$taken = !empty($filter) && (bool)static::getList(array(
 			'filter' => $filter,
 			'select' => array('ID')
-		));
+		))->fetch();
 
-		if($dbRes->fetch())
+		if ($taken)
 		{
 			$result->addError(new Main\Entity\EntityError(
 				"Handler already binded"
 			));
+
+			return $result;
 		}
-		elseif($add)
+
+		if ($add)
 		{
 			$result->modifyFields(array(
 				"DATE_CREATE" => new Main\Type\DateTime(),
@@ -586,6 +503,44 @@ class PlacementTable extends Main\Entity\DataManager
 		}
 
 		return $result;
+	}
+
+	private static function getUniqFilter(array $data, array $owner): array
+	{
+		$conditions = [];
+		$appId = array_key_exists('APP_ID', $owner)
+			? (int)$owner['APP_ID']
+			: (int)($data['APP_ID'] ?? 0);
+		$hasHandler = array_key_exists('PLACEMENT', $data) && array_key_exists('PLACEMENT_HANDLER', $data);
+
+		if (empty($owner) && $hasHandler)
+		{
+			$conditions[] = [
+				'=APP_ID' => $data['APP_ID'] ?? null,
+				'=PLACEMENT' => $data['PLACEMENT'],
+				'=PLACEMENT_HANDLER' => $data['PLACEMENT_HANDLER'],
+			];
+		}
+		elseif ($appId > 0 && $hasHandler)
+		{
+			$conditions[] = [
+				'=APP_ID' => $appId,
+				'=PLACEMENT' => $data['PLACEMENT'],
+				'=PLACEMENT_HANDLER' => $data['PLACEMENT_HANDLER'],
+			];
+		}
+
+		if (!empty($data['ADDITIONAL']))
+		{
+			$conditions[] = ['=ADDITIONAL' => $data['ADDITIONAL']];
+		}
+
+		if (empty($conditions))
+		{
+			return [];
+		}
+
+		return array_merge(['LOGIC' => 'OR'], $conditions);
 	}
 
 	private static function modifyFields(Main\ORM\Event $event, Main\ORM\EventResult $result)
@@ -637,51 +592,112 @@ class PlacementTable extends Main\Entity\DataManager
 		return $result;
 	}
 
-	private static function preparePlacementHandler(EO_Placement $handler): array
+	private static function resolveOwner(Main\ORM\Event $event): Main\Result
 	{
-		$id = $handler->getId();
-		$app = $handler->getRestApp();
-		$placementItem = [
-			'ID' => $id,
-			'APP_ID' => $handler->getAppId(),
-			'USER_ID' => $handler->getUserId() ?? 0,
-			'ICON_ID' => $handler->getIconId(),
-			'ADDITIONAL' => $handler->getAdditional(),
-			'HANDLER' => $handler->getPlacementHandler(),
-			'TITLE' => '',
-			/**
-			 * @deprecated
-			 * Use DESCRIPTION
-			 */
-			'COMMENT' => '',
-			'DESCRIPTION' => '',
-			'GROUP_NAME' => '',
-			'OPTIONS' => $handler->getOptions(),
-			'INSTALLED' => $app->getInstalled(),
-			'APP_NAME' => $app->getAppName(),
-			'APP_ACCESS' => $app->getAccess(),
-			'LANG_ALL' => [],
-		];
+		$result = new Main\Result();
+		$fields = $event->getParameter('fields');
 
-		if ($placementItem['ICON_ID'] > 0 && ($file = \CFile::GetFileArray($placementItem['ICON_ID'])))
+		if (!static::isOwnerTouched($fields))
 		{
-			$placementItem['ICON'] = array_change_key_case($file, CASE_LOWER);
+			return $result;
 		}
 
-		$handler->fillLangAll();
-		if (!is_null($handler->getLangAll()))
+		$errors = static::getOwnerErrors($fields);
+		if (!empty($errors))
 		{
-			foreach ($handler->getLangAll() as $lang)
+			return $result->addErrors($errors);
+		}
+
+		$ownerFields = Internal\Service\Embedding\EmbeddingOwnerResolver::normalize($fields);
+		if (empty($ownerFields))
+		{
+			return $result->addError(new Main\Entity\EntityError('Invalid embedding owner'));
+		}
+
+		return $result->setData($ownerFields);
+	}
+
+	private static function getOwnerErrors(array $fields): array
+	{
+		$errors = [];
+
+		if (static::isOwnerTripleTouched($fields) && !static::isOwnerTripleComplete($fields))
+		{
+			return [
+				new Main\Entity\EntityError(
+					'MODULE_ID, ENTITY_TYPE and ENTITY_ID must be changed together',
+				),
+			];
+		}
+
+		foreach (self::OWNER_TRIPLE_FIELDS as $fieldName)
+		{
+			if (mb_strlen((string)($fields[$fieldName] ?? '')) > self::OWNER_VALUE_MAX_LENGTH)
 			{
-				$placementItem['LANG_ALL'][$lang->getLanguageId()] = [
-					'TITLE' => $lang->getTitle(),
-					'DESCRIPTION' => $lang->getDescription(),
-					'GROUP_NAME' => $lang->getGroupName(),
-				];
+				$errors[] = new Main\Entity\EntityError(
+					$fieldName . ' is longer than ' . self::OWNER_VALUE_MAX_LENGTH . ' characters',
+				);
 			}
 		}
 
-		return $placementItem;
+		return $errors;
 	}
 
+	private static function applyOwner(Main\ORM\EventResult $result, Main\Result $owner): void
+	{
+		foreach ($owner->getErrors() as $error)
+		{
+			$result->addError($error);
+		}
+		if ($result->getType() === Main\Entity\EventResult::ERROR)
+		{
+			return;
+		}
+
+		$ownerFields = $owner->getData();
+		if (empty($ownerFields))
+		{
+			return;
+		}
+
+		$result->modifyFields(array_merge($result->getModified(), $ownerFields));
+	}
+
+	private static function isOwnerTouched(array $fields): bool
+	{
+		return array_key_exists('APP_ID', $fields) || static::isOwnerTripleTouched($fields);
+	}
+
+	private static function isOwnerTripleTouched(array $fields): bool
+	{
+		foreach (self::OWNER_TRIPLE_FIELDS as $fieldName)
+		{
+			if (array_key_exists($fieldName, $fields))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function isOwnerTripleComplete(array $fields): bool
+	{
+		foreach (self::OWNER_TRIPLE_FIELDS as $fieldName)
+		{
+			if (empty($fields[$fieldName]))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static function getEventRowId(Main\ORM\Event $event): int
+	{
+		$id = $event->getParameter('id');
+
+		return (int)(is_array($id) ? ($id['ID'] ?? 0) : $id);
+	}
 }

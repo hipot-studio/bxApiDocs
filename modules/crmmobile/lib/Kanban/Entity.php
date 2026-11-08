@@ -151,6 +151,17 @@ final class Entity
 		return $this;
 	}
 
+	/**
+	 * The funnel the request names, or null for a list that has none. A funnel arrives as a text and
+	 * is a number everywhere below; the view of every funnel at once names itself `-1`.
+	 */
+	public static function resolveCategoryId(array $filterParams): ?int
+	{
+		$categoryId = ($filterParams['CATEGORY_ID'] ?? null);
+
+		return ($categoryId === null ? null : (int)$categoryId);
+	}
+
 	public function getList(): array
 	{
 		$strategy = $this->getPreparedControllerStrategy();
@@ -161,6 +172,18 @@ final class Entity
 			return [
 				'items' => [],
 			];
+		}
+
+		// The funnel is named before the presets are read, and not only inside the strategy: the entity
+		// of a smart process keeps the fields of the filter it was first asked about
+		// (Kanban\Entity\Dynamic::getFilter), and the presets are the first question of this request.
+		// Asked with no funnel, the entity answers with the fields of the list of every funnel at once -
+		// a list that has no stages - and the stage condition of the filter is then dropped from the
+		// query of the items, while the counters, asked in a request of their own, still apply it.
+		$categoryId = self::resolveCategoryId($this->getFilterParams());
+		if ($categoryId !== null && $entity->isCategoriesSupported())
+		{
+			$entity->setCategoryId($categoryId);
 		}
 
 		$defaultPresets = $entity->getFilterPresets();

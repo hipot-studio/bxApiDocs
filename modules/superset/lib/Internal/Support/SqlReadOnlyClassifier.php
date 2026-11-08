@@ -15,10 +15,13 @@ namespace Bitrix\Superset\Internal\Support;
  * single lexical pass that understands SQL line comments, block comments,
  * single quoted string literals (with '' escaping) and double quoted / backtick
  * identifiers (with "" escaping), so that a ';' or a keyword such as DROP living
- * inside a comment or a literal never influences the decision. Statements are
- * separated on a ';' seen outside any literal or comment; a single trailing ';'
- * is allowed, any earlier separator means more than one statement and is
- * rejected. Parenthesis depth is tracked so a keyword inside a subquery or a
+ * inside a comment or a literal never influences the decision. Being a security
+ * boundary, the pass fails closed: a quoted run that cannot be read
+ * unambiguously - unterminated, or ending in a dialect-dependent backslash
+ * escape - rejects the whole query instead of deciding on the parsed prefix.
+ * Statements are separated on a ';' seen outside any literal or comment; a
+ * single trailing ';' is allowed, any earlier separator means more than one
+ * statement and is rejected. Parenthesis depth is tracked so a keyword inside a subquery or a
  * CTE body is never mistaken for the top-level statement type.
  *
  * Leading wrapper parentheses are accepted: a read-only query expression may be
@@ -72,6 +75,11 @@ final class SqlReadOnlyClassifier
 	public function classify(string $sql): SqlReadOnlyClassification
 	{
 		$tokens = $this->tokenize($sql);
+		if (is_string($tokens))
+		{
+			return SqlReadOnlyClassification::reject(self::REJECTION_PREFIX . ' ' . $tokens);
+		}
+
 		$statements = $this->splitStatements($tokens);
 
 		if ($statements === [])
@@ -152,9 +160,12 @@ final class SqlReadOnlyClassifier
 	 * comments and masking string literals / quoted identifiers to a single
 	 * opaque token so their content can never influence the analysis.
 	 *
-	 * @return array<int, array{t: string, v: string}>
+	 * Returns a rejection reason instead of a token stream when the input cannot
+	 * be read unambiguously, so no verdict is ever made on partially parsed SQL.
+	 *
+	 * @return array<int, array{t: string, v: string}>|string
 	 */
-	private function tokenize(string $sql): array
+	private function tokenize(string $sql): array|string
 	{
 		$tokens = [];
 		$length = strlen($sql);
@@ -193,60 +204,18 @@ final class SqlReadOnlyClassifier
 				continue;
 			}
 
-			// Single quoted string literal, with '' as an escaped quote.
-			if ($char === "'")
+			// Single quoted string literal, double quoted or backtick quoted
+			// identifier - masked to one opaque token.
+			if ($char === "'" || $char === '"' || $char === '`')
 			{
-				$i++;
-				while ($i < $length)
+				$end = $this->scanQuotedRun($sql, $i, $length);
+				if (is_string($end))
 				{
-					if ($sql[$i] === "'")
-					{
-						if ($i + 1 < $length && $sql[$i + 1] === "'")
-						{
-							$i += 2;
-							continue;
-						}
-						$i++;
-						break;
-					}
-					$i++;
+					return $end;
 				}
-				$tokens[] = ['t' => self::T_STRING, 'v' => ''];
-				continue;
-			}
 
-			// Double quoted identifier, with "" as an escaped quote.
-			if ($char === '"')
-			{
-				$i++;
-				while ($i < $length)
-				{
-					if ($sql[$i] === '"')
-					{
-						if ($i + 1 < $length && $sql[$i + 1] === '"')
-						{
-							$i += 2;
-							continue;
-						}
-						$i++;
-						break;
-					}
-					$i++;
-				}
-				$tokens[] = ['t' => self::T_IDENT_QUOTED, 'v' => ''];
-				continue;
-			}
-
-			// Backtick quoted identifier (MySQL style) - masked as well.
-			if ($char === '`')
-			{
-				$i++;
-				while ($i < $length && $sql[$i] !== '`')
-				{
-					$i++;
-				}
-				$i++;
-				$tokens[] = ['t' => self::T_IDENT_QUOTED, 'v' => ''];
+				$i = $end;
+				$tokens[] = ['t' => $char === "'" ? self::T_STRING : self::T_IDENT_QUOTED, 'v' => ''];
 				continue;
 			}
 
@@ -268,6 +237,61 @@ final class SqlReadOnlyClassifier
 		}
 
 		return $tokens;
+	}
+
+	/**
+	 * Reads a quoted run (string literal or quoted identifier) that starts at the
+	 * opening quote and returns the index right after the closing quote, or a
+	 * rejection reason when the run cannot be read unambiguously. A doubled quote
+	 * inside the run is an escaped quote, per standard SQL.
+	 *
+	 * Two cases are ambiguous and must be rejected rather than resolved, because
+	 * either one would let the rest of the query be swallowed into the run and the
+	 * verdict be made on the remaining prefix:
+	 *  - an unterminated quote;
+	 *  - a backslash right before the quote character: dialects that honour
+	 *    backslash escapes (MySQL) keep the run open there, while standard SQL and
+	 *    Trino end it. A backslash anywhere else inside the run is kept, so common
+	 *    literals such as '\d+' or 'C:\\' stay valid.
+	 *
+	 * @return int|string End index, or the reason the query is rejected.
+	 */
+	private function scanQuotedRun(string $sql, int $start, int $length): int|string
+	{
+		$quote = $sql[$start];
+		$backslashMayEscape = $quote !== '`';
+		$i = $start + 1;
+
+		while ($i < $length)
+		{
+			$char = $sql[$i];
+
+			if ($backslashMayEscape && $char === '\\')
+			{
+				if ($i + 1 >= $length || $sql[$i + 1] === $quote)
+				{
+					return 'A backslash before a quote inside a quoted literal is not permitted.';
+				}
+
+				$i += 2;
+				continue;
+			}
+
+			if ($char === $quote)
+			{
+				if ($i + 1 < $length && $sql[$i + 1] === $quote)
+				{
+					$i += 2;
+					continue;
+				}
+
+				return $i + 1;
+			}
+
+			$i++;
+		}
+
+		return 'The query contains an unterminated quoted literal or identifier.';
 	}
 
 	/**
@@ -375,9 +399,13 @@ final class SqlReadOnlyClassifier
 	}
 
 	/**
-	 * Detects a top-level INTO clause (SELECT ... INTO target), scanning only at
-	 * parenthesis depth 0 from the main query start so an INTO inside a subquery
-	 * is ignored.
+	 * Detects a top-level INTO clause (SELECT ... INTO target), scanning from the
+	 * main query start so an INTO inside a subquery is ignored.
+	 *
+	 * The scan starts inside any leading wrapper parentheses, so a ')' closing a
+	 * wrapper takes the depth below zero; everything after it is top level again,
+	 * as in "(SELECT a FROM t) INTO x". Any depth <= 0 therefore counts as top
+	 * level.
 	 *
 	 * @param array<int, array{t: string, v: string}> $tokens
 	 */
@@ -403,7 +431,7 @@ final class SqlReadOnlyClassifier
 				continue;
 			}
 
-			if ($depth === 0 && $token['t'] === self::T_WORD && $token['v'] === 'INTO')
+			if ($depth <= 0 && $token['t'] === self::T_WORD && $token['v'] === 'INTO')
 			{
 				return true;
 			}

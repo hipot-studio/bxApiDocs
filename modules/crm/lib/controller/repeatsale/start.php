@@ -24,37 +24,7 @@ class Start extends Base
 		return [
 			'flowExpectedEnableTimestamp' => FlowController::getInstance()->getExpectedEnableDate()?->getTimestamp(),
 			'canEnableFeature' => $container->getUserPermissions()->repeatSale()->canEdit(),
-			'count' => $this->getSegmentFoundClientsCount(),
+			'count' => RepeatSaleSegmentController::getInstance()->getFoundClientsCount(),
 		];
-	}
-
-	private function getSegmentFoundClientsCount(): int
-	{
-		$segmentsCollection = RepeatSaleSegmentController::getInstance()->getList([
-			'order' => [
-				'ID' => 'ASC',
-			],
-		]);
-
-		if ($segmentsCollection->isEmpty())
-		{
-			return 0;
-		}
-
-		/*
-		 * @var $segment Segment
-		 */
-		foreach ($segmentsCollection as $segment)
-		{
-			$count = $segment->getClientFound();
-			if ($count <= 0)
-			{
-				continue;
-			}
-
-			return $count;
-		}
-
-		return 0;
 	}
 }

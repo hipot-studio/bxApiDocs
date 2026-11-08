@@ -5,6 +5,7 @@ namespace Bitrix\Catalog\Integration\Report\Handler;
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Integration\Report\Filter\StoreStockFilter;
+use Bitrix\Catalog\Integration\Report\Quantity\StoreTotalsCalculator;
 use Bitrix\Catalog\Integration\Report\StoreStock\StoreStockQuantity;
 use Bitrix\Catalog\Integration\Report\StoreStock\StoreStockSale;
 use Bitrix\Catalog\StoreProductTable;
@@ -220,85 +221,7 @@ abstract class BaseHandler extends BaseReport  implements IReportMultipleData
 
 	private function prepareStoreTotals(array $storeTotals): array
 	{
-		$preparedTotals = [];
-
-		foreach ($storeTotals as $storeId => $storeTotal)
-		{
-			foreach ($storeTotal as $measureId => $entry)
-			{
-				if (!isset($preparedTotals[$storeId]))
-				{
-					$preparedTotals[$storeId] = [
-						'TITLE' => $entry['TITLE'],
-						'STORE_ID' => $storeId,
-						'TOTALS' => [],
-					];
-				}
-
-				$soldAmountDifferenceData = $entry['SOLD_AMOUNTS_DIFFERENCE'] ?? [];
-				$receivedQuantitiesDifferenceData = $entry['RECEIVED_QUANTITIES_DIFFERENCE'] ?? [];
-				$outgoingQuantitiesDifferenceData = $entry['OUTGOING_QUANTITIES_DIFFERENCE'] ?? [];
-				$amountSum =
-					(float)$entry['AMOUNT_SUM']
-					- ($receivedQuantitiesDifferenceData[$measureId] ?? 0.0)
-					+ ($outgoingQuantitiesDifferenceData[$measureId] ?? 0.0)
-					+ ($soldAmountDifferenceData[$measureId] ?? 0.0)
-				;
-				$quantityReservedSum = (float)$entry['QUANTITY_RESERVED_SUM'];
-
-				$quantity = $amountSum - $quantityReservedSum;
-				$productsSoldAmount = $entry['SOLD_AMOUNTS'] ?? [];
-				$receivedQuantityData = $entry['RECEIVED_QUANTITIES'] ?? [];
-				$outgoingQuantityData = $entry['OUTGOING_QUANTITIES'] ?? [];
-
-				$startingQuantity =
-					$amountSum
-					- ($receivedQuantityData[$measureId] ?? 0.0)
-					+ ($outgoingQuantityData[$measureId] ?? 0.0)
-					+ ($productsSoldAmount[$measureId] ?? 0.0)
-				;
-				$receivedQuantity = ($receivedQuantityData[$measureId] ?? 0.0);
-				$amountSold = $productsSoldAmount[$measureId] ?? 0.0;
-
-				$isStoreEmpty = true;
-				$values = [
-					$startingQuantity, $receivedQuantity, $amountSum, $quantityReservedSum, $quantity, $amountSold,
-				];
-				foreach ($values as $value)
-				{
-					if ($value !== 0.0)
-					{
-						$isStoreEmpty = false;
-						break;
-					}
-				}
-				if ($isStoreEmpty)
-				{
-					continue;
-				}
-
-				if (!isset($preparedTotals[$storeId]['TOTALS'][$measureId]))
-				{
-					$preparedTotals[$storeId]['TOTALS'][$measureId] = [
-						'STARTING_QUANTITY' => 0,
-						'RECEIVED_QUANTITY' => 0,
-						'AMOUNT_SUM' => 0,
-						'QUANTITY_RESERVED_SUM' => 0,
-						'QUANTITY' => 0,
-						'AMOUNT_SOLD' => 0,
-					];
-				}
-
-				$preparedTotals[$storeId]['TOTALS'][$measureId]['STARTING_QUANTITY'] += $startingQuantity;
-				$preparedTotals[$storeId]['TOTALS'][$measureId]['RECEIVED_QUANTITY'] += $receivedQuantity;
-				$preparedTotals[$storeId]['TOTALS'][$measureId]['AMOUNT_SUM'] += $amountSum;
-				$preparedTotals[$storeId]['TOTALS'][$measureId]['QUANTITY_RESERVED_SUM'] += $quantityReservedSum;
-				$preparedTotals[$storeId]['TOTALS'][$measureId]['QUANTITY'] += $quantity;
-				$preparedTotals[$storeId]['TOTALS'][$measureId]['AMOUNT_SOLD'] += $amountSold;
-			}
-		}
-
-		return $preparedTotals;
+		return (new StoreTotalsCalculator())->calculateStoreTotals($storeTotals);
 	}
 
 	private function getFormattedFilterForDifference(): ?array
@@ -434,39 +357,7 @@ abstract class BaseHandler extends BaseReport  implements IReportMultipleData
 
 	protected function prepareOverallTotals(array $storeTotals): array
 	{
-		$overallTotals = [];
-
-		foreach ($storeTotals as $storeTotalEntry)
-		{
-			foreach ($storeTotalEntry['TOTALS'] as $measureId => $total)
-			{
-				$startingQuantitySum = (float)$total['STARTING_QUANTITY'];
-				$amountSum = (float)$total['AMOUNT_SUM'];
-				$receivedQuantity = (float)$total['RECEIVED_QUANTITY'];
-				$quantityReservedSum = (float)$total['QUANTITY_RESERVED_SUM'];
-				$amountSoldSum = (float)$total['AMOUNT_SOLD'];
-
-				if (!isset($overallTotals[$measureId]))
-				{
-					$overallTotals[$measureId] = [
-						'STARTING_QUANTITY' => 0,
-						'RECEIVED_QUANTITY' => 0,
-						'AMOUNT_SUM' => 0,
-						'QUANTITY_RESERVED_SUM' => 0,
-						'AMOUNT_SOLD' => 0,
-						'QUANTITY' => 0,
-					];
-				}
-				$overallTotals[$measureId]['STARTING_QUANTITY'] += $startingQuantitySum;
-				$overallTotals[$measureId]['RECEIVED_QUANTITY'] += $receivedQuantity;
-				$overallTotals[$measureId]['AMOUNT_SUM'] += $amountSum;
-				$overallTotals[$measureId]['QUANTITY_RESERVED_SUM'] += $quantityReservedSum;
-				$overallTotals[$measureId]['QUANTITY'] += $amountSum - $quantityReservedSum;
-				$overallTotals[$measureId]['AMOUNT_SOLD'] += $amountSoldSum;
-			}
-		}
-
-		return $overallTotals;
+		return (new StoreTotalsCalculator())->sumByMeasure($storeTotals);
 	}
 
 	protected static function getAnalyticBoardByKey($key): ?AnalyticBoard

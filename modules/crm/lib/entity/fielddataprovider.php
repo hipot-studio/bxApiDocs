@@ -4,13 +4,10 @@ namespace Bitrix\Crm\Entity;
 
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
+use Bitrix\Crm\V2\Internal\Service\Ai\FieldFillPolicyService;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
-use Bitrix\Main\UserField\Types\DateType;
-use Bitrix\Main\UserField\Types\DoubleType;
 use Bitrix\Main\UserField\Types\EnumType;
-use Bitrix\Main\UserField\Types\IntegerType;
-use Bitrix\Main\UserField\Types\StringType;
 use CCrmOwnerType;
 use CCrmUserType;
 use CUserFieldEnum;
@@ -73,6 +70,16 @@ final class FieldDataProvider
 	}
 
 	/**
+	 * Returns array with description of fields that BitrixGPT is allowed to fill. Unlike getFieldData()
+	 * the policy of the field is applied, so an excluded field is absent both in the schema sent to AI
+	 * and in the parsing of its answer
+	 */
+	public function getEnabledForAiFillFieldData(): array
+	{
+		return $this->removeDisabledForAiFill($this->getFieldData());
+	}
+
+	/**
 	 * Returns array with description of fields that are accessible (visible) for the given user
 	 */
 	public function getAccessibleByUserFieldData(int $userId): array
@@ -103,10 +110,12 @@ final class FieldDataProvider
 			],
 		);
 
-		return array_filter(
+		$displayedFieldData = array_filter(
 			$this->getAccessibleByUserFieldData($userId),
 			static fn(array $field) => $config->isFormFieldVisible($field['ID']),
 		);
+
+		return $this->removeDisabledForAiFill($displayedFieldData);
 	}
 
 	public function invalidateFieldDataCache(): void
@@ -170,17 +179,34 @@ final class FieldDataProvider
 		return $result;
 	}
 
+	/**
+	 * Applied over the field data instead of inside it: the daily cache above is not dropped when the
+	 * setting of a field is switched, while the policy keeps a fresh cache of its own.
+	 */
+	private function removeDisabledForAiFill(array $fieldData): array
+	{
+		if ($this->scope !== Context::SCOPE_AI)
+		{
+			return $fieldData;
+		}
+
+		$disabledFieldNameMap = FieldFillPolicyService::getInstance()->getDisabledFieldNameMap($this->entityTypeId);
+		if (empty($disabledFieldNameMap))
+		{
+			return $fieldData;
+		}
+
+		return array_filter(
+			$fieldData,
+			static fn(array $field) => !isset($disabledFieldNameMap[$field['ID']])
+		);
+	}
+
 	private function getSupportedUserFieldTypes(): ?array
 	{
 		if ($this->scope === Context::SCOPE_AI)
 		{
-			return [
-				StringType::USER_TYPE_ID,
-				IntegerType::USER_TYPE_ID,
-				DoubleType::USER_TYPE_ID,
-				DateType::USER_TYPE_ID,
-				EnumType::USER_TYPE_ID,
-			];
+			return FieldFillPolicyService::getInstance()->getSupportedFieldTypes();
 		}
 
 		return null;

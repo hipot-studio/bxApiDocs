@@ -2016,7 +2016,12 @@ class CSocNetLogDestination
 							$users[] = $user;
 						}
 					}
-					break;
+					if ($fetchUsers)
+					{
+						break;
+					}
+
+					continue;
 				}
 				elseif (mb_substr($code, 0, 1) === 'U')
 				{
@@ -2039,7 +2044,13 @@ class CSocNetLogDestination
 					if ($isProjectRoles)
 					{
 						// todo remove after new system the project roles.
-						[$users, $userIds] = self::getUsersByRole($groupId, $match[2], $users, $userIds);
+						[$users, $userIds] = self::getUsersByRole(
+							$groupId,
+							$match[2],
+							$users,
+							$userIds,
+							$fetchUsers,
+						);
 
 						continue;
 					}
@@ -2049,7 +2060,20 @@ class CSocNetLogDestination
 						["GROUP_ID" => $groupId, "<=ROLE" => SONET_ROLES_USER, "USER_ACTIVE" => "Y"],
 						false,
 						false,
-						["ID", "USER_ID", "ROLE", "USER_NAME", "USER_LAST_NAME", "USER_SECOND_NAME", "USER_LOGIN", "USER_EMAIL", "USER_PERSONAL_PHOTO", "USER_WORK_POSITION"]
+						$fetchUsers
+							? [
+								"ID",
+								"USER_ID",
+								"ROLE",
+								"USER_NAME",
+								"USER_LAST_NAME",
+								"USER_SECOND_NAME",
+								"USER_LOGIN",
+								"USER_EMAIL",
+								"USER_PERSONAL_PHOTO",
+								"USER_WORK_POSITION",
+							]
+							: ["USER_ID"]
 					);
 
 					if ($dbMembers)
@@ -2061,17 +2085,20 @@ class CSocNetLogDestination
 								continue;
 							}
 							$userIds[$user['USER_ID']] = $user["USER_ID"];
-							$users[] = [
-								'ID' => $user["USER_ID"],
-								'USER_ID' => $user["USER_ID"],
-								'LOGIN' => $user["USER_LOGIN"],
-								'NAME' => $user["USER_NAME"],
-								'LAST_NAME' => $user["USER_LAST_NAME"],
-								'SECOND_NAME' => $user["USER_SECOND_NAME"],
-								'EMAIL' => $user["USER_EMAIL"],
-								'PERSONAL_PHOTO' => $user["USER_PERSONAL_PHOTO"],
-								'WORK_POSITION' => $user["USER_WORK_POSITION"]
-							];
+							if ($fetchUsers)
+							{
+								$users[] = [
+									'ID' => $user["USER_ID"],
+									'USER_ID' => $user["USER_ID"],
+									'LOGIN' => $user["USER_LOGIN"],
+									'NAME' => $user["USER_NAME"],
+									'LAST_NAME' => $user["USER_LAST_NAME"],
+									'SECOND_NAME' => $user["USER_SECOND_NAME"],
+									'EMAIL' => $user["USER_EMAIL"],
+									'PERSONAL_PHOTO' => $user["USER_PERSONAL_PHOTO"],
+									'WORK_POSITION' => $user["USER_WORK_POSITION"]
+								];
+							}
 						}
 					}
 				}
@@ -2138,7 +2165,13 @@ class CSocNetLogDestination
 		return $fetchUsers ? $users : $userIds;
 	}
 
-	private static function getUsersByRole(int $groupId, $role, array $users, array $userIds): array
+	private static function getUsersByRole(
+		int $groupId,
+		$role,
+		array $users,
+		array $userIds,
+		bool $fetchUsers,
+	): array
 	{
 		$isScrumCustomRole = false;
 		$scrumCustomRole = '';
@@ -2173,18 +2206,20 @@ class CSocNetLogDestination
 			],
 			false,
 			false,
-			[
-				"ID",
-				"USER_ID",
-				"ROLE",
-				"USER_NAME",
-				"USER_LAST_NAME",
-				"USER_SECOND_NAME",
-				"USER_LOGIN",
-				"USER_EMAIL",
-				"USER_PERSONAL_PHOTO",
-				"USER_WORK_POSITION",
-			]
+			$fetchUsers
+				? [
+					"ID",
+					"USER_ID",
+					"ROLE",
+					"USER_NAME",
+					"USER_LAST_NAME",
+					"USER_SECOND_NAME",
+					"USER_LOGIN",
+					"USER_EMAIL",
+					"USER_PERSONAL_PHOTO",
+					"USER_WORK_POSITION",
+				]
+				: ["USER_ID"]
 		);
 
 		if ($dbMembers)
@@ -2217,17 +2252,20 @@ class CSocNetLogDestination
 				if (!array_key_exists($user["USER_ID"], $userIds))
 				{
 					$userIds[$user["USER_ID"]] = $user["USER_ID"];
-					$users[] = [
-						'ID' => $user["USER_ID"],
-						'USER_ID' => $user["USER_ID"],
-						'LOGIN' => $user["USER_LOGIN"],
-						'NAME' => $user["USER_NAME"],
-						'LAST_NAME' => $user["USER_LAST_NAME"],
-						'SECOND_NAME' => $user["USER_SECOND_NAME"],
-						'EMAIL' => $user["USER_EMAIL"],
-						'PERSONAL_PHOTO' => $user["USER_PERSONAL_PHOTO"],
-						'WORK_POSITION' => $user["USER_WORK_POSITION"]
-					];
+					if ($fetchUsers)
+					{
+						$users[] = [
+							'ID' => $user["USER_ID"],
+							'USER_ID' => $user["USER_ID"],
+							'LOGIN' => $user["USER_LOGIN"],
+							'NAME' => $user["USER_NAME"],
+							'LAST_NAME' => $user["USER_LAST_NAME"],
+							'SECOND_NAME' => $user["USER_SECOND_NAME"],
+							'EMAIL' => $user["USER_EMAIL"],
+							'PERSONAL_PHOTO' => $user["USER_PERSONAL_PHOTO"],
+							'WORK_POSITION' => $user["USER_WORK_POSITION"]
+						];
+					}
 				}
 			}
 		}

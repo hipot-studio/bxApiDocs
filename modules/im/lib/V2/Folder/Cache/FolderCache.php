@@ -8,7 +8,15 @@ use Bitrix\Main\Application;
 class FolderCache
 {
 	private const TTL = 86400;
-	private const BASE_DIR = '/bx/imc/folder/v2/';
+
+	/**
+	 * Bump the version segment on any change to the shape of {@see FolderListData} or to the set of
+	 * prototypes in {@see \Bitrix\Im\V2\Folder\System\SystemFolderRegistry}: a module update does not
+	 * clear this cache, so an entry written by the previous version is still read as valid. A hit
+	 * returns from {@see \Bitrix\Im\V2\Folder\FolderProvider::getByUser} before ensureSystemFolders(),
+	 * which leaves a newly added system folder uncreated until the TTL expires.
+	 */
+	private const BASE_DIR = '/bx/imc/folder/v4/';
 	private const TAG_SYSTEM = 'folder_feature_system';
 
 	private array $inMemoryCache = [];

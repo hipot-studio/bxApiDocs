@@ -5,6 +5,7 @@ namespace Bitrix\Sale\Basket;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Sale\BasketBase;
+use Bitrix\Sale\BasketItem;
 
 class SingleRefreshStrategy extends RefreshStrategy
 {
@@ -58,7 +59,7 @@ class SingleRefreshStrategy extends RefreshStrategy
 	{
 		$itemToRefresh = $this->getItemToRefresh($basket);
 
-		$items = array();
+		$items = [];
 		if (!empty($itemToRefresh))
 		{
 			$items[] = $itemToRefresh;

@@ -9,26 +9,26 @@ use Bitrix\Crm\V2\Internal\Service\Item\Dictionary\CustomFieldEnumDictionary;
 /**
  * @internal
  */
-class CustomFieldEnumIdProvider implements ValidValuesProviderInterface
+class CustomFieldEnumIdProvider implements ValidValuesProviderInterface, CacheKeyProviderInterface
 {
+	public static function getCacheKey(Context $context): ?array
+	{
+		$customFieldId = $context->getExtraArgs()['customFieldId'] ?? null;
+
+		return is_scalar($customFieldId) ? [(int)$customFieldId] : null;
+	}
+
 	/**
 	 * @return int[]
 	 */
 	public static function getValidValues(Context $context): array
 	{
-		static $enumsIdMap = null;
-
 		$customFieldId = $context->getExtraArgs()['customFieldId'] ?? null;
 		if ($customFieldId === null)
 		{
 			return [];
 		}
-		if (!isset($enumsIdMap[$customFieldId]))
-		{
-			$enumsIdMap[$customFieldId] = static::getDictionary()->getEnumIds((int)$customFieldId);
-		}
-
-		return $enumsIdMap[$customFieldId];
+		return static::getDictionary()->getEnumIds((int)$customFieldId);
 	}
 
 	protected static function getDictionary(): CustomFieldEnumDictionary

@@ -338,8 +338,8 @@ class DocumentBase
         $result = null;
         $message = self::getMessage();
 
-        if (is_array($value["#"][$message["CC_BSC1_REK_VALUES"]][0]["#"][$message["CC_BSC1_REK_VALUE"]])
-            && !empty($value["#"][$message["CC_BSC1_REK_VALUES"]][0]["#"][$message["CC_BSC1_REK_VALUE"]]))
+		if (!empty($value["#"][$message["CC_BSC1_REK_VALUES"]][0]["#"][$message["CC_BSC1_REK_VALUE"]])
+			&& is_array($value["#"][$message["CC_BSC1_REK_VALUES"]][0]["#"][$message["CC_BSC1_REK_VALUE"]]))
         {
             $traits = array();
             foreach($value["#"][$message["CC_BSC1_REK_VALUES"]][0]["#"][$message["CC_BSC1_REK_VALUE"]] as $val)
@@ -595,13 +595,19 @@ class DocumentBase
 					$vatRate = $taxValue / 100;
 				}
 
+				$itemType = $item['REK_VALUES']['ITEM_TYPE'] ?? null;
+				if (array_key_exists('REK_VALUES', $item) && $item['REK_VALUES'] === null)
+				{
+					$itemType = Exchange\ImportBase::ITEM_ITEM;
+				}
+
                 $basketItems = Array(
                     'ID' => $item['ID'],
                     'NAME' => $item['NAME'],
                     'PRICE' => $price,
                     'PRICE_ONE' => $priceone,
                     'QUANTITY' => $item['QUANTITY'],
-                    'TYPE' => $item['REK_VALUES']['ITEM_TYPE'],
+                    'TYPE' => $itemType,
                     'MEASURE_CODE' => !empty($item['ITEM_UNIT']) ? $item['ITEM_UNIT']['ITEM_UNIT_CODE']:null,
                     'MEASURE_NAME' => !empty($item['ITEM_UNIT']) ? $item['ITEM_UNIT']['ITEM_UNIT_NAME']:null,
                     'ATTRIBUTES' => !empty($item['REK_VALUES']['PROP_BASKET']) ? $item['REK_VALUES']['PROP_BASKET']:null,

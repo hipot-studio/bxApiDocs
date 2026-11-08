@@ -33,10 +33,7 @@ class SendChatMessageTool extends BaseTool
 
 	public function getDescription(): string
 	{
-		return
-			'Sends a free‐form message in the task\'s chat on behalf of the current user. '
-			. 'Also can be used to leave a comment on a task.'
-		;
+		return "Sends a free‐form message in the task's chat on behalf of the current user";
 	}
 
 	public function canList(int $userId): bool

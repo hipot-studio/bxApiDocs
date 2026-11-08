@@ -75,8 +75,11 @@ class ScenarioRepository
 		// delete all scenario data
 		$chatIds = ChatTable::query()->setSelect(['ID'])->where('SCENARIO_ID', $id)->fetchCollection()->getIdList();
 		ChatTable::deleteByFilter(['=SCENARIO_ID' => $id]);
-		MessageTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
-		MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
+		if (!empty($chatIds))
+		{
+			MessageTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
+			MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
+		}
 
 		return ScenarioTable::delete($id);
 	}

@@ -15,6 +15,22 @@ use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Rest\Internal\Entity\Application\AppScopeRequestState;
 use Bitrix\Rest\Internal\Entity\Application\AppScopeRequestStatus;
 
+/**
+ * Class AppScopeRequestStateTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_AppScopeRequestState_Query query()
+ * @method static EO_AppScopeRequestState_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_AppScopeRequestState_Result getById($id)
+ * @method static EO_AppScopeRequestState_Result getList(array $parameters = [])
+ * @method static EO_AppScopeRequestState_Entity getEntity()
+ * @method static \Bitrix\Rest\Internal\Model\EO_AppScopeRequestState createObject($setDefaultValues = true)
+ * @method static \Bitrix\Rest\Internal\Model\EO_AppScopeRequestState_Collection createCollection()
+ * @method static \Bitrix\Rest\Internal\Model\EO_AppScopeRequestState wakeUpObject($row)
+ * @method static \Bitrix\Rest\Internal\Model\EO_AppScopeRequestState_Collection wakeUpCollection($rows)
+ */
 class AppScopeRequestStateTable extends DataManager
 {
 	public static function getTableName(): string

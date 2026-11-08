@@ -1,12 +1,12 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter;
 
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Meta\ActionsMetadata;
-use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkFileRenderer;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Engine\Controller;
@@ -22,7 +22,7 @@ class FileTypeControl extends Base
 	private ActionsMetadata $actionsMetaData;
 	private bool $shouldRedirectToView = false;
 	private bool $fileTypeNotAllowed = false;
-	private ?File $file = null;
+	private ?BaseObject $baseObject = null;
 
 	public function __construct(
 		private readonly Controller $controller,
@@ -41,7 +41,7 @@ class FileTypeControl extends Base
 	public function onBeforeAction(Event $event): ?EventResult
 	{
 		$action = $this->getAction();
-		/** @var UnifiedLinkFileRenderer $service */
+		/** @var UnifiedLinkRenderer $service */
 		$service = $action->getArguments()['service'] ?? null;
 
 		if ($service === null)
@@ -49,16 +49,19 @@ class FileTypeControl extends Base
 			return null;
 		}
 
-		$this->file = $service->resolveFile();
+		$this->baseObject = $service->resolveBaseObject();
 
-		if ($this->actionsMetaData->shouldRedirectToView($this->action->getName(), $this->file))
+		if ($this->actionsMetaData->shouldRedirectToView($this->action->getName(), $this->baseObject))
 		{
 			$this->shouldRedirectToView = true;
 
 			return new EventResult(EventResult::ERROR);
 		}
 
-		if (!$this->actionsMetaData->isFileTypeAllowed($action->getName(), $this->file))
+		if (
+			$this->baseObject instanceof File
+			&& !$this->actionsMetaData->isFileTypeAllowed($action->getName(), $this->baseObject)
+		)
 		{
 			$this->fileTypeNotAllowed = true;
 
@@ -70,9 +73,9 @@ class FileTypeControl extends Base
 
 	public function onAfterAction(Event $event): void
 	{
-		if ($this->shouldRedirectToView && $this->file instanceof File)
+		if ($this->shouldRedirectToView && $this->baseObject instanceof BaseObject)
 		{
-			$response = new Redirect($this->urlManager->getUnifiedLink($this->file));
+			$response = new Redirect($this->urlManager->getUnifiedLink($this->baseObject));
 
 			$event->setParameter('result', $response);
 

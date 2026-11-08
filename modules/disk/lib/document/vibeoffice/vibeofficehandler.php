@@ -36,9 +36,7 @@ class VibeofficeHandler extends DocumentHandler implements FileCreatable, IViewe
 
 	public static function isEnabled(): bool
 	{
-		/** @var Configuration $configuration */
-		$configuration = Main\DI\ServiceLocator::getInstance()->get('disk.vibeofficeConfiguration');
-		$isEnabledOnPortal = $configuration->isEnabledOnPortal();
+		$isEnabledOnPortal = Feature::isEnabledOnPortal();
 		$isEnabledDocuments = \Bitrix\Disk\Configuration::isEnabledDocuments();
 
 		return $isEnabledOnPortal && $isEnabledDocuments;

@@ -3,10 +3,12 @@
 namespace Bitrix\Catalog\Controller;
 
 use Bitrix\Catalog\Access\ActionDictionary;
+use Bitrix\Catalog\Internal\Service\Rest\AccessSupport;
 use Bitrix\Catalog\StoreDocumentTable;
 use Bitrix\Catalog\v2\Contractor\Provider\Manager;
 use Bitrix\Crm\Integration\Catalog\Contractor\StoreDocumentContractorTable;
 use Bitrix\Main\Engine\Action;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\DataType\Page;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -101,8 +103,22 @@ class DocumentContractor extends Controller
 	 */
 	public function deleteAction(int $id): ?bool
 	{
-		$existsResult = $this->exists($id);
-		if (!$existsResult->isSuccess())
+		$filter = ['=ID' => $id];
+		$documentFilter = $this->getAccessSupport()->getDocumentReferenceFilter(
+			'DOCUMENT_ID',
+			ActionDictionary::ACTION_STORE_DOCUMENT_VIEW,
+			ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY,
+		);
+		if ($documentFilter)
+		{
+			$filter[] = $documentFilter;
+		}
+
+		$binding = StoreDocumentContractorTable::getRow([
+			'select' => ['ID'],
+			'filter' => $filter,
+		]);
+		if (!$binding)
 		{
 			$this->addError(new Error('Binding was not found'));
 
@@ -142,6 +158,18 @@ class DocumentContractor extends Controller
 		bool $__calculateTotalCount = true
 	): Page
 	{
+		$documentFilter = $this->getAccessSupport()->getDocumentReferenceFilter(
+			'DOCUMENT_ID',
+			ActionDictionary::ACTION_STORE_DOCUMENT_VIEW,
+		);
+		if ($documentFilter)
+		{
+			$filter = [
+				$documentFilter,
+				$filter,
+			];
+		}
+
 		return new Page(
 			'DOCUMENT_CONTRACTOR',
 			$this->getList($select, $filter, $order, $pageNavigation),
@@ -179,6 +207,10 @@ class DocumentContractor extends Controller
 			],
 			'filter' => [
 				'ID' => $documentId,
+				...$this->getAccessSupport()->getDocumentFilters(
+					ActionDictionary::ACTION_STORE_DOCUMENT_VIEW,
+					ActionDictionary::ACTION_STORE_DOCUMENT_MODIFY,
+				),
 			],
 		]);
 
@@ -295,6 +327,11 @@ class DocumentContractor extends Controller
 		}
 
 		return $result;
+	}
+
+	private function getAccessSupport(): AccessSupport
+	{
+		return new AccessSupport((int)CurrentUser::get()->getId());
 	}
 
 	/**

@@ -89,6 +89,16 @@ class ProjectProcessor
 		";
 
 		Application::getConnection()->query($sql);
+
+		if ($userId !== 0)
+		{
+			Counter\CommentsCountCache::drop($userId);
+		}
+		else
+		{
+			// Rows of every member of the projects are gone, so no user keeps trustworthy values.
+			Counter\CommentsCountCache::dropAll();
+		}
 	}
 
 	/**

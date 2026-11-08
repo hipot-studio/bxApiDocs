@@ -2,11 +2,14 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Grid\FolderListOptions;
 use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Main;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Localization\Loc;
@@ -18,6 +21,18 @@ final class FocusController extends Internals\Controller
 {
 	const ERROR_COULD_NOT_FIND_FILE = 'DISK_FC_22004';
 	const ERROR_COULD_NOT_READ_FILE = 'DISK_FC_22005';
+
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
+	protected UnifiedLinkUrl $unifiedLinkUrl;
+
+	public function __construct()
+	{
+		parent::__construct();
+
+		$serviceLocator = ServiceLocator::getInstance();
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
+	}
 
 	protected function listActions()
 	{
@@ -155,6 +170,7 @@ final class FocusController extends Internals\Controller
 		$urlManager = Driver::getInstance()->getUrlManager();
 		$uri = new Uri($urlManager->encodeUrn($listingPath));
 		$pathInListing = $gridOptions->getNavigation()->addParams($uri, false, $finalPage);
+		$listingUls = $this->getListingUls($object);
 
 		if (Main\Grid\Context::isInternalRequest())
 		{
@@ -166,6 +182,11 @@ final class FocusController extends Internals\Controller
 				'bxajaxid' => $this->request->get('bxajaxid'),
 				'resetFilter' => $this->request->get('resetFilter'),
 			));
+		}
+
+		if (is_string($listingUls))
+		{
+			$this->unifiedLinkUrl->addUlsToUri($pathInListing, $listingUls);
 		}
 
 		return $pathInListing->getUri() . "#hl-" . $objectId . $command;
@@ -187,9 +208,10 @@ final class FocusController extends Internals\Controller
 
 	private function checkReadRights(BaseObject $object)
 	{
+		$shouldCheckUnifiedLink = $this->hasValidUls($object);
 
 		$storage = $object->getStorage();
-		$securityContext = $storage->getCurrentUserSecurityContext();
+		$securityContext = $storage->getCurrentUserSecurityContext($shouldCheckUnifiedLink);
 		$canRead = $object->canRead($securityContext);
 
 		if (!$canRead)
@@ -200,6 +222,49 @@ final class FocusController extends Internals\Controller
 		}
 
 		return true;
+	}
+
+	private function hasValidUls(BaseObject $object): bool
+	{
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		return
+			is_string($uls)
+			&& $this->unifiedLinkAccessService->validateUlsForObjectId(
+				objectId: $object->getId(),
+				uls: $uls,
+			)
+		;
+	}
+
+	private function getListingUls(?BaseObject $object): ?string
+	{
+		if (!$object instanceof BaseObject)
+		{
+			return null;
+		}
+
+		if (!$this->hasValidUls($object))
+		{
+			return null;
+		}
+
+		$parent = $object->getParent();
+		$storage = $parent?->getStorage();
+
+		if (!$parent instanceof Folder || !$storage instanceof Storage)
+		{
+			return null;
+		}
+
+		$securityContext = $storage->getCurrentUserSecurityContext(true);
+
+		if (!$parent->canRead($securityContext))
+		{
+			return null;
+		}
+
+		return $this->unifiedLinkAccessService->getUlsForObjectId($parent->getId());
 	}
 
 	private function getPageWithObject(BaseObject $object, FolderListOptions $gridOptions, array $filter)

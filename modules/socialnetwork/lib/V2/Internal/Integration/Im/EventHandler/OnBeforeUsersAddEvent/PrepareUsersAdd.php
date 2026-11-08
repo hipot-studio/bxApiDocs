@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\V2\Internal\Integration\Im\EventHandler\OnBeforeUsersAddEvent;
 
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Chat\OpenCollabChat;
 use Bitrix\Im\V2\Chat\ExternalChat\Event\BeforeUsersAddEvent;
 use Bitrix\Main\EventResult;
+use Bitrix\Main\Loader;
+use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Entity\User\UserFactory;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\ShowHistoryOption;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntity;
@@ -31,8 +35,8 @@ class PrepareUsersAdd
 
 		$isBySharingLink = $event->getAddUsersConfig()->bySharingLink();
 
-		$config =
-			$event->getAddUsersConfig()
+		$config
+			= $event->getAddUsersConfig()
 				->setWithMessage(false)
 				->setHideHistory(self::shouldHideHistory($projectId))
 		;
@@ -61,33 +65,47 @@ class PrepareUsersAdd
 			}
 		}
 
+		$requestedUserIds = Loader::includeModule('extranet')
+			? $event->getUserIds()
+			: self::getExistingActiveUserIds($event->getUserIds());
+		$hiddenUserIds = [];
+		if (!$isBySharingLink && !$chat instanceof OpenCollabChat)
+		{
+			$hiddenUserIds = self::resolveAdminAccessSelfJoinUserIds($initiatorId, $projectId, $requestedUserIds);
+		}
+		$projectUserIds = array_filter(
+			$requestedUserIds,
+			static fn ($userId): bool => !$config->isHidden((int)$userId)
+				&& !in_array((int)$userId, $hiddenUserIds, true),
+		);
+		$preflight = ExternalMembershipValidator::validateUsers($projectId, $projectUserIds);
+		if (!$preflight->isSuccess())
+		{
+			return new EventResult(EventResult::ERROR);
+		}
+
 		// $initiatorId === 0 marks a system-initiated chat add.
 		// Skip permission checks on this path.
 		if ($initiatorId === 0)
 		{
-			return new EventResult(EventResult::SUCCESS, ['config' => $config]);
+			return new EventResult(EventResult::SUCCESS, ['config' => $config, 'userIds' => $requestedUserIds]);
 		}
-
-		$requestedUserIds = $event->getUserIds();
 
 		// Phase 0 (task 718250): a superadmin self-joining a closed project chat keeps a hidden relation
 		// (admin-access read grant, not project membership) so it is never promoted to a real member
 		// and never mirrored into the project.
-		if (!$isBySharingLink && !$chat instanceof OpenCollabChat)
+		if ($hiddenUserIds !== [])
 		{
-			$adminAccessUserIds = self::resolveAdminAccessSelfJoinUserIds($initiatorId, $projectId, $requestedUserIds);
-			if ($adminAccessUserIds !== [])
-			{
-				return new EventResult(EventResult::SUCCESS, [
-					'config' => $config->addHiddenUserIds($adminAccessUserIds),
-				]);
-			}
+			return new EventResult(EventResult::SUCCESS, [
+				'config' => $config->addHiddenUserIds($hiddenUserIds),
+				'userIds' => $requestedUserIds,
+			]);
 		}
 
 		$membersToAdd = self::resolveNewProjectMembers($projectId, $requestedUserIds);
 		if ($membersToAdd->isEmpty())
 		{
-			return new EventResult(EventResult::SUCCESS, ['config' => $config]);
+			return new EventResult(EventResult::SUCCESS, ['config' => $config, 'userIds' => $requestedUserIds]);
 		}
 
 		$deniedMemberIdsMap = self::getDeniedMemberIdsMap(
@@ -99,7 +117,7 @@ class PrepareUsersAdd
 		$allMembersAllowed = empty($deniedMemberIdsMap);
 		if ($allMembersAllowed)
 		{
-			return new EventResult(EventResult::SUCCESS, ['config' => $config]);
+			return new EventResult(EventResult::SUCCESS, ['config' => $config, 'userIds' => $requestedUserIds]);
 		}
 
 		$allMembersDenied = count($deniedMemberIdsMap) === $membersToAdd->count();
@@ -112,6 +130,26 @@ class PrepareUsersAdd
 			'userIds' => self::excludeDeniedMembers($requestedUserIds, $deniedMemberIdsMap),
 			'config' => $config,
 		]);
+	}
+
+	private static function getExistingActiveUserIds(array $userIds): array
+	{
+		$userIds = array_values(array_filter(array_unique(array_map('intval', $userIds)),
+			static fn(int $id): bool => $id > 0,
+		));
+		$users = method_exists(UserFactory::class, 'getUsersByIds')
+			? UserFactory::getInstance()->getUsersByIds($userIds)
+			: array_map(static fn(int $id): User => User::getInstance($id), $userIds);
+		$validUserIds = [];
+		foreach ($users as $user)
+		{
+			if ($user->isExist() && $user->isActive())
+			{
+				$validUserIds[] = (int)$user->getId();
+			}
+		}
+
+		return $validUserIds;
 	}
 
 	/**
@@ -161,8 +199,8 @@ class PrepareUsersAdd
 
 	private static function shouldHideHistory(int $projectId): bool
 	{
-		$options =
-			Container::getInstance()
+		$options
+			= Container::getInstance()
 				->get(CollabOptionRepository::class)
 				->getOptions($projectId, [ShowHistoryOption::DB_NAME])
 		;

@@ -82,10 +82,17 @@ class GoogleDataStudio extends Service
 		};
 
 		$schema = $data['schema'] ?? [];
+		// A delegated aggregation describes its answer with protocol aliases, so the usage log takes the
+		// field names the query touched; on the raw path the schema names them already.
+		$statFields = $data['usageStatFields'] ?? [];
+		if (!$statFields)
+		{
+			$statFields = array_map($getIdFunction, $schema);
+		}
 
 		$logId = $manager->startQuery(
 			$tableName,
-			implode(', ', array_map($getIdFunction, $schema)),
+			implode(', ', $statFields),
 			Json::encode($data['where'], JSON_UNESCAPED_UNICODE),
 			Json::encode($parameters, JSON_UNESCAPED_UNICODE),
 			$requestMethod,
@@ -174,39 +181,48 @@ class GoogleDataStudio extends Service
 		}
 
 		$queryReturnResult = $queryResult->getReturn();
-		if ($queryReturnResult instanceof Result && !$queryReturnResult->isSuccess())
+		$isQueryFailed = $queryReturnResult instanceof Result && !$queryReturnResult->isSuccess();
+		if ($isQueryFailed)
 		{
 			$result->addErrors($queryReturnResult->getErrors());
-		}
-		elseif (!$connector->isFulfilledOutput())
-		{
-			if (!$firstLinePrinted)
+
+			if ($firstLinePrinted)
 			{
-				$output = '{"schema":' . Json::encode($schema, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . ',"rows":[' . "\n";
+				$size += $this->printStreamedError($result, $queryReturnResult);
+			}
+		}
+		else
+		{
+			if (!$connector->isFulfilledOutput())
+			{
+				if (!$firstLinePrinted)
+				{
+					$output = '{"schema":' . Json::encode($schema, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . ',"rows":[' . "\n";
+					echo $output;
+					$size += strlen($output);
+				}
+
+				$output = ']' . ($data['filtersApplied'] ? ',"filtersApplied":true' : '');
 				echo $output;
 				$size += strlen($output);
 			}
 
-			$output = ']' . ($data['filtersApplied'] ? ',"filtersApplied":true' : '');
-			echo $output;
-			$size += strlen($output);
+			if ($licenseLimit > 0 && $licenseLimit < $count)
+			{
+				$error = $this->getLimitExceededError($count, $licenseLimit);
+
+				$output = ",\n" . '"error":' . Json::encode($error['error']);
+				$output .= ",\n" . '"error_message":' . Json::encode($error['errorMessage']) . "\n";
+
+				echo $output;
+
+				$isOverLimit = true;
+			}
+
+			$out = '}';
+			echo $out;
+			$size += strlen($out);
 		}
-
-		if ($licenseLimit > 0 && $licenseLimit < $count)
-		{
-			$error = $this->getLimitExceededError($count, $licenseLimit);
-
-			$output = ",\n" . '"error":' . Json::encode($error['error']);
-			$output .= ",\n" . '"error_message":' . Json::encode($error['errorMessage']) . "\n";
-
-			echo $output;
-
-			$isOverLimit = true;
-		}
-
-		$out = '}';
-		echo $out;
-		$size += strlen($out);
 
 		$limitManager->fixLimit($count);
 		$manager->endQuery($logId, $count, $size, $isOverLimit);
@@ -214,6 +230,34 @@ class GoogleDataStudio extends Service
 		$databaseConnection->unlock('biconnector_data');
 
 		return $result;
+	}
+
+	private function printStreamedError(Result $result, Result $queryResult): int
+	{
+		$errorsMsg = [];
+		$errorsDescMsg = [];
+		foreach ($queryResult->getErrorCollection() as $error)
+		{
+			$errorsMsg[] = $error->getMessage();
+			if (!empty($error->getCustomData()['description']))
+			{
+				$errorsDescMsg[] = $error->getCustomData()['description'];
+			}
+		}
+
+		$output = ']';
+		$output .= ",\n" . '"error":' . Json::encode(implode('; ', $errorsMsg));
+		if (!empty($errorsDescMsg))
+		{
+			$output .= ",\n" . '"error_message":' . Json::encode(implode('; ', $errorsDescMsg));
+		}
+		$output .= "\n" . '}';
+
+		echo $output;
+
+		$this->markErrorStreamed($result);
+
+		return strlen($output);
 	}
 
 	private function getLimitExceededError(int $count, int $limit): array

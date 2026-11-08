@@ -222,6 +222,7 @@ class Chat extends BaseController
 			'loadInContext' => [
 				'+prefilters' => [
 					new ExtendPullWatchPrefilter(),
+					new DiskQuickAccessGrantor(),
 					new Filter\ExternalChatLoadedNotifier(),
 				],
 			],

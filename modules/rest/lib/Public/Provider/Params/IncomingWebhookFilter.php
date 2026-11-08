@@ -14,7 +14,6 @@ final readonly class IncomingWebhookFilter
 		public array $attributes = [],
 		public ?PasswordType $type = null,
 		public ?bool $active = null,
-		public array $excludeAttributes = [],
 	)
 	{
 	}

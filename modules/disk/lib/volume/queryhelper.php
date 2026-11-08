@@ -197,6 +197,7 @@ class QueryHelper
 
 	/**
 	 * Gets sort order fields as SQL code.
+	 * Pairs with a direction other than ASC/DESC or an unsafe field without alias are dropped.
 	 * @param string[] $orderFields Order fields set.
 	 * @param string[] $fieldAlias Aliases for the order fields.
 	 * @return string
@@ -206,9 +207,19 @@ class QueryHelper
 		$order = [];
 		foreach ($orderFields as $field => $direction)
 		{
+			$direction = self::normalizeOrderDirection($direction);
+			if ($direction === null || !is_string($field))
+			{
+				continue;
+			}
+
 			if (isset($fieldAlias[$field]))
 			{
 				$field = $fieldAlias[$field];
+			}
+			elseif (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$/D', $field))
+			{
+				continue;
 			}
 			$order[] = "$field $direction";
 		}
@@ -219,6 +230,18 @@ class QueryHelper
 		}
 
 		return $orderSql;
+	}
+
+	private static function normalizeOrderDirection(mixed $direction): ?string
+	{
+		if (!is_string($direction))
+		{
+			return null;
+		}
+
+		$direction = strtoupper(trim($direction));
+
+		return ($direction === 'ASC' || $direction === 'DESC') ? $direction : null;
 	}
 
 	/**

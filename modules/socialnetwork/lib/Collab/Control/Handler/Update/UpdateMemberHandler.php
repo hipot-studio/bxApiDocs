@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Control\Handler\Update;
 
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
+use Bitrix\Main\Result;
 use Bitrix\Socialnetwork\Collab\Control\Command\CollabUpdateCommand;
 use Bitrix\Socialnetwork\Collab\Control\Handler\Trait\SplitAccessCodesTrait;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageBuffer;
@@ -44,10 +45,32 @@ class UpdateMemberHandler implements UpdateHandlerInterface
 			return $handlerResult;
 		}
 
+		$accessResult = $this->validateNodesAccess($command);
+		if (!$accessResult->isSuccess())
+		{
+			return $handlerResult->merge($accessResult);
+		}
+
 		$addResult = $this->addMembersByCommand($command);
 		$deleteResult = $this->deleteMembersByCommand($command, $entityAfter);
 
 		return $handlerResult->merge($addResult)->merge($deleteResult);
+	}
+
+	/**
+	 * Both halves of the save are judged before either of them writes: a node the initiator may not see refuses
+	 * the whole edit, so a project is never left with the additions of a save whose removals were refused, or
+	 * the other way round.
+	 */
+	protected function validateNodesAccess(CollabUpdateCommand $command): Result
+	{
+		[, $addStructureCodes] = $this->splitAccessCodes($command->getAddMembers() ?? []);
+		[, $deleteStructureCodes] = $this->splitAccessCodes($command->getDeleteMembers() ?? []);
+
+		return Container::getInstance()
+			->getStructureRelationService()
+			->validateNodesAccess([...$addStructureCodes, ...$deleteStructureCodes], $command->getInitiatorId())
+		;
 	}
 
 	protected function addMembersByCommand(CollabUpdateCommand $command): HandlerResult
@@ -60,13 +83,18 @@ class UpdateMemberHandler implements UpdateHandlerInterface
 			return $handlerResult;
 		}
 
-		[$userCodes, $departmentCodes] = $this->splitAccessCodes($addMembers);
+		[$userCodes, $structureCodes] = $this->splitAccessCodes($addMembers);
 
-		if (!empty($departmentCodes))
+		if (!empty($structureCodes))
 		{
-			Container::getInstance()
+			$linkResult = Container::getInstance()
 				->getStructureRelationService()
-				->linkDepartments($departmentCodes, $command->getId());
+				->linkNodes($structureCodes, $command->getId(), $command->getInitiatorId());
+
+			if (!$linkResult->isSuccess())
+			{
+				return $handlerResult->merge($linkResult);
+			}
 		}
 
 		if (empty($userCodes))
@@ -169,13 +197,18 @@ class UpdateMemberHandler implements UpdateHandlerInterface
 			return $handlerResult;
 		}
 
-		[$userCodes, $departmentCodes] = $this->splitAccessCodes($deleteMembers);
+		[$userCodes, $structureCodes] = $this->splitAccessCodes($deleteMembers);
 
-		if (!empty($departmentCodes))
+		if (!empty($structureCodes))
 		{
-			Container::getInstance()
+			$unlinkResult = Container::getInstance()
 				->getStructureRelationService()
-				->unlinkDepartments($departmentCodes, $command->getId(), $command->getInitiatorId());
+				->unlinkNodes($structureCodes, $command->getId(), $command->getInitiatorId());
+
+			if (!$unlinkResult->isSuccess())
+			{
+				return $handlerResult->merge($unlinkResult);
+			}
 		}
 
 		if (empty($userCodes))
@@ -188,8 +221,8 @@ class UpdateMemberHandler implements UpdateHandlerInterface
 		;
 
 		// Capture structure-initiated members before deletion: their removal is announced project-wide by the
-		// department message (ProjectDepartmentMembersRemoved from the humanresources EventHandler), so they are
-		// excluded from the per-user exclusion message below. Covers both removal paths that reach this handler:
+		// node message the humanresources EventHandler buffers, so they are excluded from the per-user
+		// exclusion message below. Covers both removal paths that reach this handler:
 		// chat-member sync (OnAfterUsersDeleteEvent) and the COLLAB-relation unlink (StructureSyncService).
 		$structureInitiatedIds = Container::getInstance()
 			->getProjectMemberRepository()
@@ -219,10 +252,28 @@ class UpdateMemberHandler implements UpdateHandlerInterface
 		$excludeRecipients = array_values(array_diff($delete, $structureInitiatedIds));
 		if (!empty($excludeRecipients))
 		{
-			ActionMessageFactory::getInstance()
-				->getActionMessage(ActionType::ExcludeUser, $command->getId(), $command->getInitiatorId())
-				->send($excludeRecipients)
-			;
+			if (!empty($structureCodes))
+			{
+				$buffer = ActionMessageBuffer::getInstance();
+				$parameters = $buffer->areMemberMessagesSuppressed($command->getId())
+					? [ActionMessageBuffer::WITHOUT_MESSAGE_PARAMETER => true]
+					: []
+				;
+				$buffer->put(
+					ActionType::ExcludeStructureNode,
+					$command->getId(),
+					$command->getInitiatorId(),
+					$excludeRecipients,
+					$parameters,
+				);
+			}
+			else
+			{
+				ActionMessageFactory::getInstance()
+					->getActionMessage(ActionType::ExcludeUser, $command->getId(), $command->getInitiatorId())
+					->send($excludeRecipients)
+				;
+			}
 		}
 
 		$writeToLogResult = $this->writeDeleteMemberLog($delete, $entityAfter, $command->getInitiatorId());

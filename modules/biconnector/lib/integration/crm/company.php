@@ -5,6 +5,8 @@ use Bitrix\Main\Localization\Loc;
 
 class Company
 {
+	use CategoryNameTrait;
+
 	/**
 	 * Event handler for onBIConnectorDataSources event.
 	 * Adds a key crm_company to the second event parameter.
@@ -36,6 +38,15 @@ class Company
 		{
 			return;
 		}
+
+		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
+		$defaultCategoryName = $messages['CRM_BIC_COMPANY_CATEGORY_DEFAULT_NAME'] ?? '';
+		$categoryName = self::getCategoryNameExpression($helper, $languageId, $defaultCategoryName);
+		$categoryIdLabel = $helper->getConcatFunction("'['", 'C.CATEGORY_ID', "']'");
+		$category = 'concat_ws(\' \', ' . $categoryIdLabel . ', ' . $categoryName . ')';
+		// Both join keys are left joins: the builder reads 'JOIN' only for a column declared without
+		// 'LEFT_JOIN', and an inner join would drop CATEGORY_ID = 0, which has no row in the dictionary.
+		$categoryJoin = 'LEFT JOIN b_crm_item_category DC ON DC.ID = C.CATEGORY_ID';
 
 		$result['crm_company'] = [
 			'TABLE_NAME' => 'b_crm_company',
@@ -318,7 +329,28 @@ class Company
 					'FIELD_TYPE' => 'string',
 				],
 				//TODO:SEARCH_CONTENT MEDIUMTEXT NULL,
-				//TODO:CATEGORY_ID INT UNSIGNED NOT NULL DEFAULT 0,
+				//CATEGORY_ID INT UNSIGNED NOT NULL DEFAULT 0,
+				'CATEGORY_ID' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => 'C.CATEGORY_ID',
+					'FIELD_TYPE' => 'int',
+				],
+				'CATEGORY_NAME' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => $categoryName,
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'DC',
+					'JOIN' => $categoryJoin,
+					'LEFT_JOIN' => $categoryJoin,
+				],
+				'CATEGORY' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => $category,
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'DC',
+					'JOIN' => $categoryJoin,
+					'LEFT_JOIN' => $categoryJoin,
+				],
 				'UTM_SOURCE' => [
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'UTM_S.VALUE',
@@ -402,9 +434,8 @@ class Company
 			],
 		];
 
-		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_company']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_COMPANY_TABLE'] ?: 'crm_company';
-		$result['crm_company']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_COMPANY_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['crm_company']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_COMPANY_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['crm_company']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_COMPANY_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_COMPANY_FIELD_' . $fieldCode] : $fieldCode;
@@ -416,5 +447,12 @@ class Company
 			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['CRM_BIC_COMPANY_FIELD_' . $fieldCode . '_FULL']) ? $messages['CRM_BIC_COMPANY_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
+	}
+
+	protected static function getSystemCategoryCodes(): array
+	{
+		return [
+			\Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository::CATALOG_CONTRACTOR_COMPANY,
+		];
 	}
 }

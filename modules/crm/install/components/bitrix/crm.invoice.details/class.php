@@ -151,15 +151,6 @@ class CrmSmartInvoiceDetailsComponent extends FactoryBased
 
 		$result = parent::saveAction($data);
 
-		if (!$this->getErrors() && $this->item && !$this->isNewItem())
-		{
-			\Bitrix\Crm\Integration\DocumentGeneratorManager::getInstance()->enqueueItemScheduledDocumentsForActualization(
-				\Bitrix\Crm\ItemIdentifier::createByItem($this->item),
-				$this->userID,
-				\Bitrix\Crm\Integration\DocumentGeneratorManager::ACTUALIZATION_POSITION_BACKGROUND,
-			);
-		}
-
 		return $result;
 	}
 

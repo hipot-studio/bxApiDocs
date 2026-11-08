@@ -186,22 +186,24 @@ class FavoriteChat extends PrivateChat
 				->save()
 			;
 
-			$chat->sendBanner();
-
 			if (!$chat->getChatId())
 			{
 				return $result->addError(new ChatError(ChatError::CREATION_ERROR));
 			}
 
-			if ($chat->getAuthorId() > 0)
+			$authorId = $chat->getAuthorId();
+			if ($authorId > 0)
 			{
 				RelationTable::add([
 					'CHAT_ID' => $chat->getChatId(),
 					'MESSAGE_TYPE' => \IM_MESSAGE_PRIVATE,
-					'USER_ID' => $chat->getAuthorId(),
+					'USER_ID' => $authorId,
 					'STATUS' => \IM_STATUS_READ,
 				]);
+				$chat->getRelationFacade()?->onAfterRelationAdd([$authorId]);
 			}
+
+			$chat->sendBanner();
 		}
 
 		$result->setChat($chat);

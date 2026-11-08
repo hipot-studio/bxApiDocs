@@ -23,7 +23,7 @@ class UserFieldLabelSynchronizer extends UserFieldCustomSynchronizer
 		unset(self::$synchronizedFields[$fieldID]);
 	}
 
-	public static function synchronize($userFieldEntityType, $fieldName, array $params = null)
+	public static function synchronize($userFieldEntityType, $fieldName, ?array $params = null)
 	{
 		if(!\CCrmAuthorizationHelper::CheckConfigurationUpdatePermission(self::getCurrentUserPermissions()))
 		{
@@ -69,10 +69,14 @@ class UserFieldLabelSynchronizer extends UserFieldCustomSynchronizer
 			);
 		}
 
-		$parentField = ConversionManager::getParentalField($entityTypeID, $fieldName);
+		$conversionMapOptions = [
+			'ENABLE_ACTUALIZATION' => false,
+		];
+		$parentField = ConversionManager::getParentalField($entityTypeID, $fieldName, $conversionMapOptions);
 		$daughterlyFields = ConversionManager::getConcernedFields(
 			$parentField['ENTITY_TYPE_ID'],
-			$parentField['FIELD_NAME']
+			$parentField['FIELD_NAME'],
+			$conversionMapOptions
 		);
 
 		if($parentField['FIELD_NAME'] !== $fieldName)

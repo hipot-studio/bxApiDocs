@@ -55,6 +55,27 @@ final class FullReportFacade
 		];
 	}
 
+	/**
+	 * Same readiness as getReportToSend($userId, true, true) without building the report: the report day has come
+	 * or a draft is kept. The report day is read from the report info of the day the legacy layer caches, so a
+	 * repeated check calculates no period, even while the report form is shown. On a stale cache it may then answer
+	 * true while getReportToSend() is not ready for submit (see \CUserReportFull::hasReportDayCome()).
+	 */
+	public function isReportReadyForSubmit(int $userId): bool
+	{
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		return $this->isReportDay($userId) || $this->fullReportRepository->findLatestDraft($userId) !== null;
+	}
+
+	private function isReportDay(int $userId): bool
+	{
+		return (new \CUserReportFull($userId))->hasReportDayCome();
+	}
+
 	private function loadLegacyPayload(int $userId, bool $force): array
 	{
 		$payload = (new \CUserReportFull($userId))->GetReportData($force, true);

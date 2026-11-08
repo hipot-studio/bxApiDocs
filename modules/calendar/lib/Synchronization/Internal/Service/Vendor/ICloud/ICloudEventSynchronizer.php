@@ -30,6 +30,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotFoundException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\PreconditionFailedException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\UnexpectedException;
 use Bitrix\Calendar\Synchronization\Internal\Service\ConnectionManager;
+use Bitrix\Calendar\Synchronization\Internal\Service\Lock\ExportLock;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use Bitrix\Calendar\Synchronization\Internal\Service\Messenger\Sender\EventSender;
 use Bitrix\Calendar\Synchronization\Internal\Repository\EventConnectionRepository;
@@ -40,19 +41,24 @@ use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Processor\Eve
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Dto\EventResponse;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Gateway\ICloudEventGateway;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\ConfigurationException;
 use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\UuidGenerator;
 
 class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements EventSynchronizerInterface
 {
 	use EventSynchronizerTrait;
+
+	private const EVENT_CREATE_LOCK_NAME_PREFIX = 'calendar:icloud:event-create:';
 
 	public function __construct(
 		private readonly EventConnectionRepository $eventConnectionRepository,
 		private readonly EventImportProcessor $importProcessor,
 		private readonly EventRepository $eventRepository,
 		private readonly EventSender $sender,
+		private readonly ExportLock $exportLock,
 		ConnectionProvider $connectionProvider,
 		SectionConnectionRepository $sectionConnectionRepository,
 		ICloudGatewayProvider $gatewayProvider,
@@ -112,6 +118,10 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 				// If the section was deleted on the vendor side
 				$this->disableDeletedSectionConnection($sectionConnection);
 			}
+			catch (SynchronizerException $e)
+			{
+				throw $e;
+			}
 			catch (ApiException|DtoValidationException|Exception $e)
 			{
 				throw new SynchronizerException(
@@ -153,6 +163,10 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 		try
 		{
 			$this->importProcessor->import($sectionConnection, $events);
+		}
+		catch (SynchronizerException $e)
+		{
+			throw $e;
 		}
 		catch (SystemException $e)
 		{
@@ -277,7 +291,7 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 
 		if (!$sectionConnection)
 		{
-			throw new SynchronizerException(
+			throw new NoLogSynchronizerException(
 				sprintf(
 					'Section connection for section "%s" not found (event: "%s")',
 					$event->getSection()->getId(),
@@ -291,11 +305,33 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 
 		$gateway = $this->gatewayProvider->getEventGateway($ownerId, $connection->getServer());
 
+		$this->exportLock->withEventLock(
+			(int)$connection->getId(),
+			$event,
+			fn() => $this->exportEventConnection($event, $connection, $sectionConnection, $gateway),
+		);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws PersistenceException
+	 * @throws SynchronizerException
+	 */
+	private function exportEventConnection(
+		Event $event,
+		Connection $connection,
+		SectionConnection $sectionConnection,
+		ICloudEventGateway $gateway,
+	): void
+	{
 		$eventConnection = $this->getEventConnection($event->getId(), $connection->getId());
 
-		if ($eventConnection)
+		if (!$sectionConnection->isActive())
 		{
-			if (!$sectionConnection->isActive())
+			if (
+				$eventConnection
+				&& $eventConnection->getLastSyncStatus() !== Dictionary::SYNC_STATUS['create']
+			)
 			{
 				$eventConnection
 					->setVersion($event->getVersion())
@@ -307,21 +343,80 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 				return;
 			}
 
-			$this->updateEvent($event, $eventConnection, $connection, $sectionConnection, $gateway);
-
-			$this->connectionManager->updateConnection($connection);
-
 			return;
 		}
 
-		if (!$sectionConnection->isActive())
+		if (!$eventConnection || $eventConnection->getVendorEventId() === '')
 		{
-			return;
+			$eventConnection = $this->reserveEventConnection($event, $connection);
 		}
 
-		$this->createEvent($event, $connection, $sectionConnection, $gateway);
+		if ($eventConnection->getLastSyncStatus() === Dictionary::SYNC_STATUS['create'])
+		{
+			$this->createEvent($event, $eventConnection, $connection, $sectionConnection, $gateway);
+		}
+		else
+		{
+			$this->updateEvent($event, $eventConnection, $connection, $sectionConnection, $gateway);
+		}
 
 		$this->connectionManager->updateConnection($connection);
+	}
+
+	/**
+	 * @throws PersistenceException
+	 * @throws SynchronizerException
+	 */
+	private function reserveEventConnection(Event $event, Connection $connection): EventConnection
+	{
+		$eventId = (int)$event->getId();
+		$connectionId = (int)$connection->getId();
+		$lockName = self::EVENT_CREATE_LOCK_NAME_PREFIX . $connectionId . ':' . $eventId;
+		$databaseConnection = Application::getConnection();
+
+		if (!$databaseConnection->lock($lockName))
+		{
+			throw new NoLogSynchronizerException('Unable to reserve an iCloud event identifier');
+		}
+
+		try
+		{
+			$connectionPool = Application::getInstance()->getConnectionPool();
+			$connectionPool->useMasterOnly(true);
+
+			try
+			{
+				$eventConnection = $this->getEventConnection($eventId, $connectionId);
+			}
+			finally
+			{
+				$connectionPool->useMasterOnly(false);
+			}
+
+			if (!$eventConnection)
+			{
+				$eventConnection = (new EventConnection())
+					->setEvent($event)
+					->setConnection($connection)
+				;
+			}
+
+			if ($eventConnection->getVendorEventId() === '')
+			{
+				$eventConnection
+					->setVendorEventId(UuidGenerator::generateV4())
+					->setLastSyncStatus(Dictionary::SYNC_STATUS['create'])
+				;
+
+				$this->eventConnectionRepository->save($eventConnection);
+			}
+
+			return $eventConnection;
+		}
+		finally
+		{
+			$databaseConnection->unlock($lockName);
+		}
 	}
 
 	/**
@@ -331,21 +426,19 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 	 */
 	private function createEvent(
 		Event $event,
+		EventConnection $eventConnection,
 		Connection $connection,
 		SectionConnection $sectionConnection,
 		ICloudEventGateway $gateway,
 	): void
 	{
-		$eventConnection =
-			(new EventConnection())
-				->setEvent($event)
-				->setConnection($connection)
-				->setLastSyncStatus(Dictionary::SYNC_STATUS['create'])
-		;
-
 		try
 		{
-			$eventResponse = $gateway->createEvent($event, $sectionConnection->getVendorSectionId());
+			$eventResponse = $gateway->createEvent(
+				$event,
+				$sectionConnection->getVendorSectionId(),
+				$eventConnection->getVendorEventId(),
+			);
 
 			$eventConnection
 				->setRetryCount()
@@ -396,10 +489,8 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 				$e,
 			);
 		}
-		finally
-		{
-			$this->eventConnectionRepository->save($eventConnection);
-		}
+
+		$this->eventConnectionRepository->save($eventConnection);
 
 		if ($event->isRecurrence())
 		{
@@ -433,21 +524,11 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 
 		try
 		{
-			if ($eventConnection->getVendorEventId())
-			{
-				$eventResponse = $gateway->updateEvent(
-					$event,
-					$eventConnection,
-					$sectionConnection->getVendorSectionId(),
-				);
-			}
-			else
-			{
-				// EventConnection may have an empty value of vendorEventId because in legacy logic
-				// it creates in case of deleted section on the vendor's side.
-				// See ICloudEventSynchronizer::createEvent logic
-				$eventResponse = $gateway->createEvent($event, $sectionConnection->getVendorSectionId());
-			}
+			$eventResponse = $gateway->updateEvent(
+				$event,
+				$eventConnection,
+				$sectionConnection->getVendorSectionId(),
+			);
 
 			$eventConnection
 				->setVendorEventId($eventResponse->id)
@@ -644,6 +725,26 @@ class ICloudEventSynchronizer extends AbstractICloudSynchronizer implements Even
 
 		$gateway = $this->gatewayProvider->getEventGateway($ownerId, $connection->getServer());
 
+		$this->exportLock->withEventLock(
+			(int)$connection->getId(),
+			$event,
+			fn() => $this->exportInstanceConnection($event, $connection, $sectionConnection, $gateway),
+		);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws PersistenceException
+	 * @throws SynchronizerException
+	 * @throws LogicException
+	 */
+	private function exportInstanceConnection(
+		Event $event,
+		Connection $connection,
+		SectionConnection $sectionConnection,
+		ICloudEventGateway $gateway,
+	): void
+	{
 		$eventConnection = $this->getEventConnection((int)$event->getId(), (int)$connection->getId());
 
 		if ($eventConnection)

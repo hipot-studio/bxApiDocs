@@ -5,8 +5,10 @@ use Bitrix\Main\Entity;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\Security\Random;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Sign\File;
 use Bitrix\Sign\Internal\Document\TemplateTable;
+use Bitrix\Sign\Type\Document\CreationSourceType;
 use Bitrix\Sign\Type\Document\ExternalDateCreateSourceType;
 use Bitrix\Sign\Type\Document\ExternalIdSourceType;
 use Bitrix\Sign\Type\Document\InitiatedByType;
@@ -254,6 +256,37 @@ class DocumentTable extends Entity\DataManager
 				->configureTitle('Configured date format')
 				->configureNullable()
 				->addValidator(new Entity\Validator\Length(null, 50))
+			,
+			(new IntegerField('CREATION_SOURCE_TYPE'))
+				->configureTitle('Creation source type')
+				->configureRequired()
+				->configureDefaultValue(CreationSourceType::UNKNOWN->toInt())
+			,
+			(new Entity\StringField('CREATION_SOURCE_ID'))
+				->configureTitle('Creation source ID')
+				->configureNullable()
+				->addValidator(new Entity\Validator\Length(null, 32))
+			,
+			(new IntegerField('CREATION_SOURCE_ENTITY_TYPE_ID'))
+				->configureTitle('Creation source entity type ID')
+				->configureNullable()
+			,
+			(new IntegerField('CREATION_SOURCE_ENTITY_ID'))
+				->configureTitle('Creation source entity ID')
+				->configureNullable()
+			,
+			(new Entity\TextField('INVITE_MESSAGE'))
+				->configureTitle('Message attached to the invitation to sign')
+				->configureNullable()
+				// free user text: four-byte characters are lost when the connection charset is utf8mb3.
+				// Only strings are converted: Emoji turns null into an empty string, which would
+				// replace "no message" with "an empty message" on the nullable column.
+				// Emoji::decode is a preg_replace_callback with the /u modifier and returns null on a
+				// broken UTF-8 sequence: keep the stored text so the next update cannot overwrite it.
+				->addSaveDataModifier(static fn($value) => is_string($value) ? Emoji::encode($value) : $value)
+				->addFetchDataModifier(
+					static fn($value) => is_string($value) ? (Emoji::decode($value) ?? $value) : $value
+				)
 			,
 		];
 	}

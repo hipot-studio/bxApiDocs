@@ -680,6 +680,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public static function delete($id, bool $forceDeleted = false): \Bitrix\Main\Result
 	{
+		$id = (int)$id;
 		$result = new \Bitrix\Main\Entity\DeleteResult();
 		$params = [];
 
@@ -697,6 +698,17 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				$landing = self::createInstance($id, $params);
 				if ($landing->exist())
 				{
+					if (!$landing->canDelete())
+					{
+						$result->addError(
+							new \Bitrix\Main\Error(
+								Loc::getMessage('LANDING_DELETE_ACCESS_DENIED'),
+								'ACCESS_DENIED'
+							)
+						);
+
+						return $result;
+					}
 					foreach ($landing->getBlocks() as $block)
 					{
 						if ($block->getAccess() < $block::ACCESS_X)
@@ -724,6 +736,18 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 					return $result;
 				}
 			}
+		}
+
+		if (Lock::isLandingDeleteLocked($id))
+		{
+			$result->addError(
+				new \Bitrix\Main\Error(
+					Loc::getMessage('LANDING_TABLE_ERROR_LD_IS_LOCK'),
+					'LANDING_IS_LOCK'
+				)
+			);
+
+			return $result;
 		}
 
 		// delete blocks
@@ -1075,9 +1099,12 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 			// the signed preview tail unlocks the draft of a site, so it is put only on the urls of
 			// the site of this landing: a link to a page of any other site stays its plain public url
 			$rowPreviewMode = $previewMode && $this->isPreviewSite((int)$row['SITE_ID_ORIG']);
+			// in the cloud the preview link is the route of the section, built from ids alone
+			$cloudPreview = $rowPreviewMode
+				&& Site\PortalPreview::isCloud($bitrix24, $disableCloud, $row['SITE_TYPE']);
 			$publicHash = '';
 			$siteKey = null;
-			if ($rowPreviewMode)
+			if ($rowPreviewMode && !$cloudPreview)
 			{
 				if ($siteKeyCode == 'CODE')
 				{
@@ -1093,7 +1120,36 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 			{
 				$row['CODE'] .= '/';
 			}
-			if ($disableCloud)
+			// isCloud() carries the "cloud enabled" flag, so the branches below keep their former order
+			if (
+				$bitrix24
+				&& $row['SITE_TYPE'] === Site\Type::SCOPE_CODE_VIBE
+				&& (int)$row['ID'] !== (int)$row['SITE_ID_INDEX']
+			)
+			{
+				$lastFolderItem = [];
+				$folderPath = $row['FOLDER_ID']
+					? ltrim(Folder::getFullPath($row['FOLDER_ID'], $row['SITE_ID_ORIG'], $lastFolderItem), '/')
+					: '';
+				$siteDir = defined('SITE_DIR') ? SITE_DIR : '/';
+				$fullUrl[$row['ID']] = ($absolute ? $hostUrl : '') . $siteDir
+					. 'pub/site/vibe/' . $row['SITE_ID_ORIG'] . '/' . $folderPath;
+				$data[$row['ID']] = $fullUrl[$row['ID']] . ($row['RULE'] ? '' : $row['CODE']);
+				if (!$row['RULE'])
+				{
+					$fullUrl[$row['ID']] .= $row['CODE'];
+				}
+			}
+			elseif ($cloudPreview)
+			{
+				$fullUrl[$row['ID']] = Site\PortalPreview::buildUrl(
+					(int)$row['SITE_ID_ORIG'],
+					(int)$row['ID'],
+					$absolute
+				);
+				$data[$row['ID']] = $fullUrl[$row['ID']];
+			}
+			elseif ($disableCloud)
 			{
 				$lastFolderItem = [];
 				$fullUrl[$row['ID']] = ($absolute ? $hostUrl : '') .
@@ -1118,25 +1174,18 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 			else
 			{
 				$lastFolderItem = [];
-				$cloudPreview = $rowPreviewMode && Site\PreviewUrl::isCloudTarget($bitrix24, !$domainReplace, $disableCloud);
 				$fullUrl[$row['ID']] = (
-									$cloudPreview
-										? Site\PreviewUrl::buildPreviewBase($siteKey, $publicHash, $absolute)
-										: (
-											(
-												$absolute
-													? (
-														$row['SITE_PROTOCOL'] . '://' .
-														$row['SITE_DOMAIN']
-													)
-													: ''
-											) .
-											(($domainReplace || !$bitrix24) ? $pubPath : '') .
-											(($rowPreviewMode && !$bitrix24) ? '/preview/' . $publicHash : '') .
-											(($domainReplace && $bitrix24) ? $row['SITE_ID'] : '/') .
-											(($rowPreviewMode && $bitrix24) ? 'preview/' . $publicHash . '/' : '')
-										)
+										$absolute
+											? (
+												$row['SITE_PROTOCOL'] . '://' .
+												$row['SITE_DOMAIN']
+											)
+											: ''
 									) .
+									(($domainReplace || !$bitrix24) ? $pubPath : '') .
+									(($rowPreviewMode && !$bitrix24) ? '/preview/' . $publicHash : '') .
+									(($domainReplace && $bitrix24) ? $row['SITE_ID'] : '/') .
+									(($rowPreviewMode && $bitrix24) ? 'preview/' . $publicHash . '/' : '') .
 									($row['FOLDER_ID'] ? ltrim(Folder::getFullPath($row['FOLDER_ID'], $row['SITE_ID_ORIG'], $lastFolderItem), '/') : '');
 				$folderIndex = $row['ID'] == $lastFolderItem['INDEX_ID'] || !$lastFolderItem['INDEX_ID'] && trim($row['CODE'], '/') === $lastFolderItem['CODE'];
 				$data[$row['ID']] = $fullUrl[$row['ID']] .
@@ -1168,7 +1217,30 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public static function resolveIdByPublicUrl(string $landingUrl, int $siteId): ?int
 	{
-		if (Manager::isB24() && !Manager::isCloudDisable() && Site\Type::isPublicScope())
+		$vibePath = null;
+		$siteType = self::getSiteType();
+		$siteDir = defined('SITE_DIR') ? SITE_DIR : '/';
+		$urlPath = parse_url($landingUrl, PHP_URL_PATH);
+		$vibePrefix = $siteDir . 'pub/site/vibe/';
+		if (Manager::isB24() && is_string($urlPath) && str_starts_with($urlPath, $vibePrefix))
+		{
+			$parts = explode('/', substr($urlPath, strlen($vibePrefix)), 2);
+			if (($parts[0] ?? '') !== (string)$siteId || empty($parts[1]))
+			{
+				return null;
+			}
+			$site = Site::getList([
+				'select' => ['ID', 'TYPE'],
+				'filter' => ['ID' => $siteId, '=TYPE' => Site\Type::SCOPE_CODE_VIBE, 'CHECK_PERMISSIONS' => 'N'],
+			])->fetch();
+			if (!$site || $site['TYPE'] !== Site\Type::SCOPE_CODE_VIBE)
+			{
+				return null;
+			}
+			$vibePath = $siteId . '/' . $parts[1];
+			$siteType = Site\Type::SCOPE_CODE_VIBE;
+		}
+		elseif (Manager::isB24() && !Manager::isCloudDisable() && Site\Type::isPublicScope())
 		{
 			$landingUrl = rtrim(Manager::getPublicationPath($siteId), '/') . '/' . ltrim($landingUrl, '/');
 		}
@@ -1178,10 +1250,10 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 		$demoCmp = new $className;
 		$demoCmp->initComponent($componentName);
 		$demoCmp->arParams = [
-			'PATH' => mb_substr($landingUrl, mb_strlen($publicationPath)),
+			'PATH' => $vibePath ?? mb_substr($landingUrl, mb_strlen($publicationPath)),
 			'DRAFT_MODE' => 'Y',
 			'SITE_ID' => $siteId,
-			'SITE_TYPE' => self::getSiteType(),
+			'SITE_TYPE' => $siteType,
 			'CHECK_PERMISSIONS' => 'N',
 			'NOT_CHECK_DOMAIN' => 'Y',
 			'NOT_SEND_HTTP_STATUS' => 'Y',
@@ -2858,7 +2930,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 	}
 
 	/**
-	 * Dectivate the block on the landing.
+	 * Deactivate the block on the landing.
 	 * @param int $id Block id.
 	 * @return boolean
 	 */
@@ -3382,7 +3454,7 @@ class Landing extends \Bitrix\Landing\Internals\BaseTable
 				'FOLDER_ID' => $folderId,
 				'RULE' => '',
 			]);
-			// landing allready create, just copy the blocks
+			// landing already create, just copy the blocks
 			if ($res->isSuccess())
 			{
 				Landing::setEditMode();

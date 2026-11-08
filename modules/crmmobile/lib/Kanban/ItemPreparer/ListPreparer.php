@@ -4,22 +4,9 @@ namespace Bitrix\CrmMobile\Kanban\ItemPreparer;
 
 use Bitrix\Crm\Format\Date;
 use Bitrix\CrmMobile\Kanban\Client;
-use Bitrix\CrmMobile\Kanban\Dto\Field;
 
 class ListPreparer extends Base
 {
-	public function execute(array $item, array $params = []): array
-	{
-		$id = $this->getItemId($item);
-
-		if (isset($params['displayValues']))
-		{
-			$params['displayValues'] = $params['displayValues'][$id] ?? [];
-		}
-
-		return parent::execute($item, $params);
-	}
-
 	protected function getItemId(array $item): int
 	{
 		return $item['ID'];
@@ -62,37 +49,10 @@ class ListPreparer extends Base
 
 	protected function prepareFields(array $item = [], array $params = []): array
 	{
-		$fields = [];
-		foreach ($params['displayValues'] as $fieldName => $fieldValue)
-		{
-			/** @var \Bitrix\Crm\Field $field */
-			$field = $params['fieldsCollection']->getField($fieldName);
-			if (!$field || !isset($fieldValue['value']) || $this->isExcludedField($field->getName()))
-			{
-				continue;
-			}
-
-			$config = $fieldValue['config'] ?? [];
-			$fieldSettings = $field->getSettings();
-			if (isset($fieldSettings['icon']['url']))
-			{
-				$config['titleIcon']['before']['uri'] = $fieldSettings['icon']['url'];
-			}
-
-			$dtoField = Field::make([
-				'name' => $field->getName(),
-				'title' => $field->getTitle(),
-				'type' => $field->getType(),
-				'value' => $fieldValue['value'],
-				'config' => $config,
-				'multiple' => $field->isMultiple(),
-			]);
-			$this->prepareField($dtoField);
-
-			$fields[] = $dtoField;
-		}
-
-		return $fields;
+		return $this->prepareFieldsFromDisplayValues(
+			($params['displayValues'] ?? []),
+			($params['fieldsCollection'] ?? null),
+		);
 	}
 
 	protected function prepareBadges(array $item = [], array $params = []): array

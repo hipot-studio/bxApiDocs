@@ -3,7 +3,11 @@
 namespace Bitrix\Im\V2\Folder;
 
 use Bitrix\Im\Model\FolderChatTable;
+use Bitrix\Im\V2\Analytics\FolderAnalytics;
 use Bitrix\Im\V2\Common\Normalizer;
+use Bitrix\Im\V2\Error;
+use Bitrix\Im\V2\Folder\Eligibility\EligibleChatTypes;
+use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\Folder\Pull\FolderChatAdd;
 use Bitrix\Im\V2\Folder\Pull\FolderChatDelete;
 use Bitrix\Im\V2\Result;
@@ -24,6 +28,7 @@ class FolderChatService
 		{
 			$userId = (int)$folder->getUserId();
 			(new FolderChatAdd($folder, $userId))->send();
+			(new FolderAnalytics($userId))->addAddChat($chatIds);
 		}
 
 		return $result;
@@ -46,6 +51,11 @@ class FolderChatService
 	 * Diffs current vs new, UPSERT/DELETE accordingly.
 	 *
 	 * Folders that are not owned by $userId or are not personal are silently ignored.
+	 * A target folder that is full or does not accept the chat fails the whole call before the first
+	 * membership is written, so the refusal itself adds and removes no chat anywhere. The one exception
+	 * is the capacity check: on a folder at the limit it drops the membership rows that show up in no
+	 * composition anyway ({@see FolderChatLinker::findCapacityError()}) - a chat that is gone, that the
+	 * user is not in, or that is no longer accessible to them.
 	 *
 	 * @param int[] $folderIds
 	 */
@@ -87,6 +97,43 @@ class FolderChatService
 
 		$toAdd = array_values(array_diff(array_keys($validTargetFoldersById), $currentFolderIds));
 		$toRemove = array_values(array_diff($currentFolderIds, array_keys($validTargetFoldersById)));
+
+		// 4. Both reasons to refuse are checked for every target folder before the first mutation:
+		// a rejection in the middle of the loop would otherwise leave the memberships half-updated.
+		// Capacity comes first, the same order FolderChatLinker::addChats() asks in. The batch scope
+		// wraps both loops: the eligible recent sections are the same for every target folder, and a
+		// per-folder check would rebuild them up to FolderLimits::MAX_FOLDERS_PER_USER times.
+		$refusal = EligibleChatTypes::withRecentSectionsResolvedOnce(
+			function () use ($toAdd, $validTargetFoldersById, $chatId): ?Error {
+				foreach ($toAdd as $folderId)
+				{
+					$capacityError = $this->linker->findCapacityError($validTargetFoldersById[$folderId], 1);
+					if ($capacityError !== null)
+					{
+						return $capacityError;
+					}
+				}
+
+				foreach ($toAdd as $folderId)
+				{
+					$ineligibleChatIds = $this->linker->findIneligibleChats(
+						$validTargetFoldersById[$folderId],
+						[$chatId],
+					);
+					if (!empty($ineligibleChatIds))
+					{
+						return new Error(FolderError::FOLDER_CHAT_NOT_ELIGIBLE, ['chatIds' => $ineligibleChatIds]);
+					}
+				}
+
+				return null;
+			}
+		);
+
+		if ($refusal !== null)
+		{
+			return $result->addError($refusal);
+		}
 
 		foreach ($toAdd as $folderId)
 		{

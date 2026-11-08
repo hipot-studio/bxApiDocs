@@ -48,6 +48,11 @@ class PromptDisplayRuleRepository extends BaseRepository
 	 */
 	public function getRulesForPromptsAndChildren(array $promptsIds): mixed
 	{
+		if (empty($promptsIds))
+		{
+			return [];
+		}
+
 		return PromptDisplayRuleTable::query()
 			->setSelect([
 				'PROMPT_ID',

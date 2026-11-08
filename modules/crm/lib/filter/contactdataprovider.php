@@ -163,6 +163,17 @@ class ContactDataProvider extends EntityDataProvider implements FactoryOptionabl
 					'partial' => true
 				]
 			),
+			'SOURCE_DESCRIPTION' => $this->createField(
+				'SOURCE_DESCRIPTION',
+				[
+					'data' => [
+						'additionalFilter' => [
+							'isEmpty',
+							'hasAnyValue',
+						],
+					],
+				]
+			),
 			'TYPE_ID' => $this->createField(
 				'TYPE_ID',
 				[
@@ -172,6 +183,12 @@ class ContactDataProvider extends EntityDataProvider implements FactoryOptionabl
 			),
 			'EXPORT' => $this->createField(
 				'EXPORT',
+				[
+					'type' => 'checkbox'
+				]
+			),
+			'OPENED' => $this->createField(
+				'OPENED',
 				[
 					'type' => 'checkbox'
 				]
@@ -421,7 +438,7 @@ class ContactDataProvider extends EntityDataProvider implements FactoryOptionabl
 		{
 			return array(
 				'params' => array('multiple' => 'Y'),
-				'items' => \CCrmStatus::GetStatusList('SOURCE')
+				'items' => SourceDataProvider::getListWithEmptyValue()
 			);
 		}
 		elseif($fieldID === 'TYPE_ID')

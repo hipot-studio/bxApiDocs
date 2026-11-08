@@ -301,7 +301,16 @@ class Page extends Base
 		else
 		{
 			$imOpenLinesManager = ImOpenLinesManager::getInstance();
-			if(isset($options['sessionId']) && $options['sessionId'] > 0)
+			$check = $imOpenLinesManager->checkClientSessionId($options['sessionId'] ?? null, $options['dialogId']);
+			if (!$check->isSuccess())
+			{
+				$this->addErrors($check->getErrors());
+
+				return;
+			}
+
+			$options['sessionId'] = $check->getData()['sessionId'];
+			if ($options['sessionId'] > 0)
 			{
 				$imOpenLinesManager->setSessionId($options['sessionId']);
 			}

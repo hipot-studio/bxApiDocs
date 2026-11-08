@@ -2,7 +2,10 @@
 
 namespace Bitrix\Crm\Activity\Provider\ToDo\Block;
 
+use Bitrix\Calendar\Access\ActionDictionary;
+use Bitrix\Calendar\Access\EventAccessController;
 use Bitrix\Crm\Activity\Provider\ToDo\OptionallyConfigurable;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
@@ -156,7 +159,8 @@ final class Calendar extends Base
 			return;
 		}
 
-		if (!$skipActiveSectionCheck && empty($this->blockData['active']))
+		$active = $this->blockData['active'] ?? null;
+		if (!$skipActiveSectionCheck && ($active === 'false' || empty($active)))
 		{
 			$this->unbindAndDeleteCalendarEvent($entity, $calendarEventId);
 
@@ -178,12 +182,39 @@ final class Calendar extends Base
 
 	private function unbindAndDeleteCalendarEvent(OptionallyConfigurable $entity, int $calendarEventId): void
 	{
+		$userId = $entity->getContext()?->getUserId() ?? Container::getInstance()->getContext()->getUserId();
+		$eventModel = CCalendarEvent::getEventModelForPermissionCheck(
+			eventId: $calendarEventId,
+			userId: $userId,
+		);
+		if (
+			$eventModel->getId() > 0
+			&& !(new EventAccessController($userId))->check(ActionDictionary::ACTION_EVENT_DELETE, $eventModel)
+		)
+		{
+			return;
+		}
+
 		$entity->setCalendarEventId(0);
-		$entity->save();
+		$saveResult = $entity->save();
+		if (!$saveResult->isSuccess())
+		{
+			$entity->setCalendarEventId($calendarEventId);
+
+			return;
+		}
+
+		// 253583: hand the record over - the calendar reads its own with permission checks
+		$event = CCalendarEvent::GetById($calendarEventId, false);
+		if (!is_array($event))
+		{
+			return;
+		}
 
 		CCalendarEvent::Delete([
 			'id' => $calendarEventId,
 			'bMarkDeleted' => true,
+			'Event' => $event,
 		]);
 	}
 

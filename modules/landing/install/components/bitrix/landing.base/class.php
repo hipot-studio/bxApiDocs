@@ -1004,7 +1004,7 @@ class LandingBaseComponent extends \CBitrixComponent
 	}
 
 	/**
-	 * Detect, if error occurred on small tarrifs.
+	 * Detect, if error occurred on small tariffs.
 	 * @param string $errorCode Error code.
 	 * @return bool
 	 */

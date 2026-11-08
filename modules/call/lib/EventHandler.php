@@ -12,6 +12,9 @@ use Bitrix\Im\V2\Chat\Event\Dto\ChatDto;
 use Bitrix\Call\Model\CallUserTable;
 use Bitrix\Call\Model\CallUserLogTable;
 use Bitrix\Call\Service\CallLogService;
+use Bitrix\Call\Service\CallLogPushService;
+use Bitrix\Call\Counter;
+use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\EntityType;
 
 /**
@@ -67,9 +70,68 @@ class EventHandler
 					Recent::updateUserActiveCallsCache($userId);
 				}
 			}
+
+			self::refreshGuestCallLogCounters($userIds);
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Recounts the missed-calls badge of the guests whose chat membership has just changed.
+	 *
+	 * A guest sees the journal through their chat membership, so gaining or losing a chat changes their
+	 * badge while not a single journal row moves. Nothing else would notice: the counter cache is dropped
+	 * by journal writes, and this is not one - the number would stay as it was until the cache expired a
+	 * day later, disagreeing with the journal in either direction. Membership is already written by the
+	 * time these events are sent (@see \Bitrix\Im\V2\Chat::deleteUser, @see \Bitrix\Im\V2\Chat::addUsers),
+	 * so the recount reads the new one.
+	 *
+	 * @param int[] $userIds
+	 * @return void
+	 */
+	private static function refreshGuestCallLogCounters(array $userIds): void
+	{
+		// The membership change is already written and the recount is optional, so no branch of it -
+		// guest detection included - may turn a completed change into an error of the calling API.
+		try
+		{
+			$service = new CallLogService();
+			$service->preloadGuestFlags($userIds);
+
+			foreach ($userIds as $userId)
+			{
+				$userId = (int)$userId;
+				if ($userId <= 0)
+				{
+					continue;
+				}
+
+				// Guarded per user as well: one failing badge must not cancel the rest of the batch.
+				try
+				{
+					if (!$service->isGuestUser($userId))
+					{
+						continue;
+					}
+
+					Counter::clearCache($userId);
+					CallLogPushService::sendCounterUpdate($userId, $service->getMissedCounter($userId));
+				}
+				catch (\Throwable $exception)
+				{
+					Logger::getInstance()->error(
+						"Failed to refresh call log counter for guest {$userId}: {$exception->getMessage()}"
+					);
+				}
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			Logger::getInstance()->error(
+				"Failed to refresh guest call log counters after a chat membership change: {$exception->getMessage()}"
+			);
+		}
 	}
 
 	/**
@@ -158,8 +220,25 @@ class EventHandler
 			return;
 		}
 
-		Recent::updateCallCache($call->getId());
-		Recent::terminateAllCallsInChat($call->getChatId(), $call->getId());
+		// Runs synchronously after the FINISHED state is committed (call:onCallFinished is sent
+		// inline from Call::finishSideEffects). The active-calls cache rebuild is O(N) over
+		// participants (and storm-coalesced), so it stays deferred off-clock; the sibling teardown
+		// is cheap (bounded by the chat's other calls, not by participant count) and runs inline
+		// before the response, so it is not lost if the worker dies after the finish commits.
+		// terminateAllCallsInChat is the single owner of the sibling teardown (the finish
+		// controllers no longer call it directly).
+		Recent::scheduleUpdateCallCache($call->getId());
+
+		// Skip while a chat teardown is already in progress: terminateAllCallsInChat finishes each
+		// sibling synchronously and every finish() re-enters this handler via the inline
+		// call:onCallFinished event — without this guard a chat with K siblings would fan out into
+		// nested teardowns (O(K^2)). terminateAllCallsInChat raises the flag around its loop and
+		// restores it after.
+		$chatId = (int)$call->getChatId();
+		if ($chatId > 0 && !Recent::isTearingDownChat($chatId))
+		{
+			Recent::terminateAllCallsInChat($chatId, (int)$call->getId());
+		}
 
 		$userIds = array_keys($call->getCallUsers());
 		if ($userIds !== [])
@@ -198,6 +277,10 @@ class EventHandler
 		}
 
 		$service = new CallLogService();
+		// One batch instead of a cold user load per participant: every replayed row asks whether its user is
+		// a guest, and a large room replays as many rows as it had participants.
+		$service->preloadGuestFlags(array_column($existing, 'USER_ID'));
+
 		foreach ($existing as $row)
 		{
 			$service->addOrUpdateEvent(
@@ -249,6 +332,8 @@ class EventHandler
 			{
 				self::inviteUsersToCall($call, $newUsers);
 			}
+
+			self::refreshGuestCallLogCounters($newUsers);
 		}
 
 		return $result;
@@ -281,44 +366,59 @@ class EventHandler
 			}
 		}
 
-		if (!empty($usersToInvite))
+		if (empty($usersToInvite))
 		{
-			$signaling = $call->getSignaling();
-			$initiatorId = $call->getInitiatorId();
-
-			foreach ($usersToInvite as $userId)
-			{
-				if ($call->getScheme() === Call::SCHEME_JWT)
-				{
-					$signaling->sendCallInviteToUser(
-						senderId: $initiatorId,
-						toUserId: $userId,
-						isLegacyMobile: false,
-						video: true,
-						sendPush: true,
-					);
-				}
-				else
-				{
-					$signaling->sendInviteToUser(
-						senderId: $initiatorId,
-						toUserId: $userId,
-						invitedUsers: $usersToInvite,
-						isLegacyMobile: false,
-						video: true,
-						sendPush: true
-					);
-				}
-				Recent::updateUserActiveCallsCache($userId);
-			}
-
-			if (count($usersToInvite) > 0)
-			{
-				$signaling->sendUsersInvited($initiatorId, $usersToInvite, $call->getUsers(), true);
-			}
-
-			Recent::updateCallCache($call->getId());
+			return;
 		}
+
+		$signaling = $call->getSignaling();
+		$initiatorId = $call->getInitiatorId();
+
+		// Manual add to a running conference (BUGS #230232, Q-5): adding a user to the
+		// conference chat is a direct human invitation -- it RINGS and shows the recent
+		// card, even when the conference started long ago. The `manualInvite` flag lets
+		// the ring survive the client's stale gate (server_time_ago > 30), and the
+		// conference TTL widens the pull expiry so a slow answer still lands. The silent
+		// card-only path is reserved for the automatic start reconcile
+		// (see Controller\Call::reconcileConferenceParticipants()). Type is the
+		// discriminator -- 1:1 (PROVIDER_PLAIN) never reaches this handler (see the
+		// onChatUserAdd provider filter), and TYPE_INSTANT groups keep the plain ring.
+		$conferenceInvite = $call->getType() === Call::TYPE_PERMANENT;
+		$conferenceTtl = $conferenceInvite ? Settings::getConferenceInviteTtl() : null;
+
+		foreach ($usersToInvite as $userId)
+		{
+			if ($call->getScheme() === Call::SCHEME_JWT)
+			{
+				$signaling->sendCallInviteToUser(
+					senderId: $initiatorId,
+					toUserId: $userId,
+					isLegacyMobile: false,
+					video: true,
+					sendPush: true,
+					ttl: $conferenceTtl,
+					manualInvite: $conferenceInvite,
+				);
+			}
+			else
+			{
+				$signaling->sendInviteToUser(
+					senderId: $initiatorId,
+					toUserId: $userId,
+					invitedUsers: $usersToInvite,
+					isLegacyMobile: false,
+					video: true,
+					sendPush: true,
+					ttl: $conferenceTtl,
+					manualInvite: $conferenceInvite,
+				);
+			}
+			Recent::updateUserActiveCallsCache($userId);
+		}
+
+		$signaling->sendUsersInvited($initiatorId, $usersToInvite, $call->getUsers(), true);
+
+		Recent::updateCallCache($call->getId());
 	}
 
 	/**
@@ -462,7 +562,7 @@ class EventHandler
 			{
 				$result->addError(new EntityError($error->getMessage(), $error->getCode()));
 			}
- 		}
+		}
 
 		return $result;
 	}

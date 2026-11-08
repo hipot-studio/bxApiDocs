@@ -50,6 +50,11 @@ class Office365 extends Mail\Helper\OAuth
 		return \CSocServOffice365OAuth::getControllerUrl();
 	}
 
+	protected function getProviderRefreshErrorCode(): string
+	{
+		return $this->oauthEntity->getLastRefreshProviderErrorCode();
+	}
+
 }
 
 if (Main\Loader::includeModule('socialservices'))
@@ -68,9 +73,110 @@ if (Main\Loader::includeModule('socialservices'))
 		 */
 		const OUTLOOK_RESOURCE = "https://outlook.office.com/api";
 
+		private string $lastRefreshProviderErrorCode = '';
+
 		public function getStorageTokens()
 		{
 			return false;
+		}
+
+		/**
+		 * Provider error code of the refused first step, reduced to an identifier.
+		 *
+		 * @return string
+		 */
+		public function getLastRefreshProviderErrorCode(): string
+		{
+			return $this->lastRefreshProviderErrorCode;
+		}
+
+		/**
+		 * Renews the mail token in two steps: the mail scopes first, the legacy request second.
+		 *
+		 * A tenant that does not consent to the mail scopes refuses the first step, and the
+		 * second step reproduces today's scope-less request literally - so the worst outcome of
+		 * the sequence equals the current behaviour. Refusal reasons are not told apart: the
+		 * taxonomy of Microsoft error codes is not ours to rely on.
+		 *
+		 * @param string $refreshToken Stored refresh token.
+		 * @param int $userId Socialservices user ID, used only by the base persistence.
+		 * @param bool $save Persist the token into the socialservices user table.
+		 * @return bool
+		 */
+		public function getNewAccessToken($refreshToken, $userId = 0, $save = false)
+		{
+			// The code belongs to the call that is starting, so no path of it keeps the code of
+			// the previous one - the persisting branch below included.
+			$this->lastRefreshProviderErrorCode = '';
+
+			if ($save)
+			{
+				// Persisting into the socialservices user table stays base behaviour: the mail
+				// flow stores tokens itself through Bitrix\Mail\Helper\OAuth.
+				return parent::getNewAccessToken($refreshToken, $userId, $save);
+			}
+
+			if (empty($this->appID) || empty($this->appSecret) || (string)$refreshToken === '')
+			{
+				return false;
+			}
+
+			if (self::isMailScopesRequestEnabled())
+			{
+				$scopedResponse = $this->requestTokenByRefreshToken($refreshToken, $this->getOutlookScopes());
+
+				if ($this->applyTokenResponse($scopedResponse))
+				{
+					return true;
+				}
+
+				$this->lastRefreshProviderErrorCode = self::readProviderErrorCode($scopedResponse);
+			}
+
+			$legacyResponse = $this->requestTokenByRefreshToken($refreshToken);
+
+			if ($this->applyTokenResponse($legacyResponse))
+			{
+				return true;
+			}
+
+			// The refusal handed out is the one of the terminal step: a first step refused over
+			// the scopes says nothing about a refresh token the second step found revoked. A
+			// terminal answer that names no code at all leaves the code of the first step, which
+			// is then the only thing known about the refusal.
+			$this->lastRefreshProviderErrorCode = self::readProviderErrorCode($legacyResponse)
+				?: $this->lastRefreshProviderErrorCode;
+
+			return false;
+		}
+
+		/**
+		 * Whether the renewal asks for the mail scopes before the scope-less request.
+		 *
+		 * The option ~disable_microsoft_oauth_mail_scopes exists for a mass refusal of tenants:
+		 * set to Y, it returns the renewal to the single request it made before, and does so
+		 * without a deployment. Follows the option of the SMTP authorization of the same provider,
+		 * Mail\Helper\Mailbox\MailboxConnector::isOauthSmtpEnabled().
+		 *
+		 * @return bool
+		 */
+		private static function isMailScopesRequestEnabled(): bool
+		{
+			return Main\Config\Option::get('mail', '~disable_microsoft_oauth_mail_scopes') !== 'Y';
+		}
+
+		/**
+		 * Error code of an answer, taken only when the provider named it as a string: a code
+		 * arriving as an array or an object names nothing usable.
+		 *
+		 * @param array $response Decoded response.
+		 * @return string Code reduced to an identifier, empty when none was named.
+		 */
+		private static function readProviderErrorCode(array $response): string
+		{
+			$errorCode = $response['error'] ?? null;
+
+			return is_string($errorCode) ? Mail\Helper\OAuth::sanitizeProviderErrorCode($errorCode) : '';
 		}
 
 		/**
@@ -153,30 +259,102 @@ if (Main\Loader::includeModule('socialservices'))
 				return;
 			}
 
-			$httpClient = new \Bitrix\Main\Web\HttpClient();
+			$this->applyTokenResponse($this->requestTokenByRefreshToken($this->refresh_token, $scopes));
+		}
 
-			$jsonResponse = $httpClient->post(static::TOKEN_URL, [
-				'refresh_token' => $this->refresh_token,
+		/**
+		 * Asks the token endpoint for a new token, optionally naming the scopes.
+		 *
+		 * @param string $refreshToken Refresh token.
+		 * @param array|string[] $scopes Requested scopes; an empty list reproduces the base
+		 *                               scope-less request.
+		 * @return array Decoded response, empty when the endpoint answered nothing usable.
+		 */
+		private function requestTokenByRefreshToken(string $refreshToken, array $scopes = []): array
+		{
+			$requestBody = [
+				'refresh_token' => $refreshToken,
 				'client_id' => $this->appID,
 				'client_secret' => $this->appSecret,
 				'grant_type' => 'refresh_token',
-				'scope' => implode(' ', $scopes),
-			]);
+			];
+
+			if (!empty($scopes))
+			{
+				$requestBody['scope'] = implode(' ', $scopes);
+			}
+
+			return $this->decodeTokenResponse($this->postToTokenEndpoint($requestBody));
+		}
+
+		/**
+		 * The single point where the token endpoint is called, so a test can replace the
+		 * transport without touching the renewal logic.
+		 *
+		 * @param array $requestBody Request body.
+		 * @return string|false Raw response body.
+		 */
+		protected function postToTokenEndpoint(array $requestBody): string|false
+		{
+			$httpClient = new Main\Web\HttpClient();
+
+			return $httpClient->post(static::TOKEN_URL, $requestBody);
+		}
+
+		/**
+		 * @param string|false $jsonResponse Raw response body.
+		 * @return array
+		 */
+		private function decodeTokenResponse(string|false $jsonResponse): array
+		{
+			if ($jsonResponse === false || $jsonResponse === '')
+			{
+				return [];
+			}
 
 			try
 			{
-				$decoded = \Bitrix\Main\Web\Json::decode($jsonResponse);
-				if (!empty($decoded['access_token']))
-				{
-					$this->access_token = (string)$decoded['access_token'];
-					$this->refresh_token = (string)$decoded['refresh_token'];
-					$this->accessTokenExpires = (int)$decoded["expires_in"];
-				}
+				$decoded = Main\Web\Json::decode($jsonResponse);
 			}
-			catch (ArgumentException $e)
+			catch (ArgumentException)
 			{
-				AddMessage2Log($e->getMessage(), 'mail', 2, true);
+				// The record is ours alone, nothing of the exception goes into it. Today the core
+				// reduces the exception to "JSON error: Syntax error [4]" before throwing it
+				// (Main\Web\Json::checkException()), so this is a guard, not a leak being fixed: a
+				// wording built from a trace would carry the refresh token, which stands as an
+				// argument of the frames of the renewal (AC-010).
+				AddMessage2Log('Office365: the token endpoint answered a body that is not JSON', 'mail', 0);
+
+				return [];
 			}
+
+			return is_array($decoded) ? $decoded : [];
+		}
+
+		/**
+		 * Takes the tokens of a successful response, keeping the stored refresh token when the
+		 * response carries none: Microsoft does not repeat it on every answer, and an empty
+		 * assignment would cost the mailbox its only way to renew.
+		 *
+		 * @param array $response Decoded response.
+		 * @return bool True when the response carried an access token.
+		 */
+		private function applyTokenResponse(array $response): bool
+		{
+			if (empty($response['access_token']))
+			{
+				return false;
+			}
+
+			$this->access_token = (string)$response['access_token'];
+			$this->accessTokenExpires = (int)($response['expires_in'] ?? 0);
+
+			if (!empty($response['refresh_token']))
+			{
+				$this->refresh_token = (string)$response['refresh_token'];
+			}
+
+			return true;
 		}
 
 		/**

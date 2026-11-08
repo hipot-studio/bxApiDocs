@@ -16,19 +16,21 @@ final class EntityEditor extends Query
 	private Factory $factory;
 	private Item $entity;
 	private array $params;
+	private ?Item $sourceClient;
 
-	public function __construct(Factory $factory, Item $entity, array $params = [])
+	public function __construct(Factory $factory, Item $entity, array $params = [], ?Item $sourceClient = null)
 	{
 		$this->factory = $factory;
 		$this->entity = $entity;
 
 		$this->params = $params;
+		$this->sourceClient = $sourceClient;
 	}
 
 	public function execute(array $requiredFields = null): array
 	{
 		$provider = new Provider($this->entity, $this->params);
-		$mobileDecoratedProvider = new ProviderDecorator($provider, $this->factory, $this->entity);
+		$mobileDecoratedProvider = new ProviderDecorator($provider, $this->factory, $this->entity, $this->sourceClient);
 		$formWrapper = new FormWrapper($mobileDecoratedProvider, 'bitrix:crm.entity.editor');
 
 		if ($requiredFields !== null)

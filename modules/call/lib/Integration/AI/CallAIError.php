@@ -13,25 +13,80 @@ Loc::loadMessages(__FILE__);
 
 class CallAIError extends \Bitrix\Call\Error
 {
+	/**
+	 * Override resolves the new "ERROR_{code}" lang key first and injects
+	 * "#COPILOT_NAME#" so call AI error messages follow the portal license region.
+	 */
+	protected function loadErrorMessage($code, $replacements): string
+	{
+		$replacements['#COPILOT_NAME#'] = CallAISettings::getCopilotName();
+		$newMsg = Loc::getMessage("ERROR_{$code}_MSGVER_1", $replacements) ?? Loc::getMessage("ERROR_{$code}", $replacements);
+		if ($newMsg !== null)
+		{
+			return $newMsg;
+		}
+
+		return parent::loadErrorMessage($code, $replacements);
+	}
+
 	public const
 		AI_MODULE_ERROR = 'AI_MODULE_ERROR',
 		AI_UNAVAILABLE_ERROR = 'AI_UNAVAILABLE_ERROR',
 		AI_SETTINGS_ERROR = 'AI_SETTINGS_ERROR',
 		AI_AGREEMENT_ERROR = 'AI_AGREEMENT_ERROR',
-		AI_UNSUPPORTED_TRACK_ERROR = 'AI_UNSUPPORTED_TRACK_ERROR',
-		AI_EMPTY_PAYLOAD_ERROR = 'AI_EMPTY_PAYLOAD_ERROR',
+		UNSUPPORTED_TRACK_ERROR = 'UNSUPPORTED_TRACK_ERROR',
+		EMPTY_PAYLOAD_ERROR = 'EMPTY_PAYLOAD_ERROR',
 		AI_NOT_ENOUGH_BAAS_ERROR = 'AI_NOT_ENOUGH_BAAS_ERROR',
-		AI_RECORD_TOO_SHORT = 'AI_RECORD_TOO_SHORT',
+		RECORD_TOO_SHORT = 'RECORD_TOO_SHORT',
 		AI_TASK_START_FAIL = 'AI_TASK_START_FAIL',
 		AI_TASK_FAILED = 'AI_TASK_FAILED',
-		AI_TRACKPACK_NOT_RECEIVED = 'AI_TRACKPACK_NOT_FOUND',
+		TRACK_PACK_NOT_FOUND_ERROR = 'TRACK_PACK_NOT_FOUND_ERROR',
+		TRACK_PACK_NOT_FOUND_TIMEOUT = 'TRACK_PACK_NOT_FOUND_TIMEOUT',
 		AI_TRANSCRIBE_TASK_ERROR = 'AI_TRANSCRIBE_TASK_ERROR',
 		AI_OVERVIEW_TASK_ERROR = 'AI_OVERVIEW_TASK_ERROR',
-		AI_RECORDING_DISABLED = 'AI_RECORDING_DISABLED',
-		AI_MARKET_SUBSCRIPTION = 'AI_MARKET_SUBSCRIPTION'
+		RECORDING_DISABLED = 'RECORDING_DISABLED',
+		AI_MARKET_SUBSCRIPTION = 'AI_MARKET_SUBSCRIPTION',
+		AI_EMPTY_RESPONSE_ERROR = 'AI_EMPTY_RESPONSE_ERROR',
+		AI_INVALID_RESPONSE_ERROR = 'AI_INVALID_RESPONSE_ERROR',
+		AI_UNEXPECTED_RESPONSE_STRUCTURE_ERROR = 'AI_UNEXPECTED_RESPONSE_STRUCTURE_ERROR'
 	;
 
 	protected bool $recoverable = false;
+
+	/**
+	 * Maps a media backend track error code onto a CallAIError.
+	 *
+	 * A "short recording" code maps to RECORD_TOO_SHORT; known mixer codes pass
+	 * through as-is. The chat text is identical in both the pass-through and the
+	 * fallback branch (mixer codes have no lang phrase, so both render the base
+	 * failure message with no cause line); pass-through only preserves the real
+	 * code as the FollowUpAnalytics event label instead of the generic
+	 * 'TRACK_ERROR'. Anything else, including codes that would otherwise collide
+	 * with the AI error family and leak a raw tech code into the chat, falls back
+	 * to the generic code.
+	 */
+	public static function fromTrackErrorCode(string $code): self
+	{
+		if (str_contains(mb_strtoupper($code), 'SHORT'))
+		{
+			return new self(self::RECORD_TOO_SHORT);
+		}
+
+		// Local list on purpose: a class constant leaks into ReflectionClass::getConstants().
+		$knownMixerCodes = [
+			'ERR_MIXER_NOT_RESPONDING',
+			'ERR_MIXER_INTERNAL',
+			'ERR_NO_MIXER_AVAILABLE',
+		];
+		if (in_array($code, $knownMixerCodes, true))
+		{
+			return new self($code);
+		}
+
+		// Not a class constant on purpose: getErrorMessage() only surfaces
+		// declared codes, so this stays a base-phrase fallback with no cause line.
+		return new self('TRACK_ERROR');
+	}
 
 	/**
 	 * Checks if error fired by ai module.

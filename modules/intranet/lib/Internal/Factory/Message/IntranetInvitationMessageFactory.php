@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\Internal\Factory\Message;
 
+use Bitrix\Intranet\Contract\SendableContract;
 use Bitrix\Intranet\Contract\Strategy\InvitationMessageFactoryContract;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\Collection\DepartmentCollection;
@@ -11,7 +12,9 @@ use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
 use Bitrix\Intranet\Service\EmailMessage;
 use Bitrix\Intranet\Service\PhoneMessage;
+use Bitrix\Intranet\Service\RateLimitedEmailMessage;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -25,7 +28,7 @@ class IntranetInvitationMessageFactory implements InvitationMessageFactoryContra
 	{}
 
 
-	public function createEmailEvent(): EmailMessage
+	public function createEmailEvent(): SendableContract
 	{
 		Loc::loadLanguageFile($_SERVER["DOCUMENT_ROOT"] . '/bitrix/modules/intranet/lib/invitation/register.php');
 		$isCloud = Loader::includeModule('bitrix24');
@@ -68,11 +71,22 @@ class IntranetInvitationMessageFactory implements InvitationMessageFactoryContra
 			];
 		}
 
-		return new EmailMessage(
+		$emailMessage = new EmailMessage(
 			$eventName,
 			$siteIdByDepartmentId,
 			$params,
 			$messageId,
+		);
+
+		if ($emailTo === null || $emailTo === '')
+		{
+			return $emailMessage;
+		}
+
+		return new RateLimitedEmailMessage(
+			$emailMessage,
+			$emailTo,
+			ServiceLocator::getInstance()->get('intranet.service.invitation.email-rate-limiter'),
 		);
 	}
 

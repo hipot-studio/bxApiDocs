@@ -16,6 +16,21 @@ use Bitrix\Main\Loader;
 class Group extends Scope
 {
 	/**
+	 * Group id bound to a site, by the site id. The binding belongs to the site itself, so the same
+	 * answer serves every user and both modes of the access check.
+	 * @var array<int, int|null>
+	 */
+	private static array $groupIdCache = [];
+
+	/**
+	 * Operations of a site, by the site id and by the user the answer was counted for: the operations
+	 * come from the rights of the current user on the group, and the user of the process may change
+	 * (console and agent scenarios).
+	 * @var array<int, array<int, array<string, bool>>>
+	 */
+	private static array $operationsCache = [];
+
+	/**
 	 * Method for first time initialization scope.
 	 * @param array $params Additional params.
 	 * @return void
@@ -107,9 +122,48 @@ class Group extends Scope
 	 * If for site id exists group, then returns group id.
 	 * @param int $siteId Site id.
 	 * @param bool $checkAccess If true check access to binding group.
-	 * @return int
+	 * @return int|null
 	 */
 	public static function getGroupIdBySiteId(int $siteId, bool $checkAccess = false): ?int
+	{
+		if (!array_key_exists($siteId, self::$groupIdCache))
+		{
+			self::$groupIdCache[$siteId] = self::fetchGroupIdBySiteId($siteId);
+		}
+
+		$groupId = self::$groupIdCache[$siteId];
+		if ($groupId === null || !$checkAccess)
+		{
+			return $groupId;
+		}
+
+		return self::canReadGroup($groupId) ? $groupId : null;
+	}
+
+	/**
+	 * @internal Resets the runtime caches built around the group of the site.
+	 * @param int|null $siteId Site id, all the sites if null.
+	 * @return void
+	 */
+	public static function resetRuntimeCache(?int $siteId = null): void
+	{
+		if ($siteId === null)
+		{
+			self::$groupIdCache = [];
+			self::$operationsCache = [];
+		}
+		else
+		{
+			unset(self::$groupIdCache[$siteId], self::$operationsCache[$siteId]);
+		}
+	}
+
+	/**
+	 * Reads the group bound to the site, without the runtime cache.
+	 * @param int $siteId Site id.
+	 * @return int|null
+	 */
+	private static function fetchGroupIdBySiteId(int $siteId): ?int
 	{
 		$res = BindingTable::getList([
 			'select' => [
@@ -123,25 +177,32 @@ class Group extends Scope
 		]);
 		if ($row = $res->fetch())
 		{
-			$groupId = (int) $row['BINDING_ID'];
-			if ($checkAccess && Loader::includeModule('socialnetwork'))
-			{
-				$canRead = \CSocNetFeaturesPerms::CanPerformOperation(
-					Manager::getUserId(),
-					SONET_ENTITY_GROUP,
-					$groupId,
-					SocialNetwork::SETTINGS_CODE,
-					'read'
-				);
-				if (!$canRead)
-				{
-					return null;
-				}
-			}
-			return $groupId;
+			return (int)$row['BINDING_ID'];
 		}
 
 		return null;
+	}
+
+	/**
+	 * Checks the read access of the current user to the knowledge base of the group.
+	 * @param int $groupId Group id.
+	 * @return bool
+	 */
+	private static function canReadGroup(int $groupId): bool
+	{
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return true;
+		}
+
+		// the answer is already kept for the hit by CSocNetFeaturesPerms::CanPerformOperation()
+		return (bool)\CSocNetFeaturesPerms::CanPerformOperation(
+			Manager::getUserId(),
+			SONET_ENTITY_GROUP,
+			$groupId,
+			SocialNetwork::SETTINGS_CODE,
+			'read'
+		);
 	}
 
 	/**
@@ -152,25 +213,29 @@ class Group extends Scope
 	 */
 	public static function getOperationsForSite(int $siteId): array
 	{
-		static $cache = [];
+		$userId = Manager::getUserId();
 
-		if (!array_key_exists($siteId, $cache))
+		if (!isset(self::$operationsCache[$siteId][$userId]))
 		{
 			$groupId = self::getGroupIdBySiteId($siteId) ?: 0;
-			$cache[$siteId] = [
+			$canEdit = SocialNetwork::canPerformOperation($groupId, Rights::ACCESS_TYPES['edit']);
+			$operations = [
 				'read' => false,//see below
-				'edit' => SocialNetwork::canPerformOperation($groupId, Rights::ACCESS_TYPES['edit']),
+				'edit' => $canEdit,
+				'public' => $canEdit,
 				'sett' => SocialNetwork::canPerformOperation($groupId, Rights::ACCESS_TYPES['sett']),
 				'delete' => SocialNetwork::canPerformOperation($groupId, Rights::ACCESS_TYPES['delete']),
 			];
 
-			if (array_sum($cache[$siteId]))
+			if (array_sum($operations))
 			{
-				$cache[$siteId]['read'] = true;
+				$operations['read'] = true;
 			}
+
+			self::$operationsCache[$siteId][$userId] = $operations;
 		}
 
-		return $cache[$siteId];
+		return self::$operationsCache[$siteId][$userId];
 	}
 
 	/**

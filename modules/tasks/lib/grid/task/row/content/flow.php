@@ -5,10 +5,13 @@ namespace Bitrix\Tasks\Grid\Task\Row\Content;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Tasks\Grid\ControlButtonTrait;
 use Bitrix\Tasks\Grid\Task\Row\Content;
 
 class Flow extends Content
 {
+	use ControlButtonTrait;
+
 	public function prepare(): string
 	{
 		$filterFlowId = (int)$this->getFilterField('FLOW');
@@ -37,9 +40,16 @@ class Flow extends Content
 		$image = Uri::urnEncode('/bitrix/js/tasks/flow/images/flow.svg');
 		$image = "<i style=\"background-image: url('{$image}')\"></i>";
 
-		return "<a class='{$styleSelected}' onclick='{$onClick}' href='javascript:void(0)'>
-					<span class='{$iconClass}'>{$image}</span>
-					<span class='tasks-grid-flow-inner'>{$flowTitle}</span><span class='tasks-grid-filter-remove'></span>
-				</a>";
+		return $this->renderControlButton(
+			[
+				'class' => $styleSelected,
+				'aria-pressed' => ($active ? 'true' : 'false'),
+			],
+			"<span class='{$iconClass}' aria-hidden='true'>{$image}</span>"
+			. "<span class='tasks-grid-flow-inner'>{$flowTitle}</span>"
+			. "<span class='tasks-grid-filter-remove'></span>",
+			$onClick,
+			"'"
+		);
 	}
 }

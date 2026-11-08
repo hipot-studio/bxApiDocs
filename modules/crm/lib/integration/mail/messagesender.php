@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration\Mail;
 
 use Bitrix\Mail\Helper;
+use Bitrix\Mail\Service\Message\SendFailure;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -198,6 +199,11 @@ class MessageSender
 
 	public static function getControlledTransportError(?Result $transportResult): ?Error
 	{
+		if (self::canUseMailSendFailure('getControlledError'))
+		{
+			return SendFailure::getControlledError($transportResult);
+		}
+
 		if ($transportResult === null || $transportResult->isSuccess())
 		{
 			return null;
@@ -340,10 +346,21 @@ class MessageSender
 
 	private static function createSenderUnavailableResult(): Result
 	{
+		if (self::canUseMailSendFailure('createSenderUnavailableError'))
+		{
+			return (new Result())->addError(SendFailure::createSenderUnavailableError());
+		}
+
 		Loc::loadMessages((new \ReflectionClass(Mail\Sender::class))->getFileName());
 		$message = (string)Loc::getMessage('MAIN_MAIL_SENDER_UNAVAILABLE_ERROR');
 
 		return (new Result())->addError(new Error($message, Mail\Sender::SENDER_UNAVAILABLE_ERROR));
+	}
+
+	/** The refusals are owned by mail; an older mail without them leaves crm with its own copy of the rule. */
+	private static function canUseMailSendFailure(string $method): bool
+	{
+		return class_exists(SendFailure::class) && method_exists(SendFailure::class, $method);
 	}
 
 	private static function uploadToSentFolder(

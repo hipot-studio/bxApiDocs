@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Public\Command\DebugSession;
 
+use Bitrix\Bizproc\Internal\Exception\Debugger\DebuggerException;
 use Bitrix\Bizproc\Internal\Exception\ErrorBuilder;
 use Bitrix\Main\Command\AbstractCommand;
 use Bitrix\Main\Result;
@@ -26,6 +27,10 @@ class DeleteAllDebugSessionsCommand extends AbstractCommand
 				'success' => true,
 				'count' => $deletedCount,
 			]);
+		}
+		catch (DebuggerException $e)
+		{
+			return (new Result())->addError(ErrorBuilder::build($e->getMessage(), $e->getCode()));
 		}
 		catch (\Throwable $e)
 		{

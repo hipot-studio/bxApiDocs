@@ -7,6 +7,7 @@ namespace Bitrix\Vibecodeconnector\Internal\Service\Catalog\Sharing;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Vibecodeconnector\Internal\Dto\Catalog\Sharing\CatalogLinkState;
+use Bitrix\Vibecodeconnector\Internal\Dto\Catalog\Sharing\CatalogShareParticipant;
 use Bitrix\Vibecodeconnector\Internal\Dto\Catalog\Sharing\CatalogShareState;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItem;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemType;
@@ -41,6 +42,7 @@ final class CatalogSharingService
 		private readonly CatalogItemRepository $itemRepository = new CatalogItemRepository(),
 		private readonly CatalogItemSender $sender = new CatalogItemSender(),
 		?\Closure $nowProvider = null,
+		private readonly ShareDepartmentCodes $departmentCodes = new ShareDepartmentCodes(),
 	) {
 		$this->nowProvider = $nowProvider ?? static fn(): int => time();
 	}
@@ -65,21 +67,7 @@ final class CatalogSharingService
 			return $this->platformUnavailable();
 		}
 
-		if (!$response->isSuccess())
-		{
-			return (new Result())->addErrors($response->getErrors());
-		}
-
-		$state = $response->getData()['shareState'] ?? null;
-		if (!$state instanceof CatalogShareState)
-		{
-			return $this->invalidPlatformResponse();
-		}
-
-		$result = new Result();
-		$result->setData(['share' => $state->toArray()]);
-
-		return $result;
+		return $this->mapShareResult($response);
 	}
 
 	public function getLink(int $catalogItemId, int $userId, bool $isAdmin): Result
@@ -135,12 +123,15 @@ final class CatalogSharingService
 
 		$normalizedUsers = $this->normalizeParticipants($users);
 		$normalizedDepartments = $this->normalizeParticipants($departments);
+		$departmentAccessCodes = $normalizedDepartments === null
+			? null
+			: $this->dialogIdsToAccessCodes($normalizedDepartments);
 		if (
 			!is_string($audience)
 			|| !in_array($audience, self::AUDIENCES, true)
 			|| $normalizedUsers === null
-			|| $normalizedDepartments === null
-			|| !$this->isValidAudienceState($audience, $normalizedUsers, $normalizedDepartments)
+			|| $departmentAccessCodes === null
+			|| !$this->isValidAudienceState($audience, $normalizedUsers, $departmentAccessCodes)
 		)
 		{
 			return $this->invalidPayload();
@@ -149,6 +140,16 @@ final class CatalogSharingService
 		/** @var CatalogItem $item */
 		$item = $itemResult->getData()['item'];
 
+		// Verify the platform contract before writing department access codes after a platform rollback.
+		if ($departmentAccessCodes !== [])
+		{
+			$formatResult = $this->resolvePlatformDepartmentFormat($item);
+			if (!$formatResult->isSuccess())
+			{
+				return $formatResult;
+			}
+		}
+
 		try
 		{
 			$response = $this->sender->setShare(
@@ -156,7 +157,7 @@ final class CatalogSharingService
 				$userId,
 				$audience,
 				$normalizedUsers,
-				$normalizedDepartments,
+				$departmentAccessCodes,
 			);
 		}
 		catch (\Throwable)
@@ -273,6 +274,76 @@ final class CatalogSharingService
 		return $id;
 	}
 
+	private function resolvePlatformDepartmentFormat(CatalogItem $item): Result
+	{
+		try
+		{
+			$response = $this->sender->getShare($item);
+		}
+		catch (\Throwable)
+		{
+			return $this->platformUnavailable();
+		}
+
+		if (!$response->isSuccess())
+		{
+			return (new Result())->addErrors($response->getErrors());
+		}
+
+		return new Result();
+	}
+
+	/**
+	 * @param list<array{id: string, name: string}> $departments
+	 * @return list<array{id: string, name: string}>|null
+	 */
+	private function dialogIdsToAccessCodes(array $departments): ?array
+	{
+		$converted = [];
+		foreach ($departments as $department)
+		{
+			$code = $this->departmentCodes->dialogIdToAccessCode($department['id']);
+			if ($code === null)
+			{
+				return null;
+			}
+
+			$converted[] = [
+				'id' => $code,
+				'name' => $department['name'],
+			];
+		}
+
+		return $converted;
+	}
+
+	/**
+	 * @return array{
+	 *     audience: string,
+	 *     users: list<array{id: string, name: string}>,
+	 *     departments: list<array{id: string, name: string}>
+	 * }|null
+	 */
+	private function toDialogShare(CatalogShareState $state): ?array
+	{
+		$departments = [];
+		foreach ($state->departments as $department)
+		{
+			$dialogId = $this->departmentCodes->accessCodeToDialogId($department->id);
+			if ($dialogId === null)
+			{
+				return null;
+			}
+
+			$departments[] = (new CatalogShareParticipant($dialogId, $department->name))->toArray();
+		}
+
+		$share = $state->toArray();
+		$share['departments'] = $departments;
+
+		return $share;
+	}
+
 	/**
 	 * @param list<array{id: string, name: string}> $users
 	 * @param list<array{id: string, name: string}> $departments
@@ -353,13 +424,14 @@ final class CatalogSharingService
 		}
 
 		$state = $response->getData()['shareState'] ?? null;
-		if (!$state instanceof CatalogShareState)
+		$share = $state instanceof CatalogShareState ? $this->toDialogShare($state) : null;
+		if ($share === null)
 		{
 			return $this->invalidPlatformResponse();
 		}
 
 		$result = new Result();
-		$result->setData(['share' => $state->toArray()]);
+		$result->setData(['share' => $share]);
 
 		return $result;
 	}

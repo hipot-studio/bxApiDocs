@@ -254,7 +254,7 @@ final class ActivePlacementResolver
 
 	private function isUnfiltered(): bool
 	{
-		return $this->scope->getGenerationIds() === null;
+		return $this->scope->isUnfiltered();
 	}
 
 	private function buildResult(bool $rejected): Result

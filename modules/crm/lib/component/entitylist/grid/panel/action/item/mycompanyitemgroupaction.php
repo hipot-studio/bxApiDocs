@@ -16,7 +16,7 @@ final class MyCompanyItemGroupAction extends BaseItemGroupAction
 		}
 
 		$actions = [
-			new AssignChildAction($this->factory->getEntityTypeId()),
+			new AssignChildAction($this->factory->getEntityTypeId(), $this->getGridId()),
 		];
 
 		if (
@@ -24,7 +24,7 @@ final class MyCompanyItemGroupAction extends BaseItemGroupAction
 			&& EntityMergerFactory::isEntityTypeSupported($this->factory->getEntityTypeId())
 		)
 		{
-			$actions[] = new MergeChildAction($this->factory->getEntityTypeId());
+			$actions[] = new MergeChildAction($this->factory->getEntityTypeId(), $this->getGridId());
 		}
 
 		return $actions;

@@ -47,8 +47,20 @@ class RecyclingManager
 		}
 
 		$entities = static::getEntityNames();
+		if (isset($entities[$entityTypeID]))
+		{
+			return $entities[$entityTypeID];
+		}
 
-		return $entities[$entityTypeID] ?? '';
+		// a smart process keeps no entry of its own in the map above: its storage unit is derived
+		// from the type id, and the map stays the source of the filter preset of the general bin
+		$typeId = (int)$entityTypeID;
+		if (\CCrmOwnerType::isPossibleDynamicTypeId($typeId))
+		{
+			return Dynamic::getEntityName($typeId);
+		}
+
+		return '';
 	}
 
 	//region Access to RecycleBin module

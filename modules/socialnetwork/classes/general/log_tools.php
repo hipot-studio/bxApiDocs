@@ -4895,7 +4895,10 @@ class CSocNetLogTools
 								$workgroupFields["NAME"]
 								: htmlspecialcharsback($workgroupFields["NAME"])
 							),
-							"URL" => \Bitrix\Socialnetwork\Site\GroupUrl::get((int)$workgroupFields["ID"]),
+							"URL" => \Bitrix\Socialnetwork\Site\GroupUrl::get(
+								(int)$workgroupFields["ID"],
+								$workgroupFields["TYPE"] ?? null
+							),
 							"IS_EXTRANET" => (
 								is_array($GLOBALS["arExtranetGroupID"] ?? null)
 								&& in_array($workgroupFields["ID"], $GLOBALS["arExtranetGroupID"])

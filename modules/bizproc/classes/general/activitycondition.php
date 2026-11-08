@@ -46,6 +46,18 @@ abstract class CBPActivityCondition
 		return [];
 	}
 
+	/**
+	 * Whether authoring this condition requires portal admin rights, i.e. whether validateProperties() refuses
+	 * a non-admin author. Such a condition carries an executable payload, so an external AI agent may only pass
+	 * it through verbatim from the published template and may never introduce or edit one.
+	 *
+	 * @return bool
+	 */
+	public static function requiresAdminToAuthor()
+	{
+		return false;
+	}
+
 	public static function callStaticMethod($code, $method, $arParameters = array())
 	{
 		$runtime = CBPRuntime::GetRuntime();

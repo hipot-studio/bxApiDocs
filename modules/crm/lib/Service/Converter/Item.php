@@ -17,13 +17,26 @@ class Item extends Converter
 			throw new ArgumentException('model should be an instance of Item');
 		}
 
+		return $this->finalizeJson($model, $model->getData());
+	}
+
+	/**
+	 * Same as toJson(), limited to the given common field names; ENTITY_TYPE_ID is always present.
+	 *
+	 * @param string[] $commonFieldNames
+	 */
+	public function toJsonForFields(\Bitrix\Crm\Item $model, array $commonFieldNames): array
+	{
+		return $this->finalizeJson($model, $model->getDataForFields($commonFieldNames));
+	}
+
+	private function finalizeJson(\Bitrix\Crm\Item $model, array $data): array
+	{
 		$factory = Container::getInstance()->getFactory($model->getEntityTypeId());
 		if (!$factory)
 		{
 			throw new InvalidOperationException('factory for ' . $model->getEntityTypeId() . 'is not found');
 		}
-
-		$data = $model->getData();
 
 		$data = $factory->getFieldsCollection()->removeHiddenValues($data);
 

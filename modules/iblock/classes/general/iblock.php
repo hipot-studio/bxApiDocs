@@ -5,6 +5,7 @@ use Bitrix\Main\File\Image;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Iblock;
+use Bitrix\Main\Web\Uri;
 
 class CAllIBlock
 {
@@ -452,7 +453,7 @@ class CAllIBlock
 				{
 					$str = \Bitrix\Main\Context::getCurrent()->getServer()->getRequestUri();
 					if(defined("BX_AJAX_PARAM_ID"))
-						$str = CHTTP::urlDeleteParams($str, array(BX_AJAX_PARAM_ID));
+						$str = (string)(new Uri($str))->deleteParams([BX_AJAX_PARAM_ID]);
 				}
 
 				$return_url[$key] = $str;

@@ -15,6 +15,7 @@ final class Dashboard
 		public bool $published,
 		public array $nativeFilterConfig,
 		public ?DateTime $dateModify,
+		public array $jsonMetadata = [],
 	)
 	{}
 }

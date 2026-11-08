@@ -19,6 +19,7 @@ use Bitrix\Timeman\V2\Internal\Entity\Report\RecordReportType;
 use Bitrix\Timeman\V2\Internal\Repository\FullReportRepository;
 use Bitrix\Timeman\V2\Internal\Repository\RecordRepository;
 use Bitrix\Timeman\V2\Internal\Repository\ReportRepository;
+use Bitrix\Timeman\V2\Public\Event\OnFullReportSavedEvent;
 
 class FullReportService
 {
@@ -109,6 +110,7 @@ class FullReportService
 		]);
 
 		$this->clearReportInfoCache($userId);
+		OnFullReportSavedEvent::sendEvent($userId, $reportId, false);
 
 		return $result;
 	}
@@ -163,6 +165,7 @@ class FullReportService
 		]);
 
 		$this->clearReportInfoCache($currentReport->userId);
+		OnFullReportSavedEvent::sendEvent($currentReport->userId, $reportId, $updatedReport->active === true);
 
 		return $result;
 	}
@@ -238,6 +241,8 @@ class FullReportService
 			);
 		}
 
+		OnFullReportSavedEvent::sendEvent($currentReport->userId, $reportId, true);
+
 		$result->setData(['id' => $reportId]);
 
 		return $result;
@@ -246,6 +251,11 @@ class FullReportService
 	public function approve(int $reportId, int $approverId): Result
 	{
 		return $this->setDecision($reportId, $approverId, FullReportMark::POSITIVE);
+	}
+
+	public function disapprove(int $reportId, int $approverId): Result
+	{
+		return $this->setDecision($reportId, $approverId, FullReportMark::NEGATIVE);
 	}
 
 	public function reject(int $reportId, int $approverId): Result

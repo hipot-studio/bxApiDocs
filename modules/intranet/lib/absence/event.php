@@ -153,7 +153,7 @@ class Event
 	 */
 	protected static function getNameAgentStart($elementId)
 	{
-		return '\Bitrix\Intranet\Absence\Agent::start(' . $elementId . ');';
+		return '\Bitrix\Intranet\Absence\Agent::start(' . (int)$elementId . ');';
 	}
 
 	/**
@@ -162,7 +162,7 @@ class Event
 	 */
 	protected static function getNameAgentEnd($elementId)
 	{
-		return '\Bitrix\Intranet\Absence\Agent::end(' . $elementId . ');';
+		return '\Bitrix\Intranet\Absence\Agent::end(' . (int)$elementId . ');';
 	}
 
 	protected static function addAbsenceEvent(array $arFields): void
@@ -187,6 +187,7 @@ class Event
 				'absenceType' => $arEnum['XML_ID'] ?? null,
 				'activeFrom' => $arFields['ACTIVE_FROM'] ?? '',
 				'activeTo' => $arFields['ACTIVE_TO'] ?? '',
+				'initiatorUserId' => \Bitrix\Main\Engine\CurrentUser::get()->getId(),
 			]
 		);
 		$event->send();

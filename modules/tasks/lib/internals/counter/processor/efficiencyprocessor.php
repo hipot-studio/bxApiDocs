@@ -15,12 +15,19 @@ use Bitrix\Tasks\Internals\Counter\Event\EventDictionary;
 use Bitrix\Tasks\Internals\Counter\Event\EventResource;
 use Bitrix\Tasks\Internals\Counter\Event\EventResourceCollection;
 use Bitrix\Tasks\Internals\Effective;
+use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Util\Type\DateTime;
 
 class EfficiencyProcessor
 {
+	private const STATUSES_CLOSING_EFFICIENCY_VIOLATION = [
+		Status::DEFERRED,
+		Status::COMPLETED,
+		Status::SUPPOSEDLY_COMPLETED,
+	];
+
 	private $originData = [];
 	private $modifiedData = [];
 
@@ -52,6 +59,13 @@ class EfficiencyProcessor
 		$addedTasks = $eventCollection->getTasksByEventType(EventDictionary::EVENT_AFTER_TASK_ADD);
 		$restoredTasks = $eventCollection->getTasksByEventType(EventDictionary::EVENT_AFTER_TASK_RESTORE);
 		$expiredTasks = $eventCollection->getTasksByEventType(EventDictionary::EVENT_TASK_EXPIRED);
+		$expiredTaskIds = array_values(array_unique(array_intersect($ids, $expiredTasks)));
+		$expiredTaskStatuses = $this->getTaskStatuses($expiredTaskIds);
+		$closedExpiredTasks = array_keys(array_filter(
+			$expiredTaskStatuses,
+			[$this, 'isStatusClosingEfficiencyViolation']
+		));
+		$repairUsers = $this->getActiveViolationUsers($closedExpiredTasks);
 
 		$processedUsers = [];
 
@@ -71,7 +85,11 @@ class EfficiencyProcessor
 			}
 			elseif (in_array($taskId, $expiredTasks, true))
 			{
-				$processedUsers[] = $this->updateEfficiencyForExpired($taskId);
+				$processedUsers[] = $this->updateEfficiencyForExpired(
+					$taskId,
+					$expiredTaskStatuses[$taskId] ?? null,
+					$repairUsers[$taskId] ?? []
+				);
 			}
 			else
 			{
@@ -179,8 +197,15 @@ class EfficiencyProcessor
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	private function updateEfficiencyForExpired(int $taskId): array
+	private function updateEfficiencyForExpired(int $taskId, ?int $status, array $repairUsers): array
 	{
+		if ($status !== null && $this->isStatusClosingEfficiencyViolation($status))
+		{
+			Effective::repair($taskId);
+
+			return $repairUsers;
+		}
+
 		/** @var EventResource $task */
 		$task = $this->modifiedData[$taskId];
 		$taskMembers = $task->getMembersAsArray();
@@ -209,6 +234,57 @@ class EfficiencyProcessor
 		}
 
 		return $processedMembers;
+	}
+
+	private function getTaskStatuses(array $taskIds): array
+	{
+		if (empty($taskIds))
+		{
+			return [];
+		}
+
+		$statuses = [];
+		$tasks = TaskTable::query()
+			->setSelect(['ID', 'STATUS'])
+			->whereIn('ID', $taskIds)
+			->exec();
+
+		while ($task = $tasks->fetch())
+		{
+			$statuses[(int)$task['ID']] = (int)$task['STATUS'];
+		}
+
+		return $statuses;
+	}
+
+	private function getActiveViolationUsers(array $taskIds): array
+	{
+		if (empty($taskIds))
+		{
+			return [];
+		}
+
+		$users = [];
+		$violations = EffectiveTable::query()
+			->setSelect(['TASK_ID', 'USER_ID'])
+			->whereIn('TASK_ID', $taskIds)
+			->where('IS_VIOLATION', 'Y')
+			->whereNull('DATETIME_REPAIR')
+			->exec();
+
+		while ($violation = $violations->fetch())
+		{
+			$taskId = (int)$violation['TASK_ID'];
+			$userId = (int)$violation['USER_ID'];
+			$users[$taskId][$userId] = $userId;
+		}
+
+		return $users;
+	}
+
+	private function isStatusClosingEfficiencyViolation(int $status): bool
+	{
+		return in_array($status, self::STATUSES_CLOSING_EFFICIENCY_VIOLATION, true);
 	}
 
 	/**
@@ -295,7 +371,7 @@ class EfficiencyProcessor
 		$accomplicesModified = false;
 
 		$canProceed = false;
-		$statusesCompleted = [Status::DEFERRED, Status::COMPLETED, Status::SUPPOSEDLY_COMPLETED];
+		$statusesCompleted = self::STATUSES_CLOSING_EFFICIENCY_VIOLATION;
 		$statusesInProgress = [Status::NEW, Status::PENDING, Status::IN_PROGRESS];
 
 		$processedMembers = [];

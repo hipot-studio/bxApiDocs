@@ -768,7 +768,10 @@ class CatalogStoreDocumentDetailComponent extends CBitrixComponent implements Co
 		global $APPLICATION;
 		$APPLICATION->ResetException();
 
-		$isCancelled = CCatalogDocs::cancellationDocument($this->documentId);
+		$isCancelled = CCatalogDocs::cancellationDocument(
+			$this->documentId,
+			Main\Engine\CurrentUser::get()->getId(),
+		);
 
 		if (!$isCancelled && $APPLICATION->GetException())
 		{

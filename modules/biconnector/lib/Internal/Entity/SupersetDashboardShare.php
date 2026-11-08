@@ -22,6 +22,9 @@ class SupersetDashboardShare implements EntityInterface
 		private ?string $urlParameterValues = null,
 		private int $loginAttempts = 0,
 		private ?DateTime $loginLockedTill = null,
+		private ?int $disabledById = null,
+		private ?DateTime $dateDisabled = null,
+		private ?DateTime $dateLastOpened = null,
 	)
 	{
 	}
@@ -113,6 +116,13 @@ class SupersetDashboardShare implements EntityInterface
 		return $this->dateCreate;
 	}
 
+	public function setDateCreate(DateTime $dateCreate): self
+	{
+		$this->dateCreate = $dateCreate;
+
+		return $this;
+	}
+
 	public function getDateModify(): ?DateTime
 	{
 		return $this->dateModify;
@@ -169,6 +179,59 @@ class SupersetDashboardShare implements EntityInterface
 	public function setLoginLockedTill(?DateTime $loginLockedTill): self
 	{
 		$this->loginLockedTill = $loginLockedTill;
+
+		return $this;
+	}
+
+	public function getDisabledById(): ?int
+	{
+		return $this->disabledById;
+	}
+
+	public function getDateDisabled(): ?DateTime
+	{
+		return $this->dateDisabled;
+	}
+
+	/**
+	 * Links switched off before DATE_DISABLED existed carry the moment only in DATE_MODIFY.
+	 */
+	public function getEffectiveDateDisabled(): ?DateTime
+	{
+		if ($this->isActive())
+		{
+			return null;
+		}
+
+		return $this->dateDisabled ?? $this->dateModify;
+	}
+
+	/**
+	 * Switched off by someone other than its author, that is by a controller or by a ban.
+	 */
+	public function isDisabledByAdmin(): bool
+	{
+		return !$this->isActive() && $this->disabledById !== null && $this->disabledById !== $this->createdById;
+	}
+
+	public function getDateLastOpened(): ?DateTime
+	{
+		return $this->dateLastOpened;
+	}
+
+	/**
+	 * Turns the link on again as a new one: new address, new creation date, no trace of the switch-off
+	 * and of the old openings.
+	 */
+	public function enable(string $token, DateTime $now): self
+	{
+		$this->active = 'Y';
+		$this->token = $token;
+		$this->dateCreate = $now;
+		$this->dateModify = $now;
+		$this->disabledById = null;
+		$this->dateDisabled = null;
+		$this->dateLastOpened = null;
 
 		return $this;
 	}

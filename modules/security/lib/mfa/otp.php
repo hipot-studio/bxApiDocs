@@ -498,6 +498,7 @@ class Otp
 			->setActive($userInfo['ACTIVE'])
 			->setUserActive($userInfo['USER_ACTIVE'])
 			->setUserId($userInfo['USER_ID'])
+			->setUserLogin($userInfo['USER_LOGIN'])
 			->setAttempts($userInfo['ATTEMPTS'])
 			->setSecret($userInfo['SECRET'])
 			->setInitParams($userInfo['INIT_PARAMS'])
@@ -880,17 +881,17 @@ class Otp
 	{
 		if ($this->userLogin === null && $this->userId)
 		{
-			$this->userLogin = \Bitrix\Main\UserTable::query()
-				->addFilter('=ID', $this->getUserId())
+			$user = \Bitrix\Main\UserTable::query()
+				->addFilter('=ID', $this->userId)
 				->addSelect('LOGIN')
 				->exec()
 				->fetch()
 			;
 
-			$this->userLogin = $this->userLogin['LOGIN'];
+			$this->userLogin = $user['LOGIN'];
 		}
 
-		return $this->userLogin;
+		return $this->userLogin ?? '';
 	}
 
 	/**
@@ -1553,10 +1554,13 @@ class Otp
 		return $cacheFlags['otp_users'] ?? 86400;
 	}
 
-	protected static function getCacheDir(int $userId): string
+	protected static function getCacheId(int $userId): array
 	{
 		$hash = md5($userId);
-		return '/otp/' . substr($hash, 0, 2) . '/' . substr($hash, 2, 2) . '/';
+		return [
+			"otp_users_{$userId}_v2",
+			'/otp/' . substr($hash, 0, 2) . '/' . substr($hash, 2, 2) . '/',
+		];
 	}
 
 	protected static function getUserData(int $userId): ?array
@@ -1566,8 +1570,7 @@ class Otp
 
 		if ($cacheTtl !== false)
 		{
-			$cacheId = "otp_users_{$userId}_v1";
-			$cacheDir = static::getCacheDir($userId);
+			[$cacheId, $cacheDir] = static::getCacheId($userId);
 
 			if ($cache->read($cacheTtl, $cacheId, $cacheDir))
 			{
@@ -1577,7 +1580,11 @@ class Otp
 
 		// note USER.ACTIVE - need a special handling on user change
 		$userInfo = UserTable::getRowById($userId, [
-			'select' => ['*', 'USER_ACTIVE' => 'USER.ACTIVE'],
+			'select' => [
+				'*',
+				'USER_ACTIVE' => 'USER.ACTIVE',
+				'USER_LOGIN' => 'USER.LOGIN',
+			],
 		]);
 
 		if ($cacheTtl !== false)
@@ -1592,8 +1599,7 @@ class Otp
 	{
 		if (static::getCacheTtl() !== false)
 		{
-			$cacheId = "otp_users_{$userId}_v1";
-			$cacheDir = static::getCacheDir($userId);
+			[$cacheId, $cacheDir] = static::getCacheId($userId);
 
 			$cache = Application::getInstance()->getManagedCache();
 			$cache->clean($cacheId, $cacheDir);

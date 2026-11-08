@@ -16,7 +16,7 @@ class Note extends Controller
 	}
 
 	/**
-	 * Returns true if current user have 'edit' right.
+	 * Returns true if current user has 'create' additional right.
 	 * @return bool
 	 */
 	protected static function canCreateNew(): bool

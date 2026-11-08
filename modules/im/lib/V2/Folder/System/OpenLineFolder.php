@@ -40,6 +40,11 @@ final class OpenLineFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_OPENLINES';
 	}
 
+	public function getDescriptionLangKey(): ?string
+	{
+		return 'IM_FOLDER_SYSTEM_OPENLINES_DESCRIPTION';
+	}
+
 	public function isAvailable(int $userId): bool
 	{
 		if (!Loader::includeModule('imopenlines'))

@@ -20,7 +20,9 @@ final class AiSiteChatBindingContract
 	public const MANUAL_CHAT_CREATES_BINDING = false;
 	public const RECOVERY_UX_ENABLED = false;
 	public const BINDING_REQUIRED_ERROR = 'AI site generation can only be started from /sites/ai/ with a valid bindingId.';
-	public const BINDING_UNAVAILABLE_ERROR = 'AI site generation can only be started from an active /sites/ai/ chat. Open /sites/ai/ to create a new site.';
+	public const BINDING_UNAVAILABLE_ERROR_CODE = 'BINDING_UNAVAILABLE';
+	public const BINDING_UNAVAILABLE_MESSAGE = 'AI site generation can only be started from an active /sites/ai/ chat. Open /sites/ai/ to create a new site.';
+	public const BINDING_UNAVAILABLE_ERROR = self::BINDING_UNAVAILABLE_ERROR_CODE . ': ' . self::BINDING_UNAVAILABLE_MESSAGE;
 	public const SITE_CHAT_SURFACES = [
 		self::CONTEXT_SURFACE_SITES_AI,
 		self::CONTEXT_SURFACE_EDITOR,

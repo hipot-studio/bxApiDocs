@@ -7,6 +7,7 @@ use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\Error\IErrorable;
 use Bitrix\Disk\SystemUser;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\Entity\AddResult;
 use Bitrix\Main\Entity\Result;
 use Bitrix\Main\NotImplementedException;
@@ -357,13 +358,23 @@ abstract class Model implements \ArrayAccess, IErrorable
 	public static function load(array $filter, array $with = array())
 	{
 		$models = static::getModelList(array(
-			'select' => array('*'),
+			'select' => static::getSelectForLoad(),
 			'filter' => $filter,
 			'with' => $with,
 			'limit' => 1,
 		));
 
 		return array_shift($models);
+	}
+
+	/**
+	 * Returns fields to select in {@see Model::load()}.
+	 * A model which maps only a part of the columns of its table overrides it to avoid reading the rest.
+	 * @return array
+	 */
+	protected static function getSelectForLoad(): array
+	{
+		return ['*'];
 	}
 
 	/**
@@ -677,7 +688,18 @@ abstract class Model implements \ArrayAccess, IErrorable
 
 		/** @var DataManager $tableClassName */
 		$tableClassName = static::getTableClassName();
-		$updateResult = $tableClassName::update($this->getPrimary(), $data);
+		try
+		{
+			$updateResult = $tableClassName::update($this->getPrimary(), $data);
+		}
+		catch (DuplicateEntryException)
+		{
+			// a unique index of the table refused the row: the caller gets a domain error, not an SQL text
+			$this->errorCollection->add([$this->createDuplicateEntryError($data)]);
+
+			return false;
+		}
+
 		if(!$updateResult->isSuccess())
 		{
 			$this->errorCollection->addFromResult($updateResult);
@@ -688,6 +710,16 @@ abstract class Model implements \ArrayAccess, IErrorable
 		$this->setAttributesFromResult($updateResult);
 
 		return true;
+	}
+
+	/**
+	 * Describes a refusal of a unique index for the caller. A model which recognizes the refused field
+	 * as one of its own (a name unique inside a folder and so on) overrides this.
+	 * @param array $data Data of the refused write.
+	 */
+	protected function createDuplicateEntryError(array $data): Error
+	{
+		return new Error('', self::ERROR_INTERNAL_UPDATE);
 	}
 
 	/**

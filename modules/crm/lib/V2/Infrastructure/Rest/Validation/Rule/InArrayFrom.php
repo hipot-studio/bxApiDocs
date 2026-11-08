@@ -7,6 +7,7 @@ namespace Bitrix\Crm\V2\Infrastructure\Rest\Validation\Rule;
 use Attribute;
 use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Provider\Context;
 use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Provider\ValidValuesProviderInterface;
+use Bitrix\Crm\V2\Infrastructure\Rest\Validation\ValidValuesCache;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\LocalizableMessageInterface;
 use Bitrix\Main\Validation\Rule\AbstractPropertyValidationAttribute;
@@ -18,7 +19,6 @@ use Bitrix\Rest\Exceptions\ArgumentTypeException;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class InArrayFrom extends AbstractPropertyValidationAttribute implements ValidateByGroupInterface
 {
-	protected ?array $validValues = null;
 	protected ?Context $context = null;
 
 	public function __construct(
@@ -46,12 +46,21 @@ class InArrayFrom extends AbstractPropertyValidationAttribute implements Validat
 
 	public function validateProperty(mixed $propertyValue): ValidationResult
 	{
-		if (!isset($this->context))
-		{
-			$this->context = $this->buildContext($propertyValue);
-		}
+		return $this->validateWithContext($propertyValue, $this->buildContext($propertyValue));
+	}
 
-		return parent::validateProperty($propertyValue);
+	protected function validateWithContext(mixed $propertyValue, Context $context): ValidationResult
+	{
+		$this->context = $context;
+
+		try
+		{
+			return parent::validateProperty($propertyValue);
+		}
+		finally
+		{
+			$this->context = null;
+		}
 	}
 
 	public function hasContextArg(string $name): bool
@@ -90,12 +99,7 @@ class InArrayFrom extends AbstractPropertyValidationAttribute implements Validat
 			return [];
 		}
 
-		if (!isset($this->validValues))
-		{
-			$this->validValues = $this->provider::getValidValues($this->context);
-		}
-
-		return $this->validValues;
+		return ValidValuesCache::get($this->provider, $this->context);
 	}
 
 	public static function __set_state(array $array): static

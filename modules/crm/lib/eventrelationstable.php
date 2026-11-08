@@ -4,11 +4,15 @@ namespace Bitrix\Crm;
 
 use Bitrix\Crm\Service\EventHistory;
 use Bitrix\Main\Application;
-use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
 
 /**
@@ -29,7 +33,9 @@ use Bitrix\Main\Result;
  */
 class EventRelationsTable extends DataManager
 {
-	private const MAX_ROWS_IN_BATCH_UPDATE = 500;
+	use DeleteByFilterTrait;
+
+	private const BATCH_SIZE = 1000;
 
 	public static function getTableName(): string
 	{
@@ -69,98 +75,204 @@ class EventRelationsTable extends DataManager
 
 	private static function deleteRecords(string $entityTypeName, ?int $id = null): Result
 	{
-		$result = new Result();
-
-		$eventIds = [];
-
-		foreach (self::getRelationRecordsToDelete($entityTypeName, $id) as $row)
+		while (true)
 		{
-			$deleteResult = $row->delete();
-			if ($deleteResult->isSuccess())
+			$relations = self::getOwnedRelationsBatch($entityTypeName, $id);
+			if ($relations === [])
 			{
-				$eventIds[] = $row->requireEventId();
+				return new Result();
 			}
-			else
+
+			$relationIds = self::getUniqueColumnValues($relations, 'ID');
+			$eventIds = self::getUniqueColumnValues($relations, 'EVENT_ID');
+			$linkEventIds = self::getLinkEventIds($eventIds);
+
+			// relations of the batch go first: an event still referenced by them would not look orphaned yet
+			$result = self::deleteRelationsByIds($relationIds);
+			if (!$result->isSuccess())
 			{
-				$result->addErrors($deleteResult->getErrors());
+				return $result;
 			}
-		}
 
-		$eventIds = array_unique($eventIds);
-		if (empty($eventIds))
-		{
-			return $result;
-		}
-
-			$list =
-				EventTable::query()
-					->setSelect(['ID', 'FILES'])
-					->whereIn('ID', $eventIds)
-					// delete only events that have no more references in relations table
-					->whereNull('EVENT_RELATION.EVENT_ID')
-					->exec()
-			;
-
-		while ($item = $list->fetchObject())
-		{
-			$deleteResult = $item->delete();
-			if ($deleteResult->isSuccess())
+			if ($linkEventIds !== [])
 			{
-				$serializedFileIds = $item->requireFiles();
-				if (is_string($serializedFileIds) && !empty($serializedFileIds))
+				$result = self::deleteRelationsByEventIds($linkEventIds);
+				if (!$result->isSuccess())
 				{
-					$fileIds = unserialize($serializedFileIds, ['allowed_classes' => false]);
-					if (is_array($fileIds))
-					{
-						foreach ($fileIds as $fileId)
-						{
-							\CFile::Delete((int)$fileId);
-						}
-					}
+					return $result;
 				}
 			}
-			else
+
+			$orphanEvents = self::getOrphanEvents($eventIds);
+			if ($orphanEvents === [])
 			{
-				$result->addErrors($deleteResult->getErrors());
+				continue;
 			}
+
+			$orphanEventIds = self::getUniqueColumnValues($orphanEvents, 'ID');
+			$result = self::deleteEventsByIds($orphanEventIds);
+			if (!$result->isSuccess())
+			{
+				return $result;
+			}
+
+			self::deleteFiles($orphanEvents);
+		}
+	}
+
+	private static function getOwnedRelationsBatch(string $entityTypeName, ?int $id = null): array
+	{
+		// no order and no offset: sorting by ID is not covered by an index, and an offset over a set
+		// that is being deleted from skips rows
+		$query = self::query()
+			->setSelect(['ID', 'EVENT_ID'])
+			->where('ENTITY_TYPE', $entityTypeName)
+			->setLimit(self::BATCH_SIZE)
+		;
+		if (!is_null($id))
+		{
+			$query->where('ENTITY_ID', $id);
+		}
+
+		$relations = [];
+		$list = $query->exec();
+		while ($row = $list->fetch())
+		{
+			$relations[] = [
+				'ID' => (int)$row['ID'],
+				'EVENT_ID' => (int)$row['EVENT_ID'],
+			];
+		}
+
+		return $relations;
+	}
+
+	private static function getLinkEventIds(array $eventIds): array
+	{
+		if ($eventIds === [])
+		{
+			return [];
+		}
+
+		$linkEventIds = [];
+		$list = EventTable::query()
+			->setSelect(['ID'])
+			->whereIn('ID', $eventIds)
+			->whereIn('EVENT_TYPE', [EventHistory::EVENT_TYPE_LINK, EventHistory::EVENT_TYPE_UNLINK])
+			->exec()
+		;
+		while ($row = $list->fetch())
+		{
+			$linkEventIds[] = (int)$row['ID'];
+		}
+
+		return array_values(array_unique($linkEventIds));
+	}
+
+	private static function deleteRelationsByIds(array $relationIds): Result
+	{
+		return self::deleteByCondition(Query::filter()->whereIn('ID', $relationIds));
+	}
+
+	private static function deleteRelationsByEventIds(array $eventIds): Result
+	{
+		return self::deleteByCondition(Query::filter()->whereIn('EVENT_ID', $eventIds));
+	}
+
+	private static function deleteEventsByIds(array $eventIds): Result
+	{
+		return self::deleteByCondition(
+			Query::filter()->whereIn('ID', $eventIds),
+			EventTable::class
+		);
+	}
+
+	/**
+	 * @param class-string<DataManager> $dataClass
+	 */
+	private static function deleteByCondition(
+		array|ConditionTree $filter,
+		string $dataClass = self::class
+	): Result
+	{
+		$result = new Result();
+
+		try
+		{
+			$dataClass::deleteByFilter($filter);
+		}
+		catch (SqlQueryException $exception)
+		{
+			Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+
+			$result->addError(new Error('Failed to delete a batch of CRM event history records.'));
 		}
 
 		return $result;
 	}
 
-	private static function getRelationRecordsToDelete(
-		string $entityTypeName,
-		?int $id = null
-	): EO_EventRelations_Collection
+	private static function getOrphanEvents(array $eventIds): array
 	{
-		$ownedRecordsQuery = self::query()
-			->setSelect(['ID', 'EVENT_ID'])
-			->where('ENTITY_TYPE', $entityTypeName)
-		;
-		if (!is_null($id))
+		if ($eventIds === [])
 		{
-			$ownedRecordsQuery->where('ENTITY_ID', $id);
+			return [];
 		}
 
-		$relationEventsWithThisEntityQuery = EventTable::query()
-			->setSelect(['ID'])
-			->whereIn('EVENT_TYPE', [EventHistory::EVENT_TYPE_LINK, EventHistory::EVENT_TYPE_UNLINK])
-			->where('EVENT_RELATION.ENTITY_TYPE', $entityTypeName)
+		$events = [];
+		// a null join means no relation rows are left, so the event is unreachable and can be dropped
+		$list =
+			EventTable::query()
+				->setSelect(['ID', 'FILES'])
+				->whereIn('ID', $eventIds)
+				->whereNull('EVENT_RELATION.EVENT_ID')
+				->exec()
 		;
-		if (!is_null($id))
+		while ($row = $list->fetch())
 		{
-			$relationEventsWithThisEntityQuery->where('EVENT_RELATION.ENTITY_ID', $id);
+			$events[] = [
+				'ID' => (int)$row['ID'],
+				'FILES' => $row['FILES'],
+			];
 		}
 
-		$boundRecordsQuery = self::query()
-			->setSelect(['ID', 'EVENT_ID'])
-			->whereIn('EVENT_ID', $relationEventsWithThisEntityQuery)
-		;
+		return $events;
+	}
 
-		return
-			$ownedRecordsQuery
-				->union($boundRecordsQuery)
-				->fetchCollection()
-		;
+	private static function deleteFiles(array $events): void
+	{
+		foreach ($events as $event)
+		{
+			$serializedFileIds = $event['FILES'] ?? null;
+			if (!is_string($serializedFileIds) || $serializedFileIds === '')
+			{
+				continue;
+			}
+
+			$fileIds = unserialize($serializedFileIds, ['allowed_classes' => false]);
+			if (!is_array($fileIds))
+			{
+				continue;
+			}
+
+			foreach ($fileIds as $fileId)
+			{
+				\CFile::Delete((int)$fileId);
+			}
+		}
+	}
+
+	private static function getUniqueColumnValues(array $rows, string $columnName): array
+	{
+		$values = [];
+		foreach ($rows as $row)
+		{
+			$value = (int)($row[$columnName] ?? 0);
+			if ($value > 0)
+			{
+				$values[$value] = $value;
+			}
+		}
+
+		return array_values($values);
 	}
 }

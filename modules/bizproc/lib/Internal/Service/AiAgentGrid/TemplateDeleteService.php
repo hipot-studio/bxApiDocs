@@ -84,6 +84,14 @@ class TemplateDeleteService
 		return $this->deleteTemplatesInternal($templateIds, $initiator, $deleteChatbots);
 	}
 
+	public function rollbackFailedTemplateCopy(
+		int $templateId,
+		CBPWorkflowTemplateUser $initiator,
+	): Result
+	{
+		return $this->deleteTemplatesInternal([$templateId], $initiator);
+	}
+
 	/**
 	 * The processes grid calls this only after checking canDelete() for every requested template.
 	 * Owner filtering remains mandatory for every AI-agent-specific caller of deleteTemplates().

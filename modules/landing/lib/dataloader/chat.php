@@ -119,7 +119,7 @@ class Chat extends \Bitrix\Landing\Source\DataLoader
 			}
 		}
 
-		// button title we recive from attribute too
+		// button title we receive from attribute too
 		if (
 			$return &&
 			isset($filter['attributeButton']) &&

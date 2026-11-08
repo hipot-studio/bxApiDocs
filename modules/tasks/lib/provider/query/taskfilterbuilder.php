@@ -40,14 +40,18 @@ use Bitrix\Tasks\Internals\Task\Template\TemplateDependenceTable;
 use Bitrix\Tasks\Internals\Task\UserOptionTable;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Internals\UserOption\Option;
+use Bitrix\Tasks\Kanban\TaskStageTable;
 use Bitrix\Tasks\Provider\Exception\InvalidFilterException;
 use Bitrix\Tasks\Provider\TasksUFManager;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Util\Entity\DateTimeField;
 use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\Mapper\CrmIdMapper;
 
 class TaskFilterBuilder
 {
+	public const FILTER_PERSONAL_KANBAN_UNPLANNED = 'PERSONAL_KANBAN_UNPLANNED';
+
 	private const FILTER_ROLE_KEY = '::SUBFILTER-ROLEID';
 
 	private const OPERATION_EQUAL = '=';
@@ -698,6 +702,7 @@ class TaskFilterBuilder
 				case 'ALLOW_CHANGE_DEADLINE':
 				case 'MATCH_WORK_TIME':
 				case 'IS_REGULAR':
+				case 'ZOMBIE':
 					$subFilter = $this->createSubfilter($field, $val, $operation, self::CAST_STRING_EQ);
 					if ($subFilter)
 					{
@@ -965,7 +970,12 @@ class TaskFilterBuilder
 						->setGroupBy([]);
 
 					$subQuery = TaskQueryBuilder::build($taskQuery);
-					$subSql = $subQuery->getQuery();
+					// whereExpr() runs the whole expression through sprintf() again, so escape the built sub-SQL:
+					// double every literal % (e.g. a LIKE 'prefix%' from the CRM element filter) so it survives,
+					// but keep positional tokens like %1$s intact -- getQuery() leaves a live %1$s here when
+					// SAME_GROUP_PARENT_EX correlates the sub-select to the outer GROUP_ID, and the outer whereExpr
+					// below fills %1$s -> GROUP_ID, %2$s -> PARENT_ID.
+					$subSql = $this->escapeSprintfLiteralPercent($subQuery->getQuery());
 
 					$subFilter = Query::filter()
 						->logic('or')
@@ -1132,6 +1142,21 @@ class TaskFilterBuilder
 						$conditionTree->where($subFilter);
 					}
 					$this->registerRuntimeField(TaskQueryBuilder::ALIAS_TASK_STAGES);
+					break;
+
+				case self::FILTER_PERSONAL_KANBAN_UNPLANNED:
+					if (
+						!$val instanceof PersonalKanbanUnplannedFilter
+						|| $val->newStageId <= 0
+						|| !$val->ownerStageIds
+						|| min($val->ownerStageIds) <= 0
+						|| !in_array($val->newStageId, $val->ownerStageIds, true)
+					)
+					{
+						throw new InvalidFilterException('Invalid personal kanban unplanned filter');
+					}
+
+					$conditionTree->where($this->createPersonalKanbanUnplannedFilter($val));
 					break;
 
 				case 'PROJECT_NEW_COMMENTS':
@@ -1342,6 +1367,15 @@ class TaskFilterBuilder
 					$conditionTree->where($subFilter);
 					break;
 
+				// internal translation layer; field registration is feature-gated, so no flag check here is safe
+				case 'CRM_ITEM':
+					$subFilter = $this->buildCrmItemFilter($val, $helper);
+					if ($subFilter)
+					{
+						$conditionTree->where($subFilter);
+					}
+					break;
+
 				default:
 					if (preg_match('/^UF_/', $field))
 					{
@@ -1385,6 +1419,37 @@ class TaskFilterBuilder
 		}
 
 		return $conditionTree;
+	}
+
+	private function createPersonalKanbanUnplannedFilter(
+		PersonalKanbanUnplannedFilter $filter
+	): ConditionTree
+	{
+		$linkedToNew = TaskQueryBuilder::createQuery(
+			'PKUN_NEW',
+			TaskStageTable::getEntity()
+		);
+		$linkedToNew
+			->setSelect(['ID'])
+			->where('TASK_ID', new SqlExpression('%1$s'))
+			->where('STAGE_ID', $filter->newStageId)
+		;
+
+		$linkedToAny = TaskQueryBuilder::createQuery(
+			'PKUN_ANY',
+			TaskStageTable::getEntity()
+		);
+		$linkedToAny
+			->setSelect(['ID'])
+			->where('TASK_ID', new SqlExpression('%1$s'))
+			->whereIn('STAGE_ID', $filter->ownerStageIds)
+		;
+
+		return Query::filter()
+			->logic('or')
+			->whereExpr("EXISTS({$linkedToNew->getQuery()})", ['ID'])
+			->whereExpr("NOT EXISTS({$linkedToAny->getQuery()})", ['ID'])
+		;
 	}
 
 	/**
@@ -2435,6 +2500,7 @@ class TaskFilterBuilder
 	}
 
 	/**
+	 * @throws InvalidFilterException
 	 * @throws ObjectException
 	 */
 	private function translateUfFilter(string $field, string $operation, $fieldValues, bool $needEscape = true): array
@@ -2449,6 +2515,14 @@ class TaskFilterBuilder
 		if (!is_array($fieldValues))
 		{
 			$fieldValues = [$fieldValues];
+		}
+
+		foreach ($fieldValues as $value)
+		{
+			if (is_array($value))
+			{
+				throw new InvalidFilterException('Nested arrays are not allowed in user field filters');
+			}
 		}
 
 		foreach ($fieldValues as $value)
@@ -2500,12 +2574,218 @@ class TaskFilterBuilder
 	}
 
 	/**
+	 * Builds a filter over the multiple userfield storage b_utm_tasks_task for the "CRM element" field.
+	 *
+	 * Values follow DTO-01: concrete element `{ABBR}_{id}`, whole static type `ALL_{entityTypeId}`,
+	 * all smart processes `ALL_T`, no binding `NONE`. Filtering runs on the VALUE slug column of
+	 * b_utm_tasks_task; the FIELD_ID index narrows the scan (VALUE itself is not indexed).
+	 */
+	private function buildCrmItemFilter($fieldValues, $helper): ?ConditionTree
+	{
+		if (empty($fieldValues) || !Loader::includeModule('crm'))
+		{
+			return null;
+		}
+
+		if (!is_array($fieldValues))
+		{
+			$fieldValues = [$fieldValues];
+		}
+
+		$fieldId = $this->resolveCrmUfFieldId();
+		if ($fieldId <= 0)
+		{
+			return null;
+		}
+
+		$positives = [];
+		$wantNone = false;
+
+		foreach ($fieldValues as $value)
+		{
+			[$entityId, $token] = $this->parseCrmFilterValue((string)$value);
+
+			if ($token === 'NONE')
+			{
+				$wantNone = true;
+			}
+			elseif ($token === 'ALL_T')
+			{
+				// Every smart-process slug starts with the dynamic-type prefix 'T'.
+				$positives[] = $this->buildCrmPrefixCondition('T');
+			}
+			elseif (str_starts_with($token, 'ALL_'))
+			{
+				$prefix = $this->resolveCrmTypeAbbr((int)mb_substr($token, 4));
+				if ($prefix !== '')
+				{
+					$positives[] = $this->buildCrmPrefixCondition($prefix . '_');
+				}
+			}
+			else
+			{
+				// The filter picker (ADD_ENTITY_ID_TO_RESULT) sends the selector entityId + bare id, so map it to
+				// the stored slug; the cell click-filter already passes the slug and leaves entityId null.
+				$slug = $entityId === null ? $token : $this->mapCrmSelectorValueToSlug($entityId, $token);
+				if ($slug !== null && $slug !== '')
+				{
+					$positives[] = "VALUE = '" . $this->prepareForSprintf($helper->forSql($slug)) . "'";
+				}
+			}
+		}
+
+		if (empty($positives) && !$wantNone)
+		{
+			return null;
+		}
+
+		$table = 'b_utm_tasks_task';
+		$tree = Query::filter();
+		$tree->logic('or');
+
+		// The ORM sprintf()s whereExpr() expressions, so every literal % is doubled (see buildCrmPrefixCondition
+		// and prepareForSprintf) to keep the only real placeholder the %1$s task id.
+		if (!empty($positives))
+		{
+			$posSub =
+				"SELECT VALUE_ID FROM {$table}"
+				. " WHERE FIELD_ID = {$fieldId} AND (" . implode(' OR ', $positives) . ")"
+			;
+			$tree->whereExpr('%1$s IN (' . $posSub . ')', ['ID']);
+		}
+
+		if ($wantNone)
+		{
+			$noneSub =
+				"NOT EXISTS (SELECT 1 FROM {$table} m"
+				. " WHERE m.VALUE_ID = %1\$s AND m.FIELD_ID = {$fieldId})"
+			;
+			$tree->whereExpr($noneSub, ['ID']);
+		}
+
+		return $tree;
+	}
+
+	/**
+	 * The "CRM element" filter value arrives in two shapes: the cell click-filter passes the stored slug
+	 * directly (`D_15`, `ALL_2`, `NONE`), while the filter-field entity selector (ADD_ENTITY_ID_TO_RESULT)
+	 * passes JSON `["{entityId}", "{id}"]`, where the concrete id is the bare CRM id and the type lives only
+	 * in the selector entityId. Returns [entityId|null, token]; entityId is non-null only for the JSON form.
+	 *
+	 * @return array{0: ?string, 1: string}
+	 */
+	private function parseCrmFilterValue(string $value): array
+	{
+		try
+		{
+			$decoded = \Bitrix\Main\Web\Json::decode($value);
+		}
+		catch (\Bitrix\Main\ArgumentException)
+		{
+			return [null, $value];
+		}
+
+		if (is_array($decoded) && isset($decoded[0], $decoded[1]))
+		{
+			return [(string)$decoded[0], (string)$decoded[1]];
+		}
+
+		return [null, $value];
+	}
+
+	/**
+	 * Maps an entity-selector concrete pick to the stored UF_CRM_TASK slug (DTO-01): static types resolve via
+	 * CCrmOwnerType (token is the bare entity id), smart processes arrive as `{typeId}:{id}`. Mirrors the
+	 * tasks.v2 CrmIdMapper / mappers.js contract.
+	 */
+	private function mapCrmSelectorValueToSlug(string $entityId, string $token): ?string
+	{
+		$mapper = new CrmIdMapper();
+
+		$typeId = \CCrmOwnerType::ResolveID(mb_strtoupper($entityId));
+		if ($typeId !== \CCrmOwnerType::Undefined)
+		{
+			return $mapper->mapToId($typeId, (int)$token);
+		}
+
+		if (str_contains($token, ':'))
+		{
+			[$dynamicTypeId, $itemId] = explode(':', $token, 2);
+
+			return $mapper->mapToId((int)$dynamicTypeId, (int)$itemId);
+		}
+
+		return null;
+	}
+
+	private function resolveCrmUfFieldId(): int
+	{
+		static $fieldId = null;
+
+		if ($fieldId === null)
+		{
+			$row = \Bitrix\Main\UserFieldTable::query()
+				->setSelect(['ID'])
+				->where('ENTITY_ID', 'TASKS_TASK')
+				->where('FIELD_NAME', 'UF_CRM_TASK')
+				->setLimit(1)
+				->fetch()
+			;
+			$fieldId = (int)($row['ID'] ?? 0);
+		}
+
+		return $fieldId;
+	}
+
+	private function resolveCrmTypeAbbr(int $entityTypeId): string
+	{
+		if ($entityTypeId <= 0)
+		{
+			return '';
+		}
+
+		$abbr = \CCrmOwnerTypeAbbr::ResolveByTypeID($entityTypeId);
+
+		return $abbr === \CCrmOwnerTypeAbbr::Undefined ? '' : $abbr;
+	}
+
+	/**
+	 * Builds a sargable prefix condition on the VALUE slug column: VALUE LIKE 'prefix%' so the
+	 * (FIELD_ID, VALUE(50)) index range-scans instead of scanning the whole field. The literal prefix
+	 * (a CRM type abbreviation like D_, C_, T) has \ % _ ' escaped in one pass: the LIKE metacharacters
+	 * are prefixed with a backslash so they match literally, the quote is escaped for the literal.
+	 * This relies on LIKE's default escape character (backslash), which is identical on MySQL and
+	 * PostgreSQL; no explicit ESCAPE clause is emitted on purpose, since ESCAPE '\\' breaks on
+	 * PostgreSQL with standard_conforming_strings=on (the literal '\\' is two characters there, while
+	 * ESCAPE requires exactly one). prepareForSprintf() then doubles every % because whereExpr() feeds
+	 * the expression through sprintf() (the trailing wildcard % survives as %%).
+	 */
+	private function buildCrmPrefixCondition(string $prefix): string
+	{
+		$escaped = str_replace(['\\', '%', '_', "'"], ['\\\\', '\\%', '\\_', "\\'"], $prefix);
+		$pattern = $escaped . '%';
+
+		return "VALUE LIKE '" . $this->prepareForSprintf($pattern) . "'";
+	}
+
+	/**
 	 * @param string $value
 	 * @return string
 	 */
 	private function prepareForSprintf(string $value): string
 	{
 		return str_replace('%', '%%', $value);
+	}
+
+	/**
+	 * Escapes only literal % for a further sprintf() pass, leaving positional tokens (%1$s, %2$s, ...)
+	 * intact. Used when already-built SQL is re-embedded into a whereExpr(): its literal % (LIKE wildcards)
+	 * must be doubled, but any surviving positional placeholder is a live correlation the outer whereExpr
+	 * still needs to fill.
+	 */
+	private function escapeSprintfLiteralPercent(string $value): string
+	{
+		return preg_replace('/%(?!\d+\$)/', '%%', $value);
 	}
 
 	/**

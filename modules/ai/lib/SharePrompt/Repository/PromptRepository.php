@@ -13,7 +13,6 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\DateTime;
-use Bitrix\Main\DB\Result;
 use Bitrix\Main\ORM\Data\UpdateResult;
 
 class PromptRepository extends BaseRepository
@@ -87,24 +86,19 @@ class PromptRepository extends BaseRepository
 	 * @param array $promptId
 	 * @param bool $needActivate
 	 * @param $userId
-	 * @return Result
+	 * @return UpdateResult
 	 */
-	public function changeActivatePrompts(array $promptId, bool $needActivate, $userId): Result
+	public function changeActivatePrompts(array $promptId, bool $needActivate, $userId): UpdateResult
 	{
-		$promptIds = implode(',', $promptId);
-		$dateUpdate = (new DateTime())->toUserTime();
-		$needActivate = (int)$needActivate;
-
-		return $this->getConnection()->query("
-			UPDATE 
-				{$this->getPromptTableName()} 
-			SET 
-				IS_ACTIVE = {$needActivate},
-				EDITOR_ID = {$userId},
-				DATE_MODIFY = '{$dateUpdate}'
-			WHERE 
-				ID IN ({$promptIds})
-		");
+		return PromptTable::updateMulti(
+			$promptId,
+			[
+				'IS_ACTIVE' => (int)$needActivate,
+				'EDITOR_ID' => $userId,
+				'DATE_MODIFY' => (new DateTime())->toUserTime(),
+			],
+			true,
+		);
 	}
 
 	/**
@@ -222,6 +216,11 @@ class PromptRepository extends BaseRepository
 	 */
 	public function getByPromptCodes(array $codes): array
 	{
+		if (empty($codes))
+		{
+			return [];
+		}
+
 		return PromptTable::query()
 			->setSelect([
 				'ID',
@@ -274,6 +273,11 @@ class PromptRepository extends BaseRepository
 	 */
 	public function getByIds(array $codes): array
 	{
+		if (empty($codes))
+		{
+			return [];
+		}
+
 		return PromptTable::query()
 			->setSelect([
 				'ID',
@@ -365,6 +369,11 @@ class PromptRepository extends BaseRepository
 	 */
 	public function getChildrenPromptListByIds(array $promptIds, array $forbiddenPromptIds, string $lang): array
 	{
+		if (empty($promptIds))
+		{
+			return [];
+		}
+
 		$query = PromptTable::query()
 			->setSelect([
 				'ID',

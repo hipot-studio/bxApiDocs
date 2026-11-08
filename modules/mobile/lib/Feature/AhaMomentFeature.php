@@ -8,18 +8,20 @@ use Bitrix\Main\Config\Option;
 
 class AhaMomentFeature extends FeatureFlag
 {
+	private const OPTION_CODE = 'should_show_aha_moments';
+
 	public function isEnabled(): bool
 	{
-		return (bool)Option::get('mobile', 'should_show_aha_moments', true);
+		return (bool)Option::get('mobile', self::OPTION_CODE, true);
 	}
 
 	public function enable(): void
 	{
-		Option::set('mobile', 'should_show_aha_moments', true);
+		Option::set('mobile', self::OPTION_CODE, true);
 	}
 
 	public function disable(): void
 	{
-		Option::delete('mobile', ['name' => 'should_show_aha_moments']);
+		Option::delete('mobile', ['name' => self::OPTION_CODE]);
 	}
 }

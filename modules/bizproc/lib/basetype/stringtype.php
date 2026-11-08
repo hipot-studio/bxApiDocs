@@ -3,8 +3,11 @@
 namespace Bitrix\Bizproc\BaseType;
 
 use Bitrix\Main;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Class String
@@ -266,6 +269,120 @@ class StringType extends Base
 		}
 
 		return $renderResult;
+	}
+
+	/**
+	 * @param FieldType $fieldType
+	 * @param array $field
+	 * @param array $request
+	 * @return mixed|null
+	 */
+	protected static function extractValue(FieldType $fieldType, array $field, array $request)
+	{
+		$value = parent::extractValue($fieldType, $field, $request);
+
+		if ($value === null || $value === '')
+		{
+			return $value;
+		}
+
+		$rule = $fieldType->getSettings()[ValueRule::SETTINGS_KEY] ?? null;
+		if (!is_array($rule) || !isset($rule[ValueRule::MAX_LENGTH]))
+		{
+			return $value;
+		}
+
+		return static::applyMaxLengthRule($fieldType, $field, $value, (int)$rule[ValueRule::MAX_LENGTH]);
+	}
+
+	/**
+	 * The value is measured the way externalizeValue() reads it: an array is reduced by toSingleValue().
+	 *
+	 * @param FieldType $fieldType
+	 * @param array $field
+	 * @param mixed $value
+	 * @param int $maxLength
+	 * @return mixed|null
+	 */
+	protected static function applyMaxLengthRule(FieldType $fieldType, array $field, $value, int $maxLength)
+	{
+		$measured = self::reduceValueToString($fieldType, $value);
+		if ($measured === null)
+		{
+			static::addError([
+				'code' => 'ValueRuleUnsupportedValue',
+				'message' => Loc::getMessage('BPDT_STRING_VALUE_RULE_UNSUPPORTED_VALUE'),
+				'parameter' => static::generateControlName($field),
+			]);
+
+			return null;
+		}
+
+		if ($measured === '' || \CBPActivity::isExpression($measured))
+		{
+			return $value;
+		}
+
+		// no code point takes less than a byte, so a value short in bytes is inside the limit
+		if (strlen($measured) <= $maxLength)
+		{
+			return $value;
+		}
+
+		if (static::countCodePoints($measured) > $maxLength)
+		{
+			static::addError([
+				'code' => 'ValueRuleMaxLength',
+				'message' => Loc::getMessage(
+					'BPDT_STRING_VALUE_RULE_MAX_LENGTH',
+					['#MAX_LENGTH#' => $maxLength]
+				),
+				'parameter' => static::generateControlName($field),
+			]);
+
+			return null;
+		}
+
+		return $value;
+	}
+
+	/**
+	 * The client counts utf-16 units, so on astral characters it refuses values this check lets through.
+	 */
+	private static function countCodePoints(string $value): int
+	{
+		// a single-byte charset spends exactly one byte per code point
+		if (!self::isUtfCharset(static::getValueCharset()))
+		{
+			return strlen($value);
+		}
+
+		return mb_strlen($value, 'UTF-8');
+	}
+
+	private static function isUtfCharset(string $charset): bool
+	{
+		return str_replace('-', '', strtolower($charset)) === 'utf8';
+	}
+
+	protected static function getValueCharset(): string
+	{
+		return LANG_CHARSET;
+	}
+
+	private static function reduceValueToString(FieldType $fieldType, $value): ?string
+	{
+		if (is_array($value))
+		{
+			$value = static::toSingleValue($fieldType, $value);
+		}
+
+		if (is_string($value))
+		{
+			return $value;
+		}
+
+		return is_scalar($value) ? (string)$value : null;
 	}
 
 	public static function mergeValue(FieldType $fieldType, array $baseValue, $appendValue): array

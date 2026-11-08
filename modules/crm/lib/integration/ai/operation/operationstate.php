@@ -556,7 +556,16 @@ class OperationState
 
 	private function shouldTrackFillInFullScenario(): bool
 	{
-		return $this->isFillFieldsEnabled();
+		return $this->isFillFieldsEnabled()
+			&& $this->getFillFieldsEntityAllowedSnapshot() !== false
+		;
+	}
+
+	protected function getFillFieldsEntityAllowedSnapshot(): ?bool
+	{
+		return $this->getSummarizeResult()?->getFillFieldsEntityAllowedSnapshot()
+			?? $this->getTranscriptionResult()?->getFillFieldsEntityAllowedSnapshot()
+		;
 	}
 
 	private function shouldTrackCallScoringInFullCallScenario(): bool

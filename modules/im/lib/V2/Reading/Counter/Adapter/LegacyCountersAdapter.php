@@ -53,6 +53,7 @@ final class LegacyCountersAdapter
 				'COLLAB' => 0,
 				'MESSENGER' => 0,
 				'TASKS_TASK' => 0,
+				'VIBECODE_APP' => 0,
 			],
 			'CHAT' => [],
 			'DIALOG' => [],
@@ -63,10 +64,12 @@ final class LegacyCountersAdapter
 			'COLLAB_UNREAD' => [],
 			'COPILOT_UNREAD' => [],
 			'TASKS_TASK_UNREAD' => [],
+			'VIBECODE_APP_UNREAD' => [],
 			'LINES' => [],
 			'COPILOT' => [],
 			'CHANNEL_COMMENT' => [],
 			'TASKS_TASK' => [],
+			'VIBECODE_APP' => [],
 		];
 	}
 
@@ -190,6 +193,7 @@ final class LegacyCountersAdapter
 		$inCollab = false;
 		$inLines = false;
 		$inTasksTask = false;
+		$inVibecodeApp = false;
 
 		foreach ($counter->recentSections as $section)
 		{
@@ -217,6 +221,10 @@ final class LegacyCountersAdapter
 				case 'tasksTask':
 					$inTasksTask = true;
 					break;
+
+				case 'vibecodeApp':
+					$inVibecodeApp = true;
+					break;
 			}
 		}
 
@@ -237,6 +245,10 @@ final class LegacyCountersAdapter
 			if ($inTasksTask)
 			{
 				$result['TASKS_TASK_UNREAD'][$chatId] = $chatId;
+			}
+			if ($inVibecodeApp)
+			{
+				$result['VIBECODE_APP_UNREAD'][$chatId] = $chatId;
 			}
 		}
 
@@ -278,6 +290,11 @@ final class LegacyCountersAdapter
 				$result['TASKS_TASK'][$chatId] = $count;
 				$result['TYPE']['TASKS_TASK'] += $count;
 			}
+			if ($inVibecodeApp)
+			{
+				$result['VIBECODE_APP'][$chatId] = $count;
+				$result['TYPE']['VIBECODE_APP'] += $count;
+			}
 
 			if ($inChat || $inLines || $inTasksTask)
 			{
@@ -311,6 +328,11 @@ final class LegacyCountersAdapter
 				$result['TYPE']['TASKS_TASK']++;
 				$countsInTypes = true;
 			}
+			if ($inVibecodeApp)
+			{
+				$result['TYPE']['VIBECODE_APP']++;
+				$countsInTypes = true;
+			}
 
 			if ($countsInTypes && ($inChat || $inTasksTask))
 			{
@@ -328,5 +350,6 @@ final class LegacyCountersAdapter
 		$result['COPILOT_UNREAD'] = array_values($result['COPILOT_UNREAD']);
 		$result['COLLAB_UNREAD'] = array_values($result['COLLAB_UNREAD']);
 		$result['TASKS_TASK_UNREAD'] = array_values($result['TASKS_TASK_UNREAD']);
+		$result['VIBECODE_APP_UNREAD'] = array_values($result['VIBECODE_APP_UNREAD']);
 	}
 }

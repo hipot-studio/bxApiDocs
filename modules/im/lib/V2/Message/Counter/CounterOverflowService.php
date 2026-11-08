@@ -75,6 +75,7 @@ class CounterOverflowService
 			$raw = CounterOverflowTable::query()
 				->setSelect(['CHAT_ID', 'USER_ID'])
 				->whereIn('CHAT_ID', $needToFetch)
+				->whereIn('USER_ID', array_keys($needToFetch))
 				->fetchAll()
 			;
 		}
@@ -83,18 +84,17 @@ class CounterOverflowService
 			$userId = (int)$row['USER_ID'];
 			$fetched[$userId] = new CounterOverflowInfo([$userId => $userId], [], (int)$row['CHAT_ID']);
 		}
-		foreach ($userIds as $userId)
+		foreach ($needToFetch as $userId => $chatId)
 		{
-			$chatId = $this->notificationChatProvider->getChatId($userId);
 			$fetched[$userId] ??= new CounterOverflowInfo([], [$userId => $userId], $chatId);
 		}
 
-		foreach ($fetched as $userId => $info)
+		foreach ($fetched as $info)
 		{
 			self::$overflowInfoStaticCache[$info->getChatId()] = $info;
 		}
 
-		return NotificationsCounterOverflowInfo::fromCounterOverflowInfo(array_merge($cached, $fetched));
+		return NotificationsCounterOverflowInfo::fromCounterOverflowInfo($cached + $fetched);
 	}
 
 	public function filterOverflowedChatIdsByUserId(array $chatIds, int $userId): array
@@ -131,17 +131,29 @@ class CounterOverflowService
 		$this->notificationChatProvider->preload($counters->getUserIds());
 		$overflowedCounters = $this->filterOverflowedCounters($counters);
 		$rows = [];
+		$usersToSwitch = [];
 		foreach ($overflowedCounters->getUserIds() as $userId)
 		{
 			$chatId = $this->notificationChatProvider->getChatId($userId);
+			if ($this->isOverflowKnown($chatId, $userId))
+			{
+				continue;
+			}
 			$rows[] = $this->getRowToInsert($userId, $chatId);
+			$usersToSwitch[$userId] = $chatId;
 		}
 		$this->insertRows($rows);
-		foreach ($overflowedCounters->getUserIds() as $userId)
+		foreach ($usersToSwitch as $userId => $chatId)
 		{
-			$chatId = $this->notificationChatProvider->getChatId($userId);
 			self::cleanCacheByChatId($chatId, $userId, true);
 		}
+	}
+
+	protected function isOverflowKnown(int $chatId, int $userId): bool
+	{
+		return isset(self::$overflowInfoStaticCache[$chatId])
+			&& self::$overflowInfoStaticCache[$chatId]->hasOverflow($userId)
+		;
 	}
 
 	protected function getOverflowInfoFromCache(array $userIds, int $chatId): ?CounterOverflowInfo

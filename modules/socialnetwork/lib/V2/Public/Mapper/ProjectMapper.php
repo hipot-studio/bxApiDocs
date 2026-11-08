@@ -20,10 +20,10 @@ class ProjectMapper
 		$this->projectAvatarMapper = new ProjectAvatarMapper();
 	}
 
-	public function toResponse(Project $entity): ProjectResponse
+	public function toResponse(Project $entity, array $selectorItems = []): ProjectResponse
 	{
-		$members = $this->projectMemberMapper->mapToDtoCollection($entity->members)?->toArray();
-		$moderatorMembers = $this->projectMemberMapper->mapToDtoCollection($entity->moderatorMembers)?->toArray();
+		$members = $this->projectMemberMapper->mapToResponseArray($entity->members, $selectorItems);
+		$moderatorMembers = $this->projectMemberMapper->mapToResponseArray($entity->moderatorMembers);
 
 		return new ProjectResponse(
 			id: $entity->id,

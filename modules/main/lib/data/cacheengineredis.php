@@ -10,6 +10,8 @@ use Bitrix\Main\Data\LocalStorage\Storage;
  */
 class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngineInterface
 {
+	protected const CLEAN_QUEUE_KEY = '/cacheCleanPath_v1';
+
 	public function getConnectionName(): string
 	{
 		return 'cache.redis';
@@ -88,18 +90,16 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 		self::$engine->unlink($key);
 	}
 
+	/**
+	 * The key and its expiration are set by one command: a separate expire may never run,
+	 * and a lock left without expiration is held forever.
+	 */
 	public function setNotExists($key, $ttl, $value)
 	{
 		$ttl = (int)$ttl;
-		if (self::$engine->setnx($key, $value))
-		{
-			if ($ttl > 0)
-			{
-				self::$engine->expire($key, $ttl);
-			}
-			return true;
-		}
-		return false;
+		$options = $ttl > 0 ? ['nx', 'ex' => $ttl] : ['nx'];
+
+		return (bool)self::$engine->set($key, $value, $options);
 	}
 
 	public function checkInSet($key, $value): bool
@@ -125,11 +125,11 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 	public function deleteBySet($key, $prefix = '')
 	{
 		$list = self::$engine->sMembers($key);
-		self::$engine->del($key);
+		self::$engine->unlink($key);
 
 		if (is_array($list) && !empty($list))
 		{
-			self::$engine->del($list);
+			self::$engine->unlink($list);
 		}
 	}
 
@@ -148,7 +148,39 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 
 	public function addCleanPath(array $data): void
 	{
-		self::$engine->lPush($this->sid . '/cacheCleanPath', $data);
+		self::$engine->sAdd($this->sid . static::CLEAN_QUEUE_KEY, $data['PREFIX']);
+	}
+
+	public function addCleanPaths(iterable $items): void
+	{
+		foreach ($this->chunkCleanPaths($items) as $chunk)
+		{
+			self::$engine->sAdd($this->sid . static::CLEAN_QUEUE_KEY, ...array_column($chunk, 'PREFIX'));
+		}
+	}
+
+	/**
+	 * Reads up to $count prefixes of the clean queue without taking them off it.
+	 * A prefix leaves the queue only once its keys are gone: sweeping a prefix twice is safe, losing it is not,
+	 * and a process that dies mid-step would take the whole batch with it.
+	 */
+	protected function readCleanPaths(string $key, int $count): array
+	{
+		$paths = self::$engine->sRandMember($key, $count);
+
+		return is_array($paths) ? $paths : [];
+	}
+
+	/**
+	 * Takes the swept prefixes off the queue by name. Naming them is what makes a second sweeper harmless:
+	 * a prefix nobody swept is never removed, however the two steps interleave.
+	 */
+	protected function ackCleanPaths(string $key, array $paths): void
+	{
+		if ($paths)
+		{
+			self::$engine->sRem($key, ...$paths);
+		}
 	}
 
 	public function delayedDelete(): void
@@ -171,43 +203,45 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 			$count = 1;
 		}
 
-		$step = $count + $delta;
-		for ($i = 0; $i < $step; $i++)
+		$queueKey = $this->sid . static::CLEAN_QUEUE_KEY;
+		$queue = $this->readCleanPaths($queueKey, $count + $delta);
+		$swept = [];
+
+		foreach ($queue as $prefix)
 		{
-			$finished = true;
-			$paths = self::$engine->rPop($this->sid . '/cacheCleanPath');
-			if ($paths)
+			if ($prefix === '')
 			{
-				$partitionListKey = $paths['PREFIX'] . '|' . static::BX_INIT_DIR_LIST;
-				$partitionKeys = $this->getSet($partitionListKey);
-				foreach ($partitionKeys as $partition)
-				{
-					if (time() > $etime)
-					{
-						$interrupted = true;
-						$finished = false;
-						break;
-					}
+				$swept[] = $prefix;
 
-					$this->deleteBySet($partitionListKey . '|' . $partition);
-				}
+				continue;
+			}
 
-				if ($finished)
-				{
-					$deleted++;
-				}
-				elseif (time() > $etime)
+			$finished = true;
+			$partitionListKey = $prefix . '|' . static::BX_INIT_DIR_LIST;
+
+			foreach ($this->getSet($partitionListKey) as $partition)
+			{
+				if (time() > $etime)
 				{
 					$interrupted = true;
-					self::$engine->lPush($this->sid . '/cacheCleanPath', $paths);
+					$finished = false;
 					break;
 				}
+
+				$this->deleteBySet($partitionListKey . '|' . $partition);
 			}
-			else
+
+			// an unfinished prefix stays in the queue and the next step takes it again
+			if (!$finished)
 			{
 				break;
 			}
+
+			$swept[] = $prefix;
+			$deleted++;
 		}
+
+		$this->ackCleanPaths($queueKey, $swept);
 
 		if ($deleted > $count)
 		{
@@ -218,7 +252,8 @@ class CacheEngineRedis extends Cache\KeyValueEngine implements Storage\CacheEngi
 			self::$engine->setex($this->sid . '|delCount', 604800, --$count);
 		}
 
-		if ($deleted === 0)
+		// the queue is idle only when it had nothing to offer: an unfinished prefix keeps the flag on
+		if ($queue === [])
 		{
 			self::$engine->setex($this->sid . '|needClean', 3600, 'N');
 		}

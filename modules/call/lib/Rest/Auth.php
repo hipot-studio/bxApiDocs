@@ -10,6 +10,21 @@ class Auth
 {
 	public const AUTH_TYPE = 'call';
 
+	/**
+	 * Single source of truth for the uniform guest pre-registration rejection body. Every
+	 * pre-registration denial on the guest register path (missing / inactive conference, wrong
+	 * password, alias not matching the conference) returns this error + description so the response
+	 * body cannot be used to tell an open, password-protected or non-existent conference apart by
+	 * videoconf_id. HTTP status is intentionally left as-is.
+	 */
+	public const ACCESS_DENIED_ERROR_CODE = 'CALL_AUTH_ACCESS_DENIED';
+	public const ACCESS_DENIED_ERROR_DESCRIPTION = 'Call: access to conference is denied';
+
+	protected const REGISTER_METHODS = [
+		'call.user.register',
+		'im.call.user.register',
+	];
+
 	protected const AUTH_CODE_GUEST = 'guest';
 	protected const PASSWORD_CHECK_METHOD = 'call.videoconf.password.check';
 
@@ -92,6 +107,22 @@ class Auth
 
 		$conference = null;
 		$method = \CRestServer::instance()->getMethod();
+
+		// Body unification (variant c) is scoped to the guest register methods only: other call-auth
+		// methods sharing these branches must keep their original error codes.
+		$isGuestRegisterMethod = in_array(mb_strtolower((string)$method), self::REGISTER_METHODS, true);
+
+		// A register method must be a standalone top-level call. A REST batch authenticates only its
+		// outer envelope, so inner register commands receive neither an independent password check nor
+		// the register-specific error unification below. Reject the whole batch uniformly, independent of
+		// any videoconf_id, before the outer gate can leak a distinguishing code (Mantis 251236 oracle).
+		if (mb_strtolower((string)$method) === 'batch' && self::batchContainsRegisterMethod())
+		{
+			$res = self::getAccessDeniedResult();
+
+			return false;
+		}
+
 		if (
 			$method === self::PASSWORD_CHECK_METHOD
 			|| $method === 'im.videoconf.password.check'//todo: remove deprecated method
@@ -123,11 +154,13 @@ class Auth
 
 				if (!$conference || !$conference->isActive())
 				{
-					$res = [
-						'error' => 'CALL_AUTH_VIDEOCONF_NOT_ACTIVE',
-						'error_description' => 'Call: conference is not active',
-						'additional' => []
-					];
+					$res = $isGuestRegisterMethod
+						? self::getAccessDeniedResult()
+						: [
+							'error' => 'CALL_AUTH_VIDEOCONF_NOT_ACTIVE',
+							'error_description' => 'Call: conference is not active',
+							'additional' => []
+						];
 
 					return false;
 				}
@@ -140,11 +173,13 @@ class Auth
 					}
 					else
 					{
-						$res = [
-							'error' => 'CALL_AUTH_ACCESS_DENIED',
-							'error_description' => 'Call: access to conference is denied',
-							'additional' => []
-						];
+						$res = $isGuestRegisterMethod
+							? self::getAccessDeniedResult()
+							: [
+								'error' => 'CALL_AUTH_ACCESS_DENIED',
+								'error_description' => 'Call: access to conference is denied',
+								'additional' => []
+							];
 
 						return false;
 					}
@@ -162,31 +197,37 @@ class Auth
 			}
 			else
 			{
-				$res = [
-					'error' => 'CALL_AUTH_METHOD_ERROR',
-					'error_description' => 'Call: you don\'t have access to use this method [1]',
-					'additional' => []
-				];
+				$res = $isGuestRegisterMethod
+					? self::getAccessDeniedResult()
+					: [
+						'error' => 'CALL_AUTH_METHOD_ERROR',
+						'error_description' => 'Call: you don\'t have access to use this method [1]',
+						'additional' => []
+					];
 
 				return false;
 			}
 		}
 		else if (!preg_match("/^[a-fA-F0-9]{32}$/i", $authCode))
 		{
-			$res = [
-				'error' => 'CALL_AUTH_FAILED',
-				'error_description' => 'Call: user auth failed [code is not correct]',
-				'additional' => []
-			];
+			$res = $isGuestRegisterMethod
+				? self::getAccessDeniedResult()
+				: [
+					'error' => 'CALL_AUTH_FAILED',
+					'error_description' => 'Call: user auth failed [code is not correct]',
+					'additional' => []
+				];
 		}
 
 		if (!self::checkQueryMethod(array_merge(self::METHODS_WITH_AUTH, self::METHODS_WITHOUT_AUTH)))
 		{
-			$res = [
-				'error' => 'CALL_AUTH_METHOD_ERROR',
-				'error_description' => 'Call: you don\'t have access to use this method [2]',
-				'additional' => []
-			];
+			$res = $isGuestRegisterMethod
+				? self::getAccessDeniedResult()
+				: [
+					'error' => 'CALL_AUTH_METHOD_ERROR',
+					'error_description' => 'Call: you don\'t have access to use this method [2]',
+					'additional' => []
+				];
 
 			return false;
 		}
@@ -207,22 +248,26 @@ class Auth
 				}
 				else
 				{
-					$res = [
-						'error' => 'CALL_AUTH_DIFF_USER',
-						'error_description' => 'Call: you are authorized with a different user [2]',
-						'additional' => ['hash' => mb_substr($USER->GetParam('XML_ID'), mb_strlen(self::AUTH_TYPE) + 1)]
-					];
+					$res = $isGuestRegisterMethod
+						? self::getAccessDeniedResult()
+						: [
+							'error' => 'CALL_AUTH_DIFF_USER',
+							'error_description' => 'Call: you are authorized with a different user [2]',
+							'additional' => ['hash' => mb_substr($USER->GetParam('XML_ID'), mb_strlen(self::AUTH_TYPE) + 1)]
+						];
 
 					return false;
 				}
 			}
 			else
 			{
-				$res = [
-					'error' => 'CALL_AUTH_PORTAL_USER',
-					'error_description' => 'Call: you are authorized with a portal user [2]',
-					'additional' => []
-				];
+				$res = $isGuestRegisterMethod
+					? self::getAccessDeniedResult()
+					: [
+						'error' => 'CALL_AUTH_PORTAL_USER',
+						'error_description' => 'Call: you are authorized with a portal user [2]',
+						'additional' => []
+					];
 
 				return false;
 			}
@@ -246,11 +291,13 @@ class Auth
 			return true;
 		}
 
-		$res = [
-			'error' => 'CALL_AUTH_FAILED',
-			'error_description' => 'Call: user auth failed [user not found]',
-			'additional' => []
-		];
+		$res = $isGuestRegisterMethod
+			? self::getAccessDeniedResult()
+			: [
+				'error' => 'CALL_AUTH_FAILED',
+				'error_description' => 'Call: user auth failed [user not found]',
+				'additional' => []
+			];
 
 		return false;
 	}
@@ -291,6 +338,57 @@ class Auth
 		$context->getResponse()->addCookie($cookie);
 
 		return true;
+	}
+
+	/**
+	 * Uniform rejection body for guest pre-registration failures.
+	 */
+	private static function getAccessDeniedResult(): array
+	{
+		return [
+			'error' => self::ACCESS_DENIED_ERROR_CODE,
+			'error_description' => self::ACCESS_DENIED_ERROR_DESCRIPTION,
+			'additional' => [],
+		];
+	}
+
+	/**
+	 * True when the current REST batch envelope carries a guest register command. Command parsing
+	 * mirrors the real dispatcher {@see \CRestProvider::methodsBatch()} exactly: the envelope keys are
+	 * upper-cased and the CMD list is read, then each command's method is taken from its parse_url()
+	 * path. Parsing it any other way (splitting on the last `?`, or reading a lower-case cmd) would let
+	 * a register command slip past this check while the dispatcher still runs it, which re-opens the
+	 * enumeration oracle (Mantis 251236).
+	 */
+	private static function batchContainsRegisterMethod(): bool
+	{
+		$query = array_change_key_case(\CRestServer::instance()->getQuery(), CASE_UPPER);
+		$commands = $query['CMD'] ?? null;
+		if (!is_array($commands))
+		{
+			return false;
+		}
+
+		// The dispatcher only executes the first BATCH_MAX_LENGTH commands (its counter advances on every
+		// element, string or not), so scanning past that would parse commands that never run.
+		foreach (array_slice($commands, 0, \CRestUtil::BATCH_MAX_LENGTH) as $command)
+		{
+			if (!is_string($command))
+			{
+				continue;
+			}
+
+			$commandMethod = parse_url($command, PHP_URL_PATH);
+			if (
+				is_string($commandMethod)
+				&& in_array(mb_strtolower($commandMethod), self::REGISTER_METHODS, true)
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private static function getSuccessfulResult()

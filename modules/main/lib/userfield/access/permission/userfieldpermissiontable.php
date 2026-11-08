@@ -7,6 +7,7 @@ use Bitrix\Main\ORM\Fields;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\UserField\Access\Model\UserFieldModel;
 use Bitrix\Main\UserAccessTable;
 use Bitrix\Main\UserFieldTable;
 
@@ -38,6 +39,12 @@ class UserFieldPermissionTable extends AccessPermissionTable
 	public static function getObjectClass()
 	{
 		return UserFieldPermission::class;
+	}
+
+	public static function cleanCache(): void
+	{
+		parent::cleanCache();
+		UserFieldModel::cleanCache();
 	}
 
 	public static function getMap()

@@ -19,8 +19,6 @@ use Bitrix\Vibecodeconnector\Internal\Service\Provisioning\EntryPoint;
 final class DeveloperKeyIssuer
 {
 	public const DEVELOPER_KEY_SCOPES = ['rest.developer', 'vibecode.developer'];
-	private const DEVELOPER_KEY_ATTRIBUTES = ['vibe24' => 'Y', 'vibecodeconnector' => 'Y', 'developer_key' => 'Y'];
-	private const ATTR_DEVELOPER_KEY = 'developer_key';
 	private const PREVIOUS_KEYS_LIMIT = 100;
 
 	public function __construct(
@@ -62,7 +60,7 @@ final class DeveloperKeyIssuer
 	 */
 	private function buildAttributes(): array
 	{
-		return array_merge(self::DEVELOPER_KEY_ATTRIBUTES, $this->entryPoint->toAttributes());
+		return array_merge(VibecodeArtifactAttributes::DEVELOPER_KEY, $this->entryPoint->toAttributes());
 	}
 
 	private function deactivatePreviousKeys(int $userId, int $newPasswordId): void
@@ -70,7 +68,10 @@ final class DeveloperKeyIssuer
 		$params = new IncomingWebhookParams(
 			webhookFilter: new IncomingWebhookFilter(
 				userId: $userId,
-				attributes: array_merge([self::ATTR_DEVELOPER_KEY => 'Y'], $this->entryPoint->dedupAttributes()),
+				attributes: array_merge(
+					[VibecodeArtifactAttributes::DEVELOPER_KEY_CODE => 'Y'],
+					$this->entryPoint->dedupAttributes(),
+				),
 				type: PasswordType::System,
 			),
 			pager: new Pager(limit: self::PREVIOUS_KEYS_LIMIT),

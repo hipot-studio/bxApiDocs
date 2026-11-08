@@ -8,6 +8,7 @@ use Bitrix\Disk\Document\Flipchart\BoardService;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkAccessService;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\TypeFile;
@@ -22,12 +23,14 @@ use Bitrix\Main\Web\Uri;
 abstract class BaseObject extends Internals\Engine\Controller
 {
 	protected ExternalLinkProvider $externalLinkProvider;
+	protected ExternalLinkAccessService $externalLinkAccessService;
 
 	public function __construct(?Request $request = null)
 	{
 		parent::__construct($request);
 
 		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
+		$this->externalLinkAccessService = ServiceLocator::getInstance()->get(ExternalLinkAccessService::class);
 	}
 
 	protected function get(Disk\BaseObject $object)
@@ -61,10 +64,15 @@ abstract class BaseObject extends Internals\Engine\Controller
 		Disk\BaseObject $object,
 		string $newName,
 		bool $autoCorrect = false,
-		bool $generateUniqueName = false
+		bool $generateUniqueName = false,
+		bool $shouldCheckUnifiedLink = false,
 	)
 	{
-		$securityContext = $object->getStorage()?->getSecurityContext($this->getCurrentUser()->getId());
+		$securityContext = $object->getStorage()?->getSecurityContext(
+			user: $this->getCurrentUser()->getId(),
+			shouldCheckUnifiedLink: $shouldCheckUnifiedLink,
+		);
+
 		if (!$securityContext || !$object->canRename($securityContext))
 		{
 			$this->addError(new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED')));
@@ -119,9 +127,16 @@ abstract class BaseObject extends Internals\Engine\Controller
 		}
 	}
 
-	protected function markDeleted(Disk\BaseObject $object)
+	protected function markDeleted(
+		Disk\BaseObject $object,
+		bool $shouldCheckUnifiedLink = false,
+	)
 	{
-		$securityContext = $object->getStorage()->getSecurityContext($this->getCurrentUser()->getId());
+		$securityContext = $object->getStorage()->getSecurityContext(
+			user: $this->getCurrentUser()->getId(),
+			shouldCheckUnifiedLink: $shouldCheckUnifiedLink,
+		);
+
 		if (!$object->canMarkDeleted($securityContext))
 		{
 			$this->errorCollection[] = new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED'));
@@ -135,9 +150,16 @@ abstract class BaseObject extends Internals\Engine\Controller
 		}
 	}
 
-	protected function restore(Disk\BaseObject $object)
+	protected function restore(
+		Disk\BaseObject $object,
+		bool $shouldCheckUnifiedLink = false,
+	)
 	{
-		$securityContext = $object->getStorage()->getSecurityContext($this->getCurrentUser()->getId());
+		$securityContext = $object->getStorage()->getSecurityContext(
+			user: $this->getCurrentUser()->getId(),
+			shouldCheckUnifiedLink: $shouldCheckUnifiedLink,
+		);
+
 		if (!$object->canRestore($securityContext))
 		{
 			$this->errorCollection[] = new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED'));
@@ -155,7 +177,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 		//@see \Bitrix\Disk\FileLink::restore and \Bitrix\Disk\BaseObject::restoreByLinkObject
 		//in this case the object which we want to restore is original. We can't get symlink now.
 		return $this->get(
-			$object->getRealObject()
+			$object->getRealObject(),
 		);
 	}
 
@@ -213,10 +235,10 @@ abstract class BaseObject extends Internals\Engine\Controller
 		$extLink = $this->getExternalLinkObject($object);
 		if (!$extLink)
 		{
-			$extLink = $object->getRealObject()->addExternalLink(array(
+			$extLink = $object->getRealObject()->addExternalLink([
 				'CREATED_BY' => $this->getCurrentUser()->getId(),
 				'TYPE' => ExternalLink::TYPE_MANUAL,
-			));
+			]);
 		}
 
 		if (!$extLink)
@@ -245,6 +267,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 		{
 			return null;
 		}
+
 		return $this->parseExternalLinkObject($extLink, $object);
 	}
 
@@ -283,16 +306,7 @@ abstract class BaseObject extends Internals\Engine\Controller
 	 */
 	private function canManageExternalLink(Disk\BaseObject $object): bool
 	{
-		$realObject = $object->getRealObject();
-
-		if (!$realObject)
-		{
-			return false;
-		}
-
-		$securityContext = $realObject->getStorage()?->getCurrentUserSecurityContext();
-
-		return $securityContext && $realObject->canManageExternalLink($securityContext);
+		return $this->externalLinkAccessService->canManageExternalLink($object);
 	}
 
 	/**
@@ -338,13 +352,16 @@ abstract class BaseObject extends Internals\Engine\Controller
 				'canEditDocument' => $canEditDocument,
 				'canEditSettings' => $extLink->canEditSettings(),
 				'deathTime' => $extLink->getDeathTime(),
-				'deathTimeTimestamp' => $extLink->hasDeathTime()? $extLink->getDeathTime()->getTimestamp() : null,
+				'deathTimeTimestamp' => $extLink->hasDeathTime() ? $extLink->getDeathTime()->getTimestamp() : null,
 				'isBoard' => $isBoard,
 			],
 		];
 	}
 
-	protected function getAllowedOperationsRights(Disk\BaseObject $object)
+	protected function getAllowedOperationsRights(
+		Disk\BaseObject $object,
+		bool $shouldCheckUnifiedLink = false,
+	)
 	{
 		$userId = $this->getCurrentUser()->getId();
 
@@ -358,7 +375,8 @@ abstract class BaseObject extends Internals\Engine\Controller
 		{
 			$operations = $rightsManager->getUserOperationsByObject(
 				$object->getRealObjectId(),
-				$userId
+				$userId,
+				$shouldCheckUnifiedLink,
 			);
 		}
 

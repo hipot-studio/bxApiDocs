@@ -2,13 +2,13 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Source;
 
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use CUtil;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-final class EditSourceAction extends BaseAction
+final class EditSourceAction extends FormatMenuAction
 {
 
 	public static function getId(): ?string
@@ -33,6 +33,10 @@ final class EditSourceAction extends BaseAction
 
 		$this->onclick = "BX.BIConnector.ExternalSourceManager.Instance.openSourceDetail({$id}, '{$moduleId}')";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--edit-l');
+
+		return $result;
 	}
 }

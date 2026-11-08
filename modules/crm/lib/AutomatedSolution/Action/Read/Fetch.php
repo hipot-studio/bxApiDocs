@@ -4,6 +4,7 @@ namespace Bitrix\Crm\AutomatedSolution\Action\Read;
 
 use Bitrix\Crm\AutomatedSolution\Action\Action;
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
+use Bitrix\Crm\Feature\AutomatedSolutionVibe;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
 
@@ -25,7 +26,11 @@ final class Fetch implements Action
 		$dbResult = $this->prepareQuery()->exec();
 		while ($row = $dbResult->fetchObject())
 		{
-			$automatedSolutions[] = $row->collectValues();
+			$automatedSolution = $row->collectValues();
+			$automatedSolution['IS_VIBE_ENABLED'] = AutomatedSolutionVibe::normalizeValue(
+				$automatedSolution['IS_VIBE_ENABLED'] ?? false,
+			);
+			$automatedSolutions[] = $automatedSolution;
 		}
 
 		$enrichedAutomatedSolutions = $this->enrichWithTypeIds($automatedSolutions);
@@ -47,6 +52,9 @@ final class Fetch implements Action
 				'TITLE',
 				'CODE',
 				'SOURCE_ID',
+				'VIBE_ID',
+				'IS_VIBE_ENABLED',
+				'DESCRIPTION',
 			])
 		;
 
@@ -83,8 +91,11 @@ final class Fetch implements Action
 		$map = $this->getAutomatedSolutionIdToTypeIdsMap(array_column($automatedSolutions, 'ID'));
 		foreach ($automatedSolutions as &$solution)
 		{
-			$typeIds = $map[$solution['ID']] ?? [];
+			$typeIds = $map['typeIdsMap'][$solution['ID']] ?? [];
 			$solution['TYPE_IDS'] = $typeIds;
+
+			$entityTypeIds = $map['entityTypeIdsMap'][$solution['ID']] ?? [];
+			$solution['ENTITY_TYPE_IDS'] = $entityTypeIds;
 		}
 
 		return $automatedSolutions;
@@ -92,8 +103,6 @@ final class Fetch implements Action
 
 	private function getAutomatedSolutionIdToTypeIdsMap(array $automatedSolutionIds): array
 	{
-		$result = (new FetchBoundTypeIds($automatedSolutionIds))->execute();
-
-		return $result->getData()['typeIdsMap'] ?? [];
+		return (new FetchBoundTypeIds($automatedSolutionIds))->execute()->getData();
 	}
 }

@@ -45,6 +45,7 @@ final class SetParameters extends Dto
 		$scope = $fields['scope'] ?? null;
 		if ($scope === EntityEditorConfigScope::CUSTOM)
 		{
+			$validators[] = new RequiredField($this, 'customScopeId');
 			$validators[] = new IntegerField($this, 'customScopeId', 0);
 		}
 

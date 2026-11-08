@@ -6,7 +6,11 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security;
 use Bitrix\Rest\Event\Sender;
 use Bitrix\Rest\EventTable;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
+use Bitrix\Rest\Internal\Model\AppStatus;
 use Bitrix\Rest\Public;
+use Bitrix\Rest\Public\Provider\ApplicationProvider;
+use Bitrix\Rest\Public\Provider\Dto\ApplicationData;
 use Bitrix\Rest;
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
@@ -621,35 +625,43 @@ class CRestUtil
 		return $hasAccess;
 	}
 
-	public static function updateAppStatus(array $tokenInfo): ?Main\Result
+	/**
+	 * @throws Main\ArgumentException
+	 */
+	public static function updateAppStatus(array $tokenInfo, ?ApplicationData $application = null): ?Main\Result
 	{
-		if (
-			array_key_exists('status', $tokenInfo)
-			&& array_key_exists('client_id', $tokenInfo)
-			&& ($appInfo = Rest\AppTable::getByClientId($tokenInfo['client_id']))
-		)
+		if (!array_key_exists('status', $tokenInfo) || !array_key_exists('client_id', $tokenInfo))
 		{
-			$updateFields = [];
-			if (!empty($tokenInfo['status']) && $tokenInfo['status'] !== $appInfo['STATUS'])
+			return null;
+		}
+
+		$application ??= (new ApplicationProvider())->findByClientId((string)$tokenInfo['client_id']);
+
+		if ($application === null)
+		{
+			return null;
+		}
+
+		$updateFields = [];
+		if (!empty($tokenInfo['status']) && AppStatus::toPublicStatus((string)$tokenInfo['status']) !== $application->getStatus())
+		{
+			$updateFields['STATUS'] = $tokenInfo['status'];
+		}
+		if (isset($tokenInfo['date_finish']))
+		{
+			$willingToUpdateDateFinish = (int)$tokenInfo['date_finish'];
+			$currentDateFinish = $application->getDateFinish()?->getTimestamp() ?? 0;
+			if ($willingToUpdateDateFinish !== $currentDateFinish)
 			{
-				$updateFields['STATUS'] = $tokenInfo['status'];
+				$updateFields['DATE_FINISH'] = $willingToUpdateDateFinish > 0 ?
+					\Bitrix\Main\Type\DateTime::createFromTimestamp($willingToUpdateDateFinish) :
+					''
+				;
 			}
-			if (isset($tokenInfo['date_finish']))
-			{
-				$willingToUpdateDateFinish = (int)$tokenInfo['date_finish'];
-				$currentDateFinish = $appInfo['DATE_FINISH'] ? $appInfo['DATE_FINISH']->getTimestamp() : 0;
-				if ($willingToUpdateDateFinish !== $currentDateFinish)
-				{
-					$updateFields['DATE_FINISH'] = $willingToUpdateDateFinish > 0 ?
-						\Bitrix\Main\Type\DateTime::createFromTimestamp($willingToUpdateDateFinish) :
-						''
-					;
-				}
-			}
-			if (!empty($updateFields))
-			{
-				return Rest\AppTable::update($appInfo['ID'], $updateFields);
-			}
+		}
+		if (!empty($updateFields))
+		{
+			return Rest\AppTable::update($application->getId(), $updateFields);
 		}
 
 		return null;
@@ -770,13 +782,15 @@ class CRestUtil
 
 				if($installResult['result'])
 				{
+					$installCompletionMode = self::resolveInstallCompletionMode($appDetailInfo);
 					$appFields = array(
 						'CLIENT_ID' => $installResult['result']['client_id'],
 						'CODE' => $appDetailInfo['CODE'],
 						'ACTIVE' => \Bitrix\Rest\AppTable::ACTIVE,
-						'INSTALLED' => ($appDetailInfo['OPEN_API'] === 'Y' || empty($appDetailInfo['INSTALL_URL']))
+						'INSTALLED' => $installCompletionMode === AppInstallCompletionMode::Immediate
 							? \Bitrix\Rest\AppTable::INSTALLED
 							: \Bitrix\Rest\AppTable::NOT_INSTALLED,
+						'INSTALL_COMPLETION_MODE' => $installCompletionMode->value,
 						'URL' => $appDetailInfo['URL'],
 						'URL_DEMO' => $appDetailInfo['DEMO_URL'],
 						'URL_INSTALL' => $appDetailInfo['INSTALL_URL'],
@@ -802,20 +816,20 @@ class CRestUtil
 					}
 
 					$shouldFinalizeInstallation = $appFields['INSTALLED'] === \Bitrix\Rest\AppTable::INSTALLED;
-					$existingApp = \Bitrix\Rest\AppTable::getByClientId($appFields['CLIENT_ID']);
+					$existingApp = (new ApplicationProvider())->findByClientId((string)$appFields['CLIENT_ID']);
 					$appFieldsToSave = $appFields;
 					$requiresFinalization = $shouldFinalizeInstallation
-						&& (!$existingApp || $existingApp['INSTALLED'] !== \Bitrix\Rest\AppTable::INSTALLED);
+						&& ($existingApp === null || $existingApp->isInstalled() !== true);
 					if ($requiresFinalization)
 					{
 						$appFieldsToSave['ACTIVE'] = \Bitrix\Rest\AppTable::INACTIVE;
 						$appFieldsToSave['INSTALLED'] = \Bitrix\Rest\AppTable::NOT_INSTALLED;
 					}
 
-					if($existingApp)
+					if($existingApp !== null)
 					{
-						$addResult = \Bitrix\Rest\AppTable::update($existingApp['ID'], $appFieldsToSave);
-						\Bitrix\Rest\AppLangTable::deleteByApp($existingApp['ID']);
+						$addResult = \Bitrix\Rest\AppTable::update($existingApp->getId(), $appFieldsToSave);
+						\Bitrix\Rest\AppLangTable::deleteByApp($existingApp->getId());
 					}
 					else
 					{
@@ -848,37 +862,16 @@ class CRestUtil
 							}
 						}
 
-						if($appDetailInfo["OPEN_API"] === "Y" && !empty($appFields["URL_INSTALL"]))
-						{
-							// checkCallback is already called inside checkFields
-							$result = \Bitrix\Rest\EventTable::add(array(
-								"APP_ID" => $appId,
-								"EVENT_NAME" => "ONAPPINSTALL",
-								"EVENT_HANDLER" => $appFields["URL_INSTALL"],
-							));
-							if($result->isSuccess())
-							{
-								\Bitrix\Rest\Event\Sender::bind('rest', 'OnRestAppInstall');
-							}
-						}
+						\Bitrix\Rest\EventTable::syncInstallEventHandlers(
+							(int)$appId,
+							$installCompletionMode,
+							(string)($appFields['URL_INSTALL'] ?? '')
+						);
 
-						if (!empty($appFields['URL_INSTALL']))
+						if ($installCompletionMode === AppInstallCompletionMode::Immediate)
 						{
-							// checkCallback is already called inside checkFields
-							$result = EventTable::add(
-								[
-									'APP_ID' => $appId,
-									'EVENT_NAME' => 'ONAPPUSERREADY',
-									'EVENT_HANDLER' => $appFields['URL_INSTALL'],
-								]
-							);
-							if ($result->isSuccess())
-							{
-								Sender::bind('rest', 'OnRestAppUserReady');
-							}
+							\Bitrix\Rest\AppTable::install($appId);
 						}
-
-						\Bitrix\Rest\AppTable::install($appId);
 
 						$result = true;
 					}
@@ -1147,6 +1140,28 @@ class CRestUtil
 	public static function isSlider()
 	{
 		return (isset($_REQUEST['IFRAME']) && $_REQUEST['IFRAME'] === 'Y' && $_REQUEST['IFRAME_TYPE'] == 'SIDE_SLIDER');
+	}
+
+	private static function resolveInstallCompletionMode(array $appDetailInfo): AppInstallCompletionMode
+	{
+		// configurations and BIC dashboards are always completed by their own import flow
+		if (
+			(
+				($appDetailInfo['TYPE'] ?? null) === \Bitrix\Rest\AppTable::TYPE_CONFIGURATION
+				&& ($appDetailInfo['MODE'] ?? null) !== \Bitrix\Rest\AppTable::MODE_SITE
+			)
+			|| ($appDetailInfo['TYPE'] ?? null) === \Bitrix\Rest\AppTable::TYPE_BIC_DASHBOARD
+		)
+		{
+			return AppInstallCompletionMode::Deferred;
+		}
+
+		if ($appDetailInfo['OPEN_API'] === 'Y' || empty($appDetailInfo['INSTALL_URL']))
+		{
+			return AppInstallCompletionMode::Immediate;
+		}
+
+		return AppInstallCompletionMode::Deferred;
 	}
 
 }

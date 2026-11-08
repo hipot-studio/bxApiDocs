@@ -11,6 +11,7 @@ use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Superset\ActionFilter;
 use Bitrix\BIConnector\Superset\Grid\UnusedElementsGrid;
+use Bitrix\Biconnector\Internal\Grid\GridStubRenderer;
 use Bitrix\Intranet;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main;
@@ -231,21 +232,11 @@ class UnusedElementsComponent extends CBitrixComponent implements Controllerable
 
 	private function getStub(): ?string
 	{
-		$iconPath = '/bitrix/images/biconnector/workspace-analytic-grid/empty-state-icon.svg';
-		$title = Loc::getMessage('BI_UNUSED_ELEMENTS_STUB_TITLE');
-
-		return <<<HTML
-			<div class="biconnector-dataset-grid-stub-container">
-				<div class="biconnector-dataset-grid-stub-logo">
-					<img src="{$iconPath}" alt="No unused elements">
-				</div>
-				<div class="main-grid-empty-block-title">
-					{$title}
-				</div>
-			</div>
-		HTML;
+		return GridStubRenderer::render(
+			'/bitrix/images/biconnector/workspace-analytic-grid/unused-elements-empty-state.webp',
+			Loc::getMessage('BI_UNUSED_ELEMENTS_STUB_TITLE_MSGVER_1') ?? '',
+		);
 	}
-
 	public function deleteAction(array $elements): ?bool
 	{
 		foreach ($elements as $element)

@@ -12,6 +12,7 @@ use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Kanban;
 use Bitrix\Crm\Kanban\Desktop;
+use Bitrix\Crm\Kanban\Entity\Dynamic;
 use Bitrix\Crm\Kanban\EntityActivityCounter;
 use Bitrix\Crm\Kanban\ViewMode;
 use Bitrix\Crm\Order;
@@ -20,8 +21,11 @@ use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Display\Field\UserField;
 use Bitrix\Crm\Service\Timeline;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Crm\Settings\CounterSettings;
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\TransactionException;
 use Bitrix\Main\Entity\AddResult;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -87,6 +91,14 @@ class CrmKanbanComponent extends CBitrixComponent
 		$arParams['HEADER_SECTIONS'] = $arParams['HEADER_SECTIONS'] ?? [];
 		$arParams['PATH_TO_IMPORT'] = $arParams['PATH_TO_IMPORT'] ?? '';
 		$arParams['~NAME_TEMPLATE'] = $arParams['~NAME_TEMPLATE'] ?? null;
+		$arParams['FILTER_PRESET_ID'] = is_string($arParams['FILTER_PRESET_ID'] ?? null)
+			? $arParams['FILTER_PRESET_ID']
+			: null
+		;
+		$arParams['FILTER_FIELDS'] = is_array($arParams['FILTER_FIELDS'] ?? null)
+			? $arParams['FILTER_FIELDS']
+			: []
+		;
 
 		return $arParams;
 	}
@@ -112,6 +124,8 @@ class CrmKanbanComponent extends CBitrixComponent
 			'SKIP_COLUMN_COUNT_CHECK' => ($this->componentParams['SKIP_COLUMN_COUNT_CHECK'] ?? 'N'),
 			'CUSTOM_SECTION_CODE' => ($this->arParams['EXTRA']['CUSTOM_SECTION_CODE'] ?? null),
 			'API_VERSION' => $this->arParams['API_VERSION'],
+			'FILTER_PRESET_ID' => $this->arParams['FILTER_PRESET_ID'],
+			'FILTER_FIELDS' => $this->getFilterFields(),
 		];
 		$this->kanban = Desktop::getInstance($type, $params);
 
@@ -197,19 +211,106 @@ class CrmKanbanComponent extends CBitrixComponent
 		$params['ONLY_ITEMS'] = $this->arParams['ONLY_ITEMS'];
 		$params['FORCE_FILTER'] = $this->arParams['FORCE_FILTER'];
 		$params['VIEW_MODE'] = ($this->arParams['VIEW_MODE'] ?? ViewMode::MODE_STAGES);
+		$params = array_merge($params, $this->getLiveFilterParams());
 
 		return $this->getKanban()->getColumns($clear, $withoutCache, $params);
 	}
 
+	public static function prepareColumnForClient(
+		array $column,
+		bool $canSort,
+	): array
+	{
+		return [
+			'id' => $column['id'],
+			'total' => (int)$column['count'],
+			'color' => $column['color'],
+			'name' => htmlspecialcharsback($column['name']),
+			'canSort' => $canSort,
+			'canAddItem' => $column['canAddItem'],
+			'data' => [
+				'sort' => $column['sort'],
+				'real_sort' => $column['real_sort'],
+				'type' => $column['type'],
+				'description' => (string)($column['description'] ?? ''),
+				'sum' => round($column['total'] ?? 0),
+				'sum_init' => 0,
+				'sum_format' => $column['total_format'] ?? null,
+				'blockedIncomingMoving' => ($column['blockedIncomingMoving'] ?? false),
+				'hiddenTotalSum' => ($column['hiddenTotalSum'] ?? false),
+				'currencyFormat' => ($column['currencyFormat'] ?? false),
+			],
+		];
+	}
+
 	protected function getItems(array $filter = []): array
 	{
-		$params = $this->getKanban()->getItems($filter, $this->blockPage);
+		$params = $this->getKanban()->getItems(
+			$filter,
+			$this->blockPage,
+			[
+				'filter' => $this->getLiveFilterParams(),
+			]
+		);
 		if ($params['RESTRICTED_VALUE_CLICK_CALLBACK'])
 		{
 			$this->arResult['RESTRICTED_VALUE_CLICK_CALLBACK'] = $params['RESTRICTED_VALUE_CLICK_CALLBACK'];
 		}
 
 		return $params['ITEMS'];
+	}
+
+	protected function getLiveFilterParams(): array
+	{
+		return [
+			'FILTER_PRESET_ID' => $this->arParams['FILTER_PRESET_ID'],
+			'FILTER_FIELDS' => $this->getFilterFields(),
+		];
+	}
+
+	private function getFilterFields(): array
+	{
+		$filterFields = $this->arParams['FILTER_FIELDS'] ?? [];
+		if (!is_array($filterFields))
+		{
+			return [];
+		}
+
+		return $this->unescapeFilterFieldValues($filterFields);
+	}
+
+	private function unescapeFilterFieldValues(array $filterFields): array
+	{
+		foreach ($filterFields as $fieldId => $fieldValue)
+		{
+			if (is_array($fieldValue))
+			{
+				$filterFields[$fieldId] = $this->unescapeFilterFieldValues($fieldValue);
+			}
+			elseif (is_string($fieldValue))
+			{
+				$filterFields[$fieldId] = $this->unescapeFilterFieldValue($fieldValue);
+			}
+		}
+
+		return $filterFields;
+	}
+
+	private function unescapeFilterFieldValue(string $fieldValue): string
+	{
+		if (strpos($fieldValue, '&quot;') === false)
+		{
+			return $fieldValue;
+		}
+
+		$unescapedValue = str_replace('&quot;', '"', $fieldValue);
+		$firstChar = substr(trim($unescapedValue), 0, 1);
+		if ($firstChar !== '[' && $firstChar !== '{')
+		{
+			return $fieldValue;
+		}
+
+		return $unescapedValue;
 	}
 
 	protected function isSkipColumnCountCheck(): bool
@@ -220,6 +321,22 @@ class CrmKanbanComponent extends CBitrixComponent
 	protected function getEntityTypeId(): int
 	{
 		return $this->getEntity()->getTypeId();
+	}
+
+	protected function isStageDescriptionSupported(): bool
+	{
+		$entityTypeId = $this->getEntityTypeId();
+
+		return in_array(
+			$entityTypeId,
+			[
+				CCrmOwnerType::Lead,
+				CCrmOwnerType::Deal,
+				CCrmOwnerType::Quote,
+				CCrmOwnerType::SmartInvoice,
+			],
+			true,
+		) || CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId);
 	}
 
 	/**
@@ -346,6 +463,7 @@ class CrmKanbanComponent extends CBitrixComponent
 		$this->arResult['PERFORMANCE'] = $this->arParams['PERFORMANCE'] ?? [];
 		$this->arResult['STAGE_ANALYTICS'] = $this->getStageAnalyticsLabels();
 		$this->arResult['COPILOT_NAME'] = \Bitrix\Crm\Integration\AI\AIManager::getCopilotName();
+		$this->arResult['IS_STAGE_DESCRIPTION_SUPPORTED'] = $this->isStageDescriptionSupported();
 
 		$stub = $this->getStub();
 		if (!empty($stub))
@@ -397,7 +515,7 @@ class CrmKanbanComponent extends CBitrixComponent
 			$userPermissions = $this->getKanban()->getCurrentUserPermissions();
 
 			$this->arResult['IS_LOCKED_ENTITY'] = ($this->arParams['IS_LOCKED_ENTITY'] ?? 'N') === 'Y';
-			$this->arResult['ACCESS_CONFIG_PERMS'] = $this->getKanban()->isCrmAdmin();
+			$this->arResult['ACCESS_CONFIG_PERMS'] = $this->areStagesEditable();
 			$this->arResult = array_merge($this->arResult, $entity->getPermissionParameters($userPermissions));
 
 			//output
@@ -735,6 +853,21 @@ class CrmKanbanComponent extends CBitrixComponent
 	}
 
 	/**
+	 * The columns of the board are the stages of the funnel, so every column control follows the stage
+	 * right and nothing else: the funnel the board belongs to stays navigation for whoever holds no
+	 * right over its stages.
+	 */
+	protected function areStagesEditable(): bool
+	{
+		$entity = $this->getEntity();
+
+		return $entity->getUserPermissions()->configuration()->canManageStages(
+			ConfigurationCallSite::KanbanComponent,
+			ConfigurationScope::ofEntityType($entity->getTypeId(), $entity->getCategoryId()),
+		);
+	}
+
+	/**
 	 * Get request-var for http-hit.
 	 * @param string $var Request-var code.
 	 * @return array|string|null
@@ -750,6 +883,11 @@ class CrmKanbanComponent extends CBitrixComponent
 		}
 
 		return $request->get($var);
+	}
+
+	private function getRequestStringValue(mixed $value): ?string
+	{
+		return is_array($value) ? null : ($value === null ? null : (string)$value);
 	}
 
 	/** @noinspection PhpUnused */
@@ -797,6 +935,9 @@ class CrmKanbanComponent extends CBitrixComponent
 						'COMPONENT_PARAMS' => [
 							'SUBJECT' => $notifySubject,
 							'PLAIN_TEXT' => $notifyPlainText,
+							'ENTITY' => [
+								'ENTITY_TYPE' => mb_strtolower($this->getEntity()->getTypeName()),
+							],
 						],
 					]
 				]);
@@ -811,9 +952,12 @@ class CrmKanbanComponent extends CBitrixComponent
 	/** @noinspection PhpUnused */
 	protected function actionModifyStage(): array
 	{
-		if (!$this->getKanban()->isCrmAdmin())
+		if (!$this->areStagesEditable())
 		{
-			return [];
+			return [
+				'ERROR' => Loc::getMessage('CRM_KANBAN_ERROR_ACCESS_DENIED'),
+				'ERROR_CODE' => 'ACCESS_DENIED',
+			];
 		}
 
 		$stages = $this->getColumns(
@@ -823,20 +967,67 @@ class CrmKanbanComponent extends CBitrixComponent
 				'originalColumns' => true,
 			]
 		);
-		$delete = $this->request('delete');
-		$columnId = $this->request('columnId');
-		$columnName = $this->request('columnName');
-		$columnColor = $this->request('columnColor');
-		$afterColumnId = $this->request('afterColumnId');
+		$delete = (bool)$this->request('delete');
+		$columnId = (string)($this->getRequestStringValue($this->request('columnId')) ?? '');
+		$columnName = $this->getRequestStringValue($this->request('columnName'));
+		$columnColor = $this->getRequestStringValue($this->request('columnColor'));
+		$columnDescription = $this->getRequestStringValue($this->request('columnDescription'));
+		$afterColumnId = $this->getRequestStringValue($this->request('afterColumnId'));
+		$eventId = $this->getRequestStringValue($this->request('eventId'));
+
+		$entity = $this->getEntity();
+		$isOrder = ($entity->getTypeName() === CCrmOwnerType::OrderName);
+		$isExistingStage = $columnId !== '' && isset($stages[$columnId]);
+		$isCreateOperation = !$isExistingStage;
+		$explicitSemanticId = null;
+
+		if ($this->getEntity() instanceof Dynamic && $isCreateOperation)
+		{
+			$explicitSemanticId = $this->resolveStageCreationSemanticId(
+				$stages,
+				$afterColumnId,
+				$this->getRequestStringValue($this->request('beforeColumnId')),
+			);
+			if ($explicitSemanticId === null)
+			{
+				return ['ERROR' => Loc::getMessage('CRM_KANBAN_ERROR_INVALID_STAGE_SEMANTIC')];
+			}
+
+			$requestedSemanticId = $this->request('stageSemanticId');
+			if ($requestedSemanticId !== null)
+			{
+				if (!is_string($requestedSemanticId))
+				{
+					return ['ERROR' => Loc::getMessage('CRM_KANBAN_ERROR_INVALID_STAGE_SEMANTIC')];
+				}
+
+				$requestedSemanticId = mb_strtoupper(trim($requestedSemanticId));
+				if (
+					!PhaseSemantics::isDefined($requestedSemanticId)
+					|| !in_array($requestedSemanticId, PhaseSemantics::ALLOWED_SEMANTICS, true)
+					|| !in_array(
+						$requestedSemanticId,
+						[PhaseSemantics::PROCESS, PhaseSemantics::FAILURE],
+						true,
+					)
+					|| $requestedSemanticId !== $explicitSemanticId
+				)
+				{
+					return ['ERROR' => Loc::getMessage('CRM_KANBAN_ERROR_INVALID_STAGE_SEMANTIC')];
+				}
+			}
+		}
 
 		$sort = 0;
 		$semanticId = null;
+		$isReordering = $isExistingStage && $this->isStageReorderingNeeded($columnId, $afterColumnId, $stages);
+		$shouldNormalizeSort = !$isExistingStage || $isReordering;
 
-		if ($afterColumnId !== null && (string)$afterColumnId === '0')
+		if ($shouldNormalizeSort && $afterColumnId !== null && (string)$afterColumnId === '0')
 		{
 			$sort = 0;
 		}
-		elseif (isset($stages[$afterColumnId]))
+		elseif ($shouldNormalizeSort && isset($stages[$afterColumnId]))
 		{
 			$sort = $stages[$afterColumnId]['real_sort'];
 			if (($stages[$afterColumnId]['type'] ?? '') === 'LOOSE')
@@ -844,27 +1035,35 @@ class CrmKanbanComponent extends CBitrixComponent
 				$semanticId = PhaseSemantics::FAILURE;
 			}
 		}
-		elseif (isset($stages[$columnId]))
-		{
-			$sort = $stages[$columnId]['real_sort'];
-		}
-
-		if ($columnName)
-		{
-			$columnName = $this->request('columnName');
-		}
-
-		$entity = $this->getEntity();
 		$fields = [
 			'ENTITY_ID' => $entity->getStatusEntityId(),
-			'SORT' => ++$sort,
 		];
+		if ($shouldNormalizeSort)
+		{
+			$fields['SORT'] = ++$sort;
+		}
 		if ($semanticId)
 		{
 			$fields['SEMANTICS'] = $semanticId;
 		}
+		if ($explicitSemanticId !== null)
+		{
+			$fields['SEMANTICS'] = $explicitSemanticId;
+			if ($explicitSemanticId === PhaseSemantics::PROCESS)
+			{
+				foreach ($stages as $stage)
+				{
+					if (($stage['type'] ?? '') === 'WIN')
+					{
+						$fields['SORT'] = min($fields['SORT'], (int)$stage['real_sort'] - 1);
 
-		if ($columnName)
+						break;
+					}
+				}
+			}
+		}
+
+		if ($columnName !== null)
 		{
 			$fields['NAME'] = $columnName;
 			$fields['NAME_INIT'] = $columnName;
@@ -873,75 +1072,139 @@ class CrmKanbanComponent extends CBitrixComponent
 		{
 			$fields['COLOR'] = $columnColor;
 		}
+		if ($columnDescription !== null && !$isOrder)
+		{
+			$fields['DESCRIPTION'] = $columnDescription;
+		}
 
-		$fields['CATEGORY_ID'] = (
-			$entity->getCategoryId() > 0
-				? $entity->getCategoryId()
-				: null
+		$fields['CATEGORY_ID'] = $this->getStageCategoryId(
+			$entity->getCategoryId(),
+			$fields['ENTITY_ID'],
 		);
-		//todo move to entity
-		$isOrder = ($entity->getTypeName() === CCrmOwnerType::OrderName);
-		if ($columnId !== '' && isset($stages[$columnId]))
+		$connection = null;
+		if ($shouldNormalizeSort && !$delete)
 		{
-			if ($delete)
-			{
-				$result = $this->deleteStage($columnId, $stages);
-			}
-			else
-			{
-				$internalId = $isOrder ? $columnId : $stages[$columnId]['real_id'];
-				$result = $this->updateStage($internalId, $fields, ['STATUS_ID' => $columnId]);
-			}
-		}
-		else
-		{
-			$result = $this->addStage($fields);
-			$internalId = $result->getId();
+			$connection = Application::getConnection();
+			$connection->startTransaction();
 		}
 
-		if ($result->isSuccess())
+		try
 		{
-			if ($delete)
+			if ($isExistingStage)
 			{
-				return [];
-			}
-			if ($isOrder)
-			{
-				$statusId = $internalId;
-			}
-			else
-			{
-				$statusEntityId = $entity->getStatusEntityId();
-				$status = new CCrmStatus($statusEntityId);
-				$newStatus = $status->GetStatusById($internalId);
-				$statusId = $newStatus['STATUS_ID'];
-			}
-
-			$stages = $this->getColumns(
-				true,
-				true,
-				[
-					'originalColumns' => true,
-				]
-			);
-
-			if (isset($stages[$statusId]))
-			{
-				// range sorts
-				$sort = 10;
-				foreach ($stages as $stage)
+				if ($delete)
 				{
-					$internalId = $isOrder ? $stage['id'] : $stage['real_id'];
-					$this->updateStage($internalId, ['SORT' => $sort]);
-					$sort += 10;
+					$result = $this->deleteStage($columnId, $stages, $eventId);
+				}
+				else
+				{
+					$internalId = $isOrder ? $columnId : $stages[$columnId]['real_id'];
+					$updateFields = array_intersect_key(
+						$fields,
+						array_flip(['SORT', 'SEMANTICS', 'NAME', 'NAME_INIT', 'COLOR', 'DESCRIPTION']),
+					);
+					if (empty($updateFields))
+					{
+						return htmlspecialcharsback($stages[$columnId]);
+					}
+
+					$result = $this->updateStage(
+						$internalId,
+						$updateFields,
+						[
+							'STATUS_ID' => $columnId,
+							'EVENT_ID' => $eventId,
+						],
+						!$shouldNormalizeSort,
+					);
+				}
+			}
+			else
+			{
+				$result = $explicitSemanticId === PhaseSemantics::FAILURE
+					? $this->addFailureStage(
+						$fields,
+						isset($stages[$afterColumnId]) ? (int)$stages[$afterColumnId]['real_id'] : null,
+					)
+					: $this->addStage($fields, false);
+				$internalId = $result->getId();
+			}
+
+			if ($result->isSuccess())
+			{
+				if ($delete)
+				{
+					return [
+						'success' => true,
+					];
+				}
+				if ($isOrder)
+				{
+					$statusId = $internalId;
+				}
+				else
+				{
+					$statusEntityId = $entity->getStatusEntityId();
+					$status = new CCrmStatus($statusEntityId);
+					$newStatus = $status->GetStatusById($internalId);
+					$statusId = $newStatus['STATUS_ID'];
 				}
 
-				return htmlspecialcharsback($stages[$statusId]);
+				$stages = $this->getColumns(
+					true,
+					true,
+					[
+						'originalColumns' => true,
+						'skipTotalSums' => true,
+					]
+				);
+
+				if (isset($stages[$statusId]))
+				{
+					if ($shouldNormalizeSort)
+					{
+						$normalizeResult = $this->normalizeStageSorts($stages, $isOrder);
+						if (!$normalizeResult->isSuccess())
+						{
+							$this->rollbackStageTransaction($connection);
+							$normalizeErrors = $normalizeResult->getErrorMessages();
+
+							return [
+								'ERROR' => current($normalizeErrors),
+							];
+						}
+					}
+
+					$connection?->commitTransaction();
+					$connection = null;
+					if ($shouldNormalizeSort)
+					{
+						$this->sendStagePullEvent(
+							$internalId,
+							!$isExistingStage,
+							$isOrder,
+							(int)$stages[$statusId]['real_sort'],
+							$eventId,
+						);
+					}
+
+					return htmlspecialcharsback($stages[$statusId]);
+				}
+
+				$this->rollbackStageTransaction($connection);
+
+				return [
+					'ERROR' => 'Unknown error',
+				];
 			}
 
-			return [
-				'ERROR' => 'Unknown error',
-			];
+			$this->rollbackStageTransaction($connection);
+		}
+		catch (Throwable $exception)
+		{
+			$this->rollbackStageTransaction($connection);
+
+			throw $exception;
 		}
 
 		$errors = $result->getErrorMessages();
@@ -951,7 +1214,191 @@ class CrmKanbanComponent extends CBitrixComponent
 		];
 	}
 
-	private function deleteStage(string $columnId, array $stages): Result
+	/**
+	 * The new stage takes the semantics of one real neighbour in the full funnel: the left one,
+	 * or the right one when the stage is inserted as the first column. The board filter is ignored.
+	 */
+	private function resolveStageCreationSemanticId(
+		array $stages,
+		?string $afterColumnId,
+		?string $beforeColumnId,
+	): ?string
+	{
+		$neighbourId = ($afterColumnId !== null && $afterColumnId !== '0') ? $afterColumnId : $beforeColumnId;
+		$neighbourType = $neighbourId === null ? null : ($stages[$neighbourId]['type'] ?? null);
+
+		return match ($neighbourType)
+		{
+			'PROGRESS' => PhaseSemantics::PROCESS,
+			'LOOSE', 'WIN' => PhaseSemantics::FAILURE,
+			default => null,
+		};
+	}
+
+	private function addFailureStage(array $fields, ?int $afterStageId): AddResult
+	{
+		$result = new AddResult();
+		$stages = \Bitrix\Crm\StatusTable::getList([
+			'select' => ['ID', 'SORT', 'SEMANTICS'],
+			'filter' => ['=ENTITY_ID' => $fields['ENTITY_ID']],
+			'order' => ['SORT' => 'ASC', 'ID' => 'ASC'],
+		])->fetchAll();
+		$successSort = null;
+		$afterStageSort = null;
+		$failureStages = [];
+		foreach ($stages as $stage)
+		{
+			if (($stage['SEMANTICS'] ?? '') === PhaseSemantics::SUCCESS)
+			{
+				$successSort = (int)$stage['SORT'];
+			}
+			elseif (($stage['SEMANTICS'] ?? '') === PhaseSemantics::FAILURE)
+			{
+				$failureStages[] = $stage;
+				$stageSort = (int)$stage['SORT'];
+				if ((int)$stage['ID'] === $afterStageId)
+				{
+					$afterStageSort = $stageSort;
+				}
+			}
+		}
+
+		if ($successSort === null)
+		{
+			$result->addError(new Error(Loc::getMessage('CRM_KANBAN_ERROR_STAGE_CREATION_CONTEXT')));
+
+			return $result;
+		}
+
+		$candidateSort = ($afterStageSort ?? $successSort) + 1;
+		$fields['SORT'] = $candidateSort;
+		$fields['SEMANTICS'] = PhaseSemantics::FAILURE;
+		usort(
+			$failureStages,
+			static fn(array $left, array $right): int => (int)$right['SORT'] <=> (int)$left['SORT'],
+		);
+
+		foreach ($failureStages as $failureStage)
+		{
+			if ((int)$failureStage['SORT'] < $candidateSort)
+			{
+				continue;
+			}
+
+			$updateResult = $this->updateStage(
+				$failureStage['ID'],
+				['SORT' => (int)$failureStage['SORT'] + 1],
+			);
+			if (!$updateResult->isSuccess())
+			{
+				$result->addErrors($updateResult->getErrors());
+
+				return $result;
+			}
+		}
+
+		return $this->addStage($fields, false);
+	}
+
+	private function getStageCategoryId(int $categoryId, string $statusEntityId): ?int
+	{
+		if ($categoryId > 0)
+		{
+			return $categoryId;
+		}
+
+		if (preg_match('/_STAGE_(\d+)$/', $statusEntityId, $matches) === 1)
+		{
+			return (int)$matches[1];
+		}
+
+		return null;
+	}
+
+	private function rollbackStageTransaction(?\Bitrix\Main\DB\Connection &$connection): void
+	{
+		if ($connection === null)
+		{
+			return;
+		}
+
+		$transactionConnection = $connection;
+		$connection = null;
+		try
+		{
+			$transactionConnection->rollbackTransaction();
+		}
+		catch (TransactionException $exception)
+		{
+			if ($exception->getMessage() !== 'Nested rollbacks are unsupported.')
+			{
+				throw $exception;
+			}
+
+			// Nested rollback is applied through a savepoint before the exception is raised.
+		}
+	}
+
+	private function isStageReorderingNeeded(string $columnId, ?string $afterColumnId, array $stages): bool
+	{
+		if ($afterColumnId === null || $afterColumnId === $columnId)
+		{
+			return false;
+		}
+
+		$stageIds = array_keys($stages);
+		$columnIndex = array_search($columnId, $stageIds, true);
+		if ($columnIndex === false)
+		{
+			return false;
+		}
+
+		$previousColumnId = $columnIndex === 0 ? '0' : $stageIds[$columnIndex - 1];
+		if ($afterColumnId === '0')
+		{
+			return $previousColumnId !== '0';
+		}
+
+		return isset($stages[$afterColumnId]) && $afterColumnId !== $previousColumnId;
+	}
+
+	protected function normalizeStageSorts(array $stages, bool $isOrder): Result
+	{
+		$result = new Result();
+		$statusEntityId = $isOrder ? null : $this->getEntity()->getStatusEntityId();
+		$requiresManualCacheInvalidation = $statusEntityId !== null
+			&& $statusEntityId !== ''
+			&& !isset(CCrmStatus::GetEntityTypes()[$statusEntityId])
+		;
+		$sort = 10;
+		foreach ($stages as $stage)
+		{
+			if ((int)$stage['real_sort'] !== $sort)
+			{
+				$internalId = $isOrder ? $stage['id'] : $stage['real_id'];
+				$updateResult = $this->updateStage(
+					$internalId,
+					['SORT' => $sort],
+					invalidateStatusCache: false,
+				);
+				if (!$updateResult->isSuccess())
+				{
+					return $result->addErrors($updateResult->getErrors());
+				}
+			}
+
+			$sort += 10;
+		}
+
+		if ($requiresManualCacheInvalidation)
+		{
+			\Bitrix\Crm\StatusTable::removeStatusesFromCache($statusEntityId);
+		}
+
+		return $result;
+	}
+
+	private function deleteStage(string $columnId, array $stages, ?string $eventId = null): Result
 	{
 		$result = new Result();
 
@@ -1032,12 +1479,18 @@ class CrmKanbanComponent extends CBitrixComponent
 					?->createPullStage($statusInfo)
 				;
 
+				$params = [
+					'TYPE' => $entity->getTypeName(),
+					'CATEGORY_ID' => (int)($this->arParams['EXTRA']['CATEGORY_ID'] ?? 0),
+				];
+				if ($eventId !== null)
+				{
+					$params['EVENT_ID'] = $eventId;
+				}
+
 				PullManager::getInstance()->sendStageDeletedEvent(
 					$item,
-					[
-						'TYPE' => $entity->getTypeName(),
-						'CATEGORY_ID' => (int)($this->arParams['EXTRA']['CATEGORY_ID'] ?? 0),
-					]
+					$params,
 				);
 			}
 		}
@@ -1045,7 +1498,13 @@ class CrmKanbanComponent extends CBitrixComponent
 		return $result;
 	}
 
-	private function updateStage(int|string $id, array $fields = [], ?array $params = []): Result
+	protected function updateStage(
+		int|string $id,
+		array $fields = [],
+		?array $params = [],
+		bool $sendPull = true,
+		bool $invalidateStatusCache = true,
+	): Result
 	{
 		$result = new Result();
 
@@ -1060,20 +1519,20 @@ class CrmKanbanComponent extends CBitrixComponent
 			{
 				$result->addError(new Error($status->GetLastError()));
 			}
-			else if (isset($params['STATUS_ID']))
+			else
 			{
-				$data = array_merge($fields, $params);
-				$item = Kanban\Entity::getInstance($entity->getTypeName())
-					?->createPullStage($data)
-				;
+				if (
+					$invalidateStatusCache
+					&& !isset(CCrmStatus::GetEntityTypes()[$statusEntityId])
+				)
+				{
+					\Bitrix\Crm\StatusTable::removeStatusesFromCache($statusEntityId);
+				}
 
-				PullManager::getInstance()->sendStageUpdatedEvent(
-					$item,
-					[
-						'TYPE' => $entity->getTypeName(),
-						'CATEGORY_ID' => (int)($this->arParams['EXTRA']['CATEGORY_ID'] ?? 0),
-					]
-				);
+				if ($sendPull && isset($params['STATUS_ID']))
+				{
+					$this->sendStagePullEvent($id, false, false, null, $params['EVENT_ID'] ?? null);
+				}
 			}
 		}
 		else
@@ -1109,7 +1568,7 @@ class CrmKanbanComponent extends CBitrixComponent
 		return $result;
 	}
 
-	private function addStage(array $fields = []): AddResult
+	protected function addStage(array $fields = [], bool $sendPull = true): AddResult
 	{
 		$result = new AddResult();
 
@@ -1175,10 +1634,20 @@ class CrmKanbanComponent extends CBitrixComponent
 			}
 		}
 
-		if ($result->isSuccess())
+		if ($sendPull && $result->isSuccess())
 		{
+			$pullFields = $fields;
+			if ($entity->getTypeName() !== CCrmOwnerType::OrderName)
+			{
+				$pullFields = \Bitrix\Crm\StatusTable::getByPrimary((int)$result->getId())->fetch() ?: $fields;
+			}
+			else
+			{
+				$pullFields['STATUS_ID'] = $result->getId();
+			}
+
 			$item = Kanban\Entity::getInstance($entity->getTypeName())
-				?->createPullStage($fields)
+				?->createPullStage($pullFields)
 			;
 
 			PullManager::getInstance()->sendStageAddedEvent(
@@ -1191,6 +1660,83 @@ class CrmKanbanComponent extends CBitrixComponent
 		}
 
 		return $result;
+	}
+
+	private function sendStagePullEvent(
+		int|string $id,
+		bool $isAdded,
+		bool $isOrder,
+		?int $sort = null,
+		?string $eventId = null,
+	): void
+	{
+		$entity = $this->getEntity();
+		if ($isOrder)
+		{
+			$fields = StatusTable::getByPrimary($id)->fetch();
+			if (!is_array($fields))
+			{
+				return;
+			}
+
+			$statusName = StatusLangTable::getByPrimary([
+				'STATUS_ID' => $id,
+				'LID' => $this->getLanguageId(),
+			])->fetch();
+			$fields['STATUS_ID'] = $fields['ID'];
+			$fields['ENTITY_ID'] = $entity->getStatusEntityId();
+			$fields['NAME'] = (string)($statusName['NAME'] ?? '');
+			$fields['NAME_INIT'] = $fields['NAME'];
+		}
+		else
+		{
+			$fields = \Bitrix\Crm\StatusTable::getByPrimary((int)$id)->fetch();
+			if (!is_array($fields))
+			{
+				return;
+			}
+		}
+		if ($sort !== null)
+		{
+			$fields['SORT'] = $sort;
+		}
+
+		$item = Kanban\Entity::getInstance($entity->getTypeName())
+			?->createPullStage($fields)
+		;
+		$params = [
+			'TYPE' => $entity->getTypeName(),
+			'CATEGORY_ID' => (int)($this->arParams['EXTRA']['CATEGORY_ID'] ?? 0),
+		];
+		if ($eventId !== null)
+		{
+			$params['EVENT_ID'] = $eventId;
+		}
+
+		if ($isAdded)
+		{
+			PullManager::getInstance()->sendStageAddedEvent($item, $params);
+		}
+		else
+		{
+			PullManager::getInstance()->sendStageUpdatedEvent($item, $params);
+		}
+	}
+
+	protected function sendStageAddedEvent(array $fields): void
+	{
+		$entity = $this->getEntity();
+		$item = Kanban\Entity::getInstance($entity->getTypeName())
+			?->createPullStage($fields)
+		;
+
+		PullManager::getInstance()->sendStageAddedEvent(
+			$item,
+			[
+				'TYPE' => $entity->getTypeName(),
+				'CATEGORY_ID' => (int)($this->arParams['EXTRA']['CATEGORY_ID'] ?? 0),
+			],
+		);
 	}
 
 	/**

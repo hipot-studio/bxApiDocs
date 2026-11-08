@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Blog\PostSocnetRightsTable;
+use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Landing\Manager;
@@ -7,6 +9,8 @@ use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Text\Emoji;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Socialnetwork\WorkgroupTable;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -20,8 +24,12 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 {
 	private const POST_COUNT_DEFAULT = 15;
 
-	private const PATH_TO_POST_DEFAULT = '/company/personal/user/#user_id#/blog/#post_id#/';
+	/**
+	 * The block setting is not trusted to be sane: the widget shows a short feed, not a page of the blog.
+	 */
+	private const POST_COUNT_LIMIT = 50;
 
+	private const PATH_TO_POST_DEFAULT = '/company/personal/user/#user_id#/blog/#post_id#/';
 
 	/**
 	 * Base executable method.
@@ -214,50 +222,35 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 			return $data;
 		}
 
-		$res = $this->getPostsQuery();
+		$postIds = $this->getPostIdsByGroup($this->getSocnetGroupId());
+		if (empty($postIds))
+		{
+			return $data;
+		}
+
+		$previews = $this->getPostPreviews($postIds);
+
+		$res = $this->getPostsQuery($postIds);
 		while ($post = $res->Fetch())
 		{
-			$userFieldManager = Driver::getInstance()->getUserFieldManager();
-			$attachedObjectsByEntity = $userFieldManager->getAttachedObjectByEntity(
-				'BLOG_POST',
-				$post['ID'],
-				'UF_BLOG_POST_FILE'
-			);
-			$firstAttachedObject = reset($attachedObjectsByEntity);
-			if ($firstAttachedObject)
+			$post['TITLE'] = Emoji::decode((string)($post['TITLE'] ?? ''));
+
+			$preview = $previews[(int)$post['ID']] ?? null;
+			if ($preview !== null)
 			{
-				$fileArray = \CFile::GetFileArray($firstAttachedObject->getFileId());
-				$contentType = $fileArray['CONTENT_TYPE'] ?? null;
-				if ($contentType)
-				{
-					if (str_starts_with($contentType, 'image/'))
-					{
-						$post['IMG_SRC'] = UrlManager::getUrlUfController(
-							'show',
-							[
-								'attachedId' => $firstAttachedObject->getId()
-							]
-						);
-					}
-					//todo: add preview for video file
-					// if (str_starts_with($contentType, 'video/'))
-				}
+				$post['IMG_SRC'] = $preview;
 			}
+
 			$post['PATH'] = CComponentEngine::MakePathFromTemplate(
 				self::PATH_TO_POST_DEFAULT,
 				[
-					'post_id' => CBlogPost::GetPostID(
-						$post['ID'],
-						$post['CODE'],
-						true
-					),
+					'post_id' => (int)$post['ID'],
 					'user_id' => $post['AUTHOR_ID'],
 				]);
 			$post['DATE_PUBLISH_SHORT'] = FormatDate(
 				'SHORT',
-				MakeTimeStamp($post['DATE_PUBLISH'])
+				MakeTimeStamp($post['DATE_PUBLISH']),
 			);
-
 
 			$data['POSTS'][] = $post;
 			$data['USERS_ID'][$post['AUTHOR_ID']] = $post['AUTHOR_ID'];
@@ -271,73 +264,183 @@ class LandingBlocksMainpageWidgetLivefeed extends LandingBlocksMainpageWidgetBas
 		return $data;
 	}
 
-	protected function getPostsQuery(): CDBResult
+	/**
+	 * Returns the workgroup whose posts are shown: the block parameter first, the portal option next.
+	 * Keeps the answer in arParams['SOCNET_GROUP_ID'] - the templates build the link to the group from it.
+	 * @return int
+	 */
+	protected function getSocnetGroupId(): int
 	{
-		$order = ['DATE_PUBLISH' => 'DESC'];
-		$this->arParams['SOCNET_GROUP_ID'] = 0;
-		if (
-			isset($this->arParams['GROUP_ID']['filter'][0]['value']) &&
-			str_starts_with($this->arParams['GROUP_ID']['filter'][0]['value'], 'SG')
-		)
+		$groupId = 0;
+		$sourceValue = $this->arParams['GROUP_ID']['filter'][0]['value'] ?? null;
+		if (is_string($sourceValue) && str_starts_with($sourceValue, 'SG'))
 		{
-			$this->arParams['SOCNET_GROUP_ID'] = substr($this->arParams['GROUP_ID']['filter'][0]['value'], 2);
+			$groupId = (int)substr($sourceValue, 2);
 		}
-		else if (Loader::includeModule('socialnetwork'))
+		elseif (Loader::includeModule('socialnetwork'))
 		{
-			$publicationGroupId = Option::get('landing', 'mainpage_id_publication_group');
+			$publicationGroupId = (int)Option::get('landing', 'mainpage_id_publication_group');
 			if ($publicationGroupId > 0)
 			{
-				$res = WorkgroupTable::getList([
-					'filter' => [
-						'@ID' => $publicationGroupId
-					],
-					'select' => [ 'ID', 'NAME' ],
-					'limit' => 1,
+				$groupRow = WorkgroupTable::getRow([
+					'select' => ['ID'],
+					'filter' => ['=ID' => $publicationGroupId],
 				]);
-				$groupRow = $res->fetch();
-				$this->arParams['SOCNET_GROUP_ID'] = $groupRow['ID'];
+				$groupId = (int)($groupRow['ID'] ?? 0);
 			}
 		}
 
-		$filter = [
-			'PUBLISH_STATUS' => BLOG_PUBLISH_STATUS_PUBLISH,
-			'BLOG_USE_SOCNET' => 'Y',
-			'GROUP_ID' => $this->arParams['GROUP_ID'],
-			'GROUP_SITE_ID' => SITE_ID,
-			'SOCNET_SITE_ID' => [
-				SITE_ID, false,
+		$this->arParams['SOCNET_GROUP_ID'] = $groupId;
+
+		return $groupId;
+	}
+
+	/**
+	 * Returns ids of the group posts to show, most recently published first.
+	 * The rights table is the only place indexed by group, so the ids are taken there
+	 * and the post data is loaded by id afterwards.
+	 * @param int $groupId Workgroup id.
+	 * @return int[]
+	 */
+	protected function getPostIdsByGroup(int $groupId): array
+	{
+		if ($groupId <= 0)
+		{
+			return [];
+		}
+
+		$postCount = (int)($this->arParams['POST_COUNT'] ?? 0);
+		if ($postCount <= 0)
+		{
+			$postCount = self::POST_COUNT_DEFAULT;
+		}
+		$postCount = min($postCount, self::POST_COUNT_LIMIT);
+
+		// DATE_PUBLISH is stored in server time, so the cutoff for scheduled posts is server time as well
+		$now = new DateTime();
+
+		$rows = PostSocnetRightsTable::query()
+			->setSelect(['POST_ID'])
+			->where('ENTITY', 'SG' . $groupId)
+			->where('POST.PUBLISH_STATUS', BLOG_PUBLISH_STATUS_PUBLISH)
+			->where('POST.DATE_PUBLISH', '<=', $now)
+			->setOrder(['POST.DATE_PUBLISH' => 'DESC'])
+			->setLimit($postCount)
+			->fetchAll()
+		;
+
+		return array_values(array_unique(array_map('intval', array_column($rows, 'POST_ID'))));
+	}
+
+	/**
+	 * Returns arguments of the post data query, or an empty array when there is nothing to ask about.
+	 * @param int[] $postIds Blog post ids.
+	 * @return array
+	 */
+	protected function getPostsQueryParams(array $postIds): array
+	{
+		// an empty list must never reach CBlogPost::GetList: no filter plus no top count means a full scan
+		if (empty($postIds))
+		{
+			return [];
+		}
+
+		return [
+			'order' => ['DATE_PUBLISH' => 'DESC'],
+			'filter' => ['@ID' => $postIds],
+			'nav' => ['nTopCount' => count($postIds)],
+			'select' => [
+				'ID',
+				'TITLE',
+				'AUTHOR_ID',
+				'DATE_PUBLISH',
+				'NUM_COMMENTS',
+				'RATING_TOTAL_VOTES',
 			],
-			'SOCNET_GROUP_ID' => $this->arParams['SOCNET_GROUP_ID'],
-			'<=DATE_PUBLISH' => ConvertTimeStamp(time() + CTimeZone::GetOffset(), "FULL"),
 		];
+	}
 
-		$nav = [
-			'bDescPageNumbering' => false,
-			'nPageSize' => $this->arParams['POST_COUNT'],
-			'bShowAll' => false,
-		];
+	/**
+	 * @param int[] $postIds Blog post ids.
+	 * @return CDBResult
+	 */
+	protected function getPostsQuery(array $postIds): CDBResult
+	{
+		$params = $this->getPostsQueryParams($postIds);
+		if (empty($params))
+		{
+			$result = new CDBResult();
+			$result->InitFromArray([]);
 
-		$select = [
-			"ID",
-			"TITLE",
-			"AUTHOR_ID",
-			"DETAIL_TEXT",
-			"DETAIL_TEXT_TYPE",
-			"DATE_PUBLISH",
-			"NUM_COMMENTS",
-			'RATING_TOTAL_VOTES',
-			'VIEWS',
-			'UF_BLOG_POST_IMPRTNT',
-			'UF_IMPRTANT_DATE_END',
-			'POST_PARAM_BLOG_POST_IMPRTNT',
-		];
+			return $result;
+		}
 
 		return CBlogPost::GetList(
-			$order,
-			$filter,
+			$params['order'],
+			$params['filter'],
 			false,
-			$nav,
-			$select
+			$params['nav'],
+			$params['select'],
 		);
+	}
+
+	/**
+	 * Returns preview image url of the first attachment for every post which has one.
+	 * @param int[] $postIds Blog post ids.
+	 * @return array<int, string>
+	 */
+	protected function getPostPreviews(array $postIds): array
+	{
+		if (empty($postIds))
+		{
+			return [];
+		}
+
+		[$connectorClass, $moduleId] = Driver::getInstance()
+			->getUserFieldManager()
+			->getConnectorDataByEntityType('BLOG_POST')
+		;
+
+		$attachedObjects = AttachedObject::getModelList([
+			'filter' => [
+				'=ENTITY_TYPE' => $connectorClass,
+				'ENTITY_ID' => $postIds,
+				'=MODULE_ID' => $moduleId,
+			],
+			'order' => ['ID' => 'ASC'],
+			'extra' => [
+				'FILE_CONTENT_TYPE' => 'OBJECT.FILE_CONTENT.CONTENT_TYPE',
+			],
+		]);
+
+		$previews = [];
+		$handledPostIds = [];
+		foreach ($attachedObjects as $attachedObject)
+		{
+			$postId = (int)$attachedObject->getEntityId();
+			if (isset($handledPostIds[$postId]))
+			{
+				continue;
+			}
+			$handledPostIds[$postId] = true;
+
+			$contentType = $attachedObject->getExtra()->get('FILE_CONTENT_TYPE');
+			if (!is_string($contentType))
+			{
+				continue;
+			}
+
+			if (str_starts_with($contentType, 'image/'))
+			{
+				$previews[$postId] = UrlManager::getUrlUfController(
+					'show',
+					[
+						'attachedId' => $attachedObject->getId(),
+					],
+				);
+			}
+		}
+
+		return $previews;
 	}
 }

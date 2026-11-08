@@ -2,6 +2,7 @@
 
 namespace Bitrix\StaffTrackMobile\Internal;
 
+use Bitrix\Main\Config\Feature as CoreFeature;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
@@ -10,15 +11,23 @@ use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Tab\Tabable;
 use Bitrix\Mobile\Tab\Utils;
 use Bitrix\MobileApp\Janative\Manager;
+use Bitrix\StaffTrack\Feature as StaffTrackFeature;
 use Bitrix\StaffTrack\Public\Provider\CheckInSettingsProvider;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
-use Bitrix\Timeman\V2\Public\Provider\FullReportProvider;
+use Bitrix\StaffTrackMobile\Public\Features\OfficesTabFlag;
 use Bitrix\TimemanMobile\Public\Features\WorkReportsFeature;
+use Bitrix\TimemanMobile\Public\Features\WorkReportsWithAiFeature;
 use Bitrix\Main\Config\Option;
 
 class CheckInTab implements Tabable
 {
 	private Context $context;
+	private ?array $tabItems = null;
+	private ?array $timemanDependentTabs = null;
+	private ?bool $isTimemanAvailable = null;
+	private ?bool $isNewCheckInGeneration = null;
+	private ?bool $isGeoFeaturesAvailableByRegion = null;
+	private ?CheckInSettingsProvider $settingsProvider = null;
 
 	public static function onBeforeTabsGet(): array
 	{
@@ -58,6 +67,13 @@ class CheckInTab implements Tabable
 			'params' => [
 				'id' => 'stafftrack_check_in',
 				'onclick' => Utils::getComponentJSCode($this->getDataInternal()['component']),
+				'analytics' => [
+					'tool' => 'checkin',
+					'category' => 'shift',
+					'event' => 'open_section',
+					'c_section' => 'ava_menu',
+					'c_element' => 'tools_block',
+				],
 			],
 			'tag' => 'new',
 		];
@@ -77,7 +93,8 @@ class CheckInTab implements Tabable
 			Loader::includeModule('intranet')
 			&& Loader::includeModule('stafftrack')
 			&& Loader::includeModule('stafftrackmobile')
-			&& Feature::isEnabled(CheckInFeature::class);
+			&& Feature::isEnabled(CheckInFeature::class)
+			&& $this->hasVisibleTabs();
 	}
 
 	public function getId(): string
@@ -122,6 +139,12 @@ class CheckInTab implements Tabable
 	public function setContext($context): void
 	{
 		$this->context = $context;
+		$this->tabItems = null;
+		$this->timemanDependentTabs = null;
+		$this->isTimemanAvailable = null;
+		$this->isNewCheckInGeneration = null;
+		$this->isGeoFeaturesAvailableByRegion = null;
+		$this->settingsProvider = null;
 	}
 
 	public function getIconId(): string
@@ -142,36 +165,21 @@ class CheckInTab implements Tabable
 
 	private function getTabsComponent(): array
 	{
-		$hasPendingDraftReport = $this->hasPendingDraftReport();
-		$settingsProvider = new CheckInSettingsProvider();
-		$isTimemanAvailable = (
-			$settingsProvider->isTimemanAvailable()
-			&& Loader::includeModule('timemanmobile')
-			&& $settingsProvider->isWorkTimeToolAvailable()
-		);
+		$items = $this->getTabItems();
 
-		$isTimemanAllowedByLicense = $settingsProvider->isTimemanAllowedByLicense();
-
-		$timemanDependentTabs = [];
-		if ($isTimemanAvailable || $isTimemanAllowedByLicense)
-		{
-			$timemanDependentTabs = array_values(array_filter([
-				$this->getWorkDaysTab(),
-				$this->getWorkReportsTab($hasPendingDraftReport),
-			]));
-		}
-
-		$items = array_merge([$this->getShiftsTab()], $timemanDependentTabs);
-
-		$unavailableTabIds = $isTimemanAvailable
+		$unavailableTabIds = $this->isTimemanAvailable()
 			? []
-			: array_column($timemanDependentTabs, 'id');
+			: array_column($this->getTimemanDependentTabs(), 'id');
+
+		$componentCode = $this->isNewCheckInGeneration()
+			? 'stafftrack.check-in-v3.tabs'
+			: 'stafftrack.check-in-v2.tabs';
 
 		return [
 			'name' => 'JSStackComponent',
 			'title' => $this->getTitle(),
-			'componentCode' => 'stafftrack.check-in-v2.tabs',
-			'scriptPath' => Manager::getComponentPath('stafftrack:stafftrack.check-in-v2.tabs'),
+			'componentCode' => $componentCode,
+			'scriptPath' => Manager::getComponentPath('stafftrack:' . $componentCode),
 			'rootWidget' => [
 				'name' => 'tabs',
 				'settings' => [
@@ -186,7 +194,7 @@ class CheckInTab implements Tabable
 				],
 			],
 			'params' => [
-				'COMPONENT_CODE' => 'stafftrack.check-in-v2.tabs',
+				'COMPONENT_CODE' => $componentCode,
 				'USER_ID' => $this->context->userId,
 				'SITE_ID' => $this->context->siteId,
 				'UNAVAILABLE_TAB_IDS' => $unavailableTabIds,
@@ -194,33 +202,89 @@ class CheckInTab implements Tabable
 		];
 	}
 
+	private function getTabItems(): array
+	{
+		if ($this->tabItems === null)
+		{
+			$this->tabItems = array_merge(
+				array_filter([$this->getShiftsTab(), $this->getOfficesTab()]),
+				$this->getTimemanDependentTabs()
+			);
+		}
+
+		return $this->tabItems;
+	}
+
+	private function hasVisibleTabs(): bool
+	{
+		return $this->isGeoFeaturesAvailableByRegion()
+			|| $this->hasTimemanDependentTabs();
+	}
+
+	private function getTimemanDependentTabs(): array
+	{
+		if ($this->timemanDependentTabs === null)
+		{
+			$this->timemanDependentTabs = $this->hasTimemanDependentTabs()
+				? array_values(array_filter([
+					$this->getWorkDaysTab(),
+					$this->getWorkReportsTab($this->hasPendingDraftReport()),
+				]))
+				: [];
+		}
+
+		return $this->timemanDependentTabs;
+	}
+
+	private function hasTimemanDependentTabs(): bool
+	{
+		return $this->isTimemanAvailable()
+			|| $this->getSettingsProvider()->isTimemanAllowedByLicense();
+	}
+
+	private function isTimemanAvailable(): bool
+	{
+		if ($this->isTimemanAvailable === null)
+		{
+			$settingsProvider = $this->getSettingsProvider();
+
+			$this->isTimemanAvailable = $settingsProvider->isTimemanAvailable()
+				&& Loader::includeModule('timemanmobile')
+				&& $settingsProvider->isWorkTimeToolAvailable();
+		}
+
+		return $this->isTimemanAvailable;
+	}
+
+	private function getSettingsProvider(): CheckInSettingsProvider
+	{
+		return $this->settingsProvider ??= new CheckInSettingsProvider();
+	}
+
 	private function hasPendingDraftReport(): bool
 	{
 		if (
 			!Feature::isEnabled(WorkReportsFeature::class)
-			|| !Loader::includeModule('timeman')
+			|| !Feature::isEnabled(WorkReportsWithAiFeature::class)
 		)
 		{
 			return false;
 		}
 
-		$provider = new FullReportProvider();
-		if (!method_exists($provider, 'getReportToSend'))
-		{
-			return false;
-		}
-
-		return $provider
-			->getReportToSend($this->context->userId, true, true)
-			->isReadyForSubmit === true
-		;
+		return $this->getSettingsProvider()->hasReportReadyForSubmit();
 	}
 
 	private function getShiftsTab(): array
 	{
+		if (!$this->isGeoFeaturesAvailableByRegion())
+		{
+			return [];
+		}
+
 		return [
 			'id' => 'shifts',
 			'title' => Loc::getMessage('STAFFTRACKMOBILE_TAB_NAVIGATION_TAB_SHIFTS'),
+			'spotlightId' => 'stafftrack-aha-shifts-tab',
 			'disableScroll' => true,
 			'widget' => [
 				'name' => 'layout',
@@ -230,6 +294,48 @@ class CheckInTab implements Tabable
 				],
 			],
 		];
+	}
+
+	private function getOfficesTab(): array
+	{
+		if (
+			!$this->isOfficesTabFlagEnabled()
+			|| !$this->isNewCheckInGeneration()
+			|| !$this->isGeoFeaturesAvailableByRegion()
+		)
+		{
+			return [];
+		}
+
+		return [
+			'id' => 'offices',
+			'title' => Loc::getMessage('STAFFTRACKMOBILE_TAB_NAVIGATION_TAB_OFFICES'),
+			'disableScroll' => true,
+			'widget' => [
+				'name' => 'layout',
+				'code' => 'offices',
+				'settings' => [
+					'objectName' => 'layout',
+				],
+			],
+		];
+	}
+
+	protected function isOfficesTabFlagEnabled(): bool
+	{
+		return CoreFeature::isEnabled(OfficesTabFlag::class);
+	}
+
+	protected function isNewCheckInGeneration(): bool
+	{
+		return $this->isNewCheckInGeneration ??= StaffTrackFeature::isCheckInRolloutEnabled(
+			(int)$this->context->userId
+		);
+	}
+
+	protected function isGeoFeaturesAvailableByRegion(): bool
+	{
+		return $this->isGeoFeaturesAvailableByRegion ??= StaffTrackFeature::isGeoFeaturesAvailableByRegion();
 	}
 
 	private function getWorkReportsTab(bool $hasPendingDraftReport = false): array
@@ -243,6 +349,7 @@ class CheckInTab implements Tabable
 			'id' => 'work-reports',
 			'title' => Loc::getMessage('STAFFTRACKMOBILE_TAB_NAVIGATION_TAB_WORK_REPORTS'),
 			'label' => $hasPendingDraftReport ? '1' : '',
+			'spotlightId' => 'stafftrack-aha-work-reports-tab',
 			'widget' => [
 				'name' => 'layout',
 				'code' => 'work-reports',
@@ -258,6 +365,7 @@ class CheckInTab implements Tabable
 		return [
 			'id' => 'work-days',
 			'title' => Loc::getMessage('STAFFTRACKMOBILE_TAB_NAVIGATION_TAB_WORK_DAYS'),
+			'spotlightId' => 'stafftrack-aha-work-days-tab',
 			'widget' => [
 				'name' => 'layout',
 				'code' => 'work-days',

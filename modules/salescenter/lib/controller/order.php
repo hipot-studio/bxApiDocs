@@ -2,6 +2,8 @@
 
 namespace Bitrix\SalesCenter\Controller;
 
+use Bitrix\Catalog\Access\AccessController;
+use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Location\Entity\Address;
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
@@ -30,15 +32,15 @@ use Bitrix\Crm\Order\Builder\SettingsContainer;
 use Bitrix\Crm\Order\PersonType;
 use Bitrix\Crm\RequisiteAddress;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Sale\Delivery;
 use Bitrix\Sale\Helpers\Order\Builder\Converter\CatalogJSProductForm;
+use Bitrix\Sale\Internals\OrderTable;
 use Bitrix\Sale\PaySystem\PaymentAvailablesPaySystems;
+use Bitrix\Sale\Repository\PaymentRepository;
 use Bitrix\SalesCenter\Component\VatRate;
 use CCrmLead;
 use CCrmOwnerType;
 use CCrmSecurityHelper;
-use Bitrix\Sale\Internals\OrderTable;
 
 Loc::loadMessages(__FILE__);
 
@@ -48,10 +50,8 @@ class Order extends Base
 	{
 		return [
 			...parent::getAutoWiredParameters(),
-			new Parameter(
-				UserPermissions::class,
-				static fn (): UserPermissions => Container::getInstance()->getUserPermissions(),
-			),
+			new Parameter(CrmManager::class, static fn (): CrmManager => CrmManager::getInstance()),
+			new Parameter(ImOpenLinesManager::class, static fn (): ImOpenLinesManager => ImOpenLinesManager::getInstance()),
 		];
 	}
 
@@ -374,6 +374,10 @@ class Order extends Base
 		$options['deliveryExtraServicesValues'] = $deliveryRelatedServiceValues;
 		$options['deliveryResponsibleId'] = $deliveryResponsibleId;
 		$options['shipmentPropValues'] = $shipmentPropValues;
+		$options['sessionId'] = ImOpenLinesManager::getInstance()
+			->checkClientSessionId($options['sessionId'] ?? null, $options['dialogId'] ?? null)
+			->getData()['sessionId']
+		;
 
 		$order = $this->buildOrder(
 			$options,
@@ -434,6 +438,10 @@ class Order extends Base
 		$options['deliveryExtraServicesValues'] = $deliveryRelatedServiceValues;
 		$options['deliveryResponsibleId'] = $deliveryResponsibleId;
 		$options['shipmentPropValues'] = $shipmentPropValues;
+		$options['sessionId'] = ImOpenLinesManager::getInstance()
+			->checkClientSessionId($options['sessionId'] ?? null, $options['dialogId'] ?? null)
+			->getData()['sessionId']
+		;
 
 		$order = $this->buildOrder(
 			$options,
@@ -895,11 +903,46 @@ class Order extends Base
 		return null;
 	}
 
-	public function resendPaymentAction($orderId, $paymentId, $shipmentId, array $options = [])
+	public function resendPaymentAction(
+		CrmManager $crmManager,
+		$orderId,
+		$paymentId,
+		$shipmentId,
+		array $options = [],
+	)
 	{
 		if ($options['sendingMethod'] === 'sms')
 		{
-			$order = Crm\Order\Order::load($orderId);
+			$order = (int)$orderId > 0 ? Crm\Order\Order::load($orderId) : null;
+			if (!$order)
+			{
+				$this->addError(
+					new Error(Loc::getMessage('SALESCENTER_CONTROLLER_ORDER_CANT_SEND_SMS_PAYMENT_NOT_FOUND'))
+				);
+
+				return;
+			}
+
+			if (!$crmManager->canReadOrder($order))
+			{
+				$this->addPermissionDeniedError();
+
+				return;
+			}
+
+			if (
+				(int)($options['messageData']['entityTypeId'] ?? 0) > 0
+				&& (int)($options['messageData']['entityId'] ?? 0) > 0
+				&& !$crmManager->canReadOwnerEntity(
+					(int)$options['messageData']['entityId'],
+					(int)$options['messageData']['entityTypeId'],
+				)
+			)
+			{
+				$this->addPermissionDeniedError();
+
+				return;
+			}
 
 			$payment = null;
 			if ($paymentId)
@@ -916,6 +959,7 @@ class Order extends Base
 
 				return;
 			}
+
 
 			$shipment = null;
 			if ($shipmentId)
@@ -1074,7 +1118,7 @@ class Order extends Base
 	}
 
 	public function createTerminalPaymentAction(
-		UserPermissions $userPermissions,
+		CrmManager $crmManager,
 		array $basketItems = [],
 		array $options = [],
 	)
@@ -1092,7 +1136,7 @@ class Order extends Base
 			return [];
 		}
 
-		if (!$userPermissions->item()->canReadItem($item))
+		if (!$crmManager->canReadOwnerEntity($ownerId, $ownerTypeId))
 		{
 			$this->addError(new Error(
 				Loc::getMessage('SALESCENTER_CONTROLLER_ORDER_TERMINAL_PAYMENT_ACCESS_DENIED'),
@@ -1108,7 +1152,7 @@ class Order extends Base
 		];
 
 		$primaryContact = $item->getPrimaryContact();
-		if ($primaryContact)
+		if ($primaryContact && $crmManager->canReadContact($primaryContact->getId()))
 		{
 			$primaryContactId = $primaryContact->getId();
 
@@ -1125,7 +1169,8 @@ class Order extends Base
 
 		$paymentResult = Container::getInstance()->getTerminalPaymentService()->createByProducts(
 			$products,
-			Crm\Service\Sale\Terminal\CreatePaymentOptions::createFromArray($paymentOptions),
+			Crm\Service\Sale\Terminal\CreatePaymentOptions::createFromArray($paymentOptions)
+				->setCheckOrderPermissions(true),
 		);
 
 		if (!$paymentResult->isSuccess())
@@ -1172,8 +1217,16 @@ class Order extends Base
 		return $data;
 	}
 
-	public function updateTerminalPaymentAction(int $paymentId, array $options = [])
+	public function updateTerminalPaymentAction(CrmManager $crmManager, int $paymentId, array $options = [])
 	{
+		$payment = PaymentRepository::getInstance()->getById($paymentId);
+		if ($payment && !$crmManager->canReadOrder($payment->getOrder()))
+		{
+			$this->addPermissionDeniedError();
+
+			return [];
+		}
+
 		$updateOptions =
 			(new Crm\Service\Sale\Terminal\UpdatePaymentOptions())
 				->setResponsibleId($options['paymentResponsibleId'])
@@ -1207,7 +1260,12 @@ class Order extends Base
 	 * @param array $options
 	 * @return array|null
 	 */
-	public function createPaymentAction(array $basketItems = [], array $options = [])
+	public function createPaymentAction(
+		CrmManager $crmManager,
+		array $basketItems = [],
+		array $options = [],
+		?ImOpenLinesManager $imOpenLinesManager = null,
+	)
 	{
 		if (Bitrix24Manager::getInstance()->isPaymentsLimitReached())
 		{
@@ -1227,19 +1285,63 @@ class Order extends Base
 			return [];
 		}
 
+		$imOpenLinesManager ??= ImOpenLinesManager::getInstance();
+		$options = $this->applyClientSession($options, $imOpenLinesManager);
+		if ($options === null)
+		{
+			return [];
+		}
+
 		if (
 			(int)$options['orderId'] > 0
 			&& !OrderTable::getRow([
 				'select' => ['ID'],
-				'filter' => ['=ID' => $options['orderId']],
+				'filter' => ['=ID' => (int)$options['orderId']],
 			])
 		)
 		{
 			$options['orderId'] = 0;
 		}
 
+		if (
+			empty($options['sessionId'])
+			&& (int)($options['ownerTypeId'] ?? 0) > 0
+			&& (int)($options['ownerId'] ?? 0) > 0
+			&& !$crmManager->canReadOwnerEntity(
+				(int)$options['ownerId'],
+				(int)$options['ownerTypeId'],
+			)
+		)
+		{
+			$this->addPermissionDeniedError();
+
+			return [];
+		}
+
+		if (
+			(int)($options['messageData']['entityTypeId'] ?? 0) > 0
+			&& (int)($options['messageData']['entityId'] ?? 0) > 0
+			&& !$crmManager->canReadOwnerEntity(
+				(int)$options['messageData']['entityId'],
+				(int)$options['messageData']['entityTypeId'],
+			)
+		)
+		{
+			$this->addPermissionDeniedError();
+
+			return [];
+		}
+
 		// if pay from chat - find lead id
-		$crmInfo = ImOpenLinesManager::getInstance()->setSessionId($options['sessionId'])->getCrmInfo();
+		$imOpenLinesManager->setSessionId($options['sessionId']);
+		if (!empty($options['sessionId']) && !$imOpenLinesManager->canAccessSession())
+		{
+			$this->addPermissionDeniedError();
+
+			return [];
+		}
+
+		$crmInfo = $imOpenLinesManager->getCrmInfo();
 		$dialogLeadId = $crmInfo ? (int)$crmInfo['LEAD'] : null;
 
 		$basketItems = VatRate::prepareTaxPrices($basketItems);
@@ -1271,6 +1373,33 @@ class Order extends Base
 				$this->addError(
 					new Error(Loc::getMessage('SALESCENTER_CONTROLLER_ORDER_CANT_BUILD_ORDER'))
 				);
+			}
+
+			if ($isEnabledAutomaticReservation)
+			{
+				Sale\Configuration::enableAutomaticReservation();
+			}
+
+			return [];
+		}
+
+		if ($order->getId() > 0 && !$crmManager->canReadOrder($order))
+		{
+			$this->addOrderPermissionDeniedError(false);
+			if ($isEnabledAutomaticReservation)
+			{
+				Sale\Configuration::enableAutomaticReservation();
+			}
+
+			return [];
+		}
+
+		if ($order->isNew() && !$crmManager->canAddOrder())
+		{
+			$this->addOrderPermissionDeniedError(true);
+			if ($isEnabledAutomaticReservation)
+			{
+				Sale\Configuration::enableAutomaticReservation();
 			}
 
 			return [];
@@ -1569,6 +1698,28 @@ class Order extends Base
 		return [];
 	}
 
+	private function addOrderPermissionDeniedError(bool $isNewOrder): void
+	{
+		if (!\CCrmSaleHelper::isWithOrdersMode())
+		{
+			$this->addPermissionDeniedError();
+
+			return;
+		}
+
+		$error = $isNewOrder
+			? Crm\Controller\ErrorCode::getOrderCreationAccessDeniedError()
+			: Crm\Controller\ErrorCode::getOrderReadAccessDeniedError();
+		$this->addError(new Error($error->getMessage()));
+	}
+
+	private function addPermissionDeniedError(): void
+	{
+		$this->addError(new Error(
+			Loc::getMessage('SALESCENTER_CONTROLLER_ORDER_TERMINAL_PAYMENT_ACCESS_DENIED'),
+		));
+	}
+
 	private function markPaymentWithLabels(Crm\Order\Payment $payment, array $options): void
 	{
 		$paymentLabels = $options['paymentLabels'] ?? [];
@@ -1609,6 +1760,12 @@ class Order extends Base
 				new Main\Error('You have reached the order limit for your plan')
 			);
 
+			return [];
+		}
+
+		$options = $this->applyClientSession($options);
+		if ($options === null)
+		{
 			return [];
 		}
 
@@ -1836,8 +1993,8 @@ class Order extends Base
 				!isset($options['context'])
 				|| $options['context'] !== SalesCenter\Component\ContextDictionary::CHAT
 				|| !CrmManager::getInstance()->isOwnerEntityInFinalStage(
-					$clientInfo['OWNER_ID'],
-					$clientInfo['OWNER_TYPE_ID']
+					(int)$clientInfo['OWNER_ID'],
+					(int)$clientInfo['OWNER_TYPE_ID'],
 				)
 			)
 			{
@@ -2177,6 +2334,12 @@ class Order extends Base
 
 		if ($context === SalesCenter\Component\ContextDictionary::CHAT)
 		{
+			$options = $this->applyClientSession($options);
+			if ($options === null)
+			{
+				return ['orders' => $sentOrders];
+			}
+
 			if(isset($options['sessionId']))
 			{
 				$sessionId = (int)$options['sessionId'];
@@ -2327,6 +2490,12 @@ class Order extends Base
 
 		if ($context === SalesCenter\Component\ContextDictionary::CHAT)
 		{
+			$options = $this->applyClientSession($options);
+			if ($options === null)
+			{
+				return ['payments' => $sentPayments];
+			}
+
 			if (isset($options['sessionId']))
 			{
 				$sessionId = (int)$options['sessionId'];
@@ -2483,12 +2652,18 @@ class Order extends Base
 	public function getActiveOrdersCountAction($sessionId)
 	{
 		$count = 0;
+		$sessionId = ImOpenLinesManager::getInstance()->checkClientSessionId($sessionId)->getData()['sessionId'];
+		if ($sessionId <= 0)
+		{
+			return $count;
+		}
+
 		if(ImOpenLinesManager::getInstance()->isEnabled() && SaleManager::getInstance()->isEnabled() && CrmManager::getInstance()->isEnabled())
 		{
 			$userId = ImOpenLinesManager::getInstance()->setSessionId($sessionId)->getUserId();
 			if($userId > 0)
 			{
-				$count = Sale\Internals\OrderTable::getCount([
+				$count = OrderTable::getCount([
 					'=USER_ID' => $userId,
 					'=STATUS_ID' => Crm\Order\OrderStatus::getSemanticProcessStatuses(),
 				]);
@@ -2505,6 +2680,12 @@ class Order extends Base
 	public function getActivePaymentsCountAction($sessionId)
 	{
 		$count = 0;
+		$sessionId = ImOpenLinesManager::getInstance()->checkClientSessionId($sessionId)->getData()['sessionId'];
+		if ($sessionId <= 0)
+		{
+			return $count;
+		}
+
 		if (ImOpenLinesManager::getInstance()->isEnabled() && SaleManager::getInstance()->isEnabled() && CrmManager::getInstance()->isEnabled())
 		{
 			$userId = ImOpenLinesManager::getInstance()->setSessionId($sessionId)->getUserId();
@@ -2538,7 +2719,20 @@ class Order extends Base
 	 */
 	public function getFileControl($elementId = null): string
 	{
+		if ((int)$elementId > 0)
+		{
+			$elementId = (int)$elementId;
+		}
+		else
+		{
+			$elementId = null;
+		}
+
 		$productImagePropertyDescription = $this->getProductImagePropertyDescription($elementId);
+		if ($productImagePropertyDescription === [])
+		{
+			return '';
+		}
 		$property = $productImagePropertyDescription['description'];
 		$value = $productImagePropertyDescription['values'];
 
@@ -2599,6 +2793,11 @@ class Order extends Base
 			$imageProperty = $this->getDefaultImageProperty();
 		}
 
+		if (empty($imageProperty['properties']))
+		{
+			return [];
+		}
+
 		if ($imageProperty['entity'] === 'property')
 		{
 			$result['description'] = [
@@ -2652,12 +2851,54 @@ class Order extends Base
 	 */
 	private function getProductImageProperty($elementId): array
 	{
-		$result = [];
+		$catalogIblockId = (int)Option::get('crm', 'default_product_catalog_id');
+		if ($catalogIblockId <= 0)
+		{
+			return [];
+		}
 
+		$allowedIblockIds = [$catalogIblockId];
+		$skuInfo = \CCatalogSku::GetInfoByProductIBlock($catalogIblockId);
+		if ($skuInfo && (int)($skuInfo['PRODUCT_IBLOCK_ID'] ?? 0) === $catalogIblockId)
+		{
+			$skuIblockId = (int)($skuInfo['IBLOCK_ID'] ?? 0);
+			if ($skuIblockId > 0)
+			{
+				$allowedIblockIds[] = $skuIblockId;
+			}
+		}
+
+		$elementMetadata = \CIBlockElement::GetList(
+			[],
+			['ID' => $elementId, 'IBLOCK_ID' => $allowedIblockIds],
+			false,
+			false,
+			['ID', 'IBLOCK_ID'],
+		)->Fetch();
+		if (!$elementMetadata)
+		{
+			return [];
+		}
+
+		$iblockId = (int)$elementMetadata['IBLOCK_ID'];
+		$accessController = AccessController::getCurrent();
+		if (
+			!(
+				$accessController->check(ActionDictionary::ACTION_CATALOG_READ)
+				|| $accessController->check(ActionDictionary::ACTION_CATALOG_VIEW)
+			)
+			|| !\CIBlockElementRights::UserHasRightTo($iblockId, $elementId, 'element_read')
+		)
+		{
+			return [];
+		}
+
+		$result = [];
 		$elementIterator = \CIBlockElement::GetList(
 			[],
 			[
 				'ID' => $elementId,
+				'IBLOCK_ID' => $iblockId,
 			],
 			false,
 			false,
@@ -2681,8 +2922,11 @@ class Order extends Base
 			}
 			else
 			{
-				$catalogIblockId = Option::get('crm', 'default_product_catalog_id');
 				$iblockFields = \CIBlock::GetFields($catalogIblockId);
+				if (!isset($iblockFields['DETAIL_PICTURE']))
+				{
+					return [];
+				}
 
 				$fields = $element->GetFields();
 				$result = [
@@ -2701,9 +2945,11 @@ class Order extends Base
 	 */
 	private function getDefaultImageProperty(): ?array
 	{
-		$catalogIblockId = Option::get('crm', 'default_product_catalog_id');
-		if (!$catalogIblockId)
+		$catalogIblockId = (int)Option::get('crm', 'default_product_catalog_id');
+		if ($catalogIblockId <= 0 || !\CIBlock::GetByID($catalogIblockId)->Fetch())
+		{
 			return null;
+		}
 
 		$propertyIterator = \CIBlock::GetProperties(
 			$catalogIblockId,
@@ -2723,6 +2969,10 @@ class Order extends Base
 		else
 		{
 			$fields = \CIBlock::GetFields($catalogIblockId);
+			if (!isset($fields['DETAIL_PICTURE']))
+			{
+				return null;
+			}
 			$result = [
 				'entity' => 'product',
 				'properties' => $fields['DETAIL_PICTURE'],
@@ -3047,6 +3297,28 @@ HTML;
 		}
 
 		LocationManager::getInstance()->storeLocationFrom($addressId);
+	}
+
+	private function applyClientSession(array $options, ?ImOpenLinesManager $imOpenLinesManager = null): ?array
+	{
+		$imOpenLinesManager ??= ImOpenLinesManager::getInstance();
+		$check = $imOpenLinesManager->checkClientSessionId(
+			$options['sessionId'] ?? null,
+			$options['dialogId'] ?? null,
+		);
+		if (!$check->isSuccess())
+		{
+			$this->addErrors($check->getErrors());
+
+			return null;
+		}
+
+		if (isset($options['sessionId']))
+		{
+			$options['sessionId'] = $check->getData()['sessionId'];
+		}
+
+		return $options;
 	}
 
 	private function onAfterDealAdd(int $dealId, int $sessionId): void

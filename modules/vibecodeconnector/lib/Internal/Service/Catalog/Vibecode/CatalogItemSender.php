@@ -9,6 +9,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Service\MicroService\BaseSender;
+use Bitrix\Vibecodeconnector\Internal\Dto\Catalog\Sharing\CatalogShareState;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItem;
 use Bitrix\Vibecodeconnector\Internal\Entity\Embedding\EmbeddingUrl;
 use Bitrix\Vibecodeconnector\Internal\Exception\CatalogSyncFailedException;
@@ -132,7 +133,10 @@ class CatalogItemSender extends BaseSender implements CatalogItemUpdateSender
 
 		return $this->sharingResponseMapper->mapShare($this->request(
 			self::ACTION_GET_SHARE,
-			['b24_catalog_item_id' => (int)$item->getId()],
+			[
+				'b24_catalog_item_id' => (int)$item->getId(),
+				'department_format' => CatalogShareState::DEPARTMENT_FORMAT_ACCESS_CODE,
+			],
 		));
 	}
 
@@ -159,15 +163,18 @@ class CatalogItemSender extends BaseSender implements CatalogItemUpdateSender
 	): Result {
 		$this->selectEndpoint($item);
 
+		$params = [
+			'b24_catalog_item_id' => (int)$item->getId(),
+			'acting_user_id' => (string)$actingUserId,
+			'audience' => $audience,
+			'users' => $users,
+			'departments' => $departments,
+			'department_format' => CatalogShareState::DEPARTMENT_FORMAT_ACCESS_CODE,
+		];
+
 		return $this->sharingResponseMapper->mapShare($this->request(
 			self::ACTION_SET_SHARE,
-			[
-				'b24_catalog_item_id' => (int)$item->getId(),
-				'acting_user_id' => (string)$actingUserId,
-				'audience' => $audience,
-				'users' => $users,
-				'departments' => $departments,
-			],
+			$params,
 		));
 	}
 

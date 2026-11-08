@@ -7,8 +7,11 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
+use Bitrix\BIConnector\Internal\Services\DashboardSettings\DashboardSettingsMode;
+use Bitrix\BIConnector\Internal\Services\DashboardSettings\DashboardSettingsModeResolver;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
@@ -19,7 +22,6 @@ use Bitrix\BIConnector\Superset\UI\SettingsPanel\Controller\SettingsComponentCon
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\Field;
 use Bitrix\BIConnector\Superset\UI\SettingsPanel\SettingsPanel;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
-use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorableImplementation;
@@ -28,7 +30,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
-use Bitrix\Main\Type\Date;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons;
 use Bitrix\BIConnector\Configuration\Feature;
@@ -48,6 +49,7 @@ class ApacheSupersetDashboardSettingComponent
 	use ErrorableImplementation;
 
 	private ?Dashboard $dashboard;
+	private ?DashboardSettingsModeResolver $modeResolver = null;
 
 	public function __construct($component = null)
 	{
@@ -74,16 +76,22 @@ class ApacheSupersetDashboardSettingComponent
 
 	public function executeComponent()
 	{
+		$this->prepareResult();
+		$this->includeComponentTemplate();
+	}
+
+	protected function prepareResult(): void
+	{
 		$this->initDashboard();
 		if ($this->dashboard === null)
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_DASHBOARD_NOT_FOUND');
-			$this->includeComponentTemplate();
 
 			return;
 		}
 
-		$checkingResult = $this->checkAccess();
+		$mode = $this->getModeResolver()->resolve(DashboardAccessItem::createFromEntity($this->dashboard));
+		$checkingResult = $this->checkOpenAccess($mode);
 		if (!$checkingResult->isSuccess())
 		{
 			foreach ($checkingResult->getErrorMessages() as $message)
@@ -91,12 +99,23 @@ class ApacheSupersetDashboardSettingComponent
 				$this->arResult['ERROR_MESSAGES'][] = $message;
 			}
 
-			$this->includeComponentTemplate();
-
 			return;
 		}
 
-		$this->initSettingsPanel();
+		$this->arResult['SETTINGS_MODE'] = $mode->value;
+		if ($mode === DashboardSettingsMode::Reduced)
+		{
+			$this->arResult['REDUCED_SETTINGS'] = [
+				'dashboardId' => $this->dashboard->getId(),
+				'dashboard' => $this->getModeResolver()->getBaseInfo($this->dashboard),
+				'shareSetting' => $this->getModeResolver()->getShareSettingState($this->dashboard->getId()),
+			];
+		}
+		else
+		{
+			$this->initSettingsPanel();
+		}
+
 		$this->arResult['TITLE'] = $this->getTitle();
 
 		Toolbar::addButton(
@@ -114,8 +133,6 @@ class ApacheSupersetDashboardSettingComponent
 				],
 			),
 		);
-
-		$this->includeComponentTemplate();
 	}
 
 	private function initSettingsPanel(): void
@@ -132,13 +149,18 @@ class ApacheSupersetDashboardSettingComponent
 					$this->getController(),
 					new IconController('ICON_CONTROLLER'),
 				)
-				->addSection($this->getFilterSection())
 				->setAjaxData($ajaxData)
 		;
 
 		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT))
 		{
 			$settingsPanel->addSection($this->getGroupsSection());
+		}
+
+		$shareSettingState = $this->getModeResolver()->getShareSettingState($this->dashboard->getId());
+		if ($shareSettingState !== null)
+		{
+			$settingsPanel->addSection($this->getShareSettingSection($shareSettingState));
 		}
 
 		if (isset($this->arParams['DASHBOARD_ID']))
@@ -161,6 +183,25 @@ class ApacheSupersetDashboardSettingComponent
 
 	private function checkAccess(): Result
 	{
+		$canModifySettings = AccessController::getCurrent()->checkByEntity(
+			ActionDictionary::ACTION_BIC_DASHBOARD_MODIFY_SETTINGS,
+			$this->dashboard,
+		);
+
+		return $this->checkAccessWith($canModifySettings);
+	}
+
+	/**
+	 * Opening the settings also lets in a public links controller who can view the dashboard
+	 * or reaches it by its public links (reduced mode).
+	 */
+	private function checkOpenAccess(DashboardSettingsMode $mode): Result
+	{
+		return $this->checkAccessWith($mode !== DashboardSettingsMode::Denied);
+	}
+
+	private function checkAccessWith(bool $canOpenDashboardSettings): Result
+	{
 		$result = new Result();
 
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
@@ -170,7 +211,7 @@ class ApacheSupersetDashboardSettingComponent
 			return $result;
 		}
 
-		if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_MODIFY_SETTINGS, $this->dashboard))
+		if (!$canOpenDashboardSettings)
 		{
 			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_NO_RIGHTS_DASHBOARD')));
 
@@ -200,20 +241,6 @@ class ApacheSupersetDashboardSettingComponent
 		$this->dashboard = $superset->getDashboardRepository()->getById((int)$this->arParams['DASHBOARD_ID']);
 	}
 
-	private function getFilterSection(): EntityEditorSection
-	{
-		return (new EntityEditorSection(
-			name: 'DASHBOARD_FILTER',
-			title: Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_SECTION_PERIOD_TITLE'),
-		))
-			->addField(new Field\DashboardPeriodFilterField(
-				id: 'DASHBOARD_FILTER',
-				dashboard: $this->dashboard,
-			))
-			->setIconClass('--calendar-1')
-		;
-	}
-
 	private function getGroupsSection(): EntityEditorSection
 	{
 		return (new EntityEditorSection(
@@ -226,6 +253,27 @@ class ApacheSupersetDashboardSettingComponent
 			))
 			->setIconClass('--folder-empty')
 		;
+	}
+
+	/**
+	 * @param array{isBanned: bool, canChange: bool} $state
+	 */
+	private function getShareSettingSection(array $state): EntityEditorSection
+	{
+		return (new EntityEditorSection(name: 'DASHBOARD_SHARE_SETTING'))
+			->addField(new Field\DashboardShareSettingField(
+				id: 'DASHBOARD_SHARE_SETTING',
+				dashboardId: $this->dashboard->getId(),
+				state: $state,
+			))
+		;
+	}
+
+	private function getModeResolver(): DashboardSettingsModeResolver
+	{
+		$this->modeResolver ??= new DashboardSettingsModeResolver();
+
+		return $this->modeResolver;
 	}
 
 	private function getTitle(): string
@@ -278,64 +326,6 @@ class ApacheSupersetDashboardSettingComponent
 		}
 
 		$dashboardObject = $this->dashboard->getOrmObject();
-		$result = [];
-
-		if ($data['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_DEFAULT)
-		{
-			$dashboardObject->setDateFilterStart(null);
-			$dashboardObject->setDateFilterEnd(null);
-			$dashboardObject->setFilterPeriod(null);
-			$dashboardObject->setIncludeLastFilterDate(null);
-
-			$result['FILTER_PERIOD'] = EmbeddedFilter\DateTime::PERIOD_DEFAULT;
-		}
-		elseif ($data['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_NONE)
-		{
-			$dashboardObject->setDateFilterStart(null);
-			$dashboardObject->setDateFilterEnd(null);
-			$dashboardObject->setFilterPeriod(EmbeddedFilter\DateTime::PERIOD_NONE);
-
-			$result['FILTER_PERIOD'] = EmbeddedFilter\DateTime::PERIOD_NONE;
-		}
-		elseif ($data['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_RANGE)
-		{
-			$startTime = null;
-			$endTime = null;
-			$includeLastFilterDate = 'Y';
-
-			try
-			{
-				$startTime = new Date($data['DATE_FILTER_START']);
-				$endTime = new Date($data['DATE_FILTER_END']);
-			}
-			catch (\Bitrix\Main\ObjectException)
-			{
-				$error = new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_INVALID_RANGE'));
-				$this->errorCollection->setError($error);
-
-				return null;
-			}
-
-			$dashboardObject->setDateFilterStart($startTime);
-			$dashboardObject->setDateFilterEnd($endTime);
-			$dashboardObject->setFilterPeriod(EmbeddedFilter\DateTime::PERIOD_RANGE);
-			$dashboardObject->setIncludeLastFilterDate($includeLastFilterDate);
-
-			$result['DATE_FILTER_START'] = $startTime;
-			$result['DATE_FILTER_END'] = $endTime;
-			$result['FILTER_PERIOD'] = EmbeddedFilter\DateTime::PERIOD_RANGE;
-		}
-		else
-		{
-			$period = EmbeddedFilter\DateTime::getDefaultPeriod();
-			$innerPeriod = $data['FILTER_PERIOD'] ?? '';
-			if (is_string($innerPeriod) && EmbeddedFilter\DateTime::isAvailablePeriod($innerPeriod))
-			{
-				$period = $innerPeriod;
-			}
-			$dashboardObject->setFilterPeriod($period);
-			$result['FILTER_PERIOD'] = $period;
-		}
 
 		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_MODIFY_SETTINGS))
 		{
@@ -406,6 +396,6 @@ class ApacheSupersetDashboardSettingComponent
 
 		$dashboardObject->save();
 
-		return $result;
+		return [];
 	}
 }

@@ -99,7 +99,7 @@ class ScrumRepository implements ScrumRepositoryInterface
 	 */
 	public function getGroupIdsByTag(string $tag): array
 	{
-		$tag = trim($tag);
+		$tag = WorkgroupTagTable::prepareNameForSearch($tag);
 		if ($tag === '')
 		{
 			return [];

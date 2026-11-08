@@ -2,13 +2,18 @@
 
 namespace Bitrix\BIConnector\Controller;
 
+use Bitrix\BIConnector\ExternalStatLoggerManager;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\DashboardList;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorInterface;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\ActionFilter;
+use Bitrix\Main\Engine\ActionFilter\Authentication;
+use Bitrix\Main\Engine\ActionFilter\Csrf;
+use Bitrix\Main\Engine\ActionFilter\HttpMethod;
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -19,6 +24,30 @@ class UsageStat extends Controller
 	private const ENTITY_TYPE_DASHBOARD = 'dashboard';
 	private const ENTITY_TYPE_CHART = 'chart';
 	private const ENTITY_TYPE_DATASET = 'dataset';
+
+	private const KEY_MANAGE_OPERATION = 'biconnector_key_manage';
+
+	public function configureActions(): array
+	{
+		return [
+			'toggleExternalStatCollection' => [
+				'prefilters' => $this->getKeyManageActionPreFilters(),
+			],
+		];
+	}
+
+	/**
+	 * Access of this action is bound to the key management operation, so the default analytic filters
+	 * of the controller must not be applied to it.
+	 */
+	private function getKeyManageActionPreFilters(): array
+	{
+		return [
+			new Authentication(),
+			new HttpMethod([HttpMethod::METHOD_POST]),
+			new Csrf(),
+		];
+	}
 
 	protected function getDefaultPreFilters(): array
 	{
@@ -34,6 +63,43 @@ class UsageStat extends Controller
 		}
 
 		return $filters;
+	}
+
+	/**
+	 * @return array{active: bool, hoursLeft: int}|null Window state after the operation.
+	 */
+	public function toggleExternalStatCollectionAction(string $enable): ?array
+	{
+		if (!$this->canManageKeys())
+		{
+			$this->addError($this->getAccessDeniedError());
+
+			return null;
+		}
+
+		if ($enable === 'Y')
+		{
+			ExternalStatLoggerManager::enable();
+		}
+		else
+		{
+			ExternalStatLoggerManager::disable();
+		}
+
+		return [
+			'active' => ExternalStatLoggerManager::isActive(),
+			'hoursLeft' => ExternalStatLoggerManager::getHoursLeft(),
+		];
+	}
+
+	private function canManageKeys(): bool
+	{
+		return CurrentUser::get()->canDoOperation(self::KEY_MANAGE_OPERATION);
+	}
+
+	private function getAccessDeniedError(): Error
+	{
+		return new Error(Loc::getMessage('BIC_USAGE_STAT_ACCESS_DENIED'), 'ACCESS_DENIED');
 	}
 
 	public function getOpenUrlAction(string $entityType, int $entityId): ?string

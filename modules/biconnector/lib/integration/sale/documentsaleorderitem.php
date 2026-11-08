@@ -19,6 +19,7 @@ class DocumentSaleOrderItem extends Dataset
 	private ?JoinSelection $shipmentJoin = null;
 	private ?JoinSelection $shipmentStoreJoin = null;
 	private ?JoinSelection $shipmentBatchJoin = null;
+	private ?string $shipmentChain = null;
 
 	protected function getResultTableName(): string
 	{
@@ -42,7 +43,7 @@ class DocumentSaleOrderItem extends Dataset
 
 	protected function getTableDescriptionFull(): string
 	{
-		return $this->getMessage('SALE_DOCUMENT_SALEORDER_ITEM_TABLE_DESCRIPTION_FULL', '');
+		return $this->getMessage('SALE_DOCUMENT_SALEORDER_ITEM_TABLE_DESCRIPTION_FULL_MSGVER_1', '');
 	}
 
 	/**
@@ -146,17 +147,39 @@ class DocumentSaleOrderItem extends Dataset
 		];
 	}
 
+	/**
+	 * Shipment chain shared by the SHIPMENT and SHIPMENT_STORE aliases.
+	 *
+	 * Both aliases must resolve through the same shipment item row. Reaching the store rows through a
+	 * second, independent join of b_sale_order_dlv_basket pairs a document with the store rows of every
+	 * other shipment of the same basket item, so a basket item shipped by several realizations reports
+	 * the sum of all of them.
+	 *
+	 * The inner and the outer variant are deliberately the same text: GetJoins() dedupes joins by the
+	 * exact SQL string but picks the variant per alias, and the dataset filter pushes SHIPMENT to the
+	 * inner one while SHIPMENT_STORE stays outer. Two different texts would emit the chain twice and
+	 * declare every alias in it a second time.
+	 */
+	private function getShipmentChain(): string
+	{
+		if ($this->shipmentChain === null)
+		{
+			$this->shipmentChain =
+				"LEFT JOIN b_sale_order_dlv_basket DELIVERY_BASKET ON DELIVERY_BASKET.BASKET_ID = {$this->getAliasFieldName('ID')}
+				LEFT JOIN b_sale_order_delivery SHIPMENT ON SHIPMENT.ID = DELIVERY_BASKET.ORDER_DELIVERY_ID
+				LEFT JOIN b_sale_store_barcode SHIPMENT_STORE ON SHIPMENT_STORE.ORDER_DELIVERY_BASKET_ID = DELIVERY_BASKET.ID"
+			;
+		}
+
+		return $this->shipmentChain;
+	}
+
 	private function getShipmentJoin(): JoinSelection
 	{
 		if ($this->shipmentJoin === null)
 		{
-			$this->shipmentJoin = $this->createJoin(
-				'SHIPMENT',
-				"INNER JOIN b_sale_order_dlv_basket DELIVERY_BASKET ON DELIVERY_BASKET.BASKET_ID = {$this->getAliasFieldName('ID')}
-				INNER JOIN b_sale_order_delivery SHIPMENT ON SHIPMENT.ID = DELIVERY_BASKET.ORDER_DELIVERY_ID",
-				"LEFT JOIN b_sale_order_dlv_basket DELIVERY_BASKET ON DELIVERY_BASKET.BASKET_ID = {$this->getAliasFieldName('ID')}
-				LEFT JOIN b_sale_order_delivery SHIPMENT ON SHIPMENT.ID = DELIVERY_BASKET.ORDER_DELIVERY_ID"
-			);
+			$chain = $this->getShipmentChain();
+			$this->shipmentJoin = $this->createJoin('SHIPMENT', $chain, $chain);
 		}
 
 		return $this->shipmentJoin;
@@ -166,13 +189,8 @@ class DocumentSaleOrderItem extends Dataset
 	{
 		if ($this->shipmentStoreJoin === null)
 		{
-			$this->shipmentStoreJoin = $this->createJoin(
-				'SHIPMENT_STORE',
-				"INNER JOIN b_sale_order_dlv_basket DELIVERY_BASKET_STORE ON DELIVERY_BASKET_STORE.BASKET_ID = {$this->getAliasFieldName('ID')}
-				INNER JOIN b_sale_store_barcode SHIPMENT_STORE ON SHIPMENT_STORE.ORDER_DELIVERY_BASKET_ID = DELIVERY_BASKET_STORE.ID",
-				"LEFT JOIN b_sale_order_dlv_basket DELIVERY_BASKET_STORE ON DELIVERY_BASKET_STORE.BASKET_ID = {$this->getAliasFieldName('ID')}
-				LEFT JOIN b_sale_store_barcode SHIPMENT_STORE ON SHIPMENT_STORE.ORDER_DELIVERY_BASKET_ID = DELIVERY_BASKET_STORE.ID"
-			);
+			$chain = $this->getShipmentChain();
+			$this->shipmentStoreJoin = $this->createJoin('SHIPMENT_STORE', $chain, $chain);
 		}
 
 		return $this->shipmentStoreJoin;

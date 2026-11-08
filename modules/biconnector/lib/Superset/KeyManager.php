@@ -53,7 +53,7 @@ class KeyManager extends BIConnector\KeyManager
 		return static::createKeyInner($keyParameters);
 	}
 
-	public static function deleteKey(string $key): void
+	public static function deleteAccessKey(string $key): void
 	{
 		$keyObject = BIConnector\KeyTable::getList([
 			'select' => [

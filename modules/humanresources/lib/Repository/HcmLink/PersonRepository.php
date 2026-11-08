@@ -25,6 +25,8 @@ use Bitrix\Main\Type\DateTime;
 
 class PersonRepository implements Contract\Repository\HcmLink\PersonRepository
 {
+	private const USER_ID_CHUNK_SIZE = 300;
+
 	public function add(Item\HcmLink\Person $person): Item\HcmLink\Person
 	{
 		$model = $this->fillModelFromItem($person);
@@ -125,6 +127,42 @@ class PersonRepository implements Contract\Repository\HcmLink\PersonRepository
 		;
 
 		return array_map('intval', array_column($userIds, 'USER_ID'));
+	}
+
+	/**
+	 * Answers about the passed set only: a caller that checks a selection of users has no use for the
+	 * whole mapping of the company, and that one grows with the portal instead of with the question.
+	 *
+	 * @param array<int> $userIds
+	 *
+	 * @return array<int> those of the passed users who hold a person link in the company
+	 */
+	public function filterMappedUserIds(int $companyId, array $userIds): array
+	{
+		$userIds = $this->normalizeUserIds($userIds);
+		if ($userIds === [])
+		{
+			return [];
+		}
+
+		$mappedUserIds = [];
+		foreach (array_chunk($userIds, self::USER_ID_CHUNK_SIZE) as $userIdsChunk)
+		{
+			$rows = PersonTable::query()
+				->setSelect(['USER_ID'])
+				->setDistinct()
+				->where('COMPANY_ID', $companyId)
+				->whereIn('USER_ID', $userIdsChunk)
+				->fetchAll()
+			;
+
+			foreach ($rows as $row)
+			{
+				$mappedUserIds[] = (int)$row['USER_ID'];
+			}
+		}
+
+		return $mappedUserIds;
 	}
 
 	protected function getAllBy(array $filter): Item\Collection\HcmLink\PersonCollection
@@ -341,6 +379,90 @@ class PersonRepository implements Contract\Repository\HcmLink\PersonRepository
 		}
 
 		return $newCollection;
+	}
+
+	/**
+	 * Every link of the user in the company is dropped, not the first one: the pair "company + user"
+	 * is not unique on persons, and the upload assigns a user to a person without checking whether
+	 * that user is already taken elsewhere. b_user is deliberately not joined - a person of a user
+	 * already removed from the portal has to lose its link too.
+	 *
+	 * @param array<int> $userIds
+	 *
+	 * @return int count of persons that lost their link
+	 * @throws UpdateFailedException when the storage refuses the update of a batch
+	 */
+	public function dropLinksByUserIds(int $companyId, array $userIds): int
+	{
+		$userIds = $this->normalizeUserIds($userIds);
+		if ($userIds === [])
+		{
+			return 0;
+		}
+
+		$updatedAt = new DateTime();
+		$droppedCount = 0;
+
+		foreach (array_chunk($userIds, self::USER_ID_CHUNK_SIZE) as $userIdsChunk)
+		{
+			$personIds = $this->listLinkedPersonIds($companyId, $userIdsChunk);
+
+			foreach (array_chunk($personIds, self::USER_ID_CHUNK_SIZE) as $personIdsChunk)
+			{
+				$result = PersonTable::updateMulti($personIdsChunk, [
+					'USER_ID' => 0,
+					'UPDATED_AT' => $updatedAt,
+				]);
+
+				// The whole batch is one statement: either every link of it is dropped or the caller
+				// learns that none of them was.
+				if ($result->isSuccess() === false)
+				{
+					throw (new UpdateFailedException())->setErrors($result->getErrorCollection());
+				}
+
+				$droppedCount += count($personIdsChunk);
+			}
+		}
+
+		return $droppedCount;
+	}
+
+	/**
+	 * @param array<int> $userIds
+	 *
+	 * @return array<int>
+	 */
+	private function listLinkedPersonIds(int $companyId, array $userIds): array
+	{
+		$rows = PersonTable::query()
+			->setSelect(['ID'])
+			->where('COMPANY_ID', $companyId)
+			->whereIn('USER_ID', $userIds)
+			->fetchAll()
+		;
+
+		return array_map('intval', array_column($rows, 'ID'));
+	}
+
+	/**
+	 * @param array<int> $userIds
+	 *
+	 * @return array<int> unique positive identifiers
+	 */
+	private function normalizeUserIds(array $userIds): array
+	{
+		$normalized = [];
+		foreach ($userIds as $userId)
+		{
+			$userId = (int)$userId;
+			if ($userId > 0)
+			{
+				$normalized[$userId] = $userId;
+			}
+		}
+
+		return array_values($normalized);
 	}
 
 	public function getListByIds(array $ids): Item\Collection\HcmLink\PersonCollection

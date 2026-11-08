@@ -142,4 +142,24 @@ class TaskHistoryRepository implements TaskHistoryRepositoryInterface
 
 		return $result;
 	}
+
+	public function count(int $taskId): int
+	{
+		$queryResult =
+			LogTable::query()
+				->setSelect([new ExpressionField('COUNT', 'COUNT(1)')])
+				->where('TASK_ID', $taskId)
+				->setDistinct(false)
+				->setLimit(1)
+				->exec()
+				->fetch()
+		;
+
+		if (!is_array($queryResult))
+		{
+			return 0;
+		}
+
+		return (int)($queryResult['COUNT'] ?? 0);
+	}
 }

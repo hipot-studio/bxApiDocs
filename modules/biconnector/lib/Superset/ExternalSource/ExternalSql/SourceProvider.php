@@ -16,11 +16,12 @@ final class SourceProvider
 		return [
 			ExternalSource\Type::Mysql->value,
 			ExternalSource\Type::Pgsql->value,
+			ExternalSource\Type::Clickhouse->value,
 		];
 	}
 
 	/**
-	 * @return ExternalSql\Mysql[]|ExternalSql\Pgsql[]
+	 * @return ExternalSql\Mysql[]|ExternalSql\Pgsql[]|ExternalSql\Clickhouse[]
 	 */
 	public static function getSources(): array
 	{
@@ -42,17 +43,26 @@ final class SourceProvider
 
 		$connections = array_flip(array_column($connections, 'TYPE'));
 
-		return [
+		$sources = [
 			ExternalSource\Type::Mysql->value => new ExternalSql\Mysql(isset($connections[ExternalSource\Type::Mysql->value])),
 			ExternalSource\Type::Pgsql->value => new ExternalSql\Pgsql(isset($connections[ExternalSource\Type::Pgsql->value])),
 		];
+
+		if (SourceManager::isClickhouseConnectionsAvailable())
+		{
+			$sources[ExternalSource\Type::Clickhouse->value] = new ExternalSql\Clickhouse(
+				isset($connections[ExternalSource\Type::Clickhouse->value]),
+			);
+		}
+
+		return $sources;
 	}
 
 	/**
-	 * Returns cloud placeholder sources for MySQL/PgSQL.
+	 * Returns cloud placeholder sources for MySQL/PgSQL/ClickHouse.
 	 * Shows helpdesk article block when no REST connector with matching SOURCE_CODE is registered.
 	 *
-	 * @return ExternalSql\CloudMysql[]|ExternalSql\CloudPgsql[]
+	 * @return ExternalSql\CloudMysql[]|ExternalSql\CloudPgsql[]|ExternalSql\CloudClickhouse[]
 	 */
 	public static function getCloudSources(): array
 	{
@@ -82,6 +92,11 @@ final class SourceProvider
 		if (!isset($registeredSourceCodes[ExternalSource\Type::Pgsql->value]))
 		{
 			$result[ExternalSource\Type::Pgsql->value] = new ExternalSql\CloudPgsql();
+		}
+
+		if (!isset($registeredSourceCodes[ExternalSource\Type::Clickhouse->value]))
+		{
+			$result[ExternalSource\Type::Clickhouse->value] = new ExternalSql\CloudClickhouse();
 		}
 
 		return $result;

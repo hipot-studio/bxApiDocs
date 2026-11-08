@@ -8,6 +8,7 @@ use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\Intranet\SystemPageProvider\ActivityPage;
 use Bitrix\Crm\Integration\Intranet\SystemPageProvider\EventsPage;
 use Bitrix\Crm\Integration\Intranet\SystemPageProvider\PermissionsPage;
+use Bitrix\Crm\Integration\Intranet\SystemPageProvider\StartPage;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory\Dynamic;
@@ -39,6 +40,7 @@ class CustomSectionProvider extends Provider
 			ActivityPage::CODE => ActivityPage::class,
 			PermissionsPage::CODE => PermissionsPage::class,
 			EventsPage::CODE => EventsPage::class,
+			StartPage::CODE => StartPage::class,
 		];
 	}
 
@@ -59,7 +61,7 @@ class CustomSectionProvider extends Provider
 	{
 		if (self::isSystemPage($pageSettings))
 		{
-			return self::checkIfsystemPageIsAvailable($pageSettings);
+			return self::checkIfSystemPageIsAvailable($pageSettings, $userId);
 		}
 
 		$entityTypeId = IntranetManager::getEntityTypeIdByPageSettings($pageSettings);
@@ -294,7 +296,33 @@ class CustomSectionProvider extends Provider
 		return $systemPages;
 	}
 
-	private static function checkIfSystemPageIsAvailable(string $pageSettings): bool
+	public function getPublicSystemPages(CustomSection $section, int $userId): array
+	{
+		$systemPages = [];
+
+		$pageProviders = static::getSystemPageProviders();
+		foreach ($pageProviders as $systemPageProvider)
+		{
+			/** @var SystemPageProvider $systemPageProvider */
+			if (
+				!$systemPageProvider::isPublicPage()
+				|| !$systemPageProvider::isPageAvailable($section)
+			)
+			{
+				continue;
+			}
+
+			$systemPage = $systemPageProvider::getPageInstance($section);
+			if (!is_null($systemPage) && $this->isAvailable($systemPage->getSettings(), $userId))
+			{
+				$systemPages[] = $systemPage;
+			}
+		}
+
+		return $systemPages;
+	}
+
+	private static function checkIfSystemPageIsAvailable(string $pageSettings, int $userId): bool
 	{
 		[$pageCode, $sectionCode] = self::getSystemPageCodeAndSectionCode($pageSettings);
 		$pageProviders = static::getSystemPageProviders();
@@ -303,14 +331,13 @@ class CustomSectionProvider extends Provider
 			return false;
 		}
 		$customSections = IntranetManager::getCustomSections();
-		$currentUser = Container::getInstance()->getContext()->getUserId();
 		$provider = new self();
-		foreach ($customSections as $customSection)
+		foreach ($customSections ?? [] as $customSection)
 		{
 			if ($customSection->getCode() === $sectionCode)
 			{
 				$isAutomatedSolutionAdmin = Container::getInstance()
-					->getUserPermissions()
+					->getUserPermissions($userId)
 					->automatedSolution()
 					->isAutomatedSolutionAdmin($customSection->getId())
 				;
@@ -325,7 +352,7 @@ class CustomSectionProvider extends Provider
 				{
 					if (
 						!self::isSystemPage($page->getSettings())
-						&& $provider->isAvailable($page->getSettings(), $currentUser)
+						&& $provider->isAvailable($page->getSettings(), $userId)
 					)
 					{
 						return true;

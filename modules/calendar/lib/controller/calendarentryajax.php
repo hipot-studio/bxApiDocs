@@ -40,6 +40,7 @@ use Bitrix\Intranet;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\MimeType;
 use Bitrix\UI\FileUploader\Uploader;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages($_SERVER['DOCUMENT_ROOT'].BX_ROOT.'/modules/calendar/lib/controller/calendarajax.php');
 
@@ -584,32 +585,51 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 
 			if (!$busyWarning && !$locationBusyWarning)
 			{
-				if ($request->getPost('recursive') === 'Y')
+				try
 				{
-					\CCalendar::SaveEventEx(
-						[
-							'arFields' => $arFields,
-							'silentErrorMode' => false,
-							'recursionEditMode' => 'this',
-							'currentEventDateFrom' => \CCalendar::Date(
-								\CCalendar::Timestamp($request->getPost('current_date_from')),
-								false
-							),
-							'sendInvitesToDeclined' => $sendInvitesToDeclined,
-							'requestUid' => $requestUid,
-						]
-					);
+					if ($request->getPost('recursive') === 'Y')
+					{
+						$saveResult = \CCalendar::SaveEventEx(
+							[
+								'arFields' => $arFields,
+								'checkLocationOccupancy' => 'Y',
+								'silentErrorMode' => false,
+								'recursionEditMode' => 'this',
+								'currentEventDateFrom' => \CCalendar::Date(
+									\CCalendar::Timestamp($request->getPost('current_date_from')),
+									false
+								),
+								'sendInvitesToDeclined' => $sendInvitesToDeclined,
+								'requestUid' => $requestUid,
+							]
+						);
+						if ($saveResult === false)
+						{
+							$this->addError(new Error(Loc::getMessage('EC_JS_EV_SAVE_ERR'), 'edit_entry_save'));
+							$id = false;
+						}
+					}
+					else
+					{
+						$id = \CCalendar::SaveEvent(
+							[
+								'arFields' => $arFields,
+								'checkLocationOccupancy' => 'Y',
+								'silentErrorMode' => false,
+								'sendInvitesToDeclined' => $sendInvitesToDeclined,
+								'requestUid' => $requestUid,
+							]
+						);
+					}
 				}
-				else
+				catch (\Bitrix\Calendar\Core\Event\EventSaveStateException $e)
 				{
-					$id = \CCalendar::SaveEvent(
-						[
-							'arFields' => $arFields,
-							'silentErrorMode' => false,
-							'sendInvitesToDeclined' => $sendInvitesToDeclined,
-							'requestUid' => $requestUid,
-						]
-					);
+					$this->addError(new Error($e->getMessage(), $e->getErrorCode()));
+				}
+				catch (Rooms\OccupancyCheckerException|Rooms\OccupancyLockedException)
+				{
+					$locationBusyWarning = true;
+					$reload = true;
 				}
 			}
 		}
@@ -634,15 +654,16 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 
 		try
 		{
+			$locationAvailabilityChecker = new Rooms\LegacyLocationAvailabilityChecker();
 			if ($id)
 			{
 				$command = $this->getUpdateCommand($request);
-				$event = (new UpdateEventHandler())($command);
+				$event = (new UpdateEventHandler($locationAvailabilityChecker))($command);
 			}
 			else
 			{
 				$command = $this->getCreateCommand($request);
-				$event = (new CreateEventHandler())($command);
+				$event = (new CreateEventHandler($locationAvailabilityChecker))($command);
 			}
 			$newId = $event->getId();
 			$response['reload'] = true;
@@ -682,10 +703,41 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 		{
 			$this->addError(new Error('Event not found', 'edit_entry_event_not_found'));
 		}
+		catch (\Bitrix\Calendar\Core\Event\EventSaveStateException $e)
+		{
+			$this->addError(new Error($e->getMessage(), $e->getErrorCode()));
+		}
 		catch (Rooms\OccupancyCheckerException $e)
 		{
-			$this->addError(new Error(Loc::getMessage('EC_LOCATION_BUSY_RECURRENCE'), 'edit_entry_location_busy_recurrence'));
-			$this->addError(new Error($e->getMessage(), 'edit_entry_location_repeat_busy'));
+			if ($e->isInvalidInterval())
+			{
+				$this->addError(new Error(
+					$e->getMessage(),
+					Rooms\OccupancyCheckerException::INVALID_INTERVAL_ERROR_CODE,
+				));
+			}
+			elseif ($this->isRecurringOccupancyRequest($request))
+			{
+				$this->addError(new Error(Loc::getMessage('EC_LOCATION_BUSY_RECURRENCE'), 'edit_entry_location_busy_recurrence'));
+				$this->addError(new Error($this->getOccupancyConflictMessage($e), 'edit_entry_location_repeat_busy'));
+			}
+			else
+			{
+				$this->addError(new Error(Loc::getMessage('EC_LOCATION_BUSY'), 'edit_entry_location_busy'));
+			}
+		}
+		catch (Rooms\OccupancyLockedException)
+		{
+			$this->addError(
+				new Error(
+					Loc::getMessage('EC_LOCATION_BUSY') ?: 'Meeting room occupancy is locked.',
+					Rooms\OccupancyLockedException::ERROR_CODE,
+				),
+			);
+		}
+		catch (ArgumentException $exception)
+		{
+			$this->addError(new Error($exception->getMessage(), 'edit_entry_invalid_argument'));
 		}
 		catch (MaxAttendeesReachedException)
 		{
@@ -791,7 +843,7 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 		$pathToCalendar = \CCalendar::GetPathForCalendarEx($userId);
 		foreach($eventList as $ind => $event)
 		{
-			$eventList[$ind]['~URL'] = \CHTTP::urlAddParams($pathToCalendar, ['EVENT_ID' => $event['ID']]);
+			$eventList[$ind]['~URL'] = (string)(new Uri($pathToCalendar))->addParams(['EVENT_ID' => $event['ID']]);
 		}
 
 		$response['eventList'] = $eventList;
@@ -802,6 +854,12 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 		UserSettings::set($userSettings, $userId);
 
 		return $response;
+	}
+
+	private function isRecurringOccupancyRequest(HttpRequest $request): bool
+	{
+		return !empty($request->getPost('EVENT_RRULE'))
+			|| in_array($request->getPost('rec_edit_mode'), ['this', 'next', 'all'], true);
 	}
 
 	/**
@@ -871,13 +929,39 @@ class CalendarEntryAjax extends \Bitrix\Main\Engine\Controller
 			$this->getUFfields($id, $request),
 			($request['sendInvitesAgain'] ?? 'N') === 'Y',
 			$requestUid,
-			($request['doCheckOccupancy'] ?? 'N') === 'Y',
+			$this->getOccupancyCheckMode($request),
 			(int)($request['max_attendees'] ?? 0),
 			$request['category'] !== null ? (int)$request['category'] : null,
 			$request['analyticsSubSection'] ?? null,
 			(int)($request['analyticsChatId'] ?? 0),
 			$eventType,
 		];
+	}
+
+	private function getOccupancyConflictMessage(Rooms\OccupancyCheckerException $exception): string
+	{
+		if (Rooms\Manager::canExposeOccupancyDates($exception->getOccupancyData()))
+		{
+			return $exception->getMessage();
+		}
+
+		return Loc::getMessage('EC_LOCATION_BUSY') ?: 'Meeting room is busy.';
+	}
+
+	private function getOccupancyCheckMode(HttpRequest $request): string
+	{
+		$mode = $request->getPost('doCheckOccupancy');
+		if ($mode === null)
+		{
+			return 'Y';
+		}
+
+		if (!in_array($mode, ['Y', 'N'], true))
+		{
+			throw new ArgumentException('doCheckOccupancy must be either Y or N.');
+		}
+
+		return $mode;
 	}
 
 	private function getUFfields(int $eventId, HttpRequest $request): array

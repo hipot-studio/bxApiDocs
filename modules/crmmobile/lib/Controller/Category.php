@@ -19,14 +19,18 @@ use Bitrix\Crm\Security\Role\RolePermission;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\CrmMobile\Public\Feature\UnifiedFiltersFlag;
 use Bitrix\CrmMobile\Dto;
 use Bitrix\CrmMobile\Kanban\Entity;
 use Bitrix\CrmMobile\Kanban\GridId;
 use Bitrix\CrmMobile\Kanban\Kanban;
+use Bitrix\CrmMobile\Service\ConfigurationPermissions;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\CrmMobile\Controller\Base;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
+use Bitrix\Mobile\Filter\FilterRequest;
 
 Loader::requireModule('crm');
 
@@ -186,13 +190,22 @@ class Category extends Base
 		$entityTypeId = $factory->getEntityTypeId();
 		$permissions = $this->getCategoryPermissions($entityTypeId, $categoryId);
 
+		// an entity type without funnels is a single contour of the entity type, as it is on the web
+		// (crm.sales.tunnels/class.php::getTunnelCategoryIds()).
+		$capabilities = ConfigurationPermissions::createForEntityType($entityTypeId);
+
 		$categoriesEnabled = $factory->isCategoriesEnabled();
 		$stagesEnabled = $factory->isStagesEnabled();
 		$tunnelsEnabled = $categoriesEnabled && $stagesEnabled;
 
 		$stages = $factory->getStages($categoryId);
 		$stageColors = $this->getStageColors($stages);
-		$stagesBySemantics = $this->getStagesBySemantics($stages, [], $stageColors);
+		$stagesBySemantics = $this->getStagesBySemantics(
+			$stages,
+			[],
+			$stageColors,
+			$this->getStageConfigurationFields($capabilities),
+		);
 
 		return Dto\Category::make([
 			'id' => 0,
@@ -200,7 +213,8 @@ class Category extends Base
 			'name' => $factory->getEntityDescriptionInPlural(),
 			'isDefault' => true,
 			'editable' => $this->canUserEditCategory($factory->getEntityTypeId()),
-			'access' => $this->getAccess($permissions),
+			...$this->getConfigurationFields($capabilities),
+			'access' => $this->canUserEditCategory($entityTypeId) ? $this->getAccess($permissions) : null,
 			'categoriesSupported' => $factory->isCategoriesSupported(),
 			'categoriesEnabled' => $categoriesEnabled,
 			'stagesEnabled' => $stagesEnabled,
@@ -258,26 +272,35 @@ class Category extends Base
 
 	public function updateAction(Factory $factory, int $categoryId, array $fields): void
 	{
-		if (!$this->canUpdateCategory($factory, $categoryId))
+		$stageSorts = $this->requestedStageSorts($fields);
+		$access = $this->requestedAccess($fields);
+		$stagesOnly = $stageSorts !== null
+			&& !array_key_exists('name', $fields)
+			&& !array_key_exists('access', $fields)
+			&& ConfigurationPermissions::createForEntityType($factory->getEntityTypeId(), $categoryId)->modelOwnsContour()
+		;
+
+		if ($stagesOnly)
+		{
+			if ($factory->isCategoriesEnabled() && !$this->getCategoryFromFactory($factory, $categoryId))
+			{
+				return;
+			}
+		}
+		elseif (!$this->canUpdateCategory($factory, $categoryId))
 		{
 			return;
 		}
 
-		$entityId = $factory->getStagesEntityId($categoryId);
-		$stages = array_merge(
-			$fields['processStages'] ?? [],
-			$fields['successStages'] ?? [],
-			$fields['failedStages'] ?? [],
-		);
-
-		foreach ($stages as $stage)
+		if (!$this->mayWriteEveryPart($factory, $categoryId, $stageSorts !== null, $access !== null))
 		{
-			$stageResult = $this->updateStageSort($entityId, $stage['id'], $stage['sort']);
-			if (!$stageResult->isSuccess())
-			{
-				$this->addErrors($stageResult->getErrors());
-				return;
-			}
+			$this->addError(ErrorCode::getAccessDeniedError());
+			return;
+		}
+
+		if ($stageSorts !== null && !$this->updateStageSorts($factory, $categoryId, $stageSorts))
+		{
+			return;
 		}
 
 		$newCategoryName = ($fields['name'] ?? null);
@@ -286,20 +309,133 @@ class Category extends Base
 			return;
 		}
 
-		$permissions = [
+		if ($access !== null)
+		{
+			// the funnel the access is written to is the one the right was asked for - the argument of
+			// the action, never the id the request carries beside it
+			$this->updateAccess($factory->getEntityTypeId(), $categoryId, $access);
+		}
+	}
+
+	/**
+	 * The stage order the request asks to write, and null where it asks for none: a part the request
+	 * does not carry is left alone, while an empty list is a part it does carry.
+	 */
+	private function requestedStageSorts(array $fields): ?array
+	{
+		$requested = false;
+		$stages = [];
+
+		foreach (['processStages', 'successStages', 'failedStages'] as $key)
+		{
+			if (!array_key_exists($key, $fields) || !is_array($fields[$key]))
+			{
+				continue;
+			}
+
+			$requested = true;
+			$stages = array_merge($stages, $fields[$key]);
+		}
+
+		return $requested ? $stages : null;
+	}
+
+	/**
+	 * The access the request asks to write, and null where it asks for none. Only a value the write
+	 * below understands counts as a request - a permission code, or the id of the funnel the access is
+	 * copied from; anything else is ignored rather than refused.
+	 */
+	private function requestedAccess(array $fields): int|string|null
+	{
+		if (!array_key_exists('access', $fields))
+		{
+			return null;
+		}
+
+		$access = $fields['access'];
+		$isWritable = in_array($access, self::categoryPermissionCodes(), true) || is_numeric($access);
+
+		return $isWritable ? $access : null;
+	}
+
+	/**
+	 * Every part the request carries is allowed to be written. The name of the funnel is not asked
+	 * again - it is the funnel right {@see canUpdateCategory()} already asks, and these checks stand on
+	 * top of that gate. A refused part turns the whole request down before the first write.
+	 */
+	private function mayWriteEveryPart(
+		Factory $factory,
+		int $categoryId,
+		bool $stagesRequested,
+		bool $accessRequested
+	): bool
+	{
+		if (!$stagesRequested && !$accessRequested)
+		{
+			return true;
+		}
+
+		$capabilities = ConfigurationPermissions::createForEntityType(
+			$factory->getEntityTypeId(),
+			$categoryId,
+		);
+		$accessAsked = $accessRequested && $this->decidesCategoryAccess($factory, $capabilities);
+
+		return (!$stagesRequested || $capabilities->canManageStages())
+			&& (!$accessAsked || $capabilities->canManageCategoryAccess())
+		;
+	}
+
+	/**
+	 * Whether the access of this funnel is the granular model's decision to make. Where it is not - a
+	 * contour the model does not own ({@see ConfigurationPermissions::modelOwnsContour()}), or an entity
+	 * type carrying no funnels at all - the gate of the action stays the only check the access answers,
+	 * so that a capability of the new model refuses nothing the gate allows.
+	 */
+	private function decidesCategoryAccess(Factory $factory, ConfigurationPermissions $capabilities): bool
+	{
+		return $factory->isCategoriesSupported() && $capabilities->modelOwnsContour();
+	}
+
+	private function updateStageSorts(Factory $factory, int $categoryId, array $stages): bool
+	{
+		$entityId = $factory->getStagesEntityId($categoryId);
+
+		foreach ($stages as $stage)
+		{
+			$stageResult = $this->updateStageSort($entityId, $stage['id'], $stage['sort']);
+			if (!$stageResult->isSuccess())
+			{
+				$this->addErrors($stageResult->getErrors());
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private function updateAccess(int $entityTypeId, int $categoryId, int|string $access): void
+	{
+		if (in_array($access, self::categoryPermissionCodes(), true))
+		{
+			$this->setAccess($entityTypeId, $categoryId, (string)$access);
+
+			return;
+		}
+
+		$this->copyAccessCategory($entityTypeId, $categoryId, (int)$access);
+	}
+
+	/**
+	 * The access codes the write understands, as opposed to the id of a donor funnel.
+	 */
+	private static function categoryPermissionCodes(): array
+	{
+		return [
 			UserPermissions::PERMISSION_ALL,
 			UserPermissions::PERMISSION_SELF,
 			UserPermissions::PERMISSION_NONE,
 		];
-		$entityTypeId = $factory->getEntityTypeId();
-		if (in_array($fields['access'], $permissions, true))
-		{
-			$this->setAccess($entityTypeId, $fields['id'], $fields['access']);
-		}
-		elseif (is_numeric($fields['access']))
-		{
-			$this->copyAccessCategory($entityTypeId, $fields['id'], (int)$fields['access']);
-		}
 	}
 
 	private function canUpdateCategory(Factory $factory, int $categoryId): bool
@@ -439,11 +575,18 @@ class Category extends Base
 
 		if (empty($filter['presetId']))
 		{
-			$filterParams['FORCE_FILTER'] = 'Y';
+			// the unified filter names no preset until it has read the state of the list; the counters
+			// then have to be counted under the filter the list is under, or they would not add up
+			if (Feature::isDisabled(UnifiedFiltersFlag::class))
+			{
+				$filterParams['FORCE_FILTER'] = 'Y';
+			}
 		}
 		else
 		{
-			$filterParams['FILTER_PRESET_ID'] = $filter['presetId'];
+			// the counters are read back under the preset they are written to, and the form of the
+			// filter names no preset of the storage
+			$filterParams['FILTER_PRESET_ID'] = FilterRequest::resolvePresetId((string)$filter['presetId']);
 		}
 
 		if (isset($filter['search']))
@@ -515,27 +658,22 @@ class Category extends Base
 		$categories = [];
 		$restrictions = [];
 		$canUserEditCategory = $this->canUserEditCategory($factory->getEntityTypeId());
-
-		$sortedTunnelsByCategory = [];
-		if ($canUserEditCategory)
-		{
-			$tunnelScheme = (new TunnelManager($factory->getEntityTypeId()))->getScheme();
-
-			$sortedTunnelsByCategory = array_reduce($tunnelScheme['stages'],
-				function ($acc, $stage) use ($factory) {
-					foreach ($stage['tunnels'] as $tunnel)
-					{
-						$tunnelData = $this->prepareTunnelData($factory, $tunnel);
-						if ($tunnelData)
-						{
-							$acc[$stage['categoryId']][] = $tunnelData;
-						}
-					}
-					return $acc;
-				}, []);
-		}
+		$screenCapabilities = ConfigurationPermissions::createForEntityType($factory->getEntityTypeId());
 
 		$categoriesCollection = $this->getCategoriesCollection($factory);
+
+		// every item of the list is a funnel of its own, and the tunnels of one funnel are decided in
+		// that funnel alone.
+		$capabilitiesByCategory = [];
+		foreach ($categoriesCollection as $category)
+		{
+			$capabilitiesByCategory[$category->getId()] = $screenCapabilities->forFunnel($category->getId());
+		}
+
+		$sortedTunnelsByCategory = $this->getTunnelsOfCategories(
+			$factory,
+			$this->categoriesStatingTheirTunnels($capabilitiesByCategory),
+		);
 
 		foreach ($categoriesCollection as $category)
 		{
@@ -549,6 +687,7 @@ class Category extends Base
 				'isDefault' => $category->getIsDefault(),
 				'tunnels' => $sortedTunnelsByCategory[$categoryId] ?? [],
 				'categoriesEnabled' => $factory->isCategoriesEnabled(),
+				...$this->getConfigurationFields($capabilitiesByCategory[$categoryId]),
 			];
 
 			if (Counter\EntityCounterFactory::isEntityTypeSupported($factory->getEntityTypeId()))
@@ -581,7 +720,67 @@ class Category extends Base
 			'categories' => $categories,
 			'restrictions' => $restrictions,
 			'canUserEditCategory' => $canUserEditCategory,
+			'canCreateCategory' => $screenCapabilities->canCreateCategory(),
 		]);
+	}
+
+	/**
+	 * The funnels of the list whose tunnels the payload carries - the ones it states the tunnel
+	 * capability of, and no others. Loading them by any other right would state a capability over a
+	 * set that does not match it, and a client sending such a set back takes every tunnel off the
+	 * stage ({@see \Bitrix\Crm\Automation\TunnelManager::updateStageTunnels()}).
+	 *
+	 * @param array<int, ConfigurationPermissions> $capabilitiesByCategory
+	 * @return int[]
+	 */
+	private function categoriesStatingTheirTunnels(array $capabilitiesByCategory): array
+	{
+		$categoryIds = [];
+
+		foreach ($capabilitiesByCategory as $categoryId => $capabilities)
+		{
+			if ($capabilities->canManageTunnels())
+			{
+				$categoryIds[] = $categoryId;
+			}
+		}
+
+		return $categoryIds;
+	}
+
+	/**
+	 * The tunnels of the named funnels, keyed by the funnel they leave. The scheme covers every funnel
+	 * of the entity type at once, so it is read once for the whole list and not at all where no funnel
+	 * of it states its tunnels.
+	 *
+	 * @param int[] $categoryIds
+	 */
+	private function getTunnelsOfCategories(Factory $factory, array $categoryIds): array
+	{
+		if ($categoryIds === [])
+		{
+			return [];
+		}
+
+		$tunnelScheme = (new TunnelManager($factory->getEntityTypeId()))->getScheme();
+
+		return array_reduce($tunnelScheme['stages'],
+			function ($acc, $stage) use ($factory, $categoryIds) {
+				if (!in_array($stage['categoryId'], $categoryIds, true))
+				{
+					return $acc;
+				}
+
+				foreach ($stage['tunnels'] as $tunnel)
+				{
+					$tunnelData = $this->prepareTunnelData($factory, $tunnel);
+					if ($tunnelData)
+					{
+						$acc[$stage['categoryId']][] = $tunnelData;
+					}
+				}
+				return $acc;
+			}, []);
 	}
 
 	private function canUserEditCategory(int $entityTypeId): bool
@@ -632,11 +831,21 @@ class Category extends Base
 
 		$stageObjects = $factory->getStages($categoryId);
 		$stageColors = $this->getStageColors($stageObjects);
-		$canUserEditCategory = Container::getInstance()->getUserPermissions()->category()->canUpdate($category);
+
+		// a funnel that does not exist yet is a single contour of the entity type, as it is on the web
+		// (crm.sales.tunnels/class.php::getTunnelCategoryIds()).
+		$capabilities = ConfigurationPermissions::createForEntityType(
+			$factory->getEntityTypeId(),
+			$categoryNotFound ? null : $category->getId(),
+		);
 
 		$filteredTunnelsByCategory = [];
 
-		if ($tunnelsEnabled && $canUserEditCategory)
+		// the tunnels are loaded by the very right the payload states them with: stating the capability
+		// over an empty set makes the client send an incomplete one back, and every tunnel robot missing
+		// from a request is taken off the stage
+		// ({@see \Bitrix\Crm\Automation\TunnelManager::updateStageTunnels()}).
+		if ($tunnelsEnabled && $capabilities->canManageTunnels())
 		{
 			$tunnelScheme = (new TunnelManager($factory->getEntityTypeId()))->getScheme();
 
@@ -658,7 +867,12 @@ class Category extends Base
 				}, []);
 		}
 
-		$stagesBySemantics = $this->getStagesBySemantics($stageObjects, $filteredTunnelsByCategory, $stageColors);
+		$stagesBySemantics = $this->getStagesBySemantics(
+			$stageObjects,
+			$filteredTunnelsByCategory,
+			$stageColors,
+			$this->getStageConfigurationFields($capabilities),
+		);
 
 		if ($categoryNotFound && empty($stagesBySemantics))
 		{
@@ -676,7 +890,8 @@ class Category extends Base
 			'name' => $categoriesEnabled ? $category->getName() : $factory->getEntityDescriptionInPlural(),
 			'isDefault' => $category->getIsDefault(),
 			'editable' => $this->canUserEditCategory($category->getEntityTypeId()),
-			'access' => $this->getAccess($permissions),
+			...$this->getConfigurationFields($capabilities),
+			'access' => $capabilities->canManageCategoryAccess() ? $this->getAccess($permissions) : null,
 			'categoriesSupported' => $factory->isCategoriesSupported(),
 			'categoriesEnabled' => $categoriesEnabled,
 			'stagesEnabled' => $stagesEnabled,
@@ -691,7 +906,8 @@ class Category extends Base
 	private function getStagesBySemantics(
 		EO_Status_Collection $stageObjects,
 		array $filteredTunnelsByCategory = [],
-		array $stageColors = []
+		array $stageColors = [],
+		array $configurationFields = []
 	): array
 	{
 		$stagesBySemantics = [];
@@ -711,10 +927,39 @@ class Category extends Base
 				'semantics' => $semanticId,
 				'color' => $color,
 				'tunnels' => ($filteredTunnelsByCategory[$statusId] ?? []),
+				...$configurationFields,
 			];
 		}
 
 		return $stagesBySemantics;
+	}
+
+	/**
+	 * The configuration capabilities of one funnel, added beside the former `editable` flag and never
+	 * in place of it. The whole set is stated at once: a payload carrying part of it would mix the
+	 * granular decision with the former one, which DTO-01 forbids.
+	 */
+	private function getConfigurationFields(ConfigurationPermissions $capabilities): array
+	{
+		return [
+			'canOpenSettings' => $capabilities->canOpenSettings(),
+			'canManageFunnels' => $capabilities->canManageFunnels(),
+			'canManageStages' => $capabilities->canManageStages(),
+			'canManageTunnels' => $capabilities->canManageTunnels(),
+			'canManageCategoryAccess' => $capabilities->canManageCategoryAccess(),
+		];
+	}
+
+	/**
+	 * What a stage card decides on its own: the stage itself and the tunnels leaving it, asked of the
+	 * capabilities the funnel payload was built from.
+	 */
+	private function getStageConfigurationFields(ConfigurationPermissions $capabilities): array
+	{
+		return [
+			'canManageStages' => $capabilities->canManageStages(),
+			'canManageTunnels' => $capabilities->canManageTunnels(),
+		];
 	}
 
 	private function getCategoryPermissions(int $entityTypeId, int $categoryId = 0): array
@@ -933,7 +1178,7 @@ class Category extends Base
 
 		if (!empty($tunnel['robot']['Delay']))
 		{
-			$basisId = $this->extractDelayBasisId($tunnel['robot']['Delay']['basis']);
+			$basisId = $this->extractDelayBasisId($tunnel['robot']['Delay']['basis'] ?? null);
 			$robotDelayBasisName = $this->getTunnelDocumentFields($factory->getEntityTypeId())[$basisId] ?? null;
 			$tunnel['robot']['Delay']['basisName'] = $robotDelayBasisName['name'] ?? null;
 		}
@@ -965,18 +1210,31 @@ class Category extends Base
 		];
 	}
 
-	private function extractDelayBasisId(string $basis): string
+	private function extractDelayBasisId(?string $basis): string
 	{
-		$startString = '{=Document:';
-		$endString = '}';
-		$startPos = strpos($basis, $startString);
-		$endPos = strpos($basis, $endString, $startPos + strlen($startString));
-
-		if ($startPos !== false && $endPos !== false) {
-			return substr($basis, $startPos + strlen($startString), $endPos - $startPos - strlen($startString));
+		if ($basis === null)
+		{
+			return '';
 		}
 
-		return '';
+		$startString = '{=Document:';
+		$endString = '}';
+
+		$startPos = strpos($basis, $startString);
+		if ($startPos === false)
+		{
+			return '';
+		}
+
+		$valuePos = $startPos + strlen($startString);
+
+		$endPos = strpos($basis, $endString, $valuePos);
+		if ($endPos === false)
+		{
+			return '';
+		}
+
+		return substr($basis, $valuePos, $endPos - $valuePos);
 	}
 
 	private function getStageColors(EO_Status_Collection $stageObjects): array

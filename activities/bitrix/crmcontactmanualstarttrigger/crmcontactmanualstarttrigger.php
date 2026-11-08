@@ -5,8 +5,7 @@ declare(strict_types=1);
 use Bitrix\Bizproc\Activity\Mixins\ManualStartDocumentTrait;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Public\Entity\Trigger\Section;
-use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventInitiatorTrait;
-use Bitrix\Main\Type\DateTime;
+use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventOutputsTrait;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -25,7 +24,7 @@ if (!\Bitrix\Main\Loader::includeModule('crm'))
 
 class CBPCrmContactManualStartTrigger extends \CBPManualStartTrigger
 {
-	use EventInitiatorTrait;
+	use EventOutputsTrait;
 	use ManualStartDocumentTrait;
 
 	private const EVENT_INITIATOR_ID = 'Initiator';
@@ -50,8 +49,7 @@ class CBPCrmContactManualStartTrigger extends \CBPManualStartTrigger
 		$initiatorUserId = $this->resolveEventInitiatorUserId();
 		$this->setProperties([
 			static::getReturnDocumentFieldName() => $this->getDocumentId(),
-			self::EVENT_INITIATOR_ID => $initiatorUserId ? 'user_' . $initiatorUserId : null,
-			self::EVENT_DATE_TIME_ID => (new DateTime())->format(DateTime::getFormat()),
+			...static::buildEventOutputs($initiatorUserId),
 		]);
 		$this->setPropertiesTypes([
 			static::getReturnDocumentFieldName() => $this->getReturnDocumentMapTypeForInstance(),

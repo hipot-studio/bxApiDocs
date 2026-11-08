@@ -25,6 +25,9 @@ class CallList extends \IRestService
 	public const ENTITY_TYPE_ERROR = 'ENTITY_TYPE_ERROR';
 	public const WEBFORM_ERROR = 'WEBFORM_ERROR';
 
+	private const PUBLIC_FIELDS = ['ID', 'DATE_CREATE', 'CREATED_BY_ID', 'WEBFORM_ID', 'ENTITY_TYPE_ID'];
+	private const FILTER_OPERATIONS = ['', '=', '>', '<', '>=', '<=', '@'];
+
 	private static $methods = [
 		'crm.calllist.list' => [self::class, 'getsCallList'],
 		'crm.calllist.get' => [self::class, 'getCallList'],
@@ -80,21 +83,28 @@ class CallList extends \IRestService
 	 * @throws ArgumentException
 	 * @throws ObjectException
 	 * @throws ObjectPropertyException
+	 * @throws RestException
 	 * @throws SystemException
 	 */
 	public static function getsCallList(array $query, int $nav, \CRestServer $server): array
 	{
 		$query = array_change_key_case($query, CASE_UPPER);
 		$callLists = CallListTable::query();
-		$callLists->setSelect($query['SELECT'] ?? ['*']);
-		$callLists->setFilter($query['FILTER'] ?? []);
-		$callLists->setOrder($query['ORDER'] ?? []);
-
-		if ($nav !== -1)
+		$callLists->setSelect(self::prepareSelect($query['SELECT'] ?? null, $server));
+		$callLists->setFilter(
+			self::sanitizeFilter($query['FILTER'] ?? [], self::PUBLIC_FIELDS, null, self::FILTER_OPERATIONS)
+		);
+		$callLists->setOrder(self::prepareOrder($query['ORDER'] ?? [], $server));
+		$container = \Bitrix\Crm\Service\Container::getInstance();
+		if (!$container->getUserPermissions()->isAdmin())
 		{
-			$navigation = self::getNavData($nav, true);
-			$navigation['offset'] = $navigation['offset'] ?? 0;
-			$callLists->setLimit($navigation['limit']);
+			$callLists->where('CREATED_BY_ID', $container->getContext()->getUserId());
+		}
+
+		$navigation = self::getNavData($nav, true);
+		$callLists->setLimit($navigation['limit']);
+		if (isset($navigation['offset']))
+		{
 			$callLists->setOffset($navigation['offset']);
 		}
 
@@ -182,6 +192,15 @@ class CallList extends \IRestService
 
 		$row = CallListTable::getById($callListId)->fetch();
 		if (!$row)
+		{
+			throw new RestException('Call list is not found', self::LIST_ID_ERROR, $server::STATUS_WRONG_REQUEST);
+		}
+		if (
+			!\Bitrix\Crm\CallList\CallList::canReadByOwner(
+				$row,
+				\Bitrix\Crm\Service\Container::getInstance()->getContext()->getUserId(),
+			)
+		)
 		{
 			throw new RestException('Call list is not found', self::LIST_ID_ERROR, $server::STATUS_WRONG_REQUEST);
 		}
@@ -433,6 +452,87 @@ class CallList extends \IRestService
 		$callList->deleteItems($deleteEntities);
 
 		return true;
+	}
+
+	/**
+	 * @param mixed $select
+	 * @param \CRestServer $server
+	 * @return array
+	 * @throws RestException
+	 */
+	private static function prepareSelect($select, \CRestServer $server): array
+	{
+		if ($select === null || $select === [] || $select === ['*'])
+		{
+			return self::PUBLIC_FIELDS;
+		}
+
+		// An associative array is how the ORM takes an alias, so a service field could be
+		// selected under a public name. Only a plain list of field names is accepted.
+		if (!is_array($select) || !array_is_list($select))
+		{
+			throw new RestException(
+				'Select should be a list of field names',
+				self::ERROR_ARGUMENT,
+				$server::STATUS_WRONG_REQUEST
+			);
+		}
+
+		$fields = [];
+		foreach ($select as $field)
+		{
+			$field = is_string($field) ? mb_strtoupper($field) : '';
+			if (!in_array($field, self::PUBLIC_FIELDS, true))
+			{
+				throw new RestException(
+					'Select field not allowed: ' . $field,
+					self::ERROR_ARGUMENT,
+					$server::STATUS_WRONG_REQUEST
+				);
+			}
+
+			$fields[] = $field;
+		}
+
+		return $fields;
+	}
+
+	/**
+	 * @param mixed $order
+	 * @param \CRestServer $server
+	 * @return array
+	 * @throws RestException
+	 */
+	private static function prepareOrder($order, \CRestServer $server): array
+	{
+		// An array or object raises a TypeError in mb_strtoupper() inside sanitizeOrder(), and
+		// CRestServer::process() catches Exception only. The bar is a string, not a scalar: a non-string
+		// direction is rejected by sanitizeOrder() anyway, while a list value like [true] passes its
+		// loose in_array() field check.
+		if (is_array($order))
+		{
+			// sanitizeOrder() upper-cases keys only, so in the list form ['id'] the field name sits in
+			// the value and reaches the whitelist as sent. Keys are kept: sanitizeOrder() tells the
+			// list form from the associative one by them.
+			$values = [];
+			foreach ($order as $key => $value)
+			{
+				if (!is_string($value))
+				{
+					throw new RestException(
+						'Order value should be a field name or a direction',
+						self::ERROR_ARGUMENT,
+						$server::STATUS_WRONG_REQUEST
+					);
+				}
+
+				$values[$key] = mb_strtoupper($value);
+			}
+
+			$order = $values;
+		}
+
+		return self::sanitizeOrder($order, self::PUBLIC_FIELDS);
 	}
 
 	/**

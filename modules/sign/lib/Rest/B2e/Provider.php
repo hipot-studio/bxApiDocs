@@ -12,6 +12,7 @@ use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Item\Api\ExternalSignProvider\FieldsRequest;
 use Bitrix\Sign\Service\Container;
 use CRestServer;
+use CRestUtil;
 use IRestService;
 
 Loader::includeModule('rest');
@@ -178,7 +179,7 @@ final class Provider extends IRestService
 			throw new AuthTypeException("Application context required");
 		}
 
-		if (!Storage::instance()->isB2eAvailable())
+		if (!Storage::instance()->isB2eAvailable() || !CRestUtil::isAdmin())
 		{
 			throw new AccessException('Access denied');
 		}

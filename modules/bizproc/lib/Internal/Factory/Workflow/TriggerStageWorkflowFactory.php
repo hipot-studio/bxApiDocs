@@ -7,10 +7,18 @@ use Bitrix\Bizproc\Workflow\Template\Converter\NodesToTemplate;
 
 class TriggerStageWorkflowFactory
 {
-	public function create(int $templateId, array $documentId): TriggerExecutionStageWorkflow
+	/**
+	 * @param array $parameters Workflow parameters of the stub, the properties of its root activity - the
+	 *     narrowing of the document read ({@see \CBPDocument::PARAM_USED_DOCUMENT_FIELDS}) among them.
+	 */
+	public function create(
+		int $templateId,
+		array $documentId,
+		array $parameters = [],
+	): TriggerExecutionStageWorkflow
 	{
 		$workflow = new TriggerExecutionStageWorkflow(\CBPRuntime::getRuntime());
-		$workflow->initialize($this->makeRootActivity(), $documentId, [], [], [], $templateId);
+		$workflow->initialize($this->makeRootActivity(), $documentId, $parameters, [], [], $templateId);
 
 		return $workflow;
 	}

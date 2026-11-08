@@ -165,6 +165,11 @@ class MemberTable extends Entity\DataManager
 				->configureTitle('Role')
 				->configureNullable()
 			,
+			'SIGNING_METHOD' => (new StringField('SIGNING_METHOD'))
+				->configureTitle('Signing method')
+				->configureSize(20)
+				->configureNullable()
+			,
 			'REMINDER_TYPE' => (new IntegerField('REMINDER_TYPE'))
 				->configureTitle('Reminder type')
 				->configureNullable()

@@ -900,7 +900,7 @@ class ShipmentItem
 	}
 
 	/**
-	 * @return BasketItem
+	 * @return BasketItem|null
 	 */
 	public function getBasketItem()
 	{
@@ -917,7 +917,8 @@ class ShipmentItem
 	 */
 	public function getShipmentItemStoreCollection()
 	{
-		if (!$this->getBasketItem()->isReservableItem())
+		$basketItem = $this->getBasketItem();
+		if (!$basketItem || !$basketItem->isReservableItem())
 		{
 			return null;
 		}

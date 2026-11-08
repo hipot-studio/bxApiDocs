@@ -19,6 +19,7 @@ final class DatasetViewer
 	private array $settings;
 	private ?\DateTimeZone $datasetTimezone = null;
 	private \DateTimeZone $configTimezone;
+	private bool $restDiagnosticsMode = false;
 
 	public function __construct(Type $type, array $fields, array $settings)
 	{
@@ -66,6 +67,16 @@ final class DatasetViewer
 	public function setFile(array $file): self
 	{
 		$this->file = $file;
+
+		return $this;
+	}
+
+	/**
+	 * Lets a REST source name the reason of its failure instead of showing an empty preview.
+	 */
+	public function setRestDiagnosticsMode(bool $isEnabled): self
+	{
+		$this->restDiagnosticsMode = $isEnabled;
 
 		return $this;
 	}
@@ -274,7 +285,10 @@ final class DatasetViewer
 	private function getViewer(): Viewer\Viewer
 	{
 		$viewerBuilder = new Viewer\ViewerBuilder();
-		$viewerBuilder->setType($this->type);
+		$viewerBuilder
+			->setType($this->type)
+			->setRestDiagnosticsMode($this->restDiagnosticsMode)
+		;
 
 		if ($this->file)
 		{

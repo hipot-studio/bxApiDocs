@@ -40,6 +40,10 @@ class Factory
 
 	public static function reloadState(int $userId)
 	{
+		// The counter rows of the user are declared stale here, which holds no matter whether a state was
+		// built in this hit: the narrow reading of the rows keeps no state of its own.
+		Counter\CommentsCountCache::drop($userId);
+
 		if (
 			self::$instance
 			&& array_key_exists($userId, self::$instance)

@@ -12,6 +12,10 @@ class AlterTableBuilder extends \Bitrix\Main\DB\Ddl\Builder\AlterTableBuilder
 {
 	private bool $preliminaryExecutionDisabled = false;
 
+	/**
+	 * @param ?\Closure $droppedColumnFilter `fn(string $columnName): bool`. Return false to skip the column
+	 *    from DROP COLUMN rendering.
+	 */
 	public function __construct(
 		string $tableName,
 		?\Closure $columnFilter = null,
@@ -21,6 +25,8 @@ class AlterTableBuilder extends \Bitrix\Main\DB\Ddl\Builder\AlterTableBuilder
 		?\Closure $modifiedColumnFilter = null,
 		?\Closure $columnStateFactory = null,
 		private readonly ?IndexNameProcessor $indexNameProcessor = null,
+		private readonly bool $dropColumnAllowed = false,
+		private readonly ?\Closure $droppedColumnFilter = null,
 	)
 	{
 		parent::__construct(
@@ -36,6 +42,13 @@ class AlterTableBuilder extends \Bitrix\Main\DB\Ddl\Builder\AlterTableBuilder
 
 	public function dropColumn(string $columnName): static
 	{
+		// The dev-stand cleanup (dev/updates/cleanup.php) undoes schema that never shipped,
+		// so dropping columns is legal there and only there.
+		if ($this->dropColumnAllowed)
+		{
+			return parent::dropColumn($columnName);
+		}
+
 		throw new Exception(
 			1010,
 			'Drop columns is forbidden',
@@ -109,10 +122,31 @@ class AlterTableBuilder extends \Bitrix\Main\DB\Ddl\Builder\AlterTableBuilder
 			dropPrimaryKey: $dropPrimaryKey,
 			primaryKeys: $primaryKeys,
 			addedIndexes: $addedIndexes,
-			droppedColumns: $droppedColumns,
+			droppedColumns: $this->filterDroppedColumns($droppedColumns),
 			renamedColumns: $renamedColumns,
 			preliminaryExecutionDisabled: $this->preliminaryExecutionDisabled,
 			columnStates: $this->getColumnStatesForData(),
 		);
+	}
+
+	/**
+	 * Dropping a column is the only operation aimed at a shape that may already be gone: the
+	 * cleanup re-runs on every change of the current updater. The filter keeps it re-entrant,
+	 * like the other operations of the facade.
+	 *
+	 * @param string[] $droppedColumns
+	 * @return string[]
+	 */
+	private function filterDroppedColumns(array $droppedColumns): array
+	{
+		if ($this->droppedColumnFilter === null)
+		{
+			return $droppedColumns;
+		}
+
+		return array_values(array_filter(
+			$droppedColumns,
+			fn(string $columnName): bool => ($this->droppedColumnFilter)($columnName),
+		));
 	}
 }

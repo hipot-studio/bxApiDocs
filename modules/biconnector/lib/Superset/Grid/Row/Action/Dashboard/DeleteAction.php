@@ -8,8 +8,10 @@ use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-final class DeleteAction extends BaseDashboardAction
+
+final class DeleteAction extends FormatMenuAction
 {
 
 	public static function getId(): ?string

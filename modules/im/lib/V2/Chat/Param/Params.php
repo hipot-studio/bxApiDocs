@@ -537,6 +537,33 @@ class Params extends Registry
 		return $this;
 	}
 
+	/**
+	 * Deletes the param like deleteParam(), but reports whether this call actually
+	 * removed the stored row. Under concurrent requests only one caller gets true,
+	 * so once-only transitions can be safely bound to the returned value.
+	 */
+	public function tryDeleteParam(string $paramName): bool
+	{
+		if (!$this->offsetExists($paramName) || !$this->getChatId())
+		{
+			return false;
+		}
+
+		$filter = [
+			'=CHAT_ID' => $this->getChatId(),
+			'=PARAM_NAME' => $paramName,
+		];
+
+		$connection = Application::getConnection();
+		ChatParamTable::deleteBatch($filter);
+		$deleted = $connection->getAffectedRowsCount() > 0;
+
+		$this->unsetByKeys([$paramName]);
+		self::cleanCache($this->getChatId());
+
+		return $deleted;
+	}
+
 	public function deleteParam(string $paramName, bool $withSave = true): Params
 	{
 		if (!$this->offsetExists($paramName))

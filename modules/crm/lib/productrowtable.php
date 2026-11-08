@@ -259,7 +259,11 @@ class ProductRowTable extends DataManager
 	 */
 	public static function delete($primary)
 	{
-		Reservation\Internals\ProductRowReservationTable::deleteByRowId($primary);
+		// EntityObject::delete() passes ['ID' => N], which the raw query would cast to 1
+		static::normalizePrimary($primary);
+		static::validatePrimary($primary);
+
+		Reservation\Internals\ProductRowReservationTable::deleteByRowId($primary['ID']);
 		return parent::delete($primary);
 	}
 

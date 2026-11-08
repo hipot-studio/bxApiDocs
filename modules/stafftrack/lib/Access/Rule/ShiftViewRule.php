@@ -4,15 +4,11 @@ namespace Bitrix\StaffTrack\Access\Rule;
 
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Main\Access\Rule\AbstractRule;
+use Bitrix\StaffTrack\Access\AccessibleUserProvider;
 use Bitrix\StaffTrack\Access\Model\ShiftModel;
 
 class ShiftViewRule extends AbstractRule
 {
-	/**
-	 * @param AccessibleItem|null $item
-	 * @param $params
-	 * @return bool
-	 */
 	public function execute(AccessibleItem $item = null, $params = null): bool
 	{
 		if (!$item instanceof ShiftModel)
@@ -20,6 +16,22 @@ class ShiftViewRule extends AbstractRule
 			return false;
 		}
 
-		return true;
+		if ($this->user->isAdmin())
+		{
+			return true;
+		}
+
+		$callerId = $this->user->getUserId();
+		if ($callerId === $item->getUserId())
+		{
+			return true;
+		}
+
+		return (bool)$this->getAccessibleUserProvider()->filterAccessibleUserIds($callerId, [$item->getUserId()]);
+	}
+
+	protected function getAccessibleUserProvider(): AccessibleUserProvider
+	{
+		return new AccessibleUserProvider();
 	}
 }

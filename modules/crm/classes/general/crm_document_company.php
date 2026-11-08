@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Crm;
+use Bitrix\Crm\V2\Internal\Integration\Bizproc\WorkflowDocument;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
@@ -339,86 +340,8 @@ class CCrmDocumentCompany extends CCrmDocument implements IBPWorkflowDocument
 		}
 
 		global $DB;
-		$arDocumentID = self::GetDocumentInfo($parentDocumentId);
-		if ($arDocumentID == false)
-			$arDocumentID['TYPE'] = $parentDocumentId;
-
-		$arDocumentFields = self::GetDocumentFields($arDocumentID['TYPE']);
-
-		$arKeys = array_keys($arFields);
-		foreach ($arKeys as $key)
-		{
-			if (!array_key_exists($key, $arDocumentFields))
-			{
-				//Fix for issue #40374
-				unset($arFields[$key]);
-				continue;
-			}
-
-			$fieldType = $arDocumentFields[$key]["Type"];
-			if (in_array($fieldType, array("phone", "email", "im", "web"), true))
-			{
-				CCrmDocument::PrepareEntityMultiFields($arFields, mb_strtoupper($fieldType));
-				continue;
-			}
-
-			$arFields[$key] = (is_array($arFields[$key]) && !CBPHelper::IsAssociativeArray($arFields[$key])) ? $arFields[$key] : array($arFields[$key]);
-			if ($fieldType == "user")
-			{
-				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $arDocumentID['DOCUMENT_TYPE']);
-			}
-			elseif ($fieldType == "select" && mb_substr($key, 0, 3) == "UF_")
-			{
-				self::InternalizeEnumerationField('CRM_COMPANY', $arFields, $key);
-			}
-			elseif ($fieldType == "file")
-			{
-				$arFileOptions = array('ENABLE_ID' => true);
-				foreach ($arFields[$key] as &$value)
-				{
-					//Issue #40380. Secure URLs and file IDs are allowed.
-					$file = false;
-					CCrmFileProxy::TryResolveFile($value, $file, $arFileOptions);
-					$value = $file;
-				}
-				unset($value);
-			}
-			elseif ($fieldType == "S:HTML")
-			{
-				foreach ($arFields[$key] as &$value)
-				{
-					$value = array("VALUE" => $value);
-				}
-				unset($value);
-			}
-
-			if (!($arDocumentFields[$key]["Multiple"] ?? false) && is_array($arFields[$key]))
-			{
-				if (count($arFields[$key]) > 0)
-				{
-					$a = array_values($arFields[$key]);
-					$arFields[$key] = $a[0];
-				}
-				else
-				{
-					$arFields[$key] = null;
-				}
-			}
-		}
-
-		if (isset($arFields['CONTACT_ID']) && !is_array($arFields['CONTACT_ID']))
-			$arFields['CONTACT_ID'] = array($arFields['CONTACT_ID']);
-
-		if(isset($arFields['COMMENTS']))
-		{
-			$arFields['COMMENTS'] = static::sanitizeCommentsValue($arFields['COMMENTS']);
-		}
-
-		if(isset($arFields['ADDRESS_LEGAL']))
-		{
-			$arFields['REG_ADDRESS'] = $arFields['ADDRESS_LEGAL'];
-			unset($arFields['ADDRESS_LEGAL']);
-		}
+		$document = new WorkflowDocument();
+		$arFields = $document->castFields(\CCrmOwnerType::Company, $arFields);
 
 		$useTransaction = static::shouldUseTransaction();
 
@@ -447,18 +370,7 @@ class CCrmDocumentCompany extends CCrmDocument implements IBPWorkflowDocument
 			throw new \Bitrix\Main\SystemException($CCrmEntity->LAST_ERROR);
 		}
 
-		//region Try to create requisite
-		if((isset($arFields['ADDRESS']) && $arFields['ADDRESS'] !== '') ||
-			(isset($arFields['REG_ADDRESS']) && $arFields['REG_ADDRESS'] !== ''))
-		{
-			$presetID = \Bitrix\Crm\EntityRequisite::getDefaultPresetId(CCrmOwnerType::Company);
-			if($presetID > 0)
-			{
-				$converter = new \Bitrix\Crm\Requisite\AddressRequisiteConverter(CCrmOwnerType::Company, $presetID, false);
-				$converter->processEntity($ID);
-			}
-		}
-		//endregion
+		$document->createAddressRequisite(\CCrmOwnerType::Company, (int)$ID, $arFields);
 
 		$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Company, (int)$ID));
 		$result = $starter
@@ -704,5 +616,10 @@ class CCrmDocumentCompany extends CCrmDocument implements IBPWorkflowDocument
 		}
 
 		return Crm\Automation\Factory::createTarget(\CCrmOwnerType::Company);
+	}
+
+	public static function createTestDocument(string $documentType, array $fields, int $createdById): ?string
+	{
+		return (new WorkflowDocument())->createTestDocument(\CCrmOwnerType::Company, $fields, $createdById);
 	}
 }

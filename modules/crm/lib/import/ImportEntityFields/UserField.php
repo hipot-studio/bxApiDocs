@@ -13,6 +13,7 @@ final readonly class UserField implements ImportEntityFieldInterface, Arrayable
 {
 	public function __construct(
 		private CCrmUserType $userType,
+		private ?array $userFieldInfo,
 		private string $id,
 		private string $caption,
 		private string|bool $sort,
@@ -46,7 +47,7 @@ final readonly class UserField implements ImportEntityFieldInterface, Arrayable
 
 	public function process(array &$importItemFields, FieldBindings $fieldBindings, array $row): FieldProcessResult
 	{
-		return (new UserTypeValueMapper($this->getId(), $this->userType))
+		return (new UserTypeValueMapper($this->getId(), $this->userType, $this->userFieldInfo))
 			->process($importItemFields, $fieldBindings, $row)
 		;
 	}
@@ -91,9 +92,12 @@ final readonly class UserField implements ImportEntityFieldInterface, Arrayable
 
 		$mandatory = ($header['mandatory'] ?? null) === 'Y';
 		$default = ($header['default'] ?? null) === true;
+		$userFields = $userType->GetAbstractFields();
+		$userFieldInfo = $userFields[$id] ?? null;
 
 		return new self(
 			$userType,
+			is_array($userFieldInfo) ? $userFieldInfo : null,
 			$id,
 			$caption,
 			$sort,

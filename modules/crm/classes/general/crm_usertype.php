@@ -1957,6 +1957,71 @@ class CCrmUserType
 		return $this->cUFM->CheckFields($this->sEntityID, $ID, $arFields);
 	}
 
+	public static function NormalizeMoneyFieldsForSave(array &$fields, array $fieldsInfo): void
+	{
+		foreach ($fieldsInfo as $fieldName => $fieldInfo)
+		{
+			if (!array_key_exists($fieldName, $fields))
+			{
+				continue;
+			}
+
+			$userTypeId = $fieldInfo['USER_TYPE_ID']
+				?? $fieldInfo['USER_TYPE']['USER_TYPE_ID']
+				?? $fieldInfo['USER_FIELD']['USER_TYPE_ID']
+				?? $fieldInfo['TYPE']
+				?? null;
+			if ($userTypeId !== 'money')
+			{
+				continue;
+			}
+
+			$fields[$fieldName] = self::NormalizeMoneyFieldValueForSave($fields[$fieldName]);
+		}
+	}
+
+	public static function NormalizeMoneyFieldValueForSave($value)
+	{
+		if (is_array($value))
+		{
+			foreach ($value as $key => $singleValue)
+			{
+				$value[$key] = self::NormalizeMoneyFieldValueForSave($singleValue);
+			}
+
+			return $value;
+		}
+
+		if (!is_string($value))
+		{
+			return $value;
+		}
+
+		[$amount, $currency] = array_pad(explode('|', $value, 2), 2, null);
+		if ($currency === null)
+		{
+			return $value;
+		}
+
+		if ($currency !== null && preg_match('/^[A-Z]{3}$/D', $currency) !== 1)
+		{
+			return $value;
+		}
+
+		$amountWithoutSpaces = preg_replace('/[\s\x{00A0}\x{202F}]+/u', '', $amount);
+		if (!is_string($amountWithoutSpaces))
+		{
+			return $value;
+		}
+
+		if (preg_match('/^0+$/D', $amountWithoutSpaces) !== 1)
+		{
+			return $value;
+		}
+
+		return '0|' . $currency;
+	}
+
 	public static function GetTaskBindingField()
 	{
 		$dbResult = CUserTypeEntity::GetList(

@@ -9,6 +9,8 @@ use Bitrix\Crm;
 use Bitrix\Crm\AutomatedSolution\CapabilityAccessChecker;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Main\Localization\Loc;
 
 class CCrmDocument
@@ -1088,7 +1090,9 @@ class CCrmDocument
 						$r = intval($r);
 						$dbImg = CFile::GetByID($r);
 						if ($arImg = $dbImg->Fetch())
-							$result[] = "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"])."&i=".$r."&h=".md5($arImg["SUBDIR"])."]".htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
+							$result[] = class_exists(\Bitrix\Bizproc\Public\Service\File\ShowFileLinkService::class)
+								? (new \Bitrix\Bizproc\Public\Service\File\ShowFileLinkService())->getPrintableLink($arImg)
+								: "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"])."&i=".$r."&h=".md5($arImg["SUBDIR"])."]".htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
 					}
 				}
 				else
@@ -1096,7 +1100,9 @@ class CCrmDocument
 					$fieldValue = intval($fieldValue);
 					$dbImg = CFile::GetByID($fieldValue);
 					if ($arImg = $dbImg->Fetch())
-						$result = "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"])."&i=".$fieldValue."&h=".md5($arImg["SUBDIR"])."]".htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
+						$result = class_exists(\Bitrix\Bizproc\Public\Service\File\ShowFileLinkService::class)
+							? (new \Bitrix\Bizproc\Public\Service\File\ShowFileLinkService())->getPrintableLink($arImg)
+							: "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"])."&i=".$fieldValue."&h=".md5($arImg["SUBDIR"])."]".htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
 				}
 				break;
 
@@ -1361,7 +1367,7 @@ class CCrmDocument
 		}
 	}
 
-	protected static function InternalizeEnumerationField($entityTypeID, array &$fields, $name)
+	public static function InternalizeEnumerationField($entityTypeID, array &$fields, $name)
 	{
 		if(!isset($fields[$name]))
 		{
@@ -1620,6 +1626,30 @@ class CCrmDocument
 			return false;
 		}
 
+		if (
+			$operation == CBPCanUserOperateOperation::CreateAutomation
+			&& array_key_exists('DocumentStatus', $arParameters)
+		)
+		{
+			$factory = Container::getInstance()->getFactory($entityTypeId);
+			if ($factory === null)
+			{
+				return false;
+			}
+
+			if ($factory->isCategoriesSupported())
+			{
+				$stage = $factory->getStage((string)$arParameters['DocumentStatus']);
+				$categoryId = $stage?->getCategoryId();
+				if ($categoryId === null || $factory->getCategory((int)$categoryId) === null)
+				{
+					return false;
+				}
+
+				$arParameters['DocumentCategoryId'] = (int)$categoryId;
+			}
+		}
+
 		$userId = intval($userId);
 		if (!array_key_exists('AllUserGroups', $arParameters))
 		{
@@ -1644,10 +1674,26 @@ class CCrmDocument
 		$permissionEntity = static::ResolvePermissionEntity($arDocumentID, $arParameters);
 		$userPermissions = CCrmPerms::GetUserPermissions($userId);
 
-		if (
-			$operation == \CBPCanUserOperateOperation::CreateWorkflow
-			|| $operation === CBPCanUserOperateOperation::DebugAutomation
-		)
+		// Templates belong to the document type, so the category of $arParameters is not part of the scope.
+		if ($operation == \CBPCanUserOperateOperation::CreateWorkflow)
+		{
+			$effectiveUserId = $userPermissions->GetUserID();
+			if (($arParameters['GlobalFieldAccess'] ?? null) === true)
+			{
+				return Container::getInstance()->getUserPermissions($effectiveUserId)->admin()->isCrmAdmin();
+			}
+
+			return Container::getInstance()
+				->getUserPermissions($effectiveUserId)
+				->configuration()
+				->canManageBizprocTemplates(
+					ConfigurationCallSite::BizprocDocument,
+					ConfigurationScope::ofEntityType($entityTypeId),
+				)
+			;
+		}
+
+		if ($operation === CBPCanUserOperateOperation::DebugAutomation)
 		{
 			return \CCrmAuthorizationHelper::CheckConfigurationUpdatePermission($userPermissions);
 		}
@@ -1980,8 +2026,12 @@ class CCrmDocument
 			throw new CBPArgumentNullException('documentId');
 	}
 
+	protected static $lastAddDocumentFieldError = null;
+
 	public static function AddDocumentField($documentType, $arFields)
 	{
+		static::$lastAddDocumentFieldError = null;
+
 		if (mb_strpos($documentType, '_') === false)
 			$documentType .= '_0';
 
@@ -2122,10 +2172,44 @@ class CCrmDocument
 			}
 		}
 		$crmFields = new CCrmFields($GLOBALS['USER_FIELD_MANAGER'], 'CRM_'.$arDocumentID['TYPE']);
-		$crmFields->AddField($arFieldsTmp);
+		if (!$crmFields->AddField($arFieldsTmp))
+		{
+			$message = static::getAddDocumentFieldErrorMessage();
+			if ($message !== null)
+			{
+				static::$lastAddDocumentFieldError = $message;
+			}
+
+			return false;
+		}
 		$GLOBALS['CACHE_MANAGER']->ClearByTag('crm_fields_list_'.$arFieldsTmp['FIELD_NAME']);
 
 		return $arFieldsTmp['FIELD_NAME'];
+	}
+
+	public static function GetLastAddDocumentFieldError(): ?string
+	{
+		return static::$lastAddDocumentFieldError;
+	}
+
+	private static function getAddDocumentFieldErrorMessage(): ?string
+	{
+		$applicationException = $GLOBALS['APPLICATION']->GetException();
+		if (\Bitrix\Crm\UserField\UserFieldLimitError::isCreateLimitError($applicationException))
+		{
+			return \Bitrix\Crm\UserField\UserFieldLimitError::getMessage();
+		}
+
+		if (is_object($applicationException) && method_exists($applicationException, 'GetString'))
+		{
+			$message = (string)$applicationException->GetString();
+			if ($message !== '')
+			{
+				return $message;
+			}
+		}
+
+		return null;
 	}
 
 	private static  function ExtractEntityMultiFieldData(&$arSrcData, &$arDstData, $defaultValueType)
@@ -2170,7 +2254,7 @@ class CCrmDocument
 
 		return array();
 	}
-	protected static function PrepareEntityMultiFields(&$arFields, $typeName)
+	public static function PrepareEntityMultiFields(&$arFields, $typeName)
 	{
 		/*
 		--- Var.#1 (invalid) ---
@@ -2890,7 +2974,7 @@ class CCrmDocument
 		return in_array($feature, $supported);
 	}
 
-	protected static function sanitizeCommentsValue($comments)
+	public static function sanitizeCommentsValue($comments)
 	{
 		if ($comments !== '')
 		{
@@ -2912,7 +2996,7 @@ class CCrmDocument
 		return (COption::GetOptionString("crm", "bizproc_use_transaction", "N") === "Y");
 	}
 
-	protected static function castFileFieldValues($id, $typeId, $fieldId, $values)
+	public static function castFileFieldValues($id, $typeId, $fieldId, $values)
 	{
 		$arFileOptions = ['ENABLE_ID' => true];
 		$prevValue = null;

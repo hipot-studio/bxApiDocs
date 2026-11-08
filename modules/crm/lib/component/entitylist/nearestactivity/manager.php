@@ -20,7 +20,8 @@ class Manager
 
 	public function appendNearestActivityBlock(
 		array $items,
-		bool $isItemListMode = false
+		bool $isItemListMode = false,
+		array $analyticsContext = []
 	): array
 	{
 		if (empty($items))
@@ -42,7 +43,8 @@ class Manager
 				new ItemIdentifier($this->entityTypeId, $entityId, $categoryId),
 				$activitiesData[$entityId] ?? null,
 				$allowEdit,
-				FrontIntegration::make($isItemListMode, $allowEdit)
+				FrontIntegration::make($isItemListMode, $allowEdit),
+				$analyticsContext,
 			);
 
 			if (!isset($activitiesData[$entityId]))

@@ -7,6 +7,7 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
+use Bitrix\BIConnector\Superset\Dashboard\Attach\AttachAccessChecker;
 use Bitrix\UI\EntitySelector\BaseProvider;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
@@ -50,8 +51,10 @@ class UnlinkedSupersetDashboardProvider extends BaseProvider
 			return [];
 		}
 
+		$filter = array_merge(['ids' => array_map('intval', $ids)], $this->getOwnerFilter());
+
 		$integrator = IntegratorFactory::getInstance();
-		$response = $integrator->getDashboardListByFilter(['ids' => array_map('intval', $ids)]);
+		$response = $integrator->getDashboardListByFilter($filter);
 		if ($response->hasErrors())
 		{
 			return [];
@@ -74,7 +77,11 @@ class UnlinkedSupersetDashboardProvider extends BaseProvider
 		$linkedExternalIds = $this->getLinkedExternalIds();
 		$useProxyFilter = !empty($linkedExternalIds) && count($linkedExternalIds) <= self::NEQ_IDS_PROXY_LIMIT;
 
-		$filter = $useProxyFilter ? ['neqIds' => $linkedExternalIds] : [];
+		$filter = $this->getOwnerFilter();
+		if ($useProxyFilter)
+		{
+			$filter['neqIds'] = $linkedExternalIds;
+		}
 
 		$integrator = IntegratorFactory::getInstance();
 		$response = $integrator->getDashboardListByFilter($filter);
@@ -102,10 +109,15 @@ class UnlinkedSupersetDashboardProvider extends BaseProvider
 		);
 	}
 
+	private function getOwnerFilter(): array
+	{
+		return AttachAccessChecker::canAttachAnyDashboard() ? [] : ['ownedByRequestUser' => true];
+	}
+
 	/**
 	 * @return int[]
 	 */
-	private function getLinkedExternalIds(): array
+	protected function getLinkedExternalIds(): array
 	{
 		$result = [];
 		$dbResult = SupersetDashboardTable::getList([

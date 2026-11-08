@@ -2,6 +2,7 @@
 
 use Bitrix\Crm;
 use Bitrix\Crm\Activity;
+use Bitrix\Crm\Component\ComponentError;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Settings\LeadSettings;
 use Bitrix\Main;
@@ -17,6 +18,7 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 	const ACTION_VIEW = 'VIEW';
 	const ACTION_EDIT = 'EDIT';
 	const MAX_IMAGE_SIZE = 2097152;
+	const MAX_CHECKED_BINDINGS = 10;
 
 	public function __construct($component = null)
 	{
@@ -45,7 +47,22 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 
 	public static function saveActivity($fields, $userId, $siteId)
 	{
+		if (!Crm\Restriction\RestrictionManager::getVisitRestriction()->hasPermission())
+		{
+			$result = new Main\Result();
+			$result->addError(new Main\Error(Loc::getMessage('CRM_FEATURE_RESTRICTION_ERROR')));
+
+			return $result;
+		}
+
+		$accessibleBindings = self::resolveAccessibleBindings($fields, (int)$userId);
+
 		$result = new Main\Result();
+		if ($accessibleBindings === null)
+		{
+			$result->addError(new Main\Error(ComponentError::getMessage(ComponentError::ENTITY_NOT_FOUND)));
+			return $result;
+		}
 
 		$startTime = Main\Type\DateTime::createFromTimestamp($fields['CREATE_TIMESTAMP']);
 		$recordFileDescription = Main\Application::getInstance()->getContext()->getRequest()->getFile('RECORD');
@@ -64,11 +81,12 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 			return $result;
 		}
 
-		$bindings = array();
-		if ($fields['OWNER_ENTITY_ID'] > 0 && $fields['OWNER_ENTITY_TYPE'] != '')
+		$bindings = $accessibleBindings['CHECKED'];
+		$owner = $accessibleBindings['OWNER'];
+		if ($owner !== null)
 		{
-			$ownerTypeId = CCrmOwnerType::ResolveID($fields['OWNER_ENTITY_TYPE']);
-			$ownerId = (int)$fields['OWNER_ENTITY_ID'];
+			$ownerTypeId = $owner['OWNER_TYPE_ID'];
+			$ownerId = $owner['OWNER_ID'];
 		}
 		else
 		{
@@ -84,17 +102,8 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 			}
 			$ownerTypeId = CCrmOwnerType::Lead;
 			$ownerId = (int)$leadId;
+			array_unshift($bindings, array('OWNER_TYPE_ID' => $ownerTypeId, 'OWNER_ID' => $ownerId));
 		}
-
-		if($fields['VK_PROFILE'] != '')
-		{
-			self::saveVkProfile($ownerTypeId, $ownerId, $fields['VK_PROFILE']);
-		}
-
-		$bindings[] = array(
-			'OWNER_TYPE_ID' => $ownerTypeId,
-			'OWNER_ID' => $ownerId
-		);
 
 		if($fields['SAVE_PHOTO'] === 'Y' && $ownerTypeId === CCrmOwnerType::Contact && isset($_FILES['IMAGE']))
 		{
@@ -110,36 +119,6 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 						'PHOTO' => $imageId
 					);
 					$contact->Update($ownerId, $contactFields);
-				}
-			}
-		}
-
-		if(is_array($fields['CREATED_DEALS']))
-		{
-			foreach ($fields['CREATED_DEALS'] as $dealId)
-			{
-				$dealId = (int)$dealId;
-				if($dealId > 0)
-				{
-					$bindings[] = array(
-						'OWNER_TYPE_ID' => CCrmOwnerType::Deal,
-						'OWNER_ID' => $dealId
-					);
-				}
-			}
-		}
-
-		if(is_array($fields['CREATED_INVOICES']))
-		{
-			foreach ($fields['CREATED_INVOICES'] as $invoiceId)
-			{
-				$invoiceId = (int)$invoiceId;
-				if($invoiceId > 0)
-				{
-					$bindings[] = array(
-						'OWNER_TYPE_ID' => CCrmOwnerType::Invoice,
-						'OWNER_ID' => $invoiceId
-					);
 				}
 			}
 		}
@@ -200,39 +179,121 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 		}
 		else
 		{
-			$result->addError(new Main\Error(Loc::getMessage('CRM_ACTIVITY_CREATE_ERROR') . ': ' . CCrmActivity::GetLastErrorMessage()));
+			$result->addError(new Main\Error(Loc::getMessage('CRM_ACTIVITY_CREATE_ERROR')));
 		}
 		return $result;
 	}
 
-	public static function saveVkProfile($entityTypeId, $entityId, $profile)
+	/**
+	 * The bindings of the request once the acting user may attach an activity to every one of them, or null
+	 * when the request has to be refused. Called in saveActivity right after the tariff restriction and before
+	 * any side effect: a refusal has to precede the record file, the photo of the contact and the activity
+	 * itself.
+	 *
+	 * The owner is read strictly - a partly filled pair of fields, an unknown type and an id that is not a
+	 * plain positive number are refused - while the elements of the sets keep the cast to an integer they
+	 * have always been read with.
+	 *
+	 * @param array|mixed $fields
+	 * @return array|null array('OWNER' => array|null, 'CHECKED' => array): an absent owner is the branch that
+	 *         creates a new lead, and CHECKED holds only the pairs the user supplied
+	 */
+	private static function resolveAccessibleBindings($fields, int $userId): ?array
 	{
-		$entityType = CCrmOwnerType::ResolveName($entityTypeId);
-		$fieldId = 'n0';
-		$cursor = CCrmFieldMulti::GetList(
-			array('ID' => 'asc'),
-			array('ENTITY_ID' => $entityType, 'ELEMENT_ID' => $entityId)
-		);
+		$rawType = $fields['OWNER_ENTITY_TYPE'] ?? null;
+		$rawId = $fields['OWNER_ENTITY_ID'] ?? null;
 
-		while ($row = $cursor->Fetch())
+		$hasType = !is_array($rawType) && trim((string)$rawType) !== '';
+		$ownerIdText = (is_scalar($rawId) && !is_bool($rawId)) ? trim((string)$rawId) : '';
+		$hasId = preg_match('/^[0-9]+$/D', $ownerIdText) === 1 && (int)$ownerIdText > 0;
+
+		if ($hasType !== $hasId)
 		{
-			if($row['TYPE_ID'] === 'WEB' && $row['VALUE_TYPE'] === 'VK')
+			return null;
+		}
+
+		$owner = null;
+		if ($hasType)
+		{
+			$ownerTypeId = CCrmOwnerType::ResolveID($rawType);
+			if ($ownerTypeId <= 0)
 			{
-				$fieldId = $row['ID'];
-				break;
+				return null;
+			}
+
+			$owner = array('OWNER_TYPE_ID' => $ownerTypeId, 'OWNER_ID' => (int)$ownerIdText);
+		}
+
+		$checked = self::collectRequestedBindings($owner, $fields);
+		if (count($checked) > self::MAX_CHECKED_BINDINGS)
+		{
+			return null;
+		}
+
+		$activityPermissions = Crm\Service\Container::getInstance()->getUserPermissions($userId)->activity();
+		foreach ($checked as $binding)
+		{
+			if (!$activityPermissions->canAddToOwner($binding['OWNER_TYPE_ID'], $binding['OWNER_ID']))
+			{
+				return null;
 			}
 		}
 
-		$record = array(
-			'WEB' => array(
-				$fieldId => array(
-					'VALUE' => $profile,
-					'VALUE_TYPE' => 'VK'
-				)
-			)
+		return array('OWNER' => $owner, 'CHECKED' => $checked);
+	}
+
+	/**
+	 * The pairs of the request in the order the activity needs them - the owner, then CREATED_DEALS, then
+	 * CREATED_INVOICES - each pair kept once, at its first occurrence. The order matters beyond the set: the
+	 * core takes the owner of the activity from the last binding that is neither a contact nor a company.
+	 *
+	 * @param array|mixed $fields
+	 */
+	private static function collectRequestedBindings(?array $owner, $fields): array
+	{
+		$bindings = array();
+		if ($owner !== null)
+		{
+			$bindings[] = $owner;
+		}
+
+		$requestedIds = array(
+			CCrmOwnerType::Deal => $fields['CREATED_DEALS'] ?? null,
+			CCrmOwnerType::Invoice => $fields['CREATED_INVOICES'] ?? null,
 		);
-		$CCrmFieldMulti = new CCrmFieldMulti();
-		$CCrmFieldMulti->SetFields($entityType, $entityId, $record);
+		foreach ($requestedIds as $ownerTypeId => $rawIds)
+		{
+			if (!is_array($rawIds))
+			{
+				continue;
+			}
+
+			foreach ($rawIds as $rawId)
+			{
+				$ownerId = (int)$rawId;
+				if ($ownerId > 0)
+				{
+					$bindings[] = array('OWNER_TYPE_ID' => $ownerTypeId, 'OWNER_ID' => $ownerId);
+				}
+			}
+		}
+
+		return self::withoutRepeatedBindings($bindings);
+	}
+
+	private static function withoutRepeatedBindings(array $bindings): array
+	{
+		$unique = array();
+		foreach ($bindings as $binding)
+		{
+			$key = $binding['OWNER_TYPE_ID'] . '_' . $binding['OWNER_ID'];
+			if (!isset($unique[$key]))
+			{
+				$unique[$key] = $binding;
+			}
+		}
+
+		return array_values($unique);
 	}
 
 	protected function executeEditAction()
@@ -443,21 +504,6 @@ class CrmActivityVisitComponent extends \CBitrixComponent implements Main\Errora
 		return $leadId;
 	}
 
-	protected function getVkProfile($entityType, $entityId)
-	{
-		$cursor = CCrmFieldMulti::GetList(
-			array('ID' => 'asc'),
-			array('ENTITY_ID' => $entityType, 'ELEMENT_ID' => $entityId)
-		);
-		while ($row = $cursor->Fetch())
-		{
-			if($row['TYPE_ID'] === 'WEB' && $row['VALUE_TYPE'] === 'VK')
-			{
-				return $row['VALUE'];
-			}
-		}
-		return '';
-	}
 	/**
 	 * @param string $code
 	 * @return Main\Error|null

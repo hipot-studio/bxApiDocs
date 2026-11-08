@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Security\Role;
 
+use Bitrix\Crm\Security\Role\Manage\Permissions\ObserversWrite;
 use Bitrix\Crm\Security\Role\Model\RoleRelationTable;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
@@ -35,6 +36,19 @@ class PermissionsManager
 		return self::$instances[$userId];
 	}
 
+	public static function clearCache(): void
+	{
+		foreach (self::$instances as $instance)
+		{
+			$instance->userRoles = null;
+			$instance->loadedEntities = [
+				'byEntity' => [],
+				'byPermission' => [],
+				'data' => [],
+			];
+		}
+	}
+
 	private function __construct(
 		private readonly int $userId,
 	)
@@ -59,6 +73,42 @@ class PermissionsManager
 		}
 
 		return $this->load($entity, $permissionType)->hasPermissionLevel($level);
+	}
+
+	/**
+	 * Card observers are allowed to update the cards they observe.
+	 *
+	 * The coarse, block-wide reading: "the right is enabled on at least one stage of this block". It belongs to
+	 * the coarse steps of the AND-composition the callers build
+	 * ({@see \Bitrix\Crm\Service\UserPermissions\EntityPermissions\Item::hasPermissions()},
+	 * {@see \CCrmAuthorizationHelper::checkPermissionForTypeAndAttributes()},
+	 * {@see \Bitrix\Crm\Service\UserPermissions\EntityPermissions\Type::hasTypeLevelPermission()}), none of which
+	 * knows the card and therefore its stage. Replacing it with the exact reading below would hand those steps the
+	 * value of the block and close the cards standing on a stage where the right is granted.
+	 */
+	public function isObserversWriteEnabled(string $entity): bool
+	{
+		return $this->hasPermissionLevel($entity, ObserversWrite::CODE, UserPermissions::PERMISSION_ALL);
+	}
+
+	/**
+	 * The exact reading of the same right: its effective value for a card carrying these attributes - the stage
+	 * row of the right when one of them matches a stage attribute, and the value of the block otherwise.
+	 *
+	 * The only consumer is the observers branch of {@see PermissionLevel::getValueByEntityAttributes()}. The
+	 * threshold is the one of the coarse reading above - the effective attribute compared to PERMISSION_ALL - and
+	 * not the "any permissive attribute" of {@see self::hasPermissionByEntityAttributes()}.
+	 */
+	public function isObserversWriteEnabledByEntityAttributes(string $entity, array $entityAttributes): bool
+	{
+		if ($this->isAdmin())
+		{
+			return true;
+		}
+
+		return $this->getPermissionLevel($entity, ObserversWrite::CODE)
+			->isPermissionLevelEqualsToByEntityAttributes(UserPermissions::PERMISSION_ALL, $entityAttributes)
+		;
 	}
 
 	public function hasMaxPermissionLevel(string $entity, string $permissionType): bool
@@ -101,6 +151,43 @@ class PermissionsManager
 		return $this->load($entity, $permissionType);
 	}
 
+	public function preloadEntities(array $entities): void
+	{
+		if ($this->isAdmin())
+		{
+			return;
+		}
+
+		$entities = array_values(array_unique(array_filter(
+			$entities,
+			static fn(mixed $entity): bool => is_string($entity) && $entity !== '',
+		)));
+		$entities = array_values(array_filter(
+			$entities,
+			fn(string $entity): bool => !isset($this->loadedEntities['byEntity'][$entity]),
+		));
+		if ($entities === [])
+		{
+			return;
+		}
+
+		foreach ($entities as $entity)
+		{
+			$this->loadedEntities['byEntity'][$entity] = true;
+		}
+
+		$roleIds = $this->getUserRoles();
+		if ($roleIds === [])
+		{
+			return;
+		}
+
+		$this->loadPermissions([
+			'@ENTITY' => $entities,
+			'@ROLE_ID' => $roleIds,
+		]);
+	}
+
 	private function load(string $entity, string $permissionType): PermissionLevel
 	{
 		$resultKey = $entity . '_' . $permissionType;
@@ -110,7 +197,8 @@ class PermissionsManager
 			|| isset($this->loadedEntities['byPermission'][$permissionType])
 		)
 		{
-			return $this->loadedEntities['data'][$resultKey] ?? $this->createPermissionLevel($entity, $permissionType);
+			// the entity is already loaded, so an absent key means "no rows": build that empty level once
+			return $this->loadedEntities['data'][$resultKey] ??= $this->createPermissionLevel($entity, $permissionType);
 		}
 		$roleIds = $this->getUserRoles();
 
@@ -134,6 +222,13 @@ class PermissionsManager
 
 		$filter['@ROLE_ID'] = $roleIds;
 
+		$this->loadPermissions($filter);
+
+		return $this->loadedEntities['data'][$resultKey] ?? $this->createPermissionLevel($entity, $permissionType);
+	}
+
+	private function loadPermissions(array $filter): void
+	{
 		$rolePermissions = \Bitrix\Crm\Security\Role\Model\RolePermissionTable::getList([
 			'filter' => $filter,
 			'select' => [
@@ -169,8 +264,6 @@ class PermissionsManager
 			;
 			$this->loadedEntities['data'][$permissionKey] = $permissionLevel;
 		}
-
-		return $this->loadedEntities['data'][$resultKey] ?? $this->createPermissionLevel($entity, $permissionType);
 	}
 
 	public function getUserRoles(): array

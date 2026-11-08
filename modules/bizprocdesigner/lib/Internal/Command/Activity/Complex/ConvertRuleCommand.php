@@ -10,6 +10,7 @@ use Bitrix\Bizproc\Internal\Entity\Port\PortType;
 use Bitrix\Bizproc\Internal\Service\Activity\ComplexActivityService;
 use Bitrix\Bizproc\Internal\Service\Activity\UnifiedPanelDescriptorProvider;
 use Bitrix\Bizproc\Internal\Service\Container as BizprocContainer;
+use Bitrix\Bizproc\Public\Activity\Interface\NodeFilterAdditionalResultProvider;
 use Bitrix\Bizproc\Public\Activity\Interface\NodeFilterMetadataProvider;
 use Bitrix\Bizproc\Public\Activity\Structure\FlowDirectedActivity;
 use Bitrix\Bizproc\Public\Service\Activity\ActivityNameGeneratorService;
@@ -22,6 +23,7 @@ use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\Rule\OutputExpres
 use Bitrix\BizprocDesigner\Infrastructure\Enum\ConstructionType;
 use Bitrix\BizprocDesigner\Internal\Command\AbstractCommand;
 use Bitrix\BizprocDesigner\Internal\Entity\ActivityData;
+use Bitrix\BizprocDesigner\Internal\Service\Activity\BaseSettingsPayload;
 use Bitrix\BizprocDesigner\Internal\Service\Activity\ConditionConstructionConverter;
 use Bitrix\BizprocDesigner\Internal\Trait\NodeActionResolver;
 use Bitrix\Main\Loader;
@@ -29,22 +31,26 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use Bitrix\Main\Error;
 use Bitrix\Main\DI;
-use CBPRuntime;
 
 class ConvertRuleCommand extends AbstractCommand
 {
 	use NodeActionResolver;
 
+	/**
+	 * Codes of the two refusals that say a container was left unfinished. The save path answers them by
+	 * marking the node with the block they name, which is what the publication then reports
+	 * ({@see \Bitrix\Bizproc\Public\Activity\BaseComplexActivity::validateProperties()}).
+	 */
+	public const ERR_RULES_NOT_FILLED = 'ERR-RULES-NOT-FILLED';
+	public const ERR_RELATION_RULES_NOT_FILLED = 'ERR-RELATION-RULES-NOT-FILLED';
+
 	private const FILTER_RETURN_PROPERTIES_MAP = 'FilterReturnPropertiesMap';
+	private const RELATION_RETURN_PROPERTIES_MAP = 'RelationReturnPropertiesMap';
 	private const TARGET_FILTER_ID_PROPERTY = 'TargetFilterId';
 	private const FILTER_RESULT_ALL_SUFFIX = '_all';
-
-	/**
-	 * Host-metadata keys unconditionally injected by SaveCommandHandler into every activity's
-	 * Properties. For BASE_SETTINGS these arrive as empty strings (base-settings has no own
-	 * title/editorComment) and must not be allowed to overwrite the real values on the host node.
-	 */
-	private const BASE_SETTINGS_EXCLUDED_PROPERTIES = ['Title', 'EditorComment'];
+	private const RELATION_PACKAGE_SETTING = 'relationPackage';
+	private const RELATION_SOURCE_ACTIVITY = 'SourceActivity';
+	private const RELATION_SOURCE_PROPERTY = 'SourceProperty';
 
 	private ActivityNameGeneratorService $nameGeneratorService;
 	private ConditionConstructionConverter $conditionConverter;
@@ -55,6 +61,24 @@ class ConvertRuleCommand extends AbstractCommand
 	private array $links = [];
 	private array $filterSettings = [];
 	private array $filterReturnProperties = [];
+	private array $relationReturnProperties = [];
+
+	/**
+	 * Relation package entries in the order the traversal reached them, before their ids are handed out.
+	 * Every entry carries the kind of its source, the one ALG-03 selects by
+	 * ({@see self::selectRelationReturnPropertySources()}).
+	 *
+	 * @var list<array{
+	 *     portId: string,
+	 *     fromBaseSettings: bool,
+	 *     sourceActivity: string,
+	 *     sourceProperty: string,
+	 *     property: array,
+	 * }>
+	 */
+	private array $pendingRelationReturnProperties = [];
+	private array $occupiedReturnPropertyIds = [];
+	private array $nextReturnPropertySuffixes = [];
 
 	/**
 	 * The filter projections of this conversion as a wire list, each entry carrying its `Id`. Only the
@@ -109,44 +133,20 @@ class ConvertRuleCommand extends AbstractCommand
 
 	protected function validate(): bool
 	{
-		// Node-wide uniqueness guard for BASE_SETTINGS: at most one BASE_SETTINGS construction
-		// is allowed across ALL ports of the node. Per-rule uniqueness is already enforced by
-		// ValidateSingleRuleCommand, but that guard only sees one rule at a time. Two constructions
-		// in different rules / ports would otherwise pass per-rule validation individually.
-		// This aggregation point (ConvertRuleCommand) sees every port and is the correct place
-		// for the node-level invariant. Relation ports count too: their constructions are host-merged
-		// by the same execute() pass, so leaving them out would let a second block in through them.
-		$nodeBaseSettingsCount = 0;
-		foreach ([$this->portRuleDtoDictionary, $this->relationPortRuleDtoDictionary] as $portRuleDictionary)
+		$containerDuplicateError = $this->findSecondBaseSettingsOfAContainer();
+		if ($containerDuplicateError !== null)
 		{
-			foreach ($portRuleDictionary as $portRule)
-			{
-				if (!$portRule instanceof PortRuleDto)
-				{
-					continue;
-				}
+			$this->errors[] = $containerDuplicateError;
 
-				foreach ($portRule->rules as $rule)
-				{
-					foreach ($rule->constructions as $construction)
-					{
-						if ($construction->constructionType === ConstructionType::BASE_SETTINGS)
-						{
-							$nodeBaseSettingsCount++;
-						}
-					}
-				}
-			}
+			return false;
 		}
 
-		if ($nodeBaseSettingsCount > 1)
+		// TEMPORARY, and deleted as a whole: this block and the method it calls go together, and nothing
+		// else has to move with them. See the docblock of the method for the condition of the removal.
+		$nodeRulesDuplicateError = $this->findSecondBaseSettingsOfTheNodeRules();
+		if ($nodeRulesDuplicateError !== null)
 		{
-			$this->errors[] = new Error(
-				Loc::getMessage(
-					'BIZPROCDESIGNER_COMMAND_CONVERT_RULE_BASE_SETTINGS_NODE_DUPLICATE',
-				) ?? 'Only one base-settings construction is allowed per node across all ports.',
-				'ERR-BASE-SETTINGS-NODE-DUPLICATE',
-			);
+			$this->errors[] = $nodeRulesDuplicateError;
 
 			return false;
 		}
@@ -156,8 +156,7 @@ class ConvertRuleCommand extends AbstractCommand
 			// The portless container is bound by the allowlist on top of the usual catalog-based checks.
 			$allowedConstructionTypes = $this->isPortlessRuleContainer($containerKey, $portRule)
 				? ValidateSingleRuleCommand::PORTLESS_RULE_CONSTRUCTION_TYPES
-				: null
-			;
+				: null;
 
 			$result = (new ValidateSingleRuleCommand(
 				portRuleDto: $portRule,
@@ -173,7 +172,10 @@ class ConvertRuleCommand extends AbstractCommand
 
 			if (!$result->isFilled)
 			{
-				$this->errors[] = new Error('Rules are not filled for port: ' . $containerKey);
+				$this->errors[] = new Error(
+					'Rules are not filled for port: ' . $containerKey,
+					self::ERR_RULES_NOT_FILLED,
+				);
 
 				return false;
 			}
@@ -188,6 +190,7 @@ class ConvertRuleCommand extends AbstractCommand
 			$result = (new ValidateSingleRuleCommand(
 				portRuleDto: $portRule,
 				allowedConstructionTypes: ValidateSingleRuleCommand::RELATION_PORT_CONSTRUCTION_TYPES,
+				isRelationPort: true,
 			))->run();
 			if (!$result instanceof ValidateSingleRuleCommandResult)
 			{
@@ -196,7 +199,11 @@ class ConvertRuleCommand extends AbstractCommand
 
 			if (!$result->isFilled)
 			{
-				$this->errors[] = new Error('Rules are not filled for relation port: ' . $portId);
+				$this->errors[] = new Error(
+					'Rules are not filled for relation port: ' . $portId,
+					self::ERR_RELATION_RULES_NOT_FILLED,
+				);
+
 				return false;
 			}
 		}
@@ -257,6 +264,8 @@ class ConvertRuleCommand extends AbstractCommand
 	 */
 	protected function execute(): Result|ConvertRuleCommandResult
 	{
+		$this->initializeOccupiedReturnPropertyIds();
+
 		foreach ($this->portRuleDtoDictionary as $containerKey => $portRule)
 		{
 			if (!$portRule instanceof PortRuleDto)
@@ -270,15 +279,19 @@ class ConvertRuleCommand extends AbstractCommand
 			);
 		}
 
-		foreach ($this->relationPortRuleDtoDictionary as $portId => $portRule)
+		foreach ($this->relationPortRuleDtoDictionary as $portRule)
 		{
 			if (!$portRule instanceof PortRuleDto)
 			{
 				continue;
 			}
 
-			$this->processRuleCollection($portRule, isPortless: false);
+			$this->processRuleCollection($portRule, isPortless: false, relationPortId: (string)$portRule->portId);
 		}
+
+		// Deferred until every filter of the node has claimed its own id: a relation id is derived from the
+		// identity of its source and must not take an id the node already publishes.
+		$this->assignRelationReturnPropertyIds();
 
 		$activity = $this->activity->toArray();
 
@@ -313,6 +326,15 @@ class ConvertRuleCommand extends AbstractCommand
 			unset($activity['Properties'][self::FILTER_RETURN_PROPERTIES_MAP]);
 		}
 
+		if (!empty($this->relationReturnProperties))
+		{
+			$activity['Properties'][self::RELATION_RETURN_PROPERTIES_MAP] = $this->relationReturnProperties;
+		}
+		else
+		{
+			unset($activity['Properties'][self::RELATION_RETURN_PROPERTIES_MAP]);
+		}
+
 		// After the properties are assembled: the package of the node is read from them.
 		$activity['ReturnProperties'] = $this->composeReturnProperties($activity);
 
@@ -320,9 +342,8 @@ class ConvertRuleCommand extends AbstractCommand
 		// cleared stays indistinguishable from a node that never had one.
 		if ($this->nodeConditionEntries !== [])
 		{
-			$activity['Properties'][UnifiedPanelDescriptorProvider::CONDITION_PROPERTY] =
-				$this->unConvertNodeCondition()
-			;
+			$activity['Properties'][UnifiedPanelDescriptorProvider::CONDITION_PROPERTY]
+				= $this->unConvertNodeCondition();
 		}
 		else
 		{
@@ -344,7 +365,11 @@ class ConvertRuleCommand extends AbstractCommand
 	 *
 	 * @param bool $isPortless Whether this is the reserved container of a node without input ports.
 	 */
-	private function processRuleCollection(PortRuleDto $portRuleCollection, bool $isPortless): void
+	private function processRuleCollection(
+		PortRuleDto $portRuleCollection,
+		bool $isPortless,
+		?string $relationPortId = null,
+	): void
 	{
 		/** @var list<ActivityData> $inputActivities */
 		$inputActivities = [];
@@ -369,10 +394,9 @@ class ConvertRuleCommand extends AbstractCommand
 					&& $expression instanceof ActionExpressionDto
 				)
 				{
-					$previousFilterId =
-						$this->processFilterConstruction($construction, $expression, $previousFilterId)
-						?? $previousFilterId
-					;
+					$previousFilterId
+						= $this->processFilterConstruction($construction, $expression, $previousFilterId)
+						?? $previousFilterId;
 
 					continue;
 				}
@@ -383,8 +407,11 @@ class ConvertRuleCommand extends AbstractCommand
 				)
 				{
 					$backingActivityType = (string)($expression->activityData['Type'] ?? '');
+					// Whose form it is comes first: a class able to serve as an action is still the node
+					// itself when the payload carries the very class of the host.
 					$isNodeActionBaseSettings =
-						$this->isNodeActionBaseSettings($expression, $backingActivityType)
+						!$this->isHostOwnBaseSettings($expression, $backingActivityType, $this->activity->type)
+						&& $this->isNodeActionBaseSettings($expression, $backingActivityType)
 					;
 
 					// The base settings of a node the unified panel serves arrive bound to no node-action,
@@ -403,8 +430,20 @@ class ConvertRuleCommand extends AbstractCommand
 					// and falls through to the shared child-linking block below.
 					if ($isNodeActionBaseSettings)
 					{
-						$activityData = $this->prepareActionActivityData($expression->activityData ?? [], null);
-						$currentActivity = ActivityData::createFromArray($activityData);
+						// A form the user never filled carries nothing but the host-metadata keys, and the
+						// child built from it would reject the node on its own validateProperties().
+						if (BaseSettingsPayload::isFormEmpty($expression))
+						{
+							continue;
+						}
+
+						$currentActivity = ActivityData::createFromArray(
+							$this->prepareActionActivityData(
+								$expression->activityData ?? [],
+								$expression->document,
+								$expression->auxPortId,
+							),
+						);
 					}
 					else
 					{
@@ -419,18 +458,13 @@ class ConvertRuleCommand extends AbstractCommand
 
 				if ($expression instanceof ActionExpressionDto)
 				{
-					$activityData = $this->prepareActionActivityData(
-						$expression->activityData ?? [],
-						$this->resolveTargetFilterIdForAction($expression),
+					$currentActivity = ActivityData::createFromArray(
+						$this->prepareActionActivityData(
+							$expression->activityData ?? [],
+							$expression->document,
+							$expression->auxPortId,
+						),
 					);
-
-					if (!empty($expression->auxPortId))
-					{
-						$activityData['Properties'] ??= [];
-						$activityData['Properties']['auxPort'] = $expression->auxPortId;
-					}
-
-					$currentActivity = ActivityData::createFromArray($activityData);
 				}
 
 				if (
@@ -479,6 +513,15 @@ class ConvertRuleCommand extends AbstractCommand
 
 				if ($currentActivity)
 				{
+					if ($relationPortId !== null)
+					{
+						$this->registerRelationReturnProperties(
+							$relationPortId,
+							$currentActivity,
+							fromBaseSettings: $construction->constructionType === ConstructionType::BASE_SETTINGS,
+						);
+					}
+
 					if ($prevActivity)
 					{
 						$this->links[] = ["$prevActivity->name:o0", "$currentActivity->name:i0"];
@@ -524,8 +567,7 @@ class ConvertRuleCommand extends AbstractCommand
 			$inputNameRefs[] = $inputActivity->name
 				. FlowDirectedActivity::LINK_DELIMITER
 				. PortType::Input->value
-				. '0'
-			;
+				. '0';
 		}
 
 		if ($inputNameRefs === [])
@@ -535,8 +577,7 @@ class ConvertRuleCommand extends AbstractCommand
 
 		$containerKey = $isPortless
 			? ComplexActivityService::PORTLESS_RULES_KEY
-			: (int)preg_replace('/\D+/', '', $portRuleCollection->portId)
-		;
+			: (int)preg_replace('/\D+/', '', $portRuleCollection->portId);
 
 		// Wire the input of every rule of the container, not just the first one, so multi-rule switch nodes
 		// and multi-rule CRM-complex inputs do not lose part of their input binding on assembly and
@@ -546,8 +587,95 @@ class ConvertRuleCommand extends AbstractCommand
 		// either shape.
 		$this->inputNames[$containerKey] = count($inputNameRefs) === 1
 			? $inputNameRefs[0]
-			: $inputNameRefs
-		;
+			: $inputNameRefs;
+	}
+
+	/**
+	 * ALG-01, the permanent half: one input carries at most one general-settings block. An input is an input
+	 * whichever kind it is - a rules port, a relation port, the reserved container of a node without input
+	 * ports - and the rule is one and the same for all of them. Branching by the kind of container here is
+	 * what would turn the future rules fix from deleting {@see self::findSecondBaseSettingsOfTheNodeRules()}
+	 * into rewriting this.
+	 *
+	 * The node as a whole is none of this rule's business: two inputs each carrying a block are valid.
+	 * Uniqueness inside one card is answered before this, by
+	 * {@see ValidateSingleRuleCommand::validateConstructions()}; this is the answer for a card and its
+	 * neighbours in one container.
+	 */
+	private function findSecondBaseSettingsOfAContainer(): ?Error
+	{
+		foreach ([$this->portRuleDtoDictionary, $this->relationPortRuleDtoDictionary] as $containerDictionary)
+		{
+			foreach ($containerDictionary as $portRule)
+			{
+				if ($this->countBaseSettingsConstructions($portRule) > 1)
+				{
+					return new Error(
+						'Only one base-settings construction is allowed per input.',
+						'ERR-BASE-SETTINGS-CONTAINER-DUPLICATE',
+					);
+				}
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * ALG-01, the temporary half: the rules of a node carry one general-settings block between them all.
+	 *
+	 * It exists because of how the rules store that block and for no other reason: a block of the rules is
+	 * host-merged into the properties of the node ({@see self::mergeBaseSettingsProperties()}), and those are
+	 * one flat set - a second block would write over the first instead of living beside it. Relations store
+	 * their blocks inside the relation record, one per input, which is why this must not look at them at all:
+	 * seeing a block of a relation here would let it forbid the block of the rules (AC-013).
+	 *
+	 * **Condition of removal:** the rules start storing the block per input, the way relations already do.
+	 * Then this method and its call are deleted, along with the error code and the phrase behind it, and
+	 * nothing else on the server changes - {@see self::findSecondBaseSettingsOfAContainer()} already says
+	 * everything that remains true.
+	 */
+	private function findSecondBaseSettingsOfTheNodeRules(): ?Error
+	{
+		$count = 0;
+		foreach ($this->portRuleDtoDictionary as $portRule)
+		{
+			$count += $this->countBaseSettingsConstructions($portRule);
+		}
+
+		if ($count <= 1)
+		{
+			return null;
+		}
+
+		return new Error(
+			Loc::getMessage(
+				'BIZPROCDESIGNER_COMMAND_CONVERT_RULE_BASE_SETTINGS_NODE_DUPLICATE',
+			) ?? 'Only one base-settings construction is allowed across the rules of a node.',
+			'ERR-BASE-SETTINGS-NODE-DUPLICATE',
+		);
+	}
+
+	private function countBaseSettingsConstructions(mixed $portRule): int
+	{
+		if (!$portRule instanceof PortRuleDto)
+		{
+			return 0;
+		}
+
+		$count = 0;
+		foreach ($portRule->rules as $rule)
+		{
+			foreach ($rule->constructions as $construction)
+			{
+				if ($construction->constructionType === ConstructionType::BASE_SETTINGS)
+				{
+					$count++;
+				}
+			}
+		}
+
+		return $count;
 	}
 
 	/**
@@ -562,8 +690,7 @@ class ConvertRuleCommand extends AbstractCommand
 		}
 
 		return $portRule instanceof PortRuleDto
-			&& $portRule->portId === ComplexActivityService::PORTLESS_RULES_KEY
-		;
+			&& $portRule->portId === ComplexActivityService::PORTLESS_RULES_KEY;
 	}
 
 	/**
@@ -599,25 +726,12 @@ class ConvertRuleCommand extends AbstractCommand
 	 * Merge Properties from a BASE_SETTINGS expression into the host activity's Properties accumulator.
 	 * Called during processPortRuleCollection(); the merged result is applied in execute().
 	 * Variant A invariant: no child activity is created, Links are not updated.
-	 *
-	 * Host-metadata keys (Title, EditorComment) are stripped before merging: SaveCommandHandler
-	 * unconditionally writes them as empty strings for base-settings (which has no own title),
-	 * and merging them would overwrite the real Title/EditorComment of the host node.
 	 */
 	private function mergeBaseSettingsProperties(BaseSettingsExpressionDto $expression): void
 	{
-		$activityData = $expression->activityData ?? [];
-		$properties = is_array($activityData['Properties'] ?? null) ? $activityData['Properties'] : [];
-
-		// Strip host-metadata keys injected by SaveCommandHandler that are not owned by base-settings.
-		foreach (self::BASE_SETTINGS_EXCLUDED_PROPERTIES as $key)
-		{
-			unset($properties[$key]);
-		}
-
 		$this->baseSettingsProperties = [
 			...$this->baseSettingsProperties,
-			...$properties,
+			...BaseSettingsPayload::extractHostMergedProperties($expression),
 		];
 	}
 
@@ -712,7 +826,63 @@ class ConvertRuleCommand extends AbstractCommand
 		return [
 			'single' => $buildProperty('BIZPROCDESIGNER_CONVERT_RULE_FILTER_RESULT_FIRST', false),
 			'all' => $buildProperty('BIZPROCDESIGNER_CONVERT_RULE_FILTER_RESULT_ALL', true),
+			'additional' => $this->extractAdditionalFilterResults(
+				(string)($activityData['Type'] ?? ''),
+				$filterTitle,
+				$filterId,
+			),
 		];
+	}
+
+	/** The key becomes a part of a property id, and `all` is taken by the collection result of the filter. */
+	private static function isValidAdditionalFilterResultKey(string $key): bool
+	{
+		return preg_match('/^[A-Za-z0-9_]+$/D', $key) === 1
+			&& '_' . $key !== self::FILTER_RESULT_ALL_SUFFIX
+		;
+	}
+
+	/**
+	 * Documents of another module the node publishes beside the ones its filter finds: they are offered as
+	 * ordinary documents of their own type, which is what lets a neighbour node act on one.
+	 *
+	 * @return array<string, array>
+	 */
+	private function extractAdditionalFilterResults(
+		string $activityType,
+		string $filterTitle,
+		string $filterId,
+	): array
+	{
+		$activityClass = 'CBP' . $activityType;
+		if (!is_subclass_of($activityClass, NodeFilterAdditionalResultProvider::class, true))
+		{
+			return [];
+		}
+
+		$results = [];
+		foreach ($activityClass::getNodeFilterAdditionalResults() as $key => $descriptor)
+		{
+			$key = (string)$key;
+			if (!self::isValidAdditionalFilterResultKey($key) || !is_array($descriptor['Default'] ?? null))
+			{
+				continue;
+			}
+
+			$results[$key] = [
+				'Name' => $this->composeFilterResultTitle(
+					'BIZPROCDESIGNER_CONVERT_RULE_FILTER_RESULT_RELATED',
+					trim((string)($descriptor['Name'] ?? '')),
+					$filterTitle,
+					$filterId,
+				),
+				'Type' => \Bitrix\Bizproc\FieldType::DOCUMENT,
+				'Multiple' => false,
+				'Default' => $descriptor['Default'],
+			];
+		}
+
+		return $results;
 	}
 
 	private function composeFilterResultTitle(
@@ -742,11 +912,17 @@ class ConvertRuleCommand extends AbstractCommand
 		{
 			$this->putFilterReturnProperty($filterId . self::FILTER_RESULT_ALL_SUFFIX, $properties['all']);
 		}
+
+		foreach ((array)($properties['additional'] ?? []) as $key => $property)
+		{
+			$this->putFilterReturnProperty($filterId . '_' . $key, $property);
+		}
 	}
 
 	private function putFilterReturnProperty(string $propertyId, array $property): void
 	{
 		$this->filterReturnProperties[$propertyId] = $property;
+		$this->occupiedReturnPropertyIds[$propertyId] = true;
 
 		$returnProperty = ['Id' => $propertyId, ...$property];
 		if (isset($this->filterReturnPropertyIndexes[$propertyId]))
@@ -758,6 +934,170 @@ class ConvertRuleCommand extends AbstractCommand
 
 		$this->filterReturnPropertyIndexes[$propertyId] = count($this->filterReturnPropertyList);
 		$this->filterReturnPropertyList[] = $returnProperty;
+	}
+
+	/**
+	 * @param bool $fromBaseSettings Whether the child comes from the general-settings block of the input
+	 *     rather than from one of its actions. ALG-03 selects by that kind alone.
+	 */
+	private function registerRelationReturnProperties(
+		string $portId,
+		ActivityData $sourceActivity,
+		bool $fromBaseSettings,
+	): void
+	{
+		foreach (ReturnPropertiesResolver::resolve($sourceActivity->toArray()) as $property)
+		{
+			if (!$this->isRelationPackageProperty($property))
+			{
+				continue;
+			}
+
+			$sourcePropertyId = (string)($property['Id'] ?? '');
+			if ($sourcePropertyId === '')
+			{
+				continue;
+			}
+
+			unset($property['Id']);
+
+			$this->pendingRelationReturnProperties[] = [
+				'portId' => $portId,
+				'fromBaseSettings' => $fromBaseSettings,
+				'sourceActivity' => (string)$sourceActivity->name,
+				'sourceProperty' => $sourcePropertyId,
+				'property' => $property,
+			];
+		}
+	}
+
+	/**
+	 * ALG-03: one relation input publishes the package of exactly one kind of source. The general-settings
+	 * block is the head block of the input and speaks for the input as a whole, so an input carrying one
+	 * publishes its package and the packages of the actions of that input are not published at all; an
+	 * input without a block publishes the packages of its actions, exactly as before. Never both, never a
+	 * mix.
+	 *
+	 * The selection is made per input: an input with a block does not silence a neighbouring input without
+	 * one. And it is made here, after every container has been walked - while the constructions of an input
+	 * are being read it is not yet known whether a block will turn up among them.
+	 *
+	 * A block nobody filled never reaches this point: {@see self::processRuleCollection()} drops such a
+	 * construction by {@see BaseSettingsPayload::isFormEmpty()} before a child is built for it, so the
+	 * emptiness of a form is decided in one place and not in two.
+	 *
+	 * @return list<array{
+	 *     portId: string,
+	 *     fromBaseSettings: bool,
+	 *     sourceActivity: string,
+	 *     sourceProperty: string,
+	 *     property: array,
+	 * }>
+	 */
+	private function selectRelationReturnPropertySources(): array
+	{
+		$portsPublishingTheirBlock = [];
+		foreach ($this->pendingRelationReturnProperties as $pending)
+		{
+			if ($pending['fromBaseSettings'])
+			{
+				$portsPublishingTheirBlock[$pending['portId']] = true;
+			}
+		}
+
+		return array_values(array_filter(
+			$this->pendingRelationReturnProperties,
+			static fn(array $pending): bool => $pending['fromBaseSettings']
+				|| !isset($portsPublishingTheirBlock[$pending['portId']]),
+		));
+	}
+
+	/**
+	 * The package is published in the order of the traversal - that is what the node offers in the value
+	 * selector - while every id is derived from the identity of its source alone. The order of this loop
+	 * therefore decides nothing but who claims the base id among sources of one and the same identity.
+	 */
+	private function assignRelationReturnPropertyIds(): void
+	{
+		foreach ($this->selectRelationReturnPropertySources() as $pending)
+		{
+			$propertyId = $this->makeRelationReturnPropertyId(
+				$pending['portId'],
+				$pending['sourceProperty'],
+				$pending['sourceActivity'],
+			);
+
+			$this->relationReturnProperties[$propertyId] = [
+				...$pending['property'],
+				self::RELATION_SOURCE_ACTIVITY => $pending['sourceActivity'],
+				self::RELATION_SOURCE_PROPERTY => $pending['sourceProperty'],
+			];
+		}
+	}
+
+	private function isRelationPackageProperty(array $property): bool
+	{
+		$settings = $property['Settings'] ?? null;
+
+		return is_array($settings)
+			&& is_array($settings[self::RELATION_PACKAGE_SETTING] ?? null);
+	}
+
+	/**
+	 * The id is a published output of the host node, so downstream blocks reference it by an expression
+	 * saved in the template. It is therefore composed of the identity of the source alone - its port, its
+	 * property and the name of its activity, all three kept by the construction across saves - so that
+	 * adding, removing or reordering the other relation actions of the port cannot hand an already-saved id
+	 * to another action. The numeric series stays as the last resort for two sources of the very same
+	 * identity and for a collision with an id the node already publishes.
+	 */
+	private function makeRelationReturnPropertyId(
+		string $portId,
+		string $sourcePropertyId,
+		string $sourceActivityName,
+	): string
+	{
+		$baseId = $this->sanitizeReturnPropertyId(
+			'Relation_' . $portId . '_' . $sourcePropertyId . '_' . $sourceActivityName,
+		);
+		if (!isset($this->occupiedReturnPropertyIds[$baseId]))
+		{
+			$this->occupiedReturnPropertyIds[$baseId] = true;
+
+			return $baseId;
+		}
+
+		$index = $this->nextReturnPropertySuffixes[$baseId] ?? 2;
+		do
+		{
+			$candidate = $baseId . '_' . $index;
+			$index++;
+		}
+		while (isset($this->occupiedReturnPropertyIds[$candidate]));
+
+		$this->nextReturnPropertySuffixes[$baseId] = $index;
+		$this->occupiedReturnPropertyIds[$candidate] = true;
+
+		return $candidate;
+	}
+
+	private function sanitizeReturnPropertyId(string $rawId): string
+	{
+		$sanitized = preg_replace('/[^A-Za-z0-9_]/', '_', $rawId);
+
+		return is_string($sanitized) && $sanitized !== '' ? $sanitized : 'Relation';
+	}
+
+	private function initializeOccupiedReturnPropertyIds(): void
+	{
+		foreach (ReturnPropertiesResolver::resolve($this->activity->type) as $property)
+		{
+			$propertyId = $property['Id'] ?? null;
+			if (is_string($propertyId) && $propertyId !== '')
+			{
+				$this->occupiedReturnPropertyIds[$propertyId] = true;
+			}
+		}
 	}
 
 	/**
@@ -792,10 +1132,20 @@ class ConvertRuleCommand extends AbstractCommand
 		return array_values($properties);
 	}
 
-	private function prepareActionActivityData(array $activityData, ?string $targetFilterId): array
+	/**
+	 * The child activity a construction becomes, for both constructions that become one: an action and a
+	 * base-settings bound to a node-action. Both are edited by the same editor and carry the same document
+	 * and auxiliary port, so both resolve the filter the document names and enter the port it was dropped on.
+	 */
+	private function prepareActionActivityData(
+		array $activityData,
+		?string $document,
+		?string $auxPortId = null,
+	): array
 	{
 		$properties = is_array($activityData['Properties'] ?? null) ? $activityData['Properties'] : [];
 
+		$targetFilterId = $this->resolveTargetFilterId($document);
 		if ($targetFilterId !== null)
 		{
 			$properties[self::TARGET_FILTER_ID_PROPERTY] = $targetFilterId;
@@ -805,14 +1155,18 @@ class ConvertRuleCommand extends AbstractCommand
 			unset($properties[self::TARGET_FILTER_ID_PROPERTY]);
 		}
 
+		if (!empty($auxPortId))
+		{
+			$properties['auxPort'] = $auxPortId;
+		}
+
 		$activityData['Properties'] = $properties;
 
 		return $activityData;
 	}
 
-	private function resolveTargetFilterIdForAction(ActionExpressionDto $expression): ?string
+	private function resolveTargetFilterId(?string $document): ?string
 	{
-		$document = $expression->document;
 		if (!is_string($document) || $document === '')
 		{
 			return null;

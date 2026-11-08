@@ -5,6 +5,7 @@ namespace Bitrix\Main\Infrastructure\Rest\Controller\User;
 use Bitrix\Main\Error;
 use Bitrix\Main\Infrastructure\Rest\Controller\AbstractController;
 use Bitrix\Main\Infrastructure\Rest\Dto\AgreementDto;
+use Bitrix\Main\Infrastructure\Rest\Request\User\AgreementGetRequest;
 use Bitrix\Main\Infrastructure\Rest\Service\AgreementListService;
 use Bitrix\Main\Infrastructure\Rest\Service\AgreementService;
 use Bitrix\Main\Infrastructure\Rest\Support\LegacyQueryConverter;
@@ -14,7 +15,6 @@ use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Attribute\Scope;
 use Bitrix\Rest\V3\Exception\LogicException;
 use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
-use Bitrix\Rest\V3\Interaction\Request\GetRequest;
 use Bitrix\Rest\V3\Interaction\Request\ListRequest;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
 use Bitrix\Rest\V3\Interaction\Response\ListResponse;
@@ -56,9 +56,9 @@ class Agreement extends AbstractController
 	}
 
 	#[Scope('userconsent')]
-	public function getAction(GetRequest $request, AgreementService $agreementService): GetResponse
+	public function getAction(AgreementGetRequest $request, AgreementService $agreementService): GetResponse
 	{
-		$replace = $this->resolveReplace();
+		$replace = $request->replace ?? [];
 
 		try
 		{
@@ -77,14 +77,5 @@ class Agreement extends AbstractController
 		$selectedFields = $request->select?->getStructuredList() ?? [];
 
 		return new GetResponse($this->getDtoMapper()->mapOne($rawItem, $selectedFields));
-	}
-
-	private function resolveReplace(): array
-	{
-		$replace = $this->getRequest()->getJsonList()->get('replace')
-			?? $this->getRequest()->getJsonList()->get('REPLACE')
-			?? [];
-
-		return is_array($replace) ? $replace : [];
 	}
 }

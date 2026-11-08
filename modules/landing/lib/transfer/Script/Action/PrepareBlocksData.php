@@ -34,7 +34,9 @@ class PrepareBlocksData extends Blank
 	public function action(): void
 	{
 		$this->data = $this->context->getData();
-		if (empty($this->data) || empty($this->data['BLOCKS']))
+		// a BLOCKS node which is not an array is a malformed archive: nothing to prepare, and a
+		// warning here would abort the import step before the blocks are even imported
+		if (empty($this->data) || empty($this->data['BLOCKS']) || !is_array($this->data['BLOCKS']))
 		{
 			return;
 		}

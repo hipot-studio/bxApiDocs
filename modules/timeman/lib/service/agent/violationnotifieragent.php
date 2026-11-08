@@ -6,6 +6,7 @@ use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Timeman\Helper\EntityCodesHelper;
 use Bitrix\Timeman\Helper\TimeDictionary;
 use Bitrix\Timeman\Helper\UserHelper;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 use Bitrix\Timeman\Model\Schedule\Schedule;
 use Bitrix\Timeman\Model\Schedule\ScheduleTable;
 use Bitrix\Timeman\Model\Schedule\Shift\ShiftTable;
@@ -72,37 +73,41 @@ class ViolationNotifierAgent
 
 		$users = static::findUsers($violationResult);
 
-		DependencyManager::getInstance()
-			->getWorktimeNotificationService()
-			->sendViolationsNotifications(
-				$schedule,
-				$violationResult->getViolations(),
-				null,
-				function ($violation, $toUserId) use ($users) {
-					$notificationParams = new NotificationParameters();
-					$notificationParams->messageType = "S";
-					$notificationParams->fromUserId = $violation->userId;
-					$notificationParams->toUserId = $toUserId;
-					$notificationParams->notifyType = 2;
-					$notificationParams->notifyModule = 'timeman';
-					$notificationParams->notifyEvent = 'period_time_lack';
-					$gender = '_MALE';
-					$name = '';
-					if ($users[$violation->userId])
-					{
-						if ($users[$violation->userId]['PERSONAL_GENDER'] === 'F')
+		if ((new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
+		{
+			DependencyManager::getInstance()
+				->getWorktimeNotificationService()
+				->sendViolationsNotifications(
+					$schedule,
+					$violationResult->getViolations(),
+					null,
+					function ($violation, $toUserId) use ($users) {
+						$notificationParams = new NotificationParameters();
+						$notificationParams->messageType = "S";
+						$notificationParams->fromUserId = $violation->userId;
+						$notificationParams->toUserId = $toUserId;
+						$notificationParams->notifyType = 2;
+						$notificationParams->notifyModule = 'timeman';
+						$notificationParams->notifyEvent = 'period_time_lack';
+						$gender = '_MALE';
+						$name = '';
+						if ($users[$violation->userId])
 						{
-							$gender = '_FEMALE';
+							if ($users[$violation->userId]['PERSONAL_GENDER'] === 'F')
+							{
+								$gender = '_FEMALE';
+							}
+							$name = UserHelper::getInstance()->getFormattedName($users[$violation->userId]);
 						}
-						$name = UserHelper::getInstance()->getFormattedName($users[$violation->userId]);
+						$notificationParams->notifyMessage = Loc::getMessage(
+							'TM_VIOLATION_NOTIFIER_AGENT_PERIOD_TIME_LACK' . $gender,
+							['#USER_NAME#' => $name]
+						);
+
+						return $notificationParams;
 					}
-					$notificationParams->notifyMessage = Loc::getMessage(
-						'TM_VIOLATION_NOTIFIER_AGENT_PERIOD_TIME_LACK' . $gender,
-						['#USER_NAME#' => $name]
-					);
-					return $notificationParams;
-				}
-			);
+				);
+		}
 
 		DependencyManager::getInstance()
 			->getWorktimeAgentManager()
@@ -224,19 +229,22 @@ class ViolationNotifierAgent
 			['#USER_NAME#' => $name],
 			$languageId
 		);
-		foreach ($toUserIds as $toUserId)
+		if ((new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
 		{
-			$notificationParams = new NotificationParameters();
-			$notificationParams->messageType = 'S';
-			$notificationParams->fromUserId = $fromUser['ID'];
-			$notificationParams->toUserId = $toUserId;
-			$notificationParams->notifyType = 2;
-			$notificationParams->notifyModule = 'timeman';
-			$notificationParams->notifyEvent = 'shift_missed';
-			$notificationParams->notifyMessage = $notifyText;
-			DependencyManager::getInstance()
-				->getNotifier($schedule)
-				->sendMessage($notificationParams);
+			foreach ($toUserIds as $toUserId)
+			{
+				$notificationParams = new NotificationParameters();
+				$notificationParams->messageType = 'S';
+				$notificationParams->fromUserId = $fromUser['ID'];
+				$notificationParams->toUserId = $toUserId;
+				$notificationParams->notifyType = 2;
+				$notificationParams->notifyModule = 'timeman';
+				$notificationParams->notifyEvent = 'shift_missed';
+				$notificationParams->notifyMessage = $notifyText;
+				DependencyManager::getInstance()
+					->getNotifier($schedule)
+					->sendMessage($notificationParams);
+			}
 		}
 
 		return '';

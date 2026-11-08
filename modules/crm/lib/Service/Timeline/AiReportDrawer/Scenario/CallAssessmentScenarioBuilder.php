@@ -5,20 +5,19 @@ namespace Bitrix\Crm\Service\Timeline\AiReportDrawer\Scenario;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Controller\AiQualityAssessmentController;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentCriteriaController;
+use Bitrix\Crm\Copilot\CallAssessment\HintStateResolver;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\AiMessageProvider;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCallV2;
-use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Dto\ActivityContext;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Presentation\PresentationResolver;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\CallRecordDataProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\MessageProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SettingsProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SummaryDataProvider;
-use Bitrix\Crm\Service\Timeline\Config;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Main\NotSupportedException;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Web\Json;
@@ -32,14 +31,17 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 
 	/** @var array<int, array<string, array{description: string}>> */
 	private array $assessmentCriteriaByNameCache = [];
+	private readonly CallRecordDataProvider $callRecordDataProvider;
 
 	public function __construct(
 		private readonly PresentationResolver $presentationResolver,
 		private readonly SummaryDataProvider $summaryDataProvider,
 		private readonly JobRepository $jobRepository,
 		private readonly SettingsProvider $settingsProvider,
+		?CallRecordDataProvider $callRecordDataProvider = null,
 	)
 	{
+		$this->callRecordDataProvider = $callRecordDataProvider ?? new CallRecordDataProvider();
 	}
 
 	public function getCode(): ScenarioCode
@@ -52,7 +54,7 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 		$result = new Result();
 		$data = [
 			'aiDisclaimer' => AiMessageProvider::getAiDisclaimerData()['html'] ?? null,
-			'callRecord' => $this->loadCallRecord($context->activity),
+			'callRecord' => $this->callRecordDataProvider->load($context->activity),
 		];
 
 		$transcriptResult = $this->summaryDataProvider->loadTranscript($context->request->activityId);
@@ -95,7 +97,7 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 				'title' => $this->prepareTitle($data),
 				'subtitle' => $this->presentationResolver->buildSubtitle($context),
 				'settings' => $this->prepareSettings(),
-				'record' => $this->prepareRecord($data),
+				'record' => $data['callRecord'],
 				'infoPopup' => $this->presentationResolver->buildInfoPopup($context),
 				'anchors' => $this->prepareAnchors($assessmentBlocks, $blocks),
 				'assessmentBlocks' => $assessmentBlocks,
@@ -120,81 +122,11 @@ final class CallAssessmentScenarioBuilder implements ScenarioBuilderInterface
 		]));
 	}
 
-	private function loadCallRecord(array $activity): ?array
-	{
-		$elementIds = unserialize($activity['STORAGE_ELEMENT_IDS'] ?? null, ['allowed_classes' => false]);
-		if (
-			!is_array($elementIds)
-			|| empty($elementIds)
-			|| !isset($elementIds[0])
-			|| (int)$elementIds[0] <= 0
-		)
-		{
-			return null;
-		}
-
-		try
-		{
-			$fileInfo = StorageManager::getFileInfo(
-				(int)$elementIds[0],
-				(int)($activity['STORAGE_TYPE_ID'] ?? 0),
-				true,
-				[
-					'OWNER_ID' => (int)($activity['ID'] ?? 0),
-					'OWNER_TYPE_ID' => \CCrmOwnerType::Activity,
-				],
-			);
-		}
-		catch (NotSupportedException)
-		{
-			return null;
-		}
-
-		if (
-			!is_array($fileInfo)
-			|| empty($fileInfo)
-			|| !in_array(
-				GetFileExtension(mb_strtolower((string)($fileInfo['NAME'] ?? ''))),
-				Config::ALLOWED_AUDIO_EXTENSIONS,
-				true,
-			)
-		)
-		{
-			return null;
-		}
-
-		return [
-			'src' => $fileInfo['VIEW_URL'] ?? null,
-			'id' => mb_substr((string)($activity['ORIGIN_ID'] ?? ''), 3),
-		];
-	}
-
 	private function prepareTitle(array $data): string
 	{
 		$theme = $data['summary']['data']['theme'] ?? null;
 
 		return is_string($theme) ? $theme : '';
-	}
-
-	private function prepareRecord(array $data): ?array
-	{
-		$callRecord = $data['callRecord'] ?? null;
-		if (!is_array($callRecord))
-		{
-			return null;
-		}
-
-		$recordId = $callRecord['id'] ?? null;
-		$recordSrc = $callRecord['src'] ?? null;
-		if (!is_scalar($recordId) || !is_scalar($recordSrc))
-		{
-			return null;
-		}
-
-		return [
-			'recordId' => (string)$recordId,
-			'recordSrc' => (string)$recordSrc,
-		];
 	}
 
 	private function prepareAssessmentContent(int $activityId, array $assessmentHistory): array

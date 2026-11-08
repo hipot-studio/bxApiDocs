@@ -44,13 +44,18 @@ class AddMemberHandler implements AddHandlerInterface
 			return $handlerResult;
 		}
 
-		[$userCodes, $departmentCodes] = $this->splitAccessCodes($members);
+		[$userCodes, $structureCodes] = $this->splitAccessCodes($members);
 
-		if (!empty($departmentCodes))
+		if (!empty($structureCodes))
 		{
-			Container::getInstance()
+			$linkResult = Container::getInstance()
 				->getStructureRelationService()
-				->linkDepartments($departmentCodes, $entity->getId());
+				->linkNodes($structureCodes, $entity->getId(), $command->getInitiatorId());
+
+			if (!$linkResult->isSuccess())
+			{
+				return $handlerResult->merge($linkResult);
+			}
 		}
 
 		if (empty($userCodes))
@@ -81,12 +86,27 @@ class AddMemberHandler implements AddHandlerInterface
 				->splitIntoEmployeesGuestsAndBots($add)
 		;
 
-		ActionMessageBuffer::getInstance()
-			->put(ActionType::AddUser, $entity->getId(), $command->getInitiatorId(), $employeeIds)
-			->put(ActionType::AddGuest, $entity->getId(), $command->getInitiatorId(), $guestIds)
-			->put(ActionType::AddBot, $entity->getId(), $command->getInitiatorId(), $botIds)
+		$buffer = ActionMessageBuffer::getInstance();
+		$parameters = $this->getMessageParameters($buffer, $entity->getId());
+
+		$buffer
+			->put(ActionType::AddUser, $entity->getId(), $command->getInitiatorId(), $employeeIds, $parameters)
+			->put(ActionType::AddGuest, $entity->getId(), $command->getInitiatorId(), $guestIds, $parameters)
+			->put(ActionType::AddBot, $entity->getId(), $command->getInitiatorId(), $botIds, $parameters)
 		;
 
 		return $handlerResult;
+	}
+
+	/**
+	 * People added while the project is being created reach the chat as always, but say nothing of themselves:
+	 * the creation card already names the composition the project starts with.
+	 */
+	private function getMessageParameters(ActionMessageBuffer $buffer, int $collabId): array
+	{
+		return $buffer->areMemberMessagesSuppressed($collabId)
+			? [ActionMessageBuffer::WITHOUT_MESSAGE_PARAMETER => true]
+			: []
+		;
 	}
 }

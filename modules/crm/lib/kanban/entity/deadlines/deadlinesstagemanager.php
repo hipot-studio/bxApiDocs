@@ -5,6 +5,8 @@ namespace Bitrix\Crm\Kanban\Entity\Deadlines;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Item\Quote as QuoteItem;
 use Bitrix\Crm\Kanban\Entity\Deadlines\Stagefilters\StageFilter;
+use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\Router;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Date;
@@ -41,10 +43,16 @@ class DeadlinesStageManager
 		}
 	}
 
+	/**
+	 * The answer comes from Service\Factory, but the date field below is still resolved by a local
+	 * switch: a new type allowed into the deadlines view has to be added to dateFieldByEntityType()
+	 * in the same change, otherwise it gets here and hits the ArgumentException.
+	 */
 	public static function isEntitySupportDeadlines(int $entityTypeId): bool
 	{
-		$support = [\CCrmOwnerType::SmartInvoice, \CCrmOwnerType::Quote];
-		return in_array($entityTypeId, $support);
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+
+		return $factory !== null && $factory->isListViewSupported(Router::LIST_VIEW_DEADLINES);
 	}
 
 	public function __construct(int $entityTypeId)

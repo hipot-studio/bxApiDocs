@@ -26,6 +26,19 @@ use Bitrix\Main\ORM\Entity;
  */
 class FieldRegistry
 {
+	/**
+	 * Relation-backed field types as a set keyed by enum value: membership is asked once per field
+	 * on every registry build, so a keyed lookup beats a linear scan over a rebuilt array.
+	 */
+	private const RELATION_FIELD_TYPES = [
+		FieldType::MultifieldCollection->value => true,
+		FieldType::ProductRowCollection->value => true,
+		FieldType::ContactBindingCollection->value => true,
+		FieldType::CompanyBindingCollection->value => true,
+		FieldType::ObserverCollection->value => true,
+		FieldType::Utm->value => true,
+	];
+
 	/** @var array<int, self> */
 	private static array $instances = [];
 
@@ -33,6 +46,12 @@ class FieldRegistry
 
 	/** @var array<string, FieldDescriptor>|null camelName => FieldDescriptor (lazy) */
 	private ?array $fields = null;
+
+	/** @var array<string, FieldDescriptor>|null ormName => FieldDescriptor, scalars only (lazy) */
+	private ?array $scalarFieldsByOrmName = null;
+
+	/** @var array<string, string>|null entity-specific field name => common legacy field name (lazy) */
+	private ?array $legacyFieldNamesByEntityFieldName = null;
 
 	public static function getInstance(EntityType $entityType): self
 	{
@@ -69,6 +88,52 @@ class FieldRegistry
 		}
 
 		return $this->fields;
+	}
+
+	/**
+	 * Reverse index of the scalar fields: storage column -> descriptor. Lets a reader walk the
+	 * columns it actually asked for instead of the whole field set of the type
+	 * ({@see Mapper\ItemFieldMapper::syncFromOrm()}).
+	 *
+	 * Relation-backed fields are left out on purpose: `phones`, `emails`, `webs` and `ims` all sit
+	 * on the single `FM` column, so keying them by column would collapse four fields into one. They
+	 * are loaded by dedicated Loaders anyway, never by the scalar copy.
+	 *
+	 * Built once alongside {@see getFields()} and memoized the same way - the index depends on the
+	 * entity type only, never on the reader.
+	 *
+	 * @return array<string, FieldDescriptor> ormName => FieldDescriptor
+	 */
+	public function getScalarFieldsByOrmName(): array
+	{
+		if ($this->scalarFieldsByOrmName === null)
+		{
+			$index = [];
+			foreach ($this->getFields() as $descriptor)
+			{
+				if (!self::isRelationFieldType($descriptor->type))
+				{
+					$index[$descriptor->ormName] = $descriptor;
+				}
+			}
+
+			$this->scalarFieldsByOrmName = $index;
+		}
+
+		return $this->scalarFieldsByOrmName;
+	}
+
+	public function getLegacyFieldName(string $entityFieldName): string
+	{
+		if ($this->legacyFieldNamesByEntityFieldName === null)
+		{
+			$factory = Container::getInstance()->getFactory($this->entityType->getId());
+			$this->legacyFieldNamesByEntityFieldName = $factory === null
+				? []
+				: array_flip($factory->getFieldsMap());
+		}
+
+		return $this->legacyFieldNamesByEntityFieldName[$entityFieldName] ?? $entityFieldName;
 	}
 
 	// --- Field-set builders (private) ---
@@ -186,18 +251,7 @@ class FieldRegistry
 	 */
 	private static function isRelationFieldType(FieldType $type): bool
 	{
-		return in_array(
-			$type,
-			[
-				FieldType::MultifieldCollection,
-				FieldType::ProductRowCollection,
-				FieldType::ContactBindingCollection,
-				FieldType::CompanyBindingCollection,
-				FieldType::ObserverCollection,
-				FieldType::Utm,
-			],
-			true,
-		);
+		return isset(self::RELATION_FIELD_TYPES[$type->value]);
 	}
 
 	/**

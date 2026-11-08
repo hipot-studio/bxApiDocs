@@ -13,6 +13,7 @@ use Bitrix\Rest\Infrastructure\Rest\Request\InstallApplicationRequest;
 use Bitrix\Rest\Infrastructure\Rest\Response\Application\InstallAppResponse;
 use Bitrix\Rest\Public\Command\Application\InstallLocalAppCommand;
 use Bitrix\Rest\Public\Command\Application\UninstallLocalAppCommand;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Public\Provider\ApplicationProvider;
 use Bitrix\Rest\V3\Attribute\Description;
 use Bitrix\Rest\V3\Attribute\DtoType;
@@ -41,15 +42,14 @@ final class Local extends RestController
 		{
 			"title": "Test application",
 			"handlerUrl": "https://example.com",
+			"installUrl": "https://example.com/install",
+			"installCompletionMode": "deferred",
 			"scopes": ["crm"],
 			"mobile": false,
 			"menuTitles": {
 				"en": "Test application"
 			}
 		}
-		If `menuTitles` is omitted, the application is installed as API-only: 
-		it is not shown in the Bitrix24 interface, and its only way to access the portal is through the REST API, 
-		but it can still add embeddings.
 	')]
 	#[Scope(RestDeveloper::SCOPE)]
 	public function installAction(
@@ -58,6 +58,8 @@ final class Local extends RestController
 	): InstallAppResponse
 	{
 		$userId = (int)$this->getCurrentUser()->getId();
+		$installUrl = trim((string)($request->installUrl ?? ''));
+		$onlyApi = AppInstallCompletionMode::isApiOnly($request->menuTitles);
 
 		$result = $this->runCommand(new InstallLocalAppCommand(
 			userId: $userId,
@@ -65,15 +67,24 @@ final class Local extends RestController
 			title: $request->title,
 			scopes: $request->scopes,
 			handlerUrl: $request->handlerUrl,
-			installUrl: '',
-			onlyApi: empty($request->menuTitles),
+			installUrl: $installUrl,
+			onlyApi: $onlyApi,
 			mobile: $request->mobile,
 			menuTitles: $request->menuTitles,
 			attributes: $request->attributes,
 			applicationToken: empty($request?->applicationToken) ? null : (string)$request->applicationToken,
+			installCompletionMode: AppInstallCompletionMode::resolve($installUrl, $onlyApi, $request->installCompletionMode),
 		));
 
 		$resultApp = reset($result->getData());
+
+		if (!$resultApp->isInstalled())
+		{
+			return new InstallAppResponse(
+				app: $this->mapper->toDto($resultApp),
+				oauthToken: null,
+			);
+		}
 
 		$oauthToken = $applicationProvider->getOAuthToken(
 			clientId: $resultApp->getClientId(),

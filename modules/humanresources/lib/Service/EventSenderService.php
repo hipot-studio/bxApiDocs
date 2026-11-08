@@ -28,6 +28,7 @@ class EventSenderService implements \Bitrix\HumanResources\Contract\Service\Even
 			$event->name,
 			$eventData,
 		);
+		$this->recordInPositionJournal($event);
 
 		try
 		{
@@ -98,9 +99,22 @@ class EventSenderService implements \Bitrix\HumanResources\Contract\Service\Even
 	{
 		foreach ($this->eventQueue as $event)
 		{
+			$this->recordInPositionJournal($event);
 			$event->send();
 		}
 		$this->clearQueue();
+	}
+
+	private function recordInPositionJournal(Event $event): void
+	{
+		try
+		{
+			Container::getStructurePositionJournal()->record($event->getEventType(), $event->getParameters());
+		}
+		catch (\Throwable $t)
+		{
+			PositionJournal::logFailure('EventSenderService', $t);
+		}
 	}
 
 	/**

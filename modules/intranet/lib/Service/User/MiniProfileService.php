@@ -6,6 +6,7 @@ namespace Bitrix\Intranet\Service\User;
 
 use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\Intranet\Internal\Integration\Humanresources\TeamRepository;
+use Bitrix\Intranet\Internal\Integration\StaffTrack\EmployeeLocationBlock;
 use Bitrix\Intranet\Service;
 use Bitrix\Intranet\Integration;
 use Bitrix\Intranet\Enum\UserRole;
@@ -90,10 +91,12 @@ class MiniProfileService
 			return $this->makeBaseInfoResult($baseInfo, $accessDto);
 		}
 
+		$isLocationAvailable = $this->isLocationBlockAvailable($currentUserId, $userId);
+
 		$structureDto = $this->makeStructureDto($userId);
 		if (!$structureDto)
 		{
-			return $this->makeBaseInfoResult($baseInfo, $accessDto);
+			return $this->makeBaseInfoResult($baseInfo, $accessDto, $isLocationAvailable);
 		}
 
 		return new MiniProfileDataResult(
@@ -102,19 +105,27 @@ class MiniProfileService
 				access: $accessDto,
 				detailInfo: $this->makeDetailInfoDto($userModel),
 				structure: $structureDto,
+				isLocationAvailable: $isLocationAvailable,
 			),
 		);
+	}
+
+	protected function isLocationBlockAvailable(int $currentUserId, int $userId): bool
+	{
+		return EmployeeLocationBlock::isAvailable($currentUserId, $userId);
 	}
 
 	private function makeBaseInfoResult(
 		MiniProfile\BaseInfoDto $baseInfo,
 		MiniProfile\AccessDto $accessDto,
+		bool $isLocationAvailable = false,
 	): MiniProfileDataResult
 	{
 		return new MiniProfileDataResult(
 			new MiniProfile\UserMiniProfileDto(
 				baseInfo: $baseInfo,
 				access: $accessDto,
+				isLocationAvailable: $isLocationAvailable,
 			),
 		);
 	}
@@ -124,7 +135,7 @@ class MiniProfileService
 		return (new Entity\User(externalAuthId: $userModel->getExternalAuthId()))->isSystemUser();
 	}
 
-	private function makeStructureDto(int $userId, bool $withUserHeadsAndTeams = true): ?MiniProfile\StructureDto
+	protected function makeStructureDto(int $userId, bool $withUserHeadsAndTeams = true): ?MiniProfile\StructureDto
 	{
 		// Department
 		$departmentBranchCollection = $this->departmentService->getUserDepartmentBranchCollection(

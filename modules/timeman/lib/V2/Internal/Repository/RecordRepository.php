@@ -6,6 +6,7 @@ namespace Bitrix\Timeman\V2\Internal\Repository;
 
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\SystemException;
 use Bitrix\Timeman\Model\Schedule\ScheduleTable;
 use Bitrix\Timeman\Model\Schedule\Shift\ShiftTable;
@@ -123,7 +124,7 @@ class RecordRepository
 	}
 
 	/**
-	 * Closed records of the user within the given UTC range, only the columns needed to average the
+	 * Closed records of the user within the given UTC range, only the columns needed to take the median
 	 * local start of the day: RECORDED_START_TIMESTAMP (unix UTC) and START_OFFSET (user utc offset).
 	 *
 	 * @return array<int, array{RECORDED_START_TIMESTAMP: int, START_OFFSET: int}>
@@ -173,6 +174,172 @@ class RecordRepository
 		$state = $this->actionsResolver->getStateForRecord($record);
 
 		return $this->workTimeRecordMapper->mapFromOrm($record, $includeSchedule, $includeShift, $state);
+	}
+
+	/**
+	 * @param int[] $userIds
+	 * @return array{
+	 *     records: array<int, Record>,
+	 *     failedUserIds: array<int, true>
+	 * }
+	 */
+	public function getCurrentRecords(array $userIds): array
+	{
+		$userIds = array_values(array_unique(array_filter(
+			array_map('intval', $userIds),
+			static fn (int $userId): bool => $userId > 0,
+		)));
+
+		$result = [
+			'records' => [],
+			'failedUserIds' => [],
+		];
+
+		foreach (array_chunk($userIds, 300) as $userIdChunk)
+		{
+			try
+			{
+				$recordIdsByUser = $this->loadCurrentRecordIds($userIdChunk);
+				$records = $this->loadRecordsByIds(array_values($recordIdsByUser));
+				$this->fillSchedulesAndShifts($records);
+			}
+			catch (\Throwable)
+			{
+				$result['failedUserIds'] += array_fill_keys($userIdChunk, true);
+
+				continue;
+			}
+			$userIdByRecordId = array_flip($recordIdsByUser);
+			$loadedRecordIds = [];
+
+			foreach ($records as $record)
+			{
+				$recordId = (int)$record->getId();
+				$userId = (int)($userIdByRecordId[$recordId] ?? 0);
+				$loadedRecordIds[$recordId] = true;
+				if ($userId <= 0 || (int)$record->getUserId() !== $userId)
+				{
+					if ($userId > 0)
+					{
+						$result['failedUserIds'][$userId] = true;
+					}
+
+					continue;
+				}
+				try
+				{
+					$result['records'][$userId] = $this->workTimeRecordMapper->mapFromOrm(
+						$record,
+						true,
+						true,
+					);
+				}
+				catch (\Throwable)
+				{
+					$result['failedUserIds'][$userId] = true;
+				}
+			}
+			foreach ($recordIdsByUser as $userId => $recordId)
+			{
+				if (!isset($loadedRecordIds[$recordId]))
+				{
+					$result['failedUserIds'][$userId] = true;
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/** @return array<int, int> */
+	protected function loadCurrentRecordIds(array $userIds): array
+	{
+		$query = WorktimeRecordTable::query()
+			->registerRuntimeField(new ExpressionField('MAX_ID', 'MAX(%s)', 'ID'))
+			->setSelect(['USER_ID', 'MAX_ID'])
+			->whereIn('USER_ID', $userIds)
+			->setGroup(['USER_ID'])
+			->exec()
+		;
+
+		$recordIdsByUser = [];
+		while ($row = $query->fetch())
+		{
+			$userId = (int)($row['USER_ID'] ?? 0);
+			$recordId = (int)($row['MAX_ID'] ?? 0);
+			if ($userId > 0 && $recordId > 0)
+			{
+				$recordIdsByUser[$userId] = $recordId;
+			}
+		}
+
+		return $recordIdsByUser;
+	}
+
+	protected function loadRecordsByIds(array $recordIds): \Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordCollection
+	{
+		if ($recordIds === [])
+		{
+			return new \Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordCollection();
+		}
+
+		return WorktimeRecordTable::query()
+			->setSelect(['*'])
+			->whereIn('ID', $recordIds)
+			->exec()
+			->fetchCollection()
+		;
+	}
+
+	private function fillSchedulesAndShifts(
+		\Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordCollection $records,
+	): void
+	{
+		$scheduleIds = array_values(array_unique(array_filter(
+			array_map('intval', $records->getScheduleIdList()),
+			static fn (int $scheduleId): bool => $scheduleId > 0,
+		)));
+		if ($scheduleIds !== [])
+		{
+			$schedules = ScheduleTable::query()
+				->setSelect(['*'])
+				->whereIn('ID', $scheduleIds)
+				->exec()
+				->fetchCollection()
+			;
+			foreach ($records as $record)
+			{
+				$schedule = $schedules->getByPrimary($record->getScheduleId());
+				if ($schedule !== null)
+				{
+					$record->defineSchedule($schedule);
+				}
+			}
+		}
+
+		$shiftIds = array_values(array_unique(array_filter(
+			array_map('intval', $records->getShiftIdList()),
+			static fn (int $shiftId): bool => $shiftId > 0,
+		)));
+		if ($shiftIds === [])
+		{
+			return;
+		}
+
+		$shifts = ShiftTable::query()
+			->setSelect(['*'])
+			->whereIn('ID', $shiftIds)
+			->exec()
+			->fetchCollection()
+		;
+		foreach ($records as $record)
+		{
+			$shift = $shifts->getByPrimary($record->getShiftId());
+			if ($shift !== null)
+			{
+				$record->defineShift($shift);
+			}
+		}
 	}
 
 	public function getUsersRecords(

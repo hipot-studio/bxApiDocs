@@ -2,8 +2,11 @@
 
 namespace Bitrix\Sign\Controllers\V1\B2e\Member;
 
+use Bitrix\Main\Validation\Rule\ElementsType;
+use Bitrix\Main\Validation\Rule\Enum\Type;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Attribute;
+use Bitrix\Sign\FeatureResolver;
 use Bitrix\Sign\Operation;
 use Bitrix\Sign\Engine\Controller;
 use Bitrix\Sign\Type\Access\AccessibleItemType;
@@ -40,5 +43,46 @@ final class Reminder extends Controller
 		$this->addErrorsFromResult($result);
 
 		return [];
+	}
+
+	#[Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_READ, AccessibleItemType::DOCUMENT, 'documentUid')]
+	public function sendAction(string $documentUid, #[ElementsType(Type::String)] array $memberUids): array
+	{
+		if (!FeatureResolver::instance()->released('kedoSendManualReminder'))
+		{
+			return [];
+		}
+
+		$documentService = $this->container->getDocumentService();
+		$document = $documentService->getByUid($documentUid);
+
+		$logger = $this->container->getLogger('Controller');
+		if ($document === null || $document->id === null)
+		{
+			$logger->warning(
+				'Document not found. UID: {documentUid}',
+				[
+					'documentUid' => $documentUid,
+				]
+			);
+
+			return [];
+		}
+
+		$result = (new Operation\Member\Reminder\SendManual(
+			$document,
+			$memberUids,
+		))->launch();
+
+		$this->addErrorsFromResult($result);
+
+		$data = $result->getData();
+
+		if (!array_key_exists('documentTitle', $data))
+		{
+			$data['documentTitle'] = $documentService->getComposedTitleByDocument($document);
+		}
+
+		return $data;
 	}
 }

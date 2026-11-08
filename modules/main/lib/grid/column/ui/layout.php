@@ -12,6 +12,7 @@ final class Layout
 {
 	private Column $column;
 	private bool $hasLeftAlignedCounter = false;
+	private bool $sortable = true;
 
 	/**
 	 * @param Column $column
@@ -46,6 +47,30 @@ final class Layout
 	}
 
 	/**
+	 * Sets whether sorting by this column is allowed in the grid.
+	 *
+	 * @param bool $value
+	 *
+	 * @return self
+	 */
+	public function setSortable(bool $value): self
+	{
+		$this->sortable = $value;
+
+		return $this;
+	}
+
+	/**
+	 * Is sorting by this column allowed?
+	 *
+	 * @return bool
+	 */
+	public function isSortable(): bool
+	{
+		return $this->sortable && $this->column->getSort() !== null;
+	}
+
+	/**
 	 * Columns cells attributes.
 	 *
 	 * @return Attributes
@@ -53,6 +78,8 @@ final class Layout
 	public function getCellAttributes(): Attributes
 	{
 		$result = new Attributes();
+
+		$result->set('scope', 'col');
 
 		$value = $this->column->getTitle();
 		if (!empty($value))
@@ -70,6 +97,11 @@ final class Layout
 		if (!empty($value))
 		{
 			$result->set('style', $value);
+		}
+
+		if ($this->isSortable())
+		{
+			$result->set('aria-sort', $this->getAriaSortValue());
 		}
 
 		$result->setData('name', $this->column->getId());
@@ -91,6 +123,22 @@ final class Layout
 	}
 
 	/**
+	 * Current sort direction of the column in aria-sort terms.
+	 *
+	 * @return string
+	 */
+	private function getAriaSortValue(): string
+	{
+		// setSortState() narrows the value down to 'asc', 'desc' or null.
+		return match ($this->column->getSortState())
+		{
+			'asc' => 'ascending',
+			'desc' => 'descending',
+			default => 'none',
+		};
+	}
+
+	/**
 	 * Column style attribute value.
 	 *
 	 * @return string
@@ -103,6 +151,15 @@ final class Layout
 		if (isset($width))
 		{
 			$result .= " width:{$width}px;";
+
+			// A width the user dragged the column to has to beat whatever a module's own
+			// min-width or an unbreakable word in a cell asks for - the same three properties
+			// the drag itself writes on every cell of the column. Any other width is a start
+			// width that the content may widen.
+			if ($this->column->isResizedByUser())
+			{
+				$result .= " min-width:{$width}px; max-width:{$width}px;";
+			}
 		}
 
 		$colorValue = $this->column->getCssColorValue();
@@ -144,6 +201,9 @@ final class Layout
 		$width = $this->column->getWidth();
 		if (isset($width))
 		{
+			// Width only: the drag resizes this container by setting its width, and a min/max
+			// pair rendered for the previous width would pin it - the resize handle lives
+			// inside it and would stay behind at the old column border.
 			$result .= "width:{$width}px;";
 		}
 

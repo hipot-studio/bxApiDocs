@@ -9,6 +9,7 @@ use Bitrix\Tasks\V2\Public\Command\Task\Deadline\CleanChangeLogCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Deadline\UpdateDeadlineCommand;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Public\Provider\DeadlineProvider;
 use Bitrix\Tasks\V2\Public\Provider\TaskProvider;
@@ -28,6 +29,7 @@ class Deadline extends BaseController
 		$updateConfig = new UpdateConfig(
 			userId: $this->userId,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		);
 
 		$result = (new UpdateDeadlineCommand(

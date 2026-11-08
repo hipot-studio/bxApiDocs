@@ -38,7 +38,7 @@ class TaskUserField extends UserFieldDataset
 
 	protected function getTableDescriptionFull(): string
 	{
-		return $this->getMessage('TASK_UF_TABLE_DESCRIPTION_FULL', '');
+		return $this->getMessage('TASK_UF_TABLE_DESCRIPTION_FULL_MSGVER_1', '');
 	}
 
 	protected function getRawUserFields(): array

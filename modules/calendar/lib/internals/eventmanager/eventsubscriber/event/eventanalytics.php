@@ -5,12 +5,10 @@ namespace Bitrix\Calendar\Internals\EventManager\EventSubscriber\Event;
 use Bitrix\Calendar\Application\Command\CreateEventCommand;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Event\Event\AfterCalendarEventCreated;
-use Bitrix\Calendar\Internal\Integration\Socialnetwork\CollabService;
 use Bitrix\Calendar\Internals\EventManager\EventSubscriber\EventSubscriberInterface;
 use Bitrix\Calendar\Internals\EventManager\EventSubscriber\EventSubscriberResponseTrait;
 use Bitrix\Calendar\Internals\Helper\Analytics;
 use Bitrix\Calendar\Util;
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 
@@ -34,33 +32,41 @@ class EventAnalytics implements EventSubscriberInterface
 		}
 
 		$section = $calendarEvent->getSection();
-		$collabId = $section?->getOwner()?->getId();
 		$isGroupSection = $section?->getType() === Dictionary::CALENDAR_TYPE['group'];
+		$groupId = $isGroupSection ? $section?->getOwnerId() : null;
 
-		$isSharingCollab = $calendarEvent->getSpecialLabel() === Dictionary::EVENT_TYPE['shared_collab'];
-		$isCollabProjectEvent = $isGroupSection
-			&& $collabId
-			&& ServiceLocator::getInstance()->get(CollabService::class)->hasCollabers((int)$collabId)
-		;
-
-		if (!$isSharingCollab && !$isCollabProjectEvent)
-		{
-			return $this->makeSuccessResponse();
-		}
+		$isGroupEvent = $isGroupSection && $groupId;
 
 		/** @var CreateEventCommand $command */
 		$command = $event->getParameter('command');
-		$userType = Analytics::USER_TYPES['intranet'];
-		if (Util::isCollabUser(\CCalendar::getCurUserId()))
+
+		if ($isGroupEvent)
 		{
-			$userType = Analytics::USER_TYPES['collaber'];
+			$type = Analytics::EVENT_TYPE['group'];
+			$sectionKey = Analytics::SECTION['project'];
+			$subSection = $command->getAnalyticsSubSection() ?? Analytics::SUB_SECTION['calendar_project'];
+		}
+		else
+		{
+			$type = Analytics::EVENT_TYPE['single'];
+			$sectionKey = Analytics::SECTION['calendar'];
+			$subSection = $command->getAnalyticsSubSection() ?? Analytics::SUB_SECTION['calendar_personal'];
 		}
 
+		$userId = \CCalendar::getCurUserId();
+		$userType = match (true)
+		{
+			Util::isCollabUser($userId) => Analytics::USER_TYPES['collaber'],
+			Util::isExtranetUser($userId) => Analytics::USER_TYPES['extranet'],
+			default => Analytics::USER_TYPES['intranet'],
+		};
+
 		Analytics::getInstance()->onEventCreate(
-			section: Analytics::SECTION['collab'],
-			subSection: $command->getAnalyticsSubSection(),
+			type: $type,
+			section: $sectionKey,
+			subSection: $subSection,
 			userType: $userType,
-			collabId: $collabId,
+			groupId: $groupId,
 			chatId: $command->getAnalyticsChatId(),
 		);
 

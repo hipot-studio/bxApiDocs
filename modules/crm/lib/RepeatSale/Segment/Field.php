@@ -11,6 +11,25 @@ use CCrmFieldInfoAttr;
 final class Field
 {
 	private static ?bool $isChecked = null;
+	private static array $preparedDataForFilter = [];
+
+	/**
+	 * Append effective filter fields for applying filter from URL/grid.
+	 *
+	 * @see \Bitrix\Crm\Tracking\UI\Filter::appendEffectiveFields()
+	 */
+	public function appendEffectiveFilterFields(array &$fields): void
+	{
+		if (!$this->check() || !Container::getInstance()->getUserPermissions()->repeatSale()->canRead())
+		{
+			return;
+		}
+
+		if (!in_array(Item::FIELD_NAME_REPEAT_SALE_SEGMENT_ID, $fields, true))
+		{
+			$fields[] = Item::FIELD_NAME_REPEAT_SALE_SEGMENT_ID;
+		}
+	}
 
 	public function getInfoForFilter(): array
 	{
@@ -30,16 +49,27 @@ final class Field
 
 	public function getPreparedDataForFilter(): array
 	{
+		// The filter field is `partial`, and Filter\Field::toArray() assembles such fields on every render of
+		// the deal list, kanban and calendar - even when the user never opens the filter. Keep the values
+		// instead of querying segments again on each assemble; the values depend on permissions, so they are
+		// kept per user the same way Container::getUserPermissions() does it.
+		$userId = Container::getInstance()->getContext()->getUserId();
+		if (isset(self::$preparedDataForFilter[$userId]))
+		{
+			return self::$preparedDataForFilter[$userId];
+		}
+
 		$items = [];
 
 		if ($this->check() && Container::getInstance()->getUserPermissions()->repeatSale()->canRead())
 		{
+			// Child segments (e.g. `ai_approve`) create deals too and must be selectable in the filter,
+			// so all segments are included here regardless of BASE_SEGMENT_CODE.
 			$segments = RepeatSaleSegmentController::getInstance()->getList([
 				'select' => ['ID', 'TITLE'],
-				'filter' => [
-					'=BASE_SEGMENT_CODE' => null,
-				],
 				'order' => ['TITLE' => 'ASC'],
+				// 0 removes the controller's default limit of 10 rows, otherwise scenarios would be cut off
+				'limit' => 0,
 			]);
 
 			foreach ($segments as $segment)
@@ -48,12 +78,26 @@ final class Field
 			}
 		}
 
-		return [
+		self::$preparedDataForFilter[$userId] = [
 			'params' => [
 				'multiple' => 'Y',
 			],
 			'items' => $items,
 		];
+
+		return self::$preparedDataForFilter[$userId];
+	}
+
+	/**
+	 * Drops the kept filter values. A request that changes segments has to call it: the same request
+	 * may assemble the filter again (the ajax actions of the segment editor do), and the values it
+	 * gets must be the ones it has just written.
+	 *
+	 * @see \Bitrix\Crm\RepeatSale\Segment\Controller\RepeatSaleSegmentController
+	 */
+	public static function clearPreparedDataForFilter(): void
+	{
+		self::$preparedDataForFilter = [];
 	}
 
 	public function getInfo(): array

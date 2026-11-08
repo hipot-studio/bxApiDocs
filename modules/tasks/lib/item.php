@@ -1319,25 +1319,40 @@ abstract class Item extends LazyAccess
 	/**
 	 * Count items in database by condition
 	 *
-	 * @param array $dcParams
+	 * Takes the same query parameters as find(), but counts by the filter alone, because
+	 * DataManager::getCount() accepts a filter only: select, order, limit and the rest do not affect
+	 * the count. A plain filter is taken as well, for backward compatibility, so the input is read as
+	 * query parameters when it holds at least one of their keys, and as a filter otherwise.
+	 *
+	 * @param array $parameters query parameters (array('filter' => ...)) or a plain filter
 	 * @param null $settings
 	 * @return int
 	 * @throws NotImplementedException
 	 * @throws SystemException
 	 */
-	public static function getCount(array $dcParams = array(), $settings = null)
+	public static function getCount(array $parameters = array(), $settings = null)
 	{
 		if(!is_array($settings))
 		{
 			$settings = array();
 		}
 
-		if(!intval($settings['USER_ID']))
+		if(!(int)($settings['USER_ID'] ?? null))
 		{
 			$settings['USER_ID'] = User::getId();
 		}
 
 		$dc = static::getDataSourceClass();
+
+		// access controllers expect query parameters, while legacy callers pass a plain filter
+		$filter = array_intersect_key(
+			$parameters,
+			array('filter' => 1, 'select' => 1, 'order' => 1, 'limit' => 1, 'offset' => 1, 'count_total' => 1)
+		)
+			? ($parameters['filter'] ?? array())
+			: $parameters;
+
+		$dcParams = array('filter' => is_array($filter) ? $filter : array());
 
 		// todo: filter select key carefully here!!! DO NOT query fields that have DB_READABLE == false, and also
 		// todo: care about SOURCE == Scalar::SOURCE_CUSTOM here!
@@ -1345,7 +1360,7 @@ abstract class Item extends LazyAccess
 		// todo: this is the default access controller, we could specify our own in $settings and use here
 		$ac = static::getAccessControllerDefault();
 
-		$parameters = $ac->addDataBaseAccessCheck(
+		$checkedParams = $ac->addDataBaseAccessCheck(
 			$dcParams,
 			array(
 				'USER_ID' => $settings['USER_ID'],
@@ -1355,7 +1370,7 @@ abstract class Item extends LazyAccess
 		// catch some exceptions came from orm, and wrap it into a error
 		try
 		{
-			$count = $dc::getCount($parameters);
+			$count = $dc::getCount($checkedParams['filter'] ?? array());
 		}
 		catch(SystemException $e) // orm throws common SystemException, which is not good, but we cant do anything
 		{

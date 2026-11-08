@@ -2,13 +2,19 @@
 
 namespace Bitrix\Mail\Controller;
 
+use Bitrix\Mail\Access\MailboxAccessController;
+use Bitrix\Mail\Access\Model\MailboxModel;
 use Bitrix\Mail\Controller\ActionFilter\ConnectionRequestResponsibleAdminAccess;
-use Bitrix\Mail\Controller\ActionFilter\MailboxGridBulkActionsAccess;
 use Bitrix\Mail\Controller\ActionFilter\MassConnectAccess;
+use Bitrix\Mail\Controller\ActionFilter\MassMailboxActionsAccess;
 use Bitrix\Mail\Helper;
 use Bitrix\Mail\Helper\LicenseManager;
 use Bitrix\Mail\Helper\Mailbox;
 use Bitrix\Mail\Helper\Dto\MailboxConnect\MailboxConnectDTO;
+use Bitrix\Mail\Helper\Dto\MailboxConnect\GeneralSettingsPatch;
+use Bitrix\Mail\Internal\Service\Mailbox\GeneralSettingsService;
+use Bitrix\Mail\Internal\Service\Mailbox\Avatar\AvatarChange;
+use Bitrix\Mail\Internal\Service\Mailbox\Avatar\AvatarService;
 use Bitrix\Mail\Helper\Dto\Mailbox\BulkActionResult;
 use Bitrix\Mail\Helper\Mailbox\MailMassConnect;
 use Bitrix\Mail\Helper\Enum\MailboxStatus;
@@ -17,12 +23,14 @@ use Bitrix\Mail\Helper\Mailbox\MailboxConnectionRequestService;
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
 use Bitrix\Mail\Helper\Mailbox\MailboxSettingsConfig;
 use Bitrix\Mail\Helper\Mailbox\PasswordlessConnectHelper;
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Helper\OAuth;
 use Bitrix\Mail\Integration\HumanResources\NodeMemberService;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\MailServicesTable;
+use Bitrix\Mail\Public\Service\Message\Conversation\ConversationSettingsService;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\UrlManager;
@@ -39,6 +47,7 @@ use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationActionGuard;
 use Bitrix\Main;
 use Bitrix\Intranet;
 use Bitrix\HumanResources\Service\Container;
+use Psr\Log\LoggerInterface;
 
 /**
  * Class MailboxConnecting
@@ -64,17 +73,34 @@ class MailboxConnecting extends Controller
 	public function configureActions(): array
 	{
 		$massConnectFilter = ['+prefilters' => [new MassConnectAccess()]];
-		$bulkActionsFilter = ['+prefilters' => [new MassConnectAccess(), new MailboxGridBulkActionsAccess()]];
+
+		// A mass action writes to every mailbox of the batch, so it answers a POST carrying the token
+		// of the session and nothing else: the default filters of this controller let a GET through.
+		// Its gate carries the switch of the bulk actions as well, which is why it is not the gate of
+		// the passwordless connect above: that flow is no action of the grid.
+		$massActionFilter = ['+prefilters' => [
+			new Main\Engine\ActionFilter\HttpMethod([Main\Engine\ActionFilter\HttpMethod::METHOD_POST]),
+			new Main\Engine\ActionFilter\Csrf(),
+			new MassMailboxActionsAccess(),
+		]];
 
 		return [
+			'updateMailbox' => ['+prefilters' => [
+				new Main\Engine\ActionFilter\HttpMethod([Main\Engine\ActionFilter\HttpMethod::METHOD_POST]),
+				new Main\Engine\ActionFilter\Csrf(),
+			]],
+			'updateGeneralSettings' => ['+prefilters' => [
+				new Main\Engine\ActionFilter\HttpMethod([Main\Engine\ActionFilter\HttpMethod::METHOD_POST]),
+				new Main\Engine\ActionFilter\Csrf(),
+			]],
 			'createPasswordlessRequest' => $massConnectFilter,
 			'validateConnectionSettings' => $massConnectFilter,
 			'resendPasswordlessRequest' => $massConnectFilter,
 			'deletePasswordlessRequest' => $massConnectFilter,
 			'getPasswordlessRequestsCount' => $massConnectFilter,
-			'massDisconnectMailboxes' => $bulkActionsFilter,
-			'massSetCrmIntegration' => $bulkActionsFilter,
-			'massSetCalendarIntegration' => $bulkActionsFilter,
+			'massDisconnectMailboxes' => $massActionFilter,
+			'massSetCrmIntegration' => $massActionFilter,
+			'massSetCalendarIntegration' => $massActionFilter,
 			'connectMailboxByConnectionRequest' => ['+prefilters' => [new ConnectionRequestResponsibleAdminAccess()]],
 		];
 	}
@@ -189,8 +215,7 @@ class MailboxConnecting extends Controller
 		$mailboxConnector = new MailboxConnector();
 		$result = $mailboxConnectDTO->crmOptions !== null
 			? $mailboxConnector->connectMailboxWithCustomCrm($mailboxConnectDTO)
-			: $mailboxConnector->connectMailboxWithDefaultCrm($mailboxConnectDTO)
-		;
+			: $mailboxConnector->connectMailboxWithDefaultCrm($mailboxConnectDTO);
 		$this->addErrors($mailboxConnector->getErrors());
 
 		$mailboxId = (int)($result['id'] ?? 0);
@@ -199,11 +224,28 @@ class MailboxConnecting extends Controller
 		{
 			if (empty($this->getErrors()))
 			{
+				$this->captureConversationOnboardingEligibility();
 				\CUserOptions::SetOption('mail', 'previous_seen_mailbox_id', $mailboxId);
 			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Captures the right to the conversation tour strictly before `previous_seen_mailbox_id` is
+	 * written: that value is the only trace of a visit to Mail made before the release, and the right
+	 * is decided by that trace alone. The capture writes once and never revises itself, so calling it
+	 * from every point that overwrites the trace is safe.
+	 */
+	private function captureConversationOnboardingEligibility(): void
+	{
+		$previousSeenMailboxId = (int)\CUserOptions::getOption('mail', 'previous_seen_mailbox_id', 0);
+
+		(new ConversationSettingsService())->captureOnboardingEligibility(
+			(int)CurrentUser::get()->getId(),
+			$previousSeenMailboxId > 0,
+		);
 	}
 
 	public function connectMailboxByConnectionRequestAction(
@@ -364,6 +406,50 @@ class MailboxConnecting extends Controller
 		return $result !== false;
 	}
 
+	public function updateGeneralSettingsAction(int $mailboxId, array $patch): array
+	{
+		$parsed = $this->parseAvatarChange($this->getSaveParameters());
+		if (!$parsed->isSuccess())
+		{
+			$this->addErrors($parsed->getErrors());
+
+			return [];
+		}
+		$result = (new GeneralSettingsService(allowCanceled: true))->update(
+			$mailboxId,
+			GeneralSettingsPatch::fromArray($patch),
+			$parsed->getData()['change'] ?? null,
+		);
+		$this->addErrors($result->getErrors());
+
+		return $result->isSuccess() ? $result->getData() : [];
+	}
+
+	private function getSaveParameters(): array
+	{
+		$parameters = [];
+		foreach ($this->getSourceParametersList() ?? [] as $source)
+		{
+			$parameters += $source instanceof Main\Type\Dictionary ? $source->toArray() : $source;
+		}
+		$parameters += $this->getRequest()->getPostList()->toArray();
+		$parameters += $this->getRequest()->getJsonList()->toArray();
+
+		return $parameters;
+	}
+
+	private function parseAvatarChange(array $parameters): Main\Result
+	{
+		if (!Feature::isMailboxAvatarAvailable())
+		{
+			return new Main\Result();
+		}
+
+		return array_key_exists('avatar', $parameters)
+			? AvatarService::localizeErrors(AvatarChange::fromArray($parameters['avatar']))
+			: new Main\Result();
+	}
+
 	public function updateMailboxAction(int $mailboxId, MailboxConnectDTO $dto): array
 	{
 		if (!MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId))
@@ -374,7 +460,41 @@ class MailboxConnecting extends Controller
 		}
 
 		$mailboxConnector = new MailboxConnector();
-		$result = $mailboxConnector->updateMailbox($mailboxId, $dto);
+		$parameters = $this->getSaveParameters();
+		$parsed = $this->parseAvatarChange($parameters);
+		if (!$parsed->isSuccess())
+		{
+			$this->addErrors($parsed->getErrors());
+
+			return [];
+		}
+		$hasExpectedGeneration = array_key_exists('expectedSourceGenerationId', $parameters);
+		$expectedGeneration = $parameters['expectedSourceGenerationId'] ?? null;
+		if (is_string($expectedGeneration) && preg_match('/^(0|[1-9][0-9]*)$/D', $expectedGeneration))
+		{
+			$expectedGeneration = filter_var($expectedGeneration, FILTER_VALIDATE_INT);
+		}
+		if ($expectedGeneration !== null && (!is_int($expectedGeneration) || $expectedGeneration < 0))
+		{
+			$this->addError(new Error('Invalid source generation', GeneralSettingsPatch::ERROR_INVALID_PATCH));
+
+			return [];
+		}
+		$requestedFields = is_array($parameters['mailbox'] ?? null) ? $parameters['mailbox'] : $parameters;
+		if ($parameters !== [])
+		{
+			$dto = MailboxConnectDTO::createFromRequest(new Main\HttpRequest(
+				$this->getRequest()->getServer(), [], $parameters, [], [],
+			));
+		}
+		$result = $mailboxConnector->updateMailbox(
+			$mailboxId,
+			$dto,
+			expectedSourceGenerationId: $expectedGeneration,
+			hasExpectedSourceGenerationId: $hasExpectedGeneration,
+			requestedFields: $parameters === [] ? null : $requestedFields,
+			avatar: $parsed->getData()['change'] ?? null,
+		);
 		$this->addErrors($mailboxConnector->getErrors());
 
 		return $result;
@@ -484,6 +604,7 @@ class MailboxConnecting extends Controller
 		$replaceWithTheCurrentUserName = Loader::includeModule('humanresources');
 
 		$previousSeenMailboxId = (int)\CUserOptions::getOption('mail', 'previous_seen_mailbox_id', 0);
+		$this->captureConversationOnboardingEligibility();
 		$signaturesAvailable = Helper\Config\Feature::isMobileSignaturesAvailable();
 
 		foreach ($mailboxesFullData as $mailbox)
@@ -624,6 +745,7 @@ class MailboxConnecting extends Controller
 	public function getPendingPasswordlessRequestAction(): ?array
 	{
 		$currentUserId = (int)CurrentUser::get()->getId();
+
 		return (new PasswordlessConnectHelper())->getPendingRequestForUser($currentUserId);
 	}
 
@@ -689,14 +811,14 @@ class MailboxConnecting extends Controller
 
 		if($ignoreOld)
 		{
-			$oldIds = MailMessageUidTable::getList(array(
-				'select' => array('ID'),
-				'filter' => array(
+			$oldIds = MailMessageUidTable::getList([
+				'select' => ['ID'],
+				'filter' => [
 					'@ID' => $messIds,
 					'=MAILBOX_ID' => current($mailboxIds),
 					'=IS_OLD' => 'Y',
-				),
-			))->fetchAll();
+				],
+			])->fetchAll();
 
 			foreach ($oldIds as $item)
 			{
@@ -777,6 +899,7 @@ class MailboxConnecting extends Controller
 			if (!$guard->isSuccess())
 			{
 				$this->errorCollection->add($guard->getErrors());
+
 				continue;
 			}
 
@@ -844,35 +967,40 @@ class MailboxConnecting extends Controller
 			return [];
 		}
 
+		$mailboxIds = $this->normalizeBulkIds($mailboxIds);
+
 		$bulkResult = new BulkActionResult();
 
-		foreach ($mailboxIds as $rawId)
-		{
-			$id = (int)$rawId;
-			if ($id <= 0)
+		$this->walkBulkBatch($mailboxIds, function () use ($mailboxIds, $bulkResult): void {
+			foreach ($mailboxIds as $id)
 			{
-				$bulkResult->addSkipped($id, 'Invalid mailbox id');
-				continue;
-			}
+				if ($id <= 0)
+				{
+					$bulkResult->addSkipped($id, 'Invalid mailbox id');
 
-			$result = MailboxConnector::deleteMailbox($id);
+					continue;
+				}
 
-			if ($result->isSuccess())
-			{
-				$bulkResult->addApplied($id);
+				$result = MailboxConnector::deleteMailbox($id);
+
+				if ($result->isSuccess())
+				{
+					$bulkResult->addApplied($id);
+				}
+				else
+				{
+					$this->addBulkFailure($bulkResult, $id, $result);
+				}
 			}
-			else
-			{
-				$errors = $result->getErrors();
-				$errorMessage = !empty($errors) ? $errors[0]->getMessage() : 'Unknown error';
-				$bulkResult->addFailed($id, $errorMessage);
-			}
-		}
+		});
 
 		return $bulkResult->jsonSerialize();
 	}
 
 	private const BULK_ACTION_IDS_LIMIT = 500;
+
+	private bool $bulkFailureLoggerResolved = false;
+	private ?LoggerInterface $bulkFailureLogger = null;
 
 	private function checkBulkIdsLimit(array $mailboxIds): bool
 	{
@@ -887,6 +1015,91 @@ class MailboxConnecting extends Controller
 		}
 
 		return true;
+	}
+
+	/**
+	 * An identifier is an integer or the decimal form a cast would give back unchanged. Everything the
+	 * cast would rewrite - "123abc", "12 ", the padded "0012", a fraction, a boolean, an array - becomes
+	 * 0 and is skipped by the pass, so no element reaches a mailbox it does not name. One such element
+	 * costs itself and not the batch. The same identifier is walked once, so a batch of repetitions
+	 * costs one transaction instead of one per repetition. The limit is asked of the raw batch before
+	 * this, or padding with repetitions would walk around it.
+	 *
+	 * @return int[]
+	 */
+	private function normalizeBulkIds(array $mailboxIds): array
+	{
+		return array_values(array_unique(array_map(
+			static function (mixed $rawId): int
+			{
+				if (is_int($rawId))
+				{
+					return $rawId;
+				}
+
+				return is_string($rawId) && (string)(int)$rawId === $rawId ? (int)$rawId : 0;
+			},
+			$mailboxIds,
+		)));
+	}
+
+	/**
+	 * The right to every mailbox is still asked separately; what the batch shares is the lookup
+	 * behind the answer and the drop of the cache directories of the portal.
+	 */
+	private function walkBulkBatch(array $mailboxIds, callable $walk): void
+	{
+		$models = MailboxModel::createFromIds($mailboxIds);
+
+		MailboxAccessController::getInstance((int)CurrentUser::get()->getId())->withMailboxBatch(
+			$models,
+			static fn () => MailboxTable::withDeferredCacheCleanup($walk),
+		);
+	}
+
+	/**
+	 * Only a mailbox held by a visible migration keeps a text of its own; every other refusal, a
+	 * failed write included, answers the single phrase, so a missing mailbox and a foreign one
+	 * answer alike. The machine reason of the refusal goes to the log, not to the answer.
+	 */
+	private function addBulkFailure(BulkActionResult $bulkResult, int $mailboxId, Main\Result $result): void
+	{
+		$blocked = $result->getErrorCollection()->getErrorByCode(MigrationActionGuard::ERROR_ACTION_BLOCKED);
+		if ($blocked !== null)
+		{
+			$bulkResult->addFailed($mailboxId, $blocked->getMessage());
+
+			return;
+		}
+
+		$errors = $result->getErrors();
+		$reason = $errors === [] ? 'Unknown error' : $errors[0]->getMessage();
+
+		$this->bulkFailureLogger()?->warning(
+			'A mass mailbox action refused a mailbox of the batch.',
+			[
+				'mailboxId' => $mailboxId,
+				'userId' => (int)CurrentUser::get()->getId(),
+				'reason' => $reason,
+			],
+		);
+
+		$bulkResult->addFailed(
+			$mailboxId,
+			(string)Loc::getMessage('MAIL_MAILBOX_CONNECTING_ERROR_MAILBOX_NOT_FOUND'),
+		);
+	}
+
+	/** One logger for the whole batch: a batch of refusals would otherwise build one per mailbox. */
+	private function bulkFailureLogger(): ?LoggerInterface
+	{
+		if (!$this->bulkFailureLoggerResolved)
+		{
+			$this->bulkFailureLoggerResolved = true;
+			$this->bulkFailureLogger = (new Main\Diag\LoggerFactory())->createById('mail.MailboxBulkActions');
+		}
+
+		return $this->bulkFailureLogger;
 	}
 
 	/**
@@ -914,6 +1127,8 @@ class MailboxConnecting extends Controller
 			return [];
 		}
 
+		$mailboxIds = $this->normalizeBulkIds($mailboxIds);
+
 		$bulkResult = new BulkActionResult();
 
 		$useDefaults = $enabled && $crmOptions === null;
@@ -933,56 +1148,56 @@ class MailboxConnecting extends Controller
 			}
 		}
 
-		foreach ($mailboxIds as $rawId)
-		{
-			$id = (int)$rawId;
-			if ($id <= 0)
+		$crmWalk = function () use ($mailboxIds, $bulkResult, $useDefaults, $resolvedCrmOptions): void {
+			foreach ($mailboxIds as $id)
 			{
-				$bulkResult->addSkipped($id, 'Invalid mailbox id');
-				continue;
-			}
-
-			$mailboxConnector = new MailboxConnector();
-
-			if ($useDefaults)
-			{
-				$result = $mailboxConnector->enableCrmWithDefaults($id);
-
-				if (!$result->isSuccess())
+				if ($id <= 0)
 				{
-					$errors = $result->getErrors();
-					$errorMessage = !empty($errors) ? $errors[0]->getMessage() : 'Unknown error';
-					$bulkResult->addFailed($id, $errorMessage);
+					$bulkResult->addSkipped($id, 'Invalid mailbox id');
+
+					continue;
 				}
-				elseif (($result->getData()['skipped'] ?? false) === true)
+
+				$mailboxConnector = new MailboxConnector();
+
+				if ($useDefaults)
 				{
-					$bulkResult->addSkipped($id, (string)($result->getData()['reason'] ?? 'CRM already enabled'));
+					$result = $mailboxConnector->enableCrmWithDefaults($id);
+
+					if (!$result->isSuccess())
+					{
+						$this->addBulkFailure($bulkResult, $id, $result);
+					}
+					elseif (($result->getData()['skipped'] ?? false) === true)
+					{
+						$bulkResult->addSkipped($id, (string)($result->getData()['reason'] ?? 'CRM already enabled'));
+					}
+					else
+					{
+						$bulkResult->addApplied($id);
+					}
 				}
 				else
 				{
-					$bulkResult->addApplied($id);
-				}
-			}
-			else
-			{
-				$result = $mailboxConnector->updateCrmOptions($id, $resolvedCrmOptions);
+					$result = $mailboxConnector->updateCrmOptions($id, $resolvedCrmOptions);
 
-				if (!$result->isSuccess())
-				{
-					$errors = $result->getErrors();
-					$errorMessage = !empty($errors) ? $errors[0]->getMessage() : 'Unknown error';
-					$bulkResult->addFailed($id, $errorMessage);
-				}
-				elseif (($result->getData()['skipped'] ?? false) === true)
-				{
-					$bulkResult->addSkipped($id, (string)($result->getData()['reason'] ?? 'No changes'));
-				}
-				else
-				{
-					$bulkResult->addApplied($id);
+					if (!$result->isSuccess())
+					{
+						$this->addBulkFailure($bulkResult, $id, $result);
+					}
+					elseif (($result->getData()['skipped'] ?? false) === true)
+					{
+						$bulkResult->addSkipped($id, (string)($result->getData()['reason'] ?? 'No changes'));
+					}
+					else
+					{
+						$bulkResult->addApplied($id);
+					}
 				}
 			}
-		}
+		};
+
+		$this->walkBulkBatch($mailboxIds, $crmWalk);
 
 		return $bulkResult->jsonSerialize();
 	}
@@ -1012,35 +1227,37 @@ class MailboxConnecting extends Controller
 			return [];
 		}
 
+		$mailboxIds = $this->normalizeBulkIds($mailboxIds);
+
 		$bulkResult = new BulkActionResult();
 
-		foreach ($mailboxIds as $rawId)
-		{
-			$id = (int)$rawId;
-			if ($id <= 0)
+		$this->walkBulkBatch($mailboxIds, function () use ($mailboxIds, $bulkResult, $enabled): void {
+			foreach ($mailboxIds as $id)
 			{
-				$bulkResult->addSkipped($id, 'Invalid mailbox id');
-				continue;
-			}
+				if ($id <= 0)
+				{
+					$bulkResult->addSkipped($id, 'Invalid mailbox id');
 
-			$mailboxConnector = new MailboxConnector();
-			$result = $mailboxConnector->updateCalendarOptions($id, $enabled);
+					continue;
+				}
 
-			if (!$result->isSuccess())
-			{
-				$errors = $result->getErrors();
-				$errorMessage = !empty($errors) ? $errors[0]->getMessage() : 'Unknown error';
-				$bulkResult->addFailed($id, $errorMessage);
+				$mailboxConnector = new MailboxConnector();
+				$result = $mailboxConnector->updateCalendarOptions($id, $enabled);
+
+				if (!$result->isSuccess())
+				{
+					$this->addBulkFailure($bulkResult, $id, $result);
+				}
+				elseif (($result->getData()['skipped'] ?? false) === true)
+				{
+					$bulkResult->addSkipped($id, (string)($result->getData()['reason'] ?? 'No changes'));
+				}
+				else
+				{
+					$bulkResult->addApplied($id);
+				}
 			}
-			elseif (($result->getData()['skipped'] ?? false) === true)
-			{
-				$bulkResult->addSkipped($id, (string)($result->getData()['reason'] ?? 'No changes'));
-			}
-			else
-			{
-				$bulkResult->addApplied($id);
-			}
-		}
+		});
 
 		return $bulkResult->jsonSerialize();
 	}

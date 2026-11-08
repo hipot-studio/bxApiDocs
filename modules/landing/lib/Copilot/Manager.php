@@ -18,6 +18,7 @@ class Manager
 {
 	private const OPTION_AI_SITES_ENABLED = 'landing_ai_sites_enabled';
 	private const OPTION_AI_SITE_SELECTED_ELEMENT_ENABLED = 'landing_ai_site_selected_element_enabled';
+	private const OPTION_AI_SITE_FLUX_IMAGE_ENABLED = 'landing_ai_site_flux_image_enabled';
 
 	/**
 	 * Check is feature available (by option, tariff etc.)
@@ -49,6 +50,16 @@ class Manager
 	public static function isAiSiteSelectedElementEditEnabled(): bool
 	{
 		return Option::get('landing', self::OPTION_AI_SITE_SELECTED_ELEMENT_ENABLED, 'N', '') === 'Y';
+	}
+
+	/**
+	 * Is FLUX image engine enabled for AI sites.
+	 *
+	 * @return bool
+	 */
+	public static function isFluxImageEnabled(): bool
+	{
+		return Option::get('landing', self::OPTION_AI_SITE_FLUX_IMAGE_ENABLED, 'N', '') === 'Y';
 	}
 
 	/**

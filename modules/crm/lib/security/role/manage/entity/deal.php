@@ -14,7 +14,12 @@ class Deal implements PermissionEntity, FilterableByCategory
 	private function permissions(array $stages, ?string $inheritDescription): array
 	{
 		return array_merge(
-			PermissionAttrPresets::crmEntityPresetAutomation(true, $inheritDescription),
+			PermissionAttrPresets::crmEntityPresetAutomation(
+				true,
+				$inheritDescription,
+				withObserversWrite: true,
+				withObserversWriteByStages: true,
+			),
 			PermissionAttrPresets::crmEntityKanbanHideSum(),
 			PermissionAttrPresets::crmStageTransition($stages, $inheritDescription)
 		);

@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Public\Message\BlocksBuilder\Entity\SpaceDividerSize;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Entity\TitleSize;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\Buttons;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\Fold;
+use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\FormFields;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\List\Icon;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\List\OrderedListElements;
 use Bitrix\Im\V2\Public\Message\BlocksBuilder\Field\List\UnorderedListElements;
@@ -143,7 +144,9 @@ class BlockItem
 	public static function createAiAssistantSearchBlock(
 		string $title,
 		string $text,
-		?string $id = null
+		?string $id = null,
+		?int $progressValue = null,
+		?Color $progressColor = null
 	): self
 	{
 		return new self([
@@ -151,6 +154,7 @@ class BlockItem
 			Field::Type->value => BlockType::AiAssistantSearch->value,
 			Field::Title->value => $title,
 			Field::Text->value => $text,
+			Field::Progress->value => self::buildProgress($progressValue, $progressColor),
 		]);
 	}
 
@@ -182,5 +186,65 @@ class BlockItem
 			Field::Type->value => BlockType::Gallery->value,
 			Field::FileIds->value => $fileIds,
 		]);
+	}
+
+	public static function createFileBlock(
+		array $fileIds,
+		?string $id = null
+	): self
+	{
+		return new self([
+			Field::Id->value => $id,
+			Field::Type->value => BlockType::File->value,
+			Field::FileIds->value => $fileIds,
+		]);
+	}
+
+	public static function createAudioBlock(
+		int $fileId,
+		?string $id = null
+	): self
+	{
+		return new self([
+			Field::Id->value => $id,
+			Field::Type->value => BlockType::Audio->value,
+			Field::FileId->value => $fileId,
+		]);
+	}
+
+	public static function createFormBlock(
+		FormFields $fields,
+		Buttons $buttons,
+		?string $id = null
+	): self
+	{
+		return new self([
+			Field::Id->value => $id,
+			Field::Type->value => BlockType::Form->value,
+			Field::Elements->value => $fields->jsonSerialize(),
+			Field::Buttons->value => $buttons->jsonSerialize(),
+		]);
+	}
+
+	/**
+	 * A service block is shown by clients, but its text stays out of the message payload text.
+	 * The flag is available for every block type, so it is applied to a ready block item.
+	 */
+	public function asService(): self
+	{
+		return new self(array_merge($this->blockData, [Field::IsService->value => true]));
+	}
+
+	private static function buildProgress(?int $value, ?Color $color): ?array
+	{
+		if ($value === null)
+		{
+			return null;
+		}
+
+		return [
+			'value' => $value,
+			'colorToken' => $color?->value,
+		];
 	}
 }

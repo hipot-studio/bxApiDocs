@@ -69,15 +69,38 @@ class SharePasswordService
 			$share->setLoginLockedTill($lockedTill);
 		}
 
-		$this->repository->save($share);
+		$this->saveLoginState($share);
 	}
 
 	public function resetLoginAttempts(SupersetDashboardShare $share): void
 	{
+		if ($share->getLoginAttempts() === 0 && $share->getLoginLockedTill() === null)
+		{
+			return;
+		}
+
 		$share
 			->setLoginAttempts(0)
 			->setLoginLockedTill(null)
 		;
-		$this->repository->save($share);
+		$this->saveLoginState($share);
+	}
+
+	public function registerOpening(SupersetDashboardShare $share): void
+	{
+		$this->repository->touchLastOpened((int)$share->getId(), new DateTime());
+	}
+
+	/**
+	 * Only the login columns are written: saving the whole row could switch on a link that was
+	 * switched off after the guest request had read it.
+	 */
+	private function saveLoginState(SupersetDashboardShare $share): void
+	{
+		$this->repository->updateLoginState(
+			(int)$share->getId(),
+			$share->getLoginAttempts(),
+			$share->getLoginLockedTill(),
+		);
 	}
 }

@@ -11,6 +11,7 @@ final class ViewerBuilder
 	private ?int $sourceId = null;
 	private ?array $externalTableData = null;
 	private ?array $settings = null;
+	private bool $restDiagnosticsMode = false;
 
 	public function setType(BIConnector\ExternalSource\Type $type): self
 	{
@@ -43,6 +44,16 @@ final class ViewerBuilder
 	public function setSettings(array $settings): self
 	{
 		$this->settings = $settings;
+
+		return $this;
+	}
+
+	/**
+	 * Lets a REST source name the reason of its failure; other sources ignore it.
+	 */
+	public function setRestDiagnosticsMode(bool $isEnabled): self
+	{
+		$this->restDiagnosticsMode = $isEnabled;
 
 		return $this;
 	}
@@ -85,11 +96,13 @@ final class ViewerBuilder
 			$provider
 				->setSourceId($this->sourceId ?? 0)
 				->setSettings($settings)
+				->setDiagnosticsMode($this->restDiagnosticsMode)
 			;
 		}
 		if (
 			$this->type === BIConnector\ExternalSource\Type::Mysql
 			|| $this->type === BIConnector\ExternalSource\Type::Pgsql
+			|| $this->type === BIConnector\ExternalSource\Type::Clickhouse
 		)
 		{
 			$provider = new Provider\ExternalSql($this->type);

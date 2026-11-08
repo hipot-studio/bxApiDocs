@@ -8,6 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Bizproc\Activity\Dto\ContentBlock;
+use Bitrix\Bizproc\Integration\AiAssistant\ActivityAiAutoDescriber;
 use Bitrix\Bizproc\Internal\Entity\StorageItem\StorageItem;
 use Bitrix\Bizproc\Public\Activity\Interface\ActivityContentBlockProviderInterface;
 use Bitrix\Bizproc\Public\Activity\Interface\ContentBlockScopeConsumerInterface;
@@ -262,6 +263,10 @@ class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurabl
 
 	private function filterStorageFields(array $storageFieldMap, array $fieldValue): array
 	{
+		$storageFieldMap = array_filter(
+			$storageFieldMap,
+			static fn (array $field): bool => ($field['Type'] ?? null) !== FieldType::FILE,
+		);
 		$allowedFieldNames = array_column($storageFieldMap, 'FieldName');
 		$allowedFieldsMap = array_flip($allowedFieldNames);
 		$mapFieldNameToType = array_column($storageFieldMap, 'Type', 'FieldName');
@@ -395,29 +400,29 @@ class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurabl
 	{
 		$dynamicFilterFields = $context['Properties']['DynamicFilterFields'] ?? null;
 		$properties = $context['Properties'] ?? [];
-		$storageId = (int)($properties['StorageId'] ?? 0);
-		$storages = StorageActivityService::getStorageTypes();
-		$storageIds = array_map('intval', array_keys($storages));
-
-		$filteringFields = StorageActivityService::getFilteringFieldsMapByStorageIds($storageIds);
-		$filteringFieldsMap = [
-			0 => array_values(StorageActivityService::getFilteringFieldsMap(0)),
-		];
-
-		foreach ($storages as $id => $title)
-		{
-			$filteringFieldsMap[$id] = array_values($filteringFields[$id] ?? []);
-		}
+		$filteringFieldsMap = [];
 		$writeFieldsMap = [];
-		if ($storageId > 0)
+		if (($context[ActivityAiAutoDescriber::CONTEXT_AI_DESCRIPTION] ?? false) !== true)
 		{
-			$writeFieldsMap[$storageId] = self::getStorageFields($storageId);
+			// Only the manual CUSTOM controls need the full storage catalog and their display maps.
+			$storageId = StorageActivityService::resolveStorageId(
+				isset($properties['StorageId']) ? (int)$properties['StorageId'] : null,
+				\CBPHelper::stringify($properties['StorageCode'] ?? ''),
+			);
+			$storages = StorageActivityService::getStorageTypes();
+			$storageIds = array_map('intval', array_keys($storages));
+			$filteringFields = StorageActivityService::getFilteringFieldsMapByStorageIds($storageIds);
+			$filteringFieldsMap = [0 => array_values(StorageActivityService::getFilteringFieldsMap(0))];
+			foreach ($storages as $id => $title)
+			{
+				$filteringFieldsMap[$id] = array_values($filteringFields[$id] ?? []);
+			}
+			if ($storageId > 0)
+			{
+				$writeFieldsMap[$storageId] = self::getStorageFields($storageId);
+			}
 		}
-		$currentFieldValues = [];
-		if (isset($properties['Fields']) && is_array($properties['Fields']))
-		{
-			$currentFieldValues = array_column($properties['Fields'], 'Value', 'FieldName');
-		}
+		$currentFieldValues = self::resolveCurrentFieldValues($properties);
 
 		return [
 			'Author' => [
@@ -465,6 +470,7 @@ class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurabl
 			],
 			'DynamicFilterFields' => [
 				'Name' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_FILTER_FIELDS_PROPERTY'),
+				'ShowFieldLabel' => false,
 				'FieldName' => 'filter_fields',
 				'Type' => FieldType::CUSTOM,
 				'Required' => false,
@@ -481,6 +487,7 @@ class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurabl
 			],
 			'WriteFields' => [
 				'Name' => Loc::getMessage('BIZPROC_WRITE_DATA_ACTIVITY_WRITE_FIELDS_PROPERTY'),
+				'ShowFieldLabel' => false,
 				'FieldName' => 'write_fields',
 				'Type' => FieldType::CUSTOM,
 				'Required' => false,
@@ -514,6 +521,34 @@ class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurabl
 				'Default' => 'Y',
 			],
 		];
+	}
+
+	/**
+	 * The values the dialog draws its controls with. `Fields` is the display form the dialog itself writes, so
+	 * it is preferred; a block an agent authored carries none, and then the values are read back off the very
+	 * map the node executes. Without that fallback such a block would open empty and a manual save would wipe
+	 * the values it was built with.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private static function resolveCurrentFieldValues(array $properties): array
+	{
+		if (isset($properties['Fields']) && is_array($properties['Fields']))
+		{
+			return array_column($properties['Fields'], 'Value', 'FieldName');
+		}
+
+		return isset($properties['FieldValue']) && is_array($properties['FieldValue'])
+			? $properties['FieldValue']
+			: []
+		;
+	}
+
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		// Persisted but not typable via getPropertiesMap(): per-storage field->value maps (FieldValue, Fields)
+		// and the CUSTOM filter tree.
+		return ['FieldValue', 'Fields', 'DynamicFilterFields'];
 	}
 
 	protected static function extractPropertiesValues(PropertiesDialog $dialog, array $fieldsMap): Result
@@ -704,8 +739,8 @@ class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurabl
 		}
 
 		$fields = $arTestProperties['Fields'] ?? [];
-		$fieldValues = array_column($fields, 'Value');
-		if (is_array($fields) && !CBPHelper::isEmptyValue($fieldValues))
+		$fieldValues = is_array($fields) ? array_column($fields, 'Value') : [];
+		if (!CBPHelper::isEmptyValue($fieldValues))
 		{
 			foreach ($fields as $fieldName => $field)
 			{
@@ -726,8 +761,11 @@ class CBPWriteDataStorageActivity extends BaseActivity implements IBPConfigurabl
 				}
 			}
 		}
-		else
+		elseif (CBPHelper::isEmptyValue($arTestProperties['FieldValue'] ?? null))
 		{
+			// The display form is the dialog's; what the node executes is the value map, and a block built
+			// without the dialog carries only that one. Demanding the display form of it would refuse a
+			// template that writes exactly what it says it writes.
 			$errors[] = [
 				'code' => 'NotExist',
 				'parameter' => 'Fields',

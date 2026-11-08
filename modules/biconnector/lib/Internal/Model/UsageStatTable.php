@@ -29,6 +29,8 @@ use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
  * <li> FILTERS text optional
  * <li> ROW_NUM int optional
  * <li> DATA_SIZE int optional
+ * <li> READ_ROWS int optional
+ * <li> READ_BYTES int optional
  * <li> REAL_TIME double optional
  * <li> IS_OVER_LIMIT bool optional
  * <li> INPUT text optional
@@ -98,6 +100,11 @@ class UsageStatTable extends DataManager
 			,
 			new IntegerField('ROW_NUM'),
 			new IntegerField('DATA_SIZE'),
+			// Rows and bytes the source scanned, as opposed to the rows handed to the client: with a
+			// delegated aggregation the two differ by orders of magnitude. NULL when the source
+			// reports no such statistics.
+			new IntegerField('READ_ROWS'),
+			new IntegerField('READ_BYTES'),
 			new FloatField('REAL_TIME'),
 			(new BooleanField('IS_OVER_LIMIT'))
 				->configureValues('N', 'Y')

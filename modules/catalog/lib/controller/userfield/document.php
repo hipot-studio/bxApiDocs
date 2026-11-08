@@ -17,14 +17,16 @@ class Document extends \Bitrix\Catalog\Controller\Controller
 	{
 		global $USER_FIELD_MANAGER;
 
-		$existsResult = $this->exists($documentId);
-		if (!$existsResult->isSuccess())
+		$documentId = self::toPositiveInt($documentId);
+		$documentType = $this->getDocumentType($documentId);
+		$entityId = self::getEntityIdForType($documentType);
+		if (!$entityId)
 		{
-			$this->addErrors($existsResult->getErrors());
+			$this->addError(new Error('The specified document does not exist'));
 			return null;
 		}
 
-		$documentType = $fields['DOC_TYPE'];
+		$requestedDocumentType = $fields['DOC_TYPE'] ?? '';
 		unset($fields['DOC_TYPE']);
 
 		$permissionCheckResult = $this->checkUpdatePermissionByType($documentType);
@@ -34,13 +36,13 @@ class Document extends \Bitrix\Catalog\Controller\Controller
 			return null;
 		}
 
-		$entityId = self::getEntityIdForType($documentType);
-		if (!$entityId)
+		if ($requestedDocumentType !== '' && $requestedDocumentType !== $documentType)
 		{
-			return [];
+			$this->addError(new Error('The DOC_TYPE field does not match the document'));
+			return null;
 		}
 
-		$fields = $this->prepareFileFieldsForUpdate((int)$documentId, $documentType, $fields);
+		$fields = $this->prepareFileFieldsForUpdate($documentId, $documentType, $fields);
 
 		$USER_FIELD_MANAGER->Update($entityId, $documentId, $fields);
 
@@ -176,10 +178,7 @@ class Document extends \Bitrix\Catalog\Controller\Controller
 	{
 		global $USER_FIELD_MANAGER;
 
-		$documentType = StoreDocumentTable::getRow([
-			'select' => ['DOC_TYPE'],
-			'filter' => ['=ID' => $id]
-		])['DOC_TYPE'];
+		$documentType = $this->getDocumentType($id);
 		if (!$documentType)
 		{
 			return [];
@@ -206,15 +205,22 @@ class Document extends \Bitrix\Catalog\Controller\Controller
 		return $result;
 	}
 
-	protected function exists($id)
+	private function getDocumentType($id): string
 	{
-		$r = new Result();
-		if(isset($this->get($id)['ID']) === false)
+		return (string)(StoreDocumentTable::getRow([
+			'select' => ['DOC_TYPE'],
+			'filter' => ['=ID' => $id],
+		])['DOC_TYPE'] ?? '');
+	}
+
+	private static function toPositiveInt(mixed $value): int
+	{
+		if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1)
 		{
-			$r->addError(new Error('The specified document does not exist'));
+			$value = (int)$value;
 		}
 
-		return $r;
+		return is_int($value) && $value > 0 ? $value : 0;
 	}
 
 	protected function checkReadPermissionEntity()

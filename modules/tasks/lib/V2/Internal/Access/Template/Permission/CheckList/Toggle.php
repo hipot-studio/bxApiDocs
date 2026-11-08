@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Access\Template\Permission\CheckList;
 use Attribute;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TemplateAccessController;
+use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 use Bitrix\Tasks\V2\Internal\DI\Container;
@@ -31,17 +32,32 @@ class Toggle implements AttributeAccessInterface
 			return false;
 		}
 
-		$nodes = $checkListMapper->mapToNodes($entity->checklist);
+		$nodes = $checkListMapper->mapToNodes($entity->checklist)->toArray();
+
+		// the rule refuses an item by the template it belongs to, so the binding is read from storage
+		// for all the nodes at once instead of a row per node
+		$checkLists = TemplateCheckListFacade::getAccessModelsByItemIds(array_column($nodes, 'ID'));
 
 		$canToggle = true;
 		foreach ($nodes as $node)
 		{
+			$itemId = (int)($node['ID'] ?? 0);
+
+			// the rule decides by the stored row of the node, so a node naming no row of its own is
+			// refused here and not by whatever the rule makes of an item that does not exist
+			if ($itemId <= 0 || !isset($checkLists[$itemId]))
+			{
+				return false;
+			}
+
+			$checkList = $checkLists[$itemId];
+
 			if (
 				!TemplateAccessController::can(
 					userId: $context->getUserId(),
 					action: ActionDictionary::ACTION_CHECKLIST_TOGGLE,
 					itemId: $entity->getId(),
-					params: $node->toArray(),
+					params: $checkList,
 				)
 			)
 			{

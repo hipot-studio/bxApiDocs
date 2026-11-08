@@ -32,6 +32,7 @@ class CheckListSchemaBuilder extends BaseSchemaBuilder
 		return match ($action)
 		{
 			UpdateCheckListTool::ACTION_NAME, DeleteCheckListTool::ACTION_NAME => ['checkListId'],
+			UpdateCheckListItemTool::ACTION_NAME, DeleteCheckListItemTool::ACTION_NAME => ['itemId'],
 			CreateCheckListItemTool::ACTION_NAME => ['title', 'checkListId'],
 			CreateCheckListTool::ACTION_NAME => ['taskId', 'title'],
 			default => [],
@@ -100,6 +101,12 @@ class CheckListSchemaBuilder extends BaseSchemaBuilder
 				,
 				'minimum' => 0,
 			],
+			'isComplete' => [
+				'type' => ['boolean', 'null'],
+				'description' =>
+					'Set to true to mark the checklist as completed, false to reopen it, or null to leave it unchanged'
+				,
+			],
 		];
 	}
 
@@ -123,6 +130,12 @@ class CheckListSchemaBuilder extends BaseSchemaBuilder
 					. 'Must be a non-negative integer or null to leave it unchanged.'
 				,
 				'minimum' => 0,
+			],
+			'isComplete' => [
+				'type' => ['boolean', 'null'],
+				'description' =>
+					'Set to true to mark the item as completed, false to reopen it, or null to leave it unchanged'
+				,
 			],
 		];
 	}

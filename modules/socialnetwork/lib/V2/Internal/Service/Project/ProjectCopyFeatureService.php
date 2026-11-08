@@ -117,9 +117,14 @@ class ProjectCopyFeatureService
 
 	private function buildTasksFeatureFlags(?array $copyOptions): array
 	{
-		return ($copyOptions['tasks']['robots'] ?? false) === true
-			? ['robots']
-			: [];
+		$features = ['checklists'];
+
+		if (($copyOptions['tasks']['robots'] ?? false) === true)
+		{
+			$features[] = 'robots';
+		}
+
+		return $features;
 	}
 
 	private function buildTasksDatesPayload(?array $projectTerm): array

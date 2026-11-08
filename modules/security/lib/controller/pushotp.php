@@ -386,9 +386,14 @@ class PushOtp extends Main\Engine\Controller
 
 	public function sendConfirmationEmailAction(string $email)
 	{
-		global $USER;
-
 		if (!$this->checkEmailSettings())
+		{
+			return null;
+		}
+
+		$emailConfirmationOtp = $this->resolveEmailConfirmationOtp();
+
+		if ($emailConfirmationOtp === null)
 		{
 			return null;
 		}
@@ -400,7 +405,7 @@ class PushOtp extends Main\Engine\Controller
 		}
 
 		$context = new Authentication\Context();
-		$context->setUserId($USER->GetID());
+		$context->setUserId($emailConfirmationOtp->getUserId());
 
 		$shortCode = new ShortCode($context);
 
@@ -416,9 +421,9 @@ class PushOtp extends Main\Engine\Controller
 		}
 
 		$fields = [
-			'USER_ID' => $USER->GetID(),
+			'USER_ID' => $emailConfirmationOtp->getUserId(),
 			'EMAIL' => $email,
-			'LOGIN' => $USER->GetLogin(),
+			'LOGIN' => $emailConfirmationOtp->getUserLogin(),
 			'CODE' => $shortCode->generate(),
 			'DATE' => (string)(new Main\Type\DateTime()),
 		];
@@ -455,9 +460,14 @@ class PushOtp extends Main\Engine\Controller
 
 	public function confirmEmailAction(string $code, string $signedData)
 	{
-		global $USER;
-
 		if (!$this->checkEmailSettings())
+		{
+			return null;
+		}
+
+		$emailConfirmationOtp = $this->resolveEmailConfirmationOtp();
+
+		if ($emailConfirmationOtp === null)
 		{
 			return null;
 		}
@@ -485,7 +495,7 @@ class PushOtp extends Main\Engine\Controller
 		}
 
 		$context = new Authentication\Context();
-		$context->setUserId($USER->GetID());
+		$context->setUserId($emailConfirmationOtp->getUserId());
 
 		$shortCode = new ShortCode($context);
 
@@ -506,10 +516,52 @@ class PushOtp extends Main\Engine\Controller
 			return null;
 		}
 
-		Otp::getByUser($USER->GetID())
-			->setEmail($params['email'])
+		$emailConfirmationOtp->setEmail($params['email'])
 			->save()
 		;
+	}
+
+	private function resolveEmailConfirmationOtp(): ?Otp
+	{
+		global $USER;
+
+		if ($USER->IsAuthorized())
+		{
+			return Otp::getByUser((int)$USER->GetID());
+		}
+
+		$params = Otp::getDeferredParams();
+		$userId = (int)($params['USER_ID'] ?? 0);
+		$otp = $userId > 0 ? Otp::getByUser($userId) : null;
+
+		if ($otp !== null && !$otp->isUserActive())
+		{
+			$user = Main\UserTable::query()
+				->addFilter('=ID', $userId)
+				->addSelect('ACTIVE')
+				->addSelect('LOGIN')
+				->exec()
+				->fetch()
+			;
+			$otp->setUserActive(($user['ACTIVE'] ?? null) === 'Y');
+			$otp->setUserLogin($user['LOGIN'] ?? '');
+		}
+		if (
+			$this->getScope() !== self::SCOPE_AJAX
+			|| ($params[Otp::REJECTED_KEY] ?? null) !== Otp::REJECT_BY_MANDATORY
+			|| !Otp::isOtpEnabled()
+			|| !Otp::isMandatoryUsing()
+			|| $otp === null
+			|| !$otp->isUserActive()
+			|| $otp->canSkipMandatory()
+			|| $otp->isActivated()
+		)
+		{
+			$this->addError(new Main\Error(Loc::getMessage('push_otp_controller_otp_params'), 'OTP_PARAMS'));
+			return null;
+		}
+
+		return $otp;
 	}
 
 	protected function maskEmail(string $email): string
@@ -641,6 +693,16 @@ class PushOtp extends Main\Engine\Controller
 				],
 			],
 			'sendEmail' => [
+				'-prefilters' => [
+					ActionFilter\Authentication::class,
+				],
+			],
+			'sendConfirmationEmail' => [
+				'-prefilters' => [
+					ActionFilter\Authentication::class,
+				],
+			],
+			'confirmEmail' => [
 				'-prefilters' => [
 					ActionFilter\Authentication::class,
 				],

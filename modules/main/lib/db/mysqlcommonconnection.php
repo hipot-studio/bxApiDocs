@@ -297,6 +297,12 @@ abstract class MysqlCommonConnection extends Connection
 	public function lock($name, $timeout = 0)
 	{
 		$timeout = (int)$timeout;
+		if ($timeout < 0)
+		{
+			// A negative timeout value means infinite timeout. Doesn't work on MariaDB.
+			$timeout = '0xffffffff';
+		}
+
 		$name = $this->getLockName($name);
 
 		$pool = Application::getInstance()->getConnectionPool();

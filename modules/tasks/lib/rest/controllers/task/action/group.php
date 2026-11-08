@@ -14,6 +14,8 @@ use Bitrix\Tasks\Access\AccessCacheLoader;
 use Bitrix\Tasks\Flow\Access\FlowAccessController;
 use Bitrix\Tasks\Flow\Access\FlowAction;
 use Bitrix\Tasks\Flow\Provider\FlowProvider;
+use Bitrix\Tasks\Integration\CRM\CrmInTasksFeature;
+use Bitrix\Tasks\Rest\Controllers\Task\CrmItemGate;
 use Bitrix\Tasks\Util\Error;
 use Bitrix\Tasks\Util\Error\Collection;
 use Bitrix\Tasks\Helper\Filter;
@@ -33,7 +35,9 @@ use Bitrix\Tasks\Control\Group\AddAccomplice;
 use Bitrix\Tasks\Control\Group\Favorite;
 use Bitrix\Tasks\Control\Group\SetGroup;
 use Bitrix\Tasks\Control\Group\SetFlow;
+use Bitrix\Tasks\Control\Group\SetCrmItems;
 use Bitrix\Tasks\Control\Group\Delete;
+use Bitrix\Tasks\V2\Internal\DI\Container;
 
 use Bitrix\Tasks\Grid\Task;
 
@@ -383,6 +387,40 @@ class Group extends Controller
 
 		$setFlow = new SetFlow();
 		$setFlow->runBatch($this->userId, $accessedTaskIds, $flowId);
+
+		return $this->processAnswer(count($taskIds));
+	}
+
+	public function bindCrmAction(array $data): array
+	{
+		if (!CrmInTasksFeature::isOn())
+		{
+			$this->errors->add('ACTION_NOT_ALLOWED.RESTRICTED', Loc::getMessage('TASKS_ACTION_NOT_ALLOWED'));
+			return $this->preformProcessAnswer();
+		}
+
+		$taskIds = $this->checkTaskParams($data);
+
+		$crmItemId = (string)($data['crmItemId'] ?? '');
+		if (!CrmItemGate::isConcreteItem($crmItemId))
+		{
+			$this->errors->add('ACTION_NOT_ALLOWED.RESTRICTED', CrmItemGate::getInvalidItemError()->getMessage());
+			return $this->preformProcessAnswer();
+		}
+
+		$crmAccessService = Container::getInstance()->getCrmAccessService();
+		if (count($crmAccessService->filterCrmItemsWithAccess([$crmItemId], $this->userId)) !== 1)
+		{
+			$this->errors->add('ACTION_NOT_ALLOWED.RESTRICTED', Loc::getMessage('TASKS_ACTION_NOT_ALLOWED'));
+			return $this->preformProcessAnswer();
+		}
+
+		$accessedTaskIds = $this->tasksAccessCheck($taskIds, Task\GroupAction::ACTION_BIND_CRM);
+
+		$setCrmItems = new SetCrmItems();
+		$results = $setCrmItems->runBatch($this->userId, $accessedTaskIds, [$crmItemId]);
+
+		$this->checkErrors($results);
 
 		return $this->processAnswer(count($taskIds));
 	}
@@ -771,6 +809,34 @@ class Group extends Controller
 			foreach ($ids as $id)
 			{
 				if ($taskAccessController->can($this->userId, ActionDictionary::ACTION_TASK_EDIT, $id))
+				{
+					$result[] = $id;
+				}
+				else
+				{
+					$taskIdsError[] = $id;
+				}
+			}
+
+			if (!empty($taskIdsError))
+			{
+				$taskIdsError = join(', ', $taskIdsError);
+				$this->errors->addWarning(
+					'ACTION_NOT_ALLOWED.RESTRICTED',
+					Loc::getMessage(
+						'TASKS_ACTION_NOT_ALLOWED_IN_TASKS',
+						['#TASK_LIST#' => $taskIdsError]
+					)
+				);
+			}
+		}
+
+		if ($action === Task\GroupAction::ACTION_BIND_CRM)
+		{
+			$taskIdsError = [];
+			foreach ($ids as $id)
+			{
+				if (TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_EDIT, (int)$id))
 				{
 					$result[] = $id;
 				}

@@ -20,6 +20,7 @@ use Bitrix\Calendar\Rooms;
 use Bitrix\Calendar\Internals\SectionConnectionTable;
 use Bitrix\Calendar\Sync\Util\EventDescription;
 use Bitrix\Calendar\Sync\Util\Result;
+use Bitrix\Calendar\Synchronization\Internal\Exception\ICloudImportIncompleteException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\SynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use Bitrix\Calendar\Synchronization\Public\Service\SynchronizationFeature;
@@ -48,6 +49,7 @@ class DataSyncManager
 	private const ENTITY_TYPE = 'user';
 	private const MAX_NUMBER = 5;
 	private const TIME_SLICE = 2600000;
+	private const ICLOUD_IMPORT_INCOMPLETE_STATUS = 1003;
 
 	/** @var Factory $mapperHelper */
 	private $mapperFactory;
@@ -206,7 +208,7 @@ class DataSyncManager
 			catch (SynchronizerException $e)
 			{
 				$error = $this->processError([
-					$e->getCode(),
+					$this->getSynchronizerErrorCode($e),
 					$e->getMessage(),
 				]);
 
@@ -415,7 +417,10 @@ class DataSyncManager
 			{
 				$eventIdList = $this->getAllEventByParentId($child['EVENT_ID']);
 
-				EventTable::updateMulti($eventIdList, ['DELETED' => 'Y']);
+				EventTable::updateMulti($eventIdList, [
+					'DELETED' => 'Y',
+					'TIMESTAMP_X' => new DateTime(),
+				]);
 
 				EventConnectionTable::delete($child['EVENT_CONNECTION_ID']);
 			}
@@ -1423,6 +1428,27 @@ class DataSyncManager
 	private function createConnectionObject(EO_DavConnection $connection): Connection
 	{
 		return (new BuilderConnectionFromDM($connection))->build();
+	}
+
+	private function getSynchronizerErrorCode(SynchronizerException $exception): int
+	{
+		if ($exception->getCode() !== 0)
+		{
+			return $exception->getCode();
+		}
+
+		$cause = $exception;
+		while ($cause !== null)
+		{
+			if ($cause instanceof ICloudImportIncompleteException)
+			{
+				return self::ICLOUD_IMPORT_INCOMPLETE_STATUS;
+			}
+
+			$cause = $cause->getPrevious();
+		}
+
+		return 0;
 	}
 
 	/**

@@ -9,6 +9,8 @@ use Bitrix\Main\EventResult;
 use Bitrix\Sale\Delivery;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Event;
+use Bitrix\Main\Type\Callback;
+use Bitrix\Main\Web\HttpClient;
 
 
 IncludeModuleLangFile(__FILE__);
@@ -279,6 +281,39 @@ class CSaleYMHandler
 	}
 
 	/**
+	 * @return string[]
+	 */
+	public static function getOutgoingStatuses(): array
+	{
+		return ['DELIVERY', 'CANCELLED', 'PICKUP', 'DELIVERED'];
+	}
+
+	public static function isOutgoingStatus(mixed $marketStatus): bool
+	{
+		return is_string($marketStatus) && in_array($marketStatus, self::getOutgoingStatuses(), true);
+	}
+
+	public static function getOutgoingStatus(array $siteSettings, string $shopStatus): string
+	{
+		$marketStatus = $siteSettings["STATUS_OUT"][$shopStatus] ?? '';
+
+		return self::isOutgoingStatus($marketStatus) ? $marketStatus : '';
+	}
+
+	public static function filterOutgoingStatuses(array $statusOut): array
+	{
+		foreach ($statusOut as $shopStatus => $marketStatus)
+		{
+			if (!self::isOutgoingStatus($marketStatus))
+			{
+				$statusOut[$shopStatus] = '';
+			}
+		}
+
+		return $statusOut;
+	}
+
+	/**
 	 * Saves settings
 	 * @param $arSettings array Settings array to save
 	 * @return bool
@@ -289,9 +324,21 @@ class CSaleYMHandler
 			return false;
 
 		$result = true;
-		
+
 		foreach ($arSettings as $siteId => $siteSett)
 		{
+			if (isset($siteSett["STATUS_OUT"]))
+			{
+				if (is_array($siteSett["STATUS_OUT"]))
+				{
+					$arSettings[$siteId]["STATUS_OUT"] = self::filterOutgoingStatuses($siteSett["STATUS_OUT"]);
+				}
+				else
+				{
+					unset($arSettings[$siteId]["STATUS_OUT"]);
+				}
+			}
+
 			if(isset($siteSett["OUTLETS_IDS"]) && is_array($siteSett["OUTLETS_IDS"]))
 			{
 				$newOutletsIds = array();
@@ -662,6 +709,16 @@ class CSaleYMHandler
 		return $result;
 	}
 
+	public static function isValidExternalOrderId(mixed $orderId): bool
+	{
+		if (is_int($orderId))
+		{
+			return $orderId > 0;
+		}
+
+		return is_string($orderId) && preg_match('/^[1-9][0-9]*$/D', $orderId) === 1;
+	}
+
 	/**
 	 * @param array $arPostData
 	 * @return bool
@@ -670,6 +727,7 @@ class CSaleYMHandler
 	{
 		return	isset($arPostData["order"])
 			&& isset($arPostData["order"]["id"])
+			&& self::isValidExternalOrderId($arPostData["order"]["id"])
 			&& isset($arPostData["order"]["currency"])
 			&& isset($arPostData["order"]["fake"])
 			&& isset($arPostData["order"]["items"]) && is_array($arPostData["order"]["items"])
@@ -1486,7 +1544,7 @@ class CSaleYMHandler
 		if(
 			$this->yandexApiUrl == ''
 			|| $this->campaignId == ''
-			|| intval($orderId) <= 0
+			|| !self::isValidExternalOrderId($orderId)
 			|| $status == ''
 			|| $this->oAuthToken == ''
 			|| $this->oAuthClientId == ''
@@ -1497,13 +1555,7 @@ class CSaleYMHandler
 		$format = $this->communicationFormat == self::JSON ? 'json' : 'xml';
 		$url = $this->yandexApiUrl."campaigns/".$this->campaignId."/orders/".$orderId."/status.".$format;
 
-		$http = new \Bitrix\Main\Web\HttpClient(array(
-			"version" => "1.1",
-			"socketTimeout" => 30,
-			"streamTimeout" => 30,
-			"redirect" => true,
-			"redirectMax" => 5,
-		));
+		$http = $this->createHttpClient();
 
 		$arQuery = array(
 			"order" => array(
@@ -1561,7 +1613,7 @@ class CSaleYMHandler
 					$intervalSeconds = 3600;
 					$timeToStart = ConvertTimeStamp(strtotime(date('Y-m-d H:i:s', time() + $intervalSeconds)), 'FULL');
 					\CAgent::AddAgent(
-						'\CSaleYMHandler::sendStatusAgent("'.$orderId.'","'.$status.'", "'.$substatus.'", "'.$this->siteId.'");',
+						new Callback([self::class, 'sendStatusAgent'], [$orderId, $status, $substatus, $this->siteId]),
 						'sale',
 						"N",
 						$intervalSeconds,
@@ -1597,6 +1649,17 @@ class CSaleYMHandler
 		return $bResult;
 	}
 
+	protected function createHttpClient(): HttpClient
+	{
+		return new HttpClient([
+			'version' => '1.1',
+			'socketTimeout' => 30,
+			'streamTimeout' => 30,
+			'redirect' => true,
+			'redirectMax' => 5,
+		]);
+	}
+
 	/**
 	 * @param string $yandexOrderId
 	 * @param string $yandexStatus
@@ -1606,6 +1669,11 @@ class CSaleYMHandler
 	 */
 	public static function sendStatusAgent($yandexOrderId, $yandexStatus, $substatus, $siteId)
 	{
+		if (!self::isOutgoingStatus($yandexStatus))
+		{
+			return '';
+		}
+
 		$YMHandler = new CSaleYMHandler(
 			array("SITE_ID"=> $siteId)
 		);
@@ -1811,10 +1879,11 @@ class CSaleYMHandler
 
 			$settings = $YMHandler->getSettingsBySiteId($arOrder["LID"]);
 
-			if(!isset($settings["STATUS_OUT"][$status]) || $settings["STATUS_OUT"][$status] == '')
+			$yandexStatus = self::getOutgoingStatus($settings, $status);
+
+			if($yandexStatus === '')
 				return false;
 
-			$yandexStatus = $settings["STATUS_OUT"][$status];
 			$YMHandler->sendStatus($arOrder["YANDEX_ID"], $yandexStatus, $substatus);
 			$result = true;
 		}

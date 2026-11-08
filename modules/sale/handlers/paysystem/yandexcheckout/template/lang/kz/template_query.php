@@ -5,5 +5,6 @@ $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_DESCRIPTION_MSGVER_1"] = "Қыз
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_DESCRIPTION_SUM_MSGVER_1"] = "Шот бойынша төлем сомасы: <span class='widget-paysystem-checkout-sum'>#SUM#</span>";
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_ERROR_MESSAGE_FOOTER"] = "Басқа төлем әдісін таңдаңыз немесе компания менеджеріне хабарласыңыз.";
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_ERROR_MESSAGE_HEADER"] = "Өкінішті, қате пайда болды.";
+$MESS['SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_FORM_ARIA'] = 'ЮKassa арқылы төлеу';
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_QIWI_PHONE"] = "Телефон нөмірін <b>79xxxxxxxxx</b> пішімінде енгізіңіз";
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_SBERBANK_SMS_PHONE"] = "Сбербанк Онлайн желісіне байланыстырылған телефон нөмірін енгізіңіз";

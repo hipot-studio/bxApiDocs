@@ -158,6 +158,12 @@ class QuoteDataProvider extends EntityDataProvider implements FactoryOptionable
 					'partial' => true,
 				]
 			),
+			'OPENED' => $this->createField(
+				'OPENED',
+				[
+					'type' => 'checkbox'
+				]
+			),
 			'STATUS_ID' => $this->createField(
 				'STATUS_ID',
 				[

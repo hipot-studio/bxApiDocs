@@ -39,6 +39,7 @@
 			}
 
 			var data,
+				paysystemBlockNode = this.findPaysystemBlockNode(e.currentTarget || this.formNode),
 				formData = this.getAllFormData(),
 				submitButton = this.formNode.querySelector('input[type="submit"]'),
 				i;
@@ -73,12 +74,12 @@
 					if (result.status === 'success')
 					{
 						this.isAllowedSubmitting = true;
-						this.updateTemplateHtml(result.template);
+						this.updateTemplateHtml(result.template, paysystemBlockNode);
 					}
 					else if (result.status === 'error')
 					{
 						this.isAllowedSubmitting = true;
-						this.showErrorTemplate(result.buyerErrors);
+						this.showErrorTemplate(result.buyerErrors, paysystemBlockNode);
 						BX.onCustomEvent('onPaySystemAjaxError', [result.buyerErrors]);
 					}
 				}, this)
@@ -101,13 +102,32 @@
 			return !!prepared && prepared.data ? prepared.data : {};
 		},
 
-		updateTemplateHtml: function (html)
+		findPaysystemBlockNode: function(form)
 		{
-			BX.html(this.paysystemBlockNode, html)
+			return BX.findParent(form, {className: 'paysystem-yandex'}) || this.paysystemBlockNode;
 		},
 
-		showErrorTemplate: function(errors)
+		focusPaysystemBlock: function(paysystemBlockNode)
 		{
+			if (paysystemBlockNode && document.body.contains(paysystemBlockNode))
+			{
+				paysystemBlockNode.focus();
+			}
+		},
+
+		updateTemplateHtml: function (html, paysystemBlockNode)
+		{
+			paysystemBlockNode = paysystemBlockNode || this.paysystemBlockNode;
+
+			BX.html(paysystemBlockNode, html).then(BX.proxy(function() {
+				this.focusPaysystemBlock(paysystemBlockNode);
+			}, this));
+		},
+
+		showErrorTemplate: function(errors, paysystemBlockNode)
+		{
+			paysystemBlockNode = paysystemBlockNode || this.paysystemBlockNode;
+
 			var errorsList = [
 				BX.message('SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_ERROR_MESSAGE_HEADER'),
 			];
@@ -129,8 +149,9 @@
 				html: errorsList.join('<br />'),
 			});
 
-			this.paysystemBlockNode.innerHTML = '';
-			this.paysystemBlockNode.appendChild(resultDiv);
+			paysystemBlockNode.innerHTML = '';
+			paysystemBlockNode.appendChild(resultDiv);
+			this.focusPaysystemBlock(paysystemBlockNode);
 		},
 
 		PaymentPhoneForm: function(params)

@@ -6,10 +6,12 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Entity\UserOtp;
 use Bitrix\Intranet\Internal\Enum\Otp\OtpBannerType;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Factory\Otp\BannerTypeFactory;
+use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Service\Otp\OtpBannerSessionDelay;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
@@ -77,6 +79,7 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 						->getPersonalSettingsByUserId((int)$this->currentUser->getId())
 						?->getInitParams()['deviceInfo']['platform'] ?? null,
 					...($this->otpSettings->getPersonalSettingsByUserId((int)$this->currentUser->getId())?->getOtpConfig() ?? []),
+					'canSkipDeviceConnect' => (new PersonalOtp(new User((int)$this->currentUser->getId())))->getOtpConfig()['canSkipDeviceConnect'],
 				];
 			}
 		}
@@ -92,20 +95,27 @@ class CIntranetOtpInfoComponent extends CBitrixComponent
 
 			$otpPersonal = $this->otpSettings->getPersonalSettingsByUserId((int)$this->currentUser->getId());
 
-			if (
-				$otpPersonal?->isActivated()
-				|| !$otpPersonal?->isRequired()
-			) {
+			if (!$this->shouldShowMandatoryPopup($otpPersonal))
+			{
 				return;
 			}
 
 			$this->arResult['PATH_TO_PROFILE_SECURITY'] = $this->getPathToProfileSecurity();
 			$this->arResult['POPUP_NAME'] = 'otp_mandatory_info';
-			$this->arResult['USER']['OTP_DAYS_LEFT'] = $otpPersonal ? $this->getFormattedOtpDaysLeft($otpPersonal->getOtpInfo()) : null;
+			$this->arResult['USER']['OTP_DAYS_LEFT'] = $this->getFormattedOtpDaysLeft($otpPersonal->getOtpInfo());
 			$this->saveLocalStorageInfo();
 		}
 
 		$this->includeComponentTemplate();
+	}
+
+	private function shouldShowMandatoryPopup(?PersonalOtp $otpPersonal): bool
+	{
+		return $otpPersonal !== null
+			&& !$otpPersonal->isActivated()
+			&& $otpPersonal->isRequired()
+			&& !$otpPersonal->isMandatorySkippedIndefinitely()
+		;
 	}
 
 	private function getBannerType(): ?OtpBannerType

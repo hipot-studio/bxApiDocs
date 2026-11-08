@@ -4,6 +4,7 @@ namespace Bitrix\Rest;
 
 use Bitrix\Main;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
@@ -41,6 +42,10 @@ use Bitrix\Main\ORM\Query\Join;
 
 class PlacementLangTable extends DataManager
 {
+	use DeleteByFilterTrait;
+
+	private const DELETE_BATCH_SIZE = 500;
+
 	/**
 	 * Returns DB table name for entity.
 	 *
@@ -154,33 +159,41 @@ class PlacementLangTable extends DataManager
 		];
 	}
 
-	private static function getPlacementTableName()
-	{
-		return PlacementTable::getTableName();
-	}
-
-
 	/**
 	 * Removes all application placement language phrases.
 	 *
 	 * @param int $appId Application ID.
 	 *
-	 * @return Main\DB\Result
+	 * @return void
 	 */
 	public static function deleteByApp(int $appId): void
 	{
-		$dbRes = PlacementTable::getList(
-			[
-				'select' => ['ID'],
-				'filter' => [
-					'=APP_ID' => $appId,
-				]
-			]
-		);
-		$placementIds = $dbRes->fetchAll();
-		foreach ($placementIds as $placementId)
+		if ($appId <= 0)
 		{
-			static::deleteByPlacement((int)$placementId['ID']);
+			throw new Main\ArgumentException(
+				'Deleting by non-positive application id is not allowed (' . static::getTableName() . ').',
+				'appId'
+			);
+		}
+
+		$rows = PlacementTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=APP_ID' => $appId,
+			],
+		])->fetchAll();
+
+		static::deleteByPlacementIds(array_map(static fn(array $row): int => (int)$row['ID'], $rows));
+	}
+
+	/**
+	 * @param int[] $placementIds
+	 */
+	public static function deleteByPlacementIds(array $placementIds): void
+	{
+		foreach (array_chunk($placementIds, self::DELETE_BATCH_SIZE) as $chunk)
+		{
+			static::deleteByFilter(['@PLACEMENT_ID' => $chunk]);
 		}
 	}
 

@@ -8,6 +8,7 @@ use Bitrix\Catalog\MeasureTable;
 use Bitrix\Crm\Discount;
 use Bitrix\Crm\Integration\DocumentGenerator\ProductLoader;
 use Bitrix\Crm\Integration\DocumentGenerator\Value\Money;
+use Bitrix\Crm\Integration\DocumentGenerator\Value\ProductMeasure;
 use Bitrix\Crm\Integration\DocumentGenerator\Value\TaxRate;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Service\Accounting;
@@ -19,9 +20,35 @@ use Bitrix\Main\Localization\Loc;
 
 class Product extends HashDataProvider
 {
+	private const PHYSICAL_VALUE_TYPES = [
+		'WEIGHT' => ProductMeasure::WEIGHT,
+		'LENGTH' => ProductMeasure::LENGTH,
+		'WIDTH' => ProductMeasure::LENGTH,
+		'HEIGHT' => ProductMeasure::LENGTH,
+	];
+
+	private const CALCULATION_FIELDS = [
+		'PRODUCT_ID',
+		'NAME',
+		'QUANTITY',
+		'PRICE',
+		'PRICE_EXCLUSIVE',
+		'PRICE_NETTO',
+		'PRICE_BRUTTO',
+		'DISCOUNT_TYPE_ID',
+		'DISCOUNT_RATE',
+		'DISCOUNT_SUM',
+		'TAX_RATE',
+		'TAX_INCLUDED',
+		'MEASURE_CODE',
+		'MEASURE_NAME',
+		'CUSTOMIZED',
+	];
+
 	protected $id;
 	protected $properties;
 	protected $propertyValues = [];
+	private ?float $savedBasketWeight = null;
 
 	protected static $measureInfo = [];
 
@@ -71,6 +98,14 @@ class Product extends HashDataProvider
 		}
 
 		parent::__construct($data, $options);
+	}
+
+	public function setData(array $data): HashDataProvider
+	{
+		$this->savedBasketWeight = isset($data['WEIGHT']) ? (float)$data['WEIGHT'] : null;
+		unset($data['WEIGHT']);
+
+		return parent::setData($data);
 	}
 
 	/**
@@ -194,6 +229,22 @@ class Product extends HashDataProvider
 					'TITLE' => Loc::getMessage('CRM_DOCGEN_DATAPROVIDER_PRODUCT_MEASURE_SYMBOL_INTL_TITLE'),
 					'VALUE' => [$this, 'getMeasureSymbolIntl'],
 				],
+				'WEIGHT' => [
+					'TITLE' => Loc::getMessage('CRM_DOCGEN_DATAPROVIDER_PRODUCT_WEIGHT_TITLE'),
+					'VALUE' => [$this, 'getPhysicalValue'],
+				],
+				'LENGTH' => [
+					'TITLE' => Loc::getMessage('CRM_DOCGEN_DATAPROVIDER_PRODUCT_LENGTH_TITLE'),
+					'VALUE' => [$this, 'getPhysicalValue'],
+				],
+				'WIDTH' => [
+					'TITLE' => Loc::getMessage('CRM_DOCGEN_DATAPROVIDER_PRODUCT_WIDTH_TITLE'),
+					'VALUE' => [$this, 'getPhysicalValue'],
+				],
+				'HEIGHT' => [
+					'TITLE' => Loc::getMessage('CRM_DOCGEN_DATAPROVIDER_PRODUCT_HEIGHT_TITLE'),
+					'VALUE' => [$this, 'getPhysicalValue'],
+				],
 				'PRICE_SUM' => [
 					'TITLE' => Loc::getMessage('CRM_DOCGEN_DATAPROVIDER_PRODUCT_PRICE_SUM_TITLE'),
 					'VALUE' => [$this, 'getSum'],
@@ -250,6 +301,62 @@ class Product extends HashDataProvider
 		}
 
 		return $this->fields;
+	}
+
+	/**
+	 * Returns a raw physical product value in grams or millimeters.
+	 *
+	 * @param string $code
+	 * @return float|null
+	 */
+	public function getPhysicalRawValue(string $code): ?float
+	{
+		if (!isset(self::PHYSICAL_VALUE_TYPES[$code]))
+		{
+			return 0.0;
+		}
+
+		if ($code === 'WEIGHT' && $this->savedBasketWeight !== null)
+		{
+			return $this->savedBasketWeight;
+		}
+
+		$productId = (int)($this->data['PRODUCT_ID'] ?? 0);
+		if ($productId <= 0)
+		{
+			return 0.0;
+		}
+
+		return DocumentGeneratorManager::getInstance()->getProductLoader()->getProductValue($code, $productId);
+	}
+
+	/**
+	 * Returns a formatted physical product value.
+	 *
+	 * @param string $code
+	 * @return ProductMeasure
+	 */
+	public function getPhysicalValue(string $code): ProductMeasure
+	{
+		$type = self::PHYSICAL_VALUE_TYPES[$code] ?? ProductMeasure::LENGTH;
+
+		return new ProductMeasure($this->getPhysicalRawValue($code), $type);
+	}
+
+	/**
+	 * Returns product data used by monetary calculations.
+	 *
+	 * @return array
+	 */
+	public function getCalculationData(): array
+	{
+		$result = [];
+		foreach (self::CALCULATION_FIELDS as $field)
+		{
+			$result[$field] = $this->getRawValue($field);
+		}
+
+		return $result;
 	}
 
 	/**

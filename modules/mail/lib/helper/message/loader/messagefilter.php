@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mail\Helper\Message\Loader;
 
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\Dto\Message\SearchMessagesDto;
 use Bitrix\Mail\Helper\Label\LabelsFeature;
 use Bitrix\Mail\Helper\MailboxDirectoryHelper;
@@ -18,7 +19,18 @@ class MessageFilter
 	/** No mark carries this code: real ones start at 1, see {@see \Bitrix\Mail\Internals\MailMessageMarkTable}. */
 	private const NO_MATCH_MARK_CODE = 0;
 
+	private const RECIPIENT_COLUMNS = ['FIELD_TO', 'FIELD_CC', 'FIELD_BCC'];
+
+	/** As long as every column the address fields are matched against: varchar(255) each. */
+	private const ADDRESS_VALUE_MAX_LENGTH = 255;
+
+	/** Every word of the value is a condition of its own, three of them for the recipient. */
+	private const ADDRESS_VALUE_MAX_WORDS = 5;
+
 	private array $filter = [];
+
+	/** Sticky: a preset applied over the same request resets the filter, not the scope it belongs to. */
+	private bool $isWideScope = false;
 
 	public function __construct(
 		private readonly array $mailboxIds,
@@ -66,6 +78,8 @@ class MessageFilter
 			$this->addIsFavorite($filterData['IS_FAVORITE'] === 'Y');
 		}
 
+		$this->isWideScope = $this->isWideScope || $this->detectWideScope($filterData);
+
 		// Gated in the shared layer: mailmobile passes request filter params through as is.
 		$labelId = LabelsFeature::isEnabled() && isset($filterData['LABEL_ID'])
 			? (int)$filterData['LABEL_ID']
@@ -74,7 +88,7 @@ class MessageFilter
 		{
 			$this->addLabel($labelId);
 		}
-		elseif (isset($filterData['MD5_DIRS']) && is_array($filterData['MD5_DIRS']))
+		elseif (self::detectAllMailMode($filterData))
 		{
 			$this->filter['@MESSAGE_UID.DIR_MD5'] = $filterData['MD5_DIRS'];
 		}
@@ -108,6 +122,24 @@ class MessageFilter
 		{
 			$search = Emoji::encode($filterData['FIND']);
 			$this->addSearchQueryFilter($search);
+		}
+
+		// Gated in the shared layer: mailmobile passes request filter params through as is.
+		// Kept out of the wide scopes: there the list spans every mailbox and folder of the user,
+		// which is exactly where matching the address columns costs the most.
+		if (!$this->isWideScope && Feature::isMessageAddressFilterAvailable())
+		{
+			$sender = self::readTrimmedString($filterData, 'SENDER');
+			if ($sender !== '')
+			{
+				$this->addSender($sender);
+			}
+
+			$recipient = self::readTrimmedString($filterData, 'RECIPIENT');
+			if ($recipient !== '')
+			{
+				$this->addRecipient($recipient);
+			}
 		}
 
 		return $this;
@@ -167,6 +199,34 @@ class MessageFilter
 		}
 
 		return $this;
+	}
+
+	/**
+	 * MD5_DIRS marks the all-mail mode: it is the only one scoped by the folders of every user mailbox
+	 * at once, while the regular mode passes a single DIR.
+	 */
+	private static function detectAllMailMode(array $filterData): bool
+	{
+		return isset($filterData['MD5_DIRS']) && is_array($filterData['MD5_DIRS']);
+	}
+
+	/**
+	 * A scope the address columns are too expensive for: the list spans more than one mailbox. The folder
+	 * alone is no boundary here - a filter by label and the favorites section take it out as well, and
+	 * there the columns are still matched over the one mailbox they were opened in. What the gate keeps
+	 * them out of is the list of every mailbox the user has: the all-mail mode, which says so with
+	 * MD5_DIRS, and the favorites of the mobile client, which says so by the mailbox list alone.
+	 */
+	private function detectWideScope(array $filterData): bool
+	{
+		return self::detectAllMailMode($filterData) || count($this->mailboxIds) > 1;
+	}
+
+	private static function readTrimmedString(array $filterData, string $key): string
+	{
+		$value = $filterData[$key] ?? null;
+
+		return is_string($value) ? trim($value) : '';
 	}
 
 	/**
@@ -417,6 +477,108 @@ class MessageFilter
 		$this->filter['*SEARCH_CONTENT'] = $search;
 
 		return $this;
+	}
+
+	/**
+	 * Sender is matched against the decoded From header, so a display name matches as well as an address.
+	 * A value of several words is matched word by word, as the legacy list did it: the header keeps the
+	 * name in the order the sender wrote it, and the order the words were typed in may not decide
+	 * whether the message is found.
+	 */
+	public function addSender(string $sender): self
+	{
+		$words = self::splitIntoWords($sender);
+		if ($words === [])
+		{
+			return $this;
+		}
+
+		if (count($words) === 1)
+		{
+			$this->filter['%FIELD_FROM'] = $words[0];
+
+			return $this;
+		}
+
+		$this->filter[] = self::everyWordMatches('FIELD_FROM', $words);
+
+		return $this;
+	}
+
+	/**
+	 * The three recipient columns hold what fits into their varchar(255); the original recipients of the
+	 * search blob answer for the addresses of a long list that got cut off there.
+	 *
+	 * All the words of the value are required of one and the same column: a name split over the To and the
+	 * Cc of the same message names neither of the two recipients.
+	 */
+	public function addRecipient(string $recipient): self
+	{
+		$words = self::splitIntoWords($recipient);
+		if ($words === [])
+		{
+			return $this;
+		}
+
+		$condition = ['LOGIC' => 'OR'];
+		foreach (self::RECIPIENT_COLUMNS as $column)
+		{
+			$condition[] = self::everyWordMatches($column, $words);
+		}
+
+		// The same words the columns are asked for: both halves of the alternative speak of one value.
+		$originalRecipientSearch = Message::prepareOriginalRecipientsSearchString(implode(' ', $words));
+		if ($originalRecipientSearch !== '')
+		{
+			$condition[] = ['*SEARCH_CONTENT' => $originalRecipientSearch];
+		}
+
+		$this->filter[] = $condition;
+
+		return $this;
+	}
+
+	/**
+	 * The headers are stored the way {@see \CMailHeader::ConvertHeader()} leaves them, with every emoji
+	 * encoded, so the value is encoded before anything else is done to it: the columns are asked for the
+	 * form they hold, and the bound below counts the characters that are really stored. Text carrying no
+	 * emoji comes back from the encoder unchanged.
+	 *
+	 * Whitespace is the only separator taken from the legacy filter query: its boolean operators would
+	 * split the addresses that carry them, the "+" of a plus address before all.
+	 *
+	 * The value reaches the filter straight from a request and no LIMIT cuts the scan short, so a pasted
+	 * list of addresses would cost as much as a value that finds something. Both bounds are of what one
+	 * field is typed with, and the length is the one the columns themselves hold.
+	 *
+	 * @return string[]
+	 */
+	private static function splitIntoWords(string $value): array
+	{
+		$stored = trim(Emoji::encode($value));
+		$bounded = mb_substr($stored, 0, self::ADDRESS_VALUE_MAX_LENGTH);
+		$words = preg_split('/\s+/u', $bounded, -1, PREG_SPLIT_NO_EMPTY);
+
+		return $words === false ? [] : array_slice($words, 0, self::ADDRESS_VALUE_MAX_WORDS);
+	}
+
+	/**
+	 * @param string[] $words
+	 */
+	private static function everyWordMatches(string $column, array $words): array
+	{
+		if (count($words) === 1)
+		{
+			return ['%' . $column => $words[0]];
+		}
+
+		return [
+			'LOGIC' => 'AND',
+			...array_map(
+				static fn (string $word): array => ['%' . $column => $word],
+				$words,
+			),
+		];
 	}
 
 	private function addSearchQueryFilter(string $search): self

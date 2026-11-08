@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Internal\Agent;
 
 use Bitrix\Mail\Internals\MailboxSourceGenerationTable;
+use Bitrix\Mail\Internals\MessageConversationActivityTable;
+use Bitrix\Mail\Internals\MessageConversationMemberTable;
+use Bitrix\Mail\Internals\MessageConversationTable;
+use Bitrix\Mail\Internals\MigrationManualControlTable;
 use Bitrix\Mail\Internals\MigrationOperationTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
@@ -369,10 +373,10 @@ final class DeletedMailboxCleanupAgent
 
 	/**
 	 * Tables holding rows of one mailbox and nothing else, every one of them addressed by
-	 * MAILBOX_ID alone and taken by a single statement. The three tables of the source generations
-	 * are among them: they are exactly the ones a deletion that failed halfway leaves without an
-	 * owner. The letters are not - they are deleted one by one, because a letter owns rows of its
-	 * own, and files outside the database.
+	 * MAILBOX_ID alone and taken by a single statement. Source-generation and conversation-projection
+	 * tables are here because neither has a foreign key that can remove its rows with the mailbox.
+	 * The letters are not: they are deleted one by one, because a letter owns rows of its own and files
+	 * outside the database.
 	 *
 	 * @return string[]
 	 */
@@ -390,6 +394,10 @@ final class DeletedMailboxCleanupAgent
 			'b_mail_source_generation_tail_mark',
 			MailboxSourceGenerationTable::getTableName(),
 			MigrationOperationTable::getTableName(),
+			MigrationManualControlTable::getTableName(),
+			MessageConversationActivityTable::getTableName(),
+			MessageConversationMemberTable::getTableName(),
+			MessageConversationTable::getTableName(),
 		];
 	}
 
@@ -405,7 +413,11 @@ final class DeletedMailboxCleanupAgent
 			'b_mail_source_generation_match',
 			'b_mail_source_generation_tail_mark',
 			'b_mail_mailbox_source_generation',
-			'b_mail_migration_operation' => ['ID'],
+			'b_mail_migration_operation',
+			'b_mail_migration_manual_control',
+			'b_mail_message_conversation' => ['ID'],
+			'b_mail_message_conversation_member' => ['MESSAGE_ID'],
+			'b_mail_message_conversation_activity' => ['CONVERSATION_ID', 'SCOPE_KEY'],
 			'b_mail_entity_options', 'b_mail_entity_data' => ['ENTITY_TYPE', 'ENTITY_ID', 'PROPERTY_NAME'],
 		};
 	}

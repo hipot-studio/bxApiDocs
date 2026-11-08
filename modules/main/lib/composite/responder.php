@@ -206,7 +206,7 @@ class Responder
 		$lastModified = $cache->getLastModified();
 		if ($etag !== false)
 		{
-			if (array_key_exists("HTTP_IF_NONE_MATCH", $_SERVER) && $_SERVER["HTTP_IF_NONE_MATCH"] === $etag)
+			if (self::isEtagMatched($_SERVER["HTTP_IF_NONE_MATCH"] ?? null, $etag))
 			{
 				self::setStatus("304 Not Modified");
 				self::setHeaders($etag, false, "304");
@@ -268,6 +268,51 @@ class Responder
 		}
 	}
 
+	/**
+	 * Checks the If-None-Match header value against the entity tag of the page.
+	 * Weak comparison by RFC 7232, section 2.3.2: the W/ prefix is not significant.
+	 * Quotes are part of the entity-tag syntax (section 2.3), but an unquoted value matches too:
+	 * clients still hold entity tags cached before the composite started quoting them.
+	 *
+	 * @param string|null $ifNoneMatch
+	 * @param string $etag
+	 * @return bool
+	 */
+	private static function isEtagMatched($ifNoneMatch, $etag)
+	{
+		if ($ifNoneMatch === null)
+		{
+			return false;
+		}
+
+		$etag = trim($etag, "\"");
+		if ($etag === "")
+		{
+			return false;
+		}
+
+		foreach (explode(",", $ifNoneMatch) as $candidate)
+		{
+			$candidate = trim($candidate);
+			if ($candidate === "*")
+			{
+				return true;
+			}
+
+			if (str_starts_with($candidate, "W/"))
+			{
+				$candidate = substr($candidate, 2);
+			}
+
+			if (trim($candidate, "\"") === $etag)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	private static function modifyHttpHeaders()
 	{
 		Helper::removeRandParam();
@@ -291,7 +336,7 @@ class Responder
 	{
 		if ($etag !== false)
 		{
-			header("ETag: ".$etag);
+			header("ETag: \"".trim($etag, "\"")."\"");
 		}
 
 		header("Expires: Fri, 07 Jun 1974 04:00:00 GMT");
@@ -795,7 +840,7 @@ final class FileResponse extends AbstractResponse
 		{
 			$this->contents = file_get_contents($this->cacheFile);
 			if ($this->contents !== false &&
-				(mb_strlen($this->contents) < 2500 || !preg_match("/^[a-f0-9]{32}$/", mb_substr($this->contents, -35, 32)))
+				(mb_strlen($this->contents) < 2500 || Helper::extractContentChecksum($this->contents) === false)
 			)
 			{
 				$this->contents = false;

@@ -24,6 +24,7 @@ class VotingAdminVotesComponent extends \CBitrixComponent implements Controllera
 	private static array $readChannels;
 	private static array $adminChannels;
 
+	private bool $canRead = false;
 	private bool $canWrite = false;
 
 	protected string $gridId = 'vote_admin_votes';
@@ -49,6 +50,7 @@ class VotingAdminVotesComponent extends \CBitrixComponent implements Controllera
 		}
 		else
 		{
+			$this->canRead = true;
 			$this->canWrite = $moduleRights >= 'W';
 		}
 
@@ -81,19 +83,26 @@ class VotingAdminVotesComponent extends \CBitrixComponent implements Controllera
 		$nav = new PageNavigation('page');
 		$nav->allowAllRecords(false)->setPageSize(20)->initFromUri();
 
-		$result = Vote\VoteTable::getList([
-			'select' => ['*', 'AUTHOR', 'LAMP'],
-			'filter' => $this->arResult['FILTER'],
-			'order' => $this->getOrder($this->gridId),
-			'offset' => $nav->getOffset(),
-			'limit' => $nav->getLimit() + 1,
-		]);
-
-		$votes = $result->fetchCollection();
-		if ($votes->count() > $nav->getLimit())
+		if ($this->canReadVotes())
 		{
-			$allVotes = $votes->getAll();
-			$votes->remove(end($allVotes));
+			$result = Vote\VoteTable::getList([
+				'select' => ['*', 'AUTHOR', 'LAMP'],
+				'filter' => $this->arResult['FILTER'],
+				'order' => $this->getOrder($this->gridId),
+				'offset' => $nav->getOffset(),
+				'limit' => $nav->getLimit() + 1,
+			]);
+
+			$votes = $result->fetchCollection();
+			if ($votes->count() > $nav->getLimit())
+			{
+				$allVotes = $votes->getAll();
+				$votes->remove(end($allVotes));
+			}
+		}
+		else
+		{
+			$votes = Vote\VoteTable::createCollection();
 		}
 
 		$nav->setRecordCount($nav->getOffset() + $votes->count() + 1);
@@ -102,6 +111,11 @@ class VotingAdminVotesComponent extends \CBitrixComponent implements Controllera
 		$this->arResult['ROWS'] = [];
 		$this->arResult['NAV_OBJECT'] = $nav;
 		$this->arResult['ACTION_PANEL'] = $this->getGroupActions();
+	}
+
+	private function canReadVotes(): bool
+	{
+		return $this->canRead && ($this->canWrite || !empty($this->getReadChannels()));
 	}
 
 	protected function getReadChannels(): array
@@ -444,31 +458,45 @@ class VotingAdminVotesComponent extends \CBitrixComponent implements Controllera
 		return $this->errorCollection->isEmpty();
 	}
 
-	public function deleteRowAction(int $id): bool
+	private function canEditVote(int $id): bool
 	{
-		if (Vote\VoteTable::getList([
-			'select' => ['ID'],
-			'filter' => $this->getFilterToEdit() + ['=ID' => $id],
-		])->fetch())
+		if ($id <= 0 || !$this->errorCollection->isEmpty())
 		{
-			CVote::Delete($id);
-			return true;
+			return false;
 		}
 
-		return false;
+		if (!$this->canWrite && empty($this->getAdminChannels()))
+		{
+			return false;
+		}
+
+		return (bool)Vote\VoteTable::getList([
+			'select' => ['ID'],
+			'filter' => $this->getFilterToEdit() + ['=ID' => $id],
+		])->fetch();
+	}
+
+	public function deleteRowAction(int $id): bool
+	{
+		if (!$this->canEditVote($id))
+		{
+			return false;
+		}
+
+		CVote::Delete($id);
+
+		return true;
 	}
 
 	public function resetRowAction(int $id): bool
 	{
-		if (Vote\VoteTable::getList([
-			'select' => ['ID'],
-			'filter' => $this->getFilterToEdit() + ['=ID' => $id],
-		])->fetch())
+		if (!$this->canEditVote($id))
 		{
-			CVote::Reset($id);
-			return true;
+			return false;
 		}
 
-		return false;
+		CVote::Reset($id);
+
+		return true;
 	}
 }

@@ -18,6 +18,7 @@ class Loader
 	private int $userId;
 	private int $flagCounted = 0;
 	private int $flagCleared = 0;
+	private bool $flagsLoaded = false;
 	private array $rows;
 
 	private const CACHE_PREFIX = 'tasks_scorer_cache_';
@@ -29,9 +30,33 @@ class Loader
 		CounterDictionary::COUNTER_FLAG_COUNTED
 	];
 
+	/** @var array<int, self> per-hit instances, so repeated flag checks do not re-query */
+	private static array $instances = [];
+
 	public function __construct(int $userId)
 	{
 		$this->userId = $userId;
+	}
+
+	public static function getInstance(int $userId): self
+	{
+		return self::$instances[$userId] ??= new self($userId);
+	}
+
+	public static function resetInstances(): void
+	{
+		self::$instances = [];
+		CommentsCountCache::dropAll();
+	}
+
+	/**
+	 * Narrow reading of counter rows is trustworthy only when counters are already calculated for the
+	 * user. The zero limit keeps it off as well: it disables the counter state, and the full path
+	 * intentionally answers zeros then.
+	 */
+	public static function isNarrowReadAllowed(int $userId): bool
+	{
+		return Counter::getGlobalLimit() !== 0 && self::getInstance($userId)->isCounted();
 	}
 
 	public function isCounterFlag(string $type): bool
@@ -52,6 +77,11 @@ class Loader
 
 	public function isCounted(): bool
 	{
+		if (!$this->flagsLoaded)
+		{
+			$this->getFlags();
+		}
+
 		return (bool) $this->flagCounted;
 	}
 
@@ -64,6 +94,15 @@ class Loader
 	{
 		$cache = Cache::createInstance();
 		$cache->clean($this->getCacheTag(), $this->getCacheDir());
+
+		// Flags kept in memory are part of the same cache: leaving them would make this reset a no-op
+		// for anyone reading through the per-hit instance. The same holds for the comment counter values
+		// already read for the user in this hit.
+		$this->flagsLoaded = false;
+		$this->flagCounted = 0;
+		$this->flagCleared = 0;
+		unset(self::$instances[$this->userId]);
+		CommentsCountCache::drop($this->userId);
 	}
 
 	private function getCacheDir(): string
@@ -168,6 +207,8 @@ class Loader
 					break;
 			}
 		}
+
+		$this->flagsLoaded = true;
 
 		return $rows;
 	}

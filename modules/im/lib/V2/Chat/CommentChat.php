@@ -3,8 +3,10 @@
 namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Storage;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Message\Delete\DeletionMode;
 use Bitrix\Im\V2\Message\Send\MentionService;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Message\Send\SendingService;
@@ -27,6 +29,7 @@ class CommentChat extends GroupChat
 {
 	protected const LOCK_TIMEOUT = 3;
 	protected const EXTRANET_CAN_SEE_HISTORY = true;
+	protected const EXTRANET_CAN_SEE_HISTORY_ON_EXPLICIT_ADD = true;
 	protected ?Chat $parentChat;
 	protected ?Message $parentMessage;
 
@@ -182,6 +185,20 @@ class CommentChat extends GroupChat
 		parent::onAfterMessageSend($message, $sendingService);
 	}
 
+	public function onAfterMessagesDelete(MessageCollection $messages, DeletionMode $deletionMode): Result
+	{
+		$result = parent::onAfterMessagesDelete($messages, $deletionMode);
+
+		// Only a complete deletion changes MESSAGE_COUNT of the discussion, so only it leaves the
+		// plate of the root post stale. A soft deletion keeps the message and the count with it.
+		if ($deletionMode === DeletionMode::Complete)
+		{
+			$this->markParentMessageAsUpdated($this->getParentChat(), $this->getUsersToNotify()->getUserIds());
+		}
+
+		return $result;
+	}
+
 	public function filterUsersToMention(array $userIds): array
 	{
 		return $this->getParentChat()->filterUsersToMention($userIds);
@@ -234,9 +251,37 @@ class CommentChat extends GroupChat
 			return $result;
 		}
 
+		$changedUserIds = $subscribe
+			? $this->subscribeRelations($userIds, $lastId)
+			: $this->unsubscribeRelations($userIds)
+		;
+
+		$this->sendSubscribePush($subscribe, $changedUserIds);
+
+		if (!$subscribe)
+		{
+			// Same side effect as subscribe(false), in the same order: an unsubscribed user is dropped
+			// from the pull recipients of the discussion, so counters left behind would never be
+			// cleared for them.
+			$reader = ServiceLocator::getInstance()->get(Reader::class);
+			foreach ($changedUserIds as $userId)
+			{
+				$reader->readAllInChat($this->getId(), $userId);
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param int[] $userIds
+	 * @return int[] users whose subscription state has changed
+	 */
+	private function subscribeRelations(array $userIds, ?int $lastId): array
+	{
 		$this->addUsers($userIds, new Relation\AddUsersConfig(hideHistory: false, cascadeToParent: false));
 		$relations = $this->getRelations();
-		$subscribedUsers = [];
+		$changedUserIds = [];
 		foreach ($userIds as $userId)
 		{
 			$relation = $relations->getByUserId($userId, $this->getId());
@@ -249,13 +294,39 @@ class CommentChat extends GroupChat
 			{
 				$relation->setLastId($lastId);
 			}
-			$subscribedUsers[] = $userId;
+			$changedUserIds[] = $userId;
 		}
 
 		$relations->save(true);
-		$this->sendSubscribePush($subscribe, $subscribedUsers);
 
-		return $result;
+		return $changedUserIds;
+	}
+
+	/**
+	 * Users are never added to the chat here: unsubscribing somebody who does not take part in the
+	 * discussion has nothing to change.
+	 *
+	 * @param int[] $userIds
+	 * @return int[] users whose subscription state has changed
+	 */
+	private function unsubscribeRelations(array $userIds): array
+	{
+		$relations = $this->getRelations();
+		$changedUserIds = [];
+		foreach ($userIds as $userId)
+		{
+			$relation = $relations->getByUserId($userId, $this->getId());
+			if ($relation === null || $relation->getNotifyBlock())
+			{
+				continue;
+			}
+			$relation->setNotifyBlock(true);
+			$changedUserIds[] = $userId;
+		}
+
+		$relations->save(true);
+
+		return $changedUserIds;
 	}
 
 	protected function sendSubscribePush(bool $subscribe, array $userIds): void
@@ -279,7 +350,7 @@ class CommentChat extends GroupChat
 		);
 	}
 
-	protected function createDiskFolder(): ?Folder
+	protected function createDiskFolder(?Storage $storage = null): ?Folder
 	{
 		$parentFolder = $this->getParentChat()->getOrCreateDiskFolder();
 		if (!$parentFolder)

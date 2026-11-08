@@ -10,6 +10,7 @@ use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\SessionTerminationService;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientFactory;
 use Bitrix\Disk\Document\Vibeoffice\Clients\ProtocolClientInterface;
+use Bitrix\Disk\Document\Vibeoffice\HostDocumentKey;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
@@ -73,7 +74,7 @@ class VibeofficeSessionTerminationService implements SessionTerminationService
 		{
 			// Idempotent: the platform returns 204 even without an active grant.
 			$this->protocolClient->revokeGrant(
-				$session->getExternalHash(),
+				HostDocumentKey::resolve($session),
 				(string)$session->getUserId(),
 			);
 		}

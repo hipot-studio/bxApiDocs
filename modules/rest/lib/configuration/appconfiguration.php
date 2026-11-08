@@ -158,6 +158,19 @@ class AppConfiguration
 				);
 				if ($app = $res->fetch())
 				{
+					$finalizationResult = (new ApplicationInstallationFinalizer())->finalize(
+						(int)$app['ID'],
+						true,
+					);
+					if (!$finalizationResult->isSuccess())
+					{
+						return [
+							'ERROR_EXCEPTION' => [
+								'message' => Loc::getMessage('REST_CONFIGURATION_ERROR_INSTALL_APP_CONTENT'),
+							],
+						];
+					}
+
 					$res = EventTable::getList(
 						[
 							'filter' => [
@@ -170,19 +183,6 @@ class AppConfiguration
 					);
 					if (!$event = $res->fetch())
 					{
-						$finalizationResult = (new ApplicationInstallationFinalizer())->finalize(
-							(int)$app['ID'],
-							true,
-						);
-						if (!$finalizationResult->isSuccess())
-						{
-							return [
-								'ERROR_EXCEPTION' => [
-									'message' => Loc::getMessage('REST_CONFIGURATION_ERROR_INSTALL_APP_CONTENT'),
-								],
-							];
-						}
-
 						$res = EventTable::add(
 							[
 								"APP_ID" => $app['ID'],

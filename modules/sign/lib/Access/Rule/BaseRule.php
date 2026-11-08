@@ -89,42 +89,12 @@ class BaseRule extends AbstractRule
 			return true;
 		}
 
-		if (
-			$item instanceof Contract\Access\AccessibleItemWithOwner
-			&& $this->checkAccessibleItemWithOwner($action, $item)
-		)
-		{
-			return true;
-		}
-
 		if (!Loader::includeModule('crm'))
 		{
 			return false;
 		}
 
 		return $this->checkCrmEntityPermission($permissionId, $item);
-	}
-
-	private function checkAccessibleItemWithOwner(string $action, Contract\Access\AccessibleItemWithOwner $item): bool
-	{
-		$user = $this->user;
-		if (!$user instanceof UserModel)
-		{
-			return false;
-		}
-		if ($user->isAdmin())
-		{
-			return true;
-		}
-
-		if (!Loader::includeModule('crm'))
-		{
-			return false;
-		}
-
-		$itemOwnerId = $item->getOwnerId();
-
-		return $this->checkSignPermission(ActionDictionary::getPermissionIdByAction($action), $user, $itemOwnerId);
 	}
 
 	private function checkDocumentTemplateAccess(string $action, Document $item, UserModel $user): bool

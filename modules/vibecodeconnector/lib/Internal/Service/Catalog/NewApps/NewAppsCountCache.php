@@ -4,48 +4,74 @@ declare(strict_types=1);
 
 namespace Bitrix\Vibecodeconnector\Internal\Service\Catalog\NewApps;
 
-use Bitrix\Main\Data\Cache;
+use Bitrix\Main\Application;
+use Bitrix\Main\Data\ManagedCache;
 
-/**
- * Per-user cache for the "new apps" badge count.
- *
- * The count is recomputed synchronously on every page render (the binder
- * extension is loaded in OnEpilog), so it is cached to keep that hot path off
- * a heavy personal COUNT on each hit. The user-facing AJAX recount bypasses the
- * cache for accuracy, and opening an app forgets the entry.
- */
-final class NewAppsCountCache
+class NewAppsCountCache
 {
 	private const TTL = 300;
-	private const DIR = '/vibecodeconnector/new_apps_count';
+	private const TABLE_ID = 'vibecodeconnector_new_apps_count';
+	private const CACHE_ID_PREFIX = 'vibecodeconnector_new_apps_count_';
+
+	private readonly ManagedCache $managedCache;
+
+	public function __construct(?ManagedCache $managedCache = null)
+	{
+		$this->managedCache = $managedCache ?? Application::getInstance()->getManagedCache();
+	}
 
 	/**
 	 * @param callable():int $compute
 	 */
 	public function remember(int $userId, callable $compute): int
 	{
-		$cache = Cache::createInstance();
-		if ($cache->initCache(self::TTL, $this->key($userId), self::DIR))
+		return $this->rememberConditional($userId, fn (): array => ['count' => $compute(), 'cacheable' => true]);
+	}
+
+	public function rememberConditional(int $userId, callable $compute): int
+	{
+		$cacheId = $this->cacheId($userId);
+		if ($this->managedCache->read(self::TTL, $cacheId, self::TABLE_ID))
 		{
-			return (int)$cache->getVars();
+			$cached = $this->managedCache->get($cacheId);
+			if (is_int($cached))
+			{
+				return $cached;
+			}
 		}
 
 		$value = $compute();
-		if ($cache->startDataCache())
+		if ($value['cacheable'])
 		{
-			$cache->endDataCache($value);
+			$this->managedCache->set($cacheId, $value['count']);
 		}
 
-		return $value;
+		return $value['count'];
 	}
 
 	public function forget(int $userId): void
 	{
-		Cache::createInstance()->clean($this->key($userId), self::DIR);
+		$this->managedCache->clean($this->cacheId($userId), self::TABLE_ID);
 	}
 
-	private function key(int $userId): string
+	public function forgetMany(array $userIds): void
 	{
-		return 'u' . $userId;
+		foreach (array_unique(array_map('intval', $userIds)) as $userId)
+		{
+			if ($userId > 0)
+			{
+				$this->forget($userId);
+			}
+		}
+	}
+
+	public function forgetAll(): void
+	{
+		$this->managedCache->cleanDir(self::TABLE_ID);
+	}
+
+	private function cacheId(int $userId): string
+	{
+		return self::CACHE_ID_PREFIX . $userId;
 	}
 }

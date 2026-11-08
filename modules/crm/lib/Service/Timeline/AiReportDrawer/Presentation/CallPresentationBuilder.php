@@ -4,17 +4,19 @@ namespace Bitrix\Crm\Service\Timeline\AiReportDrawer\Presentation;
 
 use Bitrix\Crm\Format\Duration;
 use Bitrix\Crm\Integration\VoxImplantManager;
+use Bitrix\Crm\Activity\Provider\Email;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Dto\ActivityContext;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\DateTimeFormatter;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\MessageProvider;
-use Bitrix\Main\Application;
 use Bitrix\Main\PhoneNumber\Parser;
-use Bitrix\Main\Type\DateTime;
 
 final class CallPresentationBuilder implements ActivityPresentationBuilderInterface
 {
 	public function supports(ActivityContext $context): bool
 	{
-		return !$context->isOpenLineActivity();
+		return !$context->isOpenLineActivity()
+			&& ($context->activity['PROVIDER_ID'] ?? null) !== Email::getId()
+		;
 	}
 
 	public function buildSubtitle(ActivityContext $context): ?array
@@ -189,52 +191,10 @@ final class CallPresentationBuilder implements ActivityPresentationBuilderInterf
 
 	private function prepareInfoPopupDateAndDuration(mixed $dateTimeValue, ?int $duration, int $currentUserId): string
 	{
-		$dateTime = $this->normalizeDateTime($dateTimeValue);
-		$dateTimeText = $dateTime ? $this->formatPopupDateTime($dateTime, $currentUserId) : '';
+		$dateTimeText = DateTimeFormatter::format($dateTimeValue, $currentUserId) ?? '';
 		$durationText = ($duration !== null && $duration > 0) ? Duration::format($duration) : '';
 
 		return implode(', ', array_filter([$dateTimeText, $durationText]));
-	}
-
-	private function formatPopupDateTime(DateTime $dateTime, int $currentUserId): string
-	{
-		$dateTime = $currentUserId > 0
-			? \CCrmDateTimeHelper::getUserTime($dateTime, $currentUserId)
-			: $dateTime->toUserTime()
-		;
-
-		$timestamp = $dateTime->getTimestamp();
-		$culture = Application::getInstance()->getContext()->getCulture();
-		$longDateFormat = $culture?->getLongDateFormat() ?? 'j F';
-		$shortTimeFormat = $culture?->getShortTimeFormat() ?? 'H:i';
-
-		return sprintf(
-			'%s, %s',
-			FormatDate($longDateFormat, $timestamp),
-			FormatDate($shortTimeFormat, $timestamp),
-		);
-	}
-
-	private function normalizeDateTime(mixed $value): ?DateTime
-	{
-		if ($value instanceof DateTime)
-		{
-			return $value;
-		}
-
-		if (!is_string($value) || $value === '')
-		{
-			return null;
-		}
-
-		try
-		{
-			return new DateTime($value, DateTime::getFormat());
-		}
-		catch (\Throwable)
-		{
-			return null;
-		}
 	}
 
 	private function getActivityCommunicationInfo(int $activityId): ?array

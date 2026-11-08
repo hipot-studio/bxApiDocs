@@ -35,7 +35,7 @@ class StoreProduct extends Dataset
 
 	protected function getTableDescriptionFull(): string
 	{
-		return $this->getMessage('CATALOG_STORE_PRODUCT_TABLE_DESCRIPTION_FULL', '');
+		return $this->getMessage('CATALOG_STORE_PRODUCT_TABLE_DESCRIPTION_FULL_MSGVER_1', '');
 	}
 
 	/**

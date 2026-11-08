@@ -7,6 +7,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Intranet\Binding\Map\MapItem;
 use Bitrix\Intranet\Binding\Map\MapSection;
+use Bitrix\Intranet\Internal\Integration\Rest\EmbeddingMenuProvider;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Landing\Rights;
 use Bitrix\Main\Event;
@@ -590,120 +591,72 @@ class Menu
 		}
 
 		// rest bindings
-		if (\Bitrix\Main\Loader::includeModule('rest'))
+		$embeddingMenuProvider = new EmbeddingMenuProvider();
+		if (!$embeddingMenuProvider->isAvailable())
 		{
-			$menuSectionCode = self::SECTIONS['marketplace'];
-			$groups = [];// array for group items position storage
-			$res = \Bitrix\Rest\PlacementTable::getList([
-				'select' => [
-					'ID',
-					'APP_ID',
-					'PLACEMENT',
-					'TITLE',
-					'APP_NAME' => 'REST_APP.APP_NAME',
-					'GROUP_NAME',
-					'LANG_ALL',
-				],
-				'filter' => [
-					'=PLACEMENT' => array_keys(static::getRestPlacementMap())
-				],
-				'order' => [
-					'ID' => 'desc'
-				]
-			]);
-			foreach ($res->fetchCollection() as $row)
+			return $map;
+		}
+
+		$menuSectionCode = self::SECTIONS['marketplace'];
+		$groups = [];// array for group items position storage
+		$placementMap = static::getRestPlacementMap();
+		foreach ($embeddingMenuProvider->getBindingItems(array_keys($placementMap)) as $placement)
+		{
+			if (!isset($placementMap[$placement->placement]))
 			{
-				if (!isset(static::getRestPlacementMap()[$row->getPlacement()]))
-				{
-					continue;
-				}
+				continue;
+			}
 
-				$placementLang = [];
-				$placementLangAll = [];
-				if (!is_null($row->getLangAll()))
-				{
-					foreach ($row->getLangAll() as $lang)
-					{
-						if (trim($lang->getTitle()))
-						{
-							$placementLangAll[$lang->getLanguageId()] = [
-								'TITLE' => trim($lang->getTitle()),
-								'GROUP_NAME' => $lang->getGroupName(),
-							];
-						}
-					}
-				}
-				if (!empty($placementLangAll))
-				{
-					$langList = \Bitrix\Rest\Lang::listLanguage();
-					foreach ($langList as $lang)
-					{
-						if (!empty($placementLangAll[$lang]))
-						{
-							$placementLang = $placementLangAll[$lang];
-							break;
-						}
-					}
-					if (!$placementLang['TITLE'])
-					{
-						$placementLang = reset($placementLangAll);
-					}
-				}
-				elseif ($row->getRestApp())
-				{
-					$placementLang['TITLE'] = $row->getRestApp()->getAppName();
-				}
+			$title = $placement->bindingTitle !== ''
+				? $placement->bindingTitle
+				: ($placement->applicationTitle !== '' ? $placement->applicationTitle : $placement->defaultTitle)
+			;
+			[$bindingCode, $menuCode] = explode('@', $placementMap[$placement->placement]);
+			$bindingCode = mb_strtolower($bindingCode);
+			$menuCode = mb_strtolower($menuCode);
+			if (!isset($map[$bindingCode]['items'][$menuCode]))
+			{
+				continue;
+			}
 
-				if (!trim($placementLang['TITLE']))
+			self::$needProvider = true;
+			$oneItem = [
+				'id' => 'rest_' . $placement->id,
+				'system' => false,
+				'text' => htmlspecialcharsbx($title),
+				'sort' => 500,
+				'sectionCode' => $menuSectionCode,
+				'linkProvider' => 'marketplace',
+				'params' => [
+					'app_id' => $placement->appId,
+					'placement_id' => $placement->id,
+					'placement' => $placement->placement,
+				],
+			];
+			if ($placement->bindingGroupName !== '')
+			{
+				$groupingKey = $placement->placement . '_' . $placement->bindingGroupName;
+				if (isset($groups[$groupingKey]))
 				{
-					$placementLang['TITLE'] = \Bitrix\Rest\PlacementTable::getDefaultTitle($row->getId());
+					$i = $groups[$groupingKey];
+					$map[$bindingCode]['items'][$menuCode][$i]['items'][] = $oneItem;
 				}
-
-				[$bindingCode, $menuCode] = explode('@', static::getRestPlacementMap()[$row->getPlacement()]);
-				$bindingCode = mb_strtolower($bindingCode);
-				$menuCode = mb_strtolower($menuCode);
-				if (isset($map[$bindingCode]['items'][$menuCode]))
+				else
 				{
-					self::$needProvider = true;
-					$oneItem = [
-						'id' => 'rest_' . $row->getId(),
-						'system' => false,
-						'text' => htmlspecialcharsbx($placementLang['TITLE']),
+					$map[$bindingCode]['items'][$menuCode][] = [
+						'text' => htmlspecialcharsbx($placement->bindingGroupName),
 						'sort' => 500,
 						'sectionCode' => $menuSectionCode,
-						'linkProvider' => 'marketplace',
-						'params' => [
-							'app_id' => $row->getAppId(),
-							'placement_id' => $row->getId(),
-							'placement' => $row->getPlacement(),
-						]
+						'items' => [
+							$oneItem,
+						],
 					];
-					if ($placementLang['GROUP_NAME'])
-					{
-						$groupingKey = $row->getPlacement() . '_' . $placementLang['GROUP_NAME'];
-						if (isset($groups[$groupingKey]))
-						{
-							$i = $groups[$groupingKey];
-							$map[$bindingCode]['items'][$menuCode][$i]['items'][] = $oneItem;
-						}
-						else
-						{
-							$map[$bindingCode]['items'][$menuCode][] = [
-								'text' => $placementLang['GROUP_NAME'],
-								'sort' => 500,
-								'sectionCode' => $menuSectionCode,
-								'items' => [
-									$oneItem
-								]
-							];
-							$groups[$groupingKey] = count($map[$bindingCode]['items'][$menuCode]) - 1;
-						}
-					}
-					else
-					{
-						$map[$bindingCode]['items'][$menuCode][] = $oneItem;
-					}
+					$groups[$groupingKey] = count($map[$bindingCode]['items'][$menuCode]) - 1;
 				}
+			}
+			else
+			{
+				$map[$bindingCode]['items'][$menuCode][] = $oneItem;
 			}
 		}
 

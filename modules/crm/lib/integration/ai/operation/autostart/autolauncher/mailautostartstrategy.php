@@ -14,6 +14,7 @@ use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\ScenarioOverrideResolver;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\Slider\AutomationScenarioRegistry;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
+use Bitrix\Crm\Settings\CopilotSettings;
 use Bitrix\Main\DI\ServiceLocator;
 
 final class MailAutoStartStrategy extends BaseChannelAutoStartStrategy
@@ -96,6 +97,10 @@ final class MailAutoStartStrategy extends BaseChannelAutoStartStrategy
 				->withExtra('targetOwnerTypeId', $ownerTypeId)
 				->withExtra('targetOwnerId', $ownerId)
 				->withExtra('triggerDirection', $triggerDirection)
+				->withExtra(
+					'fillFieldsEntityAllowed',
+					CopilotSettings::getCurrent()->isFillFieldsEnabledFor($ownerTypeId),
+				),
 		);
 	}
 
@@ -118,9 +123,22 @@ final class MailAutoStartStrategy extends BaseChannelAutoStartStrategy
 			return Scenario::UNDEFINED_SCENARIO;
 		}
 
-		$isFillFieldsEnabled = AIManager::isEnabledInGlobalSettings(GlobalSetting::FillItemFromCall);
+		$entityTypeId = $this->nextTarget?->getEntityTypeId() ?? 0;
+		$isFillFieldsEnabled = AIManager::isFillFieldsEnabledForEntityType($entityTypeId);
 		$isAnalyzeCommunicationEnabled = AIManager::isEnabledInGlobalSettings(GlobalSetting::AnalyzeCommunication);
 		$isSummarizeEnabled = AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize);
+		if (
+			!$isFillFieldsEnabled
+			&& $fillFieldsActive
+			&& $isSummarizeEnabled
+			&& AIManager::isEnabledInGlobalSettings(GlobalSetting::FillItemFromCall)
+		)
+		{
+			$this->logger->debug(
+				'{date}: Fill fields autostart is disabled for entity type {entityTypeId}' . PHP_EOL,
+				['entityTypeId' => $entityTypeId],
+			);
+		}
 
 		$isFirstEmailActivityForItem = null;
 		$isFirstEmailFor = function (string $scenarioCode) use ($settings, $channel, &$isFirstEmailActivityForItem): bool {

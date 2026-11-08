@@ -12,6 +12,7 @@ use Bitrix\Disk\Internals\Error\IErrorable;
 use Bitrix\Disk\Search\IndexManager;
 use Bitrix\Disk\Security\FakeSecurityContext;
 use Bitrix\Disk\Uf\UserFieldManager;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DB\DuplicateEntryException;
@@ -115,29 +116,9 @@ final class Driver implements IErrorable
 	 */
 	public function addStorageIfNotExist(array $data, array $rights = array())
 	{
-		$filter = array_intersect_key($data, array(
-			'ID' => true,
-			'MODULE_ID' => true,
-			'ENTITY_TYPE' => true,
-			'ENTITY_ID' => true
-		));
+		$creation = $this->addStorageIfNotExistWithCreationStatus($data, $rights);
 
-		if(empty($filter))
-		{
-			throw new ArgumentException('Empty fields for filtering.');
-		}
-
-		$storage = Storage::getList(array(
-			'select' => array('ID'),
-			'filter' => $filter,
-		))->fetch();
-
-		if($storage)
-		{
-			return Storage::loadById($storage['ID']);
-		}
-
-		return self::addStorage($data, $rights);
+		return $creation['storage'] ?? null;
 	}
 
 	private function addStorageIfNotExistWithCreationStatus(array $data, array $rights = array()): ?array
@@ -167,44 +148,74 @@ final class Driver implements IErrorable
 			];
 		}
 
-		$isDuplicateEntry = false;
+		$connection = Application::getConnection();
+		// a duplicate swallowed here leaves an outer pgsql transaction aborted, so the attempt runs in a
+		// transaction of its own
+		$shouldUseTransaction = $connection->getType() === 'pgsql';
+		if ($shouldUseTransaction)
+		{
+			$connection->startTransaction();
+		}
+
 		try
 		{
 			$storage = self::addStorage($data, $rights);
 		}
 		catch (DuplicateEntryException)
 		{
-			$storage = null;
-			$isDuplicateEntry = true;
-		}
+			if ($shouldUseTransaction)
+			{
+				$connection->rollbackTransaction();
+			}
 
-		if ($storage)
+			return $this->loadStorageCreatedByConcurrentRequest($filter);
+		}
+		catch (\Throwable $exception)
 		{
-			return [
-				'storage' => $storage,
-				'created' => true,
-			];
+			if ($shouldUseTransaction)
+			{
+				$connection->rollbackTransaction();
+			}
+
+			throw $exception;
 		}
 
-		if (!$isDuplicateEntry)
+		if ($shouldUseTransaction)
+		{
+			$connection->commitTransaction();
+		}
+
+		if (!$storage)
 		{
 			return null;
 		}
 
+		return [
+			'storage' => $storage,
+			'created' => true,
+		];
+	}
+
+	/**
+	 * Storage::add() writes the storage row, its root folder and the link between them, so the winner of the
+	 * race could have written the row only. Such a half-made storage has no root object to work with.
+	 */
+	private function loadStorageCreatedByConcurrentRequest(array $filter): ?array
+	{
 		$storage = Storage::getList(array(
-			'select' => array('ID'),
+			'select' => array('ID', 'ROOT_OBJECT_ID'),
 			'filter' => $filter,
 		))->fetch();
 
-		if ($storage)
+		if (!$storage || empty($storage['ROOT_OBJECT_ID']))
 		{
-			return [
-				'storage' => Storage::loadById($storage['ID']),
-				'created' => false,
-			];
+			return null;
 		}
 
-		return null;
+		return [
+			'storage' => Storage::loadById($storage['ID']),
+			'created' => false,
+		];
 	}
 
 	/**

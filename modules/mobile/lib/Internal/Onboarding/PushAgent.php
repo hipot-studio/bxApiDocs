@@ -2,8 +2,8 @@
 
 namespace Bitrix\Mobile\Internal\Onboarding;
 
-use Bitrix\Mobile\Config\Feature;
-use Bitrix\Mobile\Feature\OnboardingPushFeature;
+use Bitrix\Main\Config\Feature;
+use Bitrix\Mobile\Public\Feature\OnboardingPushFlag;
 use Bitrix\Mobile\Internal\Onboarding\Services\OnboardingService;
 
 class PushAgent
@@ -13,7 +13,7 @@ class PushAgent
 
 	public static function run(): string
 	{
-		if (Feature::isEnabled(OnboardingPushFeature::class))
+		if (Feature::isEnabled(OnboardingPushFlag::class))
 		{
 			try
 			{

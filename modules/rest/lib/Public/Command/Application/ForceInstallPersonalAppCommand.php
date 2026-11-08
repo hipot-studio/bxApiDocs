@@ -10,10 +10,16 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\SystemException;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Internal\Validation\Rule\ExternalAttributes;
 
 class ForceInstallPersonalAppCommand extends Main\Command\AbstractCommand
 {
+	/**
+	 * $onlyApi is the legacy shorthand kept for backward compatibility: true means "no application page
+	 * and installation completes at once", so $menuTitles are dropped and the completion mode resolves
+	 * to immediate. An explicitly passed $installCompletionMode still wins over that default.
+	 */
 	public function __construct(
 		public readonly int $userId,
 		public readonly ?string $appClientId,
@@ -27,6 +33,7 @@ class ForceInstallPersonalAppCommand extends Main\Command\AbstractCommand
 		#[ExternalAttributes]
 		public readonly array $attributes = [],
 		public readonly ?string $applicationToken = null,
+		public readonly ?AppInstallCompletionMode $installCompletionMode = null,
 	)
 	{
 	}
@@ -67,6 +74,7 @@ class ForceInstallPersonalAppCommand extends Main\Command\AbstractCommand
 			'installUrl' => $this->installUrl,
 			'menuTitles' => $this->menuTitles,
 			'onlyApi' => $this->onlyApi,
+			'installCompletionMode' => $this->installCompletionMode?->value,
 			'mobile' => $this->mobile,
 		];
 	}

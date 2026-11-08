@@ -138,7 +138,11 @@ final class AutomationStarter extends BaseTypeStarter
 		{
 			$this->moduleSettings?->onBeforeRunAutomationOnUpdate($this->document->getId());
 
-			$workflowId = $target->getRuntime()->onDocumentStatusChanged();
+			// Propagate the user who changed the status as the automation
+			// initiator, so a stage robot writes history under them, not the responsible/System.
+			$workflowId = $target->getRuntime()->onDocumentStatusChanged(
+				$this->userId > 0 ? $this->userId : null
+			);
 			if ($workflowId)
 			{
 				$this->addWorkflowIdToCache($workflowId);

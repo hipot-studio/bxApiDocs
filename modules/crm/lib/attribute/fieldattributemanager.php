@@ -5,7 +5,6 @@ use Bitrix\Crm;
 use Bitrix\Crm\Attribute\Entity\FieldAttributeTable;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Crm\EntityRequisite;
-use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
@@ -15,6 +14,7 @@ use CCrmOwnerType;
 class FieldAttributeManager
 {
 	protected const CACHE_TTL = 86400;
+	private static array $listCache = [];
 
 	/** @var Crm\Restriction\RestrictionManager */
 	private static $restrictionManager = Crm\Restriction\RestrictionManager::class;
@@ -108,7 +108,11 @@ class FieldAttributeManager
 		return $presetId > 0 ? "preset_$presetId" : '';
 	}
 
-	protected static function sortPhasesBySortAscAndIdDesc(array $phases): array
+	/**
+	 * The very order the runtime sees: {@see \Bitrix\Crm\StatusTable::loadStatusesByEntityId()}.
+	 * Phases unfit for it (no positive SORT or ID) are left in the order they came in.
+	 */
+	protected static function sortPhasesBySortAscAndIdAsc(array $phases): array
 	{
 		$sortData = [
 			'sort' => [],
@@ -143,7 +147,7 @@ class FieldAttributeManager
 			!$isError
 			&& array_multisort(
 				$sortData['sort'], SORT_ASC, SORT_NUMERIC,
-				$sortData['id'], SORT_DESC, SORT_NUMERIC,
+				$sortData['id'], SORT_ASC, SORT_NUMERIC,
 				$sortData['keys']
 			)
 		)
@@ -165,12 +169,9 @@ class FieldAttributeManager
 		array $phases
 	): void
 	{
-		// If there is a range with a finish stage that comes before the created one,
-		// then the range is expanded, or a new range is added if the semantics are final.
+		// A new phase inherits nothing. The one exception is a failure phase right behind another
+		// failure one: the ranges that ended on its predecessor are cloned onto it.
 
-		$phases = static::sortPhasesBySortAscAndIdDesc($phases);
-
-		$phaseID = is_string($phaseID) ? $phaseID : '';
 		if ($phaseID === '')
 		{
 			return;
@@ -180,102 +181,29 @@ class FieldAttributeManager
 			return;
 		}
 
-		$isPrevPhaseExists = false;
-		$curPhaseId = '';
-		$prevPhaseId = '';
-		$prevPhaseSemantics = '';
-		foreach ($phases as $curPhaseId => $phase)
+		$order = static::sortPhasesBySortAscAndIdAsc($phases);
+		$sourcePhaseId = PhasePlanner::resolveFailureCloneSource($phaseID, $order);
+		if ($sourcePhaseId === null)
 		{
-			$curPhaseSemantics = $phase['SEMANTICS'] ?? '';
-			if (
-				$curPhaseId === $phaseID
-				&& $prevPhaseId !== ''
-				&& $curPhaseSemantics === $prevPhaseSemantics
-			)
-			{
-				$isPrevPhaseExists = true;
-				break;
-			}
-			$prevPhaseId = $curPhaseId;
-			$prevPhaseSemantics = $curPhaseSemantics;
+			return;
 		}
-		if ($isPrevPhaseExists)
-		{
-			$res = FieldAttributeTable::getList(
-				[
-					'filter' => [
-						'=ENTITY_TYPE_ID' => $entityTypeID,
-						'=ENTITY_SCOPE' => $entityScope,
-						'=TYPE_ID' => FieldAttributeType::REQUIRED,
-					]
-				]
-			);
-			$addRecords = [];
-			while ($row = $res->fetch())
-			{
-				if ($row['FINISH_PHASE'] === $prevPhaseId)
-				{
-					if ($prevPhaseSemantics === PhaseSemantics::FAILURE)
-					{
-						$record = $row;
-						unset($record['ID']);
-						$record['CREATED_TIME'] = new Main\Type\DateTime();
-						$record['START_PHASE'] = $curPhaseId;
-						$record['FINISH_PHASE'] = $curPhaseId;
-						$addRecords[] = $record;
-					}
-					else
-					{
-						Entity\FieldAttributeTable::update(
-							(int)$row['ID'],
-							[
-								'CREATED_TIME' => new Main\Type\DateTime(),
-								'FINISH_PHASE' => $curPhaseId,
-							]
-						);
-					}
-				}
-			}
-			if (!empty($addRecords))
-			{
-				foreach ($addRecords as $data)
-				{
-					Entity\FieldAttributeTable::add($data);
-				}
-			}
-		}
+
+		$rows = FieldAttributeTable::getList(
+			[
+				'filter' => [
+					'=ENTITY_TYPE_ID' => $entityTypeID,
+					'=ENTITY_SCOPE' => $entityScope,
+					'=TYPE_ID' => FieldAttributeType::REQUIRED,
+				],
+			]
+		)->fetchAll();
+
+		static::applyPhasePlan(PhasePlanner::planCreation($sourcePhaseId, $phaseID, $rows));
 	}
 
 	public static function findNeighborPhases(string $phaseID, array $phases = []): array
 	{
-		$found = false;
-		$prevPhaseId = null;
-		$curPhaseId = null;
-		$nextPhaseId = null;
-		$phaseIds = array_keys($phases);
-		$phaseCount = count($phases);
-		$steps = $phaseCount + 1;
-		for ($i = 0; $i <= $steps; $i++)
-		{
-			$prevPhaseId = $curPhaseId;
-			$curPhaseId = $nextPhaseId;
-			$nextPhaseId = ($i < $phaseCount) ? $phaseIds[$i] : null;
-			if ($curPhaseId === $phaseID)
-			{
-				$found = true;
-				break;
-			}
-		}
-		if (!$found)
-		{
-			$prevPhaseId = null;
-			$nextPhaseId = null;
-		}
-
-		return [
-			$prevPhaseId,
-			$nextPhaseId,
-		];
+		return PhasePlanner::neighborsOf($phaseID, $phases);
 	}
 
 	public static function processPhaseDeletion($phaseID, $entityTypeID, $entityScope, array $phases = [])
@@ -284,24 +212,10 @@ class FieldAttributeManager
 		$entityTypeID = (int)$entityTypeID;
 		$entityScope = (string)$entityScope;
 
-		if (!is_array($phases))
-		{
-			$phases = [];
-		}
-
 		// The state of the phases must be before deletion
-		$phases = static::sortPhasesBySortAscAndIdDesc($phases);
+		$order = static::sortPhasesBySortAscAndIdAsc($phases);
 
-		// Find prev and next phases
-		[$prevPhaseId, $nextPhaseId] = static::findNeighborPhases($phaseID, $phases);
-
-		// Preparation of actions for deleting or changing attributes,
-		// the extreme phase of which coincides with the status to be deleted.
-		// If the range includes one status, then the attribute is removed.
-		// If the range includes more than one status, the range is reduced,
-		// so that the deleted status is not included in it.
-		$actions = [];
-		$res = FieldAttributeTable::getList(
+		$rows = FieldAttributeTable::getList(
 			[
 				'filter' => [
 					'=ENTITY_TYPE_ID' => $entityTypeID,
@@ -312,65 +226,11 @@ class FieldAttributeManager
 						'=START_PHASE' => $phaseID,
 						'=FINISH_PHASE' => $phaseID,
 					]
-				]
+				],
 			]
-		);
-		while ($row = $res->fetch())
-		{
-			$isStartPhase = $row['START_PHASE'] === $phaseID;
-			$isFinishPhase = $row['FINISH_PHASE'] === $phaseID;
-			if (
-				$row['START_PHASE'] === $row['FINISH_PHASE']
-				|| ($isStartPhase && $nextPhaseId === null)
-				|| ($isFinishPhase && $prevPhaseId === null)
-			)
-			{
-				$actions[] = [
-					'type' => 'delete',
-					'params' => [
-						'id' => (int)$row['ID'],
-					],
-				];
-			}
-			else
-			{
-				$updateFields = [];
-				if ($isStartPhase)
-				{
-					$updateFields = [
-						'START_PHASE' => $nextPhaseId
-					];
-				}
-				else if ($isFinishPhase)
-				{
-					$updateFields = [
-						'FINISH_PHASE' => $prevPhaseId,
-					];
-				}
-				if (!empty($updateFields))
-				{
-					$actions[] = [
-						'type' => 'update',
-						'params' => [
-							'id' => (int)$row['ID'],
-							'fields' => $updateFields,
-						],
-					];
-				}
-			}
-		}
+		)->fetchAll();
 
-		foreach ($actions as $action)
-		{
-			if ($action['type'] === 'update')
-			{
-				FieldAttributeTable::update($action['params']['id'], $action['params']['fields']);
-			}
-			else if ($action['type'] === 'delete')
-			{
-				FieldAttributeTable::delete($action['params']['id']);
-			}
-		}
+		static::applyPhasePlan(PhasePlanner::planDeletion($phaseID, $order, $rows));
 	}
 
 	public static function processPhaseSortModification(
@@ -386,213 +246,71 @@ class FieldAttributeManager
 			return;
 		}
 
-		$phases = static::sortPhasesBySortAscAndIdDesc($phases);
+		$oldOrder = static::sortPhasesBySortAscAndIdAsc($phases);
 
 		$newPhases = $phases;
 		$newPhases[$phaseId]['SORT'] = $phaseSort;
-		$newPhases = static::sortPhasesBySortAscAndIdDesc($newPhases);
-
-
-		[$prevOldPhaseId, $nextOldPhaseId] = static::findNeighborPhases($phaseId, $phases);
-		[$prevNewPhaseId, $nextNewPhaseId] = static::findNeighborPhases($phaseId, $newPhases);
-
-		if ($prevOldPhaseId === $prevNewPhaseId && $nextOldPhaseId === $nextNewPhaseId)
+		$newOrder = static::sortPhasesBySortAscAndIdAsc($newPhases);
+		if (array_keys($oldOrder) === array_keys($newOrder))
 		{
+			// The new weight leaves the phases where they were: the plan would be empty whatever the
+			// rows say, so the whole settings scope is left unread.
 			return;
 		}
 
-		$fieldsAttributes = FieldAttributeTable::getList(
+		$rows = FieldAttributeTable::getList(
 			[
 				'filter' => [
 					'=ENTITY_TYPE_ID' => $entityTypeID,
 					'=ENTITY_SCOPE' => $entityScope,
 					'=TYPE_ID' => FieldAttributeType::REQUIRED,
-				]
+				],
 			]
 		)->fetchAll();
 
-		$isPhaseRequired = [];
-		$phasesFields = [];
-		foreach ($fieldsAttributes as $fieldAttribute)
-		{
-			$phasesFields[$fieldAttribute['FIELD_NAME']][] = $fieldAttribute;
-			$startPhase = $phases[$fieldAttribute['START_PHASE']];
-			$finishPhase = $phases[$fieldAttribute['FINISH_PHASE']];
-
-			if ($fieldAttribute['START_PHASE'] === $phaseId && $fieldAttribute['FINISH_PHASE'] === $phaseId)
-			{
-				$isPhaseRequired[$fieldAttribute['FIELD_NAME']] = true;
-				Entity\FieldAttributeTable::delete(
-					$fieldAttribute['ID']
-				);
-				$fieldAttribute['START_PHASE'] = $nextOldPhaseId;
-			}
-			elseif ($fieldAttribute['START_PHASE'] === $phaseId)
-			{
-				$isPhaseRequired[$fieldAttribute['FIELD_NAME']] = true;
-				Entity\FieldAttributeTable::update(
-					$fieldAttribute['ID'],
-					[
-						'CREATED_TIME' => new Main\Type\DateTime(),
-						'START_PHASE' => $nextOldPhaseId,
-					]
-				);
-				$fieldAttribute['START_PHASE'] = $nextOldPhaseId;
-			}
-			elseif ($fieldAttribute['FINISH_PHASE'] === $phaseId)
-			{
-				$isPhaseRequired[$fieldAttribute['FIELD_NAME']] = true;
-				Entity\FieldAttributeTable::update(
-					$fieldAttribute['ID'],
-					[
-						'CREATED_TIME' => new Main\Type\DateTime(),
-						'FINISH_PHASE' => $prevOldPhaseId,
-					]
-				);
-				$fieldAttribute['FINISH_PHASE'] = $prevOldPhaseId;
-			}
-			elseif ($startPhase['SORT'] < $phases[$phaseId]['SORT'] && $finishPhase['SORT'] > $phases[$phaseId]['SORT'])
-			{
-				$isPhaseRequired[$fieldAttribute['FIELD_NAME']] = true;
-			}
-		}
-
-		foreach ($phasesFields as $fieldName => $phasesField)
-		{
-			$isPhaseRequired[$fieldName] = $isPhaseRequired[$fieldName] ?? false;
-			self::addPhaseToFieldAttribute($phaseId, $newPhases, $isPhaseRequired[$fieldName], $phasesField, $fieldName);
-		}
+		static::applyPhasePlan(PhasePlanner::planReorderScope($oldOrder, $newOrder, $rows));
 	}
 
-	private static function addPhaseToFieldAttribute(
-		string $phaseId,
-		array $phases,
-		bool $isPhaseRequired,
-		array $fieldsAttributes,
-		string $fieldName
-	)
+	/**
+	 * Brings the rows to the plan {@see \Bitrix\Crm\Attribute\PhasePlanner} has drawn. Updates come
+	 * first and deletions last, so that no intermediate state of the scope looks like a lost setting.
+	 */
+	private static function applyPhasePlan(array $plan): void
 	{
-		[$prevPhaseId, $nextPhaseId] = static::findNeighborPhases($phaseId, $phases);
-
-		foreach ($fieldsAttributes as $fieldAttribute)
+		foreach ($plan['update'] as $modification)
 		{
-			if ($fieldAttribute['FIELD_NAME'] !== $fieldName)
-			{
-				unset($fieldAttribute);
-				continue;
-			}
-
-			$startPhase = $phases[$fieldAttribute['START_PHASE']];
-			$finishPhase = $phases[$fieldAttribute['FINISH_PHASE']];
-
-			if ($isPhaseRequired)
-			{
-				if ($startPhase['SORT'] < $phases[$phaseId]['SORT'] && $finishPhase['SORT'] > $phases[$phaseId]['SORT'])
-				{
-					return;
-				}
-				elseif ($fieldAttribute['START_PHASE'] === $nextPhaseId)
-				{
-					Entity\FieldAttributeTable::update(
-						$fieldAttribute['ID'],
-						[
-							'CREATED_TIME' => new Main\Type\DateTime(),
-							'START_PHASE' => $phaseId,
-						]
-					);
-
-					return;
-				}
-				elseif ($fieldAttribute['FINISH_PHASE'] === $prevPhaseId)
-				{
-					Entity\FieldAttributeTable::update(
-						$fieldAttribute['ID'],
-						[
-							'CREATED_TIME' => new Main\Type\DateTime(),
-							'FINISH_PHASE' => $phaseId,
-						]
-					);
-
-					return;
-				}
-			}
-			else
-			{
-				if ($startPhase['SORT'] < $phases[$phaseId]['SORT'] && $finishPhase['SORT'] > $phases[$phaseId]['SORT'])
-				{
-					Entity\FieldAttributeTable::update(
-						$fieldAttribute['ID'],
-						[
-							'CREATED_TIME' => new Main\Type\DateTime(),
-							'FINISH_PHASE' => $prevPhaseId,
-						]
-					);
-
-					$data = $fieldsAttributes[0];
-					unset($data['ID']);
-					$data['START_PHASE'] = $nextPhaseId;
-					$data['CREATED_TIME'] = new Main\Type\DateTime();
-					Entity\FieldAttributeTable::add($data);
-
-					return;
-				}
-			}
+			FieldAttributeTable::update(
+				$modification['ID'],
+				[
+					'CREATED_TIME' => new Main\Type\DateTime(),
+					'START_PHASE' => $modification['START_PHASE'],
+					'FINISH_PHASE' => $modification['FINISH_PHASE'],
+				]
+			);
 		}
 
-		if ($isPhaseRequired)
+		foreach ($plan['add'] as $addition)
 		{
-			$data = $fieldsAttributes[0];
-			unset($data['ID']);
-			$data['START_PHASE'] = $phaseId;
-			$data['FINISH_PHASE'] = $phaseId;
-			$data['CREATED_TIME'] = new Main\Type\DateTime();
-			Entity\FieldAttributeTable::add($data);
+			$record = $addition['ROW'];
+			unset($record['ID']);
+			$record['CREATED_TIME'] = new Main\Type\DateTime();
+			$record['START_PHASE'] = $addition['START_PHASE'];
+			$record['FINISH_PHASE'] = $addition['FINISH_PHASE'];
+
+			FieldAttributeTable::add($record);
+		}
+
+		foreach ($plan['delete'] as $id)
+		{
+			FieldAttributeTable::delete($id);
 		}
 	}
 
+	/**
+	 * @deprecated Does nothing: an inverted range is no longer a reason to drop a user setting.
+	 */
 	public static function processPhaseModification($phaseID, $entityTypeID, $entityScope, array $phases)
 	{
-		if(!is_int($entityTypeID))
-		{
-			$entityTypeID = (int)$entityTypeID;
-		}
-
-		$connection = Main\HttpApplication::getConnection();
-		$helper = $connection->getSqlHelper();
-
-		$scopeSql = $helper->forSql($entityScope);
-		$phaseSql = $helper->forSql($phaseID);
-
-		$dbResult = $connection->query(
-			"SELECT * FROM b_crm_field_attr "
-			. "WHERE ENTITY_TYPE_ID = {$entityTypeID} AND ENTITY_SCOPE = '{$scopeSql}' "
-			. "AND (START_PHASE = '{$phaseSql}' OR FINISH_PHASE = '{$phaseSql}')"
-		);
-
-		while($fields = $dbResult->fetch())
-		{
-			$startPhaseID = $fields['START_PHASE'];
-			$finishPhaseID = $fields['FINISH_PHASE'];
-
-			if($startPhaseID === $finishPhaseID)
-			{
-				continue;
-			}
-
-			$startPhase = isset($phases[$startPhaseID]) ? $phases[$startPhaseID] : null;
-			$finishPhase = isset($phases[$finishPhaseID]) ? $phases[$finishPhaseID] : null;
-			if(!(is_array($startPhase) && is_array($finishPhase)))
-			{
-				continue;
-			}
-
-			$startPhaseSort = isset($startPhase['SORT']) ? (int)$startPhase['SORT'] : 0;
-			$finishPhaseSort = isset($finishPhase['SORT']) ? (int)$finishPhase['SORT'] : 0;
-			if($startPhaseSort > $finishPhaseSort)
-			{
-				FieldAttributeTable::delete($fields['ID']);
-			}
-		}
 	}
 
 	public static function getEntityConfigurations($entityTypeID, $entityScope)
@@ -1248,10 +966,9 @@ class FieldAttributeManager
 		?int $typeId = FieldAttributeType::REQUIRED
 	): array
 	{
-		static $list = [];
-
-		$staticKey = ($entityTypeId . '-' . $entityScope . '-' . $fieldOrigin . '-' . $typeId);
-		if (!isset($list[$staticKey]))
+		$fieldOriginKey = $fieldOrigin === null ? 'origin:null' : "origin:{$fieldOrigin}";
+		$typeIdKey = $typeId === null ? 'type:null' : "type:{$typeId}";
+		if (!isset(self::$listCache[$entityTypeId][$entityScope][$fieldOriginKey][$typeIdKey]))
 		{
 			$query = new Main\Entity\Query(Entity\FieldAttributeTable::getEntity());
 			$query->addSelect('ENTITY_TYPE_ID');
@@ -1273,9 +990,19 @@ class FieldAttributeManager
 
 			$query->setCacheTtl(self::CACHE_TTL);
 
-			$list[$staticKey] = $query->exec()->fetchAll();
+			self::$listCache[$entityTypeId][$entityScope][$fieldOriginKey][$typeIdKey] = $query->exec()->fetchAll();
 		}
-		return $list[$staticKey];
+
+		return self::$listCache[$entityTypeId][$entityScope][$fieldOriginKey][$typeIdKey];
+	}
+
+	public static function invalidateRuntimeCache(int $entityTypeId, string $entityScope): void
+	{
+		unset(self::$listCache[$entityTypeId][$entityScope]);
+		if ((self::$listCache[$entityTypeId] ?? []) === [])
+		{
+			unset(self::$listCache[$entityTypeId]);
+		}
 	}
 
 	/**

@@ -37,7 +37,35 @@ class CheckList extends Controller
 			new ExactParameter(
 				Nodes::class,
 				'nodes',
-				function(string $className, array $nodes = []) {
+				function(string $className, int $taskId, array $nodes = []) {
+
+					// the closure runs before the action body, so the addressed task is checked here,
+					// ahead of the items checked against it
+					if ($taskId <= 0)
+					{
+						return $this->buildErrorResponse('Wrong task');
+					}
+
+					// a task the caller may not read is refused the same way its foreign items are,
+					// so the errors of the response tell the two apart no more
+					if (!TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_READ, $taskId))
+					{
+						return $this->buildErrorResponse('Access denied');
+					}
+
+					$ids = array_values(array_filter(array_map(static fn($item) => (int)($item['ID'] ?? 0), $nodes)));
+					if ($ids)
+					{
+						$ownItems = TaskCheckListFacade::getList(['ID'], ['TASK_ID' => $taskId, 'ID' => $ids]);
+						foreach ($ids as $itemId)
+						{
+							if (!isset($ownItems[$itemId]))
+							{
+								// the action declares non-nullable nodes, so null makes the binder reject the call
+								return $this->buildErrorResponse('Access denied');
+							}
+						}
+					}
 
 					$items = [];
 					foreach ($nodes as $id => $item)
@@ -76,11 +104,6 @@ class CheckList extends Controller
 	 */
 	public function saveAction(int $taskId, Nodes $nodes): ?array
 	{
-		if ($taskId <= 0)
-		{
-			return $this->buildErrorResponse('Wrong task');
-		}
-
 		if (!TaskAccessController::can($this->userId, ActionDictionary::ACTION_CHECKLIST_SAVE, $taskId, $nodes->toArray()))
 		{
 			return $this->buildErrorResponse('Access denied');

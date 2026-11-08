@@ -17,6 +17,9 @@ final class FillPreliminaryCallAssessments
 {
 	private const AUTO_CHECK_TYPE_ID = AutoCheckType::FIRST_INCOMING;
 	private const V2_CRITERIA_COUNT = 5;
+	private const SHIPPED_REFERENCE_LANGUAGE_IDS = ['de', 'en', 'kz', 'ru'];
+	private static array $referencePromptsByCode = [];
+	private static array $referenceMessagesByLanguageId = [];
 
 	public static function isWaiting(): bool
 	{
@@ -33,6 +36,39 @@ final class FillPreliminaryCallAssessments
 		$message = (string)Loc::getMessage('FPCA_' . strtoupper($code) . '_PROMPT');
 
 		return $message === '' ? null : $message;
+	}
+
+	/**
+	 * @return array<string, string>
+	 */
+	public static function getReferencePromptsByCode(string $code): array
+	{
+		if ($code === '')
+		{
+			return [];
+		}
+		if (isset(self::$referencePromptsByCode[$code]))
+		{
+			return self::$referencePromptsByCode[$code];
+		}
+
+		$key = 'FPCA_' . strtoupper($code) . '_PROMPT';
+		$references = [];
+		foreach (self::SHIPPED_REFERENCE_LANGUAGE_IDS as $languageId)
+		{
+			$messages = self::$referenceMessagesByLanguageId[$languageId]
+				??= Loc::loadLanguageFile(__FILE__, $languageId)
+			;
+			$message = (string)($messages[$key] ?? '');
+			if ($message !== '')
+			{
+				$references[$languageId] = $message;
+			}
+		}
+
+		self::$referencePromptsByCode[$code] = $references;
+
+		return self::$referencePromptsByCode[$code];
 	}
 
 	public static function getReferenceDescriptionByCode(string $code): ?string
@@ -73,7 +109,10 @@ final class FillPreliminaryCallAssessments
 
 	private function fillV2(CopilotCallAssessmentController $controller): void
 	{
-		$callAssessment = CallAssessmentItem::createFromArray($this->getPoliteCommunicationAssessment());
+		$data = $this->getPoliteCommunicationAssessment();
+		$data['prompt'] = '';
+		$data['isHintEnabled'] = false;
+		$callAssessment = CallAssessmentItem::createFromArray($data);
 		$result = $controller->add($callAssessment);
 		if (!$result->isSuccess())
 		{

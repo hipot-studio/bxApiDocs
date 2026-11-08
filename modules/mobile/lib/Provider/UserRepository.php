@@ -123,6 +123,7 @@ class UserRepository
 			isCollaber: self::isCollaber($userId),
 			isExtranet: self::isExtranet($userId),
 			isGuest: ($user['EXTERNAL_AUTH_ID'] ?? null) === UserRole::IM_GUEST->value,
+			isSystemUser: ($user['EXTERNAL_AUTH_ID'] ?? null) === UserRole::SYSTEM_USER->value,
 			personalMobile: $user['PERSONAL_MOBILE'] ?? null,
 			personalPhone: $user['PERSONAL_PHONE'] ?? null,
 			lastActivityDate: $lastActivityDate ?? null,

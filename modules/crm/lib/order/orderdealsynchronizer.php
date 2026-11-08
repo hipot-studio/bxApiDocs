@@ -80,10 +80,11 @@ class OrderDealSynchronizer
 	 * Fills in the missing fields on product from the `b_crm_product_row` table.
 	 *
 	 * @param array $dealProducts
+	 * @param int|null $skipUnchangedRowsOfDealId rows of this deal with the stored product and quantity are dropped
 	 *
 	 * @return array
 	 */
-	private static function fillingProducts(array $dealProducts): array
+	private static function fillingProducts(array $dealProducts, ?int $skipUnchangedRowsOfDealId = null): array
 	{
 		if (empty($dealProducts))
 		{
@@ -117,11 +118,33 @@ class OrderDealSynchronizer
 			$id = (int)$dealProduct['ID'];
 			if (isset($map[$id]))
 			{
+				if (
+					$skipUnchangedRowsOfDealId !== null
+					&& $dealProduct['OWNER_TYPE'] === CCrmOwnerTypeAbbr::Deal
+					&& (int)$dealProduct['OWNER_ID'] === $skipUnchangedRowsOfDealId
+					&& self::isSameProductAndQuantity($map[$id], $dealProduct)
+				)
+				{
+					unset($map[$id]);
+
+					continue;
+				}
+
 				$map[$id] += $dealProduct;
 			}
 		}
 
 		return array_values($map);
+	}
+
+	private static function isSameProductAndQuantity(array $incoming, array $stored): bool
+	{
+		$merged = $incoming + $stored;
+
+		return
+			(string)intval($merged['PRODUCT_ID']) === (string)intval($stored['PRODUCT_ID'])
+			&& (string)floatval($merged['QUANTITY']) === (string)floatval($stored['QUANTITY'])
+		;
 	}
 
 	/**
@@ -262,13 +285,15 @@ class OrderDealSynchronizer
 			return new Result();
 		}
 
+		$skipUnchangedRowsOfDealId = null;
 		$order = $this->getOrderBindedToDeal($dealId);
 		if (!$order)
 		{
 			$order = (new OrderCreator($dealId))->build();
+			$skipUnchangedRowsOfDealId = $dealId;
 		}
 
-		$dealProducts = self::fillingProducts($dealProducts);
+		$dealProducts = self::fillingProducts($dealProducts, $skipUnchangedRowsOfDealId);
 		$synchronizer = new ProductRowSynchronizer($order, $dealProducts);
 		return $synchronizer->verify();
 	}

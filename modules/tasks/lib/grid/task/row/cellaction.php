@@ -2,6 +2,7 @@
 namespace Bitrix\Tasks\Grid\Task\Row;
 
 use Bitrix\Main\Grid;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * Class CellAction
@@ -55,6 +56,13 @@ class CellAction
 					Grid\CellActions::PIN,
 					($isPinned ? Grid\CellActionState::ACTIVE : Grid\CellActionState::SHOW_BY_HOVER),
 				],
+				'attributes' => [
+					'aria-label' => Loc::getMessage(
+						$isPinned
+							? 'TASKS_GRID_TASK_ROW_CELL_ACTION_UNPIN_MSGVER_1'
+							: 'TASKS_GRID_TASK_ROW_CELL_ACTION_PIN_MSGVER_1'
+					),
+				],
 				'events' => [
 					'click' => "BX.Tasks.GridActions.changePin.bind(BX.Tasks.GridActions, {$taskId}, {$groupId})",
 				],
@@ -65,6 +73,13 @@ class CellAction
 			'class' => [
 				Grid\CellActions::MUTE,
 				(($this->rowData['IS_MUTED'] ?? '') === 'Y' ? Grid\CellActionState::ACTIVE : Grid\CellActionState::SHOW_BY_HOVER),
+			],
+			'attributes' => [
+				'aria-label' => Loc::getMessage(
+					($this->rowData['IS_MUTED'] ?? '') === 'Y'
+						? 'TASKS_GRID_TASK_ROW_CELL_ACTION_UNMUTE_MSGVER_1'
+						: 'TASKS_GRID_TASK_ROW_CELL_ACTION_MUTE_MSGVER_1'
+				),
 			],
 			'events' => [
 				'click' => "BX.Tasks.GridActions.changeMute.bind(BX.Tasks.GridActions, {$taskId})",

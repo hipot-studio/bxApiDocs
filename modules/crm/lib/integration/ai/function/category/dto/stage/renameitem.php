@@ -14,7 +14,9 @@ final class RenameItem extends Dto
 	protected function getValidators(array $fields): array
 	{
 		return [
+			new RequiredField($this, 'stageId'),
 			new NotEmptyField($this, 'stageId'),
+			new RequiredField($this, 'name'),
 			new NotEmptyField($this, 'name'),
 		];
 	}

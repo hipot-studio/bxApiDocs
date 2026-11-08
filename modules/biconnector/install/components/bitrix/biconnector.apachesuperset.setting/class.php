@@ -18,6 +18,8 @@ use Bitrix\BIConnector\Services\ApacheSuperset;
 use Bitrix\BIConnector\Superset\Cache\CacheManager;
 use Bitrix\BIConnector\Superset\Config\DatasetSettings;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
+use Bitrix\BIConnector\Superset\Error\IntegrationErrorPresenter;
+use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\Intranet\Portal;
@@ -27,7 +29,6 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorableImplementation;
 use Bitrix\Main\ErrorCollection;
-use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
@@ -137,14 +138,12 @@ class ApacheSupersetSettingComponent
 	private function getPeriodFilterData(): array
 	{
 		$periods = [
-			EmbeddedFilter\DateTime::PERIOD_LAST_7,
-			EmbeddedFilter\DateTime::PERIOD_LAST_30,
-			EmbeddedFilter\DateTime::PERIOD_LAST_90,
-			EmbeddedFilter\DateTime::PERIOD_LAST_180,
-			EmbeddedFilter\DateTime::PERIOD_LAST_365,
 			EmbeddedFilter\DateTime::PERIOD_CURRENT_WEEK,
 			EmbeddedFilter\DateTime::PERIOD_CURRENT_MONTH,
 			EmbeddedFilter\DateTime::PERIOD_CURRENT_YEAR,
+			EmbeddedFilter\DateTime::PERIOD_PREVIOUS_WEEK,
+			EmbeddedFilter\DateTime::PERIOD_PREVIOUS_MONTH,
+			EmbeddedFilter\DateTime::PERIOD_PREVIOUS_YEAR,
 			EmbeddedFilter\DateTime::PERIOD_RANGE,
 		];
 
@@ -217,28 +216,28 @@ class ApacheSupersetSettingComponent
 
 		if (SelfHostedLicenseLock::isDashboardLocked())
 		{
-			$result->addError(new Error(SelfHostedLicenseLock::getRestrictionMessage()));
+			$result->addError(new UserFacingError(SelfHostedLicenseLock::getRestrictionMessage()));
 
 			return $result;
 		}
 
 		if (!Feature::isBuilderEnabled())
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_FEATURE_UNAVAILABLE')));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_SETTINGS_FEATURE_UNAVAILABLE')));
 
 			return $result;
 		}
 
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_ACCESS))
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_NO_RIGHTS_MSGVER_1')));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_NO_RIGHTS_MSGVER_1')));
 
 			return $result;
 		}
 
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_ACCESS))
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_NO_RIGHTS_SETTINGS')));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_NO_RIGHTS_SETTINGS')));
 
 			return $result;
 		}
@@ -306,9 +305,8 @@ class ApacheSupersetSettingComponent
 			}
 			catch (\Bitrix\Main\ObjectException)
 			{
-				$this->errorCollection->setError(
-					new Error(Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_INVALID_RANGE'))
-				);
+				$errorMessage = Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_SAVE_ERROR_INVALID_RANGE');
+				$this->errorCollection->setError(new UserFacingError($errorMessage));
 
 				return null;
 			}
@@ -369,7 +367,12 @@ class ApacheSupersetSettingComponent
 			$clearResult = CacheManager::getInstance()->clear();
 			if (!$clearResult->isSuccess())
 			{
-				$this->errorCollection->add($clearResult->getErrors());
+				$this->errorCollection->add([
+					IntegrationErrorPresenter::present(
+						$clearResult->getErrors(),
+						Loc::getMessage('BICONNECTOR_SUPERSET_ACTION_SETTINGS_DATASET_TYPING_SAVE_ERROR'),
+					),
+				]);
 
 				return null;
 			}
@@ -446,7 +449,7 @@ class ApacheSupersetSettingComponent
 
 		if ($response->hasErrors())
 		{
-			KeyManager::deleteKey($accessKey);
+			KeyManager::deleteAccessKey($accessKey);
 
 			return null;
 		}

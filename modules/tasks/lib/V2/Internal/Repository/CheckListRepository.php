@@ -73,6 +73,38 @@ class CheckListRepository implements CheckListRepositoryInterface
 		return $ids;
 	}
 
+	public function filterExistingIds(array $ids, Entity\CheckList\Type $type): array
+	{
+		Collection::normalizeArrayValuesByInt($ids, false);
+		if (empty($ids))
+		{
+			return [];
+		}
+
+		$facade = $this->facadeResolver->resolveByType($type);
+
+		/** @var DataManager $dataTable */
+		$dataTable = $facade::getCheckListDataController();
+
+		$existingIds = [];
+		foreach (array_chunk($ids, 300) as $chunk)
+		{
+			$result =
+				$dataTable::query()
+					->setSelect(['ID'])
+					->whereIn('ID', $chunk)
+					->exec()
+			;
+
+			while ($row = $result->fetch())
+			{
+				$existingIds[] = (int)$row['ID'];
+			}
+		}
+
+		return $existingIds;
+	}
+
 	public function getAttachmentIdsByEntity(int $entityId, Entity\CheckList\Type $type): array
 	{
 		$ids = $this->getIdsByEntity($entityId, $type);

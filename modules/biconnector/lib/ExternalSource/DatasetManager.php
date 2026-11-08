@@ -2,6 +2,9 @@
 
 namespace Bitrix\BIConnector\ExternalSource;
 
+use Bitrix\BIConnector\Access\Service\TableGroupService;
+use Bitrix\BIConnector\Access\Table\PermissionCacheResetEventHandler;
+use Bitrix\BIConnector\Superset\Cache\TableListCacheInvalidator;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Engine\CurrentUser;
@@ -22,10 +25,18 @@ class DatasetManager
 	 * @param array $fields
 	 * @param array $settings
 	 * @param int|null $sourceId
+	 * @param int[]|null $tableGroupIds Groups the table is bound to, exactly these; null leaves the binding
+	 *                                  to DynamicTableBindingHandler.
 	 *
 	 * @return Main\Result
 	 */
-	public static function add(array $dataset, array $fields, array $settings = [], ?int $sourceId = null): Main\Result
+	public static function add(
+		array $dataset,
+		array $fields,
+		array $settings = [],
+		?int $sourceId = null,
+		?array $tableGroupIds = null,
+	): Main\Result
 	{
 		$result = new Main\Result();
 
@@ -36,7 +47,7 @@ class DatasetManager
 				'dataset' => $dataset,
 				'fields' => $fields,
 				'settings' => $settings,
-			]
+			],
 		);
 		$event->send();
 
@@ -48,7 +59,7 @@ class DatasetManager
 				$result->addError(
 					$error instanceof Main\Error
 						? $error
-						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_ADD_ERROR_MSGVER_1') ?? '')
+						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_ADD_ERROR_MSGVER_1') ?? ''),
 				);
 
 				return $result;
@@ -74,22 +85,35 @@ class DatasetManager
 
 		$id = null;
 
+		// The bindings go before the row of the dataset: DynamicTableBindingHandler skips a code bound
+		// already, so the table ends up in the chosen groups only.
+		if ($tableGroupIds !== null)
+		{
+			$bindingResult = self::setTableGroups((string)$dataset['NAME'], $tableGroupIds);
+			if (!$bindingResult->isSuccess())
+			{
+				self::rollback($connection);
+
+				return $result->addErrors($bindingResult->getErrors());
+			}
+		}
+
 		try
 		{
 			$datasetAddResult = Internal\ExternalDatasetTable::add($dataset);
 		}
 		catch (Main\DB\DuplicateEntryException)
 		{
-			$connection->rollbackTransaction();
+			self::rollback($connection);
 
 			$result->addError(
 				new Main\Error(
 					Loc::getMessage(
 						'BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_NAME_EXISTS_ERROR',
-						['#NAME#' => $dataset['NAME']]
+						['#NAME#' => $dataset['NAME']],
 					) ?? '',
-					'NAME_EXISTS'
-				)
+					'NAME_EXISTS',
+				),
 			);
 
 			return $result;
@@ -135,10 +159,17 @@ class DatasetManager
 				'id' => $id,
 				'dataset' => $datasetAddResult->getData(),
 			]);
+
+			if ($tableGroupIds !== null)
+			{
+				TableGroupService::resetGroupCaches();
+			}
+
+			TableListCacheInvalidator::schedule();
 		}
 		else
 		{
-			$connection->rollbackTransaction();
+			self::rollback($connection);
 		}
 
 		return $result;
@@ -148,7 +179,7 @@ class DatasetManager
 		array $dataset,
 		array $fields,
 		array $settings,
-		?int $sourceId = null
+		?int $sourceId = null,
 	): Main\Result
 	{
 		$result = new Main\Result();
@@ -167,14 +198,27 @@ class DatasetManager
 		}
 		else
 		{
+			if (
+				in_array($dataset['TYPE'] ?? null, [Type::Mysql->value, Type::Pgsql->value], true)
+				&& !self::isExternalCodeValid($dataset['EXTERNAL_CODE'] ?? null)
+			)
+			{
+				return $result->addError(
+					new Main\Error(
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_EXTERNAL_CODE_FORMAT_ERROR') ?? '',
+						'EXTERNAL_CODE_FORMAT',
+					),
+				);
+			}
+
 			$datasetName = $dataset['NAME'];
 			if (!preg_match(Internal\ExternalDatasetTable::TABLE_NAME_REGEXP, (string)$datasetName))
 			{
 				$result->addError(
 					new Main\Error(
 						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_NAME_FORMAT_ERROR') ?? '',
-						'NAME_FORMAT'
-					)
+						'NAME_FORMAT',
+					),
 				);
 			}
 			elseif (in_array($datasetName, SupersetServiceIntegration::getTableList(), true))
@@ -182,8 +226,8 @@ class DatasetManager
 				$result->addError(
 					new Main\Error(
 						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_ALREADY_EXIST_ERROR_MSGVER_1') ?? '',
-						'DATASET_ALREADY_EXIST'
-					)
+						'DATASET_ALREADY_EXIST',
+					),
 				);
 			}
 			elseif (self::isNameTaken($datasetName))
@@ -192,13 +236,15 @@ class DatasetManager
 					new Main\Error(
 						Loc::getMessage(
 							'BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_NAME_EXISTS_ERROR',
-							['#NAME#' => $datasetName]
+							['#NAME#' => $datasetName],
 						) ?? '',
-						'NAME_EXISTS'
-					)
+						'NAME_EXISTS',
+					),
 				);
 			}
 
+			// The database assigns the ID: PostgreSQL stores an explicit zero from the form as is.
+			unset($dataset['ID']);
 			$dataset['DATE_CREATE'] = new Main\Type\DateTime();
 
 			if (empty($dataset['CREATED_BY_ID']) && CurrentUser::get()->getId())
@@ -233,9 +279,16 @@ class DatasetManager
 	 * @param array $dataset
 	 * @param array $fields
 	 * @param array $settings
+	 * @param int[]|null $tableGroupIds Groups the table ends up in, exactly these; null leaves the bindings.
 	 * @return Main\Result
 	 */
-	public static function update(int $id, array $dataset = [], array $fields = [], array $settings = []): Main\Result
+	public static function update(
+		int $id,
+		array $dataset = [],
+		array $fields = [],
+		array $settings = [],
+		?array $tableGroupIds = null,
+	): Main\Result
 	{
 		$result = new Main\Result();
 
@@ -247,7 +300,7 @@ class DatasetManager
 				'dataset' => $dataset,
 				'fields' => $fields,
 				'settings' => $settings,
-			]
+			],
 		);
 		$event->send();
 
@@ -259,7 +312,7 @@ class DatasetManager
 				$result->addError(
 					$error instanceof Main\Error
 						? $error
-						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_UPDATE_ERROR_MSGVER_1') ?? '')
+						: new Main\Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_UPDATE_ERROR_MSGVER_1') ?? ''),
 				);
 
 				return $result;
@@ -279,6 +332,7 @@ class DatasetManager
 		$dataset = $checkResultData['dataset'];
 		$fields = $checkResultData['fields'];
 		$settings = $checkResultData['settings'];
+		$tableCode = $checkResultData['name'];
 
 		$connection = Main\Application::getInstance()->getConnection();
 		$connection->startTransaction();
@@ -355,7 +409,7 @@ class DatasetManager
 
 			$fieldsToDelete = array_diff(
 				$currentFields->getIdList(),
-				array_map('intval', array_column($fields, 'ID'))
+				array_map('intval', array_column($fields, 'ID')),
 			);
 			if ($fieldsToDelete)
 			{
@@ -378,15 +432,29 @@ class DatasetManager
 			}
 		}
 
+		$isTableGroupSetChanged = false;
+		if ($tableGroupIds !== null && $result->isSuccess())
+		{
+			$setTableGroupsResult = self::setTableGroups($tableCode, $tableGroupIds);
+			$result->addErrors($setTableGroupsResult->getErrors());
+			$changes = $setTableGroupsResult->getData();
+			$isTableGroupSetChanged = !empty($changes['addedGroupIds']) || !empty($changes['removedGroupIds']);
+		}
+
 		if ($result->isSuccess())
 		{
 			$connection->commitTransaction();
 		}
 		else
 		{
-			$connection->rollbackTransaction();
+			self::rollback($connection);
 
 			return $result;
+		}
+
+		if ($isTableGroupSetChanged)
+		{
+			TableGroupService::resetGroupCaches();
 		}
 
 		$event = new Main\Event(
@@ -394,9 +462,11 @@ class DatasetManager
 			self::EVENT_ON_AFTER_UPDATE_DATASET,
 			[
 				'dataset' => self::getById($id),
-			]
+			],
 		);
 		$event->send();
+
+		TableListCacheInvalidator::schedule();
 
 		return $result;
 	}
@@ -418,11 +488,25 @@ class DatasetManager
 		{
 			$result->addError(
 				new Main\Error(
-					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_NOT_FOUND_MSGVER_1') ?? ''
-				)
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DATASET_NOT_FOUND_MSGVER_1') ?? '',
+				),
 			);
 
 			return $result;
+		}
+
+		if (
+			array_key_exists('EXTERNAL_CODE', $dataset)
+			&& in_array($currentDataset->getType(), [Type::Mysql->value, Type::Pgsql->value], true)
+			&& !self::isExternalCodeValid($dataset['EXTERNAL_CODE'])
+		)
+		{
+			return $result->addError(
+				new Main\Error(
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_EXTERNAL_CODE_FORMAT_ERROR') ?? '',
+					'EXTERNAL_CODE_FORMAT',
+				),
+			);
 		}
 
 		if ($dataset)
@@ -441,6 +525,7 @@ class DatasetManager
 			'dataset' => $dataset,
 			'fields' => $fields,
 			'settings' => $settings,
+			'name' => (string)$currentDataset->getName(),
 		]);
 
 		return $result;
@@ -462,15 +547,20 @@ class DatasetManager
 					new Main\Error(
 						Loc::getMessage(
 							'BICONNECTOR_EXTERNAL_SOURCE_DATASET_MANAGER_DUPLICATE_FIELDS_ERROR',
-							['#FIELD_NAMES#' => implode(', ', array_keys($duplicates))]
+							['#FIELD_NAMES#' => implode(', ', array_keys($duplicates))],
 						),
-						'DUPLICATE_FIELDS'
-					)
+						'DUPLICATE_FIELDS',
+					),
 				);
 			}
 		}
 
 		return $result;
+	}
+
+	private static function isExternalCodeValid(mixed $externalCode): bool
+	{
+		return is_string($externalCode) && $externalCode !== '' && !str_contains($externalCode, "\0");
 	}
 
 	private static function isNameTaken(string $name): bool
@@ -489,6 +579,7 @@ class DatasetManager
 
 		foreach ($fields as $field)
 		{
+			unset($field['ID']);
 			$field['DATASET_ID'] = $id;
 			$datasetFieldsAddResult = Internal\ExternalDatasetFieldTable::add($field);
 			if (!$datasetFieldsAddResult->isSuccess())
@@ -520,6 +611,9 @@ class DatasetManager
 	/**
 	 * Deletes dataset with fields and settings
 	 *
+	 * The bindings of its table to the table groups are dropped by DynamicTableBindingHandler on the
+	 * deletion events of the row.
+	 *
 	 * @param int $id
 	 * @return Main\Result
 	 */
@@ -537,9 +631,44 @@ class DatasetManager
 		if (!$datasetDeleteResult->isSuccess())
 		{
 			$result->addErrors($datasetDeleteResult->getErrors());
+
+			return $result;
 		}
 
+		// onAfterDeleteDataset is sent by RestDatasetManager::deleteWithDataset() only, while the catalog
+		// changes on every path; a repeated call in the same hit costs nothing
+		PermissionCacheResetEventHandler::onDatasetChanged();
+
+		TableListCacheInvalidator::schedule();
+
 		return $result;
+	}
+
+	private static function setTableGroups(string $tableCode, array $tableGroupIds): Main\Result
+	{
+		try
+		{
+			return TableGroupService::setTableGroupsWithinTransaction($tableCode, $tableGroupIds);
+		}
+		catch (\Throwable $exception)
+		{
+			return (new Main\Result())->addError(new Main\Error($exception->getMessage()));
+		}
+	}
+
+	/**
+	 * Inside an outer transaction the rollback returns to the savepoint and then reports the nesting as
+	 * an exception; the changes are undone by then and the outer transaction decides the rest.
+	 */
+	private static function rollback(Main\DB\Connection $connection): void
+	{
+		try
+		{
+			$connection->rollbackTransaction();
+		}
+		catch (Main\DB\TransactionException)
+		{
+		}
 	}
 
 	/**
@@ -580,11 +709,62 @@ class DatasetManager
 		$datasetFieldsResult = Internal\ExternalDatasetFieldTable::getList([
 			'select' => ['*'],
 			'filter' => [
-				'=DATASET_ID' => $id
-			]
+				'=DATASET_ID' => $id,
+			],
 		])->fetchCollection();
 
 		return $datasetFieldsResult;
+	}
+
+	/**
+	 * Stores the settings a CSV file was actually parsed with.
+	 *
+	 * Called after a successful import, not together with the dataset row: the import runs outside
+	 * the dataset transaction and may fail, and settings must never describe data that was parsed
+	 * with something else. Deliberately bypasses self::update() so that dataset lifecycle events —
+	 * and the Superset mirroring hanging on them — are not fired a second time per save.
+	 *
+	 * @param int $datasetId
+	 * @param array $settings Keys: delimiter, encoding, hasHeaders.
+	 * @return Main\Result
+	 */
+	public static function saveFileParsingSettings(int $datasetId, array $settings): Main\Result
+	{
+		$result = new Main\Result();
+
+		foreach (['delimiter', 'encoding', 'hasHeaders'] as $key)
+		{
+			if (!isset($settings[$key]))
+			{
+				$result->addError(new Main\Error('Setting "' . $key . '" must be set', 'FILE_PARSING_SETTINGS_INCOMPLETE'));
+
+				return $result;
+			}
+		}
+
+		try
+		{
+			$updateResult = Internal\ExternalDatasetTable::update($datasetId, [
+				'CSV_DELIMITER' => $settings['delimiter'],
+				'CSV_ENCODING' => $settings['encoding'],
+				'CSV_HAS_HEADERS' => (bool)$settings['hasHeaders'],
+			]);
+		}
+		catch (\Throwable $exception)
+		{
+			// The caller runs this after a finished import and only logs the failure, so a storage
+			// exception must not escape and turn an imported dataset into a failed request.
+			$result->addError(new Main\Error($exception->getMessage(), 'FILE_PARSING_SETTINGS_SAVE_ERROR'));
+
+			return $result;
+		}
+
+		if (!$updateResult->isSuccess())
+		{
+			$result->addErrors($updateResult->getErrors());
+		}
+
+		return $result;
 	}
 
 	/**
@@ -598,8 +778,8 @@ class DatasetManager
 		$datasetSettingsResult = Internal\ExternalDatasetFieldFormatTable::getList([
 			'select' => ['*'],
 			'filter' => [
-				'=DATASET_ID' => $id
-			]
+				'=DATASET_ID' => $id,
+			],
 		])->fetchCollection();
 
 		return $datasetSettingsResult;
@@ -616,8 +796,8 @@ class DatasetManager
 		$datasetFieldsResult = Internal\ExternalDatasetFieldTable::getList([
 			'select' => ['EXTERNAL_CODE', 'NAME'],
 			'filter' => [
-				'=DATASET.EXTERNAL_CODE' => $tableName
-			]
+				'=DATASET.EXTERNAL_CODE' => $tableName,
+			],
 		])
 			->fetchCollection()
 		;

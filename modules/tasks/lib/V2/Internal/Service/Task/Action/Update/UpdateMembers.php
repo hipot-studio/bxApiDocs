@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Update;
 
+use Bitrix\Main\Application;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Repository\TaskMemberRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Trait\ConfigTrait;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Trait\MemberTrait;
 use Bitrix\Tasks\V2\Internal\Service\Task\UnsubscribeService;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationLock;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationRegistry;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationScope;
 
 class UpdateMembers
 {
@@ -20,6 +25,19 @@ class UpdateMembers
 
 	protected TaskMemberRepositoryInterface $taskMemberRepository;
 	private UnsubscribeService $unsubscribeService;
+	private ?TaskMutationRegistry $mutationRegistry;
+	private ?TaskMutationLock $mutationLock;
+
+	public function __construct(
+		UpdateConfig $config,
+		?TaskMutationRegistry $mutationRegistry = null,
+		?TaskMutationLock $mutationLock = null,
+	)
+	{
+		$this->config = $config;
+		$this->mutationRegistry = $mutationRegistry;
+		$this->mutationLock = $mutationLock;
+	}
 
 	private function init(): void
 	{
@@ -38,19 +56,33 @@ class UpdateMembers
 		$this->init();
 		$taskId = $task->id;
 
-		$currentMembers = $this->taskMemberRepository->get($task->id);
-		$toSaveUserCollection = $this->makeMemberCollectionForSave($innerFields, $currentMembers, $task);
+		$container = Container::getInstance();
+		$registry = $this->mutationRegistry ?? $container->get(TaskMutationRegistry::class);
+		$lock = $this->mutationLock ?? $container->get(TaskMutationLock::class);
 
-		if (!$toSaveUserCollection)
-		{
-			return $this->makeLogArray($currentMembers);
-		}
+		return $registry->run(
+			Application::getConnection(),
+			function (TaskMutationScope $scope) use ($innerFields, $task, $changes, $taskId, $lock, $registry): array {
+				$lock->acquire($taskId, $scope);
 
-		$this->taskMemberRepository->deleteAllInTask($taskId);
-		$this->taskMemberRepository->saveMulti($taskId, $toSaveUserCollection);
-		$this->unsubscribeExcludedUsers($taskId, $changes, $toSaveUserCollection);
+				$currentMembers = $this->taskMemberRepository->get($taskId);
+				$toSaveUserCollection = $this->makeMemberCollectionForSave($innerFields, $currentMembers, $task);
 
-		return $this->makeLogArray($toSaveUserCollection);
+				if (!$toSaveUserCollection)
+				{
+					$registry->commit(Application::getConnection(), $scope);
+
+					return $this->makeLogArray($currentMembers);
+				}
+
+				$this->taskMemberRepository->deleteAllInTask($taskId);
+				$this->taskMemberRepository->saveMulti($taskId, $toSaveUserCollection);
+				$this->unsubscribeExcludedUsers($taskId, $changes, $toSaveUserCollection);
+				$registry->commit(Application::getConnection(), $scope);
+
+				return $this->makeLogArray($toSaveUserCollection);
+			},
+		);
 	}
 
 	private function unsubscribeExcludedUsers(int $taskId, array $changes, UserCollection $existUsers): void

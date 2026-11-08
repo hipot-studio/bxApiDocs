@@ -4,6 +4,7 @@ namespace Bitrix\Im\V2\Integration\Socialnetwork;
 
 use Bitrix\Disk\Driver;
 use Bitrix\Im\Integration\Socialnetwork\Extranet;
+use Bitrix\Im\Model\RelationTable;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
@@ -74,6 +75,27 @@ class Group
 				['join_type' => 'INNER']
 			)
 		);
+
+		return $query;
+	}
+
+	/**
+	 * Users a guest shares a non-private chat with: the only people a guest is allowed to see.
+	 */
+	public static function getGuestSharedUsersQuery(int $userId): Query
+	{
+		$query = RelationTable::query();
+		$query->addSelect(new ExpressionField('DISTINCT_USER_ID', 'DISTINCT %s', 'OTHER.USER_ID'));
+		$query->registerRuntimeField(
+			new Reference(
+				'OTHER',
+				RelationTable::class,
+				Join::on('this.CHAT_ID', 'ref.CHAT_ID'),
+				['join_type' => Join::TYPE_INNER]
+			)
+		);
+		$query->where('USER_ID', $userId);
+		$query->whereNot('MESSAGE_TYPE', \IM_MESSAGE_PRIVATE);
 
 		return $query;
 	}

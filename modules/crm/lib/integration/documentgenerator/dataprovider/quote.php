@@ -9,6 +9,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\DocumentGenerator\DataProvider\ArrayDataProvider;
 use Bitrix\DocumentGenerator\DataProviderManager;
 use Bitrix\DocumentGenerator\Value\DateTime;
+use Bitrix\Main\Type;
 
 class Quote extends ProductsDataProvider
 {
@@ -87,10 +88,11 @@ class Quote extends ProductsDataProvider
 		if($this->data === null)
 		{
 			$this->data = [];
-			$data = \CCrmQuote::GetByID($this->source);
+			$data = \CCrmQuote::GetByID($this->source, false);
 			if($data)
 			{
 				$this->data = $data;
+				$this->convertDateFields();
 				$this->convertBBFieldsToHtml();
 			}
 		}
@@ -98,6 +100,17 @@ class Quote extends ProductsDataProvider
 		{
 			$this->loadProducts();
 			$this->calculateTotalFields();
+		}
+	}
+
+	protected function convertDateFields(): void
+	{
+		foreach (['BEGINDATE', 'CLOSEDATE'] as $fieldName)
+		{
+			if (array_key_exists($fieldName, $this->data))
+			{
+				$this->data[$fieldName] = $this->createDate($this->data[$fieldName]);
+			}
 		}
 	}
 

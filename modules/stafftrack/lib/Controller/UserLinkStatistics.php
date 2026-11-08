@@ -5,6 +5,7 @@ namespace Bitrix\StaffTrack\Controller;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\StaffTrack\Infrastructure\ActionFilters\LegacyCheckInDisabledFilter;
 use Bitrix\StaffTrack\Integration\Im\MessageService;
 use Bitrix\StaffTrack\Item\User;
 use Bitrix\StaffTrack\Service\UserService;
@@ -27,6 +28,14 @@ class UserLinkStatistics extends Controller
 					new CloseSession()
 				],
 			],
+		];
+	}
+
+	protected function getDefaultPreFilters(): array
+	{
+		return [
+			...parent::getDefaultPreFilters(),
+			new LegacyCheckInDisabledFilter(),
 		];
 	}
 

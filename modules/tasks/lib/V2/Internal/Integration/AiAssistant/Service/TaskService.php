@@ -77,10 +77,9 @@ class TaskService
 		$task = $this->addService->add($task, $config);
 
 		return $this->taskResponseMapper->mapFromEntity(
-			$task,
-			new CheckList(),
-			$userId,
-			$this->groupDisplayTypeResolver->resolveForGroup($task->group),
+			task: $task,
+			userId: $userId,
+			groupDisplayType: $this->groupDisplayTypeResolver->resolveForGroup($task->group),
 		);
 	}
 

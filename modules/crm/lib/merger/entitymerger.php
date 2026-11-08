@@ -1003,6 +1003,44 @@ abstract class EntityMerger
 			$targID = (int)$targID;
 		}
 
+		if ($this->isPermissionCheckEnabled() && !$this->isAdminUser())
+		{
+			$userPermissions = $this->getUserPermissions();
+			if ($userPermissions !== null)
+			{
+				// every check below reads permission attributes, one warm-up keeps it from becoming a query per entity
+				Crm\Service\Container::getInstance()
+					->getUserPermissions($userPermissions->GetUserID())
+					->item()
+					->preloadPermissionAttributes(
+						$this->entityTypeID,
+						array_unique(array_map('intval', array_merge($seedIDs, [$targID]))),
+					)
+				;
+			}
+			foreach($seedIDs as $seedID)
+			{
+				if (!$this->checkEntityReadPermission($seedID, $userPermissions))
+				{
+					throw new EntityMergerException(
+						$this->entityTypeID,
+						$seedID,
+						self::ROLE_SEED,
+						EntityMergerException::READ_DENIED
+					);
+				}
+			}
+			if (!$this->checkEntityReadPermission($targID, $userPermissions))
+			{
+				throw new EntityMergerException(
+					$this->entityTypeID,
+					$targID,
+					self::ROLE_TARG,
+					EntityMergerException::READ_DENIED
+				);
+			}
+		}
+
 		$entityFieldInfos = $this->getEntityFieldsInfo();
 		$userFieldInfos = $this->getEntityUserFieldsInfo();
 		$targ = $this->getEntityFields($targID, self::ROLE_TARG);

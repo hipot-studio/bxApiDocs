@@ -4,6 +4,7 @@ namespace Bitrix\Timeman\Component\SchedulePlan;
 use \Bitrix\Main;
 use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Timeman;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 use Bitrix\Timeman\Repository\Schedule\ScheduleRepository;
 use Bitrix\Timeman\Service\DependencyManager;
 use Bitrix\Timeman\TimemanUrlManager;
@@ -51,6 +52,14 @@ class TimemanShiftPlanComponent extends Timeman\Component\BaseComponent
 
 	public function executeComponent()
 	{
+		$toolId = Settings::TOOLS['worktime'];
+		if (!(new Settings())->isToolAvailable($toolId))
+		{
+			$this->includeComponentTemplate('tool-disabled');
+
+			return;
+		}
+
 		if (!$this->userPermissionManager->canReadShiftPlan($this->arResult['SCHEDULE_ID']))
 		{
 			showError(Loc::getMessage('TM_SCHEDULE_SHIFT_PLAN_ACCESS_DENIED'));

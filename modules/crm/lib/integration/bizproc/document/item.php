@@ -65,9 +65,14 @@ class Item extends \CCrmDocument implements \IBPWorkflowDocument
 
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 		if (
-			isset($factory)
+			$operation != \CBPCanUserOperateOperation::CreateWorkflow
+			&& isset($factory)
 			&& $factory->isCategoriesSupported()
 			&& !isset($arParameters['DocumentCategoryId'])
+			&& (
+				$operation != \CBPCanUserOperateOperation::CreateAutomation
+				|| !array_key_exists('DocumentStatus', $arParameters)
+			)
 		)
 		{
 			$arParameters['DocumentCategoryId'] = $factory->createDefaultCategoryIfNotExist()->getId();;
@@ -458,6 +463,37 @@ class Item extends \CCrmDocument implements \IBPWorkflowDocument
 		);
 
 		return $entityFields;
+	}
+
+	/**
+	 * Descriptions of the parent entity fields of $entityTypeId in the format of
+	 * {@see \CBPDocumentService::getDocumentFields()}. They are not editable: classic entity documents
+	 * pass fields to \CCrm{Entity}::Update(), which ignores PARENT_ID_*.
+	 */
+	public static function getParentFields(int $entityTypeId): array
+	{
+		$container = Container::getInstance();
+		$factory = $container->getFactory($entityTypeId);
+		if (is_null($factory))
+		{
+			return [];
+		}
+
+		$parentFields = [];
+		foreach ($container->getParentFieldManager()->getParentFieldsInfo($entityTypeId) as $fieldId => $field)
+		{
+			$parentFields[$fieldId] = [
+				'Name' => $field['TITLE'],
+				'Type' => static::resolveBPType($field['TYPE']),
+				'Options' => static::getFieldOptions($field, $factory),
+				'Settings' => static::getFieldSettings($field, $factory),
+				'Editable' => false,
+				'Required' => false,
+				'Multiple' => false,
+			];
+		}
+
+		return $parentFields;
 	}
 
 	private static function getUserFieldsMap(Crm\Service\Factory $factory): array

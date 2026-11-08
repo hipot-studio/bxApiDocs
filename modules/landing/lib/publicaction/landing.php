@@ -30,6 +30,12 @@ class Landing
 	private const STATUS_NOT_FOUND = 'not_found';
 
 	/**
+	 * Fields a request must not pass to addByTemplate: template blocks are prepared
+	 * by the server side only, never from request data (Mantis 258057).
+	 */
+	private const UNSUPPORTED_TEMPLATE_FIELDS = ['PREPARE_BLOCKS', 'PREPARE_BLOCKS_DATA'];
+
+	/**
 	 * Clear disallow keys from add/update fields.
 	 * @param array $fields
 	 * @return array
@@ -601,7 +607,7 @@ class Landing
 	}
 
 	/**
-	 * Dectivate the block on the landing.
+	 * Deactivate the block on the landing.
 	 * @param int $lid Id of landing.
 	 * @param int $block Block id.
 	 * @return PublicActionResult
@@ -966,6 +972,8 @@ class Landing
 		$willAdded = false;
 		$siteId = intval($siteId);
 		$fields = self::checkAddingInMenu($fields, $willAdded);
+		// blocks of a template are prepared by the server side only, never by the data of a request
+		$fields = array_diff_key($fields, array_flip(self::UNSUPPORTED_TEMPLATE_FIELDS));
 
 		$res = LandingCore::addByTemplate($siteId, $code, $fields);
 
@@ -1007,6 +1015,29 @@ class Landing
 
 		$fields = self::clearDisallowFields($fields);
 
+		$lid = (int)$lid;
+		$landing = LandingCore::createInstance($lid, [
+			'skip_blocks' => true
+		]);
+
+		if (!$landing->exist())
+		{
+			$result->setError($landing->getError());
+
+			return $result;
+		}
+
+		if (!$landing->canEdit())
+		{
+			$error->addError(
+				'ACCESS_DENIED',
+				Loc::getMessage('LANDING_BLOCK_ACCESS_DENIED')
+			);
+			$result->setError($error);
+
+			return $result;
+		}
+
 		$res = LandingCore::update($lid, $fields);
 
 		if ($res->isSuccess())
@@ -1032,7 +1063,7 @@ class Landing
 		$result = new PublicActionResult();
 		$error = new \Bitrix\Landing\Error;
 
-		$res = LandingCore::delete($lid);
+		$res = LandingCore::delete($lid, true);
 
 		if ($res->isSuccess())
 		{

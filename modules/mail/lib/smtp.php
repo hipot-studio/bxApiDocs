@@ -20,6 +20,7 @@ class Smtp
 	const ERR_CAPABILITY = 203;
 	const ERR_AUTH = 204;
 	const ERR_AUTH_MECH = 205;
+	const ERR_AUTH_OAUTH = 206;
 
 	protected $stream, $errors;
 	protected $sessCapability;
@@ -283,7 +284,9 @@ class Smtp
 			$token = Helper\OAuth::getTokenByMeta($this->options['password']);
 			if (empty($token))
 			{
-				$error = $this->errorMessage(array(Smtp::ERR_AUTH, Smtp::ERR_AUTH_MECH));
+				// The server does offer XOAUTH2: the token is missing because the renewal
+				// failed, and naming a missing mechanism sends diagnosis the wrong way.
+				$error = $this->errorMessage(array(Smtp::ERR_AUTH, Smtp::ERR_AUTH_OAUTH));
 				return false;
 			}
 			$formatted = sprintf("user=%s\x01auth=Bearer %s\x01\x01", $this->options['login'], $token);
@@ -529,6 +532,8 @@ class Smtp
 				return Loc::getMessage('MAIL_SMTP_ERR_AUTH');
 			case self::ERR_AUTH_MECH:
 				return Loc::getMessage('MAIL_SMTP_ERR_AUTH_MECH');
+			case self::ERR_AUTH_OAUTH:
+				return Loc::getMessage('MAIL_SMTP_ERR_AUTH_OAUTH');
 
 			default:
 				return Loc::getMessage('MAIL_SMTP_ERR_DEFAULT');

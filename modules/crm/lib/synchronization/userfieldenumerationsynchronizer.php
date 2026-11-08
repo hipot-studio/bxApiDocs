@@ -90,7 +90,7 @@ class UserFieldEnumerationSynchronizer extends UserFieldCustomSynchronizer
 	}
 	*/
 
-	public static function synchronize($userFieldEntityType, $fieldName, array $params = null)
+	public static function synchronize($userFieldEntityType, $fieldName, ?array $params = null)
 	{
 		$entityTypeID = UserFieldManager::resolveEntityTypeID($userFieldEntityType);
 		if($entityTypeID === \CCrmOwnerType::Undefined)
@@ -156,10 +156,17 @@ class UserFieldEnumerationSynchronizer extends UserFieldCustomSynchronizer
 
 		$srcKeys = array_keys($srcMap);
 
-		$originField = ConversionManager::getParentalField($entityTypeID, $fieldName);
+		$conversionMapOptions = [
+			'ENABLE_ACTUALIZATION' => false,
+		];
+		$originField = ConversionManager::getParentalField($entityTypeID, $fieldName, $conversionMapOptions);
 		$dstFields = array_merge(
 			array($originField),
-			ConversionManager::getConcernedFields($originField['ENTITY_TYPE_ID'], $originField['FIELD_NAME'])
+			ConversionManager::getConcernedFields(
+				$originField['ENTITY_TYPE_ID'],
+				$originField['FIELD_NAME'],
+				$conversionMapOptions
+			)
 		);
 
 		foreach($dstFields as $dstField)
@@ -286,6 +293,8 @@ class UserFieldEnumerationSynchronizer extends UserFieldCustomSynchronizer
 		{
 			return;
 		}
+
+		UserFieldSynchronizer::clearEnumerationValueCache($ID);
 
 		$fields = \CUserTypeEntity::GetByID($ID);
 		if(is_array($fields) && isset($fields['ENTITY_ID']) && isset($fields['FIELD_NAME']))

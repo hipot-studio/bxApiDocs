@@ -7,6 +7,7 @@ namespace Bitrix\Socialnetwork\V2\Infrastructure\Grid\Shared\Row\Action;
 use Bitrix\Main\Grid\Row\Action\Action;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Result;
+use Bitrix\Socialnetwork\V2\Infrastructure\Grid\Shared\Js\ProjectListControllerActionBuilder;
 
 class ViewAction implements Action
 {
@@ -41,10 +42,22 @@ class ViewAction implements Action
 			$href = '/workgroups/group/' . $id . '/' . $this->urlSuffix;
 		}
 
-		return [
+		$control = [
 			'text' => $this->text,
 			'href' => $href,
 			'default' => true,
 		];
+
+		$entityType = $rawFields['TYPE'] ?? null;
+		$call = ProjectListControllerActionBuilder::buildNotifyOpenProjectAction(
+			entityId: $id,
+			entityType: is_string($entityType) ? $entityType : null,
+		);
+		if ($call !== '')
+		{
+			$control['onclick'] = $call;
+		}
+
+		return $control;
 	}
 }

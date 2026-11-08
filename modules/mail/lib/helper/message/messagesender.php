@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Helper\Message;
 
 use Bitrix\Mail\Helper;
+use Bitrix\Mail\Internal\Service\Signature\Image\SignatureImageSendPreparation;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationActionGuard;
 use Bitrix\Mail\Message as MailMessage;
@@ -43,6 +44,46 @@ final class MessageSender
 		$this->bodySanitizer = $bodySanitizer;
 		$this->hostnameResolver = $hostnameResolver;
 	}
+
+	/**
+	 * Header names an extra header of a caller may carry, besides the `X-` space of its own: everything
+	 * else belongs either to the send path or to the core, and a caller that took one of those over would
+	 * leave the letter with an envelope that no longer matches what was actually sent.
+	 *
+	 * The list is an allowlist on purpose: the core writes MIME and transport headers of its own
+	 * (`Content-Type`, `Content-Transfer-Encoding`, `MIME-Version`, `Date`, `Sender`, `Return-Path`), and
+	 * a denylist would have to be extended every time it starts writing one more.
+	 */
+	private const ALLOWED_HEADER_NAMES = [
+		'auto-submitted',
+	];
+
+	/** The `X-` space belongs to the caller: no header of that space carries an envelope of the letter. */
+	private const ALLOWED_HEADER_NAME_PREFIX = 'x-';
+
+	/** Names of the `X-` space the core writes itself (`Main\Mail\Mail::getHeaders()`). */
+	private const CORE_X_HEADER_NAMES = [
+		'x-priority',
+		'x-mid',
+	];
+
+	/** Field name of a header, as RFC 5322 spells it: printable ASCII without the colon. */
+	private const HEADER_NAME_PATTERN = '/^[A-Za-z0-9!#$%&\'*+\-.^_`|~]+$/';
+
+	/**
+	 * Characters no value written into a header may carry: a line break inside one ends the header and
+	 * turns everything after it into headers - and past an empty line, into the body - of the letter the
+	 * portal actually sends.
+	 *
+	 * The values the send path writes are not all its own: the subject and the identifier of an answer
+	 * come from the letter being answered, that is from whoever sent it to the portal.
+	 *
+	 * The horizontal tab (`\x09`) is left out of the set: RFC 5322 counts it as whitespace of the value
+	 * like the space next to it, it ends no line and starts no header - a continuation line takes a line
+	 * break first, and those stay refused - so a subject or an address written with one is a value of a
+	 * person and not a smuggled header.
+	 */
+	private const CONTROL_CHARACTER_PATTERN = '/[\x00-\x08\x0A-\x1F\x7F]/';
 
 	/**
 	 * @param string[] $recipients
@@ -133,6 +174,7 @@ final class MessageSender
 	 * @param string[] $recipients
 	 * @param string[] $cc
 	 * @param string[] $bcc
+	 * @param array<string, string> $extraHeaders Headers of the caller added after the assembled ones.
 	 * @return array{success: bool, to: string[]}
 	 * @throws SystemException
 	 */
@@ -147,6 +189,7 @@ final class MessageSender
 		array $bcc = [],
 		?int $senderId = null,
 		?int $mailboxId = null,
+		array $extraHeaders = [],
 	): array
 	{
 		$originalMessage = $this->getOriginalMessage($messageId, $userId);
@@ -184,6 +227,7 @@ final class MessageSender
 			inReplyTo: $inReplyTo,
 			senderId: $senderId,
 			mailboxId: $mailboxId,
+			extraHeaders: $extraHeaders,
 		);
 	}
 
@@ -369,6 +413,7 @@ final class MessageSender
 	 * @param string[] $recipients
 	 * @param string[] $cc
 	 * @param string[] $bcc
+	 * @param array<string, string> $extraHeaders
 	 * @return array{success: bool, to: string[]}
 	 * @throws SystemException
 	 */
@@ -384,6 +429,7 @@ final class MessageSender
 		?string $inReplyTo = null,
 		?int $senderId = null,
 		?int $mailboxId = null,
+		array $extraHeaders = [],
 	): array
 	{
 		if ($this->transport !== null)
@@ -428,6 +474,8 @@ final class MessageSender
 		$senderSelection = $this->resolveSenderSelection($from, $userId, $senderId, $mailboxId);
 		$senderData = $senderSelection['sender'];
 		$sender = $this->formatSender($senderData, $userId);
+		self::assertNoControlCharacters($sender, 'From');
+
 		$senderEmail = self::extractEmail($sender);
 		$senderIdentity = $senderSelection['identity'];
 
@@ -446,12 +494,28 @@ final class MessageSender
 			throw new SystemException('Monthly portal mail limit reached.');
 		}
 
-		$recipientString = implode(', ', $recipients);
+		$signatureImagePreparation = self::signatureImagePreparation();
+		$preparedBody = self::prepareHtmlBody($body);
+		$signatureImageResult = $signatureImagePreparation->prepare(
+			$preparedBody,
+			$userId,
+			self::getHostname(),
+			$attachments,
+			$this->getAttachmentsSize($attachments),
+		);
+		if (!$signatureImageResult->isSuccess())
+		{
+			throw new SystemException($signatureImageResult->getErrors()[0]->getMessage());
+		}
+
+		$signatureImageSnapshot = $signatureImageResult->getData();
+		$attachments = (array)$signatureImageSnapshot['attachments'];
+		$recipientString = self::joinAddresses($recipients, 'To');
 
 		$outgoingParams = [
 			'TO' => $recipientString,
-			'SUBJECT' => $subject,
-			'BODY' => self::prepareHtmlBody($body),
+			'SUBJECT' => self::stripControlCharacters($subject),
+			'BODY' => (string)$signatureImageSnapshot['html'],
 			'HEADER' => [
 				'From' => $sender,
 				'Reply-To' => $sender,
@@ -468,18 +532,24 @@ final class MessageSender
 
 		if (!empty($cc))
 		{
-			$outgoingParams['HEADER']['Cc'] = implode(', ', $cc);
+			$outgoingParams['HEADER']['Cc'] = self::joinAddresses($cc, 'Cc');
 		}
 
 		if (!empty($bcc))
 		{
-			$outgoingParams['HEADER']['Bcc'] = implode(', ', $bcc);
+			$outgoingParams['HEADER']['Bcc'] = self::joinAddresses($bcc, 'Bcc');
 		}
 
+		$inReplyTo = self::prepareInReplyTo($inReplyTo);
 		if ($inReplyTo !== null)
 		{
 			$outgoingParams['HEADER']['In-Reply-To'] = $inReplyTo;
 		}
+
+		$outgoingParams['HEADER'] = array_merge(
+			$outgoingParams['HEADER'],
+			self::prepareExtraHeaders($extraHeaders),
+		);
 
 		$mailboxHelper = $this->resolveMailboxHelper($senderEmail, $userId, $senderIdentity);
 
@@ -492,6 +562,8 @@ final class MessageSender
 				throw new SystemException('Mailbox authentication failed.');
 			}
 
+			// A mailbox prints the headers itself instead of leaving the envelope to the core, so the two
+			// fields become header lines here - already carrying the values the assembly above cleared
 			$mailboxHelper->mail(array_merge(
 				$outgoingParams,
 				[
@@ -543,6 +615,124 @@ final class MessageSender
 			'success' => true,
 			'to' => $recipients,
 		];
+	}
+
+	/**
+	 * Extra headers of the caller, ready to join the assembled ones. A name that is not the caller's to
+	 * write is dropped, and a value carrying a control character is an attempt to smuggle a header of its
+	 * own, so the letter is not sent at all.
+	 *
+	 * @param array<string, string> $extraHeaders
+	 * @return array<string, string>
+	 * @throws SystemException
+	 */
+	private static function prepareExtraHeaders(array $extraHeaders): array
+	{
+		$prepared = [];
+
+		foreach ($extraHeaders as $name => $value)
+		{
+			// A list instead of a map means the caller wrote whole header lines: its keys are positions of
+			// an array and not names of headers
+			$name = is_string($name) ? trim($name) : '';
+			if (preg_match(self::HEADER_NAME_PATTERN, $name) !== 1)
+			{
+				throw new SystemException('Invalid header name provided.');
+			}
+
+			if (!self::isHeaderNameAllowed($name))
+			{
+				continue;
+			}
+
+			if (!is_string($value))
+			{
+				throw new SystemException(sprintf('Invalid value of the %s header.', $name));
+			}
+
+			self::assertNoControlCharacters($value, $name);
+
+			$prepared[$name] = $value;
+		}
+
+		return $prepared;
+	}
+
+	/**
+	 * The value with the characters that would end its header line taken out. This is the answer of the
+	 * send path for the subject: it is written by the sender of the letter being answered, so a control
+	 * character costs the character and not the send - refusing would hand anyone outside the portal a
+	 * way to silence an auto-reply.
+	 */
+	public static function stripControlCharacters(string $value): string
+	{
+		return (string)preg_replace(self::CONTROL_CHARACTER_PATTERN, '', $value);
+	}
+
+	/**
+	 * `In-Reply-To` of the answer, or nothing at all. The identifier is a `Message-Id` of the letter being
+	 * answered, that is a value of its sender: one carrying a control character is no identifier, and
+	 * cutting the character would leave the answer tied to a conversation that never existed.
+	 */
+	private static function prepareInReplyTo(?string $inReplyTo): ?string
+	{
+		if ($inReplyTo === null || self::hasControlCharacters($inReplyTo))
+		{
+			return null;
+		}
+
+		return $inReplyTo;
+	}
+
+	/**
+	 * Addresses of the caller as one header line. An address is the caller's own value and a control
+	 * character has no place in it, so the letter is not sent rather than sent along a line the caller
+	 * never wrote.
+	 *
+	 * @param string[] $addresses
+	 * @throws SystemException
+	 */
+	private static function joinAddresses(array $addresses, string $headerName): string
+	{
+		$line = implode(', ', $addresses);
+		self::assertNoControlCharacters($line, $headerName);
+
+		return $line;
+	}
+
+	/**
+	 * @throws SystemException
+	 */
+	private static function assertNoControlCharacters(string $value, string $headerName): void
+	{
+		if (self::hasControlCharacters($value))
+		{
+			throw new SystemException(sprintf('Invalid value of the %s header.', $headerName));
+		}
+	}
+
+	private static function hasControlCharacters(string $value): bool
+	{
+		return preg_match(self::CONTROL_CHARACTER_PATTERN, $value) === 1;
+	}
+
+	/**
+	 * Is this header the caller's to write. The letter still goes out without a header that is not: a
+	 * caller asking for one is not an attempt to forge the envelope, unlike a value with a line break in
+	 * it.
+	 */
+	private static function isHeaderNameAllowed(string $name): bool
+	{
+		$name = mb_strtolower($name);
+
+		if (in_array($name, self::CORE_X_HEADER_NAMES, true))
+		{
+			return false;
+		}
+
+		return in_array($name, self::ALLOWED_HEADER_NAMES, true)
+			|| str_starts_with($name, self::ALLOWED_HEADER_NAME_PREFIX)
+		;
 	}
 
 	private function resolveMailboxHelper(
@@ -908,6 +1098,30 @@ final class MessageSender
 		throw new SystemException('Original message not found or access denied.');
 	}
 
+	private function getAttachmentsSize(array $attachments): int
+	{
+		$totalSize = 0;
+		foreach ($attachments as $attachment)
+		{
+			$path = (string)($attachment['PATH'] ?? '');
+			if ($path !== '' && is_file($path))
+			{
+				$totalSize += (int)filesize($path);
+			}
+		}
+
+		return $totalSize;
+	}
+
+	/**
+	 * The single point where the preparation of signature images is built: every path that cleans an
+	 * outgoing body goes through it, so the markers are normalized the same way everywhere.
+	 */
+	private static function signatureImagePreparation(): SignatureImageSendPreparation
+	{
+		return new SignatureImageSendPreparation();
+	}
+
 	private static function prepareHtmlBody(string $body): string
 	{
 		[$body, $protectedSources] = self::protectSourcesForSanitizer(
@@ -915,12 +1129,8 @@ final class MessageSender
 			self::CID_SOURCE_PATTERN,
 			self::resolveCidSource(...),
 		);
-		$sanitizer = new \CBXSanitizer();
-		$sanitizer->setLevel(\CBXSanitizer::SECURE_LEVEL_LOW);
-		$sanitizer->applyDoubleEncode(false);
-		$sanitizer->addTags(Helper\Message::getWhitelistTagAttributes());
 
-		$html = strtr($sanitizer->sanitizeHtml($body), $protectedSources);
+		$html = strtr(self::signatureImagePreparation()->sanitizeHtml($body), $protectedSources);
 
 		if (mb_strpos($html, '</html>') === false)
 		{

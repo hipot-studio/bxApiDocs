@@ -8,6 +8,11 @@ use Bitrix\Crm\PhaseSemantics;
 
 class SmartDocument extends Dynamic
 {
+	public function shouldShowFinalStagesWithDefaultFilter(): bool
+	{
+		return false;
+	}
+
 	protected function getDefaultAdditionalSelectFields(): array
 	{
 		$fields = parent::getDefaultAdditionalSelectFields();

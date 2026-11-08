@@ -8,6 +8,7 @@ use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumDefinition;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumRegistry;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumType;
+use Bitrix\Rest\V3\Dto\TypeHelper;
 
 class FieldsValidator
 {
@@ -36,7 +37,7 @@ class FieldsValidator
 
 	public static function validateTypeAndValue(?string $type, mixed $value): bool
 	{
-		if ($type !== null && is_subclass_of($type, \BackedEnum::class))
+		if (TypeHelper::isBackedEnum($type))
 		{
 			return $value instanceof $type;
 		}

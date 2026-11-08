@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Integration\DocumentGenerator;
 
+use Bitrix\Catalog\ProductTable;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider\CrmEntityDataProvider;
 use Bitrix\Crm\Integration\DocumentGenerator\Value\Money;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
@@ -11,13 +12,17 @@ use Bitrix\DocumentGenerator\Value;
 use Bitrix\Iblock\ElementTable;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Type;
 
 class ProductLoader
 {
 	protected const FIELD_PROPERTY_PREFIX = 'PROPERTY_';
+	protected const PRODUCT_BATCH_SIZE = 500;
+	protected const PRODUCT_VALUE_CODES = ['WEIGHT', 'LENGTH', 'WIDTH', 'HEIGHT'];
 	/** @var ElementTable */
 	protected $elementTableClass = ElementTable::class;
+	/** @var ProductTable */
+	protected $productTableClass = ProductTable::class;
 	/** @var \CIBlockElement */
 	protected $iblockElementClass = \CIBlockElement::class;
 
@@ -34,6 +39,9 @@ class ProductLoader
 	protected $preparedPropertyValues = [];
 	protected $iblockValues;
 	protected $preparedIblockData;
+	protected $productValues;
+	protected $pendingProductValueIds = [];
+	protected $catalogModuleAvailable = false;
 	protected $propertyCodes;
 	protected $directoryImagePropertyCodes;
 	protected $loadedDirectoryPropertyValues;
@@ -42,10 +50,17 @@ class ProductLoader
 
 	public function __construct()
 	{
-		if (!Loader::includeModule('catalog') || !Loader::includeModule('iblock'))
+		if (!Loader::includeModule('catalog'))
 		{
 			return;
 		}
+		$this->catalogModuleAvailable = true;
+
+		if (!Loader::includeModule('iblock'))
+		{
+			return;
+		}
+
 		$this->productIblockId = Product\Catalog::getDefaultId();
 		$this->offerIblockId = Product\Catalog::getDefaultOfferId();
 	}
@@ -63,7 +78,7 @@ class ProductLoader
 			$this->addRow($row);
 		}
 
-		return $this->clearCache();
+		return $this;
 	}
 
 	/**
@@ -75,8 +90,17 @@ class ProductLoader
 	public function addRow(array $rowData): self
 	{
 		$this->rows[(int)$rowData['ID']] = $rowData;
+		$productId = (int)($rowData['PRODUCT_ID'] ?? 0);
+		if ($productId > 0)
+		{
+			$this->pendingProductValueIds[$productId] = true;
+			if ($this->productValues !== null)
+			{
+				unset($this->productValues[$productId]);
+			}
+		}
 
-		return $this->clearCache();
+		return $this->clearDerivedCache();
 	}
 
 	/**
@@ -85,6 +109,23 @@ class ProductLoader
 	 * @return $this
 	 */
 	public function clearCache(): self
+	{
+		$this->clearDerivedCache();
+		$this->productValues = [];
+		$this->pendingProductValueIds = [];
+		foreach ($this->rows as $row)
+		{
+			$productId = (int)($row['PRODUCT_ID'] ?? 0);
+			if ($productId > 0)
+			{
+				$this->pendingProductValueIds[$productId] = true;
+			}
+		}
+
+		return $this;
+	}
+
+	protected function clearDerivedCache(): self
 	{
 		$this->propertyValues = null;
 		$this->productIds = null;
@@ -289,6 +330,61 @@ class ProductLoader
 		}
 
 		return $data[$code] ?? null;
+	}
+
+	public function getProductValue(string $code, int $productId): ?float
+	{
+		if ($productId <= 0 || !in_array($code, self::PRODUCT_VALUE_CODES, true))
+		{
+			return 0.0;
+		}
+		if (!$this->catalogModuleAvailable)
+		{
+			return null;
+		}
+
+		$this->loadProductValues();
+
+		return (float)($this->productValues[$productId][$code] ?? 0);
+	}
+
+	protected function loadProductValues(): void
+	{
+		if (empty($this->pendingProductValueIds))
+		{
+			return;
+		}
+
+		if ($this->productValues === null)
+		{
+			$this->productValues = [];
+		}
+
+		foreach (array_chunk(array_keys($this->pendingProductValueIds), self::PRODUCT_BATCH_SIZE) as $productIdChunk)
+		{
+			$chunkValues = array_fill_keys($productIdChunk, []);
+			$iterator = $this->productTableClass::getList([
+				'select' => ['ID', ...self::PRODUCT_VALUE_CODES],
+				'filter' => [
+					'@ID' => $productIdChunk,
+				],
+			]);
+
+			while ($data = $iterator->fetch())
+			{
+				$productId = (int)$data['ID'];
+				foreach (self::PRODUCT_VALUE_CODES as $code)
+				{
+					$chunkValues[$productId][$code] = (float)($data[$code] ?? 0);
+				}
+			}
+
+			foreach ($productIdChunk as $productId)
+			{
+				$this->productValues[$productId] = $chunkValues[$productId];
+				unset($this->pendingProductValueIds[$productId]);
+			}
+		}
 	}
 
 	protected function loadIblockValues(): void
@@ -666,16 +762,22 @@ class ProductLoader
 				{
 					$this->preparedPropertyValues[$propertyId][$elementId] = new Value\Multiple(
 						array_map(
-							static function($value) {
-								return new Value\DateTime($value);
+							function ($value): ?Value\DateTime {
+								$date = $this->createDate($value);
+								if ($date === null)
+								{
+									return null;
+								}
+
+								return new Value\DateTime($date);
 							},
-							$propertyValue
+							$propertyValue,
 						)
 					);
 				}
 				else
 				{
-					$this->preparedPropertyValues[$propertyId][$elementId] = new Value\DateTime($propertyValue);
+					$this->preparedPropertyValues[$propertyId][$elementId] = $this->createDate($propertyValue);
 				}
 
 				return $this->preparedPropertyValues[$propertyId][$elementId];
@@ -690,7 +792,7 @@ class ProductLoader
 								return new Value\DateTime(
 									$value,
 									[
-										'format' => DateTime::getFormat(DataProviderManager::getInstance()->getCulture()),
+										'format' => Type\DateTime::getFormat(DataProviderManager::getInstance()->getCulture()),
 									]
 								);
 							},
@@ -703,7 +805,7 @@ class ProductLoader
 					$this->preparedPropertyValues[$propertyId][$elementId] = new Value\DateTime(
 						$propertyValue,
 						[
-							'format' => DateTime::getFormat(DataProviderManager::getInstance()->getCulture()),
+							'format' => Type\DateTime::getFormat(DataProviderManager::getInstance()->getCulture()),
 						]
 					);
 				}
@@ -820,6 +922,11 @@ class ProductLoader
 
 		$this->preparedPropertyValues[$propertyId][$elementId] = $propertyValue;
 		return $this->preparedPropertyValues[$propertyId][$elementId];
+	}
+
+	private function createDate(mixed $value): ?Type\Date
+	{
+		return DateOnlyParser::createForCurrentDocument()->parse($value);
 	}
 
 	protected function getPropertyDirectoryValue(array $property, $value)

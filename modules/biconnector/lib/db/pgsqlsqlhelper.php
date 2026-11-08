@@ -95,6 +95,19 @@ class PgsqlSqlHelper extends \Bitrix\Main\DB\PgsqlSqlHelper implements BiSqlHelp
 		return "CAST({$expr} AS varchar)";
 	}
 
+	public function getRoundExpression(string $expression, string $scaleExpression): string
+	{
+		// Two-argument ROUND is defined for numeric only: a double precision value has to be cast.
+		return "ROUND((({$expression}))::numeric, ({$scaleExpression}))";
+	}
+
+	public function castNumericToInt(string $expr): string
+	{
+		// bigint, not integer: the source column holds numeric(18,4), and a value beyond 32 bits
+		// would abort the whole statement with an overflow instead of leaving the join unmatched.
+		return "CAST({$expr} AS bigint)";
+	}
+
 	private function convertTimezoneOffsetToSeconds(string $timezoneOffset): int
 	{
 		if (

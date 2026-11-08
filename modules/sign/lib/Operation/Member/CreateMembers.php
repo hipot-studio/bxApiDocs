@@ -8,6 +8,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Integration\Bitrix24\B2eTariff;
 use Bitrix\Sign\Item\Document;
+use Bitrix\Sign\Item\Member\Reminder;
 use Bitrix\Sign\Item\MemberCollection;
 use Bitrix\Sign\Operation\Document\Validation\ValidateRequiredFields;
 use Bitrix\Sign\Repository\MemberRepository;
@@ -17,14 +18,20 @@ use Bitrix\Sign\Service\Sign\MemberService;
 use Bitrix\Sign\Type\Member\ChannelType;
 use Bitrix\Sign\Type\Member\ChannelValue;
 use Bitrix\Sign\Type\Member\EntityType;
+use Bitrix\Sign\Type\Member\Notification\ReminderType;
 use Bitrix\Sign\Type\Member\Role;
 
 final class CreateMembers implements Contract\Operation
 {
+	/**
+	 * @param ReminderType $reminderType frequency of reminders the signer role of the document
+	 * already has: it is set for the role as a whole, so members added to that role later inherit it.
+	 */
 	public function __construct(
 		private readonly Document $document,
 		private readonly int $party,
 		private readonly array $userIds,
+		private readonly ReminderType $reminderType = ReminderType::NONE,
 		private ?HcmLinkService $hcmLinkService = null,
 		private ?MemberService $memberService = null,
 		private ?MemberRepository $memberRepository = null,
@@ -49,6 +56,11 @@ final class CreateMembers implements Contract\Operation
 					entityType: EntityType::USER,
 					entityId: $userId,
 					role: Role::SIGNER,
+					reminder: new Reminder(
+						lastSendDate: null,
+						plannedNextSendDate: null,
+						type: $this->reminderType,
+					),
 				),
 			);
 		}

@@ -3,9 +3,11 @@
 namespace Bitrix\Disk\Document\Models;
 
 use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Service\OnlyOffice\Save\SavingMarker;
 use Bitrix\Disk\Internals\Entity\Model;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Version;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Type\DateTime;
 
 /**
@@ -22,6 +24,8 @@ final class DocumentInfo extends Model
 	public const CONTENT_STATUS_SAVED_WITH_ERROR = DocumentInfoTable::CONTENT_STATUS_SAVED_WITH_ERROR;
 	public const CONTENT_STATUS_SAVED = DocumentInfoTable::CONTENT_STATUS_SAVED;
 	public const CONTENT_STATUS_NO_CHANGES = DocumentInfoTable::CONTENT_STATUS_NO_CHANGES;
+	public const CONTENT_STATUS_SAVE_REJECTED = DocumentInfoTable::CONTENT_STATUS_SAVE_REJECTED;
+	public const CONTENT_STATUS_INTERRUPTED = DocumentInfoTable::CONTENT_STATUS_INTERRUPTED;
 
 	public const SECONDS_TO_MARK_AS_STILL_WORKING = 60;
 
@@ -150,12 +154,18 @@ final class DocumentInfo extends Model
 		return $this->contentStatus;
 	}
 
+	/**
+	 * Whether the session behind the document is over, whatever it ended with. A rejected save and an
+	 * interrupted session end it too: the document is released, and the page waiting for it may go on.
+	 */
 	public function isFinished(): bool
 	{
 		$finalStatuses = [
 			self::CONTENT_STATUS_SAVED_WITH_ERROR,
 			self::CONTENT_STATUS_SAVED,
 			self::CONTENT_STATUS_NO_CHANGES,
+			self::CONTENT_STATUS_SAVE_REJECTED,
+			self::CONTENT_STATUS_INTERRUPTED,
 		];
 
 		return in_array($this->getContentStatus(), $finalStatuses, true);
@@ -176,6 +186,14 @@ final class DocumentInfo extends Model
 		return in_array($this->getContentStatus(), $forceSavedStatuses, true);
 	}
 
+	/**
+	 * Whether the editing behind the key is gone for good and the next opening needs a key of its own.
+	 *
+	 * The silence of the editor server is the only evidence here, and a webhook writing the version is
+	 * silent in exactly the same way; handing out a new key while it works loses the version it writes.
+	 * The mark of a save in progress tells the two apart, and it is asked last: it costs a query to the
+	 * storage, and every cheaper reason to keep the key is already spent by then.
+	 */
 	public function isAbandoned(): bool
 	{
 		if ($this->isFinished())
@@ -183,16 +201,20 @@ final class DocumentInfo extends Model
 			return false;
 		}
 
-		if ($this->isSaving())
+		if (!$this->isSaving())
 		{
-			$now = new DateTime();
-			if ($now->getTimestamp() - $this->getUpdateTime()->getTimestamp() > self::SECONDS_TO_MARK_AS_STILL_WORKING * 2)
-			{
-				return true;
-			}
+			return false;
 		}
 
-		return false;
+		$now = new DateTime();
+		if ($now->getTimestamp() - $this->getUpdateTime()->getTimestamp() <= self::SECONDS_TO_MARK_AS_STILL_WORKING * 2)
+		{
+			return false;
+		}
+
+		$savingMarker = ServiceLocator::getInstance()->get(SavingMarker::class);
+
+		return !$savingMarker->isActive($this->getExternalHash());
 	}
 
 	public function isSaving(): bool
@@ -228,6 +250,11 @@ final class DocumentInfo extends Model
 	public function markAsSavedWithError(): bool
 	{
 		return $this->markWithStatus(self::CONTENT_STATUS_SAVED_WITH_ERROR);
+	}
+
+	public function markAsSaveRejected(): bool
+	{
+		return $this->markWithStatus(self::CONTENT_STATUS_SAVE_REJECTED);
 	}
 
 	public function markAsForceSaved(): bool

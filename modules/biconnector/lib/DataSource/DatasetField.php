@@ -17,6 +17,8 @@ abstract class DatasetField
 	protected ?JoinSelection $join = null;
 	protected ?string $expression = null;
 	protected bool $isPreparedFieldName = true;
+	protected ?string $nativeSqlType = null;
+	protected ?string $collation = null;
 
 	public function __construct(
 		protected readonly string $code,
@@ -260,6 +262,43 @@ abstract class DatasetField
 	}
 
 	/**
+	 * Declares the SQL type of the column on the source.
+	 *
+	 * Only a field that reports it can take part in a delegated aggregation as a boolean: without a
+	 * known carrier there is no truth table to normalize `true`/`false` from, and the field is excluded
+	 * instead of guessed. A `bool` field of a built-in dataset sits on a character flag whose truth
+	 * table is expressed nowhere in the data channel, so it declares no type and stays excluded.
+	 *
+	 * @param string $nativeSqlType Type as the source names it, e.g. 'tinyint(1)', 'boolean', 'Bool'.
+	 *
+	 * @return $this
+	 */
+	public function setNativeSqlType(string $nativeSqlType): static
+	{
+		$this->nativeSqlType = $nativeSqlType;
+
+		return $this;
+	}
+
+	/**
+	 * Declares the collation of a string column on the source.
+	 *
+	 * The collation, not the type alone, decides how the source compares two strings, so a column has to
+	 * report it before a string comparison over it can count as exact. While it is undeclared the column
+	 * stays among the ones whose comparisons are treated as unproven.
+	 *
+	 * @param string $collation Collation as the source names it, e.g. 'C', 'utf8mb4_bin'.
+	 *
+	 * @return $this
+	 */
+	public function setCollation(string $collation): static
+	{
+		$this->collation = $collation;
+
+		return $this;
+	}
+
+	/**
 	 * Return field code
 	 *
 	 * @return string
@@ -284,6 +323,16 @@ abstract class DatasetField
 			'IS_SYSTEM' => $this->isSystem ? 'Y' : 'N',
 			'IS_FIELD_NAME_PREPARED' => $this->isPreparedFieldName ? 'Y' : 'N',
 		];
+
+		if ($this->nativeSqlType !== null)
+		{
+			$result['NATIVE_SQL_TYPE'] = $this->nativeSqlType;
+		}
+
+		if ($this->collation !== null)
+		{
+			$result['COLLATION'] = $this->collation;
+		}
 
 		if ($this->isPrimary)
 		{

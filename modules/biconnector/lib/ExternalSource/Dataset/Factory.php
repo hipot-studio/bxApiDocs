@@ -21,7 +21,7 @@ final class Factory
 			Type::Csv => Csv::createDataset($dataset, $dataConnection, $languageId),
 			Type::Source1C => Source1C::createDataset($dataset, $dataConnection, $languageId),
 			Type::Rest => Rest::createDataset($dataset, $dataConnection, $languageId),
-			Type::Mysql, Type::Pgsql => ExternalSql::createDataset($dataset, $dataConnection, $languageId),
+			Type::Mysql, Type::Pgsql, Type::Clickhouse => ExternalSql::createDataset($dataset, $dataConnection, $languageId),
 			default => throw new Main\SystemException("Unknown type {$type->value}"),
 		};
 	}

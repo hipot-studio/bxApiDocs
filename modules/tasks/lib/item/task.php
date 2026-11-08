@@ -766,7 +766,8 @@ final class Task extends \Bitrix\Tasks\Item
 			$arPullData = array(
 				'TASK_ID' => $id,
 				'AFTER' => array(
-					'GROUP_ID' => $groupId
+					'GROUP_ID' => $groupId,
+					'PARENT_ID' => (int)($data['PARENT_ID'] ?? 0),
 				),
 				'params' => [
 					'addCommentExists' => false

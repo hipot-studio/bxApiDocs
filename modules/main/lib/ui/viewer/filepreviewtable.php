@@ -6,6 +6,7 @@ use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields;
 use Bitrix\Main\FileTable;
 use Bitrix\Main\ORM\Event;
+use Bitrix\Main\Type\Callback;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 
@@ -119,7 +120,7 @@ final class FilePreviewTable extends DataManager
 	{
 		self::deleteOld($dayToDeath, $portion);
 
-		return "\\Bitrix\\Main\\UI\\Viewer\\FilePreviewTable::deleteOldAgent({$dayToDeath}, {$portion});";
+		return new Callback([self::class, 'deleteOldAgent'], [$dayToDeath, $portion]);
 	}
 
 	public static function onDelete(Event $event)

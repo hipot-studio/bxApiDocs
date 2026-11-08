@@ -18,6 +18,7 @@ use Bitrix\AI\QueueJob;
 use Bitrix\AI\Result;
 use Bitrix\AI\Role\RoleManager;
 use Bitrix\AI\Service\BasicAuthToken;
+use Bitrix\AI\Service\RequestContext;
 use Bitrix\AI\Services\ImageService;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
@@ -39,7 +40,8 @@ abstract class Engine
 	protected const REQUIRES_PERSONAL_DATA_OBFUSCATION = true;
 
 	private const MAX_IMAGES_PER_REQUEST = 8;
-	protected const PARAM_CONSUMPTION_ID = 'consumptionId';
+	/** Public because the queue has to know which parameter is per-charge and not per-request. */
+	public const PARAM_CONSUMPTION_ID = 'consumptionId';
 	protected const PARAM_QUALITY = 'qualityParam';
 
 	protected const URL_COMPLETIONS_QUEUE_DEFAULT = '';
@@ -707,18 +709,6 @@ abstract class Engine
 			$this->setCache(true);
 		}
 		$params = $this->makeRequestParams();
-		$this->queueJob = QueueJob::createWithinFromEngine($this, $this->queueJobTtl)->register();
-
-		$url = $this->getCompletionsQueueUrl() . $this->getCompletionsQueueUrlPath();
-
-		$cacheManager = new EngineResultCache($this->queueJob->getCacheHash());
-
-		if ($this->isCache() && ($response = $cacheManager->getExists()))
-		{
-			$this->onResponseSuccess($response, $cacheManager, true);
-
-			return;
-		}
 
 		$http = new HttpClient;
 		$http->setHeader('Content-Type', 'application/json');
@@ -728,14 +718,67 @@ abstract class Engine
 			$http->setHeader('Authorization', $authHeader);
 		}
 
-		$http->post($url, json_encode([
-			'callbackUrl' => $this->queueJob->getCallbackUrl(),
-			'errorCallbackUrl' => $this->queueJob->getErrorCallbackUrl(),
+		$serviceClass = RequestContext\ContextHeaders::applyTo(
+			$http,
+			$this->resolveRequestContextCallType(),
+			$this->getRequestContextFeature(),
+			$this->getContext()->getUserId(),
+		);
+
+		// Assembled before the job exists, because the job is registered against it: the
+		// receiver rejects a known rid carrying a new body, so identity may only be reused
+		// when the whole body matches — not just its params. The callback urls are the one
+		// part left out: they carry the rid, which is what registration is about to decide.
+		$body = [
 			'url' => $this->getCompletionsUrl(),
 			'params' => $params,
 			'authorization' => $this->getAuthorizationHeader(),
 			'additionalHeaders' => $this->getAdditionalHeaders() ?? null,
-		]));
+		];
+		if ($serviceClass->priority !== null)
+		{
+			// The class is not recomputed: the signed string and the applied number come from
+			// one computation, so they cannot disagree. No number configured — no field at all,
+			// because an empty field reads as zero, and zero is the top class on the receiver.
+			$body['priority'] = $serviceClass->priority;
+		}
+
+		$this->queueJob = QueueJob::createWithinFromEngine($this, $this->queueJobTtl)->register($body);
+
+		$url = $this->getCompletionsQueueUrl() . $this->getCompletionsQueueUrlPath();
+
+		$cacheManager = new EngineResultCache($this->queueJob->getCacheHash());
+
+		if ($this->isCache() && ($response = $cacheManager->getExists()))
+		{
+			// The request never goes out, so the row must not be left for the cleanup agent:
+			// it would fail an already answered request and roll its charge back. Closed
+			// before the result is delivered, because delivery runs the caller's callback.
+			$this->queueJob->cancel();
+			$this->onResponseSuccess($response, $cacheManager, true);
+
+			return;
+		}
+
+		$body = [
+			'callbackUrl' => $this->queueJob->getCallbackUrl(),
+			'errorCallbackUrl' => $this->queueJob->getErrorCallbackUrl(),
+		] + $body;
+
+		$response = $http->post($url, json_encode($body));
+
+		// A transport failure is not a refusal: the request never reached the receiver, so there
+		// is no status to read. Keeping the two apart is the whole point of this log line.
+		$status = $response === false ? null : (int)$http->getStatus();
+		$receiverStatus = RequestContext\ReceiverStatus::fromHttpStatus($status);
+		if ($status !== null && !$receiverStatus->isAccepted())
+		{
+			RequestContext\ContextHeaders::log(
+				$receiverStatus->getLogLevel(),
+				'queue request not accepted: ' . $receiverStatus->getReason(),
+				['status' => $status, 'feature' => $this->getRequestContextFeature()],
+			);
+		}
 
 		if ($http->getStatus() === self::HTTP_STATUS_OK)
 		{
@@ -767,6 +810,30 @@ abstract class Engine
 
 			$this->onResponseError($message, $code);
 		}
+	}
+
+	/**
+	 * Kind of call this engine makes, as the receiver's service class understands it.
+	 *
+	 * The queue serves a mix of consumers — an interactive copilot next to mail classification
+	 * and stream analytics — so the module id says nothing about urgency. What separates them
+	 * is whether anyone is waiting: a background run has no portal user behind it.
+	 */
+	protected function resolveRequestContextCallType(): RequestContext\CallType
+	{
+		return $this->getContext()->getUserId() > 0
+			? RequestContext\CallType::Interactive
+			: RequestContext\CallType::Background;
+	}
+
+	/**
+	 * Product label of the request: the consuming module together with the scenario behind
+	 * the call, so that the receiver's breakdown shows not just which part of the product
+	 * the load comes from, but which of its calls.
+	 */
+	protected function getRequestContextFeature(): string
+	{
+		return RequestContext\FeatureTag::fromContext($this->getContext())->value;
 	}
 
 	/**

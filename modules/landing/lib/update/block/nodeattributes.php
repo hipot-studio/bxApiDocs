@@ -309,7 +309,7 @@ final class NodeAttributes extends Stepper
 //				use until cant add some filters in DOM\Parser
 				if (is_array($rules['FILTER']) && !empty($rules['FILTER']))
 				{
-					$notFilterd = false;
+					$notFiltered = false;
 //					By content. May have 'NOT' key
 					if (
 						isset($rules['FILTER']['CONTENT']) && is_array($rules['FILTER']['CONTENT']) &&
@@ -322,7 +322,7 @@ final class NodeAttributes extends Stepper
 						)
 					)
 					{
-						$notFilterd = true;
+						$notFiltered = true;
 					}
 
 //					by position in DOM
@@ -332,10 +332,10 @@ final class NodeAttributes extends Stepper
 						$nth + 1 != $rules['FILTER']['NTH']['VALUE']
 					)
 					{
-						$notFilterd = true;
+						$notFiltered = true;
 					}
 					
-					if ($notFilterd)
+					if ($notFiltered)
 					{
 						continue;
 					}

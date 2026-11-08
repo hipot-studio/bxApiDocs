@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Internal\Service\SourceGeneration;
 
 use Bitrix\Mail\Internal\Entity\SourceGeneration\Context;
+use Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill;
 use Bitrix\Mail\Internal\Service\SourceGeneration\Matching\CandidateProvider;
 use Bitrix\Mail\Internal\Service\SourceGeneration\Matching\CanonicalMessageData;
 use Bitrix\Mail\Internal\Service\SourceGeneration\Matching\CanonicalMessageNormalizer;
@@ -430,5 +431,8 @@ final class LateDeliveryReconciler
 		}
 
 		\CMailMessage::delete($messageId, $context->mailboxId);
+
+		// The record is gone for good, so the conversation projection may not keep it either
+		(new ConversationBackfill())->removeMessages($context->mailboxId, [$messageId]);
 	}
 }

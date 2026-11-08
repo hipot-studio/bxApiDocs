@@ -9,6 +9,7 @@ use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Result\Result;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Exception;
 
 class WatchTaskCommand extends AbstractCommand
@@ -22,6 +23,7 @@ class WatchTaskCommand extends AbstractCommand
 		public readonly int $auditorId,
 		public readonly bool $skipNotification = false,
 		public readonly bool $useConsistency = false,
+		public readonly InteractionOrigin $origin = InteractionOrigin::System,
 	)
 	{
 

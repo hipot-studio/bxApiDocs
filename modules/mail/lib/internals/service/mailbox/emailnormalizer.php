@@ -34,4 +34,26 @@ final class EmailNormalizer
 
 		return null;
 	}
+
+	public function domainHash(?string $normalizedEmail): ?string
+	{
+		if ($normalizedEmail === null)
+		{
+			return null;
+		}
+
+		$separator = strrpos($normalizedEmail, '@');
+		if ($separator === false)
+		{
+			return null;
+		}
+		$errors = [];
+		$domain = \CBXPunycode::ToASCII(substr($normalizedEmail, $separator + 1), $errors);
+		if (!is_string($domain) || $domain === '')
+		{
+			return null;
+		}
+
+		return hash('sha256', $domain);
+	}
 }

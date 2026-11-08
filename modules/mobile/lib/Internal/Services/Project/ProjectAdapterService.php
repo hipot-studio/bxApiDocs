@@ -47,6 +47,7 @@ final class ProjectAdapterService
 		private readonly OperationResultErrorResolver $errorResolver,
 		private readonly ProjectChatSettingsService $projectChatSettingsService,
 		private readonly ProjectLegacyUpdateService $projectLegacyUpdateService,
+		private readonly ProjectDatesReader $projectDatesReader = new ProjectDatesReader(),
 	)
 	{
 	}
@@ -281,7 +282,7 @@ final class ProjectAdapterService
 			'moderatorMembers' => $this->mapModeratorMembers($project),
 			'permissions' => $this->mapPermissions($project),
 			'options' => $options,
-			'dates' => $this->mapDates($project),
+			'dates' => $this->mapDates($project, $projectId),
 			'tags' => $project->tags,
 			'avatar' => $project->avatar,
 			'notifications' => $project->notifications,
@@ -366,32 +367,40 @@ final class ProjectAdapterService
 		);
 	}
 
-	private function mapDates(ProjectCreateDto $project): ?array
+	private function mapDates(ProjectCreateDto $project, ?int $projectId): ?array
 	{
-		$startTs = $this->mapDateToTimestamp($project->dateStart);
-		$finishTs = $this->mapDateToTimestamp($project->dateFinish);
+		$hasStart = $project->hasDateStart();
+		$hasFinish = $project->hasDateFinish();
 
-		if ($startTs === null && $finishTs === null)
+		if (!$hasStart && !$hasFinish)
 		{
 			return null;
 		}
 
-		return array_filter([
-			'startTs' => $startTs,
-			'finishTs' => $finishTs,
-		], static fn(mixed $value): bool => $value !== null);
-	}
+		// Socialnetwork rewrites both bounds whenever dates are passed, so an omitted bound keeps the stored value.
+		$storedDates = $projectId === null ? null : $this->projectDatesReader->getTimestamps($projectId);
 
-	private function mapDateToTimestamp(?string $date): ?int
-	{
-		if ($date === null || $date === '')
+		$dates = [
+			'startTs' => $hasStart
+				? $this->settingsValidator->parseDate($project->dateStart)
+				: ($storedDates['startTs'] ?? null),
+			'finishTs' => $hasFinish
+				? $this->settingsValidator->parseDate($project->dateFinish)
+				: ($storedDates['finishTs'] ?? null),
+		];
+		$this->settingsValidator->validateDateRange($dates['startTs'], $dates['finishTs']);
+
+		// Nothing changed: drop dates so the update does not trigger another group write.
+		if (
+			$storedDates !== null
+			&& $dates['startTs'] === $storedDates['startTs']
+			&& $dates['finishTs'] === $storedDates['finishTs']
+		)
 		{
 			return null;
 		}
 
-		$timestamp = strtotime($date);
-
-		return ($timestamp !== false) ? $timestamp : null;
+		return $dates;
 	}
 
 	private function getParticipantUserIds(ProjectCreateDto $project): array

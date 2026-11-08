@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Crm\Activity\Entity\EntityUncompletedActivityTable;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationAvailabilityChecker;
 use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
@@ -8,6 +9,7 @@ use Bitrix\Crm\Component\EntityList\ClientDataProvider\GridDataProvider;
 use Bitrix\Crm\Component\EntityList\ClientField\ClientFieldsPreparer;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
+use Bitrix\Crm\Component\EntityList\Grid\Panel\ActionPanelItems;
 use Bitrix\Crm\Component\EntityList\NearestActivity;
 use Bitrix\Crm\Component\EntityList\NearestActivity\ManagerFactory;
 use Bitrix\Crm\Component\EntityList\Settings\ImportItem;
@@ -36,13 +38,18 @@ use Bitrix\Crm\Service\Display;
 use Bitrix\Crm\Service\Router;
 use Bitrix\Crm\Settings\HistorySettings;
 use Bitrix\Crm\UI\SettingsButtonExtender\SettingsButtonExtenderParams;
+use Bitrix\Crm\UserActivityTable;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
 use Bitrix\Crm\WebForm\Internals\PageNavigation;
+use Bitrix\Main\Application;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Grid;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Security\Sign\Signer;
+use Bitrix\Main\UserField\Types\BooleanType;
 use Bitrix\Main\Web\Json;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Buttons\AirButtonStyle;
@@ -60,6 +67,10 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 {
 	protected const DEFAULT_PAGE_SIZE = 10;
 	private const SIGNED_PARAMS_SALT = 'CrmItemListSalt';
+	private const NEAREST_ACTIVITY_SORT_FIELD = 'nearest_activity';
+	private const ACTIVITY_USER_SORT_FIELD = 'ACTIVITY_USER_ID';
+	private const ACTIVITY_DEADLINE_SORT_FIELD = 'ACTIVITY_SORT';
+	private const EXPORT_COMPONENT_NAME = 'bitrix:crm.item.list';
 
 	protected $defaultGridSort = [
 		'ID' => 'desc',
@@ -80,6 +91,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 	private ?array $gridColumns = null;
 	private ?Grid\Panel\Panel $panel = null;
 	private ?NearestActivity\Manager $nearestActivityManager = null;
+	private ?array $nearestActivityAnalytics = null;
 	private bool $enableNextPage = false;
 	protected bool $isExportProductFields = false;
 
@@ -221,6 +233,20 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 	}
 
+	/**
+	 * The pass is issued for the very name the client puts into COMPONENT_NAME. On a kernel without
+	 * the method the export goes on without a pass, as it does today.
+	 */
+	private function getExportSignedParameters(): ?string
+	{
+		if (!method_exists(\Bitrix\Crm\Controller\ItemExport::class, 'signExportParameters'))
+		{
+			return null;
+		}
+
+		return \Bitrix\Crm\Controller\ItemExport::signExportParameters(self::EXPORT_COMPONENT_NAME, []);
+	}
+
 	public function executeComponent()
 	{
 		$this->init();
@@ -274,6 +300,8 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 
 		$this->arResult['jsParams'] = [
+			'exportComponentName' => self::EXPORT_COMPONENT_NAME,
+			'exportSignedParameters' => $this->getExportSignedParameters(),
 			'entityTypeId' => $this->entityTypeId,
 			'entityTypeName' => $entityTypeName,
 			'categoryId' => $categoryId,
@@ -462,7 +490,8 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 		else
 		{
-			$order = $this->validateOrder($gridSort['sort']);
+			$sort = $this->prepareOrderAndRuntime($gridSort['sort']);
+			$order = $sort['order'];
 			$applied = $this->applyRelatedEntitiesFilter($listFilter, $this->factory->getEntityTypeId());
 			$factoryParameters = [
 				'select' => $this->getSelect(),
@@ -470,7 +499,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				'offset' => $pageNavigation->getOffset(),
 				'limit' => $pageNavigation->getLimit() + 1,
 				'filter' => $applied['filter'],
-				'runtime' => $applied['runtime'],
+				'runtime' => array_merge($applied['runtime'], $sort['runtime']),
 			];
 			$list = $this->factory->getItemsFilteredByPermissions(
 				$factoryParameters,
@@ -545,7 +574,12 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 
 		$actionPanel = $this->getPanel()->getControls();
-		$showActionPanel = !empty($actionPanel) && !$this->isEmbedded();
+		$showActionPanel = !empty($actionPanel) && (!$this->isEmbedded() || $this->isGroupActionsEnabled());
+		if ($showActionPanel && $this->isEmbedded())
+		{
+			// an embedded grid shows only items bound to the parent, so "select all by filter" must not be offered
+			$actionPanel = ActionPanelItems::withoutForAllCheckbox($actionPanel);
+		}
 
 		$grid['SHOW_ACTION_PANEL'] = $showActionPanel;
 		if ($showActionPanel)
@@ -795,6 +829,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		$filter = $this->isEmbedded() ? $filter : [];
 		$this->provider->prepareListFilter($filter, $requestFilter);
 		$this->ufProvider->prepareListFilter($filter, $filterFields, $requestFilter);
+		$this->applyBooleanUserFieldDefaultsToFilter($filter);
 
 		foreach ($this->getClientAdditionalProviders() as $provider)
 		{
@@ -844,6 +879,72 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		);
 
 		return $filter;
+	}
+
+	protected function applyBooleanUserFieldDefaultsToFilter(array &$filter): void
+	{
+		if (
+			$this->isExportMode()
+			|| !\CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId)
+		)
+		{
+			return;
+		}
+
+		$fieldsCollection = $this->factory->getFieldsCollection();
+		foreach (array_keys($filter) as $key)
+		{
+			if (!is_string($key))
+			{
+				continue;
+			}
+
+			$field = $fieldsCollection->getField($key);
+			if (
+				!$this->isSingleBooleanCheckboxUserField($field)
+				|| !$this->getBooleanUserFieldDefaultValue($field)
+			)
+			{
+				continue;
+			}
+
+			$filterValue = $this->normalizeBooleanFilterValue($filter[$key]);
+			if ($filterValue === null)
+			{
+				continue;
+			}
+
+			unset($filter[$key]);
+			if ($filterValue)
+			{
+				// CSQLWhere assigns one comparison callback per field, so separate strict value and NULL
+				// conditions for the same field cannot be combined safely in one legacy filter.
+				$filter[] = [
+					'==' . $key => new \Bitrix\Main\DB\SqlExpression(
+						'1 OR ?# IS NULL',
+						$key,
+					),
+				];
+			}
+			else
+			{
+				$filter['==' . $key] = 0;
+			}
+		}
+	}
+
+	private function normalizeBooleanFilterValue(mixed $value): ?bool
+	{
+		if (in_array($value, [true, 1, '1', 'Y'], true))
+		{
+			return true;
+		}
+		if (in_array($value, [false, 0, '0', 'N'], true))
+		{
+			return false;
+		}
+
+		return null;
 	}
 
 	/**
@@ -910,6 +1011,11 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 
 		return ($this->arParams['isRecurring'] ?? false) === true;
+	}
+
+	protected function isGroupActionsEnabled(): bool
+	{
+		return ($this->arParams['enableGroupActions'] ?? false) === true;
 	}
 
 	protected function getBindingFilter(): ?array
@@ -1170,10 +1276,12 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 				$this->getVisibleColumns(),
 				$this->entityTypeId
 			);
-			$displayFields = $this->getDisplayFields();
+			$fieldsCollection = $this->factory->getFieldsCollection();
+			$displayFields = $this->getDisplayFields($fieldsCollection);
+			$displayItemsData = $this->prepareItemDataForDisplay($itemsData, $fieldsCollection);
 			$display = (new Display($this->entityTypeId, $displayFields, $displayOptions));
 			$displayValues = $display
-				->setItems($itemsData)
+				->setItems($displayItemsData)
 				->getAllValues()
 			;
 
@@ -1287,7 +1395,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 				$result[] = [
 					'id' => $itemId,
-					'data' => $this->prepareItemDataForEdit($itemData),
+					'data' => $this->prepareItemDataForEdit($itemData, $fieldsCollection),
 					'columns' => $itemColumn,
 					'actions' => $this->getContextActions($item),
 				];
@@ -1295,6 +1403,72 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $rawItemsData
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	private function prepareItemDataForDisplay(array $rawItemsData, Field\Collection $fieldsCollection): array
+	{
+		if (
+			$this->isExportMode()
+			|| !\CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId)
+		)
+		{
+			return $rawItemsData;
+		}
+
+		foreach ($rawItemsData as $itemId => $itemData)
+		{
+			foreach ($itemData as $key => $value)
+			{
+				if ($value !== null || !is_string($key))
+				{
+					continue;
+				}
+
+				$field = $fieldsCollection->getField($key);
+				if (!$this->isSingleBooleanCheckboxUserField($field))
+				{
+					continue;
+				}
+
+				$rawItemsData[$itemId][$key] = $this->getBooleanUserFieldDefaultValue($field);
+			}
+		}
+
+		return $rawItemsData;
+	}
+
+	private function isSingleBooleanCheckboxUserField(?Field $field): bool
+	{
+		if (
+			$field === null
+			|| !$field->isUserField()
+			|| $field->getType() !== Field::TYPE_BOOLEAN
+		)
+		{
+			return false;
+		}
+
+		$userField = $field->getUserField();
+		$settings = is_array($userField['SETTINGS'] ?? null) ? $userField['SETTINGS'] : [];
+		$display = (string)($settings['DISPLAY'] ?? BooleanType::DISPLAY_CHECKBOX);
+
+		return ($userField['USER_TYPE_ID'] ?? null) === BooleanType::USER_TYPE_ID
+			&& ($userField['MULTIPLE'] ?? 'N') !== 'Y'
+			&& !$field->isMultiple()
+			&& $display === BooleanType::DISPLAY_CHECKBOX;
+	}
+
+	private function getBooleanUserFieldDefaultValue(Field $field): bool
+	{
+		$userField = $field->getUserField();
+		$settings = is_array($userField['SETTINGS'] ?? null) ? $userField['SETTINGS'] : [];
+
+		return (int)($settings['DEFAULT_VALUE'] ?? 0) === 1;
 	}
 
 	private function appendRecurringData(array &$itemColumns, array $list): void
@@ -1326,13 +1500,23 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 	 *
 	 * @return Array<string, mixed>
 	 */
-	private function prepareItemDataForEdit(array $rawItemData): array
+	private function prepareItemDataForEdit(array $rawItemData, Field\Collection $fieldsCollection): array
 	{
 		$result = [];
 
 		foreach ($rawItemData as $key => $value)
 		{
-			if ($value instanceof \Bitrix\Main\Type\Date)
+			$field = is_string($key) ? $fieldsCollection->getField($key) : null;
+			if (
+				is_bool($value)
+				&& $field !== null
+				&& $field->isUserField()
+				&& $field->getType() === Field::TYPE_BOOLEAN
+			)
+			{
+				$result[$key] = (int)$value;
+			}
+			elseif ($value instanceof \Bitrix\Main\Type\Date)
 			{
 				$result[$key] = (string)$value;
 			}
@@ -1354,7 +1538,11 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 
 		$itemData['EDIT'] = $this->userPermissions->item()->canUpdateItem($item);
 
-		$itemData = $this->nearestActivityManager->appendNearestActivityBlock([$itemData], true)[0];
+		$this->nearestActivityAnalytics ??= $this->getAnalytics();
+
+		$itemData = $this->nearestActivityManager
+			->appendNearestActivityBlock([$itemData], true, $this->nearestActivityAnalytics)[0]
+		;
 		$rendered = $itemData['ACTIVITY_BLOCK']->render($this->getGridId());
 
 		$itemColumn['ACTIVITY_BLOCK'] = $rendered;
@@ -1424,11 +1612,11 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 	/**
 	 * @return Display\Field[]
 	 */
-	protected function getDisplayFields(): array
+	protected function getDisplayFields(?Field\Collection $fieldsCollection = null): array
 	{
 		$displayFields = [];
 
-		$fieldsCollection = $this->factory->getFieldsCollection();
+		$fieldsCollection ??= $this->factory->getFieldsCollection();
 
 		$visibleColumns = $this->getVisibleColumns();
 		if (in_array('CLIENT_INFO', $visibleColumns, true))
@@ -1567,6 +1755,7 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 						[
 							'ENTITY_ID' => $item->getId(),
 							'ENTITY_TYPE_ID' => $item->getEntityTypeId(),
+							'ENTITY_TITLE' => $item->getTitle(),
 							'CATEGORY_ID' => $item->getCategoryId(),
 							'CURRENT_ID' => $item->getStageId(),
 							'SERVICE_URL' => 'crm.controller.item.update',
@@ -1654,10 +1843,13 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 		return $menu;
 	}
 
-	protected function validateOrder(?array $order): array
+	protected function prepareOrderAndRuntime(?array $order): array
 	{
 		$order = (array)$order;
-		$result = [];
+		$result = [
+			'order' => [],
+			'runtime' => [],
+		];
 
 		foreach ($order as $field => $direction)
 		{
@@ -1666,18 +1858,113 @@ class CrmItemListComponent extends Bitrix\Crm\Component\ItemList implements \Bit
 			{
 				continue;
 			}
+
+			if ($field === self::NEAREST_ACTIVITY_SORT_FIELD)
+			{
+				if (!$this->isNearestActivitySortEnabled())
+				{
+					continue;
+				}
+
+				$result['order'][self::ACTIVITY_USER_SORT_FIELD] = 'desc';
+				$result['order'][self::ACTIVITY_DEADLINE_SORT_FIELD] = $direction;
+				$result['order'][Item::FIELD_NAME_ID] = $direction;
+				$result['runtime'] = $this->getNearestActivitySortRuntimeFields();
+
+				continue;
+			}
+
 			if ($this->factory->isFieldExists($field))
 			{
-				$result[$field] = $direction;
+				$result['order'][$field] = $direction;
 			}
 			elseif ($this->getClientFieldsPreparer()->isFieldExists($field))
 			{
 				$normalizedField = $this->getClientFieldsPreparer()->normalizeField($field);
-				$result[$normalizedField] = $direction;
+				$result['order'][$normalizedField] = $direction;
 			}
 		}
 
 		return $result;
+	}
+
+	private function isNearestActivitySortEnabled(): bool
+	{
+		return $this->factory->isCountersEnabled()
+			&& !RestrictionManager::getActivityFieldRestriction()->isExceeded()
+		;
+	}
+
+	private function getNearestActivitySortRuntimeFields(): array
+	{
+		$userIds = [0];
+		$userId = (int)$this->userPermissions->getUserId();
+		if ($userId > 0)
+		{
+			$userIds[] = $userId;
+		}
+
+		if (!$this->isUncompletedActivityReadModelReady())
+		{
+			return $this->getNearestActivitySortRuntimeFieldsFromUserActivity($userIds);
+		}
+
+		return $this->getNearestActivitySortRuntimeFieldsFromUncompletedActivity($userIds);
+	}
+
+	private function isUncompletedActivityReadModelReady(): bool
+	{
+		return Option::get('crm', 'enable_entity_uncompleted_act', 'Y') === 'Y'
+			&& Option::get('crm', 'enable_any_incoming_act', 'Y') === 'Y'
+		;
+	}
+
+	private function getNearestActivitySortRuntimeFieldsFromUncompletedActivity(array $userIds): array
+	{
+		$tableName = EntityUncompletedActivityTable::getTableName();
+		$entityTypeId = (int)$this->factory->getEntityTypeId();
+		$userIdsSql = implode(',', $userIds);
+		$whereSql = "EUA.ENTITY_ID = %s AND EUA.ENTITY_TYPE_ID = {$entityTypeId} AND EUA.RESPONSIBLE_ID IN ({$userIdsSql})";
+		$noDeadline = Application::getConnection()->getSqlHelper()->getCharToDateFunction('1970-01-01 00:00:00');
+
+		return [
+			new ExpressionField(
+				self::ACTIVITY_USER_SORT_FIELD,
+				"COALESCE((SELECT MAX(CASE WHEN EUA.RESPONSIBLE_ID > 0 THEN 1 WHEN EUA.RESPONSIBLE_ID = 0 THEN 0 END) FROM {$tableName} EUA WHERE {$whereSql}), -1)",
+				Item::FIELD_NAME_ID,
+			),
+			new ExpressionField(
+				self::ACTIVITY_DEADLINE_SORT_FIELD,
+				"COALESCE((SELECT COALESCE(MIN(CASE WHEN EUA.RESPONSIBLE_ID > 0 THEN EUA.MIN_DEADLINE END), MIN(CASE WHEN EUA.RESPONSIBLE_ID = 0 THEN EUA.MIN_DEADLINE END)) FROM {$tableName} EUA WHERE {$whereSql}), {$noDeadline})",
+				Item::FIELD_NAME_ID,
+			),
+		];
+	}
+
+	private function getNearestActivitySortRuntimeFieldsFromUserActivity(array $userIds): array
+	{
+		$tableName = UserActivityTable::getTableName();
+		$entityTypeId = (int)$this->factory->getEntityTypeId();
+		$userIdsSql = implode(',', $userIds);
+		$whereSql = "UA.USER_ID IN ({$userIdsSql}) AND UA.OWNER_ID = %s AND UA.OWNER_TYPE_ID = {$entityTypeId}";
+
+		return [
+			new ExpressionField(
+				self::ACTIVITY_USER_SORT_FIELD,
+				"COALESCE((SELECT MAX(UA.USER_ID) FROM {$tableName} UA WHERE {$whereSql}), -1)",
+				Item::FIELD_NAME_ID,
+			),
+			new ExpressionField(
+				self::ACTIVITY_DEADLINE_SORT_FIELD,
+				"COALESCE((SELECT MAX(UA.SORT) FROM {$tableName} UA WHERE {$whereSql}), '')",
+				Item::FIELD_NAME_ID,
+			),
+		];
+	}
+
+	protected function validateOrder(?array $order): array
+	{
+		return $this->prepareOrderAndRuntime($order)['order'];
 	}
 
 	protected function getListViewType(): string

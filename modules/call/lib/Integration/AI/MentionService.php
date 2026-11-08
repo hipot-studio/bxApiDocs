@@ -2,7 +2,9 @@
 
 namespace Bitrix\Call\Integration\AI;
 
-use Bitrix\Im\User;
+use Bitrix\Im\V2\Entity\User\User;
+use Bitrix\Im\V2\Entity\User\UserFactory;
+use Bitrix\Main\Loader;
 
 /**
  * @internal
@@ -14,6 +16,8 @@ final class MentionService
 		FORMAT_BB = 'bb',
 		FORMAT_HTML = 'html',
 		FORMAT_NONE = 'none';
+
+	private const BB_MENTION_PATTERN = "#\[user=([0-9]+)\](.+?)\[/user\]#iu";
 
 	private static ?MentionService $service = null;
 
@@ -40,41 +44,38 @@ final class MentionService
 
 	public function removeBBMentions(?string $text): ?string
 	{
-		if ($text)
-		{
-			foreach ($this->searchBb as $userId => $regExp)
-			{
-				$userName = $this->getUserName($userId);
-				$text = preg_replace_callback(
-					"#{$regExp}#iu",
-					static fn (): string => $userName,
-					$text,
-				);
-			}
-			// strip any remaining tag to its raw inline label
-			$text = preg_replace("#\[user=([0-9]+)\](.+?)\[/user\]#iu", "$2", $text);
-		}
-
-		return $text;
+		return $this->renderBBMentions($text, fn (int $userId): string => $this->getUserName($userId));
 	}
 
 	public function replaceBBMentions(?string $text): ?string
 	{
-		if ($text)
+		return $this->renderBBMentions($text, fn (int $userId): string => $this->getPageMention($userId));
+	}
+
+	/**
+	 * BB mentions carry the user id, so they are rendered from the text alone and the mention
+	 * dictionary of a call is not needed. That keeps a batch read over many calls from loading every
+	 * call, its participants and its associated entity just to render them. Names resolved here are
+	 * cached for the whole request, so a user repeated across calls costs one lookup.
+	 *
+	 * A user that cannot be resolved keeps the label stored next to the mention.
+	 */
+	private function renderBBMentions(?string $text, callable $render): ?string
+	{
+		if (!$text)
 		{
-			foreach ($this->searchBb as $userId => $regExp)
-			{
-				$text = preg_replace_callback(
-					"#{$regExp}#iu",
-					fn (): string => $this->getPageMention($userId),
-					$text,
-				);
-			}
-			// strip the tag to its inline label
-			$text = preg_replace("#\[user=([0-9]+)\](.+?)\[/user\]#iu", "$2", $text);
+			return $text;
 		}
 
-		return $text;
+		return preg_replace_callback(
+			self::BB_MENTION_PATTERN,
+			function (array $matches) use ($render): string {
+				$userId = (int)$matches[1];
+
+				return $this->getUserName($userId) === '' ? $matches[2] : (string)$render($userId);
+			},
+			$text,
+		);
 	}
 
 	public function replaceAiMentions(?string $text): ?string
@@ -116,7 +117,7 @@ final class MentionService
 					return $userId;
 				}
 			}
-			if (preg_match("#\[user=([0-9]+)\](.+?)\[/user\]#iu", $text, $matches))
+			if (preg_match(self::BB_MENTION_PATTERN, $text, $matches))
 			{
 				if (isset($this->searchBb[(int)$matches[1]]))
 				{
@@ -180,23 +181,92 @@ final class MentionService
 		}
 	}
 
+	/**
+	 * Resolves the names mentioned across a batch of texts in one query, so rendering many texts does
+	 * not read one user per mention. Ids already resolved in this request are skipped by the user cache.
+	 *
+	 * @param iterable<mixed> $values Texts, or content objects holding them.
+	 */
+	public function preloadMentionedUsers(iterable $values): void
+	{
+		$userIds = [];
+		$this->collectMentionedUserIds($values, $userIds);
+		$userIds = array_values(array_diff(array_keys($userIds), array_keys($this->userName)));
+		if ($userIds === [])
+		{
+			return;
+		}
+
+		if (!Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		// Names are stored right away: an id absent from the database is resolved by the batch too, so
+		// rendering reads no user of its own.
+		foreach (UserFactory::getInstance()->getUsersByIds($userIds) as $userId => $user)
+		{
+			$this->userName[$userId] = $user->isExist() ? trim((string)$user->getName()) : '';
+		}
+	}
+
+	/**
+	 * @param array<int, true> $userIds Collected ids, by reference to keep one set for the whole batch.
+	 */
+	private function collectMentionedUserIds(mixed $value, array &$userIds): void
+	{
+		if (is_string($value))
+		{
+			if (preg_match_all(self::BB_MENTION_PATTERN, $value, $matches))
+			{
+				foreach ($matches[1] as $userId)
+				{
+					$userIds[(int)$userId] = true;
+				}
+			}
+
+			return;
+		}
+
+		if (is_object($value) && !is_iterable($value))
+		{
+			$value = get_object_vars($value);
+		}
+
+		if (is_iterable($value))
+		{
+			foreach ($value as $item)
+			{
+				$this->collectMentionedUserIds($item, $userIds);
+			}
+		}
+	}
+
 	public function getUserName(int $userId): string
 	{
 		if (!isset($this->userName[$userId]))
 		{
-			$user = User::getInstance($userId);
-			$userName = $user->getFullName() ?: $user->getName();
-			$this->userName[$userId] = trim($userName);
+			$user = $this->imUser($userId);
+			// An unknown id keeps the label stored next to the mention instead of an anonymous name.
+			$this->userName[$userId] = $user?->isExist() ? trim((string)$user->getName()) : '';
 		}
 		return $this->userName[$userId];
+	}
+
+	/**
+	 * Names live in im, and the autoloader resolves its V2 namespace only for an included module, so
+	 * the dependency is stated here instead of relying on the caller's context.
+	 */
+	private function imUser(int $userId): ?User
+	{
+		return Loader::includeModule('im') ? User::getInstance($userId) : null;
 	}
 
 	public function getAIUserName(int $userId): string
 	{
 		if (!isset($this->userAiName[$userId]))
 		{
-			$user = User::getInstance($userId);
-			$userName = trim($user->getName());
+			$userName = trim((string)$this->imUser($userId)?->getFirstName());
 			$userName = preg_replace("#\s+#", '_', $userName);
 			$userName = preg_replace("#[^\p{L}\p{N}_]#u", '', $userName);
 			$this->userAiName[$userId] = $userName ?: "User";

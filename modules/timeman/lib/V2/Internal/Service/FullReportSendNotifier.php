@@ -8,6 +8,7 @@ use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
 use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Timeman\V2\Internal\Entity\FullReport\FullReport;
 use Bitrix\Timeman\V2\Internal\Entity\Report\RecordReportType;
 use Bitrix\Timeman\V2\Internal\Integration\Bizproc\FullReportSentTrigger;
@@ -59,12 +60,20 @@ final class FullReportSendNotifier
 	private function buildEventFields(FullReport $report, int $senderId): array
 	{
 		return [
+			'initiatorUserId' => $senderId,
 			FullReportSentTrigger::FIELD_USER_ID => $senderId,
 			FullReportSentTrigger::FIELD_REPORT => $this->normalizeForChat((string)$report->report),
 			FullReportSentTrigger::FIELD_REPORT_EXTENDED => $this->normalizeForChat((string)$report->reportExtended),
 			FullReportSentTrigger::FIELD_REPORT_ID => $report->id,
 			FullReportSentTrigger::FIELD_PERIOD_PHRASE => $this->reportPeriodPhraseFormatter->formatForReport($report),
 			FullReportSentTrigger::FIELD_SOURCE_TYPE => $this->resolveSourceType($report),
+			FullReportSentTrigger::FIELD_PERIOD_FROM => $report->dateFrom
+				? date(DateTime::getFormat(), $report->dateFrom)
+				: null,
+			FullReportSentTrigger::FIELD_PERIOD_TO => $report->dateTo
+				? date(DateTime::getFormat(), $report->dateTo)
+				: null,
+			FullReportSentTrigger::FIELD_EVENT_DATE_TIME => (new DateTime())->format(DateTime::getFormat()),
 		];
 	}
 

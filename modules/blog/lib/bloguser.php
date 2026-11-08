@@ -316,6 +316,8 @@ class BlogUser
 	
 	/**
 	 * Return users ids of blog posts
+	 * @deprecated Scans every post of the blog (ticket 24773); collect AUTHOR_ID from the paged post
+	 * query instead, as bitrix:blog.blog does, or use getPostAuthorsIdsByDbFilter() with a page filter.
 	 * @param $blogId
 	 */
 	public static function getPostAuthorsIdsByBlogId($blogId)

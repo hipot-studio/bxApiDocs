@@ -37,7 +37,12 @@ class NodeCatalogItemDto implements JsonSerializable
 		public readonly bool $hasAuxPorts,
 		/** Whether the node is served by the unified settings panel; absent reads as `false`. */
 		public readonly bool $servedByUnifiedPanel = false,
-		public readonly ?bool $relationsAvailable = null,
+		/**
+		 * Whether the node offers the relations block. The verdict is two-valued on purpose: the resolver
+		 * answers "no relations" for a node whose declaration says nothing about them, so the client is
+		 * never handed an undecided state to interpret on its own.
+		 */
+		public readonly bool $relationsAvailable = false,
 		public readonly ?array $contentBlock = null,
 		public readonly ?array $contentBlockProducer = null,
 		public readonly ?array $contentBlockConsumer = null,

@@ -6,11 +6,15 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Socialnetwork\FeatureTable;
 use Bitrix\Socialnetwork\Helper\Workgroup;
 use Bitrix\Socialnetwork\Helper\Path;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
+use Bitrix\Socialnetwork\WorkgroupTable;
 use Bitrix\Socialnetwork\Item\Workgroup\AvatarType;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\UserToGroupTable;
@@ -22,6 +26,7 @@ use Bitrix\Socialnetwork\Internals\EventService;
 class CAllSocNetGroup
 {
 	protected static $staticCache = array();
+	private static array $persistedTypeFieldsCache = [];
 
 	/***************************************/
 	/********  DATA MODIFICATION  **********/
@@ -210,8 +215,8 @@ class CAllSocNetGroup
 		}
 
 		$canSetEmptyAvatarType =
-			($arFields['TYPE'] ?? null) === Type::Collab->value
-			&& $avatarType === AvatarType::None->value
+			$avatarType === AvatarType::None->value
+			&& static::isCollabByFields($arFields, (int)$ID)
 		;
 
 		if ($canSetEmptyAvatarType)
@@ -231,8 +236,10 @@ class CAllSocNetGroup
 
 		if (isset($arFields['NAME']))
 		{
-			$isCollab = $arFields['TYPE'] === Bitrix\Socialnetwork\Item\Workgroup\Type::Collab->value;
-			$isCheckNameNeeded = $isCollab || (Option::get('socialnetwork', 'check_group_name_enable', 'Y') === 'Y');
+			$isCheckNameNeeded =
+				Option::get('socialnetwork', 'check_group_name_enable', 'Y') === 'Y'
+				|| static::isCollabByFields($arFields, (int)$ID)
+			;
 
 			if ($isCheckNameNeeded)
 			{
@@ -270,6 +277,22 @@ class CAllSocNetGroup
 		if (!is_string($arFields['KEYWORDS'] ?? ''))
 		{
 			unset($arFields['KEYWORDS']);
+		}
+		elseif (isset($arFields['KEYWORDS']))
+		{
+			$arFields['KEYWORDS'] = Emoji::encode($arFields['KEYWORDS']);
+			$validationResult = (new LengthValidator(null, WorkgroupTable::KEYWORDS_MAX_LENGTH))->validate(
+				$arFields['KEYWORDS'],
+				[],
+				[],
+				WorkgroupTable::getEntity()->getField('KEYWORDS'),
+			);
+			if ($validationResult !== true)
+			{
+				$APPLICATION->ThrowException($validationResult);
+
+				return false;
+			}
 		}
 
 		return true;
@@ -444,6 +467,7 @@ class CAllSocNetGroup
 
 			unset($sonetGroupCache[$ID]);
 			self::setStaticCache($sonetGroupCache);
+			self::clearPersistedTypeFieldsCache($ID);
 			GroupRegistry::getInstance()->invalidate($ID);
 			FeatureTable::cleanCache();
 		}
@@ -461,13 +485,23 @@ class CAllSocNetGroup
 		{
 			unset($sonetGroupCache[$ID]);
 			self::setStaticCache($sonetGroupCache);
+			self::clearPersistedTypeFieldsCache($ID);
 
 			if(defined("BX_COMP_MANAGED_CACHE"))
 			{
 				$CACHE_MANAGER->ClearByTag("sonet_user2group_G".$ID);
-				$CACHE_MANAGER->ClearByTag("sonet_user2group");
 				$CACHE_MANAGER->ClearByTag("sonet_group_".$ID);
-				$CACHE_MANAGER->ClearByTag("sonet_group");
+
+				if (DeferredCacheFeature::isOn())
+				{
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_user2group');
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_group');
+				}
+				else
+				{
+					$CACHE_MANAGER->ClearByTag("sonet_user2group");
+					$CACHE_MANAGER->ClearByTag("sonet_group");
+				}
 			}
 		}
 
@@ -725,6 +759,10 @@ class CAllSocNetGroup
 				if (!empty($result['GOAL']))
 				{
 					$result['GOAL'] = Emoji::decode($result['GOAL']);
+				}
+				if (!empty($result['KEYWORDS']))
+				{
+					$result['KEYWORDS'] = Emoji::decode($result['KEYWORDS']);
 				}
 
 				$result['NAME_FORMATTED'] = $result['NAME'];
@@ -1585,6 +1623,55 @@ class CAllSocNetGroup
 				$bAutoSubscribe,
 			);
 		}
+	}
+
+	protected static function getPersistedType(int $groupId): ?string
+	{
+		return static::getPersistedTypeFields($groupId)['TYPE'] ?? null;
+	}
+
+	// A row may hold no type at all, and then only the legacy markers tell a scrum from a project.
+	// One write path asks for the row up to three times, and this cache serves the repeats: it starts
+	// from a fresh read and is dropped again once the row is written, so no value outlives the call
+	// that read it - a conversion made meanwhile must never be answered from here
+	protected static function refreshPersistedTypeFields(int $groupId): array
+	{
+		static::clearPersistedTypeFieldsCache($groupId);
+
+		return static::getPersistedTypeFields($groupId);
+	}
+
+	protected static function getPersistedTypeFields(int $groupId): array
+	{
+		if (array_key_exists($groupId, self::$persistedTypeFieldsCache))
+		{
+			return self::$persistedTypeFieldsCache[$groupId];
+		}
+
+		$groupFields = WorkgroupTable::getList([
+			'select' => ['TYPE', 'PROJECT', 'SCRUM_MASTER_ID'],
+			'filter' => ['=ID' => $groupId],
+			'limit' => 1,
+		])->fetch();
+
+		self::$persistedTypeFieldsCache[$groupId] = is_array($groupFields) ? $groupFields : [];
+
+		return self::$persistedTypeFieldsCache[$groupId];
+	}
+
+	protected static function clearPersistedTypeFieldsCache(int $groupId): void
+	{
+		unset(self::$persistedTypeFieldsCache[$groupId]);
+	}
+
+	private static function isCollabByFields(array $fields, int $groupId): bool
+	{
+		if (isset($fields['TYPE']))
+		{
+			return $fields['TYPE'] === Type::Collab->value;
+		}
+
+		return $groupId > 0 && static::getPersistedType($groupId) === Type::Collab->value;
 	}
 
 	private static function getTypeByFields(array $fields): Type

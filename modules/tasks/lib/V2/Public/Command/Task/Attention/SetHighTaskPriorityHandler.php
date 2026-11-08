@@ -27,6 +27,7 @@ class SetHighTaskPriorityHandler
 		$config = new UpdateConfig(
 			userId: $command->userId,
 			useConsistency: $command->useConsistency,
+			origin: $command->origin,
 		);
 
 

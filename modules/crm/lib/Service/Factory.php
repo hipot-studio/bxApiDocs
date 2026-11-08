@@ -221,6 +221,16 @@ abstract class Factory
 			$item->refreshCategoryDependentDisabledFields();
 		}
 
+		$item->addImplementation(
+			new Item\FieldImplementation\Comments($item, $entityObject, $this->getFlexibleContentTypeFields()),
+		);
+	}
+
+	/**
+	 * Text fields in BB code: their content type is stored per item in FieldContentTypeTable.
+	 */
+	public function getFlexibleContentTypeFields(): Field\Collection
+	{
 		$flexibleContentTypeFields = [];
 		foreach ($this->getFieldsCollection()->getFieldsByType(Field::TYPE_TEXT) as $field)
 		{
@@ -229,9 +239,8 @@ abstract class Factory
 				$flexibleContentTypeFields[] = $field;
 			}
 		}
-		$item->addImplementation(
-			new Item\FieldImplementation\Comments($item, $entityObject, new Field\Collection($flexibleContentTypeFields)),
-		);
+
+		return new Field\Collection($flexibleContentTypeFields);
 	}
 
 	/**
@@ -1387,6 +1396,7 @@ abstract class Factory
 	{
 		$this->categories = null;
 		self::clearPermissionEntityTypesCache();
+		\CCrmStatus::invalidateStageGroups();
 
 		return $this;
 	}
@@ -2104,6 +2114,16 @@ abstract class Factory
 	public function isCountersEnabled(): bool
 	{
 		return $this->entityTypeSettings()?->hasCounters() ?? false;
+	}
+
+	/**
+	 * Returns true if this entity supports the item list view.
+	 *
+	 * @param string $listView one of Router::LIST_VIEW_* constants
+	 */
+	public function isListViewSupported(string $listView): bool
+	{
+		return $listView !== Router::LIST_VIEW_DEADLINES;
 	}
 
 	/**

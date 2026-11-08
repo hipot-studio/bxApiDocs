@@ -6,7 +6,9 @@ use Bitrix\Crm\Controller\Base;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\FileUploader\CommentUploaderController;
 use Bitrix\Crm\Integration\Disk\AttachmentCopier;
+use Bitrix\Crm\Integration\Disk\DiskRepository;
 use Bitrix\Crm\Integration\Disk\HiddenStorage;
+use Bitrix\Crm\Integration\Disk\InlineFileTag;
 use Bitrix\Crm\Integration\UI\FileUploader;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
@@ -194,10 +196,12 @@ class Comment extends Base
 			return null;
 		}
 
-		return $this->update($id, $ownerTypeId, $ownerId, $content, $filesList, $bindings);
+		$isFilesListComplete = !isset($fields['FILES']) && isset($fields['ATTACHMENTS']) && is_array($fields['ATTACHMENTS']);
+
+		return $this->update($id, $ownerTypeId, $ownerId, $content, $filesList, $bindings, $isFilesListComplete);
 	}
 
-    public function updateFilesAction(int $id, array $files, int $ownerTypeId, int $ownerId): ?array
+    public function updateFilesAction(int $id, int $ownerTypeId, int $ownerId, array $files = []): ?array
     {
 		if (!$this->assertValidCommentRecord($id))
 		{
@@ -390,7 +394,15 @@ class Comment extends Base
 		return $commentId;
 	}
 
-	protected function update(int $commentId, int $ownerTypeId, int $ownerId, string $content, array $filesList, array $bindings): ?int
+	protected function update(
+		int $commentId,
+		int $ownerTypeId,
+		int $ownerId,
+		string $content,
+		array $filesList,
+		array $bindings,
+		bool $isFilesListComplete = false,
+	): ?int
 	{
 		if (count($bindings) > 1)
 		{
@@ -398,6 +410,7 @@ class Comment extends Base
 		}
 
 		$oldContent = $this->load($commentId)?->getComment();
+		$attachedIdsBefore = $isFilesListComplete ? $this->getRawAttachedIds($commentId) : [];
 
 		$updateResult = CommentEntry::update($commentId, [
 			'COMMENT' => $content,
@@ -407,6 +420,15 @@ class Comment extends Base
 
 		if ($updateResult->isSuccess())
 		{
+			// disk skips the detach for an emptied list and for a repeated save within one process
+			$removedAttachedIds = empty($attachedIdsBefore)
+				? []
+				: array_diff($attachedIdsBefore, $this->getRawAttachedIds($commentId));
+			if (!empty($removedAttachedIds))
+			{
+				DiskRepository::getInstance()->detachByAttachedObjectIds(array_values($removedAttachedIds));
+			}
+
 			CommentController::getInstance()->onModify($commentId, [
 				'COMMENT' => $content,
 				'ENTITY_TYPE_ID' => $ownerTypeId,
@@ -495,13 +517,16 @@ class Comment extends Base
 		{
 			$inlineMap[$value] = $value;
 		}
+		$tag = new InlineFileTag();
+		[$textToReplace, $sizes] = $tag->detachSizes($content);
 		$newText = FileUserType::updateText(
-			$content,
+			$textToReplace,
 			CommentController::UF_FIELD_NAME,
 			$newId,
 			CommentController::UF_COMMENT_FILE_NAME,
 			$inlineMap,
 		);
+		$newText = $tag->restoreSizes($newText, $sizes);
 
 		$updateResult = CommentEntry::update($newId, ['COMMENT' => $newText]);
 		if (!$updateResult->isSuccess())
@@ -528,7 +553,8 @@ class Comment extends Base
 		{
 			foreach ($matches[1] as $reference)
 			{
-				if (!is_numeric($reference) || !in_array((int)$reference, $attachedIds, true))
+				$id = InlineFileTag::extractId($reference);
+				if ($id === null || !is_numeric($id) || !in_array((int)$id, $attachedIds, true))
 				{
 					return $compensate($newId, [new Error('Dangling inline attachment reference after comment split')]);
 				}

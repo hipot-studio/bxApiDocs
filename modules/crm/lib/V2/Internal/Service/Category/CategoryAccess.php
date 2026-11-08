@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Internal\Service\Category;
 
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\UserPermissions\Configuration;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Crm\V2\Public\EntityTypeSettings;
 
@@ -12,8 +15,12 @@ use Bitrix\Crm\V2\Public\EntityTypeSettings;
  * The permission model of the category domain, whole and in one place.
  *
  * Reading a category - and the stages of that category - follows the right to read items in it,
- * keeping the parity legacy `crm.dealcategory.list` / `crm.status.list` established. Writing
- * follows entity administrator ({@see \Bitrix\Crm\Service\UserPermissions\EntityPermissions\Admin}).
+ * keeping the parity legacy `crm.dealcategory.list` / `crm.status.list` established. Writing follows
+ * the configuration capability of the contour the entity type belongs to ({@see Configuration}), and
+ * funnels and stages follow one operation of the contour each -
+ * {@see Configuration::canManageFunnels()} and {@see Configuration::canManageStages()}. The entity
+ * administrator check this domain used to ask, `isAdminForEntity()`, is left to an excluded contour
+ * and to a rollback of the registration.
  *
  * Every `UserPermissions` call of the domain belongs here and nowhere else: legacy spread its own
  * checks over `crm.dealcategory.*` and `crm.status.*` and the two drifted apart to the point where
@@ -79,7 +86,10 @@ class CategoryAccess
 			return false;
 		}
 
-		return $this->isAdminForEntity($entityTypeId, $userId, $categoryId);
+		return $this->configurationOf($userId)->canManageFunnels(
+			ConfigurationCallSite::CategoryDomainService,
+			ConfigurationScope::ofEntityType($entityTypeId, $categoryId),
+		);
 	}
 
 	/**
@@ -88,7 +98,8 @@ class CategoryAccess
 	 *
 	 * The category is part of the check, as the category write right has it. For a contractor
 	 * category that hands the decision to the warehouse configuration right instead of CRM
-	 * administrator - see {@see \Bitrix\Crm\Service\UserPermissions\EntityPermissions\Admin}.
+	 * administrator - the contour of such a category is excluded from the configuration model and
+	 * keeps the former check ({@see ConfigurationScope}).
 	 */
 	public function canWriteStages(int $entityTypeId, int $userId, int $categoryId): bool
 	{
@@ -97,16 +108,15 @@ class CategoryAccess
 			return false;
 		}
 
-		return $this->isAdminForEntity($entityTypeId, $userId, $categoryId);
+		return $this->configurationOf($userId)->canManageStages(
+			ConfigurationCallSite::CategoryDomainService,
+			ConfigurationScope::ofEntityType($entityTypeId, $categoryId),
+		);
 	}
 
-	private function isAdminForEntity(int $entityTypeId, int $userId, ?int $categoryId): bool
+	private function configurationOf(int $userId): Configuration
 	{
-		return Container::getInstance()
-			->getUserPermissions($userId)
-			->entityAdmin()
-			->isAdminForEntity($entityTypeId, $categoryId)
-		;
+		return Container::getInstance()->getUserPermissions($userId)->configuration();
 	}
 
 	/**

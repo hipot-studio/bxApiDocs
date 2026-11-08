@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Copilot\Services\HtmlBlock;
 
 use Bitrix\Landing\Copilot\Services\Manifest\NodeCollector;
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Main\Web\DOM;
 
 /**
@@ -47,7 +48,7 @@ final class CoverageRepairer
 
 		try
 		{
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForUserHtml();
 			$doc->loadHTML('<div id="' . self::ROOT_NODE_ID . '">' . $html . '</div>');
 
 			$root = $doc->querySelector('#' . self::ROOT_NODE_ID);

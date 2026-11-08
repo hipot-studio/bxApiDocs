@@ -93,6 +93,11 @@ class Secretary
 
 		if (MessageAccess::isMailboxOwner($message['MAILBOX_ID'], $userId))
 		{
+			if (self::isAccessProvidedToMessage($mailMessageId, $message['MAILBOX_ID'], $entityType, $entityId))
+			{
+				return true;
+			}
+
 			/** @see \Bitrix\Mail\MessageUserType */
 			MessageAccessTable::add([
 				'TOKEN' => MessageAccess::createToken($message['MAILBOX_ID'], $mailMessageId, $entityType, $entityId, '0'),

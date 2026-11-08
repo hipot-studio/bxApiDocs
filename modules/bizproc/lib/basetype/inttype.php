@@ -77,6 +77,51 @@ class IntType extends Double
 			$value = null;
 		}
 
+		if ($value === null)
+		{
+			// an empty value became null above, and null compares as zero: the rule must not reject it
+			return null;
+		}
+
+		return static::applyValueRule($fieldType, $field, $value);
+	}
+
+	/**
+	 * @param FieldType $fieldType
+	 * @param array $field
+	 * @param int $value
+	 * @return null|int
+	 */
+	protected static function applyValueRule(FieldType $fieldType, array $field, $value)
+	{
+		$rule = $fieldType->getSettings()[ValueRule::SETTINGS_KEY] ?? null;
+		if (!is_array($rule) || !$rule)
+		{
+			return $value;
+		}
+
+		if (isset($rule[ValueRule::MIN]) && $value < (int)$rule[ValueRule::MIN])
+		{
+			static::addError(array(
+				'code' => 'ValueRuleMin',
+				'message' => Loc::getMessage('BPDT_INT_VALUE_RULE_MIN', array('#MIN#' => (int)$rule[ValueRule::MIN])),
+				'parameter' => static::generateControlName($field),
+			));
+
+			return null;
+		}
+
+		if (isset($rule[ValueRule::MAX]) && $value > (int)$rule[ValueRule::MAX])
+		{
+			static::addError(array(
+				'code' => 'ValueRuleMax',
+				'message' => Loc::getMessage('BPDT_INT_VALUE_RULE_MAX', array('#MAX#' => (int)$rule[ValueRule::MAX])),
+				'parameter' => static::generateControlName($field),
+			));
+
+			return null;
+		}
+
 		return $value;
 	}
 }

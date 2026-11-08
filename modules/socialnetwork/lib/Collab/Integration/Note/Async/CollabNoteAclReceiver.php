@@ -9,6 +9,7 @@ use Bitrix\Main\Messenger\Internals\Exception\Receiver\RecoverableMessageExcepti
 use Bitrix\Main\Messenger\Internals\Exception\Receiver\UnprocessableMessageException;
 use Bitrix\Main\Messenger\Receiver\AbstractReceiver;
 use Bitrix\Socialnetwork\Collab\Integration\Note\PermissionProjectionService;
+use Bitrix\Socialnetwork\Collab\Integration\Note\Service\CollectionExistenceGateway;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 
 /**
@@ -24,6 +25,11 @@ class CollabNoteAclReceiver extends AbstractReceiver
 		{
 			throw new UnprocessableMessageException($message);
 		}
+
+		// Воркер обрабатывает пачку сообщений в одном процессе, а шлюз существования —
+		// синглтон ServiceLocator'а. Без сброса коллекция, удалённая в середине пачки,
+		// осталась бы «существующей», и пересчёт ушёл бы в удалённую базу знаний.
+		Container::getInstance()->get(CollectionExistenceGateway::class)->reset();
 
 		$result = Container::getInstance()->get(PermissionProjectionService::class)->recalculate(
 			$message->collabId,

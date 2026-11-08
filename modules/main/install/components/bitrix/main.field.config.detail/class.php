@@ -7,12 +7,13 @@ if(!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Main\Engine;
 use Bitrix\Main\Error;
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\LanguageTable;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Application;
 use Bitrix\Main\UserField\ConfigComponent;
 use Bitrix\Main\UserField\Engine\SettingsArea;
+use Bitrix\Main\UserField\UserFieldAccess;
 use Bitrix\Main\UserFieldLangTable;
 use Bitrix\Main\UserFieldTable;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
@@ -101,7 +102,7 @@ class MainUfDetailComponent extends ConfigComponent implements Engine\Contract\C
 			return $this->data;
 		}
 
-		return [
+		return $this->applyDefaultSettings([
 			'ID' => 0,
 			'MANDATORY' => 'N',
 			'MULTIPLE' => 'N',
@@ -115,7 +116,7 @@ class MainUfDetailComponent extends ConfigComponent implements Engine\Contract\C
 			'EDIT_FORM_LABEL' => [
 				Loc::getCurrentLang() => Loc::getMessage('MAIN_FIELD_CONFIG_DETAIL_DEFAULT_LABEL'),
 			],
-		];
+		]);
 	}
 
 	protected function prepareForm(array $field): array
@@ -215,9 +216,53 @@ class MainUfDetailComponent extends ConfigComponent implements Engine\Contract\C
 		return [];
 	}
 
-	public function getSettingsAction(string $userTypeId): Engine\Response\HtmlContent
+	public function getSettingsAction(string $userTypeId, ?string $entityId = null, ?string $moduleId = null): Engine\Response\HtmlContent
 	{
-		return new Engine\Response\HtmlContent(new SettingsArea(['USER_TYPE_ID' => $userTypeId]));
+		$entityId = $entityId !== '' ? $entityId : null;
+		$moduleId = $moduleId !== '' ? $moduleId : null;
+
+		$field = [
+			'USER_TYPE_ID' => $userTypeId,
+		];
+
+		if ($entityId !== null)
+		{
+			$field['ENTITY_ID'] = $entityId;
+		}
+
+		if ($moduleId !== null)
+		{
+			$field = $this->applyDefaultSettings($field, $moduleId);
+		}
+
+		return new Engine\Response\HtmlContent(new SettingsArea($field));
+	}
+
+	private function applyDefaultSettings(array $field, ?string $moduleId = null): array
+	{
+		$moduleId ??= $this->moduleId;
+		if (empty($moduleId))
+		{
+			return $field;
+		}
+
+		try
+		{
+			$defaultSettings = UserFieldAccess::getInstance($moduleId)->getDefaultSettings($field);
+		}
+		catch (\Throwable)
+		{
+			return $field;
+		}
+
+		if (empty($defaultSettings))
+		{
+			return $field;
+		}
+
+		$field['SETTINGS'] = array_merge($defaultSettings, $field['SETTINGS'] ?? []);
+
+		return $field;
 	}
 
 	protected function generateFieldName(): string

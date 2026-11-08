@@ -76,6 +76,15 @@ class OpenLineTrigger extends BaseTrigger
 
 	public function checkApplyRules(array $trigger)
 	{
+		return $this->checkCommonApplyRules($trigger) && $this->checkMessageTextApplyRule($trigger);
+	}
+
+	/**
+	 * Base rules and the line selection: the part every open-line trigger shares, the outgoing one
+	 * included, since it publishes no message text rule of its own.
+	 */
+	protected function checkCommonApplyRules(array $trigger): bool
+	{
 		if (!parent::checkApplyRules($trigger))
 		{
 			return false;
@@ -87,14 +96,14 @@ class OpenLineTrigger extends BaseTrigger
 			&& $trigger['APPLY_RULES']['config_id'] > 0
 		)
 		{
-			if (
-				(int)$trigger['APPLY_RULES']['config_id'] !== (int)$this->getInputData('CONFIG_ID')
-			)
-			{
-				return false;
-			}
+			return (int)$trigger['APPLY_RULES']['config_id'] === (int)$this->getInputData('CONFIG_ID');
 		}
 
+		return true;
+	}
+
+	private function checkMessageTextApplyRule(array $trigger): bool
+	{
 		$msg = $this->getInputData('MESSAGE');
 		if (
 			$msg
@@ -135,6 +144,7 @@ class OpenLineTrigger extends BaseTrigger
 		}
 		$configs = [];
 		$orm = \Bitrix\ImOpenLines\Model\ConfigTable::getList(Array(
+			'select' => ['ID', 'LINE_NAME'],
 			'filter' => Array(
 				'=TEMPORARY' => 'N'
 			)

@@ -18,7 +18,6 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Priority;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
-use CIMShare;
 use CTimeZone;
 
 class TaskMapper
@@ -32,7 +31,12 @@ class TaskMapper
 	{
 	}
 
-	public function convertFromTranscribedMessage(array $taskData, Message $message, string $transcribedText): ?Task
+	public function convertFromTranscribedMessage(
+		array $taskData,
+		Message $message,
+		int $initiatorId,
+		bool $isMultipleMessages = false,
+	): ?Task
 	{
 		if (!Loader::includeModule('tasks'))
 		{
@@ -45,45 +49,28 @@ class TaskMapper
 			return null;
 		}
 
-		$authorId = $message->getAuthorId();
+		$this->taskService->setContextUser($initiatorId);
 
-		$this->taskService->setContextUser($authorId);
-
-		$author = new User($authorId);
+		$creator = new User($initiatorId);
 
 		$chat = $message->getChat();
 
-		$responsible = $this->participantResolver->resolveResponsible($taskData['responsible'] ?? '', $chat, $authorId);
+		$responsible = $this->participantResolver->resolveResponsible($taskData['responsible'] ?? '', $chat, $initiatorId);
 
 		return new Task(
 			title: $title,
-			description: $this->prepareDescription($taskData['description'] ?? '', $message, $transcribedText),
-			creator: $author,
+			description: $taskData['description'] ?? '',
+			creator: $creator,
 			responsible: $responsible,
-			deadlineTs: $this->prepareDeadline($taskData['deadline'] ?? '', $message->getAuthor()->getTimeZone()),
+			deadlineTs: $this->prepareDeadline($taskData['deadline'] ?? '', \Bitrix\Im\V2\Entity\User\User::getInstance($initiatorId)->getTimezone()),
 			fileIds: !FormV2Feature::isOn() ? $this->taskService->getFileIdsByMessage($message) : [],
 			group: $this->prepareGroup($chat),
 			priority: ($taskData['importance'] ?? false) ? Priority::High : Priority::Average,
 			accomplices: $this->participantResolver->resolveAccomplices($taskData['accomplices'] ?? [], $chat),
 			auditors: $this->prepareAuditors($chat),
 			dependsOn: $this->prepareRelatedTasks($chat),
-			scenarios: $this->prepareScenarios($message),
+			scenarios: $this->prepareScenarios($message, $isMultipleMessages),
 		);
-	}
-
-	private function prepareDescription(string $description, Message $message, string $transcribedText): string
-	{
-		$chat = $message->getChat();
-
-		$quote = CIMShare::prepareText([
-			'CHAT_ID' => $chat->getChatId(),
-			'MESSAGE_ID' => $message->getMessageId(),
-			'MESSAGE_TYPE' => $chat->getType(),
-			'MESSAGE' => $transcribedText,
-			'AUTHOR_ID' => $message->getAuthorId(),
-		]);
-
-		return "{$description}\n{$quote}";
 	}
 
 	private function prepareDeadline(string $formattedDeadline, ?string $userTimeZone = null): ?int
@@ -151,8 +138,14 @@ class TaskMapper
 		return [$taskId];
 	}
 
-	private function prepareScenarios(Message $message): ?Task\ScenarioCollection
+	private function prepareScenarios(Message $message, bool $isMultipleMessages = false): ?Task\ScenarioCollection
 	{
+		if ($isMultipleMessages)
+		{
+			// multiselect: the anchor message type must not mark the task as a voice/video one
+			return null;
+		}
+
 		if ($message->isVoiceNote())
 		{
 			return new Task\ScenarioCollection(Task\Scenario::Voice);

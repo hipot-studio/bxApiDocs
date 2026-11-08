@@ -13,5 +13,8 @@ class RegisterRequest implements Contract\Item
 		public ?string $title = null,
 		public int $version = Version::CURRENT,
 		public bool $hasPlaceholders = false,
+		/** @see \Bitrix\Sign\Type\Document\CreationSourceType wire value */
+		public ?string $creationSourceType = null,
+		public ?bool $isTemplate = null,
 	) {}
 }

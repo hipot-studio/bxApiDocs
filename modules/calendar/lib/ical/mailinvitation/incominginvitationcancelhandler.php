@@ -4,7 +4,8 @@
 namespace Bitrix\Calendar\ICal\MailInvitation;
 
 
-use Bitrix\Calendar\Core\Event\Properties\ExcludedDatesCollection;
+use Bitrix\Calendar\Internal\Event\ExcludedInstanceOperation;
+use Bitrix\Calendar\Internal\Event\ExcludedInstanceUserContext;
 use Bitrix\Calendar\ICal\Parser\Calendar;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectException;
@@ -67,12 +68,11 @@ class IncomingInvitationCancelHandler extends IncomingInvitationHandler
 				$date = $this->getExdateFromRecurrenceId($icalEvent->getRecurrenceId());
 				if ($date !== null)
 				{
-					\CCalendarEvent::ExcludeInstance(
-						$event['ID'],
-						$date->format(ExcludedDatesCollection::EXCLUDED_DATE_FORMAT)
+					return $this->cancelRecurringInstance(
+						(int)$event['ID'],
+						(int)$event['OWNER_ID'],
+						$date->format(CCalendar::DFormat(false)),
 					);
-
-					return true;
 				}
 			}
 			else
@@ -85,6 +85,22 @@ class IncomingInvitationCancelHandler extends IncomingInvitationHandler
 		}
 
 		return false;
+	}
+
+	private function cancelRecurringInstance(int $eventId, int $ownerId, string $excludeDate): bool
+	{
+		$userId = (int)$this->userId;
+		if ($userId <= 0 || $ownerId !== $userId)
+		{
+			return false;
+		}
+
+		$result = (new ExcludedInstanceUserContext())->run(
+			$userId,
+			static fn () => ExcludedInstanceOperation::execute($eventId, $excludeDate),
+		);
+
+		return $result->isSuccess();
 	}
 
 	/**

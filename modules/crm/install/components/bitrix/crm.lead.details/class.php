@@ -390,6 +390,7 @@ class CCrmLeadDetailsComponent
 							'PRESERVE_HISTORY' => true,
 							'ADD_EVENT_NAME' => 'CrmCreateQuoteFromLead',
 							'EXTENDED_INTERNAL_MODE' => true,
+							'ENABLE_GROUP_ACTIONS' => 'Y',
 							'ANALYTICS' => [
 								// we dont know where from this component was opened from - it could be anywhere on portal
 								'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_LEAD,
@@ -1429,6 +1430,10 @@ class CCrmLeadDetailsComponent
 
 		$this->userFieldInfos = [];
 		$userFields = $this->prepareEntityUserFields();
+		$aiFillPolicyConfigs = EditorAdapter::prepareEntityFieldAiFillPolicyConfigs(
+			CCrmOwnerType::Lead,
+			$userFields
+		);
 		$enumerationFields = [];
 		foreach($userFields as $userField)
 		{
@@ -1499,6 +1504,11 @@ class CCrmLeadDetailsComponent
 				$data['visibilityConfigs'] = $visibilityConfig[$fieldName];
 			}
 
+			if(isset($aiFillPolicyConfigs[$fieldName]))
+			{
+				$data['aiFillPolicy'] = $aiFillPolicyConfigs[$fieldName];
+			}
+
 			$this->userFieldInfos[$fieldName] = array(
 				'name' => $fieldName,
 				'title' => isset($userField['EDIT_FORM_LABEL']) ? $userField['EDIT_FORM_LABEL'] : $fieldName,
@@ -1531,7 +1541,7 @@ class CCrmLeadDetailsComponent
 	}
 	public function prepareEntityFieldAttributeConfigs()
 	{
-		if(!$this->entityFieldAttributeConfig)
+		if($this->entityFieldAttributeConfig === null)
 		{
 			$this->entityFieldAttributeConfig = FieldAttributeManager::getEntityConfigurations(
 				CCrmOwnerType::Lead,
@@ -1983,17 +1993,21 @@ class CCrmLeadDetailsComponent
 		//endregion
 		//region Client Info
 		$clientInfo = [];
+		$isCompanyReadPermitted = true;
+		// the entity row carries the fields of this contact only
+		$primaryContactID = isset($this->entityData['CONTACT_ID']) ? (int)$this->entityData['CONTACT_ID'] : 0;
+		$isPrimaryContactReadPermitted = ($primaryContactID <= 0);
 
 		$companyID = (int)($this->entityData['COMPANY_ID'] ?? 0);
 		if ($companyID > 0)
 		{
-			$isEntityReadPermitted = $this->userPermissionsService->item()->canRead(CCrmOwnerType::Company, $companyID);
+			$isCompanyReadPermitted = $this->userPermissionsService->item()->canRead(CCrmOwnerType::Company, $companyID);
 			$companyInfo = \CCrmEntitySelectorHelper::PrepareEntityInfo(
 				CCrmOwnerType::CompanyName,
 				$companyID,
 				array(
 					'ENTITY_EDITOR_FORMAT' => true,
-					'IS_HIDDEN' => !$isEntityReadPermitted,
+					'IS_HIDDEN' => !$isCompanyReadPermitted,
 					'REQUIRE_REQUISITE_DATA' => true,
 					'REQUIRE_EDIT_REQUISITE_DATA' => true,
 					'REQUIRE_MULTIFIELDS' => true,
@@ -2027,6 +2041,10 @@ class CCrmLeadDetailsComponent
 		foreach($contactIDs as $contactID)
 		{
 			$isEntityReadPermitted = $this->userPermissionsService->item()->canRead(CCrmOwnerType::Contact, $contactID);
+			if ((int)$contactID === $primaryContactID)
+			{
+				$isPrimaryContactReadPermitted = $isEntityReadPermitted;
+			}
 			$clientInfo['CONTACT_DATA'][] = CCrmEntitySelectorHelper::PrepareEntityInfo(
 				CCrmOwnerType::ContactName,
 				$contactID,
@@ -2044,6 +2062,16 @@ class CCrmLeadDetailsComponent
 			$iteration++;
 		}
 		$this->entityData['CLIENT_INFO'] = $clientInfo;
+
+		// the linked company title of a lead row read via CCrmLead::GetListEx() is
+		// ASSOCIATED_COMPANY_TITLE = CO.TITLE (map of CCrmLead::GetFields());
+		// its own COMPANY_TITLE column is filled by hand and stays intact
+		\CCrmComponentHelper::maskClientNameFields(
+			$this->entityData,
+			'ASSOCIATED_COMPANY_TITLE',
+			isCompanyReadable: $isCompanyReadPermitted,
+			isContactReadable: $isPrimaryContactReadPermitted
+		);
 
 		//endregion
 		//region Multifield Data

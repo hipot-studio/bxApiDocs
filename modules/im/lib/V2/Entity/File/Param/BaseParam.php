@@ -22,10 +22,16 @@ abstract class BaseParam implements Param
 		return $this->fileId;
 	}
 
+	public function getConflictingParams(): array
+	{
+		return [];
+	}
+
 	public static function getInstance(int $fileId, ParamName $paramName, string $value): Param
 	{
 		return match ($paramName)
 		{
+			ParamName::Duration => (new Duration($fileId, $value)),
 			ParamName::IsTranscribable => (new Transcribable($fileId, $value)),
 			ParamName::IsVideoNote => (new VideoNote($fileId, $value)),
 			ParamName::IsVoiceNote => (new VoiceNote($fileId, $value)),

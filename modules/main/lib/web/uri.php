@@ -15,14 +15,14 @@ use Psr\Http\Message\UriInterface;
 
 class Uri implements \JsonSerializable, UriInterface
 {
-	protected $scheme = '';
-	protected $host = '';
-	protected $port = null;
-	protected $user = '';
-	protected $pass = '';
-	protected $path = '';
-	protected $query = '';
-	protected $fragment = '';
+	protected string $scheme = '';
+	protected string $host = '';
+	protected ?int $port = null;
+	protected string $user = '';
+	protected string $pass = '';
+	protected string $path = '';
+	protected string $query = '';
+	protected string $fragment = '';
 
 	/**
 	 * @param string $url

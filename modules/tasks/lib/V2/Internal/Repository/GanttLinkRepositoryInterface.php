@@ -10,7 +10,7 @@ use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLinkCollection;
 interface GanttLinkRepositoryInterface
 {
 	public function getLinkTypes(int $taskId, array $dependentIds): array;
-	public function getTaskLinks(int $taskId): GanttLinkCollection;
+	public function getTaskLinks(int $taskId, ?int $limit = null, ?int $offset = null): GanttLinkCollection;
 	public function getLinksByTaskIds(array $taskIds): GanttLinkCollection;
 
 	public function update(GanttLink $ganttLink): void;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\AI\SiteBuilder\Html;
 
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Landing\Sanitizer;
 use Bitrix\Main\Web\DOM;
 
@@ -217,7 +218,7 @@ final class AiBlockHtmlSanitizer
 
 		try
 		{
-			$document = new DOM\Document();
+			$document = DocumentFactory::createForUserHtml();
 			$document->loadHTML($html);
 			self::sanitizeChildNodes($document);
 

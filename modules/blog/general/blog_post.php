@@ -502,7 +502,21 @@ class CAllBlogPost
 
 		$ID = intval($ID);
 
-		$arPost = CBlogPost::GetByID($ID);
+		if (
+			defined("BX_COMP_MANAGED_CACHE")
+			&& \Bitrix\Blog\PostTable::getEntity()->hasField("UF_BLOG_POST_IMPRTNT")
+		)
+		{
+			$arPost = \Bitrix\Blog\PostTable::query()
+				->setSelect(array("ID", "BLOG_ID", "UF_BLOG_POST_IMPRTNT"))
+				->where("ID", $ID)
+				->setLimit(1)
+				->fetch();
+		}
+		else
+		{
+			$arPost = CBlogPost::GetByID($ID);
+		}
 		if ($arPost)
 		{
 			foreach(GetModuleEvents("blog", "OnBeforePostDelete", true) as $arEvent)
@@ -510,6 +524,7 @@ class CAllBlogPost
 				if (ExecuteModuleEventEx($arEvent, Array($ID))===false)
 					return false;
 			}
+			$isImportantPost = (int)($arPost["UF_BLOG_POST_IMPRTNT"] ?? 0) > 0;
 
 			$dbResult = CBlogComment::GetList(
 				array(),
@@ -579,6 +594,7 @@ class CAllBlogPost
 			$arBlog = CBlog::GetByID($arPost["BLOG_ID"]);
 
 			$result = $DB->Query("DELETE FROM b_blog_post WHERE ID = ".$ID, true);
+			$deleteSucceeded = ($result !== false);
 
 			if (intval($arBlog["LAST_POST_ID"]) == $ID)
 				CBlog::SetStat($arPost["BLOG_ID"]);
@@ -608,6 +624,10 @@ class CAllBlogPost
 			if(defined("BX_COMP_MANAGED_CACHE"))
 			{
 				$CACHE_MANAGER->ClearByTag("blog_post_".$ID);
+				if ($deleteSucceeded && $isImportantPost)
+				{
+					$CACHE_MANAGER->ClearByTag("blogpost_important_all");
+				}
 			}
 
 			return $result;
@@ -1660,6 +1680,8 @@ class CAllBlogPost
 			$userId = intval($userId);
 			$bByUserId = true;
 		}
+		static $arMailUsersCache = [];
+
 		$postId = intval($postId);
 		if($postId <= 0)
 		{
@@ -1727,19 +1749,23 @@ class CAllBlogPost
 				&& IsModuleInstalled('mail')
 			) // check for email authorization users
 			{
-				$rsUsers = CUser::GetList(
-					"ID",
-					"asc",
-					array(
-						"ID" => $userId,
-					),
-					array(
-						"FIELDS" => array("ID", "EXTERNAL_AUTH_ID"),
-						"SELECT" => array("UF_DEPARTMENT"),
-					)
-				);
+				if (!array_key_exists($userId, $arMailUsersCache))
+				{
+					$rsUsers = CUser::GetList(
+						"ID",
+						"asc",
+						array(
+							"ID" => $userId,
+						),
+						array(
+							"FIELDS" => array("ID", "EXTERNAL_AUTH_ID"),
+							"SELECT" => array("UF_DEPARTMENT"),
+						)
+					);
+					$arMailUsersCache[$userId] = $rsUsers->Fetch();
+				}
 
-				if($arUser = $rsUsers->Fetch())
+				if($arUser = $arMailUsersCache[$userId])
 				{
 					if ($arUser["EXTERNAL_AUTH_ID"] == 'email')
 					{
@@ -2028,31 +2054,35 @@ class CAllBlogPost
 
 	private static function getCurrentUserType($userId)
 	{
-		static $currentUserType = null;
+		static $currentUserTypes = [];
+
+		$userId = (int)$userId;
 
 		if ($userId <= 0)
 		{
 			return null;
 		}
 
-		if (
-			$currentUserType === null
-			&& Loader::includeModule('intranet')
-		)
+		if (!array_key_exists($userId, $currentUserTypes))
 		{
-			$res = \Bitrix\Intranet\UserTable::getList([
-				'filter' => [
-					'ID' => $userId,
-				],
-				'select' => [ 'ID', 'USER_TYPE' ],
-			]);
-			if ($userFields = $res->fetch())
+			$currentUserTypes[$userId] = null;
+
+			if (Loader::includeModule('intranet'))
 			{
-				$currentUserType = $userFields['USER_TYPE'];
+				$res = \Bitrix\Intranet\UserTable::getList([
+					'filter' => [
+						'ID' => $userId,
+					],
+					'select' => [ 'ID', 'USER_TYPE' ],
+				]);
+				if ($userFields = $res->fetch())
+				{
+					$currentUserTypes[$userId] = $userFields['USER_TYPE'];
+				}
 			}
 		}
 
-		return $currentUserType;
+		return $currentUserTypes[$userId];
 	}
 
 	public static function NotifyIm($arParams)

@@ -36,15 +36,40 @@ class BaseSettingsExpressionDto extends BaseExpressionDto
 	 */
 	public ?array $activityData;
 
+	/**
+	 * Fields the node-action proxy mode shares with an ACTION construction: the editor of an action owns
+	 * them, and base-settings bound to a node-action is edited by that very editor. They stay null in
+	 * host-merge mode, which has no action of its own to point them at.
+	 */
+	public ?string $document;
+
+	public ?string $auxPortId;
+
+	public ?string $auxPortTitle;
+
+	public ?string $area;
+
+	public ?string $object;
+
 	public function __construct(
 		?array $rawActivityData,
 		?array $activityData,
 		?string $actionId = null,
+		?string $document = null,
+		?string $auxPortId = null,
+		?string $auxPortTitle = null,
+		?string $area = null,
+		?string $object = null,
 	)
 	{
 		$this->rawActivityData = $rawActivityData;
 		$this->activityData = $activityData;
 		$this->actionId = $actionId;
+		$this->document = $document;
+		$this->auxPortId = $auxPortId;
+		$this->auxPortTitle = $auxPortTitle;
+		$this->area = $area;
+		$this->object = $object;
 	}
 
 	public function jsonSerialize(): array
@@ -53,6 +78,11 @@ class BaseSettingsExpressionDto extends BaseExpressionDto
 			'actionId' => $this->actionId,
 			'rawActivityData' => $this->rawActivityData,
 			'activityData' => $this->activityData,
+			'document' => $this->document,
+			'auxPortId' => $this->auxPortId,
+			'auxPortTitle' => $this->auxPortTitle,
+			'area' => $this->area,
+			'object' => $this->object,
 		];
 	}
 
@@ -62,6 +92,11 @@ class BaseSettingsExpressionDto extends BaseExpressionDto
 			$data['rawActivityData'] ?? null,
 			$data['activityData'] ?? null,
 			$data['actionId'] ?? null,
+			$data['document'] ?? null,
+			$data['auxPortId'] ?? null,
+			$data['auxPortTitle'] ?? null,
+			$data['area'] ?? null,
+			$data['object'] ?? null,
 		);
 	}
 }

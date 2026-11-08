@@ -207,6 +207,11 @@ class RoleRepository extends BaseRepository
 
 	public function getByRoleCodes(array $roleCodes): array
 	{
+		if ($roleCodes === [])
+		{
+			return [];
+		}
+
 		return RoleTable::query()
 			->setSelect([
 				'ID',

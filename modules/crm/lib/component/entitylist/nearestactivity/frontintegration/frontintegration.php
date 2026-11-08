@@ -34,6 +34,7 @@ abstract class FrontIntegration
 		string $preparedGridId,
 		int $activityId,
 		ItemIdentifier $itemIdentifier,
+		array $analyticsContext = [],
 	): string;
 
 	abstract public function isActivityViewSupport(array $activity): bool;
@@ -68,6 +69,24 @@ abstract class FrontIntegration
 			'calendarSettings' => $calendarSettings,
 			'colorSettings' => $colorSettings,
 		]);
+	}
+
+	protected function getAnalytics(array $analyticsContext): string
+	{
+		return CUtil::PhpToJSObject([
+			'c_section' => $this->getAnalyticsValue($analyticsContext, 'c_section'),
+			'c_sub_section' => $this->getAnalyticsValue($analyticsContext, 'c_sub_section'),
+		]);
+	}
+
+	/**
+	 * The value is embedded into an inline onclick attribute, so anything but a plain analytics code is dropped.
+	 */
+	private function getAnalyticsValue(array $analyticsContext, string $key): string
+	{
+		$value = $analyticsContext[$key] ?? '';
+
+		return is_string($value) && preg_match('/^[a-z0-9_]+$/i', $value) ? $value : '';
 	}
 
 	protected function getPingSettings(ItemIdentifier $itemIdentifier): array

@@ -2,6 +2,8 @@
 
 namespace Bitrix\Mobile\Profile\Provider;
 
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Mobile\Profile\Enum\TabType;
@@ -46,17 +48,11 @@ class ProfileProvider
 			$selectedTabId = $availableTabs[0]['id'];
 		}
 
-		$themeProvider = new ThemeProvider($this->ownerId);
-		$currentTheme = $themeProvider->getCurrentTheme();
-		$currentTheme = $themeProvider->isSvgTheme($currentTheme)
-			? $themeProvider->getFallbackTheme()
-			: $currentTheme;
-
 		return [
 			'tabs' => $availableTabs,
 			'selectedTabId' => $selectedTabId,
 			'canView' => true,
-			'currentTheme' => $currentTheme,
+			'currentTheme' => (new ThemeProvider($this->ownerId))->getCurrentTheme(),
 		];
 	}
 
@@ -85,6 +81,35 @@ class ProfileProvider
 				}
 
 				$availableTabs[] = $tabInfo;
+			}
+		}
+
+		$event = new Event('mobile', 'onProfileTabsCollect', [
+			'viewerId' => $this->viewerId,
+			'ownerId' => $this->ownerId,
+			'tabs' => $availableTabs,
+		]);
+		$event->send();
+
+		foreach ($event->getResults() as $eventResult)
+		{
+			if ($eventResult->getType() !== EventResult::SUCCESS)
+			{
+				continue;
+			}
+
+			$tabs = $eventResult->getParameters()['tabs'] ?? [];
+			if (!is_array($tabs))
+			{
+				continue;
+			}
+
+			foreach ($tabs as $tab)
+			{
+				if (is_array($tab) && isset($tab['id']) && is_string($tab['id']))
+				{
+					$availableTabs[] = $tab;
+				}
 			}
 		}
 

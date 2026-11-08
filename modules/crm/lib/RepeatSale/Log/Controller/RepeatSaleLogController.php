@@ -30,9 +30,13 @@ class RepeatSaleLogController
 		return RepeatSaleLogTable::add($this->getFields($logItem));
 	}
 
+	/**
+	 * Reassigns the row to another job or segment only. The row describes a single created entity,
+	 * and its stage semantic is kept in sync with that entity by updateStageSemanticId().
+	 */
 	final public function update(int $id, LogItem $logItem): UpdateResult
 	{
-		return RepeatSaleLogTable::update($id, $this->getFields($logItem));
+		return RepeatSaleLogTable::update($id, $this->getReassignableFields($logItem));
 	}
 
 	final public function updateStageSemanticId(
@@ -109,11 +113,18 @@ class RepeatSaleLogController
 	private function getFields(LogItem $logItem): array
 	{
 		return [
-			'JOB_ID' => $logItem->getJobId(),
-			'SEGMENT_ID' => $logItem->getSegmentId(),
+			...$this->getReassignableFields($logItem),
 			'ENTITY_TYPE_ID' => $logItem->getEntityTypeId(),
 			'ENTITY_ID' => $logItem->getEntityId(),
-			'PHASE_SEMANTIC_ID' => $logItem->getStageSemanticId(),
+			'STAGE_SEMANTIC_ID' => $logItem->getStageSemanticId(),
+		];
+	}
+
+	private function getReassignableFields(LogItem $logItem): array
+	{
+		return [
+			'JOB_ID' => $logItem->getJobId(),
+			'SEGMENT_ID' => $logItem->getSegmentId(),
 			'UPDATED_AT' => new DateTime(),
 		];
 	}

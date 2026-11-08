@@ -3,6 +3,7 @@
 namespace Bitrix\Intranet\Integration\HumanResources;
 
 use Bitrix\HumanResources;
+use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\MemberEntityType;
@@ -32,29 +33,10 @@ final class DepartmentAssigner
 			return;
 		}
 
-		$roleId = HumanResources\Service\Container::getRoleHelperService()->getEmployeeRoleId();
-		$memberCollection = new HumanResources\Item\Collection\NodeMemberCollection();
-
-		foreach ($this->departmentCollection as $department)
-		{
-			foreach ($userCollection as $user)
-			{
-				$memberCollection->add(
-					new HumanResources\Item\NodeMember(
-						entityType: HumanResources\Type\MemberEntityType::USER,
-						entityId: $user->getId(),
-						nodeId: $department->getId(),
-						active: true,
-						role: $roleId,
-					)
-				);
-			}
-		}
-
-		if (!$memberCollection->empty())
-		{
-			HumanResources\Service\Container::getNodeMemberRepository()->createByCollection($memberCollection);
-		}
+		$this->assignUsersWithExistingMemberMap(
+			$userCollection,
+			$this->getExistingMemberMap($userCollection->getIds()),
+		);
 	}
 
 	public function assignUser(
@@ -66,26 +48,10 @@ final class DepartmentAssigner
 			return;
 		}
 
-		$roleId = HumanResources\Service\Container::getRoleHelperService()->getEmployeeRoleId();
-		$memberCollection = new HumanResources\Item\Collection\NodeMemberCollection();
-
-		foreach ($this->departmentCollection as $department)
-		{
-			$memberCollection->add(
-				new HumanResources\Item\NodeMember(
-					entityType: HumanResources\Type\MemberEntityType::USER,
-					entityId: $user->getId(),
-					nodeId: $department->getId(),
-					active: true,
-					role: $roleId,
-				)
-			);
-		}
-
-		if (!$memberCollection->empty())
-		{
-			HumanResources\Service\Container::getNodeMemberRepository()->createByCollection($memberCollection);
-		}
+		$this->assignUserWithExistingMemberMap(
+			$user,
+			$this->getExistingMemberMap([$user->getId()]),
+		);
 	}
 
 	public function reassignUser(
@@ -97,11 +63,12 @@ final class DepartmentAssigner
 			entityType: MemberEntityType::USER,
 			nodeType: NodeEntityType::DEPARTMENT,
 		);
+		$existingMemberMap = $this->buildExistingMemberMap($currentNodeMemberCollection);
 		$newDepartmentsIds = $this->departmentCollection->map(
-			fn (\Bitrix\Intranet\Entity\Department $department) => $department->getId()
+			fn (\Bitrix\Intranet\Entity\Department $department) => $department->getId(),
 		);
 		$nodeMemberCollectionToRemove = $currentNodeMemberCollection->filter(
-			fn(NodeMember $nodeMember) => !in_array($nodeMember->nodeId, $newDepartmentsIds)
+			fn(NodeMember $nodeMember) => !in_array($nodeMember->nodeId, $newDepartmentsIds),
 		);
 
 		if (!$nodeMemberCollectionToRemove->empty())
@@ -109,7 +76,12 @@ final class DepartmentAssigner
 			HumanResources\Service\Container::getNodeMemberRepository()->removeByCollection($nodeMemberCollectionToRemove);
 		}
 
-		$this->assignUser($user);
+		if (!$this->available || $this->departmentCollection->empty())
+		{
+			return;
+		}
+
+		$this->assignUserWithExistingMemberMap($user, $existingMemberMap);
 	}
 
 	public function reassignUsers(
@@ -121,11 +93,12 @@ final class DepartmentAssigner
 			entityType: MemberEntityType::USER,
 			nodeType: NodeEntityType::DEPARTMENT,
 		);
+		$existingMemberMap = $this->buildExistingMemberMap($currentNodeMemberCollection);
 		$newDepartmentsIds = $this->departmentCollection->map(
-			fn (\Bitrix\Intranet\Entity\Department $department) => $department->getId()
+			fn (\Bitrix\Intranet\Entity\Department $department) => $department->getId(),
 		);
 		$nodeMemberCollectionToRemove = $currentNodeMemberCollection->filter(
-			fn(NodeMember $nodeMember) => !in_array($nodeMember->nodeId, $newDepartmentsIds)
+			fn(NodeMember $nodeMember) => !in_array($nodeMember->nodeId, $newDepartmentsIds),
 		);
 
 		if (!$nodeMemberCollectionToRemove->empty())
@@ -133,6 +106,106 @@ final class DepartmentAssigner
 			HumanResources\Service\Container::getNodeMemberRepository()->removeByCollection($nodeMemberCollectionToRemove);
 		}
 
-		$this->assignUsers($userCollection);
+		if (!$this->available || $this->departmentCollection->empty() || $userCollection->empty())
+		{
+			return;
+		}
+
+		$this->assignUsersWithExistingMemberMap($userCollection, $existingMemberMap);
+	}
+
+	private function assignUsersWithExistingMemberMap(
+		UserCollection $userCollection,
+		array $existingMemberMap,
+	): void
+	{
+		$roleId = HumanResources\Service\Container::getRoleHelperService()->getEmployeeRoleId();
+		$memberCollection = new HumanResources\Item\Collection\NodeMemberCollection();
+
+		foreach ($this->departmentCollection as $department)
+		{
+			foreach ($userCollection as $user)
+			{
+				if (isset($existingMemberMap[$user->getId()][$department->getId()]))
+				{
+					continue;
+				}
+
+				$memberCollection->add(
+					new HumanResources\Item\NodeMember(
+						entityType: HumanResources\Type\MemberEntityType::USER,
+						entityId: $user->getId(),
+						nodeId: $department->getId(),
+						active: true,
+						role: $roleId,
+					),
+				);
+			}
+		}
+
+		if (!$memberCollection->empty())
+		{
+			HumanResources\Service\Container::getNodeMemberRepository()->createByCollection($memberCollection);
+		}
+	}
+
+	private function assignUserWithExistingMemberMap(
+		User $user,
+		array $existingMemberMap,
+	): void
+	{
+		$roleId = HumanResources\Service\Container::getRoleHelperService()->getEmployeeRoleId();
+		$memberCollection = new HumanResources\Item\Collection\NodeMemberCollection();
+
+		foreach ($this->departmentCollection as $department)
+		{
+			if (isset($existingMemberMap[$user->getId()][$department->getId()]))
+			{
+				continue;
+			}
+
+			$memberCollection->add(
+				new HumanResources\Item\NodeMember(
+					entityType: HumanResources\Type\MemberEntityType::USER,
+					entityId: $user->getId(),
+					nodeId: $department->getId(),
+					active: true,
+					role: $roleId,
+				),
+			);
+		}
+
+		if (!$memberCollection->empty())
+		{
+			HumanResources\Service\Container::getNodeMemberRepository()->createByCollection($memberCollection);
+		}
+	}
+
+	private function getExistingMemberMap(array $userIds): array
+	{
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$currentNodeMemberCollection = Container::getNodeMemberRepository()->findAllByEntityIdsAndEntityTypeAndNodeType(
+			entityIds: $userIds,
+			entityType: MemberEntityType::USER,
+			nodeType: NodeEntityType::DEPARTMENT,
+		);
+
+		return $this->buildExistingMemberMap($currentNodeMemberCollection);
+	}
+
+	private function buildExistingMemberMap(NodeMemberCollection $nodeMemberCollection): array
+	{
+		$result = [];
+
+		foreach ($nodeMemberCollection as $nodeMember)
+		{
+			$result[$nodeMember->entityId][$nodeMember->nodeId] = true;
+		}
+
+		return $result;
 	}
 }

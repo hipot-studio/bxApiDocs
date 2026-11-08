@@ -7,6 +7,7 @@ namespace Bitrix\Mail\Internal\Service\SourceGeneration;
 use Bitrix\Mail\Internal\Agent\DeletedMailboxCleanupAgent;
 use Bitrix\Mail\Internals\MailEntityDataTable;
 use Bitrix\Mail\Internals\MailEntityOptionsTable;
+use Bitrix\Mail\Internals\MigrationManualControlTable;
 use Bitrix\Mail\MailMessageTable;
 use Bitrix\Main\Application;
 
@@ -114,11 +115,21 @@ final class MailboxDeletion
 
 		try
 		{
+			$done = self::stage($mailboxId, 'the manual migration control', static function () use ($mailboxId): bool {
+				$connection = Application::getConnection();
+				if ($connection->isTableExists(MigrationManualControlTable::getTableName()))
+				{
+					MigrationManualControlTable::deleteList(['=MAILBOX_ID' => $mailboxId]);
+				}
+
+				return true;
+			});
+
 			$done = self::stage(
 				$mailboxId,
 				'the physical data',
 				static fn (): bool => self::deletePhysicalData($mailboxId),
-			);
+			) && $done;
 
 			/*
 				The bookkeeping of the generations has a stage of its own although the statement

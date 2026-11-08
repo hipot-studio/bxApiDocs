@@ -10,6 +10,7 @@ use Bitrix\Main\Text;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Currency;
+use Bitrix\Main\Web\Uri;
 
 /**
  * @global \CUser $USER
@@ -1146,11 +1147,11 @@ abstract class ElementList extends Base
 				unset($this->pagerParameters['BASE_LINK']);
 			}
 
-			$navComponentParameters['BASE_LINK'] = \CHTTP::urlAddParams($pagerBaseLink, $this->pagerParameters, array('encode' => true));
+			$navComponentParameters['BASE_LINK'] = (string)(new Uri($pagerBaseLink))->addParams($this->pagerParameters);
 		}
 		else
 		{
-			$uri = new Main\Web\Uri($this->arParams['CURRENT_BASE_PAGE']);
+			$uri = new Uri($this->arParams['CURRENT_BASE_PAGE']);
 			$uri->deleteParams(array(
 				'PAGEN_'.$elementIterator->NavNum,
 				'SIZEN_'.$elementIterator->NavNum,

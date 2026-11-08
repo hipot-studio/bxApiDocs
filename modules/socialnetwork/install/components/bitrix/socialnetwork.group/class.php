@@ -481,9 +481,11 @@ final class SocialnetworkGroup extends CBitrixComponent implements \Bitrix\Main\
 			return;
 		}
 
-		$result['Moderators'] = [];
+		$result['Moderators'] = [
+			'List' => false,
+			'Count' => 0,
+		];
 
-		$result['Moderators']['List'] = false;
 		while ($moderatorFields = $res->getNext())
 		{
 			if ($result['Moderators']['List'] === false)
@@ -492,6 +494,15 @@ final class SocialnetworkGroup extends CBitrixComponent implements \Bitrix\Main\
 			}
 
 			$result['Moderators']['List'][] = $this->getUserFields($moderatorFields);
+		}
+
+		if (is_array($result['Moderators']['List']))
+		{
+			$result['Moderators']['Count'] = $this->getActiveRelationCount(
+				(int)$result['Group']['ID'],
+				[ '=ROLE' => UserToGroupTable::ROLE_MODERATOR ],
+				count($result['Moderators']['List'])
+			);
 		}
 	}
 
@@ -515,8 +526,10 @@ final class SocialnetworkGroup extends CBitrixComponent implements \Bitrix\Main\
 			return;
 		}
 
-		$result['Members'] = [];
-		$result['Members']['List'] = false;
+		$result['Members'] = [
+			'List' => false,
+			'Count' => 0,
+		];
 
 		while ($memberFields = $res->getNext())
 		{
@@ -527,6 +540,30 @@ final class SocialnetworkGroup extends CBitrixComponent implements \Bitrix\Main\
 
 			$result['Members']['List'][] = $this->getUserFields($memberFields);
 		}
+
+		if (is_array($result['Members']['List']))
+		{
+			$result['Members']['Count'] = $this->getActiveRelationCount(
+				(int)$result['Group']['ID'],
+				[ '<=ROLE' => UserToGroupTable::ROLE_USER ],
+				count($result['Members']['List'])
+			);
+		}
+	}
+
+	private function getActiveRelationCount(int $groupId, array $roleFilter, int $loadedCount): int
+	{
+		$listIsComplete = ($loadedCount < (int)$this->arParams['ITEMS_COUNT']);
+		if ($listIsComplete)
+		{
+			return $loadedCount;
+		}
+
+		$filter = $roleFilter;
+		$filter['=GROUP_ID'] = $groupId;
+		$filter['=USER.ACTIVE'] = 'Y';
+
+		return (int)UserToGroupTable::getCount($filter);
 	}
 
 	private function setScrumMaster(&$result): void

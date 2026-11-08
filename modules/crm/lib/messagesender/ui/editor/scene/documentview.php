@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\MessageSender\UI\Editor\Scene;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\MessageService\Public\UI\MessageEditor\ContentProvider;
 use Bitrix\MessageService\Public\UI\MessageEditor\Context;
 use Bitrix\MessageService\Public\UI\MessageEditor\ViewChannel;
@@ -14,6 +15,11 @@ final class DocumentView extends BaseScene
 	public function getId(): string
 	{
 		return self::ID;
+	}
+
+	public function getName(): string
+	{
+		return (string)Loc::getMessage('CRM_MS_EDITOR_SCENE_DOCUMENT_VIEW_NAME');
 	}
 
 	public function filterViewChannels(array $viewChannels, Context $context): array

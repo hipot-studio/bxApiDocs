@@ -41,6 +41,9 @@ class AccessCode implements PropertyValidationAttributeInterface
 
 	private function isValidAccessCode(mixed $code): bool
 	{
-		return \Bitrix\Main\Access\AccessCode::isValid($code);
+		return is_string($code)
+			&& !str_ends_with($code, "\n")
+			&& \Bitrix\Main\Access\AccessCode::isValid($code)
+		;
 	}
 }

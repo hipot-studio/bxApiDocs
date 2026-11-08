@@ -2,6 +2,7 @@
 
 namespace Bitrix\Disk\ZipNginx;
 
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internals\ObjectTable;
@@ -16,7 +17,12 @@ class Archive extends Response\Zip\Archive
 {
 	private const MAX_FILES_IN_ARCHIVE = 1000;
 
-	public static function createByObjects(string $name, ObjectCollection $objectCollection, int $userId): static
+	public static function createByObjects(
+		string $name,
+		ObjectCollection $objectCollection,
+		int $userId,
+		bool $skipRootFolder = false,
+	): static
 	{
 		$entryBuilder = new Response\Zip\EntryBuilder();
 
@@ -31,14 +37,52 @@ class Archive extends Response\Zip\Archive
 					continue;
 				}
 
-				if ($archive->isPossibleUseEmptyDirectory())
+				if (!$skipRootFolder && $archive->isPossibleUseEmptyDirectory())
 				{
 					$directory = $entryBuilder->createEmptyDirectory($object->getName());
 					$archive->addEntry($directory);
 				}
 
-				$archive->collectDescendants($object, $securityContext, $object->getName() . '/');
+				$archive->collectDescendants(
+					folder: $object,
+					securityContext: $securityContext,
+					currentPath: $skipRootFolder ? '' : $object->getName() . '/',
+				);
 			}
+			if ($object instanceof File)
+			{
+				$archive->addEntry(ArchiveEntry::createFromFileModel($object));
+			}
+		}
+
+		return $archive;
+	}
+
+	public static function createByUnifiedObjects(
+		string $name,
+		ObjectCollection $objectCollection,
+		bool $skipRootFolder = false,
+	): static
+	{
+		$entryBuilder = new Response\Zip\EntryBuilder();
+		$archive = new static($name . '.zip');
+
+		foreach ($objectCollection as $object)
+		{
+			if ($object instanceof Folder)
+			{
+				if (!$skipRootFolder && $archive->isPossibleUseEmptyDirectory())
+				{
+					$directory = $entryBuilder->createEmptyDirectory($object->getName());
+					$archive->addEntry($directory);
+				}
+
+				$archive->collectDescendantsWithoutRightsCheck(
+					$object,
+					$skipRootFolder ? '' : $object->getName() . '/',
+				);
+			}
+
 			if ($object instanceof File)
 			{
 				$archive->addEntry(ArchiveEntry::createFromFileModel($object));
@@ -82,6 +126,43 @@ class Archive extends Response\Zip\Archive
 					$currentPath . $object->getName() . '/'
 				);
 
+			}
+			elseif ($object instanceof File)
+			{
+				$this->addEntry(ArchiveEntry::createFromFileModel($object, $currentPath . $object->getName()));
+			}
+		}
+	}
+
+	protected function collectDescendantsWithoutRightsCheck(Folder $folder, string $currentPath = ''): void
+	{
+		$entryBuilder = new Response\Zip\EntryBuilder();
+
+		$query = ObjectTable::getChildren(
+			objectId: $folder->getId(),
+			parameters: [
+				'filter' => [
+					'DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,
+				],
+			],
+		);
+
+		while ($row = $query->fetch())
+		{
+			$object = BaseObject::buildFromArray($row);
+
+			if ($object instanceof Folder)
+			{
+				if ($this->isPossibleUseEmptyDirectory())
+				{
+					$directory = $entryBuilder->createEmptyDirectory($currentPath . $object->getName());
+					$this->addEntry($directory);
+				}
+
+				$this->collectDescendantsWithoutRightsCheck(
+					$object,
+					$currentPath . $object->getName() . '/',
+				);
 			}
 			elseif ($object instanceof File)
 			{
@@ -156,6 +237,36 @@ class Archive extends Response\Zip\Archive
 		return false;
 	}
 
+	public static function isFileLimitExceededByUnifiedObjects(ObjectCollection $objectCollection): bool
+	{
+		$fileCount = 0;
+		$maxFilesInArchive = self::getMaxFilesInArchive();
+
+		foreach ($objectCollection as $object)
+		{
+			if ($object instanceof File)
+			{
+				$fileCount++;
+			}
+
+			if ($object instanceof Folder)
+			{
+				$fileCount += self::countFilesInFolder(
+					folder: $object,
+					limit: $maxFilesInArchive - $fileCount,
+					shouldDisableRightsCheck: true,
+				);
+			}
+
+			if ($fileCount > $maxFilesInArchive)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	/**
 	 * Checks if the number of files in the specified folder (including descendants) exceeds the maximum allowed.
 	 *
@@ -176,19 +287,28 @@ class Archive extends Response\Zip\Archive
 	 * If the number of files exceeds the maximum allowed, the method may return a value greater than the real count.
 	 *
 	 * @param Folder $folder Target folder to count files in.
-	 * @param SecurityContext $securityContext Security context for accessing folder contents.
+	 * @param SecurityContext|null $securityContext Security context for accessing folder contents.
+	 * @param int|null $limit Maximum file count to check.
+	 * @param bool $shouldDisableRightsCheck Whether rights check should be disabled.
 	 *
 	 * @return int Number of files found, or a value greater than the real count if the limit is exceeded.
 	 */
-	private static function countFilesInFolder(Folder $folder, SecurityContext $securityContext): int
+	private static function countFilesInFolder(
+		Folder $folder,
+		?SecurityContext $securityContext = null,
+		?int $limit = null,
+		bool $shouldDisableRightsCheck = false,
+	): int
 	{
 		$realFolder = $folder->getRealObject();
+
 		if (!$realFolder)
 		{
 			return 0;
 		}
 
-		$maxFilesInArchive = self::getMaxFilesInArchive();
+		$maxFilesInArchive = $limit ?? self::getMaxFilesInArchive();
+
 		$parameters = [
 			'select' => ['ID'],
 			'filter' => [
@@ -197,9 +317,24 @@ class Archive extends Response\Zip\Archive
 			],
 			'limit' => $maxFilesInArchive + 1,
 		];
-		$parameters = Driver::getInstance()
-			->getRightsManager()
-			->addRightsCheck($securityContext, $parameters, ['ID', 'CREATED_BY']);
+
+		if (!$shouldDisableRightsCheck)
+		{
+			if (!$securityContext)
+			{
+				return 0;
+			}
+
+			$parameters =
+				Driver::getInstance()
+					->getRightsManager()
+					->addRightsCheck(
+						securityContext: $securityContext,
+						parameters: $parameters,
+						specificColumns: ['ID', 'CREATED_BY'],
+					)
+			;
+		}
 
 		$fileCount = 0;
 		$query = ObjectTable::getDescendants($realFolder->getId(), $parameters);
@@ -221,7 +356,7 @@ class Archive extends Response\Zip\Archive
 	 *
 	 * @return int
 	 */
-	private static function getMaxFilesInArchive(): int
+	public static function getMaxFilesInArchive(): int
 	{
 		return (int)Option::get('disk', 'max_files_in_archive', self::MAX_FILES_IN_ARCHIVE);
 	}

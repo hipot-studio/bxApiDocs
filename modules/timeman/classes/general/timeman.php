@@ -8,6 +8,7 @@ use Bitrix\Timeman\Integration\Humanresources\ManagersResolver;
 use Bitrix\Timeman\Integration\Humanresources\SubordinateAccessUsersResolver;
 use Bitrix\Timeman\Model\Schedule\Schedule;
 use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecord;
+use Bitrix\Timeman\Repository\Query\RealUserFilter;
 use Bitrix\Timeman\Service\DependencyManager;
 use Bitrix\Timeman\Integration;
 
@@ -350,29 +351,61 @@ class CTimeMan
 
 					if ($arAccessSettings['READ']['EMPLOYEE'] >= 1)
 					{
+						$colleagues = [];
 						$dbUsers = CIntranetUtils::GetDepartmentColleagues(null, false, false, 'Y', ['ID']);
 						while ($arRes = $dbUsers->Fetch())
 						{
-							$access['READ'][] = $arRes['ID'];
+							$colleagues[] = $arRes['ID'];
+						}
+
+						$realColleagues = array_fill_keys(
+							RealUserFilter::filterRealUserIds(array_map('intval', $colleagues)),
+							true
+						);
+
+						foreach ($colleagues as $colleagueId)
+						{
+							if (isset($realColleagues[(int)$colleagueId]))
+							{
+								$access['READ'][] = $colleagueId;
+							}
 						}
 					}
 
+					$subordinates = [];
 					$dbUsers = CIntranetUtils::GetSubordinateEmployees($USER->GetID(), $arAccessSettings['READ']['HEAD'] == 1, 'Y', ['ID']);
 					while ($arRes = $dbUsers->Fetch())
 					{
-						if ($arAccessSettings['READ']['HEAD'] == 2)
-						{
-							$access['READ'] = ['*'];
-							break;
-						}
+						$subordinates[] = $arRes;
+					}
 
-						if (!isset($subordinateList[intval($arAccessSettings['READ']['HEAD'])]))
-						{
-							$subordinateList[intval($arAccessSettings['READ']['HEAD'])] = [];
-						}
+					if ($arAccessSettings['READ']['HEAD'] == 2 && !empty($subordinates))
+					{
+						$access['READ'] = ['*'];
+					}
+					else
+					{
+						$realSubordinates = array_fill_keys(
+							RealUserFilter::filterRealUserIds(
+								array_map(static fn (array $row): int => (int)$row['ID'], $subordinates)
+							),
+							true
+						);
 
-						$subordinateList[intval($arAccessSettings['READ']['HEAD'])][] = $arRes;
-						$access['READ'][] = $arRes['ID'];
+						foreach ($subordinates as $arRes)
+						{
+							if (!isset($subordinateList[intval($arAccessSettings['READ']['HEAD'])]))
+							{
+								$subordinateList[intval($arAccessSettings['READ']['HEAD'])] = [];
+							}
+
+							$subordinateList[intval($arAccessSettings['READ']['HEAD'])][] = $arRes;
+
+							if (isset($realSubordinates[(int)$arRes['ID']]))
+							{
+								$access['READ'][] = $arRes['ID'];
+							}
+						}
 					}
 
 					if ($access['READ'] !== ['*'])
@@ -514,7 +547,9 @@ class CTimeMan
 			$arEmployees = array_merge($arEmployees, $subordinateEmployees);
 		}
 
-		return array_values(array_unique($arEmployees));
+		return RealUserFilter::filterRealUserIds(
+			array_map('intval', array_unique($arEmployees))
+		);
 	}
 
 	public static function GetSectionPersonalSettings($section_id, $bHideParentLinks = false, $arNeededSettings = null)

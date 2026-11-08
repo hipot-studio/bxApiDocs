@@ -41,7 +41,7 @@ class CIntranetSearchTitleComponent extends CBitrixComponent
 		$userPageURLTemplate = Option::get('socialnetwork', 'user_page', SITE_DIR.'company/personal/', SITE_ID).'user/#user_id#/';
 
 		$userFilter = array(
-			'ACTIVE' => 'Y',
+			'=ACTIVE' => 'Y',
 			'!=EXTERNAL_AUTH_ID' => \Bitrix\Main\UserTable::getExternalUserTypes()
 		);
 

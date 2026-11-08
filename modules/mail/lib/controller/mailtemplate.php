@@ -7,6 +7,7 @@ namespace Bitrix\Mail\Controller;
 use Bitrix\Intranet;
 use Bitrix\Mail\Integration\Crm\CrmTemplateProvider;
 use Bitrix\Mail\Internal\Entity\MailTemplate\PreparedTemplate;
+use Bitrix\Mail\Internal\Entity\MailTemplate\PreparedTemplateAttachment;
 use Bitrix\Mail\Internal\Entity\MailTemplate\TemplateListItem;
 use Bitrix\Mail\Internal\Entity\MailTemplate\TemplateReference;
 use Bitrix\Mail\Internal\Service\MailTemplate\TemplateCatalog;
@@ -25,6 +26,7 @@ class MailTemplate extends Controller
 
 	private const DEFAULT_SEARCH_LIMIT = 20;
 	private const MAX_SEARCH_LIMIT = 50;
+	private const MAX_TEMPLATE_SUBJECT_LENGTH = 128;
 
 	/**
 	 * The query is looked up in the title of a template, and a title holds 128 characters, so a longer query
@@ -58,32 +60,51 @@ class MailTemplate extends Controller
 			'quickList' => $get,
 			'search' => $get,
 			'prepare' => $post,
-			'setRememberLast' => $post,
+			'create' => $post,
 			'recordUsage' => $post,
 		];
 	}
 
-	public function quickListAction(): array
+	/**
+	 * Neither parameter is declared with a type, and for one reason: the binder refuses a value the
+	 * declaration does not fit before the action is reached, so `?array` would answer a scalar reference with
+	 * an error of the binder instead of the code this action promises, and `bool` would let a `"false"` of
+	 * form data reach a cast that turns it into `true` (`mixed` no binder accepts at all,
+	 * `Bitrix\Main\Engine\AutoWire\TypeDeclarationChecker`). Both are read here instead, and an absent value
+	 * is not a malformed one: only a value that is there is read, anything unreadable is refused.
+	 *
+	 * @param mixed $priorityReference
+	 * @param mixed $pinRecentlyCreated
+	 */
+	public function quickListAction($priorityReference = null, $pinRecentlyCreated = null): ?array
 	{
-		$userId = $this->getUserId();
-		$history = $this->createUsageHistory();
-		$providers = $this->createProviders();
-		$lastHistoryReference = $history->getReferences($userId)[0] ?? null;
-		$catalog = new TemplateCatalog($providers, $history);
-		$items = $catalog->quickList($userId);
-		$rememberLast = $catalog->getRememberLast($userId);
-		$autoApplyReference = $rememberLast
-			? $this->resolveAutoApplyReference($providers, $lastHistoryReference, $userId)
-			: null
-		;
+		if ($priorityReference !== null)
+		{
+			if (!is_array($priorityReference))
+			{
+				return $this->invalidArgument();
+			}
 
-		return [
-			'items' => array_map($this->serializeListItem(...), $items),
-			'rememberLast' => $rememberLast,
-			'autoApply' => $autoApplyReference !== null
-				? $this->serializeReference($autoApplyReference)
-				: null,
-		];
+			$priorityReference = $this->createReference($priorityReference);
+			if ($priorityReference === null)
+			{
+				return null;
+			}
+		}
+
+		$pinRecentlyCreated = $pinRecentlyCreated === null ? false : $this->readFlag($pinRecentlyCreated);
+		if ($pinRecentlyCreated === null)
+		{
+			return $this->invalidArgument();
+		}
+
+		$items = $this->createCatalog()->quickList(
+			$this->getUserId(),
+			$priorityReference,
+			$pinRecentlyCreated,
+		);
+
+		return ['items' => array_map($this->serializeListItem(...), $items)];
 	}
 
 	public function searchAction(
@@ -134,24 +155,34 @@ class MailTemplate extends Controller
 		return ['template' => $this->serializePreparedTemplate($template)];
 	}
 
-	/**
-	 * The parameter is left without a type declaration on purpose: `bool` would let the binder hand a
-	 * `"false"` of form data over to a cast that turns it into `true`, and `mixed` no binder accepts at all
-	 * (`Bitrix\Main\Engine\AutoWire\TypeDeclarationChecker`). The action reads the flag by itself instead.
-	 *
-	 * @param mixed $enabled
-	 */
-	public function setRememberLastAction($enabled = null): ?array
+	public function createAction(string $subject, string $bodyHtml = '', string $emailFrom = ''): ?array
 	{
-		$isEnabled = $this->readFlag($enabled);
-		if ($isEnabled === null)
+		$subject = trim($subject);
+		if ($subject === '' || mb_strlen($subject) > self::MAX_TEMPLATE_SUBJECT_LENGTH)
 		{
 			return $this->invalidArgument();
 		}
 
-		$this->createCatalog()->setRememberLast($this->getUserId(), $isEnabled);
+		$result = $this->createPersonalTemplate($subject, $bodyHtml, $emailFrom, $this->getUserId());
+		if (!$this->transferCreationResultErrors($result))
+		{
+			return null;
+		}
 
-		return ['enabled' => $isEnabled];
+		$templateId = (int)($result->getData()['templateId'] ?? 0);
+		if ($templateId <= 0)
+		{
+			$this->addError(new Error(
+				'Template creation failed.',
+				CrmTemplateProvider::ERROR_CREATION_FAILED,
+			));
+
+			return null;
+		}
+
+		return ['reference' => $this->serializeReference(
+			new TemplateReference(CrmTemplateProvider::SOURCE, $templateId),
+		)];
 	}
 
 	public function recordUsageAction(array $reference): ?array
@@ -187,6 +218,16 @@ class MailTemplate extends Controller
 		return [CrmTemplateProvider::SOURCE => new CrmTemplateProvider()];
 	}
 
+	protected function createPersonalTemplate(
+		string $subject,
+		string $bodyHtml,
+		string $emailFrom,
+		int $userId,
+	): Result
+	{
+		return (new CrmTemplateProvider())->createPersonal($subject, $bodyHtml, $emailFrom, [], $userId);
+	}
+
 	protected function createUsageHistory(): TemplateUsageHistory
 	{
 		return new TemplateUsageHistory();
@@ -206,7 +247,7 @@ class MailTemplate extends Controller
 	{
 		$source = $data['source'] ?? null;
 		$id = $data['id'] ?? null;
-		if (is_string($id) && ctype_digit($id))
+		if (is_string($id) && preg_match('/^[0-9]+$/D', $id) === 1)
 		{
 			$id = (int)$id;
 		}
@@ -277,47 +318,25 @@ class MailTemplate extends Controller
 		return false;
 	}
 
-	/**
-	 * @param array<string, TemplateProvider> $providers
-	 */
-	private function resolveAutoApplyReference(
-		array $providers,
-		?TemplateReference $reference,
-		int $userId,
-	): ?TemplateReference
+	private function transferCreationResultErrors(Result $result): bool
 	{
-		if ($reference === null)
+		if ($result->isSuccess())
 		{
-			return null;
+			return true;
 		}
 
-		$provider = $providers[$reference->getSource()] ?? null;
-		if (!$provider instanceof TemplateProvider)
+		foreach ($result->getErrors() as $error)
 		{
-			return null;
+			$providerUnavailable = $error->getCode() === TemplateProvider::ERROR_PROVIDER_UNAVAILABLE;
+			$this->addError(new Error(
+				$providerUnavailable ? 'Template provider is unavailable.' : 'Template creation failed.',
+				$providerUnavailable
+					? TemplateProvider::ERROR_PROVIDER_UNAVAILABLE
+					: CrmTemplateProvider::ERROR_CREATION_FAILED,
+			));
 		}
 
-		try
-		{
-			if (!$provider->isAvailable($userId))
-			{
-				return null;
-			}
-
-			$items = $provider->getByIds([$reference], $userId);
-		}
-		catch (\Throwable)
-		{
-			return null;
-		}
-
-		$item = $items[0] ?? null;
-		if (!$item instanceof TemplateListItem || !$item->canApply() || !$item->getReference()->equals($reference))
-		{
-			return null;
-		}
-
-		return $item->getReference();
+		return false;
 	}
 
 	private function errorMessage(string $code): string
@@ -359,6 +378,20 @@ class MailTemplate extends Controller
 			'reference' => $this->serializeReference($template->getReference()),
 			'subject' => $template->getSubject(),
 			'bodyHtml' => $template->getBodyHtml(),
+			'attachments' => array_map(
+				$this->serializePreparedAttachment(...),
+				$template->getAttachments(),
+			),
+		];
+	}
+
+	private function serializePreparedAttachment(PreparedTemplateAttachment $attachment): array
+	{
+		return [
+			'id' => $attachment->getId(),
+			'name' => $attachment->getName(),
+			'size' => $attachment->getSize(),
+			'contentType' => $attachment->getContentType(),
 		];
 	}
 }

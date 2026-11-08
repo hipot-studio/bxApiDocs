@@ -3,8 +3,7 @@
 namespace Bitrix\Tasks\Provider\Query;
 
 use Bitrix\Main\ORM\Fields\ExpressionField;
-use Bitrix\Tasks\Access\ActionDictionary;
-use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\Provider\Exception\InvalidGroupByException;
 use Bitrix\Tasks\Provider\Exception\InvalidOrderException;
 use Bitrix\Tasks\Provider\Exception\InvalidSelectException;
@@ -13,6 +12,13 @@ use CTasks;
 class TaskQuery
 	implements TaskQueryInterface
 {
+	/**
+	 * Order modifier: rows without a value go last regardless of the direction of the main key.
+	 */
+	public const SORT_MODIFIER_EMPTY_LAST = 'EMPTY_LAST';
+	public const SORT_ASC_EMPTY_LAST = self::SORT_ASC . ',' . self::SORT_MODIFIER_EMPTY_LAST;
+	public const SORT_DESC_EMPTY_LAST = self::SORT_DESC . ',' . self::SORT_MODIFIER_EMPTY_LAST;
+
 	private string $id;
 	private int $userId;
 	private int $behalfUser = 0;
@@ -94,7 +100,7 @@ class TaskQuery
 			return false;
 		}
 
-		if (TaskAccessController::can($this->userId, ActionDictionary::ACTION_TASK_ADMIN))
+		if (UserModel::createFromId($this->userId)->isAdmin())
 		{
 			return false;
 		}
@@ -417,7 +423,7 @@ class TaskQuery
 			{
 				$sort = self::SORT_DESC;
 			}
-			if (!in_array($sort, [self::SORT_ASC, self::SORT_DESC]))
+			if (!$this->isSupportedSort($sort, (string)$column))
 			{
 				$sort = self::SORT_DESC;
 			}
@@ -426,6 +432,29 @@ class TaskQuery
 		}
 
 		return $result;
+	}
+
+	/**
+	 * The "empty values last" modifier only makes sense for the columns the builder can keep empty
+	 * values last for; anywhere else it is an unknown value like any other.
+	 *
+	 * @param string $sort
+	 * @param string $column
+	 * @return bool
+	 */
+	private function isSupportedSort(string $sort, string $column): bool
+	{
+		if (in_array($sort, [self::SORT_ASC, self::SORT_DESC], true))
+		{
+			return true;
+		}
+
+		if (!in_array($sort, [self::SORT_ASC_EMPTY_LAST, self::SORT_DESC_EMPTY_LAST], true))
+		{
+			return false;
+		}
+
+		return TaskQueryBuilder::supportsEmptyValuesLastOrder($column);
 	}
 
 	/**

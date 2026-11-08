@@ -232,6 +232,11 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 	 */
 	public function detectPage(): ?int
 	{
+		$this->arResult['IS_VIBE_CREATED'] = 0;
+		$this->arResult['IS_VIBE_PUBLISHED'] = false;
+		$this->arResult['IS_VIBE_FEATURE_AVAILABLE'] = false;
+		$this->arResult['IS_VIBE_IS_FREE_TARIFF_MODE'] = false;
+
 		if (
 			isset($this->arParams['SEF_MODE'])
 			&& $this->arParams['SEF_MODE'] === 'Y'
@@ -274,6 +279,11 @@ class LandingMainpagePubComponent extends LandingBaseComponent
 				if ($landing = $resLanding->fetch())
 				{
 					$this->arResult['LANDING_ID'] = (int)$landing['ID'];
+					$this->arResult['IS_VIBE_CREATED'] = (int)$landing['ID'];
+					$this->arResult['IS_VIBE_FEATURE_AVAILABLE'] = Vibe\Vibe::isFeatureEnable();
+					$this->arResult['IS_VIBE_IS_FREE_TARIFF_MODE'] = false;
+					// sef mode always shows a draft, publication alert is meaningless here
+					$this->arResult['IS_VIBE_PUBLISHED'] = true;
 				}
 			}
 		}

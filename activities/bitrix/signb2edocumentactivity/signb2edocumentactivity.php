@@ -28,6 +28,7 @@ use Bitrix\Sign\Service\Container;
  * @property string[] $editor
  * @property int $templateId
  * @property mixed $file
+ * @property string $message
  * @property string $isSubscriptionEnabled
  * @property int $documentId
  * @property string $documentStatus
@@ -36,6 +37,7 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 {
 	public const PARAM_TEMPLATE_ID = 'templateId';
 	public const PARAM_FILE = 'file';
+	public const PARAM_MESSAGE = 'message';
 	public const PARAM_RESPONSIBLE = 'responsible';
 	public const PARAM_EMPLOYEE = 'employee';
 	public const PARAM_REPRESENTATIVE = 'representative';
@@ -64,6 +66,10 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 			],
 			self::PARAM_FILE => [
 				'Type' => FieldType::FILE,
+				'Multiple' => false,
+			],
+			self::PARAM_MESSAGE => [
+				'Type' => FieldType::TEXT,
 				'Multiple' => false,
 			],
 			self::PARAM_RESPONSIBLE => [
@@ -104,6 +110,7 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 			self::PARAM_EDITOR => null,
 			self::PARAM_TEMPLATE_ID => null,
 			self::PARAM_FILE => null,
+			self::PARAM_MESSAGE => null,
 			self::PARAM_IS_SUBSCRIPTION_ENABLED => 'N',
 			//return
 			self::RETURN_PARAM_DOCUMENT_ID => null,
@@ -214,6 +221,21 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		$inviteMessage = $this->getParsedInviteMessage();
+		if ($inviteMessage !== null)
+		{
+			$validateMessageResult = (new Sign\Operation\Document\Validation\ValidateInviteMessage($inviteMessage))->launch();
+			if (!$validateMessageResult->isSuccess())
+			{
+				foreach ($validateMessageResult->getErrors() as $error)
+				{
+					$this->trackError($error->getMessage());
+				}
+
+				return CBPActivityExecutionStatus::Closed;
+			}
+		}
+
 		$blankReplacementConfig = null;
 		if ($fileId > 0)
 		{
@@ -313,6 +335,7 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 			representativeUserId: $representativeUserId,
 			memberList: $prepareMemberListForTemplateSendOperationResult->members,
 			blankReplacementConfig: $blankReplacementConfig,
+			inviteMessage: $inviteMessage,
 		);
 
 		$bindingCollection = Document\BindingCollection::emptyList();
@@ -654,6 +677,20 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 
 	protected static function getPropertiesMap(array $documentType, array $context = []): array
 	{
+		$messageProperty = self::isDocumentMessageEnabled()
+			? [
+				self::PARAM_MESSAGE => [
+					'Name' => Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_MESSAGE'),
+					'Hint' => Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_MESSAGE_HINT'),
+					'FieldName' => self::PARAM_MESSAGE,
+					'Type' => FieldType::TEXT,
+					'Multiple' => false,
+					'Required' => false,
+				],
+			]
+			: []
+		;
+
 		return [
 			self::PARAM_TEMPLATE_ID => [
 				'Name' => Loc::getMessage('SIGN_ACTIVITIES_SIGN_B2E_DOCUMENT_TEMPLATE_ID'),
@@ -705,6 +742,7 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 				'Required' => false,
 				'Settings' => self::getSignRoleFields(),
 			],
+			...$messageProperty,
 			self::PARAM_IS_SUBSCRIPTION_ENABLED => [
 				'Name' => Loc::getMessage('SIGN_ACTIVITIES_IS_SUBSCRIPTION_ENABLED'),
 				'FieldName' => self::PARAM_IS_SUBSCRIPTION_ENABLED,
@@ -713,6 +751,42 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 				'Required' => false,
 			],
 		];
+	}
+
+	/**
+	 * Expands business-process variables in the message with the standard bizproc mechanism, exactly
+	 * as the file property is resolved. The length is validated on the expanded result, because a short
+	 * template can produce a long text.
+	 */
+	private function getParsedInviteMessage(): ?string
+	{
+		if (!self::isDocumentMessageEnabled())
+		{
+			return null;
+		}
+
+		$rawValue = $this->getRawProperty(self::PARAM_MESSAGE);
+		if (!is_string($rawValue) || $rawValue === '')
+		{
+			return null;
+		}
+
+		$parsedValue = $this->ParseValue($rawValue, FieldType::TEXT);
+		if (!is_string($parsedValue))
+		{
+			return null;
+		}
+
+		$parsedValue = trim($parsedValue);
+
+		return $parsedValue === '' ? null : $parsedValue;
+	}
+
+	private static function isDocumentMessageEnabled(): bool
+	{
+		return Main\Loader::includeModule('sign')
+			&& Sign\Config\Feature::instance()->isDocumentMessageEnabled()
+		;
 	}
 
 	private static function getSignRoleFields(): array
@@ -778,6 +852,9 @@ class CBPSignB2EDocumentActivity extends CBPActivity implements IBPEventActivity
 			self::PARAM_FILE => $arCurrentValues[self::PARAM_FILE]
 				?? $arCurrentValues[self::PARAM_FILE . '_text']
 				?? '',
+			self::PARAM_MESSAGE => self::isDocumentMessageEnabled()
+				? (string)($arCurrentValues[self::PARAM_MESSAGE] ?? '')
+				: '',
 			self::PARAM_IS_SUBSCRIPTION_ENABLED => in_array(
 				$arCurrentValues[self::PARAM_IS_SUBSCRIPTION_ENABLED] ?? null,
 				['Y', 'N'],

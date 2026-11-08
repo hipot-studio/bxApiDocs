@@ -123,3 +123,22 @@
 	border-radius: 12px;
 	padding: 15px;
 }
+
+/*region Focus ring*/
+/* The stable id outweighs `.block-wrapper [tabindex]:not([tabindex="-1"]):focus-visible` (0,4,0)
+ * of the landing store theme, and the rules hold on the bare payment page as well. */
+#paysystem-yandex .form-control:focus-visible,
+#paysystem-yandex input[type="submit"]:focus-visible {
+	outline: var(--ui-focus-outline-width, 2px) solid var(--ui-color-base-1, #333333);
+	outline-offset: var(--ui-focus-outline-offset, 2px);
+	box-shadow: none;
+}
+
+/* The script parks the focus on the block after a submit, and
+ * `[tabindex="-1"]:focus { outline: 0 !important }` of the landing store theme is answered by
+ * nothing but `!important`. */
+#paysystem-yandex[tabindex="-1"]:focus-visible {
+	outline: var(--ui-focus-outline-width, 2px) solid var(--ui-color-base-1, #333333) !important;
+	outline-offset: var(--ui-focus-outline-offset, 2px) !important;
+}
+/*endregion*/

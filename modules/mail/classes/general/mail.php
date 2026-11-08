@@ -605,6 +605,16 @@ class CAllMailBox
 			return false;
 
 		$ID = \Bitrix\Mail\MailboxTable::add($arFields)->getId();
+		if ($ID > 0 && in_array($arFields['SERVER_TYPE'], array('imap', 'controller', 'domain', 'crdomain'), true))
+		{
+			\Bitrix\Mail\Internals\MailEntityOptionsTable::insertIgnore(
+				(int)$ID,
+				(int)$ID,
+				\Bitrix\Mail\Internals\MailEntityOptionsTable::MAILBOX_TYPE_NAME,
+				\Bitrix\Mail\Internals\MailEntityOptionsTable::DELIVERY_BOUNDARY_ENABLED_PROPERTY_NAME,
+				'Y',
+			);
+		}
 		if ($arFields['ACTIVE'] == 'Y' && $arFields['USER_ID'] != 0)
 		{
 			CUserCounter::Clear($arFields['USER_ID'], 'mail_unseen', $arFields['LID']);
@@ -658,6 +668,8 @@ class CAllMailBox
 		$serverType  = is_set($arFields, 'SERVER_TYPE') ? $arFields['SERVER_TYPE'] : $mbox['SERVER_TYPE'];
 		$periodCheck = is_set($arFields, 'PERIOD_CHECK') ? $arFields['PERIOD_CHECK'] : $mbox['PERIOD_CHECK'];
 
+		$userChanged = false;
+
 		if (!empty($mbox))
 		{
 			$userChanged = isset($arFields['USER_ID']) && $mbox['USER_ID'] != $arFields['USER_ID'];
@@ -703,11 +715,24 @@ class CAllMailBox
 			}
 		}
 
+		$writeMailbox = static function () use ($ID, $arFields): bool {
+			return \Bitrix\Mail\MailboxTable::update($ID, $arFields)->isSuccess();
+		};
+		$updated = array_key_exists('OPTIONS', $arFields)
+			? (new \Bitrix\Mail\Internal\Service\Mailbox\LegacyCrmImapGateWriteCoordinator())->updateMailbox(
+				$ID,
+				$arFields,
+				$writeMailbox,
+			)
+			: $writeMailbox();
+		if (!$updated)
+		{
+			return false;
+		}
+
 		\CAgent::removeAgent(sprintf('CMailbox::CheckMailAgent(%u);', $ID), 'mail');
 		\CAgent::removeAgent(sprintf('Bitrix\Mail\Helper::syncMailboxAgent(%u);', $ID), 'mail');
 		\CAgent::removeAgent(sprintf('Bitrix\Mail\Helper::cleanupMailboxAgent(%u);', $ID), 'mail');
-
-		\Bitrix\Mail\MailboxTable::update($ID, $arFields);
 
 		if (in_array($serverType, array('imap', 'controller', 'domain', 'crdomain')))
 		{
@@ -718,8 +743,86 @@ class CAllMailBox
 		if ($serverType == 'pop3' && (int) $periodCheck > 0)
 			CAgent::addAgent(sprintf('CMailbox::CheckMailAgent(%u);', $ID), 'mail', 'N', (int) $periodCheck*60);
 
+		// After the fields and not before: the handover gives the mailbox its check interval back, and the
+		// write above would put PERIOD_CHECK of the previous owner over it
+		if ($userChanged)
+		{
+			self::handOverVacationAutoReply($ID, (int)$arFields['USER_ID']);
+		}
+
+		// PERIOD_CHECK has more owners than the vacation period - a mailbox made public to CRM is given ten
+		// minutes here - and a period that shortened the mailbox holds the value it found to put it back.
+		// This is the seam every other owner writes through, while the period writes through the ORM, so a
+		// write seen here is always somebody else's
+		if (is_set($arFields, 'PERIOD_CHECK'))
+		{
+			self::rebaseVacationAutoReplyInterval($ID, (int)$arFields['PERIOD_CHECK']);
+		}
+
 		CMailbox::SMTPReload();
 		return true;
+	}
+
+	/**
+	 * The interval the period has to give back is kept in step with the owner who has just written one.
+	 *
+	 * Not behind the switch of the feature, for the same reason as the handover below: the bookkeeping has
+	 * to stay true whenever the tables are there, and a switch turned off after the feature was used would
+	 * leave a stale interval waiting to be put over the one this write chose.
+	 */
+	private static function rebaseVacationAutoReplyInterval(int $mailboxId, int $ownInterval): void
+	{
+		try
+		{
+			(new \Bitrix\Mail\Service\VacationAutoReply\VacationAutoReplyService())
+				->rebaseRememberedInterval($mailboxId, $ownInterval)
+			;
+		}
+		catch (\Throwable $exception)
+		{
+			(new \Bitrix\Main\Diag\LoggerFactory())->createById('mail.VacationAutoReply')?->error(
+				'Vacation auto-reply did not learn the new check interval of the mailbox.',
+				[
+					'mailboxId' => $mailboxId,
+					'ownInterval' => $ownInterval,
+					'error' => $exception->getMessage(),
+				],
+			);
+		}
+	}
+
+	/**
+	 * The auto-reply of the previous owner is switched off and the setting handed over with the mailbox.
+	 *
+	 * Here and not at the callers because a mailbox changes hands by more than one path - the admin form
+	 * writes USER_ID through a plain Update() of its own - and every path left out keeps an active setting
+	 * of the previous owner: his text, sent in his name, from his user context. This is where Delete()
+	 * keeps the other half of the same lifecycle, so the two read together.
+	 *
+	 * Not behind the switch of the feature on purpose, for the reason the cleanup in Delete() gives: the
+	 * setting has to be handed over whenever the tables are there, and a switch turned off after the
+	 * feature was used would leave the active row behind. What the catch is for is a portal that got the
+	 * code without the tables - the mailbox is updated all the same.
+	 */
+	private static function handOverVacationAutoReply(int $mailboxId, int $newOwnerId): void
+	{
+		try
+		{
+			(new \Bitrix\Mail\Service\VacationAutoReply\VacationAutoReplyService())
+				->handOverMailbox($mailboxId, $newOwnerId)
+			;
+		}
+		catch (\Throwable $exception)
+		{
+			(new \Bitrix\Main\Diag\LoggerFactory())->createById('mail.VacationAutoReply')?->error(
+				'Vacation auto-reply was not handed to the new mailbox owner.',
+				[
+					'mailboxId' => $mailboxId,
+					'newOwnerId' => $newOwnerId,
+					'error' => $exception->getMessage(),
+				],
+			);
+		}
 	}
 
 	/**
@@ -853,6 +956,51 @@ class CAllMailBox
 		$DB->query(sprintf('DELETE FROM b_mail_counter WHERE MAILBOX_ID = %u', $ID));
 		MailEntityOptionsTable::deleteList(['=MAILBOX_ID' => (int)$ID]);
 		$DB->query(sprintf('DELETE FROM b_mail_mailbox_list_search_index WHERE MAILBOX_ID = %u', $ID));
+		/*
+			The avatar resources are handed over to the cleanup queue instead of being deleted here: the
+			file behind a resource outlives its row and only MailboxAvatarCleanupAgent drops both, in that
+			order. Left attached they would be found by the reconciliation walk alone, days later. The ones
+			already being deleted keep their state - the agent is holding them. Same catch and the same
+			reason as the auto-reply below: a portal that got the code without the table loses no mailbox.
+		*/
+		try
+		{
+			\Bitrix\Main\Application::getConnection()->queryExecute((new \Bitrix\Main\DB\SqlExpression(
+				'UPDATE ?# SET STATE = ?s WHERE MAILBOX_ID = ?i AND STATE <> ?s',
+				\Bitrix\Mail\Internals\MailboxAvatarResourceTable::getTableName(),
+				\Bitrix\Mail\Internals\MailboxAvatarResourceTable::STATE_ORPHANED,
+				$ID,
+				\Bitrix\Mail\Internals\MailboxAvatarResourceTable::STATE_DELETING,
+			))->compile());
+		}
+		catch (\Throwable $exception)
+		{
+			(new \Bitrix\Main\Diag\LoggerFactory())->createById('mail.MailboxAvatar')?->error(
+				'Avatar resources of a deleted mailbox were not queued for cleanup.',
+				[
+					'mailboxId' => $ID,
+					'error' => $exception->getMessage(),
+				],
+			);
+		}
+		// Not behind the switch of the feature on purpose: the rows have to go whenever the tables are
+		// there, and a switch turned off after the feature was used would leave them behind. What the
+		// catch is for is a portal that got the code without the tables - the mailbox goes all the same.
+		try
+		{
+			\Bitrix\Mail\Internals\VacationAutoReplyLogTable::deleteByFilter(['=MAILBOX_ID' => $ID]);
+			\Bitrix\Mail\Internals\VacationAutoReplyTable::deleteByFilter(['=MAILBOX_ID' => $ID]);
+		}
+		catch (\Throwable $exception)
+		{
+			(new \Bitrix\Main\Diag\LoggerFactory())->createById('mail.VacationAutoReply')?->error(
+				'Vacation auto-reply rows of a deleted mailbox were not dropped.',
+				[
+					'mailboxId' => $ID,
+					'error' => $exception->getMessage(),
+				],
+			);
+		}
 
 		CMailbox::SMTPReload();
 
@@ -1975,6 +2123,11 @@ class CAllMailMessage
 				$arFields['OPTIONS']['trackable'] = \Bitrix\Main\Config\Option::get('main', 'track_outgoing_emails_read', 'Y') == 'Y';
 			}
 
+			if (!empty($params['outgoing_author_id']))
+			{
+				$arFields['OPTIONS']['outgoingAuthorId'] = (int)$params['outgoing_author_id'];
+			}
+
 			$message_id = \CMailMessage::add($arFields, $mailboxId);
 		}
 
@@ -2071,6 +2224,13 @@ class CAllMailMessage
 					if (!$arMessageParts[$i]['ATTACHMENT-ID'])
 					{
 						\CMailMessage::delete($message_id, $mailboxId);
+						/*
+							A resynchronization reuses the letter it replaces, so the one deleted here
+							may already be a member of a conversation.
+						*/
+						(new \Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill())
+							->removeMessages((int)$mailboxId, [(int)$message_id]);
+
 						return false;
 					}
 
@@ -2168,6 +2328,10 @@ class CAllMailMessage
 
 				$arFieldsForFilter = $arFields;
 				$arFieldsForFilter['FIELD_RCPT'] = $originalRecipients;
+				$arFieldsForFilter[\Bitrix\Mail\Helper\Mailbox\DeliveryContext::ORIGIN_FIELD] =
+					(string)($params['delivery_origin'] ?? \Bitrix\Mail\Helper\Mailbox\DeliveryOrigin::UNKNOWN);
+				$arFieldsForFilter[\Bitrix\Mail\Helper\Mailbox\DeliveryContext::SUPPRESS_BUILTIN_NOTIFICATIONS_FIELD] =
+					!empty($params['suppress_builtin_notifications']);
 
 				foreach (['BODY','BODY_BB','BODY_HTML','SUBJECT'] as $key)
 				{
@@ -2188,6 +2352,8 @@ class CAllMailMessage
 					'userId' => isset($mailbox['USER_ID']) ? $mailbox['USER_ID'] : null,
 					'icalAccess' => $icalAccess,
 					'isFreshArrival' => !empty($params['fresh_arrival']),
+					'deliveryOrigin' => (string)($params['delivery_origin'] ?? \Bitrix\Mail\Helper\Mailbox\DeliveryOrigin::UNKNOWN),
+					'suppressBuiltInNotifications' => !empty($params['suppress_builtin_notifications']),
 				]);
 				$event->send();
 
@@ -3709,10 +3875,30 @@ class CMailFilter
 		if(!CMailFilter::CheckFields($arFields))
 			return false;
 
-		$ID = $DB->Add("b_mail_filter", $arFields, Array("PHP_CONDITION", "ACTION_PHP"));
+		$writeFilter = static function () use ($DB, $arFields): int|false {
+			$filterId = $DB->Add('b_mail_filter', $arFields, ['PHP_CONDITION', 'ACTION_PHP']);
+			if (!$filterId)
+			{
+				return false;
+			}
+			if (is_set($arFields, 'CONDITIONS'))
+			{
+				CMailFilterCondition::SetConditions($filterId, $arFields['CONDITIONS']);
+			}
 
-		if(is_set($arFields, "CONDITIONS"))
-			CMailFilterCondition::SetConditions($ID, $arFields["CONDITIONS"]);
+			return (int)$filterId;
+		};
+		$ID = ($arFields['ACTION_TYPE'] ?? '') === 'crm_imap'
+			? (new \Bitrix\Mail\Internal\Service\Mailbox\LegacyCrmImapGateWriteCoordinator())->addFilter(
+				(int)$arFields['MAILBOX_ID'],
+				(string)$arFields['ACTION_TYPE'],
+				$writeFilter,
+			)
+			: $writeFilter();
+		if (!$ID)
+		{
+			return false;
+		}
 
 		CMailbox::SMTPReload();
 
@@ -3748,22 +3934,33 @@ class CMailFilter
 		if(!CMailFilter::CheckFields($arFields, $ID))
 			return false;
 
-		$arUpdateBinds = array();
-		$strUpdate = $DB->PrepareUpdateBind("b_mail_filter", $arFields,"", false, $arUpdateBinds);
+		$updated = (new \Bitrix\Mail\Internal\Service\Mailbox\LegacyCrmImapGateWriteCoordinator())->updateFilter(
+			$ID,
+			$arFields,
+			static function () use ($DB, $ID, $arFields): bool {
+				$arUpdateBinds = [];
+				$strUpdate = $DB->PrepareUpdateBind('b_mail_filter', $arFields, '', false, $arUpdateBinds);
+				$strSql = 'UPDATE b_mail_filter SET ' . $strUpdate . ' WHERE ID=' . $ID;
 
-		$strSql =
-			"UPDATE b_mail_filter SET ".
-				$strUpdate." ".
-			"WHERE ID=".$ID;
+				$arBinds = [];
+				foreach ($arUpdateBinds as $fieldId)
+				{
+					$arBinds[$fieldId] = $arFields[$fieldId];
+				}
 
-		$arBinds = array();
-		foreach($arUpdateBinds as $field_id)
-			$arBinds[$field_id] = $arFields[$field_id];
+				$DB->QueryBind($strSql, $arBinds);
+				if (is_set($arFields, 'CONDITIONS'))
+				{
+					CMailFilterCondition::SetConditions($ID, $arFields['CONDITIONS']);
+				}
 
-		$DB->QueryBind($strSql, $arBinds);
-
-		if(is_set($arFields, "CONDITIONS"))
-			CMailFilterCondition::SetConditions($ID, $arFields["CONDITIONS"]);
+				return true;
+			},
+		);
+		if (!$updated)
+		{
+			return false;
+		}
 
 		CMailbox::SMTPReload();
 
@@ -3774,16 +3971,27 @@ class CMailFilter
 	{
 		global $DB;
 		$ID = intval($ID);
-		$dbr = CMailFilterCondition::GetList(Array(), Array("FILTER_ID"=>$ID));
-		while($r = $dbr->Fetch())
+		$result = (new \Bitrix\Mail\Internal\Service\Mailbox\LegacyCrmImapGateWriteCoordinator())->deleteFilter(
+			$ID,
+			static function () use ($DB, $ID) {
+				$dbr = CMailFilterCondition::GetList([], ['FILTER_ID' => $ID]);
+				while ($condition = $dbr->Fetch())
+				{
+					if (!CMailFilterCondition::Delete($condition['ID']))
+					{
+						return false;
+					}
+				}
+
+				return $DB->Query('DELETE FROM b_mail_filter WHERE ID=' . $ID, true);
+			},
+		);
+		if ($result !== false)
 		{
-			if(!CMailFilterCondition::Delete($r["ID"]))
-				return false;
+			CMailbox::SMTPReload();
 		}
 
-		$strSql = "DELETE FROM b_mail_filter WHERE ID=".$ID;
-		CMailbox::SMTPReload();
-		return $DB->Query($strSql, true);
+		return $result;
 	}
 
 	public static function Filter($arFields, $event, $FILTER_ID=false, $PARENT_FILTER_ID = false)
@@ -4114,6 +4322,9 @@ class CMailFilter
 						)
 					);
 				CMailMessage::Delete($MESSAGE_ID, $MAILBOX_ID);
+				// The letter is gone for good, so the conversation projection may not keep it either
+				(new \Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill())
+					->removeMessages((int)$MAILBOX_ID, [(int)$MESSAGE_ID]);
 			}
 
 			if($arFilterParams["ACTION_STOP_EXEC"]=="Y")

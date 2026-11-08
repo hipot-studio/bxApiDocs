@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\MessageSender\UI\Editor\Scene;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\MessageService\Public\UI\MessageEditor\Context;
 use Bitrix\MessageService\Public\UI\SenderCode;
 
@@ -12,6 +13,11 @@ final class PaymentDetails extends BaseScene
 	public function getId(): string
 	{
 		return self::ID;
+	}
+
+	public function getName(): string
+	{
+		return (string)Loc::getMessage('CRM_MS_EDITOR_SCENE_PAYMENT_DETAILS_NAME');
 	}
 
 	public function filterContentProviders(array $providers): array

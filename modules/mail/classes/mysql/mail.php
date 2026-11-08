@@ -30,11 +30,31 @@ class CMailbox extends CAllMailBox
 				MB.MAX_KEEP_DAYS > 0
 				AND MS.DATE_INSERT < ".$helper->addDaysToDateTime('-MB.MAX_KEEP_DAYS')."
 		");
+		/*
+			The retention limit deletes the letters for good, so the projection of the conversations
+			loses them as well - in batches, so that a long run neither asks per letter nor keeps a
+			growing list of them.
+		*/
+		$portionSize = \Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill::PORTION_SIZE;
+		$conversationBackfill = new \Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill();
+		$deletedByMailbox = [];
 		while ($ar = $dbr->fetch())
 		{
-			CMailMessage::Delete($ar["ID"], (int)$ar["MAILBOX_ID"]);
+			$mailboxId = (int)$ar["MAILBOX_ID"];
+			CMailMessage::Delete($ar["ID"], $mailboxId);
+			$deletedByMailbox[$mailboxId][] = (int)$ar["ID"];
+			if (count($deletedByMailbox[$mailboxId]) >= $portionSize)
+			{
+				$conversationBackfill->removeMessages($mailboxId, $deletedByMailbox[$mailboxId]);
+				unset($deletedByMailbox[$mailboxId]);
+			}
 			if (microtime(true) - $mt > 10 * 1000)
 				break;
+		}
+
+		foreach ($deletedByMailbox as $mailboxId => $messageIds)
+		{
+			$conversationBackfill->removeMessages($mailboxId, $messageIds);
 		}
 
 		\Bitrix\Mail\Helper\Message\MessageInternalDateHandler::clearStartInternalDate();

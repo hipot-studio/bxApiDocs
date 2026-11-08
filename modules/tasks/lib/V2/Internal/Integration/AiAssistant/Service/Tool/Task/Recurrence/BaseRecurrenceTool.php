@@ -36,7 +36,7 @@ abstract class BaseRecurrenceTool extends BaseTool
 		parent::__construct($toolService, $schemaBuilder, $validationService, $tracedLogger);
 	}
 
-	abstract protected function buildDto(array $args): MakeTaskRecurringDto;
+	abstract protected function buildDto(array $args, int $userId): MakeTaskRecurringDto;
 
 	public function canRun(int $userId): bool
 	{
@@ -56,7 +56,7 @@ abstract class BaseRecurrenceTool extends BaseTool
 
 	protected function execute(int $userId, ...$args): string
 	{
-		$dto = $this->buildDto($args);
+		$dto = $this->buildDto($args, $userId);
 
 		try
 		{

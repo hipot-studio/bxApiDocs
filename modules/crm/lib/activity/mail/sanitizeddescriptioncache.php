@@ -22,6 +22,11 @@ final class SanitizedDescriptionCache
 	private const DIR = 'crm_mail';
 
 	/**
+	 * Preparation version, bumped when sanitizing changes to drop stale entries
+	 */
+	private const VERSION = 2;
+
+	/**
 	 * Get cache ID
 	 *
 	 * @param int $activityId Activity ID
@@ -30,7 +35,7 @@ final class SanitizedDescriptionCache
 	 */
 	private function getId(int $activityId): string
 	{
-		return "crm_mail_ajax_description_$activityId";
+		return 'crm_mail_ajax_description_v' . self::VERSION . '_' . $activityId;
 	}
 
 	/**

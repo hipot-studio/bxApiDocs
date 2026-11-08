@@ -47,6 +47,18 @@ class DebugSessionFilter implements FilterInterface
 			$result->where('WORKFLOW_ID', '=', (string)$this->filter['WORKFLOW_ID']);
 		}
 
+		if (isset($this->filter['IS_ENDED']))
+		{
+			if ($this->filter['IS_ENDED'])
+			{
+				$result->whereNotNull('END_TIME');
+			}
+			else
+			{
+				$result->whereNull('END_TIME');
+			}
+		}
+
 		return $result;
 	}
 }

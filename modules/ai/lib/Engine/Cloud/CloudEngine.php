@@ -95,6 +95,10 @@ abstract class CloudEngine extends Engine\Engine implements IEngine
 
 		if ($this->isCache() && ($response = $cacheManager->getExists()))
 		{
+			// The request never goes out, so the row must not be left for the cleanup agent:
+			// it would fail an already answered request and roll its charge back. Closed
+			// before the result is delivered, because delivery runs the caller's callback.
+			$this->queueJob->cancel();
 			$this->onResponseSuccess($response, $cacheManager, true);
 
 			return;

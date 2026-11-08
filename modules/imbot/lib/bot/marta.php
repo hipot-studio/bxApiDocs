@@ -9,6 +9,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
 use Bitrix\Imbot\Integration\Tasks;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 
@@ -711,12 +712,10 @@ class Marta extends Base
 					$attach->AddGrid(Array(
 						Array(
 							"VALUE" => $eventTimeFormatted,
-							"LINK" => \CHTTP::urlAddParams(
-								$calendarEventUrl,
-								[
-									'EVENT_ID' => (int)$event['ID'],
-									'EVENT_DATE' => urlencode($event['DATE_FROM'])
-								]),
+							"LINK" => (string)(new Uri($calendarEventUrl))->addParams([
+								'EVENT_ID' => (int)$event['ID'],
+								'EVENT_DATE' => $event['DATE_FROM'],
+							]),
 							"DISPLAY" => "LINE",
 							"WIDTH" => 120,
 						),

@@ -13,10 +13,10 @@ use Bitrix\Disk\Document\GoogleHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
-use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Security\DiskSecurityContext;
 use Bitrix\Disk\Security\FakeSecurityContext;
 use Bitrix\Disk\Security\ParameterSigner;
@@ -30,6 +30,7 @@ use Bitrix\Disk\ZipNginx;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -1206,9 +1207,13 @@ class Controller extends Internals\Controller
 		$zipArchive = new ZipNginx\Archive('archive' . date('y-m-d') . '.zip');
 
 		$userFieldManager = Driver::getInstance()->getUserFieldManager();
-		foreach ($userFieldManager->getAttachedObjectByEntity($entity, $entityId, $fieldName) as $attachedObject)
+		$attachedObjects = $userFieldManager->getAttachedObjectByEntity($entity, $entityId, $fieldName);
+
+		$this->preloadDownloadAccessForAttachedObjects($attachedObjects);
+
+		foreach ($attachedObjects as $attachedObject)
 		{
-			if (!$attachedObject->canRead($this->getUser()->getId()))
+			if (!$attachedObject->canDownload($this->getUser()->getId()))
 			{
 				continue;
 			}
@@ -1245,6 +1250,8 @@ class Controller extends Internals\Controller
 
 		$userFieldManager = Driver::getInstance()->getUserFieldManager();
 		$userFieldManager->loadBatchAttachedObject($attachedIds);
+		$attachedObjects = [];
+
 		foreach($attachedIds as $id)
 		{
 			if(!$userFieldManager->isLoadedAttachedObject($id))
@@ -1253,7 +1260,18 @@ class Controller extends Internals\Controller
 			}
 
 			$attachedModel = $userFieldManager->getAttachedObjectById($id);
-			if(!$attachedModel->canRead($this->getUser()->getId()))
+
+			if ($attachedModel instanceof AttachedObject)
+			{
+				$attachedObjects[] = $attachedModel;
+			}
+		}
+
+		$this->preloadDownloadAccessForAttachedObjects($attachedObjects);
+
+		foreach ($attachedObjects as $attachedModel)
+		{
+			if(!$attachedModel->canDownload($this->getUser()->getId()))
 			{
 				continue;
 			}
@@ -1273,6 +1291,35 @@ class Controller extends Internals\Controller
 		$this->end();
 	}
 
+	private function preloadDownloadAccessForAttachedObjects(array $attachedObjects): void
+	{
+		$files = [];
+
+		foreach ($attachedObjects as $attachedObject)
+		{
+			if (!$attachedObject instanceof AttachedObject)
+			{
+				continue;
+			}
+
+			$file = $attachedObject->getFile();
+
+			if ($file instanceof File)
+			{
+				$files[] = $file;
+			}
+		}
+
+		if (empty($files))
+		{
+			return;
+		}
+
+		/** @var DownloadAccess $downloadAccess */
+		$downloadAccess = ServiceLocator::getInstance()->get(DownloadAccess::class);
+		$downloadAccess->preload($files);
+	}
+
 	protected function processActionDownload($showFile = false)
 	{
 		$attachedModel = $this->getAttachedModel();
@@ -1281,6 +1328,11 @@ class Controller extends Internals\Controller
 		if (!$file)
 		{
 			$this->sendJsonErrorResponse();
+		}
+
+		if (!$showFile && !$attachedModel->canDownload($this->getUser()->getId()))
+		{
+			$this->sendJsonAccessDeniedResponse();
 		}
 
 		$fileName = $file->getName();

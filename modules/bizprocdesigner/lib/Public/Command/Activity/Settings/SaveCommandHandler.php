@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\BizprocDesigner\Public\Command\Activity\Settings;
 
+use Bitrix\Bizproc\Activity\Dto\ContentBlockContext;
 use Bitrix\Bizproc\Activity\ReturnPropertiesResolver;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
 use Bitrix\BizprocDesigner\Internal\Entity\ActivityData;
@@ -16,8 +17,17 @@ use CBPWorkflowTemplateLoader;
 
 class SaveCommandHandler
 {
+	/**
+	 * @param ?\Closure $readableExpressionContextResolver How the readable form of an expression is resolved
+	 *     for the node this handler has just saved: (array $schema, array $documentType) => ?ContentBlockContext,
+	 *     called with the blocks of the schema the save produced. Owned by the entrance of the request - it is
+	 *     the one that knows which document type it authorized and by which of the editor's paths - so this
+	 *     handler builds no context of its own. None given leaves the block saying what it said before the
+	 *     readable form existed.
+	 */
 	public function __construct(
 		private readonly TriggerUpgradeResolver $triggerUpgradeResolver = new TriggerUpgradeResolver(),
+		private readonly ?\Closure $readableExpressionContextResolver = null,
 	)
 	{}
 
@@ -69,9 +79,8 @@ class SaveCommandHandler
 		}
 
 		$errors = [];
-		\CBPActivity::callStaticMethod(
+		\CBPActivity::savePropertiesDialogValues(
 			$targetType,
-			'getPropertiesDialogValues',
 			[
 				$command->data->documentType,
 				$activity->name,
@@ -88,7 +97,19 @@ class SaveCommandHandler
 		{
 			foreach ($errors as $error)
 			{
-				$result->addError(new Error($error['message'], $error['code'] ?? 'UNKNOWN_ERROR'));
+				$result->addError(
+					new Error(
+						$error['message'],
+						$error['code'] ?? 'UNKNOWN_ERROR',
+						// An activity may bind an error to the property it belongs to. A client-side
+						// settings panel has no server-rendered field to highlight, so the binding is
+						// the only way for it to show the error next to the right control.
+						isset($error['parameter']) && $error['parameter'] !== ''
+							? ['parameter' => $error['parameter']]
+							: null
+						,
+					)
+				);
 			}
 
 			return $result;
@@ -114,10 +135,21 @@ class SaveCommandHandler
 		}
 		$currentActivity['ReturnProperties'] = ReturnPropertiesResolver::resolve($currentActivity);
 
+		// Resolved against the blocks the save has just normalised, so a declaration renamed by this same
+		// request is named in the preview the way it is named after it.
 		$currentActivity['ContentBlock'] =
 			\Bitrix\Bizproc\Activity\ContentBlockResolver::resolve(
 				$targetType,
 				$currentActivity['Properties'],
+				$this->resolveReadableExpressionContext(
+					[
+						'TEMPLATE' => $template,
+						'PARAMETERS' => $parameters,
+						'VARIABLES' => $variables,
+						'CONSTANTS' => $constants,
+					],
+					$command->data->documentType,
+				),
 			)?->toArray()
 		;
 
@@ -127,6 +159,17 @@ class SaveCommandHandler
 				->setVariables($variables)
 				->setParameters($parameters)
 		;
+	}
+
+	/** @param array $schema Blocks of the schema the save produced: TEMPLATE, PARAMETERS, VARIABLES, CONSTANTS. */
+	private function resolveReadableExpressionContext(array $schema, array $documentType): ?ContentBlockContext
+	{
+		if ($this->readableExpressionContextResolver === null)
+		{
+			return null;
+		}
+
+		return ($this->readableExpressionContextResolver)($schema, $documentType);
 	}
 
 	private function resolveSourceActivityType(array $template, string $activityName): string

@@ -16,7 +16,7 @@ namespace Bitrix\Crm\V2\Internal\Service\Category\Matching;
  *
  * A `null` colour is the absence of one rather than a value: the stage keeps the colour it has, and a
  * stage that has none is given the next colour of
- * {@see \Bitrix\Crm\Stage\DefaultProcessColorGenerator}.
+ * {@see \Bitrix\Crm\Stage\DefaultColorGenerator}.
  *
  * @internal
  */

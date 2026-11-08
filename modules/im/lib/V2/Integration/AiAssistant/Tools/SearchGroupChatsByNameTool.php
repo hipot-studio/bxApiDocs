@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Integration\AiAssistant\Tools;
 
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Filter;
 use Bitrix\Im\V2\Integration\AiAssistant\Tools\Dto\SearchGroupChatsByNameDto;
+use Bitrix\Im\V2\Integration\AiAssistant\ToolScope;
+use Bitrix\Im\V2\Integration\UI\EntitySelector\RecentProvider;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Main\Web\Json;
@@ -15,6 +18,11 @@ class SearchGroupChatsByNameTool extends BaseImTool
 {
 	private const SEARCH_CHATS_LIMIT = 100;
 
+	protected function getScope(): ToolScope
+	{
+		return ToolScope::Read;
+	}
+
 	public function getName(): string
 	{
 		return 'search_group_chats_by_name';
@@ -23,7 +31,9 @@ class SearchGroupChatsByNameTool extends BaseImTool
 	public function getDescription(): string
 	{
 		return "Searches for group chats by their name. Returns an array of group chat dialogId and their names. "
-			. "This tool works exclusively with group chats and does not search private user chats.";
+			. "This tool works exclusively with group chats and does not search private user chats. "
+			. "Results are limited to the chat types visible in the messenger search: it does not return task chats, "
+			. "comment chats or other service chats.";
 	}
 
 	public function getInputSchema(): array
@@ -32,7 +42,7 @@ class SearchGroupChatsByNameTool extends BaseImTool
 			'type' => 'object',
 			'properties' => [
 				'query' => [
-					'description' => 'The search query. This can be a group chat name or a user name for private chats.',
+					'description' => 'The search query. This must be a group chat name.',
 					'type' => 'string',
 					'minLength' => 3,
 				],
@@ -63,6 +73,7 @@ class SearchGroupChatsByNameTool extends BaseImTool
 	{
 		$chats = Filter::init()
 			->filterByName($searchGroupChatsDto->query)
+			->filterByTypes($this->getSearchableGroupChatTypes())
 			->filterUserIsMember($userId)
 			->setLimit(self::SEARCH_CHATS_LIMIT)
 			->getTitles()
@@ -74,6 +85,18 @@ class SearchGroupChatsByNameTool extends BaseImTool
 				'title' => $chat['TITLE'],
 			];
 		}, $chats);
+	}
+
+	/**
+	 * Same chat types the messenger UI search returns, minus private dialogs.
+	 * Mirrors {@see RecentProvider::getAllowedSearchChatTypes()} so task, comment, copilot,
+	 * open line and other service chats stay out of the result, exactly like the web search.
+	 *
+	 * @return array<string>
+	 */
+	private function getSearchableGroupChatTypes(): array
+	{
+		return array_values(array_diff(RecentProvider::getAllowedSearchChatTypes(), [Chat::IM_TYPE_PRIVATE]));
 	}
 
 	private function formatResult(array $chats): string

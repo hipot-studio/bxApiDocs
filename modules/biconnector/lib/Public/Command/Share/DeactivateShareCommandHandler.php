@@ -32,11 +32,11 @@ class DeactivateShareCommandHandler
 
 		try
 		{
-			$share
-				->setActive('N')
-				->setDateModify(new DateTime())
-			;
-			$this->repository->save($share);
+			if (!$this->repository->deactivateIfActive($share->getId(), $command->userId, new DateTime()))
+			{
+				return $result;
+			}
+
 			ShareExpireAgent::remove($share->getId());
 			SharePullService::sendRevokeEvent($share->getToken());
 		}

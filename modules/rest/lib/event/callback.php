@@ -4,6 +4,10 @@ namespace Bitrix\Rest\Event;
 use Bitrix\Main;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\EventTable;
+use Bitrix\Rest\Public\Provider\ApplicationProvider;
+use Bitrix\Rest\Public\Provider\Dto\ApplicationStatusData;
+use Bitrix\Rest\Public\Provider\Mapper\ApplicationDataMapper;
+use Bitrix\Rest\Public\Service\ApplicationStatusCalculator;
 use Bitrix\Rest\Tools\Diagnostics\Event;
 use Bitrix\Rest\Tools\Diagnostics\LoggerManager;
 
@@ -17,6 +21,13 @@ use Bitrix\Rest\Tools\Diagnostics\LoggerManager;
 class Callback
 {
 	/**
+	 * @var array<string, ApplicationStatusData>
+	 */
+	private static array $appStatusCache = [];
+	private static ?ApplicationDataMapper $applicationDataMapper = null;
+	private static ?ApplicationStatusCalculator $statusCalculator = null;
+
+	/**
 	 * Handler for all PHP events transferred to REST.
 	 *
 	 * @param string $name Event name.
@@ -28,6 +39,8 @@ class Callback
 	 */
 	public static function __callStatic($name, $arguments)
 	{
+		self::$appStatusCache = [];
+
 		$event = Sender::parseEventName($name);
 		LoggerManager::getInstance()->getLogger()?->info(
 			"\n{delimiter}\n"
@@ -82,10 +95,12 @@ class Callback
 		$appHoldExceptId = 0;
 		if (!empty($arguments[1]['REST_EVENT_HOLD_EXCEPT_APP']))
 		{
-			$app = AppTable::getByClientId($arguments[1]['REST_EVENT_HOLD_EXCEPT_APP']);
-			if ($app['ID'] > 0)
+			$holdExceptApp = (new ApplicationProvider())->findByClientId(
+				(string)$arguments[1]['REST_EVENT_HOLD_EXCEPT_APP'],
+			);
+			if ($holdExceptApp !== null && $holdExceptApp->getId() > 0)
 			{
-				$appHoldExceptId = $app['ID'];
+				$appHoldExceptId = $holdExceptApp->getId();
 			}
 		}
 
@@ -105,8 +120,12 @@ class Callback
 					'APP_STATUS' => 'REST_APP.STATUS',
 					'APP_ACTIVE' => 'REST_APP.ACTIVE',
 					'APP_INSTALLED' => 'REST_APP.INSTALLED',
+					'APP_DATE_FINISH' => 'REST_APP.DATE_FINISH',
+					'APP_IS_TRIALED' => 'REST_APP.IS_TRIALED',
+					'APP_URL_DEMO' => 'REST_APP.URL_DEMO',
 				])
 				->where('EVENT_NAME', mb_strtoupper($event['EVENT_REST']['EVENT']))
+				->where('VERSION', 1)
 				->where(
 					(Main\ORM\Query\Query::filter()
 						->logic('or')
@@ -147,8 +166,8 @@ class Callback
 
 				if (!empty($handler['APP_CODE']))
 				{
-					$appStatus = AppTable::getAppStatusInfo($handler['APP_CODE'], '');
-					if ($appStatus['PAYMENT_EXPIRED'] === 'Y')
+					$appStatus = static::getApplicationStatus($handler);
+					if ($appStatus->isPaymentExpired())
 					{
 						LoggerManager::getInstance()->getLogger()?->info(
 							"\n{delimiter}\n"
@@ -162,7 +181,7 @@ class Callback
 							'EVENT_ID' => $handler['ID'] ?? null,
 							'MESSAGE' => Event\LogType::SKIP_BY_PAYMENT_EXPIRED->value,
 							'eventName' => $event['EVENT'] ?? null,
-							'appStatus' => $appStatus,
+							'appStatus' => $appStatus->toArray(),
 						]);
 
 						continue;
@@ -214,5 +233,26 @@ class Callback
 		{
 			Sender::unbind($event['MODULE_ID'], $event['EVENT']);
 		}
+	}
+
+	/**
+	 * @param array<string, mixed> $handler
+	 */
+	private static function getApplicationStatus(array $handler): ApplicationStatusData
+	{
+		$clientId = (string)$handler['APP_CODE'];
+
+		self::$applicationDataMapper ??= new ApplicationDataMapper();
+		self::$statusCalculator ??= new ApplicationStatusCalculator();
+
+		return self::$appStatusCache[$clientId] ??= self::$statusCalculator->calculate(
+			self::$applicationDataMapper->convertFromRow([
+				'CLIENT_ID' => $handler['APP_CODE'],
+				'STATUS' => $handler['APP_STATUS'] ?? null,
+				'DATE_FINISH' => $handler['APP_DATE_FINISH'] ?? null,
+				'IS_TRIALED' => $handler['APP_IS_TRIALED'] ?? null,
+				'URL_DEMO' => $handler['APP_URL_DEMO'] ?? null,
+			]),
+		);
 	}
 }

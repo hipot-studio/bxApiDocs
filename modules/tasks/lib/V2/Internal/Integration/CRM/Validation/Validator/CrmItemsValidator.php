@@ -57,7 +57,7 @@ class CrmItemsValidator implements ValidatorInterface
 			));
 		}
 
-		[$entityType, $entityId] = explode('_', $value);
+		[$entityType, $entityId] = array_pad(explode('_', $value, 2), 2, '');
 
 		if ((int)$entityId <= 0)
 		{

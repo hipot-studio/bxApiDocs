@@ -92,10 +92,11 @@ class MessageUserType
 		}
 	}
 
-	public static function onBeforeSave($userField, $mailMessageId, $userId)
+	public static function onBeforeSave($userField, $mailMessageId, $userId = null)
 	{
 		$previousMailsIds = (array) $userField['VALUE'];
-		if (!in_array($mailMessageId, $previousMailsIds))
+		$isMessageAlreadySaved = in_array($mailMessageId, $previousMailsIds);
+		if (!$isMessageAlreadySaved || !static::hasBinding($userField, $mailMessageId))
 		{
 			$message = MailMessageTable::getList([
 				'select' => [
@@ -106,7 +107,7 @@ class MessageUserType
 				],
 			])->fetch();
 
-			if (MailboxTable::getUserMailbox($message['MAILBOX_ID'], $userId))
+			if ($message && MailboxTable::getUserMailbox($message['MAILBOX_ID'], $userId))
 			{
 				if ($userField['VALUE'] !== false && $userField['MULTIPLE'] === 'N')
 				{
@@ -140,6 +141,23 @@ class MessageUserType
 		}
 
 		return $mailMessageId;
+	}
+
+	private static function hasBinding(array $userField, $mailMessageId): bool
+	{
+		if (!array_key_exists('ID', $userField)
+			|| !array_key_exists('ENTITY_ID', $userField)
+			|| !array_key_exists('VALUE_ID', $userField))
+		{
+			return true;
+		}
+
+		return MessageAccessTable::getCount([
+			'=MESSAGE_ID' => $mailMessageId,
+			'=ENTITY_UF_ID' => $userField['ID'],
+			'=ENTITY_TYPE' => $userField['ENTITY_ID'],
+			'=ENTITY_ID' => $userField['VALUE_ID'],
+		]) > 0;
 	}
 
 	public static function onDelete($userField, $messageId)

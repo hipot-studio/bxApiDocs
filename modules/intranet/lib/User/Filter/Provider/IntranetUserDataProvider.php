@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\User\Filter\Provider;
 
+use Bitrix\Intranet\Entity;
 use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Enum\Otp\UserOtpStatus;
@@ -9,6 +10,7 @@ use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\OtpUserProvider;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\UserOtpStatusService;
+use Bitrix\Intranet\User;
 use Bitrix\Intranet\User\Filter\IntranetUserSettings;
 use Bitrix\Intranet\Util;
 use Bitrix\Main\DB\SqlExpression;
@@ -29,6 +31,7 @@ class IntranetUserDataProvider extends EntityDataProvider
 	private const NOT_INSTALLED_APP = 'notInstalled';
 	private IntranetUserSettings $settings;
 	private UserQueryModifier $userQueryModifier;
+	private ?User $currentUser = null;
 	private ?UserOtpStatusService $otpStatusService = null;
 
 	public function __construct(IntranetUserSettings $settings)
@@ -147,16 +150,27 @@ class IntranetUserDataProvider extends EntityDataProvider
 		$this->checkOnlineField($filterValue);
 		$this->checkVisitorField($filterValue);
 		$this->checkTagsField($filterValue);
-		$this->checkInvitedField($filterValue);
-		$this->checkWaitConfirmationField($filterValue);
+		$isInvitationModeEnabled = $this->isInvitationModeEnabled($filterValue);
+		$this->checkInvitedField($filterValue, $isInvitationModeEnabled);
+		$this->checkWaitConfirmationField($filterValue, $isInvitationModeEnabled);
 		$this->checkAppField($filterValue);
 		$this->checkOtpStatusField($filterValue);
+		$this->checkSystemUserField($filterValue);
 
 		return $filterValue;
 	}
 
 	private function checkFiredField(array &$filterValue): void
 	{
+		if (
+			isset($filterValue[IntranetUserSettings::FIRED_FIELD])
+			&& $filterValue[IntranetUserSettings::FIRED_FIELD] !== ''
+			&& !in_array($filterValue[IntranetUserSettings::FIRED_FIELD], ['Y', 'N'], true)
+		)
+		{
+			$filterValue[IntranetUserSettings::FIRED_FIELD] = 'N';
+		}
+
 		if ($this->getSettings()->isFilterAvailable(IntranetUserSettings::INVITED_FIELD))
 		{
 			$invitedFilter = [
@@ -283,17 +297,28 @@ class IntranetUserDataProvider extends EntityDataProvider
 		}
 	}
 
-	private function checkInvitedField(array &$filterValue): void
+	private function checkInvitedField(array &$filterValue, bool $isInvitationModeEnabled): void
 	{
 		if (
 			!empty($filterValue[IntranetUserSettings::INVITED_FIELD])
 			&& $this->getSettings()->isFilterAvailable(IntranetUserSettings::INVITED_FIELD)
 		)
 		{
-			if ($filterValue[IntranetUserSettings::INVITED_FIELD] === 'Y')
+			if (
+				$filterValue[IntranetUserSettings::INVITED_FIELD] === 'Y'
+				&& $isInvitationModeEnabled
+			)
 			{
 				$filterValue['=ACTIVE'] = 'Y';
 				$filterValue['!CONFIRM_CODE'] = '';
+
+				if (
+					!$this->getSettings()->isCurrentUserAdmin()
+					&& $this->getCurrentUser()->isIntranet()
+				)
+				{
+					$filterValue['INVITATION.ORIGINATOR_ID'] = $this->getSettings()->getCurrentUserId();
+				}
 			}
 			elseif ($filterValue[IntranetUserSettings::INVITED_FIELD] === 'N')
 			{
@@ -354,6 +379,18 @@ class IntranetUserDataProvider extends EntityDataProvider
 		}
 	}
 
+	private function checkSystemUserField(array &$filterValue): void
+	{
+		if (
+			!empty($filterValue[IntranetUserSettings::SYSTEM_USER_FIELD])
+			&& $filterValue[IntranetUserSettings::SYSTEM_USER_FIELD] === 'Y'
+			&& $this->getSettings()->isFilterAvailable(IntranetUserSettings::SYSTEM_USER_FIELD)
+		)
+		{
+			$filterValue['=EXTERNAL_AUTH_ID'] = Entity\User::EXTERNAL_AUTH_ID_SYSTEM;
+		}
+	}
+
 	private function checkOnlineField(array &$filterValue): void
 	{
 		if (
@@ -379,11 +416,17 @@ class IntranetUserDataProvider extends EntityDataProvider
 		}
 	}
 
-	private function checkWaitConfirmationField(array &$filterValue): void
+	private function checkWaitConfirmationField(array &$filterValue, bool $isInvitationModeEnabled): void
 	{
-		if (isset($filterValue[IntranetUserSettings::WAIT_CONFIRMATION_FIELD]))
+		if (
+			isset($filterValue[IntranetUserSettings::WAIT_CONFIRMATION_FIELD])
+			&& $this->getSettings()->isFilterAvailable(IntranetUserSettings::WAIT_CONFIRMATION_FIELD)
+		)
 		{
-			if ($filterValue[IntranetUserSettings::WAIT_CONFIRMATION_FIELD] === 'Y')
+			if (
+				$filterValue[IntranetUserSettings::WAIT_CONFIRMATION_FIELD] === 'Y'
+				&& $isInvitationModeEnabled
+			)
 			{
 				$filterValue['=ACTIVE'] = 'N';
 				$filterValue['!CONFIRM_CODE'] = '';
@@ -393,6 +436,27 @@ class IntranetUserDataProvider extends EntityDataProvider
 				$filterValue['CONFIRM_CODE'] = '';
 			}
 		}
+	}
+
+	private function isInvitationModeEnabled(array $filterValue): bool
+	{
+		return (
+			($filterValue[IntranetUserSettings::INVITED_FIELD] ?? null) === 'Y'
+			&& $this->getSettings()->isFilterAvailable(IntranetUserSettings::INVITED_FIELD)
+		) || (
+			($filterValue[IntranetUserSettings::WAIT_CONFIRMATION_FIELD] ?? null) === 'Y'
+			&& $this->getSettings()->isFilterAvailable(IntranetUserSettings::WAIT_CONFIRMATION_FIELD)
+		);
+	}
+
+	private function getCurrentUser(): User
+	{
+		if ($this->currentUser === null)
+		{
+			$this->currentUser = new User($this->getSettings()->getCurrentUserId());
+		}
+
+		return $this->currentUser;
 	}
 
 	private function checkAppField(array &$filterValue): void

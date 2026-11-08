@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Infrastructure\Controller\Task;
 use Bitrix\Tasks\V2\Public\Command\Task\Plan\UpdatePlanCommand;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Access\Task\Plan\Permission;
 use Bitrix\Tasks\V2\Public\Provider\Params\TaskParams;
@@ -26,6 +27,7 @@ class Plan extends BaseController
 		$config = new UpdateConfig(
 			userId: $this->userId,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		);
 
 		$result = (new UpdatePlanCommand(

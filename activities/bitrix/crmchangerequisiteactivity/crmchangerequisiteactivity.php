@@ -1,4 +1,5 @@
 <?php
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED!==true)
 {
 	die();
@@ -8,7 +9,10 @@ use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Crm\EntityPreset;
 use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\Field;
+use Bitrix\Crm\Integration\BizProc\Activity\RequisiteActivityForm;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Main\Localization\Loc;
 
 $runtime = CBPRuntime::GetRuntime();
 $runtime->IncludeActivityFile('CrmGetRequisitesInfoActivity');
@@ -16,6 +20,9 @@ $runtime->IncludeActivityFile('CrmGetRequisitesInfoActivity');
 class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 {
 	use ChecksResolvedTargetAccessTrait;
+
+	protected ?int $currentPresetId = null;
+	protected ?int $currentPresetCountryId = null;
 
 	public function __construct($name)
 	{
@@ -58,7 +65,7 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 
 		$requisiteSettings = EntityRequisite::getSingleInstance()->loadSettings(
 			$this->CrmEntityType,
-			$this->CrmEntityId
+			$this->CrmEntityId,
 		);
 
 		$requisiteId = $this->getRequisiteId($requisiteSettings);
@@ -85,7 +92,7 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 		$requisiteFieldValues = $requisiteValues['RequisiteFields'];
 		$addressFieldValues = $requisiteValues['RequisiteFields'][EntityRequisite::ADDRESS][$this->AddressTypeId] ?? [];
 		unset($requisiteFieldValues['RequisiteFields'][EntityRequisite::ADDRESS]);
-		$countryId = EntityRequisite::getSingleInstance()->getCountryIdByPresetId($this->getRequisitePresetId());
+		$countryId = $this->getCurrentPresetCountryId();
 
 		$debugValues = array_merge($requisiteFieldValues, $addressFieldValues, $requisiteValues['BankDetailFields']);
 
@@ -107,11 +114,16 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 	protected function filterPresetRequisiteFields(array $requisiteFieldsValues)
 	{
 		$requisiteFieldsIds = EntityRequisite::getSingleInstance()->getRqFields();
-		$presetFields = EntityPreset::getSingleInstance()->getById($this->getRequisitePresetId())['SETTINGS']['FIELDS'] ?? [];
+		$requisitePresetId = $this->getRequisitePresetId();
+		$preset = EntityPreset::getSingleInstance()->getById($requisitePresetId) ?: [];
+		$this->currentPresetId = $requisitePresetId;
+		$this->currentPresetCountryId = isset($preset['COUNTRY_ID']) ? (int)$preset['COUNTRY_ID'] : 0;
+
+		$presetFields = $preset['SETTINGS']['FIELDS'] ?? [];
 		$presetFieldsIds = array_column(
 			$presetFields,
 			null,
-			'FIELD_NAME'
+			'FIELD_NAME',
 		);
 
 		foreach ($requisiteFieldsIds as $fieldId)
@@ -135,7 +147,7 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 		return (int)$this->getBankDetailBySettings(
 			$requisiteSettings,
 			['ID' => $requisiteId, 'PRESET_ID' => $presetId],
-			['ID']
+			['ID'],
 		)['ID'];
 	}
 
@@ -193,13 +205,28 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 			}
 		}
 
+		if ($this->hasPresetRequisiteFieldsToFilter($fieldsValues['RequisiteFields']))
+		{
+			$fieldsValues['RequisiteFields'] = $this->filterInvalidStringFieldValues(
+				$fieldsValues['RequisiteFields'],
+				$this->getCurrentPresetRequisiteFieldsMap(),
+			);
+		}
+		$fieldsValues['BankDetailFields'] = $this->filterInvalidStringFieldValues(
+			$fieldsValues['BankDetailFields'],
+			static::getBankDetailMap(),
+		);
 		$fieldsValues['RequisiteFields'] = $this->prepareUserFieldValues($fieldsValues['RequisiteFields']);
 
 		if (array_key_exists(EntityRequisite::ADDRESS, $fieldsValues['RequisiteFields']))
 		{
+			$fieldsValues['RequisiteFields'][$addressFields][$addressTypeId] = $this->filterInvalidStringFieldValues(
+				$fieldsValues['RequisiteFields'][$addressFields][$addressTypeId],
+				static::getAddressFieldsMap(),
+			);
 			$fieldsValues['RequisiteFields'][$addressFields][$addressTypeId] = $this->prepareAddressFieldValues(
 				$requisiteId,
-				$fieldsValues['RequisiteFields'][$addressFields][$addressTypeId]
+				$fieldsValues['RequisiteFields'][$addressFields][$addressTypeId],
 			);
 		}
 
@@ -217,6 +244,84 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 		}
 
 		return $requisiteFieldValues;
+	}
+
+	protected function filterInvalidStringFieldValues(array $fieldValues, array $fieldsMap): array
+	{
+		foreach ($fieldValues as $fieldId => $value)
+		{
+			if (($fieldsMap[$fieldId]['Type'] ?? null) !== \Bitrix\Bizproc\FieldType::STRING)
+			{
+				continue;
+			}
+
+			if (!is_array($value) && !is_object($value))
+			{
+				continue;
+			}
+			if ($value instanceof \Stringable)
+			{
+				$fieldValues[$fieldId] = (string)$value;
+
+				continue;
+			}
+
+			$this->writeInvalidStringFieldTrackingError($fieldId, $fieldsMap[$fieldId]);
+			unset($fieldValues[$fieldId]);
+		}
+
+		return $fieldValues;
+	}
+
+	protected function hasPresetRequisiteFieldsToFilter(array $requisiteFieldsValues): bool
+	{
+		$requisiteFieldsIds = array_fill_keys(EntityRequisite::getSingleInstance()->getRqFields(), true);
+		unset($requisiteFieldsIds[EntityRequisite::ADDRESS]);
+
+		return array_intersect_key($requisiteFieldsValues, $requisiteFieldsIds) !== [];
+	}
+
+	protected function getCurrentPresetRequisiteFieldsMap(): array
+	{
+		$requisitePresetId = $this->getRequisitePresetId();
+		if ($requisitePresetId <= 0)
+		{
+			return static::getRequisiteFieldsMap();
+		}
+
+		return static::getRequisiteFieldsMap(
+			$this->getCurrentPresetCountryId(),
+		);
+	}
+
+	protected function getCurrentPresetCountryId(): int
+	{
+		$requisitePresetId = $this->getRequisitePresetId();
+		if ($requisitePresetId <= 0)
+		{
+			return 0;
+		}
+
+		if ($this->currentPresetId !== $requisitePresetId || $this->currentPresetCountryId === null)
+		{
+			$this->currentPresetId = $requisitePresetId;
+			$this->currentPresetCountryId = EntityRequisite::getSingleInstance()->getCountryIdByPresetId($requisitePresetId);
+		}
+
+		return $this->currentPresetCountryId;
+	}
+
+	protected function writeInvalidStringFieldTrackingError(string $fieldId, array $fieldProperties): void
+	{
+		$fieldName = (string)($fieldProperties['Name'] ?? $fieldId);
+		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/crm/lib/field.php');
+		$message = Loc::getMessage(Field::MESSAGE_FIELD_VALUE_NOT_VALID, ['#FIELD#' => $fieldName]);
+		if (!is_string($message) || $message === '')
+		{
+			$message = 'Invalid field value: ' . $fieldName;
+		}
+
+		$this->WriteToTrackingService($message, 0, CBPTrackingType::Error);
 	}
 
 	protected function prepareAddressFieldValues(int $requisiteId, array $rawAddressFields) : array
@@ -238,52 +343,12 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 	{
 		$dialog = parent::GetPropertiesDialog(...func_get_args());
 
-		$currentPresetId = (int)$dialog->getCurrentValue('requisite_preset');
-		$presetCountryId = 0;
-		if ($currentPresetId !== 0)
-		{
-			$presetCountryId = EntityRequisite::getSingleInstance()->getCountryIdByPresetId($currentPresetId);
-		}
-
-		$runtimeData = [
-			'PathToParentClassDir' => pathinfo(realpath($dialog->getActivityFile()), PATHINFO_DIRNAME),
-			'RequisiteFieldsMap' => array_merge(
-				self::getRequisiteFieldsMap($presetCountryId),
-				self::getUserFieldsMap()
-			),
-			'BankDetailFieldsMap' => self::getBankDetailMap(),
-			'AddressFieldsMap' => self::getAddressFieldsMap(),
-			'PresetRequisiteFieldNames' => self::getPresetsFieldNames()
-		];
-
-		$dialog
-			->setRuntimeData(array_merge($dialog->getRuntimeData(), $runtimeData))
-			->setActivityFile(__FILE__)
-			->setCurrentValues(self::mergeAddressValuesWithRqValues($dialog->getCurrentValues()))
-		;
-
-		return $dialog;
+		return RequisiteActivityForm::configureDialog($dialog, __FILE__);
 	}
 
 	protected static function mergeAddressValuesWithRqValues(array $currentValues): array
 	{
-		$fieldsValues = $currentValues['FieldsValues'];
-		$addressFields = EntityRequisite::ADDRESS;
-
-		if (
-			isset($fieldsValues)
-			&& array_key_exists($addressFields, $fieldsValues)
-			&& reset($fieldsValues[$addressFields])
-			&& !CBPHelper::isEmptyValue(current($fieldsValues[$addressFields]))
-		)
-		{
-			$fieldsValues = array_merge($fieldsValues, current($fieldsValues[$addressFields]));
-		}
-
-		unset($fieldsValues[$addressFields]);
-		$currentValues['FieldsValues'] = $fieldsValues;
-
-		return $currentValues;
+		return RequisiteActivityForm::mergeAddressValuesWithRqValues($currentValues);
 	}
 
 	public static function GetPropertiesDialogValues($documentType, $activityName, &$workflowTemplate, &$workflowParameters, &$workflowVariables, $currentValues, &$errors)
@@ -293,68 +358,35 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 
 		$documentService = $runtime->GetService('DocumentService');
 
-		$properties = self::getValues(
+		$properties = RequisiteActivityForm::getValues(
 			$documentType, $documentService, parent::getPropertiesDialogMap(),
-			$currentValues, $errors
+			$currentValues, $errors,
 		);
-		$requisiteFieldsMap = self::getRequisiteFieldsMap();
 		$requisitePresetId = $properties['RequisitePresetId'] ?? null;
-		if (is_numeric($requisitePresetId) && (int)$requisitePresetId > 0)
-		{
-			$countryId = EntityRequisite::getSingleInstance()->getCountryIdByPresetId((int)$requisitePresetId);
-			$requisiteFieldsMap = self::getRequisiteFieldsMap($countryId);
-		}
 
 		$currentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($workflowTemplate, $activityName);
-		$previousFieldsValues = self::normalizeFieldsValues(
+		$previousFieldsValues = RequisiteActivityForm::normalizeFieldsValues(
 			array_merge(
 				[
 					'RequisiteFields' => [],
 					'BankDetailFields' => [],
 				],
-				(array)($currentActivity['Properties']['FieldsValues'] ?? [])
-			)
-		);
-		$requisiteFieldsValues = array_merge(
-			self::getValues(
-				$documentType, $documentService, array_intersect_key($requisiteFieldsMap, $currentValues),
-				$currentValues, $errors
+				(array)($currentActivity['Properties']['FieldsValues'] ?? []),
 			),
-			self::getValues(
-				$documentType, $documentService, array_intersect_key(self::getUserFieldsMap(), $currentValues),
-				$currentValues, $errors
-			)
 		);
-		if (!is_numeric($requisitePresetId) || (int)$requisitePresetId <= 0)
-		{
-			$requisiteFieldsValues = self::preserveUnavailableRqListFieldValues(
-				$requisiteFieldsValues,
-				$previousFieldsValues['RequisiteFields'],
-				$requisiteFieldsMap
-			);
-		}
-
-		$properties['FieldsValues'] = [
-			'RequisiteFields' => $requisiteFieldsValues,
-			'BankDetailFields' => self::getValues(
-				$documentType, $documentService, array_intersect_key(self::getBankDetailMap(), $currentValues),
-				$currentValues, $errors
-			),
-		];
-
-		if (isset($properties['AddressTypeId']))
-		{
-			$properties['FieldsValues']['RequisiteFields'][EntityRequisite::ADDRESS] = [
-				$properties['AddressTypeId'] => self::getValues(
-					$documentType, $documentService, array_intersect_key(self::getAddressFieldsMap(), $currentValues),
-					$currentValues, $errors
-				)
-			];
-		}
+		$properties['FieldsValues'] = RequisiteActivityForm::extractFieldsValues(
+			$documentType,
+			$documentService,
+			$currentValues,
+			$errors,
+			$requisitePresetId,
+			$previousFieldsValues,
+			true,
+		);
 
 		$errors = self::ValidateProperties(
 			$properties,
-			new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser)
+			new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser),
 		);
 
 		$isCorrect = (count($errors) <= 0);
@@ -369,40 +401,42 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 	protected static function preserveUnavailableRqListFieldValues(
 		array $currentValues,
 		array $previousValues,
-		array $availableFieldsMap
+		array $availableFieldsMap,
 	): array
 	{
 		$rqListFieldsMap = array_fill_keys(
 			EntityRequisite::getSingleInstance()->getRqListFields(),
-			true
+			true,
 		);
 		$unavailableRqListFieldsMap = array_diff_key($rqListFieldsMap, $availableFieldsMap);
 
 		return array_merge(
 			array_intersect_key($previousValues, $unavailableRqListFieldsMap),
-			$currentValues
+			$currentValues,
 		);
 	}
 
 	protected static function getRequisiteFieldsMap(int $countryId = 0): array
 	{
-		$requisiteFieldsMap = parent::getRequisiteFieldsMap($countryId);
-		// the RQ_NAME field is formed from other fields. it's immutable
-		unset($requisiteFieldsMap['RQ_NAME']);
+		return RequisiteActivityForm::getRequisiteFieldsMap($countryId);
+	}
 
-		return $requisiteFieldsMap;
+	protected static function getUserFieldsMap(): array
+	{
+		return RequisiteActivityForm::getUserFieldsMap();
+	}
+
+	protected static function getBankDetailMap(): array
+	{
+		return RequisiteActivityForm::getBankDetailMap();
 	}
 
 	protected static function getAddressFieldsMap(): array
 	{
-		$addressFieldsMap = parent::getAddressFieldsMap();
-		// the LOC_ADDR_ID field is immutable
-		unset($addressFieldsMap['LOC_ADDR_ID']);
-
-		return $addressFieldsMap;
+		return RequisiteActivityForm::getAddressFieldsMap();
 	}
 
-	public static function ValidateProperties($testProperties = [], CBPWorkflowTemplateUser $user = null)
+	public static function ValidateProperties($testProperties = [], ?CBPWorkflowTemplateUser $user = null)
 	{
 		$testProperties['FieldsValues'] = self::normalizeFieldsValues($testProperties['FieldsValues'] ?? []);
 		$errors = parent::ValidateProperties($testProperties, $user);
@@ -418,6 +452,7 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 				}
 				if (!CBPHelper::isEmptyValue($fieldsValues)) {
 					$isPropertySpecified = true;
+
 					break;
 				}
 			}
@@ -428,35 +463,16 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 			$errors[] = [
 				'code' => 'NotExist',
 				'parameter' => 'FieldValue',
-				'message' => GetMessage('CRM_CRA_EMPTY_FIELDS')
+				'message' => GetMessage('CRM_CRA_EMPTY_FIELDS'),
 			];
 		}
 
 		return $errors;
 	}
 
-	protected static function normalizeFieldsValues(array $fieldsValues): array
+	protected static function normalizeFieldsValues(mixed $fieldsValues): array
 	{
-		if (!is_array($fieldsValues['RequisiteFields']))
-		{
-			$fieldsValues['RequisiteFields'] = [];
-		}
-		if (!is_array($fieldsValues['BankDetailFields']))
-		{
-			$fieldsValues['BankDetailFields'] = [];
-		}
-		if (array_key_exists(EntityRequisite::ADDRESS, $fieldsValues['RequisiteFields']))
-		{
-			foreach ($fieldsValues['RequisiteFields'][EntityRequisite::ADDRESS] as $addressTypeId => &$addressFields)
-			{
-				if (!is_array($addressFields))
-				{
-					$addressFields = [];
-				}
-			}
-		}
-
-		return $fieldsValues;
+		return RequisiteActivityForm::normalizeFieldsValues($fieldsValues);
 	}
 
 	protected static function getPropertiesDialogMap(): array
@@ -471,10 +487,10 @@ class CBPCrmChangeRequisiteActivity extends CBPCrmGetRequisitesInfoActivity
 
 					return array_merge(
 						is_array($requisiteFields) ? $requisiteFields : [],
-						is_array($bankDetailFields) ? $bankDetailFields : []
+						is_array($bankDetailFields) ? $bankDetailFields : [],
 					);
-				}
-			]
+				},
+			],
 		]);
 	}
 }

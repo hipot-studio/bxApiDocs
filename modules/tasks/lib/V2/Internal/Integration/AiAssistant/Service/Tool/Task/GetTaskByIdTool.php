@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task;
 
+use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\AiAssistant\Facade\TracedLogger;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Main\Validation\ValidationService;
-use Bitrix\Main\Web\Json;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\AccessDeniedException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Exception\InvalidIdentifierException;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider\TaskProvider;
@@ -38,11 +38,13 @@ class GetTaskByIdTool extends BaseTool
 			. 'The returned task\'s "group" includes id, name and type. '
 			. 'NOTATION: when "group" contains a "displayType" field, '
 			. 'you MUST use group.displayType — not group.type — whenever you mention the task\'s group '
-			. 'or project to the user.'
+			. 'or project to the user. '
+			. 'The "results" field contains up to ' . TaskProvider::MAX_RESULTS . ' most recent task results; '
+			. 'if the task has more, older results are omitted, so do not treat this list as exhaustive.'
 		;
 	}
 
-	protected function execute(int $userId, ...$args): string
+	protected function executeStructured(int $userId, ...$args): array
 	{
 		$dto = GetTaskByIdDto::fromArray($args);
 
@@ -54,22 +56,22 @@ class GetTaskByIdTool extends BaseTool
 		}
 		catch (DtoValidationException $e)
 		{
-			return $this->createFailureResponse($e->getMessage());
+			throw new McpException(message: $e->getMessage(), previous: $e);
 		}
 		catch (AccessDeniedException)
 		{
-			return $this->createFailureResponse('Access denied.');
+			throw new McpException('Access denied');
 		}
 		catch (InvalidIdentifierException)
 		{
-			return $this->createFailureResponse('The provided task identifier is invalid.');
+			throw new McpException('The provided task identifier is invalid');
 		}
 
 		if ($task === null)
 		{
-			return 'Task not found.';
+			throw new McpException('Task not found');
 		}
 
-		return 'Task successfully found: ' . Json::encode($task) . '.';
+		return $task;
 	}
 }

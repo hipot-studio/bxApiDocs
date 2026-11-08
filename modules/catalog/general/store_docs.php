@@ -726,6 +726,7 @@ class CAllCatalogDocs
 				if ($userId > 0)
 				{
 					$arDocFields["STATUS_BY"] = $userId;
+					$arDocFields['MODIFIED_BY'] = $userId;
 				}
 				if (!self::update($documentId, $arDocFields))
 				{

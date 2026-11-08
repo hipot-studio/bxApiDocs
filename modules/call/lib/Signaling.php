@@ -36,7 +36,7 @@ class Signaling
 		$this->call = $call;
 	}
 
-	public function sendInviteToUser(int $senderId, int $toUserId, $invitedUsers, $isLegacyMobile, bool $video = false, bool $sendPush = true, bool $isRepeated = false)
+	public function sendInviteToUser(int $senderId, int $toUserId, $invitedUsers, $isLegacyMobile, bool $video = false, bool $sendPush = true, bool $isRepeated = false, ?int $ttl = null, bool $manualInvite = false)
 	{
 		$users = $this->call->getUsers();
 
@@ -75,13 +75,17 @@ class Signaling
 			$push = $this->getInvitePush($senderId, $toUserId, $isLegacyMobile, $video);
 		}
 
-		$this->send('Call::incoming', $toUserId, $config, $push);
+		// A manual conference invite must ring even when the client sees the event as
+		// stale (server_time_ago > 30); `extra.manualInvite` overrides that gate.
+		$extra = $manualInvite ? (\Bitrix\Im\Common::getPullExtra() + ['manualInvite' => true]) : null;
+
+		$this->send('Call::incoming', $toUserId, $config, $push, $ttl ?? 5, $extra);
 	}
 
 	/**
 	 * @param int[]|null $usersInOtherCalls
 	 */
-	public function sendInvite(int $senderId, array $toUserIds, $isLegacyMobile, bool $video = false, bool $sendPush = true, bool $isRepeated = false, ?array $usersInOtherCalls = null)
+	public function sendInvite(int $senderId, array $toUserIds, $isLegacyMobile, bool $video = false, bool $sendPush = true, bool $isRepeated = false, ?array $usersInOtherCalls = null, ?int $ttl = null)
 	{
 		$toUserIds = array_values(array_unique(array_map('intval', $toUserIds)));
 		if ($toUserIds === [])
@@ -142,7 +146,7 @@ class Signaling
 			'command' => 'Call::incoming',
 			'params' => $sharedParams,
 			'user_params' => $userParams,
-			'expiry' => 5,
+			'expiry' => $ttl ?? 5,
 		]);
 
 		// Mobile push stays per-user — getInvitePush swaps name/avatar/email/phone
@@ -192,7 +196,7 @@ class Signaling
 		$pushTag = 'IM_CALL_'.$this->call->getId();
 		$push = [
 			'message' => $pushText,
-			'expiry' => 0,
+			'expiry' => $this->getInvitePushExpiry(),
 			'params' => [
 				'ACTION' => 'IMINV_'.$this->call->getId()."_".time()."_".($video ? 'Y' : 'N'),
 				'PARAMS' => [
@@ -420,8 +424,7 @@ class Signaling
 	{
 		if ($forRecovery)
 		{
-			$recoveryKey = 'call_finish_recovery_' . $this->call->getId();
-			if (!Idempotence::addKey($recoveryKey, self::FINISH_RECOVERY_TTL))
+			if (!$this->acquireFinishRecoveryKey())
 			{
 				return false;
 			}
@@ -433,13 +436,26 @@ class Signaling
 			$result = $this->sendFinishInternal($this->call->getUsers(), true, $forRecovery);
 			if (!$result)
 			{
-				Idempotence::clearKey($recoveryKey);
+				$this->releaseFinishRecoveryKey();
 			}
 
 			return $result;
 		}
 
 		return $this->sendFinishInternal($this->call->getUsers(), true, $forRecovery);
+	}
+
+	protected function acquireFinishRecoveryKey(): bool
+	{
+		return Idempotence::addKey(
+			'call_finish_recovery_' . $this->call->getId(),
+			self::FINISH_RECOVERY_TTL,
+		);
+	}
+
+	protected function releaseFinishRecoveryKey(): void
+	{
+		Idempotence::clearKey('call_finish_recovery_' . $this->call->getId());
 	}
 
 	public function sendSwitchTrackRecordStatus(int $senderId, bool $isTrackRecordOn, string $errorCode = '')
@@ -536,6 +552,130 @@ class Signaling
 		}
 	}
 
+	/**
+	 * Delivers a silent card-only conference notification to a roster in ONE pull
+	 * event: the client surfaces the active conference in its recent surface WITHOUT
+	 * ringing. Batched counterpart of the former per-user path (mirrors the transport
+	 * of {@see self::sendCallInviteBatch()}): the card payload is shared across a
+	 * conference (a group entity), so it lives in `params`; only the per-user
+	 * `logToken` differs and rides in `user_params`, merged per recipient by the
+	 * pull push-server -- one event replaces the former per-recipient fan-out.
+	 *
+	 * Used by the recent reconcile on conference start ({@see \Bitrix\Call\Controller\Call::startCallAction()})
+	 * so existing roster members who were never rung still see the conference before F5.
+	 * A manual add to a running conference ({@see \Bitrix\Call\EventHandler::onChatUserAdd()})
+	 * rings instead (Q-5) and does NOT use this card.
+	 *
+	 * Anti-mass-ring invariant: the card carries `extra.cardOnly = true` and NO
+	 * push -- it can never raise the native call screen. Never calls getInvitePush /
+	 * getCallInvitePush.
+	 *
+	 * @param int[] $toUserIds Recipient user ids.
+	 * @param int|null $ttl Pull expiry in seconds; defaults to {@see Settings::getConferenceInviteTtl()}.
+	 * @param bool $video Whether the conference is a video call.
+	 */
+	public function sendConferenceCardBatch(array $toUserIds, ?int $ttl = null, bool $video = true): void
+	{
+		$toUserIds = array_values(array_unique(array_map('intval', $toUserIds)));
+		if ($toUserIds === [])
+		{
+			return;
+		}
+
+		if (!Loader::includeModule('pull'))
+		{
+			return;
+		}
+
+		try
+		{
+			Pull\Event::add(
+				$toUserIds,
+				$this->buildConferenceCardBatchEvent($this->buildConferenceCardParams($video), $toUserIds, $ttl),
+			);
+		}
+		finally
+		{
+			// Mirror sendCallInviteBatch(): buildConferenceCardParams() populates
+			// callInfoCache[0], so drop it once the card is sent.
+			$this->resetInviteContext();
+		}
+	}
+
+	/**
+	 * Builds the shared `Call::incoming` params for a conference card. Mirrors the JWT
+	 * invite payload ({@see self::sendCallInviteToUser()}) so the client raises the
+	 * same recent card, minus the per-user busy flags (a card never rings, so they
+	 * are not needed and would cost one active-call lookup per recipient) and minus
+	 * the per-user `logToken`, which rides in `user_params` ({@see self::buildConferenceCardBatchEvent()}).
+	 * `cardOnly` deliberately does NOT live here -- see {@see self::buildConferenceCardEvent()}.
+	 *
+	 * @return array
+	 */
+	private function buildConferenceCardParams(bool $video): array
+	{
+		$chatId = (int)$this->call->getAssociatedEntity()?->getChatId();
+		$callToken = $chatId > 0 ? JwtCall::getCallToken($chatId) : '';
+
+		return [
+			'callToken' => $callToken,
+			// Conferences are group entities: toArray() is identical for every
+			// recipient, so compute it once under key 0 and reuse from the cache.
+			'call' => $this->getCallInfoForSend(0),
+			'aiSettings' => $this->getCallAiSettings(),
+			'isLegacyMobile' => false,
+			'video' => $video,
+			'callId' => $this->call->getId(),
+		];
+	}
+
+	/**
+	 * Wraps invite params into a card-only `Call::incoming` pull event. `cardOnly`
+	 * lives strictly in `extra` (never in `params`) and no `push` is attached -- the
+	 * event surfaces a recent card without ringing. Built from scratch (like
+	 * {@see self::sendPushTokenUpdate()}) because the shared send*() helpers do not
+	 * carry an `extra` field.
+	 *
+	 * @param array $params
+	 * @param int|null $ttl
+	 * @return array
+	 */
+	private function buildConferenceCardEvent(array $params, ?int $ttl): array
+	{
+		return [
+			'module_id' => 'call',
+			'command' => 'Call::incoming',
+			'params' => $params,
+			'extra' => \Bitrix\Im\Common::getPullExtra() + ['cardOnly' => true],
+			'expiry' => $ttl ?? Settings::getConferenceInviteTtl(),
+		];
+	}
+
+	/**
+	 * Wraps the shared card params into a batched card-only pull event: reuses
+	 * {@see self::buildConferenceCardEvent()} for the shared envelope (cardOnly in
+	 * `extra`, no push) and attaches per-user overrides in `user_params`. Only
+	 * `logToken` is per-user; the rest of the payload stays shared, so the pull
+	 * push-server merges each recipient's logToken into the identical card. Keys
+	 * must be userId (channel-id keys would silently drop the publish), matching
+	 * {@see self::sendCallInviteBatch()}.
+	 *
+	 * @param array $params Shared card params.
+	 * @param int[] $toUserIds Recipient user ids.
+	 * @param int|null $ttl
+	 * @return array
+	 */
+	private function buildConferenceCardBatchEvent(array $params, array $toUserIds, ?int $ttl): array
+	{
+		$userParams = [];
+		foreach ($toUserIds as $toUserId)
+		{
+			$userParams[(int)$toUserId] = ['logToken' => $this->call->getLogToken((int)$toUserId)];
+		}
+
+		return $this->buildConferenceCardEvent($params, $ttl) + ['user_params' => $userParams];
+	}
+
 	public function sendPushTokenUpdate(string $callToken, array $userIds): void
 	{
 		if (\Bitrix\Main\Loader::includeModule('pull'))
@@ -628,6 +768,7 @@ class Signaling
 		string $sendMode = self::MODE_ALL,
 		array $usersInOtherCalls = [],
 		bool $isRepeated = false,
+		?int $ttl = null,
 	): void
 	{
 		$toUserIds = array_values(array_unique(array_map('intval', $toUserIds)));
@@ -696,7 +837,7 @@ class Signaling
 					'command' => 'Call::incoming',
 					'params' => $sharedParams,
 					'user_params' => $userParams,
-					'expiry' => 5,
+					'expiry' => $ttl ?? 5,
 				]);
 			}
 
@@ -826,6 +967,8 @@ class Signaling
 		bool $sendPush = true,
 		string $sendMode = self::MODE_ALL,
 		?array $usersInOtherCalls = null,
+		?int $ttl = null,
+		bool $manualInvite = false,
 	): void
 	{
 		if ($this->inviteContext !== null)
@@ -878,10 +1021,14 @@ class Signaling
 			$push = $this->getCallInvitePush($senderId, $toUserId, $isLegacyMobile, $video);
 		}
 
+		// A manual conference invite must ring even when the client sees the event as
+		// stale (server_time_ago > 30); `extra.manualInvite` overrides that gate.
+		$extra = $manualInvite ? (\Bitrix\Im\Common::getPullExtra() + ['manualInvite' => true]) : null;
+
 		switch ($sendMode)
 		{
 			case self::MODE_WEB:
-				$this->sendToWeb('Call::incoming', $toUserId, $config);
+				$this->sendToWeb('Call::incoming', $toUserId, $config, $ttl ?? 5, $extra);
 				break;
 			case self::MODE_MOBILE:
 				if ($push !== null)
@@ -891,7 +1038,7 @@ class Signaling
 				break;
 			case self::MODE_ALL:
 			default:
-				$this->send('Call::incoming', $toUserId, $config, $push);
+				$this->send('Call::incoming', $toUserId, $config, $push, $ttl ?? 5, $extra);
 		}
 	}
 
@@ -931,7 +1078,7 @@ class Signaling
 		$pushTag = 'IM_CALL_'.$this->call->getId();
 		$push = [
 			'message' => $pushText,
-			'expiry' => 0,
+			'expiry' => $this->getInvitePushExpiry(),
 			'params' => [
 				'ACTION' => 'IMINV_'.$this->call->getId()."_".time()."_".($video ? 'Y' : 'N'),
 				'PARAMS' => [
@@ -1185,7 +1332,7 @@ class Signaling
 		return $this->sendFinishInternal([$user], false);
 	}
 
-	protected function send(string $command, $users, array $params = [], $push = null, $ttl = 5): bool
+	protected function send(string $command, $users, array $params = [], $push = null, $ttl = 5, ?array $extra = null): bool
 	{
 		if (!Loader::includeModule('pull'))
 		{
@@ -1207,18 +1354,24 @@ class Signaling
 			$params['callId'] = $this->call->getId();
 		}
 
-		Pull\Event::add($users, [
+		$event = [
 			'module_id' => 'call',
 			'command' => $command,
 			'params' => $params,
 			'push' => $push,
-			'expiry' => $ttl
-		]);
+			'expiry' => $ttl,
+		];
+		if ($extra !== null)
+		{
+			$event['extra'] = $extra;
+		}
+
+		Pull\Event::add($users, $event);
 
 		return true;
 	}
 
-	protected function sendToWeb(string $command, $users, array $params = [], $ttl = 5): bool
+	protected function sendToWeb(string $command, $users, array $params = [], $ttl = 5, ?array $extra = null): bool
 	{
 		if (!Loader::includeModule('pull'))
 		{
@@ -1240,12 +1393,18 @@ class Signaling
 			$params['callId'] = $this->call->getId();
 		}
 
-		Pull\Event::add($users, [
+		$event = [
 			'module_id' => 'call',
 			'command' => $command,
 			'params' => $params,
-			'expiry' => $ttl
-		]);
+			'expiry' => $ttl,
+		];
+		if ($extra !== null)
+		{
+			$event['extra'] = $extra;
+		}
+
+		Pull\Event::add($users, $event);
 
 		return true;
 	}
@@ -1303,5 +1462,30 @@ class Signaling
 		$this->callInfoCache[$key] = $payload;
 
 		return $payload;
+	}
+
+	/**
+	 * Returns the TTL (in seconds) for the invite push notification.
+	 *
+	 * The TTL is set to twice the ring/invite period so that:
+	 * - The push lives long enough to reach the recipient on a slow network
+	 *   (at least one full invite period as a delivery buffer).
+	 * - Stale invites are guaranteed to expire and not re-surface after the
+	 *   call is finished or declined.
+	 *
+	 * Formula: 2 * periodSeconds (one period + one period buffer).
+	 * Default: 2 * 30 s = 60 s.
+	 *
+	 * The result is clamped to at least 1 second: a misconfigured zero/negative
+	 * invite period must never collapse the TTL back to 0 (the unbounded expiry
+	 * this fix removes).
+	 *
+	 * @return int TTL in seconds, always >= 1.
+	 */
+	private function getInvitePushExpiry(): int
+	{
+		$periodSeconds = (int)ceil(Settings::getCallInvitePeriod() / 1000);
+
+		return max(1, $periodSeconds * 2);
 	}
 }

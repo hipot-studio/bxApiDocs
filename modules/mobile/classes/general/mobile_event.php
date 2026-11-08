@@ -7,7 +7,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Mobile\Context;
 use Bitrix\Mobile\Menu\Analytics;
-use Bitrix\Mobile\Tab\Manager;
+use Bitrix\Mobile\Tab\Preset\Service\ActiveTabProvider;
 use Bitrix\MobileApp\Janative\Entity\Component;
 use Bitrix\MobileApp\Janative\Entity\Extension;
 
@@ -193,8 +193,11 @@ class CMobileEvent
 			$imageDir = $eventProvider->getPath() . "/images/";
 		}
 
-		$manager = new Manager();
-		$active = array_keys($manager->getActiveTabs());
+		$context = $eventProvider instanceof Context ? $eventProvider : new Context();
+		$activeTabProvider = ActiveTabProvider::forContext($context);
+		$manager = $activeTabProvider->getManager();
+		$activeTabs = self::getActiveTabs($activeTabProvider);
+		$active = array_keys($activeTabs);
 		$all = $manager->getAllTabIDs(true);
 		$diff = array_diff($all, $active);
 		$favorite = &$data[0]["items"];
@@ -253,6 +256,22 @@ class CMobileEvent
 		return $data;
 	}
 
+	private static function getActiveTabs(
+		ActiveTabProvider $activeTabProvider,
+		?\Closure $managedTabsLoader = null,
+	): array
+	{
+		if (!$activeTabProvider->isManagedTabPresetsEnabled())
+		{
+			return $activeTabProvider->getActiveTabs();
+		}
+
+		return $managedTabsLoader !== null
+			? $managedTabsLoader($activeTabProvider->getManager())
+			: $activeTabProvider->getActiveTabs()
+		;
+	}
+
 	private static function addDevelopmentItems(array $menu): array
 	{
 		if (Option::get('mobile', 'developers_menu_section', 'N') !== 'Y')
@@ -302,13 +321,6 @@ class CMobileEvent
 			'title' => 'Manual Testing Tools',
 			'imageName' => 'form',
 			'path' => '/development/testing.tools',
-		];
-
-		$developerMenuItems[] = [
-			'id' => 'fields.component',
-			'title' => "Fields Test",
-			'imageName' => 'form',
-			'path' => '/development/fields.test',
 		];
 
 		$developerMenuItems[] = [

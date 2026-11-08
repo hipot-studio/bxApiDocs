@@ -27,18 +27,20 @@ use Bitrix\Bizproc\Public\DataView\Exception\RecomputeInProgressException;
 use Bitrix\Bizproc\Public\DataView\Exception\RowLimitExceededException;
 use Bitrix\Bizproc\Public\DataView\Exception\SourceUnavailableException;
 use Bitrix\Bizproc\Public\DataView\Service\PreviewService;
+use Bitrix\Bizproc\Public\Feature\DataView\DataViewFlag;
 use Bitrix\Bizproc\Public\Provider\DataViewProvider;
 use Bitrix\Bizproc\Public\Provider\Params\StorageType\StorageTypeFilter;
 use Bitrix\Bizproc\Public\Provider\Params\StorageType\StorageTypeSelect;
 use Bitrix\Bizproc\Public\Provider\Params\StorageType\StorageTypeSort;
 use Bitrix\Bizproc\Public\Provider\SourceCatalogProvider;
 use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Provider\Params\GridParams;
 use Bitrix\Main\Provider\Params\Pager;
@@ -49,8 +51,6 @@ Loc::loadMessages(__FILE__);
 
 final class DataView extends Controller
 {
-	private const OPTION_FEATURE = 'dataview_enabled';
-
 	public const ERROR_ACCESS_DENIED = 'ACCESS_DENIED';
 	public const ERROR_VALIDATION_FAILED = 'DATA_VIEW_VALIDATION_FAILED';
 	public const ERROR_ROWS_LIMIT_EXCEEDED = 'DATA_VIEW_ROWS_LIMIT_EXCEEDED';
@@ -60,14 +60,14 @@ final class DataView extends Controller
 
 	protected function processBeforeAction(Action $action): bool
 	{
-		if (Option::get('bizproc', self::OPTION_FEATURE, 'N') !== 'Y')
+		if (!Feature::isEnabled(DataViewFlag::class))
 		{
 			$this->addError($this->accessDeniedError());
 
 			return false;
 		}
 
-		if (!$this->isAdmin())
+		if (!(new TemplateAccessService())->canAccessTemplates())
 		{
 			$this->addError($this->accessDeniedError());
 
@@ -75,6 +75,72 @@ final class DataView extends Controller
 		}
 
 		return parent::processBeforeAction($action);
+	}
+
+	/**
+	 * Every action carrying a template id takes it from the client, so the actor must hold the edit right
+	 * on that template and the template must exist: an unlimited edit scope grants the right without
+	 * reading the row. A missing or non-positive id means "no template context" and stays open.
+	 */
+	private function checkTemplateAccess(?int $templateId): bool
+	{
+		if ($templateId === null || $templateId <= 0)
+		{
+			return true;
+		}
+
+		if ($this->templateExists($templateId))
+		{
+			return $this->checkTemplateEditRight($templateId);
+		}
+
+		$this->addError($this->accessDeniedError());
+
+		return false;
+	}
+
+	/**
+	 * The owner id stored on a view is not client input: an owner template deleted since must not lock the
+	 * view out of reading and deletion, so existence is not asked of it.
+	 */
+	private function checkTemplateEditRight(?int $templateId): bool
+	{
+		if ($templateId === null || $templateId <= 0 || (new TemplateAccessService())->canEdit($templateId))
+		{
+			return true;
+		}
+
+		$this->addError($this->accessDeniedError());
+
+		return false;
+	}
+
+	private function templateExists(int $templateId): bool
+	{
+		return (bool)Container::getWorkflowTemplateRepository()?->exists($templateId);
+	}
+
+	private function checkStorageEditRight(int $storageTypeId): bool
+	{
+		if ((new TemplateAccessService())->canEditStorage($storageTypeId))
+		{
+			return true;
+		}
+
+		$this->addError($this->accessDeniedError());
+
+		return false;
+	}
+
+	/**
+	 * A save answers for both owners it touches: the one sent by the client and the one already stored on
+	 * the view it overwrites, which SaveDataViewCommandHandler inherits when the client sends none.
+	 */
+	private function checkSaveAccess(?int $ownerTemplateId, ?int $storageTypeId): bool
+	{
+		return $this->checkTemplateAccess($ownerTemplateId)
+			&& $this->checkStorageEditRight((int)$storageTypeId)
+		;
 	}
 
 	/**
@@ -90,6 +156,11 @@ final class DataView extends Controller
 		?string $ownerActivityName = null,
 	): ?array
 	{
+		if (!$this->checkSaveAccess($ownerTemplateId, $storageTypeId))
+		{
+			return null;
+		}
+
 		$actorId = (int)CurrentUser::get()->getId();
 
 		try
@@ -188,6 +259,11 @@ final class DataView extends Controller
 		?int $ownerTemplateId = null,
 	): ?array
 	{
+		if (!$this->checkTemplateAccess($ownerTemplateId))
+		{
+			return null;
+		}
+
 		$actorId = (int)CurrentUser::get()->getId();
 
 		try
@@ -236,6 +312,11 @@ final class DataView extends Controller
 
 	public function listAction(int $templateId, string $activityName): ?array
 	{
+		if (!$this->checkTemplateAccess($templateId))
+		{
+			return null;
+		}
+
 		try
 		{
 			return ['items' => (new DataViewProvider())->getListByOwner($templateId, $activityName)];
@@ -280,6 +361,11 @@ final class DataView extends Controller
 
 	public function getAction(int $storageTypeId): ?array
 	{
+		if (!$this->checkStorageEditRight($storageTypeId))
+		{
+			return null;
+		}
+
 		try
 		{
 			$data = (new DataViewProvider())->getByStorageTypeId($storageTypeId);
@@ -318,6 +404,11 @@ final class DataView extends Controller
 
 	public function deleteAction(int $storageTypeId): ?array
 	{
+		if (!$this->checkStorageEditRight($storageTypeId))
+		{
+			return null;
+		}
+
 		try
 		{
 			(new DeleteDataViewCommandHandler())(new DeleteDataViewCommand($storageTypeId));
@@ -346,6 +437,11 @@ final class DataView extends Controller
 
 	public function getSourcesAction(?int $templateId = null): ?array
 	{
+		if (!$this->checkTemplateAccess($templateId))
+		{
+			return null;
+		}
+
 		try
 		{
 			$sources = (new SourceCatalogProvider())->getSources((int)CurrentUser::get()->getId(), $templateId);
@@ -362,6 +458,11 @@ final class DataView extends Controller
 
 	public function getStampConstantsAction(?int $templateId = null): ?array
 	{
+		if (!$this->checkTemplateAccess($templateId))
+		{
+			return null;
+		}
+
 		try
 		{
 			$constants = (new SourceCatalogProvider())->getStampConstants(
@@ -391,6 +492,11 @@ final class DataView extends Controller
 		?int $templateId = null,
 	): ?array
 	{
+		if (!$this->checkTemplateAccess($templateId))
+		{
+			return null;
+		}
+
 		try
 		{
 			$source = SourceRef::fromArray(['module' => $module, 'entity' => $entity, 'params' => $params]);
@@ -426,7 +532,7 @@ final class DataView extends Controller
 	private function accessDeniedError(): Error
 	{
 		return new Error(
-			Loc::getMessage('BIZPROC_INFRASTRUCTURE_CONTROLLER_DATAVIEW_ACCESS_DENIED'),
+			Loc::getMessage('BIZPROC_INFRASTRUCTURE_CONTROLLER_DATAVIEW_ACCESS_DENIED') ?? '',
 			self::ERROR_ACCESS_DENIED,
 		);
 	}
@@ -461,8 +567,7 @@ final class DataView extends Controller
 	{
 		return $exception->getViolation() === InvalidDataViewDefinitionException::VIOLATION_TEMPLATE_SOURCE_FOREIGN
 			? $this->templateSourceForeignError()
-			: $this->validationError()
-		;
+			: $this->validationError();
 	}
 
 	private function validationError(): Error
@@ -563,11 +668,6 @@ final class DataView extends Controller
 			Loc::getMessage('BIZPROC_INFRASTRUCTURE_CONTROLLER_DATAVIEW_UNEXPECTED_ERROR'),
 			self::ERROR_UNEXPECTED,
 		);
-	}
-
-	private function isAdmin(): bool
-	{
-		return (new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin();
 	}
 
 	private function formatTimestamp(?int $timestamp): ?string

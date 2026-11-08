@@ -6,8 +6,10 @@ namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Dictionary;
 
 use Bitrix\Rest\V3\Attribute\Filterable;
 use Bitrix\Rest\V3\Attribute\Sortable;
+use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\Dto\Dto;
 
+#[Title('CRM entity type')]
 final class EntityTypeDto extends Dto
 {
 	#[Filterable]

@@ -15,7 +15,12 @@ class Lead implements PermissionEntity
 		$inheritDescription = PermissionAttrPresets::stageInheritDescription(CCrmOwnerType::Lead, null, null);
 
 		return array_merge(
-			PermissionAttrPresets::crmEntityPresetAutomation(true, $inheritDescription),
+			PermissionAttrPresets::crmEntityPresetAutomation(
+				true,
+				$inheritDescription,
+				withObserversWrite: true,
+				withObserversWriteByStages: true,
+			),
 			PermissionAttrPresets::crmEntityKanbanHideSum(),
 			PermissionAttrPresets::crmStageTransition(CCrmStatus::GetStatusListEx('STATUS'), $inheritDescription)
 		);

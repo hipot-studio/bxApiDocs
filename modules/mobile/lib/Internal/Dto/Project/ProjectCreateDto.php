@@ -12,6 +12,8 @@ final class ProjectCreateDto
 		public readonly string $initiatePerms = SONET_ROLES_USER,
 		public readonly ?string $dateStart = null,
 		public readonly ?string $dateFinish = null,
+		private readonly ?bool $dateStartProvided = null,
+		private readonly ?bool $dateFinishProvided = null,
 		public readonly array $tags = [],
 		public readonly int $ownerId = 0,
 		public readonly array $moderatorIds = [],
@@ -35,6 +37,17 @@ final class ProjectCreateDto
 	{
 	}
 
+	// A directly constructed dto carries no presence flag, so the value itself tells whether the bound was given.
+	public function hasDateStart(): bool
+	{
+		return $this->dateStartProvided ?? $this->dateStart !== null;
+	}
+
+	public function hasDateFinish(): bool
+	{
+		return $this->dateFinishProvided ?? $this->dateFinish !== null;
+	}
+
 	public static function fromArray(array $fields): self
 	{
 		$taskPermissions = is_array($fields['taskPermissions'] ?? null) ? $fields['taskPermissions'] : [];
@@ -49,6 +62,8 @@ final class ProjectCreateDto
 			initiatePerms: (string)($fields['initiatePerms'] ?? SONET_ROLES_USER),
 			dateStart: isset($fields['dateStart']) ? (string)$fields['dateStart'] : null,
 			dateFinish: isset($fields['dateFinish']) ? (string)$fields['dateFinish'] : null,
+			dateStartProvided: array_key_exists('dateStart', $fields),
+			dateFinishProvided: array_key_exists('dateFinish', $fields),
 			tags: $tags,
 			ownerId: (int)($fields['ownerId'] ?? 0),
 			moderatorIds: self::normalizeIdList($fields['moderatorIds'] ?? []),

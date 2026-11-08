@@ -7,18 +7,19 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Internal\Access\Otp\UserPermission;
+use Bitrix\Intranet\Internal\Enum\Otp\OtpScenario;
 use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
+use Bitrix\Intranet\Internal\Service\Otp\OtpScenarioResolver;
 use Bitrix\Intranet\Internal\Service\Otp\PersonalMobilePush;
 use Bitrix\Intranet\Public\Provider\Otp\DayListProvider;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Web\Uri;
-use Bitrix\Security\Mfa\OtpType;
 
 class IntranetUserProfileSectionSecurity extends CBitrixComponent
 {
@@ -117,6 +118,7 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 		$this->arResult["PASSWORD"]["CAN_VIEW"] = $user->isCurrent() || $isAdmin ? 'Y' : 'N';
 		$this->arResult["USER"]["CAN_LOGOUT"] = $user->isCurrent() ? 'Y' : 'N';
 		$this->arResult['IS_CLOUD'] = Loader::includeModule('bitrix24');
+		$this->arResult['CAN_SHOW_PROFILE_MANAGEMENT'] = $this->canShowProfileManagement();
 
 		if (
 			Loader::includeModule('bitrix24')
@@ -171,16 +173,18 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 			$canShowBannerPushOtp = $pushOtpService->canUsePersonalModeByUserId((int)$this->arParams['USER']->getId());
 		}
 
-		$isPersonalPushType = $this->arParams['PERSONAL_OTP']->getType() === OtpType::Push;
+		$scenario = (new OtpScenarioResolver($pushOtpService))->resolve(
+			$userId,
+			$this->arParams['PERSONAL_OTP']->getType(),
+			$this->arParams['PERSONAL_OTP']->isInitialized(),
+		);
 
 		$params = [
 			'provideSmsOtp' => $verifyPhone->canSendSms(),
 			'canShowBannerPushOtp' => $canShowBannerPushOtp,
 			'isOtpActive' => $this->arParams['PERSONAL_OTP']->isActivated(),
 			'canDeactivate' => $otpPermission->canDeactivate(),
-			'isNotPushOtp' => (!$isPersonalPushType && $this->arParams['PERSONAL_OTP']->isInitialized())
-				|| (!$isPersonalPushType && !$pushOtpService->getPromoteMode()->isGreaterOrEqual(PromoteMode::Low))
-				|| ($pushOtpService->isLegacyOtpAllowedByUserId($userId) && !$isPersonalPushType),
+			'isNotPushOtp' => $scenario === OtpScenario::Legacy,
 			'days' => $this->createDays(),
 		];
 
@@ -197,6 +201,11 @@ class IntranetUserProfileSectionSecurity extends CBitrixComponent
 
 	private function createDays(): array
 	{
-		return (new DayListProvider())->getList();
+		return (new DayListProvider())->getList($this->arParams['USER']);
+	}
+
+	private function canShowProfileManagement(): bool
+	{
+		return $this->arResult['IS_CLOUD'] && $this->arResult['IS_CURRENT_USER'];
 	}
 }

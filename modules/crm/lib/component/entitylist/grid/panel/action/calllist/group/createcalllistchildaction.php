@@ -2,11 +2,11 @@
 
 namespace Bitrix\Crm\Component\EntityList\Grid\Panel\Action\CallList\Group;
 
+use Bitrix\Crm\Component\EntityList\Grid\Panel\ApplyButton;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Event;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Grid\Panel\Action\Group\GroupChildAction;
 use Bitrix\Main\Grid\Panel\Actions;
-use Bitrix\Main\Grid\Panel\Snippet;
 use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
@@ -14,7 +14,7 @@ use Bitrix\Main\Result;
 
 final class CreateCallListChildAction extends GroupChildAction
 {
-	public function __construct(private int $entityTypeId)
+	public function __construct(private int $entityTypeId, private string $gridId)
 	{
 	}
 
@@ -47,7 +47,7 @@ final class CreateCallListChildAction extends GroupChildAction
 		$onchange->addAction([
 			'ACTION' => Actions::CREATE,
 			'DATA' => [
-				(new Snippet())->getApplyButton([
+				ApplyButton::forGrid($this->gridId, [
 					'ONCHANGE' => [
 						[
 							'ACTION' => Actions::CALLBACK,
@@ -55,6 +55,7 @@ final class CreateCallListChildAction extends GroupChildAction
 								[
 									'JS' => (new Event('CallList:createCallList'))
 										->addEntityTypeId($this->entityTypeId)
+										->addGridId($this->gridId)
 										->buildJsCallback()
 									,
 								]

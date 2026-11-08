@@ -34,6 +34,14 @@ class StorageTypeProvider
 		return $this->repository->getType($filter, $select);
 	}
 
+	/**
+	 * Exact resolve by CODE, unlike the substring search of the admin grid filter (StorageTypeFilter['CODE']).
+	 */
+	public function getByCode(string $code): ?StorageType
+	{
+		return $this->repository->getByCode($code);
+	}
+
 	public function getCount(?FilterInterface $filter = null): int
 	{
 		return $this->repository->getCount($filter);

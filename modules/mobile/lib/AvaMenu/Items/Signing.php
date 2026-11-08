@@ -5,8 +5,8 @@ namespace Bitrix\Mobile\AvaMenu\Items;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Mobile\AvaMenu\AbstractMenuItem;
+use Bitrix\Mobile\Tab\Preset\Service\ActiveTabProvider;
 use Bitrix\SignMobile\Config\Feature;
-use \Bitrix\Mobile\Tab\Manager;
 
 class Signing extends AbstractMenuItem
 {
@@ -16,8 +16,7 @@ class Signing extends AbstractMenuItem
 	 */
 	public function isAvailable(): bool
 	{
-		$manager = new Manager($this->context);
-		$activeTabs = $manager->getActiveTabs();
+		$activeTabs = ActiveTabProvider::forContext($this->context)->getActiveTabs();
 
 		if (isset($activeTabs['sign']))
 		{

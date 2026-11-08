@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Public\Provider\PermissionMatrixProvider;
 use Bitrix\Bizproc\Internal\Service\Feature\BpDesignerFeature;
 use Bitrix\Main\Loader;
@@ -21,14 +22,15 @@ class BizprocConfigPermissionsComponent extends CBitrixComponent
 
 		if (!$this->includeModules())
 		{
-			$this->showError(Loc::getMessage('BIZPROC_CONFIG_PERMISSIONS_MODULE_ERROR'));
+			$this->showError(ErrorMessage::MODULE_NOT_INSTALLED->get());
 
 			return;
 		}
 
-		if (!$this->getFeature()->isAvailable())
+		$feature = $this->getFeature();
+		if (!$feature->isAvailable())
 		{
-			$this->showError(Loc::getMessage('BIZPROC_CONFIG_PERMISSIONS_TARIFF_ERROR'));
+			$this->showError($feature->makeUnavailableByTariffError()->getMessage());
 
 			return;
 		}

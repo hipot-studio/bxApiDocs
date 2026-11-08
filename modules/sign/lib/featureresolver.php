@@ -14,6 +14,8 @@ final class FeatureResolver
 		'signUntilDate',
 		'repeatTestSigning',
 		'kedoDocumentAnnul',
+		'kedoSendManualReminder',
+		'hcmLinkExclusions',
 	];
 	private static self $instance;
 

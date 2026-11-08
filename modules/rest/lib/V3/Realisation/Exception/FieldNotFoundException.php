@@ -3,10 +3,11 @@
 namespace Bitrix\Rest\V3\Realisation\Exception;
 
 use Bitrix\Rest\V3\Exception\RestException;
+use Bitrix\Rest\V3\Exception\SkipWriteToLogException;
 
 use CRestServer;
 
-class FieldNotFoundException extends RestException
+class FieldNotFoundException extends RestException implements SkipWriteToLogException
 {
 	protected const STATUS = CRestServer::STATUS_NOT_FOUND;
 

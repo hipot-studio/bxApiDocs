@@ -4,6 +4,7 @@ namespace Bitrix\StaffTrackMobile\Public\Features;
 
 use Bitrix\Mobile\Config\FeatureFlag;
 use Bitrix\Main\Config\Option;
+use Bitrix\StaffTrack\Feature;
 
 final class AutoCheckInFeature extends FeatureFlag
 {
@@ -11,7 +12,9 @@ final class AutoCheckInFeature extends FeatureFlag
 
 	public function isEnabled(): bool
 	{
-		return (new CheckInFeature())->isEnabled() && $this->isOptionEnabled();
+		return (new CheckInFeature())->isEnabled()
+			&& Feature::isGeoFeaturesAvailableByRegion()
+			&& $this->isOptionEnabled();
 	}
 
 	public function enable(): void

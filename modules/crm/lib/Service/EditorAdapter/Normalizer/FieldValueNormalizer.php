@@ -6,7 +6,20 @@ use Bitrix\Crm\Field;
 
 final class FieldValueNormalizer extends Base
 {
-	public function __construct(private readonly string $fieldType)
+	private const DEFAULT_FLOAT_PRECISION = 6;
+
+	/**
+	 * The range the `PRECISION` setting of a double user field is limited to:
+	 * the same limits the main.field.double component applies in formatValue()
+	 * (@see \Bitrix\Main\UserField\Types\DoubleType).
+	 */
+	private const MIN_FLOAT_PRECISION = 0;
+	private const MAX_FLOAT_PRECISION = 12;
+
+	public function __construct(
+		private readonly string $fieldType,
+		private readonly ?int $floatPrecision = null,
+	)
 	{
 	}
 
@@ -32,9 +45,7 @@ final class FieldValueNormalizer extends Base
 	{
 		if (is_float($value))
 		{
-			$value = sprintf('%f', $value);
-			$value = rtrim($value, '0');
-			$value = rtrim($value, '.');
+			$value = $this->formatFloat($value);
 		}
 		elseif (is_numeric($value))
 		{
@@ -57,5 +68,47 @@ final class FieldValueNormalizer extends Base
 		}
 
 		return $value;
+	}
+
+	/**
+	 * Rounds like round() does in main.field.double and DoubleType, then returns the shortest
+	 * fixed-point notation that is read back as the same float, without binary noise and trailing zeroes.
+	 */
+	private function formatFloat(float $value): string
+	{
+		if (!is_finite($value))
+		{
+			return (string)$value;
+		}
+
+		// The caller is free to pass any number: a negative precision would make round() round
+		// to tens and break sprintf() with a ValueError, and one above the PRECISION range of a
+		// double user field would keep more decimals than the field itself ever shows.
+		$precision = max(
+			self::MIN_FLOAT_PRECISION,
+			min(self::MAX_FLOAT_PRECISION, $this->floatPrecision ?? self::DEFAULT_FLOAT_PRECISION)
+		);
+		$value = round($value, $precision);
+		if ($value == 0)
+		{
+			return '0';
+		}
+
+		for ($decimals = 0; $decimals < $precision; $decimals++)
+		{
+			$result = sprintf("%.{$decimals}F", $value);
+			if ((float)$result === $value)
+			{
+				return $result;
+			}
+		}
+
+		$result = sprintf("%.{$precision}F", $value);
+		if (str_contains($result, '.'))
+		{
+			$result = rtrim(rtrim($result, '0'), '.');
+		}
+
+		return $result;
 	}
 }

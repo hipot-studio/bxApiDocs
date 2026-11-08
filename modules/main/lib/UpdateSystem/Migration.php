@@ -64,16 +64,20 @@ class Migration
 
 	public function table(string $tableName): Table
 	{
-		if (!isset($this->tables[$tableName]))
+		// case-insensitive cache key: the same table addressed in different case
+		// must share one instance (and its dev-check state); the first-seen name
+		// is kept for rendering
+		$instanceKey = strtolower($tableName);
+		if (!isset($this->tables[$instanceKey]))
 		{
-			$this->tables[$tableName] = new Table(
+			$this->tables[$instanceKey] = new Table(
 				$tableName,
 				$this->context(),
 				$this->indexNameProcessor(),
 			);
 		}
 
-		return $this->tables[$tableName];
+		return $this->tables[$instanceKey];
 	}
 
 	private function indexNameProcessor(): IndexNameProcessor

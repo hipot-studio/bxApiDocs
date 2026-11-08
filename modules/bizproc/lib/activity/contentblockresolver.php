@@ -7,6 +7,7 @@ namespace Bitrix\Bizproc\Activity;
 use Bitrix\Bizproc\Activity\Dto\ContentBlock;
 use Bitrix\Bizproc\Activity\Dto\ContentBlockContext;
 use Bitrix\Bizproc\Activity\Dto\ContentBlockScope;
+use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Bizproc\Public\Activity\Interface\ActivityContentBlockProviderInterface;
 use Bitrix\Bizproc\Public\Activity\Interface\ContentBlockScopeConsumerInterface;
 use Bitrix\Bizproc\Public\Activity\Interface\ContentBlockScopeProducerInterface;
@@ -67,9 +68,11 @@ final class ContentBlockResolver
 	 * producer activity, then resolves each activity against it. Keyed by activity Name.
 	 *
 	 * @param array<int, array{Type?: string, Name?: string, Properties?: array}> $activities
+	 * @param ?ContentBlockContext $baseContext Context of the caller: its readable expression resolver is
+	 *        carried over, while the scope stays the one this pass assembles.
 	 * @return array<string, ?ContentBlock>
 	 */
-	public static function resolveForTemplate(array $activities): array
+	public static function resolveForTemplate(array $activities, ?ContentBlockContext $baseContext = null): array
 	{
 		$classNames = [];
 		foreach ($activities as $index => $activity)
@@ -77,8 +80,11 @@ final class ContentBlockResolver
 			$classNames[$index] = self::resolveClassName((string)($activity['Type'] ?? ''));
 		}
 
-		$context = new ContentBlockContext(scope: self::buildScope($activities, $classNames));
+		$context = ($baseContext ?? new ContentBlockContext())
+			->withScope(self::buildScope($activities, $classNames))
+		;
 
+		$contextsByDocumentType = [];
 		$result = [];
 		foreach ($activities as $index => $activity)
 		{
@@ -88,14 +94,61 @@ final class ContentBlockResolver
 				continue;
 			}
 
+			$properties = is_array($activity['Properties'] ?? null) ? $activity['Properties'] : [];
+
 			$result[$name] = self::resolveWithClass(
 				$classNames[$index],
-				is_array($activity['Properties'] ?? null) ? $activity['Properties'] : [],
-				$context,
+				$properties,
+				self::contextForNode(
+					$context,
+					$classNames[$index],
+					(string)($activity['Type'] ?? ''),
+					$properties,
+					$contextsByDocumentType,
+				),
 			);
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Context of one node: a node declaring a document type of its own works in that type, so a reference to
+	 * a document field inside it is named there and not in the type of the template.
+	 *
+	 * Asked only for a node that draws a content block at all and only while the pass has a readable form to
+	 * resolve, and answered once per document type: a pass over a whole template must not pay a lookup per
+	 * node for an answer that depends on the type alone.
+	 *
+	 * @param array<string, ContentBlockContext> $contextsByDocumentType Contexts already derived by this pass.
+	 */
+	private static function contextForNode(
+		ContentBlockContext $context,
+		?string $className,
+		string $activityType,
+		array $properties,
+		array &$contextsByDocumentType,
+	): ContentBlockContext
+	{
+		if (
+			$context->readableExpressionResolver === null
+			|| $className === null
+			|| !isset(class_implements($className, false)[ActivityContentBlockProviderInterface::class])
+		)
+		{
+			return $context;
+		}
+
+		$documentType = Container::instance()
+			->getComplexActivityService()
+			->getPublishedDocumentTypeForNode($activityType, $properties)
+		;
+		if ($documentType === null)
+		{
+			return $context;
+		}
+
+		return $contextsByDocumentType[implode('|', $documentType)] ??= $context->forDocumentType($documentType);
 	}
 
 	/**

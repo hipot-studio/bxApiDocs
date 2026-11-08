@@ -22,6 +22,7 @@ final class AppFilter
 	private ?string $code = null;
 	private ?array $attributes = null;
 	private ?ConditionTree $where = null;
+	private ?array $ids = null;
 
 	public function active(?bool $active = true): self
 	{
@@ -93,6 +94,13 @@ final class AppFilter
 		return $this;
 	}
 
+	public function ids(?array $ids): self
+	{
+		$this->ids = $ids;
+
+		return $this;
+	}
+
 	public function getActive(): ?bool
 	{
 		return $this->active;
@@ -141,6 +149,11 @@ final class AppFilter
 	public function getWhere(): ?ConditionTree
 	{
 		return $this->where;
+	}
+
+	public function getIds(): ?array
+	{
+		return $this->ids;
 	}
 
 	/**

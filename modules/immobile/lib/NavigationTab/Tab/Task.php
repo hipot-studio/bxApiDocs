@@ -55,7 +55,7 @@ class Task extends BaseRecent
 
 	public function getTabTitle(): ?string
 	{
-		return Loc::getMessage('IMMOBILE_NAVIGATION_TAB_TASK_TAB_TITLE');
+		return $this->folder?->getTitle() ?? Loc::getMessage('IMMOBILE_NAVIGATION_TAB_TASK_TAB_TITLE');
 	}
 
 	public function getComponentCode(): string

@@ -13,6 +13,43 @@ class MemberEntityMapper
 	private const ACCESS_CODE_USER = 'U';
 	private const ACCESS_CODE_DEPARTMENT = 'DR';
 	private const ACCESS_CODE_DEPARTMENT_FLAT = 'D';
+	private const ACCESS_CODE_TEAM = 'SNT';
+	private const ACCESS_CODE_TEAM_RECURSIVE = 'SNTR';
+
+	/**
+	 * Maps member type and node scope to an access code prefix, in both directions. Ordered by prefix length
+	 * descending, so that a recursive prefix is always tried before the flat variant it contains: SNTR before
+	 * SNT, DR before D.
+	 *
+	 * @var list<array{prefix: string, type: MemberEntityType, withChildNodes: ?bool}>
+	 */
+	private const ACCESS_CODE_PREFIXES = [
+		[
+			'prefix' => self::ACCESS_CODE_TEAM_RECURSIVE,
+			'type' => MemberEntityType::Team,
+			'withChildNodes' => true,
+		],
+		[
+			'prefix' => self::ACCESS_CODE_TEAM,
+			'type' => MemberEntityType::Team,
+			'withChildNodes' => false,
+		],
+		[
+			'prefix' => self::ACCESS_CODE_DEPARTMENT,
+			'type' => MemberEntityType::Department,
+			'withChildNodes' => true,
+		],
+		[
+			'prefix' => self::ACCESS_CODE_USER,
+			'type' => MemberEntityType::User,
+			'withChildNodes' => null,
+		],
+		[
+			'prefix' => self::ACCESS_CODE_DEPARTMENT_FLAT,
+			'type' => MemberEntityType::Department,
+			'withChildNodes' => false,
+		],
+	];
 
 	public function fromArray(array $member): ?MemberEntity
 	{
@@ -32,7 +69,7 @@ class MemberEntityMapper
 		}
 
 		$withChildNodes = null;
-		if ($type === MemberEntityType::Department)
+		if ($type !== MemberEntityType::User)
 		{
 			$withChildNodes = is_bool($member['withChildNodes'] ?? null)
 				? $member['withChildNodes']
@@ -89,21 +126,32 @@ class MemberEntityMapper
 			return null;
 		}
 
-		return match ($entity->type)
-		{
-			MemberEntityType::User => $this->toUserAccessCode($entity->id),
-			MemberEntityType::Department => is_bool($entity->withChildNodes)
-				? ($entity->withChildNodes ? self::ACCESS_CODE_DEPARTMENT : self::ACCESS_CODE_DEPARTMENT_FLAT) . $entity->id
-				: null,
-		};
+		return $this->buildAccessCode($entity->type, $entity->withChildNodes, $entity->id);
 	}
 
 	public function toUserAccessCode(int $userId): ?string
 	{
-		return $userId > 0
-			? self::ACCESS_CODE_USER . $userId
-			: null
-		;
+		return $this->buildAccessCode(MemberEntityType::User, null, $userId);
+	}
+
+	private function buildAccessCode(MemberEntityType $type, ?bool $withChildNodes, int $id): ?string
+	{
+		if ($id <= 0)
+		{
+			return null;
+		}
+
+		$scope = $type === MemberEntityType::User ? null : $withChildNodes;
+
+		foreach (self::ACCESS_CODE_PREFIXES as $prefix)
+		{
+			if ($prefix['type'] === $type && $prefix['withChildNodes'] === $scope)
+			{
+				return $prefix['prefix'] . $id;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -126,42 +174,34 @@ class MemberEntityMapper
 
 	public function fromAccessCode(string $code): ?MemberEntity
 	{
-		if (str_starts_with($code, self::ACCESS_CODE_DEPARTMENT))
+		foreach (self::ACCESS_CODE_PREFIXES as $prefix)
 		{
-			$id = (int)substr($code, strlen(self::ACCESS_CODE_DEPARTMENT));
-			if ($id > 0)
+			$id = $this->extractAccessCodeId($code, $prefix['prefix']);
+			if ($id === null)
 			{
-				return new MemberEntity(
-					id: $id,
-					type: MemberEntityType::Department,
-					withChildNodes: true,
-				);
+				continue;
 			}
-		}
 
-		if (str_starts_with($code, self::ACCESS_CODE_DEPARTMENT_FLAT))
-		{
-			$id = (int)substr($code, strlen(self::ACCESS_CODE_DEPARTMENT_FLAT));
-			if ($id > 0)
-			{
-				return new MemberEntity(
-					id: $id,
-					type: MemberEntityType::Department,
-					withChildNodes: false,
-				);
-			}
-		}
-
-		if (str_starts_with($code, self::ACCESS_CODE_USER))
-		{
-			$id = (int)substr($code, strlen(self::ACCESS_CODE_USER));
-			if ($id > 0)
-			{
-				return new MemberEntity(id: $id, type: MemberEntityType::User);
-			}
+			return new MemberEntity(
+				id: $id,
+				type: $prefix['type'],
+				withChildNodes: $prefix['withChildNodes'],
+			);
 		}
 
 		return null;
+	}
+
+	private function extractAccessCodeId(string $code, string $prefix): ?int
+	{
+		if (!str_starts_with($code, $prefix))
+		{
+			return null;
+		}
+
+		$id = substr($code, strlen($prefix));
+
+		return preg_match('/^[0-9]+$/D', $id) === 1 && (int)$id > 0 ? (int)$id : null;
 	}
 
 	public function fromAccessCodes(array $codes): MemberEntityCollection

@@ -12,12 +12,14 @@ use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Provider\EmployeeProvider;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertStatus;
+use Bitrix\Socialnetwork\V2\Internal\Entity\PrivacyType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntity;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityCollection;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Project;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\ProjectDates;
 use Bitrix\Socialnetwork\V2\Internal\Exceptions\ProjectNameExistsException;
+use Bitrix\Socialnetwork\V2\Internal\Integration\HumanResources\Service\StructureRelationService;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\ConvertProgressMapper;
 use Bitrix\Socialnetwork\V2\Internal\Repository\CollabOptionRepository;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\MemberEntityMapper;
@@ -45,11 +47,61 @@ class CopyProjectService
 		private readonly ProjectFeatureWhitelistService $projectFeatureWhitelistService,
 		private readonly ProjectCopyFeatureService $projectCopyFeatureService,
 		private readonly WorkgroupRepository $workgroupRepository,
+		private readonly StructureRelationService $structureRelationService,
+		private readonly ProjectAnalytics $projectAnalytics,
 	)
 	{
 	}
 
 	public function copy(
+		int $sourceProjectId,
+		Project $project,
+		?array $copyOptions,
+		int $userId,
+		bool $isCurrentUserModuleAdmin = false,
+	): Result
+	{
+		// Same as AddProjectService: take the copy privacy from the form; treat a missing value as an open project.
+		$isOpened = $project->privacyType !== PrivacyType::Closed;
+
+		try
+		{
+			$result = $this->doCopy(
+				sourceProjectId: $sourceProjectId,
+				project: $project,
+				copyOptions: $copyOptions,
+				userId: $userId,
+				isCurrentUserModuleAdmin: $isCurrentUserModuleAdmin,
+			);
+		}
+		catch (\Throwable $t)
+		{
+			// Covers ProjectNameExistsException and any copy failure. The new project does not exist yet → newGroupId = 0.
+			$this->projectAnalytics->trackProjectCopyFinish(
+				newGroupId: 0,
+				sourceGroupId: $sourceProjectId,
+				userId: $userId,
+				copyOptions: $copyOptions,
+				isOpened: $isOpened,
+				errorCode: (string)$t->getCode(),
+			);
+
+			throw $t;
+		}
+
+		$this->projectAnalytics->trackProjectCopyFinish(
+			newGroupId: (int)($result->getData()['projectId'] ?? 0),
+			sourceGroupId: $sourceProjectId,
+			userId: $userId,
+			copyOptions: $copyOptions,
+			isOpened: $isOpened,
+			errorCode: $result->isSuccess() ? null : $this->extractFirstErrorCode($result->getErrors()),
+		);
+
+		return $result;
+	}
+
+	private function doCopy(
 		int $sourceProjectId,
 		Project $project,
 		?array $copyOptions,
@@ -63,6 +115,18 @@ class CopyProjectService
 		if ($project->name !== null && $this->workgroupRepository->isNameExists($project->name))
 		{
 			throw new ProjectNameExistsException();
+		}
+
+		[$members, $moderatorMembers] = $this->resolveMembers(
+			sourceProjectId: $sourceProjectId,
+			project: $project,
+		);
+		$teamsSupportedResult = $this->structureRelationService->validateTeamsSupported(
+			$members === null ? [] : $this->memberEntityMapper->toAccessCodes($members),
+		);
+		if (!$teamsSupportedResult->isSuccess())
+		{
+			return $teamsSupportedResult;
 		}
 
 		$copyResult = $this->legacyProjectCopyService->copy(
@@ -95,12 +159,10 @@ class CopyProjectService
 
 		$projectTerm = $this->extractProjectTerm($copyResult);
 
-		$this->projectFeatureWhitelistService->syncWithCreateDefaults($projectId);
+		// The copy wizard offers the same tool switches as the create form, so the state it asks for has to reach
+		// the sync: it is the only step that writes the feature states of a freshly copied project.
+		$this->projectFeatureWhitelistService->syncWithCreateDefaults($projectId, $project->features, $sourceProjectId);
 
-		[$members, $moderatorMembers] = $this->resolveMembers(
-			sourceProjectId: $sourceProjectId,
-			project: $project,
-		);
 		$targetProject = $this->buildTargetProject(
 			projectId: $projectId,
 			sourceProjectId: $sourceProjectId,
@@ -136,6 +198,16 @@ class CopyProjectService
 		}
 
 		return (new Result())->setData(['projectId' => $projectId]);
+	}
+
+	/**
+	 * @param Error[] $errors
+	 */
+	private function extractFirstErrorCode(array $errors): ?string
+	{
+		$firstError = $errors[0] ?? null;
+
+		return $firstError !== null ? (string)$firstError->getCode() : null;
 	}
 
 	private function sendProjectCreatedMessages(int $projectId, int $userId): void

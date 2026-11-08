@@ -8,6 +8,7 @@ use Bitrix\Disk\Controller\Response\PreviewResponseBuilder;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Infrastructure\Controller\HtmlViewerRefusalResponse;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Command\BaseObject\CreateByContentCommand;
 use Bitrix\Disk\Internal\Service\HtmlViewerService;
 use Bitrix\Disk\Internal\Service\MarkdownRenderService;
 use Bitrix\Disk\Internal\Service\TiffPreviewService;
@@ -16,7 +17,6 @@ use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Security\ParameterSigner;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Main;
-use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\ActionFilter\Authentication;
@@ -46,8 +46,7 @@ class File extends BaseObject
 		];
 
 		$configureActions['download'] =
-		$configureActions['showMarkdown'] =
-		$configureActions['showHtml'] = [
+		$configureActions['showMarkdown'] = [
 			'-prefilters' => [
 				Main\Engine\ActionFilter\Csrf::class,
 				Authentication::class,
@@ -57,6 +56,16 @@ class File extends BaseObject
 				new Main\Engine\ActionFilter\CloseSession(),
 			]
 		];
+		$configureActions['showHtml'] = $configureActions['showMarkdown'];
+		$configureActions['showHtml']['+prefilters'] = array_values(array_filter(
+			$configureActions['showHtml']['+prefilters'],
+			static fn(object $filter): bool => !$filter instanceof Authentication,
+		));
+		$configureActions['showHtml']['-prefilters'][] = Engine\ActionFilter\CheckReadPermission::class;
+		$configureActions['showHtml']['+prefilters'][] = new Engine\ActionFilter\CheckHtmlViewerReadPermission();
+		$configureActions['showHtml']['+prefilters'][] = new Main\Engine\ActionFilter\HttpMethod([
+			Main\Engine\ActionFilter\HttpMethod::METHOD_GET,
+		]);
 		$configureActions['showTiffPreview'] = $configureActions['showMarkdown'];
 		$configureActions['showTiffPreview']['+prefilters'][] = new Main\Engine\ActionFilter\HttpMethod([
 			Main\Engine\ActionFilter\HttpMethod::METHOD_GET,
@@ -168,77 +177,27 @@ class File extends BaseObject
 
 	public function createByContentAction(Disk\Folder $folder, $filename, Disk\Bitrix24Disk\TmpFile $content, $generateUniqueName = false)
 	{
-		$content->registerDelayedDeleteOnShutdown();
-		$currentUserId = $this->getCurrentUser()->getId();
-		$securityContext = $folder->getStorage()->getSecurityContext($currentUserId);
 		$contentType = $this->request->getHeader('X-Upload-Content-Type')?: $content->getContentType();
-
-		if (!$folder->canAdd($securityContext))
-		{
-			$this->addError(new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED')));
-
-			return null;
-		}
-
-		if ($content->isCloud() && $content->getContentType())
-		{
-			$fileId = \CFile::saveFile([
-				'name' => $content->getFilename(),
-				'tmp_name' => $content->getAbsolutePath(),
-				'type' => $contentType,
-				'width' => $content->getWidth(),
-				'height' => $content->getHeight(),
-				'MODULE_ID' => Driver::INTERNAL_MODULE_ID,
-				], Driver::INTERNAL_MODULE_ID, true, true);
-
-			if (!$fileId)
-			{
-				$this->addError(new Error('Could not save file data by \CFile::saveFile'));
-
-				return null;
-			}
-
-			//it's crutch to be similar @see \Bitrix\Disk\Folder::uploadFile()
-			$filename = Disk\Ui\Text::correctFilename($filename);
-			$file = $folder->addFile(
-				[
-					'NAME' => $filename,
-					'FILE_ID' => $fileId,
-					'SIZE' => $content->getSize(),
-					'CREATED_BY' => $currentUserId,
-				],
-				[],
-				$generateUniqueName
-			);
-		}
-		else
-		{
-			$fileArray = \CFile::makeFileArray($content->getAbsolutePath());
-			$fileArray['type'] = $contentType;
-			$fileArray['name'] = $filename;
-			$file = $folder->uploadFile(
-				$fileArray,
-				[
-					'NAME' => $filename,
-					'CREATED_BY' => $currentUserId,
-				],
-				[],
-				$generateUniqueName
-			);
-		}
-
-		if (!$file)
-		{
-			$this->addErrors($folder->getErrors());
-
-			return null;
-		}
-
 		$previewFileData = $this->request->getFile('previewFile');
-		if (is_array($previewFileData))
+
+		$result = (new CreateByContentCommand(
+			folder: $folder,
+			filename: $filename,
+			content: $content,
+			createdBy: (int)$this->getCurrentUser()->getId(),
+			contentType: $contentType,
+			generateUniqueName: (bool)$generateUniqueName,
+			previewFileData: is_array($previewFileData) ? $previewFileData : null,
+		))->run();
+
+		if (!$result->isSuccess())
 		{
-			$file->attachImagePreview($previewFileData);
+			$this->addErrors($result->getErrors());
+
+			return null;
 		}
+
+		$file = $result->getData()['file'];
 
 		return $this->getAction($file);
 	}
@@ -310,10 +269,46 @@ class File extends BaseObject
 
 	public function downloadAction(Disk\File $file)
 	{
+		$securityContext = $file->getStorage()?->getSecurityContext(
+			user: $this->getCurrentUser()->getId(),
+			shouldCheckUnifiedLink: $this->shouldCheckUnifiedLink($file),
+		);
+
+		if (!$securityContext || !$file->canDownload($securityContext))
+		{
+			$this->addError(new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED')));
+
+			return null;
+		}
+
+		return $this->buildDownloadResponse($file);
+	}
+
+	private function buildDownloadResponse(Disk\File $file)
+	{
 		$response = Response\BFile::createByFileId($file->getFileId(), $file->getName());
 		$response->setCacheTime(Disk\Configuration::DEFAULT_CACHE_TIME);
 
 		return $response;
+	}
+
+	private function shouldCheckUnifiedLink(Disk\File $file): bool
+	{
+		$serviceLocator = Main\DI\ServiceLocator::getInstance();
+		$unifiedLinkUrl = $serviceLocator->get(Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl::class);
+		$uls = $unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		if (!is_string($uls))
+		{
+			return false;
+		}
+
+		$unifiedLinkAccessService = $serviceLocator->get(Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService::class);
+
+		return $unifiedLinkAccessService->validateUlsForObjectId(
+			objectId: $file->getId(),
+			uls: $uls,
+		);
 	}
 
 	public function showMarkdownAction(Disk\File $file): ?array
@@ -392,7 +387,7 @@ class File extends BaseObject
 	public function restoreFromVersionAction(Disk\File $file, Disk\Version $version)
 	{
 		$securityContext = $file->getStorage()->getCurrentUserSecurityContext();
-		if (!$file->canRestore($securityContext))
+		if (!$file->canManageVersions($securityContext))
 		{
 			$this->addError(new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED')));
 
@@ -558,6 +553,13 @@ class File extends BaseObject
 	public function copyToMeAction(Disk\File $file)
 	{
 		$currentUserId = $this->getCurrentUser()->getId();
+		if (!$this->canCopyToMe($file, $currentUserId))
+		{
+			$this->addError(new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED')));
+
+			return null;
+		}
+
 		$userStorage = Driver::getInstance()->getStorageByUserId($currentUserId);
 		if (!$userStorage)
 		{
@@ -589,6 +591,14 @@ class File extends BaseObject
 		}
 
 		return $this->get($newFile);
+	}
+
+	private function canCopyToMe(Disk\File $file, int $userId): bool
+	{
+		$securityContext = $file->getStorage()?->getSecurityContext($userId);
+
+		return $securityContext instanceof Disk\Security\SecurityContext
+			&& $file->canDownload($securityContext);
 	}
 
 	public function showPropertiesAction(Disk\File $file)

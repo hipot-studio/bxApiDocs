@@ -96,9 +96,11 @@ final class FieldContentTypeTable extends \Bitrix\Main\ORM\Data\DataManager
 	 */
 	public static function loadForItem(ItemIdentifier $item): array
 	{
-		$results = self::loadForMultipleItems($item->getEntityTypeId(), [$item->getEntityId()]);
+		$entityTypeId = $item->getEntityTypeId();
+		$itemId = $item->getEntityId();
+		self::loadToCache($entityTypeId, [$itemId]);
 
-		return $results[$item->getEntityId()] ?? [];
+		return self::$cache[$entityTypeId][$itemId] ?? [];
 	}
 
 	public static function loadForMultipleItems(int $entityTypeId, array $itemIds): array
@@ -109,42 +111,48 @@ final class FieldContentTypeTable extends \Bitrix\Main\ORM\Data\DataManager
 			return [];
 		}
 
+		self::loadToCache($entityTypeId, $itemIds);
+
+		return array_intersect_key(self::$cache[$entityTypeId], array_flip($itemIds));
+	}
+
+	/**
+	 * @param int[] $itemIds
+	 */
+	private static function loadToCache(int $entityTypeId, array $itemIds): void
+	{
 		$itemsToLoad = [];
 		foreach ($itemIds as $itemId)
 		{
-			if (!isset(self::$cache[$entityTypeId][$itemId]))
+			if ($itemId > 0 && !isset(self::$cache[$entityTypeId][$itemId]))
 			{
 				$itemsToLoad[$itemId] = $itemId;
 			}
 		}
 
-		if (!empty($itemsToLoad))
+		if (empty($itemsToLoad))
 		{
-			self::$cache[$entityTypeId] ??= [];
-			foreach ($itemsToLoad as $itemId)
-			{
-				self::$cache[$entityTypeId][$itemId] ??= [];
-			}
-
-			$dbResult =
-				self::query()
-					->setSelect(['ENTITY_ID', 'FIELD_NAME', 'CONTENT_TYPE_ID'])
-					->where('ENTITY_TYPE_ID', $entityTypeId)
-					->whereIn('ENTITY_ID', $itemsToLoad)
-					->exec()
-			;
-
-			while ($row = $dbResult->fetchObject())
-			{
-				self::$cache[$entityTypeId][$row->getEntityId()][$row->getFieldName()] = (int)$row->getContentTypeId();
-			}
+			return;
 		}
 
-		return array_filter(
-			self::$cache[$entityTypeId],
-			fn(int $itemId) => in_array($itemId, $itemIds, true),
-			ARRAY_FILTER_USE_KEY,
-		);
+		self::$cache[$entityTypeId] ??= [];
+		foreach ($itemsToLoad as $itemId)
+		{
+			self::$cache[$entityTypeId][$itemId] ??= [];
+		}
+
+		$dbResult =
+			self::query()
+				->setSelect(['ENTITY_ID', 'FIELD_NAME', 'CONTENT_TYPE_ID'])
+				->where('ENTITY_TYPE_ID', $entityTypeId)
+				->whereIn('ENTITY_ID', $itemsToLoad)
+				->exec()
+		;
+
+		while ($row = $dbResult->fetchObject())
+		{
+			self::$cache[$entityTypeId][$row->getEntityId()][$row->getFieldName()] = (int)$row->getContentTypeId();
+		}
 	}
 
 	public static function cleanRuntimeCache(): void

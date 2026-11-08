@@ -10,6 +10,7 @@ if (!\Bitrix\Main\Loader::includeModule('crm'))
 	return;
 }
 
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Service\Router\Page\AiReportDrawer\DrawerPage;
 
 class CrmAiReportDrawerWrapper extends \Bitrix\Crm\Component\Base
@@ -22,7 +23,7 @@ class CrmAiReportDrawerWrapper extends \Bitrix\Crm\Component\Base
 		$ajaxAction = $this->resolveAjaxAction((string)($this->arParams['scenario'] ?? ''));
 		if ($ajaxAction === null)
 		{
-			$this->addError(new \Bitrix\Main\Error('Unknown scenario'));
+			$this->addError(ErrorCode::getNotFoundError());
 
 			return;
 		}
@@ -47,6 +48,7 @@ class CrmAiReportDrawerWrapper extends \Bitrix\Crm\Component\Base
 		{
 			DrawerPage::SCENARIO_CALL_ASSESSMENT => 'crm.timeline.aireportdrawer.loadCallAssessmentDrawer',
 			DrawerPage::SCENARIO_SUMMARY_HISTORY => 'crm.timeline.aireportdrawer.loadSummaryHistoryDrawer',
+			DrawerPage::SCENARIO_TRANSCRIPT => 'crm.timeline.aireportdrawer.loadTranscriptDrawer',
 			default => null,
 		};
 	}

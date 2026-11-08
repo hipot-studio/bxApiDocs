@@ -3,13 +3,17 @@
 namespace Bitrix\BIConnector\Rest;
 
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnector;
+use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
+use Bitrix\BIConnector\ExternalSource\Source\ConnectionFailure;
 use Bitrix\BIConnector\ExternalSource\Source\Rest;
 use Bitrix\BIConnector\ExternalSource\SourceManager;
 use Bitrix\BIConnector\ExternalSource\Type;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -178,9 +182,15 @@ class Source extends Base
 		$fields['code'] = Type::Rest->value . '_' . $fields['connector_id'];
 		$fields['type'] = Type::Rest->value;
 
-		if (!self::checkConnectionBeforeAdd($connector, $fields['settings']))
+		$isDiagnosticsEnabled = self::isConnectionDiagnosticsEnabled();
+		$checkResult = self::checkConnectionBeforeAdd($connector, $fields['settings'], $isDiagnosticsEnabled);
+		if (!$checkResult->isSuccess())
 		{
-			$result->addError(new Error('Cannot create connection.', 'SOURCE_CREATE_CONNECTION_ERROR'));
+			$result->addError(self::describeConnectionFailure(
+				$checkResult,
+				$isDiagnosticsEnabled,
+				new Error('Cannot create connection.', 'SOURCE_CREATE_CONNECTION_ERROR'),
+			));
 
 			return $result;
 		}
@@ -222,9 +232,15 @@ class Source extends Base
 			return $result;
 		}
 
-		if (!self::checkConnectionBeforeUpdate($sourceId, $fields['settings'] ?? []))
+		$isDiagnosticsEnabled = self::isConnectionDiagnosticsEnabled();
+		$checkResult = self::checkConnectionBeforeUpdate($sourceId, $fields['settings'] ?? [], $isDiagnosticsEnabled);
+		if (!$checkResult->isSuccess())
 		{
-			$result->addError(new Error('Cannot update connection.', 'SOURCE_UPDATE_CONNECTION_ERROR'));
+			$result->addError(self::describeConnectionFailure(
+				$checkResult,
+				$isDiagnosticsEnabled,
+				new Error('Cannot update connection.', 'SOURCE_UPDATE_CONNECTION_ERROR'),
+			));
 
 			return $result;
 		}
@@ -388,8 +404,9 @@ class Source extends Base
 
 	private static function checkConnectionBeforeAdd(
 		ExternalSourceRestConnector $connector,
-		array $settings
-	): bool
+		array $settings,
+		bool $isDiagnosticsEnabled,
+	): Result
 	{
 		$source = new Rest(0);
 		$source->setConnector($connector);
@@ -407,13 +424,17 @@ class Source extends Base
 
 		if (\Bitrix\Main\Config\Option::get('biconnector', 'biconnector_use_fake_check_test') === 'Y')
 		{
-			return self::fakeCheckForTest($settingsCollection);
+			return self::fakeCheckResultForTest($settingsCollection);
 		}
 
-		return $source->connect($settingsCollection)->isSuccess();
+		return self::checkConnection($source, $settingsCollection, $isDiagnosticsEnabled);
 	}
 
-	private static function checkConnectionBeforeUpdate(int $sourceId, array $settings): bool
+	private static function checkConnectionBeforeUpdate(
+		int $sourceId,
+		array $settings,
+		bool $isDiagnosticsEnabled,
+	): Result
 	{
 		$source = new Rest($sourceId);
 
@@ -440,10 +461,55 @@ class Source extends Base
 
 		if (\Bitrix\Main\Config\Option::get('biconnector', 'biconnector_use_fake_check_test', 'N') === 'Y')
 		{
-			return self::fakeCheckForTest($settingsCollection);
+			return self::fakeCheckResultForTest($settingsCollection);
 		}
 
-		return $source->connect($settingsCollection)->isSuccess();
+		return self::checkConnection($source, $settingsCollection, $isDiagnosticsEnabled);
+	}
+
+	private static function checkConnection(
+		Rest $source,
+		ExternalSourceSettingsCollection $settings,
+		bool $isDiagnosticsEnabled,
+	): Result
+	{
+		if ($isDiagnosticsEnabled)
+		{
+			return $source->probe($settings, stopAtFirstFailure: true);
+		}
+
+		return $source->connect($settings);
+	}
+
+	private static function isConnectionDiagnosticsEnabled(): bool
+	{
+		return (new FlagGate())->isEnabled(
+			FlagGate::REST_SOURCE_DIAGNOSTICS,
+			(int)CurrentUser::get()->getId(),
+		);
+	}
+
+	/**
+	 * A reason the check recognized is returned as it is; the generic error stays for any other one,
+	 * and is the only answer while diagnostics are off.
+	 */
+	private static function describeConnectionFailure(
+		Result $checkResult,
+		bool $isDiagnosticsEnabled,
+		Error $genericError,
+	): Error
+	{
+		$error = $checkResult->getErrors()[0] ?? null;
+		if (
+			!$isDiagnosticsEnabled
+			|| $error === null
+			|| ConnectionFailure::tryFrom((string)$error->getCode()) === null
+		)
+		{
+			return $genericError;
+		}
+
+		return new Error($error->getMessage(), $error->getCode(), $error->getCustomData());
 	}
 
 	protected static function prepareSelect(array $select): array
@@ -547,6 +613,17 @@ class Source extends Base
 		$selectSource = $select;
 
 		return [$selectSource, $selectSetting];
+	}
+
+	private static function fakeCheckResultForTest(ExternalSourceSettingsCollection $settingsCollection): Result
+	{
+		$result = new Result();
+		if (!self::fakeCheckForTest($settingsCollection))
+		{
+			$result->addError(new Error('Fake connection check failed.'));
+		}
+
+		return $result;
 	}
 
 	/**

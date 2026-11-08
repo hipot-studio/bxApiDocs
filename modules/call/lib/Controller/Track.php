@@ -342,7 +342,7 @@ class Track extends Engine\Controller
 			return null;
 		}
 
-		$track = TrackCollection::getTrackById($callId, $trackId);
+		$track = TrackCollection::getTrackById($call->getId(), $trackId);
 		if (!$track)
 		{
 			$this->addError(new Error("track_not_found", "Track not found"));

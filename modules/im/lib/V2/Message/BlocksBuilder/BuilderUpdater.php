@@ -6,7 +6,7 @@ namespace Bitrix\Im\V2\Message\BlocksBuilder;
 
 use Bitrix\Im\V2\Link\File\FileService;
 use Bitrix\Im\V2\Message;
-use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\AbstractBlock;
+use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\Update\UpdateService;
 use Bitrix\Main\DI\ServiceLocator;
 
@@ -23,13 +23,16 @@ class BuilderUpdater
 		$chat = $message->getChat();
 		$builderData = $builder->toArray();
 		$builderData['elements'][] = $blockData;
-		$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($builderData, $chat);
+		$builderService = ServiceLocator::getInstance()->get(BuilderService::class);
+		$builderResult = $builderService->create($builderData, $chat, $builder);
 		if (!$builderResult->isSuccess())
 		{
 			return $builderResult;
 		}
 
 		$lastBlock = $builderResult->getBlocksBuilder()->getLastBlock();
+		$previousPayloadText = $message->getMessage();
+		$previousFileIds = $builder->getFiles();
 
 		$result = $message
 			->setBlocksBuilder($builderResult->getBlocksBuilder())
@@ -42,10 +45,10 @@ class BuilderUpdater
 			return $builderResult->addErrors($result->getErrors());
 		}
 
-		$this->saveFileLinks($lastBlock, $message);
+		$this->synchronizeFileLinks($message, $previousFileIds);
 
 		(new Message\BlocksBuilder\Pull\MessageBlockElementAppend($message, $lastBlock))->send();
-		$this->onAfterMessageUpdate($message);
+		$this->onAfterMessageUpdate($message, $previousPayloadText, $previousFileIds);
 
 		return $builderResult;
 	}
@@ -58,8 +61,7 @@ class BuilderUpdater
 			return (new BuilderResult())->addError((new BuilderError(BuilderError::BLOCK_NOT_FOUND)));
 		}
 
-		$deletedBlock = $builder->getBlockById($blockId);
-		if ($deletedBlock === null)
+		if ($builder->getBlockById($blockId) === null)
 		{
 			return (new BuilderResult())->addError((new BuilderError(BuilderError::ELEMENT_NOT_FOUND)));
 		}
@@ -76,11 +78,15 @@ class BuilderUpdater
 		}
 
 		$chat = $message->getChat();
-		$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($builderData, $chat);
+		$builderService = ServiceLocator::getInstance()->get(BuilderService::class);
+		$builderResult = $builderService->create($builderData, $chat, $builder);
 		if (!$builderResult->isSuccess())
 		{
 			return $builderResult;
 		}
+
+		$previousPayloadText = $message->getMessage();
+		$previousFileIds = $builder->getFiles();
 
 		$result = $message
 			->setBlocksBuilder($builderResult->getBlocksBuilder())
@@ -93,10 +99,10 @@ class BuilderUpdater
 			return $builderResult->addErrors($result->getErrors());
 		}
 
-		$this->deleteFileLinks($deletedBlock, $message);
+		$this->synchronizeFileLinks($message, $previousFileIds);
 
 		(new Message\BlocksBuilder\Pull\MessageBlockElementDelete($message, $blockId))->send();
-		$this->onAfterMessageUpdate($message);
+		$this->onAfterMessageUpdate($message, $previousPayloadText, $previousFileIds);
 
 		return $builderResult;
 	}
@@ -113,8 +119,6 @@ class BuilderUpdater
 			return (new BuilderResult())->addError((new BuilderError(BuilderError::ELEMENT_NOT_FOUND)));
 		}
 
-		$oldBlock = $builder->getBlockById($blockId);
-
 		$builderData = $builder->toArray();
 		foreach ($builderData['elements'] as $key => $block)
 		{
@@ -128,13 +132,16 @@ class BuilderUpdater
 		}
 
 		$chat = $message->getChat();
-		$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($builderData, $chat);
+		$builderService = ServiceLocator::getInstance()->get(BuilderService::class);
+		$builderResult = $builderService->create($builderData, $chat, $builder);
 		if (!$builderResult->isSuccess())
 		{
 			return $builderResult;
 		}
 
 		$block = $builderResult->getBlocksBuilder()->getBlockById($blockId);
+		$previousPayloadText = $message->getMessage();
+		$previousFileIds = $builder->getFiles();
 
 		$result = $message
 			->setBlocksBuilder($builderResult->getBlocksBuilder())
@@ -147,49 +154,56 @@ class BuilderUpdater
 			return $builderResult->addErrors($result->getErrors());
 		}
 
-		$this->deleteFileLinks($oldBlock, $message);
-		$this->saveFileLinks($block, $message);
+		$this->synchronizeFileLinks($message, $previousFileIds);
 
 		(new Message\BlocksBuilder\Pull\MessageBlockElementUpdate($message, $block, $blockId))->send();
-		$this->onAfterMessageUpdate($message);
+		$this->onAfterMessageUpdate($message, $previousPayloadText, $previousFileIds);
 
 		return $builderResult;
 	}
 
-	protected function saveFileLinks(?AbstractBlock $block, Message $message): void
+	/**
+	 * @param int[] $previousBuilderFileIds
+	 */
+	private function synchronizeFileLinks(Message $message, array $previousBuilderFileIds): void
 	{
-		if ($block === null)
-		{
-			return;
-		}
+		$attachmentFileIds = $message->getParams()->isSet(Params::FILE_ID)
+			? $message->getParams()->get(Params::FILE_ID)->getValue()
+			: [];
+		$currentBuilderFileIds = $message->getBlocksBuilder()?->getFiles() ?? [];
 
-		$fileIds = $block->getFiles();
-		if (empty($fileIds))
-		{
-			return;
-		}
-
-		(new FileService())->saveFilesFromMessage($fileIds, $message);
+		(new FileService())->synchronizeFilesFromMessage(
+			array_merge($attachmentFileIds, $previousBuilderFileIds),
+			array_merge($attachmentFileIds, $currentBuilderFileIds),
+			$message,
+		);
 	}
 
-	protected function deleteFileLinks(?AbstractBlock $block, Message $message): void
+	/**
+	 * Block updates may leave the message text intact (a progress refresh, a service block): such an
+	 * update still notifies clients, but does not need the text-derived part of the post-update. The
+	 * files are looked at next to the text, because a changed set of them does not have to show up in
+	 * the text - a gallery contributes no text at all, and a replacement file may carry the same name -
+	 * while the preview a client rebuilds after a recent touch does change.
+	 *
+	 * @param int[] $previousFileIds
+	 */
+	protected function onAfterMessageUpdate(
+		Message $message,
+		?string $previousPayloadText,
+		array $previousFileIds,
+	): void
 	{
-		if ($block === null)
+		$updateService = new UpdateService($message);
+
+		$keepsPayloadText = $message->getMessage() === $previousPayloadText;
+		$keepsFiles = ($message->getBlocksBuilder()?->getFiles() ?? []) === $previousFileIds;
+
+		if ($keepsPayloadText && $keepsFiles)
 		{
-			return;
+			$updateService->withoutTextDerivedUpdate();
 		}
 
-		$fileIds = $block->getFiles();
-		if (empty($fileIds))
-		{
-			return;
-		}
-
-		(new FileService())->deleteFilesByDiskFileIds($fileIds, $message);
-	}
-
-	protected function onAfterMessageUpdate(Message $message): void
-	{
-		(new UpdateService($message))->onAfterMessageUpdate();
+		$updateService->onAfterMessageUpdate();
 	}
 }

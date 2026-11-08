@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Reading\Counter;
 
 use Bitrix\Im\Model\MessageUnreadTable;
+use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\V2\Common\RowsToMapHelper;
 use Bitrix\Im\V2\Message\Counter\CounterOverflowInfo;
 use Bitrix\Im\V2\Message\Counter\CounterOverflowService;
@@ -41,6 +42,24 @@ class CountersProvider
 		$this->cache->setChatCounter($userId, $chatId, $counter);
 
 		return $counter;
+	}
+
+	/**
+	 * Point read of the marked-as-unread flag for one chat, covered by the (USER_ID, ITEM_CID) index;
+	 * same raw source as the UNREAD flag in UserCountersCollector::fetchUnreadChats().
+	 */
+	public function isChatMarkedAsUnread(int $chatId, int $userId): bool
+	{
+		$row = RecentTable::query()
+			->setSelect(['USER_ID'])
+			->where('USER_ID', $userId)
+			->where('ITEM_CID', $chatId)
+			->where('UNREAD', true)
+			->setLimit(1)
+			->fetch()
+		;
+
+		return $row !== false;
 	}
 
 	/**

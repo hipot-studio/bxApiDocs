@@ -1754,14 +1754,9 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 	 */
 	public function takeExecution(array $params = []): void
 	{
+		// ACTION_TAKE moves the task to IN_PROGRESS through CTasks::Update, so the responsible timer is
+		// started by the post-save auto-start (UpdateService StartTimer) - the single source now.
 		$this->proceedAction(self::ACTION_TAKE, ['PARAMETERS' => $params]);
-
-		$taskData = $this->getData(false);
-		if (($taskData['ALLOW_TIME_TRACKING'] ?? '') === 'Y')
-		{
-			$timer = CTaskTimerManager::getInstance($this->getExecutiveUserId());
-			$timer->start($this->taskId);
-		}
 	}
 
 	/**
@@ -2386,7 +2381,19 @@ final class CTaskItem implements CTaskItemInterface, ArrayAccess
 			{
 				if (in_array('NEW_COMMENTS_COUNT', $arSelect, true))
 				{
-					$newComments = Bitrix\Tasks\Internals\Counter::getInstance((int)$userId)->getCommentsCount($arTasksIDs);
+					if (Bitrix\Tasks\Internals\Counter\Loader::isNarrowReadAllowed((int)$userId))
+					{
+						$newComments = Container::getInstance()
+							->getCounterRepository()
+							->getCommentsCountByUserAndTasks((int)$userId, $arTasksIDs)
+						;
+					}
+					else
+					{
+						// Counters are not trustworthy yet: the full path recounts them or answers zeros
+						// when the counter state is disabled by the zero limit.
+						$newComments = Bitrix\Tasks\Internals\Counter::getInstance((int)$userId)->getCommentsCount($arTasksIDs);
+					}
 					foreach ($newComments as $taskId => $commentsCount)
 					{
 						$arItemsData[$taskId]['NEW_COMMENTS_COUNT'] = $commentsCount;

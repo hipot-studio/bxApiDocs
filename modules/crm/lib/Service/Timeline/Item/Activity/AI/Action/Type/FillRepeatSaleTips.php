@@ -47,11 +47,18 @@ final class FillRepeatSaleTips extends AIAction
 		return $result !== null ? new ResultStateChecker($result) : null;
 	}
 
+	/**
+	 * The scenario runs once per activity, so a finished run takes the button out of the footer
+	 * instead of leaving a switched-off one behind.
+	 */
+	public function isHidden(): bool
+	{
+		return $this->getStateChecker()?->isSuccess() ?? false;
+	}
+
 	protected function isDisabled(): bool
 	{
-		return $this->getStateChecker()?->isSuccess()
-			|| $this->getStateChecker()?->isErrorsLimitExceeded()
-		;
+		return $this->getStateChecker()?->isErrorsLimitExceeded() ?? false;
 	}
 
 	protected function getHint(): ?string
@@ -59,14 +66,6 @@ final class FillRepeatSaleTips extends AIAction
 		if ($this->getStateChecker()?->isPending())
 		{
 			return null;
-		}
-
-		if ($this->getStateChecker()?->isSuccess())
-		{
-			return Loc::getMessage(
-				'CRM_TIMELINE_AI_REPEAT_SALE_HINT_SUCCESS',
-				['#COPILOT_NAME#' => AIManager::getCopilotName()]
-			);
 		}
 
 		if ($this->getStateChecker()?->isErrorsLimitExceeded())

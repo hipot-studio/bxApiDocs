@@ -29,6 +29,26 @@ class WorkflowTemplateRepository
 		;
 	}
 
+	/**
+	 * @param int[] $ids
+	 * @return int[] the ids among $ids that have a row, same physical presence as exists()
+	 */
+	public function filterExisting(array $ids): array
+	{
+		if ($ids === [])
+		{
+			return [];
+		}
+
+		$rows = WorkflowTemplateTable::query()
+			->setSelect(['ID'])
+			->whereIn('ID', $ids)
+			->fetchAll()
+		;
+
+		return array_map(static fn (array $row): int => (int)$row['ID'], $rows);
+	}
+
 	public function isTemplateActive(int $templateId): ?bool
 	{
 		$templateRow = WorkflowTemplateTable::query()

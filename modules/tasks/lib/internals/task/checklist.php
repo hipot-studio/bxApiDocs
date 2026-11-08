@@ -5,6 +5,7 @@ use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
+use Bitrix\Tasks\Internals\UpdateByFilterTrait;
 
 /**
  * Class CheckListTable
@@ -26,6 +27,8 @@ use Bitrix\Main\SystemException;
  */
 class CheckListTable extends Main\Entity\DataManager
 {
+	use UpdateByFilterTrait;
+
 	/**
 	 * Returns DB table name for entity.
 	 *

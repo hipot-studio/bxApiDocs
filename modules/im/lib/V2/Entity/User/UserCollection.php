@@ -28,6 +28,19 @@ class UserCollection extends EntityCollection
 		}
 	}
 
+	/**
+	 * Hydrates the collection warming the per-user cache with a single query first, instead
+	 * of one SELECT per id as the default constructor does on a cold cache.
+	 *
+	 * @param int[] $userIds
+	 */
+	public static function initByUserIds(array $userIds): self
+	{
+		UserFactory::getInstance()->preloadUsers($userIds);
+
+		return new static($userIds);
+	}
+
 	public function fillOnlineData(bool $withStatus = false): void
 	{
 		$idsUsersWithoutOnlineData = [];

@@ -171,7 +171,7 @@ class Message extends Controller
 			return false;
 		}
 
-		if($provider::checkOwner() && !\CCrmActivity::CheckUpdatePermission(\CCrmOwnerType::ResolveID($ownerTypeName), $ownerID))
+		if (!Container::getInstance()->getUserPermissions()->activity()->canDelete($ID))
 		{
 			$this->addError(new Error(Loc::getMessage('CRM_MAIL_CONTROLLER_PERMISSION_DENIED')));
 			return false;

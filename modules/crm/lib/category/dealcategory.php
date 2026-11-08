@@ -516,6 +516,7 @@ class DealCategory
 		{
 			self::$all = null;
 		}
+		\CCrmStatus::invalidateStageGroups();
 
 		$ID = $result->getId();
 		self::createDefaultStages($ID);
@@ -651,6 +652,7 @@ class DealCategory
 		{
 			self::$all = null;
 		}
+		\CCrmStatus::invalidateStageGroups();
 	}
 
 	/**

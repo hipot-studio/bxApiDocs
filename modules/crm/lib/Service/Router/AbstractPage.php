@@ -47,6 +47,8 @@ abstract class AbstractPage implements Contract\Page\StaticPage, HasComponent
 			return;
 		}
 
+		$this->beforeRender();
+
 		foreach ($this->tours() as $tour)
 		{
 			echo $tour->build();
@@ -153,6 +155,10 @@ abstract class AbstractPage implements Contract\Page\StaticPage, HasComponent
 	}
 
 	protected function configureSidePanel(SidePanelWrapper $sidePanel): void
+	{
+	}
+
+	protected function beforeRender(): void
 	{
 	}
 }

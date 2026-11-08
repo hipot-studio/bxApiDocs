@@ -4,6 +4,7 @@ namespace Bitrix\Tasks\Grid\Task\Row\Content;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Json;
+use Bitrix\Tasks\Grid\ControlButtonTrait;
 use Bitrix\Tasks\Grid\Task\Row\Content;
 use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\Bitrix24\FeatureDictionary;
@@ -16,6 +17,8 @@ use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit;
  */
 class Mark extends Content
 {
+	use ControlButtonTrait;
+
 	/**
 	 * @return false|string
 	 * @throws Main\ArgumentException
@@ -51,22 +54,32 @@ class Mark extends Content
 			}
 			else
 			{
+				$taskId = (int)$row['ID'];
 				$encodedValue = Json::encode(['listValue' => $mark]);
-				?>
-				<a class="task-grade-and-report <?= $markClass ?> <?= $addInReportClass ?>" href="javascript: void(0)"
-				   onclick='event.stopPropagation(); return BX.Tasks.GridActions.onMarkChangeClick(<?= $row["ID"] ?>, this, <?= $encodedValue ?>);'
-				   title="<?= Loc::getMessage($markText) ?>">
-				<span class="task-grade-and-report-inner">
-					<i class="task-grade-and-report-icon"></i>
-				</span>
-				</a>
-			<?php
+				echo $this->renderControlButton(
+					[
+						'id' => "task-grade-button-{$taskId}",
+						'class' => "task-grade-and-report {$markClass} {$addInReportClass}",
+						'aria-haspopup' => 'menu',
+						'aria-expanded' => 'false',
+						'aria-label' => Loc::getMessage($markText),
+						'title' => Loc::getMessage($markText),
+					],
+					'<span class="task-grade-and-report-inner"><i class="task-grade-and-report-icon" aria-hidden="true"></i></span>',
+					"event.stopPropagation(); return BX.Tasks.GridActions.onMarkChangeClick({$taskId}, this, {$encodedValue});",
+					"'"
+				);
 			}
 		}
 		else
 		{
+			$accessibleNameAttributes = '';
+			if ($mark !== 'NULL')
+			{
+				$accessibleNameAttributes = ' role="img" aria-label="' . htmlspecialcharsbx(Loc::getMessage($markText)) . '"';
+			}
 			?>
-			<span class="<?=$markClass?> <?=$addInReportClass?>" href="javascript: void(0)"
+			<span class="<?=$markClass?> <?=$addInReportClass?>"<?=$accessibleNameAttributes?>
 				  title="<?=Loc::getMessage($markText)?>">
 				<span class="task-grade-and-report-inner task-grade-and-report-default-cursor">
 					<i class="task-grade-and-report-icon task-grade-and-report-default-cursor"></i>
@@ -85,14 +98,14 @@ class Mark extends Content
 
 	private function renderLock(): void
 	{
-		?>
-			<div
-				style="cursor: pointer"
-				class='tasks-list-tariff-lock-container'
-				onclick="<?=Limit::getLimitLockClick(FeatureDictionary::TASK_RATE, null)?>"
-			>
-				<span class='task-list-tariff-lock'></span>
-			</div>
-		<?php
+		echo $this->renderControlButton(
+			[
+				'style' => 'cursor: pointer',
+				'class' => 'tasks-list-tariff-lock-container',
+				'aria-label' => Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_MARK_TARIFF_LOCK_MSGVER_1'),
+			],
+			'<span class="task-list-tariff-lock" aria-hidden="true"></span>',
+			'event.stopPropagation(); ' . Limit::getLimitLockClick(FeatureDictionary::TASK_RATE, null)
+		);
 	}
 }

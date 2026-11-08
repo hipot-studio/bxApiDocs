@@ -76,7 +76,7 @@ class ActiveCallsCache
 	 */
 	public static function updateUserActiveCallsCache(int $userId): array
 	{
-		return self::buildAndWriteForUsers([$userId])[$userId] ?? [];
+		return self::buildAndWriteForUsers([$userId], true)[$userId] ?? [];
 	}
 
 	/**
@@ -140,7 +140,11 @@ class ActiveCallsCache
 	 */
 	public static function updateUsersActiveCallsCache(array $userIds): void
 	{
-		self::buildAndWriteForUsers($userIds);
+		// Batch path: the cache is written per-user inside the loop, so the
+		// collected [userId => payload] map is dead weight here. Skip building it
+		// to keep peak memory at O(largest single user) instead of O(whole roster)
+		// — this runs as a background job over a full chat roster.
+		self::buildAndWriteForUsers($userIds, false);
 	}
 
 	/**
@@ -166,9 +170,16 @@ class ActiveCallsCache
 	 * 1 call-users, 1 user-profiles, plus one cache write per user).
 	 *
 	 * @param int[] $userIds
-	 * @return array<int, array> [userId => activeCallsPayload]
+	 * @param bool $collectResult Whether to accumulate and return the per-user
+	 *                            payloads. The single-user path needs them; the
+	 *                            batch path writes each payload to cache in-loop
+	 *                            and discards it, so it passes `false` to avoid
+	 *                            holding the whole roster's USERS/USER_DATA graph
+	 *                            in memory at once.
+	 * @return array<int, array> [userId => activeCallsPayload] when
+	 *                           `$collectResult`; otherwise an empty array.
 	 */
-	private static function buildAndWriteForUsers(array $userIds): array
+	private static function buildAndWriteForUsers(array $userIds, bool $collectResult = true): array
 	{
 		$normalized = [];
 		foreach ($userIds as $uid)
@@ -252,7 +263,16 @@ class ActiveCallsCache
 			}
 
 			self::writeUserActiveCallsCache($userId, $payload);
-			$result[$userId] = $payload;
+
+			if ($collectResult)
+			{
+				$result[$userId] = $payload;
+			}
+
+			// Release the per-user payload before the next iteration so the batch
+			// path (collectResult = false) never holds more than one user's full
+			// USERS/USER_DATA graph at a time.
+			unset($payload);
 		}
 
 		return $result;

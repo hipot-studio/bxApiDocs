@@ -44,10 +44,15 @@ class RedisConnectionConfigurator extends ConnectionConfigurator
 	{
 		$config = $this->getConfig();
 
-		if (isset($config['compression']) || defined('\Redis::COMPRESSION_LZ4'))
+		// lz4 on its fast coder is the measured optimum for cache values, and the constant tells the build has it
+		$compression = $config['compression'] ?? (defined('\Redis::COMPRESSION_LZ4') ? \Redis::COMPRESSION_LZ4 : null);
+		if ($compression !== null)
 		{
-			$connection->setOption(\Redis::OPT_COMPRESSION, $config['compression'] ?? \Redis::COMPRESSION_LZ4);
-			$connection->setOption(\Redis::OPT_COMPRESSION_LEVEL, $config['compression_level'] ?? \Redis::COMPRESSION_ZSTD_MAX);
+			$connection->setOption(\Redis::OPT_COMPRESSION, $compression);
+
+			// zero is what keeps each algorithm on its own default coder: fast for lz4, level 3 for zstd.
+			// A level of 1 to 12 would move lz4 to LZ4HC, which costs several times more for a few percent
+			$connection->setOption(\Redis::OPT_COMPRESSION_LEVEL, (int)($config['compression_level'] ?? 0));
 		}
 
 		$serializer = $config['serializer'] ?? (defined('\Redis::SERIALIZER_IGBINARY') ? \Redis::SERIALIZER_IGBINARY : \Redis::SERIALIZER_PHP);

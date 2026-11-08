@@ -39,7 +39,7 @@ final class CloudSharedVerifier
 	 */
 	public function isApplicable(string $iss): bool
 	{
-		return $iss === self::ISS && $this->isSlotAvailable();
+		return str_starts_with($iss, self::ISS) && $this->isSlotAvailable();
 	}
 
 	/**
@@ -62,7 +62,7 @@ final class CloudSharedVerifier
 		return $this->isSlotAvailable() && $this->keyStore->get() !== '';
 	}
 
-	public function verify(string $jwt): void
+	public function verify(string $jwt): object
 	{
 		$networkId = $this->portalNetworkId->get();
 		if ($networkId === null)
@@ -103,6 +103,8 @@ final class CloudSharedVerifier
 		}
 
 		$this->assertClaims($payload, $networkId);
+
+		return $payload;
 	}
 
 	/**
@@ -145,7 +147,7 @@ final class CloudSharedVerifier
 
 	private function assertClaims(object $payload, string $networkId): void
 	{
-		if (($payload->iss ?? null) !== self::ISS)
+		if (!is_string($payload->iss ?? null) || !str_starts_with($payload->iss, self::ISS))
 		{
 			throw new IncomingJwtInvalidException('Invalid issuer (cloud-shared)');
 		}

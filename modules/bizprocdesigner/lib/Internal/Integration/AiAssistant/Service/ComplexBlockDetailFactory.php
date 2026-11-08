@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service;
 
 use Bitrix\Bizproc\Activity\ActivityDescription;
+use Bitrix\Bizproc\Activity\Dto\Complex\BlockAvailability;
 use Bitrix\Bizproc\Activity\Enum\ActivityNodeType;
+use Bitrix\Bizproc\Activity\Enum\NodeBlockType;
 use Bitrix\Bizproc\Internal\Entity\Activity\Result\ActivityAiDescriptionResult;
+use Bitrix\Bizproc\Internal\Entity\Activity\SettingCollection;
 use Bitrix\Bizproc\Internal\Service\Container as BizprocContainer;
 use Bitrix\BizprocDesigner\Internal\Config\Feature;
 use Bitrix\BizprocDesigner\Internal\Entity\ComplexBlockDetail;
@@ -64,6 +67,7 @@ final class ComplexBlockDetailFactory
 			$normalizedCode = $searcher->normalizeActivityCode((string)$nodeActivity->getClass());
 			$nodeAction = $actionDictionary?->get($normalizedCode);
 			$handlesDocument = $nodeActivity->getNodeActionSettingsDto()?->handlesDocument ?? false;
+			$subActionDescription = $this->describeSubAction($normalizedCode, $effectiveDocumentType);
 
 			$nodeActions[] = new ComplexNodeAction(
 				activityCode: $nodeAction?->activityCode ?? $normalizedCode,
@@ -71,54 +75,77 @@ final class ComplexBlockDetailFactory
 				handlesDocument: $handlesDocument,
 				sort: $nodeAction?->sort ?? ($nodeActivity->getSort() ?? 0),
 				presetId: $nodeAction?->presetId,
-				settingsSchema: $this->buildSettingsSchema($normalizedCode, $fixedDocumentType),
+				settingsSchema: $subActionDescription?->settings ?? new SettingCollection(),
+				skippedSettings: $this->namesAllowedBesideTheSchema($subActionDescription),
 				documentSchema: $this->buildDocumentSchema($handlesDocument, $fixedDocumentType),
 			);
 		}
 
+		$runtimeFilterAvailable = $filterAvailability->isRuntimeAvailable($fixedDocumentType, $documentType ?? []);
+		$availableBlocks = $this->resolveAvailableBlocks(
+			$filterAvailability,
+			$blockType,
+			$fixedDocumentType,
+			$documentType ?? [],
+			$description,
+			$runtimeFilterAvailable,
+		);
+
 		return new ComplexBlockDetail(
 			nodeActions: $nodeActions,
 			fixedDocumentType: $fixedDocumentType,
-			filterSupported: $this->isFilterSupported(
-				$filterAvailability,
-				$blockType,
-				$fixedDocumentType,
-				$documentType ?? [],
-				$description,
-			),
+			filterSupported: $filterAvailability->isAvailableForNode($availableBlocks, $runtimeFilterAvailable),
+			conditionSupported: $availableBlocks?->isAvailable(NodeBlockType::CONDITION) ?? true,
 		);
 	}
 
 	/**
-	 * Machine-readable settings schema of a sub-action (DTO-04), built by the SAME domain service that
-	 * describes ordinary nodes ({@see \Bitrix\Bizproc\Service\AiDescription::getActivityDescription}) -
-	 * never a parallel AI description of the sub-action. The document type is the complex node's fixed
-	 * document (e.g. `['crm', 'CCrmDocumentDeal', 'DEAL']`).
+	 * Description of a sub-action (DTO-04), built by the SAME domain service that describes ordinary nodes
+	 * ({@see \Bitrix\Bizproc\Service\AiDescription::getActivityDescription}) - never a parallel AI description
+	 * of the sub-action. It carries both halves the catalog needs: the settings schema the agent may write and
+	 * the names it may keep without them being a schema violation. The document type is the node's effective one
+	 * ({@see NodeFilterAvailability::resolveEffectiveDocumentType}): its fixed document when it has one
+	 * (e.g. `['crm', 'CCrmDocumentDeal', 'DEAL']`), the edited template's otherwise - the same context
+	 * the sub-action dictionary above is resolved with.
 	 *
-	 * Failure isolation: a missing fixed document or a non-successful Result (an unresolvable/broken
-	 * sub-action) yields an empty schema so a single sub-action never breaks the whole ComplexBlockDetail.
-	 * An empty schema is also the valid value for an HTML-only sub-action.
-	 *
-	 * @return list<array> {@see \Bitrix\Bizproc\Internal\Entity\Activity\Setting::toArray()} entries
+	 * Failure isolation: no document context at all, or a non-successful Result (an unresolvable/broken
+	 * sub-action), yields `null` - an empty schema for that one sub-action instead of a broken
+	 * ComplexBlockDetail. An empty schema is also the valid value for an HTML-only sub-action.
 	 */
-	private function buildSettingsSchema(string $activityCode, ?array $fixedDocumentType): array
+	private function describeSubAction(string $activityCode, ?array $documentType): ?ActivityAiDescriptionResult
 	{
-		if ($fixedDocumentType === null)
+		if ($documentType === null)
 		{
-			return [];
+			return null;
 		}
 
 		$description = \CBPRuntime::getRuntime()
 			->getAiDescriptionService()
-			->getActivityDescription($activityCode, $fixedDocumentType)
+			->getActivityDescription($activityCode, $documentType)
 		;
 
-		if (!$description instanceof ActivityAiDescriptionResult)
+		return $description instanceof ActivityAiDescriptionResult ? $description : null;
+	}
+
+	/**
+	 * The names a sub-step may carry beside its typed schema: the ones the description could not express and the
+	 * ones the activity declares as carried from the published template. An ordinary block judges a name by the
+	 * same union ({@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\AgentSettingNameValidator::validate()}),
+	 * and a sub-step has to get the same verdict: the AI sub-action carries `pinnedContext` that way, and
+	 * refusing it would cost the agent the whole template.
+	 *
+	 * @return list<string>
+	 */
+	private function namesAllowedBesideTheSchema(?ActivityAiDescriptionResult $description): array
+	{
+		if ($description === null)
 		{
 			return [];
 		}
 
-		return $description->settings->toArray();
+		return array_values(array_unique(
+			array_merge($description->skippedSettings, $description->carriedSettings)
+		));
 	}
 
 	/**
@@ -129,7 +156,7 @@ final class ComplexBlockDetailFactory
 	 * (`returnProperties`, P11). The `documentType` mirrors the complex node's fixed document (e.g.
 	 * `['crm', 'CCrmDocumentDeal', 'DEAL']`); the source block must match by module ([0]).
 	 *
-	 * Symmetric to {@see buildSettingsSchema}: a sub-action that does not handle the document, or a complex node
+	 * Symmetric to {@see self::describeSubAction}: a sub-action that does not handle the document, or a complex node
 	 * without a fixed document, carries no document contract (`null`) - the key is not emitted, which is not a
 	 * regression.
 	 *
@@ -158,36 +185,36 @@ final class ComplexBlockDetailFactory
 	}
 
 	/**
-	 * The same answer {@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Activity\Complex::loadSettingsAction()}
-	 * publishes, through the same {@see NodeFilterAvailability}: the node's block descriptor decides, the
-	 * runtime gate is the fallback for a node without one. The agent validator
-	 * ({@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\AgentComplexRulesValidator})
-	 * rejects a filter construction on this flag, while
-	 * {@see \Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ValidateSingleRuleCommand} rejects it
-	 * on the descriptor - computing them apart would let the agent build a graph the save path refuses.
+	 * The block composition the node offers, as
+	 * {@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Activity\Complex::loadSettingsAction()}
+	 * publishes it: the node's block descriptor decides, and a node without one falls back to the legacy
+	 * default. `null` when the activity is not found.
+	 *
+	 * The two flags of the detail are read off one answer, because the save path judges both by this same
+	 * descriptor ({@see \Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ValidateSingleRuleCommand})
+	 * - computing them apart would let the agent build a graph the save path refuses. The filter flag also
+	 * carries the runtime gate of {@see NodeFilterAvailability}, which is the fallback for a node with no
+	 * declaration; the condition block has no such gate.
 	 */
-	private function isFilterSupported(
+	private function resolveAvailableBlocks(
 		NodeFilterAvailability $filterAvailability,
 		string $blockType,
 		?array $fixedDocumentType,
 		array $documentType,
 		?ActivityDescription $description,
-	): bool
+		bool $runtimeFilterAvailable,
+	): ?BlockAvailability
 	{
-		$runtimeAvailable = $filterAvailability->isRuntimeAvailable($fixedDocumentType, $documentType);
-
 		// The relations flag does not affect the filter block; it is passed as the other surfaces pass it
 		// so the descriptor lookup hits the catalog cache instead of rebuilding it. The description
 		// build() already resolved is reused instead of a second uncached searchByCode() lookup.
-		$availableBlocks = BizprocContainer::instance()->getCapabilityCatalogService()->getAvailableBlocksForNode(
+		return BizprocContainer::instance()->getCapabilityCatalogService()->getAvailableBlocksForNode(
 			activityType: $blockType,
-			filterAvailable: $runtimeAvailable,
+			filterAvailable: $runtimeFilterAvailable,
 			relationsAvailable: Feature::instance()->areComplexNodeConnectionsAvailable(),
 			documentType: $filterAvailability->resolveEffectiveDocumentType($fixedDocumentType, $documentType),
 			filterModuleSupported: $filterAvailability->supportsModule($fixedDocumentType, $documentType),
 			description: $description,
 		);
-
-		return $filterAvailability->isAvailableForNode($availableBlocks, $runtimeAvailable);
 	}
 }

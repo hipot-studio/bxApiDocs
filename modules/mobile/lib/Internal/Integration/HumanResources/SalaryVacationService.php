@@ -34,6 +34,8 @@ final class SalaryVacationService
 	private function isHcmLinkAvailable(): bool
 	{
 		return Loader::includeModule('humanresources')
+			&& method_exists(Feature::class, 'isHcmLinkSalaryVacationApiAvailable')
+			&& method_exists(Container::class, 'getHcmLinkSalaryVacationApiService')
 			&& Feature::instance()->isHcmLinkAvailable()
 			&& Feature::instance()->isHcmLinkSalaryVacationApiAvailable();
 	}

@@ -77,15 +77,32 @@ class TaskController extends ActivityController
 				->getCrmPermissions()
 		);
 
+		$scheduledData = $pullEventData[$ownerID];
+		$taskId = (int)($scheduledData['ID'] ?? 0);
+		$scheduledData['ID'] = $ownerID;
+		if ($taskId > 0 && empty($scheduledData['ASSOCIATED_ENTITY_ID']))
+		{
+			$scheduledData['ASSOCIATED_ENTITY_ID'] = $taskId;
+		}
+
+		if (empty($scheduledData['BINDINGS']) || !is_array($scheduledData['BINDINGS']))
+		{
+			$scheduledData['BINDINGS'] = $bindings;
+		}
+
 		foreach($bindings as $binding)
 		{
 			$itemIdentifier = new \Bitrix\Crm\ItemIdentifier($binding['OWNER_TYPE_ID'], $binding['OWNER_ID']);
 			$this->sendPullEventOnAdd($itemIdentifier, $historyEntryID, $params['CURRENT_USER'] ?? null);
-			$this->sendPullEventOnAddScheduled(
-				$itemIdentifier,
-				$pullEventData[$ownerID],
-				$params['CURRENT_USER'] ?? null
-			);
+			if ($this->isDetailsPageChannelActive($itemIdentifier))
+			{
+				$scheduledData = $this->prepareScheduledData($scheduledData, $itemIdentifier);
+				$this->sendPreparedPullEventOnAddScheduled(
+					$itemIdentifier,
+					$scheduledData,
+					$params['CURRENT_USER'] ?? null
+				);
+			}
 		}
 	}
 	public function onModify($ownerID, array $params)

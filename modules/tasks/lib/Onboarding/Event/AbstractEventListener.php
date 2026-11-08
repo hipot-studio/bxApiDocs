@@ -20,13 +20,8 @@ abstract class AbstractEventListener
 
 	protected OnboardingContainer $container;
 
-	public static function getInstance(): FakeEventListener|static
+	public static function getInstance(): static
 	{
-		if (!OnboardingFeature::isAvailable())
-		{
-			return new FakeEventListener();
-		}
-
 		if (!isset(static::$instances[static::class]))
 		{
 			static::$instances[static::class] = new static();
@@ -68,7 +63,10 @@ abstract class AbstractEventListener
 
 	protected function saveCommandModels(CommandModelCollection $commandModels): void
 	{
-		$this->container->getQueueService()->add($commandModels);
+		if (OnboardingFeature::isAvailable() && !$commandModels->isEmpty())
+		{
+			$this->container->getQueueService()->add($commandModels);
+		}
 	}
 
 	protected function deleteByPair(int $taskId = 0, int $userId = 0): Result

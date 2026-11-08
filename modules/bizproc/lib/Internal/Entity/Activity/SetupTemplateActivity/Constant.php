@@ -15,11 +15,12 @@ class Constant extends Item
 		public readonly array $options = [],
 		public readonly array $settings = [],
 		public readonly string|array $default = '',
+		public readonly array $meta = [],
 	) {}
 
 	public function toArray(): array
 	{
-		return parent::toArray()
+		$result = parent::toArray()
 			+ [
 				'id' => $this->id,
 				'name' => $this->name,
@@ -32,6 +33,13 @@ class Constant extends Item
 				'default' => $this->default,
 			]
 		;
+
+		if ($this->meta !== [])
+		{
+			$result['meta'] = $this->meta;
+		}
+
+		return $result;
 	}
 
 	public function getType(): ItemType

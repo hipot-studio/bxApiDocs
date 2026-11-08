@@ -50,7 +50,7 @@ class Common
 	{
 		$ranges = \Bitrix\Main\Config\Option::get('timeman', 'intranet_network_range', 'a:0:{}');
 
-		return unserialize($ranges);
+		return unserialize($ranges, ['allowed_classes' => false]);
 	}
 
 	public static function isNetworkRange($userIp = '')

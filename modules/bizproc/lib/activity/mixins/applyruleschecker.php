@@ -7,6 +7,7 @@ namespace Bitrix\Bizproc\Activity\Mixins;
 use Bitrix\Bizproc\Activity\Trigger\TriggerParameters;
 use Bitrix\Bizproc\Error;
 use Bitrix\Bizproc\Internal\Factory\Workflow\TriggerStageWorkflowFactory;
+use Bitrix\Bizproc\Internal\Service\Activity\NodeConditionEvaluator;
 use Bitrix\Bizproc\Internal\Service\Activity\UnifiedPanelDescriptorProvider;
 use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Bizproc\Result;
@@ -39,11 +40,19 @@ trait ApplyRulesChecker
 				$stubWorkflow = (new TriggerStageWorkflowFactory())->create($templateId, $documentId);
 				$activity->setWorkflow($stubWorkflow);
 				unset($rules['Properties']);
-				$result = $activity->checkApplyRules($rules, new TriggerParameters($parameters));
+				$triggerParameters = new TriggerParameters($parameters);
+				$result = $activity->checkApplyRules($rules, $triggerParameters);
 
 				if ($result->isSuccess())
 				{
-					$result = $this->checkNodeCondition($properties, $activity, $result);
+					$result = $this->checkNodeCondition(
+						$properties,
+						$activity,
+						$result,
+						$templateId,
+						$documentId,
+						$triggerParameters,
+					);
 				}
 			}
 		}
@@ -59,8 +68,19 @@ trait ApplyRulesChecker
 	 * @param \CBPActivity $activity The trigger instance the native check has just run on, bound to the
 	 *     stub workflow the condition reads the document through.
 	 * @param Result $nativeResult Verdict of the native check, returned unchanged when there is no condition.
+	 * @param int $templateId Template of the trigger row: the stub of the condition stays bound to it, so
+	 *     template constants inside the condition keep resolving.
+	 * @param array $documentId Document of the process, the one the native check has just run on.
+	 * @param TriggerParameters $parameters The parameters of the event already built for the native check.
 	 */
-	private function checkNodeCondition(array $properties, \CBPActivity $activity, Result $nativeResult): Result
+	private function checkNodeCondition(
+		array $properties,
+		\CBPActivity $activity,
+		Result $nativeResult,
+		int $templateId,
+		array $documentId,
+		TriggerParameters $parameters,
+	): Result
 	{
 		$condition = $properties[UnifiedPanelDescriptorProvider::CONDITION_PROPERTY] ?? [];
 		if (!is_array($condition) || !$condition)
@@ -75,7 +95,16 @@ trait ApplyRulesChecker
 			return Result::createError(new Error('trigger condition evaluator not exist')); // todo: Loc
 		}
 
-		return (new \CBPMixedCondition($condition))->evaluate($activity)
+		// A node that named a record of its own has its condition decided on that record, here and at the
+		// execution of the node alike ({@see NodeConditionEvaluator}). The stub of the native check above is
+		// left alone.
+		return (new NodeConditionEvaluator())->isMet(
+			new \CBPMixedCondition($condition),
+			$activity,
+			$parameters,
+			$templateId,
+			$documentId,
+		)
 			? Result::createOk()
 			: Result::createError(new Error('trigger condition not met')) // todo: Loc
 		;

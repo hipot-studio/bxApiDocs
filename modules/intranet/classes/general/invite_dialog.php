@@ -7,11 +7,15 @@
  * @copyright 2001-2014 Bitrix
  */
 
+use Bitrix\Intranet\Exception\InvitationFailedException;
 use Bitrix\Intranet\Internal\Factory\Message\CollabInvitationMessageFactory;
 use Bitrix\Intranet\Internal\Factory\Message\ExtranetInvitationMessageFactory;
 use Bitrix\Intranet\Public\Service\Invitation\InviteContext;
 use Bitrix\Intranet\Public\Service\Invitation\InviteContextManager;
+use Bitrix\Intranet\Service\EmailMessage;
+use Bitrix\Intranet\Service\RateLimitedEmailMessage;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
@@ -370,32 +374,32 @@ class CIntranetInviteDialog
 
 					if ($bExtranet)
 					{
-						CEvent::SendImmediate("EXTRANET_INVITATION", $siteIdByDepartmentId, array(
+						self::sendInvitationEmail("EXTRANET_INVITATION", $siteIdByDepartmentId, array(
 							"USER_ID" => $arUser["ID"],
 							"CHECKWORD" => $arUser["CONFIRM_CODE"],
 							"EMAIL" => $arUser["EMAIL"],
 							"USER_TEXT" => ''
-						));
+						), null, $arUser["EMAIL"]);
 					}
 					elseif ($bitrix24Installed)
 					{
 						$messageId = self::getMessageId("BITRIX24_USER_INVITATION", $siteIdByDepartmentId, LANGUAGE_ID);
-						CEvent::SendImmediate("BITRIX24_USER_INVITATION", $siteIdByDepartmentId, array(
+						self::sendInvitationEmail("BITRIX24_USER_INVITATION", $siteIdByDepartmentId, array(
 							"EMAIL_FROM" => $USER->GetEmail(),
 							"USER_ID_FROM" => $USER->GetID(),
 							"EMAIL_TO" => $arUser["EMAIL"],
 							"LINK" => self::getInviteLink($arUser, $siteIdByDepartmentId),
 							"USER_TEXT" => $messageText
-						), null, $messageId);
+						), $messageId, $arUser["EMAIL"]);
 					}
 					else
 					{
-						CEvent::SendImmediate("INTRANET_USER_INVITATION", $siteIdByDepartmentId, array(
+						self::sendInvitationEmail("INTRANET_USER_INVITATION", $siteIdByDepartmentId, array(
 							"USER_ID_FROM" => $USER->GetID(),
 							"EMAIL_TO" => $arUser["EMAIL"],
 							"LINK" => self::getInviteLink($arUser, $siteIdByDepartmentId),
 							"USER_TEXT" => $messageText
-						));
+						), null, $arUser["EMAIL"]);
 					}
 				}
 			}
@@ -446,6 +450,12 @@ class CIntranetInviteDialog
 		}
 	}
 
+	public static function isExtranetInvitationAvailable(): bool
+	{
+		return ModuleManager::isModuleInstalled('extranet')
+			&& Option::get('extranet', 'extranet_site') !== '';
+	}
+
 	public static function RegisterNewUser($SITE_ID, $arFields, &$arError)
 	{
 		global $APPLICATION;
@@ -459,10 +469,7 @@ class CIntranetInviteDialog
 
 		$arEmailExist = array();
 		$bExtranetUser = false;
-		$bExtranetInstalled = (
-			ModuleManager::isModuleInstalled('extranet')
-			&& Option::get('extranet', 'extranet_site') !== ''
-		);
+		$bExtranetInstalled = self::isExtranetInvitationAvailable();
 
 		if (!empty($arFields['EMAIL']) || !empty($arFields['PHONE']))
 		{
@@ -1208,6 +1215,35 @@ class CIntranetInviteDialog
 		// TODO: from portal sms provider
 	}
 
+	private static function sendInvitationEmail(
+		string $eventName,
+		?string $siteId,
+		array $templateParams,
+		?int $messageId = null,
+		?string $emailTo = null,
+	): bool
+	{
+		$message = new EmailMessage($eventName, (string)$siteId, $templateParams, $messageId);
+		$sendable = ($emailTo === null || $emailTo === '')
+			? $message
+			: new RateLimitedEmailMessage(
+				$message,
+				$emailTo,
+				ServiceLocator::getInstance()->get('intranet.service.invitation.email-rate-limiter'),
+			);
+
+		try
+		{
+			$sendable->sendImmediatelyWithResult();
+		}
+		catch (InvitationFailedException $exception)
+		{
+			return false;
+		}
+
+		return true;
+	}
+
 	public static function InviteUser($arUser, $messageText, $params = array())
 	{
 		global $USER;
@@ -1258,35 +1294,37 @@ class CIntranetInviteDialog
 		if ($bExtranet)
 		{
 			$messageId = self::getMessageId("EXTRANET_INVITATION", $siteIdByDepartmentId, LANGUAGE_ID);
-			CEvent::SendImmediate("EXTRANET_INVITATION", $siteIdByDepartmentId, array(
+
+			return self::sendInvitationEmail("EXTRANET_INVITATION", $siteIdByDepartmentId, array(
 				"USER_ID" => $arUser["ID"],
 				"USER_ID_FROM" => $USER->GetID(),
 				"CHECKWORD" => $arUser["CONFIRM_CODE"],
 				"EMAIL" => $emailTo,
 				"USER_TEXT" => $messageText
-			), null, $messageId);
+			), $messageId, $emailTo);
 		}
-		elseif ($isCloud)
+
+		if ($isCloud)
 		{
 			$messageId = self::getMessageId("BITRIX24_USER_INVITATION", $siteIdByDepartmentId, LANGUAGE_ID);
-			CEvent::SendImmediate("BITRIX24_USER_INVITATION", $siteIdByDepartmentId, array(
+
+			return self::sendInvitationEmail("BITRIX24_USER_INVITATION", $siteIdByDepartmentId, array(
 				"EMAIL_FROM" => $USER->GetEmail(),
 				"USER_ID_FROM" => $USER->GetID(),
 				"EMAIL_TO" => $emailTo,
 				"LINK" => self::getInviteLink($arUser, $siteIdByDepartmentId),
 				"USER_TEXT" => $messageText,
-			), null, $messageId);
+			), $messageId, $emailTo);
 		}
-		else
-		{
-			$messageId = self::getMessageId("INTRANET_USER_INVITATION", $siteIdByDepartmentId, LANGUAGE_ID);
-			CEvent::SendImmediate("INTRANET_USER_INVITATION", $siteIdByDepartmentId, array(
-				"EMAIL_TO" => $emailTo,
-				"USER_ID_FROM" => $USER->GetID(),
-				"LINK" => self::getInviteLink($arUser, $siteIdByDepartmentId),
-				"USER_TEXT" => $messageText,
-			), null, $messageId);
-		}
+
+		$messageId = self::getMessageId("INTRANET_USER_INVITATION", $siteIdByDepartmentId, LANGUAGE_ID);
+
+		return self::sendInvitationEmail("INTRANET_USER_INVITATION", $siteIdByDepartmentId, array(
+			"EMAIL_TO" => $emailTo,
+			"USER_ID_FROM" => $USER->GetID(),
+			"LINK" => self::getInviteLink($arUser, $siteIdByDepartmentId),
+			"USER_TEXT" => $messageText,
+		), $messageId, $emailTo);
 	}
 
 	public static function getMessageId($eventName, $siteId, $languageId)
@@ -1336,8 +1374,7 @@ class CIntranetInviteDialog
 		);
 		if($arUser = $rsUser->Fetch())
 		{
-			self::InviteUser($arUser, self::getInviteMessageText(), array('checkB24' => false));
-			return true;
+			return self::InviteUser($arUser, self::getInviteMessageText(), array('checkB24' => false));
 		}
 		return false;
 	}
@@ -1370,7 +1407,16 @@ class CIntranetInviteDialog
 			{
 				$factory = new ExtranetInvitationMessageFactory($user);
 			}
-			$factory->createEmailEvent()->sendImmediately();
+			try
+			{
+				$factory->createEmailEvent()->sendImmediately();
+			}
+			catch (InvitationFailedException $exception)
+			{
+				Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+
+				return false;
+			}
 
 			return true;
 		}

@@ -3,13 +3,19 @@
 namespace Bitrix\Main\UserField\Internal;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\ORM\Entity;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
+use Bitrix\Main\UserField\Types\BaseType;
+use Bitrix\Main\UserField\Types\EnumType;
+use Bitrix\Main\UserField\Types\FileType;
 
 final class UserFieldHelper
 {
@@ -154,10 +160,7 @@ final class UserFieldHelper
 
 			try
 			{
-				$connection->query(sprintf(
-					'ALTER TABLE %s ADD %s %s',
-					$sqlHelper->quote($typeData['TABLE_NAME']), $sqlHelper->quote($field['FIELD_NAME']), $sql_column_type,
-				));
+				self::addUserFieldColumn($connection, $typeData['TABLE_NAME'], $field['FIELD_NAME'], $sql_column_type);
 
 				if ($field['MULTIPLE'] == 'Y')
 				{
@@ -202,6 +205,23 @@ final class UserFieldHelper
 		return true;
 	}
 
+	private static function addUserFieldColumn(
+		Connection $connection,
+		string $tableName,
+		string $fieldName,
+		string $columnType,
+	): void
+	{
+		$sqlHelper = $connection->getSqlHelper();
+		$connection->query(sprintf(
+			'ALTER TABLE %s ADD %s %s',
+			$sqlHelper->quote($tableName),
+			$sqlHelper->quote($fieldName),
+			$columnType,
+		));
+		$connection->clearCaches($tableName);
+	}
+
 	/**
 	 * @param $field
 	 * @return array|bool
@@ -215,9 +235,147 @@ final class UserFieldHelper
 			return true;
 		}
 
+		[$factory, $typeId] = $parseResult;
+		$dataClass = $factory->getTypeDataClass();
+		$typeData = $dataClass::getById($typeId)->fetch();
+		$field['USER_TYPE'] = $userFieldHelper->getManager()?->GetUserType($field['USER_TYPE_ID']);
+
+		if ($typeData)
+		{
+			$cleanupResult = self::cleanupUserFieldValuesBeforeDelete(
+				$field,
+				self::getUserFieldValues($dataClass, $typeData, $field),
+			);
+			if (!$cleanupResult->isSuccess())
+			{
+				$userFieldHelper->getApplication()?->ThrowException(
+					$cleanupResult->getError()?->getMessage() ?? 'Could not delete user field values.',
+				);
+
+				return false;
+			}
+		}
+
 		return [
 			'PROVIDE_STORAGE' => false,
 		];
+	}
+
+	public static function cleanupUserFieldValuesBeforeDelete(
+		array $field,
+		iterable $values,
+	): Result
+	{
+		$className = $field['USER_TYPE']['CLASS_NAME'] ?? null;
+		if (!self::hasValuesDeleteHandler($field))
+		{
+			return new Result();
+		}
+
+		try
+		{
+			if (self::hasOwnTypeMethod($field, 'onBeforeDeleteValues'))
+			{
+				return $className::onBeforeDeleteValues($field, $values);
+			}
+
+			return FileType::onBeforeDeleteValues($field, $values);
+		}
+		catch (\Throwable $exception)
+		{
+			return (new Result())->addError(
+				new Error($exception->getMessage(), 'USER_FIELD_DELETE_FAILED'),
+			);
+		}
+	}
+
+	public static function hasValuesDeleteHandler(array $field): bool
+	{
+		return self::hasOwnTypeMethod($field, 'onBeforeDeleteValues')
+			|| ($field['USER_TYPE']['BASE_TYPE'] ?? null) === \CUserTypeManager::BASE_TYPE_FILE;
+	}
+
+	public static function cleanupUserFieldDefinitionBeforeDelete(array $field): Result
+	{
+		$className = $field['USER_TYPE']['CLASS_NAME'] ?? null;
+		if (!self::hasFieldDeleteHandler($field))
+		{
+			return new Result();
+		}
+
+		try
+		{
+			if (self::hasOwnTypeMethod($field, 'onBeforeDeleteField'))
+			{
+				return $className::onBeforeDeleteField($field);
+			}
+
+			return EnumType::onBeforeDeleteField($field);
+		}
+		catch (\Throwable $exception)
+		{
+			return (new Result())->addError(
+				new Error($exception->getMessage(), 'USER_FIELD_DELETE_FAILED'),
+			);
+		}
+	}
+
+	public static function hasFieldDeleteHandler(array $field): bool
+	{
+		return self::hasOwnTypeMethod($field, 'onBeforeDeleteField')
+			|| ($field['USER_TYPE']['BASE_TYPE'] ?? null) === \CUserTypeManager::BASE_TYPE_ENUM;
+	}
+
+	public static function hasDeleteLifecycle(array $field): bool
+	{
+		return self::hasValuesDeleteHandler($field) || self::hasFieldDeleteHandler($field);
+	}
+
+	private static function hasOwnTypeMethod(array $field, string $method): bool
+	{
+		$className = $field['USER_TYPE']['CLASS_NAME'] ?? null;
+		if (!is_string($className) || !is_a($className, BaseType::class, true))
+		{
+			return false;
+		}
+
+		return (new \ReflectionMethod($className, $method))->getDeclaringClass()->getName()
+			!== BaseType::class;
+	}
+
+	private static function getUserFieldValues(string $dataClass, array $typeData, array $field): iterable
+	{
+		$connection = Application::getConnection();
+		if ($field['MULTIPLE'] === 'Y')
+		{
+			$tableName = $dataClass::getMultipleValueTableName($typeData, $field);
+			if (!$connection->isTableExists($tableName))
+			{
+				return;
+			}
+
+			$query = new SqlExpression('SELECT ?# AS ?# FROM ?#', 'VALUE', 'VALUE', $tableName);
+		}
+		else
+		{
+			if (!$connection->getTableField($typeData['TABLE_NAME'], $field['FIELD_NAME']))
+			{
+				return;
+			}
+
+			$query = new SqlExpression(
+				'SELECT ?# AS ?# FROM ?#',
+				$field['FIELD_NAME'],
+				'VALUE',
+				$typeData['TABLE_NAME'],
+			);
+		}
+
+		$queryResult = $connection->query($query->compile());
+		while ($row = $queryResult->fetch())
+		{
+			yield $row['VALUE'];
+		}
 	}
 
 	public static function OnAfterUserTypeDelete($field): void
@@ -242,12 +400,6 @@ final class UserFieldHelper
 			return;
 		}
 
-		$fieldType = $userFieldHelper->getManager()->GetUserType($field['USER_TYPE_ID']);
-		if ($fieldType && $fieldType['BASE_TYPE'] === 'file')
-		{
-			self::deleteAllFilesFromUserField($typeData['TABLE_NAME'], $field['FIELD_NAME']);
-		}
-
 		$connection = Application::getConnection();
 
 		try
@@ -265,70 +417,6 @@ final class UserFieldHelper
 			if ($connection->isTableExists($utmTableName))
 			{
 				$connection->dropTable($utmTableName);
-			}
-		}
-	}
-
-	private static function deleteAllFilesFromUserField(string $tableName, string $fieldName): void
-	{
-		// cant use ORM here, the field is already deleted
-		$query = new SqlExpression(
-			'SELECT ?# FROM ?#',
-			$fieldName,
-			$tableName,
-		);
-
-		try
-		{
-			$queryResult = Application::getConnection()->query($query->compile());
-		}
-		catch (SqlQueryException)
-		{
-			// no column is ok
-			return;
-		}
-
-		while ($oldData = $queryResult->fetch())
-		{
-			$value = $oldData[$fieldName];
-
-			if (empty($value))
-			{
-				continue;
-			}
-
-			if (is_numeric($value))
-			{
-				// single file
-				\CFile::Delete($value);
-				continue;
-			}
-
-			if (is_string($value))
-			{
-				// multiple files
-
-				try
-				{
-					$valueUnserialized = unserialize($value, ['allowed_classes' => false, 'max_depth' => 1]);
-				}
-				catch (\Throwable)
-				{
-					continue;
-				}
-
-				if (!is_array($valueUnserialized))
-				{
-					continue;
-				}
-
-				foreach ($valueUnserialized as $singleValue)
-				{
-					if (!empty($singleValue) && is_numeric($singleValue))
-					{
-						\CFile::Delete($singleValue);
-					}
-				}
 			}
 		}
 	}

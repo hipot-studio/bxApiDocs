@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Type\Callback;
+
 IncludeModuleLangFile(__FILE__);
 
 class CRatings
@@ -270,7 +272,9 @@ class CRatings
 			CRatings::SetAuthorityRating($ID);
 		}
 
-		CAgent::AddAgent("CRatings::Calculate($ID);", "main", "N", 3600, "", "Y", "");
+		$callback = new Callback([self::class, 'Calculate'], [$ID]);
+
+		CAgent::AddAgent($callback, 'main', 'N', 3600, '', 'Y', '');
 
 		$stackCacheManager->Clear("b_rating");
 
@@ -348,8 +352,10 @@ class CRatings
 
 		CRatings::Calculate($ID, true);
 
-		CAgent::RemoveAgent("CRatings::Calculate($ID);", "main");
-		$AID = CAgent::AddAgent("CRatings::Calculate($ID);", "main", "N", 3600, "", "Y", "");
+		$callback = new Callback([self::class, 'Calculate'], [$ID]);
+
+		CAgent::RemoveAgent($callback, 'main');
+		CAgent::AddAgent($callback, 'main', 'N', 3600, '', 'Y', '');
 
 		$stackCacheManager->Clear("b_rating");
 
@@ -374,7 +380,9 @@ class CRatings
 		$DB->Query("DELETE FROM b_rating_component_results WHERE RATING_ID=$ID");
 		$DB->Query("DELETE FROM b_rating_results WHERE RATING_ID=$ID");
 
-		CAgent::RemoveAgent("CRatings::Calculate($ID);", "main");
+		$callback = new Callback([self::class, 'Calculate'], [$ID]);
+
+		CAgent::RemoveAgent($callback, 'main');
 
 		$stackCacheManager->Clear("b_rating");
 
@@ -437,7 +445,7 @@ class CRatings
 
 		CRatings::BuildRating($ID);
 
-		return "CRatings::Calculate($ID);";
+		return new Callback([self::class, 'Calculate'], [$ID]);
 	}
 
 	// queries modules and get all the available objects

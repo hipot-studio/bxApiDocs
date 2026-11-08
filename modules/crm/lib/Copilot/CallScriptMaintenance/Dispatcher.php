@@ -10,6 +10,7 @@ use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Operation\GenerateCallCriteria;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Service\SystemUser;
 use Bitrix\Crm\Traits\Singleton;
 use CCrmOwnerType;
 
@@ -17,9 +18,15 @@ final class Dispatcher
 {
 	use Singleton;
 
+	/** @deprecated Use getSystemUserId() instead. */
 	public const SYSTEM_USER_ID = 1;
 
-	private const SYNTHETIC_TARGET_ID = 1;
+	public const SYNTHETIC_TARGET_ID = 1;
+
+	public static function getSystemUserId(): int
+	{
+		return SystemUser::getDefaultAuthorId();
+	}
 
 	public function markGrouped(array $selectionIds): void
 	{
@@ -34,7 +41,7 @@ final class Dispatcher
 	public function launchCreateCallAssessmentJob(array $transcripts, ?int $parentJobId = null): int
 	{
 		$target = new ItemIdentifier(CCrmOwnerType::CopilotCallAssessment, self::SYNTHETIC_TARGET_ID);
-		$result = (new GenerateCallCriteria($target, self::SYSTEM_USER_ID, $parentJobId))
+		$result = (new GenerateCallCriteria($target, self::getSystemUserId(), $parentJobId))
 			->setDialogues($transcripts)
 			->setCreateMode(true)
 			->setIsManualLaunch(false)
@@ -56,7 +63,7 @@ final class Dispatcher
 	public function launchEnrichCallAssessmentJob(int $callAssessmentId, array $transcripts): int
 	{
 		$target = new ItemIdentifier(CCrmOwnerType::CopilotCallAssessment, $callAssessmentId);
-		$result = (new GenerateCallCriteria($target, self::SYSTEM_USER_ID))
+		$result = (new GenerateCallCriteria($target, self::getSystemUserId()))
 			->setDialogues($transcripts)
 			->setIsManualLaunch(false)
 			->launch()

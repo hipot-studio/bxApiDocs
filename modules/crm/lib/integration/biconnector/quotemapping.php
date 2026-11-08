@@ -2,10 +2,20 @@
 
 namespace Bitrix\Crm\Integration\BiConnector;
 
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\MysqliSqlHelper;
+use Bitrix\Main\DB\PgsqlSqlHelper;
+
 class QuoteMapping
 {
-	public static function getMapping(): array
+	/**
+	 * @param MysqliSqlHelper|PgsqlSqlHelper|null $helper Helper of the connection the mapping is built for.
+	 *   Optional for compatibility: the method had no parameters before the PostgreSQL support.
+	 */
+	public static function getMapping(MysqliSqlHelper|PgsqlSqlHelper|null $helper = null): array
 	{
+		$helper ??= Application::getConnection()->getSqlHelper();
+
 		return [
 			'TABLE_NAME' => 'b_crm_quote',
 			'TABLE_ALIAS' => 'Q',
@@ -314,7 +324,35 @@ class QuoteMapping
 					'FIELD_TYPE' => 'int',
 				],
 				//    WEBFORM_ID            int unsigned                             null,
+				'WEBFORM_ID' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'Q.WEBFORM_ID',
+					'FIELD_TYPE' => 'int',
+				],
+				'WEBFORM_NAME' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => 'WF.NAME',
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'WF',
+					'JOIN' => 'INNER JOIN b_crm_webform WF ON WF.ID = Q.WEBFORM_ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_crm_webform WF ON WF.ID = Q.WEBFORM_ID',
+				],
+				'WEBFORM' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => 'CASE WHEN Q.WEBFORM_ID is null THEN null ELSE concat_ws(\' \', '
+						. $helper->getConcatFunction('\'[\'', 'Q.WEBFORM_ID', '\']\'')
+						. ', nullif(WF.NAME, \'\')) END',
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'WF',
+					'JOIN' => 'INNER JOIN b_crm_webform WF ON WF.ID = Q.WEBFORM_ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_crm_webform WF ON WF.ID = Q.WEBFORM_ID',
+				],
 				//    ACTUAL_DATE           date                                     null,
+				'ACTUAL_DATE' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'Q.ACTUAL_DATE',
+					'FIELD_TYPE' => 'date',
+				],
 				//    CLIENT_TITLE          varchar(255)                             null,
 				//    CLIENT_ADDR           varchar(255)                             null,
 				//    CLIENT_CONTACT        varchar(255)                             null,

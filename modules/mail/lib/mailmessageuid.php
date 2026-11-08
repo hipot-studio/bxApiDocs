@@ -2,10 +2,12 @@
 
 namespace Bitrix\Mail;
 
+use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Mail\Helper\Message\MessageInternalDateHandler;
 use Bitrix\Mail\Helper\MessageEventManager;
 use Bitrix\Mail\Internal\Service\Label\LabelCountersService;
 use Bitrix\Mail\Internal\Service\Message\ClassifyPendingService;
+use Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill;
 use Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope;
 use Bitrix\Mail\Internals\MailMessageMarkTable;
 use Bitrix\Mail\Internals\MessageUploadQueueTable;
@@ -57,6 +59,15 @@ class MailMessageUidTable extends Entity\DataManager
 	];
 
 	private const REMAINING_MESSAGES_PORTION = 1000;
+	private const ACTIVITY_REFRESH_LIMIT = 500;
+	private const ACTIVITY_FIELDS = [
+		'DIR_MD5',
+		'INTERNALDATE',
+		'IS_OLD',
+		'DELETE_TIME',
+		'MESSAGE_ID',
+		'GENERATION_ID',
+	];
 
 	public static function getFilePath()
 	{
@@ -68,11 +79,70 @@ class MailMessageUidTable extends Entity\DataManager
 		return 'b_mail_message_uid';
 	}
 
+	public static function add(array $data)
+	{
+		$activityMutation = self::beginActivityMutation(self::withActivityMutationValues([], $data));
+		$mutationCompleted = false;
+		try
+		{
+			$result = parent::add($data);
+			$mutationCompleted = true;
+
+			return $result;
+		}
+		finally
+		{
+			self::finishActivityMutation($activityMutation, $mutationCompleted);
+		}
+	}
+
+	public static function update($primary, array $data)
+	{
+		$activityMutation = self::activityFieldsChanged($data)
+			? self::beginActivityMutation(self::withActivityMutationValues(
+				self::selectActivityMutationRows((array)$primary),
+				$data,
+			))
+			: null;
+		$mutationCompleted = false;
+		try
+		{
+			$result = parent::update($primary, $data);
+			$mutationCompleted = true;
+
+			return $result;
+		}
+		finally
+		{
+			self::finishActivityMutation($activityMutation, $mutationCompleted);
+		}
+	}
+
+	public static function delete($primary)
+	{
+		$activityMutation = self::beginActivityMutation(
+			self::selectActivityMutationRows((array)$primary),
+		);
+		$mutationCompleted = false;
+		try
+		{
+			$result = parent::delete($primary);
+			$mutationCompleted = true;
+
+			return $result;
+		}
+		finally
+		{
+			self::finishActivityMutation($activityMutation, $mutationCompleted);
+		}
+	}
+
 	/**
 	 * @param array $filter
 	 * @param array $fields
 	 * @param  array $eventData - optional, for compatibility reasons, should have the following structure:
 	 * [ ['HEADER_MD5' => .., 'MESSAGE_ID' => .., 'MAILBOX_USER_ID' => ..], [..]]
+	 * @param bool $sendEvent Whether to register and dispatch the modification event.
 	 * @return \Bitrix\Main\DB\Result
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\Db\SqlQueryException
@@ -82,34 +152,49 @@ class MailMessageUidTable extends Entity\DataManager
 	 */
 	public static function updateList(array $filter, array $fields, array $eventData = [], bool $sendEvent = true)
 	{
-		$entity = static::getEntity();
-		$connection = $entity->getConnection();
-
-		$result = $connection->query(sprintf(
-			"UPDATE %s SET %s WHERE %s",
-			$connection->getSqlHelper()->quote($entity->getDbTableName()),
-			$connection->getSqlHelper()->prepareUpdate($entity->getDbTableName(), $fields)[0],
-			Entity\Query::buildFilterSql($entity, $filter)
-		));
-		$eventManager = EventManager::getInstance();
-		$eventKey = $eventManager->addEventHandler(
-			'mail',
-			'onMailMessageModified',
-			array(MessageEventManager::class, 'onMailMessageModified')
-		);
-
-		if ($sendEvent)
+		$activityMutation = self::activityFieldsChanged($fields)
+			? self::beginActivityMutation(self::withActivityMutationValues(
+				self::selectActivityMutationRows($filter),
+				$fields,
+			))
+			: null;
+		$mutationCompleted = false;
+		try
 		{
-			$event = new \Bitrix\Main\Event('mail', 'onMailMessageModified', array(
-				'MAIL_FIELDS_DATA' => $eventData,
-				'UPDATED_FIELDS_VALUES' => $fields,
-				'UPDATED_BY_FILTER' => $filter,
-			));
-			$event->send();
-			EventManager::getInstance()->removeEventHandler('mail', 'onMailMessageModified', $eventKey);
-		}
+			$entity = static::getEntity();
+			$connection = $entity->getConnection();
 
-		return $result;
+			$result = $connection->query(sprintf(
+				"UPDATE %s SET %s WHERE %s",
+				$connection->getSqlHelper()->quote($entity->getDbTableName()),
+				$connection->getSqlHelper()->prepareUpdate($entity->getDbTableName(), $fields)[0],
+				Entity\Query::buildFilterSql($entity, $filter)
+			));
+			if ($sendEvent)
+			{
+				$eventManager = EventManager::getInstance();
+				$eventKey = $eventManager->addEventHandler(
+					'mail',
+					'onMailMessageModified',
+					array(MessageEventManager::class, 'onMailMessageModified')
+				);
+
+				$event = new \Bitrix\Main\Event('mail', 'onMailMessageModified', array(
+					'MAIL_FIELDS_DATA' => $eventData,
+					'UPDATED_FIELDS_VALUES' => $fields,
+					'UPDATED_BY_FILTER' => $filter,
+				));
+				$event->send();
+				EventManager::getInstance()->removeEventHandler('mail', 'onMailMessageModified', $eventKey);
+			}
+			$mutationCompleted = true;
+
+			return $result;
+		}
+		finally
+		{
+			self::finishActivityMutation($activityMutation, $mutationCompleted);
+		}
 	}
 
 	/**
@@ -137,66 +222,75 @@ class MailMessageUidTable extends Entity\DataManager
 		{
 			return false;
 		}
-
-		$entity = static::getEntity();
-		$connection = $entity->getConnection();
-
-		$portionLimit = 200;
-
-		$messagesCount = count($messages);
-
-		for ($i = 0; $i < $messagesCount; $i=$i+$portionLimit)
+		$activityMutation = self::beginActivityMutation($messages);
+		$mutationCompleted = false;
+		try
 		{
-			$portion = array_slice($messages, $i, $portionLimit);
+			$entity = static::getEntity();
+			$connection = $entity->getConnection();
 
-			$query = sprintf(
-				' FROM %s WHERE ID IN (\'' . join("','", array_column($portion, 'ID')) . '\')',
-				$connection->getSqlHelper()->quote($entity->getDbTableName()),
-			);
+			$portionLimit = 200;
 
-			self::insertIntoDeleteMessagesQueue($connection, $query);
+			$messagesCount = count($messages);
 
-			$connection->query(sprintf('DELETE %s', $query));
+			for ($i = 0; $i < $messagesCount; $i=$i+$portionLimit)
+			{
+				$portion = array_slice($messages, $i, $portionLimit);
+
+				$query = sprintf(
+					' FROM %s WHERE ID IN (\'' . join("','", array_column($portion, 'ID')) . '\')',
+					$connection->getSqlHelper()->quote($entity->getDbTableName()),
+				);
+
+				self::insertIntoDeleteMessagesQueue($connection, $query);
+
+				$connection->query(sprintf('DELETE %s', $query));
+			}
+
+			$remainingRows = static::selectRemainingUidRows($messages);
+
+			static::removeMessageMarksAndPendingFlags($messages, $filter, $remainingRows);
+
+			static::cleanupDeletedMessageLabels($messages, $filter, $remainingRows);
+
+			/*
+				A message has left the mailbox only when no uid row of it survives: the same letter
+				may sit in another folder or in a retained source generation. Repeating the filter
+				cannot answer that - it names the rows just deleted, not the message.
+			*/
+			$remains = array_column($remainingRows, 'MESSAGE_ID');
+
+			if ($sendEvent)
+			{
+				//Checking that the values were actually deleted:
+				$deletedMessages = array_filter(
+					$messages,
+					function ($item) use ($remains) {
+						return !in_array($item['MESSAGE_ID'], $remains);
+					}
+				);
+
+				$eventManager = EventManager::getInstance();
+				$eventKey = $eventManager->addEventHandler(
+					'mail',
+					'onMailMessageDeleted',
+					array(MessageEventManager::class, 'onMailMessageDeleted')
+				);
+				$event = new \Bitrix\Main\Event('mail', 'onMailMessageDeleted', array(
+					'MAIL_FIELDS_DATA' => $deletedMessages,
+					'DELETED_BY_FILTER' => $filter,
+				));
+				$event->send();
+				EventManager::getInstance()->removeEventHandler('mail', 'onMailMessageDeleted', $eventKey);
+			}
+			$mutationCompleted = true;
+
+			return true;
 		}
-
-		$remainingRows = static::selectRemainingUidRows($messages);
-
-		static::removeMessageMarksAndPendingFlags($messages, $filter, $remainingRows);
-
-		static::cleanupDeletedMessageLabels($messages, $filter, $remainingRows);
-
-		/*
-			A message has left the mailbox only when no uid row of it survives: the same letter
-			may sit in another folder or in a retained source generation. Repeating the filter
-			cannot answer that - it names the rows just deleted, not the message.
-		*/
-		$remains = array_column($remainingRows, 'MESSAGE_ID');
-
-		if ($sendEvent)
+		finally
 		{
-			//Checking that the values were actually deleted:
-			$deletedMessages = array_filter(
-				$messages,
-				function ($item) use ($remains) {
-					return !in_array($item['MESSAGE_ID'], $remains);
-				}
-			);
-
-			$eventManager = EventManager::getInstance();
-			$eventKey = $eventManager->addEventHandler(
-				'mail',
-				'onMailMessageDeleted',
-				array(MessageEventManager::class, 'onMailMessageDeleted')
-			);
-			$event = new \Bitrix\Main\Event('mail', 'onMailMessageDeleted', array(
-				'MAIL_FIELDS_DATA' => $deletedMessages,
-				'DELETED_BY_FILTER' => $filter,
-			));
-			$event->send();
-			EventManager::getInstance()->removeEventHandler('mail', 'onMailMessageDeleted', $eventKey);
+			self::finishActivityMutation($activityMutation, $mutationCompleted);
 		}
-
-		return true;
 	}
 
 	/**
@@ -463,33 +557,42 @@ class MailMessageUidTable extends Entity\DataManager
 		$entity = static::getEntity();
 		$connection = $entity->getConnection();
 		$filter = array_merge($filter , static::getPresetRemoveFilters());
+		$activityMutation = self::beginActivityMutation(self::selectActivityMutationRows($filter));
+		$mutationCompleted = false;
+		try
+		{
+			//mark selected messages for deletion if there are no messages in the download queue
+			$query = sprintf(
+				'UPDATE %s SET %s WHERE %s AND NOT EXISTS (SELECT 1 FROM %s WHERE %s)',
+				$connection->getSqlHelper()->quote($entity->getDbTableName()),
+				$connection->getSqlHelper()->prepareUpdate($entity->getDbTableName(), [
+					'DELETE_TIME' => time(),
+				])[0],
+				Entity\Query::buildFilterSql(
+					$entity,
+					$filter
+				),
+				$connection->getSqlHelper()->quote(Internals\MessageUploadQueueTable::getTableName()),
+				Entity\Query::buildFilterSql(
+					$entity,
+					[
+						'=ID' => new \Bitrix\Main\DB\SqlExpression('?#', 'ID'),
+						'=MAILBOX_ID' => new \Bitrix\Main\DB\SqlExpression('?#', 'MAILBOX_ID'),
+					]
+				)
+			);
 
-		//mark selected messages for deletion if there are no messages in the download queue
-		$query = sprintf(
-			'UPDATE %s SET %s WHERE %s AND NOT EXISTS (SELECT 1 FROM %s WHERE %s)',
-			$connection->getSqlHelper()->quote($entity->getDbTableName()),
-			$connection->getSqlHelper()->prepareUpdate($entity->getDbTableName(), [
-				'DELETE_TIME' => time(),
-			])[0],
-			Entity\Query::buildFilterSql(
-				$entity,
-				$filter
-			),
-			$connection->getSqlHelper()->quote(Internals\MessageUploadQueueTable::getTableName()),
-			Entity\Query::buildFilterSql(
-				$entity,
-				[
-					'=ID' => new \Bitrix\Main\DB\SqlExpression('?#', 'ID'),
-					'=MAILBOX_ID' => new \Bitrix\Main\DB\SqlExpression('?#', 'MAILBOX_ID'),
-				]
-			)
-		);
+			$result = $connection->query($query);
+			$count = $connection->getAffectedRowsCount();
+			$result->setCount($count > 0 ? $count : 0);
+			$mutationCompleted = true;
 
-		$result = $connection->query($query);
-		$count = $connection->getAffectedRowsCount();
-		$result->setCount($count > 0 ? $count : 0);
-
-		return $result;
+			return $result;
+		}
+		finally
+		{
+			self::finishActivityMutation($activityMutation, $mutationCompleted);
+		}
 	}
 
 	/**@
@@ -592,17 +695,146 @@ class MailMessageUidTable extends Entity\DataManager
 	 */
 	public static function mergeData(array $insert, array $update)
 	{
-		$entity = static::getEntity();
-		$connection = $entity->getConnection();
-		$helper = $connection->getSqlHelper();
-
-		$sql = $helper->prepareMerge($entity->getDBTableName(), $entity->getPrimaryArray(), $insert, $update);
-
-		$sql = current($sql);
-		if($sql <> '')
+		$primaryFilter = [];
+		foreach (static::getEntity()->getPrimaryArray() as $primaryField)
 		{
-			$connection->queryExecute($sql);
-			$entity->cleanCache();
+			if (array_key_exists($primaryField, $insert))
+			{
+				$primaryFilter['=' . $primaryField] = $insert[$primaryField];
+			}
+		}
+		$activityMutation = self::activityFieldsChanged($insert + $update)
+			? self::beginActivityMutation(self::withActivityMutationValues(
+				self::selectActivityMutationRows($primaryFilter),
+				$insert + $update,
+			))
+			: null;
+		$mutationCompleted = false;
+		try
+		{
+			$entity = static::getEntity();
+			$connection = $entity->getConnection();
+			$helper = $connection->getSqlHelper();
+
+			$sql = $helper->prepareMerge($entity->getDBTableName(), $entity->getPrimaryArray(), $insert, $update);
+
+			$sql = current($sql);
+			if($sql <> '')
+			{
+				$connection->queryExecute($sql);
+				$entity->cleanCache();
+			}
+			$mutationCompleted = true;
+		}
+		finally
+		{
+			self::finishActivityMutation($activityMutation, $mutationCompleted);
+		}
+	}
+
+	private static function activityFieldsChanged(array $fields): bool
+	{
+		return array_intersect(self::ACTIVITY_FIELDS, array_keys($fields)) !== [];
+	}
+
+	/** @return array<int, array{MAILBOX_ID: int, MESSAGE_ID: int}> */
+	private static function selectActivityMutationRows(array $filter): array
+	{
+		if (!Feature::isMessageConversationGridAvailable() || $filter === [])
+		{
+			return [];
+		}
+
+		return static::getList([
+			'select' => ['MAILBOX_ID', 'MESSAGE_ID'],
+			'filter' => $filter,
+			'limit' => self::ACTIVITY_REFRESH_LIMIT + 1,
+		])->fetchAll();
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $rows
+	 * @return array<int, array<string, mixed>>
+	 */
+	private static function withActivityMutationValues(array $rows, array $fields): array
+	{
+		if ($rows === [] && isset($fields['MAILBOX_ID'], $fields['MESSAGE_ID']))
+		{
+			$rows[] = [];
+		}
+
+		foreach ($rows as &$row)
+		{
+			foreach (['MAILBOX_ID', 'MESSAGE_ID'] as $field)
+			{
+				if (array_key_exists($field, $fields))
+				{
+					$row[$field] = $fields[$field];
+				}
+			}
+		}
+		unset($row);
+
+		return $rows;
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $rows
+	 * @return array{backfill: ConversationBackfill, claims: array<int, string|null>, messages: array<int, int[]>,
+	 *     complete: bool}|null
+	 */
+	private static function beginActivityMutation(array $rows): ?array
+	{
+		if (!Feature::isMessageConversationGridAvailable() || $rows === [])
+		{
+			return null;
+		}
+
+		$messages = [];
+		foreach ($rows as $row)
+		{
+			$mailboxId = (int)($row['MAILBOX_ID'] ?? 0);
+			$messageId = (int)($row['MESSAGE_ID'] ?? 0);
+			if ($mailboxId > 0 && $messageId > 0)
+			{
+				$messages[$mailboxId][$messageId] = $messageId;
+			}
+		}
+		if ($messages === [])
+		{
+			return null;
+		}
+
+		$backfill = new ConversationBackfill();
+		$claims = [];
+		foreach (array_keys($messages) as $mailboxId)
+		{
+			$claims[$mailboxId] = $backfill->beginPlacementMutation($mailboxId);
+		}
+
+		return [
+			'backfill' => $backfill,
+			'claims' => $claims,
+			'messages' => array_map('array_values', $messages),
+			'complete' => count($rows) <= self::ACTIVITY_REFRESH_LIMIT,
+		];
+	}
+
+	private static function finishActivityMutation(?array $context, bool $mutationCompleted = true): void
+	{
+		if ($context === null)
+		{
+			return;
+		}
+
+		foreach ($context['messages'] as $mailboxId => $messageIds)
+		{
+			$context['backfill']->finishPlacementMutation(
+				(int)$mailboxId,
+				$messageIds,
+				$context['claims'][$mailboxId] ?? null,
+				$context['complete'] && $mutationCompleted,
+			);
 		}
 	}
 

@@ -2,6 +2,7 @@
 
 use Bitrix\Crm\Activity\Mail\Message;
 use Bitrix\Crm\Activity\Provider\Email;
+use Bitrix\Crm\V2\Internal\Service\PaySystem\PrintOperation;
 use Bitrix\Main\Config;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail\Integration\AI;
@@ -109,6 +110,8 @@ class CrmActivityEmailComponent extends CBitrixComponent
 		if (empty($activity['__parent']))
 		{
 			$pdfFileId = false;
+			$quotePrintOperation = null;
+			$invoicePrintOperation = null;
 
 			if (\CCrmOwnerType::Invoice == $activity['OWNER_TYPE_ID'] && $activity['OWNER_ID'] > 0)
 			{
@@ -134,7 +137,8 @@ class CrmActivityEmailComponent extends CBitrixComponent
 					if (!empty($activity['STORAGE_ELEMENT_IDS']));
 					else if ($activity['STORAGE_TYPE_ID'] == \Bitrix\Crm\Integration\StorageType::Disk)
 					{
-						$pdfFileId = \CCrmInvoice::savePdf($invoice['ID']);
+						$invoicePrintOperation = new PrintOperation('invoice', 'email_attachment', 'activity_email_invoice');
+						$pdfFileId = $invoicePrintOperation->run(static fn() => \CCrmInvoice::savePdf($invoice['ID']));
 					}
 				}
 			}
@@ -159,25 +163,32 @@ class CrmActivityEmailComponent extends CBitrixComponent
 					if (!empty($activity['STORAGE_ELEMENT_IDS']));
 					else if ($activity['STORAGE_TYPE_ID'] == \Bitrix\Crm\Integration\StorageType::Disk)
 					{
-						if (!empty($activity['__owner_psid']) && $activity['__owner_psid'] > 0)
-							$pdfFileId = \CCrmQuote::savePdf($quote['ID'], $activity['__owner_psid']);
+						$quotePrintOperation = new PrintOperation('quote', 'email_attachment', 'activity_email_quote');
+						$pdfFileId = $quotePrintOperation->run(static function () use ($activity, $quote) {
+							if (!empty($activity['__owner_psid']) && $activity['__owner_psid'] > 0)
+							{
+								return \CCrmQuote::savePdf($quote['ID'], $activity['__owner_psid']);
+							}
 
-						if (!($pdfFileId > 0))
-						{
 							$paySystems = \CCrmPaySystem::getPaySystems($quote['PERSON_TYPE_ID']);
 							if (is_array($paySystems))
 							{
 								foreach ($paySystems as $item)
 								{
-									$itemActionFile = isset($item['~PSA_ACTION_FILE']) ? $item['~PSA_ACTION_FILE'] : '';
+									$itemActionFile = $item['~PSA_ACTION_FILE'] ?? '';
 									if (preg_match('/quote(_\w+)*$/iu', $itemActionFile))
 									{
-										$pdfFileId = \CCrmQuote::savePdf($quote['ID'], $item['~ID']);
-										break;
+										$fileId = \CCrmQuote::savePdf($quote['ID'], $item['~ID']);
+										if ($fileId > 0)
+										{
+											return $fileId;
+										}
 									}
 								}
 							}
-						}
+
+							return false;
+						});
 					}
 				}
 			}
@@ -196,16 +207,27 @@ class CrmActivityEmailComponent extends CBitrixComponent
 				{
 					$storageElement = \Bitrix\Disk\File::loadById($storageElementId, array('STORAGE'));
 
-					$diskRightsManager = \Bitrix\Disk\Driver::getInstance()->getRightsManager();
-					$diskRightsManager->append(
-						$storageElement,
-						array(array(
-							'ACCESS_CODE' => 'U'.$USER->getId(),
-							'TASK_ID' => $diskRightsManager->getTaskIdByName(\Bitrix\Disk\RightsManager::TASK_READ),
-						))
-					);
+					if (
+						($quotePrintOperation === null && $invoicePrintOperation === null)
+						|| ($storageElement !== null && $storageElement->getId() > 0)
+					)
+					{
+						$diskRightsManager = \Bitrix\Disk\Driver::getInstance()->getRightsManager();
+						$rightsSaved = $diskRightsManager->append(
+							$storageElement,
+							array(array(
+								'ACCESS_CODE' => 'U'.$USER->getId(),
+								'TASK_ID' => $diskRightsManager->getTaskIdByName(\Bitrix\Disk\RightsManager::TASK_READ),
+							))
+						);
 
-					$activity['STORAGE_ELEMENT_IDS'][] = $storageElementId;
+						if (($quotePrintOperation === null && $invoicePrintOperation === null) || $rightsSaved)
+						{
+							$activity['STORAGE_ELEMENT_IDS'][] = $storageElementId;
+							$quotePrintOperation?->complete();
+							$invoicePrintOperation?->complete();
+						}
+					}
 				}
 			}
 		}
@@ -289,9 +311,13 @@ class CrmActivityEmailComponent extends CBitrixComponent
 			);
 		}
 
+		$readableEntities = self::loadReadableEntities(array_merge(
+			$activity['COMMUNICATIONS'],
+			$activity['__communications'] ?? [],
+		));
 		foreach ($activity['COMMUNICATIONS'] as $k => $item)
 		{
-			static::prepareCommunication($item);
+			self::prepareCommunicationView($item, $readableEntities);
 			$activity['COMMUNICATIONS'][$k] = $item;
 		}
 
@@ -299,7 +325,7 @@ class CrmActivityEmailComponent extends CBitrixComponent
 		{
 			foreach ($activity['__communications'] as $k => $item)
 			{
-				static::prepareCommunication($item);
+				self::prepareCommunicationView($item, $readableEntities);
 				$activity['__communications'][$k] = $item;
 			}
 		}
@@ -515,8 +541,14 @@ class CrmActivityEmailComponent extends CBitrixComponent
 				if (array_key_exists($item['ACTIVITY_ID'], $clients))
 					continue;
 
-				static::prepareCommunication($item);
 				$clients[$item['ACTIVITY_ID']] = $item;
+			}
+
+			$readableEntities = self::loadReadableEntities($clients);
+			foreach ($clients as $activityId => $item)
+			{
+				self::prepareCommunicationView($item, $readableEntities);
+				$clients[$activityId] = $item;
 			}
 		}
 
@@ -674,11 +706,7 @@ class CrmActivityEmailComponent extends CBitrixComponent
 		}
 
 		$isActivityIncoming = \CCrmActivityDirection::Incoming == $direction;
-		$typesPriority = array(
-			\CCrmOwnerType::Contact,
-			\CCrmOwnerType::Company,
-			\CCrmOwnerType::Lead,
-		);
+		$readableEntities = self::loadReadableEntities($activity['COMMUNICATIONS']);
 
 		// FROM for display
 		{
@@ -690,10 +718,12 @@ class CrmActivityEmailComponent extends CBitrixComponent
 					{
 						foreach ($activity['COMMUNICATIONS'] as $item)
 						{
-							if (in_array(mb_strtolower($item['VALUE']), $activityEmailMeta[$field]))
+							if (
+								in_array(mb_strtolower($item['VALUE']), $activityEmailMeta[$field])
+								&& self::hasEntityViewUrl($item, $readableEntities)
+							)
 							{
-								if (empty($fromItem) || $typesPriority[$item['ENTITY_TYPE_ID']] < $typesPriority[$fromItem['ENTITY_TYPE_ID']])
-									$fromItem = $item;
+								$fromItem = self::selectPreferredCommunication($fromItem ?? [], $item, $readableEntities);
 							}
 						}
 
@@ -703,13 +733,14 @@ class CrmActivityEmailComponent extends CBitrixComponent
 				}
 
 				if (empty($fromItem))
-					$fromItem = reset($activity['COMMUNICATIONS']);
+					$fromItem = reset($activity['COMMUNICATIONS']) ?: [];
 
-				$activity['ITEM_IMAGE'] = $fromItem['IMAGE_URL'];
+				$activity['ITEM_IMAGE'] = $fromItem['IMAGE_URL'] ?? null;
 
-				$activity['ITEM_FROM_URL']   = $fromItem['VIEW_URL'];
-				$activity['ITEM_FROM_TITLE'] = $fromItem['TITLE'];
-				$activity['ITEM_FROM_EMAIL'] = $fromItem['TITLE'] != $fromItem['VALUE'] ? $fromItem['VALUE'] : null;
+				$activity['ITEM_FROM_URL']   = self::getEntityViewUrl($fromItem, $readableEntities) ?: null;
+				$activity['ITEM_FROM_TITLE'] = $fromItem['TITLE'] ?? null;
+				$activity['ITEM_FROM_EMAIL'] = ($fromItem['TITLE'] ?? null) != ($fromItem['VALUE'] ?? null)
+					? $fromItem['VALUE'] : null;
 			}
 			else
 			{
@@ -742,20 +773,23 @@ class CrmActivityEmailComponent extends CBitrixComponent
 				if (!empty($activityEmailMeta[$field]))
 				{
 					$foundEmails = array();
+					$foundRecipientViews = [];
+					$foundRecipients = [];
 					foreach ($activity['COMMUNICATIONS'] as $k => $item)
 					{
 						if (in_array(mb_strtolower($item['VALUE']), $activityEmailMeta[$field]))
 						{
 							$foundEmails[] = mb_strtolower($item['VALUE']);
 
-							$itemView = array(
-								'IMAGE' => $item['IMAGE_URL'],
-								'TITLE' => $item['VALUE'],
-								'URL'   => $item['VIEW_URL'],
+							$email = mb_strtolower($item['VALUE']);
+							$foundRecipients[$email] = self::selectPreferredCommunication(
+								$foundRecipients[$email] ?? [],
+								$item,
+								$readableEntities,
 							);
-
 							if (!$isActivityIncoming)
 							{
+								$itemView = self::prepareRecipientView($item, $readableEntities);
 								if ($field == 'to')
 									$activity['ITEM_TO'][] = $itemView;
 								if ($field == 'cc')
@@ -775,14 +809,21 @@ class CrmActivityEmailComponent extends CBitrixComponent
 
 					if ($isActivityIncoming)
 					{
+						foreach ($foundRecipients as $email => $recipient)
+						{
+							$foundRecipientViews[$email] = self::prepareRecipientView($recipient, $readableEntities);
+						}
+
 						foreach ($activityEmailMeta[$field] as $item)
 						{
-							$itemView = array('TITLE' => $item);
+							$itemView = $foundRecipientViews[mb_strtolower($item)] ?? array('TITLE' => $item);
 
 							if ($field != $replyField)
 							{
 								if ($item == mb_strtolower(trim($activityEmailMeta['__email'])))
-									$itemView['IMAGE'] = $author['IMAGE_URL'];
+								{
+									$itemView = array('TITLE' => $item, 'IMAGE' => $author['IMAGE_URL']);
+								}
 							}
 
 							if ($field == 'to')
@@ -879,11 +920,7 @@ class CrmActivityEmailComponent extends CBitrixComponent
 				{
 					foreach ($activity['COMMUNICATIONS'] as $item)
 					{
-						$activity['ITEM_TO'][] = array(
-							'IMAGE' => $item['IMAGE_URL'],
-							'TITLE' => $item['VALUE'],
-							'URL'   => $item['VIEW_URL'],
-						);
+						$activity['ITEM_TO'][] = self::prepareRecipientView($item, $readableEntities);
 					}
 				}
 			}
@@ -894,26 +931,36 @@ class CrmActivityEmailComponent extends CBitrixComponent
 		if (!empty($unknownEmails))
 		{
 			$subFilter = array();
+			$entityNames = array(
+				\CCrmOwnerType::LeadName,
+				\CCrmOwnerType::ContactName,
+				\CCrmOwnerType::CompanyName,
+			);
 			foreach ($unknownEmails as $item)
-				$subFilter[] = array('RAW_VALUE' => $item);
+			{
+				foreach ($entityNames as $entityName)
+				{
+					$subFilter[] = array(
+						'ENTITY_ID' => $entityName,
+						'RAW_VALUE' => $item,
+					);
+				}
+			}
+
 			$res = \CCrmFieldMulti::getList(
 				array(),
 				array(
-					'ENTITY_ID' => 'LEAD|CONTACT|COMPANY',
 					'TYPE_ID'   => 'EMAIL',
 					'FILTER'    => $subFilter,
 				)
 			);
 
+			$candidates = [];
 			while ($item = $res->fetch())
 			{
 				$itemTypeId = \CCrmOwnerType::resolveId($item['ENTITY_ID']);
 				$itemEmail = mb_strtolower(trim($item['VALUE']));
-
-				if (!empty($suggested[$itemEmail]) && $typesPriority[$suggested[$itemEmail]['ENTITY_TYPE_ID']] < $typesPriority[$itemTypeId])
-					continue;
-
-				$suggested[$itemEmail] = array(
+				$candidates[] = array(
 					'ENTITY_ID'      => (int) $item['ELEMENT_ID'],
 					'ENTITY_TYPE_ID' => $itemTypeId,
 					'VALUE'          => $itemEmail,
@@ -921,9 +968,25 @@ class CrmActivityEmailComponent extends CBitrixComponent
 				);
 			}
 
+			$readableEntities = self::loadReadableEntities($candidates, $readableEntities);
+			foreach ($candidates as $candidate)
+			{
+				if (!self::hasEntityViewUrl($candidate, $readableEntities))
+				{
+					continue;
+				}
+
+				$itemEmail = $candidate['VALUE'];
+				$suggested[$itemEmail] = self::selectPreferredCommunication(
+					$suggested[$itemEmail] ?? [],
+					$candidate,
+					$readableEntities,
+				);
+			}
+
 			foreach ($suggested as $k => $item)
 			{
-				\CrmActivityEmailComponent::prepareCommunication($item);
+				self::prepareCommunicationView($item, $readableEntities);
 				$suggested[$k] = $item;
 			}
 		}
@@ -944,14 +1007,158 @@ class CrmActivityEmailComponent extends CBitrixComponent
 			}
 		}
 
+		if ($isActivityIncoming && !empty($suggested))
+		{
+			foreach (array('ITEM_TO', 'ITEM_CC', 'ITEM_BCC') as $field)
+			{
+				foreach ($activity[$field] as $k => $item)
+				{
+					$email = mb_strtolower(trim($item['TITLE'] ?? ''));
+					if (
+						$email === mb_strtolower(trim($activityEmailMeta['__email'] ?? ''))
+						|| !array_key_exists($email, $suggested)
+					)
+					{
+						continue;
+					}
+
+					$activity[$field][$k] = self::prepareRecipientView($suggested[$email], $readableEntities);
+				}
+			}
+		}
+
 		$activity['REPLY_TO']  = array_values($activity['REPLY_TO']);
 		$activity['REPLY_ALL'] = array_values($activity['REPLY_ALL']);
 		$activity['REPLY_CC']  = array_values($activity['REPLY_CC']);
 	}
 
+	private static function prepareRecipientView(array $item, array $readableEntities): array
+	{
+		$itemView = array(
+			'IMAGE' => $item['IMAGE_URL'] ?? '',
+			'TITLE' => $item['VALUE'] ?? $item['TITLE'] ?? '',
+		);
+
+		$url = $item['VIEW_URL'] ?? '';
+		if ($url === '')
+		{
+			$url = self::getEntityViewUrl($item, $readableEntities);
+		}
+
+		if ($url !== '' && self::hasEntityViewUrl($item, $readableEntities))
+		{
+			$itemView['URL'] = $url;
+		}
+
+		return $itemView;
+	}
+
+	private static function getEntityViewUrl(array $item, array $readableEntities): string
+	{
+		if (!self::hasEntityViewUrl($item, $readableEntities))
+		{
+			return '';
+		}
+
+		return \CCrmOwnerType::GetEntityShowPath(
+			(int)$item['ENTITY_TYPE_ID'],
+			(int)$item['ENTITY_ID']
+		);
+	}
+
+	private static function hasEntityViewUrl(array $item, array $readableEntities): bool
+	{
+		return $readableEntities[(int)($item['ENTITY_TYPE_ID'] ?? 0)][(int)($item['ENTITY_ID'] ?? 0)] ?? false;
+	}
+
+	private static function loadReadableEntities(array $items, array $readableEntities = []): array
+	{
+		$entityTables = [
+			\CCrmOwnerType::Contact => \Bitrix\Crm\ContactTable::class,
+			\CCrmOwnerType::Company => \Bitrix\Crm\CompanyTable::class,
+			\CCrmOwnerType::Lead => \Bitrix\Crm\LeadTable::class,
+		];
+		$idsByType = [];
+		foreach ($items as $item)
+		{
+			$entityTypeId = (int)($item['ENTITY_TYPE_ID'] ?? 0);
+			$entityId = (int)($item['ENTITY_ID'] ?? 0);
+			if (
+				$entityId > 0
+				&& isset($entityTables[$entityTypeId])
+				&& !isset($readableEntities[$entityTypeId][$entityId])
+			)
+			{
+				$idsByType[$entityTypeId][] = $entityId;
+				$readableEntities[$entityTypeId][$entityId] = false;
+			}
+		}
+
+		$itemPermissions = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item();
+		foreach ($idsByType as $entityTypeId => $ids)
+		{
+			$existingIds = [];
+			$rows = $entityTables[$entityTypeId]::query()->setSelect(['ID'])->whereIn('ID', $ids)->exec();
+			while ($row = $rows->fetch())
+			{
+				$existingIds[] = (int)$row['ID'];
+			}
+			if ($existingIds === [])
+			{
+				continue;
+			}
+
+			$itemPermissions->preloadPermissionAttributes($entityTypeId, $existingIds);
+			foreach ($existingIds as $entityId)
+			{
+				$readableEntities[$entityTypeId][$entityId] = $itemPermissions->canRead($entityTypeId, $entityId);
+			}
+		}
+
+		return $readableEntities;
+	}
+
+	private static function selectPreferredCommunication(array $current, array $candidate, array $readableEntities): array
+	{
+		$typesPriority = [
+			\CCrmOwnerType::Contact => 0,
+			\CCrmOwnerType::Company => 1,
+			\CCrmOwnerType::Lead => 2,
+		];
+		if (
+			$current === []
+			|| (
+				self::hasEntityViewUrl($candidate, $readableEntities)
+				&& (
+					!self::hasEntityViewUrl($current, $readableEntities)
+					|| $typesPriority[$candidate['ENTITY_TYPE_ID']] < $typesPriority[$current['ENTITY_TYPE_ID']]
+				)
+			)
+		)
+		{
+			return $candidate;
+		}
+
+		return $current;
+	}
+
 	public static function prepareCommunication(&$item)
 	{
+		self::prepareCommunicationView($item, self::loadReadableEntities([$item]));
+	}
+
+	private static function prepareCommunicationView(array &$item, array $readableEntities): void
+	{
 		\CCrmActivity::prepareCommunicationInfo($item);
+		$viewUrl = self::getEntityViewUrl($item, $readableEntities);
+		if ($viewUrl !== '')
+		{
+			$item['VIEW_URL'] = $viewUrl;
+		}
+		else
+		{
+			unset($item['VIEW_URL']);
+		}
 
 		$entityTypes = [
 			'\CCrmContact' => \CCrmOwnerType::Contact,

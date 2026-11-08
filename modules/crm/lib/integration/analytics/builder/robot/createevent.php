@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration\Analytics\Builder\Robot;
 
 use Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder;
+use Bitrix\Crm\Integration\Analytics\Builder\Entity\WorkplaceP4;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 
 class CreateEvent extends AbstractBuilder
@@ -22,6 +23,11 @@ class CreateEvent extends AbstractBuilder
 
 	protected function buildCustomData(): array
 	{
+		if ($this->entityTypeId !== null)
+		{
+			WorkplaceP4::apply($this, $this->entityTypeId);
+		}
+
 		return [
 			'event' => Dictionary::EVENT_ENTITY_CREATE,
 			'category' => Dictionary::CATEGORY_ROBOT_OPERATIONS,

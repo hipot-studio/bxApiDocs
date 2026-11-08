@@ -3,6 +3,7 @@
 namespace Bitrix\Call\Integration\AI\Outcome;
 
 use Bitrix\Call\Integration;
+use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Integration\AI\MentionService;
 use Bitrix\Main\Localization\Loc;
 
@@ -69,6 +70,19 @@ class Insights extends AISenseContent
 		{
 			$this->callId = $outcome->getCallId();
 			$this->version = (int)($outcome->getProperty('version')?->getContent() ?? 1);
+			// The prompt is picked when the AI task starts, the version stamped when its answer arrives,
+			// so a region rule changed in between marks an answer without per-speaker analysis as version 2
+			// and the deprecated insights of that answer would never reach a consumer. The answer itself
+			// tells which prompt produced it, so it outweighs the stamp — but only where the evaluation is
+			// allowed: with the gate closed this class may withhold a stored analysis, never surface one.
+			if (
+				$this->version > 1
+				&& $this->isSpeakerEvaluationAvailable()
+				&& empty($outcome->getProperty('speaker_analysis')?->getStructure())
+			)
+			{
+				$this->version = 1;
+			}
 
 			$fieldsMap = [
 				'speakerAnalysis' => 'speaker_analysis',
@@ -188,11 +202,15 @@ class Insights extends AISenseContent
 
 		$result = ['speakerEvaluationAvailable' => $this->speakerEvaluationAvailable];
 
-		$fields = [
-			'speakerAnalysis' => ['detailedInsight', 'evaluationCriteria', 'userId', 'efficiencyValue'],
-			'meetingStrengths' => ['strengthExplanation', 'strengthTitle'],
-			'meetingWeaknesses' => ['weaknessTitle', 'weaknessExplanation'],
-		];
+		$fields = [];
+		// With the evaluation gate closed the per-speaker analysis is not shipped at all: criteria
+		// stored by an earlier, wider rule would otherwise reach consumers unnormalized.
+		if ($this->speakerEvaluationAvailable)
+		{
+			$fields['speakerAnalysis'] = ['detailedInsight', 'evaluationCriteria', 'userId', 'efficiencyValue'];
+		}
+		$fields['meetingStrengths'] = ['strengthExplanation', 'strengthTitle'];
+		$fields['meetingWeaknesses'] = ['weaknessTitle', 'weaknessExplanation'];
 		if ($this->version <= 1)
 		{
 			$fields['insights'] = ['detailedInsight'];
@@ -243,7 +261,7 @@ class Insights extends AISenseContent
 
 	protected function isSpeakerEvaluationAvailable(): bool
 	{
-		return \Bitrix\Main\Application::getInstance()->getLicense()->isCis();
+		return CallAISettings::isSpeakerEvaluationAvailable();
 	}
 
 	private function getCriteriaTitle(string $criteria): string

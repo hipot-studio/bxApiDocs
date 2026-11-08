@@ -153,33 +153,40 @@ class Task extends BaseController
 		);
 
 		$taskFields = new Fields($taskId);
-		if (isset($taskRequest['fields']) && is_array($taskRequest['fields']))
+		try
 		{
-			$taskRequest['fields'] = $taskFields->extract($taskRequest['fields'], $currentUserId);
-		}
+			if (isset($taskRequest['fields']) && is_array($taskRequest['fields']))
+			{
+				$taskRequest['fields'] = $taskFields->extract($taskRequest['fields'], $currentUserId);
+			}
 
-		if (isset($taskRequest['INLINE_USER_STATUS']) && is_numeric($taskRequest['INLINE_USER_STATUS']))
+			if (isset($taskRequest['INLINE_USER_STATUS']) && is_numeric($taskRequest['INLINE_USER_STATUS']))
+			{
+				$taskRequest['INLINE_USER_STATUS'] = \CBPTaskUserStatus::resolveStatus($taskRequest['INLINE_USER_STATUS']);
+			}
+
+			$request = new Bizproc\Api\Request\TaskService\DoTaskRequest(
+				taskId: $taskId,
+				userId: $currentUserId,
+				taskRequest: $taskRequest,
+			);
+
+			$getTasksResult = $taskService->doTask($request);
+			if (!$getTasksResult->isSuccess())
+			{
+				$this->addErrors($getTasksResult->getErrors());
+
+				return null;
+			}
+
+			$taskFields->savePendingFiles();
+
+			return true;
+		}
+		finally
 		{
-			$taskRequest['INLINE_USER_STATUS'] = \CBPTaskUserStatus::resolveStatus($taskRequest['INLINE_USER_STATUS']);
+			$this->addErrors($taskFields->compensateAttempt()->getErrors());
 		}
-
-		$request = new Bizproc\Api\Request\TaskService\DoTaskRequest(
-			taskId: $taskId,
-			userId: $currentUserId,
-			taskRequest: $taskRequest,
-		);
-
-		$getTasksResult = $taskService->doTask($request);
-		if (!$getTasksResult->isSuccess())
-		{
-			$this->addErrors($getTasksResult->getErrors());
-
-			return null;
-		}
-
-		$taskFields->savePendingFiles();
-
-		return true;
 	}
 
 	protected function getDefaultPreFilters(): array

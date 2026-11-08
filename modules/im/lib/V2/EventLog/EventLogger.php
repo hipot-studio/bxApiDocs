@@ -103,6 +103,16 @@ class EventLogger
 		$this->writeBotEventToLog($botId, $eventType, $v2Payload);
 	}
 
+	public function logFormSubmit(int $botId, string $eventType, array $v2Payload): void
+	{
+		if (!$this->isFetchBot($botId))
+		{
+			return;
+		}
+
+		$this->writeBotEventToLog($botId, $eventType, $v2Payload);
+	}
+
 	// endregion
 
 	// region User events

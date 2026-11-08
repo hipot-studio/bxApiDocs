@@ -14,7 +14,6 @@ use Bitrix\Im\V2\Sync\Entity\DialogIds;
 use Bitrix\Im\V2\Sync\Entity\Messages;
 use Bitrix\Im\V2\Sync\Entity\PinMessages;
 use Bitrix\Im\V2\Sync\Entity\Users;
-use Bitrix\Im\V2\Chat\Comment\CommentPopupItem;
 use Bitrix\Im\V2\TariffLimit\TariffLimitPopupItem;
 
 class Entities
@@ -126,7 +125,7 @@ class Entities
 	protected function getOption(): array
 	{
 		return [
-			'POPUP_DATA_EXCLUDE' => [CommentPopupItem::class, TariffLimitPopupItem::class]
+			'POPUP_DATA_EXCLUDE' => [TariffLimitPopupItem::class]
 		];
 	}
 

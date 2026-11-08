@@ -7,9 +7,18 @@ use Bitrix\Timeman\Repository\Schedule\ViolationRulesRepository;
 use Bitrix\Timeman\Service\BaseServiceResult;
 use Bitrix\Timeman\Service\DependencyManager;
 use Bitrix\Timeman\UseCase\Schedule\ViolationRules as ViolationRulesHandler;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 
 class ViolationRules extends Controller
 {
+	protected function getDefaultPreFilters()
+	{
+		return [
+			new ToolEnabledFilter(),
+			...parent::getDefaultPreFilters(),
+		];
+	}
+
 	/**
 	 * @var ViolationRulesRepository
 	 */

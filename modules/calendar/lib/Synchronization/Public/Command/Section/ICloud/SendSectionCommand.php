@@ -13,7 +13,15 @@ use Bitrix\Main\Result;
 
 class SendSectionCommand extends AbstractCommand
 {
-	public function __construct(public readonly Section $section)
+	/**
+	 * @param bool $isSectionCreated Section is new for the vendor: enables the catch-up export of its
+	 *     events. Off by default, so sending an already known section stays a plain send: only the
+	 *     section receiver knows a creation from an update and turns the flag on.
+	 */
+	public function __construct(
+		public readonly Section $section,
+		public readonly bool $isSectionCreated = false
+	)
 	{
 	}
 
@@ -21,6 +29,7 @@ class SendSectionCommand extends AbstractCommand
 	{
 		return [
 			'section' => $this->section->toArray(),
+			'isSectionCreated' => $this->isSectionCreated,
 		];
 	}
 

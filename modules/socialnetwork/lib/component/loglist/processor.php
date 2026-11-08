@@ -433,7 +433,7 @@ class Processor extends \Bitrix\Socialnetwork\Component\LogListCommon\Processor
 			&& $this->makeTimeStampFromDateTime($params['LOG_DATE_FROM'], 'SHORT') < time() + $result['TZ_OFFSET']
 		)
 		{
-			$this->setFilterKey('>=LOG_DATE', $params['LOG_DATE_FROM']);
+			$this->setFilterKey('>=LOG_DATE', convertTimeStamp($this->makeTimeStampFromDateTime($params['LOG_DATE_FROM'], 'SHORT'), 'FULL'));
 			$turnFollowModeOff = true;
 		}
 		else
@@ -720,13 +720,15 @@ class Processor extends \Bitrix\Socialnetwork\Component\LogListCommon\Processor
 			if (!empty($filterData['DATE_CREATE_from']))
 			{
 				$filtered = true;
+				$dateCreateFromValue = convertTimeStamp($this->makeTimeStampFromDateTime($filterData['DATE_CREATE_from'], 'SHORT'), 'FULL');
+
 				if (!empty($this->getFilterContent()))
 				{
-					$this->setFilterKey('>=CONTENT_DATE_CREATE', $filterData['DATE_CREATE_from']);
+					$this->setFilterKey('>=CONTENT_DATE_CREATE', $dateCreateFromValue);
 				}
 				else
 				{
-					$this->setFilterKey('>=LOG_DATE', $filterData['DATE_CREATE_from']);
+					$this->setFilterKey('>=LOG_DATE', $dateCreateFromValue);
 				}
 			}
 

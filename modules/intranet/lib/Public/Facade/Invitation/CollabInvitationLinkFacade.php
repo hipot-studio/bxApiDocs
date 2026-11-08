@@ -13,6 +13,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\SystemException;
+use Bitrix\Socialnetwork\Collab\Requirement;
 use Psr\Container\NotFoundExceptionInterface;
 
 class CollabInvitationLinkFacade extends InvitationLinkFacade
@@ -54,14 +55,25 @@ class CollabInvitationLinkFacade extends InvitationLinkFacade
 	 */
 	public function checkAccess(): void
 	{
+		$this->assertExtranetAvailable();
+
 		if (!$this->isActual())
 		{
 			throw new AccessDeniedException('The invitation link is invalid or expired.');
 		}
 	}
 
+	public function register(User $user): User
+	{
+		$this->assertExtranetAvailable();
+
+		return parent::register($user);
+	}
+
 	protected function afterRegister(User $user): User
 	{
+		$this->assertExtranetAvailable();
+
 		$this->memberServiceFacade->addUser($user);
 
 		return $user;
@@ -69,12 +81,16 @@ class CollabInvitationLinkFacade extends InvitationLinkFacade
 
 	public function onBeforeUserRegister(array &$data): void
 	{
+		$this->assertExtranetAvailable();
+
 		$data['SITE_ID'] = \CExtranet::GetExtranetSiteID();
 		$data['GROUP_ID'] = [(int)\CExtranet::GetExtranetUserGroupID()];
 	}
 
 	public function processAuthUser(User $user): void
 	{
+		$this->assertExtranetAvailable();
+
 		$this->memberServiceFacade->addUser($user);
 	}
 
@@ -83,6 +99,14 @@ class CollabInvitationLinkFacade extends InvitationLinkFacade
 		if (Loader::includeModule('extranet'))
 		{
 			ServiceContainer::getInstance()->getCollaberService()->clearCache();
+		}
+	}
+
+	private function assertExtranetAvailable(): void
+	{
+		if (!Loader::includeModule('extranet'))
+		{
+			throw new AccessDeniedException(implode('; ', Requirement::checkRequiredModules()->getErrorMessages()));
 		}
 	}
 }

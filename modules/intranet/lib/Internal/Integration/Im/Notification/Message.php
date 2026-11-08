@@ -15,6 +15,7 @@ class Message
 	private string $notifyModule;
 	private string $notifyEvent;
 	private Closure|string $notifyMessage;
+	private ?string $notifyTitle = null;
 	private array $params = [];
 
 	public function __construct(
@@ -42,6 +43,13 @@ class Message
 		return $this;
 	}
 
+	public function setTitle(string $title): self
+	{
+		$this->notifyTitle = $title;
+
+		return $this;
+	}
+
 	public function setComponentParams(string $componentId, array $componentParams): self
 	{
 		$this->params = [
@@ -54,7 +62,7 @@ class Message
 
 	public function toArray(): array
 	{
-		return [
+		$fields = [
 			'TO_USER_ID' => $this->toUserId,
 			'FROM_USER_ID' => $this->fromUserId,
 			'NOTIFY_TAG' => $this->notifyTag,
@@ -64,5 +72,11 @@ class Message
 			'NOTIFY_MESSAGE' => $this->notifyMessage,
 			'PARAMS' => $this->params,
 		];
+		if ($this->notifyTitle !== null)
+		{
+			$fields['NOTIFY_TITLE'] = $this->notifyTitle;
+		}
+
+		return $fields;
 	}
 }

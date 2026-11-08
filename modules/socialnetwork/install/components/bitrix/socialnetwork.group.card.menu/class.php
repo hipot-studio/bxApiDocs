@@ -7,6 +7,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\ComponentHelper;
+use Bitrix\Main\Web\Uri;
 
 final class SocialnetworkWorkgroupCardMenu extends CBitrixComponent
 {
@@ -75,9 +76,8 @@ final class SocialnetworkWorkgroupCardMenu extends CBitrixComponent
 
 	private function processUrl($url): string
 	{
-		return CHTTP::urlAddParams(
-			str_replace('#group_id#', $this->arParams['GROUP_ID'], $url),
-			[ 'IFRAME' => 'Y' ]
-		);
+		return (string)(new Uri(str_replace('#group_id#', $this->arParams['GROUP_ID'], $url)))
+			->addParams(['IFRAME' => 'Y'])
+		;
 	}
 }

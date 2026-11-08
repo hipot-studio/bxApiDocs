@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Bitrix\Vibecodeconnector\Internal\Integration\Main;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Service\MicroService\Client;
 
 class MainPortalFieldsProvider
 {
+	private const DEFAULT_LOCALE = 'en';
+
 	public function getPortalType(): string
 	{
 		return Client::getPortalType();
@@ -27,6 +30,13 @@ class MainPortalFieldsProvider
 	public function getLicenseRegion(): string
 	{
 		return (string)Application::getInstance()->getLicense()->getRegion();
+	}
+
+	public function getLocale(): string
+	{
+		$language = (string)Loc::getCurrentLang();
+
+		return $language !== '' ? $language : self::DEFAULT_LOCALE;
 	}
 
 	/**

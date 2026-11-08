@@ -21,7 +21,8 @@ final class ScopeGuard
 	private string $scope;
 	private bool $started = false;
 	private ?string $scopeBefore = null;
-	private bool $rightsBefore = false;
+	private bool $localRightsBefore = false;
+	private bool $globalRightsBefore = false;
 
 	public function __construct(string $scope)
 	{
@@ -41,7 +42,8 @@ final class ScopeGuard
 		$this->started = true;
 
 		$this->scopeBefore = Type::getCurrentScopeId();
-		$this->rightsBefore = Rights::isOn();
+		$this->localRightsBefore = Rights::isLocalOn();
+		$this->globalRightsBefore = Rights::isGlobalOn();
 
 		Type::setScope($this->scope);
 		Rights::setOff();
@@ -71,9 +73,14 @@ final class ScopeGuard
 			Type::setScope($this->scopeBefore);
 		}
 
-		if ($this->rightsBefore)
+		// each flag goes back to its own value: the composite isOn() answers false under
+		// LANDING_DISABLE_RIGHTS or a nested guard and would leave both flags off for good
+		if ($this->localRightsBefore)
 		{
 			Rights::setOn();
+		}
+		if ($this->globalRightsBefore)
+		{
 			Rights::setGlobalOn();
 		}
 

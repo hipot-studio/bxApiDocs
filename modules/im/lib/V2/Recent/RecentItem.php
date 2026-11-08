@@ -85,6 +85,7 @@ class RecentItem implements RestConvertible
 			->setLastReadMessageId((int)$entity['RELATION.LAST_ID'])
 			->setDateUpdate($entity['DATE_UPDATE'])
 			->setDateLastActivity($entity['DATE_LAST_ACTIVITY'])
+			->setMarkedId((int)($entity['MARKED_ID'] ?? 0))
 			->setPreviewSourceCid((int)($entity['PREVIEW_SOURCE_CID'] ?? 0))
 			->setPreviewSourceMid((int)($entity['PREVIEW_SOURCE_MID'] ?? 0))
 		;
@@ -304,7 +305,9 @@ class RecentItem implements RestConvertible
 			'pinned' => $this->pinned,
 			'unread' => $this->unread,
 			'options' => $this->options,
-			'invited' => $this->invited,
+			// Both clients read the absence of an invitation as a boolean false and keep the stored one on
+			// anything else, so an empty array would leave an activated person marked as invited forever.
+			'invited' => $this->invited === [] ? false : $this->invited,
 			'lastReadMessageId' => $this->lastReadMessageId,
 			'dateUpdate' => $this->dateUpdate,
 			'dateLastActivity' => $this->dateLastActivity,

@@ -2,8 +2,9 @@
 
 namespace Bitrix\Crm;
 
-use Bitrix\Crm\Feature\BaseFeature;
+use Bitrix\Crm\Feature\Entity\FeatureRepository;
 use Bitrix\Main\ArgumentOutOfRangeException;
+use Bitrix\Main\DI\ServiceLocator;
 
 class Feature
 {
@@ -15,30 +16,46 @@ class Feature
 			return true; // feature is already enabled for everybody
 		}
 
-		if (!is_subclass_of($featureClassName, BaseFeature::class))
+		$repository = self::getRepository();
+		if ($repository->isEnabledByClass($featureClassName))
+		{
+			return true;
+		}
+
+		// isEnabledByClass() is fail-closed, so false also covers a class that is not a flag at all
+		if (!$repository->isFlagClass($featureClassName))
 		{
 			throw new ArgumentOutOfRangeException('featureClassName');
 		}
 
-		return (new $featureClassName)->isEnabled();
+		return false;
 	}
 
 	public static function enable(string $featureClassName): void
 	{
 		$featureClassName = self::getFeatureClassName($featureClassName);
-		if (class_exists($featureClassName) && is_subclass_of($featureClassName, BaseFeature::class))
+		if (!class_exists($featureClassName))
 		{
-			(new $featureClassName)->enable();
+			return;
 		}
+
+		self::getRepository()->enableByClass($featureClassName);
 	}
 
 	public static function disable(string $featureClassName): void
 	{
 		$featureClassName = self::getFeatureClassName($featureClassName);
-		if (class_exists($featureClassName) && is_subclass_of($featureClassName, BaseFeature::class))
+		if (!class_exists($featureClassName))
 		{
-			(new $featureClassName)->disable();
+			return;
 		}
+
+		self::getRepository()->disableByClass($featureClassName);
+	}
+
+	private static function getRepository(): FeatureRepository
+	{
+		return ServiceLocator::getInstance()->get(FeatureRepository::class);
 	}
 
 	private static function getFeatureClassName(string $featureClassName): string

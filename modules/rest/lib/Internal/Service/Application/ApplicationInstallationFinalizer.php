@@ -32,7 +32,7 @@ final class ApplicationInstallationFinalizer
 	 * @param null|\Closure(): bool $lockProvider
 	 * @param null|\Closure(): void $unlockProvider
 	 * @param null|\Closure(int): bool $installedProvider
-	 * @param null|\Closure(string, int, bool): bool $availabilityProvider
+	 * @param null|\Closure(int, bool): bool $availabilityProvider
 	 * @param null|\Closure(int, bool): Result $updateProvider
 	 * @param null|\Closure(bool): void $masterOnlyProvider
 	 * @param null|\Closure(int): Result $deactivateProvider
@@ -57,7 +57,7 @@ final class ApplicationInstallationFinalizer
 			};
 		$this->installedProvider = $installedProvider
 			?? static fn(int $appId): bool => AppTable::isInstalled($appId);
-		$this->availabilityProvider = $availabilityProvider ?? Access::isAvailableCount(...);
+		$this->availabilityProvider = $availabilityProvider ?? Access::canInstallAppById(...);
 		$this->updateProvider = $updateProvider ?? self::updateApplication(...);
 		$this->masterOnlyProvider = $masterOnlyProvider ?? static function (bool $mode): void {
 			Application::getInstance()->getConnectionPool()->useMasterOnly($mode);
@@ -94,7 +94,7 @@ final class ApplicationInstallationFinalizer
 					return new Result();
 				}
 
-				if (!(($this->availabilityProvider)(Access::ENTITY_TYPE_APP, $appId, true)))
+				if (!(($this->availabilityProvider)($appId, true)))
 				{
 					$result = (new Result())->addError(new Error(
 						'Application cannot be installed on the current plan.',

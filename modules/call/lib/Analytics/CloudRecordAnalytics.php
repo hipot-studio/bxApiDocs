@@ -8,6 +8,7 @@ use Bitrix\Call\Call\BitrixCall;
 use Bitrix\Call\Call\ConferenceCall;
 use Bitrix\Call\Call\PlainCall;
 use Bitrix\Call\ControllerClient;
+use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Track;
 
 /**
@@ -17,7 +18,19 @@ class CloudRecordAnalytics extends AbstractAnalytics
 {
 	public function addDownload(Track $track, ?string $errorCode = null): self
 	{
-		$this->async(function () use ($track, $errorCode)
+		// Both methods are called from background/agent contexts where addBackgroundJob/OnAfterEpilog
+		// is unreliable, so we send analytics synchronously rather than via async().
+		if ($this->call === null)
+		{
+			Logger::getInstance()->warning(
+				"CloudRecordAnalytics::addDownload: call is null, server_download analytics skipped."
+				. " TrackId: {$track->getId()}"
+			);
+
+			return $this;
+		}
+
+		try
 		{
 			(new CloudRecordEvent('server_download', $this->call))
 				->setType($this->getCallType())
@@ -26,14 +39,32 @@ class CloudRecordAnalytics extends AbstractAnalytics
 				->setP4('recordId_' . $track->getId())
 				->send()
 			;
-		});
+		}
+		catch (\Throwable $e)
+		{
+			Logger::getInstance()->error(
+				"CloudRecordAnalytics::addDownload: server_download analytics send failed: {$e->getMessage()} (code: {$e->getCode()})."
+				. " TrackId: {$track->getId()}"
+			);
+		}
 
 		return $this;
 	}
 
 	public function addSendMessage(Track $track, ?string $errorCode = null): self
 	{
-		$this->async(function () use ($track, $errorCode)
+		// Sent synchronously — see addDownload() for rationale.
+		if ($this->call === null)
+		{
+			Logger::getInstance()->warning(
+				"CloudRecordAnalytics::addSendMessage: call is null, send_message analytics skipped."
+				. " TrackId: {$track->getId()}"
+			);
+
+			return $this;
+		}
+
+		try
 		{
 			(new CloudRecordEvent('send_message', $this->call))
 				->setType($this->getCallType())
@@ -42,7 +73,14 @@ class CloudRecordAnalytics extends AbstractAnalytics
 				->setP4('recordId_' . $track->getId())
 				->send()
 			;
-		});
+		}
+		catch (\Throwable $e)
+		{
+			Logger::getInstance()->error(
+				"CloudRecordAnalytics::addSendMessage: send_message analytics send failed: {$e->getMessage()} (code: {$e->getCode()})."
+				. " TrackId: {$track->getId()}"
+			);
+		}
 
 		return $this;
 	}
@@ -88,6 +126,7 @@ class CloudRecordAnalytics extends AbstractAnalytics
 		if ($source instanceof Track)
 		{
 			$sourceData['trackId'] = $source->getId();
+			$sourceData['externalTrackId'] = $source->getExternalTrackId();
 			$sourceData['trackType'] = $source->getType();
 			$sourceData['fileId'] = $source->getFileId();
 			$sourceData['mimeType'] = $source->getFileMimeType();

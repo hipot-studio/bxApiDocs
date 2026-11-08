@@ -410,14 +410,14 @@ class DataProviderManager
 		}
 
 		$type = null;
-		$format = [];
+		$options = [];
 		if(is_array($fieldDescription) && array_key_exists('TYPE', $fieldDescription) && !empty($fieldDescription['TYPE']))
 		{
 			$type = $fieldDescription['TYPE'];
 		}
 		if(isset($fieldDescription['FORMAT']))
 		{
-			$format = $fieldDescription['FORMAT'];
+			$options = $fieldDescription['FORMAT'];
 		}
 
 		if($type !== DataProvider::FIELD_TYPE_NAME && $this->isMultiple($value))
@@ -427,7 +427,7 @@ class DataProviderManager
 			{
 				if(!empty($singleValue))
 				{
-					$result[] = $this->getValueByType($singleValue, $type, $format);
+					$result[] = $this->getValueByType($singleValue, $type, $options);
 				}
 			}
 			if(!empty($result))
@@ -437,22 +437,22 @@ class DataProviderManager
 				{
 					return reset($result);
 				}
-				return new Multiple($result, $format);
+				return new Multiple($result, $options);
 			}
 
 			return null;
 		}
 
-		return $this->getValueByType($value, $type, $format);
+		return $this->getValueByType($value, $type, $options);
 	}
 
 	/**
 	 * @param $value
 	 * @param $type
-	 * @param $format
+	 * @param $options
 	 * @return Value
 	 */
-	protected function getValueByType($value, $type, $format)
+	protected function getValueByType($value, $type, $options)
 	{
 		if(empty($value) && !is_numeric($value))
 		{
@@ -464,19 +464,19 @@ class DataProviderManager
 		}
 		if($type === DataProvider::FIELD_TYPE_DATE || $value instanceof Date)
 		{
-			$value = new DateTime($value, $format);
+			$value = new DateTime($value, $options);
 		}
 		elseif($type === DataProvider::FIELD_TYPE_NAME && is_array($value))
 		{
-			$value = new Name($value, $format);
+			$value = new Name($value, $options);
 		}
 		elseif($type === DataProvider::FIELD_TYPE_PHONE)
 		{
-			$value = new PhoneNumber($value, $format);
+			$value = new PhoneNumber($value, $options);
 		}
 		elseif(is_a($type, Value::class, true))
 		{
-			$value = new $type($value, $format);
+			$value = new $type($value, $options);
 		}
 
 		return $value;
@@ -1135,6 +1135,11 @@ class DataProviderManager
 	public function getRegionLanguageId(): string
 	{
 		return $this->getContext()->getRegionLanguageId();
+	}
+
+	public function getTimezone(): string
+	{
+		return $this->getContext()->getTimezone();
 	}
 
 	/**

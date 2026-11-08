@@ -4,6 +4,7 @@ namespace Bitrix\Sign\Service\Providers;
 
 use Bitrix\Fileman\UserField\Types\AddressType;
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main;
 use Bitrix\Main\UserTable;
@@ -29,6 +30,9 @@ final class ProfileProvider
 		'UF_LEGAL_POSITION' => 'PROFILE_WORK_POSITION',
 		'UF_LEGAL_INN' => 'UF_INN',
 	];
+
+	private const STORAGE_CONTACT = 'user';
+	private const STORAGE_USER_FIELD_PREFIX = 'uf:';
 
 	protected ?Main\Access\AccessibleController $accessController = null;
 
@@ -172,6 +176,265 @@ final class ProfileProvider
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Which of the asked fields each of the users has a value for. The whole set of the users is read
+	 * at once - one query per storage and never one per user, because a document of three hundred
+	 * members would otherwise cost three hundred reads of the profile.
+	 *
+	 * A value is looked for exactly where loadFieldData() looks for it, the fallback of an empty legal
+	 * user field to the contact field of the profile included: a caller asking "is it filled" must get
+	 * the same answer the filling of a document field gets.
+	 *
+	 * @param array<mixed> $userIds
+	 * @param array<mixed> $fieldNames
+	 *
+	 * @return array<int, array<string, true>> userId => the asked fields he has a value for
+	 */
+	public function listFilledFieldNamesByUserIds(array $userIds, array $fieldNames): array
+	{
+		$userIds = $this->normalizeUserIds($userIds);
+		$fieldNames = $this->normalizeFieldNames($fieldNames);
+		if ($userIds === [] || $fieldNames === [])
+		{
+			return [];
+		}
+
+		if (
+			$this->accessController !== null
+			&& !$this->accessController->check(ActionDictionary::ACTION_B2E_PROFILE_FIELDS_READ)
+		)
+		{
+			return [];
+		}
+
+		$readChains = [];
+		$columnsByStorage = [];
+		foreach ($fieldNames as $fieldName)
+		{
+			$chain = $this->resolveFieldReadChain($fieldName);
+			if ($chain === [])
+			{
+				continue;
+			}
+
+			$readChains[$fieldName] = $chain;
+			foreach ($chain as [$storage, $column])
+			{
+				$columnsByStorage[$storage][$column] = $column;
+			}
+		}
+
+		$valuesByStorage = [];
+		foreach ($columnsByStorage as $storage => $columns)
+		{
+			$valuesByStorage[$storage] = $this->loadColumnValues($storage, array_values($columns), $userIds);
+		}
+
+		$filled = [];
+		foreach ($readChains as $fieldName => $chain)
+		{
+			foreach ($chain as [$storage, $column])
+			{
+				foreach ($userIds as $userId)
+				{
+					if (($valuesByStorage[$storage][$userId][$column] ?? '') !== '')
+					{
+						$filled[$userId][$fieldName] = true;
+					}
+				}
+			}
+		}
+
+		return $filled;
+	}
+
+	/**
+	 * The storages a value of the field is looked for in, in the order loadFieldData() looks: the user
+	 * field itself first, the contact field of the profile it falls back to next.
+	 *
+	 * @return list<array{0: string, 1: string}> pairs of a storage key and a column of it
+	 */
+	private function resolveFieldReadChain(string $fieldName): array
+	{
+		$description = $this->getDescriptionByFieldName($fieldName);
+		$sourceName = (string)($description['sourceName'] ?? '');
+		if ($sourceName === '')
+		{
+			return [];
+		}
+
+		$source = $description['source'] ?? null;
+		if ($source === self::SOURCE_USER)
+		{
+			return [[self::STORAGE_CONTACT, $sourceName]];
+		}
+
+		if ($source !== self::SOURCE_UF)
+		{
+			return [];
+		}
+
+		$entityId = (string)($description['entityId'] ?? '');
+		if ($entityId === '')
+		{
+			return [];
+		}
+
+		$chain = [[self::STORAGE_USER_FIELD_PREFIX . $entityId, $sourceName]];
+		$contactFieldName = self::FIELDS_MAP[$sourceName] ?? '';
+		if ($contactFieldName !== '')
+		{
+			foreach ($this->resolveFieldReadChain($contactFieldName) as $fallback)
+			{
+				$chain[] = $fallback;
+			}
+		}
+
+		return $chain;
+	}
+
+	/**
+	 * @param list<string> $columns
+	 * @param list<int> $userIds
+	 *
+	 * @return array<int, array<string, string>>
+	 */
+	private function loadColumnValues(string $storage, array $columns, array $userIds): array
+	{
+		if ($storage === self::STORAGE_CONTACT)
+		{
+			return $this->loadContactColumnValues($columns, $userIds);
+		}
+
+		return $this->loadUserFieldColumnValues(
+			mb_substr($storage, mb_strlen(self::STORAGE_USER_FIELD_PREFIX)),
+			$columns,
+			$userIds,
+		);
+	}
+
+	/**
+	 * @param list<string> $columns
+	 * @param list<int> $userIds
+	 *
+	 * @return array<int, array<string, string>>
+	 */
+	private function loadContactColumnValues(array $columns, array $userIds): array
+	{
+		$rows = UserTable::query()
+			->setSelect(array_values(array_unique(array_merge(['ID'], $columns))))
+			->whereIn('ID', $userIds)
+			->fetchAll()
+		;
+
+		return $this->mapRowsByUserId($rows, 'ID', $columns);
+	}
+
+	/**
+	 * The single values of the user fields of a whole set of entities. The manager of the user fields
+	 * reads one entity per call, and this table is the storage it reads itself.
+	 *
+	 * @param list<string> $columns
+	 * @param list<int> $userIds
+	 *
+	 * @return array<int, array<string, string>>
+	 */
+	private function loadUserFieldColumnValues(string $entityId, array $columns, array $userIds): array
+	{
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+
+		$select = array_map(
+			static fn(string $column): string => $sqlHelper->quote($column),
+			array_merge(['VALUE_ID'], $columns),
+		);
+
+		$sql = (new SqlExpression(
+			'SELECT ' . implode(', ', $select) . ' FROM ?# WHERE ?# IN (?@)',
+			'b_uts_' . mb_strtolower($entityId),
+			'VALUE_ID',
+			$userIds,
+		))->compile();
+
+		try
+		{
+			$rows = $connection->query($sql)->fetchAll();
+		}
+		catch (\Throwable)
+		{
+			// A portal that declares the user fields but never got their table reads as "nothing is
+			// filled": the wizard asks this on the way to the send and must not fatal over it.
+			return [];
+		}
+
+		return $this->mapRowsByUserId($rows, 'VALUE_ID', $columns);
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $rows
+	 * @param list<string> $columns
+	 *
+	 * @return array<int, array<string, string>>
+	 */
+	private function mapRowsByUserId(array $rows, string $userIdColumn, array $columns): array
+	{
+		$values = [];
+		foreach ($rows as $row)
+		{
+			$userId = (int)($row[$userIdColumn] ?? 0);
+			if ($userId < 1)
+			{
+				continue;
+			}
+
+			foreach ($columns as $column)
+			{
+				$values[$userId][$column] = (string)($row[$column] ?? '');
+			}
+		}
+
+		return $values;
+	}
+
+	/**
+	 * @param array<mixed> $userIds
+	 *
+	 * @return list<int> unique positive identifiers
+	 */
+	private function normalizeUserIds(array $userIds): array
+	{
+		$normalized = [];
+		foreach ($userIds as $userId)
+		{
+			$userId = (int)$userId;
+			if ($userId > 0)
+			{
+				$normalized[$userId] = $userId;
+			}
+		}
+
+		return array_values($normalized);
+	}
+
+	/**
+	 * @param array<mixed> $fieldNames
+	 *
+	 * @return list<string>
+	 */
+	private function normalizeFieldNames(array $fieldNames): array
+	{
+		$normalized = [];
+		foreach ($fieldNames as $fieldName)
+		{
+			if (is_string($fieldName) && $fieldName !== '')
+			{
+				$normalized[$fieldName] = $fieldName;
+			}
+		}
+
+		return array_values($normalized);
 	}
 
 	/**

@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Error;
+use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 
 /**
@@ -14,6 +15,7 @@ class KeyManager
 {
 	public const ERROR_EMPTY_DATA = 'EMPTY_DATA';
 	public const ERROR_EMPTY_USER_ID = 'EMPTY_USER_ID';
+	public const ERROR_KEY_NOT_FOUND = 'KEY_NOT_FOUND';
 
 	private const DEFAULT_DATA = [
 		'ID' => 0,
@@ -29,14 +31,9 @@ class KeyManager
 	 * @param array $data Access key fields.
 	 * @return array
 	 */
-	private static function fillDefaultData($data)
+	private static function fillDefaultData(array $data): array
 	{
-		if (empty($data['ACCESS_KEY']))
-		{
-			$data['ACCESS_KEY'] = static::generateAccessKey();
-		}
-
-		return array_merge(static::DEFAULT_DATA, $data);
+		return array_merge(self::DEFAULT_DATA, $data);
 	}
 
 	/**
@@ -47,7 +44,7 @@ class KeyManager
 	 *
 	 * @return \Bitrix\Main\ErrorCollection
 	 */
-	private static function check($data): ErrorCollection
+	private static function check(array $data): ErrorCollection
 	{
 		$errorCollection = new ErrorCollection();
 		if (empty($data))
@@ -57,7 +54,7 @@ class KeyManager
 			);
 		}
 
-		if ($data['USER_ID'] <= 0)
+		if (($data['USER_ID'] ?? 0) <= 0)
 		{
 			$errorCollection->setError(
 				new Error('Empty user id', static::ERROR_EMPTY_USER_ID)
@@ -72,26 +69,158 @@ class KeyManager
 	 *
 	 * @param array $data Array similar to self::DEFAULT_DATA.
 	 *
-	 * @return \Bitrix\Main\ErrorCollection|int
+	 * @return Result
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public static function save($data)
+	public static function save(array $data): Result
 	{
 		$errorCollection = static::check($data);
 		if (!$errorCollection->isEmpty())
 		{
-			return $errorCollection;
+			$result = new Result();
+			$result->addErrors($errorCollection->getValues());
+
+			return $result;
 		}
 
 		$data = static::fillDefaultData($data);
+		$id = (int)$data['ID'];
+		if ($id > 0)
+		{
+			return static::updateKey($id, $data);
+		}
 
+		return static::createKey($data);
+	}
+
+	/**
+	 * Deletes a key and its user bindings.
+	 *
+	 * @param int $id Key identifier.
+	 * @return Result
+	 */
+	public static function deleteKey(int $id): Result
+	{
+		if (!static::keyExists($id))
+		{
+			return static::createKeyNotFoundResult();
+		}
+
+		KeyUserTable::deleteByFilter(['=KEY_ID' => $id]);
+		$deleteResult = KeyTable::delete($id);
+		$result = new Result();
+		if (!$deleteResult->isSuccess())
+		{
+			$result->addErrors($deleteResult->getErrors());
+
+			return $result;
+		}
+
+		$result->setData(['ID' => $id]);
+
+		return $result;
+	}
+
+	private static function createKey(array $data): Result
+	{
+		$result = new Result();
+		if (empty($data['ACCESS_KEY']))
+		{
+			$data['ACCESS_KEY'] = static::generateAccessKey();
+		}
+
+		$save = static::prepareSaveData($data, true);
+		$save['DATE_CREATE'] = new DateTime();
+		$save['CREATED_BY'] = $data['USER_ID'];
+		if (!empty($data['SERVICE_ID']))
+		{
+			$save['SERVICE_ID'] = $data['SERVICE_ID'];
+		}
+
+		$addResult = KeyTable::add($save);
+
+		if (!$addResult->isSuccess())
+		{
+			$result->addErrors($addResult->getErrors());
+
+			return $result;
+		}
+
+		$id = (int)$addResult->getId();
+		$usersResult = static::synchronizeUsers($id, $data, true);
+		if (!$usersResult->isSuccess())
+		{
+			$result->addErrors($usersResult->getErrors());
+			$cleanupResult = static::deleteKey($id);
+			if (!$cleanupResult->isSuccess())
+			{
+				$result->addErrors($cleanupResult->getErrors());
+			}
+
+			return $result;
+		}
+		$result->setData(['ID' => $id]);
+
+		return $result;
+	}
+
+	private static function updateKey(int $id, array $data): Result
+	{
+		if (!static::keyExists($id))
+		{
+			return static::createKeyNotFoundResult();
+		}
+
+		$result = new Result();
+		$save = static::prepareSaveData($data, array_key_exists('ACCESS_KEY', $data));
+		$updateResult = KeyTable::update($id, $save);
+		if (!$updateResult->isSuccess())
+		{
+			$result->addErrors($updateResult->getErrors());
+
+			return $result;
+		}
+
+		$result->setData(['ID' => $id]);
+		$usersResult = static::synchronizeUsers($id, $data, false);
+		if (!$usersResult->isSuccess())
+		{
+			$result->addErrors($usersResult->getErrors());
+		}
+
+		return $result;
+	}
+
+	private static function keyExists(int $id): bool
+	{
+		return (bool)KeyTable::query()
+			->setSelect(['ID'])
+			->where('ID', $id)
+			->setLimit(1)
+			->fetch()
+		;
+	}
+
+	private static function createKeyNotFoundResult(): Result
+	{
+		$result = new Result();
+		$result->addError(new Error('Key not found', static::ERROR_KEY_NOT_FOUND));
+
+		return $result;
+	}
+
+	private static function prepareSaveData(array $data, bool $includeAccessKey): array
+	{
 		$save = [
 			'TIMESTAMP_X' => new DateTime(),
-			'ACCESS_KEY' => $data['ACCESS_KEY'],
 			'ACTIVE' => $data['ACTIVE'] === true ? 'Y' : 'N',
 		];
+		if ($includeAccessKey)
+		{
+			$save['ACCESS_KEY'] = $data['ACCESS_KEY'];
+		}
 
 		if (isset($data['APP_ID']))
 		{
@@ -108,100 +237,84 @@ class KeyManager
 			$save['CONNECTION'] = key($connections);
 		}
 
-		$id = (int)$data['ID'];
-		if ($id > 0)
+		return $save;
+	}
+
+	private static function synchronizeUsers(int $id, array $data, bool $isNewKey): Result
+	{
+		$result = new Result();
+		if (!isset($data['USERS']))
 		{
-			$updateResult = KeyTable::update($id, $save);
-			$updateResult->isSuccess();
-		}
-		else
-		{
-			$save['DATE_CREATE'] = new DateTime();
-			$save['CREATED_BY'] = $data['USER_ID'];
-			if (!empty($data['SERVICE_ID']))
-			{
-				$save['SERVICE_ID'] = $data['SERVICE_ID'];
-			}
-			$addResult = KeyTable::add($save);
-			if ($addResult->isSuccess())
-			{
-				$id = $addResult->getId();
-			}
-			else
-			{
-				$errorCollection->setValues(
-					$addResult->getErrorCollection()->getValues()
-				);
-			}
+			return $result;
 		}
 
-		if ($id > 0 && isset($data['USERS']))
+		$usersForm = [];
+		foreach ($data['USERS'] as $userId)
 		{
-			$usersForm = [];
-			foreach ($data['USERS'] as $userId)
+			$userId = (int)trim($userId, " \t\n\r");
+			if ($userId > 0)
 			{
-				$userId = (int)trim($userId, " \t\n\r");
-				if ($userId > 0)
-				{
-					$usersForm[$userId] = [
-						'TIMESTAMP_X' => new DateTime(),
-						'CREATED_BY' => $data['USER_ID'],
-						'KEY_ID' => $id,
-						'USER_ID' => $userId,
-					];
-				}
-			}
-
-			$usersDb = [];
-			if (!isset($addResult))
-			{
-				$userList = KeyUserTable::getList([
-					'select' => ['ID', 'USER_ID'],
-					'filter' => [
-						'=KEY_ID' => $id,
-					]
-				]);
-				while ($user = $userList->fetch())
-				{
-					$usersDb[$user['ID']] = $user['USER_ID'];
-				}
-			}
-
-			foreach ($usersForm as $user)
-			{
-				$found = false;
-				foreach ($usersDb as $dbId => $dbUserId)
-				{
-					if ($dbUserId == $user['USER_ID'])
-					{
-						unset($usersDb[$dbId]);
-						$found = true;
-						break;
-					}
-				}
-
-				if (!$found)
-				{
-					$addResult = KeyUserTable::add($user);
-					$addResult->isSuccess();
-				}
-			}
-
-			foreach ($usersDb as $dbId => $_)
-			{
-				$deleteResult = KeyUserTable::delete($dbId);
-				$deleteResult->isSuccess();
+				$usersForm[$userId] = [
+					'TIMESTAMP_X' => new DateTime(),
+					'CREATED_BY' => $data['USER_ID'],
+					'KEY_ID' => $id,
+					'USER_ID' => $userId,
+				];
 			}
 		}
 
-		return $errorCollection->isEmpty() ? $id : $errorCollection;
+		$usersDb = [];
+		if (!$isNewKey)
+		{
+			$userList = KeyUserTable::query()
+				->setSelect(['ID', 'USER_ID'])
+				->where('KEY_ID', $id)
+				->exec()
+			;
+			while ($user = $userList->fetch())
+			{
+				$usersDb[(int)$user['ID']] = (int)$user['USER_ID'];
+			}
+		}
+
+		foreach ($usersDb as $dbId => $dbUserId)
+		{
+			if (isset($usersForm[$dbUserId]))
+			{
+				unset($usersForm[$dbUserId], $usersDb[$dbId]);
+			}
+		}
+
+		foreach ($usersForm as $user)
+		{
+			$addResult = KeyUserTable::add($user);
+			if (!$addResult->isSuccess())
+			{
+				$result->addErrors($addResult->getErrors());
+
+				return $result;
+			}
+		}
+
+		foreach ($usersDb as $dbId => $_)
+		{
+			$deleteResult = KeyUserTable::delete($dbId);
+			if (!$deleteResult->isSuccess())
+			{
+				$result->addErrors($deleteResult->getErrors());
+
+				return $result;
+			}
+		}
+
+		return $result;
 	}
 
 	/**
 	 * Returns new access key
 	 * @return string
 	 */
-	public static function generateAccessKey()
+	public static function generateAccessKey(): string
 	{
 		return \Bitrix\Main\Security\Random::getStringByAlphabet(
 			32,
@@ -211,25 +324,23 @@ class KeyManager
 		);
 	}
 
-	protected static function createKeyInner(array $fields): \Bitrix\Main\Result
+	protected static function createKeyInner(array $fields): Result
 	{
-		$result = new \Bitrix\Main\Result();
-		$key = \Bitrix\BIConnector\KeyManager::generateAccessKey();
+		$key = self::generateAccessKey();
 		$fields['ACCESS_KEY'] = $key;
-		$resultSave = \Bitrix\BIConnector\KeyManager::save($fields);
-		if (!($resultSave instanceof ErrorCollection))
+		$resultSave = self::save($fields);
+		if ($resultSave->isSuccess())
 		{
-			$result->setData(['ACCESS_KEY' => $key]);
-		}
-		else
-		{
-			$result->addErrors($resultSave->getValues());
+			$resultSave->setData([
+				...$resultSave->getData(),
+				'ACCESS_KEY' => $key,
+			]);
 		}
 
-		return $result;
+		return $resultSave;
 	}
 
-	public static function createAccessKey(CurrentUser $user): \Bitrix\Main\Result
+	public static function createAccessKey(CurrentUser $user): Result
 	{
 		$keyParameters = [
 			'USER_ID' => $user->getId(),

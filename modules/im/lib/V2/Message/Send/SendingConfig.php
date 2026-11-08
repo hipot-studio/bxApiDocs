@@ -2,6 +2,8 @@
 
 namespace Bitrix\Im\V2\Message\Send;
 
+use Bitrix\Im\Message\Uuid;
+
 /**
  * Config for sending process.
  *
@@ -201,6 +203,7 @@ class SendingConfig
 
 	private ?array $counterRecipients = null;
 	private ?array $pushRecipients = null;
+	private ?Uuid $messageUuidReservation = null;
 
 	public function __construct(?array $args = null)
 	{
@@ -267,6 +270,18 @@ class SendingConfig
 	public function setPushRecipients(?array $pushRecipients): self
 	{
 		$this->pushRecipients = $pushRecipients !== null ? $this->prepareSet($pushRecipients) : null;
+
+		return $this;
+	}
+
+	public function getMessageUuidReservation(): ?Uuid
+	{
+		return $this->messageUuidReservation;
+	}
+
+	public function setMessageUuidReservation(?Uuid $messageUuidReservation): self
+	{
+		$this->messageUuidReservation = $messageUuidReservation;
 
 		return $this;
 	}

@@ -7,6 +7,7 @@ namespace Bitrix\Im\V2\Integration\AiAssistant\Tools;
 use Bitrix\Im\Dialog;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Integration\AiAssistant\Tools\Dto\SendMessageDto;
+use Bitrix\Im\V2\Integration\AiAssistant\ToolScope;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Service\Context;
@@ -17,6 +18,11 @@ use Bitrix\Main\Validation\ValidationService;
 
 class SendMessageTool extends BaseImTool
 {
+	protected function getScope(): ToolScope
+	{
+		return ToolScope::Write;
+	}
+
 	public function getName(): string
 	{
 		return 'send_message';
@@ -24,9 +30,10 @@ class SendMessageTool extends BaseImTool
 
 	public function getDescription(): string
 	{
-		return "Sends a message to a specified chat or user. 
+		return "Sends a message to a specified chat or user.
 		Use this tool when you need to send a prepared text to a specific dialog.
-		IMPORTANT: This action is irreversible and requires user confirmation.";
+		This is also the way to start a new private conversation: if the private chat with the user does not exist yet, sending the first message creates it.
+		IMPORTANT: This action is irreversible and may create a new private chat; it requires user confirmation.";
 	}
 
 	public function getInputSchema(): array

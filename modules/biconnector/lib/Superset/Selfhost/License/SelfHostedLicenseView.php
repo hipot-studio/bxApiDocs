@@ -165,10 +165,19 @@ final class SelfHostedLicenseView
 			return null;
 		}
 
+		// The section where the extension is renewed, and not the address of the banner of the same window: the
+		// popup leads the administrator straight to the renewal. Null outside the sales area, and then the popup
+		// is left with its plain confirmation button.
+		$actionUrl = LicenseLinks::getExtensionRenewalUrl();
+
 		return [
 			'title' => $texts['title'],
 			'text' => $texts['description'],
 			'termKey' => (string)$this->license->getExpiryDate()?->getTimestamp(),
+			'actionText' => $actionUrl === null
+				? null
+				: (string)Loc::getMessage('BIC_SELFHOST_LICENSE_POPUP_ACTION'),
+			'actionUrl' => $actionUrl,
 		];
 	}
 

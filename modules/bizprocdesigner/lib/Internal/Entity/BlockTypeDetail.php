@@ -3,7 +3,10 @@
 namespace Bitrix\BizprocDesigner\Internal\Entity;
 
 use Bitrix\Bizproc\Activity\Dto\NodeSettings;
+use Bitrix\Bizproc\Activity\Enum\ActivityPortRole;
 use Bitrix\Bizproc\Internal\Entity\Activity\SettingCollection;
+use Bitrix\Bizproc\Internal\Entity\Activity\SettingConstraintCollection;
+
 class BlockTypeDetail
 {
 	public function __construct(
@@ -14,6 +17,13 @@ class BlockTypeDetail
 		public readonly array $describedTypes = [],
 		/** @var list<string> activity properties that exist but cannot be expressed in the settings schema */
 		public readonly array $skippedSettings = [],
+		/**
+		 * @var list<string> names whose value may only be carried over verbatim from the published template.
+		 *     Unlike the list above this is a declared contract and is published with the block.
+		 */
+		public readonly array $carriedSettings = [],
+		/** Cross-setting rules of the block, judged after defaults and baseline values are applied. */
+		public readonly SettingConstraintCollection $settingConstraints = new SettingConstraintCollection(),
 		/** @var array<string, mixed>|null preset default property values (null = no preset applied) */
 		public readonly ?array $defaultValues = null,
 		/** Node topology (width/height/ports) from the same source as the node editor; null = block has no node settings */
@@ -24,20 +34,17 @@ class BlockTypeDetail
 
 	public function toArray(): array
 	{
+		// Unconditional up to defaultValues: an empty collection is a legal value of these keys, and an absent
+		// key reads as "unknown" rather than "none". Below the line the keys stay conditional because null
+		// means "does not apply to this block" there.
 		$array = [
 			'block' => $this->block->toArray(),
 			'settings' => $this->settings->toArray(),
+			'carriedSettings' => $this->carriedSettings,
+			'settingConstraints' => $this->settingConstraints->toArray(),
+			'returnFields' => $this->returnFields->toArray(),
+			'typesDescription' => $this->describedTypes,
 		];
-
-		if ($this->returnFields->getIterator()->count() > 0)
-		{
-			$array['returnFields'] = $this->returnFields->toArray();
-		}
-
-		if (!empty($this->describedTypes))
-		{
-			$array['typesDescription'] = $this->describedTypes;
-		}
 
 		if ($this->defaultValues !== null)
 		{
@@ -58,11 +65,11 @@ class BlockTypeDetail
 	}
 
 	/**
-	 * Port title marking a loop-back port on a loop node. The title appears on different sides depending
-	 * on the node: ForEach carries it on a dedicated body-facing *input* (i1), so the loop body must close
-	 * back into that input instead of the ordinary entry input; While carries it on the *output* side (o0,
-	 * into the body) and has no separate loop-back input - its body closes back into the ordinary entry
-	 * input i0. Source: activity NODE_SETTINGS.ports (Port title).
+	 * Port title a loop node used to mark its loop-back port with, before the meaning of a port became a
+	 * machine role ({@see ActivityPortRole::LoopBody}). Kept as the compatible fallback for a third-party
+	 * block that declares no role, so such a block keeps the loop-closure check it has today.
+	 *
+	 * @deprecated read {@see \Bitrix\Bizproc\Activity\Dto\Port::$role} instead
 	 */
 	public const LOOPBACK_PORT_TITLE = '->>';
 
@@ -84,32 +91,44 @@ class BlockTypeDetail
 	}
 
 	/**
-	 * Ids of the block's loop-back input ports (input ports titled with LOOPBACK_PORT_TITLE).
-	 * A loop node with a loop-back *input* (ForEach:i1) returns a non-empty list; non-loop blocks return
-	 * an empty list.
+	 * Ids of the block's loop-back input ports: inputs whose role is LoopBody, that is where the body of the
+	 * loop returns. A loop node with a loop-back *input* (ForEach:i1) returns a non-empty list; non-loop
+	 * blocks return an empty list.
 	 *
-	 * Note the intentional asymmetry: this reports only loop-back *inputs*. While has no loop-back input
-	 * (its loop-back is on the output side, o0), so it returns [] here - by design. Consequently the
-	 * input-based loop-closure check in {@see AgentConnectionsValidator::validateLoopClosure()} applies to
-	 * ForEach but not to While. This is a limitation of the input-based guard, not a topology defect.
+	 * Note the intentional asymmetry: this reports only loop-back *inputs*. The same role on an output means
+	 * the way into the body, so While - which carries LoopBody on its output o0 alone and closes the body
+	 * back into the ordinary entry input i0 - returns [] here, by design. Consequently the input-based
+	 * loop-closure check in {@see AgentConnectionsValidator::validateLoopClosure()} applies to ForEach but
+	 * not to While. This is a limitation of the input-based guard, not a topology defect.
 	 *
 	 * @return list<string>
 	 */
 	public function getLoopbackInputPortIds(): array
 	{
-		$input = $this->nodeSettings?->ports?->input?->toArray() ?? [];
+		$input = $this->nodeSettings?->ports?->input?->ports ?? [];
 
 		$ids = [];
 		foreach ($input as $port)
 		{
-			$id = (string)($port['id'] ?? '');
-			if ($id !== '' && (string)($port['title'] ?? '') === self::LOOPBACK_PORT_TITLE)
+			if ($port->id !== '' && self::isLoopbackInputPort($port->role, $port->title))
 			{
-				$ids[] = $id;
+				$ids[] = $port->id;
 			}
 		}
 
 		return $ids;
+	}
+
+	/**
+	 * A block that declares a role is judged by it alone. The title is read only for a block that declares
+	 * none - a third-party block written before roles existed - and that fallback is the deprecated path.
+	 */
+	private static function isLoopbackInputPort(?ActivityPortRole $role, string $title): bool
+	{
+		return $role === null
+			? $title === self::LOOPBACK_PORT_TITLE
+			: $role === ActivityPortRole::LoopBody
+		;
 	}
 
 	/**

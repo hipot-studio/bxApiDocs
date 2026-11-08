@@ -3,6 +3,7 @@
 namespace Bitrix\Intranet\Site\Sections;
 
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Crm;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
@@ -14,7 +15,6 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Rpa\Driver;
 use Bitrix\Sign;
-use CBPWorkflowTemplateUser;
 
 class AutomationSection
 {
@@ -49,6 +49,7 @@ class AutomationSection
 				static::getScripts(),
 				static::getLists(),
 				static::getAI(),
+				static::getBizprocPermissions(),
 			];
 
 			self::$items = array_filter($items, function($item) {
@@ -88,6 +89,40 @@ class AutomationSection
 			],
 			'tileData' => [
 				'url' => SITE_DIR . 'company/personal/bizproc/',
+			],
+		];
+	}
+
+	/**
+	 * Standalone top-level tile for the bizproc access-rights page. Gated exactly like the process-templates
+	 * item of the new designer (see getBizProcSubMenu): module presence, the bizproc.designer_v2 option and
+	 * the right to configure the template ACL.
+	 */
+	public static function getBizprocPermissions(): array
+	{
+		$available =
+			Loader::includeModule('bizproc')
+			&& Option::get('bizproc', 'designer_v2', 'N') === 'Y'
+			&& class_exists(TemplateAccessService::class)
+			&& (new TemplateAccessService())->canConfigureRights()
+		;
+
+		$url = SITE_DIR . 'bizproc/permissions/';
+
+		return [
+			'id' => 'bizproc_permissions',
+			'title' => Loc::getMessage('AUTOMATION_SECTION_BIZPROC_PERMISSIONS_ITEM_TITLE'),
+			'available' => $available,
+			'url' => $url,
+			'iconClass' => 'ui-icon intranet-automation-bp-icon',
+			'menuData' => [
+				'menu_item_id' => 'menu_bizproc_permissions',
+				'top_menu_id' => 'top_menu_id_bizproc_permissions',
+				'real_link' => '',
+				'onclick' => 'BX.SidePanel.Instance.open(\'' . \CUtil::JSEscape($url) . '\', { cacheable: false })',
+			],
+			'tileData' => [
+				'url' => $url,
 			],
 		];
 	}
@@ -173,21 +208,21 @@ class AutomationSection
 			}
 		}
 
-		if (Loader::includeModule('bizproc'))
+		if (
+			Loader::includeModule('bizproc')
+			&& Option::get('bizproc', 'designer_v2', 'N') === 'Y'
+			&& class_exists(TemplateAccessService::class)
+			&& (new TemplateAccessService())->canAccessTemplates()
+		)
 		{
-			$user = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
-
-			if (Option::get('bizproc', 'designer_v2', 'N') === 'Y' && $user->isAdmin())
-			{
-				$menu[] = [
-					Loc::getMessage('MENU_BIZPROC_TEMPLATE_PROCESSES'),
-					SITE_DIR . 'bizproc/templateprocesses/',
-					[],
-					[
-						'menu_item_id' => 'menu_template_processes',
-					],
-				];
-			}
+			$menu[] = [
+				Loc::getMessage('MENU_BIZPROC_TEMPLATE_PROCESSES'),
+				SITE_DIR . 'bizproc/templateprocesses/',
+				[],
+				[
+					'menu_item_id' => 'menu_template_processes',
+				],
+			];
 		}
 
 		self::$bpSubMenu = $menu;

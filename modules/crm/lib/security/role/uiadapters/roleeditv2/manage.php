@@ -10,11 +10,14 @@ use Bitrix\Crm\Security\Role\Manage\Entity\AutomatedSolutionList;
 use Bitrix\Crm\Security\Role\Manage\Entity\ButtonConfig;
 use Bitrix\Crm\Security\Role\Manage\Entity\WebFormConfig;
 use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
+use Bitrix\Crm\Security\Role\Manage\Permissions\ObserversWrite;
 use Bitrix\Crm\Security\Role\Manage\RoleManagementModelBuilder;
 use Bitrix\Crm\Security\Role\Model\RoleTable;
+use Bitrix\Crm\Security\Role\PermissionsManager;
 use Bitrix\Crm\Security\Role\Repositories\PermissionRepository;
 use Bitrix\Crm\Security\Role\Utils\RoleManagerUtils;
 use Bitrix\Crm\Security\Role\Validators\RoleNameValidator;
+use Bitrix\Crm\Service\UserPermissions\Configuration;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
@@ -124,14 +127,19 @@ class Manage
 		$toChange = PermissionModel::creteFromAppFormBatch($permissions['toChange'] ?? []);
 		$toChange = (new \Bitrix\Crm\Security\Role\UIAdapters\RoleEditV2\MultivariablesCompatibilityAdapter())->prepareChangedValues($toChange);
 
-		$this->utils->saleUpdateShopAccess();
-		$this->utils->clearRolesCache();
-
 		$applyResult = $this->permissionRepository->applyRolePermissionData($id, $toRemove, $toChange);
 		if (!$applyResult->isSuccess())
 		{
 			$result->addError(new Error($applyResult->getErrorMessages()[0] ?? ''));
+
+			return $result;
 		}
+
+		$this->utils->saleUpdateShopAccess();
+		$this->utils->clearRolesCache();
+		PermissionsManager::clearCache();
+		Configuration::resetOperationsRegistrationCache();
+		$this->entitiesBuilder->clearEntitiesCache();
 
 		return $result;
 	}
@@ -215,17 +223,23 @@ class Manage
 	{
 		$permissionEntities = $this->adapter->preparePermissionValues($entities, $roleAssignedPermissions);
 
+		// EditApp inserts 'inherit' variants to all 'hasStages' permissions manually
+		$inheritVariants = [
+			'HIDE_SUM' => HideSum::INHERIT,
+			ObserversWrite::CODE => ObserversWrite::INHERIT,
+		];
+
 		foreach ($permissionEntities as $entity)
 		{
 			foreach ($entity->permissions() as $permission)
 			{
-				if ($permission->code() !== 'HIDE_SUM')
+				$inheritVariant = $inheritVariants[$permission->code()] ?? null;
+				if ($inheritVariant === null)
 				{
 					continue;
 				}
 
-				// EditApp inserts 'inherit' variants to all 'hasStages' permissions manually
-				$permission->variants()?->remove(HideSum::INHERIT);
+				$permission->variants()?->remove($inheritVariant);
 			}
 		}
 

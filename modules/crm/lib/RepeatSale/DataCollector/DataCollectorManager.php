@@ -80,6 +80,11 @@ final class DataCollectorManager
 				return [];
 			}
 
+			$baseDeal = $this->baseDealIdentifier !== null
+				? $this->fetchBaseDeal($this->baseDealIdentifier)
+				: []
+			;
+
 			$dealCollectorParams = [
 				'entityId' => $this->entityIdentifier->getEntityId(),
 				'clientIdentifiers' => [
@@ -89,15 +94,17 @@ final class DataCollectorManager
 			if ($this->baseDealIdentifier !== null)
 			{
 				$dealCollectorParams['excludeId'] = $this->baseDealIdentifier->getEntityId();
+
+				if (!empty($baseDeal))
+				{
+					// the base deal goes to the AI apart from the history, but the purchases aggregate
+					// counts it - and only the one this user was allowed to read
+					$dealCollectorParams['baseEntityId'] = $this->baseDealIdentifier->getEntityId();
+				}
 			}
 
 			[$dealsList, $ordersSummary] = $this->getDealCollector()->getMarkers($dealCollectorParams);
 			$dealsList ??= [];
-
-			$baseDeal = $this->baseDealIdentifier !== null
-				? $this->fetchBaseDeal($this->baseDealIdentifier)
-				: []
-			;
 
 			$dealsListForChannel = empty($baseDeal) ? $dealsList : [...$dealsList, $baseDeal];
 

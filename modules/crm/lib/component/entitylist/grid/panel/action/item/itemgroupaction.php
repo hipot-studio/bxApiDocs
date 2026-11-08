@@ -50,7 +50,7 @@ final class ItemGroupAction extends BaseItemGroupAction
 			&& Exclusion\Manager::checkCreatePermission()
 		)
 		{
-			$actions[] = new ExcludeChildAction($this->factory->getEntityTypeId());
+			$actions[] = new ExcludeChildAction($this->factory->getEntityTypeId(), $this->getGridId());
 		}
 
 		return $actions;
@@ -59,16 +59,17 @@ final class ItemGroupAction extends BaseItemGroupAction
 	private function getActionsForUserWithUpdateAccess(): array
 	{
 		$actions = [];
+		$gridId = $this->getGridId();
 
 		if (\Bitrix\Crm\Integration\Sender\GridPanel::isEntityTypeSupported($this->factory->getEntityTypeId()))
 		{
 			if (\Bitrix\Crm\Integration\Sender\GridPanel::canCurrentUserAddLetters())
 			{
-				$actions[] = new AddLetterChildAction($this->factory->getEntityTypeId());
+				$actions[] = new AddLetterChildAction($this->factory->getEntityTypeId(), $gridId);
 			}
 			if (\Bitrix\Crm\Integration\Sender\GridPanel::canCurrentUserModifySegments())
 			{
-				$actions[] = new AddItemsToSegmentChildAction($this->factory->getEntityTypeId());
+				$actions[] = new AddItemsToSegmentChildAction($this->factory->getEntityTypeId(), $gridId);
 			}
 		}
 
@@ -78,14 +79,14 @@ final class ItemGroupAction extends BaseItemGroupAction
 			&& UserFieldManager::isEnabledInTasksUserField($this->factory->getEntityName())
 		)
 		{
-			$actions[] = new CreateTaskChildAction($this->factory->getEntityTypeId());
+			$actions[] = new CreateTaskChildAction($this->factory->getEntityTypeId(), $gridId);
 		}
 
 		if (!$this->gridSettings->isAllItemsCategory())
 		{
 			if ($this->factory->isStagesEnabled())
 			{
-				$actions[] = new SetStageChildAction($this->factory, $this->gridSettings->getCategoryId());
+				$actions[] = new SetStageChildAction($this->factory, $gridId, $this->gridSettings->getCategoryId());
 			}
 
 			$setCategoryAction = $this->getSetCategoryAction();
@@ -95,14 +96,14 @@ final class ItemGroupAction extends BaseItemGroupAction
 			}
 		}
 
-		$actions[] = new AssignChildAction($this->factory->getEntityTypeId());
+		$actions[] = new AssignChildAction($this->factory->getEntityTypeId(), $gridId);
 
 		if (
 			ObserversChildAction::isEntityTypeSupported($this->factory)
 			&& ObserversChildAction::isChangeObserverPermitted($this->factory->getEntityTypeId(), $this->userPermissions, $this->gridSettings->getCategoryId())
 		)
 		{
-			$actions[] = new ObserversChildAction($this->factory->getEntityTypeId());
+			$actions[] = new ObserversChildAction($this->factory->getEntityTypeId(), $gridId);
 		}
 
 		if (
@@ -110,12 +111,12 @@ final class ItemGroupAction extends BaseItemGroupAction
 			&& ConvertChildAction::isConversionPermitted($this->factory->getEntityTypeId(), $this->userPermissions)
 		)
 		{
-			$actions[] = new ConvertChildAction($this->factory->getEntityTypeId(), $this->userPermissions);
+			$actions[] = new ConvertChildAction($this->factory->getEntityTypeId(), $this->userPermissions, $gridId);
 		}
 
 		if (RefreshAccountingDataChildAction::isEntityTypeSupported($this->factory->getEntityTypeId()))
 		{
-			$actions[] = new RefreshAccountingDataChildAction($this->factory->getEntityTypeId());
+			$actions[] = new RefreshAccountingDataChildAction($this->factory->getEntityTypeId(), $gridId);
 		}
 
 		if (
@@ -126,7 +127,7 @@ final class ItemGroupAction extends BaseItemGroupAction
 			$entityTypeId = $this->factory->getEntityTypeId();
 			$mergerUrl = Container::getInstance()->getRouter()->getEntityMergeUrl($entityTypeId);
 
-			$actions[] = new MergeChildAction($entityTypeId, $mergerUrl);
+			$actions[] = new MergeChildAction($entityTypeId, $gridId, $mergerUrl);
 		}
 
 		if (
@@ -134,19 +135,19 @@ final class ItemGroupAction extends BaseItemGroupAction
 			&& CallList::isEntityTypeSupported($this->factory->getEntityTypeId())
 		)
 		{
-			$actions[] = new CreateCallListChildAction($this->factory->getEntityTypeId());
+			$actions[] = new CreateCallListChildAction($this->factory->getEntityTypeId(), $gridId);
 		}
 
-		$actions[] = new SetOpenedChildAction($this->factory->getEntityTypeId());
+		$actions[] = new SetOpenedChildAction($this->factory->getEntityTypeId(), $gridId);
 
 		if (SetExportChildAction::isEntityTypeSupported($this->factory->getEntityTypeId()))
 		{
-			$actions[] = new SetExportChildAction($this->factory->getEntityTypeId());
+			$actions[] = new SetExportChildAction($this->factory->getEntityTypeId(), $gridId);
 		}
 
 		if ($this->factory->isAutomationEnabled() && \Bitrix\Crm\Automation\Factory::isAutomationRunnable($this->factory->getEntityTypeId()))
 		{
-			$actions[] = new RestartAutomationChildAction($this->factory->getEntityTypeId());
+			$actions[] = new RestartAutomationChildAction($this->factory->getEntityTypeId(), $gridId);
 		}
 
 		return $actions;
@@ -163,7 +164,11 @@ final class ItemGroupAction extends BaseItemGroupAction
 			return null;
 		}
 
-		return new SetCategoryChildAction($this->factory, $this->gridSettings->getCategoryId());
+		return new SetCategoryChildAction(
+			$this->factory,
+			$this->getGridId(),
+			$this->gridSettings->getCategoryId(),
+		);
 	}
 
 	private function isInSystemCategory(): bool

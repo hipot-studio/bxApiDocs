@@ -30,6 +30,14 @@ final class ServerProvider extends AbstractPublicEntryPoint
 		return $this->getAvailabilityService()->ping();
 	}
 
+	/**
+	 * @param float|null $timeBudget seconds for the whole check; when it runs out, the check ends with `521`
+	 */
+	public function checkReadiness(?float $timeBudget = null): Result
+	{
+		return $this->getAvailabilityService()->checkReadiness($timeBudget);
+	}
+
 	public static function readJwtPublicKeyById(int $serverId): string
 	{
 		$server = self::getRepository()->findById($serverId);

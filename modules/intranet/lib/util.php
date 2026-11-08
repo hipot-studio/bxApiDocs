@@ -11,6 +11,7 @@ namespace Bitrix\Intranet;
 use Bitrix\Bitrix24\Integrator;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Intranet\Internals\InvitationTable;
+use Bitrix\Intranet\Internal\Util\AdminRightsGroupMemberships;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentOutOfRangeException;
@@ -568,15 +569,17 @@ class Util
 
 		[ $employeesGroupId, $portalAdminGroupId ] = self::getGroupsId();
 
-		$currentUserGroups = \CUser::getUserGroup($userId);
-		foreach ($currentUserGroups as $groupKey => $group)
+		$currentUserGroups = [];
+		$userGroupList = \CUser::GetUserGroupList($userId);
+		while ($groupMembership = $userGroupList->Fetch())
 		{
-			if ($group == 1 || $group == $portalAdminGroupId)
-			{
-				unset($currentUserGroups[$groupKey]);
-			}
+			$currentUserGroups[] = $groupMembership;
 		}
-		$currentUserGroups[] = $employeesGroupId;
+		$currentUserGroups = AdminRightsGroupMemberships::prepareForRemoval(
+			$currentUserGroups,
+			(int)$portalAdminGroupId,
+			(int)$employeesGroupId,
+		);
 		$user = new \CUser();
 		$user->Update($userId, ['GROUP_ID' => $currentUserGroups]);
 
@@ -853,4 +856,3 @@ class Util
 		return (int)Option::get('intranet', 'app_last_activity_ttl', $defaultLastActivityTimeout);
 	}
 }
-

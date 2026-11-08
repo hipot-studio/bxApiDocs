@@ -22,6 +22,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Synchronization\UserFieldSynchronizer;
 use Bitrix\Crm\Tracking;
+use Bitrix\Crm\V2\Internal\Service\PaySystem\PrintOperation;
 use Bitrix\Main\Engine\Response;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -545,6 +546,7 @@ class CrmQuoteDetailsComponent extends FactoryBased
 							'ENABLE_TOOLBAR' => true,
 							'PRESERVE_HISTORY' => true,
 							'EXTENDED_INTERNAL_MODE' => true,
+							'ENABLE_GROUP_ACTIONS' => 'Y',
 							// compatible entity-specific event name
 							'ADD_EVENT_NAME' => 'CrmCreateDealFrom'.mb_convert_case($this->getEntityName(), MB_CASE_TITLE),
 							'ANALYTICS' => [
@@ -694,19 +696,34 @@ class CrmQuoteDetailsComponent extends FactoryBased
 			return null;
 		}
 
-		$errorText = null;
-		$fileId = \CCrmQuote::savePdf($this->item->getId(), $paymentSystemId, $errorText);
-		if (!$fileId)
-		{
-			$this->errorCollection[] = new Error('Error while saving file: '.$errorText);
-			return null;
-		}
+		$operation = new PrintOperation('quote', 'email_attachment', 'quote_details_attachment');
 
-		$attachmentFileId = StorageManager::saveEmailAttachment(\CFile::GetFileArray($fileId));
+		return $operation->run(function () use ($operation, $paymentSystemId): ?array {
+			$errorText = null;
+			$fileId = \CCrmQuote::savePdf($this->item->getId(), $paymentSystemId, $errorText);
+			$file = $fileId > 0 ? \CFile::GetFileArray($fileId) : false;
+			if (!is_array($file) || (int)($file['ID'] ?? 0) <= 0)
+			{
+				$this->errorCollection[] = new Error('Error while saving file: '.$errorText);
 
-		$storageTypeId = StorageType::getDefaultTypeID();
+				return null;
+			}
 
-		return array_merge(StorageManager::getFileInfo($attachmentFileId), ['STORAGE_TYPE_ID' => $storageTypeId]);
+			$storageTypeId = StorageType::getDefaultTypeID();
+			$attachmentFileId = StorageManager::saveEmailAttachment($file, $storageTypeId);
+			$fileInfo = $attachmentFileId > 0 ? StorageManager::getFileInfo($attachmentFileId, $storageTypeId) : null;
+			if (!is_array($fileInfo) || (int)($fileInfo['ID'] ?? 0) <= 0)
+			{
+				$this->errorCollection[] = new Error('Error while saving file');
+
+				return null;
+			}
+
+			$result = array_merge($fileInfo, ['STORAGE_TYPE_ID' => $storageTypeId]);
+			$operation->complete();
+
+			return $result;
+		});
 	}
 
 	public function convertAction(int $entityTypeId, int $entityId, array $ANALYTICS = []): Response\Json

@@ -55,8 +55,7 @@ class CMainUiFilter extends CBitrixComponent
 			$this->arResult["DISABLE_SEARCH"] = true;
 		}
 
-		$this->arResult["MAIN_UI_FILTER__AND"] = Loc::getMessage('MAIN_UI_FILTER__AND');
-		$this->arResult["MAIN_UI_FILTER__MORE"] = Loc::getMessage('MAIN_UI_FILTER__MORE');
+		$this->arResult["MAIN_UI_FILTER__AND_MORE"] = Loc::getMessage('MAIN_UI_FILTER__AND_MORE');
 		$this->arResult["MAIN_UI_FILTER__BEFORE"] = Loc::getMessage("MAIN_UI_FILTER__BEFORE");
 		$this->arResult["MAIN_UI_FILTER__AFTER"] = Loc::getMessage("MAIN_UI_FILTER__AFTER");
 		$this->arResult["MAIN_UI_FILTER__NUMBER_MORE"] = Loc::getMessage("MAIN_UI_FILTER__NUMBER_MORE");

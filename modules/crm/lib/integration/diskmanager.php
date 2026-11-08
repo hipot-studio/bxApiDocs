@@ -18,6 +18,7 @@ use Bitrix\Disk\SystemUser;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\Text;
 use Bitrix\Disk\ZipNginx\ArchiveEntry;
+use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Response\Zip;
 use Bitrix\Main\Loader;
 use Bitrix\Main\EventResult;
@@ -34,15 +35,71 @@ class DiskManager
 
 	public static function checkFileReadPermission($fileID, $userID = 0)
 	{
-		if (!Loader::includeModule('disk'))
+		$access = self::resolveFileAccess($fileID, $userID);
+		if (!$access)
 		{
 			return false;
+		}
+
+		[$file, $securityContext] = $access;
+
+		return $file->canRead($securityContext);
+	}
+
+	public static function checkFileDownloadPermission($fileID, $userID = 0)
+	{
+		try
+		{
+			$access = self::resolveFileAccess($fileID, $userID);
+			if (!$access)
+			{
+				return false;
+			}
+
+			[$file, $securityContext] = $access;
+
+			return self::checkResolvedFileDownloadPermission($file, $securityContext);
+		}
+		catch (\Throwable $throwable)
+		{
+			Application::getInstance()->getExceptionHandler()->writeToLog($throwable);
+
+			return false;
+		}
+	}
+
+	private static function checkResolvedFileDownloadPermission(object $file, object $securityContext): bool
+	{
+		$fileCanDownload = method_exists($file, 'canDownload');
+		$securityContextCanDownload = method_exists($securityContext, 'canDownload');
+
+		if ($fileCanDownload !== $securityContextCanDownload)
+		{
+			return false;
+		}
+
+		return $fileCanDownload
+			? $file->canDownload($securityContext)
+			: $file->canRead($securityContext);
+	}
+
+	private static function resolveFileAccess($fileID, $userID): ?array
+	{
+		if (!static::includeDiskModule())
+		{
+			return null;
 		}
 
 		$file = File::loadById($fileID);
 		if (!$file)
 		{
-			return false;
+			return null;
+		}
+
+		$storage = $file->getStorage();
+		if (!$storage)
+		{
+			return null;
 		}
 
 		$userID = (int)$userID;
@@ -51,7 +108,12 @@ class DiskManager
 			$userID = \CCrmSecurityHelper::getCurrentUserID();
 		}
 
-		return $file->canRead($file->getStorage()->getSecurityContext($userID));
+		return [$file, $storage->getSecurityContext($userID)];
+	}
+
+	protected static function includeDiskModule(): bool
+	{
+		return Loader::includeModule('disk');
 	}
 
 	/**

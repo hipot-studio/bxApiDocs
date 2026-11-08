@@ -15,6 +15,7 @@ use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\UserTable;
 use Bitrix\Sign\FeatureResolver;
 use Bitrix\Sign\Internal;
 use Bitrix\Sign\Item;
@@ -38,6 +39,7 @@ class MemberRepository
 	// Same batch as DocumentRepository::listForSafeExportByIds(): both run over the very
 	// same set of documents, and the safe export feeds up to SAFE_EXPORT_LIMIT of them.
 	private const SIGNERS_BY_DOCUMENTS_BATCH_SIZE = 300;
+	private const MAX_SOURCE_USER_COUNT = 1000;
 
 	// lower bound of an "empty" signing date: SQL NULL or dates below this
 	// threshold (e.g. the zero seed date) are treated as an unset signing date.
@@ -203,6 +205,7 @@ class MemberRepository
 			signatureFileId: $model->getSignatureFileId(),
 			stampFileId: $model->getStampFileId(),
 			role: $role,
+			signingMethod: $model->getSigningMethod(),
 			configured: $model->getConfigured(),
 			reminder: new Item\Member\Reminder(
 				lastSendDate: $model->getReminderLastSendDate(),
@@ -289,6 +292,7 @@ class MemberRepository
 			->setSignatureFileId($item->signatureFileId)
 			->setModifiedById(Main\Engine\CurrentUser::get()->getId())
 			->setCreatedById(Main\Engine\CurrentUser::get()->getId())
+			->setSigningMethod($item->signingMethod)
 			->setContactId($item->entityType === EntityType::CONTACT ? $item->entityId : 0)
 			->setMute('N')
 			->setSigned($item->status)
@@ -786,6 +790,26 @@ class MemberRepository
 		);
 	}
 
+	/**
+	 * Whether the party holds more than one member, without counting the rest of it.
+	 *
+	 * The index covers DOCUMENT_ID alone, so counting a party reads every member row of the document;
+	 * a mass mailing is exactly the case where there are many of them, and two rows already answer.
+	 */
+	public function hasSeveralMembersInParty(int $documentId, int $party): bool
+	{
+		$rows = Internal\MemberTable
+			::query()
+			->addSelect('ID')
+			->where('DOCUMENT_ID', $documentId)
+			->where('PART', $party)
+			->setLimit(2)
+			->fetchAll()
+		;
+
+		return count($rows) > 1;
+	}
+
 	public function listByDocumentIdExcludeParty(int $documentId, int $party): Item\MemberCollection
 	{
 		$models = Internal\MemberTable
@@ -1243,6 +1267,93 @@ class MemberRepository
 				'READY_MEMBERS_COUNTER' => 0,
 			];
 		}
+	}
+
+	/**
+	 * Filter node of the company safe annulment status (NORMATIVE ALG-01). The mark of the row shown
+	 * is not always the mark of the signing that row speaks about: the company side row of an employee
+	 * initiated document is asked of the document instead - has it an annulled finished signing - since
+	 * the signer's own row is excluded from the safe listing. Every other row keeps answering with its
+	 * own column. The same substitution class drives the row mark, see Service\B2e\AnnulmentTargetService.
+	 *
+	 * Existence instead of a join on purpose: a join would multiply the rows of a document with several
+	 * finished signers and break every safe counter. The two modes stay exact complements - hence the
+	 * explicit null members for the nullable initiator type and role columns - so the row counts of
+	 * "annulled" and "signed" still add up to the count of "all".
+	 *
+	 * Existence condition and not an expression one: walking a filter, the query registers the field of
+	 * an expression condition as a runtime field of its own and rewrites the definition inside that very
+	 * filter with the field's name (Main\ORM\Query\Query::setFilterHandlerChains()), which leaves the
+	 * filter usable once, while the safe grid hands one built filter to a count query and to a listing
+	 * query in a row. An existence condition carries no column name and stays reusable, at the price of
+	 * the correlation - see getAnnulledSignerSubQuery().
+	 */
+	public function buildSafeAnnulmentCondition(bool $annulled): ConditionTree
+	{
+		$employeeInitiated = Type\Document\InitiatedByType::EMPLOYEE->toInt();
+		$assignee = $this->convertRoleToInt(Role::ASSIGNEE);
+		$subQuery = $this->getAnnulledSignerSubQuery();
+
+		$substituted = Query::filter()
+			->where('DOCUMENT.INITIATED_BY_TYPE', $employeeInitiated)
+			->where('ROLE', $assignee)
+		;
+		if ($annulled)
+		{
+			$substituted->whereExists($subQuery);
+		}
+		else
+		{
+			$substituted->whereNotExists($subQuery);
+		}
+
+		return Query::filter()
+			->logic('or')
+			->where($substituted)
+			->where(Query::filter()
+				->where(Query::filter()
+					->logic('or')
+					->where('DOCUMENT.INITIATED_BY_TYPE', '!=', $employeeInitiated)
+					->whereNull('DOCUMENT.INITIATED_BY_TYPE')
+					->where('ROLE', '!=', $assignee)
+					->whereNull('ROLE')
+				)
+				->where('ANNULLED', $annulled)
+			)
+		;
+	}
+
+	/**
+	 * Finished annulled signing of the same document. An existence condition gets no column
+	 * substitution from the query - see buildSafeAnnulmentCondition() - so the correlation is written
+	 * out here as a reference to the column of the outer table. The alias of that table is read off the
+	 * member entity instead of spelled out, so it follows the base query of the safe.
+	 */
+	private function getAnnulledSignerSubQuery(): Query
+	{
+		return Internal\MemberTable::query()
+			->setCustomBaseTableAlias('sign_internal_member_annulled_signer')
+			->where('DOCUMENT_ID', new Main\DB\SqlExpression($this->getSafeOuterDocumentIdSql()))
+			->where('ROLE', $this->convertRoleToInt(Role::SIGNER))
+			->where('SIGNED', MemberStatus::DONE)
+			->where('ANNULLED', true)
+			->setLimit(1)
+		;
+	}
+
+	/**
+	 * Quoted `<outer alias>.DOCUMENT_ID` of the safe base query. Identifiers go through the sqlHelper of
+	 * the member connection, part by part: quote() of the postgres helper takes the whole argument for a
+	 * single identifier and would not split a dotted one.
+	 */
+	private function getSafeOuterDocumentIdSql(): string
+	{
+		$sqlHelper = Internal\MemberTable::getEntity()->getConnection()->getSqlHelper();
+
+		return $sqlHelper->quote(Internal\MemberTable::query()->getInitAlias())
+			. '.'
+			. $sqlHelper->quote('DOCUMENT_ID')
+		;
 	}
 
 	/**
@@ -1839,6 +1950,41 @@ class MemberRepository
 		return $this->extractItemCollectionFromModelCollection($models, $loadEntityNames);
 	}
 
+	/**
+	 * Returns ids of documents the given members belong to. Unlike listByUids() it does not
+	 * hydrate member items, so no user and CRM lookups are made.
+	 *
+	 * @param array<string> $memberUids
+	 * @return list<int>
+	 */
+	public function listDocumentIdsByMemberUids(array $memberUids): array
+	{
+		if (empty($memberUids))
+		{
+			return [];
+		}
+
+		$rows = Internal\MemberTable::query()
+			->setSelect(['DOCUMENT_ID'])
+			->whereIn('UID', $memberUids)
+			->setDistinct()
+			->fetchAll()
+		;
+
+		return $this->extractDocumentIds($rows);
+	}
+
+	/**
+	 * @param list<array<string, mixed>> $rows
+	 * @return list<int>
+	 */
+	private function extractDocumentIds(array $rows): array
+	{
+		$documentIds = array_map('intval', array_column($rows, 'DOCUMENT_ID'));
+
+		return array_values(array_filter($documentIds));
+	}
+
 	public function getById(int $id): ?Item\Member
 	{
 		$memberEntity = Internal\MemberTable::query()
@@ -1912,7 +2058,7 @@ class MemberRepository
 			&& !empty(
 				array_filter(
 					$conditions,
-					static fn(Condition $condition) => str_starts_with($condition->getColumn(), self::SIGN_DOCUMENT_LIST_QUERY_REF_FIELD_NAME_COMPANY),
+					static fn(Condition $condition) => self::isCompanyRefFieldColumn($condition->getColumn()),
 				)
 			)
 		)
@@ -1927,6 +2073,17 @@ class MemberRepository
 				),
 			);
 		}
+	}
+
+	/**
+	 * Expression and exists conditions carry a field object or null instead of a column name
+	 * (main/lib/ORM/Query/Filter/Condition.php), so the prefix check must not assume a string.
+	 */
+	private static function isCompanyRefFieldColumn(mixed $column): bool
+	{
+		return is_string($column)
+			&& str_starts_with($column, self::SIGN_DOCUMENT_LIST_QUERY_REF_FIELD_NAME_COMPANY)
+		;
 	}
 
 	public function listB2eMembersWithReadyStatus(int $entityId, int $limit, int $offset): Item\MemberCollection
@@ -3263,6 +3420,49 @@ class MemberRepository
 		return Internal\MemberTable::updateMulti($ids, ['REMINDER_TYPE' => $reminderType->toInt()]);
 	}
 
+	/**
+	 * Reminder frequency is set for a whole role at once, so it is read back by role. The first set
+	 * type of a role wins: members created later with the default must not mask it, and a role with
+	 * no frequency set is absent from the result.
+	 *
+	 * @see MemberRepository::updateMembersReminderTypeByRole
+	 *
+	 * @return array<string, ReminderType>
+	 */
+	public function listReminderTypesByDocumentIdIndexedByRole(int $documentId): array
+	{
+		// grouped in the database: a document of a synced department holds thousands of members, and
+		// every one of them carries the frequency of its role
+		$rows = Internal\MemberTable::query()
+			->setSelect([
+				'ROLE',
+				'REMINDER_TYPE',
+				new Main\Entity\ExpressionField('FIRST_MEMBER_ID', 'MIN(%s)', 'ID'),
+			])
+			->where('DOCUMENT_ID', $documentId)
+			->whereNotNull('ROLE')
+			->whereNot('REMINDER_TYPE', ReminderType::NONE->toInt())
+			->setGroup(['ROLE', 'REMINDER_TYPE'])
+			->setOrder(['FIRST_MEMBER_ID' => 'ASC'])
+			->fetchAll()
+		;
+
+		$reminderTypes = [];
+		foreach ($rows as $row)
+		{
+			$role = Role::tryFromInt((int)$row['ROLE']);
+			$reminderType = ReminderType::tryFromInt((int)$row['REMINDER_TYPE']);
+			if ($role === null || $reminderType === null)
+			{
+				continue;
+			}
+
+			$reminderTypes[$role] ??= $reminderType;
+		}
+
+		return $reminderTypes;
+	}
+
 	public function getByDocumentAndEntityType(int $id, string $entityType): ?Item\Member
 	{
 		$model = Internal\MemberTable::query()
@@ -3298,6 +3498,78 @@ class MemberRepository
 	public function listUserIdsByDocumentId(int $documentId): array
 	{
 		return $this->listUniqueUserIdsByDocumentIds([$documentId]);
+	}
+
+	/**
+	 * @param list<int> $excludedUserIds
+	 *
+	 * @return list<int>
+	 */
+	public function listSignerUserIdsByDocumentId(
+		int $documentId,
+		int $limit = self::MAX_SOURCE_USER_COUNT + 1,
+		array $excludedUserIds = [],
+	): array
+	{
+		return $this->listSignerUserIdsByDocumentIds([$documentId], $limit, $excludedUserIds);
+	}
+
+	/**
+	 * @param list<int> $documentIds
+	 * @param list<int> $excludedUserIds
+	 *
+	 * @return list<int>
+	 */
+	public function listSignerUserIdsByDocumentIds(
+		array $documentIds,
+		int $limit = self::MAX_SOURCE_USER_COUNT + 1,
+		array $excludedUserIds = [],
+	): array
+	{
+		$documentIds = array_values(array_unique(array_filter(
+			array_map('intval', $documentIds),
+			static fn(int $documentId): bool => $documentId > 0,
+		)));
+		$limit = min(max(0, $limit), self::MAX_SOURCE_USER_COUNT + 1);
+		if ($documentIds === [] || $limit === 0)
+		{
+			return [];
+		}
+
+		$excludedUserIds = array_values(array_unique(array_filter(
+			array_map('intval', $excludedUserIds),
+			static fn(int $userId): bool => $userId > 0,
+		)));
+		$intranetUserQuery = UserTable::query()
+			->setSelect(['ID'])
+			->where('ACTIVE', 'Y')
+			->where('IS_REAL_USER', 'Y')
+			->where('UF_DEPARTMENT', '!=', false)
+		;
+
+		$query = Internal\MemberTable::query()
+			->setSelect(['ENTITY_ID'])
+			->setDistinct()
+			->whereIn('DOCUMENT_ID', $documentIds)
+			->where('ENTITY_TYPE', EntityType::USER)
+			->where('ROLE', $this->convertRoleToInt(Role::SIGNER))
+			->whereIn('ENTITY_ID', $intranetUserQuery)
+			->setLimit($limit)
+		;
+
+		if ($excludedUserIds !== [])
+		{
+			$query->whereNotIn('ENTITY_ID', $excludedUserIds);
+		}
+
+		$result = $query->exec();
+		$userIds = [];
+		while ($row = $result->fetch())
+		{
+			$userIds[] = (int)$row['ENTITY_ID'];
+		}
+
+		return $userIds;
 	}
 
 	/**
@@ -3515,5 +3787,26 @@ class MemberRepository
 			->fetchAll();
 
 		return array_map(static fn(array $item): int => (int)$item['DOCUMENT_ID'], $raws);
+	}
+
+	public function listByUidsAndDocumentIdAndStatusesAndRole(
+		array $uids,
+		int $documentId,
+		array $statuses,
+		string $role,
+		int $limit = 100,
+	): Item\MemberCollection
+	{
+		$roleId = $this->convertRoleToInt($role);
+		$memberCollection = Internal\MemberTable::query()
+			->addSelect('*')
+			->whereIn('UID', $uids)
+			->where('DOCUMENT_ID', $documentId)
+			->whereIn('SIGNED', $statuses)
+			->where('ROLE', $roleId)
+			->setLimit($limit)
+			->fetchCollection();
+
+		return $this->extractItemCollectionFromModelCollection($memberCollection);
 	}
 }

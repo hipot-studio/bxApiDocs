@@ -650,10 +650,15 @@ abstract class Cashbox
 	 */
 	protected static function buildUuid($type, $id)
 	{
-		$context = Main\Application::getInstance()->getContext();
-		$server = $context->getServer();
-		$domain = $server->getServerName();
 		$timestamp = time();
+
+		// Only the domain is shortened, so that type and id survive for parseUuid()
+		$fixedLength = mb_strlen($type.$id.$timestamp) + 3 * mb_strlen(static::UUID_DELIMITER);
+		$domain = mb_substr(
+			Manager::getSiteServerName(),
+			0,
+			max(0, static::MAX_UUID_LENGTH - $fixedLength)
+		);
 
 		$uuid =
 			$type.static::UUID_DELIMITER.

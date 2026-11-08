@@ -30,6 +30,7 @@ use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunIntegration;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunUpdateEvent;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\SendNotification;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\SendPush;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\StartTimer;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\StopTimer;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateRelatedTasks;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateHistoryLog;
@@ -60,6 +61,8 @@ class UpdateService
 	}
 
 	/**
+	 * @return array{Entity\Task, array, Entity\Task, TaskObject, array, array, array}
+	 *
 	 * @throws TaskNotExistsException
 	 * @throws CommandValidationException
 	 * @throws TaskUpdateException
@@ -67,6 +70,7 @@ class UpdateService
 	public function update(
 		Entity\Task $task,
 		UpdateConfig $config,
+		bool $deferSearchIndex = false,
 	): array
 	{
 		$this->loadMessages();
@@ -135,8 +139,12 @@ class UpdateService
 		(new AutoClose($config))($fields, $fullTaskData);
 
 		(new SendNotification($config))($fields, $sourceTaskData, $taskObject);
+		$searchIndexFields = $fields;
 
-		(new UpdateSearchIndex())($fullTaskData, $fields);
+		if (!$deferSearchIndex)
+		{
+			(new UpdateSearchIndex())($fullTaskData, $fields);
+		}
 
 		(new UpdateSync())($fields, $sourceTaskData);
 
@@ -166,6 +174,8 @@ class UpdateService
 		(new SendPush($config))($fullTaskData, $sourceTaskData, $changes);
 
 		(new StopTimer($config))($fullTaskData, $changes);
+
+		(new StartTimer($config))($fullTaskData, $changes);
 
 		// get task object with prepopulated data
 		$this->repository->invalidate($taskObject->getId());
@@ -233,7 +243,15 @@ class UpdateService
 
 		(new SendAnalytics($config))($entityBefore, $taskAfterUpdate);
 
-		return [$taskAfterUpdate, $fields, $entityBefore, $taskObjectBeforeUpdate, $sourceTaskData];
+		return [
+			$taskAfterUpdate,
+			$fields,
+			$entityBefore,
+			$taskObjectBeforeUpdate,
+			$sourceTaskData,
+			$fullTaskData,
+			$searchIndexFields,
+		];
 	}
 
 	private function getChanges(array $fields, array $fullTaskData): array

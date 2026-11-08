@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Vibecodeconnector\Internal\Service\Catalog\OpenApp;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\Web\Json;
 use Bitrix\Vibecodeconnector\Internal\Dto\Catalog\OpenApp\OpenAppPayload;
@@ -31,7 +32,7 @@ final class OpenAppLayoutRenderer
 		return sprintf(
 			'<div class="vibecodeconnector-open-app-layout" style="height:100%%;min-height:520px;">'
 			. '<form name="%s" action="%s" method="POST" target="%s" style="display:none;">%s</form>'
-			. '<iframe name="%s" frameborder="0"'
+			. '<iframe name="%s"%s frameborder="0"'
 			. ' sandbox="allow-forms allow-scripts allow-same-origin allow-popups allow-downloads"'
 			. ' allow="geolocation *; microphone *; camera *; autoplay *;"'
 			. ' style="display:block;width:100%%;height:100%%;min-height:520px;border:0;"></iframe>'
@@ -49,6 +50,7 @@ final class OpenAppLayoutRenderer
 			htmlspecialcharsbx($frameName),
 			$inputs,
 			htmlspecialcharsbx($frameName),
+			$this->renderFrameTitle($this->resolveAppTitle($payload)),
 			$formNameJson,
 			$actionUrlJson,
 		);
@@ -69,24 +71,57 @@ final class OpenAppLayoutRenderer
 
 	public function renderPage(OpenAppPayload $payload): string
 	{
-		return $this->wrapPage($this->render($payload));
+		return $this->wrapPage($this->render($payload), $this->resolveAppTitle($payload));
 	}
 
 	public function renderErrorPage(string $code, string $title, string $message): string
 	{
-		return $this->wrapPage($this->renderError($code, $title, $message));
+		return $this->wrapPage($this->renderError($code, $title, $message), $title);
 	}
 
-	private function wrapPage(string $body): string
+	private function resolveAppTitle(OpenAppPayload $payload): string
+	{
+		$appTitle = trim($payload->appTitle);
+
+		return $appTitle === ''
+			? trim((string)Loc::getMessage('VIBECODECONNECTOR_OPEN_APP_PAGE_DEFAULT_TITLE'))
+			: $appTitle;
+	}
+
+	private function renderFrameTitle(string $frameTitle): string
+	{
+		return $frameTitle === ''
+			? ''
+			: sprintf(' title="%s"', htmlspecialcharsbx($frameTitle));
+	}
+
+	private function wrapPage(string $body, string $documentTitle): string
 	{
 		return '<!doctype html>'
-			. '<html>'
+			. $this->renderHtmlTag()
 			. '<head>'
 			. '<meta charset="UTF-8">'
-			. '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">'
+			. '<meta name="viewport" content="width=device-width, initial-scale=1">'
+			. $this->renderDocumentTitle($documentTitle)
 			. '<style>html,body{height:100%;margin:0}</style>'
 			. '</head>'
 			. '<body>' . $body . '</body>'
 			. '</html>';
+	}
+
+	private function renderHtmlTag(): string
+	{
+		$language = trim((string)Loc::getCurrentLang());
+
+		return $language === ''
+			? '<html>'
+			: sprintf('<html lang="%s">', htmlspecialcharsbx($language));
+	}
+
+	private function renderDocumentTitle(string $documentTitle): string
+	{
+		return $documentTitle === ''
+			? ''
+			: sprintf('<title>%s</title>', htmlspecialcharsbx($documentTitle));
 	}
 }

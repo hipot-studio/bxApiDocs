@@ -11,6 +11,7 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Entity\DiskFile;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 use CUserTypeManager;
@@ -24,7 +25,13 @@ class AttachmentService
 
 	}
 
-	public function add(int $taskId, int $userId, array $fileIds, bool $useConsistency = false): ?Task
+	public function add(
+		int $taskId,
+		int $userId,
+		array $fileIds,
+		bool $useConsistency = false,
+		InteractionOrigin $origin = InteractionOrigin::System,
+	): ?Task
 	{
 		if (empty($fileIds))
 		{
@@ -66,6 +73,7 @@ class AttachmentService
 		$config = new UpdateConfig(
 			userId: $userId,
 			useConsistency: $useConsistency,
+			origin: $origin,
 		);
 
 		// update changelog
@@ -75,7 +83,13 @@ class AttachmentService
 		);
 	}
 
-	public function delete(int $taskId, int $userId, array $fileIds, bool $useConsistency = false): void
+	public function delete(
+		int $taskId,
+		int $userId,
+		array $fileIds,
+		bool $useConsistency = false,
+		InteractionOrigin $origin = InteractionOrigin::System,
+	): void
 	{
 		if (!Loader::includeModule('disk'))
 		{
@@ -143,6 +157,7 @@ class AttachmentService
 		$config = new UpdateConfig(
 			userId: $userId,
 			useConsistency: $useConsistency,
+			origin: $origin,
 		);
 
 		// update changelog

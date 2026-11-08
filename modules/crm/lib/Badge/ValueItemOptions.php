@@ -30,6 +30,7 @@ class ValueItemOptions
 		self::BG_COLOR_FAILURE => self::STYLE_TINTED_ALERT,
 		self::BG_COLOR_WARNING => self::STYLE_TINTED_WARNING,
 		self::BG_COLOR_PRIMARY => self::STYLE_TINTED,
+		'#dcf5fd' => self::STYLE_TINTED,
 		self::BG_COLOR_SECONDARY => self::STYLE_TINTED_NO_ACCENT,
 		self::BG_COLOR_LAVENDER => self::STYLE_TINTED_VIOLET,
 	];

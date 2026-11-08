@@ -58,6 +58,8 @@ class SalesCenterOrderListComponent extends CBitrixComponent
 			return false;
 		}
 
+		$this->applySessionAccess();
+
 		$this->arResult = Driver::getInstance()->getManagerParams();
 		$sessionId = $this->arParams['sessionId'];
 		if(!$sessionId)
@@ -87,6 +89,14 @@ class SalesCenterOrderListComponent extends CBitrixComponent
 		$this->arResult['addOrderOnClick'] = $isOrderLimitReached ? 'top.BX.UI.InfoHelper.show(\'' . CrmManager::getInstance()->getOrderLimitSliderId() . '\');' : 'BX.Salescenter.Manager.showOrderAdd();';
 
 		$this->includeComponentTemplate();
+	}
+
+	protected function applySessionAccess(): void
+	{
+		$this->arParams['sessionId'] = ImOpenLinesManager::getInstance()
+			->checkClientSessionId($this->arParams['sessionId'])
+			->getData()['sessionId']
+		;
 	}
 
 	/**

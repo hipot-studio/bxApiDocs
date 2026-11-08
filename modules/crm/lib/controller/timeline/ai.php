@@ -40,6 +40,7 @@ use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\StorageManager;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Settings\CopilotSettings;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Factory;
@@ -207,6 +208,25 @@ class AI extends Activity
 				return null;
 			}
 
+			$fillFieldsEntityAllowed = CopilotSettings::getCurrent()->isFillFieldsEnabledFor($ownerTypeId);
+			if (
+				!AIManager::isFillFieldsEnabledForEntityType($ownerTypeId)
+				&& $scenario === Scenario::FILL_FIELDS_SCENARIO
+			)
+			{
+				AIManager::logger()->info(
+					'{date}: Manual fill fields launch is disabled for entity type {entityTypeId}' . PHP_EOL,
+					[
+						'activityId' => $activityId,
+						'entityTypeId' => $ownerTypeId,
+						'scenario' => $scenario,
+					],
+				);
+				$this->addError(AIErrorCode::getFillFieldsEntityDisabledError($ownerTypeId));
+
+				return null;
+			}
+
 			if (Scenario::isCallScoringScenario($scenario))
 			{
 				$checkerResult = CallAssessmentItemChecker::getInstance()
@@ -284,6 +304,7 @@ class AI extends Activity
 					->withActivityProvider($activityProvider)
 					->withExtra('targetOwnerTypeId', $ownerTypeId)
 					->withExtra('targetOwnerId', $ownerId)
+					->withExtra('fillFieldsEntityAllowed', $fillFieldsEntityAllowed)
 			);
 			if (!$result?->isSuccess())
 			{

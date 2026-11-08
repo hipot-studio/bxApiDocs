@@ -31,6 +31,7 @@ use Bitrix\Calendar\Core\Event\Tools\UidGenerator;
 use Bitrix\Calendar\OpenEvents;
 use Bitrix\Calendar\Sync\Managers\Synchronization;
 use Bitrix\Calendar\Sync\Util\Context;
+use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use Bitrix\Calendar\Synchronization\Internal\Service\Push\PushStorageManager;
 use Bitrix\Calendar\Synchronization\Public\Service\SynchronizationFeature;
 use Bitrix\Calendar\Ui\CountersManager;
@@ -51,8 +52,12 @@ use Bitrix\Calendar\Sharing;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Provider\TaskList;
 use Bitrix\Tasks\Provider\Query\TaskQuery;
+use Bitrix\Main\Web\Uri;
 
 IncludeModuleLangFile(__FILE__);
+
+use Bitrix\Calendar\Internal\Event\ExclusionSaveTransaction;
+use Bitrix\Calendar\Internal\Event\EventSaveEffects;
 
 class CCalendar
 {
@@ -65,6 +70,9 @@ class CCalendar
 		DAY_LENGTH = 86400; // 60 * 60 * 24
 
 	public const EDIT_PREFIX = 'EDIT';
+	public const DEFAULT_MAX_PLANNER_USERS = 50;
+	private const DESTINATION_NODE_BATCH_SIZE = 500;
+	private static ?\WeakMap $nativeDeletionContexts = null;
 
 	private static
 		$id = false,
@@ -1055,6 +1063,18 @@ class CCalendar
 	 */
 	public static function DeleteEvent($id, $doExternalSync = true, $params = [])
 	{
+		try
+		{
+			return self::deleteEventWithOccupancyBoundary($id, $doExternalSync, $params);
+		}
+		catch (Rooms\OccupancyLockedException)
+		{
+			return false;
+		}
+	}
+
+	private static function deleteEventWithOccupancyBoundary($id, $doExternalSync = true, $params = [])
+	{
 		global $CACHE_MANAGER;
 
 		$id = (int)$id;
@@ -1068,6 +1088,11 @@ class CCalendar
 		$originalFrom = $params['originalFrom'] ?? null;
 		$recursionMode = $params['recursionMode'] ?? null;
 		$checkPermissions = $params['checkPermissions'] ?? true;
+		$nativeDeletionContext = self::consumeNativeDeletionContext($id, $params);
+		$nativeReadParams = $nativeDeletionContext === null ? [] : [
+			'userId' => $nativeDeletionContext['readActorId'],
+			'skipCache' => true,
+		];
 
 		if (!isset(self::$userId))
 		{
@@ -1081,6 +1106,7 @@ class CCalendar
 			'setDefaultLimit' => false,
 			'fetchAttendees' => true,
 			'checkPermissions' => $checkPermissions,
+			...$nativeReadParams,
 		]);
 
 		if (!empty($res[0]) && $event = $res[0])
@@ -1102,6 +1128,61 @@ class CCalendar
 				return Loc::getMessage('EC_ACCESS_DENIED');
 			}
 
+			if (
+				$nativeDeletionContext !== null
+				&& !self::isEventInNativeDeletionTraversal($event, $nativeDeletionContext['rootIds'])
+			)
+			{
+				$nativeDeletionContext = null;
+			}
+			$nativeDeletionTraversal = $nativeDeletionContext;
+			$ownsNativeDeletionTraversal = $nativeDeletionTraversal === null;
+			$deletionBoundary = CCalendarEvent::prepareDeletionOccupancyBoundary($event, [
+				'originalFrom' => $originalFrom,
+				'readActorId' => self::$userId,
+				'occupancyLock' => $params['occupancyLock'] ?? null,
+				'lockDeletionFamily' => true,
+				'deletionScopeRootIds' => $nativeDeletionContext['rootIds'] ?? null,
+				'recursionMode' => $recursionMode,
+			]);
+			try
+			{
+			if ($deletionBoundary['event'] === null)
+			{
+				return false;
+			}
+			$event = $deletionBoundary['event'];
+			if (
+				$nativeDeletionTraversal !== null
+				&& !self::isEventInNativeDeletionTraversal($event, $nativeDeletionTraversal['rootIds'])
+			)
+			{
+				throw new Rooms\OccupancyLockedException();
+			}
+			if ($deletionBoundary['lock'] !== null && $checkPermissions)
+			{
+				$eventModel = CCalendarEvent::getEventModelForPermissionCheck(
+					(int)$event['ID'], $event, self::$userId,
+				);
+				if (!$accessController->check(ActionDictionary::ACTION_EVENT_DELETE, $eventModel))
+				{
+					return Loc::getMessage('EC_ACCESS_DENIED');
+				}
+			}
+			if ($ownsNativeDeletionTraversal && $deletionBoundary['familyScopeChecked'])
+			{
+				$rootIds = [(int)$event['ID']];
+				if (!empty($event['RECURRENCE_ID']) && !in_array($recursionMode, ['this', 'false'], true))
+				{
+					$rootIds[] = (int)$event['RECURRENCE_ID'];
+				}
+				$nativeDeletionTraversal = [
+					'lifetime' => (object)['active' => true],
+					'rootIds' => array_values(array_unique($rootIds)),
+				];
+			}
+
+			$nestedActorParams = ['occupancyLock' => $deletionBoundary['lock']];
 			CCalendarSect::UpdateModificationLabel($event['SECT_ID']);
 
 			if ($doExternalSync !== false && $event['SECT_ID'])
@@ -1131,6 +1212,7 @@ class CCalendar
 			$res = CCalendarEvent::Delete([
 				'id' => $id,
 				'Event' => $event,
+				'occupancyLock' => $deletionBoundary['lock'],
 				'bMarkDeleted' => $markDeleted,
 				'originalFrom' => $originalFrom,
 				'userId' => $userId,
@@ -1140,10 +1222,13 @@ class CCalendar
 
 			if (!empty($event['RECURRENCE_ID']) && !in_array($recursionMode, ['this', 'false'], true))
 			{
-				self::DeleteEvent($event['RECURRENCE_ID'], $doExternalSync, [
+				$nestedParams = [
 					'sendNotification' => $sendNotification,
 					'originalFrom' => $originalFrom,
-				]);
+				] + $nestedActorParams;
+				self::deleteNativeTraversalEvent(
+					(int)$event['RECURRENCE_ID'], $doExternalSync, $nestedParams, $nativeDeletionTraversal,
+				);
 			}
 
 			if (CCalendarEvent::CheckRecurcion($event))
@@ -1152,10 +1237,13 @@ class CCalendar
 
 				foreach ($events as $ev)
 				{
-					self::DeleteEvent($ev['ID'], $doExternalSync, [
+					$nestedParams = [
 						'sendNotification' => $sendNotification,
 						'originalFrom' => $originalFrom,
-					]);
+					] + $nestedActorParams;
+					self::deleteNativeTraversalEvent(
+						(int)$ev['ID'], $doExternalSync, $nestedParams, $nativeDeletionTraversal,
+					);
 				}
 			}
 
@@ -1180,9 +1268,97 @@ class CCalendar
 			}
 
 			return $res;
+			}
+			finally
+			{
+				if ($ownsNativeDeletionTraversal && $nativeDeletionTraversal !== null)
+				{
+					$nativeDeletionTraversal['lifetime']->active = false;
+				}
+				if ($deletionBoundary['ownsLock'])
+				{
+					EventSaveEffects::releaseOccupancyLock($id, $deletionBoundary['lock']);
+				}
+			}
 		}
 
 		return false;
+	}
+
+	private static function consumeNativeDeletionContext(int $id, array $params): ?array
+	{
+		$token = $params['nativeDeletionContext'] ?? null;
+		if (
+			!is_object($token)
+			|| self::$nativeDeletionContexts === null
+			|| !isset(self::$nativeDeletionContexts[$token])
+		)
+		{
+			return null;
+		}
+		$context = self::$nativeDeletionContexts[$token];
+		unset(self::$nativeDeletionContexts[$token]);
+		$readActorId = self::$userId ?? self::GetCurUserId();
+		$userId = !empty($params['userId']) ? (int)$params['userId'] : $readActorId;
+		if (
+			!$context['lifetime']->active
+			|| $context['eventId'] !== $id
+			|| $context['readActorId'] !== (int)$readActorId
+			|| $context['userId'] !== (int)$userId
+			|| $context['lock'] !== ($params['occupancyLock'] ?? null)
+		)
+		{
+			return null;
+		}
+
+		return $context;
+	}
+
+	private static function isEventInNativeDeletionTraversal(array $event, array $rootIds): bool
+	{
+		foreach (['ID', 'PARENT_ID', 'RECURRENCE_ID'] as $field)
+		{
+			if (in_array((int)($event[$field] ?? 0), $rootIds, true))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function deleteNativeTraversalEvent(
+		int $id,
+		mixed $doExternalSync,
+		array $params,
+		?array $traversal,
+	): mixed
+	{
+		if ($traversal === null)
+		{
+			return self::DeleteEvent($id, $doExternalSync, $params);
+		}
+		$readActorId = self::$userId ?? self::GetCurUserId();
+		$userId = !empty($params['userId']) ? (int)$params['userId'] : $readActorId;
+		$token = new \stdClass();
+		self::$nativeDeletionContexts ??= new \WeakMap();
+		self::$nativeDeletionContexts[$token] = [
+			'lifetime' => $traversal['lifetime'],
+			'rootIds' => $traversal['rootIds'],
+			'eventId' => $id,
+			'readActorId' => (int)$readActorId,
+			'userId' => (int)$userId,
+			'lock' => $params['occupancyLock'] ?? null,
+		];
+		$params['nativeDeletionContext'] = $token;
+		try
+		{
+			return self::DeleteEvent($id, $doExternalSync, $params);
+		}
+		finally
+		{
+			unset(self::$nativeDeletionContexts[$token]);
+		}
 	}
 
 	public static function SetOffset($userId = false, $value = 0)
@@ -1478,7 +1654,7 @@ class CCalendar
 
 	public static function GetMaxPlannerUsers(): int
 	{
-		return (int)\Bitrix\Main\Config\Option::get('calendar', 'maxPlannerUsers', 0);
+		return (int)\Bitrix\Main\Config\Option::get('calendar', 'maxPlannerUsers', self::DEFAULT_MAX_PLANNER_USERS);
 	}
 
 	public static function GetOwnerName($type = '', $ownerId = '')
@@ -1790,7 +1966,7 @@ class CCalendar
 				$event['DT_FROM_TS'] = $fromTs;
 				$event['DT_TO_TS'] = $toTs;
 
-				$event['~URL'] = \CHTTP::urlAddParams($pathToCalendar, [
+				$event['~URL'] = (string)(new Uri($pathToCalendar))->addParams([
 					'EVENT_ID' => $event['ID'],
 					'EVENT_DATE' => self::Date($fromTs, false),
 				]);
@@ -1965,7 +2141,117 @@ class CCalendar
 	 */
 	public static function SaveEventEx($params = [])
 	{
+		$eventId = (int)($params['arFields']['ID'] ?? 0);
+		$occupancyLock = $params['occupancyLock'] ?? null;
+		$ownsOccupancyLock = false;
+		$silentErrorMode = self::$silentErrorMode;
+		$propagateEventNotAvailable = ExclusionSaveTransaction::shouldPropagateEventNotAvailable($params);
+		try
+		{
+			if ($eventId > 0)
+			{
+				$userId = (int)($params['userId'] ?? self::GetCurUserId());
+				$checkPermission = ($params['checkPermission'] ?? null) !== false;
+				$currentEvent = self::getCurrentEventForSaving($eventId, $userId, $checkPermission, true);
+				if (!is_array($currentEvent) || empty($currentEvent['ID']))
+				{
+					throw Core\Event\EventSaveStateException::eventNotAvailable(
+						empty(self::getCurrentEventForSaving($eventId, $userId, false, true)),
+					);
+				}
+
+				$oldLocation = $currentEvent['LOCATION'] ?? null;
+				$oldReservation = Rooms\Util::parseLocation($oldLocation);
+				$isOrganizerEvent = ($currentEvent['CAL_TYPE'] ?? null) !== Rooms\Manager::TYPE
+					&& (int)($currentEvent['PARENT_ID'] ?? 0) === $eventId;
+				if ($isOrganizerEvent && $oldReservation['room_event_id'])
+				{
+					$newLocation = $params['arFields']['LOCATION'] ?? $oldLocation;
+					if (is_array($newLocation))
+					{
+						$newLocation = $newLocation['NEW'] ?? $oldLocation;
+					}
+					if (
+						Main\Config\Option::get('calendar', 'isOccupancyCheckerEnabled', 'Y', '-') !== 'N'
+						&& !CCalendarEvent::isConfirmedSyncSource($params['originalFrom'] ?? null)
+					)
+					{
+						if (!($occupancyLock instanceof Rooms\OccupancyLock))
+						{
+							$occupancyLock = new Rooms\OccupancyLock();
+							$ownsOccupancyLock = true;
+						}
+						$occupancyLock->acquire($occupancyLock->resolveRoomIdsUsingCache($oldLocation, $newLocation));
+						$currentEvent = self::getCurrentEventForSaving($eventId, $userId, $checkPermission, true);
+						if (!is_array($currentEvent) || empty($currentEvent['ID']))
+						{
+							throw Core\Event\EventSaveStateException::eventNotAvailable(
+								empty(self::getCurrentEventForSaving($eventId, $userId, false, true)),
+							);
+						}
+						$requiredRoomIds = $occupancyLock->resolveRoomIdsUsingCache(
+							$currentEvent['LOCATION'] ?? null,
+							$newLocation,
+						);
+						if (!$occupancyLock->hasAcquiredRoomIds($requiredRoomIds))
+						{
+							throw new Rooms\OccupancyLockedException();
+						}
+						$params['occupancyLock'] = $occupancyLock;
+						$oldReservation = Rooms\Util::parseLocation($currentEvent['LOCATION'] ?? null);
+					}
+					if ($oldReservation['room_event_id'])
+					{
+						Rooms\Manager::assertReservationAvailable(
+							(int)$oldReservation['room_event_id'],
+							(int)$oldReservation['room_id'],
+							$checkPermission,
+							$userId,
+							$checkPermission,
+							$newLocation,
+						);
+					}
+				}
+				$params['preflightCurrentEvent'] = $currentEvent;
+			}
+
+			$params['propagateEventNotAvailable'] = true;
+
+			return self::saveEventExLegacy($params);
+		}
+		catch (Core\Event\EventSaveStateException $exception)
+		{
+			if (
+				$propagateEventNotAvailable
+				|| !$exception->isEventMissing()
+				|| $exception->getErrorCode() !== Core\Event\EventSaveStateException::EVENT_NOT_AVAILABLE
+			)
+			{
+				throw $exception;
+			}
+
+			return false;
+		}
+		finally
+		{
+			self::SetSilentErrorMode($silentErrorMode);
+			if ($ownsOccupancyLock)
+			{
+				EventSaveEffects::releaseOccupancyLock($eventId, $occupancyLock);
+			}
+		}
+	}
+
+	private static function saveEventExLegacy($params = [])
+	{
 		$arFields = $params['arFields'];
+		if (is_string($arFields['RRULE'] ?? null))
+		{
+			$arFields[CCalendarEvent::OCCUPANCY_RRULE_SOURCE_FIELD]
+				= CCalendarEvent::OCCUPANCY_RRULE_SOURCE_REQUEST_STRING;
+			$params['arFields'][CCalendarEvent::OCCUPANCY_RRULE_SOURCE_FIELD]
+				= CCalendarEvent::OCCUPANCY_RRULE_SOURCE_REQUEST_STRING;
+		}
 		if (self::$type && !isset($arFields['CAL_TYPE']))
 		{
 			$arFields['CAL_TYPE'] = self::$type;
@@ -2039,7 +2325,14 @@ class CCalendar
 		$bNew = !isset($arFields['ID']) || !$arFields['ID'];
 		if (!$bNew)
 		{
-			$curEvent = self::getCurrentEventForSaving((int)$arFields['ID'], $userId, $checkPermission);
+			$curEvent = $params['preflightCurrentEvent']
+				?? self::getCurrentEventForSaving((int)$arFields['ID'], $userId, $checkPermission);
+			if (!is_array($curEvent) || empty($curEvent['ID']))
+			{
+				throw Core\Event\EventSaveStateException::eventNotAvailable(
+					empty(self::getCurrentEventForSaving((int)$arFields['ID'], $userId, false, true)),
+				);
+			}
 
 			if (
 				in_array(
@@ -2585,8 +2878,7 @@ class CCalendar
 				'parentDateTo' => ($params['parentDateTo'] ?? null),
 			];
 
-			$res = CCalendarSync::DoSaveToDav( $arFields, $davParams, $curEvent);
-
+			$deferredDavSync = EventSaveEffects::prepareDav($arFields, $davParams, $curEvent ?: null, $res);
 			if ($res !== true && self::$silentErrorMode === true)
 			{
 				self::ThrowError($res);
@@ -2615,270 +2907,50 @@ class CCalendar
 			&& CCalendarEvent::CheckRecurcion($curEvent)
 		)
 		{
-			// Edit only current instance of the set of recurrent events
-			if ($params['recursionEditMode'] === 'this')
+			$recurrenceOccupancyLock = null;
+			if (($params['recursionEditMode'] ?? null) === 'this')
 			{
-				// 1. Edit current reccurent event: exclude current date
-				$excludeDates = CCalendarEvent::GetExDate($curEvent['EXDATE']);
-				$excludeDate = self::Date(
-					self::Timestamp($params['currentEventDateFrom'] ?? $arFields['DATE_FROM']),
-					false
+				$recurrenceOccupancyLock = self::checkRecurrenceLocationOccupancy(
+					$arFields,
+					$params,
+					$curEvent,
+					$userId,
 				);
-				$excludeDates[] = $excludeDate;
-
-				$saveEventData = [
-					'recursionEditMode' => 'skip',
-					'silentErrorMode' => $params['silentErrorMode'],
-					'sendInvitesToDeclined' => $params['sendInvitesToDeclined'],
-					'sendInvitations' => false,
-					'sendEditNotification' => false,
-					'userId' => $userId,
-					'requestUid' => $params['requestUid'] ?? null,
-					'checkPermission' => $checkPermission,
-				];
-
-				$arFieldsCurrent = [
-					'ID' => $curEvent["ID"],
-					'EXDATE' => CCalendarEvent::SetExDate($excludeDates),
-				];
-
-				if (
-					!empty($params['arFields']['SECTIONS'][0])
-					&& (int)$curEvent['SECTION_ID'] !== (int)$params['arFields']['SECTIONS'][0]
-				)
-				{
-					$arFieldsCurrent['SECTIONS'] = $params['arFields']['SECTIONS'];
-					$arFieldsCurrent['CAL_TYPE'] = $params['arFields']['CAL_TYPE'];
-					$arFieldsCurrent['OWNER_ID'] = $userId;
-				}
-
-				$saveEventData['arFields'] = $arFieldsCurrent;
-
-				// Save current event
-				$id = self::SaveEvent($saveEventData);
-
-				// 2. Copy event with new changes, but without recursion
-				$newParams = $params;
-
-				if (!($newParams['arFields']['MEETING']['REINVITE'] ?? null))
-				{
-					$newParams['saveAttendeesStatus'] = true;
-				}
-
-				$newParams['arFields']['RECURRENCE_ID'] = $curEvent['RECURRENCE_ID'] ?: $newParams['arFields']['ID'];
-				$newParams['arFields']['ORIGINAL_RECURSION_ID'] = (int)($curEvent['ORIGINAL_RECURSION_ID'] ?? $newParams['arFields']['ID']);
-
-				unset(
-					$newParams['arFields']['ID'],
-					$newParams['arFields']['DAV_XML_ID'],
-					$newParams['arFields']['G_EVENT_ID'],
-					$newParams['arFields']['SYNC_STATUS'],
-					$newParams['arFields']['CAL_DAV_LABEL'],
-					$newParams['arFields']['RRULE'],
-					$newParams['arFields']['EXDATE'],
-					$newParams['recursionEditMode'],
-				);
-
-				$newParams['arFields']['REMIND'] = $params['currentEvent']['REMIND'];
-
-				$fromTs = self::Timestamp($newParams['currentEventDateFrom']);
-				$currentFromTs = self::Timestamp($newParams['arFields']['DATE_FROM']);
-				$length = self::Timestamp($newParams['arFields']['DATE_TO']) - self::Timestamp($newParams['arFields']['DATE_FROM']);
-
-				if (!isset($newParams['arFields']['DATE_FROM'], $newParams['arFields']['DATE_TO']))
-				{
-					$length = $curEvent['DT_LENGTH'];
-					$currentFromTs = self::Timestamp($curEvent['DATE_FROM']);
-				}
-
-				$instanceDate = !isset($newParams['arFields']['DATE_FROM'])
-					|| self::Date(self::Timestamp($curEvent['DATE_FROM']), false) === self::Date($currentFromTs, false);
-
-				if ($newParams['arFields']['SKIP_TIME'])
-				{
-					if ($instanceDate)
-					{
-						$newParams['arFields']['DATE_FROM'] = self::Date($fromTs, false);
-						$newParams['arFields']['DATE_TO'] = self::Date($fromTs + $length - self::GetDayLen(), false);
-					}
-					else
-					{
-						$newParams['arFields']['DATE_FROM'] = self::Date($currentFromTs, false);
-						$newParams['arFields']['DATE_TO'] = self::Date($currentFromTs + $length - self::GetDayLen(), false);
-					}
-				}
-				elseif ($instanceDate)
-				{
-					$newFromTs = self::DateWithNewTime($currentFromTs, $fromTs);
-					$newParams['arFields']['DATE_FROM'] = self::Date($newFromTs);
-					$newParams['arFields']['DATE_TO'] = self::Date($newFromTs + $length);
-				}
-
-				$eventMod = $curEvent;
-				if (!isset($eventMod['~DATE_FROM']))
-				{
-					$eventMod['~DATE_FROM'] = $eventMod['DATE_FROM'];
-				}
-
-				$eventMod['DATE_FROM'] = $newParams['currentEventDateFrom'];
-				$commentXmlId = CCalendarEvent::GetEventCommentXmlId($eventMod);
-				$newParams['arFields']['RELATIONS'] = ['COMMENT_XML_ID' => $commentXmlId];
-				$newParams['editInstance'] = true;
-				$newParams['sendEditNotification'] = true;
-
-				//original instance date start
-				$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::GetOriginalDate(
-					$params['currentEvent']['DATE_FROM'],
-					$eventMod['DATE_FROM'],
-					$newParams['arFields']['TZ_FROM']
-				);
-				$newParams['originalDavXmlId'] = $params['currentEvent']['G_EVENT_ID'];
-				$newParams['instanceTz'] = $params['currentEvent']['TZ_FROM'];
-				$newParams['parentDateFrom'] = $params['currentEvent']['DATE_FROM'];
-				$newParams['parentDateTo'] = $params['currentEvent']['DATE_TO'];
-				$newParams['requestUid'] = $params['requestUid'] ?? null;
-				$newParams['sendInvitesToDeclined'] = $params['sendInvitesToDeclined'] ?? null;
-
-				// check instance changes from original recurrent event
-				$eventMod['DATE_FROM'] = $newParams['arFields']['ORIGINAL_DATE_FROM'];
-				$eventMod['DATE_TO'] = self::Date(
-					self::Timestamp($eventMod['DATE_FROM'], false) + $curEvent['DT_LENGTH']
-				);
-				unset($eventMod['RRULE']);
-
-				$instanceChanges = CCalendarEvent::CheckEntryChanges($newParams['arFields'], $eventMod);
-				if (!empty($instanceChanges))
-				{
-					$newParams['instanceChanges'] = $instanceChanges;
-				}
-
-				$result['recEventId'] = self::SaveEvent($newParams);
-				(new Core\Managers\EventOriginalRecursion())->add(
-					$result['recEventId'] ?? 0,
-					$newParams['arFields']['ORIGINAL_RECURSION_ID'] ?? 0,
-				);
+				$params['occupancyLock'] = $recurrenceOccupancyLock;
 			}
-			// Edit all next instances of the set of recurrent events
-			elseif(($params['recursionEditMode']) === 'next')
+
+			try
 			{
-				$currentDateTimestamp = self::Timestamp($params['currentEventDateFrom'] ?? null);
-
-				// Copy event with new changes
-				$newParams = $params;
-				$recId = $curEvent['RECURRENCE_ID'] ?: $newParams['arFields']['ID'];
-
-				$newParams['arFields']['RELATIONS'] ??= [];
-				$newParams['arFields']['RELATIONS'] = [
-					'ORIGINAL_RECURSION_ID' => $curEvent['RELATIONS']['ORIGINAL_RECURSION_ID'] ?? $recId,
-				];
-				$newParams['arFields']['ORIGINAL_RECURSION_ID'] = (int)($curEvent['ORIGINAL_RECURSION_ID'] ?? $recId);
-
-				if (empty($newParams['arFields']['MEETING']['REINVITE']))
+				// Edit only current instance of the set of recurrent events
+				if ($params['recursionEditMode'] === 'this')
 				{
-					$newParams['saveAttendeesStatus'] = true;
-				}
+					// 1. Edit current reccurent event: exclude current date
+					$excludeDates = CCalendarEvent::GetExDate($curEvent['EXDATE']);
+					$excludeDate = self::Date(
+						self::Timestamp($params['currentEventDateFrom'] ?? $arFields['DATE_FROM']),
+						false
+					);
+					$excludeDates[] = $excludeDate;
 
-				$currentFromTs = self::Timestamp($newParams['arFields']['DATE_FROM'] ?? null);
-				$length = self::Timestamp($newParams['arFields']['DATE_TO']) - self::Timestamp($newParams['arFields']['DATE_FROM']);
-
-				if (!isset($newParams['arFields']['DATE_FROM'], $newParams['arFields']['DATE_TO']))
-				{
-					$length = $curEvent['DT_LENGTH'];
-					$currentFromTs = self::Timestamp($curEvent['DATE_FROM']);
-				}
-
-				// Check location changes
-				[$isRecurrentLocationChanged, $newParams] = self::checkRecurrenceLocationChanges($newParams, $curEvent);
-				// Check name changes
-				$isRecurrentNameChanged = !empty($newParams['arFields']['NAME']) && ($curEvent['NAME'] !== $newParams['arFields']['NAME']);
-				// Check time changes
-				$isRecurrentTimeChanged = (self::Timestamp($curEvent['DATE_FROM'], false) % self::DAY_LENGTH) !== ($currentFromTs % self::DAY_LENGTH);
-				// Check attendees changes
-				$isRecurrentAttendeesChanged = self::checkRecurrenceAttendeesChanges($newParams, $curEvent);
-
-				$instanceDate = !isset($newParams['arFields']['DATE_FROM'])
-					|| self::Date(self::Timestamp($curEvent['DATE_FROM']), false) === self::Date($currentFromTs, false)
-				;
-
-				if ($newParams['arFields']['SKIP_TIME'])
-				{
-					if ($instanceDate)
-					{
-						$newParams['arFields']['DATE_FROM'] = self::Date($currentDateTimestamp, false);
-						$newParams['arFields']['DATE_TO'] = self::Date($currentDateTimestamp + $length, false);
-					}
-					else
-					{
-						$newParams['arFields']['DATE_FROM'] = self::Date($currentFromTs, false);
-						$newParams['arFields']['DATE_TO'] = self::Date($currentFromTs + $length, false);
-					}
-				}
-				elseif ($instanceDate)
-				{
-					$newFromTs = self::DateWithNewTime($currentFromTs, $currentDateTimestamp);
-					$newParams['arFields']['DATE_FROM'] = self::Date($newFromTs);
-					$newParams['arFields']['DATE_TO'] = self::Date($newFromTs + $length);
-				}
-
-				if (isset($curEvent['EXDATE']) && $curEvent['EXDATE'] !== '')
-				{
-					$newParams['arFields']['EXDATE'] = $curEvent['EXDATE'];
-				}
-
-				if (!isset($newParams['arFields']['REMIND']) && !empty($curEvent['REMIND']))
-				{
-					$newParams['arFields']['REMIND'] = $curEvent['REMIND'];
-				}
-
-				if (isset($newParams['arFields']['RRULE']['COUNT']) && $newParams['arFields']['RRULE']['COUNT'] > 0)
-				{
-					$countParams = [
-						'rrule' => $newParams['arFields']['RRULE'],
-						'dateFrom' => $curEvent['DATE_FROM'],
-						'dateTo' => !empty($params['currentEventDateFrom'])
-							? $params['currentEventDateFrom']
-							: $newParams['arFields']['DATE_FROM'],
-						'timeZone' => $curEvent['TZ_FROM'],
+					$saveEventData = [
+						'propagateEventNotAvailable' => true,
+						'checkLocationOccupancy' => $params['checkLocationOccupancy'] ?? null,
+						'recursionEditMode' => 'skip',
+						'internalSeriesResave' => true,
+						'occupancyLock' => $recurrenceOccupancyLock ?? null,
+						'silentErrorMode' => $params['silentErrorMode'] ?? null,
+						'sendInvitesToDeclined' => $params['sendInvitesToDeclined'],
+						'sendInvitations' => false,
+						'sendEditNotification' => false,
+						'userId' => $userId,
+						'requestUid' => $params['requestUid'] ?? null,
+						'checkPermission' => $checkPermission,
 					];
 
-					$newParams['arFields']['RRULE']['COUNT'] = self::CountNumberFollowEvents($countParams);
-					unset($newParams['arFields']['RRULE']['UNTIL'], $newParams['arFields']['RRULE']['~UNTIL']);
-				}
-
-				if (
-					isset($newParams['arFields']['RRULE']['FREQ'], $curEvent['RRULE']['FREQ'])
-					&& $newParams['arFields']['RRULE']['FREQ'] === 'WEEKLY'
-					&& $curEvent['RRULE']['FREQ'] === 'WEEKLY'
-					&& $newParams['arFields']['RRULE']['BYDAY'] === $curEvent['RRULE']['BYDAY']
-				)
-				{
-					$currentDate = new Type\Date($params['currentEventDateFrom']);
-					$currentFromDate = new Type\Date($newParams['arFields']['DATE_FROM']);
-					$currentDateWeekday = self::WeekDayByInd($currentDate->format('w'));
-					$currentFromDateWeekday = self::WeekDayByInd($currentFromDate->format('w'));
-
-					if (isset($newParams['arFields']['RRULE']['BYDAY'][$currentDateWeekday]))
-					{
-						unset($newParams['arFields']['RRULE']['BYDAY'][$currentDateWeekday]);
-					}
-
-					$newParams['arFields']['RRULE']['BYDAY'][$currentFromDateWeekday] = $currentFromDateWeekday;
-				}
-
-				// Check if it's first instance of the series, so we shouldn't create another event
-				if (self::Date(self::Timestamp($curEvent['DATE_FROM']), false) === self::Date($currentDateTimestamp, false))
-				{
-					$newParams['recursionEditMode'] = 'skip';
-				}
-				else
-				{
-					// 1. Edit current recurrent event: set finish date with date of current instance
 					$arFieldsCurrent = [
-						"ID" => $curEvent["ID"],
-						"RRULE" => CCalendarEvent::ParseRRULE($curEvent['RRULE']),
+						'ID' => $curEvent["ID"],
+						'EXDATE' => CCalendarEvent::SetExDate($excludeDates),
 					];
-					$arFieldsCurrent['RRULE']['UNTIL'] = self::Date($currentDateTimestamp - self::GetDayLen(), false);
-					unset($arFieldsCurrent['RRULE']['~UNTIL'], $arFieldsCurrent['RRULE']['COUNT']);
 
 					if (
 						!empty($params['arFields']['SECTIONS'][0])
@@ -2886,191 +2958,535 @@ class CCalendar
 					)
 					{
 						$arFieldsCurrent['SECTIONS'] = $params['arFields']['SECTIONS'];
+						$arFieldsCurrent['CAL_TYPE'] = $params['arFields']['CAL_TYPE'];
+						$arFieldsCurrent['OWNER_ID'] = $userId;
 					}
 
+					$saveEventData['arFields'] = $arFieldsCurrent;
+
 					// Save current event
-					$id = self::SaveEvent([
-						'arFields' => $arFieldsCurrent,
-						'silentErrorMode' => $params['silentErrorMode'] ?? null,
-						'recursionEditMode' => 'skip',
-						'sendInvitations' => false,
-						'sendEditNotification' => false,
-						'sendInvitesToDeclined' => $params['sendInvitesToDeclined'] ?? null,
-						'userId' => $userId,
-						'editNextEvents' => true,
-						'editParentEvents' => true,
-						'checkPermission' => $checkPermission,
-						'requestUid' => $params['requestUid'] ?? null,
-						'checkLocationOccupancyFields' => $newParams['arFields'],
-						'checkLocationOccupancy' => $params['checkLocationOccupancy'] ?? false,
-					]);
+					$id = self::SaveEvent($saveEventData);
+					if ($id === false)
+					{
+						return false;
+					}
+
+					// 2. Copy event with new changes, but without recursion
+					$newParams = $params;
+
+					if (!($newParams['arFields']['MEETING']['REINVITE'] ?? null))
+					{
+						$newParams['saveAttendeesStatus'] = true;
+					}
+
+					$newParams['arFields']['RECURRENCE_ID'] = $curEvent['RECURRENCE_ID'] ?: $newParams['arFields']['ID'];
+					$newParams['arFields']['ORIGINAL_RECURSION_ID'] = (int)($curEvent['ORIGINAL_RECURSION_ID'] ?? $newParams['arFields']['ID']);
 
 					unset(
 						$newParams['arFields']['ID'],
 						$newParams['arFields']['DAV_XML_ID'],
 						$newParams['arFields']['G_EVENT_ID'],
-						$newParams['recursionEditMode']
+						$newParams['arFields']['SYNC_STATUS'],
+						$newParams['arFields']['CAL_DAV_LABEL'],
+						$newParams['arFields']['RRULE'],
+						$newParams['arFields']['EXDATE'],
+						$newParams['recursionEditMode'],
+					);
+
+					$newParams['arFields']['REMIND'] = $params['currentEvent']['REMIND'];
+
+					$fromTs = self::Timestamp($newParams['currentEventDateFrom']);
+					$currentFromTs = self::Timestamp($newParams['arFields']['DATE_FROM']);
+					$length = self::Timestamp($newParams['arFields']['DATE_TO']) - self::Timestamp($newParams['arFields']['DATE_FROM']);
+
+					if (!isset($newParams['arFields']['DATE_FROM'], $newParams['arFields']['DATE_TO']))
+					{
+						$length = $curEvent['DT_LENGTH'];
+						$currentFromTs = self::Timestamp($curEvent['DATE_FROM']);
+					}
+
+					$instanceDate = !isset($newParams['arFields']['DATE_FROM'])
+						|| self::Date(self::Timestamp($curEvent['DATE_FROM']), false) === self::Date($currentFromTs, false);
+
+					if ($newParams['arFields']['SKIP_TIME'])
+					{
+						if ($instanceDate)
+						{
+							$newParams['arFields']['DATE_FROM'] = self::Date($fromTs, false);
+							$newParams['arFields']['DATE_TO'] = self::Date($fromTs + $length - self::GetDayLen(), false);
+						}
+						else
+						{
+							$newParams['arFields']['DATE_FROM'] = self::Date($currentFromTs, false);
+							$newParams['arFields']['DATE_TO'] = self::Date($currentFromTs + $length - self::GetDayLen(), false);
+						}
+					}
+					elseif ($instanceDate)
+					{
+						$newFromTs = self::DateWithNewTime($currentFromTs, $fromTs);
+						$newParams['arFields']['DATE_FROM'] = self::Date($newFromTs);
+						$newParams['arFields']['DATE_TO'] = self::Date($newFromTs + $length);
+					}
+
+					$eventMod = $curEvent;
+					if (!isset($eventMod['~DATE_FROM']))
+					{
+						$eventMod['~DATE_FROM'] = $eventMod['DATE_FROM'];
+					}
+
+					$eventMod['DATE_FROM'] = $newParams['currentEventDateFrom'];
+					$commentXmlId = CCalendarEvent::GetEventCommentXmlId($eventMod);
+					$newParams['arFields']['RELATIONS'] = ['COMMENT_XML_ID' => $commentXmlId];
+					$newParams['editInstance'] = true;
+					$newParams['sendEditNotification'] = true;
+
+					//original instance date start
+					$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::GetOriginalDate(
+						$params['currentEvent']['DATE_FROM'],
+						$eventMod['DATE_FROM'],
+						$newParams['arFields']['TZ_FROM']
+					);
+					$newParams['originalDavXmlId'] = $params['currentEvent']['G_EVENT_ID'];
+					$newParams['instanceTz'] = $params['currentEvent']['TZ_FROM'];
+					$newParams['parentDateFrom'] = $params['currentEvent']['DATE_FROM'];
+					$newParams['parentDateTo'] = $params['currentEvent']['DATE_TO'];
+					$newParams['requestUid'] = $params['requestUid'] ?? null;
+					$newParams['sendInvitesToDeclined'] = $params['sendInvitesToDeclined'] ?? null;
+
+					// check instance changes from original recurrent event
+					$eventMod['DATE_FROM'] = $newParams['arFields']['ORIGINAL_DATE_FROM'];
+					$eventMod['DATE_TO'] = self::Date(
+						self::Timestamp($eventMod['DATE_FROM'], false) + $curEvent['DT_LENGTH']
+					);
+					unset($eventMod['RRULE']);
+
+					$instanceChanges = CCalendarEvent::CheckEntryChanges($newParams['arFields'], $eventMod);
+					if (!empty($instanceChanges))
+					{
+						$newParams['instanceChanges'] = $instanceChanges;
+					}
+
+					$newParams['occupancyAuditSourceEventId'] = (int)$curEvent['ID'];
+					$result['recEventId'] = self::SaveEvent($newParams);
+					if ($result['recEventId'] === false)
+					{
+						return false;
+					}
+					(new Core\Managers\EventOriginalRecursion())->add(
+						$result['recEventId'] ?? 0,
+						$newParams['arFields']['ORIGINAL_RECURSION_ID'] ?? 0,
 					);
 				}
-
-				if (empty($newParams['arFields']['DAV_XML_ID']))
+				// Edit all next instances of the set of recurrent events
+				elseif(($params['recursionEditMode']) === 'next')
 				{
-					$newParams['arFields']['DAV_XML_ID'] = UidGenerator::createInstance()
-						->setPortalName(Util::getServerName())
-						->setDate(new Date(
-							Util::getDateObject(
-								$newParams['arFields']['ORIGINAL_DATE_FROM'] ?? null,
-								$newParams['arFields']['SKIP_TIME'] ?? null,
-								$newParams['arFields']['TZ_FROM'] ?? null
-							)
-						))
-						->setUserId((int)($newParams['arFields']['OWNER_ID'] ?? null))
-						->getUidWithDate()
-					;
-				}
+					$currentDateTimestamp = self::Timestamp($params['currentEventDateFrom'] ?? null);
 
-				$newParams['sendInvitesToDeclined'] = $params['sendInvitesToDeclined'];
-				$newParams['editNextEvents'] = true;
-				$newParams['previousRecurrentId'] = $recId;
+					// Copy event with new changes
+					$newParams = $params;
+					$recId = $curEvent['RECURRENCE_ID'] ?: $newParams['arFields']['ID'];
 
-				$result = self::SaveEvent($newParams);
-
-				if (!is_array($result))
-				{
-					$result = [
-						'id' => $result,
-						'recEventId' => $result,
+					$newParams['arFields']['RELATIONS'] ??= [];
+					$newParams['arFields']['RELATIONS'] = [
+						'ORIGINAL_RECURSION_ID' => $curEvent['RELATIONS']['ORIGINAL_RECURSION_ID'] ?? $recId,
 					];
-				}
-				(new Core\Managers\EventOriginalRecursion())->add(
-					$result['id'] ?? 0,
-					$newParams['arFields']['ORIGINAL_RECURSION_ID'] ?? 0,
-				);
+					$newParams['arFields']['ORIGINAL_RECURSION_ID'] = (int)($curEvent['ORIGINAL_RECURSION_ID'] ?? $recId);
 
-				if ($recId)
-				{
-					$recRelatedEvents = CCalendarEvent::GetEventsByRecId($recId, false);
-
-					foreach($recRelatedEvents as $recRelatedEvent)
+					if (empty($newParams['arFields']['MEETING']['REINVITE']))
 					{
-						if ($recRelatedEvent['ID'] === $result['id'])
+						$newParams['saveAttendeesStatus'] = true;
+					}
+
+					$currentFromTs = self::Timestamp($newParams['arFields']['DATE_FROM'] ?? null);
+					$length = self::Timestamp($newParams['arFields']['DATE_TO']) - self::Timestamp($newParams['arFields']['DATE_FROM']);
+
+					if (!isset($newParams['arFields']['DATE_FROM'], $newParams['arFields']['DATE_TO']))
+					{
+						$length = $curEvent['DT_LENGTH'];
+						$currentFromTs = self::Timestamp($curEvent['DATE_FROM']);
+					}
+
+					// Check location changes
+					[$isRecurrentLocationChanged, $newParams] = self::checkRecurrenceLocationChanges($newParams, $curEvent);
+					$recRelatedEvents = $recId
+						? CCalendarEvent::GetEventsByRecId($recId, false)
+						: []
+					;
+					$relatedRoomIds = self::getRecurrenceRelatedRoomIds(
+						$recRelatedEvents,
+						$currentDateTimestamp,
+						$isRecurrentLocationChanged,
+						$newParams['arFields']['LOCATION'] ?? null,
+					);
+					$relatedRoomEventIds = self::getRecurrenceRelatedRoomEventIds(
+						$recRelatedEvents,
+						$currentDateTimestamp,
+					);
+					// Check name changes
+					$isRecurrentNameChanged = !empty($newParams['arFields']['NAME']) && ($curEvent['NAME'] !== $newParams['arFields']['NAME']);
+					// Check time changes
+					$isRecurrentTimeChanged = (self::Timestamp($curEvent['DATE_FROM'], false) % self::DAY_LENGTH) !== ($currentFromTs % self::DAY_LENGTH);
+					// Check attendees changes
+					$isRecurrentAttendeesChanged = self::checkRecurrenceAttendeesChanges($newParams, $curEvent);
+
+					$instanceDate = !isset($newParams['arFields']['DATE_FROM'])
+						|| self::Date(self::Timestamp($curEvent['DATE_FROM']), false) === self::Date($currentFromTs, false)
+					;
+
+					if ($newParams['arFields']['SKIP_TIME'])
+					{
+						if ($instanceDate)
+						{
+							$newParams['arFields']['DATE_FROM'] = self::Date($currentDateTimestamp, false);
+							$newParams['arFields']['DATE_TO'] = self::Date($currentDateTimestamp + $length, false);
+						}
+						else
+						{
+							$newParams['arFields']['DATE_FROM'] = self::Date($currentFromTs, false);
+							$newParams['arFields']['DATE_TO'] = self::Date($currentFromTs + $length, false);
+						}
+					}
+					elseif ($instanceDate)
+					{
+						$newFromTs = self::DateWithNewTime($currentFromTs, $currentDateTimestamp);
+						$newParams['arFields']['DATE_FROM'] = self::Date($newFromTs);
+						$newParams['arFields']['DATE_TO'] = self::Date($newFromTs + $length);
+					}
+
+					if (isset($curEvent['EXDATE']) && $curEvent['EXDATE'] !== '')
+					{
+						$newParams['arFields']['EXDATE'] = $curEvent['EXDATE'];
+					}
+
+					if (!isset($newParams['arFields']['REMIND']) && !empty($curEvent['REMIND']))
+					{
+						$newParams['arFields']['REMIND'] = $curEvent['REMIND'];
+					}
+
+					if (isset($newParams['arFields']['RRULE']['COUNT']) && $newParams['arFields']['RRULE']['COUNT'] > 0)
+					{
+						$countParams = [
+							'rrule' => $newParams['arFields']['RRULE'],
+							'dateFrom' => $curEvent['DATE_FROM'],
+							'dateTo' => !empty($params['currentEventDateFrom'])
+								? $params['currentEventDateFrom']
+								: $newParams['arFields']['DATE_FROM'],
+							'timeZone' => $curEvent['TZ_FROM'],
+						];
+
+						$newParams['arFields']['RRULE']['COUNT'] = self::CountNumberFollowEvents($countParams);
+						unset($newParams['arFields']['RRULE']['UNTIL'], $newParams['arFields']['RRULE']['~UNTIL']);
+					}
+
+					if (
+						isset($newParams['arFields']['RRULE']['FREQ'], $curEvent['RRULE']['FREQ'])
+						&& $newParams['arFields']['RRULE']['FREQ'] === 'WEEKLY'
+						&& $curEvent['RRULE']['FREQ'] === 'WEEKLY'
+						&& $newParams['arFields']['RRULE']['BYDAY'] === $curEvent['RRULE']['BYDAY']
+					)
+					{
+						$currentDate = new Type\Date($params['currentEventDateFrom']);
+						$currentFromDate = new Type\Date($newParams['arFields']['DATE_FROM']);
+						$currentDateWeekday = self::WeekDayByInd($currentDate->format('w'));
+						$currentFromDateWeekday = self::WeekDayByInd($currentFromDate->format('w'));
+
+						if (isset($newParams['arFields']['RRULE']['BYDAY'][$currentDateWeekday]))
+						{
+							unset($newParams['arFields']['RRULE']['BYDAY'][$currentDateWeekday]);
+						}
+
+						$newParams['arFields']['RRULE']['BYDAY'][$currentFromDateWeekday] = $currentFromDateWeekday;
+					}
+
+					$futureRelatedEventFieldsById = [];
+					$futureRelatedEvents = [];
+					$occupancyCandidates = [[
+						'fields' => $newParams['arFields'],
+						'params' => $newParams,
+						'event' => $curEvent,
+					]];
+					foreach ($recRelatedEvents as $recRelatedEvent)
+					{
+						$eventId = (int)($recRelatedEvent['ID'] ?? 0);
+						if (
+							$eventId <= 0
+							|| $eventId !== (int)($recRelatedEvent['PARENT_ID'] ?? 0)
+							|| self::Timestamp($recRelatedEvent['DATE_FROM'] ?? null, false) <= $currentDateTimestamp
+						)
 						{
 							continue;
 						}
 
-						if ((int)$recRelatedEvent['ID'] !== (int)$recRelatedEvent['PARENT_ID'])
+						$eventFields = self::getRecurrenceAllLocationOccupancyFields(
+							$newParams['arFields'],
+							$recRelatedEvent,
+							$currentFromTs,
+							$length,
+							self::getRecurrentEventDayDuration(
+								$recRelatedEvent['DATE_FROM'],
+								$recRelatedEvent['DATE_TO'],
+							),
+							$isRecurrentTimeChanged,
+							$isRecurrentLocationChanged,
+							0,
+						);
+						$eventFields['ID'] = $eventId;
+						$eventFields['RRULE'] = CCalendarEvent::ParseRRULE($recRelatedEvent['RRULE']);
+						$futureRelatedEventFieldsById[$eventId] = array_intersect_key(
+							$eventFields,
+							array_fill_keys(['ID', 'RRULE', 'DATE_FROM', 'DATE_TO', 'LOCATION'], true),
+						);
+						$futureRelatedEvents[] = $recRelatedEvent;
+
+						$eventParams = $newParams;
+						$eventParams['recursionEditMode'] = 'this';
+						$occupancyCandidates[] = [
+							'fields' => $eventFields,
+							'params' => $eventParams,
+							'event' => $recRelatedEvent,
+						];
+					}
+
+					$hasOccupancyConflict = false;
+					$recurrenceOccupancyLock = self::checkRecurrenceLocationOccupancyBatch(
+						$occupancyCandidates,
+						$userId,
+						$relatedRoomIds,
+						$relatedRoomEventIds,
+						$hasOccupancyConflict,
+					);
+					if ($recurrenceOccupancyLock instanceof Rooms\OccupancyLock)
+					{
+						self::assertRecurrenceRelatedMasterEventsUnchanged(
+							$recId,
+							$recRelatedEvents,
+							$currentDateTimestamp,
+						);
+						$newParams['occupancySnapshots'] = self::createRecurrenceOccupancySnapshots(
+							$futureRelatedEvents,
+							$curEvent,
+						);
+					}
+					$newParams['occupancyLock'] = $recurrenceOccupancyLock;
+					if ($recurrenceOccupancyLock instanceof Rooms\OccupancyLock)
+					{
+						$newParams['locationOccupancyPrechecked'] = true;
+					}
+					if (
+						$hasOccupancyConflict
+						&& (($params['checkLocationOccupancy'] ?? null) === 'N'
+							|| ($params['checkLocationOccupancy'] ?? null) === false)
+					)
+					{
+						$newParams['occupancyConflictDetected'] = true;
+					}
+					if (!empty($relatedRoomEventIds))
+					{
+						$newParams['occupancyExcludedEventIds'] = $relatedRoomEventIds;
+					}
+
+					// Check if it's first instance of the series, so we shouldn't create another event
+					if (self::Date(self::Timestamp($curEvent['DATE_FROM']), false) === self::Date($currentDateTimestamp, false))
+					{
+						$newParams['recursionEditMode'] = 'skip';
+					}
+					else
+					{
+						// 1. Edit current recurrent event: set finish date with date of current instance
+						$arFieldsCurrent = [
+							"ID" => $curEvent["ID"],
+							"RRULE" => CCalendarEvent::ParseRRULE($curEvent['RRULE']),
+						];
+						$arFieldsCurrent['RRULE']['UNTIL'] = self::Date($currentDateTimestamp - self::GetDayLen(), false);
+						unset($arFieldsCurrent['RRULE']['~UNTIL'], $arFieldsCurrent['RRULE']['COUNT']);
+
+						if (
+							!empty($params['arFields']['SECTIONS'][0])
+							&& (int)$curEvent['SECTION_ID'] !== (int)$params['arFields']['SECTIONS'][0]
+						)
 						{
-							continue;
+							$arFieldsCurrent['SECTIONS'] = $params['arFields']['SECTIONS'];
 						}
 
-						$evFromTs = self::Timestamp($recRelatedEvent['DATE_FROM'], false);
-						$instanceLength = $recRelatedEvent['DT_LENGTH'] ?? $length;
-
-						if ($evFromTs > $currentDateTimestamp)
+						// Save current event
+						$id = self::SaveEvent([
+							'propagateEventNotAvailable' => true,
+							'arFields' => $arFieldsCurrent,
+							'internalSeriesResave' => true,
+							'occupancyLock' => $recurrenceOccupancyLock,
+							'silentErrorMode' => $params['silentErrorMode'] ?? null,
+							'recursionEditMode' => 'skip',
+							'sendInvitations' => false,
+							'sendEditNotification' => false,
+							'sendInvitesToDeclined' => $params['sendInvitesToDeclined'] ?? null,
+							'userId' => $userId,
+							'editNextEvents' => true,
+							'editParentEvents' => true,
+							'checkPermission' => $checkPermission,
+							'requestUid' => $params['requestUid'] ?? null,
+							'checkLocationOccupancyFields' => $newParams['arFields'],
+							'checkLocationOccupancy' => $params['checkLocationOccupancy'] ?? null,
+							'occupancyExcludedEventIds' => $relatedRoomEventIds,
+							'occupancySnapshots' => $newParams['occupancySnapshots'] ?? [],
+						]);
+						if ($id === false)
 						{
-							$newParams['arFields']['ID'] = $recRelatedEvent['ID'];
-							$newParams['arFields']['RRULE'] = CCalendarEvent::ParseRRULE($recRelatedEvent['RRULE']);
+							return false;
+						}
 
-							/*
-							 * Set correct date for related
-							 * if full day event - set related date
-							 * else if recurrent event time change - set related date and recurrent event time
-							 * else - keep related date and related time
-							 */
-							if ($newParams['arFields']['SKIP_TIME'])
+						unset(
+							$newParams['arFields']['ID'],
+							$newParams['arFields']['DAV_XML_ID'],
+							$newParams['arFields']['G_EVENT_ID'],
+							$newParams['recursionEditMode']
+						);
+					}
+
+					if (empty($newParams['arFields']['DAV_XML_ID']))
+					{
+						$newParams['arFields']['DAV_XML_ID'] = UidGenerator::createInstance()
+							->setPortalName(Util::getServerName())
+							->setDate(new Date(
+								Util::getDateObject(
+									$newParams['arFields']['ORIGINAL_DATE_FROM'] ?? null,
+									$newParams['arFields']['SKIP_TIME'] ?? null,
+									$newParams['arFields']['TZ_FROM'] ?? null
+								)
+							))
+							->setUserId((int)($newParams['arFields']['OWNER_ID'] ?? null))
+							->getUidWithDate()
+						;
+						}
+					$newParams['sendInvitesToDeclined'] = $params['sendInvitesToDeclined'];
+					$newParams['editNextEvents'] = true;
+					$newParams['previousRecurrentId'] = $recId;
+					$newParams['occupancyAuditSourceEventId'] = (int)$curEvent['ID'];
+
+					$result = self::SaveEvent($newParams);
+					if ($result === false)
+					{
+						return false;
+					}
+					unset($newParams['occupancyConflictDetected']);
+
+					if (!is_array($result))
+					{
+						$result = [
+							'id' => $result,
+							'recEventId' => $result,
+						];
+					}
+					(new Core\Managers\EventOriginalRecursion())->add(
+						$result['id'] ?? 0,
+						$newParams['arFields']['ORIGINAL_RECURSION_ID'] ?? 0,
+					);
+
+					if ($recId)
+					{
+						foreach($recRelatedEvents as $recRelatedEvent)
+						{
+							if ($recRelatedEvent['ID'] === $result['id'])
 							{
-								$newParams['arFields']['DATE_FROM'] = self::Date($evFromTs, false);
-								$newParams['arFields']['DATE_TO'] = self::Date(self::Timestamp($recRelatedEvent['DATE_TO']), false);
-							}
-							else if ($isRecurrentTimeChanged)
-							{
-								$newFromTs = self::DateWithNewTime($currentFromTs, $evFromTs);
-								$newParams['arFields']['DATE_FROM'] = self::Date($newFromTs);
-								$newParams['arFields']['DATE_TO'] = self::Date($newFromTs + $length);
-							}
-							else
-							{
-								$newParams['arFields']['DATE_FROM'] = self::Date($evFromTs);
-								$newParams['arFields']['DATE_TO'] = self::Date($evFromTs + $instanceLength);
+								continue;
 							}
 
-							/*
-							 * Set correct location for related
-							 * Entry condition - location on recurrent was not changed
-							 * if related has no location or different - keep it
-							 */
-							$newRecurrentLocation = null;
-							if (!$isRecurrentLocationChanged)
+							if ((int)$recRelatedEvent['ID'] !== (int)$recRelatedEvent['PARENT_ID'])
 							{
-								$newRecurrentLocation = $newParams['arFields']['LOCATION'] ?? '';
+								continue;
+							}
 
-								if (!empty($recRelatedEvent['LOCATION']))
+							$eventId = (int)$recRelatedEvent['ID'];
+							if (isset($futureRelatedEventFieldsById[$eventId]))
+							{
+								$newRecurrentLocation = !$isRecurrentLocationChanged
+									? ($newParams['arFields']['LOCATION'] ?? '')
+									: null
+								;
+								foreach ($futureRelatedEventFieldsById[$eventId] as $fieldName => $fieldValue)
 								{
-									$parsedRelatedLocation = Rooms\Util::parseLocation($recRelatedEvent['LOCATION']);
-									if (!empty($parsedRelatedLocation['room_event_id']))
-									{
-										$recRelatedEvent['LOCATION'] = 'calendar_' . $parsedRelatedLocation['room_id'];
-									}
+									$newParams['arFields'][$fieldName] = $fieldValue;
 								}
 
-								$newParams['arFields']['LOCATION'] = $recRelatedEvent['LOCATION'] ?? '';
-							}
+								/*
+								 * Set correct name for related
+								 */
+								if (!$isRecurrentNameChanged)
+								{
+									$newParams['arFields']['NAME'] = $recRelatedEvent['NAME'] ?? $newParams['arFields']['NAME'];
+								}
 
-							/*
-							 * Set correct name for related
-							 */
-							if (!$isRecurrentNameChanged)
-							{
-								$newParams['arFields']['NAME'] = $recRelatedEvent['NAME'] ?? $newParams['arFields']['NAME'];
-							}
+								/*
+								 * Set correct attendees for related
+								 * If recurrent attendees has not changed - keep related attendees
+								 */
+								if (!$isRecurrentAttendeesChanged)
+								{
+									$newParams['arFields']['ATTENDEES_CODES'] = $recRelatedEvent['ATTENDEES_CODES']
+										?? $newParams['arFields']['ATTENDEES_CODES']
+									;
+								}
 
-							/*
-							 * Set correct attendees for related
-							 * If recurrent attendees has not changed - keep related attendees
-							 */
-							if (!$isRecurrentAttendeesChanged)
-							{
-								$newParams['arFields']['ATTENDEES_CODES'] = $recRelatedEvent['ATTENDEES_CODES']
-									?? $newParams['arFields']['ATTENDEES_CODES']
-								;
-							}
+								/*
+								 * Set additional params
+								 */
+								$newParams['arFields']['RECURRENCE_ID'] = $result['id'];
+								$newParams['originalDavXmlId'] = $result['originalDavXmlId'];
 
-							/*
-							 * Set additional params
-							 */
-							$newParams['arFields']['RECURRENCE_ID'] = $result['id'];
-							$newParams['originalDavXmlId'] = $result['originalDavXmlId'];
+								$parentDateTime = self::Date($currentFromTs);
+								$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::GetOriginalDate(
+									$parentDateTime,
+									$recRelatedEvent['ORIGINAL_DATE_FROM'] ?? $newParams['currentEventDateFrom'],
+									$result['instanceTz']
+								);
 
-							$parentDateTime = self::Date($currentFromTs);
-							$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::GetOriginalDate(
-								$parentDateTime,
-								$recRelatedEvent['ORIGINAL_DATE_FROM'] ?? $newParams['currentEventDateFrom'],
-								$result['instanceTz']
-							);
+								$newParams['instanceTz'] = $result['instanceTz'];
+								$newParams['editInstance'] = true;
 
-							$newParams['instanceTz'] = $result['instanceTz'];
-							$newParams['editInstance'] = true;
+								unset($newParams['arFields']['EXDATE']);
 
-							unset($newParams['arFields']['EXDATE']);
+								if (isset($newParams['arFields']['RELATIONS']['ORIGINAL_RECURSION_ID']))
+								{
+									unset($newParams['arFields']['RELATIONS']);
+								}
 
-							if (isset($newParams['arFields']['RELATIONS']['ORIGINAL_RECURSION_ID']))
-							{
-								unset($newParams['arFields']['RELATIONS']);
-							}
+								if (self::SaveEvent($newParams) === false)
+								{
+									return false;
+								}
 
-							self::SaveEvent($newParams);
-
-							if ($newRecurrentLocation !== null)
-							{
-								$newParams['arFields']['LOCATION'] = $newRecurrentLocation;
+								if ($newRecurrentLocation !== null)
+								{
+									$newParams['arFields']['LOCATION'] = $newRecurrentLocation;
+								}
 							}
 						}
 					}
 				}
 			}
+			finally
+			{
+				self::releaseRecurrenceOccupancyLock($recurrenceOccupancyLock);
+			}
 		}
 		else
 		{
+			$recurrenceOccupancyLock = null;
+			if (
+				$curEvent
+				&& ($params['recursionEditMode'] ?? null) === 'all'
+			)
+			{
+				$recurrenceOccupancyLock = self::checkRecurrenceAllLocationOccupancy(
+					$params,
+					$curEvent,
+					$userId,
+				);
+				if ($recurrenceOccupancyLock instanceof Rooms\OccupancyLock)
+				{
+					$params['occupancyLock'] = $recurrenceOccupancyLock;
+				}
+			}
+
 			if (($params['recursionEditMode'] ?? null) !== 'all')
 			{
 				$params['recursionEditMode'] = 'skip';
@@ -3080,229 +3496,203 @@ class CCalendar
 				$params['recursionEditMode'] = '';
 			}
 
-			$id = CCalendarEvent::Edit($params);
-
-			if ($id)
+			try
 			{
-				$UFs = $params['UF'] ?? null;
-				if(!empty($UFs) && is_array($UFs))
+				$id = CCalendarEvent::Edit($params);
+				if ($id === false)
 				{
-					CCalendarEvent::UpdateUserFields($id, $UFs, false);
-
-					if (!empty($arFields['IS_MEETING']) && !empty($UFs['UF_WEBDAV_CAL_EVENT']))
-					{
-						$UF = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields("CALENDAR_EVENT", $id, LANGUAGE_ID);
-						self::UpdateUFRights(
-							$UFs['UF_WEBDAV_CAL_EVENT'],
-							$arFields['ATTENDEES_CODES'] ?? null,
-							$UF['UF_WEBDAV_CAL_EVENT'] ?? null
-						);
-					}
-
-					CCalendarEvent::updateSearchIndex((int)$id, [
-						'updateAllByParent' => true,
-					]);
-				}
-			}
-
-			if ($params['editNextEvents'] === true && $params['editParentEvents'] === false)
-			{
-				$result['originalDate'] = $params['arFields']['DATE_FROM'];
-				$result['originalDavXmlId'] = $params['arFields']['DAV_XML_ID'];
-				$result['instanceTz'] = $params['arFields']['TZ_FROM'];
-				$result['recEventId'] = $id;
-			}
-
-			// Here we should select all events connected with edited via RECURRENCE_ID:
-			// It could be original source event (without RECURRENCE_ID) or sibling events
-			if (
-				$curEvent
-				&& !$params['recursionEditMode']
-				&& !($params['arFields']['RECURRENCE_ID'] ?? null)
-				&& CCalendarEvent::CheckRecurcion($curEvent)
-			)
-			{
-				$events = [];
-				$recId = $curEvent['RECURRENCE_ID'] ?: $curEvent['ID'];
-
-				/**
-				 * @deprecated potentially
-				 */
-//				if ($curEvent['RECURRENCE_ID'] && $curEvent['RECURRENCE_ID'] !== $curEvent['ID'])
-//				{
-//					$masterEvent = CCalendarEvent::GetById($curEvent['RECURRENCE_ID']);
-//					if ($masterEvent)
-//					{
-//						$events[] = $masterEvent;
-//					}
-//				}
-
-				$currentFromTs = self::Timestamp($params['arFields']['DATE_FROM'], false);
-				$length = self::Timestamp($params['arFields']['DATE_TO'], false)
-					- self::Timestamp($params['arFields']['DATE_FROM'], false)
-				;
-				$allDayDurationDays = self::getRecurrentEventDayDuration(
-					$params['arFields']['DATE_FROM'],
-					$params['arFields']['DATE_TO']
-				);
-
-				if (!isset($params['arFields']['DATE_FROM'], $params['arFields']['DATE_TO']))
-				{
-					$length = $curEvent['DT_LENGTH'];
-					$currentFromTs = self::Timestamp($curEvent['DATE_FROM']);
-					$allDayDurationDays = self::getRecurrentEventDayDuration(
-						$curEvent['DATE_FROM'],
-						$curEvent['DATE_TO']
-					);
+					return false;
 				}
 
-				// Check location changes
-				[$isRecurrentLocationChanged, $params] = self::checkRecurrenceLocationChanges($params, $curEvent);
-				// Check name changes
-				$isRecurrentNameChanged = !empty($params['arFields']['NAME']) && ($curEvent['NAME'] !== $params['arFields']['NAME']);
-				// Check time changes
-				$isRecurrentTimeChanged = (self::Timestamp($curEvent['DATE_FROM'], false) % self::DAY_LENGTH) !== ($currentFromTs % self::DAY_LENGTH);
-				$recurrentDateDelta = (int)($params['recurrentDateDelta'] ?? 0);
-				$recurrentDayDelta = (int)($params['recurrentDayDelta'] ?? 0);
-				// Check attendees changes
-				$isRecurrentAttendeesChanged = self::checkRecurrenceAttendeesChanges($params, $curEvent);
-
-
-				if ($recId)
+				if ($id)
 				{
-					$instances = CCalendarEvent::GetEventsByRecId($recId, false);
-
-					if ($instances)
+					$UFs = $params['UF'] ?? null;
+					if(!empty($UFs) && is_array($UFs))
 					{
-						$events = array_merge($events, $instances);
-					}
-				}
+						CCalendarEvent::UpdateUserFields($id, $UFs, false);
 
-				foreach ($events as $ev)
-				{
-					if ($ev['ID'] === $curEvent['ID'])
-					{
-						continue;
-					}
-
-					if ($ev['PARENT_ID'] !== $ev['ID'])
-					{
-						continue;
-					}
-
-					$newParams = $params;
-
-					$newParams['arFields']['ID'] = $ev['ID'];
-					$newParams['arFields']['RECURRENCE_ID'] = $ev['RECURRENCE_ID'];
-					$newParams['arFields']['DAV_XML_ID'] = $ev['DAV_XML_ID'];
-					$newParams['arFields']['G_EVENT_ID'] = $ev['G_EVENT_ID'];
-					$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::shiftRecurrentOriginalDate(
-						$ev['ORIGINAL_DATE_FROM'] ?? null,
-						$recurrentDateDelta,
-						$recurrentDayDelta,
-						(bool)($ev['DT_SKIP_TIME'] === 'Y'),
-						$arFields['DATE_FROM'] ?? null,
-						$arFields['TZ_FROM'] ?? null
-					);
-					$newParams['arFields']['CAL_DAV_LABEL'] = $ev['CAL_DAV_LABEL'];
-					$newParams['arFields']['RRULE'] = CCalendarEvent::ParseRRULE($ev['RRULE']);
-					$newParams['recursionEditMode'] = 'skip';
-					$newParams['currentEvent'] = $ev;
-
-					$instanceLength = $ev['DT_LENGTH'] ?? $length;
-					$shiftedEventFromTs = self::Timestamp(
-						self::shiftRecurrentDateByDays($ev['DATE_FROM'], $recurrentDayDelta, true)
-					);
-
-					/*
-					 * Set correct date for related
-					 * if full day event - set related date
-					 * else if recurrent event time change - set related date and recurrent event time
-					 * else - keep related date and related time
-					 */
-					if ($newParams['arFields']['SKIP_TIME'])
-					{
-						$newParams['arFields']['DATE_FROM'] = self::shiftRecurrentDateByDays(
-							$ev['DATE_FROM'],
-							$recurrentDayDelta,
-							false
-						);
-						$newParams['arFields']['DATE_TO'] = self::shiftRecurrentDateByDays(
-							$newParams['arFields']['DATE_FROM'],
-							$allDayDurationDays,
-							false
-						);
-					}
-					else if ($isRecurrentTimeChanged)
-					{
-						$newFromTs = self::DateWithNewTime($currentFromTs, $shiftedEventFromTs);
-						$newParams['arFields']['DATE_FROM'] = self::Date($newFromTs);
-						$newParams['arFields']['DATE_TO'] = self::Date($newFromTs + $length);
-					}
-					else
-					{
-						$newParams['arFields']['DATE_FROM'] = self::Date($shiftedEventFromTs);
-						$newParams['arFields']['DATE_TO'] = self::Date($shiftedEventFromTs + $instanceLength);
-					}
-
-					/*
-					 * Set correct location for related
-					 * Entry condition - location on recurrent was not changed
-					 * if related has no location or different - keep it
-					 */
-					if (!$isRecurrentLocationChanged)
-					{
-						if (!empty($ev['LOCATION']))
+						if (!empty($arFields['IS_MEETING']) && !empty($UFs['UF_WEBDAV_CAL_EVENT']))
 						{
-							$parsedRelatedLocation = Rooms\Util::parseLocation($ev['LOCATION']);
-							if (!empty($parsedRelatedLocation['room_event_id']))
-							{
-								$ev['LOCATION'] = 'calendar_' . $parsedRelatedLocation['room_id'];
-							}
+							$UF = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields("CALENDAR_EVENT", $id, LANGUAGE_ID);
+							self::UpdateUFRights(
+								$UFs['UF_WEBDAV_CAL_EVENT'],
+								$arFields['ATTENDEES_CODES'] ?? null,
+								$UF['UF_WEBDAV_CAL_EVENT'] ?? null
+							);
 						}
 
-						$newParams['arFields']['LOCATION'] = $ev['LOCATION'] ?? '';
+						self::scheduleParentInstanceSync($id);
 					}
+				}
 
-					/*
-					 * Set correct name for related
+				if ($params['editNextEvents'] === true && $params['editParentEvents'] === false)
+				{
+					$result['originalDate'] = $params['arFields']['DATE_FROM'];
+					$result['originalDavXmlId'] = $params['arFields']['DAV_XML_ID'];
+					$result['instanceTz'] = $params['arFields']['TZ_FROM'];
+					$result['recEventId'] = $id;
+				}
+
+				// Here we should select all events connected with edited via RECURRENCE_ID:
+				// It could be original source event (without RECURRENCE_ID) or sibling events
+				if (
+					$curEvent
+					&& !$params['recursionEditMode']
+					&& !($params['arFields']['RECURRENCE_ID'] ?? null)
+					&& CCalendarEvent::CheckRecurcion($curEvent)
+				)
+				{
+					$events = [];
+					$recId = $curEvent['RECURRENCE_ID'] ?: $curEvent['ID'];
+
+					/**
+					 * @deprecated potentially
 					 */
-					if (!$isRecurrentNameChanged)
-					{
-						$newParams['arFields']['NAME'] = $ev['NAME'] ?? $newParams['arFields']['NAME'];
-					}
+	//				if ($curEvent['RECURRENCE_ID'] && $curEvent['RECURRENCE_ID'] !== $curEvent['ID'])
+	//				{
+	//					$masterEvent = CCalendarEvent::GetById($curEvent['RECURRENCE_ID']);
+	//					if ($masterEvent)
+	//					{
+	//						$events[] = $masterEvent;
+	//					}
+	//				}
 
-					/*
-					 * Set correct attendees for related
-					 * If recurrent attendees has not changed - keep related attendees
-					 */
-					if (!$isRecurrentAttendeesChanged)
-					{
-						$newParams['arFields']['ATTENDEES_CODES'] = $ev['ATTENDEES_CODES']
-							?? $newParams['arFields']['ATTENDEES_CODES']
-						;
-					}
+					$currentFromTs = self::Timestamp($params['arFields']['DATE_FROM'], false);
+					$length = self::Timestamp($params['arFields']['DATE_TO'], false)
+						- self::Timestamp($params['arFields']['DATE_FROM'], false)
+					;
+					$allDayDurationDays = self::getRecurrentEventDayDuration(
+						$params['arFields']['DATE_FROM'],
+						$params['arFields']['DATE_TO']
+					);
 
-					if (isset($ev['EXDATE']) && $ev['EXDATE'])
+					if (!isset($params['arFields']['DATE_FROM'], $params['arFields']['DATE_TO']))
 					{
-						$newParams['arFields']['EXDATE'] = self::shiftRecurrentExDatesByDays(
-							$ev['EXDATE'],
-							$recurrentDayDelta
+						$length = $curEvent['DT_LENGTH'];
+						$currentFromTs = self::Timestamp($curEvent['DATE_FROM']);
+						$allDayDurationDays = self::getRecurrentEventDayDuration(
+							$curEvent['DATE_FROM'],
+							$curEvent['DATE_TO']
 						);
 					}
 
-					if (isset($newParams['arFields']['RELATIONS']['ORIGINAL_RECURSION_ID']))
+					// Check location changes
+					[$isRecurrentLocationChanged, $params] = self::checkRecurrenceLocationChanges($params, $curEvent);
+					// Check name changes
+					$isRecurrentNameChanged = !empty($params['arFields']['NAME']) && ($curEvent['NAME'] !== $params['arFields']['NAME']);
+					// Check time changes
+					$isRecurrentTimeChanged = (self::Timestamp($curEvent['DATE_FROM'], false) % self::DAY_LENGTH) !== ($currentFromTs % self::DAY_LENGTH);
+					$recurrentDateDelta = (int)($params['recurrentDateDelta'] ?? 0);
+					$recurrentDayDelta = (int)($params['recurrentDayDelta'] ?? 0);
+					// Check attendees changes
+					$isRecurrentAttendeesChanged = self::checkRecurrenceAttendeesChanges($params, $curEvent);
+
+
+					if ($recId)
 					{
-						unset($newParams['arFields']['RELATIONS']);
+						$instances = CCalendarEvent::GetEventsByRecId($recId, false);
+
+						if ($instances)
+						{
+							$events = array_merge($events, $instances);
+						}
 					}
 
-					self::SaveEvent($newParams);
+					foreach ($events as $ev)
+					{
+						if ($ev['ID'] === $curEvent['ID'])
+						{
+							continue;
+						}
+
+						if ($ev['PARENT_ID'] !== $ev['ID'])
+						{
+							continue;
+						}
+
+						$newParams = $params;
+
+						$newParams['arFields']['ID'] = $ev['ID'];
+						$newParams['arFields']['RECURRENCE_ID'] = $ev['RECURRENCE_ID'];
+						$newParams['arFields']['DAV_XML_ID'] = $ev['DAV_XML_ID'];
+						$newParams['arFields']['G_EVENT_ID'] = $ev['G_EVENT_ID'];
+						$newParams['arFields']['ORIGINAL_DATE_FROM'] = self::shiftRecurrentOriginalDate(
+							$ev['ORIGINAL_DATE_FROM'] ?? null,
+							$recurrentDateDelta,
+							$recurrentDayDelta,
+							(bool)($ev['DT_SKIP_TIME'] === 'Y'),
+							$arFields['DATE_FROM'] ?? null,
+							$arFields['TZ_FROM'] ?? null
+						);
+						$newParams['arFields']['CAL_DAV_LABEL'] = $ev['CAL_DAV_LABEL'];
+						$newParams['arFields']['RRULE'] = CCalendarEvent::ParseRRULE($ev['RRULE']);
+						$newParams['recursionEditMode'] = 'skip';
+						$newParams['currentEvent'] = $ev;
+
+						$newParams['arFields'] = self::getRecurrenceAllLocationOccupancyFields(
+							$newParams['arFields'],
+							$ev,
+							$currentFromTs,
+							$length,
+							$allDayDurationDays,
+							$isRecurrentTimeChanged,
+							$isRecurrentLocationChanged,
+							$recurrentDayDelta,
+						);
+
+						/*
+						 * Set correct name for related
+						 */
+						if (!$isRecurrentNameChanged)
+						{
+							$newParams['arFields']['NAME'] = $ev['NAME'] ?? $newParams['arFields']['NAME'];
+						}
+
+						/*
+						 * Set correct attendees for related
+						 * If recurrent attendees has not changed - keep related attendees
+						 */
+						if (!$isRecurrentAttendeesChanged)
+						{
+							$newParams['arFields']['ATTENDEES_CODES'] = $ev['ATTENDEES_CODES']
+								?? $newParams['arFields']['ATTENDEES_CODES']
+							;
+						}
+
+						if (isset($ev['EXDATE']) && $ev['EXDATE'])
+						{
+							$newParams['arFields']['EXDATE'] = self::shiftRecurrentExDatesByDays(
+								$ev['EXDATE'],
+								$recurrentDayDelta
+							);
+						}
+
+						if (isset($newParams['arFields']['RELATIONS']['ORIGINAL_RECURSION_ID']))
+						{
+							unset($newParams['arFields']['RELATIONS']);
+						}
+
+						$newParams['internalSeriesResave'] = true;
+						unset($newParams['occupancyConflictDetected']);
+
+						if (self::SaveEvent($newParams) === false)
+						{
+							return false;
+						}
+					}
 				}
+
+			}
+			finally
+			{
+				self::releaseRecurrenceOccupancyLock($recurrenceOccupancyLock);
 			}
 
 			if ($id)
 			{
-				self::syncChange($id, $arFields, $params, $curEvent ?: null);
+				EventSaveEffects::scheduleDav((int)$id, $arFields, $deferredDavSync ?? null);
+
+				self::scheduleSavedEventSync($id, $arFields, $params, $curEvent ?: null);
 			}
 
 			$arFields['ID'] = $id;
@@ -3310,7 +3700,7 @@ class CCalendar
 			{
 				foreach(GetModuleEvents("calendar", "OnAfterCalendarEventEdit", true) as $arEvent)
 				{
-					ExecuteModuleEventEx($arEvent, array($arFields, $bNew, $userId));
+					self::scheduleEventEditHandler($arEvent, $arFields, $bNew, $userId);
 				}
 			}
 		}
@@ -4556,6 +4946,7 @@ class CCalendar
 		// strictly before delegating and expand to direct team members (flat, no sub-teams).
 		// This is the single point of SNT expansion in the calendar module.
 		$teamNodeIds = [];
+		$departmentIds = [];
 		$passthroughCodes = [];
 		foreach ($codes as $code)
 		{
@@ -4564,7 +4955,16 @@ class CCalendar
 				: null;
 			if ($nodeId !== null)
 			{
-				$teamNodeIds[] = $nodeId;
+				$teamNodeIds[$nodeId] = $nodeId;
+			}
+			elseif (
+				!$fetchUsers
+				&& is_string($code)
+				&& preg_match('/^DR([0-9]+)\z/', $code, $match) === 1
+				&& ($departmentId = (int)$match[1]) > 0
+			)
+			{
+				$departmentIds[$departmentId] = $departmentId;
 			}
 			else
 			{
@@ -4576,7 +4976,16 @@ class CCalendar
 
 		if (!empty($teamNodeIds))
 		{
-			$users = self::mergeTeamMembersIntoDestination($users, $teamNodeIds, $fetchUsers);
+			$users = self::mergeTeamMembersIntoDestination($users, array_values($teamNodeIds), $fetchUsers);
+		}
+
+		if (!empty($departmentIds))
+		{
+			$users = self::mergeDepartmentMembersIntoDestination(
+				$users,
+				array_values($departmentIds),
+				$fetchUsers,
+			);
 		}
 
 		if ($fetchUsers)
@@ -4613,7 +5022,53 @@ class CCalendar
 	private static function mergeTeamMembersIntoDestination(array $users, array $teamNodeIds, bool $fetchUsers): array
 	{
 		$teamUserIds = (new TeamMemberService())->getDirectMemberUserIds($teamNodeIds);
-		if (empty($teamUserIds))
+
+		return self::mergeUserIdsIntoDestination($users, $teamUserIds, $fetchUsers);
+	}
+
+	private static function mergeDepartmentMembersIntoDestination(
+		array $users,
+		array $departmentIds,
+		bool $fetchUsers,
+	): array
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return $users;
+		}
+
+		$departmentUserIds = [];
+		foreach (array_chunk($departmentIds, self::DESTINATION_NODE_BATCH_SIZE) as $departmentIdBatch)
+		{
+			try
+			{
+				$result = \Bitrix\Intranet\Util::getDepartmentEmployees([
+					'DEPARTMENTS' => $departmentIdBatch,
+					'RECURSIVE' => 'Y',
+					'ACTIVE' => 'Y',
+					'SELECT' => ['ID'],
+				]);
+				while ($user = $result->Fetch())
+				{
+					$userId = (int)$user['ID'];
+					if ($userId > 0)
+					{
+						$departmentUserIds[$userId] = $userId;
+					}
+				}
+			}
+			catch (\Throwable)
+			{
+				continue;
+			}
+		}
+
+		return self::mergeUserIdsIntoDestination($users, array_values($departmentUserIds), $fetchUsers);
+	}
+
+	private static function mergeUserIdsIntoDestination(array $users, array $userIds, bool $fetchUsers): array
+	{
+		if (empty($userIds))
 		{
 			return $users;
 		}
@@ -4623,7 +5078,7 @@ class CCalendar
 			// $users is a list of user records; reuse the resolver to fetch missing members
 			// in the exact same shape, then rely on dedup by user id.
 			$existingIds = array_map('intval', array_column($users, 'ID'));
-			$missingIds = array_values(array_diff($teamUserIds, $existingIds));
+			$missingIds = array_values(array_diff($userIds, $existingIds));
 			if (!empty($missingIds))
 			{
 				$codes = array_map(static fn($id) => 'U' . $id, $missingIds);
@@ -4633,7 +5088,7 @@ class CCalendar
 		else
 		{
 			// $users is an associative map keyed by user id.
-			foreach ($teamUserIds as $userId)
+			foreach ($userIds as $userId)
 			{
 				if (!array_key_exists($userId, $users))
 				{
@@ -5508,7 +5963,7 @@ class CCalendar
 	 */
 	public static function getEntryUrl(string $calType, int $ownerId, int $entryId, string $dateFrom): string
 	{
-		$uri = new Main\Web\Uri(Util::getPathToCalendar($ownerId, $calType));
+		$uri = new Uri(Util::getPathToCalendar($ownerId, $calType));
 
 		try
 		{
@@ -6112,7 +6567,7 @@ class CCalendar
 		}
 
 		$currentUser = \CUser::GetByID($currentUserId)->Fetch();
-		if ($currentUser === null)
+		if (!is_array($currentUser))
 		{
 			return;
 		}
@@ -6656,6 +7111,14 @@ class CCalendar
 	/**
 	 * Does not check access to the passed sections: that list is taken on trust from the caller.
 	 * Per-event view rights are still applied by CCalendarEvent::GetList(): checkPermissions is on by default.
+	 * The delta border $params['modifiedSince'] arrives already cast to Main\Type\DateTime; a value of another
+	 * type stops the read with an ArgumentTypeException instead of widening it back to the whole window.
+	 * The border alone keeps the read out of the event list cache: a delta is always built from the
+	 * database, never from a record of that cache. Going past the cache follows from the border and is
+	 * not an input of the method.
+	 * The border alone also widens the read to soft deleted rows, so that a deletion reaches the client as a
+	 * tombstone carrying DELETED = 'Y'. Both follow from the border: a read without one keeps the view of
+	 * living rows it has always had.
 	 *
 	 * @param array $params
 	 * @param array $arAttendees
@@ -6686,6 +7149,14 @@ class CCalendar
 		{
 			$arFilter["TO_LIMIT"] = $params['toLimit'];
 		}
+		if (isset($params['modifiedSince']))
+		{
+			$arFilter['TIMESTAMP_X_FROM'] = $params['modifiedSince'];
+			// a delta reads tombstones too, otherwise a deletion never reaches the client: the mark of a
+			// soft deleted row moves, but the default view of the read path drops the row. Without a border
+			// the read keeps its usual view, so the answer of the method without the parameter is untouched
+			$arFilter['DELETED'] = false;
+		}
 
 		$arFilter["OWNER_ID"] = $ownerId;
 
@@ -6704,7 +7175,7 @@ class CCalendar
 
 		$arFilter['SECTION'] = $sectionIds;
 
-		$res = CCalendarEvent::GetList([
+		$getListParams = [
 			'arFilter' => $arFilter,
 			'parseRecursion' => true,
 			'parseDescription' => false,
@@ -6714,7 +7185,15 @@ class CCalendar
 			'setDefaultLimit' => false,
 			'limit' => $params['limit'] ?? null,
 			'getUserfields' => true,
-		]);
+		];
+
+		// the key is absent by default: it is hashed into the event_list cache key
+		if (isset($params['modifiedSince']))
+		{
+			$getListParams['skipCache'] = true;
+		}
+
+		$res = CCalendarEvent::GetList($getListParams);
 
 		$result = [];
 		foreach ($res as $event)
@@ -6948,10 +7427,103 @@ class CCalendar
 			{
 				self::$accessNames[$code] = trim(htmlspecialcharsbx($name['name']));
 			}
+
+			$userCodesToFill = [];
+			foreach ($codes as $code)
+			{
+				if (self::shouldFillUserAccessName($code, (string)(self::$accessNames[$code] ?? '')))
+				{
+					$userCodesToFill[] = $code;
+				}
+			}
+
+			self::fillUserAccessNames($userCodesToFill);
 			self::$accessNames['UA'] = Loc::getMessage('EC_ENTITY_SELECTOR_ALL_EMPLOYEES');
 		}
 
 		return self::$accessNames;
+	}
+
+	private static function fillUserAccessNames(array $codes): void
+	{
+		$userIds = self::getUserIdsFromAccessCodes($codes);
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		foreach (self::GetUserList($userIds) as $user)
+		{
+			if (!is_array($user))
+			{
+				continue;
+			}
+
+			$name = self::getUserAccessName($user);
+			if ($name !== '')
+			{
+				self::$accessNames['U' . $user['ID']] = htmlspecialcharsbx($name);
+			}
+		}
+	}
+
+	private static function getUserIdsFromAccessCodes(array $codes): array
+	{
+		$userIds = [];
+		foreach ($codes as $code)
+		{
+			if (preg_match('/^U(\d+)$/', $code, $matches))
+			{
+				$userIds[(int)$matches[1]] = (int)$matches[1];
+			}
+		}
+
+		return array_values($userIds);
+	}
+
+	private static function shouldFillUserAccessName(string $code, string $name): bool
+	{
+		if (!preg_match('/^U(\d+)$/', $code, $matches))
+		{
+			return false;
+		}
+
+		return self::isRawUserAccessName($name, (int)$matches[1]);
+	}
+
+	private static function getUserAccessName(array $user): string
+	{
+		$userId = (int)$user['ID'];
+		$name = trim(self::GetUserName($user));
+		if (!self::isRawUserAccessName($name, $userId))
+		{
+			return $name;
+		}
+
+		// Invited users can be displayed as a raw access code, so use stable profile fields as fallback.
+		foreach (['LOGIN', 'EMAIL'] as $field)
+		{
+			$name = trim((string)($user[$field] ?? ''));
+			if (!self::isRawUserAccessName($name, $userId))
+			{
+				return $name;
+			}
+		}
+
+		return '';
+	}
+
+	private static function isRawUserAccessName(?string $name, int $userId): bool
+	{
+		$name = trim((string)$name);
+
+		return
+			$name === ''
+			|| $name === 'U' . $userId
+			|| $name === (string)$userId
+			|| $name === '[' . $userId . ']'
+			|| $name === $userId . ' [' . $userId . ']'
+		;
 	}
 
 	public static function SetSilentErrorMode($silentErrorMode = true)
@@ -7396,6 +7968,760 @@ class CCalendar
 		return implode(';', array_unique(array_merge($currentExDates, $newExDates)));
 	}
 
+	private static function checkRecurrenceAllLocationOccupancy(
+		array &$params,
+		array $curEvent,
+		int $userId,
+	): ?Rooms\OccupancyLock
+	{
+		if (!CCalendarEvent::CheckRecurcion($curEvent))
+		{
+			return null;
+		}
+
+		$recId = $curEvent['RECURRENCE_ID'] ?: $curEvent['ID'];
+		if (!$recId)
+		{
+			return null;
+		}
+
+		$currentFromTs = self::Timestamp($params['arFields']['DATE_FROM'], false);
+		$length = self::Timestamp($params['arFields']['DATE_TO'], false)
+			- self::Timestamp($params['arFields']['DATE_FROM'], false)
+		;
+		$allDayDurationDays = self::getRecurrentEventDayDuration(
+			$params['arFields']['DATE_FROM'],
+			$params['arFields']['DATE_TO'],
+		);
+
+		if (!isset($params['arFields']['DATE_FROM'], $params['arFields']['DATE_TO']))
+		{
+			$length = $curEvent['DT_LENGTH'];
+			$currentFromTs = self::Timestamp($curEvent['DATE_FROM']);
+			$allDayDurationDays = self::getRecurrentEventDayDuration(
+				$curEvent['DATE_FROM'],
+				$curEvent['DATE_TO'],
+			);
+		}
+
+		[$isRecurrentLocationChanged, $params] = self::checkRecurrenceLocationChanges($params, $curEvent);
+		$isRecurrentTimeChanged = (self::Timestamp($curEvent['DATE_FROM'], false) % self::DAY_LENGTH)
+			!== ($currentFromTs % self::DAY_LENGTH)
+		;
+		$recurrentDayDelta = (int)($params['recurrentDayDelta'] ?? 0);
+		$events = CCalendarEvent::GetEventsByRecId($recId, false) ?: [];
+		$relatedRoomIds = self::getRecurrenceRelatedRoomIds(
+			$events,
+			null,
+			$isRecurrentLocationChanged,
+			$params['arFields']['LOCATION'] ?? null,
+		);
+		$relatedRoomEventIds = self::getRecurrenceRelatedRoomEventIds(
+			[...$events, $curEvent],
+			null,
+		);
+		$params['occupancyExcludedEventIds'] = $relatedRoomEventIds;
+
+		$occupancyLock = null;
+		try
+		{
+			$occupancyCandidates = [[
+				'fields' => $params['arFields'],
+				'params' => $params,
+				'event' => $curEvent,
+			]];
+
+			foreach ($events as $event)
+			{
+				if ((int)$event['ID'] === (int)$curEvent['ID'] || (int)$event['PARENT_ID'] !== (int)$event['ID'])
+				{
+					continue;
+				}
+
+				$eventParams = $params;
+				$eventParams['recursionEditMode'] = 'this';
+				$eventFields = self::getRecurrenceAllLocationOccupancyFields(
+					$params['arFields'],
+					$event,
+					$currentFromTs,
+					$length,
+					$allDayDurationDays,
+					$isRecurrentTimeChanged,
+					$isRecurrentLocationChanged,
+					$recurrentDayDelta,
+				);
+				$occupancyCandidates[] = [
+					'fields' => $eventFields,
+					'params' => $eventParams,
+					'event' => $event,
+				];
+			}
+
+			$hasOccupancyConflict = false;
+			$occupancyLock = self::checkRecurrenceLocationOccupancyBatch(
+				$occupancyCandidates,
+				$userId,
+				$relatedRoomIds,
+				$relatedRoomEventIds,
+				$hasOccupancyConflict,
+			);
+			if ($occupancyLock instanceof Rooms\OccupancyLock)
+			{
+				self::assertRecurrenceRelatedMasterEventsUnchanged($recId, $events);
+				$params['occupancySnapshots'] = self::createRecurrenceOccupancySnapshots($events, $curEvent);
+				$params['locationOccupancyPrechecked'] = true;
+			}
+			$checkLocationOccupancy = $params['checkLocationOccupancy'] ?? null;
+			if (
+				$hasOccupancyConflict
+				&& ($checkLocationOccupancy === 'N' || $checkLocationOccupancy === false)
+			)
+			{
+				$params['occupancyConflictDetected'] = true;
+			}
+
+			return $occupancyLock;
+		}
+		catch (\Throwable $exception)
+		{
+			self::releaseRecurrenceOccupancyLock($occupancyLock);
+			throw $exception;
+		}
+	}
+
+	private static function createRecurrenceOccupancySnapshots(array $events, array $curEvent): array
+	{
+		$oldLocations = [];
+		foreach ([...$events, $curEvent] as $event)
+		{
+			$eventId = (int)($event['ID'] ?? 0);
+			if ($eventId <= 0 || array_key_exists($eventId, $oldLocations))
+			{
+				continue;
+			}
+
+			if (
+				$event === $curEvent
+				|| (int)($event['PARENT_ID'] ?? 0) === $eventId
+			)
+			{
+				$oldLocations[$eventId] = $event['LOCATION'] ?? null;
+			}
+		}
+
+		return Rooms\Manager::createOccupancySnapshots(array_keys($oldLocations), $oldLocations);
+	}
+
+	private static function assertRecurrenceRelatedMasterEventsUnchanged(
+		int $recurrenceId,
+		array $expectedEvents,
+		?int $currentDateTimestamp = null,
+	): void
+	{
+		$expectedVersions = self::getRecurrenceRelatedMasterEventVersions($expectedEvents, $currentDateTimestamp);
+		$currentEvents = EventTable::query()
+			->setSelect(['ID', 'PARENT_ID', 'DATE_FROM', 'VERSION'])
+			->where('RECURRENCE_ID', $recurrenceId)
+			->where('DELETED', 'N')
+			->whereColumn('ID', 'PARENT_ID')
+			->exec()
+			->fetchAll()
+		;
+		$currentVersions = self::getRecurrenceRelatedMasterEventVersions($currentEvents, $currentDateTimestamp);
+
+		if ($expectedVersions !== $currentVersions)
+		{
+			throw new Rooms\OccupancyLockedException();
+		}
+	}
+
+	private static function getRecurrenceRelatedMasterEventVersions(
+		array $events,
+		?int $currentDateTimestamp,
+	): array
+	{
+		$eventVersions = [];
+		foreach ($events as $event)
+		{
+			$eventId = (int)($event['ID'] ?? 0);
+			if (
+				$eventId <= 0
+				|| $eventId !== (int)($event['PARENT_ID'] ?? 0)
+				|| (
+					$currentDateTimestamp !== null
+					&& self::Timestamp($event['DATE_FROM'] ?? null, false) <= $currentDateTimestamp
+				)
+			)
+			{
+				continue;
+			}
+
+			$eventVersions[$eventId] = (int)($event['VERSION'] ?? 0);
+		}
+
+		ksort($eventVersions, SORT_NUMERIC);
+
+		return $eventVersions;
+	}
+
+	private static function releaseRecurrenceOccupancyLock(?Rooms\OccupancyLock &$occupancyLock): void
+	{
+		if (!$occupancyLock)
+		{
+			return;
+		}
+
+		$releaseException = null;
+		try
+		{
+			$isReleased = $occupancyLock->release();
+		}
+		catch (\Throwable $exception)
+		{
+			$isReleased = false;
+			$releaseException = $exception;
+		}
+
+		$occupancyLock = null;
+
+		if (!$isReleased)
+		{
+			self::logRecurrenceOccupancyLockReleaseFailure($releaseException);
+		}
+	}
+
+	private static function logRecurrenceOccupancyLockReleaseFailure(?\Throwable $exception): void
+	{
+		try
+		{
+			ServiceLocator::getInstance()
+				->get(RequestLogger::class)
+				->error(
+					'Calendar location occupancy lock release failure',
+					[
+						'exception' => $exception ? get_class($exception) : null,
+						'exceptionMessage' => $exception?->getMessage(),
+					]
+				)
+			;
+		}
+		catch (\Throwable)
+		{
+		}
+	}
+
+	private static function getRecurrenceAllLocationOccupancyFields(
+		array $arFields,
+		array $event,
+		int $currentFromTs,
+		int $length,
+		int $allDayDurationDays,
+		bool $isRecurrentTimeChanged,
+		bool $isRecurrentLocationChanged,
+		int $recurrentDayDelta,
+	): array
+	{
+		$fields = $arFields;
+		$instanceLength = $event['DT_LENGTH'] ?? $length;
+		$shiftedEventFromTs = self::Timestamp(
+			self::shiftRecurrentDateByDays($event['DATE_FROM'], $recurrentDayDelta, true),
+		);
+
+		if ($fields['SKIP_TIME'] ?? false)
+		{
+			$fields['DATE_FROM'] = self::shiftRecurrentDateByDays(
+				$event['DATE_FROM'],
+				$recurrentDayDelta,
+				false,
+			);
+			$fields['DATE_TO'] = self::shiftRecurrentDateByDays(
+				$fields['DATE_FROM'],
+				$allDayDurationDays,
+				false,
+			);
+		}
+		elseif ($isRecurrentTimeChanged)
+		{
+			$newFromTs = self::DateWithNewTime($currentFromTs, $shiftedEventFromTs);
+			$fields['DATE_FROM'] = self::Date($newFromTs);
+			$fields['DATE_TO'] = self::Date($newFromTs + $length);
+		}
+		else
+		{
+			$fields['DATE_FROM'] = self::Date($shiftedEventFromTs);
+			$fields['DATE_TO'] = self::Date($shiftedEventFromTs + $instanceLength);
+		}
+
+		if (!$isRecurrentLocationChanged)
+		{
+			$fields['LOCATION'] = $event['LOCATION'] ?? '';
+			if (!empty($fields['LOCATION']))
+			{
+				$parsedRelatedLocation = Rooms\Util::parseLocation($fields['LOCATION']);
+				if (!empty($parsedRelatedLocation['room_event_id']))
+				{
+					$fields['LOCATION'] = 'calendar_' . $parsedRelatedLocation['room_id'];
+				}
+			}
+		}
+
+		return $fields;
+	}
+
+	private static function checkRecurrenceLocationOccupancy(
+		array $arFields,
+		array $params,
+		array $curEvent,
+		int $userId,
+		array $additionalRoomIds = [],
+		array $additionalEventIds = [],
+		array $additionalCurrentEventIds = [],
+	): ?Rooms\OccupancyLock
+	{
+		return self::checkRecurrenceLocationOccupancyBatch(
+			[[
+				'fields' => $arFields,
+				'params' => $params,
+				'event' => $curEvent,
+			]],
+			$userId,
+			$additionalRoomIds,
+			$additionalEventIds,
+			additionalCurrentEventIds: $additionalCurrentEventIds,
+		);
+	}
+
+	private static function checkRecurrenceLocationOccupancyBatch(
+		array $candidates,
+		int $userId,
+		array $additionalRoomIds = [],
+		array $additionalEventIds = [],
+		?bool &$hasOccupancyConflict = null,
+		array $additionalCurrentEventIds = [],
+	): ?Rooms\OccupancyLock
+	{
+		$hasOccupancyConflict = false;
+		if ($candidates === [])
+		{
+			return null;
+		}
+
+		$firstParams = is_array($candidates[0]['params'] ?? null) ? $candidates[0]['params'] : [];
+		$checkLocationOccupancy = $firstParams['checkLocationOccupancy'] ?? null;
+		$isConfirmedSyncSource = CCalendarEvent::isConfirmedSyncSource($firstParams['originalFrom'] ?? null);
+		if ($isConfirmedSyncSource)
+		{
+			return null;
+		}
+
+		$isOccupancyEnabled = \Bitrix\Main\Config\Option::get(
+			'calendar',
+			'isOccupancyCheckerEnabled',
+			'Y',
+			'-',
+		) !== 'N';
+		$roomIds = $isOccupancyEnabled
+			? array_fill_keys(array_map('intval', $additionalRoomIds), true)
+			: []
+		;
+		$additionalLocationConnectionCache = [];
+		$fieldsToCheck = [];
+		foreach ($candidates as $candidate)
+		{
+			$arFields = $candidate['fields'] ?? null;
+			$curEvent = $candidate['event'] ?? null;
+			$params = is_array($candidate['params'] ?? null) ? $candidate['params'] : $firstParams;
+			if (!is_array($arFields) || !is_array($curEvent))
+			{
+				continue;
+			}
+
+			$location = $arFields['LOCATION'] ?? null;
+			if (is_array($location))
+			{
+				$location = $location['NEW'] ?? null;
+			}
+
+			$oldLocation = $curEvent['LOCATION'] ?? null;
+			if ($oldLocation === null && is_array($arFields['LOCATION'] ?? null))
+			{
+				$oldLocation = $arFields['LOCATION']['OLD'] ?? null;
+			}
+
+			$newRoomId = (int)(Rooms\Util::parseLocation($location)['room_id'] ?? 0);
+			foreach (
+				Rooms\OccupancyLock::resolveRoomIds(
+					$oldLocation,
+					$location,
+					$additionalLocationConnectionCache,
+				) as $roomId
+			)
+			{
+				if ($isOccupancyEnabled)
+				{
+					$roomIds[$roomId] = true;
+				}
+			}
+			if (!$isOccupancyEnabled || $newRoomId <= 0)
+			{
+				continue;
+			}
+
+			$fieldsToCheckEntry = $arFields;
+			$fieldsToCheckEntry['ID'] = (int)($curEvent['ID'] ?? $arFields['ID'] ?? 0);
+			$fieldsToCheckEntry['PARENT_ID'] = ($params['recursionEditMode'] ?? null) === 'this'
+				? (int)($curEvent['ID'] ?? $fieldsToCheckEntry['ID'])
+				: (int)($curEvent['PARENT_ID'] ?? $curEvent['ID'] ?? $fieldsToCheckEntry['ID'])
+			;
+			$fieldsToCheckEntry['LOCATION'] = ['NEW' => $location];
+			$fieldsToCheckEntry['DATE_FROM_TS_UTC'] = self::getDateTimestampUtc(
+				$fieldsToCheckEntry,
+				'DATE_FROM',
+				'TZ_FROM',
+			);
+			$fieldsToCheckEntry['DATE_TO_TS_UTC'] = self::getDateTimestampUtc(
+				$fieldsToCheckEntry,
+				'DATE_TO',
+				'TZ_TO',
+			);
+			if (
+				!empty($fieldsToCheckEntry['TZ_FROM'])
+				&& $fieldsToCheckEntry['DATE_FROM_TS_UTC'] > 0
+			)
+			{
+				$fieldsToCheckEntry['TZ_OFFSET_FROM'] = self::Timestamp(
+					$fieldsToCheckEntry['DATE_FROM'],
+					false,
+					true,
+				) - $fieldsToCheckEntry['DATE_FROM_TS_UTC'];
+			}
+			else
+			{
+				$fieldsToCheckEntry['TZ_OFFSET_FROM'] ??= $curEvent['TZ_OFFSET_FROM'] ?? 0;
+			}
+			if (
+				!empty($fieldsToCheckEntry['TZ_TO'])
+				&& $fieldsToCheckEntry['DATE_TO_TS_UTC'] > 0
+			)
+			{
+				$fieldsToCheckEntry['TZ_OFFSET_TO'] = self::Timestamp(
+					$fieldsToCheckEntry['DATE_TO'],
+					false,
+					true,
+				) - $fieldsToCheckEntry['DATE_TO_TS_UTC'];
+			}
+			else
+			{
+				$fieldsToCheckEntry['TZ_OFFSET_TO'] ??= $curEvent['TZ_OFFSET_TO'] ?? 0;
+			}
+			$fieldsToCheckEntry = self::normalizeRecurrenceLocationOccupancyFields(
+				$fieldsToCheckEntry,
+				$curEvent,
+			);
+			$rrule = CCalendarEvent::ParseRRULE($fieldsToCheckEntry['RRULE'] ?? null);
+			if (($params['recursionEditMode'] ?? null) === 'this')
+			{
+				unset($fieldsToCheckEntry['RRULE']);
+			}
+			elseif (isset($rrule['COUNT']))
+			{
+				$fieldsToCheckEntry['DATE_TO_TS_UTC'] = CCalendarEvent::calculateUntilForCountRRule($fieldsToCheckEntry);
+			}
+			else
+			{
+				$fieldsToCheckEntry['DATE_TO_TS_UTC'] = self::getRecurrenceLocationOccupancyEndTimestamp(
+					$fieldsToCheckEntry,
+					$rrule,
+				);
+			}
+
+			$fieldsToCheck[] = $fieldsToCheckEntry;
+		}
+
+		$roomIds = array_values(array_filter(array_map('intval', array_keys($roomIds))));
+		sort($roomIds, SORT_NUMERIC);
+		if ($roomIds === [])
+		{
+			return null;
+		}
+
+		$occupancyLock = $firstParams['occupancyLock'] ?? null;
+		$ownsOccupancyLock = !($occupancyLock instanceof Rooms\OccupancyLock);
+		if ($ownsOccupancyLock)
+		{
+			$occupancyLock = new Rooms\OccupancyLock();
+		}
+		$occupancyLock->acquire($roomIds);
+
+		try
+		{
+			$currentEventIds = array_fill_keys(array_map('intval', $additionalCurrentEventIds), true);
+			$newLocationsByEventId = [];
+			foreach ($candidates as $candidate)
+			{
+				$eventId = (int)($candidate['event']['ID'] ?? 0);
+				if ($eventId > 0)
+				{
+					$currentEventIds[$eventId] = true;
+					$location = $candidate['fields']['LOCATION'] ?? null;
+					$newLocationsByEventId[$eventId] = is_array($location) ? ($location['NEW'] ?? null) : $location;
+				}
+			}
+			$currentEventIds = array_values(array_filter(array_map('intval', array_keys($currentEventIds))));
+			$currentEventsById = [];
+			foreach (array_chunk($currentEventIds, 300) as $eventIdChunk)
+			{
+				$currentEvents = EventTable::query()
+					->setSelect(['ID', 'LOCATION'])
+					->whereIn('ID', $eventIdChunk)
+					->where('DELETED', 'N')
+					->exec()
+					->fetchAll()
+				;
+				foreach ($currentEvents as $currentEvent)
+				{
+					$currentEventsById[(int)$currentEvent['ID']] = $currentEvent;
+				}
+			}
+			if (count($currentEventsById) !== count($currentEventIds))
+			{
+				throw new Rooms\OccupancyLockedException();
+			}
+			$reservations = [];
+			foreach ($currentEventsById as $currentEvent)
+			{
+				$requiredRoomIds = Rooms\OccupancyLock::resolveRoomIds(
+					$currentEvent['LOCATION'] ?? null,
+					null,
+					$additionalLocationConnectionCache,
+				);
+				if (!$occupancyLock->hasAcquiredRoomIds($requiredRoomIds))
+				{
+					throw new Rooms\OccupancyLockedException();
+				}
+				$reservation = Rooms\Util::parseLocation($currentEvent['LOCATION'] ?? null);
+				if ($reservation['room_event_id'])
+				{
+					$reservations[] = [
+						'bookingId' => (int)$reservation['room_event_id'],
+						'roomId' => (int)$reservation['room_id'],
+						'newLocation' => $newLocationsByEventId[(int)$currentEvent['ID']] ?? null,
+					];
+				}
+			}
+			Rooms\Manager::assertReservationsAvailable(
+				$reservations,
+				($firstParams['checkPermission'] ?? null) !== false,
+				$userId,
+				($firstParams['checkPermission'] ?? null) !== false,
+			);
+
+			$occupancyCheckParams = [
+				'checkPermission' => $firstParams['checkPermission'] ?? null,
+				'occupancyExcludedEventIds' => $additionalEventIds,
+			];
+			$checkLocationOccupancyPermission = ($firstParams['checkPermission'] ?? null) !== false;
+			if (array_key_exists('checkLocationOccupancyPermission', $firstParams))
+			{
+				$occupancyCheckParams['checkLocationOccupancyPermission'] = $firstParams['checkLocationOccupancyPermission'];
+				$checkLocationOccupancyPermission = $firstParams['checkLocationOccupancyPermission'] === true;
+			}
+
+			if ($fieldsToCheck !== [])
+			{
+				$hasModernOccupancyConflict = CCalendarEvent::checkLocationOccupancyBatch(
+					$fieldsToCheck,
+					$occupancyCheckParams,
+					$checkLocationOccupancy === null
+						? null
+						: $checkLocationOccupancy !== 'N' && $checkLocationOccupancy !== false,
+					$checkLocationOccupancyPermission,
+				);
+				$hasOccupancyConflict = $hasOccupancyConflict || $hasModernOccupancyConflict;
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			if ($ownsOccupancyLock)
+			{
+				self::releaseRecurrenceOccupancyLock($occupancyLock);
+			}
+
+			throw $exception;
+		}
+
+		return $occupancyLock;
+	}
+
+	private static function normalizeRecurrenceLocationOccupancyFields(array $fields, array $curEvent): array
+	{
+		$skipTime = array_key_exists('SKIP_TIME', $fields)
+			? $fields['SKIP_TIME']
+			: ($fields['DT_SKIP_TIME'] ?? $curEvent['DT_SKIP_TIME'] ?? 'N')
+		;
+		$fields['DT_SKIP_TIME'] = self::normalizeRecurrenceSkipTime($skipTime);
+		$fields['DT_LENGTH'] = max(
+			0,
+			(int)$fields['DATE_TO_TS_UTC'] - (int)$fields['DATE_FROM_TS_UTC'],
+		);
+		if ($fields['DT_SKIP_TIME'] === 'Y')
+		{
+			$fields['DT_LENGTH'] += self::GetDayLen();
+		}
+
+		return $fields;
+	}
+
+	private static function normalizeRecurrenceSkipTime(mixed $skipTime): string
+	{
+		if (is_bool($skipTime))
+		{
+			return $skipTime ? 'Y' : 'N';
+		}
+
+		return in_array(mb_strtoupper((string)$skipTime), ['1', 'TRUE', 'Y'], true) ? 'Y' : 'N';
+	}
+
+	private static function getRecurrenceLocationOccupancyEndTimestamp(array $fields, ?array $rrule = null): int
+	{
+		$maxTimestamp = self::Timestamp(self::GetMaxDate(), false);
+		$rrule ??= CCalendarEvent::ParseRRULE($fields['RRULE'] ?? null);
+		$untilTimestamp = (int)($rrule['UNTIL_TS'] ?? 0);
+		if ($untilTimestamp <= 0 && is_string($rrule['UNTIL'] ?? null))
+		{
+			$untilTimestamp = self::TimestampUTC($rrule['UNTIL']);
+		}
+
+		if ($untilTimestamp > 0 && $untilTimestamp < $maxTimestamp)
+		{
+			return min($maxTimestamp, $untilTimestamp + self::GetDayLen());
+		}
+
+		return $maxTimestamp;
+	}
+
+	private static function getRecurrenceRelatedRoomIds(
+		array $events,
+		?int $currentDateTimestamp,
+		bool $isLocationChanged,
+		mixed $newLocation,
+	): array
+	{
+		$roomIds = [];
+		$additionalLocationConnectionCache = [];
+		if (is_array($newLocation))
+		{
+			$newLocation = $newLocation['NEW'] ?? null;
+		}
+
+		foreach ($events as $event)
+		{
+			$isRoomReservation = ($event['CAL_TYPE'] ?? null) === Rooms\Manager::TYPE;
+			if (!$isRoomReservation && (int)($event['ID'] ?? 0) !== (int)($event['PARENT_ID'] ?? 0))
+			{
+				continue;
+			}
+
+			if (
+				$currentDateTimestamp !== null
+				&& self::Timestamp($event['DATE_FROM'] ?? null, false) <= $currentDateTimestamp
+			)
+			{
+				continue;
+			}
+
+			$oldLocation = $event['LOCATION'] ?? null;
+			$relatedLocation = $newLocation;
+			if (!$isLocationChanged)
+			{
+				$relatedLocation = $oldLocation;
+				$parsedLocation = Rooms\Util::parseLocation($relatedLocation);
+				if (!empty($parsedLocation['room_event_id']))
+				{
+					$relatedLocation = 'calendar_' . $parsedLocation['room_id'];
+				}
+			}
+
+			foreach (
+				Rooms\OccupancyLock::resolveRoomIds(
+					$oldLocation,
+					$relatedLocation,
+					$additionalLocationConnectionCache,
+				) as $roomId
+			)
+			{
+				$roomIds[$roomId] = true;
+			}
+		}
+
+		$roomIds = array_values(array_filter(array_map('intval', array_keys($roomIds))));
+		sort($roomIds, SORT_NUMERIC);
+
+		return $roomIds;
+	}
+
+	private static function getRecurrenceRelatedRoomEventIds(
+		array $events,
+		?int $currentDateTimestamp,
+	): array
+	{
+		$roomEventIds = [];
+		foreach ($events as $event)
+		{
+			$isRoomReservation = ($event['CAL_TYPE'] ?? null) === Rooms\Manager::TYPE;
+
+			if (
+				$currentDateTimestamp !== null
+				&& self::Timestamp($event['DATE_FROM'] ?? null, false) <= $currentDateTimestamp
+			)
+			{
+				continue;
+			}
+
+			$roomEventId = $isRoomReservation
+				? ($event['ID'] ?? false)
+				: (Rooms\Util::parseLocation($event['LOCATION'] ?? null)['room_event_id'] ?? false)
+			;
+			if ($roomEventId)
+			{
+				$roomEventIds[] = (int)$roomEventId;
+			}
+		}
+
+		return array_values(array_unique(array_filter($roomEventIds)));
+	}
+
+	private static function getDateTimestampUtc(array $fields, string $dateField, string $timezoneField): int
+	{
+		if (empty($fields[$dateField]))
+		{
+			return 0;
+		}
+
+		try
+		{
+			$timezone = !empty($fields[$timezoneField])
+				? new \DateTimeZone($fields[$timezoneField])
+				: null
+			;
+			$timestamp = self::Timestamp($fields[$dateField], false, true);
+			if ($timestamp <= 0)
+			{
+				return 0;
+			}
+			if (!\CTimeZone::OptionEnabled())
+			{
+				return $timestamp;
+			}
+
+			return (new \DateTimeImmutable(gmdate('Y-m-d H:i:s', $timestamp), $timezone))->getTimestamp();
+		}
+		catch (\Throwable)
+		{
+			return 0;
+		}
+	}
+
 	/**
 	 * @param array $params
 	 * @param array $curEvent
@@ -7472,7 +8798,7 @@ class CCalendar
 		return $noEditAccessedCalendars;
 	}
 
-	public static function getCurrentEventForSaving(int $eventId, $userId, $checkPermission)
+	public static function getCurrentEventForSaving(int $eventId, $userId, $checkPermission, bool $skipCache = false)
 	{
 		$result = CCalendarEvent::GetList(
 			[
@@ -7486,6 +8812,7 @@ class CCalendar
 				'userId' => $userId,
 				'checkPermissions' => $checkPermission,
 				'loadOriginalRecursion' => true,
+				'skipCache' => $skipCache,
 			]
 		);
 
@@ -7656,4 +8983,32 @@ class CCalendar
 
 		return $createDefault;
 	}
+	private static function scheduleParentInstanceSync($id): void
+	{
+		ExclusionSaveTransaction::afterCommit(static function () use ($id): void {
+			CCalendarEvent::updateSearchIndex((int)$id, [
+				'updateAllByParent' => true,
+			]);
+		});
+	}
+
+
+	private static function scheduleSavedEventSync($id, $syncEventFields, $syncParams, $syncCurrentEvent): void
+	{
+		ExclusionSaveTransaction::afterCommit(
+			static function () use ($id, $syncEventFields, $syncParams, $syncCurrentEvent): void {
+				self::syncChange($id, $syncEventFields, $syncParams, $syncCurrentEvent);
+			},
+		);
+	}
+
+	private static function scheduleEventEditHandler($arEvent, $eventFields, $bNew, $userId): void
+	{
+		ExclusionSaveTransaction::afterCommit(
+			static function () use ($arEvent, $eventFields, $bNew, $userId): void {
+				ExecuteModuleEventEx($arEvent, [$eventFields, $bNew, $userId]);
+			},
+		);
+	}
+
 }

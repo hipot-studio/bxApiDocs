@@ -7,6 +7,7 @@ namespace Bitrix\Socialnetwork\V2\Infrastructure\Grid\Workgroup\Row\Assembler\Fi
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\V2\Infrastructure\Grid\Project\Row\Assembler\Field\AvatarBorderVariant;
+use Bitrix\Socialnetwork\V2\Infrastructure\Grid\Shared\Js\ProjectListControllerActionBuilder;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Avatar;
 
 /**
@@ -38,9 +39,10 @@ class WorkgroupNameFieldAssembler extends FieldAssembler
 			? $this->renderCollabAvatar(data: $data, escapedName: $escapedName, picPath: $picPath)
 			: $this->renderRoundAvatar(escapedName: $escapedName, picPath: $picPath);
 
+		$entityId = (int)($data['ID'] ?? 0);
 		$html = '<div class="socialnetwork-project-list-name-container">'
 			. $avatarSpan
-			. $this->renderNameNode($escapedName, $viewUrl)
+			. $this->renderNameNode($escapedName, $viewUrl, $entityId, $type)
 			. '</div>';
 
 		foreach ($this->getColumnIds() as $columnId)
@@ -75,14 +77,17 @@ class WorkgroupNameFieldAssembler extends FieldAssembler
 			. '></span>';
 	}
 
-	private function renderNameNode(string $escapedName, string $viewUrl): string
+	private function renderNameNode(string $escapedName, string $viewUrl, int $entityId, ?string $entityType): string
 	{
 		if ($viewUrl === '')
 		{
 			return '<span>' . $escapedName . '</span>';
 		}
 
-		return '<a href="' . htmlspecialcharsbx($viewUrl) . '" class="socialnetwork-project-list-name-link">'
+		$call = ProjectListControllerActionBuilder::buildNotifyOpenProjectAction($entityId, $entityType);
+		$onclickAttr = $call === '' ? '' : ' onclick="' . htmlspecialcharsbx($call) . '"';
+
+		return '<a href="' . htmlspecialcharsbx($viewUrl) . '" class="socialnetwork-project-list-name-link"' . $onclickAttr . '>'
 			. $escapedName
 			. '</a>';
 	}

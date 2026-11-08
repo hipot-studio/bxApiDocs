@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group;
 
+use Bitrix\Crm\Component\EntityList\Grid\Panel\ApplyButton;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Event;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Container;
@@ -9,7 +10,6 @@ use Bitrix\Crm\Service\Factory;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Grid\Panel\Action\Group\GroupChildAction;
 use Bitrix\Main\Grid\Panel\Actions;
-use Bitrix\Main\Grid\Panel\Snippet;
 use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\Grid\Panel\Types;
 use Bitrix\Main\HttpRequest;
@@ -19,7 +19,11 @@ use Bitrix\Main\Result;
 
 final class SetCategoryChildAction extends GroupChildAction
 {
-	public function __construct(private Factory $factory, private ?int $categoryId = null)
+	public function __construct(
+		private Factory $factory,
+		private string $gridId,
+		private ?int $categoryId = null,
+	)
 	{
 		if (!$this->factory->isCategoriesEnabled())
 		{
@@ -54,7 +58,8 @@ final class SetCategoryChildAction extends GroupChildAction
 			],
 		]);
 
-		$dropdownContainerId = 'action_set_category';
+		// the grid address keeps the id unique: a card shows several panels at once
+		$dropdownContainerId = 'action_set_category_' . $this->gridId;
 		$dropdownValueId = $dropdownContainerId . '_control';
 
 		$categoriesList = [];
@@ -110,7 +115,7 @@ final class SetCategoryChildAction extends GroupChildAction
 					'MULTIPLE' => 'N',
 					'ITEMS' => $categoriesList,
 				],
-				(new Snippet())->getApplyButton([
+				ApplyButton::forGrid($this->gridId, [
 					'ONCHANGE' => [
 						[
 							'ACTION' => Actions::CALLBACK,
@@ -119,6 +124,7 @@ final class SetCategoryChildAction extends GroupChildAction
 									'JS' =>
 										(new Event('BatchManager:executeSetCategory'))
 											->addEntityTypeId($this->factory->getEntityTypeId())
+											->addGridId($this->gridId)
 											->addValueElementId($dropdownValueId)
 											->buildJsCallback()
 									,

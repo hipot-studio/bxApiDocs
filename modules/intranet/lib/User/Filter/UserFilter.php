@@ -4,6 +4,7 @@ namespace Bitrix\Intranet\User\Filter;
 
 use Bitrix\Intranet\User\Filter\Presets\FilterPresetManager;
 use Bitrix\Main\Filter\DataProvider;
+use Bitrix\Main\Filter\Field;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\PhoneNumber;
@@ -21,6 +22,7 @@ class UserFilter extends Filter
 		'VISITOR',
 		'INVITED',
 		'INTEGRATOR',
+		'SYSTEM_USER',
 		'TAGS',
 		'DEPARTMENT',
 		'GENDER',
@@ -143,6 +145,7 @@ class UserFilter extends Filter
 				$this->filterOptions->getFilter()
 				+ $this->filterOptions->getFilterLogic($this->getFieldArrays())
 			;
+			$this->applyActivePresetVirtualFields($rawValue);
 		}
 
 		if (!empty($rawValue['FIND']))
@@ -164,6 +167,41 @@ class UserFilter extends Filter
 		$this->addSearchFilter($result, $searchString);
 
 		return $result;
+	}
+
+	/**
+	 * Virtual preset fields are not declared as filter fields, so they never reach the saved filter settings.
+	 */
+	private function applyActivePresetVirtualFields(array &$rawValue): void
+	{
+		$currentPresetId = $this->filterOptions->getCurrentFilterId();
+
+		foreach ($this->filterPresets as $preset)
+		{
+			if ($preset->getId() !== $currentPresetId)
+			{
+				continue;
+			}
+
+			$rawValue += $this->getVirtualPresetFields($preset->getFilterFields());
+
+			return;
+		}
+	}
+
+	private function getVirtualPresetFields(array $presetFields): array
+	{
+		$declaredFieldIds = array_map(
+			static fn (Field $field): string => (string)$field->getId(),
+			$this->getFields()
+		);
+
+		$isVirtualField = fn (string $fieldId): bool => (
+			in_array($fieldId, $this->uiFilterServiceFields, true)
+			&& !in_array($fieldId, $declaredFieldIds, true)
+		);
+
+		return array_filter($presetFields, $isVirtualField, ARRAY_FILTER_USE_KEY);
 	}
 
 	private function storeSelectedDepartmentFilterValue(array $filter): void

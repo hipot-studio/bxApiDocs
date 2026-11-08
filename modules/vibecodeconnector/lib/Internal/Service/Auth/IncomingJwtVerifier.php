@@ -9,6 +9,7 @@ use Bitrix\Vibecodeconnector\Internal\Entity\Pairing\Pairing;
 use Bitrix\Vibecodeconnector\Internal\Exception\IncomingJwtInvalidException;
 use Bitrix\Vibecodeconnector\Internal\Exception\PublicKeyFetchFailedException;
 use Bitrix\Vibecodeconnector\Internal\Repository\Pairing\PairingRepository;
+use Bitrix\Vibecodeconnector\Internal\Service\PublicKey\KeyRefreshThrottle;
 use Bitrix\Vibecodeconnector\Internal\Service\PublicKey\PairingKeyRefresher;
 
 final class IncomingJwtVerifier
@@ -16,6 +17,7 @@ final class IncomingJwtVerifier
 	private const ALGORITHM = 'ES256';
 	private const VERIFY_LEEWAY_SECONDS = 60;
 	private const REQUIRE_AUDIENCE_MATCH = true;
+	private const REFRESH_ATTEMPT_OPTION_PREFIX = 'pairing_key_attempt_at_';
 
 	public function __construct(
 		private readonly PairingRepository $repository = new PairingRepository(),
@@ -24,7 +26,7 @@ final class IncomingJwtVerifier
 	) {
 	}
 
-	public function verify(string $jwt): string
+	public function verify(string $jwt): object
 	{
 		if ($jwt === '')
 		{
@@ -41,9 +43,7 @@ final class IncomingJwtVerifier
 
 		if ($pairing === null && $this->cloudSharedVerifier->isApplicable($iss))
 		{
-			$this->cloudSharedVerifier->verify($jwt);
-
-			return $iss;
+			return $this->cloudSharedVerifier->verify($jwt);
 		}
 
 		if ($pairing === null)
@@ -53,6 +53,13 @@ final class IncomingJwtVerifier
 
 		if ($pairing->isExpired())
 		{
+			$throttle = new KeyRefreshThrottle(optionName: self::REFRESH_ATTEMPT_OPTION_PREFIX . md5($iss));
+			if (!$throttle->isAllowed())
+			{
+				throw new IncomingJwtInvalidException("Public key refetch for iss='{$iss}' is throttled");
+			}
+			$throttle->markAttempt();
+
 			try
 			{
 				$pairing = $this->keyRefresher->refresh($iss);
@@ -67,12 +74,10 @@ final class IncomingJwtVerifier
 			}
 		}
 
-		$this->verifySignatureAndClaims($jwt, $pairing);
-
-		return $iss;
+		return $this->verifySignatureAndClaims($jwt, $pairing);
 	}
 
-	private function verifySignatureAndClaims(string $jwt, Pairing $pairing): void
+	private function verifySignatureAndClaims(string $jwt, Pairing $pairing): object
 	{
 		try
 		{
@@ -125,6 +130,8 @@ final class IncomingJwtVerifier
 		{
 			throw new IncomingJwtInvalidException('Invalid audience');
 		}
+
+		return $payload;
 	}
 
 	private function extractIss(string $jwt): ?string

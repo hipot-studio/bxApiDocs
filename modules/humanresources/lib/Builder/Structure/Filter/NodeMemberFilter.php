@@ -99,14 +99,20 @@ final class NodeMemberFilter extends BaseFilter
 
 		if ($this->nodeFilter->depthLevel === DepthLevel::NONE)
 		{
+			$expression =
+				"SELECT 1 FROM ?#"
+				. " sub_hrm WHERE sub_hrm.NODE_ID = ?#.NODE_ID AND sub_hrm.ENTITY_ID = ?i";
+
+			$arguments = [
+				NodeMemberTable::getTableName(),
+				$query->getInitAlias(),
+				$this->entityIdFilter->entityIds->first(),
+			];
+
+			[$expression, $arguments] = $this->appendEntityTypeCondition($expression, $arguments);
+
 			$conditionTree->whereExists(
-				new SqlExpression(
-					"SELECT 1 FROM ?#"
-					. " sub_hrm WHERE sub_hrm.NODE_ID = ?#.NODE_ID AND sub_hrm.ENTITY_ID = ?",
-					NodeMemberTable::getTableName(),
-					$query->getInitAlias(),
-					$this->entityIdFilter->entityIds->first(),
-				),
+				new SqlExpression($expression, ...$arguments),
 			);
 		}
 
@@ -117,7 +123,15 @@ final class NodeMemberFilter extends BaseFilter
 				. " ?# sub_hrm "
 				. "LEFT JOIN ?# np "
 				. "ON np.CHILD_ID = sub_hrm.NODE_ID "
-				. "WHERE sub_hrm.ENTITY_ID = ?";
+				. "WHERE sub_hrm.ENTITY_ID = ?i";
+
+			$arguments = [
+				NodeMemberTable::getTableName(),
+				NodePathTable::getTableName(),
+				$this->entityIdFilter->entityIds->first(),
+			];
+
+			[$expression, $arguments] = $this->appendEntityTypeCondition($expression, $arguments);
 
 			$expression = match ($this->nodeFilter->depthLevel)
 			{
@@ -128,14 +142,26 @@ final class NodeMemberFilter extends BaseFilter
 
 			$conditionTree->whereIn(
 				'NODE_ID',
-				new SqlExpression(
-					$expression,
-					NodeMemberTable::getTableName(),
-					NodePathTable::getTableName(),
-					$this->entityIdFilter->entityIds->first(),
-					$this->nodeFilter->depthLevel,
-				),
+				new SqlExpression($expression, ...$arguments),
 			);
 		}
+	}
+
+	/**
+	 * @param string $expression
+	 * @param array $arguments
+	 *
+	 * @return array{0: string, 1: array} Expression and arguments, always extended together.
+	 */
+	private function appendEntityTypeCondition(string $expression, array $arguments): array
+	{
+		if ($this->entityType === null)
+		{
+			return [$expression, $arguments];
+		}
+
+		$arguments[] = $this->entityType->value;
+
+		return [$expression . " AND sub_hrm.ENTITY_TYPE = ?s", $arguments];
 	}
 }

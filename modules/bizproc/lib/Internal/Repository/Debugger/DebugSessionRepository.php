@@ -246,8 +246,7 @@ final class DebugSessionRepository implements DebugSessionRepositoryInterface
 
 		foreach ($ormDebugSessionCollection as $ormDebugSessionModel)
 		{
-			$debugSessionEntity = $this->debugSessionOrmMapper->convertFromOrm($ormDebugSessionModel);
-			$debugSessionCollection[] = $debugSessionEntity;
+			$debugSessionCollection->add($this->debugSessionOrmMapper->convertFromOrm($ormDebugSessionModel));
 		}
 
 		return $debugSessionCollection;
@@ -301,35 +300,41 @@ final class DebugSessionRepository implements DebugSessionRepositoryInterface
 	}
 
 	/**
+	 * @param int[] $keptSessionIds
 	 * @throws SqlQueryException
 	 */
-	public function deleteByUserId(int $userId): int
+	public function deleteByUserId(int $userId, array $keptSessionIds = []): int
 	{
+		// 0 is no id of a session and keeps the list of the placeholder non-empty
+		$keptSessionIds = [0, ...array_map('intval', $keptSessionIds)];
 		$connection = Application::getConnection();
 		$connection->startTransaction();
 
 		try
 		{
 			$countSql = new SqlExpression(
-				'SELECT COUNT(*) as CNT FROM ?# WHERE USER_ID = ?i',
+				'SELECT COUNT(*) as CNT FROM ?# WHERE USER_ID = ?i AND ID NOT IN (?@)',
 				DebugSessionTable::getTableName(),
 				$userId,
+				$keptSessionIds,
 			);
 			$countResult = $connection->query($countSql)->fetch();
 			$deletedCount = (int)($countResult['CNT'] ?? 0);
 
 			$deleteTracesSql = new SqlExpression(
-				'DELETE FROM ?# WHERE DEBUG_SESSION_ID IN (SELECT ID FROM ?# WHERE USER_ID = ?i)',
+				'DELETE FROM ?# WHERE DEBUG_SESSION_ID IN (SELECT ID FROM ?# WHERE USER_ID = ?i AND ID NOT IN (?@))',
 				DebugTraceTable::getTableName(),
 				DebugSessionTable::getTableName(),
 				$userId,
+				$keptSessionIds,
 			);
 			$connection->query($deleteTracesSql);
 
 			$deleteSessionsSql = new SqlExpression(
-				'DELETE FROM ?# WHERE USER_ID = ?i',
+				'DELETE FROM ?# WHERE USER_ID = ?i AND ID NOT IN (?@)',
 				DebugSessionTable::getTableName(),
 				$userId,
+				$keptSessionIds,
 			);
 			$connection->query($deleteSessionsSql);
 			$connection->commitTransaction();

@@ -115,6 +115,17 @@ class ListFilter
 			{
 				$filter['<' . $fieldName] = $requestFilter[$toFieldName];
 			}
+			// a range the user filled on one side only: the form writes the bound it was given and
+			// leaves the other one out, and the kanban of the same section reads such a range
+			// (Kanban::buildNumberFieldCondition)
+			elseif ($fltType === 'range' && isset($requestFilter[$fromFieldName]))
+			{
+				$filter['>=' . $fieldName] = $requestFilter[$fromFieldName];
+			}
+			elseif ($fltType === 'range' && isset($requestFilter[$toFieldName]))
+			{
+				$filter['<=' . $fieldName] = $requestFilter[$toFieldName];
+			}
 			elseif (isset($requestFilter[$fieldName]) && $requestFilter[$fieldName] === false)
 			{
 				$filter[$fieldName] = $requestFilter[$fieldName];
@@ -122,6 +133,20 @@ class ListFilter
 			elseif (isset($requestFilter[$invFieldName]) && $requestFilter[$invFieldName] === false)
 			{
 				$filter[$invFieldName] = $requestFilter[$invFieldName];
+			}
+			// a value of a preset written before the field became a number: the filter still shows
+			// such a condition, and the kanban of the same section still reads it
+			// (Kanban::buildNumberFieldCondition), so the list has to read it as well. Only a number is
+			// read there - a preset of a text field could hold anything. The selector of the form is
+			// the answer of the user even when the bound it asks for is missing, so a plain value
+			// beside it does not stand in for that bound
+			elseif (
+				!isset($requestFilter[$fieldName . '_numsel'])
+				&& isset($requestFilter[$fieldName])
+				&& is_numeric($requestFilter[$fieldName])
+			)
+			{
+				$filter[$fieldName] = $requestFilter[$fieldName];
 			}
 		}
 

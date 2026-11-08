@@ -79,7 +79,7 @@ class Imol extends Base implements Features\TraceDetectable, Features\SingleChan
 
 	protected static function getMapConnectorsToSources()
 	{
-		return [
+		$map = [
 			'yandex' => Tracking\Source\Base::Ya,
 			'vkgroup' => Tracking\Source\Base::Vk,
 			'vkgrouporder' => Tracking\Source\Base::Vk,
@@ -89,6 +89,12 @@ class Imol extends Base implements Features\TraceDetectable, Features\SingleChan
 			'fbinstagram' => Tracking\Source\Base::Ig,
 			'instagram' => Tracking\Source\Base::Ig,
 		];
+		if (Tracking\Provider::isAvitoAvailable())
+		{
+			$map['avito'] = Tracking\Source\Base::Avito;
+		}
+
+		return $map;
 	}
 
 	/**

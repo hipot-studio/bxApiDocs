@@ -11,6 +11,8 @@ use Bitrix\Rest\AppTable;
 use Bitrix\Rest\OAuth\Auth;
 use Bitrix\Rest\OAuthService;
 use Bitrix\Rest\Preset\IntegrationTable;
+use Bitrix\Rest\Public\Provider\Mapper\ApplicationDataMapper;
+use Bitrix\Rest\Public\Service\ApplicationStatusCalculator;
 use Bitrix\Rest\Sqs;
 use Bitrix\Rest\Service\ServiceContainer;
 use Bitrix\Rest\Tools\Diagnostics\Event\Logger;
@@ -74,10 +76,23 @@ class Sender
 	 * @param string $moduleId Event owner module.
 	 * @param string $eventName Event name.
 	 */
-	public static function bind($moduleId, $eventName)
+	public static function bind($moduleId, $eventName, int $version = \Bitrix\Rest\Internal\Entity\Event::VERSION_REST_V1)
 	{
 		$eventManager = EventManager::getInstance();
-		$eventManager->registerEventHandler($moduleId, $eventName, "rest", "\\Bitrix\\Rest\\Event\\Callback", static::getHandlerName($moduleId, $eventName));
+		if ($version === \Bitrix\Rest\Internal\Entity\Event::VERSION_REST_V3)
+		{
+			$eventManager->registerEventHandler(
+				fromModuleId: $moduleId,
+				eventType: $eventName,
+				toModuleId: 'rest',
+				toClass: '\\Bitrix\\Rest\\V3\\Event\\Callback',
+				toMethod: static::getHandlerName($moduleId, $eventName)
+			);
+		}
+		else
+		{
+			$eventManager->registerEventHandler($moduleId, $eventName, "rest", "\\Bitrix\\Rest\\Event\\Callback", static::getHandlerName($moduleId, $eventName));
+		}
 	}
 
 	/**
@@ -86,13 +101,38 @@ class Sender
 	 * @param string $moduleId Event owner module.
 	 * @param string $eventName Event name.
 	 */
-	public static function unbind($moduleId, $eventName)
+	public static function unbind($moduleId, $eventName, int $version = \Bitrix\Rest\Internal\Entity\Event::VERSION_REST_V1)
 	{
 		$eventManager = EventManager::getInstance();
-		$eventManager->unRegisterEventHandler($moduleId, $eventName, "rest", "\\Bitrix\\Rest\\Event\\Callback", static::getHandlerName($moduleId, $eventName));
+		if ($version === \Bitrix\Rest\Internal\Entity\Event::VERSION_REST_V3)
+		{
+			$eventManager->unRegisterEventHandler(
+				fromModuleId: $moduleId,
+				eventType: $eventName,
+				toModuleId: 'rest',
+				toClass: '\\Bitrix\\Rest\\V3\\Event\\Callback',
+				toMethod: static::getHandlerName($moduleId, $eventName)
+			);
+		}
+		else
+		{
+			$eventManager->unRegisterEventHandler(
+				$moduleId,
+				$eventName,
+				"rest",
+				"\\Bitrix\\Rest\\Event\\Callback",
+				static::getHandlerName($moduleId, $eventName)
+			);
 
-		/* compatibility */
-		$eventManager->unRegisterEventHandler($moduleId, $eventName, "rest", "CRestEventCallback", static::getHandlerName($moduleId, $eventName));
+			/* compatibility */
+			$eventManager->unRegisterEventHandler(
+				$moduleId,
+				$eventName,
+				"rest",
+				"CRestEventCallback",
+				static::getHandlerName($moduleId, $eventName)
+			);
+		}
 	}
 
 	/**
@@ -176,6 +216,8 @@ class Sender
 		$userOwnedLegacyCustomBotTokens = $isUserWebhookDenied
 			? static::getUserOwnedLegacyCustomBotTokens($handlersList)
 			: [];
+		$applicationDataMapper = new ApplicationDataMapper();
+		$statusCalculator = new ApplicationStatusCalculator();
 
 		foreach($handlersList as $handlerInfo)
 		{
@@ -205,7 +247,7 @@ class Sender
 				&& $handlerUserId <= 0
 				&& !$isLegacyCustomBotHandler;
 			if (
-				!$tariffAccessService->isOutgoingEventHandlerAvailable(
+				!static::isOutgoingEventHandlerAvailable(
 					$isPublishedApplication,
 					$isSystemHandler,
 					$isUserWebhookDenied,
@@ -254,8 +296,12 @@ class Sender
 				{
 					$application = static::getApplicationData($appId);
 				}
-				$appStatus = \Bitrix\Rest\AppTable::getAppStatusInfo($application, '');
-				if($appStatus['PAYMENT_ALLOW'] === 'Y')
+
+				$applicationProjection = is_array($application)
+					? $applicationDataMapper->convertFromRow($application)
+					: null
+				;
+				if ($applicationProjection !== null && $statusCalculator->calculate($applicationProjection)->isPaymentAllowed())
 				{
 					$authData = array(
 						Session::PARAM_SESSION => $session,
@@ -368,6 +414,17 @@ class Sender
 		static::$appData[$appId] = $dbRes->fetch();
 
 		return static::$appData[$appId];
+	}
+
+	private static function isOutgoingEventHandlerAvailable(
+		bool $isPublishedApplication,
+		bool $isSystemHandler,
+		bool $isUserWebhookDenied,
+	): bool
+	{
+		return $isPublishedApplication
+			|| $isSystemHandler
+			|| !$isUserWebhookDenied;
 	}
 
 	/**

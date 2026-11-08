@@ -5,25 +5,82 @@ namespace Bitrix\Crm\Service\WebForm;
 use Bitrix\Crm\Service\WebForm\Scenario\BaseBuilder;
 use Bitrix\Crm\Service\WebForm\Scenario\DependencyScenario\DependencyItem;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UserConsent\Agreement;
+use Bitrix\Main\UserConsent\Internals\AgreementTable;
 
 class ScenarioOptionBuilder extends BaseBuilder
 {
-	static $agreements;
+	private const PERSONAL_DATA_AGREEMENT_CODE = 'crm_def';
+
+	private static bool $personalDataAgreementResolved = false;
+	private static ?int $personalDataAgreementId = null;
+	private static bool $defaultAgreementResolved = false;
+	private static ?int $defaultAgreementId = null;
 
 	/**
 	 * @var bool
 	 */
 	private bool $supportPreset = false;
 
-	private static function getAgreements(): array
+	/**
+	 * Built-in personal data agreement is the only document allowed to be accepted by form submit.
+	 * Returns null when the portal has no such document: an arbitrary agreement must not silently
+	 * inherit that legally significant mode.
+	 *
+	 * The result is memoized per hit, absence included: the scenario dictionary builds a separate
+	 * builder for every scenario and would otherwise repeat the same query for each of them.
+	 */
+	private static function getPersonalDataAgreementId(): ?int
 	{
-		if (!self::$agreements)
+		if (self::$personalDataAgreementResolved)
 		{
-			self::$agreements = array_reverse(array_keys(Agreement::getActiveList()));
+			return self::$personalDataAgreementId;
 		}
 
-		return self::$agreements;
+		$agreement = AgreementTable::getRow([
+			'select' => ['ID'],
+			'filter' => [
+				'=CODE' => self::PERSONAL_DATA_AGREEMENT_CODE,
+				'=ACTIVE' => 'Y',
+			],
+			'order' => ['ID' => 'ASC'],
+		]);
+
+		self::$personalDataAgreementId = $agreement ? (int)$agreement['ID'] : null;
+		self::$personalDataAgreementResolved = true;
+
+		return self::$personalDataAgreementId;
+	}
+
+	/**
+	 * Document a new form starts with: the built-in personal data agreement when the portal has one,
+	 * the oldest active document otherwise, as the scenario picked it before the submit mode existed.
+	 * Zones where the built-in document is never created must not get a form with an empty list.
+	 *
+	 * Memoized the same way and queried only when the built-in document is missing.
+	 */
+	private static function getDefaultAgreementId(): ?int
+	{
+		if (self::$defaultAgreementResolved)
+		{
+			return self::$defaultAgreementId;
+		}
+
+		$agreementId = self::getPersonalDataAgreementId();
+		if ($agreementId === null)
+		{
+			$agreement = AgreementTable::getRow([
+				'select' => ['ID'],
+				'filter' => ['=ACTIVE' => 'Y'],
+				'order' => ['ID' => 'ASC'],
+			]);
+
+			$agreementId = $agreement ? (int)$agreement['ID'] : null;
+		}
+
+		self::$defaultAgreementId = $agreementId;
+		self::$defaultAgreementResolved = true;
+
+		return self::$defaultAgreementId;
 	}
 
 	public function __construct()
@@ -57,8 +114,21 @@ class ScenarioOptionBuilder extends BaseBuilder
 
 		$this->prepared['agreements']['use'] = $use;
 
-		$agreements = self::getAgreements();
-		$this->prepared['data']['agreements'][0]['id'] = $agreements[0];
+		$agreementId = self::getDefaultAgreementId();
+		if ($agreementId)
+		{
+			$this->prepared['data']['agreements'][0]['id'] = $agreementId;
+			if (!\Bitrix\Crm\WebForm\Embed\Config::isAcceptBySubmitEnabled())
+			{
+				$this->prepared['data']['agreements'][0]['checked'] = false;
+				$this->prepared['data']['agreements'][0]['required'] = true;
+				$this->prepared['data']['agreements'][0]['acceptBySubmit'] = false;
+			}
+			elseif ($agreementId === self::getPersonalDataAgreementId())
+			{
+				$this->prepared['data']['agreements'][0]['acceptBySubmit'] = true;
+			}
+		}
 
 		return $this;
 	}

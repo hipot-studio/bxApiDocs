@@ -2,6 +2,7 @@
 namespace Bitrix\Rest\Api;
 
 use Bitrix\Intranet\Invitation;
+use Bitrix\Bitrix24\Public\Command\Network\SendNetworkException;
 use Bitrix\Main\Application;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Loader;
@@ -904,7 +905,14 @@ class User extends \IRestService
 					$inviteFields['GROUP_ID'] = \CIntranetInviteDialog::getUserGroups($siteId, $bExtranet);
 					$inviteFields["CONFIRM_CODE"] = randString(8);
 
-					$ID = \CIntranetInviteDialog::RegisterUser($inviteFields);
+					try
+					{
+						$ID = \CIntranetInviteDialog::RegisterUser($inviteFields);
+					}
+					catch (SendNetworkException $e)
+					{
+						throw new RestException($e->getMessage(), RestException::ERROR_CORE);
+					}
 					if(is_array($ID))
 					{
 						throw new ArgumentException(implode("\n", $ID));
@@ -1195,7 +1203,14 @@ class User extends \IRestService
 
 	private static function prepareUserGetOrder($sort, $order): array
 	{
-		if ($sort && $order)
+		if (
+			is_string($sort)
+			&& $sort !== ''
+			&& $sort !== '0'
+			&& is_string($order)
+			&& $order !== ''
+			&& $order !== '0'
+		)
 		{
 			return [$sort => $order];
 		}

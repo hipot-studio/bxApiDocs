@@ -45,6 +45,7 @@ class RestService extends \IRestService
 					'OnImBotV2ContextGet' => ['im', 'onImBotV2ContextGet', [__CLASS__, 'onBotV2ContextGet'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
 					'OnImBotV2CommandAdd' => ['im', 'onImBotV2CommandAdd', [__CLASS__, 'onBotV2CommandAdd'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
 					'OnImBotV2ReactionChange' => ['im', 'onImBotV2ReactionChange', [__CLASS__, 'onBotV2ReactionChange'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
+					'OnImBotV2FormSubmit' => ['im', 'onImBotV2FormSubmit', [__CLASS__, 'onBotV2FormSubmit'], ['category' => \Bitrix\Rest\Sqs::CATEGORY_BOT, 'sendRefreshToken' => true]],
 				],
 			]
 		];
@@ -385,5 +386,10 @@ class RestService extends \IRestService
 	public static function onBotV2ReactionChange($arParams, $arHandler): array
 	{
 		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildReactionChange($arParams, $arHandler);
+	}
+
+	public static function onBotV2FormSubmit($arParams, $arHandler): array
+	{
+		return (new \Bitrix\Im\V2\Event\BotWebhookPayloadBuilder())->buildFormSubmit($arParams, $arHandler);
 	}
 }

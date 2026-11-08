@@ -39,6 +39,7 @@ class ExternalSourceRowAssembler extends RowAssembler
 				[
 					'DATE_CREATE',
 				],
+				timeFormat: Field\Base\DateFieldAssembler::TIME_FORMAT_SHORT,
 			),
 			new Field\Source\CreatedByFieldAssembler(
 				[

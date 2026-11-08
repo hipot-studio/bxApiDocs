@@ -449,6 +449,7 @@ class LandingSiteTileComponent extends LandingBaseComponent implements Controlle
 		$this->checkParam('~AGREEMENT', []);
 		$this->checkParam('DELETE_LOCKED', []);
 		$this->checkParam('IS_DELETED', false);
+		$this->checkParam('IS_SEARCH_REQUESTED', false);
 		// total records across all pages; falls back to the current page when the parent gives no navigation
 		$this->checkParam('TOTAL_COUNT', count($this->arParams['ITEMS']));
 

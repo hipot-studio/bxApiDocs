@@ -5,7 +5,6 @@ namespace Bitrix\Sale;
 use Bitrix\Main;
 use	Bitrix\Sale\Internals\StatusTable;
 use Bitrix\Sale\Internals\StatusLangTable;
-use Bitrix\Main\UserGroupTable;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Localization\Loc;
 
@@ -56,35 +55,12 @@ abstract class StatusBase
 	{
 		global $USER;
 
-		if ($userId == $USER->GetID())
+		if ($USER instanceof \CUser && $userId == $USER->GetID())
 		{
-			$groups = $USER->GetUserGroupArray();
-		}
-		else
-		{
-			static $cacheGroups;
-
-			if (isset($cacheGroups[$userId]))
-			{
-				$groups = $cacheGroups[$userId];
-			}
-			else
-			{
-				// TODO: DATE_ACTIVE_FROM >=< DATE_ACTIVE_TO
-				$result = UserGroupTable::getList(array(
-					'select' => array('GROUP_ID'),
-					'filter' => array('USER_ID' => $userId)
-				));
-
-				$groups = array();
-				while ($row = $result->fetch())
-					$groups []= $row['GROUP_ID'];
-
-				$cacheGroups[$userId] = $groups;
-			}
+			return $USER->GetUserGroupArray();
 		}
 
-		return $groups;
+		return \CUser::GetUserGroup($userId);
 	}
 
 	/**

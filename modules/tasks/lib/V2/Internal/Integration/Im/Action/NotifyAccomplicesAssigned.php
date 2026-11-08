@@ -31,12 +31,19 @@ class NotifyAccomplicesAssigned extends AbstractNotifyUsers implements ExcludeNo
 		parent::__construct($triggeredBy, $users);
 	}
 
+	public function toString(): string
+	{
+		$count = (int)$this->users?->count();
+
+		return $this->toPluralString($count === 1 ? 1 : 2);
+	}
+
 	public function getMessageCode(): string
 	{
 		return match ($this->triggeredBy?->getGender()) {
-			Gender::Male   => 'TASKS_IM_TASK_ACCOMPLICES_NEW_M',
-			Gender::Female => 'TASKS_IM_TASK_ACCOMPLICES_NEW_F',
-			default        => 'TASKS_IM_TASK_ACCOMPLICES_NEW_M',
+			Gender::Male   => 'TASKS_IM_TASK_ACCOMPLICES_NEW_M_MSGVER_1',
+			Gender::Female => 'TASKS_IM_TASK_ACCOMPLICES_NEW_F_MSGVER_1',
+			default        => 'TASKS_IM_TASK_ACCOMPLICES_NEW_M_MSGVER_1',
 		};
 	}
 

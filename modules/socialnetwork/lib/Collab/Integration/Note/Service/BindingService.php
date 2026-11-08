@@ -135,4 +135,27 @@ class BindingService
 
 		return $result;
 	}
+
+	/**
+	 * Removes the binding of a collab to one specific collection. No-op if none exists.
+	 *
+	 * The condition on both columns is what makes the removal safe on the recreate path:
+	 * deleting by collab alone would drop the binding a concurrent click has just created.
+	 */
+	public function deleteByCollabAndCollection(int $collabId, int $collectionId): Result
+	{
+		$result = new Result();
+
+		if ($collabId <= 0 || $collectionId <= 0)
+		{
+			return $result;
+		}
+
+		CollabNoteTable::deleteByFilter([
+			'=COLLAB_ID' => $collabId,
+			'=COLLECTION_ID' => $collectionId,
+		]);
+
+		return $result;
+	}
 }

@@ -183,6 +183,8 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 	// for the "Folder" column and the file name, so neither issues a per-row folder query.
 	private array $safeExportFolderTitles = [];
 
+	private ?Item\Document $document = null;
+
 	public function __construct($component = null)
 	{
 		parent::__construct($component);
@@ -314,7 +316,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			],
 			self::DOCUMENT_TYPE => [
 				function() {
-					$document = $this->documentRepository->getById((int)$this->arParams['ENTITY_ID']);
+					$document = $this->getDocument();
 
 					if (!$document)
 					{
@@ -422,6 +424,10 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		$isAnnulEnabled = $this->isAnnulActionEnabled();
 		$this->arResult['IS_ANNUL_SINGLE_ACTION_ENABLED'] = $isAnnulEnabled;
 		$this->arResult['IS_ANNUL_MASS_ACTIONS_ENABLED'] = $isAnnulEnabled;
+
+		$isSendManualReminderEnabled = $this->isSendManualReminderActionEnabled();
+		$this->arResult['IS_SEND_REMINDER_SINGLE_ACTIONS_ENABLED'] = $isSendManualReminderEnabled;
+		$this->arResult['IS_SEND_REMINDER_MASS_ACTIONS_ENABLED'] = $isSendManualReminderEnabled;
 	}
 
 	private function isExcelExportMode(): bool
@@ -636,6 +642,11 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		return FeatureResolver::instance()->released('kedoDocumentAnnul');
 	}
 
+	private function isSendManualReminderFeatureEnabled(): bool
+	{
+		return FeatureResolver::instance()->released('kedoSendManualReminder');
+	}
+
 	/**
 	 * The annulment mark lives on the signer member record and is surfaced in the
 	 * company safe and the per-document process grids only, behind the feature
@@ -645,6 +656,20 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 	{
 		return in_array($this->type, [self::SAFE_TYPE, self::DOCUMENT_TYPE], true)
 			&& $this->isAnnulMarkFeatureEnabled();
+	}
+
+	private function isSendManualReminderActionEnabled(): bool
+	{
+		if ($this->type !== self::DOCUMENT_TYPE || !$this->isSendManualReminderFeatureEnabled())
+		{
+			return false;
+		}
+
+		$document = $this->getDocument();
+
+		return $this->getAccessController()->check(ActionDictionary::ACTION_B2E_DOCUMENT_READ) &&
+			!Type\DocumentStatus::isFinalByDocument($document)
+		;
 	}
 
 	/**
@@ -743,7 +768,7 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			);
 		}
 
-		$document = $this->documentRepository->getById($this->entityId);
+		$document = $this->getDocument();
 		if ($document === null)
 		{
 			throw new ObjectNotFoundException(
@@ -1078,8 +1103,18 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 	 *
 	 * Default (empty filter / "signed" mode) excludes annulled records; the
 	 * "annulled" value shows only annulled records; "all" applies no predicate.
-	 * The mark now lives on the member record, so the predicate targets the
-	 * member's own ANNULLED column (the safe query is built over MemberTable).
+	 * The condition is not a plain read of the shown row's ANNULLED column: the
+	 * company side row of an employee initiated document speaks about the signer's
+	 * signing, whose row the safe listing excludes, so the repository asks the
+	 * document instead (ALG-01 of MemberRepository::buildSafeAnnulmentCondition,
+	 * the same substitution class AnnulmentTargetService uses for the row mark).
+	 * It lives in the condition set this component builds and not in the shared safe
+	 * base query: moved there it would leak to the MySafe REST surface and to the
+	 * folder moves, and neither of them has a mode of its own.
+	 * It goes in as a nested node, because the collector that registers the join for
+	 * the company reference columns reads the top level of a condition set only
+	 * (MemberRepository::updateQueryByRefFields()); the column check inside that
+	 * collector is the primary defence and the nesting the second one.
 	 */
 	private function applyAnnulmentFilter(ConditionTree $filter, array $requestFilter): void
 	{
@@ -1089,7 +1124,11 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			return;
 		}
 
-		$filter->where('ANNULLED', $annulStatus === self::FILTER_ANNUL_STATUS_ANNULLED);
+		$filter->where(
+			$this->memberRepository->buildSafeAnnulmentCondition(
+				$annulStatus === self::FILTER_ANNUL_STATUS_ANNULLED,
+			),
+		);
 	}
 
 	/**
@@ -1205,6 +1244,11 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			$this->prepareSafeGroupedData($filterOptions, $requestFilter);
 
 			return;
+		}
+
+		if ($this->type === self::DOCUMENT_TYPE)
+		{
+			$this->arResult['DOCUMENT_UID'] = $this->getDocumentUidByEntityId();
 		}
 
 		$memberCollection = match ($this->type)
@@ -1919,6 +1963,24 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 		}
 	}
 
+	private function getDocumentUidByEntityId(): ?string
+	{
+		return $this->getDocument()?->uid;
+	}
+
+	private function getDocument(): ?Item\Document
+	{
+		if ($this->document === null)
+		{
+			if (isset($this->arParams['ENTITY_ID']))
+			{
+				$this->document = $this->documentService->getById((int)$this->arParams['ENTITY_ID']);
+			}
+		}
+
+		return $this->document;
+	}
+
 	private function getDocumentsDataForGrid(
 		MemberCollection $memberCollection,
 		Item\DocumentCollection $documentCollection,
@@ -1976,6 +2038,9 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 			$this->type === self::SAFE_TYPE,
 		);
 		$isSafeSignedLabelEnabled = $this->type === self::SAFE_TYPE && $this->isAnnulMarkFeatureEnabled();
+
+		$isSendManualReminderEnabled = $this->isSendManualReminderActionEnabled();
+
 		/** @var Item\Member $member */
 		foreach ($memberCollection as $member)
 		{
@@ -2001,6 +2066,21 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 					$annulPermission->canAnnulDocumentOwnedBy($document->createdById),
 				));
 			}
+
+			$isCurrentUserEqualsMember = CurrentUser::get()->getId() !== null
+				&& Container::instance()
+					->getMemberService()
+					->isUserLinksWithMember($member, $document, CurrentUser::get()->getId())
+			;
+
+			$canSendManualReminder =
+				$isSendManualReminderEnabled &&
+				$member->role === Role::SIGNER &&
+				MemberStatus::isReadyForSigning($member->status) &&
+				!$isCurrentUserEqualsMember &&
+				!Type\DocumentStatus::isFinalByDocument($document)
+			;
+			$memberData['CAN_SEND_REMINDER'] = $canSendManualReminder;
 
 			$resultFileInfo = null;
 			$title = null;
@@ -2069,11 +2149,6 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 
 			if (isset($this->arResult['COLUMNS']['action']))
 			{
-				$isCurrentUserEqualsMember = CurrentUser::get()->getId() !== null
-					&& Container::instance()
-						->getMemberService()
-						->isUserLinksWithMember($member, $document, CurrentUser::get()->getId())
-				;
 				if ($isCurrentUserEqualsMember && $this->isSigningLinkAvailable($member, $document))
 				{
 					$memberData['ACTION'] = [
@@ -2100,6 +2175,16 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 							'DATA' => $resultFileInfo,
 						];
 					}
+				}
+				elseif ($canSendManualReminder)
+				{
+					$memberData['ACTION'] = [
+						'TYPE' => 'remind',
+						'DATA' => [
+							'DOCUMENT_UID' => $document->uid,
+							'MEMBER_UID' => $member->uid,
+						],
+					];
 				}
 			}
 
@@ -3290,5 +3375,4 @@ class SignUserDocumentListComponent extends SignBaseComponent implements Control
 
 		return $columns;
 	}
-
 }

@@ -54,4 +54,6 @@ enum EventType: string
 	case FolderChatDelete = 'folderChatDelete';
 	case UserLogout = 'userLogout';
 	case SettingsUpdate = 'settingsUpdate';
+	case CopilotGenerationState = 'copilotGenerationState';
+	case ApplicationOpenChat = 'applicationOpenChat';
 }

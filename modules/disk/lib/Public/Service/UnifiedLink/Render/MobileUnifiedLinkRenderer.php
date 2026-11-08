@@ -6,7 +6,7 @@ namespace Bitrix\Disk\Public\Service\UnifiedLink\Render;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\RenderResult;
-use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkFileRenderer;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
 use Bitrix\Disk\Version;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\NotImplementedException;
@@ -28,8 +28,8 @@ class MobileUnifiedLinkRenderer
 		CurrentUser $currentUser,
 	): RenderResult
 	{
-		$renderer = new UnifiedLinkFileRenderer(
-			file: $file,
+		$renderer = new UnifiedLinkRenderer(
+			baseObject: $file,
 			attachedObject: $attachedObject,
 			version: $version,
 			currentUser: $currentUser,
@@ -56,7 +56,7 @@ class MobileUnifiedLinkRenderer
 		$file = File::loadByUniqueCode($uniqueCode);
 		if (!$file)
 		{
-			return new RenderResult(UnifiedLinkFileRenderer::renderAccessDeniedPage(), 403);
+			return new RenderResult(UnifiedLinkRenderer::renderAccessDeniedPage(), 403);
 		}
 
 		$attachedObject = AttachedObject::loadById($attachedObjectId);
@@ -83,14 +83,14 @@ class MobileUnifiedLinkRenderer
 		$file = File::loadById($fileId)?->getRealObject();
 		if (!$file)
 		{
-			return new RenderResult(UnifiedLinkFileRenderer::renderAccessDeniedPage(), 403);
+			return new RenderResult(UnifiedLinkRenderer::renderAccessDeniedPage(), 403);
 		}
 
 		$securityContext = $file->getStorage()?->getSecurityContext($currentUser);
 
 		if (!$securityContext || !$file->canRead($securityContext))
 		{
-			return new RenderResult(UnifiedLinkFileRenderer::renderAccessDeniedPage(), 403);
+			return new RenderResult(UnifiedLinkRenderer::renderAccessDeniedPage(), 403);
 		}
 
 		$attachedObject = AttachedObject::loadById($attachedObjectId);
@@ -117,14 +117,14 @@ class MobileUnifiedLinkRenderer
 
 		if (!$attachedObject?->canRead((int)$currentUser->getId()))
 		{
-			return new RenderResult(UnifiedLinkFileRenderer::renderAccessDeniedPage(), 403);
+			return new RenderResult(UnifiedLinkRenderer::renderAccessDeniedPage(), 403);
 		}
 
 		$file = $attachedObject?->getFile()?->getRealObject();
 
 		if (!$file)
 		{
-			return new RenderResult(UnifiedLinkFileRenderer::renderAccessDeniedPage(), 403);
+			return new RenderResult(UnifiedLinkRenderer::renderAccessDeniedPage(), 403);
 		}
 
 		$version = Version::loadById($versionId);

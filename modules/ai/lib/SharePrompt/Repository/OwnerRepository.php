@@ -28,21 +28,11 @@ class OwnerRepository extends BaseRepository
 	/**
 	 * @param int[] $ownerIdsForUpdate
 	 * @param bool $isDelete
-	 * @return Result
+	 * @return UpdateResult
 	 */
-	public function setDeleteFlagOnRows(array $ownerIdsForUpdate, bool $isDelete = true): Result
+	public function setDeleteFlagOnRows(array $ownerIdsForUpdate, bool $isDelete = true): UpdateResult
 	{
-		$isDeleteFlag = (int)$isDelete;
-		$idList = implode(',', $ownerIdsForUpdate);
-
-		return $this->getConnection()->query("
-			UPDATE 
-				{$this->getOwnerTableName()} 
-			SET 
-				IS_DELETED = {$isDeleteFlag}
-			WHERE 
-				ID IN ({$idList});
-		");
+		return OwnerTable::updateMulti($ownerIdsForUpdate, ['IS_DELETED' => (int)$isDelete]);
 	}
 
 	public function setFavoriteFlagOnRow(int $promptRowId, bool $isFavorite = true): UpdateResult

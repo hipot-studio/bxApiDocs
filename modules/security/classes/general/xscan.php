@@ -17,8 +17,7 @@ class CBitrixXscan
 	static $evals_reg = '(?:assert|call_user_func|call_user_func_array|create_function|eval|exec|ob_start|passthru|pcntl_exec|popen|proc_open|set_include_path|shell_exec|system)';
 	static $black_reg = '(https?://[0-9a-z\-]+\.pw/|password_verify|https?://(?:sw\.)?bitrix\.dev|wp-config|wp-admin|wp-login|deprecated-media-js|customize-menus-rtl|adminer_errors|/etc/passwd|/etc/hosts|mysql_pdo|__halt_compiler|/bin/sh|registerPHPFunctions)';
 	static $mehtods = [
-		'Bitrix\Im\Call\Auth::authorizeById',//todo: remove it in future
-		'Bitrix\Call\Rest\Auth::authorizeById',
+		'Bitrix\Im\Call\Auth::authorizeById',
 		'Bitrix\ImOpenLines\Controller\Widget\Filter\Authorization::authorizeById',
 		'Bitrix\Imopenlines\Widget\Auth::authorizeById',
 		'Bitrix\Sale\Delivery\Services\Automatic::createConfig',
@@ -121,7 +120,15 @@ class CBitrixXscan
 		$this->progress = $progress;
 		$this->total = $total;
 
-		$this->parser = (new PhpParser\ParserFactory)->create(PhpParser\ParserFactory::PREFER_PHP7);
+		if (method_exists('\PhpParser\ParserFactory', 'createForHostVersion'))
+		{
+			$this->parser = (new PhpParser\ParserFactory)->createForHostVersion();
+		}
+		else
+		{
+			$this->parser = (new PhpParser\ParserFactory)->create(PhpParser\ParserFactory::PREFER_PHP7);
+		}
+
 		$this->nodeFinder = new NodeFinder;
 		$this->errorHandler = new PhpParser\ErrorHandler\Collecting;
 		$this->pprinter = new PhpParser\PrettyPrinter\Standard;
@@ -141,6 +148,7 @@ class CBitrixXscan
 		$this->CheckEvents();
 		$this->CheckAgents();
 		$this->CheckTemplates();
+		$this->CheckBadFiles();
 		$this->Search($start_path, 'count');
 	}
 
@@ -261,6 +269,29 @@ class CBitrixXscan
 				}
 
 				$result = (new XScanResult)->setType('tmpl')->setSrc($row['ID'])->setScore(1)->setMessage($message);
+				$this->result_collection[] = $result;
+			}
+		}
+	}
+
+	function CheckBadFiles()
+	{
+		$doc_root = rtrim($_SERVER['DOCUMENT_ROOT'], '/');
+		$files = [
+			'/bitrix/templates/.mod.txt',
+			'/b_user.json',
+			'/bitrix/tools/.sess',
+			'/bitrix/tools/.idSess',
+			'/.security.log',
+			'/bitrix/components/bitrix/app.layout/params.php',
+			'/info_files.tar.gz'
+		];
+
+		foreach($files as $file)
+		{
+			if (is_file( $doc_root . $file))
+			{
+				$result = (new XScanResult)->setType('file')->setSrc($doc_root . $file)->setScore(1)->setMessage('bad file');
 				$this->result_collection[] = $result;
 			}
 		}
@@ -2594,7 +2625,7 @@ class CBitrixXscan
 		];
 		foreach ($system as $path)
 		{
-			if (preg_match('#' . $path . '$#i', $f))
+			if (preg_match('#' . $path . '$#', $f))
 			{
 				return true;
 			}

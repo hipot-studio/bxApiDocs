@@ -14,6 +14,7 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\Internals\Log\LogFacade;
 use Bitrix\Tasks\Kanban\StagesTable;
 use Bitrix\Tasks\Scrum\Form\EntityForm;
 use Bitrix\Tasks\Scrum\Internal\EntityTable;
@@ -254,6 +255,28 @@ class SprintService implements Errorable
 				{
 					$pushService->sendUpdateSprintEvent($sprint);
 				}
+
+				$events = GetModuleEvents('tasks', 'OnAfterSprintStart', true);
+				if (!empty($events))
+				{
+					$boardedTaskIds = array_unique(array_merge($taskIds, $subTaskIds));
+					$tasksInfo = $taskService->getResponsibles($boardedTaskIds);
+					if (!$taskService->getErrors())
+					{
+						$params = $this->buildSprintEventParams('OnAfterSprintStart', $sprint, $tasksInfo);
+						foreach ($events as $event)
+						{
+							try
+							{
+								ExecuteModuleEventEx($event, [$params]);
+							}
+							catch (\Throwable $eventException)
+							{
+								LogFacade::logThrowable($eventException);
+							}
+						}
+					}
+				}
 			}
 			else
 			{
@@ -293,6 +316,8 @@ class SprintService implements Errorable
 
 			$finishedTaskIds = $kanbanService->getFinishedTaskIdsInSprint($sprint->getId());
 			$unFinishedTaskIds = $kanbanService->getUnfinishedTaskIdsInSprint($sprint->getId());
+
+			$allSprintTaskIds = array_unique(array_merge($finishedTaskIds, $unFinishedTaskIds));
 
 			$taskIdsToComplete = [];
 			foreach ($finishedTaskIds as $finishedTaskId)
@@ -405,18 +430,50 @@ class SprintService implements Errorable
 
 			$result = EntityTable::update($sprint->getId(), $sprint->getFieldsToUpdateEntity());
 
-			if ($pushService)
+			if ($result->isSuccess())
 			{
-				$pushService->sendUpdateSprintEvent($sprint);
+				if ($pushService)
+				{
+					$pushService->sendUpdateSprintEvent($sprint);
+				}
 			}
-
-			if (!$result->isSuccess())
+			else
 			{
 				$this->setErrors($result, self::ERROR_COULD_NOT_COMPLETE_SPRINT);
 			}
 
 			(new CacheService($sprint->getGroupId(), CacheService::STATS))->clean();
 			(new CacheService($sprint->getGroupId(), CacheService::TEAM_STATS))->cleanRoot();
+
+			if ($result->isSuccess())
+			{
+				$events = GetModuleEvents('tasks', 'OnAfterSprintFinish', true);
+				if (!empty($events))
+				{
+					$tasksInfo = $taskService->getResponsibles($allSprintTaskIds);
+					if (!$taskService->getErrors())
+					{
+						$params = $this->buildSprintEventParams(
+							'OnAfterSprintFinish',
+							$sprint,
+							$tasksInfo,
+							($entity->getEntityType() !== EntityForm::BACKLOG_TYPE ? ['targetSprintId' => $entity->getId()] : []),
+							$unFinishedTaskIds
+						);
+						foreach ($events as $event)
+						{
+							try
+							{
+								ExecuteModuleEventEx($event, [$params]);
+							}
+							catch (\Throwable $eventException)
+							{
+								LogFacade::logThrowable($eventException);
+							}
+						}
+					}
+				}
+			}
 		}
 		catch (\Exception $exception)
 		{
@@ -426,6 +483,51 @@ class SprintService implements Errorable
 		}
 
 		return $sprint;
+	}
+
+	private function buildSprintEventParams(
+		string $eventName,
+		EntityForm $sprint,
+		array $tasksInfo,
+		array $eventExtra = [],
+		?array $carriedOverTaskIds = null
+	): array
+	{
+		$carriedOverMap = ($carriedOverTaskIds === null ? null : array_fill_keys($carriedOverTaskIds, true));
+
+		$tasks = [];
+		foreach ($tasksInfo as $taskId => $taskInfo)
+		{
+			$taskId = (int)$taskId;
+
+			$task = [
+				'taskId' => $taskId,
+				'responsibleId' => (int)($taskInfo['RESPONSIBLE_ID'] ?? 0),
+			];
+
+			if ($carriedOverMap !== null)
+			{
+				$task['finished'] = !isset($carriedOverMap[$taskId]);
+			}
+
+			$tasks[] = $task;
+		}
+
+		$params = [
+			'event' => $eventName,
+			'sprintId' => $sprint->getId(),
+			'groupId' => $sprint->getGroupId(),
+			'sprintName' => $sprint->getName(),
+			'status' => $sprint->getStatus(),
+			'dateStart' => $sprint->getDateStart()->getTimestamp(),
+			'dateEnd' => $sprint->getDateEnd()->getTimestamp(),
+			'actorId' => $this->userId,
+		];
+
+		$params = array_merge($params, $eventExtra);
+		$params['tasks'] = $tasks;
+
+		return $params;
 	}
 
 	/**

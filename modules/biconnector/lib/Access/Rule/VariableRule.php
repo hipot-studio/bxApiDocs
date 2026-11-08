@@ -2,71 +2,33 @@
 
 namespace Bitrix\BIConnector\Access\Rule;
 
+use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 
-class VariableRule extends BaseRule
+class VariableRule extends AbstractVariableRule
 {
 	private static array $allowedPermissionDashboardIds = [];
 
-	private static array $allowedPermissionGroupIds = [];
-
-	private static ?array $groupIds = null;
-
-	/**
-	 * Return allowed group ids by permission.
-	 *
-	 * @param array $params
-	 *
-	 * @return array|null
-	 */
-	public function getPermissionMultiValues(array $params): ?array
+	protected static function loadAllGroupIds(): array
 	{
-		$permissionCode = static::getPermissionCode($params);
-		if ($permissionCode === null)
-		{
-			return null;
-		}
+		$groups = SupersetDashboardGroupTable::getList([
+			'select' => ['ID'],
+			'cache' => ['ttl' => 3600],
+		]);
 
-		$actionPermissionCode = (int)$permissionCode;
+		return array_column($groups->fetchAll(), 'ID');
+	}
 
-		$cacheKey = static::class . '_' . $this->user->getUserId() . '_' . $actionPermissionCode;
-		if (isset(static::$allowedPermissionGroupIds[$cacheKey]))
-		{
-			return static::$allowedPermissionGroupIds[$cacheKey];
-		}
-		$allGroupIds = static::getAllGroups();
-		if ($this->isAbleToSkipChecking())
-		{
-			static::$allowedPermissionGroupIds[$cacheKey] = $allGroupIds;
+	protected static function getGroupPermissionId(int $groupId): string
+	{
+		return PermissionDictionary::getDashboardGroupPermissionId($groupId);
+	}
 
-			return $allGroupIds;
-		}
-
-		$allowedGroupIds = [];
-		foreach ($allGroupIds as $groupId)
-		{
-			$groupPermissionId = PermissionDictionary::getDashboardGroupPermissionId($groupId);
-			$groupActions = $this->user->getPermissionMulti($groupPermissionId);
-			if (empty($groupActions))
-			{
-				continue;
-			}
-
-			if (
-				$groupActions[0] === PermissionDictionary::VALUE_VARIATION_ALL
-				|| in_array($actionPermissionCode, $groupActions, true)
-			)
-			{
-				$allowedGroupIds[] = $groupId;
-			}
-		}
-
-		$result = !empty($allowedGroupIds) ? $allowedGroupIds : null;
-		static::$allowedPermissionGroupIds[$cacheKey] = $result;
-
-		return $result;
+	protected static function getGroupCacheKey(): string
+	{
+		return self::class;
 	}
 
 	/**
@@ -115,18 +77,6 @@ class VariableRule extends BaseRule
 		return $result;
 	}
 
-	/**
-	 * Return allowed group ids by permission.
-	 *
-	 * @param array $params
-	 *
-	 * @return array
-	 */
-	public function getPermissionAllowedGroupIds(array $params): array
-	{
-		return $this->getPermissionMultiValues($params) ?? [];
-	}
-
 	protected function loadGroupDashboards(
 		array $groupIds,
 		array $additionalFilter = [],
@@ -171,31 +121,22 @@ class VariableRule extends BaseRule
 
 		if (!isset($params['value']))
 		{
-			return !empty($this->getPermissionAllowedGroupIds($params));
+			return parent::check($params);
+		}
+
+		$checkDashboardIds = (array)($params['value'] ?? []);
+		$item = $params['item'] ?? null;
+		if ($item instanceof DashboardAccessItem && count($checkDashboardIds) === 1)
+		{
+			$allowedGroupIds = $this->getPermissionAllowedGroupIds($params);
+			$allowedDashboardIds = $this->loadGroupDashboards($allowedGroupIds, ['=ID' => $item->getId()]);
+
+			return empty(array_diff($checkDashboardIds, $allowedDashboardIds));
 		}
 
 		$values = $this->getPermissionAllowedDashboardIds($params);
 
-		$checkDashboardIds = (array)($params['value'] ?? []);
-
 		return empty(array_diff($checkDashboardIds, $values));
-	}
-
-	private static function getAllGroups(): array
-	{
-		if (static::$groupIds !== null)
-		{
-			return static::$groupIds;
-		}
-
-		$groups = SupersetDashboardGroupTable::getList([
-			'select' => ['ID'],
-			'cache' => ['ttl' => 3600],
-		]);
-
-		static::$groupIds = array_column($groups->fetchAll(), 'ID');
-
-		return static::$groupIds;
 	}
 
 	/**
@@ -205,8 +146,8 @@ class VariableRule extends BaseRule
 	 */
 	public static function clearCache(): void
 	{
+		parent::clearCache();
+
 		static::$allowedPermissionDashboardIds = [];
-		static::$allowedPermissionGroupIds = [];
-		static::$groupIds = null;
 	}
 }

@@ -56,7 +56,7 @@ class DeleteOrFireUserCommand extends AbstractCommand
 		}
 		catch (UpdateFailedException $e)
 		{
-			return $result->addErrors($e->getErrors());
+			return $result->addErrors($e->getErrors()->toArray());
 		}
 		catch (WrongIdException)
 		{

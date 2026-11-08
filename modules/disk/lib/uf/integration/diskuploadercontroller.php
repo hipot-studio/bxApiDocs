@@ -461,10 +461,17 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				['fileId' => $fileModel->getId()]
 			);
 
-			$fileInfo->setDownloadUrl($downloadUrl);
-
 			$storage = $fileModel->getStorage();
-			$customData['canUpdate'] = $storage && $fileModel->canUpdate($storage->getCurrentUserSecurityContext());
+			$securityContext = $storage?->getCurrentUserSecurityContext();
+			$canDownload = $securityContext && $fileModel->canDownload($securityContext);
+
+			if ($canDownload)
+			{
+				$fileInfo->setDownloadUrl((string)$downloadUrl);
+			}
+
+			$customData['canUpdate'] = $storage && $securityContext && $fileModel->canUpdate($securityContext);
+			$viewerSourceUrl = $canDownload ? (string)$downloadUrl : $this->urlManager->getUrlForShowFile($fileModel);
 		}
 		else
 		{
@@ -482,10 +489,15 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 
 			$downloadUrl->addParams($quickAccessGetParam);
 
-			$fileInfo->setDownloadUrl($downloadUrl);
-
 			$user = CurrentUser::get();
 			$userId = $user ? $user->getId() : \Bitrix\Disk\Security\SecurityContext::GUEST_USER;
+			$canDownload = $fileModel->canDownload($userId);
+
+			if ($canDownload)
+			{
+				$fileInfo->setDownloadUrl((string)$downloadUrl);
+			}
+
 			$customData['canUpdate'] = $fileModel->canUpdate($userId);
 
 			$realFile = $fileModel->getFile();
@@ -494,6 +506,11 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 				$realFile && $realFileStorage && $realFile->canRename($realFileStorage->getSecurityContext($userId));
 
 			$attachedObjectId = $fileModel->getId();
+
+			$viewerSourceUrl = $canDownload
+				? (string)$downloadUrl
+				: \Bitrix\Disk\UrlManager::getUrlToActionShowUfFile($fileModel->getId(), $quickAccessGetParam)
+			;
 		}
 
 		$file = $fileModel instanceof Disk\File ? $fileModel : $fileModel->getFile();
@@ -579,7 +596,7 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 			}
 		}
 
-		$fileInfo->setViewerAttrs($this->prepareViewerAttrs($fileModel, $downloadUrl, $fileInfo));
+		$fileInfo->setViewerAttrs($this->prepareViewerAttrs($fileModel, $viewerSourceUrl, $fileInfo, $canDownload));
 
 		return $fileInfo;
 	}
@@ -627,19 +644,26 @@ class DiskUploaderController extends UploaderController implements CustomLoad, C
 
 	/**
 	 * @param AttachedObject | File $fileModel
-	 * @param string $downloadUrl
+	 * @param string $viewerSourceUrl
 	 * @param FileInfo $fileInfo
+	 * @param bool $canDownload
 	 *
 	 * @return array
 	 * @throws ArgumentException
 	 * @throws NotImplementedException
 	 */
-	private function prepareViewerAttrs(Disk\File|Disk\AttachedObject $fileModel, string $downloadUrl, FileInfo $fileInfo): array
+	private function prepareViewerAttrs(
+		Disk\File|Disk\AttachedObject $fileModel,
+		string $viewerSourceUrl,
+		FileInfo $fileInfo,
+		bool $canDownload,
+	): array
 	{
 		$file = $fileModel instanceof Disk\File ? $fileModel : $fileModel->getFile();
-		$viewerAttrs = Disk\Ui\FileAttributes::buildByFileId($fileModel->getFileId(), $downloadUrl, $file)
+		$viewerAttrs = Disk\Ui\FileAttributes::buildByFileId($fileModel->getFileId(), $viewerSourceUrl, $file)
 			->setTitle($fileModel->getName())
 			->setObjectId($fileModel->getId())
+			->setDownloadDisabled(!$canDownload)
 		;
 
 		if ($fileInfo->getPreviewUrl() !== null)

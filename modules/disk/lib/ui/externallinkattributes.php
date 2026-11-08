@@ -13,6 +13,22 @@ use Bitrix\Main\UI\Viewer\Renderer\Renderer;
 
 final class ExternalLinkAttributes extends ItemAttributes
 {
+	public const ATTRIBUTE_DOWNLOAD_DISABLED = 'data-viewer-download-disabled';
+
+	public function setDownloadDisabled(bool $disabled = true): self
+	{
+		if ($disabled)
+		{
+			$this->setAttribute(self::ATTRIBUTE_DOWNLOAD_DISABLED, 'true');
+		}
+		else
+		{
+			$this->unsetAttribute(self::ATTRIBUTE_DOWNLOAD_DISABLED);
+		}
+
+		return $this;
+	}
+
 	protected function setDefaultAttributes()
 	{
 		parent::setDefaultAttributes();

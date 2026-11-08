@@ -13,11 +13,16 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Call\Recent;
+use Bitrix\Call\Service\GuestCallPolicy;
 use Bitrix\Call\Settings;
 use Bitrix\Call\CallFactory;
 use Bitrix\Call\NotifyService;
 use Bitrix\Call\Call\Registry;
+use Bitrix\Call\RingingDeviceRegistry;
 use Bitrix\Call\Integration\AI\CallAISettings;
+use Bitrix\Call\Idempotence;
+use Bitrix\Call\ControllerClient;
+use Bitrix\Call\Logger\Logger;
 
 /**
  * @internal
@@ -39,7 +44,24 @@ class CallManager extends Engine\Controller
 	 */
 	public function createAction(int $type, string $provider, string $entityType, string $entityId, bool $joinExisting = false): ?array
 	{
+		// Checked before the lock and any lookup: an unsupported provider would be stored
+		// with the call and broadcast to clients that do not know the value.
+		if (!\Bitrix\Call\Call::isProviderSupported($provider))
+		{
+			$this->addInvalidProviderError();
+			return null;
+		}
+
 		$currentUserId = $this->getCurrentUser()->getId();
+
+		// Ahead of every lookup below: resolving a bare user id into a call entity creates the private
+		// chat of the two, so a refusal issued any later would already have left that chat behind.
+		if (!(new GuestCallPolicy())->canStartCallInEntity((int)$currentUserId, $entityType, $entityId))
+		{
+			$this->addError(new Error('Guests can only start a call in a chat of their own', 'guest_access_denied'));
+
+			return null;
+		}
 
 		$call = null;
 
@@ -130,6 +152,18 @@ class CallManager extends Engine\Controller
 			{
 				$isNew = true;
 
+				// Only starting a call follows the portal switch: the same action also joins a call already
+				// running in the chat ($joinExisting), which is why the check sits here and not in a prefilter.
+				if (!(new GuestCallPolicy())->canStartCall((int)$currentUserId))
+				{
+					$this->addError(
+						new Error('Starting a call is not available for guest users on this portal', 'guest_access_denied')
+					);
+					Application::getConnection()->unlock($lockName);
+
+					return null;
+				}
+
 				// Terminate any stuck 1-1 calls of the initiator before creating a new one.
 				// Skipped when the target is already known to be busy: in that case we only
 				// create a technical "busy" call and return user_is_busy, so cleaning up the
@@ -218,6 +252,16 @@ class CallManager extends Engine\Controller
 	}
 
 	/**
+	 * The provider travels from the request into the stored call and into the pull event,
+	 * so an unknown one is refused before anything is written. All three actions that take
+	 * a provider answer with the same code and message.
+	 */
+	private function addInvalidProviderError(): void
+	{
+		$this->addError(new Error("Invalid provider", "invalid_provider"));
+	}
+
+	/**
 	 * @param \Bitrix\Call\Call $call
 	 * @param bool $isNew
 	 * @return array{call: array, connectionData: array, users: array, userData: array, publicChannels: array, logToken: string, isNew: bool}
@@ -272,6 +316,14 @@ class CallManager extends Engine\Controller
 	 */
 	public function createChildCallAction(int $parentId, string $newProvider, array $newUsers): ?array
 	{
+		// makeClone() keeps the inherited provider only for null, so any other value from
+		// the request is written to the child call as is.
+		if (!\Bitrix\Call\Call::isProviderSupported($newProvider))
+		{
+			$this->addInvalidProviderError();
+			return null;
+		}
+
 		$parentCall = Registry::getCallWithId($parentId);
 		if (!$parentCall)
 		{
@@ -326,6 +378,15 @@ class CallManager extends Engine\Controller
 	 */
 	public function tryJoinCallAction(int $type, string $provider, string $entityType, string $entityId): ?array
 	{
+		// An empty provider is rejected here, unlike Controller\Call::tryJoinCallAction: there the
+		// provider arrives in a hydrated DTO defaulting to '', so '' means the field never arrived.
+		// Here $provider is a required parameter with no default, so '' is a value the caller sent.
+		if (!\Bitrix\Call\Call::isProviderSupported($provider))
+		{
+			$this->addInvalidProviderError();
+			return null;
+		}
+
 		$call = CallFactory::searchActive($type, $provider, $entityType, $entityId);
 		if (!$call)
 		{
@@ -465,6 +526,14 @@ class CallManager extends Engine\Controller
 			return null;
 		}
 
+		if (!(new GuestCallPolicy())->canInviteUsersNow((int)$currentUserId, $call->getChatId(), $userIds))
+		{
+			Application::getConnection()->unlock($lockName);
+			$this->addError(new Error('Guests can only call members of their own chat', 'guest_access_denied'));
+
+			return null;
+		}
+
 		if ($call->hasErrors())
 		{
 			$this->addErrors($call->getErrors());
@@ -514,9 +583,20 @@ class CallManager extends Engine\Controller
 			{
 				$existingUsers[] = $userId;
 			}
-			$usersToInvite[] = $userId;
+
+			// On a repeated invite skip participants that are already in a terminal
+			// state (DECLINED / BUSY) — they must not receive another invitation
+			// and must not be transitioned back to CALLING.  On the first
+			// (non-repeated) invite this guard is intentionally absent per
+			// invariant BHV-01.
 			$callUser = $call->getUser($userId);
-			if($callUser->getState() != CallUser::STATE_READY)
+			if ($isRepeated && $callUser?->isTerminalState())
+			{
+				continue;
+			}
+
+			$usersToInvite[] = $userId;
+			if ($callUser && $callUser->getState() !== CallUser::STATE_READY)
 			{
 				$callUser->updateState(CallUser::STATE_CALLING);
 			}
@@ -529,7 +609,15 @@ class CallManager extends Engine\Controller
 
 		if (count($usersToInvite) === 0)
 		{
-			$this->addError(new Error("No users to invite", "empty_users"));
+			if (!$isRepeated || !$call->areAllRequestedUsersTerminal($userIds))
+			{
+				// First invite always errors on an empty list. On a repeated invite an
+				// empty list is an error too, unless every requested recipient is already
+				// a participant in a terminal state (DECLINED / BUSY) — that is the only
+				// legitimate "no one left to call" silent exit. Empty / extranet-filtered
+				// input, invalid ids and add-user (capacity) failures are NOT terminal.
+				$this->addError(new Error("No users to invite", "empty_users"));
+			}
 			return;
 		}
 
@@ -644,6 +732,17 @@ class CallManager extends Engine\Controller
 	}
 
 	/**
+	 * Device-scoped ringing is a private 1-1 concern only. Group calls are created
+	 * with TYPE_INSTANT too, so the call type is not a reliable 1-1 signal — the
+	 * scope is the privacy of the associated chat. Mirrors Controller\Call.
+	 */
+	protected function isDeviceScopedCall(\Bitrix\Call\Call $call): bool
+	{
+		// Thin wrapper over the canonical domain predicate (kept as a test seam).
+		return $call->isDeviceScopedRinging();
+	}
+
+	/**
 	 * @restMethod call.CallManager.decline
 	 * @param int $callId
 	 * @param int $callInstanceId
@@ -660,14 +759,19 @@ class CallManager extends Engine\Controller
 			return null;
 		}
 
-		if (!$this->checkCallAccess($call, $currentUserId))
-		{
-			return null;
-		}
-
-		$callUser = $call->getUser($currentUserId);
+		// Pre-lock: one closed-form single-row read of the caller's row instead of
+		// materializing the whole roster (parity with the JWT decline path).
+		// Membership implies access, so reuse this CallUser for the state check
+		// below; probe associated-entity access only when the caller is not a member.
+		$callUser = $call->getUserClosedForm($currentUserId);
 		if (!$callUser)
 		{
+			if (!$call->getAssociatedEntity()?->checkAccess($currentUserId))
+			{
+				$this->addError(new Error("You don't have access to the call " . $call->getId() . "; (current user id: " . $currentUserId . ")", 'access_denied'));
+				return null;
+			}
+
 			$this->addError(new Error("User is not part of the call", "unknown_call_user"));
 			return null;
 		}
@@ -709,6 +813,35 @@ class CallManager extends Engine\Controller
 			Application::getConnection()->unlock($lockName);
 			$this->addError(new Error("Can not decline in {$callUser->getState()} user state", "wrong_user_state"));
 			return null;
+		}
+
+		// Device-aware decline for private 1-1 calls (parity with the JWT
+		// transport): drop the declining device from the ringing registry and,
+		// while the user still has other fresh ringing devices, stop here — the
+		// CallUser stays CALLING, no hangup broadcast and no finish. Empty/unknown
+		// registry (older clients) is a no-op -> legacy decline -> finish. Group
+		// calls (TYPE_INSTANT is not a 1-1 signal) are decided by chat privacy.
+		$callInstanceIdStr = (string)$callInstanceId;
+		if ($this->isDeviceScopedCall($call) && $callInstanceIdStr !== '')
+		{
+			// The legacy transport releases $lockName manually at each return, so a
+			// storage exception inside remove() must not leave the named lock held
+			// until the DB session ends (blocking parallel decline/register).
+			try
+			{
+				$hasFreshDevices = (new RingingDeviceRegistry())->remove($callId, $currentUserId, $callInstanceIdStr);
+			}
+			catch (\Throwable $exception)
+			{
+				Application::getConnection()->unlock($lockName);
+				throw $exception;
+			}
+
+			if ($hasFreshDevices)
+			{
+				Application::getConnection()->unlock($lockName);
+				return null;
+			}
 		}
 
 		if ($code === 486)
@@ -1041,17 +1174,50 @@ class CallManager extends Engine\Controller
 			? Registry::getCallWithId($callId)
 			: ($callUuid ? Registry::getCallWithUuid($callUuid) : null);
 
+		if (!$call && !$callId && $callUuid)
+		{
+			// Quick hangup race: the call may not exist on the portal yet.
+			// Re-check under the state lock; either the startCall webhook has
+			// just created it (then finish it the regular way below), or mark
+			// the room as finished so the late webhook does not revive it.
+			$call = $this->getCallOrMarkRoomFinished($callUuid);
+		}
+
 		if (!$call)
 		{
-			$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+			if (empty($this->getErrors()))
+			{
+				$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
+			}
 			return null;
 		}
 
 		$currentUserId = $this->getCurrentUser()->getId();
-		if (!$this->checkCallAccess($call, $currentUserId))
+		if (!$call->checkAccessClosedForm($currentUserId))
 		{
-			$this->addError(new Error("You do not have access to the call", "access_denied"));
+			$this->addError(new Error("You don't have access to the call " . $call->getId() . "; (current user id: " . $currentUserId . ")", 'access_denied'));
 			return null;
+		}
+
+		if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
+		{
+			// Recovery re-broadcast for stuck clients that repeat finish on an
+			// already-finished call, so a client still showing the call can clean up.
+			$recoveryBroadcast = $call->setActionUserId($currentUserId)
+				->getSignaling()
+				->sendFinish(forRecovery: true)
+			;
+
+			if ($recoveryBroadcast)
+			{
+				Recent::scheduleUpdateCallCache($call->getId());
+			}
+
+			return [
+				'call' => $call->toArray($currentUserId),
+				'connectionData' => $call->getConnectionData($currentUserId),
+				'logToken' => $call->getLogToken($currentUserId),
+			];
 		}
 
 		// UUID-based lock to serialize with Controller\Call::answerAction and
@@ -1063,6 +1229,9 @@ class CallManager extends Engine\Controller
 			return null;
 		}
 
+		$committedHere = false;
+		$sendRecoveryFinish = false;
+		$returnLiveState = false;
 		try
 		{
 			Registry::clearCache($call->getId());
@@ -1075,32 +1244,74 @@ class CallManager extends Engine\Controller
 
 			if ($call->getState() === \Bitrix\Call\Call::STATE_FINISHED)
 			{
-				// Already finished: re-broadcast finish pull and refresh Recent
-				// so stuck clients still showing the call can clean up.
-				// Pass $forRecovery=true to bypass the  suppression — without it any recovery attempt that lands
-				// inside the 10s window after the original Call::finish would silently no-op.
-				$call->setActionUserId($currentUserId)
-					->getSignaling()
-					->sendFinish(forRecovery: true)
-				;
+				// Already finished (lost race): only flag the recovery re-broadcast
+				// here. The broadcast itself (getUsers() roster load + Pull fan-out)
+				// is deferred to after unlock so it does not hold the shared
+				// call_state lock and block concurrent answer/finish.
+				$call->setActionUserId($currentUserId);
+				$sendRecoveryFinish = true;
+			}
+			elseif ($silent && $this->hasActiveUsers($call))
+			{
+				// Advisory silent finish (stuck-call recovery): the call is still live,
+				// so one stuck client must not tear it down for everyone. Skip the
+				// FINISHED commit and its broadcast; the live call state is returned
+				// after unlock (see below), so this hot, repeatable path holds the lock
+				// only for the state read and the gate decision.
+				$returnLiveState = true;
 			}
 			else
 			{
 				$call
 					->setActionUserId($currentUserId)
 					->setSilentFinish($silent)
-					->finish()
 				;
-				Recent::terminateAllCallsInChat($call->getChatId(), $call->getId());
+				// Only the atomic FINISHED transition is held under the lock.
+				$committedHere = $call->commitFinish();
 			}
 		}
 		finally
 		{
-			if ($call instanceof \Bitrix\Call\Call)
-			{
-				Recent::updateCallCache($call->getId());
-			}
 			Application::getConnection()->unlock($lockName);
+		}
+
+		if ($returnLiveState)
+		{
+			// Advisory silent finish on a live call: build the response off-lock (the
+			// live state was already read under the lock) and return without side
+			// effects or Recent cache churn, since nothing changed. Building the
+			// payload outside the critical section keeps this repeatable path from
+			// holding the shared call_state lock while it renders connection data.
+			return [
+				'call' => $call->toArray($currentUserId),
+				'connectionData' => $call->getConnectionData($currentUserId),
+				'logToken' => $call->getLogToken($currentUserId),
+			];
+		}
+
+		// Side effects run after unlock and only when this request performed the
+		// transition (exactly-once). terminateAllCallsInChat now runs once via
+		// EventHandler::onCallFinished, so it is no longer called directly here.
+		if ($committedHere)
+		{
+			$call->finishSideEffects();
+		}
+		elseif ($sendRecoveryFinish && $call instanceof \Bitrix\Call\Call)
+		{
+			// Off-lock recovery re-broadcast for stuck clients still showing the
+			// already-finished call. Pass $forRecovery=true to bypass the
+			// suppression window; it is self-rate-limited by the recovery idempotence
+			// key. Refresh Recent only for the request that actually broadcast (key
+			// acquired), so repeated recovery finishes collapse to a single rebuild.
+			if ($call->getSignaling()->sendFinish(forRecovery: true))
+			{
+				Recent::scheduleUpdateCallCache($call->getId());
+			}
+		}
+		elseif ($call instanceof \Bitrix\Call\Call)
+		{
+			// Not committed here (lost race without recovery broadcast).
+			Recent::scheduleUpdateCallCache($call->getId());
 		}
 
 		return [
@@ -1112,13 +1323,18 @@ class CallManager extends Engine\Controller
 
 	/**
 	 * @restMethod call.CallManager.getUsers
-	 * @param int $callId
+	 * @param int|null $callId
 	 * @param int[] $userIds
+	 * @param string|null $callUuid
 	 * @return null|array
 	 */
-	public function getUsersAction(int $callId, array $userIds = [])
+	public function getUsersAction(?int $callId = null, array $userIds = [], ?string $callUuid = null)
 	{
-		$call = Registry::getCallWithId($callId);
+		// $callUuid is intentionally the last parameter: siblings (finish/getUserState) put it
+		// second, but here that would shift $userIds and break legacy {callId, userIds} callers.
+		$call = $callId
+			? Registry::getCallWithId($callId)
+			: ($callUuid ? Registry::getCallWithUuid($callUuid) : null);
 		if (!$call)
 		{
 			$this->addError(new Error(Loc::getMessage("IM_REST_CALL_ERROR_CALL_NOT_FOUND"), "call_not_found"));
@@ -1160,25 +1376,37 @@ class CallManager extends Engine\Controller
 	 * @param int $userId
 	 * @return null|array
 	 */
-	public function getUserStateAction(?int $callId = null, ?string $callUuid = null, int $userId = 0)
+	public function getUserStateAction(?int $callId = null, ?string $callUuid = null, int $userId = 0): ?array
 	{
 		$currentUserId = (int)$this->getCurrentUser()->getId();
 		$call = $callId
 			? Registry::getCallWithId($callId)
 			: ($callUuid ? Registry::getCallWithUuid($callUuid) : null);
 
-		if (!$call || !$this->checkCallAccess($call, $currentUserId))
+		// Closed-form single-user access: read the caller's row once and reuse it
+		$currentCallUser = $call?->getUserClosedForm($currentUserId);
+		if (!$call || (!$currentCallUser && !$call->getAssociatedEntity()?->checkAccess($currentUserId)))
 		{
-			$this->addError(new Error("Call is not found or you do not have access to the call", "access_denied"));
+			if ($call)
+			{
+				$this->addError(new Error("You don't have access to the call " . $call->getId() . "; (current user id: " . $currentUserId . ")", 'access_denied'));
+			}
+			else
+			{
+				$this->addError(new Error("Call is not found or you do not have access to the call", "access_denied"));
+			}
 			return null;
 		}
 
-		if ($userId === 0)
+		if ($userId === 0 || $userId === $currentUserId)
 		{
-			$userId = $currentUserId;
+			$callUser = $currentCallUser;
+		}
+		else
+		{
+			$callUser = $call->getUserClosedForm($userId);
 		}
 
-		$callUser = $call->getUser($userId);
 		if (!$callUser)
 		{
 			$this->addError(new Error("User is not part of the call", "unknown_call_user"));
@@ -1186,6 +1414,38 @@ class CallManager extends Engine\Controller
 		}
 
 		return $callUser->toArray();
+	}
+
+	/**
+	 * Returns bare existence and state of a call by uuid. Lets the web client
+	 * tell a zombie media room (its call is already finished on the portal)
+	 * from a legitimate join into an ongoing call.
+	 *
+	 * @restMethod call.CallManager.getCallState
+	 * @param string|null $callUuid
+	 * @return array|null
+	 */
+	public function getCallStateAction(?string $callUuid = null): ?array
+	{
+		if (!$callUuid || !preg_match(Call::UUID_V4_PATTERN, $callUuid))
+		{
+			$this->addError(new Error("Invalid call uuid", "invalid_call_uuid"));
+			return null;
+		}
+
+		$call = Registry::getCallWithUuid($callUuid);
+		if (!$call)
+		{
+			return ['exists' => false, 'state' => null];
+		}
+
+		if (!$this->checkCallAccess($call, (int)$this->getCurrentUser()->getId()))
+		{
+			$this->addError(new Error("Call is not found or you do not have access to the call", "access_denied"));
+			return null;
+		}
+
+		return ['exists' => true, 'state' => $call->getState()];
 	}
 
 	/**
@@ -1220,6 +1480,82 @@ class CallManager extends Engine\Controller
 		}
 
 		return true;
+	}
+
+	/**
+	 * Re-reads the call by uuid under the call state lock. Returns the call
+	 * when the startCall webhook managed to create it while we were waiting
+	 * for the lock; otherwise marks the room as finished and returns null.
+	 *
+	 * @param string $callUuid
+	 * @return \Bitrix\Call\Call|null
+	 */
+	private function getCallOrMarkRoomFinished(string $callUuid): ?\Bitrix\Call\Call
+	{
+		$lockName = "call_state_call_{$callUuid}";
+		if (!Application::getConnection()->lock($lockName, static::LOCK_TTL))
+		{
+			// Report the lock explicitly so the client can retry the finish;
+			// a silent call_not_found here would leave the room untouched.
+			$this->addError(new Error("Could not get exclusive lock", "could_not_lock"));
+			return null;
+		}
+
+		try
+		{
+			$call = Registry::getCallWithUuid($callUuid);
+			if ($call)
+			{
+				return $call;
+			}
+
+			$this->markRoomFinished($callUuid, (int)$this->getCurrentUser()->getId());
+
+			return null;
+		}
+		finally
+		{
+			Application::getConnection()->unlock($lockName);
+		}
+	}
+
+	/**
+	 * Sets the finished-room marker for the uuid and finishes the media room
+	 * on the controller side. Used when a finish request arrives before the
+	 * startCall webhook has created the call entity on the portal.
+	 *
+	 * @param string $callUuid
+	 * @param int $userId
+	 * @return void
+	 */
+	private function markRoomFinished(string $callUuid, int $userId): void
+	{
+		if (!preg_match(Call::UUID_V4_PATTERN, $callUuid))
+		{
+			return;
+		}
+
+		if (!Idempotence::addKey(Call::FINISHED_ROOM_MARKER_PREFIX . $callUuid, Call::FINISHED_ROOM_MARKER_TTL))
+		{
+			// The marker is already claimed: the room finish is scheduled by the
+			// first caller, repeats must not multiply outbound HTTP requests.
+			return;
+		}
+
+		// The marker must be set under the caller's lock, but the room-finish
+		// HTTP goes out after the response, outside the lock (perf).
+		Application::getInstance()->addBackgroundJob(
+			static function () use ($callUuid, $userId) {
+				$result = (new ControllerClient())->finishPlainByUuid($callUuid, $userId);
+				if (!$result->isSuccess())
+				{
+					Logger::getInstance()->error(
+						static::class . "::markRoomFinished: controller finishPlainByUuid failed for call uuid:{$callUuid}: "
+						. implode('; ', $result->getErrorMessages()),
+					);
+				}
+			},
+		);
 	}
 
 	protected static function getLockNameWithEntityId(string $entityType, $entityId, $currentUserId): string
@@ -1264,6 +1600,32 @@ class CallManager extends Engine\Controller
 			],
 			'reportConnectionStatus' => [
 				'+prefilters' => [new Engine\ActionFilter\CloseSession()],
+			],
+			// Open to a guest over REST, where the Csrf filter of the core does not run and the guest session
+			// is recognised by its cookie alone (@see ActionFilter\SameOrigin). POST takes away the GET
+			// navigation, Origin takes away the cross-site form; native clients send no Origin or a bare
+			// portal host and pass.
+			// The guest checks of this action are inside createAction: it also joins a running call, which
+			// the portal switch does not govern.
+			'create' => [
+				'+prefilters' => [
+					new Engine\ActionFilter\HttpMethod([Engine\ActionFilter\HttpMethod::METHOD_POST]),
+					new ActionFilter\SameOrigin(),
+				],
+			],
+			// Open to a guest over REST on the same terms as create above. POST is what takes away the
+			// top-level GET navigation: a browser sends no Origin on one, so SameOrigin alone would let it
+			// through (@see ActionFilter\SameOrigin).
+			'invite' => [
+				'+prefilters' => [
+					new Engine\ActionFilter\HttpMethod([Engine\ActionFilter\HttpMethod::METHOD_POST]),
+					new ActionFilter\SameOrigin(),
+				],
+			],
+			// A guest never pulls anyone else into a call: stated at the action, because the guest allow-list
+			// of the REST API does not cover ajax.php (@see ActionFilter\DenyGuest).
+			'createChildCall' => [
+				'+prefilters' => [new ActionFilter\DenyGuest()],
 			],
 		];
 	}

@@ -9,6 +9,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Timeman\Form\Security\TaskForm;
 use Bitrix\Timeman\Model\Security\TaskAccessCodeTable;
 use Bitrix\Timeman\Security\UserPermissionsManager;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 use CTask;
 
 Loc::loadMessages(__FILE__);
@@ -18,6 +19,9 @@ class Permissions extends Controller
 	protected function getDefaultPreFilters()
 	{
 		return array_merge(
+			[
+				new ToolEnabledFilter(),
+			],
 			parent::getDefaultPreFilters(),
 			[
 				new Scope(Scope::AJAX),

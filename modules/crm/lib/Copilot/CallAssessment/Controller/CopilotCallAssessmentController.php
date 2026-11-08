@@ -361,6 +361,7 @@ final class CopilotCallAssessmentController
 			'TITLE' => $callAssessmentItem->getTitle(),
 			'DESCRIPTION' => $callAssessmentItem->getDescription(),
 			'PROMPT' => $callAssessmentItem->getPrompt(),
+			'IS_HINT_ENABLED' => $callAssessmentItem->isHintEnabled(),
 			'GIST' => $callAssessmentItem->getGist(),
 			'CALL_TYPE' => $callAssessmentItem->getCallTypeId(),
 			'AUTO_CHECK_TYPE' => $callAssessmentItem->getAutoCheckTypeId(),

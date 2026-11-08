@@ -12,6 +12,9 @@ use Bitrix\Mail\Helper\Enum\Mailbox\FolderSortMode;
 use Bitrix\Mail\Helper\MailboxAccess;
 use Bitrix\Mail\Internal\Entity\Directory\DirectoriesSettings;
 use Bitrix\Mail\Internal\Service\Directory\Settings\MailboxDirectorySettingsService;
+use Bitrix\Mail\Internal\Service\Mailbox\SettingsWriteCoordinator;
+use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationActionGuard;
+use Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope;
 use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Helper\MailboxDirectoryHelper;
 use Bitrix\Main;
@@ -62,7 +65,6 @@ class MailboxSettings extends Controller implements AccessCheckControllerInterfa
 	{
 		$result = (new MailboxDirectorySettingsService())->getSettings(
 			$mailboxId,
-			MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId),
 		);
 		if (!$result->isSuccess())
 		{
@@ -87,7 +89,6 @@ class MailboxSettings extends Controller implements AccessCheckControllerInterfa
 		$result = (new MailboxDirectorySettingsService())->loadChildren(
 			$mailboxId,
 			$dirMd5,
-			MailboxAccess::hasCurrentUserAccessToEditMailbox($mailboxId),
 		);
 		if (!$result->isSuccess())
 		{
@@ -118,15 +119,7 @@ class MailboxSettings extends Controller implements AccessCheckControllerInterfa
 			return [];
 		}
 
-		$stage = $result->getData()['migrationStage'] ?? null;
-
-		/*
-			Only a mailbox whose new physical source is waiting for these roles reports a
-			stage, and it is the stage as of this save: the operation is handed on after the
-			response, so the client rereads the state of the mailbox instead of treating this
-			value as the current one.
-		*/
-		return $stage === null ? [] : ['migrationStage' => $stage];
+		return [];
 	}
 
 	public function saveFolderSortModeAction(int $mailboxId, string $mode): void
@@ -158,13 +151,15 @@ class MailboxSettings extends Controller implements AccessCheckControllerInterfa
 			return;
 		}
 
-		EntityDataHelper::setValue(
-			$mailboxId,
-			EntityOptionsType::User,
-			(string)$userId,
-			EntityDataHelper::FOLDER_SORT_MODE,
-			$mode,
-		);
+		$this->saveFolderSorting($mailboxId, static function () use ($mailboxId, $userId, $mode): void {
+			EntityDataHelper::setValue(
+				$mailboxId,
+				EntityOptionsType::User,
+				(string)$userId,
+				EntityDataHelper::FOLDER_SORT_MODE,
+				$mode,
+			);
+		});
 	}
 
 	public function saveFolderExpandStateAction(int $mailboxId, string $collapsedFolders): void
@@ -216,51 +211,81 @@ class MailboxSettings extends Controller implements AccessCheckControllerInterfa
 			return;
 		}
 
-		$availableDirIds = $this->getAvailableDirIds($mailboxId);
+		$this->saveFolderSorting($mailboxId, function (array $state) use ($mailboxId, $userId, $order, $activateManualMode): void {
+			$pointer = (int)($state['sourceGenerationId'] ?? 0);
+			$scope = $pointer > 0 ? GenerationScope::active($pointer) : GenerationScope::withoutPreparedGenerations($mailboxId);
+			$availableDirIds = $this->getAvailableDirIds($mailboxId, $scope);
 
-		$validatedOrder = [];
-		foreach ($this->normalizeDirIds($order) as $dirId)
-		{
-			if (isset($availableDirIds[$dirId]))
+			$validatedOrder = [];
+			foreach ($this->normalizeDirIds($order) as $dirId)
 			{
-				$validatedOrder[] = $dirId;
+				if (isset($availableDirIds[$dirId]))
+				{
+					$validatedOrder[] = $dirId;
+				}
 			}
-		}
 
-		$json = json_encode(['all' => $validatedOrder]);
-		if ($json === false || mb_strlen($json, '8bit') > self::MAX_EXPAND_STATE_SIZE)
-		{
-			$this->addError(new Main\Error('Invalid folder custom order data'));
+			$json = json_encode(['all' => $validatedOrder]);
+			if ($json === false || mb_strlen($json, '8bit') > self::MAX_EXPAND_STATE_SIZE)
+			{
+				$this->addError(new Main\Error('Invalid folder custom order data'));
 
-			return;
-		}
+				return;
+			}
 
-		EntityDataHelper::setValue(
-			$mailboxId,
-			EntityOptionsType::User,
-			(string)$userId,
-			EntityDataHelper::FOLDER_CUSTOM_ORDER,
-			$json,
-		);
-
-		if ($activateManualMode && $validatedOrder !== [])
-		{
 			EntityDataHelper::setValue(
 				$mailboxId,
 				EntityOptionsType::User,
 				(string)$userId,
-				EntityDataHelper::FOLDER_SORT_MODE,
-				FolderSortMode::Manual->value,
+				EntityDataHelper::FOLDER_CUSTOM_ORDER,
+				$json,
 			);
+
+			if ($activateManualMode && $validatedOrder !== [])
+			{
+				EntityDataHelper::setValue(
+					$mailboxId,
+					EntityOptionsType::User,
+					(string)$userId,
+					EntityDataHelper::FOLDER_SORT_MODE,
+					FolderSortMode::Manual->value,
+				);
+			}
+		});
+	}
+
+	private function saveFolderSorting(int $mailboxId, callable $write): void
+	{
+		$result = (new SettingsWriteCoordinator())->execute(
+			$mailboxId,
+			function (array $state) use ($mailboxId, $write): Main\Result {
+				$result = (new MigrationActionGuard())->check($mailboxId);
+				if (!$result->isSuccess())
+				{
+					return $result;
+				}
+
+				$write($state);
+
+				$errors = $this->getErrors();
+				$this->errorCollection->clear();
+
+				return (new Main\Result())->addErrors($errors);
+			},
+			withMigrationState: true,
+		);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
 		}
 	}
 
 	/**
 	 * @return array<int, true>
 	 */
-	private function getAvailableDirIds(int $mailboxId): array
+	private function getAvailableDirIds(int $mailboxId, GenerationScope $scope): array
 	{
-		$dirs = (new MailboxDirectoryHelper($mailboxId))->getSyncDirs();
+		$dirs = (new MailboxDirectoryHelper($mailboxId, generationScope: $scope))->getSyncDirs();
 
 		$dirIds = [];
 		foreach ($dirs as $dir)

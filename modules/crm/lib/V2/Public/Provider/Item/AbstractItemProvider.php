@@ -12,10 +12,12 @@ use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\V2\Public\EntityTypeSettings;
 use Bitrix\Crm\V2\Internal\Repository\Item\ItemRepositoryInterface;
+use Bitrix\Crm\V2\Internal\Service\Item\CustomFieldDescriptor;
 use Bitrix\Crm\V2\Internal\Service\Item\CustomFieldRegistry;
 use Bitrix\Crm\V2\Internal\Service\Item\FieldRegistry;
 use Bitrix\Crm\V2\Internal\Service\Item\FieldType;
 use Bitrix\Crm\V2\Internal\Service\Item\Mapper\ItemFieldMapper;
+use Bitrix\Crm\V2\Internal\Service\Item\ResolvedSelect;
 use Bitrix\Crm\V2\Internal\Service\ItemCache;
 use Bitrix\Crm\V2\Internal\Service\Loader\CompanyBindingLoader;
 use Bitrix\Crm\V2\Internal\Service\Loader\ContactBindingLoader;
@@ -28,6 +30,7 @@ use Bitrix\Crm\V2\Internal\Service\Loader\MultifieldLoader;
 use Bitrix\Crm\V2\Internal\Service\Loader\ObserverLoader;
 use Bitrix\Crm\V2\Internal\Service\Loader\ParentLoader;
 use Bitrix\Crm\V2\Internal\Service\Loader\ProductRowLoader;
+use Bitrix\Crm\V2\Internal\Service\Loader\TrackingSourceLoader;
 use Bitrix\Crm\V2\Internal\Service\Loader\UtmLoader;
 use Bitrix\Crm\V2\Public\Entity\Item\Interface\HasCategoriesInterface;
 use Bitrix\Crm\V2\Public\Entity\Item\Item;
@@ -69,9 +72,6 @@ abstract class AbstractItemProvider
 	private ?CacheMode $cacheMode = null;
 	private ?AccessMode $accessMode = null;
 	private ?int $accessUserId = null;
-
-	/** @var string[]|null memoized per configured clone - the UF hidden from $accessUserId */
-	private ?array $resolvedHiddenCustomFields = null;
 
 	/** @var array<int, EntityType>|null memoized - parent entity types (parentTypeId => EntityType) */
 	private ?array $resolvedParentEntityTypes = null;
@@ -131,16 +131,6 @@ abstract class AbstractItemProvider
 	}
 
 	/**
-	 * Drops the per-user memo so a reconfigured clone never inherits the hidden-UF set computed for
-	 * a previous `$accessUserId`. Both {@see cached()} and {@see withAccessCheck()} clone this
-	 * provider, so re-pointing an already-used instance at another user recomputes visibility.
-	 */
-	public function __clone()
-	{
-		$this->resolvedHiddenCustomFields = null;
-	}
-
-	/**
 	 * @param ItemSelect|string[] $select Required. Accept either an {@see ItemSelect} or a plain
 	 *                                    camelCase string[] (treated as `new ItemSelect(...$names)`).
 	 */
@@ -155,7 +145,10 @@ abstract class AbstractItemProvider
 			return $items[0] ?? null;
 		}
 
-		$ormFields = $this->resolveOrmFields($select);
+		// One hidden-UF memo for the whole operation - see lazyHiddenCustomFieldNames().
+		$hiddenCustomFields = $this->lazyHiddenCustomFieldNames();
+		$resolved = $this->resolveSelect($select, $hiddenCustomFields);
+		$ormFields = $resolved->ormNames;
 		if ($this->accessMode !== null)
 		{
 			$ormFields = $this->ensureCategoryFieldForAccessCheck($ormFields);
@@ -168,8 +161,18 @@ abstract class AbstractItemProvider
 		}
 
 		$item = ItemFactory::create($this->getEntityType());
-		ItemFieldMapper::syncFromOrm($entityObject, $item, $ormFields);
-		ItemFieldMapper::syncCustomFieldsFromOrm($entityObject, $item, $this->resolveCustomFieldNames($select));
+		ItemFieldMapper::syncFromOrm(
+			$entityObject,
+			$item,
+			FieldRegistry::getInstance($this->getEntityType()),
+			$ormFields,
+		);
+		ItemFieldMapper::syncCustomFieldsFromOrm(
+			$entityObject,
+			$item,
+			$resolved->ufNames,
+			$this->customFieldDescriptorsFor($resolved->ufNames),
+		);
 
 		// Access check runs before relation loading so heavy relations load only when readable.
 		if ($this->accessMode !== null && !$this->canReadItem($item))
@@ -182,7 +185,7 @@ abstract class AbstractItemProvider
 
 		$this->applyLoaders([$item], $select);
 		$this->applyTaskLoaders([$item], $select);
-		$this->applyCustomFieldVisibility([$item]);
+		$this->applyCustomFieldVisibility([$item], $hiddenCustomFields);
 
 		return $item;
 	}
@@ -211,20 +214,26 @@ abstract class AbstractItemProvider
 			return $collection;
 		}
 
-		$ormFields = $this->resolveOrmFields($select);
+		// One hidden-UF memo for the whole operation - see lazyHiddenCustomFieldNames().
+		$hiddenCustomFields = $this->lazyHiddenCustomFieldNames();
+		$resolved = $this->resolveSelect($select, $hiddenCustomFields);
+		$ormFields = $resolved->ormNames;
 		if ($this->accessMode !== null)
 		{
 			$ormFields = $this->ensureCategoryFieldForAccessCheck($ormFields);
 		}
 
 		$entityType = $this->getEntityType();
-		$ufNames = $this->resolveCustomFieldNames($select);
+		$ufNames = $resolved->ufNames;
+		// Batch-wide metadata: resolved once, not per item.
+		$registry = FieldRegistry::getInstance($entityType);
+		$ufDescriptors = $this->customFieldDescriptorsFor($ufNames);
 		$items = [];
 		foreach ($this->getRepository()->getByIds($ids, $ormFields) as $entityObject)
 		{
 			$item = ItemFactory::create($entityType);
-			ItemFieldMapper::syncFromOrm($entityObject, $item, $ormFields);
-			ItemFieldMapper::syncCustomFieldsFromOrm($entityObject, $item, $ufNames);
+			ItemFieldMapper::syncFromOrm($entityObject, $item, $registry, $ormFields);
+			ItemFieldMapper::syncCustomFieldsFromOrm($entityObject, $item, $ufNames, $ufDescriptors);
 			$items[] = $item;
 		}
 
@@ -240,7 +249,7 @@ abstract class AbstractItemProvider
 			$this->applyLoaders($loadable, $select);
 			$this->applyTaskLoaders($loadable, $select);
 		}
-		$this->applyCustomFieldVisibility($kept);
+		$this->applyCustomFieldVisibility($kept, $hiddenCustomFields);
 		foreach ($kept as $item)
 		{
 			$collection->add($item);
@@ -292,9 +301,12 @@ abstract class AbstractItemProvider
 		$this->ensureParentFieldReferences();
 
 		$entityType = $this->getEntityType();
-		$ormFields = $this->resolveOrmFields($select);
-		$ormFilter = $this->resolveFilter($filter);
-		$order = $this->resolveOrmOrder($sort);
+		// One hidden-UF memo for the whole operation - see lazyHiddenCustomFieldNames().
+		$hiddenCustomFields = $this->lazyHiddenCustomFieldNames();
+		$resolved = $this->resolveSelect($select, $hiddenCustomFields);
+		$ormFields = $resolved->ormNames;
+		$ormFilter = $this->resolveFilter($filter, $hiddenCustomFields);
+		$order = $this->resolveOrmOrder($sort, $hiddenCustomFields);
 		$runtime = null;
 
 		if ($this->accessMode === AccessMode::Filter)
@@ -311,7 +323,10 @@ abstract class AbstractItemProvider
 			$ormFields = $this->ensureCategoryFieldForAccessCheck($ormFields);
 		}
 
-		$ufNames = $this->resolveCustomFieldNames($select);
+		$ufNames = $resolved->ufNames;
+		// Batch-wide metadata: resolved once, not per item.
+		$registry = FieldRegistry::getInstance($entityType);
+		$ufDescriptors = $this->customFieldDescriptorsFor($ufNames);
 		$collection = new ItemCollection();
 		$items = [];
 		$rows = $this->getRepository()->getList(
@@ -325,8 +340,8 @@ abstract class AbstractItemProvider
 		foreach ($rows as $entityObject)
 		{
 			$item = ItemFactory::create($entityType);
-			ItemFieldMapper::syncFromOrm($entityObject, $item, $ormFields);
-			ItemFieldMapper::syncCustomFieldsFromOrm($entityObject, $item, $ufNames);
+			ItemFieldMapper::syncFromOrm($entityObject, $item, $registry, $ormFields);
+			ItemFieldMapper::syncCustomFieldsFromOrm($entityObject, $item, $ufNames, $ufDescriptors);
 			$items[] = $item;
 		}
 
@@ -350,7 +365,7 @@ abstract class AbstractItemProvider
 
 		if ($this->cacheMode !== null)
 		{
-			$this->fillCacheFromList($items, $ormFields, $select);
+			$this->fillCacheFromList($items, $ormFields, $ufNames, $select);
 		}
 
 		if (!empty($loadable))
@@ -359,7 +374,7 @@ abstract class AbstractItemProvider
 		}
 
 		// After the raw rows are cached: strip UF the access user can't see from the copies returned.
-		$this->applyCustomFieldVisibility($kept);
+		$this->applyCustomFieldVisibility($kept, $hiddenCustomFields);
 		foreach ($kept as $item)
 		{
 			$collection->add($item);
@@ -386,16 +401,28 @@ abstract class AbstractItemProvider
 			}
 		}
 
-		if (empty($runtime))
+		return $this->getRepository()->getCount($ormFilter, $runtime);
+	}
+
+	/**
+	 * Builds an ID-only query through the same field-resolution and access-check path as getList().
+	 */
+	public function createIdQuery(?ItemFilter $filter = null): ?Query
+	{
+		$this->ensureParentFieldReferences();
+
+		$ormFilter = $this->resolveFilter($filter);
+		$runtime = null;
+		if ($this->accessMode === AccessMode::Filter)
 		{
-			return $this->getRepository()->getCount($ormFilter);
+			[, $ormFilter, $runtime, $denied] = $this->applyPermissionFilter(['ID'], $ormFilter);
+			if ($denied)
+			{
+				$ormFilter = (new ConditionTree())->where('ID', 0);
+			}
 		}
 
-		// A permission INNER JOIN can multiply rows; the repository can't take runtime fields in
-		// getCount(), so count distinct primaries via the id-only read (which de-duplicates by ID).
-		$rows = $this->getRepository()->getList(['ID'], $ormFilter, null, null, null, $runtime);
-
-		return count($rows);
+		return $this->getRepository()->createIdQuery($ormFilter, $runtime);
 	}
 
 	final protected function getRepository(): ItemRepositoryInterface
@@ -426,12 +453,18 @@ abstract class AbstractItemProvider
 		$cache = ItemCache::getInstance();
 		$entityType = $this->getEntityType();
 
-		$ormFields = $this->resolveOrmFields($select);
+		// One hidden-UF memo for the whole operation - see lazyHiddenCustomFieldNames().
+		$hiddenCustomFields = $this->lazyHiddenCustomFieldNames();
+		$resolved = $this->resolveSelect($select, $hiddenCustomFields);
+		$ormFields = $resolved->ormNames;
 		if ($this->accessMode !== null)
 		{
 			$ormFields = $this->ensureCategoryFieldForAccessCheck($ormFields);
 		}
-		$ufNames = $this->resolveCustomFieldNames($select);
+		$ufNames = $resolved->ufNames;
+		// Batch-wide metadata: resolved once, not per item.
+		$registry = FieldRegistry::getInstance($entityType);
+		$ufDescriptors = $this->customFieldDescriptorsFor($ufNames);
 		$requestAllUf = $select->shouldLoadAllCustomFields();
 		$requestAllScalars = $select->isAll();
 		$requestParents = $select->shouldLoadParents();
@@ -529,8 +562,8 @@ abstract class AbstractItemProvider
 				if ($item === null)
 				{
 					$item = ItemFactory::create($entityType);
-					ItemFieldMapper::syncFromOrm($entityObject, $item, $requestedScalarOrm);
-					ItemFieldMapper::syncCustomFieldsFromOrm($entityObject, $item, $ufNames);
+					ItemFieldMapper::syncFromOrm($entityObject, $item, $registry, $requestedScalarOrm);
+					ItemFieldMapper::syncCustomFieldsFromOrm($entityObject, $item, $ufNames, $ufDescriptors);
 					$rawById[$id] = $item;
 					$loadedScalarById[$id] = $requestedScalarOrm;
 					$loadedUfById[$id] = $ufNames;
@@ -538,8 +571,13 @@ abstract class AbstractItemProvider
 				}
 				else
 				{
-					ItemFieldMapper::syncFromOrm($entityObject, $item, $missScalarById[$id] ?? []);
-					ItemFieldMapper::syncCustomFieldsFromOrm($entityObject, $item, $missUfById[$id] ?? []);
+					ItemFieldMapper::syncFromOrm($entityObject, $item, $registry, $missScalarById[$id] ?? []);
+					ItemFieldMapper::syncCustomFieldsFromOrm(
+						$entityObject,
+						$item,
+						$missUfById[$id] ?? [],
+						$ufDescriptors,
+					);
 					$loadedScalarById[$id] = array_values(array_unique(
 						array_merge($loadedScalarById[$id], $missScalarById[$id] ?? []),
 					));
@@ -650,7 +688,7 @@ abstract class AbstractItemProvider
 
 		// Per-user UF visibility is applied only now - after the raw snapshots are cached - on the
 		// readable copies handed back. Restricted stubs carry no UF.
-		$this->applyCustomFieldVisibility($kept);
+		$this->applyCustomFieldVisibility($kept, $hiddenCustomFields);
 
 		return $kept;
 	}
@@ -749,13 +787,18 @@ abstract class AbstractItemProvider
 	 *
 	 * @param Item[] $items raw hydrated rows (pre access post-processing)
 	 * @param string[] $ormFields ORM select the rows were actually read with
+	 * @param string[] $ufNames custom-field names the rows were hydrated with
 	 */
-	private function fillCacheFromList(array $items, array $ormFields, ItemSelect $select): void
+	private function fillCacheFromList(
+		array $items,
+		array $ormFields,
+		array $ufNames,
+		ItemSelect $select,
+	): void
 	{
 		$cache = ItemCache::getInstance();
 		$entityType = $this->getEntityType();
 		$loadedOrm = $this->expandWildcardOrmFields($ormFields);
-		$ufNames = $this->resolveCustomFieldNames($select);
 		$allUf = $select->shouldLoadAllCustomFields();
 		$parentsLoaded = $select->shouldLoadParents();
 		// UF are tracked apart from scalar ORM columns on the cache entry.
@@ -828,32 +871,39 @@ abstract class AbstractItemProvider
 	}
 
 	/**
-	 * Resolves an {@see ItemSelect} to ORM column names for this provider's entity type.
+	 * Resolves an {@see ItemSelect} once into the ORM columns to read and the custom-field (`UF_*`)
+	 * names to hydrate.
 	 *
-	 * Custom fields (`UF_*`) resolve to their raw column name (ORM expands the UTS/UTM storage on
-	 * its own); {@see ItemSelect::withCustomFields()} pulls in every UF of the type. An unknown name
-	 * - neither a standard field nor a known UF - is a hard error (no silent drop).
+	 * Custom fields resolve to their raw column name (ORM expands the UTS/UTM storage on its own);
+	 * {@see ItemSelect::withCustomFields()} pulls in every UF of the type. An unknown name - neither
+	 * a standard field nor a known UF - is a hard error (no silent drop).
 	 *
-	 * @return string[] non-empty
+	 * A name without the `UF_` prefix can never be a custom field, so it is rejected without asking
+	 * the {@see CustomFieldRegistry}: the prefix only shortcuts the lookup, it never replaces the
+	 * existence check.
+	 *
+	 * @param ?\Closure $hiddenCustomFields {@see lazyHiddenCustomFieldNames()} of the running operation.
 	 * @throws UnknownSelectFieldException When a requested name is neither a standard field nor a known visible UF.
 	 */
-	private function resolveOrmFields(ItemSelect $select): array
+	private function resolveSelect(ItemSelect $select, ?\Closure $hiddenCustomFields = null): ResolvedSelect
 	{
 		$entityType = $this->getEntityType();
 		$registry = FieldRegistry::getInstance($entityType);
 		$customFields = CustomFieldRegistry::getInstance();
-		$hiddenCustomFields = $this->hiddenCustomFieldNames();
+		$hiddenCustomFields ??= $this->lazyHiddenCustomFieldNames();
 
 		// The scalar wildcard covers every standard scalar column; UF stay opt-in (explicit `UF_*`
 		// entries or `withCustomFields()`) and are appended even under the wildcard - no silent drop.
 		$isWildcard = $select->isAll();
 		$ormNames = $isWildcard ? ['*'] : ['ID']; // ID is implicit for round-tripping
+		$ufNames = [];
 
 		if ($select->shouldLoadAllCustomFields())
 		{
 			foreach ($customFields->getCustomFieldNames($entityType) as $ufName)
 			{
 				$ormNames[] = $ufName;
+				$ufNames[] = $ufName;
 			}
 		}
 
@@ -882,66 +932,49 @@ abstract class AbstractItemProvider
 				continue;
 			}
 
-			// Not a standard field: a known, visible UF resolves to its raw column. Under an active
-			// access check a UF the user can't see is treated as unknown - existence is not revealed.
-			if ($customFields->isCustomField($entityType, $camelName))
+			if (!str_starts_with($camelName, 'UF_') || !$customFields->isCustomField($entityType, $camelName))
 			{
-				if (in_array($camelName, $hiddenCustomFields, true))
-				{
-					throw new UnknownSelectFieldException($camelName);
-				}
-
-				$ormNames[] = $camelName;
-
-				continue;
+				throw new UnknownSelectFieldException($camelName);
 			}
 
-			throw new UnknownSelectFieldException($camelName);
+			// Under an active access check a UF the user can't see is treated as unknown - existence
+			// is not revealed.
+			if (in_array($camelName, $hiddenCustomFields(), true))
+			{
+				throw new UnknownSelectFieldException($camelName);
+			}
+
+			$ormNames[] = $camelName;
+			$ufNames[] = $camelName;
 		}
 
-		return array_values(array_unique($ormNames));
+		return new ResolvedSelect($ormNames, $ufNames);
 	}
 
 	/**
-	 * The custom-field (`UF_*`) names an {@see ItemSelect} asks to hydrate: explicit `UF_*` entries
-	 * plus, when {@see ItemSelect::withCustomFields()} is set, every UF of the type. The scalar
-	 * wildcard token itself never expands to UF, but explicit `UF_*` requested alongside it are kept.
+	 * Custom-field descriptors the Mapper needs for a read, resolved once per read instead of once
+	 * per item. A read without custom fields gets an empty map and never asks the registry: building
+	 * the map can cost a query, and that cost must stay tied to actually reading a `UF_*`.
 	 *
-	 * @return string[]
+	 * @param string[] $ufNames
+	 * @return array<string, CustomFieldDescriptor>
 	 */
-	private function resolveCustomFieldNames(ItemSelect $select): array
+	private function customFieldDescriptorsFor(array $ufNames): array
 	{
-		$entityType = $this->getEntityType();
-		$customFields = CustomFieldRegistry::getInstance();
-
-		if ($select->shouldLoadAllCustomFields())
+		if (empty($ufNames))
 		{
-			return $customFields->getCustomFieldNames($entityType);
+			return [];
 		}
 
-		// Explicit `UF_*` entries are hydrated even next to the scalar wildcard; the wildcard token
-		// itself carries no UF.
-		$names = [];
-		foreach ($select->getFields() as $name)
-		{
-			if (
-				$name !== ItemSelect::WILDCARD
-				&& $customFields->isCustomField($entityType, $name)
-			)
-			{
-				$names[] = $name;
-			}
-		}
-
-		return array_values(array_unique($names));
+		return CustomFieldRegistry::getInstance()->getEntityDescriptorsMap($this->getEntityType());
 	}
 
 	/**
 	 * Custom-field (`UF_*`) names to treat as non-existent for this read: under an active access
 	 * check, UF the access user can't see are hidden from field resolution (so a select / filter /
 	 * sort by one fails exactly like an unknown field) and stripped from returned items. Empty for
-	 * a system read (no access check). Memoized per configured clone - the hidden set depends only
-	 * on the fixed `$accessUserId`.
+	 * a system read (no access check). Resolved on demand only - a read that never meets a custom
+	 * field never asks the visibility subsystem.
 	 *
 	 * @return string[]
 	 */
@@ -952,9 +985,30 @@ abstract class AbstractItemProvider
 			return [];
 		}
 
-		return $this->resolvedHiddenCustomFields ??= CustomFieldRegistry::getInstance()
+		return CustomFieldRegistry::getInstance()
 			->getHiddenFieldNames($this->getEntityType(), $this->accessUserId)
 		;
+	}
+
+	/**
+	 * A memo over {@see hiddenCustomFieldNames()}: the hidden set is computed on the first custom
+	 * field met and reused afterwards. A read built only of standard fields never triggers the
+	 * computation - the closure is created, never called.
+	 *
+	 * Created once per read operation and handed to every step that resolves names (select, filter,
+	 * sort) and to the visibility pass, so one read computes the set once instead of up to four
+	 * times. The memo lives in the closure, not on the provider: an instance is single-use and
+	 * {@see withAccessCheck()} / {@see cached()} clone it, so instance state would be misleading.
+	 *
+	 * @return \Closure(): string[]
+	 */
+	private function lazyHiddenCustomFieldNames(): \Closure
+	{
+		$resolved = null;
+
+		return function () use (&$resolved): array {
+			return $resolved ??= $this->hiddenCustomFieldNames();
+		};
 	}
 
 	/**
@@ -999,26 +1053,34 @@ abstract class AbstractItemProvider
 	 * the raw cached snapshot - the cache keeps every UF regardless of who reads it.
 	 *
 	 * @param Item[] $items
+	 * @param ?\Closure $hiddenCustomFields {@see lazyHiddenCustomFieldNames()} of the running operation.
 	 */
-	private function applyCustomFieldVisibility(array $items): void
+	private function applyCustomFieldVisibility(array $items, ?\Closure $hiddenCustomFields = null): void
 	{
 		if ($this->accessMode === null)
 		{
 			return;
 		}
 
-		$hidden = $this->hiddenCustomFieldNames();
-		if (empty($hidden))
-		{
-			return;
-		}
+		$hiddenCustomFields ??= $this->lazyHiddenCustomFieldNames();
 
+		// The hidden set is asked for only once an item actually carries custom fields: a read
+		// without them - and a Restricted stub, which carries none - has nothing to strip.
+		$hidden = null;
 		foreach ($items as $item)
 		{
-			if ($item->canRead())
+			if (!$item->canRead() || $item->getCustomFields() === [])
 			{
-				$item->internalRemoveCustomFields($hidden);
+				continue;
 			}
+
+			$hidden ??= $hiddenCustomFields();
+			if ($hidden === [])
+			{
+				return;
+			}
+
+			$item->internalRemoveCustomFields($hidden);
 		}
 	}
 
@@ -1026,8 +1088,10 @@ abstract class AbstractItemProvider
 	 * Resolves an {@see ItemFilter} to a repository-ready filter (`array` for the
 	 * setFilter-style input, {@see ConditionTree} for the tree input). Field names in both
 	 * forms are camelCase and translated to ORM column names here.
+	 *
+	 * @param ?\Closure $hiddenCustomFields {@see lazyHiddenCustomFieldNames()} of the running operation.
 	 */
-	private function resolveFilter(?ItemFilter $filter): array|ConditionTree|null
+	private function resolveFilter(?ItemFilter $filter, ?\Closure $hiddenCustomFields = null): array|ConditionTree|null
 	{
 		if ($filter === null)
 		{
@@ -1037,7 +1101,7 @@ abstract class AbstractItemProvider
 		$raw = $filter->getRaw();
 		$entityType = $this->getEntityType();
 		$registry = FieldRegistry::getInstance($entityType);
-		$hiddenCustomFields = $this->hiddenCustomFieldNames();
+		$hiddenCustomFields ??= $this->lazyHiddenCustomFieldNames();
 		$parentTypes = $this->parentEntityTypes();
 
 		if ($raw instanceof ConditionTree)
@@ -1054,9 +1118,10 @@ abstract class AbstractItemProvider
 	/**
 	 * Resolves an {@see ItemSort} to an ORM-name keyed direction map.
 	 *
+	 * @param ?\Closure $hiddenCustomFields {@see lazyHiddenCustomFieldNames()} of the running operation.
 	 * @return array<string, string>|null
 	 */
-	private function resolveOrmOrder(?ItemSort $sort): ?array
+	private function resolveOrmOrder(?ItemSort $sort, ?\Closure $hiddenCustomFields = null): ?array
 	{
 		if ($sort === null || $sort->isEmpty())
 		{
@@ -1065,7 +1130,7 @@ abstract class AbstractItemProvider
 
 		$entityType = $this->getEntityType();
 		$registry = FieldRegistry::getInstance($entityType);
-		$hiddenCustomFields = $this->hiddenCustomFieldNames();
+		$hiddenCustomFields ??= $this->lazyHiddenCustomFieldNames();
 		$parentTypes = $this->parentEntityTypes();
 		$result = [];
 		foreach ($sort->getRaw() as $camelName => $direction)
@@ -1076,8 +1141,9 @@ abstract class AbstractItemProvider
 				$ormName = $descriptor->ormName;
 			}
 			elseif (
-				CustomFieldRegistry::getInstance()->isCustomField($entityType, $camelName)
-				&& !in_array($camelName, $hiddenCustomFields, true)
+				str_starts_with($camelName, 'UF_')
+				&& CustomFieldRegistry::getInstance()->isCustomField($entityType, $camelName)
+				&& !in_array($camelName, $hiddenCustomFields(), true)
 			)
 			{
 				// A multiple UF orders through a row-multiplying JOIN to its UTM back-reference. The
@@ -1116,13 +1182,16 @@ abstract class AbstractItemProvider
 	/**
 	 * Rewrites camelCase keys in a Bitrix `setFilter`-style array to ORM column names,
 	 * preserving operator prefixes (`=`, `>=`, `@`, `!@`, `%`, …).
+	 *
+	 * @param \Closure(): string[] $hiddenCustomFields Called only when a custom field is met.
+	 * @param array<int, EntityType> $parentTypes
 	 */
 	private static function translateArrayFilterKeys(
 		array $filter,
 		FieldRegistry $registry,
 		EntityType $entityType,
-		array $hiddenCustomFields = [],
-		array $parentTypes = [],
+		\Closure $hiddenCustomFields,
+		array $parentTypes,
 	): array
 	{
 		$sqlWhere = new \CSQLWhere();
@@ -1168,8 +1237,9 @@ abstract class AbstractItemProvider
 			// A known, visible UF filters by its raw column name (ORM resolves storage / multi alias);
 			// a UF hidden from the access user is rejected like an unknown field.
 			if (
-				CustomFieldRegistry::getInstance()->isCustomField($entityType, $camelName)
-				&& !in_array($camelName, $hiddenCustomFields, true)
+				str_starts_with($camelName, 'UF_')
+				&& CustomFieldRegistry::getInstance()->isCustomField($entityType, $camelName)
+				&& !in_array($camelName, $hiddenCustomFields(), true)
 			)
 			{
 				$result[$prefix . $camelName] = $value;
@@ -1215,13 +1285,16 @@ abstract class AbstractItemProvider
 
 	/**
 	 * Replaces camelCase column names with ORM names everywhere inside a {@see ConditionTree}.
+	 *
+	 * @param \Closure(): string[] $hiddenCustomFields Called only when a custom field is met.
+	 * @param array<int, EntityType> $parentTypes
 	 */
 	private static function translateTreeColumns(
 		ConditionTree $tree,
 		FieldRegistry $registry,
 		EntityType $entityType,
-		array $hiddenCustomFields = [],
-		array $parentTypes = [],
+		\Closure $hiddenCustomFields,
+		array $parentTypes,
 	): void
 	{
 		foreach ($tree->getConditions() as $node)
@@ -1255,8 +1328,9 @@ abstract class AbstractItemProvider
 			// A known, visible UF is already addressed by its raw ORM column name - leave it untouched;
 			// a UF hidden from the access user is rejected like an unknown field.
 			if (
-				CustomFieldRegistry::getInstance()->isCustomField($entityType, $column)
-				&& !in_array($column, $hiddenCustomFields, true)
+				str_starts_with($column, 'UF_')
+				&& CustomFieldRegistry::getInstance()->isCustomField($entityType, $column)
+				&& !in_array($column, $hiddenCustomFields(), true)
 			)
 			{
 				continue;
@@ -1828,6 +1902,11 @@ abstract class AbstractItemProvider
 		if ($select->shouldLoadUtm())
 		{
 			(new UtmLoader())->load($items, $select);
+		}
+
+		if ($select->shouldLoadTrackingSource())
+		{
+			(new TrackingSourceLoader())->load($items, $select);
 		}
 
 		if ($select->shouldLoadRelatedCrmObjects())

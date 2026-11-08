@@ -769,6 +769,11 @@ class CIMEvent
 		IM\V2\Guest\GuestCounter::onAfterUserUpdate($arParams);
 		IM\V2\Sync\UserLifecycleService::onAfterUserUpdate($arParams);
 
+		if (IM\Integration\Socialnetwork\Extranet::isInviteConfirmation($arParams))
+		{
+			IM\Integration\Socialnetwork\Extranet::clearGroupCacheForUser((int)$arParams['ID']);
+		}
+
 		if ((isset($arParams['ACTIVE']) || isset($arParams['UF_DEPARTMENT'])) && CIMChat::GetGeneralChatId())
 		{
 			$chat = new CIMChat(0);

@@ -57,7 +57,7 @@ class Util
 				{
 					$res['mrid'] = (int)$parsedLocation[1];
 				}
-				if ((int)$parsedLocation[2] > 0)
+				if (isset($parsedLocation[2]) && (int)$parsedLocation[2] > 0)
 				{
 					$res['mrevid'] = (int)$parsedLocation[2];
 				}
@@ -194,109 +194,125 @@ class Util
 			CTimeZone::Disable();
 		}
 
-		// *** ADD MEETING ROOM ***
-		$locOld = self::parseLocation($old);
-		$locNew = self::parseLocation($new);
-		$res = $locNew['mrid'] ? $locNew['str'] : $new;
-		$settings = CCalendar::GetSettings(['request' => false]);
-		$RMiblockId = $settings['rm_iblock_id'] ?? null;
-		// If not allowed
-		if ($RMiblockId && $locOld['mrid'] !== false && $locOld['mrevid'] !== false) // Release MR
+		try
 		{
-			Util::releaseLocation($locOld);
-		}
-
-		if ($locNew['mrid'] !== false) // Reserve MR
-		{
-			$mrevid = false;
-			if ($params['bRecreateReserveMeetings'])
+			// *** ADD MEETING ROOM ***
+			$locOld = self::parseLocation($old);
+			$locNew = self::parseLocation($new);
+			$res = $locNew['mrid'] ? $locNew['str'] : $new;
+			$settings = CCalendar::GetSettings(['request' => false]);
+			$RMiblockId = $settings['rm_iblock_id'] ?? null;
+			// If not allowed
+			if ($RMiblockId && $locOld['mrid'] !== false && $locOld['mrevid'] !== false) // Release MR
 			{
-				$mrevid = IBlockMeetingRoom::reserveMeetingRoom([
-	                'RMiblockId' => $RMiblockId,
-	                'mrid' => $locNew['mrid'],
-	                'dateFrom' => $params['dateFrom'],
-	                'dateTo' => $params['dateTo'],
-	                'name' => $params['name'],
-	                'description' => Loc::getMessage('EC_RESERVE_FOR_EVENT').': '.$params['name'],
-	                'persons' => $params['persons'],
-	                'members' => $params['attendees']
-                ]);
+				Util::releaseLocation($locOld);
 			}
 
-			else if($locNew['mrevid'] !== false)
+			if ($locNew['mrid'] !== false) // Reserve MR
 			{
-				$mrevid = $locNew['mrevid'];
+				$mrevid = false;
+				if ($params['bRecreateReserveMeetings'])
+				{
+					$mrevid = IBlockMeetingRoom::reserveMeetingRoom([
+		                'RMiblockId' => $RMiblockId,
+		                'mrid' => $locNew['mrid'],
+		                'dateFrom' => $params['dateFrom'],
+		                'dateTo' => $params['dateTo'],
+		                'name' => $params['name'],
+		                'description' => Loc::getMessage('EC_RESERVE_FOR_EVENT').': '.$params['name'],
+		                'persons' => $params['persons'],
+		                'members' => $params['attendees']
+	                ]);
+				}
+
+				else if($locNew['mrevid'] !== false)
+				{
+					$mrevid = $locNew['mrevid'];
+				}
+
+				$locNew =
+					($mrevid && $mrevid !== 'reserved' && $mrevid !== 'expire' && $mrevid > 0)
+						? 'ECMR_' . $locNew['mrid'] . '_' . $mrevid
+						: ''
+				;
+			}
+			// Release room
+			else if (
+				$locOld['room_id'] !== false
+				&& $locOld['room_event_id'] !== false
+				&& $locNew['room_id'] === false
+			)
+			{
+				if (!self::releaseLocation($locOld))
+				{
+					throw new \RuntimeException('Unable to release the current meeting room reservation.');
+				}
+
+				$locNew = $locNew['str'];
+			}
+			//Reserve room if it hasn't reserved before
+			else if($locNew['room_id'] && $locOld['room_id'] === false)
+			{
+				$roomEventId = Manager::reserveRoom([
+					'room_id' => $locNew['room_id'],
+					'room_event_id' => false,
+					'parentParams' => $params['parentParams']
+				]);
+				if (!$roomEventId)
+				{
+					throw new \RuntimeException('Unable to reserve the meeting room.');
+				}
+
+				$locNew = 'calendar_' . $locNew['room_id'] . '_' . $roomEventId;
+			}
+			//Update room event if it has been reserved before
+			else if (
+				$locNew['room_id']
+				&& $locOld['room_id']
+				&& $locOld['room_event_id']
+			)
+			{
+				$roomEventId = Manager::reserveRoom([
+					'room_id' => $locNew['room_id'],
+					'room_event_id' => $locOld['room_event_id'],
+					'parentParams' => $params['parentParams'],
+					'checkPermission' => $params['checkPermission'],
+				]);
+				if (!$roomEventId)
+				{
+					throw new \RuntimeException('Unable to update the meeting room reservation.');
+				}
+
+				$locNew = 'calendar_' . $locNew['room_id'] . '_' . $roomEventId;
+			}
+			//String value for location field
+			else
+			{
+				$locNew = $locNew['str'];
 			}
 
-			$locNew =
-				($mrevid && $mrevid !== 'reserved' && $mrevid !== 'expire' && $mrevid > 0)
-					? 'ECMR_' . $locNew['mrid'] . '_' . $mrevid
-					: ''
-			;
-		}
-		// Release room
-		else if (
-			$locOld['room_id'] !== false
-			&& $locOld['room_event_id'] !== false
-			&& $locNew['room_id'] === false
-		)
-		{
-			self::releaseLocation($locOld);
+			if ($locNew)
+			{
+				$res = $locNew;
+			}
 
-			$locNew = $locNew['str'];
+			return $res;
 		}
-		//Reserve room if it hasn't reserved before
-		else if($locNew['room_id'] && $locOld['room_id'] === false)
+		finally
 		{
-			$roomEventId = Manager::reserveRoom([
-				'room_id' => $locNew['room_id'],
-				'room_event_id' => false,
-				'parentParams' => $params['parentParams']
-			]);
-
-			$locNew = $roomEventId ? 'calendar_'.$locNew['room_id'].'_'.$roomEventId : '';
+			if ($tzEnabled)
+			{
+				CTimeZone::Enable();
+			}
 		}
-		//Update room event if it has been reserved before
-		else if (
-			$locNew['room_id']
-			&& $locOld['room_id']
-			&& $locOld['room_event_id']
-		)
-		{
-			$roomEventId = Manager::reserveRoom([
-				'room_id' => $locNew['room_id'],
-				'room_event_id' => $locOld['room_event_id'],
-				'parentParams' => $params['parentParams'],
-				'checkPermission' => $params['checkPermission'],
-			]);
-
-			$locNew = $roomEventId ? 'calendar_' . $locNew['room_id'] . '_' . $roomEventId : '';
-		}
-		//String value for location field
-		else
-		{
-			$locNew = $locNew['str'];
-		}
-
-		if ($locNew)
-		{
-			$res = $locNew;
-		}
-
-		if ($tzEnabled)
-		{
-			CTimeZone::Enable();
-		}
-
-		return $res;
 	}
 
 	/**
 	 * @param $loc
 	 *
-	 * @return void
+	 * @return bool
 	 */
-	public static function releaseLocation($loc)
+	public static function releaseLocation($loc): bool
 	{
 		$loc = [
 			'room_id' => $loc['room_id'] ?? false,
@@ -307,10 +323,13 @@ class Util
 
 		if ($loc['room_id'] && $loc['room_event_id'] !== false)
 		{
-			Manager::releaseRoom([
+			if (!Manager::releaseRoom([
 				'room_id' => $loc['room_id'],
 				'room_event_id' => $loc['room_event_id']
-			]);
+			]))
+			{
+				return false;
+			}
 		}
 
 		// Old reserve meeting based on iblock module
@@ -326,6 +345,8 @@ class Util
 				]);
 			}
 		}
+
+		return true;
 	}
 
 	/**

@@ -4,7 +4,10 @@ namespace Bitrix\BIConnector\Access\Permission;
 
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
+use Bitrix\BIConnector\Access\Rule\TableRule;
 use Bitrix\BIConnector\Access\Rule\VariableRule;
+use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
+use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
 use Bitrix\Main\Access\Permission;
 use Bitrix\Main\Localization\Loc;
 
@@ -22,6 +25,8 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public const BIC_EXTERNAL_DASHBOARD_CONFIG = 7;
 	public const BIC_DELETE_ALL_UNUSED_ELEMENTS = 8;
 	public const BIC_DASHBOARD_SHARE = 9;
+	public const BIC_SETTINGS_EDIT_TABLE_RIGHTS = 10;
+	public const BIC_SHARE_CONTROL = 11;
 
 	public const BIC_DASHBOARD = 100;
 	public const BIC_DASHBOARD_VIEW = 101;
@@ -31,20 +36,25 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 	public const BIC_DASHBOARD_COPY = 105;
 	public const BIC_DASHBOARD_MODIFY_SETTINGS = 106;
 
+	public const BIC_TABLE = 200;
+	public const BIC_TABLE_VIEW = 201;
+	public const BIC_TABLE_EDIT = 202;
+	public const BIC_TABLE_EXPORT = 203;
+
 	/** @var int deprecated */
 	public const BIC_GROUP_MODIFY = 6;
 	public const BIC_DASHBOARD_CREATE = 2;
 	
 	private static ?array $groupPermissions = null;
 
+	private static ?array $tableGroupPermissions = null;
+
+	private static ?array $tableGroupSubtitles = null;
+
 	public static function getPermission($permissionId): array
 	{
-		$dashboardPermissions = self::getDashboardGroupPermissions();
-		$permission =
-			!empty($dashboardPermissions[$permissionId])
-				? $dashboardPermissions[$permissionId]
-				: parent::getPermission($permissionId)
-		;
+		$groupPermission = is_string($permissionId) ? self::getGroupPermission($permissionId) : null;
+		$permission = $groupPermission ?? parent::getPermission($permissionId);
 
 		if ($permissionId === self::BIC_ACCESS)
 		{
@@ -80,16 +90,21 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 		}
 		elseif ($permission['type'] === Permission\PermissionDictionary::TYPE_DEPENDENT_VARIABLES)
 		{
+			$isTableGroup = is_string($permissionId) && self::isTableGroupPermission($permissionId);
+			$permissionCodes = $isTableGroup ? self::getTablePermissionCodes() : self::getDashboardPermissionCodes();
+
 			$permission['minValue'] = ['0'];
-			$permission['maxValue'] = self::getPermissionCodes();
+			$permission['maxValue'] = $permissionCodes;
 
 			$separator = '|';
-			$allSelectedKey = implode($separator, self::getPermissionCodes());
+			$allSelectedKey = implode($separator, $permissionCodes);
 			$permission['selectedVariablesAliases'] = [
 				'separator' => $separator,
-				$allSelectedKey => Loc::getMessage('BIC_DASHBOARD_ACCESS_ALL'),
+				$allSelectedKey => Loc::getMessage($isTableGroup ? 'BIC_TABLE_ACCESS_ALL' : 'BIC_DASHBOARD_ACCESS_ALL'),
 			];
-			$permission['dependentVariablesPopupHint'] = Loc::getMessage('BIC_GROUP_VARIABLES_HINT');
+			$permission['dependentVariablesPopupHint'] = Loc::getMessage(
+				$isTableGroup ? 'BIC_TABLE_GROUP_VARIABLES_HINT' : 'BIC_GROUP_VARIABLES_HINT'
+			);
 		}
 		if (in_array($permissionId, self::getOldVariablesPermissions(), true))
 		{
@@ -159,11 +174,74 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 		return str_contains($permission, 'G');
 	}
 
+	public static function getTableGroupPermissionId(int $groupId): string
+	{
+		return "T{$groupId}";
+	}
+
+	/**
+	 * The pattern lives in a method, not in a constant: the dictionary of the core builds its list of
+	 * permissions by reflection over class constants, and a constant of any visibility lands in that list.
+	 *
+	 * @return string
+	 */
+	private static function getTableGroupPermissionPattern(): string
+	{
+		// (0|[1-9]\d*) and the D modifier keep the recognizer reversible: no leading zeros, no trailing line break
+		return '/^T(0|[1-9]\d*)$/D';
+	}
+
+	public static function getTableGroupIdFromPermission(string $permission): int
+	{
+		if (preg_match(self::getTableGroupPermissionPattern(), $permission, $matches) !== 1)
+		{
+			return 0;
+		}
+
+		return (int)$matches[1];
+	}
+
+	public static function isTableGroupPermission(string $permission): bool
+	{
+		return preg_match(self::getTableGroupPermissionPattern(), $permission) === 1;
+	}
+
+	/**
+	 * @deprecated the reset covers both axes, use clearGroupPermissions()
+	 */
 	public static function clearDashboardGroupPermissions(): void
 	{
+		self::clearGroupPermissions();
+	}
+
+	public static function clearGroupPermissions(): void
+	{
 		self::$groupPermissions = null;
+		self::$tableGroupPermissions = null;
+		self::$tableGroupSubtitles = null;
 
 		VariableRule::clearCache();
+		TableRule::clearCache();
+		TableGroupMembershipService::clearCache();
+	}
+
+	/**
+	 * Return the description of a group permission of the axis the id belongs to, null for any other id.
+	 * The axes are asked apart: an id belongs to one of them, and building the dictionary of the other
+	 * one would cost a read of its groups on every hit that has nothing to do with that axis.
+	 *
+	 * @param string $permissionId
+	 *
+	 * @return array|null
+	 */
+	private static function getGroupPermission(string $permissionId): ?array
+	{
+		$groupPermissions = self::isTableGroupPermission($permissionId)
+			? self::getTableGroupPermissions()
+			: self::getDashboardGroupPermissions()
+		;
+
+		return !empty($groupPermissions[$permissionId]) ? $groupPermissions[$permissionId] : null;
 	}
 
 	public static function getDashboardGroupPermissions(): array
@@ -179,6 +257,8 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 			'cache' => ['ttl' => 3600],
 		]);
 
+		$variables = self::getDashboardPermissionVariables();
+
 		while ($group = $groups->fetchObject())
 		{
 			$id = self::getDashboardGroupPermissionId($group['ID']);
@@ -186,11 +266,11 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 				'id' => $id,
 				'title' => $group->getName(),
 				'type' => self::TYPE_DEPENDENT_VARIABLES,
-				'variables' => self::getPermissionVariables(),
+				'variables' => $variables,
 				'emptyValue' => 0,
 				'groupHead' => false,
 				'subtitle' => Loc::getMessagePlural('BIC_DASHBOARD_GROUP_SUBTITLE', count($group->getDashboards()), ['#COUNT#' => count($group->getDashboards())]),
-				'iconClass' => self::getGroupIconClass($group->getType()),
+				'iconClass' => self::getGroupIconClass($group->getType() === SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM),
 				'isClickable' => true,
 				'isDeletable' => $group->getType() === SupersetDashboardGroupTable::GROUP_TYPE_CUSTOM,
 			];
@@ -199,7 +279,121 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 		return self::$groupPermissions;
 	}
 
-	public static function getPermissionCodes(): array
+	public static function getTableGroupPermissions(): array
+	{
+		if (self::$tableGroupPermissions !== null)
+		{
+			return self::$tableGroupPermissions;
+		}
+
+		self::$tableGroupPermissions = [];
+		$groups = TableGroupTable::getList([
+			'select' => ['ID', 'NAME', 'TYPE'],
+			'order' => ['SORT' => 'ASC', 'ID' => 'ASC'],
+			'cache' => ['ttl' => 3600],
+		]);
+
+		$variables = self::getTablePermissionVariables();
+
+		while ($group = $groups->fetchObject())
+		{
+			$id = self::getTableGroupPermissionId($group->getId());
+			self::$tableGroupPermissions[$id] = [
+				'id' => $id,
+				'title' => $group->getName(),
+				'type' => self::TYPE_DEPENDENT_VARIABLES,
+				'variables' => $variables,
+				'emptyValue' => 0,
+				'groupHead' => false,
+				'iconClass' => self::getGroupIconClass($group->isSystem()),
+				'isClickable' => true,
+				'isDeletable' => $group->isSystem() === false,
+			];
+		}
+
+		return self::$tableGroupPermissions;
+	}
+
+	/**
+	 * Captions of the table group rows: the number of tables each group holds.
+	 *
+	 * Asked apart from the permission list on purpose: the permission list is read on every access
+	 * check, where the caption is never looked at, while counting the tables walks the composition of
+	 * every group.
+	 *
+	 * @return array<string, string> Permission id of the group to its caption.
+	 */
+	public static function getTableGroupSubtitles(): array
+	{
+		if (self::$tableGroupSubtitles !== null)
+		{
+			return self::$tableGroupSubtitles;
+		}
+
+		self::$tableGroupSubtitles = [];
+		foreach (array_keys(self::getTableGroupPermissions()) as $permissionId)
+		{
+			$groupId = self::getTableGroupIdFromPermission((string)$permissionId);
+			$tableCount = count(TableGroupMembershipService::getTableCodesByGroupId($groupId));
+
+			self::$tableGroupSubtitles[$permissionId] = Loc::getMessagePlural(
+				'BIC_TABLE_GROUP_SUBTITLE',
+				$tableCount,
+				['#COUNT#' => $tableCount],
+			);
+		}
+
+		return self::$tableGroupSubtitles;
+	}
+
+	/**
+	 * @return int[]
+	 */
+	public static function getTablePermissionCodes(): array
+	{
+		return [
+			self::BIC_TABLE_VIEW,
+			self::BIC_TABLE_EDIT,
+			self::BIC_TABLE_EXPORT,
+		];
+	}
+
+	private static function getTablePermissionVariables(): array
+	{
+		$permissionCodes = self::getTablePermissionCodes();
+
+		$variables = [
+			[
+				'id' => '0',
+				'title' => Loc::getMessage('BIC_TABLE_NO_ACCESS'),
+				'useAsNothingSelectedInSubsection' => true,
+				'useAsEmpty' => true,
+				'conflictsWith' => $permissionCodes,
+			],
+		];
+
+		foreach ($permissionCodes as $permissionCode)
+		{
+			$permission = self::getPermission($permissionCode);
+			$variable = [
+				'id' => $permissionCode,
+				'title' => $permission['title'],
+				'hint' => $permission['hint'],
+			];
+			if ($permissionCode !== self::BIC_TABLE_VIEW)
+			{
+				$variable['requires'] = [
+					self::BIC_TABLE_VIEW,
+				];
+			}
+
+			$variables[] = $variable;
+		}
+
+		return $variables;
+	}
+
+	public static function getDashboardPermissionCodes(): array
 	{
 		$permissionCodes = [
 			self::BIC_DASHBOARD_VIEW,
@@ -215,9 +409,9 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 		return $permissionCodes;
 	}
 
-	private static function getPermissionVariables(): array
+	private static function getDashboardPermissionVariables(): array
 	{
-		$permissionCodes = self::getPermissionCodes();
+		$permissionCodes = self::getDashboardPermissionCodes();
 
 		$variables = [
 			[
@@ -268,40 +462,74 @@ final class PermissionDictionary extends Permission\PermissionDictionary
 		return $variables;
 	}
 
-	private static function getGroupIconClass(?string $groupType): string
+	private static function getGroupIconClass(bool $isSystem): string
 	{
-		return match ($groupType)
-		{
-			SupersetDashboardGroupTable::GROUP_TYPE_SYSTEM => 'ui-icon ui-icon-file-air-folder-24',
-			default => 'ui-icon ui-icon-file-air-folder-person',
-		};
+		return $isSystem
+			? 'ui-icon ui-icon-file-air-folder-24'
+			: 'ui-icon ui-icon-file-air-folder-person'
+		;
 	}
 
 	public static function getNewGroupPermissions(): array
 	{
 		$separator = '|';
-		$allSelectedKey = implode($separator, self::getPermissionCodes());
+		$allSelectedKey = implode($separator, self::getDashboardPermissionCodes());
 
 		return [
 			'id' => 'new_G0',
 			'title' => Loc::getMessage('BIC_DASHBOARD_GROUP_TITLE'),
 			'type' => self::TYPE_DEPENDENT_VARIABLES,
-			'variables' => self::getPermissionVariables(),
+			'variables' => self::getDashboardPermissionVariables(),
 			'subtitle' => Loc::getMessagePlural('BIC_DASHBOARD_GROUP_SUBTITLE', 0, ['#COUNT#' => 0]),
 			'minValue' => ['0'],
-			'maxValue' => self::getPermissionCodes(),
+			'maxValue' => self::getDashboardPermissionCodes(),
 			'selectedVariablesAliases' => [
 				'separator' => $separator,
 				$allSelectedKey => Loc::getMessage('BIC_DASHBOARD_ACCESS_ALL'),
 			],
 			'emptyValue' => 0,
 			'groupHead' => false,
-			'iconClass' => self::getGroupIconClass(SupersetDashboardGroupTable::GROUP_TYPE_CUSTOM),
+			'iconClass' => self::getGroupIconClass(false),
 			'isClickable' => true,
 			'isDeletable' => true,
 			'isNew' => true,
 			'isModified' => true,
 			'dependentVariablesPopupHint' => Loc::getMessage('BIC_GROUP_VARIABLES_HINT'),
+		];
+	}
+
+	/**
+	 * Placeholder row of a table group that does not exist yet: it lives in the matrix until it is
+	 * saved, so its id carries the new_ prefix the strict T<id> recognizer never accepts.
+	 *
+	 * @return array
+	 */
+	public static function getNewTableGroupPermissions(): array
+	{
+		$separator = '|';
+		$permissionCodes = self::getTablePermissionCodes();
+		$allSelectedKey = implode($separator, $permissionCodes);
+
+		return [
+			'id' => 'new_T0',
+			'title' => Loc::getMessage('BIC_TABLE_GROUP_TITLE'),
+			'type' => self::TYPE_DEPENDENT_VARIABLES,
+			'variables' => self::getTablePermissionVariables(),
+			'subtitle' => Loc::getMessagePlural('BIC_TABLE_GROUP_SUBTITLE', 0, ['#COUNT#' => 0]),
+			'minValue' => ['0'],
+			'maxValue' => $permissionCodes,
+			'selectedVariablesAliases' => [
+				'separator' => $separator,
+				$allSelectedKey => Loc::getMessage('BIC_TABLE_ACCESS_ALL'),
+			],
+			'emptyValue' => 0,
+			'groupHead' => false,
+			'iconClass' => self::getGroupIconClass(false),
+			'isClickable' => true,
+			'isDeletable' => true,
+			'isNew' => true,
+			'isModified' => true,
+			'dependentVariablesPopupHint' => Loc::getMessage('BIC_TABLE_GROUP_VARIABLES_HINT'),
 		];
 	}
 }

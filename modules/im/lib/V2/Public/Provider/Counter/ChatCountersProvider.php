@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Public\Dto\Counter\ChatCounterCollection;
 use Bitrix\Im\V2\Public\Dto\Counter\ChatCounterItem;
 use Bitrix\Im\V2\Public\Provider\Params\Counter\ChatCountersParams;
 use Bitrix\Im\V2\Reading\Counter\Entity\UserCounters;
+use Bitrix\Im\V2\Reading\Counter\Provider\MessageParamUnreadCounterProvider;
 use Bitrix\Im\V2\Reading\Counter\UserCountersCollector;
 
 final class ChatCountersProvider
@@ -15,6 +16,7 @@ final class ChatCountersProvider
 	public function __construct(
 		private readonly UserCountersCollector $userCountersCollector,
 		private readonly ChatTreeResolver $chatTreeResolver,
+		private readonly MessageParamUnreadCounterProvider $messageParamUnreadCounterProvider,
 	)
 	{}
 
@@ -26,11 +28,48 @@ final class ChatCountersProvider
 		}
 
 		$counters = $this->userCountersCollector->get($params->userId);
-		$collection = ChatCounterCollection::fromUserCounters($counters, $params->chatIds);
-
-		return $collection->merge(
+		$collection = ChatCounterCollection::fromUserCounters($counters, $params->chatIds)->merge(
 			$this->buildMissingRootCollection($params->userId, $params->chatIds, $counters),
 		);
+
+		return $this->applyMessageParamExclusion($collection, $params);
+	}
+
+	private function applyMessageParamExclusion(
+		ChatCounterCollection $collection,
+		ChatCountersParams $params,
+	): ChatCounterCollection
+	{
+		if ($params->excludeByMessageParamNames === [])
+		{
+			return $collection;
+		}
+
+		$chatIds = [];
+		foreach ($collection->getAllItems() as $item)
+		{
+			if ($item->ownCounter > 0)
+			{
+				$chatIds[] = $item->chatId;
+			}
+		}
+
+		if ($chatIds === [])
+		{
+			return $collection;
+		}
+
+		$subtrahends = $this->messageParamUnreadCounterProvider
+			->getForUserByChatIds($params->userId, $chatIds, $params->excludeByMessageParamNames)
+			->getRaw()
+		;
+
+		if ($subtrahends === [])
+		{
+			return $collection;
+		}
+
+		return $collection->withSubtrahends($subtrahends);
 	}
 
 	/**

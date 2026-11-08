@@ -23,14 +23,16 @@ class ToolBar
 	public static function mapItems(array $inputItems, string $toolbarId = null, array $params = []): array
 	{
 		$inputItems = array_filter($inputItems);
+		$isCategoryMenu = ($params['isCategoryMenu'] ?? false) === true;
 
 		if (empty($inputItems))
 		{
 			return [];
 		}
 
-		$result = array_map(static function ($item) {
+		$result = array_map(static function ($item) use ($isCategoryMenu) {
 			$item = array_change_key_case($item);
+			$isCategoryItem = false;
 
 			if (isset($item['separator']))
 			{
@@ -40,16 +42,39 @@ class ToolBar
 
 			if (isset($item['name']))
 			{
-				$item['html'] = htmlspecialcharsbx($item['name']);
+				if ($isCategoryMenu)
+				{
+					$isCategoryItem = true;
+					$item['title'] = $item['name'];
+					$item['html'] = sprintf(
+						'<span class="crm-toolbar-category-menu-item-name">%s</span>',
+						htmlspecialcharsbx($item['name']),
+					);
+					unset($item['text']);
+				}
+				else
+				{
+					$item['html'] = htmlspecialcharsbx($item['name']);
+				}
 				unset($item['name']);
 
 				if (isset($item['counter']) && $item['counter'] > 0)
 				{
-					$item['html'] = sprintf(
-						'%s <span class="main-buttons-item-counter">%d</span>',
-						$item['html'],
-						$item['counter'],
-					);
+					if ($isCategoryMenu)
+					{
+						$item['html'] .= sprintf(
+							'<span class="crm-toolbar-category-menu-item-counter main-buttons-item-counter">%d</span>',
+							$item['counter'],
+						);
+					}
+					else
+					{
+						$item['html'] = sprintf(
+							'%s <span class="main-buttons-item-counter">%d</span>',
+							$item['html'],
+							$item['counter'],
+						);
+					}
 				}
 			}
 
@@ -83,6 +108,12 @@ class ToolBar
 			if (isset($item['class_name']))
 			{
 				$item['className'] = htmlspecialcharsbx($item['class_name']);
+			}
+			if ($isCategoryItem)
+			{
+				$item['className'] = trim(
+					'menu-popup-no-icon crm-toolbar-category-menu-item ' . ($item['className'] ?? '')
+				);
 			}
 
 			if (isset($item['items']))

@@ -7,6 +7,7 @@ namespace Bitrix\Vibecodeconnector\Infrastructure\Controller;
 use Bitrix\Main\AccessDeniedException;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Context;
 use Bitrix\Main\Config\Ini;
 use Bitrix\Main\DB\TransactionException;
 use Bitrix\Main\DI\ServiceLocator;
@@ -23,6 +24,7 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Vibecodeconnector\Infrastructure\Controller\ActionFilter\CheckCatalogAvailability;
 use Bitrix\Vibecodeconnector\Infrastructure\Dto\CatalogItemDtoMapper;
+use Bitrix\Vibecodeconnector\Infrastructure\Dto\LaunchAppTargetDto;
 use Bitrix\Vibecodeconnector\Infrastructure\Integration\Main\CatalogOnboardingSpotlight;
 use Bitrix\Vibecodeconnector\Infrastructure\Service\Catalog\OpenApp\OpenAppLayoutService;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItem;
@@ -32,13 +34,21 @@ use Bitrix\Vibecodeconnector\Internal\Exception\CatalogItemNotFoundException;
 use Bitrix\Vibecodeconnector\Internal\Exception\CatalogSyncFailedException;
 use Bitrix\Vibecodeconnector\Internal\Integration\Main\AccessCodes;
 use Bitrix\Vibecodeconnector\Internal\Integration\Main\IconStorageService;
+use Bitrix\Vibecodeconnector\Internal\Integration\Rest\CatalogItemEmbeddingAccessSynchronizer;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\AccessRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\CatalogItemFilter;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\CatalogItemRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\LastOpenedRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\PinRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\ViewedRepository;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Access\AccessChangeHandler;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Access\AccessWriter;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Access\HiddenAccessCleaner;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\AppChat\AppChatOnDemandService;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\AppChat\AppChatWriteAccessService;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Item\CatalogItemSettings;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Launch\LaunchService;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\NewApps\NewAppsCountInvalidator;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Icon\IconUpdateIntent;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Icon\UploadedIconProcessor;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Sharing\CatalogSharingService;
@@ -46,6 +56,10 @@ use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Vibecode\CatalogItemSender
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Vibecode\CatalogItemUpdateSender;
 use Bitrix\Vibecodeconnector\Public\Dto\CatalogItemCollection;
 use Bitrix\Vibecodeconnector\Public\Service\AvailabilityService;
+use Bitrix\Vibecodeconnector\Public\Command\Catalog\Item\Favorite\FavoriteCatalogItemCommand;
+use Bitrix\Vibecodeconnector\Public\Command\Catalog\Item\Favorite\FavoriteCatalogItemCommandHandler;
+use Bitrix\Vibecodeconnector\Public\Command\Catalog\Item\Favorite\UnfavoriteCatalogItemCommand;
+use Bitrix\Vibecodeconnector\Public\Command\Catalog\Item\Favorite\UnfavoriteCatalogItemCommandHandler;
 use Bitrix\Vibecodeconnector\Public\Command\Catalog\Item\Hide\HideCatalogItemCommand;
 use Bitrix\Vibecodeconnector\Public\Command\Catalog\Item\Hide\HideCatalogItemCommandHandler;
 use Bitrix\Vibecodeconnector\Public\Command\Catalog\Item\Hide\UnhideCatalogItemCommand;
@@ -69,13 +83,19 @@ final class Catalog extends Controller
 	private LastOpenedRepository $lastOpenedRepository;
 	private ViewedRepository $viewedRepository;
 	private AccessRepository $accessRepository;
+	private AccessWriter $accessWriter;
 	private AccessCodes $accessCodes;
 	private HiddenAccessCleaner $hiddenAccessCleaner;
+	private AccessChangeHandler $accessChangeHandler;
+	private NewAppsCountInvalidator $newAppsCountInvalidator;
+	private CatalogItemEmbeddingAccessSynchronizer $embeddingAccessSynchronizer;
+	private LaunchService $launchService;
 	private OpenAppLayoutService $openAppLayoutService;
 	private CatalogItemUpdateSender $catalogItemSender;
 	private IconStorageService $iconStorage;
 	private UploadedIconProcessor $uploadedIconProcessor;
 	private CatalogSharingService $sharingService;
+	private AppChatOnDemandService $appChatOnDemandService;
 
 	public function init(): void
 	{
@@ -87,13 +107,19 @@ final class Catalog extends Controller
 		$this->lastOpenedRepository = new LastOpenedRepository();
 		$this->viewedRepository = new ViewedRepository();
 		$this->accessRepository = new AccessRepository();
+		$this->accessWriter = new AccessWriter($this->accessRepository, $this->itemRepository);
 		$this->accessCodes = new AccessCodes();
 		$this->hiddenAccessCleaner = new HiddenAccessCleaner();
+		$this->accessChangeHandler = ServiceLocator::getInstance()->get(AccessChangeHandler::class);
+		$this->newAppsCountInvalidator = new NewAppsCountInvalidator();
+		$this->embeddingAccessSynchronizer = new CatalogItemEmbeddingAccessSynchronizer();
+		$this->launchService = ServiceLocator::getInstance()->get(LaunchService::class);
 		$this->openAppLayoutService = ServiceLocator::getInstance()->get(OpenAppLayoutService::class);
 		$this->catalogItemSender = ServiceLocator::getInstance()->get(CatalogItemSender::class);
 		$this->iconStorage = new IconStorageService();
 		$this->uploadedIconProcessor = new UploadedIconProcessor($this->iconStorage);
 		$this->sharingService = ServiceLocator::getInstance()->get(CatalogSharingService::class);
+		$this->appChatOnDemandService = ServiceLocator::getInstance()->get(AppChatOnDemandService::class);
 	}
 
 	protected function processBeforeAction(Action $action)
@@ -141,6 +167,9 @@ final class Catalog extends Controller
 			],
 			'+prefilters' => [
 				new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),
+				// recordOpen fires in parallel with the open-app page request: holding
+				// the session write lock here delays the first byte of that page
+				new ActionFilter\CloseSession(),
 			],
 		];
 		$configureActions['update'] = [
@@ -170,7 +199,7 @@ final class Catalog extends Controller
 				new ActionFilter\Csrf(false),
 			],
 		];
-		foreach (['getShare', 'setShare', 'getLink', 'setLink'] as $action)
+		foreach (['launch', 'getShare', 'setShare', 'getLink', 'setLink'] as $action)
 		{
 			$configureActions[$action] = [
 				'-prefilters' => [
@@ -179,6 +208,17 @@ final class Catalog extends Controller
 				'+prefilters' => [
 					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),
 					new ActionFilter\CloseSession(),
+				],
+			];
+		}
+		foreach (['favorite', 'unfavorite', 'openChat', 'setChatWriting', 'createChat'] as $action)
+		{
+			$configureActions[$action] = [
+				'-prefilters' => [
+					ActionFilter\HttpMethod::class,
+				],
+				'+prefilters' => [
+					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),
 				],
 			];
 		}
@@ -233,7 +273,7 @@ final class Catalog extends Controller
 
 		if ($userId > 0)
 		{
-			$count = $this->catalog->countNewAppsForUser($userId, useCache: false);
+			$count = $this->catalog->countNewAppsForUser($userId);
 		}
 
 		return ['count' => $count];
@@ -291,6 +331,7 @@ final class Catalog extends Controller
 		}
 
 		$response = [
+			'itemClickOpensChat' => (new CatalogItemSettings())->isClickOpensChatEnabled(),
 			'items' => $this->mapper->toArrayList($collection, $currentUser->isAdmin()),
 			'pagination' => [
 				'offset' => $offset,
@@ -464,12 +505,10 @@ final class Catalog extends Controller
 		int $catalogItemId,
 	): array
 	{
-		return [
-			'html' => $this->openAppLayoutService->render(
-				$catalogItemId,
-				(int)$currentUser->getId(),
-			),
-		];
+		return $this->openAppLayoutService->renderLayout(
+			$catalogItemId,
+			(int)$currentUser->getId(),
+		)->toArray();
 	}
 
 	public function openAppPageAction(
@@ -477,10 +516,48 @@ final class Catalog extends Controller
 		int $catalogItemId,
 	): HttpResponse
 	{
+		$queryList = $this->getRequest()->getQueryList();
+		$query = $queryList->toArrayRaw() ?? $queryList->toArray();
+		$placementFields = array_intersect_key($query, array_flip([
+			'PLACEMENT',
+			'PLACEMENT_ID',
+			'PLACEMENT_OPTIONS',
+		]));
+
 		return $this->openAppLayoutService->renderPageResponse(
 			$catalogItemId,
 			(int)$currentUser->getId(),
+			$placementFields,
 		);
+	}
+
+	public function launchAction(CurrentUser $currentUser, int $catalogItemId): AjaxJson
+	{
+		try
+		{
+			$result = $this->launchService->launch($catalogItemId, (int)$currentUser->getId());
+		}
+		catch (CatalogItemNotFoundException)
+		{
+			Context::getCurrent()->getResponse()->setStatus(404);
+			$this->addError(new Error('Catalog item not found', 'CATALOG_ITEM_NOT_FOUND'));
+
+			return AjaxJson::createError($this->errorCollection);
+		}
+		catch (AccessDeniedException)
+		{
+			Context::getCurrent()->getResponse()->setStatus(403);
+			$this->addError(new Error('Access denied', 'ACCESS_DENIED'));
+
+			return AjaxJson::createError($this->errorCollection);
+		}
+		$payload = ['kind' => $result->kind, 'launched' => true];
+		if ($result->app !== null)
+		{
+			$payload += LaunchAppTargetDto::fromLaunchTarget($result->app)->toArray();
+		}
+
+		return AjaxJson::createSuccess($payload);
 	}
 
 	private function resolveListUserId(CurrentUser $currentUser, ?int $previewUserId): int
@@ -499,6 +576,76 @@ final class Catalog extends Controller
 		return $previewUserId;
 	}
 
+	public function createChatAction(
+		CurrentUser $currentUser,
+		int $catalogItemId,
+	): array
+	{
+		$userId = (int)$currentUser->getId();
+		$item = $this->mustGetItem($catalogItemId);
+
+		if ($item->getOwnerId() !== $userId)
+		{
+			throw new AccessDeniedException('Only the owner of the application may create its chat');
+		}
+
+		$chatId = $this->appChatOnDemandService->createChatForOwner($catalogItemId, $userId);
+
+		return ['ok' => $chatId > 0, 'chatId' => $chatId];
+	}
+
+	public function openChatAction(
+		CurrentUser $currentUser,
+		int $catalogItemId,
+	): array
+	{
+		$userId = (int)$currentUser->getId();
+		$this->mustGetItem($catalogItemId);
+
+		if (!$this->itemRepository->isAccessibleToUser(
+			$catalogItemId,
+			$userId,
+			$this->accessCodes->getUserCodesForItems($userId, [$catalogItemId]),
+		))
+		{
+			throw new AccessDeniedException('User has no access to this catalog item');
+		}
+
+		$chatId = $this->appChatOnDemandService->ensureUserChatBestEffort($catalogItemId, $userId);
+
+		return ['ok' => $chatId > 0, 'chatId' => $chatId];
+	}
+
+	public function setChatWritingAction(
+		CurrentUser $currentUser,
+		int $catalogItemId,
+		string $allowed,
+	): array
+	{
+		$userId = (int)$currentUser->getId();
+		$item = $this->mustGetItem($catalogItemId);
+
+		if ($item->getOwnerId() !== $userId)
+		{
+			throw new AccessDeniedException('Only the owner of the application may change this');
+		}
+
+		$writingAllowed = $this->parseYesNo($allowed);
+		$applied = (new AppChatWriteAccessService())->setWritingAllowed($item, $writingAllowed);
+
+		return ['ok' => $applied, 'allowed' => $writingAllowed];
+	}
+
+	private function parseYesNo(string $value): bool
+	{
+		return match (mb_strtoupper($value))
+		{
+			'Y' => true,
+			'N' => false,
+			default => throw new ArgumentException('Expected Y or N', 'allowed'),
+		};
+	}
+
 	public function pinAction(
 		CurrentUser $currentUser,
 		int $catalogItemId,
@@ -511,7 +658,7 @@ final class Catalog extends Controller
 		if (!$this->itemRepository->isAccessibleToUser(
 			$catalogItemId,
 			$userId,
-			$this->accessCodes->getUserCodes($userId),
+			$this->accessCodes->getUserCodesForItems($userId, [$catalogItemId]),
 		))
 		{
 			throw new AccessDeniedException('User has no access to this catalog item');
@@ -534,7 +681,7 @@ final class Catalog extends Controller
 		if (!$this->itemRepository->isAccessibleToUser(
 			$catalogItemId,
 			$userId,
-			$this->accessCodes->getUserCodes($userId),
+			$this->accessCodes->getUserCodesForItems($userId, [$catalogItemId]),
 		))
 		{
 			throw new AccessDeniedException('User has no access to this catalog item');
@@ -571,13 +718,37 @@ final class Catalog extends Controller
 		return ['ok' => true];
 	}
 
+	public function favoriteAction(
+		CurrentUser $currentUser,
+		int $catalogItemId,
+	): array
+	{
+		$userId = (int)$currentUser->getId();
+
+		(new FavoriteCatalogItemCommandHandler())(new FavoriteCatalogItemCommand($userId, $catalogItemId));
+
+		return ['ok' => true];
+	}
+
+	public function unfavoriteAction(
+		CurrentUser $currentUser,
+		int $catalogItemId,
+	): array
+	{
+		$userId = (int)$currentUser->getId();
+
+		(new UnfavoriteCatalogItemCommandHandler())(new UnfavoriteCatalogItemCommand($userId, $catalogItemId));
+
+		return ['ok' => true];
+	}
+
 	public function recordOpenAction(
 		CurrentUser $currentUser,
 		int $catalogItemId,
 	): AjaxJson
 	{
 		$userId = (int)$currentUser->getId();
-		$userCodes = $this->accessCodes->getUserCodes($userId);
+		$userCodes = $this->accessCodes->getUserCodesForItems($userId, [$catalogItemId]);
 
 		if (!$this->itemRepository->isAccessibleToUser(
 			$catalogItemId,
@@ -591,6 +762,12 @@ final class Catalog extends Controller
 			}
 
 			throw new AccessDeniedException('User has no access to this catalog item');
+		}
+
+		$item = $this->itemRepository->getById($catalogItemId);
+		if ($item !== null)
+		{
+			$this->appChatOnDemandService->ensureUserChatBestEffort((int)$item->getId(), $userId);
 		}
 
 		$this->lastOpenedRepository->recordOpen($userId, $catalogItemId);
@@ -620,7 +797,13 @@ final class Catalog extends Controller
 		$userId = (int)$currentUser->getId();
 		$item = $this->mustGetItem($catalogItemId);
 		$this->mustOwnItem($item, $userId);
-		$this->accessRepository->grant($catalogItemId, $accessCode);
+		$changed = $this->accessWriter->grant($catalogItemId, $accessCode);
+		if ($changed)
+		{
+			$this->newAppsCountInvalidator->forgetAllFor($item);
+			$this->accessChangeHandler->handle($item);
+			$this->embeddingAccessSynchronizer->syncForItem($catalogItemId);
+		}
 
 		return ['ok' => true];
 	}
@@ -634,9 +817,15 @@ final class Catalog extends Controller
 		$userId = (int)$currentUser->getId();
 		$item = $this->mustGetItem($catalogItemId);
 		$this->mustOwnItem($item, $userId);
-		$this->accessRepository->revoke($catalogItemId, $accessCode);
+		$changed = $this->accessWriter->revoke($catalogItemId, $accessCode);
 
 		$this->hiddenAccessCleaner->cleanupLostAccess($catalogItemId);
+		if ($changed)
+		{
+			$this->newAppsCountInvalidator->forgetAllFor($item);
+			$this->accessChangeHandler->handle($item);
+			$this->embeddingAccessSynchronizer->syncForItem($catalogItemId);
+		}
 
 		return ['ok' => true];
 	}

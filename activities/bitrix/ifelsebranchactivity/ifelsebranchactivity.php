@@ -112,6 +112,21 @@ class CBPIfElseBranchActivity extends CBPSequenceActivity
 		return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
 	}
 
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		// Condition codes are stored as property keys; take them from the same source as the graph.
+		return \Bitrix\Bizproc\Integration\AiAssistant\ConditionSettingNames::all($documentType);
+	}
+
+	/**
+	 * A branch restricts only the condition kinds whose payload is executable: every other kind is a comparison
+	 * the agent may compose, and the shared resolver answers which is which.
+	 */
+	public static function getAiRestrictedSettingNames(array $documentType): array
+	{
+		return \Bitrix\Bizproc\Integration\AiAssistant\ConditionSettingNames::executable($documentType);
+	}
+
 	public static function GetPropertiesDialog(
 		$documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters, $arWorkflowVariables,
 		$arCurrentValues = null, $formName = "", $popupWindow = null, $currentSiteId = null, $arWorkflowConstants = null

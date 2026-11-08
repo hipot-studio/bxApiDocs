@@ -35,13 +35,12 @@ class OtpUserProvider
 			return [];
 		}
 
-		$rows = Security\Mfa\UserTable::getList([
-			'filter' => [
-				'@USER_ID' => $userIds,
-				'=USER.IS_REAL_USER' => 'Y',
-			],
-			'select' => ['USER_ID', 'ACTIVE', 'SECRET', 'TYPE', 'DEACTIVATE_UNTIL', 'SKIP_MANDATORY'],
-		])->fetchAll();
+		$rows = Security\Mfa\UserTable::query()
+			->setSelect(['USER_ID', 'ACTIVE', 'SECRET', 'TYPE', 'DEACTIVATE_UNTIL', 'SKIP_MANDATORY'])
+			->whereIn('USER_ID', $userIds)
+			->where('USER.REAL_USER', 'expr', true)
+			->fetchAll()
+		;
 
 		$result = [];
 		foreach ($rows as $row)
@@ -67,14 +66,13 @@ class OtpUserProvider
 			return [];
 		}
 
-		$rows = Security\Mfa\UserTable::getList([
-			'filter' => [
-				'=ACTIVE' => 'Y',
-				'=TYPE' => OtpType::Push->value,
-				'=USER.IS_REAL_USER' => 'Y',
-			],
-			'select' => ['USER_ID'],
-		])->fetchAll();
+		$rows = Security\Mfa\UserTable::query()
+			->setSelect(['USER_ID'])
+			->where('ACTIVE', 'Y')
+			->where('TYPE', OtpType::Push->value)
+			->where('USER.REAL_USER', 'expr', true)
+			->fetchAll()
+		;
 
 		return array_map('intval', array_column($rows, 'USER_ID'));
 	}
@@ -86,14 +84,13 @@ class OtpUserProvider
 			return [];
 		}
 
-		$rows = Security\Mfa\UserTable::getList([
-			'filter' => [
-				'=ACTIVE' => 'Y',
-				'!=TYPE' => OtpType::Push->value,
-				'=USER.IS_REAL_USER' => 'Y',
-			],
-			'select' => ['USER_ID'],
-		])->fetchAll();
+		$rows = Security\Mfa\UserTable::query()
+			->setSelect(['USER_ID'])
+			->where('ACTIVE', 'Y')
+			->addFilter('!=TYPE', OtpType::Push->value)
+			->where('USER.REAL_USER', 'expr', true)
+			->fetchAll()
+		;
 
 		return array_map('intval', array_column($rows, 'USER_ID'));
 	}
@@ -106,18 +103,15 @@ class OtpUserProvider
 			return [];
 		}
 
-		$rows = UserAccessTable::getList([
-			'filter' => [
-				'>USER_ID' => 0,
-				'@ACCESS_CODE' => $mandatoryRights,
-				'=USER.IS_REAL_USER' => 'Y',
-			],
-			'select' => ['USER_ID'],
-			'group' => ['USER_ID'],
-			'runtime' => [
-				$this->getUserReference(),
-			],
-		])->fetchAll();
+		$rows = UserAccessTable::query()
+			->registerRuntimeField($this->getUserReference())
+			->setSelect(['USER_ID'])
+			->setGroup(['USER_ID'])
+			->where('USER_ID', '>', 0)
+			->whereIn('ACCESS_CODE', $mandatoryRights)
+			->where('USER.REAL_USER', 'expr', true)
+			->fetchAll()
+		;
 
 		return array_map('intval', array_column($rows, 'USER_ID'));
 	}
@@ -134,19 +128,16 @@ class OtpUserProvider
 			return [];
 		}
 
-		$rows = UserAccessTable::getList([
-			'filter' => [
-				'>USER_ID' => 0,
-				'@USER_ID' => $userIds,
-				'@ACCESS_CODE' => $mandatoryRights,
-				'=USER.IS_REAL_USER' => 'Y',
-			],
-			'select' => ['USER_ID'],
-			'group' => ['USER_ID'],
-			'runtime' => [
-				$this->getUserReference(),
-			],
-		])->fetchAll();
+		$rows = UserAccessTable::query()
+			->registerRuntimeField($this->getUserReference())
+			->setSelect(['USER_ID'])
+			->setGroup(['USER_ID'])
+			->where('USER_ID', '>', 0)
+			->whereIn('USER_ID', $userIds)
+			->whereIn('ACCESS_CODE', $mandatoryRights)
+			->where('USER.REAL_USER', 'expr', true)
+			->fetchAll()
+		;
 
 		$result = [];
 		foreach ($rows as $row)

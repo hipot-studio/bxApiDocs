@@ -6,18 +6,17 @@ namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto;
 
 use Bitrix\Main\Validation\Rule\NotEmpty;
 use Bitrix\Main\Validation\Rule\PositiveNumber;
-use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Reminder\Recipient;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Reminder\RemindBy;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Reminder\RemindVia;
 use Bitrix\Tasks\V2\Internal\Entity\Trait\MapTypeTrait;
-use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Trait\MapDateTimeTrait;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Trait\MapTimestampTrait;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\ReminderSchemaBuilder;
 
 class AddReminderDto
 {
 	use MapTypeTrait;
-	use MapDateTimeTrait;
+	use MapTimestampTrait;
 
 	private function __construct(
 		#[PositiveNumber]
@@ -38,25 +37,10 @@ class AddReminderDto
 
 	public static function fromArray(array $props): self
 	{
-		$nextRemind = static::mapFormattedDateTime($props, 'remindAt');
-
-		$userId = static::mapInteger($props, 'userId');
-
-		$nextRemindTimestamp = 0;
-		if ($nextRemind !== null)
-		{
-			$nextRemindTimestamp = $nextRemind->getTimestamp();
-
-			if ($userId !== null)
-			{
-				$nextRemindTimestamp -= User::getTimeZoneOffset($userId);
-			}
-		}
-
 		return new self(
-			userId: $userId,
+			userId: static::mapInteger($props, 'userId'),
 			taskId: static::mapInteger($props, 'taskId'),
-			nextRemindTs: $nextRemindTimestamp,
+			nextRemindTs: static::mapTimestampWithTimeZone($props, 'remindAt'),
 			remindBy: static::mapBackedEnum($props, 'remindBy', RemindBy::class) ?? ReminderSchemaBuilder::DEFAULT_REMIND_BY,
 			remindVia: static::mapBackedEnum($props, 'remindVia', RemindVia::class) ?? ReminderSchemaBuilder::DEFAULT_REMIND_VIA,
 			recipient: static::mapBackedEnum($props, 'recipient', Recipient::class),

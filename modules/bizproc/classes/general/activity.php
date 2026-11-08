@@ -50,8 +50,27 @@ abstract class CBPActivity
 	public const CalcPattern = '#^\s*(=\s*(.*)|\{\{=\s*(.*)\s*\}\})\s*$#is';
 	public const CalcInlinePattern = '#\{\{=\s*(.*?)\s*\}\}([^\}]|$)#is';
 
+	/** Positions of the arguments of a settings form {@see self::savePropertiesDialogValues()} reads itself. */
+	private const DialogValuesActivityNameArgument = 1;
+	private const DialogValuesTemplateArgument = 2;
+
+	/**
+	 * Property naming the filter of the host node an action reads its document from
+	 * ({@see Bizproc\Activity\Mixins\TargetDocumentResolverTrait}).
+	 */
+	private const TargetFilterIdProperty = 'TargetFilterId';
+
 	protected array $arProperties = [];
 	protected array $arPropertiesTypes = [];
+
+	/**
+	 * Constants that came with the scheme of the instance ({@see \CBPActivity::setConstantsTypes()}); null
+	 * for an instance reading the constants of the published template, empty for a scheme having none.
+	 */
+	protected ?array $arConstantsTypes = null;
+
+	/** Meaningful on the root activity alone {@see self::getTestRunContext()}. */
+	private ?Bizproc\Internal\Entity\Workflow\TestRunContext $testRunContext = null;
 
 	protected string $name = '';
 	protected int $outputPortId = 0;
@@ -64,6 +83,18 @@ abstract class CBPActivity
 	protected int $resultPriority = 0;
 
 	protected ?string $documentContext;
+
+	/**
+	 * Document the context expression named, resolved once. Both {@see self::getDocumentId()} and
+	 * {@see self::getDocumentType()} lie on the hot path of every execution, and resolving parses the
+	 * expression anew every time.
+	 *
+	 * The snapshot is valid for one binding and one execution only, so it is dropped in
+	 * {@see self::setDocumentId()} - the invariant the mixin of the target document keeps as well - and in
+	 * {@see self::reInitialize()}, since the value a loop reads may differ from pass to pass.
+	 */
+	private ?array $resolvedDocumentContextId = null;
+	private bool $isDocumentContextResolved = false;
 
 	/**
 	 * Children of the activity. Only an activity owning a container ({@see self::$childContainerEnabled})
@@ -113,7 +144,7 @@ abstract class CBPActivity
 	 * - a false condition, a deactivated node - is closed without ever being executed and must skip the chain
 	 * of its children together with its logic.
 	 */
-	private ?int $childFlowInputPort = null;
+	protected ?int $childFlowInputPort = null;
 
 	/**
 	 * Service properties of the activities served by the unified settings panel, by lower-cased activity
@@ -150,10 +181,118 @@ abstract class CBPActivity
 	{
 		if (isset($this->documentContext))
 		{
-			return $this->getRootActivity()->parseValue($this->documentContext);
+			$documentId = $this->resolveDocumentContextId();
+			if ($documentId !== null)
+			{
+				return $documentId;
+			}
+
+			// A node wired to a chain of filters is not judged by its context anywhere
+			// ({@see self::isBoundToFilterChain()}), so it must not be answered by it either: its target is
+			// the selection of the chain, and the document of the process is what it fell back to before all
+			// this. An empty answer there would reach the module resolver as a document id of its own.
+			$rootActivity = $this->getRootActivity();
+			if ($this->isBoundToFilterChain() && $rootActivity !== $this)
+			{
+				return $rootActivity->getDocumentId();
+			}
+
+			// An unresolved context is not the document of the process: answering with that document is
+			// what let a node act over the wrong one. The engine skips such a node outright.
+			return [];
 		}
 
 		return $this->getRootActivity()->getDocumentId();
+	}
+
+	/**
+	 * Whether the node carries a document context of its own that names no document. Read by the engine
+	 * before the node runs ({@see CBPWorkflow::runExecuteActivityOperation()}).
+	 *
+	 * A node wired to a chain of filters is never judged by its context. The designer writes both onto such
+	 * a node - `TargetFilterId` and a context reading `{=<filterId>:Document}` - and that context names no
+	 * activity at run time: a filter publishes its selection as a property of the host node
+	 * ({@see Bizproc\Public\Activity\Mixins\NodeFilterResultProperties::initializeFilterResultPropertiesOf()}),
+	 * and the target of the action is resolved from `TargetFilterId` by the resolver of the document module.
+	 * Judging those nodes here would stop every template built on a filter chain.
+	 */
+	public function hasUnresolvedDocumentContext(): bool
+	{
+		if (!isset($this->documentContext) || $this->isBoundToFilterChain())
+		{
+			return false;
+		}
+
+		return $this->resolveDocumentContextId() === null;
+	}
+
+	/**
+	 * Whether the node takes its target from a chain of filters rather than from the document its context
+	 * names. The property alone does not say so: the designer stamps it whenever the id of a filter of the
+	 * node matches either half of the expression in the document field
+	 * ({@see \Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ConvertRuleCommand::resolveTargetFilterIdForAction()}),
+	 * so an expression on a variable of that same name is labelled too. Read as a chain, such a node would
+	 * lose the skip its unresolved value has to earn it.
+	 *
+	 * A chain is named in one of two ways and both are kept: `{=<filterId>:Document}`, the filter as an
+	 * object of its own, and `{=<hostId>:<filterId>}`, the selection as a property of the host node
+	 * ({@see Bizproc\Public\Activity\Mixins\NodeFilterResultProperties::initializeFilterResultPropertiesOf()}).
+	 * Whether the object of an expression is a node or a source of values of the process is answered by the
+	 * classifier of the engine, so the expression reads the same way here as it does everywhere else.
+	 */
+	private function isBoundToFilterChain(): bool
+	{
+		$filterId = trim((string)$this->getRawProperty(self::TargetFilterIdProperty));
+		if ($filterId === '')
+		{
+			return false;
+		}
+
+		if (!isset($this->documentContext))
+		{
+			return true;
+		}
+
+		$parsed = static::parseExpression($this->documentContext);
+		if ($parsed === null)
+		{
+			// An id written by hand names no filter, whatever the node is labelled with.
+			return false;
+		}
+
+		$object = (string)($parsed['object'] ?? '');
+		$field = (string)($parsed['field'] ?? '');
+
+		if ($object === $filterId)
+		{
+			return true;
+		}
+
+		$source = Bizproc\Workflow\Template\SourceType::getObjectSourceType($object, $field);
+
+		return $field === $filterId
+			&& ($source[0] ?? null) === Bizproc\Workflow\Template\SourceType::Activity
+		;
+	}
+
+	private function resolveDocumentContextId(): ?array
+	{
+		if (!$this->isDocumentContextResolved)
+		{
+			$this->resolvedDocumentContextId = Bizproc\Internal\Service\Container::instance()
+				->getDocumentContextResolver()
+				->resolveDocumentId($this, (string)$this->documentContext)
+			;
+			$this->isDocumentContextResolved = true;
+		}
+
+		return $this->resolvedDocumentContextId;
+	}
+
+	private function forgetResolvedDocumentContext(): void
+	{
+		$this->resolvedDocumentContextId = null;
+		$this->isDocumentContextResolved = false;
 	}
 
 	/**
@@ -162,6 +301,8 @@ abstract class CBPActivity
 	 */
 	public function setDocumentId($documentId)
 	{
+		$this->forgetResolvedDocumentContext();
+
 		$this->getRootActivity()->setDocumentId($documentId);
 	}
 
@@ -172,9 +313,22 @@ abstract class CBPActivity
 	{
 		if (isset($this->documentContext))
 		{
-			return $this->workflow->getService('DocumentService')->getDocumentType(
-				 $this->getDocumentId()
-			);
+			$documentId = $this->resolveDocumentContextId();
+			if ($documentId !== null)
+			{
+				$documentType = $this->workflow->getService('DocumentService')->getDocumentType($documentId);
+				if (is_array($documentType))
+				{
+					return $documentType;
+				}
+			}
+
+			// The context names no document, so there is nothing to read a type off. The type the node acts
+			// in is still known, and asking the document service for one would throw on the invalid id.
+			return Bizproc\Internal\Service\Container::instance()
+				->getDocumentContextResolver()
+				->resolveEffectiveDocumentType($this) ?? []
+			;
 		}
 
 		$rootActivity = $this->getRootActivity();
@@ -263,6 +417,58 @@ abstract class CBPActivity
 		return [];
 	}
 
+	/**
+	 * Setting names an external AI agent passes through verbatim (persisted but not type-mappable).
+	 * The auto-describer merges them into `skippedSettings`, so reverse validation accepts them by name
+	 * while their values bypass type coercion. Activities override this to declare such names.
+	 *
+	 * A name declared here and nowhere else stands for the free map category
+	 * ({@see \Bitrix\Bizproc\Internal\Entity\Activity\SettingCategory::EditableFreeMap}).
+	 *
+	 * @param array $documentType ['module', 'entityType', 'documentType'].
+	 * @return array<int, string>
+	 */
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		return [];
+	}
+
+	/**
+	 * Subset of {@see getAiPassthroughSettingNames()} whose values an external AI agent may only carry through
+	 * verbatim from the published template: the payload is executable, so authoring it requires rights the agent
+	 * has no way to hold. Reverse validation compares such a value against the published baseline and refuses
+	 * anything else - the passthrough contract alone would accept an arbitrary payload as is.
+	 *
+	 * These names are the carried category
+	 * ({@see \Bitrix\Bizproc\Internal\Entity\Activity\SettingCategory::Carried}) and are published as the
+	 * block's `carriedSettings`.
+	 *
+	 * @param array $documentType ['module', 'entityType', 'documentType'].
+	 * @return array<int, string>
+	 */
+	public static function getAiRestrictedSettingNames(array $documentType): array
+	{
+		return [];
+	}
+
+	/**
+	 * Setting values a non-dialog AI agent path must apply on its own, because the activity's properties
+	 * dialog writes them on every save and the agent never opens that dialog. Declared as name => value pairs
+	 * so the caller applies them without knowing what the field means. Activities override this to declare
+	 * such pairs.
+	 *
+	 * Every key here is of the enforced category
+	 * ({@see \Bitrix\Bizproc\Internal\Entity\Activity\SettingCategory::Enforced}): the server writes the
+	 * value whatever the agent sent, so the name is never published as an editable setting.
+	 *
+	 * @param array $documentType ['module', 'entityType', 'documentType'].
+	 * @return array<string, string>
+	 */
+	public static function getAiEnforcedSettingValues(array $documentType): array
+	{
+		return [];
+	}
+
 	/**********************************************************/
 	protected function clearProperties()
 	{
@@ -340,6 +546,30 @@ abstract class CBPActivity
 	public function getPropertiesTypes(): array
 	{
 		return $this->arPropertiesTypes;
+	}
+
+	/**
+	 * Returns the activity's explicit "modified by" value, or — when it is empty —
+	 * the user who started the workflow (getStartedBy). The starter is persisted
+	 * with the workflow instance, so it survives pauses, timers and async resume.
+	 *
+	 * Document-modifying activities use this instead of a bare $this->ModifiedBy so
+	 * that automated changes (e.g. scheduled-trigger workflows) are attributed to a
+	 * deliberate user instead of falling back to the default system user (admin).
+	 *
+	 * @return mixed Same shape as ModifiedBy (a "user_<id>" string), or its empty value.
+	 */
+	public function getModifiedByOrStarter(): mixed
+	{
+		$modifiedBy = $this->ModifiedBy;
+		if (!CBPHelper::isEmptyValue($modifiedBy))
+		{
+			return $modifiedBy;
+		}
+
+		$startedBy = $this->workflow ? $this->workflow->getStartedBy() : null;
+
+		return $startedBy ? ('user_' . $startedBy) : $modifiedBy;
 	}
 
 	/**********************************************************/
@@ -429,9 +659,19 @@ abstract class CBPActivity
 		return is_array($variablesTypes) ? $variablesTypes : [];
 	}
 
+	public function setConstantsTypes(array $constantsTypes): void
+	{
+		$this->getRootActivity()->arConstantsTypes = $constantsTypes;
+	}
+
 	private function getConstantTypes()
 	{
 		$rootActivity = $this->GetRootActivity();
+		if ($rootActivity->arConstantsTypes !== null)
+		{
+			return $rootActivity->arConstantsTypes;
+		}
+
 		if (method_exists($rootActivity, 'GetWorkflowTemplateId'))
 		{
 			$templateId = $rootActivity->GetWorkflowTemplateId();
@@ -496,6 +736,26 @@ abstract class CBPActivity
 		}
 
 		return $p;
+	}
+
+	/** {@see Bizproc\Internal\Entity\Workflow\TestRunContext} */
+	public function getTestRunContext(): ?Bizproc\Internal\Entity\Workflow\TestRunContext
+	{
+		return $this->getRootActivity()->testRunContext;
+	}
+
+	public function setTestRunContext(?Bizproc\Internal\Entity\Workflow\TestRunContext $context): void
+	{
+		$this->getRootActivity()->testRunContext = $context;
+	}
+
+	/**
+	 * Of a root activity read from the saved state before its workflow is restored: the workflow it keeps
+	 * is an empty shell until then, so the root is not looked up through it.
+	 */
+	public function getOwnTestRunContext(): ?Bizproc\Internal\Entity\Workflow\TestRunContext
+	{
+		return $this->testRunContext;
 	}
 
 	public function setWorkflow(CBPWorkflow $workflow)
@@ -1457,10 +1717,12 @@ abstract class CBPActivity
 	 * ({@see CBPWorkflow::runExecuteActivityOperation()}), so it skips the children together with the logic
 	 * of the node.
 	 *
-	 * A node overriding this method runs no children: it is a node of type `operators`
+	 * A node overriding this method either runs no children - a node of type `operators`
 	 * ({@see CBPStateNode}, {@see CBPMergeFlowNode}, {@see CBPForEachActivity}), and the unified panel
 	 * serves none of those
-	 * ({@see \Bitrix\Bizproc\Internal\Service\Activity\UnifiedPanelDescriptorProvider}).
+	 * ({@see \Bitrix\Bizproc\Internal\Service\Activity\UnifiedPanelDescriptorProvider}) - or starts the
+	 * chain itself through {@see self::startChildFlowOnce()}, which is what a trigger of a test run does
+	 * ({@see \Bitrix\Bizproc\Activity\BaseTrigger::executeWithPayload()}).
 	 */
 	public function executeWithPayload(ExecutionPayload $payload)
 	{
@@ -1501,7 +1763,7 @@ abstract class CBPActivity
 	 *
 	 * @return bool Whether the node now waits for children instead of closing.
 	 */
-	private function startChildFlowOnce(): bool
+	protected function startChildFlowOnce(): bool
 	{
 		return $this->childFlowAfterNativeLogic
 			&& $this->childFlowInputPort !== null
@@ -1561,6 +1823,8 @@ abstract class CBPActivity
 		// A skip belongs to one execution: left over from a previous run of a loop it would
 		// suppress the CloseActivity record the new run owes the log.
 		$this->skippedByEngine = false;
+		// The document the context names may differ from pass to pass of a loop.
+		$this->forgetResolvedDocumentContext();
 
 		if (!$this->childContainerEnabled)
 		{
@@ -1964,6 +2228,89 @@ abstract class CBPActivity
 		return self::$unifiedPanelServiceProperties[$cacheKey];
 	}
 
+	/**
+	 * The entry a settings form filled in by a user is saved through, and every caller saving one must use it.
+	 * Three callers save a template no node of the panel can reach and stay on the direct call of the activity:
+	 * {@see Bizproc\Automation\Engine\Template::saveRobotSettings()} and its crm twin
+	 * {@see \Bitrix\Crm\Automation\Engine\Template::saveRobotSettings()}, both saving a robot against a
+	 * throwaway template built around that single robot, and
+	 * {@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AiAssistantDraftConverterService},
+	 * recomputing the properties of a draft against a synthetic one-node template.
+	 *
+	 * An activity answers the save by composing the properties of its node out of the fields of its own form
+	 * and assigning them to the node as a whole - about a hundred and seventy implementations of
+	 * `getPropertiesDialogValues()` do it that way. The service properties of the unified panel
+	 * ({@see self::getUnifiedPanelServiceProperties()}) belong to the node and to no form of an activity, so
+	 * that assignment drops the condition, the graph of the children and the filter of the node every time
+	 * the user saves the form.
+	 *
+	 * The snapshot is put back over whatever the activity answered: a key of the set belongs to the node and to
+	 * no form of an activity, so an answer of that form about it is authoritative at no point. It cannot even
+	 * be a meaningful one - the shared form of the complex nodes answers with the `null` a form field that
+	 * never existed reads back ({@see Bizproc\Public\Activity\BaseComplexActivity::getPropertiesDialogValues()}),
+	 * and would erase the rules of the node with it. Only the keys of the set are put back, so a form field the
+	 * user cleared stays cleared, and the single way to drop a service property is to send a template no longer
+	 * carrying it. For an activity no unified panel serves the set is empty and this is plain delegation.
+	 *
+	 * Two shapes of a call degrade to that same plain delegation: an argument list carrying no template to
+	 * take the snapshot from, and a call naming no node of it - an empty `activityName`, or a name the
+	 * template does not carry. Both leave the snapshot empty and the restore a no-op, so the save loses the
+	 * service properties of the node exactly the way it did before this entry existed.
+	 *
+	 * What is put back comes from the template the client sent and passes no `validateProperties()` of the
+	 * activity. That template has always belonged to the client and the rights to it are checked above, so
+	 * this opens nothing new; what it does drop is the side effect the assignment used to have - a service key
+	 * of the node is no longer thrown away with the answer of its form.
+	 *
+	 * Named apart from {@see Bizproc\Activity\BaseTrigger::applyPropertiesDialogValues()}: that one is the hook
+	 * a trigger composes its own answer in, and an inherited method of the same name would collide with it.
+	 *
+	 * @param array $parameters Arguments of the form in their existing order: documentType, activityName,
+	 *     &workflowTemplate, &workflowParameters, &workflowVariables, currentValues, &errors, constants.
+	 *     Elements the caller passed by reference stay references.
+	 * @return mixed What the activity answered, unchanged.
+	 */
+	public static function savePropertiesDialogValues(string $code, array $parameters): mixed
+	{
+		$serviceProperties = self::getUnifiedPanelServiceProperties($code);
+
+		// The second condition guards the reference taken below: a reference to a missing element would create
+		// it and change the set of arguments the delegation passes on. Arguments not shaped like the ones of a
+		// settings form are delegated the way they always were instead.
+		if ($serviceProperties === [] || !is_array($parameters[self::DialogValuesTemplateArgument] ?? null))
+		{
+			return self::callStaticMethod($code, 'getPropertiesDialogValues', $parameters);
+		}
+
+		$activityName = $parameters[self::DialogValuesActivityNameArgument] ?? '';
+		$template = &$parameters[self::DialogValuesTemplateArgument];
+
+		// Taken right before the delegation and not earlier: the caller may have edited the node on its way
+		// here, and a property it removed must stay removed.
+		$node = &CBPWorkflowTemplateLoader::findActivityByName($template, $activityName);
+		$savedProperties = is_array($node['Properties'] ?? null)
+			? array_intersect_key($node['Properties'], $serviceProperties)
+			: []
+		;
+		unset($node);
+
+		$result = self::callStaticMethod($code, 'getPropertiesDialogValues', $parameters);
+
+		$node = &CBPWorkflowTemplateLoader::findActivityByName($template, $activityName);
+
+		// The form of the properties is checked the same way the snapshot above checks it: writing into
+		// properties that are not a map would raise where the plain delegation only overwrote the value.
+		if (is_array($node) && is_array($node['Properties'] ?? []))
+		{
+			foreach ($savedProperties as $name => $value)
+			{
+				$node['Properties'][$name] = $value;
+			}
+		}
+
+		return $result;
+	}
+
 	public static function callStaticMethod($code, $method, $arParameters = array())
 	{
 		$runtime = CBPRuntime::GetRuntime();
@@ -1998,10 +2345,15 @@ abstract class CBPActivity
 		return false;
 	}
 
+	/**
+	 * @param array $context Template scheme context for getPropertiesMap(), e.g. ['Template' => $workflowTemplate].
+	 *   The 'Properties' key always belongs to $currentValues and cannot be overridden by a caller.
+	 */
 	public static function createConfigurator(
 		string $activityType = '',
 		array $currentValues = [],
 		array $documentType = [],
+		array $context = [],
 	): \Bitrix\Bizproc\Public\Activity\Configurator
 	{
 		$configurator = new \Bitrix\Bizproc\Public\Activity\Configurator();
@@ -2018,7 +2370,8 @@ abstract class CBPActivity
 			return $configurator;
 		}
 
-		$propertiesMap = $className::getPropertiesMap($documentType, ['Properties' => $currentValues]);
+		$propertiesMapContext = array_merge($context, ['Properties' => $currentValues]);
+		$propertiesMap = $className::getPropertiesMap($documentType, $propertiesMapContext);
 
 		$configurator
 			->setActivityType($activityType)
@@ -2093,7 +2446,7 @@ abstract class CBPActivity
 
 		foreach (array_keys($this->activityQueue) as $childName)
 		{
-			$child = $this->workflow->getActivityByName($childName);
+			$child = $this->workflow->getActivityByName((string)$childName);
 			if ($child === null)
 			{
 				unset($this->activityQueue[$childName]);
@@ -2417,6 +2770,7 @@ abstract class CBPActivity
 	public function setDocumentContext(string $contextExpression): void
 	{
 		$this->documentContext = $contextExpression;
+		$this->forgetResolvedDocumentContext();
 	}
 
 	public function getOutputPortId(): int

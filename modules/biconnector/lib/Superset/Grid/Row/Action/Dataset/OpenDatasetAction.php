@@ -2,12 +2,12 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dataset;
 
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-final class OpenDatasetAction extends BaseAction
+final class OpenDatasetAction extends FormatMenuAction
 {
 	public static function getId(): ?string
 	{
@@ -34,7 +34,11 @@ final class OpenDatasetAction extends BaseAction
 			$name = \CUtil::JSEscape($rawFields['NAME']);
 			$this->onclick = "BX.BIConnector.DatasetImportV2.Slider.open('system', 0, {tableName: '{$name}'})";
 
-			return parent::getControl($rawFields);
+			$result = parent::getControl($rawFields);
+
+			$result['html'] = $this->getMenuItem('--o-open-new');
+
+			return $result;
 		}
 
 		if (!$datasetId && !$datasetType)
@@ -44,6 +48,10 @@ final class OpenDatasetAction extends BaseAction
 
 		$this->onclick = "BX.BIConnector.DatasetImportV2.Slider.open(\"{$datasetType}\", $datasetId)";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-open-new');
+
+		return $result;
 	}
 }

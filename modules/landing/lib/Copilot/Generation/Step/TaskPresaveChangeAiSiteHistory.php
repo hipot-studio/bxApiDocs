@@ -31,7 +31,7 @@ class TaskPresaveChangeAiSiteHistory extends TaskStep
 		}
 
 		$historyState = History::isActive();
-		$rightsState = Rights::isOn();
+		$rightsState = Rights::isGlobalOn();
 		$editModeBefore = Landing::getEditMode();
 
 		Rights::setGlobalOff();

@@ -123,6 +123,10 @@ abstract class CounterState implements \Iterator
 	 */
 	protected function updateRawCounters(): void
 	{
+		// The state is being (re)built from the counter rows, so the values read narrowly earlier in the
+		// hit are no longer the ones the rows hold.
+		CommentsCountCache::drop($this->userId);
+
 		$this->mentions = [];
 		$this->counters = $this->getCountersEmptyState();
 

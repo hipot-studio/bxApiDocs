@@ -8,17 +8,28 @@ use Bitrix\Main\Engine\Response\Component;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Blog\Item\Permissions;
+use Bitrix\Main\Web\Uri;
+use Bitrix\Main\Web\HttpClient;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\UI\EntitySelector;
 use Bitrix\Main\Web\Json;
-use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Blog\Item\Permissions;
+use Bitrix\Blog\Item\Post;
+use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Socialnetwork\Controller\Base;
 use Bitrix\Socialnetwork\Item\Helper;
 
 class BlogPost extends Base
 {
+	/**
+	 * Upper bound of the recipient set the caller may preselect. The set is untrusted, so its
+	 * size is bounded before any work is done on it; the value is far above any real recipient
+	 * list, and an oversized set is dropped as a whole.
+	 */
+	private const MAX_PRESELECTED_RECIPIENTS = 1000;
+
 	public function getDataAction(array $params = []): ?array
 	{
 		$postId = (int)($params['postId'] ?? 0);
@@ -42,7 +53,7 @@ class BlogPost extends Base
 		if (
 			!Loader::includeModule('blog')
 			|| !Loader::includeModule('socialnetwork')
-			|| !($postItem = \Bitrix\Blog\Item\Post::getById($postId))
+			|| !($postItem = Post::getById($postId))
 		)
 		{
 			$this->addError(new Error(Loc::getMessage('SONET_CONTROLLER_LIVEFEED_BLOGPOST_NOT_FOUND'), 'SONET_CONTROLLER_LIVEFEED_BLOGPOST_NOT_FOUND'));
@@ -148,7 +159,7 @@ class BlogPost extends Base
 			]);
 			$perms = $permsResult['PERM'];
 			$groupReadOnly = (
-				$permsResult['PERM'] <= \Bitrix\Blog\Item\Permissions::READ
+				$permsResult['PERM'] <= Permissions::READ
 				&& $permsResult['READ_BY_OSG']
 					? 'Y'
 					: 'N'
@@ -173,13 +184,7 @@ class BlogPost extends Base
 
 		if ($voteId > 0)
 		{
-			$voteExportUrl = \CHTTP::urlAddParams(
-				\CHTTP::urlDeleteParams(
-					$postUrl,
-					[ 'exportVoting ' ]
-				),
-				[ 'exportVoting' => $voteId ]
-			);
+			$voteExportUrl = (string)(new Uri($postUrl))->addParams(['exportVoting' => $voteId]);
 		}
 
 		return [
@@ -232,7 +237,7 @@ class BlogPost extends Base
 
 		if (
 			!Loader::includeModule('blog')
-			|| !($postItem = \Bitrix\Blog\Item\Post::getById($postId))
+			|| !($postItem = Post::getById($postId))
 		)
 		{
 			$this->addError(
@@ -325,7 +330,7 @@ class BlogPost extends Base
 					$destCodesList = EntitySelector\Converter::convertToFinderCodes($entitites);
 				}
 			}
-			catch(ArgumentException $e)
+			catch(ArgumentException)
 			{
 			}
 		}
@@ -670,7 +675,7 @@ class BlogPost extends Base
 
 				'TEXT' => [
 					'NAME' => 'POST_MESSAGE',
-					'VALUE' => \Bitrix\Main\Text\Emoji::decode(htmlspecialcharsBack($text)),
+					'VALUE' => Emoji::decode(htmlspecialcharsBack($text)),
 					'HEIGHT' => '120px'
 				],
 
@@ -761,11 +766,13 @@ class BlogPost extends Base
 		return $component;
 	}
 
-	public function getPostFormInitDataAction(int $postId, int $groupId): ?array
+	/**
+	 * @param string|null $preselectedRecipients JSON list of recipient codes chosen by the
+	 *        caller; null when the caller does not manage recipients at all. An empty list is
+	 *        a meaningful value: the form opens with no recipients.
+	 */
+	public function getPostFormInitDataAction(int $postId, int $groupId, ?string $preselectedRecipients = null): ?array
 	{
-		$postId = (int) $postId;
-		$groupId = (int) $groupId;
-
 		$editMode = $postId > 0;
 		$groupMode = $groupId > 0;
 
@@ -834,26 +841,32 @@ class BlogPost extends Base
 				return null;
 			}
 		}
-		else
+		elseif ($groupMode)
 		{
-			if ($groupMode)
+			if ($this->checkGroupAccess($groupId))
 			{
-				if ($this->checkGroupAccess($groupId))
-				{
-					$initData['recipients'] = Json::encode($this->getPostFormDestList(
-						['SG' => [$groupId => ['SG' . $groupId]]]
-					));
-				}
+				$initData['recipients'] = Json::encode($this->getPostFormDestList(
+					['SG' => [$groupId => ['SG' . $groupId]]]
+				));
 			}
-			else
+		}
+		elseif ($preselectedRecipients !== null)
+		{
+			// the recipients chosen by the caller win over the default below: it applies to
+			// everybody allowed to post to all employees and would silently replace them
+			$userIds = self::extractPreselectedUserIds($preselectedRecipients);
+			if ($userIds !== [])
 			{
-				if (ComponentHelper::getAllowToAllDestination())
-				{
-					$initData['recipients'] = Json::encode($this->getPostFormDestList(
-						['U' => ['A' => 'UA']]
-					));
-				}
+				$initData['recipients'] = Json::encode($this->getPostFormDestList(
+					['U' => array_combine($userIds, $userIds)]
+				));
 			}
+		}
+		elseif (ComponentHelper::getAllowToAllDestination())
+		{
+			$initData['recipients'] = Json::encode($this->getPostFormDestList(
+				['U' => ['A' => 'UA']]
+			));
 		}
 
 		return $initData;
@@ -877,7 +890,7 @@ class BlogPost extends Base
 			return null;
 		}
 
-		$client = new \Bitrix\Main\Web\HttpClient();
+		$client = new HttpClient();
 		$client->setPrivateIp(false);
 
 		$tempPath = \CFile::getTempName('', bx_basename($imageUrl));
@@ -916,6 +929,45 @@ class BlogPost extends Base
 		);
 
 		return ['fileId' => 'n' . $file->getId()];
+	}
+
+	/**
+	 * User identifiers of the recipient set passed by the caller. The value is untrusted, so
+	 * only user codes survive and everything else is dropped. Who the author may really post
+	 * to is decided by the feed on save, as for the other preselection modes.
+	 *
+	 * A set over the bound is dropped as a whole, before the codes are examined one by one: an
+	 * empty result opens the form without recipients and never falls back to all employees.
+	 *
+	 * @return list<int>
+	 */
+	private static function extractPreselectedUserIds(string $preselectedRecipients): array
+	{
+		try
+		{
+			$codes = Json::decode($preselectedRecipients);
+		}
+		catch (ArgumentException)
+		{
+			return [];
+		}
+
+		if (!is_array($codes) || count($codes) > self::MAX_PRESELECTED_RECIPIENTS)
+		{
+			return [];
+		}
+
+		$userIds = [];
+		foreach ($codes as $code)
+		{
+			if (is_string($code) && preg_match('/^U([1-9]\d*)$/', $code, $matches) === 1)
+			{
+				$userId = (int)$matches[1];
+				$userIds[$userId] = $userId;
+			}
+		}
+
+		return array_values($userIds);
 	}
 
 	private function getPostFormDestList(array $permList): array

@@ -10,11 +10,15 @@ use Bitrix\AI\Payload\StyledPicture;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\Response\Converter;
+use Bitrix\Main\Text\StringHelper;
 
 class Analytics
 {
 
 	private const DEFAULT_TOOL = 'ai';
+	private const FEATURE_RELEASE_EVENT = 'feature_release';
+	private const FEATURE_RELEASE_CATEGORY = 'release';
+	private const FEATURE_FLAG_PREFIX = 'flag_';
 	private const PROMPT_SECTION_REWRITE = [
 		'set_ai_session_name' => 'system_chat',
 
@@ -103,13 +107,124 @@ class Analytics
 
 	public static function sendAiQueryLimitEvent(string $errorLimit, string $moduleId, int $userId): void
 	{
+		self::buildAiQueryLimitEvent($errorLimit, $moduleId, $userId)->send();
+	}
+
+	protected static function buildAiQueryLimitEvent(
+		string $errorLimit,
+		string $moduleId,
+		int $userId,
+		?bool $isWestZone = null,
+		?bool $hasActiveVibePlusEdition = null,
+	): AnalyticsEvent
+	{
 		$event = new AnalyticsEvent('limit_exceeded', self::DEFAULT_TOOL, 'limits');
 		$event
 			->setType('bitrixgpt_limit')
 			->setP1('moduleId_' . $moduleId)
 			->setSection(strtolower(str_replace('_', '-', $errorLimit)))
 			->setUserId($userId)
-			->send()
 		;
+
+		$isWestZone ??= Portal::isWestZone();
+		if ($isWestZone)
+		{
+			$hasActiveVibePlusEdition ??= Portal::hasActiveVibePlusEdition();
+			$event->setP2('isVibe_' . ($hasActiveVibePlusEdition ? 'true' : 'false'));
+		}
+
+		return $event;
+	}
+
+	/**
+	 * Sends the feature release event for the given feature flag identifier.
+	 *
+	 * Returns true only when the platform has actually written the event: a caller that
+	 * remembers sent flags must not mark a flag whose event was silently dropped.
+	 *
+	 * The checks below mirror the early exits of the platform, which returns void and so cannot be
+	 * asked whether it wrote anything. `send()` gives up on three conditions: an undefined log file
+	 * constant, a file that is not writable, and a payload its own validation rejects. The first
+	 * two are mirrored here literally; the third is covered by the identifier checks above, since
+	 * every other field of the event is a literal of this class. Should the mirror ever drift from
+	 * `send()`, this method returns true for a dropped event, the caller writes its marker, and the
+	 * release date of that flag is lost for good - so the mirror moves only together with `send()`.
+	 *
+	 * @see \Bitrix\Main\Analytics\AnalyticsEvent::send()
+	 *
+	 * @param string $flagIdentifier Feature identifier in lowerCamelCase, without the `flag_` prefix.
+	 * @return bool
+	 */
+	public static function sendFeatureReleaseEvent(string $flagIdentifier): bool
+	{
+		// Built up front for the platform limit check below, which the current identifier format
+		// leaves unreachable: the conversion keeps no underscore. Kept in case the format changes.
+		$p1 = self::buildFeatureReleaseP1($flagIdentifier);
+
+		if ($flagIdentifier === '')
+		{
+			return false;
+		}
+
+		if (!preg_match('/^[A-Za-z][A-Za-z0-9]*\z/', $flagIdentifier))
+		{
+			return false;
+		}
+
+		if (substr_count($p1, '_') > 1)
+		{
+			return false;
+		}
+
+		if (!defined('ANALYTICS_V2_FILENAME'))
+		{
+			return false;
+		}
+
+		if (!is_writable(ANALYTICS_V2_FILENAME))
+		{
+			return false;
+		}
+
+		self::buildFeatureReleaseEvent($flagIdentifier)->send();
+
+		return true;
+	}
+
+	/**
+	 * Converts a module option name into a feature flag identifier.
+	 *
+	 * @param string $optionName
+	 * @return string
+	 */
+	public static function optionNameToFlagIdentifier(string $optionName): string
+	{
+		$name = $optionName;
+		if (str_starts_with($name, self::FEATURE_FLAG_PREFIX))
+		{
+			$name = substr($name, strlen(self::FEATURE_FLAG_PREFIX));
+		}
+
+		// No stock converter normalizes hyphens, and a hyphen would reach the metric as is.
+		$name = str_replace('-', '_', $name);
+
+		return StringHelper::snake2camel($name, true);
+	}
+
+	protected static function buildFeatureReleaseEvent(string $flagIdentifier): AnalyticsEvent
+	{
+		return (new AnalyticsEvent(
+			event: self::FEATURE_RELEASE_EVENT,
+			tool: self::DEFAULT_TOOL,
+			category: self::FEATURE_RELEASE_CATEGORY,
+		))
+			->setP1(self::buildFeatureReleaseP1($flagIdentifier))
+			->setUserId(0)
+		;
+	}
+
+	private static function buildFeatureReleaseP1(string $flagIdentifier): string
+	{
+		return self::FEATURE_FLAG_PREFIX . $flagIdentifier;
 	}
 }

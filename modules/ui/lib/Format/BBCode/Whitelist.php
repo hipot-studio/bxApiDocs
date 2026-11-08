@@ -106,7 +106,7 @@ final class Whitelist
 		return [
 			'bold', 'italic', 'underline', 'strikethrough', '|',
 			'numbered-list', 'bulleted-list', '|',
-			'link', 'image', 'video', 'smileys', '|',
+			'link', 'image', 'video', '|',
 			'clear-format',
 		];
 	}

@@ -61,7 +61,6 @@ class IncomingWebhookProvider
 			->userId($filter->userId)
 			->scopes($filter->scopes !== [] ? $filter->scopes : null)
 			->externalAttributes($filter->attributes !== [] ? $filter->attributes : null)
-			->withoutExternalAttributes($filter->excludeAttributes !== [] ? $filter->excludeAttributes : null)
 			->type($filter->type)
 			->active($filter->active)
 		;
@@ -79,6 +78,7 @@ class IncomingWebhookProvider
 			dateCreate: $webhook->getDateCreate(),
 			dateLogin: $webhook->getDateLogin(),
 			lastIp: $webhook->getLastIp(),
+			dateExpire: $webhook->getDateExpire(),
 		);
 	}
 }

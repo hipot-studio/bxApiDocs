@@ -6,6 +6,8 @@ namespace Bitrix\Im\V2\Chat\Copilot;
 
 use Bitrix\Im\Model\ChatParamTable;
 use Bitrix\Im\Model\ChatTable;
+use Bitrix\Im\V2\Analytics\ChatAnalytics;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Add\AddResult;
 use Bitrix\Im\V2\Chat\ChatError;
@@ -68,7 +70,7 @@ class DraftChatService
 			$context = new Context();
 			$context->setUserId($userId);
 
-			return (new CopilotChat(context: $context))->add(
+			$addResult = (new CopilotChat(context: $context))->add(
 				[
 					'SKIP_ADD_MESSAGE' => 'Y',
 					'SKIP_ANALYTICS' => 'Y',
@@ -81,6 +83,25 @@ class DraftChatService
 				],
 				$context
 			);
+
+			// BitrixGPT v2 funnel-top label for the draft copilot chat (under flag).
+			// The draft is created via (new CopilotChat())->add() — bypassing ChatFactory::addChat,
+			// where submit_create_new normally lives — and SKIP_ANALYTICS=Y additionally suppresses
+			// the add() pipeline's generic analytics, so the label is emitted here explicitly
+			// (we deliberately do NOT lift SKIP_ANALYTICS).
+			// A draft is "started a new chat", not a created chat: the ai create_new_chat label
+			// fires on the draft→active transition instead (CopilotChat::activateDraftChat),
+			// together with the funnel bottom im activate_new_chat.
+			$draftChat = $addResult->getChat();
+			if ($draftChat instanceof CopilotChat && Features::isBitrixGptV2Available())
+			{
+				(new ChatAnalytics($draftChat))
+					->withContext($context)
+					->addSubmitCreateNew()
+				;
+			}
+
+			return $addResult;
 		}
 		finally
 		{

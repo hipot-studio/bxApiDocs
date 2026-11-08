@@ -2,8 +2,10 @@
 
 namespace Bitrix\Sign\Controllers\V1;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Request;
 use Bitrix\Main\Type\DateTime;
@@ -11,6 +13,7 @@ use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Access\DocumentAnnulPermission;
 use Bitrix\Sign\Attribute;
 use Bitrix\Sign\Attribute\ActionAccess;
+use Bitrix\Sign\Config\Feature;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Engine\Controller;
 use Bitrix\Sign\FeatureResolver;
@@ -31,10 +34,29 @@ use Bitrix\Sign\Type\Template\EntityType;
 
 class Document extends Controller
 {
+	/**
+	 * The dictionary of the settings dialog reads the tax id of every company it answers with, and a
+	 * menu of more than that many companies is picked from by typing anyway.
+	 */
+	private const B2E_COMPANY_DICTIONARY_LIMIT = 50;
+
 	private Service\Sign\DocumentService $documentService;
 	private TemplateService $templateService;
 	private AccessService $templateAccessService;
 	private BlankRepository $blankRepository;
+
+	public function configureActions(): array
+	{
+		$actions = parent::configureActions();
+		foreach (['getPlaceholderValidationStatus', 'validatePlaceholders'] as $actionName)
+		{
+			$actions[$actionName]['+prefilters'][] = new \Bitrix\Main\Engine\ActionFilter\HttpMethod([
+				\Bitrix\Main\Engine\ActionFilter\HttpMethod::METHOD_POST,
+			]);
+		}
+
+		return $actions;
+	}
 
 	public function __construct(Request $request = null)
 	{
@@ -91,6 +113,17 @@ class Document extends Controller
 		$createdById = (int)CurrentUser::get()->getId();
 		if (!$this->validateBlankAccess($blankId, $createdById))
 		{
+			return [];
+		}
+
+		if (
+			$asTemplate
+			&& $templateFolderId !== 0
+			&& !$this->templateAccessService->hasAccessToEditFolderById($templateFolderId)
+		)
+		{
+			$this->addErrorByMessage('No access rights to edit target folder');
+
 			return [];
 		}
 
@@ -227,6 +260,8 @@ class Document extends Controller
 			return [];
 		}
 
+		$this->precomputeRawPlaceholders($document);
+
 		$template = Service\Container::instance()
 			->getDocumentTemplateService()
 			->getById((int)$document->templateId)
@@ -302,7 +337,65 @@ class Document extends Controller
 			return [];
 		}
 
+		$document = $result->getData()['document'] ?? null;
+		if ($document instanceof Item\Document)
+		{
+			$this->precomputeRawPlaceholders($document);
+		}
+
 		return [];
+	}
+
+	/**
+	 * Warms the raw placeholder code cache while the file has just reached the safe service, so that
+	 * validating the inserted codes later needs no synchronous external call.
+	 *
+	 * The warmup itself is a second round trip to the safe service, and the answer of the action owes
+	 * it nothing, so it runs after the hit is over: keeping it here would let a slow safe service hold
+	 * the worker for the whole request timeout. A skipped warmup leaves validation fail-open for raw
+	 * codes; it never adds an external call to the synchronous send path.
+	 *
+	 * Every action that replaces the body calls this, not the upload alone: the key holds the blank,
+	 * and the online editor as well as a file replacement move the document to a new blank, so the
+	 * entry of the previous body can never answer for the new one. Moving the call down into
+	 * DocumentService::upload() would cover them all at once, but that is also what the mass paths
+	 * call - copy, template import, fill and send, crm integration - and none of them wants a
+	 * background job and an external call per created document.
+	 */
+	private function precomputeRawPlaceholders(Item\Document $document, ?Application $application = null): void
+	{
+		if (!Storage::instance()->isPlaceholderRestrictionEnabled())
+		{
+			return;
+		}
+
+		if ($document->uid === null || $document->id === null || $document->blankId === null)
+		{
+			return;
+		}
+
+		$documentUid = $document->uid;
+		$documentId = $document->id;
+		$blankId = $document->blankId;
+		$groupId = $document->groupId ?? 0;
+		($application ?? Application::getInstance())->addBackgroundJob(
+			static function () use (
+				$documentUid,
+				$documentId,
+				$blankId,
+				$groupId,
+			): void {
+				Service\Container::instance()->getDocumentAgentService()->scheduleRawPlaceholderWarmup(
+					$groupId,
+					new Item\Document(
+						id: $documentId,
+						uid: $documentUid,
+						blankId: $blankId,
+						groupId: $groupId > 0 ? $groupId : null,
+					),
+				);
+			},
+		);
 	}
 
 	/**
@@ -339,6 +432,120 @@ class Document extends Controller
 		}
 
 		return (new \Bitrix\Sign\Ui\ViewModel\Wizard\Document($document))->toArray();
+	}
+
+	/**
+	 * Reports the codes already inserted into the document that its signing scenario does not
+	 * support, grouped by the reason. Informational only: nothing is blocked or removed.
+	 *
+	 * @return array{hasUnsupported: bool, reasons: array<string, list<string>>}
+	 */
+	#[Attribute\Access\LogicOr(
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_DOCUMENT_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		),
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		),
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		),
+	)]
+	public function validatePlaceholdersAction(string $uid): array
+	{
+		$document = Service\Container::instance()->getDocumentRepository()->getByUid($uid);
+
+		if (!$document)
+		{
+			$this->addError(new Error(Loc::getMessage('SIGN_CONTROLLER_DOCUMENT_NOT_FOUND')));
+
+			return [];
+		}
+
+		$operation = new Operation\Placeholder\ValidateDocumentPlaceholders($document);
+		$result = $operation->launch();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return [];
+		}
+
+		$unsupportedCodesByReason = $operation->getUnsupportedCodesByReason();
+
+		return [
+			'hasUnsupported' => $unsupportedCodesByReason !== [],
+			'reasons' => $unsupportedCodesByReason,
+		];
+	}
+
+	/**
+	 * @return array{ready: bool}
+	 */
+	#[Attribute\Access\LogicOr(
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_DOCUMENT_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		),
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		),
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_B2E_TEMPLATE_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		),
+	)]
+	public function getPlaceholderValidationStatusAction(string $uid): array
+	{
+		$container = Service\Container::instance();
+		$document = $container->getDocumentRepository()->getByUid($uid);
+		if (!$document)
+		{
+			$this->addError(new Error(Loc::getMessage('SIGN_CONTROLLER_DOCUMENT_NOT_FOUND')));
+
+			return [];
+		}
+
+		if (
+			!Storage::instance()->isPlaceholderRestrictionEnabled()
+			|| $document->id === null
+			|| $document->uid === null
+			|| $document->blankId === null
+		)
+		{
+			return ['ready' => true];
+		}
+
+		$cacheService = $container->getDocumentPlaceholderCacheService();
+		if ($cacheService->getRawPlaceholders($document->id, $document->blankId) !== null)
+		{
+			return ['ready' => true];
+		}
+
+		$groupId = (int)$document->groupId;
+		$agentService = $container->getDocumentAgentService();
+		if (!$agentService->hasRawPlaceholderWarmupChainForDocument(
+			$groupId,
+			$document->uid,
+			$document->id,
+			$document->blankId,
+		))
+		{
+			$agentService->scheduleRawPlaceholderWarmup($groupId, $document);
+		}
+
+		return ['ready' => false];
 	}
 
 	/**
@@ -471,7 +678,19 @@ class Document extends Controller
 			return [];
 		}
 
-		return ['blankId' => $result->getData()['blankId']];
+		$data = $result->getData();
+		$document = $data['document'] ?? null;
+		// The service falls back to the document of the previous body when the blank change gives none
+		// back, and the codes of the new body would then be warmed under the key of the old one.
+		if ($document instanceof Item\Document && $document->blankId === $data['blankId'])
+		{
+			$this->precomputeRawPlaceholders($document);
+		}
+
+		return [
+			'blankId' => $data['blankId'],
+			'hasPlaceholders' => $this->blankRepository->hasPlaceholdersById($data['blankId']),
+		];
 	}
 
 	#[Attribute\ActionAccess(
@@ -692,6 +911,135 @@ class Document extends Controller
 		}
 
 		return [];
+	}
+
+	/**
+	 * Company dictionary for the B2E document settings dialog: the value stored in settings is the CRM company id.
+	 */
+	#[Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT)]
+	public function listB2eCompaniesAction(): array
+	{
+		if (!Feature::instance()->isB2eBizprocChainEnabled())
+		{
+			$this->addError(new Error(
+				Loc::getMessage('SIGN_CONTROLLER_DOCUMENT_B2E_COMPANIES_FEATURE_DISABLED'),
+				'FEATURE_DISABLED',
+			));
+
+			return [];
+		}
+
+		if (B2eTariff::instance()->isB2eRestrictedInCurrentTariff())
+		{
+			$this->addB2eTariffRestrictedError();
+
+			return [];
+		}
+
+		if (!Loader::includeModule('crm'))
+		{
+			$this->addError(new Error('Module crm not installed'));
+
+			return [];
+		}
+
+		$myCompanyService = Service\Container::instance()->getCrmMyCompanyService();
+		$showTaxId = !$myCompanyService->isTaxIdIsCompanyId();
+
+		return [
+			'showTaxId' => $showTaxId,
+			'companies' => self::listSelectableCompanies(
+				$myCompanyService->listWithTaxIds(
+					checkRequisitePermissions: false,
+					limit: self::B2E_COMPANY_DICTIONARY_LIMIT,
+				),
+				$showTaxId,
+			),
+		];
+	}
+
+	/**
+	 * A company without a tax id is left out of the dictionary: the signing service knows a company by its
+	 * tax id, so the settings run would refuse such a company anyway, while asking the service which
+	 * companies are registered would cost the dialog an external request on every open.
+	 *
+	 * The tax id is answered only to a dialog that shows it: where it is not shown it repeats the
+	 * company id the answer already carries, and the dictionary has no reason to send it.
+	 *
+	 * @return list<array{id: int, title: string, taxId?: non-empty-string}>
+	 */
+	private static function listSelectableCompanies(
+		Item\Integration\Crm\MyCompanyCollection $myCompanies,
+		bool $withTaxId,
+	): array
+	{
+		$companies = [];
+		foreach ($myCompanies as $company)
+		{
+			if ($company->id === null || trim((string)$company->taxId) === '')
+			{
+				continue;
+			}
+
+			$selectable = [
+				'id' => $company->id,
+				'title' => $company->name,
+			];
+			if ($withTaxId)
+			{
+				$selectable['taxId'] = $company->taxId;
+			}
+
+			$companies[] = $selectable;
+		}
+
+		return $companies;
+	}
+
+	#[Attribute\Access\LogicOr(
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_DOCUMENT_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		),
+		new Attribute\ActionAccess(
+			permission: ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+			itemType: AccessibleItemType::DOCUMENT,
+			itemIdOrUidRequestKey: 'uid',
+		)
+	)]
+	public function modifyInviteMessageAction(string $uid, ?string $message = null): array
+	{
+		if (!Feature::instance()->isDocumentMessageEnabled())
+		{
+			$this->addError(new Error(
+				Loc::getMessage('SIGN_CONTROLLER_DOCUMENT_MESSAGE_FEATURE_DISABLED'),
+				'FEATURE_DISABLED',
+			));
+
+			return [];
+		}
+
+		$document = $this->documentService->getByUid($uid);
+		if ($document === null)
+		{
+			$this->addError(new Error(
+				Loc::getMessage('SIGN_CONTROLLER_DOCUMENT_NOT_FOUND'),
+				'DOCUMENT_NOT_FOUND',
+			));
+
+			return [];
+		}
+
+		$result = $this->documentService->modifyInviteMessage($document, $message);
+		if (!$result->isSuccess())
+		{
+			$this->addErrorsFromResult($result);
+
+			return [];
+		}
+
+		return ['success' => true];
 	}
 
 	#[Attribute\ActionAccess(

@@ -7,6 +7,7 @@ use Bitrix\AI\Payload\IPayload;
 use Bitrix\Crm\Activity\Provider\Call;
 use Bitrix\Crm\Copilot\AiCallScriptSelection\Controller\AiCallScriptSelectionController;
 use Bitrix\Crm\Copilot\AiCallScriptSelection\Entity\AiCallScriptSelectionItem;
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\ScriptMatchEvent;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Dto\Scoring\SelectCallScoringScriptPayload;
@@ -207,6 +208,13 @@ final class SelectCallScoreScript extends AbstractOperation
 				'RATIONALE' => $payload->rationale,
 			]),
 		);
+
+		(new ScriptMatchEvent())
+			->setCallAssessmentId((int)$payload->scriptId)
+			->setConfidenceScore((string)$payload->confidence)
+			->buildEvent()
+			->send()
+		;
 	}
 
 	protected static function notifyAboutJobError(

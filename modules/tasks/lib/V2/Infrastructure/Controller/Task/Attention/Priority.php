@@ -9,6 +9,7 @@ use Bitrix\Tasks\V2\Public\Command\Task\Attention\SetHighTaskPriorityCommand;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 
 class Priority extends BaseController
 {
@@ -24,6 +25,7 @@ class Priority extends BaseController
 			taskId: $task->getId(),
 			userId: $this->userId,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		))->run();
 
 		if (!$result->isSuccess())
@@ -48,6 +50,7 @@ class Priority extends BaseController
 			taskId: $task->getId(),
 			userId: $this->userId,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		))->run();
 
 		if (!$result->isSuccess())

@@ -49,6 +49,26 @@ abstract class ErrorCode
 		);
 	}
 
+	public static function getOrderCreationAccessDeniedError(): Error
+	{
+		static::loadMessages();
+
+		return new Error(
+			Loc::getMessage('CRM_COMMON_ERROR_ORDER_CREATION_ACCESS_DENIED'),
+			static::ACCESS_DENIED,
+		);
+	}
+
+	public static function getOrderReadAccessDeniedError(): Error
+	{
+		static::loadMessages();
+
+		return new Error(
+			Loc::getMessage('CRM_COMMON_ERROR_ORDER_READ_ACCESS_DENIED'),
+			static::ACCESS_DENIED,
+		);
+	}
+
 	public static function getModuleNotInstalledError(string $moduleName): Error
 	{
 		static::loadMessages();

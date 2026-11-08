@@ -236,29 +236,51 @@ class Script
 		return $uri->getLocator();
 	}
 
-	public static function getUrlContext($formData, $formPath = null, bool $multipleLoad = false)
+	public static function getUrlContext(
+		$formData,
+		$formPath = null,
+		bool $multipleLoad = false,
+		string $source = Telemetry\SubmissionClassifier::SOURCE_DIRECT_LINK,
+	)
 	{
 		if ($landingUrl = Internals\LandingTable::getLandingPublicUrl($formData['ID'], $multipleLoad))
 		{
-			return $landingUrl;
+			$link = $landingUrl;
 		}
-
-		if(!$formPath)
+		else
 		{
-			$formPath = self::getPublicFormPath();
+			if(!$formPath)
+			{
+				$formPath = self::getPublicFormPath();
+			}
+
+			$link = self::getDomain() . $formPath;
+			$link = str_replace(
+				array('#id#', '#form_id#', '#form_code#', '#form_sec#'),
+				array($formData['ID'], $formData['ID'], $formData['CODE'], $formData['SECURITY_CODE']),
+				$link
+			);
+			$link = self::proxyUrl($link);
 		}
 
-		$link = self::getDomain() . $formPath;
-		$link = str_replace(
-			array('#id#', '#form_id#', '#form_code#', '#form_sec#'),
-			array($formData['ID'], $formData['ID'], $formData['CODE'], $formData['SECURITY_CODE']),
-			$link
-		);
+		$telemetrySign = (new Telemetry\SourceContextSigner())->sign((int)$formData['ID'], $source);
+		if ($telemetrySign !== '')
+		{
+			$link = (new Uri($link))
+				->addParams([Telemetry\SourceContextSigner::PARAMETER => $telemetrySign])
+				->getLocator()
+			;
+		}
 
-		return self::proxyUrl($link);
+		return $link;
 	}
 
-	public static function getListContext($formData, $params, $formPath = null)
+	public static function getListContext(
+		$formData,
+		$params,
+		$formPath = null,
+		string $source = Telemetry\SubmissionClassifier::SOURCE_SITE,
+	)
 	{
 		static $httpHost;
 		if(!$httpHost)
@@ -292,23 +314,39 @@ class Script
 			$webpack->build();
 			$webpack = Webpack\Form::instance($formData['ID']);
 		}
+		$telemetrySign = (new Telemetry\SourceContextSigner())->sign(
+			(int)$formData['ID'],
+			$source,
+		);
 
 		return array(
 			'INLINE' => [
 				'text' => $webpack
-					->configureFormEmbeddedScript(['action' => 'inline', 'sec' => $formData['SECURITY_CODE']])
+					->configureFormEmbeddedScript([
+						'action' => 'inline',
+						'sec' => $formData['SECURITY_CODE'],
+						'telemetrySign' => $telemetrySign,
+					])
 					->getEmbeddedScript(),
 				'old' => $script->getInline($scriptParams)
 			],
 			'CLICK' => [
 				'text' => $webpack
-					->configureFormEmbeddedScript(['action' => 'click', 'sec' => $formData['SECURITY_CODE']])
+					->configureFormEmbeddedScript([
+						'action' => 'click',
+						'sec' => $formData['SECURITY_CODE'],
+						'telemetrySign' => $telemetrySign,
+					])
 					->getEmbeddedScript(),
 				'old' => $script->getButton($scriptParams + ['button_caption' => Loc::getMessage('CRM_WEBFORM_SCRIPT_BUTTON_TEXT')])
 			],
 			'AUTO' => [
 				'text' => $webpack
-					->configureFormEmbeddedScript(['action' => 'auto', 'sec' => $formData['SECURITY_CODE']])
+					->configureFormEmbeddedScript([
+						'action' => 'auto',
+						'sec' => $formData['SECURITY_CODE'],
+						'telemetrySign' => $telemetrySign,
+					])
 					->getEmbeddedScript(),
 				'old' => $script->getDelay($scriptParams + ['delay' => 5])
 			]
@@ -319,9 +357,14 @@ class Script
 	{
 		if (Manager::isEmbeddingEnabled($formId))
 		{
+			$telemetrySign = (new Telemetry\SourceContextSigner())->sign(
+				$formId,
+				Telemetry\SubmissionClassifier::SOURCE_WIDGET,
+			);
 			$options = [
 				'usedBySiteButton' => true,
 				'lang' => $params['LANGUAGE_ID'] ?: LANGUAGE_ID,
+				'telemetrySign' => $telemetrySign,
 			];
 			$formOptions = [
 				'id' => 'b24-site-button-form-' . $formId,
@@ -375,14 +418,24 @@ class Script
 		}
 
 		$formData = FormTable::getRowById($formId);
-		$sec = $formData['SECURITY_CODE'];
-		$isCallbackForm = $formData['IS_CALLBACK_FORM'] == 'Y';
 		if (!$lang)
 		{
 			$lang = Application::getInstance()->getContext()->getLanguage();
 		}
 
+		return static::getCrmButtonCompatibleWidgetShower($formData, $lang, $options);
+	}
+
+	protected static function getCrmButtonCompatibleWidgetShower(array $formData, string $lang, array $options): string
+	{
+		$formId = (int)$formData['ID'];
+		$sec = $formData['SECURITY_CODE'];
+		$isCallbackForm = $formData['IS_CALLBACK_FORM'] == 'Y';
 		$url = self::getDomain() . '/bitrix/js/crm/form_loader.js';
+		$telemetrySign = (new Telemetry\SourceContextSigner())->sign(
+			$formId,
+			Telemetry\SubmissionClassifier::SOURCE_WIDGET,
+		);
 		$options += [
 			"borders" => false,
 			"logo" => false
@@ -399,7 +452,8 @@ class Script
 			
 			(function(w,b){				
 				params = {
-					"id":"' . $formId . '","lang":"' . $lang .'","sec":"' . $sec . '","type":"inline_widget", 
+					"id":"' . $formId . '","lang":"' . $lang .'","sec":"' . $sec . '","type":"inline_widget",
+					"telemetrySign":' . Json::encode($telemetrySign) . ',
 					"node": document.getElementById("bx24_form_inline_loader_container_' . $formId . '"),
 					"isCallbackForm": ' . ($isCallbackForm ? 'true' : 'false') . ',
 					"options": ' . $options . ',

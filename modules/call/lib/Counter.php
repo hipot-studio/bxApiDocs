@@ -2,7 +2,7 @@
 
 namespace Bitrix\Call;
 
-use Bitrix\Call\Model\CallUserLogCountersTable;
+use Bitrix\Call\Service\CallLogService;
 use Bitrix\Main\EventResult;
 use Bitrix\Main\Localization\Loc;
 
@@ -37,7 +37,11 @@ class Counter
 			return (int)$cache->getVars();
 		}
 
-		$count = CallUserLogCountersTable::getCount(['USER_ID' => $userId]);
+		// The mobile badge and the journal must count the same thing. Counting rows by USER_ID here would
+		// keep showing a guest the missed calls of a chat they were removed from - and those rows are the
+		// ones the journal deliberately never clears, so the badge would stay lit with nothing able to put
+		// it out. The cut lives in one place: CallLogService.
+		$count = (new CallLogService())->getMissedCounter($userId);
 
 		$cache->startDataCache();
 		$cache->endDataCache($count);

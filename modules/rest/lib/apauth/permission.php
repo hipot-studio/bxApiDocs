@@ -7,6 +7,7 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\SystemException;
+use Bitrix\Rest\Internal\Service\PasswordPermission\PermissionListNormalizer;
 use Bitrix\Rest\Preset\EventController;
 
 /**
@@ -106,9 +107,12 @@ class PermissionTable extends ORM\Data\DataManager
 
 	public static function cleanPermissionList(array $permissionList)
 	{
+		$permissionList = (new PermissionListNormalizer())->normalize($permissionList);
+		$deniedPermission = array_map('mb_strtolower', static::$deniedPermission);
+
 		foreach($permissionList as $key => $perm)
 		{
-			if(in_array($perm, static::$deniedPermission))
+			if(in_array(mb_strtolower($perm), $deniedPermission, true))
 			{
 				unset($permissionList[$key]);
 			}

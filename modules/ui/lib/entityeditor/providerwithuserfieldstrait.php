@@ -76,13 +76,20 @@ trait ProviderWithUserFieldsTrait
 	{
 		$fields = [];
 
-		$fields['ENABLE_USER_FIELD_CREATION'] = true;
+		$isReadOnly = $this->isReadOnly();
+
+		$fields['ENABLE_USER_FIELD_CREATION'] = !$isReadOnly;
 		$fields['ENABLE_USER_FIELD_MANDATORY_CONTROL'] = true;
 		$fields['USER_FIELD_ENTITY_ID'] = $this->getUfEntityId();
 		$fields['USER_FIELD_PREFIX'] = $this->getUfPrefix();
-		$fields['USER_FIELD_CREATE_SIGNATURE'] = $this->getUfDispatcher()->getCreateSignature([
-			'ENTITY_ID' => $this->getUfEntityId(),
-		]);
+		// the signature is the only thing main/tools/uf.php checks before changing the field schema,
+		// so a card opened for viewing must not hand it out
+		$fields['USER_FIELD_CREATE_SIGNATURE'] = $isReadOnly
+			? ''
+			: $this->getUfDispatcher()->getCreateSignature([
+				'ENTITY_ID' => $this->getUfEntityId(),
+			])
+		;
 		$fields['USER_FIELD_CREATE_PAGE_URL'] = null;
 
 		return $fields;

@@ -22,8 +22,11 @@ use Bitrix\Timeman\V2\Public\Dto\Report\RecordReportType;
 class CBPSaveDayPlanActivity extends BaseActivity
 {
 	private const PARAM_USER_ID = 'UserId';
+	private const PARAM_RECORD_ID = 'RecordId';
 	private const PARAM_PLAN_TEXT = 'PlanText';
 	private const PARAM_PLAN_TYPE = 'PlanType';
+	private const PARAM_CONVERT_MARKDOWN = 'ConvertMarkdown';
+	private const RETURN_SAVED = 'Saved';
 
 	protected static $requiredModules = ['timeman'];
 
@@ -33,13 +36,19 @@ class CBPSaveDayPlanActivity extends BaseActivity
 		$this->arProperties = [
 			'Title' => '',
 			self::PARAM_USER_ID => null,
+			self::PARAM_RECORD_ID => 0,
 			self::PARAM_PLAN_TEXT => '',
 			self::PARAM_PLAN_TYPE => Loader::includeModule('timeman') ? RecordReportType::ROBOT_DAY_PLAN : null,
+			self::PARAM_CONVERT_MARKDOWN => true,
+			self::RETURN_SAVED => false,
 		];
 
 		$this->setPropertiesTypes([
 			self::PARAM_USER_ID => [
 				'Type' => FieldType::USER,
+			],
+			self::PARAM_RECORD_ID => [
+				'Type' => FieldType::INT,
 			],
 			self::PARAM_PLAN_TEXT => [
 				'Type' => FieldType::TEXT,
@@ -47,7 +56,18 @@ class CBPSaveDayPlanActivity extends BaseActivity
 			self::PARAM_PLAN_TYPE => [
 				'Type' => FieldType::SELECT,
 			],
+			self::PARAM_CONVERT_MARKDOWN => [
+				'Type' => FieldType::BOOL,
+			],
+			self::RETURN_SAVED => [
+				'Type' => FieldType::BOOL,
+			],
 		]);
+	}
+
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		return [self::PARAM_RECORD_ID, self::PARAM_CONVERT_MARKDOWN];
 	}
 
 	protected static function getFileName(): string
@@ -58,6 +78,7 @@ class CBPSaveDayPlanActivity extends BaseActivity
 	protected function internalExecute(): ErrorCollection
 	{
 		$errors = new ErrorCollection();
+		$this->setSaved(false);
 
 		$userId = $this->extractUserId();
 		if ($userId <= 0)
@@ -68,21 +89,29 @@ class CBPSaveDayPlanActivity extends BaseActivity
 
 			return $errors;
 		}
-
-		$planText = $this->convertMarkdownToBbCode(CBPHelper::stringify($this->{self::PARAM_PLAN_TEXT}));
+		$recordId = (int)$this->{self::PARAM_RECORD_ID};
+		$planType = (string)$this->{self::PARAM_PLAN_TYPE};
+		$planText = $this->preparePlanText(CBPHelper::stringify($this->{self::PARAM_PLAN_TEXT}));
 
 		$result = (new UpsertPlanCommand(
 			userId: $userId,
 			planText: $planText,
-			planType: (string)$this->{self::PARAM_PLAN_TYPE},
+			planType: $planType,
+			recordId: $recordId,
 		))->run();
 
 		foreach ($result->getErrors() as $error)
 		{
 			$errors->setError($error);
 		}
+		$this->setSaved($errors->isEmpty());
 
 		return $errors;
+	}
+
+	final protected function setSaved(bool $saved): void
+	{
+		$this->setProperty(self::RETURN_SAVED, $saved);
 	}
 
 	private function extractUserId(): int
@@ -113,6 +142,13 @@ class CBPSaveDayPlanActivity extends BaseActivity
 				'Type' => FieldType::USER,
 				'Required' => true,
 			],
+			self::PARAM_RECORD_ID => [
+				'Name' => Loc::getMessage('TIMEMAN_SAVE_DAY_PLAN_ACTIVITY_RECORD_ID_PROPERTY') ?? '',
+				'FieldName' => 'record_id',
+				'Type' => FieldType::INT,
+				'Required' => false,
+				'Default' => 0,
+			],
 			self::PARAM_PLAN_TEXT => [
 				'Name' => Loc::getMessage('TIMEMAN_SAVE_DAY_PLAN_ACTIVITY_PLAN_TEXT_PROPERTY') ?? '',
 				'FieldName' => 'plan_text',
@@ -134,11 +170,22 @@ class CBPSaveDayPlanActivity extends BaseActivity
 				),
 				'Default' => RecordReportType::ROBOT_DAY_PLAN,
 			],
+			self::PARAM_CONVERT_MARKDOWN => [
+				'Name' => Loc::getMessage('TIMEMAN_SAVE_DAY_PLAN_ACTIVITY_CONVERT_MARKDOWN_PROPERTY') ?? '',
+				'FieldName' => 'convert_markdown',
+				'Type' => FieldType::BOOL,
+				'Default' => true,
+			],
 		];
 	}
 
-	private function convertMarkdownToBbCode(string $text): string
+	private function preparePlanText(string $text): string
 	{
+		if (!CBPHelper::getBool($this->{self::PARAM_CONVERT_MARKDOWN}))
+		{
+			return $text;
+		}
+
 		if (
 			!Loader::includeModule('ai')
 			|| !class_exists(MarkdownToBBCodeTranslationService::class)

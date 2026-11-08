@@ -247,6 +247,34 @@ class LandingEditComponent extends LandingBaseFormComponent
 	}
 
 	/**
+	 * Returns true, if the settings of the current page may be shown.
+	 *
+	 * The read access is asked for the page itself and not just for the site of the request: the
+	 * hooks of the page are read through it, and without it they come back empty - so the form would
+	 * work on a page the user is not allowed to see. A page that is missing altogether answers the
+	 * same way, because its row is not read either.
+	 *
+	 * @return bool
+	 */
+	protected function isCurrentLandingAvailable(): bool
+	{
+		if (!$this->id)
+		{
+			return true;
+		}
+
+		if (!$this->arResult['LANDING'])
+		{
+			return false;
+		}
+
+		return
+			Rights::hasAccessForLanding($this->id, Rights::ACCESS_TYPES['read'])
+			&& Rights::hasAccessForSite($this->arParams['SITE_ID'], Rights::ACCESS_TYPES['sett'])
+		;
+	}
+
+	/**
 	 * Base executable method.
 	 * @return void
 	 */
@@ -291,17 +319,7 @@ class LandingEditComponent extends LandingBaseFormComponent
 				: [];
 
 			// if access denied, or not found
-			if (!$this->arResult['LANDING'])
-			{
-				$this->id = 0;
-			}
-			if (
-				$this->id &&
-				!Rights::hasAccessForSite(
-					$this->arParams['SITE_ID'],
-					Rights::ACCESS_TYPES['sett']
-				)
-			)
+			if (!$this->isCurrentLandingAvailable())
 			{
 				$this->id = 0;
 				$this->arParams['LANDING_ID'] = 0;

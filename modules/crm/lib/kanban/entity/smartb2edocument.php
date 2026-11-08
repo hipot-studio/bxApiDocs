@@ -14,6 +14,7 @@ use Bitrix\Crm\Service\Display\Field\Sign\B2e\UserListField;
 use Bitrix\Crm\Service\Display\Field\Sign\B2e\UserNameListField;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sign\Config;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\DocumentCollection;
 use Bitrix\Sign\Item\Member;
@@ -25,6 +26,14 @@ use Bitrix\Sign\Type\MemberStatus;
 
 final class SmartB2eDocument extends Dynamic
 {
+	public function shouldShowFinalStagesWithDefaultFilter(): bool
+	{
+		return false;
+	}
+
+	private const STAGE_COORDINATION = 'COORDINATION';
+	private const STAGE_FILLING = 'FILLING';
+
 	private readonly ?EntityService $entityService;
 	private ?DocumentCollection $documentCollection = null;
 	private ?MemberCollection $readyForActionReviewOrEditMemberCollection = null;
@@ -38,6 +47,119 @@ final class SmartB2eDocument extends Dynamic
 		$this->entityService = Loader::includeModule('sign') && method_exists(
 			SignContainer::instance(), 'getCrmKanbanB2eEntityService',
 		) ? SignContainer::instance()->getCrmKanbanB2eEntityService() : null;
+	}
+
+	public function getStagesList(): array
+	{
+		$stages = parent::getStagesList();
+
+		return $this->prepareStagesListForKedoStageReorder(
+			$stages,
+			$this->isKedoStageReorderEnabled(),
+		);
+	}
+
+	private function prepareStagesListForKedoStageReorder(array $stages, bool $isFeatureEnabled): array
+	{
+		if (!$isFeatureEnabled)
+		{
+			return $stages;
+		}
+
+		try
+		{
+			$defaultCategoryId = Service\Container::getInstance()->getSignB2eTypeService()->getDefaultCategoryId();
+			if ($defaultCategoryId <= 0)
+			{
+				return $stages;
+			}
+
+			$categoryId = $this->categoryId > 0 ? $this->categoryId : $defaultCategoryId;
+			if ($categoryId !== $defaultCategoryId)
+			{
+				return $stages;
+			}
+
+			$statusService = Service\Container::getInstance()->getSignB2eStatusService();
+
+			return $this->swapStagesIfFillingAfterCoordination(
+				$stages,
+				$statusService->makeName($categoryId, self::STAGE_COORDINATION),
+				$statusService->makeName($categoryId, self::STAGE_FILLING),
+			);
+		}
+		catch (\Throwable)
+		{
+			return $stages;
+		}
+	}
+
+	private function isKedoStageReorderEnabled(): bool
+	{
+		try
+		{
+			if (
+				!Loader::includeModule('sign')
+				|| !class_exists(Config\Feature::class)
+				|| !method_exists(Config\Feature::class, 'instance')
+			)
+			{
+				return false;
+			}
+
+			$feature = Config\Feature::instance();
+
+			return
+				method_exists($feature, 'isKedoStageReorderEnabled')
+				&& $feature->isKedoStageReorderEnabled()
+			;
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
+	private function swapStagesIfFillingAfterCoordination(
+		array $stages,
+		string $coordinationStageId,
+		string $fillingStageId,
+	): array
+	{
+		$stageIds = array_keys($stages);
+		$coordinationStagePosition = array_search($coordinationStageId, $stageIds, true);
+		$fillingStagePosition = array_search($fillingStageId, $stageIds, true);
+
+		if (
+			$coordinationStagePosition === false
+			|| $fillingStagePosition === false
+			|| $fillingStagePosition < $coordinationStagePosition
+		)
+		{
+			return $stages;
+		}
+
+		$reorderedStages = [];
+		foreach ($stages as $stageId => $stage)
+		{
+			if ($stageId === $coordinationStageId)
+			{
+				$reorderedStages[$fillingStageId] = $stages[$fillingStageId];
+
+				continue;
+			}
+
+			if ($stageId === $fillingStageId)
+			{
+				$reorderedStages[$coordinationStageId] = $stages[$coordinationStageId];
+
+				continue;
+			}
+
+			$reorderedStages[$stageId] = $stage;
+		}
+
+		return $reorderedStages;
 	}
 
 	private function getCustomFields(): array

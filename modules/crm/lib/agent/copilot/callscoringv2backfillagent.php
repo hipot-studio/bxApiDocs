@@ -9,6 +9,7 @@ use Bitrix\Crm\Copilot\CallAssessment\Backfill\BackfillService;
 use Bitrix\Crm\Feature;
 use Bitrix\Crm\Feature\CallScoringV2;
 use Bitrix\Crm\Integration\AI\AIManager;
+use Bitrix\Crm\Integration\Analytics\Builder\CallAssessment\PrefillCriteriaEvent;
 use CTimeZone;
 
 final class CallScoringV2BackfillAgent extends AgentBase
@@ -35,6 +36,8 @@ final class CallScoringV2BackfillAgent extends AgentBase
 
 		if ($completed)
 		{
+			(new PrefillCriteriaEvent())->buildEvent()->send();
+
 			// the guard of the preparation is what publishes the enabled state here, so the whole activation is due
 			(new CallScoringV2())->activateAfterDataPreparation();
 

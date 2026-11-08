@@ -60,13 +60,36 @@ class CCalendarNotify
 			$notifyFields['TO_USER_ID'] = $toUser;
 		}
 
-		$userOrm = \Bitrix\Main\UserTable::getList([
-			'filter' => ['=ID' => $toUser, '=ACTIVE' => 'Y'],
-			'select' => ['ID']
-		]);
-		if (!$userOrm->fetch())
+		$recipient = \Bitrix\Main\UserTable::query()
+			->setSelect(['ID', 'TIME_ZONE', 'TIME_ZONE_OFFSET'])
+			->where('ID', $toUser)
+			->where('ACTIVE', 'Y')
+			->setLimit(1)
+			->fetch()
+		;
+		if (!$recipient)
 		{
 			return false;
+		}
+
+		// A full day event keeps its calendar day, so only timed events are shifted. For a
+		// cancelled occurrence the instance wall clock is assembled by the producer from the
+		// series start, so it is taken from params instead of the event fields.
+		if (
+			in_array($mode, ['change_notify', 'cancel', 'cancel_this', 'cancel_all', 'cancel_sharing'], true)
+			&& ($params['fields']['DT_SKIP_TIME'] ?? null) === 'N'
+		)
+		{
+			$recipientTimestamp = self::getRecipientDateTimestamp(
+				$mode === 'cancel_this' ? ($params['from'] ?? null) : ($params['fields']['DATE_FROM'] ?? null),
+				$params['fields']['TZ_FROM'] ?? null,
+				$recipient
+			);
+			if ($recipientTimestamp !== null)
+			{
+				$params['from_timestamp'] = $recipientTimestamp;
+				$params['from_recipient'] = CCalendar::Date($recipientTimestamp, true, true, true);
+			}
 		}
 
 		$eventId = $params["eventId"] ?? null;
@@ -110,7 +133,7 @@ class CCalendarNotify
 				$notifyFields = self::Invite($notifyFields, $params);
 				break;
 			case 'change_notify':
-				$notifyFields = self::ChangeNotify($notifyFields, $params);
+				$notifyFields = self::ChangeNotify($notifyFields, $params, $recipient);
 				break;
 			case 'cancel':
 				$notifyFields = self::Cancel($notifyFields, $params);
@@ -326,7 +349,7 @@ class CCalendarNotify
 		return $fields;
 	}
 
-	public static function ChangeNotify($fields = [], $params = [])
+	public static function ChangeNotify($fields = [], $params = [], ?array $recipient = null)
 	{
 		$fields['NOTIFY_EVENT'] = "change";
 		$fields['NOTIFY_TAG'] = "CALENDAR|INVITE|".$params['eventId']."|".$fields['TO_USER_ID'];
@@ -337,7 +360,8 @@ class CCalendarNotify
 			return '[url=' . $params["pathToEvent"] . ']' . $value . '[/url]';
 		};
 
-		$changeMessage = static function (?string $languageId, $isOutMessage, $changedLocation) use ($params, $getValueWithViewEventUrl)
+		$changeMessage = static function (?string $languageId, $isOutMessage, $changedLocation)
+			use ($params, $recipient, $getValueWithViewEventUrl)
 		{
 			$result = '';
 
@@ -362,13 +386,18 @@ class CCalendarNotify
 					case 'DATE_FROM':
 						if ($params['fields']['DT_SKIP_TIME'] === 'N')
 						{
-							$userOffset = \CCalendar::GetTimezoneOffset($params['fields']['TZ_FROM'])
-								- \CCalendar::GetCurrentOffsetUTC($params['guestId']);
-
-							$change['oldValue'] = \CCalendar::Date(\CCalendar::Timestamp($change['oldValue'])
-								- $userOffset, true, true, true);
-							$change['newValue'] = \CCalendar::Date(\CCalendar::Timestamp($change['newValue'])
-								- $userOffset, true, true, true);
+							$change['oldValue'] = self::renderDateForRecipient(
+								$change['oldValue'],
+								$params['fields']['TZ_FROM'],
+								$params['guestId'],
+								$recipient
+							);
+							$change['newValue'] = self::renderDateForRecipient(
+								$change['newValue'],
+								$params['fields']['TZ_FROM'],
+								$params['guestId'],
+								$recipient
+							);
 						}
 
 						$result = Loc::getMessage(
@@ -385,13 +414,18 @@ class CCalendarNotify
 					case 'DATE_TO':
 						if ($params['fields']['DT_SKIP_TIME'] === 'N')
 						{
-							$userOffset = \CCalendar::GetTimezoneOffset($params['fields']['TZ_TO'])
-								- \CCalendar::GetCurrentOffsetUTC($params['guestId']);
-
-							$change['oldValue'] = \CCalendar::Date(\CCalendar::Timestamp($change['oldValue'])
-								- $userOffset, true, true, true);
-							$change['newValue'] = \CCalendar::Date(\CCalendar::Timestamp($change['newValue'])
-								- $userOffset, true, true, true);
+							$change['oldValue'] = self::renderDateForRecipient(
+								$change['oldValue'],
+								$params['fields']['TZ_TO'],
+								$params['guestId'],
+								$recipient
+							);
+							$change['newValue'] = self::renderDateForRecipient(
+								$change['newValue'],
+								$params['fields']['TZ_TO'],
+								$params['guestId'],
+								$recipient
+							);
 						}
 
 						$result = Loc::getMessage(
@@ -414,7 +448,7 @@ class CCalendarNotify
 							$locationMessageCode,
 							[
 								'#TITLE#' => $isOutMessage ? $params["name"] : $getValueWithViewEventUrl($params["name"]),
-								'#ACTIVE_FROM#' => $params["from"],
+								'#ACTIVE_FROM#' => $params['from_recipient'] ?? $params["from"],
 								'#NEW_VALUE#' => $changedLocation
 							],
 							$languageId
@@ -1173,6 +1207,125 @@ class CCalendarNotify
 		$fields['NOTIFY_LINK'] = $params['pathToEvent'];
 
 		return $fields;
+	}
+
+	/**
+	 * Resolves the moment of the event from its wall clock and its own timezone.
+	 * Returns null when the timezone is missing or invalid, or the wall clock is unparsable.
+	 */
+	private static function getEventMomentTimestamp($wallClock, $timezone): ?int
+	{
+		if (!is_string($wallClock) || trim($wallClock) === '' || !is_string($timezone))
+		{
+			return null;
+		}
+
+		$timezone = trim($timezone);
+		if ($timezone === '')
+		{
+			return null;
+		}
+
+		try
+		{
+			new DateTimeZone($timezone);
+		}
+		catch (Exception)
+		{
+			return null;
+		}
+
+		$dateTime = CCalendar::createDateTimeObjectFromString($wallClock, $timezone);
+		if (!($dateTime instanceof DateTime))
+		{
+			return null;
+		}
+
+		// createDateTimeObjectFromString() keeps the current seconds in place, while the
+		// calendar stack rounds timestamps to a minute, so drop them.
+		return $dateTime->setTime((int)$dateTime->format('H'), (int)$dateTime->format('i'))->getTimestamp();
+	}
+
+	/**
+	 * Returns the offset of the recipient from UTC in effect at the given moment,
+	 * or null when the recipient has neither a valid timezone nor a stored offset.
+	 */
+	private static function getRecipientOffsetFromUtc(array $recipient, int $moment): ?int
+	{
+		$timezone = trim((string)($recipient['TIME_ZONE'] ?? ''));
+		if ($timezone !== '')
+		{
+			try
+			{
+				new DateTimeZone($timezone);
+
+				return CCalendar::GetTimezoneOffset($timezone, $moment);
+			}
+			catch (Exception)
+			{
+			}
+		}
+
+		// Legacy fallback: TIME_ZONE_OFFSET is stored relative to the server timezone.
+		if (isset($recipient['TIME_ZONE_OFFSET']))
+		{
+			return (int)date('Z', $moment) + (int)$recipient['TIME_ZONE_OFFSET'];
+		}
+
+		return null;
+	}
+
+	/**
+	 * Shifts the moment of the event so that rendering it in the server timezone shows the
+	 * wall clock of the recipient. Returns null when the server representation must be kept.
+	 */
+	private static function getRecipientDateTimestamp($wallClock, $timezone, array $recipient): ?int
+	{
+		if (!CTimeZone::OptionEnabled())
+		{
+			return null;
+		}
+
+		$moment = self::getEventMomentTimestamp($wallClock, $timezone);
+		if ($moment === null)
+		{
+			return null;
+		}
+
+		$recipientOffset = self::getRecipientOffsetFromUtc($recipient, $moment);
+		if ($recipientOffset === null)
+		{
+			return null;
+		}
+
+		// CCalendar::Date() and FormatDate() render in the server timezone, so the moment
+		// shifted by the difference of the offsets gives exactly the recipient wall clock.
+		return $moment + $recipientOffset - (int)date('Z', $moment);
+	}
+
+	/**
+	 * Formats a wall clock of the event in the timezone of the recipient. Falls back to the
+	 * legacy conversion, which takes both offsets as of now instead of the event moment.
+	 */
+	private static function renderDateForRecipient(
+		$wallClock,
+		$timezone,
+		$recipientId,
+		?array $recipient = null
+	): string
+	{
+		$recipientTimestamp = $recipient === null
+			? null
+			: self::getRecipientDateTimestamp($wallClock, $timezone, $recipient)
+		;
+		if ($recipientTimestamp !== null)
+		{
+			return CCalendar::Date($recipientTimestamp, true, true, true);
+		}
+
+		$userOffset = CCalendar::GetTimezoneOffset($timezone) - CCalendar::GetCurrentOffsetUTC($recipientId);
+
+		return CCalendar::Date(CCalendar::Timestamp($wallClock) - $userOffset, true, true, true);
 	}
 
 	private static function getFromFormatted($params, ?string $languageId = null): string

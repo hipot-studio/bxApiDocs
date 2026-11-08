@@ -1,0 +1,29 @@
+{
+	"_comment": "Shared test cases for BitrixGPT file upload policy. Keep in sync with the copy in immobile/install/mobileapp/immobile/extensions/im/messenger/lib/copilot/file-validator/fixtures/file-upload-policy.json — any divergence must be caught by CI.",
+	"policy": {
+		"allowedExtensions": [
+			"txt", "md", "csv", "xlsx", "xls", "docx", "doc", "pptx", "pdf", "jpg", "jpeg", "png", "webp", "gif"
+		],
+		"maxFileSize": 5242880,
+		"maxFilesPerMessage": 10
+	},
+	"cases": [
+		{ "name": "report.pdf", "size": 1024, "verdict": "OK" },
+		{ "name": "notes.txt", "size": 10, "verdict": "OK" },
+		{ "name": "photo.PNG", "size": 500000, "verdict": "OK" },
+		{ "name": "data.CSV", "size": 100, "verdict": "OK" },
+		{ "name": "boundary.pdf", "size": 5242880, "verdict": "OK" },
+		{ "name": "photo.jpeg", "size": 100, "verdict": "OK" },
+		{ "name": "legacy.DOC", "size": 100, "verdict": "OK" },
+		{ "name": "deck.PPTX", "size": 100, "verdict": "OK" },
+		{ "name": "sticker.GIF", "size": 100, "verdict": "OK" },
+
+		{ "name": "virus.exe", "size": 100, "verdict": "INVALID_FILE_FORMAT" },
+		{ "name": "archive.zip", "size": 100, "verdict": "INVALID_FILE_FORMAT" },
+		{ "name": "report.pdf.exe", "size": 100, "verdict": "INVALID_FILE_FORMAT" },
+		{ "name": "readme", "size": 100, "verdict": "INVALID_FILE_FORMAT" },
+
+		{ "name": "big.pdf", "size": 10485761, "verdict": "FILE_TOO_LARGE" },
+		{ "name": "over-boundary.pdf", "size": 5242881, "verdict": "FILE_TOO_LARGE" }
+	]
+}

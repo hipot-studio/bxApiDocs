@@ -23,9 +23,33 @@ class ShiftsManager
 		$this->shiftPlanProvider = $shiftPlanProvider;
 	}
 
+	/**
+	 * Whether the schedule still belongs to the user's active schedules.
+	 */
+	public function containsSchedule(?int $scheduleId): bool
+	{
+		// getByPrimary() casts an empty primary to 0, so without this guard a schedule stored under id 0
+		// would count as a match.
+		if ($scheduleId === null || $scheduleId <= 0)
+		{
+			return false;
+		}
+
+		return $this->activeSchedules->getByPrimary($scheduleId) !== null;
+	}
+
+	/**
+	 * Whether the user's active schedules hold a flextime one. Such a set resolves no shift at all, so the
+	 * decisions relying on the next shift have nothing to move their threshold.
+	 */
+	public function hasFlextimeSchedule(): bool
+	{
+		return $this->activeSchedules->hasFlextime();
+	}
+
 	private function buildShiftWithDate(\DateTime $userDateTime, $checkRelevant, ?ShiftWithDate $previousShitWithDate = null): ?ShiftWithDate
 	{
-		if (!$this->activeSchedules->count() === 0 || $this->activeSchedules->hasFlextime() ||
+		if ($this->activeSchedules->count() === 0 || $this->activeSchedules->hasFlextime() ||
 			$this->activeSchedules->obtainActiveShifts()->count() === 0)
 		{
 			return null;
@@ -43,47 +67,81 @@ class ShiftsManager
 		{
 			return empty($nextShiftsWithDates) ? null : reset($nextShiftsWithDates);
 		}
-		else
+
+		$shiftedShifts = [];
+		$fixedShifts = [];
+		foreach ($nextShiftsWithDates as $shiftWithDate)
 		{
-			$shiftedShifts = [];
-			$fixedShifts = [];
-			foreach ($nextShiftsWithDates as $shiftWithDate)
+			if ($shiftWithDate->getSchedule()->isShifted())
 			{
-				if ($shiftWithDate->getSchedule()->isShifted())
-				{
-					$shiftedShifts[$shiftWithDate->getDateTimeStart()->getTimestamp()] = $shiftWithDate;
-				}
-				else
-				{
-					$fixedShifts[$shiftWithDate->getDateTimeStart()->getTimestamp()] = $shiftWithDate;
-				}
+				$shiftedShifts[] = $shiftWithDate;
 			}
-			if (count($shiftedShifts) > 1)
+			else
 			{
-				ksort($shiftedShifts);
-				if ($checkRelevant)
-				{
-					foreach ($shiftedShifts as $shiftedShift)
-					{
-						/** @var ShiftWithDate $shiftedShift */
-						if ($this->hasShiftPlan($shiftedShift))
-						{
-							return $shiftedShift;
-						}
-					}
-				}
-				return reset($shiftedShifts);
+				$fixedShifts[] = $shiftWithDate;
 			}
-			if (count($fixedShifts) > 0)
-			{
-				if (count($fixedShifts) > 1)
-				{
-					ksort($fixedShifts);
-				}
-				return reset($fixedShifts);
-			}
-			return empty($shiftedShifts) ? null : reset($shiftedShifts);
 		}
+		$shiftedShifts = $this->sortedByStartAndShiftId($shiftedShifts);
+		$fixedShifts = $this->sortedByStartAndShiftId($fixedShifts);
+
+		if ($checkRelevant)
+		{
+			foreach ($shiftedShifts as $shiftedShift)
+			{
+				if ($this->hasShiftPlan($shiftedShift))
+				{
+					return $shiftedShift;
+				}
+			}
+		}
+
+		// A fixed shift losing to the shifted ones only when those have several distinct starts has no domain
+		// reason behind it - it is the legacy arbitration, kept deliberately and locked by
+		// ShiftsManagerShiftPlanTest::testWithoutAnAssignmentTheFixedShiftOfTheMixedSetKeepsWinning().
+		if ($this->hasSeveralStartTimes($shiftedShifts))
+		{
+			return $shiftedShifts[0];
+		}
+		if (!empty($fixedShifts))
+		{
+			return $fixedShifts[0];
+		}
+
+		return $shiftedShifts[0] ?? null;
+	}
+
+	/**
+	 * Orders the candidates by the start instant, an equal start decided by the smaller shift id. The pair is
+	 * unique among the candidates, so the order does not depend on the traversal of schedules and shifts.
+	 *
+	 * @param ShiftWithDate[] $shiftsWithDates
+	 * @return ShiftWithDate[]
+	 */
+	private function sortedByStartAndShiftId(array $shiftsWithDates): array
+	{
+		usort(
+			$shiftsWithDates,
+			function (ShiftWithDate $first, ShiftWithDate $second) {
+				return [$first->getDateTimeStart()->getTimestamp(), (int)$first->getShift()->getId()]
+					<=> [$second->getDateTimeStart()->getTimestamp(), (int)$second->getShift()->getId()];
+			}
+		);
+
+		return $shiftsWithDates;
+	}
+
+	/**
+	 * @param ShiftWithDate[] $shiftsWithDates
+	 */
+	private function hasSeveralStartTimes(array $shiftsWithDates): bool
+	{
+		$starts = [];
+		foreach ($shiftsWithDates as $shiftWithDate)
+		{
+			$starts[$shiftWithDate->getDateTimeStart()->getTimestamp()] = true;
+		}
+
+		return count($starts) > 1;
 	}
 
 	public function buildRelevantShiftWithDate(\DateTime $userDateTime, ?ShiftWithDate $previousShitWithDate = null): ?ShiftWithDate
@@ -96,14 +154,19 @@ class ShiftsManager
 		return $this->buildShiftWithDate($userDateTime, false, $previousShitWithDate);
 	}
 
+	/**
+	 * DATE_ASSIGNED of a shift plan is the local calendar date of the shift start, so the lookup takes the
+	 * date dateTimeStart carries in the zone its caller supplied - which has to be the employee's. Only a
+	 * real IANA zone matches Shift::buildUtcStartByShiftplan() exactly; a synthetic '+HH:MM' offset drifts
+	 * from it inside the DST window around local midnight. For an overnight shift it is the date of the
+	 * start: buildUtcEndByUserId() carries the end over itself.
+	 */
 	private function hasShiftPlan(ShiftWithDate $shift)
 	{
-		$shiftStartDate = clone $shift->getDateTimeStart();
-		$shiftStartDate->setTimezone(new \DateTimeZone('UTC'));
 		return (bool)$this->shiftPlanProvider->findActiveByComplexId(
 			$shift->getShift()->getId(),
 			$this->userId,
-			new Date($shiftStartDate->format('Y-m-d'), 'Y-m-d')
+			new Date($shift->getDateTimeStart()->format('Y-m-d'), 'Y-m-d')
 		);
 	}
 

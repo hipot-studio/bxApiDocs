@@ -4,13 +4,10 @@
 namespace Bitrix\Market\ListTemplates;
 
 
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Categories;
 use Bitrix\Market\Rest\Actions;
 use Bitrix\Market\Toolbar;
 use Bitrix\Market\Rest\Transport;
-
-Loc::loadMessages(__DIR__ . '/../../install/components/bitrix/market.main/class.php');
 
 class Category extends BaseTemplate
 {
@@ -23,7 +20,7 @@ class Category extends BaseTemplate
 
 	public function setResult(bool $isAjax = false)
 	{
-		$title = Loc::getMessage('MARKET_MAIN_PAGE_TITLE_MSGVER_1');
+		$title = Toolbar::getMarketPageTitle();
 		$selectedCategory = $this->getSelectedCategory();
 		$selectedCategoryTag = $this->getSelectedCategoryTag();
 

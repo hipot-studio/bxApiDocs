@@ -440,6 +440,14 @@ class IntranetManager
 		return null;
 	}
 
+	public static function clearLeftMenuCache(): void
+	{
+		if (Loader::includeModule('intranet'))
+		{
+			ServiceLocator::getInstance()->get('intranet.customSection.manager')->clearLeftMenuCache();
+		}
+	}
+
 	/**
 	 * @internal
 	 */

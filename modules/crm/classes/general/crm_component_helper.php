@@ -772,6 +772,54 @@ class CCrmComponentHelper
 	}
 
 	/**
+	 * Replaces the name-bearing client fields joined into an entity row with the hidden entity stub.
+	 * Only the name carriers are masked: the other client columns glued onto the row
+	 * (COMPANY_BANKING_DETAILS, CONTACT_BIRTHDATE and the like) are left untouched by design.
+	 * Readability decisions are made by the caller and passed in, so that a single request keeps a
+	 * single permission verdict per client; this helper never asks the permission layer itself.
+	 * Client identifiers are left intact: the details card relies on them and the link itself is
+	 * not restricted.
+	 *
+	 * The key holding the linked company title differs per entity type, so the caller passes it in:
+	 * a deal row keeps it in COMPANY_TITLE, a lead row in ASSOCIATED_COMPANY_TITLE, while the lead's
+	 * own COMPANY_TITLE column is user input and must stay intact. In both rows that key maps to
+	 * CO.TITLE, because the rows are read via CCrmDeal::GetListEx() / CCrmLead::GetListEx(), whose
+	 * field map comes from CCrmDeal::GetFields() / CCrmLead::GetFields(); the legacy
+	 * CCrmDeal::GetList() map uses different aliases and does not apply here.
+	 */
+	public static function maskClientNameFields(
+		array &$entityData,
+		string $companyTitleKey,
+		bool $isCompanyReadable,
+		bool $isContactReadable
+	): void
+	{
+		if (!$isCompanyReadable && array_key_exists($companyTitleKey, $entityData))
+		{
+			$entityData[$companyTitleKey] = (string)CCrmEntitySelectorHelper::getHiddenTitle(CCrmOwnerType::CompanyName);
+		}
+
+		if ($isContactReadable)
+		{
+			return;
+		}
+
+		if (array_key_exists('CONTACT_FULL_NAME', $entityData))
+		{
+			$entityData['CONTACT_FULL_NAME'] = (string)CCrmEntitySelectorHelper::getHiddenTitle(CCrmOwnerType::ContactName);
+		}
+
+		// name parts are wiped, otherwise the hidden full name is reassembled from them
+		foreach (['CONTACT_HONORIFIC', 'CONTACT_NAME', 'CONTACT_SECOND_NAME', 'CONTACT_LAST_NAME'] as $fieldName)
+		{
+			if (array_key_exists($fieldName, $entityData))
+			{
+				$entityData[$fieldName] = '';
+			}
+		}
+	}
+
+	/**
 	 * @param int $entityTypeId
 	 * @param int[] $entityIds
 	 * @return array

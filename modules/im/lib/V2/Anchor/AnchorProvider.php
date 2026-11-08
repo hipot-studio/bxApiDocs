@@ -7,7 +7,6 @@ namespace Bitrix\Im\V2\Anchor;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 use Bitrix\Im\V2\Common\ContextCustomer;
-use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DI\ServiceLocator;
@@ -16,7 +15,10 @@ class AnchorProvider
 {
 	use ContextCustomer;
 
-	private const CACHE_ID = 'user_anchors_v2_';
+	// Bumped to v3: the cached response carries the recent section set, now derived from the type
+	// literal minus exclusions. Entries written by v2 hold the old set and a module update does not
+	// clear them, so they would keep serving it until the TTL expires.
+	private const CACHE_ID = 'user_anchors_v3_';
 	private const CACHE_DIR = '/bx/imc/anchors/';
 	private const CACHE_TTL = 60 * 60 * 24 * 30; // 1 month
 
@@ -74,7 +76,6 @@ class AnchorProvider
 			->fetchAll()
 		;
 
-		$recentConfigManager = RecentConfigManager::getInstance();
 		$typeRegistry = ServiceLocator::getInstance()->get(TypeRegistry::class);
 
 		foreach ($rows as $row)
@@ -84,10 +85,10 @@ class AnchorProvider
 			$messageParentId = (int)($row['PARENT_MID'] ?? 0);
 
 			$type = $typeRegistry->getByLiteralAndEntity($row['TYPE'] ?? '', $row['ENTITY_TYPE'] ?? null);
-			$extendedType = $type->getExtendedType(false);
-			$recentSections = $chatParentId > 0
-				? $recentConfigManager->getAllRecentSectionsByType($extendedType)
-				: $recentConfigManager->getBaseRecentSections($extendedType);
+			$recentSections = $typeRegistry->getRecentSectionsMinusExclusions(
+				$type,
+				hasParent: $chatParentId > 0,
+			);
 
 			$map[$chatId] = [
 				'PARENT_CHAT_ID' => $chatParentId,

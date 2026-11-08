@@ -8,9 +8,23 @@ use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertProgress;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertStatus;
 use Bitrix\Socialnetwork\Collab\Internals\CollabOptionTable;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\ConvertProgressMapper;
+use Bitrix\Socialnetwork\V2\Infrastructure\Agent\RestoreConvertedProjectListsPermissionAgent;
 
 class ConvertProgressRepository implements ConvertProgressRepositoryInterface
 {
+	public function markNewConversion(int $groupId): void
+	{
+		CollabOptionTable::merge(
+			[
+				'COLLAB_ID' => $groupId,
+				'NAME' => RestoreConvertedProjectListsPermissionAgent::NEW_CONVERSION_OPTION_NAME,
+				'VALUE' => RestoreConvertedProjectListsPermissionAgent::MARKER_OPTION_VALUE,
+			],
+			['VALUE' => RestoreConvertedProjectListsPermissionAgent::MARKER_OPTION_VALUE],
+			['COLLAB_ID', 'NAME'],
+		);
+	}
+
 	public function __construct(
 		private readonly ConvertProgressMapper $mapper,
 	)

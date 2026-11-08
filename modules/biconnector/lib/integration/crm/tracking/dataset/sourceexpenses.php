@@ -40,7 +40,7 @@ class SourceExpenses extends BIBuilderDataset
 
 	protected function getTableDescriptionFull(): string
 	{
-		return $this->getMessage('TRACKING_SOURCE_EXPENSES_TABLE_DESCRIPTION_FULL', '');
+		return $this->getMessage('TRACKING_SOURCE_EXPENSES_TABLE_DESCRIPTION_FULL_MSGVER_1', '');
 	}
 
 	/**

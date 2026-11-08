@@ -77,12 +77,17 @@ class PrepareDatePlan implements PrepareFieldInterface
 			if ($shiftData)
 			{
 				$startValue = $shiftData['START_DATE_PLAN'];
-				$fields['START_DATE_PLAN'] = $startValue ?? 0;
-
 				$endValue = $shiftData['END_DATE_PLAN'];
-				$fields['END_DATE_PLAN'] = $endValue ?? 0;
+				$durationSeconds = $shiftData['DURATION_PLAN_SECONDS'];
 
-				$fields['DURATION_PLAN_SECONDS'] = $shiftData['DURATION_PLAN_SECONDS'];
+				// an explicit date change applies the scheduler result as is, up to resetting the plan to zero;
+				// otherwise the result is applied only as a whole plan
+				if ($datesChanged || $this->isWholePlan($startValue, $endValue, $durationSeconds))
+				{
+					$fields['START_DATE_PLAN'] = $startValue ?? 0;
+					$fields['END_DATE_PLAN'] = $endValue ?? 0;
+					$fields['DURATION_PLAN_SECONDS'] = $durationSeconds;
+				}
 
 				$this->config->getRuntime()->setLegacyOperationResultData('SHIFT_RESULT', $shiftResult->getData());
 			}
@@ -157,5 +162,13 @@ class PrepareDatePlan implements PrepareFieldInterface
 		}
 
 		return false;
+	}
+
+	// DURATION_PLAN_SECONDS is written only by Scheduler\Result\Impact::setDataUpdated() and is not in the
+	// impact select (Impact::getBaseMixin()), so it never comes from the database: a non-null value means the
+	// scheduler entered its plan branch. Adding it to that select would make this check always true here.
+	private function isWholePlan(mixed $startValue, mixed $endValue, mixed $durationSeconds): bool
+	{
+		return $startValue !== null && $endValue !== null && $durationSeconds !== null;
 	}
 }

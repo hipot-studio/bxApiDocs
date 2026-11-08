@@ -24,6 +24,44 @@ class ExternalLinkBitrixOrmRepository implements ExternalLinkRepositoryInterface
 	/**
 	 * {@inheritDoc}
 	 */
+	public function getForUnifiedLinkAccessCheckCollection(array $objectIds): array
+	{
+		$objectIds = array_values(array_unique(array_filter(array_map('intval', $objectIds))));
+
+		if (empty($objectIds))
+		{
+			return [];
+		}
+
+		$links = [];
+
+		$linkList = ExternalLink::getModelList([
+			'filter' => [
+				'@OBJECT_ID' => $objectIds,
+				'=TYPE' => ExternalLinkTable::TYPE_MANUAL,
+				'=IS_EXPIRED' => false,
+			],
+			'order' => [
+				'CREATE_TIME' => 'DESC',
+			],
+		]);
+
+		foreach ($linkList as $link)
+		{
+			$objectId = (int)$link->getObjectId();
+
+			if (!isset($links[$objectId]))
+			{
+				$links[$objectId] = $link;
+			}
+		}
+
+		return $links;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
 	public function getForComponent(mixed $objectId): ?ExternalLink
 	{
 		return $this->findInternal(
@@ -47,6 +85,18 @@ class ExternalLinkBitrixOrmRepository implements ExternalLinkRepositoryInterface
 	public function getForUse(mixed $objectId): ?ExternalLink
 	{
 		return $this->findInternal(
+			objectId: $objectId,
+			type: ExternalLinkTable::TYPE_MANUAL,
+			isExpired: false,
+		);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public function getAllForUse(mixed $objectId): array
+	{
+		return $this->listInternal(
 			objectId: $objectId,
 			type: ExternalLinkTable::TYPE_MANUAL,
 			isExpired: false,
@@ -95,8 +145,10 @@ class ExternalLinkBitrixOrmRepository implements ExternalLinkRepositoryInterface
 	): array
 	{
 		$parameters = [
+			// Rows born within one second tie on CREATE_TIME, so the id keeps the choice deterministic.
 			'order' => [
 				'CREATE_TIME' => 'DESC',
+				'ID' => 'DESC',
 			],
 		];
 

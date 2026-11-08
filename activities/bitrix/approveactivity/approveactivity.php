@@ -1098,6 +1098,25 @@ class CBPApproveActivity extends CBPCompositeActivity implements
 		return min($timeoutDuration, 3600 * 24 * 365 * 5);
 	}
 
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		// Written by GetPropertiesDialogValues() on every save, but no control fills it, so the saved value
+		// is an empty one no type accepts. It is not authored - only carried through as it came.
+		return ['Parameters'];
+	}
+
+	/**
+	 * The whole passthrough list, because none of it is authored: what stands in `Parameters` becomes the
+	 * PARAMETERS of the approval task, and {@see CBPRestService::prepareTaskParameters()} hands those keys out
+	 * to any consumer of `bizproc.task.list`. Without the barrier the passthrough contract would take an
+	 * arbitrary payload as is; with it a written value has to be the one the published template carries, while
+	 * the empty value this dialog writes on every save costs the agent nothing.
+	 */
+	public static function getAiRestrictedSettingNames(array $documentType): array
+	{
+		return self::getAiPassthroughSettingNames($documentType);
+	}
+
 	public static function GetPropertiesDialog(
 		$documentType,
 		$activityName,

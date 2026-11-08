@@ -2,6 +2,7 @@
 
 namespace Bitrix\Mail\Controller;
 
+use Bitrix\Mail\Internal\Service\Signature\Image\SignatureImageSendPreparation;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Text\StringHelper;
 
@@ -19,6 +20,11 @@ abstract class Base extends Controller
 		$sanitizer->addTags(array('style' => array()));
 
 		return $sanitizer->sanitizeHtml($text);
+	}
+
+	protected function sanitizeSignature(string $html): string
+	{
+		return (new SignatureImageSendPreparation())->sanitizeHtml($html);
 	}
 
 	/**

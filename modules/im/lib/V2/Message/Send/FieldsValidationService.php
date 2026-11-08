@@ -6,6 +6,9 @@ use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message\BlocksBuilder\BuilderService;
+use Bitrix\Im\V2\Message\Contact\ChatTypePolicy;
+use Bitrix\Im\V2\Message\Contact\ContactCardError;
+use Bitrix\Im\V2\Message\Contact\ContactCardService;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\Param\ParamError;
 use Bitrix\Im\V2\Message\Params;
@@ -30,6 +33,7 @@ class FieldsValidationService
 		'STICKER_PARAMS',
 		'AI_ASSISTANT',
 		'BLOCK',
+		'CONTACT',
 	];
 
 	private Chat $chat;
@@ -59,6 +63,11 @@ class FieldsValidationService
 		}
 
 		$this->fillChatData();
+		$result = $this->checkContactCombination();
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
 
 		foreach (self::FIELD_KEYS as $fieldKey)
 		{
@@ -73,6 +82,7 @@ class FieldsValidationService
 				'STICKER_PARAMS' => $this->checkStickerParams(),
 				'AI_ASSISTANT' => $this->checkAiAssistant(),
 				'BLOCK' => $this->checkBlock(),
+				'CONTACT' => $this->checkContact(),
 			};
 
 			if (!$result->isSuccess())
@@ -84,6 +94,24 @@ class FieldsValidationService
 		return $result->setResult($this->fields);
 	}
 
+	private function checkContactCombination(): Result
+	{
+		$result = new Result();
+		if (!isset($this->fields['CONTACT']))
+		{
+			return $result;
+		}
+
+		$hasExclusiveContent = isset($this->fields['ATTACH'])
+			|| isset($this->fields['STICKER_PARAMS'])
+			|| isset($this->fields['BLOCK'])
+			|| ($this->fields['SYSTEM'] ?? 'N') === 'Y';
+
+		return $hasExclusiveContent
+			? $result->addError(new ContactCardError(ContactCardError::INVALID))
+			: $result;
+	}
+
 	private function isEmptyMessageWithForward(?MessageCollection $forwardMessages): bool
 	{
 		if (isset($forwardMessages))
@@ -93,6 +121,7 @@ class FieldsValidationService
 				&& !isset($this->fields['ATTACH'])
 				&& !isset($this->fields['STICKER_PARAMS'])
 				&& !isset($this->fields['BLOCK'])
+				&& !isset($this->fields['CONTACT'])
 			)
 			{
 				return true;
@@ -162,11 +191,15 @@ class FieldsValidationService
 
 			$this->fields['MESSAGE'] = trim($this->fields['MESSAGE']);
 
-			if ($this->fields['MESSAGE'] === '' && empty($this->fields['ATTACH']))
+			if (
+				$this->fields['MESSAGE'] === ''
+				&& empty($this->fields['ATTACH'])
+				&& !isset($this->fields['CONTACT'])
+			)
 			{
 				return $result->addError(new MessageError(
 					MessageError::EMPTY_MESSAGE,
-					"Message can't be empty"
+					"Message can't be empty",
 				));
 			}
 		}
@@ -175,6 +208,10 @@ class FieldsValidationService
 			return $result;
 		}
 		elseif (isset($this->fields['BLOCK']))
+		{
+			return $result;
+		}
+		elseif (isset($this->fields['CONTACT']))
 		{
 			return $result;
 		}
@@ -220,16 +257,16 @@ class FieldsValidationService
 		}
 
 		$result = \Bitrix\Rest\AppTable::getList(
-			array(
-				'filter' => array(
-					'=CLIENT_ID' => $clientId
-				),
-				'select' => array(
+			[
+				'filter' => [
+					'=CLIENT_ID' => $clientId,
+				],
+				'select' => [
 					'CODE',
 					'APP_NAME',
 					'APP_NAME_DEFAULT' => 'LANG_DEFAULT.MENU_NAME',
-				)
-			)
+				],
+			],
 		);
 		$result = $result->fetch();
 		$moduleName = !empty($result['APP_NAME'])
@@ -237,8 +274,7 @@ class FieldsValidationService
 			: (!empty($result['APP_NAME_DEFAULT'])
 				? $result['APP_NAME_DEFAULT']
 				: $result['CODE']
-			)
-		;
+			);
 
 		return "[b]" . $moduleName . "[/b]\n" . $message;
 	}
@@ -264,7 +300,7 @@ class FieldsValidationService
 
 			return $result->addError(new ParamError(
 				ParamError::ATTACH_ERROR,
-				'You have exceeded the maximum allowable size of attach'
+				'You have exceeded the maximum allowable size of attach',
 			));
 		}
 
@@ -424,7 +460,7 @@ class FieldsValidationService
 		$stickerParams = StickerService::getStickerMessageParams(
 			(int)$this->fields['STICKER_PARAMS']['id'],
 			(int)$this->fields['STICKER_PARAMS']['packId'],
-			PackType::tryFrom((string)$this->fields['STICKER_PARAMS']['packType'])
+			PackType::tryFrom((string)$this->fields['STICKER_PARAMS']['packType']),
 		);
 
 		if (empty($stickerParams))
@@ -484,6 +520,58 @@ class FieldsValidationService
 		$builder = $builderResult->getBlocksBuilder();
 		$this->fields['PARAMS'][Params::BLOCK] = $builder;
 		$this->fields['MESSAGE'] = $builder->getPayloadText();
+
+		return $result;
+	}
+
+	private function checkContact(): Result
+	{
+		$result = new Result();
+		if (!isset($this->fields['CONTACT']))
+		{
+			return $result;
+		}
+
+		if (!Features::isContactCardAvailable())
+		{
+			return $result->addError(new ContactCardError(ContactCardError::FEATURE_DISABLED));
+		}
+
+		if (!ChatTypePolicy::isAllowed($this->chat))
+		{
+			return $result->addError(new ContactCardError(ContactCardError::CHAT_TYPE_RESTRICTED));
+		}
+
+		$contact = $this->fields['CONTACT'];
+		if (
+			!is_array($contact)
+			|| array_diff(array_keys($contact), ['firstName', 'lastName', 'phones', 'photoId']) !== []
+		)
+		{
+			return $result->addError(new ContactCardError(ContactCardError::INVALID));
+		}
+
+		$contactResult = (new ContactCardService())->prepare(
+			$contact,
+			$this->chat,
+			$this->fields['MESSAGE'] ?? null,
+		);
+		if (!$contactResult->isSuccess())
+		{
+			return $contactResult;
+		}
+
+		$contactFields = $contactResult->getResult();
+		$params = $this->fields['PARAMS'] ?? [];
+		unset(
+			$params[Params::COMPONENT_ID],
+			$params[Params::COMPONENT_PARAMS],
+			$params[Params::FILE_ID],
+		);
+
+		$this->fields['MESSAGE'] = $contactFields['MESSAGE'];
+		$this->fields['PARAMS'] = [...$params, ...$contactFields['PARAMS']];
+		unset($this->fields['CONTACT']);
 
 		return $result;
 	}

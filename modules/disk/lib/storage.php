@@ -5,18 +5,16 @@ namespace Bitrix\Disk;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\StorageTable;
-use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Disk\ProxyType\Type;
+use Bitrix\Disk\Security\DiskSecurityContext;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
-use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\BooleanField;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Result;
 use Bitrix\Main\Event;
-use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectNotFoundException;
@@ -465,15 +463,16 @@ final class Storage extends Internals\Model implements \JsonSerializable
 
 	/**
 	 * @param $user
+	 * @param bool $shouldCheckUnifiedLink
 	 * @return Security\SecurityContext
 	 */
-	public function getSecurityContext($user)
+	public function getSecurityContext($user, bool $shouldCheckUnifiedLink = false)
 	{
 		//todo Mistake? We decided, SecurityContext should parse USER self. But we would not create typical SecurityContext (cache. cache)
 		$userId = null;
 		if ($user instanceof CurrentUser)
 		{
-			return $this->getSecurityContext($user->getId());
+			return $this->getSecurityContext($user->getId(), $shouldCheckUnifiedLink);
 		}
 
 		if ($user instanceof \CUser)
@@ -490,24 +489,42 @@ final class Storage extends Internals\Model implements \JsonSerializable
 
 		if ($userId === null)
 		{
-			return $this->getProxyType()->getSecurityContextByUser($user);
-		}
-		if (!isset($this->cacheSecurityContext[$userId]))
-		{
-			$this->cacheSecurityContext[$userId] = $this->getProxyType()->getSecurityContextByUser($user);
+			$securityContext = $this->getProxyType()->getSecurityContextByUser($user);
+
+			if ($securityContext instanceof DiskSecurityContext)
+			{
+				$securityContext->checkUnifiedLink($shouldCheckUnifiedLink);
+			}
+
+			return $securityContext;
 		}
 
-		return $this->cacheSecurityContext[$userId];
+		$cacheSecurityContextKey = "{$userId}_$shouldCheckUnifiedLink";
+
+		if (!isset($this->cacheSecurityContext[$cacheSecurityContextKey]))
+		{
+			$securityContext = $this->getProxyType()->getSecurityContextByUser($user);
+
+			if ($securityContext instanceof DiskSecurityContext)
+			{
+				$securityContext->checkUnifiedLink($shouldCheckUnifiedLink);
+			}
+
+			$this->cacheSecurityContext[$cacheSecurityContextKey] = $securityContext;
+		}
+
+		return $this->cacheSecurityContext[$cacheSecurityContextKey];
 	}
 
 	/**
+	 * @param bool $shouldCheckUnifiedLink
 	 * @return Security\SecurityContext
 	 */
-	public function getCurrentUserSecurityContext()
+	public function getCurrentUserSecurityContext(bool $shouldCheckUnifiedLink = false)
 	{
 		global $USER;
 
-		return $this->getSecurityContext($USER);
+		return $this->getSecurityContext($USER, $shouldCheckUnifiedLink);
 	}
 
 	/**
@@ -928,7 +945,13 @@ final class Storage extends Internals\Model implements \JsonSerializable
 			return false;
 		}
 
-		return $this->update(array('NAME' => $name));
+		$status = $this->update(array('NAME' => $name));
+		if ($status)
+		{
+			$this->clearStorageListCaches();
+		}
+
+		return $status;
 	}
 
 	public function delete($deletedBy, bool $bypassDeletionRestriction = false): bool
@@ -953,7 +976,7 @@ final class Storage extends Internals\Model implements \JsonSerializable
 		return $status;
 	}
 
-	private function clearStorageListCaches(): void
+	public function clearStorageListCaches(): void
 	{
 		$cacheTag = $this->getStorageListCacheTag();
 		if (!defined('BX_COMP_MANAGED_CACHE') || $cacheTag === null)

@@ -44,7 +44,7 @@ class ChecklistToggleRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return false;
 		}
 
-		$checklist = $this->getModelFromParams($params);
+		$checklist = $this->getModelFromParams($params, $task);
 		if ($checklist->getEntityId() !== $task->getId())
 		{
 			$this->controller->addError(static::class, 'Incorrect checklist');

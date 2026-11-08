@@ -93,7 +93,13 @@ final class ConfigFactory
 				}
 			}
 
-			$config = new ListConfig($name, $items, $type);
+			$emptyValueCaption =
+				isset($params['DATA']['EMPTY_VALUE_CAPTION']) && is_string($params['DATA']['EMPTY_VALUE_CAPTION'])
+					? $params['DATA']['EMPTY_VALUE_CAPTION']
+					: null
+			;
+
+			$config = new ListConfig($name, $items, $type, $emptyValueCaption);
 		}
 		elseif (Types::CUSTOM === $type)
 		{

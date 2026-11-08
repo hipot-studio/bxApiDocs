@@ -5,6 +5,12 @@ namespace Bitrix\Landing\Copilot\Generation\Scenario;
 
 final class ChangeAiSiteErrorMessages
 {
+	/**
+	 * Prefix of the step 30 message that carries a selection reason. Owned here together with the
+	 * texts themselves, so a reworded failure stays reworded everywhere it is shown.
+	 */
+	public const SELECTION_FAILURE_PREFIX = 'Failed to select blocks for update: ';
+
 	private function __construct()
 	{
 	}
@@ -43,13 +49,34 @@ final class ChangeAiSiteErrorMessages
 		return self::getMap()[$stepId] ?? '';
 	}
 
+	/**
+	 * Joins the selection reason with its diagnostic detail: "reason (detail)".
+	 * Single source of the join format for the step 30 messages.
+	 */
+	public static function formatSelectionReason(array $selectionDebug): string
+	{
+		$reason = trim((string)($selectionDebug['reason'] ?? ''));
+		if ($reason === '')
+		{
+			return '';
+		}
+
+		$detail = trim((string)($selectionDebug['detail'] ?? ''));
+		if ($detail === '')
+		{
+			return $reason;
+		}
+
+		return $reason . ' (' . $detail . ')';
+	}
+
 	private static function resolveSelectionMessage(array $selectionDebug): string
 	{
 		$mode = trim((string)($selectionDebug['mode'] ?? ''));
-		$reason = trim((string)($selectionDebug['reason'] ?? ''));
+		$reason = self::formatSelectionReason($selectionDebug);
 		if ($mode === 'error' && $reason !== '')
 		{
-			return 'Failed to select blocks for update: ' . $reason;
+			return self::SELECTION_FAILURE_PREFIX . $reason;
 		}
 
 		return self::getMap()[30];

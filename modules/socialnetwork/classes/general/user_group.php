@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Event;
@@ -20,6 +21,8 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\WorkgroupTable;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 use Bitrix\Socialnetwork\Internals\Counter;
 use Bitrix\Socialnetwork\Internals\EventService;
 
@@ -263,6 +266,14 @@ class CAllSocNetUserToGroup
 
 		$bSuccess = $DB->Query("DELETE FROM b_sonet_user2group WHERE ID = ".$id."", true);
 
+		if ($bSuccess)
+		{
+			\Bitrix\Socialnetwork\Permission\Rule\GroupRelationCache::invalidate(
+				(int)$relationFields['GROUP_ID'],
+				(int)$relationFields['USER_ID'],
+			);
+		}
+
 		if (!$skipStatistics)
 		{
 			CSocNetGroup::SetStat($relationFields["GROUP_ID"]);
@@ -291,7 +302,15 @@ class CAllSocNetUserToGroup
 		{
 			$CACHE_MANAGER->ClearByTag("sonet_user2group_G".$relationFields["GROUP_ID"]);
 			$CACHE_MANAGER->ClearByTag("sonet_user2group_U".$relationFields["USER_ID"]);
-			$CACHE_MANAGER->ClearByTag("sonet_user2group");
+
+			if (DeferredCacheFeature::isOn())
+			{
+				DeferredTagCleaner::getInstance()->clearByTag('sonet_user2group');
+			}
+			else
+			{
+				$CACHE_MANAGER->ClearByTag("sonet_user2group");
+			}
 		}
 
 		if (
@@ -380,7 +399,15 @@ class CAllSocNetUserToGroup
 			$groupIdList[] = (int)$relationFields["GROUP_ID"];
 		}
 
-		$DB->Query("DELETE FROM b_sonet_user2group WHERE USER_ID = ".$userId."", true);
+		$deleteResult = $DB->Query("DELETE FROM b_sonet_user2group WHERE USER_ID = ".$userId."", true);
+
+		if ($deleteResult)
+		{
+			foreach ($groupIdList as $groupId)
+			{
+				\Bitrix\Socialnetwork\Permission\Rule\GroupRelationCache::invalidate($groupId, $userId);
+			}
+		}
 
 		foreach ($groupIdList as $groupId)
 		{
@@ -448,6 +475,12 @@ class CAllSocNetUserToGroup
 			return (new Main\Result())->addError(new Main\Error('$userIds is empty'));
 		}
 
+		$preflight = ExternalMembershipValidator::validateUsers($groupId, $userIds);
+		if (!$preflight->isSuccess())
+		{
+			return $preflight;
+		}
+
 		$users = [];
 		foreach($userIds as $userId)
 		{
@@ -461,7 +494,17 @@ class CAllSocNetUserToGroup
 			];
 		}
 
-		return UserToGroupTable::addMulti($users, true);
+		$result = UserToGroupTable::addMulti($users, true);
+
+		if ($result->isSuccess())
+		{
+			foreach ($userIds as $userId)
+			{
+				\Bitrix\Socialnetwork\Permission\Rule\GroupRelationCache::invalidate($groupId, (int)$userId);
+			}
+		}
+
+		return $result;
 	}
 
 	public static function addUniqueUsersToGroup(int $groupId, array $userIds): void
@@ -763,6 +806,11 @@ class CAllSocNetUserToGroup
 			return false;
 		}
 
+		if (!ExternalMembershipValidator::checkUsers((int)$groupId, [$userId], UserToGroupTable::ROLE_USER))
+		{
+			return false;
+		}
+
 		$groupFields = WorkgroupTable::getList([
 			'select' => [
 				'ACTIVE',
@@ -1027,6 +1075,11 @@ class CAllSocNetUserToGroup
 			return false;
 		}
 
+		if (!ExternalMembershipValidator::checkUsers((int)$groupId, [$userId], UserToGroupTable::ROLE_USER))
+		{
+			return false;
+		}
+
 		$groupFields = WorkgroupTable::getList([
 			'select' => [
 				'NAME',
@@ -1090,7 +1143,7 @@ class CAllSocNetUserToGroup
 			"=DATE_UPDATE" => CDatabase::CurrentTimeFunction(),
 			"MESSAGE" => str_replace(
 				[ "#TEXT#", "#GROUP_NAME#" ],
-				[ $message, $groupFields["NAME"] ],
+				[ $message, self::escapeGroupNameForMessage($groupFields["NAME"]) ],
 				(
 					empty($message)
 						? Loc::getMessage($inviteConfirmTextEmptyMessageKey)
@@ -1678,6 +1731,14 @@ class CAllSocNetUserToGroup
 
 		if ($arResult = $dbResult->Fetch())
 		{
+			if (!ExternalMembershipValidator::checkUsers(
+				(int)$arResult['GROUP_ID'],
+				[$targetUserID],
+			))
+			{
+				return false;
+			}
+
 			if (!empty($arResult['GROUP_NAME']))
 			{
 				$arResult['GROUP_NAME'] = Emoji::decode($arResult['GROUP_NAME']);
@@ -2553,6 +2614,7 @@ class CAllSocNetUserToGroup
 		$groupFields = [],
 		bool $skipChatMessage = false,
 		bool $skipNotifications = false,
+		bool $keepPreviousOwnerAsModerator = false,
 	): bool
 	{
 		global $DB, $APPLICATION, $USER;
@@ -2577,6 +2639,11 @@ class CAllSocNetUserToGroup
 			return false;
 		}
 
+		if (!ExternalMembershipValidator::checkUsers((int)$groupId, [(int)$userId], UserToGroupTable::ROLE_OWNER))
+		{
+			return false;
+		}
+
 		$errorMessage = "";
 		$DB->StartTransaction();
 
@@ -2593,7 +2660,10 @@ class CAllSocNetUserToGroup
 		);
 		if ($existingRelationFields = $res->fetch())
 		{
-			$role = UserToGroupTable::ROLE_USER;
+			$role = $keepPreviousOwnerAsModerator
+				? UserToGroupTable::ROLE_MODERATOR
+				: UserToGroupTable::ROLE_USER
+			;
 
 			$workgroup = WorkgroupTable::getList([
 				'select' => ['SCRUM_MASTER_ID'],
@@ -3522,6 +3592,20 @@ class CAllSocNetUserToGroup
 	public static function getMessage($message)
 	{
 		return Loc::getMessage($message);
+	}
+
+	private static function escapeGroupNameForMessage(?string $name): string
+	{
+		// The stored message is rendered through CSocNetTextParser with ANCHOR=Y. Besides HTML and
+		// bbcode brackets, the parser auto-links bare "scheme://..." URLs, so the ":" is turned into a
+		// numeric entity to keep a URL-like group name from becoming a live link. The template restores
+		// the text with htmlspecialcharsback(), which reverses only named entities, so "&#58;"/"&#91;"
+		// stay inert for the parser yet render as ":"/"[" for the user.
+		return str_replace(
+			[ '[', ']', ':' ],
+			[ '&#91;', '&#93;', '&#58;' ],
+			htmlspecialcharsbx((string)$name)
+		);
 	}
 
 	private static function getProjectAwareMessageKey(string $messageKey, ?string $fallbackMessageKey = null): string

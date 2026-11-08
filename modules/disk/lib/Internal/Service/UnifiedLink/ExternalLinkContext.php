@@ -64,7 +64,11 @@ final class ExternalLinkContext
 		}
 
 		$externalLink = ExternalLink::loadById($payload['linkId']);
-		if (!$externalLink instanceof ExternalLink || $externalLink->isExpired())
+		if (
+			!$externalLink instanceof ExternalLink
+			|| $externalLink->getType() !== ExternalLink::TYPE_MANUAL
+			|| $externalLink->isExpired()
+		)
 		{
 			return null;
 		}

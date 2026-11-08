@@ -343,6 +343,11 @@ final class CurrencyClassifier
 				'TEMPLATE' => '#VALUE# #CURRENCY#',
 			],
 		],
+		'md' => [
+			'MDL' => [
+				'TEMPLATE' => '#VALUE# #CURRENCY#',
+			],
+		],
 		'pl' => [
 			self::MODIFIER_ALL => [
 				'DEC_POINT' => self::DECIMAL_POINT_COMMA,
@@ -476,6 +481,13 @@ final class CurrencyClassifier
 			],
 			'MXN' => [
 				'TEMPLATE' => 'MXN#VALUE#',
+			],
+		],
+		'me' => [
+			'MDL' => [
+				'DEC_POINT' => self::DECIMAL_POINT_COMMA,
+				'THOUSANDS_VARIANT' => self::SEPARATOR_DOT,
+				'TEMPLATE' => '#VALUE# #CURRENCY#',
 			],
 		],
 	];

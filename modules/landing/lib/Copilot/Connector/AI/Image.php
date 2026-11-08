@@ -13,6 +13,8 @@ class Image extends BaseConnector
 {
 	protected const CATEGORY = 'image';
 	protected const CONTEXT_ID = 'landing_site_copilot_image';
+	// the engine itself is registered by the ai module
+	private const FLUX_ENGINE_CODE = 'FluxLitellm';
 
 	public function request(Prompt $prompt): Main\Result
 	{
@@ -67,8 +69,44 @@ class Image extends BaseConnector
 
 	protected function getEngineCode(): ?string
 	{
+		$fluxEngineCode = static::getFluxEngineCode();
+		if ($fluxEngineCode !== null)
+		{
+			return $fluxEngineCode;
+		}
+
 		$manager = new Tuning\Manager();
 
 		return $manager->getItem(Landing\Connector\Ai::TUNING_CODE_SITE_IMAGE_PROVIDER)?->getValue();
+	}
+
+	/**
+	 * FLUX engine code when the landing option is on and the ai module has the engine available.
+	 * With the option off nothing else is called.
+	 *
+	 * @return string|null
+	 */
+	public static function getFluxEngineCode(): ?string
+	{
+		if (!Landing\Copilot\Manager::isFluxImageEnabled())
+		{
+			return null;
+		}
+
+		return static::isFluxEngineAvailable() ? self::FLUX_ENGINE_CODE : null;
+	}
+
+	protected static function isFluxEngineAvailable(): bool
+	{
+		if (!Main\Loader::includeModule('ai'))
+		{
+			return false;
+		}
+
+		return AI\Engine::getByCode(
+			self::FLUX_ENGINE_CODE,
+			new AI\Context('landing', static::CONTEXT_ID),
+			static::CATEGORY
+		) !== null;
 	}
 }

@@ -21,6 +21,9 @@ class AuthenticationService
 {
 	protected static ?self $instance = null;
 
+	/** @var array<string, int|null> per-request memo for findUserByToken, misses included */
+	private array $userIdByToken = [];
+
 	private function __construct()
 	{
 	}
@@ -63,22 +66,33 @@ class AuthenticationService
 	/**
 	 * ACTIVE='N' guests are treated as unknown — that's how kick and inactivity
 	 * cleanup invalidate tokens without deleting the user row.
+	 *
+	 * Memoized per request, misses included: a single hit of the guest page asks the same token twice,
+	 * and nothing within a request creates or deactivates the guest it names.
 	 */
 	public function findUserByToken(Token $token): ?int
 	{
+		$tokenValue = $token->getValue();
+		if (array_key_exists($tokenValue, $this->userIdByToken))
+		{
+			return $this->userIdByToken[$tokenValue];
+		}
+
 		$userData = UserTable::query()
 			->setSelect(['ID', 'EXTERNAL_AUTH_ID'])
-			->where('XML_ID', $this->buildXmlId($token->getValue()))
+			->where('XML_ID', $this->buildXmlId($tokenValue))
 			->where('ACTIVE', 'Y')
 			->fetch()
 		;
 
-		if ($userData && $userData['EXTERNAL_AUTH_ID'] === UserGuest::AUTH_ID)
-		{
-			return (int)$userData['ID'];
-		}
+		$userId = $userData && $userData['EXTERNAL_AUTH_ID'] === UserGuest::AUTH_ID
+			? (int)$userData['ID']
+			: null
+		;
 
-		return null;
+		$this->userIdByToken[$tokenValue] = $userId;
+
+		return $userId;
 	}
 
 	/**

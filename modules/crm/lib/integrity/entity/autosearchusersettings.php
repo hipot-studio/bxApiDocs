@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integrity\Entity;
 
 use Bitrix\Main\Entity\BooleanField;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\InsertIgnoreByDefaultTrait;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -27,6 +28,7 @@ use Bitrix\Main\ORM\Fields\StringField;
  */
 class AutosearchUserSettingsTable extends DataManager
 {
+	use InsertIgnoreByDefaultTrait;
 
 	public static function getObjectClass()
 	{

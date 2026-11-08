@@ -30,6 +30,36 @@ final class MailboxModel implements AccessibleItem
 		return $model;
 	}
 
+	/** @return array<int, self> */
+	public static function createFromIds(array $itemIds): array
+	{
+		$itemIds = array_values(array_unique(array_filter(array_map('intval', $itemIds))));
+		if ($itemIds === [])
+		{
+			return [];
+		}
+
+		$models = [];
+		foreach (array_chunk($itemIds, 100) as $chunk)
+		{
+			$mailboxes = MailboxTable::getList([
+				'select' => ['ID', 'USER_ID'],
+				'filter' => ['@ID' => $chunk],
+			]);
+			while ($mailbox = $mailboxes->fetch())
+			{
+				$id = (int)$mailbox['ID'];
+				$model = new self();
+				$model->setId($id);
+				$model->setOwnerId((int)$mailbox['USER_ID']);
+				self::$cache[$id] = $model;
+				$models[$id] = $model;
+			}
+		}
+
+		return $models;
+	}
+
 	private function setId(int $itemId): void
 	{
 		$this->id = $itemId;

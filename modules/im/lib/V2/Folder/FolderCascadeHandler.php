@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Folder;
 
+use Bitrix\Im\Model\FolderSourceTable;
 use Bitrix\Im\V2\Folder\Pin\PinService;
 
 class FolderCascadeHandler
@@ -45,6 +46,7 @@ class FolderCascadeHandler
 
 		$this->pinService->clearByUser($userId);
 		$this->folderChatLinker->clearByUser($userId);
+		FolderSourceTable::deleteBatch(['=USER_ID' => $userId]);
 		$this->folderService->deleteAllByUser($userId);
 	}
 }

@@ -6,14 +6,18 @@ use Bitrix\Crm\Integration\OpenLineManager;
 use Bitrix\Crm\Kanban\Entity;
 use Bitrix\Crm\Kanban\EntityBadge;
 use Bitrix\Crm\Service\Display\Field;
+use Bitrix\CrmMobile\Public\Feature\UnifiedFiltersFlag;
 use Bitrix\CrmMobile\Kanban\Client;
 use Bitrix\CrmMobile\Kanban\GridId;
 use Bitrix\CrmMobile\Kanban\Kanban;
+use Bitrix\CrmMobile\Kanban\View\CompactDisplayValues;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Mobile\Filter\FilterRequest;
 
 final class KanbanStrategy extends Base
 {
@@ -87,19 +91,30 @@ final class KanbanStrategy extends Base
 
 		$filterParams = $this->params['filterParams'];
 		$statusId = ($filterParams['stageId'] ?? null);
+		$presetId = (string)($filterParams['FILTER_PRESET_ID'] ?? '');
 
 		if ($statusId)
 		{
 			$filter[$stageFieldName] = $statusId;
 		}
-		elseif (empty($filterParams['FILTER_PRESET_ID']))
+		elseif ($presetId === '' && Feature::isDisabled(UnifiedFiltersFlag::class))
 		{
+			// FORCE_FILTER drops every condition but the category (crm Kanban::getFilter): the right
+			// answer while no preset is named, unless the filter stored for the list is to be kept -
+			// the unified client leaves the id empty on purpose. Same decision as Category::getFilterParams
 			$filterParams['FORCE_FILTER'] = 'Y';
 		}
 
 		if (isset($filterParams['ID']))
 		{
 			$filter['@ID'] = $filterParams['ID'];
+		}
+
+		if ($presetId !== '')
+		{
+			// crm Kanban::getFilter() applies the preset the params name, and `default_filter` names
+			// no conditions at all: the id has to be the resolved one prepareFilter() writes under
+			$filterParams['FILTER_PRESET_ID'] = FilterRequest::resolvePresetId($presetId);
 		}
 
 		$this->prepareFilter($entity);
@@ -119,7 +134,7 @@ final class KanbanStrategy extends Base
 		$filterParams = ($this->params['filterParams'] ?? []);
 		$presetId = ($filterParams['FILTER_PRESET_ID'] ?? null);
 
-		if ($presetId === null)
+		if ($presetId === null || $presetId === '')
 		{
 			return;
 		}
@@ -238,9 +253,21 @@ final class KanbanStrategy extends Base
 		 */
 		$renderLastActivityTime = (Option::get('crmmobile', 'render_last_activity_time_in_kanban_items', 'N') === 'Y');
 
-		return [
+		$params = [
 			'permissionEntityAttributes' => $entityAttributes,
 			'renderLastActivityTime' => $renderLastActivityTime,
 		];
+
+		$compactFieldsNames = $this->resolveCompactShowedFields();
+		if ($compactFieldsNames === null)
+		{
+			return $params;
+		}
+
+		// The kanban select is built from the card settings of the current user and never holds the compact
+		// field set, so its values are loaded and formatted from scratch.
+		$compactValues = new CompactDisplayValues($this->getFactory($this->getEntityTypeId()));
+
+		return array_merge($params, $compactValues->getItemParams(array_keys($items), $compactFieldsNames));
 	}
 }

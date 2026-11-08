@@ -8,17 +8,18 @@ use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSenderInterface;
 
 #[Recipients(creator: true, responsible: true, accomplices: true, auditors: false)]
-class NotifyResultFromMessage extends AbstractNotify
+class NotifyResultFromMessage extends AbstractNotifyResult
 {
 	public function __construct(
 		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
-		protected readonly ?Entity\User $triggeredBy = null,
 		private readonly ChatActionLinkService $chatActionLinkService,
+		protected readonly ?Entity\User $triggeredBy = null,
 		private readonly int $messageId = 0,
 		private readonly int $dateTs = 0,
 		private readonly int $resultId = 0,
 		private readonly ?Entity\Result\Type $type = null,
+		private readonly string $resultText = '',
 	)
 	{
 		$sender->sendMessage(task: $task, notification: $this);
@@ -27,8 +28,8 @@ class NotifyResultFromMessage extends AbstractNotify
 	public function getMessageCode(): string
 	{
 		return $this->triggeredBy?->getGender() === Entity\User\Gender::Female
-			? 'TASKS_IM_RESULT_FROM_MESSAGE_F_MSGVER_1'
-			: 'TASKS_IM_RESULT_FROM_MESSAGE_M_MSGVER_1'
+			? 'TASKS_IM_RESULT_FROM_MESSAGE_F_MSGVER_2'
+			: 'TASKS_IM_RESULT_FROM_MESSAGE_M_MSGVER_2'
 		;
 	}
 
@@ -41,10 +42,15 @@ class NotifyResultFromMessage extends AbstractNotify
 			entityId: $this->resultId,
 		);
 
+		$chatId = $this->task->chatId;
+		$hasSourceMessage = $this->messageId > 0 && $chatId !== null && $chatId > 0;
+
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
 			'#DATE#' => "[TIMESTAMP=$this->dateTs FORMAT=LONG_DATE_FORMAT]",
 			'#OPEN_RESULT_URL#' => $openResultUrl,
+			'#SOURCE_MESSAGE_OPEN#' => $hasSourceMessage ? '[CONTEXT=chat' . $chatId . '/' . $this->messageId . ']' : '',
+			'#SOURCE_MESSAGE_CLOSE#' => $hasSourceMessage ? '[/CONTEXT]' : '',
 		];
 	}
 
@@ -61,5 +67,10 @@ class NotifyResultFromMessage extends AbstractNotify
 		}
 
 		return [Params::AI_TASK_TRIGGER_MESSAGE_ID => $this->messageId];
+	}
+
+	public function getAttach(): ?\CIMMessageParamAttach
+	{
+		return $this->buildResultTextAttach($this->resultText);
 	}
 }

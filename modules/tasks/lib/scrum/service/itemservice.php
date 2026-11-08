@@ -12,6 +12,7 @@ use Bitrix\Main\ORM\Query;
 use Bitrix\Main\Result;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Scrum\Form\ItemForm;
 use Bitrix\Tasks\Scrum\Form\ItemInfo;
 use Bitrix\Tasks\Scrum\Internal\EntityTable;
@@ -30,7 +31,9 @@ class ItemService implements Errorable
 	const ERROR_COULD_NOT_READ_ALL_ITEMS = 'TASKS_IS_13';
 	const ERROR_COULD_NOT_READ_ITEM_BY_TYPE_ID = 'TASKS_IS_14';
 	const ERROR_COULD_NOT_CLEAN_ITEMS_TYPE_ID = 'TASKS_IS_15';
+	const ERROR_COULD_NOT_MOVE_ITEM_BEFORE = 'TASKS_IS_16';
 	const ERROR_COULD_NOT_GET_LIST = 'ITEM_LIST_01';
+	private const MIN_SORT_STEP = 0.001;
 
 	private $errorCollection;
 
@@ -534,52 +537,49 @@ class ItemService implements Errorable
 
 	private function normalizeEntitySort(int $entityId): void
 	{
-		$offset = 0;
-		$limit = 500;
+		$batchSize = 500;
+		$items = ItemTable::getList([
+			'select' => ['ID'],
+			'filter' => ['ENTITY_ID' => $entityId],
+			'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
+		]);
+
 		$sortValue = ItemForm::DEFAULT_SORT_VALUE;
+		$bufferedItemIds = [];
+		$sortWhens = [];
+		$hasMoreItems = true;
 
-		do {
-			$items = ItemTable::getList([
-				'select' => ['ID', 'SORT_FLOAT'],
-				'filter' => ['ENTITY_ID' => $entityId],
-				'order' => ['SORT_FLOAT' => 'ASC', 'ID' => 'DESC'],
-				'limit' => $limit,
-				'offset' => $offset
-			])->fetchAll();
-			if (empty($items))
+		while ($hasMoreItems)
+		{
+			$item = $items->fetch();
+			$hasMoreItems = is_array($item);
+
+			if ($hasMoreItems)
 			{
-				break;
+				$itemId = (int)$item['ID'];
+				$bufferedItemIds[] = $itemId;
+				$sortWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . $sortValue;
+				$sortValue += ItemForm::DEFAULT_SORT_VALUE;
 			}
 
-			$sortWhens = [];
-			$itemIds = [];
-			$currentSort = $sortValue;
-
-			foreach ($items as $item)
-			{
-				$itemIds[] = $item['ID'];
-				$sortWhens[] = 'WHEN ID = ' . $item['ID'] . ' THEN ' . $currentSort;
-				$currentSort += ItemForm::DEFAULT_SORT_VALUE;
-			}
-
-			if (!empty($sortWhens))
+			$isBufferFull = (count($bufferedItemIds) === $batchSize);
+			if ($bufferedItemIds && ($isBufferFull || !$hasMoreItems))
 			{
 				try
 				{
-					ItemTable::updateMulti($itemIds, [
-						'SORT_FLOAT' => new SqlExpression('(CASE ' . implode(' ', $sortWhens) . ' END)')
+					ItemTable::updateMulti($bufferedItemIds, [
+						'SORT_FLOAT' => new SqlExpression('(CASE ' . implode(' ', $sortWhens) . ' END)'),
 					]);
 				}
 				catch (\Exception $e)
 				{
 					Container::getInstance()->getLogger()->logError($e);
 				}
+
+				$bufferedItemIds = [];
+				$sortWhens = [];
 			}
-
-			$offset += $limit;
-			$sortValue = $currentSort;
-
-		} while (count($items) === $limit);
+		}
 	}
 
 	public function updateEntityIdToItems(int $entityId, array $itemIds): void
@@ -669,71 +669,168 @@ class ItemService implements Errorable
 		}
 	}
 
-	public function sortItems(array $sortInfo, ?PushService $pushService = null): void
+	/**
+	 * Moves root Scrum items immediately before another root item.
+	 *
+	 * @param array $itemsToMove Ordered items with their temporary push identifiers.
+	 * @param int $targetItemId Target item id.
+	 * @param int $entityId Scrum entity id.
+	 * @param PushService|null $pushService Push service.
+	 * @return array Updated sort information keyed by item id.
+	 */
+	public function moveItemsBeforeItem(
+		array $itemsToMove,
+		int $targetItemId,
+		int $entityId,
+		?PushService $pushService = null
+	): array
+	{
+		$itemsToMove = $this->normalizeItemsToMove($itemsToMove);
+		$itemIds = array_keys($itemsToMove);
+		if (!$itemIds || $targetItemId <= 0 || $entityId <= 0 || isset($itemsToMove[$targetItemId]))
+		{
+			$this->setMoveItemBeforeError();
+
+			return [];
+		}
+
+		try
+		{
+			$requiredItemIds = [...$itemIds, $targetItemId];
+			$currentItemsData = $this->getRootItemsData($entityId, $requiredItemIds);
+			if (count($currentItemsData) !== count($requiredItemIds))
+			{
+				$this->setMoveItemBeforeError();
+
+				return [];
+			}
+
+			$targetItemData = $currentItemsData[$targetItemId];
+			$previousItemData = $this->getPreviousRootItemData(
+				$entityId,
+				$targetItemData,
+				$itemIds
+			);
+
+			$previousSort = (float)($previousItemData['SORT_FLOAT'] ?? 0.0);
+			$targetSort = (float)$targetItemData['SORT_FLOAT'];
+			$sortStep = ($targetSort - $previousSort) / (count($itemIds) + 1);
+
+			$sortsNormalized = false;
+			if ($sortStep <= self::MIN_SORT_STEP)
+			{
+				$this->normalizeEntitySort($entityId);
+				$sortsNormalized = true;
+
+				$currentItemsData = $this->getRootItemsData($entityId, $requiredItemIds);
+				$targetItemData = $currentItemsData[$targetItemId] ?? null;
+				if (!$targetItemData)
+				{
+					$this->setMoveItemBeforeError();
+
+					return [];
+				}
+
+				$previousItemData = $this->getPreviousRootItemData(
+					$entityId,
+					$targetItemData,
+					$itemIds
+				);
+				$previousSort = (float)($previousItemData['SORT_FLOAT'] ?? 0.0);
+				$targetSort = (float)$targetItemData['SORT_FLOAT'];
+				$sortStep = ($targetSort - $previousSort) / (count($itemIds) + 1);
+			}
+
+			$sortValues = $this->calculateSortValues($itemIds, $previousSort, $targetSort);
+			if (!$sortValues)
+			{
+				$this->setMoveItemBeforeError();
+
+				return [];
+			}
+
+			$sortWhens = [];
+			$updatedItems = [];
+			foreach ($sortValues as $itemId => $sort)
+			{
+				$sortWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . $sort;
+				$updatedItems[$itemId] = [
+					'sort' => $sort,
+					'tmpId' => $itemsToMove[$itemId],
+				];
+				if ($sortsNormalized)
+				{
+					$updatedItems[$itemId]['normalizationRequired'] = true;
+					$updatedItems[$itemId]['entityId'] = $entityId;
+				}
+			}
+
+			ItemTable::updateMulti($itemIds, [
+				'SORT_FLOAT' => new SqlExpression('(CASE ' . implode(' ', $sortWhens) . ' END)'),
+			]);
+
+			if ($pushService)
+			{
+				$pushService->sendSortItemEvent($updatedItems);
+			}
+
+			return $updatedItems;
+		}
+		catch (\Exception $exception)
+		{
+			$this->errorCollection->setError(
+				new Error($exception->getMessage(), self::ERROR_COULD_NOT_MOVE_ITEM_BEFORE)
+			);
+
+			return [];
+		}
+	}
+
+	public function sortItems(array $sortInfo, ?PushService $pushService = null): array
 	{
 		if (empty($sortInfo))
 		{
-			return;
+			return [];
 		}
 
 		$allItemIds = $this->collectAllItemIds($sortInfo);
-		$itemIds = array_keys($sortInfo);
-
-		if (empty($itemIds))
+		if (empty($allItemIds))
 		{
-			return;
+			return [];
 		}
 
 		$currentItemsData = $this->getCurrentItemsData($allItemIds);
+		$newSortValues = $this->calculateNewSortPositions($sortInfo, $currentItemsData);
 
 		$sortWhens = [];
-		$entityWhens = [];
-		$updatedItems = [];
+		$sortItemParams = [];
+		$itemIds = [];
 
 		foreach ($sortInfo as $itemId => $info)
 		{
 			$itemId = (int)$itemId;
-			if (!$itemId)
+			if (!$itemId || !isset($newSortValues[$itemId]))
 			{
 				continue;
 			}
 
-			$currentData = $currentItemsData[$itemId] ?? null;
-			if (!$currentData)
-			{
-				continue;
-			}
-
-			$previousItemId = isset($info['previousItemId']) ? (int)$info['previousItemId'] : null;
-			$nextItemId = isset($info['nextItemId']) ? (int)$info['nextItemId'] : null;
 			$newEntityId = isset($info['entityId']) ? (int)$info['entityId'] : null;
-			$tmpId = $info['tmpId'] ?? '';
+			$tmpId = is_string($info['tmpId'] ?? null) ? $info['tmpId'] : '';
 			$updatedItemId = isset($info['updatedItemId']) ? (int)$info['updatedItemId'] : 0;
+			$newSort = (float)$newSortValues[$itemId];
 
-			$newSort = $this->calculateNewSortPosition(
-				$previousItemId,
-				$nextItemId,
-				$currentItemsData
-			);
-
+			$itemIds[] = $itemId;
 			$sortWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . $newSort;
-			if ($newEntityId)
-			{
-				$entityWhens[] = 'WHEN ID = ' . $itemId . ' THEN ' . $newEntityId;
-			}
+			$sortItemParams[$itemId] = [
+				'tmpId' => $tmpId,
+				'newEntityId' => $newEntityId,
+				'sendUpdate' => $updatedItemId > 0,
+			];
+		}
 
-			if ($updatedItemId)
-			{
-				$updatedItems[$itemId] = [
-					'sort' => $newSort,
-					'tmpId' => $tmpId,
-				];
-
-				if ($newEntityId)
-				{
-					$updatedItems[$itemId]['entityId'] = $newEntityId;
-				}
-			}
+		if (empty($itemIds))
+		{
+			return [];
 		}
 
 		if (!empty($sortWhens))
@@ -743,17 +840,153 @@ class ItemService implements Errorable
 			]);
 		}
 
-		if (!empty($entityWhens))
+		$updatedItems = [];
+		$sortedItems = [];
+		$storedItemsData = $this->getCurrentItemsData($itemIds);
+		foreach ($sortItemParams as $itemId => $params)
 		{
-			ItemTable::updateMulti($itemIds, [
-				'ENTITY_ID' => new SqlExpression('(CASE ' . implode(' ', $entityWhens) . ' ELSE ENTITY_ID END)'),
-			]);
+			if (!isset($storedItemsData[$itemId]))
+			{
+				continue;
+			}
+
+			$itemInfo = [
+				'sort' => (float)$storedItemsData[$itemId]['SORT_FLOAT'],
+			];
+			if ($params['tmpId'] !== '')
+			{
+				$itemInfo['tmpId'] = $params['tmpId'];
+			}
+			if ($params['newEntityId'])
+			{
+				$itemInfo['entityId'] = (int)$storedItemsData[$itemId]['ENTITY_ID'];
+			}
+
+			$sortedItems[$itemId] = $itemInfo;
+			if ($params['sendUpdate'])
+			{
+				$updatedItems[$itemId] = $itemInfo;
+			}
 		}
 
 		if ($updatedItems && $pushService)
 		{
 			$pushService->sendSortItemEvent($updatedItems);
 		}
+
+		return $sortedItems;
+	}
+
+	private function normalizeItemsToMove(array $itemsToMove): array
+	{
+		$normalizedItems = [];
+		foreach ($itemsToMove as $itemData)
+		{
+			if (!is_array($itemData))
+			{
+				continue;
+			}
+
+			$itemId = (int)($itemData['id'] ?? 0);
+			if ($itemId <= 0 || isset($normalizedItems[$itemId]))
+			{
+				continue;
+			}
+
+			$normalizedItems[$itemId] = (string)($itemData['tmpId'] ?? '');
+		}
+
+		return $normalizedItems;
+	}
+
+	private function calculateSortValues(array $itemIds, float $previousSort, float $targetSort): array
+	{
+		$sortStep = ($targetSort - $previousSort) / (count($itemIds) + 1);
+		if ($sortStep <= 0)
+		{
+			return [];
+		}
+
+		$sortValues = [];
+		foreach ($itemIds as $index => $itemId)
+		{
+			$sortValues[$itemId] = $previousSort + ($sortStep * ($index + 1));
+		}
+
+		return $sortValues;
+	}
+
+	private function getRootItemsData(int $entityId, array $itemIds): array
+	{
+		$query = $this->getRootItemsQuery($entityId)
+			->setSelect(['ID', 'SORT_FLOAT'])
+			->whereIn('ID', $itemIds)
+		;
+
+		$items = [];
+		$result = $query->exec();
+		while ($itemData = $result->fetch())
+		{
+			$items[(int)$itemData['ID']] = $itemData;
+		}
+
+		return $items;
+	}
+
+	private function getPreviousRootItemData(int $entityId, array $targetItemData, array $excludeIds): ?array
+	{
+		$targetItemId = (int)$targetItemData['ID'];
+		$targetSort = (float)$targetItemData['SORT_FLOAT'];
+		$positionFilter = Query\Query::filter()
+			->logic('or')
+			->where('SORT_FLOAT', '<', $targetSort)
+			->where(
+				Query\Query::filter()
+					->where('SORT_FLOAT', $targetSort)
+					->where('ID', '>', $targetItemId)
+			)
+		;
+
+		$query = $this->getRootItemsQuery($entityId)
+			->setSelect(['ID', 'SORT_FLOAT'])
+			->where($positionFilter)
+			->setOrder(['SORT_FLOAT' => 'DESC', 'ID' => 'ASC'])
+			->setLimit(1)
+		;
+		if ($excludeIds)
+		{
+			$query->whereNotIn('ID', $excludeIds);
+		}
+
+		return $query->exec()->fetch() ?: null;
+	}
+
+	private function getRootItemsQuery(int $entityId): Query\Query
+	{
+		$rootTaskFilter = Query\Query::filter()
+			->logic('or')
+			->where('TASK.PARENT_ID', 0)
+			->whereNull('TASK.PARENT_ID')
+		;
+
+		return ItemTable::query()
+			->registerRuntimeField('TASK', new ReferenceField(
+				'TASK',
+				TaskTable::getEntity(),
+				Join::on('this.SOURCE_ID', 'ref.ID'),
+				['join_type' => 'INNER']
+			))
+			->where('ENTITY_ID', $entityId)
+			->where('ACTIVE', 'Y')
+			->where($rootTaskFilter)
+		;
+	}
+
+	private function setMoveItemBeforeError(): void
+	{
+		$this->errorCollection->setError(
+			new Error('Unable to move Scrum items before the target item.', self::ERROR_COULD_NOT_MOVE_ITEM_BEFORE)
+		);
 	}
 
 	private function collectAllItemIds(array $sortInfo): array
@@ -810,39 +1043,122 @@ class ItemService implements Errorable
 		return $result;
 	}
 
-	private function calculateNewSortPosition(?int $previousItemId, ?int $nextItemId, array $currentItemsData): float
+	private function calculateNewSortPositions(array $sortInfo, array $currentItemsData): array
 	{
-		$previousSort = null;
-		$nextSort = null;
-
-		if ($previousItemId && isset($currentItemsData[$previousItemId]))
+		$itemIds = [];
+		foreach (array_keys($sortInfo) as $itemId)
 		{
-			$previousSortValue = $currentItemsData[$previousItemId]['SORT_FLOAT'];
-			$previousSort = ($previousSortValue !== 0.0) ? $previousSortValue : null;
+			$itemId = (int)$itemId;
+			if ($itemId && isset($currentItemsData[$itemId]))
+			{
+				$itemIds[$itemId] = true;
+			}
 		}
 
-		if ($nextItemId && isset($currentItemsData[$nextItemId]))
+		$groups = [];
+		$visitedItemIds = [];
+		foreach (array_keys($itemIds) as $itemId)
 		{
-			$nextSortValue = $currentItemsData[$nextItemId]['SORT_FLOAT'];
-			$nextSort = ($nextSortValue !== 0.0) ? $nextSortValue : null;
+			$previousItemId = isset($sortInfo[$itemId]['previousItemId'])
+				? (int)$sortInfo[$itemId]['previousItemId']
+				: null
+			;
+			if ($previousItemId && isset($itemIds[$previousItemId]))
+			{
+				continue;
+			}
+
+			$groups[] = $this->collectSortGroup($itemId, $sortInfo, $itemIds, $visitedItemIds);
 		}
 
-		if ($previousSort === null && $nextSort !== null)
+		foreach (array_keys($itemIds) as $itemId)
 		{
-			return $nextSort / 2.0;
+			if (!isset($visitedItemIds[$itemId]))
+			{
+				$groups[] = $this->collectSortGroup($itemId, $sortInfo, $itemIds, $visitedItemIds);
+			}
 		}
-		elseif ($previousSort !== null && $nextSort === null)
+
+		$newSortValues = [];
+		foreach ($groups as $group)
 		{
-			return $previousSort + ItemForm::DEFAULT_SORT_VALUE;
+			if (empty($group))
+			{
+				continue;
+			}
+
+			$firstItemId = reset($group);
+			$lastItemId = end($group);
+			$previousItemId = isset($sortInfo[$firstItemId]['previousItemId'])
+				? (int)$sortInfo[$firstItemId]['previousItemId']
+				: null
+			;
+			$nextItemId = isset($sortInfo[$lastItemId]['nextItemId'])
+				? (int)$sortInfo[$lastItemId]['nextItemId']
+				: null
+			;
+			$previousSort = $this->getCurrentSort($previousItemId, $currentItemsData);
+			$nextSort = $this->getCurrentSort($nextItemId, $currentItemsData);
+			$groupSize = count($group);
+
+			$sortStep = ItemForm::DEFAULT_SORT_VALUE;
+			$firstSort = ItemForm::DEFAULT_SORT_VALUE;
+			if ($previousSort !== null && $nextSort !== null && $nextSort > $previousSort)
+			{
+				$sortStep = ($nextSort - $previousSort) / ($groupSize + 1);
+				$firstSort = $previousSort + $sortStep;
+			}
+			elseif ($previousSort !== null)
+			{
+				$firstSort = $previousSort + ItemForm::DEFAULT_SORT_VALUE;
+			}
+			elseif ($nextSort !== null)
+			{
+				$sortStep = $nextSort / ($groupSize + 1);
+				$firstSort = $sortStep;
+			}
+
+			foreach ($group as $index => $itemId)
+			{
+				$newSortValues[$itemId] = $firstSort + $sortStep * $index;
+			}
 		}
-		elseif ($previousSort !== null && $nextSort !== null)
+
+		return $newSortValues;
+	}
+
+	private function collectSortGroup(
+		int $firstItemId,
+		array $sortInfo,
+		array $itemIds,
+		array &$visitedItemIds
+	): array
+	{
+		$group = [];
+		$currentItemId = $firstItemId;
+		while ($currentItemId && isset($itemIds[$currentItemId]) && !isset($visitedItemIds[$currentItemId]))
 		{
-			return ($previousSort + $nextSort) / 2.0;
+			$group[] = $currentItemId;
+			$visitedItemIds[$currentItemId] = true;
+			$currentItemId = isset($sortInfo[$currentItemId]['nextItemId'])
+				? (int)$sortInfo[$currentItemId]['nextItemId']
+				: null
+			;
 		}
-		else
+
+		return $group;
+	}
+
+	private function getCurrentSort(?int $itemId, array $currentItemsData): ?float
+	{
+		if (!$itemId || !isset($currentItemsData[$itemId]))
 		{
-			return ItemForm::DEFAULT_SORT_VALUE;
+			return null;
 		}
+
+		$sort = (float)$currentItemsData[$itemId]['SORT_FLOAT'];
+
+		return $sort !== 0.0 ? $sort : null;
 	}
 
 	/**

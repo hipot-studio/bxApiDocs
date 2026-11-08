@@ -19,6 +19,7 @@ final class DrawerPage extends AbstractPage
 
 	public const SCENARIO_CALL_ASSESSMENT = 'call-assessment';
 	public const SCENARIO_SUMMARY_HISTORY = 'summary-history';
+	public const SCENARIO_TRANSCRIPT = 'transcript';
 	private const COMPONENT_NAME = 'bitrix:crm.ai.report.drawer.wrapper';
 
 	public function __construct(
@@ -57,7 +58,11 @@ final class DrawerPage extends AbstractPage
 		return [
 			(new Route('ai-report-drawer/{scenario}/'))
 				->configure(static function (RoutingConfiguration $configuration) {
-					$pattern = self::SCENARIO_CALL_ASSESSMENT . '|' . self::SCENARIO_SUMMARY_HISTORY;
+					$pattern = implode('|', [
+						self::SCENARIO_CALL_ASSESSMENT,
+						self::SCENARIO_SUMMARY_HISTORY,
+						self::SCENARIO_TRANSCRIPT,
+					]);
 					$configuration->where('scenario', $pattern);
 				})
 			,
@@ -74,7 +79,7 @@ final class DrawerPage extends AbstractPage
 	public static function getSidePanelAnchorRules(): array
 	{
 		return [
-			(new SidePanelAnchorRule('ai-report-drawer/(call-assessment|summary-history)/?'))
+			(new SidePanelAnchorRule('ai-report-drawer/(call-assessment|summary-history|transcript)/?'))
 				->scopes(self::scopes())
 				->configureOptions(function (SidePanelAnchorOptions $options) {
 					$options

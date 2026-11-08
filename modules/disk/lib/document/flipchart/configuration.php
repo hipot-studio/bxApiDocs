@@ -18,6 +18,9 @@ use Bitrix\Main\Web\Json;
 class Configuration
 {
 	private const JWT_SECRET_OPTION = 'flipchart.jwt_secret';
+	private const ANNOTATIONS_API_PATH = '/api/disk/flipchart/annotations/v1';
+	private const COMMENTS_API_PATH = '/api/disk/flipchart/comments/v1';
+	private const COMMENT_MENTIONS_MAX_ITEMS_DEFAULT = 30;
 
 	private static $localValues = null;
 
@@ -129,6 +132,63 @@ class Configuration
 		$default = self::getFromSettings('app_url', 'https://flip-backend/app');
 
 		return Option::get('disk', 'flipchart.app_url', $default);
+	}
+
+	public static function getAnnotationsApiUrl(): ?string
+	{
+		$explicitUrl = Option::get(
+			'disk',
+			'flipchart.annotations_api_url',
+			self::getFromSettings('annotations_api_url'),
+		);
+		if ($explicitUrl === null || $explicitUrl === '')
+		{
+			return self::getSiteAnnotationsApiUrl();
+		}
+
+		return self::isValidAppUrl($explicitUrl) ? $explicitUrl : null;
+	}
+
+	public static function getCommentsApiUrl(): ?string
+	{
+		$explicitUrl = Option::get(
+			'disk',
+			'flipchart.comments_api_url',
+			self::getFromSettings('comments_api_url'),
+		);
+		if ($explicitUrl === null || $explicitUrl === '')
+		{
+			return self::getSiteApiUrl(self::COMMENTS_API_PATH);
+		}
+
+		return self::isValidAppUrl($explicitUrl) ? $explicitUrl : null;
+	}
+
+	private static function getSiteAnnotationsApiUrl(): ?string
+	{
+		return self::getSiteApiUrl(self::ANNOTATIONS_API_PATH);
+	}
+
+	/**
+	 * The default is signed into the board JWT, so it is built only from the configured site address
+	 * over https and never from the request host.
+	 */
+	private static function getSiteApiUrl(string $path): ?string
+	{
+		$serverName = trim((string)Option::get('main', 'server_name', ''));
+		if ($serverName === '')
+		{
+			return null;
+		}
+
+		$url = 'https://' . $serverName . $path;
+		$uri = new Uri($url);
+		if ($uri->getScheme() !== 'https' || $uri->getHost() === '' || $uri->getPath() !== $path)
+		{
+			return null;
+		}
+
+		return $url;
 	}
 
 	public static function getSaveDeltaTime(): int
@@ -248,6 +308,37 @@ class Configuration
 	public static function isTasksEnabled(): bool
 	{
 		return Option::get('disk', 'flipchart.tasks_enabled', 'N') === 'Y';
+	}
+
+	public static function isAnnotationsEnabled(): bool
+	{
+		return Option::get('disk', 'boards.annotations_enabled', 'N') === 'Y';
+	}
+
+	public static function isTagsEnabled(): bool
+	{
+		return Option::get('disk', 'boards.tags_enabled', 'N') === 'Y';
+	}
+
+	public static function isCommentsEnabled(): bool
+	{
+		return Option::get('disk', 'boards.comments_enabled', 'N') === 'Y';
+	}
+
+	/**
+	 * A single request's `mentions` is capped at this many items: exceeding it never refuses the
+	 * request, the caller (comment create/update) keeps only the first items in the order received.
+	 * A stored value that is not a positive integer is not trusted and falls back to the default.
+	 */
+	public static function getCommentMentionsMaxItems(): int
+	{
+		$value = (int)Option::get(
+			'disk',
+			'flipchart.comment_mentions_max_items',
+			self::COMMENT_MENTIONS_MAX_ITEMS_DEFAULT,
+		);
+
+		return $value > 0 ? $value : self::COMMENT_MENTIONS_MAX_ITEMS_DEFAULT;
 	}
 
 	/**

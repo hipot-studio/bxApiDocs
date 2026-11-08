@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Crm;
+use Bitrix\Crm\V2\Internal\Integration\Bizproc\WorkflowDocument;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
@@ -257,10 +258,12 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 					'COMPANY_ID',
 					GetMessage('CRM_DOCUMENT_CRM_ENTITY_TYPE_COMPANY')
 				),
-				"Type" => "string",
+				"Type" => "UF:crm",
+				"Options" => ['COMPANY' => 'Y'],
 				"Filterable" => true,
 				"Editable" => true,
 				"Required" => false,
+				"Multiple" => false,
 			],
 			"COMPANY_IDS" => [
 				"Name" => static::getEntityFieldCaption(
@@ -423,77 +426,8 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 		}
 
 		global $DB;
-		$arDocumentID = self::GetDocumentInfo($parentDocumentId);
-		if ($arDocumentID == false)
-			$arDocumentID['TYPE'] = $parentDocumentId;
-
-		$arDocumentFields = self::GetDocumentFields($arDocumentID['TYPE']);
-
-		$arKeys = array_keys($arFields);
-		foreach ($arKeys as $key)
-		{
-			if (!array_key_exists($key, $arDocumentFields))
-			{
-				//Fix for issue #40374
-				unset($arFields[$key]);
-				continue;
-			}
-
-			$fieldType = $arDocumentFields[$key]["Type"];
-			if (in_array($fieldType, array("phone", "email", "im", "web"), true))
-			{
-				CCrmDocument::PrepareEntityMultiFields($arFields, mb_strtoupper($fieldType));
-				continue;
-			}
-
-			$arFields[$key] = (is_array($arFields[$key]) && !CBPHelper::IsAssociativeArray($arFields[$key])) ? $arFields[$key] : array($arFields[$key]);
-			if ($arDocumentFields[$key]["Type"] == "user")
-			{
-				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $arDocumentID['DOCUMENT_TYPE']);
-			}
-			elseif ($fieldType == "select" && mb_substr($key, 0, 3) == "UF_")
-			{
-				self::InternalizeEnumerationField('CRM_CONTACT', $arFields, $key);
-			}
-			elseif ($fieldType == "file")
-			{
-				$arFileOptions = array('ENABLE_ID' => true);
-				foreach ($arFields[$key] as &$value)
-				{
-					//Issue #40380. Secure URLs and file IDs are allowed.
-					$file = false;
-					CCrmFileProxy::TryResolveFile($value, $file, $arFileOptions);
-					$value = $file;
-				}
-				unset($value);
-			}
-			elseif ($fieldType == "S:HTML")
-			{
-				foreach ($arFields[$key] as &$value)
-				{
-					$value = array("VALUE" => $value);
-				}
-				unset($value);
-			}
-
-			if (!$arDocumentFields[$key]["Multiple"] && is_array($arFields[$key]))
-			{
-				if (count($arFields[$key]) > 0)
-				{
-					$a = array_values($arFields[$key]);
-					$arFields[$key] = $a[0];
-				}
-				else
-				{
-					$arFields[$key] = null;
-				}
-			}
-		}
-
-		if(isset($arFields['COMMENTS']))
-		{
-			$arFields['COMMENTS'] = static::sanitizeCommentsValue($arFields['COMMENTS']);
-		}
+		$document = new WorkflowDocument();
+		$arFields = $document->castFields(\CCrmOwnerType::Contact, $arFields);
 
 		$useTransaction = static::shouldUseTransaction();
 
@@ -522,19 +456,7 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 			throw new \Bitrix\Main\SystemException($CCrmEntity->LAST_ERROR);
 		}
 
-		//region Try to create requisite
-		if((isset($arFields['ADDRESS']) && $arFields['ADDRESS'] !== '') ||
-			(isset($arFields['ADDRESS_2']) && $arFields['ADDRESS_2'] !== '') ||
-			(isset($arFields['ADDRESS_CITY']) && $arFields['ADDRESS_CITY'] !== ''))
-		{
-			$presetID = \Bitrix\Crm\EntityRequisite::getDefaultPresetId(CCrmOwnerType::Contact);
-			if($presetID > 0)
-			{
-				$converter = new \Bitrix\Crm\Requisite\AddressRequisiteConverter(CCrmOwnerType::Contact, $presetID, false);
-				$converter->processEntity($ID);
-			}
-		}
-		//endregion
+		$document->createAddressRequisite(\CCrmOwnerType::Contact, (int)$ID, $arFields);
 
 		$starter = new CrmStarter(new DocumentDto(\CCrmOwnerType::Contact, (int)$ID));
 		$result = $starter
@@ -771,5 +693,10 @@ class CCrmDocumentContact extends CCrmDocument implements IBPWorkflowDocument
 		}
 
 		return Crm\Automation\Factory::createTarget(\CCrmOwnerType::Contact);
+	}
+
+	public static function createTestDocument(string $documentType, array $fields, int $createdById): ?string
+	{
+		return (new WorkflowDocument())->createTestDocument(\CCrmOwnerType::Contact, $fields, $createdById);
 	}
 }

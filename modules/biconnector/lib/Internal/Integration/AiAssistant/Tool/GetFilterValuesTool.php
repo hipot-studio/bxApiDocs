@@ -3,14 +3,21 @@
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
+use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
+use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
+use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\GetFilterValuesOperation;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 
-final class GetFilterValuesTool extends BaseBiTool
+final class GetFilterValuesTool extends BaseSubjectAwareBiTool
 {
 	private const LIMIT_DEFAULT = 20;
 	private const LIMIT_MAX = 50;
@@ -18,6 +25,11 @@ final class GetFilterValuesTool extends BaseBiTool
 	public function getName(): string
 	{
 		return 'get_filter_values';
+	}
+
+	public function getImpact(): OperationImpact
+	{
+		return OperationImpact::Read;
 	}
 
 	public function getDescription(): string
@@ -44,6 +56,7 @@ final class GetFilterValuesTool extends BaseBiTool
 				'dashboardId' => [
 					'type' => 'integer',
 					'description' => 'Dashboard ID from list_dashboards.',
+					'minimum' => 1,
 				],
 				'filterColumn' => [
 					'type' => 'string',
@@ -76,6 +89,7 @@ final class GetFilterValuesTool extends BaseBiTool
 							],
 						],
 						'required' => ['name', 'value'],
+						'additionalProperties' => false,
 					],
 				],
 				'urlParams' => [
@@ -97,7 +111,37 @@ final class GetFilterValuesTool extends BaseBiTool
 		];
 	}
 
-	protected function executeStructured(int $userId, ...$args): array
+	protected function executeStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
+	{
+		if (!(new FlagGate())->isEnabled(FlagGate::BUILDER_MCP_OPERATIONS, $userId))
+		{
+			return $this->legacyExecuteStructured($userId, $subject, $args);
+		}
+
+		self::requireBiconnectorModule();
+
+		$search = isset($args['search']) && is_string($args['search']) ? $args['search'] : null;
+		$limit = isset($args['limit']) && is_numeric($args['limit']) ? (int)$args['limit'] : null;
+
+		// Resolved per call: aiassistant keeps a tool as a process-wide singleton.
+		$result = ServiceLocator::getInstance()->get(GetFilterValuesOperation::class)->execute(
+			(int)$args['dashboardId'],
+			(string)($args['filterColumn'] ?? ''),
+			$search,
+			$limit,
+			$args['appliedFilters'] ?? [],
+			is_array($args['urlParams'] ?? null) ? $args['urlParams'] : [],
+			new Actor($userId, Channel::Mcp),
+		);
+		if (!$result->isSuccess())
+		{
+			throw self::toMcpException(OperationRefusal::forTool($result));
+		}
+
+		return $result->getData();
+	}
+
+	private function legacyExecuteStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
 	{
 		Loader::includeModule('biconnector');
 
@@ -114,8 +158,12 @@ final class GetFilterValuesTool extends BaseBiTool
 		$filterColumn = (string)($args['filterColumn'] ?? '');
 		if ($filterColumn === '')
 		{
-			throw new McpException('filterColumn is required.');
+			throw new McpException('filterColumn is required: provide the column name to fetch filter values for.');
 		}
+
+		$pinnedArguments = new PinnedArgumentResolver();
+		$runId = $pinnedArguments->beginRunCall($subject, $userId, $this->getName(), ['filterColumn' => $filterColumn]);
+		$budget = DigestCallBudget::start($runId);
 
 		$search = null;
 		if (isset($args['search']) && is_string($args['search']) && trim($args['search']) !== '')
@@ -133,13 +181,17 @@ final class GetFilterValuesTool extends BaseBiTool
 		$urlParamOverrides = is_array($args['urlParams'] ?? null) ? $args['urlParams'] : [];
 
 		$filters = new AppliedFilters($userId);
-		$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById($externalId);
+		$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById(
+			$externalId,
+			$budget->getStreamTimeout(0),
+			arbitrateServiceFailure: $runId === null,
+		);
 		if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
 		{
-			throw self::integratorFailureException(
-				$dashboardDtoResp,
-				['stage' => 'get_filter_values.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
-			);
+			$context = ['stage' => 'get_filter_values.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId];
+
+			throw $pinnedArguments->findRunFailure($runId, $userId, $dashboardDtoResp, $context)
+				?? self::integratorFailureException($dashboardDtoResp, $context);
 		}
 		$dashboardDto = $dashboardDtoResp->getData();
 
@@ -157,7 +209,7 @@ final class GetFilterValuesTool extends BaseBiTool
 				throw self::toMcpException($validateResult);
 			}
 		}
-		$resolveResult = $filters->resolve($dashboard, $callerFilters);
+		$resolveResult = $filters->resolve($dashboard, $dashboardDto, $callerFilters);
 		if (!$resolveResult->isSuccess())
 		{
 			throw self::toMcpException($resolveResult);
@@ -172,6 +224,17 @@ final class GetFilterValuesTool extends BaseBiTool
 		}
 		$urlParams = $urlParamsResult->getData()['urlParams'];
 
+		$exhausted = $pinnedArguments->findExhaustedBudget(
+			$runId,
+			$userId,
+			$budget,
+			['stage' => 'get_filter_values.fetch', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
+		);
+		if ($exhausted !== null)
+		{
+			throw $exhausted;
+		}
+
 		$response = IntegratorFactory::getInstance()->getFilterValues(
 			$externalId,
 			$filterColumn,
@@ -179,6 +242,8 @@ final class GetFilterValuesTool extends BaseBiTool
 			$urlParams,
 			$search,
 			$limit,
+			$budget->getStreamTimeout(60),
+			arbitrateServiceFailure: $runId === null,
 		);
 
 		if ($response->hasErrors())
@@ -189,10 +254,10 @@ final class GetFilterValuesTool extends BaseBiTool
 				throw self::toMcpException($columnCheck);
 			}
 
-			throw self::integratorFailureException(
-				$response,
-				['stage' => 'get_filter_values.fetch', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
-			);
+			$context = ['stage' => 'get_filter_values.fetch', 'dashboard_id' => $dashboardId, 'user_id' => $userId];
+
+			throw $pinnedArguments->findRunFailure($runId, $userId, $response, $context)
+				?? self::integratorFailureException($response, $context);
 		}
 
 		$rawData = $response->getData();
@@ -203,6 +268,8 @@ final class GetFilterValuesTool extends BaseBiTool
 				['stage' => 'get_filter_values.empty', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
 			);
 		}
+
+		$pinnedArguments->completeRunCall($runId, $userId);
 
 		return [
 			'column' => $rawData['column'] ?? $filterColumn,

@@ -1,49 +1,68 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Access\UnifiedLink;
 
-use Bitrix\Disk\File;
-use Bitrix\Disk\Integration\Collab\CollabService;
+use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\Folder;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration;
 use Bitrix\Disk\Internal\Repository\UnifiedLinkAccessRepository;
-use Bitrix\Disk\User;
 
 class UnifiedLinkAccessCheckHandler extends ChainableAccessCheckHandler
 {
-	private CollabService $collabService;
+	protected UnifiedLinkUserAccessResolver $userAccessResolver;
 
 	public function __construct(
-		private readonly int $userId,
+		int $userId,
 	)
 	{
-		$this->collabService = new CollabService();
+		$this->userAccessResolver = new UnifiedLinkUserAccessResolver($userId);
 	}
-	
-	protected function doCheck(File $file): UnifiedLinkAccessLevel
+
+	protected function doCheck(BaseObject $baseObject): UnifiedLinkAccessLevel
 	{
-		$unifiedLinkAccessLevel = UnifiedLinkAccessRepository::getByObjectId((int)$file->getId());
-		$checkAccessByLink = $unifiedLinkAccessLevel ?? Configuration::getDefaultAccessLevel();
+		return $this->userAccessResolver->canUseUnifiedLink($baseObject)
+			? $this->getAccessLevelForObject($baseObject)
+			: UnifiedLinkAccessLevel::Denied
+		;
+	}
 
-		$user = User::loadById($this->userId);
+	protected function doCheckCollection(array $baseObjects): array
+	{
+		$objectIds = array_keys($baseObjects);
+		$result = [];
+		$accessLevels = UnifiedLinkAccessRepository::getByObjectIds($objectIds);
 
-		if ($user->isIntranetUser())
+		foreach ($baseObjects as $objectId => $baseObject)
 		{
-			return $checkAccessByLink;
+			if (!$this->userAccessResolver->canUseUnifiedLink($baseObject))
+			{
+				continue;
+			}
+
+			$result[$objectId] = $accessLevels[$objectId] ?? $this->getDefaultAccessLevel($baseObject);
 		}
 
-		if (
-			$user->isCollaber()
-			&& $this->collabService->isUserMemberOfCollabByObject(
-				baseObject: $file,
-				userId: (int)$user->getId(),
-			)
-		)
-		{
-			return $checkAccessByLink;
-		}
+		return $result;
+	}
 
-		return UnifiedLinkAccessLevel::Denied;
+	protected function getAccessSource(): UnifiedLinkAccessSource
+	{
+		return UnifiedLinkAccessSource::UnifiedLink;
+	}
+
+	protected function getAccessLevelForObject(BaseObject $baseObject): UnifiedLinkAccessLevel
+	{
+		return UnifiedLinkAccessRepository::getByObjectId((int)$baseObject->getId())
+			?? $this->getDefaultAccessLevel($baseObject)
+		;
+	}
+
+	protected function getDefaultAccessLevel(BaseObject $baseObject): UnifiedLinkAccessLevel
+	{
+		return $baseObject instanceof Folder
+			? Configuration::getFolderDefaultAccessLevel()
+			: Configuration::getDefaultAccessLevel()
+		;
 	}
 }

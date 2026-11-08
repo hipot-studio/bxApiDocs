@@ -289,7 +289,7 @@ class Analytics extends Common
 		$analyticsEvent = new AnalyticsEvent(
 			$event,
 			self::TOOL,
-			self::CATEGORY,
+			self::TASK_CATEGORY,
 		);
 
 		$this->sendAnalytics(
@@ -790,6 +790,11 @@ class Analytics extends Common
 			->setType($type)
 			->setStatus($status ? self::STATUS_SUCCESS : self::STATUS_ERROR)
 		;
+
+		if ($this->getUserId() > 0)
+		{
+			$analyticsEvent->setUserId($this->getUserId());
+		}
 
 		if (in_array($section, self::SECTION, true))
 		{

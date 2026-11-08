@@ -12,6 +12,7 @@ use Bitrix\Main\Validation\Rule\RegExp;
 use Bitrix\Rest\V3\Attribute\Editable;
 use Bitrix\Rest\V3\Attribute\Filterable;
 use Bitrix\Rest\V3\Attribute\Required;
+use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\Dto\Attribute\TypeAlias;
 use Bitrix\Rest\V3\Dto\Dto;
 
@@ -47,6 +48,7 @@ use Bitrix\Rest\V3\Dto\Dto;
  * Common\Dictionary\StageDto` - the stage of an item, a different contract altogether - already
  * answers to `bitrix.crm.stagedto`. Without the alias one of the two would publish the other's fields.
  */
+#[Title('CRM pipeline stage')]
 #[TypeAlias('CategoryStageDto')]
 final class StageDto extends Dto
 {

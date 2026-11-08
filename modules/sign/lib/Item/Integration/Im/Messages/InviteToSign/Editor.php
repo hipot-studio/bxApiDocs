@@ -3,11 +3,12 @@
 namespace Bitrix\Sign\Item\Integration\Im\Messages\InviteToSign;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Sign\Contract\Chat\Message\HasMemberKey;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Integration\Im\Message;
 use Bitrix\Sign\Type\Member\Role;
 
-class Editor extends Message
+class Editor extends Message implements HasMemberKey
 {
 	public function __construct(
 		int $fromUser,

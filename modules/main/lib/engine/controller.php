@@ -14,6 +14,7 @@ use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Errorable;
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Context;
@@ -43,6 +44,7 @@ class Controller implements Errorable, Controllerable
 
 	public const ERROR_REQUIRED_PARAMETER = 'MAIN_CONTROLLER_22001';
 	public const ERROR_UNKNOWN_ACTION     = 'MAIN_CONTROLLER_22002';
+	public const INTERNAL_ERROR_MESSAGE   = 'Internal server error.';
 
 	public const EXCEPTION_UNKNOWN_ACTION = 22002;
 
@@ -485,8 +487,7 @@ class Controller implements Errorable, Controllerable
 			$this->writeToLogException($e);
 		}
 
-		$exceptionHandling = Configuration::getValue('exception_handling');
-		if (!empty($exceptionHandling['debug']))
+		if ($this->isDebugMode())
 		{
 			$this->addError(new Error(ExceptionHandlerFormatter::format($e)));
 			if ($e->getPrevious())
@@ -494,6 +495,13 @@ class Controller implements Errorable, Controllerable
 				$this->addError(new Error(ExceptionHandlerFormatter::format($e->getPrevious())));
 			}
 		}
+	}
+
+	private function isDebugMode(): bool
+	{
+		$exceptionHandling = Configuration::getValue('exception_handling');
+
+		return !empty($exceptionHandling['debug']);
 	}
 
 	private function shouldWriteToLogException(\Throwable $e): bool
@@ -1024,12 +1032,25 @@ class Controller implements Errorable, Controllerable
 			return new Error($e->getMessage(), self::ERROR_REQUIRED_PARAMETER);
 		}
 
-		return new Error($e->getMessage(), $e->getCode());
+		if (
+			$e instanceof BinderArgumentException
+			|| $e instanceof ValidationException
+			|| $e instanceof ArgumentException
+			|| $this->isDebugMode()
+		)
+		{
+			return new Error($e->getMessage(), $e->getCode());
+		}
+
+		return new Error(self::INTERNAL_ERROR_MESSAGE, $e->getCode());
 	}
 
 	protected function buildErrorFromPhpError(\Error $error)
 	{
-		return new Error($error->getMessage(), $error->getCode());
+		return new Error(
+			$this->isDebugMode() ? $error->getMessage() : self::INTERNAL_ERROR_MESSAGE,
+			$error->getCode()
+		);
 	}
 
 	/**

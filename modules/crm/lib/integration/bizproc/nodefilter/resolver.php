@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Bitrix\Crm\Integration\BizProc\NodeFilter;
 
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
+use Bitrix\Bizproc\Public\Activity\Interface\NodeFilterSourceProvider;
 use Bitrix\Crm\Automation\Connectors\ItemRelations;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\ParentFieldManager;
 
 final class Resolver
 {
@@ -15,11 +18,19 @@ final class Resolver
 	private const FILTER_SETTINGS_PROPERTY = 'FilterSettings';
 	private const RESOLUTION_LIMIT = 150;
 	private const RESOLUTION_ORDER = ['ID' => 'DESC'];
+	private const MULTI_VALUE_OPERATORS = ['in', '!in'];
 
-	public static function resolveDocuments(\CBPActivity $activity): array
+	public static function resolveDocuments(
+		\CBPActivity $activity,
+		?DynamicTypeScopePolicy $scopePolicy = null,
+	): array
 	{
 		$owner = self::findSettingsOwner($activity);
 		if ($owner === null)
+		{
+			return [];
+		}
+		if (!self::ownerSettingsMatchScope($owner, $scopePolicy))
 		{
 			return [];
 		}
@@ -45,6 +56,12 @@ final class Resolver
 
 	private static function resolveDocumentIdByTypeMatcher(\CBPActivity $activity, callable $expectedTypeMatcher): ?array
 	{
+		// A filter of an external source holds a document of another module: a CRM action never targets it.
+		$filterMatcher = static fn(array $filter): bool =>
+			!self::isExternalFilter($filter)
+			&& $expectedTypeMatcher((int)$filter['targetEntityTypeId'])
+		;
+
 		$targetFilterId = self::resolveTargetFilterId($activity);
 		if ($targetFilterId === null)
 		{
@@ -53,6 +70,10 @@ final class Resolver
 
 		$owner = self::findSettingsOwner($activity);
 		if ($owner === null)
+		{
+			return null;
+		}
+		if (!self::ownerSettingsMatchScope($owner))
 		{
 			return null;
 		}
@@ -68,7 +89,7 @@ final class Resolver
 			$activity,
 			$targetFilterId,
 			$settingsById,
-			$expectedTypeMatcher,
+			$filterMatcher,
 		);
 		if (is_array($resolvedDocumentId))
 		{
@@ -85,7 +106,7 @@ final class Resolver
 			$targetFilterId,
 			$settingsById,
 			$resolved,
-			$expectedTypeMatcher,
+			$filterMatcher,
 		);
 	}
 
@@ -104,6 +125,60 @@ final class Resolver
 		self::normalizeSettings($settings);
 	}
 
+	public static function validateSettingsScope(
+		mixed $settings,
+		DynamicTypeScope $scope,
+		?DynamicTypeScopePolicy $scopePolicy = null,
+	): void
+	{
+		if ($settings === null || $settings === [])
+		{
+			return;
+		}
+		if (!is_array($settings))
+		{
+			throw new \InvalidArgumentException('CRM node filter settings are invalid.');
+		}
+
+		$scopePolicy ??= DynamicTypeScopePolicy::getRequestInstance();
+		foreach (self::normalizeSettings($settings) as $filter)
+		{
+			$entityTypeId = (int)$filter['targetEntityTypeId'];
+			if (
+				\CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId)
+				&& !$scopePolicy->contains($scope, $entityTypeId)
+			)
+			{
+				throw new \InvalidArgumentException('Smart process type is outside the node scope.');
+			}
+		}
+	}
+
+	public static function isScopedActivity(\CBPActivity $activity): bool
+	{
+		return self::findScope($activity) !== null;
+	}
+
+	public static function hasTargetFilter(\CBPActivity $activity): bool
+	{
+		return self::resolveTargetFilterId($activity) !== null;
+	}
+
+	public static function isEntityTypeInScope(
+		\CBPActivity $activity,
+		int $entityTypeId,
+		?DynamicTypeScopePolicy $scopePolicy = null,
+	): bool
+	{
+		$scope = self::findScope($activity);
+		if ($scope === null)
+		{
+			return true;
+		}
+
+		return ($scopePolicy ?? DynamicTypeScopePolicy::getRequestInstance())->contains($scope, $entityTypeId);
+	}
+
 	/**
 	 * Finds the nearest activity (self or ancestor) that owns the node filter settings.
 	 * Filter result documents are exposed on this activity, so it is also the activity whose
@@ -120,6 +195,50 @@ final class Resolver
 		}
 
 		return null;
+	}
+
+	private static function findScope(\CBPActivity $activity): ?DynamicTypeScope
+	{
+		for ($current = $activity; $current !== null; $current = $current->parent)
+		{
+			if (is_callable([$current, 'getNodeFilterDynamicTypeScope']))
+			{
+				$scope = $current::getNodeFilterDynamicTypeScope();
+				if ($scope instanceof DynamicTypeScope)
+				{
+					return $scope;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private static function ownerSettingsMatchScope(
+		\CBPActivity $owner,
+		?DynamicTypeScopePolicy $scopePolicy = null,
+	): bool
+	{
+		$scope = self::findScope($owner);
+		if ($scope === null)
+		{
+			return true;
+		}
+
+		try
+		{
+			self::validateSettingsScope(
+				$owner->{self::FILTER_SETTINGS_PROPERTY} ?? null,
+				$scope,
+				$scopePolicy,
+			);
+
+			return true;
+		}
+		catch (\InvalidArgumentException)
+		{
+			return false;
+		}
 	}
 
 	private static function readNormalizedSettings(\CBPActivity $owner): array
@@ -250,7 +369,7 @@ final class Resolver
 		\CBPActivity $activity,
 		string $targetFilterId,
 		array $settingsById,
-		callable $expectedTypeMatcher,
+		callable $filterMatcher,
 	): ?array
 	{
 		$visited = [];
@@ -265,13 +384,35 @@ final class Resolver
 				return null;
 			}
 
-			$documentId = self::findDocumentIdInParentProperties($activity, $currentFilterId);
-			if (
-				is_array($documentId)
-				&& $expectedTypeMatcher((int)$filter['targetEntityTypeId'])
-			)
+			$hasParentProperty = false;
+			$parentDocumentId = null;
+			for ($parent = $activity; $parent !== null; $parent = $parent->parent)
 			{
-				return $documentId;
+				if (!$parent->isPropertyExists($currentFilterId))
+				{
+					continue;
+				}
+
+				$hasParentProperty = true;
+				$parentDocumentId = $parent->{$currentFilterId} ?? null;
+				break;
+			}
+
+			if ($hasParentProperty)
+			{
+				if (!is_array($parentDocumentId))
+				{
+					return [];
+				}
+
+				if ($filterMatcher($filter))
+				{
+					return $parentDocumentId;
+				}
+			}
+			else if ($filterMatcher($filter))
+			{
+				break;
 			}
 
 			if (($filter['sourceMode'] ?? null) !== 'filter')
@@ -285,25 +426,11 @@ final class Resolver
 		return null;
 	}
 
-	private static function findDocumentIdInParentProperties(\CBPActivity $activity, string $filterId): ?array
-	{
-		for ($parent = $activity->parent; $parent !== null; $parent = $parent->parent)
-		{
-			$documentId = $parent->{$filterId} ?? null;
-			if (is_array($documentId))
-			{
-				return $documentId;
-			}
-		}
-
-		return null;
-	}
-
 	private static function resolveDocumentIdByFilterChain(
 		string $filterId,
 		array $settingsById,
 		array $resolved,
-		callable $expectedTypeMatcher,
+		callable $filterMatcher,
 	): ?array
 	{
 		$visited = [];
@@ -318,10 +445,12 @@ final class Resolver
 				return null;
 			}
 
-			if (
-				isset($resolved[$currentFilterId])
-				&& $expectedTypeMatcher((int)$filter['targetEntityTypeId'])
-			)
+			if (!isset($resolved[$currentFilterId]))
+			{
+				return null;
+			}
+
+			if ($filterMatcher($filter))
 			{
 				return $resolved[$currentFilterId]['documentId'];
 			}
@@ -345,7 +474,8 @@ final class Resolver
 		}
 
 		$targetEntityTypeId = (int)($filter['targetEntityTypeId'] ?? $filter['entityTypeId'] ?? 0);
-		if ($targetEntityTypeId <= 0)
+		$targetEntityKey = $targetEntityTypeId > 0 ? '' : trim((string)($filter['targetEntityKey'] ?? ''));
+		if ($targetEntityTypeId <= 0 && $targetEntityKey === '')
 		{
 			return null;
 		}
@@ -365,6 +495,7 @@ final class Resolver
 		return [
 			'id' => (string)($filter['id'] ?? ('filter_' . $index)),
 			'targetEntityTypeId' => $targetEntityTypeId,
+			'targetEntityKey' => $targetEntityKey,
 			'sourceMode' => $sourceMode,
 			'sourceFilterId' => $sourceFilterId,
 			'conditions' => is_array($filter['conditions'] ?? null) ? $filter['conditions'] : ['items' => []],
@@ -373,14 +504,19 @@ final class Resolver
 
 	private static function resolveFilter(\CBPActivity $activity, array $filter, array $resolved): ?array
 	{
+		if (self::isExternalFilter($filter))
+		{
+			return self::resolveExternalFilter($activity, $filter);
+		}
+
 		$documentType = \CCrmBizProcHelper::ResolveDocumentType($filter['targetEntityTypeId']);
 		if (!is_array($documentType))
 		{
 			return null;
 		}
 
-		$candidateIds = self::resolveCandidateIds($activity, $filter, $resolved);
-		if (is_array($candidateIds) && empty($candidateIds))
+		$candidateConditions = self::resolveCandidateConditions($activity, $filter, $resolved);
+		if (is_array($candidateConditions) && empty($candidateConditions))
 		{
 			return null;
 		}
@@ -391,14 +527,27 @@ final class Resolver
 			return null;
 		}
 
-		$conditionGroup = new ConditionGroup($filter['conditions']);
+		$conditionGroup = new ConditionGroup(self::unserializeDealListValues($filter['conditions']));
 		$conditionGroup->internalizeValues($documentType);
+		foreach ($conditionGroup->getItems() as [$condition])
+		{
+			if ($condition->getOperator() === 'in' && $condition->getValue() === [])
+			{
+				$condition->setField('ID');
+				$condition->setOperator('=');
+				$condition->setValue(0);
+			}
+		}
+
 		$ormFilter = (new OrmFilterAdapter($documentType))->getOrmFilter($conditionGroup, $documentType);
 
 		$queryFilter = [];
-		if (is_array($candidateIds))
+		if (is_array($candidateConditions))
 		{
-			$queryFilter[] = ['@ID' => array_values(array_unique($candidateIds))];
+			$queryFilter[] = count($candidateConditions) === 1
+				? $candidateConditions[0]
+				: ['LOGIC' => 'OR', ...$candidateConditions]
+			;
 		}
 		if (!empty($filter['conditions']['items']))
 		{
@@ -444,7 +593,97 @@ final class Resolver
 		];
 	}
 
-	private static function resolveCandidateIds(\CBPActivity $activity, array $filter, array $resolved): ?array
+	/**
+	 * The designer stores the list of a multi-value operator as a JSON string in a single value slot.
+	 * The deal field accepts any string and would otherwise be internalized as a list of that one string.
+	 * Other fields keep the string: a user field internalizes a native list down to a single user.
+	 */
+	private static function unserializeDealListValues(array $conditions): array
+	{
+		$dealFieldId = ParentFieldManager::getParentFieldName(\CCrmOwnerType::Deal);
+
+		foreach ($conditions['items'] ?? [] as $index => $item)
+		{
+			$condition = is_array($item) ? ($item[0] ?? null) : null;
+			if (
+				!is_array($condition)
+				|| ($condition['field'] ?? null) !== $dealFieldId
+				|| !in_array($condition['operator'] ?? null, self::MULTI_VALUE_OPERATORS, true)
+				|| !is_string($condition['value'] ?? null)
+			)
+			{
+				continue;
+			}
+
+			$decoded = json_decode($condition['value'], true);
+			if (is_array($decoded) && array_is_list($decoded) && $decoded === array_filter($decoded, 'is_scalar'))
+			{
+				$conditions['items'][$index][0]['value'] = $decoded;
+			}
+		}
+
+		return $conditions;
+	}
+
+	private static function isExternalFilter(array $filter): bool
+	{
+		return trim((string)($filter['targetEntityKey'] ?? '')) !== '';
+	}
+
+	private static function resolveExternalFilter(\CBPActivity $activity, array $filter): ?array
+	{
+		$provider = self::findExternalSourceProvider((string)$filter['targetEntityKey']);
+		if ($provider === null)
+		{
+			return null;
+		}
+
+		$rootDocumentId = $activity->getRootActivity()->getDocumentId();
+		if (!is_array($rootDocumentId) || count($rootDocumentId) < 3)
+		{
+			return null;
+		}
+
+		$documentIds = $provider->resolveDocumentIds(
+			$filter['conditions'],
+			$rootDocumentId,
+			self::RESOLUTION_LIMIT,
+		);
+		if (empty($documentIds))
+		{
+			return null;
+		}
+
+		$documentIds = array_values($documentIds);
+
+		return [
+			'documentId' => $documentIds[0],
+			'documentIds' => $documentIds,
+			'entityTypeId' => 0,
+			'entityIds' => [],
+		];
+	}
+
+	private static function findExternalSourceProvider(string $sourceKey): ?NodeFilterSourceProvider
+	{
+		if (!method_exists(\Bitrix\Bizproc\Internal\Service\Container::class, 'getNodeFilterSourceRegistry'))
+		{
+			return null;
+		}
+
+		return \Bitrix\Bizproc\Internal\Service\Container::instance()
+			->getNodeFilterSourceRegistry()
+			->getProvider($sourceKey)
+		;
+	}
+
+	/**
+	 * Returns the alternatives that restrict the candidates of the filter as ORM conditions,
+	 * or null when the candidates are not restricted at all. An empty list means no candidates.
+	 *
+	 * @return array[]|null
+	 */
+	private static function resolveCandidateConditions(\CBPActivity $activity, array $filter, array $resolved): ?array
 	{
 		if ($filter['sourceMode'] === 'filter')
 		{
@@ -456,10 +695,10 @@ final class Resolver
 
 			if ((int)$source['entityTypeId'] === (int)$filter['targetEntityTypeId'])
 			{
-				return $source['entityIds'] ?? [];
+				return self::makeIdCondition($source['entityIds'] ?? []);
 			}
 
-			return self::getRelatedEntityIds($source['documentId'], $filter['targetEntityTypeId']);
+			return self::getRelatedConditions($source['documentId'], (int)$filter['targetEntityTypeId']);
 		}
 
 		$rootDocumentId = $activity->getRootActivity()->getDocumentId();
@@ -491,13 +730,16 @@ final class Resolver
 				return null;
 			}
 
-			return [$rootEntityId];
+			return self::makeIdCondition([$rootEntityId]);
 		}
 
-		return null;
+		return self::getRelatedConditions($rootDocumentId, $targetEntityTypeId);
 	}
 
-	private static function getRelatedEntityIds(array $sourceDocumentId, int $targetEntityTypeId): array
+	/**
+	 * @return array[]
+	 */
+	private static function getRelatedConditions(array $sourceDocumentId, int $targetEntityTypeId): array
 	{
 		try
 		{
@@ -513,11 +755,58 @@ final class Resolver
 			return [];
 		}
 
-		$relations = new ItemRelations(new ItemIdentifier($sourceEntityTypeId, $sourceEntityId));
-		$related = $relations->getParentElementIdentifiers($targetEntityTypeId);
+		$source = new ItemIdentifier($sourceEntityTypeId, $sourceEntityId);
 
+		$conditions = self::makeIdCondition(
+			self::extractEntityIds(
+				(new ItemRelations($source))->getParentElementIdentifiers($targetEntityTypeId),
+				$targetEntityTypeId,
+			)
+		);
+
+		$childrenFieldName = (new RelationFieldResolver())
+			->findCustomParentField($sourceEntityTypeId, $targetEntityTypeId)
+		;
+		if ($childrenFieldName !== null)
+		{
+			$conditions[] = ['=' . $childrenFieldName => $sourceEntityId];
+
+			return $conditions;
+		}
+
+		return array_merge(
+			$conditions,
+			self::makeIdCondition(
+				self::extractEntityIds(self::getChildIdentifiers($source, $targetEntityTypeId), $targetEntityTypeId)
+			)
+		);
+	}
+
+	/**
+	 * @return ItemIdentifier[]
+	 */
+	private static function getChildIdentifiers(ItemIdentifier $source, int $targetEntityTypeId): array
+	{
+		if ($source->getEntityTypeId() === $targetEntityTypeId)
+		{
+			return [];
+		}
+
+		$relation = Container::getInstance()->getRelationManager()->getRelation(
+			new RelationIdentifier($source->getEntityTypeId(), $targetEntityTypeId)
+		);
+
+		return $relation?->getChildElements($source) ?? [];
+	}
+
+	/**
+	 * @param ItemIdentifier[] $identifiers
+	 * @return int[]
+	 */
+	private static function extractEntityIds(array $identifiers, int $targetEntityTypeId): array
+	{
 		$result = [];
-		foreach ($related as $identifier)
+		foreach ($identifiers as $identifier)
 		{
 			if ($identifier instanceof ItemIdentifier && $identifier->getEntityTypeId() === $targetEntityTypeId)
 			{
@@ -526,6 +815,17 @@ final class Resolver
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @param int[] $entityIds
+	 * @return array[]
+	 */
+	private static function makeIdCondition(array $entityIds): array
+	{
+		$ids = array_values(array_unique($entityIds));
+
+		return $ids ? [['@ID' => $ids]] : [];
 	}
 
 	private static function matchesExpectedType(int $targetEntityTypeId, ?int $expectedType): bool

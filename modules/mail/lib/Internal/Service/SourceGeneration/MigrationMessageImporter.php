@@ -40,12 +40,6 @@ final class MigrationMessageImporter
 	/** Diagnostics, not a merge instruction: a long list adds nothing to it */
 	private const MAX_STORED_CANDIDATES = 50;
 
-	/** A placement the user has read, whether the server already knows it or not */
-	private const READ_STATES = ['Y', 'S'];
-
-	private const READ_STATE = 'Y';
-	private const UNREAD_STATE = 'N';
-
 	public function __construct(
 		private readonly MessageMatcher $matcher = new MessageMatcher(),
 	)
@@ -348,42 +342,97 @@ final class MigrationMessageImporter
 	}
 
 	/**
-	 * A letter the user had already read stays read after the transfer: the placement of the
-	 * new generation is registered from the flags of a server that knows nothing of what was
-	 * read here, so the state of the archived placement is carried over.
+	 * A letter carries the reading of the portal over the transfer, in both directions: the
+	 * placement of the new generation is registered from the flags of a server that knows
+	 * nothing of what happened here, so both a letter the user had read and one they had
+	 * marked unread would come back from it as the server has them.
 	 *
-	 * In one direction only. An archived placement nobody read says nothing about the new
-	 * one, whose server may well report it read; and a placement waiting to push a state of
-	 * its own is the decision of the user, which no repeated import may undo.
+	 * Written as an intention {@see ReadStateIntent} - the ordinary synchronization of the
+	 * folder is what pushes it to the new server, and a settled value would instead be rolled
+	 * back by that same synchronization the moment the server reported otherwise.
+	 *
+	 * The side of the portal is read over the retained scope alone, and over the live placements
+	 * of it: a placement of a generation being prepared is the word of the new server, and the
+	 * word of a server is never what the user meant, while a placement of a letter the user has
+	 * deleted says nothing about the reading of the letter they kept. The replay pass asks the
+	 * same rule of the same two sides {@see ActionReplayService}, so it reads them the same way.
+	 *
+	 * The retained scope is the whole history of the mailbox except what it is preparing, and the
+	 * active generation of it leads: a mailbox moved twice keeps the letters of the first move in
+	 * a generation of its own, but everything the user has done to the letter since that move
+	 * happened in the source serving them now. A generation of an earlier move answers only for a
+	 * letter the active one holds no live placement of.
 	 */
 	private function carryReadStateOfTheArchive(Context $context, string $uidId, int $messageId): void
 	{
 		$placements = MailMessageUidTable::getList([
-			'select' => ['ID', 'IS_SEEN'],
+			'select' => ['ID', 'IS_SEEN', 'GENERATION_ID'],
 			'filter' => [
 				'=MAILBOX_ID' => $context->mailboxId,
 				'=MESSAGE_ID' => $messageId,
+				'==DELETE_TIME' => 0,
 			],
 		])->fetchAll();
 
-		$isRead = false;
-		$imported = '';
+		$scope = GenerationScope::withoutPreparedGenerations($context->mailboxId);
+		$activeScope = GenerationScope::forMailbox($context->mailboxId);
+
+		$imported = null;
+		$retained = [];
+		$active = [];
 
 		foreach ($placements as $placement)
 		{
-			$seen = (string)$placement['IS_SEEN'];
-
 			if ((string)$placement['ID'] === $uidId)
 			{
-				$imported = $seen;
+				$imported = (string)$placement['IS_SEEN'];
 
 				continue;
 			}
 
-			$isRead = $isRead || in_array($seen, self::READ_STATES, true);
+			$generationId = (int)$placement['GENERATION_ID'];
+
+			if (!$scope->includes($generationId))
+			{
+				continue;
+			}
+
+			$retained[] = (string)$placement['IS_SEEN'];
+
+			if ($activeScope->includes($generationId))
+			{
+				$active[] = (string)$placement['IS_SEEN'];
+			}
 		}
 
-		if (!$isRead || $imported !== self::UNREAD_STATE)
+		/*
+			The word of the portal is the one of the source the user is working in: a mailbox moved
+			twice keeps the letters of the first move in a generation of its own, and what the user
+			has done to the letter since happened in the active one alone. The older generations
+			answer only while the active one holds no live placement of the letter at all.
+		*/
+		$retained = $active === [] ? $retained : $active;
+
+		if ($imported === null)
+		{
+			return;
+		}
+
+		/*
+			No live placement of the portal left - the letter was deleted here while the transfer
+			ran - is no word of the portal about the reading, and an absent word is not the word
+			"unread": unreading the letter on the new source would be our own invention. The
+			replay pass leaves such a letter alone as well {@see ActionReplayService::replayLetter()},
+			and the two consumers of the rule answer the same case the same way.
+		*/
+		if ($retained === [])
+		{
+			return;
+		}
+
+		$intent = ReadStateIntent::forPlacement(ReadStateIntent::portalHasRead($retained), $imported);
+
+		if ($intent === null)
 		{
 			return;
 		}
@@ -393,7 +442,7 @@ final class MigrationMessageImporter
 				'ID' => $uidId,
 				'MAILBOX_ID' => $context->mailboxId,
 			],
-			['IS_SEEN' => self::READ_STATE],
+			['IS_SEEN' => $intent],
 		);
 	}
 

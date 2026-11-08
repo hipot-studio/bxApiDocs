@@ -24,6 +24,7 @@ final class FieldType
 	public const STAMP = 'stamp';
 	public const ADDRESS = 'address';
 	public const SNILS = 'snils';
+	public const INN = 'inn';
 	public const FIRST_NAME = 'firstname';
 	public const LAST_NAME = 'lastname';
 	public const PATRONYMIC = 'patronymic';
@@ -62,6 +63,7 @@ final class FieldType
 			self::STAMP,
 			self::ADDRESS,
 			self::SNILS,
+			self::INN,
 			self::FIRST_NAME,
 			self::LAST_NAME,
 			self::PATRONYMIC,

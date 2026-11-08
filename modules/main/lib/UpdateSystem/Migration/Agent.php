@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Main\UpdateSystem\Migration;
 
+use Bitrix\Main\Type\Callback;
 use Bitrix\Main\UpdateSystem\Migration\Tools\SourceCode;
 
 class Agent
@@ -21,13 +22,14 @@ class Agent
 	/**
 	 * Add agent. Checks if canUpdateDatabase and isModuleInstalled.
 	 *
-	 * @param string|array{class-string, string} $agentName Either an invocation string `'Foo::bar();'`
-	 *     or a class+method tuple `[Foo::class, 'bar']`. The tuple form keeps the method name navigable
-	 *     in IDEs without triggering autoload of the target class at migration time.
+	 * @param string|array{class-string, string}|Callback $agentName Either an invocation string `'Foo::bar();'`
+	 *     or a class+method tuple `[Foo::class, 'bar']`. A Callback keeps typed arguments intact.
+	 *     The tuple form keeps the method name navigable in IDEs without triggering autoload
+	 *     of the target class at migration time.
 	 * @param int|null $execDelay First execution delay in seconds.
 	 * @throws Exception
 	 */
-	public function add(string|array $agentName, int $interval, bool $isPeriod = false, ?int $execDelay = null): self
+	public function add(string|array|Callback $agentName, int $interval, bool $isPeriod = false, ?int $execDelay = null): self
 	{
 		$mode = $this->context->getDatabaseUpdateMode();
 		if (!$mode->canUpdateDatabase())
@@ -46,11 +48,11 @@ class Agent
 	}
 
 	/**
-	 * @param string|array{class-string, string} $agentName
+	 * @param string|array{class-string, string}|Callback $agentName
 	 * @param int|null $execDelay First execution delay in seconds.
 	 * @throws Exception
 	 */
-	public function addIfModuleInstalled(string|array $agentName, int $interval, bool $isPeriod = false, ?int $execDelay = null): self
+	public function addIfModuleInstalled(string|array|Callback $agentName, int $interval, bool $isPeriod = false, ?int $execDelay = null): self
 	{
 		return $this->add($agentName, $interval, $isPeriod, $execDelay);
 	}
@@ -58,11 +60,11 @@ class Agent
 	/**
 	 * Add agent. Checks if canUpdateDatabase and moduleTablesExist.
 	 *
-	 * @param string|array{class-string, string} $agentName
+	 * @param string|array{class-string, string}|Callback $agentName
 	 * @param int|null $execDelay First execution delay in seconds.
 	 * @throws Exception
 	 */
-	public function addIfModuleExists(string|array $agentName, int $interval, bool $isPeriod = false, ?int $execDelay = null): self
+	public function addIfModuleExists(string|array|Callback $agentName, int $interval, bool $isPeriod = false, ?int $execDelay = null): self
 	{
 		if (!$this->context->getDatabaseUpdateMode()->canUpdateDatabase())
 		{
@@ -78,10 +80,10 @@ class Agent
 	}
 
 	/**
-	 * @param string|array{class-string, string} $agentName
+	 * @param string|array{class-string, string}|Callback $agentName
 	 * @throws Exception
 	 */
-	public function remove(string|array $agentName): self
+	public function remove(string|array|Callback $agentName): self
 	{
 		$mode = $this->context->getDatabaseUpdateMode();
 		if (!$mode->canUpdateDatabase())
@@ -96,10 +98,11 @@ class Agent
 		}
 
 		$agentName = $this->normalizeAgentName($agentName);
+		$target = $this->getAgentTarget($agentName);
 
 		if (
 			$this->context->isDevMode()
-			&& SourceCode::classBelongsToModule($agentName, $this->context->getModuleId()) === false
+			&& SourceCode::classBelongsToModule($target, $this->context->getModuleId()) === false
 		)
 		{
 			throw new Exception(
@@ -116,11 +119,11 @@ class Agent
 	}
 
 	/**
-	 * @param string|array{class-string, string} $agentName
+	 * @param string|array{class-string, string}|Callback $agentName
 	 */
-	private function normalizeAgentName(string|array $agentName): string
+	private function normalizeAgentName(string|array|Callback $agentName): string|Callback
 	{
-		if (is_string($agentName))
+		if (is_string($agentName) || $agentName instanceof Callback)
 		{
 			return $agentName;
 		}
@@ -130,11 +133,24 @@ class Agent
 		return $class . '::' . $method . '();';
 	}
 
-	private function doAdd(string $agentName, int $interval, bool $isPeriod = false, ?int $execDelay = null): self
+	private function getAgentTarget(string|Callback $agentName): string
 	{
+		if ($agentName instanceof Callback)
+		{
+			$callback = $agentName->getCallback();
+
+			return is_array($callback) ? $callback[0] : $callback;
+		}
+
+		return $agentName;
+	}
+
+	private function doAdd(string|Callback $agentName, int $interval, bool $isPeriod = false, ?int $execDelay = null): self
+	{
+		$target = $this->getAgentTarget($agentName);
 		if (
 			$this->context->isDevMode()
-			&& str_starts_with($agentName, '\\')
+			&& str_starts_with($target, '\\')
 		)
 		{
 			throw new Exception(
@@ -145,7 +161,7 @@ class Agent
 		}
 		if (
 			$this->context->isDevMode()
-			&& SourceCode::classBelongsToModule($agentName, $this->context->getModuleId()) === false
+			&& SourceCode::classBelongsToModule($target, $this->context->getModuleId()) === false
 		)
 		{
 			throw new Exception(

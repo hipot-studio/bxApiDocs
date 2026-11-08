@@ -9,8 +9,10 @@ use Bitrix\Im\V2\Guest\Auth\AuthError;
 use Bitrix\Im\V2\Guest\Auth\Token;
 use Bitrix\Im\V2\Guest\GuestService;
 use Bitrix\Im\V2\Result;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Engine\AutoWire\Parameter;
 use Bitrix\Main\Engine\ActionFilter\Authentication;
+use Bitrix\Main\Loader;
 
 class Guest extends BaseController
 {
@@ -65,7 +67,37 @@ class Guest extends BaseController
 
 		return [
 			'user' => User::getInstance($userId)->toRestFormat(),
+			'userToken' => $this->resolveGuestUserToken($userId),
 		];
+	}
+
+	/**
+	 * Reissue the personal call JWT after a rename. Best-effort: the rename is already committed,
+	 * so a token failure must not fail the whole action — return null and log instead.
+	 */
+	private function resolveGuestUserToken(int $userId): ?string
+	{
+		try
+		{
+			if (!Loader::includeModule('call'))
+			{
+				return null;
+			}
+
+			return \Bitrix\Call\JwtCall::updateUserJwt($userId);
+		}
+		catch (\Throwable $e)
+		{
+			(new LoggerFactory())->createById('im.Guest.SetName')?->error(
+				'Failed to reissue guest call JWT after rename',
+				[
+					'userId' => $userId,
+					'exception' => $e->getMessage(),
+				],
+			);
+
+			return null;
+		}
 	}
 
 	/**

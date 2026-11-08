@@ -36,9 +36,11 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 	 */
 	public static function ping(int $id, bool $deleted = false): bool
 	{
-		if (array_key_exists($id, self::$pings))
+		$deletedKey = (int)$deleted;
+
+		if (array_key_exists($deletedKey, self::$pings[$id] ?? []))
 		{
-			return self::$pings[$id];
+			return self::$pings[$id][$deletedKey];
 		}
 
 		$filter = [
@@ -55,9 +57,9 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 			],
 			'filter' => $filter
 		]);
-		self::$pings[$id] = (boolean) $check->fetch();
+		self::$pings[$id][$deletedKey] = (boolean)$check->fetch();
 
-		return self::$pings[$id];
+		return self::$pings[$id][$deletedKey];
 	}
 
 	/**
@@ -100,7 +102,8 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 				'TYPE',
 				'ACTIVE',
 				'DELETED',
-				'ID'
+				'ID',
+				'LANDING_ID_INDEX'
 			),
 			'filter' => array(
 				'ID' => $id,
@@ -140,26 +143,29 @@ class Site extends \Bitrix\Landing\Internals\BaseTable
 
 			$previewRequested = $previewForNotActive && ($row['ACTIVE'] === 'N' || $row['DELETED'] === 'Y');
 
+			// in the cloud the preview link is the route of the section to the index page: no domain
+			// of the site and no signed tail, hence the check ahead of the branching by the domain
+			if ($previewRequested && Site\PortalPreview::isCloud($isB24localVar, $disableCloud, $row['TYPE']))
+			{
+				$paths[$row['ID']] = $row['LANDING_ID_INDEX']
+					? Site\PortalPreview::buildUrl((int)$row['ID'], (int)$row['LANDING_ID_INDEX'], $hostInclude)
+					: '';
+
+				continue;
+			}
+
 			if ($row['DOMAIN_ID'])
 			{
-				if (Site\PreviewUrl::isCloudPreview($isB24localVar, (bool)$row['DOMAIN_ID'], $disableCloud, $previewRequested))
+				$paths[$row['ID']] = ($hostInclude ? ($disableCloud ? $hostUrl : $row['DOMAIN_PROTOCOL'] . '://' . $row['DOMAIN_NAME']) : '') . $pubPath;
+				if ($full)
 				{
-					// preview link of a cloud site lives on the portal host, see Site\PreviewUrl
-					$paths[$row['ID']] = Site\PreviewUrl::buildSiteBase($row['ID'], $hostInclude);
-				}
-				else
-				{
-					$paths[$row['ID']] = ($hostInclude ? ($disableCloud ? $hostUrl : $row['DOMAIN_PROTOCOL'] . '://' . $row['DOMAIN_NAME']) : '') . $pubPath;
-					if ($full)
+					if ($disableCloud && $isB24localVar)
 					{
-						if ($disableCloud && $isB24localVar)
-						{
-							$paths[$row['ID']] .= $row['CODE'];
-						}
-						else if (!$isB24localVar)
-						{
-							$paths[$row['ID']] .= '/';
-						}
+						$paths[$row['ID']] .= $row['CODE'];
+					}
+					else if (!$isB24localVar)
+					{
+						$paths[$row['ID']] .= '/';
 					}
 				}
 			}

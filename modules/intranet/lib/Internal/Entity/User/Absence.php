@@ -24,11 +24,19 @@ class Absence implements EntityInterface
 
 	public function toArray(): array
 	{
+		$dateTo = $this->getDateTo();
+		if (!$this->dateToContainsTime())
+		{
+			$dateTo = clone $dateTo;
+			$dateTo->disableUserTime();
+			$dateTo->setTime(23, 59, 59);
+		}
+
 		return [
 			'id' => $this->getId(),
 			'userId' => $this->getUserId(),
 			'dateFrom' => $this->getDateFrom()->toString(),
-			'dateTo' => $this->getDateTo()->toString(),
+			'dateTo' => $dateTo->toString(),
 			'description' => $this->getDescription(),
 			'typeXmlId' => $this->getTypeXmlId(),
 			'name' => $this->getName(),

@@ -22,12 +22,22 @@ class AddRelatedTaskHandler
 		if ($command->useConsistency)
 		{
 			return $this->consistencyResolver->resolve('task.related.add')->wrap(
-				fn (): Task => $this->relatedTaskService->add($command->taskId, [$command->relatedTaskId], $command->userId),
+				fn (): Task => $this->relatedTaskService->add(
+					$command->taskId,
+					[$command->relatedTaskId],
+					$command->userId,
+					$command->origin,
+				),
 			);
 		}
 		else
 		{
-			return $this->relatedTaskService->add($command->taskId, [$command->relatedTaskId], $command->userId);
+			return $this->relatedTaskService->add(
+				$command->taskId,
+				[$command->relatedTaskId],
+				$command->userId,
+				$command->origin,
+			);
 		}
 	}
 }

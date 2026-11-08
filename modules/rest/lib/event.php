@@ -3,6 +3,7 @@ namespace Bitrix\Rest;
 
 use Bitrix\Main;
 use Bitrix\Main\ORM\Data\Internal\MergeTrait;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Preset\EventController;
 use Bitrix\Main\ORM\Fields\ArrayField;
 
@@ -111,6 +112,13 @@ class EventTable extends Main\Entity\DataManager
 				'data_type' => 'Bitrix\Bitrix24\AppsTable',
 				'reference' => array('=this.APP_ID' => 'ref.ID'),
 			),
+			(new Main\ORM\Fields\ArrayField('JSON_OPTIONS'))
+				->configureNullable()
+				->configureSerializationJson(),
+			(new Main\ORM\Fields\IntegerField('VERSION'))
+				->configureRequired()
+				->addValidator(new Main\ORM\Fields\Validators\RangeValidator(0, 255))
+				->configureDefaultValue(1),
 		);
 	}
 
@@ -136,8 +144,93 @@ class EventTable extends Main\Entity\DataManager
 	 */
 	public static function deleteAppInstaller($appId)
 	{
+		return static::deleteByAppAndName($appId, 'ONAPPINSTALL');
+	}
+
+	/**
+	 * Removes application event handlers of the given name.
+	 *
+	 * @param int $appId Application ID.
+	 * @param string $eventName Event name.
+	 *
+	 * @return Main\DB\Result
+	 */
+	public static function deleteByAppAndName($appId, string $eventName)
+	{
 		$connection = Main\Application::getConnection();
-		return $connection->query("DELETE FROM ".static::getTableName()." WHERE APP_ID='".intval($appId)."' AND EVENT_NAME='ONAPPINSTALL'");
+		$helper = $connection->getSqlHelper();
+
+		return $connection->query(
+			"DELETE FROM " . static::getTableName()
+			. " WHERE APP_ID='" . intval($appId) . "'"
+			. " AND EVENT_NAME='" . $helper->forSql($eventName) . "'"
+		);
+	}
+
+	/**
+	 * Keeps install-time event handlers (ONAPPINSTALL / ONAPPUSERREADY) in sync with
+	 * the current completion mode and handler URL. Used by every install path
+	 * (marketplace, preset integrations, legacy CRestUtil) so mode transitions behave the same.
+	 *
+	 * ONAPPINSTALL is registered only for immediate completion with a handler URL and dropped
+	 * otherwise: keeping a stale handler after immediate -> deferred would leak fresh OAuth
+	 * tokens to an outdated endpoint once the deferred install finishes.
+	 * ONAPPUSERREADY tracks the current handler URL regardless of the mode.
+	 *
+	 * @param int $appId Application ID.
+	 * @param AppInstallCompletionMode $mode Resolved completion mode.
+	 * @param string|null $urlInstall Current install handler URL.
+	 *
+	 * @return Main\Result
+	 */
+	public static function syncInstallEventHandlers(
+		int $appId,
+		AppInstallCompletionMode $mode,
+		?string $urlInstall
+	): Main\Result
+	{
+		$result = new Main\Result();
+		$url = trim((string)$urlInstall);
+
+		static::deleteAppInstaller($appId);
+		if ($mode === AppInstallCompletionMode::Immediate && $url !== '')
+		{
+			// checkCallback is already called inside checkFields
+			$installResult = static::add([
+				'APP_ID' => $appId,
+				'EVENT_NAME' => 'ONAPPINSTALL',
+				'EVENT_HANDLER' => $url,
+			]);
+			if ($installResult->isSuccess())
+			{
+				\Bitrix\Rest\Event\Sender::bind('rest', 'OnRestAppInstall');
+			}
+			else
+			{
+				$result->addErrors($installResult->getErrors());
+			}
+		}
+
+		static::deleteByAppAndName($appId, 'ONAPPUSERREADY');
+		if ($url !== '')
+		{
+			// checkCallback is already called inside checkFields
+			$userReadyResult = static::add([
+				'APP_ID' => $appId,
+				'EVENT_NAME' => 'ONAPPUSERREADY',
+				'EVENT_HANDLER' => $url,
+			]);
+			if ($userReadyResult->isSuccess())
+			{
+				\Bitrix\Rest\Event\Sender::bind('rest', 'OnRestAppUserReady');
+			}
+			else
+			{
+				$result->addErrors($userReadyResult->getErrors());
+			}
+		}
+
+		return $result;
 	}
 
 	/**
@@ -212,6 +305,7 @@ class EventTable extends Main\Entity\DataManager
 				'=EVENT_HANDLER' => $data['EVENT_HANDLER'],
 				'=USER_ID' => $data['USER_ID'] ?? 0,
 				'=CONNECTOR_ID' => $data['CONNECTOR_ID'] ?? '',
+				'=VERSION' => $data['VERSION'] ?? 1,
 			),
 			'select' => array('ID')
 		));

@@ -8,6 +8,7 @@ use Bitrix\Sign\Internal\Document\EO_Group_Query;
 use Bitrix\Sign\Internal\Document\Group as GroupModel;
 use Bitrix\Sign\Internal\Document\GroupCollection as GroupCollectionModel;
 use Bitrix\Sign\Internal\Document\GroupTable;
+use Bitrix\Sign\Internal\DocumentTable;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Model\ItemBinder\BaseItemToModelBinder;
 use Bitrix\Sign\Type;
@@ -55,6 +56,56 @@ final class GroupRepository
 		}
 
 		return $this->extractItemFromModel($model);
+	}
+
+	/**
+	 * Loads only the fields used by document access rules and placeholder warmup readiness.
+	 */
+	public function listDocumentAccessContexts(int $groupId, int $limit): Item\DocumentCollection
+	{
+		if ($groupId < 1 || $limit < 1)
+		{
+			return new Item\DocumentCollection();
+		}
+
+		$rows = DocumentTable::query()
+			->setSelect([
+				'ID',
+				'UID',
+				'BLANK_ID',
+				'STATUS',
+				'ENTITY_TYPE',
+				'ENTITY_ID',
+				'CREATED_BY_ID',
+				'TEMPLATE_ID',
+			])
+			->where('GROUP_ID', $groupId)
+			->setLimit($limit)
+			->addOrder('ID', 'DESC')
+			->fetchAll()
+		;
+
+		return new Item\DocumentCollection(...array_map(
+			static function (array $row): Item\Document
+			{
+				$entityType = isset($row['ENTITY_TYPE']) ? (string)$row['ENTITY_TYPE'] : null;
+
+				return new Item\Document(
+					id: (int)$row['ID'],
+					uid: isset($row['UID']) ? (string)$row['UID'] : null,
+					blankId: isset($row['BLANK_ID']) ? (int)$row['BLANK_ID'] : null,
+					status: isset($row['STATUS']) ? (string)$row['STATUS'] : null,
+					entityType: $entityType,
+					entityTypeId: $entityType === null
+						? null
+						: Type\Document\EntityType::getEntityTypeIdByType($entityType),
+					entityId: isset($row['ENTITY_ID']) ? (int)$row['ENTITY_ID'] : null,
+					createdById: isset($row['CREATED_BY_ID']) ? (int)$row['CREATED_BY_ID'] : null,
+					templateId: isset($row['TEMPLATE_ID']) ? (int)$row['TEMPLATE_ID'] : null,
+				);
+			},
+			$rows,
+		));
 	}
 
 	public function update(Item\Document\Group $item): Result

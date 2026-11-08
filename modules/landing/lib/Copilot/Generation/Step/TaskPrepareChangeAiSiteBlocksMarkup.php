@@ -13,6 +13,7 @@ use Bitrix\Landing\Copilot\Generation\Log;
 use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteState;
 use Bitrix\Landing\Copilot\Services\HtmlBlock\AdditiveNodeTagger;
 use Bitrix\Landing\Copilot\Services\Manifest\NodeCollector;
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Main\Web\DOM;
 
 class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
@@ -130,7 +131,7 @@ class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
 
 		try
 		{
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForUserHtml();
 			$doc->loadHTML('<div id="' . self::ROOT_NODE_ID . '">' . $html . '</div>');
 
 			$root = $doc->querySelector('#' . self::ROOT_NODE_ID);
@@ -299,7 +300,7 @@ class TaskPrepareChangeAiSiteBlocksMarkup extends TaskStep
 		$sources = [];
 		try
 		{
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForUserHtml();
 			$doc->loadHTML('<div id="' . self::ROOT_NODE_ID . '-original">' . $html . '</div>');
 			$root = $doc->querySelector('#' . self::ROOT_NODE_ID . '-original');
 			if ($root)

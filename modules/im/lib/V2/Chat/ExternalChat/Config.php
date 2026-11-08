@@ -9,5 +9,6 @@ class Config
 		public readonly array $permissions = [],
 		public readonly bool $isAutoJoinEnabled = false,
 		public readonly bool $requiresParentMembership = true,
+		public readonly bool $useDefaultRecentSection = false,
 	) {}
 }

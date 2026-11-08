@@ -8,19 +8,33 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Order\Order;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Sale\Payment;
 use Bitrix\Crm\Order\ProductManager;
 use Bitrix\Crm\Service\Sale\Terminal\CreatePaymentOptions;
 use Bitrix\CrmMobile\Controller\Action;
 use Bitrix\CrmMobile\Controller\Salescenter\Product2BasketItemConverter;
 use Bitrix\CrmMobile\Integration\Sale\Payment\GetPaymentQuery;
+use Bitrix\Main\Error;
 use Bitrix\Sale\Helpers\Order\Builder\Converter\CatalogJSProductForm;
 use Bitrix\SalesCenter\Integration\CrmManager;
 
 class CreatePaymentAction extends Action
 {
-	final public function run(Item $entity, int $responsibleId, array $products): ?array
+	final public function run(
+		UserPermissions $userPermissions,
+		Item $entity,
+		int $responsibleId,
+		array $products,
+	): ?array
 	{
+		if (!$userPermissions->item()->canReadItem($entity))
+		{
+			$this->addError(new Error('Access denied'));
+
+			return null;
+		}
+
 		$paymentService = Container::getInstance()->getTerminalPaymentService();
 
 		$createPaymentOptions =

@@ -14,9 +14,23 @@ class MailboxDirectory
 	/** @var array<int, array<string, array>> mailbox id => scope cache key => dirs by path */
 	private static array $mailboxDirs = [];
 
+	/**
+	 * @var array<int, array<string, GenerationScope>> The scope behind every cached entry above.
+	 *      An addressed reset asks the scope itself which generations its entry covers: the key
+	 *      is a string built for uniqueness, and reading a shape back out of it went wrong once
+	 *      already - the shape stating what it refuses carries no generation number at all.
+	 */
+	private static array $mailboxDirScopes = [];
+
+	/**
+	 * The scope of a read that named none: the generations serving the mailbox, which for a
+	 * mailbox without a pointer means every one of them except the ones it is preparing. The
+	 * folders of a prepared generation are written when its snapshot is accepted, before the
+	 * pass that moves the pointer, and they belong to no tree the user is looking at.
+	 */
 	private static function scope($mailboxId, ?GenerationScope $scope): GenerationScope
 	{
-		return $scope ?? GenerationScope::forMailbox((int)$mailboxId);
+		return $scope ?? GenerationScope::servingMailbox((int)$mailboxId);
 	}
 
 	public static function fetchAllDirsTypes($mailboxId, ?GenerationScope $scope = null)
@@ -267,6 +281,7 @@ class MailboxDirectory
 			}
 
 			self::$mailboxDirs[$mailboxId][$cacheKey] = $result;
+			self::$mailboxDirScopes[$mailboxId][$cacheKey] = $scope;
 		}
 
 		return self::$mailboxDirs[$mailboxId][$cacheKey];
@@ -277,6 +292,7 @@ class MailboxDirectory
 		if ($mailboxId === null)
 		{
 			self::$mailboxDirs = [];
+			self::$mailboxDirScopes = [];
 			GenerationScope::invalidateActivePointerCache();
 
 			return;
@@ -284,30 +300,30 @@ class MailboxDirectory
 
 		if ($generationId === null)
 		{
-			unset(self::$mailboxDirs[$mailboxId]);
+			unset(self::$mailboxDirs[$mailboxId], self::$mailboxDirScopes[$mailboxId]);
 			GenerationScope::invalidateActivePointerCache($mailboxId);
 
 			return;
 		}
 
-		// Reset the cache of one generation only: drop the scopes that cover it
+		// Reset the cache of one generation only: drop the entries whose scope covers it
 		foreach (array_keys(self::$mailboxDirs[$mailboxId] ?? []) as $cacheKey)
 		{
-			if (self::cacheKeyIncludesGeneration($cacheKey, $generationId))
+			if (self::entryCoversGeneration($mailboxId, $cacheKey, $generationId))
 			{
-				unset(self::$mailboxDirs[$mailboxId][$cacheKey]);
+				unset(self::$mailboxDirs[$mailboxId][$cacheKey], self::$mailboxDirScopes[$mailboxId][$cacheKey]);
 			}
 		}
 	}
 
-	private static function cacheKeyIncludesGeneration(string $cacheKey, int $generationId): bool
+	/**
+	 * Whether the entry of the cache holds the folders of this generation, asked of the scope
+	 * that built the entry. An entry whose scope is unknown is dropped: a cache entry lost for
+	 * nothing costs one query, a stale one is read as the truth.
+	 */
+	private static function entryCoversGeneration(int $mailboxId, string $cacheKey, int $generationId): bool
 	{
-		if ($cacheKey === 'all')
-		{
-			return true;
-		}
-
-		return in_array((string)$generationId, explode('_', ltrim($cacheKey, 'g')), true);
+		return (self::$mailboxDirScopes[$mailboxId][$cacheKey] ?? null)?->includes($generationId) ?? true;
 	}
 
 	public static function fetchAllSyncDirs($mailboxId, ?GenerationScope $scope = null)

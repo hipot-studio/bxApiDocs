@@ -9,6 +9,7 @@ use CBPWorkflowTemplateUser;
 
 use Bitrix\Main\Engine\ActionFilter\HttpMethod;
 use Bitrix\Main\Engine\JsonController;
+use Bitrix\Main\Error;
 use Bitrix\Main\Request;
 use Bitrix\Main\Result;
 use Bitrix\Main\Engine\CurrentUser;
@@ -19,11 +20,13 @@ use Bitrix\Bizproc\Api\Enum\Template\CreateSource;
 
 use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\ItemType;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsGridHelper;
+use Bitrix\Bizproc\Internal\Integration\Tasks\DocumentFieldTypes\ProjectFieldStateResolver;
 use Bitrix\Bizproc\Internal\Repository\WorkflowTemplate\AiAgentRepository;
 use Bitrix\Bizproc\Public\Provider\WorkflowTemplate\AiAgentProvider;
 use Bitrix\Bizproc\Public\Service\AiAgent\RegionAvailabilityServiceInterface;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\ExistingRunsWarningPolicy;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\LaunchableTemplateResolver;
+use Bitrix\Bizproc\Internal\Service\AiAgentGrid\OwnershipTransferService;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Result\TemplateCreatedResult;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\SystemTemplateActivationService;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\TemplateDeleteService;
@@ -58,6 +61,7 @@ class Template extends BaseController
 	private readonly SetupTemplateService $setupTemplateService;
 	private readonly LaunchableTemplateResolver $launchableTemplateResolver;
 	private readonly ExistingRunsWarningPolicy $existingRunsWarningPolicy;
+	private readonly OwnershipTransferService $ownershipTransferService;
 
 	public function __construct(Request $request = null)
 	{
@@ -76,6 +80,7 @@ class Template extends BaseController
 		$this->setupTemplateService = ServiceLocator::getInstance()->get(SetupTemplateService::class);
 		$this->launchableTemplateResolver = ServiceLocator::getInstance()->get(LaunchableTemplateResolver::class);
 		$this->existingRunsWarningPolicy = ServiceLocator::getInstance()->get(ExistingRunsWarningPolicy::class);
+		$this->ownershipTransferService = ServiceLocator::getInstance()->get(OwnershipTransferService::class);
 	}
 
 	/**
@@ -95,6 +100,11 @@ class Template extends BaseController
 				],
 			],
 			'checkExistingRuns' => [
+				'+prefilters' => [
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+			],
+			'changeOwner' => [
 				'+prefilters' => [
 					new HttpMethod([HttpMethod::METHOD_POST]),
 				],
@@ -168,22 +178,7 @@ class Template extends BaseController
 
 		if (!$this->canCurrentUserManageLaunchedTemplate($templateId, requireStarted: true))
 		{
-			// Separate the ERR-002 actuality failure (deleted/changed so it is no longer a
-			// restartable launched copy) from a genuine ownership denial, so the frontend can
-			// surface "data is out of date" rather than "access denied".
-			if (!$this->aiAgentProvider->isRestartableLaunchedTemplate($templateId))
-			{
-				$this->addError(
-					ErrorMessage::TEMPLATE_NOT_FOUND->getError(
-						['#ID#' => $templateId],
-						self::ERROR_CODE_TEMPLATE_STALE,
-					),
-				);
-
-				return [];
-			}
-
-			$this->addError(ErrorMessage::ACCESS_DENIED->getError([], self::ERROR_CODE_ACCESS_DENIED));
+			$this->addLaunchedTemplateDenial($templateId);
 
 			return [];
 		}
@@ -204,13 +199,70 @@ class Template extends BaseController
 	}
 
 	/**
+	 * Hands a launched AI-agent copy over to another employee (API-01 changeOwner).
+	 *
+	 * The acting user is resolved server-side; the request carries only the copy, the owner the caller
+	 * saw and the recipient. The expected owner is a write condition, not a right: a copy whose owner
+	 * changed after the grid was rendered is refused as templateStale instead of being handed over on
+	 * top of somebody else's ownership.
+	 *
+	 * Check order mirrors startAction: tariff/region -> transfer right -> operation. The right is asked
+	 * here only to answer with a precise error code; OwnershipTransferService asks it again and stays
+	 * the source of truth for every other caller of the operation.
+	 *   - tariff/region unavailable -> the codes AiAgentsFeature and BaseController already established;
+	 *   - no right against a still launched copy the caller still sees the owner of -> accessDenied;
+	 *   - the launched copy is gone, no longer started, or owned by somebody else by now -> templateStale
+	 *     (ERR-002).
+	 *
+	 * @return array{ownerId: int} Owner the copy ended up with; empty on any refusal.
+	 */
+	public function changeOwnerAction(int $templateId, int $expectedOwnerId, int $newOwnerId): array
+	{
+		if (!$this->isRestartAvailable($templateId))
+		{
+			return [];
+		}
+
+		$currentUser = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
+		$canTransfer = $this->aiAgentProvider->canTransferOwnership(
+			$templateId,
+			(int)$currentUser->getId(),
+			$currentUser->isAdmin(),
+		);
+
+		if (!$canTransfer)
+		{
+			$this->addTransferDenial($templateId, $expectedOwnerId);
+
+			return [];
+		}
+
+		$transferResult = $this->ownershipTransferService->transfer(
+			$templateId,
+			$expectedOwnerId,
+			$newOwnerId,
+			$currentUser,
+		);
+
+		if (!$transferResult->isSuccess())
+		{
+			$this->addErrors($this->mapTransferErrors($transferResult->getErrors()));
+
+			return [];
+		}
+
+		return ['ownerId' => $newOwnerId];
+	}
+
+	/**
 	 * Copies a launchable AI-agent template and starts the copy.
 	 *
 	 * Admission is the shared launchable predicate (PRED-01), the same one the pre-flight check
-	 * uses, so the two paths cannot diverge: both a system template and a user-created one (added
-	 * via the designer) may be copied, while a launched copy, a template of another type/section, a
-	 * missing template and a system template hidden by the registry are all rejected as
-	 * accessDenied.
+	 * uses, so the two paths cannot diverge: a system template of the catalogue is copied as a
+	 * product feature with no role ACL involved, while a user-created one (added via the designer)
+	 * additionally asks the template ACL for the edit right on the source. A launched copy, a
+	 * template of another type/section, a missing template, a system template hidden by the registry
+	 * and a user-created one the user may not edit are all rejected as the same accessDenied.
 	 */
 	public function copyAndStartAction(int $templateId): array
 	{
@@ -264,6 +316,11 @@ class Template extends BaseController
 		if (!$startResult->isSuccess())
 		{
 			$this->addErrors($startResult->getErrors());
+			$deleteResult = $this->templateDeleteService->rollbackFailedTemplateCopy(
+				templateId: $copyResult->templateId,
+				initiator: new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser),
+			);
+			$this->addErrors($deleteResult->getErrors());
 
 			return [];
 		}
@@ -334,6 +391,11 @@ class Template extends BaseController
 			return [];
 		}
 
+		$trustedProjectConstantValues = $this->getTrustedProjectConstantValuesForUpgradeReview(
+			$constantValues,
+			$this->getStoredTemplateConstantValues($templateId),
+		);
+
 		$result = $this->agentUpgradeService->upgrade($templateId, $constantValues);
 
 		if (!$result->isSuccess())
@@ -346,14 +408,19 @@ class Template extends BaseController
 		if ($result->getStatus() === UpgradeStatus::NeedsReview)
 		{
 			$values = $result->getValues();
+			$blocks = $this->setupTemplateService->getRequiredConstantBlocks(
+				$result->getReferenceTemplateId(),
+				array_keys($values),
+			);
 
 			return [
 				'status' => UpgradeStatus::NeedsReview->value,
 				// Setup blocks of every editable constant of the new version, filtered from the
 				// reference setup-template blocks by the merged constant codes.
-				'blocks' => $this->setupTemplateService->getRequiredConstantBlocks(
-					$result->getReferenceTemplateId(),
-					array_keys($values),
+				'blocks' => $this->setupTemplateService->enrichProjectConstantBlocks(
+					$blocks,
+					$trustedProjectConstantValues,
+					(int)$currentUser->getId(),
 				),
 				// Values to pre-fill the master, keyed by constant code: current copy values on the
 				// first call, the submitted values (merged over current) on a re-validation.
@@ -516,6 +583,69 @@ class Template extends BaseController
 	}
 
 	/**
+	 * Project state can be resolved only for the saved copy values.
+	 * Submitted values are used solely to check whether that saved value is still selected.
+	 *
+	 * @param array<string, mixed>|null $submittedConstantValues
+	 * @param array<string, mixed> $storedConstantValues
+	 * @return array<string, mixed>
+	 */
+	private function getTrustedProjectConstantValuesForUpgradeReview(
+		?array $submittedConstantValues,
+		array $storedConstantValues,
+	): array
+	{
+		if ($submittedConstantValues === null)
+		{
+			return $storedConstantValues;
+		}
+
+		$trustedValues = [];
+		foreach ($storedConstantValues as $code => $storedValue)
+		{
+			if (
+				array_key_exists($code, $submittedConstantValues)
+				&& $this->isSameProjectConstantValue($submittedConstantValues[$code], $storedValue)
+			)
+			{
+				$trustedValues[$code] = $storedValue;
+			}
+		}
+
+		return $trustedValues;
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function getStoredTemplateConstantValues(int $templateId): array
+	{
+		$values = [];
+		foreach ((array)\CBPWorkflowTemplateLoader::getTemplateConstants($templateId) as $code => $constant)
+		{
+			if (is_array($constant))
+			{
+				$values[(string)$code] = $constant['Default'] ?? $constant['default'] ?? null;
+			}
+		}
+
+		return $values;
+	}
+
+	private function isSameProjectConstantValue(mixed $submittedValue, mixed $reviewValue): bool
+	{
+		return $this->normalizeProjectConstantValue($submittedValue) === $this->normalizeProjectConstantValue($reviewValue);
+	}
+
+	private function normalizeProjectConstantValue(mixed $value): array
+	{
+		$normalized = (new ProjectFieldStateResolver())->extractProjectIds($value);
+		sort($normalized);
+
+		return $normalized;
+	}
+
+	/**
 	 * Records a best-effort warning when the post-upgrade re-launch does not start (observability
 	 * only). Swallows its own errors so a logging failure can never affect the already-applied
 	 * upgrade.
@@ -613,6 +743,83 @@ class Template extends BaseController
 			$currentUser->isAdmin(),
 			$requireStarted,
 		);
+	}
+
+	/**
+	 * Reports a failed right check on a launched copy the way the section already answers it: a copy
+	 * that is no longer a started launched one reads as templateStale (ERR-002), so the frontend can
+	 * surface "data is out of date", and only a live copy the user may not manage reads as accessDenied.
+	 */
+	private function addLaunchedTemplateDenial(int $templateId): void
+	{
+		if (!$this->aiAgentProvider->isRestartableLaunchedTemplate($templateId))
+		{
+			$this->addError(
+				ErrorMessage::TEMPLATE_NOT_FOUND->getError(
+					['#ID#' => $templateId],
+					self::ERROR_CODE_TEMPLATE_STALE,
+				),
+			);
+
+			return;
+		}
+
+		$this->addError(ErrorMessage::ACCESS_DENIED->getError([], self::ERROR_CODE_ACCESS_DENIED));
+	}
+
+	/**
+	 * Reports a failed transfer right the way changeOwner answers it. The launched-copy denial above tells
+	 * a live copy from a gone one, and ownership adds a second way for the data to be out of date: the copy
+	 * is still there, but its owner is no longer the one the grid rendered. The former owner has really
+	 * lost the right by then, and answering accessDenied would leave a row the client knows to be current
+	 * on screen; templateStale (ERR-002) is what makes it reload the row.
+	 */
+	private function addTransferDenial(int $templateId, int $expectedOwnerId): void
+	{
+		if (
+			$this->aiAgentProvider->isRestartableLaunchedTemplate($templateId)
+			&& $this->aiAgentProvider->getLaunchedCopyOwner($templateId) !== $expectedOwnerId
+		)
+		{
+			$this->addError(
+				ErrorMessage::TEMPLATE_NOT_FOUND->getError(
+					['#ID#' => $templateId],
+					self::ERROR_CODE_TEMPLATE_STALE,
+				),
+			);
+
+			return;
+		}
+
+		$this->addLaunchedTemplateDenial($templateId);
+	}
+
+	/**
+	 * "This employee already owns the agent" (Q-1) keeps its own wording but has no code of its own in
+	 * API-01: what was wrong is the choice of recipient, so it reaches the client under the recipient
+	 * code. Every other refusal already carries either an API-01 code of the operation or the code its
+	 * own layer established, the same way the tariff and region denials do.
+	 *
+	 * @param array<Error> $errors
+	 *
+	 * @return list<Error>
+	 */
+	private function mapTransferErrors(array $errors): array
+	{
+		$mapped = [];
+		foreach ($errors as $error)
+		{
+			$mapped[] = $error->getCode() === OwnershipTransferService::ERROR_CODE_ALREADY_OWNER
+				? new Error(
+					$error->getMessage(),
+					OwnershipTransferService::ERROR_CODE_INVALID_RECIPIENT,
+					$error->getCustomData(),
+				)
+				: $error
+			;
+		}
+
+		return $mapped;
 	}
 
 	private function isRestartAvailable(int $templateId): bool

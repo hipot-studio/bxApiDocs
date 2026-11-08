@@ -105,6 +105,7 @@ class NodeService
 		NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
 		int $limit = 100,
 		int $offset = 0,
+		?int $viewerUserId = null,
 	): NodeCollection
 	{
 		return InternalContainer::getNodeRepository()->findAll(
@@ -114,6 +115,7 @@ class NodeService
 			activeFilter: $activeFilter,
 			limit: $limit,
 			offset: $offset,
+			viewerUserId: $viewerUserId,
 		);
 	}
 
@@ -123,6 +125,7 @@ class NodeService
 		array $nodeTypes = [NodeEntityType::DEPARTMENT],
 		?StructureAction $structureAction = null,
 		NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
+		?int $viewerUserId = null,
 	): NodeCollection
 	{
 		if (empty($nodeIds))
@@ -136,6 +139,7 @@ class NodeService
 			nodeTypes: $nodeTypes,
 			structureAction: $structureAction,
 			activeFilter: $activeFilter,
+			viewerUserId: $viewerUserId,
 		);
 	}
 
@@ -316,6 +320,21 @@ class NodeService
 		}
 
 		return InternalContainer::getNodeAccessCodeService()->getNodeIdsByAccessCodes($accessCodes);
+	}
+
+	/**
+	 * @param array<string> $accessCodes
+	 *
+	 * @return array<string, list<int>>
+	 */
+	public function getNodeIdsGroupedByAccessCode(array $accessCodes): array
+	{
+		if (empty($accessCodes))
+		{
+			return [];
+		}
+
+		return InternalContainer::getNodeAccessCodeService()->getNodeIdsGroupedByAccessCode($accessCodes);
 	}
 	//endregion
 

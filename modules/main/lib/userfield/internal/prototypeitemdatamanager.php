@@ -237,19 +237,16 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 						}
 					}
 				}
-
-				$helper = $connection->getSqlHelper();
-				// first, delete old values
-				$connection->query(sprintf(
-					'DELETE FROM %s WHERE %s = %d',
-					$helper->quote($utmTableName), $helper->quote('ID'), $id
-				));
 			}
 
-			foreach ($values as $value)
-			{
-				$connection->add($utmTableName, array('ID' => $id, 'VALUE' => $value));
-			}
+			$storage = new MultipleValueStorage(
+				$connection,
+				$utmTableName,
+				static fn() => ORM\Entity::getInstance($typeDataClass::getUtmEntityClassName(static::getEntity(), $fields[$fieldName])),
+				(int)$type['ID'],
+				(int)$fields[$fieldName]['ID'],
+			);
+			$storage->save((int)$id, $values, (bool)$isUpdate);
 		}
 
 		return $result;
@@ -308,6 +305,13 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 		$typeDataClass = $factory->getTypeDataClass();
 
 		$fields = $userFieldManager->getUserFields(static::getItemUserFieldEntityId());
+		foreach ($fields as $name => $field)
+		{
+			$values = $oldData[$name] ?? [];
+			$values = is_array($values) ? array_values($values) : [$values];
+			UserFieldHelper::cleanupUserFieldValuesBeforeDelete($field, $values);
+		}
+
 		foreach ($oldData as $k => $v)
 		{
 			$userfield = $fields[$k];
@@ -330,21 +334,6 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 				}
 			}
 
-			// remove files
-			if ($userfield["USER_TYPE"]["BASE_TYPE"]=="file")
-			{
-				if(is_array($oldData[$k]))
-				{
-					foreach($oldData[$k] as $value)
-					{
-						\CFile::delete($value);
-					}
-				}
-				else
-				{
-					\CFile::delete($oldData[$k]);
-				}
-			}
 		}
 
 		return $result;
@@ -367,6 +356,21 @@ abstract class PrototypeItemDataManager extends ORM\Data\DataManager
 			}
 
 			$userField = $userFields[$k];
+			$className = $userField['USER_TYPE']['CLASS_NAME'] ?? null;
+
+			if (
+				$userField['MULTIPLE'] === 'Y'
+				&& is_array($v)
+				&& is_callable([$className, 'onBeforeSaveAll'])
+			)
+			{
+				$data[$k] = call_user_func_array(
+					[$className, 'onBeforeSaveAll'],
+					[$userField, $v],
+				);
+
+				continue;
+			}
 
 			if ($userField['MULTIPLE'] == 'N')
 			{

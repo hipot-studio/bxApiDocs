@@ -8,7 +8,6 @@ enum AppAttributeCode: string
 {
 	case OwnerUserId = 'OWNER_USER_ID';
 	case InstalledByUserId = 'INSTALLED_USER_ID';
-	case ForceInstalled = 'FORCE_INSTALLED';
 
 	public static function getValues(): array
 	{

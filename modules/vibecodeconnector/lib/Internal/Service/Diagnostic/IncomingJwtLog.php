@@ -17,6 +17,7 @@ final class IncomingJwtLog
 	private const MAX_AUDIENCE_LENGTH = 255;
 	private const MAX_AUDIENCE_ITEMS = 5;
 	private const MAX_JWT_ID_LENGTH = 128;
+	private const MAX_ORIGIN_LENGTH = 64;
 	private const MAX_ERROR_CLASS_LENGTH = 255;
 
 	/**
@@ -134,6 +135,7 @@ final class IncomingJwtLog
 		$this->copyLimitedString($header, 'kid', $sourceHeader['kid'] ?? null, self::MAX_KEY_ID_LENGTH);
 		$this->copyLimitedString($claims, 'iss', $sourceClaims['iss'] ?? null, self::MAX_ISSUER_LENGTH);
 		$this->copyLimitedString($claims, 'jti', $sourceClaims['jti'] ?? null, self::MAX_JWT_ID_LENGTH);
+		$this->copyLimitedString($claims, 'origin', $sourceClaims['origin'] ?? null, self::MAX_ORIGIN_LENGTH);
 
 		$audience = $this->normalizeAudience($sourceClaims['aud'] ?? null);
 		if ($audience !== null)

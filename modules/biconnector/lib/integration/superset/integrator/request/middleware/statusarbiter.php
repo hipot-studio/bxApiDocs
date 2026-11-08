@@ -12,8 +12,15 @@ final class StatusArbiter extends Base
 {
 	private const ID = 'STATUS_ARBITER';
 
+	/**
+	 * @param bool $arbitrateServiceFailure Whether a service failure may move the instance to ERROR.
+	 *        A request made behind an unattended schedule passes false: the recovery series out of
+	 *        ERROR is opened by a user visit only, so on such a path a single failure would become
+	 *        a permanent one. Frozen answers and the return to READY are arbitrated either way.
+	 */
 	public function __construct(
-		private readonly IntegratorLogger $logger
+		private readonly IntegratorLogger $logger,
+		private readonly bool $arbitrateServiceFailure = true,
 	)
 	{}
 
@@ -52,41 +59,38 @@ final class StatusArbiter extends Base
 
 		if (self::isServiceErrorCode($response->getStatus()))
 		{
-			if ($response->getStatus() === IntegratorResponse::STATUS_UNKNOWN)
+			// A response carrying errors is already journaled by the Logger middleware,
+			// and only a refusal silent about its reason needs a record of its own.
+			if (!$response->hasErrors())
 			{
-				$errors = [new Error('Got unknown status code from proxy-service')];
-			}
-			else
-			{
-				$errors = [new Error('Got unsuccessful status from proxy-service')];
-			}
-
-			if ($response->hasErrors())
-			{
-				array_push($errors, ...$response->getErrors());
+				$this->logger->logMethodErrors(
+					$request->getAction(),
+					$response->getStatus(),
+					[new Error(self::describeServiceFailure($response->getStatus()))],
+				);
 			}
 
-			$this->logger->logMethodErrors($request->getAction(), $response->getStatus(), $errors);
 			// Don't overwrite PENDING_DELETE with ERROR — a transient proxy error must not
 			// prevent the cleanup agent from performing the actual deletion after timeout.
-			if (!SupersetInitializer::isSupersetPendingDelete())
+			if ($this->arbitrateServiceFailure && !SupersetInitializer::isSupersetPendingDelete())
 			{
 				SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_ERROR);
 			}
 		}
-		else if ($response->hasErrors())
+		else if (!$response->hasErrors() && SupersetInitializer::isSupersetUnavailable())
 		{
-			$this->logger->logMethodErrors($request->getAction(), $response->getStatus(), $response->getErrors());
-		}
-		else
-		{
-			if (SupersetInitializer::isSupersetUnavailable())
-			{
-				SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_READY);
-			}
+			SupersetInitializer::setSupersetStatus(SupersetInitializer::SUPERSET_STATUS_READY);
 		}
 
 		return parent::afterRequest($request, $response);
+	}
+
+	private static function describeServiceFailure(int $status): string
+	{
+		return $status === IntegratorResponse::STATUS_UNKNOWN
+			? 'Got unknown status code from proxy-service'
+			: 'Got unsuccessful status from proxy-service'
+		;
 	}
 
 	private static function isServiceErrorCode(int $code): bool

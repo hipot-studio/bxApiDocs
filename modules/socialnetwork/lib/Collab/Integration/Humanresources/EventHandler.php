@@ -11,14 +11,14 @@ use Bitrix\HumanResources\Type\RelationEntityType;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\CollabChat;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
+use Bitrix\Main\Application;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageBuffer;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 use Bitrix\Socialnetwork\V2\Internal\Integration\HumanResources\Mapper\DepartmentRelationMapper;
-use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ChatMessageSender;
-use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\Message\ProjectDepartmentMembersAdded;
-use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\Message\ProjectDepartmentMembersRemoved;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\MemberEntityMapper;
 
 /**
@@ -32,9 +32,21 @@ use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\MemberEntityMapper;
  * that CHAT relation off the collab chat. Keeping the CHAT relation in place is what lets im own the chat
  * membership (add now, remove on the eventual COLLAB unlink via its own CHAT-relation sync). The chat tree
  * (child chats) is im's responsibility — see Im\V2\Chat\Tree\ChatTreeDepartmentSynchronizer.
+ *
+ * The handler announces nothing by itself: a linked or unlinked node goes into the ActionMessageBuffer, so
+ * that one membership edit gives one message listing everyone it added (people, departments and teams),
+ * no matter whether the edit came from the project form or from the org structure.
  */
 class EventHandler
 {
+	/**
+	 * Unlinking a node is announced impersonally, and $relation->createdBy holds the author of the link,
+	 * not the one removing it: the summary of a removal names nobody as its author.
+	 */
+	private const NO_SENDER = 0;
+
+	private static bool $isBufferFlushScheduled = false;
+
 	public static function OnRelationAdded(Event $event): void
 	{
 		/** @var NodeRelation $relation */
@@ -56,19 +68,47 @@ class EventHandler
 			return;
 		}
 
-		Container::getInstance()
-			->getStructureSyncService()
-			->enqueueRelationAdded(
-				nodeId: $relation->nodeId,
-				entityId: $relation->entityId,
-				createdBy: $relation->createdBy,
-				withChildNodes: $relation->withChildNodes,
-			)
-		;
+		self::bufferStructureNode($relation, ActionType::AddUser, (int)$relation->createdBy);
 
-		self::linkRelatedChatRelations($relation);
+		self::holdSummaryWhile(static function () use ($relation): void {
+			Container::getInstance()
+				->getStructureSyncService()
+				->enqueueRelationAdded(
+					nodeId: $relation->nodeId,
+					entityId: $relation->entityId,
+					createdBy: $relation->createdBy,
+					withChildNodes: $relation->withChildNodes,
+				)
+			;
 
-		self::announceProjectDepartment($relation, added: true);
+			self::linkRelatedChatRelations($relation);
+		});
+	}
+
+	/**
+	 * Brings the members of the node into the project - or takes them out of it - while the buffer waits. That
+	 * part of the edit ends in a nested project edit (im mirrors the chat membership back onto the project),
+	 * and the nested edit flushes the buffer on its way out: a save that links two nodes with people in them
+	 * would announce each of them separately, and the people picked by hand a third time. The node itself is
+	 * already in the buffer by then, so even a flush that escapes the hold names it together with the rest.
+	 *
+	 * @param callable(): void $syncNodeMembers
+	 */
+	private static function holdSummaryWhile(callable $syncNodeMembers): void
+	{
+		self::scheduleBufferFlush();
+
+		$buffer = ActionMessageBuffer::getInstance();
+		$buffer->holdFlush();
+
+		try
+		{
+			$syncNodeMembers();
+		}
+		finally
+		{
+			$buffer->releaseFlush();
+		}
 	}
 
 	/**
@@ -153,7 +193,7 @@ class EventHandler
 			return;
 		}
 
-		$container->getStructureRelationService()->linkDepartments([$accessCode], $collabId);
+		$container->getStructureRelationService()->linkNodes([$accessCode], $collabId);
 	}
 
 	public static function OnMemberAdded(Event $event): void
@@ -183,19 +223,21 @@ class EventHandler
 			return;
 		}
 
-		Container::getInstance()
-			->getStructureSyncService()
-			->enqueueRelationDeleted(
-				nodeId: $relation->nodeId,
-				entityId: $relation->entityId,
-				createdBy: $relation->createdBy,
-				withChildNodes: $relation->withChildNodes,
-			)
-		;
+		self::bufferStructureNode($relation, ActionType::ExcludeStructureNode, self::NO_SENDER);
 
-		self::unlinkRelatedChatRelations($relation);
+		self::holdSummaryWhile(static function () use ($relation): void {
+			Container::getInstance()
+				->getStructureSyncService()
+				->enqueueRelationDeleted(
+					nodeId: $relation->nodeId,
+					entityId: $relation->entityId,
+					createdBy: $relation->createdBy,
+					withChildNodes: $relation->withChildNodes,
+				)
+			;
 
-		self::announceProjectDepartment($relation, added: false);
+			self::unlinkRelatedChatRelations($relation);
+		});
 	}
 
 	private static function unlinkRelatedChatRelations(NodeRelation $relation): void
@@ -208,46 +250,81 @@ class EventHandler
 
 		Container::getInstance()
 			->getStructureRelationService()
-			->unlinkChatRelations((int)$relation->nodeId, [$collabChatId])
+			->unlinkChatRelations(
+				(int)$relation->nodeId,
+				[$collabChatId],
+				(bool)$relation->withChildNodes,
+			)
 		;
 	}
 
 	/**
-	 * Project-phrased announcement in the collab chat that a department's members joined/left the project.
-	 * The "Project" wording lives here (socialnetwork), not in im — im's chat-phrased finish message is
-	 * suppressed for CollabChat.
+	 * Puts the linked or unlinked node into the buffer instead of announcing it right away. The buffer keeps
+	 * the project-phrased wording on the socialnetwork side (im's chat-phrased finish message is suppressed
+	 * for CollabChat) and merges the node with whatever else the same edit changed.
+	 *
+	 * A node without a name is dropped by the buffer, so a project keeps its silence exactly as before.
+	 *
+	 * A department or a team attached while the project is being created says nothing of itself either: the
+	 * creation card names it among the members, and the buffer record is kept only for what it does to the chat.
 	 */
-	private static function announceProjectDepartment(NodeRelation $relation, bool $added): void
+	private static function bufferStructureNode(NodeRelation $relation, ActionType $action, int $senderId): void
 	{
 		if (!Loader::includeModule('im'))
 		{
 			return;
 		}
 
-		$collabChatId = GroupRegistry::getInstance()->get((int)$relation->entityId)?->getChatId() ?? 0;
+		$collabId = (int)$relation->entityId;
+
+		$collabChatId = GroupRegistry::getInstance()->get($collabId)?->getChatId() ?? 0;
 		if ($collabChatId <= 0)
 		{
 			return;
 		}
 
-		$departmentName = (string)(
-			\Bitrix\HumanResources\Service\Container::getNodeService()
-				->getNodeInformation((int)$relation->nodeId)?->name
-			?? ''
-		);
-		if ($departmentName === '')
+		$node = Container::getInstance()->get(DepartmentRelationMapper::class)->map($relation);
+		if ($node === null)
 		{
 			return;
 		}
 
-		$messageData = $added
-			? new ProjectDepartmentMembersAdded($departmentName)
-			: new ProjectDepartmentMembersRemoved($departmentName);
-
-		Container::getInstance()
-			->get(ChatMessageSender::class)
-			->sendMessage($collabChatId, $messageData)
+		$buffer = ActionMessageBuffer::getInstance();
+		$parameters = $buffer->areMemberMessagesSuppressed($collabId)
+			? [ActionMessageBuffer::WITHOUT_MESSAGE_PARAMETER => true]
+			: []
 		;
+
+		$buffer->put($action, $collabId, $senderId, parameters: $parameters, nodes: [$node]);
+	}
+
+	/**
+	 * A membership edit made in the project flushes the buffer itself (CollabService), but a node linked from
+	 * the org structure has no such pipeline, so the summary is published at the end of the request. Both may
+	 * happen within one request: the flush empties the buffer, so the later one finds nothing to publish.
+	 */
+	private static function scheduleBufferFlush(): void
+	{
+		if (self::$isBufferFlushScheduled)
+		{
+			return;
+		}
+
+		self::$isBufferFlushScheduled = true;
+
+		Application::getInstance()->addBackgroundJob(self::publishBufferedSummary(...));
+	}
+
+	/**
+	 * Publishes whatever the buffer still holds at the end of the request. The sign of a scheduled publication
+	 * is dropped first: a process that outlives one request - a queue consumer, a console script - edits the
+	 * composition again, and that edit has to be able to schedule a publication of its own.
+	 */
+	private static function publishBufferedSummary(): void
+	{
+		self::$isBufferFlushScheduled = false;
+
+		ActionMessageBuffer::getInstance()->flush();
 	}
 
 	public static function OnMemberDeleted(Event $event): void

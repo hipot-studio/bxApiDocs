@@ -40,8 +40,10 @@ final class CreateParameters extends Dto
 		return [
 			new DefinedCategoryIdentifier($this, 'entityTypeId', 'categoryId'),
 
+			new RequiredField($this, 'title'),
 			new NotEmptyField($this, 'title'),
 
+			new RequiredField($this, 'sections'),
 			new NotEmptyField($this, 'sections'),
 			new ObjectCollectionField($this, 'sections'),
 

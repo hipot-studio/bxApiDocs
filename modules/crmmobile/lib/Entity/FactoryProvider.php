@@ -4,6 +4,7 @@ namespace Bitrix\CrmMobile\Entity;
 
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Settings\Crm;
 use Bitrix\Crm\Settings\LeadSettings;
 use Bitrix\Main\Loader;
@@ -26,18 +27,26 @@ final class FactoryProvider
 	/**
 	 * @return Factory[]
 	 */
-	public static function getFactoriesMetaData(array $categories = []): array
+	public static function getFactoriesMetaData(
+		array $categories = [],
+		?array $entityTypeIds = null,
+		?Container $container = null,
+		?UserPermissions $userPermissions = null,
+	): array
 	{
-		if (self::isExtranetUser())
+		$container ??= Container::getInstance();
+		$userPermissions ??= $container->getUserPermissions();
+		if (self::isExtranetUser($userPermissions->getUserId()))
 		{
 			return [];
 		}
 
 		$result = [];
 
-		$factories = Container::getInstance()->getTypesMap()->getFactories();
-		$userPermissions = Container::getInstance()->getUserPermissions();
-		$supportedEntityTypeIds = self::getSupportedEntityTypeIds();
+		$factories = self::getFactories($entityTypeIds, $container);
+		$includeDynamicTypes = $entityTypeIds === null
+			|| !empty(array_filter($entityTypeIds, [\CCrmOwnerType::class, 'isPossibleDynamicTypeId']));
+		$supportedEntityTypeIds = array_fill_keys(self::getSupportedTypes($includeDynamicTypes, $container), true);
 
 		foreach ($factories as $factory)
 		{
@@ -53,7 +62,7 @@ final class FactoryProvider
 					'entityTypeId' => $entityTypeId,
 					'entityTypeName' => $factory->getEntityName(),
 					'title' => $factory->getEntityDescription(),
-					'supported' => in_array($entityTypeId, $supportedEntityTypeIds, true),
+					'supported' => isset($supportedEntityTypeIds[$entityTypeId]),
 					'restricted' => RestrictionManager::isEntityRestricted($entityTypeId),
 				];
 			}
@@ -64,6 +73,11 @@ final class FactoryProvider
 
 	public static function getSupportedEntityTypeIds(): array
 	{
+		return self::getSupportedTypes(true, Container::getInstance());
+	}
+
+	private static function getSupportedTypes(bool $includeDynamicTypes, Container $container): array
+	{
 		$entities = [];
 		$dynamicEntities = [];
 
@@ -72,9 +86,9 @@ final class FactoryProvider
 			$entities[] = \CCrmOwnerType::Lead;
 		}
 
-		if (Crm::isMobileDynamicTypesEnabled())
+		if ($includeDynamicTypes && Crm::isMobileDynamicTypesEnabled())
 		{
-			$dynamicTypesMap = Container::getInstance()->getDynamicTypesMap()->load([
+			$dynamicTypesMap = $container->getDynamicTypesMap()->load([
 				'isLoadStages' => false,
 				'isLoadCategories' => false,
 			]);
@@ -96,6 +110,29 @@ final class FactoryProvider
 			],
 			$dynamicEntities
 		);
+	}
+
+	/**
+	 * @return Factory[]
+	 */
+	private static function getFactories(?array $entityTypeIds, Container $container): array
+	{
+		if ($entityTypeIds === null)
+		{
+			return $container->getTypesMap()->getFactories();
+		}
+
+		$factories = [];
+		foreach (array_unique($entityTypeIds) as $entityTypeId)
+		{
+			$factory = $container->getFactory($entityTypeId);
+			if ($factory !== null)
+			{
+				$factories[] = $factory;
+			}
+		}
+
+		return $factories;
 	}
 
 	private static function filterSupportedFactories(array $factories): array
@@ -163,8 +200,8 @@ final class FactoryProvider
 		);
 	}
 
-	private static function isExtranetUser()
+	private static function isExtranetUser(?int $userId = null): bool
 	{
-		return Loader::includeModule('intranet') && !\Bitrix\Intranet\Util::isIntranetUser();
+		return Loader::includeModule('intranet') && !\Bitrix\Intranet\Util::isIntranetUser($userId);
 	}
 }

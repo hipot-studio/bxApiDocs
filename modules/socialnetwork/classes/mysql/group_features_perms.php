@@ -1,6 +1,9 @@
 <?
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/socialnetwork/classes/general/group_features_perms.php");
 
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
+
 class CSocNetFeaturesPerms extends CAllSocNetFeaturesPerms
 {
 	/***************************************/
@@ -56,8 +59,16 @@ class CSocNetFeaturesPerms extends CAllSocNetFeaturesPerms
 					&& defined("BX_COMP_MANAGED_CACHE")
 				)
 				{
-					$CACHE_MANAGER->ClearByTag('sonet_features2perms');
 					$CACHE_MANAGER->ClearByTag("sonet_feature_".$arFields["FEATURE_ID"]);
+
+					if (DeferredCacheFeature::isOn())
+					{
+						DeferredTagCleaner::getInstance()->clearByTag('sonet_features2perms');
+					}
+					else
+					{
+						$CACHE_MANAGER->ClearByTag('sonet_features2perms');
+					}
 				}
 			}
 			else

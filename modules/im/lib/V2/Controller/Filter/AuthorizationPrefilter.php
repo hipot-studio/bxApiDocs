@@ -73,16 +73,18 @@ class AuthorizationPrefilter extends Base
 
 	protected function tryAuthenticateGuest(): void
 	{
+		$token = Token::createFromRequest();
+		if ($token === null)
+		{
+			return;
+		}
+
 		if (!Features::isChatWithGuestsAvailable(GuestService::getInstance()->getCurrentInviterId()))
 		{
 			return;
 		}
 
-		$token = Token::createFromRequest();
-		if ($token !== null)
-		{
-			AuthenticationService::getInstance()->authenticate($token);
-		}
+		AuthenticationService::getInstance()->authenticate($token);
 	}
 
 	protected function checkGuestAccess(): ?EventResult

@@ -12,6 +12,7 @@ use Bitrix\Crm\Model\AssignedTable;
 use Bitrix\Crm\Model\LastCommunicationTable;
 use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Recurring\RecurringFieldEditorAdapter;
+use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\ParentFieldManager;
@@ -47,6 +48,8 @@ class ItemDataProvider extends EntityDataProvider
 
 	public const FIELD_STAGE_SEMANTIC = 'STAGE_SEMANTIC_ID';
 
+	public const ACTIVITY_BLOCK_SORT_FIELD = 'nearest_activity';
+
 	protected const PRESET_ENTITY_SELECTOR = 'preset_entity_selector';
 	protected const PRESET_DEST_SELECTOR = 'preset_dest_selector';
 	protected const PRESET_DATETIME = 'preset_datetime';
@@ -59,6 +62,8 @@ class ItemDataProvider extends EntityDataProvider
 	/** @var Factory */
 	protected $factory;
 	protected $stages;
+	/** Built from the factory and the settings of this instance, so it must not be cached wider */
+	private ?array $fieldsInfo = null;
 
 	public function __construct(ItemSettings $settings, Factory $factory)
 	{
@@ -70,11 +75,9 @@ class ItemDataProvider extends EntityDataProvider
 
 	protected function getFieldsInfo(): array
 	{
-		static $fields;
-
-		if (!is_null($fields))
+		if (!is_null($this->fieldsInfo))
 		{
-			return $fields;
+			return $this->fieldsInfo;
 		}
 
 		// todo temporary crutch for smart invoices
@@ -419,13 +422,13 @@ class ItemDataProvider extends EntityDataProvider
 				'filterOptionPreset' => static::PRESET_LIST,
 				'editable' => new ListConfig(
 					Item::FIELD_NAME_SOURCE_ID,
-					StatusTable::getStatusesList(StatusTable::ENTITY_ID_SOURCE),
+					SourceDataProvider::getListWithEmptyValue(),
 				),
 			];
 			$fields[Item::FIELD_NAME_SOURCE_DESCRIPTION] = [
-				'type' => static::TYPE_TEXT,
+				'type' => static::TYPE_STRING,
 				'displayGrid' => true,
-				'displayFilter' => false,
+				'displayFilter' => true,
 				'defaultGrid' => false,
 				'defaultFilter' => false,
 			];
@@ -434,11 +437,12 @@ class ItemDataProvider extends EntityDataProvider
 		if ($this->factory->isCategoriesEnabled())
 		{
 			$fields[Item::FIELD_NAME_CATEGORY_ID] = [
-				'type' => static::TYPE_STRING,
+				'type' => static::TYPE_LIST,
 				'displayGrid' => true,
-				'displayFilter' => false,
+				'displayFilter' => $this->isAllItemsCategory(),
 				'defaultGrid' => false,
 				'defaultFilter' => false,
+				'filterOptionPreset' => static::PRESET_LIST,
 			];
 		}
 
@@ -472,7 +476,7 @@ class ItemDataProvider extends EntityDataProvider
 			'displayFilter' => false,
 			'defaultGrid' => false,
 			'defaultFilter' => false,
-			'sortField' => null,
+			'sortField' => $this->isActivityBlockSortEnabled() ? static::ACTIVITY_BLOCK_SORT_FIELD : null,
 			'customCaption' => Loc::getMessage('CRM_FILTER_ITEMDATAPROVIDER_ACTIVITY_BLOCK'),
 		];
 
@@ -497,7 +501,7 @@ class ItemDataProvider extends EntityDataProvider
 
 		$this->addParentFieldsInfo($fields);
 
-		return $fields;
+		return $this->fieldsInfo = $fields;
 	}
 
 	protected function appendRecurringFields(array &$fields): void
@@ -1017,6 +1021,23 @@ class ItemDataProvider extends EntityDataProvider
 				$result['items'][$stage->getStatusId()] = $stage->getName();
 			}
 		}
+		elseif ($fieldID === Item::FIELD_NAME_CATEGORY_ID)
+		{
+			$result = [
+				'params' => ['multiple' => 'Y'],
+				'items' => [],
+			];
+
+			$categories = Container::getInstance()
+				->getUserPermissions()
+				->category()
+				->filterAvailableForReadingCategories($this->factory->getCategories())
+			;
+			foreach ($categories as $category)
+			{
+				$result['items'][$category->getId()] = $category->getName();
+			}
+		}
 		elseif ($fieldID === static::FIELD_STAGE_SEMANTIC)
 		{
 			$result = [
@@ -1036,7 +1057,7 @@ class ItemDataProvider extends EntityDataProvider
 		{
 			$result = [
 				'params' => ['multiple' => 'Y'],
-				'items' => StatusTable::getStatusesList(StatusTable::ENTITY_ID_SOURCE),
+				'items' => SourceDataProvider::getListWithEmptyValue(),
 			];
 		}
 		elseif (ParentFieldManager::isParentFieldName($fieldID))
@@ -1055,6 +1076,13 @@ class ItemDataProvider extends EntityDataProvider
 		}
 
 		return $result;
+	}
+
+	private function isActivityBlockSortEnabled(): bool
+	{
+		return $this->factory->isCountersEnabled()
+			&& !RestrictionManager::getActivityFieldRestriction()->isExceeded()
+		;
 	}
 
 	private function canUseAssignedTableForUserProvider(): bool

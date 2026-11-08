@@ -7,6 +7,7 @@ namespace Bitrix\Bizproc\Public\Activity;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\Entity\Workflow\ExecutionPayload;
 use Bitrix\Bizproc\Public\Activity\Mixins\NodeFilterResultProperties;
+use Bitrix\Bizproc\Public\Activity\Mixins\RelationPackageProperties;
 use Bitrix\Bizproc\Public\Activity\Structure\FlowDirectedActivity;
 use Bitrix\Bizproc\Internal\Entity\Activity\Interface\FlowCompositeActivity;
 use Bitrix\Bizproc\Internal\Service\Activity\ChildValidationContext;
@@ -26,12 +27,23 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 	FlowCompositeActivity
 {
 	use NodeFilterResultProperties;
+	use RelationPackageProperties;
 
 	protected const RULES_PARAM = 'Rules';
 	protected const RELATIONS_PARAM = 'Relations';
 	protected const INPUT_ACTIVITY_NAMES = 'InputNames';
 	protected const OUTPUT_ACTIVITY_NAMES = 'OutputNames';
 	protected const NOT_FILLED_MARK = 'NotFilled';
+
+	/**
+	 * Values the mark takes when the panel names the block it was left in, so the refusal of the
+	 * publication names it too ({@see self::getNotFilledMessage()}). Any other non-empty value is a mark
+	 * all the same - a node marked before the block was named carries a plain `Y`.
+	 */
+	public const NOT_FILLED_RULES = 'Rules';
+	public const NOT_FILLED_RELATIONS = 'Relations';
+
+	private const FILLED_MARK = 'N';
 
 	protected array $queuePortIds = [];
 
@@ -48,6 +60,7 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 				static::OUTPUT_ACTIVITY_NAMES => [],
 			],
 			static::getFilterPropertyDefaults(),
+			static::getRelationPropertyDefaults(),
 		);
 
 		$this->setPropertiesTypes([
@@ -55,6 +68,7 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 				'Type' => FieldType::RULES,
 			],
 			...static::getFilterPropertyTypes(),
+			...static::getRelationPropertyTypes(),
 		]);
 	}
 
@@ -68,8 +82,16 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 	public function execute(): int
 	{
 		$this->initializeFilterResultProperties();
+		$this->initializeRelationPackageProperties();
 
 		return parent::execute();
+	}
+
+	public function onEvent(CBPActivity $sender, $arEventParameters = []): void
+	{
+		$this->transferRelationPackageProperties($sender);
+
+		parent::onEvent($sender, $arEventParameters);
 	}
 
 	public static function validateChild($childActivity, $bFirstChild = false)
@@ -195,15 +217,32 @@ abstract class BaseComplexActivity extends FlowDirectedActivity implements
 			];
 		}
 
-		if (($arTestProperties[static::NOT_FILLED_MARK] ?? 'N') === 'Y')
+		$notFilledMark = (string)($arTestProperties[static::NOT_FILLED_MARK] ?? self::FILLED_MARK);
+		if ($notFilledMark !== self::FILLED_MARK && $notFilledMark !== '')
 		{
 			$arErrors[] = [
 				'code' => 'NotExist',
-				'message' => Loc::getMessage('BIZPROC_PUBLIC_ACTIVITY_BCA_NOT_FILLED'),
+				'message' => self::getNotFilledMessage($notFilledMark),
 			];
 		}
 
 		return array_merge($arErrors, parent::validateProperties($arTestProperties, $user));
+	}
+
+	/**
+	 * What the publication says of a node the panel marked unfinished. A mark naming the block it was left
+	 * in names that block to the person as well; the rules are what the message speaks of by default, so a
+	 * mark of the rules and one written before the block was named say the same thing.
+	 */
+	private static function getNotFilledMessage(string $notFilledMark): string
+	{
+		$messageId = match ($notFilledMark)
+		{
+			self::NOT_FILLED_RELATIONS => 'BIZPROC_PUBLIC_ACTIVITY_BCA_NOT_FILLED_RELATIONS',
+			default => 'BIZPROC_PUBLIC_ACTIVITY_BCA_NOT_FILLED',
+		};
+
+		return (string)Loc::getMessage($messageId);
 	}
 
 	protected static function getPropertiesMap(array $documentType, array $context = []): array

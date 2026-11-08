@@ -1,6 +1,5 @@
 <?php
 
-use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\Response\AjaxJson;
 use Bitrix\Main\Loader;
@@ -48,7 +47,7 @@ class MarketMain extends CBitrixComponent implements Controllerable, Loadable
 	private function prepareResult()
 	{
 		$this->prepareParams();
-		$this->pageTitle = Loc::getMessage('MARKET_MAIN_PAGE_TITLE_MSGVER_1');
+		$this->pageTitle = Toolbar::getMarketPageTitle();
 		$this->arResult['TITLE'] = $this->pageTitle;
 		$this->arResult['COLLECTIONS'] = [];
 		$this->arResult['SLIDER'] = [];

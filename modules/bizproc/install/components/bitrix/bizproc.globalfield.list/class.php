@@ -712,6 +712,7 @@ HTML;
 		unset($baseTypes[\Bitrix\Bizproc\FieldType::INTERNALSELECT]);
 		unset($baseTypes[\Bitrix\Bizproc\FieldType::FILE]);
 		unset($baseTypes[\Bitrix\Bizproc\FieldType::CONDITIONGROUP]);
+		unset($baseTypes[\Bitrix\Bizproc\FieldType::NODEREFERENCE]);
 
 		$documentType = $this->arParams['DOCUMENT_TYPE'];
 		$documentTypes = $documentService->GetDocumentFieldTypes($documentType);
@@ -817,12 +818,7 @@ HTML;
 			'URL' => null,
 		];
 
-		$usersInfo = \Bitrix\Bizproc\Automation\Helper::prepareUserSelectorEntities(
-			$this->arParams['DOCUMENT_TYPE'],
-			'user_' . $userId
-		);
-
-		if ($userId <= 0 || !$usersInfo)
+		if ($userId <= 0)
 		{
 			return $user;
 		}
@@ -831,12 +827,32 @@ HTML;
 			return $this->usersInfo[$userId];
 		}
 
-		$userInfo = $usersInfo[0];
+		$userInfo = \CUser::GetList(
+			'id',
+			'asc',
+			['ID_EQUAL_EXACT' => $userId],
+			[
+				'FIELDS' => [
+					'ID',
+					'NAME',
+					'SECOND_NAME',
+					'LAST_NAME',
+					'LOGIN',
+					'TITLE',
+					'EMAIL',
+					'PERSONAL_PHOTO',
+				],
+			],
+		)->Fetch();
+		if (!$userInfo)
+		{
+			return $user;
+		}
 
 		$this->usersInfo[$userId] = [
-			'NAME' => $userInfo['name'],
-			'AVATAR' => $userInfo['photoSrc'],
-			'URL' => $userInfo['url'],
+			'NAME' => \CUser::FormatName(\CSite::GetNameFormat(false), $userInfo, true, false),
+			'AVATAR' => \CBPViewHelper::getUserPhotoSrc($userInfo),
+			'URL' => sprintf('/company/personal/user/%s/', $userId),
 		];
 
 		return $this->usersInfo[$userId];

@@ -57,6 +57,11 @@ class GroupEntity extends EO_Workgroup
 		return $object;
 	}
 
+	/**
+	 * Returns true only for legacy projects; new Projects retain the collab type.
+	 *
+	 * @see \Bitrix\Socialnetwork\Item\Workgroup::isCollabProject() for the new Project
+	 */
 	public function isProject(): bool
 	{
 		return $this->typeIs(Type::Project);

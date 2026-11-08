@@ -27,6 +27,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Crm\Settings\LayoutSettings;
+use Bitrix\Crm\Tour\Onboarding\DealCard;
 use Bitrix\Crm\Tracking;
 use Bitrix\Currency;
 use Bitrix\Main;
@@ -290,7 +291,6 @@ class CCrmDealDetailsComponent
 		$extras = isset($this->arParams['~EXTRAS']) && is_array($this->arParams['~EXTRAS'])
 			? $this->arParams['~EXTRAS'] : array();
 
-		$this->arResult['WAREHOUSE_CRM_TOUR_DATA'] = $this->getWarehouseOnboardTourData();
 		$this->arResult['ENABLE_TASK'] = IsModuleInstalled('tasks');
 		$this->arResult['ACTION_URI'] = $this->arResult['POST_FORM_URI'] = POST_FORM_ACTION_URI;
 
@@ -468,6 +468,10 @@ class CCrmDealDetailsComponent
 		$this->prepareEntityUserFieldInfos();
 
 		$this->initializeEditorData();
+
+		// Asked after the mode, the id and the entity data are settled: the tour belongs to the card
+		// of an existing deal, and a copy, an expose form or a recurring template is not one.
+		$this->arResult['WAREHOUSE_CRM_TOUR_DATA'] = $this->getWarehouseOnboardTourData();
 
 		if ($this->entityID <= 0 || $this->entityData['IS_RECURRING'] === "Y" || $this->isCopyMode)
 		{
@@ -675,6 +679,7 @@ class CCrmDealDetailsComponent
 									'PRESERVE_HISTORY' => true,
 									'ADD_EVENT_NAME' => 'CrmCreateQuoteFromDeal',
 									'EXTENDED_INTERNAL_MODE' => true,
+									'ENABLE_GROUP_ACTIONS' => 'Y',
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
 										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_DEAL,
@@ -812,7 +817,7 @@ class CCrmDealDetailsComponent
 						$this->categoryID,
 						$this->userID
 					);
-					if ($checkAutomationTourGuideData)
+					if ($checkAutomationTourGuideData && !$this->isOnboardingTourGoingToShow())
 					{
 						$this->arResult['AUTOMATION_CHECK_AUTOMATION_TOUR_GUIDE_DATA'] = [
 							'options' => $checkAutomationTourGuideData,
@@ -1714,7 +1719,7 @@ class CCrmDealDetailsComponent
 	}
 	public function prepareEntityFieldAttributeConfigs()
 	{
-		if(!$this->entityFieldAttributeConfig)
+		if($this->entityFieldAttributeConfig === null)
 		{
 			$this->entityFieldAttributeConfig = FieldAttributeManager::getEntityConfigurations(
 				CCrmOwnerType::Deal,
@@ -1739,6 +1744,10 @@ class CCrmDealDetailsComponent
 		$enumerationFields = array();
 
 		$visibilityConfig = $this->prepareEntityFieldvisibilityConfigs(CCrmOwnerType::Deal);
+		$aiFillPolicyConfigs = EditorAdapter::prepareEntityFieldAiFillPolicyConfigs(
+			CCrmOwnerType::Deal,
+			$userFields
+		);
 
 		foreach($userFields as $userField)
 		{
@@ -1799,6 +1808,11 @@ class CCrmDealDetailsComponent
 			if(isset($visibilityConfig[$fieldName]))
 			{
 				$data['visibilityConfigs'] = $visibilityConfig[$fieldName];
+			}
+
+			if(isset($aiFillPolicyConfigs[$fieldName]))
+			{
+				$data['aiFillPolicy'] = $aiFillPolicyConfigs[$fieldName];
 			}
 
 			$this->userFieldInfos[$fieldName] = array(
@@ -2366,6 +2380,10 @@ class CCrmDealDetailsComponent
 
 		//region Client Data & Multifield Data
 		$clientInfo = array();
+		$isCompanyReadPermitted = true;
+		// the entity row carries the fields of this contact only
+		$primaryContactID = isset($this->entityData['CONTACT_ID']) ? (int)$this->entityData['CONTACT_ID'] : 0;
+		$isPrimaryContactReadPermitted = ($primaryContactID <= 0);
 
 		$companyID = isset($this->entityData['COMPANY_ID']) ? (int)$this->entityData['COMPANY_ID'] : 0;
 		if($companyID > 0)
@@ -2381,13 +2399,13 @@ class CCrmDealDetailsComponent
 				$this->entityData
 			);
 
-			$isEntityReadPermitted = $this->userPermissionsService->item()->canRead(CCrmOwnerType::Company, $companyID);
+			$isCompanyReadPermitted = $this->userPermissionsService->item()->canRead(CCrmOwnerType::Company, $companyID);
 			$companyInfo = \CCrmEntitySelectorHelper::PrepareEntityInfo(
 				CCrmOwnerType::CompanyName,
 				$companyID,
 				array(
 					'ENTITY_EDITOR_FORMAT' => true,
-					'IS_HIDDEN' => !$isEntityReadPermitted,
+					'IS_HIDDEN' => !$isCompanyReadPermitted,
 					'REQUIRE_REQUISITE_DATA' => true,
 					'REQUIRE_EDIT_REQUISITE_DATA' => true,
 					'REQUIRE_MULTIFIELDS' => true,
@@ -2433,6 +2451,10 @@ class CCrmDealDetailsComponent
 		foreach($contactIDs as $contactID)
 		{
 			$isEntityReadPermitted = $this->userPermissionsService->item()->canRead(CCrmOwnerType::Contact, $contactID);
+			if ((int)$contactID === $primaryContactID)
+			{
+				$isPrimaryContactReadPermitted = $isEntityReadPermitted;
+			}
 			$clientInfo['CONTACT_DATA'][] = CCrmEntitySelectorHelper::PrepareEntityInfo(
 				CCrmOwnerType::ContactName,
 				$contactID,
@@ -2450,6 +2472,16 @@ class CCrmDealDetailsComponent
 			$iteration++;
 		}
 		$this->entityData['CLIENT_INFO'] = $clientInfo;
+
+		// COMPANY_TITLE of a deal row read via CCrmDeal::GetListEx() is CO.TITLE, the title of the
+		// linked company (map of CCrmDeal::GetFields()); the legacy CCrmDeal::GetList() map uses
+		// different aliases and does not apply here
+		\CCrmComponentHelper::maskClientNameFields(
+			$this->entityData,
+			'COMPANY_TITLE',
+			isCompanyReadable: $isCompanyReadPermitted,
+			isContactReadable: $isPrimaryContactReadPermitted
+		);
 
 		//region Requisites
 		$this->entityData['REQUISITE_BINDING'] = array();
@@ -3451,10 +3483,28 @@ class CCrmDealDetailsComponent
 		];
 	}
 
+	/**
+	 * Newcomers meet the onboarding tour first: it walks the whole card, and a hint opening over it
+	 * would take the screen before the first step. Nothing is lost: the warehouse chain keeps its
+	 * state, so the hint comes back on the next opening.
+	 */
+	private function isOnboardingTourGoingToShow(): bool
+	{
+		$isEditMode = (bool)($this->arResult['IS_EDIT_MODE'] ?? false);
+		$isRecurringTemplate = ($this->entityData['IS_RECURRING'] ?? 'N') === 'Y';
+		$openedDealId = $isEditMode && !$isRecurringTemplate ? (int)($this->arResult['ENTITY_ID'] ?? 0) : 0;
+
+		return DealCard::getInstance()
+			->setEntityId($openedDealId)
+			->isGoingToShow()
+		;
+	}
+
 	private function getWarehouseOnboardTourData(): array
 	{
 		$tourData = [
-			'IS_TOUR_AVAILABLE' => WarehouseOnboarding::isCrmWarehouseOnboardingAvailable($this->userID),
+			'IS_TOUR_AVAILABLE' => WarehouseOnboarding::isCrmWarehouseOnboardingAvailable($this->userID)
+				&& !$this->isOnboardingTourGoingToShow(),
 		];
 
 		if ($tourData['IS_TOUR_AVAILABLE'])

@@ -223,9 +223,27 @@ class AiPromptLibraryComponentGrid extends CBitrixComponent
 			$stub = $this->getStubHtml();
 		}
 
+		$gridParams = $this->addPromptNameAttrs(
+			ComponentParams::get($this->getGrid())
+		);
+
 		$this->arResult = [
-			'GRID' => [...ComponentParams::get($this->getGrid()), 'STUB' => $stub],
+			'GRID' => [...$gridParams, 'STUB' => $stub],
 		];
+	}
+
+	private function addPromptNameAttrs(array $gridParams): array
+	{
+		foreach ($gridParams['ROWS'] as $rowIndex => $row)
+		{
+			$promptName = $row['data']['DATA']['NAME'] ?? null;
+			if (is_string($promptName))
+			{
+				$gridParams['ROWS'][$rowIndex]['attrs']['data-prompt-name'] = $promptName;
+			}
+		}
+
+		return $gridParams;
 	}
 
 	private function initToolbar(): void

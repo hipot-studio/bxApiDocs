@@ -15,6 +15,12 @@ interface ExternalLinkRepositoryInterface extends RepositoryInterface
 	public function getForUnifiedLinkAccessCheck(mixed $objectId): ?ExternalLink;
 
 	/**
+	 * @param array<int, int> $objectIds
+	 * @return array<int, ExternalLink>
+	 */
+	public function getForUnifiedLinkAccessCheckCollection(array $objectIds): array;
+
+	/**
 	 * @param mixed $objectId
 	 * @return ExternalLink|null
 	 */
@@ -31,4 +37,13 @@ interface ExternalLinkRepositoryInterface extends RepositoryInterface
 	 * @return ExternalLink|null
 	 */
 	public function getForUse(mixed $objectId): ?ExternalLink;
+
+	/**
+	 * The schema holds no unique key over the working manual link of an object, so a caller which
+	 * has to see every row asks for the whole list, newest first.
+	 *
+	 * @param mixed $objectId
+	 * @return ExternalLink[]
+	 */
+	public function getAllForUse(mixed $objectId): array;
 }

@@ -2,6 +2,8 @@
 
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\Integration\Intranet\User;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 use Bitrix\Socialnetwork\WorkgroupTable;
 
 IncludeModuleLangFile(__FILE__);
@@ -184,8 +186,16 @@ class CAllSocNetFeaturesPerms
 			{
 				if (defined("BX_COMP_MANAGED_CACHE"))
 				{
-					$CACHE_MANAGER->ClearByTag('sonet_features2perms');
 					$CACHE_MANAGER->ClearByTag("sonet_features2perms_".$ID);
+
+					if (DeferredCacheFeature::isOn())
+					{
+						DeferredTagCleaner::getInstance()->clearByTag('sonet_features2perms');
+					}
+					else
+					{
+						$CACHE_MANAGER->ClearByTag('sonet_features2perms');
+					}
 				}
 				else
 				{
@@ -251,8 +261,16 @@ class CAllSocNetFeaturesPerms
 
 			if (defined("BX_COMP_MANAGED_CACHE"))
 			{
-				$CACHE_MANAGER->ClearByTag('sonet_features2perms');
 				$CACHE_MANAGER->ClearByTag("sonet_features2perms_".$ID);
+
+				if (DeferredCacheFeature::isOn() || ($options['deferCacheClear'] ?? false) === true)
+				{
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_features2perms');
+				}
+				else
+				{
+					$CACHE_MANAGER->ClearByTag('sonet_features2perms');
+				}
 			}
 			else
 			{

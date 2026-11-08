@@ -66,7 +66,7 @@ final class TailwindRuntimeInitService
 			: []
 		;
 
-		$rightsState = Rights::isOn();
+		$rightsState = Rights::isGlobalOn();
 		if ($rightsState)
 		{
 			Rights::setGlobalOff();

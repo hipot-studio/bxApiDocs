@@ -11,6 +11,7 @@ use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\DB\MysqlCommonConnection;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Mail\Internal\SenderTable;
+use Bitrix\Main\Mail\Sender\AddressFilter;
 use Bitrix\Main\Mail\Sender\UserSenderDataProvider;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Query;
@@ -101,17 +102,7 @@ class SenderProvider
 				->where('IS_PUBLIC', true)
 			)
 		;
-		if (self::isEmailComparisonCaseInsensitive())
-		{
-			$independentQuery->whereIn('EMAIL', $emails);
-		}
-		else
-		{
-			$independentQuery
-				->registerRuntimeField(new ExpressionField('EMAIL_LOWER', 'LOWER(%s)', 'EMAIL'))
-				->whereIn('EMAIL_LOWER', $emails);
-		}
-		$independentSenders = $independentQuery->fetchAll();
+		$independentSenders = self::applyAddressCondition($independentQuery, $emails)->fetchAll();
 		foreach ($independentSenders as $sender)
 		{
 			$email = mb_strtolower((string)($sender['EMAIL'] ?? ''));
@@ -135,14 +126,40 @@ class SenderProvider
 	}
 
 	/**
-	 * MySQL compares EMAIL with a case-insensitive collation, so the plain indexed lookup already
-	 * matches every case variant. Case-sensitive engines (PostgreSQL) compare through LOWER(EMAIL)
-	 * instead, served there by the functional index on LOWER(email); a narrower exact-match pass
-	 * would hide case variants of an address that has at least one exact row.
+	 * The address condition belongs to main: it owns the table and the form of the lookup over it.
+	 *
+	 * @param string[] $emails
 	 */
-	private static function isEmailComparisonCaseInsensitive(): bool
+	private static function applyAddressCondition(Query $query, array $emails): Query
 	{
-		return Application::getConnection() instanceof MysqlCommonConnection;
+		if (method_exists(AddressFilter::class, 'applyEmails'))
+		{
+			return AddressFilter::applyEmails($query, $emails);
+		}
+
+		return self::applyCaseInsensitiveAddressCondition($query, $emails);
+	}
+
+	/**
+	 * An older kernel hands out no condition, and it does not normalize the stored address either, so
+	 * here the case of the stored value still matters. Where the collation folds the case on its own
+	 * the plain comparison already matches every variant and keeps the index; only an engine that
+	 * compares case-sensitively has to fold the case in the query and pay for it, because a sender
+	 * saved in mixed case would otherwise vanish from the list.
+	 *
+	 * @param string[] $emails
+	 */
+	private static function applyCaseInsensitiveAddressCondition(Query $query, array $emails): Query
+	{
+		if (Application::getConnection() instanceof MysqlCommonConnection)
+		{
+			return $query->whereIn('EMAIL', $emails);
+		}
+
+		return $query
+			->registerRuntimeField(new ExpressionField('EMAIL_LOWER', 'LOWER(%s)', 'EMAIL'))
+			->whereIn('EMAIL_LOWER', $emails)
+		;
 	}
 
 	/**

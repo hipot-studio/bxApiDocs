@@ -16,6 +16,8 @@ use Bitrix\Main\SystemException;
 
 class AnnualSummaryRepository
 {
+	private const WRITE_BATCH_SIZE = 500;
+
 	/**
 	 * @throws ArgumentException
 	 * @throws ObjectPropertyException
@@ -57,6 +59,7 @@ class AnnualSummaryRepository
 			['TOTAL' => $entity->getTotal()],
 		);
 		Application::getConnection()->query($sql[0]);
+		AnnualSummaryTable::cleanCache();
 	}
 
 	public function saveCollection(EntityCollection $collection): void
@@ -70,16 +73,26 @@ class AnnualSummaryRepository
 				'TOTAL' => $entity->getTotal(),
 			];
 		}
-		$helper = Application::getConnection()->getSqlHelper();
-		$sql = $helper->prepareMergeMultiple(
-			AnnualSummaryTable::getTableName(),
-			['USER_ID', 'NAME'],
-			$rows,
-		);
-		if (isset($sql[0]))
+
+		if (empty($rows))
 		{
-			Application::getConnection()->query($sql[0]);
+			return;
 		}
+
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+		foreach (array_chunk($rows, self::WRITE_BATCH_SIZE) as $batch)
+		{
+			$sql = $helper->prepareMergeValues(
+				AnnualSummaryTable::getTableName(),
+				['USER_ID', 'NAME'],
+				$batch,
+				['TOTAL'],
+			);
+			$connection->query($sql);
+		}
+
+		AnnualSummaryTable::cleanCache();
 	}
 
 	/**

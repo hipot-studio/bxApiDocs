@@ -9,6 +9,7 @@ use Bitrix\UI\AccessRights\V2\Control\Trait\HasHintTitle;
 use Bitrix\UI\AccessRights\V2\Control\Trait\HasSelectedVariablesAliases;
 use Bitrix\UI\AccessRights\V2\Control\Trait\HasSharedOptions;
 use Bitrix\UI\AccessRights\V2\Control\Value\MultiVariable;
+use Bitrix\UI\AccessRights\V2\Control\Value\VariablesSource;
 use Bitrix\UI\AccessRights\V2\Options\RightSection\RightItem;
 use Bitrix\UI\AccessRights\V2\Options\RightSection\RightItem\Type;
 
@@ -22,6 +23,9 @@ class MultiVariables implements Control, RightItemConfigurator
 	protected array $variables = [];
 
 	protected string|int|null $allSelectedCode = null;
+	protected ?string $allSelectedTitle = null;
+	protected ?VariablesSource $variablesSource = null;
+	protected ?string $unloadedVariableTitlePattern = null;
 	protected ?bool $enableSearch = null;
 	protected ?bool $showAvatars = null;
 	protected ?bool $compactView = null;
@@ -44,6 +48,11 @@ class MultiVariables implements Control, RightItemConfigurator
 			$rightItem->addVariable($rightItemVariable);
 		}
 
+		$rightItem
+			->setVariablesSource($this->variablesSource?->toArray())
+			->setAllSelectedTitle($this->allSelectedTitle)
+			->setUnloadedVariableTitlePattern($this->unloadedVariableTitlePattern);
+
 		$this->configureRightItemBySharedOptions($rightItem);
 		$this->configureRightItemBySelectedVariablesAliases($rightItem);
 		$this->configureRightItemByHintTitle($rightItem);
@@ -63,6 +72,31 @@ class MultiVariables implements Control, RightItemConfigurator
 	public function allSelectedCode(string|int|null $code): static
 	{
 		$this->allSelectedCode = $code;
+
+		return $this;
+	}
+
+	public function allSelectedTitle(?string $title): static
+	{
+		$this->allSelectedTitle = $title;
+
+		return $this;
+	}
+
+	public function variablesSource(?VariablesSource $variablesSource): static
+	{
+		$this->variablesSource = $variablesSource;
+
+		return $this;
+	}
+
+	/**
+	 * @param ?string $pattern caption of a value the source does not name, with
+	 *                {@see RightItem::UNLOADED_VARIABLE_VALUE_PLACEHOLDER} in place of the value
+	 */
+	public function unloadedVariableTitlePattern(?string $pattern): static
+	{
+		$this->unloadedVariableTitlePattern = $pattern;
 
 		return $this;
 	}

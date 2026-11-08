@@ -2,6 +2,7 @@
 
 namespace Bitrix\AI\ShareRole\Service\GridRole;
 
+use Bitrix\AI\Entity\AccessCodeTrait;
 use Bitrix\AI\Entity\TranslateTrait;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Integration\Intranet\DepartmentService;
@@ -35,6 +36,7 @@ class GridRoleService
 {
 	use UserPhoto;
 	use TranslateTrait;
+	use AccessCodeTrait;
 
 	protected const MAX_SHARE_DATA = 5;
 	protected DataProvider $accessRightsDataProvider;
@@ -43,7 +45,17 @@ class GridRoleService
 
 	protected string $nameFormat;
 
-	protected array $existingGroupCodes;
+	/** @var list<int> */
+	protected array $pageGroupIds = [];
+
+	/** @var list<int> */
+	protected array $pageDepartmentIds = [];
+
+	protected ?array $existingGroupIdSet = null;
+
+	protected ?array $notVisibleGroupIdSet = null;
+
+	protected ?array $existingDepartmentIdSet = null;
 
 	public function __construct(
 		protected GridRoleRepository $gridRoleRepository,
@@ -211,6 +223,22 @@ class GridRoleService
 	 */
 	protected function fillSharing(array $roles, int $userId): array
 	{
+		$pageCodes = [];
+		foreach ($roles as $role)
+		{
+			if (empty($role['SHARE_CODES']))
+			{
+				continue;
+			}
+
+			foreach (explode(',', $role['SHARE_CODES']) as $code)
+			{
+				$pageCodes[$code] = $code;
+			}
+		}
+
+		$this->resetShareValidationState(array_values($pageCodes));
+
 		$sharingInfoDto = $this->getSharingInfoDto();
 		$format = $this->getNameFormat();
 
@@ -327,7 +355,7 @@ class GridRoleService
 
 			if ($accessCode->getEntityType() === AccessCode::TYPE_SOCNETGROUP)
 			{
-				if (!in_array($code, $this->getExistingGroupCodes(), true))
+				if (!isset($this->getExistingGroupIdSet()[$accessCode->getEntityId()]))
 				{
 					$gridRoleDto->decreaseCountShare();
 					continue;
@@ -343,7 +371,7 @@ class GridRoleService
 
 			if ($accessCode->getEntityType() === AccessCode::TYPE_DEPARTMENT)
 			{
-				if (!in_array($code, $this->getExistingDepartmentCodes(), true))
+				if (!isset($this->getExistingDepartmentIdSet()[$accessCode->getEntityId()]))
 				{
 					$gridRoleDto->decreaseCountShare();
 					continue;
@@ -367,7 +395,7 @@ class GridRoleService
 		if (
 			$accessCode->getEntityType() === AccessCode::TYPE_SOCNETGROUP
 			&& !array_key_exists($code, $userGroups)
-			&& array_key_exists($entity->getId(), $this->groupService->getNotVisibleGroupListInKeys())
+			&& isset($this->getNotVisibleGroupIdSet()[$accessCode->getEntityId()])
 		)
 		{
 			$name = $this->getHiddenName();
@@ -446,16 +474,6 @@ class GridRoleService
 		return 'U' . $userId;
 	}
 
-	protected function getCodeForGroup(int $groupId): string
-	{
-		return 'SG' . $groupId;
-	}
-
-	protected function getCodeForDepartment(int $departmentId): string
-	{
-		return 'DR' . $departmentId;
-	}
-
 	protected function getIdsFromList(array $list): array
 	{
 		if (empty($list))
@@ -485,30 +503,51 @@ class GridRoleService
 		return $this->allUsersEntityName;
 	}
 
-	protected function getExistingGroupCodes(): array
+	/**
+	 * Collects the group and department ids of the codes to validate and drops the memoized predicates.
+	 *
+	 * @param string[] $codes
+	 */
+	protected function resetShareValidationState(array $codes): void
 	{
-		if (empty($this->existingGroupCodes))
-		{
-			$this->existingGroupCodes = $this->groupService->getAllGroupCodes();
-			$this->existingGroupCodes = array_map(
-				fn($value) => $this->getCodeForGroup($value), $this->existingGroupCodes
-			);
-		}
-
-		return $this->existingGroupCodes;
+		$ids = $this->collectEntityIdsByTypes($codes, [AccessCode::TYPE_SOCNETGROUP, AccessCode::TYPE_DEPARTMENT]);
+		$this->pageGroupIds = $ids[AccessCode::TYPE_SOCNETGROUP];
+		$this->pageDepartmentIds = $ids[AccessCode::TYPE_DEPARTMENT];
+		$this->existingGroupIdSet = null;
+		$this->notVisibleGroupIdSet = null;
+		$this->existingDepartmentIdSet = null;
 	}
 
-	protected function getExistingDepartmentCodes(): array
+	protected function getExistingGroupIdSet(): array
 	{
-		if (empty($this->existingDepartmentCodes))
+		if (is_null($this->existingGroupIdSet))
 		{
-			$this->existingDepartmentCodes = $this->departmentService->getDepartments();
-			$this->existingDepartmentCodes = array_map(
-				fn($value) => $this->getCodeForDepartment($value), $this->existingDepartmentCodes
+			$this->existingGroupIdSet = array_flip($this->groupService->getExistingGroupIds($this->pageGroupIds));
+		}
+
+		return $this->existingGroupIdSet;
+	}
+
+	protected function getNotVisibleGroupIdSet(): array
+	{
+		if (is_null($this->notVisibleGroupIdSet))
+		{
+			$this->notVisibleGroupIdSet = array_flip($this->groupService->getNotVisibleGroupIds($this->pageGroupIds));
+		}
+
+		return $this->notVisibleGroupIdSet;
+	}
+
+	protected function getExistingDepartmentIdSet(): array
+	{
+		if (is_null($this->existingDepartmentIdSet))
+		{
+			$this->existingDepartmentIdSet = array_flip(
+				$this->departmentService->getExistingDepartmentIds($this->pageDepartmentIds)
 			);
 		}
 
-		return $this->existingDepartmentCodes;
+		return $this->existingDepartmentIdSet;
 	}
 
 	protected function log(string $text): void

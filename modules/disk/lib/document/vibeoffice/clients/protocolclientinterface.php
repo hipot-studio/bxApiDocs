@@ -19,7 +19,7 @@ interface ProtocolClientInterface
 	 * Opens an editing session for the document.
 	 * POST /v1/documents/{docKey}/open
 	 */
-	public function open(string $docKey, array $body): Result;
+	public function open(string $docKey, array $body, ?float $deadline = null): Result;
 
 	/**
 	 * Creates or updates access grants for the document.
@@ -40,6 +40,15 @@ interface ProtocolClientInterface
 	 * POST /v1/documents/{docKey}/forcesave
 	 */
 	public function forcesave(string $docKey, ?array $userdata): Result;
+
+	/**
+	 * Updates the metadata the document server keeps for the document. The document server carries
+	 * the new title to every editor of the co-editing session, so the header of the editor shows it.
+	 * POST /v1/documents/{docKey}/meta
+	 *
+	 * @param string $title the file name with its extension: the only metadata the platform accepts
+	 */
+	public function updateMeta(string $docKey, string $title): Result;
 
 	/**
 	 * Converts a document.

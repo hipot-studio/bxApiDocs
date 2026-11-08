@@ -12,6 +12,7 @@ use Bitrix\Main\Security\Random;
 use Bitrix\Main\Security\SecurityException;
 use Bitrix\Main\Web\JWT;
 use Bitrix\Main\Service\MicroService\Client;
+use Bitrix\Call\Integration\AI\CallAISettings;
 
 /**
  * @internal
@@ -87,7 +88,7 @@ class JwtCall
 					Option::set('call', 'call_v2_enabled', true);
 
 					Signaling::sendClearCallTokens();
-					NotifyService::getInstance()->addAdminNotify(Loc::getMessage('CALL_REGISTRATION_ADMIN_NOTIFY'));
+					NotifyService::getInstance()->addAdminNotify(Loc::getMessage('CALL_REGISTRATION_ADMIN_NOTIFY_MSGVER_1', ['#COPILOT_NAME#' => CallAISettings::getCopilotName()]));
 
 					return '';
 				}
@@ -114,7 +115,7 @@ class JwtCall
 			{
 				Option::set('call', 'call_v2_enabled', true);
 				Signaling::sendClearCallTokens();
-				NotifyService::getInstance()->addAdminNotify(Loc::getMessage('CALL_REGISTRATION_ADMIN_NOTIFY'));
+				NotifyService::getInstance()->addAdminNotify(Loc::getMessage('CALL_REGISTRATION_ADMIN_NOTIFY_MSGVER_1', ['#COPILOT_NAME#' => CallAISettings::getCopilotName()]));
 
 				return '';
 			}
@@ -318,6 +319,26 @@ class JwtCall
 		}
 
 		return self::$userTokens[$userId];
+	}
+
+	/**
+	 * Reissues the personal user JWT after a profile change (e.g. guest rename).
+	 *
+	 * getUserJwt reads the name via \Bitrix\Im\User::getFullName, which resolves through
+	 * \CIMContactList::GetUserData, so both in-process caches are dropped: the legacy
+	 * \Bitrix\Im\User instance and \CIMContactList::$staticUserDataCache. The disk cache is
+	 * invalidated by the core on CUser::Update via the USER_NAME tag. Then the token is re-encoded.
+	 *
+	 * @param int $userId
+	 * @return string
+	 */
+	public static function updateUserJwt(int $userId): string
+	{
+		\Bitrix\Im\User::clearStaticCache();
+		\CIMContactList::clearStaticUserDataCache();
+		unset(self::$userTokens[$userId]);
+
+		return self::getUserJwt($userId);
 	}
 
 	/**

@@ -2,6 +2,10 @@
 
 namespace Bitrix\Sign\Contract\Util;
 
+/**
+ * Keys of the shared root of the cache of the module. Own scopes and dropping a scope as a whole
+ * belong to the implementation that owns them, Util\MainCache.
+ */
 interface Cache
 {
 	public function get(string $key, mixed $default = null): mixed;

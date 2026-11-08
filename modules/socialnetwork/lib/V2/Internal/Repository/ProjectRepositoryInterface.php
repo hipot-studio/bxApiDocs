@@ -10,7 +10,19 @@ use Bitrix\Socialnetwork\V2\Internal\Entity\Project\ProjectCollection;
 
 interface ProjectRepositoryInterface
 {
-	public function getById(int $projectId): ?Project;
+	public function getById(
+		int $projectId,
+		bool $resolveLegacyDepartmentNames = false,
+	): ?Project;
+
+	public function getViewInfoById(int $projectId): ?Project;
+
+	/**
+	 * Reads the project row for the view info block and its tags with a single query.
+	 */
+	public function findViewInfoRow(int $projectId): ?ProjectViewInfoRow;
+
+	public function mapViewInfoRow(ProjectViewInfoRow $viewInfoRow): Project;
 
 	/**
 	 * @return string[]

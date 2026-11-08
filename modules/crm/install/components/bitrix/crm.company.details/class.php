@@ -366,6 +366,7 @@ class CCrmCompanyDetailsComponent
 									'PRESERVE_HISTORY' => true,
 									'ADD_EVENT_NAME' => 'CrmCreateQuoteFromCompany',
 									'EXTENDED_INTERNAL_MODE' => true,
+									'ENABLE_GROUP_ACTIONS' => 'Y',
 									'ANALYTICS' => [
 										// we dont know where from this component was opened from - it could be anywhere on portal
 										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::SECTION_COMPANY,
@@ -1223,7 +1224,7 @@ class CCrmCompanyDetailsComponent
 
 	public function prepareEntityFieldAttributeConfigs()
 	{
-		if (!$this->entityFieldAttributeConfig)
+		if ($this->entityFieldAttributeConfig === null)
 		{
 			$this->entityFieldAttributeConfig = FieldAttributeManager::getEntityConfigurations(
 				CCrmOwnerType::Company,
@@ -1249,6 +1250,10 @@ class CCrmCompanyDetailsComponent
 		$enumerationFields = [];
 
 		$visibilityConfig = $this->prepareEntityFieldvisibilityConfigs(CCrmOwnerType::Company);
+		$aiFillPolicyConfigs = Crm\Service\EditorAdapter::prepareEntityFieldAiFillPolicyConfigs(
+			CCrmOwnerType::Company,
+			$userFields
+		);
 
 		foreach($userFields as $userField)
 		{
@@ -1311,6 +1316,11 @@ class CCrmCompanyDetailsComponent
 			if (isset($visibilityConfig[$fieldName]))
 			{
 				$data['visibilityConfigs'] = $visibilityConfig[$fieldName];
+			}
+
+			if (isset($aiFillPolicyConfigs[$fieldName]))
+			{
+				$data['aiFillPolicy'] = $aiFillPolicyConfigs[$fieldName];
 			}
 
 			$this->userFieldInfos[$fieldName] = array(

@@ -9,8 +9,9 @@ use Bitrix\Bizproc\Internal\Repository\StorageItemRepository\StorageItemReposito
 use Bitrix\Bizproc\Public\Command\DataView\RecomputeDataViewCommand;
 use Bitrix\Bizproc\Public\Command\DataView\RecomputeDataViewCommandHandler;
 use Bitrix\Bizproc\Public\DataView\Exception\RecomputeInProgressException;
+use Bitrix\Bizproc\Public\Feature\DataView\DataViewFlag;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Provider\Params\GridParams;
 
@@ -91,7 +92,7 @@ class StorageItemProvider
 		}
 		$this->freshnessEnsured = true;
 
-		if (Option::get('bizproc', 'dataview_enabled', 'N') !== 'Y')
+		if (!Feature::isEnabled(DataViewFlag::class))
 		{
 			return;
 		}
@@ -232,7 +233,6 @@ class StorageItemProvider
 	private function cooldownDir(string $key): string
 	{
 		return self::RECOMPUTE_COOLDOWN_DIR
-			. substr(md5($key), 2, 2) . '/' . $this->storageTypeId . '/'
-		;
+			. substr(md5($key), 2, 2) . '/' . $this->storageTypeId . '/';
 	}
 }

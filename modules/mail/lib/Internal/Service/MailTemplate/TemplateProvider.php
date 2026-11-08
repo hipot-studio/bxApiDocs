@@ -39,6 +39,11 @@ interface TemplateProvider
 	public function getByIds(array $references, int $userId): array;
 
 	/**
+	 * @return list<TemplateListItem>
+	 */
+	public function getRecentlyCreated(int $userId, int $limit = 5): array;
+
+	/**
 	 * On success, result data contains PreparedTemplate under self::RESULT_TEMPLATE.
 	 */
 	public function prepare(TemplateReference $reference, int $userId): Result;

@@ -23,6 +23,7 @@ class CBPStopWorkTimeTrigger extends BaseTrigger
 	private const RETURN_PARAM_RECORD_ID = 'RECORD_ID';
 	private const RETURN_PARAM_IS_FIRST_STOP = 'IS_FIRST_STOP';
 	private const RETURN_PARAM_WORKDAY_START = 'WORKDAY_START';
+	private const RETURN_PARAM_WORKDAY_END = 'WORKDAY_END';
 
 	public function __construct($name)
 	{
@@ -35,6 +36,7 @@ class CBPStopWorkTimeTrigger extends BaseTrigger
 			self::RETURN_PARAM_RECORD_ID => null,
 			self::RETURN_PARAM_IS_FIRST_STOP => null,
 			self::RETURN_PARAM_WORKDAY_START => null,
+			self::RETURN_PARAM_WORKDAY_END => null,
 		];
 
 		$this->SetPropertiesTypes([
@@ -48,6 +50,9 @@ class CBPStopWorkTimeTrigger extends BaseTrigger
 				'Type' => FieldType::BOOL,
 			],
 			self::RETURN_PARAM_WORKDAY_START => [
+				'Type' => FieldType::DATETIME,
+			],
+			self::RETURN_PARAM_WORKDAY_END => [
 				'Type' => FieldType::DATETIME,
 			],
 		]);
@@ -134,16 +139,20 @@ class CBPStopWorkTimeTrigger extends BaseTrigger
 			$this->{self::RETURN_PARAM_RECORD_ID} = $recordId;
 		}
 
-		$this->{self::RETURN_PARAM_IS_FIRST_STOP} =
-			($context[StopWorktimeTrigger::FIELD_IS_FIRST_STOP] ?? false) ? 'Y' : 'N'
-		;
+		$this->{self::RETURN_PARAM_IS_FIRST_STOP}
+			= ($context[StopWorktimeTrigger::FIELD_IS_FIRST_STOP] ?? false) ? 'Y' : 'N';
 
+		// The dispatcher hands over the serialized bizproc datetime, which already carries the employee's offset.
 		$workdayStart = $context[StopWorktimeTrigger::FIELD_WORKDAY_START] ?? null;
-		if ($workdayStart instanceof \DateTimeInterface)
+		if (!empty($workdayStart))
 		{
-			$workdayStartOffset = $workdayStart->getOffset();
-			$this->{self::RETURN_PARAM_WORKDAY_START} =
-				(new \Bitrix\Bizproc\BaseType\Value\DateTime($workdayStart->getTimestamp(), $workdayStartOffset))->serialize();
+			$this->{self::RETURN_PARAM_WORKDAY_START} = $workdayStart;
+		}
+
+		$workdayEnd = $context[StopWorktimeTrigger::FIELD_WORKDAY_END] ?? null;
+		if (!empty($workdayEnd))
+		{
+			$this->{self::RETURN_PARAM_WORKDAY_END} = $workdayEnd;
 		}
 
 		return CBPActivityExecutionStatus::Closed;
@@ -154,7 +163,7 @@ class CBPStopWorkTimeTrigger extends BaseTrigger
 		if (!\Bitrix\Main\Loader::includeModule('timeman'))
 		{
 			return Result::createFromErrorCode(
-				Error::MODULE_NOT_INSTALLED
+				Error::MODULE_NOT_INSTALLED,
 			);
 		}
 

@@ -11,6 +11,7 @@ use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\HandlerHelper;
 use Bitrix\Rest\RestException;
 
@@ -62,8 +63,17 @@ class AppTable extends DataManager
 			(new BooleanField('INSTALLED'))
 				->configureValues('N', 'Y'),
 
+			(new EnumField('INSTALL_COMPLETION_MODE'))
+				->configureRequired()
+				->configureValues(array_map(
+					static fn (AppInstallCompletionMode $mode): string => $mode->value,
+					AppInstallCompletionMode::cases()
+				))
+				->configureDefaultValue(AppInstallCompletionMode::Deferred->value),
+
 			(new StringField('URL'))
-				->configureSize(1000),
+				->configureSize(1000)
+				->configureDefaultValue(''),
 
 			(new StringField('URL_DEMO'))
 				->configureSize(1000),

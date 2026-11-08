@@ -13,14 +13,19 @@ class UseAppRule extends AbstractRule
 {
 	public function execute(?AccessibleItem $item = null, $params = null): bool
 	{
-		if ($this->user->isAdmin())
-		{
-			return true;
-		}
-
 		if (!$item instanceof AppModel)
 		{
 			return false;
+		}
+
+		if (!$item->isInstalled())
+		{
+			return false;
+		}
+
+		if ($this->user->isAdmin())
+		{
+			return true;
 		}
 
 		if ($item->isPersonal() && $item->getOwnerUserId() === $this->user->getUserId())

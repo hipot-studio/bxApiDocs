@@ -17,6 +17,7 @@ use Bitrix\Sign\Type;
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Item;
 use Bitrix\Main;
+use Bitrix\Sign\Type\Member\Notification\ReminderType;
 use Bitrix\Sign\Type\Member\Role;
 
 /**
@@ -28,6 +29,7 @@ final class SyncDepartmentsPage implements Contract\Operation
 
 	private readonly MemberService $memberService;
 	private readonly MemberNodeRepository $memberNodeRepository;
+	private readonly MemberRepository $memberRepository;
 	private readonly SignersListService $signersListService;
 
 	public function __construct(
@@ -39,6 +41,7 @@ final class SyncDepartmentsPage implements Contract\Operation
 	{
 		$this->memberService = Container::instance()->getMemberService();
 		$this->memberNodeRepository = Container::instance()->getMemberNodeRepository();
+		$this->memberRepository = Container::instance()->getMemberRepository();
 		$this->signersListService = Container::instance()->getSignersListService();
 	}
 
@@ -50,6 +53,8 @@ final class SyncDepartmentsPage implements Contract\Operation
 				new Main\Error('Wrong document scenario'),
 			);
 		}
+
+		$signerReminderType = $this->getSavedSignerReminderType();
 
 		$syncedEmployees = 0;
 		while ($syncedEmployees < self::DEPT_SYNC_PAGE_SIZE)
@@ -127,6 +132,7 @@ final class SyncDepartmentsPage implements Contract\Operation
 				$this->document,
 				$this->party,
 				$newUniqUsersForDocument,
+				$signerReminderType,
 			))->launch();
 			if (!$addResult->isSuccess())
 			{
@@ -157,6 +163,40 @@ final class SyncDepartmentsPage implements Contract\Operation
 		}
 
 		return (new Main\Result)->setData(['syncFinished' => false]);
+	}
+
+	/**
+	 * Employees of the departments become members of the signer role, and the frequency of reminders
+	 * is set for that role as a whole: a document that already has one (a copy of a template) must not
+	 * get members without it. Read once per launch — the loop below walks the pages of every
+	 * department of the document.
+	 *
+	 * A document whose signers are only departments has no member of that role left to read it from:
+	 * the parties step deletes the members and creates none for a department. The frequency of a copy
+	 * is then taken from the document it was copied from. Only a template is asked that question —
+	 * copying has to keep what the source carries, while sending a document starts from the defaults.
+	 */
+	private function getSavedSignerReminderType(): ReminderType
+	{
+		$reminderType = $this->getSignerReminderTypeOfDocument($this->document->id);
+		if ($reminderType !== null)
+		{
+			return $reminderType;
+		}
+
+		if (!$this->document->isTemplated() || $this->document->createdFromDocumentId === null)
+		{
+			return ReminderType::NONE;
+		}
+
+		return $this->getSignerReminderTypeOfDocument($this->document->createdFromDocumentId) ?? ReminderType::NONE;
+	}
+
+	private function getSignerReminderTypeOfDocument(int $documentId): ?ReminderType
+	{
+		$reminderTypes = $this->memberRepository->listReminderTypesByDocumentIdIndexedByRole($documentId);
+
+		return $reminderTypes[Role::SIGNER] ?? null;
 	}
 
 	private function getDepartmentForSync(): ?Item\Hr\NodeSync

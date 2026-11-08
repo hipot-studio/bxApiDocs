@@ -1018,7 +1018,12 @@ class CBPVirtualDocument extends CIBlockDocument
 		// $arAllowableOperations == array() - no allowable operations
 		// $arAllowableOperations == array("read", ...) - allowable operations list
 		if (!is_array($arAllowableOperations) && $operation != 4)
-			return true;
+		{
+			// no state machine: fall back to iblock rights instead of allowing every authorized user
+			$iblockId = intval(mb_substr($documentType, mb_strlen("type_")));
+
+			return self::canUserOperateIBlock($operation, $userId, $iblockId);
+		}
 
 		if ($operation == 4)
 			return true;
@@ -1046,6 +1051,80 @@ class CBPVirtualDocument extends CIBlockDocument
 		}
 
 		return $r;
+	}
+
+	private static function canUserOperateIBlock($operation, $userId, $iblockId)
+	{
+		if (CIBlock::GetArrayByID($iblockId, "RIGHTS_MODE") === "E")
+		{
+			$arOperations = self::getIBlockUserOperations($iblockId, $userId);
+
+			$canRead = (
+				isset($arOperations["element_read"])
+				// covers custom rights sets granting iblock_rights_edit without element_read
+				|| isset($arOperations["iblock_rights_edit"])
+			);
+			// iblock level operations only: rights granted on separate sections are ignored
+			$canBindElements = isset($arOperations["section_element_bind"]);
+
+			if ($operation == CBPCanUserOperateOperation::ViewWorkflow)
+				return $canRead;
+
+			// WriteDocument here has one consumer, the expression picker (admin/bizproc_selector.php), and it
+			// shows read side data: iblock fields, names of global constants and variables, the user roster.
+			// So read access passes on top of the binding right this operation asked for before, not instead
+			if ($operation == CBPCanUserOperateOperation::WriteDocument)
+				return ($canRead || $canBindElements);
+
+			if ($operation == CBPCanUserOperateOperation::StartWorkflow)
+				return $canBindElements;
+
+			return false;
+		}
+
+		$permission = CIBlock::GetPermission($iblockId, $userId);
+
+		// same read side data as above; "W" implies "R", so nobody who passed WriteDocument before loses it
+		if ($operation == CBPCanUserOperateOperation::ViewWorkflow || $operation == CBPCanUserOperateOperation::WriteDocument)
+			return ($permission >= "R");
+
+		return ($permission >= "W");
+	}
+
+	private static function getIBlockUserOperations($iblockId, $userId)
+	{
+		global $USER;
+
+		// process scoped cache: a selector asks about the same pair over and over and the rights join
+		// below is cached nowhere. The key carries the resolved subject and the authorization flag, since
+		// with no user id GetUserOperations() answers for the current $USER and turns "AU" rights on by
+		// its authorization, and the refresh flag, since access codes are refreshed for a passed user only
+		static $cache = array();
+
+		$subjectId = ($userId > 0 ? $userId : (is_object($USER) ? intval($USER->GetID()) : 0));
+		$isAuthorized = (is_object($USER) && $USER->IsAuthorized() ? 1 : 0);
+
+		$codesRefreshed = ($userId > 0 ? 1 : 0);
+
+		$cacheKey = $iblockId . "|" . $subjectId . "|" . $isAuthorized . "|" . $codesRefreshed;
+
+		// an empty operation list is a legitimate answer and must stay cached, hence array_key_exists()
+		if (!array_key_exists($cacheKey, $cache))
+		{
+			if ($userId > 0)
+			{
+				// unlike CIBlockElementRights::GetUserOperations(), the iblock level one does not refresh
+				// the access codes of the user it is asked about
+				$acc = new CAccess;
+				$acc->UpdateCodes(array("USER_ID" => $userId));
+			}
+
+			// UserHasRightTo() would resolve the current $USER instead, while this method is also asked
+			// about another user and with no current user at all (scripts, agents)
+			$cache[$cacheKey] = CIBlockRights::GetUserOperations($iblockId, $userId);
+		}
+
+		return $cache[$cacheKey];
 	}
 
 	public static function getList($arOrder = array("SORT" => "ASC"), $arFilter = array(), $arGroupBy = false, $arNavStartParams = false, $arSelectFields=array())

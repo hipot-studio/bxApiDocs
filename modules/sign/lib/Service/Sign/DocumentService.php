@@ -16,12 +16,14 @@ use Bitrix\Sign\Document;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
 use Bitrix\Sign\Internal\DocumentTable;
 use Bitrix\Sign\Item;
+use Bitrix\Sign\Item\Document\Binding;
 use Bitrix\Sign\Item\Document\BindingCollection;
 use Bitrix\Sign\Item\Document\Template\TemplateFolderRelation;
 use Bitrix\Sign\Main\User;
 use Bitrix\Sign\Operation\ChangeDocumentStatus;
 use Bitrix\Sign\Operation\CheckDocumentAccess;
 use Bitrix\Sign\Operation\ConfigureFillAndStart;
+use Bitrix\Sign\Operation\Document\RestoreState;
 use Bitrix\Sign\Operation\Document\Validation;
 use Bitrix\Sign\Operation\Document\Blank\Delete;
 use Bitrix\Sign\Operation\Kanban\B2e\SendDeleteEntityPullEvent;
@@ -38,6 +40,7 @@ use Bitrix\Sign\Result\Service\Sign\Document\CreateTemplateResult;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Type;
+use Bitrix\Sign\Type\Document\CreationSourceType;
 use Bitrix\Sign\Type\Document\EntityType;
 use Bitrix\Sign\Type\Document\InitiatedByType;
 use Bitrix\Sign\Type\DocumentStatus;
@@ -48,7 +51,18 @@ use Bitrix\Sign\Type\Document\Version;
 
 class DocumentService
 {
+	/**
+	 * The local write of a change failed. Whether the change stays applied anyway is not told by
+	 * the code: a change the signing service has taken is marked on the result itself.
+	 *
+	 * @see \Bitrix\Sign\Item\Document\Configure\Step::markExternalApplied()
+	 */
+	public const ERROR_DOCUMENT_SAVE_FAILED = 'DOCUMENT_SAVE_FAILED';
+
 	private const DOCUMENT_NAME_LENGTH_LIMIT = 100;
+	public const ERROR_CODE_DOCUMENT_IN_FINAL_STATUS = 'DOCUMENT_IN_FINAL_STATUS';
+	public const ERROR_CODE_DOCUMENT_NOT_INITIATED_BY_COMPANY = 'DOCUMENT_NOT_INITIATED_BY_COMPANY';
+	public const ERROR_CODE_DOCUMENT_NOT_B2E = 'DOCUMENT_NOT_B2E';
 
 	private DocumentRepository $documentRepository;
 	private BlankRepository $blankRepository;
@@ -78,6 +92,7 @@ class DocumentService
 		?MemberRepository $memberRepository = null,
 		?TemplateFolderRelationRepository $templateFolderRelationRepository = null,
 		?Service\Integration\Disk\DiskService $diskService = null,
+		?Document\Entity\Factory $documentEntityFactory = null,
 	)
 	{
 		$container = Container::instance();
@@ -86,7 +101,7 @@ class DocumentService
 		$this->blankService = $blankService ?? $container->getSignBlankService();
 		$this->blankRepository = $blankRepository ?? $container->getBlankRepository();
 		$this->eventHandlerService = $eventHandlerService ?? $container->getEventHandlerService();
-		$this->documentEntityFactory = new Document\Entity\Factory();
+		$this->documentEntityFactory = $documentEntityFactory ?? new Document\Entity\Factory();
 		$this->providerCodeService = $providerCodeService ?? $container->getProviderCodeService();
 		$this->documentTemplateRepository = $documentTemplateRepository ?? $container->getDocumentTemplateRepository();
 		$this->documentTemplateService = $documentTemplateService ?? $container->getDocumentTemplateService();
@@ -113,6 +128,7 @@ class DocumentService
 	/**
 	 * @param int $blankId
 	 * @param string $title
+	 * @param bool|null $checkPermission null keeps the permission check configured for the service
 	 *
 	 * @return \Bitrix\Main\Result
 	 */
@@ -127,6 +143,8 @@ class DocumentService
 		int $chatId = 0,
 		?int $templateId = null,
 		?BindingCollection $bindings = null,
+		?Item\Document\CreationSource $creationSource = null,
+		?bool $checkPermission = null,
 	): Main\Result
 	{
 		$result = new Main\Result();
@@ -159,6 +177,7 @@ class DocumentService
 
 		$documentItem = new Item\Document(entityType: $entityType, entityId: $entityId, templateId: $templateId);
 		$documentItem->initiatedByType = $initiatedByType;
+		$this->applyCreationSource($documentItem, $creationSource);
 
 		$documentItem->dateSignUntil = $blank->scenario === Type\BlankScenario::B2B
 			? null
@@ -199,7 +218,7 @@ class DocumentService
 			$template = $createTemplateResult->template;
 		}
 
-		$result = $this->insertToDB($title, $blank, $documentItem, $createdById, $bindings);
+		$result = $this->insertToDB($title, $blank, $documentItem, $createdById, $bindings, $checkPermission);
 
 		if (!$result->isSuccess())
 		{
@@ -215,6 +234,10 @@ class DocumentService
 			title: $documentItem->title,
 			version: $documentItem->version,
 			hasPlaceholders: $blank->hasPlaceholders,
+			creationSourceType: ($documentItem->creationSourceType ?? CreationSourceType::UNKNOWN)->value,
+			// Read here and nowhere else: copying a template registers a carrier with asTemplate
+			// false, and Operation\Document\Copy clears templateId right after this call.
+			isTemplate: $documentItem->isTemplated(),
 		);
 		$documentRegisterResponse = $apiDocument->register($documentRegisterRequest);
 
@@ -234,6 +257,20 @@ class DocumentService
 			'template' => $template,
 			'documentId' => $documentItem->id,
 		]);
+	}
+
+	private function applyCreationSource(Item\Document $documentItem, ?Item\Document\CreationSource $source): void
+	{
+		if ($source === null)
+		{
+			return;
+		}
+
+		$documentItem->creationSourceType = $source->type;
+		$documentItem->creationSourceId = $source->id;
+		$documentItem->creationSourceEntityTypeId = $source->entityTypeId;
+		$documentItem->creationSourceEntityId = $source->entityId;
+		$documentItem->creationSourceSpecifics = $source->specifics;
 	}
 
 	/**
@@ -286,8 +323,7 @@ class DocumentService
 			}
 		}
 
-		$smartDocument = $this->documentEntityFactory->getByDocument($document);
-		$smartDocument?->setTitle($this->composeSmartDocumentTitle($document, $smartDocument));
+		$this->refreshSmartDocumentTitle($document);
 
 		return $result;
 	}
@@ -317,6 +353,37 @@ class DocumentService
 			]) : $item->title) ,
 			default => trim($item->title),
 		};
+	}
+
+	/**
+	 * Recomposes the title of the linked smart process card.
+	 * The card title is derived from the document title and the external id, but is not updated
+	 * together with them. A card that refuses the write is worth an error: for a caller recomposing
+	 * the title of its own accord, that error is the only sign the card kept the title it had. A
+	 * document with no card in crm behind it has no title to recompose and reports nothing, and so
+	 * does a card already carrying the composed title: saving a crm item runs every field of it.
+	 *
+	 * @see self::readMyCompanyId() reads the card of the document the same way
+	 */
+	public function refreshSmartDocumentTitle(Item\Document $document): Main\Result
+	{
+		$result = new Main\Result();
+		$smartDocument = $this->documentEntityFactory->getByDocument($document);
+		if ($smartDocument === null || $smartDocument->getId() < 1)
+		{
+			return $result;
+		}
+
+		$title = $this->composeSmartDocumentTitle($document, $smartDocument);
+		if ($title === $smartDocument->getTitle())
+		{
+			return $result;
+		}
+
+		return $smartDocument->setTitle($title)
+			? $result
+			: $result->addError(new Main\Error('Error when trying to save smart document title'))
+		;
 	}
 
 	public function getComposedTitleByDocument(Item\Document $item): string
@@ -572,6 +639,220 @@ class DocumentService
 		return $this->providerCodeService->updateProviderCode($document, $providerCode);
 	}
 
+	/**
+	 * Sets the provider code of exactly one document.
+	 *
+	 * @see self::modifyProviderCode() spreads the code over the company documents instead.
+	 */
+	public function modifyProviderCodeForSingleDocument(Item\Document $document, string $providerCode): Main\Result
+	{
+		if (!$this->canBeChanged($document))
+		{
+			return (new Main\Result())->addError(new Main\Error('Document cannot be changed'));
+		}
+
+		return $this->providerCodeService->updateProviderCodeToDocument($document, $providerCode);
+	}
+
+	/**
+	 * Saves the message attached to the invitation to sign on a single document; a whole batch of one
+	 * send goes through modifyInviteMessageForDocuments(). Outside of these two the attribute is only
+	 * written by the operations that create the document.
+	 *
+	 * The status is checked twice, and both checks are needed: the guard below refuses with the error
+	 * code of the reason, while the write itself repeats the status condition in its `WHERE` clause.
+	 * Without the second check the document read before the write and the document written to are not
+	 * the same state — `ConfigureDocument` of a neighbouring document of the batch runs in parallel and
+	 * moves this one to `ready`, and the text would land on a document whose invitations are already
+	 * being formed.
+	 *
+	 * @param string|null $message null, an empty string or whitespace only clears the previously saved message
+	 */
+	public function modifyInviteMessage(Item\Document $document, ?string $message): Main\Result
+	{
+		$validationResult = (new Validation\ValidateInviteMessage($message))->launch();
+		if (!$validationResult->isSuccess())
+		{
+			return $validationResult;
+		}
+
+		$guardResult = $this->checkInviteMessageCanBeStored($document);
+		if (!$guardResult->isSuccess())
+		{
+			return $guardResult;
+		}
+
+		$result = new Main\Result();
+		if (!$document->id)
+		{
+			return $result->addError(new Main\Error('Document not found'));
+		}
+
+		$normalizedMessage = self::normalizeInviteMessage($message);
+		if (!$this->documentRepository->updateInviteMessageIfEditable($document->id, $normalizedMessage))
+		{
+			return $result->addError($this->createInviteMessageStatusError());
+		}
+
+		$document->inviteMessage = $normalizedMessage;
+
+		return $result;
+	}
+
+	/**
+	 * Saves one message on every document of a send batch. The batch of the group wizard carries a
+	 * single text, so the whole batch is written by one conditional statement instead of one statement
+	 * per document: the statement runs inside the transaction of the caller and every statement saved
+	 * there is lock time saved on documents the wizard is about to configure.
+	 *
+	 * The guards of the single write run over the whole batch before that statement, so a refused
+	 * document gives its own error code and nothing is written. The statement itself takes either all
+	 * the documents or none of them: a document whose status changed after the guard is refused by the
+	 * status condition of the write, and then the batch has to be taken back — that is the business of
+	 * the caller, which owns the transaction.
+	 *
+	 * @param string|null $message null, an empty string or whitespace only clears the previously saved message
+	 */
+	public function modifyInviteMessageForDocuments(Item\DocumentCollection $documents, ?string $message): Main\Result
+	{
+		$validationResult = (new Validation\ValidateInviteMessage($message))->launch();
+		if (!$validationResult->isSuccess())
+		{
+			return $validationResult;
+		}
+
+		$guardResult = $this->checkInviteMessageCanBeStoredForDocuments($documents);
+		if (!$guardResult->isSuccess())
+		{
+			return $guardResult;
+		}
+
+		$result = new Main\Result();
+		$documentIds = [];
+		foreach ($documents as $document)
+		{
+			if (!$document->id)
+			{
+				return $result->addError(new Main\Error('Document not found'));
+			}
+
+			$documentIds[] = $document->id;
+		}
+
+		if ($documentIds === [])
+		{
+			return $result;
+		}
+
+		$normalizedMessage = self::normalizeInviteMessage($message);
+		if (!$this->documentRepository->updateInviteMessageForEditableDocuments($documentIds, $normalizedMessage))
+		{
+			return $result->addError($this->createInviteMessageStatusError());
+		}
+
+		foreach ($documents as $document)
+		{
+			$document->inviteMessage = $normalizedMessage;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * The same guards over a whole batch: one rejected document rejects the batch, and its own error
+	 * code says why. The batch entry point calls this before it opens its transaction — a refusal
+	 * costs no transaction — and the batch write repeats the check, so the guards cannot be skipped.
+	 */
+	public function checkInviteMessageCanBeStoredForDocuments(Item\DocumentCollection $documents): Main\Result
+	{
+		foreach ($documents as $document)
+		{
+			$guardResult = $this->checkInviteMessageCanBeStored($document);
+			if (!$guardResult->isSuccess())
+			{
+				return $guardResult;
+			}
+		}
+
+		return new Main\Result();
+	}
+
+	private function createInviteMessageStatusError(): Main\Error
+	{
+		return new Main\Error(
+			Loc::getMessage('SIGN_SERVICE_DOCUMENT_INVITE_MESSAGE_DOCUMENT_IN_FINAL_STATUS'),
+			self::ERROR_CODE_DOCUMENT_IN_FINAL_STATUS,
+		);
+	}
+
+	/**
+	 * Every reason to refuse the write in one place: the batch entry point checks the whole batch
+	 * before its first write and has to refuse for the same reasons and with the same error codes.
+	 *
+	 * Only a B2E invitation sent by the company carries the message: HrBotMessageService passes the
+	 * text on to the employee signer and no other invitation reads it. Both conditions are required
+	 * explicitly, so a document that carries neither sign is refused instead of storing a value that
+	 * would be silently undeliverable. The client hides the field in the same cases.
+	 *
+	 * The status window is narrower than the one of canBeChanged(): the text is read when the
+	 * invitation is formed, and that happens on the callback of a document already sent, so `ready` is
+	 * too late to change it. A batch of a group wizard makes it visible — configure walks the batch
+	 * document by document, so a write allowed in `ready` would give the invitations of one send
+	 * different versions of the same message.
+	 */
+	public function checkInviteMessageCanBeStored(Item\Document $document): Main\Result
+	{
+		$result = new Main\Result();
+
+		if (!Type\DocumentScenario::isB2eScenarioByDocument($document))
+		{
+			return $result->addError(new Main\Error(
+				Loc::getMessage('SIGN_SERVICE_DOCUMENT_INVITE_MESSAGE_DOCUMENT_NOT_B2E'),
+				self::ERROR_CODE_DOCUMENT_NOT_B2E,
+			));
+		}
+
+		if ($document->initiatedByType !== InitiatedByType::COMPANY)
+		{
+			return $result->addError(new Main\Error(
+				Loc::getMessage('SIGN_SERVICE_DOCUMENT_INVITE_MESSAGE_NOT_INITIATED_BY_COMPANY'),
+				self::ERROR_CODE_DOCUMENT_NOT_INITIATED_BY_COMPANY,
+			));
+		}
+
+		if (!Type\DocumentStatus::isEditableByDocument($document))
+		{
+			return $result->addError(new Main\Error(
+				Loc::getMessage('SIGN_SERVICE_DOCUMENT_INVITE_MESSAGE_DOCUMENT_IN_FINAL_STATUS'),
+				self::ERROR_CODE_DOCUMENT_IN_FINAL_STATUS,
+			));
+		}
+
+		return $result;
+	}
+
+	/**
+	 * A message made of whitespace only means no message. Without this the three delivery channels
+	 * disagree on the same value: the invitation body gets a block with a blank line under its title,
+	 * the mobile card gets an empty gap, and the web card shows nothing because it trims on render.
+	 * Every entry point that stores the attribute normalizes through here.
+	 */
+	public static function normalizeInviteMessage(?string $message): ?string
+	{
+		if ($message === null)
+		{
+			return null;
+		}
+
+		// The character class the browser trims by, so the value the client counts and the value the
+		// server stores stay the same; on broken UTF-8 the pattern returns null and the ASCII trim of
+		// the fallback still keeps a blank message out of the delivery channels.
+		$trimmed = preg_replace('~^[\s\pZ\x{FEFF}]+|[\s\pZ\x{FEFF}]+$~u', '', $message);
+		$message = trim($trimmed ?? $message);
+
+		return $message === '' ? null : $message;
+	}
+
 	public function update(Item\Document $document): Main\Result
 	{
 		return $this->documentRepository->update($document);
@@ -583,6 +864,7 @@ class DocumentService
 		Item\Document $documentItem,
 		int $createdById = 0,
 		?BindingCollection $bindings = null,
+		?bool $checkPermission = null,
 	): Main\Result
 	{
 		// backward compatibility
@@ -598,7 +880,10 @@ class DocumentService
 
 		if ((int)$documentItem->entityId === 0 && !$documentItem->isTemplated())
 		{
-			$result = $this->documentEntityFactory->createNewEntity($documentItem, $this->checkPermission);
+			$result = $this->documentEntityFactory->createNewEntity(
+				$documentItem,
+				$checkPermission ?? $this->checkPermission,
+			);
 			if (!$result->isSuccess())
 			{
 				return $result;
@@ -706,9 +991,37 @@ class DocumentService
 			;
 
 			$result->addErrors($addResult->getErrors());
+
+			if ($addResult->isSuccess())
+			{
+				$this->addProcessActivity($document, $binding);
+			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Deal "Process: ..." in the timeline of a document a personnel process created. The handler answers
+	 * with nothing for every binding that is not such a process, so no branching happens here.
+	 *
+	 * Whatever the deal fails at stays inside: this method exists to tie the document to the entity, an
+	 * unsuccessful result of it aborts the whole registration of the document, and a timeline row is not
+	 * a reason to leave a document unbound.
+	 */
+	private function addProcessActivity(Item\Document $document, Binding $binding): void
+	{
+		try
+		{
+			Container::instance()->getCrmProcessActivityHandler()->createForBoundDocument(
+				(int)$document->entityId,
+				$binding->entityType,
+				$binding->entityId,
+			);
+		}
+		catch (\Throwable)
+		{
+		}
 	}
 
 	/**
@@ -875,6 +1188,18 @@ class DocumentService
 			return $result->addErrors($uploadResult->getErrors());
 		}
 
+		if (
+			$document->id !== null
+			&& $oldBlankId !== null
+			&& $oldBlankId !== $document->blankId
+		)
+		{
+			Container::instance()
+				->getDocumentPlaceholderCacheService()
+				->deleteRawPlaceholders($document->id, $oldBlankId)
+			;
+		}
+
 		$this->tryDeleteBlank($oldBlankId);
 
 		return \Bitrix\Sign\Result\Result::createByData(['document' => $document]);
@@ -945,16 +1270,77 @@ class DocumentService
 			return (new Main\Result())->addErrors($response->getErrors());
 		}
 
-		$updateResult = $this->documentRepository->update($document);
+		return $this->saveDateSignUntilTakenByService($document);
+	}
+
+	/**
+	 * The signing service has taken the date already, so whatever the local write of it fails with,
+	 * a refused write or a query that threw, the caller is told the change stays applied. The
+	 * timeline event is a side effect of the write and not the write itself: it is logged where it
+	 * fails and does not make a saved date unsaved.
+	 *
+	 * @see \Bitrix\Sign\Item\Document\Configure\Step::isExternalApplied() reads the mark of the result
+	 */
+	private function saveDateSignUntilTakenByService(Item\Document $document): Main\Result
+	{
+		try
+		{
+			$updateResult = $this->documentRepository->update($document);
+		}
+		catch (\Throwable $exception)
+		{
+			$this->logDocumentFailure(
+				'Failed to save the sign until date of {documentUid}: {errorsText}',
+				$document,
+				$exception,
+			);
+
+			return self::makeDateSignUntilNotSavedResult();
+		}
 
 		if (!$updateResult->isSuccess())
 		{
-			return $result->addError(new Main\Error('Error when trying to save document'));
+			return self::makeDateSignUntilNotSavedResult();
 		}
 
-		$this->fireDocumentUpdatedTimelineEvent($document);
+		try
+		{
+			$this->fireDocumentUpdatedTimelineEvent($document);
+		}
+		catch (\Throwable $exception)
+		{
+			$this->logDocumentFailure(
+				'Failed to emit the update event of {documentUid}: {errorsText}',
+				$document,
+				$exception,
+			);
+		}
 
 		return $updateResult;
+	}
+
+	/**
+	 * The date the signing service has taken and the document could not keep: the mark tells the
+	 * caller the change stays applied and no local compensation can take it back.
+	 */
+	private static function makeDateSignUntilNotSavedResult(): Main\Result
+	{
+		return Item\Document\Configure\Step::markExternalApplied(
+			(new Main\Result())->addError(
+				new Main\Error('Error when trying to save document', self::ERROR_DOCUMENT_SAVE_FAILED),
+			),
+		);
+	}
+
+	private function logDocumentFailure(string $message, Item\Document $document, \Throwable $exception): void
+	{
+		Container::instance()->getLogger('Service')->error(
+			$message,
+			[
+				'documentUid' => $document->uid,
+				'errorsText' => $exception->getMessage(),
+			],
+		);
 	}
 
 	/**
@@ -994,7 +1380,7 @@ class DocumentService
 			if (empty($file->content->data))
 			{
 				return (new Main\Result())->addError(
-					new Main\Error(Loc::getMessage('SIGN_SERVICE_DOCUMENT_FILE_EMPTY')),
+					new Main\Error(Loc::getMessage('SIGN_SERVICE_DOCUMENT_FILE_EMPTY'), 'FILE_EMPTY'),
 				);
 			}
 
@@ -1042,7 +1428,7 @@ class DocumentService
 			return $result->addError(new Main\Error('Document status does not allow editing'));
 		}
 
-		return $this->diskService->getEditUrl($blank, $userId, $document->title);
+		return $this->diskService->getEditUrl($blank, $userId, $document->title, $uid);
 	}
 
 	public function applyEditedFile(string $documentUid, int $diskFileId, int $userId): Main\Result
@@ -1095,7 +1481,7 @@ class DocumentService
 			[$clonedFileId],
 			$blank->scenario ?? Type\BlankScenario::B2E,
 			$blank->forTemplate,
-			$blank->hasPlaceholders,
+			true,
 		);
 		if (!$blankResult->isSuccess())
 		{
@@ -1228,9 +1614,12 @@ class DocumentService
 			$result->addError(new Main\Error(Loc::getMessage('SIGN_SERVICE_DOCUMENT_NOT_FOUND')));
 		}
 
+		$blankId = $blankId ?: $document?->blankId;
 		try
 		{
-			$blank = $this->blankRepository->getById($blankId ? : $document->blankId);
+			// A missing document leaves no blank id to look up: reading it off the document would
+			// turn a reported error into a TypeError of the caller.
+			$blank = $blankId === null ? null : $this->blankRepository->getById($blankId);
 		}
 		catch (Main\ObjectPropertyException|Main\ArgumentException|Main\SystemException $e)
 		{
@@ -1337,6 +1726,14 @@ class DocumentService
 			return $documentResult;
 		}
 
+		if ($document->blankId !== null)
+		{
+			Container::instance()
+				->getDocumentPlaceholderCacheService()
+				->deleteRawPlaceholders($documentId, $document->blankId)
+			;
+		}
+
 		$smartDocument = $this->documentEntityFactory->getByDocument($document);
 		if ($smartDocument && $smartDocument->getId())
 		{
@@ -1413,6 +1810,55 @@ class DocumentService
 			DocumentStatus::getEnding(),
 			true,
 		);
+	}
+
+	/**
+	 * Takes the snapshot of the document fields, of the member composition and of the company
+	 * the smart process card points at, the document can be returned to.
+	 *
+	 * @param ?Item\Document\Configure\Plan $plan what the caller is going to apply, where it keeps such
+	 *        a plan: the card is read only for a plan that can move the composition the card mirrors,
+	 *        because only such a plan can move the company of the card. Null captures the whole state.
+	 *
+	 * @see self::restoreState()
+	 */
+	public function captureState(
+		Item\Document $document,
+		?Item\Document\Configure\Plan $plan = null,
+	): Item\Document\State
+	{
+		return Item\Document\State::capture(
+			$document,
+			$this->memberRepository->listByDocumentId((int)$document->id),
+			$plan === null || $plan->movesMemberComposition() ? $this->readMyCompanyId($document) : null,
+		);
+	}
+
+	/**
+	 * Null when the document has no card behind it: there is no company to know about, and the
+	 * restore has nothing to put back.
+	 */
+	private function readMyCompanyId(Item\Document $document): ?int
+	{
+		$entity = $this->documentEntityFactory->getByDocument($document);
+
+		return $entity !== null && $entity->getId() > 0 ? $entity->getCompanyId() : null;
+	}
+
+	/**
+	 * Returns the document to the captured state, including the fields that were empty.
+	 *
+	 * @param ?Item\Document\Configure\Journal $journal what the caller has applied, where it keeps
+	 *        such a journal: the parts of the snapshot the run never touched are left alone.
+	 *
+	 * @see self::captureState()
+	 */
+	public function restoreState(
+		Item\Document\State $state,
+		?Item\Document\Configure\Journal $journal = null,
+	): Main\Result
+	{
+		return (new RestoreState($state, $journal))->launch();
 	}
 
 	private function makeDocNameFromBlank(Item\Blank $blank, ?Document\Entity\Dummy $entity = null): string
@@ -1511,8 +1957,7 @@ class DocumentService
 
 		if ($sourceType === Type\Document\ExternalIdSourceType::MANUAL)
 		{
-			$smartDocument = $this->documentEntityFactory->getByDocument($document);
-			$smartDocument?->setTitle($this->composeSmartDocumentTitle($document, $smartDocument));
+			$this->refreshSmartDocumentTitle($document);
 		}
 
 		return new Main\Result();

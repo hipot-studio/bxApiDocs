@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Bizproc\Public\Service\File\ShowFileLinkService;
 use Bitrix\Iblock\PropertyEnumerationTable;
 use Bitrix\Iblock\PropertyTable;
 use Bitrix\Main\Config\Option;
@@ -862,7 +863,16 @@ class CIBlockDocument implements \IBPWorkflowDocument
 						$r = intval($r);
 						$dbImg = CFile::GetByID($r);
 						if ($arImg = $dbImg->Fetch())
-							$result[] = "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"])."&i=".$r."&h=".md5($arImg["SUBDIR"])."]".htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
+						{
+							if (class_exists(ShowFileLinkService::class))
+							{
+								$result[] = (new ShowFileLinkService())->getPrintableLink($arImg);
+							}
+							else
+							{
+								$result[] = "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"])."&i=".$r."&h=".md5($arImg["SUBDIR"])."]".htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
+							}
+						}
 					}
 				}
 				else
@@ -870,7 +880,16 @@ class CIBlockDocument implements \IBPWorkflowDocument
 					$fieldValue = intval($fieldValue);
 					$dbImg = CFile::GetByID($fieldValue);
 					if ($arImg = $dbImg->Fetch())
-						$result = "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"])."&i=".$fieldValue."&h=".md5($arImg["SUBDIR"])."]".htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
+					{
+						if (class_exists(ShowFileLinkService::class))
+						{
+							$result = (new ShowFileLinkService())->getPrintableLink($arImg);
+						}
+						else
+						{
+							$result = "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"])."&i=".$fieldValue."&h=".md5($arImg["SUBDIR"])."]".htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
+						}
+					}
 				}
 				break;
 
@@ -1264,7 +1283,15 @@ class CIBlockDocument implements \IBPWorkflowDocument
 						if ($ar)
 						{
 							$arResult["PROPERTY_".$propertyKey][intval($v)] = $ar["SRC"];
-							$arResult["PROPERTY_".$propertyKey."_printable"][intval($v)] = "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($ar["FILE_NAME"])."&i=".$v."&h=".md5($ar["SUBDIR"])."]".htmlspecialcharsbx($ar["ORIGINAL_NAME"])."[/url]";
+							if (class_exists(ShowFileLinkService::class))
+							{
+								$arResult["PROPERTY_".$propertyKey."_printable"][intval($v)] =
+									(new ShowFileLinkService())->getPrintableLink($ar);
+							}
+							else
+							{
+								$arResult["PROPERTY_".$propertyKey."_printable"][intval($v)] = "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($ar["FILE_NAME"])."&i=".$v."&h=".md5($ar["SUBDIR"])."]".htmlspecialcharsbx($ar["ORIGINAL_NAME"])."[/url]";
+							}
 						}
 					}
 				}
@@ -1963,6 +1990,7 @@ class CIBlockDocument implements \IBPWorkflowDocument
 		CIBlockElement::WF_CleanUpHistoryCopies($documentId, 0);
 
 		$arFieldsPropertyValues = array();
+		$hasDiskFileWorkflow = false;
 		$complexDocumentId = ['iblock', get_called_class(), $documentId];
 
 		$dbResult = CIBlockElement::GetList(
@@ -1976,23 +2004,32 @@ class CIBlockDocument implements \IBPWorkflowDocument
 			throw new Exception("Element is not found");
 
 		$arDocumentFields = self::GetDocumentFields("iblock_".$arResult["IBLOCK_ID"]);
+		$filePropertyKeys = self::getFilePropertyKeys((int)$arResult["IBLOCK_ID"]);
 
 		$arKeys = array_keys($arFields);
 		foreach ($arKeys as $key)
 		{
-			if (!array_key_exists($key, $arDocumentFields))
+			$isDeclared = array_key_exists($key, $arDocumentFields);
+			if (self::isUnsafeWorkflowField($key, $arFields[$key], $isDeclared))
+			{
+				unset($arFields[$key]);
+				continue;
+			}
+
+			if (!$isDeclared)
 				continue;
 
 			$arFields[$key] = (is_array($arFields[$key]) && !CBPHelper::IsAssociativeArray($arFields[$key])) ?
 				$arFields[$key] : array($arFields[$key]);
 			$realKey = ((mb_substr($key, 0, mb_strlen("PROPERTY_")) == "PROPERTY_")?
 				mb_substr($key, mb_strlen("PROPERTY_")) : $key);
+			$fieldType = self::getWorkflowFieldType($key, $arDocumentFields[$key], $filePropertyKeys);
 
-			if ($arDocumentFields[$key]["Type"] == "user")
+			if ($fieldType == "user")
 			{
 				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $complexDocumentId);
 			}
-			elseif ($arDocumentFields[$key]["Type"] == "select")
+			elseif ($fieldType == "select")
 			{
 				$arV = array();
 				$db = CIBlockProperty::GetPropertyEnum(
@@ -2025,7 +2062,7 @@ class CIBlockDocument implements \IBPWorkflowDocument
 					$arFields[$key] = $listValue;
 				}
 			}
-			elseif ($arDocumentFields[$key]["Type"] == "file")
+			elseif ($fieldType == "file")
 			{
 				$files = array();
 				foreach ($arFields[$key] as $value)
@@ -2034,14 +2071,14 @@ class CIBlockDocument implements \IBPWorkflowDocument
 					{
 						foreach($value as $file)
 						{
-							$makeFileArray = CFile::MakeFileArray($file);
+							$makeFileArray = self::makeWorkflowFileArray($file);
 							if($makeFileArray)
 								$files[] = $makeFileArray;
 						}
 					}
 					else
 					{
-						$makeFileArray = CFile::MakeFileArray($value);
+						$makeFileArray = self::makeWorkflowFileArray($value);
 						if($makeFileArray)
 							$files[] = $makeFileArray;
 					}
@@ -2051,7 +2088,7 @@ class CIBlockDocument implements \IBPWorkflowDocument
 				else
 					$arFields[$key] = array(array('del' => 'Y'));
 			}
-			elseif($arDocumentFields[$key]["Type"] == "S:DiskFile")
+			elseif ($fieldType == "S:DiskFile")
 			{
 				foreach ($arFields[$key] as &$value)
 				{
@@ -2061,8 +2098,9 @@ class CIBlockDocument implements \IBPWorkflowDocument
 					}
 				}
 				$arFields[$key] = array("VALUE" => $arFields[$key], "DESCRIPTION" => "workflow");
+				$hasDiskFileWorkflow = true;
 			}
-			elseif ($arDocumentFields[$key]["Type"] == "S:HTML")
+			elseif ($fieldType == "S:HTML")
 			{
 				foreach ($arFields[$key] as &$value)
 					$value = array("VALUE" => $value);
@@ -2097,12 +2135,134 @@ class CIBlockDocument implements \IBPWorkflowDocument
 		$iblockElement = new CIBlockElement();
 		if (!empty($arFieldsPropertyValues))
 		{
-			$iblockElement->SetPropertyValuesEx($documentId, $arResult["IBLOCK_ID"], $arFieldsPropertyValues);
+			$writePropertyValues = static fn() => $iblockElement->SetPropertyValuesEx($documentId, $arResult["IBLOCK_ID"], $arFieldsPropertyValues);
+
+			if ($hasDiskFileWorkflow && \Bitrix\Main\Loader::includeModule('disk') && class_exists('Bitrix\Disk\Integration\FileDiskProperty'))
+			{
+				\Bitrix\Disk\Integration\FileDiskProperty::runInWorkflowWriteContext($writePropertyValues);
+			}
+			else
+			{
+				$writePropertyValues();
+			}
 		}
 
 		$res = $iblockElement->Update($documentId, $arFields, false, true, true);
 		if (!$res)
 			throw new Exception($iblockElement->LAST_ERROR);
+	}
+
+	/**
+	 * Undeclared keys reach CIBlockElement as is, and CFile::SaveFile copies tmp_name and deletes old_file,
+	 * so file arrays are not accepted under any key: file fields take only IDs of b_file.
+	 */
+	private static function isUnsafeWorkflowField(mixed $key, mixed $value, bool $isDeclared): bool
+	{
+		return (!$isDeclared && $key === 'PROPERTY_VALUES') || self::containsFileArray($value);
+	}
+
+	/**
+	 * A service key such as PROPERTY_<CODE>_PRINTABLE may be declared over a property having that code,
+	 * so a value is handled as a file when the property it is written to is a file property.
+	 */
+	private static function getWorkflowFieldType(mixed $key, array $documentField, array $filePropertyKeys): mixed
+	{
+		$key = (string)$key;
+		if (str_starts_with($key, 'PROPERTY_') && isset($filePropertyKeys[substr($key, 9)]))
+		{
+			return 'file';
+		}
+
+		return $documentField['Type'] ?? null;
+	}
+
+	/**
+	 * Keys of PROPERTY_VALUES that CIBlockElement resolves to a file property: its code or its ID.
+	 */
+	private static function getFilePropertyKeys(int $iblockId): array
+	{
+		$keys = [];
+		$iterator = PropertyTable::getList([
+			'select' => ['ID', 'CODE'],
+			'filter' => [
+				'=IBLOCK_ID' => $iblockId,
+				'=ACTIVE' => 'Y',
+				'=PROPERTY_TYPE' => PropertyTable::TYPE_FILE,
+			],
+			'cache' => [
+				'ttl' => 86400,
+			],
+		]);
+		while ($property = $iterator->fetch())
+		{
+			$keys[(string)$property['ID']] = true;
+			if ((string)$property['CODE'] !== '')
+			{
+				$keys[(string)$property['CODE']] = true;
+			}
+		}
+
+		return $keys;
+	}
+
+	private static function containsFileArray(mixed $value): bool
+	{
+		if (!is_array($value))
+		{
+			return false;
+		}
+
+		if (array_key_exists('tmp_name', $value) || array_key_exists('old_file', $value))
+		{
+			return true;
+		}
+
+		foreach ($value as $item)
+		{
+			if (self::containsFileArray($item))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function makeWorkflowFileArray(mixed $value): ?array
+	{
+		$fileId = self::normalizeWorkflowFileId($value);
+		if ($fileId === null || !CFile::GetFileArray($fileId))
+		{
+			return null;
+		}
+
+		// Only an int may reach MakeFileArray: a string would be read as a local path or downloaded as a URL.
+		$file = CFile::MakeFileArray($fileId);
+
+		return is_array($file) && !empty($file['tmp_name']) ? $file : null;
+	}
+
+	private static function normalizeWorkflowFileId(mixed $value): ?int
+	{
+		if (is_int($value))
+		{
+			return $value > 0 ? $value : null;
+		}
+
+		if (!is_string($value))
+		{
+			return null;
+		}
+
+		$value = trim($value, " \t\r\n");
+		if ($value === '' || preg_match('/^[0-9]+$/D', $value) !== 1)
+		{
+			return null;
+		}
+
+		$fileId = (int)$value;
+
+		return $fileId > 0 ? $fileId : null;
 	}
 
 	public static function LockDocument($documentId, $workflowId)
@@ -2547,14 +2707,23 @@ class CIBlockDocument implements \IBPWorkflowDocument
 		}
 
 		$arFieldsPropertyValues = [];
+		$hasDiskFileWorkflow = false;
 		$complexDocumentId = ['iblock', get_called_class(), $parentDocumentId];
 
 		$arDocumentFields = static::GetDocumentFields("iblock_".$arFields["IBLOCK_ID"]);
+		$filePropertyKeys = self::getFilePropertyKeys((int)$arFields["IBLOCK_ID"]);
 
 		$arKeys = array_keys($arFields);
 		foreach ($arKeys as $key)
 		{
-			if (!isset($arDocumentFields[$key]))
+			$isDeclared = isset($arDocumentFields[$key]);
+			if (self::isUnsafeWorkflowField($key, $arFields[$key], $isDeclared))
+			{
+				unset($arFields[$key]);
+				continue;
+			}
+
+			if (!$isDeclared)
 			{
 				continue;
 			}
@@ -2568,12 +2737,13 @@ class CIBlockDocument implements \IBPWorkflowDocument
 					? substr($key, 9)
 					: $key
 			;
+			$fieldType = self::getWorkflowFieldType($key, $arDocumentFields[$key], $filePropertyKeys);
 
-			if ($arDocumentFields[$key]["Type"] == "user")
+			if ($fieldType == "user")
 			{
 				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $complexDocumentId);
 			}
-			elseif ($arDocumentFields[$key]["Type"] == "select")
+			elseif ($fieldType == "select")
 			{
 				$arV = array();
 				$db = CIBlockProperty::GetPropertyEnum($realKey, false, array("IBLOCK_ID" => $arFields["IBLOCK_ID"]));
@@ -2602,24 +2772,22 @@ class CIBlockDocument implements \IBPWorkflowDocument
 					$arFields[$key] = $listValue;
 				}
 			}
-			elseif ($arDocumentFields[$key]["Type"] == "file")
+			elseif ($fieldType == "file")
 			{
 				$files = array();
 				foreach ($arFields[$key] as $value)
 				{
-					if (is_array($value))
+					$values = is_array($value) ? $value : array($value);
+					foreach($values as $file)
 					{
-						foreach($value as $file)
-						{
-							$files[] = CFile::MakeFileArray($file);
-						}
+						$makeFileArray = self::makeWorkflowFileArray($file);
+						if ($makeFileArray)
+							$files[] = $makeFileArray;
 					}
-					else
-						$files[] = CFile::MakeFileArray($value);
 				}
 				$arFields[$key] = $files;
 			}
-			elseif ($arDocumentFields[$key]["Type"] == "S:DiskFile")
+			elseif ($fieldType == "S:DiskFile")
 			{
 				foreach ($arFields[$key] as &$value)
 				{
@@ -2629,8 +2797,9 @@ class CIBlockDocument implements \IBPWorkflowDocument
 					}
 				}
 				$arFields[$key] = array("VALUE" => $arFields[$key], "DESCRIPTION" => "workflow");
+				$hasDiskFileWorkflow = true;
 			}
-			elseif ($arDocumentFields[$key]["Type"] == "N:Sequence")
+			elseif ($fieldType == "N:Sequence")
 			{
 				$queryObject = \CIBlockProperty::getByID($realKey, $arFields["IBLOCK_ID"]);
 				if ($property = $queryObject->fetch())
@@ -2644,7 +2813,7 @@ class CIBlockDocument implements \IBPWorkflowDocument
 					$value = ["VALUE" => $sequence->getNext()];
 				}
 			}
-			elseif ($arDocumentFields[$key]["Type"] == "S:HTML")
+			elseif ($fieldType == "S:HTML")
 			{
 				foreach ($arFields[$key] as &$value)
 					$value = array("VALUE" => $value);
@@ -2684,7 +2853,17 @@ class CIBlockDocument implements \IBPWorkflowDocument
 		}
 
 		$iblockElement = new CIBlockElement();
-		$id = $iblockElement->Add($arFields, false, true, true);
+
+		$addElement = static fn() => $iblockElement->Add($arFields, false, true, true);
+
+		if ($hasDiskFileWorkflow && \Bitrix\Main\Loader::includeModule('disk') && class_exists('Bitrix\Disk\Integration\FileDiskProperty'))
+		{
+			$id = \Bitrix\Disk\Integration\FileDiskProperty::runInWorkflowWriteContext($addElement);
+		}
+		else
+		{
+			$id = $addElement();
+		}
 		if (!$id || $id <= 0)
 		{
 			throw new Exception($iblockElement->getLastError());

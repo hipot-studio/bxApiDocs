@@ -74,13 +74,16 @@ final class CapabilityAccessChecker
 
 	private function isImportedAutomatedSolution(int $automatedSolutionId): bool
 	{
-		$automatedSolution = Container::getInstance()->getAutomatedSolutionManager()->getAutomatedSolution($automatedSolutionId);
-		if (!$automatedSolution)
+		$sourceId = Container::getInstance()
+			->getAutomatedSolutionManager()
+			->getAutomatedSolutionSourceId($automatedSolutionId)
+		;
+		if ($sourceId === null)
 		{
 			return false;
 		}
 
-		return $this->isImported((int)($automatedSolution['SOURCE_ID'] ?? 0));
+		return $this->isImported($sourceId);
 	}
 
 	private function isEntityTypeIdBoundToImportedAutomatedSolution(int $entityTypeId): bool
@@ -92,10 +95,7 @@ final class CapabilityAccessChecker
 			return false;
 		}
 
-		$clone = clone($type); // @todo
-		$clone->fill(['AUTOMATED_SOLUTION']);
-
-		return $this->isImported((int)$clone->getAutomatedSolution()?->getSourceId());
+		return $this->isImportedAutomatedSolution((int)$type->getCustomSectionId());
 	}
 
 	private function isImported(int $sourceId): bool

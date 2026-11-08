@@ -945,6 +945,11 @@ class SalesCenterPaySystemComponent extends CBitrixComponent implements Main\Eng
 					if ($group === 'MEASURE')
 					{
 						$hint = Loc::getMessage('SALESCENTER_SP_CASHBOX_MEASURE_HINT');
+
+						if (is_a($handler, Cashbox\CashboxYooKassa::class, true))
+						{
+							$warning = Loc::getMessage('SALESCENTER_SP_CASHBOX_MEASURE_ATTENTION');
+						}
 					}
 
 					$result['section'][$group] = [

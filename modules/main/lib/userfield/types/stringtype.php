@@ -58,6 +58,11 @@ class StringType extends BaseType
 		$rows = (int)($userField['SETTINGS']['ROWS'] ?? 0);
 		$min = (int)($userField['SETTINGS']['MIN_LENGTH'] ?? 0);
 		$max = (int)($userField['SETTINGS']['MAX_LENGTH'] ?? 0);
+		$defaultValue =
+			isset($userField['SETTINGS']) && is_array($userField['SETTINGS'])
+				? ($userField['SETTINGS']['DEFAULT_VALUE'] ?? '')
+				: ''
+		;
 
 		$regExp = '';
 		if (
@@ -77,8 +82,22 @@ class StringType extends BaseType
 			'REGEXP' => $regExp,
 			'MIN_LENGTH' => $min,
 			'MAX_LENGTH' => $max,
-			'DEFAULT_VALUE' => isset($userField['SETTINGS']) && is_array($userField['SETTINGS']) ? ($userField['SETTINGS']['DEFAULT_VALUE'] ?? '') : '',
+			'DEFAULT_VALUE' => $defaultValue,
 		];
+	}
+
+	/**
+	 * Returns true when a scalar string value contains explicit line breaks.
+	 */
+	public static function isMultilineValue($value): bool
+	{
+		return (
+			is_string($value)
+			&& (
+				mb_strpos($value, "\n") !== false
+				|| mb_strpos($value, "\r") !== false
+			)
+		);
 	}
 
 	/**

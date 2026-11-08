@@ -11,6 +11,7 @@ use Bitrix\Main\Type\Collection;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Sale\Internals\FacebookConversion;
+use Bitrix\Main\Web\Uri;
 
 /**
  * @global \CUser $USER
@@ -1008,7 +1009,7 @@ abstract class Element extends Base
 		{
 			$APPLICATION->SetPageProperty(
 				'backgroundImage',
-				'style="background-image: url(\''.\CHTTP::urnEncode($arResult['BACKGROUND_IMAGE']['SRC'], 'UTF-8').'\')"'
+				'style="background-image: url(\'' . Uri::urnEncode($arResult['BACKGROUND_IMAGE']['SRC']) . '\')"'
 			);
 		}
 

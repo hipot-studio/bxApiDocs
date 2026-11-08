@@ -5,6 +5,7 @@ namespace Bitrix\Sign\Operation\Document;
 use Bitrix\Main;
 use Bitrix\Main\IO\Path;
 use Bitrix\Sign\Compatibility\Document\Scheme;
+use Bitrix\Sign\Config\Feature;
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Member;
@@ -62,6 +63,13 @@ final class FillAndSend implements Contract\Operation
 		if (!$validateConfigResult->isSuccess())
 		{
 			return $validateConfigResult;
+		}
+
+		$inviteMessage = $this->getInviteMessage();
+		$validateMessageResult = (new Validation\ValidateInviteMessage($inviteMessage))->launch();
+		if (!$validateMessageResult->isSuccess())
+		{
+			return $validateMessageResult;
 		}
 
 		$config = $this->fillConfig;
@@ -221,6 +229,11 @@ final class FillAndSend implements Contract\Operation
 		$document->providerCode = $providerCode;
 		$document->regionDocumentType = $config->regionDocumentType;
 		$document->scheme = Scheme::createDefaultSchemeByProviderCode($providerCode);
+		// Written by the same update as the rest of the document, and validated at the start of the
+		// operation. The invitation is built asynchronously from the stored document, so the text only
+		// has to be there before the configure agent is scheduled below. External REST does not trim
+		// its input, so the value goes through the same normalization as the domain write path.
+		$document->inviteMessage = DocumentService::normalizeInviteMessage($inviteMessage);
 
 		$fillExternalSettingsResult = $this->fillDocumentExternalSettings($document);
 		if (!$fillExternalSettingsResult->isSuccess())
@@ -246,6 +259,23 @@ final class FillAndSend implements Contract\Operation
 		$this->document = $document;
 
 		return new Main\Result();
+	}
+
+	/**
+	 * The optional message from the send request. This is the server-side gate for the whole REST
+	 * entry point: with the feature off the field is treated exactly like an unknown request key,
+	 * so a request that carries it behaves as it does today.
+	 */
+	private function getInviteMessage(): ?string
+	{
+		if (!Feature::instance()->isDocumentMessageEnabled())
+		{
+			return null;
+		}
+
+		$message = $this->fillConfig->message;
+
+		return ($message === null || $message === '') ? null : $message;
 	}
 
 	private function fillDocumentExternalSettings(Document $document): Main\Result

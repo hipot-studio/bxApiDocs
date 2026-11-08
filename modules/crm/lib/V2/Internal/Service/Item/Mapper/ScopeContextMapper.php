@@ -9,7 +9,6 @@ use Bitrix\Crm\V2\Public\Command\Item\AbstractItemCommand;
 use Bitrix\Crm\V2\Public\Command\Item\Scope;
 
 /**
- * Maps V2 Scope + userId to legacy Context.
  * @internal
  */
 class ScopeContextMapper

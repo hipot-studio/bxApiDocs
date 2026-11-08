@@ -87,7 +87,7 @@ final class UserIdValueMapper
 		{
 			$query = UserTable::query()
 				->setSelect(['ID'])
-				->where('IS_REAL_USER', 'Y')
+				->where('REAL_USER', 'expr', true)
 				->setOrder(['ID' => 'ASC'])
 				->setLimit(1)
 			;

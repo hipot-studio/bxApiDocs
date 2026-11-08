@@ -4,17 +4,25 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\V2\Internal\Repository;
 
+use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
+use Bitrix\Socialnetwork\Provider\CollabUserPolicyProvider;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Owner\ProjectOwnerState;
 use Bitrix\Socialnetwork\WorkgroupTable;
 
 class ProjectOwnerRepository implements ProjectOwnerRepositoryInterface
 {
+	private const CANDIDATE_PAGE_SIZE = 200;
+
+	public function __construct(private readonly ?CollabUserPolicyProvider $userPolicyProvider = null)
+	{
+	}
+
 	public function getOwnerState(int $projectId): ?ProjectOwnerState
 	{
 		if ($projectId <= 0)
@@ -63,17 +71,40 @@ class ProjectOwnerRepository implements ProjectOwnerRepositoryInterface
 
 	public function findReplacementOwnerId(int $projectId, int $currentOwnerId): ?int
 	{
+		$requiresPolicy = false;
+		if (!Loader::includeModule('extranet'))
+		{
+			$group = WorkgroupTable::query()->setSelect(['TYPE'])->where('ID', $projectId)->fetch();
+			$requiresPolicy = ($group['TYPE'] ?? null) === Type::Collab->value;
+		}
+
+		$limit = $requiresPolicy ? self::CANDIDATE_PAGE_SIZE : 1;
 		$query = UserToGroupTable::query()
 			->setSelect(['USER_ID'])
 			->where($this->buildCandidateSelectionFilter($projectId, $currentOwnerId))
 			->setOrder($this->getCandidateSelectionOrder())
-			->setLimit(1)
+			->setLimit($limit)
 		;
 
-		$row = $query->exec()->fetch();
-		$userId = (int)($row['USER_ID'] ?? 0);
+		$offset = 0;
+		do
+		{
+			$rows = $query->setOffset($offset)->exec()->fetchAll();
+			$userIds = array_map('intval', array_column($rows, 'USER_ID'));
+			if ($requiresPolicy)
+			{
+				$classification = ($this->userPolicyProvider ?? CollabUserPolicyProvider::getInstance())->classify($userIds);
+				$userIds = array_values(array_intersect($userIds, $classification['internal']));
+			}
+			if ($userIds !== [])
+			{
+				return $userIds[0] > 0 ? $userIds[0] : null;
+			}
+			$offset += $limit;
+		}
+		while ($requiresPolicy && count($rows) === $limit);
 
-		return $userId > 0 ? $userId : null;
+		return null;
 	}
 
 	protected function buildCandidateSelectionFilter(int $projectId, int $currentOwnerId): ConditionTree
@@ -110,7 +141,7 @@ class ProjectOwnerRepository implements ProjectOwnerRepositoryInterface
 			Query::filter()
 				->logic('or')
 				->whereNot('TYPE', Type::Scrum->value)
-				->whereNull('TYPE')
+				->whereNull('TYPE'),
 			);
 	}
 }

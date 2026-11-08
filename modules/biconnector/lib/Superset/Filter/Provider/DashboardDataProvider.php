@@ -2,12 +2,16 @@
 
 namespace Bitrix\BIConnector\Superset\Filter\Provider;
 
+use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\UI\EntitySelector\SupersetDashboardProvider;
 use Bitrix\BIConnector\Integration\UI\EntitySelector\SupersetDashboardTagProvider;
 use Bitrix\BIConnector\Integration\UI\EntitySelector\SupersetGroupProvider;
 use Bitrix\BIConnector\Integration\UI\EntitySelector\SupersetScopeProvider;
+use Bitrix\BIConnector\Public\Features\PublicLinksControl;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter\ScopeMap;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Filter\EntityDataProvider;
 use Bitrix\Main\Filter\Settings;
 use Bitrix\Main\Localization\Loc;
@@ -16,6 +20,10 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 
 class DashboardDataProvider extends EntityDataProvider
 {
+	public const SHARE_BANNED_FIELD_ID = 'SHARE_BANNED';
+	public const SHARE_BANNED_ORM_KEY = '!SHARE_BAN.ID';
+	public const SHARE_NOT_BANNED_ORM_KEY = 'SHARE_BAN.ID';
+
 	public function __construct(protected Settings $settings)
 	{
 	}
@@ -32,7 +40,7 @@ class DashboardDataProvider extends EntityDataProvider
 
 	public function prepareFields(): array
 	{
-		return [
+		$fields = [
 
 			'DATE_CREATE' => $this->createField('DATE_CREATE', [
 				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TITLE_DATE_CREATE'),
@@ -117,6 +125,24 @@ class DashboardDataProvider extends EntityDataProvider
 				'partial' => true,
 			]),
 		];
+
+		if ($this->canFilterByShareBan())
+		{
+			$fields[self::SHARE_BANNED_FIELD_ID] = $this->createField(self::SHARE_BANNED_FIELD_ID, [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_TITLE_SHARE_BANNED'),
+				'default' => false,
+				'type' => 'checkbox',
+			]);
+		}
+
+		return $fields;
+	}
+
+	protected function canFilterByShareBan(): bool
+	{
+		return Feature::isEnabled(PublicLinksControl::class)
+			&& AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SHARE_CONTROL)
+		;
 	}
 
 	public function prepareFieldData($fieldID): ?array
@@ -316,6 +342,7 @@ class DashboardDataProvider extends EntityDataProvider
 	public function prepareFilterValue(array $rawFilterValue): array
 	{
 		$rawFilterValue = parent::prepareFilterValue($rawFilterValue);
+		$rawFilterValue = $this->prepareShareBanFilterValue($rawFilterValue);
 
 		if (!empty($rawFilterValue['FIND']))
 		{
@@ -330,6 +357,33 @@ class DashboardDataProvider extends EntityDataProvider
 			{
 				$rawFilterValue['TITLE'] = "%{$rawFilterValue['FIND']}%";
 			}
+		}
+
+		return $rawFilterValue;
+	}
+
+	private function prepareShareBanFilterValue(array $rawFilterValue): array
+	{
+		if (!array_key_exists(self::SHARE_BANNED_FIELD_ID, $rawFilterValue))
+		{
+			return $rawFilterValue;
+		}
+
+		$value = $rawFilterValue[self::SHARE_BANNED_FIELD_ID];
+		unset($rawFilterValue[self::SHARE_BANNED_FIELD_ID]);
+
+		if (!$this->canFilterByShareBan())
+		{
+			return $rawFilterValue;
+		}
+
+		if ($value === 'Y')
+		{
+			$rawFilterValue[self::SHARE_BANNED_ORM_KEY] = null;
+		}
+		elseif ($value === 'N')
+		{
+			$rawFilterValue[self::SHARE_NOT_BANNED_ORM_KEY] = null;
 		}
 
 		return $rawFilterValue;

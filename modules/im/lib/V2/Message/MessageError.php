@@ -35,7 +35,8 @@ class MessageError extends Error
 		INFORM_USER_STATUS_ERROR = 'INFORM_USER_STATUS_ERROR',
 		REPLY_ERROR = 'REPLY_ERROR',
 		PARAMS_ERROR = 'PARAMS_ERROR',
-		WRONG_UUID = 'WRONG_UUID'
+		WRONG_UUID = 'WRONG_UUID',
+		FILES_MISMATCH = 'MESSAGE_FILES_MISMATCH'
 	;
 
 	protected function loadErrorMessage($code, $replacements): string

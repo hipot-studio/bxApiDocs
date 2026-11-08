@@ -3,10 +3,23 @@
 namespace Bitrix\Crm\Security\AccessAttribute;
 
 use Bitrix\Main;
+use Bitrix\Main\ORM\Data\AddStrategy\Contract\AddStrategy;
+use Bitrix\Main\ORM\Data\AddStrategy\Merge;
+use Bitrix\Main\ORM\Data\AddStrategy\Trait\AddMergeTrait;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 
 abstract class EntityAccessAttributeTable extends Main\ORM\Data\DataManager
 {
+	use AddMergeTrait;
+
+	protected static function getMergeStrategy(): AddStrategy
+	{
+		return new Merge(
+			static::getEntity(),
+			['ENTITY_ID', 'USER_ID', 'IS_OPENED', 'IS_ALWAYS_READABLE', 'PROGRESS_STEP'],
+		);
+	}
+
 	/**
 	 * @inheritdoc
 	 */
@@ -81,7 +94,7 @@ abstract class EntityAccessAttributeTable extends Main\ORM\Data\DataManager
 		if ($entityCount > 1)
 		{
 			static::deleteByEntity($entityId);
-			static::add($updateFields);
+			static::addMerge($updateFields);
 		}
 		elseif ($entityCount === 1)
 		{
@@ -89,7 +102,7 @@ abstract class EntityAccessAttributeTable extends Main\ORM\Data\DataManager
 		}
 		else
 		{
-			static::add($updateFields);
+			static::addMerge($updateFields);
 		}
 	}
 

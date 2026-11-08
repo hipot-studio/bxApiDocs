@@ -1,21 +1,19 @@
 <?php
-if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)
+if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)
 {
 	die();
 }
 
-use Bitrix\Call\Call;
 use Bitrix\Call\Conference;
 use Bitrix\Im\Chat;
 use Bitrix\Intranet\Util;
-use Bitrix\Main\Config\Option;
 use Bitrix\Main\Context;
 use Bitrix\Main\Data\LocalStorage\SessionLocalStorage;
-use \Bitrix\Main\Loader,
-	\Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Loader;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Page\Asset;
 
-class ImComponentConference extends CBitrixComponent
+class ImComponentConference extends \CBitrixComponent
 {
 	private $chatId = 0;
 	private $userId = 0;
@@ -55,11 +53,6 @@ class ImComponentConference extends CBitrixComponent
 		{
 			$this->startupErrorCode = Conference::ERROR_BITRIX24_ONLY;
 		}
-//		else if ($this->conference && !$this->conference->isActive())
-//		{
-//			//finished or not started yet
-//			$this->startupErrorCode = $this->conference->getStatus();
-//		}
 		else
 		{
 			if ($this->conference->isPasswordRequired())
@@ -180,6 +173,9 @@ class ImComponentConference extends CBitrixComponent
 		$this->arResult['USER_COUNT'] = $this->userCount;
 		$this->arResult['STARTUP_ERROR_CODE'] = $this->startupErrorCode;
 		$this->arResult['IS_INTRANET_OR_EXTRANET'] = $this->isIntranetOrExtranet;
+		$this->arResult['HAS_CUSTOM_NAME'] = (!$this->isIntranetOrExtranet && $this->userId > 0)
+			? \Bitrix\Call\Rest\User::hasCustomName($this->userId)
+			: null;
 		$this->arResult['LANGUAGE'] = Loc::getCurrentLang();
 		$this->arResult['FEATURE_CONFIG'] = $this->getFeatureConfig();
 		$this->arResult['LOGGER_CONFIG'] = \Bitrix\Im\Settings::getLoggerConfig();
@@ -353,4 +349,4 @@ class ImComponentConference extends CBitrixComponent
 	{
 		return \Bitrix\Main\Application::getInstance()->getLocalSession('conference_check_' . $this->conference->getId());
 	}
-};
+}

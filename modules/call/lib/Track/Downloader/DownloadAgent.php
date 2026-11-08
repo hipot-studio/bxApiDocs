@@ -28,6 +28,14 @@ class DownloadAgent
 	public const NETWORK_ERROR_DELAY = 300;
 	public const NETWORK_ERROR_DELAY_EXTENDED = 600;
 
+	/**
+	 * Request-scoped marker: true when the current hit is a pingTracks wake-up
+	 * from callcontroller (set by {@see self::markWakeUpHit()}). Agents execute
+	 * in the end-of-request background job of the same PHP request, so the flag
+	 * is visible in {@see self::run()}. No persistence needed.
+	 */
+	private static bool $wakeUpHit = false;
+
 	private static function getMaxRetryCount(): int
 	{
 		return self::getIntOption('call_download_max_retry_count', self::MAX_RETRY_COUNT);
@@ -57,6 +65,34 @@ class DownloadAgent
 		$value = (int)\Bitrix\Main\Config\Option::get('call', $name, $default);
 
 		return $value > 0 ? $value : $default;
+	}
+
+	/**
+	 * [DEBUG] Download-only-on-ping mode for deterministic QA of the wake-up flow.
+	 * Toggle: \Bitrix\Main\Config\Option::set('call', 'debug_download_only_on_ping', true|false).
+	 * While enabled, run() executes only within a pingTracks hit from callcontroller
+	 * (see markWakeUpHit()); any other hit silently postpones the agent, keeping the
+	 * track "silent" so the KK poller picks it up and the ping itself wakes it.
+	 */
+	private static function isDebugDownloadOnlyPing(): bool
+	{
+		return filter_var(\Bitrix\Main\Config\Option::get('call', 'debug_download_only_on_ping', ''), FILTER_VALIDATE_BOOLEAN);
+	}
+
+	/**
+	 * Mark the current request as a pingTracks wake-up hit.
+	 * Called first thing by CallController::pingTracksAction. No-op while the
+	 * debug_download_only_on_ping option is off, so the production ping hot path
+	 * pays nothing beyond one read from the warmed option cache.
+	 */
+	public static function markWakeUpHit(): void
+	{
+		if (!self::isDebugDownloadOnlyPing())
+		{
+			return;
+		}
+
+		self::$wakeUpHit = true;
 	}
 
 	/**
@@ -133,6 +169,16 @@ class DownloadAgent
 		if ($pauseUntil > 0 && \time() < $pauseUntil)
 		{
 			$log && $logger->info("DownloadAgent::run: Paused until " . date('c', $pauseUntil) . ". TrackId: {$trackId}");
+			return self::buildAgentName($trackId, $retryCount, $expectedBytes, $syncRetry, $pauseUntil);
+		}
+
+		// [DEBUG] Download-only-on-ping QA mode: outside a pingTracks hit the agent is
+		// postponed exactly like the pause branch above — no telemetry (UPDATE_TIME on
+		// KK stays untouched, the track keeps looking "silent" to the poller), retry
+		// counters and agent arguments unchanged, the agent stays scheduled in b_agent.
+		if (self::isDebugDownloadOnlyPing() && !self::$wakeUpHit)
+		{
+			$log && $logger->info("DownloadAgent::run: Debug download-only-on-ping mode, postponed. TrackId: {$trackId}");
 			return self::buildAgentName($trackId, $retryCount, $expectedBytes, $syncRetry, $pauseUntil);
 		}
 
@@ -381,6 +427,65 @@ class DownloadAgent
 		]);
 
 		return (bool)$agents->fetch();
+	}
+
+	/**
+	 * Batched variant of {@see self::hasScheduledAgent()}. One SQL hit with an
+	 * OR of per-track LIKE patterns; each pattern is a fixed prefix into
+	 * ix_agent_name(NAME(100)), so the optimiser does N narrow range scans
+	 * instead of one broad scan over every active DownloadAgent::run(...) row.
+	 * The trailing comma in `'::run(<id>,%'` keeps id `1` from matching `10`.
+	 *
+	 * @param int[] $trackIds
+	 * @return array<int,bool> Map [trackId => hasAgent] for every input id.
+	 */
+	public static function hasScheduledAgentsForTracks(array $trackIds): array
+	{
+		$result = [];
+		foreach ($trackIds as $id)
+		{
+			$result[(int)$id] = false;
+		}
+		if (!$result)
+		{
+			return $result;
+		}
+
+		$connection = \Bitrix\Main\Application::getConnection();
+		// LIKE pattern, not exact match — backslashes in the FQCN must be
+		// doubled for the LIKE escape layer first, then forSql doubles again
+		// for the string literal (mirrors CDatabase::ForSqlLike). Plain forSql
+		// would leave a single backslash that LIKE eats as an escape char and
+		// the pattern would match nothing.
+		$prefix = $connection->getSqlHelper()->forSql(
+			str_replace('\\', '\\\\', self::class . '::run(')
+		);
+
+		$likeClauses = [];
+		foreach (array_keys($result) as $trackId)
+		{
+			$likeClauses[] = "NAME LIKE '" . $prefix . (int)$trackId . ",%'";
+		}
+
+		$rs = $connection->query(
+			"SELECT NAME FROM b_agent
+			WHERE MODULE_ID = 'call'
+				AND ACTIVE = 'Y'
+				AND (" . implode(' OR ', $likeClauses) . ")"
+		);
+		while ($row = $rs->fetch())
+		{
+			if (preg_match('/::run\((\d+),/', $row['NAME'], $m))
+			{
+				$trackId = (int)$m[1];
+				if (array_key_exists($trackId, $result))
+				{
+					$result[$trackId] = true;
+				}
+			}
+		}
+
+		return $result;
 	}
 
 	/**

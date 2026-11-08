@@ -120,7 +120,11 @@ class Runtime
 		return null;
 	}
 
-	protected function runTemplates($documentStatus, string $preGeneratedWorkflowId = null)
+	protected function runTemplates(
+		$documentStatus,
+		string $preGeneratedWorkflowId = null,
+		?int $initiatorUserId = null
+	)
 	{
 		$isDebug = $this->isDebug();
 		$template = new Template($this->getTarget()->getDocumentType(), $documentStatus);
@@ -147,8 +151,12 @@ class Runtime
 			$documentComplexId = [$documentType[0], $documentType[1], $documentId];
 			$useForcedTracking = $this->canUseForcedTracking() && !$template->isExternalModified();
 
+			// When the initiator (the user who changed the status) is known, the
+			// workflow is started on their behalf so the history author resolves
+			// to them; otherwise it stays started by System (null) as before.
 			$startParameters = [
-				\CBPDocument::PARAM_TAGRET_USER => null, //Started by System
+				\CBPDocument::PARAM_TAGRET_USER =>
+					($initiatorUserId !== null && $initiatorUserId > 0) ? 'user_' . $initiatorUserId : null,
 				\CBPDocument::PARAM_USE_FORCED_TRACKING => $isDebug || $useForcedTracking,
 				\CBPDocument::PARAM_IGNORE_SIMULTANEOUS_PROCESSES_LIMIT => true,
 				\CBPDocument::PARAM_DOCUMENT_TYPE => $documentType,
@@ -205,17 +213,22 @@ class Runtime
 
 	protected function writeTriggerTracking($workflowId, $trigger)
 	{
-		$trackingService = \CBPRuntime::getRuntime()->getTrackingService();
+		$trackingService = $this->getTrackingService();
 
-		$trackingService->write(
+		$trackingService->writeForced(
 			$workflowId,
 			\CBPTrackingType::Trigger,
 			'APPLIED_TRIGGER',
 			\CBPActivityExecutionStatus::Closed,
 			\CBPActivityExecutionResult::Succeeded,
 			'',
-			$trigger['ID']
+			$trigger['ID'],
 		);
+	}
+
+	protected function getTrackingService(): \CBPTrackingService
+	{
+		return \CBPRuntime::getRuntime()->getTrackingService();
 	}
 
 	protected function stopTemplates()
@@ -272,7 +285,7 @@ class Runtime
 	 *
 	 * @throws InvalidOperationException
 	 */
-	public function onDocumentStatusChanged()
+	public function onDocumentStatusChanged(?int $initiatorUserId = null)
 	{
 		$preGeneratedWorkflowId = \CBPRuntime::generateWorkflowId();
 		if ($this->isDebug())
@@ -295,10 +308,10 @@ class Runtime
 			}
 		}
 
-		return $this->runDocumentStatus($preGeneratedWorkflowId);
+		return $this->runDocumentStatus($preGeneratedWorkflowId, $initiatorUserId);
 	}
 
-	public function runDocumentStatus(string $preGeneratedWorkflowId = null): ?string
+	public function runDocumentStatus(string $preGeneratedWorkflowId = null, ?int $initiatorUserId = null): ?string
 	{
 		$status = $this->getTarget()->getDocumentStatus();
 		$documentType = $this->getTarget()->getDocumentType()[2];
@@ -308,7 +321,7 @@ class Runtime
 		{
 			$this->stopTemplates();
 
-			return $this->runTemplates($status, $preGeneratedWorkflowId);
+			return $this->runTemplates($status, $preGeneratedWorkflowId, $initiatorUserId);
 		}
 
 		return null;

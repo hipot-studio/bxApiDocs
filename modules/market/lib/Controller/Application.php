@@ -3,7 +3,9 @@
 namespace Bitrix\Market\Controller;
 
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\AjaxJson;
+use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Market\Application\Installed;
@@ -14,6 +16,7 @@ use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Market\Link;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
+use Bitrix\Rest\Public\Command\Application\AppInstallRequest\CreateAppInstallRequestCommand;
 
 class Application extends Controller
 {
@@ -169,6 +172,32 @@ class Application extends Controller
 		$fields['text'] = $reviewText;
 
 		return $fields;
+	}
+
+	public function requestInstallAction(string $code, ?string $version = null, ?string $checkHash = null, ?string $installHash = null): AjaxJson
+	{
+		if (!Loader::includeModule('rest'))
+		{
+			$this->addError(new Error(
+				Loc::getMessage('MARKET_ERROR_LOADS_MODULE_REST'),
+				'ERROR_LOADS_MODULE_REST',
+			));
+
+			return AjaxJson::createError($this->errorCollection);
+		}
+
+		$normalizedVersion = ($version !== null && $version !== '') ? $version : '1';
+
+		$userId = (int)CurrentUser::get()->getId();
+		$command = new CreateAppInstallRequestCommand($code, $normalizedVersion, $userId, $checkHash, $installHash);
+		$result = $command->run();
+
+		if (!$result->isSuccess())
+		{
+			return AjaxJson::createError($result->getErrorCollection());
+		}
+
+		return AjaxJson::createSuccess();
 	}
 
 	protected function getDefaultPreFilters(): array

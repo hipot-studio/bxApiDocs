@@ -19,15 +19,20 @@ final class FetchBoundTypeIds implements Action
 			'isLoadCategories' => false,
 		])->getTypes();
 
+		$boundEntityTypeIds = array_fill_keys($this->automatedSolutionIds, []);
 		$boundTypeIdsMap = array_fill_keys($this->automatedSolutionIds, []);
 		foreach ($types as $type)
 		{
 			if (in_array($type->getCustomSectionId(), $this->automatedSolutionIds, true))
 			{
 				$boundTypeIdsMap[$type->getCustomSectionId()][] = $type->getId();
+				$boundEntityTypeIds[$type->getCustomSectionId()][] = $type->getEntityTypeId();
 			}
 		}
 
-		return (new Result())->setData(['typeIdsMap' => $boundTypeIdsMap]);
+		return (new Result())->setData([
+			'typeIdsMap' => $boundTypeIdsMap,
+			'entityTypeIdsMap' => $boundEntityTypeIds,
+		]);
 	}
 }

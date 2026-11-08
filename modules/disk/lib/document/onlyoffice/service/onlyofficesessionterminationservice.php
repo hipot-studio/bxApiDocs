@@ -37,15 +37,34 @@ class OnlyOfficeSessionTerminationService implements SessionTerminationService
 
 	public function terminateSessionsWithInsufficientRights(): void
 	{
-		$sessionsToTerminate = $this->getSessionsToTerminate();
+		$this->terminateSessions($this->getSessionsToTerminate());
+	}
 
-		if (empty($sessionsToTerminate))
+	public function terminateSessionsByExternalLink(int $externalLinkId): void
+	{
+		$sessions = DocumentSession::getModelList([
+			'filter' => [
+				'=SERVICE' => DocumentService::OnlyOffice->value,
+				'=OBJECT_ID' => $this->object->getId(),
+				'=EXTERNAL_LINK_ID' => $externalLinkId,
+			],
+		]);
+
+		$this->terminateSessions($sessions);
+	}
+
+	/**
+	 * @param DocumentSession[] $sessions
+	 */
+	private function terminateSessions(array $sessions): void
+	{
+		if (empty($sessions))
 		{
 			return;
 		}
 
-		$this->terminateExternalSession($sessionsToTerminate);
-		$this->deleteLocalSession($sessionsToTerminate);
+		$this->terminateExternalSession($sessions);
+		$this->deleteLocalSession($sessions);
 	}
 
 	/**

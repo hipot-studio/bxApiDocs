@@ -3,10 +3,11 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2023 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main;
+use Bitrix\Main\Type\Callback;
 use Bitrix\Main\Type\DateTime;
 
 IncludeModuleLangFile(__FILE__);
@@ -579,20 +580,20 @@ class CAccess
 	/**
 	 * @internal
 	 * @param int $lastId
-	 * @return string
+	 * @return Callback|null
 	 */
-	public static function deleteDuplicatesAgent(int $lastId = 0)
+	public static function deleteDuplicatesAgent(int $lastId = 0): ?Callback
 	{
 		$connection = Main\Application::getConnection();
 
 		if (!($connection instanceof Main\DB\MysqlCommonConnection))
 		{
-			return '';
+			return null;
 		}
 
 		if ($connection->getIndexName('b_user_access', ['USER_ID', 'ACCESS_CODE'], true) === 'ux_ua_user_access')
 		{
-			return '';
+			return null;
 		}
 
 		$codes = $connection->query("
@@ -618,7 +619,7 @@ class CAccess
 
 		if ($id !== null)
 		{
-			return "CAccess::deleteDuplicatesAgent({$id});";
+			return new Callback([self::class, __FUNCTION__], [(int)$id]);
 		}
 
 		try
@@ -631,10 +632,10 @@ class CAccess
 		}
 		catch (Main\DB\SqlQueryException)
 		{
-			return "CAccess::deleteDuplicatesAgent();";
+			return new Callback([self::class, __FUNCTION__]);
 		}
 
-		return '';
+		return null;
 	}
 }
 

@@ -13,6 +13,10 @@ use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Attribute\Scope;
 use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
 use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
+use Bitrix\Rest\V3\Structure\Filtering\Condition;
+use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
+use Bitrix\Rest\V3\Structure\Filtering\Logic;
+use Bitrix\Rest\V3\Structure\Filtering\Operator;
 use Bitrix\Rest\V3\Structure\PaginationStructure;
 
 #[DtoType(LikeItemDto::class)]
@@ -21,6 +25,8 @@ class Like extends AbstractController
 	#[Scope('rating')]
 	public function listAction(LikeListRequest $request, LikeListService $likeListService): LikeListResponse
 	{
+		$this->assertSupportedFilter($request->filter);
+
 		$filter = $request->filter->getSimpleFilterConditions();
 		$entityTypeId = (string)($filter['entityTypeId'] ?? '');
 		$entityId = (int)($filter['entityId'] ?? 0);
@@ -107,5 +113,78 @@ class Like extends AbstractController
 		}
 
 		return new ArrayResponse($result);
+	}
+
+	/**
+	 * The action addresses the vote list through getSimpleFilterConditions(), which flattens the
+	 * tree into one value per field: OR, negation and a repeated field would silently lose part of
+	 * the request instead of narrowing it. Everything the flat map cannot express is rejected here.
+	 */
+	private function assertSupportedFilter(FilterStructure $filter): void
+	{
+		$this->assertPlainAndGroup($filter);
+
+		$usedFields = [];
+		foreach ($filter->getConditions() as $condition)
+		{
+			if ($condition instanceof FilterStructure)
+			{
+				$this->assertPlainAndGroup($condition);
+
+				$nested = $condition->getConditions();
+				if (count($nested) !== 1 || !($nested[0] instanceof Condition))
+				{
+					throw new RequestValidationException([
+						new Error('Nested filter groups are not supported for the like list.', 'filter'),
+					]);
+				}
+
+				$condition = $nested[0];
+			}
+
+			$this->assertEqualityCondition($condition);
+			$usedFields[] = $condition->getLeftOperand();
+		}
+
+		if (count($usedFields) !== count(array_unique($usedFields)))
+		{
+			throw new RequestValidationException([
+				new Error('Repeating one field in the like list filter is not supported.', 'filter'),
+			]);
+		}
+	}
+
+	private function assertPlainAndGroup(FilterStructure $filter): void
+	{
+		if ($filter->isNegative())
+		{
+			throw new RequestValidationException([
+				new Error('Negative filters are not supported for the like list.', 'filter'),
+			]);
+		}
+
+		if ($filter->logic() !== Logic::And)
+		{
+			throw new RequestValidationException([
+				new Error('OR filters are not supported for the like list.', 'filter'),
+			]);
+		}
+	}
+
+	private function assertEqualityCondition(Condition|FilterStructure $condition): void
+	{
+		if (!($condition instanceof Condition) || $condition->getOperator() !== Operator::Equal)
+		{
+			throw new RequestValidationException([
+				new Error("Only '=' operation is supported for the like list filter.", 'filter'),
+			]);
+		}
+
+		if (!is_string($condition->getLeftOperand()))
+		{
+			throw new RequestValidationException([
+				new Error('Expressions are not supported for the like list filter.', 'filter'),
+			]);
+		}
 	}
 }

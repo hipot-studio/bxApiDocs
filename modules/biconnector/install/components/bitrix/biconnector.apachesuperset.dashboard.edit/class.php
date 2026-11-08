@@ -7,6 +7,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Access\Service\DashboardGroupService;
 use Bitrix\BIConnector\Integration\Superset\Repository\SupersetUserRepository;
 use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightOptions;
@@ -20,19 +21,20 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardUrlParameterTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
-use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
+use Bitrix\BIConnector\Superset\Dashboard\Attach\AttachAccessChecker;
 use Bitrix\BIConnector\Superset\Dashboard\Metadata\DashboardMetadataBuilder;
 use Bitrix\BIConnector\Superset\Dashboard\Metadata\MetadataSection\NativeFilterConfigurationSection;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
-use Bitrix\BIConnector\Superset\UI\Period\DefaultPeriodLabelBuilder;
 use Bitrix\BIConnector\Integration\UI\FileUploader;
 use Bitrix\BIConnector\Integration\UI\FileUploaderController\DashboardInfoUploaderController;
 use Bitrix\BIConnector\Internal\Entity\ValueObject\DashboardCreate\DashboardSaveData;
 use Bitrix\BIConnector\Internal\Repository\Mapper\SupersetDashboardInfoGalleryMapper;
 use Bitrix\BIConnector\Internal\Repository\Mapper\SupersetDashboardInfoMapper;
 use Bitrix\BIConnector\Internal\Repository\SupersetDashboardInfoGalleryRepository;
+use Bitrix\BIConnector\Internal\Services\DashboardSettings\DashboardSettingsMode;
+use Bitrix\BIConnector\Internal\Services\DashboardSettings\DashboardSettingsModeResolver;
 use Bitrix\BIConnector\Internal\Repository\SupersetDashboardInfoRepository;
 use Bitrix\BIConnector\Internal\Services\DashboardInfo\FileCleanupService;
 use Bitrix\BIConnector\Public\Command\DashboardInfo\AddSupersetDashboardInfoCommand;
@@ -62,6 +64,8 @@ class ApacheSupersetDashboardEditComponent
 	private const DASHBOARD_TITLE_MAX_LENGTH = 128;
 
 	private ?Dashboard $dashboard = null;
+	private ?DashboardSettingsMode $settingsMode = null;
+	private ?DashboardSettingsModeResolver $modeResolver = null;
 
 	public function __construct($component = null)
 	{
@@ -106,13 +110,18 @@ class ApacheSupersetDashboardEditComponent
 
 	public function executeComponent(): void
 	{
+		$this->prepareResult();
+		$this->includeComponentTemplate();
+	}
+
+	protected function prepareResult(): void
+	{
 		$this->initDashboard();
 
-		$checkAccessResult = $this->checkAccess();
+		$checkAccessResult = $this->checkAccess(true);
 		if (!$checkAccessResult->isSuccess())
 		{
 			$this->arResult['ERROR_MESSAGES'] = $checkAccessResult->getErrorMessages();
-			$this->includeComponentTemplate();
 
 			return;
 		}
@@ -142,8 +151,44 @@ class ApacheSupersetDashboardEditComponent
 			),
 		);
 
+		if (!$this->isEditMode())
+		{
+			$this->arResult['SETTINGS_MODE'] = DashboardSettingsMode::Full->value;
+			$this->prepareSettings();
+
+			return;
+		}
+
+		$mode = $this->getSettingsMode();
+		$this->arResult['SETTINGS_MODE'] = $mode->value;
+		$shareSettingState = $this->getModeResolver()->getShareSettingState($this->dashboard->getId());
+		if ($mode === DashboardSettingsMode::Reduced)
+		{
+			$this->arResult['REDUCED_SETTINGS'] = [
+				'dashboardId' => $this->dashboard->getId(),
+				'dashboard' => $this->getModeResolver()->getBaseInfo($this->dashboard),
+				'shareSetting' => $shareSettingState,
+			];
+
+			return;
+		}
+
+		$this->arResult['SHARE_SETTING'] = $shareSettingState;
 		$this->prepareSettings();
-		$this->includeComponentTemplate();
+	}
+
+	private function getSettingsMode(): DashboardSettingsMode
+	{
+		$this->settingsMode ??= $this->getModeResolver()->resolve(DashboardAccessItem::createFromEntity($this->dashboard));
+
+		return $this->settingsMode;
+	}
+
+	private function getModeResolver(): DashboardSettingsModeResolver
+	{
+		$this->modeResolver ??= new DashboardSettingsModeResolver();
+
+		return $this->modeResolver;
 	}
 
 	private function prepareSettings(): void
@@ -158,7 +203,6 @@ class ApacheSupersetDashboardEditComponent
 			'isEditMode' => $this->isEditMode(),
 			'isAllowedClearGroups' => $this->isAllowedClearGroups(),
 			'defaultValues' => $defaultValues,
-			'periodList' => $this->getPeriodList(),
 			'paramList' => $this->getParamList(),
 			'requiredParamList' => $this->getRequiredParamList(),
 			'groupIds' => $defaultValues['groups'],
@@ -203,7 +247,6 @@ class ApacheSupersetDashboardEditComponent
 				$this->getDashboardGroupIds($this->dashboard->getId()),
 				$editableGroups,
 			));
-			$periodValues = $this->getDashboardPeriodDefaultValues();
 
 			return [
 				'title' => $this->dashboard->getTitle(),
@@ -215,12 +258,8 @@ class ApacheSupersetDashboardEditComponent
 				'groups' => $groupIds,
 				'scopes' => ScopeService::getInstance()->getDashboardScopes($this->dashboard->getId()),
 				'params' => $this->appendRequiredParams($this->getDashboardParamCodes($this->dashboard->getId())),
-				'filterPeriod' => $periodValues['filterPeriod'],
-				'dateFilterStart' => $periodValues['dateFilterStart'],
-				'dateFilterEnd' => $periodValues['dateFilterEnd'],
 			];
 		}
-		$periodValues = $this->getNewDashboardPeriodDefaultValues();
 
 		return [
 			'title' => $this->getDefaultDashboardTitle(),
@@ -232,36 +271,6 @@ class ApacheSupersetDashboardEditComponent
 			'groups' => $this->getInitialGroupIds(),
 			'scopes' => [],
 			'params' => $this->getRequiredParamCodes(),
-			'filterPeriod' => $periodValues['filterPeriod'],
-			'dateFilterStart' => $periodValues['dateFilterStart'],
-			'dateFilterEnd' => $periodValues['dateFilterEnd'],
-		];
-	}
-
-	private function getDashboardPeriodDefaultValues(): array
-	{
-		$filterPeriod = $this->dashboard?->getOrmObject()->getFilterPeriod();
-		if (!is_string($filterPeriod) || $filterPeriod === '')
-		{
-			$filterPeriod = EmbeddedFilter\DateTime::PERIOD_DEFAULT;
-		}
-
-		$dateFilterStart = $this->dashboard?->getOrmObject()->getDateFilterStart() ?? EmbeddedFilter\DateTime::getDefaultDateStart();
-		$dateFilterEnd = $this->dashboard?->getOrmObject()->getDateFilterEnd() ?? EmbeddedFilter\DateTime::getDefaultDateEnd();
-
-		return [
-			'filterPeriod' => $filterPeriod,
-			'dateFilterStart' => $dateFilterStart->toString(),
-			'dateFilterEnd' => $dateFilterEnd->toString(),
-		];
-	}
-
-	private function getNewDashboardPeriodDefaultValues(): array
-	{
-		return [
-			'filterPeriod' => EmbeddedFilter\DateTime::PERIOD_DEFAULT,
-			'dateFilterStart' => EmbeddedFilter\DateTime::getDefaultDateStart()->toString(),
-			'dateFilterEnd' => EmbeddedFilter\DateTime::getDefaultDateEnd()->toString(),
 		];
 	}
 
@@ -352,43 +361,6 @@ class ApacheSupersetDashboardEditComponent
 		return $result;
 	}
 
-	private function getPeriodList(): array
-	{
-		$periods = [
-			EmbeddedFilter\DateTime::PERIOD_LAST_7,
-			EmbeddedFilter\DateTime::PERIOD_LAST_30,
-			EmbeddedFilter\DateTime::PERIOD_LAST_90,
-			EmbeddedFilter\DateTime::PERIOD_LAST_180,
-			EmbeddedFilter\DateTime::PERIOD_LAST_365,
-			EmbeddedFilter\DateTime::PERIOD_CURRENT_WEEK,
-			EmbeddedFilter\DateTime::PERIOD_CURRENT_MONTH,
-			EmbeddedFilter\DateTime::PERIOD_CURRENT_YEAR,
-			EmbeddedFilter\DateTime::PERIOD_RANGE,
-			EmbeddedFilter\DateTime::PERIOD_NONE,
-		];
-
-		$items = [];
-		foreach ($periods as $period)
-		{
-			$items[] = [
-				'value' => $period,
-				'name' => EmbeddedFilter\DateTime::getPeriodName($period),
-			];
-		}
-
-		$defaultPeriodLabel = (new DefaultPeriodLabelBuilder())->build();
-		$items[] = [
-			'value' => EmbeddedFilter\DateTime::PERIOD_DEFAULT,
-			'name' => $defaultPeriodLabel['fullText'],
-			'isDefault' => true,
-			'prefixText' => $defaultPeriodLabel['prefixText'],
-			'valueText' => $defaultPeriodLabel['valueText'],
-			'suffixText' => $defaultPeriodLabel['suffixText'],
-		];
-
-		return $items;
-	}
-
 	private function getDefaultDashboardTitle(): string
 	{
 		$name = Loc::getMessage('DASHBOARD_EDIT_FORM_DEFAULT_TITLE');
@@ -466,7 +438,11 @@ class ApacheSupersetDashboardEditComponent
 		;
 	}
 
-	private function checkAccess(): Main\Result
+	/**
+	 * @param bool $isOpening Opening an existing dashboard also lets in a public links controller
+	 *     who can only view it (reduced mode); saving still requires the edit right.
+	 */
+	private function checkAccess(bool $isOpening = false): Main\Result
 	{
 		$result = new Main\Result();
 
@@ -507,7 +483,11 @@ class ApacheSupersetDashboardEditComponent
 				return $result;
 			}
 
-			if (!AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $this->dashboard))
+			$canOpen = $isOpening
+				? $this->getSettingsMode() !== DashboardSettingsMode::Denied
+				: AccessController::getCurrent()->checkByEntity(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $this->dashboard)
+			;
+			if (!$canOpen)
 			{
 				$result->addError(new Error(Loc::getMessage('DASHBOARD_EDIT_FORM_OPEN_EDIT_ACCESS_ERROR')));
 
@@ -594,8 +574,6 @@ class ApacheSupersetDashboardEditComponent
 			$dashboard->setStatus(SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED);
 		}
 
-		$this->applyPeriodData($dashboard, $saveData->getPeriodData());
-
 		$isSaved = $this->executeInTransaction(
 			function () use ($dashboard, $saveData, $imageValidationData): bool {
 				$saveResult = $dashboard->save();
@@ -667,8 +645,6 @@ class ApacheSupersetDashboardEditComponent
 			$dashboardObject->setTitle($saveData->title);
 		}
 
-		$this->applyPeriodData($dashboardObject, $saveData->getPeriodData());
-
 		$isUpdated = $this->executeInTransaction(
 			function () use ($dashboardObject, $saveData, $imageValidationData): bool {
 				$saveResult = $dashboardObject->save();
@@ -715,11 +691,18 @@ class ApacheSupersetDashboardEditComponent
 	private function validateAttach(int $externalId): Main\Result
 	{
 		$result = new Main\Result();
+
+		if (!AttachAccessChecker::canAttach($externalId))
+		{
+			$result->addError(new Error(Loc::getMessage('DASHBOARD_EDIT_FORM_ERROR')));
+
+			return $result;
+		}
+
 		$existing = SupersetDashboardTable::getRow([
 			'filter' => ['=EXTERNAL_ID' => $externalId],
 			'select' => ['ID'],
 		]);
-
 		if ($existing)
 		{
 			$result->addError(new Error(Loc::getMessage('DASHBOARD_EDIT_FORM_ERROR')));
@@ -1219,87 +1202,6 @@ class ApacheSupersetDashboardEditComponent
 		);
 	}
 
-	private function preparePeriodData(array $data): ?array
-	{
-		$filterPeriod = $data['filterPeriod'] ?? EmbeddedFilter\DateTime::PERIOD_DEFAULT;
-		if (!is_string($filterPeriod))
-		{
-			$filterPeriod = EmbeddedFilter\DateTime::PERIOD_DEFAULT;
-		}
-
-		if ($filterPeriod === EmbeddedFilter\DateTime::PERIOD_DEFAULT)
-		{
-			return [
-				'FILTER_PERIOD' => null,
-				'DATE_FILTER_START' => null,
-				'DATE_FILTER_END' => null,
-				'INCLUDE_LAST_FILTER_DATE' => null,
-			];
-		}
-
-		if ($filterPeriod === EmbeddedFilter\DateTime::PERIOD_NONE)
-		{
-			return [
-				'FILTER_PERIOD' => EmbeddedFilter\DateTime::PERIOD_NONE,
-				'DATE_FILTER_START' => null,
-				'DATE_FILTER_END' => null,
-				'INCLUDE_LAST_FILTER_DATE' => null,
-			];
-		}
-
-		if ($filterPeriod === EmbeddedFilter\DateTime::PERIOD_RANGE)
-		{
-			try
-			{
-				$dateFilterStart = new Main\Type\Date((string)($data['dateFilterStart'] ?? ''));
-				$dateFilterEnd = new Main\Type\Date((string)($data['dateFilterEnd'] ?? ''));
-			}
-			catch (Main\ObjectException)
-			{
-				$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_EDIT_FORM_INVALID_RANGE_ERROR'));
-
-				return null;
-			}
-
-			if ($dateFilterStart->getTimestamp() > $dateFilterEnd->getTimestamp())
-			{
-				$this->errorCollection[] = new Error(Loc::getMessage('DASHBOARD_EDIT_FORM_INVALID_RANGE_ERROR'));
-
-				return null;
-			}
-
-			return [
-				'FILTER_PERIOD' => EmbeddedFilter\DateTime::PERIOD_RANGE,
-				'DATE_FILTER_START' => $dateFilterStart,
-				'DATE_FILTER_END' => $dateFilterEnd,
-				'INCLUDE_LAST_FILTER_DATE' => 'Y',
-			];
-		}
-
-		$period = EmbeddedFilter\DateTime::getDefaultPeriod();
-		if (EmbeddedFilter\DateTime::isAvailablePeriod($filterPeriod))
-		{
-			$period = $filterPeriod;
-		}
-
-		return [
-			'FILTER_PERIOD' => $period,
-			'DATE_FILTER_START' => null,
-			'DATE_FILTER_END' => null,
-			'INCLUDE_LAST_FILTER_DATE' => null,
-		];
-	}
-
-	private function applyPeriodData(SupersetDashboard $dashboard, array $periodData): void
-	{
-		$dashboard
-			->setFilterPeriod($periodData['FILTER_PERIOD'])
-			->setDateFilterStart($periodData['DATE_FILTER_START'])
-			->setDateFilterEnd($periodData['DATE_FILTER_END'])
-			->setIncludeLastFilterDate($periodData['INCLUDE_LAST_FILTER_DATE'])
-		;
-	}
-
 	private function buildDashboardResponse(int $dashboardId): ?array
 	{
 		$superset = new SupersetController();
@@ -1327,6 +1229,7 @@ class ApacheSupersetDashboardEditComponent
 	private function initDashboard(): void
 	{
 		$this->dashboard = null;
+		$this->settingsMode = null;
 		if (!$this->isEditMode())
 		{
 			return;
@@ -1389,14 +1292,6 @@ class ApacheSupersetDashboardEditComponent
 			return null;
 		}
 
-		$periodData = $this->preparePeriodData(
-			is_array($data['period'] ?? null) ? $data['period'] : []
-		);
-		if ($periodData === null)
-		{
-			return null;
-		}
-
 		$coverImageData = $this->prepareCoverImageData($data['coverImage'] ?? []);
 		$galleryImageData = $this->prepareGalleryImageData($data['galleryImage'] ?? []);
 
@@ -1408,7 +1303,6 @@ class ApacheSupersetDashboardEditComponent
 			params: $this->appendRequiredParams($this->normalizeStringList($data['params'] ?? [])),
 			coverImage: $coverImageData,
 			galleryImage: $galleryImageData,
-			period: $periodData,
 			externalId: max(0, (int)($data['externalId'] ?? 0)),
 			externalPublished: (bool)($data['externalPublished'] ?? false),
 		);

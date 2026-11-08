@@ -1,11 +1,11 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Access\UnifiedLink;
 
 use Bitrix\Disk\AttachedObject;
-use Bitrix\Disk\File;
+use Bitrix\Disk\BaseObject;
+use Bitrix\Disk\Internal\Service\UnifiedLink\BaseObjectResolver;
 
 class AttachedObjectsAccessCheckHandler extends ChainableAccessCheckHandler
 {
@@ -16,19 +16,57 @@ class AttachedObjectsAccessCheckHandler extends ChainableAccessCheckHandler
 	{
 	}
 
-	protected function doCheck(File $file): UnifiedLinkAccessLevel
+	protected function doCheck(BaseObject $baseObject): UnifiedLinkAccessLevel
 	{
-		if ($this->attachedObject !== null)
+		$attachedObject = BaseObjectResolver::resolveAttachedObject($baseObject, $this->attachedObject);
+		if ($attachedObject === null)
 		{
-			if ($this->attachedObject->canUpdate($this->userId))
-			{
-				return UnifiedLinkAccessLevel::Edit;
-			}
+			return UnifiedLinkAccessLevel::Denied;
+		}
 
-			if ($this->attachedObject->canRead($this->userId))
-			{
-				return UnifiedLinkAccessLevel::Read;
-			}
+		return $this->getAccessLevel($attachedObject);
+	}
+
+	protected function doCheckCollection(array $baseObjects): array
+	{
+		if (!$this->attachedObject instanceof AttachedObject)
+		{
+			return [];
+		}
+
+		$objectId = (int)$this->attachedObject->getObjectId();
+		$baseObject = $baseObjects[$objectId] ?? null;
+		if (!$baseObject instanceof BaseObject)
+		{
+			return [];
+		}
+
+		$attachedObject = BaseObjectResolver::resolveAttachedObject($baseObject, $this->attachedObject);
+		if ($attachedObject === null)
+		{
+			return [];
+		}
+
+		return [
+			$objectId => $this->getAccessLevel($attachedObject),
+		];
+	}
+
+	protected function getAccessSource(): UnifiedLinkAccessSource
+	{
+		return UnifiedLinkAccessSource::AttachedObject;
+	}
+
+	protected function getAccessLevel(AttachedObject $attachedObject): UnifiedLinkAccessLevel
+	{
+		if ($attachedObject->canUpdate($this->userId))
+		{
+			return UnifiedLinkAccessLevel::Edit;
+		}
+
+		if ($attachedObject->canRead($this->userId))
+		{
+			return UnifiedLinkAccessLevel::Read;
 		}
 
 		return UnifiedLinkAccessLevel::Denied;

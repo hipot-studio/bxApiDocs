@@ -5,6 +5,7 @@ use Bitrix\Calendar\Access\Model\SectionModel;
 use Bitrix\Calendar\Access\SectionAccessController;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Section\Section;
+use Bitrix\Calendar\Infrastructure\Localization\DefaultSectionNameResolver;
 use Bitrix\Calendar\Integration\Pull\PushCommand;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab;
 use Bitrix\Calendar\Internal\Integration\Socialnetwork\CollabService;
@@ -1317,11 +1318,18 @@ class CCalendarSect
 			|| $params['type'] === Dictionary::CALENDAR_TYPE['group']
 		)
 		{
+			// the name is not localizable here, so the description stays in the request language
 			$name = CCalendar::GetOwnerName($params['type'], $params['ownerId']);
+			$description = Loc::getMessage('EC_DEF_SECT_DESC');
 		}
 		else
 		{
-			$name = $params['type'] === 'location' ? Loc::getMessage('EC_DEF_SECT_LOCATION_CAL') : Loc::getMessage('EC_DEF_SECT_GROUP_CAL');
+			$nameResolver = DefaultSectionNameResolver::forPortal();
+			$name = $params['type'] === Dictionary::CALENDAR_TYPE['location']
+				? $nameResolver->getLocationName()
+				: $nameResolver->getGroupName()
+			;
+			$description = $nameResolver->getDescription();
 		}
 
 		$userId = $params['type'] === 'user' ? $params['ownerId'] : CCalendar::GetCurUserId();
@@ -1347,7 +1355,7 @@ class CCalendarSect
 			$arFields = [
 				'CAL_TYPE' => $params['type'],
 				'NAME' => $name,
-				'DESCRIPTION' => Loc::getMessage('EC_DEF_SECT_DESC'),
+				'DESCRIPTION' => $description,
 				'COLOR' => $color,
 				'OWNER_ID' => $params['ownerId'],
 				'IS_EXCHANGE' => 0,
@@ -1575,7 +1583,8 @@ class CCalendarSect
 			{
 				self::GetArrayPermissions([$sectId]);
 			}
-			$perms = self::$Permissions[$sectId];
+			// a section that no longer exists leaves the key unfilled and ends up without operations below
+			$perms = self::$Permissions[$sectId] ?? null;
 
 			self::$arOp[$key] = [];
 			if (is_array($perms))

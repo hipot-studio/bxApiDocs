@@ -150,4 +150,29 @@ class CBPCreateCrmDealDocumentActivity extends CBPCreateDocumentActivity
 		return parent::GetPropertiesDialogValues($documentType, $activityName, $arWorkflowTemplate,
 			$arWorkflowParameters, $arWorkflowVariables, $arCurrentValues, $arErrors);
 	}
+
+	public static function getTestRunDocumentFields(array $documentType): array
+	{
+		if (!CModule::IncludeModule('crm'))
+		{
+			return [];
+		}
+
+		return static::getEditableDocumentFields(\CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Deal));
+	}
+
+	public static function parseTestRunDocumentValues(array $documentType, array $formValues): array
+	{
+		if (!CModule::IncludeModule('crm'))
+		{
+			return [
+				'fields' => [],
+				'errors' => [
+					['code' => 'NotLoaded', 'message' => GetMessage('BPCDA_MODULE_NOT_LOADED') ?? ''],
+				],
+			];
+		}
+
+		return static::parseTestRunValues(\CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Deal), $formValues);
+	}
 }

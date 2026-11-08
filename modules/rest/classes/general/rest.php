@@ -17,7 +17,6 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Response\BFile;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
-use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access\LoadLimiter;
 use Bitrix\Rest\Engine\RestManager;
 use Bitrix\Rest\Event\Session;
@@ -25,12 +24,13 @@ use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\LicenseException;
 use Bitrix\Rest\Notify;
 use Bitrix\Rest\OAuthService;
+use Bitrix\Rest\Public\Provider\ApplicationProvider;
 use Bitrix\Rest\Public\Services\AppScopeRequestService;
 use Bitrix\Rest\RestException;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\Public\Event\RestInitEvent;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Web\Json;
+use Bitrix\Rest\Internal\Response\StreamedJsonResponse;
 use Bitrix\Rest\RestExceptionInterface;
 use Bitrix\Rest\Tools\Diagnostics\RestServerProcessLogger;
 use Bitrix\Rest\UsageStatTable;
@@ -46,6 +46,7 @@ class CRestServer
 	public const STATUS_PAYMENT_REQUIRED = "402 Payment Required"; // reserved for future use
 	public const STATUS_FORBIDDEN = "403 Forbidden";
 	public const STATUS_NOT_FOUND = "404 Not Found";
+	public const STATUS_CONFLICT = "409 Conflict";
 	public const STATUS_TO_MANY_REQUESTS = "429 Too Many Requests";
 	public const STATUS_INTERNAL = "500 Internal Server Error";
 
@@ -399,8 +400,8 @@ class CRestServer
 	{
 		$signature = '';
 
-		$arRes = AppTable::getByClientId($this->clientId);
-		if (is_array($arRes) && $arRes['SHARED_KEY'] <> '')
+		$application = (new ApplicationProvider())->findByClientId((string)$this->clientId);
+		if ($application !== null && (string)$application->getSharedKey() !== '')
 		{
 			$methodState = is_array($this->securityMethodState)
 				? $this->securityMethodState
@@ -408,7 +409,7 @@ class CRestServer
 
 			$methodState['state'] = $this->securityClientState;
 
-			$signature = $this->makeSignature($arRes['SHARED_KEY'], $methodState);
+			$signature = $this->makeSignature($application->getSharedKey(), $methodState);
 		}
 
 		return $signature;
@@ -487,16 +488,27 @@ class CRestServer
 		{
 			throw new RestException('Wrong handler class!', RestException::ERROR_INTERNAL_WRONG_HANDLER_CLASS, self::STATUS_INTERNAL);
 		}
-		else
-		{
-			if (array_key_exists("state", $this->query))
-			{
-				$this->securityClientState = $this->query["state"];
-				unset($this->query["state"]);
-			}
-		}
+
+		$this->normalizeQuery();
 
 		return true;
+	}
+
+	private function normalizeQuery(): void
+	{
+		if (array_key_exists("state", $this->query))
+		{
+			if (is_string($this->query["state"]))
+			{
+				$this->securityClientState = $this->query["state"];
+			}
+			unset($this->query["state"]);
+		}
+
+		if (array_key_exists("token", $this->query) && !is_string($this->query["token"]))
+		{
+			unset($this->query["token"]);
+		}
 	}
 
 	protected function checkSite(): bool
@@ -689,18 +701,7 @@ class CRestServer
 
 	public function sendHeaders():void
 	{
-		if ($this->error)
-		{
-			CHTTP::setStatus($this->error->getStatus());
-		}
-		elseif ($this->resultStatus)
-		{
-			CHTTP::setStatus($this->resultStatus);
-		}
-		else
-		{
-			CHTTP::setStatus(self::STATUS_OK);
-		}
+		CHTTP::setStatus($this->getResponseStatus());
 
 		switch ($this->transport)
 		{
@@ -715,6 +716,21 @@ class CRestServer
 		}
 
 		$this->sendHeadersAdditional();
+	}
+
+	protected function getResponseStatus(): string
+	{
+		if ($this->error)
+		{
+			return $this->error->getStatus();
+		}
+
+		if ($this->resultStatus)
+		{
+			return $this->resultStatus;
+		}
+
+		return self::STATUS_OK;
 	}
 
 	public function sendHeadersAdditional(): void
@@ -738,7 +754,7 @@ class CRestServer
 		}
 	}
 
-	public function output($data): BFile|string|null
+	public function output($data): Main\HttpResponse|string|null
 	{
 		UsageStatTable::finalize();
 
@@ -793,18 +809,13 @@ class CRestServer
 		return $data;
 	}
 
-	protected function outputJson($data): string
+	protected function outputJson($data): StreamedJsonResponse
 	{
-		try
-		{
-			$res = Json::encode($data);
-		}
-		catch (ArgumentException)
-		{
-			$res = '{"error":"WRONG_ENCODING","error_description":"Wrong request encoding"}';
-		}
+		$response = new StreamedJsonResponse(Main\Application::getInstance(), $data, (string)$this->getMethod());
+		$response->setStatus($this->getResponseStatus());
+		$response->addHeader('Content-Type', 'application/json; charset=utf-8');
 
-		return $res;
+		return $response;
 	}
 
 	protected function outputXml($data): string

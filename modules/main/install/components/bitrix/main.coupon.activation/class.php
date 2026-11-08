@@ -164,6 +164,18 @@ class LicensePopupComponent extends CBitrixComponent implements Controllerable, 
 
 	public function activateAction(): bool
 	{
+		global $USER;
+
+		if (!is_object($USER) || !$USER->CanDoOperation('install_updates'))
+		{
+			$this->errorCollection[] = new Error(
+				Loc::getMessage('MAIN_COUPON_ACTIVATION_NOT_ADMIN'),
+				0
+			);
+
+			return false;
+		}
+
 		$request = Context::getCurrent()->getRequest();
 		$key = htmlspecialcharsbx(trim($request->getPost('key')));
 		$this->validateLicenseString($key);

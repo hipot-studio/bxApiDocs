@@ -52,6 +52,16 @@ class Result extends \Bitrix\Main\Result
 		return $this->data['object'] ?? null;
 	}
 
+	public function setDataValues(array $values): self
+	{
+		foreach ($values as $key => $value)
+		{
+			$this->data[$key] = $value;
+		}
+
+		return $this;
+	}
+
 	public function getDataByKey(string $key): mixed
 	{
 		return $this->data[$key] ?? null;

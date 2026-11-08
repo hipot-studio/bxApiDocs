@@ -6,6 +6,7 @@ use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Im\Model\LinkTaskTable;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChannelChat;
+use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Integration\AI\CopilotNameResolver;
 use Bitrix\Im\V2\Link\File\TemporaryFileService;
@@ -25,12 +26,15 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Tasks\Slider\Path\PathMaker;
 use Bitrix\Tasks\Slider\Path\TaskPathMaker;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Chat as TasksV2Chat;
 
 class TaskService
 {
 	use ContextCustomer;
 
 	protected const SIGNATURE_SALT = 'task_service_salt';
+	protected const ANALYTICS_SECTION_CHAT = 'chat';
+	protected const ANALYTICS_SECTION_TASKS_CHAT = 'chat_tasks';
 	protected const ADD_TASK_EVENT = 'taskAdd';
 	protected const UPDATE_TASK_EVENT = 'taskUpdate';
 	protected const DELETE_TASK_EVENT = 'taskDelete';
@@ -182,15 +186,14 @@ class TaskService
 		return new Result();
 	}
 
-	public function deleteLinkedAutoTask(int $triggerMessageId): void
+	public function deleteLinkedAutoTask(int $triggerMessageId, ?int $taskId = null): void
 	{
-		$taskLink = TaskItem::getByMessageId($triggerMessageId);
-		if ($taskLink === null)
+		if ($taskId === null || $taskId <= 0)
 		{
-			return;
+			// fallback for auto-task messages sent before the AI_TASK_ID param existed
+			$taskId = TaskItem::getByMessageId($triggerMessageId)?->getEntityId();
 		}
 
-		$taskId = $taskLink->getEntityId();
 		if ($taskId === null || $taskId <= 0)
 		{
 			return;
@@ -222,11 +225,12 @@ class TaskService
 		$chat->setContext($this->context);
 
 		$data = ['PARAMS' => []];
+		$analyticsSection = $this->getAnalyticsSection($chat);
 
 		$taskPath = (new TaskPathMaker(0, PathMaker::EDIT_ACTION, $userId))->makeEntityPath();
 		$link = new Uri($taskPath);
 		$link->addParams([
-			'ta_sec' => 'chat',
+			'ta_sec' => $analyticsSection,
 			'ta_el' => 'chat_context_menu',
 		]);
 
@@ -290,7 +294,7 @@ class TaskService
 				...$data['PARAMS'],
 				'entityId' => $chat->getChatId(),
 				'subEntityId' => $data['PARAMS']['IM_MESSAGE_ID'] ?? null,
-				'ta_sec' => 'chat',
+				'ta_sec' => $analyticsSection,
 				'ta_el' => 'chat_context_menu',
 				'description' => $data['PARAMS']['DESCRIPTION'] ?? null,
 				'auditors' => $data['PARAMS']['AUDITORS'] ?? null,
@@ -339,7 +343,7 @@ class TaskService
 		$authorId = $this->getContext()->getUserId();
 		$messageText = $this->getTaskMessageText($taskLink, $taskType);
 
-		$markAsSystem = $taskType !== TaskType::VoiceNoteAutoTask && $taskType !== TaskType::VideoNoteAutoTask;
+		$markAsSystem = !$taskType->isAutoTask();
 
 		$message =
 			(new Message())
@@ -349,7 +353,7 @@ class TaskService
 				->markAsSystem($markAsSystem)
 		;
 
-		$this->fillParams($message, $taskType, $messageId);
+		$this->fillParams($message, $taskType, $messageId, (int)($taskLink->getEntityId() ?? 0));
 
 		$sendingConfig =
 			(new SendingConfig())
@@ -370,13 +374,19 @@ class TaskService
 		return $result;
 	}
 
-	protected function fillParams(Message $message, TaskType $taskType, int $messageId): void
+	protected function fillParams(Message $message, TaskType $taskType, int $messageId, int $taskId = 0): void
 	{
-		if ($taskType === TaskType::VideoNoteAutoTask || $taskType === TaskType::VoiceNoteAutoTask)
+		if ($taskType->isAutoTask())
 		{
 			$message->addParam(Params::AI_TASK_TRIGGER_MESSAGE_ID, $messageId);
+
+			if ($taskId > 0)
+			{
+				$message->addParam(Params::AI_TASK_ID, $taskId);
+			}
 		}
-		else
+
+		if (!$taskType->isAutoTask())
 		{
 			$message->addParam(Params::STYLE_CLASS, 'bx-messenger-content-item-system');
 		}
@@ -451,11 +461,13 @@ class TaskService
 	{
 		if ($task->getMessageId() !== null)
 		{
-			return match (true)
+			return match ($type)
 			{
-				$type === TaskType::Task => $this->getMessageByMessageTask($task),
-				$type === TaskType::VoiceNoteAutoTask => $this->getMessageByVoiceNoteAutoTask($task),
-				$type === TaskType::VideoNoteAutoTask => $this->getMessageByVideoNoteAutoTask($task),
+				TaskType::VoiceNoteAutoTask => $this->getMessageByVoiceNoteAutoTask($task),
+				TaskType::VideoNoteAutoTask => $this->getMessageByVideoNoteAutoTask($task),
+				TaskType::SingleMessageAutoTask => $this->getMessageByMessageAutoTask($task, false),
+				TaskType::MultipleMessagesAutoTask => $this->getMessageByMessageAutoTask($task, true),
+				default => $this->getMessageByMessageTask($task),
 			};
 		}
 
@@ -494,6 +506,24 @@ class TaskService
 		);
 	}
 
+	protected function getMessageByMessageAutoTask(TaskItem $task, bool $isMultipleMessages): ?string
+	{
+		$genderModifier = ($this->getContext()->getUser()->getGender() === 'F') ? '_F' : '';
+		$phraseCode = $isMultipleMessages
+			? 'IM_CHAT_TASK_REGISTER_FROM_AI_MULTIPLE_MESSAGES_NOTIFICATION'
+			: 'IM_CHAT_TASK_REGISTER_FROM_AI_MESSAGE_NOTIFICATION';
+
+		$text = Loc::getMessage(
+			$phraseCode . $genderModifier,
+			[
+				'#LINK#' => $task->getEntity()->getUrl(),
+				'#USER_ID#' => $this->getContext()->getUserId(),
+			]
+		);
+
+		return $text . "\n" . $this->getAutoGeneratedNoticeText();
+	}
+
 	protected function getMessageByVoiceNoteAutoTask(TaskItem $task): ?string
 	{
 		$text = Loc::getMessage(
@@ -529,6 +559,26 @@ class TaskService
 		$text = Loc::getMessage('IM_CHAT_TASK_AUTO_GENERATED_NOTICE') ?? '';
 
 		return "[SIZE=12pt][COLOR=#C2C2C2]{$text}[/COLOR][/SIZE]";
+	}
+
+	private function getAnalyticsSection(Chat $chat): string
+	{
+		return $this->isTasksChat($chat) ? self::ANALYTICS_SECTION_TASKS_CHAT : self::ANALYTICS_SECTION_CHAT;
+	}
+
+	/**
+	 * The same entity type pair EntityLinkFactory routes to TasksType: legacy task chat and tasks V2 chat.
+	 */
+	private function isTasksChat(Chat $chat): bool
+	{
+		$entityType = $chat->getEntityType() ?? '';
+
+		if ($entityType === ExtendedType::Tasks->value)
+		{
+			return true;
+		}
+
+		return Loader::includeModule('tasks') && $entityType === TasksV2Chat::ENTITY_TYPE;
 	}
 
 	private function isTasksV2Form(): bool

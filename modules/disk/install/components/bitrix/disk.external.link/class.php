@@ -24,13 +24,16 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internal\Service\HtmlViewerPageService;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
 use Bitrix\Disk\Internal\Service\HtmlViewerService;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkPasswordProtectionService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\ExternalLinkContext;
 use Bitrix\Disk\Internals\DiskComponent;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\ObjectTable;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkOpenPolicy;
 use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkPasswordService;
 use Bitrix\Disk\Internal\Service\TiffPreview\ErrorCode;
 use Bitrix\Disk\Internal\Service\TiffPreview\PreviewStatus;
@@ -38,6 +41,8 @@ use Bitrix\Disk\Internal\Service\TiffPreviewService;
 use Bitrix\Disk\Internal\Service\ExternalLink\PasswordProtectionResult;
 use Bitrix\Disk\Internal\Service\ExternalLink\PasswordProtectionState;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
+use Bitrix\Disk\Security\DiskSecurityContext;
+use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Disk\Ui\Icon;
@@ -72,17 +77,19 @@ class CDiskExternalLinkComponent extends DiskComponent
 {
 	protected const EXCEPTION_CODE_ACCESS_DENIED = 221880;
 
-	const PAGE_SIZE = 25;
+	public const PAGE_SIZE = 25;
 	// An offset built from a larger page number overflows int and turns the LIMIT of the query into
 	// a negative number, so the page number is capped before it reaches the offset.
 	private const MAX_PAGE_NUMBER = 100000;
 	// 44 hours: below it a change is shown as "yesterday at 13:48", above it as a full date.
 	private const RELATIVE_UPDATE_TIME_THRESHOLD = 158400;
-	const MAX_SIZE_TO_PREVIEW = 15728640; //1024 * 1024 * 15 bytes
+	public const MAX_SIZE_TO_PREVIEW = 15728640; //1024 * 1024 * 15 bytes
 
 	private const ONLYOFFICE_FILE_VIEWER = 'onlyoffice';
 	private const VIBEOFFICE_FILE_VIEWER = 'vibeoffice';
 	private const BOARD_FILE_VIEWER = 'board';
+	private const ACTION_DOWNLOAD_FILE_UNDER_FOLDER = 'downloadFileUnderFolder';
+	private const ACTION_SHOW_FILE_UNDER_FOLDER = 'showFileUnderFolder';
 	private const HTML_FILE_VIEWER = 'html';
 	private const FILE_VIEWERS = [
 		self::ONLYOFFICE_FILE_VIEWER,
@@ -93,11 +100,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	protected ExternalLinkProvider $externalLinkProvider;
 	protected ExternalLinkPasswordService $externalLinkPasswordService;
+	protected DownloadAccess $downloadAccess;
+	protected ExternalLinkPasswordProtectionService $externalLinkPasswordProtectionService;
+	protected ExternalLinkOpenPolicy $externalLinkOpenPolicy;
 	/** @var ExternalLink */
 	protected $externalLink;
 	protected ?string $hash = null;
 	protected bool $fromUnifiedLink = false;
-	protected ?File $file;
+	protected ?BaseObject $baseObject = null;
 	protected ?AttachedObject $attachedObject = null;
 	protected ?Version $version = null;
 	protected ?string $unifiedLink = null;
@@ -108,6 +118,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 	protected $defaultHandlerForView;
 	protected $langId;
 	private ?string $fullDateFormat = null;
+	private bool $passwordValidationResultCached = false;
+	private ?bool $passwordValidationResult = null;
+	private ?PasswordProtectionResult $passwordProtectionResult = null;
+	private ?PasswordProtectionState $passwordProtectionState = null;
+	private ?string $passwordProtectionError = null;
+	private bool $passwordProtectionRequestError = false;
 
 	public function __construct($component = null)
 	{
@@ -116,6 +132,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$serviceLocator = ServiceLocator::getInstance();
 		$this->externalLinkProvider = $serviceLocator->get(ExternalLinkProvider::class);
 		$this->externalLinkPasswordService = $serviceLocator->get(ExternalLinkPasswordService::class);
+		$this->downloadAccess = $serviceLocator->get(DownloadAccess::class);
+		$this->externalLinkPasswordProtectionService = new ExternalLinkPasswordProtectionService(
+			$this->externalLinkPasswordService,
+		);
+		$this->externalLinkOpenPolicy = $serviceLocator->get(ExternalLinkOpenPolicy::class);
 	}
 
 	/**
@@ -129,23 +150,18 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		$this->findLink();
 		$this->maybeGenerateUnifiedLink($actionName);
-		$this->maybeRedirectToUnifiedLink($actionName);
 
 		$this->defaultHandlerForView = $this->getHandlerForView();
 
-		$isBoardsHandler = $this->isBoardsHandler();
-		if(
-			($isBoardsHandler && !Configuration::isEnabledBoardExternalLink()) ||
-			(!$isBoardsHandler && $this->externalLink->isAutomatic() && !Configuration::isEnabledAutoExternalLink()) ||
-			(!$isBoardsHandler && !$this->externalLink->isAutomatic() && !Configuration::isEnabledManualExternalLink())
-		)
+		if (!$this->externalLinkOpenPolicy->canOpenByPortalPolicy($this->externalLink))
 		{
 			$this->maybeRefuseHtmlViewerContent();
 
-			$this->arResult = array(
+			$this->arResult = [
 				'ERROR_MESSAGE' => $this->getMessage('DISK_EXTERNAL_LINK_ERROR_DISABLED_MODE'),
-			);
+			];
 			$this->includeComponentTemplate('error');
+
 			return false;
 		}
 
@@ -156,7 +172,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 			if ($this->externalLink->allowEdit())
 			{
-				if ($isBoardsHandler && $this->validatePassword() && $actionName !== 'goToEdit')
+				if ($this->isBoardsHandler() && $this->validatePassword() && $actionName !== 'goToEdit')
 				{
 					$this->redirectToAction('goToEdit');
 
@@ -175,9 +191,9 @@ class CDiskExternalLinkComponent extends DiskComponent
 		{
 			//so it means we work with action with file: download, show. We have to check download token.
 			if (
-				!$this->externalLink->isImage() &&
-				!$this->externalLink->isAutomatic() &&
-				!$this->checkDownloadToken($this->request->getQuery('token'))
+				!$this->externalLink->isImage()
+				&& !$this->externalLink->isAutomatic()
+				&& !$this->checkDownloadToken($this->request->getQuery('token'))
 			)
 			{
 				$this->maybeRefuseHtmlViewerContent();
@@ -199,6 +215,9 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 			return false;
 		}
+
+		$this->arResult['FROM_UNIFIED_LINK'] = $this->fromUnifiedLink;
+		$this->arResult['UNIFIED_LINK'] = $this->unifiedLink;
 
 		return true;
 	}
@@ -279,7 +298,8 @@ class CDiskExternalLinkComponent extends DiskComponent
 			'goToEdit',
 			'download',
 			'downloadFolderArchive',
-			'downloadFileUnderFolder',
+			self::ACTION_DOWNLOAD_FILE_UNDER_FOLDER,
+			self::ACTION_SHOW_FILE_UNDER_FOLDER,
 			'showByGoogleViewer' => [
 				'method' => ['GET', 'POST'],
 			],
@@ -321,16 +341,16 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$this->fromUnifiedLink = ($this->arParams['FROM_UNIFIED_LINK'] ?? false) === true;
-		$this->file = $this->arParams['FILE'] ?? null;
+		$this->baseObject = $this->arParams['BASE_OBJECT'] ?? $this->arParams['FILE'] ?? null;
 		$this->attachedObject = $this->arParams['ATTACHED_OBJECT'] ?? null;
 		$this->version = $this->arParams['VERSION'] ?? null;
 
-		if (!is_string($this->hash) && !$this->file instanceof File)
+		if (!is_string($this->hash) && !$this->baseObject instanceof BaseObject)
 		{
-			throw new SystemException('Neither hash nor file were provided', self::EXCEPTION_CODE_ACCESS_DENIED);
+			throw new SystemException('Neither hash nor object were provided', self::EXCEPTION_CODE_ACCESS_DENIED);
 		}
 
-		$this->langId = $this->request->get('langId')?: LANGUAGE_ID;
+		$this->langId = $this->request->get('langId') ?: LANGUAGE_ID;
 
 		return $this;
 	}
@@ -384,6 +404,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		{
 			return false;
 		}
+
 		return $_SESSION['DISK_PUBLIC_VERIFICATION'][$this->externalLink->getObject()->getId()] === $token;
 	}
 
@@ -428,7 +449,21 @@ class CDiskExternalLinkComponent extends DiskComponent
 					$documentSession->setUserId(CurrentUser::get()->getId());
 				}
 
-				$createdSession = $documentSession->createEditSession();
+				$createdSession = $this->getSessionServiceByFile($this->externalLink->getFile())
+					=== DocumentService::Vibeoffice
+						? $this->generateDocumentSession(
+							$this->externalLink->getFile(),
+							sessionType: DocumentSession::TYPE_EDIT,
+						)
+						: $documentSession->createEditSession()
+				;
+				if (!$createdSession)
+				{
+					$this->showNotFoundPage();
+
+					return false;
+				}
+
 				if ($createdSession->getId() != $documentSession->getId())
 				{
 					$documentSession->delete();
@@ -437,6 +472,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				$documentSession = $createdSession;
 				$this->arResult['DOCUMENT_SESSION'] = $documentSession;
 				$this->arResult['LINK_TO_DOWNLOAD'] = $this->getDownloadUrl();
+				$this->arResult['CAN_DOWNLOAD'] = true;
 			}
 
 			if ($isBoard && !$this->setParamsForBoard($documentSession, $this->externalLink->getFile()))
@@ -458,22 +494,31 @@ class CDiskExternalLinkComponent extends DiskComponent
 	{
 		$isFolder = $this->externalLink->getObject() instanceof Folder;
 		$isFile = !$isFolder;
+		$validPassword = $this->validatePassword();
+			if ($this->passwordProtectionRequestError)
+			{
+				$this->showAccessDenied();
+
+				return;
+			}
+
+			if ($this->hasUnsafePasswordProtectionState())
+			{
+				$this->showAccessDenied();
+
+				return;
+			}
 
 		$server = Application::getInstance()->getContext()->getServer();
-		$this->arResult = array(
+
+		$this->arResult = array_merge($this->arResult ?? [], [
 			'HASH' => $this->externalLink->getHash(),
 			'PROTECTED_BY_PASSWORD' => $this->externalLink->hasPassword(),
-			'VALID_PASSWORD' => $this->validatePassword(),
+			'VALID_PASSWORD' => $validPassword,
+			'PASSWORD_PROTECTION' => $this->getPasswordProtectionData(),
 			'SESSION_EXPIRED' => $this->request->getQuery('session') === 'expired',
 			'SITE_NAME' => Option::get('main', 'site_name', $server->getServerName()),
-			'FROM_UNIFIED_LINK' => $this->fromUnifiedLink,
-			'UNIFIED_LINK' => $this->unifiedLink,
-		);
-
-		if ($this->arResult['VALID_PASSWORD'] && isset($_POST['PASSWORD']))
-		{
-			$this->maybeRedirectToUnifiedLink('default', true);
-		}
+		]);
 
 		if ($isFile)
 		{
@@ -486,7 +531,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$isDocument = $viewerSource !== null && $this->isViewableDocument($viewerSource->getExtension());
 
 			// Html is answered before the board and office branches, the order the unified link keeps in
-			// HtmlRenderableFileHandlerFactory: the same decision is made twice, so it is made the same
+			// HtmlRenderableHandlerFactory: the same decision is made twice, so it is made the same
 			// way. Shown right here instead of the download card: the same viewer page a portal user
 			// gets, minus the access popup. The card stays the fallback while the viewer is switched
 			// off, which is what the policy answers.
@@ -526,6 +571,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				if (!$documentSession)
 				{
 					$this->includeComponentTemplate('error');
+
 					return;
 				}
 
@@ -561,7 +607,16 @@ class CDiskExternalLinkComponent extends DiskComponent
 					$this->externalLink->getFile(),
 					Driver::getInstance()->getUrlManager(),
 				);
-				$this->arResult['LINK_TO_DOWNLOAD'] = $this->getDownloadUrl();
+
+				$file = $this->externalLink->getObject()?->getRealObject();
+				$canDownload = $file instanceof File
+					&& $this->canDownloadObjectByExternalLink($file);
+				$this->arResult['CAN_DOWNLOAD'] = $canDownload;
+
+				if ($canDownload)
+				{
+					$this->arResult['LINK_TO_DOWNLOAD'] = $this->getDownloadUrl();
+				}
 
 				$this->showFileViewer($documentViewer);
 
@@ -603,14 +658,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 			);
 			$this->arResult['SHARE_URL'] = $this->getShareUrl($relativeItems);
 			$this->arResult['BREADCRUMBS'] = $this->getBreadcrumbs($path, $relativeItems);
-			$this->arResult['BREADCRUMBS_ROOT'] = array(
+			$this->arResult['BREADCRUMBS_ROOT'] = [
 				'NAME' => $rootFolder->getName(),
-				'LINK' => $this->getUrlManager()->getUrlExternalLink(array(
+				'LINK' => $this->getUrlManager()->getUrlExternalLink([
 					'hash' => $this->externalLink->getHash(),
 					'action' => 'default',
-				), true),
+				], true),
 				'ID' => $this->externalLink->getObjectId(),
-			);
+			];
 
 			$securityContext = $rootFolder->getStorage()?->getSecurityContext($this->externalLink->getCreatedBy());
 			if ($securityContext !== null)
@@ -623,10 +678,23 @@ class CDiskExternalLinkComponent extends DiskComponent
 			}
 		}
 
-		$this->includeComponentTemplate($isFile? 'template' : 'folder');
+		$this->includeComponentTemplate($isFile ? 'template' : 'folder');
 	}
 
 	protected function validatePassword(): ?bool
+	{
+		if ($this->passwordValidationResultCached)
+		{
+			return $this->passwordValidationResult;
+		}
+
+		$this->passwordValidationResultCached = true;
+		$this->passwordValidationResult = $this->doValidatePassword();
+
+		return $this->passwordValidationResult;
+	}
+
+	private function doValidatePassword(): ?bool
 	{
 		// Allow access if no password
 		if (!$this->externalLink->hasPassword())
@@ -639,20 +707,119 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return true;
 		}
 
-		$password = $this->request->getPost('PASSWORD');
+		$passwordFieldExists = $this->request->getPostList()->offsetExists('PASSWORD');
+		$password = (string)$this->request->getPost('PASSWORD');
 
-		// If no password
-		if (!$password)
+		if (!$passwordFieldExists)
 		{
+			$this->ensurePasswordProtectionState();
+
 			return $this->request->isPost()
 				? false // restrict access
 				: null; // show form
 		}
 
-		return $this->externalLinkPasswordService->validateAndConfirm($this->externalLink, $password);
+		if (!check_bitrix_sessid())
+		{
+			$this->passwordProtectionRequestError = true;
+			$this->passwordProtectionError = 'request_error';
+
+			return false;
+		}
+
+		$this->passwordProtectionResult = $this->externalLinkPasswordProtectionService->checkPassword(
+			$this->externalLink,
+			$password,
+			$this->getSourceIp(),
+			$this->request->getPost('CAPTCHA_SID'),
+			$this->request->getPost('CAPTCHA_WORD'),
+		);
+
+		if ($this->isUnsafePasswordProtectionResult($this->passwordProtectionResult))
+		{
+			$this->passwordProtectionRequestError = true;
+			$this->passwordProtectionResult = null;
+			$this->passwordProtectionError = 'request_error';
+
+			return false;
+		}
+
+		if ($this->passwordProtectionResult->status !== PasswordProtectionResult::STATUS_SUCCESS)
+		{
+			$this->passwordProtectionError = $this->passwordProtectionResult->status;
+
+			return false;
+		}
+
+		return true;
 	}
 
-	private function generateDocumentSession(File $file, ?Version $version = null): ?DocumentSession
+		private function isUnsafePasswordProtectionResult(PasswordProtectionResult $result): bool
+		{
+			$missingCaptchaSid = $result->captchaRequired && $result->captchaSid === null;
+		$checkedPasswordBeforeCaptcha
+			= $result->status === PasswordProtectionResult::STATUS_CAPTCHA_REQUIRED
+			&& $result->passwordChecked;
+
+			return $missingCaptchaSid || $checkedPasswordBeforeCaptcha;
+		}
+
+		private function hasUnsafePasswordProtectionState(): bool
+		{
+			return (
+				$this->passwordProtectionState instanceof PasswordProtectionState
+				&& $this->passwordProtectionState->captchaRequired
+				&& $this->passwordProtectionState->captchaSid === null
+			);
+		}
+
+		private function getPasswordProtectionData(): array
+		{
+		$captchaRequired = false;
+		$captchaSid = null;
+
+		if ($this->passwordProtectionResult instanceof PasswordProtectionResult)
+		{
+			$captchaRequired = $this->passwordProtectionResult->captchaRequired;
+			$captchaSid = $this->passwordProtectionResult->captchaSid;
+		}
+		elseif ($this->passwordProtectionState instanceof PasswordProtectionState)
+		{
+			$captchaRequired = $this->passwordProtectionState->captchaRequired;
+			$captchaSid = $this->passwordProtectionState->captchaSid;
+		}
+
+		return [
+			'STATUS' => $this->passwordProtectionResult?->status,
+			'ERROR' => $this->passwordProtectionError,
+			'CAPTCHA_REQUIRED' => $captchaRequired,
+			'CAPTCHA_SID' => $captchaSid,
+		];
+	}
+
+	private function ensurePasswordProtectionState(): void
+	{
+		if ($this->passwordProtectionState instanceof PasswordProtectionState)
+		{
+			return;
+		}
+
+		$this->passwordProtectionState = $this->externalLinkPasswordProtectionService->getState(
+			$this->externalLink,
+			$this->getSourceIp(),
+		);
+	}
+
+	private function getSourceIp(): string
+	{
+		return trim((string)$this->request->getRemoteAddress());
+	}
+
+	private function generateDocumentSession(
+		File $file,
+		?Version $version = null,
+		?int $sessionType = null,
+	): ?DocumentSession
 	{
 		$documentSessionContext = new DocumentSessionContext($file->getId(), null, $this->externalLink->getId());
 		$service = $this->getSessionServiceByFile($file);
@@ -666,7 +833,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			: new OnlyOffice\DocumentSessionManager();
 		$sessionManager
 			->setUserId($this->getUser()->getId() ?: GuestUser::GUEST_USER_ID)
-			->setSessionType($this->getSessionType())
+			->setSessionType($sessionType ?? $this->getSessionType())
 			->setSessionContext($documentSessionContext)
 			->setService($service)
 		;
@@ -679,12 +846,19 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 		try
 		{
-			return $sessionManager->findOrCreateSession();
+			$documentSession = $sessionManager->findOrCreateSession();
 		}
 		finally
 		{
 			$sessionManager->unlock();
 		}
+
+		if ($sessionManager instanceof Vibeoffice\DocumentSessionManager)
+		{
+			$this->arResult['RESTRICTION_OUTCOME'] = $sessionManager->getRestrictionOutcome();
+		}
+
+		return $documentSession;
 	}
 
 	private function setDocumentSource(SessionManager $sessionManager, File $file, ?Version $version = null): void
@@ -720,14 +894,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return null;
 		}
 
-		return array(Folder::loadById($data['OBJECT_ID']), $data['RELATIVE_ITEMS']);
+		return [Folder::loadById($data['OBJECT_ID']), $data['RELATIVE_ITEMS']];
 	}
 
 	protected function getBreadcrumbs($path, array $relativeItems)
 	{
-		$crumbs = array();
+		$crumbs = [];
 
-		$serverName = (Context::getCurrent()->getRequest()->isHttps()? "https" : "http") . "://" . Context::getCurrent()->getServer()->getHttpHost();
+		$serverName = (Context::getCurrent()->getRequest()->isHttps() ? "https" : "http") . "://" . Context::getCurrent()->getServer()->getHttpHost();
 		$uri = new Uri($serverName . $this->request->getRequestUri());
 		$parts = explode('/', trim($path, '/'));
 
@@ -741,20 +915,20 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$uri->deleteParams(
 				array_merge(
 					\Bitrix\Main\HttpRequest::getSystemParameters(),
-					array('path')
-				)
+					['path'],
+				),
 			);
 			$uri->addParams(
-				array(
-					'path' => implode('/', (array_slice($parts, 0, $i + 1))) ? : '',
-				)
+				[
+					'path' => implode('/', (array_slice($parts, 0, $i + 1))) ?: '',
+				],
 			);
 
-			$crumbs[] = array(
+			$crumbs[] = [
 				'ID' => $item['ID'],
 				'NAME' => $item['NAME'],
 				'ENCODED_LINK' => $uri->getLocator(),
-			);
+			];
 		}
 		unset($i, $item);
 
@@ -877,8 +1051,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$nowTime = time() + CTimeZone::getOffset();
 
 		$urlManager = Driver::getInstance()->getUrlManager();
-
-		$items = [];
+		$objectsOnPage = [];
 		$countObjectsOnPage = 0;
 		$hasNextPage = false;
 		$cursor = $rootFolder->getList($parameters);
@@ -891,8 +1064,18 @@ class CDiskExternalLinkComponent extends DiskComponent
 				break;
 			}
 
-			/** @var File|Folder $object */
-			$object = BaseObject::buildFromArray($row);
+			$objectsOnPage[] = BaseObject::buildFromArray($row);
+		}
+
+		$downloadSecurityContext = $rootFolder->getStorage()?->getCurrentUserSecurityContext(true);
+		if ($downloadSecurityContext instanceof SecurityContext)
+		{
+			$this->preloadDownloadAccessForExternalLinkObjects($objectsOnPage, $downloadSecurityContext);
+		}
+
+		$items = [];
+		foreach ($objectsOnPage as $object)
+		{
 			$name = $object->getName();
 			$isFolder = $object instanceof Folder;
 			$timestampUpdate = $object->getUpdateTime()->toUserTime()->getTimestamp();
@@ -910,6 +1093,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				'FORMATTED_SIZE' => $isFolder ? '' : CFile::formatSize($object->getSize()),
 				'UPDATE_TIME' => $this->formatUpdateTime($timestampUpdate, $nowTime),
 				'VIEWER_ATTRIBUTES' => '',
+				'CAN_DOWNLOAD' => false,
 			];
 
 			if ($isFolder)
@@ -917,7 +1101,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				$uri = new Uri($this->request->getRequestUri());
 				$uri->deleteParams(array_merge(
 					\Bitrix\Main\HttpRequest::getSystemParameters(),
-					['path', 'pageNumber']
+					['path', 'pageNumber'],
 				));
 				$uri->addParams([
 					'path' => $relativePath . '/' . $name . '/',
@@ -927,13 +1111,8 @@ class CDiskExternalLinkComponent extends DiskComponent
 			}
 			else
 			{
-				$downloadUrl = $urlManager->getUrlExternalLink([
-					'hash' => $this->externalLink->getHash(),
-					'action' => 'downloadFileUnderFolder',
-					'token' => $this->downloadToken,
-					'path' => $relativePath ?: '/',
-					'fileId' => $object->getId(),
-				]);
+				$downloadUrl = $this->getDownloadUrlForFileUnderFolder($relativePath, $object->getId());
+				$viewerSourceUrl = $this->getViewerSourceUrlForFileUnderFolder($relativePath, $object->getId());
 				$viewUrl = $urlManager->getUrlExternalLink([
 					'hash' => $this->externalLink->getHash(),
 					'action' => $this->getViewActionNameForJs($object),
@@ -941,11 +1120,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 					'path' => $relativePath ?: '/',
 					'fileId' => $object->getId(),
 				]);
+				$canDownload = $this->canDownloadObjectByExternalLink($object);
 
-				$attributes = Ui\ExternalLinkAttributes::tryBuildByFileId($object->getFileId(), new Uri($downloadUrl))
+				$attributes = Ui\ExternalLinkAttributes::tryBuildByFileId($object->getFileId(), new Uri($viewerSourceUrl))
 					->setTitle($name)
 					->setDocumentViewUrl($viewUrl)
 					->setGroupBy($this->componentId)
+					->setDownloadDisabled(!$canDownload)
 				;
 
 				if ($this->getHandlerForViewByFile($object) instanceof BoardsHandler)
@@ -960,8 +1141,9 @@ class CDiskExternalLinkComponent extends DiskComponent
 					]);
 				}
 
-				$item['URL'] = $downloadUrl;
+				$item['URL'] = $canDownload ? $downloadUrl : 'javascript:void(0)';
 				$item['VIEWER_ATTRIBUTES'] = (string)$attributes;
+				$item['CAN_DOWNLOAD'] = $canDownload;
 			}
 
 			$items[] = $item;
@@ -997,23 +1179,28 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return null;
 		}
 
-		return array(
+		$canDownload = $this->canDownloadObjectByExternalLink($rootFolder);
+
+		return [
 			'ID' => $rootFolder->getId(),
 			'STORAGE_ID' => $rootFolder->getStorageId(),
 			'NAME' => $rootFolder->getName(),
 			'CREATED_BY' => $this->externalLink->getCreatedBy(),
 			'UPDATE_TIME' => $rootFolder->getUpdateTime(),
 			'SIZE' => $rootFolder->getRealObject()->countSizeOfFiles(),
-			'DOWNLOAD_URL' => $this->getUrlManager()->getUrlExternalLink(array(
-				'fileId' => $this->externalLink->getId(),
-				'folderId' => $this->externalLink->getId(),
-				'hash' => $this->externalLink->getHash(),
-				'action' => 'downloadFolderArchive',
-				'token' => $this->downloadToken,
-				'path' => '/',
-			)),
+			'DOWNLOAD_URL' => $canDownload
+				? $this->getUrlManager()->getUrlExternalLink([
+					'fileId' => $this->externalLink->getId(),
+					'folderId' => $this->externalLink->getId(),
+					'hash' => $this->externalLink->getHash(),
+					'action' => 'downloadFolderArchive',
+					'token' => $this->downloadToken,
+					'path' => '/',
+				])
+				: null,
 			'VIEW_URL' => $this->getUrlManager()->getPublicExternalLink($rootFolder, $this->externalLink->getHash()),
-		);
+			'CAN_DOWNLOAD' => $canDownload,
+		];
 	}
 
 	private function getDownloadUrl()
@@ -1039,6 +1226,8 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return null;
 		}
 
+		$canDownload = $this->canDownloadObjectByExternalLink($file);
+
 		$version = null;
 		if ($this->externalLink->isSpecificVersion())
 		{
@@ -1053,7 +1242,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$viewerSourceName = $viewerSource->getName();
 		$viewerSourceTime = $version?->getCreateTime() ?? $file->getUpdateTime();
 
-		$result = array(
+		$result = [
 			'ID' => $file->getId(),
 			'IS_IMAGE' => TypeFile::isImage($version === null ? $file : $viewerSourceName),
 			'IS_DOCUMENT' => TypeFile::isDocument($viewerSourceName),
@@ -1069,56 +1258,57 @@ class CDiskExternalLinkComponent extends DiskComponent
 			'SIZE' => $file->getSize(),
 			'FORMATTED_SIZE' => CFile::formatSize($file->getSize()),
 			'DOWNLOAD_URL' => $this->getDownloadUrl(),
-			'ABSOLUTE_SHOW_FILE_URL' => $this->getUrlManager()->getUrlExternalLink(array(
+			'ABSOLUTE_SHOW_FILE_URL' => $this->getUrlManager()->getUrlExternalLink([
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showFile',
 				'token' => $this->downloadToken,
-			)),
-			'SHOW_PREVIEW_URL' => $this->getUrlManager()->getUrlExternalLink(array(
+			]),
+			'SHOW_PREVIEW_URL' => $this->getUrlManager()->getUrlExternalLink([
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showPreview',
 				'token' => $this->downloadToken,
-			)),
-			'SHOW_FILE_URL' => $this->getUrlManager()->getUrlExternalLink(array(
+			]),
+			'SHOW_FILE_URL' => $this->getUrlManager()->getUrlExternalLink([
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showFile',
 				'token' => $this->downloadToken,
-			)),
+			]),
 			'VIEW_URL' => $this->getUrlManager()->getPublicExternalLink($file, $this->externalLink->getHash()),
-			'VIEW_FULL_URL' => $this->getUrlManager()->getUrlExternalLink(array(
+			'VIEW_FULL_URL' => $this->getUrlManager()->getUrlExternalLink([
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'default',
-			), true),
-		);
+			], true),
+			'CAN_DOWNLOAD' => $canDownload,
+		];
 
 		if ($result['IS_IMAGE'])
 		{
 			$fileData = $viewerSource->getFile();
 			if ($fileData)
 			{
-				$result['IMAGE_DIMENSIONS'] = array(
+				$result['IMAGE_DIMENSIONS'] = [
 					'WIDTH' => $fileData['WIDTH'],
 					'HEIGHT' => $fileData['HEIGHT'],
-				);
+				];
 			}
 		}
 		elseif ($this->isTiffFile($viewerSource) || $viewerSource->getView()->getData())
 		{
 			CJSCore::Init('disk');
-			$viewUrl = array(
-				$this->getUrlManager()->getUrlExternalLink(array(
+			$viewUrl = [
+				$this->getUrlManager()->getUrlExternalLink([
 					'hash' => $this->externalLink->getHash(),
 					'action' => 'showView',
 					'token' => $this->downloadToken,
 					'ts' => $viewerSourceTime->getTimestamp(),
 					'ncc' => 1,
-				)),
-				$this->getUrlManager()->getUrlExternalLink(array(
+				]),
+				$this->getUrlManager()->getUrlExternalLink([
 					'hash' => $this->externalLink->getHash(),
 					'action' => 'showFile',
 					'token' => $this->downloadToken,
-				))
-			);
+				]),
+			];
 
 			$height = 520;
 			$width = 720;
@@ -1130,11 +1320,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 				$height = 400;
 				$width = 600;
 			}
-			$sourceUri = $this->getUrlManager()->getUrlExternalLink(array(
+			$sourceUri = $this->getUrlManager()->getUrlExternalLink([
 				'hash' => $this->externalLink->getHash(),
 				'action' => 'showFile',
 				'token' => $this->downloadToken,
-			));
+			]);
 
 			if (
 				$this->isTiffFile($viewerSource)
@@ -1175,6 +1365,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 					->unsetAttribute('data-viewer')
 					->setAttribute('data-inline-viewer')
 					->setAttribute('data-disable-annotation-layer')
+					->setDownloadDisabled(!$canDownload)
 				;
 
 
@@ -1182,20 +1373,20 @@ class CDiskExternalLinkComponent extends DiskComponent
 			}
 			else
 			{
-				$result['VIEWER'] = $viewerSource->getView()->render(array(
+				$result['VIEWER'] = $viewerSource->getView()->render([
 					'PATH' => $viewUrl,
 					'HEIGHT' => $height,
 					'WIDTH' => $width,
 					'SIZE_TYPE' => 'absolute',
-				));
+				]);
 			}
 
 		}
 		elseif ($result['IS_DOCUMENT'] && $this->canMakePreview($viewerSource))
 		{
-			$result['PREVIEW'] = array(
+			$result['PREVIEW'] = [
 				'VIEW_URL' => $this->getDocumentPreviewUrl($file, $version),
-			);
+			];
 		}
 
 		return $result;
@@ -1256,6 +1447,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		if (!$file)
 		{
 			$this->includeComponentTemplate('error');
+
 			return false;
 		}
 
@@ -1272,7 +1464,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$elementId = 'bx_ajaxelement_' . $file->getId() . '_' . randString(4);
 		$view = $file->getView();
 
-		$html = $view->render(array(
+		$html = $view->render([
 			'PATH' => $pathToView,
 			'IFRAME' => $iframe,
 			'ID' => $elementId,
@@ -1280,7 +1472,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			'PREVIEW' => $preview,
 			'SIZE_TYPE' => $sizeType,
 			'PRINT_URL' => $printUrl,
-		));
+		]);
 
 		if($iframe == 'Y')
 		{
@@ -1288,7 +1480,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 		else
 		{
-			$result = array('html' => $html, 'innerElementId' => $elementId);
+			$result = ['html' => $html, 'innerElementId' => $elementId];
 			$result = array_merge($result, $view->getJsViewerAdditionalJsonParams());
 			$this->sendJsonResponse($result);
 		}
@@ -1348,19 +1540,26 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$this->sendJsonErrorResponse();
 		}
 
-		$downloadUrl = Driver::getInstance()->getUrlManager()->getUrlExternalLink(
-			[
-				'hash' => $this->externalLink->getHash(),
-				'action' => 'downloadFileUnderFolder',
-				'token' => $token,
-				'path' => $path,
-				'fileId' => $fileId,
-			]
-		);
-
 		$this->arResult['DOCUMENT_SESSION'] = $documentSession;
 		$this->arResult['LINK_TO_EDIT'] = '';
-		$this->arResult['LINK_TO_DOWNLOAD'] = $downloadUrl;
+
+		$canDownload = $this->canDownloadObjectByExternalLink($file);
+		$this->arResult['CAN_DOWNLOAD'] = $canDownload;
+
+		if ($canDownload)
+		{
+			$downloadUrl = Driver::getInstance()->getUrlManager()->getUrlExternalLink(
+				[
+					'hash' => $this->externalLink->getHash(),
+					'action' => 'downloadFileUnderFolder',
+					'token' => $token,
+					'path' => $path,
+					'fileId' => $fileId,
+				],
+			);
+
+			$this->arResult['LINK_TO_DOWNLOAD'] = $downloadUrl;
+		}
 
 		$this->showFileViewer($documentViewer);
 	}
@@ -1388,7 +1587,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 				$this->sendJsonErrorResponse();
 			}
 
-			$this->sendJsonSuccessResponse(array('viewed' => $result));
+			$this->sendJsonSuccessResponse(['viewed' => $result]);
 		}
 
 		$documentPreviewData = $this->getDocumentPreviewData($file);
@@ -1404,6 +1603,13 @@ class CDiskExternalLinkComponent extends DiskComponent
 	{
 		$file = $this->externalLink->getFile();
 		if (!$file)
+		{
+			$this->showNotFoundPage();
+
+			return;
+		}
+
+		if (!$showFile && !$this->canDownloadObjectByExternalLink($file))
 		{
 			$this->showNotFoundPage();
 
@@ -1446,16 +1652,16 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	protected function getTargetFile($path, $fileId)
 	{
-		[$targetFolder,] = $this->getTargetFolderData($this->externalLink->getFolder(), $path);
+		[$targetFolder] = $this->getTargetFolderData($this->externalLink->getFolder(), $path);
 		if (!$targetFolder)
 		{
 			return null;
 		}
 
-		$targetFile = File::load(array(
+		$targetFile = File::load([
 			'ID' => (int)$fileId,
 			'PARENT_ID' => (int)$targetFolder->getRealObjectId(),
-		));
+		]);
 
 		if (!$targetFile || !$targetFile->getFile())
 		{
@@ -1470,11 +1676,35 @@ class CDiskExternalLinkComponent extends DiskComponent
 		$targetFile = $this->getTargetFile($path, $fileId);
 		if(!$targetFile)
 		{
-			$this->includeComponentTemplate('error');
+			$this->showDownloadFileUnderFolderError();
+
 			return false;
 		}
 
-		CFile::viewByUser($targetFile->getFile(), array('force_download' => !$showFile, 'attachment_name' => $targetFile->getName()));
+		if (!$showFile && !$this->canDownloadObjectByExternalLink($targetFile))
+		{
+			$this->showDownloadFileUnderFolderError();
+
+			return false;
+		}
+
+		CFile::viewByUser(
+			arFile: $targetFile->getFile(),
+			options: [
+				'force_download' => !$showFile,
+				'attachment_name' => $targetFile->getName(),
+			],
+		);
+	}
+
+	protected function processActionShowFileUnderFolder($path, $fileId): void
+	{
+		$this->processActionDownloadFileUnderFolder($path, $fileId, true);
+	}
+
+	protected function showDownloadFileUnderFolderError(): void
+	{
+		$this->includeComponentTemplate('error');
 	}
 
 	/**
@@ -1625,12 +1855,14 @@ class CDiskExternalLinkComponent extends DiskComponent
 		if(!$file)
 		{
 			$this->showNotFoundPage();
+
 			return false;
 		}
 
 		if(!$file->getView()->isHtmlAvailable() || !$this->checkDownloadToken($this->request->getQuery('token')))
 		{
 			$this->showNotFoundPage();
+
 			return false;
 		}
 
@@ -1640,6 +1872,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			if(!$version)
 			{
 				$this->showNotFoundPage();
+
 				return false;
 			}
 			$fileData = $version->getView()->getData();
@@ -1652,10 +1885,11 @@ class CDiskExternalLinkComponent extends DiskComponent
 		if(!$fileData)
 		{
 			$this->showNotFoundPage();
+
 			return false;
 		}
 
-		CFile::viewByUser($fileData, array('force_download' => false, 'attachment_name' => $file->getView()->getName(), 'cache_time' => 0));
+		CFile::viewByUser($fileData, ['force_download' => false, 'attachment_name' => $file->getView()->getName(), 'cache_time' => 0]);
 	}
 
 	protected function findLink()
@@ -1673,9 +1907,9 @@ class CDiskExternalLinkComponent extends DiskComponent
 		{
 			$this->externalLink = $this->externalLinkProvider->getForComponentByHash($this->hash);
 		}
-		elseif ($this->file instanceof File)
+		elseif ($this->baseObject instanceof BaseObject)
 		{
-			$this->externalLink = $this->externalLinkProvider->getForComponent($this->file->getId());
+			$this->externalLink = $this->externalLinkProvider->getForComponent($this->baseObject->getRealObjectId());
 		}
 
 		if(
@@ -1693,18 +1927,27 @@ class CDiskExternalLinkComponent extends DiskComponent
 
 	private function isExternalLinkContextValid(): bool
 	{
-		if (!$this->file instanceof File)
+		if (!$this->baseObject instanceof BaseObject)
 		{
 			return false;
 		}
 
-		$linkFile = $this->externalLink->getFile();
+		$linkObject = $this->externalLink->getObject();
 		if (
-			!$linkFile instanceof File
-			|| (int)$linkFile->getRealObjectId() !== (int)$this->file->getRealObjectId()
+			!$linkObject instanceof BaseObject
+			|| (int)$linkObject->getRealObjectId() !== (int)$this->baseObject->getRealObjectId()
 		)
 		{
 			return false;
+		}
+
+		if (!$this->baseObject instanceof File)
+		{
+			return (
+				$this->attachedObject === null
+				&& $this->version === null
+				&& (int)$this->externalLink->getVersionId() === 0
+			);
 		}
 
 		if ($this->attachedObject instanceof AttachedObject)
@@ -1712,7 +1955,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$attachedFile = $this->attachedObject->getFile();
 			if (
 				!$attachedFile instanceof File
-				|| (int)$attachedFile->getRealObjectId() !== (int)$this->file->getRealObjectId()
+				|| (int)$attachedFile->getRealObjectId() !== (int)$this->baseObject->getRealObjectId()
 			)
 			{
 				return false;
@@ -1724,7 +1967,7 @@ class CDiskExternalLinkComponent extends DiskComponent
 			$versionFile = $this->version->getObject();
 			if (
 				!$versionFile instanceof File
-				|| (int)$versionFile->getRealObjectId() !== (int)$this->file->getRealObjectId()
+				|| (int)$versionFile->getRealObjectId() !== (int)$this->baseObject->getRealObjectId()
 			)
 			{
 				return false;
@@ -1772,6 +2015,12 @@ class CDiskExternalLinkComponent extends DiskComponent
 		}
 
 		$securityContext = $storage->getSecurityContext($createdBy);
+
+		if (!$this->canDownloadFolderArchiveByExternalLink($folder))
+		{
+			$this->sendJsonAccessDeniedResponse();
+		}
+
 		$zipArchive = ZipNginx\Archive::createFromFolder($folder, $securityContext);
 		$this->restartBuffer();
 		$zipArchive->send();
@@ -1781,6 +2030,72 @@ class CDiskExternalLinkComponent extends DiskComponent
 	public function getLangId()
 	{
 		return $this->langId;
+	}
+
+	private function canDownloadObjectByExternalLink(BaseObject $object): bool
+	{
+		$securityContext = $object->getStorage()?->getCurrentUserSecurityContext(true);
+
+		if (!$securityContext instanceof SecurityContext)
+		{
+			return false;
+		}
+
+		if ($object->canUpdate($securityContext))
+		{
+			return true;
+		}
+
+		return $this->downloadAccess->checkExternalLink($object, $this->externalLink);
+	}
+
+	private function preloadDownloadAccessForExternalLinkObjects(
+		array $objects,
+		SecurityContext $securityContext,
+	): void
+	{
+		if ($securityContext instanceof DiskSecurityContext)
+		{
+			$securityContext->preloadOperationsForObjects($objects);
+		}
+
+		$this->downloadAccess->preload($objects, $this->externalLink);
+	}
+
+	private function getDownloadUrlForFileUnderFolder(string $relativePath, int $fileId): string
+	{
+		return $this->getUrlForFileUnderFolder(
+			self::ACTION_DOWNLOAD_FILE_UNDER_FOLDER,
+			$relativePath,
+			$fileId,
+		);
+	}
+
+	private function getViewerSourceUrlForFileUnderFolder(string $relativePath, int $fileId): string
+	{
+		return $this->getUrlForFileUnderFolder(
+			self::ACTION_SHOW_FILE_UNDER_FOLDER,
+			$relativePath,
+			$fileId,
+		);
+	}
+
+	private function getUrlForFileUnderFolder(string $action, string $relativePath, int $fileId): string
+	{
+		return $this->getUrlManager()->getUrlExternalLink(
+			[
+				'hash' => $this->externalLink->getHash(),
+				'action' => $action,
+				'token' => $this->downloadToken,
+				'path' => $relativePath ?: '/',
+				'fileId' => $fileId,
+			],
+		);
+	}
+
+	private function canDownloadFolderArchiveByExternalLink(Folder $folder): bool
+	{
+		return $this->canDownloadObjectByExternalLink($folder);
 	}
 
 	public function getMessage($id, $replace = null)
@@ -1925,24 +2240,20 @@ class CDiskExternalLinkComponent extends DiskComponent
 			return;
 		}
 
-		$file = $this->externalLink->getFile();
+		$baseObject = $this->externalLink->getObject();
 
-		if (!$file instanceof File || !$file->supportsUnifiedLink())
+		if (!$baseObject instanceof BaseObject || !$baseObject->supportsUnifiedLink())
 		{
 			return;
 		}
 
 		$urlManager = Driver::getInstance()->getUrlManager();
-		$options = $this->getUnifiedLinkOptions($file);
-
-		if ($actionName === 'goToEdit')
-		{
-			$this->unifiedLink = $urlManager->getUnifiedEditLink($file, $options);
-		}
-		else
-		{
-			$this->unifiedLink = $urlManager->getUnifiedLink($file, $options);
-		}
+		$options = $baseObject instanceof File ? $this->getUnifiedLinkOptions($baseObject) : [];
+		$this->unifiedLink = $urlManager->getPublicUnifiedLink(
+			$baseObject,
+			$actionName === 'goToEdit',
+			$options,
+		);
 	}
 
 	private function buildEditLink(?File $file, UrlManager $urlManager): string
@@ -1956,6 +2267,28 @@ class CDiskExternalLinkComponent extends DiskComponent
 			'hash' => $this->externalLink->getHash(),
 			'action' => 'goToEdit',
 		]);
+	}
+
+	public function getVibeofficeTrustedOpening(): array
+	{
+		$session = $this->arResult['DOCUMENT_SESSION'] ?? null;
+		$file = $this->baseObject ?? $this->externalLink?->getFile();
+		if (!$session instanceof \Bitrix\Disk\Document\Models\DocumentSession || !$file instanceof File)
+		{
+			return [];
+		}
+
+		return [
+			'channel' => $this->fromUnifiedLink ? 'unified' : 'public',
+			'file' => $file,
+			'externalLink' => $this->externalLink,
+			'unifiedOptions' => $this->fromUnifiedLink ? $this->getUnifiedLinkOptions($file) : [],
+			'objectId' => (int)$file->getId(),
+			'attachedObjectId' => (int)$this->attachedObject?->getId(),
+			'versionId' => (int)$session->getVersionId(),
+			'type' => $session->getType(),
+			'editorMode' => \Bitrix\Disk\Document\OnlyOffice\Editor\ConfigBuilder::VISUAL_MODE_USUAL,
+		];
 	}
 
 	private function getUnifiedLinkOptions(File $file): array
@@ -1988,26 +2321,4 @@ class CDiskExternalLinkComponent extends DiskComponent
 		return $this->unifiedLinkOptions;
 	}
 
-	private function maybeRedirectToUnifiedLink(string $actionName, bool $skipPostCheck = false): void
-	{
-		if (
-			$this->fromUnifiedLink
-			|| (
-				$actionName !== 'default'
-				&& $actionName !== 'goToEdit'
-			)
-			|| (
-				!$skipPostCheck
-				&& $this->request->isPost()
-			)
-			|| !is_string($this->unifiedLink)
-		)
-		{
-			return;
-		}
-
-		$redirect = new Redirect($this->unifiedLink);
-
-		Application::getInstance()->end(0, $redirect);
-	}
 }

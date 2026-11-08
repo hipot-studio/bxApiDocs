@@ -160,7 +160,7 @@ class BaseTable
 	}
 
 	/**
-	 * Register calllback for internal table.
+	 * Register callback for internal table.
 	 * @param string $code Type of callback.
 	 * @param callable $callback Callback.
 	 * @return void

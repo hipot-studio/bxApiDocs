@@ -10,6 +10,8 @@ use Bitrix\Sign\Repository\BlockRepository;
 use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkFieldService;
+use Bitrix\Sign\Service\Placeholder\Restriction\PlaceholderRestrictionService;
+use Bitrix\Sign\Service\Placeholder\Restriction\ScenarioContext;
 use Bitrix\Sign\Type;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Service;
@@ -22,6 +24,7 @@ class Factory
 	private readonly HcmLinkFieldService $hcmLinkFieldService;
 	private readonly LegalInfoProvider $legalInfoProvider;
 	private readonly BlockRepository $blockRepository;
+	private readonly PlaceholderRestrictionService $placeholderRestrictionService;
 	/** @var array<string, Item\MemberCollection> */
 	private array $membersByDocumentParty = [];
 	/** @var array<int, list<string>> */
@@ -33,6 +36,7 @@ class Factory
 		?HcmLinkFieldService $hcmLinkFieldService = null,
 		?LegalInfoProvider $legalInfoProvider = null,
 		?BlockRepository $blockRepository = null,
+		?PlaceholderRestrictionService $placeholderRestrictionService = null,
 	)
 	{
 		$this->memberRepository = $memberRepository ?? Container::instance()->getMemberRepository();
@@ -40,6 +44,9 @@ class Factory
 		$this->hcmLinkFieldService = $hcmLinkFieldService ?? Container::instance()->getHcmLinkFieldService();
 		$this->legalInfoProvider = $legalInfoProvider ?? Container::instance()->getLegalInfoProvider();
 		$this->blockRepository = $blockRepository ?? Container::instance()->getBlockRepository();
+		$this->placeholderRestrictionService = $placeholderRestrictionService
+			?? Container::instance()->getPlaceholderRestrictionService()
+		;
 	}
 
 	/**
@@ -251,14 +258,10 @@ class Factory
 	 * Decides whether the regional external-field block (registration number / creation date)
 	 * must be produced for the given document.
 	 *
-	 * Company-initiated documents always get the regional block: the send wizard has a regional
-	 * settings step where the company supplies the values.
-	 * Employee-initiated documents get it only when the blank really holds the matching placeholder
-	 * block, and never when an HCM link reference block was already resolved above (HCM keeps
-	 * priority). Each regional field is decided on its own: a blank carrying only the registration
-	 * number code must not produce the creation date block. The blank-level "has placeholders" flag
-	 * is not a usable signal here: it is one flag per blank, so it neither tells the two codes apart
-	 * nor distinguishes a blank authored from the placeholder tile with no codes typed into it.
+	 * The scenario part of the decision belongs to the restriction config, which the template send
+	 * asks as well, so both paths cannot drift apart. What stays here is the state this factory alone
+	 * knows: which regional placeholder blocks the blank really holds, and the priority of an HCM link
+	 * reference block resolved above (HCM keeps the field for itself).
 	 */
 	private function shouldCreateRegionalBlock(
 		Item\Document $document,
@@ -266,11 +269,24 @@ class Factory
 		string $fieldType,
 	): bool
 	{
-		if (!$document->isInitiatedByEmployee())
-		{
-			return true;
-		}
+		return $this->placeholderRestrictionService->isRegionalBlockRequired(
+			ScenarioContext::fromAxes(initiatedByType: $document->initiatedByType),
+			fn(): bool => $this->blankHoldsRegionalBlock($document, $currentCode, $fieldType),
+		);
+	}
 
+	/**
+	 * Each regional field is decided on its own: a blank carrying only the registration number code must
+	 * not produce the creation date block. The blank-level "has placeholders" flag is not a usable signal
+	 * here: it is one flag per blank, so it neither tells the two codes apart nor distinguishes a blank
+	 * authored from the placeholder tile with no codes typed into it.
+	 */
+	private function blankHoldsRegionalBlock(
+		Item\Document $document,
+		?string $currentCode,
+		string $fieldType,
+	): bool
+	{
 		if ($currentCode === Type\BlockCode::B2E_HCMLINK_REFERENCE)
 		{
 			return false;

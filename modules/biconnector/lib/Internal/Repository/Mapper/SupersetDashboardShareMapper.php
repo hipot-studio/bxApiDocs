@@ -23,6 +23,9 @@ class SupersetDashboardShareMapper
 			$ormModel->getUrlParameterValues(),
 			$ormModel->getLoginAttempts(),
 			$ormModel->getLoginLockedTill(),
+			$ormModel->getDisabledById(),
+			$ormModel->getDateDisabled(),
+			$ormModel->getDateLastOpened(),
 		);
 
 		$entity->setId($ormModel->getId());
@@ -30,26 +33,35 @@ class SupersetDashboardShareMapper
 		return $entity;
 	}
 
+	/**
+	 * Guest columns (LOGIN_*, DATE_LAST_OPENED) are left out: the guest path writes them with its own
+	 * point updates, and a full save must not overwrite them with a stale copy.
+	 */
 	public function convertToOrm(SupersetDashboardShare $entity): EO_SupersetDashboardShare
 	{
 		$ormModel = $entity->getId()
 			? EO_SupersetDashboardShare::wakeUp($entity->getId())
 			: SupersetDashboardShareTable::createObject()
 				->setDashboardId($entity->getDashboardId())
-				->setToken($entity->getToken())
 				->setCreatedById($entity->getCreatedById())
 		;
 
 		$ormModel
+			->setToken($entity->getToken())
 			->setPassword($entity->getPassword())
 			->setDateExpire($entity->getDateExpire())
 			->setActive($entity->getActive())
 			->setDateModify($entity->getDateModify())
 			->setExternalFilterValues($entity->getExternalFilterValues())
 			->setUrlParameterValues($entity->getUrlParameterValues())
-			->setLoginAttempts($entity->getLoginAttempts())
-			->setLoginLockedTill($entity->getLoginLockedTill())
+			->setDisabledById($entity->getDisabledById())
+			->setDateDisabled($entity->getDateDisabled())
 		;
+
+		if ($entity->getDateCreate())
+		{
+			$ormModel->setDateCreate($entity->getDateCreate());
+		}
 
 		return $ormModel;
 	}

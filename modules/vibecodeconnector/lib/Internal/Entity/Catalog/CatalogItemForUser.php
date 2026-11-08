@@ -11,5 +11,7 @@ final class CatalogItemForUser
 		public readonly bool $isPinned,
 		public readonly bool $isOwnedByUser,
 		public readonly bool $isHidden = false,
+		public readonly bool $isLastOpened = false,
+		public readonly bool $isFavorite = false,
 	) {}
 }

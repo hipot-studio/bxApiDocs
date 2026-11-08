@@ -14,6 +14,7 @@ use Bitrix\Timeman\Repository\Worktime\WorktimeRepository;
 use Bitrix\Timeman\UseCase\Worktime\Manage;
 use Bitrix\Timeman\Service\Worktime\Result\WorktimeServiceResult;
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 
 class Worktime extends Controller
 {
@@ -40,12 +41,11 @@ class Worktime extends Controller
 
 	protected function getDefaultPreFilters()
 	{
-		return array_merge(
-			parent::getDefaultPreFilters(),
-			[
-				new Scope(Scope::AJAX),
-			]
-		);
+		return [
+			new ToolEnabledFilter(),
+			...parent::getDefaultPreFilters(),
+			new Scope(Scope::AJAX),
+		];
 	}
 
 	public function pauseAction($userId, $latitudeClose = null, $longitudeClose = null, $ipClose = null, $device = null)

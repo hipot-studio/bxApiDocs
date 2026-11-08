@@ -22,6 +22,7 @@ class Export extends Main\Engine\Controller
 	/** How many day keep files in the cloud. */
 	const EXPIRE_DAYS = 24;
 
+	const ACTION_DISPATCHER = 'dispatcher';
 	const ACTION_EXPORT = 'export';
 	const ACTION_UPLOAD = 'upload';
 	const ACTION_CANCEL = 'cancel';
@@ -35,8 +36,20 @@ class Export extends Main\Engine\Controller
 	const STATUS_PROGRESS = 'PROGRESS';
 
 
+	/** Key of the controller identity inside signed progress data, kept out of $fieldToStoreInProcess. */
+	protected const PROGRESS_CONTROLLER_IDENTITY_KEY = 'controllerIdentity';
+
+	/** Every admission refusal looks the same from the outside: the reason never leaves the kernel. */
+	protected const ADMISSION_ERROR_MESSAGE = 'Component name is not allowed.';
+
 	/** @var string */
 	protected $componentName = '';
+
+	/** @var boolean - Whether the component name passed admission. */
+	protected $isComponentNameAdmitted = false;
+
+	/** @var array|null - Parameters taken from the very pass that admitted the component name. */
+	protected $admittedParameters = null;
 
 	/** @var array */
 	protected $componentParameters = [];
@@ -103,6 +116,7 @@ class Export extends Main\Engine\Controller
 
 	/** @var string[] */
 	protected $fieldToStoreInProcess = array(
+		'componentName',
 		'exportType',
 		'fileName',
 		'filePath',
@@ -115,8 +129,8 @@ class Export extends Main\Engine\Controller
 		'processedItems',
 		'totalItems',
 		'lastExportedId',
-		'cloudChunkSize',
 		'bucketId',
+		'cloudMinChunkSize',
 		'isExportCompleted',
 		'isUploadFinished',
 		'timeStart',
@@ -192,35 +206,47 @@ class Export extends Main\Engine\Controller
 
 		$this->processToken = $this->request->get('PROCESS_TOKEN');
 		$this->exportType = $this->request->get('EXPORT_TYPE');
-		$this->componentName = $this->request->get('COMPONENT_NAME');
 
-		$signedParameters = $this->request->getPost('signedParameters');
-		if (!empty($signedParameters))
+		$progressData = $this->getProgressParameters();
+		if (!empty($progressData))
 		{
-			$this->componentParameters = $this->decodeSignedParameters($this->componentName, $signedParameters);
+			$this->isNewProcess = (empty($progressData['processToken']) || $progressData['processToken'] !== $this->processToken);
+		}
+
+		// admission runs before the state is restored: afterwards both sides of the identity check
+		// would be the same value taken from the progress
+		$admittedComponentName = $this->resolveComponentName($progressData);
+
+		if (!$this->isNewProcess)
+		{
+			// restore state
+			foreach ($this->fieldToStoreInProcess as $fieldName)
+			{
+				if (isset($progressData[$fieldName]))
+				{
+					$this->{$fieldName} = $progressData[$fieldName];
+				}
+			}
+		}
+
+		$this->isComponentNameAdmitted = ($admittedComponentName !== null);
+		$this->componentName = (string)$admittedComponentName;
+
+		// parameters serve the export action alone, and a refused name never reaches it: unfolding a
+		// pass after a refusal would only replace the single refusal with a signature error
+		$signedParameters = $this->getSignedParametersFromRequest();
+		if ($this->isComponentNameAdmitted && $signedParameters !== '')
+		{
+			$this->componentParameters = $this->admittedParameters ?? $this->decodeExportParameters(
+				$this->componentName,
+				$signedParameters
+			);
 		}
 
 		$initialOptions = $this->request->getPost('INITIAL_OPTIONS');
 		if (!empty($initialOptions))
 		{
 			$this->componentParameters['STEXPORT_INITIAL_OPTIONS'] = $initialOptions;
-		}
-
-		$progressData = $this->getProgressParameters();
-		if (!empty($progressData))
-		{
-			$this->isNewProcess = (empty($progressData['processToken']) || $progressData['processToken'] !== $this->processToken);
-			if (!$this->isNewProcess)
-			{
-				// restore state
-				foreach ($this->fieldToStoreInProcess as $fieldName)
-				{
-					if (isset($progressData[$fieldName]))
-					{
-						$this->{$fieldName} = $progressData[$fieldName];
-					}
-				}
-			}
 		}
 
 		if ($this->isCloudAvailable)
@@ -231,6 +257,86 @@ class Export extends Main\Engine\Controller
 				$this->isCloudAvailable = false;
 			}
 		}
+	}
+
+
+	/**
+	 * Admits the name of the component to be included, or refuses it.
+	 *
+	 * A continuation trusts the name confirmed on the first step and only checks that the progress
+	 * belongs to this very controller: the progress slot is shared by the whole module. A first step
+	 * is admitted by a pass issued by this controller for this very name; failing that, the name is
+	 * looked up in the transitional registry of the module, which is why a pass of the old format is
+	 * not terminal while the registry is there.
+	 *
+	 * @param array $progressData Raw signed progress data, read before the state is restored.
+	 *
+	 * @return string|null Admitted component name, or null on refusal.
+	 */
+	protected function resolveComponentName(array $progressData): ?string
+	{
+		if (!$this->isNewProcess && !empty($progressData['componentName']))
+		{
+			$storedIdentity = $progressData[static::PROGRESS_CONTROLLER_IDENTITY_KEY] ?? null;
+			if ($storedIdentity !== null && $storedIdentity !== static::getExportControllerIdentity())
+			{
+				return null;
+			}
+
+			// progress without the identity belongs to a process started before the update
+			return (string)$progressData['componentName'];
+		}
+
+		$candidate = $this->getStringFromRequest('COMPONENT_NAME');
+		if (!\CComponentEngine::checkComponentName($candidate))
+		{
+			return null;
+		}
+
+		$signedParameters = $this->getSignedParametersFromRequest();
+		if ($signedParameters !== '')
+		{
+			$parameters = Main\Component\ExportParameterSigner::unsign(
+				$candidate,
+				static::getExportControllerIdentity(),
+				$signedParameters
+			);
+			if ($parameters !== null)
+			{
+				$this->admittedParameters = $parameters;
+
+				return $candidate;
+			}
+		}
+
+		// @todo Transitional, to be removed together with the table of ExportParameterSigner once
+		// every module owning an export controller has shipped the update that issues passes for its
+		// components: after that a component name is admitted by a signed pass alone.
+		if (Main\Component\ExportParameterSigner::isTransitionallyAllowed($this->module, $candidate))
+		{
+			return $candidate;
+		}
+
+		return null;
+	}
+
+
+	/**
+	 * Anything that is not a string is read as an empty value: an array in the request must end in the
+	 * ordinary refusal, not in a TypeError on the way to it.
+	 */
+	protected function getStringFromRequest(string $name): string
+	{
+		$value = $this->request->get($name);
+
+		return is_string($value) ? $value : '';
+	}
+
+	protected function getSignedParametersFromRequest(): string
+	{
+		$value = $this->request->getPost('signedParameters');
+
+		return is_string($value) ? $value : '';
 	}
 
 
@@ -1038,9 +1144,15 @@ class Export extends Main\Engine\Controller
 			return true;
 		}
 
-		if ($this->componentName === '')
+		// admission gates exactly the actions that may reach IncludeComponent(); the rest never need
+		// the name, including download links issued before the update. The name is lowered because
+		// the engine resolves actions case-insensitively and keeps the spelling of the request
+		if (
+			!$this->isComponentNameAdmitted
+			&& in_array(mb_strtolower($action->getName()), [self::ACTION_EXPORT, self::ACTION_DISPATCHER], true)
+		)
 		{
-			$this->addError(new Error('Component name is not specified.'));
+			$this->addError(new Error(static::ADMISSION_ERROR_MESSAGE));
 		}
 		if (!in_array($this->exportType, array(self::EXPORT_TYPE_CSV, self::EXPORT_TYPE_EXCEL), true))
 		{
@@ -1155,6 +1267,7 @@ class Export extends Main\Engine\Controller
 		// store state
 		$progressData = [
 			'processToken' => $this->processToken,
+			static::PROGRESS_CONTROLLER_IDENTITY_KEY => static::getExportControllerIdentity(),
 		];
 		foreach ($this->fieldToStoreInProcess as $fieldName)
 		{
@@ -1315,6 +1428,55 @@ class Export extends Main\Engine\Controller
 	protected function decodeSignedParameters($componentName, $signedParameters)
 	{
 		return Main\Component\ParameterSigner::unsignParameters($componentName, $signedParameters);
+	}
+
+	/**
+	 * Unpacks parameters of the component: a pass of the new format first, the former pair after it.
+	 * A blob that neither schema unfolds stays an error, as it is today: silently replacing it with
+	 * empty parameters would turn a refusal into an export with lost settings.
+	 *
+	 * @param string $componentName Component name the parameters were signed with.
+	 * @param string $signedParameters Signed parameters of component as string.
+	 *
+	 * @return array
+	 * @throws \Bitrix\Main\Security\Sign\BadSignatureException
+	 */
+	protected function decodeExportParameters(string $componentName, string $signedParameters): array
+	{
+		$parameters = Main\Component\ExportParameterSigner::unsign(
+			$componentName,
+			static::getExportControllerIdentity(),
+			$signedParameters
+		);
+
+		return $parameters ?? $this->decodeSignedParameters($componentName, $signedParameters);
+	}
+
+	/**
+	 * Signs parameters of the component exported by this controller.
+	 *
+	 * @param string $componentName Component name, exactly as it goes into the request.
+	 * @param array $parameters Parameters of component.
+	 *
+	 * @return string
+	 */
+	public static function signExportParameters(string $componentName, array $parameters): string
+	{
+		return Main\Component\ExportParameterSigner::sign(
+			$componentName,
+			static::getExportControllerIdentity(),
+			$parameters
+		);
+	}
+
+	/**
+	 * Identity of this controller as it enters the salt of an export pass.
+	 *
+	 * @return string
+	 */
+	public static function getExportControllerIdentity(): string
+	{
+		return Main\Component\ExportParameterSigner::resolveControllerIdentity(static::class);
 	}
 
 	/**

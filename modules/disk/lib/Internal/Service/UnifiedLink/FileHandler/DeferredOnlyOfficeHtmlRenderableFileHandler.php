@@ -5,23 +5,23 @@ namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
 
 use Bitrix\Disk\Internal\Service\UnifiedLink\Render\DeferredDocumentLoaderRenderer;
 
-class DeferredOnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableFileHandler
+class DeferredOnlyOfficeHtmlRenderableFileHandler implements HtmlRenderableHandler
 {
-	public function view(): FileHandlerOperationResult
+	public function view(): HandlerOperationResult
 	{
 		return $this->render();
 	}
 
-	public function edit(): FileHandlerOperationResult
+	public function edit(): HandlerOperationResult
 	{
 		return $this->render();
 	}
 
-	private function render(): FileHandlerOperationResult
+	private function render(): HandlerOperationResult
 	{
 		$renderer = new DeferredDocumentLoaderRenderer();
 
-		return FileHandlerOperationResult::createSuccess(
+		return HandlerOperationResult::createSuccess(
 			value: $renderer->render(),
 			headers: $renderer->getHeaders(),
 		);

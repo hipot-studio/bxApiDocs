@@ -15,8 +15,8 @@ class SetStateHandler
 
 	}
 
-	public function __invoke(SetStateCommand $command): void
+	public function __invoke(SetStateCommand $command): ?array
 	{
-		$this->stateService->set($command->state, $command->userId);
+		return $this->stateService->set($command->state, $command->userId);
 	}
 }

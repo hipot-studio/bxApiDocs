@@ -42,16 +42,22 @@ final class AiAssistantWorkflowTemplateConverterService
 	 * `$activity['Node'] = $node`. It holds the frontend geometry (`position`/`dimensions`) and the inner
 	 * `node` block (`type`, `frame*` styling) the reverse frame branch reads. There is no exported constant
 	 * for this key in NodesToTemplate.
+	 *
+	 * Public because the geometry slice of the bound graph
+	 * ({@see AgentWorkflowResolverService::getBoundBlocks()}) reads the same saved shape: a second spelling
+	 * of the key would let the two readings of one storage format drift apart.
 	 */
-	private const NODE_ELEMENT = 'Node';
+	public const NODE_ELEMENT = 'Node';
 
 	/**
 	 * Preset section a saved activity carries next to `Type`/`Name`/`Properties`: the id of the preset applied
 	 * when the node was created ({@see \Bitrix\BizprocDesigner\Internal\Entity\ActivityData::toArray}, the same
 	 * key the manual editor stamps and {@see \Bitrix\Bizproc\Workflow\Template\Converter\TemplateToNodes} reads
 	 * back for the node visuals). NodesToTemplate exports no constant for it.
+	 *
+	 * Public for the same reason as {@see self::NODE_ELEMENT}.
 	 */
-	private const PRESET_ID_ELEMENT = 'PresetId';
+	public const PRESET_ID_ELEMENT = 'PresetId';
 
 	/**
 	 * Host graph properties that {@see \Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ConvertRuleCommand}
@@ -77,6 +83,25 @@ final class AiAssistantWorkflowTemplateConverterService
 	private const DERIVED_SERVICE_PROPERTY_NAMES = [
 		'Return',
 		'EditorComment',
+	];
+
+	/**
+	 * State of the editor a block carries in its `Properties` and no agent authors: the collapsed/expanded flag
+	 * the legacy designer writes onto the four container blocks that can be folded on the canvas (while, foreach,
+	 * parallel, empty block), and the one the storage nodes write for their own filter section. It is the
+	 * server's to keep - `_DesMinimized` is emitted as a setting it fails
+	 * {@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\AgentSettingNameValidator} for
+	 * every block whose schema does not describe it, which is what refused a folded loop outright, and
+	 * `IsExpanded` would let an agent fold a section a person unfolded (BRIEF § 3.5).
+	 *
+	 * Public because the write path has to restore exactly what this one withholds
+	 * ({@see AiAssistantDraftConverterService::applyServerOwnedProperties()}): the agent is never handed the
+	 * value, so it cannot send it back, and a name dropped on one side and unrestored on the other is a value
+	 * lost on the first agent write.
+	 */
+	public const EDITOR_SERVICE_PROPERTY_NAMES = [
+		'_DesMinimized',
+		'IsExpanded',
 	];
 
 	/**
@@ -577,6 +602,7 @@ final class AiAssistantWorkflowTemplateConverterService
 		$excluded = [
 			NodesToTemplate::PROPERTY_TITLE,
 			...self::DERIVED_SERVICE_PROPERTY_NAMES,
+			...self::EDITOR_SERVICE_PROPERTY_NAMES,
 		];
 
 		$settings = new AgentSettingCollection();

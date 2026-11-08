@@ -26,9 +26,6 @@ trait Document
 			Loader::requireModule('documentgenerator');
 
 			$this->document = \Bitrix\DocumentGenerator\Document::loadById($this->getDocumentId());
-
-			// dead code for Document Activity
-			// DocumentGeneratorManager::getInstance()->actualizeDocumentImmediately($this->document);
 		}
 
 		return $this->document;

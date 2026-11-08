@@ -2,6 +2,7 @@
 
 namespace Bitrix\UI\Infrastructure\Agent\EntityEditorConfig;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
@@ -22,6 +23,22 @@ class CrmAccessCodesConverterAgent extends AgentBase
 	public static function doRun(): bool
 	{
 		$instance = new self();
+
+		// The table holds the only data to convert, so its absence is terminal: without
+		// stopping, an agent registered by another module would reschedule itself forever.
+		if (!$instance->hasConfigTable())
+		{
+			return self::AGENT_DONE_STOP_IT;
+		}
+
+		// OPTION_CATEGORY may be missing on portals where the updater adding it did not
+		// apply; wait for the schema to be repaired instead of failing the query.
+		if (!$instance->hasOptionCategoryColumn())
+		{
+			$instance->setExecutionPeriod(3600);
+
+			return self::PERIODICAL_AGENT_RUN_LATER;
+		}
 
 		if (!HumanResources::getInstance()->isUsed())
 		{
@@ -44,6 +61,23 @@ class CrmAccessCodesConverterAgent extends AgentBase
 		$instance->cleanUp();
 
 		return self::AGENT_DONE_STOP_IT;
+	}
+
+	private function hasConfigTable(): bool
+	{
+		return Application::getConnection()->isTableExists(EntityFormConfigTable::getTableName());
+	}
+
+	// getTableField() reads the columns with a SELECT and throws when the table is absent,
+	// so this must be called only after hasConfigTable().
+	private function hasOptionCategoryColumn(): bool
+	{
+		$field = Application::getConnection()->getTableField(
+			EntityFormConfigTable::getTableName(),
+			'OPTION_CATEGORY',
+		);
+
+		return $field !== null;
 	}
 
 	private function setIsConvertingOption(): void

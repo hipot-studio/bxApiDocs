@@ -35,6 +35,7 @@ final class ModuleManager
 					$config['controllerProvider'] ?? null,
 					$config['documentation'] ?? [],
 					\Bitrix\Main\ModuleManager::getModificationDateTime($moduleId),
+					$config['events']['providers'] ?? null,
 				);
 			}
 		}

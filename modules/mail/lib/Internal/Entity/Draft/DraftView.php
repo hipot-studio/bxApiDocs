@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Internal\Entity\Draft;
 
 use Bitrix\Mail\Helper\Attachment\Storage;
+use Bitrix\Mail\Internal\Service\DateTime\UtcDateTimeFormatter;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
 
@@ -33,8 +34,7 @@ final class DraftView
 		$body = (string)($row['BODY'] ?? '');
 		$largeAttachments = ($row['LARGE_ATTACHMENTS_DATA'] ?? null) !== null
 			? Json::decode((string)$row['LARGE_ATTACHMENTS_DATA'])
-			: []
-		;
+			: [];
 		$inlineObjectIds = [];
 		foreach ($attachments as $attachment)
 		{
@@ -91,6 +91,9 @@ final class DraftView
 					'name' => (string)$attachment['FILE_NAME'],
 					'size' => (int)$attachment['FILE_SIZE'],
 					'contentType' => $attachment['CONTENT_TYPE'],
+					'contentId' => $attachment['CONTENT_ID'] ?? null,
+					'isInline' => ($attachment['IS_INLINE'] ?? false) === true
+						|| ($attachment['IS_INLINE'] ?? null) === 'Y',
 					'url' => isset($attachment['URL']) ? (string)$attachment['URL'] : null,
 					'previewUrl' => isset($attachment['PREVIEW_URL']) ? (string)$attachment['PREVIEW_URL'] : null,
 					'previewWidth' => isset($attachment['PREVIEW_WIDTH']) ? (int)$attachment['PREVIEW_WIDTH'] : null,
@@ -159,15 +162,23 @@ final class DraftView
 			'contextType' => $this->contextType,
 			'crmEntityTypeId' => $this->crmEntityTypeId,
 			'crmEntityId' => $this->crmEntityId,
-			'updatedAt' => $this->updatedAt->format(DATE_ATOM),
-			'expiresAt' => $this->expiresAt->format(DATE_ATOM),
+			'updatedAt' => UtcDateTimeFormatter::format($this->updatedAt),
+			'expiresAt' => UtcDateTimeFormatter::format($this->expiresAt),
 			'snapshot' => $this->snapshot->toArray(),
 			'attachments' => array_map(
 				static fn(array $attachment): array => [
 					'id' => $attachment['id'],
+					// The object this copy was made from, when it is a copy. A set of the large attachment
+					// scenario is signed over the source objects, so a client that only knows the copies
+					// cannot extend the set the draft already carries and loses it on the next autosave.
+					'sourceObjectId' => ($attachment['sourceObjectId'] ?? 0) > 0
+						? (int)$attachment['sourceObjectId']
+						: null,
 					'name' => $attachment['name'],
 					'size' => $attachment['size'],
 					'contentType' => $attachment['contentType'],
+					'contentId' => $attachment['contentId'],
+					'isInline' => $attachment['isInline'],
 					'url' => $attachment['url'] ?? null,
 					'previewUrl' => $attachment['previewUrl'] ?? null,
 					'previewWidth' => $attachment['previewWidth'] ?? null,

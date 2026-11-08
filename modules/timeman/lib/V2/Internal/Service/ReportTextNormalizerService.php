@@ -14,6 +14,7 @@ final class ReportTextNormalizerService
 			return '';
 		}
 
+		[$text, $encodedQuotes] = $this->protectEncodedQuotesInInlineFormattingTags($text);
 		$text = $this->decodeHtmlEntities($text);
 		$text = $this->stripLegacyTypographyTags($text);
 
@@ -22,8 +23,13 @@ final class ReportTextNormalizerService
 			$text = $this->stripPresentationAttributes($text);
 			$text = $this->collapseBlockWrappers($text);
 			$text = $this->mapInlineFormattingTags($text);
+			$text = strtr($text, $encodedQuotes);
 			$text = (string)(new \CTextParser())->convertHTMLToBB($text);
 			$text = $this->stripLegacyTypographyTags($text);
+		}
+		else
+		{
+			$text = strtr($text, $encodedQuotes);
 		}
 
 		return $this->cleanupWhitespace($text);
@@ -56,6 +62,34 @@ final class ReportTextNormalizerService
 		return html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
 	}
 
+	private function protectEncodedQuotesInInlineFormattingTags(string $text): array
+	{
+		$encodedQuotes = [];
+		$placeholderIndex = 0;
+
+		$text = preg_replace_callback(
+			'#<\s*(?:strong|b|em|i|u|del|s|strike)\b(?:\s+(?:[^"\'<>]|"[^"]*"|\'[^\']*\')*)?\s*>#iu',
+			static function (array $matches) use (&$encodedQuotes, &$placeholderIndex): string
+			{
+				return preg_replace_callback(
+					'/&(?:quot|apos);|&#0*(?:34|39);|&#x0*(?:22|27);/i',
+					static function (array $entity) use (&$encodedQuotes, &$placeholderIndex): string
+					{
+						$placeholder = "\x1E{$placeholderIndex}\x1F";
+						$encodedQuotes[$placeholder] = $entity[0];
+						$placeholderIndex++;
+
+						return $placeholder;
+					},
+					$matches[0],
+				) ?? $matches[0];
+			},
+			$text,
+		) ?? $text;
+
+		return [$text, $encodedQuotes];
+	}
+
 	private function stripPresentationAttributes(string $text): string
 	{
 		return $this->safeReplace(
@@ -72,11 +106,21 @@ final class ReportTextNormalizerService
 
 	private function collapseBlockWrappers(string $text): string
 	{
+		// code spans are shielded from the two rules this fix introduces: their markup has to
+		// stay literal, the way a code block is meant to render
+		[$text, $codeSpans] = $this->protectCodeSpans($text);
+		// resolved early so the rule below can tell an existing line break from a missing one
+		$text = $this->safeReplace('/<br\b[^>]*>/i', "\n", $text);
 		$text = $this->safeReplace(
 			'/<\/(?:p|div)>\s*<(?:p|div)[^>]*>/i',
 			"\n\n",
 			$text,
 		);
+		// a block wrapper opened right after content starts a new line. The preceding character
+		// is consumed rather than looked behind at: a leading assertion would make the pattern
+		// quadratic on input full of unclosed '<div ', while consuming keeps it linear.
+		$text = $this->safeReplace('/([^\n])(<(?:p|div)[^>]*>)/i', "$1\n$2", $text);
+		$text = strtr($text, $codeSpans);
 		$text = $this->safeReplace(
 			['/<(?:p|div)[^>]*>/i', '/<\/(?:p|div)>/i', '/<\/?span[^>]*>/i'],
 			['', "\n", ''],
@@ -84,6 +128,27 @@ final class ReportTextNormalizerService
 		);
 
 		return $this->safeReplace('/\n{3,}/', "\n\n", $text);
+	}
+
+	private function protectCodeSpans(string $text): array
+	{
+		$spans = [];
+		$index = 0;
+
+		$text = preg_replace_callback(
+			'#\[code\].*?\[/code\]|<code\b[^>]*>.*?</code\s*>#isu',
+			static function (array $matches) use (&$spans, &$index): string
+			{
+				$placeholder = "\x1C{$index}\x1D";
+				$spans[$placeholder] = $matches[0];
+				$index++;
+
+				return $placeholder;
+			},
+			$text,
+		) ?? $text;
+
+		return [$text, $spans];
 	}
 
 	private function mapInlineFormattingTags(string $text): string
@@ -96,8 +161,10 @@ final class ReportTextNormalizerService
 				'#</(?:em|i)\s*>#iu',
 				'#<u(?:\s[^>]*)?>#iu',
 				'#</u\s*>#iu',
+				'#<(?:del|s|strike)(?:\s+(?:[^"\'<>]|"[^"]*"|\'[^\']*\')*)?\s*>#iu',
+				'#</(?:del|s|strike)\s*>#iu',
 			],
-			['[b]', '[/b]', '[i]', '[/i]', '[u]', '[/u]'],
+			['[b]', '[/b]', '[i]', '[/i]', '[u]', '[/u]', '[s]', '[/s]'],
 			$text,
 		);
 	}

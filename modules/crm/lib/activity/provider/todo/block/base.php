@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Activity\Provider\ToDo\Block;
 use Bitrix\Crm\Activity\Provider\ToDo\OptionallyConfigurable;
 use Bitrix\Crm\Activity\Provider\ToDo\SaveConfig;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\Result;
 
 abstract class Base implements BlockInterface
 {
@@ -35,5 +36,10 @@ abstract class Base implements BlockInterface
 	public function prepareEntityBefore(OptionallyConfigurable $entity): SaveConfig
 	{
 		return new SaveConfig(false);
+	}
+
+	public function commitDeferredActions(OptionallyConfigurable $entity): Result
+	{
+		return new Result();
 	}
 }

@@ -17,11 +17,18 @@ class UserFieldHistory
 {
 	/** @var DateTime[] $items*/
 	private static $items = null;
-	public static function processCreation($entityTypeID, $fieldID)
+	private static array $processedModificationFieldIds = [];
+
+	public static function processCreation($entityTypeID, $fieldID, bool $markProcessed = true)
 	{
 		self::synchronize($entityTypeID);
+		if($markProcessed)
+		{
+			self::markProcessedModification($fieldID);
+		}
 	}
-	public static function processModification($entityTypeID, $fieldID)
+
+	public static function processModification($entityTypeID, $fieldID, bool $markProcessed = true)
 	{
 		$entityTypeID = (int)$entityTypeID;
 		$fieldID = (int)$fieldID;
@@ -37,8 +44,35 @@ class UserFieldHistory
 		if (CCrmOwnerType::IsDefined($entityTypeID))
 		{
 			self::synchronize($entityTypeID);
+			if($markProcessed)
+			{
+				self::markProcessedModification($fieldID);
+			}
 		}
 	}
+
+	public static function consumeProcessedModificationInCurrentRequest($fieldID): bool
+	{
+		$fieldID = (int)$fieldID;
+		if(!isset(self::$processedModificationFieldIds[$fieldID]))
+		{
+			return false;
+		}
+
+		unset(self::$processedModificationFieldIds[$fieldID]);
+
+		return true;
+	}
+
+	private static function markProcessedModification($fieldID): void
+	{
+		$fieldID = (int)$fieldID;
+		if($fieldID > 0)
+		{
+			self::$processedModificationFieldIds[$fieldID] = true;
+		}
+	}
+
 	public static function processRemoval($entityTypeID, $fieldID)
 	{
 		self::synchronize($entityTypeID);

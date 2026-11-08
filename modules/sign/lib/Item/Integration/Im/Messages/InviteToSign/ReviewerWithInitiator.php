@@ -2,10 +2,11 @@
 
 namespace Bitrix\Sign\Item\Integration\Im\Messages\InviteToSign;
 
+use Bitrix\Sign\Contract\Chat\Message\HasMemberKey;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Integration\Im\Message;
 
-class ReviewerWithInitiator extends Message\WithInitiator
+class ReviewerWithInitiator extends Message\WithInitiator implements HasMemberKey
 {
 	public function __construct(
 		int $fromUser,

@@ -54,9 +54,16 @@ class Consent
 		}
 
 		$parameters['IP'] = (isset($params['IP']) && $params['IP']) ? $params['IP'] : $request->getRemoteAddress();
-		if (isset($params['URL']) && $params['URL'])
+		// truncated before the check so that the stored value is the one that was checked
+		$url = isset($params['URL']) ? (string)$params['URL'] : '';
+		if (mb_strlen($url) > 4000)
 		{
-			$parameters['URL'] = $params['URL'];
+			$url = mb_substr($url, 0, 4000);
+		}
+
+		if (ConsentUrl::isAllowed($url))
+		{
+			$parameters['URL'] = $url;
 		}
 		else
 		{

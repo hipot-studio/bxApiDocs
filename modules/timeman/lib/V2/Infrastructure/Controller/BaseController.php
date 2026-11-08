@@ -8,6 +8,7 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Timeman\Security\UserPermissionsManager;
 use Bitrix\Timeman\Service\DependencyManager;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 
 class BaseController extends JsonController
 {
@@ -23,6 +24,7 @@ class BaseController extends JsonController
 	public function getDefaultPreFilters()
 	{
 		$prefilters = [
+			new ToolEnabledFilter(),
 			...parent::getDefaultPreFilters(),
 		];
 

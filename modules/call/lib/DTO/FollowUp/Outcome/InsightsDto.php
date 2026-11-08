@@ -13,8 +13,12 @@ class InsightsDto extends Dto
 	use NullCompactArrayTrait;
 
 	/**
-	 * False on non-CIS portals — speaker-level evaluation is region-gated.
-	 * When false, speakerAnalysis and other speaker-evaluation fields are empty.
+	 * Region-gated by the portal license; the region list is owned by
+	 * {@see \Bitrix\Call\Integration\AI\CallAISettings::isSpeakerEvaluationAvailable()}.
+	 * When false, new outcomes are analysed by a prompt that carries no evaluation, and on read the
+	 * whole speakerAnalysis is withheld — including an analysis stored by an earlier, wider rule:
+	 * the field comes as null in the full response shape and is absent where nulls are compacted.
+	 * The rest of the AI insights (meeting strengths, weaknesses, recommendations) is unaffected.
 	 *
 	 * Nullable on purpose: when `select` does not include `insights` or
 	 * `insights.speakerEvaluationAvailable`, the field stays null and is stripped
@@ -22,16 +26,22 @@ class InsightsDto extends Dto
 	 * default `false` would leak into responses regardless of select, violating
 	 * the "return only listed fields" contract.
 	 */
-	#[Description('Whether per-speaker evaluation is available on this portal. False for non-CIS regions; speakerAnalysis is empty in that case.')]
+	#[Description('Whether per-speaker evaluation is available on this portal, gated by the license region. When false, speakerAnalysis carries no data — null in the full response shape, absent where nulls are compacted; the rest of the insights is unaffected.')]
 	public ?bool $speakerEvaluationAvailable = null;
 
 	/**
-	 * Per-speaker analysis. Sorted by talkPercentage DESC, then efficiencyValue DESC.
-	 * Enrichment fields (talkPercentage, duration, durationFormat) come from the Transcription.
+	 * Per-speaker analysis, carried only while {@see self::$speakerEvaluationAvailable} is true: items
+	 * carry userId and efficiencyValue, every criterion is an object {value, criteria, title}, the
+	 * enrichment fields (talkPercentage, duration, durationFormat) come from the Transcription, the
+	 * list is limited to speakers matched to portal users and sorted by talkPercentage DESC, then
+	 * efficiencyValue DESC. With the gate closed the field carries no value in any form: null where the
+	 * response keeps the full DTO shape (`get`, or `insights` / `insights.speakerAnalysis` in `select`)
+	 * and absent where nulls are compacted, so an analysis stored by an earlier, wider rule never
+	 * reaches a consumer.
 	 *
 	 * @var array<int, array{userId?: int, detailedInsight?: string, efficiencyValue?: int, evaluationCriteria?: array<string, array{value: bool, criteria: string, title: string}>, talkPercentage?: int, duration?: int, durationFormat?: string}>|null
 	 */
-	#[Description('Per-speaker analysis, sorted by talkPercentage DESC, efficiencyValue DESC. Each item: { userId, detailedInsight, efficiencyValue (0..100), evaluationCriteria (map of criterion->{value,criteria,title}), talkPercentage, duration (seconds), durationFormat (localized human label) }.')]
+	#[Description('Per-speaker analysis, filled only when speakerEvaluationAvailable is true; when it is false the field carries no data — null where the response keeps the full shape (get, or insights / insights.speakerAnalysis in select) and absent where nulls are compacted. Each item: { userId, detailedInsight, efficiencyValue (0..100), evaluationCriteria (map of criterion->{value,criteria,title}), talkPercentage, duration (seconds), durationFormat (localized human label) }, limited to speakers matched to portal users and sorted by talkPercentage DESC, efficiencyValue DESC.')]
 	public ?array $speakerAnalysis = null;
 
 	/**

@@ -4,10 +4,13 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Folder;
 
 use Bitrix\Im\Model\FolderChatTable;
+use Bitrix\Im\Model\FolderSourceTable;
 use Bitrix\Im\Model\FolderTable;
 use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Folder\Cache\FolderCache;
 use Bitrix\Im\V2\Folder\Cache\FolderListData;
+use Bitrix\Im\V2\Folder\Definition\CompositeDefinition;
+use Bitrix\Im\V2\Folder\System\AllFolder;
 
 class FolderProvider
 {
@@ -47,6 +50,10 @@ class FolderProvider
 		{
 			$folder->setChatIds($this->loadChatIdsForFolder((int)$row['ID']));
 		}
+		elseif ($this->isCompositeFolder($folder))
+		{
+			$this->hydrateComposition($folder, $this->loadSourceCodesForFolder((int)$row['ID']));
+		}
 
 		return $folder;
 	}
@@ -84,9 +91,10 @@ class FolderProvider
 			return $collection;
 		}
 
-		// Resolve all rows into concrete subclasses, collect personal ids for batch chat preload.
+		// Resolve all rows into concrete subclasses, collect ids for batch preloads.
 		$resolved = [];
 		$personalIds = [];
+		$compositeIds = [];
 
 		foreach ($rows as $row)
 		{
@@ -102,24 +110,36 @@ class FolderProvider
 			{
 				$personalIds[] = (int)$row['ID'];
 			}
+			elseif ($this->isCompositeFolder($folder))
+			{
+				$compositeIds[] = (int)$row['ID'];
+			}
 		}
 
 		// Batch preload membership for personal folders — single SQL, no N+1.
 		$chatIdsByFolder = $this->loadChatIdsForFolders($personalIds);
 
-		// Build FolderListData for cache storage (flat rows + chatIds map).
+		// Batch preload source composition for composite folders - single SQL, no N+1.
+		$sourceCodesByFolder = $this->loadSourceCodesForFolders($compositeIds);
+
+		// Build FolderListData for cache storage (flat rows + chatIds map + source codes map).
 		$flatRows = [];
 		foreach ($rows as $row)
 		{
 			$flatRows[(int)$row['ID']] = $row;
 		}
-		$this->folderCache->set($userId, $parentId, new FolderListData($flatRows, $chatIdsByFolder));
+
+		$this->folderCache->set($userId, $parentId, new FolderListData($flatRows, $chatIdsByFolder, $sourceCodesByFolder));
 
 		foreach ($resolved as $folderId => $folder)
 		{
 			if ($folder instanceof PersonalFolder)
 			{
 				$folder->setChatIds($chatIdsByFolder[$folderId] ?? []);
+			}
+			else
+			{
+				$this->hydrateComposition($folder, $sourceCodesByFolder[$folderId] ?? []);
 			}
 
 			$collection->add($folder);
@@ -146,6 +166,10 @@ class FolderProvider
 			if ($folder instanceof PersonalFolder)
 			{
 				$folder->setChatIds($data->personalChatIds[$folderId] ?? []);
+			}
+			else
+			{
+				$this->hydrateComposition($folder, $data->sourceCodes[$folderId] ?? []);
 			}
 
 			$collection->add($folder);
@@ -176,6 +200,7 @@ class FolderProvider
 		/** @var array<int, Folder> $result */
 		$result = [];
 		$personalIds = [];
+		$compositeIds = [];
 		foreach ($rows as $row)
 		{
 			$folder = $this->folderFactory->createFromRow($row);
@@ -191,6 +216,10 @@ class FolderProvider
 			{
 				$personalIds[] = $folderId;
 			}
+			elseif ($this->isCompositeFolder($folder))
+			{
+				$compositeIds[] = $folderId;
+			}
 		}
 
 		if (!empty($personalIds))
@@ -204,7 +233,42 @@ class FolderProvider
 			}
 		}
 
+		if (!empty($compositeIds))
+		{
+			$sourceCodesByFolder = $this->loadSourceCodesForFolders($compositeIds);
+			foreach ($compositeIds as $folderId)
+			{
+				$this->hydrateComposition($result[$folderId], $sourceCodesByFolder[$folderId] ?? []);
+			}
+		}
+
 		return $result;
+	}
+
+	/**
+	 * A composite folder keeps the codes of its member folders in b_im_folder_source, so its
+	 * composition has to be preloaded. Compositeness is read from the definition type rather
+	 * than from a concrete class: the definition is a value object and building it does not
+	 * touch the stored composition, so the check stays free of extra queries.
+	 */
+	private function isCompositeFolder(Folder $folder): bool
+	{
+		return $folder->getDefinition() instanceof CompositeDefinition;
+	}
+
+	/**
+	 * Applies the stored member codes to a composite folder. The setter belongs to the concrete
+	 * folder, so this is the single place where a composite folder is wired to its composition;
+	 * a folder that carries none is left untouched. Today "All" is the only composite folder.
+	 *
+	 * @param string[] $sourceCodes member folder codes
+	 */
+	private function hydrateComposition(Folder $folder, array $sourceCodes): void
+	{
+		if ($folder instanceof AllFolder)
+		{
+			$folder->setSourceCodes($sourceCodes);
+		}
 	}
 
 	/**
@@ -218,6 +282,19 @@ class FolderProvider
 		}
 
 		return $this->loadChatIdsForFolders([$folderId])[$folderId] ?? [];
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private function loadSourceCodesForFolder(int $folderId): array
+	{
+		if ($folderId <= 0)
+		{
+			return [];
+		}
+
+		return $this->loadSourceCodesForFolders([$folderId])[$folderId] ?? [];
 	}
 
 	/**
@@ -244,6 +321,34 @@ class FolderProvider
 			$folderId = (int)$row['FOLDER_ID'];
 			$chatId = (int)$row['CHAT_ID'];
 			$result[$folderId][] = $chatId;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param int[] $folderIds
+	 * @return array<int, string[]> map folderId -> source folder codes
+	 */
+	private function loadSourceCodesForFolders(array $folderIds): array
+	{
+		$result = [];
+
+		if (empty($folderIds))
+		{
+			return $result;
+		}
+
+		$rows = FolderSourceTable::query()
+			->setSelect(['FOLDER_ID', 'SOURCE_FOLDER_CODE'])
+			->whereIn('FOLDER_ID', $folderIds)
+			->fetchAll()
+		;
+
+		foreach ($rows as $row)
+		{
+			$folderId = (int)$row['FOLDER_ID'];
+			$result[$folderId][] = (string)$row['SOURCE_FOLDER_CODE'];
 		}
 
 		return $result;

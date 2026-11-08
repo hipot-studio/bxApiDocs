@@ -34,7 +34,7 @@ class Filter
 	 */
 	public function setIsScrum(bool $value)
 	{
-		$this->isScrum = true;
+		$this->isScrum = $value;
 		return $this;
 	}
 
@@ -80,25 +80,6 @@ class Filter
 
 	public function processFilterCounters(Query $query, string $counter): Query
 	{
-		$query->getFilterHandler()->removeCondition($this->getProjectVisibilityCondition());
-		$query
-			->setDistinct(true)
-			->registerRuntimeField(
-				'TS',
-				new ReferenceField(
-					'TS',
-					Counter\CounterTable::getEntity(),
-					Join::on('this.ID', 'ref.GROUP_ID')->where('ref.USER_ID', $this->userId),
-					['join_type' => 'inner']
-				)
-			)
-			->where(
-				Query::filter()
-					->whereNotNull('UG.ID')
-					->whereIn('UG.ROLE', UserToGroupTable::getRolesMember())
-			)
-		;
-
 		$typesMap = [
 			'EXPIRED' => [
 				'INCLUDE' => Counter\CounterDictionary::MAP_EXPIRED,
@@ -123,7 +104,31 @@ class Filter
 				'EXCLUDE' => Counter\CounterDictionary::MAP_COMMENTS,
 			],
 		];
-		$type = $typesMap[$counter];
+		$type = $typesMap[$counter] ?? null;
+		if ($type === null)
+		{
+			return $query;
+		}
+
+		$userRelation = $query->getEntity()->hasField('CONTEXT_RELATION') ? 'CONTEXT_RELATION' : 'UG';
+
+		$query
+			->setDistinct(true)
+			->registerRuntimeField(
+				'TS',
+				new ReferenceField(
+					'TS',
+					Counter\CounterTable::getEntity(),
+					Join::on('this.ID', 'ref.GROUP_ID')->where('ref.USER_ID', $this->userId),
+					['join_type' => 'inner']
+				)
+			)
+			->where(
+				Query::filter()
+					->whereNotNull($userRelation . '.ID')
+					->whereIn($userRelation . '.ROLE', UserToGroupTable::getRolesMember())
+			)
+		;
 
 		$condition = Query::filter()->whereIn('TS.TYPE', $type['INCLUDE']);
 		if ($type['EXCLUDE'])
@@ -188,7 +193,7 @@ class Filter
 	public function processFilterType(Query $query, string $typeName): Query
 	{
 		$types = $this->getProjectTypes();
-		$type = $types[$typeName];
+		$type = $types[$typeName] ?? null;
 
 		if ($type)
 		{

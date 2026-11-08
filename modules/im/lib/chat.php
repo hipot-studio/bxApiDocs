@@ -424,15 +424,7 @@ class Chat
 			$orderId = Array('CHAT_ID' => 'ASC', 'ID' => 'DESC');
 			$orderResult = Array('ID' => 'DESC');
 
-			if ($chatData['RELATION_START_ID'] > 0)
-			{
-				$filter['>=ID'] = $chatData['RELATION_START_ID'];
-			}
-
-			if (isset($options['LAST_ID']) && intval($options['LAST_ID']) > 0)
-			{
-				$filter['<ID'] = intval($options['LAST_ID']);
-			}
+			$filter = self::addHistoryBounds($filter, $chatData, intval($options['LAST_ID'] ?? 0));
 		}
 
 		$orm = \Bitrix\Im\Model\MessageTable::getList(array(
@@ -457,135 +449,16 @@ class Chat
 			return $result;
 		}
 
-		$orm = \Bitrix\Im\Model\MessageTable::getList(array(
-			'select' => [
-				'ID', 'AUTHOR_ID', 'DATE_CREATE', 'NOTIFY_EVENT', 'MESSAGE',
-				'USER_LAST_ACTIVITY_DATE' => 'AUTHOR.LAST_ACTIVITY_DATE',
-				/*'USER_IDLE' => 'STATUS.IDLE',
-				'USER_MOBILE_LAST_DATE' => 'STATUS.MOBILE_LAST_DATE',
-				'USER_DESKTOP_LAST_DATE' => 'STATUS.DESKTOP_LAST_DATE',*/
-				'MESSAGE_UUID' => 'UUID.UUID',
-			],
-			'filter' => ['=ID' => $ids],
-			'order' => $orderResult,
-		));
-
-		$users = Array();
-
-		$userOptions = ['SKIP_ONLINE' => 'Y'];
-		if ($options['JSON'] == 'Y')
-		{
-			$userOptions['JSON'] = 'Y';
-		}
-		if ($chatData['CHAT_ENTITY_TYPE'] == 'LIVECHAT')
-		{
-			[$lineId] = explode('|', $chatData['CHAT_ENTITY_ID']);
-			$userOptions['LIVECHAT'] = $lineId;
-			$userOptions['USER_CODE'] = 'livechat|' . $lineId . '|' . $chatData['CHAT_ID'] . '|' . $userId;
-		}
-
-		$messages = Array();
-		while($message = $orm->fetch())
-		{
-			if ($message['NOTIFY_EVENT'] == 'private_system')
-			{
-				$message['AUTHOR_ID'] = 0;
-			}
-
-			if (isset($options['USER_TAG_SPREAD']) && $options['USER_TAG_SPREAD'] === 'Y')
-			{
-				$message['MESSAGE'] = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", Array('\Bitrix\Im\Text', 'modifyShortUserTag'), $message['MESSAGE']);
-			}
-
-			$messages[$message['ID']] = Array(
-				'ID' => (int)$message['ID'],
-				'CHAT_ID' => (int)$chatId,
-				'AUTHOR_ID' => (int)$message['AUTHOR_ID'],
-				'DATE' => $message['DATE_CREATE'],
-				'TEXT' => (string)\Bitrix\Im\Text::parse($message['MESSAGE']),
-				'UNREAD' => $chatData['RELATION_USER_ID'] > 0 && $chatData['RELATION_LAST_ID'] < $message['ID'],
-				'UUID' => $message['MESSAGE_UUID'],
-			);
-			$messages[$message['ID']]['REPLACES'] = \Bitrix\Im\Text::getReplaceMap($messages[$message['ID']]['TEXT']);
-			if ($message['AUTHOR_ID'] && !isset($users[$message['AUTHOR_ID']]))
-			{
-				$user = User::getInstance($message['AUTHOR_ID'])->getArray($userOptions);
-				$user['last_activity_date'] = $message['USER_LAST_ACTIVITY_DATE']? date('c', $message['USER_LAST_ACTIVITY_DATE']->getTimestamp()): false;
-				$user['desktop_last_date'] = false;
-				$user['mobile_last_date'] = false;
-				$user['idle'] = false;
-
-				$users[$message['AUTHOR_ID']] = $user;
-			}
-			if ($options['CONVERT_TEXT'])
-			{
-				$messages[$message['ID']]['TEXT_CONVERTED'] = \Bitrix\Im\Text::parseLegacyFormat($message['MESSAGE']);
-			}
-		}
-
-		$params = \CIMMessageParam::Get(array_keys($messages));
-
-		$fileIds = Array();
-		foreach ($params as $messageId => $param)
-		{
-			$messages[$messageId]['PARAMS'] = empty($param)? []: $param;
-
-			if (
-				empty($messages[$messageId]['TEXT'])
-				&& !isset($param['FILE_ID'])
-				&& !isset($param['KEYBOARD'])
-				&& !isset($param['ATTACH'])
-			)
-			{
-				$messages[$messageId]['TEXT'] = Loc::getMessage('IM_CHAT_MESSAGE_DELETED');
-				$messages[$messageId]['PARAMS']['IS_DELETED'] = 'Y';
-			}
-
-			if (isset($param['FILE_ID']))
-			{
-				foreach ($param['FILE_ID'] as $fileId)
-				{
-					$fileIds[$fileId] = $fileId;
-				}
-			}
-
-			if (isset($param['CHAT_USER']) && is_array($param['CHAT_USER']))
-			{
-				foreach ($param['CHAT_USER'] as $paramsUserId)
-				{
-					$users[$paramsUserId] = User::getInstance($paramsUserId)->getArray($userOptions);
-				}
-			}
-		}
-
-		$disappearing = DisappearService::getMessagesDisappearingTime(array_keys($messages));
-		foreach ($messages as $messageId => $message)
-		{
-			if (
-				isset($disappearing[$messageId])
-				&& $disappearing[$messageId]['DATE_REMOVE'] instanceof DateTime
-			)
-			{
-				$messages[$messageId]['DISAPPEARING_DATE'] = $disappearing[$messageId]['DATE_REMOVE']->format(DATE_ATOM);
-			}
-			else
-			{
-				$messages[$messageId]['DISAPPEARING_DATE'] = null;
-			}
-		}
-
-		$messages = \CIMMessageLink::prepareShow($messages, $params);
-
-		$files = \CIMDisk::GetFiles($chatId, $fileIds);
+		$batch = self::processMessagesBatch($ids, $orderResult, $chatData, $userId, $options, collectUsersFiles: true);
 
 		$result = Array(
 			'CHAT_ID' => (int)$chatId,
-			'MESSAGES' => $messages,
-			'USERS' => array_values($users),
-			'FILES' => array_values($files),
+			'MESSAGES' => $batch['MESSAGES'],
+			'USERS' => array_values($batch['USERS']),
+			'FILES' => array_values($batch['FILES']),
 		);
 
-		if (count($files) && $fileSort == 'DESC')
+		if (count($batch['FILES']) && $fileSort == 'DESC')
 		{
 			$result['FILES'] = array_reverse($result['FILES']);
 		}
@@ -593,11 +466,10 @@ class Chat
 		if ($startFromUnread)
 		{
 			$result['MESSAGES'] = array_reverse($result['MESSAGES']);
-			$additionalMessages = self::getMessages($chatId, $userId, [
-				'LIMIT' => $limit,
-				'LAST_ID' => $chatData['RELATION_UNREAD_ID']
-			]);
-			$result['MESSAGES'] = array_merge($result['MESSAGES'], $additionalMessages['MESSAGES']);
+			$result['MESSAGES'] = array_merge(
+				$result['MESSAGES'],
+				self::getMessagesBeforeUnread($chatData, $userId, $limit, $options)
+			);
 		}
 
 		if ($options['JSON'])
@@ -647,6 +519,208 @@ class Chat
 		return $result;
 	}
 
+	/**
+	 * Limits the message window to the history available to the user: the START_ID lower bound
+	 * and the optional exclusive upper bound $beforeId.
+	 */
+	private static function addHistoryBounds(array $filter, array $chatData, int $beforeId): array
+	{
+		if ($chatData['RELATION_START_ID'] > 0)
+		{
+			$filter['>=ID'] = $chatData['RELATION_START_ID'];
+		}
+
+		if ($beforeId > 0)
+		{
+			$filter['<ID'] = $beforeId;
+		}
+
+		return $filter;
+	}
+
+	/**
+	 * Reads the messages already seen by the user, right below the unread window.
+	 * Returns messages in DESC order, ready to be appended to the reversed unread window.
+	 */
+	private static function getMessagesBeforeUnread(array $chatData, int $userId, int $limit, array $options): array
+	{
+		$filter = ['=CHAT_ID' => (int)$chatData['CHAT_ID']];
+		$filter = self::addHistoryBounds($filter, $chatData, (int)$chatData['RELATION_UNREAD_ID']);
+
+		$orm = \Bitrix\Im\Model\MessageTable::getList([
+			'select' => ['ID'],
+			'filter' => $filter,
+			'order' => ['CHAT_ID' => 'ASC', 'ID' => 'DESC'],
+			'limit' => $limit,
+		]);
+		$ids = array_map(fn ($item) => $item['ID'], $orm->fetchAll());
+		if (empty($ids))
+		{
+			return [];
+		}
+
+		// Users and files of this batch stay out of the answer, only CONVERT_TEXT is inherited.
+		$batchOptions = ['CONVERT_TEXT' => $options['CONVERT_TEXT'] ?? null];
+
+		$batch = self::processMessagesBatch(
+			$ids,
+			['ID' => 'DESC'],
+			$chatData,
+			$userId,
+			$batchOptions,
+			collectUsersFiles: false
+		);
+
+		return $batch['MESSAGES'];
+	}
+
+	/**
+	 * Builds the payload of a message batch: text, params, disappearing date and link attachments.
+	 * Authors, chat users and files are collected only when $collectUsersFiles is set.
+	 */
+	private static function processMessagesBatch(
+		array $ids,
+		array $order,
+		array $chatData,
+		int $userId,
+		array $options,
+		bool $collectUsersFiles
+	): array
+	{
+		$chatId = (int)$chatData['CHAT_ID'];
+
+		$orm = \Bitrix\Im\Model\MessageTable::getList([
+			'select' => [
+				'ID', 'AUTHOR_ID', 'DATE_CREATE', 'NOTIFY_EVENT', 'MESSAGE',
+				'USER_LAST_ACTIVITY_DATE' => 'AUTHOR.LAST_ACTIVITY_DATE',
+				/*'USER_IDLE' => 'STATUS.IDLE',
+				'USER_MOBILE_LAST_DATE' => 'STATUS.MOBILE_LAST_DATE',
+				'USER_DESKTOP_LAST_DATE' => 'STATUS.DESKTOP_LAST_DATE',*/
+				'MESSAGE_UUID' => 'UUID.UUID',
+			],
+			'filter' => ['=ID' => $ids],
+			'order' => $order,
+		]);
+
+		$users = [];
+		$userOptions = [];
+		if ($collectUsersFiles)
+		{
+			$userOptions = ['SKIP_ONLINE' => 'Y'];
+			if (isset($options['JSON']) && $options['JSON'] == 'Y')
+			{
+				$userOptions['JSON'] = 'Y';
+			}
+			if ($chatData['CHAT_ENTITY_TYPE'] === 'LIVECHAT')
+			{
+				[$lineId] = explode('|', $chatData['CHAT_ENTITY_ID']);
+				$userOptions['LIVECHAT'] = $lineId;
+				$userOptions['USER_CODE'] = 'livechat|' . $lineId . '|' . $chatId . '|' . $userId;
+			}
+		}
+
+		$messages = [];
+		while ($message = $orm->fetch())
+		{
+			if ($message['NOTIFY_EVENT'] === 'private_system')
+			{
+				$message['AUTHOR_ID'] = 0;
+			}
+
+			if (isset($options['USER_TAG_SPREAD']) && $options['USER_TAG_SPREAD'] === 'Y')
+			{
+				$message['MESSAGE'] = preg_replace_callback("/\[USER=([0-9]+|all)\]\[\/USER\]/i", ['\Bitrix\Im\Text', 'modifyShortUserTag'], $message['MESSAGE']);
+			}
+
+			$messages[$message['ID']] = [
+				'ID' => (int)$message['ID'],
+				'CHAT_ID' => $chatId,
+				'AUTHOR_ID' => (int)$message['AUTHOR_ID'],
+				'DATE' => $message['DATE_CREATE'],
+				'TEXT' => (string)\Bitrix\Im\Text::parse($message['MESSAGE']),
+				'UNREAD' => $chatData['RELATION_USER_ID'] > 0 && $chatData['RELATION_LAST_ID'] < $message['ID'],
+				'UUID' => $message['MESSAGE_UUID'],
+			];
+			$messages[$message['ID']]['REPLACES'] = \Bitrix\Im\Text::getReplaceMap($messages[$message['ID']]['TEXT']);
+			if ($collectUsersFiles && $message['AUTHOR_ID'] && !isset($users[$message['AUTHOR_ID']]))
+			{
+				$user = User::getInstance($message['AUTHOR_ID'])->getArray($userOptions);
+				$user['last_activity_date'] = $message['USER_LAST_ACTIVITY_DATE']? date('c', $message['USER_LAST_ACTIVITY_DATE']->getTimestamp()): false;
+				$user['desktop_last_date'] = false;
+				$user['mobile_last_date'] = false;
+				$user['idle'] = false;
+
+				$users[$message['AUTHOR_ID']] = $user;
+			}
+			if (!empty($options['CONVERT_TEXT']))
+			{
+				$messages[$message['ID']]['TEXT_CONVERTED'] = \Bitrix\Im\Text::parseLegacyFormat($message['MESSAGE']);
+			}
+		}
+
+		$params = \CIMMessageParam::Get(array_keys($messages));
+
+		$fileIds = [];
+		foreach ($params as $messageId => $param)
+		{
+			$messages[$messageId]['PARAMS'] = empty($param)? []: $param;
+
+			if (
+				empty($messages[$messageId]['TEXT'])
+				&& !isset($param['FILE_ID'])
+				&& !isset($param['KEYBOARD'])
+				&& !isset($param['ATTACH'])
+			)
+			{
+				$messages[$messageId]['TEXT'] = Loc::getMessage('IM_CHAT_MESSAGE_DELETED');
+				$messages[$messageId]['PARAMS']['IS_DELETED'] = 'Y';
+			}
+
+			if (!$collectUsersFiles)
+			{
+				continue;
+			}
+
+			if (isset($param['FILE_ID']))
+			{
+				foreach ($param['FILE_ID'] as $fileId)
+				{
+					$fileIds[$fileId] = $fileId;
+				}
+			}
+
+			if (isset($param['CHAT_USER']) && is_array($param['CHAT_USER']))
+			{
+				foreach ($param['CHAT_USER'] as $paramsUserId)
+				{
+					$users[$paramsUserId] = User::getInstance($paramsUserId)->getArray($userOptions);
+				}
+			}
+		}
+
+		$disappearing = DisappearService::getMessagesDisappearingTime(array_keys($messages));
+		foreach ($messages as $messageId => $message)
+		{
+			if (
+				isset($disappearing[$messageId])
+				&& $disappearing[$messageId]['DATE_REMOVE'] instanceof DateTime
+			)
+			{
+				$messages[$messageId]['DISAPPEARING_DATE'] = $disappearing[$messageId]['DATE_REMOVE']->format(DATE_ATOM);
+			}
+			else
+			{
+				$messages[$messageId]['DISAPPEARING_DATE'] = null;
+			}
+		}
+
+		return [
+			'MESSAGES' => \CIMMessageLink::prepareShow($messages, $params),
+			'USERS' => $users,
+			'FILES' => $collectUsersFiles ? \CIMDisk::GetFiles($chatId, $fileIds) : [],
+		];
+	}
+
 	public static function getUsers($chatId, $options = []): array
 	{
 		$params = [
@@ -678,6 +752,13 @@ class Chat
 		$json = isset($options['JSON']) && $options['JSON'] === 'Y' ? 'Y' : 'N';
 		$users = [];
 		$relations = self::getRelation($chatId, $params);
+		if (!is_array($relations))
+		{
+			return [];
+		}
+
+		self::preloadUsers(array_keys($relations));
+
 		foreach ($relations as $user)
 		{
 			$userData = \Bitrix\Im\User::getInstance($user['USER_ID'])->getArray([
@@ -700,6 +781,22 @@ class Chat
 		}
 
 		return $users;
+	}
+
+	/**
+	 * Hydrates the whole user list at once, so per-user getArray() calls do not fall back to single-row queries.
+	 *
+	 * @param int[] $userIds
+	 */
+	private static function preloadUsers(array $userIds): void
+	{
+		\Bitrix\Im\V2\Entity\User\UserFactory::getInstance()->getUsersByIds($userIds);
+
+		$chunkSize = \Bitrix\Im\V2\Entity\User\UserFactory::USERS_FETCH_CHUNK_SIZE;
+		foreach (array_chunk($userIds, $chunkSize) as $chunk)
+		{
+			(new \Bitrix\Im\V2\Entity\User\UserCollection($chunk))->fillOnlineData();
+		}
 	}
 
 	/**

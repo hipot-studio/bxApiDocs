@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Integration\Superset\Integrator;
 
+use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\SqlExecutionContext;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\User;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
 use Bitrix\Main\Type\Date;
@@ -115,6 +116,22 @@ interface IntegratorInterface
 	public function clearCache(): IntegratorResponse;
 
 	/**
+	 * Asks the image to drop the permission cache keys of this portal.
+	 *
+	 * Idempotent: absent keys are not an error, and the call may be repeated. Touches neither the data cache
+	 * nor the caches of slices and chart results - those are cleared by clearCache() and cost far more.
+	 *
+	 * An instance that does not serve is not an error of the call either, but the caller has to be able to
+	 * tell that case apart from a failure: the two hosting modes read it differently. The distinguishing
+	 * mark is the instance status the portal keeps, not the status code of the response.
+	 *
+	 * @see \Bitrix\BIConnector\Access\Table\PermissionCacheResetNotifier
+	 *
+	 * @return IntegratorResponse<null>
+	 */
+	public function clearPermissionCache(): IntegratorResponse;
+
+	/**
 	 * Updates domain connection with new domain if domain was changed.
 	 *
 	 * @return IntegratorResponse
@@ -140,7 +157,11 @@ interface IntegratorInterface
 	 *
 	 * @param array $filter Filter of dashboards. Supported keys:
 	 *  - 'ids' (int[]) — include only dashboards with these external ids;
-	 *  - 'neqIds' (int[]) — exclude dashboards with these external ids.
+	 *  - 'neqIds' (int[]) — exclude dashboards with these external ids;
+	 *  - 'ownedByRequestUser' (bool) — keep only dashboards owned by the user of the request.
+	 *    The owner is resolved by the remote side, so the portal never passes an external user id.
+	 *    While the remote side has not confirmed the filter, the method returns an error response
+	 *    instead of a list: an unfiltered list would expose dashboards of other users.
 	 * @return IntegratorResponse<Dto\DashboardList>
 	 */
 	public function getDashboardListByFilter(array $filter = []): IntegratorResponse;
@@ -149,9 +170,19 @@ interface IntegratorInterface
 	 * Returns response with dashboard with requested id.
 	 *
 	 * @param int $dashboardId
+	 * @param int $streamTimeout Read timeout of the remote call in seconds; 0 keeps the default one.
+	 *        Honoured by the proxy transport; the self-hosted one reads a local instance.
+	 * @param bool $arbitrateServiceFailure Whether a service failure is allowed to move the local
+	 *        instance status to ERROR. An unattended schedule passes false: a reading request is
+	 *        stopped by the ready gate while the instance is not READY, so such a request would
+	 *        never bring the instance back out of the status its own failure had set.
 	 * @return IntegratorResponse<Dto\Dashboard>
 	 */
-	public function getDashboardById(int $dashboardId): IntegratorResponse;
+	public function getDashboardById(
+		int $dashboardId,
+		int $streamTimeout = 0,
+		bool $arbitrateServiceFailure = true,
+	): IntegratorResponse;
 
 	/**
 	 * Returns response with dashboard credentials to embed on successful request.
@@ -165,6 +196,11 @@ interface IntegratorInterface
 	 * @return IntegratorResponse<Dto\DashboardEmbeddedCredentials>
 	 */
 	public function getDashboardEmbeddedCredentials(int $dashboardId, array $rlsRules = [], int $expSeconds = 0): IntegratorResponse;
+
+	/**
+	 * @return IntegratorResponse<Dto\DashboardEmbeddedCredentials>
+	 */
+	public function getDemoEmbeddedCredentials(string $reportCode, string $lang): IntegratorResponse;
 
 	/**
 	 * Returns response with ID of copied dashboard on success request.
@@ -245,6 +281,14 @@ interface IntegratorInterface
 	public function getDatasetList(array $ids): IntegratorResponse;
 
 	/**
+	 * Returns response with the list of every physical (non-virtual) dataset of the instance.
+	 * If response code is not OK - returns empty data.
+	 *
+	 * @return IntegratorResponse
+	 */
+	public function getPhysicalDatasetList(): IntegratorResponse;
+
+	/**
 	 * Sets owner for dashboard
 	 *
 	 * @param int $dashboardId
@@ -277,6 +321,8 @@ interface IntegratorInterface
 	 * @param array{by?: string, order?: string} $sort Drill-down sort; ignored in skeleton mode.
 	 * @param int|null $limit Drill-down row cap; ignored in skeleton mode.
 	 * @param int $offset Drill-down page offset into the sorted rows; ignored in skeleton mode.
+	 * @param bool $arbitrateServiceFailure Same meaning as in getDashboardById().
+	 * @param User|null $user The user the overview is built for; null builds it for the user of the request.
 	 * @return IntegratorResponse
 	 */
 	public function getDashboardOverview(
@@ -288,11 +334,14 @@ interface IntegratorInterface
 		array $sort = [],
 		?int $limit = null,
 		int $offset = 0,
+		bool $arbitrateServiceFailure = true,
+		?User $user = null,
 	): IntegratorResponse;
 
 	/**
 	 * Gets available values for a dashboard native filter.
 	 *
+	 * @param bool $arbitrateServiceFailure Same meaning as in getDashboardById().
 	 * @return IntegratorResponse
 	 */
 	public function getFilterValues(
@@ -303,6 +352,7 @@ interface IntegratorInterface
 		?string $search = null,
 		?int $limit = null,
 		int $streamTimeout = 60,
+		bool $arbitrateServiceFailure = true,
 	): IntegratorResponse;
 
 	// endregion
@@ -367,6 +417,45 @@ interface IntegratorInterface
 
 	// endregion
 
+	// region Table
+
+	/**
+	 * Returns response with the list of physical tables available in the BI database.
+	 *
+	 * @param string|null $schema Schema to filter tables by (defaults to bitrix24).
+	 * @return IntegratorResponse
+	 */
+	public function listTables(?string $schema = null): IntegratorResponse;
+
+	/**
+	 * Returns response with the columns/metadata of a physical table in the BI database.
+	 *
+	 * @param string $tableName Physical table name.
+	 * @param string|null $schema Schema of the table (defaults to bitrix24).
+	 * @return IntegratorResponse
+	 */
+	public function getTableMetadata(string $tableName, ?string $schema = null): IntegratorResponse;
+
+	// endregion
+
+	// region SQL Lab
+
+	/**
+	 * Executes a read-only SQL query through Superset SQL Lab and returns rows and columns.
+	 *
+	 * @param string $sql Raw SQL SELECT to execute against the BI database.
+	 * @param int|null $limit Optional row cap (queryLimit).
+	 * @param SqlExecutionContext|null $context Explicit execution channel and user.
+	 * @return IntegratorResponse
+	 */
+	public function executeSql(
+		string $sql,
+		?int $limit = null,
+		?SqlExecutionContext $context = null,
+	): IntegratorResponse;
+
+	// endregion
+
 	// region Dataset
 
 	/**
@@ -386,12 +475,60 @@ interface IntegratorInterface
 	public function getDatasetByName(string $name): IntegratorResponse;
 
 	/**
+	 * Returns response with the list of datasets in Superset.
+	 *
+	 * When $pageSize is given the call is bounded to a single Superset page and the
+	 * response carries `datasets` plus a `count` holding the total number of
+	 * matching datasets — use this for paginated reads so the request cost does not
+	 * grow with the number of datasets on the instance. Without $pageSize the full
+	 * list is walked and a flat array of datasets is returned (kept for the by-ids /
+	 * idempotency callers).
+	 *
+	 * @param int[] $ids Optional filter: only datasets with these ids.
+	 * @param int[] $neqIds Optional filter: exclude datasets with these ids.
+	 * @param int|null $page Zero-based page index (bounded mode).
+	 * @param int|null $pageSize Page size; presence switches on bounded mode.
+	 * @return IntegratorResponse
+	 */
+	public function listDatasets(
+		array $ids = [],
+		array $neqIds = [],
+		?int $page = null,
+		?int $pageSize = null
+	): IntegratorResponse;
+
+	/**
 	 * Adds dataset
 	 *
 	 * @param array $fields
 	 * @return IntegratorResponse
 	 */
 	public function createDataset(array $fields): IntegratorResponse;
+
+	/**
+	 * Creates a virtual dataset (SQL-backed view) in Superset based on a source table.
+	 *
+	 * @param string $datasetName Display name of the new dataset.
+	 * @param string $sourceTable Source physical table name in the BI database.
+	 * @param string[] $columns Columns to project from the source table.
+	 * @param string|null $sourceSchema Source table schema (defaults to bitrix24).
+	 * @return IntegratorResponse
+	 */
+	public function createVirtualDataset(
+		string $datasetName,
+		string $sourceTable,
+		array $columns,
+		?string $sourceSchema = null,
+	): IntegratorResponse;
+
+	/**
+	 * Creates a virtual dataset (SQL-backed view) in Superset from a raw SQL query.
+	 *
+	 * @param string $datasetName Display name of the new dataset.
+	 * @param string $sql Raw SQL SELECT used as the dataset source.
+	 * @return IntegratorResponse
+	 */
+	public function createDatasetFromSql(string $datasetName, string $sql): IntegratorResponse;
 
 	/**
 	 * Updates dataset
@@ -443,6 +580,68 @@ interface IntegratorInterface
 	 * @return IntegratorResponse
 	 */
 	public function initRequiredDataset(array $tables = []): IntegratorResponse;
+
+	// endregion
+
+	// region Chart
+
+	/**
+	 * Returns the list of charts in Superset.
+	 *
+	 * When $pageSize is given the call is bounded to a single Superset page and the
+	 * response `count` holds the total number of matching charts — use this for
+	 * paginated reads and name lookups so the request cost does not grow with the
+	 * number of charts on the instance. Without $pageSize the full list is walked
+	 * (kept for the by-ids usage-statistics caller).
+	 *
+	 * @param int[] $ids Optional filter: only charts with these ids.
+	 * @param string|null $nameFilter Optional filter: charts whose name contains this.
+	 * @param int|null $page Zero-based page index (bounded mode).
+	 * @param int|null $pageSize Page size; presence switches on bounded mode.
+	 * @return IntegratorResponse
+	 */
+	public function listCharts(
+		array $ids = [],
+		?string $nameFilter = null,
+		?int $page = null,
+		?int $pageSize = null
+	): IntegratorResponse;
+
+	/**
+	 * Returns chart config (slice_name, viz_type, datasource, params, etc.) by id.
+	 *
+	 * @param int $id
+	 * @return IntegratorResponse
+	 */
+	public function getChartById(int $id): IntegratorResponse;
+
+	/**
+	 * Creates a new chart.
+	 *
+	 * Payload matches Superset ChartPostSchema (slice_name, datasource_id, datasource_type,
+	 * viz_type, params (JSON string), query_context (JSON string), description, ...).
+	 *
+	 * @param array $payload
+	 * @return IntegratorResponse
+	 */
+	public function createChart(array $payload): IntegratorResponse;
+
+	/**
+	 * Updates an existing chart with the given fields.
+	 *
+	 * @param int $id
+	 * @param array $fields
+	 * @return IntegratorResponse
+	 */
+	public function updateChart(int $id, array $fields): IntegratorResponse;
+
+	/**
+	 * Deletes a chart by id.
+	 *
+	 * @param int $id
+	 * @return IntegratorResponse
+	 */
+	public function deleteChart(int $id): IntegratorResponse;
 
 	// endregion
 

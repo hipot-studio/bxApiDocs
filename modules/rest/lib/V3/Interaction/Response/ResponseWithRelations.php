@@ -32,8 +32,9 @@ abstract class ResponseWithRelations extends Response
 			$fromField = $relation->getFromField();
 			$toField = $relation->getToField();
 
-			$isFromFieldRequested = in_array($fromField, $relation->getRequest()->select->getList(), true);
 			$isToFieldRequested = in_array($toField, $relation->getRequest()->select->getList(), true);
+
+			$relationIndex = $this->indexRelationItems($relationData, $toField, $isToFieldRequested);
 
 			if ($this instanceof ListResponse)
 			{
@@ -41,16 +42,10 @@ abstract class ResponseWithRelations extends Response
 				{
 					if (isset($item[$fromField]))
 					{
-						$this->mergeRelationData(
-							$item,
-							$relationName,
-							$relationData,
-							$relation->isMultiply(),
-							$fromField,
-							$toField,
+						$item[$relationName] = $this->getRelationValue(
+							$relationIndex,
 							$item[$fromField],
-							$isFromFieldRequested,
-							$isToFieldRequested,
+							$relation->isMultiply(),
 						);
 					}
 				}
@@ -60,16 +55,10 @@ abstract class ResponseWithRelations extends Response
 			{
 				if (isset($result['item'][$fromField]))
 				{
-					$this->mergeRelationData(
-						$result['item'],
-						$relationName,
-						$relationData,
-						$relation->isMultiply(),
-						$fromField,
-						$toField,
+					$result['item'][$relationName] = $this->getRelationValue(
+						$relationIndex,
 						$result['item'][$fromField],
-						$isFromFieldRequested,
-						$isToFieldRequested,
+						$relation->isMultiply(),
 					);
 				}
 			}
@@ -105,54 +94,91 @@ abstract class ResponseWithRelations extends Response
 		return $this;
 	}
 
-	private function mergeRelationData(
-		array &$data,
-		string $relationName,
-		array $relationData,
-		bool $isMultiply,
-		string $fromField,
-		string $toField,
-		$currentValue,
-		bool $isFromFieldRequested,
-		bool $isToFieldRequested,
-	): void {
-		$matchedItems = [];
-
+	/**
+	 * Groups related records by the relation field value, keeping the order of the relation response.
+	 *
+	 * @return array{byKey: array<string, array[]>, nonKeyable: array<array{mixed, array}>}
+	 */
+	private function indexRelationItems(array $relationData, string $toField, bool $isToFieldRequested): array
+	{
 		if (isset($relationData['items']))
 		{
-			// ListResponse
-			foreach ($relationData['items'] as $relationItem)
+			$relationItems = $relationData['items'];
+		}
+		elseif (isset($relationData['item']))
+		{
+			$relationItems = [$relationData['item']];
+		}
+		else
+		{
+			$relationItems = [];
+		}
+
+		$index = [
+			'byKey' => [],
+			'nonKeyable' => [],
+		];
+
+		foreach ($relationItems as $relationItem)
+		{
+			if (!isset($relationItem[$toField]))
 			{
-				if (isset($relationItem[$toField]) && $relationItem[$toField] === $currentValue)
+				continue;
+			}
+
+			$value = $relationItem[$toField];
+			if (!$isToFieldRequested)
+			{
+				unset($relationItem[$toField]);
+			}
+
+			$key = $this->getRelationKey($value);
+			if ($key === null)
+			{
+				$index['nonKeyable'][] = [$value, $relationItem];
+			}
+			else
+			{
+				$index['byKey'][$key][] = $relationItem;
+			}
+		}
+
+		return $index;
+	}
+
+	private function getRelationValue(array $relationIndex, mixed $parentValue, bool $isMultiply): ?array
+	{
+		$key = $this->getRelationKey($parentValue);
+		if ($key !== null)
+		{
+			$matchedItems = $relationIndex['byKey'][$key] ?? [];
+		}
+		else
+		{
+			$matchedItems = [];
+			foreach ($relationIndex['nonKeyable'] as [$value, $relationItem])
+			{
+				if ($value === $parentValue)
 				{
-					if (!$isToFieldRequested)
-					{
-						unset($relationItem[$toField]);
-					}
 					$matchedItems[] = $relationItem;
 				}
 			}
 		}
-		elseif (isset($relationData['item']))
+
+		return $isMultiply ? $matchedItems : ($matchedItems[0] ?? null);
+	}
+
+	/**
+	 * Returns null for a value that cannot become an array key without breaking strict comparison.
+	 */
+	private function getRelationKey(mixed $value): ?string
+	{
+		if (is_int($value) || is_string($value))
 		{
-			// GetResponse
-			if (isset($relationData['item'][$toField]) && $relationData['item'][$toField] === $currentValue)
-			{
-				if (!$isToFieldRequested)
-				{
-					unset($relationData['item'][$toField]);
-				}
-				$matchedItems[] = $relationData['item'];
-			}
+			// the type prefix keeps "1" and 1 apart: array key casting would merge them
+			return get_debug_type($value) . ':' . $value;
 		}
 
-		if (!empty($matchedItems))
-		{
-			$data[$relationName] = $isMultiply ? $matchedItems : $matchedItems[0];
-		}
-		else
-		{
-			$data[$relationName] = $isMultiply ? [] : null;
-		}
+		return null;
 	}
 }

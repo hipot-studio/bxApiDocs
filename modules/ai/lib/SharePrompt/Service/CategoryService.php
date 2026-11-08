@@ -211,6 +211,18 @@ class CategoryService
 		];
 	}
 
+	/**
+	 * @return Category[]
+	 */
+	public function getRelatedCategoriesForUserPrompts(string $category): array
+	{
+		return match (Category::tryFrom($category))
+		{
+			Category::TASKS_RESULTS => [Category::TASKS],
+			default => [],
+		};
+	}
+
 
 	/**
 	 * @return array<string, string>

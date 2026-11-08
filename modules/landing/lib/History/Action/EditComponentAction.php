@@ -32,7 +32,7 @@ class EditComponentAction extends BaseAction
 			if (isset($manifest['nodes'][$selector]['extra']))
 			{
 				$doc = $block->getDom();
-				Node\Component::saveNode($block, $selector, $value);
+				Node\Component::saveNode($block, $selector, $value, ['decodeValues' => false]);
 				$block->saveContent($doc->saveHTML());
 
 				return $block->save();

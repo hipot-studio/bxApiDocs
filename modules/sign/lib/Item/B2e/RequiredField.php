@@ -10,6 +10,7 @@ class RequiredField implements Item, \JsonSerializable, Arrayable
 	public function __construct(
 		public string $type,
 		public string $role,
+		public bool $required = true,
 	) {}
 
 	public function jsonSerialize(): array
@@ -22,6 +23,7 @@ class RequiredField implements Item, \JsonSerializable, Arrayable
 		return [
 			'type' => $this->type,
 			'role' => $this->role,
+			'required' => $this->required,
 		];
 	}
 }

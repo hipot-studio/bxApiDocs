@@ -9,21 +9,19 @@ use Bitrix\Crm\V2\Internal\Service\Item\Dictionary\CurrencyDictionary;
 /**
  * @internal
  */
-class CurrencyIdProvider implements ValidValuesProviderInterface
+class CurrencyIdProvider implements ValidValuesProviderInterface, CacheKeyProviderInterface
 {
+	public static function getCacheKey(Context $context): ?array
+	{
+		return [];
+	}
+
 	/**
 	 * @return string[]
 	 */
 	public static function getValidValues(Context $context): array
 	{
-		static $currenciesId = null;
-
-		if ($currenciesId === null)
-		{
-			$currenciesId = static::getDictionary()->getAllId();
-		}
-
-		return $currenciesId;
+		return static::getDictionary()->getAllId();
 	}
 
 	protected static function getDictionary(): CurrencyDictionary

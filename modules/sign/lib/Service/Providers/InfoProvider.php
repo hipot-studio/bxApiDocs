@@ -41,6 +41,23 @@ abstract class InfoProvider
 	}
 
 	/**
+	 * Identifiers of the user fields by their names. The light half of getFieldsMap(): a caller that
+	 * needs the identifier alone pays no enum items for it.
+	 *
+	 * @return array<string, int>
+	 */
+	public function getFieldIdsByName(): array
+	{
+		$fieldIds = [];
+		foreach ($this->getUserFields() as $field)
+		{
+			$fieldIds[$field['FIELD_NAME']] = (int)$field['ID'];
+		}
+
+		return $fieldIds;
+	}
+
+	/**
 	 * @return array<string, array{
 	 *     type: string,
 	 *     caption: string,

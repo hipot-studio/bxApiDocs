@@ -6,6 +6,7 @@ use Bitrix\Main\ORM\Fields;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\UI\FileInputUtility;
+use Bitrix\Main\UserField\Internal\UserFieldHelper;
 use Bitrix\Main\UserField\Types;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\UserFieldTable;
@@ -543,11 +544,18 @@ class CUserTypeManager
 
 		$files = $options['FILES'] ?? $_FILES;
 		$form = isset($options['FORM']) && is_array($options['FORM']) ? $options['FORM'] : $_POST;
+		$fields = isset($options['FIELDS']) && is_array($options['FIELDS']) ? array_flip($options['FIELDS']) : null;
 
 		$arUserFields = $this->GetUserFields($entity_id);
 		foreach ($arUserFields as $arUserField)
 		{
 			$fieldName = $arUserField['FIELD_NAME'];
+
+			if ($fields !== null && !isset($fields[$fieldName]))
+			{
+				continue;
+			}
+
 			if ($arUserField["EDIT_IN_LIST"] == "Y")
 			{
 				if (!isset($form[$fieldName]))
@@ -2363,8 +2371,18 @@ class CUserTypeManager
 
 		if ($arUserFields = $this->GetUserFields($entity_id, $ID, false, 0))
 		{
+			$storedValues = $this->getStoredValuesForEntityDelete($arUserFields, $entity_id, $ID);
 			foreach ($arUserFields as $arUserField)
 			{
+				if (UserFieldHelper::hasValuesDeleteHandler($arUserField))
+				{
+					$arUserField['ENTITY_VALUE_ID'] = $ID;
+					UserFieldHelper::cleanupUserFieldValuesBeforeDelete(
+						$arUserField,
+						$this->iterateStoredValues($storedValues[(int)$arUserField['ID']] ?? []),
+					);
+				}
+
 				if (is_array($arUserField["VALUE"]))
 				{
 					foreach ($arUserField["VALUE"] as $value)
@@ -2372,11 +2390,6 @@ class CUserTypeManager
 						if (is_callable([$arUserField["USER_TYPE"]["CLASS_NAME"], "ondelete"]))
 						{
 							call_user_func_array([$arUserField["USER_TYPE"]["CLASS_NAME"], "ondelete"], [$arUserField, $value]);
-						}
-
-						if ($arUserField["USER_TYPE"]["BASE_TYPE"] == "file")
-						{
-							CFile::Delete($value);
 						}
 					}
 				}
@@ -2386,15 +2399,98 @@ class CUserTypeManager
 					{
 						call_user_func_array([$arUserField["USER_TYPE"]["CLASS_NAME"], "ondelete"], [$arUserField, $arUserField["VALUE"]]);
 					}
-
-					if ($arUserField["USER_TYPE"]["BASE_TYPE"] == "file")
-					{
-						CFile::Delete($arUserField["VALUE"]);
-					}
 				}
 			}
 			$DB->Query("DELETE FROM b_utm_" . strtolower($entity_id) . " WHERE VALUE_ID = " . $ID);
 			$DB->Query("DELETE FROM b_uts_" . strtolower($entity_id) . " WHERE VALUE_ID = " . $ID);
+		}
+	}
+
+	private function getStoredValuesForEntityDelete(array $fields, string $entityId, int $valueId): array
+	{
+		$entityId = strtolower($entityId);
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$result = [];
+		$singleFields = [];
+		$multipleFields = [];
+		foreach ($fields as $field)
+		{
+			if (!UserFieldHelper::hasValuesDeleteHandler($field))
+			{
+				continue;
+			}
+			$fieldId = (int)$field['ID'];
+			$result[$fieldId] = [];
+			if ($field['MULTIPLE'] === 'Y')
+			{
+				$multipleFields[$fieldId] = match ($field['USER_TYPE']['BASE_TYPE'])
+				{
+					'int', 'file', 'enum' => 'VALUE_INT',
+					'double' => 'VALUE_DOUBLE',
+					'datetime' => 'VALUE_DATE',
+					default => 'VALUE',
+				};
+			}
+			else
+			{
+				$className = $field['USER_TYPE']['CLASS_NAME'] ?? null;
+				if (array_key_exists('VALUE_RAW', $field)
+					&& (!is_string($className) || !is_callable([$className, 'FormatField'])))
+				{
+					$result[$fieldId][] = $field['VALUE_RAW'];
+				}
+				else
+				{
+					$singleFields[$fieldId] = (string)$field['FIELD_NAME'];
+				}
+			}
+		}
+
+		if ($singleFields !== [])
+		{
+			$columns = implode(', ', array_map([$sqlHelper, 'quote'], array_values($singleFields)));
+			$row = $connection->query(sprintf(
+				'SELECT %s FROM %s WHERE %s = %d',
+				$columns,
+				$sqlHelper->quote('b_uts_' . $entityId),
+				$sqlHelper->quote('VALUE_ID'),
+				$valueId,
+			))->fetch();
+			if (is_array($row))
+			{
+				foreach ($singleFields as $fieldId => $fieldName)
+				{
+					$result[$fieldId][] = $row[$fieldName] ?? null;
+				}
+			}
+		}
+
+		if ($multipleFields !== [])
+		{
+			$fieldIds = implode(', ', array_map('intval', array_keys($multipleFields)));
+			$queryResult = $connection->query(sprintf(
+				'SELECT %s, %s, %s, %s, %s FROM %s WHERE %s = %d AND %s IN (%s) ORDER BY %s',
+				$sqlHelper->quote('FIELD_ID'), $sqlHelper->quote('VALUE'), $sqlHelper->quote('VALUE_INT'),
+				$sqlHelper->quote('VALUE_DOUBLE'), $sqlHelper->quote('VALUE_DATE'),
+				$sqlHelper->quote('b_utm_' . $entityId), $sqlHelper->quote('VALUE_ID'), $valueId,
+				$sqlHelper->quote('FIELD_ID'), $fieldIds, $sqlHelper->quote('ID'),
+			));
+			while ($row = $queryResult->fetch())
+			{
+				$fieldId = (int)$row['FIELD_ID'];
+				$result[$fieldId][] = $row[$multipleFields[$fieldId]];
+			}
+		}
+
+		return $result;
+	}
+
+	private function iterateStoredValues(array $values): iterable
+	{
+		foreach ($values as $value)
+		{
+			yield $value;
 		}
 	}
 

@@ -18,6 +18,8 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\CheckList\Dele
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\CheckList\DeleteCheckListTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\CheckList\UpdateCheckListItemTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\CheckList\UpdateCheckListTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\GetChatMessagesTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\GetTaskHistoryTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Member\AddAccomplicesTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Member\AddAuditorsTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Member\AddCurrentUserAsAuditorTool;
@@ -81,6 +83,7 @@ class TasksToolSet extends BaseToolSet
 			DeleteTaskTool::class,
 			DetachTaskFromGroupTool::class,
 			GetTaskByIdTool::class,
+			GetTaskHistoryTool::class,
 			SearchTasksTool::class,
 			UpdateTaskTool::class,
 			AddReminderTool::class,
@@ -92,6 +95,7 @@ class TasksToolSet extends BaseToolSet
 
 		if (FormV2Feature::isOn())
 		{
+			$tools[] = GetChatMessagesTool::class;
 			$tools[] = SendChatMessageTool::class;
 		}
 

@@ -5,7 +5,9 @@ namespace Bitrix\Sale\Exchange\Integration\Controller;
 
 
 use Bitrix\Main\Engine\Action;
+use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Main\Error;
+use Bitrix\Main\Event;
 use Bitrix\Rest\Integration\Controller\Base;
 use Bitrix\Sale\Rest\View\SaleViewManager;
 use Bitrix\Sale\Exchange\Integration\Entity\B24IntegrationStatProviderTable;
@@ -20,10 +22,11 @@ class Statistic extends Base
 	public function getFieldsAction()
 	{
 		$view = $this->getViewManager()
-			->getView($this);
+			->getView($this)
+		;
 
 		return ['STATISTIC'=>$view->prepareFieldInfos(
-			$view->getFields()
+			$view->getFields(),
 		)];
 	}
 
@@ -42,7 +45,7 @@ class Statistic extends Base
 	{
 		return new Page('STATISTIC',
 			$this->getList($select, $filter, $order, $pageNavigation),
-			$this->count($filter)
+			$this->count($filter),
 		);
 	}
 
@@ -64,6 +67,7 @@ class Statistic extends Base
 		else
 		{
 			$this->addErrors($r->getErrors());
+
 			return null;
 		}
 	}
@@ -90,6 +94,7 @@ class Statistic extends Base
 		}
 
 		$this->addErrors($r->getErrors());
+
 		return null;
 	}
 
@@ -113,6 +118,7 @@ class Statistic extends Base
 			if($r->isSuccess() === false)
 			{
 				$this->addErrors($r->getErrors());
+
 				return null;
 			}
 
@@ -129,12 +135,13 @@ class Statistic extends Base
 				return [
 					'ITEMS' => [
 						'PROVIDER' => $provider::getRow(['filter'=>['ID'=>$providerId]]),
-					]
+					],
 				];
 			}
 		}
 
 		$this->addErrors($r->getErrors());
+
 		return null;
 	}
 
@@ -159,6 +166,7 @@ class Statistic extends Base
 		}
 
 		$this->addErrors($r->getErrors());
+
 		return null;
 	}
 
@@ -180,6 +188,7 @@ class Statistic extends Base
 		}
 
 		$this->addErrors($r->getErrors());
+
 		return null;
 	}
 
@@ -201,6 +210,7 @@ class Statistic extends Base
 		else
 		{
 			$this->addErrors($r->getErrors());
+
 			return null;
 		}
 	}
@@ -217,6 +227,7 @@ class Statistic extends Base
 		{
 			$statistics[$k]['PROVIDER_ID'] = $providerId;
 		}
+
 		return $statistics;
 	}
 
@@ -232,8 +243,8 @@ class Statistic extends Base
 		$provider = new B24IntegrationStatProviderTable();
 
 		$fields = $this->getEntityTable()::getRow([
-				'filter'=>['PROVIDER_ID'=>$providerId],
-				'order'=>['DATE_UPDATE'=>'DESC']]
+			'filter'=>['PROVIDER_ID'=>$providerId],
+			'order'=>['DATE_UPDATE'=>'DESC']],
 		);
 
 		if(is_array($fields))
@@ -247,6 +258,24 @@ class Statistic extends Base
 		return new SaleViewManager($action);
 	}
 
+	protected function processBeforeAction(Action $action)
+	{
+		global $USER;
+
+		if (!($USER instanceof \CUser) || !$USER->GetID())
+		{
+			$authentication = (new Authentication())->bindAction($action);
+			$authentication->onBeforeAction(
+				new Event('main', static::getFullEventName(static::EVENT_ON_BEFORE_ACTION)),
+			);
+			$this->addErrors($authentication->getErrors());
+
+			return false;
+		}
+
+		return parent::processBeforeAction($action);
+	}
+
 	protected function getEntityTable()
 	{
 		return new B24integrationStatTable();
@@ -254,22 +283,26 @@ class Statistic extends Base
 
 	protected function checkReadPermissionEntity()
 	{
-		return new Result();
+		$result = new Result();
+
+		if (\CMain::GetGroupRight('sale') === 'D')
+		{
+			$result->addError(new Error('Access Denied', 200040300010));
+		}
+
+		return $result;
 	}
 
-	protected function checkCreatePermissionEntity()
+	protected function checkModifyPermissionEntity(): Result
 	{
-		return new Result();
-	}
+		$result = new Result();
 
-	protected function checkUpdatePermissionEntity()
-	{
-		return new Result();
-	}
+		if (\CMain::GetGroupRight('sale') !== 'W')
+		{
+			$result->addError(new Error('Access Denied', 200040300020));
+		}
 
-	protected function checkDeletePermissionEntity()
-	{
-		return new Result();
+		return $result;
 	}
 
 	protected function checkPermissionEntity($name, $arguments=[])
@@ -301,6 +334,7 @@ class Statistic extends Base
 		{
 			$r->addError(new Error('Provider is not exists'));
 		}
+
 		return $r;
 	}
 
@@ -314,8 +348,9 @@ class Statistic extends Base
 
 		if(count($data) > \Bitrix\Sale\Exchange\Integration\Manager\Statistic::STATISTIC_IMPORT_PACKAGE_LIMIT)
 		{
-			$r->addError(new Error('Batch exceeded the limit - '.\Bitrix\Sale\Exchange\Integration\Manager\Statistic::STATISTIC_IMPORT_PACKAGE_LIMIT));
+			$r->addError(new Error('Batch exceeded the limit - ' . \Bitrix\Sale\Exchange\Integration\Manager\Statistic::STATISTIC_IMPORT_PACKAGE_LIMIT));
 		}
+
 		return $r;
 	}
 
@@ -331,6 +366,6 @@ class Statistic extends Base
 		$result = B24IntegrationStatProviderTable::getByPrimary($id);
 		$row = $result->fetch();
 
-		return (is_array($row)? $row : null);
+		return is_array($row) ? $row : null;
 	}
 }

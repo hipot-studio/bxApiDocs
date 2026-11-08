@@ -7,6 +7,7 @@ namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Requisite;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\V3\Attribute\Filterable;
 use Bitrix\Rest\V3\Attribute\Sortable;
+use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\Dto\Dto;
 
 /**
@@ -14,9 +15,11 @@ use Bitrix\Rest\V3\Dto\Dto;
  * whole portal publishes it.
  *
  * The list of properties is not a decision of this class: which column of `b_crm_requisite` is published,
- * under which name and with which of the two attributes was settled by the field revision the method was
- * published under, column by column. A field added here on its own is a breach of that contract - a
- * published field can never be removed.
+ * under which name and with which of the two attributes was settled column by column when the method was
+ * published, and the settlement is written down as constants in
+ * {@see \Bitrix\Crm\Tests\Unit\Lib\V2\Infrastructure\Rest\Dto\Requisite\OwnerRequisiteDtoGeneratorTest},
+ * where a case keeps this contract and the one of the per-owner routes naming the same fields. A field
+ * added here on its own is a breach of that contract - a published field can never be removed.
  *
  * The property names are the field names of
  * {@see \Bitrix\Crm\V2\Internal\Entity\Requisite\Requisite} one to one, so nothing is renamed between the
@@ -30,6 +33,7 @@ use Bitrix\Rest\V3\Dto\Dto;
  * `presetId`, `identificationTypeId` and `taxRegimeId` publish references to CRM dictionaries REST 3.0
  * offers no way to list yet. That is a known departure from the regulation rather than an omission.
  */
+#[Title('CRM company or contact details')]
 final class RequisiteDto extends Dto
 {
 	#[Filterable]

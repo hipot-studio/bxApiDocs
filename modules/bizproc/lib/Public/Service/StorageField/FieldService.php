@@ -17,6 +17,17 @@ class FieldService
 {
 	private const CODE_PATTERN = '/^[A-Za-z_][A-Za-z0-9_]*$/';
 
+	public const EDITABLE_TYPES = [
+		FieldType::STRING,
+		FieldType::TEXT,
+		FieldType::INT,
+		FieldType::DOUBLE,
+		FieldType::BOOL,
+		FieldType::DATE,
+		FieldType::DATETIME,
+		FieldType::USER,
+	];
+
 	public function prepare(StorageFieldDto $storageFieldDto): ?StorageField
 	{
 		$storageFieldEntity = StorageField::mapFromArray($storageFieldDto->toArray());
@@ -68,6 +79,11 @@ class FieldService
 				Loc::getMessage('BIZPROC_FIELD_SERVICE_CODE_EXIST') ?? ''
 			);
 		}
+	}
+
+	public static function isEditableType(?string $type): bool
+	{
+		return in_array($type, self::EDITABLE_TYPES, true);
 	}
 
 	public static function isNumericFieldType(string $type): bool

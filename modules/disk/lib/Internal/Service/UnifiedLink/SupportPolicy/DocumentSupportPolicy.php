@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\SupportPolicy;
@@ -9,7 +8,7 @@ use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\Document\DocumentViewPolicy;
 use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration;
 
-class DocumentSupportPolicy extends BaseSupportPolicy
+class DocumentSupportPolicy extends FileSupportPolicy
 {
 	protected function passesSpecializedChecks(File $file): bool
 	{

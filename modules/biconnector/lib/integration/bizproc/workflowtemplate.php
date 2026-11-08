@@ -37,7 +37,7 @@ class WorkflowTemplate extends Dataset
 
 	protected function getTableDescriptionFull(): string
 	{
-		return $this->getMessage('WORKFLOW_TEMPLATE_TABLE_DESCRIPTION_FULL', '');
+		return $this->getMessage('WORKFLOW_TEMPLATE_TABLE_DESCRIPTION_FULL_MSGVER_1', '');
 	}
 
 	protected function onBeforeEvent(): Result

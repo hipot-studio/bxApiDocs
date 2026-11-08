@@ -16,6 +16,7 @@ final class CatalogSharingResponseMapper
 	public const ERROR_PLATFORM_INVALID_RESPONSE = 'SHARE_PLATFORM_INVALID_RESPONSE';
 
 	private const LINK_CREATED_VIA = 'BITRIX24_PORTAL';
+	private const DEPARTMENT_ACCESS_CODE_PATTERN = '/^DR?[1-9][0-9]*$/D';
 
 	private const AUDIENCES = [
 		CatalogShareState::AUDIENCE_OWNER_ONLY,
@@ -85,9 +86,18 @@ final class CatalogSharingResponseMapper
 			return $this->invalidResponse();
 		}
 
+		if (($data['department_format'] ?? null) !== CatalogShareState::DEPARTMENT_FORMAT_ACCESS_CODE)
+		{
+			return $this->invalidResponse();
+		}
+
 		$users = $this->mapParticipants($data['users']);
 		$departments = $this->mapParticipants($data['departments']);
-		if ($users === null || $departments === null)
+		if (
+			$users === null
+			|| $departments === null
+			|| !$this->areDepartmentAccessCodes($departments)
+		)
 		{
 			return $this->invalidResponse();
 		}
@@ -107,6 +117,22 @@ final class CatalogSharingResponseMapper
 		]);
 
 		return $result;
+	}
+
+	/**
+	 * @param list<CatalogShareParticipant> $departments
+	 */
+	private function areDepartmentAccessCodes(array $departments): bool
+	{
+		foreach ($departments as $department)
+		{
+			if (preg_match(self::DEPARTMENT_ACCESS_CODE_PATTERN, $department->id) !== 1)
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	public function mapLink(Result $response): Result

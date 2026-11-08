@@ -60,6 +60,19 @@ class Sanitizer
 		'help',
 	];
 
+	/** The sequence read as the start of a php tag, so its two readers below cannot drift apart. */
+	private const PHP_OPEN_TAG = '<?';
+
+	/**
+	 * The comment Bitrix\Main\Web\DOM\HtmlParser leaves in place of a php slice it stored.
+	 * The parser restores the slice into any document carrying the comment, so in user content
+	 * it is a trace of somebody else's parse rather than authored text (mantis 0257122).
+	 */
+	public const PHP_SLICE_PLACEHOLDER = 'BX_DOM_DOCUMENT_PHP_SLICE_PLACEHOLDER';
+
+	/** The placeholder as the parser writes it: the token plus `_object_slice` inside a comment. */
+	private const PHP_SLICE_PLACEHOLDER_COMMENT = '/<!--\s*' . self::PHP_SLICE_PLACEHOLDER . '[^>]*-->/';
+
 	private array $sanitizers = [];
 	private array $filters = self::DEFAULT_TEXT_FILTERS;
 
@@ -117,6 +130,14 @@ class Sanitizer
 			$bad = true;
 		}
 
+		if (self::containsPhpSlicePlaceholder($text))
+		{
+			// unlike `<?` the placeholder is not authored text, so cutting it loses nothing and
+			// closes the sinks whose caller never reads the flag
+			$bad = true;
+			$text = self::removePhpSlicePlaceholders($text);
+		}
+
 		$needReverse = $this->checkFilter(self::AVAILABLE_TEXT_FILTERS['reverseSanitize']);
 		if ($needReverse)
 		{
@@ -156,7 +177,81 @@ class Sanitizer
 	 */
 	public static function containsUnneutralizedPhpOpenTag(string $content): bool
 	{
-		return str_contains($content, '<?');
+		return str_contains($content, self::PHP_OPEN_TAG);
+	}
+
+	/**
+	 * Placeholder of a php slice stored by the DOM parser, in any of its numbered forms.
+	 */
+	public static function containsPhpSlicePlaceholder(string $content): bool
+	{
+		return str_contains($content, self::PHP_SLICE_PLACEHOLDER);
+	}
+
+	/**
+	 * Drops the placeholder comment, and the bare token of a placeholder the content carries in
+	 * any other shape: left in place, it becomes a comment again for the next transformation.
+	 */
+	private static function removePhpSlicePlaceholders(string $content): string
+	{
+		$withoutComments = preg_replace(self::PHP_SLICE_PLACEHOLDER_COMMENT, '', $content);
+
+		return str_replace(self::PHP_SLICE_PLACEHOLDER, '', $withoutComments ?? $content);
+	}
+
+	/**
+	 * How many raw PHP open tags the content carries.
+	 *
+	 * Publication compares the count of its own input and output: php in the content of a
+	 * component block is normal, a php open tag the publication chain itself produced is not.
+	 *
+	 * The guarantee covers `<?` alone; a closing `?>` a transformation glued together is not seen
+	 * here. Block::view() eval's the content as `?> … <?`, so it starts in html mode and a stray
+	 * `?>` reaches no php, while `<?` never survives reverseSanitizeText on the way in.
+	 */
+	public static function countUnneutralizedPhpOpenTags(string $content): int
+	{
+		return substr_count($content, self::PHP_OPEN_TAG);
+	}
+
+	/**
+	 * Which of the two the publication is allowed to write. The chain may carry the php open tags
+	 * of the stored content over, but never create one, so content that gained a tag on the way
+	 * is published as the database holds it (mantis 255166).
+	 */
+	public static function publishableContent(string $original, string $transformed): string
+	{
+		$originalTags = self::countUnneutralizedPhpOpenTags($original);
+		$transformedTags = self::countUnneutralizedPhpOpenTags($transformed);
+
+		return $transformedTags > $originalTags ? $original : $transformed;
+	}
+
+	/**
+	 * Drops the editor's contenteditable attribute, but only where it really is an attribute of an
+	 * already opened tag. A plain str_replace glues together whatever surrounds the removed
+	 * substring, so safe content is able to end up carrying a php open tag (mantis 255166).
+	 */
+	public static function removeContentEditableAttribute(string $content): string
+	{
+		// `[^<>]`, never `[^>]`: with `[^>]` the tag of `<a< contenteditable="true"?php` closes up into `<a<?php`
+		// `(?<!\s)` keeps the lazy prefix out of a whitespace run: from every position inside one
+		// `\s+` rescans the rest of the run, which is quadratic on content the block author
+		// controls, and the backtrack limit does not break that off
+		// `++` takes every occurrence the tag repeats in a row, and possessively: a `+` that gives
+		// the run back to the lazy prefix brings the quadratic rescan back with it
+		$replaced = preg_replace('/(<[a-z][^<>]*?(?<!\s))(?:\s+contenteditable="true")++/i', '$1', $content);
+
+		if ($replaced === null)
+		{
+			// unreachable unless the engine itself gave up; the attribute then stays in the
+			// content, and nothing else would tell that the cleanup did not run
+			Debug::log(0, preg_last_error_msg(), 'LANDING_SANITIZER_PCRE');
+
+			return $content;
+		}
+
+		return $replaced;
 	}
 
 	/**

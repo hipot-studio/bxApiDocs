@@ -6,6 +6,7 @@ use Bitrix\Main\Engine;
 use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\UI\Extension;
+use Bitrix\Main\UI\Extension\Serializer;
 
 /**
  * Class LoadExt
@@ -21,6 +22,14 @@ class LoadExt extends Engine\Controller
 	{
 		return [
 			'getExtensions' => [
+				'+prefilters' => [
+					new CloseSession()
+				],
+				'-prefilters' => [
+					Authentication::class
+				]
+			],
+			'resolveExtensions' => [
 				'+prefilters' => [
 					new CloseSession()
 				],
@@ -54,5 +63,37 @@ class LoadExt extends Engine\Controller
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Resolves a batch of extensions into an ordered, deduplicated list of
+	 * structured descriptions instead of pre-rendered HTML.
+	 *
+	 * @param string[] $extension
+	 * @param string $coreLoaded 'Y' when the client already runs the full core
+	 *     bundle; anything else (including requests of older client bundles that
+	 *     do not send the flag) keeps the core assets in the response, and the
+	 *     client deduplicates them by URL.
+	 * @param string[] $loadedExtension Extensions the client already has
+	 *     registered; their branches are left out of the response. An empty list
+	 *     (older client bundles do not send it) resolves the whole graph.
+	 * @return array|null
+	 */
+	public function resolveExtensionsAction(
+		array $extension = [],
+		string $coreLoaded = 'N',
+		array $loadedExtension = [],
+	): ?array
+	{
+		$result = (new Serializer())->resolve($extension, $coreLoaded === 'Y', $loadedExtension);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getData();
 	}
 }

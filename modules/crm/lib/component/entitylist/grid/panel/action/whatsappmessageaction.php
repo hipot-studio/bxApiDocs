@@ -23,6 +23,7 @@ class WhatsAppMessageAction implements Action
 	public function __construct(
 		private readonly int $entityTypeId,
 		private readonly ?int $categoryId,
+		private readonly string $gridId,
 	)
 	{
 	}
@@ -62,6 +63,7 @@ class WhatsAppMessageAction implements Action
 				[
 					'JS' => (new Event('BatchManager:whatsappMessage'))
 						->addEntityTypeId($this->entityTypeId)
+						->addGridId($this->gridId)
 						->addParam('categoryId', $this->categoryId)
 						->addParam('isWhatsAppEdnaEnabled', $isWhatsAppEdnaEnabled)
 						->addParam('ednaManageUrl', $ednaManageUrl)

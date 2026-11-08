@@ -24,7 +24,6 @@ class TaskRepository
 
 		$data['ID'] = (int)$data['ID'];
 
-
 		return $data;
 	}
 

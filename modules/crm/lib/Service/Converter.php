@@ -117,6 +117,12 @@ abstract class Converter
 	 */
 	public function convertFieldNameFromCamelCaseToUpperCase(string $fieldName): string
 	{
+		// the core converter expects camelCase and splits an UPPER_CASE word after every letter
+		if (preg_match('/^[A-Z0-9_]+$/', $fieldName))
+		{
+			return $fieldName;
+		}
+
 		// if there is camelCase for this $fieldName - than this $fieldName is already in UPPER_CASE.
 		$camelCase = $this->caseCache->getCamelCase($fieldName);
 		if ($camelCase)

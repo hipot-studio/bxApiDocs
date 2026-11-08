@@ -7,6 +7,7 @@ namespace Bitrix\Socialnetwork\V2\Internal\Service\Convert;
 use Bitrix\Main\Error;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Item\Workgroup;
+use Bitrix\Socialnetwork\Provider\GroupProvider;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertProgress;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertResult;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Convert\ConvertTrackedHandler;
@@ -26,6 +27,7 @@ use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\UpdateFeaturePermis
 use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\SyncProjectChatMembers;
 use Bitrix\Socialnetwork\V2\Internal\Service\Convert\Handler\UpdateGroupTasksChat;
 use Bitrix\Socialnetwork\V2\Internal\Service\Convert\StatusResolve\StatusResolveService;
+use Bitrix\Socialnetwork\V2\Internal\Service\ProjectAnalytics;
 use Throwable;
 
 class ConvertService
@@ -34,6 +36,7 @@ class ConvertService
 		private readonly HandlerFactoryInterface $handlerFactory,
 		private readonly ConvertProgressRepositoryInterface $progressRepository,
 		private readonly StatusResolveService $statusResolveService,
+		private readonly ProjectAnalytics $projectAnalytics,
 	)
 	{
 
@@ -49,7 +52,15 @@ class ConvertService
 			return $result->addError(new Error('Group not found'));
 		}
 
-		if ($groupBefore->getType() === Workgroup\Type::Scrum)
+		// A row may hold no type at all, and then only the legacy markers tell a scrum from a project.
+		// Without resolving them a legacy scrum slips past the guard below, and the status service - which
+		// takes the type as a required argument - is handed nothing
+		$typeBefore = $groupBefore->getType()
+			?? GroupProvider::getInstance()->getGroupType($groupId)
+			?? Workgroup\Type::getDefault()
+		;
+
+		if ($typeBefore === Workgroup\Type::Scrum)
 		{
 			return $result->addError(new Error('Scrum group cannot be converted'));
 		}
@@ -61,8 +72,18 @@ class ConvertService
 			return $result->setGroupAfter($groupBefore);
 		}
 
-		$this->statusResolveService->start($progress, $groupBefore->getType());
+		// This durable exclusion precedes every progress save, including the completed status.
+		$this->progressRepository->markNewConversion($groupId);
+		$this->statusResolveService->start($progress, $typeBefore);
 		$this->progressRepository->save($progress);
+
+		$sourceType = $groupBefore->getType();
+		$this->projectAnalytics->trackConvertStart(
+			groupId: $groupId,
+			sourceType: $sourceType,
+			userId: $userId,
+			isOpened: $groupBefore->isOpened(),
+		);
 
 		try
 		{
@@ -83,6 +104,12 @@ class ConvertService
 		catch (Throwable $t)
 		{
 			$this->statusResolveService->fail($progress);
+			$this->projectAnalytics->trackConvertFinish(
+				groupId: $groupId,
+				sourceType: $sourceType,
+				userId: $userId,
+				errorCode: (string)$t->getCode(),
+			);
 
 			throw $t;
 		}
@@ -97,6 +124,12 @@ class ConvertService
 		{
 			$this->statusResolveService->fail($progress);
 			$this->progressRepository->save($progress);
+			$this->projectAnalytics->trackConvertFinish(
+				groupId: $groupId,
+				sourceType: $sourceType,
+				userId: $userId,
+				errorCode: 'group_not_found',
+			);
 
 			return $result->addError(new Error('Group not found after conversion'));
 		}
@@ -148,6 +181,13 @@ class ConvertService
 		catch (Throwable $t)
 		{
 			$this->statusResolveService->fail($progress);
+			$this->projectAnalytics->trackConvertFinish(
+				groupId: $groupId,
+				sourceType: $sourceType,
+				userId: $userId,
+				isOpened: $groupAfter->isOpened(),
+				errorCode: (string)$t->getCode(),
+			);
 
 			throw $t;
 		}
@@ -155,6 +195,13 @@ class ConvertService
 		{
 			$this->progressRepository->save($progress);
 		}
+
+		$this->projectAnalytics->trackConvertFinish(
+			groupId: $groupId,
+			sourceType: $sourceType,
+			userId: $userId,
+			isOpened: $groupAfter->isOpened(),
+		);
 
 		return $result->setGroupAfter($groupAfter);
 	}

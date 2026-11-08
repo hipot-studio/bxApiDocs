@@ -25,7 +25,7 @@ class Type extends OrmObject
 
 		$data = $this->convertKeysToCamelCase($model->collectValues());
 
-		unset($data['name'], $data['tableName'], $data['isCrmTrackingEnabled']);
+		unset($data['name'], $data['tableName'], $data['isCrmTrackingEnabled'], $data['description']);
 
 		if ($allData)
 		{

@@ -114,6 +114,13 @@ class Link extends \Bitrix\Landing\Node
 				$result[$pos]['attrs']['target'] = $target;
 				$resultList[$pos]->setAttribute('target', $target);
 
+				if (($manifest['nodes'][$selector]['ariaLabelFromHref'] ?? false) === true)
+				{
+					$label = $resultList[$pos]->getAttribute('href') ?: '#';
+					$result[$pos]['attrs']['aria-label'] = $label;
+					$resultList[$pos]->setAttribute('aria-label', $label);
+				}
+
 				$allowedAttrs = self::allowedAttrs();
 				if (!empty($attrs))
 				{
@@ -282,7 +289,7 @@ class Link extends \Bitrix\Landing\Node
 			return null;
 		}
 		$result = [];
-		$dublicate = [];
+		$duplicate = [];
 		foreach ($field['actions'] as $row)
 		{
 			if (empty($row) || !is_array($row))
@@ -297,7 +304,7 @@ class Link extends \Bitrix\Landing\Node
 			{
 				continue;
 			}
-			if (isset($dublicate[$row['type']]))
+			if (isset($duplicate[$row['type']]))
 			{
 				continue;
 			}
@@ -306,7 +313,7 @@ class Link extends \Bitrix\Landing\Node
 				'type' => $row['type'],
 				'name' => $row['name'],
 			];
-			$dublicate[$row['type']] = true;
+			$duplicate[$row['type']] = true;
 		}
 
 		return (!empty($result) ? $result : null);

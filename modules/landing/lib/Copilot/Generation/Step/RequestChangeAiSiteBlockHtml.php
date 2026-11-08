@@ -14,6 +14,7 @@ use Bitrix\Landing\Copilot\Connector\AI\Prompt;
 use Bitrix\Landing\Copilot\Connector\Schema;
 use Bitrix\Landing\Copilot\Data\Site;
 use Bitrix\Landing\Copilot\Generation\Log;
+use Bitrix\Landing\Copilot\Generation\GenerationTimeSliceException;
 use Bitrix\Landing\Copilot\Generation\Request;
 use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteState;
 use Bitrix\Landing\Copilot\Generation\Step\Base\RuntimeRequestQuotaProvider;
@@ -21,6 +22,7 @@ use Bitrix\Landing\Copilot\Generation\Type\RequestEntities;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntityDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Model\RequestToEntitiesTable;
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Web\DOM;
 
@@ -563,7 +565,7 @@ class RequestChangeAiSiteBlockHtml extends RequestMultiple implements RuntimeReq
 		$timer = $this->generation->getTimer();
 		if (!$timer->check())
 		{
-			throw new \RuntimeException("The maximum execution time has been reached, step {$this->stepId} was aborted");
+			throw new GenerationTimeSliceException("The maximum execution time has been reached, step {$this->stepId} was aborted");
 		}
 	}
 
@@ -779,7 +781,7 @@ class RequestChangeAiSiteBlockHtml extends RequestMultiple implements RuntimeReq
 
 		try
 		{
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForUserHtml();
 			$doc->loadHTML('<div id="' . self::ROOT_PROMPT_NODE_ID . '">' . $html . '</div>');
 			$root = $doc->querySelector('#' . self::ROOT_PROMPT_NODE_ID);
 			if (!$root)

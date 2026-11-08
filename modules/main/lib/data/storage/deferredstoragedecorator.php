@@ -153,4 +153,9 @@ class DeferredStorageDecorator implements StorageInterface
 	{
 		$this->save();
 	}
+
+	public function __unserialize(array $data): void
+	{
+		// Disables unserialize
+	}
 }

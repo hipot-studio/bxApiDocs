@@ -2,19 +2,36 @@
 
 namespace Bitrix\Rest\V3\Schema;
 
+use Bitrix\Main\Type\Contract\Arrayable;
 use Bitrix\Main\Type\DateTime;
 
-class ModuleConfig
+final readonly class ModuleConfig implements Arrayable
 {
 	public function __construct(
-		public readonly string $id,
-		public readonly string $version,
-		public readonly string $defaultNamespace,
-		public readonly array $namespaces,
-		public readonly array $routes,
-		public readonly ?string $schemaProviderClass,
-		public readonly array $documentation,
-		public readonly ?DateTime $modificationDateTime
+		public string $id,
+		public string $version,
+		public string $defaultNamespace,
+		public array $namespaces,
+		public array $routes,
+		public ?string $schemaProviderClass,
+		public array $documentation,
+		public ?DateTime $modificationDateTime,
+		public ?array $eventProviders,
 	) {
+	}
+
+	public function toArray(): array
+	{
+		return [
+			'id' => $this->id,
+			'version' => $this->version,
+			'defaultNamespace' => $this->defaultNamespace,
+			'namespaces' => $this->namespaces,
+			'routes' => $this->routes,
+			'schemaProviderClass' => $this->schemaProviderClass,
+			'documentation' => $this->documentation,
+			'modificationDateTime' => $this->modificationDateTime?->format(DATE_ATOM),
+			'eventProviders' => $this->eventProviders,
+		];
 	}
 }

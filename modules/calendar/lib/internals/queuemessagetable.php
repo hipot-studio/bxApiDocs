@@ -2,13 +2,11 @@
 
 namespace Bitrix\Calendar\Internals;
 
-use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Entity\DatetimeField;
 use Bitrix\Main\Entity\IntegerField;
 use Bitrix\Main\Entity\StringField;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\ArrayField;
-use Bitrix\Main\SystemException;
 
 /**
  * Class QueueMessageTable
@@ -38,7 +36,6 @@ class QueueMessageTable extends DataManager
 
 	/**
 	 * @return array
-	 *
 	 */
 	public static function getMap()
 	{
@@ -49,7 +46,14 @@ class QueueMessageTable extends DataManager
 			,
 			(new ArrayField('MESSAGE'))
 			,
-			(new DatetimeField('DATE_CREATE'))
+			(new DatetimeField('DATE_CREATE')),
+			(new StringField('STATUS'))
+				->configureRequired()
+				->configureDefaultValue('new')
+			,
+			(new IntegerField('ATTEMPTS'))
+				->configureRequired()
+				->configureDefaultValue(0),
 		];
 	}
 }

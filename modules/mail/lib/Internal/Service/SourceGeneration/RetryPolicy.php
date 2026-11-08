@@ -8,6 +8,7 @@ use Bitrix\Mail\Integration\MailService\MailboxMigrationCancelReceiver;
 use Bitrix\Mail\Integration\MailService\MailboxSwitchAuthorizationReceiver;
 use Bitrix\Mail\Integration\MailService\ReadyMailboxReceiver;
 use Bitrix\Mail\Internals\MigrationOperationTable;
+use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 
@@ -22,6 +23,9 @@ final class RetryPolicy
 	public const CLASS_PAUSED = 'paused';
 	public const CONTEXT_COMMAND = 'command';
 	public const CONTEXT_ACCEPTED = 'accepted';
+	public const FAILURE_TRANSIENT = 'transient';
+	public const FAILURE_CREDENTIALS = 'credentials';
+	public const FAILURE_CONFIGURATION = 'configuration';
 
 	public const ERROR_AGENT_EXCEPTION = 'MAIL_SOURCE_GENERATION_AGENT_EXCEPTION';
 	public const ERROR_NO_PROGRESS = 'MAIL_SOURCE_GENERATION_NO_PROGRESS';
@@ -30,6 +34,13 @@ final class RetryPolicy
 	private const MAX_STALLED_ATTEMPTS = 10;
 	private const MAX_STALLED_SECONDS = 86400;
 	private const AWAIT_POLL_SECONDS = 20 * 60;
+	/*
+		A pass under a manual wait moves the transfer nowhere: the grant of a stage schedules the
+		continuation itself and never waits for a poll. Polling is left only to notice the mode
+		being switched off for the whole portal, so it runs as rarely as the wait for an external
+		answer does.
+	*/
+	private const MANUAL_POLL_SECONDS = self::AWAIT_POLL_SECONDS;
 	private const BUSY_RETRY_SECONDS = 5 * 60;
 	private const NETWORK_RETRY_MAX_SECONDS = 30 * 60;
 	private const TAIL_RETRY_MAX_SECONDS = 5 * 60;
@@ -52,18 +63,29 @@ final class RetryPolicy
 		?string $errorCode,
 		bool $progressed,
 		?DateTime $now = null,
+		bool $manualWaiting = false,
+		?DateTime $retryResumedAt = null,
+		bool $retryAttemptsReset = false,
 	): array
 	{
 		$now ??= new DateTime();
 		$lastProgress = $this->dateOf($operation['LAST_PROGRESS'] ?? null)
 			?? $this->dateOf($operation['DATE_CREATE'] ?? null)
 			?? clone $now;
+		$retryBudgetResumed = $retryResumedAt !== null
+			&& $retryResumedAt->getTimestamp() > $lastProgress->getTimestamp();
+		$lastProgressForBudget = $retryBudgetResumed ? clone $retryResumedAt : clone $lastProgress;
 		$stalledAttempts = (int)($operation['STALLED_ATTEMPTS'] ?? 0);
+		if ($retryAttemptsReset)
+		{
+			$stalledAttempts = 0;
+		}
 
 		if ($progressed)
 		{
 			$stalledAttempts = 0;
 			$lastProgress = clone $now;
+			$lastProgressForBudget = clone $now;
 		}
 
 		if ($stage->hasNowhereToGo())
@@ -74,6 +96,20 @@ final class RetryPolicy
 				false,
 				$stalledAttempts,
 				null,
+				$lastProgress,
+				null,
+				null,
+			);
+		}
+
+		if ($manualWaiting)
+		{
+			return $this->decision(
+				MigrationOperationTable::STATE_WAITING,
+				$stage,
+				true,
+				$stalledAttempts,
+				$this->after($now, self::MANUAL_POLL_SECONDS),
 				$lastProgress,
 				null,
 				null,
@@ -102,7 +138,7 @@ final class RetryPolicy
 			}
 			if (
 				$stalledAttempts >= self::MAX_STALLED_ATTEMPTS
-				|| $now->getTimestamp() - $lastProgress->getTimestamp() >= self::MAX_STALLED_SECONDS
+				|| $now->getTimestamp() - $lastProgressForBudget->getTimestamp() >= self::MAX_STALLED_SECONDS
 			)
 			{
 				return $this->decision(
@@ -166,7 +202,7 @@ final class RetryPolicy
 		}
 		if (
 			$stalledAttempts >= self::MAX_STALLED_ATTEMPTS
-			|| $now->getTimestamp() - $lastProgress->getTimestamp() >= self::MAX_STALLED_SECONDS
+			|| $now->getTimestamp() - $lastProgressForBudget->getTimestamp() >= self::MAX_STALLED_SECONDS
 		)
 		{
 			return $this->decision(
@@ -193,13 +229,25 @@ final class RetryPolicy
 		);
 	}
 
-	/** @return array{errorOwner: ?string, retryable: bool} */
+	/**
+	 * @return array{
+	 *     errorOwner: ?string,
+	 *     retryable: bool,
+	 *     failureCategory: ?string,
+	 *     retryAfter: ?int,
+	 * }
+	 */
 	public static function commandMetadata(Result $result): array
 	{
 		$error = $result->getErrors()[0] ?? null;
 		if ($error === null)
 		{
-			return ['errorOwner' => null, 'retryable' => false];
+			return [
+				'errorOwner' => null,
+				'retryable' => false,
+				'failureCategory' => null,
+				'retryAfter' => null,
+			];
 		}
 
 		$code = (string)$error->getCode();
@@ -208,7 +256,46 @@ final class RetryPolicy
 		return [
 			'errorOwner' => self::ownerOf($code, self::CONTEXT_COMMAND),
 			'retryable' => in_array($class, [self::CLASS_RETRYABLE, self::CLASS_EXTERNAL_FIX, self::CLASS_PAUSED], true),
+			'failureCategory' => self::commandFailureCategory($error),
+			'retryAfter' => null,
 		];
+	}
+
+	private static function commandFailureCategory(Error $error): ?string
+	{
+		$code = (string)$error->getCode();
+		if (in_array($code, [
+			ConnectionSnapshotValidator::ERROR_IMAP_INVALID,
+			ConnectionSnapshotValidator::ERROR_SMTP_INVALID,
+		], true))
+		{
+			return self::FAILURE_CONFIGURATION;
+		}
+
+		if (!in_array($code, [
+			MigrationService::ERROR_CONNECTION_UNAVAILABLE,
+			SmtpSnapshotSwitcher::ERROR_CONNECTION_UNAVAILABLE,
+		], true))
+		{
+			return null;
+		}
+
+		$customData = $error->getCustomData();
+		$type = is_array($customData) ? ($customData['type'] ?? null) : null;
+		if ($type === \Bitrix\Mail\Helper\Mailbox\MailboxConnector::RESPONSE_ERROR_CODE_WRONG_AUTH)
+		{
+			return self::FAILURE_CREDENTIALS;
+		}
+
+		if (in_array($type, [
+			\Bitrix\Mail\Helper\Mailbox\MailboxConnector::RESPONSE_ERROR_CODE_IMAP_CONNECTION,
+			\Bitrix\Mail\Helper\Mailbox\MailboxConnector::RESPONSE_ERROR_CODE_SMTP_CONNECTION,
+		], true))
+		{
+			return self::FAILURE_TRANSIENT;
+		}
+
+		return null;
 	}
 
 	public static function enrichCommandResult(Result $result): Result
@@ -233,6 +320,15 @@ final class RetryPolicy
 			MigrationService::ERROR_IMPORT_FAILED,
 			MigrationService::ERROR_FOLDERS_UNAVAILABLE,
 			MigrationService::ERROR_FINAL_SYNC_FAILED,
+			/*
+				The pass of catching up gave the page back refused, and the commonest reason for
+				it is the new source that could not be reached right now - the same thing the
+				final synchronization answers with, and it stands here for the same reason: the
+				connection comes back and the next run walks the same cursor again. The refusal
+				keeps the switch from happening until a pass goes through; what it must not do is
+				keep the operation from ever trying again.
+			*/
+			MigrationService::ERROR_REPLAY_REFUSED,
 			MigrationService::ERROR_SNAPSHOT_REVISION_CONFLICT,
 			SmtpSnapshotSwitcher::ERROR_CONNECTION_UNAVAILABLE,
 			Switcher::ERROR_MAILBOX_LOCKED,
@@ -259,11 +355,24 @@ final class RetryPolicy
 		return self::CLASS_TERMINAL;
 	}
 
+	public static function canResumeAfterSwitchAuthorization(?string $errorCode): bool
+	{
+		return $errorCode === self::ERROR_NO_PROGRESS
+			|| ($errorCode !== null && self::classifyAccepted($errorCode) === self::CLASS_RETRYABLE);
+	}
+
 	public static function classifyCommand(string $errorCode): string
 	{
 		if (in_array($errorCode, [
 			MigrationService::ERROR_FEATURE_DISABLED,
 			MigrationService::ERROR_MIGRATION_STOPPED,
+			/*
+				A portal the transfer has not been rolled out to yet: the same question answers
+				yes once the update lands, so it stands with the two switches rather than with a
+				failure. The class is also what tells the other side the refusal is free - their
+				list of the words of this module is kept level with this very branch.
+			*/
+			MigrationService::ERROR_OPERATION_SCHEMA_MISSING,
 		], true))
 		{
 			return self::CLASS_PAUSED;
@@ -302,6 +411,7 @@ final class RetryPolicy
 			if (in_array($errorCode, [
 				ReadyMailboxReceiver::ERROR_CONTRACT_INVALID,
 				ReadyMailboxReceiver::ERROR_MAILBOX_NOT_FOUND,
+				ReadyMailboxReceiver::ERROR_MAILBOX_INACTIVE,
 				MailboxSwitchAuthorizationReceiver::ERROR_CONTRACT_INVALID,
 				MailboxMigrationCancelReceiver::ERROR_CONTRACT_INVALID,
 				ConnectionSnapshotValidator::ERROR_EMAIL_INVALID,
@@ -327,12 +437,17 @@ final class RetryPolicy
 				MigrationService::ERROR_DIRECTORY_ROLES_AMBIGUOUS,
 				MigrationService::ERROR_MIGRATION_STOPPED,
 				MigrationService::ERROR_FEATURE_DISABLED,
+				MigrationService::ERROR_OPERATION_SCHEMA_MISSING,
 				SmtpSnapshotSwitcher::ERROR_CONNECTION_UNAVAILABLE,
 			], true))
 			{
 				return MigrationOperationTable::ERROR_OWNER_INFRASTRUCTURE;
 			}
 
+			/*
+				A readiness that could not be answered falls here on purpose: a schema left half
+				built is a state of this module, and the owner of it is this module.
+			*/
 			return MigrationOperationTable::ERROR_OWNER_MAIL;
 		}
 

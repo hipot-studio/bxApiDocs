@@ -56,7 +56,26 @@ class FormProvider
 
 	public function getPartnerFeedbackFormList(): array
 	{
+		$westZones = \Bitrix\UI\Form\FeedbackForm::getWestZones();
+
 		return [
+			['zones' => $westZones, 'id' => 588, 'lang' => 'en', 'sec' => '5yxb4v'],
+			['zones' => $westZones, 'id' => 590, 'lang' => 'br', 'sec' => 'd926w3'],
+			['zones' => $westZones, 'id' => 592, 'lang' => 'la', 'sec' => 'u8hl3w'],
+			['zones' => $westZones, 'id' => 594, 'lang' => 'de', 'sec' => 'ytqxzu'],
+			['zones' => $westZones, 'id' => 596, 'lang' => 'pl', 'sec' => 't49oo9'],
+			['zones' => $westZones, 'id' => 598, 'lang' => 'tr', 'sec' => '03a1oo'],
+			['zones' => $westZones, 'id' => 600, 'lang' => 'vn', 'sec' => 'aa58o7'],
+			['zones' => $westZones, 'id' => 602, 'lang' => 'it', 'sec' => 'ahmuhf'],
+			['zones' => $westZones, 'id' => 604, 'lang' => 'fr', 'sec' => 'v133xm'],
+			['zones' => $westZones, 'id' => 606, 'lang' => 'ms', 'sec' => '852wkj'],
+			['zones' => $westZones, 'id' => 608, 'lang' => 'id', 'sec' => 'afmab1'],
+			['zones' => $westZones, 'id' => 610, 'lang' => 'tc', 'sec' => 'fux6b2'],
+			['zones' => $westZones, 'id' => 612, 'lang' => 'sc', 'sec' => 't0dlen'],
+			['zones' => $westZones, 'id' => 614, 'lang' => 'th', 'sec' => 'k7by62'],
+			['zones' => $westZones, 'id' => 616, 'lang' => 'ja', 'sec' => '3dlvmd'],
+			['zones' => $westZones, 'id' => 618, 'lang' => 'ar', 'sec' => 'tszo3e'],
+			['zones' => $westZones, 'id' => 620, 'lang' => 'ru', 'sec' => 'd7uqas'],
 			['zones' => ['ru'], 'id' => 3594, 'lang' => 'ru', 'sec' => '3xe3ye'],
 			['zones' => ['by'], 'id' => 85, 'lang' => 'ru', 'sec' => 'ygosc1'],
 			['zones' => ['kz'], 'id' => 104, 'lang' => 'ru', 'sec' => '3k8fn5'],
@@ -66,7 +85,26 @@ class FormProvider
 
 	public function getPartnerRefusalFormList(): array
 	{
+		$westZones = \Bitrix\UI\Form\FeedbackForm::getWestZones();
+
 		return [
+			['zones' => $westZones, 'id' => 542, 'lang' => 'en', 'sec' => 'n6qbr1'],
+			['zones' => $westZones, 'id' => 544, 'lang' => 'br', 'sec' => '8bvgmo'],
+			['zones' => $westZones, 'id' => 546, 'lang' => 'la', 'sec' => 'fgemml'],
+			['zones' => $westZones, 'id' => 548, 'lang' => 'de', 'sec' => 'vfe8vl'],
+			['zones' => $westZones, 'id' => 550, 'lang' => 'pl', 'sec' => 'dqtss4'],
+			['zones' => $westZones, 'id' => 552, 'lang' => 'tr', 'sec' => 'cbt3z6'],
+			['zones' => $westZones, 'id' => 554, 'lang' => 'vn', 'sec' => 'rtba1e'],
+			['zones' => $westZones, 'id' => 556, 'lang' => 'it', 'sec' => 't14rtt'],
+			['zones' => $westZones, 'id' => 558, 'lang' => 'fr', 'sec' => '0ta2it'],
+			['zones' => $westZones, 'id' => 560, 'lang' => 'ms', 'sec' => 'igpafm'],
+			['zones' => $westZones, 'id' => 562, 'lang' => 'id', 'sec' => '4cyuen'],
+			['zones' => $westZones, 'id' => 564, 'lang' => 'tc', 'sec' => '7viz4q'],
+			['zones' => $westZones, 'id' => 566, 'lang' => 'sc', 'sec' => '1qblkh'],
+			['zones' => $westZones, 'id' => 568, 'lang' => 'th', 'sec' => 'l2g19u'],
+			['zones' => $westZones, 'id' => 570, 'lang' => 'ja', 'sec' => 'o47o3f'],
+			['zones' => $westZones, 'id' => 572, 'lang' => 'ar', 'sec' => 'pfhgqj'],
+			['zones' => $westZones, 'id' => 574, 'lang' => 'ru', 'sec' => 'i932o7'],
 			['zones' => ['ru'], 'id' => 3593, 'lang' => 'ru', 'sec' => 'amp2bn'],
 			['zones' => ['by'], 'id' => 83, 'lang' => 'ru', 'sec' => '2s1mg3'],
 			['zones' => ['kz'], 'id' => 102, 'lang' => 'ru', 'sec' => 'rsa332'],

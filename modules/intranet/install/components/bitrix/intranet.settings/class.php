@@ -123,12 +123,25 @@ class SettingsComponent extends CBitrixComponent implements Controllerable, Erro
 		return $arParams;
 	}
 
-	public function getStartPage(array $codesOfPages): string
+	public function getStartPage(array $codesOfPages, ?array $readableCodesOfPages = null): string
 	{
-		return isset($this->arParams['START_PAGE'])
-		&& in_array($this->arParams['START_PAGE'], $codesOfPages, true)
-			? $this->arParams['START_PAGE']
-			: current($codesOfPages);
+		$startPage = $this->arParams['START_PAGE'] ?? null;
+		if (in_array($startPage, $codesOfPages, true))
+		{
+			return $startPage;
+		}
+
+		$requestPage = Application::getInstance()
+			->getContext()
+			->getRequest()
+			->getQuery('page')
+		;
+		$readableCodesOfPages ??= $codesOfPages;
+
+		return in_array($requestPage, $readableCodesOfPages, true)
+			? $requestPage
+			: current($codesOfPages)
+		;
 	}
 
 	public static function hasAccess(): bool
@@ -178,30 +191,44 @@ class SettingsComponent extends CBitrixComponent implements Controllerable, Erro
 		);
 		//endregion
 
-		$codesOfPages = array_keys($providers);
-		$this->arResult['START_PAGE'] = $this->getStartPage($codesOfPages);
+		$settingsFactory = $this->createFactory();
+		$pageSettingsInstances = [];
+		$readableCodesOfPages = [];
+		foreach (array_keys($providers) as $type)
+		{
+			$pageSettingsInstance = $settingsFactory->build($type);
+			$pageSettingsInstances[$type] = $pageSettingsInstance;
+			if ($pageSettingsInstance->getPermission()->canRead())
+			{
+				$readableCodesOfPages[] = $type;
+			}
+		}
+
+		$this->arResult['START_PAGE'] = $this->getStartPage(array_keys($providers), $readableCodesOfPages);
 		$this->arResult['ANALYTIC_CONTEXT'] = htmlspecialcharsbx($_REQUEST['analyticContext'] ?? '');
 		$this->arResult['OPTION_TO_MOVE'] = htmlspecialcharsbx($_REQUEST['option'] ?? '');
 		$this->arResult['MENU_ITEMS'] = [];
 		$this->arResult['PERMISSION'] = static::createPermission()->getPermission();
 		$this->arResult['PAGES_PERMISSION'] = [];
 
-		$settingsFactory = $this->createFactory();
 		foreach ($providers as $type => $provider)
 		{
-			$pageSettingsInstance = $settingsFactory->build($type);
+			$pageSettingsInstance = $pageSettingsInstances[$type];
+			$canReadPage = $pageSettingsInstance->getPermission()->canRead();
 
 			$this->arResult['MENU_ITEMS'][$provider->getType() . '_item'] = [
 					'NAME' => $provider->getTitle(),
 					'ACTIVE' => $this->arResult['START_PAGE'] === $type,
 					'ATTRIBUTES' => [
 						'title' => $provider->getTitle(),
+						'bx-operative' => $canReadPage ? 'Y' : 'N',
 						'DATA' => [
 							'type' => $type,
+							'testid' => 'intranet-settings-menu-link-' . $type,
 						],
 					],
-					'DISABLED' => !$pageSettingsInstance->getPermission()->canRead(),
-					'OPERATIVE' => $pageSettingsInstance->getPermission()->canRead()
+					'DISABLED' => !$canReadPage,
+					'OPERATIVE' => $canReadPage
 				] + ($provider instanceof Intranet\Settings\SettingsExternalPageProviderInterface ?
 					[
 						'EXTERNAL' => 'Y',
@@ -209,6 +236,18 @@ class SettingsComponent extends CBitrixComponent implements Controllerable, Erro
 					] : []
 				)
 			;
+
+			if ($canReadPage)
+			{
+				$this->arResult['MENU_ITEMS'][$provider->getType() . '_item']['ATTRIBUTES']['href'] =
+					'?page=' . rawurlencode($type)
+				;
+
+				if ($this->arResult['START_PAGE'] === $type)
+				{
+					$this->arResult['MENU_ITEMS'][$provider->getType() . '_item']['ATTRIBUTES']['aria-current'] = 'page';
+				}
+			}
 
 			if ($type === 'tools' && $pageSettingsInstance->getPermission()->canEdit())
 			{
@@ -295,6 +334,7 @@ class SettingsComponent extends CBitrixComponent implements Controllerable, Erro
 				if (!$saveResult->isSuccess())
 				{
 					$this->errorCollection->add($saveResult->getErrors());
+					$result->addErrors($saveResult->getErrors());
 				}
 			}
 		}

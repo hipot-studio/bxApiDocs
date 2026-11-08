@@ -21,10 +21,17 @@ use Bitrix\Main\Application;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\ORM\Data\AddResult;
 use Bitrix\Main\ORM\Data\UpdateResult;
+use Bitrix\Main\UserAccessTable;
 
 class AccessRepository implements AccessRepositoryInterface
 {
 	private const INSERT_BATCH_SIZE = 500;
+
+	/**
+	 * Chat codes are left out of the membership read, exactly as the model of the framework leaves them out: a
+	 * role relation never carries such a code, while a portal holds a great many rows of them.
+	 */
+	private const CHAT_ACCESS_PROVIDER = 'imchat';
 
 	public function __construct(
 		private readonly AccessRoleMapper $roleMapper,
@@ -126,6 +133,24 @@ class AccessRepository implements AccessRepositoryInterface
 		return $this->convertPermissionsFromOrm($ormPermissions);
 	}
 
+	public function getRoleIdsByPermissionValues(array $permissionIds, array $values): array
+	{
+		if (empty($permissionIds) || empty($values))
+		{
+			return [];
+		}
+
+		$rows = PermissionTable::query()
+			->addSelect('ROLE_ID')
+			->whereIn('PERMISSION_ID', array_map('strval', $permissionIds))
+			->whereIn('VALUE', array_map('intval', $values))
+			->exec()
+			->fetchAll()
+		;
+
+		return array_values(array_unique(array_map('intval', array_column($rows, 'ROLE_ID'))));
+	}
+
 	public function getAccessCodesByRoleIds(array $roleIds): array
 	{
 		if (empty($roleIds))
@@ -146,6 +171,45 @@ class AccessRepository implements AccessRepositoryInterface
 		}
 
 		return $result;
+	}
+
+	public function getUserAccessCodes(array $userIds): array
+	{
+		$userIds = array_values(array_unique(array_filter(
+			array_map('intval', $userIds),
+			static fn(int $userId): bool => $userId > 0,
+		)));
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		$codes = array_fill_keys($userIds, []);
+
+		$rows = UserAccessTable::query()
+			->setSelect(['USER_ID', 'ACCESS_CODE'])
+			->whereIn('USER_ID', $userIds)
+			->whereNot('PROVIDER_ID', self::CHAT_ACCESS_PROVIDER)
+			->exec()
+		;
+
+		while ($row = $rows->fetch())
+		{
+			$userId = (int)$row['USER_ID'];
+			$code = (string)$row['ACCESS_CODE'];
+
+			// Keyed by the code itself, so a code and a signature shared by several rows are stored once - the
+			// same set the model builds, where the deduplication happens at the end instead.
+			$codes[$userId][$code] = $code;
+
+			$signature = (new AccessCode($code))->getSignature();
+			if ($signature)
+			{
+				$codes[$userId][$signature] = $signature;
+			}
+		}
+
+		return array_map('array_values', $codes);
 	}
 
 	public function addRole(string $name): AddResult

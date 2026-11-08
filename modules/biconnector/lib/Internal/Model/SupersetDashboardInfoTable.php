@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Internal\Model;
 
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
+use Bitrix\Main\ORM\Data\Internal\MergeTrait;
 use Bitrix\Main\ORM\Event;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
@@ -28,6 +29,7 @@ use Bitrix\Main\ORM\Fields\TextField;
 class SupersetDashboardInfoTable extends DataManager
 {
 	use DeleteByFilterTrait;
+	use MergeTrait;
 
 	public static function getTableName(): string
 	{

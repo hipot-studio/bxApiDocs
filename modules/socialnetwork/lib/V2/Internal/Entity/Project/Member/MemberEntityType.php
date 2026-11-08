@@ -8,4 +8,5 @@ enum MemberEntityType: string
 {
 	case User = 'user';
 	case Department = 'department';
+	case Team = 'team';
 }

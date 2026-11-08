@@ -164,6 +164,11 @@ class CBPFixResultActivity extends BaseActivity
 		if (!empty($values['ResultUser']))
 		{
 			$userId = \CBPHelper::extractFirstUser($values['ResultUser'], $this->getDocumentId());
+			if ($userId === null)
+			{
+				return null;
+			}
+
 			$resultValue = [
 				'RESULT_TYPE' => self::RESULT_POSITIVE,
 				'USER_ID' => $userId,

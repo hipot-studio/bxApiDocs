@@ -5,6 +5,7 @@ namespace Bitrix\Tasks\Internals\Task\Search\Repository;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
 use Bitrix\Tasks\Internals\Member\MemberFacade;
 use Bitrix\Tasks\Internals\Task\Search\Exception\SearchIndexException;
+use Bitrix\Tasks\Internals\Task\Search\Exception\TaskNotFoundException;
 use Bitrix\Tasks\Internals\Task\Search\RepositoryInterface;
 use Bitrix\Tasks\Member\Service\TaskMemberService;
 use Bitrix\Tasks\Provider\Tag\TagList;
@@ -50,7 +51,7 @@ class TaskRepository implements RepositoryInterface
 		$this->task = $tasks[0] ?? null;
 		if (is_null($this->task))
 		{
-			throw new SearchIndexException("Task {$this->taskId} not found");
+			throw new TaskNotFoundException("Task {$this->taskId} not found");
 		}
 
 		$this->fillWithMembers()->fillWithCheckLists()->fillWithTags();
@@ -116,6 +117,9 @@ class TaskRepository implements RepositoryInterface
 			'TITLE',
 			'DESCRIPTION',
 			'GROUP_ID',
+			'SITE_ID',
+			'CHANGED_DATE',
+			'CREATED_DATE',
 			'UF_CRM_TASK',
 		];
 	}

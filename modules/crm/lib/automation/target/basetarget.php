@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Automation\Target;
 
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup;
+use Bitrix\Crm\Automation\DesignerAvailability;
 use Bitrix\Crm\Automation\Engine\TemplatesScheme;
 use Bitrix\Crm\Automation\Trigger\Entity\EO_Trigger;
 use Bitrix\Main\Loader;
@@ -193,6 +194,11 @@ abstract class BaseTarget extends \Bitrix\Bizproc\Automation\Target\BaseTarget
 	public function getDocumentType()
 	{
 		return \CCrmBizProcHelper::ResolveDocumentType($this->getEntityTypeId());
+	}
+
+	public function canRunExternalModifiedTemplates(): bool
+	{
+		return DesignerAvailability::getInstance()->isAvailable();
 	}
 
 	public function prepareTriggersToSave(array &$triggers)

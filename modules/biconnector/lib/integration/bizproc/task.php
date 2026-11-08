@@ -37,6 +37,8 @@ class Task
 
 		$taskStatusesSql = static::mapDictionarytoSqlCase(static::getTaskStatuses(), $helper);
 		$taskIdsStatusesSql = static::mapDictionarytoSqlCase(static::getTaskIdsStatuses(), $helper);
+		$taskUserStatusesSql = static::mapDictionarytoSqlCase(static::getTaskUserStatuses($languageId), $helper);
+		$taskUserIdsStatusesSql = static::mapDictionarytoSqlCase(static::getTaskUserIdsStatuses($languageId), $helper);
 		$taskCodesSql = static::mapDictionarytoSqlCase(static::getTaskCodesNames(), $helper);
 		$taskIdsCodesSql = static::mapDictionarytoSqlCase(static::getTaskCodesIdsNames(), $helper);
 		$taskTypeIdsSql = static::mapSerializedDictionarytoSqlCase(static::getTaskApproveTypeIds(), $helper);
@@ -152,12 +154,36 @@ class Task
 						'LEFT JOIN b_user U ON U.ID = TU.USER_ID',
 					],
 				],
+				'USER_STATUS_ID' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'TU.STATUS',
+					'FIELD_TYPE' => 'int',
+					'TABLE_ALIAS' => 'TU',
+					'JOIN' => 'INNER JOIN b_bp_task_user TU ON TU.TASK_ID = T.ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_bp_task_user TU ON TU.TASK_ID = T.ID',
+				],
+				'USER_STATUS_NAME' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => str_replace('#FIELD_NAME#', 'TU.STATUS', $taskUserStatusesSql),
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'TU',
+					'JOIN' => 'INNER JOIN b_bp_task_user TU ON TU.TASK_ID = T.ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_bp_task_user TU ON TU.TASK_ID = T.ID',
+				],
+				'USER_STATUS' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => str_replace('#FIELD_NAME#', 'TU.STATUS', $taskUserIdsStatusesSql),
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'TU',
+					'JOIN' => 'INNER JOIN b_bp_task_user TU ON TU.TASK_ID = T.ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_bp_task_user TU ON TU.TASK_ID = T.ID',
+				],
 			],
 		];
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['bizproc_task']['TABLE_DESCRIPTION'] = $messages['BP_BIC_TASK_TABLE'] ?: 'bizproc_task';
-		$result['bizproc_task']['TABLE_DESCRIPTION_FULL'] = $messages['BP_BIC_TASK_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['bizproc_task']['TABLE_DESCRIPTION_FULL'] = $messages['BP_BIC_TASK_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['bizproc_task']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['BP_BIC_TASK_FIELD_' . $fieldCode]) ? $messages['BP_BIC_TASK_FIELD_' . $fieldCode] : $fieldCode;
@@ -212,6 +238,7 @@ class Task
 			if ($id === '')
 			{
 				$default = "'" . $helper->forSql($value) . "'";
+
 				continue;
 			}
 
@@ -238,6 +265,29 @@ class Task
 	public static function getTaskIdsStatuses()
 	{
 		$names = static::getTaskStatuses();
+
+		foreach ($names as $id => &$name)
+		{
+			$name = "[{$id}] {$name}";
+		}
+
+		return $names;
+	}
+
+	public static function getTaskUserStatuses(string $languageId): array
+	{
+		return [
+			0 => Loc::getMessage('BP_BIC_TASK_USER_STATUS_0', null, $languageId),
+			1 => Loc::getMessage('BP_BIC_TASK_USER_STATUS_1', null, $languageId),
+			2 => Loc::getMessage('BP_BIC_TASK_USER_STATUS_2', null, $languageId),
+			3 => Loc::getMessage('BP_BIC_TASK_USER_STATUS_3', null, $languageId),
+			4 => Loc::getMessage('BP_BIC_TASK_USER_STATUS_4', null, $languageId),
+		];
+	}
+
+	public static function getTaskUserIdsStatuses(string $languageId): array
+	{
+		$names = static::getTaskUserStatuses($languageId);
 
 		foreach ($names as $id => &$name)
 		{

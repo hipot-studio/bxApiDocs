@@ -108,6 +108,33 @@ class Idempotence
 	}
 
 	/**
+	 * Checks whether a key exists and has not expired yet.
+	 *
+	 * On the file-cache fallback expiration is evaluated at read time against
+	 * the given $ttl, so callers must pass the same TTL that was used in
+	 * {@see self::addKey()}. KV engines store the TTL at write time and
+	 * ignore the parameter here.
+	 *
+	 * @param string $key
+	 * @param int $ttl Cache TTL in seconds, defaults to self::CACHE_TTL (24h).
+	 * @return bool
+	 */
+	public static function hasKey(string $key, int $ttl = self::CACHE_TTL): bool
+	{
+		$engine = self::getKvCacheEngine();
+		if ($engine !== null)
+		{
+			$value = $engine->get(self::engineKey($key));
+
+			return $value !== false && $value !== null;
+		}
+
+		$cache = Cache::createInstance();
+
+		return $cache->initCache($ttl, self::getCacheKey($key), self::CACHE_DIR);
+	}
+
+	/**
 	 * Drops a previously stored key. Mainly used by tests/bench harness to reset state.
 	 *
 	 * @param string $key

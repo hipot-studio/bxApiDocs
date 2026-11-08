@@ -4,8 +4,8 @@ namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Storage;
 use Bitrix\Im\Access\ChatAuthProvider;
-use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Collab\CollabInfo;
 use Bitrix\Im\V2\Chat\Collab\GuestCounter;
 use Bitrix\Im\V2\Entity\User\User;
@@ -25,6 +25,7 @@ use Bitrix\Main\DI\ServiceLocator;
 class CollabChat extends ExternalChat
 {
 	protected const EXTRANET_CAN_SEE_HISTORY = true;
+	protected const EXTRANET_CAN_SEE_HISTORY_ON_EXPLICIT_ADD = true;
 
 	private const UNAVAILABLE_ACTION_GROUPS = [
 		ActionGroup::ManageUi,
@@ -78,9 +79,9 @@ class CollabChat extends ExternalChat
 		return Group::getStorageId((int)$this->getEntityId()) ?? 0;
 	}
 
-	protected function createDiskFolder(): ?Folder
+	protected function createDiskFolder(?Storage $storage = null): ?Folder
 	{
-		$storage = \CIMDisk::GetStorage($this->chatId);
+		$storage ??= \CIMDisk::GetStorage($this->chatId);
 		if (!$storage)
 		{
 			return null;
@@ -98,11 +99,6 @@ class CollabChat extends ExternalChat
 		$accessProvider->updateChatCodesByRelations($this->getId());
 
 		return $folder;
-	}
-
-	public function canHaveChild(Chat $child): bool
-	{
-		return !($child instanceof CommentChat);
 	}
 
 	public function isAutoJoinEnabled(): bool

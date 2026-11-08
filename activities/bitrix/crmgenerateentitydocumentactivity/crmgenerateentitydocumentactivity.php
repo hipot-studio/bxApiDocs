@@ -51,7 +51,6 @@ class CBPCrmGenerateEntityDocumentActivity
 			'MyCompanyId' => null,
 			'MyCompanyRequisiteId' => null,
 			'MyCompanyBankDetailId' => null,
-			'CreateActivity' => 'N',
 
 			//return
 			'DocumentId' => null,
@@ -59,7 +58,6 @@ class CBPCrmGenerateEntityDocumentActivity
 			'DocumentPdf' => null,
 			'DocumentDocx' => null,
 			'DocumentNumber' => null,
-			'DocumentActivityId' => null,
 		);
 
 		$this->SetPropertiesTypes([
@@ -68,7 +66,6 @@ class CBPCrmGenerateEntityDocumentActivity
 			'DocumentPdf' => ['Type' => 'file'],
 			'DocumentDocx' => ['Type' => 'file'],
 			'DocumentNumber' => ['Type' => 'string'],
-			'DocumentActivityId' => ['Type' => 'int'],
 		]);
 	}
 
@@ -80,7 +77,6 @@ class CBPCrmGenerateEntityDocumentActivity
 		$this->DocumentPdf = null;
 		$this->DocumentDocx = null;
 		$this->DocumentNumber = null;
-		$this->DocumentActivityId = null;
 	}
 
 	public function Cancel()
@@ -220,23 +216,6 @@ class CBPCrmGenerateEntityDocumentActivity
 			$this,
 			'document',
 		);
-
-		if ($this->CreateActivity === 'Y')
-		{
-			$createActivityResult = DocumentGeneratorManager::getInstance()->createDocumentActivity(
-				$document,
-				$itemIdentifier,
-				$targetUserId,
-			);
-			if ($createActivityResult->isSuccess())
-			{
-				$this->DocumentActivityId = $createActivityResult->getData()['id'];
-			}
-			else
-			{
-				$this->WriteToTrackingService(implode(',', $result->getErrorMessages()), 0, CBPTrackingType::Error);
-			}
-		}
 
 		//If don`t need to wait for PDF - close activity
 		if (!$isWaitForPdf)
@@ -550,16 +529,6 @@ class CBPCrmGenerateEntityDocumentActivity
 		{
 			$enablePublicUrl = $arCurrentValues['public_url_text'] ?? 'N';
 		}
-		$createActivity = $arCurrentValues['create_activity'] ?? null;
-		if (!empty($createActivity))
-		{
-			$enablePublicUrl = $enablePublicUrl === 'Y' ? 'Y' : 'N';
-		}
-		else
-		{
-			$createActivity = $arCurrentValues['create_activity'] ?? 'N';
-		}
-
 		$withStamps = $arCurrentValues['with_stamps'] ?? null;
 		if(!empty($withStamps))
 		{
@@ -574,7 +543,6 @@ class CBPCrmGenerateEntityDocumentActivity
 			'TemplateId' => !empty($arCurrentValues['template_id']) ? $arCurrentValues['template_id'] : $arCurrentValues['template_id_text'],
 			'UseSubscription' => $useSubscription,
 			'EnablePublicUrl' => $enablePublicUrl,
-			'CreateActivity' => $createActivity,
 			'WithStamps' => $withStamps,
 			'Values' => $arCurrentValues['Values'],
 			'MyCompanyId' => !empty($arCurrentValues['my_company_id']) ? $arCurrentValues['my_company_id'] : $arCurrentValues['my_company_id_text'],
@@ -639,7 +607,24 @@ class CBPCrmGenerateEntityDocumentActivity
 
 		if($request['customer_action'] == 'getValuePropertyDialog')
 		{
-			if(!$request['templateId'] || !$request['entity_type'] || !$request['placeholder'])
+			$placeholders = [];
+			if(isset($request['placeholders']) && is_array($request['placeholders']))
+			{
+				foreach($request['placeholders'] as $placeholder)
+				{
+					if(is_string($placeholder) && $placeholder !== '')
+					{
+						$placeholders[] = $placeholder;
+					}
+				}
+				$placeholders = array_values(array_unique($placeholders));
+			}
+			elseif(!empty($request['placeholder']))
+			{
+				$placeholders[] = $request['placeholder'];
+			}
+
+			if(!$request['templateId'] || !$request['entity_type'] || empty($placeholders))
 			{
 				return $response;
 			}
@@ -656,8 +641,21 @@ class CBPCrmGenerateEntityDocumentActivity
 			}
 			$template->setSourceType($providerClassName);
 			$document = DocumentGenerator\Document::createByTemplate($template, ' ');
-			$fields = $document->getFields([$request['placeholder']], true, true);
-			$response = self::renderValuePropertyDialog($request['isRobot'] == 'y', $providerClassName, $request['placeholder'], \Bitrix\Main\Engine\Response\Converter::toJson()->process($fields[$request['placeholder']]));
+			$fields = $document->getFields($placeholders, true, true);
+			foreach($placeholders as $placeholder)
+			{
+				if(!array_key_exists($placeholder, $fields))
+				{
+					continue;
+				}
+
+				$response .= self::renderValuePropertyDialog(
+					$request['isRobot'] == 'y',
+					$providerClassName,
+					$placeholder,
+					\Bitrix\Main\Engine\Response\Converter::toJson()->process($fields[$placeholder]),
+				);
+			}
 		}
 
 		return $response;
@@ -665,7 +663,7 @@ class CBPCrmGenerateEntityDocumentActivity
 
 	public static function renderValuePropertyDialog($isRobot, $providerClassName, $placeholder, array $field = null, $value = null)
 	{
-		if((!$value || empty($value)) && isset($field['chain']))
+		if(($value === null || $value === '') && isset($field['chain']))
 		{
 			$value = $field['chain'];
 		}

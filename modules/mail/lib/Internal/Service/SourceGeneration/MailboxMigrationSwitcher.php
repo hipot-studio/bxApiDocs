@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Internal\Service\SourceGeneration;
 
 use Bitrix\Mail\Helper\Mailbox\MailboxConnector;
+use Bitrix\Mail\Internal\Service\Mailbox\SettingsWriteCoordinator;
 use Bitrix\Mail\Internals\MailboxSourceGenerationTable;
 use Bitrix\Mail\Internals\Service\Mailbox\EmailNormalizer;
 use Bitrix\Mail\MailboxTable;
-use Bitrix\Mail\Public\Service\Mailbox\AddressHistory;
+use Bitrix\Mail\Public\Service\Mailbox\Alias\AddressHistory;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\Error;
@@ -21,6 +22,8 @@ class MailboxMigrationSwitcher
 	public const ERROR_EMAIL_UPDATE_FAILED = 'MAIL_SOURCE_GENERATION_SWITCH_EMAIL_UPDATE_FAILED';
 	public const ERROR_SWITCH_FAILED = 'MAIL_SOURCE_GENERATION_BUSINESS_SWITCH_FAILED';
 	public const RESULT_IMAP_DIRECTORIES = 'imapDirectories';
+	/** The provisioned block of the inspection: {pairs: [{source, target, created}], notCreated: [{source, reason, directoryId}]} */
+	public const RESULT_FOLDER_OUTCOMES = 'folderOutcomes';
 
 	public function __construct(
 		private readonly Switcher $generationSwitcher = new Switcher(),
@@ -31,7 +34,10 @@ class MailboxMigrationSwitcher
 	{
 	}
 
-	/** @param array $heldLock The mailbox synchronization lease held over final sync and delta. */
+	/**
+	 * Owns the switch transaction; the caller holds OperationLock before entering.
+	 * @param array $heldLock The mailbox synchronization lease held over final sync and delta.
+	 */
 	public function switch(
 		int $mailboxId,
 		string $operationId,
@@ -86,16 +92,93 @@ class MailboxMigrationSwitcher
 	/** Validates the target transports before the mailbox synchronization lease is acquired. */
 	public function prepare(ConnectionSnapshot $snapshot): Result
 	{
+		$checked = $this->checkedImap($snapshot, $this->validateImapConnection($snapshot->imap()), false);
+
+		return $checked->isSuccess() ? $this->withPreparedSmtp($snapshot, $checked->getData()) : $checked;
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $knownDirectories
+	 * @param bool $atAcceptance The acceptance of a snapshot creates the missing folders of the user
+	 *        on the target server; any other check only compares {@see inspectKnownTopology()}.
+	 * @param string[] $notCreatedSources Paths of the known folders the operation already failed to create.
+	 * @param bool $createMissing False for a repeated acceptance of an operation whose generation is
+	 *        already written: a missing folder of the user is let through and left to the hand over.
+	 * @param TargetFolderCreator|null $creator The creator of the acceptance, with its deadline and
+	 *        its observer of created folders; a plain one when none is given.
+	 */
+	public function prepareKnownTopology(
+		ConnectionSnapshot $snapshot,
+		array $knownDirectories,
+		?\Bitrix\Mail\Imap $client = null,
+		bool $atAcceptance = false,
+		array $notCreatedSources = [],
+		bool $createMissing = true,
+		?TargetFolderCreator $creator = null,
+	): Result
+	{
+		$checked = $this->inspectKnownTopology(
+			$snapshot,
+			$knownDirectories,
+			$client,
+			$atAcceptance,
+			$notCreatedSources,
+			$createMissing,
+			$creator,
+		);
+
+		return $checked->isSuccess() ? $this->withPreparedSmtp($snapshot, $checked->getData()) : $checked;
+	}
+
+	/**
+	 * The IMAP half of {@see prepareKnownTopology()}: the target folders of the known topology under
+	 * {@see RESULT_IMAP_DIRECTORIES} and, at the acceptance, what became of the folders without a pair
+	 * under {@see RESULT_FOLDER_OUTCOMES}.
+	 *
+	 * A folder of the inbox or of a system role missing on the target server fails the check with a
+	 * code the retry policy treats as one needing an external fix: always so at the acceptance, where
+	 * the mail service knows no code of a missing inbox, and with that code later on.
+	 *
+	 * @param array<int, array<string, mixed>> $knownDirectories
+	 * @param string[] $notCreatedSources
+	 */
+	public function inspectKnownTopology(
+		ConnectionSnapshot $snapshot,
+		array $knownDirectories,
+		?\Bitrix\Mail\Imap $client = null,
+		bool $atAcceptance = false,
+		array $notCreatedSources = [],
+		bool $createMissing = true,
+		?TargetFolderCreator $creator = null,
+	): Result
+	{
+		$validatedImap = (new MailboxConnector())->inspectKnownMigrationConnectionSnapshot(
+			$snapshot->imap(),
+			$knownDirectories,
+			$client,
+			$atAcceptance ? ($creator ?? new TargetFolderCreator()) : null,
+			$notCreatedSources,
+			$createMissing,
+		);
+
+		return $this->checkedImap($snapshot, $validatedImap, $atAcceptance);
+	}
+
+	private function checkedImap(ConnectionSnapshot $snapshot, Result $validatedImap, bool $atAcceptance): Result
+	{
 		$imap = $snapshot->imap();
-		$validatedImap = $this->validateImapConnection($imap);
 		if (!$validatedImap->isSuccess())
 		{
 			$result = new Result();
 			foreach ($validatedImap->getErrors() as $error)
 			{
+				$customData = is_array($error->getCustomData()) ? $error->getCustomData() : [];
+				$type = $customData['type'] ?? null;
+				$missingRole = $customData['missingRole'] ?? null;
 				$result->addError(new Error(
 					MigrationMetrics::withoutSecretsOf($imap, $error->getMessage()),
-					MigrationService::ERROR_CONNECTION_UNAVAILABLE,
+					is_string($missingRole) ? self::missingFolderCode($missingRole, $atAcceptance) : MigrationService::ERROR_CONNECTION_UNAVAILABLE,
+					array_filter(['type' => $type, 'missingRole' => $missingRole], 'is_string') ?: null,
 				));
 			}
 
@@ -111,10 +194,30 @@ class MailboxMigrationSwitcher
 			));
 		}
 
+		$data = [self::RESULT_IMAP_DIRECTORIES => $directories];
+		$provisioned = $validatedImap->getData()['provisioned'] ?? null;
+		if (is_array($provisioned))
+		{
+			$data[self::RESULT_FOLDER_OUTCOMES] = $provisioned;
+		}
+
+		return (new Result())->setData($data);
+	}
+
+	private static function missingFolderCode(string $role, bool $atAcceptance): string
+	{
+		return !$atAcceptance && $role === 'inbox'
+			? MigrationService::ERROR_INCOME_FOLDER_MISSING
+			: MigrationService::ERROR_DIRECTORY_ROLES_AMBIGUOUS
+		;
+	}
+
+	private function withPreparedSmtp(ConnectionSnapshot $snapshot, array $imapData): Result
+	{
 		$preparedSmtp = $this->smtpSwitcher->prepare($snapshot);
 		if ($preparedSmtp->isSuccess())
 		{
-			$preparedSmtp->setData($preparedSmtp->getData() + [self::RESULT_IMAP_DIRECTORIES => $directories]);
+			$preparedSmtp->setData($preparedSmtp->getData() + $imapData);
 		}
 
 		return $preparedSmtp;
@@ -187,8 +290,9 @@ class MailboxMigrationSwitcher
 			$connection->startTransaction();
 			$transactionStarted = true;
 
-			$mailbox = $this->lockMailbox($connection, $mailboxId);
-			if ($mailbox === null)
+			$coordinator = new SettingsWriteCoordinator();
+			$locked = $coordinator->lockWithinTransaction($mailboxId, true, $operationId);
+			if (!$locked->isSuccess())
 			{
 				$this->rollback($connection);
 				$transactionStarted = false;
@@ -199,6 +303,7 @@ class MailboxMigrationSwitcher
 				));
 			}
 
+			$mailbox = $locked->getData()['mailbox'];
 			$currentEmail = $this->emailNormalizer->normalizeMailbox($mailbox);
 			if ($currentEmail === null)
 			{
@@ -210,6 +315,8 @@ class MailboxMigrationSwitcher
 					self::ERROR_EMAIL_INVALID,
 				));
 			}
+
+			$coordinator->lockSendersWithinTransaction($mailboxId, $mailbox);
 
 			$activated = $this->generationSwitcher->activateWithinTransaction(
 				$mailboxId,
@@ -286,31 +393,14 @@ class MailboxMigrationSwitcher
 			));
 		}
 
-		try
+		$afterCommit = [fn() => $this->generationSwitcher->afterCommit($mailboxId)];
+		if ($smtpChange !== null)
 		{
-			$this->generationSwitcher->afterCommit($mailboxId);
+			$afterCommit[] = fn() => $this->smtpSwitcher->afterCommit($smtpChange, $mailboxId);
 		}
-		finally
-		{
-			if ($smtpChange !== null)
-			{
-				$this->smtpSwitcher->afterCommit($smtpChange, $mailboxId);
-			}
-		}
+		$coordinator->afterCommit($afterCommit);
 
 		return $result->setData($activated->getData());
-	}
-
-	/** @return array<string, mixed>|null */
-	private function lockMailbox(Connection $connection, int $mailboxId): ?array
-	{
-		$mailbox = $connection->query(sprintf(
-			'SELECT ID, EMAIL, NAME, LOGIN, USERNAME, USER_ID FROM %s WHERE ID = %u FOR UPDATE',
-			MailboxTable::getTableName(),
-			$mailboxId,
-		))->fetch();
-
-		return $mailbox ?: null;
 	}
 
 	private function alreadySwitched(int $mailboxId, string $operationId): ?int
@@ -335,8 +425,7 @@ class MailboxMigrationSwitcher
 		return $this->generationSwitcher->getActiveGenerationId($mailboxId) === $generationId
 			&& $this->generationSwitcher->isProjectionConfirmed($mailboxId, $generationId)
 			? $generationId
-			: null
-		;
+			: null;
 	}
 
 	private function rollback(Connection $connection): void

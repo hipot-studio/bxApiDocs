@@ -21,6 +21,7 @@ class RestBot
 		'OnImBotV2ContextGet' => 'onImBotV2ContextGet',
 		'OnImBotV2CommandAdd' => 'onImBotV2CommandAdd',
 		'OnImBotV2ReactionChange' => 'onImBotV2ReactionChange',
+		'OnImBotV2FormSubmit' => 'onImBotV2FormSubmit',
 	];
 
 	/**

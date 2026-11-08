@@ -4,6 +4,8 @@ namespace Bitrix\Im\V2\Folder\System;
 
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserType;
+use Bitrix\Im\V2\Folder\Definition\FolderDefinition;
+use Bitrix\Im\V2\Folder\Definition\UnsupportedDefinition;
 
 /**
  * "All open channels" — sort-anchor only. Chat-level operations (pin/tail)
@@ -35,6 +37,11 @@ final class AllOpenChannelFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_OPEN_CHANNEL';
 	}
 
+	public function getDescriptionLangKey(): ?string
+	{
+		return 'IM_FOLDER_SYSTEM_OPEN_CHANNEL_DESCRIPTION';
+	}
+
 	public function isAvailable(int $userId): bool
 	{
 		try
@@ -47,5 +54,16 @@ final class AllOpenChannelFolder extends SystemFolder
 		{
 			return false;
 		}
+	}
+
+	public function shouldMigrateLegacyPins(): bool
+	{
+		return false;
+	}
+
+	/** Showcase/catalog of open channels: no standard recent list, tail not supported. */
+	public function getDefinition(): FolderDefinition
+	{
+		return new UnsupportedDefinition($this->getRecentSection());
 	}
 }

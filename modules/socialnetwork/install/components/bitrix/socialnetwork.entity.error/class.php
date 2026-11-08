@@ -13,6 +13,7 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\V2\Feature;
 
 Loc::loadMessages(__FILE__);
 
@@ -61,8 +62,20 @@ class SocialnetworkEntityError extends \CBitrixComponent
 			$this->arResult['HELP_LINK'] = true;
 		}
 
-		$this->arResult['TITLE'] = Loc::getMessage('SOCIALNETWORK_ENTITY_ERROR_COMPONENT_TITLE_' . $this->arParams['ENTITY']);
-		$this->arResult['DESCRIPTION'] = Loc::getMessage('SOCIALNETWORK_ENTITY_ERROR_COMPONENT_DESCRIPTION_' . $this->arParams['ENTITY']);
+		$messageSuffix = (
+			$this->arParams['ENTITY'] === self::ENTITY_SONET_GROUP
+			&& Feature::isNewProjectsOn()
+		)
+			? '_V2'
+			: ''
+		;
+
+		$this->arResult['TITLE'] = Loc::getMessage(
+			'SOCIALNETWORK_ENTITY_ERROR_COMPONENT_TITLE_' . $this->arParams['ENTITY'] . $messageSuffix,
+		);
+		$this->arResult['DESCRIPTION'] = Loc::getMessage(
+			'SOCIALNETWORK_ENTITY_ERROR_COMPONENT_DESCRIPTION_' . $this->arParams['ENTITY'] . $messageSuffix,
+		);
 
 		$this->arResult = array_merge($this->arResult, $this->arParams);
 	}

@@ -10,9 +10,18 @@ use Bitrix\Timeman\Monitor\Config;
 use Bitrix\Timeman\Monitor\History\History;
 use Bitrix\Timeman\Monitor\Report\DayReport;
 use Bitrix\Timeman\Monitor\Security\Permissions;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 
 class Monitor extends Controller
 {
+	protected function getDefaultPreFilters()
+	{
+		return [
+			new ToolEnabledFilter(),
+			...parent::getDefaultPreFilters(),
+		];
+	}
+
 	public function recordHistoryAction($history)
 	{
 		$enabled = Config::getEnabled();

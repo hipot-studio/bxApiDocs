@@ -3,6 +3,7 @@
 namespace Bitrix\Bizproc\UI;
 
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Web\Json;
 
 class WorkflowUserGridView extends WorkflowUserView
 {
@@ -156,6 +157,8 @@ class WorkflowUserGridView extends WorkflowUserView
 				'name' => html_entity_decode($task['~NAME']),
 				'description' => $task['~DESCRIPTION'],
 				'isInline' => \CBPHelper::getBool($task['IS_INLINE'] ?? null),
+				'activity' => $task['ACTIVITY'] ?? null,
+				'hash' => $isRunning ? $this->getTaskSimilarityHash($task) : null,
 				'controls' => $isRunning ? $this->getTaskControls($task) : [],
 				'overdueDate' => $task['~OVERDUE_DATE'] ?? null,
 				'url' => $isRpa
@@ -168,6 +171,59 @@ class WorkflowUserGridView extends WorkflowUserView
 		}
 
 		return $tasks;
+	}
+
+	/**
+	 * Similarity hash: tasks of one template that expect the same decision share it. Kept identical
+	 * on web and mobile, so the grouping rules of both clients stay in sync.
+	 */
+	protected function getTaskSimilarityHash(array $task): string
+	{
+		$hashData = ['TEMPLATE_ID' => $this->workflow['WORKFLOW_TEMPLATE_ID'] ?? 0];
+
+		if (isset($task['ACTIVITY_NAME']))
+		{
+			$hashData['ACTIVITY_NAME'] = $task['ACTIVITY_NAME'];
+		}
+
+		if (isset($task['ACTIVITY']) && $task['ACTIVITY'] === 'HandleExternalEventActivity')
+		{
+			$hashData['TASK_ID'] = $task['ID'];
+		}
+
+		$parameters = $task['PARAMETERS'] ?? null;
+
+		if (is_array($parameters))
+		{
+			if (isset($parameters['ShowComment']))
+			{
+				$hashData['ShowComment'] = $parameters['ShowComment'];
+			}
+
+			if (isset($parameters['REQUEST']))
+			{
+				$hashData['REQUEST'] = $parameters['REQUEST'];
+				if (is_array($parameters['REQUEST']))
+				{
+					foreach ($parameters['REQUEST'] as $property)
+					{
+						// a template built outside the designer may hold a REQUEST element of any shape
+						$propertyType = (is_array($property) || $property instanceof \ArrayAccess)
+							? ($property['Type'] ?? null)
+							: null
+						;
+						if ($propertyType === 'file' || $propertyType === 'S:DiskFile')
+						{
+							$hashData['TASK_ID'] = $task['ID'];
+
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		return md5(Json::encode($hashData));
 	}
 
 	protected function getTaskControls(array $task): array

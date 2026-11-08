@@ -222,7 +222,7 @@ class LandingFilterComponent extends LandingBaseComponent implements Controllera
 		$gridFilter = self::getFilterPresets();
 		$search = $grid->getFilter($gridFilter);
 
-		if ($search['FILTER_APPLIED'])
+		if ($search['FILTER_APPLIED'] ?? null)
 		{
 			return $search;
 		}
@@ -259,7 +259,7 @@ class LandingFilterComponent extends LandingBaseComponent implements Controllera
 			if ($search['FILTER_APPLIED'] ?? null)
 			{
 				// if user type just in area
-				if (isset($search['FIND']) && trim($search['FIND']))
+				if (isset($search['FIND']) && (trim((string)$search['FIND']) !== ''))
 				{
 					$findOriginal = trim($search['FIND']);
 					$search['FIND'] = '%' . trim($search['FIND']) . '%';
@@ -546,7 +546,7 @@ class LandingFilterComponent extends LandingBaseComponent implements Controllera
 			$grid = self::getGrid($this->arParams['FILTER_TYPE'], $this->arParams['TYPE']);
 			$gridFilter = self::getFilterPresets();
 			$search = $grid->getFilter($gridFilter);
-			self::$isDeleted = $search['DELETED'] === 'Y';
+			self::$isDeleted = ($search['DELETED'] ?? null) === 'Y';
 		}
 
 		parent::executeComponent();

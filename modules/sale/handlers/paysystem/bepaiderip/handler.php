@@ -27,6 +27,7 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 	private const API_URL = 'https://api.bepaid.by';
 	private const TRACKING_ID_DELIMITER = '#';
 	private const STATUS_SUCCESSFUL_CODE = 'successful';
+	private const STATUS_PENDING_CODE = 'pending';
 
 	/**
 	 * @inheritDoc
@@ -77,7 +78,7 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 	{
 		$result = new ServiceResult();
 
-		$inputStream = self::readFromStream();
+		$inputStream = $request::getInput();
 		$data = self::decode($inputStream);
 		if ($data === false)
 		{
@@ -95,6 +96,18 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 				PaySystem\Error::create(
 					Loc::getMessage('SALE_HPS_BEPAID_ERIP_ERROR_SIGNATURE')
 				)
+			);
+		}
+
+		if (!$payment->getField('PS_INVOICE_ID'))
+		{
+			if (($transaction['status'] ?? null) === self::STATUS_PENDING_CODE)
+			{
+				return $result;
+			}
+
+			return $result->addError(
+				PaySystem\Error::create(Loc::getMessage('SALE_HPS_BEPAID_ERIP_RESPONSE_ERROR'))
 			);
 		}
 
@@ -340,16 +353,17 @@ class BePaidEripHandler extends PaySystem\ServiceHandler
 	 */
 	private function isSignatureCorrect(Payment $payment, $inputStream): bool
 	{
+		$signatureHeader = $_SERVER['HTTP_CONTENT_SIGNATURE'] ?? '';
 		PaySystem\Logger::addDebugInfo(
 			sprintf(
 				'%s: Signature: %s; Webhook: %s',
 				__CLASS__,
-				$_SERVER['HTTP_CONTENT_SIGNATURE'],
+				$signatureHeader,
 				$inputStream
 			)
 		);
 
-		$signature  = base64_decode($_SERVER['HTTP_CONTENT_SIGNATURE']);
+		$signature  = base64_decode($signatureHeader);
 		if (!$signature)
 		{
 			return false;

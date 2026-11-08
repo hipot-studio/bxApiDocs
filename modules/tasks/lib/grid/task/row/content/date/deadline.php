@@ -2,6 +2,7 @@
 namespace Bitrix\Tasks\Grid\Task\Row\Content\Date;
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Tasks\Grid\ControlButtonTrait;
 use Bitrix\Tasks\Grid\Task\Row\Content\Date;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Calendar;
@@ -17,6 +18,8 @@ use CTimeZone;
  */
 class Deadline extends Date
 {
+	use ControlButtonTrait;
+
 	private static $workTimeSettings = [];
 
 	public function prepare()
@@ -30,19 +33,25 @@ class Deadline extends Date
 		$text = htmlspecialcharsbx(($state['text'] ?: $this->formatDate($row['DEADLINE'])));
 
 		$canChange = ($state['clickable'] ?? true) && $row['ACTION']['CHANGE_DEADLINE'];
-		$onClick = '';
+		$designClass = !empty($state['design']) ? '--' . $state['design'] : '--outline';
 
 		if ($canChange)
 		{
 			$taskId = (int)$row['ID'];
-			$onClick = "onclick=\"BX.Tasks.GridActions.onDeadlineChangeClick({$taskId}, this, '{$jsDeadline}'); event.stopPropagation();\"";
+
+			return $this->renderControlButton(
+				[
+					'class' => "ui-chip {$designClass} --s --rounded --compact",
+					'aria-haspopup' => 'dialog',
+					'aria-expanded' => 'false',
+				],
+				'<div class="ui-chip-text">' . $text . '</div>',
+				"BX.Tasks.GridActions.onDeadlineChangeClick({$taskId}, this, '{$jsDeadline}'); event.stopPropagation();"
+			);
 		}
 
-		$readonlyClass = !$canChange ? 'task-deadline-readonly' : '';
-		$designClass = !empty($state['design']) ? '--' . $state['design'] : '--outline';
-
 		return <<<HTML
-			<div class="ui-chip $designClass --s --rounded --compact $readonlyClass" $onClick>
+			<div class="ui-chip $designClass --s --rounded --compact task-deadline-readonly">
 				<div class="ui-chip-text">$text</div>
 			</div>
 		HTML;

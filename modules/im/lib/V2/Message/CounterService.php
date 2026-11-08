@@ -23,9 +23,9 @@ class CounterService
 	protected const DELAY_DELETION_COUNTERS_OF_FIRED_USER = 604800; // 1 week
 
 	protected const CACHE_TTL = 86400; // 1 month
-	protected const CACHE_NAME = 'counter_v7';
-	protected const CACHE_CHATS_COUNTERS_NAME = 'chats_counter_v7';
-	protected const CACHE_PATH = '/bx/im/counter/v7/';
+	protected const CACHE_NAME = 'counter_v8';
+	protected const CACHE_CHATS_COUNTERS_NAME = 'chats_counter_v8';
+	protected const CACHE_PATH = '/bx/im/counter/v8/';
 
 	protected static array $staticCounterCache = [];
 	protected static array $staticChatsCounterCache = [];

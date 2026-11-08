@@ -104,10 +104,16 @@ final class SelfHostedLicense
 	{
 		$expiryDate = $this->getExpiryDate();
 
-		return $expiryDate === null
-			? null
-			: DateTime::createFromTimestamp($expiryDate->getTimestamp() + $this->getGraceDays() * 86400)
-		;
+		return $expiryDate === null ? null : $this->getBlockDateOf($expiryDate);
+	}
+
+	/**
+	 * The day the work stops for any term and not only the current one: a term already replaced by a renewal still
+	 * tells whether the portal had stopped before the renewal came.
+	 */
+	public function getBlockDateOf(DateTime $expiryDate): DateTime
+	{
+		return DateTime::createFromTimestamp($expiryDate->getTimestamp() + $this->getGraceDays() * 86400);
 	}
 
 	/**

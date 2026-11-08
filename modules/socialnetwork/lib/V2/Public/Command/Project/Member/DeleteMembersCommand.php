@@ -12,6 +12,10 @@ use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 use Bitrix\Socialnetwork\V2\Public\Dto;
 
+/**
+ * Team support is not asked about here: a team already linked to the project must stay detachable after the portal
+ * loses teams, or the project would keep a member no edit could drop.
+ */
 class DeleteMembersCommand extends AbstractCommand
 {
 	public function __construct(

@@ -9,6 +9,16 @@ use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 
 class UserResponseMapper
 {
+	public function mapFromEntityCollection(?UserCollection $users): ?array
+	{
+		if ($users === null)
+		{
+			return null;
+		}
+
+		return array_map(fn(User $user): array => $this->mapFromEntity($user), $users->getEntities());
+	}
+
 	public function mapFromEntity(?User $user): ?array
 	{
 		if ($user === null)
@@ -33,22 +43,5 @@ class UserResponseMapper
 			'id' => $id,
 			'name' => $name,
 		];
-	}
-
-	public function mapFromEntityCollection(?UserCollection $users): ?array
-	{
-		if ($users === null)
-		{
-			return null;
-		}
-
-		$mapped = [];
-
-		foreach ($users as $user)
-		{
-			$mapped[] = $this->mapFromEntity($user);
-		}
-
-		return $mapped;
 	}
 }

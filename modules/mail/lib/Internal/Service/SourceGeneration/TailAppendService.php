@@ -196,6 +196,14 @@ class TailAppendService
 	private const STATE_REST_CURSOR = 'tail_rest_cursor';
 	private const STATE_REST_DONE = 'tail_rest_done';
 
+	/**
+	 * The walk over the remainder of the folders a hand over brought into the new server late
+	 * {@see reopenForFolders()}: [{generation, hash}] of the folders of the old server, its cursor and mark.
+	 */
+	private const STATE_REOPENED_DIRS = 'tail_reopened_dirs';
+	private const STATE_REOPENED_CURSOR = 'tail_reopened_cursor';
+	private const STATE_REOPENED_DONE = 'tail_reopened_done';
+
 	/** The letter this pass is appending right now: written before the append, cleared after the verdict */
 	private const STATE_IN_FLIGHT = 'tail_in_flight';
 
@@ -241,6 +249,13 @@ class TailAppendService
 	 */
 	private const STATE_UNNUMBERED_SOURCE = 'tail_unnumbered_source';
 
+	/**
+	 * The one letter that went up before the stage knew the source names no numbers: it carries
+	 * neither a mark nor a verdict until it is read back, and the walk over the reopened folders
+	 * must not append it again.
+	 */
+	private const STATE_GAP_LETTER = 'tail_gap_letter';
+
 	/* What one letter of the remainder came to. The first three mean it is on the new source */
 
 	private const OUTCOME_APPENDED = 'appended';
@@ -269,6 +284,15 @@ class TailAppendService
 	/** Whether the engine of the active generation has been asked for at all */
 	private bool $activeGenerationEngineAsked = false;
 
+	/** The system roles of the folders of the mailbox, read once for the whole pass */
+	private ?SystemRoleMap $systemRoles = null;
+
+	/** The folders the transfer brought into the new server, read once for the whole pass */
+	private ?FolderPairMap $folderPairs = null;
+
+	/** @var array<string, true> The folders of the prepared generation its import reads */
+	private array $preparedSyncPaths = [];
+
 	private ?Helper\Mailbox\HistorySyncAttemptService $attempts = null;
 
 	public function __construct(
@@ -277,6 +301,7 @@ class TailAppendService
 		private readonly TailAttachmentFetcher $attachments = new TailAttachmentFetcher(),
 		private readonly TailMarkService $marks = new TailMarkService(),
 		private readonly TailBodyFetcher $body = new TailBodyFetcher(),
+		private readonly RolloutBrakeReader $brakes = new RolloutBrakeReader(),
 	)
 	{
 	}
@@ -295,6 +320,9 @@ class TailAppendService
 
 		$this->activeGenerationEngine = null;
 		$this->activeGenerationEngineAsked = false;
+		$this->systemRoles = null;
+		$this->folderPairs = null;
+		$this->preparedSyncPaths = [];
 
 		$progress = $this->readProgress($context->generationId);
 
@@ -320,7 +348,7 @@ class TailAppendService
 			));
 		}
 
-		$destinations = $this->findDestinations($prepared);
+		$destinations = $this->findDestinations($prepared, $context);
 		$dirPath = $destinations[MailboxDirectoryTable::TYPE_INCOME] ?? null;
 
 		if ($dirPath === null)
@@ -364,6 +392,19 @@ class TailAppendService
 
 		while ($letters < $this->getPassBudget() && $walks < self::WALK_BUDGET)
 		{
+			/*
+				This stage is the one that writes to the new source: every letter of the remainder
+				it takes is a letter put on the new server. So the switches of the rollout are
+				asked here as well, and asked of the storage itself - the value the process holds
+				in memory is the one taken before the operator pressed anything
+				{@see RolloutBrakeReader}. A pass told to stop leaves its cursors where they are
+				and reports itself unfinished, exactly as it does when its budget runs out.
+			*/
+			if ($this->brakes->findRefusal() !== null)
+			{
+				return $this->continued($result);
+			}
+
 			$progress = $this->readProgress($context->generationId);
 
 			if ($progress === null)
@@ -390,14 +431,35 @@ class TailAppendService
 			$refusedRun = (int)($progress[self::STATE_REFUSED_RUN] ?? 0);
 
 			/*
+				The walk over the reopened folders passes over the letters the first walk appended into
+				the inbox of the new server before their folder was there: the replay of the hand over
+				moves them into the pair. Their verdicts come in one statement for the page, and nothing
+				else of theirs is read. A source naming no number leaves such a letter with a mark and no
+				verdict until it is read back, so the marks count as well, and so does the one letter that
+				went up before the stage knew it - a letter whose marked append the server refused is not
+				retried here either: the first walk named it as left behind.
+			*/
+			$settled = $pass['folders'] !== null
+				? $this->findVerdictsOf($context, $page->messageIds)
+					+ ($unnumbered ? $this->marks->findMarkedOf($context, $page->messageIds) : [])
+					+ (isset($progress[self::STATE_GAP_LETTER]) ? [(int)$progress[self::STATE_GAP_LETTER] => true] : [])
+				: []
+			;
+			$pending = $settled === []
+				? $page->messageIds
+				: array_values(array_filter($page->messageIds, static fn ($id): bool => !isset($settled[(int)$id])))
+			;
+
+			/*
 				The letters of the page, their archived placements and the rows of their files
 				come in three statements for the whole page: one letter used to cost three of its
 				own, and a page of fifty of them a hundred and fifty round trips to the database
 				before the first append.
 			*/
-			$letterRows = $this->loadLetters($context, $page->messageIds);
-			$attachmentRows = $this->loadAttachmentsOfLetters($page->messageIds);
-			$outcomeFolders = $this->loadOutcomeFoldersOfLetters($context->mailboxId, $letterRows);
+			$letterRows = $this->loadLetters($context, $pending);
+			$attachmentRows = $this->loadAttachmentsOfLetters($pending);
+			$roles = $this->systemRoles($context->mailboxId);
+			$pairs = $this->folderPairs($context);
 
 			/*
 				And the attempts the letters of the page have spent, in one statement of their own:
@@ -405,14 +467,19 @@ class TailAppendService
 				a letter that never failed from asking the database about a counter that is not there.
 			*/
 			$spent = $this->attempts($context->mailboxId)->getAttemptCounts(
-				array_map(strval(...), $page->messageIds),
+				array_map(strval(...), $pending),
 			);
 
-			foreach ($page->messageIds as $messageId)
+			/*
+				A letter passed over is not closed by a write of its own: the next letter closed moves the
+				cursor past it, the end of the page does the same, and a pass ending in between offers it
+				again only to pass over it again.
+			*/
+			foreach ($pending as $messageId)
 			{
 				$messageId = (int)$messageId;
 				$letter = $letterRows[$messageId] ?? null;
-				$dirPath = $this->destinationOf($letter, $outcomeFolders, $destinations);
+				$dirPath = $this->destinationOf($letter, $roles, $pairs, $destinations);
 
 				if ($dirPath === null)
 				{
@@ -525,6 +592,7 @@ class TailAppendService
 					*/
 					$unnumbered = true;
 					$closed[self::STATE_UNNUMBERED_SOURCE] = true;
+					$closed[self::STATE_GAP_LETTER] = $messageId;
 				}
 
 				$this->store($context->generationId, $closed);
@@ -554,6 +622,72 @@ class TailAppendService
 		}
 
 		return $this->continued($result);
+	}
+
+	/**
+	 * Opens the walk over the remainder of these folders of the old server once more: the hand over has
+	 * just brought them into the new server, or failed to, and goes back to this stage for their letters
+	 * {@see LateFolderReconciler}.
+	 *
+	 * The two ordinary walks are not repeated: a letter they appended has no placement of the prepared
+	 * generation until the delta of the hand over reads it back, so a second ordinary walk would append
+	 * it again. This walk passes over such a letter by its verdict instead.
+	 *
+	 * The window is counted anew from here: the one of the first pass has usually run out while the
+	 * switch was awaited, and the first refusal of the new server would set a letter of such a folder
+	 * aside at once. A decision to switch with the remainder unfinished, once taken, stays.
+	 *
+	 * @param array<int, array{generation: int, hash: string}> $dirs
+	 */
+	public function reopenForFolders(int $generationId, array $dirs): void
+	{
+		$dirs = array_values(array_map(
+			static fn (array $dir): array => ['generation' => (int)$dir['generation'], 'hash' => (string)$dir['hash']],
+			$dirs,
+		));
+
+		$this->store($generationId, [
+			self::STATE_REOPENED_DIRS => $dirs === [] ? null : $dirs,
+			self::STATE_REOPENED_CURSOR => null,
+			self::STATE_REOPENED_DONE => null,
+			self::STATE_REFUSED_RUN => null,
+			self::STATE_STALLED => null,
+			self::STATE_STARTED_AT => time(),
+		]);
+	}
+
+	/**
+	 * Whether these folders of the old server hold a letter the walks of the stage have not reached:
+	 * one the final synchronization of a hand over brought into a folder with no pair after the walks
+	 * were through. Message ids only grow, so such a letter lies beyond the cursor the walks reached,
+	 * and the lookup is one page of the remainder of those folders above it.
+	 *
+	 * @param array<int, array{generation: int, hash: string}> $dirs
+	 */
+	public function hasLettersBeyondItsWalks(Context $context, array $dirs): bool
+	{
+		$hashes = array_values(array_unique(array_map(static fn (array $dir): string => (string)$dir['hash'], $dirs)));
+		if ($hashes === [])
+		{
+			return false;
+		}
+
+		$progress = $this->readProgress($context->generationId) ?? [];
+		// The two ordinary walks split the letters between them: the one behind covers both
+		$reached = min((int)($progress[self::STATE_REFERENCED_CURSOR] ?? 0), (int)($progress[self::STATE_REST_CURSOR] ?? 0));
+
+		$reopened = array_map(
+			static fn (array $dir): string => (string)($dir['hash'] ?? ''),
+			array_filter((array)($progress[self::STATE_REOPENED_DIRS] ?? []), 'is_array'),
+		);
+		if (($progress[self::STATE_REOPENED_DONE] ?? false) && array_diff($hashes, $reopened) === [])
+		{
+			$reached = max($reached, (int)($progress[self::STATE_REOPENED_CURSOR] ?? 0));
+		}
+
+		$page = $this->remainder->listFolderPage($context, $hashes, $reached, 1);
+
+		return $page->messageIds !== [] || !$page->isExhausted;
 	}
 
 	/**
@@ -1296,19 +1430,65 @@ class TailAppendService
 	}
 
 	/**
+	 * The letters of the page the matching journal of the generation already answers for, in one
+	 * statement by the index of the journal {@see hasVerdictOf()}.
+	 *
+	 * @param int[] $messageIds
+	 * @return array<int, true>
+	 */
+	private function findVerdictsOf(Context $context, array $messageIds): array
+	{
+		if ($messageIds === [])
+		{
+			return [];
+		}
+
+		$rows = SourceGenerationMatchTable::getList([
+			'select' => ['MESSAGE_ID'],
+			'filter' => [
+				'=MAILBOX_ID' => $context->mailboxId,
+				'@MESSAGE_ID' => array_map('intval', $messageIds),
+				'=GENERATION_ID' => $context->generationId,
+				'=STATE' => SourceGenerationMatchTable::STATE_MATCHED,
+			],
+		])->fetchAll();
+
+		return array_fill_keys(array_map(static fn (array $row): int => (int)$row['MESSAGE_ID'], $rows), true);
+	}
+
+	/**
 	 * Which of the two walks the stage owes next.
 	 *
+	 * The walk over the folders a hand over reopened comes first: it is opened only after both
+	 * ordinary walks are through.
+	 *
 	 * @param array<string, mixed> $progress
-	 * @return array{cursor: string, done: string, referenced: bool}|null Null when both are through.
+	 * @return array{cursor: string, done: string, referenced: bool, folders: string[]|null}|null Null
+	 *         when every walk is through.
 	 */
 	private function currentPass(array $progress): ?array
 	{
+		$reopened = array_filter((array)($progress[self::STATE_REOPENED_DIRS] ?? []), 'is_array');
+		if ($reopened !== [] && !($progress[self::STATE_REOPENED_DONE] ?? false))
+		{
+			return [
+				'cursor' => self::STATE_REOPENED_CURSOR,
+				'done' => self::STATE_REOPENED_DONE,
+				'referenced' => false,
+				'folders' => array_values(array_unique(array_map(
+					static fn (array $dir): string => (string)($dir['hash'] ?? ''),
+					$reopened,
+				))),
+			];
+		}
+
 		if (!($progress[self::STATE_REFERENCED_DONE] ?? false))
 		{
 			return [
 				'cursor' => self::STATE_REFERENCED_CURSOR,
 				'done' => self::STATE_REFERENCED_DONE,
 				'referenced' => true,
+				'folders' => null,
 			];
 		}
 
@@ -1318,6 +1498,7 @@ class TailAppendService
 				'cursor' => self::STATE_REST_CURSOR,
 				'done' => self::STATE_REST_DONE,
 				'referenced' => false,
+				'folders' => null,
 			];
 		}
 
@@ -1325,12 +1506,17 @@ class TailAppendService
 	}
 
 	/**
-	 * @param array{cursor: string, done: string, referenced: bool} $pass
+	 * @param array{cursor: string, done: string, referenced: bool, folders: string[]|null} $pass
 	 * @param array<string, mixed> $progress
 	 */
 	private function readPage(Context $context, array $pass, array $progress): TailRemainderPage
 	{
 		$cursor = (int)($progress[$pass['cursor']] ?? 0);
+
+		if ($pass['folders'] !== null)
+		{
+			return $this->remainder->listFolderPage($context, $pass['folders'], $cursor);
+		}
 
 		return $pass['referenced']
 			? $this->remainder->listReferencedPage($context, $cursor)
@@ -1400,12 +1586,13 @@ class TailAppendService
 
 			/*
 				The lazy download of the attachments reads the coordinates off the very row it is
-				given, and the boundary of the engine checks the generation of them: without the
-				generation of the placement the download would be refused.
+				given, and the boundary of the engine checks the generation and the folder version
+				of them: without them the download would be refused.
 			*/
 			$letters[$messageId] = $row + [
 				'DIR_MD5' => $placement['DIR_MD5'],
 				'MSG_UID' => $placement['MSG_UID'],
+				'DIR_UIDV' => $placement['DIR_UIDV'],
 				'GENERATION_ID' => $placement['GENERATION_ID'],
 				'__placement' => $placement,
 			];
@@ -1415,78 +1602,22 @@ class TailAppendService
 	}
 
 	/**
-	 * Whether the selected archived placement of each letter belongs to the sent folder.
+	 * The folder of the prepared generation this letter of the remainder goes into: the folder
+	 * the transfer brought into the new server for the folder the letter lies in, then the sent
+	 * one when its archived placement lies in a sent folder, the incoming one otherwise.
 	 *
-	 * The folders are read for the whole page. A placement is addressed by both its generation
-	 * and its path hash: retained generations stay in the same physical table and may contain
-	 * equal paths.
+	 * The placement is addressed by both its generation and its path hash: retained generations
+	 * stay in the same physical table and may contain equal paths.
 	 *
-	 * @param array<int, array> $letters
-	 * @return array<string, true> Generation and path hash of sent folders.
-	 */
-	private function loadOutcomeFoldersOfLetters(int $mailboxId, array $letters): array
-	{
-		$folderKeys = [];
-		$generationIds = [];
-		$dirHashes = [];
-
-		foreach ($letters as $letter)
-		{
-			$placement = $letter['__placement'] ?? [];
-			$generationId = (int)($placement['GENERATION_ID'] ?? 0);
-			$dirHash = (string)($placement['DIR_MD5'] ?? '');
-
-			if ($dirHash === '')
-			{
-				continue;
-			}
-
-			$folderKeys[$this->folderKey($generationId, $dirHash)] = true;
-			$generationIds[$generationId] = $generationId;
-			$dirHashes[$dirHash] = $dirHash;
-		}
-
-		if ($folderKeys === [])
-		{
-			return [];
-		}
-
-		$rows = MailboxDirectoryTable::getList([
-			'select' => ['GENERATION_ID', 'DIR_MD5', MailboxDirectoryTable::TYPE_OUTCOME],
-			'filter' => [
-				'=MAILBOX_ID' => $mailboxId,
-				'@GENERATION_ID' => array_values($generationIds),
-				'@DIR_MD5' => array_values($dirHashes),
-				'=' . MailboxDirectoryTable::TYPE_OUTCOME => MailboxDirectoryTable::ACTIVE,
-			],
-		])->fetchAll();
-
-		$outcomeFolders = [];
-
-		foreach ($rows as $row)
-		{
-			$key = $this->folderKey((int)$row['GENERATION_ID'], (string)$row['DIR_MD5']);
-
-			if (isset($folderKeys[$key]))
-			{
-				$outcomeFolders[$key] = true;
-			}
-		}
-
-		return $outcomeFolders;
-	}
-
-	private function folderKey(int $generationId, string $dirHash): string
-	{
-		return $generationId . ':' . $dirHash;
-	}
-
-	/**
 	 * @param array|null $letter
-	 * @param array<string, true> $outcomeFolders
 	 * @param array<string, string> $destinations
 	 */
-	private function destinationOf(?array $letter, array $outcomeFolders, array $destinations): ?string
+	private function destinationOf(
+		?array $letter,
+		SystemRoleMap $roles,
+		FolderPairMap $pairs,
+		array $destinations,
+	): ?string
 	{
 		$inbox = $destinations[MailboxDirectoryTable::TYPE_INCOME] ?? null;
 
@@ -1496,12 +1627,33 @@ class TailAppendService
 		}
 
 		$placement = $letter['__placement'];
-		$key = $this->folderKey((int)$placement['GENERATION_ID'], (string)$placement['DIR_MD5']);
+		$paired = $pairs->targetOf((int)$placement['GENERATION_ID'], (string)$placement['DIR_MD5']);
 
-		return isset($outcomeFolders[$key])
-			? ($destinations[MailboxDirectoryTable::TYPE_OUTCOME] ?? null)
-			: $inbox
-		;
+		if ($paired !== null && isset($this->preparedSyncPaths[$paired['path']]))
+		{
+			return $paired['path'];
+		}
+		$sent = $roles->holds(
+			(int)$placement['GENERATION_ID'],
+			(string)$placement['DIR_MD5'],
+			MailboxDirectoryTable::TYPE_OUTCOME,
+		);
+
+		return $sent ? ($destinations[MailboxDirectoryTable::TYPE_OUTCOME] ?? null) : $inbox;
+	}
+
+	/**
+	 * The system roles of the folders of the mailbox, read once for the whole pass: a page of
+	 * the remainder is hundreds of letters and the roles of both generations are in one answer.
+	 */
+	private function systemRoles(int $mailboxId): SystemRoleMap
+	{
+		return $this->systemRoles ??= SystemRoleMap::ofMailbox($mailboxId);
+	}
+
+	private function folderPairs(Context $context): FolderPairMap
+	{
+		return $this->folderPairs ??= FolderPairMap::ofGeneration($context->mailboxId, $context->generationId);
 	}
 
 	/**
@@ -1520,7 +1672,7 @@ class TailAppendService
 	private function loadArchivedPlacements(int $mailboxId, array $messageIds): array
 	{
 		$rows = MailMessageUidTable::getList([
-			'select' => ['ID', 'MESSAGE_ID', 'DIR_MD5', 'MSG_UID', 'GENERATION_ID', 'INTERNALDATE', 'IS_SEEN'],
+			'select' => ['ID', 'MESSAGE_ID', 'DIR_MD5', 'MSG_UID', 'DIR_UIDV', 'GENERATION_ID', 'INTERNALDATE', 'IS_SEEN'],
 			'filter' => GenerationScope::forMailbox($mailboxId)->apply([
 				'=MAILBOX_ID' => $mailboxId,
 				'@MESSAGE_ID' => $messageIds,
@@ -1605,35 +1757,27 @@ class TailAppendService
 	 * synchronized folders of the generation and no others - so the folder is confirmed to
 	 * be one of them here as well, and not only inside the append.
 	 */
-	private function findDestinations(Helper\Mailbox\Imap $prepared): array
+	private function findDestinations(Helper\Mailbox\Imap $prepared, Context $context): array
 	{
-		$dirs = $prepared->getDirsHelper();
 		$syncPaths = [];
 
-		foreach ($dirs->getSyncDirs() as $dir)
+		foreach ($prepared->getDirsHelper()->getSyncDirs() as $dir)
 		{
 			$syncPaths[(string)$dir->getPath()] = true;
 		}
 
+		$this->preparedSyncPaths = $syncPaths;
+
+		$roles = $this->systemRoles($context->mailboxId);
 		$destinations = [];
 
-		foreach (
-			[
-				MailboxDirectoryTable::TYPE_INCOME => $dirs->getIncome(),
-				MailboxDirectoryTable::TYPE_OUTCOME => $dirs->getOutcome(),
-			] as $type => $dir
-		)
+		foreach ([MailboxDirectoryTable::TYPE_INCOME, MailboxDirectoryTable::TYPE_OUTCOME] as $role)
 		{
-			if ($dir === null || $dir === false)
-			{
-				continue;
-			}
+			$path = $roles->pathOf($context->generationId, $role);
 
-			$path = (string)$dir->getPath();
-
-			if (isset($syncPaths[$path]))
+			if ($path !== null && isset($syncPaths[$path]))
 			{
-				$destinations[$type] = $path;
+				$destinations[$role] = $path;
 			}
 		}
 

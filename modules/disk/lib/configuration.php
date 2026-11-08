@@ -13,6 +13,7 @@ use Bitrix\Disk\Internal\Enum\CustomServerTypes;
 use Bitrix\Disk\Internal\Enum\ServersTypesEnum;
 use Bitrix\Disk\Internal\Service\MarkdownRenderService;
 use Bitrix\Main\Config\Feature;
+use Bitrix\Disk\Internal\Service\Sync\SyncFeatureOption;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Viewer\Transformation\Document;
@@ -23,10 +24,16 @@ use InvalidArgumentException;
 final class Configuration
 {
 	public const DEFAULT_CACHE_TIME = 60;
+	public const DEFAULT_SECONDS_TO_JOIN_VERSION = 300;
 	public const REVISION_API       = 8;
+	public const OPTION_SECONDS_TO_JOIN_VERSION = 'disk_seconds_to_join_version';
 	public const OPTION_ONLYOFFICE_SERVERS_TYPE = 'disk_onlyoffice_servers_type';
 	public const OPTION_ONLYOFFICE_SWITCH_SERVERS_TYPE_STATE = 'disk_onlyoffice_switch_servers_type_state';
 	public const OPTION_DEFAULT_VIEWER_CUSTOM_CONFIG_TYPE = 'default_viewer_service_custom_config_type';
+	public const OPTION_ONLYOFFICE_INTERRUPT_THRESHOLD = 'disk_onlyoffice_interrupt_threshold';
+	public const OPTION_ONLYOFFICE_INTERRUPT_AGENT_ENABLED = 'disk_onlyoffice_interrupt_agent_enabled';
+
+	public const DEFAULT_ONLYOFFICE_INTERRUPT_THRESHOLD = 900;
 
 	public static function isEnabledDefaultEditInUf()
 	{
@@ -77,6 +84,25 @@ final class Configuration
 		return Feature::isEnabled(FileViewerFormatsFlag::class);
 	}
 
+	public static function isSyncRestEnabled(): bool
+	{
+		return (new SyncFeatureOption())->isEnabled();
+	}
+
+	/**
+	 * Tells whether a subtree query may check membership by EXISTS instead of joining the path table.
+	 *
+	 * The check narrows candidates by the storage of the container first, which holds while an object
+	 * keeps the storage of its parent. Should a portal break that, objects disappear from such lists
+	 * silently, so the option returns every caller of the mode to the join without a deployment.
+	 *
+	 * @return bool
+	 */
+	public static function isEnabledSubtreeCheckByExists(): bool
+	{
+		return Option::get(Driver::INTERNAL_MODULE_ID, 'disk_enable_subtree_check_by_exists', 'Y') === 'Y';
+	}
+
 	/**
 	 * Returns maximum size (in bytes) of a markdown file that the viewer renders.
 	 * Single source of truth for the markdown render size limit.
@@ -114,13 +140,13 @@ final class Configuration
 	}
 
 	/**
-	 * Extra hosts a portal may allow for the html viewer's passive subresources (styles, fonts, images),
-	 * on top of the built-in CDN allowlist. Lets an operator whitelist a generator's CDN without a release.
+	 * Extra https hosts a portal may allow for the html viewer's passive subresources, kept for backward
+	 * compatibility with the `disk_html_viewer_csp_hosts` option.
 	 *
-	 * The value goes straight into a Content-Security-Policy header, so every entry is validated against a
-	 * strict https-origin pattern (no port, path, wildcard or CSP delimiter): anything else is dropped to
-	 * keep an operator from injecting a directive. Script hosts are intentionally not configurable here —
-	 * external script execution would defeat the isolation (ADR § 6).
+	 * The viewer's CSP now opens every passive resource group to any https origin, so this allowlist is
+	 * effectively a no-op: an explicit `https://host` is already covered by `https:`. The strict https-origin
+	 * validation (no port, path, wildcard or CSP delimiter) is preserved so a stored value stays a safe
+	 * origin should the option be consumed again.
 	 *
 	 * @return string[] validated `https://host` origins, deduplicated
 	 */
@@ -160,6 +186,22 @@ final class Configuration
 		$value = (int)Option::get(Driver::INTERNAL_MODULE_ID, 'disk_version_limit_per_file', 0);
 
 		return $value?: null;
+	}
+
+	public static function getSecondsToJoinVersion(): int
+	{
+		$value = trim((string)Option::get(
+			Driver::INTERNAL_MODULE_ID,
+			self::OPTION_SECONDS_TO_JOIN_VERSION,
+			self::DEFAULT_SECONDS_TO_JOIN_VERSION
+		));
+
+		if ($value === '' || preg_match('/^\d+$/', $value) !== 1)
+		{
+			return self::DEFAULT_SECONDS_TO_JOIN_VERSION;
+		}
+
+		return (int)$value;
 	}
 
 	public static function isPossibleToShowExternalLinkControl()
@@ -551,6 +593,29 @@ final class Configuration
 		}
 
 		return $serversType;
+	}
+
+	/**
+	 * Seconds of silence after which an editing session of OnlyOffice counts as interrupted.
+	 */
+	public static function getOnlyOfficeInterruptThreshold(): int
+	{
+		$threshold = (int)Option::get(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			name: self::OPTION_ONLYOFFICE_INTERRUPT_THRESHOLD,
+			default: self::DEFAULT_ONLYOFFICE_INTERRUPT_THRESHOLD,
+		);
+
+		return $threshold > 0 ? $threshold : self::DEFAULT_ONLYOFFICE_INTERRUPT_THRESHOLD;
+	}
+
+	public static function isOnlyOfficeInterruptAgentEnabled(): bool
+	{
+		return Option::get(
+			moduleId: Driver::INTERNAL_MODULE_ID,
+			name: self::OPTION_ONLYOFFICE_INTERRUPT_AGENT_ENABLED,
+			default: 'Y',
+		) === 'Y';
 	}
 
 	public static function storeStateForOnlyofficeSwitchServersType(array $state): void

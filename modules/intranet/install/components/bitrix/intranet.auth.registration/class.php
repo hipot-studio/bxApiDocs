@@ -1,4 +1,5 @@
 <?php
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -7,11 +8,13 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Internal\Factory\InvitationLinkFacadeFactory;
+use Bitrix\Intranet\Public\Facade\Invitation\InvitationLinkFacade;
+use Bitrix\Intranet\Public\Provider\Portal;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\AccessDeniedException;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
-use Bitrix\Intranet\Public\Provider\Portal;
 
 class AuthRegistrationComponent extends \CBitrixComponent
 {
@@ -46,19 +49,8 @@ class AuthRegistrationComponent extends \CBitrixComponent
 
 			if ($request->isPost() && $request->getPost('Register'))
 			{
-				$user = $invitationLinkFacade->register($this->createUser($request->getValues()));
-
-				if ($user->getActive())
-				{
-					LocalRedirect('/');
-				}
-				else
-				{
-					$this->arResult['AUTH_RESULT'] = [
-						'TYPE' => 'OK',
-						'ID' => $user->getId(),
-					];
-				}
+				$user = $this->createUser($request->getValues());
+				$this->processRegistration($invitationLinkFacade, $user);
 			}
 		}
 		catch (AccessDeniedException $exception)
@@ -73,6 +65,61 @@ class AuthRegistrationComponent extends \CBitrixComponent
 		$this->arResult['HOST_NAME'] = (new Portal\DomainProvider())->getHostName();
 
 		$this->includeComponentTemplate();
+	}
+
+	protected function processRegistration(
+		InvitationLinkFacade $invitationLinkFacade,
+		User $user,
+	): void
+	{
+		try
+		{
+			$registeredUser = $invitationLinkFacade->register($user);
+
+			if ($registeredUser->getActive())
+			{
+				LocalRedirect('/');
+
+				return;
+			}
+
+			$this->arResult['AUTH_RESULT'] = [
+				'TYPE' => 'OK',
+				'ID' => $registeredUser->getId(),
+			];
+		}
+		catch (SystemException $exception)
+		{
+			if (!$this->isSingleEmailExistsError($exception, $user))
+			{
+				throw $exception;
+			}
+
+			$this->arResult['AUTH_RESULT'] = [
+				'TYPE' => 'ERROR',
+				'MESSAGE' => $this->getEmailExistsMessage($user),
+				'LOGIN_URL' => SITE_DIR . 'auth/?login=yes',
+			];
+		}
+	}
+
+	protected function getEmailExistsMessage(User $user): string
+	{
+		return Loc::getMessage('USER_WITH_EMAIL_EXIST', [
+			'#EMAIL#' => htmlspecialcharsbx($user->getEmail()),
+		]) ?? '';
+	}
+
+	private function isSingleEmailExistsError(SystemException $exception, User $user): bool
+	{
+		$emailExistsMessage = $this->getEmailExistsMessage($user);
+		$registrationError = $exception->getMessage();
+		if (str_ends_with($registrationError, '<br>'))
+		{
+			$registrationError = substr($registrationError, 0, -4);
+		}
+
+		return $emailExistsMessage !== '' && $registrationError === $emailExistsMessage;
 	}
 
 	private function createUser($userData): User

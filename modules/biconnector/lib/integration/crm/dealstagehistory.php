@@ -206,7 +206,7 @@ class DealStageHistory
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_deal_stage_history']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_DSH_TABLE'] ?: 'crm_deal_stage_history';
-		$result['crm_deal_stage_history']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_DSH_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['crm_deal_stage_history']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_DSH_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['crm_deal_stage_history']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_DSH_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_DSH_FIELD_' . $fieldCode] : $fieldCode;

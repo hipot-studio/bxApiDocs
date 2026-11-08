@@ -17,6 +17,11 @@ class RunUpdateEvent
 
 	public function __invoke(array $fields, array $sourceTaskData, ?callable $eventFilter = null): array
 	{
+		if ($this->config->isSkipTaskUpdateEvent())
+		{
+			return $fields;
+		}
+
 		$fields['META:PREV_FIELDS'] = $sourceTaskData;
 
 		$eventTaskData = $this->config->getRuntime()->getEventTaskData();

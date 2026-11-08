@@ -13,7 +13,27 @@ trait SidebarFilterProcessorTrait
 			$query->whereIn($fieldsMap['AUTHOR_ID'] ?? 'AUTHOR_ID', $filter['USER_ID']);
 		}
 
-		if (isset($filter['LAST_ID']))
+		$dateField = $fieldsMap['DATE_CREATE'] ?? 'DATE_CREATE';
+
+		// the composite cursor continues the date order only: it says nothing about any other order
+		if (isset($filter['LAST_DATE'], $filter['LAST_ID'], $order[$dateField]))
+		{
+			// the date is not unique, so the id resolves the ties in the same direction
+			$idField = $fieldsMap['ID'] ?? 'ID';
+			$operator = $order[$dateField] === 'DESC' ? '<' : '>';
+
+			$query->where(
+				Query::filter()
+					->logic('or')
+					->where($dateField, $operator, $filter['LAST_DATE'])
+					->where(
+						Query::filter()
+							->where($dateField, $filter['LAST_DATE'])
+							->where($idField, $operator, $filter['LAST_ID'])
+					)
+			);
+		}
+		elseif (isset($filter['LAST_ID']))
 		{
 			$operator = $order[$fieldsMap['ID'] ?? 'ID'] === 'DESC' ? '<' : '>';
 			$query->where($fieldsMap['ID'] ?? 'ID', $operator, $filter['LAST_ID']);
@@ -37,6 +57,11 @@ trait SidebarFilterProcessorTrait
 		if (isset($filter['START_ID']) && (int)$filter['START_ID'] > 0)
 		{
 			$query->where($fieldsMap['MESSAGE_ID'] ?? 'MESSAGE_ID', '>=', $filter['START_ID']);
+		}
+
+		if (isset($filter['END_ID']) && (int)$filter['END_ID'] > 0)
+		{
+			$query->where($fieldsMap['MESSAGE_ID'] ?? 'MESSAGE_ID', '<=', $filter['END_ID']);
 		}
 	}
 }

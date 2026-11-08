@@ -98,7 +98,7 @@ class UserMapper
 
 		foreach ($users as $user)
 		{
-			$userId = (int)($user['ID'] ?? null);
+			$userId = (int)($user['ID'] ?? 0);
 			if ($userId <= 0)
 			{
 				continue;

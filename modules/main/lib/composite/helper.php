@@ -12,6 +12,10 @@ namespace Bitrix\Main\Composite;
  */
 class Helper
 {
+	private const CHECKSUM_PREFIX = "<!--";
+	private const CHECKSUM_SUFFIX = "-->";
+	private const CHECKSUM_HASH_LENGTH = 32;
+
 	private static $options = array();
 	private static $isAjaxRequest = null;
 	private static $ajaxRandom = null;
@@ -313,7 +317,29 @@ class Helper
 
 		$cacheKey = $host.$uriPath."@".$queryString.$privateKey.".html";
 
-		return str_replace(array("?", "*"), "_", $cacheKey);
+		return self::normalizeCacheKey(str_replace(array("?", "*"), "_", $cacheKey));
+	}
+
+	/**
+	 * Collapses the repeated slashes and the "." of the key, as the file system layer does
+	 * with the path of the file. A key that is not normalized belongs to a file that is,
+	 * and the key restored from the path of that file is the key of another page.
+	 * Main\IO\Path is out of reach here: the class works before the kernel
+	 *
+	 * @param string $cacheKey
+	 *
+	 * @return string
+	 */
+	private static function normalizeCacheKey($cacheKey)
+	{
+		$cacheKey = preg_replace("#/+#", "/", $cacheKey);
+
+		while (str_contains($cacheKey, "/./"))
+		{
+			$cacheKey = str_replace("/./", "/", $cacheKey);
+		}
+
+		return $cacheKey;
 	}
 
 	public static function removeIgnoredParams($queryString)
@@ -670,6 +696,43 @@ class Helper
 	}
 
 	/**
+	 * Returns the content as the storage keeps it: the trailing checksum tells a whole page from a truncated one
+	 * @param string $content
+	 * @param string $md5 the content hash
+	 * @return string
+	 */
+	public static function wrapContentChecksum(string $content, string $md5): string
+	{
+		return $content.self::CHECKSUM_PREFIX.$md5.self::CHECKSUM_SUFFIX;
+	}
+
+	/**
+	 * Returns the number of bytes the checksum of the hash adds to the content
+	 * @param string $md5 the content hash
+	 * @return int
+	 */
+	public static function getContentChecksumLength(string $md5): int
+	{
+		return strlen(self::CHECKSUM_PREFIX) + strlen($md5) + strlen(self::CHECKSUM_SUFFIX);
+	}
+
+	/**
+	 * Returns the checksum of the stored content or false, if the content does not end with one
+	 * @param string $storedContent
+	 * @return string|false
+	 */
+	public static function extractContentChecksum(string $storedContent)
+	{
+		$checksum = substr(
+			$storedContent,
+			-(self::CHECKSUM_HASH_LENGTH + strlen(self::CHECKSUM_SUFFIX)),
+			self::CHECKSUM_HASH_LENGTH
+		);
+
+		return preg_match("/^[a-f0-9]{".self::CHECKSUM_HASH_LENGTH."}$/", $checksum) > 0 ? $checksum : false;
+	}
+
+	/**
 	 * Returns the number of bytes of file cache. If file .size doesn't exist returns false
 	 * @return bool|float
 	 */
@@ -685,14 +748,41 @@ class Helper
 		return $result;
 	}
 
+	/**
+	 * Adds the delta to the counter of the size of the cache.
+	 * False is "nothing changed" here, as everywhere in this class, and a zero delta has nothing
+	 * to write; emptying the counter is resetCacheFileSize(), not a value of this parameter
+	 *
+	 * @param float|false $bytes positive or negative value
+	 *
+	 * @return void
+	 */
 	public static function updateCacheFileSize($bytes = 0.0)
 	{
-		$options = self::getOptions();
-		if ($options["WRITE_STATISTIC"] === "N")
+		if ($bytes === false || doubleval($bytes) === 0.0)
 		{
 			return;
 		}
 
+		self::writeCacheFileSize(doubleval($bytes), false);
+	}
+
+	/**
+	 * Empties the counter of the size of the cache: the whole cache is gone
+	 * @return void
+	 */
+	public static function resetCacheFileSize()
+	{
+		self::writeCacheFileSize(0.0, true);
+	}
+
+	/**
+	 * @param float $bytes the delta, ignored by a reset
+	 * @param bool $reset
+	 * @return void
+	 */
+	private static function writeCacheFileSize(float $bytes, bool $reset)
+	{
 		$fileName = self::getSizeFilePath();
 		if (($handle = @fopen($fileName, "c+")) === false)
 		{
@@ -701,7 +791,7 @@ class Helper
 
 		if (@flock($handle, LOCK_EX))
 		{
-			$cacheSize = $bytes === false ? 0 : doubleval(fgets($handle)) + doubleval($bytes);
+			$cacheSize = $reset ? 0 : doubleval(fgets($handle)) + $bytes;
 			$cacheSize = $cacheSize > 0 ? $cacheSize : 0;
 
 			fseek($handle, 0);
@@ -717,6 +807,7 @@ class Helper
 	 * Returns array with cache statistics data.
 	 * Returns an empty array in case of disabled html cache.
 	 *
+	 * @deprecated nothing fills the FILE_SIZE value, the size of the cache is in getCacheFileSize()
 	 * @return array
 	 */
 	public static function readStatistic()
@@ -742,6 +833,7 @@ class Helper
 	 * Updates cache usage statistics.
 	 * Each of parameters is added to appropriate existing stats.
 	 *
+	 * @deprecated the size of the cache is counted by updateCacheFileSize(), the $files value is not read by anything
 	 * @param integer|false $hits Number of cache hits.
 	 * @param integer|false $writings Number of cache writing.
 	 * @param integer|false $quota Quota change in bytes.
@@ -807,15 +899,10 @@ class Helper
 	/**
 	 * Updates disk quota and cache statistic
 	 *
-	 * @param float $bytes positive or negative value
+	 * @param float|false $bytes positive or negative value, false changes nothing
 	 */
 	public static function updateQuota($bytes)
 	{
-		if ($bytes == 0.0)
-		{
-			return;
-		}
-
 		self::updateCacheFileSize($bytes);
 	}
 
@@ -884,14 +971,16 @@ class Helper
 	 */
 	public static function cleanAll()
 	{
+		/*
+		 * The counter of the composite is applied by the cleanup itself, together with the records of the
+		 * pages; the disk quota of the portal counts the place on the disk, so it gets every byte freed
+		 */
 		$bytes = Data\FileStorage::deleteRecursive("/");
 
 		if (class_exists("cdiskquota"))
 		{
 			\CDiskQuota::updateDiskQuota("file", $bytes, "delete");
 		}
-
-		self::updateQuota(-$bytes);
 	}
 
 	//endregion

@@ -21,4 +21,20 @@ final class RestoreVersionResponse extends Result
 
 		return $this;
 	}
+
+	/**
+	 * The revision the client has to come back with on its next write of the draft it is switched to. The
+	 * service knows it from the row it has just written or read, so the caller never re-reads the draft.
+	 */
+	public function getDraftRevision(): int
+	{
+		return (int)($this->data['draftRevision'] ?? 0);
+	}
+
+	public function setDraftRevision(int $draftRevision): self
+	{
+		$this->data['draftRevision'] = $draftRevision;
+
+		return $this;
+	}
 }

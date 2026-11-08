@@ -21,6 +21,7 @@ class Repository
 	protected Provider\Registry $providerRegistry;
 
 	private ?array $cache = null;
+	private bool $isGetListCached = false;
 
 	final public function __construct()
 	{
@@ -30,6 +31,8 @@ class Repository
 	final public function clearCache(): void
 	{
 		$this->cache = null;
+		$this->isGetListCached = false;
+
 		$this->dataManager::cleanCache();
 	}
 
@@ -38,7 +41,7 @@ class Repository
 	 */
 	final public function getCustomSections(): array
 	{
-		if (is_array($this->cache))
+		if (is_array($this->cache) && $this->isGetListCached)
 		{
 			return array_values($this->cache);
 		}
@@ -62,12 +65,19 @@ class Repository
 		}
 
 		$this->cache = $sections;
+		$this->isGetListCached = true;
 
 		return array_values($sections);
 	}
 
 	final public function getCustomSection(string $customSectionCode): ?CustomSection
 	{
+		// If we got all sections and desired one is not found in cache, then it means it does not exist => no need to check in db
+		if ($this->isGetListCached)
+		{
+			return $this->cache[$customSectionCode] ?? null;
+		}
+
 		if (is_array($this->cache) && array_key_exists($customSectionCode, $this->cache))
 		{
 			return $this->cache[$customSectionCode];

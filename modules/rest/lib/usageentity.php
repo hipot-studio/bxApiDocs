@@ -3,6 +3,8 @@ namespace Bitrix\Rest;
 
 use Bitrix\Main;
 use \Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Rest\Public\Provider\ApplicationProvider;
+use Bitrix\Rest\Public\Provider\Dto\ApplicationData;
 
 /**
  * Class UsageEntityTable
@@ -142,11 +144,11 @@ class UsageEntityTable extends Main\Entity\DataManager
 		$key = $entityType.'|'.$entityId;
 		if (!isset(static::$info[$key]))
 		{
-			if ($entityType == self::ENTITY_TYPE_APPLICATION && ($appInfo = AppTable::getByClientId($entityId)))
+			if ($entityType == self::ENTITY_TYPE_APPLICATION && ($appInfo = self::findApplication($entityId)))
 			{
 				static::$info[$key] = array(
-					'ENTITY_ID' => $appInfo['ID'],
-					'ENTITY_CODE' => $appInfo['CLIENT_ID'],
+					'ENTITY_ID' => $appInfo->getId(),
+					'ENTITY_CODE' => $appInfo->getClientId(),
 				);
 			}
 			else
@@ -158,6 +160,25 @@ class UsageEntityTable extends Main\Entity\DataManager
 			}
 		}
 		return static::$info[$key];
+	}
+
+	private static function findApplication(int|string $entityId): ?ApplicationData
+	{
+		$provider = new ApplicationProvider();
+		$value = (string)$entityId;
+		$normalizedId = (string)(int)$value;
+
+		if ($normalizedId == $value)
+		{
+			if ($normalizedId !== $value)
+			{
+				return null;
+			}
+
+			return $provider->findById((int)$value);
+		}
+
+		return $provider->findByClientId($value) ?? $provider->findByCode($value);
 	}
 
 	/**

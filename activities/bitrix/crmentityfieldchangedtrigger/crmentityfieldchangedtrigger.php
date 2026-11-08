@@ -7,10 +7,9 @@ use Bitrix\Bizproc\Activity\Trigger\TriggerParameters;
 use Bitrix\Bizproc\Integration\UI\EntitySelector\DocumentTypeProvider;
 use Bitrix\Bizproc\Public\Entity\Trigger\Section;
 use Bitrix\Bizproc\Result;
-use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventInitiatorTrait;
+use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventOutputsTrait;
 use Bitrix\Crm\Integration\BizProc\Trigger\CategoryProperty;
 use Bitrix\Crm\Integration\BizProc\Trigger\TrackedFieldsProperty;
-use Bitrix\Main\Type\DateTime;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -30,7 +29,7 @@ if (!\Bitrix\Main\Loader::includeModule('crm'))
 
 class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 {
-	use EventInitiatorTrait;
+	use EventOutputsTrait;
 
 	public const REACTION_MODE_ID = 'ReactionMode';
 	public const MODE_FIELDS = 'fields';
@@ -76,8 +75,8 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 
 	private function checkCategoryApplyRules(TriggerParameters $parameters): Result
 	{
-		$expectedCategoryId = CategoryProperty::normalizeId($this->getActivityProperty('categoryId'));
-		if ($expectedCategoryId === null)
+		$expectedCategoryIds = CategoryProperty::normalizeIds($this->getActivityProperty('categoryId'));
+		if ($expectedCategoryIds === [])
 		{
 			return Result::createOk();
 		}
@@ -86,7 +85,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			$parameters->get('CategoryId') ?? $parameters->get('categoryId'),
 		);
 
-		return $expectedCategoryId === $actualCategoryId
+		return in_array($actualCategoryId, $expectedCategoryIds, true)
 			? Result::createOk()
 			: Result::createError(new \Bitrix\Bizproc\Error('category mismatch'));
 	}
@@ -107,6 +106,33 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 		);
 	}
 
+	protected function getSections(): array
+	{
+		if (!CategoryProperty::supportsMultipleCategories())
+		{
+			return parent::getSections();
+		}
+
+		$entityTypeId = CategoryProperty::resolveEntityTypeId($this->getActivityProperty('Document'));
+		if ($entityTypeId <= 0)
+		{
+			return [];
+		}
+
+		$categoryIds = CategoryProperty::normalizeIds($this->getActivityProperty('categoryId'));
+		if ($categoryIds === [])
+		{
+			return [$this->getSection()];
+		}
+
+		$sectionId = 'crm|' . \CCrmOwnerType::ResolveName($entityTypeId);
+
+		return array_map(
+			static fn(int $categoryId): Section => new Section($sectionId, (string)$categoryId),
+			$categoryIds,
+		);
+	}
+
 	public function execute(): int
 	{
 		parent::execute();
@@ -124,8 +150,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 		$this->setProperties([
 			'ReturnDocument' => $document,
 			'ChangedFields' => $changedFields,
-			self::EVENT_INITIATOR_ID => $initiatorUserId ? 'user_' . $initiatorUserId : null,
-			self::EVENT_DATE_TIME_ID => (new DateTime())->format(DateTime::getFormat()),
+			...static::buildEventOutputs($initiatorUserId),
 		]);
 
 		$this->setPropertiesTypes([
@@ -532,6 +557,66 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 		return CategoryProperty::resolveDocumentTypeFromDocument($document);
 	}
 
+	public static function getConditionDocumentSourceFieldNames(): array
+	{
+		return ['Document'];
+	}
+
+	public function getConditionDocumentComplexType(): ?array
+	{
+		return static::resolveConditionDocumentType($this->getRawProperty('Document'));
+	}
+
+	public function getConditionDocumentId(TriggerParameters $parameters): ?array
+	{
+		$conditionType = $this->getConditionDocumentComplexType();
+		$documentId = $parameters->get('Document');
+		if (!static::isConditionDocumentIdOfType($documentId, $conditionType))
+		{
+			return null;
+		}
+
+		return array_values($documentId);
+	}
+
+	private static function resolveConditionDocumentType(mixed $document): ?array
+	{
+		if (!\CBPHelper::hasStringRepresentation($document))
+		{
+			return null;
+		}
+
+		$documentType = static::resolveDocumentTypeFromDocument((string)$document);
+
+		return static::isComplexDocumentType($documentType) ? $documentType : null;
+	}
+
+	private static function isConditionDocumentIdOfType(mixed $documentId, ?array $conditionType): bool
+	{
+		return static::isComplexDocumentType($documentId)
+			&& $conditionType !== null
+			&& \CBPHelper::isEqualDocumentEntity($documentId, $conditionType)
+		;
+	}
+
+	private static function isComplexDocumentType(mixed $document): bool
+	{
+		if (!is_array($document) || count($document) !== 3)
+		{
+			return false;
+		}
+
+		foreach ($document as $part)
+		{
+			if (!is_string($part) || $part === '')
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	/**
 	 * Server-fill the monitored Fields options from the current document, in parity with the ajax path
 	 * (getAjaxResponse) and categoryId. The base getPropertiesMap fills the Fields SELECT via this hook;
@@ -584,7 +669,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			[
 				'ID' => 'DEAL',
 				'NAME' => \Bitrix\Main\Localization\Loc::getMessage('BP_CRM_DEAL_FCT_DESCR_NAME_MSGVER_1'),
-				'DESCRIPTION' => static::getPresetMessage('DEAL', 'DESCR'),
+				'DESCRIPTION' => static::getPresetMessage('DEAL', 'DESCR_1'),
 				'PROPERTIES' => ['Document' => $isEntitySelectorAvailable ? 'crm@CCrmDocumentDeal@DEAL' : 'DEAL'],
 				'NODE_ICON' => Outline::HANDSHAKE->name,
 				'GROUPS' => [
@@ -595,7 +680,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			[
 				'ID' => 'CONTACT',
 				'NAME' => \Bitrix\Main\Localization\Loc::getMessage('BP_CRM_CONTACT_FCT_DESCR_NAME_MSGVER_1'),
-				'DESCRIPTION' => static::getPresetMessage('CONTACT', 'DESCR'),
+				'DESCRIPTION' => static::getPresetMessage('CONTACT', 'DESCR_1'),
 				'PROPERTIES' => [
 					'Document' => $isEntitySelectorAvailable ? 'crm@CCrmDocumentContact@CONTACT' : 'CONTACT',
 				],
@@ -608,7 +693,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			[
 				'ID' => 'COMPANY',
 				'NAME' => \Bitrix\Main\Localization\Loc::getMessage('BP_CRM_COMPANY_FCT_DESCR_NAME_MSGVER_1'),
-				'DESCRIPTION' => static::getPresetMessage('COMPANY', 'DESCR'),
+				'DESCRIPTION' => static::getPresetMessage('COMPANY', 'DESCR_1'),
 				'PROPERTIES' => [
 					'Document' => $isEntitySelectorAvailable ? 'crm@CCrmDocumentCompany@COMPANY' : 'COMPANY',
 				],
@@ -621,7 +706,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			[
 				'ID' => 'LEAD',
 				'NAME' => \Bitrix\Main\Localization\Loc::getMessage('BP_CRM_LEAD_FCT_DESCR_NAME_MSGVER_1'),
-				'DESCRIPTION' => static::getPresetMessage('LEAD', 'DESCR'),
+				'DESCRIPTION' => static::getPresetMessage('LEAD', 'DESCR_1'),
 				'PROPERTIES' => ['Document' => $isEntitySelectorAvailable ? 'crm@CCrmDocumentLead@LEAD' : 'LEAD'],
 				'NODE_ICON' => Outline::LEAD->name,
 				'GROUPS' => [
@@ -636,7 +721,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			$presets[] = [
 				'ID' => 'QUOTE',
 				'NAME' => \Bitrix\Main\Localization\Loc::getMessage('BP_CRM_QUOTE_FCT_DESCR_NAME_MSGVER_1'),
-				'DESCRIPTION' => static::getPresetMessage('QUOTE', 'DESCR'),
+				'DESCRIPTION' => static::getPresetMessage('QUOTE', 'DESCR_1'),
 				'PROPERTIES' => ['Document' => 'crm@Bitrix\Crm\Integration\BizProc\Document\Quote@QUOTE'],
 				'NODE_ICON' => Outline::SUITCASE->name,
 				'GROUPS' => [
@@ -649,7 +734,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 				'NAME' => \Bitrix\Main\Localization\Loc::getMessage(
 					'BP_CRM_AUTOMATED_SOLUTION_FCT_DESCR_NAME_MSGVER_1',
 				),
-				'DESCRIPTION' => static::getPresetMessage('AUTOMATED_SOLUTION', 'DESCR'),
+				'DESCRIPTION' => static::getPresetMessage('AUTOMATED_SOLUTION', 'DESCR_1'),
 				'PROPERTIES' => ['IsAutomatedSolution' => 'Y'],
 				'NODE_ICON' => Outline::SMART_PROCESS->name,
 				'GROUPS' => [
@@ -660,7 +745,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			$presets[] = [
 				'ID' => 'DYNAMIC',
 				'NAME' => \Bitrix\Main\Localization\Loc::getMessage('BP_CRM_DYNAMIC_FCT_DESCR_NAME_MSGVER_1'),
-				'DESCRIPTION' => static::getPresetMessage('DYNAMIC', 'DESCR'),
+				'DESCRIPTION' => static::getPresetMessage('DYNAMIC', 'DESCR_1'),
 				'NODE_ICON' => Outline::SMART_PROCESS->name,
 				'GROUPS' => [
 					ActivityGroup::STARTER->value,
@@ -674,7 +759,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			$presets[] = [
 				'ID' => 'ORDER',
 				'NAME' => \Bitrix\Main\Localization\Loc::getMessage('BP_CRM_ORDER_FCT_DESCR_NAME_MSGVER_1'),
-				'DESCRIPTION' => static::getPresetMessage('ORDER', 'DESCR'),
+				'DESCRIPTION' => static::getPresetMessage('ORDER', 'DESCR_1'),
 				'PROPERTIES' => [
 					'Document' => $isEntitySelectorAvailable
 						? 'crm@Bitrix\Crm\Integration\BizProc\Document\Order@ORDER'
@@ -695,7 +780,7 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 			$presets[] = [
 				'ID' => 'SMART_INVOICE',
 				'NAME' => \Bitrix\Main\Localization\Loc::getMessage('BP_CRM_SMART_INVOICE_FCT_DESCR_NAME_MSGVER_1'),
-				'DESCRIPTION' => static::getPresetMessage('SMART_INVOICE', 'DESCR'),
+				'DESCRIPTION' => static::getPresetMessage('SMART_INVOICE', 'DESCR_1'),
 				'PROPERTIES' => [
 					'Document' => 'crm@Bitrix\Crm\Integration\BizProc\Document\SmartInvoice@SMART_INVOICE',
 				],
@@ -706,6 +791,19 @@ class CBPCrmEntityFieldChangedTrigger extends CBPFieldChangedTrigger
 					ActivityGroup::PAYMENT->value,
 				],
 			];
+		}
+
+		foreach ($presets as $index => $preset)
+		{
+			$document = static::resolveDocumentTypeFromDocument(
+				(string)($preset['PROPERTIES']['Document'] ?? ''),
+			);
+			if ($document === null)
+			{
+				continue;
+			}
+
+			$presets[$index]['PROPERTIES']['Return']['ReturnDocument'] = static::getReturnDocumentMapType($document);
 		}
 
 		return $presets;

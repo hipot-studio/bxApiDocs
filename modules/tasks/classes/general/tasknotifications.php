@@ -21,6 +21,7 @@ use Bitrix\Tasks\Internals\UserOption;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\Type\DateTime;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Main\Web\Uri;
 
 class CTaskNotifications
 {
@@ -1387,7 +1388,7 @@ class CTaskNotifications
 
 		if(is_array($parameters['PARAMETERS'] ?? null))
 		{
-			$url = CHTTP::urlAddParams($url, $parameters['PARAMETERS']);
+			$url = (string)(new Uri($url))->addParams($parameters['PARAMETERS']);
 		}
 
 		if((string)($parameters['HASH'] ?? null) != '')

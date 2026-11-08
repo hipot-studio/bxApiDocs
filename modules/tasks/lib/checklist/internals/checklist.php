@@ -33,6 +33,7 @@ class CheckList extends CompositeTreeItem
 	private $facade;
 	private $action = [];
 	private bool $needSkipMembers = false;
+	private bool $shouldRecountSortIndexes;
 
 	/** @var DataManager $checkListDataController */
 	private $checkListDataController;
@@ -50,9 +51,16 @@ class CheckList extends CompositeTreeItem
 	 * @param int $userId
 	 * @param CheckListFacade|string $facade
 	 * @param array $fields
+	 * @param bool $shouldRecountSortIndexes
 	 * @throws NotImplementedException
 	 */
-	public function __construct($nodeId, $userId, $facade, $fields = [])
+	public function __construct(
+		$nodeId,
+		$userId,
+		$facade,
+		$fields = [],
+		bool $shouldRecountSortIndexes = true
+	)
 	{
 		parent::__construct($nodeId);
 
@@ -62,6 +70,7 @@ class CheckList extends CompositeTreeItem
 		$this->facade = $facade;
 		$this->action = (isset($fields['ACTION']) && is_array($fields['ACTION']) ? $fields['ACTION'] : []);
 		$this->fields = new CheckListFields($fields);
+		$this->shouldRecountSortIndexes = $shouldRecountSortIndexes;
 
 		$this->checkListDataController = $facade::getCheckListDataController();
 		$this->checkListTree = $facade::getCheckListTree();
@@ -346,7 +355,13 @@ class CheckList extends CompositeTreeItem
 	 */
 	public function copy()
 	{
-		return new static($this->getNodeId(), $this->userId, $this->facade, $this->getFields());
+		return new static(
+			$this->getNodeId(),
+			$this->userId,
+			$this->facade,
+			$this->getFields(),
+			$this->shouldRecountSortIndexes,
+		);
 	}
 
 	/**
@@ -372,7 +387,10 @@ class CheckList extends CompositeTreeItem
 		$tableFields = $changedFields['TABLE'];
 		$commonFields = $changedFields['COMMON'];
 
-		if (array_key_exists('SORT_INDEX', $tableFields) || array_key_exists('PARENT_ID', $commonFields))
+		if (
+			$this->shouldRecountSortIndexes
+			&& (array_key_exists('SORT_INDEX', $tableFields) || array_key_exists('PARENT_ID', $commonFields))
+		)
 		{
 			$this->recountSortIndexes(Application::getConnection());
 		}
@@ -460,7 +478,10 @@ class CheckList extends CompositeTreeItem
 		$checkListMemberDataController = $this->checkListMemberDataController;
 
 		$this->fillMandatoryFields();
-		$this->recountSortIndexes(Application::getConnection());
+		if ($this->shouldRecountSortIndexes)
+		{
+			$this->recountSortIndexes(Application::getConnection());
+		}
 
 		$fields = $this->getFields();
 		$fieldsForTable = $facade::getFieldsForTable($fields);

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\UserField\Dto;
 
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 use Bitrix\Main\Validation\Rule\NotEmpty;
 
 class EnumerationItem extends Dto
@@ -16,6 +17,7 @@ class EnumerationItem extends Dto
 	protected function getValidators(array $fields): array
 	{
 		return [
+			new RequiredField($this, 'value'),
 			new NotEmptyField($this, 'value'),
 		];
 	}

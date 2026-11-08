@@ -222,6 +222,19 @@ final class DebugSession implements EntityInterface
 		return $this->metadata;
 	}
 
+	public function setMetadata(array $metadata): self
+	{
+		$this->metadata = $metadata;
+
+		return $this;
+	}
+
+	/** A test run of the designer {@see \Bitrix\Bizproc\Public\Service\TestRun\TestRunService}. */
+	public function isTestRun(): bool
+	{
+		return ($this->metadata['testRun'] ?? false) === true;
+	}
+
 	public function getLogs(): Logs
 	{
 		return $this->logs;

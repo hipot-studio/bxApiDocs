@@ -90,13 +90,26 @@ class SelfHostedLicenseNotifier
 		$secondsLeft = $expiryDate->getTimestamp() - time();
 		if ($secondsLeft < 0)
 		{
+			$state = SelfHostedLicense::getInstance()->getState();
+
 			// A term that has run out is recorded and nothing else: the stop is announced by the state of the
 			// section, while this record is what later tells a renewal from a restoration of stopped work. Recorded
 			// on the day the work really stops and not on the day the term ends - the grace between the two keeps
 			// the reports running, and there is nothing to restore yet.
-			if (SelfHostedLicense::getInstance()->getState() === SelfHostedLicenseState::Expired)
+			if ($state === SelfHostedLicenseState::Expired)
 			{
 				$this->markWorkStopped();
+
+				// The grace is never announced after it is over: a portal told about its grace when the reports
+				// are already gone is told the wrong thing, and the stop announces itself.
+				return;
+			}
+
+			// Only a license really inside its grace is told about it: with the check disabled the term means
+			// nothing, and a message naming a block date would contradict the section.
+			if ($state === SelfHostedLicenseState::Grace)
+			{
+				$this->announceGrace($expiryDate);
 			}
 
 			return;
@@ -149,6 +162,26 @@ class SelfHostedLicenseNotifier
 	}
 
 	/**
+	 * Confirmation that a term renewed inside the grace has arrived. The work never stopped here, so the message
+	 * names the new date instead of saying that anything started working again.
+	 */
+	public function notifyAboutRenewal(): void
+	{
+		if (!SupersetHostMode::isSelfHosted())
+		{
+			return;
+		}
+
+		$expiryDate = $this->readExpiryDate();
+		if ($expiryDate === null || $expiryDate->getTimestamp() < time())
+		{
+			return;
+		}
+
+		$this->notifyAdminsAboutRenewal($expiryDate);
+	}
+
+	/**
 	 * The license state is re-read because it is remembered in a static instance and an agent lives long
 	 * enough for the remembered value to go stale.
 	 */
@@ -165,41 +198,40 @@ class SelfHostedLicenseNotifier
 	 */
 	protected function notifyAdmins(DateTime $expiryDate): void
 	{
-		$formattedDate = $expiryDate->format(self::DATE_FORMAT);
-		$formattedBlockDate = (string)SelfHostedLicense::getInstance()->getBlockDate()?->format(self::DATE_FORMAT);
-		$renewalLink = LicenseLinks::getExtensionPurchaseUrl();
-
-		$titleCallback = static fn(?string $languageId = null) => Loc::getMessage(
+		$this->sendTermNotice(
 			'BIC_SELFHOST_LICENSE_EXPIRY_NOTIFY_TITLE',
-			language: $languageId,
+			'BIC_SELFHOST_LICENSE_EXPIRY_NOTIFY_TEXT',
+			$this->getTermReplacements($expiryDate),
+			'BIC_SELFHOST_LICENSE_EXPIRY_NOTIFY_ACTION',
 		);
-		$messageCallback = static function (?string $languageId = null) use (
-			$formattedDate,
-			$formattedBlockDate,
-			$renewalLink,
-		): string {
-			$message = (string)Loc::getMessage(
-				'BIC_SELFHOST_LICENSE_EXPIRY_NOTIFY_TEXT',
-				[
-					'#DATE#' => $formattedDate,
-					'#BLOCK_DATE#' => $formattedBlockDate,
-				],
-				$languageId,
-			);
-			if ($renewalLink === null)
-			{
-				return $message;
-			}
+	}
 
-			$action = (string)Loc::getMessage(
-				'BIC_SELFHOST_LICENSE_EXPIRY_NOTIFY_ACTION',
-				language: $languageId,
-			);
+	/**
+	 * The term is over while its grace is not: the work still runs, and the message names both dates - the one
+	 * that has passed and the one the reports go away on.
+	 */
+	protected function notifyAdminsAboutGrace(DateTime $expiryDate): void
+	{
+		$this->sendTermNotice(
+			'BIC_SELFHOST_LICENSE_GRACE_NOTIFY_TITLE',
+			'BIC_SELFHOST_LICENSE_GRACE_NOTIFY_TEXT',
+			$this->getTermReplacements($expiryDate),
+			'BIC_SELFHOST_LICENSE_EXPIRY_NOTIFY_ACTION',
+		);
+	}
 
-			return $message . "\n" . '[URL=' . $renewalLink . ']' . $action . '[/URL]';
-		};
-
-		Agent::notifyAllAdmins($titleCallback, $messageCallback);
+	/**
+	 * A term renewed while the portal was inside its grace. Nothing was restored, so nothing is called restored:
+	 * the message carries the new date and no call to action - there is nothing left to buy.
+	 */
+	protected function notifyAdminsAboutRenewal(DateTime $expiryDate): void
+	{
+		$this->sendTermNotice(
+			'BIC_SELFHOST_LICENSE_RENEWED_NOTIFY_TITLE',
+			'BIC_SELFHOST_LICENSE_RENEWED_NOTIFY_TEXT',
+			['#DATE#' => $expiryDate->format(self::DATE_FORMAT)],
+			null,
+		);
 	}
 
 	/**
@@ -208,19 +240,63 @@ class SelfHostedLicenseNotifier
 	 */
 	protected function notifyAdminsAboutRestoredWork(DateTime $expiryDate): void
 	{
-		$formattedDate = $expiryDate->format(self::DATE_FORMAT);
-
-		$titleCallback = static fn(?string $languageId = null) => Loc::getMessage(
+		$this->sendTermNotice(
 			'BIC_SELFHOST_LICENSE_RESTORED_NOTIFY_TITLE',
-			language: $languageId,
-		);
-		$messageCallback = static fn(?string $languageId = null) => Loc::getMessage(
 			'BIC_SELFHOST_LICENSE_RESTORED_NOTIFY_TEXT',
-			['#DATE#' => $formattedDate],
-			$languageId,
+			['#DATE#' => $expiryDate->format(self::DATE_FORMAT)],
+			null,
 		);
+	}
+
+	/**
+	 * One shape for every notice about the term: a title, a text with the dates in it and a call to action that
+	 * goes away together with its address.
+	 *
+	 * The texts are handed over as callbacks and not as strings: the delivery writes a message per recipient and
+	 * asks for it in the language of that recipient, so a string built here would freeze the language of whoever
+	 * happened to trigger the agent.
+	 */
+	private function sendTermNotice(
+		string $titleKey,
+		string $textKey,
+		array $replacements,
+		?string $actionKey,
+	): void
+	{
+		$actionLink = $actionKey === null ? null : LicenseLinks::getExtensionPurchaseUrl();
+
+		$titleCallback = static fn(?string $languageId = null) => Loc::getMessage($titleKey, language: $languageId);
+		$messageCallback = static function (?string $languageId = null) use (
+			$textKey,
+			$replacements,
+			$actionKey,
+			$actionLink,
+		): string {
+			$message = (string)Loc::getMessage($textKey, $replacements, $languageId);
+			if ($actionLink === null)
+			{
+				return $message;
+			}
+
+			$action = (string)Loc::getMessage($actionKey, language: $languageId);
+
+			return $message . "\n" . '[URL=' . $actionLink . ']' . $action . '[/URL]';
+		};
 
 		Agent::notifyAllAdmins($titleCallback, $messageCallback);
+	}
+
+	/**
+	 * The day the work stops is taken from the license and never counted here: the length of the grace is an
+	 * option of the stand, and a message that added fifteen days of its own would name a date the portal does
+	 * not live by.
+	 */
+	private function getTermReplacements(DateTime $expiryDate): array
+	{
+		return [
+			'#DATE#' => $expiryDate->format(self::DATE_FORMAT),
+			'#BLOCK_DATE#' => (string)SelfHostedLicense::getInstance()->getBlockDate()?->format(self::DATE_FORMAT),
+		];
 	}
 
 	private function isWarningShown(): bool
@@ -270,5 +346,22 @@ class SelfHostedLicenseNotifier
 	private function forgetStoppedWork(): void
 	{
 		Option::set('biconnector', LicenseOption::WORK_STOPPED, 'N');
+	}
+
+	/**
+	 * The pass repeats itself every day while the term stays inside its grace, so the record of the term the
+	 * grace was announced for is what keeps the message single. The record is written before the message is
+	 * built for the same reason the warnings are: a delivery that failed is not worth a message a day.
+	 */
+	private function announceGrace(DateTime $expiryDate): void
+	{
+		$term = (string)$expiryDate->getTimestamp();
+		if (Option::get('biconnector', LicenseOption::GRACE_NOTIFIED_TERM, '') === $term)
+		{
+			return;
+		}
+
+		Option::set('biconnector', LicenseOption::GRACE_NOTIFIED_TERM, $term);
+		$this->notifyAdminsAboutGrace($expiryDate);
 	}
 }

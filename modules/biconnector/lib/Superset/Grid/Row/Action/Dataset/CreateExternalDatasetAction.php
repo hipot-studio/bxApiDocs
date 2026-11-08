@@ -2,12 +2,12 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dataset;
 
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-final class CreateExternalDatasetAction extends BaseAction
+final class CreateExternalDatasetAction extends FormatMenuAction
 {
 	public static function getId(): ?string
 	{
@@ -31,7 +31,11 @@ final class CreateExternalDatasetAction extends BaseAction
 			$name = \CUtil::JSEscape($rawFields['NAME']);
 			$this->onclick = "BX.BIConnector.ExternalDatasetManager.Instance.createExternalDatasetByName('{$name}')";
 
-			return parent::getControl($rawFields);
+			$result = parent::getControl($rawFields);
+
+			$result['html'] = $this->getMenuItem('--o-add-database');
+
+			return $result;
 		}
 
 		$datasetId = (int)($rawFields['ID'] ?? 0);
@@ -42,6 +46,10 @@ final class CreateExternalDatasetAction extends BaseAction
 
 		$this->onclick = "BX.BIConnector.ExternalDatasetManager.Instance.createExternalDataset({$datasetId})";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-add-database');
+
+		return $result;
 	}
 }

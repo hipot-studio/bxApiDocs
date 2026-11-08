@@ -29,7 +29,7 @@ final class Issuer
 	 */
 	public function issue(int $userId, array $scopes, string $title): string
 	{
-		$this->accessGate->ensureRestProvisioningAvailable();
+		$this->accessGate->ensureRestProvisioningAvailable($this->entryPoint, $userId);
 
 		return $this->permissionSource->isVibecodeSource()
 			? $this->webhookCreator->forceCreate($userId, $scopes, $title)

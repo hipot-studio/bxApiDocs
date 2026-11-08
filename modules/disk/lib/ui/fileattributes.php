@@ -8,6 +8,7 @@ use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\HtmlViewerPolicy;
+use Bitrix\Disk\Internal\Service\UnifiedLink;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\UI\Viewer\Renderer\Html;
 use Bitrix\Disk\UI\Viewer\Renderer\Markdown;
@@ -15,6 +16,7 @@ use Bitrix\Disk\UI\Viewer\Renderer\Tiff;
 use Bitrix\Disk\Uf\Integration\DiskUploaderController;
 use Bitrix\Disk\Version;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\UI\Extension;
 use Bitrix\Main\UI\Viewer\ItemAttributes;
 use Bitrix\Main\UI\Viewer\Renderer;
@@ -30,6 +32,7 @@ final class FileAttributes extends ItemAttributes
 	public const ATTRIBUTE_SEPARATE_ITEM = 'data-viewer-separate-item';
 	public const ATTRIBUTE_UNIFIED_LINK = 'data-unified-link';
 	public const ATTRIBUTE_MARKDOWN_URL = 'data-markdown-url';
+	public const ATTRIBUTE_DOWNLOAD_DISABLED = 'data-viewer-download-disabled';
 	public const ATTRIBUTE_TIFF_PREVIEW_URL = 'data-tiff-preview-url';
 
 	public const JS_TYPE_CLASS_MARKDOWN = 'BX.Disk.Viewer.MarkdownItem';
@@ -46,7 +49,16 @@ final class FileAttributes extends ItemAttributes
 	// The revision the item shows, when it shows one: the file it belongs to answers for everything else.
 	public const KEY_VERSION_OBJECT = 'VERSION_OBJECT';
 
+	/**
+	 * Marks the file data of a caller that only asks for the item type and must not pay for it with a write.
+	 * Set by resolveViewerTypeByFileModel() alone; building an item by real file data never sets it.
+	 */
+	private const KEY_WITHOUT_SIDE_EFFECTS = 'WITHOUT_SIDE_EFFECTS';
+
+	private const UNKNOWN_IMAGE_SIDE = 1;
+
 	private bool $needSetUnifiedLink = false;
+	private bool $unifiedLinkDisabled = false;
 	private array $unifiedLinkOptions = [];
 	private bool $useUnifiedEditLink = false;
 	private ?string $tiffPreviewUrlOverride = null;
@@ -79,6 +91,54 @@ final class FileAttributes extends ItemAttributes
 		return self::buildByFileData($fileData, $sourceUri);
 	}
 
+	/**
+	 * Resolves the viewer item type from what the file model already knows, without reading b_file
+	 * and without building an instance: no extension is loaded, and the unified link is judged by the
+	 * configuration alone, so that resolving a type writes nothing.
+	 *
+	 * A caller that already knows the stored file id of the model hands it over: a link owns none, so
+	 * asking the model for it resolves the object behind the link.
+	 */
+	public static function resolveViewerTypeByFileModel(File $file, string $contentType, ?int $fileId = null): string
+	{
+		return (string)static::getViewerTypeByFile([
+			'ID' => $fileId ?? (int)$file->getFileId(),
+			'ORIGINAL_NAME' => (string)$file->getName(),
+			'CONTENT_TYPE' => $contentType,
+			'FILE_SIZE' => (int)$file->getSize(),
+			// The model carries no image dimensions. The placeholder stands for "valid, but unknown":
+			// without it an image would be downgraded to a plain file by a rule that judges dimensions,
+			// while the file size keeps deciding the size restrictions as it does for any other type.
+			'WIDTH' => self::UNKNOWN_IMAGE_SIDE,
+			'HEIGHT' => self::UNKNOWN_IMAGE_SIDE,
+			self::KEY_FILE_OBJECT => $file,
+			self::KEY_VERSION_OBJECT => null,
+			self::KEY_WITHOUT_SIDE_EFFECTS => true,
+		]);
+	}
+
+	/**
+	 * Tells whether a file of this viewer type becomes a separate item that opens by its unified link.
+	 * Mirrors the branches of setDefaultAttributes() that build a separate item; the type alone does not
+	 * answer it, because a pdf carries the cloud document type as well while staying embedded.
+	 *
+	 * @param string $type
+	 * @param string $contentType
+	 * @return bool
+	 */
+	public static function requiresUnifiedLinkToOpen(string $type, string $contentType): bool
+	{
+		if ($type === Disk\UI\Viewer\Renderer\Board::getJsType())
+		{
+			return true;
+		}
+
+		return self::isSetViewDocumentInClouds()
+			&& Document\DocumentViewPolicy::isAllowedUseClouds($contentType)
+			&& Document\DocumentViewPolicy::getDefaultHandlerForView() instanceof OnlyOfficeHandler
+		;
+	}
+
 	private function supportsUnifiedLink(): bool
 	{
 		$file = $this->getFileObject();
@@ -93,7 +153,7 @@ final class FileAttributes extends ItemAttributes
 	private function setUnifiedLink(): void
 	{
 		$file = $this->getFileObject();
-		if ($this->needSetUnifiedLink && isset($file))
+		if ($this->needSetUnifiedLink && !$this->unifiedLinkDisabled && isset($file))
 		{
 			$unifiedLinkOptions = $this->unifiedLinkOptions;
 
@@ -247,6 +307,21 @@ final class FileAttributes extends ItemAttributes
 		return $this;
 	}
 
+	/**
+	 * Keeps the unified link out of the attributes of a file that supports one. The link is how an item
+	 * opens when it is the only way to open it, but for an embedded item it is just a "copy link" action,
+	 * which a surface limited to viewing and downloading does not offer.
+	 *
+	 * @param bool $disabled
+	 * @return $this
+	 */
+	public function setUnifiedLinkDisabled(bool $disabled = true): self
+	{
+		$this->unifiedLinkDisabled = $disabled;
+
+		return $this;
+	}
+
 	private function getFileObject(): ?File
 	{
 		if (isset($this->fileData[self::KEY_FILE_OBJECT]) && $this->fileData[self::KEY_FILE_OBJECT] instanceof File)
@@ -281,6 +356,20 @@ final class FileAttributes extends ItemAttributes
 	public function setAsSeparateItem()
 	{
 		$this->setAttribute(self::ATTRIBUTE_SEPARATE_ITEM, true);
+
+		return $this;
+	}
+
+	public function setDownloadDisabled(bool $disabled = true): self
+	{
+		if ($disabled)
+		{
+			$this->setAttribute(self::ATTRIBUTE_DOWNLOAD_DISABLED, 'true');
+		}
+		else
+		{
+			$this->unsetAttribute(self::ATTRIBUTE_DOWNLOAD_DISABLED);
+		}
 
 		return $this;
 	}
@@ -502,7 +591,7 @@ final class FileAttributes extends ItemAttributes
 		if (
 			$fileObject instanceof File
 			&& self::isHtmlViewerSource($fileObject, self::getVersionObject($fileArray))
-			&& $fileObject->supportsUnifiedLink()
+			&& self::hasUnifiedLinkToOpenHtml($fileObject, $fileArray)
 		)
 		{
 			return Html::getJsType();
@@ -532,6 +621,25 @@ final class FileAttributes extends ItemAttributes
 		}
 
 		return $type;
+	}
+
+	/**
+	 * The link the html view lives on. On the item itself the object is asked directly, and the answer is
+	 * exact. A caller that only resolves a type may not ask it: supportsUnifiedLink() writes the unique code
+	 * of an object that has none, and a listing of files must stay a pure read. Such a caller gets the
+	 * read-only answer of the same policy instead; the code is written later, when the item is built.
+	 */
+	private static function hasUnifiedLinkToOpenHtml(File $file, array $fileArray): bool
+	{
+		if (empty($fileArray[self::KEY_WITHOUT_SIDE_EFFECTS]))
+		{
+			return $file->supportsUnifiedLink();
+		}
+
+		return ServiceLocator::getInstance()
+			->get(UnifiedLink\UnifiedLinkSupportService::class)
+			->supportsByConfiguration($file)
+		;
 	}
 
 	private static function getVersionObject(array $fileArray): ?Version

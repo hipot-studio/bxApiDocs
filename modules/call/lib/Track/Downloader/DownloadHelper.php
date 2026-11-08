@@ -5,6 +5,7 @@ namespace Bitrix\Call\Track\Downloader;
 use Bitrix\Main\IO;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\HttpClient;
+use Bitrix\Call\Download\DownloadPolicy;
 use Bitrix\Call\Track;
 use Bitrix\Call\Track\TrackError;
 use Bitrix\Call\Logger\Logger;
@@ -17,7 +18,6 @@ use Bitrix\Call\Integration\AI\CallAISettings;
  */
 class DownloadHelper
 {
-	private const STREAM_TIMEOUT = 10; // CURLOPT_LOW_SPEED_TIME in seconds
 	/**
 	 * Check if remote server supports Range requests and get file size.
 	 *
@@ -117,22 +117,13 @@ class DownloadHelper
 	}
 
 	/**
-	 * Create configured HttpClient instance
+	 * Create configured HttpClient instance: the client of the track policy, which the chunks of
+	 * {@see ChunkedDownloader} are requested with as well.
 	 *
 	 * @return HttpClient
 	 */
 	public static function createHttpClient(): HttpClient
 	{
-		$httpClient = new HttpClient();
-		$httpClient
-			->waitResponse(true)
-			->setTimeout(20)
-			->setStreamTimeout(self::STREAM_TIMEOUT)
-			->disableSslVerification()
-			->setHeader('User-Agent', 'Bitrix Call Client ' . \Bitrix\Main\Service\MicroService\Client::getPortalType())
-			->setHeader('Referer', \Bitrix\Main\Service\MicroService\Client::getServerName())
-		;
-
-		return $httpClient;
+		return DownloadPolicy::forTracks()->createHttpClient();
 	}
 }

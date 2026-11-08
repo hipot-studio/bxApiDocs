@@ -22,6 +22,7 @@ use Bitrix\HumanResources\Result\PropertyResult;
 use Bitrix\HumanResources\Result\Repository\UpdateNodeMemberResult;
 use Bitrix\HumanResources\Public\Service\Container as PublicContainer;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Service\PositionJournal;
 use Bitrix\HumanResources\Enum\EventName;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
@@ -30,6 +31,7 @@ use Bitrix\HumanResources\Type\RelationEntityType;
 use Bitrix\HumanResources\Util\CacheManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
@@ -45,6 +47,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	use TransactionHelperTrait;
 
 	private const CACHE_TTL = 86400;
+	private const REMOVAL_PORTION_SIZE = 1000;
 	public const NODE_MEMBER_CACHE_DIR = '/node/member/';
 
 	private static array $queryTotalCount = [];
@@ -458,32 +461,55 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 	 */
 	public function removeAllMembersByNodeId(int $nodeId): void
 	{
-		Model\NodeMemberRoleTable::deleteByNodeId($nodeId);
-
-		$nodeMemberCollection = new NodeMemberCollection();
-
-		$offset = 0;
-
-		while (
-			($collection = $this->hydrateNodeMemberCollection(
-				$this->getBaseQuery(
-					nodeId: $nodeId,
-					limit: 1000,
-					offset: $offset,
-					onlyActive: false,
-				),
-			))
-			&& !$collection->empty()
-		)
+		while ($memberIds = $this->findMemberIdsPortion($nodeId))
 		{
-			foreach ($collection as $nodeMember)
+			if (!$this->removeByCollection($this->findAllWithRolesByIds($memberIds)))
 			{
-				$nodeMemberCollection->add($nodeMember);
+				return;
 			}
-			$offset += 1000;
+		}
+	}
+
+	/**
+	 * A portion is deleted as a whole, so the next call sees the members left after it.
+	 *
+	 * @return list<int>
+	 */
+	private function findMemberIdsPortion(int $nodeId): array
+	{
+		$rows = Model\NodeMemberTable::query()
+			->setSelect(['ID'])
+			->where('NODE_ID', $nodeId)
+			->setLimit(self::REMOVAL_PORTION_SIZE)
+			->fetchAll()
+		;
+
+		return array_map('intval', array_column($rows, 'ID'));
+	}
+
+	/**
+	 * @param list<int> $memberIds
+	 */
+	private function findAllWithRolesByIds(array $memberIds): NodeMemberCollection
+	{
+		$rows = Model\NodeMemberTable::query()
+			->setSelect(array_merge($this->getBaseFieldList(), ['ROLE']))
+			->whereIn('ID', $memberIds)
+			->addOrder('ID')
+			->fetchAll()
+		;
+
+		$membersById = [];
+		foreach ($rows as $row)
+		{
+			$member = $membersById[$row['ID']] ??= $this->convertModelArrayToItem($row);
+			$member->roles = array_values(array_unique(array_filter([
+				...$member->roles,
+				$row['HUMANRESOURCES_MODEL_NODE_MEMBER_ROLE_ID'] ?? null,
+			])));
 		}
 
-		$this->removeByCollection($nodeMemberCollection);
+		return new NodeMemberCollection(...array_values($membersById));
 	}
 
 	/**
@@ -693,7 +719,9 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			);
 		}
 
-		$nodeMemberEntity = NodeMemberTable::getById($item->id)
+		$nodeMemberEntity = NodeMemberTable::query()
+			->setSelect($this->getBaseFieldList())
+			->where('ID', $item->id)
 			->fetchObject()
 		;
 
@@ -811,6 +839,7 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		$result = new Main\Result();
 
 		$modelCollection = NodeMemberTable::query()
+			->setSelect($this->getBaseFieldList())
 			->where('ENTITY_TYPE', $entityType->name)
 			->where('ENTITY_ID', $entityId)
 			->fetchCollection()
@@ -821,12 +850,44 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			return $result;
 		}
 
+		$previousMembers = [];
 		foreach ($modelCollection as $model)
 		{
+			$previousMembers[] = $this->convertModelToItem($model);
 			$model->setActive($active);
 		}
 
-		return $modelCollection->save();
+		$result = $modelCollection->save();
+		if ($result->isSuccess())
+		{
+			$this->recordActivityChangesInPositionJournal($previousMembers, $active);
+		}
+
+		return $result;
+	}
+
+	/**
+	 * @param list<NodeMember> $previousMembers
+	 */
+	private function recordActivityChangesInPositionJournal(array $previousMembers, bool $active): void
+	{
+		try
+		{
+			$journal = Container::getStructurePositionJournal();
+			foreach ($previousMembers as $previousMember)
+			{
+				$member = clone $previousMember;
+				$member->active = $active;
+				$journal->record(
+					EventName::OnMemberUpdated->name,
+					['member' => $member, 'fields' => ['active'], 'previousMember' => $previousMember],
+				);
+			}
+		}
+		catch (\Throwable $t)
+		{
+			PositionJournal::logFailure('NodeMemberRepository', $t);
+		}
 	}
 
 	public function setActiveByEntityTypeAndEntityIds(
@@ -989,6 +1050,13 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		$nodeMemberCollection->setTotalCount(self::$queryTotalCount['usersCount']);
 	}
 
+	/**
+	 * @param RelationEntityType $entityType
+	 * @param int $entityId
+	 * @param list<int> $usersToCompare
+	 *
+	 * @return list<int>
+	 */
 	public function getCommonUsersFromRelation(
 		RelationEntityType $entityType,
 		int $entityId,
@@ -1003,16 +1071,6 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 		{
 			return [];
 		}
-		$connection = Application::getConnection();
-
-		$users = implode(', ', $usersToCompare);
-
-		$relationEntityType = $entityType->name;
-		$memberEntityType = MemberEntityType::USER->name;
-		$nodeTableName = Model\NodeTable::getTableName();
-		$nodePathTableName = Model\NodePathTable::getTableName();
-		$nodeRelationTableName = Model\NodeRelationTable::getTableName();
-		$nodeMemberTableName = Model\NodeMemberTable::getTableName();
 
 		if (empty($nodeEntityTypeCollection->getItems()))
 		{
@@ -1022,43 +1080,66 @@ class NodeMemberRepository implements Contract\Repository\NodeMemberRepository
 			);
 		}
 
-		$helper = Application::getConnection()->getSqlHelper();
-
-		$types = implode(
-			',',
-			array_map(
-				static function(NodeEntityType $type) use ($helper) {
-					$type = $helper->forSql($type->value);
-					return "'$type'";
-				},
-				$nodeEntityTypeCollection->getItems(),
-			),
+		$users = array_values(
+			array_filter(
+				array_map(intval(...), $usersToCompare),
+				static fn(int $userId): bool => $userId > 0,
+			)
 		);
 
-		$query =
+		if (empty($users))
+		{
+			return [];
+		}
+
+		$nodeTypes = array_values(
+			array_map(
+				static fn(NodeEntityType $type): string => $type->value,
+				$nodeEntityTypeCollection->getItems(),
+			)
+		);
+
+		$userPlaceholders = implode(', ', array_fill(0, count($users), '?i'));
+		$typePlaceholders = implode(', ', array_fill(0, count($nodeTypes), '?s'));
+
+		$expression =
 			<<<SQL
 				SELECT DISTINCT nm.ENTITY_ID as USER
-				FROM $nodeMemberTableName nm
+				FROM ?# nm
 				INNER JOIN (
 					SELECT DISTINCT n.ID
-					FROM $nodeTableName n
-						INNER JOIN $nodePathTableName np ON np.CHILD_ID = n.ID
-						INNER JOIN $nodeRelationTableName nr ON (
-						nr.WITH_CHILD_NODES = 'Y' AND (np.PARENT_ID = nr.NODE_ID OR nr.NODE_ID = n.ID) AND n.TYPE IN ($types)
+					FROM ?# n
+						INNER JOIN ?# np ON np.CHILD_ID = n.ID
+						INNER JOIN ?# nr ON (
+						nr.WITH_CHILD_NODES = 'Y' AND (np.PARENT_ID = nr.NODE_ID OR nr.NODE_ID = n.ID) AND n.TYPE IN ($typePlaceholders)
 						OR
 						nr.WITH_CHILD_NODES = 'N' AND nr.NODE_ID = n.ID
 						)
-						WHERE nr.ENTITY_TYPE = '$relationEntityType'
-						AND nr.ENTITY_ID = $entityId
+						WHERE nr.ENTITY_TYPE = ?s
+						AND nr.ENTITY_ID = ?i
 				) as relation ON relation.ID = nm.NODE_ID
-				WHERE nm.ENTITY_ID IN ($users)
-				AND nm.ENTITY_TYPE = '$memberEntityType'
+				WHERE nm.ENTITY_ID IN ($userPlaceholders)
+				AND nm.ENTITY_TYPE = ?s
 				AND nm.ACTIVE = 'Y'
 			SQL;
 
-		$result = $connection->query($query);
+		$arguments = [
+			Model\NodeMemberTable::getTableName(),
+			Model\NodeTable::getTableName(),
+			Model\NodePathTable::getTableName(),
+			Model\NodeRelationTable::getTableName(),
+			...$nodeTypes,
+			$entityType->name,
+			$entityId,
+			...$users,
+			MemberEntityType::USER->name,
+		];
 
-		return array_column($result->fetchAll(), 'USER');
+		$query = (new SqlExpression($expression, ...$arguments))->compile();
+
+		$result = Application::getConnection()->query($query);
+
+		return array_map(intval(...), array_column($result->fetchAll(), 'USER'));
 	}
 
 	public function findAllByRoleIdAndStructureId(

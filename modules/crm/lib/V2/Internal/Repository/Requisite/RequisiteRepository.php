@@ -14,20 +14,32 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 
 /**
- * The single point the new layer reads the requisites of the whole portal through.
+ * The single point the new layer reads the requisites of the portal through: the selection that spans
+ * the whole portal ({@see self::findAll()}), one record ({@see self::findById()}) and the records of a
+ * single owner ({@see self::findByOwner()}).
  *
- * **Rights are not checked here, and this class must not serve a non-administrative scenario.** The
- * only gate of the read is the portal administrator check of the REST controller above it: a
- * requisite carries no access control of its own, and the right to read one is derived from the right
- * to read its owner - which this read deliberately does not apply. Put it behind anything weaker than
- * a portal administrator and the legal details of every counterparty of the portal are open.
+ * **Rights are not checked here** - by any of the three, and the gate each of them stands behind is a
+ * different one. The selection that spans the portal is gated by the portal administrator check of the
+ * REST controller above it: a requisite carries no access control of its own, and the right to read one
+ * is derived from the right to read its owner - which that selection deliberately does not apply. Put it
+ * behind anything weaker than a portal administrator and the legal details of every counterparty of the
+ * portal are open.
+ *
+ * The read of one owner is gated by the right to read **that owner**, asked before this class is
+ * ({@see \Bitrix\Crm\V2\Internal\Access\Requisite\RequisitePermissions::canRead()}). One question is the
+ * whole of it, because the answer is bound to a single owner and cannot carry a record of another one.
+ * The condition built for lists that cross owners ({@see \Bitrix\Crm\Security\OwnerEntityListRestriction})
+ * is deliberately **not** added on top of it: it exists for a selection whose rows belong to owners the
+ * caller did not name, and here it would ask a question already answered and make every page pay for a
+ * subquery that decides nothing.
  *
  * Owners are limited to contacts and companies. That belongs to the contract of the read rather than
  * to the storage, so it is applied here and cannot be widened by the caller.
  *
- * Read-only: requisites are written through the legacy facade, which this class does not touch. There
- * is no count of the whole selection either - the answer is a page, and an incomplete page is what
- * tells the caller the selection has ended.
+ * Read-only: a requisite is written through {@see RequisiteWriteRepository}, and the two are kept apart
+ * so that a read never carries a way to change what it read. They share the map of the columns
+ * ({@see RequisiteColumnMap}) and nothing else. There is no count of the whole selection either - the
+ * answer is a page, and an incomplete page is what tells the caller the selection has ended.
  *
  * ORM objects never leave the class, and neither does the storage vocabulary: the filter, the
  * ordering and the field set are all expressed in {@see Requisite} field names, and a name this class
@@ -37,83 +49,14 @@ use Bitrix\Main\Type\DateTime;
  */
 final class RequisiteRepository
 {
-	/** Every field of a requisite record and the column of `b_crm_requisite` behind it. */
-	private const COLUMN_BY_FIELD = [
-		Requisite::FIELD_ID => 'ID',
-		Requisite::FIELD_OWNER_ID => 'ENTITY_ID',
-		Requisite::FIELD_OWNER_TYPE_ID => 'ENTITY_TYPE_ID',
-		Requisite::FIELD_PRESET_ID => 'PRESET_ID',
-		Requisite::FIELD_NAME => 'NAME',
-		Requisite::FIELD_ACTIVE => 'ACTIVE',
-		Requisite::FIELD_XML_ID => 'XML_ID',
-		Requisite::FIELD_ORIGINATOR_ID => 'ORIGINATOR_ID',
-		Requisite::FIELD_SORT => 'SORT',
-		Requisite::FIELD_CREATED_TIME => 'DATE_CREATE',
-		Requisite::FIELD_UPDATED_TIME => 'DATE_MODIFY',
-		Requisite::FIELD_CREATED_BY_ID => 'CREATED_BY_ID',
-		Requisite::FIELD_UPDATED_BY_ID => 'MODIFY_BY_ID',
-		Requisite::FIELD_FULL_NAME => 'RQ_NAME',
-		Requisite::FIELD_FIRST_NAME => 'RQ_FIRST_NAME',
-		Requisite::FIELD_LAST_NAME => 'RQ_LAST_NAME',
-		Requisite::FIELD_SECOND_NAME => 'RQ_SECOND_NAME',
-		Requisite::FIELD_COMPANY_TITLE => 'RQ_COMPANY_NAME',
-		Requisite::FIELD_COMPANY_FULL_NAME => 'RQ_COMPANY_FULL_NAME',
-		Requisite::FIELD_COMPANY_IDENTIFIER => 'RQ_COMPANY_ID',
-		Requisite::FIELD_COMPANY_REGISTRATION_DATE => 'RQ_COMPANY_REG_DATE',
-		Requisite::FIELD_DIRECTOR_NAME => 'RQ_DIRECTOR',
-		Requisite::FIELD_ACCOUNTANT_NAME => 'RQ_ACCOUNTANT',
-		Requisite::FIELD_CEO_NAME => 'RQ_CEO_NAME',
-		Requisite::FIELD_CEO_POSITION => 'RQ_CEO_WORK_POS',
-		Requisite::FIELD_CONTACT_PERSON => 'RQ_CONTACT',
-		Requisite::FIELD_EMAIL_ADDRESS => 'RQ_EMAIL',
-		Requisite::FIELD_PHONE_NUMBER => 'RQ_PHONE',
-		Requisite::FIELD_FAX_NUMBER => 'RQ_FAX',
-		Requisite::FIELD_IDENTIFICATION_TYPE_ID => 'RQ_IDENT_TYPE',
-		Requisite::FIELD_IDENTITY_DOCUMENT_TYPE => 'RQ_IDENT_DOC',
-		Requisite::FIELD_IDENTITY_DOCUMENT_SERIES => 'RQ_IDENT_DOC_SER',
-		Requisite::FIELD_IDENTITY_DOCUMENT_NUMBER => 'RQ_IDENT_DOC_NUM',
-		Requisite::FIELD_IDENTITY_DOCUMENT_PERSONAL_NUMBER => 'RQ_IDENT_DOC_PERS_NUM',
-		Requisite::FIELD_IDENTITY_DOCUMENT_ISSUE_DATE => 'RQ_IDENT_DOC_DATE',
-		Requisite::FIELD_IDENTITY_DOCUMENT_ISSUED_BY => 'RQ_IDENT_DOC_ISSUED_BY',
-		Requisite::FIELD_IDENTITY_DOCUMENT_DEPARTMENT_CODE => 'RQ_IDENT_DOC_DEP_CODE',
-		Requisite::FIELD_INN => 'RQ_INN',
-		Requisite::FIELD_KPP => 'RQ_KPP',
-		Requisite::FIELD_USRLE => 'RQ_USRLE',
-		Requisite::FIELD_IFNS => 'RQ_IFNS',
-		Requisite::FIELD_OGRN => 'RQ_OGRN',
-		Requisite::FIELD_OGRNIP => 'RQ_OGRNIP',
-		Requisite::FIELD_OKPO => 'RQ_OKPO',
-		Requisite::FIELD_OKTMO => 'RQ_OKTMO',
-		Requisite::FIELD_OKVED => 'RQ_OKVED',
-		Requisite::FIELD_EDRPOU => 'RQ_EDRPOU',
-		Requisite::FIELD_DRFO => 'RQ_DRFO',
-		Requisite::FIELD_KBE => 'RQ_KBE',
-		Requisite::FIELD_IIN => 'RQ_IIN',
-		Requisite::FIELD_BIN => 'RQ_BIN',
-		Requisite::FIELD_REGON => 'RQ_REGON',
-		Requisite::FIELD_KRS => 'RQ_KRS',
-		Requisite::FIELD_PESEL => 'RQ_PESEL',
-		Requisite::FIELD_SIRET => 'RQ_SIRET',
-		Requisite::FIELD_SIREN => 'RQ_SIREN',
-		Requisite::FIELD_RCS => 'RQ_RCS',
-		Requisite::FIELD_CNPJ => 'RQ_CNPJ',
-		Requisite::FIELD_CPF => 'RQ_CPF',
-		Requisite::FIELD_STATE_REGISTRATION => 'RQ_STATE_REG',
-		Requisite::FIELD_MUNICIPAL_REGISTRATION => 'RQ_MNPL_REG',
-		Requisite::FIELD_LEGAL_FORM => 'RQ_LEGAL_FORM',
-		Requisite::FIELD_SHARE_CAPITAL => 'RQ_CAPITAL',
-		Requisite::FIELD_TAX_REGIME_ID => 'RQ_TAX_REGIME',
-		Requisite::FIELD_RESIDENCE_COUNTRY => 'RQ_RESIDENCE_COUNTRY',
-		Requisite::FIELD_BASIS_DOCUMENT => 'RQ_BASE_DOC',
-		Requisite::FIELD_REGISTRATION_CERTIFICATE_SERIES => 'RQ_ST_CERT_SER',
-		Requisite::FIELD_REGISTRATION_CERTIFICATE_NUMBER => 'RQ_ST_CERT_NUM',
-		Requisite::FIELD_REGISTRATION_CERTIFICATE_DATE => 'RQ_ST_CERT_DATE',
-		Requisite::FIELD_VAT_PAYER => 'RQ_VAT_PAYER',
-		Requisite::FIELD_VAT_NUMBER => 'RQ_VAT_ID',
-		Requisite::FIELD_VAT_CERTIFICATE_SERIES => 'RQ_VAT_CERT_SER',
-		Requisite::FIELD_VAT_CERTIFICATE_NUMBER => 'RQ_VAT_CERT_NUM',
-		Requisite::FIELD_VAT_CERTIFICATE_DATE => 'RQ_VAT_CERT_DATE',
-	];
+	/**
+	 * Every field of a requisite record and the column of `b_crm_requisite` behind it.
+	 *
+	 * Declared in {@see RequisiteColumnMap} and named here: the write of the same area asks the storage
+	 * the same question, and two maps of it would answer differently the first time a field was added to
+	 * one of them.
+	 */
+	private const COLUMN_BY_FIELD = RequisiteColumnMap::COLUMN_BY_FIELD;
 
 	/**
 	 * The owners a requisite of this read belongs to; nothing else is answered for. Public because it is
@@ -125,28 +68,15 @@ final class RequisiteRepository
 		OwnerType::COMPANY,
 	];
 
-	// The three maps below are keyed by field name rather than listed: every field of every row of a page is
-	// classified through them, and a page holds up to a thousand records of seventy-four fields.
+	// The three maps below are declared in RequisiteColumnMap for the same reason as the map of columns,
+	// and cover the whole area rather than the read alone: a field only the write knows is never a field
+	// this class is asked to make sense of.
 
-	private const INT_FIELDS = [
-		Requisite::FIELD_ID => true,
-		Requisite::FIELD_OWNER_ID => true,
-		Requisite::FIELD_OWNER_TYPE_ID => true,
-		Requisite::FIELD_PRESET_ID => true,
-		Requisite::FIELD_SORT => true,
-		Requisite::FIELD_CREATED_BY_ID => true,
-		Requisite::FIELD_UPDATED_BY_ID => true,
-	];
+	private const INT_FIELDS = RequisiteColumnMap::INT_FIELDS;
 
-	private const BOOL_FIELDS = [
-		Requisite::FIELD_ACTIVE => true,
-		Requisite::FIELD_VAT_PAYER => true,
-	];
+	private const BOOL_FIELDS = RequisiteColumnMap::BOOL_FIELDS;
 
-	private const DATE_TIME_FIELDS = [
-		Requisite::FIELD_CREATED_TIME => true,
-		Requisite::FIELD_UPDATED_TIME => true,
-	];
+	private const DATE_TIME_FIELDS = RequisiteColumnMap::DATE_TIME_FIELDS;
 
 	/**
 	 * A page of requisites of the contacts and companies of the portal, ordered as asked. The filter,
@@ -197,6 +127,78 @@ final class RequisiteRepository
 		}
 
 		return $requisites;
+	}
+
+	/**
+	 * The requisite $id names, and `null` when there is none - including for an identifier that could
+	 * not be one, so a caller never has to check the identifier before asking.
+	 *
+	 * A record of an owner outside the types of the read is `null` as well: the storage holds such rows
+	 * ({@see \Bitrix\Crm\V2\Internal\Service\Requisite\OwnerResolver::isSupportedType()}), and this class
+	 * answers for none of them however it is asked.
+	 *
+	 * @param string[] $select the {@see Requisite} fields the caller needs; an empty list means all of
+	 *        them, and a field left out is `null` in the record - indistinguishable from a cell the
+	 *        record keeps empty.
+	 * @throws ArgumentException a field set over a field that is not a field of a requisite.
+	 * @throws SystemException a failure of the query itself, or a storage that answers a value of a
+	 *         field the read cannot make sense of.
+	 */
+	public function findById(int $id, array $select = []): ?Requisite
+	{
+		if ($id <= 0)
+		{
+			return null;
+		}
+
+		$requisites = $this->findAll(
+			(new ConditionTree())->where(Requisite::FIELD_ID, $id),
+			[],
+			1,
+			0,
+			$select,
+		);
+
+		return $requisites[0] ?? null;
+	}
+
+	/**
+	 * A page of the requisites of one owner, ordered as asked.
+	 *
+	 * Whether the user may read that owner is settled before this is called, and an owner of a type no
+	 * requisite of this read belongs to answers an empty page rather than a refusal: the types are the
+	 * contract of the read and naming another one selects nothing, exactly as a filter over them would.
+	 *
+	 * @param array<string, string> $order {@see Requisite} field name => `ASC`/`DESC`; the primary key
+	 *        settles whatever the ordering leaves equal, so the pages of one read do not overlap.
+	 * @param string[] $select the {@see Requisite} fields the caller needs; an empty list means all of
+	 *        them.
+	 * @return Requisite[]
+	 * @throws ArgumentException an ordering or a field set over a field that is not a field of a
+	 *         requisite.
+	 * @throws SystemException a failure of the query itself, or a storage that answers a value of a
+	 *         field the read cannot make sense of.
+	 */
+	public function findByOwner(
+		int $ownerTypeId,
+		int $ownerId,
+		array $order = [],
+		?int $limit = null,
+		int $offset = 0,
+		array $select = [],
+	): array
+	{
+		if ($ownerId <= 0)
+		{
+			return [];
+		}
+
+		$filter = (new ConditionTree())
+			->where(Requisite::FIELD_OWNER_TYPE_ID, $ownerTypeId)
+			->where(Requisite::FIELD_OWNER_ID, $ownerId)
+		;
+
+		return $this->findAll($filter, $order, $limit, $offset, $select);
 	}
 
 	/**
@@ -286,13 +288,7 @@ final class RequisiteRepository
 	 */
 	private static function requireColumn(string $field): string
 	{
-		$column = self::COLUMN_BY_FIELD[$field] ?? null;
-		if ($column === null)
-		{
-			throw new ArgumentException(sprintf('Unknown requisite field `%s`', $field), 'field');
-		}
-
-		return $column;
+		return RequisiteColumnMap::requireColumn($field);
 	}
 
 	/**

@@ -46,11 +46,6 @@ final class DashboardDetailInfoProvider
 
 		$type = $ormObject->getType();
 		$viewsCount = $this->dashboardViewRepository->countViews($dashboardId);
-		$nativeFilterFields = $dashboard->getNativeFilterFields();
-		$filterPeriod = $nativeFilterFields['FILTER_PERIOD'] ?? null;
-		$dateFilterStart = $this->prepareDateFilterValue($nativeFilterFields['DATE_FILTER_START'] ?? null);
-		$dateFilterEnd = $this->prepareDateFilterValue($nativeFilterFields['DATE_FILTER_END'] ?? null);
-		$includeLastFilterDate = (bool)($nativeFilterFields['INCLUDE_LAST_FILTER_DATE'] ?? false);
 
 		if ($type === SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM)
 		{
@@ -83,10 +78,6 @@ final class DashboardDetailInfoProvider
 				publishedDate: $dashboardInfo->getPublishedDate(),
 				updatedById: $dashboardInfo->getUpdatedById(),
 				updatedDate: $dashboardInfo->getUpdatedDate(),
-				filterPeriod: $filterPeriod,
-				dateFilterStart: $dateFilterStart,
-				dateFilterEnd: $dateFilterEnd,
-				includeLastFilterDate: $includeLastFilterDate,
 			);
 		}
 
@@ -121,10 +112,6 @@ final class DashboardDetailInfoProvider
 				publishedDate: $ormObject->getDateCreate(),
 				updatedById: null,
 				updatedDate: $ormObject->getDateModify(),
-				filterPeriod: $filterPeriod,
-				dateFilterStart: $dateFilterStart,
-				dateFilterEnd: $dateFilterEnd,
-				includeLastFilterDate: $includeLastFilterDate,
 				appCode: $appCode,
 				ratingInfo: $appDetail->getReviews(),
 			);
@@ -278,15 +265,5 @@ final class DashboardDetailInfoProvider
 		}
 
 		return $url;
-	}
-
-	private function prepareDateFilterValue(mixed $value): ?string
-	{
-		if ($value === null || $value === '')
-		{
-			return null;
-		}
-
-		return (string)$value;
 	}
 }

@@ -4,6 +4,8 @@ namespace Bitrix\Disk;
 
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
+use Bitrix\Disk\Internal\Enum\ExternalLinkScenario;
+use Bitrix\Disk\Internal\Service\Sync\Access\LinkAccessPublisher;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\ExternalLinkTable;
@@ -55,6 +57,8 @@ final class ExternalLink extends Internals\Model
 	protected $canDownloadWithReadAccess;
 	/** @var bool */
 	protected $canEditSettings;
+	/** @var string|null */
+	protected $scenario;
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -280,6 +284,19 @@ final class ExternalLink extends Internals\Model
 	}
 
 	/**
+	 * Returns scenario of external link, null for a regular manual link.
+	 */
+	public function getScenario(): ?ExternalLinkScenario
+	{
+		if ($this->scenario === null)
+		{
+			return null;
+		}
+
+		return ExternalLinkScenario::tryFrom($this->scenario);
+	}
+
+	/**
 	 * Returns access right (view, edit).
 	 * @return int
 	 */
@@ -359,6 +376,14 @@ final class ExternalLink extends Internals\Model
 	}
 
 	/**
+	 * Tells if external link serves mail attachments.
+	 */
+	public function isMailAttachmentLink(): bool
+	{
+		return $this->getScenario() === ExternalLinkScenario::MailAttachments;
+	}
+
+	/**
 	 * Tells if external link has specific version.
 	 * @return bool
 	 */
@@ -413,6 +438,7 @@ final class ExternalLink extends Internals\Model
 			'CREATE_USER' => 'createUser',
 			'CAN_DOWNLOAD_WITH_READ_ACCESS' => 'canDownloadWithReadAccess',
 			'CAN_EDIT_SETTINGS' => 'canEditSettings',
+			'SCENARIO' => 'scenario',
 		);
 	}
 
@@ -534,9 +560,17 @@ final class ExternalLink extends Internals\Model
 			return false;
 		}
 
-		return $this->update(array(
+		$deathTimeBefore = $this->getDeathTime();
+		$success = $this->update(array(
 			'DEATH_TIME' => null,
 		));
+
+		if ($success)
+		{
+			$this->publishLifetimeChange($deathTimeBefore, null);
+		}
+
+		return $success;
 	}
 
 	public function revokePassword()
@@ -564,9 +598,30 @@ final class ExternalLink extends Internals\Model
 			return false;
 		}
 
-		return $this->update(array(
+		$deathTimeBefore = $this->getDeathTime();
+		$success = $this->update(array(
 			'DEATH_TIME' => $dateTime,
 		));
+
+		if ($success)
+		{
+			$this->publishLifetimeChange($deathTimeBefore, $dateTime);
+		}
+
+		return $success;
+	}
+
+	/**
+	 * A lifetime that ran out switches the link off without deleting it, and one that is taken away
+	 * lights it again - both move the boundary for whoever held the object by this link alone.
+	 */
+	private function publishLifetimeChange(?DateTime $deathTimeBefore, ?DateTime $deathTimeAfter): void
+	{
+		(new LinkAccessPublisher())->publishExternalLinkLifetimeChanged(
+			(int)$this->getObjectId(),
+			$deathTimeBefore,
+			$deathTimeAfter,
+		);
 	}
 
 	/**
@@ -614,6 +669,17 @@ final class ExternalLink extends Internals\Model
 	}
 
 	/**
+	 * Scenario is assigned on creation only, so it is dropped from any update.
+	 * @inheritDoc
+	 */
+	protected function update(array $data)
+	{
+		unset($data['SCENARIO']);
+
+		return parent::update($data);
+	}
+
+	/**
 	 * Removes expired links with type AUTO.
 	 * @internal Uses in CAgent.
 	 * @return string
@@ -657,7 +723,15 @@ final class ExternalLink extends Internals\Model
 			], true));
 		}
 
-		return $this->deleteInternal();
+		$success = $this->deleteInternal();
+
+		if ($success)
+		{
+			// the object may have left the sight of whoever held it by this link and by nothing else
+			(new LinkAccessPublisher())->publishExternalLinkRevoked((int)$this->getObjectId());
+		}
+
+		return $success;
 	}
 
 	private function deleteShortUri($uri)
@@ -673,11 +747,7 @@ final class ExternalLink extends Internals\Model
 	public function generateUrl(): Uri
 	{
 		$driver = Driver::getInstance();
-		return new Uri(
-			$driver->getUrlManager()->getPublicExternalLink(
-				object: $this->getObject(),
-				hash: $this->getHash(),
-			),
-		);
+
+		return new Uri($driver->getUrlManager()->getCopyablePublicExternalLink($this));
 	}
 }

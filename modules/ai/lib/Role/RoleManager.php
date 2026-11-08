@@ -68,8 +68,10 @@ class RoleManager
 	public function getRolesByCode(array $roleCodes): array
 	{
 		static $roleCache = [];
+		$languageCode = $this->languageCode;
+		$roleCache[$languageCode] ??= [];
 
-		$rolesToFetch = array_diff($roleCodes, array_keys($roleCache));
+		$rolesToFetch = array_diff($roleCodes, array_keys($roleCache[$languageCode]));
 
 		if (!empty($rolesToFetch))
 		{
@@ -100,16 +102,16 @@ class RoleManager
 
 			foreach ($fetchedRoles as $role)
 			{
-				$roleCache[$role['code']] = $role;
+				$roleCache[$languageCode][$role['code']] = $role;
 			}
 		}
 
 		$roles = [];
 		foreach ($roleCodes as $code)
 		{
-			if (isset($roleCache[$code]))
+			if (isset($roleCache[$languageCode][$code]))
 			{
-				$roles[] = $roleCache[$code];
+				$roles[] = $roleCache[$languageCode][$code];
 			}
 		}
 
@@ -618,6 +620,11 @@ class RoleManager
 	 */
 	public function getPromptsByCategoryAndRoleCodes(string $category, array $roleCodes): array
 	{
+		if (empty($roleCodes))
+		{
+			return [];
+		}
+
 		$prompts = [];
 		$roles = RoleTable::query()
 			->setSelect(['RULES', 'CODE'])

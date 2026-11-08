@@ -5,6 +5,7 @@ namespace Bitrix\Superset\Internal\Services;
 use Bitrix\Main\Result;
 use Bitrix\Superset\Internal\Connector\SupersetInstance;
 use Bitrix\Superset\Internal\Entities\Server;
+use Bitrix\Superset\Internal\Support\InstanceUnavailableStatus;
 
 class CreateFilterDataset
 {
@@ -56,6 +57,15 @@ class CreateFilterDataset
 			if ($buildResult->isSuccess())
 			{
 				$buildData[$dataset['table_name']] = $buildResult->getData();
+			}
+			elseif (InstanceUnavailableStatus::isReportedBy($buildResult))
+			{
+				$unavailableResult = new Result();
+				$unavailableResult->addErrors($buildResult->getErrors());
+				$unavailableResult->addErrors($result->getErrors());
+				$unavailableResult->setData($buildData);
+
+				return $unavailableResult;
 			}
 			else
 			{

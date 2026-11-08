@@ -165,6 +165,12 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 					'type' => 'checkbox'
 				]
 			),
+			'OPENED' => $this->createField(
+				'OPENED',
+				[
+					'type' => 'checkbox'
+				]
+			),
 			'IS_REPEATED_APPROACH' => $this->createField(
 				'IS_REPEATED_APPROACH',
 				[
@@ -176,6 +182,17 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 				[
 					'type' => 'list',
 					'partial' => true
+				]
+			),
+			'SOURCE_DESCRIPTION' => $this->createField(
+				'SOURCE_DESCRIPTION',
+				[
+					'data' => [
+						'additionalFilter' => [
+							'isEmpty',
+							'hasAnyValue',
+						],
+					],
 				]
 			),
 			'OBSERVER_IDS' => $this->createField(
@@ -718,7 +735,7 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 			$categoryID = $this->getCategoryID();
 			return array(
 				'params' => array('multiple' => 'Y'),
-				'items' => DealCategory::getStageList(max($categoryID, 0))
+				'items' => $this->prepareStageItems($categoryID),
 			);
 		}
 
@@ -883,7 +900,7 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 		{
 			return array(
 				'params' => array('multiple' => 'Y'),
-				'items' => \CCrmStatus::GetStatusList('SOURCE')
+				'items' => SourceDataProvider::getListWithEmptyValue()
 			);
 		}
 
@@ -930,6 +947,34 @@ class DealDataProvider extends EntityDataProvider implements FactoryOptionable
 		}
 
 		return null;
+	}
+
+	private function prepareStageItems(int $categoryID): array
+	{
+		if ($categoryID >= 0)
+		{
+			return DealCategory::getStageList($categoryID);
+		}
+
+		$categoryAccess = $this->getCategoryAccessData();
+		if (!isset($categoryAccess['READ']))
+		{
+			return DealCategory::getStageList(0);
+		}
+
+		$items = [];
+		foreach (DealCategory::prepareSelectListItems($categoryAccess['READ']) as $readableCategoryID => $categoryName)
+		{
+			foreach (DealCategory::getStageList((int)$readableCategoryID) as $stageID => $stageName)
+			{
+				$items[$stageID] = (int)$readableCategoryID > 0 && $categoryName !== ''
+					? "{$categoryName} / {$stageName}"
+					: $stageName
+				;
+			}
+		}
+
+		return $items;
 	}
 
 	protected function applySettingsDependantFilter(array &$filterFields): void

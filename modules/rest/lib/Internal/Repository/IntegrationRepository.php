@@ -4,11 +4,17 @@ declare(strict_types=1);
 
 namespace Bitrix\Rest\Internal\Repository;
 
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\Repository\RepositoryInterface;
+use Bitrix\Rest\Enum\APAuth\PasswordType;
+use Bitrix\Rest\Enum\Integration\ElementCodeType;
+use Bitrix\Rest\Internal\Entity\Application\AppAttribute;
 use Bitrix\Rest\Internal\Entity\Integration\Integration;
+use Bitrix\Rest\Internal\Model\AppAttributeTable;
 use Bitrix\Rest\Internal\Repository\Mapper\IntegrationMapper;
 use Bitrix\Rest\Preset\IntegrationTable;
 use Bitrix\Rest\Internal\Model\AppTable;
@@ -74,6 +80,61 @@ class IntegrationRepository implements RepositoryInterface
 		}
 
 		return $this->mapper->convertFromOrm($ormModel);
+	}
+
+	public function hasUserIntegrations(array $excludedAppAttributes = []): bool
+	{
+		return $this->buildUserIntegrationQuery($excludedAppAttributes)
+			->setSelect(['ID'])
+			->setLimit(1)
+			->fetch() !== false
+		;
+	}
+
+	private function buildUserIntegrationQuery(array $excludedAppAttributes): Query
+	{
+		$query = IntegrationTable::query()
+			->where('ELEMENT_CODE', '!=', ElementCodeType::IN_WEBHOOK->value)
+			->where(Query::filter()
+				->logic('or')
+				->where('PASSWORD.TYPE', PasswordType::User->value)
+				->whereNull('PASSWORD_ID'),
+			)
+		;
+
+		if ($excludedAppAttributes !== [])
+		{
+			$query->where(Query::filter()
+				->logic('or')
+				->where('ELEMENT_CODE', '!=', ElementCodeType::APPLICATION->value)
+				->whereNull('APP_ID')
+				->whereNotIn('APP_ID', $this->buildApplicationIdsByAttributesQuery($excludedAppAttributes)),
+			);
+		}
+
+		return $query;
+	}
+
+	private function buildApplicationIdsByAttributesQuery(array $attributes): Query
+	{
+		$codeFilter = Query::filter()->logic('or');
+		foreach ($attributes as $code => $value)
+		{
+			$codeFilter->where(
+				Query::filter()
+					->where('CODE', $code)
+					->where('VALUE', $value),
+			);
+		}
+
+		return AppAttributeTable::query()
+			->setSelect(['APP_ID'])
+			->where('TYPE', AppAttribute::TYPE_EXTERNAL)
+			->where($codeFilter)
+			->setGroup(['APP_ID'])
+			->registerRuntimeField(new ExpressionField('MATCHED_CODES', 'COUNT(DISTINCT %s)', 'CODE'))
+			->where('MATCHED_CODES', count($attributes))
+		;
 	}
 
 	/**

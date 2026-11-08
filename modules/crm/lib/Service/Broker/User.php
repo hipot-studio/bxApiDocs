@@ -44,6 +44,41 @@ class User extends Broker
 		return ($this->getById($id)['IS_REAL_USER'] ?? 'N') === 'Y';
 	}
 
+	/**
+	 * Finds all active real user IDs for exact email matches, grouped by normalized email.
+	 *
+	 * @param string[] $emails
+	 * @return array<string, array<int, int>>
+	 */
+	public function getActiveRealUserIdsByEmails(array $emails): array
+	{
+		$emails = array_values(array_unique(array_filter($emails)));
+		if (empty($emails))
+		{
+			return [];
+		}
+
+		$rows = UserTable::query()
+			->setSelect(['ID', 'EMAIL'])
+			->whereIn('EMAIL', $emails)
+			->where('ACTIVE', 'Y')
+			->where('REAL_USER', 'expr', true)
+			->exec()
+		;
+		$userIdsByEmail = [];
+		while ($row = $rows->fetch())
+		{
+			$email = mb_strtolower(trim((string)($row['EMAIL'] ?? '')));
+			$userId = (int)($row['ID'] ?? 0);
+			if ($email !== '' && $userId > 0)
+			{
+				$userIdsByEmail[$email][$userId] = $userId;
+			}
+		}
+
+		return $userIdsByEmail;
+	}
+
 	protected function loadEntry(int $id): ?array
 	{
 		if ($id === 0)

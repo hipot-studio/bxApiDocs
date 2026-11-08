@@ -7,6 +7,7 @@ use Bitrix\Im\V2\Chat\NotifyChat;
 use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Im\V2\Link\File\FileCollection;
 use Bitrix\Im\V2\Link\File\FileItem;
+use Bitrix\Im\V2\Link\File\Subtype;
 use Bitrix\Im\V2\Link\File\SubtypeGroup;
 use Bitrix\Im\V2\Message\CounterService;
 use Bitrix\Im\V2\Permission\Action;
@@ -528,7 +529,7 @@ class CIMRestService extends IRestService
 
 		if (isset($arParams['FIRST_ID']))
 		{
-			if (!preg_match('/^\d{1,}$/i', $arParams['FIRST_ID']))
+			if (!is_scalar($arParams['FIRST_ID']) || !preg_match('/^\d{1,}$/i', $arParams['FIRST_ID']))
 			{
 				throw new Bitrix\Rest\RestException("First ID can't be string", "FIRST_ID_STRING", CRestServer::STATUS_WRONG_REQUEST);
 			}
@@ -536,7 +537,7 @@ class CIMRestService extends IRestService
 		}
 		else if (isset($arParams['LAST_ID']))
 		{
-			if (!preg_match('/^\d{1,}$/i', $arParams['LAST_ID']))
+			if (!is_scalar($arParams['LAST_ID']) || !preg_match('/^\d{1,}$/i', $arParams['LAST_ID']))
 			{
 				throw new Bitrix\Rest\RestException("Last ID can't be string", "LAST_ID_STRING", CRestServer::STATUS_WRONG_REQUEST);
 			}
@@ -1049,33 +1050,41 @@ class CIMRestService extends IRestService
 		{
 			$config['WITH_COUNTERS'] = 'N';
 		}
-		if (isset($arParams['SKIP_OPENLINES']) && $arParams['SKIP_OPENLINES'] === 'Y')
+		// ONLY_OPENLINES is the leading mode: chat type filters are mutually exclusive with it
+		if (isset($arParams['ONLY_OPENLINES']) && $arParams['ONLY_OPENLINES'] === 'Y')
 		{
-			$config['SKIP_OPENLINES'] = 'Y';
+			$config['ONLY_OPENLINES'] = 'Y';
+		}
+		else
+		{
+			if (isset($arParams['SKIP_OPENLINES']) && $arParams['SKIP_OPENLINES'] === 'Y')
+			{
+				$config['SKIP_OPENLINES'] = 'Y';
+			}
+			if (isset($arParams['ONLY_COPILOT']) && $arParams['ONLY_COPILOT'] === 'Y')
+			{
+				$config['ONLY_COPILOT'] = 'Y';
+			}
+			if (isset($arParams['ONLY_CHANNEL']) && $arParams['ONLY_CHANNEL'] === 'Y')
+			{
+				$config['ONLY_CHANNEL'] = 'Y';
+			}
+			if ($skipChatParam === 'Y')
+			{
+				$config['SKIP_CHAT'] = 'Y';
+			}
+			if ($skipDialogParam === 'Y')
+			{
+				$config['SKIP_DIALOG'] = 'Y';
+			}
 		}
 		if (isset($arParams['SKIP_UNDISTRIBUTED_OPENLINES']) && $arParams['SKIP_UNDISTRIBUTED_OPENLINES'] === 'Y')
 		{
 			$config['SKIP_UNDISTRIBUTED_OPENLINES'] = 'Y';
 		}
-		if (isset($arParams['ONLY_COPILOT']) && $arParams['ONLY_COPILOT'] === 'Y')
-		{
-			$config['ONLY_COPILOT'] = 'Y';
-		}
-		if (isset($arParams['ONLY_CHANNEL']) && $arParams['ONLY_CHANNEL'] === 'Y')
-		{
-			$config['ONLY_CHANNEL'] = 'Y';
-		}
 		if (isset($arParams['CAN_MANAGE_MESSAGES']) && $arParams['CAN_MANAGE_MESSAGES'] === 'Y')
 		{
 			$config['CAN_MANAGE_MESSAGES'] = 'Y';
-		}
-		if ($skipChatParam === 'Y')
-		{
-			$config['SKIP_CHAT'] = 'Y';
-		}
-		if ($skipDialogParam === 'Y')
-		{
-			$config['SKIP_DIALOG'] = 'Y';
 		}
 		if ($unreadOnly === 'Y')
 		{
@@ -2196,9 +2205,14 @@ class CIMRestService extends IRestService
 	public static function chatFileGet($arParams, $n, CRestServer $server)
 	{
 		$arParams = array_change_key_case($arParams, CASE_UPPER);
+		$order = self::getFileOrder($arParams);
+		self::checkFileOrderScope($arParams, $order);
+		$lastDate = self::getFileCursorDate($arParams, $order);
+
 		$filter = [
 			'SEARCH_FILE_NAME' => $arParams['SEARCH_FILE_NAME'] ?? null,
 			'LAST_ID' => $arParams['LAST_ID'] ?? null,
+			'LAST_DATE' => $lastDate,
 			'SUBTYPE' => $arParams['SUBTYPE'] ?? null,
 			'USER_ID' => $arParams['USER_ID'] ?? null,
 			'CHAT_ID' => $arParams['CHAT_ID'] ?? null,
@@ -2207,9 +2221,7 @@ class CIMRestService extends IRestService
 			'GROUP' => $arParams['GROUP'] ?? null,
 		];
 		$limit = self::getLimit($arParams);
-		$order = [
-			'ID' => $arParams['ORDER']['ID'] ?? 'DESC',
-		];
+
 		if (!isset($filter['CHAT_ID']))
 		{
 			throw new \Bitrix\Rest\RestException('CHAT_ID can`t be empty', 'CHAT_ID_EMPTY', \CRestServer::STATUS_WRONG_REQUEST);
@@ -3872,7 +3884,7 @@ class CIMRestService extends IRestService
 
 		if (isset($arParams['LAST_ID']) )
 		{
-			if (!preg_match('/^\d+$/', $arParams['LAST_ID']))
+			if (!is_scalar($arParams['LAST_ID']) || !preg_match('/^\d+$/', $arParams['LAST_ID']))
 			{
 				throw new Bitrix\Rest\RestException(
 					"Last notification ID can't be string",
@@ -4148,7 +4160,7 @@ class CIMRestService extends IRestService
 
 		if (isset($arParams['LAST_ID']))
 		{
-			if (!preg_match('/^\d+$/', $arParams['LAST_ID']))
+			if (!is_scalar($arParams['LAST_ID']) || !preg_match('/^\d+$/', $arParams['LAST_ID']))
 			{
 				throw new Bitrix\Rest\RestException(
 					"Last notification ID can't be string",
@@ -4402,6 +4414,44 @@ class CIMRestService extends IRestService
 			throw new Bitrix\Rest\RestException("List of files in not specified", "FILES_ERROR", CRestServer::STATUS_WRONG_REQUEST);
 		}
 
+		$fileAccessValidation = (new \Bitrix\Im\V2\Message\Send\DiskFileAccessValidator(CIMDisk::GetUserId()))
+			->validate(array_map('intval', array_keys($files)));
+		if (!$fileAccessValidation->isSuccess())
+		{
+			$fileAccessError = $fileAccessValidation->getErrors()[0];
+			$fileAccessStatus =
+				$fileAccessError->getCode() === \Bitrix\Im\V2\Entity\File\FileError::ACCESS_ERROR
+					? CRestServer::STATUS_FORBIDDEN
+					: CRestServer::STATUS_WRONG_REQUEST
+			;
+
+			throw new Bitrix\Rest\RestException(
+				$fileAccessError->getMessage(),
+				$fileAccessError->getCode(),
+				$fileAccessStatus,
+			);
+		}
+
+		// Server-side file policy for copilot chats. Runs before any copy/side effect.
+		// A null policy means the feature flags are off: the policy acts as a kill-switch.
+		$copilotFileUploadPolicy = $targetChat instanceof \Bitrix\Im\V2\Chat\CopilotChat
+			? \Bitrix\Im\V2\Chat\CopilotChat::getFileUploadPolicyPublicData()
+			: null;
+		if ($copilotFileUploadPolicy !== null)
+		{
+			$copilotFileValidation = (new \Bitrix\Im\V2\Message\Send\CopilotFileValidator($copilotFileUploadPolicy))
+				->validate(array_map('intval', array_keys($files)));
+			if (!$copilotFileValidation->isSuccess())
+			{
+				$copilotFileError = $copilotFileValidation->getErrors()[0];
+				throw new Bitrix\Rest\RestException(
+					$copilotFileError->getMessage(),
+					$copilotFileError->getCode(),
+					CRestServer::STATUS_WRONG_REQUEST
+				);
+			}
+		}
+
 		if (isset($arParams['TEMPLATE_ID']) && !empty($arParams['TEMPLATE_ID']))
 		{
 			$arParams['TEMPLATE_ID'] = mb_substr((string)$arParams['TEMPLATE_ID'], 0, 255);
@@ -4420,14 +4470,71 @@ class CIMRestService extends IRestService
 			'AS_FILE' => $arParams['AS_FILE'] ?? 'N',
 			'WAIT_FULL_EXECUTION' => 'N',
 			'FILE_PARAMS' => $arParams['FILE_PARAMS'] ?? null,
+			'SENT_FROM_UI' => $server->getAuthType() === \Bitrix\Rest\SessionAuth\Auth::AUTH_TYPE,
 		];
 		if ($replyId > 0)
 		{
 			$uploadOptions['PARAMS']['REPLY_ID'] = $replyId;
 		}
-		$result = CIMDisk::UploadFileFromDisk($chatId, array_values($files), $arParams['MESSAGE'], $uploadOptions);
+
+		try
+		{
+			$vCardConversionResult = (new \Bitrix\Im\V2\Message\Contact\VCardConversionService())->tryConvert(
+				$targetChat,
+				array_values($files),
+				$arParams['MESSAGE'] ?? null,
+				$uploadOptions,
+				CIMDisk::GetUserId(),
+			);
+		}
+		catch (\Bitrix\Main\AccessDeniedException)
+		{
+			throw new Bitrix\Rest\RestException(
+				"Action unavailable",
+				"ACCESS_ERROR",
+				CRestServer::STATUS_FORBIDDEN,
+			);
+		}
+		if (is_array($vCardConversionResult))
+		{
+			return $vCardConversionResult;
+		}
+		if ($vCardConversionResult === false)
+		{
+			throw new Bitrix\Rest\RestException(
+				"Error during saving file to chat",
+				"SAVE_ERROR",
+				CRestServer::STATUS_WRONG_REQUEST,
+			);
+		}
+
+		try
+		{
+			$result = CIMDisk::UploadFileFromDisk(
+				$chatId,
+				array_values($files),
+				$arParams['MESSAGE'],
+				$uploadOptions,
+			);
+		}
+		catch (\Throwable $exception)
+		{
+			$reservation = $uploadOptions['MESSAGE_UUID_RESERVATION'] ?? null;
+			if ($reservation instanceof \Bitrix\Im\Message\Uuid)
+			{
+				$reservation->deleteIfPending();
+			}
+
+			throw $exception;
+		}
 		if (!$result)
 		{
+			$reservation = $uploadOptions['MESSAGE_UUID_RESERVATION'] ?? null;
+			if ($reservation instanceof \Bitrix\Im\Message\Uuid)
+			{
+				$reservation->deleteIfPending();
+			}
+
 			throw new Bitrix\Rest\RestException("Error during saving file to chat", "SAVE_ERROR", CRestServer::STATUS_WRONG_REQUEST);
 		}
 
@@ -7553,6 +7660,136 @@ class CIMRestService extends IRestService
 		}
 
 		return (int)$options['OFFSET'];
+	}
+
+	private static function getFileOrder($options = [])
+	{
+		$requested = $options['ORDER'] ?? null;
+		$requested = is_array($requested) ? array_change_key_case($requested, CASE_UPPER) : [];
+
+		$order = [
+			'ID' => $requested['ID'] ?? 'DESC',
+		];
+
+		if (isset($requested['DATE_CREATE']))
+		{
+			$order['DATE_CREATE'] = $requested['DATE_CREATE'];
+		}
+
+		// the core uppercases the direction before validating it, so the cursor has to read the same value
+		foreach ($order as $field => $direction)
+		{
+			if (is_string($direction))
+			{
+				$order[$field] = mb_strtoupper($direction);
+			}
+		}
+
+		return $order;
+	}
+
+	/**
+	 * The order by the date is served by the index (CHAT_ID, SUBTYPE, DATE_CREATE, ID), so it reads in order
+	 * inside one subtype only: the index holds no common order across several of them, and everything the
+	 * filter covers is sorted before the limit cuts the answer. The tab that asks for this order is a single
+	 * tab, that is a single group of subtypes, so the scope is checked by the normalized composition of the
+	 * filter rather than by the presence of a key: a request naming every subtype at once, or every group at
+	 * once, passes a check of presence and pays the very sort of the whole file history that check forbids.
+	 *
+	 * A filter whose values are all unknown keeps its former answer: nothing is left to read, the query is
+	 * closed by an impossible condition, and an empty list costs no sort.
+	 */
+	private static function checkFileOrderScope(array $options, array $order): void
+	{
+		if (!isset($order['DATE_CREATE']))
+		{
+			return;
+		}
+
+		$groups = self::getFileOrderGroups($options);
+
+		if ($groups === null)
+		{
+			throw new \Bitrix\Rest\RestException(
+				'ORDER.DATE_CREATE is accepted only together with SUBTYPE or GROUP',
+				'FILE_ORDER_WITHOUT_SUBTYPE',
+				\CRestServer::STATUS_WRONG_REQUEST
+			);
+		}
+
+		if (count($groups) > 1)
+		{
+			throw new \Bitrix\Rest\RestException(
+				'ORDER.DATE_CREATE is accepted for a single subtype group only',
+				'FILE_ORDER_ACROSS_GROUPS',
+				\CRestServer::STATUS_WRONG_REQUEST
+			);
+		}
+	}
+
+	/**
+	 * The groups the filter covers, resolved from the same values the collection resolves its subtypes from:
+	 * SUBTYPE wins over GROUP, and a value outside the enumeration is dropped rather than widened.
+	 *
+	 * @return string[]|null Null when the filter names neither a subtype nor a group.
+	 */
+	private static function getFileOrderGroups(array $options): ?array
+	{
+		$subtypeFilter = FileItem::normalizeFilterFromJsonFormat($options['SUBTYPE'] ?? null);
+		$groupFilter = FileItem::normalizeFilterFromJsonFormat($options['GROUP'] ?? null);
+
+		if (isset($subtypeFilter))
+		{
+			$subtypes = Subtype::getSubtypeFilter($subtypeFilter);
+		}
+		elseif (isset($groupFilter))
+		{
+			$subtypes = SubtypeGroup::getSubtypeFilter($groupFilter);
+		}
+		else
+		{
+			return null;
+		}
+
+		$groups = [];
+
+		foreach ($subtypes as $subtype)
+		{
+			$group = SubtypeGroup::tryFromSubtype(Subtype::from($subtype));
+			$groups[$group->value] = $group->value;
+		}
+
+		return array_values($groups);
+	}
+
+	/**
+	 * The composite cursor of the date order is a pair. Half of it builds the page by a boundary the other
+	 * half contradicts: a lone LAST_ID walks by the record id while the rows come out by the date, so a
+	 * record above the boundary by date but below it by id is served twice. An incomplete pair is refused
+	 * instead of served wrong; without the date order the cursor stays the plain LAST_ID one.
+	 */
+	private static function getFileCursorDate(array $options, array $order): ?DateTime
+	{
+		if (!isset($order['DATE_CREATE']))
+		{
+			return null;
+		}
+
+		if (isset($options['LAST_ID']) !== isset($options['LAST_DATE']))
+		{
+			throw new \Bitrix\Rest\RestException(
+				'LAST_ID and LAST_DATE must be given together when ORDER.DATE_CREATE is set',
+				'FILE_CURSOR_INCOMPLETE',
+				\CRestServer::STATUS_WRONG_REQUEST
+			);
+		}
+
+		if (!isset($options['LAST_DATE']))
+		{
+			return null;
+		}
+
+		return new DateTime($options['LAST_DATE'], DateTimeInterface::RFC3339);
 	}
 
 	private static function getRawParam(string $paramName)

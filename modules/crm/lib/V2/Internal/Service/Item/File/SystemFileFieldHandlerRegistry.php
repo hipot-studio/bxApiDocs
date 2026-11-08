@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Internal\Service\Item\File;
 
+use Bitrix\Crm\Field;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\V2\Public\EntityType;
 
 final class SystemFileFieldHandlerRegistry
@@ -12,9 +14,19 @@ final class SystemFileFieldHandlerRegistry
 	private array $handlers;
 
 	/** @param list<SystemFileFieldHandler>|null $handlers */
-	public function __construct(?array $handlers = null)
+	public function __construct(?array $handlers = null, ?\Closure $fieldResolver = null)
 	{
-		$this->handlers = $handlers ?? [new ContactPhotoHandler()];
+		$fieldResolver ??= static function (EntityType $entityType, string $fieldName): ?Field
+		{
+			return Container::getInstance()->getFactory($entityType->getId())
+				?->getFieldsCollection()
+				->getField($fieldName)
+			;
+		};
+		$this->handlers = $handlers ?? [
+			new ContactPhotoHandler($fieldResolver),
+			new CompanyLogoHandler($fieldResolver),
+		];
 	}
 
 	public function get(EntityType $entityType, string $fieldName): ?SystemFileFieldHandler
@@ -22,19 +34,6 @@ final class SystemFileFieldHandlerRegistry
 		foreach ($this->handlers as $handler)
 		{
 			if ($handler->supports($entityType, $fieldName))
-			{
-				return $handler;
-			}
-		}
-
-		return null;
-	}
-
-	public function getByRestField(EntityType $entityType, string $restFieldName): ?SystemFileFieldHandler
-	{
-		foreach ($this->handlers as $handler)
-		{
-			if ($handler->getRestFieldName() === $restFieldName && $handler->supports($entityType, $handler->getFieldName()))
 			{
 				return $handler;
 			}

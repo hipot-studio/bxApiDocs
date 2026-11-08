@@ -290,23 +290,36 @@ final class ColumnResolver
 	}
 
 	/**
+	 * Sources the rows of the result are read from; stamp constants are not among them.
+	 *
+	 * @return SourceRef[]
+	 */
+	public static function collectRowSourceRefs(array $definition): array
+	{
+		return array_map(
+			static fn ($source): SourceRef => SourceRef::fromArray((array)$source),
+			(array)($definition['sources'] ?? []),
+		);
+	}
+
+	/**
 	 * Sources and stamp constants alike: a stamp reads a value just as a source does.
 	 *
 	 * @return SourceRef[]
 	 */
 	private static function collectSourceRefs(array $definition): array
 	{
-		$references = (array)($definition['sources'] ?? []);
+		$references = self::collectRowSourceRefs($definition);
 		foreach ((array)($definition['columns'] ?? []) as $column)
 		{
 			$column = (array)$column;
 			if (($column['kind'] ?? null) === 'constant')
 			{
-				$references[] = (array)($column['constant'] ?? []);
+				$references[] = SourceRef::fromArray((array)($column['constant'] ?? []));
 			}
 		}
 
-		return array_map(static fn ($source): SourceRef => SourceRef::fromArray((array)$source), $references);
+		return $references;
 	}
 
 	private static function isTemplateScopedRef(SourceRef $ref): bool

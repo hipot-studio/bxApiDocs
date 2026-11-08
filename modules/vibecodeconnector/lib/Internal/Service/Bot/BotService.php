@@ -142,6 +142,11 @@ final class BotService
 			&& $this->options->get(self::OPTION_CLIENT_ID) !== '';
 	}
 
+	public function getBotId(): int
+	{
+		return (int)$this->options->get(self::OPTION_BOT_ID, '0');
+	}
+
 	/**
 	 * Returns bot identity & secrets for Vibe to use as the lazy-pull source of truth.
 	 *

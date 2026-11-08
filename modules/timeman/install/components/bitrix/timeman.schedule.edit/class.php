@@ -14,6 +14,7 @@ use Bitrix\Timeman\Helper\EntityCodesHelper;
 use Bitrix\Timeman\Helper\Form\Schedule\CalendarFormHelper;
 use Bitrix\Timeman\Helper\Form\Schedule\ScheduleFormHelper;
 use Bitrix\Timeman\Helper\UserHelper;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 use Bitrix\Timeman\Model\Schedule\Calendar\CalendarTable;
 use Bitrix\Timeman\Model\Schedule\Calendar\EO_Calendar_Collection;
 use Bitrix\Timeman\Model\Schedule\ScheduleTable;
@@ -75,6 +76,14 @@ class TimemanScheduleComponent extends \Bitrix\Timeman\Component\BaseComponent
 	/** @inheritdoc */
 	public function executeComponent()
 	{
+		$toolId = Settings::TOOLS['worktime'];
+		if (!(new Settings())->isToolAvailable($toolId))
+		{
+			$this->includeComponentTemplate('tool-disabled');
+
+			return;
+		}
+
 		$editingSchedule = null;
 		$this->arResult['isNewSchedule'] = true;
 		$this->arResult['showShiftPlanBtn'] = false;

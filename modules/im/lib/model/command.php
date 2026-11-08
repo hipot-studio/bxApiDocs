@@ -155,7 +155,28 @@ class CommandTable extends Main\Entity\DataManager
 	{
 		return array(
 			new Main\Entity\Validator\Length(null, 255),
+			array(__CLASS__, 'validateCommandName'),
 		);
+	}
+
+	/**
+	 * Rejects whitespace and control characters in a command name. A space or a newline would
+	 * let a single stored command split into extra tokens once the client inserts it into a
+	 * message: "/help admin" would run command "help" with argument "admin" under the sender.
+	 */
+	public static function validateCommandName($value, $primary, array $row, Main\ORM\Fields\Field $field)
+	{
+		if (self::isNameValid((string)$value))
+		{
+			return true;
+		}
+
+		return 'The command name must not contain whitespace or control characters.';
+	}
+
+	public static function isNameValid(string $command): bool
+	{
+		return preg_match('/[\p{C}\p{Z}]/u', $command) === 0;
 	}
 	/**
 	 * Returns validators for CLASS field.

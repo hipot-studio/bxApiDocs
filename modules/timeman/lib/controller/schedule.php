@@ -14,10 +14,19 @@ use Bitrix\Timeman\Service\BaseServiceResult;
 use Bitrix\Timeman\Service\DependencyManager;
 use Bitrix\Timeman\TimemanUrlManager;
 use Bitrix\Timeman\UseCase\Schedule as ScheduleHandler;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 use Bitrix\Main\Engine\Controller;
 
 class Schedule extends Controller
 {
+	protected function getDefaultPreFilters()
+	{
+		return [
+			new ToolEnabledFilter(),
+			...parent::getDefaultPreFilters(),
+		];
+	}
+
 	/** @var \Bitrix\Timeman\Repository\DepartmentRepository */
 	private $departmentRepository;
 	/** @var \Bitrix\Timeman\Repository\Schedule\ScheduleRepository */

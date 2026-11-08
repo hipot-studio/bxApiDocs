@@ -26,7 +26,13 @@ abstract class BaseGridAction implements Action
 
 			if ($result)
 			{
-				$this->sendEvent($result->isSuccess());
+				$isSuccess = $result->isSuccess();
+				$this->sendEvent($isSuccess);
+
+				if (!$isSuccess)
+				{
+					return $result;
+				}
 			}
 
 			return null;

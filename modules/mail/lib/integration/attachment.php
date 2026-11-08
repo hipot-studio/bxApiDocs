@@ -102,6 +102,8 @@ class Attachment
 				'MSG_UID' => 'MESSAGE_UID.MSG_UID',
 				// The generation of the placement: what tells a lazy download it is still usable
 				'GENERATION_ID' => 'MESSAGE_UID.GENERATION_ID',
+				// The version of the folder the uid was written under: the same download reads it too
+				'DIR_UIDV' => 'MESSAGE_UID.DIR_UIDV',
 			],
 			'filter' => array_merge(
 				['=ID' => $messageId],

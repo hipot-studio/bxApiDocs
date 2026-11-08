@@ -128,7 +128,7 @@ class TaskSyncAiSiteFontsHook extends TaskStep
 	protected function collectFontClassesFromBlocks(int $landingId, array $blockIds): array
 	{
 		$fontClasses = [];
-		$rightsBefore = Rights::isOn();
+		$rightsBefore = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 
 		$editModeBefore = Landing::getEditMode();
@@ -376,7 +376,7 @@ class TaskSyncAiSiteFontsHook extends TaskStep
 
 	private function executeWithoutRights(callable $callback): mixed
 	{
-		$rightsState = Rights::isOn();
+		$rightsState = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 		try
 		{

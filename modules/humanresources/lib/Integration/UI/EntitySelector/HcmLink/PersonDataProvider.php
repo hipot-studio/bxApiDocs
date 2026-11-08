@@ -52,7 +52,14 @@ class PersonDataProvider extends EntitySelector\BaseProvider
 
 	public function isAvailable(): bool
 	{
-		return true;
+		try
+		{
+			return Container::getHcmLinkAccessService()->canRead();
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
 	}
 
 	/**

@@ -46,7 +46,7 @@ class Item extends Base
 				continue;
 			}
 
-			if(empty($fields[$userField->getName()]))
+			if($userField->isValueEmpty($fields[$userField->getName()]))
 			{
 				$item->set($userField->getName(), null);
 				continue;

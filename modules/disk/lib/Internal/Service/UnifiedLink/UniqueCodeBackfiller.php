@@ -9,12 +9,11 @@ use Throwable;
 
 class UniqueCodeBackfiller
 {
-	/** @var array<int, string> */
-	private array $processedFileIds = [];
+	private array $processedObjectIds = [];
 
-	public function backfillUniqueCode(int $fileId): bool
+	public function backfillUniqueCode(int $objectId): bool
 	{
-		if (!isset($this->processedFileIds[$fileId]))
+		if (!isset($this->processedObjectIds[$objectId]))
 		{
 			$connection = Application::getConnection();
 			$uniqueCode = (new UniqueCode())->generate();
@@ -25,26 +24,37 @@ class UniqueCodeBackfiller
 				$connection->queryExecute(
 					"UPDATE b_disk_object
 						SET UNIQUE_CODE = '" . $sqlHelper->forSql($uniqueCode) . "'
-						WHERE ID = {$fileId} AND (UNIQUE_CODE IS NULL OR UNIQUE_CODE = '')"
+						WHERE ID = {$objectId} AND (UNIQUE_CODE IS NULL OR UNIQUE_CODE = '')"
 				);
 
-				$this->processedFileIds[$fileId] = $uniqueCode;
+				if ($connection->getAffectedRowsCount() > 0)
+				{
+					$this->processedObjectIds[$objectId] = $uniqueCode;
 
-				return true;
+					return true;
+				}
+
+				$actualUniqueCode = (string)$connection->queryScalar(
+					"SELECT UNIQUE_CODE FROM b_disk_object WHERE ID = {$objectId}"
+				);
+
+				$this->processedObjectIds[$objectId] = $actualUniqueCode;
+
+				return $actualUniqueCode !== '';
 			}
 			catch (Throwable)
 			{
-				$this->processedFileIds[$fileId] = '';
+				$this->processedObjectIds[$objectId] = '';
 
 				return false;
 			}
 		}
 
-		return !empty($this->getBackfilledUniqueCode($fileId));
+		return !empty($this->getBackfilledUniqueCode($objectId));
 	}
 
-	public function getBackfilledUniqueCode(int $fileId): ?string
+	public function getBackfilledUniqueCode(int $objectId): ?string
 	{
-		return $this->processedFileIds[$fileId] ?? null;
+		return $this->processedObjectIds[$objectId] ?? null;
 	}
 }

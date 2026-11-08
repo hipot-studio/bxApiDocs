@@ -46,11 +46,14 @@ class MapperService implements Contract\Service\HcmLink\MapperService
 			);
 		}
 
-		$mappedUserIds = $this->personRepository->getMappedUserIdsByCompanyId($company->id);
+		$mappedUserIds = array_fill_keys(
+			$this->personRepository->filterMappedUserIds($company->id, $userIds),
+			true,
+		);
 
 		return new FilterNotMappedUserIdsResult(
 			userIds: array_values(
-				array_filter($userIds, fn(int $userId) => !in_array($userId, $mappedUserIds, true))
+				array_filter($userIds, static fn(int $userId) => !isset($mappedUserIds[$userId]))
 			)
 		);
 	}

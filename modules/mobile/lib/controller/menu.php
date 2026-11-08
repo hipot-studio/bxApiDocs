@@ -5,25 +5,39 @@ namespace Bitrix\Mobile\Controller;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\Controller;
 
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Loader;
 use Bitrix\Mobile\Context;
+use Bitrix\Mobile\Feature\SecuritySettingsFeature;
+use Bitrix\Mobile\Feature\WhatsNewFeature;
 use Bitrix\Mobile\Menu\MenuList;
 use Bitrix\Mobile\Menu\AhaMoment;
 use Bitrix\Mobile\Menu\Service\MenuListCache;
 use Bitrix\Mobile\Menu\Service\SupportBanners;
-use Bitrix\Mobile\Internal\Integration\HumanResources\SalaryVacationService;
+use Bitrix\Mobile\Menu\MyCompany\BlockProvider;
+use Bitrix\Mobile\Menu\MyCompany\Card\EmployeesCardProvider;
+use Bitrix\Mobile\Menu\MyCompany\Card\PartnersCardProvider;
+use Bitrix\Mobile\Menu\MyCompany\Card\SupportCardProvider;
+use Bitrix\Mobile\Menu\MyCompany\Dto\MyCompanyData;
+use Bitrix\Mobile\Menu\MyCompany\MyCompanyProvider;
+use Bitrix\Mobile\Menu\Promo\FloatingPromoProvider;
+use Bitrix\Mobile\Menu\Tariff\TariffPlateProvider;
 use Bitrix\Mobile\Provider\CommonUserDto;
 use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\Mobile\Provider\ThemeProvider;
-use Bitrix\Timeman\Model\Schedule\Schedule;
-use Bitrix\Timeman\Model\Schedule\ScheduleTable;
 use Bitrix\Mobile\Config\Feature;
-use Bitrix\Mobile\Feature\PersonalAccountFeature;
+use Bitrix\Mobile\Feature\QrLoginFeature;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
 use Bitrix\StaffTrack\Public\Provider\CheckInProvider;
+use Bitrix\Mobile\Menu\ToolUsage\ToolUsage;
 
 class Menu extends Controller
 {
+	/**
+	 * @var array<int, MyCompanyProvider>
+	 */
+	private array $myCompanySections = [];
+
 	public function configureActions()
 	{
 		return [
@@ -33,6 +47,16 @@ class Menu extends Controller
 				],
 			],
 			'getInitialMenuData' => [
+				'+prefilters' => [
+					new CloseSession(),
+				],
+			],
+			'getImplementationSpecialistsList' => [
+				'+prefilters' => [
+					new CloseSession(),
+				],
+			],
+			'getMyCompany' => [
 				'+prefilters' => [
 					new CloseSession(),
 				],
@@ -49,6 +73,7 @@ class Menu extends Controller
 		{
 			return [];
 		}
+
 		$userId = (int)$this->getCurrentUser()?->getId();
 		if (!$userId)
 		{
@@ -70,61 +95,117 @@ class Menu extends Controller
 		]);
 		$cache = new MenuListCache($context->userId);
 
-		$supportBotId = $this->getSupportBotId();
-		$currentTheme = (new ThemeProvider($userId))->getCurrentTheme();
-
-		$canUseTimeMan = $this->canUseTimeMan($context);
-
-		$workTime = [];
-		$canManageWorkTimeOnMobile = !$user->isGuest;
-
-		if ($canUseTimeMan)
-		{
-			$workTime = $this->getWorkTime();
-
-			$canManageWorkTimeOnMobile = $this->canManageWorkTimeOnMobile($userId, $forceRefresh);
-		}
-
 		$checkInData = $this->getCheckInData($user);
 
-		$personalAccount = $this->getPersonalAccount($user);
+		$canUseMyCompany = $this->canUseMyCompany($user);
+		$canInvite = $this->canInvite($user);
+
+		$employees = new EmployeesCardProvider($user);
 
 		$response = [
 			'user' => $user,
 			'menuList' => $user->isGuest ? [] : (new MenuList($context, $cache))->build($forceRefresh),
 			'currentShift' => $this->getCurrentShift($user),
-			'workTime' => $workTime,
-			'company' => $this->getCompany($user),
-			'personalAccount' => [
-				'companies' => $personalAccount['companies'],
-			],
-			'helpdeskUrl' => Loader::includeModule('ui') ? \Bitrix\UI\Util::getHelpdeskUrl(true) : null,
-			'supportBotId' => $supportBotId,
+			'portal' => $this->getPortal($user, $canUseMyCompany),
 			'supportBanners' => $this->getSupportBanners(),
-			'ahaMoment' => $this->getAhaMoment(),
-			'currentTheme' => $currentTheme,
+			'ahaMoment' => $this->getAhaMoment($user, $canInvite),
+			'currentTheme' => (new ThemeProvider($userId))->getCurrentTheme(),
 			'isNewCheckInEnabled' => $checkInData['isNewCheckInEnabled'],
 			'manualCheckIns' => $checkInData['manualCheckIns'],
+			'shouldShowPresetBanner' => (new ToolUsage())->shouldShowMenuBanner(),
 
 			'restrictions' => [
 				'canOpenProfile' => !$user->isGuest,
 				'canEditProfile' => $USER->CanDoOperation('edit_own_profile'),
-				'canUseTimeMan' => $canUseTimeMan,
+				'canUseTimeMan' => $this->canUseTimeMan($context),
 				'canUseCheckIn' => $checkInData['canUseCheckIn'],
-				'canUseSupport' => $supportBotId > 0,
-				'canInvite' => $this->canInvite(),
-				'canUsePersonalAccount' => $personalAccount['canUsePersonalAccount'],
-				'canUseTelephony' => \Bitrix\Main\Loader::includeModule('voximplant') && \Bitrix\Voximplant\Security\Helper::canCurrentUserPerformCalls(),
-				'shouldShowWhatsNew' => \Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\WhatsNewFeature::class),
-				'canManageWorkTimeOnMobile' => $canManageWorkTimeOnMobile,
-				'canUseSecuritySettings' => $user->isGuest ? false : \Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\SecuritySettingsFeature::class),
+				'canUseMyCompany' => $canUseMyCompany,
+				'canInvite' => $canInvite,
+				// The call intent is read in either state of the section: while it is off the employees card
+				// of the menu carries it, and while it is on the invite deeplink still hands it to the list
+				// of users it opens.
+				'canUseTelephony' => $employees->canUseTelephony(),
+				'canUseSecuritySettings' => $user->isGuest ? false : Feature::isEnabled(SecuritySettingsFeature::class),
 				'canUseTabPresetSettings' => !$user->isGuest,
 				'canUseNotificationSettings' => !$user->isGuest,
 				'canGoToWeb' => !$user->isGuest,
+				// Read in either state of the section: while it is off the menu draws the card of the news
+				// itself, and while it is on the counter of the entry plate sums the news up.
+				'shouldShowWhatsNew' => Feature::isEnabled(WhatsNewFeature::class),
+				'canLoginOnOtherDevice' => !$user->isGuest && Feature::isEnabled(QrLoginFeature::class),
 			],
 		];
 
+		if ($canUseMyCompany)
+		{
+			$response['company'] = [
+				'tariffPlate' => $this->getTariffDemoPlate(),
+				'floatingPromo' => $this->getFloatingPromo($user),
+			];
+		}
+		else
+		{
+			$response['company'] = [
+				'employees' => $employees->getCompany(),
+			];
+
+			// The destinations of the support card: with the section on the card lives there and takes them
+			// from the answer of the section, so nobody reads these in the menu.
+			$support = new SupportCardProvider();
+			$supportBotId = $support->getBotId();
+
+			$response['helpdeskUrl'] = $support->getHelpdeskUrl();
+			$response['supportBotId'] = $supportBotId;
+			$response['restrictions']['canUseSupport'] = $supportBotId > 0;
+		}
+
 		return $response;
+	}
+
+	/**
+	 * The whole "My company" section, requested when the section opens and on the refresh gesture:
+	 * which cards there are, in which order, and the data of every one of them. The screen is drawn
+	 * from this answer alone, so a card waits for nothing of its own. Unavailable section is a field
+	 * of the answer, not an error: everything else is simply absent then.
+	 *
+	 * @restMethod mobile.Menu.getMyCompany
+	 */
+	public function getMyCompanyAction(): array
+	{
+		$unavailable = ['available' => false];
+
+		if (!Loader::includeModule('mobileapp'))
+		{
+			return $unavailable;
+		}
+
+		$userId = (int)$this->getCurrentUser()?->getId();
+		if (!$userId)
+		{
+			return $unavailable;
+		}
+
+		$user = $this->getUserData($userId);
+		if (!$user)
+		{
+			return $unavailable;
+		}
+
+		$provider = $this->getMyCompanySection($user);
+		if (!$provider->isAvailable())
+		{
+			return $unavailable;
+		}
+
+		$blocks = new BlockProvider($user, $provider);
+
+		return MyCompanyData::make([
+			'available' => true,
+			'blocks' => $blocks->getCodes(),
+			'blockData' => $blocks->getData(),
+			'portal' => $provider->getPortal(),
+			'tariffShowcase' => TariffPlateProvider::isShowcaseEnabled(),
+		])->toArray();
 	}
 
 	private function getCheckInData(CommonUserDto $user): ?array
@@ -137,7 +218,7 @@ class Menu extends Controller
 		{
 			$isNewCheckInEnabled =  Feature::isEnabled(CheckInFeature::class);
 			$manualCheckIns = $isNewCheckInEnabled
-				? CheckInProvider::getInstance()->getCurrentUserManualCheckInsByDate($user->id, time())
+				? (new CheckInProvider())->getCurrentUserManualCheckInsByDate($user->id, time())
 				: [];
 		}
 
@@ -197,17 +278,8 @@ class Menu extends Controller
 		}
 
 		return Loader::includeModule('stafftrack')
-			&& \Bitrix\StaffTrack\Feature::isCheckInEnabled();
-	}
-
-	private function getSupportBotId(): int
-	{
-		if (!\Bitrix\Mobile\Config\Feature::isEnabled(\Bitrix\Mobile\Feature\SupportFeature::class))
-		{
-			return 0;
-		}
-
-		return  (int)(new \Bitrix\Mobile\Provider\SupportProvider())->getBotId();
+			&& \Bitrix\StaffTrack\Feature::isCheckInEnabled()
+			&& \Bitrix\StaffTrack\Feature::isGeoFeaturesAvailableByRegion();
 	}
 
 	private function getSupportBanners(): array
@@ -220,124 +292,131 @@ class Menu extends Controller
 		];
 	}
 
-	private function canInvite(): bool
+	/**
+	 * The narrow set of the demo plate - the one card of the tariff domain the menu keeps beside the
+	 * entry of the section. The full set belongs to the answer of the section.
+	 */
+	private function getTariffDemoPlate(): array
 	{
-		return (
-			Loader::includeModule('intranet')
-			&& Loader::includeModule('intranetmobile')
-			&& \Bitrix\Intranet\Invitation::canCurrentUserInvite());
+		return (new TariffPlateProvider())->getDemoPlateData();
+	}
+
+	/**
+	 * Portal line of the menu answer. The only reader is the plate that opens the "My company"
+	 * section: it shows the company name on its main row, so the menu carries the name alone - the
+	 * address and the theme of the portal line belong to the section answer.
+	 *
+	 * Without the section there is no plate either, so the name is not looked up at all.
+	 *
+	 * @return array{name: string}
+	 */
+	private function getPortal(CommonUserDto $user, bool $canUseMyCompany): array
+	{
+		return [
+			'name' => $canUseMyCompany ? $this->getMyCompanySection($user)->getPortalName() : '',
+		];
+	}
+
+	private function getFloatingPromo(CommonUserDto $user): array
+	{
+		return (new FloatingPromoProvider($user))->getData();
+	}
+
+	/**
+	 * Whether the user may invite. The signal lays out the employees card of the "My company"
+	 * section as well as the menu, and the skeleton the section draws has to match the height of
+	 * the loaded card, so both take it from the one place that owns it.
+	 */
+	private function canInvite(CommonUserDto $user): bool
+	{
+		return $this->getMyCompanySection($user)->canInvite();
 	}
 
 	private function canUseTimeMan(Context $context): bool
 	{
 		return !$context->extranet
+			&& Loader::includeModule('intranet')
+			&& ToolsManager::getInstance()->checkAvailabilityByToolId('worktime')
 			&& Loader::includeModule('timeman')
 			&& \CTimeMan::CanUse()
 		;
 	}
 
-	private function getCompany(CommonUserDto $user): ?array
+	/**
+	 * Full specialists list data (users + per-user companion) fetched lazily when the list opens,
+	 * so the heavy per-user companion loop stays off the menu payload.
+	 *
+	 * @restMethod mobile.Menu.getImplementationSpecialistsList
+	 */
+	public function getImplementationSpecialistsListAction(): array
 	{
-		if ($user->isExtranet || $user->isCollaber || $user->isGuest)
+		$empty = ['users' => [], 'extra' => []];
+
+		if (!Loader::includeModule('mobileapp'))
 		{
-			return null;
+			return $empty;
 		}
 
+		$userId = (int)$this->getCurrentUser()?->getId();
+		if (!$userId)
+		{
+			return $empty;
+		}
+
+		// The list is a surface of the section, so it answers for the section first and for the tile
+		// after - the same order the answer of the section itself follows.
+		$user = $this->getUserData($userId);
 		if (
-			!Loader::includeModule('intranet')
-			|| !Loader::includeModule('intranetmobile')
-			|| !Loader::includeModule('humanresources')
+			!$user
+			|| !$this->canUseMyCompany($user)
+			|| !(new PartnersCardProvider($user))->passesSpecialistsGate()
 		)
 		{
-			return null;
+			return $empty;
 		}
 
-		$departmentProvider = new \Bitrix\IntranetMobile\Provider\DepartmentProvider();
-
-		$departmentUserIds = $departmentProvider->getEmployeesFromUserDepartments($user->id, 4);
-
-		if (count($departmentUserIds) < 4)
+		global $USER;
+		if (!$USER->CanDoOperation('edit_all_users'))
 		{
-			$allUserIds = $departmentProvider->getAllEmployees(0, 8);
-
-			$userIds = array_unique(array_merge($departmentUserIds, $allUserIds));
-			$userIds = array_slice($userIds, 0, 4);
+			return $empty;
 		}
-		else
+
+		// Same order as the section: the sandbox substitutes the list data, not a gate in front of it.
+		$sandbox = PartnersCardProvider::createDevSandbox($userId);
+		if ($sandbox !== null)
 		{
-			$userIds = $departmentUserIds;
+			return $sandbox->getListData();
 		}
 
-		$users = UserRepository::getByIds($userIds);
-
-		$totalUsersCount = $departmentProvider->getTotalEmployeeCount();
-
-		return [
-			'users' => $users,
-			'totalUsersCount' => $totalUsersCount,
-			'canInvite' => true,
-		];
+		return (new \Bitrix\IntranetMobile\Provider\ImplementationSpecialistProvider())->getListData();
 	}
 
 	/**
-	 * Personal account (salary/vacation) company list and its visibility flag.
-	 * A disabled feature flag short-circuits before any humanresources call.
-	 * One humanresources call per menu render: the flag is derived from the list
-	 * (empty list also covers the disabled region gate).
+	 * "My company" section availability: the rollout flag plus the company employee check, both
+	 * owned by the section provider. The menu carries the flag only: the section data comes from
+	 * its own action.
 	 *
-	 * @return array{canUsePersonalAccount: bool, companies: list<array>}
+	 * The very same value also picks the shape of the tariffPlate block, so the menu computes it
+	 * once per request and passes the result around instead of asking the provider twice.
 	 */
-	private function getPersonalAccount(CommonUserDto $user): array
+	private function canUseMyCompany(CommonUserDto $user): bool
 	{
-		if (
-			!Feature::isEnabled(PersonalAccountFeature::class)
-			|| $user->isExtranet
-			|| $user->isCollaber
-			|| $user->isGuest
-		)
-		{
-			return [
-				'canUsePersonalAccount' => false,
-				'companies' => [],
-			];
-		}
-
-		$companies = (new SalaryVacationService())->getCompanyList($user->id)['companies'] ?? [];
-
-		return [
-			'canUsePersonalAccount' => !empty($companies),
-			'companies' => $companies,
-		];
+		return $this->getMyCompanySection($user)->isAvailable();
 	}
 
-	private function getWorkTime()
+	private function getAhaMoment(CommonUserDto $user, bool $canInvite): ?array
 	{
-		if (!\CBXFeatures::IsFeatureEnabled('timeman')
-			|| !\CModule::IncludeModule('timeman')
-			|| !\CTimeMan::CanUse()
-		)
-		{
-			return [];
-		}
-
-		if (abs(\CTimeZone::GetOffset()) > BX_TIMEMAN_WRONG_DATE_CHECK)
-		{
-			return ['ERROR' => 'WRONG_DATE'];
-		}
-
-		$runtimeInfo = \CTimeMan::GetRuntimeInfo(false);
-
-		if (empty($runtimeInfo) || !is_array($runtimeInfo))
-		{
-			return [];
-		}
-
-		return $runtimeInfo;
+		return (new AhaMoment())->getMenuAhaMoment($this->getMyCompanySection($user), $canInvite);
 	}
 
-	private function getAhaMoment(): ?array
+	/**
+	 * The "My company" provider of the request. The availability flag, the invite signal, the portal
+	 * name and the aha moment all ask it, and it keeps no cache of its own: every constructor builds
+	 * the availability set anew.
+	 */
+	private function getMyCompanySection(CommonUserDto $user): MyCompanyProvider
 	{
-		return (new AhaMoment())->getMenuAhaMoment();
+		return $this->myCompanySections[$user->id] ??= new MyCompanyProvider($user);
 	}
 
 	public function getInitialMenuDataAction(): array
@@ -368,7 +447,7 @@ class Menu extends Controller
 
 		return [
 			'restrictions' => [
-				'canInvite' => $this->canInvite(),
+				'canInvite' => $this->canInvite($user),
 				'canUseTimeMan' => $this->canUseTimeMan($context),
 			],
 			'ahaMoment' => (new AhaMoment())->getAvatarAhaMoment($userId),
@@ -376,55 +455,4 @@ class Menu extends Controller
 		];
 	}
 
-	private function canManageWorkTimeOnMobile(int $userId, bool $forceRefresh = false): bool
-	{
-		$ttl = 60 * 60 * 24 * 7; // week
-		$cacheId = "canManage_workTime_on_mobile_{$userId}";
-		$cachePath = '/mobile/menu/canManageWorkTimeOnMobile/';
-		$cache = \Bitrix\Main\Data\Cache::createInstance();
-
-		if ($forceRefresh)
-		{
-			$cache->clean($cacheId, $cachePath);
-		}
-
-		if ($cache->initCache($ttl, $cacheId, $cachePath))
-		{
-			$vars = $cache->getVars();
-			if (isset($vars['result']))
-			{
-				return (bool)$vars['result'];
-			}
-
-			$cache->clean($cacheId, $cachePath);
-		}
-
-		$scheduleRepository = \Bitrix\Timeman\Service\DependencyManager::getInstance()->getScheduleRepository();
-		$schedules = $scheduleRepository->findSchedulesByUserId($userId);
-
-		if (empty($schedules))
-		{
-			$result = true;
-		}
-		else
-		{
-			$result = true;
-			foreach ($schedules as $schedule)
-			{
-				if (!Schedule::isDeviceAllowed(ScheduleTable::ALLOWED_DEVICES_MOBILE, $schedule))
-				{
-					$result = false;
-					break;
-				}
-			}
-		}
-
-		if ($cache->startDataCache())
-		{
-			$cache->endDataCache(['result' => $result]);
-		}
-
-
-		return $result;
-	}
 }

@@ -141,7 +141,7 @@ class RequestHtmlBlockImages extends AbstractAiImageRequest
 	protected function applyResponses(): bool
 	{
 		$changed = false;
-		$rightsBefore = Rights::isOn();
+		$rightsBefore = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 		try
 		{

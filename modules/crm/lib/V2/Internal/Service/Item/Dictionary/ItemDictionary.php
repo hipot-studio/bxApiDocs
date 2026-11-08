@@ -41,11 +41,32 @@ class ItemDictionary
 
 		$items = \Bitrix\Crm\V2\Public\Provider\Item\ItemProvider::forEntityType($entityType)
 			->withAccessCheck($userId)
-			->getByIds(array_values(array_unique($filterEntityIds)), ['id'])
+			->getByIds(
+				array_values(array_unique($filterEntityIds)),
+				$this->isCategoryRestricted($entityType) ? ['id', 'categoryId'] : ['id'],
+			)
 		;
 
-		return $items->map(
-			static fn(Item $item): int => $item->getId(),
+		$result = [];
+		foreach ($items as $item)
+		{
+			if ($this->isCategoryRestricted($entityType) && $item->getCategoryId() !== 0)
+			{
+				continue;
+			}
+
+			$result[] = $item->getId();
+		}
+
+		return $result;
+	}
+
+	private function isCategoryRestricted(EntityType $entityType): bool
+	{
+		return in_array(
+			$entityType->getId(),
+			[EntityType::company()->getId(), EntityType::contact()->getId()],
+			true,
 		);
 	}
 }

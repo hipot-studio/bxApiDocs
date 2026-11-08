@@ -49,6 +49,7 @@ class Result extends \Bitrix\Main\Result implements \JsonSerializable
 		private bool $isManualLaunch = true,
 		private ?string $languageId = null,
 		private ?int $nextTypeId = null,
+		private ?bool $fillFieldsEntityAllowed = null,
 	)
 	{
 		parent::__construct();
@@ -157,6 +158,11 @@ class Result extends \Bitrix\Main\Result implements \JsonSerializable
 	public function getNextTypeId(): ?int
 	{
 		return $this->nextTypeId;
+	}
+
+	public function getFillFieldsEntityAllowedSnapshot(): ?bool
+	{
+		return $this->fillFieldsEntityAllowed;
 	}
 
 	public function jsonSerialize(): array

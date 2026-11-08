@@ -9,6 +9,7 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Superset\Internal\Api\Dataset;
 use Bitrix\Superset\Internal\Connector\SupersetInstance;
 use Bitrix\Superset\Internal\HttpStatus;
+use Bitrix\Superset\Internal\Support\InstanceUnavailableStatus;
 
 class DatasetBuilder
 {
@@ -106,7 +107,7 @@ class DatasetBuilder
 			$errorMessage .= "; Http status: {$datasetResult->getHttpStatus()}";
 			$errorMessage .= "; Errors: " . implode(', ', $datasetResult->getErrorMessages());
 
-			$result->addError(new Error($errorMessage));
+			$result->addError(InstanceUnavailableStatus::createError($errorMessage, $datasetResult));
 
 			return $result;
 		}
@@ -161,7 +162,7 @@ class DatasetBuilder
 				$errorMessage .= "; Http status: {$getResult->getHttpStatus()}";
 				$errorMessage .= "; Errors: " . implode(', ', $getResult->getErrorMessages());
 
-				$result->addError(new Error($errorMessage));
+				$result->addError(InstanceUnavailableStatus::createError($errorMessage, $getResult));
 
 				return $result;
 			}

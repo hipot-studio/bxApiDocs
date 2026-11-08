@@ -471,6 +471,7 @@ final class PrepareDocumentSendRequest implements Contract\Operation
 			responsibleUser: $this->responsible,
 			externalSettings: $externalSettings,
 			language: $request->fields->getLanguage(),
+			message: $request->fields->getMessage(),
 		);
 
 		return new Main\Result();

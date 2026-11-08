@@ -64,6 +64,19 @@ class MailEntityOptionsTable extends Entity\DataManager
 		way, and ten minutes later is too soon to ask again.
 	*/
 	const HISTORY_SYNC_RETRY_AFTER_PROPERTY_NAME = 'HISTORY_SYNC_RETRY_AFTER';
+	/*
+		What the owner of the mailbox has already been shown about the migration of mail to Bitrix24
+		Mail: which migration popup they saw, until when a "remind later" of theirs holds (a unix
+		timestamp, not a flag), and whether they closed the banner. They live under the MAILBOX entity
+		type, because the notice is addressed to the single owner of the mailbox, and stay out of
+		CACHEABLE_PROPERTIES on purpose: a person changes them, so the cache would be dropped on every
+		write. Mind that PROPERTY_NAME holds 32 characters - hence the shortened prefix.
+	*/
+	const MIG_NOTICE_POPUP_SHOWN_PROPERTY_NAME = 'MIG_NOTICE_POPUP_SHOWN';
+	const MIG_NOTICE_REMIND_AFTER_PROPERTY_NAME = 'MIG_NOTICE_REMIND_AFTER';
+	const MIG_NOTICE_BANNER_DISMISSED_PROPERTY_NAME = 'MIG_NOTICE_BANNER_DISMISSED';
+	const DELIVERY_BOUNDARY_ENABLED_PROPERTY_NAME = 'DELIVERY_BOUNDARY_ENABLED_V1';
+	const DELIVERY_BOUNDARY_PROPERTY_NAME = 'SYNC_DELIVERY_BOUNDARY_V1';
 
 	private const MAILBOX_OPTION_CACHE_TTL = 86400;
 	private const MAILBOX_OPTION_CACHE_KEY_PREFIX = 'mail_mailbox_option_';

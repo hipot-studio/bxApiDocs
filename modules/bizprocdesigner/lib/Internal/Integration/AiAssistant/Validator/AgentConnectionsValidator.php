@@ -58,7 +58,9 @@ final class AgentConnectionsValidator
 
 		if (!is_array($connections))
 		{
-			return (new Result())->addError(GraphError::at($path, "{$path} should be array"));
+			return (new Result())->addError(
+				GraphError::at($path, "{$path} should be array", GraphErrorCode::GraphElementInvalid),
+			);
 		}
 
 		if (count($connections) > self::MAX_CONNECTIONS)
@@ -77,7 +79,9 @@ final class AgentConnectionsValidator
 			: array_values(array_diff($blockIds, $frameBlockIds));
 		if (empty($connections) && count($connectableBlockIds) > 1)
 		{
-			return (new Result())->addError(GraphError::at($path, "{$path} should be not empty array"));
+			return (new Result())->addError(
+				GraphError::at($path, "{$path} should be not empty array", GraphErrorCode::GraphElementInvalid),
+			);
 		}
 
 		$result = new Result();
@@ -105,12 +109,13 @@ final class AgentConnectionsValidator
 	}
 
 	/**
-	 * Validates that the tail of a loop body returns into the dedicated loop-back input (ForEach:i1, title
-	 * "->>"); the ordinary entry input i0 is not a valid body return.
+	 * Validates that the tail of a loop body returns into the dedicated loop-back input (ForEach:i1, the
+	 * input whose role is LoopBody); the ordinary entry input i0 is not a valid body return.
 	 *
-	 * Input-based by design, so While is out of scope: its loop-back is expressed on the output side (o0)
-	 * and the body closes back into i0, so {@see BlockTypeDetail::getLoopbackInputPortIds()} returns [] for
-	 * it and $blockLoopbackInputPortsMap carries no entry. An unclosed While passes without a diagnostic.
+	 * Input-based by design, so While is out of scope: it carries the same role on its output side (o0)
+	 * alone and the body closes back into i0, so {@see BlockTypeDetail::getLoopbackInputPortIds()} returns
+	 * [] for it and $blockLoopbackInputPortsMap carries no entry. An unclosed While passes without a
+	 * diagnostic. Moving the role check from the port title changed the signal, never this scope.
 	 *
 	 * @param array<string, list<string>> $blockLoopbackInputPortsMap
 	 */
@@ -183,7 +188,9 @@ final class AgentConnectionsValidator
 	{
 		if (!is_array($connection))
 		{
-			return (new Result())->addError(GraphError::at($path, "$path should be object"));
+			return (new Result())->addError(
+				GraphError::at($path, "$path should be object", GraphErrorCode::GraphElementInvalid),
+			);
 		}
 
 		$result = new Result();
@@ -285,7 +292,9 @@ final class AgentConnectionsValidator
 
 		if (!is_string($portId) || $portId === '')
 		{
-			return (new Result())->addError(GraphError::at($path, "$path should be not empty string"));
+			return (new Result())->addError(
+				GraphError::at($path, "$path should be not empty string", GraphErrorCode::PortInvalid),
+			);
 		}
 
 		if (!is_string($blockId) || $blockId === '')
@@ -327,12 +336,16 @@ final class AgentConnectionsValidator
 	{
 		if (!is_string($id) || $id === '')
 		{
-			return (new Result())->addError(GraphError::at($path, "$path should be not empty string"));
+			return (new Result())->addError(
+				GraphError::at($path, "$path should be not empty string", GraphErrorCode::GraphElementInvalid),
+			);
 		}
 
 		if (!in_array($id, $blockIds, true))
 		{
-			return (new Result())->addError(GraphError::at($path, "$path is incorrect block id"));
+			return (new Result())->addError(
+				GraphError::at($path, "$path is incorrect block id", GraphErrorCode::GraphElementInvalid),
+			);
 		}
 
 		// A frame overlay is presentational and owns no ports; a connection to it has no port to land on and
@@ -340,7 +353,9 @@ final class AgentConnectionsValidator
 		// connectable blocks appear in connections. Membership is expressed via memberBlockIds, not links.
 		if (in_array($id, $frameBlockIds, true))
 		{
-			return (new Result())->addError(GraphError::at($path, "$path must not reference a frame block"));
+			return (new Result())->addError(
+				GraphError::at($path, "$path must not reference a frame block", GraphErrorCode::GraphElementNotAllowed),
+			);
 		}
 
 		return new Result();

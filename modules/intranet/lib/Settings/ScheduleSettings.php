@@ -10,6 +10,7 @@ use Bitrix\Intranet\Settings\Controls\Selector;
 use Bitrix\Intranet\Settings\Controls\Tab;
 use Bitrix\Intranet\Settings\Controls\Text;
 use Bitrix\Intranet\Settings\Search\SearchEngine;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
@@ -207,7 +208,8 @@ class ScheduleSettings extends AbstractSettings
 			);
 
 			$data['TIMEMAN'] = [
-				'enabled' => IsModuleInstalled('timeman') || IsModuleInstalled('bitrix24'),
+				'enabled' => (IsModuleInstalled('timeman') || IsModuleInstalled('bitrix24'))
+					&& ToolsManager::getInstance()->checkAvailabilityByToolId('worktime'),
 				'restricted' => $this->isTimemanRestricted()
 			];
 		}

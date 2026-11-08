@@ -2,6 +2,7 @@
 
 use Bitrix\Bizproc;
 use Bitrix\Bizproc\Debugger\Workflow\DebugWorkflow;
+use Bitrix\Bizproc\Internal\Entity\Workflow\TestRunContext;
 use Bitrix\Bizproc\Internal\Entity\WorkflowTemplate\VersionChoice;
 use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Bizproc\Internal\Service\Debugger\DebugSessionServiceInterface;
@@ -76,9 +77,10 @@ class CBPRuntime
 		return $this->debugSessionService;
 	}
 
+	/** Null while no session is current, so a workflow run outside of one traces nowhere. */
 	public function getDebugSessionService(): ?DebugSessionServiceInterface
 	{
-		return $this->debugSessionService;
+		return $this->debugSessionService?->findDebugSession() === null ? null : $this->debugSessionService;
 	}
 
 	/**
@@ -196,13 +198,23 @@ class CBPRuntime
 	 * @param array $documentId - ID of the document
 	 * @param mixed $workflowParameters - Optional parameters of the created workflow instance
 	 * @param array|null $parentWorkflow - Parent Workflow information.
+	 * @param VersionChoice|null $versionChoice - Version of the scheme to execute; chosen by the runtime
+	 *     itself when the caller names none.
+	 * @param TestRunContext|null $testRunContext - Marks the instance a test run of the template.
 	 * @return CBPWorkflow
 	 * @throws CBPArgumentNullException
 	 * @throws CBPArgumentOutOfRangeException
 	 * @throws Exception
 	 * @throws \Bitrix\Main\ArgumentNullException
 	 */
-	public function createWorkflow($workflowTemplateId, $documentId, $workflowParameters = [], $parentWorkflow = null)
+	public function createWorkflow(
+		$workflowTemplateId,
+		$documentId,
+		$workflowParameters = [],
+		$parentWorkflow = null,
+		?VersionChoice $versionChoice = null,
+		?TestRunContext $testRunContext = null,
+	)
 	{
 		$workflowTemplateId = intval($workflowTemplateId);
 		if ($workflowTemplateId <= 0)
@@ -253,7 +265,7 @@ class CBPRuntime
 
 		$loader = CBPWorkflowTemplateLoader::GetLoader();
 
-		$versionChoice = $this->chooseTemplateVersion(
+		$versionChoice ??= $this->chooseTemplateVersion(
 			$workflowTemplateId,
 			$workflowParameters,
 			$workflowId,
@@ -283,12 +295,19 @@ class CBPRuntime
 			throw new Exception("EmptyRootActivity");
 		}
 
+		if ($versionChoice->carriesOwnConstants)
+		{
+			$rootActivity->setConstantsTypes($versionChoice->executableFields['CONSTANTS'] ?? []);
+		}
+
 		foreach(GetModuleEvents("bizproc", "OnCreateWorkflow", true)  as $arEvent)
 		{
 			ExecuteModuleEventEx($arEvent, [$workflowTemplateId, $documentId, &$workflowParameters, $workflowId]);
 		}
 
 		$workflow->initialize($rootActivity, $arDocumentId, $workflowParameters, $workflowVariablesTypes, $workflowParametersTypes, $workflowTemplateId);
+
+		$rootActivity->setTestRunContext($testRunContext);
 
 		$starterUserId = static::starterUserIdOf($workflowParameters);
 
@@ -522,12 +541,37 @@ class CBPRuntime
 
 	protected function getWorkflowInstance(string $workflowId): CBPWorkflow
 	{
-		if (WorkflowInstanceTable::isDebugWorkflow($workflowId))
+		if ($this->isInstanceOfLegacyDebugger($workflowId))
 		{
 			return new DebugWorkflow($workflowId, $this);
 		}
 
 		return new CBPWorkflow($workflowId, $this);
+	}
+
+	/**
+	 * A test run of the designer is started with the debug event type too, so the journal shows it as a debug
+	 * one, but it has no state of the legacy debugger for DebugWorkflow to turn its queue with. The run is told
+	 * by the context kept in the state of the instance: neither a pause nor a cleared journal takes it away.
+	 */
+	private function isInstanceOfLegacyDebugger(string $workflowId): bool
+	{
+		if (!WorkflowInstanceTable::isDebugWorkflow($workflowId))
+		{
+			return false;
+		}
+
+		try
+		{
+			$rootActivity = CBPWorkflowPersister::GetPersister()->LoadWorkflow($workflowId, true);
+		}
+		catch (Exception)
+		{
+			// the load that follows reports the broken instance on its own
+			return true;
+		}
+
+		return !($rootActivity instanceof CBPActivity) || $rootActivity->getOwnTestRunContext() === null;
 	}
 
 	public function onWorkflowStatusChanged($workflowId, $status)
@@ -929,6 +973,7 @@ class CBPRuntime
 		$classesList[] = \DateTime::class;
 		$classesList[] = \DateTimeZone::class;
 		$classesList[] = Bizproc\Internal\Entity\Workflow\ExecutionPayload::class;
+		$classesList[] = TestRunContext::class;
 
 		return unserialize($stream, ['allowed_classes' => $classesList]);
 	}

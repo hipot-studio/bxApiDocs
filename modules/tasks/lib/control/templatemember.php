@@ -8,11 +8,15 @@ use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Control\Exception\TemplateNotFoundException;
+use Bitrix\Tasks\Internals\Log\LogFacade;
 use \Bitrix\Tasks\Internals\Task\Template\TemplateMemberTable;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
+use Bitrix\Tasks\Util\User;
 
 class TemplateMember
 {
+	private const MEMBERS_WIPED_LOG_MARKER = 'TASKS_TEMPLATE_MEMBERS_WIPED';
+
 	public function __construct(
 		private readonly int $templateId
 	)
@@ -34,18 +38,53 @@ class TemplateMember
 
 	public function set(array $data): void
 	{
-		$members = $this->getCurrentMembers();
+		$currentMembers = $this->getCurrentMembers();
 
-		$members = $this->prepareMembers($data, $members);
+		$members = $this->prepareMembers($data, $currentMembers);
 
 		if (empty($members))
 		{
 			return;
 		}
 
+		$this->logWipedTypes($currentMembers, $members);
+
 		$this->deleteByTemplateId();
 
 		TemplateMemberTable::addInsertIgnoreMulti($members, true);
+	}
+
+	/**
+	 * An incoming empty list wipes its member type, so a caller sending one instead of no field at all
+	 * loses members silently. The wipe stays legal on purpose (a person may remove every accomplice), so it
+	 * is traced rather than forbidden: the trace names such a caller without waiting for a client report.
+	 */
+	private function logWipedTypes(array $currentMembers, array $members): void
+	{
+		$incomingCountByType = array_count_values(array_column($members, 'TYPE'));
+
+		foreach ($currentMembers as $type => $rows)
+		{
+			if (empty($rows) || isset($incomingCountByType[$type]))
+			{
+				continue;
+			}
+
+			$this->logWipedType((string)$type, count($rows));
+		}
+	}
+
+	protected function logWipedType(string $type, int $wasCount): void
+	{
+		LogFacade::log(
+			[
+				'templateId' => $this->templateId,
+				'type' => $type,
+				'wasCount' => $wasCount,
+				'updatedBy' => (int)User::getId(),
+			],
+			self::MEMBERS_WIPED_LOG_MARKER,
+		);
 	}
 
 	private function getCurrentMembers(): array

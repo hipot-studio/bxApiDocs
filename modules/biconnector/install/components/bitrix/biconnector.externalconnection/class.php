@@ -12,7 +12,6 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
-use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BiConnector\Settings;
@@ -64,17 +63,9 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 					'active' => $source->getActive(),
 				];
 
-				$settings = ExternalSourceSettingsTable::getList([
-					'filter' => [
-						'SOURCE_ID' => $source->getId(),
-					],
-				])->fetchAll();
-				foreach ($settings as $setting)
+				foreach (ExternalSource\SourceManager::getPublicSettings($source) as $code => $value)
 				{
-					if ($setting['CODE'] !== 'password')
-					{
-						$this->arResult['SOURCE_FIELDS'][$setting['CODE']] = htmlspecialcharsbx($setting['VALUE']);
-					}
+					$this->arResult['SOURCE_FIELDS'][$code] = htmlspecialcharsbx($value);
 				}
 
 				if ($source->getType() === Type::Rest->value)
@@ -107,6 +98,7 @@ class ExternalConnectionComponent extends CBitrixComponent implements Controller
 				elseif (
 					$this->arParams['CONNECTOR_TYPE'] === Type::Mysql->value
 					|| $this->arParams['CONNECTOR_TYPE'] === Type::Pgsql->value
+					|| $this->arParams['CONNECTOR_TYPE'] === Type::Clickhouse->value
 				)
 				{
 					$this->arResult['SOURCE_FIELDS']['code'] = $this->arParams['CONNECTOR_TYPE'];

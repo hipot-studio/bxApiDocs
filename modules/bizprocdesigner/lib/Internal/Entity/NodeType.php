@@ -8,4 +8,7 @@ enum NodeType: string
 	case Complex = 'complex';
 	case Trigger = 'trigger';
 	case Frame = 'frame';
+	case Operators = 'operators';
+	case Services = 'services';
+	case Tool = 'tool';
 }

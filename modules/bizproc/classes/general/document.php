@@ -1,11 +1,15 @@
 <?php
 
 use Bitrix\Bizproc;
+use Bitrix\Bizproc\Internal\Entity\Workflow\TestRunContext;
+use Bitrix\Bizproc\Internal\Entity\WorkflowTemplate\VersionChoice;
+use Bitrix\Bizproc\Public\Feature\Debugger\ProcessDebuggerFlag;
 use Bitrix\Bizproc\Public\Provider\PilotVisibilityProvider;
 use Bitrix\Bizproc\UI\WorkflowUserView;
 use Bitrix\Bizproc\Workflow\Template\Collection\Usages;
 use Bitrix\Bizproc\Workflow\Template\SourceType;
 use Bitrix\Main;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventManager;
@@ -363,9 +367,20 @@ class CBPDocument
 	 * @param array $parameters - Workflow parameters.
 	 * @param array $errors - Errors array(array("code" => error_code, "message" => message, "file" => file_path), ...).
 	 * @param array|null $parentWorkflow - Parent workflow information.
+	 * @param VersionChoice|null $versionChoice - Version of the scheme to execute; chosen by the runtime
+	 *     itself when the caller names none.
+	 * @param TestRunContext|null $testRunContext - Marks the instance a test run of the template.
 	 * @return string - Workflow id.
 	 */
-	public static function startWorkflow($workflowTemplateId, $documentId, $parameters, &$errors, $parentWorkflow = null)
+	public static function startWorkflow(
+		$workflowTemplateId,
+		$documentId,
+		$parameters,
+		&$errors,
+		$parentWorkflow = null,
+		?VersionChoice $versionChoice = null,
+		?TestRunContext $testRunContext = null,
+	)
 	{
 		$errors = [];
 		$parameters = static::prepareWorkflowParameters($parameters);
@@ -382,12 +397,16 @@ class CBPDocument
 			$parameters[static::PARAM_IGNORE_SIMULTANEOUS_PROCESSES_LIMIT] = true;
 		}
 
+		$runtime = CBPRuntime::GetRuntime();
+		// A workflow started from inside a debugged one must not leave the outer one tracing into its session.
+		$outerDebugSession = $runtime->getDebugSessionService()?->findDebugSession();
+		$suspendedDebugger = null;
+
 		try
 		{
-			$runtime = CBPRuntime::GetRuntime();
 			$debug = null;
 
-			if (Option::get('bizproc', 'debugger_available', 'N') === 'Y')
+			if ($testRunContext === null && Feature::isEnabled(ProcessDebuggerFlag::class))
 			{
 				$debug = static::findActiveDebugSession($workflowTemplateId);
 			}
@@ -399,6 +418,10 @@ class CBPDocument
 					$debug,
 					Bizproc\Internal\Entity\Debugger\DocumentId::createFromArray($documentId),
 				);
+			}
+			elseif ($testRunContext === null)
+			{
+				$suspendedDebugger = self::suspendTestRunTracing($runtime, $outerDebugSession);
 			}
 
 			$debugSessionService?->addTrace(
@@ -412,7 +435,14 @@ class CBPDocument
 				],
 			);
 
-			$wi = $runtime->createWorkflow($workflowTemplateId, $documentId, $parameters, $parentWorkflow);
+			$wi = $runtime->createWorkflow(
+				$workflowTemplateId,
+				$documentId,
+				$parameters,
+				$parentWorkflow,
+				$versionChoice,
+				$testRunContext,
+			);
 			$debugSessionService?->getDebugSession()->setWorkflowId($wi->getInstanceId());
 			$debugSessionService?->addTrace(
 				Bizproc\Internal\Entity\Debugger\TraceType::Log,
@@ -462,6 +492,10 @@ class CBPDocument
 				"message" => $e->getMessage(),
 				"file" => $e->getFile() . " [" . $e->getLine() . "]",
 			];
+		}
+		finally
+		{
+			($debugSessionService ?? $suspendedDebugger)?->restoreSession($outerDebugSession);
 		}
 
 		return null;
@@ -566,24 +600,54 @@ class CBPDocument
 
 		$arParameters[static::PARAM_DOCUMENT_EVENT_TYPE] = $autoExecute;
 
+		$outerDebugSession = $runtime->getDebugSessionService()?->findDebugSession();
+		$suspendedDebugger = self::suspendTestRunTracing($runtime, $outerDebugSession);
+
 		$templates = CBPWorkflowTemplateLoader::SearchTemplatesByDocumentType($documentType, $autoExecute);
-		foreach ($templates as $template)
+		try
 		{
-			try
+			foreach ($templates as $template)
 			{
-				$wi = $runtime->CreateWorkflow($template['ID'], $documentId, $arParameters);
-				self::setUsedDocumentFields($wi, $template['ID']);
-				$wi->Start();
-			}
-			catch (Exception $e)
-			{
-				$arErrors[] = [
-					"code" => $e->getCode(),
-					"message" => $e->getMessage(),
-					"file" => $e->getFile() . " [" . $e->getLine() . "]",
-				];
+				try
+				{
+					$wi = $runtime->CreateWorkflow($template['ID'], $documentId, $arParameters);
+					self::setUsedDocumentFields($wi, $template['ID']);
+					$wi->Start();
+				}
+				catch (Exception $e)
+				{
+					$arErrors[] = [
+						"code" => $e->getCode(),
+						"message" => $e->getMessage(),
+						"file" => $e->getFile() . " [" . $e->getLine() . "]",
+					];
+				}
 			}
 		}
+		finally
+		{
+			$suspendedDebugger?->restoreSession($outerDebugSession);
+		}
+	}
+
+	/**
+	 * A workflow a test run starts, not debugged itself, is kept out of the trace of the run until its start
+	 * is over. Anything started outside of a test run traces as before.
+	 */
+	private static function suspendTestRunTracing(
+		CBPRuntime $runtime,
+		?Bizproc\Internal\Entity\Debugger\DebugSession $outerDebugSession,
+	): ?Bizproc\Internal\Service\Debugger\DebugSessionServiceInterface
+	{
+		if ($outerDebugSession?->isTestRun() !== true)
+		{
+			return null;
+		}
+
+		$debugger = $runtime->makeDebugger();
+		$debugger->restoreSession(null);
+
+		return $debugger;
 	}
 
 	public static function setUsedDocumentFields(CBPWorkflow $workflow, int $tplId): void
@@ -1364,7 +1428,8 @@ class CBPDocument
 							$arFields["MODIFIER_USER"] = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
 							try
 							{
-								CBPWorkflowTemplateLoader::Add($arFields);
+								// standard templates come with a module and were published by nobody
+								CBPWorkflowTemplateLoader::Add($arFields, markFirstPublication: false);
 							}
 							catch (Exception $e)
 							{
@@ -1873,6 +1938,30 @@ class CBPDocument
 
 	public static function getTemplatesForStart($userId, $documentType, $documentId = null, array $parameters = [])
 	{
+		return self::getTemplatesForStartLimited($userId, $documentType, $documentId, $parameters);
+	}
+
+	/**
+	 * Returns startable templates narrowed before access checks and enrichment.
+	 *
+	 * @param array{templateId?: int, templateIds?: int[], searchQuery?: string, limit?: int} $selection
+	 * @return array<int, array{id: int, name: string, description: string, hasParameters: bool,
+	 *     isConstantsTuned: bool}>
+	 */
+	public static function getTemplatesForStartLimited(
+		$userId,
+		$documentType,
+		$documentId = null,
+		array $parameters = [],
+		array $selection = [],
+	)
+	{
+		$limit = isset($selection['limit']) ? (int)$selection['limit'] : null;
+		if ($limit !== null && $limit < 1)
+		{
+			return [];
+		}
+
 		if (!isset($parameters['UserGroups']))
 		{
 			$currentUser = \Bitrix\Main\Engine\CurrentUser::get();
@@ -1890,16 +1979,51 @@ class CBPDocument
 		}
 		$op = CBPCanUserOperateOperation::StartWorkflow;
 
+		$filter = [
+			'DOCUMENT_TYPE' => $documentType,
+			'ACTIVE' => 'Y',
+			'IS_SYSTEM' => 'N',
+			'<AUTO_EXECUTE' => CBPDocumentEventType::Automation,
+		];
+
+		if (isset($selection['templateId']))
+		{
+			$templateId = (int)$selection['templateId'];
+			if ($templateId < 1)
+			{
+				return [];
+			}
+
+			$filter['ID'] = $templateId;
+		}
+		elseif (array_key_exists('templateIds', $selection))
+		{
+			$templateIds = array_values(array_unique(array_filter(
+				array_map(
+					'intval',
+					is_array($selection['templateIds']) ? $selection['templateIds'] : [],
+				),
+				static fn(int $templateId): bool => $templateId > 0,
+			)));
+			if ($templateIds === [])
+			{
+				return [];
+			}
+
+			$filter['ID'] = $templateIds;
+		}
+
+		$searchQuery = trim((string)($selection['searchQuery'] ?? ''));
+		if ($searchQuery !== '')
+		{
+			$filter['%NAME'] = $searchQuery;
+		}
+
 		$templates = [];
 		$dbWorkflowTemplate = CBPWorkflowTemplateLoader::GetList(
 			['SORT' => 'ASC', 'NAME' => 'ASC'],
 			array_merge(
-				[
-					"DOCUMENT_TYPE" => $documentType,
-					"ACTIVE" => "Y",
-					"IS_SYSTEM" => "N",
-					'<AUTO_EXECUTE' => CBPDocumentEventType::Automation,
-				],
+				$filter,
 				// the list is the manual start point of the document, so the templates a pilot acts on are
 				// narrowed here to the ones this employee may see; the key of the condition is its own and
 				// does not meet the ones above
@@ -1931,6 +2055,11 @@ class CBPDocument
 				'hasParameters' => count($arWorkflowTemplate['PARAMETERS']) > 0,
 				'isConstantsTuned' => CBPWorkflowTemplateLoader::isConstantsTuned($arWorkflowTemplate["ID"]),
 			];
+
+			if ($limit !== null && count($templates) >= $limit)
+			{
+				break;
+			}
 		}
 
 		return $templates;

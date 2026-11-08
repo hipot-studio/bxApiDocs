@@ -71,6 +71,15 @@ final class ProviderCode
 	}
 
 	/**
+	 * Whether the code is a technical one: such a code marks a document signed outside the portal and
+	 * names no provider a document can be sent to for signing.
+	 */
+	public static function isTechnical(string $providerCode): bool
+	{
+		return $providerCode === self::EXTERNAL;
+	}
+
+	/**
 	 * @param string $providerLikeString
 	 *
 	 * @return self::*|null

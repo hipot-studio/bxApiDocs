@@ -74,8 +74,11 @@ class ChatbotRepository
 		// delete all chatbot data
 		$chatIds = ChatTable::query()->setSelect(['ID'])->where('CHATBOT_ID', $id)->fetchCollection()->getIdList();
 		ChatTable::deleteByFilter(['=CHATBOT_ID' => $id]);
-		MessageTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
-		MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
+		if (!empty($chatIds))
+		{
+			MessageTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
+			MessageUnreadTable::deleteByFilter(['=CHAT_ID' => $chatIds]);
+		}
 
 		return ChatbotTable::delete($id);
 	}

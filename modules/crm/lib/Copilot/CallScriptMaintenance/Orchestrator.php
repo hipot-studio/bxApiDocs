@@ -300,7 +300,7 @@ final class Orchestrator
 			return;
 		}
 
-		$result = AIManager::launchGroupSuspiciousCalls($calls, $callAssessments, Dispatcher::SYSTEM_USER_ID);
+		$result = AIManager::launchGroupSuspiciousCalls($calls, $callAssessments, Dispatcher::getSystemUserId());
 
 		$jobId = (int)($result->getJobId() ?? 0);
 		if ($jobId <= 0)

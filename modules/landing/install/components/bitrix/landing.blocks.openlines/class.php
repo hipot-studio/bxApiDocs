@@ -204,11 +204,54 @@ class LandingBlocksOlComponent extends \CBitrixComponent
 		return ['openline'];
 	}
 
+	/**
+	 * Has the widget an action the template is able to print?
+	 *
+	 * The template answers a widget in three shapes: a link of its own (`show.url` a string), a pair
+	 * of links for mobile and desktop (`show.url` an array, the desktop one activated by
+	 * `show.js.desktop`) and a bare piece of javascript (`show` a string). A widget of no shape at
+	 * all - `show` an array without a `url`, which is what a connector answers when it is not set up
+	 * - fell through to the last branch, and the array printed into the handler became the literal
+	 * `Array`.
+	 *
+	 * It used to reach the page as a `div` nobody could focus. It is a button now, so a widget with
+	 * nothing to do would become a stop of the keyboard path of its own, named and lit, answering
+	 * neither Enter nor Space: a dead control is worse than an absent one.
+	 * @param array $widget Widget of the button.
+	 * @return bool
+	 */
+	protected function hasAction(array $widget): bool
+	{
+		$show = $widget['show'] ?? null;
+
+		if (!is_array($show))
+		{
+			return is_string($show) && $show !== '';
+		}
+
+		if (!isset($show['url']))
+		{
+			return false;
+		}
+
+		if (!is_array($show['url']))
+		{
+			return true;
+		}
+
+		return $this->arParams['IS_MOBILE']
+			? isset($show['url']['mobile'])
+			: is_string($show['js']['desktop'] ?? null);
+	}
+
 	protected function prepareWidgetsToPrint(): void
 	{
 		foreach ($this->arParams['WIDGETS'] as $key => $widget)
 		{
-			if (!in_array($widget['type'], self::getAvailableChannelTypes(), true))
+			if (
+				!in_array($widget['type'], self::getAvailableChannelTypes(), true)
+				|| !$this->hasAction($widget)
+			)
 			{
 				unset($this->arParams['WIDGETS'][$key]);
 

@@ -8,12 +8,14 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Tasks\V2\Internal\Entity\CheckList;
 use Bitrix\Tasks\V2\Internal\Entity\CheckList\CheckListItem;
 use Bitrix\Tasks\V2\Internal\Entity\Group;
+use Bitrix\Tasks\V2\Internal\Entity\Result;
+use Bitrix\Tasks\V2\Internal\Entity\ResultCollection;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Provider\Mapper\Util\DateFormatter;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\PriorityMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\TaskStatusMapper;
 use Bitrix\Tasks\V2\Internal\Service\Link\LinkService;
-use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\SchemaBuilder\BaseSchemaBuilder;
 use Bitrix\Tasks\V2\Internal\Service\NameService;
 
 class TaskResponseMapper
@@ -21,6 +23,7 @@ class TaskResponseMapper
 	public function __construct(
 		private readonly TaskStatusMapper $statusMapper,
 		private readonly PriorityMapper $priorityMapper,
+		private readonly UserResponseMapper $userResponseMapper,
 		private readonly NameService $nameService,
 		private readonly LinkService $linkService,
 	)
@@ -29,8 +32,8 @@ class TaskResponseMapper
 
 	public function mapFromArray(
 		array $taskData,
-		CheckList $checkList,
 		int $userId,
+		?CheckList $checkList = null,
 		?string $groupDisplayType = null,
 	): array
 	{
@@ -49,45 +52,87 @@ class TaskResponseMapper
 			parent: $this->mapTask((int)($taskData['PARENT_ID'] ?? 0)),
 		);
 
-		return $this->mapFromEntity($task, $checkList, $userId, $groupDisplayType);
+		return $this->mapFromEntity(
+			task: $task,
+			userId: $userId,
+			checkList: $checkList,
+			groupDisplayType: $groupDisplayType,
+		);
 	}
 
-	public function mapFromEntity(Task $task, CheckList $checkList, int $userId, ?string $groupDisplayType = null): array
+	public function mapFromEntity(
+		Task $task,
+		int $userId,
+		?CheckList $checkList = null,
+		?ResultCollection $results = null,
+		?array $permissions = null,
+		?string $groupDisplayType = null,
+	): array
 	{
-		$deadline = $task->deadlineTs ? DateTime::createFromTimestamp($task->deadlineTs) : null;
-
 		return [
 			'taskId' => $task->id,
 			'title' => $task->title,
 			'description' => $task->description,
-			'creator' => $this->mapUserFromEntity($task->creator),
-			'responsible' => $this->mapUserFromEntity($task->responsible),
-			'deadline' => $deadline?->format(BaseSchemaBuilder::DATE_FORMAT),
-			'checklist' => $this->mapCheckList($checkList),
+			'creator' => $this->userResponseMapper->mapFromEntity($task->creator),
+			'responsible' => $this->userResponseMapper->mapFromEntity($task->responsible),
+			'accomplices' => $this->userResponseMapper->mapFromEntityCollection($task->accomplices),
+			'auditors' => $this->userResponseMapper->mapFromEntityCollection($task->auditors),
+			'deadline' => DateFormatter::formatTimestamp($task->deadlineTs, DateFormatter::FORMAT_WITHOUT_TIMEZONE, $userId),
+			'checklists' => $this->mapCheckLists($checkList),
+			'results' => $this->mapResults($results, $userId),
 			'group' => $this->mapGroupFromEntity($task->group, $groupDisplayType),
 			'priority' => $task->priority?->value,
 			'status' => $task->status?->value,
 			'parentTaskId' => $task->parent?->getId(),
+			'permissions' => $permissions,
 			'link' => $this->getLink($task->getId(), $userId),
 		];
 	}
 
-	private function mapCheckList(CheckList $checkList): array
+	private function mapCheckLists(?CheckList $checkList): ?array
 	{
-		$formatted = [];
-
-		/** @var CheckListItem $item */
-		foreach ($checkList as $item)
+		if ($checkList === null)
 		{
-			$formatted[] = [
-				'id' => $item->getId(),
-				'title' => $item->title,
-				'parentId' => $item->parentId,
-				'sortIndex' => $item->sortIndex,
-			];
+			return null;
 		}
 
-		return $formatted;
+		return array_map(fn(CheckListItem $item): array => $this->mapCheckListItem($item), $checkList->getEntities());
+	}
+
+	private function mapCheckListItem(CheckListItem $item): array
+	{
+		return [
+			'id' => $item->getId(),
+			'title' => $item->title,
+			'creator' => $this->userResponseMapper->mapFromEntity($item->creator),
+			'parentId' => $item->parentId,
+			'sortIndex' => $item->sortIndex,
+			'isComplete' => $item->isComplete,
+		];
+	}
+
+	private function mapResults(?ResultCollection $results, int $userId): ?array
+	{
+		if ($results === null)
+		{
+			return null;
+		}
+
+		return array_map(fn(Result $result): array => $this->mapResult($result, $userId), $results->getEntities());
+	}
+
+	private function mapResult(Result $result, int $userId): array
+	{
+		return [
+			'id' => $result->getId(),
+			'text' => $result->text,
+			'author' => $this->userResponseMapper->mapFromEntity($result->author),
+			'createdDate' => DateFormatter::formatTimestamp(
+				$result->createdAtTs,
+				DateFormatter::FORMAT_WITHOUT_TIMEZONE,
+				$userId,
+			),
+		];
 	}
 
 	private function mapDeadline(mixed $deadline): ?int
@@ -108,19 +153,6 @@ class TaskResponseMapper
 		}
 
 		return Task::mapFromId($id);
-	}
-
-	private function mapUserFromEntity(?User $user): ?array
-	{
-		if ($user === null)
-		{
-			return null;
-		}
-
-		return [
-			'id' => $user->getId(),
-			'name' => $user->name,
-		];
 	}
 
 	private function mapGroupFromEntity(?Group $group, ?string $displayType): ?array

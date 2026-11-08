@@ -2,7 +2,7 @@
 
 class CSearchItem extends CDBResult
 {
-	function GetList($arOrder = [], $arFilter = [], $arSelect = [])
+	public function GetList($arOrder = [], $arFilter = [], $arSelect = [])
 	{
 		global $DB;
 
@@ -20,14 +20,12 @@ class CSearchItem extends CDBResult
 		{
 			foreach ($arOrder as $key => $ord)
 			{
-				$ord = mb_strtoupper($ord) <> 'ASC' ? 'DESC' : 'ASC';
+				$ord = mb_strtoupper($ord) !== 'ASC' ? 'DESC' : 'ASC';
 				$key = mb_strtoupper($key);
-				switch ($key)
+				if ($key === 'ID')
 				{
-				case 'ID':
 					$sqlOrder[$key] = $strSearchContentAlias . '.' . $key . ' ' . $ord;
 					$arSelect[] = 'ID';
-					break;
 				}
 			}
 		}
@@ -167,7 +165,7 @@ class CSearchItem extends CDBResult
 		return $res;
 	}
 
-	function Fetch()
+	public function Fetch()
 	{
 		static $arSite = [];
 
@@ -188,7 +186,7 @@ class CSearchItem extends CDBResult
 				$r['URL'] = $r['SITE_URL'];
 			}
 
-			if (mb_substr($r['URL'], 0, 1) == '=')
+			if (str_starts_with($r['URL'], '='))
 			{
 				foreach (GetModuleEvents('search', 'OnSearchGetURL', true) as $arEvent)
 				{

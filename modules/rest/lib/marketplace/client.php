@@ -10,10 +10,9 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\Date;
-use Bitrix\Bitrix24\Public\Enum\VibePlus\MonetizationModel;
-use Bitrix\Bitrix24\Public\Service\VibePlus\MonetizationModelProvider;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
+use Bitrix\Rest\Internal\Integration\Bitrix24\TariffAccessService;
 use Bitrix\Bitrix24\Feature;
 
 if(!defined('REST_MP_CATEGORIES_CACHE_TTL'))
@@ -630,7 +629,7 @@ class Client
 		if (ModuleManager::isModuleInstalled('bitrix24') && Loader::includeModule('bitrix24'))
 		{
 			$result =
-				((new MonetizationModelProvider())->get() === MonetizationModel::SUBSCRIPTION)
+				(new TariffAccessService())->isSubscriptionMonetizationModel()
 				|| in_array(Application::getInstance()->getLicense()->getRegion() ?? '', ['ru', 'by'])
 			;
 		}

@@ -5,11 +5,14 @@ use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Intranet\Secretary;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Entity\ReferenceField;
+use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Tasks\Internals\Task\Priority;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\Service\Template\Author\AuthorAssignmentSubject;
 
 Loc::loadMessages(__FILE__);
 
@@ -51,32 +54,53 @@ final class Tasks
 			$templateResult = \CTaskTemplates::GetList($order, $filter, $navParams, $params, $select);
 			if (!$templateResult->Fetch())
 			{
-				(new \CTaskTemplates())->Add([
-					'CREATED_BY' => $adminId,
-					'TPARAM_TYPE' => \CTaskTemplates::TYPE_FOR_NEW_USER,
-					'PRIORITY' => \CTasks::PRIORITY_AVERAGE,
-					'STATUS' => \CTasks::STATE_PENDING,
-					'TITLE' => $data['TITLE'],
-					'DESCRIPTION' => $data['DESCRIPTION'],
-					'DESCRIPTION_IN_BBCODE' => 'Y',
-					'SITE_ID' => \CTaskTemplates::CURRENT_SITE_ID,
-					'XML_ID' => $xmlId,
-					'ALLOW_CHANGE_DEADLINE' => 'Y',
-				]);
+				$addParams = [];
+				if (
+					class_exists(AuthorAssignmentSubject::class)
+					&& defined(\CTaskTemplates::class . '::AUTHOR_ASSIGNMENT_SUBJECT')
+				)
+				{
+					$addParams[\CTaskTemplates::AUTHOR_ASSIGNMENT_SUBJECT] =
+						AuthorAssignmentSubject::fromServerContext($adminId);
+				}
+
+				(new \CTaskTemplates())->Add(
+					arFields: [
+						'CREATED_BY' => $adminId,
+						'TPARAM_TYPE' => \CTaskTemplates::TYPE_FOR_NEW_USER,
+						'PRIORITY' => \CTasks::PRIORITY_AVERAGE,
+						'STATUS' => \CTasks::STATE_PENDING,
+						'TITLE' => $data['TITLE'],
+						'DESCRIPTION' => $data['DESCRIPTION'],
+						'DESCRIPTION_IN_BBCODE' => 'Y',
+						'SITE_ID' => \CTaskTemplates::CURRENT_SITE_ID,
+						'XML_ID' => $xmlId,
+						'ALLOW_CHANGE_DEADLINE' => 'Y',
+					],
+					arParams: $addParams,
+				);
 			}
 		}
 	}
 
-	public static function createDemoTasksForUser(int $userId): void
+	public static function createDemoTasksForUser(int $userId): Result
 	{
+		$result = new Result();
+		$templateCount = 0;
+		$createdTaskCount = 0;
+		$result->setData([
+			'templateCount' => $templateCount,
+			'createdTaskCount' => $createdTaskCount,
+		]);
+
 		if (!Loader::includeModule('tasks'))
 		{
-			return;
+			return $result;
 		}
 
 		if (self::isCollaber($userId))
 		{
-			return;
+			return $result;
 		}
 
 		$templateResult = \CTaskTemplates::GetList(
@@ -96,13 +120,36 @@ final class Tasks
 		);
 		while ($item = $templateResult->Fetch())
 		{
-			\CTaskItem::addByTemplate(
+			$templateCount++;
+			$createdTasks = \CTaskItem::addByTemplate(
 				$item['ID'],
 				$item['CREATED_BY'],
 				false,
-				['BEFORE_ADD_CALLBACK' => self::getBeforeAddCallback($userId)]
+				[
+					'BEFORE_ADD_CALLBACK' => self::getBeforeAddCallback($userId),
+					'COPY_FILE_ATTACHMENTS_WITH_DESCRIPTION' => true,
+				],
 			);
+
+			if ($createdTasks === [])
+			{
+				$result->addError(new Error(
+					"Failed to create tasks from new employee template {$item['ID']}.",
+					'INTRANET_NEW_EMPLOYEE_TEMPLATE_TASK_CREATION_FAILED',
+				));
+
+				continue;
+			}
+
+			$createdTaskCount += count($createdTasks);
 		}
+
+		$result->setData([
+			'templateCount' => $templateCount,
+			'createdTaskCount' => $createdTaskCount,
+		]);
+
+		return $result;
 	}
 
 	private static function getBeforeAddCallback(int $userId): \Closure

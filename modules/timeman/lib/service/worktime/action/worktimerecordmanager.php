@@ -8,6 +8,14 @@ use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecord;
 
 class WorktimeRecordManager
 {
+	/**
+	 * Cap applied to the resume/expiration threshold when no next shift can move it: 18 hours from the
+	 * record start. Numerically equal to the 2 * 9 * 3600 literal in
+	 * moreThanHalfTillNextShiftOrNewShiftStarted(), but a different notion - a schedule-agnostic neutral
+	 * window, not two standard working days - so the two must stay independent.
+	 */
+	public const NEUTRAL_THRESHOLD_SECONDS = 18 * 3600;
+
 	/** @var Shift|null */
 	private $shift;
 	/** @var Schedule|null */
@@ -57,7 +65,7 @@ class WorktimeRecordManager
 			return false;
 		}
 
-		return !$this->moreThanHalfTillNextShiftOrNewShiftStarted();
+		return !$this->thresholdPassedWithCeiling();
 	}
 
 	public function isEligibleToEdit()
@@ -66,7 +74,7 @@ class WorktimeRecordManager
 		{
 			return false;
 		}
-		if ($this->isRecordExpired())
+		if ($this->isRecordExpiredWithoutNeutralCeiling())
 		{
 			return true;
 		}
@@ -76,11 +84,65 @@ class WorktimeRecordManager
 
 	public function isRecordExpired()
 	{
-		if ($this->record->getRecordedStopTimestamp() > 0)
+		return !$this->hasRecordedStop() && $this->thresholdPassedWithCeiling();
+	}
+
+	public function isRecordScheduleActual(): bool
+	{
+		return $this->shiftsManager->containsSchedule((int)$this->record->getScheduleId());
+	}
+
+	/**
+	 * Expiration for the edit window: it must stay on the plain threshold, ceiling excluded.
+	 */
+	private function isRecordExpiredWithoutNeutralCeiling(): bool
+	{
+		return !$this->hasRecordedStop() && $this->moreThanHalfTillNextShiftOrNewShiftStarted();
+	}
+
+	private function hasRecordedStop(): bool
+	{
+		return $this->record->getRecordedStopTimestamp() > 0;
+	}
+
+	/**
+	 * Threshold seen by the resume and expiration decisions only: a record left without a next shift to
+	 * wait for additionally expires at NEUTRAL_THRESHOLD_SECONDS after its start.
+	 */
+	private function thresholdPassedWithCeiling(): bool
+	{
+		if ($this->moreThanHalfTillNextShiftOrNewShiftStarted())
+		{
+			return true;
+		}
+		if (!$this->isCeilingApplicable())
 		{
 			return false;
 		}
-		return $this->moreThanHalfTillNextShiftOrNewShiftStarted();
+
+		return $this->currentDateTime->getTimestamp()
+			> ($this->buildRecordStartDateTime()->getTimestamp() + self::NEUTRAL_THRESHOLD_SECONDS);
+	}
+
+	/**
+	 * Either the record's schedule has left the employee's active set, or a flextime schedule was added
+	 * beside it, silencing the shift search of the whole set: both leave the plain threshold with nothing
+	 * to move it.
+	 */
+	private function isCeilingApplicable(): bool
+	{
+		// A record carrying no schedule has none that could leave the set, so it keeps the plain threshold.
+		if ((int)$this->record->getScheduleId() <= 0)
+		{
+			return false;
+		}
+		if (!$this->isRecordScheduleActual())
+		{
+			return true;
+		}
+
+		// A flextime record of its own set never had a next shift to wait for - nothing changed for it.
+		return $this->shiftsManager->hasFlextimeSchedule() && !Schedule::isScheduleFlextime($this->schedule);
 	}
 
 	private function moreThanHalfTillNextShiftOrNewShiftStarted()

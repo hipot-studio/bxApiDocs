@@ -207,6 +207,7 @@ abstract class ItemDetail extends Base implements Controllerable
 					'FIELD' => $fieldName,
 					'MULTIPLE' => $userField['MULTIPLE'],
 					'MANDATORY' => $userField['MANDATORY'],
+					'HELP_MESSAGE' => $userField['HELP_MESSAGE'] ?? null,
 					'SETTINGS' => $userField['SETTINGS'] ?? null,
 				];
 

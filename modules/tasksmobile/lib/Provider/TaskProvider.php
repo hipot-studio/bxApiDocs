@@ -653,8 +653,12 @@ final class TaskProvider
 			$searchParams = new TaskRequestFilter();
 			$searchParams->ownerId = $kanbanOwnerId;
 
+			// the card shows the stage field, not the board: its client drops the stage counters, so they are not asked for
 			$stageProvider = new StageProvider($this->userId, $searchParams);
-			$kanban = $stageProvider->getKanbanInfoByWorkMode($projectId, $taskId, $workMode)->getData();
+			$kanban = $stageProvider
+				->getKanbanInfoByWorkMode($projectId, $taskId, $workMode, withCounters: false)
+				->getData()
+			;
 		}
 
 		$allTasks[] = $task;
@@ -1786,9 +1790,29 @@ final class TaskProvider
 		}
 
 		$userIds[] = $this->userId;
-		$userIds[] = $this->searchParams->ownerId;
+
+		$ownerId = (int)$this->searchParams->ownerId;
+		if (
+			!in_array($ownerId, array_map('intval', $userIds), true)
+			&& $this->canViewOwnerProfile()
+		)
+		{
+			$userIds[] = $ownerId;
+		}
 
 		return UserRepository::getByIds($userIds);
+	}
+
+	private function canViewOwnerProfile(): bool
+	{
+		$ownerId = $this->searchParams->ownerId;
+		if ($ownerId <= 0 || $ownerId === $this->userId)
+		{
+			return true;
+		}
+
+		return Loader::includeModule('socialnetwork')
+			&& \CSocNetUser::CanProfileView($this->userId, $ownerId);
 	}
 
 	private function getGroupsData(array $tasks, ?int $projectId = null): array

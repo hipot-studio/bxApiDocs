@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Tasks\Grid\Task\Row\Content;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork\Livefeed\Context\Context;
 use Bitrix\Tasks\Grid\Task\Row\Content;
@@ -77,7 +78,15 @@ class Title extends Content
 			]);
 		}
 
-		$priorityLayout = ($taskPriority === \Bitrix\Tasks\Internals\Task\Priority::HIGH ? '<span class="task-priority-high"></span> ' : '');
+		$priorityLabel = htmlspecialcharsbx(
+			Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_TITLE_PRIORITY_HIGH'),
+			ENT_QUOTES
+		);
+		$priorityLayout = (
+			$taskPriority === \Bitrix\Tasks\Internals\Task\Priority::HIGH
+				? '<span class="task-priority-high" role="img" aria-label="' . $priorityLabel . '"></span> '
+				: ''
+		);
 
 		$countFiles = (int) ($row['COUNT_FILES'] ?? 0);
 
@@ -89,8 +98,20 @@ class Title extends Content
 		$forkedByTemplateId = (int)($row['FORKED_BY_TEMPLATE_ID'] ?? 0);
 		$isRegular = $isTaskReplicate || $forkedByTemplateId > 0;
 
-		$filesIcon = "<div class='task-attachment-counter ui-label ui-label-sm ui-label-light'><span class='ui-label-inner'>{$countFiles}</span></div>";
-		$checkListIcon = "<div class='task-checklist-counter ui-label ui-label-sm ui-label-light'><span class='ui-label-inner'>{$checkListComplete}/{$checkListAll}</span></div>";
+		$filesLabel = htmlspecialcharsbx(
+			Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_TITLE_FILES_COUNT', ['#COUNT#' => $countFiles]),
+			ENT_QUOTES
+		);
+		$checkListLabel = htmlspecialcharsbx(
+			Loc::getMessage('TASKS_GRID_TASK_ROW_CONTENT_TITLE_CHECK_LIST_PROGRESS', [
+				'#DONE#' => $checkListComplete,
+				'#TOTAL#' => $checkListAll,
+			]),
+			ENT_QUOTES
+		);
+
+		$filesIcon = "<div class='task-attachment-counter ui-label ui-label-sm ui-label-light' role='img' aria-label='{$filesLabel}'><span class='ui-label-inner'>{$countFiles}</span></div>";
+		$checkListIcon = "<div class='task-checklist-counter ui-label ui-label-sm ui-label-light' role='img' aria-label='{$checkListLabel}'><span class='ui-label-inner'>{$checkListComplete}/{$checkListAll}</span></div>";
 
 		$regularIcon = null;
 		$templateReplicateParamsByTaskId = $parameters['TEMPLATE_REPLICATE_PARAMS_BY_TASK_ID'] ?? null;

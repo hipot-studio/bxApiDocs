@@ -29,6 +29,7 @@ use Bitrix\Sale;
 class ImOpenLinesManager extends Base
 {
 	const META_PARAM = 'scm';
+	public const ERROR_SESSION_ACCESS_DENIED = 'SALESCENTER_IMOL_SESSION_ACCESS_DENIED';
 
 	protected $sessionId;
 	protected $sessionInfo;
@@ -54,10 +55,38 @@ class ImOpenLinesManager extends Base
 	{
 		if($this->isEnabled())
 		{
-			$this->sessionId = (int)$sessionId;
+			$sessionId = (int)$sessionId;
+			if ($this->sessionId !== $sessionId)
+			{
+				$this->sessionInfo = null;
+			}
+			$this->sessionId = $sessionId;
 		}
 
 		return $this;
+	}
+
+	public function canAccessSession(): bool
+	{
+		if (!$this->isEnabled())
+		{
+			return true;
+		}
+
+		if ($this->sessionId <= 0)
+		{
+			return false;
+		}
+
+		$sessionInfo = $this->getSessionInfo();
+		$chatId = (int)($sessionInfo['CHAT_ID'] ?? 0);
+
+		return $chatId > 0 && $this->canAccessChat($chatId);
+	}
+
+	protected function canAccessChat(int $chatId): bool
+	{
+		return Chat::hasAccess($chatId);
 	}
 
 	/**
@@ -291,6 +320,74 @@ class ImOpenLinesManager extends Base
 		}
 
 		return false;
+	}
+
+	public function canUseSession(int $sessionId, mixed $dialogId = null): bool
+	{
+		if ($sessionId <= 0 || !$this->isEnabled())
+		{
+			return false;
+		}
+
+		$hasDialogId = $dialogId !== null && $dialogId !== '';
+		if ($hasDialogId && !is_scalar($dialogId))
+		{
+			return false;
+		}
+
+		$chatId = $this->getSessionChatId($sessionId);
+		if ($chatId === null || $chatId <= 0)
+		{
+			return false;
+		}
+
+		if ($hasDialogId && (string)$dialogId !== 'chat' . $chatId)
+		{
+			return false;
+		}
+
+		return $this->hasChatAccess($chatId);
+	}
+
+	public function checkClientSessionId(mixed $sessionId, mixed $dialogId = null): Result
+	{
+		$result = new Result();
+
+		$sessionId = is_scalar($sessionId) ? (int)$sessionId : 0;
+		if ($sessionId <= 0)
+		{
+			return $result->setData(['sessionId' => 0]);
+		}
+
+		if (!$this->canUseSession($sessionId, $dialogId))
+		{
+			return $result
+				->addError(new Error(
+					Loc::getMessage('SALESCENTER_IMOPMANAGER_SESSION_ACCESS_DENIED'),
+					self::ERROR_SESSION_ACCESS_DENIED,
+				))
+				->setData(['sessionId' => 0])
+			;
+		}
+
+		return $result->setData(['sessionId' => $sessionId]);
+	}
+
+	protected function getSessionChatId(int $sessionId): ?int
+	{
+		$session = SessionTable::getList([
+			'select' => ['CHAT_ID'],
+			'filter' => [
+				'=ID' => $sessionId,
+			],
+		])->fetch();
+
+		return $session ? (int)$session['CHAT_ID'] : null;
+	}
+
+	protected function hasChatAccess(int $chatId): bool
+	{
+		return Chat::hasAccess($chatId);
 	}
 
 	/**
@@ -652,9 +749,11 @@ class ImOpenLinesManager extends Base
 	{
 		$result = new Result();
 
-		if (!$compilationLink)
+		if (empty($compilationLink['link']))
 		{
 			$result->addError(new Error(Loc::getMessage('SALESCENTER_IMOPMANAGER_EMPTY_COMPILATION_LINK')));
+
+			return $result;
 		}
 
 		if ($this->isEnabled())

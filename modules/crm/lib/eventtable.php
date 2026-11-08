@@ -3,6 +3,7 @@
 namespace Bitrix\Crm;
 
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
@@ -26,6 +27,8 @@ use Bitrix\Main\ORM\Fields\StringField;
  */
 class EventTable extends DataManager
 {
+	use DeleteByFilterTrait;
+
 	public static function getTableName(): string
 	{
 		return 'b_crm_event';

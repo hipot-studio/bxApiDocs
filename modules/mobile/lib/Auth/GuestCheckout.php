@@ -50,7 +50,10 @@ final class GuestCheckout
 	private const COMPONENT_CALLS = 'calls';
 	private const COMPONENT_CALLS_SCRIPT = 'call:calls';
 
-	public function __construct(private readonly \CUser $user)
+	public function __construct(
+		private readonly \CUser $user,
+		private readonly string $portalLanguage,
+	)
 	{
 	}
 
@@ -155,7 +158,7 @@ final class GuestCheckout
 		}
 
 		$userId = (int)$this->user->GetID();
-		$this->user->Authorize($userId, false, false, MobileGuestApplication::ID);
+		$this->authorizeGuest($userId);
 
 		// Refresh the invite-code cookie to the code just navigated to.
 		AuthorizationService::getInstance()->setInviteCode($guestCode);
@@ -204,10 +207,8 @@ final class GuestCheckout
 			return $this->buildError([]);
 		}
 
-		// Narrow 'im_guest_mobile' scope: adds the native URLs the base 'im_guest' lacks, while
-		// staying narrower than the full MobileApplication scope.
 		$userId = (int)$guestUser->getId();
-		$this->user->Authorize($userId, false, false, MobileGuestApplication::ID);
+		$this->authorizeGuest($userId);
 
 		$requestGuestName = $guestResult->getJoinStatus() === JoinStatus::NEW_GUEST
 			&& ($guestName === null || $guestName === '');
@@ -220,6 +221,17 @@ final class GuestCheckout
 			requestGuestName: $requestGuestName,
 			guestCode: $guestCode,
 		);
+	}
+
+	/**
+	 * Narrow 'im_guest_mobile' scope: adds the native URLs the base 'im_guest' lacks, while staying
+	 * narrower than the full MobileApplication scope. A checkout by guest code is a deliberate return to
+	 * the contour, so the spent scope-exit attempts come back {@see AuthorizationService::allowGuestReentry}.
+	 */
+	private function authorizeGuest(int $userId): void
+	{
+		AuthorizationService::getInstance()->allowGuestReentry($userId);
+		$this->user->Authorize($userId, false, false, MobileGuestApplication::ID);
 	}
 
 	/**
@@ -326,6 +338,7 @@ final class GuestCheckout
 			'sessid_md5' => bitrix_sessid(),
 			'cloud' => ModuleManager::isModuleInstalled('bitrix24')
 				&& \COption::GetOptionString('bitrix24', 'network', 'N') === 'Y',
+			'portalLanguage' => $this->portalLanguage,
 			'backend_version' => ModuleManager::getVersion('mobile'),
 			'target' => md5($userId . \CMain::GetServerUniqID()),
 			'newStyleSupported' => true,

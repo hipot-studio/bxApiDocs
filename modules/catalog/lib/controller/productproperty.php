@@ -209,6 +209,14 @@ final class ProductProperty extends ProductPropertyBase
 			return null;
 		}
 
+		$permissionResult = $this->checkUpdatePermission($id, $fields);
+		if (!$permissionResult->isSuccess())
+		{
+			$this->addErrors($permissionResult->getErrors());
+
+			return null;
+		}
+
 		$prepareResult = $this->prepareFieldsForUpdate($id, $fields);
 		if (!$prepareResult->isSuccess())
 		{
@@ -251,6 +259,14 @@ final class ProductProperty extends ProductPropertyBase
 		if (!$existsResult->isSuccess())
 		{
 			$this->addErrors($existsResult->getErrors());
+
+			return null;
+		}
+
+		$permissionResult = $this->checkDeletePermission($id);
+		if (!$permissionResult->isSuccess())
+		{
+			$this->addErrors($permissionResult->getErrors());
 
 			return null;
 		}
@@ -329,6 +345,69 @@ final class ProductProperty extends ProductPropertyBase
 		}
 
 		return $result;
+	}
+
+	private function checkUpdatePermission(int $id, array $fields): Result
+	{
+		$iblockId = $this->getPropertyIblockId($id);
+		if ($iblockId === null)
+		{
+			$result = new Result();
+			$result->addError($this->getErrorEntityNotExists());
+
+			return $result;
+		}
+
+		$result = $this->checkIblockModifyPermission($iblockId);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		if (!array_key_exists('IBLOCK_ID', $fields))
+		{
+			return $result;
+		}
+
+		$targetIblockId = (int)$fields['IBLOCK_ID'];
+		if ($targetIblockId === $iblockId)
+		{
+			return $result;
+		}
+
+		if (!$this->isIblockCatalog($targetIblockId))
+		{
+			$result->addError(new Error('The specified iblock is not a product catalog'));
+
+			return $result;
+		}
+
+		return $this->checkIblockModifyPermission($targetIblockId);
+	}
+
+	private function checkDeletePermission(int $id): Result
+	{
+		$iblockId = $this->getPropertyIblockId($id);
+		if ($iblockId === null)
+		{
+			$result = new Result();
+			$result->addError($this->getErrorEntityNotExists());
+
+			return $result;
+		}
+
+		return $this->checkIblockModifyPermission($iblockId);
+	}
+
+	private function getPropertyIblockId(int $id): ?int
+	{
+		$property = $this->getPropertyById($id);
+		if ($property === null)
+		{
+			return null;
+		}
+
+		return (int)$property['IBLOCK_ID'];
 	}
 
 	private function processCustomTypesBeforeAdd(array &$fields): void

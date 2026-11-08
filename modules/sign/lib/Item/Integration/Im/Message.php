@@ -56,6 +56,13 @@ abstract class Message implements \Bitrix\Sign\Contract\Chat\Message
 		return $this->member;
 	}
 
+	public function setMember(?Member $member): self
+	{
+		$this->member = $member;
+
+		return $this;
+	}
+
 	public function getLink(): ?string
 	{
 		return $this->link;

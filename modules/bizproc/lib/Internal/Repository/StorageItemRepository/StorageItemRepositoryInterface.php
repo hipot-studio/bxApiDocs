@@ -93,6 +93,13 @@ interface StorageItemRepositoryInterface
 	public function getCountsByStorageTypeIds(array $storageTypeIds): array;
 
 	/**
+	 * @param int[] $itemIds
+	 * @return int[] distinct storage type ids
+	 * @throws \Bitrix\Main\ArgumentException
+	 */
+	public function getStorageTypeIdsByItemIds(array $itemIds): array;
+
+	/**
 	 * @param array $ids
 	 * @return void
 	 * @throws \Bitrix\Main\ArgumentException

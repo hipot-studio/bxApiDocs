@@ -203,7 +203,7 @@ class BaseService extends \IRestService
 		}
 
 		$handlerData = Internals\DeliveryRestHandlerTable::getList([
-			'filter' => ['CODE' => $code],
+			'filter' => ['=CODE' => $code],
 			'limit' => 1,
 		])->fetch();
 		if ($handlerData)

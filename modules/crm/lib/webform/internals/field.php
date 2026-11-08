@@ -8,6 +8,7 @@
 namespace Bitrix\Crm\WebForm\Internals;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Crm\WebForm\Helper;
 use Bitrix\Main\ORM\Fields\ArrayField;
@@ -32,6 +33,8 @@ Loc::loadMessages(__FILE__);
  */
 class FieldTable extends Entity\DataManager
 {
+	use DeleteByFilterTrait;
+
 	const TYPE_ENUM_SECTION = 'section';
 	const TYPE_ENUM_PAGE = 'page';
 

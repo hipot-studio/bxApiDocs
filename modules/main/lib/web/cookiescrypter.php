@@ -5,6 +5,8 @@ namespace Bitrix\Main\Web;
 use Bitrix\Main\Config;
 use Bitrix\Main\Security\Cipher;
 use Bitrix\Main\Security\SecurityException;
+use Bitrix\Main\Security\Sign\BadSignatureException;
+use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\Session\KernelSession;
 use Bitrix\Main\SystemException;
 
@@ -19,9 +21,13 @@ final class CookiesCrypter
 
 	private const SIGN_PREFIX = '-crpt-';
 	private const CIPHER_KEY_SUFFIX = 'cookiecrypter';
+	private const COOKIE_VERSION = 'v2';
+	private const COOKIE_VERSION_SEPARATOR = ':';
+	private const SIGNATURE_SALT = 'cookies_crypter_v2';
 
 	protected ?string $cipherKey;
 	protected Cipher $cipher;
+	protected Signer $signer;
 
 	public function __construct()
 	{
@@ -48,6 +54,22 @@ final class CookiesCrypter
 			throw new SystemException('There is no crypto[crypto_key] in .settings.php. Generate it.');
 		}
 		$this->cipherKey = $this->prependSuffixToKey($this->cipherKey);
+
+		return $this;
+	}
+
+	/**
+	 * Builds signer object.
+	 * @return $this
+	 */
+	protected function buildSigner(): self
+	{
+		if (isset($this->signer))
+		{
+			return $this;
+		}
+
+		$this->signer = new Signer();
 
 		return $this;
 	}
@@ -186,6 +208,8 @@ final class CookiesCrypter
 		{
 			$value = gzencode($value);
 		}
+		$value = self::COOKIE_VERSION . self::COOKIE_VERSION_SEPARATOR . $value;
+		$value = $this->signValue($value);
 
 		return $this->encodeUrlSafeB64($this->cipher->encrypt($value, $this->getCipherKey()));
 	}
@@ -202,12 +226,88 @@ final class CookiesCrypter
 		$this->buildCipher();
 
 		$value = $this->cipher->decrypt($this->decodeUrlSafeB64($value), $this->getCipherKey());
+		$value = $this->verifyValue($value);
+		$value = $this->removeVersion($value);
 		if (\function_exists('gzdecode'))
 		{
-			$value = gzdecode($value);
+			$decodedValue = gzdecode($value);
+			if ($decodedValue === false)
+			{
+				throw new SecurityException('Cookie decompression failed.');
+			}
+
+			$value = $decodedValue;
 		}
 
 		return $value;
+	}
+
+	/**
+	 * Signs compressed cookie value.
+	 * @param string $value Value to sign.
+	 * @return string
+	 */
+	protected function signValue(string $value): string
+	{
+		$this->buildSigner();
+
+		return $this->signer->pack([
+			$value,
+			$this->signer->getSignature($value, self::SIGNATURE_SALT),
+		]);
+	}
+
+	/**
+	 * Verifies and extracts compressed cookie value.
+	 * @param string $value Signed value.
+	 * @return string
+	 * @throws SecurityException
+	 */
+	protected function verifyValue(string $value): string
+	{
+		$this->buildSigner();
+
+		$separator = $this->signer->getSeparator();
+		$signaturePosition = strrpos($value, $separator);
+		if ($signaturePosition === false)
+		{
+			throw new SecurityException('Cookie signature is missing.');
+		}
+
+		$unsignedValue = substr($value, 0, $signaturePosition);
+		$signature = substr($value, $signaturePosition + strlen($separator));
+		try
+		{
+			$isValid = $this->signer->validate($unsignedValue, $signature, self::SIGNATURE_SALT);
+		}
+		catch (BadSignatureException)
+		{
+			$isValid = false;
+		}
+
+		if (!$isValid)
+		{
+			throw new SecurityException('Cookie signature is invalid.');
+		}
+
+		return $unsignedValue;
+	}
+
+	/**
+	 * Removes and validates cookie version.
+	 * @param string $value Versioned value.
+	 * @return string
+	 * @throws SecurityException
+	 */
+	protected function removeVersion(string $value): string
+	{
+		$versionPrefix = self::COOKIE_VERSION . self::COOKIE_VERSION_SEPARATOR;
+		if (!str_starts_with($value, $versionPrefix))
+		{
+			throw new SecurityException('Unsupported cookie version.');
+		}
+
+		return substr($value, strlen($versionPrefix));
 	}
 
 	/**

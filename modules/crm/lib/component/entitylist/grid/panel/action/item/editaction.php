@@ -21,6 +21,7 @@ final class EditAction extends \Bitrix\Main\Grid\Panel\Action\EditAction
 	public function __construct(
 		private Factory $factory,
 		private Context $context,
+		private string $gridId,
 		private ?int $categoryId = null,
 		private ?array $editableFieldsWhitelist = null, // null - all fields are editable
 		private array $columnNameToEditableFieldNameMap = []
@@ -145,6 +146,7 @@ final class EditAction extends \Bitrix\Main\Grid\Panel\Action\EditAction
 						'JS' =>
 							(new Event('loadEnumsAndEditSelected'))
 								->addEntityTypeId($this->factory->getEntityTypeId())
+								->addGridId($this->gridId)
 								->addParam('categoryId', $this->categoryId)
 								->buildJsCallback()
 						,

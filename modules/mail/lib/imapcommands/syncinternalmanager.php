@@ -122,6 +122,12 @@ class SyncInternalManager
 					$errorCode));
 			}
 		}
+		$rebindResult = $this->rebindPlacementsOfPreviousFolderVersion();
+		if (!$rebindResult->isSuccess())
+		{
+			return $rebindResult;
+		}
+
 		if (is_null($this->messages))
 		{
 			$this->messages = $this->repository->getMessages();
@@ -147,6 +153,57 @@ class SyncInternalManager
 			return $result->addError(new Main\Error(Loc::getMessage('MAIL_CLIENT_MESSAGES_MULTIPLE_FOLDERS'),
 				'MAIL_CLIENT_MESSAGES_MULTIPLE_FOLDERS'));
 		}
+		return $result;
+	}
+
+	/**
+	 * The command is carried to the letters it names, and a folder the server has recreated numbers its
+	 * letters anew: the row the command was given addresses another letter of that folder from then on.
+	 * Before anything is carried anywhere, such a row is brought to the number the folder keeps its letter
+	 * under now, and the command follows the row that came out of it.
+	 *
+	 * A letter the folder no longer holds is not brought anywhere and is not commanded either: its number
+	 * belongs to another letter now, so the command answers that the message was not found - which is what
+	 * has really happened to it.
+	 */
+	private function rebindPlacementsOfPreviousFolderVersion(): Main\Result
+	{
+		$result = new Main\Result();
+
+		if (!($this->mailboxHelper instanceof Mail\Helper\Mailbox\Imap))
+		{
+			return $result;
+		}
+
+		$rebindResult = $this->mailboxHelper->rebindPlacementsOfPreviousFolderVersion(
+			$this->repository->getNamedPlacements(),
+		);
+		if (!$rebindResult->isSuccess())
+		{
+			return $result->addError(new Main\Error(
+				Loc::getMessage('MAIL_CLIENT_SYNC_ERROR'),
+				'MAIL_CLIENT_SYNC_ERROR',
+			));
+		}
+		$rebound = (array)($rebindResult->getData()['placements'] ?? []);
+
+		if ($rebound === [])
+		{
+			return $result;
+		}
+
+		$this->messagesIds = array_values(array_unique(array_filter(
+			array_map(
+				static fn ($id) => array_key_exists((string)$id, $rebound) ? $rebound[(string)$id] : $id,
+				$this->messagesIds,
+			),
+			static fn ($id) => $id !== null,
+		)));
+
+		// The rows the command names have changed, so what was read by the previous ones says nothing
+		$this->repository = $this->getRepository();
+		$this->messages = null;
+
 		return $result;
 	}
 

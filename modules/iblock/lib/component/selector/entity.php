@@ -5,6 +5,7 @@ use Bitrix\Main,
 	Bitrix\Main\UI,
 	Bitrix\Main\Localization\Loc,
 	Bitrix\Iblock;
+use Bitrix\Main\Web\Uri;
 
 abstract class Entity extends \CBitrixComponent implements Main\Engine\Contract\Controllerable, Main\Errorable
 {
@@ -1610,11 +1611,7 @@ abstract class Entity extends \CBitrixComponent implements Main\Engine\Contract\
 		$navComponentParameters = [];
 		if ($this->arParams['BASE_LINK'] !== '')
 		{
-			$navComponentParameters["BASE_LINK"] = \CHTTP::urlAddParams(
-				$this->arParams['BASE_LINK'],
-				[],
-				['encode' => true]
-			);
+			$navComponentParameters["BASE_LINK"] = (string)(new Uri($this->arParams['BASE_LINK']))->addParams([]);
 		}
 		$this->navigationString = $iterator->GetPageNavStringEx(
 			$navComponentObject,

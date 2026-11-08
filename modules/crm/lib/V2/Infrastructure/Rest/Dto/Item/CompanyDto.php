@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item;
 
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Attribute\CrmRelation;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\Dictionary\CurrencyDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\ItemDto;
@@ -21,6 +22,7 @@ use Bitrix\Rest\V3\Attribute\Filterable;
 use Bitrix\Rest\V3\Attribute\Required;
 use Bitrix\Rest\V3\Attribute\RelationToOne;
 use Bitrix\Rest\V3\Attribute\Sortable;
+use Bitrix\Rest\V3\Realisation\Dto\FileDto;
 
 class CompanyDto extends AbstractItemDto
 {
@@ -29,6 +31,7 @@ class CompanyDto extends AbstractItemDto
 	#[InArrayFrom(ItemProvider::class, ['entityTypeId' => OwnerType::LEAD])]
 	public ?int $leadId;
 	#[RelationToOne('leadId', 'id')]
+	#[CrmRelation(OwnerType::LEAD)]
 	public ?ItemDto $lead;
 
 	#[Editable]
@@ -66,6 +69,9 @@ class CompanyDto extends AbstractItemDto
 	#[Filterable]
 	#[Sortable]
 	public ?float $revenue;
+
+	#[Editable]
+	public ?FileDto $logo;
 
 	#[Editable]
 	#[Filterable]

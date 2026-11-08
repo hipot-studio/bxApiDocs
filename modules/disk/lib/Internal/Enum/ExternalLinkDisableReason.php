@@ -7,7 +7,7 @@ enum ExternalLinkDisableReason: string
 {
 	case Feature = 'feature';
 	case Option = 'option';
-	case FileOption = 'fileOption';
+	case ObjectOption = 'objectOption';
 
 	/**
 	 * @return array
@@ -17,7 +17,7 @@ enum ExternalLinkDisableReason: string
 		return [
 			'feature' => ExternalLinkDisableReason::Feature->value,
 			'option' => ExternalLinkDisableReason::Option->value,
-			'fileOption' => ExternalLinkDisableReason::FileOption->value,
+			'objectOption' => ExternalLinkDisableReason::ObjectOption->value,
 		];
 	}
 }

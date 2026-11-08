@@ -12,7 +12,6 @@ use Bitrix\Calendar\Core\Event\Event;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Mappers\Factory;
 use Bitrix\Calendar\Integration\Bitrix24\FeatureDictionary;
-use Bitrix\Calendar\Integration\HumanResources\TeamAccessService;
 use Bitrix\Calendar\Integration\SocialNetwork\Collab\UserCollabs;
 use Bitrix\Calendar\Integration\HumanResources;
 use Bitrix\Calendar\Integration\SocialNetwork;
@@ -35,6 +34,8 @@ use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Calendar\Integration\Bitrix24Manager;
 use Bitrix\Calendar\Ui\CountersManager;
 use Bitrix\Calendar\Access\ActionDictionary;
+use Bitrix\Calendar\Internals\Helper\Analytics;
+use Bitrix\Main\Analytics\AnalyticsEvent;
 
 Loc::loadMessages(__FILE__);
 
@@ -437,13 +438,17 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 		if ($entryId > 0)
 		{
-			$fromTs = \CCalendar::Timestamp($_REQUEST['date_from']);
-			if (!empty($_REQUEST['date_from_offset']))
+			$timezoneOffsetRaw = $request->get('timezoneOffset');
+			if ($timezoneOffsetRaw === null || $timezoneOffsetRaw === '')
 			{
-				$fromTs -= $_REQUEST['date_from_offset'];
+				$timezoneOffsetRaw = $request->get('date_from_offset');
 			}
-
-			$entry = \CCalendarEvent::getEventForEditInterface($entryId, ['eventDate' => \CCalendar::Date($fromTs)]);
+			$timezoneOffset = (int)$timezoneOffsetRaw;
+			$entry = \CCalendarEvent::getEventForEditInterface($entryId, [
+				'eventDate' => (string)$request->get('date_from'),
+				'timezoneOffset' => $timezoneOffset,
+				'userId' => $userId,
+			]);
 			$entryId = is_array($entry) && isset($entry['ID']) ? (int)$entry['ID'] : $entryId;
 
 			if (!empty($entry) && is_array($entry))
@@ -998,12 +1003,10 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		$entryId = (int)$request['entryId'];
 		$parentId = (int)($request['entry']['parentId'] ?? $request['parentId'] ?? 0);
 		$userId = \CCalendar::getCurUserId();
-		$ownerId = (int)$request['ownerId'];
 		$type = $request['type'];
 		$entries = $request['entries'];
 		$isExtranetUser = Loader::includeModule('intranet') && !\Bitrix\Intranet\Util::isIntranetUser($userId);
 
-		$hostId = (int)$request['hostId'];
 		if (!$entryId && $request['cur_event_id'])
 		{
 			$entryId = (int)$request['cur_event_id'];
@@ -1027,11 +1030,8 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		}
 		else
 		{
-			if (!$hostId && $type === Dictionary::CALENDAR_TYPE['user'])
-			{
-				$hostId = $ownerId ?: $userId;
-			}
-			elseif (!$hostId && $type !== Dictionary::CALENDAR_TYPE['open_event'])
+			$hostId = (int)$request['hostId'];
+			if (!$hostId && $type !== Dictionary::CALENDAR_TYPE['open_event'])
 			{
 				$hostId = $userId;
 			}
@@ -1043,6 +1043,9 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		}
 
 		$codes = [];
+		$attendeesProvided = ($request['attendeesProvided'] ?? null) === 'Y'
+			|| is_array($request['entityList'])
+			|| is_array($request['codes']);
 		// open event need only location planner, so ignore entityList
 		if ($type !== Dictionary::CALENDAR_TYPE['open_event'])
 		{
@@ -1055,13 +1058,16 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				$codes = $request['codes'];
 			}
 
-			if ($entryId > 0 && empty($codes))
+			if (!$attendeesProvided)
 			{
-				$codes[] = 'U' . $hostId;
-			}
-			if ($request['add_cur_user_to_list'] === 'Y' || empty($codes))
-			{
-				$codes[] = 'U' . $userId;
+				if ($hostId > 0)
+				{
+					$codes[] = 'U' . $hostId;
+				}
+				if ($entryId <= 0 && $userId !== $hostId)
+				{
+					$codes[] = 'U' . $userId;
+				}
 			}
 		}
 
@@ -1070,8 +1076,6 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		{
 			$codes = ['U' . $userId];
 		}
-
-		$codes = $this->prepareCodesForPlanner($codes);
 
 		$prevUserList = is_array($request['prevUserList']) ? $request['prevUserList'] : [];
 		$skipFeatureCheck = ($request['skipFeatureCheck'] ?? null) === 'Y';
@@ -1096,54 +1100,6 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 			'prevUserList' => $prevUserList,
 			'skipFeatureCheck' => $skipFeatureCheck,
 		]);
-	}
-
-	private function prepareCodesForPlanner(array $codes): array
-	{
-		$entities = Util::convertCodesToEntities($codes);
-		$currentUserId = \CCalendar::getCurUserId();
-
-		$filteredEntities = [];
-
-		foreach ($entities as $entity)
-		{
-			// Team codes (SNT<id>) expand into member lists, so gate them by node view
-			// permission, deny-by-default, symmetrically to the project branch below.
-			if ($entity['entityId'] === 'structure-node')
-			{
-				if ((new TeamAccessService())->canViewTeam((int)$entity['id'], (int)$currentUserId))
-				{
-					$filteredEntities[] = $entity;
-				}
-
-				continue;
-			}
-
-			if ($entity['entityId'] !== 'project')
-			{
-				$filteredEntities[] = $entity;
-
-				continue;
-			}
-
-			if ($entity['id'] <= 0)
-			{
-				continue;
-			}
-
-			$permission = \CCalendar::GetPermissions([
-				'type' => 'group',
-				'ownerId' => $entity['id'],
-				'userId' => $currentUserId,
-			]);
-
-			if ($permission['view'])
-			{
-				$filteredEntities[] = $entity;
-			}
-		}
-
-		return Util::convertEntitiesToCodes($filteredEntities);
 	}
 
 	public function getPlannerAction()
@@ -1184,7 +1140,10 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 		if ($event)
 		{
-			if (\CCalendarEvent::CheckRecurcion($event))
+			if (
+				\CCalendarEvent::CheckRecurcion($event)
+				&& $this->doesUntilDateShortenRecurrence($event, $untilTimestamp)
+			)
 			{
 				$event['RRULE'] = \CCalendarEvent::ParseRRULE($event['RRULE']);
 				$event['RRULE']['UNTIL'] = \CCalendar::Date($untilTimestamp, false);
@@ -1202,7 +1161,17 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 					'recursionEditMode' => 'skip',
 					'editParentEvents' => true,
 					'editEntryUntil' => true,
+					'checkLocationOccupancy' => 'N',
 				]);
+				if ($id === false)
+				{
+					$this->addError(new Error(
+						'[ed01]' . Loc::getMessage('EC_EVENT_DEL_ERROR'),
+						'change_recurcive_entry_until',
+					));
+
+					return ['result' => false];
+				}
 				$recId = $event["ID"];
 				$response['id'] = $id;
 			}
@@ -1214,10 +1183,7 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 				{
 					$recParentEvent['RRULE'] = \CCalendarEvent::ParseRRULE($recParentEvent['RRULE']);
 
-					if (
-						$recParentEvent['RRULE']['UNTIL']
-						&& \CCalendar::Timestamp($recParentEvent['RRULE']['UNTIL']) > $untilTimestamp
-					)
+					if ($this->doesUntilDateShortenRecurrence($recParentEvent, $untilTimestamp))
 					{
 						$recParentEvent['RRULE']['UNTIL'] = \CCalendar::Date($untilTimestamp, false);
 
@@ -1235,12 +1201,21 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 							'recursionEditMode' => 'skip',
 							'editParentEvents' => true,
 							'editEntryUntil' => true,
+							'checkLocationOccupancy' => 'N',
 						]);
+						if ($id === false)
+						{
+							$this->addError(new Error(
+								'[ed01]' . Loc::getMessage('EC_EVENT_DEL_ERROR'),
+								'change_recurcive_entry_until',
+							));
+
+							return ['result' => false];
+						}
 						$response['id'] = $id;
+						$recId = $event["RECURRENCE_ID"];
 					}
 				}
-
-				$recId = $event["RECURRENCE_ID"];
 			}
 
 			if ($recId)
@@ -1267,9 +1242,52 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		return $response;
 	}
 
+	private function doesUntilDateShortenRecurrence(array $event, int $untilTimestamp): bool
+	{
+		$rrule = \CCalendarEvent::ParseRRULE($event['RRULE'] ?? null);
+		if (isset($rrule['COUNT']))
+		{
+			$event['RRULE'] = $rrule;
+			$event['EXDATE'] = '';
+			$instances = [];
+			\CCalendarEvent::ParseRecursion($instances, $event, [
+				'userId' => \CCalendar::GetCurUserId(),
+				'fromLimitTs' => $untilTimestamp - \CCalendar::GetDayLen(),
+				'toLimitTs' => \CCalendarEvent::calculateUntilForCountRRule($event),
+				'loadLimit' => null,
+				'instanceCount' => false,
+				'preciseLimits' => true,
+			]);
+
+			foreach ($instances as $instance)
+			{
+				if (\CCalendar::Timestamp($instance['DATE_FROM']) > $untilTimestamp)
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		if (!empty($rrule['UNTIL']))
+		{
+			return \CCalendar::Timestamp($rrule['UNTIL']) > $untilTimestamp;
+		}
+
+		return true;
+	}
+
 	public function excludeRecursionDateAction($entryId, $excludeDate)
 	{
-		\CCalendarEvent::ExcludeInstance((int)$entryId, $excludeDate);
+		return $this->executeExcludedInstanceAction((int)$entryId, $excludeDate);
+	}
+
+	private function executeExcludedInstanceAction(int $entryId, mixed $excludeDate): array
+	{
+		$this->addErrors(
+			\Bitrix\Calendar\Internal\Event\ExcludedInstanceOperation::execute($entryId, $excludeDate)->getErrors(),
+		);
 
 		return [];
 	}
@@ -1332,14 +1350,62 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		}
 		else
 		{
-			\CCalendarEvent::SetMeetingStatusEx([
+			$meetingStatus = $request->getPost('status');
+			$meetingStatusResult = \CCalendarEvent::SetMeetingStatusEx([
 				'attendeeId' => $userId,
 				'eventId' => (int)$request->getPost('entryId'),
 				'parentId' => (int)$request->getPost('entryParentId'),
-				'status' => $request->getPost('status'),
+				'status' => $meetingStatus,
 				'reccurentMode' => $request->getPost('recursionMode'),
 				'currentDateFrom' => $request->getPost('currentDateFrom'),
 			]);
+
+			if ($meetingStatusResult === false)
+			{
+				$this->addError(new Error(
+					'Meeting status was not applied.',
+					'MEETING_STATUS_NOT_APPLIED',
+				));
+
+				return null;
+			}
+
+			$section = $event->getSection();
+			$isGroupSection = $section?->getType() === Dictionary::CALENDAR_TYPE['group'];
+			$groupId = $isGroupSection ? $section?->getOwnerId() : null;
+
+			if ($groupId)
+			{
+				$userType = match (true)
+				{
+					Util::isCollabUser($userId) => Analytics::USER_TYPES['collaber'],
+					Util::isExtranetUser($userId) => Analytics::USER_TYPES['extranet'],
+					default => Analytics::USER_TYPES['intranet'],
+				};
+
+				if ($meetingStatus === 'Y')
+				{
+					Analytics::getInstance()->onEventAccept(
+						eventId: $entryId,
+						userId: $userId,
+						groupId: $groupId,
+						subSection: Analytics::SUB_SECTION['calendar'],
+						userType: $userType,
+						status: AnalyticsEvent::STATUS_SUCCESS,
+					);
+				}
+				elseif ($meetingStatus === 'N')
+				{
+					Analytics::getInstance()->onEventDecline(
+						eventId: $entryId,
+						userId: $userId,
+						groupId: $groupId,
+						subSection: Analytics::SUB_SECTION['calendar'],
+						userType: $userType,
+						status: AnalyticsEvent::STATUS_SUCCESS,
+					);
+				}
+			}
 		}
 
 		\CCalendar::UpdateCounter([$userId], [$event->getId()]);
@@ -1369,15 +1435,30 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 		if ($accessController->check(ActionDictionary::ACTION_EVENT_EDIT, $eventModel, ['checkCurrentEvent' => 'Y']))
 		{
 			$entry['REMIND'] = \CCalendarReminder::prepareReminder($request->getPost('reminders'));
+			try
+			{
+				$response['id'] = \CCalendar::SaveEvent([
+					'arFields' => [
+						'ID' => $entry['ID'],
+						'REMIND' => $entry['REMIND'],
+					],
+					'updateReminders' => true,
+					'checkPermission' => false,
+				]);
+			}
+			catch (Rooms\OccupancyLockedException)
+			{
+				$this->addError(
+					new Error(
+						Loc::getMessage('EC_LOCATION_BUSY') ?: 'Meeting room occupancy is locked.',
+						Rooms\OccupancyLockedException::ERROR_CODE,
+					),
+				);
+
+				return [];
+			}
+
 			$response['REMIND'] = $entry['REMIND'];
-			$response['id'] = \CCalendar::SaveEvent([
-				'arFields' => [
-					'ID' => $entry['ID'],
-					'REMIND' => $entry['REMIND'],
-				],
-				'updateReminders' => true,
-				'checkPermission' => false,
-			]);
 
 			\CCalendar::ClearCache('event_list');
 		}
@@ -1542,8 +1623,11 @@ class CalendarAjax extends \Bitrix\Main\Engine\Controller
 
 	public function getSectionListAction($type, $ownerId): array
 	{
+		$sections = \CCalendarSect::prepareSectionListResponse($type, (int)$ownerId);
+
 		return [
-			'sections' => \CCalendarSect::prepareSectionListResponse($type, (int)$ownerId),
+			'sections' => $sections,
+			'accessNames' => \CCalendar::GetAccessNames(),
 		];
 	}
 

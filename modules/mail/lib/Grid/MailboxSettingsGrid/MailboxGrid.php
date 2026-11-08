@@ -4,7 +4,7 @@ namespace Bitrix\Mail\Grid\MailboxSettingsGrid;
 
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Column\Provider\MailboxDataProvider;
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Panel\MailboxPanelProvider;
-use Bitrix\Mail\Helper\Config\Feature;
+use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Grid\MailboxSettingsGrid\Row\Assembler\MailboxRowAssembler;
 use Bitrix\Main\Grid\Column\Columns;
 use Bitrix\Main\Grid\Grid;
@@ -40,7 +40,7 @@ final class MailboxGrid extends Grid
 
 	protected function createPanel(): ?Panel
 	{
-		if (!Feature::isMailboxGridBulkActionsAvailable())
+		if (!MailAccess::hasCurrentUserAccessToMassMailboxActions())
 		{
 			return null;
 		}

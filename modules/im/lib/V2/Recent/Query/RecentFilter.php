@@ -9,7 +9,10 @@ use Bitrix\Im\V2\Chat\Type\Query\TypeFilter;
 use Bitrix\Im\V2\Chat\Type\TypeCondition;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
 use Bitrix\Im\V2\Common\WithableTrait;
+use Bitrix\Im\V2\Folder\Definition\Selection;
+use Bitrix\Im\V2\Folder\Definition\SelectionBranch;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Provider\Params\FilterInterface;
@@ -17,7 +20,7 @@ use Bitrix\Main\Provider\Params\PrepareQueryInterface;
 use Bitrix\Main\Type\DateTime;
 
 /**
- * @method self with(int $userId = null,?DateTime $lastMessageDate = null,?int $lastMessageId = null,bool $unreadOnly = null,array $chatIds = null,array $excludeChatIds = null,?string $recentSection = null,?int $parentChatId = null,?TypeCondition $typeCondition = null,)
+ * @method self with(int $userId = null,?DateTime $lastMessageDate = null,?int $lastMessageId = null,bool $unreadOnly = null,array $chatIds = null,array $excludeChatIds = null,?string $recentSection = null,?int $parentChatId = null,?TypeCondition $typeCondition = null,?Selection $selection = null,bool $hideInvisibleCompanions = null,bool $hideJoinedPortalRows = null,)
  */
 class RecentFilter implements FilterInterface, PrepareQueryInterface
 {
@@ -35,6 +38,11 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 		public readonly ?string $recentSection = null,
 		public readonly ?int $parentChatId = null,
 		public readonly ?TypeCondition $typeCondition = null,
+		public readonly ?Selection $selection = null,
+		// The two composition rules the "All" folder puts on private conversations (ALG-02, ALG-03).
+		// Off by default: every other recent query keeps the shape it had before the folder existed.
+		public readonly bool $hideInvisibleCompanions = false,
+		public readonly bool $hideJoinedPortalRows = false,
 		private readonly ?TypeRegistry $typeRegistry = null,
 	) {}
 
@@ -56,6 +64,11 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 
 	public function isPossible(): bool
 	{
+		if ($this->selection !== null)
+		{
+			return !$this->selection->isEmpty();
+		}
+
 		return $this->resolveTypeCondition()->isPossible();
 	}
 
@@ -65,11 +78,18 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 
 		$result->where('USER_ID', $this->userId);
 
-		$this->applyTypeConditionFilter($result);
-
-		if (isset($this->parentChatId))
+		if ($this->selection !== null)
 		{
-			$result->where('CHAT.PARENT_ID', $this->parentChatId);
+			$this->applySelectionFilter($result);
+		}
+		else
+		{
+			$this->applyTypeConditionFilter($result);
+
+			if (isset($this->parentChatId))
+			{
+				$result->where('CHAT.PARENT_ID', $this->parentChatId);
+			}
 		}
 
 		if (isset($this->lastMessageDate))
@@ -105,6 +125,61 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 		}
 	}
 
+	/**
+	 * Composite selection: OR of the member branches, each carrying its own recent
+	 * section and root frame. A single branch is applied inline (no OR wrapper) so
+	 * the section/personal path stays byte-for-byte the previous single-branch query.
+	 */
+	private function applySelectionFilter(ConditionTree $result): void
+	{
+		$branches = $this->selection->getBranches();
+
+		if ($branches === [])
+		{
+			$result->where(new ExpressionField('ALWAYS_FALSE', '0'), '=', '1');
+
+			return;
+		}
+
+		if (count($branches) === 1)
+		{
+			$this->applyBranchFilter($result, $branches[0]);
+
+			return;
+		}
+
+		$union = Query::filter()->logic(ConditionTree::LOGIC_OR);
+		foreach ($branches as $branch)
+		{
+			$branchTree = new ConditionTree();
+			$this->applyBranchFilter($branchTree, $branch);
+			$union->where($branchTree);
+		}
+
+		$result->where($union);
+	}
+
+	private function applyBranchFilter(ConditionTree $tree, SelectionBranch $branch): void
+	{
+		if ($branch->chatIds !== null)
+		{
+			$tree->whereIn('ITEM_CID', $branch->chatIds);
+		}
+		else
+		{
+			$condition = $this->resolveTypeCondition($branch->typeCondition);
+			if ($condition->hasConditions())
+			{
+				$tree->where((new TypeFilter($condition))->toConditionTree());
+			}
+		}
+
+		if ($branch->parentChatId !== null)
+		{
+			$tree->where('CHAT.PARENT_ID', $branch->parentChatId);
+		}
+	}
+
 	public function prepareQuery(Query $query): void
 	{
 		$query->where($this->prepareFilter());
@@ -124,10 +199,36 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 				->forUser($this->userId, TreeOrigin::forChat('CHAT'))
 				->apply($query);
 		}
+
+		if ($this->hideInvisibleCompanions)
+		{
+			ServiceLocator::getInstance()
+				->get(CompanionVisibilityFilterFactory::class)
+				->forReader($this->userId)
+				->apply($query);
+		}
+
+		if ($this->hideJoinedPortalRows)
+		{
+			(new JoinedPortalRowFilter())->apply($query);
+		}
 	}
 
 	private function canIncludeNestedChats(): bool
 	{
+		if ($this->selection !== null)
+		{
+			foreach ($this->selection->getBranches() as $branch)
+			{
+				if ($branch->chatIds === null && $branch->parentChatId !== self::ROOT_PARENT_CHAT_ID)
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
 		return $this->parentChatId !== self::ROOT_PARENT_CHAT_ID;
 	}
 
@@ -143,13 +244,14 @@ class RecentFilter implements FilterInterface, PrepareQueryInterface
 		};
 	}
 
-	private function resolveTypeCondition(): TypeCondition
+	private function resolveTypeCondition(?string $recentSection = null): TypeCondition
 	{
+		$recentSection ??= $this->recentSection;
 		$condition = $this->typeCondition ?? new TypeCondition();
 
-		if (isset($this->recentSection))
+		if (isset($recentSection))
 		{
-			$sectionCondition = $this->getTypeRegistry()->getConditionByRecentSection($this->recentSection);
+			$sectionCondition = $this->getTypeRegistry()->getConditionByRecentSection($recentSection);
 			$condition = $condition->merge($sectionCondition);
 		}
 

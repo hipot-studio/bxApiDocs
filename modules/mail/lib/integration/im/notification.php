@@ -5,6 +5,10 @@ namespace Bitrix\Mail\Integration\Im;
 use Bitrix\Mail\Helper\AnalyticsHelper;
 use Bitrix\Mail\Internal\Async\Message\MailboxAccessNotificationMessage;
 use Bitrix\Mail\Internal\Async\Message\OrphanedMailboxAutoDisconnectNotificationMessage;
+use Bitrix\Mail\Internal\Async\Message\ScheduledMessageFailedMessage;
+use Bitrix\Mail\Internals\ScheduledMessageTable;
+use Bitrix\Mail\Service\Message\SendFailure;
+use Bitrix\Mail\Service\ScheduledMessage\ScheduledMessageErrorText;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Web\Uri;
@@ -15,16 +19,16 @@ Loc::loadMessages(__FILE__);
 
 class Notification
 {
-	const notifierSchemeTypeMail = 'new_message_v2';
-	const notifierSchemeTypeMailTariffRestrictions = 'tariff_restrictions';
-	const notifyPushTagMailMessage = 'MAIL|MESSAGE|%u';
-	const notifyPushTagMailList = 'MAIL|LIST|%u';
+	public const notifierSchemeTypeMail = 'new_message_v2';
+	public const notifierSchemeTypeMailTariffRestrictions = 'tariff_restrictions';
+	public const notifyPushTagMailMessage = 'MAIL|MESSAGE|%u';
+	public const notifyPushTagMailList = 'MAIL|LIST|%u';
 
 	/**
 	 * CPushManager::SendAgent() takes deferred push rows older than 15 seconds and is scheduled
 	 * every 30 seconds, so 15 minutes is a wide margin for delayed agents and sparse cron.
 	 */
-	const deferredPushCancelWindowSeconds = 900;
+	public const deferredPushCancelWindowSeconds = 900;
 
 	//region General methods
 
@@ -34,26 +38,35 @@ class Notification
 
 		return [
 			'mail' => [
-				self::notifierSchemeTypeMail => [
-					'NAME' => Loc::getMessage('MAIL_NOTIFY_NEW_MESSAGE'),
-					'SITE' => 'Y',
-					'SYSTEM' => 'Y',
-					'MAIL' => 'N',
-					'PUSH' => 'Y',
-					'DISABLED' => [
-						IM_NOTIFY_FEATURE_MAIL,
-					],
+				'PRODUCT_SOURCE' => [
+					'ID' => 'mail',
+					'NAME' => Loc::getMessage('MAIL_NOTIFY_PRODUCT_SOURCE_NAME'),
+					'DESCRIPTION' => Loc::getMessage('MAIL_NOTIFY_PRODUCT_SOURCE_DESCRIPTION'),
+					'ICON' => ['TYPE' => 'named', 'VALUE' => 'mail'],
+					'SORT' => 800,
 				],
-				'imposed_tariff_restrictions_on_the_mailbox' => [
-					'NAME' => Loc::getMessage('MAIL_NOTIFY_IMPOSE_TARIFF_RESTRICTIONS_ON_THE_MAILBOX'),
-					'SITE' => 'Y',
-					'SYSTEM' => 'Y',
-					'MAIL' => 'Y',
-					'PUSH' => 'Y',
-					'DISABLED' => [
-						IM_NOTIFY_FEATURE_PUSH,
-						IM_NOTIFY_FEATURE_MAIL,
-						IM_NOTIFY_FEATURE_SITE,
+				'NOTIFY' => [
+					self::notifierSchemeTypeMail => [
+						'NAME' => Loc::getMessage('MAIL_NOTIFY_NEW_MESSAGE'),
+						'SITE' => 'Y',
+						'SYSTEM' => 'Y',
+						'MAIL' => 'N',
+						'PUSH' => 'Y',
+						'DISABLED' => [
+							IM_NOTIFY_FEATURE_MAIL,
+						],
+					],
+					'imposed_tariff_restrictions_on_the_mailbox' => [
+						'NAME' => Loc::getMessage('MAIL_NOTIFY_IMPOSE_TARIFF_RESTRICTIONS_ON_THE_MAILBOX'),
+						'SITE' => 'Y',
+						'SYSTEM' => 'Y',
+						'MAIL' => 'Y',
+						'PUSH' => 'Y',
+						'DISABLED' => [
+							IM_NOTIFY_FEATURE_PUSH,
+							IM_NOTIFY_FEATURE_MAIL,
+							IM_NOTIFY_FEATURE_SITE,
+						],
 					],
 				],
 			],
@@ -74,6 +87,12 @@ class Notification
 		$url = AnalyticsHelper::addSourceAnalyticsToMessage($url, AnalyticsHelper::ENTITY_TYPE_NOTIFICATION);
 
 		return $url;
+	}
+
+	/** Screen of one scheduled letter, the only place its reason and the way to change it are shown. */
+	private static function getScheduledMessageUrl(int $mailboxId, int $scheduledMessageId): string
+	{
+		return htmlspecialcharsbx(sprintf('/mail/scheduled/%u/%u', $mailboxId, $scheduledMessageId));
 	}
 
 	private static function getMailboxEditUrl(int $mailboxId, bool $absoluteUrl = false): string
@@ -159,7 +178,7 @@ class Notification
 		{
 			return static fn (?string $languageId = null) => Loc::getMessage(
 				'MAIL_PUSH_NOTIFY_NEW_MESSAGE_MULTI',
-				[ '#COUNT#' => $messageCount ],
+				['#COUNT#' => $messageCount],
 				$languageId,
 			);
 		}
@@ -168,7 +187,7 @@ class Notification
 		{
 			return static fn (?string $languageId = null) => Loc::getMessage(
 				'MAIL_PUSH_NOTIFY_NEW_SINGLE_MESSAGE_IN_MAIL_CLIENT',
-				[ '#SUBJECT#' => $message['SUBJECT'] ],
+				['#SUBJECT#' => $message['SUBJECT']],
 				$languageId,
 			);
 		}
@@ -212,7 +231,7 @@ class Notification
 		foreach ($messageIds as $messageId)
 		{
 			\CIMNotify::DeleteBySubTag(
-				self::getNotifySubTag(self::getPushTagForMessageId((int)$messageId), $userId)
+				self::getNotifySubTag(self::getPushTagForMessageId((int)$messageId), $userId),
 			);
 		}
 
@@ -309,7 +328,7 @@ class Notification
 					'group' => 'im_notify',
 					'senderName' => Loc::getMessage('MAIL_NOTIFY_NEW_MESSAGE_TITLE'),
 				],
-				['TAG' => 'IM_NOTIFY']
+				['TAG' => 'IM_NOTIFY'],
 			],
 			'PUSH_MESSAGE' => self::getPushMessageForNewMessage($message, $fields['count']),
 			'NOTIFY_MESSAGE_OUT' => empty($message)
@@ -381,7 +400,7 @@ class Notification
 					self::notifyForNewMessagesInMail($id, $fields);
 				}
 			}
-			else if ($type == 'imposed_tariff_restrictions_on_the_mailbox')
+			elseif ($type == 'imposed_tariff_restrictions_on_the_mailbox')
 			{
 				self::notifyForTariffRestrictions($mailboxId);
 			}
@@ -551,7 +570,6 @@ class Notification
 			],
 		]);
 	}
-
 
 	public static function sendPasswordlessRequestNotification(
 		int $userId,
@@ -759,10 +777,15 @@ class Notification
 
 		$phrase = match ($status)
 		{
-			'done' => 'MAIL_NOTIFY_MIGRATION_DONE',
-			'cancelled' => 'MAIL_NOTIFY_MIGRATION_CANCELLED',
-			default => 'MAIL_NOTIFY_MIGRATION_STARTED',
+			'done', 'cancelled' => 'MAIL_NOTIFY_MIGRATION_DONE',
+			'running', 'waiting', 'blocked', 'switching' => 'MAIL_NOTIFY_MIGRATION_STARTED',
+			default => null,
 		};
+		if ($phrase === null)
+		{
+			return;
+		}
+
 		$safeEmail = htmlspecialcharsbx($mailboxEmail);
 		$message = static fn (?string $languageId = null) => Loc::getMessage(
 			$phrase,
@@ -781,6 +804,30 @@ class Notification
 				'COMPONENT_PARAMS' => ['SUBJECT' => $message],
 			],
 		]);
+	}
+
+	public static function notifyAdminAboutDeletedMailhostMailbox(
+		int $adminUserId,
+		int $mailboxId,
+		string $mailboxEmail,
+	): bool
+	{
+		if (!Main\Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		$message = self::getNotificationMessageCallback(
+			'MAIL_NOTIFY_MAILHOST_MAILBOX_DELETED',
+			['#EMAIL#' => htmlspecialcharsbx($mailboxEmail)],
+		);
+		return (int)\CIMNotify::Add([
+			'TO_USER_ID' => $adminUserId,
+			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => 'MAIL|MAILHOST_DELETED|' . $mailboxId,
+			'NOTIFY_MESSAGE' => $message,
+		]) > 0;
 	}
 
 	public static function dispatchOrphanedMailboxAutoDisconnectNotifications(
@@ -828,5 +875,110 @@ class Notification
 				],
 			],
 		]);
+	}
+
+	public static function dispatchScheduledMessageFailedNotification(
+		int $scheduledMessageId,
+		int $authorId,
+		string $subject,
+		string $errorCode,
+		?string $viewUrl = null,
+	): void
+	{
+		(new ScheduledMessageFailedMessage($scheduledMessageId, $authorId, $subject, $errorCode, $viewUrl))
+			->send('mail_scheduled_message_failed')
+		;
+	}
+
+	public static function notifyUserAboutScheduledMessageFailed(
+		int $authorId,
+		int $scheduledMessageId,
+		string $subject,
+		string $errorCode,
+		?string $viewUrl = null,
+	): void
+	{
+		// The mailbox the screen of the letter lives under is read here and not carried through the queue, so
+		// messages already queued keep being processed by the shape they were sent with.
+		if ($viewUrl === null)
+		{
+			$mailboxId = self::getScheduledMessageMailboxId($scheduledMessageId);
+			$viewUrl = $mailboxId > 0 ? self::getScheduledMessageUrl($mailboxId, $scheduledMessageId) : '';
+		}
+		$messagePhrase = $viewUrl === ''
+			? 'MAIL_NOTIFY_SCHEDULED_MESSAGE_FAILED'
+			: 'MAIL_NOTIFY_SCHEDULED_MESSAGE_FAILED_WITH_LINK';
+
+		\CIMNotify::Add([
+			'TO_USER_ID' => $authorId,
+			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => 'MAIL|SCHEDULED_MESSAGE|FAILED|' . $scheduledMessageId,
+			// The reason is resolved inside the callback and not passed in ready: im renders the notification
+			// in the language of its reader, and a text substituted beforehand would carry the language of
+			// the agent that failed to send.
+			'NOTIFY_MESSAGE' => static fn (?string $languageId = null) => Loc::getMessage(
+				$messagePhrase,
+				[
+					'#SUBJECT#' => htmlspecialcharsbx($subject),
+					'#ERROR#' => ScheduledMessageErrorText::getReason($errorCode, $languageId),
+					'#VIEW_URL#' => $viewUrl,
+				],
+				$languageId,
+			),
+		]);
+	}
+
+	/** One notification per letter: a mailbox whose server keeps refusing does not repeat it on every retry. */
+	public static function notifyUserAboutMessageSendFailed(
+		int $authorId,
+		int $messageId,
+		string $subject,
+		string $errorCode,
+	): void
+	{
+		if ($authorId <= 0 || !Main\Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		$viewUrl = $messageId > 0 ? htmlspecialcharsbx(sprintf('/mail/message/%u', $messageId)) : '';
+		$messagePhrase = $viewUrl === ''
+			? 'MAIL_NOTIFY_MESSAGE_SEND_FAILED'
+			: 'MAIL_NOTIFY_MESSAGE_SEND_FAILED_WITH_LINK';
+
+		\CIMNotify::Add([
+			'TO_USER_ID' => $authorId,
+			'NOTIFY_TYPE' => IM_NOTIFY_SYSTEM,
+			'NOTIFY_MODULE' => 'mail',
+			'NOTIFY_TAG' => 'MAIL|MESSAGE|FAILED|' . $messageId,
+			'NOTIFY_MESSAGE' => static fn (?string $languageId = null) => Loc::getMessage(
+				$messagePhrase,
+				[
+					'#SUBJECT#' => htmlspecialcharsbx($subject),
+					'#ERROR#' => SendFailure::getText($errorCode, $languageId),
+					'#VIEW_URL#' => $viewUrl,
+				],
+				$languageId,
+			),
+		]);
+	}
+
+	/** Zero for a letter that is no longer there: a dead address in the notification is worse than none. */
+	private static function getScheduledMessageMailboxId(int $scheduledMessageId): int
+	{
+		if ($scheduledMessageId <= 0)
+		{
+			return 0;
+		}
+
+		$row = ScheduledMessageTable::query()
+			->setSelect(['MAILBOX_ID'])
+			->where('ID', $scheduledMessageId)
+			->setLimit(1)
+			->fetch()
+		;
+
+		return (int)($row['MAILBOX_ID'] ?? 0);
 	}
 }

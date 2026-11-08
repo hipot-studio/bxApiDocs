@@ -55,12 +55,31 @@ class TimeManagementService
 		bool $canRenew = false,
 	): ?Timer
 	{
+		if (!$canStart && !$canRenew)
+		{
+			$existingTimer = $this->timerRepository->get($userId);
+			if (
+				$existingTimer !== null
+				&& (int)$existingTimer->startedAtTs > 0
+				&& (int)$existingTimer->taskId === $taskId
+			)
+			{
+				return $existingTimer;
+			}
+		}
+
 		$this->stopTimer($userId);
 
 		$task = $this->taskRepository->getById($taskId);
 		if ($task === null)
 		{
 			return null;
+		}
+
+		$isInProgress = $task->status === Status::InProgress;
+		if (!$isInProgress && !$canStart && $canRenew)
+		{
+			$this->statusService->renew($taskId, new UpdateConfig($userId));
 		}
 
 		$timer = $this->timerService->start($userId, $taskId);
@@ -74,16 +93,9 @@ class TimeManagementService
 			$this->plannerService->merge($userId, [$taskId], []);
 		}
 
-		if ($task->status !== Status::InProgress)
+		if (!$isInProgress && $canStart)
 		{
-			if ($canStart)
-			{
-				$this->statusService->start($taskId, new UpdateConfig($userId));
-			}
-			elseif ($canRenew)
-			{
-				$this->statusService->renew($taskId, new UpdateConfig($userId));
-			}
+			$this->statusService->start($taskId, new UpdateConfig($userId));
 		}
 
 		$timeSpent = $this->elapsedTimeRepository->getSum($taskId);
@@ -222,6 +234,8 @@ class TimeManagementService
 		}
 
 		$activeTimers = $this->timerRepository->getRunningTimersByTaskId($taskId);
+
+		$userIds = array_unique([...$userIds, ...$activeTimers->getUserIdList()]);
 
 		$timersForUsers = $this->timerRepository->getByUserIds($userIds, $taskId);
 		foreach ($timersForUsers as $timer)

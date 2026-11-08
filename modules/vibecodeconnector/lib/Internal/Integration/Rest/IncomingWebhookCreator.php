@@ -13,8 +13,6 @@ use Bitrix\Vibecodeconnector\Internal\Service\Provisioning\EntryPoint;
 
 final class IncomingWebhookCreator
 {
-	private const ATTRIBUTES = ['vibe24' => 'Y', 'vibecodeconnector' => 'Y'];
-
 	public function __construct(
 		private readonly EntryPoint $entryPoint,
 	) {
@@ -52,7 +50,7 @@ final class IncomingWebhookCreator
 	 */
 	private function buildAttributes(): array
 	{
-		return array_merge(self::ATTRIBUTES, $this->entryPoint->toAttributes());
+		return array_merge(VibecodeArtifactAttributes::ARTIFACT, $this->entryPoint->toAttributes());
 	}
 
 	private function dispatch(AbstractCommand $command): string

@@ -40,6 +40,30 @@ final class UnifiedPanelDescriptorProvider
 	public const OUTPUT_NAMES_PROPERTY = 'OutputNames';
 
 	/**
+	 * Property the relation cards of a node are stored in: the rule containers of its relation ports, keyed
+	 * by port id. The name and the shape are the ones of the complex nodes
+	 * ({@see \Bitrix\Bizproc\Public\Activity\BaseComplexActivity}), because the very same panel writes them
+	 * ({@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Activity\Complex::saveSettingsAction()}) and
+	 * reads them back.
+	 *
+	 * Listed here although only a node whose descriptor declares a relation action ever carries a value: the
+	 * set is what a settings form of an activity is not allowed to drop, and the graph properties above are
+	 * declared for every served node on the same ground. A node offered no relations block keeps the empty
+	 * default and nothing else changes for it. The panel dropping the property itself when the relations
+	 * surface is gone is a save of the panel and passes no settings form at all.
+	 */
+	public const RELATIONS_PROPERTY = 'Relations';
+
+	/**
+	 * Property the verdict of the panel over its own cards is stored in: `Y` while a card the panel saved is
+	 * left unfinished. The name and the shape are the ones of the complex nodes
+	 * ({@see \Bitrix\Bizproc\Public\Activity\BaseComplexActivity}), because the very same panel writes and
+	 * clears it ({@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Activity\Complex::saveSettingsAction()})
+	 * and the very same check reads it ({@see BaseComplexActivity::validateProperties()}).
+	 */
+	public const NOT_FILLED_PROPERTY = 'NotFilled';
+
+	/**
 	 * Triggers whose event carries no real document, so the condition block - it reads document fields -
 	 * is not offered to them. An emitter of `Starter::addEvent()` added later without a document has to be
 	 * listed here, otherwise the user configures a condition that silently never matches;
@@ -56,6 +80,8 @@ final class UnifiedPanelDescriptorProvider
 		'stopworktimetrigger',
 		'absenceleavesicktrigger',
 		'absencevacationtrigger',
+		'newemployeetrigger',
+		'employeedismissaltrigger',
 		// Excluded on a second ground too: its rule check is occupied by the repeated-start guard.
 		'scheduledtrigger',
 		// Emitters passing the synthetic `Workflow` pseudo-document.
@@ -158,9 +184,9 @@ final class UnifiedPanelDescriptorProvider
 	 * children of such a node stays with them ({@see \CBPActivity::validateChild()}) - a template saved while
 	 * the feature was on has to keep publishing after it is switched off.
 	 *
-	 * @param bool $featureAvailable Verdict of the rollout option of the feature
-	 *     (`bizprocdesigner`/`complex_node_connections_available`), read and passed in by the editor: the
-	 *     option belongs to that module ({@see \Bitrix\BizprocDesigner\Internal\Config\Feature}).
+	 * @param bool $featureAvailable Verdict of the designer feature flag
+	 *     \Bitrix\BizprocDesigner\Public\Feature\Node\ComplexNodeConnectionsFlag, read and passed in by the
+	 *     editor through {@see \Bitrix\BizprocDesigner\Internal\Config\Feature}.
 	 */
 	public function isSurfaceAvailableForNode(
 		string $activityCode,
@@ -224,9 +250,20 @@ final class UnifiedPanelDescriptorProvider
 	 * set. The rules property stays in {@see ComplexActivityService::configureRuleProperty()} and is not
 	 * redeclared here.
 	 *
-	 * The order carries nothing: every consumer of the rules addresses them by name
-	 * ({@see ComplexActivityService::resolveRuleProperty()}), not by their position among the properties of
-	 * type {@see FieldType::RULES}.
+	 * Of the order the single thing that matters is that the rules stay the first property of type
+	 * {@see FieldType::RULES} in the set: they are addressed by name, but the fallback of that lookup takes
+	 * the first property of the type ({@see ComplexActivityService::resolveRuleProperty()}, over
+	 * {@see \Bitrix\Bizproc\Public\Activity\Configurator::getFirstPropertyByType()}), and the set carries
+	 * several properties of it - the condition, the filter settings, the graph of the children and the
+	 * relations. Beyond that the order carries nothing.
+	 *
+	 * The `NotFilled` mark belongs to the set for the same reason the data it judges does: the panel writes
+	 * the two in one save, and a verdict parted from its data is worse than either alone. Dropped, an
+	 * unfinished card would stop holding the node out of a publication
+	 * ({@see BaseComplexActivity::validateProperties()}) while staying just as unfinished. Kept, it lives
+	 * exactly as long as the state it describes - the panel clears it on the save that finishes the card
+	 * ({@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Activity\Complex::saveSettingsAction()}), and
+	 * the snapshot is taken off the template the caller already edited, so a cleared mark is never restored.
 	 *
 	 * @param bool $hasInputPort Whether the node has an input port: it decides how the single default
 	 *     rules container is addressed.
@@ -237,7 +274,10 @@ final class UnifiedPanelDescriptorProvider
 			...Container::instance()->getComplexActivityService()->configureRuleProperty($hasInputPort),
 			self::CONDITION_PROPERTY => $this->configureConditionProperty(),
 			...BaseComplexActivity::getFilterServiceProperties(),
+			...BaseComplexActivity::getRelationServiceProperties(),
 			...$this->configureChildGraphProperties(),
+			self::RELATIONS_PROPERTY => $this->configureRelationsProperty(),
+			self::NOT_FILLED_PROPERTY => $this->configureNotFilledProperty(),
 		];
 	}
 
@@ -280,6 +320,45 @@ final class UnifiedPanelDescriptorProvider
 		}
 
 		return $properties;
+	}
+
+	/**
+	 * The relation cards of the node, declared the same way the graph of its children is and for the same
+	 * reason: a node declaring the property itself keeps its own declaration, and one that does not would
+	 * lose what the panel saved on the next load of the process.
+	 *
+	 * Placed behind the rules container, as every other property of type {@see FieldType::RULES} in the set
+	 * is ({@see self::getServiceProperties()}).
+	 */
+	private function configureRelationsProperty(): array
+	{
+		return [
+			'Name' => self::RELATIONS_PROPERTY,
+			'FieldName' => self::RELATIONS_PROPERTY,
+			'Type' => FieldType::RULES,
+			'Default' => [],
+			'Hidden' => true,
+		];
+	}
+
+	/**
+	 * The verdict of the panel over its own cards. A string mark and not a rules container, so it cannot be
+	 * kept out of the settings form the way the payload properties are ({@see FieldType::RULES}): `Hidden`
+	 * is what tells the form it is no control of it, the same as for `FilterReturnPropertiesMap`
+	 * ({@see \Bitrix\Bizproc\Public\Activity\Mixins\NodeFilterResultProperties::getFilterServiceProperties()}).
+	 *
+	 * `N` is the default because that is the value the single reader of the mark substitutes for an absent
+	 * one ({@see BaseComplexActivity::validateProperties()}): a node the panel never marked is filled.
+	 */
+	private function configureNotFilledProperty(): array
+	{
+		return [
+			'Name' => self::NOT_FILLED_PROPERTY,
+			'FieldName' => self::NOT_FILLED_PROPERTY,
+			'Type' => FieldType::STRING,
+			'Default' => 'N',
+			'Hidden' => true,
+		];
 	}
 
 	/**

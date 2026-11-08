@@ -27,11 +27,12 @@ class DetachFile
 
 		$attachId = (int)($parameters['ID'] ?? 0);
 		$entityId = (int)($parameters['ENTITY_ID'] ?? 0);
+		$objectId = (int)($parameters['OBJECT_ID'] ?? 0);
 
 		match ($entityType)
 		{
-			Task::class => (new Action\DetachFileFromTask())($entityId, $attachId),
-			Template::class => (new Action\DetachFileFromTemplate())($entityId, $attachId),
+			Task::class => (new Action\DetachFileFromTask())($entityId, $attachId, $objectId),
+			Template::class => (new Action\DetachFileFromTemplate())($entityId, $attachId, $objectId),
 			default => null,
 		};
 	}

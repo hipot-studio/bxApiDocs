@@ -2,8 +2,10 @@
 
 namespace Bitrix\Crm\Service\EditorAdapter\Normalizer;
 
+use Bitrix\Main\ObjectException;
 use Bitrix\Main\UserField\Dispatcher;
 use Bitrix\Main\UserField\Types\BooleanType;
+use Bitrix\Main\UserField\Types\DateType;
 
 final class UserFieldValueNormalizer extends Base
 {
@@ -21,6 +23,11 @@ final class UserFieldValueNormalizer extends Base
 			if (is_array($value))
 			{
 				$value = array_values($value);
+			}
+
+			if ($this->fieldParams['USER_TYPE_ID'] === DateType::USER_TYPE_ID)
+			{
+				$value = $this->normalizeDateValue($value);
 			}
 			elseif ($this->fieldParams['USER_TYPE_ID'] === BooleanType::USER_TYPE_ID)
 			{
@@ -44,5 +51,27 @@ final class UserFieldValueNormalizer extends Base
 			'SIGNATURE' => $fieldSignature,
 			'IS_EMPTY' => false,
 		];
+	}
+
+	private function normalizeDateValue(mixed $value): mixed
+	{
+		if (is_array($value))
+		{
+			return array_map(fn($singleValue) => $this->normalizeDateValue($singleValue), $value);
+		}
+
+		if ($value === null || $value === '')
+		{
+			return $value;
+		}
+
+		try
+		{
+			return DateType::onAfterFetch($this->fieldParams, ['VALUE' => $value]);
+		}
+		catch (ObjectException)
+		{
+			return $value;
+		}
 	}
 }

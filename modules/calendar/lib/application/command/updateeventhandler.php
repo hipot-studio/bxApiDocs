@@ -8,6 +8,7 @@ use Bitrix\Calendar\Access\Model\EventModel;
 use Bitrix\Calendar\Application\AttendeeService;
 use Bitrix\Calendar\Core\Builders\EventBuilderFromArray;
 use Bitrix\Calendar\Core\Event\Event;
+use Bitrix\Calendar\Core\Event\LegacyLocationAvailabilityCheckerInterface;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Mappers\Factory;
 use Bitrix\Calendar\Core\Section\Section;
@@ -19,12 +20,15 @@ use Bitrix\Calendar\Internals\Exception\ExtranetPermissionDenied;
 use Bitrix\Calendar\Internals\Exception\LocationBusy;
 use Bitrix\Calendar\Internals\Exception\PermissionDenied;
 use Bitrix\Calendar\Internals\Exception\SectionNotFound;
-use Bitrix\Calendar\Rooms\AccessibilityManager;
 use Bitrix\Calendar\Util;
 use Bitrix\Main\DI\ServiceLocator;
 
 class UpdateEventHandler implements CommandHandler
 {
+	public function __construct(private readonly LegacyLocationAvailabilityCheckerInterface $locationAvailabilityChecker)
+	{
+	}
+
 	private bool $canEdit;
 	private bool $canEditAttendees;
 	private bool $canEditLocation;
@@ -39,6 +43,7 @@ class UpdateEventHandler implements CommandHandler
 
 		$section = $this->getSection($mapperFactory, $command);
 		$event = $this->getEvent($mapperFactory, $command->getId());
+		$this->checkTargetSectionAccess($event, $section, $command->getUserId());
 		$entryFields = $this->convertToArray($event, $mapperFactory);
 		$currentFields = $entryFields;
 
@@ -67,8 +72,10 @@ class UpdateEventHandler implements CommandHandler
 			'currentEventDateFrom' => $command->getCurrentDateFrom(),
 			'sendInvitesToDeclined' => $command->isSendInvitesAgain(),
 			'requestUid' => $command->getRequestUid(),
-			'checkLocationOccupancy' => $command->isCheckLocationOccupancy(),
+			'checkLocationOccupancy' => $command->getOccupancyCheckMode(),
+			'checkLocationOccupancyPermission' => true,
 			'userId' => \CCalendar::GetUserId(),
+			'attendees' => $entryFields['ATTENDEES'] ?? null,
 		]);
 
 		if ($updatedEvent === null)
@@ -137,8 +144,28 @@ class UpdateEventHandler implements CommandHandler
 		$attendeeService = new AttendeeService();
 		$attendeeCodes = $attendeeService->getAttendeeAccessCodes($command->getAttendeesEntityList(), $command->getUserId());
 		$attendees = \CCalendar::GetDestinationUsers($attendeeCodes);
-		$isMeeting = $attendeeService->isMeeting($attendeeCodes, $section, $command->getUserId());
 		$attendeesAndCodes = $attendeeService->excludeAttendees($attendees, $attendeeCodes, $command->getExcludeUsers());
+		$notSelectableProjectCodes = $attendeeService->getNotSelectableProjectAccessCodes(
+			$entryFields['ATTENDEES_CODES'] ?? [],
+			$command->getUserId(),
+		);
+		if (!empty($notSelectableProjectCodes))
+		{
+			$attendeesAndCodes['codes'] = array_values(array_unique(array_merge(
+				$attendeesAndCodes['codes'],
+				$notSelectableProjectCodes,
+			)));
+			$attendeesAndCodes['attendees'] = \CCalendar::GetDestinationUsers($attendeesAndCodes['codes']);
+			$excludeUsers = $attendeeService->getExcludeUsers(
+				$attendeesAndCodes['attendees'],
+				$command->getExcludeUsers(),
+			);
+			$attendeesAndCodes['attendees'] = array_diff($attendeesAndCodes['attendees'], $excludeUsers);
+		}
+		$isMeeting = $attendeeService->isMeeting(array_values(array_unique(array_merge(
+			$attendeeCodes,
+			$notSelectableProjectCodes,
+		))), $section, $command->getUserId());
 
 		$entryFields['ATTENDEES_CODES'] = $attendeesAndCodes['codes'];
 		$entryFields['ATTENDEES'] = $attendeesAndCodes['attendees'];
@@ -176,7 +203,10 @@ class UpdateEventHandler implements CommandHandler
 			'TZ_FROM' => $command->getTimeZoneFrom(),
 			'TZ_TO' => $command->getTimeZoneTo(),
 		];
-		$isLocationBusy = !AccessibilityManager::checkAccessibility($command->getLocation(), ['fields' => $params]);
+		$isLocationBusy =
+			$command->getOccupancyCheckMode() !== 'N'
+			&& !$this->locationAvailabilityChecker->isAvailable($command->getLocation(), $params)
+		;
 		if ($isLocationBusy)
 		{
 			throw new LocationBusy();
@@ -194,6 +224,30 @@ class UpdateEventHandler implements CommandHandler
 		$this->canEditLocation = $controller->check(ActionDictionary::ACTION_EVENT_EDIT_LOCATION, $model);
 
 		if (!($this->canEdit || $this->canEditAttendees || $this->canEditLocation))
+		{
+			throw new PermissionDenied();
+		}
+	}
+
+	private function checkTargetSectionAccess(Event $event, Section $section, int $userId): void
+	{
+		// A move happens only in editBaseFields (canEdit branch) when the event
+		// calendar type matches the target section type and the section changes.
+		$isMove = $this->canEdit
+			&& $event->getCalendarType() === $section->getType()
+			&& $section->getId() !== $event->getSection()->getId();
+		if (!$isMove)
+		{
+			return;
+		}
+
+		$model = EventModel::createNew()
+			->setOwnerId($section->getOwner()?->getId() ?? 0)
+			->setSectionId($section->getId())
+			->setSectionType($section->getType() ?? '')
+		;
+
+		if (!(new EventAccessController($userId))->check(ActionDictionary::ACTION_EVENT_ADD, $model))
 		{
 			throw new PermissionDenied();
 		}
@@ -251,16 +305,30 @@ class UpdateEventHandler implements CommandHandler
 		return $section;
 	}
 
-	private function notifyEventAuthor(Factory $mapperFactory, Event $updatedEvent, int $userId, array $currentFields): void
+	private function isEventAuthorNotified(Event $event, int $userId): bool
 	{
-		$isMeeting = $updatedEvent->isMeeting();
-		$meetingHostId = $updatedEvent->getEventHost()?->getId();
-		$type = $updatedEvent->getCalendarType();
+		$meetingHostId = $event->getEventHost()?->getId();
 
-		if (!($isMeeting && $meetingHostId && $userId !== $meetingHostId && $type === 'user'))
+		return $event->isMeeting()
+			&& !empty($meetingHostId)
+			&& $userId !== $meetingHostId
+			&& $event->getCalendarType() === Dictionary::CALENDAR_TYPE['user']
+		;
+	}
+
+	private function notifyEventAuthor(
+		Factory $mapperFactory,
+		Event $updatedEvent,
+		int $userId,
+		array $currentFields,
+	): void
+	{
+		if (!$this->isEventAuthorNotified($updatedEvent, $userId))
 		{
 			return;
 		}
+
+		$meetingHostId = $updatedEvent->getEventHost()?->getId();
 
 		// TODO: refactor all this crap in the future
 		$entryFields = $mapperFactory->getEvent()->convertToArray($updatedEvent);
@@ -270,7 +338,8 @@ class UpdateEventHandler implements CommandHandler
 			return;
 		}
 
-		$fromTo = \CCalendarEvent::GetEventFromToForUser($entryFields, $userId);
+		// the notification goes to the meeting host, so its time must be built for the host
+		$fromTo = \CCalendarEvent::GetEventFromToForUser($entryFields, $meetingHostId);
 		\CCalendarNotify::Send([
 			'mode' => 'change_notify',
 			'name' => $entryFields['NAME'] ?? null,

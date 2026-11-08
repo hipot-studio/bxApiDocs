@@ -10,6 +10,7 @@ use Bitrix\Tasks\Internals\Notification\User;
 use Bitrix\Tasks\Internals\Notification\UserRepositoryInterface;
 use Bitrix\Tasks\Internals\Registry\GroupRegistry;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
+use Bitrix\Tasks\Util\DateTime\RecipientDateTimeFormatter;
 
 class TaskUpdated
 {
@@ -108,34 +109,19 @@ class TaskUpdated
 					case 'DEADLINE':
 					case 'START_DATE_PLAN':
 					case 'END_DATE_PLAN':
-						$recepientTimeZoneOffset = $userRepository->getUserTimeZoneOffset($recepient->getId());
-						// $arChanges ALREADY contains server time, no need to substract user timezone again
-						$utsFromValue = $value['FROM_VALUE'];// - $curUserTzOffset;
-						$utsToValue = $value['TO_VALUE'];// - $curUserTzOffset;
-						// Make bitrix timestamp for given user
-						$bitrixTsFromValue = $utsFromValue + $recepientTimeZoneOffset;
-						$bitrixTsToValue = $utsToValue + $recepientTimeZoneOffset;
-
-						$timeDescription = '';
-						if($utsFromValue > 360000) // is correct timestamp?
-						{
-							$fromValueAsString = \Bitrix\Tasks\UI::formatDateTime(
-								$bitrixTsFromValue, '^'.\Bitrix\Tasks\UI::getDateTimeFormat()
-							);
-							$timeDescription .= $fromValueAsString;
-						}
-
-						$timeDescription .= ' --> ';
-
-						if($utsToValue > 360000) // is correct timestamp?
-						{
-							$toValueAsString = \Bitrix\Tasks\UI::formatDateTime(
-								$bitrixTsToValue, '^'.\Bitrix\Tasks\UI::getDateTimeFormat()
-							);
-							$timeDescription .= $toValueAsString;
-						}
-
-						$tmpStr .= $timeDescription;
+						$utsFromValue = (int)$value['FROM_VALUE'];
+						$utsToValue = (int)$value['TO_VALUE'];
+						[$fromValue, $toValue] = RecipientDateTimeFormatter::formatManyForRecipient(
+							[
+								$utsFromValue > 360000 ? $utsFromValue : 0,
+								$utsToValue > 360000 ? $utsToValue : 0,
+							],
+							$recepient->getId(),
+							$recepient->getLang(),
+							'^' . \Bitrix\Tasks\UI::getDateTimeFormat(),
+							true,
+						);
+						$tmpStr .= $fromValue . ' --> ' . $toValue;
 						break;
 
 					case 'TAGS':

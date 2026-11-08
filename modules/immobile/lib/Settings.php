@@ -3,7 +3,10 @@
 namespace Bitrix\ImMobile;
 
 use Bitrix\Im\V2\Application\Features;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
+use Bitrix\Vibecodeconnector\Public\Service\AvailabilityService;
+use Bitrix\Vibecodeconnector\Public\Service\NewAppsBadgeAvailability;
 
 class Settings
 {
@@ -81,7 +84,59 @@ class Settings
 
 	public static function isVibecodeButtonAvailable(): bool
 	{
-		return \Bitrix\Main\Config\Option::get('immobile', 'is_vibecode_button_available', 'N') === 'Y';
+		if (!Loader::includeModule('vibecodeconnector'))
+		{
+			return false;
+		}
+
+		if (!class_exists(AvailabilityService::class))
+		{
+			// TODO: remove this legacy fallback once vibecodeconnector ships the availability predicate everywhere.
+			return \Bitrix\Main\Config\Option::get('immobile', 'is_vibecode_button_available', 'N') === 'Y';
+		}
+
+		$currentUserId = (int)CurrentUser::get()->getId();
+
+		return (new AvailabilityService())->isAvailableForUser($currentUserId);
+	}
+
+	public static function isVibecodeRecentActionAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'vibecode_recent_action_available', 'N') === 'Y';
+	}
+
+	/**
+	 * Whether the Vibe button carries the counter of the user's new apps. The connector decides:
+	 * the counter gives way to the app chats once they are on, the messenger folder announces the
+	 * novelties instead. A connector without the predicate knows no app chats, so the counter stays.
+	 */
+	public static function isVibecodeNewAppsBadgeAvailable(): bool
+	{
+		if (!Loader::includeModule('vibecodeconnector'))
+		{
+			return false;
+		}
+
+		if (!class_exists(NewAppsBadgeAvailability::class))
+		{
+			return true;
+		}
+
+		return (new NewAppsBadgeAvailability())->isAvailable();
+	}
+
+	public static function isVibecodeAppChatSendPermissionAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get(
+			'immobile',
+			'vibecode_app_chat_send_permission_available',
+			'Y',
+		) === 'Y';
+	}
+
+	public static function isMarkdownNativeRendererAvailable(): bool
+	{
+		return \Bitrix\Main\Config\Option::get('immobile', 'is_markdown_native_renderer_available', 'N') === 'Y';
 	}
 
 	public static function isCopilotSelectModelEnabled(): bool
@@ -118,5 +173,22 @@ class Settings
 	public static function isAutoTaskUIAvailable(): bool
 	{
 		return true;
+	}
+
+	public static function isVideoNotePlaybackRateAvailable(): bool
+	{
+		// Unified flag with the web messenger: im.video_note_playback_rate_available (see Im\V2\Application\Features)
+		if (!Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		// im and immobile are updated independently, so an older im may not ship the predicate yet
+		if (!method_exists(Features::class, 'isVideoNotePlaybackRateAvailable'))
+		{
+			return false;
+		}
+
+		return Features::isVideoNotePlaybackRateAvailable();
 	}
 }

@@ -481,7 +481,8 @@ class FollowUp extends RestController
 
 		/** @var Transcription $transcription */
 		$transcription = null;
-		$outcomes = ['version' => 1];
+		$outcomes = [];
+		$version = 1;
 		$outcomeCollection = OutcomeCollection::getOutcomesByCallId($callId);
 		foreach ($outcomeCollection as $outcome)
 		{
@@ -503,8 +504,15 @@ class FollowUp extends RestController
 			if ($content->hasContent())
 			{
 				$outcomes[$outcome->getType()] = $content->toRestFormat(mentionFormat: FollowUpReader::MENTION_FORMAT_BB);
-				$outcomes['version'] = max($outcomes['version'], $content->getVersion());
+				$version = max($version, $content->getVersion());
 			}
+		}
+
+		// Stamp version only when at least one contentful outcome was collected, so a call
+		// without a follow-up serializes to an empty object instead of {"version": 1}.
+		if ($outcomes !== [])
+		{
+			$outcomes['version'] = $version;
 		}
 
 		if (
@@ -541,7 +549,8 @@ class FollowUp extends RestController
 		$result = [
 			'call' => $this->prepareCallData($call),
 			'tracks' => $this->prepareTracksData($call->getId()),
-			'aiOutcome' => $outcomes,
+			// Force an empty object ({}) rather than an empty array ([]) when there is no outcome.
+			'aiOutcome' => $outcomes === [] ? new \stdClass() : $outcomes,
 		];
 
 		return ['result' => $result];

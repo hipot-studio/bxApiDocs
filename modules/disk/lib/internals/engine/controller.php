@@ -3,9 +3,11 @@
 namespace Bitrix\Disk\Internals\Engine;
 
 use Bitrix\Disk\Internals\Diag;
+use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use \Bitrix\Main\Engine;
 use Bitrix\Main\Engine\Action;
+use Bitrix\Main\Localization\Loc;
 
 class Controller extends Engine\Controller
 {
@@ -20,6 +22,15 @@ class Controller extends Engine\Controller
 	{
 		parent::init();
 		$this->errorCollection = new ErrorCollection();
+	}
+
+	/**
+	 * Loc resolves phrases against the calling file, so the refusal lives here to stay
+	 * available to every descendant controller without a phrase of its own.
+	 */
+	protected function addDeniedError(): void
+	{
+		$this->errorCollection[] = new Error(Loc::getMessage('DISK_CONTROLLER_DENIED_ERROR_MESSAGE'));
 	}
 
 	protected function processBeforeAction(Action $action)

@@ -16,6 +16,7 @@ use Bitrix\Crm\Field;
 use Bitrix\Crm\Format\Money;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Integration\Analytics\Builder;
+use Bitrix\Crm\Integration\Analytics\KanbanCreateOrigin;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfig\DynamicDefaultEntityConfig;
@@ -32,13 +33,17 @@ use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Requisite\EntityLink;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Security\StagePermissions;
+use Bitrix\Crm\Service\ClientRecentCategoryResolver;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Crm\Service\UserPermissions\Event;
 use Bitrix\Crm\Service\Operation;
 use Bitrix\Crm\Service\ParentFieldManager;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Engine\Response\Json;
 use Bitrix\Main\Engine\UrlManager;
@@ -481,6 +486,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		$params = [
 			'entityTypeId' => $this->getEntityTypeID(),
 			'entityTypeName' => $this->factory->getEntityName(),
+			'entityTypeCaption' => $this->factory->getEntityDescription(),
 			'id' => $this->item->getId(),
 			'messages' => $this->getJsMessages(),
 			'signedParameters' => $this->getSignedParameters(),
@@ -1276,7 +1282,14 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 	public function getEditorConfig(): array
 	{
 		$userFieldEntityId = $this->getUserFieldEntityId();
-		$isUserFieldCreationEnabled = Container::getInstance()->getUserPermissions($this->userID)->isAdminForEntity($this->entityTypeId, $this->categoryId);
+		$isUserFieldCreationEnabled = Container::getInstance()
+			->getUserPermissions($this->userID)
+			->configuration()
+			->canManageFields(
+				ConfigurationCallSite::FactoryBasedFieldCreation,
+				ConfigurationScope::ofEntityType($this->entityTypeId, $this->categoryId),
+			)
+		;
 
 		$editorGuid = $this->getEditorGuid();
 
@@ -1613,10 +1626,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 			{
 				/** @var ItemIdentifier[] $processedEntities */
 				$processedEntities = $result->getData()['processedEntities'] ?? [];
-				foreach ($processedEntities as $identifier)
-				{
-					$this->addRecentlyUsedItem($identifier->getEntityTypeId(), $identifier->getEntityId());
-				}
+				$this->addRecentlyUsedItems($processedEntities);
 				/** @var array[] $createdClientEntities - clients created in this submit (CREATED_CLIENT_ENTITIES records) */
 				$createdClientEntities = $result->getData()['createdEntities'] ?? [];
 				$requisiteBinding = (array)($result->getData()['requisiteBinding'] ?? []);
@@ -1666,6 +1676,33 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 				->setItemOption('VIEW_MODE', \Bitrix\Crm\Kanban\ViewMode::MODE_ACTIVITIES)
 				->setItemOption(\Bitrix\Crm\Kanban\Entity\EntityActivities::ACTIVITY_STAGE_ID, $activityViewModeStageId)
 			;
+		}
+
+		$originParams = is_array($data['PARAMS'] ?? null) ? $data['PARAMS'] : [];
+		$originViewMode = $originParams['VIEW_MODE'] ?? \Bitrix\Crm\Kanban\ViewMode::MODE_STAGES;
+		$originViewMode = is_string($originViewMode) ? $originViewMode : '';
+		if ($activityViewModeStageId !== null)
+		{
+			$originParams[\Bitrix\Crm\Kanban\Entity\EntityActivities::ACTIVITY_STAGE_ID] = $activityViewModeStageId;
+		}
+		$columnId = KanbanCreateOrigin::resolveColumnForSave(
+			$originViewMode,
+			$this->factory->isStagesEnabled() ? (string)$this->item->getStageId() : '',
+			$originParams,
+		);
+		if (KanbanCreateOrigin::verifyForSave(
+			$data['KANBAN_CREATE_ORIGIN'] ?? null,
+			$this->userID,
+			$this->entityTypeId,
+			(int)$this->item->getCategoryId(),
+			$columnId,
+			$isNew,
+			$this->isCopyMode(),
+			$this->isConversionMode(),
+			$originViewMode,
+		))
+		{
+			$operation->getContext()->setItemOption('KANBAN_CREATE_ORIGIN', true);
 		}
 
 		$result = $operation->launch();
@@ -1889,6 +1926,7 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 		$setData = [];
 
 		global $USER_FIELD_MANAGER;
+		\CCrmUserType::NormalizeMoneyFieldsForSave($data, $this->factory->getUserFieldsInfo());
 		$USER_FIELD_MANAGER->EditFormAddFields($this->getUserFieldEntityId(), $data, ['FORM' => $data]);
 
 		$parentTypeId = (int)($data['PARENT_TYPE_ID'] ?? 0);
@@ -2068,20 +2106,48 @@ abstract class FactoryBased extends BaseComponent implements Controllerable, Sup
 
 	protected function addRecentlyUsedItem(int $entityTypeId, int $id): void
 	{
+		$identifier = ItemIdentifier::createByParams($entityTypeId, $id);
+		if ($identifier === null)
+		{
+			return;
+		}
+
+		$this->addRecentlyUsedItems([$identifier]);
+	}
+
+	/**
+	 * @param ItemIdentifier[] $identifiers
+	 */
+	protected function addRecentlyUsedItems(array $identifiers): void
+	{
+		if (empty($identifiers))
+		{
+			return;
+		}
+
 		// TODO: need to detect category ID when will implement real category params feature
 		$categoryParams = CCrmComponentHelper::getEntityClientFieldCategoryParams($this->factory->getEntityTypeId());
+		$category = ServiceLocator::getInstance()
+			->get(ClientRecentCategoryResolver::class)
+			->resolve($this->factory->getEntityTypeId(), $this->getComponentName())
+		;
 
-		Entity::addLastRecentlyUsedItems(
-			$this->getComponentName(),
-			mb_strtolower(CCrmOwnerType::ResolveName($entityTypeId)),
-			[
+		foreach ($identifiers as $identifier)
+		{
+			$entityTypeId = $identifier->getEntityTypeId();
+
+			Entity::addLastRecentlyUsedItems(
+				$category,
+				mb_strtolower(CCrmOwnerType::ResolveName($entityTypeId)),
 				[
-					'ENTITY_TYPE_ID' => $entityTypeId,
-					'ENTITY_ID' => $id,
-					'CATEGORY_ID' => $categoryParams[$entityTypeId]['categoryId'] ?? 0,
+					[
+						'ENTITY_TYPE_ID' => $entityTypeId,
+						'ENTITY_ID' => $identifier->getEntityId(),
+						'CATEGORY_ID' => $categoryParams[$entityTypeId]['categoryId'] ?? 0,
+					]
 				]
-			]
-		);
+			);
+		}
 	}
 
 	protected function getOperation(): Operation

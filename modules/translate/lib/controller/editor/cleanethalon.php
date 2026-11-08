@@ -230,8 +230,15 @@ class CleanEthalon
 	private function cleanLangFile($relLangPath): void
 	{
 		$currentLang = Loc::getCurrentLang();
-		$langPath = Translate\IO\Path::replaceLangId($relLangPath, $currentLang);
-		$langFullPath = Translate\IO\Path::tidy(self::$documentRoot. '/'. $langPath);
+		$pathResult = Translate\IO\Path::resolveAllowedLangFile($relLangPath, $currentLang);
+		if (!$pathResult->isSuccess())
+		{
+			$this->addError(new Main\Error(Loc::getMessage('TR_CLEAN_FILE_NOT_LANG', ['#FILE#' => $relLangPath])));
+
+			return;
+		}
+
+		$langFullPath = self::$documentRoot. $pathResult->getData()['path'];
 		$langFullPath = Main\Localization\Translation::convertLangPath($langFullPath, $currentLang);
 
 		// settings
@@ -280,8 +287,13 @@ class CleanEthalon
 					continue;
 				}
 
-				$langPath = Translate\IO\Path::replaceLangId($relLangPath, $langId);
-				$langFullPath = Translate\IO\Path::tidy(self::$documentRoot.'/'.$langPath);
+				$langPathResult = Translate\IO\Path::resolveAllowedLangFile($relLangPath, $langId);
+				if (!$langPathResult->isSuccess())
+				{
+					continue;
+				}
+
+				$langFullPath = self::$documentRoot. $langPathResult->getData()['path'];
 				$langFullPath = Main\Localization\Translation::convertLangPath($langFullPath, $langId);
 
 				try

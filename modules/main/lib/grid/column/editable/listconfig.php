@@ -7,16 +7,23 @@ use Bitrix\Main\Grid\Editor\Types;
 class ListConfig extends Config
 {
 	private array $items;
+	private ?string $emptyValueCaption;
 
 	/**
 	 * @param string[] $items in format `[value => name]`
 	 * @param string|null $type
 	 */
-	public function __construct(string $name, array $items, string $type = Types::DROPDOWN)
+	public function __construct(
+		string $name,
+		array $items,
+		string $type = Types::DROPDOWN,
+		?string $emptyValueCaption = null
+	)
 	{
 		parent::__construct($name, $type);
 
 		$this->items = $items;
+		$this->emptyValueCaption = $emptyValueCaption;
 	}
 
 	/**
@@ -49,6 +56,11 @@ class ListConfig extends Config
 		$result['DATA'] = [
 			'ITEMS' => $this->getItemsAsDropdown(),
 		];
+
+		if (isset($this->emptyValueCaption))
+		{
+			$result['DATA']['EMPTY_VALUE_CAPTION'] = $this->emptyValueCaption;
+		}
 
 		return $result;
 	}

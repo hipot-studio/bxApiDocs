@@ -8,6 +8,7 @@ use Bitrix\Crm\EO_Activity;
 use Bitrix\Crm\Integration\Tasks\TaskObject;
 use Bitrix\Crm\Integration\Tasks\TaskViewedTable;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\ActivityController;
 use Bitrix\Crm\Timeline\Entity\EO_Timeline;
 use Bitrix\Crm\Timeline\Entity\TimelineTable;
@@ -108,7 +109,7 @@ final class Comment extends Base
 			'STORAGE_ELEMENT_IDS' => $timelineParams['TASK_FILE_IDS'],
 		]);
 
-		self::invalidate($this->getCacheKey($timelineParams['TASK_ID']));
+		self::invalidateAll();
 	}
 
 	public function refresh(EO_Activity $activity, Bindings $bindings, array $timelineParams): void
@@ -131,12 +132,18 @@ final class Comment extends Base
 				'STORAGE_ELEMENT_IDS' => $timelineParams['TASK_FILE_IDS'],
 			]);
 
-			self::invalidate($this->getCacheKey($taskId));
+			self::invalidateAll();
 		}
+		$activityData = $activity->collectValues();
 		foreach ($bindings as $identifier)
 		{
-			$this->activityController->sendPullEventOnUpdateScheduled($identifier, $activity->collectValues());
+			if (!Container::getInstance()->getTimelinePusher()->isDetailsPageChannelActive($identifier))
+			{
+				continue;
+			}
 
+			$activityData = $this->activityController->prepareScheduledData($activityData, $identifier);
+			$this->activityController->sendPreparedPullEventOnUpdateScheduled($identifier, $activityData);
 		}
 	}
 
@@ -163,7 +170,7 @@ final class Comment extends Base
 
 		}
 
-		$key = $this->getCacheKey($taskId);
+		$key = $this->getCacheKey($taskId, $identifier);
 		if (isset(self::$cache[$key]))
 		{
 			return self::$cache[$key];

@@ -10,6 +10,7 @@ final class FolderProviderParams
 	public function __construct(
 		public readonly ?DateTime $lastMessageDate = null,
 		public readonly ?int $limit = null,
+		public readonly bool $unreadOnly = false,
 	) {}
 
 	public static function fromArray(array $filter = [], ?int $limit = null): self
@@ -30,6 +31,10 @@ final class FolderProviderParams
 			}
 		}
 
-		return new self(lastMessageDate: $date, limit: $limit);
+		return new self(
+			lastMessageDate: $date,
+			limit: $limit,
+			unreadOnly: isset($filter['unread']) && $filter['unread'] === 'Y',
+		);
 	}
 }

@@ -13,10 +13,14 @@ use Bitrix\Socialnetwork\Collab\Control\Option\OptionFactory;
 use Bitrix\Socialnetwork\Control\Enum\ViewMode;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ConvertChatService;
+use Bitrix\Socialnetwork\V2\Internal\Integration\HumanResources\Service\StructureRelationService;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectTagRepositoryInterface;
+use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityCollection;
+use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Project;
 use Bitrix\Socialnetwork\V2\Internal\Entity\PrivacyType;
 use Bitrix\Socialnetwork\V2\Internal\Service\Notification\ProjectNotificationSettingsService;
+use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\MemberEntityMapper;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectAvatarLegacyPayloadBuilder;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\InitiatorMemberTrait;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\ProjectFeatureToggleService;
@@ -35,6 +39,8 @@ class UpdateProjectService
 		private readonly ProjectFeatureToggleService $projectFeatureToggleService,
 		private readonly ConvertChatService $convertChatService,
 		private readonly ProjectNotificationSettingsService $notificationSettingsService,
+		private readonly MemberEntityMapper $memberEntityMapper,
+		private readonly StructureRelationService $structureRelationService,
 	)
 	{
 	}
@@ -55,6 +61,15 @@ class UpdateProjectService
 		if (!$this->isBaseFeatureAvailable($projectId, $baseFeatureId))
 		{
 			return (new Result())->addError(new Error('Base feature is invalid'));
+		}
+
+		if ($project->tagNames !== null)
+		{
+			$tagValidation = $this->projectTagRepository->validate($project->tagNames);
+			if (!$tagValidation->isSuccess())
+			{
+				return (new Result())->addErrors($tagValidation->getErrors());
+			}
 		}
 
 		$data = ['id' => $projectId];
@@ -120,9 +135,31 @@ class UpdateProjectService
 		$projectData['members'] = $members?->toArray();
 		$projectData['moderatorMembers'] = $project->moderatorMembers?->toArray();
 
+		$memberDiff = $this->projectMemberDiffBuilder->build($projectId, $projectData);
+		$teamsSupportedResult = $this->structureRelationService->validateTeamsSupported(
+			$memberDiff['addMembers'] ?? [],
+		);
+		if (!$teamsSupportedResult->isSuccess())
+		{
+			return $teamsSupportedResult;
+		}
+
+		$visibilityResult = $this->validateTeamsVisibility($project->members, $userId);
+		if (!$visibilityResult->isSuccess())
+		{
+			return $visibilityResult;
+		}
+
+		if (array_key_exists('deleteMembers', $memberDiff))
+		{
+			$memberDiff['deleteMembers'] = $this->filterVisibleMemberCodes(
+				$memberDiff['deleteMembers'],
+				$userId,
+			);
+		}
 		$data = [
 			...$data,
-			...$this->projectMemberDiffBuilder->build($projectId, $projectData),
+			...$memberDiff,
 		];
 
 		$updateCommand = CollabUpdateCommand::createFromArray($data)
@@ -160,7 +197,11 @@ class UpdateProjectService
 
 		if ($project->tagNames !== null)
 		{
-			$this->projectTagRepository->save($projectId, $project->tagNames);
+			$tagResult = $this->projectTagRepository->save($projectId, $project->tagNames);
+			if (!$tagResult->isSuccess())
+			{
+				return (new Result())->addErrors($tagResult->getErrors());
+			}
 		}
 
 		if ($featureStates !== [])
@@ -186,7 +227,14 @@ class UpdateProjectService
 			$this->notificationSettingsService->save($projectId, $project->notifications);
 		}
 
-		return (new Result())->setData(['projectId' => $collab->getId()]);
+		return (new Result())->setData([
+			'projectId' => $collab->getId(),
+			// Membership delta applied by this edit, surfaced so the explicit-edit boundary
+			// (UpdateProjectHandler) can emit member analytics. Copy reuses update() directly and
+			// therefore never reports these as user-driven member changes.
+			'addedMembers' => $this->memberEntityMapper->fromAccessCodes($memberDiff['addMembers'] ?? []),
+			'removedMembers' => $this->memberEntityMapper->fromAccessCodes($memberDiff['deleteMembers'] ?? []),
+		]);
 	}
 
 	private function isBaseFeatureAvailable(int $projectId, string $baseFeatureId): bool
@@ -197,5 +245,44 @@ class UpdateProjectService
 		}
 
 		return $this->projectFeatureToggleService->canSetBaseFeature($projectId, $baseFeatureId);
+	}
+
+	/**
+	 * Every team the client sends is judged, whether or not the project already holds it. Judging only what the
+	 * diff turns into an addition would let success and refusal tell a linked team from an unlinked one, and an
+	 * editor could find a team hidden from them by trying ids.
+	 *
+	 * Visibility, not the right to edit: the provider hands the editor a composition already filtered by
+	 * visibility, so a team the editor sees but may not edit comes back with every save and must not refuse it.
+	 */
+	private function validateTeamsVisibility(?MemberEntityCollection $members, int $userId): Result
+	{
+		$teams = $members?->filterByType(MemberEntityType::Team);
+		if ($teams === null || $teams->isEmpty())
+		{
+			return new Result();
+		}
+
+		return $this->structureRelationService->validateNodesVisibility(
+			$this->memberEntityMapper->toAccessCodes($teams),
+			$userId,
+		);
+	}
+
+	/**
+	 * @param string[] $accessCodes
+	 * @return string[]
+	 */
+	private function filterVisibleMemberCodes(array $accessCodes, int $userId): array
+	{
+		if (empty($accessCodes))
+		{
+			return [];
+		}
+
+		$members = $this->memberEntityMapper->fromAccessCodes($accessCodes);
+		$visibleMembers = $this->structureRelationService->filterVisibleNodesForUser($members, $userId);
+
+		return $this->memberEntityMapper->toAccessCodes($visibleMembers);
 	}
 }

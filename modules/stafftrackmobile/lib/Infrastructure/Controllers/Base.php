@@ -11,7 +11,11 @@ class Base extends Controller
 	{
 		parent::init();
 
-		define('BX_MOBILE', true);
+		// init() runs per controller instance, and a process may build more than one
+		if (!defined('BX_MOBILE'))
+		{
+			define('BX_MOBILE', true);
+		}
 	}
 
 	protected function getDefaultPreFilters(): array

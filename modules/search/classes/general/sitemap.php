@@ -3,13 +3,13 @@ IncludeModuleLangFile(__FILE__);
 
 class CAllSiteMap extends CDBResult
 {
-	var $m_href = '';                //URL for result
-	var $m_error = '';        //Error message
-	var $m_events = [];        //Events cache
-	var $m_errors_count = 0;        //Number of wrong URLs
-	var $m_errors_href = '';        //URL for errors file
+	public $m_href = '';                //URL for result
+	public $m_error = '';        //Error message
+	public $m_events = [];        //Events cache
+	public $m_errors_count = 0;        //Number of wrong URLs
+	public $m_errors_href = '';        //URL for errors file
 
-	function Create($site_id, $max_execution_time, $NS, $arOptions = [])
+	public function Create($site_id, $max_execution_time, $NS, $arOptions = [])
 	{
 		@set_time_limit(0);
 		if (!is_array($NS))
@@ -87,7 +87,7 @@ class CAllSiteMap extends CDBResult
 		if ($arSite = $rsSite->Fetch())
 		{
 			$SERVER_NAME = trim($arSite['SERVER_NAME']);
-			if ($SERVER_NAME == '')
+			if ($SERVER_NAME === '')
 			{
 				$this->m_error = GetMessage('SEARCH_ERROR_SERVER_NAME', ['#SITE_ID#' => '<a href="site_edit.php?LID=' . urlencode($site_id) . '&lang=' . urlencode(LANGUAGE_ID) . '">' . htmlspecialcharsbx($site_id) . '</a>']) . '<br>';
 				return false;
@@ -163,13 +163,13 @@ class CAllSiteMap extends CDBResult
 
 				if ($bBlogNoComments && ($ar['MODULE_ID'] == 'blog'))
 				{
-					if (mb_substr($ar['ITEM_ID'], 0, 1) === 'C')
+					if (str_starts_with($ar['ITEM_ID'], 'C'))
 					{
 						continue;
 					}
 				}
 
-				if (preg_match('/^[a-z]+:\\/\\//', $ar['URL']))
+				if (preg_match('#^[a-z]+://#', $ar['URL']))
 				{
 					$strURL = $ar['URL'];
 				}
@@ -265,7 +265,7 @@ class CAllSiteMap extends CDBResult
 		}
 	}
 
-	function Fetch()
+	public function Fetch()
 	{
 		static $index = false;
 
@@ -277,7 +277,7 @@ class CAllSiteMap extends CDBResult
 				$r['URL'] = $r['SITE_URL'];
 			}
 
-			if (mb_substr($r['URL'], 0, 1) == '=')
+			if (str_starts_with($r['URL'], '='))
 			{
 				foreach ($this->m_events as $arEvent)
 				{
@@ -313,7 +313,7 @@ class CAllSiteMap extends CDBResult
 		return $r;
 	}
 
-	function URLEncode($str, $charset)
+	public function URLEncode($str, $charset)
 	{
 		$strEncodedURL = '';
 		$arUrlComponents = preg_split('#(://|/|\\?|=|&)#', $str, -1, PREG_SPLIT_DELIM_CAPTURE);
@@ -339,14 +339,14 @@ class CAllSiteMap extends CDBResult
 		return $strEncodedURL;
 	}
 
-	function LocationEncode($str)
+	public function LocationEncode($str)
 	{
 		static $search = ['&', "'", '"', '>', '<'];
 		static $replace = ['&amp;', '&apos;', '&quot;', '&gt;', '&lt;'];
 		return str_replace($search, $replace, $str);
 	}
 
-	function TimeEncode($iTime)
+	public function TimeEncode($iTime)
 	{
 		$iTZ = date('Z', $iTime);
 		$iTZHour = intval(abs($iTZ) / 3600);
@@ -355,7 +355,7 @@ class CAllSiteMap extends CDBResult
 		return date('Y-m-d', $iTime) . 'T' . date('H:i:s', $iTime) . $strTZ;
 	}
 
-	function GetURLs($site_id, $ID, $limit=0)
+	public function GetURLs($site_id, $ID, $limit=0)
 	{
 	}
 }

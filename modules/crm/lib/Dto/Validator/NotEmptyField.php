@@ -27,8 +27,12 @@ final class NotEmptyField extends Validator
 	public function validate(array $fields): Result
 	{
 		$result = new Result();
+		if (!array_key_exists($this->fieldToCheck, $fields))
+		{
+			return $result;
+		}
 
-		$value = $fields[$this->fieldToCheck] ?? null;
+		$value = $fields[$this->fieldToCheck];
 		if ($this->isNeedTrim && is_string($value))
 		{
 			$value = preg_replace('/\s+/u', ' ', $value);

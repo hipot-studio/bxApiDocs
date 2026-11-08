@@ -631,15 +631,12 @@ class FilterManager
 	{
 		$result = [];
 
-		$value = trim($value);
+		$value = \Bitrix\Socialnetwork\Item\Workgroup::prepareSearchIndexQuery($value);
 
-		$value = (
-			Search\Content::isIntegerToken($value)
-				? Search\Content::prepareIntegerToken($value)
-				: Search\Content::prepareStringToken($value)
-		);
-
-		if (Search\Content::canUseFulltextSearch($value, Search\Content::TYPE_MIXED))
+		if (
+			$value !== ''
+			&& Search\Content::canUseFulltextSearch($value, Search\Content::TYPE_MIXED)
+		)
 		{
 			$result['*SEARCH_INDEX'] = $value;
 		}

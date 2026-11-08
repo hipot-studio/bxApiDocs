@@ -453,7 +453,7 @@ class Chat extends AbstractEntity
 					*/
 					$message = '';
 				}
-				elseif ($otherUserState == CallUser::STATE_CALLING)
+				elseif ($otherUserState == CallUser::STATE_CALLING || $otherUserState == CallUser::STATE_UNAVAILABLE)
 				{
 					$callDurationSec = $this->call->getDuration();
 					$invitePeriodSec = (int)(Settings::getCallInvitePeriod() / 1000);
@@ -562,6 +562,10 @@ class Chat extends AbstractEntity
 			'avatar' => $this->getAvatar($initiatorId),
 			'avatarColor' => $this->getAvatarColor($initiatorId),
 			'userCounter' => count($this->chatUsers),
+			// Client device-scoped-decline gates read this single server-computed flag
+			// from the canonical Call::isDeviceScopedRinging() predicate, so client and
+			// server never drift (clients must not recombine the raw signals themselves).
+			'isDeviceScoped' => (bool)$this->getCall()?->isDeviceScopedRinging(),
 			'ownerId' => $this->getOwnerId(),
 			'managerIds' => array_values($this->getManagerIds()),
 			'advanced' => [

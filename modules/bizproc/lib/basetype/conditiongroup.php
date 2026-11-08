@@ -5,6 +5,8 @@ namespace Bitrix\Bizproc\BaseType;
 use Bitrix\Bizproc\Activity\Enum\Operator;
 use Bitrix\Bizproc\Automation\Engine\ConditionGroup as EngineConditionGroup;
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Integration\AiAssistant\ConditionOperatorDictionary;
+use Bitrix\Bizproc\Internal\Entity\Activity\SettingType;
 use Bitrix\Main;
 
 /**
@@ -19,7 +21,7 @@ use Bitrix\Main;
  */
 class ConditionGroup extends Base
 {
-	// Mirror of the multi-value limits in EntityFilter (bizproc/lib/activity/mixins/entityfilter.php).
+	// Mirror of the multi-value limits in EntityFilter (bizproc/lib/Activity/Mixins/EntityFilter.php).
 	private const MAX_MULTIPLE_CONDITION_VALUES = 500;
 	private const MAX_MULTIPLE_CONDITION_VALUE_LENGTH = 255;
 	private const MAX_MULTIPLE_CONDITION_JSON_LENGTH = 65535;
@@ -337,5 +339,21 @@ HTML;
 		}
 
 		return ['items' => []];
+	}
+
+	public static function getAiSettingType(): SettingType
+	{
+		return new SettingType(
+			name: static::getType(),
+			description:
+				'The value is a group of conditions, shaped as {"items": [[{"object": ..., "field": ...,'
+				. ' "operator": ..., "value": ...}, joiner], ...]}, where joiner is the string "'
+				. EngineConditionGroup::JOINER_OR . '" or "' . EngineConditionGroup::JOINER_AND . '" and glues'
+				. ' the item to the NEXT one: only the literal "' . EngineConditionGroup::JOINER_OR . '" joins'
+				. ' by OR, anything else - another string, a number, an absent joiner - joins by AND. The joiner'
+				. ' of the last item is never used. The field is addressed by its stable codes, never by its'
+				. ' label.'
+				. ' ' . ConditionOperatorDictionary::contractText('the condition', [Operator::Modified]),
+		);
 	}
 }

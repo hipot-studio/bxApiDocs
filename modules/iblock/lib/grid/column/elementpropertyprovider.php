@@ -16,6 +16,7 @@ class ElementPropertyProvider extends BaseElementProvider
 	protected const PREFIX_ID = 'PROPERTY_';
 
 	protected array $properties;
+	protected array $visibleColumnIds;
 
 	public function prepareColumns(): array
 	{
@@ -83,8 +84,14 @@ class ElementPropertyProvider extends BaseElementProvider
 			}
 			elseif ($row['PROPERTY_TYPE'] === PropertyTable::TYPE_LIST)
 			{
-				$listItems = $this->getPropertyEnumValues($row['ID']);
-				if (!empty($listItems))
+				// enum values are used by the inline editor of a visible column only
+				$isVisible = $this->isColumnVisible($columnId);
+				$listItems = $isVisible ? $this->getPropertyEnumValues($row['ID']) : [];
+				if ($isVisible && empty($listItems))
+				{
+					$description['editable'] = false;
+				}
+				else
 				{
 					$description['type'] =
 						$multiple
@@ -97,11 +104,7 @@ class ElementPropertyProvider extends BaseElementProvider
 						$listItems,
 					);
 				}
-				else
-				{
-					$description['editable'] = false;
-				}
-				unset($listItems);
+				unset($listItems, $isVisible);
 			}
 			elseif ($row['PROPERTY_TYPE'] === PropertyTable::TYPE_ELEMENT)
 			{
@@ -124,6 +127,17 @@ class ElementPropertyProvider extends BaseElementProvider
 		}
 
 		return $this->createColumns($result);
+	}
+
+	protected function isColumnVisible(string $columnId): bool
+	{
+		if (!isset($this->visibleColumnIds))
+		{
+			$options = new Grid\Options($this->getSettings()->getId());
+			$this->visibleColumnIds = array_fill_keys($options->getVisibleColumns(), true);
+		}
+
+		return isset($this->visibleColumnIds[$columnId]);
 	}
 
 	protected function getProperties(): array

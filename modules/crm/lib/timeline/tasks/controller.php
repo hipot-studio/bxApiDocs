@@ -715,8 +715,14 @@ final class Controller extends FactoryBasedController
 			$activity = $activity->collectValues();
 			foreach ($bindings as $identifier)
 			{
+				if (!Container::getInstance()->getTimelinePusher()->isDetailsPageChannelActive($identifier))
+				{
+					continue;
+				}
+
 				$responsibleId = $this->getAssignedByEntity($identifier);
-				$this->activityController->sendPullEventOnUpdateScheduled($identifier, $activity, $responsibleId);
+				$activity = $this->activityController->prepareScheduledData($activity, $identifier);
+				$this->activityController->sendPreparedPullEventOnUpdateScheduled($identifier, $activity, $responsibleId);
 			}
 		}
 	}
@@ -751,7 +757,7 @@ final class Controller extends FactoryBasedController
 				}
 				else
 				{
-					$this->commentActivityProvider->refresh($activity, $bindings, $timelineParams);
+					$this->commentActivityProvider->refresh($activity, new Bindings($identifier), $timelineParams);
 				}
 			}
 		}

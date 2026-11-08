@@ -76,11 +76,9 @@ class OwnerService
 
 		if (!empty($ownerIdsForUpdate))
 		{
-			$this->ownerRepository->setDeleteFlagOnRows(
+			$resultUpdate = $this->ownerRepository->setDeleteFlagOnRows(
 				array_unique($ownerIdsForUpdate), $isDeleted
 			);
-
-			$resultUpdate = new \Bitrix\Main\Result();
 		}
 
 		return [$resultCreate ?? null, $resultUpdate ?? null];

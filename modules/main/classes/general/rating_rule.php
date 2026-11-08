@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Type\Callback;
+
 IncludeModuleLangFile(__FILE__);
 
 class CRatingRule
@@ -164,7 +166,17 @@ class CRatingRule
 		);
 		$DB->Update("b_rating_rule", $arFields_u, "WHERE ID = ".$ID);
 		
-		CAgent::AddAgent("CRatingRule::Apply($ID);", "main", "N", $arRatingRuleConfigs['CONDITION'][$arFields["CONDITION_NAME"]]['REFRESH_TIME'], "", "Y", "");
+		$callback = new Callback([self::class, 'Apply'], [$ID]);
+
+		CAgent::AddAgent(
+			$callback,
+			'main',
+			'N',
+			$arRatingRuleConfigs['CONDITION'][$arFields["CONDITION_NAME"]]['REFRESH_TIME'],
+			'',
+			'Y',
+			''
+		);
 
 		return $ID;
 	}
@@ -236,8 +248,18 @@ class CRatingRule
 			$DB->Update("b_rating_rule", $arFields_u, "WHERE ID = ".$ID);
 		}
 		
-		CAgent::RemoveAgent("CRatingRule::Apply($ID);", "main");
-		CAgent::AddAgent("CRatingRule::Apply($ID);", "main", "N", $arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['REFRESH_TIME'], "", "Y", "");
+		$callback = new Callback([self::class, 'Apply'], [$ID]);
+
+		CAgent::RemoveAgent($callback, 'main');
+		CAgent::AddAgent(
+			$callback,
+			'main',
+			'N',
+			$arRatingRuleConfigs['CONDITION_CONFIG'][$arFields["CONDITION_NAME"]]['REFRESH_TIME'],
+			'',
+			'Y',
+			''
+		);
 
 		return true;
 	}
@@ -256,7 +278,9 @@ class CRatingRule
 		$DB->Query("DELETE FROM b_rating_rule WHERE ID=$ID");
 		$DB->Query("DELETE FROM b_rating_rule_vetting WHERE RULE_ID=$ID");
 
-		CAgent::RemoveAgent("CRatingRule::Apply($ID);", "main");
+		$callback = new Callback([self::class, 'Apply'], [$ID]);
+
+		CAgent::RemoveAgent($callback, 'main');
 		
 		return true;
 	}
@@ -287,7 +311,7 @@ class CRatingRule
 
 			$DB->Query("UPDATE b_rating_rule SET LAST_APPLIED = ".$DB->GetNowFunction()." WHERE ID = $ID");
 		}
-		return "CRatingRule::Apply($ID);";
+		return new Callback([self::class, 'Apply'], [$ID]);
 	}
 
 	// get vetting list

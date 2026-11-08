@@ -3,6 +3,7 @@ namespace Bitrix\Landing\PublicAction;
 
 use Bitrix\Crm\WebForm\EntityFieldProvider;
 use Bitrix\Crm\WebForm\Options;
+use Bitrix\Landing\Error;
 use Bitrix\Landing\PublicActionResult;
 use Bitrix\Main\Loader;
 use Bitrix\Main\UserConsent\Agreement;
@@ -14,6 +15,22 @@ class Form
 	public static function getAgreements()
 	{
 		$result = [];
+		$publicActionResult = new PublicActionResult();
+		$publicActionResult->setResult($result);
+
+		if (!Loader::includeModule('crm'))
+		{
+			return $publicActionResult;
+		}
+
+		if (!static::checkFormPermission())
+		{
+			$error = new Error();
+			$error->addError('ACCESS_DENIED', 'Access denied.');
+			$publicActionResult->setError($error);
+
+			return $publicActionResult;
+		}
 
 		$agreementsIds = array_keys(
 			Agreement::getActiveList()
@@ -28,10 +45,10 @@ class Form
 				'id' => (int)$agreementData['ID'],
 				'name' => (string)$agreementData['NAME'],
 				'labelText' => (string)$agreement->getLabelText(),
+				'code' => (string)($agreementData['CODE'] ?? ''),
 			];
 		}
 
-		$publicActionResult = new PublicActionResult();
 		$publicActionResult->setResult($result);
 
 		return $publicActionResult;

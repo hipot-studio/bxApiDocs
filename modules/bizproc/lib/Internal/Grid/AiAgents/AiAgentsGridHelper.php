@@ -13,6 +13,7 @@ use Bitrix\Bizproc\Internal\Integration\Rag\Service\KnowledgeBaseFileService;
 use Bitrix\Bizproc\Internal\Integration\Rag\Service\KnowledgeBaseService;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\FileTable;
+use Bitrix\Main\Engine\CurrentUser;
 use CBPHelper;
 
 use Bitrix\HumanResources\Enum\DepthLevel;
@@ -30,16 +31,22 @@ use Bitrix\Main\Engine\Response\Converter;
 
 use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateSection;
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Internal\Access\Permission\PermissionDictionary;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Filter\AiAgentsFilter;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Filter\AiAgentsFilterSettings;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Service\TemplateBotUsageService;
+use Bitrix\Bizproc\Internal\Grid\AiAgents\Service\TemplateProjectUsageService;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Settings\AiAgentsSettings;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\Visibility\HiddenAiAgentsRegistry;
 use Bitrix\Bizproc\Internal\Repository\WorkflowTemplate\Query\LaunchedCopyQuery;
+use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Upgrade\UpgradeFeatureToggle;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Version\UpgradeAvailabilityService;
 use Bitrix\Bizproc\Internal\Service\SetupTemplate\SetupTemplateService;
+use Bitrix\Bizproc\Public\Provider\WorkflowTemplate\AiAgentProvider;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateSectionTable;
+use CBPWorkflowTemplateUser;
 
 
 /**
@@ -55,20 +62,30 @@ class AiAgentsGridHelper
 	private UpgradeAvailabilityService $upgradeAvailabilityService;
 	private TemplateBotUsageService $templateBotUsageService;
 	private SetupTemplateService $setupTemplateService;
+	private AiAgentProvider $aiAgentProvider;
+	private TemplateAccessService $templateAccessService;
+	private TemplateProjectUsageService $templateProjectUsageService;
 
 	public function __construct(
 		?HiddenAiAgentsRegistry $hiddenAiAgents = null,
 		?UpgradeAvailabilityService $upgradeAvailabilityService = null,
 		?TemplateBotUsageService $templateBotUsageService = null,
 		?SetupTemplateService $setupTemplateService = null,
+		?AiAgentProvider $aiAgentProvider = null,
+		?TemplateAccessService $templateAccessService = null,
+		?TemplateProjectUsageService $templateProjectUsageService = null,
 	)
 	{
 		$this->navParamName = self::GRID_ID . '_nav';
 		$this->hiddenAiAgents = $hiddenAiAgents ?? ServiceLocator::getInstance()->get(HiddenAiAgentsRegistry::class);
 		$this->upgradeAvailabilityService = $upgradeAvailabilityService ?? new UpgradeAvailabilityService();
-		$this->templateBotUsageService =
-			$templateBotUsageService ?? ServiceLocator::getInstance()->get(TemplateBotUsageService::class);
+		$this->templateBotUsageService
+			= $templateBotUsageService ?? ServiceLocator::getInstance()->get(TemplateBotUsageService::class);
 		$this->setupTemplateService = $setupTemplateService ?? new SetupTemplateService();
+		// The very instance the row actions ask for the transfer right, so the page warmup below reaches them.
+		$this->aiAgentProvider = $aiAgentProvider ?? ServiceLocator::getInstance()->get(AiAgentProvider::class);
+		$this->templateAccessService = $templateAccessService ?? new TemplateAccessService();
+		$this->templateProjectUsageService = $templateProjectUsageService ?? new TemplateProjectUsageService();
 
 		Loader::requireModule('humanresources');
 	}
@@ -333,6 +350,7 @@ class AiAgentsGridHelper
 		$idMapByTemplate = [];
 		$ragFileIds = [];
 		$templateIds = [];
+		$projectIdsByTemplate = [];
 
 		foreach ($templates as $template)
 		{
@@ -345,6 +363,10 @@ class AiAgentsGridHelper
 			}
 
 			$extractedIds = $this->extractIdsFromConstants($template);
+			if ($extractedIds['projectIds'] !== [])
+			{
+				$projectIdsByTemplate[$templateId] = $extractedIds['projectIds'];
+			}
 
 			$allUserIds = [...$allUserIds, ...$extractedIds['userIds']];
 			$allDepartmentIds = [...$allDepartmentIds, ...$extractedIds['departmentIds']];
@@ -359,6 +381,20 @@ class AiAgentsGridHelper
 				'recursiveDepartmentIds' => $extractedIds['recursiveDepartmentIdsFromConstant'],
 				'ragFilesStatuses' => $ragFilesStatuses,
 			];
+		}
+
+		$projectUserIdsByTemplate = $this->templateProjectUsageService->getUserIdsByTemplate(
+			$projectIdsByTemplate,
+			(int)CurrentUser::get()->getId(),
+			true,
+		);
+		foreach ($projectUserIdsByTemplate as $templateId => $userIds)
+		{
+			$idMapByTemplate[$templateId]['usedByUserIds'] = array_values(array_unique([
+				...$idMapByTemplate[$templateId]['usedByUserIds'],
+				...$userIds,
+			]));
+			$allUserIds = [...$allUserIds, ...$userIds];
 		}
 
 		$templateBotIdMap = $this->templateBotUsageService->getBotIdsByTemplate($templateIds, $templates);
@@ -396,18 +432,60 @@ class AiAgentsGridHelper
 			$templateChatsMap,
 		);
 
+		$this->warmupTemplateEditRights($templateIds);
+		$this->warmupTransferRights($templateIds);
+
 		return $this->attachVersionAvailabilityToTemplates($enriched);
 	}
 
 	/**
-	 * Enriches launched copies with DTO-01 upgrade/customization fields
-	 * (hasNewVersion, isCustomized, currentVersionLabel, newVersionLabel).
+	 * @param list<int> $templateIds
+	 */
+	private function warmupTemplateEditRights(array $templateIds): void
+	{
+		$currentUser = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
+
+		$this->templateAccessService->warmupAuthorshipForPermission(
+			$templateIds,
+			PermissionDictionary::BIZPROC_TEMPLATE_EDIT,
+			(int)$currentUser->getId(),
+		);
+	}
+
+	/**
+	 * Batch-warms the transfer-ownership predicate for the whole page up front, so the per-row
+	 * ChangeOwnerAction reads it from the provider instead of asking the database one to three times per
+	 * launched copy (grid hot-path N+1, NFR P95). Same reason and same place as preloadOriginSettings()
+	 * below; the acting user comes from server-side state, exactly as the row action resolves it.
+	 *
+	 * @param list<int> $templateIds
+	 */
+	private function warmupTransferRights(array $templateIds): void
+	{
+		$currentUser = new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
+
+		$this->aiAgentProvider->warmupTransferRights($templateIds, (int)$currentUser->getId());
+	}
+
+	/**
+	 * Enriches launched copies with the DTO-01 fields the version cell and the upgrade action read
+	 * off the row: hasNewVersion, isCustomized, isComparable, hasSystemOrigin, currentVersionLabel,
+	 * newVersionLabel.
+	 *
+	 * Both readers of those fields are closed by the same flag, so a disabled feature skips the
+	 * whole enrichment here rather than at the call sites: the decision stays in one place, and a
+	 * future caller cannot walk around it. Every reader takes the fields as optional.
 	 *
 	 * @param array $templates
 	 * @return array
 	 */
 	private function attachVersionAvailabilityToTemplates(array $templates): array
 	{
+		if (!UpgradeFeatureToggle::isEnabled())
+		{
+			return $templates;
+		}
+
 		// Batch-load ORIGIN_SYSTEM_CODE/VERSION for the whole page in a single query up front, so
 		// the per-row getAvailabilityForRow() below reads them from the service cache instead of
 		// issuing two settings lookups per launched copy (grid hot-path N+1, NFR P95).
@@ -415,8 +493,7 @@ class AiAgentsGridHelper
 
 		foreach ($templates as &$template)
 		{
-			$availability = $this->upgradeAvailabilityService->getAvailabilityForRow($template);
-			$template += $availability->toArray();
+			$template += $this->upgradeAvailabilityService->getAvailabilityForRow($template)->toArray();
 		}
 		unset($template);
 
@@ -424,25 +501,32 @@ class AiAgentsGridHelper
 	}
 
 	/**
-	 * Extracts user and department IDs from a template's constants.
+	 * Extracts user, department and project IDs from a template's constants.
 	 *
 	 * @param array $template A single template data array.
 	 * @return array{
 	 *     userIds: list<int>,
 	 *     departmentIds: list<int>,
-	 *     recursiveDepartmentIds: list<int>
+	 *     recursiveDepartmentIdsFromConstant: list<int>,
+	 *     projectIds: list<int>
 	 * }
 	 */
 	private function extractIdsFromConstants(array $template): array
 	{
 		if (!is_null($template['SYSTEM_CODE']) || empty($template['CONSTANTS']))
 		{
-			return ['userIds' => [], 'departmentIds' => [], 'recursiveDepartmentIdsFromConstant' => []];
+			return [
+				'userIds' => [],
+				'departmentIds' => [],
+				'recursiveDepartmentIdsFromConstant' => [],
+				'projectIds' => [],
+			];
 		}
 
 		$userIds = [];
 		$departmentIds = [];
 		$recursiveDepartmentIds = [];
+		$projectIds = [];
 
 		$documentType = $this->getTemplateDocumentType($template);
 
@@ -453,6 +537,27 @@ class AiAgentsGridHelper
 
 		foreach ($constants as $constantInfo)
 		{
+			if (
+				($constantInfo['Type'] ?? '') === 'project'
+				&& !empty($template['ACTIVATED_BY'])
+				&& !empty($template['ACTIVATED_AT'])
+			)
+			{
+				foreach ((array)($constantInfo['Default'] ?? []) as $value)
+				{
+					if (!is_int($value) && !is_string($value))
+					{
+						continue;
+					}
+
+					$projectId = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+					if ($projectId !== false)
+					{
+						$projectIds[] = $projectId;
+					}
+				}
+			}
+
 			if (($constantInfo['Type'] ?? '') !== FieldType::USER)
 			{
 				continue;
@@ -474,6 +579,7 @@ class AiAgentsGridHelper
 			'userIds' => array_unique($userIds),
 			'departmentIds' => array_unique($departmentIds),
 			'recursiveDepartmentIdsFromConstant' => array_unique($recursiveDepartmentIds),
+			'projectIds' => array_values(array_unique($projectIds)),
 		];
 	}
 

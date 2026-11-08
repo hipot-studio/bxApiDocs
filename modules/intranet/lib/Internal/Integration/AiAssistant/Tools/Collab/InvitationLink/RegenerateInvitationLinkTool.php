@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Intranet\Internal\Integration\AiAssistant\Tools\Collab\InvitationLink;
 
+use Bitrix\AiAssistant\Exceptions\McpException;
 use Bitrix\Intranet\Infrastructure\LinkCodeGenerator;
+use Bitrix\Intranet\Internal\Access\CollabInvitationLinkPermission;
 use Bitrix\Intranet\Internal\Integration\AiAssistant\Dto\Collab\ProjectIdDto;
 use Bitrix\Intranet\Internal\Integration\AiAssistant\Tools\Collab\BaseCollabTool;
 use Bitrix\Main\Event;
@@ -48,6 +50,11 @@ class RegenerateInvitationLinkTool extends BaseCollabTool
 	protected function executeStructuredInternal(int $userId, ...$args): array
 	{
 		$dto = ProjectIdDto::fromArray($args);
+		if (!$this->canManageInvitationLink($userId, $dto->projectId))
+		{
+			throw new McpException('Current user cannot regenerate the invitation link.');
+		}
+
 		$project = $this->resolveProject($userId, $dto->projectId);
 		$linkEntity = $this->generateInvitationLinkEntity($dto->projectId);
 
@@ -66,6 +73,11 @@ class RegenerateInvitationLinkTool extends BaseCollabTool
 			...$this->buildInvitationLinkUrls($userId, $project, $linkEntity->getCode()),
 			'regenerated' => true,
 		];
+	}
+
+	protected function canManageInvitationLink(int $userId, int $projectId): bool
+	{
+		return (new CollabInvitationLinkPermission())->canManage($userId, $projectId);
 	}
 
 	protected function generateInvitationLinkEntity(int $projectId)

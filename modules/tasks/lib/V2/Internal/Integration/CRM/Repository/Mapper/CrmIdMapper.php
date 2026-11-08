@@ -17,7 +17,7 @@ class CrmIdMapper
 			return null;
 		}
 
-		[$entityType, $entityId] = explode('_', $id);
+		[$entityType, $entityId] = array_pad(explode('_', $id, 2), 2, '');
 
 		$entityId = (int)$entityId;
 		$typeId = CCrmOwnerType::ResolveID(CCrmOwnerTypeAbbr::ResolveName($entityType));

@@ -9,6 +9,7 @@ use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
 use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Public\Command\Task\Access\AddObserverCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Access\RequestAccessCommand;
 use Bitrix\Tasks\V2\Public\Provider\Task\AccessRequestProvider;
 
@@ -66,5 +67,30 @@ class Access extends BaseController
 			userId: $this->userId,
 			taskId: (int)$task->getId(),
 		);
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.Task.Access.addObserver
+	 */
+	#[CloseSession]
+	public function addObserverAction(
+		Entity\Task $task,
+		int $userId,
+	): ?array
+	{
+		$result = (new AddObserverCommand(
+			taskId: (int)$task->getId(),
+			currentUserId: $this->userId,
+			candidateId: $userId,
+		))->run();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return ['outcome' => $result->getDataByKey('outcome')->value];
 	}
 }

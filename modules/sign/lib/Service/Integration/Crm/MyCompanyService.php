@@ -11,9 +11,18 @@ use Bitrix\Sign\Item\Integration\Crm\MyCompanyCollection;
 
 final class MyCompanyService
 {
-	public function listWithTaxIds(array $inIds = [], bool $checkRequisitePermissions = true): MyCompanyCollection
+	/**
+	 * @param ?int $limit how many companies to answer with at most; null asks for all of them. The tax
+	 *        id of every company answered is read by a request of its own, so a caller that only
+	 *        offers a list to choose from is better off with a limit.
+	 */
+	public function listWithTaxIds(
+		array $inIds = [],
+		bool $checkRequisitePermissions = true,
+		?int $limit = null,
+	): MyCompanyCollection
 	{
-		$companies = MyCompany::listItems(inIds: $inIds);
+		$companies = MyCompany::listItems(itemsAmount: $limit, inIds: $inIds);
 		$this->appendRequisites($companies, $checkRequisitePermissions);
 
 		return $companies;

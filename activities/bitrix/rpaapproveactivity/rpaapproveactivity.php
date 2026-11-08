@@ -133,8 +133,24 @@ class CBPRpaApproveActivity
 
 	private function extractNextInQueue(): array
 	{
-		$taskUser = array_shift($this->usersQueue);
-		return $taskUser ? $this->applyAlternatives([$taskUser]) : [];
+		$skippedAbsent = false;
+		while ($this->usersQueue)
+		{
+			$users = [array_shift($this->usersQueue)];
+			if ($this->SkipAbsent !== 'Y')
+			{
+				return $users;
+			}
+
+			$this->filterAbsent($users);
+			if ($users)
+			{
+				return $users;
+			}
+			$skippedAbsent = true;
+		}
+
+		return $skippedAbsent ? $this->applyAlternatives([]) : [];
 	}
 
 	private function applyAlternatives(array $users): array
@@ -287,7 +303,7 @@ class CBPRpaApproveActivity
 		$this->LastApprover = 'user_'.$arEventParameters['REAL_USER_ID'];
 
 		$taskService = $this->workflow->GetService('TaskService');
-		$taskService->MarkCompleted($this->taskId, $arEventParameters['REAL_USER_ID'], $approve ? CBPTaskUserStatus::Yes : CBPTaskUserStatus::No);
+		$taskService->markCompleted($this->taskId, $arEventParameters['REAL_USER_ID'], $approve ? CBPTaskUserStatus::Yes : CBPTaskUserStatus::No);
 
 		$approveType = $this->ApproveType;
 		$responsibleType = $this->ResponsibleType;
@@ -380,7 +396,7 @@ class CBPRpaApproveActivity
 			return false;
 		}
 
-		$taskUsers = \CBPTaskService::getTaskUserIds($this->taskId);
+		$taskUsers = $this->getTaskUserIds();
 
 		while ($newUsers = $this->extractNextInQueue())
 		{
@@ -393,12 +409,22 @@ class CBPRpaApproveActivity
 		if ($newUsers)
 		{
 			$taskUsers = array_merge($taskUsers, $newUsers);
-			\CBPTaskService::Update($this->taskId, [
-				'USERS' => $taskUsers,
-			]);
+			$this->updateTaskUsers($taskUsers);
 		}
 
 		return $newUsers ? null : $currentStatus;
+	}
+
+	protected function getTaskUserIds(): array
+	{
+		return \CBPTaskService::getTaskUserIds($this->taskId);
+	}
+
+	protected function updateTaskUsers(array $users): void
+	{
+		\CBPTaskService::Update($this->taskId, [
+			'USERS' => $users,
+		]);
 	}
 
 	private function touchHeadsQueue($currentStatus, $currentUserId): ?bool

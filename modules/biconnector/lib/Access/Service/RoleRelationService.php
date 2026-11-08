@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Access\Service;
 
 use Bitrix\BIConnector\Access\Role\RoleRelationTable;
 use Bitrix\BIConnector\Access\Role\RoleUtil;
+use Bitrix\BIConnector\Access\Table\PermissionCacheResetNotifier;
 use Bitrix\Main\Access\Exception\RoleRelationSaveException;
 use Bitrix\Main;
 
@@ -42,5 +43,9 @@ final class RoleRelationService
 		}
 
 		RoleRelationTable::deleteList(['=RELATION' => $accessCodes]);
+
+		// The cleanup after a deleted org-structure node runs outside a transaction of its own, and it
+		// changes the set of everybody who held a role through those codes.
+		PermissionCacheResetNotifier::notifyChanged();
 	}
 }

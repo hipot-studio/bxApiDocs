@@ -22,7 +22,7 @@ class UserLegalFieldStrategy extends AbstractAliasStrategy
 		'Pos' => ['fieldCode' => 'USER_UF_LEGAL_POSITION', 'fieldType' => FieldType::POSITION],
 		'Addr' => ['fieldCode' => 'USER_UF_LEGAL_ADDRESS', 'fieldType' => FieldType::STRING],
 		'Snils' => ['fieldCode' => 'USER_UF_LEGAL_SNILS', 'fieldType' => FieldType::SNILS],
-		'Inn' => ['fieldCode' => 'USER_UF_LEGAL_INN', 'fieldType' => FieldType::STRING],
+		'Inn' => ['fieldCode' => 'USER_UF_LEGAL_INN', 'fieldType' => FieldType::INN],
 	];
 
 	private const STATIC_REVERSE = [

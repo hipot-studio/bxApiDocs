@@ -9,6 +9,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\OperationTable;
 use Bitrix\Main\TaskOperationTable;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 
 Loc::loadMessages(__FILE__);
 if (!Loader::includeModule('timeman'))
@@ -40,6 +41,13 @@ class TimemanSettingsPermissionsComponent extends \Bitrix\Timeman\Component\Base
 
 	public function executeComponent()
 	{
+		if (!$this->isToolAvailable())
+		{
+			$this->includeComponentTemplate('tool-disabled');
+
+			return;
+		}
+
 		if (!$this->userPermissionsManager->canUpdateSettings())
 		{
 			$this->showError(Loc::getMessage('TIMEMAN_SETTINGS_PERMS_PERMISSIONS_ERROR'));
@@ -136,6 +144,11 @@ class TimemanSettingsPermissionsComponent extends \Bitrix\Timeman\Component\Base
 
 		$this->setTitle(Loc::getMessage('TIMEMAN_SETTINGS_PERMS_TITLE'));
 		$this->includeComponentTemplate();
+	}
+
+	private function isToolAvailable(): bool
+	{
+		return (new Settings())->isToolAvailable(Settings::TOOLS['worktime']);
 	}
 
 	/**

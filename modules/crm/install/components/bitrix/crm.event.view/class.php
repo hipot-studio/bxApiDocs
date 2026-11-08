@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Restriction\AvailabilityManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EventHistory;
@@ -21,7 +22,10 @@ final class CrmEventViewComponent extends \Bitrix\Crm\Component\Base
 
 	protected function compileEventDesc(array $event, bool $useNl2br = true): string
 	{
-		if (mb_strlen($event['EVENT_TEXT_1']) > 255 || mb_strlen($event['EVENT_TEXT_2']) > 255)
+		if (
+			$this->getEventTextVisibleLength($event['EVENT_TEXT_1']) > 255
+			|| $this->getEventTextVisibleLength($event['EVENT_TEXT_2']) > 255
+		)
 		{
 			$desc =
 				'<div id="event_desc_short_'
@@ -60,6 +64,39 @@ final class CrmEventViewComponent extends \Bitrix\Crm\Component\Base
 		}
 
 		return $useNl2br ? nl2br($desc) : $desc;
+	}
+
+	private function getEventTextVisibleLength(string $html): int
+	{
+		return mb_strlen(
+			html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8')
+		);
+	}
+
+	protected function prepareEventTextForDescription(string $text): string
+	{
+		$plainText = TextHelper::convertHtmlToText(
+			TextHelper::encodeSingleUnsupportedAngleBracketTokens($text),
+			true
+		);
+		$parts = preg_split(
+			'/<br\b[^>]*>/isu',
+			$plainText
+		);
+		if ($parts === false)
+		{
+			$parts = [$plainText];
+		}
+
+		$parts = array_map(
+			static fn (string $part): string => htmlspecialcharsbx(
+				html_entity_decode($part, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML5, 'UTF-8'),
+				ENT_COMPAT | ENT_SUBSTITUTE
+			),
+			$parts
+		);
+
+		return implode('<br>', $parts);
 	}
 
 	protected function enrichRelationEvents(array $events): array

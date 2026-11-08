@@ -73,7 +73,38 @@ class FileCollection extends EntityCollection implements DateFilterable
 			]);
 		}
 
-		return new static(array_merge($diskFiles, $preloadDiskFiles), $chatId);
+		$orderedDiskFiles = static::sortDiskFilesByIds(array_merge($diskFiles, $preloadDiskFiles), $diskFilesIds);
+
+		return new static($orderedDiskFiles, $chatId);
+	}
+
+	/**
+	 * The collection is walked as a sequence, so its models must follow the ids they were asked by: the select and
+	 * the preloaded models come in an order of their own.
+	 *
+	 * @param File[] $diskFiles
+	 * @param int[] $diskFilesIds
+	 * @return File[]
+	 */
+	protected static function sortDiskFilesByIds(array $diskFiles, array $diskFilesIds): array
+	{
+		$diskFilesById = [];
+		foreach ($diskFiles as $diskFile)
+		{
+			$diskFilesById[$diskFile->getId()] = $diskFile;
+		}
+
+		$sortedDiskFiles = [];
+		foreach ($diskFilesIds as $diskFileId)
+		{
+			if (isset($diskFilesById[$diskFileId]))
+			{
+				$sortedDiskFiles[] = $diskFilesById[$diskFileId];
+				unset($diskFilesById[$diskFileId]);
+			}
+		}
+
+		return $sortedDiskFiles;
 	}
 
 	public function getDiskFiles(): array

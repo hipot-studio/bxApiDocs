@@ -28,6 +28,7 @@ use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\EntityPreset;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Crm\RequisiteAddress;
+use Bitrix\Crm\V2\Internal\Service\Requisite\ExternalFieldSetFilter;
 use Bitrix\Location\Entity\Address;
 
 Loc::loadMessages(__FILE__);
@@ -888,9 +889,15 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 		/** @var CUserTypeManager */
 		global $USER_FIELD_MANAGER;
 
-		if (isset($this->formData['NAME']))
+		// The form data may come from a source that knows nothing of the preset - an application that
+		// searched the organization up by its registration number - and carry legal details this preset
+		// does not show. Only the form data is narrowed: $this->rawRequisiteData already holds the
+		// requisite as it is stored, and values outside the preset have to stay there.
+		$formData = (new ExternalFieldSetFilter())->filter($this->formData, $this->presetId);
+
+		if (isset($formData['NAME']))
 		{
-			$requisiteName = trim(strval($this->formData['NAME']));
+			$requisiteName = trim(strval($formData['NAME']));
 			if (
 				$this->isPresetChange
 				&& isset($this->rawRequisiteData['NAME'])
@@ -904,33 +911,33 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 			$this->rawRequisiteData['NAME'] = $requisiteName;
 		}
 
-		if (isset($this->formData['PRESET_ID']))
+		if (isset($formData['PRESET_ID']))
 		{
-			$this->rawRequisiteData['PRESET_ID'] = (int) $this->formData['PRESET_ID'];
+			$this->rawRequisiteData['PRESET_ID'] = (int) $formData['PRESET_ID'];
 		}
 
-		if (isset($this->formData['CODE']))
+		if (isset($formData['CODE']))
 		{
-			$this->rawRequisiteData['CODE'] = trim(strval($this->formData['CODE']));
+			$this->rawRequisiteData['CODE'] = trim(strval($formData['CODE']));
 		}
 
-		if (isset($this->formData['XML_ID']))
+		if (isset($formData['XML_ID']))
 		{
-			$this->rawRequisiteData['XML_ID'] = trim(strval($this->formData['XML_ID']));
+			$this->rawRequisiteData['XML_ID'] = trim(strval($formData['XML_ID']));
 		}
 
-		if (isset($this->formData['ACTIVE']))
+		if (isset($formData['ACTIVE']))
 		{
-			$this->rawRequisiteData['ACTIVE'] = ($this->formData['ACTIVE'] === 'Y');
+			$this->rawRequisiteData['ACTIVE'] = ($formData['ACTIVE'] === 'Y');
 		}
 
-		if (isset($this->formData['SORT']))
+		if (isset($formData['SORT']))
 		{
-			$this->rawRequisiteData['SORT'] = (int) $this->formData['SORT'];
+			$this->rawRequisiteData['SORT'] = (int) $formData['SORT'];
 		}
-		if (isset($this->formData['ADDRESS_ONLY']))
+		if (isset($formData['ADDRESS_ONLY']))
 		{
-			$this->rawRequisiteData['ADDRESS_ONLY'] = ($this->formData['ADDRESS_ONLY'] === 'Y') ? 'Y' : 'N';
+			$this->rawRequisiteData['ADDRESS_ONLY'] = ($formData['ADDRESS_ONLY'] === 'Y') ? 'Y' : 'N';
 		}
 
 		// RQ fields
@@ -938,11 +945,11 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 		$fileFields = $this->requisite->getFileFields();
 		foreach ($rqFieldNames as $rqFieldName)
 		{
-			if (isset($this->formData[$rqFieldName]))
+			if (isset($formData[$rqFieldName]))
 			{
 				if (in_array($rqFieldName, $fileFields))
 				{
-					$fileFieldValue = $this->formData[$rqFieldName];
+					$fileFieldValue = $formData[$rqFieldName];
 					if ($fileFieldValue)
 					{
 						$allowedFileIds = \Bitrix\Main\UI\FileInputUtility::instance()->checkFiles(
@@ -953,7 +960,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 							$this->rawRequisiteData[$rqFieldName] = $fileFieldValue;
 						}
 					}
-					if ($this->formData[$rqFieldName . '_del'])
+					if ($formData[$rqFieldName . '_del'])
 					{
 						$this->rawRequisiteData[$rqFieldName] = null;
 					}
@@ -963,10 +970,10 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 					if ($this->isLocationModuleIncluded)
 					{
 						$this->rawRequisiteData[$rqFieldName] = [];
-						if (is_array($this->formData[$rqFieldName]))
+						if (is_array($formData[$rqFieldName]))
 						{
 							$allowedRqAddrTypeMap = array_fill_keys(EntityAddressType::getAllIDs(), true);
-							foreach ($this->formData[$rqFieldName] as $addressTypeId => $addressJson)
+							foreach ($formData[$rqFieldName] as $addressTypeId => $addressJson)
 							{
 								$addressTypeId = (int)$addressTypeId;
 								$locationAddress = null;
@@ -998,7 +1005,7 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 				}
 				else
 				{
-					$this->rawRequisiteData[$rqFieldName] = trim($this->formData[$rqFieldName]);
+					$this->rawRequisiteData[$rqFieldName] = trim($formData[$rqFieldName]);
 				}
 			}
 		}
@@ -1006,13 +1013,13 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 		$USER_FIELD_MANAGER->EditFormAddFields(
 			$this->requisite->getUfId(),
 			$this->rawRequisiteData,
-			['FORM' => $this->formData]
+			['FORM' => $formData]
 		);
 
 		// bank details
-		if (isset($this->formData['BANK_DETAILS']) && is_array($this->formData['BANK_DETAILS']))
+		if (isset($formData['BANK_DETAILS']) && is_array($formData['BANK_DETAILS']))
 		{
-			foreach ($this->formData['BANK_DETAILS'] as $pseudoId => $formFields)
+			foreach ($formData['BANK_DETAILS'] as $pseudoId => $formFields)
 			{
 				$fields = array();
 				$fieldNames = array_merge(
@@ -1900,7 +1907,9 @@ class CCrmRequisiteDetailsComponent extends CBitrixComponent
 	{
 		$params = [];
 
-		$params['~ENABLE_SETTINGS_FOR_ALL'] = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityEditor()->canEditCommonView();
+		// The requisite card is not one of the cards the contextual right of common views covers, so it
+		// names none and keeps the global answer.
+		$params['~ENABLE_SETTINGS_FOR_ALL'] = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->entityEditor()->canEditCommonView(null, null);
 
 		//region CAN_UPDATE_PERSONAL_CONFIGURATION && CAN_UPDATE_COMMON_CONFIGURATION
 		$canUpdatePersonalConfiguration = true;

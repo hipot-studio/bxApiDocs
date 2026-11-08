@@ -30,12 +30,12 @@ interface DataViewRepositoryInterface
 	public function getStorageTypeIds(): array;
 
 	/**
-	 * Batch counterpart of {@see getByStorageTypeId}: loads every requested view in one query.
+	 * Reads only the owner column of every view, without loading the TEXT columns
+	 * (DEFINITION, DELETION_MARKS) or decoding their JSON.
 	 *
-	 * @param int[] $storageTypeIds
-	 * @return array<int, DataView> found views keyed by storage type id
+	 * @return array<int, int|null> owner template id by storage type id, ordered by id ascending
 	 */
-	public function getByStorageTypeIds(array $storageTypeIds): array;
+	public function getOwnerTemplateIds(): array;
 
 	public function save(DataView $dataView): DataView;
 

@@ -552,7 +552,34 @@ HTML;
 	{
 		return new SettingType(
 			name: static::getType(),
-			description: 'The values are references to users in Bitrix24 and have the form "user_{number}", where {number} is the numeric identifier of the user in Bitrix24, for example "user_1" for the user with ID 1',
+			description:
+				'The values are references to users in Bitrix24. Four forms are accepted'
+				. ' (see \CBPHelper::extractUsers).'
+				. ' 1) A direct reference "user_{number}", where {number} is the numeric identifier of the user,'
+				. ' for example "user_1" for the user with ID 1.'
+				. ' 2) An expression "{=Document:FIELD}" pointing at a document field that holds users; it is'
+				. ' resolved when the process runs, so it keeps working when the person changes. The fields'
+				. ' available for a document type are listed by the document.field.list method - the ones of type'
+				. ' "user" are the ones that fit here, and a field name may contain a dot, for example'
+				. ' "{=Document:ASSIGNED_BY.UF_HEAD}" for the head of the responsible person.'
+				. ' 3) A group code "group_{code}", for example "group_UA" for every employee, "group_D{id}" for a'
+				. ' single department, "group_DR{id}" for that department together with all of its sub-departments,'
+				. ' "group_G{id}" for a user group, "group_SG{id}_{A|E|K}" for a social network group. The only'
+				. ' difference between "group_D{id}" and "group_DR{id}" is the sub-departments: both give every'
+				. ' employee who belongs to the department, and neither of them singles out its head. No group code'
+				. ' means "the head of a department" - a head is addressed by an expression on a field that holds'
+				. ' one, as in form 2.'
+				. ' 4) The literal "author", where the setting offers it as its default value: the document service'
+				. ' resolves it to the person the document belongs to, so it only means anything for a block that'
+				. ' works with a document that has one.'
+				. ' There is no directory to look a person up by name.'
+				. ' When the setting is REQUIRED and no specific person is named, look for a value the graph'
+				. ' already offers before giving up: an earlier block may publish an output of this very type -'
+				. ' the person who triggered the process, say - and the outputs of a written block are listed in'
+				. ' its returnProperties. An expression on such an output is a real answer, not a guess.'
+				. ' Only when nothing offers one, leave the setting out and say so in the answer instead of'
+				. ' guessing a number - and check first whether anything downstream reads this block\'s outputs,'
+				. ' because an unfilled required setting can cost the block those outputs.',
 		);
 	}
 }

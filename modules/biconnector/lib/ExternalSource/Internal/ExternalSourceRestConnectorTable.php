@@ -199,6 +199,30 @@ class ExternalSourceRestConnectorTable extends DataManager
 					'title' => Loc::getMessage('EXTERNAL_SOURCE_REST_CONNECTOR_SOURCE_CODE_FIELD'),
 				]
 			),
+			new StringField(
+				'URL_CAPABILITIES',
+				[
+					'validation' => function()
+					{
+						return[
+							new LengthValidator(null, 2048),
+						];
+					},
+					'title' => Loc::getMessage('EXTERNAL_SOURCE_ENTITY_REST_URL_CAPABILITIES_FIELD'),
+				]
+			),
+			new StringField(
+				'URL_AGGREGATED_DATA',
+				[
+					'validation' => function()
+					{
+						return[
+							new LengthValidator(null, 2048),
+						];
+					},
+					'title' => Loc::getMessage('EXTERNAL_SOURCE_ENTITY_REST_URL_AGGREGATED_DATA_FIELD'),
+				]
+			),
 		];
 	}
 

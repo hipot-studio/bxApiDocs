@@ -65,6 +65,10 @@ class Provider
 			'ID',
 			'NAME',
 			'PROJECT',
+			// the filter of the list offers both, and a condition of a field missing here is dropped
+			// without a word: the list then answers as if the user had chosen nothing
+			'VISIBLE',
+			'OPENED',
 			'SCRUM_MASTER_ID',
 			'CLOSED',
 			'SCRUM',

@@ -5,6 +5,7 @@ namespace Bitrix\Sign\Service\Sign;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Entity\AddResult;
 use Bitrix\Main\Error;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Result;
@@ -191,6 +192,38 @@ class BlankService
 		return $this->createFromFile($fileCollection, $scenario, $forTemplate, $hasPlaceholders);
 	}
 
+	/**
+	 * Total size of files still pending in the uploader, taken from their metadata: content is not read.
+	 *
+	 * An unknown, foreign or expired token counts as zero: such a file is rejected later,
+	 * when the blank is created from it.
+	 *
+	 * @param array $files Uploader tokens.
+	 * @return int size in bytes
+	 */
+	public function getUploadedFilesTotalSize(array $files): int
+	{
+		$tokens = array_values(array_filter(
+			$files,
+			static fn($fileId): bool => is_string($fileId) && $fileId !== '',
+		));
+
+		if ($tokens === [] || !Loader::includeModule('ui'))
+		{
+			return 0;
+		}
+
+		$uploader = new \Bitrix\UI\FileUploader\Uploader(new BlankUploadController([]));
+
+		$totalSize = 0;
+		foreach ($uploader->load($tokens) as $loadResult)
+		{
+			$totalSize += $loadResult->getFile()?->getSize() ?? 0;
+		}
+
+		return $totalSize;
+	}
+
 	public function changeBlankTitleByDocument(Document $document, string $title): Result
 	{
 		if ($document->blankId === null)
@@ -221,13 +254,7 @@ class BlankService
 			return new Result();
 		}
 
-		$blank = $this->blankRepository->getById($blankId);
-		if (!$blank)
-		{
-			return new Result();
-		}
-
-		return $this->deleteWithResources($blank);
+		return $this->blankRepository->delete($blankId);
 	}
 
 	public function getPreviewUrl(int $blankId): ?string

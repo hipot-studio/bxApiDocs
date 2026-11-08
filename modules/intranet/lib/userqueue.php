@@ -7,6 +7,7 @@
  */
 namespace Bitrix\Intranet;
 
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -148,7 +149,8 @@ class UserQueue
 	 */
 	public static function isSupportedWorkTime()
 	{
-		return ModuleManager::isModuleInstalled('timeman');
+		return ModuleManager::isModuleInstalled('timeman')
+			&& ToolsManager::getInstance()->checkAvailabilityByToolId('worktime');
 	}
 
 	/**

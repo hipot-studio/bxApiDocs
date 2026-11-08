@@ -84,6 +84,11 @@ abstract class UserFieldAccess
 		return $types;
 	}
 
+	public function getDefaultSettings(array $field): array
+	{
+		return [];
+	}
+
 	public function canReadWithFilter(array $filter): bool
 	{
 		return is_array($this->prepareFilter($filter));

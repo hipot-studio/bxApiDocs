@@ -14,11 +14,15 @@ use Bitrix\Crm\V2\Public\EntityTypeSettings;
 use Bitrix\Crm\V2\Public\Provider\Item\AccessMode;
 use Bitrix\Crm\V2\Public\Provider\Item\CompanyProvider;
 use Bitrix\Crm\V2\Public\Provider\Item\ItemProvider;
+use Bitrix\Crm\V2\Public\Provider\Item\Param\ItemFilter;
 use Bitrix\Crm\V2\Public\Provider\Item\Param\ItemSelect;
+use Bitrix\Crm\V2\Internal\Service\Item\ItemFieldMapper;
 
 class ItemLoader
 {
 	private const BATCH_SIZE = 500;
+	/** @var array<string, array{0: \Bitrix\Rest\V3\Dto\Dto, 1: array<string|int, mixed>, 2: \Bitrix\Rest\V3\Dto\DtoFieldsCollection, 3: array<string, true>}> */
+	private array $relatedDtoMappingContexts = [];
 
 	public function __construct(
 		private readonly ?int $userId = null,
@@ -39,7 +43,7 @@ class ItemLoader
 		$relatedSelect = $select->getRelatedCrmObjectsSelect();
 		if (isset($relatedSelect['myCompany']))
 		{
-			$this->loadMyCompanies($items, $relatedSelect['myCompany']);
+			$this->loadMyCompanies($items, $select);
 		}
 
 		$relatedFieldMap = $this->collectRelatedFieldMap($items, $select);
@@ -48,20 +52,25 @@ class ItemLoader
 			return;
 		}
 
-		$loadedItemsByEntityType = [];
-		foreach ($this->collectIdsByEntityType($relatedFieldMap) as $entityTypeId => $ids)
+		[$groups, $groupKeysByField] = $this->collectRelationGroups($relatedFieldMap, $select);
+		$loadedItemsByGroup = [];
+		foreach ($groups as $groupKey => $group)
 		{
+			$entityTypeId = $group['entityTypeId'];
 			$entityType = EntityType::fromId($entityTypeId);
-			$loadedItemsByEntityType[$entityTypeId] = [];
-			$relatedItemSelect = $this->getRelatedItemSelect($select, $entityTypeId);
-			foreach (array_chunk(array_keys($ids), self::BATCH_SIZE) as $idsChunk)
+			$loadedItemsByGroup[$groupKey] = [];
+			$relatedItemSelect = $this->getRelatedItemSelect($select, $entityTypeId, $group['relationNames']);
+			foreach (array_chunk(array_keys($group['ids']), self::BATCH_SIZE) as $idsChunk)
 			{
-				foreach ($this->loadRelatedItems($entityType, $idsChunk, $relatedItemSelect) as $loadedItem)
+				$loadedItems = $group['allowedCategoryIds'] === null
+					? $this->loadRelatedItems($entityType, $idsChunk, $relatedItemSelect)
+					: $this->loadRelatedItemsInCategories($entityType, $idsChunk, $relatedItemSelect, $group['allowedCategoryIds']);
+				foreach ($loadedItems as $loadedItem)
 				{
 					$loadedItemId = $loadedItem->getId();
 					if ($loadedItemId !== null)
 					{
-						$loadedItemsByEntityType[$entityTypeId][$loadedItemId] = $loadedItem;
+						$loadedItemsByGroup[$groupKey][$loadedItemId] = $loadedItem;
 					}
 				}
 			}
@@ -71,8 +80,14 @@ class ItemLoader
 		{
 			foreach ($relatedByOwner as $ownerId => $relatedDescriptor)
 			{
-				$value = $this->resolveLoadedRelationValue($loadedItemsByEntityType, $relatedDescriptor);
-				if ($fieldName !== 'contacts' && $fieldName !== 'companies')
+				$groupKey = $groupKeysByField[$fieldName] ?? null;
+				$value = $groupKey === null
+					? []
+					: $this->resolveLoadedRelationValue(
+						[$relatedDescriptor['entityTypeId'] => $loadedItemsByGroup[$groupKey]],
+						$relatedDescriptor,
+					);
+				if (!$relatedDescriptor['multiple'])
 				{
 					$value = $value[0] ?? null;
 				}
@@ -91,8 +106,33 @@ class ItemLoader
 	}
 
 	/**
+	 * @param int[] $ids
+	 * @param int[] $allowedCategoryIds
+	 */
+	protected function loadRelatedItemsInCategories(
+		EntityType $entityType,
+		array $ids,
+		ItemSelect $select,
+		array $allowedCategoryIds,
+	): iterable
+	{
+		if ($allowedCategoryIds === [])
+		{
+			return [];
+		}
+
+		return ItemProvider::forEntityType($entityType)
+			->withAccessCheck($this->userId, AccessMode::Restricted)
+			->getList($select, new ItemFilter([
+				'@id' => $ids,
+				'@categoryId' => $allowedCategoryIds,
+			]))
+		;
+	}
+
+	/**
 	 * @param Item[] $items
-	 * @return array<string, array<int, array{owner: Item, entityTypeId: int|null, ids: int[]}>>
+	 * @return array<string, array<int, array{owner: Item, entityTypeId: int|null, ids: int[], multiple: bool}>>
 	 */
 	private function collectRelatedFieldMap(array $items, ItemSelect $select): array
 	{
@@ -105,7 +145,7 @@ class ItemLoader
 				continue;
 			}
 
-			foreach (array_keys($select->getRelatedCrmObjectsSelect()) as $fieldName)
+			foreach ($select->getRelatedCrmObjects() as $fieldName => $relatedDescriptor)
 			{
 				if ($fieldName === 'myCompany')
 				{
@@ -117,6 +157,7 @@ class ItemLoader
 					'owner' => $item,
 					'entityTypeId' => $entityTypeId,
 					'ids' => $ids,
+					'multiple' => $relatedDescriptor['multiple'],
 				];
 			}
 		}
@@ -124,39 +165,189 @@ class ItemLoader
 		return $result;
 	}
 
-	private function getRelatedItemSelect(ItemSelect $select, int $entityTypeId): ItemSelect
+	/** @param string[]|null $relationNames */
+	private function getRelatedItemSelect(ItemSelect $select, int $entityTypeId, ?array $relationNames = null): ItemSelect
 	{
+		$relationNames ??= array_keys(array_filter(
+			$select->getRelatedCrmObjects(),
+			static fn(string $fieldName): bool => $fieldName !== 'myCompany',
+			ARRAY_FILTER_USE_KEY,
+		));
 		$fields = ['id'];
-		foreach ($select->getRelatedCrmObjectsSelect() as $relatedFieldName => $relatedSelect)
+		$relatedEntityType = EntityType::fromId($entityTypeId);
+		$fieldMapper = new ItemFieldMapper();
+		$customFieldDataSelect = [];
+		$loadMultifields = [];
+		$loadContactBindings = false;
+		$loadCompanyBindings = false;
+		$loadObservers = false;
+		$loadEmployee = false;
+		$loadUtm = false;
+		$dictionariesSelect = [];
+		$loadCategoryForStage = false;
+		$lastCommunicationSelect = [];
+		foreach ($select->getRelatedCrmObjects() as $relatedFieldName => $relatedDescriptor)
 		{
-			$relatedEntityTypeId = $this->resolveRelatedFieldType($relatedFieldName);
+			if ($relationNames !== null && !in_array($relatedFieldName, $relationNames, true))
+			{
+				continue;
+			}
+			$relatedEntityTypeId = $relatedDescriptor['entityTypeId'] ?? $this->resolveRelatedFieldType($relatedFieldName);
 			if ($relatedEntityTypeId !== $entityTypeId)
 			{
 				continue;
 			}
-
-			if ($this->shouldLoadRelatedTitle($relatedSelect))
+			if ($relatedDescriptor['select'] === [])
 			{
 				array_push($fields, ...$this->getTitleSourceFields($entityTypeId));
+				array_push($fields, ...$this->getUrlSourceFields($entityTypeId));
+			}
+			if ($relatedFieldName === 'myCompany')
+			{
+				$fields[] = 'isMyCompany';
 			}
 
-			if ($this->shouldLoadRelatedUrl($relatedSelect))
+			foreach ($relatedDescriptor['select'] as $selectedField)
 			{
-				array_push($fields, ...$this->getUrlSourceFields($entityTypeId));
+				[$topLevelField] = explode('.', $selectedField, 2);
+				$mappedTopLevelField = $fieldMapper->mapDtoFieldNameToItem($topLevelField) ?? $topLevelField;
+				if (str_starts_with($topLevelField, 'UF_') && str_ends_with($topLevelField, '_data'))
+				{
+					$customFieldName = substr($topLevelField, 0, -strlen('_data'));
+					$fields[] = $customFieldName;
+					$customFieldDataSelect[$customFieldName] = [];
+
+					continue;
+				}
+				if (ItemFieldMapper::requiresDictionaryLoader($topLevelField))
+				{
+					$dictionariesSelect[$topLevelField] = [];
+					$loadCategoryForStage = $loadCategoryForStage
+						|| in_array($topLevelField, ['stage', 'previousStage'], true);
+				}
+				if (ItemFieldMapper::isEmployeeRelationField($topLevelField))
+				{
+					$loadEmployee = true;
+				}
+				switch ($mappedTopLevelField)
+				{
+					case 'contactBindings':
+						$loadContactBindings = true;
+
+						break;
+					case 'companyBindings':
+						$loadCompanyBindings = true;
+
+						break;
+					case 'observers':
+						$loadObservers = true;
+
+						break;
+					case 'phones':
+						$loadMultifields['phone'] = true;
+
+						break;
+					case 'emails':
+						$loadMultifields['email'] = true;
+
+						break;
+					case 'webs':
+						$loadMultifields['web'] = true;
+
+						break;
+					case 'ims':
+						$loadMultifields['im'] = true;
+
+						break;
+					case 'utm':
+						$loadUtm = true;
+
+						break;
+					case 'lastCommunication':
+						$lastCommunicationField = explode('.', $selectedField, 2)[1] ?? null;
+						if ($lastCommunicationField !== null)
+						{
+							$lastCommunicationSelect[] = $lastCommunicationField;
+						}
+
+						break;
+					case 'id':
+					case 'entityTypeId':
+					case 'canRead':
+						break;
+					case 'stage':
+					case 'previousStage':
+					case 'stageSemantic':
+					case 'source':
+					case 'category':
+					case 'currency':
+					case 'webform':
+						break;
+					case 'title':
+						array_push($fields, ...$this->getTitleSourceFields($entityTypeId));
+
+						break;
+					case 'url':
+						array_push($fields, ...$this->getUrlSourceFields($entityTypeId));
+
+						break;
+					default:
+						$fields[] = $mappedTopLevelField;
+				}
+			}
+		}
+		if (EntityTypeSettings::of($relatedEntityType)->isCategoriesSupported())
+		{
+			$fields[] = 'categoryId';
+		}
+
+		$relatedSelect = new ItemSelect(...array_values(array_unique($fields)));
+		$relatedSelect->withContactBindings($loadContactBindings);
+		$relatedSelect->withCompanyBindings($loadCompanyBindings);
+		$relatedSelect->withEmployee($loadEmployee);
+		$relatedSelect->withObservers($loadObservers);
+		foreach (array_keys($loadMultifields) as $multifield)
+		{
+			match ($multifield)
+			{
+				'phone' => $relatedSelect->withPhones(),
+				'email' => $relatedSelect->withEmails(),
+				'web' => $relatedSelect->withWebs(),
+				'im' => $relatedSelect->withIms(),
+			};
+		}
+		if ($loadUtm)
+		{
+			$relatedSelect->withUtm();
+		}
+		if ($dictionariesSelect !== [])
+		{
+			$relatedSelect->withDictionaries($dictionariesSelect);
+		}
+		if ($lastCommunicationSelect !== [] || $this->hasWholeRelationSelected($select, $entityTypeId, 'lastCommunication'))
+		{
+			$relatedSelect->withLastCommunication(array_values(array_unique($lastCommunicationSelect)));
+		}
+		if ($customFieldDataSelect !== [])
+		{
+			$relatedSelect->withCustomFieldData($customFieldDataSelect);
+		}
+
+		return $relatedSelect;
+	}
+
+	private function hasWholeRelationSelected(ItemSelect $select, int $entityTypeId, string $fieldName): bool
+	{
+		foreach ($select->getRelatedCrmObjects() as $relatedFieldName => $relatedDescriptor)
+		{
+			$relatedEntityTypeId = $relatedDescriptor['entityTypeId'] ?? $this->resolveRelatedFieldType($relatedFieldName);
+			if ($relatedEntityTypeId === $entityTypeId && in_array($fieldName, $relatedDescriptor['select'], true))
+			{
+				return true;
 			}
 		}
 
-		return new ItemSelect(...array_values(array_unique($fields)));
-	}
-
-	private function shouldLoadRelatedTitle(array $select): bool
-	{
-		return $select === [] || in_array('title', $select, true);
-	}
-
-	private function shouldLoadRelatedUrl(array $select): bool
-	{
-		return $select === [] || in_array('url', $select, true);
+		return false;
 	}
 
 	/**
@@ -190,6 +381,8 @@ class ItemLoader
 		return match (true)
 		{
 			$fieldName === 'company' => EntityType::company()->getId(),
+			$fieldName === 'myCompany' => EntityType::company()->getId(),
+			$fieldName === 'deal' => EntityType::deal()->getId(),
 			$fieldName === 'lead' => EntityType::lead()->getId(),
 			$fieldName === 'quote' => EntityType::quote()->getId(),
 			$fieldName === 'contact' || $fieldName === 'contacts' => EntityType::contact()->getId(),
@@ -202,14 +395,21 @@ class ItemLoader
 	}
 
 	/**
-	 * @param array<string, array<int, array{owner: Item, entityTypeId: int|null, ids: int[]}>> $relatedFieldMap
-	 * @return array<int, array<int, true>>
+	 * @param array<string, array<int, array{owner: Item, entityTypeId: int|null, ids: int[], multiple: bool}>> $relatedFieldMap
+	 * @return array{0: array<string, array{entityTypeId: int, allowedCategoryIds: int[]|null, relationNames: string[], ids: array<int, true>}>, 1: array<string, string>}
 	 */
-	private function collectIdsByEntityType(array $relatedFieldMap): array
+	private function collectRelationGroups(array $relatedFieldMap, ItemSelect $select): array
 	{
-		$result = [];
-		foreach ($relatedFieldMap as $relatedByOwner)
+		$groups = [];
+		$groupKeysByField = [];
+		$selectByField = $select->getRelatedCrmObjects();
+		foreach ($relatedFieldMap as $fieldName => $relatedByOwner)
 		{
+			$allowedCategoryIds = $selectByField[$fieldName]['allowedCategoryIds'] ?? null;
+			if ($allowedCategoryIds !== null)
+			{
+				sort($allowedCategoryIds);
+			}
 			foreach ($relatedByOwner as $relatedDescriptor)
 			{
 				$entityTypeId = $relatedDescriptor['entityTypeId'];
@@ -217,18 +417,33 @@ class ItemLoader
 				{
 					continue;
 				}
+				$groupKey = $entityTypeId . ':' . ($allowedCategoryIds === null ? '*' : implode(',', $allowedCategoryIds));
+				$groupKeysByField[$fieldName] = $groupKey;
+				$groups[$groupKey] ??= [
+					'entityTypeId' => $entityTypeId,
+					'allowedCategoryIds' => $allowedCategoryIds,
+					'relationNames' => [],
+					'ids' => [],
+				];
+				$groups[$groupKey]['relationNames'][$fieldName] = $fieldName;
 
 				foreach ($relatedDescriptor['ids'] as $id)
 				{
 					if ($id > 0)
 					{
-						$result[$entityTypeId][$id] = true;
+						$groups[$groupKey]['ids'][$id] = true;
 					}
 				}
 			}
 		}
 
-		return $result;
+		foreach ($groups as &$group)
+		{
+			$group['relationNames'] = array_values($group['relationNames']);
+		}
+		unset($group);
+
+		return [$groups, $groupKeysByField];
 	}
 
 	/**
@@ -241,6 +456,13 @@ class ItemLoader
 			$companyId = method_exists($item, 'getCompanyId') ? (int)$item->getCompanyId() : 0;
 
 			return [EntityType::company()->getId(), $companyId > 0 ? [$companyId] : []];
+		}
+
+		if ($fieldName === 'deal')
+		{
+			$dealId = method_exists($item, 'getDealId') ? (int)$item->getDealId() : 0;
+
+			return [EntityType::deal()->getId(), $dealId > 0 ? [$dealId] : []];
 		}
 
 		if ($fieldName === 'lead')
@@ -344,21 +566,56 @@ class ItemLoader
 	 * @param Item[] $items
 	 * @param string[] $select
 	 */
-	private function loadMyCompanies(array $items, array $select): void
+	private function loadMyCompanies(array $items, ItemSelect $select): void
 	{
 		$myCompanyIdsByOwnerId = $this->collectMyCompanyIdsByOwnerId($items);
-		$companiesById = $myCompanyIdsByOwnerId === []
-			? []
-			: $this->loadMyCompaniesById(
-				array_values(array_unique($myCompanyIdsByOwnerId)),
-				$select,
-			)
-		;
-		$canReadBaseFields = Container::getInstance()
+		$canReadBaseFields = $this->userId === null || Container::getInstance()
 			->getUserPermissions($this->userId)
 			->myCompany()
 			->canReadBaseFields()
 		;
+		$companiesById = $myCompanyIdsByOwnerId === []
+			? []
+			: $this->loadMyCompaniesById(
+				array_values(array_unique($myCompanyIdsByOwnerId)),
+				$this->getRelatedItemSelect($select, EntityType::company()->getId(), ['myCompany']),
+			)
+		;
+		$restrictedMyCompanyIds = array_values(array_filter(
+			array_unique($myCompanyIdsByOwnerId),
+			static fn(int $id): bool => !isset($companiesById[$id]) || !$companiesById[$id]->canRead(),
+		));
+		$companiesById = array_filter(
+			$companiesById,
+			static fn(Company $company): bool => $company->getIsMyCompany() === true,
+		);
+		if (!$canReadBaseFields && $restrictedMyCompanyIds !== [])
+		{
+			$companiesById = $this->restoreRestrictedMyCompanies(
+				$companiesById,
+				$this->loadMyCompaniesById(
+					$restrictedMyCompanyIds,
+					new ItemSelect('id', 'isMyCompany'),
+					false,
+				),
+			);
+		}
+		if ($canReadBaseFields && $restrictedMyCompanyIds !== [])
+		{
+			$baseCompaniesById = $this->loadMyCompaniesById(
+				$restrictedMyCompanyIds,
+				$this->getBaseMyCompanySelect($select),
+				false,
+			);
+			foreach ($baseCompaniesById as $id => $baseCompany)
+			{
+				$company = $companiesById[$id] ?? null;
+				if (($company === null || !$company->canRead()) && $baseCompany->getIsMyCompany() === true)
+				{
+					$companiesById[$id] = $this->toBaseRestrictedMyCompany($baseCompany);
+				}
+			}
+		}
 
 		foreach ($items as $item)
 		{
@@ -373,11 +630,29 @@ class ItemLoader
 			$myCompany = $companiesById[$myCompanyIdsByOwnerId[$ownerId]] ?? null;
 			if ($myCompany !== null && !$canReadBaseFields)
 			{
-				$myCompany->markAsRestricted();
+				$myCompany = $this->toRestrictedMyCompany($myCompany);
 			}
 
 			$item->internalSet('myCompany', $myCompany);
 		}
+	}
+
+	/**
+	 * @param array<int, Company> $companiesById
+	 * @param array<int, Company> $identityCompaniesById
+	 * @return array<int, Company>
+	 */
+	private function restoreRestrictedMyCompanies(array $companiesById, array $identityCompaniesById): array
+	{
+		foreach ($identityCompaniesById as $id => $identityCompany)
+		{
+			if ($identityCompany->getIsMyCompany() === true)
+			{
+				$companiesById[$id] = $this->toRestrictedMyCompany($identityCompany);
+			}
+		}
+
+		return $companiesById;
 	}
 
 	/**
@@ -410,16 +685,21 @@ class ItemLoader
 	 * @param string[] $select
 	 * @return array<int, Company>
 	 */
-	private function loadMyCompaniesById(array $ids, array $select): array
+	private function loadMyCompaniesById(array $ids, ItemSelect $select, bool $withAccessCheck = true): array
 	{
-		$itemSelect = new ItemSelect(...$this->getMyCompanySourceFields($select));
 		$result = [];
 		foreach (array_chunk($ids, self::BATCH_SIZE) as $idsChunk)
 		{
-			$collection = (new CompanyProvider())->getByIds($idsChunk, $itemSelect);
+			$provider = new CompanyProvider();
+			if ($withAccessCheck && $this->userId !== null)
+			{
+				$provider = $provider->withAccessCheck($this->userId, AccessMode::Restricted);
+			}
+
+			$collection = $provider->getByIds($idsChunk, $select);
 			foreach ($collection as $company)
 			{
-				if (!$company instanceof Company || $company->getId() === null || $company->getIsMyCompany() !== true)
+				if (!$company instanceof Company || $company->getId() === null)
 				{
 					continue;
 				}
@@ -431,22 +711,45 @@ class ItemLoader
 		return $result;
 	}
 
-	/**
-	 * @param string[] $select
-	 * @return string[]
-	 */
-	private function getMyCompanySourceFields(array $select): array
+	private function getBaseMyCompanySelect(ItemSelect $select): ItemSelect
 	{
+		$selectedFields = $select->getRelatedCrmObjects()['myCompany']['select'] ?? [];
 		$fields = ['id', 'isMyCompany'];
-		if ($select === [] || in_array('title', $select, true))
+		if ($selectedFields === [] || in_array('title', $selectedFields, true))
 		{
-			$fields[] = 'title';
+			array_push($fields, ...$this->getTitleSourceFields(EntityType::company()->getId()));
 		}
-		if ($select === [] || in_array('url', $select, true))
+		if ($selectedFields === [] || in_array('url', $selectedFields, true))
 		{
-			$fields[] = 'categoryId';
+			array_push($fields, ...$this->getUrlSourceFields(EntityType::company()->getId()));
 		}
 
-		return array_values(array_unique($fields));
+		return new ItemSelect(...array_values(array_unique($fields)));
 	}
+
+	private function toRestrictedMyCompany(Company $company): Company
+	{
+		$restricted = new Company();
+		$id = $company->getId();
+		if ($id !== null)
+		{
+			$restricted->setId($id);
+		}
+		$restricted->markAsRestricted();
+
+		return $restricted;
+	}
+
+	private function toBaseRestrictedMyCompany(Company $company): Company
+	{
+		$restricted = (new Company())
+			->setId((int)$company->getId())
+			->setTitle($company->getTitle())
+			->setCategoryId($company->getCategoryId())
+		;
+		$restricted->markAsRestrictedWithBaseFields();
+
+		return $restricted;
+	}
+
 }

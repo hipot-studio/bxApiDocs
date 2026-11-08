@@ -15,11 +15,12 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Web\Json;
 use Bitrix\Rest\Internal\Integration\UI\CopilotService;
-use Bitrix\Rest\Internal\Service\VibePlus\IntegrationUpsellHelperCodeProvider;
+use Bitrix\Rest\Internal\Integration\Bitrix24\UpsellHelperCodeProvider;
 use Bitrix\Rest\Preset\Data\Placement;
 use Bitrix\Rest\Preset\Data\Webhook;
 use Bitrix\Rest\Preset\IntegrationTable;
 use Bitrix\Rest\Preset\Provider;
+use Bitrix\Rest\AppLangTable;
 use Bitrix\Rest\Marketplace\Url;
 
 Loc::loadMessages(__FILE__);
@@ -272,15 +273,47 @@ class RestIntegrationGridComponent extends CBitrixComponent implements Controlle
 		$res = IntegrationTable::getList($paramsGetList);
 
 		$nav->setRecordCount($res->getCount());
+		$itemList = $res->fetchAll();
+		$appIds = array_values(
+			array_unique(
+				array_filter(
+					array_map(
+						static fn(array $item): int => (int)($item['APP_ID'] ?? 0),
+						$itemList
+					)
+				)
+			)
+		);
+		$appIdsWithPage = [];
+		if ($isAdmin && !empty($appIds))
+		{
+			$appLangResult = AppLangTable::getList([
+				'select' => [
+					'APP_ID',
+					'MENU_NAME',
+				],
+				'filter' => [
+					'@APP_ID' => $appIds,
+				],
+			]);
+			while ($appLang = $appLangResult->fetch())
+			{
+				if (trim((string)$appLang['MENU_NAME']) !== '')
+				{
+					$appIdsWithPage[(int)$appLang['APP_ID']] = true;
+				}
+			}
+		}
+
 		$eventList = array_column(Webhook::getList(), 'name', 'id');
 		$widgetList = array_column(Placement::getList(), 'name', 'id');
 
 		$availabilityTool = \Bitrix\Rest\Infrastructure\IntegrationAvailabilityTool::createByDefault();
-		$upsellHelperCodeProvider = new IntegrationUpsellHelperCodeProvider();
+		$upsellHelperCodeProvider = new UpsellHelperCodeProvider();
 		$mapper = new Bitrix\Rest\Model\Mapper\Integration();
 		$items = [];
 
-		while ($item = $res->Fetch())
+		foreach ($itemList as $item)
 		{
 			$integrationEntity = $mapper->mapArrayToEntity($item);
 			$item['TITLE'] = htmlspecialcharsbx($item['TITLE']);
@@ -385,7 +418,7 @@ class RestIntegrationGridComponent extends CBitrixComponent implements Controlle
 					'DEFAULT' => false,
 				];
 
-				if ($item['APPLICATION_ONLY_API'] === 'N')
+				if (!empty($appIdsWithPage[(int)$item['APP_ID']]))
 				{
 					$actions[] = [
 						'TEXT' => Loc::getMessage('REST_INTEGRATION_GRID_ACTION_APP_OPEN'),

@@ -29,6 +29,7 @@ use Bitrix\Main\UI\AccessRights\DataProvider;
 class RolePermissionService
 {
 	private const DB_ERROR_KEY = "HUMAN_RESOURCES_CONFIG_PERMISSIONS_DB_ERROR";
+	private const INVALID_SETTINGS_ERROR = 'Invalid role permission settings format.';
 
 	private ?RoleRelationService $roleRelationService;
 	private ?PermissionRepository $permissionRepository;
@@ -61,10 +62,12 @@ class RolePermissionService
 	 *     accessRights: array<array{id: string, value: string}> }> $permissionSettings
 	 *
 	 * @return void
-	 * @throws SqlQueryException|WrongStructureItemException
+	 * @throws SqlQueryException|WrongStructureItemException|\DomainException
 	 */
 	public function saveRolePermissions(array &$permissionSettings): void
 	{
+		$this->assertPermissionSettingsShape($permissionSettings);
+
 		$existingRoleIds = array_values(array_filter(
 			array_map(
 				static fn(array $setting): int => (int)$setting['id'],
@@ -134,6 +137,53 @@ class RolePermissionService
 		}
 
 		$this->cleanCaches();
+	}
+
+	/**
+	 * @throws \DomainException
+	 */
+	private function assertPermissionSettingsShape(array $permissionSettings): void
+	{
+		foreach ($permissionSettings as $setting)
+		{
+			if (!is_array($setting) || !isset($setting['id'], $setting['title']))
+			{
+				throw new \DomainException(self::INVALID_SETTINGS_ERROR);
+			}
+
+			if (!is_scalar($setting['id']) || !is_scalar($setting['title']))
+			{
+				throw new \DomainException(self::INVALID_SETTINGS_ERROR);
+			}
+
+			$this->assertAccessRightsShape($setting['accessRights'] ?? null);
+		}
+
+		$this->roleRelationService->assertSettingsShape($permissionSettings);
+	}
+
+	/**
+	 * @throws \DomainException
+	 */
+	private function assertAccessRightsShape(mixed $accessRights): void
+	{
+		if ($accessRights === null)
+		{
+			return;
+		}
+
+		if (!is_array($accessRights))
+		{
+			throw new \DomainException(self::INVALID_SETTINGS_ERROR);
+		}
+
+		foreach ($accessRights as $right)
+		{
+			if (!is_array($right) || !is_scalar($right['id'] ?? null))
+			{
+				throw new \DomainException(self::INVALID_SETTINGS_ERROR);
+			}
+		}
 	}
 
 	/**

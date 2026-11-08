@@ -17,7 +17,15 @@ interface UserRepository
 
 	public function findUsersByIds(array $ids): UserCollection;
 
+	public function findRealUsersByIds(array $ids): UserCollection;
+
 	public function findUsersByFilter(array $filter): UserCollection;
+
+	public function findRealUsersByFilter(array $filter): UserCollection;
+
+	public function findSystemUsersByIds(array $ids): UserCollection;
+
+	public function findSystemUsersByFilter(array $filter): UserCollection;
 
 	public function findUsersByEmails(array $emails): UserCollection;
 
@@ -54,4 +62,6 @@ interface UserRepository
 	 * @throws DeleteFailedException
 	 */
 	public function delete(User $user): void;
+
+	public function hasMoreThanOneActiveUser(): bool;
 }

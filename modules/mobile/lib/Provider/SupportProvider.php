@@ -11,6 +11,9 @@ use Bitrix\Main\DI\ServiceLocator;
 
 class SupportProvider
 {
+	/** @var array<int, bool> */
+	private static array $enabledByUserId = [];
+
 	private ?int $userId;
 
 	public function __construct()
@@ -20,6 +23,11 @@ class SupportProvider
 
 	/**
 	 * Checks if the bot is enabled.
+	 *
+	 * The feature flag and the bot lookup ask this twice within one request, and the answer costs a
+	 * walk of the imbot session of the user. It is kept per user id: a single process serves more
+	 * than one of them.
+	 *
 	 * @return bool
 	 * @throws LoaderException
 	 */
@@ -30,9 +38,7 @@ class SupportProvider
 			return false;
 		}
 
-		$supportService = $this->getSupportService();
-
-		return $supportService?->isEnabled() && $supportService?->isActiveSupportForUser($this->userId);
+		return self::$enabledByUserId[$this->userId] ??= $this->resolveEnabled();
 	}
 
 	/**
@@ -59,6 +65,13 @@ class SupportProvider
 		$events = Tourist::getEvents();
 
 		return array_key_exists('show_support', $events);
+	}
+
+	private function resolveEnabled(): bool
+	{
+		$supportService = $this->getSupportService();
+
+		return $supportService?->isEnabled() && $supportService?->isActiveSupportForUser($this->userId);
 	}
 
 	/**

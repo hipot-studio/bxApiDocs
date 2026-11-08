@@ -18,14 +18,15 @@ class Uuid
 	/** @var string */
 	private $uuid;
 
-	/** @var DateTime */
-	private $dateCreate;
-
 	/** @var int */
 	private $messageId;
 
 	/** @var bool */
 	private $messageLoaded = false;
+
+	private ?DateTime $dateCreate = null;
+
+	private ?DateTime $reservationDateCreate = null;
 
 	/** @var Connection */
 	protected $connection;
@@ -44,14 +45,14 @@ class Uuid
 		$this->tableName = $this->sqlHelper->forSql(MessageUuidTable::getTableName());
 	}
 
+	public function getUuid(): string
+	{
+		return $this->uuid;
+	}
+
 	private function setMessageId(?int $messageId): void
 	{
 		$this->messageId = $messageId;
-	}
-
-	private function setDateCreate(DateTime $dateCreate): void
-	{
-		$this->dateCreate = $dateCreate;
 	}
 
 	/**
@@ -62,8 +63,9 @@ class Uuid
 	 */
 	public function add(): bool
 	{
+		$dateCreate = new DateTime();
 		$preparedData = $this->sqlHelper->prepareInsert($this->tableName, [
-			'DATE_CREATE' => (new DateTime()),
+			'DATE_CREATE' => $dateCreate,
 			'UUID' => $this->uuid,
 		]);
 
@@ -75,6 +77,13 @@ class Uuid
 			)
 		);
 		$rowsAffected = $this->connection->getAffectedRowsCount();
+		if ($rowsAffected > 0)
+		{
+			$this->dateCreate = $dateCreate;
+			$this->reservationDateCreate = $dateCreate;
+			$this->setMessageId(null);
+			$this->messageLoaded = true;
+		}
 
 		return $rowsAffected > 0;
 	}
@@ -89,6 +98,41 @@ class Uuid
 		$regex = '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/';
 
 		return preg_match($regex, $uuid) === 1;
+	}
+
+	/**
+	 * Loads existing UUID records in one query.
+	 *
+	 * @param string[] $uuids
+	 * @return array<string, self>
+	 */
+	public static function getExistingByUuids(array $uuids): array
+	{
+		$uuids = array_values(array_unique(array_filter($uuids, static function ($uuid): bool {
+			return is_string($uuid) && self::validate($uuid);
+		})));
+		if (empty($uuids))
+		{
+			return [];
+		}
+
+		$records = MessageUuidTable::query()
+			->setSelect(['UUID', 'MESSAGE_ID', 'DATE_CREATE'])
+			->whereIn('UUID', $uuids)
+			->fetchAll()
+		;
+
+		$services = [];
+		foreach ($records as $record)
+		{
+			$service = new self($record['UUID']);
+			$service->messageLoaded = true;
+			$service->setMessageId(isset($record['MESSAGE_ID']) ? (int)$record['MESSAGE_ID'] : null);
+			$service->dateCreate = $record['DATE_CREATE'] instanceof DateTime ? $record['DATE_CREATE'] : null;
+			$services[$record['UUID']] = $service;
+		}
+
+		return $services;
 	}
 
 	/**
@@ -112,7 +156,7 @@ class Uuid
 
 		$this->messageLoaded = true;
 		$this->setMessageId($uuidRecord['MESSAGE_ID']);
-		$this->setDateCreate($uuidRecord['DATE_CREATE']);
+		$this->dateCreate = $uuidRecord['DATE_CREATE'];
 	}
 
 	/**
@@ -131,25 +175,38 @@ class Uuid
 	}
 
 	/**
-	 * Updates date create in the record by UUID.
-	 */
-	private function updateDateCreate(): void
-	{
-		MessageUuidTable::update($this->uuid, [
-			'DATE_CREATE' => new DateTime()
-		]);
-	}
-
-	/**
 	 * Updates message_id for the certain UUID.
 	 *
 	 * @param int $messageId Message id.
 	 */
 	public function updateMessageId(int $messageId): void
 	{
-		MessageUuidTable::update($this->uuid, [
-			'MESSAGE_ID' => $messageId
-		]);
+		if ($this->messageLoaded && $this->messageId === $messageId)
+		{
+			return;
+		}
+
+		if ($this->reservationDateCreate instanceof DateTime)
+		{
+			$uuid = $this->sqlHelper->forSql($this->uuid);
+			$reservationDateSql = $this->sqlHelper->convertToDbDateTime($this->reservationDateCreate);
+			$this->connection->queryExecute(
+				"UPDATE {$this->tableName} SET MESSAGE_ID = {$messageId} "
+				. "WHERE UUID = '{$uuid}' AND MESSAGE_ID IS NULL AND DATE_CREATE = {$reservationDateSql}"
+			);
+			if ($this->connection->getAffectedRowsCount() <= 0)
+			{
+				return;
+			}
+		}
+		else
+		{
+			MessageUuidTable::update($this->uuid, [
+				'MESSAGE_ID' => $messageId
+			]);
+		}
+		$this->setMessageId($messageId);
+		$this->messageLoaded = true;
 	}
 
 	/**
@@ -165,25 +222,23 @@ class Uuid
 	}
 
 	/**
-	 * Checks if the UUID record is expired.
-	 *
-	 * @return bool
+	 * Deletes an unfinished UUID reservation without touching a completed mapping.
 	 */
-	private function isExpired(): bool
+	public function deleteIfPending(): bool
 	{
-		if (!$this->messageLoaded)
+		if (!$this->reservationDateCreate instanceof DateTime)
 		{
-			$this->loadMessage();
+			return false;
 		}
 
-		if ($this->dateCreate instanceof DateTime)
-		{
-			$dateCreateTimestamp = $this->dateCreate->getTimestamp();
+		$uuid = $this->sqlHelper->forSql($this->uuid);
+		$reservationDateSql = $this->sqlHelper->convertToDbDateTime($this->reservationDateCreate);
+		$this->connection->queryExecute(
+			"DELETE FROM {$this->tableName} "
+			. "WHERE UUID = '{$uuid}' AND MESSAGE_ID IS NULL AND DATE_CREATE = {$reservationDateSql}"
+		);
 
-			return (time() - $dateCreateTimestamp) > self::TTL;
-		}
-
-		return false;
+		return $this->connection->getAffectedRowsCount() > 0;
 	}
 
 	/**
@@ -193,14 +248,73 @@ class Uuid
 	 */
 	public function updateIfExpired(): bool
 	{
-		if ($this->isExpired())
+		$now = new DateTime();
+		if (!$this->messageLoaded)
 		{
-			$this->updateDateCreate();
-
-			return true;
+			$this->loadMessage();
+		}
+		if (
+			!$this->dateCreate instanceof DateTime
+			|| ($now->getTimestamp() - $this->dateCreate->getTimestamp()) <= self::TTL
+		)
+		{
+			return false;
 		}
 
-		return false;
+		$expiredAt = (clone $now)->add('-' . self::TTL . ' seconds');
+		$uuid = $this->sqlHelper->forSql($this->uuid);
+		$nowSql = $this->sqlHelper->convertToDbDateTime($now);
+		$expiredAtSql = $this->sqlHelper->convertToDbDateTime($expiredAt);
+
+		$this->connection->queryExecute(
+			"UPDATE {$this->tableName} SET DATE_CREATE = {$nowSql} "
+			. "WHERE UUID = '{$uuid}' AND MESSAGE_ID IS NULL AND DATE_CREATE < {$expiredAtSql}"
+		);
+		if ($this->connection->getAffectedRowsCount() <= 0)
+		{
+			return false;
+		}
+
+		$this->setMessageId(null);
+		$this->messageLoaded = true;
+		$this->dateCreate = $now;
+		$this->reservationDateCreate = $now;
+
+		return true;
+	}
+
+	/**
+	 * Atomically verifies and refreshes an owned reservation before side effects.
+	 */
+	public function renewReservation(): bool
+	{
+		if (!$this->reservationDateCreate instanceof DateTime)
+		{
+			return false;
+		}
+
+		$renewedAt = (new DateTime())->add('+1 second');
+		if ($renewedAt->getTimestamp() <= $this->reservationDateCreate->getTimestamp())
+		{
+			$renewedAt = (clone $this->reservationDateCreate)->add('+1 second');
+		}
+
+		$uuid = $this->sqlHelper->forSql($this->uuid);
+		$renewedAtSql = $this->sqlHelper->convertToDbDateTime($renewedAt);
+		$reservationDateSql = $this->sqlHelper->convertToDbDateTime($this->reservationDateCreate);
+		$this->connection->queryExecute(
+			"UPDATE {$this->tableName} SET DATE_CREATE = {$renewedAtSql} "
+			. "WHERE UUID = '{$uuid}' AND MESSAGE_ID IS NULL AND DATE_CREATE = {$reservationDateSql}"
+		);
+		if ($this->connection->getAffectedRowsCount() <= 0)
+		{
+			return false;
+		}
+
+		$this->reservationDateCreate = $renewedAt;
+		$this->dateCreate = $renewedAt;
+
+		return true;
 	}
 
 	/**

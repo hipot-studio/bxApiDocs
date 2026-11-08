@@ -20,12 +20,13 @@ class SetMonthlyByMonthDaysTaskRecurrenceTool extends BaseRecurrenceTool
 		;
 	}
 
-	protected function buildDto(array $args): MakeTaskRecurringDto
+	protected function buildDto(array $args, int $userId): MakeTaskRecurringDto
 	{
 		return MakeTaskRecurringDto::fromArray([
 			...$args,
 			'period' => Period::Monthly->value,
 			'monthlyType' => MonthlyType::MonthDay->value,
+			'userId' => $userId,
 		]);
 	}
 }

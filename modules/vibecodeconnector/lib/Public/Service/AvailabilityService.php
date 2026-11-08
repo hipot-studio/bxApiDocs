@@ -4,31 +4,35 @@ declare(strict_types=1);
 
 namespace Bitrix\Vibecodeconnector\Public\Service;
 
-use Bitrix\Main\Config\Option;
-use Bitrix\Main\Type\DateTime;
-use Bitrix\Vibecodeconnector\Internal\Integration\Bitrix24\VibePlusPolicy;
+use Bitrix\Main\Config\Feature;
+use Bitrix\Vibecodeconnector\Internal\Config\Feature\VibeBalance;
 use Bitrix\Vibecodeconnector\Internal\Integration\Intranet\IntranetGate;
 use Bitrix\Vibecodeconnector\Internal\Repository\Pairing\PairingRepository;
 use Bitrix\Vibecodeconnector\Internal\Service\Auth\CloudSharedVerifier;
+use Bitrix\Vibecodeconnector\Internal\Service\Availability\PortalReadiness;
 
 class AvailabilityService
 {
 	/** @var array<int, bool> */
 	private static array $allowedMemo = [];
 
+	private ?PortalReadiness $portalReadiness = null;
+
 	public function __construct(
 		private readonly PairingRepository $pairingRepository = new PairingRepository(),
 		private readonly CloudSharedVerifier $cloudSharedVerifier = new CloudSharedVerifier(),
 		private readonly IntranetGate $intranetGate = new IntranetGate(),
-		private readonly ?object $options = null,
-		private readonly ?object $vibeButtonAvailability = null,
-		private readonly VibePlusPolicy $vibePlusPolicy = new VibePlusPolicy(),
 	) {
 	}
 
 	public function isAvailableForUser(int $userId): bool
 	{
 		return $userId > 0 && $this->isEnabled() && $this->isAllowedForUser($userId);
+	}
+
+	public function isVibeBalanceEnabled(): bool
+	{
+		return Feature::isEnabled(VibeBalance::class);
 	}
 
 	/**
@@ -55,61 +59,22 @@ class AvailabilityService
 	 */
 	public function isReady(): bool
 	{
-		return $this->isCloudSlotAvailable() || $this->pairingRepository->hasAny();
+		return $this->portalReadiness()->isReady();
 	}
 
 	public function isEnabled(): bool
 	{
-		return
-			$this->getOption('is_ready', 'N') === 'Y'
-			&& $this->vibePlusPolicy->isCatalogVisible()
-		;
+		return $this->portalReadiness()->isVisible();
 	}
 
 	public function setEnabled(bool $value): void
 	{
-		$this->setOption('is_ready', $value ? 'Y' : 'N');
-		$this->setOption('is_ready_set_at', (string)(new DateTime())->getTimestamp());
-		if ($this->vibeButtonAvailability !== null)
-		{
-			$this->vibeButtonAvailability->set($value);
-		}
-		else
-		{
-			Option::set('immobile', 'is_vibecode_button_available', $value ? 'Y' : 'N');
-		}
+		$this->portalReadiness()->setVisible($value);
 		self::$allowedMemo = [];
 	}
 
-	private function getOption(string $name, string $default): string
+	private function portalReadiness(): PortalReadiness
 	{
-		if ($this->options !== null)
-		{
-			return $this->options->get($name, $default);
-		}
-
-		return Option::get('vibecodeconnector', $name, $default);
-	}
-
-	private function setOption(string $name, string $value): void
-	{
-		if ($this->options !== null)
-		{
-			$this->options->set($name, $value);
-
-			return;
-		}
-
-		Option::set('vibecodeconnector', $name, $value);
-	}
-
-	private function isCloudSlotAvailable(): bool
-	{
-		if (method_exists($this->cloudSharedVerifier, 'isSlotAvailable'))
-		{
-			return $this->cloudSharedVerifier->isSlotAvailable();
-		}
-
-		return $this->cloudSharedVerifier->isConfigured();
+		return $this->portalReadiness ??= new PortalReadiness($this->cloudSharedVerifier, $this->pairingRepository);
 	}
 }

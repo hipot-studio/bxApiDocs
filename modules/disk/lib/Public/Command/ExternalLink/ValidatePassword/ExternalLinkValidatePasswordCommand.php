@@ -12,12 +12,15 @@ use Throwable;
 class ExternalLinkValidatePasswordCommand extends AbstractCommand
 {
 	/**
-	 * @param mixed $fileId
+	 * @param mixed $objectId
 	 * @param string|null $password
 	 */
 	public function __construct(
-		public readonly mixed $fileId,
+		public readonly mixed $objectId,
 		public readonly ?string $password,
+		public readonly mixed $sourceIp,
+		public readonly mixed $captchaSid = null,
+		public readonly mixed $captchaWord = null,
 	)
 	{
 	}

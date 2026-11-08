@@ -3,16 +3,16 @@
 namespace Bitrix\Mail;
 
 use Bitrix\Main;
-use Bitrix\Mail\Helper\Enum\CrmFlag;
-use Bitrix\Mail\Helper\Mailbox\CrmImapFilter;
 use Bitrix\Mail\Helper\Message\MessageInternalDateHandler;
+use Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill;
 use Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationActionGuard;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationMetrics;
 
 class Helper
 {
-	private const REPAIR_CRM_IMAP_FILTER_LOCK = 'mail_repair_crm_imap_filter';
+	/** Seconds until the next pass of the vacation auto-reply check interval agent when a pack came out full. */
+	private const VACATION_AUTO_REPLY_NEXT_PACK_DELAY = 60;
 
 	public static function syncAllDirsInMailboxForTheFirstSyncDayAgent()
 	{
@@ -317,9 +317,19 @@ class Helper
 
 		$mailboxIdByMessageId = array_column($rowsMailMessage, 'MAILBOX_ID', 'ID');
 
+		$deletedByMailbox = [];
 		foreach($messageIdsWithoutUid as $messageId)
 		{
-			\CMailMessage::delete($messageId, (int)$mailboxIdByMessageId[$messageId]);
+			$mailboxId = (int)$mailboxIdByMessageId[$messageId];
+			\CMailMessage::delete($messageId, $mailboxId);
+			$deletedByMailbox[$mailboxId][] = $messageId;
+		}
+
+		// The letters are gone for good, so the conversation projection may not keep them either
+		$conversationBackfill = new ConversationBackfill();
+		foreach ($deletedByMailbox as $mailboxId => $deletedMessageIds)
+		{
+			$conversationBackfill->removeMessages($mailboxId, $deletedMessageIds);
 		}
 
 		return sprintf('Bitrix\Mail\Helper::removeUnattachedMessagesAgent(%u, %u);', $maxId, $packSize);
@@ -480,60 +490,9 @@ class Helper
 		}
 	}
 
-	/**
-	 * One-shot pass that brings the actual 'crm_imap' filter of every active IMAP mailbox
-	 * in line with the stored CrmFlag::Connect intention. Removes itself when the pass is over.
-	 */
 	public static function repairCrmImapFilterAgent(int $lastMailboxId = 0, int $packSize = 100): string
 	{
-		if (!Main\Loader::includeModule('crm'))
-		{
-			return '';
-		}
-
-		$connection = Main\Application::getConnection();
-		if (!$connection->lock(self::REPAIR_CRM_IMAP_FILTER_LOCK))
-		{
-			return self::getRepairCrmImapFilterAgentCall($lastMailboxId, $packSize);
-		}
-
-		try
-		{
-			$mailboxes =
-				MailboxTable::query()
-					->setSelect(['ID', 'OPTIONS'])
-					->where('ID', '>', $lastMailboxId)
-					->where('ACTIVE', 'Y')
-					->where('SERVER_TYPE', 'imap')
-					->addOrder('ID')
-					->setLimit($packSize)
-					->fetchAll()
-			;
-
-			if (!$mailboxes)
-			{
-				return '';
-			}
-
-			foreach ($mailboxes as $mailbox)
-			{
-				$flags = (array)($mailbox['OPTIONS']['flags'] ?? []);
-				CrmImapFilter::sync((int)$mailbox['ID'], in_array(CrmFlag::Connect->value, $flags, true));
-			}
-
-			$maxId = max(array_map('intval', array_column($mailboxes, 'ID')));
-
-			return self::getRepairCrmImapFilterAgentCall($maxId, $packSize);
-		}
-		finally
-		{
-			$connection->unlock(self::REPAIR_CRM_IMAP_FILTER_LOCK);
-		}
-	}
-
-	private static function getRepairCrmImapFilterAgentCall(int $lastMailboxId, int $packSize): string
-	{
-		return sprintf('Bitrix\Mail\Helper::repairCrmImapFilterAgent(%d, %d);', $lastMailboxId, $packSize);
+		return '';
 	}
 
 	public static function cleanupMailboxAgent($id)
@@ -565,6 +524,56 @@ class Helper
 		}
 
 		return sprintf('Bitrix\Mail\Helper::cleanupMailboxAgent(%u);', $id);
+	}
+
+	/**
+	 * Keeps the check interval of the mailboxes in step with their vacation auto-reply periods: gives their
+	 * own interval back to those whose period is over and shortens the interval of those whose period is
+	 * about to start.
+	 *
+	 * Switching the auto-reply off restores the interval right away, but a user who leaves the portal for
+	 * good would otherwise leave the mailbox on the shortened interval forever.
+	 *
+	 * The switch of the feature does not stop the restoring pass: it only gives a mailbox its own interval
+	 * back and turns nothing on. A feature switched off closes the seam, the receiver and saving the
+	 * setting, so a mailbox shortened by a period would have nobody left to free it - and would keep
+	 * checking its mail server every ten minutes for good. With the feature off every remembered interval
+	 * goes back at once, and switching the feature on again shortens the periods that are still running.
+	 */
+	public static function restoreVacationAutoReplyCheckIntervalAgent(): string
+	{
+		$agentCall = 'Bitrix\Mail\Helper::restoreVacationAutoReplyCheckIntervalAgent();';
+		$adjuster = new Service\VacationAutoReply\MailboxCheckIntervalAdjuster();
+
+		$shortened = 0;
+
+		if (Helper\Config\Feature::isVacationAutoReplyAvailable())
+		{
+			$restored = $adjuster->restoreExpired();
+			// A period saved long in advance shortens nothing when it is saved, so the interval of a
+			// mailbox whose vacation is about to start is shortened here
+			$shortened = $adjuster->shortenStarting();
+		}
+		else
+		{
+			$restored = $adjuster->restoreAll();
+		}
+
+		if (
+			$restored >= Service\VacationAutoReply\MailboxCheckIntervalAdjuster::AGENT_PACK_SIZE
+			|| $shortened >= Service\VacationAutoReply\MailboxCheckIntervalAdjuster::AGENT_PACK_SIZE
+		)
+		{
+			// A full pack leaves more mailboxes waiting, and each of them keeps its shortened interval
+			// until a pass reaches it: an hour between passes is a day per 12 000 mailboxes
+			global $pPERIOD;
+			$pPERIOD = $pPERIOD === null
+				? self::VACATION_AUTO_REPLY_NEXT_PACK_DELAY
+				: min((int)$pPERIOD, self::VACATION_AUTO_REPLY_NEXT_PACK_DELAY)
+			;
+		}
+
+		return $agentCall;
 	}
 
 	/**
@@ -834,17 +843,17 @@ class Helper
 			]
 		];
 
-		$scope = GenerationScope::forMailbox((int)$mailboxId);
-		if ($scope->getGenerationIds() !== null)
+		$scope = GenerationScope::servingMailbox((int)$mailboxId);
+		if (!$scope->isUnfiltered())
 		{
 			/*
-				A folder of a retained generation keeps its own counter row, and its path is
-				the same as that of the folder serving the user now, so the rows can only be
-				told apart by the generation of the folder each of them addresses. The folders
-				are read separately rather than joined: ENTITY_ID of a counter is a string
-				while the folder id is an integer, and no portable comparison of the two
-				exists - PostgreSQL has no operator for it at all. A mailbox holds units of
-				folders, so the list stays short and the condition stays in the query.
+				A folder of another generation keeps its own counter row, and its path is the
+				same as that of the folder serving the user now, so the rows can only be told
+				apart by the generation of the folder each of them addresses. The folders are
+				read separately rather than joined: ENTITY_ID of a counter is a string while
+				the folder id is an integer, and no portable comparison of the two exists -
+				PostgreSQL has no operator for it at all. A mailbox holds units of folders, so
+				the list stays short and the condition stays in the query.
 			*/
 			$directoryIds = array_column(
 				Internals\MailboxDirectoryTable::getList([

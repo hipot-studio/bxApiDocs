@@ -36,7 +36,7 @@ class CreateEventCommand implements Command, BusyAttendees
 	private array $ufFields;
 	private bool $sendInvitesAgain;
 	private int $requestUid;
-	private bool $checkLocationOccupancy;
+	private string $occupancyCheckMode;
 	private ?int $category;
 	private ?int $maxAttendees;
 	private ?string $analyticsSubSection;
@@ -76,7 +76,7 @@ class CreateEventCommand implements Command, BusyAttendees
 		array $ufFields,
 		bool $sendInvitesAgain,
 		int $requestUid,
-		bool $checkLocationOccupancy,
+		string $occupancyCheckMode,
 		?int $maxAttendees,
 		?int $category,
 		?string $analyticsSubSection,
@@ -116,7 +116,7 @@ class CreateEventCommand implements Command, BusyAttendees
 		$this->ufFields = $ufFields;
 		$this->sendInvitesAgain = $sendInvitesAgain;
 		$this->requestUid = $requestUid;
-		$this->checkLocationOccupancy = $checkLocationOccupancy;
+		$this->occupancyCheckMode = $occupancyCheckMode;
 		$this->category = $category;
 		$this->maxAttendees = $maxAttendees;
 		$this->analyticsSubSection = $analyticsSubSection;
@@ -124,9 +124,9 @@ class CreateEventCommand implements Command, BusyAttendees
 		$this->eventType = $eventType;
 	}
 
-	public function isCheckLocationOccupancy(): bool
+	public function getOccupancyCheckMode(): string
 	{
-		return $this->checkLocationOccupancy;
+		return $this->occupancyCheckMode;
 	}
 
 	public function getRequestUid(): int

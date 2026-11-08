@@ -51,8 +51,14 @@ class Result extends Task
 		if ($this->taskPostData === null)
 		{
 			$taskReadRepository = Container::getInstance()->getTaskReadRepository();
+			$taskId = $this->getTaskId();
 
-			$task = $taskReadRepository->getById($this->getTaskId(), new Select(members: true));
+			if ($taskId === null || $taskId <= 0)
+			{
+				return [];
+			}
+
+			$task = $taskReadRepository->getById($taskId, new Select(members: true));
 			if ($task === null)
 			{
 				return [];

@@ -3,12 +3,16 @@
 namespace Bitrix\UI\AccessRights\V2\Options\RightSection;
 
 use Bitrix\Main\Type\Contract\Arrayable;
+use Bitrix\UI\AccessRights\V2\Options\RightSection\RightItem\Preset;
 use Bitrix\UI\AccessRights\V2\Options\RightSection\RightItem\Type;
 use Bitrix\UI\AccessRights\V2\Options\RightSection\RightItem\Variable;
 use JsonSerializable;
 
 class RightItem implements JsonSerializable, Arrayable
 {
+	/** Stands for the value itself in {@see self::$unloadedVariableTitlePattern}. */
+	public const UNLOADED_VARIABLE_VALUE_PLACEHOLDER = '#VALUE#';
+
 	protected ?string $subtitle = null;
 	protected ?string $hint = null;
 	protected ?bool $isGroupHead = null;
@@ -23,6 +27,9 @@ class RightItem implements JsonSerializable, Arrayable
 	protected ?array $selectedVariablesAliases = null;
 
 	protected string|int|null $allSelectedCode = null;
+	protected ?string $allSelectedTitle = null;
+	protected ?array $variablesSource = null;
+	protected ?string $unloadedVariableTitlePattern = null;
 	protected ?bool $isEnableSearch = null;
 	protected ?bool $isShowAvatars = null;
 	protected ?bool $isCompactView = null;
@@ -37,6 +44,9 @@ class RightItem implements JsonSerializable, Arrayable
 
 	/** @var Variable[] */
 	protected array $variables = [];
+
+	/** @var Preset[] */
+	protected array $presets = [];
 
 	public function __construct(
 		protected string $id,
@@ -226,6 +236,46 @@ class RightItem implements JsonSerializable, Arrayable
 		return $this;
 	}
 
+	public function getAllSelectedTitle(): ?string
+	{
+		return $this->allSelectedTitle;
+	}
+
+	public function setAllSelectedTitle(?string $allSelectedTitle): static
+	{
+		$this->allSelectedTitle = $allSelectedTitle;
+
+		return $this;
+	}
+
+	public function getVariablesSource(): ?array
+	{
+		return $this->variablesSource;
+	}
+
+	public function setVariablesSource(?array $variablesSource): static
+	{
+		$this->variablesSource = $variablesSource;
+
+		return $this;
+	}
+
+	public function getUnloadedVariableTitlePattern(): ?string
+	{
+		return $this->unloadedVariableTitlePattern;
+	}
+
+	/**
+	 * Caption a value of a source-fed right gets when neither the source nor the variables of the right name it:
+	 * {@see self::UNLOADED_VARIABLE_VALUE_PLACEHOLDER} stands where the value goes.
+	 */
+	public function setUnloadedVariableTitlePattern(?string $unloadedVariableTitlePattern): static
+	{
+		$this->unloadedVariableTitlePattern = $unloadedVariableTitlePattern;
+
+		return $this;
+	}
+
 	public function isEnableSearch(): ?bool
 	{
 		return $this->isEnableSearch;
@@ -289,6 +339,25 @@ class RightItem implements JsonSerializable, Arrayable
 	public function addVariable(Variable $variable): static
 	{
 		$this->variables[] = $variable;
+
+		return $this;
+	}
+
+	public function getPresets(): array
+	{
+		return $this->presets;
+	}
+
+	public function setPresets(array $presets): static
+	{
+		$this->presets = $presets;
+
+		return $this;
+	}
+
+	public function addPreset(Preset $preset): static
+	{
+		$this->presets[] = $preset;
 
 		return $this;
 	}
@@ -383,8 +452,12 @@ class RightItem implements JsonSerializable, Arrayable
 			'setEmptyOnSetMinMaxValueInColumn' => $this->isSetEmptyOnSetMinMaxValueInColumn(),
 
 			'variables' => array_map(static fn (Variable $variable) => $variable->toArray(), $this->getVariables()),
+			'presets' => array_map(static fn (Preset $preset) => $preset->toArray(), $this->getPresets()),
+			'variablesSource' => $this->prepareVariablesSourceForOutput(),
+			'unloadedVariableTitlePattern' => $this->getUnloadedVariableTitlePattern(),
 
 			'allSelectedCode' => $this->getAllSelectedCode(),
+			'allSelectedTitle' => $this->getAllSelectedTitle(),
 			'selectedVariablesAliases' => $this->getSelectedVariablesAliases(),
 			'enableSearch' => $this->isEnableSearch(),
 			'showAvatars' => $this->isShowAvatars(),
@@ -404,6 +477,23 @@ class RightItem implements JsonSerializable, Arrayable
 	public function jsonSerialize(): array
 	{
 		return $this->toArray();
+	}
+
+	private function prepareVariablesSourceForOutput(): ?array
+	{
+		$source = self::tryVariablesSourceFromArray($this->variablesSource);
+		if ($source === null)
+		{
+			return null;
+		}
+
+		if (array_key_exists('providerOptions', $source) && !$source['providerOptions'])
+		{
+			// the client normalizes provider options as a plain object, so an empty map must stay `{}` in JSON
+			$source['providerOptions'] = new \stdClass();
+		}
+
+		return $source;
 	}
 
 	public static function tryFromArray(array $data): ?self
@@ -495,6 +585,22 @@ class RightItem implements JsonSerializable, Arrayable
 			$item->setAllSelectedCode($data['allSelectedCode']);
 		}
 
+		if (isset($data['allSelectedTitle']))
+		{
+			$item->setAllSelectedTitle((string)$data['allSelectedTitle']);
+		}
+
+		if (isset($data['variablesSource']))
+		{
+			$item->setVariablesSource(self::tryVariablesSourceFromArray($data['variablesSource']));
+		}
+
+		$unloadedVariableTitlePattern = $data['unloadedVariableTitlePattern'] ?? null;
+		if (is_string($unloadedVariableTitlePattern) && $unloadedVariableTitlePattern !== '')
+		{
+			$item->setUnloadedVariableTitlePattern($unloadedVariableTitlePattern);
+		}
+
 		if (isset($data['enableSearch']))
 		{
 			$item->setIsEnableSearch((bool)$data['enableSearch']);
@@ -550,6 +656,10 @@ class RightItem implements JsonSerializable, Arrayable
 			$variables = [];
 			foreach ($data['variables'] as $variableData)
 			{
+				if (!is_array($variableData))
+				{
+					continue;
+				}
 				$variable = Variable::tryFromArray($variableData);
 				if ($variable === null)
 				{
@@ -560,6 +670,78 @@ class RightItem implements JsonSerializable, Arrayable
 			$item->setVariables($variables);
 		}
 
+		if (isset($data['presets']) && is_array($data['presets']))
+		{
+			$presets = [];
+			foreach ($data['presets'] as $presetData)
+			{
+				if (!is_array($presetData))
+				{
+					continue;
+				}
+				$preset = Preset::tryFromArray($presetData);
+				if ($preset === null)
+				{
+					continue;
+				}
+				$presets[] = $preset;
+			}
+			$item->setPresets($presets);
+		}
+
 		return $item;
+	}
+
+	private static function tryVariablesSourceFromArray(mixed $source): ?array
+	{
+		if (!is_array($source))
+		{
+			return null;
+		}
+
+		$entityId = $source['entityId'] ?? null;
+		if (!is_string($entityId) || $entityId === '')
+		{
+			return null;
+		}
+
+		$result = [
+			'entityId' => $entityId,
+		];
+
+		if (array_key_exists('dynamicLoad', $source))
+		{
+			$result['dynamicLoad'] = (bool)$source['dynamicLoad'];
+		}
+
+		if (array_key_exists('dynamicSearch', $source))
+		{
+			$result['dynamicSearch'] = (bool)$source['dynamicSearch'];
+		}
+
+		if (array_key_exists('dynamicSearchMatchMode', $source))
+		{
+			$matchMode = $source['dynamicSearchMatchMode'];
+			$result['dynamicSearchMatchMode'] = is_scalar($matchMode) ? (string)$matchMode : null;
+		}
+
+		$providerOptions = $source['providerOptions'] ?? null;
+		if (is_array($providerOptions) || is_object($providerOptions))
+		{
+			$result['providerOptions'] = (array)$providerOptions;
+		}
+
+		if (array_key_exists('fillRecentItems', $source))
+		{
+			$result['fillRecentItems'] = (bool)$source['fillRecentItems'];
+		}
+
+		$itemEntityId = $source['itemEntityId'] ?? null;
+		if (is_string($itemEntityId) && $itemEntityId !== '')
+		{
+			$result['itemEntityId'] = $itemEntityId;
+		}
+
+		return $result;
 	}
 }

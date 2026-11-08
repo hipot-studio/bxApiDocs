@@ -6,6 +6,7 @@ use Bitrix\Crm\Activity\LastCommunication\LastCommunicationTimeFormatter;
 use Bitrix\Crm\Activity\ToDo\CalendarSettings\CalendarSettingsProvider;
 use Bitrix\Crm\Activity\ToDo\ColorSettings\ColorSettingsProvider;
 use Bitrix\Crm\Color\PhaseColorScheme;
+use Bitrix\Crm\Filter\FieldsTransform\LeadClosedField;
 use Bitrix\Crm\Filter\FieldsTransform\UserBasedField;
 use Bitrix\Crm\Filter\RelatedEntity;
 use Bitrix\Crm\Format\PersonNameFormatter;
@@ -32,6 +33,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotSupportedException;
 use Bitrix\Main\Text\HtmlFilter;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\UserGroupTable;
 use Bitrix\Main\UserTable;
 use Bitrix\Rest\Marketplace\Url;
@@ -46,6 +48,42 @@ abstract class Kanban
 	protected const MAX_SORTED_ITEMS_COUNT = 1000;
 	protected const REST_CONFIGURATION_PLACEMENT_URL_CONTEST = 'crm_kanban';
 	protected const OPTION_NAME_HIDE_REST_DEMO = 'kanban_rest_hide';
+	protected const LEAD_ADDRESS_REQUIRED_FIELDS = [
+		'ADDRESS',
+		'ADDRESS_2',
+		'ADDRESS_CITY',
+		'ADDRESS_POSTAL_CODE',
+		'ADDRESS_REGION',
+		'ADDRESS_PROVINCE',
+		'ADDRESS_LOC_ADDR_ID',
+	];
+	private const LIVE_FILTER_FIELD_VALUE_SUFFIXES = [
+		'_numsel',
+		'_datesel',
+		'_from',
+		'_to',
+		'_quarter',
+		'_year',
+		'_month',
+		'_days',
+		'_name',
+		'_label',
+		'_isEmpty',
+		'_hasAnyValue',
+	];
+	private const PRESET_STAGE_FILTER_FIELD_IDS = [
+		'STAGE_SEMANTIC_ID',
+		'STATUS_SEMANTIC_ID',
+		'STAGE_ID',
+		'STATUS_ID',
+	];
+	private const FILTER_TECHNICAL_FIELD_IDS = [
+		'PRESET_ID',
+		'FILTER_ID',
+		'FILTER_APPLIED',
+		'FIND',
+		'CATEGORY_ID',
+	];
 
 	protected static array $instances = [];
 
@@ -60,6 +98,8 @@ abstract class Kanban
 	protected array $params = [];
 	protected array $semanticIds = [];
 	protected array $allowSemantics = [];
+	protected array $filterAllowSemantics = [];
+	protected array $deadlinesFilterAllowSemantics = [];
 	protected array $allowStages = [];
 	protected array $additionalSelect = [];
 	protected array $additionalEdit = [];
@@ -108,6 +148,7 @@ abstract class Kanban
 		{
 			$entityTypeName = $entityType . '-' . (int)$params['CATEGORY_ID'];
 		}
+		$entityTypeName .= '-' . ($params['VIEW_MODE'] ?? ViewMode::MODE_STAGES);
 
 		if (!isset(self::$instances[$entityTypeName]))
 		{
@@ -400,7 +441,7 @@ abstract class Kanban
 			$baseCurrency = $this->currency;
 			if ($this->entity->getTypeName() === \CCrmOwnerType::OrderName)
 			{
-				$filterCommon = $this->getOrderFilter($runtime);
+				$filterCommon = $this->getOrderFilter($runtime, $params);
 				if (isset($filterCommon[$this->getStatusKey()]))
 				{
 					$this->allowStages = $filterCommon[$this->getStatusKey()];
@@ -451,6 +492,7 @@ abstract class Kanban
 					'id' => $status['STATUS_ID'] ?? null,
 					'name' => $status['NAME'] ?? null,
 					'color' => $this->getColumnColor($status),
+					'description' => (string)($status['DESCRIPTION'] ?? ''),
 					'type' => $status['PROGRESS_TYPE'] ?? null,
 					'sort' => $sort,
 					'count' => 0,
@@ -489,12 +531,11 @@ abstract class Kanban
 			// Pass semantic param to the deadlines view for correct filter works
 			if (
 				$this->viewMode === ViewMode::MODE_DEADLINES
-				&& !empty($this->allowSemantics)
-				&& is_array($this->allowSemantics)
+				&& !empty($this->getDeadlinesFilterAllowSemantics())
 				&& $this->entity instanceof Dynamic
 			)
 			{
-				$filter['STAGE_SEMANTIC_ID'] = $this->allowSemantics;
+				$filter['STAGE_SEMANTIC_ID'] = $this->getDeadlinesFilterAllowSemantics();
 			}
 
 			// Apply the related-entities filter to the totals path too. Kanban::getItems()
@@ -502,13 +543,16 @@ abstract class Kanban
 			// a separate ORM/legacy query for column sums and counts; without applying the
 			// filter here, Dynamic getList() crashes with "Unknown field definition
 			// RELATED_ENTITIES" and legacy entities lose the EXISTS predicate from totals.
-			$totalsParameters = ['filter' => $filter, 'runtime' => $runtime];
-			$this->applyRelatedEntitiesFilter($totalsParameters);
-			$filter = $totalsParameters['filter'];
-			$runtime = $totalsParameters['runtime'] ?? $runtime;
+			if (!($params['skipTotalSums'] ?? false))
+			{
+				$totalsParameters = ['filter' => $filter, 'runtime' => $runtime];
+				$this->applyRelatedEntitiesFilter($totalsParameters);
+				$filter = $totalsParameters['filter'];
+				$runtime = $totalsParameters['runtime'] ?? $runtime;
 
-			//get sums and counts
-			$this->entity->fillStageTotalSums($filter, $runtime, $columns);
+				//get sums and counts
+				$this->entity->fillStageTotalSums($filter, $runtime, $columns);
+			}
 		}
 
 		if ($withoutCache)
@@ -527,11 +571,19 @@ abstract class Kanban
 		return [];
 	}
 
-	protected function getOrderFilter(array &$runtime): array
+	protected function getOrderFilter(array &$runtime, array $params = []): array
 	{
 		$grid = $this->entity->getFilterOptions();
-		$gridFilter = $this->entity->getGridFilter();
+		$filterId = ($params['FILTER_PRESET_ID'] ?? null);
+		if ($filterId)
+		{
+			$grid->setCurrentFilterPresetId($filterId);
+		}
+
+		$gridFilter = $this->entity->getGridFilter($filterId, $this->getLiveFilterFieldIds($params));
 		$search = $grid->GetFilter($gridFilter);
+		$search = $this->mergeLiveFilterValues($params, $grid, $gridFilter, $search);
+		$search = $this->restoreDefaultPresetStageFields($grid, $search, $params);
 		EntityHandler::internalize($gridFilter, $search);
 
 		$filterFields = [];
@@ -622,14 +674,101 @@ abstract class Kanban
 	}
 
 	/**
+	 * Condition a number field of the filter puts into the query, keys included.
+	 *
+	 * The form of the filter writes a number as three keys - the selector `_numsel` and the bounds
+	 * `_from` and `_to`. A preset saved while the field was a text one keeps a plain value under the
+	 * name of the field instead, and a field that becomes a number afterwards has to go on reading
+	 * it as long as it is a number: the filter still shows such a condition, so a query dropping it
+	 * stops narrowing the list without a word. The keys of the form win over a plain value left next
+	 * to them - they are the answer the user gave last.
+	 *
+	 * @param string $key name of the field
+	 * @param array $search values of the filter, as the storage keeps them
+	 * @return array<string, mixed>
+	 */
+	public static function buildNumberFieldCondition(string $key, array $search): array
+	{
+		$fromFieldName = $key . '_from';
+		$toFieldName = $key . '_to';
+		$filterType = ($search[$key . '_numsel'] ?? 'exact');
+
+		if (
+			($filterType === 'exact' || $filterType === 'range')
+			&& isset($search[$fromFieldName], $search[$toFieldName])
+		)
+		{
+			return [
+				'>=' . $key => $search[$fromFieldName],
+				'<=' . $key => $search[$toFieldName],
+			];
+		}
+
+		if ($filterType === 'exact' && isset($search[$fromFieldName]))
+		{
+			return [$key => $search[$fromFieldName]];
+		}
+
+		// a range the user filled on one side only: the form writes the bound it was given and leaves
+		// the other one out (`writeRange` of the drawer), and a bare lower bound is a condition like any other
+		if ($filterType === 'range' && isset($search[$fromFieldName]))
+		{
+			return ['>=' . $key => $search[$fromFieldName]];
+		}
+
+		if ($filterType === 'range' && isset($search[$toFieldName]))
+		{
+			return ['<=' . $key => $search[$toFieldName]];
+		}
+
+		if ($filterType === 'more' && isset($search[$fromFieldName]))
+		{
+			return ['>' . $key => $search[$fromFieldName]];
+		}
+
+		if ($filterType === 'less' && isset($search[$toFieldName]))
+		{
+			return ['<' . $key => $search[$toFieldName]];
+		}
+
+		if (isset($search[$key]) && $search[$key] === false)
+		{
+			return [$key => false];
+		}
+
+		if (isset($search['!' . $key]) && $search['!' . $key] === false)
+		{
+			return ['!' . $key => false];
+		}
+
+		// a value of a preset written before the field became a number. Only a number is read there: a
+		// preset of a text field could hold anything, and a word is no condition for a number field.
+		// The selector of the form is the answer of the user even when the bound it asks for is
+		// missing, so a plain value left beside it does not stand in for that bound: read there, it
+		// would narrow the list by a number nobody asked for and under an operator nobody chose
+		if (
+			!isset($search[$key . '_numsel'])
+			&& isset($search[$key])
+			&& is_numeric($search[$key])
+		)
+		{
+			return [$key => $search[$key]];
+		}
+
+		return [];
+	}
+
+	/**
 	 * Make filter from env.
 	 * @param array $params
 	 * @return array
 	 */
 	protected function getFilter(array $params = []): array
 	{
-		static $filter = null;
+		static $filters = [];
 		$entity = $this->getEntity();
+		$canUseFilterCache = true;
+		$filterCacheKey = $this->getFilterCacheKey($entity, $params);
 
 		if(isset($params['FORCE_FILTER']) && $params['FORCE_FILTER'] === 'Y')
 		{
@@ -652,9 +791,11 @@ abstract class Kanban
 			return $forceFilter;
 		}
 
-		if($filter !== null)
+		if ($canUseFilterCache && isset($filters[$filterCacheKey]))
 		{
-			return $filter;
+			$this->restoreFilterStateFromCache($filters[$filterCacheKey]);
+
+			return $filters[$filterCacheKey]['filter'];
 		}
 
 		$filter = [];
@@ -665,6 +806,7 @@ abstract class Kanban
 			'SECOND_NAME',
 			'POST',
 			'COMMENTS',
+			Item::FIELD_NAME_SOURCE_DESCRIPTION,
 			'COMPANY_TITLE',
 			'COMPANY_COMMENTS',
 			'CONTACT_FULL_NAME',
@@ -704,8 +846,32 @@ abstract class Kanban
 			$grid->setCurrentFilterPresetId($filterId);
 		}
 
-		$gridFilter = $entity->getGridFilter($filterId);
+		$gridFilter = $entity->getGridFilter($filterId, $this->getLiveFilterFieldIds($params));
 		$search = $grid->GetFilter($gridFilter);
+		$search = $this->mergeLiveFilterValues($params, $grid, $gridFilter, $search);
+		$search = $this->restoreDefaultPresetStageFields($grid, $search, $params);
+		$shouldClearImplicitDefaultPresetStageFields = $this->shouldClearImplicitDefaultPresetStageFields(
+			$params,
+			$grid,
+			$search,
+			$entity
+		);
+		if ($shouldClearImplicitDefaultPresetStageFields)
+		{
+			$search = self::clearStageFilterFields($search);
+			$search['FILTER_APPLIED'] = false;
+		}
+		$shouldShowFinalStagesWithEmptyFilter = (
+			$entity->shouldShowFinalStagesWithEmptyFilter()
+			&& $this->isEmptyFilter($search)
+		);
+		$shouldShowFinalStagesWithDefaultFilter = (
+			$this->isClearFilterRequest()
+			&& $entity->shouldShowFinalStagesWithDefaultFilter()
+			&& $this->isDefaultPresetStageFilter($grid, $search)
+		);
+		$stageFieldsForColumns = self::extractStageFilterFields($search);
+		$stageSemanticFilterForActivities = $stageFieldsForColumns['STAGE_SEMANTIC_ID'] ?? $stageFieldsForColumns['STATUS_SEMANTIC_ID'] ?? null;
 		\Bitrix\Crm\UI\Filter\EntityHandler::internalize($gridFilter, $search);
 		\Bitrix\Crm\Search\SearchEnvironment::convertEntityFilterValues($entity->getTypeId(), $search);
 
@@ -776,41 +942,17 @@ abstract class Kanban
 						$filter['!' . $key] = $search['!' . $key];
 					}
 				}
-				elseif (isset($item['type']) && $item['type'] === 'number')
+				elseif ($this->isNumberFilterField($item, $key, $search))
 				{
-					$fltType = $search[$key . '_numsel'] ?? 'exact';
-					if (
-						($fltType === 'exact' || $fltType === 'range')
-						&& isset($search[$fromFieldName], $search[$toFieldName])
-					)
-					{
-						$filter['>=' . $key] = $search[$fromFieldName];
-						$filter['<=' . $key] = $search[$toFieldName];
-					}
-					elseif ($fltType === 'exact' && isset($search[$fromFieldName]))
-					{
-						$filter[$key] = $search[$fromFieldName];
-					}
-					elseif ($fltType === 'more' && isset($search[$fromFieldName]))
-					{
-						$filter['>' . $key] = $search[$fromFieldName];
-					}
-					elseif ($fltType === 'less' && isset($search[$toFieldName]))
-					{
-						$filter['<' . $key] = $search[$toFieldName];
-					}
-					elseif (isset($search[$key]) && $search[$key] === false)
-					{
-						$filter[$key] = $search[$key];
-					}
-					elseif (isset($search['!' . $key]) && $search['!' . $key] === false)
-					{
-						$filter['!' . $key] = $search['!' . $key];
-					}
+					$filter = array_merge($filter, self::buildNumberFieldCondition($key, $search));
 				}
 				elseif(isset($search[$key]))
 				{
-					if((isset($search[$key]) && $search[$key] === false))
+					if($key === 'STATUS_CONVERTED')
+					{
+						$filter = array_merge($filter, LeadClosedField::transform($search[$key]));
+					}
+					elseif((isset($search[$key]) && $search[$key] === false))
 					{
 						$filter[$key] = $search[$key];
 					}
@@ -837,10 +979,6 @@ abstract class Kanban
 					)
 					{
 						$filter['%' . $key] = $search[$key];
-					}
-					elseif($key === 'STATUS_CONVERTED')
-					{
-						$filter[$key === 'N' ? 'STATUS_SEMANTIC_ID' : '!STATUS_SEMANTIC_ID'] = 'P';
 					}
 					elseif ($key === 'ORDER_TOPIC' ||
 						(
@@ -891,7 +1029,7 @@ abstract class Kanban
 				}
 			}
 			//search index
-			$find = $search['SEARCH_CONTENT'] ? trim($search['SEARCH_CONTENT']) : null;
+			$find = !empty($search['SEARCH_CONTENT']) ? trim((string)$search['SEARCH_CONTENT']) : null;
 			if(!empty($find))
 			{
 				$search['FIND'] = $find;
@@ -1004,8 +1142,32 @@ abstract class Kanban
 		{
 			unset($filter['OVERDUE']);
 		}
+
 		//detect success/fail columns
-		$this->prepareSemanticIdsAndStages($filter);
+		$this->filterAllowSemantics = $this->getAllowSemanticsByFilter($filter);
+		$this->deadlinesFilterAllowSemantics = $this->getDeadlinesFilterAllowSemanticsByFilterState(
+			$shouldShowFinalStagesWithDefaultFilter,
+			$shouldShowFinalStagesWithEmptyFilter,
+			$this->filterAllowSemantics,
+		);
+		$filterForColumns = array_merge($filter, $stageFieldsForColumns);
+		$defaultSemanticIdsForColumns = [];
+		if ($shouldShowFinalStagesWithDefaultFilter || $shouldShowFinalStagesWithEmptyFilter)
+		{
+			unset(
+				$filterForColumns[$this->getStatusKey()],
+				$filterForColumns['=' . $this->getStatusKey()],
+				$filterForColumns['STAGE_SEMANTIC_ID'],
+				$filterForColumns['STATUS_SEMANTIC_ID']
+			);
+			$defaultSemanticIdsForColumns = [
+				PhaseSemantics::PROCESS,
+				PhaseSemantics::SUCCESS,
+				PhaseSemantics::FAILURE,
+			];
+		}
+
+		$this->prepareSemanticIdsAndStages($filterForColumns, $defaultSemanticIdsForColumns);
 
 		$entityTypeId = $entity->getTypeId();
 		//region Apply Search Restrictions
@@ -1018,7 +1180,512 @@ abstract class Kanban
 
 		CCrmEntityHelper::prepareMultiFieldFilter($filter, [], '=%', false);
 
+		if ($entity instanceof \Bitrix\Crm\Kanban\Entity\DynamicActivities)
+		{
+			if (empty($stageSemanticFilterForActivities) && !empty($params['FILTER_PRESET_ID']))
+			{
+				$stageFieldsForActivities = $this->getDefaultPresetStageFieldsByIds(
+					$grid,
+					[
+						(string)$params['FILTER_PRESET_ID'],
+						'filter_' . (string)$params['FILTER_PRESET_ID'],
+						$grid->getCurrentFilterId(),
+					]
+				);
+				$stageSemanticFilterForActivities = $stageFieldsForActivities['STAGE_SEMANTIC_ID'] ?? $stageFieldsForActivities['STATUS_SEMANTIC_ID'] ?? null;
+			}
+
+			if (!empty($stageSemanticFilterForActivities))
+			{
+				$filter[\Bitrix\Crm\Kanban\Entity\EntityActivities::STAGE_SEMANTIC_FILTER] = $stageSemanticFilterForActivities;
+			}
+		}
+
+		if (
+			$shouldShowFinalStagesWithEmptyFilter
+			&& $entity instanceof \Bitrix\Crm\Kanban\Entity\DynamicActivities
+			&& $this->shouldShowAllStageSemanticsForActivities($search, $shouldClearImplicitDefaultPresetStageFields)
+		)
+		{
+			$filter[\Bitrix\Crm\Kanban\Entity\EntityActivities::SHOW_ALL_STAGE_SEMANTICS] = true;
+		}
+
+		if ($canUseFilterCache)
+		{
+			$filters[$filterCacheKey] = $this->makeFilterCacheValue($filter);
+		}
+
 		return $filter;
+	}
+
+	private function makeFilterCacheValue(array $filter): array
+	{
+		return [
+			'filter' => $filter,
+			'semanticIds' => $this->semanticIds,
+			'allowSemantics' => $this->allowSemantics,
+			'filterAllowSemantics' => $this->filterAllowSemantics,
+			'deadlinesFilterAllowSemantics' => $this->deadlinesFilterAllowSemantics,
+			'allowStages' => $this->allowStages,
+		];
+	}
+
+	private function restoreFilterStateFromCache(array $cachedFilter): void
+	{
+		$this->semanticIds = $cachedFilter['semanticIds'];
+		$this->allowSemantics = $cachedFilter['allowSemantics'];
+		$this->filterAllowSemantics = $cachedFilter['filterAllowSemantics'];
+		$this->deadlinesFilterAllowSemantics = $cachedFilter['deadlinesFilterAllowSemantics'];
+		$this->allowStages = $cachedFilter['allowStages'];
+	}
+
+	private function getFilterCacheKey(Entity $entity, array $params): string
+	{
+		return implode('|', [
+			$entity->getTypeName(),
+			(string)$entity->getCategoryId(),
+			$this->viewMode,
+			md5(serialize([
+				$params['FILTER_PRESET_ID'] ?? null,
+				$params['FILTER_FIELDS'] ?? null,
+			])),
+		]);
+	}
+
+	protected function getLiveFilterFieldIds(array $params): array
+	{
+		$filterFields = $params['FILTER_FIELDS'] ?? null;
+		if (!is_array($filterFields) || empty($filterFields))
+		{
+			return [];
+		}
+
+		return array_keys($this->normalizeLiveFilterFieldIds($filterFields));
+	}
+
+	private function normalizeLiveFilterFieldId(string $fieldId): string
+	{
+		foreach (self::LIVE_FILTER_FIELD_VALUE_SUFFIXES as $suffix)
+		{
+			if (str_ends_with($fieldId, $suffix))
+			{
+				return mb_substr($fieldId, 0, -mb_strlen($suffix));
+			}
+		}
+
+		return $fieldId;
+	}
+
+	private function normalizeLiveFilterFieldIds(array $filterFields): array
+	{
+		$fieldIds = [];
+		foreach (array_keys($filterFields) as $fieldId)
+		{
+			if (!is_string($fieldId) && !is_int($fieldId))
+			{
+				continue;
+			}
+
+			$normalizedFieldId = $this->normalizeLiveFilterFieldId((string)$fieldId);
+			if ($normalizedFieldId !== '')
+			{
+				$fieldIds[$normalizedFieldId] = true;
+			}
+		}
+
+		return $fieldIds;
+	}
+
+	protected function mergeLiveFilterValues(
+		array $params,
+		Options $filterOptions,
+		array $gridFilter,
+		array $search
+	): array
+	{
+		$filterFields = $params['FILTER_FIELDS'] ?? null;
+		if (!is_array($filterFields) || empty($filterFields))
+		{
+			return $search;
+		}
+
+		$filterFields = $this->filterLiveFilterFields($filterFields, $gridFilter);
+		if (empty($filterFields))
+		{
+			return $search;
+		}
+
+		$search = $this->clearSearchValuesForLiveFilterFields($search, $filterFields);
+		$filterValues = Options::fetchFieldValuesFromFilterSettings(['fields' => $filterFields], [], $gridFilter);
+		foreach ($filterValues as $key => $value)
+		{
+			if ($value === '' || $value === null || $value === [])
+			{
+				unset($filterValues[$key]);
+			}
+		}
+
+		$presetId = $params['FILTER_PRESET_ID'] ?? $filterOptions->getCurrentFilterId();
+		$shouldRewriteFilterId = array_key_exists('FILTER_PRESET_ID', $params);
+
+		if (empty($filterValues))
+		{
+			if ($shouldRewriteFilterId)
+			{
+				$search['PRESET_ID'] = $presetId;
+				$search['FILTER_ID'] = $presetId;
+			}
+			else
+			{
+				$search['PRESET_ID'] = $search['PRESET_ID'] ?? $presetId;
+				$search['FILTER_ID'] = $search['FILTER_ID'] ?? $presetId;
+			}
+			$search['FILTER_APPLIED'] = false;
+			if (!array_key_exists('FIND', $filterFields))
+			{
+				$search['FIND'] = $search['FIND'] ?? $filterOptions->getSearchString();
+			}
+
+			return $search;
+		}
+
+		$search = array_merge($search, $filterValues);
+
+		if ($shouldRewriteFilterId)
+		{
+			$search['PRESET_ID'] = $presetId;
+			$search['FILTER_ID'] = $presetId;
+		}
+		else
+		{
+			$search['PRESET_ID'] = $search['PRESET_ID'] ?? $presetId;
+			$search['FILTER_ID'] = $search['FILTER_ID'] ?? $presetId;
+		}
+		$search['FILTER_APPLIED'] = true;
+		if (!array_key_exists('FIND', $filterFields))
+		{
+			$search['FIND'] = $search['FIND'] ?? $filterOptions->getSearchString();
+		}
+
+		return $search;
+	}
+
+	private function filterLiveFilterFields(array $filterFields, array $gridFilter): array
+	{
+		$allowedFieldIds = array_fill_keys(array_merge(array_keys($gridFilter), ['FIND']), true);
+		foreach ($this->getEntity()->getFieldsRestrictions() as $restrictedFieldId)
+		{
+			unset($allowedFieldIds[$restrictedFieldId]);
+		}
+
+		$result = [];
+		foreach ($filterFields as $fieldId => $value)
+		{
+			if (!is_string($fieldId) && !is_int($fieldId))
+			{
+				continue;
+			}
+
+			$normalizedFieldId = $this->normalizeLiveFilterFieldId((string)$fieldId);
+			if ($normalizedFieldId !== '' && isset($allowedFieldIds[$normalizedFieldId]))
+			{
+				$result[$fieldId] = $value;
+			}
+		}
+
+		return $result;
+	}
+
+	private function clearSearchValuesForLiveFilterFields(array $search, array $filterFields): array
+	{
+		$fieldIds = $this->normalizeLiveFilterFieldIds($filterFields);
+
+		foreach (array_keys($fieldIds) as $fieldId)
+		{
+			foreach (['', '=', '!', '>', '<', '>=', '<=', '@', '%', '=%'] as $operator)
+			{
+				unset($search[$operator . $fieldId]);
+			}
+
+			foreach (self::LIVE_FILTER_FIELD_VALUE_SUFFIXES as $suffix)
+			{
+				unset($search[$fieldId . $suffix]);
+			}
+		}
+
+		return $search;
+	}
+
+	protected function isNumberFilterField(array $filterField, string $fieldName, array $search): bool
+	{
+		if (($filterField['type'] ?? null) === 'number')
+		{
+			return true;
+		}
+
+		return
+			isset($search[$fieldName . '_numsel'])
+			&& (
+				array_key_exists($fieldName . '_from', $search)
+				|| array_key_exists($fieldName . '_to', $search)
+			)
+		;
+	}
+
+	protected function restoreDefaultPresetStageFields(Options $filterOptions, array $search, array $params = []): array
+	{
+		if (($search['FILTER_APPLIED'] ?? null) === false && $this->hasLiveStageFilterFields($params))
+		{
+			return $search;
+		}
+
+		$stageFields = $this->getDefaultPresetStageFieldValues($filterOptions, $search);
+		if (empty($stageFields))
+		{
+			return $search;
+		}
+
+		$isChanged = false;
+		foreach ($stageFields as $fieldId => $value)
+		{
+			if (empty($search[$fieldId]))
+			{
+				$search[$fieldId] = $value;
+				$isChanged = true;
+			}
+		}
+
+		if (!$isChanged)
+		{
+			return $search;
+		}
+
+		$presetId = $filterOptions->getCurrentFilterId();
+		$search['PRESET_ID'] = $search['PRESET_ID'] ?? $presetId;
+		$search['FILTER_ID'] = $search['FILTER_ID'] ?? $presetId;
+		$search['FILTER_APPLIED'] = true;
+		$search['FIND'] = $search['FIND'] ?? $filterOptions->getSearchString();
+
+		return $search;
+	}
+
+	private function hasLiveStageFilterFields(array $params): bool
+	{
+		$filterFields = $params['FILTER_FIELDS'] ?? null;
+		if (!is_array($filterFields) || empty($filterFields))
+		{
+			return false;
+		}
+
+		foreach (array_keys($this->normalizeLiveFilterFieldIds($filterFields)) as $fieldId)
+		{
+			if (in_array($fieldId, self::PRESET_STAGE_FILTER_FIELD_IDS, true))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function shouldShowAllStageSemanticsForActivities(
+		array $search,
+		bool $shouldClearImplicitDefaultPresetStageFields
+	): bool
+	{
+		return
+			$shouldClearImplicitDefaultPresetStageFields
+			|| $this->isEmptyFilter($search)
+		;
+	}
+
+	private function shouldClearImplicitDefaultPresetStageFields(
+		array $params,
+		Options $filterOptions,
+		array $search,
+		Entity $entity
+	): bool
+	{
+		return
+			$this->viewMode === ViewMode::MODE_ACTIVITIES
+			&& $this->isClearFilterRequest()
+			&& empty($params['FILTER_PRESET_ID'])
+			&& $entity->shouldShowFinalStagesWithEmptyFilter()
+			&& $this->isDefaultPresetStageFilter($filterOptions, $search)
+		;
+	}
+
+	private function isClearFilterRequest(): bool
+	{
+		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
+
+		return $request->get('clear_filter') === 'Y';
+	}
+
+	private function isEmptyFilter(array $search): bool
+	{
+		if (($search['FILTER_APPLIED'] ?? false) === true || ($search['FILTER_APPLIED'] ?? null) === 'Y')
+		{
+			return false;
+		}
+
+		foreach ($search as $fieldId => $value)
+		{
+			if (in_array($fieldId, self::FILTER_TECHNICAL_FIELD_IDS, true))
+			{
+				continue;
+			}
+
+			if ($value !== '' && $value !== null && $value !== [])
+			{
+				return false;
+			}
+		}
+
+		return trim((string)($search['FIND'] ?? '')) === '';
+	}
+
+	private function isDefaultPresetStageFilter(Options $filterOptions, array $search): bool
+	{
+		$defaultPresets = $filterOptions->getDefaultPresets();
+		if (!is_array($defaultPresets))
+		{
+			return false;
+		}
+
+		$defaultPreset = $this->getDefaultPreset($filterOptions, $defaultPresets, $search);
+		if (!is_array($defaultPreset) || ($defaultPreset['default'] ?? false) !== true)
+		{
+			return false;
+		}
+
+		$stageFields = self::getDefaultPresetStageFields($defaultPreset);
+		if (empty($stageFields))
+		{
+			return false;
+		}
+
+		foreach ($stageFields as $fieldId => $value)
+		{
+			if (!isset($search[$fieldId]) || (array)$search[$fieldId] !== (array)$value)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private function getDefaultPresetStageFieldValues(Options $filterOptions, array $search = []): array
+	{
+		$defaultPresets = $filterOptions->getDefaultPresets();
+		if (!is_array($defaultPresets))
+		{
+			return [];
+		}
+
+		$defaultPreset = $this->getDefaultPreset($filterOptions, $defaultPresets, $search);
+		if (!is_array($defaultPreset))
+		{
+			return [];
+		}
+
+		return self::getDefaultPresetStageFields($defaultPreset);
+	}
+
+	private function getDefaultPresetStageFieldsByIds(Options $filterOptions, array $presetIds): array
+	{
+		$defaultPresets = $filterOptions->getDefaultPresets();
+		if (!is_array($defaultPresets))
+		{
+			return [];
+		}
+
+		foreach ($presetIds as $presetId)
+		{
+			if (!is_string($presetId) || $presetId === '')
+			{
+				continue;
+			}
+
+			$defaultPreset = $defaultPresets[$presetId] ?? null;
+			if (is_array($defaultPreset))
+			{
+				return self::getDefaultPresetStageFields($defaultPreset);
+			}
+		}
+
+		return [];
+	}
+	private function getDefaultPreset(Options $filterOptions, array $defaultPresets, array $search = []): array
+	{
+		$presetId = $this->getFilterId($filterOptions, $search);
+		$defaultPreset = $defaultPresets[$presetId] ?? null;
+		if (is_array($defaultPreset))
+		{
+			return $defaultPreset;
+		}
+
+		$currentPresetId = $filterOptions->getCurrentFilterId();
+		if (is_string($currentPresetId) && $currentPresetId !== '' && $currentPresetId !== $presetId)
+		{
+			$defaultPreset = $defaultPresets[$currentPresetId] ?? null;
+			if (is_array($defaultPreset))
+			{
+				return $defaultPreset;
+			}
+		}
+
+		return [];
+	}
+
+	private function getFilterId(Options $filterOptions, array $search = []): string
+	{
+		$filterId = $search['FILTER_ID'] ?? $search['PRESET_ID'] ?? null;
+		if (is_string($filterId) && $filterId !== '')
+		{
+			return $filterId;
+		}
+
+		return $filterOptions->getCurrentFilterId();
+	}
+
+	private static function getDefaultPresetStageFields(array $defaultPreset): array
+	{
+		$defaultFields = $defaultPreset['fields'] ?? [];
+		if (!is_array($defaultFields))
+		{
+			return [];
+		}
+
+		return self::extractStageFilterFields($defaultFields);
+	}
+
+	private static function clearStageFilterFields(array $fields): array
+	{
+		foreach (self::PRESET_STAGE_FILTER_FIELD_IDS as $fieldId)
+		{
+			foreach (['', '=', '!', '@', '!@'] as $operator)
+			{
+				unset($fields[$operator . $fieldId]);
+			}
+		}
+
+		return $fields;
+	}
+
+	private static function extractStageFilterFields(array $fields): array
+	{
+		$stageFields = [];
+		foreach (self::PRESET_STAGE_FILTER_FIELD_IDS as $fieldId)
+		{
+			if (!empty($fields[$fieldId]))
+			{
+				$stageFields[$fieldId] = $fields[$fieldId];
+			}
+		}
+
+		return $stageFields;
 	}
 
 	protected function getOrder(): array
@@ -1045,19 +1712,21 @@ abstract class Kanban
 	}
 
 	/**
-	 * @param $filter
+	 * @param array $filter
+	 * @param array $defaultSemanticIds
 	 */
-	protected function prepareSemanticIdsAndStages(array $filter = []): void
+	protected function prepareSemanticIdsAndStages(array $filter = [], array $defaultSemanticIds = []): void
 	{
-		$this->prepareSemanticIds($filter);
+		$this->prepareSemanticIds($filter, $defaultSemanticIds);
 		$this->prepareAllowStages($filter);
 		$this->prepareAllowSemantics();
 	}
 
 	/**
 	 * @param array $filter
+	 * @param array $defaultSemanticIds
 	 */
-	protected function prepareSemanticIds(array $filter): void
+	protected function prepareSemanticIds(array $filter, array $defaultSemanticIds = []): void
 	{
 		$this->semanticIds = [];
 		if(isset($filter['STATUS_SEMANTIC_ID']))
@@ -1070,7 +1739,7 @@ abstract class Kanban
 		}
 		else
 		{
-			$this->semanticIds = $this->entity->getSemanticIds();
+			$this->semanticIds = $defaultSemanticIds ?: $this->entity->getSemanticIds();
 		}
 	}
 
@@ -1084,6 +1753,8 @@ abstract class Kanban
 
 	protected function prepareAllowSemantics(): void
 	{
+		$this->allowSemantics = [];
+
 		if(in_array(PhaseSemantics::PROCESS, $this->semanticIds, true))
 		{
 			$this->allowSemantics[] = PhaseSemantics::PROCESS;
@@ -1103,6 +1774,63 @@ abstract class Kanban
 		{
 			$this->allowSemantics[] = PhaseSemantics::PROCESS;
 		}
+	}
+
+	protected function getDeadlinesFilterAllowSemantics(): array
+	{
+		return $this->deadlinesFilterAllowSemantics;
+	}
+
+	private function getDeadlinesFilterAllowSemanticsByFilterState(
+		bool $shouldShowFinalStagesWithDefaultFilter,
+		bool $shouldShowFinalStagesWithEmptyFilter,
+		array $filterAllowSemantics
+	): array
+	{
+		return ($shouldShowFinalStagesWithDefaultFilter || $shouldShowFinalStagesWithEmptyFilter)
+			? []
+			: $filterAllowSemantics
+		;
+	}
+
+	protected function getAllowSemanticsByFilter(array $filter, array $defaultSemanticIds = []): array
+	{
+		$semanticIds = [];
+		if(isset($filter['STATUS_SEMANTIC_ID']))
+		{
+			$semanticIds = (array)$filter['STATUS_SEMANTIC_ID'];
+		}
+		elseif(isset($filter['STAGE_SEMANTIC_ID']))
+		{
+			$semanticIds = (array)$filter['STAGE_SEMANTIC_ID'];
+		}
+		else
+		{
+			$semanticIds = $defaultSemanticIds ?: $this->entity->getSemanticIds();
+		}
+
+		$allowSemantics = [];
+		if(in_array(PhaseSemantics::PROCESS, $semanticIds, true))
+		{
+			$allowSemantics[] = PhaseSemantics::PROCESS;
+		}
+
+		if(in_array(PhaseSemantics::SUCCESS, $semanticIds, true))
+		{
+			$allowSemantics[] = PhaseSemantics::SUCCESS;
+		}
+
+		if(in_array(PhaseSemantics::FAILURE, $semanticIds, true))
+		{
+			$allowSemantics[] = PhaseSemantics::FAILURE;
+		}
+
+		if(empty($allowSemantics))
+		{
+			$allowSemantics[] = PhaseSemantics::PROCESS;
+		}
+
+		return $allowSemantics;
 	}
 
 	/**
@@ -1281,10 +2009,18 @@ abstract class Kanban
 		{
 			$select = array_merge($select, array_keys($this->requiredFields));
 		}
+		if ($this->isLeadAddressRequired())
+		{
+			$select = array_unique(array_merge($select, self::LEAD_ADDRESS_REQUIRED_FIELDS));
+		}
 
 		$type = $this->entity->getTypeName();
 		$runtime = [];
-		$filterCommon = ($type === \CCrmOwnerType::OrderName ? $this->getOrderFilter($runtime) : $this->getFilter($params['filter'] ?? []));
+		$filterCommon = (
+			$type === \CCrmOwnerType::OrderName
+				? $this->getOrderFilter($runtime, $params['filter'] ?? [])
+				: $this->getFilter($params['filter'] ?? [])
+		);
 
 		// remove conflict keys and merge filters
 		$filter = array_merge($filterCommon, $filter);
@@ -1320,12 +2056,11 @@ abstract class Kanban
 		// Pass semantic param to the deadlines view for correct filter works
 		if (
 			$this->viewMode === ViewMode::MODE_DEADLINES
-			&& !empty($this->allowSemantics)
-			&& is_array($this->allowSemantics)
+			&& !empty($this->getDeadlinesFilterAllowSemantics())
 			&& $this->entity instanceof Dynamic
 		)
 		{
-			$parameters['filter']['STAGE_SEMANTIC_ID'] = $this->allowSemantics;
+			$parameters['filter']['STAGE_SEMANTIC_ID'] = $this->getDeadlinesFilterAllowSemantics();
 		}
 
 		$this->applyRelatedEntitiesFilter($parameters);
@@ -1339,8 +2074,7 @@ abstract class Kanban
 			$rows[$row['ID']] = $row;
 		}
 
-		$addSelect = array_keys($this->additionalSelect);
-		$rows = $this->entity->appendRelatedEntitiesValues($rows, $addSelect);
+		$rows = $this->entity->appendRelatedEntitiesValues($rows, $this->getRelatedEntitiesSelect());
 
 		$displayOptions = new \Bitrix\Crm\Service\Display\Options();
 		if ($this->getApiVersion() > 1)
@@ -1409,7 +2143,7 @@ abstract class Kanban
 			// collect required
 			$required = [];
 			$requiredFm = [];
-			if ($this->requiredFields && $this->viewMode === ViewMode::MODE_STAGES)
+			if ($this->isRequiredFieldsMapUsed())
 			{
 				// fm fields check later
 				foreach ($this->getAllowedFmTypes() as $fm)
@@ -1430,7 +2164,7 @@ abstract class Kanban
 						continue;
 					}
 
-					if ($this->isRequiredFieldEmpty($fieldName, $fieldValue))
+					if ($this->isRequiredFieldEmpty($fieldName, $fieldValue, $row))
 					{
 						foreach ($this->requiredFields[$fieldName] as $stageId)
 						{
@@ -1599,6 +2333,27 @@ abstract class Kanban
 		];
 	}
 
+	/** The map of the fields required by a stage is built for the stages view only. */
+	protected function isRequiredFieldsMapUsed(): bool
+	{
+		return !empty($this->requiredFields) && $this->viewMode === ViewMode::MODE_STAGES;
+	}
+
+	/**
+	 * Values of the related entities are needed not only by the card fields, but by the required fields map
+	 * as well: a required field filled in but left out of the card must not be reported as empty.
+	 */
+	protected function getRelatedEntitiesSelect(): array
+	{
+		$select = array_keys($this->additionalSelect);
+		if ($this->isRequiredFieldsMapUsed())
+		{
+			$select = array_merge($select, array_keys($this->requiredFields));
+		}
+
+		return array_values(array_unique($select));
+	}
+
 	protected function getItemFields(array $row, array $renderedRows): array
 	{
 		$fields = [];
@@ -1668,9 +2423,14 @@ abstract class Kanban
 		return $this->entity->skipClientField($row, $code);
 	}
 
-	protected function isRequiredFieldEmpty(string $fieldName, mixed $fieldValue): bool
+	protected function isRequiredFieldEmpty(string $fieldName, mixed $fieldValue, array $row = []): bool
 	{
 		if (!isset($this->requiredFields[$fieldName]))
+		{
+			return false;
+		}
+
+		if ($fieldName === 'ADDRESS' && $this->isLeadAddressFilled($row))
 		{
 			return false;
 		}
@@ -1687,6 +2447,44 @@ abstract class Kanban
 		}
 
 		return $field->isValueEmpty($fieldValue);
+	}
+
+	private function isLeadAddressRequired(): bool
+	{
+		return (
+			$this->viewMode === ViewMode::MODE_STAGES
+			&& $this->entity->getTypeId() === \CCrmOwnerType::Lead
+			&& isset($this->requiredFields['ADDRESS'])
+		);
+	}
+
+	private function isLeadAddressFilled(array $row): bool
+	{
+		if (!$this->isLeadAddressRequired())
+		{
+			return false;
+		}
+
+		foreach (self::LEAD_ADDRESS_REQUIRED_FIELDS as $fieldName)
+		{
+			$value = $row[$fieldName] ?? null;
+			if ($fieldName === 'ADDRESS_LOC_ADDR_ID')
+			{
+				if ((int)$value > 0)
+				{
+					return true;
+				}
+
+				continue;
+			}
+
+			if ($value !== null && $value !== '')
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	protected function prepareAdditionalFields(array $item): array
@@ -2065,17 +2863,6 @@ abstract class Kanban
 		return $additionalFields;
 	}
 
-	/**
-	 * Current user is admin?
-	 * @return bool
-	 */
-	public function isCrmAdmin(): bool
-	{
-		$entity = $this->getEntity();
-
-		return $entity->getUserPermissions()->isAdminForEntity($entity->getTypeId(), $entity->getCategoryId());
-	}
-
 	public function removeUserAdditionalSelectFields(): void
 	{
 		if ($this->canEditSettings())
@@ -2104,6 +2891,14 @@ abstract class Kanban
 		}
 
 		return $this->entity;
+	}
+
+	/**
+	 * @return string[]
+	 */
+	public function getAllowedSemantics(): array
+	{
+		return $this->allowSemantics;
 	}
 
 	/**

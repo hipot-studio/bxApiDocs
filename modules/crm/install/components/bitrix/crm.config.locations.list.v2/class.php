@@ -11,21 +11,34 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();
 
 use Bitrix\Main\Config;
 use Bitrix\Main;
-use Bitrix\Sale\Location;
+use Bitrix\Crm\V2\Infrastructure\Component\Location\Filter\LocationDataProvider;
+use Bitrix\Crm\V2\Infrastructure\Component\Location\Grid\LocationGrid;
+use Bitrix\Crm\V2\Internal\Integration\Sale\Location\LocationAdapter;
+use Bitrix\Crm\V2\Internal\Service\Location\LocationListService;
+use Bitrix\Main\Filter\Filter;
+use Bitrix\Main\Filter\Component\ComponentParams as FilterComponentParams;
+use Bitrix\Main\Grid\Component\ComponentParams as GridComponentParams;
+use Bitrix\Main\Grid\Settings;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
-use Bitrix\Sale\Location\Admin\LocationHelper as Helper;
-use Bitrix\Main\Web\Uri;
+use Bitrix\Main\UI\Filter\Options as FilterOptions;
 
 Loc::loadMessages(__FILE__);
 
 class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 {
-	protected $componentData = 	array();
-	protected $dbResult = 		array();
-	protected $errors = 		array('FATAL' => array(), 'NONFATAL' => array());
+	private const GRID_ID = 'CRM_LOC_LIST';
+	private const BATCH_CONTROLLER = 'crm.v2.Location.BatchDelete';
+
+	protected $componentData = 	[];
+	protected $dbResult = 		[];
+	protected $errors = 		['FATAL' => [], 'NONFATAL' => []];
 
 	protected $currentCache = 	false;
+	private ?LocationAdapter $locationAdapter = null;
+	private ?LocationListService $locationListService = null;
+	private ?LocationGrid $grid = null;
+	private ?Filter $filter = null;
 
 	/**
 	 * Function checks and prepares all the parameters passed. Everything about $arParam modification is here.
@@ -34,7 +47,11 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 	 */
 	public function onPrepareComponentParams($arParams)
 	{
+		$arParams['PARENT_ID'] ??= 0;
+		$arParams['PARENT_ID_FROM_REQUEST'] ??= 'N';
 		self::tryParseInt($arParams['CACHE_TIME'], 36000000, true);
+		self::tryParseInt($arParams['PARENT_ID'], 0, true);
+		self::tryParseBoolean($arParams['PARENT_ID_FROM_REQUEST']);
 
 		// parse function examples:
 
@@ -101,83 +118,31 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 		$this->arParams['PATH_TO_LOCATIONS_LIST'] = CrmCheckPath('PATH_TO_LOCATIONS_LIST', $this->arParams['PATH_TO_LOCATIONS_LIST'], '');
 		$this->arParams['PATH_TO_LOCATIONS_ADD'] = CrmCheckPath('PATH_TO_LOCATIONS_ADD', $this->arParams['PATH_TO_LOCATIONS_ADD'], '?add');
 		$this->arParams['PATH_TO_LOCATIONS_EDIT'] = CrmCheckPath('PATH_TO_LOCATIONS_EDIT', $this->arParams['PATH_TO_LOCATIONS_EDIT'], '?loc_id=#loc_id#&edit');
+		$this->arParams['PATH_TO_LOCATIONS_IMPORT'] = CrmCheckPath('PATH_TO_LOCATIONS_IMPORT', $this->arParams['PATH_TO_LOCATIONS_IMPORT'], '?import');
 
 		return true;
 	}
 
 	protected function checkIntegrity()
 	{
-		if(!Location\LocationTable::checkIntegrity())
+		if(!$this->getLocationAdapter()->isIntegrityValid())
 		{
 			$this->errors['FATAL'][] = Loc::getMessage('CRM_CLL2_IMPORT_ERROR');
+
 			return false;
 		}
 
 		return true;
 	}
+
 	/**
 	 * Function makes some actions based on what is in $this->request
 	 * @return void
 	 */
 	protected function performAction()
 	{
-		$this->dbResult['REQUEST'] = array(
-			'GET' => $this->request->getQueryList(),
-			'POST' => $this->request->getPostList(),
-		);
-
-		$this->componentData['LIST_HEADERS'] = Helper::getListGridColumns(); // columns figure in list
-		$this->componentData['FILTER_HEADERS'] = Helper::getFilterColumns(); // columns figure in filter
-
-		//_print_r($this->dbResult['REQUEST']);
-		$requestMethod = \Bitrix\Main\Context::getCurrent()->getServer()->getRequestMethod();
-
-		$this->getGridOpts();
-		$gridId = $this->dbResult['GRID_ID'];
-
-		$parameters = array();
-		$actionSupposeToBeDone = false;
-
-		if ($requestMethod === 'POST' && check_bitrix_sessid() && isset($this->dbResult['REQUEST']['POST']['action_button_'.$gridId]))
-		{
-			// group delete
-
-			$action = $this->dbResult['REQUEST']['POST']['action_button_'.$gridId];
-			if($this->dbResult['CAN_DELETE'] && $action === 'delete')
-			{
-				if($this->dbResult['REQUEST']['POST']['action_all_rows_'.$gridId] == 'Y') // delete all by filter
-				{
-					$parameters = $this->getListParameters();
-				}
-				else // delete all by list
-					$parameters['ID'] = $this->dbResult['REQUEST']['POST']['ID'];
-
-				$actionSupposeToBeDone = true;
-			}
-		}
-		elseif ($requestMethod == 'GET' && check_bitrix_sessid() && isset($this->dbResult['REQUEST']['GET']['action_'.$gridId]))
-		{
-			// single delete
-
-			if ($this->dbResult['CAN_DELETE'] && $this->dbResult['REQUEST']['GET']['action_'.$gridId] === 'delete')
-			{
-				if(isset($this->dbResult['REQUEST']['GET']['ID']))
-					$parameters['ID'] = array($this->dbResult['REQUEST']['GET']['ID']);
-			}
-
-			$actionSupposeToBeDone = true;
-		}
-
-		$parameters['OPERATION'] = 'DELETE';
-
-		$result = Helper::performGridOperations($parameters);
-		if(is_array($result['errors']))
-			$this->errors['NONFATAL'] = array_merge($this->errors['NONFATAL'], $result['errors']);
-
-		if($actionSupposeToBeDone && !$this->checkHasErrors() && !isset($this->dbResult['REQUEST']['POST']['AJAX_CALL']))
-		{
-			LocalRedirect($GLOBALS['APPLICATION']->GetCurPage());
-		}
+		$this->componentData['LIST_HEADERS'] = $this->getLocationAdapter()->getListGridColumns();
+		$this->componentData['FILTER_HEADERS'] = $this->getLocationAdapter()->getFilterColumns();
 	}
 
 	protected function getGridOpts()
@@ -185,24 +150,107 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 		if(isset($this->componentData['GRID_OPTS']))
 			return $this->componentData['GRID_OPTS'];
 
-		$this->dbResult['GRID_ID'] = 'CRM_LOC_LIST';
-		$this->dbResult['FORM_ID'] = isset($this->arParams['FORM_ID']) ? $this->arParams['FORM_ID'] : '';
-		$this->dbResult['TAB_ID'] = isset($this->arParams['TAB_ID']) ? $this->arParams['TAB_ID'] : '';
+		$this->dbResult['GRID_ID'] = self::GRID_ID;
+		$this->dbResult['FORM_ID'] = $this->arParams['FORM_ID'] ?? '';
+		$this->dbResult['TAB_ID'] = $this->arParams['TAB_ID'] ?? '';
 
 		$this->componentData['GRID_OPTS'] = new CCrmGridOptions($this->dbResult['GRID_ID']);
+
 		return $this->componentData['GRID_OPTS'];
+	}
+
+	private function createGrid(): LocationGrid
+	{
+		return new LocationGrid(
+			new Settings(['ID' => self::GRID_ID]),
+			$this->componentData['LIST_HEADERS'] ?? [],
+			(bool)($this->dbResult['CAN_EDIT'] ?? false),
+		);
+	}
+
+	private function createFilter(): Filter
+	{
+		return new Filter(
+			self::GRID_ID,
+			new LocationDataProvider(
+				self::GRID_ID,
+				LANGUAGE_ID,
+				$this->componentData['FILTER_HEADERS'] ?? [],
+				$this->getLocationAdapter()->getTypeList(),
+			),
+		);
+	}
+
+	private function getLocationAdapter(): LocationAdapter
+	{
+		return $this->locationAdapter ??= new LocationAdapter();
+	}
+
+	private function getLocationListService(): LocationListService
+	{
+		return $this->locationListService ??= new LocationListService($this->getLocationAdapter());
+	}
+
+	private function applyParentIdFromRequest(): void
+	{
+		if (!$this->arParams['PARENT_ID_FROM_REQUEST'])
+		{
+			return;
+		}
+
+		$options = new FilterOptions(self::GRID_ID);
+		$fields = $options->getFilter();
+		unset($fields['PRESET_ID'], $fields['FILTER_ID'], $fields['FILTER_APPLIED']);
+		$fields['PARENT_ID_numsel'] = 'exact';
+		$fields['PARENT_ID_from'] = (string)$this->arParams['PARENT_ID'];
+		$fields['PARENT_ID_to'] = '';
+
+		$currentSettings = $options->getFilterSettings($options->getCurrentFilterId()) ?? [];
+		$currentSettings['fields'] ??= [];
+		$rows = FilterOptions::fetchPresetFields($currentSettings);
+		$rows[] = 'PARENT_ID';
+		$options->setupDefaultFilter($fields, array_values(array_unique($rows)));
+	}
+
+	private function prepareGridResult(LocationGrid $grid): void
+	{
+		$pagination = $grid->getPagination();
+		if ($pagination !== null)
+		{
+			$pagination->setRecordCount((int)($this->dbResult['ROWS_COUNT'] ?? 0));
+		}
+
+		$grid->setRawRows($this->dbResult['LOCS'] ?? []);
+
+		$this->dbResult['grid'] = GridComponentParams::get($grid);
+		$this->dbResult['filter'] = FilterComponentParams::get(
+			$this->filter,
+			[
+				'GRID_ID' => self::GRID_ID,
+				'ENABLE_LIVE_SEARCH' => true,
+				'ENABLE_FIELDS_SEARCH' => 'Y',
+			],
+		);
+		$this->dbResult['clientConfig'] = [
+			'gridId' => self::GRID_ID,
+			'filterId' => self::GRID_ID,
+			'addUrl' => $this->arParams['PATH_TO_LOCATIONS_ADD'],
+			'editUrlTemplate' => $this->arParams['PATH_TO_LOCATIONS_EDIT'],
+			'importUrl' => $this->arParams['PATH_TO_LOCATIONS_IMPORT'],
+			'batchController' => self::BATCH_CONTROLLER,
+		];
 	}
 
 	protected function getFilter()
 	{
-		$this->dbResult['FILTER_PRESETS'] = array();
-		$this->dbResult['FILTER'] = array();
+		$this->dbResult['FILTER_PRESETS'] = [];
+		$this->dbResult['FILTER'] = [];
 
 		foreach($this->componentData['FILTER_HEADERS'] as $code => $fld)
 		{
-			$this->dbResult['FILTER'][] = array(
-				'id' => $code, 'name' => str_replace('&nbsp;', ' ', $fld['title']), 'default' => $fld['DEFAULT']
-			);
+			$this->dbResult['FILTER'][] = [
+				'id' => $code, 'name' => str_replace('&nbsp;', ' ', $fld['title']), 'default' => $fld['DEFAULT'],
+			];
 		}
 
 		$this->dbResult['FILTER_VALUES'] = $this->getGridOpts()->GetFilter($this->dbResult['FILTER']);
@@ -212,7 +260,7 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 
 	protected function getOrder()
 	{
-		$arSort = array();
+		$arSort = [];
 
 		$request = $this->request->getQueryList();
 
@@ -220,13 +268,13 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 		$sort = isset($request['order']) ? trim($request['order']) : 'asc';
 
 		if(isset($request['by']) && isset($request['order']))
-			$arSort = array($by => $sort);
+			$arSort = [$by => $sort];
 
 		$gridSorting = $this->getGridOpts()->GetSorting(
-			array(
-				'sort' => array('ID' => 'asc'),
-				'vars' => array('by' => 'by', 'order' => 'order')
-			)
+			[
+				'sort' => ['ID' => 'asc'],
+				'vars' => ['by' => 'by', 'order' => 'order'],
+			],
 		);
 
 		$this->dbResult['SORT'] = !empty($arSort) ? $arSort : $gridSorting['sort'];
@@ -239,23 +287,23 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 	protected function getListParameters()
 	{
 		$filter = $this->getFilter();
-		$parsedFilter = array();
+		$parsedFilter = [];
 
 		foreach($this->componentData['FILTER_HEADERS'] as $code => $field)
 		{
 			if(isset($filter[$code]))
 				$parsedFilter[$code] = $filter[$code];
-			if(isset($filter[$code.'_from']))
-				$parsedFilter[$code]['FROM'] = $filter[$code.'_from'];
-			if(isset($filter[$code.'_to']))
-				$parsedFilter[$code]['TO'] = $filter[$code.'_to'];
+			if(isset($filter[$code . '_from']))
+				$parsedFilter[$code]['FROM'] = $filter[$code . '_from'];
+			if(isset($filter[$code . '_to']))
+				$parsedFilter[$code]['TO'] = $filter[$code . '_to'];
 		}
 
 		// convert values to the general format Helper can understand
-		$proxed = array(
+		$proxed = [
 			'FILTER' => $parsedFilter,
-			'ORDER' => $this->getOrder()
-		);
+			'ORDER' => $this->getOrder(),
+		];
 
 		return $proxed;
 	}
@@ -275,44 +323,51 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 	 */
 	protected function obtainCachedData(&$cachedData)
 	{
-		$cachedData['TYPES'] = Helper::getTypeList();
+		$cachedData['TYPES'] = $this->getLocationAdapter()->getTypeList();
 	}
 
 	/**
-	 * Here we obtain data that is dependent to data in the cache 
+	 * Here we obtain data that is dependent to data in the cache
 	 * @return void
 	 */
 	protected function obtainCacheDependentData()
 	{
-		$listParams = Helper::getParametersForList($this->getListParameters());
-
-		$dbRecordsList = Helper::getList($listParams, false, 20); // there is no pagenav api in d7, so use wrapper of the old api
-		$dbRecordsList->bShowAll = false;
-
-		$this->dbResult['LOCS'] = array();
-		while($arLoc = $dbRecordsList->GetNext())
+		if ($this->grid === null || $this->filter === null)
 		{
-			$arLoc['PATH_TO_LOCATIONS_EDIT'] =
-				CComponentEngine::MakePathFromTemplate(
+			return;
+		}
+
+		$this->getFilter();
+		$this->getOrder();
+		$pagination = $this->grid->getPagination();
+		$select = array_values(array_unique([
+			...$this->grid->getVisibleColumnsIds(),
+			'NAME_' . mb_strtoupper(LANGUAGE_ID),
+		]));
+		$result = $this->getLocationListService()->read(
+			$this->filter,
+			$this->dbResult['SORT'] ?? [],
+			$select,
+			LANGUAGE_ID,
+			$pagination?->getPageSize() ?? 20,
+			$pagination?->getOffset() ?? 0,
+		);
+
+		$this->dbResult['LOCS'] = [];
+		foreach ($result['rows'] as $arLoc)
+		{
+			$arLoc['PATH_TO_LOCATIONS_EDIT']
+				= CComponentEngine::MakePathFromTemplate(
 					$this->arParams['PATH_TO_LOCATIONS_EDIT'],
-					array('loc_id' => $arLoc['ID'])
+					['loc_id' => $arLoc['ID']],
 				);
 
-			$arLoc['PATH_TO_LOCATIONS_DELETE'] =
-				(string)(new Uri(CComponentEngine::MakePathFromTemplate(
-						$this->arParams['PATH_TO_LOCATIONS_LIST'],
-						array('loc_id' => $arLoc['ID'])
-					)))->addParams(array('action_'.$this->dbResult['GRID_ID'] => 'delete', 'ID' => $arLoc['ID'], 'sessid' => bitrix_sessid()));
-
-			$arLoc['TYPE_ID'] = htmlspecialcharsbx($this->dbResult['TYPES'][$arLoc['TYPE_ID']]);
+			$arLoc['TYPE_ID'] = $this->dbResult['TYPES'][$arLoc['TYPE_ID']] ?? '';
 
 			$this->dbResult['LOCS'][$arLoc['ID']] = $arLoc;
 		}
 
-		$navComponentObject = 1; // formal
-		$this->dbResult['ROWS_COUNT'] = $dbRecordsList->NavRecordCount;
-		$this->dbResult['NAV_STRING'] = $dbRecordsList->GetPageNavStringEx($navComponentObject, Loc::getMessage("CRM_CLL2_INTS_TASKS_NAV"), "", false);
-		$this->dbResult['NAV_RESULT'] = $dbRecordsList;
+		$this->dbResult['ROWS_COUNT'] = $result['count'];
 	}
 
 	/**
@@ -321,22 +376,22 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 	 */
 	protected function formatResult()
 	{
-		$this->arResult =& $this->dbResult;
-		$this->arResult['ERRORS'] =& $this->errors;
+		$this->arResult =&$this->dbResult;
+		$this->arResult['ERRORS'] =&$this->errors;
 
 		if(is_array($this->componentData['LIST_HEADERS']))
 		{
 			// grid
-			$this->arResult['HEADERS'] = array();
+			$this->arResult['HEADERS'] = [];
 			foreach($this->componentData['LIST_HEADERS'] as $code => $fld)
 			{
-				$this->arResult['HEADERS'][] = array(
+				$this->arResult['HEADERS'][] = [
 					'id' => $code,
 					'name' => $fld['title'],
 					'sort' => $code,
 					'default' => $fld['DEFAULT'],
-					'editable' => false
-				);
+					'editable' => false,
+				];
 			}
 		}
 
@@ -352,7 +407,12 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 		if($this->checkRequiredModules() && $this->checkPermissions() && $this->checkParameters() && $this->checkIntegrity())
 		{
 			$this->performAction();
+			$this->applyParentIdFromRequest();
+			$this->grid = $this->createGrid();
+			$this->grid->processRequest();
+			$this->filter = $this->createFilter();
 			$this->obtainData();
+			$this->prepareGridResult($this->grid);
 		}
 
 		$this->formatResult();
@@ -367,15 +427,15 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 
 	protected function getCacheDependences()
 	{
-		return	array(
-					static::getClassName(),
-					LANGUAGE_ID
-				);
+		return	[
+			static::getClassName(),
+			LANGUAGE_ID,
+		];
 	}
 
 	protected static function getStrForVariable($val)
 	{
-		return ':'.($val ? strval($val) : '0').':';
+		return ':' . ($val ? strval($val) : '0') . ':';
 	}
 
 	/**
@@ -391,7 +451,7 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 		{
 			try
 			{
-				$cachedData = array();
+				$cachedData = [];
 				$this->obtainCachedData($cachedData);
 			}
 			catch (Exception $e)
@@ -423,6 +483,7 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 	public static function tryParseBoolean(&$fld)
 	{
 		$fld = $fld == 'Y';
+
 		return $fld;
 	}
 
@@ -432,7 +493,7 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 	 * @param string $default Default value
 	 * @return string parsed value
 	 */
-	public static function tryParseWhiteList(&$fld, $list = array())
+	public static function tryParseWhiteList(&$fld, $list = [])
 	{
 		if(!in_array($fld, $list))
 			$fld = current($list);
@@ -510,9 +571,9 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 	 */
 	final protected function getCacheNeed()
 	{
-		return	intval($this->arParams['CACHE_TIME']) > 0 &&
-				$this->arParams['CACHE_TYPE'] != 'N' &&
-				Config\Option::get("main", "component_cache_on", "Y") == "Y";
+		return	intval($this->arParams['CACHE_TIME']) > 0
+				&& $this->arParams['CACHE_TYPE'] != 'N'
+				&& Config\Option::get("main", "component_cache_on", "Y") == "Y";
 	}
 
 	/**
@@ -520,7 +581,7 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 	 * @param mixed[]|string $cacheId An optional addition for cache key
 	 * @return boolean True, if cache content needs to be generated, false if cache is valid and can be read
 	 */
-	final protected function startCache($cacheId = array())
+	final protected function startCache($cacheId = [])
 	{
 		if(!$this->getCacheNeed())
 			return true;
@@ -585,10 +646,10 @@ class CBitrixCrmConfigLocationList2Component extends CBitrixComponent
 	 * Function leaves the ability to modify cache key in future.
 	 * @return string Cache key to be used in CPHPCache()
 	 */
-	final protected function getCacheKey($cacheId = array())
+	final protected function getCacheKey($cacheId = [])
 	{
 		if(!is_array($cacheId))
-			$cacheId = array((string) $cacheId);
+			$cacheId = [(string)$cacheId];
 
 		$cacheId['SITE_ID'] = SITE_ID;
 		$cacheId['LANGUAGE_ID'] = LANGUAGE_ID;

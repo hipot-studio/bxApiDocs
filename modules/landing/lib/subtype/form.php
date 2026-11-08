@@ -553,17 +553,17 @@ class Form
 		{
 			foreach (static::getFormsViaConnector() ?? [] as $form)
 			{
-				$filtred = true;
+				$filtered = true;
 				foreach ($filter as $key => $value)
 				{
 					$clearKey = preg_replace('/^[^A-Z]*/', '', $key);
 					if (!array_key_exists($clearKey, $form) || $form[$clearKey] !== $value)
 					{
-						$filtred = false;
+						$filtered = false;
 						break;
 					}
 				}
-				if ($filtred)
+				if ($filtered)
 				{
 					$forms[$form['ID']] = $form;
 				}
@@ -605,19 +605,7 @@ class Form
 			$manifest['assets']['ext'][] = 'landing_form';
 		}
 
-		// style setting
-		if (
-			!isset($manifest['style']['block']) && !isset($manifest['style']['nodes'])
-		)
-		{
-			$manifest['style'] = [
-				'block' => ['type' => Block::DEFAULT_WRAPPER_STYLE],
-				'nodes' => $manifest['style'] ?? [],
-			];
-		}
-		$manifest['style']['nodes'][self::SELECTOR_FORM_NODE] = [
-			'type' => self::STYLE_SETTING,
-		];
+		$manifest = static::prepareStyleManifest($manifest);
 
 		if (Manager::isB24())
 		{
@@ -705,6 +693,42 @@ class Form
 			Landing::getEditMode()
 				? self::getAttrs()
 				: [['attribute' => self::ATTR_FORM_PARAMS]];
+
+		return $manifest;
+	}
+
+	/**
+	 * Adds the style setting of the form node.
+	 *
+	 * A repo block carries its manifest from REST as it was registered, so neither style nor
+	 * style.nodes is guaranteed to be an array here: Block::getManifest() normalizes them only
+	 * later, after the subtype has run.
+	 *
+	 * The result holds exactly block and nodes, because that is the only shape
+	 * Block::getManifest() leaves alone: any other one it wraps into nodes a second time, which
+	 * would bury the style node of the form in style.nodes.nodes, where the editor does not look
+	 * for it. An absent block stays empty on purpose - the wrapper style, including the widget
+	 * type of Vibe, belongs to Block::getManifest() and is filled there.
+	 */
+	protected static function prepareStyleManifest(array $manifest): array
+	{
+		$style = is_array($manifest['style'] ?? null) ? $manifest['style'] : [];
+
+		$hasNotation = isset($style['block']) || isset($style['nodes']);
+		$block = is_array($style['block'] ?? null) ? $style['block'] : [];
+		$nodes = is_array($style['nodes'] ?? null) ? $style['nodes'] : [];
+		unset($style['block'], $style['nodes']);
+
+		// what is left of style is the legacy notation: the map of selectors lies right under it
+		$nodes = array_merge($style, $nodes);
+		$nodes[self::SELECTOR_FORM_NODE] = [
+			'type' => self::STYLE_SETTING,
+		];
+
+		$manifest['style'] = [
+			'block' => $hasNotation ? $block : ['type' => Block::DEFAULT_WRAPPER_STYLE],
+			'nodes' => $nodes,
+		];
 
 		return $manifest;
 	}
@@ -1067,8 +1091,10 @@ class Form
 			$defaultData['USE_LICENCE'] = $agreementId ? 'Y' : 'N';
 			if ($agreementId)
 			{
-				$defaultData['LICENCE_BUTTON_IS_CHECKED'] = 'Y';
-				$defaultData['AGREEMENT_ID'] = $agreementId;
+				$defaultData = array_replace(
+					$defaultData,
+					self::getAgreementFormData((int)$agreementId, self::getCrmFormSchemaVersion()),
+				);
 			}
 
 			$isLeadEnabled = LeadSettings::getCurrent()?->isEnabled();
@@ -1090,6 +1116,68 @@ class Form
 		}
 
 		return null;
+	}
+
+	/**
+	 * Legal document of a form created from the site editor.
+	 *
+	 * `landing` and `crm` are released independently, so the modes of a legal document are asked
+	 * for only when `crm` says it knows them. An older `crm` gets the fields it has always had:
+	 * it neither stores the acceptance by form submit nor even declares the columns for it, and
+	 * an unknown field would break the creation of the form instead of degrading it.
+	 */
+	protected static function getAgreementFormData(int $agreementId, int $crmSchemaVersion): array
+	{
+		$acceptBySubmitEnabled = static::isAcceptBySubmitEnabled();
+		if (
+			$crmSchemaVersion < 2
+			|| $acceptBySubmitEnabled !== true
+		)
+		{
+			return [
+				'AGREEMENT_ID' => $agreementId,
+				'LICENCE_BUTTON_IS_CHECKED' => $acceptBySubmitEnabled === null ? 'Y' : 'N',
+			];
+		}
+
+		// The relation carries the modes on its own, and the legacy `AGREEMENT_ID` alias would
+		// overwrite them from the columns of the form on save.
+		return [
+			'AGREEMENT_ID' => null,
+			'LICENCE_BUTTON_IS_CHECKED' => 'Y',
+			'AGREEMENTS' => [
+				[
+					'AGREEMENT_ID' => $agreementId,
+					'CHECKED' => 'Y',
+					'REQUIRED' => 'Y',
+					'ACCEPT_BY_SUBMIT' => 'Y',
+				],
+			],
+		];
+	}
+
+	protected static function isAcceptBySubmitEnabled(): ?bool
+	{
+		if (!method_exists(WebForm\Embed\Config::class, 'isAcceptBySubmitEnabled'))
+		{
+			return null;
+		}
+
+		return WebForm\Embed\Config::isAcceptBySubmitEnabled();
+	}
+
+	/**
+	 * Version of the form configuration contract of the installed `crm`; 1 when it does not
+	 * publish one yet.
+	 */
+	protected static function getCrmFormSchemaVersion(): int
+	{
+		if (!method_exists(WebForm\Embed\Config::class, 'getSchemaVersion'))
+		{
+			return 1;
+		}
+
+		return WebForm\Embed\Config::getSchemaVersion();
 	}
 
 	/**

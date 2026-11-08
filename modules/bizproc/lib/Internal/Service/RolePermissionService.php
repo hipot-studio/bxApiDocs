@@ -23,6 +23,14 @@ use Bitrix\Main\Localization\Loc;
  * per role (delete-by-role + bulk insert, catalog-style). A portable advisory lock serializes the
  * read+write so a concurrent revoke cannot interleave.
  *
+ * The replace is full, and stays full for every caller by default. Only a caller that says so explicitly
+ * ($preserveInexpressibleValues) gets the one exception: a value the page that produced this payload showed
+ * nowhere is carried over from the committed rows instead of being dropped
+ * {@see self::withUnexpressedValues()}. That way a programmatic full-state write can still revoke the value,
+ * while a save from a page that could not show it does not delete it. The caller answers for its own payload;
+ * this service does not look at the portal state behind it, which would make a switch flipped while the page
+ * was open part of the request.
+ *
  * The tagged {@see PermissionCache} is invalidated after commit: touched roles by their role tag, and any
  * structural change (role create/delete, membership change) by the global tag.
  */
@@ -50,7 +58,12 @@ final class RolePermissionService
 	 * }> $userGroups full desired state of the matrix
 	 * @param array<int, int|string> $deletedUserGroups role ids to delete
 	 */
-	public function saveRolePermissions(int $userId, array $userGroups, array $deletedUserGroups = []): Result
+	public function saveRolePermissions(
+		int $userId,
+		array $userGroups,
+		array $deletedUserGroups = [],
+		bool $preserveInexpressibleValues = false,
+	): Result
 	{
 		$result = new Result();
 		$connection = Application::getConnection();
@@ -154,6 +167,14 @@ final class RolePermissionService
 				$structural = $structural || $isNewRole;
 
 				$desired = $this->desiredByPermission($userGroup);
+				if ($preserveInexpressibleValues)
+				{
+					$desired = $this->withUnexpressedValues(
+						$desired,
+						$isNewRole ? [] : ($currentPermissions[$roleId] ?? []),
+					);
+				}
+
 				if ($isNewRole || $this->permissionsRequireUpdate($currentPermissions[$roleId] ?? [], $roleId, $desired))
 				{
 					$this->replacePermissions($roleId, $desired);
@@ -302,8 +323,10 @@ final class RolePermissionService
 				$value = (int)$value;
 				if ($isMultivariables)
 				{
-					// Keep only the "all" sentinel or a real (positive) template id; drop 0 and bogus negatives.
-					if ($value !== PermissionDictionary::VALUE_VARIATION_ALL && $value <= 0)
+					// Keep only a sentinel scope value or a real (positive) template id; drop 0 and bogus
+					// negatives. The dictionary answers what a sentinel is, so a new one is admitted here
+					// by adding it there and nowhere else.
+					if (!PermissionDictionary::isSentinelValue($value) && $value <= 0)
 					{
 						continue;
 					}
@@ -326,6 +349,52 @@ final class RolePermissionService
 		}
 
 		return $rows;
+	}
+
+	/**
+	 * Committed values the page that sent this payload could not express, put back into the desired state: what
+	 * a page never showed, a save from that page must not delete. The rights page has exactly one such value -
+	 * the "own templates" sentinel of a template scope, and it is expressible only when the source mode is usable
+	 * AND the portal switch of the value is on. Under either condition unmet it is neither an element of the
+	 * right nor a
+	 * value of a cell
+	 * ({@see \Bitrix\Bizproc\Internal\Integration\UI\AccessRights\V2\AccessRightsProvider::loadUserGroupModels()}),
+	 * so its absence from the payload carries no intent of the user at all.
+	 *
+	 * Whether that was the case is decided by the caller and NOT re-read from the switches here. The question
+	 * belongs to the render that produced the payload, and the pair of switches is portal state that moves
+	 * independently of an open page: read a second time at save it made a switch flipped in between part of the
+	 * request. Off and on again around one page - the documented emergency use of the switch - deleted a granted
+	 * value nobody saw, and off between a deliberate deselect and its save restored the value that was just
+	 * revoked. The page answers about itself
+	 * ({@see \Bitrix\Bizproc\Internal\Integration\UI\AccessRights\V2\AccessRightsProvider::isOwnSentinelExpressible()}).
+	 *
+	 * Being a sentinel is not what saves a value either: "all" is offered in every mode, so a payload without it
+	 * removes it as before. The one condition is that the page could not express the value.
+	 *
+	 * @param array<int, int[]> $desired
+	 * @param iterable<\Bitrix\Bizproc\Internal\Entity\Access\Permission> $current committed rows of the role
+	 * @return array<int, int[]>
+	 */
+	private function withUnexpressedValues(array $desired, iterable $current): array
+	{
+		foreach ($current as $permission)
+		{
+			$value = (int)$permission->getValue();
+			$permissionId = (int)$permission->getPermissionId();
+			if ($value !== PermissionDictionary::VALUE_VARIATION_OWN || !$this->isMultivariables($permissionId))
+			{
+				continue;
+			}
+
+			$desired[$permissionId] ??= [];
+			if (!in_array($value, $desired[$permissionId], true))
+			{
+				$desired[$permissionId][] = $value;
+			}
+		}
+
+		return $desired;
 	}
 
 	/**

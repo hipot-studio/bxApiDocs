@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Psr\Log\LogLevel;
@@ -14,6 +14,7 @@ use Bitrix\Main\Diag\Logger;
 use Bitrix\Main\Diag\SysLogger;
 use Bitrix\Main\Diag\FileLogger;
 use Bitrix\Main\Diag\JsonLinesFormatter;
+use Bitrix\Main\Type\Callback;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -188,7 +189,7 @@ class CEventLog
 			$DB->Query("DELETE FROM b_event_log WHERE TIMESTAMP_X <= " . $DB->CharToDateFunction(ConvertTimeStamp($date, "FULL")));
 		}
 
-		return "CEventLog::CleanUpAgent();";
+		return new Callback([self::class, 'CleanUpAgent']);
 	}
 
 	public static function GetList($arOrder = ["ID" => "DESC"], $arFilter = [], $arNavParams = false)

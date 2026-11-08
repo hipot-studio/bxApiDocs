@@ -71,62 +71,12 @@ class CrmFeaturesList extends CBitrixComponent implements \Bitrix\Main\Engine\Co
 
 	public function enableFeatureAction(string $featureId): ?bool
 	{
-		if (!$this->checkAccess())
-		{
-			$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
-
-			return null;
-		}
-
-		$feature = $this->featureRepository->getById($featureId);
-		if ($feature !== null)
-		{
-			try {
-				$feature->enable();
-			}
-			catch (\Throwable $exception)
-			{
-				$this->errors->setError(new \Bitrix\Main\Error($exception->getMessage(), $exception->getCode()));
-
-				return null;
-			}
-
-			return true;
-		}
-
-		$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getNotFoundError());
-
-		return null;
+		return $this->switchFeatureByAction($featureId, true);
 	}
 
 	public function disableFeatureAction(string $featureId): ?bool
 	{
-		if (!$this->checkAccess())
-		{
-			$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
-
-			return null;
-		}
-
-		$feature = $this->featureRepository->getById($featureId);
-		if ($feature !== null)
-		{
-			try {
-				$feature->disable();
-			}
-			catch (\Throwable $exception)
-			{
-				$this->errors->setError(new \Bitrix\Main\Error($exception->getMessage(), $exception->getCode()));
-
-				return null;
-			}
-
-			return true;
-		}
-
-		$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getNotFoundError());
-
-		return null;
+		return $this->switchFeatureByAction($featureId, false);
 	}
 
 	public function enableToursAction()
@@ -222,21 +172,97 @@ class CrmFeaturesList extends CBitrixComponent implements \Bitrix\Main\Engine\Co
 		return false;
 	}
 
+	/**
+	 * Returns the effective state after a completed attempt: the core engine may keep the previous
+	 * value without raising an exception, so a completed call does not mean an applied change.
+	 * Returns null when the attempt did not complete, and the client then restores the previous
+	 * switch position. A hook throwing after the engine has already stored the value falls into
+	 * that branch too, so the restored position can lag behind the stored one until a reload.
+	 */
+	private function switchFeatureByAction(string $featureId, bool $enabled): ?bool
+	{
+		if (!$this->checkAccess())
+		{
+			$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
+
+			return null;
+		}
+
+		if (!$this->featureRepository->has($featureId))
+		{
+			$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getNotFoundError());
+
+			return null;
+		}
+
+		try
+		{
+			if ($enabled)
+			{
+				$this->featureRepository->enable($featureId);
+			}
+			else
+			{
+				$this->featureRepository->disable($featureId);
+			}
+
+			return $this->featureRepository->isEnabled($featureId);
+		}
+		catch (\Throwable $exception)
+		{
+			\Bitrix\Crm\Service\Container::getInstance()->getLogger('Features')->error(
+				'Cannot switch CRM feature',
+				[
+					'featureId' => $featureId,
+					'enabled' => $enabled,
+					'exception' => $exception,
+				],
+			);
+
+			$this->errors->setError(\Bitrix\Crm\Controller\ErrorCode::getGeneralError());
+
+			return null;
+		}
+	}
+
 	private function enableFeature(string $featureId): void
 	{
-		$feature = $this->featureRepository->getById($featureId);
-		if ($feature && $feature->allowSwitchBySecretLink())
-		{
-			$feature->enable();
-		}
+		$this->switchFeatureBySecretLink($featureId, true);
 	}
 
 	private function disableFeature(string $featureId): void
 	{
-		$feature = $this->featureRepository->getById($featureId);
-		if ($feature && $feature->allowSwitchBySecretLink())
+		$this->switchFeatureBySecretLink($featureId, false);
+	}
+
+	private function switchFeatureBySecretLink(string $featureId, bool $enabled): void
+	{
+		if (!$this->featureRepository->isSwitchBySecretLinkAllowed($featureId))
 		{
-			$feature->disable();
+			return;
+		}
+
+		try
+		{
+			if ($enabled)
+			{
+				$this->featureRepository->enable($featureId);
+			}
+			else
+			{
+				$this->featureRepository->disable($featureId);
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			\Bitrix\Crm\Service\Container::getInstance()->getLogger('Features')->error(
+				'Cannot switch CRM feature by secret link',
+				[
+					'featureId' => $featureId,
+					'enabled' => $enabled,
+					'exception' => $exception,
+				],
+			);
 		}
 	}
 

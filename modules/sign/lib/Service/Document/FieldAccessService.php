@@ -38,6 +38,30 @@ class FieldAccessService
 	}
 
 	/**
+	 * Delete permissions of the field categories the module owns. The CRM categories are absent on
+	 * purpose: the module has no delete permission of its own for them, their lifecycle is ruled by CRM.
+	 *
+	 * @return array<string, bool>
+	 */
+	public function getDeleteByCategoryPermissions(int $userId): array
+	{
+		$accessController = $this->accessControllerFactory->createByUserId($userId);
+		if ($accessController === null)
+		{
+			return [];
+		}
+
+		return [
+			FrontFieldCategory::PROFILE->value =>
+				$accessController->check(ActionDictionary::ACTION_B2E_PROFILE_FIELDS_DELETE)
+			,
+			FrontFieldCategory::DYNAMIC_MEMBER->value =>
+				$accessController->check(ActionDictionary::ACTION_B2E_MEMBER_DYNAMIC_FIELDS_DELETE)
+			,
+		];
+	}
+
+	/**
 	 * @param array{fields: array, options: array} $crmFieldsData
 	 *
 	 * @return array<string, bool>

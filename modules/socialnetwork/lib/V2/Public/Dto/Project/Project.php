@@ -13,6 +13,8 @@ use Bitrix\Socialnetwork\V2\Internal\Validation\ProjectValidationGroup;
 use Bitrix\Socialnetwork\V2\Internal\Entity\PrivacyType;
 use Bitrix\Socialnetwork\V2\Internal\Validation\Rule\NullOr;
 use Bitrix\Socialnetwork\V2\Public\Mapper\ProjectMemberMapper;
+use Bitrix\Socialnetwork\V2\Public\Validation\Rule\NoTeamModerators;
+use Bitrix\Socialnetwork\V2\Public\Validation\Rule\TeamsSupported;
 
 class Project implements EntityInterface
 {
@@ -32,7 +34,9 @@ class Project implements EntityInterface
 		#[NullOr(PositiveNumber::class)]
 		public readonly ?int $chatId = null,
 		public readonly ?PrivacyType $privacyType = null,
+		#[TeamsSupported(groups: [ProjectValidationGroup::Add, ProjectValidationGroup::Copy])]
 		public readonly ?MemberCollection $members = null,
+		#[NoTeamModerators]
 		public readonly ?MemberCollection $moderatorMembers = null,
 		public readonly ?array $features = null,
 		public readonly ?string $baseFeatureId = null,

@@ -10,6 +10,7 @@ namespace Bitrix\Main\UserConsent\Internals;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\UserConsent\ConsentUrl;
 
 
 /**
@@ -82,6 +83,7 @@ class ConsentTable extends DataManager
 			'URL' => array(
 				'data_type' => 'string',
 				'required' => false,
+				'save_data_modification' => array(ConsentUrl::class, 'getSaveModificator'),
 			),
 			'ORIGIN_ID' => array(
 				'data_type' => 'string',

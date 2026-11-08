@@ -24,6 +24,7 @@ final class ObjectOptionsTable extends DataManager
 
 	public const NAME_ALLOW_DOWNLOAD_ON_READ = 'dw-on-read';
 	public const NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ = 'pub-mng-on-read';
+	public const NAME_EXTERNAL_LINK_SCENARIO = 'ext-link-scenario';
 
 	public static function getTableName()
 	{

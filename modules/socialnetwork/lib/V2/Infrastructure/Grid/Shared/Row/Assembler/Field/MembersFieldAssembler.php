@@ -8,6 +8,7 @@ use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\V2\Infrastructure\Grid\Shared\Js\ProjectListControllerActionBuilder;
+use Bitrix\Socialnetwork\V2\Infrastructure\Grid\Shared\Localization\ColumnMessage;
 use Bitrix\Socialnetwork\V2\Internal\Entity\User;
 use Bitrix\Socialnetwork\V2\Internal\Entity\User\Role;
 use Bitrix\Socialnetwork\V2\Internal\Entity\UserCollection;
@@ -106,11 +107,23 @@ class MembersFieldAssembler extends FieldAssembler
 		;
 
 		$onclick = $this->getPopupOnclick($entityId, $entityType);
+		if ($onclick === '')
+		{
+			return $headsLayout . $membersLayout;
+		}
 
-		return '<div class="sonet-ui-grid-user-list-container" onclick="' . htmlspecialcharsbx($onclick) . '">'
+		$label = ColumnMessage::get(ColumnMessage::MEMBERS);
+
+		return '<button type="button" class="sonet-ui-grid-user-list-container"'
+			. ' aria-label="' . htmlspecialcharsbx($label) . '"'
+			. ' aria-haspopup="dialog"'
+			. ' aria-expanded="false"'
+			. ' aria-controls="workgroup-grid-members-popup-menu"'
+			. ' data-testid="socialnetwork-project-list-members-' . $entityId . '"'
+			. ' onclick="' . htmlspecialcharsbx($onclick) . '">'
 			. $headsLayout
 			. $membersLayout
-			. '</div>';
+			. '</button>';
 	}
 
 	/**
@@ -153,12 +166,12 @@ class MembersFieldAssembler extends FieldAssembler
 
 		$modifier = $isHeads ? ' sonet-ui-grid-user-list--green' : '';
 
-		return '<div style="display: inline-block">'
-			. '<div class="sonet-ui-grid-user-list' . $modifier . '">'
+		return '<span style="display: inline-block" aria-hidden="true">'
+			. '<span class="sonet-ui-grid-user-list' . $modifier . '">'
 			. $avatarsHtml
 			. $counterHtml
-			. '</div>'
-			. '</div>';
+			. '</span>'
+			. '</span>';
 	}
 
 	private function renderAvatar(User $user): string
@@ -170,9 +183,9 @@ class MembersFieldAssembler extends FieldAssembler
 			$style = ' style="background-image: url(\'' . Uri::urnEncode($photoSrc) . '\')"';
 		}
 
-		return '<a class="sonet-ui-grid-user-item"' . $style . '>'
-			. '<div class="sonet-ui-grid-user-crown"></div>'
-			. '</a>';
+		return '<span class="sonet-ui-grid-user-item"' . $style . '>'
+			. '<span class="sonet-ui-grid-user-crown"></span>'
+			. '</span>';
 	}
 
 	private function renderCounter(int $remaining): string
@@ -182,10 +195,10 @@ class MembersFieldAssembler extends FieldAssembler
 			return '';
 		}
 
-		return '<div class="sonet-ui-grid-user-count">'
+		return '<span class="sonet-ui-grid-user-count">'
 			. '<span class="sonet-ui-grid-user-plus">+</span>'
 			. $remaining
-			. '</div>';
+			. '</span>';
 	}
 
 	private function getPopupOnclick(int $entityId, ?string $entityType): string

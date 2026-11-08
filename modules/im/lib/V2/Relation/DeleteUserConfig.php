@@ -11,13 +11,20 @@ final class DeleteUserConfig
 	public readonly bool $withoutRead;
 	public readonly bool $blockGuestRejoin;
 
+	/**
+	 * Answer of Structure::holdsUser() obtained by the caller in batch; null means "not asked yet",
+	 * so a single deletion still asks for itself.
+	 */
+	public readonly ?bool $structureHoldsUser;
+
 	public function __construct(
 		bool $withMessage = true,
 		bool $skipRecent = false,
 		bool $withNotification = true,
 		bool $skipCheckReason = false,
 		bool $withoutRead = false,
-		bool $blockGuestRejoin = false
+		bool $blockGuestRejoin = false,
+		?bool $structureHoldsUser = null
 	)
 	{
 		$this->withMessage = $withMessage;
@@ -26,5 +33,6 @@ final class DeleteUserConfig
 		$this->skipCheckReason = $skipCheckReason;
 		$this->withoutRead = $withoutRead;
 		$this->blockGuestRejoin = $blockGuestRejoin;
+		$this->structureHoldsUser = $structureHoldsUser;
 	}
 }

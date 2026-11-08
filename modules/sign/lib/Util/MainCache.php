@@ -11,11 +11,35 @@ class MainCache implements Contract\Util\Cache
 {
 	private Cache $bitrixCache;
 	private const CACHE_DIR = 'sign';
+	private readonly ?string $scope;
+	private readonly string $dir;
 	private int $ttl = 3600;
 
-	public function __construct()
+	/**
+	 * @param string|null $scope own subdirectory of the cache of the module. The root of the cache is
+	 *                           shared by every consumer of the module, so a consumer that resets its
+	 *                           keys as a whole holds a scope of its own: see deleteAll().
+	 */
+	public function __construct(?string $scope = null)
 	{
 		$this->bitrixCache = Cache::createInstance();
+
+		$normalizedScope = $scope === null ? '' : trim($scope, '/ ');
+		$this->scope = $normalizedScope === '' ? null : $normalizedScope;
+		$this->dir = $this->scope === null ? self::CACHE_DIR : self::CACHE_DIR . '/' . $this->scope;
+	}
+
+	/**
+	 * An instance bound to the own scope of a consumer; the ttl of the source is kept. The instance of
+	 * the service locator is shared by every consumer, so the scope is taken and never set: a setter
+	 * would move the keys of the neighbours as well.
+	 */
+	public function withScope(string $scope): static
+	{
+		$scoped = new static($scope);
+		$scoped->ttl = $this->ttl;
+
+		return $scoped;
 	}
 
 	public function get(string $key, mixed $default = null): mixed
@@ -25,7 +49,7 @@ class MainCache implements Contract\Util\Cache
 			$this->bitrixCache->initCache(
 				$this->ttl,
 				$key,
-				self::CACHE_DIR
+				$this->dir
 			)
 		)
 		{
@@ -52,7 +76,7 @@ class MainCache implements Contract\Util\Cache
 			$this->bitrixCache->startDataCache(
 				$ttl ?? $this->ttl,
 				$key,
-				self::CACHE_DIR
+				$this->dir
 			)
 		)
 		{
@@ -64,7 +88,29 @@ class MainCache implements Contract\Util\Cache
 
 	public function delete(string $key): static
 	{
-		$this->bitrixCache->clean($key, self::CACHE_DIR);
+		$this->bitrixCache->clean($key, $this->dir);
+
+		return $this;
+	}
+
+	/**
+	 * Drops every key of the own scope at once. The root of the cache of the module is shared by all
+	 * of its consumers, the tariff of the license among them, so an instance without a scope has
+	 * nothing it may drop as a whole: bind it to a scope of its own through withScope() first.
+	 *
+	 * @throws ArgumentException when the instance is bound to the root of the cache of the module
+	 */
+	public function deleteAll(): static
+	{
+		if ($this->scope === null)
+		{
+			throw new ArgumentException(
+				'The cache of the module is shared by its consumers and cannot be dropped as a whole',
+				'scope',
+			);
+		}
+
+		$this->bitrixCache->cleanDir($this->dir);
 
 		return $this;
 	}

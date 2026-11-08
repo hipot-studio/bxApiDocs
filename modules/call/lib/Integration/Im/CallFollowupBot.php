@@ -88,7 +88,12 @@ class CallFollowupBot extends ImBot\Bot\Base
 						)
 						{
 							$message = ChatMessage::generateTaskStartMessage($callId, $chat);
-							if ($message)
+							// Claim-before-send keyed by (callId, AI_START, attemptId): the attempt
+							// discriminator (transcribe task id) lets a manual restart re-show its status.
+							if (
+								$message
+								&& NotifyService::getInstance()->claim($callId, NotifyService::MESSAGE_TYPE_AI_START, CallAIService::getInstance()->getCurrentAnalysisAttemptId($callId))
+							)
 							{
 								$sendingConfig = (new SendingConfig())
 									->enableSkipCommandExecution()

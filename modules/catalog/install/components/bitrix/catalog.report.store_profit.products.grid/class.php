@@ -305,25 +305,20 @@ class CatalogReportStoreProfitProductsGridComponent extends \Bitrix\Catalog\Comp
 			}
 		}
 
+		$periodMovements = [
+			'RECEIVED' => $receivedQuantityData,
+			'OUTGOING' => $outgoingQuantityData,
+			'SOLD' => $amountSoldData,
+		];
+		$afterPeriodMovements = [
+			'RECEIVED' => $receivedQuantityAmountDifferenceData,
+			'OUTGOING' => $outgoingQuantityAmountDifferenceData,
+			'SOLD' => $amountSoldAmountDifferenceData,
+		];
+
 		foreach ($productData as $item)
 		{
-			$receivedQuantityAmountDifference = (float)($receivedQuantityAmountDifferenceData[$item['PRODUCT_ID']] ?? 0);
-			$outgoingQuantityAmountDifference = (float)($outgoingQuantityAmountDifferenceData[$item['PRODUCT_ID']] ?? 0);
-			$amountSoldAmountDifference = (float)($amountSoldAmountDifferenceData[$item['PRODUCT_ID']] ?? 0);
-			$item['AMOUNT'] =
-				$item['AMOUNT']
-				- $receivedQuantityAmountDifference
-				+ $outgoingQuantityAmountDifference
-				+ $amountSoldAmountDifference
-			;
-
-			$receivedQuantity = (float)($receivedQuantityData[$item['PRODUCT_ID']] ?? 0);
-			$outgoingQuantity = (float)($outgoingQuantityData[$item['PRODUCT_ID']] ?? 0);
-			$amountSold = (float)($amountSoldData[$item['PRODUCT_ID']] ?? 0);
-			$item['STARTING_QUANTITY'] = $item['AMOUNT'] - $receivedQuantity + $outgoingQuantity + $amountSold;
-			$item['RECEIVED_QUANTITY'] = (float)($receivedQuantityData[$item['PRODUCT_ID']] ?? 0);
-			$item['AMOUNT_SOLD'] = (float)($amountSoldData[$item['PRODUCT_ID']] ?? 0);
-			$item['QUANTITY'] = $item['AMOUNT'] - (float)$item['QUANTITY_RESERVED'];
+			$item = $this->applyRowQuantities($item, $periodMovements, $afterPeriodMovements);
 			$productPrices = $formattedPricesSoldData[$item['PRODUCT_ID']] ?? [
 				'TOTAL_SOLD' => 0,
 				'TOTAL_COST_PRICE' => 0,

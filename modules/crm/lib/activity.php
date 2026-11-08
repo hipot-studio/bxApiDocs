@@ -286,8 +286,9 @@ class ActivityTable extends Entity\DataManager
 			'RESULT_MARK' => array(
 				'data_type' => 'integer'
 			),
+			// The column is decimal(18,4), same as RESULT_SUM below.
 			'RESULT_VALUE' => array(
-				'data_type' => 'integer'
+				'data_type' => 'float'
 			),
 			'RESULT_SUM' => array(
 				'data_type' => 'float'
@@ -324,9 +325,15 @@ class ActivityTable extends Entity\DataManager
 				// ->configureSerializeCallback([self::class, 'serializeSettings'])
 				// ->configureUnserializeCallback([self::class, 'unserializeSettings']),
 
-			new TextField('PROVIDER_PARAMS', [
-				'serialized' => true
-			]),
+			(new TextField('PROVIDER_PARAMS'))
+				->addSaveDataModifier([self::class, 'serializeProviderParams'])
+				->addFetchDataModifier([self::class, 'unserializeProviderParams']),
+
+			// Opaque payload: its structure belongs to the provider layer, the storage boundary never decodes it.
+			new TextField('PROVIDER_DATA'),
+
+			// Derived from COMPLETED by the write path only; ORM writes bypass that synchronization.
+			new Entity\IntegerField('STATUS'),
 
 			new Entity\IntegerField('STORAGE_TYPE_ID'),
 		);
@@ -349,6 +356,24 @@ class ActivityTable extends Entity\DataManager
 		$value = unserialize($value, ['allowed_classes' => false]);
 
 		return self::decodeEmoji($value);
+	}
+
+	public static function serializeProviderParams($value)
+	{
+		return serialize($value);
+	}
+
+	/**
+	 * The column is writable from the outside through legacy REST, so unpacking it must not be able to
+	 * instantiate an object: a serialized object degrades into an inert placeholder and a broken value into
+	 * false, and neither raises an exception - historical rows have to stay readable.
+	 *
+	 * @param string|null $value
+	 * @return mixed
+	 */
+	public static function unserializeProviderParams($value)
+	{
+		return $value === null ? null : unserialize((string)$value, ['allowed_classes' => false]);
 	}
 
 	private static function encodeEmoji($value)

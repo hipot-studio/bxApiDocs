@@ -1,6 +1,8 @@
 <?
 
 use Bitrix\Socialnetwork\FeatureTable;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/socialnetwork/classes/general/group_features.php");
 
@@ -59,8 +61,16 @@ class CSocNetFeatures extends CAllSocNetFeatures
 				&& array_key_exists("ENTITY_ID", $arFields)
 			)
 			{
-				$CACHE_MANAGER->ClearByTag('sonet_features');
 				$CACHE_MANAGER->ClearByTag("sonet_features_".$arFields["ENTITY_TYPE"]."_".$arFields["ENTITY_ID"]);
+
+				if (DeferredCacheFeature::isOn())
+				{
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_features');
+				}
+				else
+				{
+					$CACHE_MANAGER->ClearByTag('sonet_features');
+				}
 			}
 
 			FeatureTable::cleanCache();

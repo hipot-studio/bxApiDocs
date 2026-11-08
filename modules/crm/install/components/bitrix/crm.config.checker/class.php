@@ -3,6 +3,8 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
 {
 	die();
 }
+use Bitrix\Crm\Engine\ActionFilter\CheckWriteConfigPermission;
+use Bitrix\Main\Engine\ActionFilter\HttpMethod;
 use Bitrix\Main\IO\Path;
 use Bitrix\Main\Localization\Loc;
 
@@ -119,9 +121,26 @@ class CrmConfigurationCheckerComponent extends \CBitrixComponent implements \Bit
 		$this->includeComponentTemplate();
 	}
 
+	/**
+	 * The access error of the constructor is read by executeComponent() only; an AJAX call goes through
+	 * ComponentController, so the CRM administrator right is enforced by a prefilter of every action.
+	 * Every action changes state or reports configuration, and the core client sends POST, so the default
+	 * GET of the engine is dropped as well.
+	 */
 	public function configureActions()
 	{
-		return [];
+		$config = [];
+		foreach (['reset', 'continue', 'executeStep', 'showSlider', 'closeSlider'] as $action)
+		{
+			$config[$action] = [
+				'+prefilters' => [
+					new CheckWriteConfigPermission(),
+					new HttpMethod([HttpMethod::METHOD_POST]),
+				],
+			];
+		}
+
+		return $config;
 	}
 
 	protected function checkStep()
@@ -159,15 +178,10 @@ class CrmConfigurationCheckerComponent extends \CBitrixComponent implements \Bit
 		return $this->checkStep();
 	}
 
-	public function executeStepAction()
+	public function executeStepAction(string $stepId, string $stepAction, array $stepData = [])
 	{
-		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
 		$steps = [];
-		if ($step = $this->configurator->execStep(
-			$request->getPost("stepId"),
-			$request->getPost("stepAction"),
-			$request->getPost("stepData"))
-		)
+		if ($step = $this->configurator->execStep($stepId, $stepAction, $stepData))
 		{
 			$steps[$step->getId()] = [
 				"actual" => $step->isActual(),

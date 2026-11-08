@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Internal\Grid\AiAgents\Column\Provider;
 
+use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Upgrade\UpgradeFeatureToggle;
 use Bitrix\Main\Grid\Column\DataProvider;
 use Bitrix\Main\Grid\Column\Type;
 use Bitrix\Main\Localization\Loc;
@@ -12,6 +13,7 @@ class AiAgentsDataProvider extends DataProvider
 	public function prepareColumns(): array
 	{
 		$result = [];
+		$isUpgradeEnabled = UpgradeFeatureToggle::isEnabled();
 
 		$result[]
 			= $this->createColumn('ID')
@@ -43,6 +45,16 @@ class AiAgentsDataProvider extends DataProvider
 				->setPreventDefault(false)
 				->setDefault(true)
 		;
+
+		if ($isUpgradeEnabled)
+		{
+			$result[]
+				= $this->createColumn('VERSION')
+					->setName(Loc::getMessage('BIZPROC_AI_AGENTS_COLUMN_VERSION'))
+					->setWidth(200)
+					->setDefault(true)
+			;
+		}
 
 		$result[]
 			= $this->createColumn('LAUNCH_CONTROL')

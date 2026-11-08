@@ -40,6 +40,7 @@ class Form
 		'USE_CAPTCHA' => 'N',
 		'USE_LICENCE' => 'N',
 		'LICENCE_BUTTON_IS_CHECKED' => 'Y',
+		'LICENCE_BUTTON_ACCEPT_BY_SUBMIT' => 'N',
 		'FIELDS' => array(),
 		'PRESET_FIELDS' => array(),
 		'INVOICE_SETTINGS' => array(),
@@ -56,11 +57,17 @@ class Form
 	protected $isEmbeddedAvailableChanged = false;
 	protected $forceBuild = false;
 	protected $integration;
+	private ?Telemetry\RecorderInterface $telemetryRecorder;
 
-	public function __construct($id = null, array $params = null)
+	public function __construct(
+		$id = null,
+		array $params = null,
+		?Telemetry\RecorderInterface $telemetryRecorder = null,
+	)
 	{
 		$this->params = self::$defaultParams;
 		$this->integration = new Options\Integration($this);
+		$this->telemetryRecorder = $telemetryRecorder;
 		if ($id)
 		{
 			$this->load($id);
@@ -242,6 +249,10 @@ class Form
 			return false;
 		}
 
+		// The whole row is read, but the configuration version is not part of the form document:
+		// it belongs to the storage layer, and FormTable::onBeforeUpdate() is its only author
+		unset($result['DATE_MODIFY']);
+
 		if (!is_array($result['FORM_SETTINGS']))
 		{
 			$result['FORM_SETTINGS'] = [];
@@ -268,6 +279,25 @@ class Form
 		}
 
 		$this->params = $result;
+		return true;
+	}
+
+	public function loadOnlySecurityData($id): bool
+	{
+		$this->setId($id);
+		$result = Internals\FormTable::query()
+			->setSelect(['ACTIVE', 'SECURITY_CODE'])
+			->where('ID', $id)
+			->setLimit(1)
+			->fetch()
+		;
+		if (!$result)
+		{
+			return false;
+		}
+
+		$this->params = $result;
+
 		return true;
 	}
 
@@ -320,16 +350,27 @@ class Form
 		}
 
 		$this->params['AGREEMENTS'] = Internals\AgreementTable::getList([
-			'select' => ['AGREEMENT_ID', 'CHECKED', 'REQUIRED'],
+			'select' => ['AGREEMENT_ID', 'CHECKED', 'REQUIRED', 'ACCEPT_BY_SUBMIT'],
 			'filter' => ['=FORM_ID' => $id]
 		])->fetchAll();
 		if ($this->params['AGREEMENT_ID'])
 		{
+			foreach ($this->params['AGREEMENTS'] as $agreement)
+			{
+				if ((int)$agreement['AGREEMENT_ID'] === (int)$this->params['AGREEMENT_ID'])
+				{
+					$this->params['LICENCE_BUTTON_ACCEPT_BY_SUBMIT'] = $agreement['ACCEPT_BY_SUBMIT'];
+
+					break;
+				}
+			}
+
 			$this->params['AGREEMENTS'] = array_merge(
 				[[
 					'AGREEMENT_ID' => $this->params['AGREEMENT_ID'],
 					'CHECKED' => $this->params['LICENCE_BUTTON_IS_CHECKED'] === 'Y' ? 'Y' : 'N',
 					'REQUIRED' => 'Y',
+					'ACCEPT_BY_SUBMIT' => ($this->params['LICENCE_BUTTON_ACCEPT_BY_SUBMIT'] ?? 'N') === 'Y' ? 'Y' : 'N',
 				]],
 				$this->params['AGREEMENTS']
 			);
@@ -338,6 +379,7 @@ class Form
 		{
 			$this->params['AGREEMENT_ID'] = $this->params['AGREEMENTS'][0]['AGREEMENT_ID'];
 			$this->params['LICENCE_BUTTON_IS_CHECKED'] = $this->params['AGREEMENTS'][0]['CHECKED'];
+			$this->params['LICENCE_BUTTON_ACCEPT_BY_SUBMIT'] = $this->params['AGREEMENTS'][0]['ACCEPT_BY_SUBMIT'];
 		}
 
 		$responsibleQueue = new ResponsibleQueue($id);
@@ -372,6 +414,7 @@ class Form
 				'AGREEMENT_ID' => $agreementId,
 				'CHECKED' => $agreement['CHECKED'] === 'Y' ? 'Y' : 'N',
 				'REQUIRED' => $agreement['REQUIRED'] === 'Y' ? 'Y' : 'N',
+				'ACCEPT_BY_SUBMIT' => ($agreement['ACCEPT_BY_SUBMIT'] ?? 'N') === 'Y' ? 'Y' : 'N',
 			];
 		}
 		unset($result['AGREEMENTS']);
@@ -381,8 +424,11 @@ class Form
 			{
 				$agreements[] = [
 					'AGREEMENT_ID' => $result['AGREEMENT_ID'],
-					'CHECKED' => $result['LICENCE_BUTTON_IS_CHECKED'] === 'Y' ? 'Y' : 'N',
+					'CHECKED' => !$this->id && !Embed\Config::isAcceptBySubmitEnabled()
+						? 'N'
+						: ($result['LICENCE_BUTTON_IS_CHECKED'] === 'Y' ? 'Y' : 'N'),
 					'REQUIRED' => 'Y',
+					'ACCEPT_BY_SUBMIT' => ($result['LICENCE_BUTTON_ACCEPT_BY_SUBMIT'] ?? 'N') === 'Y' ? 'Y' : 'N',
 				];
 			}
 			elseif (isset($result['LICENCE_BUTTON_IS_CHECKED']))
@@ -395,10 +441,38 @@ class Form
 					}
 
 					$agreements[$index]['CHECKED'] = $result['LICENCE_BUTTON_IS_CHECKED'] === 'Y' ? 'Y' : 'N';
+					$agreements[$index]['ACCEPT_BY_SUBMIT'] = ($result['LICENCE_BUTTON_ACCEPT_BY_SUBMIT'] ?? 'N') === 'Y'
+						? 'Y'
+						: 'N';
 				}
 			}
 		}
 		$result['AGREEMENT_ID'] = null;
+		unset($result['LICENCE_BUTTON_ACCEPT_BY_SUBMIT']);
+
+		if (!Embed\Config::isAcceptBySubmitEnabled())
+		{
+			$storedSubmitAgreementIds = [];
+			if ($this->id)
+			{
+				$storedAgreements = Internals\AgreementTable::getList([
+					'select' => ['AGREEMENT_ID'],
+					'filter' => ['=FORM_ID' => $this->id, '=ACCEPT_BY_SUBMIT' => 'Y'],
+				]);
+				while ($storedAgreement = $storedAgreements->fetch())
+				{
+					$storedSubmitAgreementIds[(int)$storedAgreement['AGREEMENT_ID']] = true;
+				}
+			}
+
+			foreach ($agreements as &$agreement)
+			{
+				$agreement['ACCEPT_BY_SUBMIT'] = isset(
+					$storedSubmitAgreementIds[(int)$agreement['AGREEMENT_ID']]
+				) ? 'Y' : 'N';
+			}
+			unset($agreement);
+		}
 
 		$fields = $result['FIELDS'];
 		unset($result['FIELDS']);
@@ -497,7 +571,10 @@ class Form
 			}
 
 			$formResult = new Main\Entity\Result;
+			// Both dates are required columns the storage fills itself, and the editor document
+			// carries neither, so the pre-check is given the values the write would store
 			$result['DATE_CREATE'] = new Main\Type\DateTime();
+			$result['DATE_MODIFY'] = new Main\Type\DateTime();
 			Internals\FormTable::checkFields($formResult, $this->id, $result);
 			$this->prepareResult('FIELDS', $formResult);
 
@@ -602,6 +679,8 @@ class Form
 		if ($this->id)
 		{
 			unset($result['ID']);
+			// FormTable::onBeforeUpdate() advances the version only when the fields omit it
+			unset($result['DATE_MODIFY']);
 			$formResult = Internals\FormTable::update($this->id, $result);
 			$isAdded = false;
 		}
@@ -615,6 +694,8 @@ class Form
 
 		if (!$formResult->isSuccess())
 		{
+			$this->prepareResult('FIELDS', $formResult);
+
 			return;
 		}
 
@@ -740,6 +821,7 @@ class Form
 
 			$dependency['FORM_ID'] = $this->id;
 
+			unset($dependency['ID']);
 			$dependencyResult = Internals\FieldDependenceTable::add($dependency);
 			$this->prepareResult('DEPENDENCIES', $dependencyResult);
 		}
@@ -1245,7 +1327,14 @@ class Form
 			return null;
 		}
 
-		unset($form['ID'], $form['DATE_CREATE'], $form['ACTIVE_CHANGE_DATE'], $form['SECURITY_CODE'], $form['XML_ID']);
+		unset(
+			$form['ID'],
+			$form['DATE_CREATE'],
+			$form['DATE_MODIFY'],
+			$form['ACTIVE_CHANGE_DATE'],
+			$form['SECURITY_CODE'],
+			$form['XML_ID']
+		);
 		$form['NAME'] = Loc::getMessage('CRM_WEBFORM_FORM_COPY_NAME_PREFIX') . ' ' . $form['NAME'];
 		$form['ACTIVE'] = 'N';
 		$form['IS_SYSTEM'] = 'N';
@@ -1598,14 +1687,20 @@ class Form
 			'CALLBACK_PHONE' => $fieldPhoneValue,
 			'ENTITIES' => isset($resultParameters['ENTITIES']) ? $resultParameters['ENTITIES'] : [],
 		);
-		$result = new Result(null, $data);
+		$result = $this->createResult($data);
 		$result->save();
 		if ($result->hasErrors())
 		{
 			$this->errors = $result->getErrors();
+			$this->markTelemetryValidationError($resultParameters);
 		}
 		else
 		{
+			if ($result->getId())
+			{
+				$this->completeTelemetry($resultParameters, $resultFields);
+			}
+
 			if ($fieldEmailValue)
 			{
 				self::sendEventFormSent(array(
@@ -1731,6 +1826,91 @@ class Form
 		}
 
 		return $result;
+	}
+
+	protected function createResult(array $data): Result
+	{
+		return new Result(null, $data);
+	}
+
+	private function markTelemetryValidationError(array $resultParameters): void
+	{
+		$attemptId = $this->getTelemetryAttemptId($resultParameters);
+		if ($attemptId === null)
+		{
+			return;
+		}
+
+		$context = $resultParameters['TELEMETRY_CONTEXT'] ?? [];
+		$formId = (int)$this->id;
+		$this->recordTelemetry(
+			static function (Telemetry\RecorderInterface $recorder) use ($attemptId, $context, $formId): void {
+				if (($context['ensureAttempt'] ?? false) === true)
+				{
+					$recorder->start(
+						$attemptId,
+						$formId,
+						(string)($context['source'] ?? Telemetry\SubmissionClassifier::SOURCE_UNKNOWN),
+						is_string($context['userAgent'] ?? null) ? $context['userAgent'] : null,
+					);
+				}
+				$recorder->markError($attemptId, 'validation');
+			},
+		);
+	}
+
+	private function completeTelemetry(array $resultParameters, array $resultFields): void
+	{
+		$attemptId = $this->getTelemetryAttemptId($resultParameters);
+		if ($attemptId === null)
+		{
+			return;
+		}
+
+		$fields = array_map(
+			static fn(array $field): array => [
+				'type' => $field['type'] ?? null,
+				'value' => $field['values'] ?? ($field['value'] ?? null),
+				'hidden' => $field['hidden'] ?? false,
+			],
+			$resultFields,
+		);
+		$formId = (int)$this->id;
+		$templateId = isset($this->params['TEMPLATE_ID']) && is_string($this->params['TEMPLATE_ID'])
+			? $this->params['TEMPLATE_ID']
+			: null
+		;
+
+		$this->recordTelemetry(
+			static function (Telemetry\RecorderInterface $recorder) use (
+				$attemptId,
+				$formId,
+				$fields,
+				$templateId,
+			): void {
+				$recorder->complete($attemptId, $formId, $fields, $templateId);
+			},
+		);
+	}
+
+	private function getTelemetryAttemptId(array $resultParameters): ?string
+	{
+		$context = $resultParameters['TELEMETRY_CONTEXT'] ?? null;
+		$attemptId = is_array($context) ? ($context['attemptId'] ?? null) : null;
+
+		return is_string($attemptId) && $attemptId !== '' ? $attemptId : null;
+	}
+
+	private function recordTelemetry(callable $operation): void
+	{
+		try
+		{
+			$this->telemetryRecorder ??= new Telemetry\Recorder();
+			$operation($this->telemetryRecorder);
+		}
+		catch (\Throwable)
+		{
+		}
 	}
 
 	protected function sendEventFormSent($fields)
@@ -1955,10 +2135,19 @@ class Form
 			static::activate($form['ID'], false);
 		}
 
-		if (!self::canRemoveCopyright())
+		if (!static::canRemoveCopyright())
 		{
 			$connection = Main\Application::getConnection();
-			$connection->query("UPDATE b_crm_webform SET COPYRIGHT_REMOVED='N'");
+			$sqlHelper = $connection->getSqlHelper();
+			$modifiedTimeColumn = $sqlHelper->quote('DATE_MODIFY');
+			$currentTime = $sqlHelper->convertToDbDateTime(new Main\Type\DateTime());
+			$incrementedModifiedTime = $sqlHelper->addSecondsToDateTime(1, $modifiedTimeColumn);
+			$connection->queryExecute(
+				"UPDATE b_crm_webform SET COPYRIGHT_REMOVED = 'N', {$modifiedTimeColumn} ="
+				. " CASE WHEN {$modifiedTimeColumn} IS NULL OR {$modifiedTimeColumn} < {$currentTime}"
+				. " THEN {$currentTime} ELSE {$incrementedModifiedTime} END"
+				. " WHERE COPYRIGHT_REMOVED = 'Y'",
+			);
 		}
 	}
 

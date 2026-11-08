@@ -91,6 +91,8 @@ class SalesDynamicsGraph extends LinearGraph
 			{
 				$result['graphs'][$k]["balloonFunction"] = "BX.Crm.Report.Dashboard.Content.SalesDynamics.renderBalloon";
 				$result['graphs'][$k]["balloon"]["borderThickness"] = 0;
+				// amcharts defaults to 220px, too narrow for money with a word-form currency name
+				$result['graphs'][$k]["balloon"]["maxWidth"] = 340;
 			}
 
 			$totalAmountFormatted_1 = \CCrmCurrency::MoneyToString($sums[1], $baseCurrency);

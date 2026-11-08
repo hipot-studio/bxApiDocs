@@ -15,11 +15,38 @@ class Recent
 	public const ACTIVE_CALLS_DEPTH_HOURS = 12;
 
 	/**
-	 * TTL of the KV stamp used by {@see self::scheduleUpdateCallCache()} to coalesce the decline-storm.
+	 * TTL of the KV stamps used to coalesce request storms: the cache-rebuild stamp of
+	 * {@see self::scheduleUpdateCallCache()} and the recovery-teardown stamp of
+	 * {@see self::scheduleTerminateAllCallsInChat()}.
 	 */
 	private const SCHEDULE_TOKEN_TTL = 60;
 
+	/**
+	 * Minimum interval (seconds) between two forceRecalc-driven snapshot rebuilds
+	 * for the same user in {@see self::updateUserActiveCallsCacheThrottled()}.
+	 * Bounds the roster-wide rebuild cost a single caller can trigger.
+	 */
+	private const FORCE_RECALC_COOLDOWN_TTL = 10;
+
 	private static ?ActiveCallsCache $callsCache = null;
+
+	/**
+	 * Set of chat IDs currently inside {@see self::terminateAllCallsInChat()} (chatId => true).
+	 * Each finish() re-enters EventHandler::onCallFinished synchronously; that handler checks
+	 * this via {@see self::isTearingDownChat()} for its OWN chat and skips scheduling another
+	 * teardown, so a chat with K sibling calls does not fan out into ~K-1 redundant teardowns
+	 * (O(K^2) snapshot queries). Keyed per chat rather than a single global flag: finishing a
+	 * call of a DIFFERENT chat while a teardown is in progress must still tear down that chat's
+	 * own siblings instead of being suppressed and silently skipped.
+	 *
+	 * @var array<int, true>
+	 */
+	private static array $chatsInTeardown = [];
+
+	public static function isTearingDownChat(int $chatId): bool
+	{
+		return isset(self::$chatsInTeardown[$chatId]);
+	}
 
 	private static function callsCache(): ActiveCallsCache
 	{
@@ -55,6 +82,24 @@ class Recent
 		return self::callsCache()->getActiveCallsForUser($userId);
 	}
 
+	/**
+	 * Cache-first active calls for an explicit user id, without touching global
+	 * $USER. Lets callers (e.g. the recent read-endpoint) resolve the snapshot
+	 * for the already-authenticated user and stay testable.
+	 *
+	 * @param int $userId User ID
+	 * @return array [callId => callData]
+	 */
+	public static function getActiveCallsForUser(int $userId): array
+	{
+		if (!Settings::isNewCallsEnabled())
+		{
+			return [];
+		}
+
+		return self::callsCache()->getActiveCallsForUser($userId);
+	}
+
 	public static function finishActiveCalls(int $depthHours = self::ACTIVE_CALLS_DEPTH_HOURS): void
 	{
 		Loader::includeModule('im');
@@ -84,6 +129,61 @@ class Recent
 	public static function updateUserActiveCallsCache(int $userId): array
 	{
 		return self::callsCache()->updateUserActiveCallsCache($userId);
+	}
+
+	/**
+	 * forceRecalc entry point behind {@see Controller\Recent::getActiveAction()},
+	 * throttled per user.
+	 *
+	 * A forced rebuild ({@see self::updateUserActiveCallsCache()}) is expensive: it
+	 * primes the whole participant roster through {@see Util::getUsers()} and
+	 * rewrites the file cache. Left ungated, any authenticated caller could hammer
+	 * `forceRecalc=Y` and drive unbounded parallel rebuilds — a cheap DoS vector.
+	 *
+	 * This coalesces bursts to at most one rebuild per
+	 * {@see self::FORCE_RECALC_COOLDOWN_TTL} seconds per user: an atomic KV claim
+	 * ({@see KeyValueEngine::setNotExists()}) admits exactly one rebuild while the
+	 * stamp is held; other callers get the current cache-first snapshot (the same
+	 * payload a plain read returns), so a warm portal answers from cache and a cold
+	 * one still rebuilds lazily on the cache miss.
+	 *
+	 * Falls back to an unconditional rebuild on file-cache deployments (no shared
+	 * KV): correctness over storm-cost, mirroring {@see self::scheduleUpdateCallCache()}.
+	 *
+	 * @param int $userId User ID
+	 * @return array [callId => callData]
+	 */
+	public static function updateUserActiveCallsCacheThrottled(int $userId): array
+	{
+		$engine = self::getKvCacheEngine();
+		if ($engine === null)
+		{
+			return self::updateUserActiveCallsCache($userId);
+		}
+
+		// Atomic claim: setNotExists() admits exactly one caller per cooldown window,
+		// so concurrent forceRecalc bursts collapse to a single rebuild. A separate
+		// get()/set() pair would race -- two requests could both read an empty stamp
+		// and both trigger the expensive rebuild before either wrote it back.
+		$cooldownKey = self::forceRecalcCooldownKey($userId);
+		if (!$engine->setNotExists($cooldownKey, self::FORCE_RECALC_COOLDOWN_TTL, 1))
+		{
+			// Cooldown already claimed: skip the rebuild and serve the current
+			// snapshot, exactly as a non-forced read would.
+			return self::getActiveCallsForUser($userId);
+		}
+
+		return self::updateUserActiveCallsCache($userId);
+	}
+
+	/**
+	 * Drops the forceRecalc cooldown stamp for a user so the next forced read
+	 * rebuilds immediately. No-op on file-cache deployments (no shared KV).
+	 * Kept for tests, which must reset this non-transactional state between runs.
+	 */
+	public static function clearForceRecalcCooldown(int $userId): void
+	{
+		self::getKvCacheEngine()?->del(self::forceRecalcCooldownKey($userId));
 	}
 
 	/**
@@ -200,16 +300,31 @@ class Recent
 		return $engine instanceof KeyValueEngine ? $engine : null;
 	}
 
-	private static function scheduleTokenKey(int $callId): string
+	private static function cacheKeyPrefix(): string
 	{
 		$cacheConfig = Configuration::getValue('cache');
 		$sid = (is_array($cacheConfig) && !empty($cacheConfig['sid'])) ? $cacheConfig['sid'] : 'BX';
 
-		return $sid . '|call:sched_token:' . $callId;
+		return $sid . '|call:';
+	}
+
+	private static function scheduleTokenKey(int $callId): string
+	{
+		return self::cacheKeyPrefix() . 'sched_token:' . $callId;
+	}
+
+	private static function scheduleTeardownTokenKey(int $chatId): string
+	{
+		return self::cacheKeyPrefix() . 'sched_teardown_token:' . $chatId;
+	}
+
+	private static function forceRecalcCooldownKey(int $userId): string
+	{
+		return self::cacheKeyPrefix() . 'recent_force_recalc:' . $userId;
 	}
 
 	/**
-	 * Terminates all active calls in a chat except the specified call
+	 * Terminates all active calls in a chat except the specified call.
 	 *
 	 * @param int $chatId Chat ID
 	 * @param int|null $excludeCallId Call ID to exclude from termination
@@ -217,20 +332,136 @@ class Recent
 	 */
 	public static function terminateAllCallsInChat(int $chatId, ?int $excludeCallId = null): void
 	{
-		if (!$chatId)
+		if (!$chatId || !Loader::includeModule('im'))
 		{
 			return;
 		}
 
-		if (!Loader::includeModule('im'))
+		$filter = self::buildActiveCallsInChatFilter($chatId, $excludeCallId);
+		if ($filter === null)
 		{
 			return;
 		}
 
+		$callList = CallTable::getList([
+			'select' => array_keys(CallTable::getEntity()->getScalarFields()),
+			'filter' => $filter,
+			'order' => ['ID' => 'DESC']
+		]);
+
+		// Suppress recursive teardown of THIS chat: each finish() below re-enters
+		// EventHandler::onCallFinished synchronously, which would otherwise call
+		// terminateAllCallsInChat again for the remaining siblings (O(K^2)). The handler skips
+		// while this chat's flag is raised. Keyed per chat so finishing a call of another chat
+		// during this loop is not suppressed; restore prior membership so a re-entrant teardown
+		// of the same chat does not clear the guard early.
+		$wasTearingDown = isset(self::$chatsInTeardown[$chatId]);
+		self::$chatsInTeardown[$chatId] = true;
+		try
+		{
+			while ($callData = $callList->fetch())
+			{
+				// Reset END_DATE to null before creating the call instance to ensure proper finish() behavior
+				$callData['END_DATE'] = null;
+
+				$activeCall = CallFactory::createWithArray($callData['PROVIDER'], $callData);
+				if ($activeCall->getState() === Call::STATE_FINISHED)
+				{
+					continue;
+				}
+
+				$activeCall->finish();
+				self::updateCallCache($activeCall->getId());
+			}
+		}
+		finally
+		{
+			if (!$wasTearingDown)
+			{
+				unset(self::$chatsInTeardown[$chatId]);
+			}
+		}
+	}
+
+	/**
+	 * Deferred, storm-coalesced counterpart of {@see self::terminateAllCallsInChat()} for
+	 * the repeat-finish recovery path. A repeat finish of an already-FINISHED call re-runs
+	 * the sibling teardown as a safety net (the original finish may have committed the CAS
+	 * but died before its inline teardown in onCallFinished). Under a finish-storm every
+	 * such request would otherwise run the same IM-chat load + active-calls SELECT
+	 * synchronously; the process-local {@see self::isTearingDownChat()} guard cannot dedupe
+	 * across HTTP requests.
+	 *
+	 * Mirrors {@see self::scheduleUpdateCallCache()}: each request stamps a monotonic token
+	 * in shared KV and schedules a job carrying it; the job runs the teardown only if no
+	 * strictly fresher token appeared, so the storm collapses to a single off-clock
+	 * teardown. Only this recovery re-run is coalesced — the primary onCallFinished
+	 * teardown stays inline.
+	 *
+	 * Falls back to an unconditional background job on file-cache deployments (no shared
+	 * KV): correctness over storm-cost.
+	 */
+	public static function scheduleTerminateAllCallsInChat(int $chatId, ?int $excludeCallId = null): void
+	{
+		if ($chatId <= 0)
+		{
+			return;
+		}
+
+		$engine = self::getKvCacheEngine();
+		if ($engine === null)
+		{
+			\Bitrix\Main\Application::getInstance()->addBackgroundJob(
+				[self::class, 'terminateAllCallsInChat'],
+				[$chatId, $excludeCallId],
+				\Bitrix\Main\Application::JOB_PRIORITY_LOW,
+			);
+
+			return;
+		}
+
+		$token = (int)round(microtime(true) * 1000);
+		$engine->set(self::scheduleTeardownTokenKey($chatId), self::SCHEDULE_TOKEN_TTL, $token);
+
+		\Bitrix\Main\Application::getInstance()->addBackgroundJob(
+			[self::class, 'runScheduledTerminateAllCallsInChat'],
+			[$chatId, $excludeCallId, $token],
+			\Bitrix\Main\Application::JOB_PRIORITY_LOW,
+		);
+	}
+
+	/**
+	 * Background-job entry point for {@see self::scheduleTerminateAllCallsInChat()}.
+	 * Aborts when the KV stamp shows a strictly later scheduling — that request's job
+	 * owns the teardown. Ties (sub-millisecond bursts) let extra runs through; the
+	 * teardown is idempotent (siblings already FINISHED are skipped).
+	 */
+	public static function runScheduledTerminateAllCallsInChat(int $chatId, ?int $excludeCallId, int $token): void
+	{
+		$engine = self::getKvCacheEngine();
+		if ($engine !== null)
+		{
+			$latest = (int)$engine->get(self::scheduleTeardownTokenKey($chatId));
+			if ($latest > $token)
+			{
+				return;
+			}
+		}
+
+		self::terminateAllCallsInChat($chatId, $excludeCallId);
+	}
+
+	/**
+	 * Builds the ORM filter for active calls in a chat (provider/entity by chat type,
+	 * non-finished, within the depth window), optionally excluding one call. Returns
+	 * null when the chat does not exist.
+	 */
+	private static function buildActiveCallsInChatFilter(int $chatId, ?int $excludeCallId): ?array
+	{
 		$chat = \Bitrix\Im\V2\Chat::getInstance($chatId);
 		if ($chat instanceof \Bitrix\Im\V2\Chat\NullChat)
 		{
-			return;
+			return null;
 		}
 
 		$depthHours = self::ACTIVE_CALLS_DEPTH_HOURS;
@@ -260,26 +491,7 @@ class Recent
 			$filter['!=ID'] = $excludeCallId;
 		}
 
-		$callList = CallTable::getList([
-			'select' => array_keys(CallTable::getEntity()->getScalarFields()),
-			'filter' => $filter,
-			'order' => ['ID' => 'DESC']
-		]);
-
-		while ($callData = $callList->fetch())
-		{
-			// Reset END_DATE to null before creating the call instance to ensure proper finish() behavior
-			$callData['END_DATE'] = null;
-
-			$activeCall = CallFactory::createWithArray($callData['PROVIDER'], $callData);
-			if ($activeCall->getState() === Call::STATE_FINISHED)
-			{
-				continue;
-			}
-
-			$activeCall->finish();
-			self::updateCallCache($activeCall->getId());
-		}
+		return $filter;
 	}
 
 	/**

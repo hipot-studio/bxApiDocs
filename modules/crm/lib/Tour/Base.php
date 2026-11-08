@@ -99,10 +99,15 @@ abstract class Base
 	{
 		return $this->isShowDeadlineExpired()
 			|| !$this->isAvailablePortal()
-			|| Config::isToursDeactivated($this->getOptionCategory())
+			|| $this->isToursDeactivated()
 			|| $this->isNumberOfViewsExceeded()
 			|| !$this->canShow()
 		;
+	}
+
+	protected function isToursDeactivated(): bool
+	{
+		return Config::isToursDeactivated($this->getOptionCategory());
 	}
 
 	protected function isUserSeenTour(): bool

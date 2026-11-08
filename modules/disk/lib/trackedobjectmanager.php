@@ -2,17 +2,20 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Service\Sync\Journal\JournalWriter;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk;
 use Bitrix\Disk\Realtime\Events\UserRecentsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\DuplicateEntryException;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Type\DateTime;
 
 final class TrackedObjectManager
 {
 	protected ErrorCollection $errorCollection;
 	protected array $dataToInsert = [];
+	private ?JournalWriter $journalWriter = null;
 
 	/**
 	 * Constructor RecentlyUsedManager.
@@ -122,13 +125,14 @@ final class TrackedObjectManager
 
 		if ($alreadyExists && !empty($alreadyExists['ID']))
 		{
-			$this->refresh($object);
+			$this->refresh($object, $userId);
 		}
 		else
 		{
+			$addResult = null;
 			try
 			{
-				Disk\Internals\TrackedObjectTable::add([
+				$addResult = Disk\Internals\TrackedObjectTable::add([
 					'USER_ID' => $userId,
 					'OBJECT_ID' => $object->getId(),
 					'REAL_OBJECT_ID' => $object->getRealObjectId(),
@@ -138,6 +142,14 @@ final class TrackedObjectManager
 			}
 			catch (DuplicateEntryException)
 			{
+			}
+
+			if ($addResult?->isSuccess())
+			{
+				// The entry into the set is published from the point that wrote the row, and only for a
+				// first entry: a duplicate means the user already held the object, and the writer takes
+				// "first" on trust from here.
+				$this->getJournalWriter()->publishInteractionEntered($object->getRealObjectId(), $userId);
 			}
 
 			$event = new UserRecentsEvent(
@@ -161,11 +173,34 @@ final class TrackedObjectManager
 		return true;
 	}
 
-	public function refresh(BaseObject $object): void
+	private function getJournalWriter(): JournalWriter
 	{
+		return $this->journalWriter ??= new JournalWriter();
+	}
+
+	/**
+	 * Refreshes the freshness stamp of the object in the set of one user.
+	 *
+	 * The stamp is personal - it is the date this user reached the object, and it is read as such by the
+	 * page of recent documents and by the sync protocol. An interaction of one user therefore moves the
+	 * stamp of that user alone.
+	 *
+	 * @param mixed|int|User|\CUser $user User of the interaction; the current one when not given.
+	 */
+	public function refresh(BaseObject $object, $user = null): void
+	{
+		$userId = User::resolveUserId($user ?? CurrentUser::get());
+		if ($userId === null)
+		{
+			return;
+		}
+
 		Disk\Internals\TrackedObjectTable::updateBatch(
 			['UPDATE_TIME' => new DateTime()],
-			['REAL_OBJECT_ID' => $object->getRealObjectId()]
+			[
+				'USER_ID' => $userId,
+				'REAL_OBJECT_ID' => $object->getRealObjectId(),
+			]
 		);
 	}
 }

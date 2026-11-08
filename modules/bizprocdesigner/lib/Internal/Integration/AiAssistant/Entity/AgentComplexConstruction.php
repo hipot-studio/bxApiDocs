@@ -54,6 +54,23 @@ final class AgentComplexConstruction implements Arrayable
 		return is_string($portId) && $portId !== '' ? $portId : null;
 	}
 
+	/**
+	 * Auxiliary (tool) port id (aN) an `action` construction binds via `auxPortId`; `null` for any other kind
+	 * or an action without one. Like an `output` port it is a source endpoint of a connection, so it is part of
+	 * the complex node's dynamic output-port projection used to validate links leaving the node.
+	 */
+	public function getAuxPortId(): ?string
+	{
+		if ($this->type !== self::TYPE_ACTION)
+		{
+			return null;
+		}
+
+		$portId = $this->expression['auxPortId'] ?? null;
+
+		return is_string($portId) && $portId !== '' ? $portId : null;
+	}
+
 	public function toArray(): array
 	{
 		return [

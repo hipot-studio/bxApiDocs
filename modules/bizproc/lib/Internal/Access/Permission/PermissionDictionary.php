@@ -10,6 +10,7 @@ use Bitrix\Main\Localization\Loc;
 final class PermissionDictionary extends MainPermissionDictionary
 {
 	public const VALUE_VARIATION_ALL = -1;
+	public const VALUE_VARIATION_OWN = -2;
 
 	public const BIZPROC_TEMPLATE_CREATE = 1;
 	public const BIZPROC_TEMPLATE_EDIT = 2;
@@ -18,6 +19,16 @@ final class PermissionDictionary extends MainPermissionDictionary
 	public const BIZPROC_TEMPLATE_CONFIGURE_RIGHTS = 5;
 
 	private const PERMISSION_PREFIX = 'BIZPROC_TEMPLATE_';
+
+	/**
+	 * Whether a multivariables VALUE is a sentinel ("all", "own") rather than a template ID. The single source
+	 * of truth for "this scope value is not a template ID": a literal check on the spot silently misses a
+	 * sentinel added later.
+	 */
+	public static function isSentinelValue(int $value): bool
+	{
+		return $value === self::VALUE_VARIATION_ALL || $value === self::VALUE_VARIATION_OWN;
+	}
 
 	public static function getPermission($permissionId): array
 	{

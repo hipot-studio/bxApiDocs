@@ -163,7 +163,7 @@ class ManagerCounters extends DataSource
 		"ID" => 6,
 		"NAME" => 'Sergey',
 		"AVATAR" => Array(
-			"src" => "/avatar-man-3.png",
+			"src" => "/avatar-man-3.webp",
 			"width" => "98",
 			"height" => "98",
 			"size" => "6388",

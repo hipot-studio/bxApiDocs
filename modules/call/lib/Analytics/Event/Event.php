@@ -108,6 +108,14 @@ abstract class Event
 			$this->event->setP5($this->p5);
 		}
 
+		// Background jobs have no current user, so bind the event to the call initiator.
+		// Zero initiator keeps the AnalyticsEvent fallback to the current user intact.
+		$initiatorId = $this->call->getInitiatorId();
+		if ($initiatorId > 0)
+		{
+			$this->event->setUserId($initiatorId);
+		}
+
 		$this->event->send();
 	}
 

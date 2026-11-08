@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Bitrix\CrmMobile\Kanban\Entity\ControllerStrategy;
+namespace Bitrix\CrmMobile\Kanban\ControllerStrategy;
 
 use Bitrix\Main\SystemException;
 

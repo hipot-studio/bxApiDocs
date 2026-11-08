@@ -6,6 +6,8 @@ namespace Bitrix\Socialnetwork\V2\Internal\Integration\Extranet\Service;
 
 use Bitrix\Extranet\Service\ServiceContainer;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ModuleManager;
+use Bitrix\Socialnetwork\Provider\CollabUserPolicyProvider;
 use CExtranet;
 
 class ExtranetUserService
@@ -27,7 +29,14 @@ class ExtranetUserService
 	{
 		if (!Loader::includeModule('extranet'))
 		{
-			return false;
+			if (!ModuleManager::isModuleInstalled('intranet'))
+			{
+				return false;
+			}
+
+			$classification = CollabUserPolicyProvider::getInstance()->classify([$userId]);
+
+			return !in_array($userId, $classification['internal'], true);
 		}
 
 		return !CExtranet::IsIntranetUser('', $userId);

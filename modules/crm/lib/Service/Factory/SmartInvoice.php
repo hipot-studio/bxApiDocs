@@ -19,6 +19,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\Operation;
+use Bitrix\Crm\Service\Router;
 use Bitrix\Crm\Settings\InvoiceSettings;
 use Bitrix\Crm\UserField\UserFieldManager;
 use Bitrix\Main\Config\Option;
@@ -47,6 +48,16 @@ class SmartInvoice extends Dynamic
 	public function getUserFieldEntityId(): string
 	{
 		return static::USER_FIELD_ENTITY_ID;
+	}
+
+	public function isListViewSupported(string $listView): bool
+	{
+		if ($listView === Router::LIST_VIEW_DEADLINES)
+		{
+			return true;
+		}
+
+		return parent::isListViewSupported($listView);
 	}
 
 
@@ -229,6 +240,12 @@ class SmartInvoice extends Dynamic
 				while ($role = $dbResult->Fetch())
 				{
 					$roles[$role['ID']] = $role;
+					// when old invoices are disabled, preset roles have no old invoice permissions to copy from,
+					// but they still must get their preset defaults
+					if (!isset($permissions[$role['ID']]))
+					{
+						$permissions[$role['ID']] = [];
+					}
 				}
 				$categoryIdentifier = new CategoryIdentifier(\CCrmOwnerType::SmartInvoice, $defaultCategoryId);
 
@@ -339,10 +356,6 @@ class SmartInvoice extends Dynamic
 		$operation->addAction(
 			Operation::ACTION_AFTER_SAVE,
 			new Operation\Action\SmartInvoiceStatusChangedTrigger(),
-		);
-		$operation->addAction(
-			Operation::ACTION_AFTER_SAVE,
-			new Operation\Action\ActualizeDocuments()
 		);
 		$operation->addAction(
 			Operation::ACTION_AFTER_SAVE,

@@ -75,7 +75,11 @@ class Record extends BaseController
 	{
 		$accessManager = $this->getAccessManager();
 
-		if (!$accessManager->canReadWorktime($userId))
+		// Whoever may run their own work day may see its state, as the web widget does,
+		// even when their role grants no read access to work time records.
+		$isOwnManagedRecord = $userId === $this->userId && $accessManager->canManageWorktime();
+
+		if (!$isOwnManagedRecord && !$accessManager->canReadWorktime($userId))
 		{
 			$this->addError(new Error('Access denied.'));
 

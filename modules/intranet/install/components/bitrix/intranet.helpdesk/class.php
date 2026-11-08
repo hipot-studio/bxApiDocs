@@ -5,10 +5,11 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\Internal\Service\Notification\NewHelperNotificationService;
 use Bitrix\Main\Context;
 use Bitrix\Main\Loader;
 use Bitrix\UI\Util;
-use Bitrix\Intranet\Internal\Service\Notification\NewHelperNotificationService;
 
 class IntranetHelpdeskComponent extends CBitrixComponent
 {
@@ -21,8 +22,6 @@ class IntranetHelpdeskComponent extends CBitrixComponent
 		$this->arResult['CAN_HAVE_HELP_NOTIFICATIONS'] = 'N';
 		$this->arResult['CURRENT_HELP_NOTIFICATIONS'] = '';
 		$this->arResult['LAST_CHECK_NOTIFICATIONS_TIME'] = '';
-		$newHelperNotificationService = NewHelperNotificationService::createForCurrentUser();
-		$this->arResult['SHOULD_SHOW_NEW_HELPER_NOTIFICATION'] = $newHelperNotificationService->needToShow() ? 'Y' : 'N';
 		$this->arResult['IM_BAR_EXISTS'] = Loader::includeModule('im')
 			&& CBXFeatures::IsFeatureEnabled('WebMessenger')
 			&& !defined('BX_IM_FULLSCREEN');
@@ -75,20 +74,29 @@ class IntranetHelpdeskComponent extends CBitrixComponent
 			$this->arResult['HELPDESK_URL'] = Util::getHelpdeskUrl(true);
 		}
 
-		$this->arResult['OPEN_HELPER_AFTER_PAGE_LOADING'] = false;
-		$helper = Context::getCurrent()->getRequest()->getQuery('helper');
-
-		if (isset($helper) && $helper === 'Y')
-		{
-			$this->arResult['OPEN_HELPER_AFTER_PAGE_LOADING'] = true;
-
-			if ($this->arResult['SHOULD_SHOW_NEW_HELPER_NOTIFICATION'] === 'Y')
-			{
-				$newHelperNotificationService->setShownForUser();
-				$this->arResult['SHOULD_SHOW_NEW_HELPER_NOTIFICATION'] = 'N';
-			}
-		}
+		$this->initializeNewHelperNotification();
 
 		$this->includeComponentTemplate();
+	}
+
+	protected function initializeNewHelperNotification(): void
+	{
+		$openHelper = Context::getCurrent()->getRequest()->getQuery('helper') === 'Y';
+		$shouldShow = !$openHelper && $this->createNewHelperNotificationService()->needToShow();
+		$userId = $shouldShow ? $this->getCurrentUserId() : 0;
+
+		$this->arResult['OPEN_HELPER_AFTER_PAGE_LOADING'] = $openHelper;
+		$this->arResult['SHOULD_SHOW_NEW_HELPER_NOTIFICATION'] = $userId > 0 ? 'Y' : 'N';
+		$this->arResult['NEW_HELPER_NOTIFICATION_USER_ID'] = $userId > 0 ? $userId : 0;
+	}
+
+	protected function createNewHelperNotificationService(): NewHelperNotificationService
+	{
+		return NewHelperNotificationService::createForCurrentUser();
+	}
+
+	protected function getCurrentUserId(): int
+	{
+		return (int)CurrentUser::get()->getId();
 	}
 }

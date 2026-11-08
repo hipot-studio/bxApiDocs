@@ -32,6 +32,16 @@ class ExternalLinkPasswordService
 
 	public function validateAndConfirm(ExternalLink $externalLink, ?string $password): bool
 	{
+		if (!$this->validate($externalLink, $password))
+		{
+			return false;
+		}
+
+		return $this->confirm($externalLink);
+	}
+
+	public function validate(ExternalLink $externalLink, ?string $password): bool
+	{
 		if (!$externalLink->hasPassword())
 		{
 			return true;
@@ -47,7 +57,7 @@ class ExternalLinkPasswordService
 			return false;
 		}
 
-		return $this->confirm($externalLink);
+		return true;
 	}
 
 	public function confirm(ExternalLink $externalLink): bool

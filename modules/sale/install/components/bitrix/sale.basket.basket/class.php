@@ -374,7 +374,7 @@ class CBitrixBasketComponent extends CBitrixComponent
 			$params['DISCOUNT_PERCENT_POSITION'] = trim((string)$params['DISCOUNT_PERCENT_POSITION']);
 		}
 
-		if (empty($params['LABEL_PROP_POSITION']))
+		if (empty($params['DISCOUNT_PERCENT_POSITION']))
 		{
 			$params['DISCOUNT_PERCENT_POSITION'] = 'bottom-right';
 		}

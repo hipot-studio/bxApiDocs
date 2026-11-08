@@ -29,17 +29,21 @@ class Label extends Controller
 
 	public function configureActions()
 	{
+		// Reading is open to POST as well: the only action transport of the mobile client sends POST,
+		// so a GET-only read would be unreachable from it. The same shape as in Draft and
+		// MessageConversation, the neighbouring controllers the mobile client already reads from.
+		$read = [
+			'+prefilters' => [
+				new ActionFilter\HttpMethod([
+					ActionFilter\HttpMethod::METHOD_GET,
+					ActionFilter\HttpMethod::METHOD_POST,
+				]),
+			],
+		];
+
 		return [
-			'list' => [
-				'+prefilters' => [
-					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_GET]),
-				],
-			],
-			'messageLabels' => [
-				'+prefilters' => [
-					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_GET]),
-				],
-			],
+			'list' => $read,
+			'messageLabels' => $read,
 			'commonMessageLabels' => [
 				'+prefilters' => [
 					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),

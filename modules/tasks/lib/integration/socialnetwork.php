@@ -146,9 +146,20 @@ abstract class SocialNetwork extends \Bitrix\Tasks\Integration\Integration
 		}
 	}
 
-	public static function getMemberList($groupId)
+	public static function getMemberList(int $groupId, int $userId): ?array
 	{
-		self::includeModule();
+		if (
+			!self::includeModule()
+			|| $groupId <= 0
+			|| $userId <= 0
+			|| !\Bitrix\Socialnetwork\Helper\Workgroup\Access::canView([
+				'groupId' => $groupId,
+				'userId' => $userId,
+			])
+		)
+		{
+			return null;
+		}
 
 		$out = array();
 		try
@@ -159,7 +170,7 @@ abstract class SocialNetwork extends \Bitrix\Tasks\Integration\Integration
 						'DATE_CREATE' => 'ASC'
 					),
 					'filter' => array(
-						'GROUP_ID' => $groupId,
+						'=GROUP_ID' => $groupId,
 						'USER.ACTIVE' => 'Y',
 						'@ROLE' => array(
 							\Bitrix\Socialnetwork\UserToGroupTable::ROLE_MODERATOR,
@@ -206,9 +217,9 @@ abstract class SocialNetwork extends \Bitrix\Tasks\Integration\Integration
 
 
 		}
-		catch (\Bitrix\Main\ArgumentException $e)
+		catch (\Bitrix\Main\ArgumentException)
 		{
-			dd($e);
+			return array();
 		}
 
 		return $out;

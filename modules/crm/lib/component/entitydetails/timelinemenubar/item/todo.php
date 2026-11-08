@@ -9,6 +9,7 @@ use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\EventHandler;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Tour\Onboarding\DealCard;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
@@ -46,8 +47,31 @@ class ToDo extends Item
 			// provider, not by this flag (API-02, Mantis #223889).
 			'canChangeDeadline' => true,
 			'actionMenuSettings' => $this->getActionMenuSettings(),
-			'isTourViewed' => $isTourViewedInWeb || $isHideAllTours,
+			'isTourViewed' => $isTourViewedInWeb || $isHideAllTours || $this->isSupersededByOnboardingTour(),
 		];
+	}
+
+	/**
+	 * The deal card onboarding tour has a step of its own over this menubar, so on the opening it
+	 * takes, the hint says nothing. Deals only: this item serves every CRM entity, and elsewhere the
+	 * hint must keep working. The user option is not written, so the hint returns next time.
+	 */
+	private function isSupersededByOnboardingTour(): bool
+	{
+		if ($this->getEntityTypeId() !== \CCrmOwnerType::Deal || $this->getEntityId() <= 0)
+		{
+			return false;
+		}
+
+		return $this->getDealCardOnboardingTour()
+			->setEntityId($this->getEntityId())
+			->isGoingToShow()
+		;
+	}
+
+	protected function getDealCardOnboardingTour(): DealCard
+	{
+		return DealCard::getInstance();
 	}
 
 	final protected function getCurrentUser(): array

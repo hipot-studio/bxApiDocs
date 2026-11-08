@@ -4,6 +4,7 @@ namespace Bitrix\Catalog\Component;
 
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
+use Bitrix\Catalog\Integration\Report\Quantity\QuantityNormalizer;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -82,7 +83,7 @@ abstract class ReportStoreList extends \CBitrixComponent
 		return $result;
 	}
 
-	private function prepareItemColumn(array $item): array
+	protected function prepareItemColumn(array $item): array
 	{
 		$column = $item;
 
@@ -102,7 +103,7 @@ abstract class ReportStoreList extends \CBitrixComponent
 		return $column;
 	}
 
-	private function prepareOverallTotalRow(array $overallData): array
+	protected function prepareOverallTotalRow(array $overallData): array
 	{
 		$overallColumns = [];
 		$overallColumns['TITLE'] = Loc::getMessage('CATALOG_REPORT_STORE_LIST_OVERALL_TOTAL');
@@ -141,7 +142,7 @@ abstract class ReportStoreList extends \CBitrixComponent
 		return Loc::getMessage(
 			'CATALOG_REPORT_STORE_LIST_MEASURE_TEMPLATE',
 			[
-				'#NUMBER#' => $number,
+				'#NUMBER#' => QuantityNormalizer::format((float)$number),
 				'#MEASURE_SYMBOL#' => $this->getMeasureSymbol($measureId),
 			]
 		);
@@ -173,7 +174,7 @@ abstract class ReportStoreList extends \CBitrixComponent
 		return $measure !== null ? htmlspecialcharsbx($measure['SYMBOL']) : '';
 	}
 
-	private function getMeasures(): array
+	protected function getMeasures(): array
 	{
 		static $measures = [];
 

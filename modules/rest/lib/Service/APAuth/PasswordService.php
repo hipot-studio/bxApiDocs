@@ -11,6 +11,7 @@ use Bitrix\Rest\Entity\APAuth\Password;
 use Bitrix\Rest\Enum;
 use Bitrix\Rest\Entity\Collection\APAuth\PasswordCollection;
 use Bitrix\Rest\Contract;
+use Bitrix\Rest\Internal\Service\PasswordPermission\PermissionListNormalizer;
 use Bitrix\Rest\Dto;
 use Bitrix\Rest\Repository\APAuth\PasswordRepository;
 use Bitrix\Rest\Repository\Exception\CreationFailedException;
@@ -92,7 +93,8 @@ class PasswordService implements Contract\Service\APAuth\PasswordService
 		{
 			$password = $this->passwordRepository->create($password);
 
-			foreach ($createPasswordDto->getPermissions() as $permissionCode)
+			$permissionCodeList = (new PermissionListNormalizer())->normalize($createPasswordDto->getPermissions());
+			foreach ($permissionCodeList as $permissionCode)
 			{
 				$createPermissionDto = new Dto\APAuth\CreatePermissionDto(
 					permissionCode: $permissionCode,

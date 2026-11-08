@@ -38,20 +38,21 @@ class ExternalSourceDataProvider extends DataProvider
 		;
 
 		$result[] =
+			$this->createColumn('CREATED_BY_ID')
+				->setType(Type::TEXT)
+				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_COLUMN_TITLE_CREATED_BY'))
+				->setAlign('left')
+				->setDefault(true)
+		;
+
+		$result[] =
 			$this->createColumn('DATE_CREATE')
 				->setType(Type::DATE)
 				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_COLUMN_TITLE_DATE_CREATE'))
 				->setAlign('left')
 				->setDefault(true)
 				->setSort('DATE_CREATE')
-		;
-
-		$result[] =
-			$this->createColumn('CREATED_BY_ID')
-				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_COLUMN_TITLE_CREATED_BY'))
-				->setAlign('left')
-				->setDefault(true)
+				->setWidth(180)
 		;
 
 		 $result[] =

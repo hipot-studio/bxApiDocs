@@ -41,9 +41,9 @@ class PromptService
 	/**
 	 * @throws \Exception
 	 */
-	public function changeActivatePrompt(int $promptId, bool $needActivate, int $userId): void
+	public function changeActivatePrompt(int $promptId, bool $needActivate, int $userId): UpdateResult
 	{
-		$this->promptRepository->changeActivatePrompt($promptId, $needActivate, $userId);
+		return $this->promptRepository->changeActivatePrompt($promptId, $needActivate, $userId);
 	}
 
 	/**
@@ -53,9 +53,7 @@ class PromptService
 	 */
 	public function changeActivatePrompts(array $promptIds, bool $needActivate, int $userId): Result
 	{
-		$this->promptRepository->changeActivatePrompts($promptIds, $needActivate, $userId);
-
-		return new Result();
+		return $this->promptRepository->changeActivatePrompts($promptIds, $needActivate, $userId);
 	}
 
 	/**

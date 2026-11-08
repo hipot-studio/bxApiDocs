@@ -344,6 +344,17 @@ class PermissionLevel
 			return new PermissionLevelValue(UserPermissions::PERMISSION_ALL);
 		}
 
+		// observers may update the cards they observe on a stage the right is granted on, even without any role
+		// write permission
+		if (
+			$this->permissionType === UserPermissions::OPERATION_UPDATE
+			&& in_array(UserPermissions::ATTRIBUTES_CONCERNED_USER_PREFIX . $this->userId, $entityAttributes, true)
+			&& $this->isObserversWriteEnabled($entityAttributes)
+		)
+		{
+			return new PermissionLevelValue(UserPermissions::PERMISSION_ALL);
+		}
+
 		if (empty($this->attributeToRoleRelations) && empty($this->settingsToRoleRelations))
 		{
 			return new PermissionLevelValue(UserPermissions::PERMISSION_NONE);
@@ -384,6 +395,18 @@ class PermissionLevel
 		}
 
 		return $this->getValueFromSavedAttrsAndSettings(self::EMPTY_FIELD_VALUE);
+	}
+
+	/**
+	 * The effective value of the right for a card with these very attributes: the stage row of the right when one
+	 * matches, and the value of the block otherwise. The attributes are passed on whole - the stage among them is
+	 * the only key a row of this right can match.
+	 */
+	protected function isObserversWriteEnabled(array $entityAttributes): bool
+	{
+		return PermissionsManager::getInstance($this->userId)
+			->isObserversWriteEnabledByEntityAttributes($this->permissionEntity, $entityAttributes)
+		;
 	}
 
 	private function normalizeField(string $field): string

@@ -22,7 +22,7 @@ abstract class BaseChannelAutoStartStrategy
 	protected ?int $userId;
 	protected LoggerInterface $logger;
 	protected TargetResolver $targetResolver;
-	protected ?ItemIdentifier $nextTarget;
+	protected ?ItemIdentifier $nextTarget = null;
 
 	/**
 	 * Method for running the strategy.

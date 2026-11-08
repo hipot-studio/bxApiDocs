@@ -24,6 +24,25 @@ use Bitrix\AI\Tuning\Defaults;
 
 class CallAISettings
 {
+	private static ?string $copilotName = null;
+	private static ?bool $speakerEvaluationAvailable = null;
+
+	/**
+	 * Returns the AI assistant brand name ("BitrixGPT" or "CoPilot") according to the portal license region.
+	 * Use to substitute the "#COPILOT_NAME#" placeholder in localized phrases.
+	 */
+	public static function getCopilotName(): string
+	{
+		if (self::$copilotName === null)
+		{
+			self::$copilotName = Loader::includeModule('ui')
+				? (new \Bitrix\Ui\Public\Services\Copilot\CopilotNameService())->getCopilotName()
+				: 'CoPilot';
+		}
+
+		return self::$copilotName;
+	}
+
 	public const
 		CALL_COPILOT_ENABLE = 'call_copilot_enable',
 
@@ -57,6 +76,11 @@ class CallAISettings
 		CALL_RECORD_MIN_LENGTH = 59
 	;
 
+	/**
+	 * License regions where the legal department allows per-speaker evaluation of a call.
+	 * @see self::isSpeakerEvaluationAvailable()
+	 */
+	private const SPEAKER_EVALUATION_REGIONS = ['ru', 'by', 'kg', 'am', 'az', 'ge'];
 
 	public static function isCallAIEnable(): bool
 	{
@@ -151,6 +175,24 @@ class CallAISettings
 		}
 
 		return $enabled;
+	}
+
+	/**
+	 * Whether per-speaker evaluation of a call may be requested from AI and shown to users.
+	 * Depends on the license region only, there is no option to override it.
+	 * @return bool
+	 */
+	public static function isSpeakerEvaluationAvailable(): bool
+	{
+		// A class property rather than a method static: the license region never changes within a
+		// process, but tests substitute it, and only a class property can be reset for that.
+		if (self::$speakerEvaluationAvailable === null)
+		{
+			$region = Application::getInstance()->getLicense()->getRegion();
+			self::$speakerEvaluationAvailable = in_array($region, self::SPEAKER_EVALUATION_REGIONS, true);
+		}
+
+		return self::$speakerEvaluationAvailable;
 	}
 
 	//region Autostart recoding
@@ -402,16 +444,17 @@ class CallAISettings
 		$groups = [];
 		if (!empty(Engine::getListAvailable('call'))) /** @see \Bitrix\AI\Engine::CATEGORIES */
 		{
+			$copilotNameReplace = ['#COPILOT_NAME#' => self::getCopilotName()];
 			$groups['call_copilot'] = [
-				'title' => Loc::getMessage('CALL_SETTINGS_COPILOT_GROUP'),
-				'description' => Loc::getMessage('CALL_SETTINGS_COPILOT_DESCRIPTION'),
+				'title' => Loc::getMessage('CALL_SETTINGS_COPILOT_GROUP_MSGVER_1', $copilotNameReplace),
+				'description' => Loc::getMessage('CALL_SETTINGS_COPILOT_DESCRIPTION_MSGVER_1', $copilotNameReplace),
 				//todo: Add 'helpdesk' article here
 			];
 
 			$items[self::CALL_COPILOT_ENABLE] = [
 				'group' => 'call_copilot',
-				'title' => Loc::getMessage('CALL_SETTINGS_COPILOT_TITLE'),
-				'header' => Loc::getMessage('CALL_SETTINGS_COPILOT_HEADER'),
+				'title' => Loc::getMessage('CALL_SETTINGS_COPILOT_TITLE_MSGVER_1', $copilotNameReplace),
+				'header' => Loc::getMessage('CALL_SETTINGS_COPILOT_HEADER_MSGVER_1', $copilotNameReplace),
 				'type' => Type::BOOLEAN,
 				'default' => true,
 			];

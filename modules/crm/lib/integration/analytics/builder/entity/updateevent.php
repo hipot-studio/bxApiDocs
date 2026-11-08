@@ -25,6 +25,8 @@ final class UpdateEvent extends AbstractBuilder
 
 	protected function buildCustomData(): array
 	{
+		WorkplaceP4::apply($this, (int)$this->entityTypeId);
+
 		return [
 			'category' => Dictionary::CATEGORY_ENTITY_OPERATIONS,
 			'event' => Dictionary::EVENT_ENTITY_EDIT,

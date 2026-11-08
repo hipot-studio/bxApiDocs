@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Disk\Controller\ActionFilter;
 
-use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkFileRenderer;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
 use Bitrix\Main\Context;
 use Bitrix\Main\Engine\ActionFilter\Base;
 use Bitrix\Main\Error;
@@ -57,7 +57,7 @@ class RequiredParameter extends Base
 		if ($this->notFound && $this->return404page)
 		{
 			$response = new HttpResponse();
-			$response->setContent(UnifiedLinkFileRenderer::renderAccessDeniedPage());
+			$response->setContent(UnifiedLinkRenderer::renderAccessDeniedPage());
 			$response->setStatus(404);
 
 			$event->setParameter('result', $response);

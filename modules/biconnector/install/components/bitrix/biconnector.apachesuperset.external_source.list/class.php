@@ -3,8 +3,9 @@
 use Bitrix\BIConnector\Superset\Grid\ExternalSourceRepository;
 use Bitrix\BIConnector\Superset\Grid\ExternalSourceGrid;
 use Bitrix\BIConnector\Superset\Grid\Settings\ExternalSourceSettings;
+use Bitrix\BIConnector\Internal\Grid\FilterPresetSynchronizer;
+use Bitrix\Biconnector\Internal\Grid\GridStubRenderer;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\UI\Filter\Options;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar\ButtonLocation;
@@ -52,6 +53,7 @@ class ApacheSupersetExternalSourceListComponent extends CBitrixComponent
 
 	private function init(): void
 	{
+		FilterPresetSynchronizer::sync(self::GRID_ID, ExternalSourceGrid::getFilterPresets());
 		$this->initGrid();
 		$this->initGridFilter();
 		$this->initExternalSourceRepo();
@@ -101,11 +103,9 @@ class ApacheSupersetExternalSourceListComponent extends CBitrixComponent
 				$filter,
 				[
 					'GRID_ID' => $gridId,
-					'FILTER_PRESETS' => $this->getFilterPresets(),
+					'FILTER_PRESETS' => ExternalSourceGrid::getFilterPresets(),
 				]
 			);
-
-			$this->prepareFilterOption($gridId);
 		}
 		else
 		{
@@ -115,19 +115,6 @@ class ApacheSupersetExternalSourceListComponent extends CBitrixComponent
 		}
 
 		Toolbar::addFilter($options);
-	}
-
-	private function getFilterPresets(): array
-	{
-		return [
-			'active' => [
-				'name' => \Bitrix\Main\Localization\Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_FILTER_PRESET_ACTIVE') ?? '',
-				'fields' => [
-					'ACTIVE' => 'Y',
-				],
-				'default' => true,
-			],
-		];
 	}
 
 	private function initCreateButton(): void
@@ -181,37 +168,23 @@ class ApacheSupersetExternalSourceListComponent extends CBitrixComponent
 		{
 			return null;
 		}
+		$button = new Buttons\CreateButton([
+			'text' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_STUB_BUTTON'),
+			'color' => Buttons\Color::PRIMARY,
+			'icon' => Buttons\Icon::ADD,
+			'air' => true,
+		]);
 
-		$iconPath = $this->getPath() . '/images/not-found.svg';
-		$title = Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_STUB_TITLE_MSGVER_1') ?? '';
-		$description = Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_STUB_DESCRIPTION_MSGVER_1') ?? '';
+		$button->getAttributeCollection()['onclick'] =
+			'BX.BIConnector.ExternalSourceManager.Instance.openCreateSourceSlider()'
+		;
 
-		return <<<HTML
-			<div class="biconnector-dataset-grid-stub-container">
-				<div class="biconnector-dataset-grid-stub-logo">
-					<img src="{$iconPath}" alt="Not Found">
-				</div>
-				<div class="main-grid-empty-block-title">
-					{$title}
-				</div>
-				<div class="main-grid-empty-block-description document-list-stub-description" style="width: 100%;">
-					{$description}
-				</div>
-			</div>
-		HTML;
-	}
-
-	private function prepareFilterOption(string $filterId): void
-	{
-		$existOptions = new Options($filterId);
-		if ($existOptions->getDefaultFilterId() === Options::DEFAULT_FILTER)
-		{
-			$newOption = new Options(
-				$filterId,
-				$this->getFilterPresets(),
-			);
-			$newOption->save();
-		}
+		return GridStubRenderer::render(
+			'/bitrix/images/biconnector/workspace-analytic-grid/source-empty-state.webp',
+			Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_STUB_TITLE_MSGVER_2') ?? '',
+			Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_STUB_DESCRIPTION_MSGVER_2'),
+			$button,
+		);
 	}
 
 	private function prepareSourceTitleList(array $rows): array

@@ -38,18 +38,20 @@ final class QueueJob
 
 	public const DEFAULT_TTL = 14400;
 	public const MAX_TTL = 86400;
-	private const CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.api.queue.callbackBody&hash={hash}';
-	private const CLOUD_CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.b24cloudai.callbackSuccess&hash={hash}';
-	private const THIRDPARTY_CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.thirdparty.callbackSuccess&hash={hash}';
-	private const CALLBACK_ERROR_PATH = '/bitrix/services/main/ajax.php?action=ai.api.queue.callbackError&hash={hash}';
-	private const CLOUD_CALLBACK_ERROR_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.b24cloudai.callbackError&hash={hash}';
-	private const THIRDPARTY_CALLBACK_ERROR_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.thirdparty.callbackError&hash={hash}';
+	private const CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.api.queue.callbackBody&hash={hash}&rid={hash}';
+	private const CLOUD_CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.b24cloudai.callbackSuccess&hash={hash}&rid={hash}';
+	private const THIRDPARTY_CALLBACK_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.thirdparty.callbackSuccess&hash={hash}&rid={hash}';
+	private const CALLBACK_ERROR_PATH = '/bitrix/services/main/ajax.php?action=ai.api.queue.callbackError&hash={hash}&rid={hash}';
+	private const CLOUD_CALLBACK_ERROR_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.b24cloudai.callbackError&hash={hash}&rid={hash}';
+	private const THIRDPARTY_CALLBACK_ERROR_PATH = '/bitrix/services/main/ajax.php?action=ai.controller.integration.thirdparty.callbackError&hash={hash}&rid={hash}';
 
 	private ?int $id = null;
 	private ?string $hash = null;
 	private ?string $cacheHash = null;
 	private ?Error $error = null;
 	private bool $apiRequestCompleted = true;
+	/** Whether this instance took over a row created by an earlier attempt. */
+	private bool $reusedRow = false;
 	private int $ttl = self::DEFAULT_TTL;
 	private Context $context;
 	private IEngine $engine;
@@ -134,6 +136,79 @@ final class QueueJob
 		return $expireDate !== null
 			? $expireDate < new DateTime()
 			: $dateCreate < DateTime::createFromTimestamp(time() - self::DEFAULT_TTL);
+	}
+
+	/**
+	 * Job data with the parameters that belong to the charge rather than to the request.
+	 *
+	 * The limit is spent before the queue is reached, and a BAAS charge hands back an id of its
+	 * own each time. Left in, that id makes every attempt look like a different request — no
+	 * repeat is ever recognised, and the result cache never hits either, because this same
+	 * fingerprint is its key. The id stays in the stored row: the failure paths roll back by it.
+	 *
+	 * @param array $data Job data as it will be stored.
+	 * @return array Same data, fit to be fingerprinted.
+	 */
+	private static function withoutPerChargeParameters(array $data): array
+	{
+		unset($data['PARAMETERS'][Engine\Engine::PARAM_CONSUMPTION_ID]);
+
+		return $data;
+	}
+
+	/**
+	 * Latest unfinished and unexpired job with the same request fingerprint, if there is one.
+	 *
+	 * Being unfinished is expressed by the row's mere existence: a finished job is deleted.
+	 * The expiry rule of isRowExpired() is repeated here as a condition of the query rather
+	 * than applied to fetched rows — one fingerprint accumulates expired rows that the cleanup
+	 * agent has not reached yet, and TTL is per job, so an alive row with a long TTL can sit
+	 * arbitrarily far down the list. Whenever isRowExpired() changes, this condition changes
+	 * with it.
+	 *
+	 * Alive rows are walked newest first until the wire body matches. Taking only the newest
+	 * one would miss a fit: a single job fingerprint legitimately holds several alive rows —
+	 * the body carries context the job data never sees — so bodies A and B alternating inside
+	 * one TTL would each keep creating new jobs. The walk streams rows and stops at the first
+	 * match, which for the ordinary case is the first row fetched.
+	 *
+	 * @param string $cacheHash Fingerprint of the job.
+	 * @param string $requestHash Fingerprint of the body as it goes on the wire. A row whose
+	 *   stored fingerprint differs is not a repeat, however well the job fingerprints match.
+	 * @return array|null
+	 */
+	private static function findAliveRowByCacheHash(string $cacheHash, string $requestHash): ?array
+	{
+		$rows = QueueTable::query()
+			->setSelect(['ID', 'HASH', 'ENGINE_CUSTOM_SETTINGS'])
+			->where('CACHE_HASH', $cacheHash)
+			->where(
+				Query::filter()
+					->logic('or')
+					->where('EXPIRE_DATE', '>', new DateTime())
+					->where(
+						Query::filter()
+							->logic('and')
+							->whereNull('EXPIRE_DATE')
+							->where('DATE_CREATE', '>', DateTime::createFromTimestamp(time() - self::DEFAULT_TTL))
+					)
+			)
+			->setOrder(['ID' => 'DESC'])
+			->exec();
+
+		// The fingerprint of the stored data is not the fingerprint of the wire body: context
+		// messages are collected by an event at send time and never reach the row. Keeping the
+		// identity of a request whose body has since changed is worse than not keeping it —
+		// the receiver answers such a repeat with a conflict, and the request fails outright.
+		while ($row = $rows->fetch())
+		{
+			if (($row['ENGINE_CUSTOM_SETTINGS']['REQUEST_HASH'] ?? null) === $requestHash)
+			{
+				return $row;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -262,16 +337,18 @@ final class QueueJob
 	/**
 	 * Registers new Queue Job.
 	 *
+	 * @param array|null $requestParams Body of the request as it goes on the wire, save for the
+	 *   parts derived from the job itself. Passing it is what allows a repeat to keep the
+	 *   identity of the first attempt; without it every registration creates a new job, as before.
 	 * @return self
 	 */
-	public function register(): self
+	public function register(?array $requestParams = null): self
 	{
 		if ($this->hash)
 		{
 			return $this;
 		}
 
-		$hash = QueueTable::generateHash();
 		$data = [
 			'ENGINE_CLASS' => $this->engine::class,
 			'ENGINE_CODE' => $this->engine->getCode(),
@@ -296,7 +373,40 @@ final class QueueJob
 			);
 		}
 
-		$cacheHash = md5(serialize($data));
+		$cacheHash = md5(serialize(self::withoutPerChargeParameters($data)));
+
+		// Kept out of $data on purpose: the cache hash is the fingerprint of the job, and adding
+		// the wire body to it would change the result cache key of every engine at once.
+		$requestHash = $requestParams === null ? null : md5(serialize($requestParams));
+
+		$aliveRow = $requestHash === null ? null : self::findAliveRowByCacheHash($cacheHash, $requestHash);
+		if ($aliveRow !== null)
+		{
+			// A repeat of the same request keeps the identity of the first attempt: the receiver
+			// recognises the retry by rid, and rid is this hash.
+			$this->id = (int)$aliveRow['ID'];
+			$this->hash = $aliveRow['HASH'];
+			$this->context = $this->engine->getContext();
+			$this->cacheHash = $cacheHash;
+			$this->reusedRow = true;
+
+			// The limit was charged before the request got here, and this attempt turned out not
+			// to be a request at all. The charge of the attempt that owns the row stays: it is
+			// the one the failure paths will roll back.
+			$this->getLimitControlService()->rollbackConsumption(
+				new Limiter\Usage($this->engine->getContext()),
+				$this->engine->getPayload()->getCost(),
+				$this->engine->getConsumptionId()
+			);
+
+			return $this;
+		}
+
+		$hash = QueueTable::generateHash();
+		if ($requestHash !== null)
+		{
+			$data['ENGINE_CUSTOM_SETTINGS']['REQUEST_HASH'] = $requestHash;
+		}
 		$data['HASH'] = $hash;
 		$data['CACHE_HASH'] = $cacheHash;
 		$data['EXPIRE_DATE'] = DateTime::createFromTimestamp(time() + $this->ttl);
@@ -657,10 +767,25 @@ final class QueueJob
 	/**
 	 * Cancels current Queue Job.
 	 * Removes Job from Queue and does not callbacks.
+	 *
+	 * Called by every path that ends before the request goes out — a cached result, a missing
+	 * cloud registration. Left in place such a row would sit unfinished until its TTL, and the
+	 * cleanup agent would then fail it: an invented error event for a request that never went
+	 * wrong, and a rollback of a charge that was spent for good. The charge is not touched
+	 * here — an answer served from the cache is still an answer the portal asked for.
+	 *
+	 * A row taken over from an earlier attempt is left alone: that attempt is still in flight
+	 * and its callback needs the row.
+	 *
 	 * @return void
 	 */
 	public function cancel(): void
 	{
+		if ($this->reusedRow)
+		{
+			return;
+		}
+
 		$this->delete();
 	}
 

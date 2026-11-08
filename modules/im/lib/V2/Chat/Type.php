@@ -44,7 +44,17 @@ class Type
 
 	public function getFilterKey(): string
 	{
-		return $this->literal . ':' . ($this->entityType ?? '');
+		return self::buildFilterKey($this->literal, $this->entityType);
+	}
+
+	/**
+	 * Key of a type as literal + entity type, declared here and nowhere else. The format is a load-bearing
+	 * contract, not a private detail: the chat tree relation registry keys its rules by it, so a change
+	 * silently drops every rule instead of failing.
+	 */
+	public static function buildFilterKey(string $literal, ?string $entityType): string
+	{
+		return $literal . ':' . ($entityType ?? '');
 	}
 
 	public function allowsDynamic(): bool

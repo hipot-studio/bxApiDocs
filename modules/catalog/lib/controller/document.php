@@ -6,6 +6,7 @@ use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Access\Model\StoreDocument;
 use Bitrix\Catalog\Config\Feature;
 use Bitrix\Catalog\Config\State;
+use Bitrix\Catalog\Internal\Service\Rest\AccessSupport;
 use Bitrix\Catalog\Internal\Service\RestValidator\Entity;
 use Bitrix\Catalog\StoreDocumentElementTable;
 use Bitrix\Main\Engine\CurrentUser;
@@ -118,7 +119,11 @@ class Document extends Controller
 
 		global $APPLICATION;
 
-		$documentData = $this->getDocumentData($documentIds);
+		$documentData = $this->getAccessibleDocumentData($documentIds);
+		if ($documentData === null)
+		{
+			return null;
+		}
 
 		$userId = CurrentUser::get()->getId();
 		foreach ($documentIds as $documentId)
@@ -216,7 +221,12 @@ class Document extends Controller
 
 		global $APPLICATION;
 
-		$documentData = $this->getDocumentData($documentIds);
+		$documentData = $this->getAccessibleDocumentData($documentIds);
+		if ($documentData === null)
+		{
+			return null;
+		}
+
 		$userId = CurrentUser::get()->getId();
 		foreach ($documentIds as $documentId)
 		{
@@ -645,7 +655,7 @@ class Document extends Controller
 			return null;
 		}
 
-		if (!$this->checkDocumentAccess(ActionDictionary::ACTION_STORE_DOCUMENT_CONDUCT, $id))
+		if (!$this->checkDocumentOperationAccess(ActionDictionary::ACTION_STORE_DOCUMENT_CONDUCT, $id))
 		{
 			return null;
 		}
@@ -718,7 +728,7 @@ class Document extends Controller
 			return null;
 		}
 
-		if (!$this->checkDocumentAccess(ActionDictionary::ACTION_STORE_DOCUMENT_CANCEL, $id))
+		if (!$this->checkDocumentOperationAccess(ActionDictionary::ACTION_STORE_DOCUMENT_CANCEL, $id))
 		{
 			return null;
 		}
@@ -776,7 +786,7 @@ class Document extends Controller
 
 		if (in_array($name, ['conductlist', 'cancellist', 'unconfirm', 'confirm', 'conduct', 'cancel'], true))
 		{
-			return $this->checkUpdatePermissionEntity();
+			return $this->checkDocumentOperationPermissionEntity();
 		}
 
 		if ($name === 'deletelist')
@@ -826,6 +836,18 @@ class Document extends Controller
 		return $r;
 	}
 
+	private function checkDocumentOperationPermissionEntity(): Result
+	{
+		$result = new Result();
+		$access = $this->getAccessSupport()->ensureDocumentReadAccess();
+		if (!$access->isSuccess())
+		{
+			$result->addError(new Error(Loc::getMessage('DOCUMENT_CONTROLLER_NO_RIGHTS_ERROR')));
+		}
+
+		return $result;
+	}
+
 	private function getDocumentData(array $documentIds): array
 	{
 		$documentTitlesRes = StoreDocumentTable::getList(['select' => ['ID', 'DOC_TYPE', 'TITLE'], 'filter' => ['ID' => $documentIds]]);
@@ -840,6 +862,19 @@ class Document extends Controller
 		}
 
 		return $documentTitles;
+	}
+
+	private function getAccessibleDocumentData(array $documentIds): ?array
+	{
+		$result = $this->getAccessSupport()->getAccessibleDocuments($documentIds);
+		if (!$result->isSuccess())
+		{
+			$this->addError(new Error(Loc::getMessage('DOCUMENT_CONTROLLER_NO_RIGHTS_ERROR')));
+
+			return null;
+		}
+
+		return $result->getData()['documents'] ?? [];
 	}
 
 	private function getDocumentStoreList(array $documentIds): array
@@ -910,14 +945,65 @@ class Document extends Controller
 		$can = $this->accessController->check($action, StoreDocument::createFromId($documentId));
 		if (!$can)
 		{
-			$this->addError(
-				new Error(Loc::getMessage('DOCUMENT_CONTROLLER_NO_RIGHTS_ERROR'))
-			);
+			$this->addDocumentAccessDeniedError();
 
 			return false;
 		}
 
 		return true;
+	}
+
+	private function checkDocumentOperationAccess(string $action, int $documentId): bool
+	{
+		$accessSupport = $this->getAccessSupport();
+		$documentResult = $accessSupport->getAccessibleDocuments([$documentId]);
+		if (!$documentResult->isSuccess())
+		{
+			$this->addDocumentAccessDeniedError();
+
+			return false;
+		}
+
+		$document = $documentResult->getData()['documents'][$documentId] ?? null;
+		if (!$document)
+		{
+			$canAccessMissingDocument = $accessSupport->checkDocumentAction(
+				$action,
+				[
+					'ID' => $documentId,
+					'DOC_TYPE' => null,
+				],
+			);
+			if (!$canAccessMissingDocument || StoreDocumentTable::getById($documentId)->fetch())
+			{
+				$this->addDocumentAccessDeniedError();
+
+				return false;
+			}
+
+			$this->addError(new Error(Loc::getMessage('CATALOG_CONTROLLER_DOCUMENT_NOT_FOUND'), 2));
+
+			return false;
+		}
+
+		if (!$accessSupport->checkDocumentAction($action, $document))
+		{
+			$this->addDocumentAccessDeniedError();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function addDocumentAccessDeniedError(): void
+	{
+		$this->addError(new Error(Loc::getMessage('DOCUMENT_CONTROLLER_NO_RIGHTS_ERROR')));
+	}
+
+	private function getAccessSupport(): AccessSupport
+	{
+		return new AccessSupport((int)CurrentUser::get()->getId());
 	}
 
 	/**

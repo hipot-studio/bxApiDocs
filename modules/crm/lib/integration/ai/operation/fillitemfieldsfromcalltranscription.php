@@ -29,6 +29,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Context;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Timeline\AI\Controller;
+use Bitrix\Crm\V2\Internal\Service\Ai\FieldFillPolicyService;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentNullException;
@@ -283,6 +284,37 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 		}
 	}
 
+	/**
+	 * Drops the values of fields BitrixGPT is not allowed to fill. The answer of the model is parsed
+	 * against the policy read at that same moment ({@see self::extractPayloadFromAIResult()}), so in the
+	 * live flow nothing reaches here to be dropped; this is kept as the last check standing over the
+	 * payload regardless of how it was built. It runs before conflicts are calculated, before anything is
+	 * written and before the payload is stored back into the queue - the copy the confirmation UI and the
+	 * feedback upload read. The value is not carried anywhere else: only the separate 'comment' result
+	 * reaches Item::FIELD_NAME_COMMENTS.
+	 */
+	private static function removeDisabledFields(
+		FillItemFieldsFromCallTranscriptionPayload $payload,
+		int $entityTypeId
+	): void
+	{
+		$disabledFieldNameMap = FieldFillPolicyService::getInstance()->getDisabledFieldNameMap($entityTypeId);
+		if (empty($disabledFieldNameMap))
+		{
+			return;
+		}
+
+		$payload->singleFields = array_values(array_filter(
+			$payload->singleFields,
+			static fn(SingleFieldFillPayload $field) => !isset($disabledFieldNameMap[$field->name])
+		));
+
+		$payload->multipleFields = array_values(array_filter(
+			$payload->multipleFields,
+			static fn(MultipleFieldFillPayload $field) => !isset($disabledFieldNameMap[$field->name])
+		));
+	}
+
 	protected static function notifyTimelineAfterSuccessfulLaunch(Result $result): void {}
 
 	protected static function onAfterSuccessfulJobFinish(Result $result, ?\Bitrix\AI\Context $context = null): void
@@ -317,6 +349,7 @@ class FillItemFieldsFromCallTranscription extends AbstractOperation
 			return;
 		}
 
+		self::removeDisabledFields($payload, $factory->getEntityTypeId());
 		self::calculateConflicts($payload, $factory, $item);
 
 		$automaticallyHandledFields = self::getAutomaticallyHandledFields(

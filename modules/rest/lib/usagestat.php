@@ -576,8 +576,15 @@ class UsageStatTable extends Main\Entity\DataManager
 
 			if (OAuthService::getEngine()?->isRegistered())
 			{
-				$response = OAuthService::getEngine()?->getClient()->sendApplicationUsage($usage);
-				$return = is_array($response) && $response['result'] === true;
+				try
+				{
+					$response = OAuthService::getEngine()?->getClient()->sendApplicationUsage($usage);
+					$return = is_array($response) && $response['result'] === true;
+				}
+				catch (SystemException)
+				{
+					$return = false;
+				}
 			}
 			else
 			{

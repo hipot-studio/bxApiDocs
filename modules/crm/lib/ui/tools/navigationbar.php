@@ -85,6 +85,21 @@ class NavigationBar
 		return $this->repeatSaleView;
 	}
 
+	/**
+	 * Deal filter context of the repeat sale widget, shared by the toolbar button and the auto-opened banner.
+	 */
+	public function getRepeatSaleDealFilterParams(): array
+	{
+		// The widget counts the repeat sales of the whole portal, so the list it opens carries no funnel of
+		// its own: narrowing the URL down to the category of the current page would show fewer deals than
+		// the number that was clicked.
+		$dealListUrl = (string)Container::getInstance()->getRouter()->getItemListUrl(\CCrmOwnerType::Deal);
+
+		return [
+			'dealListUrl' => $dealListUrl,
+		];
+	}
+
 	public function getRepeatSaleViewLayout(): ?Button
 	{
 		Container::getInstance()->getLocalization()->loadMessages();
@@ -105,12 +120,15 @@ class NavigationBar
 		$isGlowingSettingsButton = $config['isGlowingSettingsButton'] ?? false;
 		$showSettingsButton = $config['showSettingsButton'] ?? true;
 
-		$params = Json::encode([
-			'showConfetti' => $showConfetti,
-			'periodTypeId' => $periodTypeId,
-			'isGlowingSettingsButton' => $isGlowingSettingsButton,
-			'showSettingsButton' => $showSettingsButton,
-		]);
+		$params = Json::encode(array_merge(
+			[
+				'showConfetti' => $showConfetti,
+				'periodTypeId' => $periodTypeId,
+				'isGlowingSettingsButton' => $isGlowingSettingsButton,
+				'showSettingsButton' => $showSettingsButton,
+			],
+			$this->getRepeatSaleDealFilterParams(),
+		));
 
 		return new Button([
 			'text' => Loc::getMessage('CRM_COMMON_REPEAT_SALE'),
@@ -212,7 +230,15 @@ class NavigationBar
 
 		if ($link)
 		{
-			$params['URL'] = $link;
+			$javascriptPrefix = 'javascript:';
+			if (str_starts_with($link, $javascriptPrefix))
+			{
+				$params['ON_CLICK'] = substr($link, strlen($javascriptPrefix));
+			}
+			else
+			{
+				$params['URL'] = $link;
+			}
 		}
 		elseif ($onClick)
 		{

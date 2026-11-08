@@ -14,4 +14,6 @@ interface ConvertProgressRepositoryInterface
 	public function getStatusByGroupId(int $groupId): ?ConvertStatus;
 
 	public function save(ConvertProgress $progress): void;
+
+	public function markNewConversion(int $groupId): void;
 }

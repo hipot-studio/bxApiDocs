@@ -519,12 +519,9 @@ class Block
 							$blocks[$block]->updateNodes($components, $additional);
 						}
 					}
+					// the editor attribute leaks into the saved content; drop it in attribute position only
 					$blocks[$block]->saveContent(
-						str_replace(
-							'contenteditable="true"',
-							'',
-							$blocks[$block]->getContent()
-						)
+						Sanitizer::removeContentEditableAttribute($blocks[$block]->getContent()),
 					);
 					$result->setResult($blocks[$block]->save());
 					$result->setError($blocks[$block]->getError());

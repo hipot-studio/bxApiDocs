@@ -3,20 +3,24 @@
 namespace Bitrix\BIConnector\Controller\ExternalSource;
 
 use Bitrix\BIConnector;
+use Bitrix\BIConnector\Access\AccessController;
+use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\ExternalSource;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\SourceManager;
 use Bitrix\BIConnector\Superset\ActionFilter;
+use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\Crm;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
 class Source extends Controller
 {
+	public const ERROR_ACCESS_DENIED = 'ACCESS_DENIED';
+
 	protected function getDefaultPreFilters(): array
 	{
 		$additionalFilters = [
@@ -59,7 +63,8 @@ class Source extends Controller
 		$saveResult = $source->save();
 		if (!$saveResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_SAVED') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_SAVED');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -71,7 +76,8 @@ class Source extends Controller
 	{
 		if ($moduleId !== 'BI')
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_DELETE_ERROR_WRONG_MODULE') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_DELETE_ERROR_WRONG_MODULE');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -79,7 +85,8 @@ class Source extends Controller
 		$source = BIConnector\ExternalSource\Internal\ExternalSourceTable::getById($id)->fetchObject();
 		if (!$source)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -99,7 +106,8 @@ class Source extends Controller
 	{
 		if ($moduleId !== 'BI')
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_DELETE_ERROR_WRONG_MODULE') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_DELETE_ERROR_WRONG_MODULE');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -120,7 +128,8 @@ class Source extends Controller
 		$sourceEntity = BIConnector\ExternalSource\Internal\ExternalSourceTable::getById($sourceId)->fetchObject();
 		if (!$sourceEntity)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -140,25 +149,67 @@ class Source extends Controller
 		return true;
 	}
 
+	/**
+	 * Connecting to an external database must not be left to the interface check alone:
+	 * a direct controller call bypasses the component guard.
+	 */
+	private function checkExternalDashboardConfigAccess(): bool
+	{
+		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG))
+		{
+			return true;
+		}
+
+		$this->addError(new UserFacingError(
+			Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_ACCESS_DENIED'),
+			self::ERROR_ACCESS_DENIED,
+		));
+
+		return false;
+	}
+
 	public function checkConnectionByDataAction(array $data): ?bool
 	{
+		if (!$this->checkExternalDashboardConfigAccess())
+		{
+			return null;
+		}
+
 		if (!isset($data['type']) || !$data['type'])
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
 
-		$configKey = $data['code'];
-		$requiredFields = ExternalSource\SourceManager::getFieldsConfig()[$configKey];
+		$fieldsConfig = ExternalSource\SourceManager::getFieldsConfig();
+		$configKey = $data['code'] ?? '';
+		if (!isset($fieldsConfig[$configKey]))
+		{
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_TYPE_UNAVAILABLE');
+			$this->addError(new UserFacingError($errorMessage));
+
+			return null;
+		}
+
+		$requiredFields = $fieldsConfig[$configKey];
 		$settings = ExternalSource\Internal\ExternalSourceSettingsTable::createCollection();
 		foreach ($requiredFields as $requiredField)
 		{
-			if (!isset($data[$requiredField['code']]) || !$data[$requiredField['code']])
+			if ($requiredField['required'] ?? true)
 			{
-				$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE') ?? ''));
+				if (!isset($data[$requiredField['code']]) || !$data[$requiredField['code']])
+				{
+					$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_FIELDS_INCOMPLETE');
+					$this->addError(new UserFacingError($errorMessage));
 
-				return null;
+					return null;
+				}
+			}
+			elseif (!isset($data[$requiredField['code']]) || $data[$requiredField['code']] === '')
+			{
+				continue;
 			}
 
 			$settingItem = ExternalSource\Internal\ExternalSourceSettingsTable::createObject();
@@ -174,7 +225,7 @@ class Source extends Controller
 		$type = ExternalSource\Type::tryFrom($data['type']);
 		if (!$type)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_UNKNOWN_TYPE', [
+			$this->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_UNKNOWN_TYPE', [
 				'#CONNECTION_TYPE#' => htmlspecialcharsbx($data['type']),
 			]) ?? ''));
 
@@ -184,12 +235,13 @@ class Source extends Controller
 		$source = ExternalSource\Source\Factory::getSource($type, 0);
 		if ($source instanceof ExternalSource\Source\Rest)
 		{
-			$connectorId = (int)str_replace('rest_', '', $data['code']);
+			$connectorId = (int)str_replace('rest_', '', $configKey);
 			$connector = ExternalSourceRestConnectorTable::getByPrimary($connectorId)->fetchObject();
 
 			if (!$connector)
 			{
-				$this->errorCollection[] = new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? '');
+				$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND');
+				$this->errorCollection[] = new UserFacingError($errorMessage);
 
 				return null;
 			}
@@ -209,6 +261,11 @@ class Source extends Controller
 
 	public function saveAction(array $data): ?array
 	{
+		if (!$this->checkExternalDashboardConfigAccess())
+		{
+			return null;
+		}
+
 		$sourceId = null;
 		if (isset($data['id']))
 		{
@@ -253,7 +310,8 @@ class Source extends Controller
 		$saveResult = $source->save();
 		if (!$saveResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_SAVED') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_SAVED');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -274,7 +332,8 @@ class Source extends Controller
 		{
 			if (!Loader::includeModule('crm'))
 			{
-				$result->addError(new Error('Module crm is not installed'));
+				$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_MODULE_UNAVAILABLE');
+				$result->addError(new UserFacingError($errorMessage));
 
 				return $result;
 			}
@@ -283,7 +342,8 @@ class Source extends Controller
 
 		if (!$source)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND');
+			$result->addError(new UserFacingError($errorMessage));
 
 			return $result;
 		}

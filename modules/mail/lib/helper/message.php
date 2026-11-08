@@ -3,16 +3,15 @@
 namespace Bitrix\Mail\Helper;
 
 use Bitrix\Mail\Integration\Calendar\ICal\ICalMailManager;
+use Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill;
 use Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope;
 use Bitrix\Mail\Internals\MailMessageAttachmentTable;
 use Bitrix\Mail\Internals\MessageAccessTable;
-use Bitrix\Mail\Internals\MessageClosureTable;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\MailMessageTable;
+use Bitrix\Mail\Public\Service\Access\MessageAccessService;
 use Bitrix\Main;
-use Bitrix\Main\Security;
 use Bitrix\Mail\Internals;
-use Bitrix\Mail\Helper\MessageAccess as AccessHelper;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Config\Ini;
 use Bitrix\Main\Mail\Converter;
@@ -23,6 +22,18 @@ use Bitrix\Main\Web\Uri;
 class Message
 {
 	private const ORIGINAL_RECIPIENT_SEARCH_TOKEN_PREFIX = 'xrcpt';
+
+	// address columns are varchar(255), a value of exactly this length is a truncated one
+	private const ADDRESS_FIELD_MAX_LENGTH = 255;
+
+	private const ADDRESS_FIELDS_MAP = [
+		'__from' => 'FIELD_FROM',
+		'__reply_to' => 'FIELD_REPLY_TO',
+		'__to' => 'FIELD_TO',
+		'__cc' => 'FIELD_CC',
+		'__bcc' => 'FIELD_BCC',
+		'__rcpt' => 'FIELD_RCPT',
+	];
 
 	// entity types with special access rules (group tokens)
 	public const ENTITY_TYPE_USER_MESSAGE = MessageAccessTable::ENTITY_TYPE_USER_MESSAGE;
@@ -95,6 +106,16 @@ class Message
 			'style' => [],
 			'colgroup' => [],
 			'col' => ['width'],
+			'img' => array_merge(
+				$validTagAttributes,
+				[
+					'src',
+					'alt',
+					'title',
+					'data-bx-mail-signature-image',
+					'data-bx-mail-signature-image-size',
+				],
+			),
 			'table' => $tableAttributes,
 			'center' => $validTagAttributes,
 			'div' => $validTagAttributes,
@@ -178,6 +199,77 @@ class Message
 	}
 
 	/**
+	 * Restores address fields that were truncated on save and the legacy Bcc, reading the raw header.
+	 * Returns the row unchanged when there is no header or nothing to restore.
+	 *
+	 * @param array $row row of Mail\MailMessageTable with HEADER and FIELD_* columns.
+	 *
+	 * @return array row with restored address fields.
+	 */
+	public static function restoreAddressFieldsFromHeader(array $row): array
+	{
+		$header = (string)($row['HEADER'] ?? '');
+		if ($header === '')
+		{
+			return $row;
+		}
+
+		$restoreAddressFields = false;
+		foreach (self::ADDRESS_FIELDS_MAP as $field)
+		{
+			if (mb_strlen((string)($row[$field] ?? '')) === self::ADDRESS_FIELD_MAX_LENGTH)
+			{
+				$restoreAddressFields = true;
+
+				break;
+			}
+		}
+
+		$legacyOriginalRecipientInBcc = false;
+		if (!$restoreAddressFields && (string)($row['FIELD_BCC'] ?? '') !== '')
+		{
+			$originalRecipientHeaders = [];
+			preg_match_all(
+				'/(?:^|\r?\n)X-Original-Rcpt-to\s*:\s*([^\r\n]+)/i',
+				$header,
+				$originalRecipientHeaders,
+			);
+			foreach ($originalRecipientHeaders[1] ?? [] as $originalRecipient)
+			{
+				$originalRecipient = trim($originalRecipient);
+				if (
+					$originalRecipient !== ''
+					&& mb_stripos((string)$row['FIELD_BCC'], $originalRecipient) !== false
+				)
+				{
+					$legacyOriginalRecipientInBcc = true;
+
+					break;
+				}
+			}
+		}
+
+		if (!$restoreAddressFields && !$legacyOriginalRecipientInBcc)
+		{
+			return $row;
+		}
+
+		$parsedHeader = \CMailMessage::parseHeader($header, LANG_CHARSET);
+
+		if ($restoreAddressFields)
+		{
+			$row['FIELD_FROM'] = $parsedHeader->getHeader('FROM');
+			$row['FIELD_REPLY_TO'] = $parsedHeader->getHeader('REPLY-TO');
+			$row['FIELD_TO'] = $parsedHeader->getHeader('TO');
+			$row['FIELD_CC'] = $parsedHeader->getHeader('CC');
+		}
+
+		$row['FIELD_BCC'] = self::getBccFromParsedHeader($parsedHeader);
+
+		return $row;
+	}
+
+	/**
 	 * Adapts a message(result of Mail\MailMessageTable::getList) for output in the public interface.
 	 *
 	 * @param array &$message(result of Mail\MailMessageTable::getList. Changes the data in a variable!).
@@ -197,67 +289,9 @@ class Message
 			}
 		}
 
-		$fieldsMap = array(
-			'__from' => 'FIELD_FROM',
-			'__reply_to' => 'FIELD_REPLY_TO',
-			'__to' => 'FIELD_TO',
-			'__cc' => 'FIELD_CC',
-			'__bcc' => 'FIELD_BCC',
-			'__rcpt' => 'FIELD_RCPT',
-		);
+		$message = self::restoreAddressFieldsFromHeader($message);
 
-		if ('' != $message['HEADER'])
-		{
-			$restoreAddressFields = false;
-			foreach ($fieldsMap as $field)
-			{
-				if (mb_strlen((string)($message[$field] ?? '')) == 255)
-				{
-					$restoreAddressFields = true;
-					break;
-				}
-			}
-
-			$legacyOriginalRecipientInBcc = false;
-			if (!$restoreAddressFields && (string)($message['FIELD_BCC'] ?? '') !== '')
-			{
-				$originalRecipientHeaders = [];
-				preg_match_all(
-					'/(?:^|\r?\n)X-Original-Rcpt-to\s*:\s*([^\r\n]+)/i',
-					(string)$message['HEADER'],
-					$originalRecipientHeaders,
-				);
-				foreach ($originalRecipientHeaders[1] ?? [] as $originalRecipient)
-				{
-					$originalRecipient = trim($originalRecipient);
-					if (
-						$originalRecipient !== ''
-						&& mb_stripos((string)$message['FIELD_BCC'], $originalRecipient) !== false
-					)
-					{
-						$legacyOriginalRecipientInBcc = true;
-						break;
-					}
-				}
-			}
-
-			if ($restoreAddressFields || $legacyOriginalRecipientInBcc)
-			{
-				$parsedHeader = \CMailMessage::parseHeader($message['HEADER'], LANG_CHARSET);
-
-				if ($restoreAddressFields)
-				{
-					$message['FIELD_FROM'] = $parsedHeader->getHeader('FROM');
-					$message['FIELD_REPLY_TO'] = $parsedHeader->getHeader('REPLY-TO');
-					$message['FIELD_TO'] = $parsedHeader->getHeader('TO');
-					$message['FIELD_CC'] = $parsedHeader->getHeader('CC');
-				}
-
-				$message['FIELD_BCC'] = self::getBccFromParsedHeader($parsedHeader);
-			}
-		}
-
-		foreach ($fieldsMap as $fieldKey => $fieldName)
+		foreach (self::ADDRESS_FIELDS_MAP as $fieldKey => $fieldName)
 		{
 			$message[$fieldKey] = [];
 
@@ -396,14 +430,14 @@ class Message
 		return $message;
 	}
 
-	public static function hasAccess(&$message, $userId = null)
+	public static function hasAccess(&$message, $userId = null, ?MessageAccessService $accessService = null)
 	{
 		global $USER;
 
 		if (
-			!($userId > 0 || is_object($USER) && $USER->isAuthorized()) ||
+			!($userId > 0 || is_object($USER) && $USER->isAuthorized())
 			//If message id = 0 , the message is deleted or not loaded:
-			is_null($message['ID']) || $message['ID'] === 0 || $message['ID'] === '0'
+			|| is_null($message['ID']) || $message['ID'] === 0 || $message['ID'] === '0'
 		)
 		{
 			return false;
@@ -414,69 +448,31 @@ class Message
 			$userId = $USER->getId();
 		}
 
+		$token = isset($_REQUEST['mail_uf_message_token']) && is_string($_REQUEST['mail_uf_message_token'])
+			? $_REQUEST['mail_uf_message_token']
+			: '';
+		$accessResult = ($accessService ?? new MessageAccessService())->resolve(
+			(int)$message['MAILBOX_ID'],
+			(int)$message['ID'],
+			(int)$userId,
+			$token,
+		);
+
+		if ($accessResult->isSuccess())
+		{
+			$message['__access_level']
+				= $accessResult->getData()[MessageAccessService::RESULT_ACCESS_LEVEL];
+
+			return true;
+		}
+
+		// bindings to a chat, a calendar event, a task or a post: the only branch left needing the message
 		$messageAccess = \Bitrix\Mail\MessageAccess::createByMessageId($message['ID'], $userId);
-		$access = $messageAccess->isOwner();
-
-		$message['__access_level'] = $access ? 'full' : false;
-
-		// check access by tokens
-		if (!$access && isset($_REQUEST['mail_uf_message_token']))
-		{
-			$token = $signature = '';
-			if (is_string($_REQUEST['mail_uf_message_token']) && mb_strpos($_REQUEST['mail_uf_message_token'], ':') > 0)
-			{
-				[$token, $signature] = explode(':', $_REQUEST['mail_uf_message_token'], 2);
-			}
-
-			if ($token <> '' && $signature <> '')
-			{
-				$excerpt = MessageAccessTable::getList(array(
-					'select' => array('SECRET', 'MESSAGE_ID', 'ENTITY_TYPE', 'ENTITY_ID'),
-					'filter' => array(
-						'=TOKEN' => $token,
-						'=MAILBOX_ID' => $message['MAILBOX_ID'],
-					),
-					'limit' => 1,
-				))->fetch();
-
-				if (!empty($excerpt['SECRET']))
-				{
-					if (self::checkAccessForEntityToken($excerpt['ENTITY_TYPE'], (int)$excerpt['ENTITY_ID'], $userId))
-					{
-						$salt = self::getSaltByEntityType($excerpt['ENTITY_TYPE'], (int)$excerpt['ENTITY_ID'], $userId);
-
-						$signer = new Security\Sign\Signer(new Security\Sign\HmacAlgorithm('md5'));
-
-						if ($signer->validate($excerpt['SECRET'], $signature, $salt))
-						{
-							$access = $message['ID'] == $excerpt['MESSAGE_ID'];
-
-							if (!$access) // check parent access
-							{
-								$access = (bool) MessageClosureTable::getList(array(
-									'select' => array('PARENT_ID'),
-									'filter' => array(
-										'=MESSAGE_ID' => $message['ID'],
-										'=PARENT_ID' => $excerpt['MESSAGE_ID'],
-									),
-								))->fetch();
-							}
-						}
-					}
-				}
-			}
-		}
-
-		// check access by direct links
-		if (!$access)
-		{
-			$access = $messageAccess->canViewMessage();
-		}
-
-		if (false === $message['__access_level'])
-		{
-			$message['__access_level'] = $access ? 'read' : false;
-		}
+		$isOwner = $messageAccess->isOwner();
+		$access = $isOwner || $messageAccess->canViewMessage();
+		$message['__access_level'] = $isOwner
+			? MessageAccessService::ACCESS_LEVEL_FULL
+			: ($access ? MessageAccessService::ACCESS_LEVEL_READ : false);
 
 		return $access;
 	}
@@ -1515,20 +1511,6 @@ class Message
 		return (bool)MailboxTable::getUserMailbox($mailboxId, $userId);
 	}
 
-	private static function checkAccessForEntityToken(?string $entityType, int $entityId, int $userId): bool
-	{
-		switch ($entityType)
-		{
-			case Message::ENTITY_TYPE_IM_CHAT:
-			case Message::ENTITY_TYPE_CHAT_MESSAGE:
-				return AccessHelper::checkAccessForChat($entityId, $userId);
-			case Message::ENTITY_TYPE_CALENDAR_EVENT:
-				return AccessHelper::checkAccessForCalendarEvent($entityId, $userId);
-			default:
-				return true; // tasks, crm, user messages create per-user tokens
-		}
-	}
-
 	/**
 	 * @param $mailboxId
 	 * @param $messageId
@@ -1546,6 +1528,28 @@ class Message
 				'VALUE' => 'N',
 			]
 		);
+	}
+
+	/**
+	 * Brings the conversation projection up to date with the letter whose closure has just been saved,
+	 * before the list of the client is told to refresh itself.
+	 *
+	 * Nothing is reported back and nothing is thrown: the caller is the central write path of the mail
+	 * synchronization, and a read model must not be able to break the delivery of a letter. A
+	 * projection that did fail takes the readiness of the mailbox back and arms the background pass,
+	 * so grouping resumes only from a projection that has been walked and checked again.
+	 */
+	public static function syncConversationProjection(int $mailboxId, int $messageId): void
+	{
+		if ($mailboxId <= 0 || $messageId <= 0)
+		{
+			return;
+		}
+
+		if (!(new ConversationBackfill())->indexMessage($mailboxId, $messageId))
+		{
+			MessageConversationStepper::bind();
+		}
 	}
 
 	/**
@@ -1617,7 +1621,7 @@ class Message
 	public static function getOutgoingSubject(
 		string $subject,
 		string $body,
-		string $emptySubjectPlaceholder,
+		?string $emptySubjectPlaceholder = null,
 	): string
 	{
 		if (trim($subject) !== '')
@@ -1626,8 +1630,18 @@ class Message
 		}
 
 		$generated = static::extractSubjectFromBody($body);
+		$emptySubjectPlaceholder ??= self::getOutgoingSubjectPlaceholder();
 
 		return $generated !== '' ? $generated : $emptySubjectPlaceholder;
+	}
+
+	private static function getOutgoingSubjectPlaceholder(): string
+	{
+		$messages = \Bitrix\Main\Localization\Loc::loadLanguageFile(
+			__DIR__ . '/../../install/components/bitrix/mail.client/class.php',
+		);
+
+		return (string)($messages['MAIL_MESSAGE_EMPTY_SUBJECT_PLACEHOLDER'] ?? '(no subject)');
 	}
 
 	public static function getWithAccessCheck(int $messageId, ?int $userId): ?array

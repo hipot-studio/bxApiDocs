@@ -18,6 +18,7 @@ use Bitrix\Main\Errorable;
 use Bitrix\Mail\Helper\Cache\SanitizedBodyCache;
 use Bitrix\Mail\Helper\Label\LabelsFeature;
 use Bitrix\Mail\Internal\Service\Label\LabelService;
+use Bitrix\Mail\Internal\Service\Mailbox\Avatar\AvatarService;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationActionGuard;
 use Bitrix\Mail\Integration\AI;
 
@@ -101,7 +102,8 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 		$this->prepareMessageHtml($message);
 
 		$this->arResult['MESSAGE'] = $message;
-		$this->arResult['SEND_ERROR'] = Mail\Helper\Mailbox::getPermanentSendError($message);
+		$this->setMailboxAvatar((int)$message['MAILBOX_ID']);
+		$this->arResult['SEND_ERROR'] = Mail\Service\Message\SendFailure::getMessageFailure($message);
 
 		$this->arResult['LAST_RCPT'] = Mail\Helper\Recipient::loadLastRcpt();
 		$this->arResult['EMAILS'] = array();//Mail\Helper\Recipient::loadMailContacts();
@@ -243,6 +245,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 
 			$this->arResult['LOG'] = $log;
 			$this->arResult['avatarParams'] = $this->getAvatarParams($log);
+			$this->setMailboxAvatar((int)$message['MAILBOX_ID']);
 			ob_start();
 
 			$this->includeComponentTemplate('log');
@@ -266,13 +269,30 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 	 */
 	private function getAvatarParams($messages)
 	{
-		$params = (new Mail\MessageView\AvatarManager(Main\Engine\CurrentUser::get()->getId()))
+		$params = (new Mail\MessageView\AvatarManager(
+			Main\Engine\CurrentUser::get()->getId(),
+			$this->getMessageAccessToken(),
+		))
 			->getAvatarParamsFromMessagesHeaders($messages);
 		foreach ($params as $email => $data)
 		{
 			$params[$email]['avatarSize'] = 23;
 		}
 		return $params;
+	}
+
+	private function getMessageAccessToken(): string
+	{
+		return isset($_REQUEST['mail_uf_message_token']) && is_string($_REQUEST['mail_uf_message_token'])
+			? $_REQUEST['mail_uf_message_token']
+			: ''
+		;
+	}
+
+	private function setMailboxAvatar(int $mailboxId): void
+	{
+		$avatars = (new AvatarService())->getDisplayData([$mailboxId]);
+		$this->arResult['MAILBOX_AVATAR'] = $avatars[$mailboxId] ?? null;
 	}
 
 	/**
@@ -299,6 +319,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 		$this->prepareMessageHtml($message);
 
 		$this->arResult['MESSAGE'] = $message;
+		$this->setMailboxAvatar((int)$message['MAILBOX_ID']);
 		$this->prepareUser();
 
 		$this->arResult['LAST_RCPT'] = Mail\Helper\Recipient::loadLastRcpt();
@@ -752,6 +773,8 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 				'MSG_UID' => 'MESSAGE_UID.MSG_UID',
 				// The generation of the placement: what tells a lazy download it is still usable
 				'GENERATION_ID' => 'MESSAGE_UID.GENERATION_ID',
+				// The version of the folder the uid was written under: the same download reads it too
+				'DIR_UIDV' => 'MESSAGE_UID.DIR_UIDV',
 				'MAILBOX_EMAIL' => 'MAILBOX.EMAIL',
 				'MAILBOX_NAME' => 'MAILBOX.NAME',
 				'MAILBOX_OPTIONS' => 'MAILBOX.OPTIONS',
@@ -818,6 +841,7 @@ class CMailClientMessageViewComponent extends CBitrixComponent implements Contro
 		$item['MAILBOX_EMAIL'] = $message['MAILBOX_EMAIL'];
 		$item['MAILBOX_NAME'] = $message['MAILBOX_NAME'];
 		$item['MAILBOX_LOGIN'] = $message['MAILBOX_LOGIN'];
+		$item['__access_level'] = $message['__access_level'] ?? false;
 
 		$item = $this->prepareMessage($item);
 		$item['SENDER_EMAIL'] = $this->getEmailFromFieldFrom($item['FIELD_FROM']);

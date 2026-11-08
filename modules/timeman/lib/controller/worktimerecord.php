@@ -6,21 +6,22 @@ use Bitrix\Main\Engine\Controller;
 
 use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Engine\Response\DataType\Page;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordCollection;
 use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordTable;
 use Bitrix\Timeman\Util\Form\Filter\Validator\NumberValidator;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 
 class WorktimeRecord extends Controller
 {
 	protected function getDefaultPreFilters()
 	{
-		return array_merge(
-			parent::getDefaultPreFilters(),
-			[
-				new Scope(Scope::REST),
-			]
-		);
+		return [
+			new ToolEnabledFilter(),
+			...parent::getDefaultPreFilters(),
+			new Scope(Scope::REST),
+		];
 	}
 
 	public function getAction($id)
@@ -84,29 +85,25 @@ class WorktimeRecord extends Controller
 				return [];
 			}
 
-			if (isset($filter['USER_ID']))
-			{
-				$filter['USER_ID'] = array_intersect((array)$filter['USER_ID'], $readableUserIds);
-				if (empty($filter['USER_ID']))
-				{
-					return [];
-				}
-			}
-			else
-			{
-				$filter['USER_ID'] = $readableUserIds;
-			}
+			// Nested as a whole, the requested filter cannot widen the restriction with its own LOGIC.
+			$filter = [$filter];
 		}
 
-		/** @var WorktimeRecordCollection $records */
-		$records = WorktimeRecordTable::query()
+		$query = WorktimeRecordTable::query()
 			->setSelect($select)
 			->setFilter($filter)
 			->setOffset($pageNavigation->getOffset())
 			->setLimit($pageNavigation->getLimit())
 			->setOrder($order)
-			->exec()
-			->fetchCollection();
+		;
+		if ($checkAccess)
+		{
+			// Not in the array filter: a requested condition on USER_ID would retype the restriction there.
+			$query->whereIn('USER_ID', $readableUserIds);
+		}
+
+		/** @var WorktimeRecordCollection $records */
+		$records = $query->exec()->fetchCollection();
 
 		$result = [];
 		foreach ($records->getAll() as $record)
@@ -114,7 +111,21 @@ class WorktimeRecord extends Controller
 			$result[] = $this->convertRecordFields($record);
 		}
 
-		return new Page('WORKTIME_RECORDS', $result, function () use ($filter) {
+		return new Page('WORKTIME_RECORDS', $result, function () use ($filter, $checkAccess, $readableUserIds) {
+			if ($checkAccess)
+			{
+				// As getCount() counts, plus the restriction that the array filter does not carry.
+				$row = WorktimeRecordTable::query()
+					->addSelect(new ExpressionField('CNT', 'COUNT(1)'))
+					->setFilter($filter)
+					->whereIn('USER_ID', $readableUserIds)
+					->exec()
+					->fetch()
+				;
+
+				return (int)$row['CNT'];
+			}
+
 			return WorktimeRecordTable::getCount($filter);
 		});
 	}

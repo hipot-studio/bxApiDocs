@@ -203,22 +203,22 @@ class DepartmentProvider extends BaseStructureProvider
 
 			if ($selectMode === DepartmentProviderSelectMode::UsersAndDepartments && $this->providerOptions->allowFlatDepartments)
 			{
-				$dialog->addItem(
-					new Item(
-						[
-							'id' => $this->addFlatModeValuePostfix($node->id ?? ''),
-							'entityId' => self::ENTITY_ID,
-							'title' => Loc::getMessage(
-								'HUMANRESOURCES_ENTITY_SELECTOR_ONLY_EMPLOYEES_MSGVER_1',
-								['#NODE_NAME#' => $node->name]
-							),
-							'customData' => [
-								'accessCode' => $this->getSimpleNodeAccessCodeString($node) ?? '',
-								'nodeEntityType' => $this->getNodeEntityType($node),
-							],
+				$flatItem = new Item(
+					[
+						'id' => $this->addFlatModeValuePostfix($node->id ?? ''),
+						'entityId' => self::ENTITY_ID,
+						'title' => Loc::getMessage(
+							'HUMANRESOURCES_ENTITY_SELECTOR_ONLY_EMPLOYEES_MSGVER_1',
+							['#NODE_NAME#' => $node->name]
+						),
+						'customData' => [
+							'accessCode' => $this->getSimpleNodeAccessCodeString($node) ?? '',
+							'nodeEntityType' => $this->getNodeEntityType($node),
 						],
-					),
+					],
 				);
+				$this->updateItemViewOptions($flatItem, $node, isFlatItem: true);
+				$dialog->addItem($flatItem);
 			}
 		}
 	}
@@ -737,58 +737,38 @@ class DepartmentProvider extends BaseStructureProvider
 			);
 		}
 
-		if ($this->providerOptions->allowFlatDepartments && !$this->providerOptions->isFlatMode)
+		$hasFlatChild =
+			$this->providerOptions->allowFlatDepartments
+			&& !$this->providerOptions->isFlatMode
+			&& ($node->isDepartment() || $node->isTeam())
+		;
+
+		if ($hasFlatChild)
 		{
-			if ($node->isDepartment())
-			{
-				$item->addChild(
-					new Item(
-						[
-							'id' => $this->addFlatModeValuePostfix($node->id ?? ''),
-							'entityId' => self::ENTITY_ID,
-							'title' => Loc::getMessage(
-								'HUMANRESOURCES_ENTITY_SELECTOR_ONLY_EMPLOYEES_MSGVER_1',
-								['#NODE_NAME#' => $node->name]
-							),
-							'nodeOptions' => [
-								'title' => Loc::getMessage(
-									'HUMANRESOURCES_ENTITY_SELECTOR_ONLY_DEPARTMENT_EMPLOYEES',
-								),
-								'avatar' => self::IMAGE_DEPARTMENT_OPTION,
-								'renderMode' => 'override',
-							],
-							'customData' => [
-								'accessCode' => $this->addFlatModeValuePostfix($this->getSimpleNodeAccessCodeString($node) ?? ''),
-								'nodeEntityType' => $this->getNodeEntityType($node),
-							],
-						],
+			$isDepartment = $node->isDepartment();
+			$flatItem = new Item(
+				[
+					'id' => $this->addFlatModeValuePostfix($node->id ?? ''),
+					'entityId' => self::ENTITY_ID,
+					'title' => Loc::getMessage(
+						'HUMANRESOURCES_ENTITY_SELECTOR_ONLY_EMPLOYEES_MSGVER_1',
+						['#NODE_NAME#' => $node->name]
 					),
-				);
-			}
-			elseif ($node->isTeam())
-			{
-				$item->addChild(
-					new Item(
-						[
-							'id' => $this->addFlatModeValuePostfix($node->id ?? ''),
-							'entityId' => self::ENTITY_ID,
-							'title' => Loc::getMessage(
-								'HUMANRESOURCES_ENTITY_SELECTOR_ONLY_EMPLOYEES_MSGVER_1',
-								['#NODE_NAME#' => $node->name]
-							),
-							'nodeOptions' => [
-								'title' => Loc::getMessage('HUMANRESOURCES_ENTITY_SELECTOR_ONLY_TEAM_EMPLOYEES_MSGVER_1'),
-								'avatar' => self::IMAGE_TEAM_OPTION,
-								'renderMode' => 'override',
-							],
-							'customData' => [
-								'accessCode' => $this->addFlatModeValuePostfix($this->getSimpleNodeAccessCodeString($node) ?? ''),
-								'nodeEntityType' => $this->getNodeEntityType($node),
-							],
-						],
-					),
-				);
-			}
+					'nodeOptions' => [
+						'title' => $isDepartment
+							? Loc::getMessage('HUMANRESOURCES_ENTITY_SELECTOR_ONLY_DEPARTMENT_EMPLOYEES')
+							: Loc::getMessage('HUMANRESOURCES_ENTITY_SELECTOR_ONLY_TEAM_EMPLOYEES_MSGVER_1'),
+						'avatar' => $isDepartment ? self::IMAGE_DEPARTMENT_OPTION : self::IMAGE_TEAM_OPTION,
+						'renderMode' => 'override',
+					],
+					'customData' => [
+						'accessCode' => $this->addFlatModeValuePostfix($this->getSimpleNodeAccessCodeString($node) ?? ''),
+						'nodeEntityType' => $this->getNodeEntityType($node),
+					],
+				],
+			);
+			$this->updateItemViewOptions($flatItem, $node, isFlatItem: true);
+			$item->addChild($flatItem);
 		}
 	}
 
@@ -897,7 +877,7 @@ class DepartmentProvider extends BaseStructureProvider
 						],
 					],
 				);
-				$this->updateItemViewOptions($item, $node);
+				$this->updateItemViewOptions($item, $node, isFlatItem: $isFlatDepartment);
 
 				$items[] = $item;
 			}
@@ -916,21 +896,22 @@ class DepartmentProvider extends BaseStructureProvider
 		return $value . ':F';
 	}
 
-	private function updateItemViewOptions(Item $item, Node $node): void
+	private function updateItemViewOptions(Item $item, Node $node, bool $isFlatItem = false): void
 	{
 		if ($node->isTeam())
 		{
-			$this->applyTeamTagOptions($item);
+			$this->applyTeamTagOptions($item, $isFlatItem);
 
 			return;
 		}
 
 		$isRoot = (int)$node->parentId === 0;
-		$this->applyDepartmentTagOptions($item, $isRoot);
+		$this->applyDepartmentTagOptions($item, $isRoot, $isFlatItem);
 	}
 
 	private function applyTeamTagOptions(
 		Item $item,
+		bool $isFlatItem = false,
 	): void
 	{
 		$tagOptions = $item->getTagOptions();
@@ -940,12 +921,9 @@ class DepartmentProvider extends BaseStructureProvider
 
 		if ($this->providerOptions->showIcons)
 		{
-			$icon = self::IMAGE_TEAM;
+			$icon = $isFlatItem ? self::IMAGE_TEAM_OPTION : self::IMAGE_TEAM;
 			$this->placeAvatar($item, $icon, $this->providerOptions->avatarMode);
-			if ($isDefaultTagStyle)
-			{
-				$tagOptions->set('avatar', $icon);
-			}
+			$tagOptions->set('avatar', $icon);
 		}
 
 		if ($isDefaultTagStyle)
@@ -959,6 +937,7 @@ class DepartmentProvider extends BaseStructureProvider
 	private function applyDepartmentTagOptions(
 		Item $item,
 		bool $isRoot,
+		bool $isFlatItem = false,
 	): void
 	{
 		$isDefaultTagStyle = $this->providerOptions->tagStyle === DepartmentProviderTagStyleMode::Default;
@@ -967,15 +946,15 @@ class DepartmentProvider extends BaseStructureProvider
 		$item->setSupertitle(Loc::getMessage('HUMANRESOURCES_ENTITY_SELECTOR_DEPARTMENT_SUPER_TITLE'));
 		if ($this->providerOptions->showIcons)
 		{
-			$icon = $isRoot
-				? self::IMAGE_COMPANY
-				: self::IMAGE_DEPARTMENT;
+			$icon = match (true)
+			{
+				$isFlatItem => self::IMAGE_DEPARTMENT_OPTION,
+				$isRoot => self::IMAGE_COMPANY,
+				default => self::IMAGE_DEPARTMENT,
+			};
 
 			$this->placeAvatar($item, $icon, $this->providerOptions->avatarMode);
-			if ($isDefaultTagStyle)
-			{
-				$tagOptions->set('avatar', $icon);
-			}
+			$tagOptions->set('avatar', $icon);
 		}
 
 		if ($isDefaultTagStyle)

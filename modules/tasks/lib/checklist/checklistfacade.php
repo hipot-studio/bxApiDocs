@@ -15,6 +15,7 @@ use Bitrix\Main\ObjectException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\Model\ChecklistModel;
 use Bitrix\Tasks\CheckList\Internals\CheckList;
 use Bitrix\Tasks\CheckList\Internals\CheckListTree;
 use Bitrix\Tasks\Integration\Disk\Rest\Attachment;
@@ -58,6 +59,24 @@ abstract class CheckListFacade
 
 	const MEMBER_ACCOMPLICE = 'A';
 	const MEMBER_AUDITOR = 'U';
+
+	/**
+	 * The only item fields a caller of merge() may set. The owner and the entity of a saved row are
+	 * decided here, not by the caller: a row of storage is what the access rules trust.
+	 */
+	private const MERGE_ITEM_FIELDS = [
+		'ID',
+		'NODE_ID',
+		'PARENT_NODE_ID',
+		'COPIED_ID',
+		'PARENT_ID',
+		'TITLE',
+		'SORT_INDEX',
+		'IS_COMPLETE',
+		'IS_IMPORTANT',
+		'MEMBERS',
+		'ATTACHMENTS',
+	];
 
 	public static $entityIdName = '';
 	public static $userFieldsEntityIdName = '';
@@ -224,6 +243,52 @@ abstract class CheckListFacade
 	}
 
 	/**
+	 * Reads the rows the checklist rules decide by, so a caller that checks many items pays one query
+	 * instead of a row read per item.
+	 *
+	 * @param int[] $itemIds
+	 * @return array<int, ChecklistModel> item id => model of its stored row, absent for unknown ids
+	 * @throws ArgumentException
+	 * @throws NotImplementedException
+	 * @throws SystemException
+	 */
+	public static function getAccessModelsByItemIds(array $itemIds): array
+	{
+		$itemIds = array_values(array_filter(array_unique(array_map('intval', $itemIds))));
+		if (empty($itemIds))
+		{
+			return [];
+		}
+
+		// the select allowlist drops CREATED_BY for an entity whose items have no author column
+		$rows = static::getList(['ID', static::$entityIdName, 'CREATED_BY'], ['ID' => $itemIds]);
+
+		$models = [];
+		foreach ($rows as $itemId => $row)
+		{
+			$models[(int)$itemId] = ChecklistModel::createFromArray($row);
+		}
+
+		return $models;
+	}
+
+	/**
+	 * Tells whether the entity owns the item, by the stored row and not by the tree: an id the entity
+	 * does not own is no place of its tree, whether it belongs to another entity or to nothing at all.
+	 *
+	 * @param int $itemId
+	 * @param int $entityId
+	 * @return bool
+	 * @throws ArgumentException
+	 * @throws NotImplementedException
+	 * @throws SystemException
+	 */
+	protected static function hasItemInEntity(int $itemId, int $entityId): bool
+	{
+		return !empty(static::getList(['ID'], ['ID' => $itemId, static::$entityIdName => $entityId]));
+	}
+
+	/**
 	 * @param int $entityId
 	 * @param int $userId
 	 * @param array $fields
@@ -239,7 +304,9 @@ abstract class CheckListFacade
 	{
 		$addResult = new Result();
 
-		if (!static::checkAccess($entityId, $userId, ActionDictionary::ACTION_CHECKLIST_ADD, $fields))
+		// the item being added has no stored row, so the rules decide without one: the fields of the
+		// request may neither name an existing item nor claim its owner
+		if (!static::checkAccess($entityId, $userId, ActionDictionary::ACTION_CHECKLIST_ADD))
 		{
 			$code = 'ACTION_NOT_ALLOWED';
 			$addResult = static::addErrorToResult($addResult, $code, self::ACTION_ADD);
@@ -251,6 +318,14 @@ abstract class CheckListFacade
 		{
 			$addResult->loadErrors($fieldsChecking->getErrors());
 			return $addResult;
+		}
+
+		// the rights are decided for the entity, so the parent must belong to it: otherwise the new
+		// item would hang an edge of this entity's tree on an item of another one
+		$parentId = (int)($fields['PARENT_ID'] ?? 0);
+		if ($parentId > 0 && !static::hasItemInEntity($parentId, $entityId))
+		{
+			return static::addErrorToResult($addResult, 'ACTION_NOT_ALLOWED', self::ACTION_ADD);
 		}
 
 		/** @var static $facade */
@@ -305,6 +380,17 @@ abstract class CheckListFacade
 		{
 			$updateResult->loadErrors($fieldsChecking->getErrors());
 			return $updateResult;
+		}
+
+		// a re-parenting reaches the tree the same way an add does; the zero parent is the root of the
+		// entity's own tree and needs no such check
+		if (array_key_exists('PARENT_ID', $fields))
+		{
+			$parentId = (int)$fields['PARENT_ID'];
+			if ($parentId > 0 && !static::hasItemInEntity($parentId, $entityId))
+			{
+				return static::addErrorToResult($updateResult, $code, self::ACTION_MODIFY);
+			}
 		}
 
 		$checkList->setFields($fields);
@@ -640,8 +726,17 @@ abstract class CheckListFacade
 			return $mergeResult;
 		}
 
+		$newItems = static::getFilteredItemsToMerge($newItems);
+
 		$traversedItems = [];
-		$newItemsTree = static::getObjectStructuredRoots($newItems, $entityId, $userId, 'PARENT_NODE_ID');
+		$newItems = static::normalizeInvalidSortIndexesByPayloadOrder($newItems, 'PARENT_NODE_ID');
+		$newItemsTree = static::getObjectStructuredRoots(
+			$newItems,
+			$entityId,
+			$userId,
+			'PARENT_NODE_ID',
+			shouldRecountSortIndexes: false,
+		);
 
 		foreach ($newItemsTree as $item)
 		{
@@ -711,36 +806,52 @@ abstract class CheckListFacade
 			return $moveResult;
 		}
 
-		/** @var CheckListFacade $facade */
 		$items = static::getByEntityId($entityId);
-		$facade = static::class;
-		$relatedItemFields = static::getList([], ['ID' => $relatedItemId])[$relatedItemId];
-		$relatedItem = new CheckList(0, $userId, $facade, $relatedItemFields);
+		$relatedItemId = (int)$relatedItemId;
+
+		if (!isset($items[$relatedItemId]))
+		{
+			$code = 'ACTION_NOT_ALLOWED';
+			$moveResult = static::addErrorToResult($moveResult, $code, self::ACTION_REORDER);
+			return $moveResult;
+		}
 
 		$itemToMoveFields = $itemToMove->getFields();
-		$relatedItemFields = $relatedItem->getFields();
+		$itemToMoveId = (int)$itemToMoveFields['ID'];
 
-		$sortIndex = $relatedItemFields['SORT_INDEX'];
-		$newParentId = $relatedItemFields['PARENT_ID'];
+		$sortIndex = (int)$items[$relatedItemId]['SORT_INDEX'];
+		$newParentId = (int)$items[$relatedItemId]['PARENT_ID'];
 
 		$previousParentId = $newParentId;
+		$visitedParentIds = [];
 
 		while ($previousParentId !== 0)
 		{
-			if ($previousParentId === $itemToMoveFields['ID'])
+			if ($previousParentId === $itemToMoveId)
 			{
 				$moveResult = static::addErrorToResult($moveResult, 'NO_LOOPS_AVAILABLE');
 				return $moveResult;
 			}
 
-			$previousParentId = $items[$previousParentId]['PARENT_ID'];
+			// walking a chain that left the entity's own items or already looped inside them would
+			// never reach the moved item and would never end; and such a parent is no place of this
+			// entity's tree, so the move is refused the way any item the entity does not own is
+			if (!isset($items[$previousParentId]) || isset($visitedParentIds[$previousParentId]))
+			{
+				$code = 'ACTION_NOT_ALLOWED';
+				$moveResult = static::addErrorToResult($moveResult, $code, self::ACTION_REORDER);
+				return $moveResult;
+			}
+
+			$visitedParentIds[$previousParentId] = true;
+			$previousParentId = (int)$items[$previousParentId]['PARENT_ID'];
 		}
 
 		$newFields = [
 			'SORT_INDEX' => ($position === static::MOVING_POSITION_BEFORE? $sortIndex : $sortIndex + 1)
 		];
 
-		if ($itemToMoveFields['PARENT_ID'] !== $newParentId)
+		if ((int)$itemToMoveFields['PARENT_ID'] !== $newParentId)
 		{
 			$newFields['PARENT_ID'] = $newParentId;
 		}
@@ -1076,23 +1187,80 @@ abstract class CheckListFacade
 	}
 
 	/**
+	 * Keeps unique integer indexes, including sparse ones, and normalizes only invalid sibling sets.
+	 * Empty parent identifiers belong to the root sibling set.
+	 */
+	private static function normalizeInvalidSortIndexesByPayloadOrder(array $items, string $keyToParent): array
+	{
+		$siblingItemKeys = [];
+
+		foreach ($items as $itemKey => $item)
+		{
+			$parentNodeId = (string)($item[$keyToParent] ?? 0);
+			$parentNodeId = $parentNodeId === '' ? '0' : $parentNodeId;
+			$siblingItemKeys[$parentNodeId][] = $itemKey;
+		}
+
+		foreach ($siblingItemKeys as $itemKeys)
+		{
+			$uniqueSortIndexes = [];
+
+			foreach ($itemKeys as $itemKey)
+			{
+				$sortIndex = $items[$itemKey]['SORT_INDEX'] ?? null;
+				$sortIndex = filter_var($sortIndex, FILTER_VALIDATE_INT);
+				if ($sortIndex === false || isset($uniqueSortIndexes[$sortIndex]))
+				{
+					break;
+				}
+
+				$uniqueSortIndexes[$sortIndex] = true;
+			}
+
+			if (count($uniqueSortIndexes) === count($itemKeys))
+			{
+				continue;
+			}
+
+			foreach ($itemKeys as $sortIndex => $itemKey)
+			{
+				$items[$itemKey]['SORT_INDEX'] = $sortIndex;
+			}
+		}
+
+		return $items;
+	}
+
+	/**
 	 * Returns array of roots with subtrees as object structures.
 	 *
 	 * @param array $items
 	 * @param int $entityId
 	 * @param int $userId
 	 * @param string $keyToParent
+	 * @param bool $shouldRecountSortIndexes
 	 * @return array
 	 * @throws NotImplementedException
 	 */
-	public static function getObjectStructuredRoots($items, $entityId, $userId, $keyToParent = 'PARENT_ID')
+	public static function getObjectStructuredRoots(
+		$items,
+		$entityId,
+		$userId,
+		$keyToParent = 'PARENT_ID',
+		bool $shouldRecountSortIndexes = true
+	)
 	{
 		$result = [];
 
 		$arrayStructuredRoots = static::getArrayStructuredRoots($items, $keyToParent);
 		foreach ($arrayStructuredRoots as $root)
 		{
-			$checkList = static::makeCheckListItem($root, $entityId, $userId);
+			$checkList = static::makeCheckListItem(
+				$root,
+				$entityId,
+				$userId,
+				$shouldRecountSortIndexes,
+			);
 			$checkList->setFields(['PARENT_ID' => 0]);
 
 			$result[] = $checkList;
@@ -1105,10 +1273,16 @@ abstract class CheckListFacade
 	 * @param array $root
 	 * @param int $entityId
 	 * @param int $userId
+	 * @param bool $shouldRecountSortIndexes
 	 * @return CheckList
 	 * @throws NotImplementedException
 	 */
-	private static function makeCheckListItem($root, $entityId, $userId)
+	private static function makeCheckListItem(
+		$root,
+		$entityId,
+		$userId,
+		bool $shouldRecountSortIndexes = true
+	)
 	{
 		static::$nodeId++;
 
@@ -1118,14 +1292,35 @@ abstract class CheckListFacade
 		/** @var CheckListFacade $facade */
 		$facade = static::class;
 
-		$tree = new CheckList($nodeId, $userId, $facade, $fields);
+		$tree = new CheckList($nodeId, $userId, $facade, $fields, $shouldRecountSortIndexes);
 
 		foreach ($root['SUB_TREE'] as $item)
 		{
-			$tree->add(static::makeCheckListItem($item, $entityId, $userId));
+			$tree->add(static::makeCheckListItem($item, $entityId, $userId, $shouldRecountSortIndexes));
 		}
 
 		return $tree;
+	}
+
+	/**
+	 * Drops the item fields a caller may not set, so a row written by a request never gets its owner
+	 * from that request. Callers that copy rows of storage keep their fields: they build the items
+	 * through getObjectStructuredRoots() and do not go through merge().
+	 *
+	 * @param array $items
+	 * @return array
+	 */
+	private static function getFilteredItemsToMerge(array $items): array
+	{
+		$allowedFields = array_flip(self::MERGE_ITEM_FIELDS);
+
+		return array_map(
+			static function($item) use ($allowedFields)
+			{
+				return (is_array($item) ? array_intersect_key($item, $allowedFields) : $item);
+			},
+			$items
+		);
 	}
 
 	/**
@@ -1468,7 +1663,7 @@ abstract class CheckListFacade
 	/**
 	 * @param int $entityId
 	 * @param int $userId
-	 * @param array $items
+	 * @param array $items rows read from storage, so the rules may trust their owner and binding
 	 * @return mixed
 	 */
 	public static function fillActionsForItems($entityId, $userId, $items)
@@ -1481,10 +1676,15 @@ abstract class CheckListFacade
 		$items = array_map(
 			static function($item) use ($entityId, $userId)
 			{
+				$checkList = ChecklistModel::createFromArray($item);
+
+				// both actions of the drawing contract are the very same right, so it is checked once
+				$canEdit = static::checkAccess($entityId, $userId, ActionDictionary::ACTION_CHECKLIST_EDIT, $checkList);
+
 				$item['ACTION'] = [
-					'MODIFY' => static::checkAccess($entityId, $userId, ActionDictionary::ACTION_CHECKLIST_EDIT, $item),
-					'REMOVE' => static::checkAccess($entityId, $userId, ActionDictionary::ACTION_CHECKLIST_EDIT, $item),
-					'TOGGLE' => static::checkAccess($entityId, $userId, ActionDictionary::ACTION_CHECKLIST_TOGGLE, $item),
+					'MODIFY' => $canEdit,
+					'REMOVE' => $canEdit,
+					'TOGGLE' => static::checkAccess($entityId, $userId, ActionDictionary::ACTION_CHECKLIST_TOGGLE, $checkList),
 				];
 
 				return $item;

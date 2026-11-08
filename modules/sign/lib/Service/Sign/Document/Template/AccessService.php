@@ -13,6 +13,8 @@ use Bitrix\Sign\Access\Service\RolePermissionService;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Contract;
 use Bitrix\Sign\Item\Collection;
+use Bitrix\Sign\Item\Document\TemplateCollection;
+use Bitrix\Sign\Item\Document\TemplateFolderCollection;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Sign\Repository\Document\TemplateFolderRepository;
 use Bitrix\Sign\Repository\Document\TemplateRepository;
@@ -180,11 +182,57 @@ class AccessService
 		return true;
 	}
 
-	public function hasAccessToReadForCollection(Collection $templateEntities): bool
+	/**
+	 * The verdict cache of an access controller is keyed by numeric id without the object type, so
+	 * folders are checked on a controller of their own: otherwise the verdict on a template with id
+	 * N is handed out for a folder with id N, and no order of the checks can prevent it - whichever
+	 * set goes last is the one that reads the verdicts of the others. Templates still go first,
+	 * which keeps a folder verdict away from a template as a second line of defence.
+	 *
+	 * Entities are already loaded by the caller and are checked as they are: reading them again here
+	 * would let a template moved into a folder between the two reads reach the output unchecked.
+	 */
+	public function hasAccessToReadTemplateEntities(
+		TemplateCollection $templates,
+		TemplateCollection $templatesInFolders,
+		TemplateFolderCollection $folders,
+	): Result
+	{
+		$result = new Result();
+
+		$userId = (int)$this->getCurrentUserAccessModel()?->getUserId();
+		if ($userId <= 0)
+		{
+			return $result->addError(new Error('No current user to check the read access of'));
+		}
+
+		$templateAccessController = new AccessController($userId);
+		if (!$this->hasAccessToReadForCollection($templates, $templateAccessController))
+		{
+			return $result->addError(new Error('No access rights to read templates'));
+		}
+
+		if (!$this->hasAccessToReadForCollection($templatesInFolders, $templateAccessController))
+		{
+			return $result->addError(new Error('No access rights to read templates in folder'));
+		}
+
+		if (!$this->hasAccessToReadForCollection($folders, new AccessController($userId)))
+		{
+			return $result->addError(new Error('No access rights to read folder'));
+		}
+
+		return $result;
+	}
+
+	public function hasAccessToReadForCollection(
+		Collection $templateEntities,
+		?AccessController $accessController = null,
+	): bool
 	{
 		foreach ($templateEntities as $templateEntity)
 		{
-			if (!$this->hasAccessToRead($templateEntity))
+			if (!$this->hasAccessToRead($templateEntity, $accessController))
 			{
 				return false;
 			}
@@ -290,9 +338,9 @@ class AccessService
 		);
 	}
 
-	public function hasAccessToRead(Contract\Item $item): bool
+	public function hasAccessToRead(Contract\Item $item, ?AccessController $accessController = null): bool
 	{
-		return $this->accessController->checkByItem(
+		return ($accessController ?? $this->accessController)->checkByItem(
 			ActionDictionary::ACTION_B2E_TEMPLATE_READ,
 			$item,
 		);

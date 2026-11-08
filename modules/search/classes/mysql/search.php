@@ -4,9 +4,9 @@ require_once $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/search/classes/general
 class CSearch extends CAllSearch
 {
 	/*
-	var $arForumTopics = array();
+	public $arForumTopics = array();
 
-	function DBNavStart()
+	public function DBNavStart()
 	{
 		//total rows count
 		$this->NavRecordCount = mysql_num_rows($this->result);
@@ -117,7 +117,7 @@ class CSearch extends CAllSearch
 	}
 	*/
 
-	function MakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem)
+	public function MakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem)
 	{
 		global $USER;
 		$DB = CDatabase::GetModuleConnection('search');
@@ -148,7 +148,6 @@ class CSearch extends CAllSearch
 		}
 		$arSelect['USER_ID'] = 'sc.USER_ID';
 
-
 		if (mb_strpos($strSort, 'TITLE_RANK') !== false)
 		{
 			$strSelect = '';
@@ -156,7 +155,7 @@ class CSearch extends CAllSearch
 			{
 				foreach ($this->Query->m_stemmed_words as $stem)
 				{
-					if ($strSelect <> '')
+					if ($strSelect !== '')
 					{
 						$strSelect .= ' + ';
 					}
@@ -168,7 +167,7 @@ class CSearch extends CAllSearch
 			{
 				foreach ($this->Query->m_words as $word)
 				{
-					if ($strSelect <> '')
+					if ($strSelect !== '')
 					{
 						$strSelect .= ' + ';
 					}
@@ -186,6 +185,8 @@ class CSearch extends CAllSearch
 
 		$bWordPos = COption::GetOptionString('search', 'use_word_distance') == 'Y';
 
+		$strSql = '';
+
 		if ($bIncSites && $bStem)
 		{
 			$arSelect['SITE_URL'] = 'scsite.URL';
@@ -193,7 +194,7 @@ class CSearch extends CAllSearch
 
 			if (!preg_match('/(sc|sct)./', $query))
 			{
-				$strSqlWhere = preg_replace('#AND\\(st.TF >= [0-9\.,]+\\)#i', '', $strSqlWhere);
+				$strSqlWhere = preg_replace('#AND\(st.TF >= [0-9.,]+\)#i', '', $strSqlWhere);
 
 				if (count($this->Query->m_stemmed_words) > 1)
 				{
@@ -210,14 +211,14 @@ class CSearch extends CAllSearch
 					INNER JOIN b_search_content_site scsite ON sc.ID=scsite.SEARCH_CONTENT_ID
 					' . (count($this->Query->m_stemmed_words) > 1 ?
 						'INNER JOIN  (
-							select search_content_id, max(st.TF) TF, ' . ($bWordPos ? 'case when STDDEV(st.PS)-' . $this->normdev(count($this->Query->m_stemmed_words)) . ' between -0.000001 and 1 then 1/STDDEV(st.PS) else 0 end + ' : '') . "sum(st.TF/sf.FREQ) as " . $helper->quote('RANK') . "
+							select search_content_id, max(st.TF) TF, ' . ($bWordPos ? 'case when STDDEV(st.PS)-' . $this->normdev(count($this->Query->m_stemmed_words)) . ' between -0.000001 and 1 then 1/STDDEV(st.PS) else 0 end + ' : '') . 'sum(st.TF/sf.FREQ) as ' . $helper->quote('RANK') . "
 							from b_search_content_stem st, b_search_content_freq sf
 							where st.language_id = '" . $this->Query->m_lang . "'
 							and st.stem = sf.stem
 							and sf.language_id = st.language_id
 							and st.stem in (" . $strStemList . ')
 							' . ($this->tf_hwm > 0 ? 'and st.TF >= ' . number_format($this->tf_hwm, 2, '.', '') : '') . '
-							' . ($this->tf_hwm_site_id <> '' ? "and sf.SITE_ID = '" . $DB->ForSQL($this->tf_hwm_site_id, 2) . "'" : 'and sf.SITE_ID IS NULL') . '
+							' . ($this->tf_hwm_site_id <> '' ? "and sf.SITE_ID = '" . $DB->ForSql($this->tf_hwm_site_id, 2) . "'" : 'and sf.SITE_ID IS NULL') . '
 							group by st.search_content_id
 							having (' . $query . ')
 						) stt ON sc.id = stt.search_content_id'
@@ -228,17 +229,13 @@ class CSearch extends CAllSearch
 				' . (count($this->Query->m_stemmed_words) > 1 ? '' : "
 					and stt.language_id = '" . $this->Query->m_lang . "'
 					and stt.stem in (" . $strStemList . ')
-					' . ($this->tf_hwm > 0 ? 'and stt.TF >= ' . number_format($this->tf_hwm, 2, '.', '') : '') . '') . '
+					' . ($this->tf_hwm > 0 ? 'and stt.TF >= ' . number_format($this->tf_hwm, 2, '.', '') : '')) . '
 				' . $strSqlWhere . '
 				';
 			}
 			else
 			{
-				$arGroupBy = [];
-				foreach ($arSelect as $selectAlias => $selectField)
-				{
-					$arGroupBy[] = $selectField;
-				}
+				$arGroupBy = array_values($arSelect);
 
 				if (count($this->Query->m_stemmed_words) > 1)
 				{
@@ -266,7 +263,7 @@ class CSearch extends CAllSearch
 							st.language_id = sf.language_id
 							and st.stem=sf.stem
 							' . ($this->tf_hwm_site_id <> '' ?
-							"and sf.SITE_ID = '" . $DB->ForSQL($this->tf_hwm_site_id, 2) . "'" :
+							"and sf.SITE_ID = '" . $DB->ForSql($this->tf_hwm_site_id, 2) . "'" :
 							'and sf.SITE_ID IS NULL'
 						) :
 						''
@@ -284,7 +281,8 @@ class CSearch extends CAllSearch
 				';
 			}
 		}
-		elseif ($bIncSites && !$bStem)
+
+		if ($bIncSites && !$bStem)
 		{
 			$bDistinct = true;
 
@@ -292,11 +290,7 @@ class CSearch extends CAllSearch
 			$arSelect['SITE_ID'] = 'scsite.SITE_ID';
 			$arSelect[$helper->quote('RANK')] = '1';
 
-			$arGroupBy = [];
-			foreach ($arSelect as $selectAlias => $selectField)
-			{
-				$arGroupBy[] = $selectField;
-			}
+			$arGroupBy = array_values($arSelect);
 
 			if ($this->Query->bTagsSearch)
 			{
@@ -334,13 +328,10 @@ class CSearch extends CAllSearch
 				';
 			}
 		}
-		elseif (!$bIncSites && $bStem)
+
+		if (!$bIncSites && $bStem)
 		{
-			$arGroupBy = [];
-			foreach ($arSelect as $selectAlias => $selectField)
-			{
-				$arGroupBy[] = $selectField;
-			}
+			$arGroupBy = array_values($arSelect);
 
 			if (count($this->Query->m_stemmed_words) > 1)
 			{
@@ -367,7 +358,7 @@ class CSearch extends CAllSearch
 						st.language_id = sf.language_id
 						and st.stem=sf.stem
 						' . ($this->tf_hwm_site_id <> '' ?
-						"and sf.SITE_ID = '" . $DB->ForSQL($this->tf_hwm_site_id, 2) . "'" :
+						"and sf.SITE_ID = '" . $DB->ForSql($this->tf_hwm_site_id, 2) . "'" :
 						'and sf.SITE_ID IS NULL'
 					) :
 					''
@@ -385,16 +376,13 @@ class CSearch extends CAllSearch
 				(' . $query . ') ' : '') . '
 			';
 		}
-		else //if(!$bIncSites && !$bStem)
+
+		if (!$bIncSites && !$bStem)
 		{
 			$bDistinct = true;
 			$arSelect[$helper->quote('RANK')] = '1';
 
-			$arGroupBy = [];
-			foreach ($arSelect as $selectAlias => $selectField)
-			{
-				$arGroupBy[] = $selectField;
-			}
+			$arGroupBy = array_values($arSelect);
 
 			$strSql = '
 			FROM b_search_content sc
@@ -409,7 +397,8 @@ class CSearch extends CAllSearch
 			HAVING
 				(' . $query . ')' :
 					' WHERE
-				(' . $query . ')
+				' . CSearch::CheckPermissions('sc.ID') . '
+				AND (' . $query . ')
 				' . $strSqlWhere . '
 			') . '
 			';
@@ -424,7 +413,6 @@ class CSearch extends CAllSearch
 			$limit = $this->offset . ', ' . $this->limit;
 		}
 
-		$strRatingJoin = '';
 		$RATING_MAX = 0;
 		$RATING_MIN = 0;
 		if (
@@ -492,7 +480,7 @@ class CSearch extends CAllSearch
 					) sc0
 					INNER JOIN b_search_content sc ON sc.ID = sc0.ID
 					LEFT JOIN b_rating_voting rv ON rv.ENTITY_TYPE_ID = sc.ENTITY_TYPE_ID AND rv.ENTITY_ID = sc.ENTITY_ID
-					LEFT JOIN b_rating_vote rvv ON rvv.ENTITY_TYPE_ID = sc.ENTITY_TYPE_ID AND rvv.ENTITY_ID = sc.ENTITY_ID AND rvv.USER_ID = ' . intval($USER->GetId()) . '
+					LEFT JOIN b_rating_vote rvv ON rvv.ENTITY_TYPE_ID = sc.ENTITY_TYPE_ID AND rvv.ENTITY_ID = sc.ENTITY_ID AND rvv.USER_ID = ' . intval($USER->GetID()) . '
 				' . str_replace(' ' . $helper->quote('RANK'), ' SRANK', $strSort);
 			}
 		}
@@ -508,7 +496,7 @@ class CSearch extends CAllSearch
 		return $strSql;
 	}
 
-	function tagsMakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem, $limit = 100)
+	public function tagsMakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem, $limit = 100)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$limit = intval($limit);
@@ -517,18 +505,20 @@ class CSearch extends CAllSearch
 			//We have to make some magic in case quotes was used in query
 			//We have to move (sc.searchable_content LIKE '%".ToUpper($word)."%') from $query to $strSqlWhere
 			$arMatches = [];
-			while (preg_match("/(AND\s+\([sct]+.searchable_content LIKE \'\%.+?\%\'\))/", $query, $arMatches))
+			while (preg_match("/AND\s+\([sct]+\.searchable_content LIKE '%.+?%'\)/", $query, $arMatches))
 			{
 				$strSqlWhere .= $arMatches[0];
 				$query = str_replace($arMatches[0], '', $query);
-				$arMatches = [];
 			}
 		}
 
+		$strStemList = '';
 		if ($bStem)
 		{
 			$strStemList = implode(', ', $this->Query->m_stemmed_words_id);
 		}
+
+		$strSql = '';
 
 		if ($bIncSites && $bStem)
 		{
@@ -550,7 +540,7 @@ class CSearch extends CAllSearch
 							st.language_id = sf.language_id
 							and st.stem=sf.stem
 							' . ($this->tf_hwm_site_id <> '' ?
-						"and sf.SITE_ID = '" . $DB->ForSQL($this->tf_hwm_site_id, 2) . "'" :
+						"and sf.SITE_ID = '" . $DB->ForSql($this->tf_hwm_site_id, 2) . "'" :
 						'and sf.SITE_ID IS NULL'
 					) :
 					''
@@ -570,7 +560,8 @@ class CSearch extends CAllSearch
 				' . $strSort . '
 			';
 		}
-		elseif ($bIncSites && !$bStem)
+
+		if ($bIncSites && !$bStem)
 		{
 			//Copy first exists into inner join in hopeless try to defeat MySQL optimizer
 			$strSqlJoin2 = '';
@@ -639,7 +630,8 @@ class CSearch extends CAllSearch
 				';
 			}
 		}
-		elseif (!$bIncSites && $bStem)
+
+		if (!$bIncSites && $bStem)
 		{
 			$strSql = '
 				SELECT
@@ -658,7 +650,7 @@ class CSearch extends CAllSearch
 							st.language_id = sf.language_id
 							and st.stem=sf.stem
 							' . ($this->tf_hwm_site_id <> '' ?
-						"and sf.SITE_ID = '" . $DB->ForSQL($this->tf_hwm_site_id, 2) . "'" :
+						"and sf.SITE_ID = '" . $DB->ForSql($this->tf_hwm_site_id, 2) . "'" :
 						'and sf.SITE_ID IS NULL'
 					) :
 					''
@@ -678,7 +670,8 @@ class CSearch extends CAllSearch
 				' . $strSort . '
 			';
 		}
-		else // if(!$bIncSites && !$bStem)
+
+		if (!$bIncSites && !$bStem)
 		{
 			$strSql = '
 				SELECT
@@ -762,12 +755,11 @@ class CSearch extends CAllSearch
 		static $CACHE_SITE_LANGS = [];
 		$ID = intval($ID);
 
-		$arLang = [];
 		if (!is_array($arLID))
 		{
 			$arLID = [];
 		}
-		foreach ($arLID as $site => $url)
+		foreach ($arLID as $site => $_)
 		{
 			$sql_site = $DB->ForSql($site);
 
@@ -867,9 +859,9 @@ class CSearch extends CAllSearch
 			$maxValuesCnt = 1500;
 			$strSqlValues = '';
 			$i = 0;
-			foreach ($stem as $word => $count)
+			foreach ($stem as $word => $_)
 			{
-				$strSqlValues .= ",'" . $DB->ForSQL($word) . "'";
+				$strSqlValues .= ",'" . $DB->ForSql($word) . "'";
 				$i++;
 
 				if (mb_strlen($strSqlValues) > $maxValuesLen || $i > $maxValuesCnt)
@@ -885,7 +877,7 @@ class CSearch extends CAllSearch
 				}
 			}
 
-			if ($strSqlValues <> '')
+			if ($strSqlValues !== '')
 			{
 				$rs = $DB->Query($strSqlPrefix . mb_substr($strSqlValues, 1) . ')');
 				while ($ar = $rs->Fetch())
@@ -899,10 +891,10 @@ class CSearch extends CAllSearch
 
 		if (!isset($cache[$stem]))
 		{
-			$rs = $DB->Query("insert into b_search_stem (STEM) values ('" . $DB->ForSQL($stem) . "')", true);
+			$rs = $DB->Query("insert into b_search_stem (STEM) values ('" . $DB->ForSql($stem) . "')", true);
 			if ($rs === false)
 			{
-				$rs = $DB->Query("select ID from b_search_stem WHERE STEM = '" . $DB->ForSQL($stem) . "'");
+				$rs = $DB->Query("select ID from b_search_stem WHERE STEM = '" . $DB->ForSql($stem) . "'");
 				$ar = $rs->Fetch();
 				$cache[$stem] = $ar['ID'];
 			}
@@ -928,7 +920,7 @@ class CSearch extends CAllSearch
 			$arLID = [];
 		}
 
-		foreach ($arLID as $site => $url)
+		foreach ($arLID as $site => $_)
 		{
 			if (!array_key_exists($site, $CACHE_SITE_LANGS))
 			{
@@ -952,7 +944,7 @@ class CSearch extends CAllSearch
 			}
 		}
 
-		foreach ($arLang as $lang => $value)
+		foreach ($arLang as $lang => $_)
 		{
 			$sql_lang = $DB->ForSql($lang);
 
@@ -1019,7 +1011,7 @@ class CSearch extends CAllSearch
 		}
 		$sContent = str_replace("\x00", '', $sContent);
 
-		foreach ($arLID as $site_id => $url)
+		foreach ($arLID as $site_id => $_)
 		{
 			$arTags = tags_prepare($sContent, $site_id);
 			if ($arTags)
@@ -1059,11 +1051,12 @@ class CSearch extends CAllSearch
 		}
 	}
 
-	public static function UpdateSite($ID, $arSITE_ID)
+	public static function UpdateSite($ID, $arSITE_ID, $isNew = false)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$helper = $DB->getConnection()->getSqlHelper();
 		$ID = intval($ID);
+
 		if (!is_array($arSITE_ID))
 		{
 			$DB->Query('
@@ -1073,49 +1066,55 @@ class CSearch extends CAllSearch
 		}
 		else
 		{
-			$rsSite = $DB->Query('
-				SELECT SITE_ID, URL
-				FROM b_search_content_site
-				WHERE SEARCH_CONTENT_ID = ' . $ID . '
-			');
-			while ($arSite = $rsSite->Fetch())
+			$arToDelete = [];
+			$arToInsert = [];
+			foreach ($arSITE_ID as $site_id => $site_url)
 			{
-				if (!array_key_exists($arSite['SITE_ID'], $arSITE_ID))
+				$arToInsert[$site_id] = [
+					'SEARCH_CONTENT_ID' => $ID,
+					'SITE_ID' => $site_id,
+					'URL' => $site_url,
+				];
+			}
+			ksort($arToInsert);
+
+			if (!$isNew)
+			{
+				$rsSite = $DB->Query('
+					SELECT *
+					FROM b_search_content_site
+					WHERE SEARCH_CONTENT_ID = ' . $ID . '
+				');
+				while ($arSite = $rsSite->Fetch())
 				{
-					$DB->Query('
-						DELETE FROM b_search_content_site
-						WHERE SEARCH_CONTENT_ID = ' . $ID . "
-						AND SITE_ID = '" . $DB->ForSql($arSite['SITE_ID']) . "'
-					");
-				}
-				else
-				{
-					if ($arSite['URL'] !== $arSITE_ID[$arSite['SITE_ID']])
+					$site_id = $arSite['SITE_ID'];
+					if (isset($arToInsert[$site_id]))
 					{
-						$DB->Query("
-							UPDATE b_search_content_site
-							SET URL = '" . $DB->ForSql($arSITE_ID[$arSite['SITE_ID']], 2000) . "'
-							WHERE SEARCH_CONTENT_ID = " . $ID . "
-							AND SITE_ID = '" . $DB->ForSql($arSite['SITE_ID']) . "'
-						");
+						unset($arToInsert[$site_id]); //This already in DB
 					}
-					unset($arSITE_ID[$arSite['SITE_ID']]);
+					else
+					{
+						$arToDelete[] = "'" . $DB->ForSql($site_id) . "'";  //And this should be deleted
+					}
 				}
 			}
 
-			$arInsert = [];
-			foreach ($arSITE_ID as $site => $url)
+			if ($arToDelete)
 			{
-				$arInsert[] = [
-					'SEARCH_CONTENT_ID' => $ID,
-					'SITE_ID' => $site,
-					'URL' => $url,
-				];
+				$DB->Query('
+					DELETE FROM b_search_content_site
+					WHERE SEARCH_CONTENT_ID = ' . $ID . '
+					AND SITE_ID IN (' . implode(',', $arToDelete) . ')
+				');
 			}
-			$merge = $helper->prepareMergeMultiple('b_search_content_site', ['SEARCH_CONTENT_ID', 'SITE_ID'], $arInsert);
-			if ($merge && $merge[0])
+
+			if ($arToInsert)
 			{
-				$DB->Query($merge[0]);
+				$merge = $helper->prepareMergeMultiple('b_search_content_site', ['SEARCH_CONTENT_ID', 'SITE_ID'], $arToInsert);
+				if ($merge && $merge[0])
+				{
+					$DB->Query($merge[0]);
+				}
 			}
 		}
 	}
@@ -1123,9 +1122,9 @@ class CSearch extends CAllSearch
 
 class CSearchQuery extends CAllSearchQuery
 {
-	var $cnt = 0;
+	public $cnt = 0;
 
-	function BuildWhereClause($word)
+	public function BuildWhereClause($word)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 
@@ -1171,7 +1170,7 @@ class CSearchQuery extends CAllSearchQuery
 			$word = mb_strtoupper($word);
 			$this->m_stemmed_words[] = $word;
 
-			$rs = $DB->Query("select ID from b_search_stem where STEM='" . $DB->ForSQL($word) . "'");
+			$rs = $DB->Query("select ID from b_search_stem where STEM='" . $DB->ForSql($word) . "'");
 			$ar = $rs->Fetch();
 			$this->m_stemmed_words_id[] = intval($ar['ID']);
 

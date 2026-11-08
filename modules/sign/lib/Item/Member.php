@@ -36,6 +36,7 @@ class Member implements Contract\Item, Contract\Item\TrackableItem
 		public ?int $signatureFileId = null,
 		public ?int $stampFileId = null,
 		public ?string $role = null,
+		public ?string $signingMethod = null,
 		public ?int $configured = null,
 		?Reminder $reminder = null,
 		public ?DateTime $dateSend = null,

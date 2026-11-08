@@ -231,6 +231,18 @@ class CBPWorkflowPersister
 
 	public function saveWorkflow(CBPActivity $rootActivity, $bUnlocked)
 	{
+		// read before pullReadOnlyData(): the mark of the start surface lives in the read only data of the
+		// root, and pulling it leaves nothing to tell a manual start from an automatic one
+		$statusBeforeSave = (int)$rootActivity->GetWorkflowStatus();
+		$manualStartSurface = $rootActivity->getRawPropertyValue(\CBPDocument::PARAM_MANUAL_START_SURFACE);
+		if (array_key_exists(\CBPDocument::PARAM_MANUAL_START_SURFACE, $rootActivity->getPropertiesTypes()))
+		{
+			$manualStartSurface = null;
+		}
+
+		$workflowId = (string)$rootActivity->GetWorkflowInstanceId();
+		$templateId = (int)$rootActivity->GetWorkflowTemplateId();
+
 		$creationData = [];
 		if ($rootActivity->workflow->isNew())
 		{
@@ -274,17 +286,35 @@ class CBPWorkflowPersister
 		}
 
 		$this->InsertWorkflow($rootActivity->GetWorkflowInstanceId(), $buffer, $workflowStatus, $bUnlocked, $creationData);
+
+		// after the standard save and never before it: a completion the persister failed to store is no
+		// completion at all. The status of an abandoned run was substituted above, so the one read on entry
+		// is what tells a run that really finished; the rest of the predicate is the same as for the values
+		if ($statusBeforeSave === CBPWorkflowStatus::Completed && $this->isLastValuesCapturable($rootActivity))
+		{
+			(new Bizproc\Internal\Service\StartStat\SuccessfulManualStartCounter())->record(
+				$templateId,
+				$workflowId,
+				$manualStartSurface,
+				new Main\Type\DateTime(),
+			);
+		}
 	}
 
 	/**
 	 * Only a run the template really went through to its own end carries the last values of that template.
 	 * An abandoned run is a run of a document being deleted: its status is substituted above to close the
-	 * instance, but nothing has finished. A debug run goes by the same template as the production one and
-	 * would overwrite its values with the ones the developer was stepping through.
+	 * instance, but nothing has finished. A debug run and a test run go by the same template as the
+	 * production one and would overwrite its values with the ones the developer was stepping through or
+	 * typed into the form of the trigger.
 	 */
 	private function isLastValuesCapturable(CBPActivity $rootActivity): bool
 	{
-		return !$rootActivity->workflow->isAbandoned() && !$rootActivity->workflow->isDebug();
+		return
+			!$rootActivity->workflow->isAbandoned()
+			&& !$rootActivity->workflow->isDebug()
+			&& $rootActivity->getTestRunContext() === null
+		;
 	}
 
 	protected function getSerializedForm(CBPActivity $rootActivity)

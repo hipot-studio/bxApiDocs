@@ -385,7 +385,29 @@ final class SignB2eDocument extends Activity
 			$items['annul'] = $annulItem;
 		}
 
+		$copyUidItem = $this->getCopyDocumentUidMenuItem();
+		if ($copyUidItem !== null)
+		{
+			$items['copyUid'] = $copyUidItem;
+		}
+
 		return $items;
+	}
+
+	private function getCopyDocumentUidMenuItem(): ?Layout\Menu\MenuItem
+	{
+		$uid = (string)$this->getSignDocument()?->uid;
+		if ($uid === '')
+		{
+			return null;
+		}
+
+		return (new Layout\Menu\MenuItem((string)Loc::getMessage('CRM_SIGN_B2E_ACTIVITY_COPY_UID')))
+			->setAction(
+				(new Layout\Action\JsEvent($this->getType() . ':CopyUid'))
+					->addActionParamString('documentUid', $uid)
+			)
+		;
 	}
 
 	private function getAnnulMenuItem(): ?Layout\Menu\MenuItem

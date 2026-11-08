@@ -213,9 +213,11 @@ class CBPCrmGetDataEntityActivity extends CBPActivity
 									$dbImg = CFile::getByID($r);
 									if ($arImg = $dbImg->fetch())
 									{
-										$photo[] = "[url=/bitrix/tools/bizproc_show_file.php?f=".
-											urlencode($arImg["FILE_NAME"])."&i=".$r."&h=".md5($arImg["SUBDIR"])."]".
-											htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
+										$photo[] = class_exists(\Bitrix\Bizproc\Public\Service\File\ShowFileLinkService::class)
+											? (new \Bitrix\Bizproc\Public\Service\File\ShowFileLinkService())->getPrintableLink($arImg)
+											: "[url=/bitrix/tools/bizproc_show_file.php?f=".
+												urlencode($arImg["FILE_NAME"])."&i=".$r."&h=".md5($arImg["SUBDIR"])."]".
+												htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
 									}
 								}
 							}
@@ -225,9 +227,11 @@ class CBPCrmGetDataEntityActivity extends CBPActivity
 								$dbImg = CFile::getByID($entityData['PHOTO']);
 								if ($arImg = $dbImg->fetch())
 								{
-									$photo = "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"]).
-										"&i=".$entityData['PHOTO']."&h=".md5($arImg["SUBDIR"])."]".
-										htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
+									$photo = class_exists(\Bitrix\Bizproc\Public\Service\File\ShowFileLinkService::class)
+										? (new \Bitrix\Bizproc\Public\Service\File\ShowFileLinkService())->getPrintableLink($arImg)
+										: "[url=/bitrix/tools/bizproc_show_file.php?f=".urlencode($arImg["FILE_NAME"]).
+											"&i=".$entityData['PHOTO']."&h=".md5($arImg["SUBDIR"])."]".
+											htmlspecialcharsbx($arImg["ORIGINAL_NAME"])."[/url]";
 								}
 							}
 							$entityData['PHOTO'] = $photo;

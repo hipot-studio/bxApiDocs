@@ -55,7 +55,7 @@ class WebpackBuilder extends Builder
 
 	protected function normalizeBaseResources(): void
 	{
-		$this->resources->remove($this->criticalResources->getPathes());
+		$this->resources->remove($this->criticalResources->getPaths());
 		$this->normalizedResources = $this->resources->getNormalized();
 	}
 

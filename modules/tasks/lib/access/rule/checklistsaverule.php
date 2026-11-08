@@ -9,6 +9,7 @@
 namespace Bitrix\Tasks\Access\Rule;
 
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\Model\ChecklistModel;
 use Bitrix\Tasks\Access\Model\TemplateModel;
 use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Tasks\Access\Rule\Traits\ChecklistTrait;
@@ -60,12 +61,7 @@ class ChecklistSaveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 
 		if (!$this->isList($params))
 		{
-			$checklist = $this->getModelFromParams($params);
-			$action = $checklist->getId()
-				? ActionDictionary::ACTION_CHECKLIST_EDIT
-				: ActionDictionary::ACTION_CHECKLIST_ADD;
-
-			return $this->controller->check($action, $task, $checklist);
+			return $this->checkSingleItem($params, $task);
 		}
 
 		// Warning! Mass check for webform format only. See \TasksTaskComponent::checkRights()
@@ -81,9 +77,14 @@ class ChecklistSaveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return $this->controller->check(ActionDictionary::ACTION_CHECKLIST_ADD, $task, $params);
 		}
 
+		// rows of the delta come from $task->getChecklist(), so they are read from storage
 		foreach ($delta[self::CHANGED] as $row)
 		{
-			if (!$this->controller->check(ActionDictionary::ACTION_CHECKLIST_EDIT, $task, $row))
+			if (!$this->controller->check(
+				ActionDictionary::ACTION_CHECKLIST_EDIT,
+				$task,
+				ChecklistModel::createFromArray($row),
+			))
 			{
 				$this->controller->addError(static::class, 'Access to checklist edit denied');
 				return false;
@@ -92,7 +93,11 @@ class ChecklistSaveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 
 		foreach ($delta[self::STATUS_CHANGED] ?? [] as $row)
 		{
-			if (!$this->controller->check(ActionDictionary::ACTION_CHECKLIST_TOGGLE, $task, $row))
+			if (!$this->controller->check(
+				ActionDictionary::ACTION_CHECKLIST_TOGGLE,
+				$task,
+				ChecklistModel::createFromArray($row),
+			))
 			{
 				$this->controller->addError(static::class, 'Access to checklist toggle denied');
 				return false;
@@ -100,6 +105,52 @@ class ChecklistSaveRule extends \Bitrix\Main\Access\Rule\AbstractRule
 		}
 
 		return true;
+	}
+
+	/**
+	 * A single payload names the item by identifier only, so the row answering for it is taken from the
+	 * checklist of the entity: an identifier the entity does not hold has no row to answer.
+	 *
+	 * @param $params
+	 * @param AccessibleItem $task
+	 * @return bool
+	 */
+	private function checkSingleItem($params, AccessibleItem $task): bool
+	{
+		$checklist = is_array($params)
+			? $this->getStoredItemModel($params, $task)
+			: $this->getModelFromParams($params, $task);
+
+		if (!$checklist)
+		{
+			$this->controller->addError(static::class, 'Incorrect checklist data');
+			return false;
+		}
+
+		$action = $checklist->getId()
+			? ActionDictionary::ACTION_CHECKLIST_EDIT
+			: ActionDictionary::ACTION_CHECKLIST_ADD;
+
+		return $this->controller->check($action, $task, $checklist);
+	}
+
+	/**
+	 * @param array $params
+	 * @param AccessibleItem $task
+	 * @return ChecklistModel|null null when the addressed item is none of the entity's own
+	 */
+	private function getStoredItemModel(array $params, AccessibleItem $task): ?ChecklistModel
+	{
+		$itemId = (int)($params['ID'] ?? 0);
+		if ($itemId <= 0)
+		{
+			// no item is addressed, so the payload adds one and there is no stored row to decide by
+			return new ChecklistModel();
+		}
+
+		$row = $task->getChecklist()[$itemId] ?? null;
+
+		return $row ? ChecklistModel::createFromArray($row) : null;
 	}
 
 	/**

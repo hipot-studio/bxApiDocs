@@ -3,6 +3,7 @@
 namespace Bitrix\StaffTrackMobile\Infrastructure\Controllers;
 
 use Bitrix\Main\Engine\ActionFilter\Attribute\Rule\CloseSession;
+use Bitrix\StaffTrack\Feature as StaffTrackFeature;
 use Bitrix\StaffTrackMobile\Public\Features\AutoCheckInFeature;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
 
@@ -10,12 +11,23 @@ class Feature extends Base
 {
 	/**
 	 * @ajaxAction stafftrackmobile.v2.Feature.isNewCheckInFeatureEnabled
-	 * @return bool
+	 * @return array{isEnabled: true, isCheckInRolloutEnabled: bool}|false
 	 */
 	#[CloseSession]
-	public function isNewCheckInFeatureEnabledAction(): bool
+	public function isNewCheckInFeatureEnabledAction(): array|false
 	{
-		return (new CheckInFeature())->isEnabled();
+		if (!(new CheckInFeature())->isEnabled())
+		{
+			// stay falsy for bundles cached on devices: they read this response as a boolean
+			return false;
+		}
+
+		$userId = (int)$this->getCurrentUser()?->getId();
+
+		return [
+			'isEnabled' => true,
+			'isCheckInRolloutEnabled' => StaffTrackFeature::isCheckInRolloutEnabled($userId),
+		];
 	}
 
 	/**
@@ -26,15 +38,5 @@ class Feature extends Base
 	public function isAutoCheckInFeatureEnabledAction(): bool
 	{
 		return (new AutoCheckInFeature())->isEnabled();
-	}
-
-	/**
-	 * @return bool
-	 */
-	public static function isWesternPortal(): bool
-	{
-		$portalZone = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?? 'en';
-
-		return !in_array($portalZone, ['ru', 'by', 'kz', 'br', 'in'], true);
 	}
 }

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Step\Helper;
 
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Web\DOM;
@@ -186,7 +187,7 @@ final class ChangeAiSiteDomHelper
 
 	private static function parseBlockRoot(string $blockHtml): ?DOM\Element
 	{
-		$doc = new DOM\Document();
+		$doc = DocumentFactory::createForUserHtml();
 		$doc->loadHTML('<div id="' . self::ROOT_NODE_ID . '">' . $blockHtml . '</div>');
 		$root = $doc->querySelector('#' . self::ROOT_NODE_ID);
 

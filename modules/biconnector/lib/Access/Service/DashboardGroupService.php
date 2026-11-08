@@ -7,6 +7,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupScopeTab
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetScopeTable;
+use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Internal\Integration\Im\DashboardDiscussionChatAccessSyncScheduler;
 use Bitrix\Main\Application;
@@ -47,7 +48,7 @@ class DashboardGroupService
 
 		if (is_null($group))
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_SAVE_GROUP_ERROR_NOT_FOUND') ?? ''));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_SAVE_GROUP_ERROR_NOT_FOUND')));
 
 			return $result;
 		}
@@ -59,7 +60,7 @@ class DashboardGroupService
 		{
 			if (empty($groupInfo['name']))
 			{
-				$result->addError(new Error(Loc::getMessage('BICONNECTOR_SAVE_GROUP_ERROR_NO_NAME') ?? ''));
+				$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_SAVE_GROUP_ERROR_NO_NAME')));
 
 				return $result;
 			}

@@ -1412,25 +1412,36 @@ class CAllIMContactList
 		";
 		$DB->Query($strSQL);*/
 
-		if ($isChat)
+		if ($isChat && is_array($entityId))
 		{
-			$chat = IM\V2\Chat::getInstance((int)$entityId);
+			$chats = self::getExistingChats($entityId);
 		}
 		else
 		{
-			$chat = IM\V2\Entity\User\User::getInstance($userId)->getChatWith($entityId, false);
+			$chats = [];
+			$chat = $isChat
+				? IM\V2\Chat::getInstance((int)$entityId)
+				: IM\V2\Entity\User\User::getInstance($userId)->getChatWith($entityId, false)
+			;
+			if ($chat instanceof Chat && $chat->isExist())
+			{
+				$chats[(int)$chat->getChatId()] = $chat;
+			}
 		}
 
 		$lineRemoveComplete = false;
-		if (
-			$isChat
-			&& $chat->getChatId()
-			&& $chat->getType() === IM\V2\Chat::IM_TYPE_OPEN_LINE
-			&& class_exists('\Bitrix\ImOpenLines\Recent')
-		)
+		if ($isChat && class_exists('\Bitrix\ImOpenLines\Recent'))
 		{
-			$lineRemoveResult = \Bitrix\ImOpenLines\Recent::removeRecent((int)$userId, $chat->getChatId());
-			$lineRemoveComplete = $lineRemoveResult->isSuccess();
+			foreach ($chats as $chatId => $chatOfList)
+			{
+				if ($chatOfList->getType() !== IM\V2\Chat::IM_TYPE_OPEN_LINE)
+				{
+					continue;
+				}
+
+				$lineRemoveResult = \Bitrix\ImOpenLines\Recent::removeRecent((int)$userId, $chatId);
+				$lineRemoveComplete = $lineRemoveComplete || $lineRemoveResult->isSuccess();
+			}
 		}
 
 		$strSQL = "DELETE FROM b_im_recent WHERE USER_ID = {$userId} AND {$itemType} AND {$sqlEntityId}";
@@ -1441,47 +1452,46 @@ class CAllIMContactList
 			->get(IM\V2\Reading\Counter\Internal\CountersCache::class)
 			->remove((int)$userId);
 
-		// Refresh the parent collab preview pointer when a source chat leaves recent (single-id form only).
-		if (
-			$isChat
-			&& !is_array($entityId)
-			&& $chat instanceof Chat
-			&& !($chat instanceof Chat\NullChat)
-		)
+		// Refresh the parent collab preview pointer when a source chat leaves recent.
+		if ($isChat && !empty($chats))
 		{
-			\Bitrix\Main\DI\ServiceLocator::getInstance()
+			$pointerService = \Bitrix\Main\DI\ServiceLocator::getInstance()
 				->get(IM\V2\Recent\PreviewSource\CollabPreviewSourcePointerService::class)
-				->recomputeForRemovedSourceChat($chat, (int)$userId)
 			;
+			foreach ($chats as $chatOfList)
+			{
+				$pointerService->recomputeForRemovedSourceChat($chatOfList, (int)$userId);
+			}
 		}
 
-		if (!$withoutRead && $chat?->isExist())
+		if (!$withoutRead && !empty($chats))
 		{
 			$reader = \Bitrix\Main\DI\ServiceLocator::getInstance()->get(IM\V2\Reading\Reader::class);
-			$reader->readAllInChat($chat->getId(), $userId, true);
+			foreach ($chats as $chatId => $chatOfList)
+			{
+				$reader->readAllInChat($chatId, $userId, true);
 
-			Sync\Logger::getInstance()->add(
-				new Sync\Event(Sync\Event::DELETE_EVENT, Sync\Event::CHAT_ENTITY, $chat->getChatId()),
-				$userId,
-				$chat
-			);
+				Sync\Logger::getInstance()->add(
+					new Sync\Event(Sync\Event::DELETE_EVENT, Sync\Event::CHAT_ENTITY, $chatId),
+					$userId,
+					$chatOfList
+				);
+			}
 		}
 
 		if ($isChat && \Bitrix\Main\Loader::includeModule('pull'))
 		{
-			if (is_array($entityId))
+			// the base subscription is dropped by the ids of the request, not by the resolved chats:
+			// a row of an already deleted chat leaves recent, so its tag must leave b_pull_watch too.
+			// the chat is needed only to tell whether the discussion tag exists as well
+			$chatIds = is_array($entityId) ? $entityId : [(int)$entityId];
+			foreach (array_unique($chatIds) as $chatId)
 			{
-				foreach ($entityId as $value)
+				\CPullWatch::delete($userId, 'IM_PUBLIC_'.$chatId);
+
+				if (self::canHaveComments($chats[$chatId] ?? null))
 				{
-					\CPullWatch::delete($userId, 'IM_PUBLIC_'.(int)$value);
-				}
-			}
-			else
-			{
-				\CPullWatch::delete($userId, 'IM_PUBLIC_'.(int)$entityId);
-				if ($chat->getType() === Chat::IM_TYPE_CHANNEL)
-				{
-					\CPullWatch::delete($userId, 'IM_PUBLIC_COMMENT_'.(int)$entityId);
+					\CPullWatch::delete($userId, 'IM_PUBLIC_COMMENT_'.$chatId);
 				}
 			}
 		}
@@ -1499,6 +1509,43 @@ class CAllIMContactList
 		}
 
 		return true;
+	}
+
+	// Discussions are owned by the channel family only.
+	protected static function canHaveComments(?Chat $chat): bool
+	{
+		return $chat instanceof Chat\ChannelChat;
+	}
+
+	/**
+	 * Resolves the ids of a list into chat instances in one pass, with the select of the canonical
+	 * loader Chat\ChatFactory::getRawById(). The instances bypass the chat cache, so reading the same
+	 * chat later still costs a query.
+	 *
+	 * @param int[] $chatIds
+	 * @return Chat[] existing chats keyed by chat id
+	 */
+	protected static function getExistingChats(array $chatIds): array
+	{
+		if (empty($chatIds))
+		{
+			return [];
+		}
+
+		$rows = IM\Model\ChatTable::query()
+			->setSelect(['*', '_ALIAS' => 'ALIAS.ALIAS'])
+			->whereIn('ID', $chatIds)
+			->fetchAll()
+		;
+
+		$chats = [];
+		foreach ($rows as $row)
+		{
+			$row['ALIAS'] = $row['_ALIAS'];
+			$chats[(int)$row['ID']] = Chat\ChatFactory::getInstance()->initChat($row);
+		}
+
+		return $chats;
 	}
 
 	public static function DialogHide($dialogId, $userId = null)

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Vibecodeconnector\Internal\Model\Catalog;
 
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 
@@ -13,6 +14,8 @@ use Bitrix\Main\ORM\Fields\IntegerField;
  */
 final class HiddenTable extends DataManager
 {
+	use DeleteByFilterTrait;
+
 	public static function getTableName(): string
 	{
 		return 'b_vibecodeconnector_catalog_hidden';

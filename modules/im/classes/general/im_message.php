@@ -1298,6 +1298,9 @@ class CIMMessage
 		$additionalEntitiesRest = $additionalEntitiesAdapter->toRestFormat([
 			'WITHOUT_OWN_REACTIONS' => true,
 			'MESSAGE_ONLY_COMMON_FIELDS' => true,
+			// the event payload is common to every recipient of the chat, while the title of the forward
+			// source is personal to the reader
+			'POPUP_DATA_EXCLUDE' => [\Bitrix\Im\V2\Message\Forward\ForwardSourcePopupItem::class],
 		]);
 
 		$multidialog = null;

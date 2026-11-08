@@ -20,15 +20,29 @@ Loc::loadMessages(__FILE__);
 
 final class ItemNormalizer
 {
+	public const IM_STORAGE_PROXY_TYPE = 'Bitrix\\Im\\Disk\\ProxyType\\Im';
+
 	private array $storageTypeCache = [];
 	private readonly \Closure $projectStorageChecker;
 
 	public function __construct(
 		private readonly FileTypeClassifier $fileTypeClassifier = new FileTypeClassifier(),
+		private readonly ViewerSupport $viewerSupport = new ViewerSupport(),
 		?\Closure $projectStorageChecker = null,
 	)
 	{
 		$this->projectStorageChecker = $projectStorageChecker ?? $this->isProjectStorage(...);
+	}
+
+	/**
+	 * Prepares the set for the fields whose answer lives outside the object row, so that normalizing an
+	 * item of the set costs no query of its own.
+	 *
+	 * @param array<BaseObject> $objects
+	 */
+	public function warmUpItems(array $objects): void
+	{
+		$this->viewerSupport->warmUpLinkedFiles($objects);
 	}
 
 	public function normalize(BaseObject $object): ?array
@@ -55,6 +69,7 @@ final class ItemNormalizer
 			'fileType' => $isFile ? $this->fileTypeClassifier->classify($object) : null,
 			'source' => $source,
 			'preview' => $isFile ? $this->normalizePreview($object) : null,
+			'previewable' => $isFile ? $this->viewerSupport->isPreviewable($object) : null,
 		];
 	}
 
@@ -276,6 +291,12 @@ final class ItemNormalizer
 		if (array_key_exists($storageId, $this->storageTypeCache))
 		{
 			return $this->storageTypeCache[$storageId];
+		}
+		if ($storage->getEntityType() === self::IM_STORAGE_PROXY_TYPE)
+		{
+			$this->storageTypeCache[$storageId] = 'im';
+
+			return 'im';
 		}
 
 		$proxyType = $storage->getProxyType();

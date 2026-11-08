@@ -6,7 +6,6 @@ namespace Bitrix\Im\V2\Chat\Cache;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Cache\Mapper\MapperInterface;
 use Bitrix\Im\V2\Chat\ChatClassResolver;
-use Bitrix\Im\V2\Cache\CacheableEntity;
 use Bitrix\Main\DI\ServiceLocator;
 
 /**
@@ -14,8 +13,7 @@ use Bitrix\Main\DI\ServiceLocator;
  */
 class ChatMapper implements MapperInterface
 {
-	/** @return Chat */
-	public function __invoke(array $data): CacheableEntity
+	public function __invoke(array $data): Chat
 	{
 		$chatClass = ServiceLocator::getInstance()->get(ChatClassResolver::class)->resolveForInit($data);
 

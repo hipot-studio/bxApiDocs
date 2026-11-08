@@ -9,6 +9,7 @@ use Bitrix\Rest\V3\Attribute\Editable;
 use Bitrix\Rest\V3\Attribute\Filterable;
 use Bitrix\Rest\V3\Attribute\Required;
 use Bitrix\Rest\V3\Attribute\Sortable;
+use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\Dto\Dto;
 
 /**
@@ -40,6 +41,7 @@ use Bitrix\Rest\V3\Dto\Dto;
  * the second row of a `replace` would be judged by the values of the first. Both checks are therefore
  * made per request, by the mapper.
  */
+#[Title('CRM product row')]
 final class ProductRowDto extends Dto
 {
 	#[Filterable]

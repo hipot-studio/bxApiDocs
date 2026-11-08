@@ -22,9 +22,18 @@ class HcmLinkPlaceholderCollectorStrategy extends AbstractPlaceholderCollectorSt
 	{
 		return NameHelper::create(
 			BlockCode::B2E_HCMLINK_REFERENCE,
-			$this->hcmLinkFieldService->getFieldTypeByName($fieldCode),
+			$fieldType,
 			$party,
 			$fieldCode,
 		);
+	}
+
+	/**
+	 * The descriptor of a field of the external HR system carries an integer enumerator of that
+	 * system; the same value is encoded in the field name, and the service maps it to a field type.
+	 */
+	protected function resolveFieldType(string $fieldCode, string $descriptorType): string
+	{
+		return $this->hcmLinkFieldService->getFieldTypeByName($fieldCode);
 	}
 }

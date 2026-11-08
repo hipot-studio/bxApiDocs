@@ -4,7 +4,6 @@ namespace Bitrix\Sign\Service\Sign;
 
 use Bitrix\Bizproc\Error;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Sign\Access\AccessController;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Connector\MemberDataPicker;
@@ -61,6 +60,7 @@ class MemberService
 	private Service\Providers\ProfileProvider $profileProvider;
 	private readonly AccessController\AccessControllerFactory $accessControllerFactory;
 	public const MAX_REVIEWERS_COUNT = 20;
+	private const COMPOSITION_LOCK_NAME_PREFIX = 'sign_document_members_';
 
 	/**
 	 * @param \Bitrix\Sign\Repository\MemberRepository|null $memberRepository
@@ -73,7 +73,8 @@ class MemberService
 		?FileRepository $fileRepository = null,
 		?Service\Integration\Crm\B2eDocumentService $b2eDocumentService = null,
 		?Service\UserService $userService = null,
-		Service\SignersListService $signersListService = null,
+		?Service\SignersListService $signersListService = null,
+		?Service\Integration\HumanResources\NodeService $nodeService = null,
 	)
 	{
 		$container = Container::instance();
@@ -84,7 +85,7 @@ class MemberService
 		$this->communicationService = new CommunicationService(Main\Engine\CurrentUser::get()->getId());
 		$this->b2eDocumentService = $b2eDocumentService ?? $container->getB2eDocumentService();
 		$this->profileProvider = $container->getServiceProfileProvider();
-		$this->nodeService = $container->getHumanResourcesNodeService();
+		$this->nodeService = $nodeService ?? $container->getHumanResourcesNodeService();
 		$this->accessControllerFactory = $container->getAccessControllerFactory();
 		$this->userService = $userService ?? $container->getUserService();
 		$this->signersListService = $signersListService ?? $container->getSignersListService();
@@ -101,6 +102,7 @@ class MemberService
 		Type\Member\Notification\ReminderType $reminderType = Type\Member\Notification\ReminderType::NONE,
 		?int $employeeId = null,
 		bool $skipPermissionCheck = false,
+		?string $signingMethod = null,
 	): Main\Result
 	{
 		$document = $this->documentRepository->getByUid($documentUid);
@@ -146,6 +148,7 @@ class MemberService
 				type: $reminderType,
 			),
 			employeeId: $employeeId,
+			signingMethod: $signingMethod,
 		));
 
 		if (!$addResult->isSuccess())
@@ -276,12 +279,32 @@ class MemberService
 		return new Main\Result();
 	}
 
+	/**
+	 * @param bool $keepSavedReminderTypes members are recreated here, so a member that comes without a
+	 * reminder frequency inherits the one its role already has on the document. Only the parties step
+	 * of the wizard asks for it: it edits a document whose settings the user has already seen, while
+	 * sending a document composes its members anew and starts from the defaults.
+	 *
+	 * Writes the member composition of a B2E document: the given members replace the saved ones
+	 * whole. The paths that replace a composition whole come here (the signing wizard, the
+	 * template send, the copy, the fill and send, the configure activity and its compensation),
+	 * and the lock serializes them against each other. Members also change by paths that take
+	 * neither this lock nor the state check: \Bitrix\Sign\Operation\Member\SyncDepartmentsPage
+	 * and \Bitrix\Sign\Operation\Member\CreateMembers rewrite the composition, and the member
+	 * controller adds and removes a single member.
+	 *
+	 * @see self::findCompositionRefusal() the state a composition may no longer be written in
+	 * @see self::writeB2eComposition() what runs under the lock
+	 * @see \Bitrix\Sign\Controllers\V1\Document\Member::getSyncMembersLock() sign_sync_members_{uid},
+	 *      another lock, over a wider section of the member sync and under a name of its own
+	 */
 	public function setupB2eMembers(
 		string $documentUid,
 		Item\MemberCollection $memberCollection,
 		int $representativeId,
 		bool $skipPermissionCheck = false,
 		bool $excludeRejected = true,
+		bool $keepSavedReminderTypes = false,
 	): Main\Result
 	{
 		$document = $this->documentRepository->getByUid($documentUid);
@@ -297,6 +320,13 @@ class MemberService
 			return (new Main\Result())->addError(
 				new Main\Error('Wrong document scenario'),
 			);
+		}
+
+		// the state is checked twice: here to spare the validations below, and again under the lock
+		$refusal = self::findCompositionRefusal($document);
+		if ($refusal !== null)
+		{
+			return (new Main\Result())->addError($refusal);
 		}
 
 		$result = new Main\Result();
@@ -377,14 +407,83 @@ class MemberService
 			$signersCountResult = $this->getUniqueSignersCount($entityCollection, $excludeRejected);
 			if (!$signersCountResult->isSuccess())
 			{
-				return $signersCountResult;
+				if (
+					$signersCountResult->getErrorCollection()
+						->getErrorByCode('SIGN_B2E_MEMBER_SELECTION_EMPTY') === null
+				)
+				{
+					return $signersCountResult;
+				}
 			}
-			$signersCount = (int)$signersCountResult->getData()['count'];
+			else
+			{
+				$signersCount = (int)$signersCountResult->getData()['count'];
+			}
 		}
 
 		if (B2eTariff::instance()->isB2eSignersCountRestricted($signersCount))
 		{
 			return $result->addError(B2eTariff::instance()->getSignersCountAccessError());
+		}
+
+		if (!$this->acquireCompositionLock($documentUid))
+		{
+			return (new Main\Result())->addError(
+				new Main\Error(
+					message: (string)Loc::getMessage('SIGN_SERVICE_MEMBER_COMPOSITION_IS_BUSY'),
+					code: 'SIGN_DOCUMENT_MEMBERS_BUSY',
+				),
+			);
+		}
+
+		try
+		{
+			return $this->writeB2eComposition(
+				$documentUid,
+				$memberCollection,
+				$assignee,
+				$maxParty,
+				$representativeId,
+				$skipPermissionCheck,
+				$keepSavedReminderTypes,
+			);
+		}
+		finally
+		{
+			$this->releaseCompositionLock($documentUid);
+		}
+	}
+
+	/**
+	 * Reads the saved composition, wipes it and creates the given one in its place. Only the write
+	 * runs here: the validations of the composition need no lock, and holding one over them would
+	 * keep the document busy for the whole request.
+	 *
+	 * The document is read anew: the checks above ran before the lock, and the document could have
+	 * gone to signing in between.
+	 */
+	private function writeB2eComposition(
+		string $documentUid,
+		Item\MemberCollection $memberCollection,
+		Item\Member $assignee,
+		int $maxParty,
+		int $representativeId,
+		bool $skipPermissionCheck,
+		bool $keepSavedReminderTypes,
+	): Main\Result
+	{
+		$document = $this->documentRepository->getByUid($documentUid);
+		if (!$document)
+		{
+			return (new Main\Result())->addError(
+				new Main\Error(Loc::getMessage('SIGN_SERVICE_MEMBER_DOCUMENT_NOT_FOUND')),
+			);
+		}
+
+		$refusal = self::findCompositionRefusal($document);
+		if ($refusal !== null)
+		{
+			return (new Main\Result())->addError($refusal);
 		}
 
 		$savedAssignee = $this->memberRepository
@@ -394,6 +493,11 @@ class MemberService
 		if ($savedAssignee !== null)
 		{
 			$assignee->presetId ??= $savedAssignee->presetId;
+		}
+
+		if ($keepSavedReminderTypes)
+		{
+			$this->applySavedReminderTypes($document->id, $memberCollection);
 		}
 
 		$result = $this->cleanByDocumentId($document->id);
@@ -437,6 +541,7 @@ class MemberService
 					reminderType: $member->reminder->type,
 					employeeId: $member->employeeId,
 					skipPermissionCheck: $skipPermissionCheck,
+					signingMethod: $member->signingMethod,
 				);
 
 				if (!$result->isSuccess())
@@ -488,71 +593,372 @@ class MemberService
 		return new Main\Result();
 	}
 
-	public function getUniqueSignersCount(Item\Hr\EntitySelector\EntityCollection $entityCollection, bool $excludeRejected = true): Main\Result
+	/**
+	 * Setting up the parties recreates the members, and the wizard sends no reminder frequency with
+	 * them: it is chosen per role on a later step. Without carrying the stored frequency over, a
+	 * document that already has one (a copy of a template) loses it. A frequency that did come from
+	 * the wizard is an explicit choice and stays untouched.
+	 */
+	private function applySavedReminderTypes(int $documentId, Item\MemberCollection $memberCollection): void
 	{
-		$uniqUsers = [];
+		$savedReminderTypes = $this->memberRepository->listReminderTypesByDocumentIdIndexedByRole($documentId);
+		if ($savedReminderTypes === [])
+		{
+			return;
+		}
+
+		foreach ($memberCollection as $member)
+		{
+			if (
+				$member->role === null
+				|| $member->reminder->type !== Type\Member\Notification\ReminderType::NONE
+			)
+			{
+				continue;
+			}
+
+			$savedReminderType = $savedReminderTypes[$member->role] ?? null;
+			if ($savedReminderType !== null)
+			{
+				$member->reminder->type = $savedReminderType;
+			}
+		}
+	}
+
+	/**
+	 * Points the company member of a B2E document, and the card of the smart process mirroring it,
+	 * at the given company. The company member belongs to the company the document is signed from,
+	 * so a path that moves the company of the document without rewriting the composition has to
+	 * move the member too, or the member and the card keep the company the document no longer has.
+	 *
+	 * Only the one member is written. Rewriting the composition whole would drop the department
+	 * relations of the document, and a caller that was asked for the company has no business
+	 * touching the signers.
+	 *
+	 * The lock and the state check are the ones the composition write itself takes: this is a
+	 * writer of the composition like any other, and it is serialized against them by the same name.
+	 *
+	 * @see self::setupB2eMembers() writes the composition whole and mirrors the same pair
+	 * @see self::findCompositionRefusal() the state a composition may no longer be written in
+	 */
+	public function moveB2eCompanyMember(string $documentUid, int $companyId): Main\Result
+	{
+		if ($companyId < 1)
+		{
+			return (new Main\Result())->addError(new Main\Error('Company is empty'));
+		}
+
+		if (!$this->acquireCompositionLock($documentUid))
+		{
+			return (new Main\Result())->addError(
+				new Main\Error(
+					message: (string)Loc::getMessage('SIGN_SERVICE_MEMBER_COMPOSITION_IS_BUSY'),
+					code: 'SIGN_DOCUMENT_MEMBERS_BUSY',
+				),
+			);
+		}
+
+		try
+		{
+			return $this->writeB2eCompanyMember($documentUid, $companyId);
+		}
+		finally
+		{
+			$this->releaseCompositionLock($documentUid);
+		}
+	}
+
+	/**
+	 * The document is read under the lock: the caller checked its state before taking one, and it
+	 * could have gone to signing in between.
+	 */
+	private function writeB2eCompanyMember(string $documentUid, int $companyId): Main\Result
+	{
+		$document = $this->documentRepository->getByUid($documentUid);
+		if (!$document)
+		{
+			return (new Main\Result())->addError(
+				new Main\Error(Loc::getMessage('SIGN_SERVICE_MEMBER_DOCUMENT_NOT_FOUND')),
+			);
+		}
+
+		$refusal = self::findCompositionRefusal($document);
+		if ($refusal !== null)
+		{
+			return (new Main\Result())->addError($refusal);
+		}
+
+		$companyMember = $this->getAssignee($document);
+
+		// the member of a role names no company of its own, and a document without a company
+		// member has nothing to move: neither is an error, there is simply nothing to write
+		if (
+			$companyMember === null
+			|| $companyMember->entityType !== EntityType::COMPANY
+		)
+		{
+			return new Main\Result();
+		}
+
+		if ($companyMember->entityId !== $companyId)
+		{
+			// the requisite preset belongs to the company the member pointed at and names nothing
+			// under the new one
+			$companyMember->entityId = $companyId;
+			$companyMember->presetId = 0;
+
+			$updateResult = $this->memberRepository->update($companyMember);
+			if (!$updateResult->isSuccess())
+			{
+				return $updateResult;
+			}
+		}
+
+		if ($document->isTemplated())
+		{
+			return new Main\Result();
+		}
+
+		return $this->b2eDocumentService->setMyCompany($document, $companyId);
+	}
+
+	/**
+	 * Why the member composition of the document may no longer be written, if it may not. The
+	 * window is the one the document write path itself allows: a document that has gone to signing
+	 * keeps the members its invitations were built from, and members created anew would be shown
+	 * on the portal while the signing service kept the previous ones.
+	 *
+	 * A caller needing a narrower window keeps its own check: the configure activity refuses a
+	 * document already brought to `ready`, and ConfigureDocument takes an `uploaded` one only.
+	 *
+	 * @see \Bitrix\Sign\Service\Sign\DocumentService::canBeChanged() the same window
+	 */
+	private static function findCompositionRefusal(Item\Document $document): ?Main\Error
+	{
+		if (!in_array($document->status, DocumentStatus::getEnding(), true))
+		{
+			return null;
+		}
+
+		return new Main\Error(
+			message: (string)Loc::getMessage('SIGN_SERVICE_MEMBER_COMPOSITION_CANNOT_BE_CHANGED'),
+			code: 'SIGN_DOCUMENT_INCORRECT_STATUS',
+			customData: [
+				'has' => $document->status,
+				'expected' => array_values(
+					array_diff(DocumentStatus::getAll(), DocumentStatus::getEnding()),
+				),
+			],
+		);
+	}
+
+	/**
+	 * Zero timeout: a composition another writer is already changing is refused right away instead
+	 * of holding the request until it is done.
+	 */
+	private function acquireCompositionLock(string $documentUid): bool
+	{
+		return Main\Application::getConnection()->lock(self::COMPOSITION_LOCK_NAME_PREFIX . $documentUid, 0);
+	}
+
+	private function releaseCompositionLock(string $documentUid): bool
+	{
+		return Main\Application::getConnection()->unlock(self::COMPOSITION_LOCK_NAME_PREFIX . $documentUid);
+	}
+
+	public function resolveUniqueSignerIds(
+		Item\Hr\EntitySelector\EntityCollection $entityCollection,
+		bool $excludeRejected = true,
+		int $limit = 1000,
+	): Main\Result
+	{
+		if ($limit < 1 || $limit > 1000)
+		{
+			return (new Main\Result())->addError(
+				new Main\Error(
+					(string)Loc::getMessage('SIGN_SERVICE_MEMBER_SELECTION_INVALID'),
+					'SIGN_B2E_MEMBER_SELECTION_INVALID',
+				),
+			);
+		}
+
+		if ($entityCollection->count() === 0)
+		{
+			return (new Main\Result())->addError(
+				new Main\Error(
+					(string)Loc::getMessage('SIGN_SERVICE_MEMBER_SELECTION_EMPTY'),
+					'SIGN_B2E_MEMBER_SELECTION_EMPTY',
+				),
+			);
+		}
+
+		if ($entityCollection->count() > $limit)
+		{
+			return $this->createSignerLimitExceededResult($limit);
+		}
 
 		/** @var Item\Hr\EntitySelector\Entity $entity */
 		foreach ($entityCollection as $entity)
 		{
-			if (
-				!$entity->entityType->isDepartment()
-				&& !$entity->entityType->isDocument()
-				&& !$entity->entityType->isSignersList()
-			)
-			{
-				$uniqUsers[$entity->entityId] = true;
-
-				continue;
-			}
-
-			if ($entity->entityType->isDocument())
-			{
-				$signers = $this->listByDocumentId($entity->entityId)->filterByRole(Type\Member\Role::SIGNER);
-				$signers = $this->filterFiredSigners($signers);
-				$users = $this->getUserIdsForMembers($signers);
-				foreach ($users as $userId)
-				{
-					$uniqUsers[$userId] = true;
-				}
-
-				continue;
-			}
-
-			if ($entity->entityType->isSignersList())
-			{
-				$users = $this->signersListService->listSigners($entity->entityId)->getUserIds();
-				foreach ($users as $userId)
-				{
-					$uniqUsers[$userId] = true;
-				}
-
-				continue;
-			}
-
-			if (!$this->nodeService->isNodeExists($entity->entityId))
+			if ($entity->entityId < 1 || $entity->entityType === Type\Hr\EntitySelector\EntityType::Unknown)
 			{
 				return (new Main\Result())->addError(
-					new Main\Error("Department not found"),
+					new Main\Error(
+						(string)Loc::getMessage('SIGN_SERVICE_MEMBER_SELECTION_INVALID'),
+						'SIGN_B2E_MEMBER_SELECTION_INVALID',
+					),
 				);
 			}
+		}
 
-			foreach ($this->nodeService->getAllEmployeesByEntitySelector($entity) ?? [] as $deptMember)
+		$uniqUsers = [];
+		$departmentSources = [];
+		$signersListIds = [];
+		$documentIds = [];
+
+		/** @var Item\Hr\EntitySelector\Entity $entity */
+		foreach ($entityCollection as $entity)
+		{
+			if ($entity->entityType->isUser())
 			{
-				$uniqUsers[$deptMember->entityId] = true;
+				$uniqUsers[$entity->entityId] = true;
+				if (count($uniqUsers) > $limit)
+				{
+					return $this->createSignerLimitExceededResult($limit);
+				}
+
+				continue;
+			}
+
+			$sourceKey = $entity->entityType->value . ':' . $entity->entityId;
+			if ($entity->entityType->isDepartment())
+			{
+				$departmentSources[$sourceKey] = $entity;
+
+				continue;
+			}
+			if ($entity->entityType->isSignersList())
+			{
+				$signersListIds[$entity->entityId] = true;
+
+				continue;
+			}
+			if ($entity->entityType->isDocument())
+			{
+				$documentIds[$entity->entityId] = true;
+
+				continue;
+			}
+
+			return (new Main\Result())->addError(
+				new Main\Error(
+					(string)Loc::getMessage('SIGN_SERVICE_MEMBER_SELECTION_INVALID'),
+					'SIGN_B2E_MEMBER_SELECTION_INVALID',
+				),
+			);
+		}
+
+		$sourceReaders = [];
+		if ($departmentSources !== [])
+		{
+			$sourceReaders[] = fn(int $remainingBudget, array $excludedUserIds): array => $this->nodeService
+				->listEmployeeUserIdsByEntities(
+					array_values($departmentSources),
+					$remainingBudget,
+					$excludedUserIds,
+				)
+			;
+		}
+		if ($signersListIds !== [])
+		{
+			$sourceReaders[] = fn(int $remainingBudget, array $excludedUserIds): array => $this->signersListService
+				->listSignerUserIdsByListIds(
+					array_keys($signersListIds),
+					$remainingBudget,
+					$excludedUserIds,
+				)
+			;
+		}
+		if ($documentIds !== [])
+		{
+			$sourceReaders[] = fn(int $remainingBudget, array $excludedUserIds): array => $this->memberRepository
+				->listSignerUserIdsByDocumentIds(
+					array_keys($documentIds),
+					$remainingBudget,
+					$excludedUserIds,
+				)
+			;
+		}
+		foreach ($sourceReaders as $sourceReader)
+		{
+			$remainingBudget = $limit - count($uniqUsers) + 1;
+			foreach ($sourceReader($remainingBudget, array_keys($uniqUsers)) as $userId)
+			{
+				$userId = (int)$userId;
+				if ($userId > 0)
+				{
+					$uniqUsers[$userId] = true;
+				}
+			}
+
+			if (count($uniqUsers) > $limit)
+			{
+				return $this->createSignerLimitExceededResult($limit);
 			}
 		}
 
+		$totalCount = count($uniqUsers);
+		if ($totalCount === 0)
+		{
+			return (new Main\Result())->addError(
+				new Main\Error(
+					(string)Loc::getMessage('SIGN_SERVICE_MEMBER_SELECTION_EMPTY'),
+					'SIGN_B2E_MEMBER_SELECTION_EMPTY',
+				),
+			);
+		}
+
+		$excludedCount = 0;
 		if ($excludeRejected)
 		{
-			$rejectedUsers = $this->signersListService->listRejectedSigners();
-			foreach ($rejectedUsers as $rejectedUser)
+			foreach ($this->signersListService->listRejectedSignerIdsByUserIds(array_keys($uniqUsers)) as $rejectedUserId)
 			{
-				unset($uniqUsers[$rejectedUser->userId]);
+				$rejectedUserId = (int)$rejectedUserId;
+				if (isset($uniqUsers[$rejectedUserId]))
+				{
+					unset($uniqUsers[$rejectedUserId]);
+					$excludedCount++;
+				}
 			}
 		}
 
-		return (new Main\Result())->setData(['count' => count($uniqUsers)]);
+		$userIds = array_keys($uniqUsers);
+
+		return (new Main\Result())->setData([
+			'userIds' => $userIds,
+			'count' => count($userIds),
+			'totalCount' => $totalCount,
+			'excludedCount' => $excludedCount,
+		]);
+	}
+
+	public function getUniqueSignersCount(
+		Item\Hr\EntitySelector\EntityCollection $entityCollection,
+		bool $excludeRejected = true,
+	): Main\Result
+	{
+		return $this->resolveUniqueSignerIds($entityCollection, $excludeRejected);
+	}
+
+	private function createSignerLimitExceededResult(int $limit): Main\Result
+	{
+		return (new Main\Result())->addError(
+			new Main\Error(
+				(string)Loc::getMessage('SIGN_SERVICE_MEMBER_LIMIT_EXCEEDED', ['#LIMIT#' => $limit]),
+				'SIGN_B2E_MEMBER_LIMIT_EXCEEDED',
+				['limit' => $limit],
+			),
+		);
 	}
 
 	public function cleanByDocumentId(int $documentId): Main\Result
@@ -941,6 +1347,21 @@ class MemberService
 			if (is_int($userId))
 			{
 				$result[] = $userId;
+			}
+		}
+
+		return $result;
+	}
+
+	public function getUserIdsMapForMembers(Item\MemberCollection $memberCollection, ?Item\Document $document = null): array
+	{
+		$result = [];
+		foreach ($memberCollection as $member)
+		{
+			$userId = $this->getUserIdForMember($member, $document);
+			if (is_int($userId))
+			{
+				$result[$member->id] = $userId;
 			}
 		}
 

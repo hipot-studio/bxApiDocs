@@ -8,6 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Internal\Entity\StorageField\StorageField;
 use Bitrix\Bizproc\Public\Provider\StorageFieldProvider;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Localization\Loc;
@@ -15,7 +16,7 @@ use Bitrix\Main\Application;
 use Bitrix\Bizproc\Internal\Model\StorageFieldTable;
 use Bitrix\Bizproc\Internal\Repository\Mapper\StorageFieldMapper;
 use Bitrix\Main\Loader;
-use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
 
 class BizprocStorageFieldEditComponent extends CBitrixComponent
 {
@@ -40,7 +41,8 @@ class BizprocStorageFieldEditComponent extends CBitrixComponent
 			return;
 		}
 
-		if (!(new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin())
+		$accessService = new TemplateAccessService();
+		if (!$accessService->canAccessTemplates())
 		{
 			$this->errorCollection->setError(ErrorMessage::ACCESS_DENIED->getError());
 
@@ -66,10 +68,24 @@ class BizprocStorageFieldEditComponent extends CBitrixComponent
 				);
 			}
 
+			if (!$accessService->canEditStorage($storageId))
+			{
+				$this->errorCollection->setError(ErrorMessage::ACCESS_DENIED->getError());
+
+				return;
+			}
+
 			if ($fieldId > 0)
 			{
 				$provider = new StorageFieldProvider();
 				$this->field = $provider->getById($fieldId);
+				if ($this->field && !$accessService->canEditStorage((int)$this->field->getStorageId()))
+				{
+					$this->errorCollection->setError(ErrorMessage::ACCESS_DENIED->getError());
+
+					return;
+				}
+
 				if ($this->field)
 				{
 					$this->data = $this->field->toArray();
@@ -170,28 +186,6 @@ class BizprocStorageFieldEditComponent extends CBitrixComponent
 
 	private function getFieldsTypes(): array
 	{
-		$allowedTypes = [
-			FieldType::STRING,
-			FieldType::TEXT,
-			FieldType::INT,
-			FieldType::DOUBLE,
-			FieldType::BOOL,
-			FieldType::DATE,
-			FieldType::DATETIME,
-			FieldType::USER,
-		];
-
-		$documentTypes = \CBPHelper::GetDocumentFieldTypes();
-
-		$fieldTypes = [];
-		foreach ($allowedTypes as $type)
-		{
-			if (isset($documentTypes[$type]))
-			{
-				$fieldTypes[$type] = $documentTypes[$type]['Name'];
-			}
-		}
-
-		return $fieldTypes;
+		return StorageActivityService::getFieldTypes();
 	}
 }

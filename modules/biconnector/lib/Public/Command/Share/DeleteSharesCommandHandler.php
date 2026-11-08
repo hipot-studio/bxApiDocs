@@ -32,6 +32,17 @@ class DeleteSharesCommandHandler
 				ShareExpireAgent::remove($share->getId());
 				$this->repository->delete($share->getId());
 			}
+
+			// Callers gate further steps on this result, so success has to mean an
+			// empty share storage, not just an absence of exceptions. Nothing to prove
+			// when there was nothing to delete.
+			if ($shares && $this->repository->getByDashboardId($command->dashboardId))
+			{
+				$result->addError(new Error(
+					'Some public share links of dashboard are still stored',
+					'shares_not_deleted',
+				));
+			}
 		}
 		catch (\Exception $e)
 		{

@@ -109,7 +109,7 @@ class CCrmAuthorizationHelper
 		return \Bitrix\Crm\Service\Container::getInstance()
 			->getUserPermissions()
 			->entityEditor()
-			->canEditCommonView()
+			->canEditCommonView(null, null)
 		;
 	}
 
@@ -160,8 +160,16 @@ class CCrmAuthorizationHelper
 		}
 		$entityAttrs = $entityAttrs[$entityID] ?? [];
 
-		return
+		$hasPermissionWithoutAttributes =
 			$permissionsManager->hasPermission($entityTypeName, $permissionType)
+			|| (
+				$permissionType === UserPermissions::OPERATION_UPDATE
+				&& $permissionsManager->isObserversWriteEnabled($entityTypeName)
+			)
+		;
+
+		return
+			$hasPermissionWithoutAttributes
 			&& $permissionsManager->doUserAttributesMatchesToEntityAttributes($entityTypeName, $permissionType, $entityAttrs)
 		;
 	}

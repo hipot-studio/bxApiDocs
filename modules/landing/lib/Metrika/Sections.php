@@ -21,4 +21,5 @@ enum Sections: string
 	case sites = 'sites';
 	case chat = 'chat';
 	case buttonMenu = 'button_menu';
+	case searchResult = 'search_result';
 }

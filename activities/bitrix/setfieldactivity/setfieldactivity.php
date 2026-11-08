@@ -76,7 +76,7 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 				$this->writeDebugInfo($this->getDebugInfo($resultFields));
 			}
 
-			$documentService->UpdateDocument($documentId, $resultFields, $this->ModifiedBy);
+			$documentService->UpdateDocument($documentId, $resultFields, $this->getModifiedByOrStarter());
 
 			if (
 				Loader::includeModule('crm')
@@ -202,7 +202,7 @@ class CBPSetFieldActivity extends CBPActivity implements IBPActivityExternalEven
 						$this->resolveTargetDocumentType($documentId),
 						$fieldValue,
 					);
-					$documentService->UpdateDocument($documentId, $resultFields);
+					$documentService->UpdateDocument($documentId, $resultFields, $this->getModifiedByOrStarter());
 				}
 				else
 				{

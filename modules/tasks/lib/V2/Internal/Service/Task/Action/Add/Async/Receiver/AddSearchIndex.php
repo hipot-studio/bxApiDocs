@@ -6,10 +6,9 @@ namespace Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Async\Receiver;
 
 use Bitrix\Main\Messenger\Entity\MessageInterface;
 use Bitrix\Main\Messenger\Receiver\AbstractReceiver;
-use Bitrix\Tasks\Integration\Search;
-use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Async\Message;
-use Bitrix\Tasks\Internals;
+use Bitrix\Tasks\V2\Internal\Service\Task\SearchIndexService;
+use Bitrix\Tasks\V2\Internal\Service\Task\SearchIndexWriter;
 
 class AddSearchIndex extends AbstractReceiver
 {
@@ -20,19 +19,6 @@ class AddSearchIndex extends AbstractReceiver
 			return;
 		}
 
-		$id = (int)($message->task['ID'] ?? 0);
-		$repository = Container::getInstance()->getTaskRepository();
-		if (!$repository->isExists($id))
-		{
-			return;
-		}
-
-		$task = $message->unSerialiseDateTime(
-			payload: $message->task,
-			dateTimeKeys: ['CHANGED_DATE', 'CREATED_DATE'],
-		);
-
-		Search\Task::index($task);
-		Internals\SearchIndex::setTaskSearchIndex($id);
+		(new SearchIndexService(new SearchIndexWriter()))->index((int)($message->task['ID'] ?? 0));
 	}
 }

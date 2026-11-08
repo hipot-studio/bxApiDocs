@@ -15,6 +15,7 @@ use Bitrix\Rest\Internal\Entity\Application\App;
 use Bitrix\Rest\Internal\Entity\Application\AppAttributeCollection;
 use Bitrix\Rest\Internal\Entity\Application\AppExternalAttribute;
 use Bitrix\Rest\Internal\Entity\Application\AppFactory;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Internal\Service\Application\ApplicationInstaller;
 use Bitrix\Rest\Internal\Service\User\ActiveAdminFinder;
 
@@ -61,7 +62,7 @@ final class ForceInstallPersonalAppCommandHandler
 			title: $command->title,
 			installUrl: $command->installUrl,
 			mobile: $command->mobile,
-			menuTitles: $command->menuTitles,
+			menuTitles: $command->onlyApi ? [] : $command->menuTitles,
 			externalAttributes: $externalAttributes,
 		);
 
@@ -69,9 +70,13 @@ final class ForceInstallPersonalAppCommandHandler
 			userId: $command->userId,
 			app: $app,
 			onlyApi: $command->onlyApi,
+			installCompletionMode: AppInstallCompletionMode::resolve(
+				$command->installUrl,
+				$command->onlyApi,
+				$command->installCompletionMode?->value,
+			),
 			applicationToken: (string)$command->applicationToken,
 			initiatorUserId: $this->getInitiatorUserId(),
-			skipTariffCheck: true,
 		);
 	}
 

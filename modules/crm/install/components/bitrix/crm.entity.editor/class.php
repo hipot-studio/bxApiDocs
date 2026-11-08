@@ -13,15 +13,20 @@ use Bitrix\Crm\EntityForm\ScopeAccess;
 use Bitrix\Crm\FieldContext\ContextManager;
 use Bitrix\Crm\FieldContext\Repository;
 use Bitrix\Crm\Integration\HumanResources\HumanResources;
+use Bitrix\Crm\Integration\Rest\AppPlacement;
 use Bitrix\Crm\Integration\UI\EntityEditor\MartaAIMarksRepository;
 use Bitrix\Crm\Integration\UI\EntityEditor\UnavailableFieldsChecker;
 use Bitrix\Crm\Integration\UI\EntitySelector\CountryProvider;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter\SchemeDecorator;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
+use Bitrix\Crm\V2\Internal\Service\Ai\FieldFillPolicyService;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Spotlight;
+use Bitrix\Rest\Api\UserFieldType;
 use Bitrix\UI;
 use Bitrix\Ui\EntityForm\Scope;
 use Bitrix\UI\Form\EntityEditorConfiguration;
@@ -54,6 +59,19 @@ class CCrmEntityEditorComponent extends UIFormComponent
 		if (is_numeric($entityTypeID))
 		{
 			return Container::getInstance()->getUserPermissions()->isAdminForEntity((int)$entityTypeID, $categoryId);
+		}
+
+		return false;
+	}
+
+	private static function canManageCommonViews(mixed $entityTypeID, ?int $categoryId): bool
+	{
+		if (is_numeric($entityTypeID))
+		{
+			return Container::getInstance()->getUserPermissions()->configuration()->canManageCommonViews(
+				ConfigurationCallSite::EntityEditorComponent,
+				ConfigurationScope::ofEntityType((int)$entityTypeID, $categoryId),
+			);
 		}
 
 		return false;
@@ -518,11 +536,15 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 		$this->prepareConfig();
 
-		$this->arResult['ENABLE_SETTINGS_FOR_ALL'] = Container::getInstance()->getUserPermissions()->entityEditor()->canEditCommonView();
+		$this->arResult['ENABLE_SETTINGS_FOR_ALL'] = Container::getInstance()
+			->getUserPermissions()
+			->entityEditor()
+			->canEditCommonView(is_numeric($this->entityTypeID) ? (int)$this->entityTypeID : null, $this->categoryId)
+		;
 
 		//region CAN_UPDATE_PERSONAL_CONFIGURATION && CAN_UPDATE_COMMON_CONFIGURATION
 		$this->arResult['CAN_UPDATE_PERSONAL_CONFIGURATION'] = true;
-		$this->arResult['CAN_UPDATE_COMMON_CONFIGURATION'] = self::isAdminForEntity($this->entityTypeID, $this->categoryId);
+		$this->arResult['CAN_UPDATE_COMMON_CONFIGURATION'] = self::canManageCommonViews($this->entityTypeID, $this->categoryId);
 
 		if(!isset($this->arParams['~ENABLE_CONFIGURATION_UPDATE']))
 		{
@@ -680,7 +702,11 @@ class CCrmEntityEditorComponent extends UIFormComponent
 
 		//Rest placement and userfield types
 		$this->arResult['REST_USE'] = false;
-		$this->arResult['REST_PLACEMENT_TAB_CONFIG'] = array();
+		$this->arResult['REST_PLACEMENT_TAB_CONFIG'] = [
+			'detail_tab_placement' => CCrmOwnerType::IsDefined($this->entityTypeID)
+				? AppPlacement::getDetailTabPlacementCode($this->entityTypeID)
+				: '',
+		];
 		$this->arResult['USERFIELD_TYPE_ADDITIONAL'] = array();
 		if(
 			$this->arParams['ENABLE_USER_FIELD_CREATION'] !== false
@@ -704,10 +730,7 @@ class CCrmEntityEditorComponent extends UIFormComponent
 				'crm_field',
 				'crm_' . $this->configID . '_add_field'
 			);
-			$this->arResult['REST_PLACEMENT_TAB_CONFIG'] = array(
-				'entity' => CCrmOwnerType::ResolveName($this->entityTypeID),
-				'placement' => \Bitrix\Rest\Api\UserFieldType::PLACEMENT_UF_TYPE,
-			);
+			$this->arResult['REST_PLACEMENT_TAB_CONFIG']['placement'] = UserFieldType::PLACEMENT_UF_TYPE;
 		}
 		//end Rest placement and userfield types
 
@@ -718,6 +741,9 @@ class CCrmEntityEditorComponent extends UIFormComponent
 			'useHumanResourcesModule' => HumanResources::getInstance()->isUsed() ? 'Y' : 'N',
 			'useOnAddOnUpdateSegregation' => ScopeAccess::getInstance('crm')->canUseOnAddOnUpdateSegregation() ? 'Y' : 'N',
 		];
+		$this->arResult['AI_FILL_POLICY_SETTINGS'] = FieldFillPolicyService::getInstance()
+			->getEditorSettings((int)$this->entityTypeID)
+		;
 		$this->arResult['ENTITY_CONFIG_CATEGORY_NAME'] = $this->getConfigurationCategoryName();
 
 		if ($this->arResult['READ_ONLY'])

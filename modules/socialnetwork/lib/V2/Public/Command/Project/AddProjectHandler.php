@@ -70,6 +70,7 @@ class AddProjectHandler
 			moderatorMembers: $moderatorMembers,
 			rawPermissions: $this->normalizer->normalizePermissions($dto->permissions),
 			options: $dto->options,
+			features: $dto->features,
 			baseFeatureId: $dto->baseFeatureId,
 			tagNames: $dto->tags,
 			publication: $dto->publication,

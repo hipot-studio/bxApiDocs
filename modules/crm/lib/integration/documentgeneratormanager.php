@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration;
 
 use Bitrix\Crm\Integration\DocumentGenerator\CustomField\FieldController;
+use Bitrix\Crm\Integration\DocumentGenerator\CreationOperationContext;
 use Bitrix\Crm\Integration\DocumentGenerator\DataProvider;
 use Bitrix\Crm\Integration\DocumentGenerator\ProductLoader;
 use Bitrix\Crm\Integration\DocumentGenerator\Template;
@@ -21,10 +22,11 @@ use Bitrix\DocumentGenerator\Model\DocumentTable;
 use Bitrix\DocumentGenerator\Model\TemplateProviderTable;
 use Bitrix\DocumentGenerator\Model\TemplateTable;
 use Bitrix\DocumentGenerator\Nameable;
-use Bitrix\DocumentGenerator\Service\ActualizeQueue;
 use Bitrix\DocumentGenerator\VirtualDocument;
 use Bitrix\Main\DB\DuplicateEntryException;
+use Bitrix\Main\DB\Exception as DbException;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Data\Storage\Exception\StorageException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
@@ -44,15 +46,9 @@ class DocumentGeneratorManager
 	public const DOCUMENT_PUBLIC_VIEW_EVENT_NAME = 'onPublicView';
 	public const DOCUMENT_DELETE_EVENT_NAME = '\Bitrix\DocumentGenerator\Model\Document::OnBeforeDelete';
 
-	public const ACTUALIZATION_POSITION_QUEUE = 'actualizationQueue';
-	public const ACTUALIZATION_POSITION_BACKGROUND = 'actualizationBackground';
-	public const ACTUALIZATION_POSITION_IMMEDIATELY = 'actualizationImmediately';
-
 	public const VALUE_PAYMENT_ID = '_paymentId';
 
 	protected $isEnabled;
-
-	protected array $scheduledActivitiesCache = [];
 
 	public function __construct()
 	{
@@ -289,6 +285,20 @@ class DocumentGeneratorManager
 		/** @var Document $document */
 		if($document)
 		{
+			$creationOperationContext = CreationOperationContext::getCurrent();
+			$documentId = (int)$document->ID;
+			if ($creationOperationContext !== null && $documentId > 0)
+			{
+				$creationOperationContext->rememberDocumentId($documentId);
+				try
+				{
+					$creationOperationContext->persistDocumentId();
+				}
+				catch (StorageException | DbException)
+				{
+				}
+			}
+
 			$provider = $document->getProvider();
 			if($provider && $provider instanceof DataProvider\CrmEntityDataProvider)
 			{
@@ -376,8 +386,6 @@ class DocumentGeneratorManager
 				]);
 				$event->send();
 			}
-
-			static::getInstance()->deleteDocumentActivity($primary);
 		}
 
 		return true;
@@ -405,10 +413,6 @@ class DocumentGeneratorManager
 				]);
 				$event->send();
 			}
-
-			\Bitrix\Crm\Activity\Provider\Document::onDocumentUpdate(
-				$document->ID,
-			);
 		}
 
 		return true;
@@ -887,198 +891,6 @@ class DocumentGeneratorManager
 		{
 			return (new Result())->addError(Error::createFromThrowable($exception));
 		}
-	}
-
-	public function createDocumentActivity(
-		Document $document,
-		ItemIdentifier $itemIdentifier,
-		?int $userId = null
-	): Result
-	{
-		$provider = new \Bitrix\Crm\Activity\Provider\Document();
-
-		if (!$userId)
-		{
-			$userId = Container::getInstance()->getContext()->getUserId();
-		}
-
-		return $provider->createActivity(
-			\Bitrix\Crm\Activity\Provider\Document::PROVIDER_TYPE_ID_DOCUMENT,
-			[
-				'BINDINGS' => [
-					[
-						'OWNER_TYPE_ID' => $itemIdentifier->getEntityTypeId(),
-						'OWNER_ID' => $itemIdentifier->getEntityId(),
-					],
-				],
-				'ASSOCIATED_ENTITY_ID' => $document->ID,
-				'SUBJECT' => $document->getTitle(),
-				'COMPLETED' => 'N',
-				'RESPONSIBLE_ID' => $userId,
-			]
-		);
-	}
-
-	protected function getActualizeQueue(): ?ActualizeQueue
-	{
-		if (!$this->isEnabled())
-		{
-			return null;
-		}
-		try
-		{
-			$queue = ServiceLocator::getInstance()->get('documentgenerator.service.actualizeQueue');
-		}
-		catch(\Bitrix\Main\ObjectNotFoundException $e)
-		{
-			$queue = null;
-		}
-
-		return $queue;
-	}
-
-	/**
-	 * todo move to activity broker
-	 *
-	 * @param ItemIdentifier $itemIdentifier
-	 * @return array
-	 */
-	final protected function getItemScheduledDocumentActivities(ItemIdentifier $itemIdentifier): array
-	{
-		if (isset($this->scheduledActivitiesCache[$itemIdentifier->getHash()]))
-		{
-			return $this->scheduledActivitiesCache[$itemIdentifier->getHash()];
-		}
-		$result = [];
-		$filter = [
-			'STATUS' => \CCrmActivityStatus::Waiting,
-			'OWNER_TYPE_ID' => $itemIdentifier->getEntityTypeId(),
-			'OWNER_ID' => $itemIdentifier->getEntityId(),
-			'COMPLETED' => 'N',
-			'TYPE_ID' => \CCrmActivityType::Provider,
-			'PROVIDER_ID' => \Bitrix\Crm\Activity\Provider\Document::getId(),
-			'PROVIDER_TYPE_ID' => \Bitrix\Crm\Activity\Provider\Document::PROVIDER_TYPE_ID_DOCUMENT,
-		];
-		$list = \CCrmActivity::GetList(
-			['DEADLINE' => 'ASC'],
-			$filter,
-			false,
-			false,
-		);
-		while ($activity = $list->fetch())
-		{
-			$result[] = $activity;
-		}
-
-		$this->scheduledActivitiesCache[$itemIdentifier->getHash()] = $result;
-
-		return $result;
-	}
-
-	private function removeActivityFromCache(array $activity): void
-	{
-		$ownerTypeId = (int)($activity['OWNER_TYPE_ID'] ?? \CCrmOwnerType::Undefined);
-		$ownerId = (int)($activity['OWNER_ID'] ?? 0);
-
-		if (\CCrmOwnerType::isCorrectEntityTypeId($ownerTypeId) && $ownerId > 0)
-		{
-			$owner = new ItemIdentifier($ownerTypeId, $ownerId);
-
-			unset($this->scheduledActivitiesCache[$owner->getHash()]);
-		}
-	}
-
-	private function deleteDocumentActivity(int $documentId): void
-	{
-		$activity = \CCrmActivity::GetList(
-			[],
-			[
-				'TYPE_ID' => \CCrmActivityType::Provider,
-				'PROVIDER_ID' => \Bitrix\Crm\Activity\Provider\Document::getId(),
-				'PROVIDER_TYPE_ID' => \Bitrix\Crm\Activity\Provider\Document::PROVIDER_TYPE_ID_DOCUMENT,
-				'ASSOCIATED_ENTITY_ID' => $documentId,
-			],
-			false,
-			false,
-		)->Fetch();
-
-		if ($activity)
-		{
-			\CCrmActivity::Delete($activity['ID'], false);
-			$this->removeActivityFromCache($activity);
-		}
-	}
-
-	final protected function enqueueDocumentForActualization(
-		int $documentId,
-		?int $userId = null,
-		string $position = self::ACTUALIZATION_POSITION_QUEUE
-	): void
-	{
-		$queue = $this->getActualizeQueue();
-		if (!$queue)
-		{
-			return;
-		}
-
-		$task = new ActualizeQueue\Task($documentId);
-		if ($userId > 0)
-		{
-			$task->setUserId($userId);
-		}
-		$task->setPosition($position);
-
-		$queue->addTask($task);
-	}
-
-	/**
-	 * Add scheduled documents found by $itemIdentifier to the queue for actualization on $position.
-	 *
-	 * @param ItemIdentifier $itemIdentifier
-	 * @param int|null $userId
-	 * @param string $position
-	 * @return void
-	 */
-	final public function enqueueItemScheduledDocumentsForActualization(
-		ItemIdentifier $itemIdentifier,
-		int $userId = null,
-		string $position = self::ACTUALIZATION_POSITION_QUEUE
-	): void
-	{
-		$queue = $this->getActualizeQueue();
-		if (!$queue)
-		{
-			return;
-		}
-
-		$activities = $this->getItemScheduledDocumentActivities($itemIdentifier);
-
-		foreach ($activities as $activity)
-		{
-			$documentId = (int)($activity['ASSOCIATED_ENTITY_ID'] ?? 0);
-			if ($documentId > 0)
-			{
-				$this->enqueueDocumentForActualization(
-					$documentId,
-					$userId,
-					$position
-				);
-			}
-		}
-	}
-
-	public function actualizeDocumentImmediately(Document $document): void
-	{
-		$queue = $this->getActualizeQueue();
-		if (!$queue)
-		{
-			return;
-		}
-
-		$queue->addTask(
-			ActualizeQueue\Task::createByDocument($document)
-				->setPosition(ActualizeQueue\Task::ACTUALIZATION_POSITION_IMMEDIATELY)
-		);
 	}
 
 	public function replacePlaceholdersInText(

@@ -20,17 +20,5 @@ abstract class BaseDepartment implements IDepartment
 		return 'DR' . $departmentId;
 	}
 
-	public function getColleagues(): array
-	{
-		$result = \CIntranetUtils::getDepartmentColleagues(null, true, false, 'Y', ['ID']);
-		$colleaguesIds = [];
-
-		while (($row = $result->Fetch()))
-		{
-			$id = (int)$row['ID'];
-			$colleaguesIds[$id] = $id;
-		}
-
-		return array_values($colleaguesIds);
-	}
+	abstract public function getColleagueIdsByUserId(int $userId, ?int $limit = null, string $order = 'DESC'): array;
 }

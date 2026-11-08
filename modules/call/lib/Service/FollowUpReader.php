@@ -54,6 +54,7 @@ class FollowUpReader
 	private const
 		FIELD_CALL_ID = 'callId',
 		FIELD_CALL_TYPE = 'callType',
+		FIELD_CHAT_ID = 'chatId',
 		FIELD_INITIATOR_ID = 'initiatorId',
 		FIELD_START_DATE = 'startDate',
 		FIELD_END_DATE = 'endDate',
@@ -85,12 +86,14 @@ class FollowUpReader
 	 * Opt-in meta-fields. Valid as `select` entries but excluded from the default
 	 * payload because each one triggers an extra DB query / join or is rarely needed:
 	 *   - uuid          → cheap (in b_call row) but a niche identifier, opt-in by request
+	 *   - chatId        → cheap (in b_call row); opt-in keeps the default payload unchanged
 	 *   - participants  → b_call_user + b_user
 	 *   - tracks        → b_call_track (per-call call)
 	 *   - outcomes / language / version / createdAt → b_call_outcome + properties
 	 */
 	private const OPT_IN_META_FIELDS = [
 		self::FIELD_UUID,
+		self::FIELD_CHAT_ID,
 		self::FIELD_PARTICIPANTS,
 		self::FIELD_TRACKS,
 		self::FIELD_OUTCOMES,
@@ -247,6 +250,9 @@ class FollowUpReader
 	 * @param int $participantFilter 0 = all participants (admin), >0 = filter to that user.
 	 * @param array<string, string>|null $order e.g. ['startDate' => 'desc']
 	 * @param array{limit?: int, afterCursor?: array{startDate: string, id: int}}|null $pagination
+	 * @param int[]|null $chatIds Restrict the selection to calls of these chats. Null = every chat;
+	 *     an empty or fully non-positive list selects nothing rather than everything.
+	 * @param string|null $stateFilter Restrict to calls in that state, e.g. {@see Call::STATE_FINISHED}.
 	 * @return array{items: DtoCollection, hasMore: bool, afterCursor: ?array}
 	 */
 	public function list(
@@ -257,6 +263,8 @@ class FollowUpReader
 		?array $order,
 		?array $pagination,
 		string $mentionFormat = self::MENTION_FORMAT_BB,
+		?array $chatIds = null,
+		?string $stateFilter = null,
 	): array
 	{
 		$this->mentionFormat = $this->normalizeMentionFormat($mentionFormat);
@@ -266,7 +274,16 @@ class FollowUpReader
 		$limit = $this->clampLimit($normalizedSelect, $pagination['limit'] ?? null);
 		$afterCursor = $pagination['afterCursor'] ?? null;
 
-		$rows = $this->queryCalls($dateFrom, $dateTo, $participantFilter, $direction, $limit + 1, $afterCursor);
+		$rows = $this->queryCalls(
+			$dateFrom,
+			$dateTo,
+			$participantFilter,
+			$direction,
+			$limit + 1,
+			$afterCursor,
+			$chatIds,
+			$stateFilter,
+		);
 
 		$hasMore = count($rows) > $limit;
 		if ($hasMore)
@@ -314,6 +331,7 @@ class FollowUpReader
 			}
 			$outcomesByCall = $this->loadOutcomesByCallId($callIds, $outcomeTypesFilter);
 		}
+		$this->preloadMentionedUsers($outcomesByCall);
 
 		$items = new DtoCollection(FollowUpDto::class);
 		$last = null;
@@ -345,6 +363,35 @@ class FollowUpReader
 			'hasMore' => $hasMore,
 			'afterCursor' => $nextCursor,
 		];
+	}
+
+	/**
+	 * Resolves every user mentioned across the page in one query, before any text is rendered.
+	 * A mention is rendered from the id inside its own tag, so without this each distinct id would
+	 * cost a lookup of its own. Structured overview fields remove mentions even for the `bb` output,
+	 * therefore every AI-enabled list preloads the page-wide user set.
+	 *
+	 * @param array<int, OutcomeEntity[]> $outcomesByCall
+	 */
+	private function preloadMentionedUsers(array $outcomesByCall): void
+	{
+		$contents = [];
+		foreach ($outcomesByCall as $outcomes)
+		{
+			foreach ($outcomes as $outcome)
+			{
+				$content = $outcome->getSenseContent();
+				if ($content !== null)
+				{
+					$contents[] = $content;
+				}
+			}
+		}
+
+		if ($contents !== [])
+		{
+			MentionService::getInstance()->preloadMentionedUsers($contents);
+		}
 	}
 
 	/**
@@ -662,16 +709,42 @@ class FollowUpReader
 		string $direction,
 		int $limit,
 		?array $afterCursor,
+		?array $chatIds = null,
+		?string $stateFilter = null,
 	): array
 	{
 		$dir = strtoupper($direction) === 'ASC' ? 'ASC' : 'DESC';
 
+		if ($chatIds !== null)
+		{
+			$chatIds = array_values(array_unique(array_filter(
+				array_map('intval', $chatIds),
+				static fn (int $chatId): bool => $chatId > 0,
+			)));
+			// An asked-for but empty chat list means "no chat qualifies", never "every chat".
+			if ($chatIds === [])
+			{
+				return [];
+			}
+		}
+
 		$query = CallTable::query()
-			->setSelect(['ID', 'TYPE', 'INITIATOR_ID', 'PROVIDER', 'STATE', 'UUID', 'START_DATE', 'END_DATE'])
+			->setSelect([
+				'ID', 'TYPE', 'CHAT_ID', 'INITIATOR_ID', 'PROVIDER', 'STATE', 'UUID', 'START_DATE', 'END_DATE',
+			])
 			->where('START_DATE', '>=', $from)
 			->where('START_DATE', '<=', $to)
 			->setOrder(['START_DATE' => $dir, 'ID' => $dir])
 			->setLimit($limit);
+
+		if ($chatIds !== null)
+		{
+			$query->whereIn('CHAT_ID', $chatIds);
+		}
+		if ($stateFilter !== null)
+		{
+			$query->where('STATE', $stateFilter);
+		}
 
 		$query->registerRuntimeField(
 			new Reference(
@@ -685,13 +758,6 @@ class FollowUpReader
 
 		if ($participantFilter > 0)
 		{
-			// Match Call::checkAccess() semantics — a user "has access" to the call if either:
-			//   1) they are a direct participant (row in b_call_user), OR
-			//   2) they are a member of the chat associated with the call (b_im_relation).
-			// We LEFT-JOIN both relations on (CALL_ID, USER_ID) and (CHAT_ID, USER_ID)
-			// respectively, and require at least one to match. This keeps `list` symmetric
-			// with `get` (which uses $call->checkAccess($userId)) — a chat member who
-			// didn't actually join the call still sees the follow-up in their list.
 			Loader::includeModule('im');
 
 			$query->registerRuntimeField(
@@ -899,6 +965,7 @@ class FollowUpReader
 		return [
 			'ID' => $call->getId(),
 			'TYPE' => $call->getType(),
+			'CHAT_ID' => $call->getChatId(),
 			'INITIATOR_ID' => $call->getInitiatorId(),
 			'START_DATE' => $call->getStartDate(),
 			'END_DATE' => $call->getEndDate(),
@@ -925,6 +992,10 @@ class FollowUpReader
 		if (isset($paths[self::FIELD_CALL_TYPE]))
 		{
 			$dto->callType = (int)$row['TYPE'];
+		}
+		if (isset($paths[self::FIELD_CHAT_ID]))
+		{
+			$dto->chatId = (int)$row['CHAT_ID'];
 		}
 		if (isset($paths[self::FIELD_INITIATOR_ID]))
 		{
@@ -1010,6 +1081,7 @@ class FollowUpReader
 	{
 		$dto->callId = $call->getId();
 		$dto->callType = $call->getType();
+		$dto->chatId = $call->getChatId();
 		$dto->initiatorId = $call->getInitiatorId();
 		$dto->startDate = $this->formatDateTime($call->getStartDate());
 		$dto->endDate = $this->formatDateTime($call->getEndDate());

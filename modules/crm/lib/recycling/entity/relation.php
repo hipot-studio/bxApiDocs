@@ -21,6 +21,16 @@ use Bitrix\Main;
  */
 class RelationTable extends Main\Entity\DataManager
 {
+	private const PRIMARY_COLUMNS = [
+		'SRC_ENTITY_TYPE_ID',
+		'SRC_ENTITY_ID',
+		'SRC_RECYCLE_BIN_ID',
+		'DST_ENTITY_TYPE_ID',
+		'DST_ENTITY_ID',
+		'DST_RECYCLE_BIN_ID',
+	];
+	private const MAX_SET_RECYCLE_BIN_ATTEMPTS = 3;
+
 	/**
 	 * @inheritdoc
 	 */
@@ -179,16 +189,15 @@ class RelationTable extends Main\Entity\DataManager
 			$recycleBinID = (int)$recycleBinID;
 		}
 
-		$connection = Main\Application::getConnection();
-		$connection->queryExecute(
-			"UPDATE b_crm_recycling_relation 
-					SET SRC_RECYCLE_BIN_ID = {$recycleBinID}  
-					WHERE SRC_ENTITY_TYPE_ID = {$entityTypeID} AND SRC_ENTITY_ID = {$entityID} AND SRC_RECYCLE_BIN_ID <= 0"
+		self::setRecycleBinID(
+			'SRC_RECYCLE_BIN_ID',
+			$recycleBinID,
+			"SRC_ENTITY_TYPE_ID = {$entityTypeID} AND SRC_ENTITY_ID = {$entityID} AND SRC_RECYCLE_BIN_ID <= 0"
 		);
-		$connection->queryExecute(
-			"UPDATE b_crm_recycling_relation 
-					SET DST_RECYCLE_BIN_ID = {$recycleBinID}  
-					WHERE DST_ENTITY_TYPE_ID = {$entityTypeID} AND DST_ENTITY_ID = {$entityID} AND DST_RECYCLE_BIN_ID <= 0"
+		self::setRecycleBinID(
+			'DST_RECYCLE_BIN_ID',
+			$recycleBinID,
+			"DST_ENTITY_TYPE_ID = {$entityTypeID} AND DST_ENTITY_ID = {$entityID} AND DST_RECYCLE_BIN_ID <= 0"
 		);
 	}
 
@@ -204,17 +213,79 @@ class RelationTable extends Main\Entity\DataManager
 			return;
 		}
 
+		self::setRecycleBinID('SRC_RECYCLE_BIN_ID', 0, "SRC_RECYCLE_BIN_ID = {$recycleBinID}");
+		self::setRecycleBinID('DST_RECYCLE_BIN_ID', 0, "DST_RECYCLE_BIN_ID = {$recycleBinID}");
+	}
+
+	/**
+	 * The recycle bin columns are part of the primary key, so the update can turn a row into an exact copy
+	 * of an existing one: a parallel deletion of the other side of the relation saves such a copy between
+	 * our upsert and this update. The copies are removed first; the update is retried if another one appears
+	 * in between.
+	 */
+	private static function setRecycleBinID(string $binColumn, int $recycleBinID, string $condition): void
+	{
 		$connection = Main\Application::getConnection();
-		$connection->queryExecute(
-			"UPDATE b_crm_recycling_relation 
-					SET SRC_RECYCLE_BIN_ID = 0  
-					WHERE SRC_RECYCLE_BIN_ID = {$recycleBinID}"
+
+		for ($attempt = 1; ; $attempt++)
+		{
+			// a failed statement aborts the whole transaction on pgsql, the savepoint keeps the retry possible
+			$connection->startTransaction();
+			try
+			{
+				self::deleteRowsDuplicatedByUpdate($binColumn, $recycleBinID, $condition);
+				$connection->queryExecute(
+					"UPDATE b_crm_recycling_relation SET {$binColumn} = {$recycleBinID} WHERE {$condition}"
+				);
+				$connection->commitTransaction();
+
+				return;
+			}
+			catch (\Throwable $exception)
+			{
+				$connection->rollbackTransaction();
+				$canRetry = $exception instanceof Main\DB\DuplicateEntryException
+					&& $attempt < self::MAX_SET_RECYCLE_BIN_ATTEMPTS
+				;
+				if (!$canRetry)
+				{
+					throw $exception;
+				}
+			}
+		}
+	}
+
+	private static function deleteRowsDuplicatedByUpdate(string $binColumn, int $recycleBinID, string $condition): void
+	{
+		$twinConditions = [];
+		foreach (self::PRIMARY_COLUMNS as $column)
+		{
+			$twinConditions[] = $column === $binColumn
+				? "twin.{$column} = {$recycleBinID}"
+				: "twin.{$column} = r.{$column}"
+			;
+		}
+
+		$connection = Main\Application::getConnection();
+		$rows = $connection->query(
+			'SELECT r.' . implode(', r.', self::PRIMARY_COLUMNS) . ' FROM b_crm_recycling_relation r'
+			. " WHERE {$condition} AND EXISTS ("
+			. 'SELECT 1 FROM b_crm_recycling_relation twin WHERE ' . implode(' AND ', $twinConditions)
+			. ')'
 		);
-		$connection->queryExecute(
-			"UPDATE b_crm_recycling_relation 
-					SET DST_RECYCLE_BIN_ID = 0  
-					WHERE DST_RECYCLE_BIN_ID = {$recycleBinID}"
-		);
+
+		while ($row = $rows->fetch())
+		{
+			$keyConditions = [];
+			foreach (array_combine(self::PRIMARY_COLUMNS, array_values($row)) as $column => $value)
+			{
+				$keyConditions[] = "{$column} = " . (int)$value;
+			}
+
+			$connection->queryExecute(
+				'DELETE FROM b_crm_recycling_relation WHERE ' . implode(' AND ', $keyConditions)
+			);
+		}
 	}
 
 	public static function deleteByRecycleBin($recycleBinID)

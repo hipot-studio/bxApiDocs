@@ -158,7 +158,6 @@ class Overview extends AISenseContent
 	 */
 	public function toRestFormat(string $mentionFormat = MentionService::FORMAT_BB): array
 	{
-		$mentionService = $this->getMentionService();
 		$replaceMentions = fn (string $value): string => $this->applyMentionFormat($value, $mentionFormat);
 
 		$result = [];
@@ -223,7 +222,7 @@ class Overview extends AISenseContent
 					$meeting = $row->meeting;
 					$result['meetings'][$i] = [
 						'meeting' => $replaceMentions($meeting),
-						'meetingMentionLess' => $mentionService->removeBbMentions($meeting),
+						'meetingMentionLess' => $this->removeMentions($meeting),
 					];
 					if ($row?->quote)
 					{
@@ -242,7 +241,7 @@ class Overview extends AISenseContent
 					$actionItem = $row->actionItem;
 					$result['actionItems'][$i] = [
 						'actionItem' => $replaceMentions($actionItem),
-						'actionItemMentionLess' => $mentionService->removeBbMentions($actionItem)
+						'actionItemMentionLess' => $this->removeMentions($actionItem)
 					];
 					if ($row?->quote)
 					{
@@ -293,7 +292,7 @@ class Overview extends AISenseContent
 						$task = $row->task;
 						$result['tasks'][$i] = [
 							'task' => $replaceMentions($task),
-							'taskMentionLess' => $mentionService->removeBbMentions($task),
+							'taskMentionLess' => $this->removeMentions($task),
 						];
 						if ($row?->quote)
 						{

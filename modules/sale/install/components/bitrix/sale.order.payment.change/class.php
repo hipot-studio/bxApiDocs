@@ -202,7 +202,7 @@ class SaleOrderPaymentChange extends \CBitrixComponent
 
 			$this->prepareData();
 
-			if ($this->order)
+			if ($this->order && $this->errorCollection->isEmpty())
 			{
 				if (
 					$this->arParams['ALLOW_INNER'] == 'Y'
@@ -247,7 +247,7 @@ class SaleOrderPaymentChange extends \CBitrixComponent
 					}
 				}
 			}
-			else
+			elseif (!$this->order)
 			{
 				$this->errorCollection->setError(new Main\Error(Loc::getMessage('SOPC_ERROR_ORDER_NOT_EXISTS')));
 			}
@@ -291,15 +291,30 @@ class SaleOrderPaymentChange extends \CBitrixComponent
 		{
 			return;
 		}
+
+		if (!$this->isOrderAvailableForCurrentUser())
+		{
+			$this->order = null;
+			return;
+		}
+
 		$paymentClassName = $registry->getPaymentClassName();
 		$paymentList = $paymentClassName::getList(
 			array(
-				"filter" => array("ACCOUNT_NUMBER" => $this->arParams['PAYMENT_NUMBER']),
+				"filter" => array(
+					"=ORDER_ID" => $this->order->getId(),
+					"=ACCOUNT_NUMBER" => $this->arParams['PAYMENT_NUMBER'],
+				),
 				"select" => array('*')
 			)
 		);
 
 		$this->arResult['PAYMENT'] = $paymentList->fetch();
+		if (empty($this->arResult['PAYMENT']))
+		{
+			$this->errorCollection->setError(new Main\Error(Loc::getMessage("SOPC_ERROR_PAYMENT_NOT_EXISTS")));
+			return;
+		}
 
 		$this->arResult['IS_ALLOW_PAY'] = $this->order->isAllowPay() ? 'Y' : 'N';
 
@@ -309,6 +324,18 @@ class SaleOrderPaymentChange extends \CBitrixComponent
 		{
 			$this->loadInnerData();
 		}
+	}
+
+	protected function isOrderAvailableForCurrentUser(): bool
+	{
+		global $USER;
+
+		if (!$USER->IsAuthorized())
+		{
+			return true;
+		}
+
+		return $this->order->getUserId() === (int)$USER->GetID();
 	}
 
 	/**
@@ -404,7 +431,7 @@ class SaleOrderPaymentChange extends \CBitrixComponent
 		$accountList = CSaleUserAccount::GetList(
 			array("CURRENCY" => "ASC"),
 			array(
-				"USER_ID" => (int)($USER->GetID()),
+				"USER_ID" => $this->order->getUserId(),
 				"CURRENCY" => $this->order->getCurrency()
 			),
 			false,

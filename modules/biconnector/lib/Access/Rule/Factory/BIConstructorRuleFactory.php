@@ -10,6 +10,7 @@ final class BIConstructorRuleFactory extends RuleControllerFactory
 {
 	protected const BASE_RULE = 'Base';
 	protected const DASHBOARD_RULE = 'Dashboard';
+	protected const TABLE_RULE = 'Table';
 
 	protected function getClassName(string $action, AccessibleController $controller): ?string
 	{
@@ -26,6 +27,11 @@ final class BIConstructorRuleFactory extends RuleControllerFactory
 		if (in_array(self::DASHBOARD_RULE, $actionParts, true))
 		{
 			return $this->getNamespace($controller) . static::DASHBOARD_RULE . static::SUFFIX;
+		}
+
+		if (in_array(self::TABLE_RULE, $actionParts, true))
+		{
+			return $this->getNamespace($controller) . static::TABLE_RULE . static::SUFFIX;
 		}
 
 		return $this->getNamespace($controller) . static::BASE_RULE . static::SUFFIX;

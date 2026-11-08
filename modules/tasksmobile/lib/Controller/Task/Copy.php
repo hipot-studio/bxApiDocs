@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\TasksMobile\Controller\Task;
 
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
+use Bitrix\Tasks\V2\Internal\Entity\CheckList\Type;
 use Bitrix\TasksMobile\Controller\Base;
 use Bitrix\TasksMobile\Exception\PermissionCheckFailedException;
 use Bitrix\TasksMobile\Provider\ChecklistProvider;
@@ -20,12 +23,12 @@ final class Copy extends Base
 
 	public function getSourceTaskDataAction(int $taskId): array
 	{
-		$userId = CurrentUser::get()->getId() ?? 0;
+		$userId = (int)CurrentUser::get()->getId();
 
 		$this->assertTaskReadPermission($taskId, $userId);
 
 		return $this->convertKeysToCamelCase([
-			'CHECKLIST' => (new ChecklistProvider())->getChecklistTree($taskId, true),
+			'CHECKLIST' => (new ChecklistProvider())->getChecklistV2($taskId, Type::Task, true),
 		]);
 	}
 
@@ -37,7 +40,7 @@ final class Copy extends Base
 		$result = TaskAccessController::can(
 			$userId,
 			ActionDictionary::ACTION_TASK_READ,
-			$taskId
+			$taskId,
 		);
 
 		if (!$result)

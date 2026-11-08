@@ -11,4 +11,5 @@ enum AiAgentsActionType: string
 	case EDIT = 'edit';
 	case RESTART = 'restart';
 	case UPGRADE = 'upgrade';
+	case CHANGE_OWNER = 'change-owner';
 }

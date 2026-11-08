@@ -499,7 +499,7 @@ class Sprint extends Base
 			return null;
 		}
 
-		$sprintService = new SprintService();
+		$sprintService = new SprintService($this->getUserId());
 
 		if (!$sprintService->canStartSprint($this->getUserId(), $sprint->getGroupId()))
 		{
@@ -556,7 +556,7 @@ class Sprint extends Base
 			return null;
 		}
 
-		$sprintService = new SprintService();
+		$sprintService = new SprintService($this->getUserId());
 
 		$sprint = $sprintService->getActiveSprintByGroupId($groupId);
 

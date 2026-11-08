@@ -242,7 +242,12 @@ class Repo
 	 */
 	private static function checkRepositoryAccess(?array $app, Error $error): bool
 	{
-		if (isset($app['CODE']) || Landing\Rights::isAdmin())
+		if (
+			isset($app['CODE'])
+			|| Manager::isAdmin()
+			// without the permissions feature Rights::isAdmin() is true for anyone
+			|| (Manager::checkFeature(Manager::FEATURE_PERMISSIONS_AVAILABLE) && Landing\Rights::isAdmin())
+		)
 		{
 			return true;
 		}

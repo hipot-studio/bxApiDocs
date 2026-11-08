@@ -13,9 +13,10 @@ use Bitrix\Rest\V3\Dto\Dto;
  * The reader is an external agent, not an end user: the message is the domain validator's own text and
  * stays as it is.
  *
- * blockId and code are nullable rather than conditionally emitted: a problem the validator could not
- * bind to a block, or a message no error class has been extracted for yet, still answers with the key
- * carrying null, so the agent may read all four fields of every issue unconditionally.
+ * blockId, code and details are nullable rather than conditionally emitted: a problem the validator could
+ * not bind to a block, a message no error class has been extracted for yet, or a failure with nothing to
+ * explain, still answers with the key carrying null, so the agent may read all five fields of every issue
+ * unconditionally.
  */
 class ValidationIssueDto extends Dto
 {
@@ -30,4 +31,11 @@ class ValidationIssueDto extends Dto
 
 	#[Description('Message of the domain validator.')]
 	public string $message;
+
+	/** Untyped keys on purpose: which dictionaries a problem carries depends on the failure it names. */
+	#[Description(
+		'Server-side dictionaries explaining the problem: allowedKeys, requiredKeys, allowedOutputs,'
+		. ' constraint, maxBytes, actualBytes, recommendedSelect. Null when the problem carries none.'
+	)]
+	public ?array $details;
 }

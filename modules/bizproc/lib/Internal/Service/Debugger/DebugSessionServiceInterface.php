@@ -16,6 +16,13 @@ interface DebugSessionServiceInterface
 
 	public function createSession(Debug $debug, DocumentId $documentId): DebugSession;
 
+	/**
+	 * Makes an already existing session the current one of the hit; null leaves the hit without one.
+	 */
+	public function restoreSession(?DebugSession $session): void;
+
+	public function findDebugSession(): ?DebugSession;
+
 	public function addTrace(
 		TraceType $type,
 		string $key,

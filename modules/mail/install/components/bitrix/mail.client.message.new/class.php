@@ -17,6 +17,18 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 	/** Template of the redesigned form: only it gets the initial data of TPL-01. */
 	private const COMPOSE_TEMPLATE_NAME = 'compose';
 
+	/** Statuses ScheduledMessageService still accepts a change of: everything else is refused on the way in. */
+	private const EDITABLE_SCHEDULED_STATUSES = [
+		Mail\Internals\ScheduledMessageTable::STATUS_SCHEDULED,
+		Mail\Internals\ScheduledMessageTable::STATUS_ERROR,
+	];
+
+	private const SCHEDULED_STATUS_REFUSAL_PHRASES = [
+		Mail\Internals\ScheduledMessageTable::STATUS_SENDING => 'MAIL_MESSAGE_NEW_SCHEDULED_SENDING',
+		Mail\Internals\ScheduledMessageTable::STATUS_SENT => 'MAIL_MESSAGE_NEW_SCHEDULED_SENT',
+		Mail\Internals\ScheduledMessageTable::STATUS_CANCELLED => 'MAIL_MESSAGE_NEW_SCHEDULED_CANCELLED',
+	];
+
 	/** @var bool */
 	private $isCrmEnable = false;
 
@@ -33,23 +45,61 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 		if (!is_object($USER) || !$USER->isAuthorized())
 		{
 			$APPLICATION->authForm('');
+
 			return;
 		}
 
 		$draftId = max(0, (int)($_REQUEST['draftId'] ?? 0));
+		$scheduledMessageId = max(0, (int)($_REQUEST['scheduledId'] ?? 0));
+		$scheduledMessage = null;
+		if ($scheduledMessageId > 0)
+		{
+			// A saved link outlives the feature: without this, the form of a new letter would open with empty
+			// fields and no word said, and the author would take it for the letter they came to change.
+			if (!Mail\Helper\Config\Feature::isScheduledMessageAvailable())
+			{
+				showError(Loc::getMessage('MAIL_CLIENT_ELEMENT_DENIED'));
+
+				return;
+			}
+
+			$result = (new Mail\Service\ScheduledMessage\ScheduledMessageService())->get(
+				(int)$USER->getId(),
+				$scheduledMessageId,
+			);
+			$scheduledMessage = $result->getData()['scheduledMessage'] ?? null;
+			if (
+				!$result->isSuccess()
+				|| !is_array($scheduledMessage)
+				|| (int)($scheduledMessage['AUTHOR_ID'] ?? 0) !== (int)$USER->getId()
+			)
+			{
+				showError(Loc::getMessage('MAIL_CLIENT_ELEMENT_DENIED'));
+
+				return;
+			}
+
+			$statusRefusal = self::getScheduledStatusRefusal((string)($scheduledMessage['STATUS'] ?? ''));
+			if ($statusRefusal !== null)
+			{
+				showError($statusRefusal);
+
+				return;
+			}
+		}
 		$isDraftParentMessage = false;
 		$messageId = 0;
 		$isReplyAll = false;
 		if (!empty($_REQUEST['forward']) && $_REQUEST['forward'] > 0)
 		{
 			$messageType = 'forward';
-			$messageId = (int) $_REQUEST['forward'];
+			$messageId = (int)$_REQUEST['forward'];
 			$subjectPrefix = 'Fwd';
 		}
-		else if (!empty($_REQUEST['reply']) && $_REQUEST['reply'] > 0)
+		elseif (!empty($_REQUEST['reply']) && $_REQUEST['reply'] > 0)
 		{
 			$messageType = 'reply';
-			$messageId = (int) $_REQUEST['reply'];
+			$messageId = (int)$_REQUEST['reply'];
 			$subjectPrefix = 'Re';
 			$isReplyAll = isset($_REQUEST['reply_all']) && $_REQUEST['reply_all'] === 'Y';
 		}
@@ -71,7 +121,7 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 			}
 		}
 
-		$message = array();
+		$message = [];
 
 		$this->arResult['TO_PLUG_EXTENSION_SALES_LETTER_TEMPLATE'] = false;
 
@@ -84,12 +134,25 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 		{
 			if ($mailbox = Mail\MailboxTable::getUserMailbox($_REQUEST['id']))
 			{
-				$message = array(
+				$message = [
 					'MAILBOX_ID' => $mailbox['ID'],
 					'MAILBOX_EMAIL' => $mailbox['EMAIL'],
 					'MAILBOX_NAME' => 'MAILBOX.NAME',
 					'MAILBOX_LOGIN' => 'MAILBOX.LOGIN',
-				);
+				];
+			}
+		}
+		elseif (is_array($scheduledMessage))
+		{
+			$mailboxId = (int)($scheduledMessage['MAILBOX_ID'] ?? 0);
+			if ($mailbox = Mail\MailboxTable::getUserMailbox($mailboxId))
+			{
+				$message = [
+					'MAILBOX_ID' => $mailbox['ID'],
+					'MAILBOX_EMAIL' => $mailbox['EMAIL'],
+					'MAILBOX_NAME' => 'MAILBOX.NAME',
+					'MAILBOX_LOGIN' => 'MAILBOX.LOGIN',
+				];
 			}
 		}
 
@@ -166,12 +229,14 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 		Mail\Helper\Message::prepare($message);
 
 		$this->arResult['MESSAGE'] = $message;
-		$this->arResult['EMAILS'] = array();//Mail\Helper\Recipient::loadMailContacts();
+		$this->arResult['EMAILS'] = [];//Mail\Helper\Recipient::loadMailContacts();
 		$this->arResult['ANALYTICS'] = $this->arParams['ANALYTICS'];
 
 		if ($this->getTemplateName() === self::COMPOSE_TEMPLATE_NAME)
 		{
-			$draftClientId = Main\UuidGenerator::generateV4();
+			$draftsAvailable = Mail\Helper\Config\Feature::isInternalDraftsWebAvailable()
+				&& !is_array($scheduledMessage);
+			$draftClientId = $draftsAvailable ? Main\UuidGenerator::generateV4() : '';
 			$this->arResult['COMPOSE_FORM_DATA'] = (new Mail\Service\Compose\ComposeFormDataProvider())
 				->getInitialData($message, [
 					'replyAll' => $isReplyAll,
@@ -179,8 +244,9 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 					'analyticsElement' => $this->getRequestedAnalyticsElement(),
 					'pathToMessageList' => $this->arParams['~PATH_TO_MAIL_MSG_LIST'] ?? '',
 					'pathToHome' => $this->arParams['~PATH_TO_MAIL_HOME'] ?? '',
-					'draftId' => Mail\Helper\Config\Feature::isInternalDraftsWebAvailable() ? $draftId : 0,
-					'draftClientId' => Mail\Helper\Config\Feature::isInternalDraftsWebAvailable() ? $draftClientId : '',
+					'draftId' => $draftsAvailable ? $draftId : 0,
+					'draftClientId' => $draftClientId,
+					'scheduledMessage' => $scheduledMessage,
 				])
 			;
 		}
@@ -207,17 +273,32 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 		$this->arResult['DRAFT_CLIENT_ID'] = Main\UuidGenerator::generateV4();
 		$this->arResult['DRAFT_MODE'] = $message['__type'] ?? 'new';
 		$this->arResult['DRAFT_PARENT_MESSAGE_ID'] = (int)($message['__parent'] ?? 0) ?: null;
-		$this->arResult['LARGE_ATTACHMENT_LOCAL_FEATURE_AVAILABLE'] =
-			Mail\Helper\Config\Feature::isLargeAttachmentDiskUploadAvailable()
-		;
-		$this->arResult['LARGE_ATTACHMENT_FEATURE_AVAILABLE'] =
-			Mail\Helper\LicenseManager::isLargeAttachmentAutoUploadEnabled()
-		;
+		$this->arResult['LARGE_ATTACHMENT_LOCAL_FEATURE_AVAILABLE']
+			= Mail\Helper\Config\Feature::isLargeAttachmentDiskUploadAvailable();
+		$this->arResult['LARGE_ATTACHMENT_FEATURE_AVAILABLE']
+			= Mail\Helper\LicenseManager::isLargeAttachmentAutoUploadEnabled();
 		$this->arResult['LARGE_ATTACHMENT_SHOW_AHA'] = $this->arResult['LARGE_ATTACHMENT_FEATURE_AVAILABLE']
 			&& !Mail\Helper\Config\Guide::wasLargeAttachmentAhaShown();
 		$this->arResult['LARGE_ATTACHMENT_AHA_OPTION_NAME'] = Mail\Helper\Config\Guide::getLargeAttachmentAhaGuideOptionName();
 		$this->arResult['LARGE_ATTACHMENT_POST_SEND_SUPPRESSED'] = Mail\Helper\Config\Guide::wasLargeAttachmentPostSendPromptSuppressed();
 		$this->arResult['LARGE_ATTACHMENT_POST_SEND_OPTION_NAME'] = Mail\Helper\Config\Guide::getLargeAttachmentPostSendPromptOptionName();
+	}
+
+	/**
+	 * The form saves a scheduled letter only while the service still lets it be changed. A letter of any other
+	 * status is refused here, at the entrance, and the refusal names the status: otherwise the author fills the
+	 * form in and learns of it from the save.
+	 */
+	private static function getScheduledStatusRefusal(string $status): ?string
+	{
+		if (in_array($status, self::EDITABLE_SCHEDULED_STATUSES, true))
+		{
+			return null;
+		}
+
+		$phrase = self::SCHEDULED_STATUS_REFUSAL_PHRASES[$status] ?? 'MAIL_CLIENT_ELEMENT_DENIED';
+
+		return (string)Loc::getMessage($phrase);
 	}
 
 	/**
@@ -266,6 +347,8 @@ class CMailClientMessageNewComponent extends CBitrixComponent
 				'INTERNALDATE' => 'MESSAGE_UID.INTERNALDATE',
 				// The generation of the placement: what tells a lazy download it is still usable
 				'GENERATION_ID' => 'MESSAGE_UID.GENERATION_ID',
+				// The version of the folder the uid was written under: the same download reads it too
+				'DIR_UIDV' => 'MESSAGE_UID.DIR_UIDV',
 			],
 			'filter' => array_merge(
 				['=ID' => $messageId],

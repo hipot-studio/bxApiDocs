@@ -1,6 +1,8 @@
 <?php
+
 namespace Bitrix\BIConnector\Integration\Crm;
 
+use Bitrix\Crm\StatusTable;
 use Bitrix\Main\Localization\Loc;
 
 class Deal
@@ -35,6 +37,15 @@ class Deal
 		$connection = $manager->getDatabaseConnection();
 		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
+		$dealTypeStatusTable
+			= '(SELECT DTS.STATUS_ID, DTS.NAME '
+			. 'FROM b_crm_status DTS '
+			. 'INNER JOIN ('
+			. 'SELECT STATUS_ID, MIN(ID) AS MIN_ID '
+			. 'FROM b_crm_status '
+			. 'WHERE ENTITY_ID = \'' . StatusTable::ENTITY_ID_DEAL_TYPE . '\' '
+			. 'GROUP BY STATUS_ID'
+			. ') DTM ON DTM.MIN_ID = DTS.ID)';
 
 		$statusSemanticsForSql = [];
 		$statusSemantics = \Bitrix\Crm\PhaseSemantics::getAllDescriptions();
@@ -399,6 +410,14 @@ class Deal
 					'FIELD_NAME' => 'D.TYPE_ID',
 					'FIELD_TYPE' => 'string',
 				],
+				'TYPE_NAME' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'DT.NAME',
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'DT',
+					'JOIN' => 'INNER JOIN ' . $dealTypeStatusTable . ' DT ON DT.STATUS_ID = D.TYPE_ID',
+					'LEFT_JOIN' => 'LEFT JOIN ' . $dealTypeStatusTable . ' DT ON DT.STATUS_ID = D.TYPE_ID',
+				],
 				//OPPORTUNITY DECIMAL(18,2) DEFAULT NULL,
 				'OPPORTUNITY' => [
 					'IS_METRIC' => 'Y',
@@ -639,6 +658,22 @@ class Deal
 					'JOIN' => 'INNER JOIN b_crm_deal_contact CDC ON CDC.DEAL_ID = D.ID',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_deal_contact CDC ON CDC.DEAL_ID = D.ID',
 				],
+				'CONTACTS' => [
+					'GROUP_CONCAT' => ', ',
+					'GROUP_KEY' => 'CONTACT_IDS',
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'CASE WHEN CDC.CONTACT_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'CDC.CONTACT_ID', "']'") . ', nullif(CC.FULL_NAME, \'\')) END',
+					'FIELD_TYPE' => 'array_string',
+					'TABLE_ALIAS' => 'CDC',
+					'JOIN' => [
+						'INNER JOIN b_crm_deal_contact CDC ON CDC.DEAL_ID = D.ID',
+						'INNER JOIN b_crm_contact CC ON CC.ID = CDC.CONTACT_ID',
+					],
+					'LEFT_JOIN' => [
+						'LEFT JOIN b_crm_deal_contact CDC ON CDC.DEAL_ID = D.ID',
+						'LEFT JOIN b_crm_contact CC ON CC.ID = CDC.CONTACT_ID',
+					],
+				],
 			],
 		];
 
@@ -655,7 +690,7 @@ class Deal
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_deal']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_DEAL_TABLE'] ?: 'crm_deal';
-		$result['crm_deal']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_DEAL_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['crm_deal']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_DEAL_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['crm_deal']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_DEAL_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_DEAL_FIELD_' . $fieldCode] : $fieldCode;

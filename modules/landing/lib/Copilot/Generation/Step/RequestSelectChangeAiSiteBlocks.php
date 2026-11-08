@@ -26,6 +26,9 @@ class RequestSelectChangeAiSiteBlocks extends RequestSingle
 	private const DEBUG_MODE_AI = 'ai';
 	private const DEBUG_MODE_ERROR = 'error';
 	private const DEBUG_REASON_SELECTION_FAILED = 'Block selection request failed.';
+	private const DEBUG_DETAIL_MAX_LENGTH = 200;
+	private const DEBUG_DETAIL_ANONYMOUS_CLASS = 'anonymous class';
+	private const DEBUG_DETAIL_UNKNOWN_ERROR = 'generation error';
 	private const SKIPPED_REASON_NOT_AVAILABLE = 'BLOCK_NOT_AVAILABLE_FOR_CHANGE';
 	private const SKIPPED_REASON_MOVE_TARGET_NOT_FOUND = 'MOVE_BLOCK_TARGET_NOT_FOUND';
 	private const SKIPPED_REASON_MOVE_SAME_SOURCE_AND_TARGET = 'MOVE_BLOCK_SAME_SOURCE_AND_TARGET';
@@ -62,12 +65,84 @@ class RequestSelectChangeAiSiteBlocks extends RequestSingle
 		{
 			return parent::execute();
 		}
-		catch (GenerationException $exception)
+		catch (\Throwable $exception)
 		{
-			$this->setSelectionDebug(self::DEBUG_MODE_ERROR, self::DEBUG_REASON_SELECTION_FAILED);
+			$this->logSelectionFailure($exception);
+			$this->setSelectionDebug(
+				self::DEBUG_MODE_ERROR,
+				self::DEBUG_REASON_SELECTION_FAILED,
+				self::buildSelectionFailureDetail($exception),
+			);
 
 			throw $exception;
 		}
+	}
+
+	/**
+	 * User-facing diagnostic detail of a failed selection step.
+	 * The text of a GenerationException is not a product message: it is built of a service code and,
+	 * for a failed AI request, of the provider diagnostics ("Response is not correct: <code>: <text>").
+	 * So the detail is taken from a controlled catalog keyed by the error code, and any other Throwable
+	 * is reduced to its short class name: internal data (codes, request ids, file paths, SQL text)
+	 * never reaches the user, while the full text stays in the generation log.
+	 */
+	private static function buildSelectionFailureDetail(\Throwable $exception): string
+	{
+		if ($exception instanceof GenerationException)
+		{
+			return self::resolveGenerationErrorDetail($exception->getErrorCode());
+		}
+
+		$class = $exception::class;
+
+		// An anonymous class name is "<declaring file>$<counter>" behind a NUL byte, so neither
+		// the class name nor its basename ("Foo.php:123$0") may reach the user: the whole family
+		// answers with one neutral label instead.
+		if (str_contains($class, '@anonymous'))
+		{
+			return self::DEBUG_DETAIL_ANONYMOUS_CLASS;
+		}
+
+		// basename() over normalized separators, so only the short class name is left.
+		return basename(str_replace('\\', '/', $class));
+	}
+
+	/**
+	 * Safe wording of a generation error code. An unknown code (a new enum case) answers with the
+	 * neutral label rather than with the text of the exception, so the catalog stays closed by default.
+	 *
+	 * @return string
+	 */
+	private static function resolveGenerationErrorDetail(GenerationErrors $errorCode): string
+	{
+		$details = [
+			GenerationErrors::default->value => self::DEBUG_DETAIL_UNKNOWN_ERROR,
+			GenerationErrors::notExistResponse->value => 'the AI service returned no response',
+			GenerationErrors::restrictedRequest->value => 'the request is not allowed',
+			GenerationErrors::notFullyResponse->value => 'the AI service response is incomplete',
+			GenerationErrors::dataValidation->value => 'the AI service response did not pass validation',
+			GenerationErrors::notCorrectResponse->value => 'the AI service response is not correct',
+			GenerationErrors::requestQuotaExceeded->value => 'the AI request limit is exhausted',
+			GenerationErrors::notSendRequest->value => 'the request to the AI service was not sent',
+			GenerationErrors::errorInRequest->value => 'the AI service returned an error',
+		];
+
+		return $details[$errorCode->value] ?? self::DEBUG_DETAIL_UNKNOWN_ERROR;
+	}
+
+	/**
+	 * Keeps the full exception text in the internal diagnostic channel only.
+	 */
+	private function logSelectionFailure(\Throwable $exception): void
+	{
+		if (!Log::isEnabled())
+		{
+			return;
+		}
+
+		(new Log($this->generation->getId()))->add(
+			'ChangeAiSite block selection failed: ' . $exception::class . ': ' . $exception->getMessage(),
+		);
 	}
 
 	protected function getPrompt(): Prompt
@@ -801,11 +876,21 @@ class RequestSelectChangeAiSiteBlocks extends RequestSingle
 		);
 	}
 
-	private function setSelectionDebug(string $mode, string $reason = ''): void
+	private function setSelectionDebug(string $mode, string $reason = '', string $detail = ''): void
 	{
 		ChangeAiSiteState::setSelectionDebug($this->generation, [
 			'mode' => $mode,
 			'reason' => trim($reason),
+			'detail' => self::limitDebugDetail($detail),
 		]);
+	}
+
+	private static function limitDebugDetail(string $detail): string
+	{
+		$detail = trim($detail);
+
+		return mb_strlen($detail) > self::DEBUG_DETAIL_MAX_LENGTH
+			? mb_substr($detail, 0, self::DEBUG_DETAIL_MAX_LENGTH)
+			: $detail;
 	}
 }

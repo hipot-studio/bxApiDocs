@@ -4,10 +4,15 @@ use Bitrix\Ai\Services\MarkdownToBBCodeTranslationService;
 use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Im\Bot;
+use Bitrix\Im\Bot\Keyboard;
 use Bitrix\Bizproc\Integration\ImBot\BizprocBot;
+use Bitrix\Im\V2\Chat\ChatFactory;
+use Bitrix\Im\V2\Message\BlocksBuilder\BuilderService;
+use Bitrix\Im\V2\Message\Params;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Json;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -24,6 +29,8 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 	private const PARAM_CHAT_ID = 'chatId';
 	private const PARAM_AI_WARNING = 'aiWarning';
 	private const PARAM_EXPAND_URL_PREVIEW = 'expandUrlPreview';
+	private const PARAM_BUTTONS = 'buttons';
+	private const PARAM_MESSAGE_BLOCKS_JSON = 'messageBlocksJson';
 
 	public function __construct($name)
 	{
@@ -38,6 +45,8 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 			self::PARAM_CHAT_ID => null,
 			self::PARAM_AI_WARNING => null,
 			self::PARAM_EXPAND_URL_PREVIEW => null,
+			self::PARAM_BUTTONS => null,
+			self::PARAM_MESSAGE_BLOCKS_JSON => null,
 		];
 	}
 
@@ -60,7 +69,10 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 			];
 		}
 
-		if (empty($arTestProperties[self::PARAM_RECIPIENT]) && empty($arTestProperties[self::PARAM_CHAT_ID]))
+		if (
+			empty($arTestProperties[self::PARAM_RECIPIENT])
+			&& empty($arTestProperties[self::PARAM_CHAT_ID])
+		)
 		{
 			$errors[] = [
 				'code' => 'NotExist',
@@ -154,14 +166,46 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 		}
 
 		$currentActivity = &CBPWorkflowTemplateLoader::FindActivityByName($arWorkflowTemplate, $activityName);
+
+		// `buttons` is configured through the system template, not this dialog;
+		// preserve it so a manual save in the visual designer does not drop the keyboard.
+		foreach (self::getAiPassthroughSettingNames($documentType) as $propertyId)
+		{
+			if (isset($currentActivity['Properties'][$propertyId]))
+			{
+				$properties[$propertyId] = $currentActivity['Properties'][$propertyId];
+			}
+		}
+
 		$currentActivity['Properties'] = $properties;
 
 		return true;
 	}
 
+	private static function isAiNodeAvailable(): bool
+	{
+		$serviceLocator = \Bitrix\Main\DI\ServiceLocator::getInstance();
+		$interface = \Bitrix\Bizproc\Public\Service\AiAgent\NodeAvailabilityServiceInterface::class;
+		if (!$serviceLocator->has($interface))
+		{
+			return true;
+		}
+
+		return $serviceLocator->get($interface)->isAvailable();
+	}
+
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		// `buttons` is persisted from the system template but intentionally absent from getPropertiesMap.
+		return [
+			self::PARAM_BUTTONS,
+			self::PARAM_MESSAGE_BLOCKS_JSON,
+		];
+	}
+
 	protected static function getPropertiesMap(array $documentType, array $context = []): array
 	{
-		return [
+		$map = [
 			self::PARAM_BOT_ID => [
 				'Name' => Loc::getMessage('IMBOT_MESSAGE_ACTIVITY_PROPERTY_BOT_ID'),
 				'FieldName' => self::PARAM_BOT_ID,
@@ -206,6 +250,17 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 				'Type' => FieldType::BOOL,
 			],
 		];
+
+		if (self::isAiNodeAvailable())
+		{
+			$map[self::PARAM_AI_WARNING] = [
+				'Name' => Loc::getMessage('IMBOT_MESSAGE_ACTIVITY_PROPERTY_AI_WARNING'),
+				'FieldName' => self::PARAM_AI_WARNING,
+				'Type' => FieldType::BOOL,
+			];
+		}
+
+		return $map;
 	}
 
 	/**
@@ -262,9 +317,10 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 		$chatId = (int)$this->{self::PARAM_CHAT_ID};
 		$aiWarning = CBPHelper::getBool($this->{self::PARAM_AI_WARNING});
 		$expandUrlPreview = CBPHelper::getBool($this->{self::PARAM_EXPAND_URL_PREVIEW});
+		$keyboard = $this->buildKeyboard($botId);
 		if ($chatId > 0)
 		{
-			$this->sendAndTrackError($botId, "chat{$chatId}", $message, $asError, $aiWarning, $expandUrlPreview);
+			$this->sendAndTrackError($botId, "chat{$chatId}", $message, $asError, $aiWarning, $expandUrlPreview, $keyboard);
 
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -276,10 +332,9 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 
 			return CBPActivityExecutionStatus::Closed;
 		}
-
 		foreach ($recipients as $recipient)
 		{
-			$this->sendAndTrackError($botId, (string)$recipient, $message, $asError, $aiWarning, $expandUrlPreview);
+			$this->sendAndTrackError($botId, (string)$recipient, $message, $asError, $aiWarning, $expandUrlPreview, $keyboard);
 		}
 
 		return CBPActivityExecutionStatus::Closed;
@@ -292,9 +347,10 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 		bool $asError,
 		bool $aiWarning,
 		bool $expandUrlPreview,
+		?Keyboard $keyboard = null,
 	): void
 	{
-		$sent = $this->sendByDialogId($botId, $dialogId, $message, $asError, $aiWarning, $expandUrlPreview);
+		$sent = $this->sendByDialogId($botId, $dialogId, $message, $asError, $aiWarning, $expandUrlPreview, $keyboard);
 		if (!$sent)
 		{
 			$this->trackErrorFromGlobalVariables();
@@ -308,6 +364,7 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 		bool $asError,
 		bool $aiWarning,
 		bool $expandUrlPreview,
+		?Keyboard $keyboard = null,
 	): bool
 	{
 		$botIdentifier = ['BOT_ID' => $botId];
@@ -325,12 +382,102 @@ class CBPImBotMessageActivity extends CBPActivity implements IBPConfigurableActi
 			$messageFields['PARAMS'] = ['COMPONENT_ID' => 'AiBizprocMessage'];
 		}
 
+		$blocksBuilder = $this->buildMessageBlocks($dialogId, $botId);
+		if ($blocksBuilder !== null)
+		{
+			$messageFields['PARAMS'][Params::BLOCK] = $blocksBuilder;
+		}
+
 		if (!$expandUrlPreview)
 		{
 			$messageFields['URL_PREVIEW'] = 'N';
 		}
 
+		if ($keyboard !== null)
+		{
+			$messageFields['KEYBOARD'] = $keyboard;
+		}
+
 		return (bool)Bot::addMessage($botIdentifier, $messageFields);
+	}
+
+	private function buildMessageBlocks(string $dialogId, int $botId): ?object
+	{
+		// older `im` versions know the blocks builder but not the message param, so blocks cannot be attached
+		if (!defined(Params::class . '::BLOCK'))
+		{
+			return null;
+		}
+
+		$json = (string)$this->{self::PARAM_MESSAGE_BLOCKS_JSON};
+		if ($json === '')
+		{
+			return null;
+		}
+
+		try
+		{
+			$data = Json::decode($json);
+			$chatId = (int)\Bitrix\Im\Dialog::getChatId($dialogId, $botId);
+			if (!is_array($data) || $chatId <= 0)
+			{
+				return null;
+			}
+
+			$chat = ChatFactory::getInstance()->getChatById($chatId);
+			$result = ServiceLocator::getInstance()->get(BuilderService::class)->create($data, $chat);
+
+			return $result->isSuccess() ? $result->getBlocksBuilder() : null;
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+	}
+
+	/**
+	 * Builds an inline keyboard from the optional multiple `buttons` property.
+	 * Each entry is {COMMAND, COMMAND_PARAMS, TEXT, CONTEXT}. A COMMAND button
+	 * requires a resolved bot id (> 0); when the property is empty or no valid
+	 * button is produced, no keyboard is attached and current behaviour is kept.
+	 */
+	private function buildKeyboard(int $botId): ?Keyboard
+	{
+		if ($botId <= 0)
+		{
+			return null;
+		}
+
+		$buttons = $this->{self::PARAM_BUTTONS};
+		if (!is_array($buttons) || empty($buttons))
+		{
+			return null;
+		}
+
+		$keyboard = new Keyboard($botId);
+		foreach ($buttons as $button)
+		{
+			if (!is_array($button))
+			{
+				continue;
+			}
+
+			$command = (string)($button['COMMAND'] ?? '');
+			$text = (string)($button['TEXT'] ?? '');
+			if ($command === '' || $text === '')
+			{
+				continue;
+			}
+
+			$keyboard->addButton([
+				'COMMAND' => $command,
+				'COMMAND_PARAMS' => (string)($button['COMMAND_PARAMS'] ?? ''),
+				'TEXT' => $text,
+				'CONTEXT' => (string)($button['CONTEXT'] ?? 'ALL'),
+			]);
+		}
+
+		return empty($keyboard->getArray()) ? null : $keyboard;
 	}
 
 	private function trackErrorFromGlobalVariables(): void

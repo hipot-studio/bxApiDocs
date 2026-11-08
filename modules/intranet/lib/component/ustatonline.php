@@ -14,6 +14,7 @@ use Bitrix\Main\Config\Option;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Intranet\Integration\Timeman\Worktime;
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\UserTable;
 use Bitrix\Main\Entity;
 
@@ -507,7 +508,11 @@ class UstatOnline extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 			$this->arResult["IS_FEATURE_TIMEMAN_AVAILABLE"] = false;
 		}
 
-		if ($this->arResult["IS_TIMEMAN_INSTALLED"] && $this->arResult["IS_FEATURE_TIMEMAN_AVAILABLE"])
+		if (
+			$this->arResult["IS_TIMEMAN_INSTALLED"]
+			&& $this->arResult["IS_FEATURE_TIMEMAN_AVAILABLE"]
+			&& ToolsManager::getInstance()->checkAvailabilityByToolId('worktime')
+		)
 		{
 			return true;
 		}

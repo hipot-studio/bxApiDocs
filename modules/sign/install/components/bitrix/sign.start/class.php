@@ -11,6 +11,7 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Session\SessionInterface;
+use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Config\Feature;
@@ -89,6 +90,8 @@ class SignStartComponent extends SignBaseComponent
 		'b2e_signers_lists' => 'b2e/signers/',
 		'b2e_signers_edit' => 'b2e/signers/#list_id#/',
 		'b2e_signers_signer_edit' => 'b2e/signers/#list_id#/signer/#user_id#/',
+		'b2e_process_catalog' => 'b2e/processes/catalog/',
+		'b2e_processes' => 'b2e/processes/',
 	];
 
 	/**
@@ -118,6 +121,8 @@ class SignStartComponent extends SignBaseComponent
 		'b2e_signers_lists' => [],
 		'b2e_signers_edit' => ['list_id'],
 		'b2e_signers_signer_edit' => ['list_id', 'user_id'],
+		'b2e_process_catalog' => [],
+		'b2e_processes' => [],
 	];
 
 	/**
@@ -170,6 +175,23 @@ class SignStartComponent extends SignBaseComponent
 
 			$this->addCategorySelectButton();
 		}
+
+		$this->loadProcessesPill();
+	}
+
+	/**
+	 * Pill "Processes" of the row of the views. The row itself belongs to crm and takes no item from
+	 * outside, so the extension mounts an element of its own into it at load - nothing here but the flag
+	 * decides whether the pill appears at all (AC-016).
+	 */
+	private function loadProcessesPill(): void
+	{
+		if (!$this->isB2eKanbanOrList() || !Feature::instance()->isKedoRunProcessEnabled())
+		{
+			return;
+		}
+
+		\Bitrix\Main\UI\Extension::load('sign.v2.b2e.process-pill');
 	}
 
 	private function isCreateButtonExists(): bool
@@ -866,6 +888,12 @@ class SignStartComponent extends SignBaseComponent
 		$showTariffSlider = B2eTariff::instance()->isB2eRestrictedInCurrentTariff();
 		if (!$showTariffSlider)
 		{
+			$runProcessItem = $this->getRunProcessMenuItem();
+			if ($runProcessItem !== null)
+			{
+				$menuItems[] = $runProcessItem;
+			}
+
 			$buttonParams['mainButton'] = ['link' => $btnLink];
 			$buttonParams['menu'] = ['items' => $menuItems];
 		}
@@ -885,6 +913,85 @@ class SignStartComponent extends SignBaseComponent
 		}
 
 		Toolbar::addButton($splitButton, ButtonLocation::AFTER_TITLE);
+	}
+
+	/**
+	 * Third item of the create button - the processes of the KEDO section. Whether it exists at all is
+	 * decided here, at the render of the toolbar: by the time the submenu is expanded the answer is
+	 * needed already. The composition of the submenu is another question and belongs to the client -
+	 * it asks the catalog on the first expand.
+	 */
+	private function getRunProcessMenuItem(): ?array
+	{
+		if (!Feature::instance()->isKedoRunProcessEnabled())
+		{
+			return null;
+		}
+
+		$container = Service\Container::instance();
+
+		// an absent smart process is not an empty list: the item is hidden altogether
+		if (!$container->getCrmProcessTypeService()->isAvailable())
+		{
+			return null;
+		}
+
+		$userId = (int)CurrentUser::get()->getId();
+		if (!$container->getBizprocProcessCatalogService()->hasAny($userId))
+		{
+			return null;
+		}
+
+		\Bitrix\Main\UI\Extension::load('sign.v2.grid.b2e.processes');
+
+		$options = [
+			'createProcessUrl' => $this->getCreateProcessUrl(),
+			'allProcessesUrl' => $this->getStringParam('PAGE_URL_B2E_PROCESS_CATALOG'),
+		];
+
+		return [
+			'text' => Loc::getMessage('SIGN_TOOLBAR_CREATE_BUTTON_TITLE_RUN_PROCESS'),
+			// main.popup builds no submenu for an item without items, so the placeholder holds the
+			// submenu until the client replaces its contents. It stays focusable on purpose: an
+			// unfocusable item is put behind aria-hidden and the wait is then announced by nothing
+			'items' => [
+				[
+					'html' => '<span class="sign-b2e-run-process-menu__loader"></span>',
+					'attrs' => [
+						'aria-label' => (string)Loc::getMessage('SIGN_TOOLBAR_CREATE_BUTTON_RUN_PROCESS_LOADING'),
+						'aria-busy' => 'true',
+					],
+				],
+			],
+			'events' => [
+				// the alias of main.popup, not the plain name of the event: only through it the handler
+				// is called on the menu item itself
+				'onSubMenuShow' => new \Bitrix\UI\Buttons\JsCode(
+					'BX.Sign.V2.Grid.B2e.RunProcessMenu.fill(this, ' . Json::encode($options) . ')',
+				),
+			],
+		];
+	}
+
+	/**
+	 * Constructor of the business processes, opened with no preselected scheme: the node of the manual
+	 * start is put into it by the tuner. An empty string means there is nothing to open.
+	 *
+	 * Public because the page of the process catalog offers the same action and must not resolve the
+	 * address of the constructor a second time.
+	 */
+	public function getCreateProcessUrl(): string
+	{
+		$entityTypeId = Service\Container::instance()->getCrmProcessTypeService()->getEntityTypeId();
+		if ($entityTypeId === null || !Loader::includeModule('crm'))
+		{
+			return '';
+		}
+
+		$documentType = \CCrmBizProcHelper::ResolveDocumentType($entityTypeId);
+		$editorUrl = $documentType === null ? null : \CCrmDocument::getBizprocEditorUrl($documentType);
+
+		return $editorUrl === null ? '' : str_replace('#ID#', '0', $editorUrl);
 	}
 
 	private function getCategoryButtonIconByCode(string $code): string

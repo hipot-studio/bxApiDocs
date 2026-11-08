@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Copilot\Generation\Step\Helper;
 
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Landing\Subtype\Form;
 use Bitrix\Main\Web\DOM;
 
@@ -15,7 +16,7 @@ final class CrmFormHtmlPreparer
 	{
 		try
 		{
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForUserHtml();
 			$doc->loadHTML('<div id="' . $rootNodeId . '">' . $html . '</div>');
 
 			$root = $doc->querySelector('#' . $rootNodeId);
@@ -74,7 +75,7 @@ final class CrmFormHtmlPreparer
 
 		try
 		{
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForUserHtml();
 			$doc->loadHTML('<div id="' . $rootNodeId . '">' . $html . '</div>');
 
 			$root = $doc->querySelector('#' . $rootNodeId);
@@ -133,7 +134,7 @@ final class CrmFormHtmlPreparer
 
 		try
 		{
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForUserHtml();
 			$doc->loadHTML('<div id="' . $rootNodeId . '">' . $html . '</div>');
 			$root = $doc->querySelector('#' . $rootNodeId);
 			if (!$root)

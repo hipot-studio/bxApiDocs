@@ -4,11 +4,14 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\GoogleHandler;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Ui;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Main\Localization\Loc;
 
@@ -124,15 +127,26 @@ class CDiskUfCommentsAttachesComponent extends BaseComponent
 		{
 			$this->arResult['ATTACHED_IDS'] = array();
 			$this->arResult['COMMON_SIZE'] = 0;
+			$this->arResult['CAN_DOWNLOAD_ARCHIVE'] = true;
+
 			foreach($this->arResult['FILES'] as $fileData)
 			{
+				if (!$fileData['CAN_DOWNLOAD'])
+				{
+					$this->arResult['CAN_DOWNLOAD_ARCHIVE'] = false;
+				}
+
 				$this->arResult['ATTACHED_IDS'][] = $fileData['ID'];
 				$this->arResult['COMMON_SIZE'] += $fileData['SIZE_BYTES'];
 			}
-			$this->arResult['DOWNLOAD_ARCHIVE_URL'] = \Bitrix\Disk\Driver::getInstance()->getUrlManager()->getUrlUfController('downloadArchive', array(
-				'attachedIds' => $this->arResult['ATTACHED_IDS'],
-				'signature' => \Bitrix\Disk\Security\ParameterSigner::getArchiveSignature($this->arResult['ATTACHED_IDS']), 
-			));
+
+			if ($this->arResult['CAN_DOWNLOAD_ARCHIVE'])
+			{
+				$this->arResult['DOWNLOAD_ARCHIVE_URL'] = \Bitrix\Disk\Driver::getInstance()->getUrlManager()->getUrlUfController('downloadArchive', array(
+					'attachedIds' => $this->arResult['ATTACHED_IDS'],
+					'signature' => \Bitrix\Disk\Security\ParameterSigner::getArchiveSignature($this->arResult['ATTACHED_IDS']),
+				));
+			}
 		}
 
 		$this->includeComponentTemplate('show');
@@ -147,6 +161,9 @@ class CDiskUfCommentsAttachesComponent extends BaseComponent
 		$files = array();
 		$userId = $this->getUser()->getId();
 		$urlManager = \Bitrix\Disk\Driver::getInstance()->getUrlManager();
+
+		$this->preloadDownloadAccessForAttachedObjects($attachedObjects);
+
 		foreach($attachedObjects as $attachedObject)
 		{
 			$file = $attachedObject->getFile();
@@ -158,6 +175,13 @@ class CDiskUfCommentsAttachesComponent extends BaseComponent
 			$id = $attachedObject->getId();
 			$name = $file->getName();
 			$extension = $file->getExtension();
+			$canDownload = $attachedObject->canDownload($userId);
+
+			$downloadUrl = $canDownload
+				? $urlManager->getUrlUfController('download', ['attachedId' => $id])
+				: null
+			;
+
 			$data = array(
 				'ID' => $id,
 				'NAME' => $name,
@@ -175,7 +199,8 @@ class CDiskUfCommentsAttachesComponent extends BaseComponent
 
 				'VIEW_URL' => $urlManager->getUrlToShowAttachedFileByService($id, 'gvdrive'),
 				'EDIT_URL' => $urlManager->getUrlToStartEditUfFileByService($id, 'gdrive'),
-				'DOWNLOAD_URL' => $urlManager->getUrlUfController('download', array('attachedId' => $id)),
+				'DOWNLOAD_URL' => $downloadUrl,
+				'CAN_DOWNLOAD' => $canDownload,
 				'COPY_TO_ME_URL' => $urlManager->getUrlUfController('copyToMe', array('attachedId' => $id)),
 
 				'DELETE_URL' => ''
@@ -188,15 +213,15 @@ class CDiskUfCommentsAttachesComponent extends BaseComponent
 
 			$data['CURRENT_USER_IS_OWNER'] = $attachedObject->getCreatedBy() == $this->getUser()->getId();
 			$data['ALLOW_AUTO_COMMENT'] = $attachedObject->getAllowAutoComment();
-			$sourceUri = new \Bitrix\Main\Web\Uri($urlManager->getUrlUfController('download', array('attachedId' => $id)));
-			$attr = FileAttributes::buildByFileId($file->getFileId(), $sourceUri)
+			$sourceUrl = $downloadUrl ?? $urlManager->getUrlUfController('show', ['attachedId' => $id]);
+			$sourceUri = new \Bitrix\Main\Web\Uri($sourceUrl);
+
+			$attr = FileAttributes::buildByFileId($file->getFileId(), $sourceUri, $file)
 				->setObjectId($attachedObject->getObjectId())
 				->setAttachedObjectId($attachedObject->getId())
 				->setTitle($file->getName())
 				->setGroupBy($this->componentId)
-				->addAction([
-					'type' => 'download',
-				])
+				->setDownloadDisabled(!$canDownload)
 				->addAction([
 					'type' => 'copyToMe',
 					'text' => Loc::getMessage('DISK_UF_ATTACHED_ACTION_SAVE_TO_OWN_FILES'),
@@ -208,6 +233,13 @@ class CDiskUfCommentsAttachesComponent extends BaseComponent
 					'buttonIconClass' => 'ui-btn-icon-cloud',
 				])
 			;
+
+			if ($canDownload)
+			{
+				$attr->addAction([
+					'type' => 'download',
+				]);
+			}
 
 			if ($data['CAN_UPDATE'] && $data['EDITABLE'])
 			{
@@ -241,6 +273,37 @@ class CDiskUfCommentsAttachesComponent extends BaseComponent
 		\Bitrix\Main\Type\Collection::sortByColumn($files, 'ID');
 
 		return $files;
+	}
+
+	protected function preloadDownloadAccessForAttachedObjects(array $attachedObjects): void
+	{
+		$files = [];
+
+		foreach ($attachedObjects as $attachedObject)
+		{
+			if (!$attachedObject instanceof AttachedObject)
+			{
+				continue;
+			}
+
+			$file = $attachedObject->getFile();
+			if ($file instanceof File)
+			{
+				$files[] = $file;
+			}
+		}
+
+		if (empty($files))
+		{
+			return;
+		}
+
+		$this->getDownloadAccess()->preload($files);
+	}
+
+	protected function getDownloadAccess(): DownloadAccess
+	{
+		return ServiceLocator::getInstance()->get(DownloadAccess::class);
 	}
 
 	/**

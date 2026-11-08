@@ -5,6 +5,7 @@ namespace Bitrix\Landing\Copilot\Generation\Step;
 
 use Bitrix\Landing\Copilot\Generation\Step\Base\TaskStep;
 use Bitrix\Landing\Block;
+use Bitrix\Landing\Copilot\Services\Manifest\AiBlockTemplateFactory;
 use Bitrix\Landing\Copilot\Services\Manifest\Builder;
 use Bitrix\Landing\Copilot\Services\Manifest\RepoManifestMerger;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
@@ -1006,7 +1007,7 @@ class TaskReplaceChangeAiSiteBlocksHtml extends TaskStep
 
 	protected function createAiBlockTemplate(string $generatedHtml, array $meta): PublicActionResult
 	{
-		return PublicAction\AiBlock::createTemplate($generatedHtml, $meta);
+		return $this->createAiBlockTemplateFactory()->createTemplate($generatedHtml, $meta);
 	}
 
 	protected function addAiBlockTemplateToLanding(
@@ -1016,7 +1017,12 @@ class TaskReplaceChangeAiSiteBlocksHtml extends TaskStep
 		int $beforeId,
 	): PublicActionResult
 	{
-		return PublicAction\AiBlock::addToLanding($landingId, $repoId, $afterId, $beforeId);
+		return $this->createAiBlockTemplateFactory()->addToLanding($landingId, $repoId, $afterId, $beforeId);
+	}
+
+	protected function createAiBlockTemplateFactory(): AiBlockTemplateFactory
+	{
+		return new AiBlockTemplateFactory();
 	}
 
 	protected function resolveFirstLandingBlockId(int $landingId): int
@@ -1435,7 +1441,7 @@ class TaskReplaceChangeAiSiteBlocksHtml extends TaskStep
 
 	private function executeWithoutRights(callable $callback): mixed
 	{
-		$rightsState = Rights::isOn();
+		$rightsState = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 		try
 		{

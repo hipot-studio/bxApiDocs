@@ -208,13 +208,6 @@ class CreateLandingSiteHandler extends AbstractSiteHandler
 			return null;
 		}
 
-		// the preview hash is signed by the host of the current request, so an url without the host
-		// would look whole but would not pass the check - there is nothing to fall back to
-		if ((string)Manager::getHttpHost() === '')
-		{
-			return null;
-		}
-
 		$previousPreviewMode = Landing::getPreviewMode();
 		Landing::setPreviewMode(true);
 

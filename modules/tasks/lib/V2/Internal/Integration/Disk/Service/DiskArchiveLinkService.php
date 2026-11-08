@@ -32,6 +32,59 @@ class DiskArchiveLinkService
 		);
 	}
 
+	public function getByResultId(int $resultId): ?string
+	{
+		return $this->get(
+			entityId: $resultId,
+			entityType: UserField::RESULT,
+			fieldName: UserField::TASK_RESULT,
+		);
+	}
+
+	/**
+	 * Returns a map of resultId => archive link (or null) for multiple results at once.
+	 * Performs the disk-module and ZipNginx checks only once.
+	 *
+	 * @param int[] $resultIds
+	 * @return array<int, string|null>
+	 */
+	public function getByResultIds(array $resultIds): array
+	{
+		if (empty($resultIds))
+		{
+			return [];
+		}
+
+		if (!Loader::includeModule('disk'))
+		{
+			return array_fill_keys($resultIds, null);
+		}
+
+		if (!ZipNginx\Configuration::isEnabled())
+		{
+			return array_fill_keys($resultIds, null);
+		}
+
+		$urlManager = Driver::getInstance()->getUrlManager();
+
+		$map = [];
+		foreach ($resultIds as $resultId)
+		{
+			$map[$resultId] = $urlManager::getUrlUfController(self::DOWNLOAD_ACTION, [
+				'entityId' => $resultId,
+				'entity' => UserField::RESULT,
+				'fieldName' => UserField::TASK_RESULT,
+				'signature' => ParameterSigner::getEntityArchiveSignature(
+					entity: UserField::RESULT,
+					entityId: $resultId,
+					fieldName: UserField::TASK_RESULT,
+				),
+			]);
+		}
+
+		return $map;
+	}
+
 	protected function get(int $entityId, string $entityType, string $fieldName): ?string
 	{
 		if (!Loader::includeModule('disk'))

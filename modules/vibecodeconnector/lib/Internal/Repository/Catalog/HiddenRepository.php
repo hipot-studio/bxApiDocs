@@ -10,6 +10,8 @@ use Bitrix\Vibecodeconnector\Internal\Model\Catalog\HiddenTable;
 
 final class HiddenRepository
 {
+	private const USER_CHUNK_SIZE = 2000;
+
 	public function upsert(int $userId, int $catalogItemId): void
 	{
 		$existing = $this->findId($userId, $catalogItemId);
@@ -33,6 +35,26 @@ final class HiddenRepository
 		if ($existing !== null)
 		{
 			HiddenTable::delete($existing);
+		}
+	}
+
+	public function deleteForUsers(int $catalogItemId, array $userIds): void
+	{
+		$userIds = array_values(array_filter(
+			array_unique(array_map('intval', $userIds)),
+			static fn (int $userId): bool => $userId > 0,
+		));
+		if ($catalogItemId <= 0 || $userIds === [])
+		{
+			return;
+		}
+
+		foreach (array_chunk($userIds, self::USER_CHUNK_SIZE) as $chunk)
+		{
+			HiddenTable::deleteByFilter([
+				'=CATALOG_ITEM_ID' => $catalogItemId,
+				'@USER_ID' => $chunk,
+			]);
 		}
 	}
 

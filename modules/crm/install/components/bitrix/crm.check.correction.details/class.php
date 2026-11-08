@@ -373,22 +373,46 @@ class CCrmCheckCorrectionDetailsComponent extends Crm\Component\EntityDetails\Ba
 
 		foreach (Cashbox\Manager::getListFromCache() as $item)
 		{
-			if ($item['ACTIVE'] !== 'Y')
+			if (!static::isCorrectionCashboxAvailable($item['ID']))
 			{
 				continue;
 			}
 
 			$cashbox = Cashbox\Manager::getObjectById($item['ID']);
-			if ($cashbox->isCorrection())
-			{
-				$result[] = [
-					'NAME' => $cashbox->getField('NAME'),
-					'VALUE' => $cashbox->getField('ID'),
-				];
-			}
+			$result[] = [
+				'NAME' => $cashbox->getField('NAME'),
+				'VALUE' => $cashbox->getField('ID'),
+			];
 		}
 
 		return $result;
+	}
+
+	public static function isCorrectionCashboxAvailable(mixed $cashboxId): bool
+	{
+		if (!is_int($cashboxId) && !(is_string($cashboxId) && preg_match('/^[1-9][0-9]*$/D', $cashboxId) === 1))
+		{
+			return false;
+		}
+
+		$cashboxId = (int)$cashboxId;
+		if ($cashboxId <= 0)
+		{
+			return false;
+		}
+
+		$cashboxList = Cashbox\Manager::getListFromCache();
+		if (
+			!isset($cashboxList[$cashboxId])
+			|| $cashboxList[$cashboxId]['ACTIVE'] !== 'Y'
+		)
+		{
+			return false;
+		}
+
+		$cashbox = Cashbox\Manager::getObjectById($cashboxId);
+
+		return $cashbox !== null && $cashbox->isCorrection();
 	}
 
 	protected function getCheckTypeMap()
@@ -627,11 +651,13 @@ class CCrmCheckCorrectionDetailsComponent extends Crm\Component\EntityDetails\Ba
 
 		return true;
 	}
-	protected function checkEntityPermission($permissionTypeID)
+	public function checkEntityPermission($permissionTypeID, ?CCrmPerms $userPermissions = null): bool
 	{
 		return EntityAuthorization::checkPermission(
 			$permissionTypeID,
-			\CCrmOwnerType::Order
+			\CCrmOwnerType::Order,
+			0,
+			$userPermissions
 		);
 	}
 }

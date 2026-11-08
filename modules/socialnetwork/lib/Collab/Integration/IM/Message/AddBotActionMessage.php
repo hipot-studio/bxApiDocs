@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageBuffer;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 
 class AddBotActionMessage implements ActionMessageInterface
@@ -40,7 +41,7 @@ class AddBotActionMessage implements ActionMessageInterface
 			$this->addUsersToChat($this->collabId, $parameters, ...$recipientIds);
 		}
 
-		$withoutMessage = $parameters['withoutMessage'] ?? false;
+		$withoutMessage = $parameters[ActionMessageBuffer::WITHOUT_MESSAGE_PARAMETER] ?? false;
 
 		if ($withoutMessage)
 		{

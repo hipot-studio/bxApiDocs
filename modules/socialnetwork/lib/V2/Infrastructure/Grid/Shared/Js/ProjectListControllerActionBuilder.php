@@ -8,7 +8,7 @@ use Bitrix\Main\Web\Json;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use CUtil;
 
-final class ProjectListControllerActionBuilder
+class ProjectListControllerActionBuilder
 {
 	private const CONTROLLER = 'BX.Socialnetwork.Project.List.Controller';
 
@@ -119,11 +119,39 @@ final class ProjectListControllerActionBuilder
 		);
 	}
 
-	public static function buildDefaultRowAction(string $viewUrl): string
+	public static function buildNotifyOpenProjectAction(
+		int $entityId,
+		?string $entityType,
+	): string
 	{
+		if ($entityType !== Type::Collab->value)
+		{
+			return '';
+		}
+
+		return self::buildMethodCall(
+			'notifyOpenProject',
+			[$entityId, Json::encode($entityType)],
+			false,
+		);
+	}
+
+	public static function buildDefaultRowAction(
+		string $viewUrl,
+		?int $entityId = null,
+		?string $entityType = null,
+	): string
+	{
+		$arguments = [Json::encode($viewUrl)];
+		if ($entityId !== null && $entityType !== null)
+		{
+			$arguments[] = $entityId;
+			$arguments[] = Json::encode($entityType);
+		}
+
 		return self::buildMethodCall(
 			'defaultRowAction',
-			[Json::encode($viewUrl)],
+			$arguments,
 			false,
 		);
 	}

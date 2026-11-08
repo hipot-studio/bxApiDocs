@@ -1,11 +1,12 @@
 <?php
 namespace Bitrix\Crm\Activity\Provider;
 
-use Bitrix\Crm\Activity\Provider\ToDo\ToDo;
 use Bitrix\Crm\Badge\SourceIdentifier;
-use Bitrix\Crm\Feature;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\V2\Internal\Service\Activity\Provider\ProviderRegistry;
+use Bitrix\Crm\V2\Internal\Service\Activity\Provider\ProviderRegistryInterface;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query;
 
@@ -42,57 +43,43 @@ class ProviderManager
 		return self::$allProviders;
 	}
 
+	/**
+	 * The providers of an activity by the value of the PROVIDER_ID column, as the registry composes them.
+	 *
+	 * WHICH PROVIDERS EXIST IS ANSWERED IN ONE PLACE NOW ({@see ProviderRegistry}), and this list is a reading
+	 * of it rather than a literal of its own. Nothing about the answer changes: the providers, their order and
+	 * the conditions of their membership are the ones this method has always had, the availability of a provider
+	 * is still what $checkAvailable asks about, and the provider of repeat sales is still missing from both
+	 * readings while its feature is off. Reading the internals of V2 from here is the agreed transitional
+	 * exception to the layering of the module, as it is for the facade of the activities.
+	 *
+	 * @return array<string, string> the class of every provider by its identifier
+	 */
 	public static function prepareProviderList(bool $checkAvailable = true): array
 	{
-		$providersList = [
-			ToDo::getId() => ToDo::className(),
-			Meeting::getId() => Meeting::className(),
-			Task::getId() => Task::className(),
-			Call::getId() => Call::className(),
-			CallList::getId() => CallList::className(),
-			Email::getId() => Email::className(),
-			Sms::getId() => Sms::className(),
-			WhatsApp::getId() => WhatsApp::className(),
-			Telegram::getId() => Telegram::className(),
-			Notification::getId() => Notification::className(),
-			OpenLine::getId() => OpenLine::className(),
-			WebForm::getId() => WebForm::className(),
-			Livefeed::getId() => Livefeed::className(),
-			ExternalChannel::getId() => ExternalChannel::className(),
-			Request::getId() => Request::className(),
-			RestApp::getId() => RestApp::className(),
-			Delivery::getId() => Delivery::className(),
-			CallTracker::getId() => CallTracker::class,
-			StoreDocument::getId() => StoreDocument::className(),
-			Document::getId() => Document::className(),
-			SignDocument::getId() => SignDocument::className(),
-			SignB2eDocument::getId() => SignB2eDocument::className(),
-			Payment::getId() => Payment::className(),
-			ConfigurableRestApp::getId() => ConfigurableRestApp::className(),
-			CalendarSharing::getId() => CalendarSharing::className(),
-			Tasks\Comment::getId() => Tasks\Comment::class,
-			Tasks\Task::getId() => Tasks\Task::class,
-			Booking\Booking::getId() => Booking\Booking::class,
-			Booking\WaitListItem::getId() => Booking\WaitListItem::class,
-			Bizproc\Workflow::getId() => Bizproc\Workflow::class,
-			Bizproc\Comment::getId() => Bizproc\Comment::class,
-			Bizproc\Task::getId() => Bizproc\Task::class,
-			EntityExclusion::getId() => EntityExclusion::class,
-		];
-
-		if(!$checkAvailable || Visit::isAvailable())
+		$providersList = [];
+		foreach (self::registry()->getAll(!$checkAvailable) as $providerId => $descriptor)
 		{
-			$providersList[Visit::getId()] = Visit::className();
-		}
+			// A provider belonging to the registry for the sake of the timeline lists alone was never part of
+			// this list, and adding it here would give the callers a provider legacy never gave them.
+			if ($descriptor->isMembershipOnly())
+			{
+				continue;
+			}
 
-		if (!$checkAvailable || Zoom::isAvailable())
-		{
-			$providersList[Zoom::getId()] = Zoom::className();
-		}
+			$className = $descriptor->getClassName();
 
-		if (Feature::enabled(Feature\RepeatSale::class))
-		{
-			$providersList[RepeatSale::getId()] = RepeatSale::className();
+			// The readers of this list call the STATIC hooks of the legacy contract on the class name it hands
+			// out ($className::isCompletable(), ::getName(), ::processCreation() and the rest), and a class
+			// written against the contract of V2 answers those very names as INSTANCE methods. A provider that
+			// brings no legacy class at all would therefore make every legacy reader call an instance method
+			// statically, so it is left out here - which is what legacy answered about it anyway.
+			if (!is_a($className, Base::class, true))
+			{
+				continue;
+			}
+
+			$providersList[$providerId] = $className;
 		}
 
 		return array_merge($providersList, self::anotherProviders());
@@ -337,26 +324,49 @@ class ProviderManager
 	{
 		if (self::$allProvidersEntities === null)
 		{
-			self::$allProvidersEntities = self::prepareProviderEntityList(false);
+			self::$allProvidersEntities = self::prepareProviderEntityList();
 		}
 
 		return self::$allProvidersEntities[$providerId] ?? null;
 	}
 
+	/**
+	 * The class of the domain entity behind the activities of a provider, for the providers that have one.
+	 *
+	 * @return array<string, string>
+	 */
 	private static function prepareProviderEntityList(): array
 	{
-		return [
-			ToDo::getId() => \Bitrix\Crm\Activity\Entity\ToDo::class,
-			\Bitrix\Crm\Activity\Provider\Bizproc\Task::getId() => \Bitrix\Crm\Activity\Entity\Task::class,
-		];
+		$entities = [];
+		foreach (self::registry()->getAll(true) as $providerId => $descriptor)
+		{
+			$entityClassName = $descriptor->getEntityClassName();
+			if ($entityClassName !== null)
+			{
+				$entities[$providerId] = $entityClassName;
+			}
+		}
+
+		return $entities;
 	}
 
+	/**
+	 * The providers taking part in the filter over the activities related to a CRM object.
+	 *
+	 * @return string[]
+	 */
 	private static function prepareRelatedFilterProviders(): array
 	{
-		return [
-			ToDo::getId(),
-			Call::getId(),
-		];
+		$providerIds = [];
+		foreach (self::registry()->getAll(true) as $providerId => $descriptor)
+		{
+			if ($descriptor->isRelatedFilterProvider())
+			{
+				$providerIds[] = $providerId;
+			}
+		}
+
+		return $providerIds;
 	}
 
 	public static function getRelatedFilterProviders(): array
@@ -372,5 +382,14 @@ class ProviderManager
 	public static function isRelatedFilterProvider(string $providerId): bool
 	{
 		return in_array($providerId, self::getRelatedFilterProviders());
+	}
+
+	/**
+	 * The one registry of the hit. Whoever registers a provider from another module registers it there, so
+	 * building a second one here would hide it from these lists.
+	 */
+	private static function registry(): ProviderRegistryInterface
+	{
+		return ServiceLocator::getInstance()->get(ProviderRegistry::SERVICE_CODE);
 	}
 }

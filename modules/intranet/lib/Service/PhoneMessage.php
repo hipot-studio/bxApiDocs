@@ -29,26 +29,40 @@ class PhoneMessage implements SendableContract
 
 	public function send(): void
 	{
-		if (
-			Loader::includeModule('bitrix24')
-			&& (
-				!$this->checkPolicies
-				|| $this->canSendInvite
-			)
-		)
-		{
-			$result = ProfileService::getInstance()
-				->reInviteUserByPhone($this->user->getId())
-			;
-			if (!$result->isSuccess())
-			{
-				throw new InvitationFailedException($result->getErrorCollection());
-			}
-		}
+		$this->sendInvitation();
 	}
 
 	public function sendImmediately(): void
 	{
-		$this->send();
+		$this->sendImmediatelyWithResult();
+	}
+
+	public function sendImmediatelyWithResult(): bool
+	{
+		return $this->sendInvitation();
+	}
+
+	protected function sendInvitation(): bool
+	{
+		if (
+			!Loader::includeModule('bitrix24')
+			|| (
+				$this->checkPolicies
+				&& !$this->canSendInvite
+			)
+		)
+		{
+			return false;
+		}
+
+		$result = ProfileService::getInstance()
+			->reInviteUserByPhone($this->user->getId())
+		;
+		if (!$result->isSuccess())
+		{
+			throw new InvitationFailedException($result->getErrorCollection());
+		}
+
+		return true;
 	}
 }

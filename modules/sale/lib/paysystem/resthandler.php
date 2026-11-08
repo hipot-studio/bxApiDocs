@@ -423,6 +423,13 @@ class RestHandler extends PaySystem\ServiceHandler
 			{
 				foreach ($formSettings['FIELDS'] as $value)
 				{
+					$value = self::normalizeField($value);
+					if ($value === null)
+					{
+						$result = false;
+						break;
+					}
+
 					if ((isset($value['VISIBLE']) && $value['VISIBLE'] === 'Y') || is_array($value['CODE']))
 					{
 						$result = false;
@@ -447,7 +454,13 @@ class RestHandler extends PaySystem\ServiceHandler
 
 		foreach ($fields as $key => $value)
 		{
-			if (!is_array($value['CODE']) && !empty($value['CODE']))
+			$value = self::normalizeField($value);
+			if ($value === null || is_array($value['CODE']))
+			{
+				continue;
+			}
+
+			if (array_key_exists($value['CODE'], $businessValueParams))
 			{
 				$result[$key] = $businessValueParams[$value['CODE']];
 			}
@@ -616,6 +629,12 @@ class RestHandler extends PaySystem\ServiceHandler
 
 		foreach ($fields as $key => $value)
 		{
+			$value = self::normalizeField($value);
+			if ($value === null)
+			{
+				continue;
+			}
+
 			$input = $this->getInputParams($payment, $value);
 			$template .= $this->createInput($key, $input);
 		}
@@ -636,6 +655,11 @@ class RestHandler extends PaySystem\ServiceHandler
 			'NAME' => '',
 			'HIDDEN' => 'Y',
 		];
+		$value = self::normalizeField($value);
+		if ($value === null)
+		{
+			return $result;
+		}
 
 		$settings = $this->getHandlerSettings();
 		$params = $this->getParamsBusValue($payment);
@@ -650,8 +674,8 @@ class RestHandler extends PaySystem\ServiceHandler
 		{
 			/** $value from FIELDS like map on CODES */
 			$code = $value['CODE'];
-			$input = $settings['CODES'][$code];
-			$result['VALUE'] = $params[$code];
+			$input = $settings['CODES'][$code] ?? [];
+			$result['VALUE'] = $params[$code] ?? '';
 			$result['NAME'] = $input['NAME'] ?? '';
 		}
 
@@ -666,6 +690,25 @@ class RestHandler extends PaySystem\ServiceHandler
 		}
 
 		return $result;
+	}
+
+	private static function normalizeField($value): ?array
+	{
+		if (is_string($value) && $value !== '')
+		{
+			return ['CODE' => $value];
+		}
+
+		if (
+			!is_array($value)
+			|| !array_key_exists('CODE', $value)
+			|| (!is_array($value['CODE']) && (!is_string($value['CODE']) || $value['CODE'] === ''))
+		)
+		{
+			return null;
+		}
+
+		return $value;
 	}
 
 	/**

@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Integration\AiAssistant\AiAssistantService;
 use Bitrix\Im\V2\Promotion\Entity\Promotion;
 use Bitrix\Im\V2\Promotion\Entity\PromotionList;
 use Bitrix\Im\V2\Promotion\Internals\DeviceType;
+use Bitrix\Im\V2\Promotion\Internals\PortalAge;
 use Bitrix\Im\V2\Promotion\Internals\PromotionType;
 use Bitrix\Im\V2\Promotion\Internals\UserType;
 use Bitrix\Im\V2\Service\Locator;
@@ -29,6 +30,10 @@ class UIPromotionService implements PromotionServiceInterface
 
 	private const ONE_MONTH = 3600 * 24 * 30;
 	private const ENDLESS_LIFETIME = 0;
+	private const VOICE_MESSAGE_PROMO_CUTOFF_DATE_OPTION = 'voice_message_promo_cutoff_date';
+	private const VOICE_MESSAGE_PROMO_CUTOFF_DATE_DEFAULT = '2026-08-26';
+	private const FOLDER_ALL_ONBOARDING_PROMO_CUTOFF_DATE_OPTION = 'folder_all_onboarding_promo_cutoff_date';
+	private const FOLDER_ALL_ONBOARDING_PROMO_CUTOFF_DATE_DEFAULT = '2026-10-13';
 
 	public function getActive(DeviceType $type = DeviceType::ALL): PromotionList
 	{
@@ -182,7 +187,7 @@ class UIPromotionService implements PromotionServiceInterface
 		}
 
 		$result[] = [
-			"ID" => 'call:sync-promo-popup:05052026:all',
+			"ID" => 'call:web-background-promo:13082026:all',
 			"USER_TYPE" => UserType::ALL->value,
 			"DEVICE_TYPE" => DeviceType::WEB->value,
 		];
@@ -271,6 +276,48 @@ class UIPromotionService implements PromotionServiceInterface
 			];
 		}
 
+		if (Features::isChatFolderAllAvailable() && $this->isFolderAllOnboardingPromoAllowedByPortalAge())
+		{
+			// One record per platform: the "seen" fact is stored per promo id, and the web and the app
+			// are released independently, so viewing the onboarding on one keeps it waiting on the other.
+			// Endless by intent: without LIFETIME the promo expires thirty days after its first check.
+			$result[] = [
+				"ID" => 'im:folder-all-onboarding:12082026:all',
+				"USER_TYPE" => UserType::ALL->value,
+				"DEVICE_TYPE" => DeviceType::WEB->value,
+				"LIFETIME" => self::ENDLESS_LIFETIME,
+			];
+
+			$result[] = [
+				"ID" => 'immobile:folder-all-onboarding:12082026:mobile',
+				"USER_TYPE" => UserType::ALL->value,
+				"DEVICE_TYPE" => DeviceType::MOBILE->value,
+				"LIFETIME" => self::ENDLESS_LIFETIME,
+			];
+		}
+
+		$result[] = [
+			'ID' => 'im:main-reaction-onboarding:20072026:all',
+			'USER_TYPE' => UserType::ALL->value,
+			'DEVICE_TYPE' => DeviceType::WEB->value,
+			'LIFETIME' => self::ENDLESS_LIFETIME,
+			'START_DATE' => (new DateTime('20.07.2026', 'd.m.Y'))->getTimestamp(),
+		];
+
+		if (
+			Features::isVoiceMessageRecordingAvailable()
+			&& $this->isVoiceMessagePromoAllowedByPortalAge()
+		)
+		{
+			$result[] = [
+				'ID' => 'im:voice-message-recording:26082026:old',
+				'USER_TYPE' => UserType::OLD->value,
+				'USER_TIMESPAN' => self::ONE_MONTH,
+				'DEVICE_TYPE' => DeviceType::WEB->value,
+				'LIFETIME' => self::ENDLESS_LIFETIME,
+			];
+		}
+
 		$settings = Configuration::getValue('im');
 		if (isset($settings['promotion']) && is_array($settings['promotion']))
 		{
@@ -278,6 +325,24 @@ class UIPromotionService implements PromotionServiceInterface
 		}
 
 		return $result;
+	}
+
+	private function isFolderAllOnboardingPromoAllowedByPortalAge(): bool
+	{
+		return PortalAge::isCreatedBeforeCutoffDateOrUnknown(
+			'im',
+			self::FOLDER_ALL_ONBOARDING_PROMO_CUTOFF_DATE_OPTION,
+			self::FOLDER_ALL_ONBOARDING_PROMO_CUTOFF_DATE_DEFAULT,
+		);
+	}
+
+	private function isVoiceMessagePromoAllowedByPortalAge(): bool
+	{
+		return PortalAge::isCreatedBeforeCutoffDate(
+			'im',
+			self::VOICE_MESSAGE_PROMO_CUTOFF_DATE_OPTION,
+			self::VOICE_MESSAGE_PROMO_CUTOFF_DATE_DEFAULT
+		);
 	}
 
 	private function getTour(array $config, DeviceType $type = DeviceType::ALL): bool|Tour|null

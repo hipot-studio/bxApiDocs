@@ -19,4 +19,6 @@ interface TaskAccessRequestRepositoryInterface
 	public function clearByTaskId(int $taskId): void;
 
 	public function clearByUserId(int $userId): void;
+
+	public function clearByUserAndTaskId(int $userId, int $taskId): void;
 }

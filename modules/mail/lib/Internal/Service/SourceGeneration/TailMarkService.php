@@ -253,6 +253,33 @@ class TailMarkService
 	}
 
 	/**
+	 * The letters of the list an earlier walk of this generation issued a mark for, whatever the
+	 * state of the record: a pending one is a letter appended and not read back yet. The walk over
+	 * the folders a hand over reopened passes over them {@see TailAppendService}: on a source naming
+	 * no number the mark is all that tells a letter the first walk put there.
+	 *
+	 * @param int[] $messageIds
+	 * @return array<int, true>
+	 */
+	public function findMarkedOf(Context $context, array $messageIds): array
+	{
+		if ($messageIds === [])
+		{
+			return [];
+		}
+
+		$rows = SourceGenerationTailMarkTable::getList([
+			'select' => ['MESSAGE_ID'],
+			'filter' => [
+				'=GENERATION_ID' => $context->generationId,
+				'@MESSAGE_ID' => array_map('intval', $messageIds),
+			],
+		])->fetchAll();
+
+		return array_fill_keys(array_map(static fn (array $row): int => (int)$row['MESSAGE_ID'], $rows), true);
+	}
+
+	/**
 	 * The SHA-256 in hex, the spelling every stored hash of the matching uses.
 	 */
 	private function hash(string $mark): string

@@ -60,9 +60,10 @@ class ProviderCodeService
 
 	public function updateProviderCode(Item\Document $document, string $providerCode): Result
 	{
-		if (!Type\ProviderCode::isValid($providerCode))
+		$validationResult = $this->validateProviderCode($providerCode);
+		if (!$validationResult->isSuccess())
 		{
-			return (new Result())->addError(new Main\Error("Invalid provider code. `$providerCode`"));
+			return $validationResult;
 		}
 
 		if ($document->companyUid === null)
@@ -74,5 +75,35 @@ class ProviderCodeService
 		$companyUid = $document->companyUid;
 
 		return $this->documentRepository->updateProviderCodeToDocumentsByCompanyUid($companyUid, $providerCode);
+	}
+
+	/**
+	 * Writes the provider code of exactly one document, without the document status guard.
+	 *
+	 * @internal the status guard lives in the entry point of the domain, so a caller outside it would
+	 *           write the code of a document that may no longer be changed.
+	 *
+	 * @see \Bitrix\Sign\Service\Sign\DocumentService::modifyProviderCodeForSingleDocument() guarded entry point.
+	 * @see self::updateProviderCode() spreads the code over the company documents instead.
+	 */
+	public function updateProviderCodeToDocument(Item\Document $document, string $providerCode): Result
+	{
+		$validationResult = $this->validateProviderCode($providerCode);
+		if (!$validationResult->isSuccess())
+		{
+			return $validationResult;
+		}
+
+		$document->providerCode = $providerCode;
+
+		return $this->documentRepository->update($document);
+	}
+
+	private function validateProviderCode(string $providerCode): Result
+	{
+		return Type\ProviderCode::isValid($providerCode)
+			? new Result()
+			: (new Result())->addError(new Main\Error("Invalid provider code. `$providerCode`"))
+		;
 	}
 }

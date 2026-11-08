@@ -2,13 +2,16 @@
 
 namespace Bitrix\Crm\Integration\Calendar;
 
+use Bitrix\Calendar\Core;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
+use Bitrix\Calendar\Internals\SharingLinkTable;
 use Bitrix\Calendar\Sharing\Link\CrmDealLink;
 use Bitrix\Calendar\Sharing\Link\CrmDealLinkMapper;
 use Bitrix\Calendar\Sharing\Link\EventLink;
 use Bitrix\Calendar\Sharing\Link\Factory;
 use Bitrix\Calendar\Sharing\SharingConference;
 use Bitrix\Calendar\Sharing;
+use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\Integration\MailManager;
 use Bitrix\Crm\Integration\NotificationsManager;
 use Bitrix\Crm\Integration\SmsManager;
@@ -28,7 +31,105 @@ use Bitrix\Main\SystemException;
 class Helper
 {
 	private static ?Factory $linkFactory = null;
+	private static ?Core\Mappers\Event $eventMapper = null;
 	private static ?self $instance = null;
+
+	public function getCrmDealIdByLinkHash(string $linkHash): ?int
+	{
+		if ($linkHash === '' || !Loader::includeModule('calendar'))
+		{
+			return null;
+		}
+
+		$link = SharingLinkTable::query()
+			->setSelect(['OBJECT_TYPE', 'OBJECT_ID'])
+			->where('HASH', $linkHash)
+			->setLimit(1)
+			->fetch()
+		;
+		if (!$link || $link['OBJECT_TYPE'] !== Sharing\Link\Helper::CRM_DEAL_SHARING_TYPE)
+		{
+			return null;
+		}
+
+		$dealId = (int)$link['OBJECT_ID'];
+
+		return $dealId > 0 ? $dealId : null;
+	}
+
+	public function getCrmDealIdByEventId(int $eventId): ?int
+	{
+		if ($eventId <= 0 || !Loader::includeModule('calendar'))
+		{
+			return null;
+		}
+
+		self::$eventMapper ??= new Core\Mappers\Event();
+		if (!(self::$eventMapper->getById($eventId) instanceof Core\Event\Event))
+		{
+			return null;
+		}
+
+		$link = self::getLinkFactory()->getEventLinkByEventId($eventId, false);
+		if (!$link instanceof EventLink || !$link->getParentLinkHash())
+		{
+			return null;
+		}
+
+		$dealId = $this->getCrmDealIdByLinkHash($link->getParentLinkHash());
+		if ($dealId === null)
+		{
+			return null;
+		}
+
+		$deal = Container::getInstance()->getFactory(\CCrmOwnerType::Deal)?->getItem($dealId, ['ID']);
+		if ($deal !== null)
+		{
+			return $dealId;
+		}
+
+		$activity = ActivityTable::query()
+			->setSelect(['ID', 'OWNER_ID'])
+			->where('CALENDAR_EVENT_ID', $eventId)
+			->where('PROVIDER_ID', 'CRM_CALENDAR_SHARING')
+			->where('OWNER_TYPE_ID', \CCrmOwnerType::Deal)
+			->setLimit(1)
+			->fetch()
+		;
+		$reboundDealId = (int)($activity['OWNER_ID'] ?? 0);
+		if ($reboundDealId <= 0)
+		{
+			return $dealId;
+		}
+
+		foreach ($this->getActivityBindings((int)$activity['ID']) as $binding)
+		{
+			if (
+				(int)$binding['OWNER_TYPE_ID'] === \CCrmOwnerType::Deal
+				&& (int)$binding['OWNER_ID'] === $reboundDealId
+			)
+			{
+				return $reboundDealId;
+			}
+		}
+
+		return $dealId;
+	}
+
+	public function getActivityBindings(int $activityId): array
+	{
+		if ($activityId <= 0)
+		{
+			return [];
+		}
+
+		$activity = ActivityTable::getRow([
+			'select' => ['ID', 'PROVIDER_ID'],
+			'filter' => ['=ID' => $activityId, '=PROVIDER_ID' => 'CRM_CALENDAR_SHARING'],
+		]);
+
+		return $activity ? \CCrmActivity::GetBindings($activityId) : [];
+	}
 
 	public static function isSharingCrmAvaible(): bool
 	{

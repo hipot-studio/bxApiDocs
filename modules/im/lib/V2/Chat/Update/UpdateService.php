@@ -230,14 +230,131 @@ class UpdateService
 
 	protected function deleteUsers(): self
 	{
-		$deletedUsers = $this->updateFields->getDeletedUsers();
+		$deletedUsers = array_map('intval', $this->updateFields->getDeletedUsers());
+
+		if (empty($deletedUsers))
+		{
+			return $this;
+		}
+
+		$authorIdBeforeDelete = $this->chat->getAuthorId();
+		$structureAnswers = $this->askStructureAboutMarkedUsers($deletedUsers);
+
+		try
+		{
+			foreach ($deletedUsers as $userId)
+			{
+				$this->chat->deleteUser(
+					$userId,
+					new DeleteUserConfig(false, structureHoldsUser: $this->toDeletionAnswer($structureAnswers, $userId)),
+				);
+			}
+		}
+		catch (\Throwable $deletionError)
+		{
+			// An iteration that fails after its relation is gone owes the verification as much as one
+			// that returns: the addition sync of a change holding the member again meanwhile has
+			// already run. Its own failure must not replace the one the caller is about to hear.
+			$released = $this->releasedMembers($deletedUsers, $structureAnswers);
+			$this->chat->restoreMembersHeldByStructureQuietly(
+				$released,
+				$this->deletedAuthorAmong($released, $authorIdBeforeDelete),
+			);
+
+			throw $deletionError;
+		}
+
+		// The answers were read once for the whole set, so here they are as old as they get, and the loop
+		// above is long enough for the structure to change under them. One question for the set.
+		$released = $this->releasedMembers($deletedUsers, $structureAnswers);
+		$this->chat->restoreMembersHeldByStructure(
+			$released,
+			$this->deletedAuthorAmong($released, $authorIdBeforeDelete),
+		);
+
+		return $this;
+	}
+
+	/**
+	 * Who of the set left the chat, read from the relations and not from the results of the calls: a chat
+	 * type that cancels a deletion answers with an empty success. Reading it here instead of counting it
+	 * in the loop also keeps the answer whole when an iteration fails halfway.
+	 *
+	 * @param list<int> $deletedUsers
+	 * @return list<int> members the structure released and the chat holds no relation for any more
+	 */
+	private function releasedMembers(array $deletedUsers, array $structureAnswers): array
+	{
+		$released = [];
 
 		foreach ($deletedUsers as $userId)
 		{
-			$this->chat->deleteUser((int)$userId, new DeleteUserConfig(false));
+			$leftTheChat = !$this->chat->getRelations()->hasUser($userId, (int)$this->chat->getId());
+
+			if ($this->toDeletionAnswer($structureAnswers, $userId) === false && $leftTheChat)
+			{
+				$released[] = $userId;
+			}
 		}
 
-		return $this;
+		return $released;
+	}
+
+	/**
+	 * @param list<int> $released
+	 */
+	private function deletedAuthorAmong(array $released, int $authorIdBeforeDelete): ?int
+	{
+		return in_array($authorIdBeforeDelete, $released, true) ? $authorIdBeforeDelete : null;
+	}
+
+	/**
+	 * Chat update deletes members in a loop, so asking inside a single deletion would cost one
+	 * multi-join query per member. Only members carrying a structure mark are asked about - a deletion
+	 * never reaches the question for the rest - and all of them in one batch.
+	 *
+	 * @param list<int> $userIds
+	 * @return array<int, bool|null>
+	 */
+	protected function askStructureAboutMarkedUsers(array $userIds): array
+	{
+		$relations = $this->chat->getRawRelations();
+		$markedUsers = [];
+
+		foreach ($userIds as $userId)
+		{
+			$relation = $relations->getByUserId($userId, $this->chat->getId());
+
+			if ($relation !== null && $relation->getReason() !== Reason::DEFAULT)
+			{
+				$markedUsers[] = $userId;
+			}
+		}
+
+		if (empty($markedUsers))
+		{
+			return [];
+		}
+
+		return (new Structure($this->chat))->holdsUsers($markedUsers);
+	}
+
+	/**
+	 * Null means two different things on the two sides: the structure could not be asked, and nobody has
+	 * asked yet. Passed through as the second, the first would send deleteUser() to ask again for every
+	 * member - the repetition the batch exists to remove. Unanswered keeps the restriction anyway, so it
+	 * travels on as "held".
+	 *
+	 * @param array<int, bool|null> $answers
+	 */
+	protected function toDeletionAnswer(array $answers, int $userId): ?bool
+	{
+		if (!array_key_exists($userId, $answers))
+		{
+			return null;
+		}
+
+		return $answers[$userId] ?? true;
 	}
 
 	protected function addManagers(): self

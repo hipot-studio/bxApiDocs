@@ -17,6 +17,8 @@ use Bitrix\Im;
 use Bitrix\Im\Bot\Keyboard;
 use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Im\V2\Message\CounterService;
+use Bitrix\Im\V2\Message\Sticker\PackType;
+use Bitrix\Im\V2\Message\Sticker\StickerService;
 use Bitrix\ImBot;
 use Bitrix\ImBot\Log;
 use Bitrix\ImBot\DialogSession;
@@ -58,6 +60,7 @@ class Network extends Base implements NetworkBot
 		MESSAGE_PARAM_SENDING = 'SENDING',
 		MESSAGE_PARAM_SENDING_TIME = 'SENDING_TS',
 		MESSAGE_PARAM_DELIVERED = 'IS_DELIVERED',
+		MESSAGE_PARAM_NETWORK_STICKER = 'IMOL_STICKER',// network sticker carrier passing the controller whitelist
 
 		CHAT_ENTITY_TYPE = 'NETWORK_DIALOG',
 		CHAT_NETWORK_SUPPORT_COUNTER = 'imbot_network_dialog_',
@@ -1738,6 +1741,29 @@ class Network extends Base implements NetworkBot
 			}
 		}
 
+		// convert network sticker carrier into component
+		$networkSticker = $message['PARAMS'][self::MESSAGE_PARAM_NETWORK_STICKER] ?? null;
+		if (is_array($networkSticker) && !empty($networkSticker['uri']))
+		{
+			// A carrier without hasText comes from a peer that left the text empty for a sticker-only message.
+			$hasText = isset($networkSticker['hasText'])
+				? (bool)$networkSticker['hasText']
+				: ($message['MESSAGE'] ?? '') !== ''
+			;
+			if (!$hasText)
+			{
+				$message['MESSAGE'] = StickerService::getPlaceholder();
+			}
+			$message['PARAMS'][Im\V2\Message\Params::COMPONENT_ID] = 'NetworkStickerMessage';
+			$message['PARAMS'][Im\V2\Message\Params::COMPONENT_PARAMS] = [
+				'uri' => (string)$networkSticker['uri'],
+				'width' => (int)($networkSticker['width'] ?? 0),
+				'height' => (int)($networkSticker['height'] ?? 0),
+				'hasText' => $hasText,
+			];
+			unset($message['PARAMS'][self::MESSAGE_PARAM_NETWORK_STICKER]);
+		}
+
 		if (!empty($messageFields['USER']))
 		{
 			$message['PARAMS'][Im\V2\Message\Params::USER_ID] = $messageFields['USER']['ID'];
@@ -2269,6 +2295,53 @@ class Network extends Base implements NetworkBot
 	}
 
 	/**
+	 * Resolves the just-sent sticker locally and builds the IMOL_STICKER carrier.
+	 * The bot-controller whitelist strips STICKER_PARAMS but passes IMOL_* keys, so the
+	 * sticker crosses the network under IMOL_STICKER with an absolute image uri.
+	 *
+	 * @param array $messageParams Live message params (may contain STICKER_PARAMS).
+	 * @return array|null Carrier {id, packId, packType, uri, width, height} or null.
+	 */
+	protected static function buildNetworkStickerCarrier(array $messageParams): ?array
+	{
+		$stickerParams = $messageParams['STICKER_PARAMS'] ?? null;
+		if (!is_array($stickerParams))
+		{
+			return null;
+		}
+
+		// STICKER_PARAMS keys arrive either camelCase (event params) or SNAKE_UPPER (stored params).
+		$stickerId = $stickerParams['id'] ?? $stickerParams['ID'] ?? null;
+		$packId = $stickerParams['packId'] ?? $stickerParams['PACK_ID'] ?? null;
+		$packTypeValue = $stickerParams['packType'] ?? $stickerParams['PACK_TYPE'] ?? null;
+		if ($stickerId === null || $packId === null || $packTypeValue === null)
+		{
+			return null;
+		}
+
+		$packType = PackType::tryFrom((string)$packTypeValue);
+		if ($packType === null)
+		{
+			return null;
+		}
+
+		$stickerItem = (new StickerService())->getStickerById((int)$stickerId, (int)$packId, $packType);
+		if ($stickerItem === null || empty($stickerItem->uri))
+		{
+			return null;
+		}
+
+		return [
+			'id' => $stickerItem->id,
+			'packId' => $stickerItem->packId,
+			'packType' => $packType->value,
+			'uri' => \Bitrix\Main\Engine\UrlManager::getInstance()->getHostUrl() . $stickerItem->uri,
+			'width' => $stickerItem->width,
+			'height' => $stickerItem->height,
+		];
+	}
+
+	/**
 	 * Event handler on message add.
 	 * @see \Bitrix\Im\Bot::onMessageAdd
 	 *
@@ -2405,6 +2478,18 @@ class Network extends Base implements NetworkBot
 					break;
 				}
 			}
+		}
+
+		// The carrier is built after the quote block so that a quoted text counts as the author's own text.
+		if ($stickerCarrier = self::buildNetworkStickerCarrier($messageParams))
+		{
+			$stickerCarrier['hasText'] = $messageFields['MESSAGE'] !== '';
+			if (!$stickerCarrier['hasText'])
+			{
+				// A peer that cannot render the carrier still needs non-empty text to accept the message.
+				$messageFields['MESSAGE'] = StickerService::getPlaceholder();
+			}
+			$messageParams[self::MESSAGE_PARAM_NETWORK_STICKER] = $stickerCarrier;
 		}
 
 		\CIMMessageParam::set($messageId, [

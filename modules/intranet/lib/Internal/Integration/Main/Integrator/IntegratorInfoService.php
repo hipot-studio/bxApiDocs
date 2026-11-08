@@ -47,6 +47,17 @@ class IntegratorInfoService
 			return $this->updateIntegratorInfo();
 		}
 
+		return $this->getSavedIntegratorInfo();
+	}
+
+	private function getSavedIntegratorInfo(): IntegratorInfoDto
+	{
+		$partnerId = Option::get('bitrix24', 'partner_id', '');
+		if ($partnerId === '')
+		{
+			return new IntegratorInfoDto();
+		}
+
 		return new IntegratorInfoDto(
 			id: (int)$partnerId,
 			name: Option::get('bitrix24', 'partner_name', ''),
@@ -114,7 +125,15 @@ class IntegratorInfoService
 
 	public function updateIntegratorInfo(): IntegratorInfoDto
 	{
-		$integratorInfo = $this->fetchIntegratorInfo();
+		$integratorInfo = $this->license->getPartnerId()
+			? $this->fetchIntegratorInfo()
+			: new IntegratorInfoDto()
+		;
+		if ($integratorInfo === null)
+		{
+			return $this->getSavedIntegratorInfo();
+		}
+
 		$this->saveIntegratorInfo($integratorInfo);
 
 		return $integratorInfo;
@@ -127,10 +146,10 @@ class IntegratorInfoService
 		return $uri->setPath('b24/util.php');
 	}
 
-	private function fetchIntegratorInfo(): IntegratorInfoDto
+	private function fetchIntegratorInfo(): ?IntegratorInfoDto
 	{
 		$httpClient = $this->createHttpClient();
-		$hashKey = Application::getInstance()->getLicense()->getHashLicenseKey();
+		$hashKey = $this->license->getHashLicenseKey();
 
 		$requestParams = [
 			'type' => self::GET_PARTNER_TYPE,
@@ -139,42 +158,70 @@ class IntegratorInfoService
 		];
 		$responseResult = $httpClient->post((string)$this->getUtilUri(), $requestParams);
 
-		if ($responseResult)
+		if (!is_string($responseResult) || !in_array($httpClient->getStatus(), [200, 210], true))
 		{
-			if (in_array($httpClient->getStatus(), [200, 210], true))
-			{
-				try
-				{
-					$partnerData = Json::decode($responseResult);
-				}
-				catch (ArgumentException $e)
-				{
-					return new IntegratorInfoDto();
-				}
-
-				if (empty($partnerData))
-				{
-					return new IntegratorInfoDto();
-				}
-
-				return new IntegratorInfoDto(
-					id: (int)($partnerData['id'] ?? 0),
-					name: $partnerData['name'] ?? '',
-					url: $partnerData['url'] ?? '',
-					phone: $partnerData['phone'] ?? '',
-					ol: $partnerData['ol'] ?? '',
-					canContact: $partnerData['canContact'] ?? false,
-					logo: $partnerData['logo'] ?? '',
-					company: $partnerData['companyName'] ?? '',
-					email: $partnerData['email'] ?? '',
-				);
-			}
+			return null;
 		}
 
-		return new IntegratorInfoDto();
+		try
+		{
+			$partnerData = Json::decode($responseResult);
+		}
+		catch (ArgumentException)
+		{
+			return null;
+		}
+
+		if (!is_array($partnerData) || isset($partnerData['error']))
+		{
+			return null;
+		}
+
+		if ($partnerData === [] || ($partnerData['message'] ?? null) === 'NO_PARTNER')
+		{
+			return new IntegratorInfoDto();
+		}
+
+		$partnerId = $partnerData['id'] ?? null;
+		if (
+			(!is_int($partnerId) && !(is_string($partnerId) && preg_match('/^[0-9]+$/D', $partnerId) === 1))
+			|| (int)$partnerId < 0
+		)
+		{
+			return null;
+		}
+
+		if ((int)$partnerId === 0)
+		{
+			return new IntegratorInfoDto();
+		}
+
+		foreach (['name', 'url', 'phone', 'ol', 'logo', 'companyName', 'email'] as $field)
+		{
+			if (isset($partnerData[$field]) && !is_string($partnerData[$field]))
+			{
+				return null;
+			}
+		}
+		if (isset($partnerData['canContact']) && !is_bool($partnerData['canContact']))
+		{
+			return null;
+		}
+
+		return new IntegratorInfoDto(
+			id: (int)$partnerId,
+			name: $partnerData['name'] ?? '',
+			url: $partnerData['url'] ?? '',
+			phone: $partnerData['phone'] ?? '',
+			ol: $partnerData['ol'] ?? '',
+			canContact: $partnerData['canContact'] ?? false,
+			logo: $partnerData['logo'] ?? '',
+			company: $partnerData['companyName'] ?? '',
+			email: $partnerData['email'] ?? '',
+		);
 	}
 
-	private function createHttpClient(): HttpClient
+	protected function createHttpClient(): HttpClient
 	{
 		return new HttpClient([
 			'socketTimeout' => 25,

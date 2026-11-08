@@ -456,10 +456,10 @@ class GroupChat extends Chat
 		return mb_substr($chatTitle, 0, 255);
 	}
 
-	public function sendPushUpdateMessage(Message $message): void
+	public function sendPushUpdateMessage(Message $message, bool $compositionUpdated = false): void
 	{
 		$pushFormat = new Message\PushFormat($message);
-		$push = $pushFormat->formatMessageUpdate();
+		$push = $pushFormat->formatMessageUpdate($compositionUpdated);
 		$push['params']['dialogId'] = $this->getDialogId();
 		if ($this->getType() === self::IM_TYPE_COMMENT)
 		{

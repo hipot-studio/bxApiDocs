@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Internal\Config;
 
-use Bitrix\Main\Config\Option;
+use Bitrix\Bizproc\Public\Feature\Template\PilotPublicationFlag;
 
 /**
  * The single source of the rollout flag of the pilot publication: every gate of the feature reads the
@@ -18,12 +18,9 @@ use Bitrix\Main\Config\Option;
 final class PilotPublicationFeature
 {
 	public const MODULE_ID = 'bizproc';
-	public const OPTION_NAME = 'pilot_publication_available';
-
-	private const DEFAULT_VALUE = 'N';
 
 	public static function isEnabled(): bool
 	{
-		return Option::get(self::MODULE_ID, self::OPTION_NAME, self::DEFAULT_VALUE) === 'Y';
+		return \Bitrix\Main\Config\Feature::isEnabled(PilotPublicationFlag::class);
 	}
 }

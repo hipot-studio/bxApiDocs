@@ -20,7 +20,8 @@ final class ChildrenDataProvider
 		bool $showRights = false,
 		array $context = [],
 		array $order = [],
-		PageNavigation $pageNavigation = null
+		PageNavigation $pageNavigation = null,
+		bool $shouldCheckUnifiedLink = false,
 	): Result
 	{
 		$result = new Result();
@@ -53,7 +54,7 @@ final class ChildrenDataProvider
 		$limit = $pageNavigation?->getLimit() ?: 50;
 		$offset = $pageNavigation?->getOffset() ?: 0;
 
-		$securityContext = $storage->getSecurityContext($currentUser->getId());
+		$securityContext = $storage->getSecurityContext($currentUser->getId(), $shouldCheckUnifiedLink);
 
 		$filter = [
 			'PARENT_ID' => $folder->getRealObjectId(),
@@ -75,11 +76,15 @@ final class ChildrenDataProvider
 		];
 
 		$driver = Disk\Driver::getInstance();
-		$queryParameters = $driver->getRightsManager()->addRightsCheck(
-			$securityContext,
-			$queryParameters,
-			['ID', 'CREATED_BY']
-		);
+
+		if (!$shouldCheckUnifiedLink)
+		{
+			$queryParameters = $driver->getRightsManager()->addRightsCheck(
+				securityContext: $securityContext,
+				parameters: $queryParameters,
+				specificColumns: ['ID', 'CREATED_BY'],
+			);
+		}
 
 		$childIds = [];
 		$childResult = Disk\Folder::getList($queryParameters);
@@ -115,6 +120,11 @@ final class ChildrenDataProvider
 		$childDataResult = Disk\BaseObject::loadBatchById($childIds);
 		foreach ($childDataResult as $childObject)
 		{
+			if ($shouldCheckUnifiedLink)
+			{
+				$childObject->supportsUnifiedLink();
+			}
+
 			$contextType = null;
 			if ($contextTypeResolver && ($childObject instanceof Disk\Folder))
 			{

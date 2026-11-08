@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Integration\MailService;
 
+use Bitrix\Mail\Internal\Service\Mailbox\SettingsWriteCoordinator;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationService;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationStage;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationMetrics;
@@ -46,7 +47,7 @@ final class MailboxMigrationCancelReceiver
 				->addError(new Error(
 					'A valid mailbox migration cancellation is expected',
 					self::ERROR_CONTRACT_INVALID,
-				))
+				)),
 			);
 		}
 
@@ -57,7 +58,7 @@ final class MailboxMigrationCancelReceiver
 				->addError(new Error(
 					'The mailbox migration operation is already running',
 					MigrationService::ERROR_OPERATION_BUSY,
-				))
+				)),
 			);
 		}
 
@@ -70,7 +71,15 @@ final class MailboxMigrationCancelReceiver
 		{
 			$connection->startTransaction();
 			$transactionStarted = true;
-			$known = $this->operationTracker->find($mailboxId, $operationId);
+			$locked = (new SettingsWriteCoordinator())->lockWithinTransaction($mailboxId, true, $operationId);
+			if (!$locked->isSuccess())
+			{
+				$connection->rollbackTransaction();
+				$transactionStarted = false;
+
+				return RetryPolicy::enrichCommandResult($locked->setData(['stage' => MigrationStage::Legacy]));
+			}
+			$known = $this->operationTracker->findWithinTransaction($mailboxId, $operationId);
 			if ((string)($known['EXEC_STATE'] ?? '') === MigrationOperationTable::STATE_CANCELLED)
 			{
 				$stage = MigrationStage::tryFrom((string)$known['STAGE']) ?? MigrationStage::Legacy;
@@ -127,7 +136,8 @@ final class MailboxMigrationCancelReceiver
 				->addError(new Error(
 					'The migration cancellation request is not saved',
 					MigrationService::ERROR_CANCEL_NOT_SAVED,
-				));
+				))
+			;
 		}
 		finally
 		{

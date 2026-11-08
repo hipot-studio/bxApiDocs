@@ -3,6 +3,7 @@ namespace Bitrix\Landing\Copilot\Services\Manifest;
 
 use Bitrix\Landing\Copilot\Services\HtmlBlock\NodeTagger;
 use Bitrix\Landing\Error;
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Main\Web\DOM\Document;
 
 class Builder
@@ -76,7 +77,7 @@ class Builder
 
 	private function loadDocument(string $html): Document
 	{
-		$doc = new Document();
+		$doc = DocumentFactory::createForUserHtml();
 
 		try
 		{

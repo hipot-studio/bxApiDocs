@@ -20,6 +20,11 @@ final class AiSiteChatTrigger extends BaseAction
 		return true;
 	}
 
+	public function isAgentRoutedChat(): bool
+	{
+		return true;
+	}
+
 	protected function shouldRunAction(TriggerInitDto $triggerInitDto): bool
 	{
 		return false;

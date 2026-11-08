@@ -69,6 +69,11 @@ class ShareRepository extends BaseRepository
 	 */
 	public function getInfoAccessPrompt(array $promptId, int $userId): array
 	{
+		if ($promptId === [])
+		{
+			return [];
+		}
+
 		return ShareTable::query()
 			->setSelect([
 				'SHARE_ID' => 'ID',

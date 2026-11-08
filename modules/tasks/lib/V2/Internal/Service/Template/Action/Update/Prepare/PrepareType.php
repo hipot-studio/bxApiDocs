@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Prepare;
 
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Handler\Exception\TemplateFieldValidateException;
 use Bitrix\Tasks\V2\Internal\Entity\Template\TypeDictionary;
 
@@ -30,6 +31,13 @@ class PrepareType implements PrepareFieldInterface
 
 		if ((int)$currentTemplateType === TypeDictionary::NEW_USERS)
 		{
+			if ((int)($fields['BASE_TEMPLATE_ID'] ?? 0) > 0)
+			{
+				throw new TemplateFieldValidateException(
+					Loc::getMessage('TASKS_TEMPLATE_FOR_NEW_USER_CANNOT_BE_SUBTEMPLATE'),
+				);
+			}
+
 			$fields['BASE_TEMPLATE_ID'] = '';
 			$fields['REPLICATE_PARAMS'] = [];
 			$fields['RESPONSIBLE_ID'] = '0';

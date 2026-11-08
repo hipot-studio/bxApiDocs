@@ -47,7 +47,8 @@ abstract class AbstractStorage
 
 	/**
 	 * Deletes the cache
-	 * Returns the number of deleted bytes
+	 * Returns the number of bytes whose removal is confirmed
+	 * or false if the cache could not be deleted
 	 * @return int|false
 	 */
 	abstract public function delete();

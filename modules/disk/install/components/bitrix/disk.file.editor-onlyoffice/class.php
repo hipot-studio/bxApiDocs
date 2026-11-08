@@ -1,12 +1,11 @@
 <?php
 
 use Bitrix\Disk;
-use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
-use Bitrix\Disk\document\SharingControlType;
 use Bitrix\Disk\Driver;
-use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Component\DocumentHeaderPage;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Document\OnlyOffice;
@@ -32,6 +31,8 @@ Loader::requireModule('disk');
 
 class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Controllerable
 {
+	use DocumentHeaderPage;
+
 	public const ERROR_CODE_EXCEEDED_LIMIT = 'exceeded_limit';
 	public const ERROR_CODE_COULD_NOT_LOCK = 'could_not_lock';
 	protected const SESSION_SHOW_IMMEDIATELY_KEY = 'disk.promoShowImmediately';
@@ -44,6 +45,8 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 	protected OnlyOffice\RestrictionManager $restrictionManager;
 	protected Disk\Integration\Baas\BaasSessionBoostService $sessionBoostService;
 	protected Disk\Public\Provider\CustomServerAvailabilityProvider $customServerAvailabilityProvider;
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
+	protected UnifiedLinkUrl $unifiedLinkUrl;
 	private bool $unifiedLinkAccessOnly = false;
 	private bool $unifiedLinkMode = false;
 
@@ -59,10 +62,12 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 		$this->sessionBoostService = new Disk\Integration\Baas\BaasSessionBoostService();
 
-		$this->customServerAvailabilityProvider =
-			ServiceLocator::getInstance()
-				->get(Disk\Public\Provider\CustomServerAvailabilityProvider::class)
-		;
+		$serviceLocator = ServiceLocator::getInstance();
+		$this->customServerAvailabilityProvider = $serviceLocator->get(
+			Disk\Public\Provider\CustomServerAvailabilityProvider::class,
+		);
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
 
 		return parent::processBeforeAction($actionName);
 	}
@@ -85,8 +90,8 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			$this->currentUser = Disk\Document\Models\GuestUser::create();
 		}
 
-		$this->unifiedLinkAccessOnly = (bool)($this->arParams['UNIFIED_LINK_ACCESS_ONLY'] ?? false);
 		$this->unifiedLinkMode = (bool)($this->arParams['UNIFIED_LINK_MODE'] ?? false);
+		$this->unifiedLinkAccessOnly = (bool)($this->arParams['UNIFIED_LINK_ACCESS_ONLY'] ?? false);
 	}
 
 	public function configureActions()
@@ -96,8 +101,8 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 	protected function processActionDefault()
 	{
-		$this->arResult['UNIFIED_LINK_ACCESS_ONLY'] = $this->unifiedLinkAccessOnly;
 		$this->arResult['UNIFIED_LINK_MODE'] = $this->unifiedLinkMode;
+		$this->arResult['UNIFIED_LINK_ACCESS_ONLY'] = $this->unifiedLinkAccessOnly;
 		$this->arResult['FILE_UNIQUE_CODE'] = $this->arParams['FILE_UNIQUE_CODE'] ?? '';
 		$this->arResult['SIGN_PLACEHOLDERS_ENABLED'] = $this->isSignPlaceholdersEnabled();
 
@@ -108,10 +113,6 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			return;
 		}
 
-		if (!isset($this->arParams['SHOW_BUTTON_OPEN_NEW_WINDOW']))
-		{
-			$this->arParams['SHOW_BUTTON_OPEN_NEW_WINDOW'] = true;
-		}
 		/** @var Disk\Document\Models\DocumentSession $documentSession */
 		$documentSession = $this->arParams['DOCUMENT_SESSION'];
 
@@ -192,7 +193,6 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			;
 		}
 
-		$this->arResult['DOCUMENT_HANDLERS'] = $this->getDocumentHandlersForEditingFile();
 		$this->arResult['EDITOR'] = [
 			'MODE' => $configBuilder->getMode(),
 			'ALLOW_EDIT' => $allowEdit,
@@ -215,6 +215,7 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 		$this->arResult['LINK_TO_EDIT'] = $this->getLinkToEdit($documentSession);
 		$this->arResult['LINK_TO_DOWNLOAD'] = $this->getLinkToDownload($documentSession);
+		$this->arResult['CAN_DOWNLOAD'] = $this->canDownloadDocument($documentSession);
 
 		$infoToken = Disk\Document\Online\UserInfoToken::generateTimeLimitedToken(
 			$this->getUserIdForOnline(),
@@ -229,11 +230,10 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			'infoToken' => $infoToken,
 		]);
 
-		$this->arResult['SHOULD_DISABLE_SHARING_BUTTON'] = $this->shouldDisableSharingButton();
-
-		if ($this->arResult['EXTERNAL_LINK_MODE'])
+		if (!$this->arResult['CAN_DOWNLOAD'])
 		{
 			$configBuilder->allowDownload(false);
+			$configBuilder->allowPrint(false);
 		}
 		else
 		{
@@ -321,7 +321,6 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 
 		$this->arResult['EDITOR_JSON'] = Json::encode($editorConfigData);
 
-		$this->arResult['SHARING_CONTROL_TYPE'] = $this->getSharingControlType($documentSession)?->value;
 		$this->arResult['PULL_CONFIG'] = null;
 		$publicPullConfigurator = new Disk\Document\Online\PublicPullConfigurator();
 		if ($publicPullConfigurator->getErrors())
@@ -336,12 +335,20 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 			$this->arResult['PULL_USER_CONFIG'] = Config::get([
 				'JSON' => true,
 			]);
-
-			$this->arResult['PUBLIC_CHANNEL'] = $publicPullConfigurator->getChannel($realObjectId)->getSignedPublicId();
 		}
+
+		// The header of the page and the presence on it belong to one and the same opening, so the
+		// page describes it once and answers both from that description.
+		$openingContext = $this->buildOpeningContext(
+			$documentSession,
+			$this->arResult['CAN_DOWNLOAD'] ? $this->arResult['LINK_TO_DOWNLOAD'] : '',
+		);
+		$this->arResult['PRESENCE_CONFIG'] = $this->buildPresenceConfig($documentSession, $openingContext);
+		$this->arResult['HEADER_COMPOSITION'] = $this->buildHeaderComposition($openingContext);
 
 		if (OnlyOffice\OnlyOfficeHandler::shouldRestrictedBySize($documentSession->getObject()->getSize()))
 		{
+			$documentSession->setAsNonActive();
 			$this->includeComponentTemplate('large-file');
 		}
 		else
@@ -494,49 +501,55 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 	{
 		if (isset($this->arParams['LINK_TO_DOWNLOAD']))
 		{
-			return $this->arParams['LINK_TO_DOWNLOAD'];
+			return (string)$this->arParams['LINK_TO_DOWNLOAD'];
 		}
 
-		/** @see \Bitrix\Disk\Controller\DocumentService::downloadDocumentAction */
-		return (new Disk\Controller\DocumentService())->getActionUri(
-			'downloadDocument',
-			[
+		$file = $documentSession->getFile();
+
+		$downloadUrl = (new Disk\Controller\DocumentService())->getActionUri(
+			actionName: 'downloadDocument',
+			params: [
 				'documentSessionId' => $documentSession->getId(),
 				'documentSessionHash' => $documentSession->getExternalHash(),
-			]
+			],
 		);
+
+		if ($file && ($this->unifiedLinkMode || $this->unifiedLinkAccessOnly))
+		{
+			return $this->unifiedLinkUrl->addUlsToUrl(
+				url: $downloadUrl,
+				uls: $this->unifiedLinkAccessService->getUlsForObjectId($file->getId()),
+			);
+		}
+
+		return $downloadUrl;
 	}
 
-	protected function getSharingControlType(Disk\Document\Models\DocumentSession $documentSession): ?SharingControlType
+	protected function canDownloadDocument(Disk\Document\Models\DocumentSession $documentSession): bool
 	{
-		if ($this->arResult['EXTERNAL_LINK_MODE'] || !$documentSession->getObject())
+		if (empty($this->arResult['LINK_TO_DOWNLOAD']))
 		{
-			return null;
+			return false;
 		}
 
-		if (
-			!Bitrix24Manager::isFeatureEnabled('disk_file_sharing')
-			&& !Bitrix24Manager::isFeatureEnabled('disk_onlyoffice_edit')
-		)
+		if ($this->arResult['EXTERNAL_LINK_MODE'])
 		{
-			return SharingControlType::BlockedByFeature;
+			return ($this->arParams['DOWNLOAD_ALLOWED_BY_EXTERNAL_LINK'] ?? false) === true;
 		}
 
-		$currentUser = CurrentUser::get();
-		if (!$documentSession->canUserChangeRights($currentUser) && !$documentSession->canUserShare($currentUser))
-		{
-			return SharingControlType::WithoutEdit;
-		}
-		if ($documentSession->canUserChangeRights($currentUser))
-		{
-			return SharingControlType::WithChangeRights;
-		}
-		if ($documentSession->canUserShare($currentUser))
-		{
-			return SharingControlType::WithSharing;
-		}
+		$file = $documentSession->getFile();
 
-		return SharingControlType::WithoutEdit;
+		$securityContext = $file
+			?->getStorage()
+			->getCurrentUserSecurityContext(
+				$this->arResult['EXTERNAL_LINK_MODE']
+					|| $this->unifiedLinkMode
+					|| $this->unifiedLinkAccessOnly,
+			)
+		;
+
+		return $securityContext
+			&& $documentSession->canDownload($securityContext);
 	}
 
 	protected function processSavingTemplate(Disk\Document\Models\DocumentSession $documentSession): void
@@ -562,38 +575,6 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 
 		return $this->currentUser->getId();
-	}
-
-	private function getDocumentHandlersForEditingFile(): array
-	{
-		$handlers = [];
-		foreach ($this->listCloudHandlersForCreatingFile() as $handler)
-		{
-			$handlers[] = [
-				'code' => $handler::getCode(),
-				'name' => $handler::getName(),
-			];
-		}
-
-		return array_merge($handlers, [
-			[
-				'code' => LocalDocumentController::getCode(),
-				'name' => LocalDocumentController::getName(),
-			],
-		]);
-	}
-
-	/**
-	 * @return Disk\Document\DocumentHandler[]
-	 */
-	private function listCloudHandlersForCreatingFile(): array
-	{
-		if (!\Bitrix\Disk\Configuration::canCreateFileByCloud())
-		{
-			return [];
-		}
-
-		return array_values(Driver::getInstance()->getDocumentHandlersManager()->getHandlersForCreatingFile());
 	}
 
 	protected function getEditorJsonConfig(OnlyOffice\Editor\ConfigBuilder $configBuilder): Result
@@ -785,13 +766,5 @@ class CDiskFileEditorOnlyOfficeComponent extends BaseComponent implements Contro
 		}
 
 		return null;
-	}
-
-	/**
-	 * @return bool
-	 */
-	protected function shouldDisableSharingButton(): bool
-	{
-		return !$this->currentUser->isIntranetUser() && !$this->currentUser->isCollaber();
 	}
 }

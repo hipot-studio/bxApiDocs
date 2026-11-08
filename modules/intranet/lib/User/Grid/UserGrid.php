@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\User\Grid;
 
+use Bitrix\Intranet\Entity;
 use Bitrix\Intranet\Internal\Integration\Humanresources\UserDepartmentProvider;
 use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
 use Bitrix\Intranet\Service\ServiceContainer;
@@ -175,8 +176,17 @@ final class UserGrid extends Grid
 	{
 		$query = UserTable::query();
 		$query->setSelect($params['select'])
-			->where('REAL_USER', 'expr', true)
 			->setDistinct(true);
+
+		if ($this->isSystemUserPresetActive($params['filter'] ?? []))
+		{
+			// REAL_USER is not applied here: it would exclude the system user itself
+			$query->where('EXTERNAL_AUTH_ID', Entity\User::EXTERNAL_AUTH_ID_SYSTEM);
+		}
+		else
+		{
+			$query->where('REAL_USER', 'expr', true);
+		}
 
 		if (isset($params['filter']))
 		{
@@ -221,6 +231,11 @@ final class UserGrid extends Grid
 	public function getList(array $params = []): array
 	{
 		return $this->getQuery($params)->fetchAll();
+	}
+
+	private function isSystemUserPresetActive(array $filterValue): bool
+	{
+		return ($filterValue['=EXTERNAL_AUTH_ID'] ?? null) === Entity\User::EXTERNAL_AUTH_ID_SYSTEM;
 	}
 
 	public function setRawRows(iterable $rawValue): void

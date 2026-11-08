@@ -1527,9 +1527,15 @@ class CSocNetAllowed
 
 	public static function addStandardFeatureList()
 	{
-		$userId = \Bitrix\Socialnetwork\Helper\User::getCurrentUserId();
+		// The legacy autoload map outlives the Bitrix\Socialnetwork namespace registration
+		$userId = 0;
+		if (class_exists(\Bitrix\Socialnetwork\Helper\User::class))
+		{
+			$userId = \Bitrix\Socialnetwork\Helper\User::getCurrentUserId();
+		}
+
 		$isCollabUser = false;
-		if ($userId > 0)
+		if ($userId > 0 && class_exists(\Bitrix\Socialnetwork\Collab\User\User::class))
 		{
 			$isCollabUser = (new \Bitrix\Socialnetwork\Collab\User\User($userId))->isCollaber();
 		}
@@ -1896,7 +1902,11 @@ class CSocNetAllowed
 			)
 		)
 		{
-			$livefeedProvider = new \Bitrix\Socialnetwork\Livefeed\BlogPost;
+			$livefeedEventIds = [];
+			if (class_exists(\Bitrix\Socialnetwork\Livefeed\BlogPost::class))
+			{
+				$livefeedEventIds = (new \Bitrix\Socialnetwork\Livefeed\BlogPost())->getEventId();
+			}
 
 			$arFeatureTmp = array(
 				"allowed" => array(),
@@ -1919,7 +1929,7 @@ class CSocNetAllowed
 						"OPERATION" => "",
 						"NO_SET" => true,
 						"REAL_EVENT_ID" => "blog_post",
-						"FULL_SET" => array_unique(array_merge($livefeedProvider->getEventId(), array("blog", "blog_comment")))
+						"FULL_SET" => array_unique(array_merge($livefeedEventIds, array("blog", "blog_comment")))
 					),
 					"blog_post" => array(
 						"ENTITIES" => array(),

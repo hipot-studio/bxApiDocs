@@ -56,7 +56,7 @@ class BIConnectorStartComponent extends CBitrixComponent
 					'ACTIVE' => true,
 					'ACCESS_KEY' => $key,
 				]);
-				if (!($resultSave instanceof ErrorCollection))
+				if ($resultSave->isSuccess())
 				{
 					$accessKey = $key;
 				}

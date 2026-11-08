@@ -13,6 +13,7 @@ use Bitrix\Crm\Integration\AI\Operation\Autostart\ScenarioOverrideResolver;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\Slider\AutomationScenarioRegistry;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\Slider\GlobalFeatureReader;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
+use Bitrix\Crm\Settings\CopilotSettings;
 use Bitrix\Main\DI\ServiceLocator;
 
 final class ChatAutoStartStrategy extends BaseChannelAutoStartStrategy
@@ -70,13 +71,17 @@ final class ChatAutoStartStrategy extends BaseChannelAutoStartStrategy
 		);
 
 		ServiceLocator::getInstance()->get(PipelineExecutor::class)->startOrResume(
-			new StepContext(
+			(new StepContext(
 				activityId: $activityId,
 				userId: $this->userId,
 				scenarioName: $scenario,
 				isManualLaunch: false,
 				activityProvider: OpenLine::getId(),
-			),
+			))
+				->withExtra(
+					'fillFieldsEntityAllowed',
+					CopilotSettings::getCurrent()->isFillFieldsEnabledFor($this->nextTarget?->getEntityTypeId() ?? 0),
+				),
 		);
 	}
 
@@ -98,9 +103,22 @@ final class ChatAutoStartStrategy extends BaseChannelAutoStartStrategy
 			return Scenario::UNDEFINED_SCENARIO;
 		}
 
-		$isFillFieldsEnabled = AIManager::isEnabledInGlobalSettings(GlobalSetting::FillItemFromCall);
+		$entityTypeId = $this->nextTarget?->getEntityTypeId() ?? 0;
+		$isFillFieldsEnabled = AIManager::isFillFieldsEnabledForEntityType($entityTypeId);
 		$isAnalyzeCommunicationEnabled = AIManager::isEnabledInGlobalSettings(GlobalSetting::AnalyzeCommunication);
 		$isSummarizeEnabled = AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize);
+		if (
+			!$isFillFieldsEnabled
+			&& $fillFieldsActive
+			&& $isSummarizeEnabled
+			&& AIManager::isEnabledInGlobalSettings(GlobalSetting::FillItemFromCall)
+		)
+		{
+			$this->logger->debug(
+				'{date}: Fill fields autostart is disabled for entity type {entityTypeId}' . PHP_EOL,
+				['entityTypeId' => $entityTypeId],
+			);
+		}
 
 		$isFirstChatActivityWithFiles = null;
 		$isFirstChatFor = function (string $scenarioCode) use ($settings, $channel, &$isFirstChatActivityWithFiles): bool {

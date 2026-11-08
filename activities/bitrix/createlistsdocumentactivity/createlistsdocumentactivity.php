@@ -84,7 +84,7 @@ class CBPCreateListsDocumentActivity extends CBPCreateDocumentActivity
 
 		$documentService = $this->workflow->getRuntime()->getDocumentService();
 		$documentFields = $documentService->getDocumentFields($documentType);
-		$resultFields = $this->prepareFieldsValues($documentType, $fields);
+		$resultFields = $this->prepareFieldsValues($documentType, $fields, $documentFields);
 		try
 		{
 			$this->ElementId = $documentService->createDocument($documentType, $resultFields);
@@ -142,6 +142,62 @@ class CBPCreateListsDocumentActivity extends CBPCreateDocumentActivity
 	protected function getCreatedDocumentType(): array
 	{
 		return $this->DocumentType ?? [];
+	}
+
+	protected function prepareFieldsValues(array $documentType, array $values, ?array $documentFields = null): array
+	{
+		$documentService = $this->workflow->getRuntime()->getDocumentService();
+		$documentId = $this->getDocumentId();
+		$documentFields ??= $documentService->getDocumentFields($documentType);
+		$documentFieldsAliasesMap = CBPDocument::getDocumentFieldsAliasesMap($documentFields);
+
+		$resultFields = [];
+		foreach ($values as $key => $value)
+		{
+			$fieldKey = $key;
+			if (!isset($documentFields[$fieldKey]) && isset($documentFieldsAliasesMap[$fieldKey]))
+			{
+				$fieldKey = $documentFieldsAliasesMap[$fieldKey];
+			}
+
+			$property = $documentFields[$fieldKey] ?? null;
+			if (
+				$property
+				&& ($property['Type'] ?? null) === 'select'
+				&& empty($property['Multiple'])
+				&& is_array($value)
+				&& CBPHelper::isAssociativeArray($value)
+			)
+			{
+				$value = array_key_first($value);
+			}
+
+			if ($property && $value)
+			{
+				$fieldTypeObject = $documentService->getFieldTypeObject($documentType, $property);
+				if ($fieldTypeObject)
+				{
+					if (is_array($documentId))
+					{
+						$fieldTypeObject->setDocumentId($documentId);
+					}
+					$fieldTypeObject->setValue($value);
+					$value = $fieldTypeObject->externalizeValue(
+						\Bitrix\Bizproc\FieldType::VALUE_CONTEXT_DOCUMENT,
+						$fieldTypeObject->getValue()
+					);
+				}
+			}
+
+			if (is_null($value))
+			{
+				$value = '';
+			}
+
+			$resultFields[$fieldKey] = $value;
+		}
+
+		return $resultFields;
 	}
 
 	public static function validateProperties($testProperties = [], CBPWorkflowTemplateUser $user = null)

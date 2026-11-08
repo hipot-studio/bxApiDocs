@@ -11,7 +11,12 @@
  * This class handles only A- and U-type items. The rest of the table content lays outside the class scope.
  */
 
+use Bitrix\Main\Application;
 use Bitrix\Tasks\Internals\Task\MemberTable;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationLock;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationRegistry;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationScope;
 
 class CTaskMembers
 {
@@ -78,11 +83,15 @@ class CTaskMembers
 			$check = MemberTable::getByPrimary($arMember)->fetch();
 			if(!$check) // still dont have
 			{
-				$result = MemberTable::add($arMember);
-				if ($result->isSuccess())
-				{
-					return $result->getId();
-				}
+				return self::runMutation((int)$arMember['TASK_ID'], static function () use ($arMember) {
+					$result = MemberTable::add($arMember);
+					if ($result->isSuccess())
+					{
+						return $result->getId();
+					}
+
+					return false;
+				});
 			}
 		}
 		
@@ -192,6 +201,7 @@ class CTaskMembers
 	function DeleteByUserID($USER_ID)
 	{
 		$result = false;
+		$taskIds = [];
 		$list = MemberTable::getList(array(
 			"filter" => array(
 				"=USER_ID" => $USER_ID,
@@ -200,8 +210,29 @@ class CTaskMembers
 		));
 		while ($item = $list->fetch())
 		{
-			$result = MemberTable::delete($item);
+			$taskIds[(int)$item['TASK_ID']] = (int)$item['TASK_ID'];
 		}
+
+		foreach ($taskIds as $taskId)
+		{
+			$result = self::runMutation($taskId, static function () use ($USER_ID, $taskId) {
+				$deleted = false;
+				$list = MemberTable::getList(array(
+					"filter" => array(
+						"=TASK_ID" => $taskId,
+						"=USER_ID" => $USER_ID,
+						"=TYPE" => array("A", "U"),
+					),
+				));
+				while ($item = $list->fetch())
+				{
+					$deleted = MemberTable::delete($item);
+				}
+
+				return $deleted;
+			});
+		}
+
 		return $result;
 	}
 
@@ -221,13 +252,18 @@ class CTaskMembers
             $filter['=TYPE'] = array("A", "U"); // remove only of that type
         }
 
-		$list = MemberTable::getList(array(
-			"filter" => $filter,
-		));
-		while ($item = $list->fetch())
-		{
-			$result = MemberTable::delete($item);
-		}
+		$result = self::runMutation((int)$TASK_ID, static function () use ($filter) {
+			$result = false;
+			$list = MemberTable::getList(array(
+				"filter" => $filter,
+			));
+			while ($item = $list->fetch())
+			{
+				$result = MemberTable::delete($item);
+			}
+
+			return $result;
+		});
 
 		return $result;
 	}
@@ -245,27 +281,27 @@ class CTaskMembers
 	 */
 	public static function updateForTask($taskId, array $userIds, $type)
 	{
-		// drop previous
-		$list = MemberTable::getList(array(
-			"filter" => array(
-				'=TYPE' => $type,
-				'=TASK_ID' => $taskId,
-			),
-		));
-		while ($item = $list->fetch())
-		{
-			MemberTable::delete($item);
-		}
-
-		// add new
-		foreach($userIds as $userId)
-		{
-			MemberTable::add(array(
-				'TASK_ID' => $taskId,
-				'USER_ID' => $userId,
-				'TYPE' => $type,
+		return self::runMutation((int)$taskId, static function () use ($taskId, $userIds, $type): void {
+			$list = MemberTable::getList(array(
+				"filter" => [
+					'=TYPE' => $type,
+					'=TASK_ID' => $taskId,
+				],
 			));
-		}
+			while ($item = $list->fetch())
+			{
+				MemberTable::delete($item);
+			}
+
+			foreach ($userIds as $userId)
+			{
+				MemberTable::add([
+					'TASK_ID' => $taskId,
+					'USER_ID' => $userId,
+					'TYPE' => $type,
+				]);
+			}
+		});
 	}
 
 	public static function DeleteAllByTaskID($TASK_ID)
@@ -274,15 +310,34 @@ class CTaskMembers
 		$filter = array(
 			"=TASK_ID" => $TASK_ID,
 		);
-		$list = MemberTable::getList(array(
-			"filter" => $filter,
-		));
-		while ($item = $list->fetch())
-		{
-			$result = MemberTable::delete($item);
-		}
+		$result = self::runMutation((int)$TASK_ID, static function () use ($filter) {
+			$result = false;
+			$list = MemberTable::getList(array(
+				"filter" => $filter,
+			));
+			while ($item = $list->fetch())
+			{
+				$result = MemberTable::delete($item);
+			}
+
+			return $result;
+		});
 
 		return $result;
+	}
+
+	private static function runMutation(int $taskId, callable $operation): mixed
+	{
+		$container = Container::getInstance();
+
+		return $container->get(TaskMutationRegistry::class)->run(
+			Application::getConnection(),
+			static function (TaskMutationScope $scope) use ($container, $taskId, $operation): mixed {
+				$container->get(TaskMutationLock::class)->acquire($taskId, $scope);
+
+				return $operation();
+			},
+		);
 	}
 
 }

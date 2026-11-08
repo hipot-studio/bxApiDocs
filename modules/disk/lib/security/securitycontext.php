@@ -101,6 +101,15 @@ abstract class SecurityContext implements IErrorable
 	 * @param $objectId
 	 * @return bool
 	 */
+	public function canDownload($objectId)
+	{
+		return $this->canRead($objectId);
+	}
+
+	/**
+	 * @param $objectId
+	 * @return bool
+	 */
 	abstract public function canRename($objectId);
 
 	/**
@@ -152,11 +161,27 @@ abstract class SecurityContext implements IErrorable
 	 * @param $parentObjectId
 	 * @return void
 	 */
-	public function preloadOperationsForChildren($parentObjectId)
+	public function preloadOperationsForChildren($parentObjectId, bool $shouldPreloadDownloadAccess = false)
 	{
 	}
 
-	public function preloadOperationsForSpecifiedObjects($parentObjectId, array $objectIds)
+	public function preloadOperationsForSpecifiedObjects(
+		$parentObjectId,
+		array $objectIds,
+		bool $shouldPreloadDownloadAccess = false,
+	)
+	{
+	}
+
+	public function preloadOperationsForObjects(array $objects): void
+	{
+	}
+
+	public function preloadOperationsForObjectIds(array $objectIds): void
+	{
+	}
+
+	public function preloadUnifiedLinkAccessLevelsForObjects(array $objects): void
 	{
 	}
 

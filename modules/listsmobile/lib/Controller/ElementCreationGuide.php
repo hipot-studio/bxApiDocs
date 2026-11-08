@@ -10,6 +10,7 @@ use Bitrix\Lists\Api\Service\ServiceFactory\ProcessService;
 use Bitrix\Lists\Api\Service\ServiceFactory\ServiceFactory;
 use Bitrix\Lists\Api\Service\WorkflowService;
 use Bitrix\Lists\Security\ElementRight;
+use Bitrix\Lists\Security\IblockRight;
 use Bitrix\Lists\Service\Param;
 use Bitrix\ListsMobile\Command\LoadEntityCommand;
 use Bitrix\ListsMobile\Command\SaveEntityCommand;
@@ -166,6 +167,7 @@ class ElementCreationGuide extends Controller
 				|| $workflowService->hasParameters($elementId)
 			,
 			'isConstantsTuned' => $workflowService->isConstantsTuned(),
+			'canUserTuneConstants' => $this->canUserTuneConstants($iBlockId, $service->getInnerIBlockTypeId()),
 			'signedIBlockIdAndElementId' => $this->signIBlockIdAndElementId($iBlockId, $elementId),
 		];
 	}
@@ -439,6 +441,18 @@ class ElementCreationGuide extends Controller
 		$response = $accessService->checkElementPermission(0, 0, ElementRight::ADD, $iBlockId);
 
 		return $response->isSuccess();
+	}
+
+	private function canUserTuneConstants(int $iBlockId, string $iBlockTypeId): bool
+	{
+		if (!Loader::includeModule('iblock'))
+		{
+			return false;
+		}
+
+		$accessService = $this->getAccessService($iBlockTypeId, $iBlockId);
+
+		return $accessService->checkIBlockPermission($iBlockId, IblockRight::EDIT)->isSuccess();
 	}
 
 	private function getAccessService(string $iBlockTypeId, int $iBlockId): AccessService

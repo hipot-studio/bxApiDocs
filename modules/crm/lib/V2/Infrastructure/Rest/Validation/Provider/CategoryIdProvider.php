@@ -10,24 +10,24 @@ use Bitrix\Crm\V2\Public\EntityType;
 /**
  * @internal
  */
-class CategoryIdProvider implements ValidValuesProviderInterface
+class CategoryIdProvider implements ValidValuesProviderInterface, CacheKeyProviderInterface
 {
+	public static function getCacheKey(Context $context): ?array
+	{
+		$entityTypeId = $context->getExtraArgs()['entityTypeId'] ?? null;
+
+		return is_int($entityTypeId) ? [$entityTypeId] : null;
+	}
+
 	/**
 	 * @return int[]
 	 */
 	public static function getValidValues(Context $context): array
 	{
-		static $categoriesIdMap = [];
-
 		$userId = $context->getUserId();
 		$entityType = $context->getEntityType();
-		$entityTypeId = $entityType->getId();
-		if (!isset($categoriesIdMap[$userId][$entityTypeId]))
-		{
-			$categoriesIdMap[$userId][$entityTypeId] = static::getDictionary()->getAllId($entityType, $userId);
-		}
 
-		return $categoriesIdMap[$userId][$entityTypeId];
+		return static::getDictionary()->getAllId($entityType, $userId);
 	}
 
 	protected static function getDictionary(): CategoryDictionary

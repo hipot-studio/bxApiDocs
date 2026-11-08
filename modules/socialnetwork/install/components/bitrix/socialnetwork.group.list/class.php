@@ -695,11 +695,18 @@ class CSocialnetworkGroupListComponent extends WorkgroupList
 				continue;
 			}
 
-			if (
-				$fieldName === '%=TAG'
-				&& (string)$value !== ''
-			)
+			if ($fieldName === '%=TAG')
 			{
+				$tagName = WorkgroupTagTable::prepareNameForSearch((string)$value);
+				unset($filter[$fieldName]);
+
+				if ($tagName === '')
+				{
+					// Keep empty result set when a tag filter was requested but normalized to empty.
+					$this->query->addFilter('=ID', 0);
+					continue;
+				}
+
 				$this->query->registerRuntimeField(
 					new Reference(
 						'TAG',
@@ -710,8 +717,10 @@ class CSocialnetworkGroupListComponent extends WorkgroupList
 				);
 				$this->runtimeFieldsManager->add('TAG');
 
-				$this->query->addFilter('%=TAG.NAME', (string)$value);
-				unset($filter[$fieldName]);
+				$this->query->addFilter(
+					'%=TAG.NAME',
+					$tagName
+				);
 				continue;
 			}
 

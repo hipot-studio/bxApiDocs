@@ -117,15 +117,26 @@ class SaveFile
 		$result['UPDATED'] = [];
 		$result['CLEANED'] = [];
 
-		foreach ($enabledLanguagesList as $langId)
+		// the path depends on the language code, so all of them are resolved before the first write
+		$pathsResult = $this->resolveLangFilePaths(
+			$file,
+			\array_intersect($enabledLanguagesList, \array_merge($languagesToUpdate, $languagesToDrop))
+		);
+		if (!$pathsResult->isSuccess())
 		{
-			if (!\in_array($langId, $languagesToUpdate) && !\in_array($langId, $languagesToDrop))
-			{
-				continue;
-			}
+			$this->addError(new Main\Error(Loc::getMessage(
+				$pathsResult->getErrors()[0]->getCode() === Translate\IO\Path::ERROR_NOT_LANG_FILE
+					? 'TR_EDIT_ERROR_FILE_NOT_LANG'
+					: 'TR_EDIT_FILE_WRONG_NAME',
+				['#FILE#' => $file]
+			)));
 
-			$langRelPath = Translate\IO\Path::replaceLangId($file, $langId);
-			$fullPath = Translate\IO\Path::tidy($documentRoot. '/'. $langRelPath);
+			return $result;
+		}
+
+		foreach ($pathsResult->getData() as $langId => $langFilePath)
+		{
+			$fullPath = $documentRoot. $langFilePath;
 			$fullPath = Main\Localization\Translation::convertLangPath($fullPath, $langId);
 
 			$langFile = new Translate\File($fullPath);

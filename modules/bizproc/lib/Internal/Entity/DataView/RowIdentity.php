@@ -73,6 +73,6 @@ final class RowIdentity
 
 	private static function isPositiveIntString(string $value): bool
 	{
-		return $value !== '' && ctype_digit($value);
+		return preg_match('/^[0-9]+$/D', $value) === 1;
 	}
 }

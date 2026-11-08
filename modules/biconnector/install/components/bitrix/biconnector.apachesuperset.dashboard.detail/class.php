@@ -12,16 +12,24 @@ use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Access\Update\DashboardGroupRights\Converter;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
 use Bitrix\BIConnector\Configuration\Feature;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\BitrixGptChat;
 use Bitrix\BIConnector\Integration\Superset\Integrator\ServiceLocation;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardUrlParameterTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Internal\ChartAnalysis\ChartAnalysisAvailabilityService;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\BitrixGptBiAnnouncement;
+use Bitrix\BIConnector\Internal\Digest\Service\DigestSetupAvailability;
+use Bitrix\BIConnector\Internal\Digest\Service\DigestSetupAvailabilityService;
 use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
+use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
+use Bitrix\BIConnector\Public\Dto\ChartAnalysisAvailability;
+use Bitrix\BIConnector\Public\Provider\ChartAnalysisAvailabilityProvider;
 use Bitrix\BIConnector\Public\Provider\DashboardDetailInfoProvider;
 use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightOptions;
 use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightResolver;
@@ -43,14 +51,25 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 	private ?Dashboard $dashboard;
 	private int $dashboardId;
+	private bool $isMobile = false;
 
 	public function onPrepareComponentParams($arParams)
 	{
 		$this->dashboardId = (int)($arParams['DASHBOARD_ID'] ?? 0);
+		$this->isMobile = (bool)($arParams['IS_MOBILE'] ?? false);
 		$arParams['CODE'] = $arParams['CODE'] ?? '';
 		$arParams['URL_PARAMS'] = $this->getUrlParams();
 
 		return parent::onPrepareComponentParams($arParams);
+	}
+
+	/**
+	 * On mobile every exit renders the single `mobile` template, which turns arResult into a
+	 * bridge signal for the native shell; on web the original page name is used unchanged.
+	 */
+	private function renderTemplate(string $page = ''): void
+	{
+		$this->includeComponentTemplate($this->isMobile ? 'mobile' : $page);
 	}
 
 	private function getSupersetController(): SupersetController
@@ -80,6 +99,9 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 				'title' => Loc::getMessage('SUPERSET_DASHBOARD_DETAIL_INFO_AHA_MOMENT_TITLE'),
 				'description' => Loc::getMessage('SUPERSET_DASHBOARD_DETAIL_INFO_AHA_MOMENT_DESCRIPTION'),
 			],
+			'DASHBOARD_ONBOARDING' => (new Superset\UI\DashboardOnboarding\DashboardOnboardingConfig(
+				Superset\UI\DashboardOnboarding\DashboardOnboardingMode::None
+			))->toArray(),
 			'MARKET_COLLECTION_URL' => MarketDashboardManager::getMarketCollectionUrl(),
 			'SUPERSET_SERVICE_LOCATION' => ServiceLocation::getCurrentDatacenterLocationRegion(),
 		];
@@ -136,6 +158,14 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	{
 		if (!$this->isComponentAvailable())
 		{
+			if ($this->isMobile)
+			{
+				$this->arResult['MOBILE_REASON'] = 'superset_unavailable';
+				$this->renderTemplate();
+
+				return;
+			}
+
 			LocalRedirect('/bi/dashboard/');
 		}
 
@@ -148,7 +178,8 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			if (!$dashboard)
 			{
 				$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_DETAIL_NOT_FOUND');
-				$this->includeComponentTemplate();
+				$this->arResult['MOBILE_REASON'] = 'no_access';
+				$this->renderTemplate();
 
 				return;
 			}
@@ -164,7 +195,8 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		if (!$initResult)
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_DETAIL_NOT_FOUND');
-			$this->includeComponentTemplate();
+			$this->arResult['MOBILE_REASON'] = 'no_access';
+			$this->renderTemplate();
 
 			return;
 		}
@@ -184,7 +216,8 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			;
 
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage($errorCode);
-			$this->includeComponentTemplate();
+			$this->arResult['MOBILE_REASON'] = 'no_access';
+			$this->renderTemplate();
 
 			return;
 		}
@@ -192,7 +225,8 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($this->dashboard->getType()))
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BI_CONNECTOR_SUPERSET_MARKET_DASHBOARD_IS_NOT_AVAILABLE_BY_SUB');
-			$this->includeComponentTemplate();
+			$this->arResult['MOBILE_REASON'] = 'no_access';
+			$this->renderTemplate();
 
 			return;
 		}
@@ -203,7 +237,8 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		)
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BI_CONNECTOR_SUPERSET_DASHBOARD_IS_NOT_TARIFF_AVAILABLE');
-			$this->includeComponentTemplate();
+			$this->arResult['MOBILE_REASON'] = 'no_access';
+			$this->renderTemplate();
 
 			return;
 		}
@@ -272,18 +307,25 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		)
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_DETAIL_NOT_FOUND');
-			$this->includeComponentTemplate();
+			$this->arResult['MOBILE_REASON'] = 'superset_unavailable';
+			$this->renderTemplate();
 
 			return;
 		}
 
 		$this->prepareAccessParams();
+		$this->prepareDigestSetupSurface();
+		$this->prepareBitrixGptChat();
+		$this->prepareChartAnalysisSurface();
 
 		$this->prepareEmbeddedCredentials();
 		$this->prepareNativeFilters();
 
 		$this->prepareUrlParams();
 		$this->prepareInfoAhaMoment();
+		$this->prepareDashboardOnboarding();
+		$this->prepareBitrixGptAnnouncement();
+		$this->prepareMcpBiConnection();
 
 		$this->arResult['IS_USE_EXTERNAL_DATASETS'] = $this->dashboard->isUseExternalDatasets();
 		$this->arResult['CAN_SEND_STARTUP_METRIC'] = self::canSendStartupSupersetMetric();
@@ -302,7 +344,7 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 			CurrentUser::get()->getId()
 		))->run();
 
-		$this->includeComponentTemplate();
+		$this->renderTemplate();
 
 		Application::getInstance()
 			->addBackgroundJob(fn() => Superset\Updater\ClientUpdater::update())
@@ -310,6 +352,13 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 		Application::getInstance()
 			->addBackgroundJob(fn() => MarketDashboardManager::getInstance()->updateApplications())
+		;
+
+		// Backfill physical-dataset descriptions on a live instance (a report is being viewed), never
+		// from the installer/updater where Superset may be unreachable. Throttled to at most once an
+		// hour and one-shot (stops once it succeeds).
+		Application::getInstance()
+			->addBackgroundJob(fn() => BIConnector\Internal\Services\Dataset\DatasetLabelBackfill::run())
 		;
 	}
 
@@ -323,8 +372,9 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->arResult['IS_FIRST_STARTUP'] = $firstStartup;
 		$this->arResult['SUPERSET_STATUS'] = SupersetInitializer::getSupersetStatus();
 		$this->arResult['SUPERSET_SERVICE_LOCATION'] = ServiceLocation::getCurrentDatacenterLocationRegion();
+		$this->arResult['MOBILE_STATE'] = 'preparing';
 
-		$this->includeComponentTemplate('startup');
+		$this->renderTemplate('startup');
 	}
 
 	private function initDashboard(): bool
@@ -365,9 +415,9 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->arResult['URL_PARAMS'] = [];
 
 		$uriVariables = SupersetDashboardUrlParameterTable::getList([
-				'filter' => ['=DASHBOARD_ID' => $this->dashboard->getId()],
-				'select' => ['ID', 'CODE'],
-			])
+			'filter' => ['=DASHBOARD_ID' => $this->dashboard->getId()],
+			'select' => ['ID', 'CODE'],
+		])
 			->fetchCollection()
 		;
 
@@ -379,9 +429,18 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 
 		foreach ($existedCodes as $code => $id)
 		{
-			if (isset($this->arParams['URL_PARAMS'][$code]))
+			// A global parameter - `current_user` - is a value of the server and not of the address: it reaches
+			// the page only through a link Service::getEmbeddedUrl() built. A saved link, a page opened by id and
+			// the mobile frame page carry no parameters at all, and the dashboard would answer with the rows of
+			// everyone. loadGlobalValue() gives nothing for a parameter of a scope: that one has no value outside
+			// the place the report was opened from.
+			$parameter = UrlParameter\Parameter::tryFrom($code);
+			$value = $this->arParams['URL_PARAMS'][$code]
+				?? ($parameter ? UrlParameter\ScopeMap::loadGlobalValue($parameter) : null);
+
+			if ($value !== null)
 			{
-				$this->arResult['URL_PARAMS'][$code] = $this->arParams['URL_PARAMS'][$code];
+				$this->arResult['URL_PARAMS'][$code] = $value;
 			}
 		}
 	}
@@ -411,6 +470,55 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->arResult['INFO_AHA_MOMENT']['canShow'] = $spotlightConfig->canShow();
 		$this->arResult['INFO_AHA_MOMENT']['id'] = $spotlightConfig->getSpotlightId();
 		$this->arResult['INFO_AHA_MOMENT']['showDelaySeconds'] = $spotlightConfig->getShowDelaySeconds();
+	}
+
+	private function prepareDashboardOnboarding(): void
+	{
+		$context = new Superset\UI\DashboardOnboarding\DashboardOnboardingContext(
+			userId: (int)CurrentUser::get()->getId(),
+			dashboardType: $this->dashboard->getType(),
+			dashboardStatus: $this->dashboard->getStatus(),
+			dashboardCreatedById: (int)$this->dashboard->getField('CREATED_BY_ID'),
+			canEdit: $this->arResult['CAN_EDIT'] === 'Y',
+			isBitrixGptAvailable: $this->arResult['BITRIX_GPT_CHAT']['IS_AVAILABLE'],
+		);
+
+		$config = $this->getDashboardOnboardingService()->getConfig($context);
+		$this->arResult['DASHBOARD_ONBOARDING'] = $config->toArray();
+
+		// Both the tour and the info hint point at the same header button: the hint waits for
+		// another visit instead of overlapping the onboarding.
+		if ($config->getMode() !== Superset\UI\DashboardOnboarding\DashboardOnboardingMode::None)
+		{
+			$this->arResult['INFO_AHA_MOMENT']['canShow'] = false;
+		}
+	}
+
+	/**
+	 * Called from the ready render branch only: startup and error screens must not carry the announcement.
+	 */
+	private function prepareBitrixGptAnnouncement(): void
+	{
+		$this->arResult['BITRIXGPT_BI_ANNOUNCEMENT'] = [
+			'canShow' => BitrixGptBiAnnouncement::canShowForCurrentUser(),
+			'surface' => 'detail',
+		];
+	}
+
+	/**
+	 * Called from the ready render branch only, and only while the feature is on: with the option off
+	 * neither the key nor the header action exists. The catalogue of the operations travels in the
+	 * settings of the popup extension, which the header asks for at the press of the action, so the page
+	 * of the report neither builds the catalogue nor carries it.
+	 */
+	private function prepareMcpBiConnection(): void
+	{
+		if (!Feature::isMcpBiConnectionEnabled())
+		{
+			return;
+		}
+
+		$this->arResult['MCP_BI_CONNECTION'] = true;
 	}
 
 	private function prepareAccessParams(): void
@@ -447,20 +555,74 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 		$this->arResult['CAN_SHARE'] = $canShare ? 'Y' : 'N';
 
 		$shareProvider = \Bitrix\Main\DI\ServiceLocator::getInstance()->get('biconnector.provider.share');
-		$currentUserId = (int)CurrentUser::get()->getId();
-		$share = $shareProvider->getByDashboardAndUser($this->dashboard->getId(), $currentUserId);
-		if ($share && $share->isActive())
+		$this->arResult['SHARE_DATA'] = $shareProvider->getAuthorShareState(
+			$this->dashboard->getId(),
+			(int)CurrentUser::get()->getId(),
+		);
+		$this->arResult['IS_SHARE_BANNED'] = $shareProvider->isShareBanned($this->dashboard->getId()) ? 'Y' : 'N';
+	}
+
+	protected function prepareDigestSetupSurface(): void
+	{
+		$availability = $this->createDigestSetupAvailabilityService()->check(
+			$this->dashboard,
+			(int)CurrentUser::get()->getId(),
+		);
+		if ($availability->state === DigestSetupAvailability::HIDDEN)
 		{
-			$this->arResult['SHARE_DATA'] = [
-				'isActive' => true,
-				'password' => $share->getPassword(),
-				'dateExpireTimestamp' => $share->getDateExpire()->getTimestamp(),
-			];
+			return;
 		}
-		else
+
+		$this->arResult['DIGEST_SETUP'] = [
+			'dashboardId' => $this->dashboard->getId(),
+			'availability' => $availability->toArray(),
+		];
+	}
+
+	protected function createDigestSetupAvailabilityService(): DigestSetupAvailabilityService
+	{
+		return ServiceLocator::getInstance()->get(DigestSetupAvailabilityService::class);
+	}
+
+	/**
+	 * The header button, the chart analysis surface and its availability check share one answer per hit.
+	 */
+	protected function prepareBitrixGptChat(): void
+	{
+		$isAvailable = BitrixGptChat::isAvailable();
+
+		$this->arResult['BITRIX_GPT_CHAT'] = [
+			'IS_AVAILABLE' => $isAvailable,
+			'NAME' => $isAvailable ? BitrixGptChat::getName() : '',
+		];
+	}
+
+	protected function prepareChartAnalysisSurface(): void
+	{
+		$availability = $this->createChartAnalysisAvailabilityProvider()->check(
+			$this->dashboard,
+			(int)CurrentUser::get()->getId(),
+		);
+		if ($availability->state === ChartAnalysisAvailability::HIDDEN)
 		{
-			$this->arResult['SHARE_DATA'] = null;
+			return;
 		}
+
+		$this->arResult['CHART_ANALYSIS'] = [
+			'dashboardId' => $this->dashboard->getId(),
+			'state' => $availability->state,
+			'promoterCode' => $availability->promoterCode,
+			'bitrixGptName' => $this->arResult['BITRIX_GPT_CHAT']['NAME'],
+		];
+	}
+
+	protected function createChartAnalysisAvailabilityProvider(): ChartAnalysisAvailabilityProvider
+	{
+		return new ChartAnalysisAvailabilityProvider(
+			new ChartAnalysisAvailabilityService(
+				isBitrixGptAvailable: fn(): bool => $this->arResult['BITRIX_GPT_CHAT']['IS_AVAILABLE'],
+			),
+		);
 	}
 
 	private function getUrlParams(): ?array
@@ -490,5 +652,10 @@ class ApacheSupersetDashboardDetailComponent extends CBitrixComponent
 	private function getAhaMomentSpotlightResolver(): AhaMomentSpotlightResolver
 	{
 		return ServiceLocator::getInstance()->get('biconnector.service.ahaMomentSpotlightResolver');
+	}
+
+	private function getDashboardOnboardingService(): Superset\UI\DashboardOnboarding\DashboardOnboardingService
+	{
+		return ServiceLocator::getInstance()->get(Superset\UI\DashboardOnboarding\DashboardOnboardingService::class);
 	}
 }

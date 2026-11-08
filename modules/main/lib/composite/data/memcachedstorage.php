@@ -73,16 +73,31 @@ final class MemcachedStorage extends AbstractStorage
 		return $this->getProps() !== false;
 	}
 
+	/**
+	 * Deletes the cache
+	 * @return int|false the number of bytes whose removal is confirmed, false on failure
+	 */
 	public function delete()
 	{
-		if ($this->memcached && $this->memcached->delete($this->cacheKey))
+		if (!$this->memcached)
 		{
-			$size = $this->getProp("size");
-			$this->deleteProps();
-			return $size;
+			return false;
 		}
 
-		return false;
+		$size = $this->getProp("size");
+
+		/*
+		 * The content is evicted by its own lifetime, and a delete of a key that is already gone is a refusal
+		 * too: only a content still readable after the delete means the removal really failed
+		 */
+		if (!$this->memcached->delete($this->cacheKey) && $this->read() !== false)
+		{
+			return false;
+		}
+
+		$this->deleteProps();
+
+		return $size !== false ? $size : 0;
 	}
 
 	public function deleteAll()

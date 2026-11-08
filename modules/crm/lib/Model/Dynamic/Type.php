@@ -62,6 +62,8 @@ use Bitrix\Main\UserField;
  * @method Type setUpdatedBy(int $createdById)
  * @method DateTime|null getUpdatedTime()
  * @method Type setUpdatedTime(DateTime $updatedTime)
+ * @method string|null getDescription()
+ * @method Type setDescription(?string $description)
  */
 class Type extends UserField\Internal\Type implements \JsonSerializable
 {

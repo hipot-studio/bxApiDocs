@@ -2,8 +2,9 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
-use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSignature;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Security\ParameterSigner;
 use Bitrix\Main\DI\ServiceLocator;
@@ -20,7 +21,8 @@ class DownloadController extends Internals\Controller
 	const ERROR_COULD_NOT_FIND_REAL_FILE = 'DISK_DC_22006';
 
 	protected UnifiedLinkAccessService $unifiedLinkAccessService;
-	protected UnifiedLinkSignature $unifiedLinkSignature;
+	protected UnifiedLinkUrl $unifiedLinkUrl;
+	protected DownloadAccess $downloadAccess;
 	protected $fileId;
 	protected $versionId;
 	/** @var File */
@@ -31,9 +33,10 @@ class DownloadController extends Internals\Controller
 	public function __construct()
 	{
 		parent::__construct();
-
-		$this->unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
-		$this->unifiedLinkSignature = new UnifiedLinkSignature();
+		$serviceLocator = ServiceLocator::getInstance();
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
+		$this->downloadAccess = $serviceLocator->get(DownloadAccess::class);
 	}
 
 	protected function listActions()
@@ -117,17 +120,17 @@ class DownloadController extends Internals\Controller
 
 	protected function onBeforeActionDownloadFile()
 	{
-		return $this->onWorkWithOneFile();
+		return $this->onWorkWithOneFile(true);
 	}
 
 	protected function onBeforeActionDownloadVersion()
 	{
-		return $this->onWorkWithOneFile();
+		return $this->onWorkWithOneFile(true);
 	}
 
 	protected function onBeforeActionCopyToMe()
 	{
-		return $this->onWorkWithOneFile();
+		return $this->onWorkWithOneFile(true);
 	}
 
 	protected function onBeforeActionTransformOnOpen()
@@ -135,7 +138,7 @@ class DownloadController extends Internals\Controller
 		return $this->onWorkWithOneFile();
 	}
 
-	private function onWorkWithOneFile()
+	protected function onWorkWithOneFile($shouldCheckDownload = false)
 	{
 		if(!$this->checkRequiredGetParams(array('fileId')))
 		{
@@ -163,20 +166,21 @@ class DownloadController extends Internals\Controller
 			return new EventResult(EventResult::ERROR);
 		}
 		//todo refactor. The method send response. It's bad.
-		$this->checkPermissions();
+		$this->checkPermissions($shouldCheckDownload);
 
 		return new EventResult(EventResult::SUCCESS);
 	}
 
-	protected function checkPermissions()
+	protected function checkPermissions($shouldCheckDownload = false)
 	{
-		if ($this->hasUnifiedLinkAccess())
-		{
-			return;
-		}
+		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext($this->hasUnifiedLinkAccess());
 
-		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext();
-		if(!$this->file->canRead($securityContext))
+		$hasAccess = $shouldCheckDownload
+			? $this->file->canDownload($securityContext)
+			: $this->file->canRead($securityContext)
+		;
+
+		if(!$hasAccess)
 		{
 			$this->errorCollection->addOne(new Error(Loc::getMessage('DISK_DOWNLOAD_CONTROLLER_ERROR_BAD_RIGHTS'), self::ERROR_BAD_RIGHTS));
 
@@ -189,30 +193,27 @@ class DownloadController extends Internals\Controller
 		}
 	}
 
-	/**
-	 * The `_uls` signature is weighed against what the request actually asks for: a versionId turns
-	 * every action here into one serving that revision, and only the signature of the pair opens it.
-	 * The signature naming the file is handed out with the json of every file, so accepting it for a
-	 * revision would open the whole history along with the document.
-	 */
 	protected function hasUnifiedLinkAccess(): bool
 	{
-		$uls = $this->request->getQuery('_uls');
-		if (
-			!is_string($uls)
-			|| !$this->file->supportsUnifiedLink()
-			|| !$this->unifiedLinkAccessService->check($this->file)->canRead()
-		)
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
+		if (!is_string($uls) || !$this->file->supportsUnifiedLink())
 		{
 			return false;
 		}
 
-		if ($this->versionId)
-		{
-			return $this->unifiedLinkSignature->validateUlsForVersion((int)$this->fileId, (int)$this->versionId, $uls);
-		}
+		$isSignatureValid = $this->versionId
+			? $this->unifiedLinkAccessService->validateUlsForVersion(
+				objectId: $this->file->getId(),
+				versionId: $this->versionId,
+				uls: $uls,
+			)
+			: $this->unifiedLinkAccessService->validateUlsForObjectId(
+				objectId: $this->file->getId(),
+				uls: $uls,
+			)
+		;
 
-		return $this->unifiedLinkSignature->validateUlsForObjectId((int)$this->fileId, $uls);
+		return $isSignatureValid && $this->unifiedLinkAccessService->check($this->file)->canRead();
 	}
 
 	protected function processActionDownloadFile()
@@ -385,7 +386,7 @@ class DownloadController extends Internals\Controller
 
 		$fileData = $this->version->getFile();
 		\CFile::viewByUser($fileData, [
-			'force_download' => false,
+			'force_download' => true,
 			'cache_time' => Configuration::DEFAULT_CACHE_TIME,
 			'attachment_name' => $this->version->getName()
 		]);
@@ -454,24 +455,22 @@ class DownloadController extends Internals\Controller
 		}
 
 		$zipArchive = new ZipNginx\Archive('archive' . date('y-m-d') . '.zip');
+		$files = File::loadBatchById(array_map('intval', $objectIds), ['STORAGE']);
+		$securityContextByFile = $this->preloadArchiveFileSecurityContexts(
+			$files,
+			(int)$this->getUser()->getId(),
+		);
 
-		foreach($objectIds as $id)
+		foreach($files as $file)
 		{
-			//now we can't allow to download whole folder.
-			$file = File::loadById($id);
-			if(!$file)
+			if (!$file instanceof File)
 			{
 				continue;
 			}
 
-			$storage = $file->getStorage();
-			if(!$storage)
-			{
-				continue;
-			}
+			$securityContext = $securityContextByFile[spl_object_id($file)] ?? null;
 
-			$securityContext = $storage->getCurrentUserSecurityContext();
-			if(!$file->canRead($securityContext))
+			if(!$securityContext || !$file->canDownload($securityContext))
 			{
 				continue;
 			}
@@ -491,6 +490,11 @@ class DownloadController extends Internals\Controller
 		$this->end();
 	}
 
+	protected function preloadArchiveFileSecurityContexts(array $files, int $userId): array
+	{
+		return DownloadAccess::preloadForFilesBySecurityContext($files, $userId);
+	}
+
 	protected function processActionDownloadByExternalLink($externalLink)
 	{
 		if(!ExternalLink::isValidValueForField('HASH', $externalLink, $this->errorCollection))
@@ -499,13 +503,8 @@ class DownloadController extends Internals\Controller
 		}
 
 		/** @var ExternalLink $externalLink */
-		$externalLink = ExternalLink::load(
-			array(
-				'=HASH' => $externalLink,
-			),
-			array(
-				'FILE'
-			)
+		$externalLink = $this->loadExternalLinkForDownload(
+			$externalLink,
 		);
 
 		if (!$externalLink || $externalLink->isExpired() || $externalLink->isSpecificVersion() || !$externalLink->getFile())
@@ -521,6 +520,34 @@ class DownloadController extends Internals\Controller
 		}
 
 		$file = $externalLink->getFile();
+		$canDownloadWithReadAccess = $this->downloadAccess->checkExternalLink($file, $externalLink);
+
+		if (!$externalLink->allowEdit() && !$canDownloadWithReadAccess)
+		{
+			$this->errorCollection[] = new Error(
+				Loc::getMessage('DISK_DOWNLOAD_CONTROLLER_ERROR_BAD_RIGHTS'),
+				self::ERROR_BAD_RIGHTS,
+			);
+			$this->sendJsonErrorResponse();
+		}
+
+		$this->sendExternalLinkFile($file);
+	}
+
+	protected function loadExternalLinkForDownload(string $externalLink): ?ExternalLink
+	{
+		return ExternalLink::load(
+			array(
+				'=HASH' => $externalLink,
+			),
+			array(
+				'FILE'
+			)
+		);
+	}
+
+	protected function sendExternalLinkFile(File $file): void
+	{
 		$fileData = $file->getFile();
 
 		\CFile::viewByUser($fileData, array('force_download' => false, 'attachment_name' => $file->getName()));

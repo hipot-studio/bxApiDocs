@@ -169,6 +169,9 @@ class B2eCompany extends Controller
 			$company->goskeyLiteAvailable = !$goskeyLiteRestricted
 				&& (bool)($registeredByTaxId['goskey_lite_available'] ?? false)
 			;
+			$company->goskeyRepresentativeSigningAvailable = !$goskeyLiteRestricted
+				&& (bool)($registeredByTaxId['goskey_representative_signing_available'] ?? false)
+			;
 			if (!empty($registeredByTaxId['register_url']) && is_string($registeredByTaxId['register_url']))
 			{
 				$company->registerUrl = $registeredByTaxId['register_url'];

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Vibecodeconnector\Internal\Repository\Pairing;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\Type\DateTime;
@@ -54,6 +55,49 @@ final class PairingRepository
 	}
 
 	/**
+	 * Existence check that reads the row itself and locks it until the caller's transaction ends.
+	 *
+	 * Unlike `findByIss()` it consults neither the file cache nor a transaction snapshot: a cached
+	 * row survives a deletion made by another process (and the module's cache cannot always be
+	 * invalidated across users), while a plain `SELECT` under `REPEATABLE READ` keeps returning the
+	 * row this transaction saw first. A locking read always sees the latest committed state, which
+	 * is what a writer about to stamp this issuer onto a catalog item needs.
+	 *
+	 * Whoever wants the lock to mean anything must call this inside a transaction and hold it until
+	 * commit; without row-locking support the call degrades to a plain uncached existence check.
+	 */
+	public function lockByIss(string $iss): bool
+	{
+		if ($iss === '')
+		{
+			return false;
+		}
+
+		$connection = Application::getConnection();
+		if (!in_array($connection->getType(), ['mysql', 'pgsql'], true))
+		{
+			// `FOR UPDATE` and the row-limit syntax below are the MySQL/PostgreSQL dialect. On the
+			// rest the call degrades to an uncached existence check: no lock, but no broken SQL
+			// either - and the callers already treat a missing lock as "not synchronised".
+			return PairingTable::query()
+				->setSelect(['ID'])
+				->where('ISS', $iss)
+				->setLimit(1)
+				->fetch() !== false
+			;
+		}
+
+		$helper = $connection->getSqlHelper();
+		$sql = 'SELECT ' . $helper->quote('ID')
+			. ' FROM ' . $helper->quote(PairingTable::getTableName())
+			. ' WHERE ' . $helper->quote('ISS') . " = '" . $helper->forSql($iss) . "'"
+			. ' LIMIT 1 FOR UPDATE'
+		;
+
+		return $connection->query($sql)->fetch() !== false;
+	}
+
+	/**
 	 * @return list<Pairing>
 	 */
 	public function listAll(): array
@@ -64,6 +108,17 @@ final class PairingRepository
 			->fetchAll();
 
 		return array_map(fn (array $row): Pairing => $this->mapRow($row), $rows);
+	}
+
+	public function listEndpointUrls(): array
+	{
+		$rows = PairingTable::query()
+			->setSelect(['ENDPOINT_URL'])
+			->setCacheTtl(self::CACHE_TTL_SECONDS)
+			->fetchAll()
+		;
+
+		return array_column($rows, 'ENDPOINT_URL');
 	}
 
 	public function listExpired(?int $now = null): array
@@ -82,6 +137,7 @@ final class PairingRepository
 		$row = PairingTable::query()
 			->setSelect(['ID'])
 			->setLimit(1)
+			->setCacheTtl(self::CACHE_TTL_SECONDS)
 			->fetch();
 
 		return $row !== false;
@@ -126,6 +182,20 @@ final class PairingRepository
 
 	public function deleteByIss(string $iss): void
 	{
+		$this->deleteByIssKeepingCache($iss);
+		$this->invalidateCache();
+	}
+
+	/**
+	 * Deletes the row and leaves the cache alone, for callers running inside a transaction.
+	 *
+	 * Invalidating before the commit is worse than not invalidating at all: a reader that misses
+	 * the cache in that window still sees the committed row, caches it again, and nothing
+	 * invalidates it afterwards - so a revoked issuer would keep verifying tokens until the cached
+	 * entry expires. Such callers must call `invalidateCache()` once the commit succeeded.
+	 */
+	public function deleteByIssKeepingCache(string $iss): void
+	{
 		$row = PairingTable::query()
 			->setSelect(['ID'])
 			->where('ISS', $iss)
@@ -135,8 +205,12 @@ final class PairingRepository
 		if ($row !== false)
 		{
 			PairingTable::delete((int)$row['ID']);
-			$this->bustCache();
 		}
+	}
+
+	public function invalidateCache(): void
+	{
+		$this->bustCache();
 	}
 
 	public function deleteAll(): void

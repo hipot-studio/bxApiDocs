@@ -26,4 +26,5 @@ enum GlobalAction: string
 	case OpenProfile = 'OPEN_PROFILE';
 	case OpenCalendar = 'OPEN_CALENDAR';
 	case BeChatManager = 'BE_CHAT_MANAGER';
+	case LinkStructureNode = 'LINK_STRUCTURE_NODE';
 }

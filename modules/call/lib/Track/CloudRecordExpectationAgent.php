@@ -183,6 +183,66 @@ class CloudRecordExpectationAgent
 	}
 
 	/**
+	 * Batched variant of {@see self::hasScheduledAgent()}. One SQL hit with an OR
+	 * of per-call LIKE patterns; each pattern is a fixed prefix into
+	 * ix_agent_name(NAME(100)), so the optimiser does N narrow range scans instead
+	 * of one broad scan over every active CloudRecordExpectationAgent::run(...)
+	 * row. The trailing comma in `'::run(<id>,%'` keeps id `1` from matching `10`.
+	 * Mirrors {@see DownloadAgent::hasScheduledAgentsForTracks()}.
+	 *
+	 * @param int[] $callIds
+	 * @return array<int,bool> Map [callId => hasAgent] for every input id.
+	 */
+	public static function hasScheduledAgents(array $callIds): array
+	{
+		$result = [];
+		foreach ($callIds as $id)
+		{
+			$result[(int)$id] = false;
+		}
+		if (!$result)
+		{
+			return $result;
+		}
+
+		$connection = \Bitrix\Main\Application::getConnection();
+		// LIKE pattern, not exact match — backslashes in the FQCN must be doubled
+		// for the LIKE escape layer first, then forSql doubles again for the string
+		// literal (mirrors CDatabase::ForSqlLike). Plain forSql would leave a single
+		// backslash that LIKE eats as an escape char and the pattern would match
+		// nothing.
+		$prefix = $connection->getSqlHelper()->forSql(
+			str_replace('\\', '\\\\', self::class . '::run(')
+		);
+
+		$likeClauses = [];
+		foreach (array_keys($result) as $callId)
+		{
+			$likeClauses[] = "NAME LIKE '" . $prefix . (int)$callId . ",%'";
+		}
+
+		$rs = $connection->query(
+			"SELECT NAME FROM b_agent
+			WHERE MODULE_ID = 'call'
+				AND ACTIVE = 'Y'
+				AND (" . implode(' OR ', $likeClauses) . ")"
+		);
+		while ($row = $rs->fetch())
+		{
+			if (preg_match('/::run\((\d+),/', $row['NAME'], $m))
+			{
+				$callId = (int)$m[1];
+				if (array_key_exists($callId, $result))
+				{
+					$result[$callId] = true;
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	/**
 	 * Remove agent for this call
 	 *
 	 * @param int $callId Call ID
@@ -361,7 +421,7 @@ class CloudRecordExpectationAgent
 			$call = Registry::getCallWithId($callId);
 			if ($call)
 			{
-				self::sendTelemetry($call, 'error', 'track_failed', 'track_download_stuck');
+				self::sendTelemetry($call, 'error', 'track_failed', 'track_download_stuck', $record);
 			}
 
 			return 'failed';
@@ -386,11 +446,12 @@ class CloudRecordExpectationAgent
 		?\Bitrix\Call\Call $call,
 		string $status,
 		string $event,
-		?string $errorCode = null
+		?string $errorCode = null,
+		?Track $track = null
 	): void
 	{
 		(new CloudRecordAnalytics($call))->sendTelemetry(
-			source: null,
+			source: $track,
 			status: $status,
 			event: 'cloud_record_expectation_' . $event,
 			errorCode: $errorCode

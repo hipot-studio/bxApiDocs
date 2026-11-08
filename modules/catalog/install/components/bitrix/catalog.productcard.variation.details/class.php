@@ -9,13 +9,14 @@ use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
 use Bitrix\Catalog\Component\BaseForm;
 use Bitrix\Catalog\Component\GridVariationForm;
+use Bitrix\Catalog\Component\InvalidMoneyPropertyValueException;
+use Bitrix\Catalog\Component\MoneyPropertyValueNormalizer;
 use Bitrix\Catalog\Component\VariationForm;
 use Bitrix\Catalog\Component\StoreAmount;
 use Bitrix\Catalog\Config\State;
 use Bitrix\Catalog\v2\BaseIblockElementEntity;
 use Bitrix\Catalog\v2\IoC\ServiceContainer;
 use Bitrix\Catalog\v2\Sku\BaseSku;
-use Bitrix\Currency\Integration\IblockMoneyProperty;
 use Bitrix\Iblock\Component\Property\ComponentLinksBuilder;
 use Bitrix\Iblock\PropertyTable;
 use Bitrix\Main\DB\SqlQueryException;
@@ -320,13 +321,76 @@ class CatalogProductVariationDetailsComponent
 				}
 				elseif (Loader::includeModule('currency'))
 				{
-					if (isset($field['AMOUNT'], $field['CURRENCY']))
+					if (is_array($field) && array_key_exists('AMOUNT', $field) && array_key_exists('CURRENCY', $field))
 					{
-						$field = IblockMoneyProperty::getUnitedValue($field['AMOUNT'], $field['CURRENCY']);
+						if (is_array($field['AMOUNT']) && is_array($field['CURRENCY']))
+						{
+							if (
+								count($field['AMOUNT']) !== count($field['CURRENCY'])
+								|| array_diff_key($field['AMOUNT'], $field['CURRENCY']) !== []
+							)
+							{
+								throw new InvalidMoneyPropertyValueException(
+									$name,
+									(string)($property?->getName() ?? $name)
+								);
+							}
+
+							$moneyValues = [];
+							foreach ($field['AMOUNT'] as $valueIndex => $amount)
+							{
+								$currency = $field['CURRENCY'][$valueIndex];
+								if (
+									(!is_int($amount) && !is_float($amount) && !is_string($amount) && $amount !== null)
+									|| !is_string($currency)
+								)
+								{
+									throw new InvalidMoneyPropertyValueException(
+										$name,
+										(string)($property?->getName() ?? $name)
+									);
+								}
+
+								$moneyValues[] = MoneyPropertyValueNormalizer::normalize($amount, $currency);
+							}
+							$field = $moneyValues;
+						}
+						elseif (
+							(is_int($field['AMOUNT']) || is_float($field['AMOUNT']) || is_string($field['AMOUNT']) || $field['AMOUNT'] === null)
+							&& is_string($field['CURRENCY'])
+						)
+						{
+							$field = MoneyPropertyValueNormalizer::normalize($field['AMOUNT'], $field['CURRENCY']);
+						}
+						else
+						{
+							throw new InvalidMoneyPropertyValueException(
+								$name,
+								(string)($property?->getName() ?? $name)
+							);
+						}
 					}
-					elseif (isset($field['PRICE']['VALUE'], $field['CURRENCY']['VALUE']))
+					elseif (
+						isset($field['PRICE'], $field['CURRENCY'])
+						&& is_array($field['PRICE']) && is_array($field['CURRENCY'])
+						&& array_key_exists('VALUE', $field['PRICE']) && array_key_exists('VALUE', $field['CURRENCY'])
+					)
 					{
-						$field = IblockMoneyProperty::getUnitedValue(
+						if (
+							(
+								!is_int($field['PRICE']['VALUE']) && !is_float($field['PRICE']['VALUE'])
+								&& !is_string($field['PRICE']['VALUE']) && $field['PRICE']['VALUE'] !== null
+							)
+							|| !is_string($field['CURRENCY']['VALUE'])
+						)
+						{
+							throw new InvalidMoneyPropertyValueException(
+								$name,
+								(string)($property?->getName() ?? $name)
+							);
+						}
+
+						$field = MoneyPropertyValueNormalizer::normalize(
 							$field['PRICE']['VALUE'],
 							$field['CURRENCY']['VALUE']
 						);
@@ -762,6 +826,11 @@ class CatalogProductVariationDetailsComponent
 						$variation->getMeasureRatioCollection()->setDefault($measureRatioField);
 					}
 					$result = $variation->save();
+				}
+				catch (InvalidMoneyPropertyValueException $exception)
+				{
+					$result = new Result();
+					$result->addError(new Error($exception->getMessage(), $exception->getFieldName()));
 				}
 				catch (SqlQueryException)
 				{

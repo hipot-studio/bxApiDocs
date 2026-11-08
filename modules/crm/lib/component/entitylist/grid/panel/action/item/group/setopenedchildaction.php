@@ -2,13 +2,13 @@
 
 namespace Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group;
 
+use Bitrix\Crm\Component\EntityList\Grid\Panel\ApplyButton;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Event;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Grid\Panel\Action\Group\GroupChildAction;
 use Bitrix\Main\Grid\Panel\Actions;
-use Bitrix\Main\Grid\Panel\Snippet;
 use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\Grid\Panel\Types;
 use Bitrix\Main\HttpRequest;
@@ -17,7 +17,7 @@ use Bitrix\Main\Result;
 
 final class SetOpenedChildAction extends GroupChildAction
 {
-	public function __construct(private int $entityTypeId)
+	public function __construct(private int $entityTypeId, private string $gridId)
 	{
 	}
 
@@ -48,7 +48,8 @@ final class SetOpenedChildAction extends GroupChildAction
 			],
 		]);
 
-		$dropdownContainerId = 'action_set_opened';
+		// the grid address keeps the id unique: a card shows several panels at once
+		$dropdownContainerId = 'action_set_opened_' . $this->gridId;
 		$dropdownValueId = $dropdownContainerId . '_control';
 
 		Container::getInstance()->getLocalization()->loadMessages();
@@ -72,7 +73,7 @@ final class SetOpenedChildAction extends GroupChildAction
 						],
 					],
 				],
-				(new Snippet())->getApplyButton([
+				ApplyButton::forGrid($this->gridId, [
 					'ONCHANGE' => [
 						[
 							'ACTION' => Actions::CALLBACK,
@@ -81,6 +82,7 @@ final class SetOpenedChildAction extends GroupChildAction
 									'JS' =>
 										(new Event('BatchManager:executeSetOpened'))
 											->addEntityTypeId($this->entityTypeId)
+											->addGridId($this->gridId)
 											->addValueElementId($dropdownValueId)
 											->buildJsCallback()
 									,

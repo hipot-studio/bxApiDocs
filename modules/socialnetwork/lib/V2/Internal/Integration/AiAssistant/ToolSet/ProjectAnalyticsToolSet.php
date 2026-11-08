@@ -9,6 +9,7 @@ use Bitrix\AiAssistant\Definition\Dto\UsesToolsDto;
 use Bitrix\AiAssistant\Definition\ToolSet\BaseToolSet;
 use Bitrix\Socialnetwork\V2\Internal\Integration\AiAssistant\Tool\FindProjectByNameTool;
 use Bitrix\Socialnetwork\V2\Internal\Integration\AiAssistant\Tool\GetProjectForAnalysisTool;
+use Bitrix\Socialnetwork\V2\Internal\Integration\AiAssistant\Tool\GetProjectMeetingsTool;
 
 class ProjectAnalyticsToolSet extends BaseToolSet
 {
@@ -30,6 +31,7 @@ class ProjectAnalyticsToolSet extends BaseToolSet
 		$tools = [
 			FindProjectByNameTool::class,
 			GetProjectForAnalysisTool::class,
+			GetProjectMeetingsTool::class,
 		];
 
 		return new UsesToolsDto($tools);

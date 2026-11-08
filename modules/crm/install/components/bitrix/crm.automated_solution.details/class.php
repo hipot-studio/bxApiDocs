@@ -6,6 +6,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\Crm\Component\Base;
+use Bitrix\Crm\Feature;
+use Bitrix\Crm\Feature\AutomatedSolutionVibe;
+use Bitrix\Crm\Integration\Landing\Vibe\VibeRepository;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -77,8 +80,10 @@ class CrmAutomatedSolutionDetailsComponent extends Base
 			return;
 		}
 
+		$isHubTemplate = \Bitrix\Crm\Feature::enabled(\Bitrix\Crm\Feature\SmartProcessCrmHub::class);
+
 		$this->arResult['isNew'] = $this->automatedSolution === null;
-		$this->arResult['state'] = $this->prepareVuexState();
+		$this->arResult['state'] = $this->prepareVuexState($isHubTemplate);
 
 		$this->arResult['activeTabId'] = $this->arParams['activeTabId'] ?? null;
 		if (!in_array($this->arResult['activeTabId'], self::TAB_IDS, true))
@@ -86,31 +91,84 @@ class CrmAutomatedSolutionDetailsComponent extends Base
 			$this->arResult['activeTabId'] = current(self::TAB_IDS);
 		}
 
+		if ($isHubTemplate)
+		{
+			$this->setTemplateName('hub');
+		}
+
 		$this->includeComponentTemplate();
 	}
 
-	private function prepareVuexState(): array
+	private function prepareVuexState(bool $isHubTemplate): array
 	{
 		$permissions = [
 			'canMoveSmartProcessFromCrm' => $this->userPermissions->isCrmAdmin(),
 			'canMoveSmartProcessFromAnotherAutomatedSolution' => $this->userPermissions->automatedSolution()->canEdit(),
 		];
+		$vibeState = $this->prepareVibeState();
 
 		if (!$this->automatedSolution)
 		{
 			return [
 				'automatedSolution' => [],
 				'dynamicTypesTitles' => [],
+				...$vibeState,
+				'readOnly' => $this->arResult['readOnly'],
 				'permissions' => $permissions,
 				'isPermissionsLayoutV2Enabled' => true,
+				'intranetCustomSectionUrl' => null,
 			];
 		}
 
 		return [
 			'automatedSolution' => Container::getInstance()->getAutomatedSolutionConverter()->toJson($this->automatedSolution),
 			'dynamicTypesTitles' => $this->getTitlesOfDynamicTypes($this->automatedSolution['TYPE_IDS']),
+			...$vibeState,
+			'readOnly' => $this->arResult['readOnly'],
 			'permissions' => $permissions,
 			'isPermissionsLayoutV2Enabled' => true,
+			// Only the hub passport shows the address, so .default does not load intranet sections for it.
+			'intranetCustomSectionUrl' => $isHubTemplate ? $this->resolveCustomSectionUrl() : null,
+		];
+	}
+
+	// Адрес кастом-раздела, в котором живёт это ЦРМ. IntranetManager статический — сервиса
+	// getIntranetManager() в Container нет. Название раздела не годится: Update.php синхронно пишет
+	// в него TITLE решения, то есть оно дословно повторило бы заголовок паспорта (D-04).
+	private function resolveCustomSectionUrl(): ?string
+	{
+		$sectionId = (int)($this->automatedSolution['INTRANET_CUSTOM_SECTION_ID'] ?? 0);
+		if ($sectionId <= 0)
+		{
+			return null;
+		}
+
+		$sections = \Bitrix\Crm\Integration\IntranetManager::getCustomSections();
+		if (!is_array($sections))
+		{
+			return null;
+		}
+
+		foreach ($sections as $section)
+		{
+			if ($section->getId() === $sectionId)
+			{
+				$url = \Bitrix\Crm\Integration\IntranetManager::getUrlForCustomSection($section);
+
+				return $url ? $url->getUri() : null;
+			}
+		}
+
+		return null;
+	}
+
+	private function prepareVibeState(): array
+	{
+		$isVibeFeatureEnabled = Feature::enabled(AutomatedSolutionVibe::class);
+
+		return [
+			'isVibeFeatureEnabled' => $isVibeFeatureEnabled,
+			'isVibeAvailable' => $isVibeFeatureEnabled && VibeRepository::isVibeAvailable(),
 		];
 	}
 

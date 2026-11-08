@@ -6,6 +6,7 @@ namespace Bitrix\Bizproc\Internal\Integration\UI\AccessRights\V2;
 
 use Bitrix\Bizproc\Integration\UI\EntitySelector\AccessTemplateProvider;
 use Bitrix\Bizproc\Internal\Access\AccessController;
+use Bitrix\Bizproc\Internal\Access\OwnTemplatesOption;
 use Bitrix\Bizproc\Internal\Access\Permission\PermissionDictionary;
 use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Entity\Access\RoleCollection;
@@ -42,12 +43,17 @@ final class AccessRightsProvider implements Provider
 	private ?bool $lazyTemplatesUsable = null;
 	private ?bool $templateAdmin = null;
 
+	/**
+	 * @param null|bool $ownSentinelExpressible answer of another render this snapshot has to obey, null to ask
+	 *                                          the switches {@see self::isOwnSentinelExpressible()}
+	 */
 	public function __construct(
 		private readonly ?int $userId = null,
 		private readonly bool $withVariables = true,
 		private readonly DelegationScopeValidator $scopeValidator = new DelegationScopeValidator(),
 		private readonly string $uiValueSourceClass = VariablesSource::class,
 		private readonly string $uiRightItemClass = RightItem::class,
+		private readonly ?bool $ownSentinelExpressible = null,
 	)
 	{
 	}
@@ -58,8 +64,7 @@ final class AccessRightsProvider implements Provider
 			new Template(
 				$this->getVariablesMap(),
 				$this->getAllSelectableByPermission(),
-				// The save path decodes values only, so it needs neither the value source nor the "all" caption.
-				$this->withVariables && $this->isLazyTemplatesUsable(),
+				$this->hasVariablesSource(),
 			),
 		];
 
@@ -67,6 +72,20 @@ final class AccessRightsProvider implements Provider
 	}
 
 	/**
+	 * The matrix cell of every role, with one value withheld whenever the page has no element for it: the
+	 * "own templates" sentinel gets an element of its own only in the source mode of the page and only while
+	 * the portal switch of the value is on {@see self::ownTemplatesVariables()}. In the static mode the client
+	 * collapses the pick into "all" by the number of variables, and a value it can neither show nor deselect
+	 * still counts towards that number, so leaving it in would hand the role every future template one pick
+	 * early; with the switch off the client has no element to sign the value with and captions the cell as an
+	 * unrecognized template. Withheld from the page, not from the matrix: the granted value keeps acting, and
+	 * a save from that page carries it over instead of deleting it
+	 * ({@see \Bitrix\Bizproc\Internal\Service\RolePermissionService::withUnexpressedValues()}) - the two halves
+	 * read the same pair of switches and have to keep reading it together.
+	 *
+	 * That pair decides it, not $withVariables: a caller reading the cells alone gets the very values the page
+	 * of that portal would send.
+	 *
 	 * @return UserGroupModelDto[]
 	 */
 	public function loadUserGroupModels(): array
@@ -82,6 +101,7 @@ final class AccessRightsProvider implements Provider
 		$touchable = array_fill_keys($roleIds, true);
 		$permissionsByRole = $snapshot['permissionsByRole'];
 		$accessCodesByRole = Container::getAccessRepository()->getAccessCodesByRoleIds($roleIds);
+		$withholdOwnValue = !$this->isOwnSentinelExpressible();
 
 		$models = [];
 		foreach ($snapshot['roles'] as $role)
@@ -101,6 +121,11 @@ final class AccessRightsProvider implements Provider
 
 			foreach ($permissionsByRole[$roleId] ?? [] as $permission)
 			{
+				if ($withholdOwnValue && (int)$permission['value'] === PermissionDictionary::VALUE_VARIATION_OWN)
+				{
+					continue;
+				}
+
 				$model->addAccessRightModel(
 					new RightModel(self::ENTITY_ID, (string)$permission['id'], $permission['value']),
 				);
@@ -215,7 +240,7 @@ final class AccessRightsProvider implements Provider
 	}
 
 	/**
-	 * ALG-01: the ids come from the values of the multivariables rights, the threshold cuts every right down to
+	 * The ids come from the values of the multivariables rights, the threshold cuts every right down to
 	 * its first ITEMS_LIMIT ids, and one indexed query loads the titles of what is left. One query for every
 	 * right and every role, never one per cell.
 	 *
@@ -228,9 +253,9 @@ final class AccessRightsProvider implements Provider
 	 */
 	private function collectVariablesFromMatrix(): array
 	{
-		// A right with no granted value keeps its key with an empty list: the client tells that state apart
-		// from "no source given".
-		$variables = array_fill_keys($this->getMultivariablesPermissionIds(), []);
+		// A right with no granted value keeps its key with the sentinel alone (or an empty list once the portal
+		// switch is off): the client tells that state apart from "no source given".
+		$variables = array_fill_keys($this->getMultivariablesPermissionIds(), $this->ownTemplatesVariables());
 
 		$idsByPermission = [];
 		foreach ($this->loadRolePermissions()['permissionsByRole'] as $cells)
@@ -244,7 +269,8 @@ final class AccessRightsProvider implements Provider
 				}
 
 				$templateId = (int)$cell['value'];
-				// the "all" sentinel (-1), 0 and any other noise are not template ids
+				// a sentinel value ("all", "own"), 0 and any other noise are no template ids: the "own" option
+				// is already an element of the right and counts towards neither the threshold nor the title query
 				if ($templateId <= 0)
 				{
 					continue;
@@ -296,8 +322,37 @@ final class AccessRightsProvider implements Provider
 	}
 
 	/**
+	 * The "own templates" option every multivariables right opens with, or nothing while the portal switch is
+	 * off. It is a scope value and no template, so it is built here instead of coming out of the matrix cells:
+	 * that keeps it out of the ITEMS_LIMIT threshold and out of the title query, and it is offered on a right
+	 * nobody was granted it on yet.
+	 *
+	 * Only the source mode has it. With the static list the client collapses the pick into "all" by the number
+	 * of variables, and an extra element would break that collapsing in both directions; the cells follow the
+	 * same pair of switches, so the value cannot be left counting where the element is missing
+	 * {@see self::loadUserGroupModels()}.
+	 *
+	 * @return array<int, array{id: int, title: string}>
+	 */
+	private function ownTemplatesVariables(): array
+	{
+		// The same answer the cells obey, and not the switch alone: inside this branch the two are one and the
+		// same reading, and under the answer of another render they have to stay one.
+		if (!$this->isOwnSentinelExpressible())
+		{
+			return [];
+		}
+
+		return [[
+			'id' => PermissionDictionary::VALUE_VARIATION_OWN,
+			// one caption in both places: the same phrase names the item of the scope dialog
+			'title' => AccessTemplateProvider::makeOwnTemplatesTitle(),
+		]];
+	}
+
+	/**
 	 * Every Nodes template of the portal in every multivariables right: the behaviour before the lazy scope,
-	 * kept as the branch of a disabled OPT-01.
+	 * kept as the branch of the static mode.
 	 *
 	 * @return array<int, array<int, array{id: int, title: string}>>
 	 */
@@ -380,36 +435,80 @@ final class AccessRightsProvider implements Provider
 	}
 
 	/**
-	 * The option and the ui contract are two independent reasons to stay on the branch before OPT-01: either one
+	 * Whether the rights of the page carry the server-side value source, which is what tells the two modes of
+	 * the page apart for everything built here: with the source the client neither counts the picked values
+	 * against the variables nor collapses the pick on its own, so the sentinel of the scope may be both an
+	 * element of the right and a value of a cell. The save path decodes values only, hence no source there.
+	 */
+	private function hasVariablesSource(): bool
+	{
+		return $this->withVariables && $this->isLazyTemplatesUsable();
+	}
+
+	/**
+	 * Whether the page of THIS render can express the "own templates" sentinel at all: the value needs both the
+	 * server-side value source of the page and the portal switch of the scope, and under either one unmet it is
+	 * neither an element of a right nor a value of a cell.
+	 *
+	 * Public because the answer has to travel with the payload of the page. The save decides about carrying the
+	 * value over by this very answer ({@see \Bitrix\Bizproc\Public\Provider\PermissionMatrixProvider::getOptions()}
+	 * ships it, {@see \Bitrix\Bizproc\Internal\Service\RolePermissionService::withUnexpressedValues()} obeys it)
+	 * instead of asking the two switches a second time. Asking twice made the pair of switches part of the
+	 * request: one flipped between render and save either deleted a granted value or restored a deliberately
+	 * deselected one, because the two halves of one rule answered differently.
+	 *
+	 * A snapshot built for a page that is already on screen is given that page's answer instead of asking the
+	 * switches at all: the client replaces the matrix with the answer of a save but keeps the parameters of its
+	 * own render, so the two would part ways for the rest of the session
+	 * ({@see \Bitrix\Bizproc\Public\Provider\PermissionMatrixProvider::getDataForSaveResponse()}).
+	 */
+	public function isOwnSentinelExpressible(): bool
+	{
+		return $this->ownSentinelExpressible === null
+			? ($this->isLazyTemplatesUsable() && OwnTemplatesOption::isEnabled())
+			: $this->carriesExpressibleRender()
+		;
+	}
+
+	/**
+	 * Whether the answer carried into this snapshot may be believed. The mode of a render travels with its
+	 * payload, the ui contract does not: the answer arrives as a request parameter, so a claim of "expressible"
+	 * against a ui that predates the value source would build the page with a class that is on no autoloader.
+	 * An honest page loses nothing by the probe - the classes it rendered with are still loaded - while a forged
+	 * claim falls back to the static mode instead of a fatal.
+	 */
+	private function carriesExpressibleRender(): bool
+	{
+		return $this->ownSentinelExpressible === true
+			&& LazyTemplatesOption::isContractAvailable($this->uiValueSourceClass, $this->uiRightItemClass)
+		;
+	}
+
+	/**
+	 * The option and the ui contract are two independent reasons to stay on the static branch: either one
 	 * keeps the static list, and neither is a condition of the other. bizproc may run against a ui that predates
 	 * the value source, and then the page stays as it was instead of calling an API that is not there. Silently,
 	 * because for the user that is simply the page it had before.
 	 */
 	private function isLazyTemplatesUsable(): bool
 	{
-		$this->lazyTemplatesUsable ??= LazyTemplatesOption::isEnabled() && $this->isUiContractAvailable();
+		// An answer of another render saying "expressible" carries this one: the answer is the conjunction of the
+		// mode and the portal switch, so its true side means that render had the value source. Without this the
+		// snapshot would follow the render for the cells and the switches for the elements - and a mode switched
+		// off in between would leave the value in a cell the static page names no element for, shifting the
+		// threshold the client collapses the pick by. A carried answer the ui contract does not back is believed
+		// by neither half {@see self::carriesExpressibleRender()}.
+		if ($this->carriesExpressibleRender())
+		{
+			return true;
+		}
+
+		$this->lazyTemplatesUsable ??= LazyTemplatesOption::isUsable(
+			$this->uiValueSourceClass,
+			$this->uiRightItemClass,
+		);
 
 		return $this->lazyTemplatesUsable;
-	}
-
-	/**
-	 * Two probes and not one, because the elements of the contract reached ui in separate commits and an update
-	 * is assembled commit by commit: a ui carrying the value source without the placeholder constant, or the
-	 * other way round, is a state this module can be installed next to. One element per commit is enough - what
-	 * came along with the probed element cannot be missing while the element itself is there.
-	 *
-	 * Three of the five calls this module makes into the new ui API are never probed directly -
-	 * MultiVariables::variablesSource(), allSelectedTitle() and unloadedVariableTitlePattern(). They rest on the
-	 * invariant that an update takes a ui commit whole: each of them came to ui with the same addition as one of
-	 * the two probed elements, so it is there whenever its probe passes.
-	 *
-	 * The probed names are constructor parameters holding the ui defaults: a class of ui that is loaded cannot be
-	 * taken off the autoloader, so a test points the probes at names of its own instead.
-	 */
-	private function isUiContractAvailable(): bool
-	{
-		return class_exists($this->uiValueSourceClass)
-			&& defined($this->uiRightItemClass . '::UNLOADED_VARIABLE_VALUE_PLACEHOLDER');
 	}
 
 	/**

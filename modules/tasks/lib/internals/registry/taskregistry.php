@@ -102,44 +102,9 @@ class TaskRegistry
 			return null;
 		}
 
-		if (
-			$withRelations
-			&& !isset($this->storage[$taskId]['IN_FAVORITES'])
-		)
+		if ($withRelations)
 		{
-			$this->fillFavorites([$taskId]);
-		}
-
-		if (
-			$withRelations
-			&& !isset($this->storage[$taskId]['MEMBER_LIST'])
-		)
-		{
-			$this->fillMembers([$taskId]);
-		}
-
-		if (
-			$withRelations
-			&& !isset($this->storage[$taskId]['DEPARTMENTS'])
-		)
-		{
-			$this->fillDepartments([$taskId]);
-		}
-
-		if (
-			$withRelations
-			&& !isset($this->storage[$taskId]['FLOW_ID'])
-		)
-		{
-			$this->fillFlowId([$taskId]);
-		}
-
-		if (
-			$withRelations
-			&& !isset($this->storage[$taskId]['IS_RESULT_REQUIRED'])
-		)
-		{
-			$this->fillParameters([$taskId]);
+			$this->fillRelations([$taskId]);
 		}
 
 		return $this->storage[$taskId];
@@ -177,73 +142,101 @@ class TaskRegistry
 			$taskIds = [$taskIds];
 		}
 
-		$taskIds = array_diff(array_unique($taskIds), array_keys($this->storage));
-		if (empty($taskIds))
-		{
-			return $this;
-		}
-
-		foreach ($taskIds as $id)
-		{
-			$this->storage[$id] = null;
-		}
-
-		$res = \Bitrix\Tasks\Internals\TaskTable::query()
-			->addSelect('ID')
-			->addSelect('PARENT_ID')
-			->addSelect('TITLE')
-			->addSelect('GROUP_ID')
-			->addSelect('STAGE_ID')
-			->addSelect('STATUS')
-			->addSelect('STATUS_CHANGED_DATE')
-			->addSelect('ALLOW_CHANGE_DEADLINE')
-			->addSelect('ALLOW_TIME_TRACKING')
-			->addSelect('DEADLINE')
-			->addSelect('TASK_CONTROL')
-			->addSelect('PRIORITY')
-			->addSelect('DESCRIPTION')
-			->addSelect('FORUM_TOPIC_ID')
-			->addSelect('RESPONSIBLE_ID')
-			->addSelect('CREATED_BY')
-			->addSelect('CLOSED_DATE')
-			->addSelect('CREATED_DATE')
-			->addSelect('START_DATE_PLAN')
-			->addSelect('END_DATE_PLAN')
-			->addSelect('SITE_ID')
-			->whereIn('ID', $taskIds)
-			->exec();
-
+		$taskIds = array_unique($taskIds);
+		$taskIdsToLoad = array_diff($taskIds, array_keys($this->storage));
 		$foundIds = [];
-		while ($row = $res->fetch())
+		if (!empty($taskIdsToLoad))
 		{
-			$row['ZOMBIE'] = 'N';
-			$foundIds[] = $row['ID'];
-			$this->storage[$row['ID']] = $row;
-		}
+			foreach ($taskIdsToLoad as $id)
+			{
+				$this->storage[$id] = null;
+			}
 
-		if (count($taskIds) > count($foundIds))
-		{
-			$deletedIds = array_diff($taskIds, $foundIds);
-			$this->loadDeleted($deletedIds);
-		}
+			$res = \Bitrix\Tasks\Internals\TaskTable::query()
+				->addSelect('ID')
+				->addSelect('PARENT_ID')
+				->addSelect('TITLE')
+				->addSelect('GROUP_ID')
+				->addSelect('STAGE_ID')
+				->addSelect('STATUS')
+				->addSelect('STATUS_CHANGED_DATE')
+				->addSelect('ALLOW_CHANGE_DEADLINE')
+				->addSelect('ALLOW_TIME_TRACKING')
+				->addSelect('DEADLINE')
+				->addSelect('TASK_CONTROL')
+				->addSelect('PRIORITY')
+				->addSelect('DESCRIPTION')
+				->addSelect('FORUM_TOPIC_ID')
+				->addSelect('RESPONSIBLE_ID')
+				->addSelect('CREATED_BY')
+				->addSelect('CLOSED_DATE')
+				->addSelect('CREATED_DATE')
+				->addSelect('START_DATE_PLAN')
+				->addSelect('END_DATE_PLAN')
+				->addSelect('SITE_ID')
+				->whereIn('ID', $taskIdsToLoad)
+				->exec();
 
-		if (empty($foundIds))
-		{
-			return $this;
-		}
+			while ($row = $res->fetch())
+			{
+				$row['ZOMBIE'] = 'N';
+				$foundIds[] = $row['ID'];
+				$this->storage[$row['ID']] = $row;
+			}
 
-		$this->fillGroups($foundIds);
+			if (count($taskIdsToLoad) > count($foundIds))
+			{
+				$deletedIds = array_diff($taskIdsToLoad, $foundIds);
+				$this->loadDeleted($deletedIds);
+			}
+
+			if (!empty($foundIds))
+			{
+				$this->fillGroups($foundIds);
+			}
+		}
 
 		if ($withRelations)
 		{
-			$this->fillFavorites($foundIds);
-			$this->fillMembers($foundIds);
-			$this->fillDepartments($foundIds);
-			$this->fillFlowId($foundIds);
-			$this->fillParameters($foundIds);
+			$this->fillRelations($taskIds);
 		}
 
 		return $this;
+	}
+
+	private function fillRelations(array $taskIds): void
+	{
+		$taskIds = array_values(
+			array_filter(
+				$taskIds,
+				fn (int $taskId): bool => isset($this->storage[$taskId]),
+			),
+		);
+		if (empty($taskIds))
+		{
+			return;
+		}
+
+		$relations = [
+			'IN_FAVORITES' => 'fillFavorites',
+			'MEMBER_LIST' => 'fillMembers',
+			'DEPARTMENTS' => 'fillDepartments',
+			'FLOW_ID' => 'fillFlowId',
+			'IS_RESULT_REQUIRED' => 'fillParameters',
+		];
+		foreach ($relations as $field => $loader)
+		{
+			$taskIdsToLoad = array_values(
+				array_filter(
+					$taskIds,
+					fn (int $taskId): bool => !isset($this->storage[$taskId][$field]),
+				),
+			);
+			if (!empty($taskIdsToLoad))
+			{
+				$this->{$loader}($taskIdsToLoad);
+			}
+		}
 	}
 
 	public function isLoaded(int $taskId): bool

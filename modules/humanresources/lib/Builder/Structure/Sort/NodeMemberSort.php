@@ -13,7 +13,8 @@ class NodeMemberSort implements SortInterface
 	private array $orderColumns = [];
 
 	public function __construct(
-		public readonly ?SortDirection $id= null,
+		public readonly ?SortDirection $id = null,
+		public readonly ?SortDirection $entityId = null,
 	)
 	{
 	}
@@ -24,6 +25,7 @@ class NodeMemberSort implements SortInterface
 	public function prepareSort(): array
 	{
 		$this->addIdSort();
+		$this->addEntityIdSort();
 
 		return $this->orderColumns;
 	}
@@ -36,6 +38,16 @@ class NodeMemberSort implements SortInterface
 		}
 
 		$this->orderColumns[$this->alias . 'ID'] = $this->id->value;
+	}
+
+	private function addEntityIdSort(): void
+	{
+		if ($this->entityId === null)
+		{
+			return;
+		}
+
+		$this->orderColumns[$this->alias . 'ENTITY_ID'] = $this->entityId->value;
 	}
 
 	public function setCurrentAlias(string $alias): static

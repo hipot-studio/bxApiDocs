@@ -14,6 +14,7 @@ class Epic extends AbstractEntity
 		public readonly ?int $id = null,
 		public readonly ?string $title = null,
 		public readonly ?string $color = null,
+		public readonly bool $isRestricted = false,
 	)
 	{
 	}
@@ -29,15 +30,25 @@ class Epic extends AbstractEntity
 			id: static::mapInteger($props, 'id'),
 			title: static::mapString($props, 'name'),
 			color: static::mapString($props, 'color'),
+			isRestricted: static::mapBool($props, 'isRestricted', false) ?? false,
 		);
 	}
 
 	public function toArray(): array
 	{
+		if ($this->isRestricted)
+		{
+			return [
+				'id' => $this->id,
+				'isRestricted' => true,
+			];
+		}
+
 		return [
 			'id' => $this->id,
 			'title' => $this->title,
 			'color' => $this->color,
+			'isRestricted' => $this->isRestricted,
 		];
 	}
 }

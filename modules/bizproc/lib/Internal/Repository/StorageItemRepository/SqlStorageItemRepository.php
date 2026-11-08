@@ -96,6 +96,30 @@ class SqlStorageItemRepository implements StorageItemRepositoryInterface
 		return $counts;
 	}
 
+	public function getStorageTypeIdsByItemIds(array $itemIds): array
+	{
+		$ids = array_values(array_unique(array_filter(array_map('intval', $itemIds), static fn(int $id) => $id > 0)));
+		if (!$ids)
+		{
+			return [];
+		}
+
+		$result = StorageRecordTable::query()
+			->setSelect(['STORAGE_ID'])
+			->whereIn('ID', $ids)
+			->setGroup(['STORAGE_ID'])
+			->exec()
+		;
+
+		$storageTypeIds = [];
+		while ($row = $result->fetch())
+		{
+			$storageTypeIds[] = (int)$row['STORAGE_ID'];
+		}
+
+		return $storageTypeIds;
+	}
+
 	public function exists(int $id): bool
 	{
 		$result = StorageRecordTable::getByPrimary($id, ['select' => ['ID']])->fetch();

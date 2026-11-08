@@ -95,14 +95,13 @@ class Parameter
 			]);
 		}
 
-		$sql = "
-			INSERT INTO ". ParameterTable::getTableName() ."
-			(TASK_ID, CODE, VALUE)
-			VALUES
-			(". implode("),(", $insertRows) .")
-		";
+		$sql = $sqlHelper->getInsertIgnore(
+			ParameterTable::getTableName(),
+			'(TASK_ID, CODE, VALUE)',
+			'VALUES (' . implode('),(', $insertRows) . ')',
+		);
 
-		Application::getConnection()->query($sql);
+		$connection->queryExecute($sql);
 	}
 
 	/**

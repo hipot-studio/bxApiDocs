@@ -6,7 +6,9 @@ use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\Controller\Action\Entity\SearchAction;
 use Bitrix\Crm\Controller\Base;
 use Bitrix\Crm\Controller\Entity;
+use Bitrix\Crm\Service\ClientRecentCategoryResolver;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use CCrmComponentHelper;
 use CCrmOwnerType;
@@ -63,10 +65,15 @@ final class RecentlyUsed extends Base
 		}
 
 		$expandEntityName = strtolower(CCrmOwnerType::ResolveName($expandEntityTypeId));
+		$legacyCategory = $this->getEntityCategoryCode($categoryIdentifier);
+		$category = ServiceLocator::getInstance()
+			->get(ClientRecentCategoryResolver::class)
+			->resolve($categoryIdentifier->getEntityTypeId(), $legacyCategory, $isMyCompany)
+		;
 
 		return SearchAction::prepareSearchResultsJson(
 			Entity::getRecentlyUsedItems(
-				$this->getEntityCategoryCode($categoryIdentifier),
+				$category,
 				$expandEntityName,
 				[
 					'EXPAND_ENTITY_TYPE_ID' => $expandEntityTypeId,

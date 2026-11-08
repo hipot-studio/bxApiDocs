@@ -10,13 +10,21 @@ use Bitrix\DocumentGenerator\DataProvider\Rest;
 use Bitrix\DocumentGenerator\DataProviderManager;
 use Bitrix\DocumentGenerator\Driver;
 use Bitrix\DocumentGenerator\Engine\CheckPermissions;
+use Bitrix\DocumentGenerator\Feature\DocumentTitlePattern;
+use Bitrix\DocumentGenerator\Model\DocumentTable;
 use Bitrix\DocumentGenerator\Model\FileTable;
 use Bitrix\DocumentGenerator\Model\TemplateProviderTable;
 use Bitrix\DocumentGenerator\Model\TemplateTable;
 use Bitrix\DocumentGenerator\Model\TemplateUserTable;
+use Bitrix\DocumentGenerator\TitlePattern;
+use Bitrix\DocumentGenerator\Timezone;
 use Bitrix\DocumentGenerator\UserPermissions;
 use Bitrix\Main\Application;
+use Bitrix\Main\Config\Feature;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
+use Bitrix\Main\Engine\ActionFilter\HttpMethod;
+use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Engine\Response\DataType\ContentUri;
 use Bitrix\Main\Engine\Response\DataType\Page;
@@ -39,6 +47,8 @@ class Template extends Base
 {
 	const DEFAULT_DATA_PATH = '/bitrix/modules/documentgenerator/data/';
 
+	private const TITLE_PATTERN_LOGGER_ID = 'documentgenerator.Default';
+
 	/**
 	 * @return array
 	 */
@@ -60,6 +70,15 @@ class Template extends Base
 			'-prefilters' => [
 				Csrf::class
 			]
+		];
+		$configureActions['getTitlePatternData'] = [
+			'-prefilters' => [
+				CheckPermissions::class,
+			],
+			'+prefilters' => [
+				new Scope(Scope::AJAX),
+				new HttpMethod([HttpMethod::METHOD_POST]),
+			],
 		];
 
 		return $configureActions;
@@ -109,6 +128,13 @@ class Template extends Base
 	 */
 	public function addAction(array $fields, \CRestServer $restServer = null)
 	{
+		$this->prepareTitlePatternInput($fields);
+		$this->prepareTimezoneInput($fields);
+		if (!$this->validateTimezoneInput($fields))
+		{
+			return null;
+		}
+
 		if($restServer && !isset($fields['fileId']))
 		{
 			$fields['fileId'] = $this->uploadFile($fields[static::FILE_PARAM_NAME], [
@@ -147,6 +173,10 @@ class Template extends Base
 		{
 			return null;
 		}
+		if (!$this->validateTitlePattern($fields))
+		{
+			return null;
+		}
 		if(!$fields['active'])
 		{
 			$fields['active'] = 'Y';
@@ -172,7 +202,7 @@ class Template extends Base
 		$fields['createdBy'] = Driver::getInstance()->getUserId();
 		$converter = new Converter(Converter::TO_UPPER | Converter::KEYS | Converter::TO_SNAKE);
 		$templateData = $converter->process($fields);
-		$result = $this->add($templateData, $fields['providers'], $fields['users']);
+		$result = $this->add($templateData, $fields['providers'], $fields['users'], true, $restServer);
 		if ($result->isSuccess())
 		{
 			foreach ($fields['providers'] as $provider)
@@ -212,6 +242,13 @@ class Template extends Base
 	 */
 	public function updateAction(\Bitrix\DocumentGenerator\Template $template, array $fields, \CRestServer $restServer = null)
 	{
+		$this->prepareTitlePatternInput($fields);
+		$this->prepareTimezoneInput($fields);
+		if (!$this->validateTimezoneInput($fields))
+		{
+			return null;
+		}
+
 		// do not let change moduleId in rest scope
 		if($restServer)
 		{
@@ -236,6 +273,19 @@ class Template extends Base
 		}
 		$fields['bodyType'] = Docx::class;
 		$fields['id'] = $template->ID;
+		if (
+			Feature::isEnabled(DocumentTitlePattern::class)
+			&& !array_key_exists('titlePattern', $fields)
+			&& $template->TITLE_PATTERN !== null
+			&& (array_key_exists('fileId', $fields) || array_key_exists('providers', $fields))
+		)
+		{
+			$fields['titlePattern'] = $template->TITLE_PATTERN;
+		}
+		if (!$this->validateTitlePattern($fields, $template))
+		{
+			return null;
+		}
 		$converter = new Converter(Converter::TO_UPPER | Converter::KEYS | Converter::TO_SNAKE);
 		$templateData = $converter->process($fields);
 		if(!isset($fields['users']) || !is_array($fields['users']))
@@ -260,7 +310,7 @@ class Template extends Base
 			$templateData['IS_DEFAULT'] = 'N';
 		}
 
-		$result = $this->add($templateData, $fields['providers'], $fields['users']);
+		$result = $this->add($templateData, $fields['providers'], $fields['users'], true, $restServer);
 		if ($result->isSuccess())
 		{
 			if (!empty($fields['providers']))
@@ -675,7 +725,13 @@ class Template extends Base
 	 * @throws \Bitrix\Main\ObjectException
 	 * @throws \Exception
 	 */
-	protected function add(array $templateData, array $providers = [], array $users = [], bool $checkPermissions = true)
+	protected function add(
+		array $templateData,
+		array $providers = [],
+		array $users = [],
+		bool $checkPermissions = true,
+		?\CRestServer $restServer = null,
+	)
 	{
 		$result = new Result();
 		$id = intval($templateData['ID'] ?? 0);
@@ -759,7 +815,7 @@ class Template extends Base
 		}
 
 		$template = \Bitrix\DocumentGenerator\Template::loadById($templateId);
-		$result->setData($this->getAction($template));
+		$result->setData($this->getAction($template, $restServer));
 
 		return $result;
 	}
@@ -866,6 +922,21 @@ class Template extends Base
 	 */
 	public function listAction(array $select = ['*'], array $order = null, array $filter = null, PageNavigation $pageNavigation = null, \CRestServer $restServer = null)
 	{
+		$isTitlePatternEnabled = Feature::isEnabled(DocumentTitlePattern::class);
+		if (!$isTitlePatternEnabled)
+		{
+			$select = $this->removeTitlePatternFromSelect($select);
+			$filter = $this->removeTitlePatternFromQueryParameters($filter);
+			$order = $this->removeTitlePatternFromQueryParameters($order);
+		}
+		$isTimezoneEnabled = Timezone::isEnabled();
+		if (!$isTimezoneEnabled)
+		{
+			$select = $this->removeTimezoneFromSelect($select);
+			$filter = $this->removeTimezoneFromQueryParameters($filter);
+			$order = $this->removeTimezoneFromQueryParameters($order);
+		}
+
 		$withProviders = $withUsers = false;
 		if(($key = array_search('providers', $select)) !== false)
 		{
@@ -923,6 +994,14 @@ class Template extends Base
 		$buffer = [];
 		foreach($templates as $template)
 		{
+			if (!$isTitlePatternEnabled)
+			{
+				unset($template['TITLE_PATTERN']);
+			}
+			if (!$isTimezoneEnabled)
+			{
+				unset($template['TIMEZONE']);
+			}
 			$template['download'] = $this->getTemplateDownloadLink($template['ID'], $template['UPDATE_TIME']);
 			$buffer[$template['ID']] = $template;
 		}
@@ -963,7 +1042,7 @@ class Template extends Base
 	 */
 	public function getAction(\Bitrix\DocumentGenerator\Template $template, \CRestServer $restServer = null)
 	{
-		return [
+		$result = [
 			'template' => [
 				'id' => $template->ID,
 				'name' => $template->NAME,
@@ -982,6 +1061,489 @@ class Template extends Base
 				'updateTime' => $template->UPDATE_TIME,
 			],
 		];
+		if (Feature::isEnabled(DocumentTitlePattern::class))
+		{
+			$result['template']['titlePattern'] = $template->TITLE_PATTERN;
+		}
+		if (Timezone::isEnabled())
+		{
+			$result['template']['timezone'] = $template->TIMEZONE;
+		}
+
+		return $result;
+	}
+
+	private function prepareTimezoneInput(array &$fields): void
+	{
+		$timezoneIsProvided = false;
+		$timezone = null;
+		foreach ($fields as $field => $value)
+		{
+			if (!is_string($field) || !$this->isTimezoneField($field))
+			{
+				continue;
+			}
+
+			if (!$timezoneIsProvided || $field === 'timezone')
+			{
+				$timezone = $value;
+				$timezoneIsProvided = true;
+			}
+
+			unset($fields[$field]);
+		}
+
+		if (!$timezoneIsProvided || !Timezone::isEnabled())
+		{
+			return;
+		}
+
+		$fields['timezone'] = $timezone === '' ? null : $timezone;
+	}
+
+	private function validateTimezoneInput(array $fields): bool
+	{
+		if (!array_key_exists('timezone', $fields) || $fields['timezone'] === null)
+		{
+			return true;
+		}
+
+		if (is_string($fields['timezone']) && Timezone::isValid($fields['timezone']))
+		{
+			return true;
+		}
+
+		$this->addError(new Error(
+			'Timezone must be a canonical IANA identifier.',
+			'TIMEZONE_INVALID',
+			['field' => 'timezone'],
+		));
+
+		return false;
+	}
+
+	private function prepareTitlePatternInput(array &$fields): void
+	{
+		$titlePatternIsProvided = false;
+		$titlePattern = null;
+		foreach ($fields as $field => $value)
+		{
+			if (!is_string($field) || !$this->isTitlePatternInputField($field))
+			{
+				continue;
+			}
+
+			if (!$titlePatternIsProvided || $field === 'titlePattern')
+			{
+				$titlePattern = $value;
+				$titlePatternIsProvided = true;
+			}
+
+			unset($fields[$field]);
+		}
+
+		if (!$titlePatternIsProvided || !Feature::isEnabled(DocumentTitlePattern::class))
+		{
+			return;
+		}
+
+		$fields['titlePattern'] = is_string($titlePattern) && trim($titlePattern) === '' ? null : $titlePattern;
+	}
+
+	public function getTitlePatternDataAction(
+		int $fileId,
+		array $providers,
+		string $moduleId,
+		?\Bitrix\DocumentGenerator\Template $template = null,
+		?string $titlePattern = null,
+	): ?array
+	{
+		if (!Feature::isEnabled(DocumentTitlePattern::class))
+		{
+			$this->addTitlePatternOperationError(
+				'TITLE_PATTERN_FEATURE_DISABLED',
+				'DOCGEN_CONTROLLER_TEMPLATE_TITLE_PATTERN_FEATURE_DISABLED',
+			);
+
+			return null;
+		}
+
+		if (
+			!$this->canModifyTemplates()
+			|| ($template && !$this->canModifyTemplate((int)$template->ID))
+		)
+		{
+			$this->addTitlePatternAccessError();
+
+			return null;
+		}
+
+		if (!$this->canUseTitlePatternFile($fileId, $template))
+		{
+			return null;
+		}
+
+		$providerClassNames = $this->prepareTitlePatternProviders($providers, $moduleId);
+		if ($providerClassNames === null)
+		{
+			return null;
+		}
+
+		$candidateTemplate = \Bitrix\DocumentGenerator\Template::loadFromArray([
+			'FILE_ID' => $fileId,
+			'BODY_TYPE' => Docx::class,
+		]);
+		$patternWasProvided = $this->isTitlePatternParameterProvided(func_num_args());
+		if (!$patternWasProvided || $titlePattern === null || (is_string($titlePattern) && trim($titlePattern) === ''))
+		{
+			$pattern = new TitlePattern('');
+			$validation = [
+				'checked' => $patternWasProvided,
+				'isValid' => $patternWasProvided ? true : null,
+				'errors' => [],
+			];
+		}
+		elseif (!is_string($titlePattern))
+		{
+			$this->addTitlePatternContextError();
+
+			return null;
+		}
+		else
+		{
+			$pattern = new TitlePattern($titlePattern);
+			$validationResult = $pattern->validate($candidateTemplate, $providerClassNames);
+			$validation = [
+				'checked' => true,
+				'isValid' => $validationResult->isSuccess(),
+				'errors' => $this->getTitlePatternValidationErrors($validationResult),
+			];
+		}
+
+		$catalogResult = $pattern->getCatalog($candidateTemplate, $providerClassNames);
+
+		return [
+			'maxLength' => TitlePattern::MAX_LENGTH,
+			'groups' => $catalogResult->getData()['groups'] ?? [],
+			'validation' => $validation,
+		];
+	}
+
+	protected function canModifyTemplates(): bool
+	{
+		return Driver::getInstance()->getUserPermissions()->canModifyTemplates();
+	}
+
+	protected function canModifyTemplate(int $templateId): bool
+	{
+		return Driver::getInstance()->getUserPermissions()->canModifyTemplate($templateId);
+	}
+
+	private function canUseTitlePatternFile(
+		int $fileId,
+		?\Bitrix\DocumentGenerator\Template $template,
+	): bool
+	{
+		$file = $fileId > 0
+			? FileTable::query()->setSelect(['ID'])->where('ID', $fileId)->setLimit(1)->fetch()
+			: false
+		;
+		if (!$file)
+		{
+			$this->addTitlePatternContextError();
+
+			return false;
+		}
+
+		$document = DocumentTable::query()
+			->setSelect(['ID'])
+			->setFilter([
+				'LOGIC' => 'OR',
+				'=FILE_ID' => $fileId,
+				'=IMAGE_ID' => $fileId,
+				'=PDF_ID' => $fileId,
+			])
+			->setLimit(1)
+			->fetch()
+		;
+		if ($document)
+		{
+			$this->addTitlePatternAccessError();
+
+			return false;
+		}
+
+		$templateQuery = TemplateTable::query()
+			->setSelect(['ID'])
+			->where('FILE_ID', $fileId)
+		;
+		if ($template)
+		{
+			$templateQuery->where('ID', '!=', (int)$template->ID);
+		}
+
+		if ($templateQuery->setLimit(1)->fetch())
+		{
+			$this->addTitlePatternAccessError();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function prepareTitlePatternProviders(array $providers, string $moduleId): ?array
+	{
+		if (
+			$moduleId === ''
+			|| !ModuleManager::isModuleInstalled($moduleId)
+			|| !Loader::includeModule($moduleId)
+			|| empty($providers)
+		)
+		{
+			$this->addTitlePatternContextError();
+
+			return null;
+		}
+
+		$providerClassNames = [];
+		foreach ($providers as $provider)
+		{
+			if (!is_string($provider) || $provider === '')
+			{
+				$this->addTitlePatternContextError();
+
+				return null;
+			}
+
+			$providerClassName = TemplateProviderTable::getClassNameFromFilterString($provider);
+			if (!DataProviderManager::checkProviderName($providerClassName, $moduleId))
+			{
+				$this->addTitlePatternContextError();
+
+				return null;
+			}
+			$providerClassNames[] = $providerClassName;
+		}
+
+		return array_values(array_unique($providerClassNames));
+	}
+
+	private function getTitlePatternValidationErrors(Result $result): array
+	{
+		if ($result->isSuccess())
+		{
+			return [];
+		}
+
+		$fieldName = $result->getError()?->getCustomData()['fieldName'] ?? null;
+
+		return [[
+			'code' => TitlePattern::ERROR_CODE,
+			'message' => (string)Loc::getMessage('DOCGEN_CONTROLLER_TEMPLATE_TITLE_PATTERN_INVALID'),
+			'placeholder' => $fieldName === null ? null : '{' . $fieldName . '}',
+		]];
+	}
+
+	private function addTitlePatternAccessError(): void
+	{
+		$this->addTitlePatternOperationError(
+			'TITLE_PATTERN_ACCESS_DENIED',
+			'DOCGEN_CONTROLLER_TEMPLATE_TITLE_PATTERN_ACCESS_DENIED',
+		);
+	}
+
+	private function addTitlePatternContextError(): void
+	{
+		$this->addTitlePatternOperationError(
+			'TITLE_PATTERN_CONTEXT_INVALID',
+			'DOCGEN_CONTROLLER_TEMPLATE_TITLE_PATTERN_CONTEXT_INVALID',
+		);
+	}
+
+	private function addTitlePatternOperationError(string $code, string $messageCode): void
+	{
+		Loc::loadLanguageFile(__FILE__);
+		$this->addError(new Error((string)Loc::getMessage($messageCode), $code));
+	}
+
+	private function isTitlePatternParameterProvided(int $argumentCount): bool
+	{
+		$sourceParametersList = $this->getSourceParametersList();
+		if ($sourceParametersList === null)
+		{
+			return $argumentCount >= 5;
+		}
+
+		foreach ($sourceParametersList as $source)
+		{
+			if (is_array($source) && array_key_exists('titlePattern', $source))
+			{
+				return true;
+			}
+
+			if ($source instanceof \ArrayAccess && $source->offsetExists('titlePattern'))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function validateTitlePattern(
+		array $fields,
+		?\Bitrix\DocumentGenerator\Template $storedTemplate = null,
+	): bool
+	{
+		if (!array_key_exists('titlePattern', $fields) || $fields['titlePattern'] === null)
+		{
+			return true;
+		}
+
+		if (!is_string($fields['titlePattern']))
+		{
+			$this->addTitlePatternError('Title pattern must be a string');
+
+			return false;
+		}
+
+		$fileId = (int)($fields['fileId'] ?? $storedTemplate?->FILE_ID ?? 0);
+		$candidateTemplate = \Bitrix\DocumentGenerator\Template::loadFromArray([
+			'FILE_ID' => $fileId,
+			'BODY_TYPE' => $fields['bodyType'] ?? $storedTemplate?->BODY_TYPE ?? Docx::class,
+		]);
+		$providers = $fields['providers'] ?? [];
+		if (!is_array($providers))
+		{
+			$providers = [];
+		}
+		if (empty($providers) && $storedTemplate)
+		{
+			$providers = $storedTemplate->getDataProviders(true);
+		}
+		$providerClassNames = array_map(
+			[TemplateProviderTable::class, 'getClassNameFromFilterString'],
+			$providers,
+		);
+		$moduleId = $fields['moduleId'] ?? $storedTemplate?->MODULE_ID ?? Driver::REST_MODULE_ID;
+		$providerClassNames = array_values(array_filter(
+			$providerClassNames,
+			fn(string $provider): bool => DataProviderManager::checkProviderName($provider, $moduleId),
+		));
+		$result = (new TitlePattern($fields['titlePattern']))->validate($candidateTemplate, $providerClassNames);
+		if ($result->isSuccess())
+		{
+			return true;
+		}
+
+		$this->logTitlePatternValidationFailure($result, $storedTemplate?->ID);
+		Loc::loadLanguageFile(__FILE__);
+		$this->addTitlePatternError(
+			(string)Loc::getMessage('DOCGEN_CONTROLLER_TEMPLATE_TITLE_PATTERN_INVALID'),
+		);
+
+		return false;
+	}
+
+	private function logTitlePatternValidationFailure(Result $result, ?int $templateId): void
+	{
+		(new LoggerFactory())
+			->createById(self::TITLE_PATTERN_LOGGER_ID, isCheckEnabledFromRegistry: false)
+			->warning('{method}: rejected title pattern of template {templateId}: {errors}', [
+				'method' => __METHOD__,
+				'templateId' => $templateId ?? 0,
+				'errors' => implode('; ', $result->getErrorMessages()),
+			])
+		;
+	}
+
+	private function isTitlePatternInputField(string $field): bool
+	{
+		return mb_strtolower(str_replace('_', '', $field)) === 'titlepattern';
+	}
+
+	private function addTitlePatternError(string $message): void
+	{
+		$this->addError(new Error(
+			$message,
+			TitlePattern::ERROR_CODE,
+			['field' => 'titlePattern'],
+		));
+	}
+
+	private function removeTitlePatternFromSelect(array $select): array
+	{
+		return array_values(array_filter(
+			$select,
+			fn(mixed $field): bool => !is_string($field) || !$this->isTitlePatternField($field),
+		));
+	}
+
+	private function removeTitlePatternFromQueryParameters(?array $parameters): array
+	{
+		$parameters ??= [];
+		foreach ($parameters as $field => $value)
+		{
+			if (is_string($field) && $this->isTitlePatternField($field))
+			{
+				unset($parameters[$field]);
+
+				continue;
+			}
+
+			if (is_array($value))
+			{
+				$parameters[$field] = $this->removeTitlePatternFromQueryParameters($value);
+			}
+		}
+
+		return $parameters;
+	}
+
+	private function isTitlePatternField(string $field): bool
+	{
+		$field = ltrim($field, '!<>=%@?*');
+		$field = str_replace('_', '', $field);
+
+		return mb_strtolower($field) === 'titlepattern';
+	}
+
+	private function removeTimezoneFromSelect(array $select): array
+	{
+		return array_values(array_filter(
+			$select,
+			fn(mixed $field): bool => !is_string($field) || !$this->isTimezoneField($field),
+		));
+	}
+
+	private function removeTimezoneFromQueryParameters(?array $parameters): array
+	{
+		$parameters ??= [];
+		foreach ($parameters as $field => $value)
+		{
+			if (is_string($field) && $this->isTimezoneField($field))
+			{
+				unset($parameters[$field]);
+
+				continue;
+			}
+
+			if (is_array($value))
+			{
+				$parameters[$field] = $this->removeTimezoneFromQueryParameters($value);
+			}
+		}
+
+		return $parameters;
+	}
+
+	private function isTimezoneField(string $field): bool
+	{
+		$field = ltrim($field, '!<>=%@?*');
+		$field = str_replace('_', '', $field);
+
+		return mb_strtolower($field) === 'timezone';
 	}
 
 	/**

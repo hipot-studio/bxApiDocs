@@ -23,7 +23,7 @@ class NotifyResponsibleChanged extends AbstractNotify implements
 		private readonly Entity\Task $task,
 		MessageSenderInterface $sender,
 		protected readonly ?Entity\User $triggeredBy = null,
-		private readonly ?Entity\User $oldResponsible = null,
+		?Entity\User $oldResponsible = null,
 		private readonly ?Entity\User $newResponsible = null,
 		private readonly bool $isNewMember = false,
 	)
@@ -34,9 +34,9 @@ class NotifyResponsibleChanged extends AbstractNotify implements
 	public function getMessageCode(): string
 	{
 		return match ($this->triggeredBy?->getGender()) {
-			Entity\User\Gender::Male   => 'TASKS_IM_TASK_RESPONSIBLE_CHANGED_M',
-			Entity\User\Gender::Female => 'TASKS_IM_TASK_RESPONSIBLE_CHANGED_F',
-			default                    => 'TASKS_IM_TASK_RESPONSIBLE_CHANGED_M',
+			Entity\User\Gender::Male   => 'TASKS_IM_TASK_RESPONSIBLE_CHANGED_M_MSGVER_1',
+			Entity\User\Gender::Female => 'TASKS_IM_TASK_RESPONSIBLE_CHANGED_F_MSGVER_1',
+			default                    => 'TASKS_IM_TASK_RESPONSIBLE_CHANGED_M_MSGVER_1',
 		};
 	}
 
@@ -44,7 +44,6 @@ class NotifyResponsibleChanged extends AbstractNotify implements
 	{
 		return [
 			'#USER#' => $this->formatUser($this->triggeredBy),
-			'#OLD_RESPONSIBLE#' => $this->formatUser($this->oldResponsible),
 			'#NEW_RESPONSIBLE#' => $this->formatUser($this->newResponsible),
 		];
 	}

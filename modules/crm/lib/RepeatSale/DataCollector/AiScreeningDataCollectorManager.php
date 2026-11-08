@@ -63,6 +63,7 @@ final class AiScreeningDataCollectorManager
 			->setLimit(self::HISTORY_COLLECTION_LIMIT)
 			->getMarkers([
 				'clientIdentifiers' => $clientIdentifiers,
+				'baseEntityId' => $targetItemId,
 			])
 		;
 

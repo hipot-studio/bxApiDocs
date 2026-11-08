@@ -8,6 +8,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
 use Bitrix\Intranet;
+use Bitrix\Intranet\Internal\Integration\StaffTrack\OfficesTile;
 use Bitrix\Main\Engine;
 use Bitrix\Main\Engine\Response;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
@@ -82,10 +83,11 @@ class InvitationWidget extends Engine\Controller
 			\Bitrix\Socialnetwork\Collab\CollabFeature::isOn();
 		$intranetUser = new Intranet\User();
 
-		return [
+		$result = [
 			'isCurrentUserAdmin' => $intranetUser->isAdmin(),
 			'isInvitationAvailable' => Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()->canInvite(),
 			'structureLink' => '/company/vis_structure.php',
+			'userListLink' => SITE_DIR . 'company/',
 			'invitationLink' => Intranet\CurrentUser::get()->isAdmin() || Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()->canInvite()
 				? Engine\UrlManager::getInstance()->create('getSliderContent', [
 					'c' => 'bitrix:intranet.invitation',
@@ -109,6 +111,20 @@ class InvitationWidget extends Engine\Controller
 				'isLimit' => $maxUserCount > 0 && $currentUserCount > $maxUserCount,
 			],
 		];
+
+		$offices = $this->getOfficesTile();
+
+		if ($offices !== null)
+		{
+			$result['offices'] = $offices;
+		}
+
+		return $result;
+	}
+
+	protected function getOfficesTile(): ?array
+	{
+		return OfficesTile::get();
 	}
 
 	private function getActiveUsersCount(): int

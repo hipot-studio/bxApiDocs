@@ -3,11 +3,24 @@
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Error;
+use Bitrix\Main\Errorable;
+use Bitrix\Main\ErrorableImplementation;
+use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
-class DocumentGeneratorConfigComponent extends CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable
+class DocumentGeneratorConfigComponent extends CBitrixComponent implements \Bitrix\Main\Engine\Contract\Controllerable, Errorable
 {
+	use ErrorableImplementation;
+
+	public function __construct($component = null)
+	{
+		parent::__construct($component);
+
+		$this->errorCollection = new ErrorCollection();
+	}
+
 	public function executeComponent()
 	{
 		if(!Loader::includeModule('documentgenerator'))
@@ -31,6 +44,7 @@ class DocumentGeneratorConfigComponent extends CBitrixComponent implements \Bitr
 
 		$this->arResult['TITLE'] = Loc::getMessage('DOCGEN_CONFIG_TITLE');
 		$this->arResult['enablePublicSign'] = (Option::get('documentgenerator', 'document_enable_public_b24_sign', 'Y') == 'Y');
+		$this->prepareTimezoneResult();
 
 		global $APPLICATION;
 		$APPLICATION->SetTitle($this->arResult['TITLE']);
@@ -38,7 +52,7 @@ class DocumentGeneratorConfigComponent extends CBitrixComponent implements \Bitr
 		$this->includeComponentTemplate();
 	}
 
-	private function hasAccess(): bool
+	protected function hasAccess(): bool
 	{
 		return \Bitrix\DocumentGenerator\Driver::getInstance()->getUserPermissions()->canModifySettings();
 	}
@@ -70,9 +84,51 @@ class DocumentGeneratorConfigComponent extends CBitrixComponent implements \Bitr
 		{
 			return;
 		}
-		if(!\Bitrix\DocumentGenerator\Integration\Bitrix24Manager::isRestrictionsActive())
+
+		if (
+			\Bitrix\DocumentGenerator\Timezone::isEnabled()
+			&& array_key_exists('document_timezone', $config)
+		)
+		{
+			$timezone = $config['document_timezone'];
+			if ($timezone !== '' && (!is_string($timezone) || !\Bitrix\DocumentGenerator\Timezone::isValid($timezone)))
+			{
+				$this->errorCollection->setError(new Error('Invalid timezone.', 'TIMEZONE_INVALID'));
+
+				return;
+			}
+
+			Option::set('documentgenerator', \Bitrix\DocumentGenerator\Timezone::OPTION_NAME, $timezone);
+		}
+
+		if (
+			!$this->areRestrictionsActive()
+			&& array_key_exists('document_enable_public_b24_sign', $config)
+		)
 		{
 			Option::set('documentgenerator', 'document_enable_public_b24_sign', $config['document_enable_public_b24_sign']);
 		}
+	}
+
+	protected function prepareTimezoneResult(): void
+	{
+		if (!\Bitrix\DocumentGenerator\Timezone::isEnabled())
+		{
+			return;
+		}
+
+		$timezone = Option::get(
+			'documentgenerator',
+			\Bitrix\DocumentGenerator\Timezone::OPTION_NAME,
+			'',
+		);
+		$this->arResult['timezoneFeatureEnabled'] = true;
+		$this->arResult['timezoneItems'] = \Bitrix\DocumentGenerator\Timezone::getItems();
+		$this->arResult['timezone'] = \Bitrix\DocumentGenerator\Timezone::isValid($timezone) ? $timezone : '';
+	}
+
+	protected function areRestrictionsActive(): bool
+	{
+		return \Bitrix\DocumentGenerator\Integration\Bitrix24Manager::isRestrictionsActive();
 	}
 }

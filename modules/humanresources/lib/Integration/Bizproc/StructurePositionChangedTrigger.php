@@ -1,0 +1,24 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Bitrix\HumanResources\Integration\Bizproc;
+
+final class StructurePositionChangedTrigger
+{
+	public const FIELD_USER_ID = 'FIELD_USER_ID';
+	public const FIELD_CHANGE_TYPE = 'FIELD_CHANGE_TYPE';
+	public const FIELD_PREVIOUS_NODE_IDS = 'FIELD_PREVIOUS_NODE_IDS';
+	public const FIELD_PREVIOUS_NODE_NAMES = 'FIELD_PREVIOUS_NODE_NAMES';
+	public const FIELD_NEW_NODE_IDS = 'FIELD_NEW_NODE_IDS';
+	public const FIELD_NEW_NODE_NAMES = 'FIELD_NEW_NODE_NAMES';
+	public const FIELD_PREVIOUS_ROLE = 'FIELD_PREVIOUS_ROLE';
+	public const FIELD_NEW_ROLE = 'FIELD_NEW_ROLE';
+	public const FIELD_EVENT_DATE_TIME = 'FIELD_EVENT_DATE_TIME';
+
+	public const REFUSAL_CODE_PREFIX = 'HUMANRESOURCES_STRUCTURE_POSITION_TRIGGER_';
+
+	public const REFUSAL_OUTSIDE_USERS = self::REFUSAL_CODE_PREFIX . 'OUTSIDE_USERS';
+	public const REFUSAL_NO_EMPLOYEE = self::REFUSAL_CODE_PREFIX . 'NO_EMPLOYEE';
+	public const REFUSAL_CHANGE_TYPE = self::REFUSAL_CODE_PREFIX . 'CHANGE_TYPE';
+}

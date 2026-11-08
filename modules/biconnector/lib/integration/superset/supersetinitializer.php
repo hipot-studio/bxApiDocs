@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Integration\Superset;
 use Bitrix\BIConnector\Access\Install\AccessInstaller;
 use Bitrix\BIConnector\Configuration\DataTimezone;
 use Bitrix\BIConnector\ExternalSource\Type;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\BitrixGptBiAnnouncement;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
 use Bitrix\BIConnector\Superset\Config\ConfigContainer;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Request\IntegratorResponse;
@@ -538,11 +539,22 @@ final class SupersetInitializer
 	{
 		if ($value)
 		{
+			// unfreezing comes through the same point, so the date is stamped on the first startup only
+			if (!self::isSupersetInstanceExists())
+			{
+				Option::set(
+					'biconnector',
+					BitrixGptBiAnnouncement::INSTANCE_STARTUP_DATE_OPTION,
+					(string)time(),
+				);
+			}
+
 			Option::set('biconnector', self::SUPERSET_INSTANCE_EXISTS_OPTION, 'Y');
 		}
 		else
 		{
 			Option::delete('biconnector', ['name' => self::SUPERSET_INSTANCE_EXISTS_OPTION]);
+			Option::delete('biconnector', ['name' => BitrixGptBiAnnouncement::INSTANCE_STARTUP_DATE_OPTION]);
 		}
 	}
 

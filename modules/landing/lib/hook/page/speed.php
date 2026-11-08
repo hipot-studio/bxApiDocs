@@ -54,7 +54,7 @@ class Speed extends \Bitrix\Landing\Hook\Page
 	 */
 	public function getTitle()
 	{
-		return Loc::getMessage('LANDING_HOOK_SPEED_TTILE');
+		return Loc::getMessage('LANDING_HOOK_SPEED_TITLE');
 	}
 
 	/**

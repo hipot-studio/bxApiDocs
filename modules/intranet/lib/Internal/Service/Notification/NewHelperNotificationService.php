@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Bitrix\Intranet\Internal\Service\Notification;
 
 use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Internal\Integration\Bitrix24\PortalInfoService;
 use Bitrix\Main\Config\Option;
 
 class NewHelperNotificationService implements NotificationService
 {
 	private const MODULE_ID = 'intranet';
+	private const END_TIMESTAMP_UTC = 1793491200; // 2026-11-01 00:00:00 UTC
 	protected const OPTION_IS_NEW_HELPDESK = 'isNewHelpdesk';
-	protected const OPTION_START_TS = 'new_helper_notification_start_ts';
-	protected const OPTION_END_TS = 'new_helper_notification_end_ts';
 	protected const USER_OPTION_CATEGORY = 'intranet';
 	protected const USER_OPTION_NAME = 'new_helper_notification_shown';
 	protected const USER_OPTION_VALUE = 'Y';
@@ -22,6 +22,7 @@ class NewHelperNotificationService implements NotificationService
 		private readonly ?CurrentUser $currentUser,
 		private readonly ?PortalInfoService $portalInfoService,
 		private readonly ?int $currentTimestamp,
+		private readonly ?User $user = null,
 	)
 	{
 	}
@@ -37,21 +38,10 @@ class NewHelperNotificationService implements NotificationService
 
 	public function isAvailable(): bool
 	{
-		if (Option::get(self::MODULE_ID, self::OPTION_IS_NEW_HELPDESK, 'N') !== 'Y')
-		{
-			return false;
-		}
-
-		$period = $this->getDisplayPeriod();
-
-		if ($period === null)
-		{
-			return false;
-		}
-
-		return
-			$this->currentTimestamp >= $period['start']
-			&& $this->currentTimestamp <= $period['end'];
+		return Option::get(self::MODULE_ID, self::OPTION_IS_NEW_HELPDESK, 'N') === 'Y'
+			&& $this->portalInfoService?->isCis() === false
+			&& $this->currentTimestamp !== null
+			&& $this->currentTimestamp < self::END_TIMESTAMP_UTC;
 	}
 
 	public function needToShow(): bool
@@ -61,7 +51,7 @@ class NewHelperNotificationService implements NotificationService
 			return false;
 		}
 
-		if (!$this->currentUser->isAuthorized())
+		if (!$this->currentUser?->isAuthorized())
 		{
 			return false;
 		}
@@ -73,28 +63,11 @@ class NewHelperNotificationService implements NotificationService
 			return false;
 		}
 
-		$period = $this->getDisplayPeriod();
+		$user = $this->user ?? new User($userId);
 
-		if ($period === null)
-		{
-			return false;
-		}
-
-		$portalCreationDate = $this->portalInfoService->getCreationDateTime();
-
-		if ($portalCreationDate === null || $portalCreationDate->getTimestamp() > $period['start'])
-		{
-			return false;
-		}
-
-		$userRegistrationDate = $this->currentUser->getDateRegister();
-
-		if ($userRegistrationDate === null || $userRegistrationDate->getTimestamp() > $period['start'])
-		{
-			return false;
-		}
-
-		return true;
+		return $user->isIntranet()
+			&& !$user->isIntegrator()
+			&& !$user->isCollaber();
 	}
 
 	public function setShownForUser(): void
@@ -106,33 +79,6 @@ class NewHelperNotificationService implements NotificationService
 			false,
 			$this->currentUser->getId(),
 		);
-	}
-
-	/**
-	 * @return array{start: int, end: int}|null
-	 */
-	private function getDisplayPeriod(): ?array
-	{
-		$startTimestamp = $this->getPositiveIntegerOptionValue(self::OPTION_START_TS);
-		$endTimestamp = $this->getPositiveIntegerOptionValue(self::OPTION_END_TS);
-
-		if ($startTimestamp === null || $endTimestamp === null || $startTimestamp > $endTimestamp)
-		{
-			return null;
-		}
-
-		return [
-			'start' => $startTimestamp,
-			'end' => $endTimestamp,
-		];
-	}
-
-	private function getPositiveIntegerOptionValue(string $optionName): ?int
-	{
-		$rawValue = Option::get(self::MODULE_ID, $optionName);
-		$value = (int)$rawValue;
-
-		return $value > 0 ? $value : null;
 	}
 
 	private function isAlreadyShownForUser(int $userId): bool

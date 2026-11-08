@@ -104,7 +104,7 @@ abstract class PhraseFts extends DataManager
 	 */
 	public static function getPartitionTableName(string $langId): string
 	{
-		if (!in_array($langId, Translate\Config::getLanguages(skipCache: true), true))
+		if (mb_strlen($langId) !== 2 || str_contains($langId, '`'))
 		{
 			throw new ArgumentException('Parameter langId has wrong value');
 		}

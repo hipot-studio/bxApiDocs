@@ -2,7 +2,9 @@
 
 namespace Bitrix\BIConnector\Superset\Filter\Provider;
 
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\ExternalSource;
+use Bitrix\BIConnector\Integration\UI\EntitySelector\TableGroupProvider;
 use Bitrix\Main\Filter\EntityDataProvider;
 use Bitrix\Main\Filter\Settings;
 use Bitrix\Main\Loader;
@@ -11,6 +13,8 @@ use Bitrix\Main\UI;
 
 class ExternalDatasetDataProvider extends EntityDataProvider
 {
+	public const TYPE_EXTERNAL = 'external';
+
 	public function __construct(protected Settings $settings)
 	{
 	}
@@ -82,6 +86,18 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 			]),
 		];
 
+		if (Feature::isTablePermissionsEnabled())
+		{
+			// The reports section names its own groups the very same way: one table belongs to
+			// several groups, and several picked groups give the union of their tables.
+			$result['GROUPS'] = $this->createField('GROUPS.ID', [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TITLE_GROUPS'),
+				'default' => true,
+				'partial' => true,
+				'type' => 'entity_selector',
+			]);
+		}
+
 		if (ExternalSource\SourceManager::isExternalConnectionsAvailable())
 		{
 			$result['SOURCE'] = $this->createField('SOURCE.ID', [
@@ -101,6 +117,7 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 		{
 			$items = [
 				ExternalSource\Type::System->value => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_SYSTEM') ?? '',
+				self::TYPE_EXTERNAL => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_EXTERNAL') ?? '',
 				ExternalSource\Type::Csv->value => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_CSV'),
 			];
 
@@ -118,6 +135,7 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 			{
 				$items[ExternalSource\Type::Mysql->value] = Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_MYSQL');
 				$items[ExternalSource\Type::Pgsql->value] = Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_PGSQL');
+				$items[ExternalSource\Type::Clickhouse->value] = Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_FILTER_TYPE_CLICKHOUSE');
 			}
 
 			return [
@@ -142,6 +160,29 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 				$fieldID . '_filter',
 				['fieldName' => $fieldID]
 			);
+		}
+
+		if ($fieldID === 'GROUPS.ID')
+		{
+			return [
+				'params' => [
+					'multiple' => 'Y',
+					'dialogOptions' => [
+						'context' => TableGroupProvider::ENTITY_ID,
+						'multiple' => 'Y',
+						'entities' => [
+							[
+								'id' => TableGroupProvider::ENTITY_ID,
+								'options' => ['filter' => true],
+								'dynamicLoad' => true,
+								'dynamicSearch' => true,
+							],
+						],
+						'dropdownMode' => true,
+						'compactView' => true,
+					],
+				],
+			];
 		}
 
 		if ($fieldID === 'SOURCE.ID')
@@ -182,6 +223,12 @@ class ExternalDatasetDataProvider extends EntityDataProvider
 	public function prepareFilterValue(array $rawFilterValue): array
 	{
 		$rawFilterValue = parent::prepareFilterValue($rawFilterValue);
+
+		if (($rawFilterValue['TYPE'] ?? null) === self::TYPE_EXTERNAL)
+		{
+			unset($rawFilterValue['TYPE']);
+			$rawFilterValue['!=TYPE'] = ExternalSource\Type::System->value;
+		}
 
 		if (!empty($rawFilterValue['FIND']))
 		{

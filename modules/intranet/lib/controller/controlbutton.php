@@ -16,6 +16,7 @@ use Bitrix\Intranet;
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Socialnetwork\Helper;
 use Bitrix\Socialnetwork\Integration\Im\Chat\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
 
@@ -64,7 +65,7 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 		{
 			if (!in_array($user['EXTERNAL_AUTH_ID'], $externalUserTypes, true))
 			{
-				$newUserIds[] = $user['ID'];
+				$newUserIds[] = (int)$user['ID'];
 			}
 		}
 
@@ -162,7 +163,7 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 			return $res;
 		}
 
-		$entry = \CCalendarEvent::getEventForViewInterface($entityId);
+		$entry = $this->readCalendarEvent($entityId);
 
 		if (!$entry)
 		{
@@ -172,13 +173,15 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 		$pathToCalendar = \CCalendar::GetPathForCalendarEx($USER->GetID());
 		$pathToEvent = (string)(new Uri($pathToCalendar))->addParams(['EVENT_ID' => $entry['ID']]);
 
+		$attendeeList = $this->getCalendarAttendeeList($entry);
+
 		$notDeclinedIds = null;
-		if (is_array($entry['ATTENDEE_LIST']))
+		if (is_array($attendeeList))
 		{
 			// exclude decliners
 			$notDeclinedIds =  array_column(
 				array_filter(
-					$entry['ATTENDEE_LIST'],
+					$attendeeList,
 					static fn (array $attendee) => $attendee['status'] !== 'N'
 				),
 				'id'
@@ -187,6 +190,7 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 
 		$res = [
 			'ID' => $entry['ID'],
+			'PARENT_ID' => $entry['PARENT_ID'] ?? 0,
 			'TITLE' => $entry['NAME'],
 			'DESCRIPTION' => $entry['DESCRIPTION'],
 			'CREATED_BY' => $entry['CREATED_BY'],
@@ -195,8 +199,8 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 			'DT_SKIP_TIME' => $entry['DT_SKIP_TIME'],
 			'RECURRENCE_ID' => $entry['RECURRENCE_ID'],
 			// TODO: not used if NOT_DECLINED_IDS presented
-			'USER_IDS' => is_array($entry['ATTENDEE_LIST'])
-				? array_column($entry['ATTENDEE_LIST'], 'id')
+			'USER_IDS' => is_array($attendeeList)
+				? array_column($attendeeList, 'id')
 				: [$entry['CREATED_BY']]
 			,
 			'NOT_DECLINED_IDS' => $notDeclinedIds ?: [$entry['CREATED_BY']],
@@ -208,6 +212,53 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 		$this->checkUsers($res['NOT_DECLINED_IDS']);
 
 		return $res;
+	}
+
+	protected function readCalendarEvent($entityId): array|false
+	{
+		return \CCalendarEvent::getEventForViewInterface($entityId);
+	}
+
+	private function getCalendarAttendeeList(array $entry): ?array
+	{
+		$attendeeList = $entry['ATTENDEE_LIST'] ?? null;
+		if (!is_array($attendeeList))
+		{
+			return null;
+		}
+
+		if (!empty($attendeeList) || !$this->isOwnPlainEventHost($entry))
+		{
+			return $attendeeList;
+		}
+
+		$status = in_array($entry['MEETING_STATUS'] ?? null, ['Y', 'N', 'Q', 'H'], true)
+			? $entry['MEETING_STATUS']
+			: 'H'
+		;
+
+		return [
+			[
+				'id' => (int)$entry['MEETING_HOST'],
+				'entryId' => $entry['ID'],
+				'status' => $status,
+			],
+		];
+	}
+
+	/**
+	 * MEETING_HOST comes from the client, so it is trusted only when it matches the calendar owner.
+	 */
+	private function isOwnPlainEventHost(array $entry): bool
+	{
+		$hostId = (int)($entry['MEETING_HOST'] ?? 0);
+
+		return
+			empty($entry['IS_MEETING'])
+			&& ($entry['CAL_TYPE'] ?? null) === 'user'
+			&& $hostId > 0
+			&& $hostId === (int)($entry['OWNER_ID'] ?? 0)
+		;
 	}
 
 	private function getTaskChat($entityId)
@@ -276,7 +327,7 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 			return $chatId;
 		}
 
-		$userId = $USER->GetId();
+		$userId = (int)$USER->GetId();
 		$calendarData = $this->getCalendarData($entityId, $entityData);
 
 		if (
@@ -287,6 +338,20 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 			return $chatId;
 		}
 
+		$canonicalEntityId = (int)($calendarData['PARENT_ID'] ?: $calendarData['ID']);
+		if ($canonicalEntityId !== (int)$calendarData['ID'])
+		{
+			$calendarData = $this->getCalendarData($canonicalEntityId);
+			if (
+				empty($calendarData['ID'])
+				|| !is_array($calendarData['USER_IDS'] ?? null)
+				|| !in_array($userId, $calendarData['USER_IDS'], true)
+			)
+			{
+				return $chatId;
+			}
+		}
+
 		if ($calendarData['MEETING']['CHAT_ID'] > 0)
 		{
 			$chatId = $calendarData['MEETING']['CHAT_ID'];
@@ -294,8 +359,25 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 		}
 		else
 		{
-			$lockName = "chat_create_calendar_event_{$entityId}";
-			if (!Application::getConnection()->lock($lockName))
+			if (class_exists(\Bitrix\Calendar\Internal\GuestLink\GuestLinkResolver::class))
+			{
+				$lockName = \Bitrix\Calendar\Internal\GuestLink\GuestLinkResolver::getChatCreateLockName(
+					$canonicalEntityId,
+					(int)($calendarData['RECURRENCE_ID'] ?? 0),
+				);
+				$locked = Application::getConnection()->lock(
+					$lockName,
+					\Bitrix\Calendar\Internal\GuestLink\GuestLinkResolver::CHAT_CREATE_LOCK_TIMEOUT,
+				);
+			}
+			else
+			{
+				// calendar without the guest link feature never takes this lock, so the name needs no sharing
+				$lockName = "chat_create_calendar_event_{$canonicalEntityId}";
+				$locked = Application::getConnection()->lock($lockName);
+			}
+
+			if (!$locked)
 			{
 				$this->addError(new Error(
 					Loc::getMessage('INTRANET_CONTROL_BUTTON_CREATE_CHAT_LOCK_ERROR'), 'lock_error')
@@ -303,15 +385,38 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 				return null;
 			}
 
-			$parentCalendarData = [];
-			if ($calendarData['RECURRENCE_ID'])
+			try
 			{
-				$parentCalendarData = $this->getCalendarData($calendarData['RECURRENCE_ID']);
+				$calendarData = $this->getCalendarData($canonicalEntityId);
+				if (
+					empty($calendarData['ID'])
+					|| !is_array($calendarData['USER_IDS'] ?? null)
+					|| !in_array($userId, $calendarData['USER_IDS'], true)
+				)
+				{
+					return $chatId;
+				}
+
+				$chatId = (int)($calendarData['MEETING']['CHAT_ID'] ?? 0);
+				if ($chatId > 0)
+				{
+					Intranet\ControlButton::addUserToChat($chatId, $userId);
+				}
+				else
+				{
+					$parentCalendarData = [];
+					if ($calendarData['RECURRENCE_ID'])
+					{
+						$parentCalendarData = $this->getCalendarData($calendarData['RECURRENCE_ID']);
+					}
+
+					$chatId = Intranet\ControlButton::createCalendarChat($calendarData, $userId, $parentCalendarData);
+				}
 			}
-
-			$chatId = Intranet\ControlButton::createCalendarChat($calendarData, $userId, $parentCalendarData);
-
-			Application::getConnection()->unlock($lockName);
+			finally
+			{
+				Application::getConnection()->unlock($lockName);
+			}
 		}
 
 		return $chatId;
@@ -327,6 +432,20 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 		)
 		{
 			return $chatId;
+		}
+
+		$groupId = (int)$groupId;
+
+		if ($groupId <= 0)
+		{
+			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_ENTITY_ERROR')));
+
+			return null;
+		}
+
+		if (!$this->ensureWorkgroupChatAccess($groupId))
+		{
+			return null;
 		}
 
 		$chatData = Workgroup::getChatData(
@@ -349,6 +468,47 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 		}
 
 		return $chatId;
+	}
+
+	private function ensureWorkgroupChatAccess(int $groupId): bool
+	{
+		global $USER;
+		$userId = (is_object($USER) ? (int)$USER->getId() : 0);
+
+		if ($this->canAccessWorkgroupChat($groupId, $userId))
+		{
+			return true;
+		}
+
+		$this->addError(new Error(
+			Loc::getMessage('INTRANET_CONTROL_BUTTON_WORKGROUP_ACCESS_ERROR'),
+			'access_denied'
+		));
+
+		return false;
+	}
+
+	/**
+	 * Group chat belongs to group members only, so UserCanViewGroup is not enough here:
+	 * it is also true for a non-member of a visible open group.
+	 * UserCanModifyGroup covers the owner, the scrum master and the portal admin.
+	 *
+	 * Membership is resolved for $userId, but the portal admin flag inside
+	 * CSocNetUserToGroup::InitUserPerms always comes from the current session, not from $userId.
+	 */
+	protected function canAccessWorkgroupChat(int $groupId, int $userId): bool
+	{
+		if ($groupId <= 0 || $userId <= 0)
+		{
+			return false;
+		}
+
+		$permissions = Helper\Workgroup::getPermissions([
+			'groupId' => $groupId,
+			'userId' => $userId,
+		]);
+
+		return !empty($permissions['UserIsMember']) || !empty($permissions['UserCanModifyGroup']);
 	}
 
 	public function getChatAction($entityType, $entityId, $entityData = [])
@@ -385,6 +545,74 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 
 	public function getVideoCallChatAction($entityType, $entityId, $entityData = [])
 	{
+		$userCount = $this->getVideoCallUserCount($entityType, $entityId, $entityData);
+		if ($userCount === null)
+		{
+			return null;
+		}
+
+		if ($userCount === 1)
+		{
+			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_VIDEOCALL_SELF_ERROR')));
+			return null;
+		}
+
+		return $this->getChatAction($entityType, $entityId);
+	}
+
+	public function getVideoCallStartAction($entityType, $entityId, $entityData = []): ?array
+	{
+		$userCount = $this->getVideoCallUserCount($entityType, $entityId, $entityData);
+		if ($userCount === null)
+		{
+			return null;
+		}
+
+		$callOptions = [];
+		if ($userCount === 1)
+		{
+			if ($entityType !== 'calendar_event')
+			{
+				$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_VIDEOCALL_SELF_ERROR')));
+				return null;
+			}
+
+			// a meeting may be started by its only employee, guests are invited by link and need time to join;
+			// an older call module has no such period, then the call waits for the usual time
+			if ($this->isSyncCallInvitePeriodAvailable())
+			{
+				$callOptions = ['invitePeriod' => \Bitrix\Call\Settings::getSyncCallInvitePeriod()];
+			}
+		}
+
+		$chatId = (int)$this->getChatAction($entityType, $entityId);
+		if (!$this->errorCollection->isEmpty())
+		{
+			return null;
+		}
+
+		// without a chat there is no call, and the options would reveal to a non-member that the event is personal
+		if ($chatId <= 0)
+		{
+			$callOptions = [];
+		}
+
+		return [
+			'chatId' => $chatId,
+			'callOptions' => $callOptions,
+		];
+	}
+
+	protected function isSyncCallInvitePeriodAvailable(): bool
+	{
+		return method_exists(\Bitrix\Call\Settings::class, 'getSyncCallInvitePeriod');
+	}
+
+	/**
+	 * Returns null when the request is rejected, the error is already added.
+	 */
+	private function getVideoCallUserCount($entityType, $entityId, $entityData): ?int
+	{
 		if (!$entityType || !$entityId)
 		{
 			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_ENTITY_ERROR')));
@@ -397,6 +625,26 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 			return null;
 		}
 
+		$userCount = $this->countVideoCallUsers((string)$entityType, $entityId, $entityData);
+		if ($userCount === null)
+		{
+			return null;
+		}
+
+		if ($userCount > \Bitrix\Call\Call::getMaxParticipants())
+		{
+			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_VIDEOCALL_LIMIT')));
+			return null;
+		}
+
+		return $userCount;
+	}
+
+	/**
+	 * Returns null when access is denied, the error is already added.
+	 */
+	protected function countVideoCallUsers(string $entityType, $entityId, $entityData): ?int
+	{
 		$userCount = 0;
 
 		if ($entityType === 'task')
@@ -419,22 +667,17 @@ class ControlButton extends \Bitrix\Main\Engine\Controller
 		}
 		elseif ($entityType === 'workgroup' && Loader::includeModule('socialnetwork'))
 		{
-			$userCount = Workgroup::getNumberOfMembers($entityId);
+			$groupId = (int)$entityId;
+
+			if (!$this->ensureWorkgroupChatAccess($groupId))
+			{
+				return null;
+			}
+
+			$userCount = Workgroup::getNumberOfMembers($groupId);
 		}
 
-		if ($userCount > \Bitrix\Call\Call::getMaxParticipants())
-		{
-			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_VIDEOCALL_LIMIT')));
-			return null;
-		}
-
-		if ($userCount === 1)
-		{
-			$this->addError(new Error(Loc::getMessage('INTRANET_CONTROL_BUTTON_VIDEOCALL_SELF_ERROR')));
-			return null;
-		}
-
-		return $this->getChatAction($entityType, $entityId);
+		return $userCount;
 	}
 
 	public function getTaskLinkAction($entityType, $entityId, $postEntityType = '', $entityData = []): array

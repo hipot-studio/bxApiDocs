@@ -68,6 +68,12 @@ class ParticipantResolver
 		return new User($authorId);
 	}
 
+	/**
+	 * A participant key resolves by its own checksum alone (@see UserKeyConverter), so a key that
+	 * came back inside a model answer can name any user of the portal - the prefix in front of the
+	 * checksum is arbitrary. Only a member of the chat the task is built from may become one of its
+	 * participants, so anything else is dropped here and degrades to getDefaultResponsible().
+	 */
 	private function resolve(string $participantIdentifier, Chat $chat): ?User
 	{
 		$chatId = (int)$chat->getId();
@@ -84,6 +90,16 @@ class ParticipantResolver
 			return null;
 		}
 
+		if (!$this->isChatMember($userId, $chat))
+		{
+			return null;
+		}
+
 		return new User($userId);
+	}
+
+	private function isChatMember(int $userId, Chat $chat): bool
+	{
+		return isset($chat->getRelations()->getUserIds()[$userId]);
 	}
 }

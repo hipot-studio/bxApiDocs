@@ -16,7 +16,9 @@ use Bitrix\Main\Type\DateTime;
  * For a launched copy linked to a system template via ORIGIN_SYSTEM_CODE:
  *  - hasNewVersion: reference (system template) revision != copy installed
  *    version (ORIGIN_SYSTEM_VERSION);
- *  - isCustomized: copy current-logic revision != installed version.
+ *  - isCustomized: copy current-logic revision != installed version;
+ *  - isComparable: every revision the two flags above stand on was available, so a pair of
+ *    false flags means "compared, no difference" and never "nothing was compared".
  *
  * Performance: a timestamp prefilter avoids the full logic hash on the hot path.
  *  - Copy customization is skipped unless the copy is flagged IS_MODIFIED, since
@@ -106,19 +108,22 @@ class UpgradeAvailabilityService
 		$referenceRow = $this->getReferenceRow($originSystemCode);
 		if ($referenceRow === null)
 		{
-			return new UpgradeAvailabilityDto();
+			return new UpgradeAvailabilityDto(hasSystemOrigin: true);
 		}
 
 		$installedVersion = $this->getOriginSystemVersion($templateId);
 		$referenceRevision = $this->getReferenceRevision($originSystemCode, $referenceRow['id']);
-
-		$hasNewVersion =
-			$installedVersion !== null
-			&& $referenceRevision !== null
-			&& $referenceRevision !== $installedVersion
-		;
-
 		$isCustomized = $this->isCopyCustomized($templateRow, $templateId, $installedVersion);
+
+		if ($referenceRevision === null || $isCustomized === null)
+		{
+			return new UpgradeAvailabilityDto(
+				currentVersionLabel: $this->makeVersionLabel($installedVersion),
+				hasSystemOrigin: true,
+			);
+		}
+
+		$hasNewVersion = $referenceRevision !== $installedVersion;
 
 		return new UpgradeAvailabilityDto(
 			hasNewVersion: $hasNewVersion,
@@ -127,21 +132,24 @@ class UpgradeAvailabilityService
 			newVersionLabel: $hasNewVersion
 				? $this->makeVersionLabel($referenceRevision, $referenceRow['modified'])
 				: null,
+			isComparable: true,
+			hasSystemOrigin: true,
 		);
 	}
 
 	/**
-	 * Whether the copy logic diverged from its installed version.
+	 * Whether the copy logic diverged from its installed version; null when that question has no
+	 * answer - there is no installed version to compare with, or the copy revision does not compute.
 	 *
 	 * Fast prefilter: a copy that was never edited (IS_MODIFIED != 'Y') cannot
 	 * be customized, so the full logic hash is skipped. Only a modified copy is
 	 * hashed and compared against the installed version.
 	 */
-	private function isCopyCustomized(array $templateRow, int $templateId, ?string $installedVersion): bool
+	private function isCopyCustomized(array $templateRow, int $templateId, ?string $installedVersion): ?bool
 	{
 		if ($installedVersion === null)
 		{
-			return false;
+			return null;
 		}
 
 		if (array_key_exists('IS_MODIFIED', $templateRow) && (string)$templateRow['IS_MODIFIED'] !== 'Y')
@@ -150,8 +158,12 @@ class UpgradeAvailabilityService
 		}
 
 		$currentRevision = $this->templateRevisionService->getTemplateRevision($templateId);
+		if ($currentRevision === null)
+		{
+			return null;
+		}
 
-		return $currentRevision !== null && $currentRevision !== $installedVersion;
+		return $currentRevision !== $installedVersion;
 	}
 
 	/**

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\BizprocDesigner\Internal\Service\Activity;
 
+use Bitrix\Bizproc\Activity\Dto\Complex\AvailableBlock;
 use Bitrix\Bizproc\Activity\Dto\Complex\BlockAvailability;
 use Bitrix\Bizproc\Activity\Enum\NodeBlockType;
 use Bitrix\Bizproc\Internal\Service\Container as BizprocContainer;
@@ -85,5 +86,24 @@ final class NodeFilterAvailability
 	public function isAvailableForNode(?BlockAvailability $availableBlocks, bool $runtimeAvailable): bool
 	{
 		return $availableBlocks?->isAvailable(NodeBlockType::FILTER) ?? $runtimeAvailable;
+	}
+
+	/**
+	 * The blocks the editor offers to add: while the rollout flag is off the filter is not offered, a node that
+	 * declares it included. Only the offer - the save path keeps {@see self::isAvailableForNode()}, so a filter
+	 * saved earlier still passes validation.
+	 */
+	public function hideFilterUntilRolledOut(BlockAvailability $availableBlocks): BlockAvailability
+	{
+		$filter = $availableBlocks->get(NodeBlockType::FILTER);
+		if ($filter === null || !$filter->available || Feature::instance()->isNodeFilterAvailable())
+		{
+			return $availableBlocks;
+		}
+
+		return BlockAvailability::fromArrayData($availableBlocks->toArray())->set(
+			NodeBlockType::FILTER,
+			new AvailableBlock(available: false, constraints: $filter->constraints),
+		);
 	}
 }

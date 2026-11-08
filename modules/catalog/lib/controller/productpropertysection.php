@@ -56,6 +56,15 @@ final class ProductPropertySection extends ProductPropertyBase
 
 			return null;
 		}
+
+		$permissionResult = $this->checkIblockModifyPermission((int)$property['IBLOCK_ID']);
+		if (!$permissionResult->isSuccess())
+		{
+			$this->addErrors($permissionResult->getErrors());
+
+			return null;
+		}
+
 		$fields['IBLOCK_ID'] = $property['IBLOCK_ID'];
 
 		\CIBlockSectionPropertyLink::Set(self::BLANK_SECTION, $propertyId, $fields);

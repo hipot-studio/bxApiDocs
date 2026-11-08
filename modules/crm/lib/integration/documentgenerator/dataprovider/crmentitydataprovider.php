@@ -15,6 +15,7 @@ use Bitrix\Crm\Field;
 use Bitrix\Crm\Format\PersonNameFormatter;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Integration\DocumentGenerator\CustomField\Field\Extension\PaymentQrCodePurpose;
+use Bitrix\Crm\Integration\DocumentGenerator\DateOnlyParser;
 use Bitrix\Crm\Integration\DocumentGenerator\Value\Money;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\ItemIdentifier;
@@ -40,7 +41,7 @@ use Bitrix\Main\IO\Path;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Numerator\Hashable;
-use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Type;
 
 abstract class CrmEntityDataProvider extends EntityDataProvider implements Hashable, DocumentNumerable, Nameable
 {
@@ -341,6 +342,7 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 	public function getCommonFields(): array
 	{
 		$fields = [];
+		$dataProviderManager = DataProviderManager::getInstance();
 
 		if ($this->isEnableMyCompany())
 		{
@@ -382,8 +384,8 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 			'OPTIONS' => [
 				'DISABLE_MY_COMPANY' => true,
 				'VALUES' => [
-					'REQUISITE' => $this->getRequisiteId(),
-					'BANK_DETAIL' => $this->getBankDetailId(),
+					'REQUISITE' => $dataProviderManager->getValueFromList($this->getRequisiteId(), true),
+					'BANK_DETAIL' => $dataProviderManager->getValueFromList($this->getBankDetailId(), true),
 				],
 				'isLightMode' => true,
 			]
@@ -516,7 +518,7 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 			elseif($field['USER_TYPE_ID'] === 'datetime')
 			{
 				$result[$code]['TYPE'] = static::FIELD_TYPE_DATE;
-				$result[$code]['FORMAT'] = ['format' => DateTime::getFormat(DataProviderManager::getInstance()->getCulture())];
+				$result[$code]['FORMAT'] = ['format' => Type\DateTime::getFormat(DataProviderManager::getInstance()->getCulture())];
 			}
 			elseif($field['USER_TYPE_ID'] === 'crm' && !$this->isLightMode())
 			{
@@ -628,6 +630,46 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 	}
 
 	/**
+	 * Returns the user field placeholders getFields() puts into $this->userFieldDescriptions,
+	 * without loading the field values.
+	 *
+	 * @return string[]
+	 */
+	protected function getUserFieldPlaceholders(): array
+	{
+		$names = array_diff(array_keys($this->getEntity()->getFields()), $this->getHiddenFields());
+		$placeholders = array_fill_keys($names, true);
+
+		$manager = $this->getCrmUserTypeManager();
+		if ($manager)
+		{
+			$supportedNames = [];
+			foreach ($manager->GetEntityFields(0) as $name => $field)
+			{
+				if (isset($this->getAvailableUserFieldTypes()[$field['USER_TYPE_ID']]))
+				{
+					$supportedNames[] = $name;
+					$placeholders[$name] = true;
+				}
+				else
+				{
+					unset($placeholders[$name]);
+				}
+			}
+
+			foreach ($this->getAlternativeUserFieldNames($supportedNames) as $alternatives)
+			{
+				$placeholders += array_fill_keys($alternatives, true);
+			}
+		}
+
+		return array_values(array_filter(
+			array_keys($placeholders),
+			static fn(string $name): bool => str_starts_with($name, 'UF_') && !str_ends_with($name, '_SINGLE'),
+		));
+	}
+
+	/**
 	 * @param array $placeholders
 	 * @return array
 	 */
@@ -725,7 +767,7 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 		$field = $this->userFieldDescriptions[$placeholder];
 
 		$value = $field['VALUE'];
-		if (!$value && $field['USER_TYPE_ID'] !== 'boolean')
+		if (!$value && !in_array($field['USER_TYPE_ID'], ['boolean', 'date'], true))
 		{
 			return $value;
 		}
@@ -760,6 +802,13 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 			{
 				$value = $field['DATA'][$value];
 			}
+		}
+		elseif ($field['USER_TYPE_ID'] === 'date')
+		{
+			$value = is_array($value)
+				? array_map([$this, 'createDate'], $value)
+				: $this->createDate($value)
+			;
 		}
 		elseif ($field['USER_TYPE_ID'] === 'money')
 		{
@@ -899,6 +948,11 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 		}
 
 		return $value;
+	}
+
+	protected function createDate(mixed $value): ?Type\Date
+	{
+		return DateOnlyParser::createForCurrentDocument()->parse($value);
 	}
 
 	/**
@@ -1155,7 +1209,10 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 				}
 				elseif (!empty($this->getOptions()['VALUES']['REQUISITE']))
 				{
-					$requisiteId = $this->getOptions()['VALUES']['REQUISITE'] ?? false;
+					$requisiteId = DataProviderManager::getInstance()->getValueFromList(
+						$this->getOptions()['VALUES']['REQUISITE'],
+						true
+					);
 				}
 				else
 				{
@@ -1261,7 +1318,10 @@ abstract class CrmEntityDataProvider extends EntityDataProvider implements Hasha
 			}
 			elseif (!empty($this->getOptions()['VALUES']['BANK_DETAIL']))
 			{
-				$bankDetailId = $this->getOptions()['VALUES']['BANK_DETAIL'] ?? null;
+				$bankDetailId = DataProviderManager::getInstance()->getValueFromList(
+					$this->getOptions()['VALUES']['BANK_DETAIL'],
+					true
+				);
 			}
 			else
 			{

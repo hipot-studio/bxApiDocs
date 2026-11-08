@@ -10,6 +10,7 @@ use Bitrix\Tasks\Access\Model\UserModel;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListConverterHelper;
 use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
 use Bitrix\Tasks\Integration\Bitrix24;
+use Bitrix\Tasks\Internals\Task\Template\UnresolvedFormMembers;
 use Bitrix\Tasks\Provider\TemplateProvider;
 use Bitrix\Tasks\Util\Error\Collection;
 use Bitrix\Tasks\Item\Task\Template;
@@ -29,6 +30,11 @@ CBitrixComponent::includeComponentClass("bitrix:tasks.base");
 
 class TasksTaskTemplateComponent extends TasksBaseComponent implements Errorable, Controllerable
 {
+	// Member fields the form protects from losing members it could not render. The responsible is out:
+	// its widget demands a member, so a restored id would join the chosen one and make the template
+	// a multitask one behind the person's back.
+	private const PROTECTED_MEMBER_FIELDS = array('ACCOMPLICES', 'AUDITORS');
+
 	/** @var null|Template */
 	protected $template = 		null;
 	protected $users2Get = 		array();
@@ -544,6 +550,36 @@ class TasksTaskTemplateComponent extends TasksBaseComponent implements Errorable
 		parent::doPreAction();
 
 		$this->arResult['COMPONENT_DATA']['BACKURL'] = $this->getBackUrl();
+	}
+
+	protected function processBeforeAction($trigger = array())
+	{
+		$trigger = parent::processBeforeAction($trigger);
+
+		return is_array($trigger) ? $this->restoreUnresolvedMembers($trigger) : $trigger;
+	}
+
+	/**
+	 * The form posts members it could not render (see UnresolvedFormMembers) and a flag per member field
+	 * telling whether that field had rendered members at all. Both are form-local, so they are consumed
+	 * before the plan reaches the public action the form calls.
+	 */
+	private function restoreUnresolvedMembers(array $actions): array
+	{
+		foreach ($actions as $key => $action)
+		{
+			$data = $action['ARGUMENTS']['data'] ?? null;
+
+			if (is_array($data))
+			{
+				$actions[$key]['ARGUMENTS']['data'] = UnresolvedFormMembers::applyToFormData(
+					$data,
+					self::PROTECTED_MEMBER_FIELDS
+				);
+			}
+		}
+
+		return $actions;
 	}
 
 	protected function processAfterAction()

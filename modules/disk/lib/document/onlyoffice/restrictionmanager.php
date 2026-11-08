@@ -14,12 +14,14 @@ use Bitrix\Main\Config;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
+use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Disk\Document\Models\DocumentSessionTable;
 use RuntimeException;
+use Throwable;
 
 final class RestrictionManager
 {
@@ -114,6 +116,16 @@ final class RestrictionManager
 		return false;
 	}
 
+	public function existsUsageForObject(int $objectId, int $userId): bool
+	{
+		return $this->isExistsSessionByObjectId($objectId, $userId);
+	}
+
+	public function hasAvailableDocumentSessionSlot(): bool
+	{
+		return $this->checkLimit();
+	}
+
 	public function getAvailableDocumentSessionCount(): int
 	{
 		$limit = $this->getLimit();
@@ -137,19 +149,158 @@ final class RestrictionManager
 
 	public function registerUsage(string $documentKey, int $userId): void
 	{
+		$this->registerPendingUsage($documentKey, $userId);
+	}
+
+	public function registerPendingUsage(string $documentKey, int $userId): ?bool
+	{
 		if ($this->existsSession($documentKey, $userId))
 		{
-			return;
+			return false;
 		}
 
 		$restrictionLog = new RestrictionLog();
 		$restrictionLog
 			->setUserId($userId)
-			->setExternalHash($documentKey);
+			->setExternalHash($documentKey)
+		;
 
-		$restrictionLog->save();
+		$result = $restrictionLog->save();
+		if (!$result->isSuccess())
+		{
+			return null;
+		}
 
 		self::emitEvent(self::SAVE_SESSION_EVENT);
+
+		return true;
+	}
+
+	public function cancelPendingUsage(string $documentKey, int $userId): void
+	{
+		$entries = RestrictionLogTable::query()
+			->setSelect(['ID'])
+			->where('EXTERNAL_HASH', $documentKey)
+			->where('USER_ID', $userId)
+			->where('STATUS', RestrictionLogTable::STATUS_PENDING)
+			->fetchCollection()
+		;
+		foreach ($entries as $entry)
+		{
+			$entry->delete();
+		}
+
+		if (!$entries->isEmpty())
+		{
+			self::emitEvent(self::DELETE_SESSION_EVENT);
+		}
+	}
+
+	/**
+	 * Deletes all restriction log entries for a document inside the caller's transaction.
+	 *
+	 * `availableCount` is diagnostics for the notification only, and reading the limit talks to
+	 * an external service on box ({@see self::getBaseLimitForBox()}), so its failure is reported
+	 * as an unknown count instead of an error: a temporarily unreachable limit source must not
+	 * roll back the caller's cleanup and leave the slot taken.
+	 */
+	public function deleteByExternalHash(string $documentKey): Result
+	{
+		$result = new Result();
+
+		try
+		{
+			$deletedCount = $this->deleteEntries($documentKey);
+		}
+		catch (Throwable $exception)
+		{
+			return $result->addError(new Error(
+				$exception->getMessage(),
+				'restriction_log_delete_failed',
+			));
+		}
+
+		return $result->setData([
+			'deletedCount' => $deletedCount,
+			'availableCount' => $this->getAvailableDocumentSessionCountOrNull(),
+		]);
+	}
+
+	private function getAvailableDocumentSessionCountOrNull(): ?int
+	{
+		try
+		{
+			return $this->getAvailableDocumentSessionCount();
+		}
+		catch (Throwable)
+		{
+			return null;
+		}
+	}
+
+	/**
+	 * Publishes the restriction count calculated by a committed cleanup.
+	 */
+	public function notifyRestrictionLogChanged(int $availableCount): void
+	{
+		self::emitEvent(self::DELETE_SESSION_EVENT, $availableCount);
+	}
+
+	/**
+	 * Binds a reservation made under a temporary key to the document key of the opened session
+	 * and marks the slot as taken.
+	 *
+	 * The status is what keeps the slot alive: a row left in STATUS_PENDING is removed by the
+	 * TTL_PENDING cleanup ({@see self::deletePendingUsages()}, {@see self::deleteOldOrPending()})
+	 * a couple of minutes into the session. Services that have no per-document hook to promote the
+	 * row later ({@see self::processHookData()} is the OnlyOffice one) rely on this call.
+	 *
+	 * When the session kept the reserved key (the usual first open) there is nothing to rename,
+	 * only the status to promote.
+	 */
+	public function bindPendingUsage(string $reservationKey, string $documentKey, int $userId): void
+	{
+		if ($reservationKey === $documentKey)
+		{
+			$this->markPendingUsageAsUsed($documentKey, $userId);
+
+			return;
+		}
+
+		if ($this->existsSession($documentKey, $userId))
+		{
+			$this->cancelPendingUsage($reservationKey, $userId);
+
+			return;
+		}
+
+		RestrictionLogTable::updateBatch(
+			[
+				'EXTERNAL_HASH' => $documentKey,
+				'STATUS' => RestrictionLogTable::STATUS_USED,
+				'UPDATE_TIME' => new DateTime(),
+			],
+			[
+				'=EXTERNAL_HASH' => $reservationKey,
+				'=USER_ID' => $userId,
+				'=STATUS' => RestrictionLogTable::STATUS_PENDING,
+			],
+		);
+	}
+
+	private function markPendingUsageAsUsed(string $documentKey, int $userId): void
+	{
+		RestrictionLogTable::updateBatch(
+			[
+				'STATUS' => RestrictionLogTable::STATUS_USED,
+				'UPDATE_TIME' => new DateTime(),
+			],
+			[
+				'=EXTERNAL_HASH' => $documentKey,
+				'=USER_ID' => $userId,
+				'=STATUS' => RestrictionLogTable::STATUS_PENDING,
+			],
+		);
 	}
 
 	public function processHookData(int $status, array $hookData): void
@@ -224,6 +375,13 @@ final class RestrictionManager
 
 	protected function deleteEntriesByExternalHash(string $documentKey, array $userIds = null): void
 	{
+		$this->deleteEntries($documentKey, $userIds);
+
+		self::emitEvent(self::DELETE_SESSION_EVENT);
+	}
+
+	private function deleteEntries(string $documentKey, ?array $userIds = null): int
+	{
 		$connection = Application::getConnection();
 		$tableName = RestrictionLogTable::getTableName();
 		$sqlHelper = $connection->getSqlHelper();
@@ -241,7 +399,7 @@ final class RestrictionManager
 
 		$connection->queryExecute($sql);
 
-		self::emitEvent(self::DELETE_SESSION_EVENT);
+		return $connection->getAffectedRowsCount();
 	}
 
 	protected function countSessions(): int
@@ -271,14 +429,14 @@ final class RestrictionManager
 
 		$query =
 			(new Query(RestrictionLogTable::getEntity()))
-				->setSelect(['ID', 'OBJECT_ID' => 'SESSION.OBJECT_ID'])
+				->setSelect(['ID'])
 				->registerRuntimeField($referenceField)
 				->where('USER_ID', $userId)
+				->where('SESSION.OBJECT_ID', $objectId)
+				->setLimit(1)
 		;
 
-		$objectIds = array_map(static fn(array $item) => (int)$item['OBJECT_ID'], $query->fetchAll());
-
-		return in_array($objectId, $objectIds, true);
+		return (bool)$query->fetch();
 	}
 
 	public function deletePendingUsages(): void
@@ -328,10 +486,15 @@ final class RestrictionManager
 		self::emitEvent(self::DELETE_SESSION_EVENT);
 	}
 
-	private static function emitEvent(string $type): void
+	private static function emitEvent(string $type, ?int $availableDocumentSessionCount = null): void
 	{
+		if ($availableDocumentSessionCount === null)
+		{
+			$availableDocumentSessionCount = (new self)->getAvailableDocumentSessionCount();
+		}
+
 		$event = new Event(Driver::INTERNAL_MODULE_ID, $type);
-		$event->setParameter('availableDocumentSessionCount', (new self)->getAvailableDocumentSessionCount());
+		$event->setParameter('availableDocumentSessionCount', $availableDocumentSessionCount);
 		$event->send();
 	}
 

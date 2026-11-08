@@ -123,8 +123,15 @@ final class SignB2eSignersEdit extends SignBaseComponent
 		$listId = (int)$this->list->id;
 		$actions = [];
 
-		if ($this->canCurrentUserSendByTemplate())
+		if ($this->canCurrentUserAddDocument())
 		{
+			$wizardUrl = CUtil::JSEscape($this->urlGenerator->makeOpenWizardForSignersListUrl($listId));
+			$actions[] = [
+				'phrase' => 'SIGN_B2E_SIGNERS_EDIT_ACTION_OPEN_WIZARD',
+				'handler' => "(new BX.Sign.V2.Grid.B2e.Signers()).openWizard('{$wizardUrl}')",
+				'dataset' => ['testId' => 'sign-b2e-signers-edit-open-wizard-menu-item'],
+			];
+
 			// the menu encodes its items itself, so JS escaping of the address is enough
 			$sendUrl = CUtil::JSEscape($this->urlGenerator->makeTemplateSendUrl($listId));
 			$actions[] = [
@@ -165,7 +172,7 @@ final class SignB2eSignersEdit extends SignBaseComponent
 		return $actions;
 	}
 
-	private function canCurrentUserSendByTemplate(): bool
+	private function canCurrentUserAddDocument(): bool
 	{
 		// signing items are hidden for the system list by requirement
 		if ($this->signersListService->isRejectedList((int)$this->list->id))

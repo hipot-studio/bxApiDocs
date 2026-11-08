@@ -19,7 +19,13 @@ class Office365SectionReceiver extends AbstractSectionReceiver
 	{
 		if ($message instanceof SectionCreatedMessage || $message instanceof SectionUpdatedMessage)
 		{
-			return new SendSectionCommand($section, $message instanceof SectionCreatedMessage);
+			$isCreation = $message instanceof SectionCreatedMessage;
+
+			return new SendSectionCommand(
+				$section,
+				subscribeToPush: $isCreation,
+				isSectionCreated: $isCreation,
+			);
 		}
 
 		return null;

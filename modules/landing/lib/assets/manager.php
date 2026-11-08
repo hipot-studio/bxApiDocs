@@ -160,7 +160,7 @@ class Manager
 	}
 
 	/**
-	 * Recursive (by 'rel' key) adding assets in WP packege
+	 * Recursive (by 'rel' key) adding assets in WP package
 	 *
 	 * @param [string]|string $code
 	 * @param int|null $location - Where will be placed asset.

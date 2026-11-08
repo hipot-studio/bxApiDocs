@@ -7,6 +7,9 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventListener
 {
+	/** The one condition kind an AI agent composes for a loop; every other installed kind is carried verbatim. */
+	public const AI_AUTHORABLE_CONDITION = 'fieldcondition';
+
 	private const CYCLE_LIMIT = 1000;
 	private int $cycleCounter = 0;
 	private int $rootCycleCounter = 0;
@@ -158,6 +161,27 @@ class CBPWhileActivity extends CBPCompositeActivity implements IBPActivityEventL
 		$this->outputPortId = 0;
 
 		return false;
+	}
+
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		// The condition is stored under a property key equal to the condition code; take the codes from the
+		// same source as the graph.
+		return \Bitrix\Bizproc\Integration\AiAssistant\ConditionSettingNames::all($documentType);
+	}
+
+	/**
+	 * A loop restricts every condition kind but {@see self::AI_AUTHORABLE_CONDITION}, which is stricter than the
+	 * branch: there an unauthorable kind is only the executable one, here it is everything the agent does not
+	 * compose. The loop has no "otherwise" state to fall back on - an empty condition means the body never runs -
+	 * so a kind the agent cannot compose has to arrive from the published version or not at all.
+	 */
+	public static function getAiRestrictedSettingNames(array $documentType): array
+	{
+		return array_values(array_diff(
+			\Bitrix\Bizproc\Integration\AiAssistant\ConditionSettingNames::all($documentType),
+			[self::AI_AUTHORABLE_CONDITION],
+		));
 	}
 
 	public static function GetPropertiesDialog(

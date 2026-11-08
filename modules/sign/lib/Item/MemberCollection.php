@@ -13,6 +13,12 @@ use Iterator;
 
 class MemberCollection implements Contract\Item, Contract\ItemCollection, Iterator, Countable
 {
+	/** the form of a composition property the write of it takes */
+	private const WRITTEN = 0;
+
+	/** the form a comparison of two compositions sees; a property without it is not compared */
+	private const COMPARED = 1;
+
 	protected ?int $queryTotal = null;
 	private array $items;
 	/** @var ArrayIterator<Member> */
@@ -251,5 +257,93 @@ class MemberCollection implements Contract\Item, Contract\ItemCollection, Iterat
 		}
 
 		return $newCollection;
+	}
+
+	/**
+	 * The composition copied the way its write takes it: the domain path creates the members anew,
+	 * so neither the identifiers of the rows nor anything else the path fills by itself travels
+	 * with the copy.
+	 *
+	 * @see \Bitrix\Sign\Service\Sign\MemberService::setupB2eMembers() the write itself
+	 */
+	public function copyForWrite(): static
+	{
+		$copies = new static();
+		foreach ($this as $member)
+		{
+			$written = array_map(
+				static fn(array $property): mixed => $property[self::WRITTEN],
+				self::listCompositionProperties($member),
+			);
+
+			$copies->add(new Member(...$written));
+		}
+
+		return $copies;
+	}
+
+	/**
+	 * The composition as a comparison of two of them sees it, in an order of its own, because the
+	 * row order of a composition carries nothing while the party does. A property nobody has filled
+	 * compares as the empty value of its own kind, so a run building its signers without a requisite
+	 * preset matches the zero the document keeps. Left out is the employee of the HCM link, the only
+	 * property the comparison does not share with the copy: a composition built by a run carries no
+	 * employee and would never match one read from the document.
+	 *
+	 * @return list<array<string, int|string>>
+	 */
+	public function describeForComparison(): array
+	{
+		$described = [];
+		foreach ($this as $member)
+		{
+			$compared = [];
+			foreach (self::listCompositionProperties($member) as $name => $property)
+			{
+				if (array_key_exists(self::COMPARED, $property))
+				{
+					$compared[$name] = $property[self::COMPARED];
+				}
+			}
+
+			$described[] = $compared;
+		}
+
+		sort($described);
+
+		return $described;
+	}
+
+	/**
+	 * The properties a composition is made of, keyed by the argument its write passes them as and
+	 * told in both forms they are used in: the value the write takes, then the value a comparison
+	 * of two compositions sees. Both forms of a property are declared here and nowhere else, so a
+	 * property joins the composition by one line, with the way it compares alongside it.
+	 *
+	 * The identifiers of the rows, the communications, the statuses and the dates are left out
+	 * entirely: the domain path that writes the composition fills them by itself.
+	 *
+	 * @return array<string, array{0: mixed, 1?: int|string}>
+	 */
+	private static function listCompositionProperties(Member $member): array
+	{
+		return [
+			'party' => [$member->party, (int)$member->party],
+			'entityType' => [$member->entityType, (string)$member->entityType],
+			'entityId' => [$member->entityId, (int)$member->entityId],
+			'role' => [$member->role, (string)$member->role],
+			'presetId' => [$member->presetId, (int)$member->presetId],
+			'reminder' => [
+				new Member\Reminder(
+					lastSendDate: null,
+					plannedNextSendDate: null,
+					type: $member->reminder->type,
+				),
+				$member->reminder->type->value,
+			],
+			// the employee of the HCM link has no compared form on purpose: a composition built by
+			// a run carries none and would never match one read from the document
+			'employeeId' => [$member->employeeId],
+		];
 	}
 }

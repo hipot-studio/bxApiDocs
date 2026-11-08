@@ -26,6 +26,7 @@ class SyncService
 
 	protected const AGENT_SHORT_PERIOD = 5;
 	protected const AGENT_LONG_PERIOD = 300;
+	protected const CANDIDATE_PAGES_PER_TICK = 5;
 
 	protected NodeMemberService $memberService;
 	protected NodeRelationService $relationService;
@@ -242,6 +243,27 @@ class SyncService
 		}
 
 		$item = $itemResult->getResult();
+
+		$firstIterationResult = $this->underRunLock($syncInfo, fn () => $this->runFirstIteration($item));
+
+		if ($firstIterationResult === null)
+		{
+			// Someone may already be iterating this triple, and doing nothing loses no work: the item
+			// goes back to the queue and the agent takes it from there.
+			$item->unlock();
+			$this->determinePeriod(false);
+
+			return new Result();
+		}
+
+		return $firstIterationResult;
+	}
+
+	/**
+	 * The iteration an event pays for itself, on an item this process owns.
+	 */
+	private function runFirstIteration(Item\QueueItem $item): Result
+	{
 		try
 		{
 			$firstIterationResult = $this->syncProcessor->makeIteration($item);
@@ -273,37 +295,145 @@ class SyncService
 		return $result;
 	}
 
+	/**
+	 * A tick takes the first candidate it can own. A live owner is not work for this process and not a
+	 * reason to stop either - one long iteration must not hold up the items behind it - so the tick
+	 * walks on, page by page, until it owns something or the queue ends. Without the walk a head held by
+	 * owners that outlive their rows would be the whole answer every five seconds.
+	 *
+	 * The budget bounds the cost of one tick, and the cursor outlives it so that the budget does not
+	 * bound the walk. A tick that did find work puts the cursor back to the beginning, so the ordinary
+	 * order of the queue is the ordinary case.
+	 */
 	protected function syncNext(): Result
 	{
 		$result = new Result();
-		$syncInfo = $this->syncProcessor->dequeue();
+		$afterId = $this->syncProcessor->getQueueCursor();
 
-		if ($syncInfo === null)
+		for ($page = 0; $page < static::CANDIDATE_PAGES_PER_TICK; $page++)
 		{
-			return $result;
+			$candidates = $this->syncProcessor->dequeueCandidates($afterId);
+
+			if (empty($candidates))
+			{
+				// The end of the queue, or a cursor left behind rows that are gone: either way the next
+				// tick starts from the head.
+				$this->syncProcessor->setQueueCursor(0);
+
+				return $result;
+			}
+
+			foreach ($candidates as $syncInfo)
+			{
+				$iterationResult = $this->underRunLock($syncInfo, function () use ($syncInfo) {
+					// Ownership settled what the age of the row could only raise, so a return by age is
+					// a fact worth a warning here rather than a suspicion.
+					$this->announceRecoveryOf($syncInfo);
+
+					return $this->iterate($syncInfo);
+				});
+
+				if ($iterationResult !== null)
+				{
+					$this->syncProcessor->setQueueCursor(0);
+
+					return $iterationResult;
+				}
+			}
+
+			$afterId = (int)array_key_last($candidates);
 		}
 
+		$this->syncProcessor->setQueueCursor($afterId);
+
+		return $result;
+	}
+
+	/**
+	 * The announcement is diagnostics and the iteration is the work: left unguarded, a broken logger
+	 * would stop the recovery for good, because every later tick picks the same row and fails on the
+	 * same warning before reaching the iteration.
+	 */
+	private function announceRecoveryOf(Item\SyncInfo $syncInfo): void
+	{
+		try
+		{
+			$this->syncProcessor->logRecoveryOf($syncInfo);
+		}
+		catch (\Throwable)
+		{
+			// There is nowhere left to report a broken logger to.
+		}
+	}
+
+	/**
+	 * Ownership of an iteration and its release in one construct: a run lock leaked by a throw outlives
+	 * the request on a persistent connection and then refuses every later attempt at this triple.
+	 *
+	 * Ownership is taken before the row is read. The item carries the pointer it was read with, so an
+	 * item read while the previous owner was still finishing repeats that owner's batch and writes the
+	 * old pointer back over the new one.
+	 *
+	 * @param callable(): Result $work
+	 * @return Result|null null when the iteration is owned by someone else
+	 */
+	private function underRunLock(Item\SyncInfo $syncInfo, callable $work): ?Result
+	{
+		if (!$this->syncProcessor->tryLockRun($syncInfo))
+		{
+			return null;
+		}
+
+		try
+		{
+			return $work();
+		}
+		finally
+		{
+			$this->syncProcessor->unlockRun($syncInfo);
+		}
+	}
+
+	/**
+	 * One iteration of an item this process already owns. Both writes to the row happen under that
+	 * ownership, so a competing agent cannot claim the item while it is being finished.
+	 */
+	private function iterate(Item\SyncInfo $syncInfo): Result
+	{
+		$result = new Result();
 		$item = $this->syncProcessor->tryGetWithLock($syncInfo);
+
 		if ($item === null)
 		{
 			return $result;
 		}
+
 		try
 		{
-			$iterationResult = $this->syncProcessor->makeIteration($item);
-			if ($iterationResult->hasMore())
+			if ($this->syncProcessor->makeIteration($item)->hasMore())
 			{
 				$item->unlock();
 			}
 			else
 			{
+				// Under the same guard as the iteration: a failure of the deletion or of the finishing
+				// message used to leave the item marked, waiting out the whole return delay.
 				$this->syncProcessor->finalizeSync($item);
 			}
 		}
 		catch (\Throwable $exception)
 		{
-			$item->unlock();
-			$item->setErrorStatus();
+			// The row is freed last, as everywhere: while it is still marked, a competing agent has
+			// nothing to claim. Freeing it does not depend on the status write - a failure there would
+			// otherwise leave the mark with nobody working on it.
+			try
+			{
+				$item->setErrorStatus();
+			}
+			finally
+			{
+				$item->unlock();
+			}
 		}
 
 		return $result;

@@ -6,7 +6,7 @@ namespace Bitrix\Im\V2\Pull\Event;
 
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Pull\EventType;
-use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
+use Bitrix\Im\V2\Recent\Config\HiddenSectionsResolver;
 
 class ChatHide extends BaseChatEvent
 {
@@ -47,7 +47,7 @@ class ChatHide extends BaseChatEvent
 	protected function getRecentConfig(): array
 	{
 		$recentConfig = $this->chat->getRecentConfig()->toPullFormat();
-		$recentConfig['sections'] = $this->getSectionsToHide();
+		$recentConfig['sections'] = HiddenSectionsResolver::resolve($this->chat);
 
 		return $recentConfig;
 	}
@@ -55,18 +55,5 @@ class ChatHide extends BaseChatEvent
 	public function shouldSendToOnlySpecificRecipients(): bool
 	{
 		return true;
-	}
-
-	protected function getSectionsToHide(): array
-	{
-		$extendedType = $this->chat->getExtendedType(false);
-
-		// We have to hide the OpenChannel only from the default section,
-		// because Open Channels have their own tab with their own Recent, which is populated from the b_im_chat table.
-		return match ($extendedType)
-		{
-			Chat\ExtendedType::OpenChannel->value => [RecentConfigManager::DEFAULT_SECTION_NAME],
-			default => $this->chat->getRecentSections(),
-		};
 	}
 }

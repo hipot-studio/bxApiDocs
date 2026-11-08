@@ -5,20 +5,23 @@ namespace Bitrix\Intranet\Settings\Tools;
 use Bitrix\Bitrix24\Feature;
 use Bitrix\Intranet\Internal\Integration\Bitrix24\Module;
 use Bitrix\Intranet\Site\Sections\TimemanSection;
+use Bitrix\Main\Data\Cache;
+use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Diag\LoggerFactory;
+use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Result;
 
 class Company extends Tool
 {
-	private function getSubgroupsAvailability($subgroupId): bool
+	private function getSubgroupsAvailability(string $subgroupId): bool
 	{
 		return match ($subgroupId) {
 			'knowledge_base' => ModuleManager::isModuleInstalled('landing'),
 			'video_conference' => ModuleManager::isModuleInstalled('im'),
-			'worktime', 'work_report', 'schedules' =>
-				ModuleManager::isModuleInstalled('timeman')
-				|| (Loader::includeModule('bitrix24') && Feature::isFeatureEnabled('timeman')),
+			'worktime', 'work_report', 'schedules' => $this->isCloud() || $this->isModuleInstalled('timeman'),
 			'meetings' =>
 				ModuleManager::isModuleInstalled('meeting')
 				|| (Loader::includeModule('bitrix24') && Feature::isFeatureEnabled('meeting')),
@@ -43,6 +46,8 @@ class Company extends Tool
 	protected const SUBGROUPS_ORDER_ARRAY = [
 		'structure', 'employees', 'worktime', 'absence', 'knowledge_base', 'meetings', 'login_history', 'video_conference'
 	];
+
+	private const LOGGER_ID = 'intranet.settings.tools.company';
 
 	public function getId(): string
 	{
@@ -71,7 +76,7 @@ class Company extends Tool
 
 	public function isEnabledSubgroupById(string $id): bool
 	{
-		if ('worktime' === $id && !ModuleManager::isModuleInstalled('timeman') && !ModuleManager::isModuleInstalled('bitrix24'))
+		if ('worktime' === $id && !$this->isCloud() && !$this->isModuleInstalled('timeman'))
 		{
 			return false;
 		}
@@ -88,8 +93,28 @@ class Company extends Tool
 	{
 		if ($this->getSubgroupCode('worktime') === $code)
 		{
-			(new Module\Installer('timeman'))->install();
-			(new Module\Installer('timemanmobile'))->install();
+			$timemanWasInstalled = $this->isModuleInstalled('timeman');
+
+			foreach (['timeman', 'timemanmobile'] as $moduleName)
+			{
+				if ($this->isModuleInstalled($moduleName))
+				{
+					continue;
+				}
+
+				$installResult = $this->installModule($moduleName);
+				if (!$installResult->isSuccess())
+				{
+					$this->logModuleInstallFailure($moduleName, $installResult);
+
+					return;
+				}
+			}
+
+			parent::enableSubgroup($code);
+			$this->onWorktimeStateChanged(true, $timemanWasInstalled);
+
+			return;
 		}
 
 		if ($this->getSubgroupCode('meetings') === $code)
@@ -104,8 +129,10 @@ class Company extends Tool
 	{
 		if ($this->getSubgroupCode('worktime') === $code)
 		{
-			(new Module\Deleter('timeman'))->delete();
-			(new Module\Deleter('timemanmobile'))->delete();
+			parent::disableSubgroup($code);
+			$this->onWorktimeStateChanged(false, true);
+
+			return;
 		}
 
 		if ($this->getSubgroupCode('meetings') === $code)
@@ -114,6 +141,72 @@ class Company extends Tool
 		}
 
 		parent::disableSubgroup($code);
+	}
+
+	public function enableAllSubgroups(): void
+	{
+		parent::enableAllSubgroups();
+		$this->enableSubgroup($this->getSubgroupCode('worktime'));
+	}
+
+	public function disableAllSubgroups(): void
+	{
+		parent::disableAllSubgroups();
+		$this->disableSubgroup($this->getSubgroupCode('worktime'));
+	}
+
+	protected function isModuleInstalled(string $moduleName): bool
+	{
+		return ModuleManager::isModuleInstalled($moduleName);
+	}
+
+	protected function installModule(string $moduleName): Result
+	{
+		return (new Module\Installer($moduleName))->install();
+	}
+
+	protected function isCloud(): bool
+	{
+		return ModuleManager::isModuleInstalled('bitrix24');
+	}
+
+	protected function clearWorktimeDataCache(): void
+	{
+		Cache::createInstance()->cleanDir('/timeman/work-time-data/');
+	}
+
+	protected function clearLeftMenuCache(): void
+	{
+		ServiceLocator::getInstance()->get('intranet.customSection.manager')->clearLeftMenuCache();
+	}
+
+	protected function sendWorktimeStateChangedEvent(bool $enabled): void
+	{
+		(new Event('bitrix24', 'OnManualModuleAddDelete', [
+			'modulesList' => ['timeman' => $enabled ? 'Y' : 'N'],
+		]))->send();
+	}
+
+	protected function logModuleInstallFailure(string $moduleName, Result $result): void
+	{
+		(new LoggerFactory())->createById(self::LOGGER_ID, isCheckEnabledFromRegistry: false)?->error(
+			'Failed to install module {module} while enabling worktime: {errors}',
+			[
+				'module' => $moduleName,
+				'errors' => implode('; ', $result->getErrorMessages()),
+			],
+		);
+	}
+
+	private function onWorktimeStateChanged(bool $enabled, bool $sendEvent): void
+	{
+		if ($sendEvent)
+		{
+			$this->sendWorktimeStateChangedEvent($enabled);
+		}
+
+		$this->clearWorktimeDataCache();
+		$this->clearLeftMenuCache();
 	}
 
 	public function getSubgroupSettingsPath(): array

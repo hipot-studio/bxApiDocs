@@ -64,17 +64,25 @@ class BitrixCall extends \Bitrix\Call\Call
 		parent::initCall();
 	}
 
-	public function finish(): void
+	protected function getControllerClient(): ControllerClient
 	{
-		if (
-			$this->scheme !== self::SCHEME_JWT
-			&& $this->getState() != static::STATE_FINISHED
-		)
+		return new ControllerClient();
+	}
+
+	protected function finishOnController(): \Bitrix\Main\Result
+	{
+		// finishCall() tears the room down by UUID and does not need the endpoint, so
+		// gate only on the classic scheme. Keying on $this->endpoint would leak a room
+		// on the controller when createCall() succeeded but the endpoint was never
+		// persisted — the empty-endpoint response branch in initCall(), or a crash
+		// between createCall() and setEndpoint()/save(). The Result is returned so
+		// finishSideEffects() can retry a failed teardown.
+		if ($this->scheme !== self::SCHEME_JWT)
 		{
-			(new ControllerClient())->finishCall($this);
+			return $this->getControllerClient()->finishCall($this);
 		}
 
-		parent::finish();
+		return new \Bitrix\Main\Result();
 	}
 
 	protected function generateJwt(int $userId): string

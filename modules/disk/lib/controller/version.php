@@ -14,7 +14,6 @@ use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\Response;
 use Bitrix\Main\HttpResponse;
-use Bitrix\Main\Localization\Loc;
 
 final class Version extends Engine\Controller
 {
@@ -25,8 +24,7 @@ final class Version extends Engine\Controller
 		$configureActions = parent::configureActions();
 
 		$configureActions['download'] =
-		$configureActions['showMarkdown'] =
-		$configureActions['showHtml'] = [
+		$configureActions['showMarkdown'] = [
 			'-prefilters' => [
 				ActionFilter\Csrf::class,
 				ActionFilter\Authentication::class,
@@ -36,6 +34,16 @@ final class Version extends Engine\Controller
 				new ActionFilter\CloseSession(),
 			]
 		];
+		$configureActions['showHtml'] = $configureActions['showMarkdown'];
+		$configureActions['showHtml']['+prefilters'] = array_values(array_filter(
+			$configureActions['showHtml']['+prefilters'],
+			static fn(object $filter): bool => !$filter instanceof ActionFilter\Authentication,
+		));
+		$configureActions['showHtml']['-prefilters'][] = Engine\ActionFilter\CheckReadPermission::class;
+		$configureActions['showHtml']['+prefilters'][] = new Engine\ActionFilter\CheckHtmlViewerReadPermission();
+		$configureActions['showHtml']['+prefilters'][] = new ActionFilter\HttpMethod([
+			ActionFilter\HttpMethod::METHOD_GET,
+		]);
 		$configureActions['showTiffPreview'] = $configureActions['showMarkdown'];
 		$configureActions['showTiffPreview']['+prefilters'][] = new ActionFilter\HttpMethod([
 			ActionFilter\HttpMethod::METHOD_GET,
@@ -63,12 +71,45 @@ final class Version extends Engine\Controller
 		return $defaultPreFilters;
 	}
 
-	public function downloadAction(Disk\Version $version): Response\BFile
+	public function downloadAction(Disk\Version $version): ?Response\BFile
 	{
+		$file = $version->getObject();
+
+		$securityContext = $file?->getStorage()?->getSecurityContext(
+			user: $this->getCurrentUser()->getId(),
+			shouldCheckUnifiedLink: $file instanceof Disk\File && $this->shouldCheckUnifiedLink($file),
+		);
+
+		if (!$file || !$securityContext || !$file->canDownload($securityContext))
+		{
+			$this->addError(new Error(Loc::getMessage('DISK_ERROR_MESSAGE_DENIED')));
+
+			return null;
+		}
+
 		$response = Response\BFile::createByFileId($version->getFileId(), $version->getName());
 		$response->setCacheTime(Disk\Configuration::DEFAULT_CACHE_TIME);
 
 		return $response;
+	}
+
+	private function shouldCheckUnifiedLink(Disk\File $file): bool
+	{
+		$serviceLocator = \Bitrix\Main\DI\ServiceLocator::getInstance();
+		$unifiedLinkUrl = $serviceLocator->get(Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl::class);
+		$uls = $unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		if (!is_string($uls))
+		{
+			return false;
+		}
+
+		$unifiedLinkAccessService = $serviceLocator->get(Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService::class);
+
+		return $unifiedLinkAccessService->validateUlsForObjectId(
+			objectId: $file->getId(),
+			uls: $uls,
+		);
 	}
 
 	public function showMarkdownAction(Disk\Version $version): ?array
@@ -118,11 +159,9 @@ final class Version extends Engine\Controller
 	{
 		$file = $version->getObject();
 		$securityContext = $file->getStorage()->getSecurityContext($this->getCurrentUser()->getId());
-		if (!$file->canDelete($securityContext) || !$file->canRestore($securityContext))
+		if (!$file->canManageVersions($securityContext))
 		{
-			$this->errorCollection[] = new Error(
-				Loc::getMessage("DISK_CHECK_READ_PERMISSION_ERROR_MESSAGE")
-			);
+			$this->addDeniedError();
 
 			return;
 		}

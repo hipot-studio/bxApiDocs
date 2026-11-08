@@ -10,6 +10,7 @@ use Bitrix\ImBot\Bot\OpenLinesBizprocBot;
 use Bitrix\ImBot\Integration\Im\Repository\OpenLinesBotRepository;
 use Bitrix\ImOpenLines\Chat;
 use Bitrix\ImOpenLines\Config;
+use Bitrix\ImOpenLines\Model\OperatorTransferTable;
 use Bitrix\ImOpenLines\Model\SessionTable;
 use Bitrix\ImOpenLines\Operator;
 use Bitrix\Main\DI\ServiceLocator;
@@ -78,6 +79,15 @@ class OpenLineManager
 		return self::$isEnabled;
 	}
 
+	/**
+	 * An imopenlines that cannot publish the actual chat close must not expose the close trigger.
+	 */
+	public static function isCloseTriggerEnabled(): bool
+	{
+		return self::isEnabled()
+			&& method_exists(\Bitrix\ImOpenLines\Crm::class, 'executeAutomationCloseTrigger');
+	}
+
 	public static function getSupportedConnectors(): array
 	{
 		if (!self::isEnabled())
@@ -128,7 +138,7 @@ class OpenLineManager
 
 		return [
 			'HREF' => '#',
-			'ONCLICK' => "if(typeof(top.BXIM)!=='undefined') top.BXIM.openMessengerSlider('{$value}', {RECENT: 'N', MENU: 'N'}); return BX.PreventDefault(event);",
+			'ONCLICK' => "if(typeof(top.BXIM)!=='undefined') top.BXIM.openMessengerSlider('" . \CUtil::JSEscape($value) . "', {RECENT: 'N', MENU: 'N'}); return BX.PreventDefault(event);",
 			'TEXT' => $text,
 			'TITLE' => $text,
 		];
@@ -266,6 +276,19 @@ class OpenLineManager
 		$session = SessionTable::getById($sessionId)->fetch();
 
 		return $session ?: [];
+	}
+
+	public static function getSessionOperatorTransfers(?int $sessionId): array
+	{
+		if (!isset($sessionId) || !self::isEnabled())
+		{
+			return [];
+		}
+
+		return OperatorTransferTable::getList([
+			'select' => ['USER_ID', 'TRANSFER_TYPE', 'TRANSFER_USER_ID', 'DATE_CREATE'],
+			'filter' => ['=SESSION_ID' => $sessionId],
+		])->fetchAll();
 	}
 
 	public static function getChatUnReadMessagesCount(?string $userCode, ?int $userId): int

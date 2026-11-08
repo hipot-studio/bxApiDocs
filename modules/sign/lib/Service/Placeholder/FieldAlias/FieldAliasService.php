@@ -69,6 +69,11 @@ class FieldAliasService
 		return $this->registry->getStrategyForAlias($alias)?->aliasToFieldName($alias, $context);
 	}
 
+	public function supportsFieldName(string $fieldName): bool
+	{
+		return $this->registry->getStrategyForFieldName($fieldName) !== null;
+	}
+
 	/**
 	 * Returns an alias only when it survives a full field name -> alias -> field name roundtrip.
 	 * fieldType and subfieldCode are excluded from comparison on purpose: the type is restored

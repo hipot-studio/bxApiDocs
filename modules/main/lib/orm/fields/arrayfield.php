@@ -164,7 +164,7 @@ class ArrayField extends ScalarField
 	 */
 	public function decodePhp($value)
 	{
-		return unserialize($value);
+		return unserialize($value, ['allowed_classes' => false]);
 	}
 
 	/**

@@ -33,14 +33,15 @@ class CatalogProductStoreAmountDetailsComponent extends \CBitrixComponent implem
 	private const DEFAULT_PAGE_SIZE = 5;
 	private $navigation;
 	private array $measures = [];
-	private $filterPresets;
+	private ?array $filterPresets = null;
 	private $storeProductCount;
 	private $storeProducts;
-	private $gridId;
 	private int $productId;
+	private ?int $storeId = null;
 	private BaseProduct $product;
 	private array $headers;
 	private Options $gridOptions;
+	private \Bitrix\Main\UI\Filter\Options $filterOptions;
 	private PageNavigation $pageNavigation;
 
 	public function __construct($component = null)
@@ -111,6 +112,7 @@ class CatalogProductStoreAmountDetailsComponent extends \CBitrixComponent implem
 	private function fillResult(): void
 	{
 		$this->arResult['IS_SHOWED_STORE_RESERVE'] = \Bitrix\Catalog\Config\State::isShowedStoreReserve();
+		$this->arResult['STORE_ID'] = $this->getStoreId();
 		$this->arResult['GRID'] = $this->getGridData();
 		$this->arResult['FILTER_PARAMS'] = $this->getFilterParams();
 		$this->arResult['TOTAL_DATA'] = $this->getTotalData();
@@ -160,7 +162,7 @@ class CatalogProductStoreAmountDetailsComponent extends \CBitrixComponent implem
 
 	private function getGridId(): string
 	{
-		return self::GRID_NAME . '_' . $this->getProduct()->getId();
+		return self::GRID_NAME;
 	}
 
 	private function getNavigation(): PageNavigation
@@ -196,27 +198,26 @@ class CatalogProductStoreAmountDetailsComponent extends \CBitrixComponent implem
 		return (int)($navParams['nPageSize'] ?? self::DEFAULT_PAGE_SIZE);
 	}
 
+	private function getFilterOptions(): \Bitrix\Main\UI\Filter\Options
+	{
+		if (!isset($this->filterOptions))
+		{
+			$this->filterOptions = new \Bitrix\Main\UI\Filter\Options($this->getGridId());
+		}
+
+		return $this->filterOptions;
+	}
+
 	private function getFilterPresets(): array
 	{
-		if (!$this->filterPresets)
+		if (!isset($this->filterPresets))
 		{
-			$filterOptions = new \Bitrix\Main\UI\Filter\Options($this->getGridId());
+			$filterOptions = $this->getFilterOptions();
 
-			if (!$this->isGridAction())
+			if (!$this->isGridAction() && $this->getStoreId() > 0)
 			{
-				$filterOptions->setFilterSettings(
-					\Bitrix\Main\UI\Filter\Options::TMP_FILTER,
-					[
-						'fields' => [
-							'STORE' => [
-								$this->getStoreIdFromRequest()
-							]
-						]
-					],
-					true,
-					false
-				);
-				$filterOptions->save();
+				// an opening that carries a store of its own starts from it, not from the filter of a previous one
+				$filterOptions->reset();
 			}
 
 			$this->filterPresets = $filterOptions->getFilter();
@@ -225,14 +226,56 @@ class CatalogProductStoreAmountDetailsComponent extends \CBitrixComponent implem
 		return $this->filterPresets;
 	}
 
+	/**
+	 * Stores the grid is scoped to.
+	 *
+	 * The store comes from the url and belongs to one opening, while FILTER_ID is shared by the details
+	 * of every product: saved in the options of the filter it would reach the details of another product
+	 * opened for another store, so it is applied to the request that carries it and never saved. What the
+	 * user chose in the filter himself is saved by bitrix:main.ui.filter and wins over it, a cleared filter
+	 * included: an empty store of a session that touched the filter means every store and not the url one.
+	 *
+	 * @return int[]
+	 */
+	private function getFilteredStoreIds(): array
+	{
+		$storeIds = $this->getFilterPresets()['STORE'] ?? [];
+		if (is_array($storeIds) && $storeIds)
+		{
+			return $storeIds;
+		}
+
+		if ($this->getFilterOptions()->getSessionFilterId() !== null)
+		{
+			return [];
+		}
+
+		$storeId = $this->getStoreId();
+
+		return $storeId > 0 ? [$storeId] : [];
+	}
+
 	private function isGridAction(): bool
 	{
 		return $this->request->get('grid_action') !== null || $this->request->get('action') !== null;
 	}
 
-	private function getStoreIdFromRequest(): ?int
+	private function setStoreId(int $storeId): void
 	{
-		return (int)$this->request->get('storeId');
+		$this->storeId = $storeId;
+	}
+
+	/**
+	 * The store of the opening: a page carries it in its url, an action of the details in its own parameters.
+	 */
+	private function getStoreId(): int
+	{
+		if ($this->storeId === null)
+		{
+			$this->storeId = (int)$this->request->get('storeId');
+		}
+
+		return $this->storeId;
 	}
 
 	private function getGridData(): array
@@ -600,8 +643,7 @@ class CatalogProductStoreAmountDetailsComponent extends \CBitrixComponent implem
 			];
 		}
 
-		$filterPreset = $this->getFilterPresets();
-		$filteredStoreIds = $filterPreset['STORE'] ?? [];
+		$filteredStoreIds = $this->getFilteredStoreIds();
 		if ($filteredStoreIds)
 		{
 			$filter['@STORE_ID'] = $filteredStoreIds;
@@ -843,9 +885,10 @@ class CatalogProductStoreAmountDetailsComponent extends \CBitrixComponent implem
 		return $this->defaultMeasure;
 	}
 
-	public function updateTotalDataAction($productId): ?array
+	public function updateTotalDataAction($productId, $storeId = 0): ?array
 	{
 		$this->setProductId((int)$productId);
+		$this->setStoreId((int)$storeId);
 
 		if (!$this->checkModules() || !$this->checkPermissions() || !$this->checkProduct())
 		{

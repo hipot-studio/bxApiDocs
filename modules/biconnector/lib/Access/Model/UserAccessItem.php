@@ -233,4 +233,60 @@ final class UserAccessItem extends Main\Access\User\UserModel
 
 		return true;
 	}
+
+	/**
+	 * Fills default table group access permissions for roles that have edit rights.
+	 *
+	 * The operations come from the table axis: the codes of the dashboard axis would mean something
+	 * else under a table group permission id.
+	 *
+	 * @param int $groupId
+	 *
+	 * @return bool Whether anything was granted.
+	 *
+	 * @throws \Bitrix\Main\Db\SqlQueryException
+	 */
+	public function fillDefaultTableGroupAccess(int $groupId): bool
+	{
+		$roles = $this->getRoles();
+
+		if (empty($roles))
+		{
+			return false;
+		}
+
+		$roleEditableRights = PermissionTable::query()
+			->addSelect('ROLE_ID')
+			->whereIn('ROLE_ID', $roles)
+			->where('PERMISSION_ID', PermissionDictionary::BIC_SETTINGS_EDIT_TABLE_RIGHTS)
+			->where('VALUE', 1)
+			->exec()
+		;
+
+		$accessibleRoles = array_column($roleEditableRights->fetchAll(), 'ROLE_ID');
+		if (empty($accessibleRoles))
+		{
+			return false;
+		}
+
+		$permissionGroupId = PermissionDictionary::getTableGroupPermissionId($groupId);
+		$permissionCodes = PermissionDictionary::getTablePermissionCodes();
+
+		$tablePermissions = [];
+		foreach ($accessibleRoles as $roleId)
+		{
+			foreach ($permissionCodes as $permissionCode)
+			{
+				$tablePermissions[] = [
+					'ROLE_ID' => $roleId,
+					'PERMISSION_ID' => $permissionGroupId,
+					'VALUE' => $permissionCode,
+				];
+			}
+		}
+
+		RoleUtil::insertPermissions($tablePermissions);
+
+		return true;
+	}
 }

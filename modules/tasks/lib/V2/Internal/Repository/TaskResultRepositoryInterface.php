@@ -31,6 +31,8 @@ interface TaskResultRepositoryInterface
 
 	public function getResultMessageMap(int $taskId): array;
 
+	public function getCurrentUserResultMessageMap(int $taskId, int $userId, int $limit): array;
+
 	public function save(Entity\Result $entity, int $userId): int;
 
 	public function delete(int $id, int $userId): void;

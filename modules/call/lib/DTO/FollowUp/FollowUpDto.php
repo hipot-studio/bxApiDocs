@@ -27,6 +27,9 @@ class FollowUpDto extends Dto
 	#[Description('Call type: 1 = instant ad-hoc, 2 = permanent conference room, 3 = large room.')]
 	public ?int $callType = null;
 
+	#[Description('Id of the chat the call belongs to. Opt-in: list this in `select` to receive it.')]
+	public ?int $chatId = null;
+
 	#[Description('User id of who initiated the call.')]
 	public ?int $initiatorId = null;
 
@@ -45,6 +48,12 @@ class FollowUpDto extends Dto
 	#[Description('Detected transcription language (BCP-47 / ISO 639-1, e.g. "ru", "en"). Null when there is no transcription.')]
 	public ?string $language = null;
 
+	/**
+	 * The insights block reports the version its stored answer actually matches: the prompt is picked
+	 * when the AI task starts and the version stamped when the answer arrives, so a region rule changed
+	 * in between could otherwise stamp an answer without per-speaker evaluation as version 2.
+	 * @see \Bitrix\Call\Integration\AI\Outcome\Insights::__construct()
+	 */
 	#[Description('Maximum schema version across all stored outcome blocks (transcription, overview, summary, insights, evaluation).')]
 	public ?int $version = null;
 
@@ -74,7 +83,7 @@ class FollowUpDto extends Dto
 	#[Description('Segmented summary of the call by topic chunks.')]
 	public ?SummaryDto $summary = null;
 
-	#[Description('AI insights: per-speaker analysis (CIS only), meeting strengths/weaknesses, recommendations.')]
+	#[Description('AI insights: per-speaker analysis with region-gated evaluation, meeting strengths/weaknesses, recommendations.')]
 	public ?InsightsDto $insights = null;
 
 	#[Description('Meeting efficiency evaluation: overall score and individual evaluation criteria.')]

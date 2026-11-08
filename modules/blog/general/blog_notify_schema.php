@@ -97,6 +97,13 @@ class CBlogNotifySchema
 		return array(
 			"blog" => array(
 				"NAME" => GetMessage('BLG_NS_MSGVER_2'),
+				"PRODUCT_SOURCE" => array(
+					"ID" => "blog",
+					"NAME" => GetMessage('BLG_NS_PRODUCT_SOURCE_NAME'),
+					"DESCRIPTION" => GetMessage('BLG_NS_PRODUCT_SOURCE_DESCRIPTION'),
+					"ICON" => array("TYPE" => "named", "VALUE" => "folder"),
+					"SORT" => 1500,
+				),
 				"NOTIFY" => $ar,
 			),
 		);

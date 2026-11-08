@@ -11,6 +11,8 @@ use Bitrix\BIConnector\Internal\Entity\ValueObject\LoadIndicator\TriggeredFactor
 use Bitrix\BIConnector\Internal\Services\LoadIndicator\LoadIndicatorCalculator;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\UI\Public\System\Chip;
+use Bitrix\Ui\Public\Enum\IconSet\Outline;
 
 final class LoadLevelFieldAssembler extends FieldAssembler
 {
@@ -48,13 +50,34 @@ final class LoadLevelFieldAssembler extends FieldAssembler
 		$color = $this->getLevelColor($indicator->getLevel());
 		$hintContent = $this->renderHintContent($indicator);
 
+		switch ($color)
+		{
+			case 'danger':
+				$design = Chip\Design::TINTED_ALERT;
+				$icon = Outline::CIRCLE_CROSS->value;
+				break;
+			case 'orange':
+				$design = Chip\Design::TINTED_WARNING;
+				$icon = Outline::ALERT->value;
+				break;
+			default:
+				$design = Chip\Design::TINTED_SUCCESS;
+				$icon = Outline::CIRCLE_CHECK->value;
+				break;
+		}
+
+		$chip = Chip\Chip::create([
+			'text' => htmlspecialcharsbx($label) ?? '',
+			'design' => $design,
+			'size' => Chip\Size::XS,
+			'icon' => $icon,
+			'rounded' => true,
+		])->render();
+
 		return sprintf(
-			'<span class="ui-label ui-label-%s ui-label-fill biconnector-usage-stat-load-level">'
-			. '<span class="ui-label-inner" data-hint="%s" data-hint-html data-hint-no-icon data-hint-interactivity>%s</span>'
-			. '</span>',
-			$color,
+			'<span data-hint="%s" data-hint-html data-hint-no-icon data-hint-interactivity>%s</span>',
 			htmlspecialcharsbx($hintContent),
-			htmlspecialcharsbx($label),
+			$chip,
 		);
 	}
 

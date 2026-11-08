@@ -13,10 +13,12 @@ class LegalInfoProvider extends InfoProvider
 
 	public const USER_FIELD_ENTITY_ID = LegalInfo::USER_FIELD_ENTITY_ID;
 	public const VIRTUAL_FULL_NAME_FIELD = 'UF_LEGAL_FULL_NAME';
+	public const SNILS_FIELD = 'UF_LEGAL_SNILS';
+	public const INN_FIELD = 'UF_LEGAL_INN';
 	public const LEGAL_USER_FIELD_DEFAULT = [
 		'UF_LEGAL_ADDRESS',
-		'UF_LEGAL_INN',
-		'UF_LEGAL_SNILS',
+		self::INN_FIELD,
+		self::SNILS_FIELD,
 		'UF_LEGAL_POSITION',
 		'UF_LEGAL_PATRONYMIC_NAME',
 		'UF_LEGAL_LAST_NAME',
@@ -26,6 +28,31 @@ class LegalInfoProvider extends InfoProvider
 		'UF_LEGAL_LAST_NAME',
 		'UF_LEGAL_NAME',
 		'UF_LEGAL_PATRONYMIC_NAME',
+	];
+
+	/**
+	 * Semantic type of a legal field the provider knows from the field itself. Read by getType(), so
+	 * it also drives the lookup of a field by its type (getLegalInfoFieldByType()).
+	 */
+	private const PROVIDER_FIELD_TYPES = [
+		'UF_LEGAL_NAME' => FieldType::FIRST_NAME,
+		'UF_LEGAL_LAST_NAME' => FieldType::LAST_NAME,
+		'UF_LEGAL_PATRONYMIC_NAME' => FieldType::PATRONYMIC,
+		'UF_LEGAL_POSITION' => FieldType::POSITION,
+		self::VIRTUAL_FULL_NAME_FIELD => FieldType::FULL_NAME,
+	];
+
+	/**
+	 * Semantic type of a legal field only its field code tells: the user field behind it can be a
+	 * plain string, or there is no user field at all. Read by the stage that publishes the type of
+	 * the fields list, FieldService::resolveProfileFieldType(); the provider itself keeps reporting
+	 * the user field type for these codes, because a field is looked up by type on stands where the
+	 * user field carries the meaning.
+	 */
+	public const CONTRACT_FIELD_TYPES = [
+		self::VIRTUAL_FULL_NAME_FIELD => FieldType::FULL_NAME,
+		self::SNILS_FIELD => FieldType::SNILS,
+		self::INN_FIELD => FieldType::INN,
 	];
 
 	/**
@@ -90,15 +117,7 @@ class LegalInfoProvider extends InfoProvider
 
 	protected function getType(array $field): string
 	{
-		return match ($field['FIELD_NAME'] ?? '')
-		{
-			'UF_LEGAL_NAME' => FieldType::FIRST_NAME,
-			'UF_LEGAL_LAST_NAME' => FieldType::LAST_NAME,
-			'UF_LEGAL_PATRONYMIC_NAME' => FieldType::PATRONYMIC,
-			'UF_LEGAL_POSITION' => FieldType::POSITION,
-			self::VIRTUAL_FULL_NAME_FIELD => FieldType::FULL_NAME,
-			default => parent::getType($field),
-		};
+		return self::PROVIDER_FIELD_TYPES[$field['FIELD_NAME'] ?? ''] ?? parent::getType($field);
 	}
 
 	public function getFirstFieldNameByType(string $fieldType): ?string

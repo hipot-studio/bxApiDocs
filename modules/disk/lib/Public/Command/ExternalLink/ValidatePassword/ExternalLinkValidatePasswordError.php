@@ -8,5 +8,7 @@ enum ExternalLinkValidatePasswordError: string
 	/** @see \Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\UnifiedLinkAccessChecker::onBeforeAction */
 	case Forbidden = 'FORBIDDEN';
 	case InvalidPassword = 'INVALID_PASSWORD';
+	case CaptchaRequired = 'CAPTCHA_REQUIRED';
+	case CaptchaInvalid = 'CAPTCHA_INVALID';
 	case ExternalLinkNotFound = 'EXTERNAL_LINK_NOT_FOUND';
 }

@@ -44,6 +44,11 @@ class EntityRelationMapping
 					'TABLE_ALIAS' => 'DTD',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_dynamic_type DTD ON ER.DST_ENTITY_TYPE_ID = DTD.ENTITY_TYPE_ID',
 				],
+				'CREATED_TIME' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'ER.CREATED_TIME',
+					'FIELD_TYPE' => 'datetime',
+				],
 			],
 		];
 	}

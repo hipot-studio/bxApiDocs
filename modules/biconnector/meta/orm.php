@@ -3316,6 +3316,16 @@ namespace Bitrix\BIConnector\Integration\Superset\Model {
 	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetUser resetUpdated()
 	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetUser unsetUpdated()
 	 * @method \boolean fillUpdated()
+	 * @method \string getLogin()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetUser setLogin(\string|\Bitrix\Main\DB\SqlExpression $login)
+	 * @method bool hasLogin()
+	 * @method bool isLoginFilled()
+	 * @method bool isLoginChanged()
+	 * @method \string remindActualLogin()
+	 * @method \string requireLogin()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetUser resetLogin()
+	 * @method \Bitrix\BIConnector\Integration\Superset\Model\EO_SupersetUser unsetLogin()
+	 * @method \string fillLogin()
 	 *
 	 * Common methods:
 	 * ---------------
@@ -3368,6 +3378,8 @@ namespace Bitrix\BIConnector\Integration\Superset\Model {
 	 * @method \string[] fillPermissionHash()
 	 * @method \boolean[] getUpdatedList()
 	 * @method \boolean[] fillUpdated()
+	 * @method \string[] getLoginList()
+	 * @method \string[] fillLogin()
 	 *
 	 * Common methods:
 	 * ---------------

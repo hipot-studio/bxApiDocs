@@ -28,7 +28,7 @@ class ModificationFieldsBase
 
 	public function __construct($name, $arguments,  $controller, $data=[], $scope='')
 	{
-		$this->name = $name;
+		$this->name = mb_strtolower($name);
 		$this->arguments = $arguments;
 		$this->controller = $controller;
 

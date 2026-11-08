@@ -925,6 +925,8 @@ class CMainUIGrid extends CBitrixComponent
 	{
 		$options = $this->getCurrentOptions();
 		$colSizes = $options["columns_sizes"]["columns"];
+		$resized = $options["columns_sizes"]["resized"] ?? [];
+		$resized = is_array($resized) ? array_map('strval', $resized) : [];
 
 		foreach ($this->getResultColumns() as $columnId => $column)
 		{
@@ -932,6 +934,7 @@ class CMainUIGrid extends CBitrixComponent
 			if (isset($colSize) && $column->isResizeable())
 			{
 				$column->setWidth($colSize);
+				$column->setResizedByUser(in_array((string)$columnId, $resized, true));
 			}
 		}
 
@@ -1808,6 +1811,7 @@ class CMainUIGrid extends CBitrixComponent
 			'resizeable' => $column->isResizeable(),
 			'prevent_default' => $column->isPreventDefault(),
 			'sticked' => $column->isSticked(),
+			'sticked_side' => $column->getStickedSide(),
 			'sticked_default' => json_encode($column->isSticked()),
 			'layout' => $this->prepareColumnHeaderLayoutByColumn($column),
 		];
@@ -1836,6 +1840,7 @@ class CMainUIGrid extends CBitrixComponent
 	private function prepareColumnHeaderLayoutByColumn(Column $column): array
 	{
 		$layout = clone $column->getLayout();
+		$layout->setSortable((bool)$this->arParams['ALLOW_SORT']);
 
 		return [
 			'cell' => [
@@ -1870,7 +1875,7 @@ class CMainUIGrid extends CBitrixComponent
 			isset($this->arParams["ENABLE_COLLAPSIBLE_ROWS"])
 			&& $this->arParams["ENABLE_COLLAPSIBLE_ROWS"]
 			&& isset($row["parent_group_id"])
-			&& $row["parent_group_id"] === $options['lastCollapsedGroupId']
+			&& in_array($row["parent_group_id"], $options['collapsedGroupIds'] ?? [], true)
 		)
 		{
 			$rowClass .= " main-grid-hide";
@@ -1922,6 +1927,10 @@ class CMainUIGrid extends CBitrixComponent
 			"id" => "checkbox_" . $this->arParams["GRID_ID"] . "_" . $row["id"],
 			"name" => "ID[]",
 			"value" => $row["id"],
+			"aria-label" => Loc::getMessage(
+				"interface_grid_check_row",
+				["#ROW#" => $row["default_action"]["title"] ?? $row["id"]],
+			),
 		];
 
 		if (!isset($row["editable"]) || $row["editable"] !== false)
@@ -1938,10 +1947,13 @@ class CMainUIGrid extends CBitrixComponent
 		$columns = [
 			"drag" => [
 				"cell" => [
-					"enabled" => (
-						$this->arParams["ALLOW_ROWS_SORT"]
-						&& (!isset($row["draggable"]) || $row["draggable"] !== false)
-					),
+					// The cell goes in wherever the head has one, so that every row carries
+					// the same set of cells: with `table-layout: fixed` the columns are laid
+					// out by the first row, and a row one cell short would shift its whole
+					// contents a column to the left. A row that cannot be dragged is marked
+					// by the `main-grid-row-drag-disabled` class on the row itself, which is
+					// what `rows-sortable` reads - the cell stays, empty.
+					"enabled" => $this->arParams["ALLOW_ROWS_SORT"],
 				],
 			],
 			"checkbox" => [
@@ -1966,6 +1978,10 @@ class CMainUIGrid extends CBitrixComponent
 					),
 					"attributes" => static::stringifyAttrs([
 						"data-actions" => $row["actions"] ?? [],
+						"aria-label" => Loc::getMessage(
+							"interface_grid_row_actions",
+							["#ROW#" => $row["default_action"]["title"] ?? $row["id"]],
+						),
 					]),
 				],
 			],
@@ -1991,6 +2007,17 @@ class CMainUIGrid extends CBitrixComponent
 				'data-column-id' => $columnId,
 			];
 			$cellStyle = "";
+
+			// `table-layout: fixed` takes the width of a column from its header alone only while no
+			// cell of the column asks for more: content that cannot be broken - a long word, a
+			// module's own min-width - widens the column back and the width the user dragged it to
+			// is lost on reload. The drag writes these three properties on every cell of the column,
+			// so the server does the same for such a column. Any other width stays a start width.
+			$width = $column->getWidth();
+			if (isset($width) && $column->isResizedByUser())
+			{
+				$cellStyle .= "width: {$width}px; min-width: {$width}px; max-width: {$width}px;";
+			}
 			if (
 				$this->arParams["ENABLE_COLLAPSIBLE_ROWS"]
 				&& $column->isShift()
@@ -2060,6 +2087,12 @@ class CMainUIGrid extends CBitrixComponent
 							$actionAttributes,
 							$action['attributes']
 						);
+					}
+
+					// Consumers define what the action does, so a name they set wins over the generic fallback.
+					if (!isset($actionAttributes['aria-label']) && !isset($actionAttributes['title']))
+					{
+						$actionAttributes['aria-label'] = Loc::getMessage('interface_grid_cell_action');
 					}
 
 					$cellActions[] = array_merge(
@@ -2393,6 +2426,11 @@ class CMainUIGrid extends CBitrixComponent
 		if ($this->arParams['ALLOW_STICKED_COLUMNS'] && $column->isSticked())
 		{
 			$classList[] = 'main-grid-sticked-column';
+
+			if ($column->isStickedRight())
+			{
+				$classList[] = 'main-grid-sticked-column-right';
+			}
 		}
 
 		return ' ' . join(' ', $classList);
@@ -2463,6 +2501,10 @@ class CMainUIGrid extends CBitrixComponent
 		{
 			$this->arResult['COLUMNS_ALL'][$columnId] = $this->convertColumnToArray($column);
 		}
+		$this->arResult['COLUMNS_ALL'] = $this->applyShowedColumnsOrder(
+			$this->arResult['COLUMNS_ALL'],
+			$this->getShowedColumnsList(),
+		);
 		$this->arResult['HEADERS_ALL'] = $this->arResult['COLUMNS_ALL'];
 
 		// showed
@@ -2481,15 +2523,83 @@ class CMainUIGrid extends CBitrixComponent
 		}
 	}
 
+	/**
+	 * Puts showed columns into the full column list in the user order, keeping hidden ones
+	 * at their own places. Settings popup is built from this list, so without the reordering
+	 * it shows the developer order again after a page reload.
+	 *
+	 * Ids are matched as array keys, so that a numeric column id saved as a string still
+	 * matches: the result is always a permutation of `$columns`. A repeated id keeps its last
+	 * place, the same way `applyColumnsSort` overwrites the sort index of such a column.
+	 *
+	 * @param array $columns in format `[id => column]`
+	 * @param array $showedColumns showed column ids in the order chosen by the user
+	 * @return array in format `[id => column]`
+	 */
+	protected function applyShowedColumnsOrder(array $columns, array $showedColumns): array
+	{
+		$userOrder = [];
+		foreach ($showedColumns as $columnId)
+		{
+			if (isset($columns[$columnId]))
+			{
+				unset($userOrder[$columnId]);
+				$userOrder[$columnId] = true;
+			}
+		}
+
+		if (empty($userOrder))
+		{
+			return $columns;
+		}
+
+		$orderedIds = array_keys($userOrder);
+		$orderedIndex = 0;
+		$result = [];
+
+		foreach (array_keys($columns) as $columnId)
+		{
+			if (isset($userOrder[$columnId]))
+			{
+				$columnId = $orderedIds[$orderedIndex];
+				$orderedIndex++;
+			}
+
+			$result[$columnId] = $columns[$columnId];
+		}
+
+		return $result;
+	}
+
 	protected function sortResultColumns(): void
 	{
 		if ($this->needSortColumns && !empty($this->arResult['COLUMNS']))
 		{
+			foreach ($this->arResult['COLUMNS'] as &$column)
+			{
+				$column['sticked_weight'] = $this->getStickedWeight($column);
+			}
+			unset($column);
+
 			Collection::sortByColumn($this->arResult['COLUMNS'], [
-				'sticked' => SORT_DESC,
+				'sticked_weight' => SORT_ASC,
 				'sort_index' => SORT_ASC,
 			]);
 		}
+	}
+
+	/**
+	 * Sort weight that keeps left-sticked columns first, right-sticked last and
+	 * everything else in between, preserving the original order within each group.
+	 */
+	private function getStickedWeight(array $column): int
+	{
+		if (empty($column['sticked']))
+		{
+			return 1;
+		}
+
+		return ($column['sticked_side'] ?? 'left') === 'right' ? 2 : 0;
 	}
 
 	protected function getColumnsAllWithSections(array $columns): array
@@ -2669,24 +2779,24 @@ class CMainUIGrid extends CBitrixComponent
 
 	protected static function restoreCollapsedGroupsState(&$rows, $collapsedIds)
 	{
-		if (is_array($collapsedIds) && !empty($collapsedIds))
+		// an empty array is a saved state "every group expanded", unlike a missing one
+		$hasUserState = is_array($collapsedIds);
+
+		foreach ($rows as $key => $row)
 		{
-			foreach ($rows as $key => $row)
+			if (!isset($row["custom"]))
 			{
-				if (isset($row["custom"]))
-				{
-					$rows[$key]["expand"] = !in_array($row["id"], $collapsedIds);
-				}
+				continue;
 			}
-		}
-		else
-		{
-			foreach ($rows as $key => $row)
+
+			if ($hasUserState)
 			{
-				if (isset($row["custom"]))
-				{
-					$rows[$key]["expand"] = true;
-				}
+				$rows[$key]["expand"] = !in_array($row["id"], $collapsedIds);
+			}
+			else
+			{
+				// no saved user state: keep the collapsed state passed in ROWS
+				$rows[$key]["expand"] = !isset($row["expand"]) || $row["expand"] !== false;
 			}
 		}
 	}
@@ -2721,15 +2831,24 @@ class CMainUIGrid extends CBitrixComponent
 	protected function prepareTemplateData()
 	{
 		$options = [
-			"lastCollapsedGroupId" => null,
+			"collapsedGroupIds" => [],
 			"hasCellActions" => [],
 		];
 
 		foreach ($this->arParams["ROWS"] as $row)
 		{
+			if (
+				!empty($row["custom"])
+				&& isset($row["expand"], $row["group_id"])
+				&& $row["expand"] === false
+			)
+			{
+				$options["collapsedGroupIds"][] = $row["group_id"];
+			}
+
 			if (isset($row["cellActions"]) && is_array($row["cellActions"]))
 			{
-				foreach ($row["cellActions"] as $actions => $columnCellId)
+				foreach ($row["cellActions"] as $columnCellId => $actions)
 				{
 					if (is_array($actions) && !empty($actions))
 					{
@@ -2761,11 +2880,6 @@ class CMainUIGrid extends CBitrixComponent
 
 		foreach ($this->arParams["ROWS"] as $rowId => $row)
 		{
-			if (!empty($row["custom"]))
-			{
-				$options["lastCollapsedGroupId"] = isset($row["expand"]) && $row["expand"] === false ? $row["group_id"] : null;
-			}
-
 			$row["layout"] = $this->prepareRowLayout($row, $options);
 			$this->arParams["ROWS"][$rowId] = $row;
 		}
@@ -2861,6 +2975,11 @@ trait DeprecatedMethods
 		if ($this->arParams["ALLOW_STICKED_COLUMNS"] && $column["sticked"])
 		{
 			$result .= " main-grid-sticked-column";
+
+			if (($column["sticked_side"] ?? 'left') === 'right')
+			{
+				$result .= " main-grid-sticked-column-right";
+			}
 		}
 
 		if (

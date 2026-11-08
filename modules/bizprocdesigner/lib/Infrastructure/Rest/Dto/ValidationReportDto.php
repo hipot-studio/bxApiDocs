@@ -20,10 +20,20 @@ use Bitrix\Rest\V3\Dto\DtoCollection;
  */
 class ValidationReportDto extends Dto
 {
-	#[Description('The submitted graph passed both the domain validation and the post-layout check.')]
+	#[Description(
+		'The submitted graph passed both the domain validation and the post-layout check.'
+		. ' True exactly when issues is empty; warnings do not affect it.'
+	)]
 	public bool $valid;
 
 	#[ElementType(ValidationIssueDto::class)]
-	#[Description('Problems found in the submitted graph. Empty when the graph is valid.')]
+	#[Description('Blocking problems found in the submitted graph. Empty when the graph is valid.')]
 	public DtoCollection $issues;
+
+	#[ElementType(ValidationIssueDto::class)]
+	#[Description(
+		'Non-blocking risks of the submitted graph: the graph is accepted, and the write path takes it as it is.'
+		. ' They come with the dry run alone - a refused write answers with its problems only.'
+	)]
+	public DtoCollection $warnings;
 }

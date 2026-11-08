@@ -9,7 +9,7 @@ use Bitrix\Market\Application\Installed;
 use Bitrix\Market\Application\License;
 use Bitrix\Market\Application\MarketDetail;
 use Bitrix\Market\Application\Rights;
-use Bitrix\Market\Application\VibePlusApplicationLimit;
+use Bitrix\Market\Application\ApplicationLimit;
 use Bitrix\Market\Application\Versions;
 use Bitrix\Market\Detail\DetailType;
 use Bitrix\Market\Menu;
@@ -18,7 +18,6 @@ use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\Marketplace\Client;
 use Bitrix\Rest\Marketplace\Url;
-use Bitrix\Rest\Service\ServiceContainer;
 use Bitrix\Market\Internal;
 use Bitrix\Market\Loadable;
 
@@ -88,7 +87,7 @@ class RestMarketDetail extends CBitrixComponent implements Loadable
 	private function loadDetailResult(): void
 	{
 		$this->prepareInfo();
-		$this->arResult['VIBE_PLUS_APPLICATION_LIMIT'] = (new VibePlusApplicationLimit())->getProjection();
+		$this->arResult['VIBE_PLUS_APPLICATION_LIMIT'] = (new ApplicationLimit())->getProjection();
 
 		$marketDetail = new MarketDetail($this->arParams['APP_CODE'], DetailType::App);
 		$marketDetail->setVersion($this->version);
@@ -184,8 +183,7 @@ class RestMarketDetail extends CBitrixComponent implements Loadable
 			$this->arResult['APP']['IS_TRIALED'] = $this->appItem['IS_TRIALED'];
 			$this->arResult['APP']['WAS_INSTALLED'] = 'Y';
 			$this->arResult['APP']['HAS_APP_FORM'] = !empty($this->appItem['URL_SETTINGS'])
-				&& isset($this->arResult['APP']['OPEN_API'])
-				&& $this->arResult['APP']['OPEN_API'] === 'Y';
+				&& \CRestUtil::checkAppAccess($this->appItem['CLIENT_ID'], $this->appItem);
 		}
 
 		if (
@@ -215,10 +213,11 @@ class RestMarketDetail extends CBitrixComponent implements Loadable
 			isset($this->arResult['APP']['BY_SUBSCRIPTION'])
 			&& $this->arResult['APP']['BY_SUBSCRIPTION'] === 'Y'
 		;
-		$isTariffApplicationLimit = ServiceContainer::getInstance()
-			->getVibePlusTariffAccessService()
-			->getMarketApplicationLimit() !== null
-		;
+		$isTariffApplicationLimit = in_array(
+			$this->arResult['VIBE_PLUS_APPLICATION_LIMIT']['limit']['state'] ?? null,
+			['finite', 'unlimited'],
+			true,
+		);
 		$canInstallApp = $this->isAppInstalled() || Access::canInstallApp($this->arResult['APP']);
 
 		if (
@@ -281,6 +280,21 @@ class RestMarketDetail extends CBitrixComponent implements Loadable
 			$this->arResult['APP'],
 			$this->arResult['START_INSTALL']
 		);
+
+		$this->arResult['APP']['HAS_ACTIVE_INSTALL_REQUEST'] = 'N';
+		if (
+			isset($this->arResult['APP']['BUTTONS'][Action::NO_ACCESS_INSTALL])
+			&& !empty($this->arResult['APP']['CODE'])
+		)
+		{
+			$appVersion = (string)($this->arResult['APP']['VER'] ?? '');
+
+			$restInstallRequest = new Internal\Integration\Rest\RestAppInstallRequest();
+			if ($restInstallRequest->hasActiveInstallRequest((string)$this->arResult['APP']['CODE'], $appVersion))
+			{
+				$this->arResult['APP']['HAS_ACTIVE_INSTALL_REQUEST'] = 'Y';
+			}
+		}
 
 		if (!empty($this->appItem))
 		{

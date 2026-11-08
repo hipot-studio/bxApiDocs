@@ -294,23 +294,11 @@ class CCrmInvoiceRestService extends IRestService
 
 		// sanitize
 		$comments = isset($fields['COMMENTS']) ? trim($fields['COMMENTS']) : '';
+		if ($comments !== '' && mb_strpos($comments, '<') !== false)
+			$comments = self::sanitizeHtml($comments);
 		$userDescription = isset($fields['USER_DESCRIPTION']) ? trim($fields['USER_DESCRIPTION']) : '';
-		$bSanitizeComments = ($comments !== '' && mb_strpos($comments, '<') !== false);
-		$bSanitizeUserDescription = ($userDescription !== '' && mb_strpos($userDescription, '<') !== false);
-		if ($bSanitizeComments || $bSanitizeUserDescription)
-		{
-			$sanitizer = new CBXSanitizer();
-			$sanitizer->ApplyDoubleEncode(false);
-			$sanitizer->SetLevel(CBXSanitizer::SECURE_LEVEL_MIDDLE);
-			//Crutch for for Chrome line break behaviour in HTML editor.
-			$sanitizer->AddTags(array('div' => array()));
-			if ($bSanitizeComments)
-				$fields['COMMENTS'] = $sanitizer->SanitizeHtml($fields['COMMENTS']);
-			if ($bSanitizeUserDescription)
-				$fields['USER_DESCRIPTION'] = $sanitizer->SanitizeHtml($fields['USER_DESCRIPTION']);
-			unset($sanitizer);
-		}
-		unset($bSanitizeComments, $bSanitizeUserDescription);
+		if ($userDescription !== '' && mb_strpos($userDescription, '<') !== false)
+			$userDescription = self::sanitizeHtml($userDescription);
 		$fields['COMMENTS'] = $comments;
 		$fields['USER_DESCRIPTION'] = $userDescription;
 		unset($comments, $userDescription);
@@ -485,23 +473,11 @@ class CCrmInvoiceRestService extends IRestService
 		$updateComments = isset($fields['COMMENTS']);
 		$updateUserDescription = isset($fields['USER_DESCRIPTION']);
 		$comments = $updateComments ? trim($fields['COMMENTS']) : '';
+		if ($comments !== '' && mb_strpos($comments, '<') !== false)
+			$comments = self::sanitizeHtml($comments);
 		$userDescription = $updateUserDescription ? trim($fields['USER_DESCRIPTION']) : '';
-		$bSanitizeComments = ($comments !== '' && mb_strpos($comments, '<') !== false);
-		$bSanitizeUserDescription = ($userDescription !== '' && mb_strpos($userDescription, '<') !== false);
-		if ($bSanitizeComments || $bSanitizeUserDescription)
-		{
-			$sanitizer = new CBXSanitizer();
-			$sanitizer->ApplyDoubleEncode(false);
-			$sanitizer->SetLevel(CBXSanitizer::SECURE_LEVEL_MIDDLE);
-			//Crutch for for Chrome line break behaviour in HTML editor.
-			$sanitizer->AddTags(array('div' => array()));
-			if ($bSanitizeComments)
-				$fields['COMMENTS'] = $sanitizer->SanitizeHtml($fields['COMMENTS']);
-			if ($bSanitizeUserDescription)
-				$fields['USER_DESCRIPTION'] = $sanitizer->SanitizeHtml($fields['USER_DESCRIPTION']);
-			unset($sanitizer);
-		}
-		unset($bSanitizeComments, $bSanitizeUserDescription);
+		if ($userDescription !== '' && mb_strpos($userDescription, '<') !== false)
+			$userDescription = self::sanitizeHtml($userDescription);
 		if ($updateComments)
 			$fields['COMMENTS'] = $comments;
 		if ($updateUserDescription)
@@ -1717,6 +1693,17 @@ class CCrmInvoiceRestService extends IRestService
 	private static function isRequiredUserFieldCheckEnabled()
 	{
 		return RestSettings::getCurrent()->isRequiredUserFieldCheckEnabled();
+	}
+
+	private static function sanitizeHtml($value)
+	{
+		$sanitizer = new CBXSanitizer();
+		$sanitizer->ApplyDoubleEncode(false);
+		$sanitizer->SetLevel(CBXSanitizer::SECURE_LEVEL_MIDDLE);
+		//Crutch for for Chrome line break behaviour in HTML editor.
+		$sanitizer->AddTags(array('div' => array()));
+
+		return $sanitizer->SanitizeHtml($value);
 	}
 
 	private static function getAllowedFilterOperations()

@@ -11,7 +11,6 @@ use Bitrix\Socialnetwork\Collab\Control\Handler\Trait\UpdateMemberRoleLogTrait;
 use Bitrix\Socialnetwork\Control\Command\UpdateCommand;
 use Bitrix\Socialnetwork\Control\Handler\HandlerResult;
 use Bitrix\Socialnetwork\Control\Handler\Update\UpdateHandlerInterface;
-use Bitrix\Socialnetwork\Control\Member\Trait\UpdateMemberRoleTrait;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use CSocNetUserToGroup;
@@ -19,7 +18,6 @@ use CSocNetUserToGroup;
 class UpdateOwnerHandler implements UpdateHandlerInterface
 {
 	use UpdateMemberRoleLogTrait;
-	use UpdateMemberRoleTrait;
 
 	public function update(UpdateCommand $command, Workgroup $entityBefore, Workgroup $entityAfter): HandlerResult
 	{
@@ -44,16 +42,21 @@ class UpdateOwnerHandler implements UpdateHandlerInterface
 			return $handlerResult;
 		}
 
-		$result = CSocNetUserToGroup::SetOwner($ownerId, $command->getId(), [], true);
+		$result = CSocNetUserToGroup::SetOwner(
+			$ownerId,
+			$command->getId(),
+			skipChatMessage: true,
+			keepPreviousOwnerAsModerator: true,
+		);
 
 		if ($result === false)
 		{
 			$handlerResult->addApplicationError();
+
+			return $handlerResult;
 		}
 
-		$result = $this->updateMembersRole($command->getId(), $command->getInitiatorId(), UserToGroupTable::ROLE_MODERATOR, $beforeOwnerId);
-
-		$handlerResult->merge($result);
+		$handlerResult->setGroupChanged();
 
 		$oldOwnerChangeRoleLogResult =
 			$this->writeMemberRoleUpdateLog(

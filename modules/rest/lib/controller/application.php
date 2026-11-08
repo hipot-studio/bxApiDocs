@@ -4,10 +4,11 @@ namespace Bitrix\Rest\Controller;
 
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
-use Bitrix\Main\Loader;
 use Bitrix\Rest\Marketplace;
 use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Rest\Internal\Access\User\Model\RestUserModel;
 use Bitrix\Rest\Internal\Entity\CurrentUser;
+use Bitrix\Rest\Internal\Service\User\ExternalUserChecker;
 use Bitrix\Rest\PlacementTable;
 
 class Application extends Controller
@@ -53,76 +54,17 @@ class Application extends Controller
 
 		$currentUserId = (int)(CurrentUser::getInstance()->getId() ?? 0);
 		$targetUserId = $userId ?? $currentUserId;
+		$externalUserChecker = new ExternalUserChecker();
 		if (
-			$this->isExternalUser($targetUserId)
-			|| ($currentUserId !== $targetUserId && $this->isExternalUser($currentUserId))
+			$externalUserChecker->isExternal($targetUserId)
+			|| ($currentUserId !== $targetUserId && $externalUserChecker->isExternal($currentUserId))
+			|| ($currentUserId !== $targetUserId && !RestUserModel::createFromId($currentUserId)->isAdmin())
 		)
 		{
 			return [];
 		}
 
 		return PlacementTable::getHandlersList(placement: $placement, userId: $targetUserId);
-	}
-
-	private function isExternalUser(int $userId): bool
-	{
-		if ($userId <= 0)
-		{
-			return false;
-		}
-
-		if (Loader::includeModule('humanresources'))
-		{
-			try
-			{
-				return !\Bitrix\HumanResources\Public\Service\Container::getUserDepartmentService()->isEmployee($userId);
-			}
-			catch (\Throwable)
-			{
-			}
-		}
-
-		if ($this->isExtranetByDepartment($userId))
-		{
-			return true;
-		}
-
-		if (
-			Loader::includeModule('extranet')
-			&& class_exists(\Bitrix\Extranet\Service\ServiceContainer::class)
-		)
-		{
-			return \Bitrix\Extranet\Service\ServiceContainer::getInstance()
-				->getCollaberService()
-				->isCollaberById($userId)
-			;
-		}
-
-		return false;
-	}
-
-	private function isExtranetByDepartment(int $userId): bool
-	{
-		if (!Loader::includeModule('extranet') || !\CExtranet::getExtranetSiteId())
-		{
-			return false;
-		}
-
-		$user = \CUser::GetList(
-			['ID' => 'ASC'],
-			'',
-			['ID' => $userId],
-			[
-				'FIELDS' => ['ID'],
-				'SELECT' => ['UF_DEPARTMENT'],
-			]
-		)->fetch();
-		if (!is_array($user))
-		{
-			return true;
-		}
-
-		return (int)($user['UF_DEPARTMENT'][0] ?? 0) <= 0;
 	}
 
 	/**

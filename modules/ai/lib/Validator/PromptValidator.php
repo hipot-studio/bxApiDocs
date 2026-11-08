@@ -146,7 +146,7 @@ class PromptValidator
 		{
 			throw new ValidateException(
 				$fieldName,
-				Loc::getMessage(Loc::getMessage('AI_VALIDATOR_NO_FOUND_BY_CODES'))
+				Loc::getMessage('AI_VALIDATOR_NO_FOUND_BY_CODES')
 			);
 		}
 

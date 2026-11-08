@@ -19,6 +19,10 @@ final class DraftTable extends DataManager
 	public const STATUS_ACTIVE = 'active';
 	public const STATUS_COMPLETED = 'completed';
 
+	public const COMPOSE_MODE_NEW = 'new';
+	public const COMPOSE_MODE_REPLY = 'reply';
+	public const COMPOSE_MODE_FORWARD = 'forward';
+
 	public static function getTableName(): string
 	{
 		return 'b_mail_draft';
@@ -38,7 +42,11 @@ final class DraftTable extends DataManager
 			new IntegerField('CRM_ENTITY_ID'),
 			(new EnumField('COMPOSE_MODE'))
 				->configureRequired()
-				->configureValues(['new', 'reply', 'forward']),
+				->configureValues([
+					self::COMPOSE_MODE_NEW,
+					self::COMPOSE_MODE_REPLY,
+					self::COMPOSE_MODE_FORWARD,
+				]),
 			new IntegerField('PARENT_MESSAGE_ID'),
 			new TextField('SENDER_DATA'),
 			(new TextField('RECIPIENTS_DATA'))->configureRequired(),

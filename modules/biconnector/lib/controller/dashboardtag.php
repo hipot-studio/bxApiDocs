@@ -6,13 +6,12 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTagTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetTagTable;
-use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Superset\ActionFilter\BIConstructorAccess;
+use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -61,7 +60,8 @@ class DashboardTag extends Controller
 
 		if ($userTag)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_HAS_EXIST_TAG') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_HAS_EXIST_TAG');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -103,7 +103,8 @@ class DashboardTag extends Controller
 
 		if (!$tag)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_EMPTY_TAG') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_EMPTY_TAG');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -117,7 +118,8 @@ class DashboardTag extends Controller
 
 		if ($existedTitle && $id !== (int)$existedTitle['ID'])
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_HAS_EXIST_TAG') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_HAS_EXIST_TAG');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -152,7 +154,8 @@ class DashboardTag extends Controller
 
 		if (!$tag)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_EMPTY_TAG') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_SAVE_ERROR_EMPTY_TAG');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -177,12 +180,10 @@ class DashboardTag extends Controller
 
 	private function checkPermission(): bool
 	{
-		if (
-			!Feature::isBuilderEnabled()
-			|| !AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_TAG_MODIFY)
-		)
+		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_TAG_MODIFY))
 		{
-			$this->addError(new Error('Access denied.'));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_DASHBOARD_TAG_ACCESS_ERROR_MODIFY');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return false;
 		}

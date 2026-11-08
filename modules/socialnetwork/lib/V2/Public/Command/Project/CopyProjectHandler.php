@@ -70,6 +70,7 @@ class CopyProjectHandler
 			moderatorMembers: $moderatorMembers,
 			rawPermissions: $this->normalizer->normalizePermissions($dto->permissions),
 			options: $dto->options,
+			features: $dto->features,
 			tagNames: $dto->tags,
 			publication: $dto->publication,
 			notifications: $notifications,

@@ -4,6 +4,10 @@ namespace Bitrix\Disk;
 
 use Bitrix\Disk;
 use Bitrix\Disk\Document\Online\UserInfoToken;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
+use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
+use Bitrix\Disk\Internal\Service\Sync\Journal\TrackedSetCleanupPublisher;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
 use Bitrix\Disk\Internals\AttachedObjectTable;
 use Bitrix\Disk\Internals\EditSessionTable;
@@ -25,13 +29,12 @@ use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Main;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\ObjectException;
-use Bitrix\Main\Security\Random;
 use Bitrix\Main\Type\DateTime;
 use CFile;
 
@@ -50,12 +53,13 @@ class File extends BaseObject
 	const ERROR_INVALID_USER_FOR_UNLOCK       = 'DISK_FILE_22010';
 	const ERROR_INVALID_FILE_ARRAY 		      = 'DISK_FILE_22011';
 
-	const SECONDS_TO_JOIN_VERSION = 300;
-
 	const STATE_DO_NOTHING     = 2;
 	const STATE_DELETE_PROCESS = 3;
 
 	const CODE_RECORDED_FILE = 'RECORDED';
+
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
+	protected UnifiedLinkUrl $unifiedLinkUrl;
 
 	protected array $fileTypeFixes = [
 		TypeFile::UNKNOWN => [
@@ -94,6 +98,15 @@ class File extends BaseObject
 	/** @var View\Base */
 	protected $view;
 
+	public function __construct()
+	{
+		parent::__construct();
+
+		$serviceLocator = ServiceLocator::getInstance();
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
+	}
+
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
 	 * @throws \Bitrix\Main\NotImplementedException
@@ -112,6 +125,17 @@ class File extends BaseObject
 	public function canStartBizProc(SecurityContext $securityContext)
 	{
 		return $securityContext->canStartBizProc($this->id);
+	}
+
+	/**
+	 * Checks rights to restore and delete versions of current file.
+	 * A version is a state of the file content, so managing versions is the right to update the content.
+	 * @param SecurityContext $securityContext Security context.
+	 * @return bool
+	 */
+	public function canManageVersions(SecurityContext $securityContext): bool
+	{
+		return $this->canUpdate($securityContext);
 	}
 
 	/**
@@ -186,18 +210,6 @@ class File extends BaseObject
 		$filter['TYPE'] = ObjectTable::TYPE_FILE;
 
 		return parent::load($filter, $with);
-	}
-
-	/**
-	 * @param string $uniqueCode
-	 * @param array $with
-	 * @return File|null
-	 * @noinspection PhpDocMissingThrowsInspection
-	 */
-	public static function loadByUniqueCode(string $uniqueCode, array $with = []): ?static
-	{
-		/** @noinspection PhpUnhandledExceptionInspection */
-		return static::load(['=UNIQUE_CODE' => $uniqueCode], $with);
 	}
 
 	protected static function getClassNameModel(array $row)
@@ -300,6 +312,10 @@ class File extends BaseObject
 
 		if(isset($this->file) && $this->fileId == $this->file['ID'])
 		{
+			// A record handed over by a batch read carries no public url: building one runs an event and
+			// costs a bucket per file in the clouds, so it waits until someone asks for the url.
+			$this->file['SRC'] ??= \CFile::GetFileSRC($this->file);
+
 			return $this->file;
 		}
 
@@ -307,10 +323,28 @@ class File extends BaseObject
 
 		if(!$this->file)
 		{
-			return array();
+			return [];
 		}
 
 		return $this->file;
+	}
+
+	/**
+	 * Fills the cache of getFile() with a record read elsewhere, so that a batch read of b_file serves this
+	 * model too. A record of another file is ignored. The public url is not built here: getFile() builds it
+	 * when it is asked for, so a batch pays for it only on the files whose url is actually used.
+	 *
+	 * @param array $fileData Record of b_file, as CFile returns it.
+	 * @return void
+	 */
+	public function primeFileData(array $fileData): void
+	{
+		if (!$this->fileId || (int)($fileData['ID'] ?? 0) !== (int)$this->fileId)
+		{
+			return;
+		}
+
+		$this->file = $fileData;
 	}
 
 	/**
@@ -721,7 +755,7 @@ class File extends BaseObject
 			'SYNC_UPDATE_TIME' => $this->getSyncUpdateTime(),
 			'UPDATED_BY' => $updatedBy,
 		));
-		$this->updateRelated();
+		$this->updateRelated($updatedBy);
 
 		$driver = Driver::getInstance();
 		if ($this->getStorage()->isUseInternalRights())
@@ -741,6 +775,17 @@ class File extends BaseObject
 		{
 			//just update content
 			$driver->getIndexManager()->updateFileContent($this);
+		}
+
+		// The first version is the content the file was created with, and the creation of the file is
+		// published on its own: the journal would otherwise take two records for every upload.
+		if (!$this->isFirstVersion())
+		{
+			$this->publishToJournal(
+				ChangeType::ContentVersion,
+				$updatedBy,
+				['size', 'versionId', 'versionNumber', 'updatedAt', 'updatedBy'],
+			);
 		}
 
 		$objectEvent = $this->makeObjectEvent(
@@ -787,7 +832,7 @@ class File extends BaseObject
 	 *
 	 * @param array $file Structure like $_FILES.
 	 * @param int $createdBy Id of user.
-	 * @param bool $disableJoin If set false the method attempts to join version with last version (@see \Bitrix\Disk\File::SECONDS_TO_JOIN_VERSION).
+	 * @param bool $disableJoin If set false the method attempts to join version with last version (@see \Bitrix\Disk\Configuration::getSecondsToJoinVersion()).
 	 * @return Version|null
 	 * @throws \Bitrix\Main\SystemException
 	 */
@@ -949,7 +994,13 @@ class File extends BaseObject
 		$versionLimitPerFile = Configuration::getVersionLimitPerFile();
 		if ($this->getGlobalContentVersion() > 1 && $versionLimitPerFile > 0)
 		{
-			foreach ($this->getVersions(['offset' => $versionLimitPerFile, 'limit' => 100]) as $oldVersion)
+			$olderVersions = $this->getVersions([
+				'order' => ['ID' => 'DESC'],
+				'offset' => $versionLimitPerFile,
+				'limit' => 100,
+			]);
+
+			foreach ($olderVersions as $oldVersion)
 			{
 				$oldVersion->delete($createdBy);
 			}
@@ -1033,11 +1084,17 @@ class File extends BaseObject
 			return true;
 		}
 
+		$secondsToJoinVersion = Configuration::getSecondsToJoinVersion();
+		if ($secondsToJoinVersion === 0)
+		{
+			return false;
+		}
+
 		$now = new DateTime;
 		if($this->updateTime && $this->updatedBy == $createdBy)
 		{
 			$updateTimestamp = $this->updateTime->getTimestamp();
-			if($now->getTimestamp() - $updateTimestamp < self::SECONDS_TO_JOIN_VERSION)
+			if($now->getTimestamp() - $updateTimestamp < $secondsToJoinVersion)
 			{
 				return true;
 			}
@@ -1304,6 +1361,7 @@ class File extends BaseObject
 
 		/** @var FileTable $tableClassName */
 		$tableClassName = self::getTableClassName();
+		$rightsCodesBeforeMove = Driver::getInstance()->getRightsManager()->captureCodesBeforeMove($this);
 
 		$moveResult = $tableClassName::move($this->id, $realFolderId);
 		if (!$moveResult->isSuccess())
@@ -1338,7 +1396,7 @@ class File extends BaseObject
 		}
 		//</editor-fold>
 
-		Driver::getInstance()->getRightsManager()->setAfterMove($this);
+		Driver::getInstance()->getRightsManager()->setAfterMove($this, $rightsCodesBeforeMove);
 
 		$subscribersAfterMove = Driver::getInstance()->collectSubscribers($this);
 		Driver::getInstance()->sendChangeStatus($subscribersAfterMove);
@@ -1365,6 +1423,8 @@ class File extends BaseObject
 			return null;
 		}
 
+		$this->publishToJournal(ChangeType::Moved, $movedBy, ['places']);
+
 		$event = new UserRecentsEvent(
 			(int)$movedBy,
 			'recentFileMoved',
@@ -1380,22 +1440,6 @@ class File extends BaseObject
 		$event->sendToUser();
 
 		return $this;
-	}
-
-	private function generateUniqueTmpName(): string
-	{
-		$uniqueTmpName = $this->name;
-
-		$uniquePart = '_' . Random::getString(32);
-		$maxAllowedLength = 255 - mb_strlen($uniquePart);
-
-		if (mb_strlen($this->name) > $maxAllowedLength)
-		{
-			$uniqueTmpName = mb_substr($this->name, 0, $maxAllowedLength);
-		}
-		$uniqueTmpName .= $uniquePart;
-
-		return $uniqueTmpName;
 	}
 
 	/**
@@ -1500,6 +1544,12 @@ class File extends BaseObject
 
 		$this->currentState = static::STATE_DELETE_PROCESS;
 
+		// The audience is taken before the rights and the interaction set it is read from are torn down;
+		// the record itself is published once the row of the file is gone, so that a deletion that broke
+		// halfway leaves the client holding a file the portal still holds too.
+		$publishesTombstone = !$this->journalCascadeChild && !$this->isLink();
+		$tombstoneAudience = $publishesTombstone ? $this->captureTombstoneAudience() : null;
+
 		$success = EditSessionTable::deleteByFilter(array(
 			'OBJECT_ID' => $this->id,
 		));
@@ -1513,9 +1563,19 @@ class File extends BaseObject
 			'OBJECT_ID' => $this->id,
 		]);
 
-		TrackedObjectTable::deleteBatch([
-			'REAL_OBJECT_ID' => $this->id,
-		]);
+		// The rows of the interaction set are the only record of who held the file by an interaction and
+		// by no right of their own. A child of a cascade publishes no tombstone the holder could be
+		// addressed by: the record of the root stands for the whole subtree, and its root is a folder
+		// they never saw. The rows go here together with the record they are addressed from, so that a
+		// cascade that broke below leaves no record naming a holder the set still carries the file to.
+		if ($this->journalCascadeChild)
+		{
+			(new TrackedSetCleanupPublisher())->publishHoldersLosingTheObject((int)$this->id);
+
+			TrackedObjectTable::deleteBatch([
+				'REAL_OBJECT_ID' => $this->id,
+			]);
+		}
 
 		$success = ExternalLinkTable::deleteByFilter(array(
 			'OBJECT_ID' => $this->id,
@@ -1601,6 +1661,22 @@ class File extends BaseObject
 		{
 			return false;
 		}
+
+		if (!$this->journalCascadeChild)
+		{
+			// Taken here and not before the gates above: several of them still answer with false, and a
+			// deletion that broke halfway would take the file from the holders who see it by their
+			// interaction alone while the portal goes on holding it.
+			TrackedObjectTable::deleteBatch([
+				'REAL_OBJECT_ID' => $this->id,
+			]);
+		}
+
+		if ($publishesTombstone)
+		{
+			$this->publishTombstoneToJournal($deletedBy, $tombstoneAudience);
+		}
+
 		Driver::getInstance()->getIndexManager()->dropIndex($this);
 
 		Application::getInstance()->getTaggedCache()->clearByTag("disk_file_{$this->id}");
@@ -1772,9 +1848,9 @@ class File extends BaseObject
 		}
 	}
 
-	private function updateRelated()
+	private function updateRelated($updatedBy)
 	{
-		Disk\Driver::getInstance()->getTrackedObjectManager()->refresh($this);
+		Disk\Driver::getInstance()->getTrackedObjectManager()->refresh($this, $updatedBy);
 	}
 
 	/**
@@ -1861,21 +1937,20 @@ class File extends BaseObject
 		$urlShowObjectInGrid = new Main\Web\Uri($urlShowObjectInGrid);
 
 		$downloadUri = Main\Engine\UrlManager::getInstance()->create('disk.file.download', ['fileId' => $this->getId()]);
+		$uls = null;
 
 		if ($this->supportsUnifiedLink())
 		{
-			$uls = (new Main\Security\Sign\Signer())->getSignature((string)$this->getId());
+			$uls = $this->unifiedLinkAccessService->getUlsForObjectId($this->getId());
 
-			$downloadUri->addParams([
-				'_uls' => $uls,
-			]);
+			$this->unifiedLinkUrl->addUlsToUri($downloadUri, $uls);
 		}
 
 		$links = [
 			/** @see \Bitrix\Disk\Controller\File::downloadAction() */
 			'download' => $downloadUri,
 			'showInGrid' => $urlShowObjectInGrid,
-			'preview' => $this->getPreviewLink(),
+			'preview' => $this->getPreviewLink($uls),
 		];
 
 		return array_merge(parent::jsonSerialize(), [
@@ -1888,7 +1963,7 @@ class File extends BaseObject
 		]);
 	}
 
-	private function getPreviewLink(): ?string
+	private function getPreviewLink(?string $uls): ?string
 	{
 		$urlManager = Main\Engine\UrlManager::getInstance();
 
@@ -1905,13 +1980,20 @@ class File extends BaseObject
 			return null;
 		}
 
-		return $urlManager->create($controllerAction, [
+		$previewUri = $urlManager->create($controllerAction, [
 			'humanRE' => 1,
 			'width' => 640,
 			'height' => 640,
 			'signature' => ParameterSigner::getImageSignature($this->getId(), 640, 640),
 			'fileId' => $this->getId(),
 		]);
+
+		if (is_string($uls) && $uls !== '')
+		{
+			$this->unifiedLinkUrl->addUlsToUri($previewUri, $uls);
+		}
+
+		return (string)$previewUri;
 	}
 
 	public function supportsUnifiedLink(): bool

@@ -406,6 +406,10 @@ class ToDo extends Base
 		{
 			return null;
 		}
+		if (!$this->commitDeferredActions($blocksManager, $options))
+		{
+			return null;
+		}
 
 		$currentUserId = $this->getCurrentUserId();
 		if (isset($responsibleId) && $responsibleId !== $currentUserId)
@@ -481,6 +485,10 @@ class ToDo extends Base
 
 		$result = $this->saveTodo($todo, $options);
 		if ($result === null)
+		{
+			return null;
+		}
+		if (!$this->commitDeferredActions($blocksManager, $options))
 		{
 			return null;
 		}
@@ -817,6 +825,19 @@ class ToDo extends Base
 		$this->addErrors($saveResult->getErrors());
 
 		return null;
+	}
+
+	private function commitDeferredActions(BlocksManager $blocksManager, array $saveOptions = []): bool
+	{
+		$result = $blocksManager->commitDeferredActions($saveOptions);
+		if ($result->isSuccess())
+		{
+			return true;
+		}
+
+		$this->addErrors($result->getErrors());
+
+		return false;
 	}
 
 	private function saveFilesToStorage(

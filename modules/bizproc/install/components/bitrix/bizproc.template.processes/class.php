@@ -9,6 +9,7 @@ use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\GridTemplateRequest;
 use Bitrix\Bizproc\Api\Response\WorkflowTemplateService\GridTemplateResponse;
 use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
+use Bitrix\Bizproc\Internal\Grid\WorkflowTemplates\Filter\WorkflowTemplateListFilter;
 use Bitrix\Bizproc\Internal\Grid\WorkflowTemplates\WorkflowTemplateGridHelper;
 use Bitrix\Bizproc\Internal\Service\AiAgentGrid\TemplateDeleteService;
 use Bitrix\Bizproc\Public\Service\TemplateAccessService;
@@ -37,19 +38,45 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 {
 	protected const GRID_ID = 'bizproc_template_processes';
 	protected const NAVIGATION_ID = 'page';
-	protected const FILTER_ID = self::GRID_ID . '_filter';
 
-	protected Filter\Options $filterOptions;
+	protected ?Filter\Options $filterOptions = null;
 	protected Grid\Options $gridOptions;
 	private ErrorCollection $errorCollection;
+	private ?WorkflowTemplateListFilter $listFilter = null;
 
 	public function __construct($component = null)
 	{
 		parent::__construct($component);
 
 		$this->errorCollection = new ErrorCollection();
-		$this->filterOptions = new Filter\Options(self::FILTER_ID);
 		$this->gridOptions = new Grid\Options(self::GRID_ID);
+	}
+
+	/**
+	 * Classes of the module are created on demand and never in the constructor: on the ajax route the
+	 * component is built before any module is included, so the namespace of bizproc is not registered yet.
+	 */
+	private function getListFilter(): WorkflowTemplateListFilter
+	{
+		return $this->listFilter ??= new WorkflowTemplateListFilter();
+	}
+
+	/**
+	 * Not a constant of the component: constant expressions of a class are evaluated when the class is
+	 * initialised, that is on `new`, and on the ajax route the component is built before checkModules().
+	 */
+	private function getFilterId(): string
+	{
+		return WorkflowTemplateListFilter::FILTER_ID;
+	}
+
+	/**
+	 * The settings are built with the list of presets: without it the default preset does not become the
+	 * current one and the page opens on the whole list.
+	 */
+	private function getFilterOptions(): Filter\Options
+	{
+		return $this->filterOptions ??= new Filter\Options($this->getFilterId(), $this->getFilterPresets());
 	}
 
 	public function configureActions(): array
@@ -88,6 +115,9 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 	{
 		$userId = $this->getCurrentUserId();
 		$accessService = new TemplateAccessService();
+		// the grid action carries ids only (no CREATED_BY), so authorship is fetched for the whole list in
+		// bounded batches instead of once per canDelete() below
+		$accessService->warmupAuthorship($ids, $userId);
 
 		foreach ($ids as $id)
 		{
@@ -182,7 +212,7 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 	private function fillGridInfo(): void
 	{
 		$this->arResult['gridId'] = static::GRID_ID;
-		$this->arResult['filterId'] = static::FILTER_ID;
+		$this->arResult['filterId'] = $this->getFilterId();
 		$this->arResult['navigationId'] = static::NAVIGATION_ID;
 		$this->arResult['gridColumns'] = $this->getGridColumns();
 		$this->arResult['pageNavigation'] = $this->getPageNavigation();
@@ -331,9 +361,9 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 	private function addToolbar(): void
 	{
 		Toolbar::addFilter([
-			'FILTER_ID' => static::FILTER_ID,
+			'FILTER_ID' => $this->getFilterId(),
 			'GRID_ID' => static::GRID_ID,
-			'FILTER' => $this->getFilterFields(),
+			'FILTER' => $this->getListFilter()->getFields(),
 			'FILTER_PRESETS' => $this->getFilterPresets(),
 			'ENABLE_LABEL' => true,
 			'RESET_TO_DEFAULT_MODE' => true,
@@ -355,31 +385,6 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 		);
 
 		Toolbar::addFavoriteStar();
-	}
-
-	private function getFilterFields(): array
-	{
-		return [
-			'NAME' => [
-				'id' => 'NAME',
-				'name' => Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_COLUMN_NAME'),
-				'type' => 'string',
-				'default' => true,
-			],
-		];
-	}
-
-	private function getFilterPresets(): array
-	{
-		return [
-			'filter_default' => [
-				'name' => Loc::getMessage('BIZPROC_TEMPLATE_PROCESSES_COLUMN_NAME'),
-				'fields' => [
-					'NAME' => '',
-				],
-				'default' => false,
-			],
-		];
 	}
 
 	private function fillGridData(): void
@@ -418,27 +423,26 @@ class BizprocTemplateProcesses extends CBitrixComponent implements Controllerabl
 	private function setFiltersToRequest(GridTemplateRequest $templateToGet): void
 	{
 		$templateToGet->setFilterUserId($this->getCurrentUserId());
-		$currentFilters = $this->filterOptions->getFilter($this->getFilterFields());
-		$filter = [];
 
-		if (!empty($currentFilters['NAME']))
+		$filterValues = $this->getFilterOptions()->getFilter($this->getListFilter()->getFields());
+
+		$searchQuery = $this->getListFilter()->getSearchQuery($filterValues);
+		if ($searchQuery !== '')
 		{
-			$filter['%NAME'] = $currentFilters['NAME'];
+			$templateToGet->setFilterSearchQuery($searchQuery);
 		}
 
-		$findValue = trim($currentFilters['FIND'] ?? '');
-
-		if ($findValue !== '')
-		{
-			$templateToGet->setFilterSearchQuery($findValue);
-		}
-
-		$templateToGet->setFilter($filter);
+		$templateToGet->setFilter($this->getListFilter()->getOrmFilter($filterValues));
 	}
 
 	private function getCurrentUserId(): int
 	{
-		return CurrentUser::get()->getId();
+		return (int)CurrentUser::get()->getId();
+	}
+
+	private function getFilterPresets(): array
+	{
+		return $this->getListFilter()->getPresets($this->getCurrentUserId(), CurrentUser::get()->getFormattedName());
 	}
 
 	private function setSortingToRequest(GridTemplateRequest $templateToGet): void

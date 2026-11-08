@@ -8,7 +8,7 @@ use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Rest\Repository\AppRepository;
 use Bitrix\Rest\Repository\IntegrationRepository;
-use Bitrix\Rest\Internal\Service\VibePlus\TariffAccessService;
+use Bitrix\Rest\Internal\Integration\Bitrix24\TariffAccessService;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Bitrix\Rest\Contract;

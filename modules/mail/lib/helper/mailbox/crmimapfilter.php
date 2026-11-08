@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Helper\Mailbox;
 
 use Bitrix\Mail\Helper\Enum\CrmImapFilterContext;
+use Bitrix\Mail\Internal\Repository\SqlRowLock;
 use Bitrix\Mail\MailFilterTable;
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
@@ -26,13 +29,14 @@ final class CrmImapFilter
 		int $mailboxId,
 		bool $shouldBeConnected,
 		CrmImapFilterContext $context = CrmImapFilterContext::MailboxConnect,
+		bool $lockFilters = false,
 	): Result
 	{
 		$result = new Result();
 
 		$ids = [];
 		$activeIds = [];
-		foreach (self::fetchFilters($mailboxId) as $filter)
+		foreach (self::fetchFilters($mailboxId, $lockFilters) as $filter)
 		{
 			$id = (int)$filter['ID'];
 			$ids[] = $id;
@@ -45,7 +49,10 @@ final class CrmImapFilter
 
 		if (!$shouldBeConnected)
 		{
-			self::deleteFilters($ids);
+			if (!self::deleteFilters($ids, $lockFilters))
+			{
+				$result->addError(new Error('The CRM filter was not deleted', 'MAIL_CRM_IMAP_FILTER_DELETE_FAILED'));
+			}
 
 			return $result;
 		}
@@ -57,20 +64,33 @@ final class CrmImapFilter
 		}
 
 		$keptId = $activeIds[0] ?? null;
-		self::deleteFilters($keptId === null ? $ids : array_diff($ids, [$keptId]));
+		if (!self::deleteFilters($keptId === null ? $ids : array_diff($ids, [$keptId]), $lockFilters))
+		{
+			return $result->addError(new Error('The CRM filter was not deleted', 'MAIL_CRM_IMAP_FILTER_DELETE_FAILED'));
+		}
 
 		if ($keptId !== null)
 		{
 			return $result;
 		}
 
-		$addedId = \CMailFilter::add([
+		$fields = [
 			'MAILBOX_ID' => $mailboxId,
 			'NAME' => 'CRM IMAP ' . $mailboxId,
 			'ACTION_TYPE' => self::ACTION_TYPE,
 			'WHEN_MAIL_RECEIVED' => 'Y',
 			'WHEN_MANUALLY_RUN' => 'Y',
-		]);
+		];
+		try
+		{
+			$addedId = $lockFilters
+				? Application::getConnection()->add(MailFilterTable::getTableName(), $fields + ['ACTIVE' => 'Y'])
+				: \CMailFilter::add($fields);
+		}
+		catch (SqlQueryException)
+		{
+			$addedId = false;
+		}
 
 		if (!$addedId)
 		{
@@ -130,8 +150,20 @@ final class CrmImapFilter
 		};
 	}
 
-	private static function fetchFilters(int $mailboxId): array
+	public static function fetchFilters(int $mailboxId, bool $lockFilters = false): array
 	{
+		if ($lockFilters)
+		{
+			$connection = Application::getConnection();
+			return $connection->query(sprintf(
+				"SELECT ID, ACTIVE, WHEN_MAIL_RECEIVED FROM %s WHERE MAILBOX_ID = %u"
+					. " AND ACTION_TYPE = 'crm_imap' ORDER BY ID%s",
+				SqlRowLock::table(MailFilterTable::getTableName(), $connection->getType()),
+				$mailboxId,
+				SqlRowLock::suffix($connection->getType()),
+			))->fetchAll();
+		}
+
 		return MailFilterTable::getList([
 			'select' => ['ID', 'ACTIVE', 'WHEN_MAIL_RECEIVED'],
 			'filter' => [
@@ -142,11 +174,22 @@ final class CrmImapFilter
 		])->fetchAll();
 	}
 
-	private static function deleteFilters(array $ids): void
+	private static function deleteFilters(array $ids, bool $deferEffects): bool
 	{
 		foreach ($ids as $id)
 		{
-			\CMailFilter::delete($id);
+			if ($deferEffects)
+			{
+				$connection = Application::getConnection();
+				$connection->queryExecute(sprintf('DELETE FROM b_mail_filter_cond WHERE FILTER_ID = %u', $id));
+				$connection->queryExecute(sprintf('DELETE FROM %s WHERE ID = %u', MailFilterTable::getTableName(), $id));
+			}
+			elseif (!\CMailFilter::delete($id))
+			{
+				return false;
+			}
 		}
+
+		return true;
 	}
 }

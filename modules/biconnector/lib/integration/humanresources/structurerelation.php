@@ -35,7 +35,7 @@ class StructureRelation extends Dataset
 
 	protected function getTableDescriptionFull(): string
 	{
-		return $this->getMessage('HR_BIC_STRUCTURE_RELATION_TABLE_DESCRIPTION_FULL', '');
+		return $this->getMessage('HR_BIC_STRUCTURE_RELATION_TABLE_DESCRIPTION_FULL_MSGVER_1', '');
 	}
 
 	/**

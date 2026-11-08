@@ -532,17 +532,15 @@ class Counter
 	public function getCommentsCount(array $taskIds): array
 	{
 		$res = array_fill_keys($taskIds, 0);
+		$commentTypes = array_fill_keys(CounterDictionary::getCommentsCounterTypes(), true);
 
 		foreach ($this->getState() as $row)
 		{
-			if (!in_array($row['TASK_ID'], $taskIds))
+			if (!isset($res[$row['TASK_ID']]))
 			{
 				continue;
 			}
-			if (
-				in_array($row['TYPE'], CounterDictionary::MAP_COMMENTS)
-				|| in_array($row['TYPE'], CounterDictionary::MAP_MUTED_COMMENTS)
-			)
+			if (isset($commentTypes[$row['TYPE']]))
 			{
 				$res[$row['TASK_ID']] = (int)$row['VALUE'];
 			}

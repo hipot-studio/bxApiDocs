@@ -12,9 +12,8 @@ use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Entity\AgentBlock;
  * The real on-canvas size of a node by its widget type - the single backend mirror of the numbers the chart
  * widgets hardcode, so the frame-overlay geometry ({@see FrameGeometry}) matches what the user actually sees.
  *
- * The canvas sizes a node by its widget type, NOT by the persisted block.dimensions: block-simple renders
- * 300x58, block-operator is 180 wide, block-complex is 260 wide (its narrow SwitchNode variant 180), and
- * operator/complex nodes grow in height with their ports/rules. The forward converter and the post-layout
+ * The canvas sizes nodes from their widget, saved dimensions and port count. The numbers below stay the
+ * measuring rule for frame membership: the forward converter and the post-layout
  * checker both measure members through this class, so the geometry that is validated is - by construction -
  * the geometry that is persisted.
  *

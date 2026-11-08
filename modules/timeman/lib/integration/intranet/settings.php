@@ -2,6 +2,7 @@
 
 namespace Bitrix\Timeman\Integration\Intranet;
 
+use Bitrix\Intranet\Settings\Tools\Company;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Loader;
 
@@ -24,6 +25,12 @@ final class Settings
 		if (!$this->isAvailable() || !in_array($tool, self::TOOLS))
 		{
 			return true;
+		}
+
+		if ($tool === self::TOOLS['worktime'])
+		{
+			// read the tool state directly: the menu cache behind ToolsManager depends on the current user
+			return (new Company())->isEnabledSubgroupById(self::TOOLS['worktime']);
 		}
 
 		return (ToolsManager::getInstance())->checkAvailabilityByToolId($tool);

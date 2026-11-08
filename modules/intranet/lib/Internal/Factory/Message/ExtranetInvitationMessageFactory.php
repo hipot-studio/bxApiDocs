@@ -9,6 +9,8 @@ use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Service\EmailMessage;
 use Bitrix\Intranet\Service\PhoneMessage;
+use Bitrix\Intranet\Service\RateLimitedEmailMessage;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
 class ExtranetInvitationMessageFactory implements InvitationMessageFactoryContract
@@ -18,7 +20,7 @@ class ExtranetInvitationMessageFactory implements InvitationMessageFactoryContra
 	)
 	{}
 
-	public function createEmailEvent(): EmailMessage
+	public function createEmailEvent(): SendableContract
 	{
 		$isCloud = Loader::includeModule('bitrix24');
 
@@ -43,11 +45,22 @@ class ExtranetInvitationMessageFactory implements InvitationMessageFactoryContra
 			"USER_TEXT" => \CIntranetInviteDialog::getInviteMessageText(),
 		];
 
-		return new EmailMessage(
+		$emailMessage = new EmailMessage(
 			$eventName,
 			$siteId,
 			$params,
 			$messageId,
+		);
+
+		if ($emailTo === null || $emailTo === '')
+		{
+			return $emailMessage;
+		}
+
+		return new RateLimitedEmailMessage(
+			$emailMessage,
+			$emailTo,
+			ServiceLocator::getInstance()->get('intranet.service.invitation.email-rate-limiter'),
 		);
 	}
 

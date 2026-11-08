@@ -1,11 +1,11 @@
 <?php
 
 use Bitrix\Crm;
+use Bitrix\Crm\V2\Internal\Integration\Bizproc\WorkflowDocument;
 use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
-use Bitrix\Main;
 
 if (!CModule::IncludeModule('bizproc'))
 {
@@ -441,14 +441,9 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 		}
 
 		global $DB;
-		$arDocumentID = self::GetDocumentInfo($parentDocumentId);
-		if ($arDocumentID == false)
-		{
-			$arDocumentID['TYPE'] = $parentDocumentId;
-		}
-
-		$arFields = self::performTypeCast($arDocumentID, $arFields);
-		$arFields = self::performTypeCast4CategoryAndStage($arFields);
+		$document = new WorkflowDocument();
+		$arFields = $document->castFields(\CCrmOwnerType::Deal, $arFields);
+		$arFields = $document->castDealCategoryAndStage($arFields);
 
 		$useTransaction = static::shouldUseTransaction();
 
@@ -543,7 +538,8 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 			throw new Exception(GetMessage('CRM_DOCUMENT_ELEMENT_IS_NOT_FOUND'));
 		}
 
-		$arFields = self::performTypeCast($arDocumentID, $arFields, true);
+		$document = new WorkflowDocument();
+		$arFields = $document->castFields(\CCrmOwnerType::Deal, $arFields, (int)$arDocumentID['ID']);
 
 		//region Category & Stage
 		$categoryID = isset($arPresentFields['CATEGORY_ID']) ? (int)$arPresentFields['CATEGORY_ID'] : 0;
@@ -552,7 +548,7 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 			throw new Exception(GetMessage('CRM_DOCUMENT_DEAL_CATEGORY_CHANGE_ERROR'));
 		}
 
-		$arFields = self::performTypeCast4CategoryAndStage($arFields, $categoryID);
+		$arFields = $document->castDealCategoryAndStage($arFields, $categoryID);
 
 		//endregion
 
@@ -718,190 +714,8 @@ class CCrmDocumentDeal extends CCrmDocument implements IBPWorkflowDocument
 		return Crm\Automation\Factory::createTarget(\CCrmOwnerType::Deal);
 	}
 
-	private static function performTypeCast(array $documentInfo, array $fields, bool $isUpdate = false): array
-	{
-		$documentId = $documentInfo['TYPE'] . '_' . ($isUpdate ? $documentInfo['ID'] : '0');
-		$complexDocumentId = [$documentInfo['DOCUMENT_TYPE'][0], $documentInfo['DOCUMENT_TYPE'][1], $documentId];
-
-		$documentFields = self::GetDocumentFields($documentInfo['TYPE']);
-
-		$keys = array_keys($fields);
-		foreach ($keys as $key)
-		{
-			if (!array_key_exists($key, $documentFields))
-			{
-				//Fix for issue #40374
-				unset($fields[$key]);
-				continue;
-			}
-
-			$fields[$key] = (is_array($fields[$key]) && !CBPHelper::IsAssociativeArray($fields[$key]))
-				? $fields[$key]
-				: [$fields[$key]]
-			;
-
-			if ($documentFields[$key]['Type'] == 'user')
-			{
-				$fields[$key] = \CBPHelper::extractUsers($fields[$key], $complexDocumentId);;
-			}
-			elseif ($documentFields[$key]['Type'] == 'select' && mb_substr($key, 0, 3) == 'UF_')
-			{
-				self::InternalizeEnumerationField('CRM_DEAL', $fields, $key);
-			}
-			elseif ($documentFields[$key]['Type'] == 'file')
-			{
-				$fields[$key] = static::castFileFieldValues(
-					$documentInfo['ID'],
-					\CCrmOwnerType::Deal,
-					$key,
-					$fields[$key],
-				);
-			}
-			elseif ($documentFields[$key]['Type'] == 'S:HTML')
-			{
-				foreach ($fields[$key] as &$value)
-				{
-					$value = ['VALUE' => $value];
-				}
-				unset($value);
-			}
-			elseif ($documentFields[$key]['Type'] === 'string' && is_array($fields[$key]))
-			{
-				$fields[$key] = \CBPHelper::makeArrayFlat($fields[$key]);
-			}
-
-			if (!($documentFields[$key]['Multiple'] ?? false) && is_array($fields[$key]))
-			{
-				if (count($fields[$key]) > 0)
-				{
-					$a = array_values($fields[$key]);
-					$fields[$key] = $a[0];
-				}
-				else
-				{
-					$fields[$key] = null;
-				}
-			}
-		}
-
-		if(isset($fields['COMMENTS']))
-		{
-			$fields['COMMENTS'] = static::sanitizeCommentsValue($fields['COMMENTS']);
-		}
-		if(isset($fields['BEGINDATE']))
-		{
-			if ($fields['BEGINDATE'] instanceof Main\Type\Date)
-			{
-				$fields['BEGINDATE'] = (string)$fields['BEGINDATE'];
-			}
-			elseif(
-				is_object($fields['BEGINDATE'])
-				&& method_exists($fields['BEGINDATE'], '__toString')
-				&& Main\Type\Date::isCorrect((string)$fields['BEGINDATE'])
-			)
-			{
-				$fields['BEGINDATE'] = (string)$fields['BEGINDATE'];
-			}
-		}
-		if(isset($fields['CLOSEDATE']))
-		{
-			if ($fields['CLOSEDATE'] instanceof Main\Type\Date)
-			{
-				$fields['CLOSEDATE'] = (string)$fields['CLOSEDATE'];
-			}
-			elseif(
-				is_object($fields['CLOSEDATE'])
-				&& method_exists($fields['CLOSEDATE'], '__toString')
-				&& Main\Type\Date::isCorrect((string)$fields['CLOSEDATE'])
-			)
-			{
-				$fields['CLOSEDATE'] = (string)$fields['CLOSEDATE'];
-			}
-		}
-
-		return $fields;
-	}
-
-	private static function performTypeCast4CategoryAndStage(array $fields, int $presentCategoryID = null): array
-	{
-		if (!isset($fields['STAGE_ID']))
-		{
-			return $fields;
-		}
-
-		if($fields['STAGE_ID'] === '')
-		{
-			unset($fields['STAGE_ID']);
-
-			return $fields;
-		}
-
-		$stageID = $fields['STAGE_ID'];
-		$stageCategoryID = DealCategory::resolveFromStageID($stageID);
-		if($presentCategoryID === null && !isset($fields['CATEGORY_ID']))
-		{
-			$fields['CATEGORY_ID'] = $stageCategoryID;
-
-			return $fields;
-		}
-
-		$categoryID = $presentCategoryID ?? (int)$fields['CATEGORY_ID'];
-		if($categoryID !== $stageCategoryID)
-		{
-			throw new Exception(
-				GetMessage(
-					'CRM_DOCUMENT_DEAL_STAGE_MISMATCH_ERROR',
-					[
-						'#CATEGORY#' => DealCategory::getName($categoryID),
-						'#TARG_CATEGORY#' => DealCategory::getName($stageCategoryID),
-						'#TARG_STAGE#' => DealCategory::getStageName($stageID, $stageCategoryID)
-					]
-				)
-			);
-		}
-
-		return $fields;
-	}
-
 	public static function createTestDocument(string $documentType, array $fields, int $createdById): ?string
 	{
-		if (empty($fields))
-		{
-			return null;
-		}
-
-		$documentInfo = self::GetDocumentInfo($documentType);
-		if (empty($documentInfo))
-		{
-			$documentInfo['TYPE'] = $documentType;
-		}
-
-		$fields = self::performTypeCast($documentInfo, $fields);
-		$fields = self::performTypeCast4CategoryAndStage($fields);
-
-		$deal = new CCrmDeal(true);
-		$id = $deal->Add(
-			$fields,
-			true,
-			[
-				'DISABLE_USER_FIELD_CHECK' => true,
-				'REGISTER_SONET_EVENT' => true,
-				'CURRENT_USER' => $createdById,
-			]
-		);
-
-		if (!$id || $id <= 0)
-		{
-			throw new Exception($deal->LAST_ERROR);
-		}
-
-		if (isset($arFields['TRACKING_SOURCE_ID']))
-		{
-			Crm\Tracking\UI\Details::saveEntityData(\CCrmOwnerType::Deal, $id, $arFields);
-		}
-
-		// no automation, no processes
-
-		return \CCrmOwnerType::DealName . '_' . $id;
+		return (new WorkflowDocument())->createTestDocument(\CCrmOwnerType::Deal, $fields, $createdById);
 	}
 }

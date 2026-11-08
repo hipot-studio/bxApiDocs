@@ -17,6 +17,8 @@ class Director extends Base
 			PermissionDictionary::MAIL_MAILBOX_CONNECT => PermissionDictionaryAlias::VALUE_YES,
 			PermissionDictionary::MAIL_MAILBOX_CRM_INTEGRATION_EDIT => PermissionDictionaryAlias::VALUE_YES,
 			PermissionDictionary::MAIL_SHARED_SIGNATURES_MANAGE => PermissionDictionaryAlias::VALUE_NO,
+			PermissionDictionary::MAIL_MESSAGE_DELETE => PermissionDictionaryAlias::VALUE_YES,
+			PermissionDictionary::MAIL_SENDER_AVATARS_MANAGE => PermissionDictionaryAlias::VALUE_NO,
 		];
 	}
 }

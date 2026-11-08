@@ -6,10 +6,10 @@ use Bitrix\Landing\Assets\Manager;
 use Bitrix\Landing\Block;
 use Bitrix\Landing\Repo;
 use Bitrix\Landing;
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Web\DOM;
 use Bitrix\Main\Web\Json;
 use Bitrix\Rest\UsageStatTable;
 
@@ -19,6 +19,13 @@ use Bitrix\Rest\UsageStatTable;
 class WidgetVue
 {
 	private const APP_DEBUG_OPTION_NAME = 'widgetvue_debug';
+
+	/**
+	 * The name of the application is written by its vendor and reaches the reader whole: it is the
+	 * accessible name of the frame and it opens every announcement the widget makes. Past a line of
+	 * text a name stops telling one widget from another, so it is cut to one.
+	 */
+	private const FRAME_TITLE_MAX_LENGTH = 100;
 
 	/**
 	 * Prepare manifest.
@@ -68,42 +75,55 @@ class WidgetVue
 		$manifest['callbacks'] = [
 			'afterAdd' => function (Block $block) use ($params)
 			{
-				$content = $block->getContent();
-				$doc = new DOM\Document();
-				try
-				{
-					$doc->loadHTML($content);
-				}
-				catch (\Exception $e)
-				{}
-
-				$rootNode = $doc->querySelector($params['rootNode']);
-				if (!$rootNode)
+				$content = self::wrapRootNode($block, $params['rootNode']);
+				if ($content === null)
 				{
 					return;
 				}
 
-				$newId = self::getRootNodeId($block);
-				$rootNode->setAttribute('id', $newId);
-				$rootNode->setInnerHTML(
-					self::getLoaderString($block)
-					. self::getInitScript($block)
-				);
-
-				$parentNode = $rootNode->getParentNode();
-
-				$wrapperNode = $doc->createElement('div');
-				$wrapperNode->setClassName('landing-block');
-
-				$wrapperNode->setChildNodesArray([$rootNode]);
-				$parentNode->setChildNodesArray([$wrapperNode]);
-
-				$block->saveContent($doc->saveHTML());
+				$block->saveContent($content);
 				$block->save();
 			},
 		];
 
 		return $manifest;
+	}
+
+	/**
+	 * Wraps the root node of the block into a landing-block div and returns the new content,
+	 * or null when the block has no such node.
+	 */
+	private static function wrapRootNode(Block $block, string $rootNodeSelector): ?string
+	{
+		$doc = DocumentFactory::createForStoredContent();
+		try
+		{
+			$doc->loadHTML($block->getContent());
+		}
+		catch (\Exception $e)
+		{}
+
+		$rootNode = $doc->querySelector($rootNodeSelector);
+		if (!$rootNode)
+		{
+			return null;
+		}
+
+		$rootNode->setAttribute('id', self::getRootNodeId($block));
+		$rootNode->setInnerHTML(
+			self::getLoaderString($block)
+			. self::getInitScript($block)
+		);
+
+		$parentNode = $rootNode->getParentNode();
+
+		$wrapperNode = $doc->createElement('div');
+		$wrapperNode->setClassName('landing-block');
+
+		$wrapperNode->setChildNodesArray([$rootNode]);
+		$parentNode->setChildNodesArray([$wrapperNode]);
+
+		return $doc->saveHTML();
 	}
 
 	private static function getAppInfo(Block $block): ?array
@@ -160,6 +180,7 @@ class WidgetVue
 		if ($app && isset($app['ID']))
 		{
 			$vueParams['appId'] = (int)$app['ID'];
+			$vueParams['frameTitle'] = \truncateText((string)($app['APP_NAME'] ?? ''), self::FRAME_TITLE_MAX_LENGTH);
 
 			$vueParams['appAllowedByTariff'] = true;
 			if ($app['PAYMENT_ALLOW'] !== 'Y')

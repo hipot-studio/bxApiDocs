@@ -27,6 +27,9 @@ use Bitrix\Main\SystemException;
 
 class EventRepository
 {
+	// Events finished more than about a month ago are not exported anymore.
+	private const EXPORT_PAST_WINDOW_SECONDS = 2600000;
+
 	private Factory $mapperFactory;
 
 	public function __construct()
@@ -55,9 +58,7 @@ class EventRepository
 		/** @noinspection PhpUnhandledExceptionInspection */
 		Loader::includeModule('dav');
 
-		$timestamp = time() - 2600000;
-
-		$eventDb = EventTable::query()
+		$query = EventTable::query()
 			->setSelect([
 				'*',
 				'EVENT_CONNECTION.ID',
@@ -73,26 +74,14 @@ class EventRepository
 				'EVENT_CONNECTION.CONNECTION',
 				'EVENT_CONNECTION.EVENT',
 			])
-			->where('OWNER_ID', $userId)
-			->where('CAL_TYPE', \Bitrix\Calendar\Core\Event\Tools\Dictionary::CALENDAR_TYPE['user'])
-			->where('DATE_TO_TS_UTC', '>', $timestamp)
-			->where(Query::filter()
-				->logic('or')
-				->whereNot('MEETING_STATUS', 'N')
-				->whereNull('MEETING_STATUS'),
-			)
 			->whereIn('SECTION_ID', $sectionIds)
-			->registerRuntimeField('EVENT_CONNECTION',
-				new ReferenceField(
-					'SYNC_DATA',
-					EventConnectionTable::getEntity(),
-					Join::on('ref.EVENT_ID', 'this.ID')
-						->where('ref.CONNECTION_ID', $connectionId)
-					,
-					['join_type' => Join::TYPE_LEFT],
-				),
-			)
 			->addOrder('ID')
+		;
+
+		$exportableEvents = $this->filterExportableEvents($query, $userId);
+
+		$eventDb = $this
+			->joinEventConnection($exportableEvents, $connectionId)
 			->exec()
 		;
 
@@ -154,6 +143,99 @@ class EventRepository
 		}
 
 		return $this->getExportingEvents($map);
+	}
+
+	/**
+	 * Ids of the section events having no connection with the given vendor connection yet.
+	 *
+	 * Unlike getExportingEventsBySectionIds(), the selection holds only the events never sent to the
+	 * vendor. An event that already has an EventConnection is driven by its own message, so a catch-up
+	 * export must not re-route it: an update would be enqueued as a creation, and a deleted event
+	 * would be dropped by the receiver instead of being deleted at the vendor. The trade-off is
+	 * deliberate: the wide selection also re-drove the events whose connection stayed in an unfinished
+	 * action of Dictionary::SYNC_EVENT_ACTION, and they are now left to the retry budget of their own
+	 * message.
+	 *
+	 * Only ids are selected, and the ordering by ID makes the truncation at the limit deterministic:
+	 * the same overflowing section always gives up the same tail - do not drop it. A non-positive
+	 * limit selects nothing.
+	 *
+	 * @return int[]
+	 *
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 *
+	 * @noinspection PhpDocMissingThrowsInspection
+	 */
+	public function getUnsyncedEventIdsBySectionId(
+		int $sectionId,
+		int $userId,
+		int $connectionId,
+		int $limit,
+	): array
+	{
+		if ($limit <= 0)
+		{
+			return [];
+		}
+
+		/** @noinspection PhpUnhandledExceptionInspection */
+		Loader::includeModule('dav');
+
+		$query = EventTable::query()
+			->setSelect(['ID'])
+			->where('SECTION_ID', $sectionId)
+			->where('DELETED', 'N')
+			->addOrder('ID')
+			->setLimit($limit)
+		;
+
+		$exportableEvents = $this->filterExportableEvents($query, $userId);
+
+		$rows = $this
+			->joinEventConnection($exportableEvents, $connectionId)
+			->whereNull('EVENT_CONNECTION.ID')
+			->fetchAll()
+		;
+
+		return array_map(static fn(array $row): int => (int)$row['ID'], $rows);
+	}
+
+	/**
+	 * Events any export selection starts from: the user calendar events of the owner, not too old and
+	 * not declined by them.
+	 */
+	private function filterExportableEvents(Query $query, int $userId): Query
+	{
+		return $query
+			->where('OWNER_ID', $userId)
+			->where('CAL_TYPE', \Bitrix\Calendar\Core\Event\Tools\Dictionary::CALENDAR_TYPE['user'])
+			->where('DATE_TO_TS_UTC', '>', time() - self::EXPORT_PAST_WINDOW_SECONDS)
+			->where(Query::filter()
+				->logic('or')
+				->whereNot('MEETING_STATUS', 'N')
+				->whereNull('MEETING_STATUS'),
+			)
+		;
+	}
+
+	/**
+	 * Left join of the event connection with the given vendor connection, so a selection can tell an
+	 * already exported event from a new one.
+	 */
+	private function joinEventConnection(Query $query, int $connectionId): Query
+	{
+		return $query->registerRuntimeField('EVENT_CONNECTION',
+			new ReferenceField(
+				'SYNC_DATA',
+				EventConnectionTable::getEntity(),
+				Join::on('ref.EVENT_ID', 'this.ID')
+					->where('ref.CONNECTION_ID', $connectionId)
+				,
+				['join_type' => Join::TYPE_LEFT],
+			),
+		);
 	}
 
 	/**

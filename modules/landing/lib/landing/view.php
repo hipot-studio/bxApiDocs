@@ -8,7 +8,7 @@ use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\Landing;
 use \Bitrix\Landing\Rights;
 use \Bitrix\Landing\Internals\ViewTable;
-use \Bitrix\Landing\Controller;
+use Bitrix\Main\UserTable;
 
 class View
 {
@@ -180,39 +180,40 @@ class View
 	{
 		$res = ViewTable::getList([
 			'select' => [
-				'USER_ID'
+				'USER_ID',
+				'NAME' => 'USER.NAME',
+				'LAST_NAME' => 'USER.LAST_NAME',
+				'PERSONAL_PHOTO' => 'USER.PERSONAL_PHOTO',
 			],
-			'filter' => [
-				'LID' => $lid
-			]
+			'filter' => ['=LID' => $lid],
+			'runtime' => [
+				new Entity\ReferenceField(
+					'USER',
+					UserTable::class,
+					['=this.USER_ID' => 'ref.ID'],
+					['join_type' => 'INNER'],
+				),
+			],
 		]);
-		$data = [];
+		$data = [
+			'id' => [],
+			'name' => [],
+			'avatar' => [],
+		];
 		while ($row = $res->fetch())
 		{
 			$data['id'][] = $row['USER_ID'];
-		}
-		$usersInfo = Controller\User::getUsersInfoAction($data['id']);
-		$data['name'] = $usersInfo['name'];
-		$countUsers = count($usersInfo['name']);
-		for ($i = 0; $i < $countUsers; $i++)
-		{
-			if ($usersInfo['personalPhoto'][$i])
+			$data['name'][] = \CUser::formatName(\CSite::getNameFormat(false), $row, true, false);
+			$avatar = null;
+			if ($row['PERSONAL_PHOTO'])
 			{
 				$avatar = \CFile::ResizeImageGet(
-					$usersInfo['personalPhoto'][$i],
+					$row['PERSONAL_PHOTO'],
 					['width' => 58, 'height' => 58],
-					BX_RESIZE_IMAGE_EXACT
+					BX_RESIZE_IMAGE_EXACT,
 				);
 			}
-			if (isset($avatar['src']))
-			{
-				$data['avatar'][] = $avatar['src'];
-			}
-			else
-			{
-				$data['avatar'][] = '';
-			}
-			unset($avatar);
+			$data['avatar'][] = $avatar['src'] ?? '';
 		}
 
 		return $data;

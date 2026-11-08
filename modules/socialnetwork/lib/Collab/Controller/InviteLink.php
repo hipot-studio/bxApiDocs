@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\Collab\Controller;
 
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -46,6 +47,13 @@ class InviteLink extends Controller
 	 */
 	public function onCopyAction(InviteLinkDto $dto): ?bool
 	{
+		if (!\Bitrix\Main\Loader::includeModule('extranet'))
+		{
+			$this->addErrors(ExternalMembershipValidator::denied()->getErrors());
+
+			return null;
+		}
+
 		if (!CollabAccessController::can($this->userId, CollabDictionary::INVITE, $dto->collabId))
 		{
 			$this->addError(new Error('Access denied'));

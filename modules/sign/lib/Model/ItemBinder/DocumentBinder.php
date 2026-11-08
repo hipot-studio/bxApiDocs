@@ -8,10 +8,14 @@ use Bitrix\Sign\Repository\DocumentRepository;
 
 class DocumentBinder extends BaseItemToModelBinder
 {
+	/**
+	 * @param list<string> $additionalNullableProperties item properties allowed to be set to null
+	 */
 	public function __construct(
 		private readonly Document $item,
 		private readonly EntityObject $model,
 		private readonly DocumentRepository $documentRepository,
+		private readonly array $additionalNullableProperties = [],
 	)
 	{
 		parent::__construct($this->item, $this->model);
@@ -37,7 +41,9 @@ class DocumentBinder extends BaseItemToModelBinder
 			'hcmLinkDateSettingId' => empty($value) ? null : $value,
 			'scenario' => $this->documentRepository->getScenarioIdByName($value),
 			'scheme' => $this->documentRepository->getSchemeIdByType($value),
-			'initiator' => $this->documentRepository->getModelMetaByItem($this->item),
+			// both META mapped properties rebuild the whole field, so changing one does not drop the other
+			'initiator',
+			'creationSourceSpecifics' => $this->documentRepository->getModelMetaByItem($this->item),
 			default => parent::convertItemValueToModelValue($value, $itemPropertyName),
 		};
 	}
@@ -50,7 +56,8 @@ class DocumentBinder extends BaseItemToModelBinder
 			'hcmLinkExternalIdSettingId' => 'HCMLINK_EXTERNAL_ID_SETTING_ID',
 			'hcmLinkDateSettingId' => 'HCMLINK_DATE_SETTING_ID',
 			'hcmLinkCompanyId' => 'HCMLINK_COMPANY_ID',
-			'initiator' => 'META',
+			'initiator',
+			'creationSourceSpecifics' => 'META',
 			default => parent::getModelFieldByItemProperty($itemProperty),
 		};
 	}
@@ -61,8 +68,11 @@ class DocumentBinder extends BaseItemToModelBinder
 			'groupId',
 			'externalId',
 			'externalDateCreate',
+			'inviteMessage',
 		];
 
-		return in_array($name, $properties, true);
+		return in_array($name, $properties, true)
+			|| in_array($name, $this->additionalNullableProperties, true)
+		;
 	}
 }

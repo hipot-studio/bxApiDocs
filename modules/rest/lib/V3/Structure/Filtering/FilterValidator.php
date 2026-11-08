@@ -45,6 +45,11 @@ class FilterValidator
 	 */
 	public static function validateOperands(Condition $condition, Dto $dto): void
 	{
+		if ($condition->getLeftOperand() === null)
+		{
+			throw new InvalidFilterException('Left operand is required.');
+		}
+
 		if (!$condition->getLeftOperand() instanceof Expression)
 		{
 			if (!isset($dto->getFields()[$condition->getLeftOperand()]))

@@ -79,10 +79,20 @@ class Requirement
 
 	public static function checkRequiredModules(): Result
 	{
+		return static::checkModules(static::REQUIRED_MODULES);
+	}
+
+	public static function checkRequiredModulesForOpening(): Result
+	{
+		return static::checkModules(array_diff(static::REQUIRED_MODULES, ['extranet']));
+	}
+
+	private static function checkModules(array $modules): Result
+	{
 		$result = new Result();
 
 		$uninstalledModules = [];
-		foreach (static::REQUIRED_MODULES as $module)
+		foreach ($modules as $module)
 		{
 			if (!ModuleManager::isModuleInstalled($module))
 			{

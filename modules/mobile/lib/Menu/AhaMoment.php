@@ -4,6 +4,11 @@ namespace Bitrix\Mobile\Menu;
 
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
+use Bitrix\Mobile\Feature\MyCompanyFeature;
+use Bitrix\Mobile\Internal\Onboarding\Checkers\PortalAgeChecker;
+use Bitrix\Mobile\Menu\MyCompany\MyCompanyProvider;
+use Bitrix\Mobile\Menu\Promo\EmployeeThreshold;
 use Bitrix\Mobile\Tourist;
 use Bitrix\Main\Loader;
 
@@ -11,13 +16,21 @@ class AhaMoment
 {
 	private const RELOCATION_EVENT = 'mobile_relocation_ava_menu_aha_moment';
 	private const RELOCATION_THRESHOLD_TS = 1757894400; // 2025-09-15
+	private const MY_COMPANY_EVENT = 'mobile_my_company_aha_menu';
+	private const USERS_FLOATING_BANNER_SHOWN_EVENT = 'mobile_users_floating_banner_shown';
 
 	// TODO: add THRESHOLD AFTER RELEASE
 	private const CALL_LIST_EVENT = 'mobile_menu_call_list_aha_moment';
 	private const MAIL_LIST_EVENT = 'mobile_menu_mail_list_aha_moment';
 
-	public function getMenuAhaMoment(): ?array
+	public function getMenuAhaMoment(MyCompanyProvider $section, bool $canInvite): ?array
 	{
+		$myCompanyAhaMoment = $this->getMyCompanyAhaMoment($section, $canInvite);
+		if ($myCompanyAhaMoment !== null)
+		{
+			return $myCompanyAhaMoment;
+		}
+
 		$callListAhaMoment = $this->getCallListAhaMoment();
 		if ($callListAhaMoment !== null)
 		{
@@ -30,51 +43,103 @@ class AhaMoment
 			return $mailListAhaMoment;
 		}
 
+		return $this->getInvitationAhaMoment();
+	}
+
+	/**
+	 * Unaccepted invitations of the portal. The moment carries no tourist event on purpose: it is a
+	 * reminder and keeps coming back while the invitations are still unaccepted.
+	 */
+	private function getInvitationAhaMoment(): ?array
+	{
 		if (!Loader::includeModule('intranetmobile'))
 		{
 			return null;
 		}
 
-		$invitationService = new \Bitrix\IntranetMobile\Invitation\InvitationAhaMoment();
-		$invitation = $invitationService->getUnacceptedInvitesAhaMoment();
-		if ($invitation)
+		$invitation = (new \Bitrix\IntranetMobile\Invitation\InvitationAhaMoment())
+			->getUnacceptedInvitesAhaMoment()
+		;
+		if ($invitation === null)
 		{
-			return [
-				'type' => 'invitation',
-				'title' => $invitation->title,
-				'description' => $invitation->description,
-			];
+			return null;
 		}
 
-		return null;
+		return [
+			'type' => 'invitation',
+			'title' => $invitation->title,
+			'description' => $invitation->description,
+		];
+	}
+
+	private function getMyCompanyAhaMoment(MyCompanyProvider $section, bool $canInvite): ?array
+	{
+		if (!$section->isAvailable())
+		{
+			return null;
+		}
+
+		$events = $this->getTouristEvents();
+		if (isset($events[self::MY_COMPANY_EVENT]))
+		{
+			return null;
+		}
+
+		$portalCreatedAt = $this->getPortalCreatedAt();
+		if ($portalCreatedAt === null)
+		{
+			return null;
+		}
+
+		$isNewPortal = (new MyCompanyFeature())->isPortalCreatedAfterLaunch($portalCreatedAt);
+		if ($isNewPortal === null)
+		{
+			return null;
+		}
+
+		if ($isNewPortal && !$this->isInviteAhaMomentAvailable($events, $canInvite))
+		{
+			return null;
+		}
+
+		return [
+			'type' => $isNewPortal ? 'my_company_invite' : 'my_company_relocation',
+			'title' => Loc::getMessage(
+				$isNewPortal
+					? 'MOBILE_MENU_AHA_MOMENT_MY_COMPANY_INVITE_TITLE'
+					: 'MOBILE_MENU_AHA_MOMENT_MY_COMPANY_RELOCATION_TITLE',
+			),
+			'description' => Loc::getMessage('MOBILE_MENU_AHA_MOMENT_MY_COMPANY_MENU_DESCRIPTION'),
+			'eventName' => self::MY_COMPANY_EVENT,
+		];
+	}
+
+	private function isInviteAhaMomentAvailable(array $events, bool $canInvite): bool
+	{
+		return $canInvite
+			&& (new EmployeeThreshold())->isReached()
+			&& isset($events[self::USERS_FLOATING_BANNER_SHOWN_EVENT]);
+	}
+
+	protected function getPortalCreatedAt(): ?DateTime
+	{
+		$portalAgeChecker = new PortalAgeChecker();
+		if (!$portalAgeChecker->isPortalDateKnown())
+		{
+			return null;
+		}
+
+		return $portalAgeChecker->getPortalCreatedAt();
+	}
+
+	protected function getTouristEvents(): array
+	{
+		return Tourist::getEvents();
 	}
 
 	public function getAvatarAhaMoment(int $userId): ?array
 	{
-		$relocationAhaMoment = $this->getRelocationAhaMoment($userId);
-		if ($relocationAhaMoment !== null)
-		{
-			return $relocationAhaMoment;
-		}
-
-		if (!Loader::includeModule('intranetmobile'))
-		{
-			return null;
-		}
-
-		$invitationService = new \Bitrix\IntranetMobile\Invitation\InvitationAhaMoment();
-		$invitation = $invitationService->getFirstInviteAhaMoment();
-		if ($invitation !== null)
-		{
-			return [
-				'type' => 'first_invitation',
-				'title' => $invitation->title,
-				'description' => $invitation->description,
-				'eventName' => $invitationService::FIRST_INVITE_TOURIST_EVENT,
-			];
-		}
-
-		return null;
+		return $this->getRelocationAhaMoment($userId);
 	}
 
 	private function getRelocationAhaMoment(int $userId): ?array

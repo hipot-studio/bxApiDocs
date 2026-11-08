@@ -8,28 +8,28 @@ if (!defined('START_EXEC_TIME'))
 
 class CAllSearch extends CDBResult
 {
-	var $Query; //Query parset
-	var $Statistic; //Search statistic
-	var $strQueryText = false; //q
-	var $strTagsText = false; //tags
-	var $strSqlWhere = ''; //additional sql filter
-	var $strTags = ''; //string of tags in double quotes separated by commas
-	var $errorno = 0;
-	var $error = false;
-	var $arParams = [];
-	var $url_add_params = []; //additional url params (OnSearch event)
-	var $tf_hwm = 0;
-	var $tf_hwm_site_id = '';
-	var $_opt_ERROR_ON_EMPTY_STEM = false;
-	var $_opt_NO_WORD_LOGIC = false;
-	var $offset = false;
-	var $limit = false;
-	var $bUseRatingSort = false;
-	var $flagsUseRatingSort = 0;
-	/** @var CSearchFormatter */
-	var $formatter = null;
+	public $Query; //Query parset
+	public $Statistic; //Search statistic
+	public $strQueryText = false; //q
+	public $strTagsText = false; //tags
+	public $strSqlWhere = ''; //additional sql filter
+	public $strTags = ''; //string of tags in double quotes separated by commas
+	public $errorno = 0;
+	public $error = false;
+	public $arParams = [];
+	public $url_add_params = []; //additional url params (OnSearch event)
+	public $tf_hwm = 0;
+	public $tf_hwm_site_id = '';
+	public $_opt_ERROR_ON_EMPTY_STEM = false;
+	public $_opt_NO_WORD_LOGIC = false;
+	public $offset = false;
+	public $limit = false;
+	public $bUseRatingSort = false;
+	public $flagsUseRatingSort = 0;
+	/** @var CSearchFormatter|null */
+	public $formatter = null;
 
-	function __construct($strQuery = false, $SITE_ID = false, $MODULE_ID = false, $ITEM_ID = false, $PARAM1 = false, $PARAM2 = false, $aSort = [], $aParamsEx = [], $bTagsCloud = false)
+	public function __construct($strQuery = false, $SITE_ID = false, $MODULE_ID = false, $ITEM_ID = false, $PARAM1 = false, $PARAM2 = false, $aSort = [], $aParamsEx = [], $bTagsCloud = false)
 	{
 		$this->limit = (int)COption::GetOptionInt('search', 'max_result_size');
 		if ($this->limit < 1)
@@ -40,7 +40,7 @@ class CAllSearch extends CDBResult
 		$this->CSearch($strQuery, $SITE_ID, $MODULE_ID, $ITEM_ID, $PARAM1, $PARAM2, $aSort, $aParamsEx, $bTagsCloud);
 	}
 
-	function CSearch($strQuery = false, $LID = false, $MODULE_ID = false, $ITEM_ID = false, $PARAM1 = false, $PARAM2 = false, $aSort = [], $aParamsEx = [], $bTagsCloud = false)
+	public function CSearch($strQuery = false, $LID = false, $MODULE_ID = false, $ITEM_ID = false, $PARAM1 = false, $PARAM2 = false, $aSort = [], $aParamsEx = [], $bTagsCloud = false)
 	{
 		if ($strQuery === false)
 		{
@@ -59,7 +59,7 @@ class CAllSearch extends CDBResult
 
 	//combination ($MODULE_ID, $PARAM1, $PARAM2, $PARAM3) is used to narrow search
 	//returns recordset with search results
-	
+	public 
 	/**
 	 * <p>Метод инициализирует выборку данных. Нестатический метод.</p><p>Перед выполнением поисковых запросов вызывается событие <a class="link" href="https://dev.1c-bitrix.ru/api_help/search/events/onsearch.php">OnSearch</a>.</p>
 	 *
@@ -99,7 +99,7 @@ class CAllSearch extends CDBResult
 			foreach ($arTags as $i => $strTag)
 			{
 				$strTag = trim($strTag);
-				if ($strTag <> '')
+				if ($strTag !== '')
 				{
 					$arTags[$i] = str_replace('"', '\\"', $strTag);
 				}
@@ -122,14 +122,14 @@ class CAllSearch extends CDBResult
 		$this->strQueryText = $strQuery = trim($arParams['QUERY']);
 		$this->strTags = $strTags = $arParams['TAGS'] ?? '';
 
-		if (($strQuery == '') && ($strTags <> ''))
+		if (($strQuery === '') && ($strTags !== ''))
 		{
 			$strQuery = $strTags;
 			$bTagsSearch = true;
 		}
 		else
 		{
-			if ($strTags <> '')
+			if ($strTags !== '')
 			{
 				$strQuery .= ' ' . $strTags;
 			}
@@ -168,7 +168,7 @@ class CAllSearch extends CDBResult
 		}
 		else
 		{
-			if (!$query || trim($query) == '')
+			if (!$query || trim($query) === '')
 			{
 				if ($bTagsCloud)
 				{
@@ -230,17 +230,15 @@ class CAllSearch extends CDBResult
 			$bIncSites = false;
 
 			$arSqlWhere = [];
-			if (is_array($aParamsEx) && !empty($aParamsEx))
+			foreach ($aParamsEx as $aParamEx)
 			{
-				foreach ($aParamsEx as $aParamEx)
+				$strSqlWhere = CSearch::__PrepareFilter($aParamEx, $bIncSites);
+				if ($strSqlWhere !== '')
 				{
-					$strSqlWhere = CSearch::__PrepareFilter($aParamEx, $bIncSites);
-					if ($strSqlWhere != '')
-					{
-						$arSqlWhere[] = $strSqlWhere;
-					}
+					$arSqlWhere[] = $strSqlWhere;
 				}
 			}
+
 			if (!empty($arSqlWhere))
 			{
 				$arSqlWhere = [
@@ -249,7 +247,7 @@ class CAllSearch extends CDBResult
 			}
 
 			$strSqlWhere = CSearch::__PrepareFilter($arParams, $bIncSites);
-			if ($strSqlWhere != '')
+			if ($strSqlWhere !== '')
 			{
 				array_unshift($arSqlWhere, $strSqlWhere);
 			}
@@ -263,7 +261,7 @@ class CAllSearch extends CDBResult
 
 			$bStem = !$bTagsSearch && count($this->Query->m_stemmed_words) > 0;
 			//calculate freq of the word on the whole site_id
-			if ($bStem && count($this->Query->m_stemmed_words))
+			if ($bStem)
 			{
 				$arStat = $this->GetFreqStatistics($this->Query->m_lang, $this->Query->m_stemmed_words, $arParams['SITE_ID']);
 				$this->tf_hwm_site_id = ($arParams['SITE_ID'] <> '' ? $arParams['SITE_ID'] : '');
@@ -272,7 +270,7 @@ class CAllSearch extends CDBResult
 				if (!$bTagsCloud && $aParamsEx['USE_TF_FILTER'])
 				{
 					$hwm = false;
-					foreach ($this->Query->m_stemmed_words as $i => $stem)
+					foreach ($this->Query->m_stemmed_words as $stem)
 					{
 						if (!array_key_exists($stem, $arStat))
 						{
@@ -316,7 +314,17 @@ class CAllSearch extends CDBResult
 		parent::__construct($r);
 	}
 
-	function SetOptions($arOptions)
+	public function tagsMakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem, $limit = 100)
+	{
+		throw new \Bitrix\Main\NotImplementedException;
+	}
+
+	public function MakeSQL($query, $strSqlWhere, $strSort, $bIncSites, $bStem)
+	{
+		throw new \Bitrix\Main\NotImplementedException;
+	}
+
+	public function SetOptions($arOptions)
 	{
 		if (array_key_exists('ERROR_ON_EMPTY_STEM', $arOptions))
 		{
@@ -329,17 +337,17 @@ class CAllSearch extends CDBResult
 		}
 	}
 
-	function SetOffset($offset)
+	public function SetOffset($offset)
 	{
 		$this->offset = (int)$offset;
 	}
 
-	function SetLimit($limit)
+	public function SetLimit($limit)
 	{
 		$this->limit = (int)$limit;
 	}
 
-	function GetFilterMD5()
+	public function GetFilterMD5()
 	{
 		$perm = CSearch::CheckPermissions('sc.ID');
 		$sql = preg_replace("/(DATE_FROM|DATE_TO|DATE_CHANGE)(\\s+IS\\s+NOT\\s+NULL|\\s+IS\\s+NULL|\\s*[<>!=]+\\s*'.*?')/im", '', $this->strSqlWhere);
@@ -351,15 +359,15 @@ class CAllSearch extends CDBResult
 		return chr($a[1]);
 	}
 
-	function GetFreqStatistics($lang_id, $arStem, $site_id = '')
+	public function GetFreqStatistics($lang_id, $arStem, $site_id = '')
 	{
 		$DB = CDatabase::GetModuleConnection('search');
-		$sql_site_id = $DB->ForSQL($site_id);
-		$sql_lang_id = $DB->ForSQL($lang_id);
+		$sql_site_id = $DB->ForSql($site_id);
+		$sql_lang_id = $DB->ForSql($lang_id);
 		$sql_stem = [];
 		foreach ($arStem as $stem)
 		{
-			$sql_stem[] = $DB->ForSQL($stem);
+			$sql_stem[] = $DB->ForSql($stem);
 		}
 
 		$limit = COption::GetOptionInt('search', 'max_result_size');
@@ -386,7 +394,7 @@ class CAllSearch extends CDBResult
 			inner join b_search_stem s on s.ID = f.STEM
 			WHERE LANGUAGE_ID = '" . $sql_lang_id . "'
 			AND s.STEM in ('" . implode("','", $sql_stem) . "')
-			AND " . ($site_id <> '' ? "SITE_ID = '" . $sql_site_id . "'" : 'SITE_ID IS NULL') . '
+			AND " . ($site_id ? "SITE_ID = '" . $sql_site_id . "'" : 'SITE_ID IS NULL') . '
 			ORDER BY STEM
 		';
 
@@ -404,7 +412,7 @@ class CAllSearch extends CDBResult
 		{
 			if (!$ar['STEM'])
 			{
-				$arMissed[] = $DB->ForSQL($stem);
+				$arMissed[] = $DB->ForSql($stem);
 			}
 		}
 
@@ -415,7 +423,7 @@ class CAllSearch extends CDBResult
 				FROM
 					b_search_content_stem st
 					inner join b_search_stem s on s.ID = st.STEM
-					' . ($site_id <> '' ? "INNER JOIN b_search_content_site scsite ON scsite.SEARCH_CONTENT_ID = st.SEARCH_CONTENT_ID AND scsite.SITE_ID = '" . $sql_site_id . "'" : '') . "
+					' . ($site_id ? "INNER JOIN b_search_content_site scsite ON scsite.SEARCH_CONTENT_ID = st.SEARCH_CONTENT_ID AND scsite.SITE_ID = '" . $sql_site_id . "'" : '') . "
 				WHERE st.LANGUAGE_ID = '" . $sql_lang_id . "'
 				AND s.STEM in ('" . implode("','", $arMissed) . "')
 				GROUP BY s.ID, s.STEM, floor(st.TF/100)
@@ -437,7 +445,7 @@ class CAllSearch extends CDBResult
 			}
 		}
 
-		foreach ($arResult as $stem => $ar)
+		foreach ($arResult as $ar)
 		{
 			if (isset($ar['DO_INSERT']) && $ar['DO_INSERT'])
 			{
@@ -446,8 +454,8 @@ class CAllSearch extends CDBResult
 					UPDATE b_search_content_freq
 					SET FREQ=' . $FREQ . ', TF=' . number_format($ar['TF'], 2, '.', '') . "
 					WHERE LANGUAGE_ID='" . $sql_lang_id . "'
-					AND " . ($site_id <> '' ? "SITE_ID = '" . $sql_site_id . "'" : 'SITE_ID IS NULL') . "
-					AND STEM='" . $DB->ForSQL($ar['ID']) . "'
+					AND " . ($site_id ? "SITE_ID = '" . $sql_site_id . "'" : 'SITE_ID IS NULL') . "
+					AND STEM='" . $DB->ForSql($ar['ID']) . "'
 				";
 				$rsUpdate = $DB->Query($strSql);
 				if ($rsUpdate->AffectedRowsCount() <= 0)
@@ -456,7 +464,7 @@ class CAllSearch extends CDBResult
 						INSERT INTO b_search_content_freq
 						(STEM, LANGUAGE_ID, SITE_ID, FREQ, TF)
 						VALUES
-						('" . $DB->ForSQL($ar['ID']) . "', '" . $sql_lang_id . "', " . ($site_id <> '' ? "'" . $sql_site_id . "'" : 'NULL') . ', ' . $FREQ . ', ' . number_format($ar['TF'], 2, '.', '') . ')
+						('" . $DB->ForSql($ar['ID']) . "', '" . $sql_lang_id . "', " . ($site_id ? "'" . $sql_site_id . "'" : 'NULL') . ', ' . $FREQ . ', ' . number_format($ar['TF'], 2, '.', '') . ')
 					';
 					$rsInsert = $DB->Query($strSql, true);
 				}
@@ -466,10 +474,11 @@ class CAllSearch extends CDBResult
 		return $arResult;
 	}
 
-	function Repl($strCond, $strType, $strWh)
+	public function Repl($strCond, $strType, $strWh)
 	{
 		$l = mb_strlen($strCond);
 
+		$pcreLettersClass = '';
 		if ($this->Query->bStemming)
 		{
 			$arStemInfo = stemming_init($this->Query->m_lang);
@@ -491,8 +500,8 @@ class CAllSearch extends CDBResult
 			//Check if we are in the middle of the numeric entity
 			while (
 				$pos !== false &&
-				preg_match('/^[0-9]+;/', mb_substr($strWh, $pos)) &&
-				preg_match('/^[0-9]+#&/', strrev(mb_substr($strWh, 0, $pos + mb_strlen($strCond))))
+				preg_match('/^\d+;/', mb_substr($strWh, $pos)) &&
+				preg_match('/^\d+#&/', strrev(mb_substr($strWh, 0, $pos + mb_strlen($strCond))))
 			)
 			{
 				$pos = mb_strpos($strWhUpp, $strCondUpp, $pos + 1);
@@ -545,7 +554,7 @@ class CAllSearch extends CDBResult
 		return $strWh;
 	}
 
-	function PrepareSearchResult($str)
+	public function PrepareSearchResult($str)
 	{
 		//$words - contains what we will highlight
 		$words = [];
@@ -570,7 +579,7 @@ class CAllSearch extends CDBResult
 			//And add missing stemming words
 			$arStemInfo = stemming_init($this->Query->m_lang);
 			$a = stemming($this->Query->m_query, $this->Query->m_lang, true);
-			foreach ($a as $stem => $cnt)
+			foreach ($a as $stem => $_)
 			{
 				if (!preg_match('/cut[56]/i', $stem))
 				{
@@ -592,7 +601,7 @@ class CAllSearch extends CDBResult
 		$pregMask = '';
 		foreach ($words as $search => $type)
 		{
-			if ($type == 'STEM')
+			if ($type === 'STEM')
 			{
 				$pregMask = '(?<!' . $pcreLettersClass . ')' . preg_quote($search, '/') . $pcreLettersClass . '*|' . $pregMask;
 			}
@@ -632,7 +641,8 @@ class CAllSearch extends CDBResult
 
 				if (isset($search))
 				{
-					$p = $oneCase[0][1];
+					// Slice the string up to the byte offset, then count actual UTF-8 characters
+					$p = mb_strlen(substr($strUpp, 0, $oneCase[0][1]));
 					if (!isset($arPos[$search]))
 					{
 						$arPos[$search] = $p;
@@ -688,7 +698,7 @@ class CAllSearch extends CDBResult
 
 		sort($arPos);
 
-		$str_len = strlen($str);
+		$str_len = mb_strlen($str);
 		$delta = 250 / count($arPos);
 		$arOtr = [];
 		//Have to do it two times because Positions eat each other
@@ -704,7 +714,7 @@ class CAllSearch extends CDBResult
 				{
 					$pos_beg = 0;
 				}
-				while (($pos_beg > 0) && (mb_strpos(" ,.!?\n\r", substr($str, $pos_beg, 1)) === false))
+				while (($pos_beg > 0) && (mb_strpos(" ,.!?\n\r", mb_substr($str, $pos_beg, 1)) === false))
 				{
 					$pos_beg--;
 				}
@@ -715,7 +725,7 @@ class CAllSearch extends CDBResult
 				{
 					$pos_end = $str_len;
 				}
-				while (($pos_end < $str_len) && (mb_strpos(" ,.!?\n\r", substr($str, $pos_end, 1)) === false))
+				while (($pos_end < $str_len) && (mb_strpos(" ,.!?\n\r", mb_substr($str, $pos_end, 1)) === false))
 				{
 					$pos_end++;
 				}
@@ -739,7 +749,7 @@ class CAllSearch extends CDBResult
 		foreach ($arOtr as $borders)
 		{
 			$str_result .= ($borders[0] <= 0 ? '' : ' ...')
-				. substr($str, $borders[0], $borders[1] - $borders[0] + 1)
+				. mb_substr($str, $borders[0], $borders[1] - $borders[0] + 1)
 				. ($borders[1] >= $str_len ? '' : '... ');
 		}
 
@@ -753,7 +763,7 @@ class CAllSearch extends CDBResult
 		return $str_result;
 	}
 
-	function NavStart($nPageSize = 0, $bShowAll = true, $iNumPage = false)
+	public function NavStart($nPageSize = 0, $bShowAll = true, $iNumPage = false)
 	{
 		parent::NavStart($nPageSize, $bShowAll, $iNumPage);
 		if (COption::GetOptionString('search', 'stat_phrase') == 'Y')
@@ -767,7 +777,7 @@ class CAllSearch extends CDBResult
 		}
 	}
 
-	function Fetch()
+	public function Fetch()
 	{
 		static $arSite = [];
 		$DB = CDatabase::GetModuleConnection('search');
@@ -799,7 +809,7 @@ class CAllSearch extends CDBResult
 				$r['URL'] = $r['SITE_URL'];
 			}
 
-			if (isset($r['URL']) && mb_substr($r['URL'], 0, 1) == '=')
+			if (isset($r['URL']) && str_starts_with($r['URL'], '='))
 			{
 				foreach (GetModuleEvents('search', 'OnSearchGetURL', true) as $arEvent)
 				{
@@ -819,7 +829,6 @@ class CAllSearch extends CDBResult
 			$r['URL'] = preg_replace("'(?<!:)/+'s", '/', $r['URL']);
 			$r['URL_WO_PARAMS'] = $r['URL'];
 
-			$w = $this->Query->m_words;
 			if (count($this->url_add_params))
 			{
 				$p1 = mb_strpos($r['URL'], '?');
@@ -889,7 +898,7 @@ class CAllSearch extends CDBResult
 			foreach ($arIncTmp as $mask)
 			{
 				$mask = trim($mask);
-				if ($mask <> '')
+				if ($mask !== '')
 				{
 					$arInc[] = "'^" . $mask . "$'";
 				}
@@ -906,7 +915,7 @@ class CAllSearch extends CDBResult
 			foreach ($arExcTmp as $mask)
 			{
 				$mask = trim($mask);
-				if ($mask <> '')
+				if ($mask !== '')
 				{
 					if (preg_match('#^/[a-z0-9_.\\\\]+/#i', $mask))
 					{
@@ -980,52 +989,12 @@ class CAllSearch extends CDBResult
 		return $SEARCH_CACHED_GROUPS;
 	}
 
-	public static function QueryMnogoSearch(&$xml)
-	{
-		$SITE = COption::GetOptionString('search', 'mnogosearch_url', 'www.mnogosearch.org');
-		$PATH = COption::GetOptionString('search', 'mnogosearch_path', '');
-		$PORT = COption::GetOptionString('search', 'mnogosearch_port', '80');
-
-		$QUERY_STR = 'document=' . urlencode($xml);
-
-		$strRequest = 'POST ' . $PATH . " HTTP/1.0\r\n";
-		$strRequest .= "User-Agent: BitrixSM\r\n";
-		$strRequest .= "Accept: */*\r\n";
-		$strRequest .= 'Host: ' . $SITE . "\r\n";
-		$strRequest .= "Accept-Language: en\r\n";
-		$strRequest .= "Content-type: application/x-www-form-urlencoded\r\n";
-		$strRequest .= 'Content-length: ' . mb_strlen($QUERY_STR) . "\r\n";
-		$strRequest .= "\r\n";
-		$strRequest .= $QUERY_STR;
-		$strRequest .= "\r\n";
-
-		$arAll = '';
-		$errno = 0;
-		$errstr = '';
-
-		$FP = fsockopen($SITE, $PORT, $errno, $errstr, 120);
-		if ($FP)
-		{
-			fputs($FP, $strRequest);
-
-			while (($line = fgets($FP, 4096)) && $line != "\r\n");
-			while ($line = fread($FP, 4096))
-			{
-				$arAll .= $line;
-			}
-			fclose($FP);
-		}
-
-		return $arAll;
-	}
-
 	//////////////////////////////////
 	//reindex the whole server content
 	//$bFull = true - no not check change_date. all index tables will be truncated
 	//       = false - add new ones. update changed and delete deleted.
 	public static function ReIndexAll($bFull = false, $max_execution_time = 0, $NS = [], $clear_suggest = false)
 	{
-		global $APPLICATION;
 		$DB = CDatabase::GetModuleConnection('search');
 
 		@set_time_limit(0);
@@ -1046,13 +1015,11 @@ class CAllSearch extends CDBResult
 				$NS['MODULE_ID'] = $NS_OLD['MODULE_ID'];
 			}
 		}
-		$NS['CNT'] = intval($NS['CNT']);
+		$NS['CNT'] = intval($NS['CNT'] ?? 0);
 		if (!$bFull && (!isset($NS['SESS_ID']) || mb_strlen($NS['SESS_ID']) != 32))
 		{
 			$NS['SESS_ID'] = md5(uniqid(''));
 		}
-
-		$p1 = microtime(true);
 
 		$DB->StartTransaction();
 		CSearch::ReindexLock();
@@ -1094,6 +1061,7 @@ class CAllSearch extends CDBResult
 		if (
 			(!isset($NS['MODULE']) || $NS['MODULE'] == '' || $NS['MODULE'] == 'main')
 			&& (!isset($NS['MODULE_ID']) || $NS['MODULE_ID'] == '' || $NS['MODULE_ID'] == 'main')
+			&& !str_starts_with(COption::GetOptionString('search', 'exclude_mask'), '/*;')
 		)
 		{
 			$arLangDirs = [];
@@ -1141,7 +1109,7 @@ class CAllSearch extends CDBResult
 					$max_execution_time > 0
 					&& isset($NS['MODULE'])
 					&& $NS['MODULE'] == 'main'
-					&& mb_substr($NS['ID'] . '/', 0, mb_strlen($site_path)) != $site_path
+					&& mb_substr($NS['ID'] . '/', 0, mb_strlen($site_path)) !== $site_path
 				)
 				{
 					continue;
@@ -1159,8 +1127,6 @@ class CAllSearch extends CDBResult
 				}
 			}
 		}
-
-		$p1 = microtime(true);
 
 		//for every who wants to reindex
 		$oCallBack = new CSearchCallback;
@@ -1206,7 +1172,10 @@ class CAllSearch extends CDBResult
 			}
 			else  //new method
 			{
-				if ($max_execution_time > 0 && $arResult !== false && mb_strlen('.' . $arResult) > 1)
+				if (
+					$max_execution_time > 0
+					&& trim($arResult) !== ''
+				)
 				{
 					$DB->Commit();
 					return [
@@ -1214,9 +1183,9 @@ class CAllSearch extends CDBResult
 						'CNT' => $oCallBack->CNT,
 						'ID' => $arResult,
 						'CLEAR' => $NS['CLEAR'],
-						'SESS_ID' => $NS['SESS_ID'],
-						'SITE_ID' => $NS['SITE_ID'],
-						'MODULE_ID' => $NS['MODULE_ID'],
+						'SESS_ID' => $NS['SESS_ID'] ?? null,
+						'SITE_ID' => $NS['SITE_ID'] ?? null,
+						'MODULE_ID' => $NS['MODULE_ID'] ?? null,
 					];
 				}
 			}
@@ -1271,7 +1240,13 @@ class CAllSearch extends CDBResult
 			}
 			else  //new way
 			{
-				return ['MODULE' => $arEvent['TO_MODULE_ID'], 'CNT' => $oCallBack->CNT, 'ID' => $arResult, 'CLEAR' => $NS['CLEAR'], 'SESS_ID' => $NS['SESS_ID']];
+				return [
+					'MODULE' => $arEvent['TO_MODULE_ID'],
+					'CNT' => $oCallBack->CNT,
+					'ID' => $arResult,
+					'CLEAR' => $NS['CLEAR'],
+					'SESS_ID' => $NS['SESS_ID'],
+				];
 			}
 		}
 
@@ -1320,6 +1295,7 @@ class CAllSearch extends CDBResult
 	public static function Index($MODULE_ID, $ITEM_ID, $arFields, $bOverWrite = false, $SEARCH_SESS_ID = '')
 	{
 		$DB = CDatabase::GetModuleConnection('search');
+		$fullTextDelay = (CPageOption::GetOptionString('search', 'full_text_delay_index', null) ?? COption::GetOptionString('search', 'full_text_delay_index')) === 'Y';
 
 		$arFields['MODULE_ID'] = $MODULE_ID;
 		$arFields['ITEM_ID'] = $ITEM_ID;
@@ -1367,7 +1343,7 @@ class CAllSearch extends CDBResult
 				$i = 0;
 				foreach ($arFields['SITE_ID'] as $k => $val)
 				{
-					if ('' . $k != '' . $i)
+					if ((string)$k !== (string)$i)
 					{
 						$bNotAssoc = false;
 						break;
@@ -1385,7 +1361,7 @@ class CAllSearch extends CDBResult
 				}
 			}
 
-			if (count($arFields['SITE_ID']) <= 0)
+			if (!$arFields['SITE_ID'])
 			{
 				return 0;
 			}
@@ -1394,19 +1370,19 @@ class CAllSearch extends CDBResult
 			$arFields['LID'] = current($arFields['SITE_ID']);
 
 			$arSites = [];
-			foreach ($arFields['SITE_ID'] as $site => $url)
+			foreach ($arFields['SITE_ID'] as $site => $_)
 			{
-				$arSites[] = $DB->ForSQL($site, 2);
+				$arSites[] = $DB->ForSql($site, 2);
 			}
 
 			$strSql = "
 				SELECT CR.RANK
 				FROM b_search_custom_rank CR
 				WHERE CR.SITE_ID in ('" . implode("', '", $arSites) . "')
-				AND CR.MODULE_ID='" . $DB->ForSQL($MODULE_ID) . "'
-				" . (is_set($arFields, 'PARAM1') ? "AND (CR.PARAM1 IS NULL OR CR.PARAM1='' OR CR.PARAM1='" . $DB->ForSQL($arFields['PARAM1']) . "')" : '') . '
-				' . (is_set($arFields, 'PARAM2') ? "AND (CR.PARAM2 IS NULL OR CR.PARAM2='' OR CR.PARAM2='" . $DB->ForSQL($arFields['PARAM2']) . "')" : '') . '
-				' . ($ITEM_ID <> '' ? "AND (CR.ITEM_ID IS NULL OR CR.ITEM_ID='' OR CR.ITEM_ID='" . $DB->ForSQL($ITEM_ID) . "')" : '') . '
+				AND CR.MODULE_ID='" . $DB->ForSql($MODULE_ID) . "'
+				" . (is_set($arFields, 'PARAM1') ? "AND (CR.PARAM1 IS NULL OR CR.PARAM1='' OR CR.PARAM1='" . $DB->ForSql($arFields['PARAM1']) . "')" : '') . '
+				' . (is_set($arFields, 'PARAM2') ? "AND (CR.PARAM2 IS NULL OR CR.PARAM2='' OR CR.PARAM2='" . $DB->ForSql($arFields['PARAM2']) . "')" : '') . '
+				' . ($ITEM_ID <> '' ? "AND (CR.ITEM_ID IS NULL OR CR.ITEM_ID='' OR CR.ITEM_ID='" . $DB->ForSql($ITEM_ID) . "')" : '') . '
 				ORDER BY
 					PARAM1 DESC, PARAM2 DESC, ITEM_ID DESC
 			';
@@ -1452,8 +1428,8 @@ class CAllSearch extends CDBResult
 			'SELECT ID, MODULE_ID, ITEM_ID, ' . $DB->DateToCharFunction('DATE_CHANGE') . ' as DATE_CHANGE
 			' . $strSqlSelect . "
 			FROM b_search_content
-			WHERE MODULE_ID = '" . $DB->ForSQL($MODULE_ID) . "'
-				AND ITEM_ID = '" . $DB->ForSQL($ITEM_ID) . "' ";
+			WHERE MODULE_ID = '" . $DB->ForSql($MODULE_ID) . "'
+				AND ITEM_ID = '" . $DB->ForSql($ITEM_ID) . "' ";
 
 		$r = $DB->Query($strSql);
 
@@ -1475,8 +1451,11 @@ class CAllSearch extends CDBResult
 				$DB->Query('DELETE FROM b_search_content_site WHERE SEARCH_CONTENT_ID = ' . $ID);
 				$DB->Query('DELETE FROM b_search_content_title WHERE SEARCH_CONTENT_ID = ' . $ID);
 				$DB->Query('DELETE FROM b_search_tags WHERE SEARCH_CONTENT_ID = ' . $ID);
-				CSearchFullText::getInstance()->deleteById($ID);
 				$DB->Query('DELETE FROM b_search_content WHERE ID = ' . $ID);
+				if (!$fullTextDelay || !CSearchFullText::getInstance()->syncContent($ID))
+				{
+					CSearchFullText::getInstance()->deleteById($ID);
+				}
 
 				return 0;
 			}
@@ -1502,7 +1481,7 @@ class CAllSearch extends CDBResult
 			}
 			elseif (array_key_exists('DATE_CHANGE', $arFields))
 			{
-				$arFields['~DATE_CHANGE'] = $arFields['DATE_CHANGE'] = $DATE_CHANGE = $DB->FormatDate($arFields['DATE_CHANGE'], 'DD.MM.YYYY HH:MI:SS', CLang::GetDateFormat());
+				$arFields['~DATE_CHANGE'] = $arFields['DATE_CHANGE'] = $DATE_CHANGE = CDatabase::FormatDate($arFields['DATE_CHANGE'], 'DD.MM.YYYY HH:MI:SS', CLang::GetDateFormat());
 			}
 			else
 			{
@@ -1511,7 +1490,7 @@ class CAllSearch extends CDBResult
 
 			if (!$bOverWrite && $DATE_CHANGE == $arResult['DATE_CHANGE'])
 			{
-				if ($SEARCH_SESS_ID <> '')
+				if ($SEARCH_SESS_ID !== '')
 				{
 					$DB->Query("UPDATE b_search_content SET UPD='" . $DB->ForSql($SEARCH_SESS_ID) . "' WHERE ID = " . $ID);
 				}
@@ -1524,29 +1503,29 @@ class CAllSearch extends CDBResult
 
 			if ($bBody || $bTitle || $bTags)
 			{
-				if (array_key_exists('INDEX_TITLE', $arFields) && $arFields['INDEX_TITLE'] === false)
-				{
-					$content = '';
-				}
-				else
+				$content = '';
+
+				if (
+					!array_key_exists('INDEX_TITLE', $arFields)
+					|| !$arFields['INDEX_TITLE'] === false)
 				{
 					if ($bTitle)
 					{
-						$content = $arFields['TITLE'] . "\r\n";
+						$content = $arFields['TITLE'] . "\n";
 					}
-					else
+					elseif (isset($arResult['TITLE']))
 					{
-						$content = $arResult['TITLE'] . "\r\n";
+						$content = $arResult['TITLE'] . "\n";
 					}
 				}
 
 				if ($bBody)
 				{
-					$content .= $arFields['BODY'] . "\r\n";
+					$content .= $arFields['BODY'] . "\n";
 				}
 				else
 				{
-					$content .= $arResult['BODY'] . "\r\n";
+					$content .= $arResult['BODY'] . "\n";
 				}
 
 				if ($bTags)
@@ -1562,7 +1541,7 @@ class CAllSearch extends CDBResult
 				$arFields['SEARCHABLE_CONTENT'] = CSearch::KillEntities(mb_strtoupper($content));
 			}
 
-			if ($SEARCH_SESS_ID <> '')
+			if ($SEARCH_SESS_ID !== '')
 			{
 				$arFields['UPD'] = $SEARCH_SESS_ID;
 			}
@@ -1611,19 +1590,32 @@ class CAllSearch extends CDBResult
 			$arFields['MODULE_ID'] = $MODULE_ID;
 			$arFields['ITEM_ID'] = $ITEM_ID;
 
-			if (array_key_exists('INDEX_TITLE', $arFields) && $arFields['INDEX_TITLE'] === false)
+			if (
+				!isset($arFields['INDEX_TITLE'])
+				|| (
+					array_key_exists('INDEX_TITLE', $arFields)
+					&& $arFields['INDEX_TITLE'] === false
+				)
+			)
 			{
-				$content = $arFields['BODY'] . "\r\n" . ($arFields['TAGS'] ?? '');
+				$content = '';
 			}
 			else
 			{
-				$content = $arFields['TITLE'] . "\r\n" . $arFields['BODY'] . "\r\n" . ($arFields['TAGS'] ?? '');
+				$content = $arFields['TITLE'] . "\n";
+			}
+
+			$content .= $arFields['BODY'];
+
+			if ($bTags)
+			{
+				$content .= "\n" . $arFields['TAGS'];
 			}
 
 			$content = preg_replace_callback('/&#(\\d+);/', ['CSearch', 'chr'], $content);
 			$arFields['SEARCHABLE_CONTENT'] = CSearch::KillEntities(mb_strtoupper($content));
 
-			if ($SEARCH_SESS_ID != '')
+			if ($SEARCH_SESS_ID !== '')
 			{
 				$arFields['UPD'] = $SEARCH_SESS_ID;
 			}
@@ -1633,7 +1625,7 @@ class CAllSearch extends CDBResult
 			if ($ID === false)
 			{
 				//Check if item was added
-				$strSql = "SELECT ID FROM b_search_content WHERE MODULE_ID = '" . $DB->ForSQL($MODULE_ID) . "' AND ITEM_ID = '" . $DB->ForSQL($ITEM_ID) . "' ";
+				$strSql = "SELECT ID FROM b_search_content WHERE MODULE_ID = '" . $DB->ForSql($MODULE_ID) . "' AND ITEM_ID = '" . $DB->ForSql($ITEM_ID) . "' ";
 				$rs = $DB->Query($strSql);
 				$ar = $rs->Fetch();
 				if ($ar)
@@ -1645,25 +1637,32 @@ class CAllSearch extends CDBResult
 					return $ID;
 				}
 			}
-			CSearchFullText::getInstance()->replace($ID, $arFields);
+
+			if (is_set($arFields, 'PARAMS'))
+			{
+				CSearch::SetContentItemParams($ID, $arFields['PARAMS'], false);
+			}
+
+			CSearch::SetContentItemGroups($ID, $arGroups, false, true);
+
+			CSearch::UpdateSite($ID, $arFields['SITE_ID'], true);
 
 			foreach (GetModuleEvents('search', 'OnAfterIndexAdd', true) as $arEvent)
 			{
 				ExecuteModuleEventEx($arEvent, [$ID, $arFields]);
 			}
 
-			if (is_set($arFields, 'PARAMS'))
+			if (!$fullTextDelay || !CSearchFullText::getInstance()->syncContent($ID))
 			{
-				CSearch::SetContentItemParams($ID, $arFields['PARAMS']);
+				CSearchFullText::getInstance()->replace($ID, $arFields);
 			}
 
-			CSearch::SetContentItemGroups($ID, $arGroups);
-
-			CSearch::UpdateSite($ID, $arFields['SITE_ID']);
-
 			if (
-				!array_key_exists('INDEX_TITLE', $arFields)
-				|| $arFields['INDEX_TITLE'] !== false
+				isset($arFields['TITLE'])
+				&& (
+					!array_key_exists('INDEX_TITLE', $arFields)
+					|| $arFields['INDEX_TITLE'] !== false
+				)
 			)
 			{
 				CSearch::IndexTitle($arFields['SITE_ID'], $ID, $arFields['TITLE']);
@@ -1761,9 +1760,9 @@ class CAllSearch extends CDBResult
 			return 0;
 		}
 
-		$file_doc_root = CSite::GetSiteDocRoot($path[0]);
+		$file_doc_root = \Bitrix\Main\SiteTable::getDocumentRoot(!$path[0] ? null : $path[0]);
 		$file_rel_path = $path[1];
-		$file_abs_path = preg_replace('#[\\\\\\/]+#', '/', $file_doc_root . '/' . $file_rel_path);
+		$file_abs_path = preg_replace('#[\\/]+#', '/', $file_doc_root . '/' . $file_rel_path);
 		$f = $io->GetFile($file_abs_path);
 
 		if (!$f->IsExists() || !$f->IsReadable())
@@ -1789,7 +1788,7 @@ class CAllSearch extends CDBResult
 		$rsSites = CSite::GetList('lendir', 'desc');
 		while ($arSite = $rsSites->Fetch())
 		{
-			$site_path = preg_replace('#[\\\\\\/]+#', '/', $arSite['ABS_DOC_ROOT'] . '/' . $arSite['DIR'] . '/');
+			$site_path = preg_replace('#[\\/]+#', '/', $arSite['ABS_DOC_ROOT'] . '/' . $arSite['DIR'] . '/');
 			if (mb_strpos($file_abs_path, $site_path) === 0)
 			{
 				$file_site = $arSite['ID'];
@@ -1797,7 +1796,7 @@ class CAllSearch extends CDBResult
 			}
 		}
 
-		if ($file_site == '')
+		if ($file_site === '')
 		{
 			return 0;
 		}
@@ -1808,25 +1807,25 @@ class CAllSearch extends CDBResult
 			return 0;
 		}
 
-		if ($SEARCH_SESS_ID <> '')
+		if ($SEARCH_SESS_ID !== '')
 		{
 			$DATE_CHANGE = $DB->CharToDateFunction(
 				FormatDate(
-					$DB->DateFormatToPHP(CLang::GetDateFormat('FULL')), $f->GetModificationTime() + CTimeZone::GetOffset()
+					CDatabase::DateFormatToPHP(CLang::GetDateFormat('FULL')), $f->GetModificationTime() + CTimeZone::GetOffset()
 				)
 			);
 			$strSql = "
 				SELECT ID
 				FROM b_search_content
 				WHERE MODULE_ID = 'main'
-					AND ITEM_ID = '" . $DB->ForSQL($item_id) . "'
+					AND ITEM_ID = '" . $DB->ForSql($item_id) . "'
 					AND DATE_CHANGE = " . $DATE_CHANGE . '
 			';
 
 			$r = $DB->Query($strSql);
 			if ($arR = $r->Fetch())
 			{
-				$strSql = "UPDATE b_search_content SET UPD='" . $DB->ForSQL($SEARCH_SESS_ID) . "' WHERE ID = " . $arR['ID'];
+				$strSql = "UPDATE b_search_content SET UPD='" . $DB->ForSql($SEARCH_SESS_ID) . "' WHERE ID = " . $arR['ID'];
 				$DB->Query($strSql);
 				return $arR['ID'];
 			}
@@ -1855,7 +1854,7 @@ class CAllSearch extends CDBResult
 				if (preg_match("/<(meta)\\s+([^>]*)(content)\\s*=\\s*(['\"]).*?(charset)\\s*=\\s*(.*?)(\\4)/is", mb_substr($sFile, 0, $sHeadEndPos), $arMetaMatch))
 				{
 					$doc_charset = $arMetaMatch[6];
-					if (strtoupper($doc_charset) != 'UTF-8')
+					if (strtoupper($doc_charset) !== 'UTF-8')
 					{
 						$sFile = \Bitrix\Main\Text\Encoding::convertEncoding($sFile, $doc_charset, 'UTF-8');
 					}
@@ -1902,14 +1901,14 @@ class CAllSearch extends CDBResult
 				'PERMISSIONS' => $arGPerm,
 				'TITLE' => $title,
 				'BODY' => $filesrc,
-				'TAGS' => array_key_exists($tags, $arrFile['PROPERTIES']) ? $arrFile['PROPERTIES'][$tags] : '',
+				'TAGS' => $arrFile['PROPERTIES'][$tags] ?? '',
 			], false, $SEARCH_SESS_ID
 		);
 
 		return $ID;
 	}
 
-	public static function RecurseIndex($path = [], $max_execution_time = 0, &$NS)
+	public static function RecurseIndex($path, $max_execution_time, &$NS)
 	{
 		if (!is_array($path))
 		{
@@ -1919,7 +1918,7 @@ class CAllSearch extends CDBResult
 		$site = $path[0];
 		$path = $path[1];
 
-		$DOC_ROOT = CSite::GetSiteDocRoot($site);
+		$DOC_ROOT = \Bitrix\Main\SiteTable::getDocumentRoot(!$site ? null : $site);
 		$abs_path = $DOC_ROOT . $path;
 
 		$io = CBXVirtualIo::GetInstance();
@@ -1942,7 +1941,7 @@ class CAllSearch extends CDBResult
 
 			if ($dir_entry->IsDirectory())
 			{
-				if ($path_file == '/bitrix')
+				if ($path_file === '/bitrix')
 				{
 					continue;
 				}
@@ -1951,10 +1950,10 @@ class CAllSearch extends CDBResult
 				if (
 					$max_execution_time <= 0
 					|| !isset($NS['MODULE'])
-					|| $NS['MODULE'] == ''
+					|| $NS['MODULE'] === ''
 					|| (
-						$NS['MODULE'] == 'main'
-						&& mb_substr($NS['ID'] . '/', 0, mb_strlen($site . '|' . $path_file . '/')) == $site . '|' . $path_file . '/'
+						$NS['MODULE'] === 'main'
+						&& mb_substr($NS['ID'] . '/', 0, mb_strlen($site . '|' . $path_file . '/')) === $site . '|' . $path_file . '/'
 					)
 				)
 				{
@@ -2017,7 +2016,7 @@ class CAllSearch extends CDBResult
 		$bPHP = false;
 		while ($i < $c)
 		{
-			if ($a[$i] == '\'' && $bPHP)
+			if ($a[$i] === '\'' && $bPHP)
 			{
 				while ((++$i) < $c)
 				{
@@ -2039,7 +2038,7 @@ class CAllSearch extends CDBResult
 					}
 				}
 			}
-			elseif ($a[$i] == '"' && $bPHP)
+			elseif ($a[$i] === '"' && $bPHP)
 			{
 				while ((++$i) < $c)
 				{
@@ -2060,7 +2059,7 @@ class CAllSearch extends CDBResult
 					}
 				}
 			}
-			elseif ($a[$i] == '//' && $bPHP)
+			elseif ($a[$i] === '//' && $bPHP)
 			{
 				//single line comment
 				while ((++$i) < $c)
@@ -2166,7 +2165,6 @@ class CAllSearch extends CDBResult
 
 	public static function __PrepareFilter($arFilter, &$bIncSites, $strSearchContentAlias = 'sc.')
 	{
-		$DB = CDatabase::GetModuleConnection('search');
 		$arSql = [];
 		$arNewFilter = [];
 		static $arFilterEvents = false;
@@ -2205,6 +2203,10 @@ class CAllSearch extends CDBResult
 			case 'ITEM_ID':
 			case 'PARAM1':
 			case 'PARAM2':
+			case 'USER_ID':
+			case 'ENTITY_TYPE_ID':
+			case 'ENTITY_ID':
+			case 'SITE_ID':
 				if ($val !== false)
 				{
 					$arNewFilter['=' . $field] = $val;
@@ -2233,12 +2235,6 @@ class CAllSearch extends CDBResult
 				if ($val <> '')
 				{
 					$arNewFilter['>=' . $field] = $val;
-				}
-				break;
-			case 'SITE_ID':
-				if ($val !== false)
-				{
-					$arNewFilter['=' . $field] = $val;
 				}
 				break;
 			default:
@@ -2297,6 +2293,27 @@ class CAllSearch extends CDBResult
 			'PARAM2' => [
 				'TABLE_ALIAS' => $strSearchContentAlias,
 				'FIELD_NAME' => $strSearchContentAlias . '.PARAM2',
+				'MULTIPLE' => 'N',
+				'FIELD_TYPE' => 'string',
+				'JOIN' => false,
+			],
+			'USER_ID' => [
+				'TABLE_ALIAS' => $strSearchContentAlias,
+				'FIELD_NAME' => $strSearchContentAlias . '.USER_ID',
+				'MULTIPLE' => 'N',
+				'FIELD_TYPE' => 'string',
+				'JOIN' => false,
+			],
+			'ENTITY_TYPE_ID' => [
+				'TABLE_ALIAS' => $strSearchContentAlias,
+				'FIELD_NAME' => $strSearchContentAlias . '.ENTITY_TYPE_ID',
+				'MULTIPLE' => 'N',
+				'FIELD_TYPE' => 'string',
+				'JOIN' => false,
+			],
+			'ENTITY_ID' => [
+				'TABLE_ALIAS' => $strSearchContentAlias,
+				'FIELD_NAME' => $strSearchContentAlias . '.ENTITY_ID',
 				'MULTIPLE' => 'N',
 				'FIELD_TYPE' => 'string',
 				'JOIN' => false,
@@ -2368,11 +2385,12 @@ class CAllSearch extends CDBResult
 			}
 		}
 
-		$bIncSites = $bIncSites || $obQueryWhere->GetJoins() <> '';
+		$bIncSites = $bIncSites || $obQueryWhere->GetJoins();
+
 		return $strWhere;
 	}
 
-	function __PrepareSort($aSort = [], $strSearchContentAlias = 'sc.', $bTagsCloud = false)
+	public function __PrepareSort($aSort = [], $strSearchContentAlias = 'sc.', $bTagsCloud = false)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$helper = $DB->getConnection()->getSqlHelper();
@@ -2387,7 +2405,7 @@ class CAllSearch extends CDBResult
 		{
 			foreach ($aSort as $key => $ord)
 			{
-				$ord = mb_strtoupper($ord) <> 'ASC' ? 'DESC' : 'ASC';
+				$ord = mb_strtoupper($ord) !== 'ASC' ? 'DESC' : 'ASC';
 				$key = mb_strtoupper($key);
 				switch ($key)
 				{
@@ -2410,7 +2428,7 @@ class CAllSearch extends CDBResult
 			$this->flagsUseRatingSort = 0;
 			foreach ($aSort as $key => $ord)
 			{
-				$ord = mb_strtoupper($ord) <> 'ASC' ? 'DESC' : 'ASC';
+				$ord = mb_strtoupper($ord) !== 'ASC' ? 'DESC' : 'ASC';
 				$key = mb_strtoupper($key);
 				switch ($key)
 				{
@@ -2451,7 +2469,7 @@ class CAllSearch extends CDBResult
 				}
 			}
 
-			if (count($arOrder) == 0)
+			if (!$arOrder)
 			{
 				$arOrder[] = 'CUSTOM_RANK DESC';
 				$arOrder[] = $helper->quote('RANK') . ' DESC';
@@ -2480,7 +2498,7 @@ class CAllSearch extends CDBResult
 		}
 		elseif (array_key_exists('DATE_CHANGE', $arFields))
 		{
-			$arFields['DATE_CHANGE'] = $DB->FormatDate($arFields['DATE_CHANGE'], 'DD.MM.YYYY HH:MI:SS', CLang::GetDateFormat());
+			$arFields['DATE_CHANGE'] = CDatabase::FormatDate($arFields['DATE_CHANGE'], 'DD.MM.YYYY HH:MI:SS', CLang::GetDateFormat());
 		}
 
 		$tableFields = [];
@@ -2542,7 +2560,7 @@ class CAllSearch extends CDBResult
 
 		$site = false;
 		CMain::InitPathVars($site, $path);
-		$DOC_ROOT = CSite::GetSiteDocRoot($site);
+		$DOC_ROOT = \Bitrix\Main\SiteTable::getDocumentRoot(!$site ? null : $site);
 		$path = rtrim($path, '/');
 
 		if (!is_array($arGroups))
@@ -2587,7 +2605,7 @@ class CAllSearch extends CDBResult
 					}
 
 					$full_file = $path . '/' . $file;
-					if ($full_file == '/bitrix')
+					if ($full_file === '/bitrix')
 					{
 						continue;
 					}
@@ -2627,37 +2645,49 @@ class CAllSearch extends CDBResult
 		}
 	}
 
-	public static function SetContentItemGroups($index_id, $arGroups)
+	public static function SetContentItemGroups($index_id, $arGroups, $updateFullText = true, $isNew = false)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
+		$helper = $DB->getConnection()->getSqlHelper();
 		$index_id = intval($index_id);
 
 		$arToDelete = [];
 		$arToInsert = [];
+		$arFullText = [];
 		foreach ($arGroups as $group_code)
 		{
 			if ($group_code <> '')
 			{
-				$arToInsert[$group_code] = '(' . $index_id . ", '" . $DB->ForSQL($group_code) . "')";
+				$arToInsert[$group_code] = [
+					'SEARCH_CONTENT_ID' => $index_id,
+					'GROUP_CODE' => $group_code,
+				];
+				if ($updateFullText)
+				{
+					$arFullText[] = $group_code;
+				}
 			}
 		}
 		ksort($arToInsert);
 
 		//Read database
-		$rs = $DB->Query('
-			SELECT * FROM b_search_content_right
-			WHERE SEARCH_CONTENT_ID = ' . $index_id . '
-		');
-		while ($ar = $rs->Fetch())
+		if (!$isNew)
 		{
-			$group_code = $ar['GROUP_CODE'];
-			if (isset($arToInsert[$group_code]))
+			$rs = $DB->Query('
+				SELECT * FROM b_search_content_right
+				WHERE SEARCH_CONTENT_ID = ' . $index_id . '
+			');
+			while ($ar = $rs->Fetch())
 			{
-				unset($arToInsert[$group_code]); //This already in DB
-			}
-			else
-			{
-				$arToDelete[] = "'" . $DB->ForSQL($group_code) . "'";  //And this should be deleted
+				$group_code = $ar['GROUP_CODE'];
+				if (isset($arToInsert[$group_code]))
+				{
+					unset($arToInsert[$group_code]); //This already in DB
+				}
+				else
+				{
+					$arToDelete[] = "'" . $DB->ForSql($group_code) . "'";  //And this should be deleted
+				}
 			}
 		}
 
@@ -2672,11 +2702,18 @@ class CAllSearch extends CDBResult
 
 		if ($arToInsert)
 		{
-			$DB->Query('
-				INSERT INTO b_search_content_right
-				(SEARCH_CONTENT_ID, GROUP_CODE)
-				VALUES ' . implode(',', $arToInsert)
-			);
+			$merge = $helper->prepareMergeMultiple('b_search_content_right', ['SEARCH_CONTENT_ID', 'GROUP_CODE'], $arToInsert);
+			if ($merge && $merge[0])
+			{
+				$DB->Query($merge[0]);
+			}
+		}
+
+		if ($arFullText && ($arToDelete || $arToInsert))
+		{
+			CSearchFullText::getInstance()->update($index_id, [
+				'PERMISSIONS' => $arFullText,
+			]);
 		}
 	}
 
@@ -2720,7 +2757,7 @@ class CAllSearch extends CDBResult
 		return '((' . implode(') OR (', $arResult) . '))';
 	}
 
-	public static function SetContentItemParams($index_id, $arParams)
+	public static function SetContentItemParams($index_id, $arParams, $updateFullText = true)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$index_id = intval($index_id);
@@ -2732,9 +2769,9 @@ class CAllSearch extends CDBResult
 			foreach ($arParams as $k1 => $v1)
 			{
 				$name = trim($k1);
-				if ($name <> '')
+				if ($name !== '')
 				{
-					$sql_name = "'" . $DB->ForSQL($name, 100) . "'";
+					$sql_name = "'" . $DB->ForSql($name, 100) . "'";
 
 					if (!is_array($v1))
 					{
@@ -2744,9 +2781,9 @@ class CAllSearch extends CDBResult
 					foreach ($v1 as $v2)
 					{
 						$value = trim($v2);
-						if ($value <> '')
+						if ($value !== '')
 						{
-							$sql_value = "'" . $DB->ForSQL($value, 100) . "'";
+							$sql_value = "'" . $DB->ForSql($value, 100) . "'";
 							$key = md5($sql_name) . md5($sql_value);
 
 							$arToInsert[$key] = '
@@ -2778,8 +2815,8 @@ class CAllSearch extends CDBResult
 			');
 			while ($ar = $rs->Fetch())
 			{
-				$sql_name = "'" . $DB->ForSQL($ar['PARAM_NAME'], 100) . "'";
-				$sql_value = "'" . $DB->ForSQL($ar['PARAM_VALUE'], 100) . "'";
+				$sql_name = "'" . $DB->ForSql($ar['PARAM_NAME'], 100) . "'";
+				$sql_value = "'" . $DB->ForSql($ar['PARAM_VALUE'], 100) . "'";
 				$key = md5($sql_name) . md5($sql_value);
 
 				if (array_key_exists($key, $arToInsert))
@@ -2788,7 +2825,7 @@ class CAllSearch extends CDBResult
 				}
 				else
 				{
-					$DB->Query($s = '
+					$DB->Query('
 						DELETE FROM b_search_content_param
 						WHERE
 						SEARCH_CONTENT_ID = ' . $index_id . '
@@ -2802,6 +2839,13 @@ class CAllSearch extends CDBResult
 		foreach ($arToInsert as $sql)
 		{
 			$DB->Query($sql);
+		}
+
+		if ($updateFullText)
+		{
+			CSearchFullText::getInstance()->update($index_id, [
+				'PARAMS' => $arParams,
+			]);
 		}
 	}
 
@@ -2821,11 +2865,11 @@ class CAllSearch extends CDBResult
 			SELECT PARAM_NAME, PARAM_VALUE
 			FROM b_search_content_param
 			WHERE SEARCH_CONTENT_ID = ' . $index_id . '
-			' . ($param_name && $param_name <> '' ? " AND PARAM_NAME = '" . $DB->ForSQL($param_name) . "'" : '') . '
+			' . ($param_name && $param_name <> '' ? " AND PARAM_NAME = '" . $DB->ForSql($param_name) . "'" : '') . '
 		');
 		while ($ar = $rs->Fetch())
 		{
-			if (!isset($ar['PARAM_NAME'], $arResult))
+			if (!isset($arResult[$ar['PARAM_NAME']]))
 			{
 				$arResult[$ar['PARAM_NAME']] = [];
 			}
@@ -2835,7 +2879,7 @@ class CAllSearch extends CDBResult
 		return $arResult;
 	}
 
-	function stddev($arValues)
+	public function stddev($arValues)
 	{
 		$mean = array_sum($arValues) / count($arValues);
 		$variance = 0.0;
@@ -2846,7 +2890,7 @@ class CAllSearch extends CDBResult
 		return sqrt($variance / count($arValues));
 	}
 
-	function normdev($words_count)
+	public function normdev($words_count)
 	{
 		$a = [];
 		while ($words_count > 0)
@@ -2861,13 +2905,13 @@ class CAllSearch extends CDBResult
 		$DB = CDatabase::GetModuleConnection('search');
 
 		$strFilter = '';
-		if ($MODULE_ID != '')
+		if ($MODULE_ID !== '')
 		{
 			$strFilter .= " AND MODULE_ID = '" . $DB->ForSql($MODULE_ID) . "' ";
 		}
 
 		$strJoin = '';
-		if ($SITE_ID != '')
+		if ($SITE_ID !== '')
 		{
 			$strFilter .= " AND scsite.SITE_ID = '" . $DB->ForSql($SITE_ID) . "' ";
 			$strJoin .= ' INNER JOIN b_search_content_site scsite ON sc.ID=scsite.SEARCH_CONTENT_ID ';
@@ -2906,8 +2950,8 @@ class CAllSearch extends CDBResult
 			$DB->Query('DELETE FROM b_search_content_site WHERE SEARCH_CONTENT_ID = ' . $ar['ID']);
 			$DB->Query('DELETE FROM b_search_content_title WHERE SEARCH_CONTENT_ID = ' . $ar['ID']);
 			$DB->Query('DELETE FROM b_search_tags WHERE SEARCH_CONTENT_ID = ' . $ar['ID']);
-			CSearchFullText::getInstance()->deleteById($ar['ID']);
 			$DB->Query('DELETE FROM b_search_content WHERE ID = ' . $ar['ID']);
+			CSearchFullText::getInstance()->deleteById($ar['ID']);
 		}
 
 		CSearchTags::CleanCache();
@@ -2935,8 +2979,8 @@ class CAllSearch extends CDBResult
 			$DB->Query('DELETE FROM b_search_content_site WHERE SEARCH_CONTENT_ID = ' . $ar['ID']);
 			$DB->Query('DELETE FROM b_search_content_title WHERE SEARCH_CONTENT_ID = ' . $ar['ID']);
 			$DB->Query('DELETE FROM b_search_tags WHERE SEARCH_CONTENT_ID = ' . $ar['ID']);
-			CSearchFullText::getInstance()->deleteById($ar['ID']);
 			$DB->Query('DELETE FROM b_search_content WHERE ID = ' . $ar['ID']);
+			CSearchFullText::getInstance()->deleteById($ar['ID']);
 		}
 
 		CSearchTags::CleanCache();
@@ -2945,31 +2989,41 @@ class CAllSearch extends CDBResult
 	public static function DeleteIndex($MODULE_ID, $ITEM_ID = false, $PARAM1 = false, $PARAM2 = false, $SITE_ID = false)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
+		$fullTextDelay = (CPageOption::GetOptionString('search', 'full_text_delay_index', null) ?? COption::GetOptionString('search', 'full_text_delay_index')) === 'Y';
 		$bIncSites = false;
-		$op = (mb_strpos($ITEM_ID, '%') !== false ? '%=' : '=');
 
-		if ($PARAM1 !== false && $PARAM2 !== false)
+		if (is_array($ITEM_ID))
 		{
-			$strSqlWhere = CSearch::__PrepareFilter([
-				'MODULE_ID' => $MODULE_ID,
-				$op . 'ITEM_ID' => $ITEM_ID,
-				[
-					'=PARAM1' => $PARAM1,
-					'PARAM2' => $PARAM2,
-				],
-				'SITE_ID' => $SITE_ID,
-			], $bIncSites);
+			$arFilter = $ITEM_ID;
 		}
 		else
 		{
-			$strSqlWhere = CSearch::__PrepareFilter([
-				'MODULE_ID' => $MODULE_ID,
-				$op . 'ITEM_ID' => $ITEM_ID,
-				'PARAM1' => $PARAM1,
-				'PARAM2' => $PARAM2,
-				'SITE_ID' => $SITE_ID,
-			], $bIncSites);
+			$op = (mb_strpos($ITEM_ID, '%') !== false ? '%=' : '=');
+
+			if ($PARAM1 !== false && $PARAM2 !== false)
+			{
+				$arFilter = [
+					$op . 'ITEM_ID' => $ITEM_ID,
+					[
+						'=PARAM1' => $PARAM1,
+						'PARAM2' => $PARAM2,
+					],
+					'SITE_ID' => $SITE_ID,
+				];
+			}
+			else
+			{
+				$arFilter = [
+					$op . 'ITEM_ID' => $ITEM_ID,
+					'PARAM1' => $PARAM1,
+					'PARAM2' => $PARAM2,
+					'SITE_ID' => $SITE_ID,
+				];
+			}
 		}
+
+		$arFilter['MODULE_ID'] = $MODULE_ID;
+		$strSqlWhere = CSearch::__PrepareFilter($arFilter, $bIncSites);
 
 		$strSql = '
 			SELECT sc.ID
@@ -2994,8 +3048,11 @@ class CAllSearch extends CDBResult
 			$DB->Query('DELETE FROM b_search_content_site WHERE SEARCH_CONTENT_ID = ' . $ar['ID']);
 			$DB->Query('DELETE FROM b_search_content_title WHERE SEARCH_CONTENT_ID = ' . $ar['ID']);
 			$DB->Query('DELETE FROM b_search_tags WHERE SEARCH_CONTENT_ID = ' . $ar['ID']);
-			CSearchFullText::getInstance()->deleteById($ar['ID']);
 			$DB->Query('DELETE FROM b_search_content WHERE ID = ' . $ar['ID']);
+			if (!$fullTextDelay || !CSearchFullText::getInstance()->syncContent($ar['ID']))
+			{
+				CSearchFullText::getInstance()->deleteById($ar['ID']);
+			}
 		}
 
 		CSearchTags::CleanCache();
@@ -3004,6 +3061,7 @@ class CAllSearch extends CDBResult
 	public static function Update($ID, $arFields)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
+		$fullTextDelay = (CPageOption::GetOptionString('search', 'full_text_delay_index', null) ?? COption::GetOptionString('search', 'full_text_delay_index')) === 'Y';
 		$bUpdate = false;
 
 		if (array_key_exists('~DATE_CHANGE', $arFields))
@@ -3018,7 +3076,7 @@ class CAllSearch extends CDBResult
 		}
 		elseif (array_key_exists('DATE_CHANGE', $arFields))
 		{
-			$arFields['DATE_CHANGE'] = $DB->FormatDate($arFields['DATE_CHANGE'], 'DD.MM.YYYY HH:MI:SS', CLang::GetDateFormat());
+			$arFields['DATE_CHANGE'] = CDatabase::FormatDate($arFields['DATE_CHANGE'], 'DD.MM.YYYY HH:MI:SS', CLang::GetDateFormat());
 		}
 
 		if (array_key_exists('SITE_ID', $arFields))
@@ -3041,18 +3099,18 @@ class CAllSearch extends CDBResult
 					$arNewGroups[$group_id] = $group_id;
 				}
 			}
-			CSearch::SetContentItemGroups($ID, $arNewGroups);
+			CSearch::SetContentItemGroups($ID, $arNewGroups, false);
 			$bUpdate = true;
 		}
 
 		if (array_key_exists('PARAMS', $arFields))
 		{
-			CSearch::SetContentItemParams($ID, $arFields['PARAMS']);
+			CSearch::SetContentItemParams($ID, $arFields['PARAMS'], false);
 			$bUpdate = true;
 		}
 
 		$strUpdate = $DB->PrepareUpdate('b_search_content', $arFields);
-		if ($strUpdate <> '')
+		if ($strUpdate)
 		{
 			$DB->Query('UPDATE b_search_content SET ' . $strUpdate . ' WHERE ID = ' . intval($ID));
 			$bUpdate = true;
@@ -3060,7 +3118,10 @@ class CAllSearch extends CDBResult
 
 		if ($bUpdate)
 		{
-			CSearchFullText::getInstance()->update($ID, $arFields);
+			if (!$fullTextDelay || !CSearchFullText::getInstance()->syncContent($ID))
+			{
+				CSearchFullText::getInstance()->update($ID, $arFields);
+			}
 		}
 	}
 
@@ -3080,7 +3141,7 @@ class CAllSearch extends CDBResult
 			SELECT sc.ID
 			FROM b_search_content sc
 			' . ($bIncSites ? 'INNER JOIN b_search_content_site scsite ON sc.ID=scsite.SEARCH_CONTENT_ID' : '') . '
-			' . ($strSqlWhere <> '' ? 'WHERE ' . $strSqlWhere : '') . '
+			' . ($strSqlWhere ? 'WHERE ' . $strSqlWhere : '') . '
 		';
 		$rs = $DB->Query($strSql);
 		while ($ar = $rs->Fetch())
@@ -3091,30 +3152,7 @@ class CAllSearch extends CDBResult
 
 	public static function ChangeSite($MODULE_ID, $arSite, $ITEM_ID = false, $PARAM1 = false, $PARAM2 = false, $SITE_ID = false)
 	{
-		$DB = CDatabase::GetModuleConnection('search');
-		$bIncSites = false;
-
-		$strSqlWhere = CSearch::__PrepareFilter([
-			'MODULE_ID' => $MODULE_ID,
-			'ITEM_ID' => $ITEM_ID,
-			'PARAM1' => $PARAM1,
-			'PARAM2' => $PARAM2,
-			'SITE_ID' => $SITE_ID,
-		], $bIncSites);
-
-		$strSql = '
-			SELECT sc.ID
-			FROM b_search_content sc
-			' . ($bIncSites ? 'INNER JOIN b_search_content_site scsite ON sc.ID=scsite.SEARCH_CONTENT_ID' : '') . '
-			WHERE
-			' . $strSqlWhere . '
-		';
-
-		$r = $DB->Query($strSql);
-		while ($arR = $r->Fetch())
-		{
-			CSearch::Update($arR['ID'], ['SITE_ID' => $arSite]);
-		}
+		static::ChangeIndex($MODULE_ID, ['SITE_ID' => $arSite], $ITEM_ID, $PARAM1, $PARAM2, $SITE_ID);
 	}
 
 	public static function ChangePermission($MODULE_ID, $arGroups, $ITEM_ID = false, $PARAM1 = false, $PARAM2 = false, $SITE_ID = false, $PARAMS = false)
@@ -3133,10 +3171,9 @@ class CAllSearch extends CDBResult
 
 		if ($strSqlWhere)
 		{
-			$strSqlJoin1 = 'INNER JOIN b_search_content sc ON sc.ID = b_search_content_right.SEARCH_CONTENT_ID';
 			$match = [];
 			//Copy first exists into inner join in hopeless try to defeat MySQL optimizer
-			if (preg_match('#^\\s*EXISTS (\\(SELECT \\* FROM b_search_content_param WHERE SEARCH_CONTENT_ID = sc.ID AND PARAM_NAME = \'[^\']+\' AND PARAM_VALUE  = \'[^\']+\'\\))#', $strSqlWhere, $match))
+			if (preg_match("#^\s*EXISTS (\(SELECT \* FROM b_search_content_param WHERE SEARCH_CONTENT_ID = sc.ID AND PARAM_NAME = '[^']+' AND PARAM_VALUE = '[^']+'\))#", $strSqlWhere, $match))
 			{
 				$subTable = str_replace('SEARCH_CONTENT_ID = sc.ID AND', '', $match[1]);
 				$strSqlJoin2 = 'INNER JOIN ' . $subTable . ' p1 ON p1.SEARCH_CONTENT_ID = sc.ID';
@@ -3148,7 +3185,6 @@ class CAllSearch extends CDBResult
 		}
 		else
 		{
-			$strSqlJoin1 = '';
 			$strSqlJoin2 = '';
 		}
 
@@ -3161,24 +3197,73 @@ class CAllSearch extends CDBResult
 				''
 			) . '
 		');
-		while ($arR = $rs->fetch())
+		while ($arR = $rs->Fetch())
 		{
 			CSearch::Update($arR['ID'], ['PERMISSIONS' => $arGroups]);
+		}
+	}
+
+	public static function AddPermission($MODULE_ID, $permission, $arFilter = [])
+	{
+		$DB = CDatabase::GetModuleConnection('search');
+		$helper = $DB->getConnection()->getSqlHelper();
+		$bIncSites = false;
+
+		$arFilter['MODULE_ID'] = $MODULE_ID;
+		$strSqlWhere = CSearch::__PrepareFilter($arFilter, $bIncSites);
+
+		$insert = $helper->getInsertIgnore('b_search_content_right', '(SEARCH_CONTENT_ID, GROUP_CODE)', '
+			SELECT sc.ID, \'' . $DB->ForSql($permission) . '\'
+			FROM b_search_content sc
+			' . ($bIncSites ? 'INNER JOIN b_search_content_site scsite ON sc.ID=scsite.SEARCH_CONTENT_ID' : '') . '
+			' . ($strSqlWhere ? 'WHERE ' . $strSqlWhere : '')
+		);
+
+		$rs = $DB->Query($insert);
+		if ($rs->AffectedRowsCount() > 0)
+		{
+			CSearchFullText::getInstance()->syncPermission($permission, $arFilter);
+		}
+	}
+
+	public static function DeletePermission($MODULE_ID, $permission, $arFilter = [])
+	{
+		$DB = CDatabase::GetModuleConnection('search');
+		$bIncSites = false;
+
+		$arFilter['MODULE_ID'] = $MODULE_ID;
+		$strSqlWhere = CSearch::__PrepareFilter($arFilter, $bIncSites);
+
+		$alias = ($DB->getConnection() instanceof \Bitrix\Main\DB\MysqlCommonConnection ? 'r' : '');
+		$delete = 'DELETE ' . $alias . ' FROM b_search_content_right r WHERE SEARCH_CONTENT_ID in (
+			SELECT sc.ID
+			FROM b_search_content sc
+			' . ($bIncSites ? 'INNER JOIN b_search_content_site scsite ON sc.ID=scsite.SEARCH_CONTENT_ID' : '') . '
+			WHERE
+			' . ($strSqlWhere ?: '1=1') . '
+			)
+			AND GROUP_CODE = \'' . $DB->ForSql($permission) . '\'
+		';
+
+		$rs = $DB->Query($delete);
+		if ($rs->AffectedRowsCount() > 0)
+		{
+			CSearchFullText::getInstance()->syncPermission($permission, $arFilter);
 		}
 	}
 }
 
 class CSearchSQLHelper
 {
-	var $bIncSites = false;
-	var $strSearchContentAlias = '';
+	public $bIncSites = false;
+	public $strSearchContentAlias = '';
 
-	function __construct($strSearchContentAlias)
+	public function __construct($strSearchContentAlias)
 	{
 		$this->strSearchContentAlias = $strSearchContentAlias;
 	}
 
-	function _CallbackURL($field_name, $operation, $field_value)
+	public function _CallbackURL($field_name, $operation, $field_value)
 	{
 		global $DB;
 
@@ -3188,13 +3273,14 @@ class CSearchSQLHelper
 		}
 		elseif ($field_value !== false)
 		{
-			$sql_values = [$DB->ForSQL($field_value)];
+			$sql_values = [$DB->ForSql($field_value)];
 		}
 		else
 		{
 			$sql_values = [];
 		}
 
+		$arSQL = [];
 		$strSql = '';
 		if (!empty($sql_values))
 		{
@@ -3240,7 +3326,7 @@ class CSearchSQLHelper
 		}
 	}
 
-	function _CallbackPARAMS($field_name, $operation, $field_value)
+	public function _CallbackPARAMS($field_name, $operation, $field_value)
 	{
 		global $DB;
 
@@ -3253,15 +3339,15 @@ class CSearchSQLHelper
 				{
 					foreach ($val as $i => $val2)
 					{
-						$val[$i] = $DB->ForSQL($val2);
+						$val[$i] = $DB->ForSql($val2);
 					}
 					$where = " in ('" . implode("', '", $val) . "')";
 				}
 				else
 				{
-					$where = " = '" . $DB->ForSQL($val) . "'";
+					$where = " = '" . $DB->ForSql($val) . "'";
 				}
-				$arSql[] = 'EXISTS (SELECT * FROM b_search_content_param WHERE SEARCH_CONTENT_ID = ' . $field_name . " AND PARAM_NAME = '" . $DB->ForSQL($key) . "' AND PARAM_VALUE " . $where . ')';
+				$arSql[] = 'EXISTS (SELECT * FROM b_search_content_param WHERE SEARCH_CONTENT_ID = ' . $field_name . " AND PARAM_NAME = '" . $DB->ForSql($key) . "' AND PARAM_VALUE " . $where . ')';
 			}
 		}
 
@@ -3281,25 +3367,26 @@ class CSearchSQLHelper
 
 class CAllSearchQuery
 {
-	var $m_query;
-	var $m_parsed_query;
-	var $m_words;
-	var $m_stemmed_words;
-	var $m_stemmed_words_id;
-	var $m_fields;
-	var $m_kav;
-	var $default_query_type;
-	var $rus_bool_lang;
-	var $no_bool_lang;
-	var $m_casematch;
-	var $error = '';
-	var $errorno = 0;
-	var $bTagsSearch = false;
-	var $m_tags_words;
-	var $bStemming = false;
-	var $bText = false;
+	public $m_query;
+	public $m_parsed_query;
+	public $m_words;
+	public $m_stemmed_words;
+	public $m_stemmed_words_id;
+	public $m_fields;
+	public $m_kav;
+	public $default_query_type;
+	public $rus_bool_lang;
+	public $no_bool_lang;
+	public $m_casematch;
+	public $m_lang;
+	public $error = '';
+	public $errorno = 0;
+	public $bTagsSearch = false;
+	public $m_tags_words;
+	public $bStemming = false;
+	public $bText = false;
 
-	function __construct($default_query_type = 'and', $rus_bool_lang = 'yes', $m_casematch = 0, $site_id = '')
+	public function __construct($default_query_type = 'and', $rus_bool_lang = 'yes', $m_casematch = 0, $site_id = '')
 	{
 		$this->m_query = '';
 		$this->m_stemmed_words = [];
@@ -3322,7 +3409,7 @@ class CAllSearchQuery
 		}
 	}
 
-	function GetQueryString($fields, $query, $bTagsSearch = false, $bUseStemming = true, $bErrorOnEmptyStem = false)
+	public function GetQueryString($fields, $query, $bTagsSearch = false, $bUseStemming = true, $bErrorOnEmptyStem = false)
 	{
 		$this->m_words = [];
 		$this->m_fields = explode(',', $fields);
@@ -3360,7 +3447,7 @@ class CAllSearchQuery
 		return $query;
 	}
 
-	function CutKav($query)
+	public function CutKav($query)
 	{
 		$arQuotes = [];
 		if (preg_match_all("/([\"'])(.*?)(?<!\\\\)(\\1)/s", $query, $arQuotes))
@@ -3368,7 +3455,7 @@ class CAllSearchQuery
 			foreach ($arQuotes[2] as $i => $quoted)
 			{
 				$quoted = trim($quoted);
-				if ($quoted <> '')
+				if ($quoted !== '')
 				{
 					$repl = $i . 'cut5';
 					$this->m_kav[$repl] = str_replace('\\"', '"', $quoted);
@@ -3388,10 +3475,10 @@ class CAllSearchQuery
 		return $query;
 	}
 
-	function ParseQ($q)
+	public function ParseQ($q)
 	{
 		$q = trim($q);
-		if ($q == '')
+		if ($q === '')
 		{
 			return '';
 		}
@@ -3409,7 +3496,7 @@ class CAllSearchQuery
 		return $q;
 	}
 
-	function ParseStr($qwe)
+	public function ParseStr($qwe)
 	{
 		//Take alphabet into account
 		$arStemInfo = stemming_init($this->m_lang);
@@ -3426,7 +3513,7 @@ class CAllSearchQuery
 			$qwe = preg_replace('/(\\s+|^|[|&~])not(\\s+|$|[|&~])/isu', "\\1~\\2", $qwe);
 			$qwe = preg_replace('/(\\s+|^|[|&~])without(\\s+|$|[|&~])/isu', "\\1~\\2", $qwe);
 
-			if ($this->rus_bool_lang == 'yes')
+			if ($this->rus_bool_lang === 'yes')
 			{
 				$qwe = preg_replace('/(\\s+|^|[|&~])' . GetMessage('SEARCH_TERM_OR') . '(\\s+|$|[|&~])/isu', "\\1|\\2", $qwe);
 				$qwe = preg_replace('/(\\s+|^|[|&~])' . GetMessage('SEARCH_TERM_AND') . '(\\s+|$|[|&~])/isu', "\\1&\\2", $qwe);
@@ -3435,14 +3522,14 @@ class CAllSearchQuery
 			}
 		}
 
-		$qwe = preg_replace('/(\\s*\\|+\\s*)/isu', '|', $qwe);
-		$qwe = preg_replace('/(\\s*\\++\\s*|\\s*\\&\\s*)/isu', '&', $qwe);
-		$qwe = preg_replace('/(\\s*\\~+\\s*)/isu', '~', $qwe);
+		$qwe = preg_replace('/(\s*\|+\s*)/isu', '|', $qwe);
+		$qwe = preg_replace('/(\s*\++\s*|\s*&\s*)/isu', '&', $qwe);
+		$qwe = preg_replace('/(\s*\~+\s*)/isu', '~', $qwe);
 
 		$qwe = preg_replace('/\s*([()])\s*/su', "\\1", $qwe);
 
 		// default query type is and
-		if (mb_strtolower($this->default_query_type) == 'or')
+		if (mb_strtolower($this->default_query_type) === 'or')
 		{
 			$default_op = '|';
 		}
@@ -3451,15 +3538,15 @@ class CAllSearchQuery
 			$default_op = '&';
 		}
 
-		$qwe = preg_replace('/(\s+|\&\|+|\|\&+)/su', $default_op, $qwe);
+		$qwe = preg_replace('/(\s+|&\|+|\|&+)/su', $default_op, $qwe);
 
 		// remove unnesessary boolean operators
 		$qwe = preg_replace('/\|+/', '|', $qwe);
 		$qwe = preg_replace('/&+/', '&', $qwe);
 		$qwe = preg_replace('/~+/', '~', $qwe);
-		$qwe = preg_replace('/\|\&\|/', '&', $qwe);
-		$qwe = preg_replace('/[\|\&\~]+$/', '', $qwe);
-		$qwe = preg_replace('/^[\|\&]+/', '', $qwe);
+		$qwe = preg_replace('/\|&\|/', '&', $qwe);
+		$qwe = preg_replace('/[\|&\~]+$/', '', $qwe);
+		$qwe = preg_replace('/^[\|&]+/', '', $qwe);
 
 		// transform "w1 ~w2" -> "w1 default_op ~ w2"
 		// ") ~w" -> ") default_op ~w"
@@ -3468,11 +3555,11 @@ class CAllSearchQuery
 		// "w (" -> "w default_op ("
 		// ")(" -> ") default_op ("
 
-		$qwe = preg_replace('/([^\&\~\|\(\)]+)~([^\&\~\|\(\)]+)/su', "\\1" . $default_op . "~\\2", $qwe);
-		$qwe = preg_replace('/\)~{1,}/su', ')' . $default_op . '~', $qwe);
-		$qwe = preg_replace('/~{1,}\(/su', ($default_op == '|' ? '~|(' : '&~('), $qwe);
-		$qwe = preg_replace('/\)([^\&\~\|\(\)]+)/su', ')' . $default_op . "\\1", $qwe);
-		$qwe = preg_replace('/([^\&\~\|\(\)]+)\(/su', "\\1" . $default_op . '(', $qwe);
+		$qwe = preg_replace('/([^&\~\|\(\)]+)~([^&\~\|\(\)]+)/su', "\\1" . $default_op . "~\\2", $qwe);
+		$qwe = preg_replace('/\)~+/su', ')' . $default_op . '~', $qwe);
+		$qwe = preg_replace('/~+\(/su', ($default_op === '|' ? '~|(' : '&~('), $qwe);
+		$qwe = preg_replace('/\)([^&\~\|\(\)]+)/su', ')' . $default_op . "\\1", $qwe);
+		$qwe = preg_replace('/([^&\~\|\(\)]+)\(/su', "\\1" . $default_op . '(', $qwe);
 		$qwe = preg_replace('/\) *\(/su', ')' . $default_op . '(', $qwe);
 
 		// remove unnesessary boolean operators
@@ -3480,19 +3567,19 @@ class CAllSearchQuery
 		$qwe = preg_replace('/&+/', '&', $qwe);
 
 		// remove errornous format of query - ie: '(&', '&)', '(|', '|)', '~&', '~|', '~)'
-		$qwe = preg_replace('/\(\&{1,}/s', '(', $qwe);
-		$qwe = preg_replace('/\&{1,}\)/s', ')', $qwe);
-		$qwe = preg_replace('/\~{1,}\)/s', ')', $qwe);
-		$qwe = preg_replace('/\(\|{1,}/s', '(', $qwe);
-		$qwe = preg_replace('/\|{1,}\)/s', ')', $qwe);
-		$qwe = preg_replace('/\~{1,}\&{1,}/s', '&', $qwe);
-		$qwe = preg_replace('/\~{1,}\|{1,}/s', '|', $qwe);
+		$qwe = preg_replace('/\(&+/s', '(', $qwe);
+		$qwe = preg_replace('/&+\)/s', ')', $qwe);
+		$qwe = preg_replace('/\~+\)/s', ')', $qwe);
+		$qwe = preg_replace('/\(\|+/s', '(', $qwe);
+		$qwe = preg_replace('/\|+\)/s', ')', $qwe);
+		$qwe = preg_replace('/\~+&+/s', '&', $qwe);
+		$qwe = preg_replace('/\~+\|+/s', '|', $qwe);
 
 		$qwe = preg_replace('/\(\)/s', '', $qwe);
-		$qwe = preg_replace('/^[\|\&]{1,}/s', '', $qwe);
-		$qwe = preg_replace('/[\|\&\~]{1,}$/s', '', $qwe);
-		$qwe = preg_replace('/\|\&/s', '&', $qwe);
-		$qwe = preg_replace('/\&\|/s', '|', $qwe);
+		$qwe = preg_replace('/^[\|&]+/s', '', $qwe);
+		$qwe = preg_replace('/[\|&\~]+$/s', '', $qwe);
+		$qwe = preg_replace('/\|&/s', '&', $qwe);
+		$qwe = preg_replace('/&\|/s', '|', $qwe);
 
 		// remove unnesessary boolean operators one more time
 		$qwe = preg_replace('/\|+/', '|', $qwe);
@@ -3501,7 +3588,7 @@ class CAllSearchQuery
 		return $qwe;
 	}
 
-	function StemWord($w)
+	public function StemWord($w)
 	{
 		static $preg_ru = false;
 		if (is_array($w))
@@ -3516,7 +3603,7 @@ class CAllSearchQuery
 			{
 				return $w;
 			}
-			elseif ($this->rus_bool_lang == 'yes')
+			elseif ($this->rus_bool_lang === 'yes')
 			{
 				if ($preg_ru === false)
 				{
@@ -3545,13 +3632,23 @@ class CAllSearchQuery
 		}
 	}
 
-	function StemQuery($q, $lang = 'en')
+	/**
+	 * @param string $q
+	 * @param string $lang
+	 * @phpstan-impure
+	 */
+	public function StemQuery($q, $lang = 'en')
 	{
 		$arStemInfo = stemming_init($lang);
 		return preg_replace_callback('/([' . $arStemInfo['pcre_letters'] . ']+)/u', [$this, 'StemWord'], $q);
 	}
 
-	function PrepareQuery($q)
+	public function BuildWhereClause($word)
+	{
+		throw new \Bitrix\Main\NotImplementedException;
+	}
+
+	public function PrepareQuery($q)
 	{
 		$state = 0;
 		$qu = [];
@@ -3573,7 +3670,7 @@ class CAllSearchQuery
 					$state = 0;
 					$qu[] = ' NOT ';
 				}
-				elseif ($t == '(')
+				elseif ($t === '(')
 				{
 					$n++;
 					$state = 0;
@@ -3643,12 +3740,13 @@ class CAllSearchQuery
 
 class CSearchCallback
 {
-	var $MODULE = '';
-	var $max_execution_time = 0;
-	var $CNT = 0;
-	var $SESS_ID = '';
+	public $MODULE = '';
+	public static $startTime = START_EXEC_TIME;
+	public $max_execution_time = 0;
+	public $CNT = 0;
+	public $SESS_ID = '';
 
-	function Index($arFields)
+	public function Index($arFields)
 	{
 		$ID = $arFields['ID'];
 		if ($ID == '')
@@ -3657,8 +3755,8 @@ class CSearchCallback
 		}
 		unset($arFields['ID']);
 		CSearch::Index($this->MODULE, $ID, $arFields, false, $this->SESS_ID);
-		$this->CNT = $this->CNT + 1;
-		if ($this->max_execution_time > 0 && microtime(true) - START_EXEC_TIME > $this->max_execution_time)
+		$this->CNT++;
+		if ($this->max_execution_time > 0 && microtime(true) - static::$startTime > $this->max_execution_time)
 		{
 			return false;
 		}

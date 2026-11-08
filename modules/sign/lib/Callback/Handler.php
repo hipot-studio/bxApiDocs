@@ -21,6 +21,7 @@ use Bitrix\Sign\Repository\DocumentRepository;
 use Bitrix\Sign\Repository\EntityFileRepository;
 use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Integration\Im\InviteCardService;
 use Bitrix\Sign\Service\Integration\Imbot\HrBot;
 use Bitrix\Sign\Service\B2e\MyDocumentsGrid;
 use Bitrix\Sign\Service\Sign\LegalLogService;
@@ -38,6 +39,7 @@ class Handler
 	private LegalLogService $legalLogService;
 	private EntityFileRepository $entityFileRepository;
 	private readonly MyDocumentsGrid\EventService $myDocumentGridService;
+	private readonly InviteCardService $inviteCardService;
 
 	public function __construct(
 		private readonly DocumentRepository $documentRepository,
@@ -49,6 +51,7 @@ class Handler
 		$this->legalLogService = Container::instance()->getLegalLogService();
 		$this->entityFileRepository = Container::instance()->getEntityFileRepository();
 		$this->myDocumentGridService = Container::instance()->getMyDocumentGridEventService();
+		$this->inviteCardService = Container::instance()->getInviteCardService();
 	}
 
 	public function execute(array $payload): Main\Result
@@ -473,8 +476,20 @@ class Handler
 
 		if ($message->getOperationCode() === 'DOCUMENT_SET_USER_DATA')
 		{
+			// This is the one path that writes a finished status past the domain operation, so it
+			// repeats the rule that operation follows rather than adding a marking place of its own:
+			// where this very write ends the action, the cards of the participant go quiet. The queue
+			// of the signing service does not promise the status callback arrives before this one, and
+			// once the participant counts as finished the operation marks nothing any more. In the
+			// usual order the status is already there, the flag below is true, and this costs nothing.
+			$wasFinished = Type\MemberStatus::isFinishForSigning($member->status);
 			$member->status = Type\MemberStatus::DONE;
 			$updateResult = $this->memberRepository->update($member);
+
+			if ($updateResult->isSuccess() && !$wasFinished)
+			{
+				$this->inviteCardService->markCompletedForMember($member);
+			}
 		}
 		else
 		{
@@ -586,6 +601,11 @@ class Handler
 							$hrBotMessageService->handleCompanyReceivedByEmployeeDocument($document, $member)->getErrors(),
 						);
 					}
+
+					if ($resultSendToChat->isSuccess())
+					{
+						$this->muteInvitationCardOfEndedDocument($document, $member);
+					}
 				}
 			}
 
@@ -603,6 +623,32 @@ class Handler
 			$result->addError(new Main\Error('Can\'t add message to chat'));
 			$this->sendChatMessageDeliveredTimelineEvent(false, $document, $member, $message);
 			$this->legalLogService->registerChatInviteNotDelivered($document, $member);
+		}
+	}
+
+	/**
+	 * The card carries the state of the document read at the start of this handler, and the sweep of a
+	 * document that ends runs once, over the cards already in the chat. A document that ends while the
+	 * invitation is on its way is therefore seen by neither: the card arrives calling for an action
+	 * nobody expects any more, and past a finished document nothing mutes it - a participant's own
+	 * status change marks nothing there. Hence the re-read, and deliberately after the message is in:
+	 * that covers the whole window instead of narrowing it. B2E only, and only for a card born active:
+	 * the cards exist nowhere else, and one already quiet has nothing to be done to it.
+	 */
+	private function muteInvitationCardOfEndedDocument(Item\Document $document, Item\Member $member): void
+	{
+		if (
+			!Type\DocumentScenario::isB2EScenario($document->scenario ?? '')
+			|| InviteCardService::isActionOver($member, $document)
+		)
+		{
+			return;
+		}
+
+		$freshDocument = $this->documentRepository->getById($document->id);
+		if ($freshDocument !== null && InviteCardService::isActionOver($member, $freshDocument))
+		{
+			$this->inviteCardService->markCompletedForMember($member);
 		}
 	}
 

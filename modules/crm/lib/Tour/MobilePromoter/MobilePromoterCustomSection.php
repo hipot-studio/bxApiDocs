@@ -2,8 +2,7 @@
 
 namespace Bitrix\Crm\Tour\MobilePromoter;
 
-use Bitrix\Crm\Model\Dynamic\TypeTable;
-use Bitrix\Main\Data\Cache;
+use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Main\Localization\Loc;
 
 class MobilePromoterCustomSection extends MobilePromoter
@@ -36,35 +35,38 @@ class MobilePromoterCustomSection extends MobilePromoter
 			return false;
 		}
 
-		$cache = Cache::createInstance();
-		if ($cache->initCache(
-			self::CACHE_TTL,
-			'crm.tour.mobile-promoter.dynamicTypes',
-			self::CACHE_DIR
-		))
+		foreach ($this->getEntityTypeIdsInCurrentCustomSection() as $entityTypeId)
 		{
-			$dynamicTypes = $cache->getVars();
-		}
-		else
-		{
-			$dynamicTypes = TypeTable::getList([
-				'select' => ['ID', 'ENTITY_TYPE_ID', 'CUSTOM_SECTION_ID'],
-				'filter' => ['>=CUSTOM_SECTION_ID' => 0],
-			])->fetchAll();
-
-			$cache->startDataCache();
-			$cache->endDataCache($dynamicTypes);
-		}
-
-		foreach ($dynamicTypes as $dynamicType)
-		{
-			if ($this->hasItemsByAssigned($dynamicType['ENTITY_TYPE_ID']))
+			if ($this->hasItemsByAssigned($entityTypeId))
 			{
 				return true;
 			}
 		}
 
 		return false;
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function getEntityTypeIdsInCurrentCustomSection(): array
+	{
+		if ($this->customSectionId === null)
+		{
+			return [];
+		}
+
+		foreach (IntranetManager::getCustomSections() ?? [] as $customSection)
+		{
+			if ($customSection->getId() !== $this->customSectionId)
+			{
+				continue;
+			}
+
+			return IntranetManager::getEntityTypesInCustomSection((string)$customSection->getCode());
+		}
+
+		return [];
 	}
 
 	protected function getTitle(): string

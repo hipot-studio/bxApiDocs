@@ -178,7 +178,7 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 		/** @noinspection PhpDeprecationInspection */
 		$rsData = CTaskElapsedTime::GetList(
 			array(),
-			array('ID' => (int) $itemId)
+			array('ID' => (int)$itemId, 'TASK_ID' => (int)$taskId)
 		);
 
 		if (is_object($rsData) && ($arData = $rsData->fetch()))
@@ -195,7 +195,7 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 	 * @param $select
 	 * @param $params
 	 *
-	 * @return array
+	 * @return array [items, navigation data]; navigation data is null when the total count was not requested
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 */
 	public static function getList($order = [], $filter = [], $select = [], $params = []): array
@@ -204,6 +204,7 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 			'order' => (is_array($order) && !empty($order) ? $order : ['ID' => 'ASC']),
 			'filter' => (is_array($filter) ? $filter : []),
 			'select' => (is_array($select) && !empty($select) ? $select : ['*']),
+			'count_total' => true,
 		];
 
 		if (is_array($params))
@@ -219,7 +220,7 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 					$parameters['offset'] = (int)$params['NAV_PARAMS']['iNumPage'];
 				}
 			}
-			$parameters['count_total'] = (isset($params['count_total']) ? (bool)$params['count_total'] : true);
+			$parameters['count_total'] = self::isCountTotalRequested($params);
 		}
 
 		$dbResult = ElapsedTimeTable::getList($parameters, [
@@ -228,6 +229,12 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 		]);
 
 		$result = $dbResult->fetchAll();
+
+		if (!$parameters['count_total'])
+		{
+			return [$result, null];
+		}
+
 		$count = $dbResult->getCount();
 
 		$navData = [
@@ -236,6 +243,24 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 		];
 
 		return [$result, $navData];
+	}
+
+	private static function isCountTotalRequested(array $params): bool
+	{
+		if (!isset($params['count_total']))
+		{
+			return true;
+		}
+
+		$value = $params['count_total'];
+
+		// REST passes scalars as strings, so (bool)'false' and (bool)'N' would silently mean "on"
+		if (is_string($value) && in_array(mb_strtolower(trim($value)), ['n', 'no', 'false', 'off'], true))
+		{
+			return false;
+		}
+
+		return (bool)$value;
 	}
 
 	private static function __resetSystemWideTasksCacheByTag($arData)
@@ -324,6 +349,7 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 				$filter = ($argsParsed[2] ?? []);
 				$select = ($argsParsed[3] ?? []);
 				$navParams = is_array($argsParsed[4]['NAV_PARAMS'] ?? null) ? $argsParsed[4]['NAV_PARAMS'] : null;
+				$countTotal = self::isCountTotalRequested(is_array($argsParsed[4] ?? null) ? $argsParsed[4] : []);
 
 				$byTaskId = false;
 				if (count($argsParsed) > 0 && $taskId !== 0)
@@ -369,7 +395,7 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 
 				$params = array(
 					'NAV_PARAMS' => $navParams,
-					'count_total' => true
+					'count_total' => $countTotal
 				);
 				[$elapsedItems, $navData] = self::getList($order, $filter, $select, $params);
 
@@ -499,7 +525,7 @@ final class CTaskElapsedItem extends CTaskSubItemAbstract
 						array(
 							'description' => 'params',
 							'type' => 'array',
-							'allowedKeys' => array('NAV_PARAMS')
+							'allowedKeys' => array('NAV_PARAMS', 'count_total')
 						),
 					),
 					'allowedKeysInReturnValue' => $readableKeys,

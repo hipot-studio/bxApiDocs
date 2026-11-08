@@ -3,6 +3,7 @@
 namespace Bitrix\Disk\Document\Models;
 
 use Bitrix\Disk\Internals\DataManager;
+use Bitrix\Main\Application;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\StringField;
@@ -33,6 +34,8 @@ final class DocumentInfoTable extends DataManager
 	public const CONTENT_STATUS_SAVED_WITH_ERROR = 4;
 	public const CONTENT_STATUS_SAVED = 5;
 	public const CONTENT_STATUS_NO_CHANGES = 6;
+	public const CONTENT_STATUS_SAVE_REJECTED = 7;
+	public const CONTENT_STATUS_INTERRUPTED = 8;
 
 	/**
 	 * Returns DB table name for entity.
@@ -84,5 +87,35 @@ final class DocumentInfoTable extends DataManager
 				->configureDefaultValue(self::CONTENT_STATUS_INIT)
 			,
 		];
+	}
+
+	/**
+	 * Closes a session as interrupted only while the row still looks the way the caller saw it.
+	 *
+	 * The caller reads the rows of the sessions gone quiet and closes them one by one, so a save callback
+	 * may arrive in between and write the outcome it knows. The snapshot in the filter leaves that outcome
+	 * alone: a row whose status or update time has moved on is not the row the decision was made about.
+	 *
+	 * @return bool whether the row was closed by this call.
+	 */
+	public static function markAsInterruptedIfUnchanged(
+		string $hash,
+		int $expectedStatus,
+		DateTime $expectedUpdateTime,
+	): bool
+	{
+		parent::updateBatch(
+			[
+				'CONTENT_STATUS' => self::CONTENT_STATUS_INTERRUPTED,
+				'UPDATE_TIME' => new DateTime(),
+			],
+			[
+				'=EXTERNAL_HASH' => $hash,
+				'=CONTENT_STATUS' => $expectedStatus,
+				'=UPDATE_TIME' => $expectedUpdateTime,
+			]
+		);
+
+		return Application::getConnection()->getAffectedRowsCount() > 0;
 	}
 }

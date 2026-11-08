@@ -142,6 +142,7 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	public function setChatId(?int $chatId): self
 	{
 		$this->chatId = $chatId;
+
 		return $this;
 	}
 
@@ -189,24 +190,72 @@ class FileItem implements RestEntity, PopupDataAggregatable
 
 	public function getCopyToChat(Chat $chat): ?self
 	{
+		return $this->getCopyToChatResult($chat)->getResult();
+	}
+
+	/**
+	 * @return Result<FileItem>
+	 */
+	public function getCopyToChatResult(Chat $chat): Result
+	{
+		$result = new Result();
+
 		if (!Loader::includeModule('disk'))
 		{
-			return null;
+			return $result->addError(new FileError(FileError::DISK_NOT_INSTALLED));
 		}
 
-		$folder = $chat->getOrCreateDiskFolder();
+		$folder = $chat->getDiskFolder();
+		if (!$folder instanceof Folder)
+		{
+			$storage = \CIMDisk::GetStorage($chat->getChatId());
+			if (!$storage)
+			{
+				return $result->addError(new FileError(FileError::STORAGE_NOT_FOUND));
+			}
+
+			$folder = $chat->getOrCreateDiskFolder($storage);
+		}
 		$diskFile = $this->getDiskFile()?->getRealObject();
 
-		if (!($folder instanceof Folder) || $diskFile === null)
+		if (!$folder instanceof Folder)
 		{
-			return null;
+			return $result->addError(new FileError(FileError::FOLDER_NOT_FOUND));
+		}
+
+		if (!$diskFile instanceof File)
+		{
+			return $result->addError(new FileError(FileError::NOT_FOUND));
+		}
+
+		if (!\CDiskQuota::getInstance()->checkDiskQuota(['size' => $diskFile->getSize()]))
+		{
+			return $result->addError(new FileError(FileError::STORAGE_QUOTA_EXCEEDED));
 		}
 
 		$newFileModel = $diskFile->copyTo($folder, $chat->getContext()->getUserId(), true);
 
-		if (!($newFileModel instanceof File))
+		if (!$newFileModel instanceof File)
 		{
-			return null;
+			$errors = $diskFile->getErrors();
+			if (empty($errors))
+			{
+				return $result->addError(new FileError(FileError::COPY_ERROR));
+			}
+
+			foreach ($errors as $error)
+			{
+				if ((string)$error->getCode() === File::ERROR_SIZE_RESTRICTION)
+				{
+					$result->addError(new FileError(FileError::STORAGE_QUOTA_EXCEEDED));
+
+					continue;
+				}
+
+				$result->addError($error);
+			}
+
+			return $result;
 		}
 
 		if ($diskFile->getCode() === \Bitrix\Im\V2\Link\File\FileItem::MEDIA_ORIGINAL_CODE)
@@ -216,7 +265,7 @@ class FileItem implements RestEntity, PopupDataAggregatable
 
 		$newFileModel->increaseGlobalContentVersion();
 
-		return new static($newFileModel, $chat->getId());
+		return $result->setResult(new static($newFileModel, $chat->getId()));
 	}
 
 	public function getPopupData(array $excludedList = []): PopupData
@@ -244,6 +293,7 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	{
 		$diskFile = $this->getDiskFile();
 		$author = User::getInstance((int)$diskFile?->getCreatedBy());
+
 		return [
 			'id' => (int)$diskFile?->getId(),
 			'chatId' => (int)$this->getChatId(),
@@ -253,8 +303,8 @@ class FileItem implements RestEntity, PopupDataAggregatable
 			'extension' => mb_strtolower($diskFile?->getExtension() ?? ''),
 			'size' => (int)$diskFile?->getSize(),
 			'image' => $this->getPreviewSizes() ?? false,
-			'status' => $diskFile?->getGlobalContentVersion() > 1? 'done': 'upload',
-			'progress' => $diskFile?->getGlobalContentVersion() > 1? 100: -1,
+			'status' => $diskFile?->getGlobalContentVersion() > 1 ? 'done' : 'upload',
+			'progress' => $diskFile?->getGlobalContentVersion() > 1 ? 100 : -1,
 			'authorId' => (int)$diskFile?->getCreatedBy(),
 			'authorName' => $author->getName(),
 			'urlPreview' => $this->getPreviewLink(),
@@ -263,9 +313,22 @@ class FileItem implements RestEntity, PopupDataAggregatable
 			'viewerAttrs' => $this->getViewerAttributes(),
 			'mediaUrl' => $this->getMediaUrl(),
 			'isTranscribable' => $this->isTranscribable(),
-			'isVideoNote' => $this->isVideoNote(),
+			'isVideoNote' => $this->isVideoNoteOfType($diskFile),
 			'isVoiceNote' => $this->isVoiceNote(),
+			'duration' => $this->getDuration(),
 		];
+	}
+
+	/**
+	 * The flag alone does not make a video note: an id of a disk file comes back into use, nothing deletes
+	 * the params of the deleted file, and the clients draw a round record by this very field. The subtype of
+	 * the sidebar record is calculated by the same pair of the flag and the type.
+	 *
+	 * @see \Bitrix\Im\V2\Link\File\FileItem::calculateSubtype()
+	 */
+	private function isVideoNoteOfType(?File $diskFile): bool
+	{
+		return $this->isVideoNote() && (int)$diskFile?->getTypeFile() === TypeFile::VIDEO;
 	}
 
 	private function getMediaUrl(): array
@@ -314,6 +377,11 @@ class FileItem implements RestEntity, PopupDataAggregatable
 		return $this->getContentType() === 'image' || $this->getContentType() === 'video';
 	}
 
+	public function isAudioType(): bool
+	{
+		return $this->getContentType() === 'audio';
+	}
+
 	public function setContentType(string $contentType): self
 	{
 		$this->contentType = $contentType;
@@ -346,20 +414,45 @@ class FileItem implements RestEntity, PopupDataAggregatable
 		];
 	}
 
-	private function getPreviewLink(): string
+	/**
+	 * Source of truth of the branch order for getPreviewLink() and for the direct download of a file body.
+	 * The private getPreviewLinkBySize() below answers another question - a preview link of the asked size
+	 * for toRestFormat() - and keeps its own order of branches and its own contract.
+	 */
+	public function getPreviewSource(): PreviewSource
 	{
 		$diskFile = $this->getDiskFile();
 		if (!isset($diskFile))
 		{
-			return '';
+			return PreviewSource::None;
 		}
 
-		return match (true)
+		if ($this->isAnimatedImage())
 		{
-			$this->isAnimatedImage() => $this->getDownloadLink(),
-			TypeFile::isImage($diskFile) => $this->isOversized() ? $this->getShowLink() : $this->getDownloadLink(),
-			$diskFile->getView()->getPreviewData() !== null => $this->getFilePreviewLink(),
-			default => '',
+			return PreviewSource::Original;
+		}
+
+		if (TypeFile::isImage($diskFile))
+		{
+			return $this->isOversized() ? PreviewSource::ResizedImage : PreviewSource::Original;
+		}
+
+		if ($diskFile->getView()->getPreviewData() !== null)
+		{
+			return PreviewSource::GeneratedPreview;
+		}
+
+		return PreviewSource::None;
+	}
+
+	private function getPreviewLink(): string
+	{
+		return match ($this->getPreviewSource())
+		{
+			PreviewSource::Original => $this->getDownloadLink(),
+			PreviewSource::ResizedImage => $this->getShowLink(),
+			PreviewSource::GeneratedPreview => $this->getFilePreviewLink(),
+			PreviewSource::None => '',
 		};
 	}
 
@@ -616,6 +709,11 @@ class FileItem implements RestEntity, PopupDataAggregatable
 	public function isVoiceNote(): bool
 	{
 		return $this->getParams()->getParam(ParamName::IsVoiceNote)?->getValue() ?? false;
+	}
+
+	public function getDuration(): ?int
+	{
+		return $this->getParams()->getParam(ParamName::Duration)?->getValue();
 	}
 
 	public function setCompletedTranscription(?TranscribeFileItem $item): self

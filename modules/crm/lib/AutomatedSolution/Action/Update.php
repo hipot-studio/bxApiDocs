@@ -4,6 +4,8 @@ namespace Bitrix\Crm\AutomatedSolution\Action;
 
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Comparer\ComparerBase;
+use Bitrix\Crm\Feature;
+use Bitrix\Crm\Feature\AutomatedSolutionVibe;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Intranet\CustomSection\Entity\CustomSectionTable;
@@ -25,7 +27,12 @@ final class Update implements Action
 	{
 		$diff = ComparerBase::compareEntityFields($this->previousFields, $this->currentFields);
 
-		if (!$diff->isChanged('TITLE'))
+		$hasTitleChange = $diff->isChanged('TITLE');
+		$isVibeFeatureEnabled = Feature::enabled(AutomatedSolutionVibe::class);
+		$hasVibeToggled = $isVibeFeatureEnabled && $diff->isChanged('IS_VIBE_ENABLED');
+		$hasDescriptionChange = $this->hasDescriptionChange();
+
+		if (!$hasTitleChange && !$hasVibeToggled && !$hasDescriptionChange)
 		{
 			// nothing to change
 			return new Result();
@@ -56,20 +63,23 @@ final class Update implements Action
 					[
 						'automatedSolutionId' => $this->id,
 						'customSectionId' => $automatedSolution->getIntranetCustomSectionId(),
-					]
+					],
 				),
 			);
 		}
 
-		$intranetSection
-			->setTitle($diff->getCurrentValue('TITLE'))
-			->setCode('') // to provoke CODE regeneration
-		;
-
-		$intranetResult = $intranetSection->save();
-		if (!$intranetResult->isSuccess())
+		if ($hasTitleChange) // Update intranet section title and code only if AS title has changed
 		{
-			return $overallResult->addErrors($intranetResult->getErrors());
+			$intranetSection
+				->setTitle($diff->getCurrentValue('TITLE'))
+				->setCode('') // to provoke CODE regeneration
+			;
+
+			$intranetResult = $intranetSection->save();
+			if (!$intranetResult->isSuccess())
+			{
+				return $overallResult->addErrors($intranetResult->getErrors());
+			}
 		}
 
 		$automatedSolution
@@ -80,12 +90,44 @@ final class Update implements Action
 			->setUpdatedBy(Container::getInstance()->getContext()->getUserId())
 		;
 
+		if ($hasDescriptionChange)
+		{
+			$automatedSolution->setDescription($this->currentFields['DESCRIPTION']);
+		}
+
 		$crmResult = $automatedSolution->save();
 		if (!$crmResult->isSuccess())
 		{
 			return $overallResult->addErrors($crmResult->getErrors());
 		}
 
-		return $overallResult->setData(['fields' => $automatedSolution->collectValues()]);
+		if ($hasVibeToggled)
+		{
+			$lifecycle = Container::getInstance()->getAutomatedSolutionVibeLifecycleService();
+			$lifecycleResult = AutomatedSolutionVibe::normalizeValue($diff->getCurrentValue('IS_VIBE_ENABLED'))
+				? $lifecycle->enable($this->id)
+				: $lifecycle->disable($this->id);
+			if (!$lifecycleResult->isSuccess())
+			{
+				$overallResult->addErrors($lifecycleResult->getErrors());
+			}
+
+			$automatedSolution = AutomatedSolutionTable::getById($this->id)->fetchObject();
+		}
+
+		$fields = $automatedSolution->collectValues();
+		$fields['IS_VIBE_ENABLED'] = AutomatedSolutionVibe::normalizeValue($fields['IS_VIBE_ENABLED'] ?? false);
+		$fields['TYPE_IDS'] = $this->previousFields['TYPE_IDS'] ?? [];
+
+		return $overallResult->setData(['fields' => $fields]);
+	}
+
+	// Difference::isChanged() treats all empty values as equal and so would miss a description "0"
+	private function hasDescriptionChange(): bool
+	{
+		return (
+			array_key_exists('DESCRIPTION', $this->currentFields)
+			&& $this->currentFields['DESCRIPTION'] !== ($this->previousFields['DESCRIPTION'] ?? null)
+		);
 	}
 }

@@ -12,8 +12,12 @@ abstract class Service
 {
 	protected $manager = null;
 	protected ?array $dataSourceConnectors = null;
+
 	/** Per-request memo of getDataSourceConnector() keyed by table name (event-built path). */
-	private array $dataSourceConnectorMemo = [];
+	protected array $dataSourceConnectorMemo = [];
+
+	/** @var array<string, true> Datasets already looked for and not found during this request. */
+	protected array $missingDataSources = [];
 	protected static $serviceId = '';
 	public static $dateFormats = [];
 	protected $languageMap = null;
@@ -140,6 +144,13 @@ abstract class Service
 			return $this->dataSourceConnectorMemo[$name];
 		}
 
+		// A dataset that was already looked for and not found stays not found for this request: firing the
+		// event again would cost another round of description building for the same answer.
+		if ($this->isMissingDataSource($name))
+		{
+			return null;
+		}
+
 		$dataSources = [];
 		$event = new \Bitrix\Main\Event('biconnector', 'OnBIConnectorDataSources', [
 			$this->manager,
@@ -151,6 +162,8 @@ abstract class Service
 
 		if (empty($dataSources[$name]))
 		{
+			$this->rememberMissingDataSource($name);
+
 			return null;
 		}
 
@@ -162,7 +175,63 @@ abstract class Service
 			$fields->add($this->prepareFieldDto($fieldName, $fieldInfo));
 		}
 
-		return $this->dataSourceConnectorMemo[$name] = new Connector\Sql($name, $fields, $source);
+		return $this->rememberDataSourceConnector(new Connector\Sql($name, $fields, $source));
+	}
+
+	/**
+	 * Keeps one description snapshot per dataset for the lifetime of the request.
+	 *
+	 * A dynamic source may answer differently every time it is asked, and one HTTP request touches the
+	 * description several times - to validate the table, to build the SQL, to compute the capabilities
+	 * fingerprint and to execute. Without a single snapshot the body could be built from one description
+	 * while the headers that confirm it came from another, which is exactly what those headers exist to
+	 * rule out.
+	 */
+	protected function rememberDataSourceConnector(Connector\Base $connector): Connector\Base
+	{
+		$this->dataSourceConnectorMemo[$connector->getName()] = $connector;
+		$this->forgetMissingDataSource($connector->getName());
+
+		return $connector;
+	}
+
+	protected function isMissingDataSource(string $name): bool
+	{
+		return isset($this->missingDataSources[$name]);
+	}
+
+	protected function rememberMissingDataSource(string $name): void
+	{
+		$this->missingDataSources[$name] = true;
+	}
+
+	protected function forgetMissingDataSource(string $name): void
+	{
+		unset($this->missingDataSources[$name]);
+	}
+
+	/**
+	 * Drops everything remembered for the duration of one logical request.
+	 *
+	 * The snapshot must not outlive the request it was taken for. In a plain HTTP entry point the service
+	 * is built anew, but the same object is reused in agents, queues and long running workers, and there
+	 * a remembered description, a remembered absence or a prepared statement would answer a later request
+	 * with older data - and the growing map of prepared answers would never be released.
+	 */
+	public function beginRequest(): void
+	{
+		$remembered = array_merge((array)$this->dataSourceConnectors, $this->dataSourceConnectorMemo);
+		foreach ($remembered as $connector)
+		{
+			if ($connector instanceof Connector\Base)
+			{
+				$connector->beginRequest();
+			}
+		}
+
+		$this->dataSourceConnectors = null;
+		$this->dataSourceConnectorMemo = [];
+		$this->missingDataSources = [];
 	}
 
 	/**
@@ -185,6 +254,15 @@ abstract class Service
 
 		foreach ($dataSources as $datasourceName => $source)
 		{
+			// A dataset asked for by name earlier in the request keeps the description it was answered with,
+			// so the full collection and the single lookup never hand out two descriptions for one dataset.
+			if (isset($this->dataSourceConnectorMemo[$datasourceName]))
+			{
+				$dataSourceConnectors[$datasourceName] = $this->dataSourceConnectorMemo[$datasourceName];
+
+				continue;
+			}
+
 			$fields = new FieldCollection();
 			foreach ($source['FIELDS'] as $fieldName => $fieldInfo)
 			{
@@ -222,13 +300,31 @@ abstract class Service
 		$result = [];
 		foreach ($this->getDataSourceConnectors() as $connector)
 		{
-			$result[] = [
-				$connector->getName(),
-				$connector->rawInfo['TABLE_DESCRIPTION'] ?? [],
-			];
+			$result[] = $this->buildTableListRow($connector);
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Builds one row of the table list: the technical name first, the human-readable one next.
+	 *
+	 * The row shape is part of the contract with every consumer of "show_tables", and the external
+	 * services read it by index, so a service that carries more than these two publishes the extra
+	 * elements by overriding this method rather than by widening the row for everybody.
+	 *
+	 * @param Connector\Base $connector
+	 *
+	 * @return array
+	 */
+	protected function buildTableListRow(Connector\Base $connector): array
+	{
+		$verboseName = (string)($connector->rawInfo['VERBOSE_NAME'] ?? '');
+
+		return [
+			$connector->getName(),
+			$verboseName !== '' ? $verboseName : ($connector->rawInfo['TABLE_DESCRIPTION'] ?? []),
+		];
 	}
 
 	/**
@@ -286,6 +382,46 @@ abstract class Service
 			->getFields()
 			->toArray()
 		;
+	}
+
+	/**
+	 * Table description extended with the capabilities block, served by `?desc&caps=1` (design §2.1).
+	 *
+	 * The `columns` array is element-wise identical to the answer of plain `?desc`, which itself
+	 * stays byte-for-byte unchanged, so a plugin that does not ask for capabilities sees no change.
+	 *
+	 * @param string $tableName Data source name.
+	 *
+	 * @return array
+	 */
+	public function describeTable(string $tableName): array
+	{
+		$connector = $this->getDataSourceConnector($tableName);
+		if (!$connector)
+		{
+			return [];
+		}
+
+		return [
+			'version' => 1,
+			'columns' => array_values($connector->getFields()->toArray()),
+			'capabilities' => [
+				'aggregation' => $connector->getAggregationCapabilities()->toArray(),
+			],
+		];
+	}
+
+	/**
+	 * Current capabilities fingerprint of a table, or null when aggregation is not available.
+	 *
+	 * It travels with every aggregated answer so that the plugin can detect that the source or the
+	 * capabilities changed after it planned the query.
+	 */
+	public function getAggregationCapsFingerprint(string $tableName): ?string
+	{
+		$capabilities = $this->getDataSourceConnector($tableName)?->getAggregationCapabilities();
+
+		return $capabilities?->supported ? $capabilities->getFingerprint() : null;
 	}
 
 	/**
@@ -525,6 +661,13 @@ abstract class Service
 				$sqlWhere[] = $andFilter;
 			}
 		}
+	}
+
+	protected function markErrorStreamed(Result $result): void
+	{
+		$data = $result->getData();
+		$data['errorStreamed'] = true;
+		$result->setData($data);
 	}
 
 	protected function formatLimitValue(int $value): string

@@ -240,6 +240,12 @@ class Form extends Main\Engine\JsonController
 		$viewOptions = $this->buildViewOptions(WebForm\Options::getViewOptions(), $dict);
 		$scripts = WebForm\Script::getListContext($formData, []); // embed codes
 		$pubLink = WebForm\Script::getUrlContext($formData); // public form link
+		$qrLink = WebForm\Script::getUrlContext(
+			$formData,
+			null,
+			false,
+			WebForm\Telemetry\SubmissionClassifier::SOURCE_QR,
+		);
 
 		$previewLink = strtr(WebForm\Script::getPublicFormPath(), [
 			'#id#' => $formData['ID'],
@@ -256,6 +262,7 @@ class Form extends Main\Engine\JsonController
 			'embed' => [
 				'scripts' => array_change_key_case($scripts, CASE_LOWER),
 				'pubLink' => $pubLink,
+				'qrLink' => $qrLink,
 				'previewLink' => $previewLink,
 				'viewValues' => array_change_key_case($views, CASE_LOWER),
 				'viewOptions' => array_change_key_case($viewOptions, CASE_LOWER),
@@ -667,6 +674,7 @@ class Form extends Main\Engine\JsonController
 		if (!empty($preparing['agreements']) && is_array($preparing['agreements']))
 		{
 			$existed = [];
+			$agreementBehaviors = [];
 			foreach ($preparing['agreements'] as $item)
 			{
 				if ($item && is_numeric($item))
@@ -681,6 +689,7 @@ class Form extends Main\Engine\JsonController
 				}
 
 				$existed[] = $item['id'];
+				$agreementBehaviors[(string)$item['id']] = $item;
 			}
 
 			if (!empty($options['data']['agreements']))
@@ -692,6 +701,32 @@ class Form extends Main\Engine\JsonController
 						return in_array($item['id'], $existed);
 					}
 				);
+
+				foreach ($options['data']['agreements'] as &$agreement)
+				{
+					$behavior = $agreementBehaviors[(string)($agreement['id'] ?? '')] ?? null;
+					if (!$behavior)
+					{
+						continue;
+					}
+
+					foreach (['checked', 'required', 'acceptBySubmit'] as $property)
+					{
+						$mode = self::readAgreementMode($behavior, $property);
+						if ($mode !== null)
+						{
+							$agreement[$property] = $mode;
+						}
+					}
+					foreach (['agreementNoticeEnabled', 'agreementNoticeText'] as $property)
+					{
+						if (isset($behavior[$property]))
+						{
+							$agreement[$property] = $behavior[$property];
+						}
+					}
+				}
+				unset($agreement);
 			}
 		}
 
@@ -707,7 +742,13 @@ class Form extends Main\Engine\JsonController
 				if (!in_array($id, $existed))
 				{
 					$existed[] = $id;
-					$formOptions->getConfig()->appendAgreement($id);
+					$formOptions->getConfig()->appendAgreement(
+						$id,
+						self::readAgreementMode($agreement, 'checked'),
+						self::readAgreementMode($agreement, 'required'),
+						self::readAgreementMode($agreement, 'acceptBySubmit'),
+						is_array($agreement) ? $agreement : [],
+					);
 				}
 			}
 		}
@@ -746,6 +787,25 @@ class Form extends Main\Engine\JsonController
 		;
 
 		return $formOptionsArray;
+	}
+
+	/**
+	 * A mode the caller said nothing about is not an instruction to reset it.
+	 *
+	 * The editor of the form is released separately from `crm`, so a client that does not know a
+	 * mode yet sends no key for it, and `null` tells the config to keep what the form has stored.
+	 * An explicit `false` stays a request to turn the mode off.
+	 *
+	 * @param mixed $agreement
+	 */
+	private static function readAgreementMode($agreement, string $key): ?bool
+	{
+		if (!is_array($agreement) || !array_key_exists($key, $agreement) || $agreement[$key] === null)
+		{
+			return null;
+		}
+
+		return (bool)$agreement[$key];
 	}
 
 	/**

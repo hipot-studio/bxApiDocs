@@ -22,6 +22,11 @@ class AiSiteRuntimeAvailabilityGuard
 		return $this->getAvailabilityService()->checkSitesAiProductAvailability();
 	}
 
+	public function checkStatusReadProductAvailability(): AiSiteChatAvailabilityResult
+	{
+		return $this->getAvailabilityService()->checkSitesAiStatusReadAvailability();
+	}
+
 	public function checkRuntimeAvailability(): AiSiteChatAvailabilityResult
 	{
 		$productAvailability = $this->checkProductAvailability();

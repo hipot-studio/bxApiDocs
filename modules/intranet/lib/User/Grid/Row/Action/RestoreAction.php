@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\User\Grid\Row\Action;
 
+use Bitrix\Intranet\Enum\UserRole;
 use Bitrix\Intranet\User\Access\UserActionDictionary;
 use Bitrix\Main\Localization\Loc;
 
@@ -29,9 +30,12 @@ class RestoreAction extends JsGridAction
 
 	protected function getActionParams(array $rawFields): array
 	{
+		$user = $this->getSettings()->getUserCollection()?->getByUserId($rawFields['ID']);
+
 		return [
 			'action' => 'restore',
 			'userId' => $rawFields['ID'],
+			'requiresDepartmentSelection' => $user?->getRole() === UserRole::VISITOR,
 		];
 	}
 }

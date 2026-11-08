@@ -27,6 +27,11 @@ final class LicenseOption
 	public const EARLY_WARNING_SHOWN = '~selfhost_license_early_warning_shown';
 	public const DATA_REFUSAL_LOGGED = '~selfhost_license_data_refusal_logged';
 	public const WORK_STOPPED = '~selfhost_license_work_stopped';
+	/**
+	 * Value is the term the start of its grace was announced for, not a yes or no: a renewed term is a
+	 * different value, so the next grace announces itself without anyone resetting the record.
+	 */
+	public const GRACE_NOTIFIED_TERM = '~selfhost_license_grace_notified_term';
 	public const CHECK_DISABLED = 'selfhost_license_check_disabled';
 	public const GRACE_DAYS = 'selfhost_license_grace_days';
 }

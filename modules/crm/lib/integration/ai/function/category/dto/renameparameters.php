@@ -28,6 +28,7 @@ final class RenameParameters extends Dto
 
 			new DefinedCategoryIdentifier($this, 'entityTypeId', 'categoryId'),
 
+			new RequiredField($this, 'title'),
 			new NotEmptyField($this, 'title'),
 		];
 	}

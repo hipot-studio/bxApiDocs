@@ -14,7 +14,6 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupScopeTab
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
-use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Superset\Logger\MarketDashboardLogger;
 use Bitrix\BIConnector\Superset\Scope\ScopeService;
 use Bitrix\BIConnector\Superset\Scope\MarketCollectionUrlBuilder;
@@ -25,7 +24,6 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
-use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest;
 use Bitrix\Rest\AppTable;
@@ -229,7 +227,7 @@ final class MarketDashboardManager
 	}
 
 	/**
-	 * Sets dashboard settings contained in archive. Sets period, scopes, etc.
+	 * Sets dashboard settings contained in archive. Sets scopes, url parameters, group.
 	 *
 	 * @param Model\SupersetDashboard $dashboard
 	 * @param array $dashboardSettings
@@ -246,45 +244,6 @@ final class MarketDashboardManager
 			$this->saveDashboardGroupByScope($dashboard->getId(), self::getDefaultDashboardGroupScope());
 
 			return;
-		}
-
-		if (
-			isset($dashboardSettings['period'])
-			&& empty($dashboard->fillFilterPeriod())
-		)
-		{
-			$periodSetting = $dashboardSettings['period'];
-			if ($periodSetting['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_DEFAULT)
-			{
-				$dashboard->setDateFilterStart(null);
-				$dashboard->setDateFilterEnd(null);
-				$dashboard->setFilterPeriod(null);
-			}
-			elseif ($periodSetting['FILTER_PERIOD'] === EmbeddedFilter\DateTime::PERIOD_RANGE)
-			{
-				try
-				{
-					$dateStart = new Date($periodSetting['DATE_FILTER_START']);
-					$dateEnd = new Date($periodSetting['DATE_FILTER_END']);
-					$includeLastFilterDate = $periodSetting['INCLUDE_LAST_FILTER_DATE'] ?? null;
-					$dashboard->setDateFilterStart($dateStart);
-					$dashboard->setDateFilterEnd($dateEnd);
-					$dashboard->setIncludeLastFilterDate($includeLastFilterDate);
-					$dashboard->setFilterPeriod(EmbeddedFilter\DateTime::PERIOD_RANGE);
-				}
-				catch (\Bitrix\Main\ObjectException)
-				{}
-			}
-			else
-			{
-				$period = EmbeddedFilter\DateTime::getDefaultPeriod();
-				$innerPeriod = $periodSetting['FILTER_PERIOD'] ?? '';
-				if (is_string($innerPeriod) && EmbeddedFilter\DateTime::isAvailablePeriod($innerPeriod))
-				{
-					$period = $innerPeriod;
-				}
-				$dashboard->setFilterPeriod($period);
-			}
 		}
 
 		$dashboard->save();
@@ -508,19 +467,11 @@ final class MarketDashboardManager
 				}
 
 				$response = $this->integrator->deleteDashboard([$originalDashboard->getExternalId()], $originalDashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_MARKET);
-				if ($response->hasErrors())
+				if (
+					$response->hasErrors()
+					&& $response->getStatus() !== IntegratorResponse::STATUS_NOT_FOUND
+				)
 				{
-					if ($response->getStatus() === IntegratorResponse::STATUS_NOT_FOUND)
-					{
-						if ($originalDashboard->getType() === SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM)
-						{
-							SystemDashboardManager::saveDeletedSystemDashboard($appCode);
-						}
-						$originalDashboard->delete();
-
-						return $result;
-					}
-
 					$result->addError(new Error(Loc::getMessage('BI_CONNECTOR_SUPERSET_ERROR_DELETE_PROXY') ?? ''));
 
 					return $result;
@@ -531,7 +482,15 @@ final class MarketDashboardManager
 			{
 				SystemDashboardManager::saveDeletedSystemDashboard($appCode);
 			}
-			$originalDashboard->delete();
+			$deleteResult = $originalDashboard->delete();
+			if (!$deleteResult->isSuccess())
+			{
+				$result->addErrors($deleteResult->getErrors());
+
+				return $result;
+			}
+
+			DashboardManager::notifyDashboardListChanged();
 		}
 
 		return $result;

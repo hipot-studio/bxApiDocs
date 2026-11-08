@@ -132,11 +132,21 @@ interface NodeMemberRepository extends EventableRepository
 		\Bitrix\HumanResources\Type\MemberEntityType $entityType
 	): Item\Collection\NodeMemberCollection;
 
+	/**
+	 * @param \Bitrix\HumanResources\Type\RelationEntityType $entityType
+	 * @param int $entityId
+	 * @param list<int> $usersToCompare
+	 *
+	 * @return list<int>
+	 */
 	public function getCommonUsersFromRelation(
 		\Bitrix\HumanResources\Type\RelationEntityType $entityType,
 		int $entityId,
 		array $usersToCompare,
-		NodeEntityTypeCollection $nodeEntityTypeCollection = new NodeEntityTypeCollection(NodeEntityType::DEPARTMENT),
+		NodeEntityTypeCollection $nodeEntityTypeCollection = new NodeEntityTypeCollection(
+			NodeEntityType::DEPARTMENT,
+			NodeEntityType::TEAM,
+		),
 	);
 
 	public function findAllByRoleIdAndStructureId(?int $roleId, int $structureId): Item\Collection\NodeMemberCollection;

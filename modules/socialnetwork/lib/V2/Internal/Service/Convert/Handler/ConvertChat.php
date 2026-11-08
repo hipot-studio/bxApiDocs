@@ -23,6 +23,16 @@ class ConvertChat implements HandlerInterface
 			throw new ProjectConvertChatException('Chat was not created for the group');
 		}
 
+		if ($groupAfter->getType() !== Type::Collab)
+		{
+			throw new ProjectConvertChatException(sprintf(
+				'Group [%d] is not a collab (type [%s]), conversion of chat [%d] aborted',
+				$groupAfter->getId(),
+				$groupAfter->getType()?->value ?? 'unknown',
+				$chatId,
+			));
+		}
+
 		$chatService = Container::getInstance()->getConvertChatService();
 
 		$result = $chatService->convertChat(

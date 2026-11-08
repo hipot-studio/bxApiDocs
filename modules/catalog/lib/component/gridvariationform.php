@@ -260,6 +260,9 @@ class GridVariationForm extends VariationForm
 						'HTML_ENTITY' => true,
 					];
 					break;
+				case 'multimoney':
+					$description['editable'] = false;
+					break;
 				default:
 					$description['editable'] = ['TYPE' => Types::TEXT];
 			}
@@ -407,6 +410,11 @@ class GridVariationForm extends VariationForm
 						$currency = $separatedValues['CURRENCY'];
 						$values[$name] = \CCurrencyLang::CurrencyFormat($amount, $currency, true);
 					}
+					break;
+				case 'multimoney':
+					$values[$name] = self::formatMultipleMoneyValues(
+						$values[$description['data']['formattedWithCurrency']] ?? []
+					);
 					break;
 			}
 
@@ -931,6 +939,11 @@ class GridVariationForm extends VariationForm
 				case 'custom':
 					$values[$name] = $values[$description['data']['view']];
 					break;
+				case 'multimoney':
+					$values[$name] = self::formatMultipleMoneyValues(
+						$values[$description['data']['formattedWithCurrency']] ?? []
+					);
+					break;
 				case 'money':
 					$descriptionData = $description['data'];
 					$values[$name] = [
@@ -960,6 +973,16 @@ class GridVariationForm extends VariationForm
 		}
 
 		return $values;
+	}
+
+	private static function formatMultipleMoneyValues(array $values): string
+	{
+		$formattedValues = array_map(
+			static fn($value): string => HtmlFilter::encode((string)$value, ENT_QUOTES, false),
+			$values
+		);
+
+		return implode('<br>', $formattedValues);
 	}
 
 	/**

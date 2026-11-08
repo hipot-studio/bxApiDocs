@@ -61,12 +61,21 @@ class Provider
 	private const MAX_RUNTIME_FILTER_SCAN = 3000;
 	private const WARM_UP_BATCH_SIZE = 300;
 	private const GROUP_STORAGE_CACHE_VERSION = 'v5';
+	private const SOURCE_CATALOGUE_CACHE_VERSION = 'v1';
 	private const GROUP_STORAGE_CACHE_TTL = 14400;
 	private const GROUP_STORAGE_MANAGED_CACHE_TTL = 31536000;
 	private const SUPPORTED_STORAGE_PROXY_TYPES = [
 		ProxyType\User::class,
 		ProxyType\Common::class,
 		ProxyType\Group::class,
+		ItemNormalizer::IM_STORAGE_PROXY_TYPE,
+	];
+	/**
+	 * Storages the administrator bypass never reaches: membership in a chat is the only thing
+	 * that opens its storage, and a portal or socialnetwork administrator is not a member.
+	 */
+	private const STRICT_RIGHTS_STORAGE_PROXY_TYPES = [
+		ItemNormalizer::IM_STORAGE_PROXY_TYPE,
 	];
 
 	private array $groupSourceTitles = [];
@@ -76,6 +85,7 @@ class Provider
 		private readonly Context $context,
 		private readonly ItemNormalizer $itemNormalizer = new ItemNormalizer(),
 		private readonly FileTypeClassifier $fileTypeClassifier = new FileTypeClassifier(),
+		private readonly ViewerAttributesFactory $viewerAttributesFactory = new ViewerAttributesFactory(),
 	)
 	{
 	}
@@ -85,6 +95,7 @@ class Provider
 		Filter $filter,
 		int $pageSize = self::DEFAULT_PAGE_SIZE,
 		bool $includeTotal = false,
+		int $page = self::DEFAULT_PAGE,
 	): Result
 	{
 		if ($includeTotal)
@@ -98,6 +109,19 @@ class Provider
 		}
 
 		$type = $initialStage['type'];
+		$normalizedPageSize = $this->normalizePageSize($pageSize);
+		if (
+			$type === self::INITIAL_STAGE_SOURCES
+				? !$this->isSourcePageValid($page, $normalizedPageSize)
+				: !$this->isPageWithinOffsetLimit($page, $normalizedPageSize)
+		)
+		{
+			return (new Result())->addError(Error::create(Error::INVALID_CONTEXT));
+		}
+		if ($type !== self::INITIAL_STAGE_SOURCES && $page !== self::DEFAULT_PAGE)
+		{
+			return (new Result())->addError(Error::create(Error::INVALID_CONTEXT));
+		}
 
 		return match ($type)
 		{
@@ -109,7 +133,7 @@ class Provider
 				self::DEFAULT_ORDER,
 				$pageSize,
 			),
-			self::INITIAL_STAGE_SOURCES => $this->getSources(),
+			self::INITIAL_STAGE_SOURCES => $this->getSources($page, $pageSize),
 			default => (new Result())->addError(Error::create(Error::INVALID_CONTEXT)),
 		};
 	}
@@ -162,6 +186,7 @@ class Provider
 			'pagination' => $data['pagination'],
 			'context' => $data['context'],
 			'emptyReason' => $data['emptyReason'],
+			'sourceRevision' => null,
 		];
 
 		return (new Result())->setData($data);
@@ -219,21 +244,61 @@ class Provider
 			'pagination' => ['hasMore' => false, 'total' => null],
 			'context' => $this->getEmptyNavigationContext(),
 			'emptyReason' => empty($items) ? 'empty' : null,
+			'sourceRevision' => null,
 		]);
 
 		return $result;
 	}
 
-	public function getSources(): Result
+	public function getSources(
+		int $page = self::DEFAULT_PAGE,
+		int $pageSize = self::DEFAULT_PAGE_SIZE,
+	): Result
 	{
 		$result = new Result();
+		$pageSize = $this->normalizePageSize($pageSize);
+		if (!$this->isSourcePageValid($page, $pageSize))
+		{
+			return $result->addError(Error::create(Error::INVALID_CONTEXT));
+		}
+
+		$catalogue = $this->loadCachedSourceCatalogue() ?? $this->buildSourceCatalogue();
+		$offset = ($page - 1) * $pageSize;
+		$sources = \array_slice($catalogue['sources'], $offset, $pageSize);
+		$hasMore = $offset + \count($sources) < \count($catalogue['sources']);
+
+		$result->setData([
+			'stage' => ['type' => self::INITIAL_STAGE_SOURCES, 'storageId' => null, 'folderId' => null],
+			'items' => [],
+			'sources' => $sources,
+			'pagination' => ['hasMore' => $hasMore, 'total' => null],
+			'context' => $this->getEmptyNavigationContext(),
+			'emptyReason' => $page === self::DEFAULT_PAGE && empty($sources) ? 'empty' : null,
+			'sourceRevision' => $catalogue['revision'],
+		]);
+
+		return $result;
+	}
+
+	private function buildSourceCatalogue(): array
+	{
 		$storages = $this->collectUniqueStorages($this->loadSourceStorages());
 		$this->warmUpStorageMetadata($storages);
 		$groupTitles = $this->loadGroupTitlesForStorages($storages);
-
 		$sources = [];
+		$groupIds = [];
+
 		foreach ($storages as $storage)
 		{
+			if ($storage->getProxyType() instanceof ProxyType\Group)
+			{
+				$groupId = (int)$storage->getEntityId();
+				if ($groupId > 0)
+				{
+					$groupIds[$groupId] = $groupId;
+				}
+			}
+
 			$source = $this->itemNormalizer->normalizeSourceDescriptor(
 				$storage,
 				$this->resolveSourceTitle($storage, $groupTitles),
@@ -245,16 +310,90 @@ class Provider
 			}
 		}
 
-		$result->setData([
-			'stage' => ['type' => self::INITIAL_STAGE_SOURCES, 'storageId' => null, 'folderId' => null],
-			'items' => [],
+		$catalogue = [
 			'sources' => $sources,
-			'pagination' => ['hasMore' => false, 'total' => null],
-			'context' => $this->getEmptyNavigationContext(),
-			'emptyReason' => empty($sources) ? 'empty' : null,
-		]);
+			'revision' => hash('sha256', serialize($sources)),
+		];
+		$this->saveSourceCatalogueToCache($catalogue, array_values($groupIds));
 
-		return $result;
+		return $catalogue;
+	}
+
+	protected function loadCachedSourceCatalogue(): ?array
+	{
+		$cache = Cache::createInstance();
+		if (!$cache->initCache(
+			$this->getGroupStorageCacheTtl(),
+			$this->getSourceCatalogueCacheId(),
+			$this->getSourceCatalogueCachePath(),
+		))
+		{
+			return null;
+		}
+
+		$data = $cache->getVars();
+		if (
+			!\is_array($data)
+			|| !isset($data['sources'], $data['revision'])
+			|| !\is_array($data['sources'])
+			|| !\is_string($data['revision'])
+			|| preg_match('/^[a-f0-9]{64}$/D', $data['revision']) !== 1
+		)
+		{
+			return null;
+		}
+
+		return [
+			'sources' => array_values($data['sources']),
+			'revision' => $data['revision'],
+		];
+	}
+
+	protected function saveSourceCatalogueToCache(array $data, array $groupIds): void
+	{
+		$cachePath = $this->getSourceCatalogueCachePath();
+		$cache = Cache::createInstance();
+		if (!$cache->startDataCache(
+			$this->getGroupStorageCacheTtl(),
+			$this->getSourceCatalogueCacheId(),
+			$cachePath,
+		))
+		{
+			return;
+		}
+
+		$taggedCache = Application::getInstance()->getTaggedCache();
+		$taggedCache->startTagCache($cachePath);
+		$taggedCache->registerTag('sonet_user2group_U' . $this->context->getUserId());
+		$taggedCache->registerTag(Storage::GROUP_STORAGE_CACHE_TAG);
+		$taggedCache->registerTag('disk_common_storage');
+		foreach ($groupIds as $groupId)
+		{
+			$taggedCache->registerTag("sonet_group_{$groupId}");
+			$taggedCache->registerTag("sonet_features_G_{$groupId}");
+		}
+		$taggedCache->endTagCache();
+
+		$cache->endDataCache($data);
+	}
+
+	private function getSourceCatalogueCacheId(): string
+	{
+		$siteId = defined('SITE_ID') ? (string)SITE_ID : '';
+		$languageId = defined('LANGUAGE_ID') ? (string)LANGUAGE_ID : '';
+
+		return self::SOURCE_CATALOGUE_CACHE_VERSION . '_file_picker_sources_'
+			. md5($siteId . ':' . $languageId)
+			. '_' . $this->context->getUserId();
+	}
+
+	private function getSourceCatalogueCachePath(): string
+	{
+		$userId = $this->context->getUserId();
+
+		return '/disk/file_picker/source_catalogue/'
+			. str_pad((string)($userId % 100), 2, '0', STR_PAD_LEFT)
+			. "/{$userId}";
 	}
 
 	private function collectUniqueStorages(array $storages): array
@@ -591,7 +730,7 @@ class Provider
 		$groupIds = [];
 		foreach ($storages as $storage)
 		{
-			if (!$storage instanceof Storage || !$storage->getProxyType() instanceof ProxyType\Group)
+			if (!$storage instanceof Storage || $storage->getEntityType() !== ProxyType\Group::class)
 			{
 				continue;
 			}
@@ -666,6 +805,8 @@ class Provider
 	 */
 	private function warmUpObjectMetadata(array $objects): void
 	{
+		$this->itemNormalizer->warmUpItems($objects);
+
 		$storageIds = [];
 		foreach ($objects as $object)
 		{
@@ -700,7 +841,7 @@ class Provider
 		$groupIds = [];
 		foreach ($storages as $storage)
 		{
-			if (!$storage instanceof Storage || !$storage->getProxyType() instanceof ProxyType\Group)
+			if (!$storage instanceof Storage || $storage->getEntityType() !== ProxyType\Group::class)
 			{
 				continue;
 			}
@@ -784,6 +925,9 @@ class Provider
 		$hasMore = \count($objects) > $pageSize;
 		$objects = \array_slice($objects, 0, $pageSize);
 		$total = $includeTotal ? $this->countChildren($storage, $folder, $filter) : null;
+
+		// The storages of a folder page are known already, only the items themselves need warming up.
+		$this->itemNormalizer->warmUpItems($objects);
 
 		$items = [];
 		foreach ($objects as $object)
@@ -1040,6 +1184,161 @@ class Provider
 		]);
 
 		return $result;
+	}
+
+	/**
+	 * Viewer attributes of the requested files, in the order they were asked for. A file the user may not
+	 * read, a folder, a deleted object and a file the picker must not open are all left out with no trace:
+	 * the answer never tells whether an object exists.
+	 */
+	public function getViewerAttributes(array $objectIds): Result
+	{
+		$result = new Result();
+		$ids = $this->uniquePositiveIds($objectIds);
+		if (empty($ids))
+		{
+			return $result->setData(['items' => []]);
+		}
+
+		// The limit counts the items actually asked about, as the selection does: a repeated id is one item.
+		if (\count($ids) > self::MAX_PAGE_SIZE)
+		{
+			return $result->addError(Error::create(Error::TOO_MANY_ITEMS));
+		}
+
+		$loadedObjects = [];
+		foreach ($this->loadReadableObjectsByIds($ids) as $object)
+		{
+			if (!$object instanceof BaseObject)
+			{
+				continue;
+			}
+
+			$loadedObjects[(int)$object->getId()] = $object;
+		}
+
+		$files = [];
+		foreach ($ids as $id)
+		{
+			$object = $loadedObjects[$id] ?? null;
+			if ($object instanceof File && !$object->isDeleted())
+			{
+				$files[$id] = $object;
+			}
+		}
+
+		$securityContexts = $this->preloadRightsForViewerAttributes($files);
+		$this->viewerAttributesFactory->preloadFileData($files);
+
+		$items = [];
+		foreach ($files as $id => $file)
+		{
+			$attributes = $this->viewerAttributesFactory->build($file, $securityContexts[$id]);
+			if ($attributes === null)
+			{
+				continue;
+			}
+
+			$items[] = ['objectId' => $id, 'attributes' => $attributes];
+		}
+
+		return $result->setData(['items' => $items]);
+	}
+
+	/**
+	 * One security context per kind of rights for the whole batch, with the rights and the download access
+	 * of its files read in one go. A context of its own per file shares none of its caches, so every file
+	 * would pay for its own rights, object and option queries.
+	 *
+	 * The context is warmed by object ids and not by objects on purpose: that is the path where the real
+	 * objects behind the ids are resolved for the whole batch at once as well.
+	 *
+	 * @param array<int, File> $filesByObjectId
+	 * @return array<int, SecurityContext>
+	 */
+	private function preloadRightsForViewerAttributes(array $filesByObjectId): array
+	{
+		$groups = $this->groupFilesByRightsKind($filesByObjectId);
+
+		$securityContextByObjectId = [];
+		foreach ($groups as $kind => $files)
+		{
+			if (empty($files))
+			{
+				continue;
+			}
+
+			$securityContext = $kind === 'strict'
+				? $this->createSecurityContext()
+				: $this->createResolveSelectionSecurityContext()
+			;
+
+			if ($securityContext instanceof DiskSecurityContext)
+			{
+				$securityContext->preloadOperationsForObjectIds($this->collectRightsObjectIds($files));
+			}
+
+			foreach (array_keys($files) as $objectId)
+			{
+				$securityContextByObjectId[$objectId] = $securityContext;
+			}
+		}
+
+		return $securityContextByObjectId;
+	}
+
+	/**
+	 * The two kinds of rights differ by the administrator bypass alone. Without it the whole batch is one
+	 * group: a second context would answer exactly the same and share none of the caches of the first, so
+	 * splitting the batch would only pay for the rights and the download access twice.
+	 *
+	 * @param array<int, File> $filesByObjectId
+	 * @return array<string, array<int, File>>
+	 */
+	private function groupFilesByRightsKind(array $filesByObjectId): array
+	{
+		if (!$this->isStorageAdministrator())
+		{
+			return ['strict' => $filesByObjectId];
+		}
+
+		$groups = ['strict' => [], 'common' => []];
+		foreach ($filesByObjectId as $objectId => $file)
+		{
+			$groups[$this->needsStrictRights($file) ? 'strict' : 'common'][$objectId] = $file;
+		}
+
+		return $groups;
+	}
+
+	/**
+	 * The kind of rights an object was loaded with, so that the right to download is judged exactly as the
+	 * right to read was: a chat storage never gets the administrator bypass, the rest of the supported
+	 * storages do.
+	 */
+	protected function needsStrictRights(BaseObject $object): bool
+	{
+		$entityType = $object->getStorage()?->getEntityType();
+
+		return \in_array($entityType, self::STRICT_RIGHTS_STORAGE_PROXY_TYPES, true);
+	}
+
+	/**
+	 * A file answers for its right to download by its real object, so a symlink needs both ids warmed.
+	 *
+	 * @param array<int, File> $files
+	 * @return array<int, int>
+	 */
+	private function collectRightsObjectIds(array $files): array
+	{
+		$objectIds = [];
+		foreach ($files as $file)
+		{
+			$objectIds[] = (int)$file->getId();
+			$objectIds[] = (int)$file->getRealObjectId();
+		}
+
+		return $objectIds;
 	}
 
 	private function loadChildrenPage(
@@ -1376,6 +1675,12 @@ class Provider
 			&& ($page - 1) <= intdiv(self::MAX_PAGE_OFFSET, $pageSize);
 	}
 
+	private function isSourcePageValid(int $page, int $pageSize): bool
+	{
+		return $page > 0
+			&& ($page - 1) <= intdiv(PHP_INT_MAX, $pageSize);
+	}
+
 	protected function loadReadableFolderContext(int $storageId, int $folderId): ?array
 	{
 		$folder = $this->loadFolderById($folderId);
@@ -1426,21 +1731,56 @@ class Provider
 
 	protected function loadReadableObjectsByIds(array $objectIds): iterable
 	{
+		if (!$this->isStorageAdministrator())
+		{
+			return $this->loadObjectsForStorageTypes(
+				$objectIds,
+				self::SUPPORTED_STORAGE_PROXY_TYPES,
+				$this->createSecurityContext(),
+			);
+		}
+
+		$bypassedTypes = array_values(
+			array_diff(self::SUPPORTED_STORAGE_PROXY_TYPES, self::STRICT_RIGHTS_STORAGE_PROXY_TYPES),
+		);
+
+		return [
+			...$this->loadObjectsForStorageTypes(
+				$objectIds,
+				self::STRICT_RIGHTS_STORAGE_PROXY_TYPES,
+				$this->createSecurityContext(),
+			),
+			...$this->loadObjectsForStorageTypes(
+				$objectIds,
+				$bypassedTypes,
+				$this->createResolveSelectionSecurityContext(),
+			),
+		];
+	}
+
+	private function loadObjectsForStorageTypes(
+		array $objectIds,
+		array $storageProxyTypes,
+		SecurityContext $securityContext,
+	): array
+	{
 		$parameters = [
 			'select' => ['*'],
 			'filter' => [
 				'@ID' => $objectIds,
-				'@STORAGE.ENTITY_TYPE' => self::SUPPORTED_STORAGE_PROXY_TYPES,
+				'@STORAGE.ENTITY_TYPE' => $storageProxyTypes,
 			],
 			'with' => ['STORAGE'],
 		];
 		$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck(
-			$this->createResolveSelectionSecurityContext(),
+			$securityContext,
 			$parameters,
 			['ID', 'CREATED_BY'],
 		);
 
-		return $this->loadObjects($parameters);
+		$objects = $this->loadObjects($parameters);
+
+		return is_array($objects) ? $objects : iterator_to_array($objects);
 	}
 
 	protected function loadObjects(array $parameters): iterable

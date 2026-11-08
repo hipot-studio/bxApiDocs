@@ -2,30 +2,51 @@
 
 namespace Bitrix\Call\Track\Downloader;
 
-use Bitrix\Main\IO;
 use Bitrix\Main\Result;
-use Bitrix\Main\Web\HttpClient;
-use Bitrix\Main\Loader;
+use Psr\Log\LoggerInterface;
 use Bitrix\Call\Track;
 use Bitrix\Call\Track\TrackError;
 use Bitrix\Call\Logger\Logger;
 use Bitrix\Call\Integration\AI\CallAISettings;
 use Bitrix\Call\Analytics\TrackAnalytics;
 use Bitrix\Call\Call\Registry;
+use Bitrix\Call\Download\ChunkedDownloadEngine;
+use Bitrix\Call\Download\DownloadFailure;
+use Bitrix\Call\Download\DownloadFailureReason;
+use Bitrix\Call\Download\DownloadJob;
+use Bitrix\Call\Download\DownloadObserver;
+use Bitrix\Call\Download\DownloadPolicy;
+use Bitrix\Call\Download\DownloadStatus;
 
 /**
- * Downloads track file in chunks with time limit awareness and resume capability
+ * Downloads track file in chunks with time limit awareness and resume capability.
+ *
+ * The chunk loop itself is {@see ChunkedDownloadEngine}, driven with the track policy
+ * {@see DownloadPolicy::forTracks()}; this class keeps what is the track's own around it - the
+ * temp path of the row, the log lines, the telemetry, the track errors and the completion.
+ * The hooks below are called by the engine at the points the loop used to log and report from.
  *
  * @internal
  */
-class ChunkedDownloader extends AbstractDownloader
+class ChunkedDownloader extends AbstractDownloader implements DownloadObserver
 {
-	private const CHUNK_SIZE = 10485760; // 10 MB
-	private const EXECUTION_TIME_LIMIT = 25; // seconds
+	// Defaults for the tuning options (see DownloadPolicy::forTracks()).
+	public const CHUNK_SIZE = DownloadPolicy::DEFAULT_CHUNK_SIZE; // 10 MB
+	public const EXECUTION_TIME_LIMIT = DownloadPolicy::DEFAULT_STEP_BUDGET; // seconds
 
 	private int $fileSize;
 	private float $startTime;
-	private int $downloadedBytes = 0;
+	private DownloadPolicy $policy;
+	private int $chunkSize;
+	private int $executionTimeLimit; // the step budget the engine enforces, as read from the options
+
+	private ?Track $track = null;
+	private bool $log = false;
+	private ?LoggerInterface $logger = null;
+	private string $contentRange = '';
+	private bool $forcedNetworkError = false;
+	private bool $budgetSpentBeforeStart = false;
+	private ?TrackError $chunkError = null;
 
 	/**
 	 * @param int $fileSize Known file size from Range support check
@@ -34,23 +55,10 @@ class ChunkedDownloader extends AbstractDownloader
 	{
 		$this->fileSize = $fileSize;
 		$this->startTime = defined('START_EXEC_TIME') ? START_EXEC_TIME : microtime(true);
-	}
-
-	/**
-	 * Check if execution time limit has been reached
-	 */
-	protected function isExecutionLimitReached(): bool
-	{
-		return php_sapi_name() !== 'cli' && (microtime(true) - $this->startTime) >= self::EXECUTION_TIME_LIMIT;
-	}
-
-	/**
-	 * Check if download can continue (time limit not reached and file not complete)
-	 */
-	protected function canContinueDownload(): bool
-	{
-		return !$this->isExecutionLimitReached()
-			&& $this->downloadedBytes < $this->fileSize;
+		// Tuning options are read once per instance, not per chunk in the download loop.
+		$this->policy = DownloadPolicy::forTracks();
+		$this->chunkSize = $this->policy->chunkSize;
+		$this->executionTimeLimit = $this->policy->stepBudgetSeconds;
 	}
 
 	/**
@@ -62,7 +70,6 @@ class ChunkedDownloader extends AbstractDownloader
 		$log = CallAISettings::isLoggingEnable();
 		$logger = Logger::getInstance();
 
-		$downloadUrl = $track->getDownloadUrl();
 		$tempPath = $track->getTempPath();
 
 		// Initialize temp path if not set
@@ -74,42 +81,84 @@ class ChunkedDownloader extends AbstractDownloader
 			$log && $logger->info("ChunkedDownloader::download: TempPath created: {$tempPath}. TrackId: {$track->getId()}");
 		}
 
-		// Get current progress from file size on disk
-		$this->downloadedBytes = 0;
-		$file = new IO\File($tempPath);
-		if ($file->isExists())
+		$this->track = $track;
+		$this->log = $log;
+		$this->logger = $logger;
+		$this->contentRange = '';
+		$this->forcedNetworkError = false;
+		$this->budgetSpentBeforeStart = false;
+		$this->chunkError = null;
+
+		$outcome = $this->createEngine()->step(new TrackDownloadJob($track, $this->fileSize, $this->policy), $this);
+
+		// The engine answers a throwable with an outcome; the chunk loop of tracks always let it through.
+		if ($outcome->failure?->exception !== null)
 		{
-			$this->downloadedBytes = (int)$file->getSize();
-			$log && $logger->info("ChunkedDownloader::download: Resuming. Downloaded: {$this->downloadedBytes}/{$this->fileSize} bytes. TrackId: {$track->getId()}");
+			throw $outcome->failure->exception;
 		}
 
-		// Check if execution time already exceeded - reschedule immediately
-		if ($this->isExecutionLimitReached())
+		if ($outcome->status === DownloadStatus::Failed)
 		{
-			$this->sendTelemetry($track, 'in_progress', null, $this->getEventName($track, 'finished_by_execution_timelimit'));
+			if ($this->chunkError !== null)
+			{
+				$result->addError($this->chunkError);
 
-			$log && $logger->info("ChunkedDownloader::download: Time limit exceeded at start, rescheduling. TrackId: {$track->getId()}");
-			return $this->progress($result, $this->downloadedBytes);
+				return $this->fail($result);
+			}
+
+			return $this->failBeforeChunks($result, $track, $tempPath, $outcome->failure);
 		}
 
-		// Ensure directory exists
-		IO\Directory::createDirectory(\dirname($tempPath));
+		if ($this->budgetSpentBeforeStart)
+		{
+			return $this->progress($result, $outcome->downloadedBytes);
+		}
 
+		$totalTime = round(microtime(true) - $this->startTime, 1);
+
+		if ($outcome->status === DownloadStatus::Completed)
+		{
+			$log && $logger->info(
+				"ChunkedDownloader::download: Completed. {$this->fileSize} bytes, "
+				. "{$outcome->chunks} chunks, {$totalTime}s. TrackId: {$track->getId()}"
+			);
+
+			// Send telemetry about successful download completion
+			$this->sendTelemetry($track, 'success', null, $this->getEventName($track, 'download_completed'));
+
+			return $this->complete($result, $track);
+		}
+
+		// Download not finished — return progress status
+		$percent = round(($outcome->downloadedBytes / $this->fileSize) * 100, 1);
 		$log && $logger->info(
-			"ChunkedDownloader::download: Starting. TrackId: {$track->getId()}, "
-			. "FileSize: {$this->fileSize}, Downloaded: {$this->downloadedBytes}, ChunkSize: " . self::CHUNK_SIZE
+			"ChunkedDownloader::download: Time limit. {$percent}% ({$outcome->downloadedBytes}/{$this->fileSize}), "
+			. "{$outcome->chunks} chunks, {$totalTime}s. TrackId: {$track->getId()}"
 		);
 
-		// Send telemetry about download start
-		$this->sendTelemetry($track, 'success', null, $this->getEventName($track, 'download_started'));
+		$this->sendTelemetry($track, 'success', null, $this->getEventName($track, 'download_in_progress'));
 
-		try
+		return $this->progress($result, $outcome->downloadedBytes);
+	}
+
+	/**
+	 * The engine that runs the chunk loop; its time budget counts from the start of this downloader.
+	 */
+	protected function createEngine(): ChunkedDownloadEngine
+	{
+		return new ChunkedDownloadEngine($this->startTime);
+	}
+
+	/**
+	 * A step that failed before its first chunk. The temp file that cannot be opened is the only
+	 * such failure the track policy meets through the factory, which probes the url and the size
+	 * before a chunked downloader exists.
+	 */
+	private function failBeforeChunks(Result $result, Track $track, string $tempPath, DownloadFailure $failure): Result
+	{
+		if ($failure->reason === DownloadFailureReason::FileError)
 		{
-			$fileHandle = $file->open('a');
-		}
-		catch (IO\FileOpenException $e)
-		{
-			$log && $logger->error("ChunkedDownloader::download: Cannot open file: {$tempPath}");
+			$this->log && $this->logger->error("ChunkedDownloader::download: Cannot open file: {$tempPath}");
 
 			// Send telemetry about error
 			$this->sendTelemetry($track, 'error', 'file_open_error', $this->getEventName($track, 'download_failed'));
@@ -120,99 +169,45 @@ class ChunkedDownloader extends AbstractDownloader
 			)));
 		}
 
-		// Download chunks until time limit or completion
-		$chunkCount = 0;
-		try
-		{
-			while ($this->canContinueDownload())
-			{
-				$chunkCount++;
-				$startByte = $this->downloadedBytes;
-				$endByte = min($this->downloadedBytes + self::CHUNK_SIZE - 1, $this->fileSize - 1);
-				$percent = round(($this->downloadedBytes / $this->fileSize) * 100, 1);
+		$this->log && $this->logger->error("ChunkedDownloader::download: {$failure->message}. TrackId: {$track->getId()}");
 
-				$log && $logger->info(
-					"ChunkedDownloader::download: Chunk #{$chunkCount}. "
-					. "Bytes: {$startByte}-{$endByte}, Progress: {$percent}%. TrackId: {$track->getId()}"
-				);
-
-				$chunkResult = $this->downloadChunk($downloadUrl, $startByte, $endByte, $fileHandle, $this->fileSize);
-				if (!$chunkResult->isSuccess())
-				{
-					$log && $logger->error("ChunkedDownloader::download: Chunk #{$chunkCount} failed. TrackId: {$track->getId()}");
-
-					$errors = $chunkResult->getErrors();
-					$errorCode = !empty($errors) ? $errors[0]->getCode() : 'unknown';
-					$isForced = (bool)($chunkResult->getData()['debug_forced_error'] ?? false);
-					$debugSuffix = $isForced ? '_debug' : '';
-					$this->sendTelemetry(
-						$track,
-						'error',
-						$errorCode . $debugSuffix,
-						$this->getEventName($track, 'download_chunk_failed' . $debugSuffix)
-					);
-
-					$result->addErrors($chunkResult->getErrors());
-					return $this->fail($result);
-				}
-
-				$bytesWritten = $chunkResult->getData()['bytes_written'];
-				$this->downloadedBytes += $bytesWritten;
-
-				if ($this->downloadedBytes >= $this->fileSize)
-				{
-					$log && $logger->info("ChunkedDownloader::download: Completed at chunk #{$chunkCount}. TrackId: {$track->getId()}");
-					break;
-				}
-			}
-		}
-		finally
-		{
-			$file->close();
-		}
-
-		$completed = ($this->downloadedBytes >= $this->fileSize);
-
-		$totalTime = round(microtime(true) - $this->startTime, 1);
-
-		if ($completed)
-		{
-			$log && $logger->info(
-				"ChunkedDownloader::download: Completed. {$this->fileSize} bytes, "
-				. "{$chunkCount} chunks, {$totalTime}s. TrackId: {$track->getId()}"
-			);
-
-			// Send telemetry about successful download completion
-			$this->sendTelemetry($track, 'success', null, $this->getEventName($track, 'download_completed'));
-
-			return $this->complete($result, $track);
-		}
-
-		// Download not finished — return progress status
-		$percent = round(($this->downloadedBytes / $this->fileSize) * 100, 1);
-		$log && $logger->info(
-			"ChunkedDownloader::download: Time limit. {$percent}% ({$this->downloadedBytes}/{$this->fileSize}), "
-			. "{$chunkCount} chunks, {$totalTime}s. TrackId: {$track->getId()}"
-		);
-
-		$this->sendTelemetry($track, 'success', null, $this->getEventName($track, 'download_in_progress'));
-
-		return $this->progress($result, $this->downloadedBytes);
+		return $this->fail($result->addError(new TrackError(TrackError::DOWNLOAD_ERROR, $failure->message)));
 	}
 
-	/**
-	 * Download a single chunk of the file.
-	 *
-	 * @param string $url Download URL
-	 * @param int $startByte Starting byte position
-	 * @param int $endByte Ending byte position
-	 * @param resource $fileHandle File handle for writing
-	 * @param int $expectedTotalSize Expected total file size (for validation)
-	 * @return Result Contains 'bytes_written' on success
-	 */
-	protected function downloadChunk(string $url, int $startByte, int $endByte, $fileHandle, int $expectedTotalSize = 0): Result
+	public function onResume(DownloadJob $job, int $downloadedBytes): void
 	{
-		$result = new Result();
+		$this->log && $this->logger->info(
+			"ChunkedDownloader::download: Resuming. Downloaded: {$downloadedBytes}/{$this->fileSize} bytes. TrackId: {$this->track->getId()}"
+		);
+	}
+
+	public function onBudgetSpentBeforeStart(DownloadJob $job, int $downloadedBytes): void
+	{
+		$this->budgetSpentBeforeStart = true;
+		$this->sendTelemetry($this->track, 'in_progress', null, $this->getEventName($this->track, 'finished_by_execution_timelimit'));
+
+		$this->log && $this->logger->info("ChunkedDownloader::download: Time limit exceeded at start, rescheduling. TrackId: {$this->track->getId()}");
+	}
+
+	public function onStart(DownloadJob $job, int $downloadedBytes): void
+	{
+		$this->log && $this->logger->info(
+			"ChunkedDownloader::download: Starting. TrackId: {$this->track->getId()}, "
+			. "FileSize: {$this->fileSize}, Downloaded: {$downloadedBytes}, ChunkSize: {$this->chunkSize}"
+		);
+
+		// Send telemetry about download start
+		$this->sendTelemetry($this->track, 'success', null, $this->getEventName($this->track, 'download_started'));
+	}
+
+	public function onChunkRequest(DownloadJob $job, int $chunk, int $startByte, int $endByte, int $downloadedBytes): bool
+	{
+		$percent = round(($downloadedBytes / $this->fileSize) * 100, 1);
+		$this->log && $this->logger->info(
+			"ChunkedDownloader::download: Chunk #{$chunk}. "
+			. "Bytes: {$startByte}-{$endByte}, Progress: {$percent}%. TrackId: {$this->track->getId()}"
+		);
+
 		$log = CallAISettings::isLoggingEnable();
 		$logger = Logger::getInstance();
 
@@ -222,83 +217,92 @@ class ChunkedDownloader extends AbstractDownloader
 		// Toggle: \Bitrix\Main\Config\Option::set('call', 'debug_force_network_error', true|false).
 		// Returned through the normal chunked path so DownloadAgent retry counter,
 		// telemetry and $this->fail($result) all fire as in production.
-		// The debug_forced_error flag is set on the Result so the caller can mark the
-		// telemetry payload with a distinct event/errorCode and the synthetic event
-		// is not mistaken for a real network failure in analytics.
+		// The debug suffix marks the telemetry payload with a distinct event/errorCode so the
+		// synthetic event is not mistaken for a real network failure in analytics.
 		if (filter_var(\Bitrix\Main\Config\Option::get('call', 'debug_force_network_error', ''), FILTER_VALIDATE_BOOLEAN))
 		{
 			$log && $logger->error("ChunkedDownloader::downloadChunk: Forced NETWORK_ERROR (debug_force_network_error). Bytes: {$startByte}-{$endByte}");
+			$this->forcedNetworkError = true;
 
-			$result->setData(['debug_forced_error' => true]);
-			return $result->addError(new TrackError(
-				TrackError::NETWORK_ERROR,
-				'ChunkedDownloader: forced NETWORK_ERROR for testing'
-			));
+			return false;
 		}
 
-		$httpClient = DownloadHelper::createHttpClient();
-		$httpClient->setHeader('Range', "bytes={$startByte}-{$endByte}");
-		$httpClient->setOutputStream($fileHandle);
-		$queryResult = $httpClient->query(HttpClient::HTTP_GET, $url);
-		$httpClient->getResult();
+		return true;
+	}
 
-		$status = $httpClient->getStatus();
-		$log && $logger->info("ChunkedDownloader::downloadChunk: HTTP completed. Status: {$status}");
+	public function onChunkResponse(DownloadJob $job, int $chunk, int $httpStatus, string $contentRange): void
+	{
+		$this->contentRange = $contentRange;
 
-		if (!$queryResult || $status !== 206)
+		$log = CallAISettings::isLoggingEnable();
+		$log && Logger::getInstance()->info("ChunkedDownloader::downloadChunk: HTTP completed. Status: {$httpStatus}");
+	}
+
+	public function onChunkFailed(DownloadJob $job, int $chunk, int $startByte, int $endByte, DownloadFailure $failure): void
+	{
+		$log = CallAISettings::isLoggingEnable();
+		$logger = Logger::getInstance();
+		$debugSuffix = '';
+
+		if ($this->forcedNetworkError)
 		{
-			$httpErrors = $httpClient->getError();
-			$isNetworkError = isset($httpErrors['NETWORK']);
+			$error = new TrackError(TrackError::NETWORK_ERROR, 'ChunkedDownloader: forced NETWORK_ERROR for testing');
+			$debugSuffix = '_debug';
+		}
+		elseif ($failure->reason === DownloadFailureReason::SizeChanged)
+		{
+			$log && $logger->info("ChunkedDownloader::downloadChunk: Content-Range: '{$this->contentRange}'");
 
-			$errors = array_values($httpErrors);
-			if ($status != 206)
-			{
-				$errors[] = "Expected HTTP 206, got: {$status}";
-			}
-			$errors[] = 'url: ' . (parse_url($url, PHP_URL_HOST) ?: $url);
-
-			$errorMessage = implode('; ', $errors);
-
-			$log && $logger->error("ChunkedDownloader::downloadChunk: Failed: {$errorMessage}. Bytes: {$startByte}-{$endByte}");
+			preg_match('/bytes (\d+)-(\d+)\/(\d+)/', $this->contentRange, $matches);
+			$totalSize = (int)$matches[3];
+			$log && $logger->warning(
+				"ChunkedDownloader::downloadChunk: File size changed: expected {$this->fileSize}, got {$totalSize}"
+			);
+			$error = new TrackError(
+				TrackError::FILE_SIZE_MISMATCH,
+				"File size changed during download: expected {$this->fileSize}, got {$totalSize}"
+			);
+		}
+		else
+		{
+			$log && $logger->error("ChunkedDownloader::downloadChunk: Failed: {$failure->message}. Bytes: {$startByte}-{$endByte}");
 
 			$errorCode = TrackError::DOWNLOAD_ERROR;
-			if ($isNetworkError)
+			if (isset($failure->httpErrors['NETWORK']))
 			{
 				$errorCode = TrackError::NETWORK_ERROR;
 
-				$systemException = new \Bitrix\Main\SystemException('Network connection error: ' . $errorMessage);
+				$systemException = new \Bitrix\Main\SystemException('Network connection error: ' . $failure->message);
 				\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($systemException);
 			}
 
-			return $result->addError(new TrackError(
-				$errorCode,
-				"Chunk download failed: {$errorMessage}"
-			));
+			$error = new TrackError($errorCode, "Chunk download failed: {$failure->message}");
 		}
 
-		// Validate Content-Range header if present
-		$contentRange = $httpClient->getHeaders()->get('Content-Range');
-		$log && $logger->info("ChunkedDownloader::downloadChunk: Content-Range: '{$contentRange}'");
+		$this->log && $this->logger->error("ChunkedDownloader::download: Chunk #{$chunk} failed. TrackId: {$this->track->getId()}");
 
-		if ($contentRange && preg_match('/bytes (\d+)-(\d+)\/(\d+)/', $contentRange, $matches))
-		{
-			$totalSize = (int)$matches[3];
-			if ($expectedTotalSize > 0 && $totalSize !== $expectedTotalSize)
-			{
-				$log && $logger->warning(
-					"ChunkedDownloader::downloadChunk: File size changed: expected {$expectedTotalSize}, got {$totalSize}"
-				);
-				return $result->addError(new TrackError(
-					TrackError::FILE_SIZE_MISMATCH,
-					"File size changed during download: expected {$expectedTotalSize}, got {$totalSize}"
-				));
-			}
-		}
+		$this->sendTelemetry(
+			$this->track,
+			'error',
+			$error->getCode() . $debugSuffix,
+			$this->getEventName($this->track, 'download_chunk_failed' . $debugSuffix)
+		);
 
-		$bytesWritten = $endByte - $startByte + 1;
+		$this->chunkError = $error;
+	}
+
+	public function onChunkWritten(DownloadJob $job, int $chunk, int $bytesWritten, int $downloadedBytes): void
+	{
+		$log = CallAISettings::isLoggingEnable();
+		$logger = Logger::getInstance();
+
+		$log && $logger->info("ChunkedDownloader::downloadChunk: Content-Range: '{$this->contentRange}'");
 		$log && $logger->info("ChunkedDownloader::downloadChunk: Success. BytesWritten: {$bytesWritten}");
 
-		return $result->setData(['bytes_written' => $bytesWritten]);
+		if ($downloadedBytes >= $this->fileSize)
+		{
+			$this->log && $this->logger->info("ChunkedDownloader::download: Completed at chunk #{$chunk}. TrackId: {$this->track->getId()}");
+		}
 	}
 
 	/**

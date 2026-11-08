@@ -12,6 +12,22 @@ use Bitrix\Main\ORM\Fields\JsonField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 
+/**
+ * Class AppScopeRequestTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_AppScopeRequest_Query query()
+ * @method static EO_AppScopeRequest_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_AppScopeRequest_Result getById($id)
+ * @method static EO_AppScopeRequest_Result getList(array $parameters = [])
+ * @method static EO_AppScopeRequest_Entity getEntity()
+ * @method static \Bitrix\Rest\Internal\Model\EO_AppScopeRequest createObject($setDefaultValues = true)
+ * @method static \Bitrix\Rest\Internal\Model\EO_AppScopeRequest_Collection createCollection()
+ * @method static \Bitrix\Rest\Internal\Model\EO_AppScopeRequest wakeUpObject($row)
+ * @method static \Bitrix\Rest\Internal\Model\EO_AppScopeRequest_Collection wakeUpCollection($rows)
+ */
 class AppScopeRequestTable extends DataManager
 {
 	public static function getTableName(): string

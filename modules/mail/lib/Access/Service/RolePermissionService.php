@@ -47,6 +47,7 @@ class RolePermissionService
 		{
 			$roleId = (int)$group['id'];
 			$roleTitle = (string)$group['title'];
+			$isNewRole = $roleId === 0;
 
 			$roleId = $this->saveRole($roleTitle, $roleId);
 			if (!$roleId)
@@ -75,6 +76,18 @@ class RolePermissionService
 						'VALUE' => (int)$right['value'],
 					];
 				}
+			}
+
+			if ($isNewRole)
+			{
+				$permissionsToSave = array_merge(
+					$permissionsToSave,
+					$this->getDefaultPermissionsForNewRole(
+						$roleId,
+						$group['accessRights'] ?? [],
+						$availablePermissionIds,
+					),
+				);
 			}
 		}
 
@@ -276,6 +289,51 @@ class RolePermissionService
 		}
 
 		return $members;
+	}
+
+	/**
+	 * While the feature is off the right is out of the screen inventory: the screen sends no value
+	 * for it, so a role created by then would lose deletion the moment the feature is on. Once the
+	 * screen offers the toggle it is drawn off until the administrator switches it, so a missing
+	 * value is the denial he sees. A sent value wins only while the right is in that inventory:
+	 * outside it saveRolePermissions() drops the value, so the default has to be written anyway.
+	 *
+	 * @param $accessRights array<array{id: string, value: string}>
+	 * @param $availablePermissionIds array<string>
+	 *
+	 * @return array<array{ROLE_ID: int, PERMISSION_ID: string, VALUE: int}>
+	 */
+	private function getDefaultPermissionsForNewRole(
+		int $roleId,
+		array $accessRights,
+		array $availablePermissionIds,
+	): array
+	{
+		$isOfferedByTheScreen = in_array(
+			PermissionDictionary::MAIL_MESSAGE_DELETE,
+			$availablePermissionIds,
+			true,
+		);
+		$sentPermissionIds = array_map('strval', array_column($accessRights, 'id'));
+		$isSentByTheScreen = in_array(PermissionDictionary::MAIL_MESSAGE_DELETE, $sentPermissionIds, true);
+
+		if ($isOfferedByTheScreen && $isSentByTheScreen)
+		{
+			return [];
+		}
+
+		$defaultValue = $isOfferedByTheScreen
+			? PermissionDictionary::VALUE_NO
+			: PermissionDictionary::VALUE_YES
+		;
+
+		return [
+			[
+				'ROLE_ID' => $roleId,
+				'PERMISSION_ID' => PermissionDictionary::MAIL_MESSAGE_DELETE,
+				'VALUE' => $defaultValue,
+			],
+		];
 	}
 
 	/**

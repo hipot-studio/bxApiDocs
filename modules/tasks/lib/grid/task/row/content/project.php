@@ -4,6 +4,7 @@ namespace Bitrix\Tasks\Grid\Task\Row\Content;
 use Bitrix\Main;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Tasks\Grid\ControlButtonTrait;
 use Bitrix\Tasks\Grid\Task\Row\Content;
 use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ProjectLimit;
@@ -15,6 +16,8 @@ use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ProjectLimit;
  */
 class Project extends Content
 {
+	use ControlButtonTrait;
+
 	/**
 	 * @return string
 	 * @throws Main\ArgumentException
@@ -29,18 +32,39 @@ class Project extends Content
 		{
 			if (!ProjectLimit::isFeatureEnabledOrTrial())
 			{
-				return (
-					$row['ACTION']['EDIT']
-					? "<div style='cursor: pointer;' class='tasks-list-tariff-lock-container' onclick='BX.UI.InfoHelper.show(`limit_tasks_projects`)'><span class='task-list-tariff-lock'></span></div>"
-					: "<span></span>"
+				if (!$row['ACTION']['EDIT'])
+				{
+					return "<span></span>";
+				}
+
+				return $this->renderControlButton(
+					[
+						'style' => 'cursor: pointer;',
+						'class' => 'tasks-list-tariff-lock-container',
+						'aria-label' => GetMessage('TASKS_GRID_TASK_ROW_CONTENT_PROJECT_TARIFF_LOCK_MSGVER_1'),
+					],
+					'<span class="task-list-tariff-lock" aria-hidden="true"></span>',
+					'event.stopPropagation(); BX.UI.InfoHelper.show(`limit_tasks_projects`)'
 				);
 			}
 
-			return (
-				$row['ACTION']['EDIT']
-					? "<div class='tasks-list-project-container'><span class='tasks-list-project-add' onclick='BX.PreventDefault(); BX.Tasks.GridActions.onProjectAddClick({$row['ID']}, this)'></span></div>"
-					: "<span></span>"
-			);
+			if (!$row['ACTION']['EDIT'])
+			{
+				return "<span></span>";
+			}
+
+			$taskId = (int)$row['ID'];
+
+			return '<div class="tasks-list-project-container">'
+				. $this->renderControlButton(
+					[
+						'class' => 'tasks-list-project-add',
+						'aria-label' => GetMessage('TASKS_GRID_TASK_ROW_CONTENT_PROJECT_ADD_MSGVER_1'),
+					],
+					'',
+					"BX.PreventDefault(); BX.Tasks.GridActions.onProjectAddClick({$taskId}, this)"
+				)
+				. '</div>';
 		}
 
 		$groupName = htmlspecialcharsbx($row['GROUP_NAME']);
@@ -101,10 +125,24 @@ class Project extends Content
 
 		$iconClass = implode(' ', $iconClassList);
 
-		return "<a class='{$selector}' onclick='{$onClick}' href='javascript:void(0)'>
-					<span class='{$iconClass}'>{$photo}</span>
-					<span class='tasks-grid-group-inner'>{$groupName}</span><span class='tasks-grid-filter-remove'></span>
-				</a>";
+		$innerHtml = "<span class='{$iconClass}' aria-hidden='true'>{$photo}</span>"
+			. "<span class='tasks-grid-group-inner'>{$groupName}</span>"
+			. "<span class='tasks-grid-filter-remove'></span>";
+
+		if ($onClick === '')
+		{
+			return "<span class='{$selector}' onclick='event.stopPropagation();'>{$innerHtml}</span>";
+		}
+
+		return $this->renderControlButton(
+			[
+				'class' => $selector,
+				'aria-pressed' => ($selected ? 'true' : 'false'),
+			],
+			$innerHtml,
+			$onClick,
+			"'"
+		);
 
 	}
 }

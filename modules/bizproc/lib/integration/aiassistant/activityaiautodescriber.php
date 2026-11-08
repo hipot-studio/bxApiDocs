@@ -8,6 +8,7 @@ use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\Entity\Activity\ActivityAiDescriptionSource;
 use Bitrix\Bizproc\Internal\Entity\Activity\Result\ActivityAiDescriptionResult;
 use Bitrix\Bizproc\Internal\Entity\Activity\Setting;
+use Bitrix\Bizproc\Internal\Entity\Activity\SettingCategory;
 use Bitrix\Bizproc\Internal\Entity\Activity\SettingCollection;
 use Bitrix\Bizproc\Internal\Service\Container;
 use Bitrix\Bizproc\RestActivityTable;
@@ -23,14 +24,21 @@ class ActivityAiAutoDescriber
 	public const ERROR_ACTIVITY_NOT_FOUND = 'AUTO_DESCRIPTION_ACTIVITY_NOT_FOUND';
 	public const ERROR_DISABLED = 'AUTO_DESCRIPTION_DISABLED';
 	public const ERROR_NOT_SUITABLE = 'AUTO_DESCRIPTION_NOT_SUITABLE';
+	public const CONTEXT_AI_DESCRIPTION = 'AiDescription';
 
 	private const PROPERTIES_MAP_METHOD = 'getPropertiesMap';
 	private const PROPERTIES_DIALOG_MAP_METHOD = 'getPropertiesDialogMap';
+	private const PASSTHROUGH_SETTING_NAMES_METHOD = 'getAiPassthroughSettingNames';
+	private const RESTRICTED_SETTING_NAMES_METHOD = 'getAiRestrictedSettingNames';
+	private const ENFORCED_SETTING_VALUES_METHOD = 'getAiEnforcedSettingValues';
 	private const SERVICE_PROPERTIES = ['Title', 'EditorComment'];
 
 	/**
 	 * Builds an AI settings schema for a REST activity from its RestActivityTable entry.
 	 * Non-REST activity codes are not supported; use {@see buildMapSettingsLenient()} instead.
+	 *
+	 * Takes no pinned-values context: a REST activity declares its schema in the table, with nothing to
+	 * resolve from the values a preset applies. Accepting one here promised a caller more than the method does.
 	 *
 	 * @see buildMapSettingsLenient() for the lenient file-based path used by the gate.
 	 */
@@ -59,33 +67,40 @@ class ActivityAiAutoDescriber
 	 *
 	 * @return array{0: SettingCollection, 1: list<string>} [$settings, $skippedPropertyNames]
 	 */
-	public function buildMapSettingsLenient(string $code, array $documentType): array
+	public function buildMapSettingsLenient(string $code, array $documentType, array $context = []): array
 	{
 		if ($this->isRestActivityCode($code))
 		{
 			return [new SettingCollection(), []];
 		}
 
+		// Collected before the early returns, not after: passthrough names do not come from the properties map
+		// and are not derived, so an activity that answers with no schema at all still owes them. A manual
+		// `.ai.php` reads them from here, and without them AgentSettingNameValidator refuses the block by name.
+		$passthrough = $this->passthroughSettingNames($code, $documentType);
+
 		$activityDescription = $this->findActivityDescription($code);
 		if ($activityDescription === null)
 		{
-			return [new SettingCollection(), []];
+			return [new SettingCollection(), $passthrough];
 		}
 
 		if (!$activityDescription->isAiAutoDescriptionAllowed())
 		{
-			return [new SettingCollection(), []];
+			return [new SettingCollection(), $passthrough];
 		}
 
-		$map = $this->getDeclaredPropertiesMap($code, $activityDescription, $documentType);
+		$map = $this->getDeclaredPropertiesMap($code, $activityDescription, $documentType, $context);
 		$map = array_diff_key($map, array_flip(self::SERVICE_PROPERTIES));
 
 		if (!$map)
 		{
-			return [new SettingCollection(), []];
+			return [new SettingCollection(), $passthrough];
 		}
 
-		return $this->buildSettingsResultLenient($map, $documentType);
+		[$settings, $skipped] = $this->buildSettingsResultLenient($map, $documentType);
+
+		return [$settings, array_values(array_unique(array_merge($skipped, $passthrough)))];
 	}
 
 	/**
@@ -117,6 +132,81 @@ class ActivityAiAutoDescriber
 		return [$settings, $skipped];
 	}
 
+	/**
+	 * Names the activity declares as passthrough (persisted but intentionally not type-mapped).
+	 * Merged into $skipped so reverse validation accepts them by name without touching their values.
+	 *
+	 * Public because a caller that lost the lenient build to an exception still has to answer with these names
+	 * ({@see \Bitrix\Bizproc\Service\AiDescription::buildActivityDescription()}); the call itself never throws.
+	 *
+	 * @return list<string>
+	 */
+	public function passthroughSettingNames(string $code, array $documentType): array
+	{
+		return $this->settingNamesOf($code, self::PASSTHROUGH_SETTING_NAMES_METHOD, $documentType);
+	}
+
+	/**
+	 * Lifecycle category of every name the activity declares through its three AI hooks, by the compatibility
+	 * rule of TPL-01: a passthrough name with no restricted twin is a free map, a restricted one is carried, an
+	 * enforced key is enforced. Enforced wins over the others - the server writes that value on every save, so
+	 * nothing sent under the name survives, not even what the published template carries.
+	 *
+	 * An activity that declares no hook answers with an empty map and keeps behaving exactly as it did before
+	 * categories existed.
+	 *
+	 * @return array<string, SettingCategory>
+	 */
+	public function hookSettingCategories(string $code, array $documentType): array
+	{
+		$categories = [];
+
+		foreach ($this->passthroughSettingNames($code, $documentType) as $name)
+		{
+			$categories[$name] = SettingCategory::EditableFreeMap;
+		}
+
+		foreach ($this->settingNamesOf($code, self::RESTRICTED_SETTING_NAMES_METHOD, $documentType) as $name)
+		{
+			$categories[$name] = SettingCategory::Carried;
+		}
+
+		foreach ($this->enforcedSettingNames($code, $documentType) as $name)
+		{
+			$categories[$name] = SettingCategory::Enforced;
+		}
+
+		return $categories;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function enforcedSettingNames(string $code, array $documentType): array
+	{
+		$values = $this->callActivityStaticMethod($code, self::ENFORCED_SETTING_VALUES_METHOD, [$documentType]);
+		if (!is_array($values))
+		{
+			return [];
+		}
+
+		return array_values(array_filter(array_keys($values), 'is_string'));
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function settingNamesOf(string $code, string $method, array $documentType): array
+	{
+		$names = $this->callActivityStaticMethod($code, $method, [$documentType]);
+		if (!is_array($names))
+		{
+			return [];
+		}
+
+		return array_values(array_filter($names, 'is_string'));
+	}
+
 	private function findActivityDescription(string $code): ?ActivityDescription
 	{
 		return Container::instance()->getActivitySearcherService()->searchByCode($code);
@@ -125,13 +215,18 @@ class ActivityAiAutoDescriber
 	private function getDeclaredPropertiesMap(
 		string $code,
 		ActivityDescription $activityDescription,
-		array $documentType
+		array $documentType,
+		array $context = []
 	): array
 	{
-		// Pass an empty $context (second arg) so activities that read current-values context
-		// (e.g. to add conditional fields) return their full schema instead of a trimmed one.
-		// An empty array matches what the designer passes on first open (no current values set).
-		$map = $this->callActivityStaticMethod($code, self::PROPERTIES_MAP_METHOD, [$documentType, []]);
+		// $context carries the values the block is already pinned to - today the properties a preset applies.
+		// Activities that resolve their option lists from another setting need it: the field list of a CRM
+		// trigger comes from its own `Document`, so an empty context answers with an empty SELECT, and the
+		// agent is handed a required setting with no allowed values it could possibly know.
+		// Empty stays the default: without pinned values an activity must answer with its full schema rather
+		// than one trimmed to a half-filled dialog, which is what the designer sees on first open.
+		$context[self::CONTEXT_AI_DESCRIPTION] = true;
+		$map = $this->callActivityStaticMethod($code, self::PROPERTIES_MAP_METHOD, [$documentType, $context]);
 		if (!is_array($map) || !$map)
 		{
 			$dialog = new PropertiesDialog(

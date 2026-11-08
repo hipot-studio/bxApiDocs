@@ -15,6 +15,7 @@ use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\EventHistory\TrackedObject;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Operation;
+use Bitrix\Crm\Service\Router;
 use Bitrix\Crm\Settings\QuoteSettings;
 use Bitrix\Main\IO\Path;
 use Bitrix\Main\Localization\Loc;
@@ -117,12 +118,12 @@ class Quote extends Factory
 			],
 			Item::FIELD_NAME_LAST_ACTIVITY_BY => [
 				'TYPE' => Field::TYPE_USER,
-				'ATTRIBUTES' => [],
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
 			],
 			//LAST_ACTIVITY_TIME should be processed after LAST_ACTIVITY_BY
 			Item::FIELD_NAME_LAST_ACTIVITY_TIME => [
 				'TYPE' => Field::TYPE_DATETIME,
-				'ATTRIBUTES' => [],
+				'ATTRIBUTES' => [\CCrmFieldInfoAttr::NotDisplayed],
 				'CLASS' => Field\LastActivityTime::class,
 			],
 			Item::FIELD_NAME_ASSIGNED => [
@@ -402,6 +403,16 @@ class Quote extends Factory
 		throw new NotSupportedException('Quote doesn\'t support categories');
 	}
 
+
+	public function isListViewSupported(string $listView): bool
+	{
+		if ($listView === Router::LIST_VIEW_DEADLINES)
+		{
+			return true;
+		}
+
+		return parent::isListViewSupported($listView);
+	}
 
 	public function isNewRoutingForListEnabled(): bool
 	{

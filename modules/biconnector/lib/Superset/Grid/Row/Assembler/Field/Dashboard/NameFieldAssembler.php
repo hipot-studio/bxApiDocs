@@ -8,28 +8,33 @@ use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
+use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
-use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Base\DetailLinkFieldAssembler;
 use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
+use Bitrix\Main\Grid\Settings;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Extension;
 use Bitrix\Main\Web\Json;
+use Bitrix\Main\Web\Uri;
 
 class NameFieldAssembler extends DetailLinkFieldAssembler
 {
+	public function __construct(
+		array $columnIds,
+		?Settings $settings,
+		private readonly MarketAccessManager $marketAccessManager,
+	)
+	{
+		parent::__construct($columnIds, $settings);
+	}
+
 	protected function prepareColumn($value): string
 	{
 		$id = (int)$value['ID'];
 		$title = htmlspecialcharsbx($value['TITLE']);
-
-		$editButton = '';
-		if ($this->canEditTitle($value) && !empty($value['EDIT_URL']))
-		{
-			$editButton = $this->getEditButton($id);
-		}
 
 		$classTypePrefix = 'dashboard';
 		$pinButton = '';
@@ -37,6 +42,17 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		{
 			$isPinned = (bool)$value['IS_PINNED'];
 			$pinButton = $this->getPinButton($id, $isPinned);
+		}
+
+		$constructorButton = '';
+
+		if (
+			!empty($value['EDIT_URL'])
+			&& $this->canShowConstructorButton($value)
+			&& $this->canEditDashboard($value)
+		)
+		{
+			$constructorButton = $this->getConstructorButton($value);
 		}
 
 		if ($value['IS_TARIFF_RESTRICTED'])
@@ -138,7 +154,7 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 				. 'openFrom=grid'
 			;
 
-			if (!MarketAccessManager::getInstance()->isDashboardAvailableByType($value['TYPE'] ?? ''))
+			if (!$this->marketAccessManager->isDashboardAvailableByType($value['TYPE'] ?? ''))
 			{
 				$link = "
 					<div style='display: flex; align-items: center;'>
@@ -159,11 +175,11 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		}
 
 		$buttons = '';
-		if (!empty($editButton) || !empty($pinButton))
+		if (!empty($pinButton) || !empty($constructorButton))
 		{
 			$buttons = "
 				<div class='dashboard-title-buttons'>
-					{$editButton}
+					{$constructorButton}
 					{$pinButton}
 				</div>
 			";
@@ -172,25 +188,12 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 		return <<<HTML
 			<div class="{$classTypePrefix}-title-wrapper">
 				<div class="{$classTypePrefix}-title-wrapper__item {$classTypePrefix}-title-preview">
-					{$link}
+					<div class="biconnector-grid-title">
+						{$link}
+					</div>
 					{$buttons}
 				</div>
 			</div>
-		HTML;
-	}
-
-	protected function getEditButton(int $dashboardId): string
-	{
-		Extension::load('ui.design-tokens');
-
-		return <<<HTML
-			<a
-				onclick="event.stopPropagation(); BX.BIConnector.SupersetDashboardGridManager.Instance.renameDashboard({$dashboardId})"
-			>
-				<i
-					class="ui-icon-set --edit-l dashboard-edit-icon"
-				></i>
-			</a>
 		HTML;
 	}
 
@@ -224,19 +227,14 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 	 *
 	 * @return bool
 	 */
-	protected function canEditTitle(array $dashboardData): bool
+	protected function canEditDashboard(array $dashboardData): bool
 	{
 		if (!Feature::isBuilderEnabled() || SelfHostedLicenseLock::isDashboardLocked())
 		{
 			return false;
 		}
 
-		$supersetController = new SupersetController();
-		if (
-			!$supersetController->isSupersetEnabled()
-			|| SupersetInitializer::isSupersetUnavailable()
-			|| !($dashboardData['IS_AVAILABLE_DASHBOARD'] ?? true)
-		)
+		if (!SupersetInitializer::isSupersetReady())
 		{
 			return false;
 		}
@@ -247,6 +245,70 @@ class NameFieldAssembler extends DetailLinkFieldAssembler
 			'STATUS' => $dashboardData['STATUS'],
 		]);
 
-		return AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_EDIT, $accessItem);
+		// Neither a system nor a market report is edited in place: the button copies it first,
+		// so for them the copy right opens the button.
+		$isCopiedBeforeEditing = in_array(
+			$dashboardData['TYPE'],
+			[
+				SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM,
+				SupersetDashboardTable::DASHBOARD_TYPE_MARKET,
+			],
+			true,
+		);
+
+		$action =
+			$isCopiedBeforeEditing
+				? ActionDictionary::ACTION_BIC_DASHBOARD_COPY
+				: ActionDictionary::ACTION_BIC_DASHBOARD_EDIT
+		;
+
+		return AccessController::getCurrent()->check($action, $accessItem);
+	}
+
+	private function canShowConstructorButton(array $dashboardData): bool
+	{
+		return
+			($dashboardData['ENTITY_TYPE'] ?? null) === DashboardGroupRepository::TYPE_DASHBOARD
+			&& !empty($dashboardData['IS_ACCESS_ALLOWED'])
+			&& empty($dashboardData['IS_TARIFF_RESTRICTED'])
+			&& !empty($dashboardData['IS_AVAILABLE_DASHBOARD'])
+			&& $this->marketAccessManager->isDashboardAvailableByType((string)($dashboardData['TYPE'] ?? ''))
+		;
+	}
+
+	private function getConstructorButton(array $dashboardData): string
+	{
+		$editUrl = new Uri((string)$dashboardData['EDIT_URL']);
+		$editUrl->addParams(['edit' => 'true']);
+
+		$params = Json::encode([
+			'dashboardId' => (int)$dashboardData['ID'],
+			'type' => (string)$dashboardData['TYPE'],
+			'editUrl' => $editUrl->getLocator(),
+			'appId' => (string)$dashboardData['APP_ID'],
+		]);
+
+		$onclick = htmlspecialcharsbx(
+			'event.stopPropagation(); '
+			. 'BX.BIConnector.SupersetDashboardGridManager.Instance'
+			. ".openDashboardInConstructor({$params});"
+		);
+
+		$label = (string)Loc::getMessage('BICONNECTOR_DASHBOARD_EDIT_IN_CONSTRUCTOR');
+
+		return <<<HTML
+		<button
+			type="button"
+			class="dashboard-title-constructor-button"
+			title="{$label}"
+			aria-label="{$label}"
+			onclick="{$onclick}"
+		>
+			<i
+				class="dashboard-title-constructor-icon"
+				aria-hidden="true"
+			></i>
+		</button>
+	HTML;
 	}
 }

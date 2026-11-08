@@ -48,6 +48,8 @@ class CreateTaskTool extends BaseTool
 
 	protected function executeStructured(int $userId, ...$args): array
 	{
+		$this->assertDeadlineArgsConsistent($args);
+
 		$dto = CreateTaskDto::fromArray([...$args, 'userId' => $userId]);
 
 		$this->assertAvailable($dto);
@@ -72,6 +74,20 @@ class CreateTaskTool extends BaseTool
 		}
 
 		return $task;
+	}
+
+	/**
+	 * @throws McpException
+	 */
+	private function assertDeadlineArgsConsistent(array $args): void
+	{
+		if (($args['withoutDeadline'] ?? null) === true && isset($args['deadlineDate']))
+		{
+			throw new McpException(
+				'"deadlineDate" and "withoutDeadline" are mutually exclusive: '
+				. 'either pass a deadline or set "withoutDeadline" to true, not both',
+			);
+		}
 	}
 
 	/**

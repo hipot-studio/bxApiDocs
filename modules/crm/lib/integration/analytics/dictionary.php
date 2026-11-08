@@ -26,6 +26,7 @@ final class Dictionary
 	public const CATEGORY_FUNNELS = 'funnels';
 	public const CATEGORY_IMPORT_OPERATIONS = 'import_operations';
 	public const CATEGORY_USERFIELD_OPERATIONS = 'userfields';
+	public const CATEGORY_SPEECH_ANALYTICS = 'speech_analytics';
 
 	// region Event const
 	public const EVENT_ENTITY_ADD_OPEN = 'entity_add_open';
@@ -58,9 +59,15 @@ final class Dictionary
 	public const EVENT_GENERATE_CALL_CRITERIA = 'generate_call_criteria';
 	public const EVENT_GENERATE_CALL_SCRIPT_FROM_DIALOG = 'generate_call_script_from_dialog';
 	public const EVENT_GENERATE_CALL_SCRIPT_DESCRIPTION = 'generate_call_script_description';
+	public const EVENT_GENERATE_MANAGER_SUMMARY = 'generate_manager_summary';
 	public const EVENT_FILL_REPEAT_SALE_TIPS = 'fill_repeat_sale_tips';
 	public const EVENT_SCREENING_REPEAT_SALE_ITEM = 'screening_repeat_sale_item';
 	public const EVENT_ANALYZE_COMMUNICATION = 'analyze_communication';
+
+	public const EVENT_PREFILL_CRITERIA = 'prefill_criteria';
+	public const EVENT_CREATE_SCRIPT = 'create_script';
+	public const EVENT_CRITERIA_GEN = 'criteria_gen';
+	public const EVENT_SCRIPT_MATCH = 'script_match';
 
 	public const EVENT_AUTOMATION_CREATE = 'automation_create';
 	public const EVENT_AUTOMATION_EDIT = 'automation_edit';
@@ -86,6 +93,8 @@ final class Dictionary
 	// region Type const
 	public const TYPE_MANUAL = 'manual';
 	public const TYPE_AUTO = 'auto';
+	public const TYPE_SCRIPT = 'script';
+	public const TYPE_COPILOT = 'copilot';
 	public const TYPE_AGENT = 'agent';
 	public const TYPE_AUTOMATED_SOLUTION = 'automated_solution';
 	public const TYPE_DEAL = 'deal';
@@ -228,7 +237,16 @@ final class Dictionary
 
 	public const STATUS_REPEAT_SALE_POSSIBLE = 'possible';
 	public const STATUS_REPEAT_SALE_NOT_POSSIBLE = 'notPossible';
+	public const STATUS_REPEAT_SALE_STOPPED = 'stopped';
+	public const STATUS_REPEAT_SALE_NO_TIPS = 'noTips';
 	// endregion
+
+	public const P5_KEY_SOURCE = 'source';
+	public const SOURCE_MARKETPLACE = 'marketplace';
+	public const SOURCE_LOCAL = 'local';
+
+	public const CONTEXT_APPLICATION_SOURCE = 'APPLICATION_SOURCE';
+	public const CONTEXT_APPLICATION_CODE = 'APPLICATION_CODE';
 
 	public const UNKNOWN = 'unknown';
 
@@ -254,6 +272,26 @@ final class Dictionary
 				? CCrmOwnerType::CommonDynamicName
 				: CCrmOwnerType::ResolveName($entityTypeId),
 		);
+	}
+
+	public static function getApplicationSource(?string $clientId): ?string
+	{
+		if ($clientId === null)
+		{
+			return null;
+		}
+
+		if (str_starts_with($clientId, 'app.'))
+		{
+			return self::SOURCE_MARKETPLACE;
+		}
+
+		if (str_starts_with($clientId, 'local.'))
+		{
+			return self::SOURCE_LOCAL;
+		}
+
+		return null;
 	}
 
 	public static function getCrmMode(): string

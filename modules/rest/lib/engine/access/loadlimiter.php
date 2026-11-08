@@ -3,12 +3,14 @@
 namespace Bitrix\Rest\Engine\Access;
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Loader;
 use Bitrix\Rest\OAuth\Client;
 use Bitrix\Main\Application;
 use Bitrix\Rest\APAuth;
 use Bitrix\Rest\OAuth;
 use Bitrix\Bitrix24\Feature;
+use Psr\Log\LoggerInterface;
 
 /**
  * Class LoadLimiter
@@ -23,6 +25,7 @@ class LoadLimiter
 	private const BAN_DURATION = 300; // sec, fixed ban duration on limit exceeded
 	private const DEFAULT_DOMAIN = 'default';
 	private const BATCH_TIME_WEIGHT = 0.5; // batch requests are counted with a reduced weight
+	private const TIME_LOGGER_ID = 'rest.LoadLimiter.time'; // enabled only by the "loggers" section of .settings.php
 	private static int $version = 2;
 	private static int $bucketSize = 60; //sec
 	private static int $bucketCount = 10;
@@ -404,63 +407,109 @@ class LoadLimiter
 	 */
 	public static function finalize(): void
 	{
-		if (static::$timeRegistered && static::isActive())
+		if (!static::$timeRegistered)
 		{
-			$resource = static::getConnectionResource();
-			if ($resource)
-			{
-				foreach (static::$timeRegistered as $item)
-				{
-					$time = 0;
-					$firstTime = reset($item['timeStart']);
-					foreach ($item['timeStart'] as $k => $timeStart)
-					{
-						if ($item['timeFinish'][$k])
-						{
-							$time += $item['timeFinish'][$k] - $timeStart;
-						}
-					}
-
-					if ($item['method'] === Client::METHOD_BATCH)
-					{
-						$time *= self::BATCH_TIME_WEIGHT;
-					}
-
-					if ($time > static::$minimalFixTime)
-					{
-						$key = static::getKey(
-							entityType: $item['entityType'],
-							entity: $item['entity'],
-							method: $item['method'],
-							bucketNum: static::getNumBucket()
-						);
-
-						if ($resource->exists($key))
-						{
-							$resource->incrByFloat($key, $time);
-						}
-						else
-						{
-							$expireAt = $firstTime + static::$bucketCount * static::$bucketSize;
-							$resource->incrByFloat($key, $time);
-							$resource->expireAt($key, (int) $expireAt);
-
-							$keyExpire = static::getKey(
-								entityType: $item['entityType'],
-								entity: $item['entity'],
-								method: $item['method'],
-								bucketNum: static::getNumBucket(),
-								prefix: self::CACHE_EXPIRE_TIME_PREFIX
-							);
-
-							$resource->incrByFloat($keyExpire, $expireAt);
-							$resource->expireAt($keyExpire, (int) $expireAt);
-						}
-					}
-				}
-				static::$timeRegistered = [];
-			}
+			return;
 		}
+
+		$resource = static::getConnectionResource();
+		foreach (static::$timeRegistered as $item)
+		{
+			$duration = 0.0;
+			foreach ($item['timeStart'] as $k => $timeStart)
+			{
+				if ($item['timeFinish'][$k] ?? null)
+				{
+					$duration += $item['timeFinish'][$k] - $timeStart;
+				}
+			}
+
+			$time = $item['method'] === Client::METHOD_BATCH ? $duration * self::BATCH_TIME_WEIGHT : $duration;
+			$operatingTime = $time > static::$minimalFixTime ? $time : 0.0;
+
+			if ($resource && $operatingTime > 0)
+			{
+				static::saveTime($resource, $item, $operatingTime);
+			}
+
+			static::logTime($item, $duration, $operatingTime);
+		}
+
+		static::$timeRegistered = [];
+	}
+
+	private static function logTime(array $item, float $duration, float $operatingTime): void
+	{
+		// A broken logger must not affect the limiter accounting.
+		try
+		{
+			static::getTimeLogger()?->info(
+				'{domain} {entityType}:{entity} {method} hits {hits}, duration {duration}, operating time {operatingTime}',
+				[
+					'domain' => static::getDomain(),
+					'entityType' => $item['entityType'],
+					'entity' => $item['entity'],
+					'method' => $item['method'],
+					'hits' => count($item['timeStart']),
+					'duration' => $duration,
+					'operatingTime' => $operatingTime,
+				]
+			);
+		}
+		catch (\Throwable $exception)
+		{
+			Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+		}
+	}
+
+	private static function saveTime(object $resource, array $item, float $time): void
+	{
+		$key = static::getKey(
+			entityType: $item['entityType'],
+			entity: $item['entity'],
+			method: $item['method'],
+			bucketNum: static::getNumBucket()
+		);
+
+		if ($resource->exists($key))
+		{
+			$resource->incrByFloat($key, $time);
+
+			return;
+		}
+
+		$expireAt = reset($item['timeStart']) + static::$bucketCount * static::$bucketSize;
+		$resource->incrByFloat($key, $time);
+		$resource->expireAt($key, (int) $expireAt);
+
+		$keyExpire = static::getKey(
+			entityType: $item['entityType'],
+			entity: $item['entity'],
+			method: $item['method'],
+			bucketNum: static::getNumBucket(),
+			prefix: self::CACHE_EXPIRE_TIME_PREFIX
+		);
+
+		$resource->incrByFloat($keyExpire, $expireAt);
+		$resource->expireAt($keyExpire, (int) $expireAt);
+	}
+
+	protected static function getTimeLogger(): ?LoggerInterface
+	{
+		static $isInitialized = false;
+		static $logger = null;
+
+		if (!$isInitialized)
+		{
+			$isInitialized = true;
+			$logger = (new LoggerFactory(alwaysReturnLogger: false))->createById(
+				self::TIME_LOGGER_ID,
+				isCheckEnabledFromRegistry: false,
+				returnDefaultLoggerIfNotExists: false,
+			);
+		}
+
+		return $logger;
 	}
 
 	/**

@@ -26,30 +26,48 @@ final class Documentation extends RestController
 	#[NotIdempotent]
 	public function openApiAction(): ArrayResponse
 	{
-		if (!Locker::lock(self::DOCUMENTATION_CACHE_KEY))
-		{
-			throw new SystemException('Generation in progress.');
-		}
-
 		$generation = DynamicEnumRegistry::getGeneration();
 		$cacheKey = self::DOCUMENTATION_CACHE_KEY . '.' . $this->responseLanguage;
-		$cached = CacheManager::get($cacheKey);
-		$result = is_array($cached)
-			&& ($cached['dynamicEnumGeneration'] ?? null) === $generation
-			&& isset($cached['openApi'])
-				? $cached['openApi']
-				: null;
 
+		// the lock guards generation only, a warm cache must never wait for it
+		$result = $this->getCachedOpenApi($cacheKey, $generation);
 		if ($result === null)
 		{
-			$manager = new DocumentationManager($this->responseLanguage ?: DefaultLanguage::get());
-			$result = $manager->generateDataForJson();
-			CacheManager::set($cacheKey, [
-				'dynamicEnumGeneration' => $generation,
-				'openApi' => $result,
-			], CacheManager::ONE_HOUR_TTL);
+			if (!Locker::lock(self::DOCUMENTATION_CACHE_KEY))
+			{
+				throw new SystemException('Generation in progress.');
+			}
+
+			try
+			{
+				$result = $this->getCachedOpenApi($cacheKey, $generation);
+				if ($result === null)
+				{
+					$manager = new DocumentationManager($this->responseLanguage ?: DefaultLanguage::get());
+					$result = $manager->generateDataForJson();
+					CacheManager::set($cacheKey, [
+						'dynamicEnumGeneration' => $generation,
+						'openApi' => $result,
+					], CacheManager::ONE_HOUR_TTL);
+				}
+			}
+			finally
+			{
+				Locker::unlock(self::DOCUMENTATION_CACHE_KEY);
+			}
 		}
 
 		return (new ArrayResponse($result))->setShowDebugInfo(false)->setShowRawData(true);
+	}
+
+	private function getCachedOpenApi(string $cacheKey, int $generation): ?array
+	{
+		$cached = CacheManager::get($cacheKey);
+
+		return is_array($cached)
+			&& ($cached['dynamicEnumGeneration'] ?? null) === $generation
+			&& is_array($cached['openApi'] ?? null)
+				? $cached['openApi']
+				: null;
 	}
 }

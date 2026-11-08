@@ -2,14 +2,26 @@
 
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
+use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
+use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
+use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\SearchParametersOperation;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
-final class SearchDashboardParametersTool extends BaseBiTool
+final class SearchDashboardParametersTool extends BaseSubjectAwareBiTool
 {
 	public function getName(): string
 	{
 		return 'search_dashboard_parameters';
+	}
+
+	public function getImpact(): OperationImpact
+	{
+		return OperationImpact::Read;
 	}
 
 	public function getDescription(): string
@@ -35,6 +47,7 @@ final class SearchDashboardParametersTool extends BaseBiTool
 				'dashboardId' => [
 					'type' => 'integer',
 					'description' => 'Dashboard ID from the list_dashboards tool result.',
+					'minimum' => 1,
 				],
 				'search' => [
 					'type' => 'string',
@@ -56,7 +69,31 @@ final class SearchDashboardParametersTool extends BaseBiTool
 		];
 	}
 
-	protected function executeStructured(int $userId, ...$args): array
+	protected function executeStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
+	{
+		if (!(new FlagGate())->isEnabled(FlagGate::BUILDER_MCP_OPERATIONS, $userId))
+		{
+			return $this->legacyExecuteStructured($userId, $subject, $args);
+		}
+
+		self::requireBiconnectorModule();
+
+		// Resolved per call: aiassistant keeps a tool as a process-wide singleton.
+		$result = ServiceLocator::getInstance()->get(SearchParametersOperation::class)->execute(
+			(int)$args['dashboardId'],
+			isset($args['search']) ? (string)$args['search'] : null,
+			isset($args['offset']) ? max(0, (int)$args['offset']) : 0,
+			new Actor($userId, Channel::Mcp),
+		);
+		if (!$result->isSuccess())
+		{
+			throw self::toMcpException(OperationRefusal::forTool($result));
+		}
+
+		return $result->getData();
+	}
+
+	private function legacyExecuteStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
 	{
 		Loader::includeModule('biconnector');
 

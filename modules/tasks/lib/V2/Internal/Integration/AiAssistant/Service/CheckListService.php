@@ -55,7 +55,7 @@ class CheckListService
 
 		$newCheckLists = [$checkList, ...$children];
 
-		$this->checkListService->add($newCheckLists, $dto->taskId, $userId);
+		$this->checkListService->add($newCheckLists, $dto->taskId, $userId, fromAi: true);
 	}
 
 	/**
@@ -70,18 +70,19 @@ class CheckListService
 			throw new InvalidIdentifierException();
 		}
 
-		if (!$this->accessService->canUpdate($userId, $dto->getId()))
+		$item = new CheckListItem(
+			id: $dto->getId(),
+			title: $dto->title,
+			isComplete: $dto->isComplete,
+			sortIndex: $dto->sortIndex,
+		);
+
+		if (!$this->accessService->canSave($userId, $item))
 		{
 			throw new AccessDeniedException();
 		}
 
-		$item = new CheckListItem(
-			id: $dto->getId(),
-			title: $dto->title,
-			sortIndex: $dto->sortIndex,
-		);
-
-		$this->checkListService->updateItem($item, $userId);
+		$this->checkListService->updateItem($item, $userId, fromAi: true);
 	}
 
 	/**
@@ -100,7 +101,7 @@ class CheckListService
 			throw new AccessDeniedException();
 		}
 
-		$this->checkListService->delete($dto->getId(), $userId);
+		$this->checkListService->delete($dto->getId(), $userId, fromAi: true);
 	}
 
 	/**
@@ -126,7 +127,7 @@ class CheckListService
 			parentId: $dto->checkListId,
 		);
 
-		$this->checkListService->addItem($item, $userId);
+		$this->checkListService->addItem($item, $userId, fromAi: true);
 	}
 
 	protected function prepareChildren(array $childrenTitles, array $parent): array

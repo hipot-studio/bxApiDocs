@@ -4,6 +4,7 @@ namespace Bitrix\Catalog\Integration\Report\Handler\StoreProfit;
 
 use Bitrix\Catalog\Integration\Report\Filter\StoreStockFilter;
 use Bitrix\Catalog\Integration\Report\Handler\BaseHandler;
+use Bitrix\Catalog\Integration\Report\Quantity\StoreTotalsCalculator;
 use Bitrix\Catalog\Integration\Report\StoreStock\StoreStockSale;
 use Bitrix\Catalog\Product\Price\Calculation;
 use Bitrix\Currency\CurrencyManager;
@@ -11,6 +12,8 @@ use Bitrix\Main\Loader;
 
 abstract class ProfitHandler extends BaseHandler
 {
+	private const SUMMED_MONEY_FIELDS = ['TOTAL_SOLD', 'TOTAL_COST_PRICE', 'PROFIT'];
+
 	private function getPriceAmounts(): array
 	{
 		return StoreStockSale::getProductsSoldPricesForStores(
@@ -71,21 +74,15 @@ abstract class ProfitHandler extends BaseHandler
 
 		$priceAmounts = $this->getPriceAmounts();
 
+		$calculator = new StoreTotalsCalculator();
 		$formattedTotalsByPrices = $storeTotals;
 		foreach ($storeTotals as $storeId => $storeTotal)
 		{
 			$total = [
 				'TOTAL_SOLD' => 0,
-				'TOTAL_COST_PRICE' => 0
+				'TOTAL_COST_PRICE' => 0,
 			];
-			$storeTotal['TOTALS'] ??= [];
-			foreach ($storeTotal['TOTALS'] as $measureId => $fields)
-			{
-				foreach ($fields as $fieldId => $value)
-				{
-					$total[$fieldId][$measureId] = $value;
-				}
-			}
+			$total += $calculator->pivotToFieldMeasure($storeTotal['TOTALS'] ?? []);
 
 			$priceAmounts[$storeId] ??= [];
 			foreach ($priceAmounts[$storeId] as $currency => $fields)
@@ -107,13 +104,8 @@ abstract class ProfitHandler extends BaseHandler
 
 	protected function prepareOverallTotals(array $storeTotals): array
 	{
-		$overallTotals = [
-			'STARTING_QUANTITY' => [],
-			'RECEIVED_QUANTITY' => [],
-			'AMOUNT_SUM' => [],
-			'QUANTITY_RESERVED_SUM' => [],
-			'QUANTITY' => [],
-			'AMOUNT_SOLD' => [],
+		$overallTotals = (new StoreTotalsCalculator())->sumByFieldAndMeasure($storeTotals);
+		$overallTotals += [
 			'TOTAL_SOLD' => 0,
 			'TOTAL_COST_PRICE' => 0,
 			'PROFIT' => 0,
@@ -122,22 +114,9 @@ abstract class ProfitHandler extends BaseHandler
 
 		foreach ($storeTotals as $storeTotalEntry)
 		{
-			foreach ($storeTotalEntry['TOTALS'] as $fieldName => $value)
+			foreach (self::SUMMED_MONEY_FIELDS as $fieldName)
 			{
-				if ($value && is_array($value))
-				{
-					$overallTotals[$fieldName] ??= [];
-					foreach ($value as $measureId => $measureItemValue)
-					{
-						$overallTotals[$fieldName][$measureId] ??= 0.0;
-						$overallTotals[$fieldName][$measureId] += $measureItemValue;
-					}
-				}
-				else
-				{
-					$overallTotals[$fieldName] ??= 0.0;
-					$overallTotals[$fieldName] += (float)$value;
-				}
+				$overallTotals[$fieldName] += (float)($storeTotalEntry['TOTALS'][$fieldName] ?? 0.0);
 			}
 		}
 

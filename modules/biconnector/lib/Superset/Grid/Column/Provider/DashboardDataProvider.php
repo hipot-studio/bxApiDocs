@@ -21,6 +21,7 @@ class DashboardDataProvider extends DataProvider
 				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_NAME'))
 				->setAlign('left')
 				->setDefault(true)
+				->setWidth(400)
 				->setSort('TITLE')
 		;
 
@@ -33,29 +34,10 @@ class DashboardDataProvider extends DataProvider
 				->setWidth(150)
 		;
 
-		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE))
-		{
-			$result[] =
-				$this->createColumn('SHARE_LINK')
-					->setType(Type::TEXT)
-					->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_SHARE_LINK'))
-					->setAlign('left')
-					->setDefault(true)
-			;
-		}
-
 		$result[] =
 			$this->createColumn('CREATED_BY_ID')
 				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_AUTHOR'))
-				->setAlign('left')
-				->setDefault(true)
-		;
-
-		$result[] =
-			$this->createColumn('GROUPS')
-				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_GROUPS'))
+				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_AUTHOR_MSGVER_1'))
 				->setAlign('left')
 				->setDefault(true)
 		;
@@ -92,10 +74,21 @@ class DashboardDataProvider extends DataProvider
 				->setDefault(true)
 		;
 
+		if (AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_DASHBOARD_SHARE))
+		{
+			$result[] =
+				$this->createColumn('SHARE_LINK')
+					->setType(Type::TEXT)
+					->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_SHARE_LINK'))
+					->setAlign('left')
+					->setDefault(true)
+			;
+		}
+
 		$result[] =
-			$this->createColumn('FILTER_PERIOD')
+			$this->createColumn('GROUPS')
 				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_DATE_PERIOD'))
+				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_GRID_COLUMN_TITLE_GROUPS'))
 				->setAlign('left')
 				->setDefault(true)
 		;
@@ -117,6 +110,7 @@ class DashboardDataProvider extends DataProvider
 				->setAlign('left')
 				->setDefault(false)
 				->setSort('DATE_CREATE')
+				->setWidth(180)
 		;
 
 		$result[] =
@@ -126,6 +120,7 @@ class DashboardDataProvider extends DataProvider
 				 ->setAlign('left')
 				 ->setDefault(false)
 				 ->setSort('DATE_MODIFY')
+				 ->setWidth(180)
 		;
 
 		return $result;

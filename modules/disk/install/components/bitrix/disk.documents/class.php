@@ -1,18 +1,14 @@
 <?php
 
 use Bitrix\Disk;
-use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
-use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Driver;
-use Bitrix\Disk\Internals\ObjectOptionsTable;
 use Bitrix\Disk\Type\DocumentGridVariant;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Main;
 use Bitrix\Main\Analytics\AnalyticsEvent;
-use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\UI\UiTour;
 
@@ -27,7 +23,6 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 	protected $paginationName = 'nav';
 
 	private $userId;
-	private UnifiedLinkAccessService $unifiedLinkAccessService;
 	private $storage;
 	private $nowTime;
 	private $fullFormatWithoutSec;
@@ -39,7 +34,6 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 	{
 		parent::__construct($component);
 		$this->userId = (int)$this->getUser()->getId();
-		$this->unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
 	}
 
 	public function getUserId(): int
@@ -63,7 +57,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 		{
 			$this->errorCollection[] = new Error('Documents owner is not specified.');
 		}
-		else if (!($storage = Driver::getInstance()->getStorageByUserId($this->getUserId())))
+		elseif (!($storage = Driver::getInstance()->getStorageByUserId($this->getUserId())))
 		{
 			$this->errorCollection[] = new Error('User storage is not found.');
 		}
@@ -110,6 +104,12 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 		$items = [];
 		$driver = Driver::getInstance();
 		$urlManager = $driver->getUrlManager();
+		$securityContext = $this->storage->getCurrentUserSecurityContext();
+
+		if ($securityContext instanceof Disk\Security\DiskSecurityContext)
+		{
+			$securityContext->preloadOperationsForObjects($files);
+		}
 
 		$this->nowTime = time() + CTimeZone::getOffset();
 		$this->fullFormatWithoutSec = preg_replace('/:s$/', '', CDatabase::dateFormatToPHP(CSite::GetDateFormat("FULL")));
@@ -153,7 +153,15 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				'OPEN_DOCUMENT_LINK' => $this->getUrlManager()->getUrlForViewBoard($file, false, $this->variant === DocumentGridVariant::FlipchartList ? 'boards_page' : 'docs_page'),
 			];
 
-			$sourceUri = new Main\Web\Uri($urlManager->getUrlForDownloadFile($file));
+			$canDownload = $file->canDownload($securityContext);
+
+			$sourceUrl = $canDownload
+				? $urlManager->getUrlForDownloadFile($file)
+				: $urlManager->getUrlForShowFile($file)
+			;
+
+			$sourceUri = new Main\Web\Uri($sourceUrl);
+
 			if ($fileId && !empty($item['FILE_CONTENT_TYPE']))
 			{
 				$attr = Disk\Ui\FileAttributes::buildByFileData([
@@ -175,6 +183,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				->setObjectId($fileId)
 				->setAttachedObjectId($attachedObjectId)
 				->setTitle($item['NAME'])
+				->setDownloadDisabled(!$canDownload)
 				->addAction([
 					'type' => 'download',
 				])
@@ -315,7 +324,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				'TYPE' => Disk\Internals\ObjectTable::TYPE_FILE,
 			] + $filter + $variantFilter,
 			'with' => $aliases,
-			'order' => $sorting
+			'order' => $sorting,
 		]) + ($pageNavigation ? [
 			'limit' => $pageNavigation->getLimit() + 1,
 			'offset' => $pageNavigation->getOffset(),
@@ -330,6 +339,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 			if ($pageNavigation && (count($items) >= $pageNavigation->getLimit()))
 			{
 				$nextPageIsEnable = true;
+
 				break;
 			}
 			$model = Disk\File::buildFromRow($row, $aliases);
@@ -354,6 +364,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 			}, array_filter($this->getGridHeaders(), function($item) {
 				return $item['default'] === true;
 		}));
+
 		return $columns;
 	}
 
@@ -414,7 +425,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				'id' => 'SHARED',
 				'name' => Main\Localization\Loc::getMessage('DISK_DOCUMENTS_HEADER_SHARED'),
 				'default' => true,
-			]
+			],
 		];
 		if (Disk\Configuration::isEnabledManualExternalLink() || Disk\Configuration::isEnabledBoardExternalLink())
 		{
@@ -433,9 +444,11 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				{
 					$item['color'] = \Bitrix\Main\Grid\Column\Color::BLUE;
 				}
+
 				return $item;
 			}, $result);
 		}
+
 		return $result;
 	}
 
@@ -448,6 +461,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 			'type' => 'string',
 			'default' => true,
 		];
+
 		return $result;
 	}
 
@@ -455,7 +469,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 	{
 		$filterOptions = new Main\UI\Filter\Options($this->arResult['FILTER_ID']);
 		$rawFilter = $filterOptions->getFilter(
-			$this->getFilterDefinition()
+			$this->getFilterDefinition(),
 		);
 
 		$filter = [];
@@ -475,17 +489,17 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				}
 				elseif
 				(
-					!empty($rawFilter['SEARCH_BY_CONTENT']) &&
-					Disk\Configuration::allowUseExtendedFullText() &&
-					Disk\Search\Reindex\ExtendedIndex::isReady()
+					!empty($rawFilter['SEARCH_BY_CONTENT'])
+					&& Disk\Configuration::allowUseExtendedFullText()
+					&& Disk\Search\Reindex\ExtendedIndex::isReady()
 				)
 				{
 					$filter["*EXTENDED_INDEX.SEARCH_INDEX"] = $fulltextContent;
 				}
 				elseif
 				(
-					(!empty($rawFilter['SEARCH_BY_CONTENT']) || !Disk\Search\Reindex\HeadIndex::isReady()) &&
-					Disk\Search\Reindex\BaseObjectIndex::isReady()
+					(!empty($rawFilter['SEARCH_BY_CONTENT']) || !Disk\Search\Reindex\HeadIndex::isReady())
+					&& Disk\Search\Reindex\BaseObjectIndex::isReady()
 				)
 				{
 					$filter["*SEARCH_INDEX"] = $fulltextContent;
@@ -510,33 +524,34 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 				$filter['TYPE_FILE'][] = Disk\TypeFile::KNOWN;
 			}
 		}
+
 		return $filter;
 	}
-
 
 	/**
 	 * @return DocumentHandler[]
 	 */
 	public function listCloudHandlersForCreatingFile()
 	{
-		$handlers = array();
+		$handlers = [];
 		if (Disk\Configuration::canCreateFileByCloud())
 		{
 			$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
 			foreach ($documentHandlersManager->getHandlersForCreatingFile() as $handler)
 			{
-				$handlers[] = array(
+				$handlers[] = [
 					'code' => $handler::getCode(),
 					'name' => $handler::getName(),
 					'supportsUnifiedLink' => $handler->supportsUnifiedLink(),
-				);
+				];
 			}
 		}
-		$handlers[] = array(
+		$handlers[] = [
 			'code' => Disk\Document\LocalDocumentController::getCode(),
 			'name' => Disk\Document\LocalDocumentController::getName(),
 			'supportsUnifiedLink' => false,
-		);
+		];
+
 		return $handlers;
 	}
 
@@ -567,7 +582,8 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 		$pageNavigation = new Main\UI\PageNavigation($this->paginationName);
 		$pageNavigation
 			->setPageSize($navParams['nPageSize'])
-			->allowAllRecords(false);
+			->allowAllRecords(false)
+		;
 		if ($this->request->get('grid_action') === 'more' && $this->request->get('grid_id') === $gridOptions->getId())
 		{
 			$pageNavigation->setCurrentPage($this->request->get($this->paginationName));
@@ -583,15 +599,16 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 			$filterData,
 			$pageNavigation,
 			$sorting['sort'],
-			$gridOptions->GetVisibleColumns() ?: $this->getGridHeadersByDefault()
+			$gridOptions->GetVisibleColumns() ?: $this->getGridHeadersByDefault(),
 		);
 
 		$pageNavigation
 			->setRecordCount(
 				$pageNavigation->getOffset()
 				+ count($this->arResult['ITEMS'])
-				+ ($nextPage ? 1 : 0)
-			);
+				+ ($nextPage ? 1 : 0),
+			)
+		;
 		$this->arResult['SORT'] = $sorting['sort'];
 		$this->arResult['SORT_VARS'] = $sorting['vars'];
 		$this->arResult['HEADERS'] = $this->getGridHeaders($this->arResult['SORT']);
@@ -600,10 +617,10 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 		$this->arResult['ENABLE_NEXT_PAGE'] = $nextPage;
 		$this->arResult['CURRENT_PAGE'] = $pageNavigation->getCurrentPage();
 
-		$this->arResult['GRID_VIEW'] = array(
+		$this->arResult['GRID_VIEW'] = [
 			'MODE' => null,
 			'VIEW_SIZE' => null,
-		);
+		];
 		$this->arResult['IS_FILTER_SET'] = !empty($filterData);
 		$options = CUserOptions::GetOption('disk', 'documents');
 		if (isset($options['viewMode']) && $options['viewMode'] === 'tile')
@@ -660,6 +677,7 @@ class CDiskDocumentsComponent extends BaseComponent implements Controllerable
 	public function formatRows($rows)
 	{
 		$arResult = $this->arResult;
+
 		return array_map(
 			function($row) use ($arResult)
 			{
@@ -701,7 +719,7 @@ HTML;
 					'columnClasses' =>[
 						'EXTERNAL_LINK' => 'main-grid-cell-external-link',
 					],
-					'columns' => array(
+					'columns' => [
 						'ID' => $row['ID'],
 						'NAME' => <<<HTML
 	<table class="bx-disk-object-name"><tr>
@@ -715,7 +733,7 @@ HTML;
 		</td>
 	</tr></table>
 HTML
-					,
+						,
 						'FILE_SIZE' => \CFile::formatSize($row['FILE_SIZE']),
 						'CREATED_BY' => <<<HTML
 <div class="bx-disk-user-link disk-documents-grid-user">
@@ -723,14 +741,14 @@ HTML
 	<a class="disk-documents-grid-user-link" target='_blank' href="{$row['CREATED_BY']['URL']}">{$row['CREATED_BY']['NAME']}</a>
 </div>
 HTML
-					,
+						,
 						'UPDATED_BY' => <<<HTML
 <div class="bx-disk-user-link disk-documents-grid-user">
 	{$row['UPDATED_BY']['AVATAR_HTML']}
 	<a class="disk-documents-grid-user-link" target='_blank' href="{$row['UPDATED_BY']['URL']}">{$row['UPDATED_BY']['NAME']}</a>
 </div>
 HTML
-					,
+						,
 						'ACTIVITY_TIME' => $row['ACTIVITY_TIME'],
 						'CREATE_TIME' => $row['CREATE_TIME'],
 						'UPDATE_TIME' => $row['UPDATE_TIME'],
@@ -741,10 +759,10 @@ HTML
 	});</script>
 </div>
 HTML
-					,
+						,
 						'EXTERNAL_LINK' => $this->getHtmlForExternalLink($row, $file)
-					,
-					),
+						,
+					],
 					'actions' => [[
 						'id' => 'loader',
 						'html' => '<svg class="disk-documents-circular" viewBox="25 25 50 50">
@@ -765,7 +783,7 @@ HTML
 <div class="bx-disk-external-link" id="bx-disk-external-link-{$row['ID']}">
 	<div class=" disk-control-external-link disk-control-external-link-skeleton--active">
 		<div class="disk-control-external-link-btn">
-			<span class="ui-switcher ui-switcher-off">
+			<span class="ui-switcher --air ui-switcher-off">
 				<span class="ui-switcher-cursor"></span>
 				<span class="ui-switcher-disabled"></span>
 			</span>
@@ -799,25 +817,14 @@ HTML;
 		}
 
 		$realFile = $file->getRealObject();
-		$unifiedLinkAccessLevel = $this->unifiedLinkAccessService->check($realFile);
-		$onlyRead = $unifiedLinkAccessLevel === UnifiedLinkAccessLevel::Read;
+		$securityContext = $realFile->getStorage()?->getCurrentUserSecurityContext(true);
 
-		if ($onlyRead)
+		if (!$securityContext)
 		{
-			/** @see \Bitrix\Disk\Controller\AccessRights::checkManageExternalLink */
-			$objectOptions = $realFile->getObjectOptions();
-
-			$allowManagePublicAccessWithViewingRights =
-				$objectOptions[ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ]
-			;
-
-			if (!$allowManagePublicAccessWithViewingRights)
-			{
-				return false;
-			}
+			return false;
 		}
 
-		return true;
+		return $realFile->canManageExternalLink($securityContext);
 	}
 
 	private function getBoardsGuideId(): string
@@ -840,5 +847,4 @@ HTML;
 
 		return false;
 	}
-
 }

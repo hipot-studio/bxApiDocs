@@ -270,7 +270,12 @@ class CBPGetUserActivity extends CBPActivity
 		return array_map(static fn($teamHead) => "user_{$teamHead}",  $result);
 	}
 
-	private static function useLeadType(): bool
+	/**
+	 * Protected rather than private: the AI description publishes the very same choices the dialog offers, and
+	 * `lead` is the one that depends on the portal. Asking this method is what keeps the two in step - a schema
+	 * with its own copy of the condition would offer a type the dialog hides, or hide one it offers.
+	 */
+	protected static function useLeadType(): bool
 	{
 		if (!Bitrix\Main\Loader::includeModule('humanresources'))
 		{
@@ -649,5 +654,21 @@ class CBPGetUserActivity extends CBPActivity
 		}
 
 		return array_merge($arErrors, parent::validateProperties($arTestProperties, $user));
+	}
+
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		// Legacy dialog activity with no getPropertiesMap(): without a passthrough the reverse round-trip would
+		// reject every persisted setting as an unknown name.
+		return [
+			'UserType',
+			'MaxLevel',
+			'UserParameter',
+			'ReserveUserParameter',
+			'SkipAbsent',
+			'SkipAbsentReserve',
+			'SkipTimeman',
+			'SkipTimemanReserve',
+		];
 	}
 }

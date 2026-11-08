@@ -50,6 +50,17 @@ class LandingSiteDomainComponent extends LandingBaseComponent
 	 */
 	protected function actionSaveBitrix24(string $param): bool
 	{
+		// a non-ASCII name would be saved as punycode, so it is refused before the site is written
+		if (preg_match('/[^\x00-\x7F]/', trim($param)))
+		{
+			$this->addError(
+				'DOMAIN_NOT_ASCII',
+				Loc::getMessage('LANDING_CMP_ERROR_DOMAIN_NOT_ASCII')
+			);
+
+			return false;
+		}
+
 		return $this->actionSavePrivate($param . $this->arResult['POSTFIX']);
 	}
 

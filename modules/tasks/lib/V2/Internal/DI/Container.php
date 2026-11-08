@@ -30,6 +30,7 @@ use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\ToolService;
 use Bitrix\Tasks\V2\Internal\Integration\Intranet\Service\UserUrlService;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepository;
 use Bitrix\Tasks\V2\Internal\Repository\DeadlineChangeLogRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Repository\DuplicateCandidateRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\FlowMemberRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\CheckListMapper;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\ReminderMapper;
@@ -98,6 +99,7 @@ use Bitrix\Tasks\V2\Public\Provider\CheckListProvider;
 use Bitrix\Tasks\V2\Public\Provider\Counter\RoleProvider;
 use Bitrix\Tasks\V2\Internal\Service\TaskLegacyFeatureService;
 use Bitrix\Tasks\V2\Public\Provider\DeadlineProvider;
+use Bitrix\Tasks\V2\Public\Provider\OnboardingBannerProvider;
 use Bitrix\Tasks\V2\Internal\Service\Task\CopyTaskService;
 use Bitrix\Tasks\V2\Public\Provider\TariffProvider;
 
@@ -206,6 +208,11 @@ class Container extends AbstractContainer
 	public function getTaskReadRepository(): TaskReadRepositoryInterface
 	{
 		return $this->get(TaskReadRepositoryInterface::class);
+	}
+
+	public function getDuplicateCandidateRepository(): DuplicateCandidateRepositoryInterface
+	{
+		return $this->get(DuplicateCandidateRepositoryInterface::class);
 	}
 
 	public function getTaskStageRepository(): TaskStageRepositoryInterface
@@ -451,6 +458,11 @@ class Container extends AbstractContainer
 	public function getAhaMomentProvider(): AhaMomentProvider
 	{
 		return $this->get(AhaMomentProvider::class);
+	}
+
+	public function getOnboardingBannerProvider(): OnboardingBannerProvider
+	{
+		return $this->get(OnboardingBannerProvider::class);
 	}
 
 	public function getTariffProvider(): TariffProvider

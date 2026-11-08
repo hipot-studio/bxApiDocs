@@ -19,6 +19,8 @@ use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ChatMessageSender;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\Message\MessageDataInterface;
 use Bitrix\Socialnetwork\V2\Internal\Service\Notification\CounterDecision;
 use Bitrix\Socialnetwork\V2\Internal\Service\Notification\CounterPolicyResolver;
 use CAllSocNetUser;
@@ -190,6 +192,32 @@ trait MessageTrait
 			CounterDecision::CounterOff => self::SILENT_WITH_RECENT,
 			CounterDecision::Passthrough => $passthroughSilent,
 		};
+	}
+
+	/**
+	 * Publishes what one membership edit changed as a single impersonal system message: the text lists
+	 * people, departments and teams together, so it has no author and states no initiator.
+	 *
+	 * Stays silent instead of failing on two expected cases: the phrase is missing for the portal language,
+	 * and the project is already gone by the time the buffer is flushed (deleted right after the edit).
+	 */
+	protected function sendMembersSummary(MessageDataInterface $messageData, int $groupId, bool $silent = false): int
+	{
+		if (trim($messageData->getText()) === '')
+		{
+			return 0;
+		}
+
+		$chatId = GroupRegistry::getInstance()->get($groupId)?->getChatId() ?? 0;
+		if ($chatId <= 0)
+		{
+			return 0;
+		}
+
+		return (int)Container::getInstance()
+			->get(ChatMessageSender::class)
+			->sendMessage($chatId, $messageData, $silent)
+		;
 	}
 
 	protected function sendMessage(

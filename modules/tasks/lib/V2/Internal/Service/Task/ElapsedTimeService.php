@@ -69,7 +69,7 @@ class ElapsedTimeService
 			elapsedTime: $elapsedTime->cloneWith(['id' => $id]),
 		));
 
-		return [$id, $currentDuration];
+		return [$id, $currentDuration + $elapsedTime->seconds];
 	}
 
 	public function update(ElapsedTime $elapsedTime): ElapsedTime

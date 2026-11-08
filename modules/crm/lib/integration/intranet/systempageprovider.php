@@ -51,4 +51,14 @@ abstract class SystemPageProvider
 
 		return true;
 	}
+
+	/**
+	 * Allows to redefine whether to show page in public (f.e. in left menu) or not
+	 *
+	 * @return bool
+	 */
+	public static function isPublicPage(): bool
+	{
+		return false;
+	}
 }

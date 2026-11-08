@@ -32,6 +32,11 @@ class OrderContactCompanyTable extends ORM\Data\DataManager
 {
 	use ORM\Data\AddStrategy\Trait\InsertIgnoreByDefaultTrait;
 
+	protected static function getInsertIgnoreStrategy(): ORM\Data\AddStrategy\Contract\AddStrategy
+	{
+		return new ORM\Data\AddStrategy\InsertIgnore(static::getEntity(), ['ORDER_ID', 'ENTITY_ID', 'ENTITY_TYPE_ID']);
+	}
+
 	/**
 	 * Get table name.
 	 * @return string

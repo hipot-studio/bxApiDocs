@@ -4,7 +4,7 @@ class CSearchUser
 {
 	protected $_user_id;
 
-	function __construct($user_id)
+	public function __construct($user_id)
 	{
 		$this->_user_id = intval($user_id);
 	}
@@ -51,7 +51,7 @@ class CSearchUser
 		}
 	}
 
-	function IsGroupsExists()
+	public function IsGroupsExists()
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$rs = $DB->Query($DB->TopSql('
@@ -61,7 +61,7 @@ class CSearchUser
 		return is_array($rs->Fetch());
 	}
 
-	function DeleteGroups()
+	public function DeleteGroups()
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$DB->Query('
@@ -70,7 +70,7 @@ class CSearchUser
 		');
 	}
 
-	function AddGroups($arGroups)
+	public function AddGroups($arGroups)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 
@@ -89,12 +89,12 @@ class CSearchUser
 				INSERT INTO b_search_user_right
 				(USER_ID, GROUP_CODE)
 				VALUES
-				(' . $this->_user_id . ", '" . $DB->ForSQL($group_code, 100) . "')
+				(' . $this->_user_id . ", '" . $DB->ForSql($group_code, 100) . "')
 			", true);
 		}
 	}
 
-	function SetGroups($arGroups)
+	public function SetGroups($arGroups)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$dbCodes = $DB->Query('
@@ -111,7 +111,7 @@ class CSearchUser
 				$DB->Query('
 					DELETE FROM b_search_user_right
 					WHERE USER_ID = ' . $this->_user_id . "
-					AND GROUP_CODE = '" . $DB->ForSQL($dbCode['GROUP_CODE']) . "'
+					AND GROUP_CODE = '" . $DB->ForSql($dbCode['GROUP_CODE']) . "'
 				");
 			}
 			else

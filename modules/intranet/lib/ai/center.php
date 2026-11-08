@@ -12,7 +12,22 @@ use Bitrix\Rest\AppTable;
 
 class Center
 {
+	private static bool $isAssistantAppLoaded = false;
+
+	private static $assistantApp = null;
+
 	public static function getAssistantApp()
+	{
+		if (!self::$isAssistantAppLoaded)
+		{
+			self::$assistantApp = self::loadAssistantApp();
+			self::$isAssistantAppLoaded = true;
+		}
+
+		return self::$assistantApp;
+	}
+
+	private static function loadAssistantApp()
 	{
 		$app = null;
 		if (Loader::includeModule("bitrix24"))

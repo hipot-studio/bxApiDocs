@@ -14,6 +14,7 @@ use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\AutomatedSolution\Support\TypeFilter;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Integration\Intranet\CustomSection;
+use Bitrix\Crm\Integration\Intranet\SystemPageProvider\StartPage;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Model\Dynamic\Type;
 use Bitrix\Crm\Security\Notification\EntityPermsNotificationTable;
@@ -28,6 +29,10 @@ final class AutomatedSolutionManager
 	protected ?array $intranetCustomSections = null;
 
 	protected ?array $automatedSolutions = null;
+	protected ?array $automatedSolutionsForPermissions = null;
+	protected ?array $automatedSolutionSourceIds = null;
+
+	protected ?array $automatedSolutionsByCode = null;
 
 	/**
 	 * @param array $fields
@@ -91,6 +96,25 @@ final class AutomatedSolutionManager
 		return null;
 	}
 
+	public function getAutomatedSolutionSourceId(int $id): ?int
+	{
+		if (!isset($this->automatedSolutionSourceIds))
+		{
+			$this->automatedSolutionSourceIds = [];
+
+			$automatedSolutions = AutomatedSolutionTable::query()
+				->setSelect(['ID', 'SOURCE_ID'])
+				->exec()
+			;
+			while ($automatedSolution = $automatedSolutions->fetch())
+			{
+				$this->automatedSolutionSourceIds[(int)$automatedSolution['ID']] = (int)$automatedSolution['SOURCE_ID'];
+			}
+		}
+
+		return $this->automatedSolutionSourceIds[$id] ?? null;
+	}
+
 	public function getAutomatedSolutionByIntranetCustomSectionId(int $intranetCustomSectionId): ?array
 	{
 		foreach ($this->getExistingAutomatedSolutions() as $solution)
@@ -102,6 +126,20 @@ final class AutomatedSolutionManager
 		}
 
 		return null;
+	}
+
+	public function getAutomatedSolutionByIntranetCode(string $code): ?array
+	{
+		if ($this->automatedSolutionsByCode === null)
+		{
+			$this->automatedSolutionsByCode = [];
+			foreach ($this->getExistingAutomatedSolutions() as $solution)
+			{
+				$this->automatedSolutionsByCode[$solution['CODE']] = $solution;
+			}
+		}
+
+		return $this->automatedSolutionsByCode[$code] ?? null;
 	}
 
 	/**
@@ -295,6 +333,21 @@ final class AutomatedSolutionManager
 		return $this->intranetCustomSections;
 	}
 
+	public function getAutomatedSolutionsForPermissions(): array
+	{
+		if ($this->automatedSolutionsForPermissions === null)
+		{
+			$this->automatedSolutionsForPermissions = [];
+			$result = AutomatedSolutionTable::getList(['select' => ['ID', 'TITLE']]);
+			while ($solution = $result->fetchObject())
+			{
+				$this->automatedSolutionsForPermissions[$solution->getId()] = $solution->collectValues();
+			}
+		}
+
+		return $this->automatedSolutionsForPermissions;
+	}
+
 	public function getExistingAutomatedSolutions(?int $sourceId = null): array
 	{
 		if (!isset($this->automatedSolutions))
@@ -351,13 +404,36 @@ final class AutomatedSolutionManager
 	private function cleanRuntimeCache(): void
 	{
 		$this->automatedSolutions = null;
+		$this->automatedSolutionsForPermissions = null;
+		$this->automatedSolutionSourceIds = null;
+		$this->automatedSolutionsByCode = null;
 		$this->intranetCustomSections = null;
+		StartPage::clearRuntimeCache();
 		IntranetManager::clearCustomSectionRuntimeCache();
 	}
 
 	public function hasImportedAutomatedSolutions(): bool
 	{
 		$result = (new Fetch(['SOURCE_ID' => AutomatedSolutionTable::SOURCE_MARKETPLACE], null, null, 1))->execute();
+
+		return !empty($result->getData()['automatedSolutions']);
+	}
+
+	public function isAutomatedSolutionExists(mixed $automatedSolution): bool
+	{
+		if (!is_int($automatedSolution))
+		{
+			return false;
+		}
+
+		$result = (new Fetch(
+			filter: [
+				'ID' => $automatedSolution,
+			],
+			limit: 1,
+		))
+			->execute()
+		;
 
 		return !empty($result->getData()['automatedSolutions']);
 	}

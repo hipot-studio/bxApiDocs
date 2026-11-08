@@ -2,7 +2,7 @@
 
 class CSiteMap extends CAllSiteMap
 {
-	function GetURLs($site_id, $ID, $limit = 0)
+	public function GetURLs($site_id, $ID, $limit = 0)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$strSql = '
@@ -29,9 +29,9 @@ class CSiteMap extends CAllSiteMap
 			INNER JOIN b_search_content_right scg ON sc.ID=scg.SEARCH_CONTENT_ID
 		WHERE
 			scg.GROUP_CODE='G2'
-			AND scsite.SITE_ID='" . $DB->ForSQL($site_id, 2) . "'
-			AND (sc.DATE_FROM is null OR sc.DATE_FROM <= " . $DB->CurrentTimeFunction() . ')
-			AND (sc.DATE_TO is null OR sc.DATE_TO >= ' . $DB->CurrentTimeFunction() . ')
+			AND scsite.SITE_ID='" . $DB->ForSql($site_id, 2) . "'
+			AND (sc.DATE_FROM is null OR sc.DATE_FROM <= " . CDatabase::CurrentTimeFunction() . ')
+			AND (sc.DATE_TO is null OR sc.DATE_TO >= ' . CDatabase::CurrentTimeFunction() . ')
 			AND sc.ID > ' . intval($ID) . '
 		ORDER BY
 			sc.ID

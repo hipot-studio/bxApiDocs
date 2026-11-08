@@ -71,13 +71,13 @@ class GoogleSectionSynchronizer extends AbstractGoogleSynchronizer implements Se
 	 * @throws SynchronizerException
 	 * @throws PushException
 	 */
-	public function sendSection(Section $section): void
+	public function sendSection(Section $section): ?SectionConnection
 	{
 		$connection = $this->getUserConnection($section->getOwner()->getId());
 
 		if (!$connection)
 		{
-			return;
+			return null;
 		}
 
 		$gateway = $this->getUserGateway($section->getOwner()->getId(), $connection);
@@ -103,17 +103,19 @@ class GoogleSectionSynchronizer extends AbstractGoogleSynchronizer implements Se
 
 				$this->connectionManager->updateConnection($connection);
 
-				return;
+				return $sectionConnection;
 			}
 
 			/** @var CalendarResponse $calendarResponse */
 			$calendarResponse = $this->createSection($section, $gateway);
 
-			$this->sectionConnectionRepository->save(
-				$this->createSectionConnection($section, $connection, $calendarResponse)
-			);
+			$sectionConnection = $this->createSectionConnection($section, $connection, $calendarResponse);
+
+			$this->sectionConnectionRepository->save($sectionConnection);
 
 			$this->connectionManager->updateConnection($connection);
+
+			return $sectionConnection;
 		}
 		catch (NotAuthorizedException $e)
 		{

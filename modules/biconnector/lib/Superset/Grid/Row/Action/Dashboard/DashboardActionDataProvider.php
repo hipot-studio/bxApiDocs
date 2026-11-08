@@ -6,7 +6,9 @@ use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Internal\Digest\Service\DigestSetupAvailabilityService;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\Grid\Row\Action\DataProvider;
 
@@ -15,9 +17,27 @@ use Bitrix\Main\Grid\Row\Action\DataProvider;
  */
 class DashboardActionDataProvider extends DataProvider
 {
+	private ?DigestSetupAvailabilityService $digestSetupAvailabilityService = null;
+
 	public function __construct(?DashboardSettings $settings = null)
 	{
 		parent::__construct($settings);
+	}
+
+	/**
+	 * Every row of the grid asks the same service, so the portal half of its answer is resolved once per
+	 * request instead of once per row.
+	 */
+	protected function createDigestSetupAvailabilityService(): DigestSetupAvailabilityService
+	{
+		return ServiceLocator::getInstance()->get(DigestSetupAvailabilityService::class);
+	}
+
+	private function createConfigureDigestAction(): ConfigureDigestAction
+	{
+		$this->digestSetupAvailabilityService ??= $this->createDigestSetupAvailabilityService();
+
+		return new ConfigureDigestAction($this->digestSetupAvailabilityService);
 	}
 
 	public function prepareActions(): array
@@ -32,6 +52,7 @@ class DashboardActionDataProvider extends DataProvider
 	{
 		return [
 			new OpenSettingsAction(),
+			$this->createConfigureDigestAction(),
 			new CopyAction(),
 			new ExportAction(),
 			new SetDraftAction(),
@@ -60,10 +81,37 @@ class DashboardActionDataProvider extends DataProvider
 	 */
 	public function prepareDashboardGroupActions(array $rawFields): array
 	{
-		$actions = $this->prepareDashboardActions();
+		return [
+			new DemoAction(),
+			...$this->prepareAllowedDashboardActions($rawFields),
+		];
+	}
 
-		$settings = $this->getSettings();
+	public function prepareControls(array $rawFields): array
+	{
+		if (!Feature::isBuilderEnabled())
+		{
+			return $this->buildControls($this->prepareBuilderDisabledActions(), $rawFields);
+		}
 
+		$actions = [];
+		if ($rawFields['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_GROUP)
+		{
+			$actions = $this->prepareGroupActions();
+		}
+		elseif ($rawFields['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_DASHBOARD)
+		{
+			$actions = $this->prepareDashboardGroupActions($rawFields);
+		}
+
+		return $this->buildControls($actions, $rawFields);
+	}
+
+	/**
+	 * @return BaseAction[]
+	 */
+	private function prepareAllowedDashboardActions(array $rawFields): array
+	{
 		if ($rawFields['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED)
 		{
 			return [
@@ -84,7 +132,7 @@ class DashboardActionDataProvider extends DataProvider
 		}
 
 		if (
-			($settings !== null && !$settings->isSupersetAvailable())
+			!$this->getSettings()->isSupersetAvailable()
 			|| $rawFields['STATUS'] === SupersetDashboardTable::DASHBOARD_STATUS_LOAD
 			|| !$rawFields['IS_ACCESS_ALLOWED']
 		)
@@ -92,6 +140,7 @@ class DashboardActionDataProvider extends DataProvider
 			return [];
 		}
 
+		// A synced report without an edit link is broken: it can only be deleted, a digest of it would never run.
 		if ($rawFields['EXTERNAL_ID'] && $rawFields['EDIT_URL'] === '')
 		{
 			return [
@@ -99,26 +148,24 @@ class DashboardActionDataProvider extends DataProvider
 			];
 		}
 
-		return $actions;
+		return $this->prepareDashboardActions();
 	}
 
-	public function prepareControls(array $rawFields): array
+	/**
+	 * @return BaseAction[]
+	 */
+	private function prepareBuilderDisabledActions(): array
 	{
-		$actions = [];
-		if (!Feature::isBuilderEnabled())
-		{
-			return $actions;
-		}
+		return [
+			new DemoAction(),
+		];
+	}
 
-		if ($rawFields['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_GROUP)
-		{
-			$actions = $this->prepareGroupActions();
-		}
-		elseif ($rawFields['ENTITY_TYPE'] === DashboardGroupRepository::TYPE_DASHBOARD)
-		{
-			$actions = $this->prepareDashboardGroupActions($rawFields);
-		}
-
+	/**
+	 * @param BaseAction[] $actions
+	 */
+	private function buildControls(array $actions, array $rawFields): array
+	{
 		$result = [];
 		foreach ($actions as $actionsItem)
 		{

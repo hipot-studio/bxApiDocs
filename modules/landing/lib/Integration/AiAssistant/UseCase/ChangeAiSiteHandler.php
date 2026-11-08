@@ -15,7 +15,9 @@ use Bitrix\Landing\Integration\AiAssistant\AiSiteChangeGenerationHelper;
 use Bitrix\Landing\Integration\AiAssistant\AiSiteGenerationHelper;
 use Bitrix\Landing\Integration\AiAssistant\Dto\AiSiteChatAvailabilityResult;
 use Bitrix\Landing\Integration\AiAssistant\Dto\ChangeAiSiteDto;
+use Bitrix\Landing\Integration\AiAssistant\Dto\FailedGenerationContextDto;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteRuntimeAvailabilityGuard;
+use Bitrix\Landing\Metrika;
 use Bitrix\Main\Loader;
 
 class ChangeAiSiteHandler
@@ -124,6 +126,11 @@ class ChangeAiSiteHandler
 		return (new CreateAiSiteChecker())->isLandingCreated($landingId);
 	}
 
+	protected function resolveSiteIdByPageId(int $pageId): int
+	{
+		return AiSiteChangeGenerationHelper::resolveSiteIdByPageId($pageId);
+	}
+
 	protected function isAiSiteSelectedElementEditEnabled(): bool
 	{
 		return CopilotManager::isAiSiteSelectedElementEditEnabled();
@@ -194,24 +201,26 @@ class ChangeAiSiteHandler
 		$pageId = $pageId > 0 ? $pageId : max(0, $requestedPageId);
 		$siteId = AiSiteChangeGenerationHelper::extractSiteId($generation);
 
-		if ($generation->isError())
+		// The terminal answer is decided by the same predicate the run itself decides the agent by: an
+		// Error mark that never reached the database leaves the step executable, so the generation keeps
+		// an executor and is going to continue.
+		if ($generation->isErrorPersisted())
 		{
-			$limitError = AiSiteGenerationHelper::extractLimitError($generation);
-			if ($limitError !== null)
-			{
-				return AiSiteChangeGenerationHelper::buildStatusResponse(
-					jobId: $jobId,
-					status: 'failed',
-					pageId: $pageId,
-					message: 'Page change generation failed.',
-					error: AiSiteChangeGenerationHelper::resolveFailureMessage($generation),
-					changeResult: AiSiteChangeGenerationHelper::extractResultState($generation),
-					siteId: $siteId,
-					limitError: $limitError,
-				);
-			}
+			// A failure before step 40 knows the page but not the site: DTO-02 wants both real.
+			$siteId = $siteId > 0 ? $siteId : $this->resolveSiteIdByPageId($pageId);
 
-			throw new \RuntimeException(AiSiteChangeGenerationHelper::resolveFailureMessage($generation));
+			// Resolve the errored step and its blocking verdict once, as one context: the reason text
+			// and the classification both need them, and each would otherwise repeat the read.
+			$failedContext = FailedGenerationContextDto::forChangeGeneration($generation);
+
+			return AiSiteChangeGenerationHelper::buildFailedResponse(
+				generation: $generation,
+				jobId: $jobId,
+				pageId: $pageId,
+				siteId: $siteId,
+				error: AiSiteChangeGenerationHelper::resolveFailureMessage($generation, $failedContext),
+				failure: AiSiteChangeGenerationHelper::resolveFailure($generation, $failedContext),
+			);
 		}
 
 		if (!$generation->isFinished())
@@ -232,7 +241,18 @@ class ChangeAiSiteHandler
 
 		if ($pageId <= 0)
 		{
-			throw new \RuntimeException(self::MESSAGE_FINISHED_WITHOUT_PAGE);
+			return AiSiteChangeGenerationHelper::buildFailedResponse(
+				generation: $generation,
+				jobId: $jobId,
+				pageId: $pageId,
+				siteId: $siteId,
+				error: self::MESSAGE_FINISHED_WITHOUT_PAGE,
+				failure: AiSiteGenerationHelper::buildFailure(
+					AiSiteGenerationHelper::ERROR_TYPE_TECHNICAL,
+					null,
+					Metrika\Statuses::Error->value,
+				),
+			);
 		}
 
 		return $this->buildCompletedResponse($generation, $jobId, $pageId, $siteId);

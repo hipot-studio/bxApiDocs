@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\Integration\AI\Operation\Handler;
 
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\CreateScriptEvent;
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\CriteriaGenEvent;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
+use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentCriteriaController;
 use Bitrix\Crm\Copilot\CallAssessment\CriteriaWriter;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\AutoCheckType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\CallType;
@@ -16,6 +19,7 @@ use Bitrix\Crm\Copilot\CallScriptMaintenance\State;
 use Bitrix\Crm\Copilot\CallScriptMaintenance\StateRepository;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Dto\Scoring\GenerateCallCriteriaPayload;
+use Bitrix\Main\Application;
 
 final class GenerateCallCriteriaHandler
 {
@@ -35,9 +39,14 @@ final class GenerateCallCriteriaHandler
 
 	public function saveCriteria(): void
 	{
+		$this->sendCriteriaGenAnalytics($this->saveCriteriaAndGetCount());
+	}
+
+	private function saveCriteriaAndGetCount(): int
+	{
 		if ($this->assessmentId <= 0)
 		{
-			return;
+			return 0;
 		}
 
 		$criteria = array_map(
@@ -50,19 +59,42 @@ final class GenerateCallCriteriaHandler
 
 		$results = (new CriteriaWriter())->append($this->assessmentId, $criteria);
 
+		$savedCount = 0;
 		foreach ($results as $result)
 		{
-			if (!$result->isSuccess())
+			if ($result->isSuccess())
 			{
-				AIManager::logger()->error(
-					'{date}: {class}: Failed to save generated criterion: {errors}',
-					[
-						'class' => self::class,
-						'errors' => $result->getErrors(),
-					],
-				);
+				$savedCount++;
+
+				continue;
 			}
+
+			AIManager::logger()->error(
+				'{date}: {class}: Failed to save generated criterion: {errors}',
+				[
+					'class' => self::class,
+					'errors' => $result->getErrors(),
+				],
+			);
 		}
+
+		return $savedCount;
+	}
+
+	private function sendCriteriaGenAnalytics(int $savedCount): void
+	{
+		if ($savedCount <= 0)
+		{
+			return;
+		}
+
+		(new CriteriaGenEvent())
+			->setCallAssessmentId($this->assessmentId)
+			->setCriteriaCount($savedCount)
+			->setIsManualLaunch(false)
+			->buildEvent()
+			->send()
+		;
 	}
 
 	public function applyMaintenancePostActionsByJob(int $jobId): bool
@@ -108,6 +140,13 @@ final class GenerateCallCriteriaHandler
 			$this->saveCriteria();
 			$dispatcher->markGrouped($selectionIds);
 			$dispatcher->pingAgent();
+
+			(new CreateScriptEvent())
+				->setCallAssessmentId($newId)
+				->setIsManualLaunch(false)
+				->buildEvent()
+				->send()
+			;
 		}
 		elseif ($type === State::JOB_TYPE_ENRICH_CALL_ASSESSMENT)
 		{
@@ -122,8 +161,14 @@ final class GenerateCallCriteriaHandler
 		}
 		elseif ($type === State::JOB_TYPE_BACKFILL_CALL_ASSESSMENT)
 		{
-			$this->saveCriteria();
+			$savedCount = $this->saveCriteriaAndGetCount();
+			$this->sendCriteriaGenAnalytics($savedCount);
 			$this->backfillAssessmentDescriptionIfEmpty();
+
+			if ($savedCount > 0 && $savedCount === count($this->payload->newCriteria))
+			{
+				$this->deleteReplacedCriteria((array)($context['criteriaIdsToReplace'] ?? []));
+			}
 		}
 		else
 		{
@@ -131,6 +176,69 @@ final class GenerateCallCriteriaHandler
 		}
 
 		return true;
+	}
+
+	/** @param int[] $criterionIds */
+	private function deleteReplacedCriteria(array $criterionIds): void
+	{
+		$criterionIds = array_values(array_unique(array_filter(
+			array_map('intval', $criterionIds),
+			static fn(int $id): bool => $id > 0,
+		)));
+		if (empty($criterionIds))
+		{
+			return;
+		}
+
+		$controller = CopilotCallAssessmentCriteriaController::getInstance();
+		$existingCriterionIds = [];
+		foreach ($criterionIds as $criterionId)
+		{
+			$criterion = $controller->getById($criterionId);
+			if ($criterion === null)
+			{
+				continue;
+			}
+			if ((int)$criterion['ASSESSMENT_ID'] !== $this->assessmentId)
+			{
+				AIManager::logger()->error(
+					'{date}: {class}: Refusing to delete unrelated replaced criterion {criterion}',
+					['class' => self::class, 'criterion' => $criterionId],
+				);
+
+				return;
+			}
+
+			$existingCriterionIds[] = $criterionId;
+		}
+		if (empty($existingCriterionIds))
+		{
+			return;
+		}
+
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+		try
+		{
+			foreach ($existingCriterionIds as $criterionId)
+			{
+				$result = $controller->deleteById($criterionId);
+				if ($result === null || !$result->isSuccess())
+				{
+					throw new \RuntimeException(implode('; ', $result?->getErrorMessages() ?? []));
+				}
+			}
+
+			$connection->commitTransaction();
+		}
+		catch (\Throwable $error)
+		{
+			$connection->rollbackTransaction();
+			AIManager::logger()->error(
+				'{date}: {class}: Failed to delete replaced criteria after successful repair: {error}',
+				['class' => self::class, 'error' => $error->getMessage()],
+			);
+		}
 	}
 
 	private function backfillAssessmentDescriptionIfEmpty(): void
@@ -177,6 +285,7 @@ final class GenerateCallCriteriaHandler
 			'title' => $title,
 			'description' => $description,
 			'prompt' => '',
+			'isHintEnabled' => false,
 			'gist' => null,
 			'clientTypeIds' => [ClientType::ANY->value],
 			'callTypeId' => CallType::ALL->value,

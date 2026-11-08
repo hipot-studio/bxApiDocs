@@ -15,6 +15,7 @@ final class Uploader
 	private ?int $activityId = null;
 	private array $currentStorageElementIds = [];
 	private Mode $mode = Mode::ADD;
+	private bool $deferDeletion = false;
 
 	public function __construct(
 		private readonly array $fileUploaderIds,
@@ -38,6 +39,7 @@ final class Uploader
 
 		$idsOfNewFiles = $this->getPreparedIdsOfNewFiles();
 		$idsNotChanged = [];
+		$idsToRemove = [];
 
 		$itemIdentifier = new ItemIdentifier($this->ownerTypeId, $this->ownerId);
 		$currentFileIds = $this->getCurrentFileIds($itemIdentifier, $this->currentStorageElementIds);
@@ -49,7 +51,14 @@ final class Uploader
 			$idsToRemove = array_diff($currentFileIds, $this->fileUploaderIds);
 			$idsNotChanged = array_keys(array_diff($currentFileIds, $idsToRemove));
 
-			$hiddenStorage->deleteFiles(array_keys($idsToRemove));
+			if (!$this->deferDeletion)
+			{
+				$deletedFileIds = $hiddenStorage->deleteFiles(array_keys($idsToRemove));
+				$idsNotChanged = array_merge(
+					$idsNotChanged,
+					array_diff(array_keys($idsToRemove), $deletedFileIds),
+				);
+			}
 		}
 
 		$fileUploader = new \Bitrix\Crm\Integration\UI\FileUploader(
@@ -81,7 +90,15 @@ final class Uploader
 
 		return $result->setData([
 			'ids' => array_values(array_merge($idsNotChanged, $hiddenStorageFileIds)),
+			'idsToRemove' => array_values(array_keys($idsToRemove)),
 		]);
+	}
+
+	public function setDeferDeletion(bool $deferDeletion): self
+	{
+		$this->deferDeletion = $deferDeletion;
+
+		return $this;
 	}
 
 	public function setMode(Mode $mode): self

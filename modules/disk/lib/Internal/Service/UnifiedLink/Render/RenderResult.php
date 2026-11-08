@@ -1,17 +1,16 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\Render;
 
-final class RenderResult
+final readonly class RenderResult
 {
 	public function __construct(
-		private readonly string $content,
-		private readonly int $status,
-		private readonly ?string $redirectUrl = null,
-		private readonly ?string $component = null,
-		private readonly array $headers = [],
+		private string $content,
+		private int $status,
+		private ?string $redirectUrl = null,
+		private ?string $component = null,
+		private array $headers = [],
 	) {
 	}
 

@@ -12,6 +12,7 @@ use Bitrix\Bizproc\Public\Activity\Registry\FilterResultPropertyResolverRegistry
 use Bitrix\Bizproc\Public\Activity\Registry\RelationFieldResolverRegistry;
 use Bitrix\Bizproc\Public\Activity\Registry\TargetDocumentAccessGuardRegistry;
 use Bitrix\Bizproc\Public\Activity\Registry\TargetDocumentResolverRegistry;
+use Bitrix\Bizproc\Public\Activity\Service\DocumentContextResolver;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
 use Bitrix\Main\DI\ServiceLocator;
 use Psr\Container\ContainerInterface;
@@ -81,6 +82,11 @@ class Container
 	public function getTargetDocumentResolverRegistry(): TargetDocumentResolverRegistry
 	{
 		return static::getService('bizproc.service.activity.targetDocumentResolverRegistry');
+	}
+
+	public function getDocumentContextResolver(): DocumentContextResolver
+	{
+		return static::getService('bizproc.service.activity.documentContextResolver');
 	}
 
 	public function getTargetDocumentAccessGuardRegistry(): TargetDocumentAccessGuardRegistry

@@ -51,8 +51,17 @@ class AddModeratorsHandler implements AddHandlerInterface
 			return $handlerResult;
 		}
 
-		ActionMessageBuffer::getInstance()
-			->put(ActionType::AddUser, $entity->getId(), $command->getInitiatorId(), $add)
+		$buffer = ActionMessageBuffer::getInstance();
+
+		// A moderator of a project being created is in the creation card among the members, so the card is all
+		// that is said about them; the chat membership goes through as always.
+		$parameters = $buffer->areMemberMessagesSuppressed($entity->getId())
+			? [ActionMessageBuffer::WITHOUT_MESSAGE_PARAMETER => true]
+			: []
+		;
+
+		$buffer
+			->put(ActionType::AddUser, $entity->getId(), $command->getInitiatorId(), $add, $parameters)
 			->flush();
 
 		Messenger::setManagers($entity->getId(), $add);

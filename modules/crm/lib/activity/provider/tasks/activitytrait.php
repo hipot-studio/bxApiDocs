@@ -2,6 +2,8 @@
 
 namespace Bitrix\Crm\Activity\Provider\Tasks;
 
+use Bitrix\Crm\ItemIdentifier;
+
 trait ActivityTrait
 {
 	public static function invalidate(string $key): void
@@ -14,8 +16,14 @@ trait ActivityTrait
 		static::$cache = [];
 	}
 
-	public function getCacheKey(int $entityId): string
+	public function getCacheKey(int $entityId, ?ItemIdentifier $identifier = null): string
 	{
-		return static::getSubject() . '_' . $entityId;
+		$key = static::getSubject() . '_' . $entityId;
+		if ($identifier !== null)
+		{
+			$key .= '_' . $identifier->getEntityTypeId() . '_' . $identifier->getEntityId();
+		}
+
+		return $key;
 	}
 }

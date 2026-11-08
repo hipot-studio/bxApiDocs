@@ -18,6 +18,14 @@ class ImportCsv
 	use Translate\Controller\Stepper;
 	use Translate\Controller\ProcessParams;
 
+	private const PATH_ERROR_PHRASE = [
+		Translate\IO\Path::ERROR_INVALID_PATH => 'TR_IMPORT_ERROR_BAD_FILEPATH',
+		Translate\IO\Path::ERROR_NOT_LANG_FILE => 'TR_IMPORT_ERROR_FILE_NOT_LANG',
+		Translate\IO\Path::ERROR_PATH_NOT_ALLOWED => 'TR_IMPORT_ERROR_BAD_FILEPATH',
+	];
+
+	private const MAX_SKIPPED_PATHS_REPORTED = 10;
+
 	/** @var int */
 	private $seekLine;
 
@@ -55,6 +63,12 @@ class ImportCsv
 	/** @var int */
 	private $importedPhraseCount = 0;
 
+	/** @var string[] Reported messages of the skipped paths, keyed by the raw csv value. */
+	private $skippedPaths = [];
+
+	/** @var bool */
+	private $hasUnreportedSkippedPaths = false;
+
 
 
 	/**
@@ -69,6 +83,9 @@ class ImportCsv
 		$fields = ['tabId', 'encodingIn', 'updateMethod', 'csvFilePath', 'seekLine', 'importedPhrasesCount'];
 
 		$this->keepField($fields);
+
+		// kept between the steps, but never taken from the request: the value comes from the csv
+		$this->keepField(['skippedPaths', 'hasUnreportedSkippedPaths']);
 
 		foreach ($fields as $key)
 		{
@@ -167,6 +184,14 @@ class ImportCsv
 			if (isset($progressParams['importedPhrasesCount']))
 			{
 				$this->importedPhraseCount = $progressParams['importedPhrasesCount'];
+			}
+			if (isset($progressParams['skippedPaths']))
+			{
+				$this->skippedPaths = $progressParams['skippedPaths'];
+			}
+			if (isset($progressParams['hasUnreportedSkippedPaths']))
+			{
+				$this->hasUnreportedSkippedPaths = $progressParams['hasUnreportedSkippedPaths'];
 			}
 		}
 
@@ -321,14 +346,6 @@ class ImportCsv
 
 			foreach ($phraseList as $filePath => $translationList)
 			{
-				if (Translate\IO\Path::isLangDir($filePath, true) !== true)
-				{
-					$this->addError(new Main\Error(Loc::getMessage('TR_IMPORT_ERROR_FILE_NOT_LANG', ['#FILE#' => $filePath])));
-					continue;
-				}
-
-				$filePath = Translate\IO\Path::normalize('/'.$filePath);
-
 				foreach ($translationList as $languageId => $fileMessages)
 				{
 					if (empty($fileMessages))
@@ -336,13 +353,19 @@ class ImportCsv
 						continue;
 					}
 
-					$langFilePath = Translate\IO\Path::replaceLangId($filePath, $languageId);
-
-					if (\Rel2Abs('/', $langFilePath) !== $langFilePath)
+					$pathResult = Translate\IO\Path::resolveAllowedLangFile($filePath, $languageId);
+					if (!$pathResult->isSuccess())
 					{
-						$this->addError(new Main\Error(Loc::getMessage('TR_IMPORT_ERROR_BAD_FILEPATH', ['#FILE#' => $filePath])));
-						break;
+						// an action error would turn the step into a completed one and leave the rest
+						// of the file unimported, so a rejected path is reported as a warning
+						$this->skipPath($filePath, $pathResult->getErrors()[0]->getCode());
+
+						// the language code takes part in the check, so a neighbouring language of the
+						// same row can still be importable; the report is deduplicated by the path
+						continue;
 					}
+
+					$langFilePath = $pathResult->getData()['path'];
 
 					$fullPath = self::$documentRoot. $langFilePath;
 					$fullPath = Main\Localization\Translation::convertLangPath($fullPath, $languageId);
@@ -350,6 +373,8 @@ class ImportCsv
 					$langFile = new Translate\File($fullPath);
 					$langFile->setLangId($languageId);
 					$langFile->setOperatingEncoding(self::$sourceEncoding[$languageId]);
+
+					$errorCountBeforeLoad = \count($this->getErrors());
 
 					if (!$langFile->loadTokens())
 					{
@@ -364,7 +389,7 @@ class ImportCsv
 							}
 						}
 					}
-					if (\count($this->getErrors()) > 0)
+					if (\count($this->getErrors()) > $errorCountBeforeLoad)
 					{
 						continue;
 					}
@@ -482,11 +507,52 @@ class ImportCsv
 			$this->clearProgressParameters();
 		}
 
-		return [
+		$result = [
 			'PROCESSED_ITEMS' => $this->processedItems,
 			'TOTAL_ITEMS' => $this->totalItems,
 			'TOTAL_PHRASES' => $this->importedPhraseCount,
 		];
+
+		if (!empty($this->skippedPaths))
+		{
+			// the client escapes a warning, so the message stays plain text
+			$result['WARNING'] = \implode('; ', $this->skippedPaths);
+			if ($this->hasUnreportedSkippedPaths)
+			{
+				$result['WARNING'] .= ' ...';
+			}
+		}
+
+		return $result;
+	}
+
+
+	/**
+	 * Registers a csv row rejected by the path check. Such a row does not stop the import.
+	 *
+	 * @param string $filePath Raw value of the csv file column.
+	 * @param string $errorCode Reason code returned by the path check.
+	 *
+	 * @return void
+	 */
+	private function skipPath(string $filePath, string $errorCode): void
+	{
+		if (isset($this->skippedPaths[$filePath]))
+		{
+			return;
+		}
+
+		if (\count($this->skippedPaths) >= self::MAX_SKIPPED_PATHS_REPORTED)
+		{
+			$this->hasUnreportedSkippedPaths = true;
+
+			return;
+		}
+
+		$this->skippedPaths[$filePath] = Loc::getMessage(
+			self::PATH_ERROR_PHRASE[$errorCode] ?? 'TR_IMPORT_ERROR_BAD_FILEPATH',
+			['#FILE#' => $filePath]
+		);
 	}
 
 

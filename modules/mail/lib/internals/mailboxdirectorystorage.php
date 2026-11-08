@@ -15,7 +15,8 @@ class MailboxDirectoryStorage
 	public function __construct($mailboxId, ?GenerationScope $generationScope = null)
 	{
 		$this->mailboxId = $mailboxId;
-		$this->generationScope = $generationScope ?? GenerationScope::forMailbox((int)$mailboxId);
+		// A read that names no scope gets the folders serving the mailbox, prepared ones aside
+		$this->generationScope = $generationScope ?? GenerationScope::servingMailbox((int)$mailboxId);
 
 		$this->init();
 	}

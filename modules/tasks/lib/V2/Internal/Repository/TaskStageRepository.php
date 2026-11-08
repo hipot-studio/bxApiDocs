@@ -42,7 +42,11 @@ class TaskStageRepository implements TaskStageRepositoryInterface
 
 	public function update(int $id, int $stageId): void
 	{
-		TaskStageTable::update($id, ['STAGE_ID' => $stageId]);
+		$result = TaskStageTable::update($id, ['STAGE_ID' => $stageId]);
+		if (!$result->isSuccess())
+		{
+			throw new SqlQueryException($result->getError()?->getMessage());
+		}
 	}
 
 	public function upsert(int $taskId, int $stageId): int

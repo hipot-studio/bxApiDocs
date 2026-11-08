@@ -1,10 +1,12 @@
 <?php
+use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Configuration;
-use Bitrix\Disk\Driver;
+use Bitrix\Disk\File;
+use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internals\BaseComponent;
 use Bitrix\Disk\Document\DocumentHandler;
-use Bitrix\Disk\Uf\LocalDocumentController;
 use Bitrix\Disk\Ui\FileAttributes;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 
 if(!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)die();
@@ -56,6 +58,9 @@ class CDiskUfVersionComponent extends BaseComponent
 		$urlManager = \Bitrix\Disk\Driver::getInstance()->getUrlManager();
 		$isEnabledObjectLock = Configuration::isEnabledObjectLock();
 
+		$attachedModels = $this->loadAttachedObjects($values);
+		$this->preloadDownloadAccessForAttachedObjects($attachedModels);
+
 		$versions = array();
 		foreach($values as $value)
 		{
@@ -65,7 +70,7 @@ class CDiskUfVersionComponent extends BaseComponent
 				continue;
 			}
 			/** @var \Bitrix\Disk\AttachedObject $attachedModel */
-			$attachedModel = \Bitrix\Disk\AttachedObject::loadById($attachedObjectId, array('VERSION.OBJECT'));
+			$attachedModel = $attachedModels[$attachedObjectId] ?? null;
 			if(!$attachedModel)
 			{
 				continue;
@@ -77,6 +82,12 @@ class CDiskUfVersionComponent extends BaseComponent
 				continue;
 			}
 			$extension = $version->getExtension();
+			$canDownload = $attachedModel->canDownload($this->getUser()->getId());
+
+			$downloadUrl = $canDownload
+				? $urlManager->getUrlUfController('download', ['attachedId' => $attachedModel->getId()])
+				: null
+			;
 
 			$versionData = array(
 				'ID' => $attachedModel->getId(),
@@ -88,7 +99,8 @@ class CDiskUfVersionComponent extends BaseComponent
 				'EXTENSION' => $extension,
 				'SIZE' => \CFile::formatSize($version->getSize()),
 				'HISTORY_URL' => $urlManager->getUrlUfController('history', array('attachedId' => $attachedModel->getId())),
-				'DOWNLOAD_URL' => $urlManager->getUrlUfController('download', array('attachedId' => $attachedModel->getId())),
+				'DOWNLOAD_URL' => $downloadUrl,
+				'CAN_DOWNLOAD' => $canDownload,
 				'COPY_TO_ME_URL' => $urlManager->getUrlUfController('copyTome', array('attachedId' => $attachedModel->getId())),
 				'VIEW_URL' => $urlManager->getUrlToShowAttachedFileByService($attachedModel->getId(), 'gvdrive'),
 				'EDIT_URL' => $urlManager->getUrlToStartEditUfFileByService($attachedModel->getId(), 'gdrive'),
@@ -106,15 +118,15 @@ class CDiskUfVersionComponent extends BaseComponent
 				$versionData['IS_LOCKED_BY_SELF'] = $this->getUser()->getId() == $objectLock->getCreatedBy();
 			}
 
-			$sourceUri = new \Bitrix\Main\Web\Uri($urlManager->getUrlUfController('download', array('attachedId' => $attachedModel->getId())));
+			$sourceUri = new \Bitrix\Main\Web\Uri(
+				$downloadUrl ?? $urlManager->getUrlUfController('show', array('attachedId' => $attachedModel->getId()))
+			);
 			$attr = FileAttributes::buildByFileId($attachedModel->getFileId(), $sourceUri, $file, $version)
 				->setObjectId($attachedModel->getObjectId())
 				->setAttachedObjectId($attachedModel->getId())
 				->setVersionId($attachedModel->getVersionId())
 				->setTitle($version->getName())
-				->addAction([
-					'type' => 'download',
-				])
+				->setDownloadDisabled(!$canDownload)
 				->addAction([
 					'type' => 'copyToMe',
 					'text' => Loc::getMessage('DISK_UF_VERSION_ACTION_SAVE_TO_OWN_FILES'),
@@ -127,47 +139,13 @@ class CDiskUfVersionComponent extends BaseComponent
 				])
 			;
 
-			if ($versionData['CAN_UPDATE'] && $versionData['EDITABLE'])
+			if ($canDownload)
 			{
-				if ($file->supportsUnifiedLink())
-				{
-					$editUnifiedLink = $urlManager->getUnifiedEditLink($file, [
-						'versionId' => $attachedModel->getVersionId(),
-						'attachedId' => $attachedModel->getId(),
-					]);
-					$attr->addAction([
-						'type' => 'edit',
-						'buttonIconClass' => ' ',
-						'action' => "BX.Disk.Viewer.Actions.openUnifiedLink",
-						'params' => [
-							'unifiedLinkToOpen' => $editUnifiedLink,
-						],
-					]);
-				}
-				else
-				{
-					$documentName = \CUtil::JSEscape($version->getName());
-					$items = [];
-					foreach ($this->getDocumentHandlersForEditingFile() as $handlerData)
-					{
-						$items[] = [
-							'text' => $handlerData['name'],
-							'onclick' => "BX.Disk.Viewer.Actions.runActionEdit({name: '{$documentName}', attachedObjectId: {$attachedModel->getId()}, serviceCode: '{$handlerData['code']}'})",
-						];
-					}
-					$attr->addAction([
-						'type' => 'edit',
-						'buttonIconClass' => ' ',
-						'action' => 'BX.Disk.Viewer.Actions.runActionDefaultEdit',
-						'params' => [
-							'attachedObjectId' => $attachedModel->getId(),
-							'name' => $documentName,
-							'dependsOnService' => $items ? null : LocalDocumentController::getCode(),
-						],
-						'items' => $items,
-					]);
-				}
+				$attr->addAction([
+					'type' => 'download',
+				]);
 			}
+
 			$versionData['ATTRIBUTES_FOR_VIEWER'] = $attr;
 
 
@@ -179,32 +157,67 @@ class CDiskUfVersionComponent extends BaseComponent
 	}
 
 	/**
-	 * @return \Bitrix\Disk\Document\DocumentHandler[]
+	 * @return array<int, AttachedObject>
 	 */
-	private function listCloudHandlersForCreatingFile()
+	protected function loadAttachedObjects(array $values): array
 	{
-		if (!\Bitrix\Disk\Configuration::canCreateFileByCloud())
+		$attachedObjects = [];
+
+		foreach ($values as $value)
 		{
-			return array();
+			$attachedObjectId = (int)$value;
+
+			if ($attachedObjectId <= 0 || array_key_exists($attachedObjectId, $attachedObjects))
+			{
+				continue;
+			}
+
+			$attachedObject = $this->loadAttachedObject($attachedObjectId);
+
+			if ($attachedObject instanceof AttachedObject)
+			{
+				$attachedObjects[$attachedObjectId] = $attachedObject;
+			}
 		}
 
-		return array_values(Driver::getInstance()->getDocumentHandlersManager()->getHandlersForCreatingFile());
+		return $attachedObjects;
 	}
 
-	private function getDocumentHandlersForEditingFile()
+	protected function loadAttachedObject(int $attachedObjectId): ?AttachedObject
 	{
-		$handlers = [];
-		foreach ($this->listCloudHandlersForCreatingFile() as $handler)
+		return AttachedObject::loadById($attachedObjectId, ['OBJECT', 'VERSION.OBJECT']);
+	}
+
+	protected function preloadDownloadAccessForAttachedObjects(array $attachedObjects): void
+	{
+		$files = [];
+
+		foreach ($attachedObjects as $attachedObject)
 		{
-			$handlers[] = [
-				'code' => $handler::getCode(),
-				'name' => $handler::getName(),
-			];
+			if (!$attachedObject instanceof AttachedObject)
+			{
+				continue;
+			}
+
+			$file = $attachedObject->getFile();
+
+			if ($file instanceof File)
+			{
+				$files[] = $file;
+			}
 		}
 
-		return array_merge($handlers, [[
-			'code' => LocalDocumentController::getCode(),
-			'name' => LocalDocumentController::getName(),
-		]]);
+		if (empty($files))
+		{
+			return;
+		}
+
+		$this->getDownloadAccess()->preload($files);
 	}
+
+	protected function getDownloadAccess(): DownloadAccess
+	{
+		return ServiceLocator::getInstance()->get(DownloadAccess::class);
+	}
+
 }

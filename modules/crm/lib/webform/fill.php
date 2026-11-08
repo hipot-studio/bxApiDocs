@@ -10,7 +10,9 @@ namespace Bitrix\Crm\WebForm;
 use Bitrix\Crm\Entity\Identificator;
 use Bitrix\Crm\FileUploader\SiteFormFileUploaderController;
 
+use Bitrix\Crm\WebForm\Agreement\SubmissionPolicy;
 use Bitrix\Crm\WebForm\Limitations;
+use Bitrix\Main;
 use Bitrix\UI;
 
 /*
@@ -24,6 +26,8 @@ class Fill
 	protected $values;
 	/** @var array $consents Consents. */
 	protected $consents = [];
+	private array $explicitConsents = [];
+	private array $displayedSubmitAgreements = [];
 	/** @var int|string $trace Trace. */
 	protected $trace;
 	/** @var array $properties Properties. */
@@ -32,6 +36,10 @@ class Fill
 	protected $entities;
 	/** @var bool $isFieldCheckingEnabled Is field checking enabled. */
 	protected $isFieldCheckingEnabled = true;
+	/** @var SubmissionPolicy|null $agreementPolicy Acceptance policy of the saved form. */
+	private ?SubmissionPolicy $agreementPolicy = null;
+	/** @var array Telemetry context. */
+	protected $telemetryContext = [];
 
 	/*
 	 * Constructor.
@@ -62,6 +70,20 @@ class Fill
 	public function setConsents(array $consents)
 	{
 		$this->consents = $consents;
+		return $this;
+	}
+
+	public function setExplicitConsents(array $explicitConsents): self
+	{
+		$this->explicitConsents = $explicitConsents;
+
+		return $this;
+	}
+
+	public function setDisplayedSubmitAgreements(array $displayedSubmitAgreements): self
+	{
+		$this->displayedSubmitAgreements = $displayedSubmitAgreements;
+
 		return $this;
 	}
 
@@ -113,13 +135,40 @@ class Fill
 		return $this;
 	}
 
+	/**
+	 * Set telemetry context.
+	 *
+	 * @param array $context Telemetry context.
+	 * @return $this
+	 */
+	public function setTelemetryContext(array $context): self
+	{
+		$this->telemetryContext = $context;
+
+		return $this;
+	}
+
 	/*
 	 * Save form fill.
+	 *
+	 * Internal fills with field checking disabled do not present legal documents to the client.
 	 *
 	 * @return Result
 	 */
 	public function save()
 	{
+		$acceptedAgreementIds = [];
+		if ($this->isFieldCheckingEnabled)
+		{
+			$agreements = $this->resolveAgreements();
+			if (!$agreements->isSuccess())
+			{
+				return self::createRefusedResult($agreements->getErrorMessages());
+			}
+
+			$acceptedAgreementIds = $agreements->getData()['acceptedAgreementIds'] ?? [];
+		}
+
 		return $this->form->addResult(
 			$this->getFilledFields(),
 			[
@@ -127,42 +176,57 @@ class Fill
 				'DISABLE_FIELD_CHECKING' => !$this->isFieldCheckingEnabled,
 				'COMMON_FIELDS' => [],
 				'PLACEHOLDERS' => $this->properties,
-				'AGREEMENTS' => $this->getAppliedAgreements(),
+				'AGREEMENTS' => $acceptedAgreementIds,
 				'STOP_CALLBACK' => false,
 				'COMMON_DATA' => [
 					'VISITED_PAGES' => [],
 					'TRACE' => $this->trace
 				],
+				'TELEMETRY_CONTEXT' => $this->telemetryContext,
 			]
 		);
 	}
 
-	private function getAppliedAgreements(): array
+	/**
+	 * Result of a submission refused by the acceptance policy.
+	 *
+	 * The errors of the result model have no public setter, so they are filled by an heir at
+	 * construction: an empty error list would let a caller printing errors run on to a result
+	 * entity that was never created.
+	 *
+	 * @param string[] $errors
+	 * @return Result
+	 */
+	private static function createRefusedResult(array $errors): Result
 	{
-		$formData = $this->form->get();
-		if ($formData['USE_LICENCE'] != 'Y')
+		return new class(null, null, $errors) extends Result
 		{
-			return [];
-		}
-
-		$list = array_column($formData['AGREEMENTS'], 'AGREEMENT_ID');
-		$agreements = [];
-		foreach ($this->consents as $name => $value)
-		{
-			if ($value <> 'Y')
+			public function __construct($id, ?array $params, array $errors)
 			{
-				continue;
-			}
+				parent::__construct($id, $params);
 
-			$id = (int)preg_replace('/[^\d]/', '', $name);
-			if (!$id || !in_array($id, $list))
-			{
-				continue;
+				$this->errors = $errors;
 			}
-			$agreements[] = $id;
-		}
+		};
+	}
 
-		return $agreements;
+	/**
+	 * Resolve the accepted documents of this submission against the saved form policy.
+	 *
+	 * Public submission validates the policy before saving; save() also enforces it when field
+	 * checking is enabled.
+	 *
+	 * @return Main\Result Data key `acceptedAgreementIds` holds the accepted identifiers.
+	 */
+	public function resolveAgreements(): Main\Result
+	{
+		$this->agreementPolicy ??= SubmissionPolicy::createFromForm($this->form);
+
+		return $this->agreementPolicy->resolveAcceptance(
+			$this->consents,
+			$this->explicitConsents,
+			$this->displayedSubmitAgreements,
+		);
 	}
 
 	private function getFilledFields(): array

@@ -9,8 +9,10 @@ use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-final class ExportAction extends BaseDashboardAction
+
+final class ExportAction extends FormatMenuAction
 {
 
 	public static function getId(): ?string

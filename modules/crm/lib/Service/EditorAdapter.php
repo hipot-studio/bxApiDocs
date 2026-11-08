@@ -33,12 +33,14 @@ use Bitrix\Crm\Service\EditorAdapter\Normalizer\FieldValueNormalizer;
 use Bitrix\Crm\Service\EditorAdapter\Normalizer\UserFieldValueNormalizer;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\UI\EntitySelector;
+use Bitrix\Crm\V2\Internal\Service\Ai\FieldFillPolicyService;
 use Bitrix\Currency\CurrencyTable;
 use Bitrix\Main\InvalidOperationException;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Request;
 use Bitrix\Main\Result;
+use Bitrix\Main\UserField\Types\DoubleType;
 use Bitrix\Main\Web\Json;
 use CComponentEngine;
 use CCrmComponentHelper;
@@ -213,7 +215,11 @@ class EditorAdapter
 
 			$itemOwnEditorEntityFields[] = $fieldData;
 
-			$fieldValueNormalized = $this->normalizeFieldValue($item->get($fieldName), $fieldData['type']);
+			$fieldValueNormalized = $this->normalizeFieldValue(
+				$item->get($fieldName),
+				$fieldData['type'],
+				$this->getUserFieldFloatPrecision($fieldData),
+			);
 
 			if ($fieldData['type'] === 'userField')
 			{
@@ -1305,6 +1311,7 @@ class EditorAdapter
 		$entityUserFields = [];
 		$enumerationFields = [];
 		$userFieldEntityID = CCrmOwnerType::ResolveUserFieldEntityID($entityTypeId);
+		$aiFillPolicyConfigs = static::prepareEntityFieldAiFillPolicyConfigs($entityTypeId, $userFields);
 		foreach($userFields as $userField)
 		{
 			$fieldName = $userField['FIELD_NAME'];
@@ -1372,6 +1379,11 @@ class EditorAdapter
 			{
 				$entityUserFields[$fieldName]['data']['visibilityConfigs'] = $visibilityConfig[$fieldName];
 			}
+
+			if (isset($aiFillPolicyConfigs[$fieldName]))
+			{
+				$entityUserFields[$fieldName]['data']['aiFillPolicy'] = $aiFillPolicyConfigs[$fieldName];
+			}
 		}
 
 		if(!empty($enumerationFields))
@@ -1390,9 +1402,63 @@ class EditorAdapter
 		return $entityUserFields;
 	}
 
-	protected function normalizeFieldValue($value, string $fieldType): mixed
+	/**
+	 * Generates the BitrixGPT fill policy of $userFields for the editor, keyed by field name.
+	 * A field gets an entry only while the setting exists for it - the supported types of an entity
+	 * type the policy covers; the editor shows no switch for the fields left out.
+	 *
+	 * @param int $entityTypeId
+	 * @param array $userFields
+	 * @return array<string, array{available: bool, enabled: bool}>
+	 */
+	public static function prepareEntityFieldAiFillPolicyConfigs(int $entityTypeId, array $userFields): array
 	{
-		return (new FieldValueNormalizer($fieldType))->normalize($value);
+		$policy = FieldFillPolicyService::getInstance();
+		if (!$policy->isEntityTypeAvailable($entityTypeId))
+		{
+			return [];
+		}
+
+		$supportedFieldTypeMap = array_flip($policy->getSupportedFieldTypes());
+		$disabledFieldNameMap = $policy->getDisabledFieldNameMap($entityTypeId);
+
+		$configs = [];
+		foreach ($userFields as $userField)
+		{
+			$fieldName = (string)($userField['FIELD_NAME'] ?? '');
+			if ($fieldName === '' || !isset($supportedFieldTypeMap[$userField['USER_TYPE_ID'] ?? '']))
+			{
+				continue;
+			}
+
+			$configs[$fieldName] = [
+				'available' => true,
+				'enabled' => !isset($disabledFieldNameMap[$fieldName]),
+			];
+		}
+
+		return $configs;
+	}
+
+	protected function normalizeFieldValue($value, string $fieldType, ?int $floatPrecision = null): mixed
+	{
+		return (new FieldValueNormalizer($fieldType, $floatPrecision))->normalize($value);
+	}
+
+	protected function getUserFieldFloatPrecision(array $fieldData): ?int
+	{
+		$fieldInfo = $fieldData['data']['fieldInfo'] ?? null;
+		if (
+			!is_array($fieldInfo)
+			|| ($fieldInfo['USER_TYPE_ID'] ?? null) !== DoubleType::USER_TYPE_ID
+		)
+		{
+			return null;
+		}
+
+		$precision = (int)($fieldInfo['SETTINGS']['PRECISION'] ?? 0);
+
+		return min(12, max(0, $precision));
 	}
 
 	protected function normalizeUserFieldValue($fieldValue, bool $isValueEmpty, array $fieldParams): array

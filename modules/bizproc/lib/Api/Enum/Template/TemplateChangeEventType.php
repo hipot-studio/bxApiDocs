@@ -6,4 +6,5 @@ enum TemplateChangeEventType: int // values are persisted in b_bp_workflow_templ
 {
 	case Publication = 1;
 	case Creation = 2;
+	case DraftSave = 3;
 }

@@ -68,6 +68,7 @@ class MessageRepository implements MessageRepositoryInterface
 		foreach ($messages as $message)
 		{
 			$result[] = [
+				'ID' => $message->getMessageId(),
 				'TEXT' => $message->getMessage(),
 				'CREATED_DATE' => $message->getDateCreate(),
 				'USER_ID' => $message->getAuthorId(),

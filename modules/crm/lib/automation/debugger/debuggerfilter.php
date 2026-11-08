@@ -38,26 +38,24 @@ class DebuggerFilter
 			return [0];
 		}
 
-		$session = \Bitrix\Bizproc\Debugger\Session\Manager::getActiveSession();
-		if (!$session || !$session->isStartedInDocumentType(\CCrmBizProcHelper::ResolveDocumentType($entityTypeId)))
-		{
-			return [0];
-		}
-
-		$documents = $session->getDocuments();
-		$documentType = $session->getDocumentType();
 		$result = [];
-
-		foreach ($documents as $document)
+		$session = \Bitrix\Bizproc\Debugger\Session\Manager::getActiveSession();
+		if ($session && $session->isStartedInDocumentType(\CCrmBizProcHelper::ResolveDocumentType($entityTypeId)))
 		{
-			$documentId = [$documentType[0], $documentType[1], $document->getDocumentId()];
-			[$entityTypeName, $entityId] = \CCrmBizProcHelper::resolveEntityId($documentId);
-
-			if ($entityId)
+			$documentType = $session->getDocumentType();
+			foreach ($session->getDocuments() as $document)
 			{
-				$result[] = $entityId;
+				$documentId = [$documentType[0], $documentType[1], $document->getDocumentId()];
+				[$entityTypeName, $entityId] = \CCrmBizProcHelper::resolveEntityId($documentId);
+
+				if ($entityId)
+				{
+					$result[] = $entityId;
+				}
 			}
 		}
+
+		$result = array_values(array_unique([...$result, ...\Bitrix\Crm\Integration\BizProc\TestRunEntity::getActiveIds($entityTypeId)]));
 
 		return (count($result) > 0) ? $result : [0];
 	}

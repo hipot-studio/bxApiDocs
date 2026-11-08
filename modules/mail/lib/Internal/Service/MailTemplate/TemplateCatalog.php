@@ -44,18 +44,50 @@ final class TemplateCatalog
 	}
 
 	/**
+	 * A caller that has just written a template but was not told which one, a CRM that answers the panel with
+	 * no template of its own, asks for the newest of the provider to lead the list: a history of the user
+	 * would otherwise hide the template just written behind the ones applied before it.
+	 *
 	 * @return list<TemplateListItem>
 	 */
-	public function quickList(int $userId): array
+	public function quickList(
+		int $userId,
+		?TemplateReference $priorityReference = null,
+		bool $pinRecentlyCreated = false,
+	): array
 	{
 		$historyReferences = $this->history->getReferences($userId);
 		$resolvedItems = $this->resolveHistory($historyReferences, $userId);
-		if (!empty($resolvedItems))
+		$priorityItem = $priorityReference !== null
+			? $this->resolvePriority($priorityReference, $userId)
+			: null
+		;
+		$needsNewest = $priorityItem === null && $pinRecentlyCreated;
+		$recentlyCreated = empty($resolvedItems) || $needsNewest
+			? $this->recentlyCreated($userId)
+			: []
+		;
+		$items = !empty($resolvedItems)
+			? array_slice($resolvedItems, 0, self::QUICK_LIST_LIMIT)
+			: $recentlyCreated
+		;
+		if ($needsNewest)
 		{
-			return array_slice($resolvedItems, 0, self::QUICK_LIST_LIMIT);
+			$priorityItem = $recentlyCreated[0] ?? null;
 		}
 
-		return $this->search('', $userId, 0, self::QUICK_LIST_LIMIT)->getItems();
+		if ($priorityItem === null)
+		{
+			return array_slice($items, 0, self::QUICK_LIST_LIMIT);
+		}
+
+		$priorityKey = $this->referenceKey($priorityItem->getReference());
+		$items = array_values(array_filter(
+			$items,
+			fn(TemplateListItem $item): bool => $this->referenceKey($item->getReference()) !== $priorityKey,
+		));
+
+		return array_slice([$priorityItem, ...$items], 0, self::QUICK_LIST_LIMIT);
 	}
 
 	public function search(string $query, int $userId, int $offset = 0, int $limit = 20): TemplatePage
@@ -180,16 +212,6 @@ final class TemplateCatalog
 		return (new Result())->setData([self::RESULT_RECORDED => true]);
 	}
 
-	public function getRememberLast(int $userId): bool
-	{
-		return $this->history->getRememberLast($userId);
-	}
-
-	public function setRememberLast(int $userId, bool $enabled): void
-	{
-		$this->history->setRememberLast($userId, $enabled);
-	}
-
 	/**
 	 * @param list<TemplateReference> $references
 	 * @return list<TemplateListItem>
@@ -240,6 +262,65 @@ final class TemplateCatalog
 		}
 
 		return $resolved;
+	}
+
+	/**
+	 * @return list<TemplateListItem>
+	 */
+	private function recentlyCreated(int $userId): array
+	{
+		foreach ($this->providers as $provider)
+		{
+			if (!$this->isProviderAvailable($provider, $userId))
+			{
+				continue;
+			}
+
+			try
+			{
+				$items = array_values(array_filter(
+					$provider->getRecentlyCreated($userId, self::QUICK_LIST_LIMIT),
+					static fn(mixed $item): bool => $item instanceof TemplateListItem && $item->canApply(),
+				));
+				if (!empty($items))
+				{
+					return array_slice($items, 0, self::QUICK_LIST_LIMIT);
+				}
+			}
+			catch (Throwable)
+			{
+				continue;
+			}
+		}
+
+		return [];
+	}
+
+	private function resolvePriority(TemplateReference $reference, int $userId): ?TemplateListItem
+	{
+		$provider = $this->providers[$reference->getSource()] ?? null;
+		if ($provider === null || !$this->isProviderAvailable($provider, $userId))
+		{
+			return null;
+		}
+
+		try
+		{
+			$items = $provider->getByIds([$reference], $userId);
+		}
+		catch (Throwable)
+		{
+			return null;
+		}
+
+		$item = $items[0] ?? null;
+
+		return $item instanceof TemplateListItem
+			&& $item->canApply()
+			&& $item->getReference()->equals($reference)
+				? $item
+				: null
+		;
 	}
 
 	/**

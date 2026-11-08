@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\BizprocDesigner\Infrastructure\Rest\Controller;
 
+use Bitrix\Bizproc\Workflow\Template\AgentOwnedMetadata;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Controller\ActionFilter\AgentTokenFilter;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Controller\ActionFilter\AiAvailabilityFilter;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Service\UnconvertibleGraphReader;
@@ -14,9 +15,14 @@ use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Entity\WorkflowTempl
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\RequestSource;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\AgentWorkflowValidationResult;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AgentTokenGuard;
-use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\DocumentAccessService;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AuthorizedTemplateSubject;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\FramePostLayoutChecker;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\OperationAuthorizationGuard;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\UserAdminResolver;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\ValidationContextFactory;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\AgentTemplateMetadataValidator;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\GraphLimitsValidator;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\ValidationProfile;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\SaveWorkflowValidator;
 use Bitrix\BizprocDesigner\Internal\Service\Container;
 use Bitrix\Main\Engine\CurrentUser;
@@ -114,8 +120,14 @@ abstract class AbstractAgentRestController extends RestController
 			throw new EntityNotFoundException($templateId);
 		}
 
-		$isUserAdmin = (new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin();
-		if (!(new DocumentAccessService())->canManageDocument($userId, $identifier->documentDescription, $templateId, $isUserAdmin))
+		$isUserAdmin = UserAdminResolver::isAdmin($userId);
+		$verdict = (new OperationAuthorizationGuard())->authorize(
+			$userId,
+			$identifier->documentDescription,
+			$templateId,
+			$isUserAdmin,
+		);
+		if (!$verdict->allowed)
 		{
 			throw new AccessDeniedException();
 		}
@@ -124,9 +136,78 @@ abstract class AbstractAgentRestController extends RestController
 	}
 
 	/**
-	 * Fresh re-validation of the authorizing token against the requested template: the auth chain of rest
-	 * caches validity for up to a day, so a revoked token can pass transport auth and still reach here
-	 * {@see AgentTokenGuard}. Comparing the requested template against the binding closes tampering with it.
+	 * Push-path counterpart of {@see self::resolveAndAuthorize()} that authorizes the subject exactly once and
+	 * mints the {@see AuthorizedTemplateSubject} proof the draft service consumes instead of re-checking access.
+	 *
+	 * @throws AccessDeniedException
+	 * @throws EntityNotFoundException
+	 */
+	protected function resolveAuthorizedSubject(int $templateId): AuthorizedTemplateSubject
+	{
+		$this->assertTokenValidForTemplate($templateId);
+
+		return $this->authorizedSubjectFor($templateId);
+	}
+
+	/**
+	 * Bound-template counterpart of {@see self::resolveAuthorizedSubject()}, mirroring
+	 * {@see self::resolveAndAuthorizeBoundTemplate()}: reading the binding answers for an active,
+	 * non-expired token of ours and is itself the fresh check, so no separate token re-validation is needed.
+	 *
+	 * @throws AccessDeniedException
+	 * @throws EntityNotFoundException
+	 */
+	protected function resolveAuthorizedSubjectForBoundTemplate(): AuthorizedTemplateSubject
+	{
+		$passwordId = $this->getServer()?->getPasswordId();
+		$boundTemplateId = AgentTokenGuard::forCurrentRequest()->getBoundTemplateId($passwordId);
+		if ($boundTemplateId === null)
+		{
+			throw new AccessDeniedException();
+		}
+
+		return $this->authorizedSubjectFor($boundTemplateId);
+	}
+
+	/**
+	 * Shared subject-minting core of {@see self::resolveAuthorizedSubject()} and
+	 * {@see self::resolveAuthorizedSubjectForBoundTemplate()}: exactly one {@see OperationAuthorizationGuard}
+	 * call per request, so the push path never re-authorizes the same subject twice.
+	 *
+	 * @throws AccessDeniedException
+	 * @throws EntityNotFoundException
+	 */
+	private function authorizedSubjectFor(int $templateId): AuthorizedTemplateSubject
+	{
+		$userId = (int)CurrentUser::get()->getId();
+
+		$identifier = Container::getAgentWorkflowResolverService()->resolveByTemplateId($templateId, $userId);
+		if ($identifier === null)
+		{
+			throw new EntityNotFoundException($templateId);
+		}
+
+		$subject = AuthorizedTemplateSubject::authorize(
+			new OperationAuthorizationGuard(),
+			$userId,
+			$identifier,
+			UserAdminResolver::isAdmin($userId),
+		);
+		if ($subject === null)
+		{
+			throw new AccessDeniedException();
+		}
+
+		return $subject;
+	}
+
+	/**
+	 * Fresh, non-cacheable re-validation of the authorizing token against the requested template.
+	 *
+	 * The rest auth chain caches token validity for up to a day, so a revoked or expired token can
+	 * pass the transport auth and still reach this controller. The refusal is therefore raised here
+	 * (not as a 401 from rest): the token is re-read and checked on every call. This also closes a
+	 * templateId query tampering by comparing the requested template against the token binding.
 	 *
 	 * @throws AccessDeniedException
 	 */
@@ -182,8 +263,8 @@ abstract class AbstractAgentRestController extends RestController
 	}
 
 	/**
-	 * The header plus the graph the identifier points at, so a read template and an added draft answer with
-	 * one shape. Null when the graph is gone.
+	 * The header plus the metadata and the graph the identifier points at, so a read template and an added
+	 * draft answer with one shape. Null when the graph is gone.
 	 *
 	 * @return array{
 	 *     id: int,
@@ -191,6 +272,7 @@ abstract class AbstractAgentRestController extends RestController
 	 *     documentType: DocumentDescription,
 	 *     modified: ?string,
 	 *     hasDraft: bool,
+	 *     description: string,
 	 *     draftId: ?int,
 	 *     blocks: AgentBlockCollection,
 	 *     connections: AgentConnectionCollection,
@@ -198,14 +280,20 @@ abstract class AbstractAgentRestController extends RestController
 	 */
 	protected function templateResource(WorkflowTemplateIdentifier $identifier): ?array
 	{
-		$agentTemplate = Container::getAgentWorkflowResolverService()->getAgentTemplate($identifier);
+		$resolver = Container::getAgentWorkflowResolverService();
+
+		$agentTemplate = $resolver->getAgentTemplate($identifier);
 		if ($agentTemplate === null)
 		{
 			return null;
 		}
 
+		$metadata = $resolver->getEffectiveMetadata($identifier);
+
 		return [
 			...$this->resourceHeader($identifier),
+			'name' => $metadata[AgentOwnedMetadata::FIELD_NAME],
+			'description' => $metadata[AgentOwnedMetadata::FIELD_DESCRIPTION],
 			'draftId' => $identifier->draftId,
 			'blocks' => $agentTemplate->blocks,
 			'connections' => $agentTemplate->connections,
@@ -269,20 +357,29 @@ abstract class AbstractAgentRestController extends RestController
 		return (new GraphLimitsValidator())->validate(
 			blocks: $rawGraph['blocks'],
 			connections: $rawGraph['connections'],
-			source: RequestSource::Rest,
+			// The entry is where the profile is chosen (TPL-02): every action of this controller is the external
+			// contour, and the validators past this point never ask the source again.
+			profile: ValidationProfile::ExternalContour,
 		);
 	}
 
 	/**
 	 * The verdict on a submitted graph, shared by the dry run and the write so both answer with the same
 	 * one. Returns the accepted graph as AgentWorkflowValidationResult, or a Result carrying the problems.
+	 *
+	 * The context carries the published baseline the enforced-immutability and storage-editability guards
+	 * judge against ({@see ValidationContextFactory}), so it is assembled here rather than passing the source
+	 * alone - a bound template with no context would let a forged storage node through unchecked.
 	 */
-	protected function validateGraph(array $graph, DocumentDescription $documentType): Result
+	protected function validateGraph(array $graph, WorkflowTemplateIdentifier $identifier): Result
 	{
+		$userId = $this->currentUserId();
+		$isUserAdmin = UserAdminResolver::isAdmin($userId);
+
 		$validateResult = (new SaveWorkflowValidator(
 			input: $graph,
-			documentType: $documentType,
-			source: RequestSource::Rest,
+			documentType: $identifier->documentDescription,
+			context: (new ValidationContextFactory())->create($identifier, RequestSource::Rest, $userId, $isUserAdmin),
 		))->validate();
 
 		if (!$validateResult instanceof AgentWorkflowValidationResult)
@@ -298,6 +395,32 @@ abstract class AbstractAgentRestController extends RestController
 		);
 
 		return $postLayoutResult->isSuccess() ? $validateResult : $postLayoutResult;
+	}
+
+	/** @param array{blocks: mixed, connections: mixed} $graph */
+	protected function validateSubmission(
+		FieldsStructure $fields,
+		array $graph,
+		WorkflowTemplateIdentifier $identifier,
+	): Result
+	{
+		$currentMetadata = Container::getAgentWorkflowResolverService()->getEffectiveMetadata($identifier);
+
+		$metadataResult = (new AgentTemplateMetadataValidator())->validate(
+			$fields->getItems(),
+			$currentMetadata[AgentOwnedMetadata::FIELD_DESCRIPTION],
+		);
+		if (!$metadataResult->isSuccess())
+		{
+			return $metadataResult;
+		}
+
+		$graphResult = $this->validateGraph($graph, $identifier);
+
+		return $graphResult instanceof AgentWorkflowValidationResult
+			? $graphResult->withTemplateMetadata($metadataResult->metadata)
+			: $graphResult
+		;
 	}
 
 	/**

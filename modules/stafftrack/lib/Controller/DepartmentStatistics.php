@@ -10,6 +10,7 @@ use Bitrix\StaffTrack\Access\DepartmentStatisticsAction;
 use Bitrix\StaffTrack\Access\Model\DepartmentStatisticsModel;
 use Bitrix\StaffTrack\Controller\Trait\ErrorResponseTrait;
 use Bitrix\StaffTrack\Dictionary\Status;
+use Bitrix\StaffTrack\Infrastructure\ActionFilters\LegacyCheckInDisabledFilter;
 use Bitrix\Stafftrack\Integration\HumanResources\Structure;
 use Bitrix\StaffTrack\Provider\ShiftProvider;
 use Bitrix\StaffTrack\Provider\UserProvider;
@@ -41,6 +42,14 @@ class DepartmentStatistics extends Controller
 					new CloseSession(),
 				],
 			],
+		];
+	}
+
+	protected function getDefaultPreFilters(): array
+	{
+		return [
+			...parent::getDefaultPreFilters(),
+			new LegacyCheckInDisabledFilter(),
 		];
 	}
 

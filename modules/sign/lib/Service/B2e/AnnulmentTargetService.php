@@ -24,6 +24,9 @@ use Bitrix\Sign\Type\MemberStatus;
  * The service reads neither the feature flag nor the permissions: whether the feature is
  * released and whether the substitution applies to this grid mode arrive as arguments, and
  * the owner scope is applied by the caller on top of the eligibility predicate.
+ *
+ * The second carrier of the same substitution class is the annulment status filter of the
+ * safe: MemberRepository::buildSafeAnnulmentCondition().
  */
 final class AnnulmentTargetService
 {

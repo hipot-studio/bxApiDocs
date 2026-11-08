@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\Access\Task\Status\Permission;
 
 use Attribute;
+use Bitrix\Main\Access\AccessibleController;
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\Model\TaskModel;
+use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\V2\Internal\Access\AccessUserErrorInterface;
 use Bitrix\Tasks\V2\Internal\Access\AccessUserErrorTrait;
 use Bitrix\Tasks\V2\Internal\Access\AttributeAccessInterface;
 use Bitrix\Tasks\V2\Internal\Access\Factory\AccessControllerTrait;
 use Bitrix\Tasks\V2\Internal\Access\Factory\Type;
+use Bitrix\Tasks\V2\Internal\Access\Task\Status\CompletionAccessRule;
 use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Access\Context\Context;
 
@@ -27,8 +31,10 @@ class Complete implements AttributeAccessInterface, AccessUserErrorInterface
 
 		$before = $adapter->create();
 
-		$result = $accessController->check(ActionDictionary::ACTION_TASK_COMPLETE, $before)
-			&& $accessController->check(ActionDictionary::ACTION_TASK_COMPLETE_RESULT, $before);
+		$result
+			= $this->hasFinalStatus($before)
+				? $accessController->check(ActionDictionary::ACTION_TASK_READ, $before)
+				: $this->canFinalize($accessController, $before);
 
 		if (!$result)
 		{
@@ -36,5 +42,17 @@ class Complete implements AttributeAccessInterface, AccessUserErrorInterface
 		}
 
 		return $result;
+	}
+
+	private function canFinalize(AccessibleController $accessController, ?TaskModel $before): bool
+	{
+		return CompletionAccessRule::isSatisfiedBy(
+			static fn (string $action): bool => $accessController->check($action, $before),
+		);
+	}
+
+	private function hasFinalStatus(?TaskModel $before): bool
+	{
+		return in_array((int)$before?->getStatus(), Status::getCompletedStatuses(), true);
 	}
 }

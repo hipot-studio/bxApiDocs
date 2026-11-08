@@ -16,12 +16,15 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\Security\Sign\BadSignatureException;
 use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
+use Bitrix\StaffTrack\Access\AccessibleUserProvider;
 use Bitrix\StaffTrack\Access\Model\ShiftModel;
+use Bitrix\StaffTrack\Access\Model\UserModel;
 use Bitrix\StaffTrack\Access\ShiftAccessController;
 use Bitrix\StaffTrack\Access\ShiftAction;
 use Bitrix\StaffTrack\Controller\Trait\ErrorResponseTrait;
 use Bitrix\StaffTrack\Controller\Trait\IntranetUserTrait;
 use Bitrix\StaffTrack\Helper\DateHelper;
+use Bitrix\StaffTrack\Infrastructure\ActionFilters\LegacyCheckInDisabledFilter;
 use Bitrix\StaffTrack\Internals\Exception\InvalidDtoException;
 use Bitrix\StaffTrack\Model;
 use Bitrix\StaffTrack\Provider\ShiftProvider;
@@ -57,6 +60,14 @@ class Shift extends Controller
 				'shift',
 				fn (string $className, int $id): ?Model\Shift => ShiftRegistry::getInstance()->get($id),
 			),
+		];
+	}
+
+	protected function getDefaultPreFilters(): array
+	{
+		return [
+			...parent::getDefaultPreFilters(),
+			new LegacyCheckInDisabledFilter(),
 		];
 	}
 
@@ -109,7 +120,6 @@ class Shift extends Controller
 	 * @throws ObjectException
 	 * @throws ObjectPropertyException
 	 * @throws SystemException
-	 * @throws UnknownActionException
 	 */
 	public function listAction(
 		array $filter = [],
@@ -128,11 +138,73 @@ class Shift extends Controller
 			return $this->buildErrorResponse('Filter must not be empty');
 		}
 
+		$filter = $this->scopeFilterToAccessibleUsers($filter);
+		if ($filter === null)
+		{
+			return [
+				'shiftList' => [],
+			];
+		}
+
 		$collection = $this->provider->list($filter, $select, $order, $limit);
 
 		return [
 			'shiftList' => $this->provider->prepareClientData($collection),
 		];
+	}
+
+	/**
+	 * Restricts the USER_ID filter to users the caller may view, so listAction
+	 * never exposes other users' shifts (task-250794). Admins are not scoped.
+	 * Returns null when none of the requested users are accessible.
+	 *
+	 * @param array $filter
+	 * @return array|null
+	 */
+	private function scopeFilterToAccessibleUsers(array $filter): ?array
+	{
+		if (UserModel::createFromId($this->userId)->isAdmin())
+		{
+			return $filter;
+		}
+
+		$provider = new AccessibleUserProvider();
+		$requestedUserIds = $this->extractRequestedUserIds($filter);
+
+		if ($requestedUserIds === [])
+		{
+			$filter['USER_ID'] = $provider->getDefaultAccessibleUserIds($this->userId);
+
+			return $filter;
+		}
+
+		// silently drop requested users the caller may not view
+		$allowedUserIds = $provider->filterAccessibleUserIds($this->userId, $requestedUserIds);
+		if ($allowedUserIds === [])
+		{
+			return null;
+		}
+
+		$filter['USER_ID'] = $allowedUserIds;
+
+		return $filter;
+	}
+
+	/**
+	 * @param array $filter
+	 * @return int[]
+	 */
+	private function extractRequestedUserIds(array $filter): array
+	{
+		if (!isset($filter['USER_ID']))
+		{
+			return [];
+		}
+
+		$rawUserIds = is_array($filter['USER_ID']) ? $filter['USER_ID'] : [$filter['USER_ID']];
+		$userIds = array_filter(array_map('intval', $rawUserIds));
+
+		return array_values(array_unique($userIds));
 	}
 
 	/**

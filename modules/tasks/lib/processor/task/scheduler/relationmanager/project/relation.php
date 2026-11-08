@@ -117,15 +117,55 @@ final class Relation extends \Bitrix\Tasks\Processor\Task\Scheduler\Relation
 
 		if ($matchWorkTime)
 		{
-			return $this->getLag() > 0 ?
+			$startDate = $this->getLag() > 0 ?
 				$calender->calculateEndDate($startDate, $this->getLag()) :
 				$calender->calculateStartDate($startDate, abs($this->getLag()));
+
+			if ($this->getType() == ProjectDependenceTable::LINK_TYPE_FINISH_START)
+			{
+				$startDate = $this->normalizeWorkStart($startDate, $calender);
+			}
+
+			return $startDate;
 		}
 		else
 		{
 			$startDate->addSecond($this->getLag());
 			return $startDate;
 		}
+	}
+
+	private function normalizeWorkStart(DateTime $date, Calendar $calendar)
+	{
+		if ($this->isAllowedWorkStart($date, $calendar))
+		{
+			return $date;
+		}
+
+		$date = $calendar->getClosestWorkTime($date, true);
+		if (!$this->isAllowedWorkStart($date, $calendar))
+		{
+			$date->addSecond(1);
+			$date = $calendar->getClosestWorkTime($date, true);
+		}
+
+		return $date;
+	}
+
+	private function isAllowedWorkStart(DateTime $date, Calendar $calendar)
+	{
+		foreach ($calendar->getWorkHours($date) as $interval)
+		{
+			if (
+				$date->getTimestamp() >= $interval['startDate']->getTimestamp()
+				&& $date->getTimestamp() < $interval['endDate']->getTimestamp()
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public function updateLag()

@@ -54,4 +54,44 @@ final class NodePathRepository
 
 		return $result;
 	}
+
+	/**
+	 * Ancestors of several nodes at once, read off the materialized paths: one indexed read instead of a
+	 * lookup per node. The row a node holds about itself is left out by the depth, the way the rest of the
+	 * module reads the table ({@see \Bitrix\HumanResources\Builder\Structure\Filter\NodeMemberFilter}).
+	 *
+	 * No query-level cache here either, for the reason {@see self::getAbsoluteDepthMap()} names.
+	 *
+	 * @param list<int> $nodeIds
+	 *
+	 * @return array<int, list<int>> Ancestors of every node asked for, empty for a node of the top level.
+	 *
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function findParentIdsByNodeIds(array $nodeIds): array
+	{
+		$nodeIds = array_values(array_unique(array_map('intval', $nodeIds)));
+		if (!$nodeIds)
+		{
+			return [];
+		}
+
+		$parentIdsByNodeId = array_fill_keys($nodeIds, []);
+
+		$rows = NodePathTable::query()
+			->setSelect(['CHILD_ID', 'PARENT_ID'])
+			->whereIn('CHILD_ID', $nodeIds)
+			->where('DEPTH', '>', 0)
+			->exec()
+		;
+
+		while ($row = $rows->fetch())
+		{
+			$parentIdsByNodeId[(int)$row['CHILD_ID']][] = (int)$row['PARENT_ID'];
+		}
+
+		return $parentIdsByNodeId;
+	}
 }

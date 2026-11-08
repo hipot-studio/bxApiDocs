@@ -26,6 +26,7 @@ class RelationTaskMapper
 	public function mapToEntity(
 		array $task,
 		?User $responsible = null,
+		?User $creator = null,
 		?Group $group = null,
 		?array $rights = null,
 		?array $subTaskIds = null,
@@ -38,6 +39,7 @@ class RelationTaskMapper
 			id: $taskId,
 			title: $task['TITLE'] ?? '',
 			responsible: $responsible,
+			creator: $creator,
 			deadlineTs: ($task['DEADLINE'] ?? null) instanceof DateTime ? $task['DEADLINE']->getTimestamp() : null,
 			group: $group,
 			status: $this->taskStatusMapper->mapToEnum((int)($task['STATUS'] ?? 0)),
@@ -67,10 +69,14 @@ class RelationTaskMapper
 		foreach ($tasks as $task)
 		{
 			$taskId = (int)($task['ID'] ?? 0);
+			$creatorId = (int)($task['CREATED_BY'] ?? 0);
 
 			$entities[]= $this->mapToEntity(
 				task: $task,
 				responsible: $users?->findOneById((int)($task['RESPONSIBLE_ID'] ?? 0)),
+				// SC-005: the frontend needs the creator in relation lists only as an identifier (creator.id).
+				// We return a trimmed-down user (id only) so as not to expose email/externalAuthId and other author fields.
+				creator: $creatorId > 0 ? new User(id: $creatorId) : null,
 				group: $groups?->findOneById((int)($task['GROUP_ID'] ?? 0)),
 				rights: $rights[$taskId] ?? null,
 				subTaskIds: $subTaskIds[$taskId] ?? null,

@@ -18,6 +18,7 @@ trait EntityFilter
 	private const IMPOSSIBLE_FILTER_VALUE = "\x00__bp_invalid_condition__";
 
 	private ?bool $ormFilterValid = null;
+	private bool $ormFilterComplete = false;
 
 	abstract public function getDocumentType();
 
@@ -28,6 +29,7 @@ trait EntityFilter
 	): array
 	{
 		$this->ormFilterValid = true;
+		$this->ormFilterComplete = true;
 		$filter = ['LOGIC' => 'OR'];
 
 		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
@@ -51,6 +53,7 @@ trait EntityFilter
 			if (!isset($fieldsMap[$fieldId]))
 			{
 				$this->ormFilterValid = false;
+				$this->ormFilterComplete = false;
 				continue;
 			}
 
@@ -59,6 +62,7 @@ trait EntityFilter
 				$betweenFilterResult = $this->getBetweenFilter($fieldsMap[$fieldId] ?? [], $condition);
 				if (!$betweenFilterResult->isSuccess())
 				{
+					$this->ormFilterComplete = false;
 					continue;
 				}
 
@@ -80,6 +84,7 @@ trait EntityFilter
 					if ($conditionValue === null)
 					{
 						$this->ormFilterValid = false;
+						$this->ormFilterComplete = false;
 
 						return $this->getImpossibleOrmFilter($condition->getField());
 					}
@@ -96,6 +101,7 @@ trait EntityFilter
 				}
 				else
 				{
+					$this->ormFilterComplete = false;
 					continue;
 				}
 			}
@@ -106,6 +112,7 @@ trait EntityFilter
 				if ($value === null)
 				{
 					$this->ormFilterValid = false;
+					$this->ormFilterComplete = false;
 
 					return $this->getImpossibleOrmFilter($condition->getField());
 				}
@@ -164,11 +171,17 @@ trait EntityFilter
 
 			if (!$operator)
 			{
+				// A successful between has already contributed both bounds above.
+				if ($condition->getOperator() !== \Bitrix\Bizproc\Activity\Operator\BetweenOperator::getCode())
+				{
+					$this->ormFilterComplete = false;
+				}
 				continue;
 			}
 
 			if (\CBPHelper::isEmptyValue($value) && in_array($operator, ['@', '!@'], true))
 			{
+				$this->ormFilterComplete = false;
 				continue;
 			}
 
@@ -186,6 +199,11 @@ trait EntityFilter
 	protected function isOrmFilterValid(): bool
 	{
 		return $this->ormFilterValid ?? false;
+	}
+
+	protected function isOrmFilterComplete(): bool
+	{
+		return $this->ormFilterComplete;
 	}
 
 	private function getBetweenFilter(array $property, Condition $condition): Result

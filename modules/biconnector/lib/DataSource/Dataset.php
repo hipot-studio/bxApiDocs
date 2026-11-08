@@ -74,6 +74,17 @@ abstract class Dataset
 	}
 
 	/**
+	 * Human-readable table name shown in the BI builder table list.
+	 * Null means the table has no dedicated verbose name (the description is used as a fallback).
+	 *
+	 * @return string|null
+	 */
+	protected function getVerboseName(): ?string
+	{
+		return null;
+	}
+
+	/**
 	 * @return DatasetFilter|null
 	 */
 	protected function getFilter(): ?DatasetFilter
@@ -140,6 +151,12 @@ abstract class Dataset
 			'TABLE_DESCRIPTION_FULL' => $this->getTableDescriptionFull(),
 			'FIELDS' => $this->getResultFields(),
 		];
+
+		$verboseName = $this->getVerboseName();
+		if ($verboseName !== null && $verboseName !== '')
+		{
+			$result['VERBOSE_NAME'] = $verboseName;
+		}
 
 		$filter = $this->getFilter();
 		if ($filter !== null && !empty($filter->filterFields()))

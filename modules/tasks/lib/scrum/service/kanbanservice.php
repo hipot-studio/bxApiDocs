@@ -7,6 +7,7 @@ use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Integration\Recyclebin;
+use Bitrix\Tasks\Internals\Task\UpdateEventSuppression;
 use Bitrix\Tasks\Kanban\StagesTable;
 use Bitrix\Tasks\Kanban\TaskStageTable;
 use Bitrix\Tasks\Kanban\ProjectsTable;
@@ -27,10 +28,33 @@ class KanbanService implements Errorable
 	private $finishedTaskIdsCache = [];
 
 	private static $sprintStageIds = [];
+	private bool $skipTaskUpdateEvent;
+	private bool $deferTaskStageUpdate;
+	/** @var array<int, int> */
+	private array $deferredTaskStageUpdates = [];
 
-	public function __construct()
+	public function __construct(bool $skipTaskUpdateEvent = false, bool $deferTaskStageUpdate = false)
 	{
 		$this->errorCollection = new ErrorCollection;
+		$this->skipTaskUpdateEvent = $skipTaskUpdateEvent;
+		$this->deferTaskStageUpdate = $deferTaskStageUpdate;
+	}
+
+	public function flushTaskStageUpdates(): bool
+	{
+		$updates = $this->deferredTaskStageUpdates;
+		$this->deferredTaskStageUpdates = [];
+
+		$success = true;
+		foreach ($updates as $taskId => $stageId)
+		{
+			if (!$this->updateTaskStageId($taskId, $stageId))
+			{
+				$success = false;
+			}
+		}
+
+		return $success;
 	}
 
 	/**
@@ -188,13 +212,14 @@ class KanbanService implements Errorable
 	 */
 	public function addTasksToKanban(int $sprintId, array $taskIds, int $lastSprintId = 0): bool
 	{
+		Collection::normalizeArrayValuesByInt($taskIds, false);
+		if (empty($taskIds))
+		{
+			return true;
+		}
+
 		try
 		{
-			if (empty($taskIds))
-			{
-				return false;
-			}
-
 			$defaultStageId = $this->getDefaultStageId($sprintId);
 			if (!$defaultStageId)
 			{
@@ -230,7 +255,10 @@ class KanbanService implements Errorable
 				}
 			}
 
-			$this->removeTasksFromKanban($sprintId, $taskIds);
+			if (!$this->removeTasksFromKanban($sprintId, $taskIds))
+			{
+				return false;
+			}
 
 			$stageService = Container::getInstance()->getTaskStageService();
 
@@ -240,13 +268,15 @@ class KanbanService implements Errorable
 
 				$stageService->upsert($taskId, $stageId);
 
-				$taskObject = new \CTasks;
-				$taskObject->update($taskId, ['STAGE_ID' => $stageId]);
+				if (!$this->applyTaskStageUpdate($taskId, $stageId))
+				{
+					return false;
+				}
 			}
 
 			return true;
 		}
-		catch (\Exception $exception)
+		catch (\Throwable $exception)
 		{
 			$this->errorCollection->setError(
 				new Error($exception->getMessage(), self::ERROR_COULD_NOT_ADD_TASK)
@@ -274,16 +304,24 @@ class KanbanService implements Errorable
 
 			if ($finishStageId)
 			{
-				$this->removeTasksFromKanban($sprintId, [$taskId]);
+				if (!$this->removeTasksFromKanban($sprintId, [$taskId]))
+				{
+					return;
+				}
 
 				$stageService = Container::getInstance()->getTaskStageService();
 				$stageService->upsert($taskId, $finishStageId);
 
-				$taskObject = new \CTasks;
-				$taskObject->update($taskId, ['STAGE_ID' => $finishStageId]);
+				$this->applyTaskStageUpdate($taskId, $finishStageId);
+			}
+			else
+			{
+				$this->errorCollection->setError(
+					new Error('Failed to get the finish stage', self::ERROR_COULD_NOT_ADD_ONE_TASK)
+				);
 			}
 		}
-		catch (\Exception $exception)
+		catch (\Throwable $exception)
 		{
 			$this->errorCollection->setError(
 				new Error($exception->getMessage(), self::ERROR_COULD_NOT_ADD_ONE_TASK)
@@ -352,16 +390,24 @@ class KanbanService implements Errorable
 
 			if ($newStageId)
 			{
-				$this->removeTasksFromKanban($sprintId, [$taskId]);
+				if (!$this->removeTasksFromKanban($sprintId, [$taskId]))
+				{
+					return;
+				}
 
 				$stageService = Container::getInstance()->getTaskStageService();
 				$stageService->upsert($taskId, $newStageId);
 
-				$taskObject = new \CTasks;
-				$taskObject->update($taskId, ['STAGE_ID' => $newStageId]);
+				$this->applyTaskStageUpdate($taskId, $newStageId);
+			}
+			else
+			{
+				$this->errorCollection->setError(
+					new Error('Failed to get the new stage', self::ERROR_COULD_NOT_ADD_ONE_TASK)
+				);
 			}
 		}
-		catch (\Exception $exception)
+		catch (\Throwable $exception)
 		{
 			$this->errorCollection->setError(
 				new Error($exception->getMessage(), self::ERROR_COULD_NOT_ADD_ONE_TASK)
@@ -374,10 +420,17 @@ class KanbanService implements Errorable
 	 *
 	 * @param int $sprintId Sprint id.
 	 * @param array $taskIds List task id.
+	 * @param bool $updateTaskStage Write the cleared stage into the task itself.
 	 * @return bool
 	 */
-	public function removeTasksFromKanban(int $sprintId, array $taskIds): bool
+	public function removeTasksFromKanban(int $sprintId, array $taskIds, bool $updateTaskStage = true): bool
 	{
+		Collection::normalizeArrayValuesByInt($taskIds, false);
+		if (empty($taskIds))
+		{
+			return true;
+		}
+
 		try
 		{
 			$stageIds = $this->getSprintStageIds($sprintId);
@@ -399,14 +452,16 @@ class KanbanService implements Errorable
 				if (!empty($ids))
 				{
 					$stageService->clearRelations($ids);
-					$taskObject = new \CTasks;
-					$taskObject->update($taskId, ['STAGE_ID' => 0]);
+					if ($updateTaskStage && !$this->applyTaskStageUpdate($taskId, 0))
+					{
+						return false;
+					}
 				}
 			}
 
 			return true;
 		}
-		catch (\Exception $exception)
+		catch (\Throwable $exception)
 		{
 			$this->errorCollection->setError(
 				new Error($exception->getMessage(), self::ERROR_COULD_NOT_REMOVE_TASK)
@@ -604,8 +659,6 @@ class KanbanService implements Errorable
 			return false;
 		}
 
-		$taskObject = new \CTasks;
-
 		$queryObject = TaskStageTable::getList([
 			'filter' => [
 				'TASK_ID' => $taskId,
@@ -614,13 +667,18 @@ class KanbanService implements Errorable
 			]
 		]);
 
-		$stageService = Container::getInstance()->getTaskStageService();
-
-		if ($taskStage = $queryObject->fetch())
+		$taskStage = $queryObject->fetch();
+		if (!$taskStage)
 		{
-			$stageService->move((int)$taskStage['ID'], $stageId);
+			return false;
+		}
 
-			$taskObject->update($taskId, ['STAGE_ID' => $stageId]);
+		$stageService = Container::getInstance()->getTaskStageService();
+		$stageService->move((int)$taskStage['ID'], $stageId);
+
+		if (!$this->applyTaskStageUpdate($taskId, $stageId))
+		{
+			return false;
 		}
 
 		return true;
@@ -919,6 +977,54 @@ class KanbanService implements Errorable
 		}
 
 		return $stageId;
+	}
+
+	private function applyTaskStageUpdate(int $taskId, int $stageId): bool
+	{
+		if ($this->deferTaskStageUpdate)
+		{
+			$this->deferredTaskStageUpdates[$taskId] = $stageId;
+
+			return true;
+		}
+
+		return $this->updateTaskStageId($taskId, $stageId);
+	}
+
+	private function updateTaskStageId(int $taskId, int $stageId): bool
+	{
+		$parameters = $this->skipTaskUpdateEvent
+			? UpdateEventSuppression::getParameters()
+			: []
+		;
+
+		$taskObject = new \CTasks();
+		if ($taskObject->update($taskId, ['STAGE_ID' => $stageId], $parameters) !== false)
+		{
+			return true;
+		}
+
+		$errors = $taskObject->GetErrors();
+		if ($errors === [])
+		{
+			$this->errorCollection->setError(
+				new Error('Failed to update task stage', self::ERROR_COULD_NOT_ADD_ONE_TASK)
+			);
+
+			return false;
+		}
+
+		foreach ($errors as $error)
+		{
+			$this->errorCollection->setError(
+				new Error(
+					(string)($error['text'] ?? ''),
+					(string)($error['id'] ?? self::ERROR_COULD_NOT_ADD_ONE_TASK),
+				)
+			);
+		}
+
+		return false;
 	}
 
 	private function isTasksInBasket(array $taskIds): array

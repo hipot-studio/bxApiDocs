@@ -215,6 +215,16 @@ class Rights
 	}
 
 	/**
+	 * Check current status of the local flag only, without the global mode
+	 * and LANDING_DISABLE_RIGHTS. Use it to restore the flag after setOff().
+	 * @return bool
+	 */
+	public static function isLocalOn(): bool
+	{
+		return self::$available;
+	}
+
+	/**
 	 * Check current status for checking rights.
 	 * @return bool
 	 */
@@ -515,7 +525,20 @@ class Rights
 			$scopeOperationsSite = Site\Type::getOperationsForSite($entityId);
 			if ($scopeOperationsSite !== null)
 			{
-				return array_values($scopeOperationsSite);
+				$operations = [];
+				foreach ($scopeOperationsSite as $operation => $allowed)
+				{
+					if (is_int($operation))
+					{
+						$operations[] = $allowed;
+					}
+					elseif ($allowed === true)
+					{
+						$operations[] = $operation;
+					}
+				}
+
+				return $operations;
 			}
 		}
 
@@ -653,22 +676,23 @@ class Rights
 		// is switched per command inside a single process (REST / AJAX batch)
 		$scopeKey = (string)Site\Type::getCurrentScopeId();
 
-		if (!isset(self::$siteOperationsCache[$scopeKey][$siteId]))
+		$deletedKey = (int)$deleted;
+		if (!isset(self::$siteOperationsCache[$scopeKey][$siteId][$deletedKey]))
 		{
 			if ($siteId === 0 || !self::isOn() || Site::ping($siteId, $deleted))
 			{
-				self::$siteOperationsCache[$scopeKey][$siteId] = self::getOperations(
+				self::$siteOperationsCache[$scopeKey][$siteId][$deletedKey] = self::getOperations(
 					$siteId,
 					self::ENTITY_TYPE_SITE
 				);
 			}
 			else
 			{
-				self::$siteOperationsCache[$scopeKey][$siteId] = [];
+				self::$siteOperationsCache[$scopeKey][$siteId][$deletedKey] = [];
 			}
 		}
 
-		return in_array($accessType, self::$siteOperationsCache[$scopeKey][$siteId]);
+		return in_array($accessType, self::$siteOperationsCache[$scopeKey][$siteId][$deletedKey], true);
 	}
 
 	/**
@@ -715,7 +739,7 @@ class Rights
 			}
 		}
 
-		return in_array($accessType, self::$landingOperationsCache[$scopeKey][$landingId]);
+		return in_array($accessType, self::$landingOperationsCache[$scopeKey][$landingId], true);
 	}
 
 	/**

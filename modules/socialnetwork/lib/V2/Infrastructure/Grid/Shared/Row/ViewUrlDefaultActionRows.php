@@ -30,8 +30,15 @@ class ViewUrlDefaultActionRows extends Rows
 			return $row;
 		}
 
+		$entityId = (int)($rawValue['ID'] ?? 0);
+		$entityType = is_string($rawValue['TYPE'] ?? null) ? $rawValue['TYPE'] : null;
+
 		$row['default_action'] = [
-			'onclick' => ProjectListControllerActionBuilder::buildDefaultRowAction($viewUrl),
+			'onclick' => ProjectListControllerActionBuilder::buildDefaultRowAction(
+				viewUrl: $viewUrl,
+				entityId: $entityId > 0 ? $entityId : null,
+				entityType: $entityType,
+			),
 			'title' => $this->defaultActionTitle,
 		];
 

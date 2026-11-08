@@ -1107,7 +1107,9 @@ final class TemplateBuilder
 				'BaseType' => null,
 				'Name' => '###' . $prefix . 'RETURN_' . $langKeySuffix . '###',
 				'Description' => null,
-				'Multiple' => false,
+				// A property holding several values says so in its description, and the field built from it
+				// in the designer keeps every value only while the template says so too.
+				'Multiple' => (bool)($def['MULTIPLE'] ?? false),
 				'Required' => false,
 				'Options' => null,
 				'Settings' => null,

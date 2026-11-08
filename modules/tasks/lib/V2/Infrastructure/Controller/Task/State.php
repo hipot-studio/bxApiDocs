@@ -15,7 +15,7 @@ class State extends BaseController
 	 */
 	public function setAction(
 		Entity\Task\State $state,
-	): ?bool
+	): array|bool|null
 	{
 		$result = (new SetStateCommand(
 			state: $state,
@@ -29,6 +29,6 @@ class State extends BaseController
 			return null;
 		}
 
-		return true;
+		return $result->getDataByKey('deadlineUserOption') ?? true;
 	}
 }

@@ -42,6 +42,7 @@ use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Message\Param\Menu;
 use Bitrix\Im\V2\Message\Param\Keyboard;
 use Bitrix\Im\V2\Message\Param\AttachArray;
+use Bitrix\Im\V2\Message\Param\FileOrderRule;
 use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\Message\MessageParameter;
 use Bitrix\Im\V2\Rest\PopupData;
@@ -160,6 +161,8 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	/** Display message as a system notification. */
 	protected bool $isSystem = false;
 
+	protected bool $sentFromUi = false;
+
 	protected ?UrlItem $url = null;
 
 	protected int $botId = 0;
@@ -168,6 +171,13 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	protected ?string $uuid = null;
 
 	protected ?string $forwardUuid = null;
+
+	/**
+	 * Title of the parent chat of the source discussion, resolved on read and personal to the reader.
+	 * The carrier is the message itself, not shared state: the value crosses neither the boundary of
+	 * the request nor the boundary of the reader.
+	 */
+	protected ?string $forwardParentTitle = null;
 
 	/** File UUID.*/
 	protected ?string $fileUuid = null;
@@ -253,6 +263,18 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	public function isSystem(): bool
 	{
 		return $this->isSystem;
+	}
+
+	public function markSentFromUi(bool $flag): self
+	{
+		$this->sentFromUi = $flag;
+
+		return $this;
+	}
+
+	public function isSentFromUi(): bool
+	{
+		return $this->sentFromUi;
 	}
 
 	public function isDisappearing(): bool
@@ -681,7 +703,10 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		$fileIds = [];
 		if ($this->getParams()->isSet(Params::FILE_ID))
 		{
-			$fileIds = $this->getParams()->get(Params::FILE_ID)->getValue();
+			$fileIds = FileOrderRule::orderedFileIds(
+				$this->getParams()->get(Params::FILE_ID)->getValue(),
+				$this->getFileOrder(),
+			);
 		}
 
 		if ($this->getBlocksBuilder() !== null)
@@ -694,6 +719,16 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 
 		return $fileIds;
+	}
+
+	/**
+	 * Sequence chosen for the attachments; null means the message keeps the natural order of its composition.
+	 *
+	 * @return int[]|null
+	 */
+	private function getFileOrder(): ?array
+	{
+		return $this->getParams()->get(Params::FILE_ORDER)->getValue();
 	}
 
 	/**
@@ -1538,6 +1573,10 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 				'set' => 'markAsSystem', /** @see Message::markAsSystem */
 				'get' => 'isSystem', /** @see Message::isSystem */
 			],
+			'SENT_FROM_UI' => [
+				'set' => 'markSentFromUi', /** @see Message::markSentFromUi */
+				'get' => 'isSentFromUi', /** @see Message::isSentFromUi */
+			],
 			'PARAMS' => [
 				'set' => 'setParams', /** @see Message::setParams */
 				'get' => 'getParams', /** @see Message::getParams */
@@ -1864,6 +1903,8 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 	{
 		$params = clone $this->getParams();
 
+		$this->applyFileOrderTo($params);
+
 		if ($withUrl)
 		{
 			$url = $this->getUrl();
@@ -1879,6 +1920,34 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 
 		return $params;
+	}
+
+	/**
+	 * Every path that serializes the params outwards takes them from getEnrichedParams(), so the composition is put
+	 * into the chosen order right here. The rows of the composition are rebuilt instead of being reordered in place:
+	 * a marked row keeps its value visible to addValue(), and reusing them would leave the composition empty.
+	 */
+	private function applyFileOrderTo(Params $params): void
+	{
+		$fileOrder = $this->getFileOrder();
+
+		if ($fileOrder === null || !$params->isSet(Params::FILE_ID))
+		{
+			return;
+		}
+
+		$orderedComposition = Params::create(Params::FILE_ID);
+		$orderedFileIds = FileOrderRule::orderedFileIds(
+			$params->get(Params::FILE_ID)->getValue(),
+			$fileOrder,
+		);
+
+		foreach ($orderedFileIds as $fileId)
+		{
+			$orderedComposition->addValue($fileId);
+		}
+
+		$params->set(Params::FILE_ID, $orderedComposition);
 	}
 
 	public function isCompletelyEmpty(): bool
@@ -1910,6 +1979,21 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		;
 	}
 
+	/**
+	 * Called by ForwardSourcePopupItem while popup data is being serialized, that is, before this
+	 * message is. The schema rests on that order (Rest\RestAdapter::toRestFormat()) and on the item
+	 * coming first in MessageCollection::getPopupData(): break either, and the title silently stops
+	 * reaching the block.
+	 *
+	 * @internal Written by the popup item that resolves the title, not part of the public surface.
+	 */
+	public function setForwardParentTitle(?string $title): self
+	{
+		$this->forwardParentTitle = $title;
+
+		return $this;
+	}
+
 	public function getForwardInfo(): ?array
 	{
 		if (!$this->isForward())
@@ -1918,13 +2002,62 @@ class Message implements ArrayAccess, RegistryEntry, ActiveRecord, RestEntity, P
 		}
 
 		$contextId = $this->getParams()->get(Params::FORWARD_CONTEXT_ID)->getValue();
+		$sourceChat = $this->getForwardSourceChat($contextId);
+		$parentChat = $sourceChat instanceof Chat\CommentChat
+			? $this->liftChat($sourceChat->getParentChatId() ?? 0)
+			: null
+		;
 
 		return [
 			'id' => $contextId,
 			'userId' => (int)$this->getParams()->get(Params::FORWARD_USER_ID)->getValue(),
-			'chatTitle' => $this->getParams()->get(Params::FORWARD_CHAT_TITLE)->getValue() ?? null,
+			'chatTitle' => $this->getForwardChatTitle(),
 			'chatType' => Im\V2\Message\Forward\ForwardService::getChatTypeByContextId($contextId),
+			'parentChatId' => $sourceChat instanceof Chat\CommentChat ? ($sourceChat->getParentChatId() ?? 0) : 0,
+			'parentMessageId' => $sourceChat instanceof Chat\CommentChat ? $sourceChat->getParentMessageId() : 0,
+			'parentChatType' => $parentChat?->isExist() ? $parentChat->getExtendedType() : null,
 		];
+	}
+
+	/**
+	 * The snapshot written at forwarding time wins: the channel branch keeps the name the post had.
+	 * The resolved title fills the field only where there is no snapshot, that is, for a discussion.
+	 * Nothing is fetched here; without a warm-up the field simply stays null, as it does in a push event.
+	 */
+	private function getForwardChatTitle(): ?string
+	{
+		$snapshot = $this->getParams()->get(Params::FORWARD_CHAT_TITLE)->getValue();
+
+		return ($snapshot === null || $snapshot === '') ? $this->forwardParentTitle : $snapshot;
+	}
+
+	/**
+	 * Private chats never host discussions, so their context is resolved without touching the database.
+	 */
+	private function getForwardSourceChat(string $contextId): ?Chat
+	{
+		$dialogId = Chat::getDialogIdByContextId($contextId);
+		if (!str_starts_with($dialogId, 'chat'))
+		{
+			return null;
+		}
+
+		return $this->liftChat((int)mb_substr($dialogId, 4));
+	}
+
+	/**
+	 * Through the batch path rather than Chat::getInstance(): a chat lifted one by one comes without
+	 * counters and the last message, and the first read of any field costs a second query for them.
+	 * The batch row carries them actual, so the block of an event is filled by one query per chat.
+	 */
+	private function liftChat(int $chatId): ?Chat
+	{
+		if ($chatId <= 0)
+		{
+			return null;
+		}
+
+		return Chat\ChatFactory::getInstance()->getChatsByIds([$chatId])[$chatId] ?? null;
 	}
 
 	/**

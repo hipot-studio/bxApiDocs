@@ -13,11 +13,26 @@ use Bitrix\Crm\Settings\InvoiceSettings;
 
 class SmartInvoice implements PermissionEntity
 {
-	private function permissions(bool $isAutomationEnabled, array $stages, ?string $inheritDescription): array
+	private function permissions(
+		bool $isAutomationEnabled,
+		bool $isObserversEnabled,
+		array $stages,
+		?string $inheritDescription,
+	): array
 	{
+		// a smart invoice always has stages, so the permission follows them wherever observers are on
 		$permissions =  $isAutomationEnabled ?
-			PermissionAttrPresets::crmEntityPresetAutomation(true, $inheritDescription)
-			: PermissionAttrPresets::crmEntityPreset($inheritDescription);
+			PermissionAttrPresets::crmEntityPresetAutomation(
+				true,
+				$inheritDescription,
+				withObserversWrite: $isObserversEnabled,
+				withObserversWriteByStages: $isObserversEnabled,
+			)
+			: PermissionAttrPresets::crmEntityPreset(
+				$inheritDescription,
+				withObserversWrite: $isObserversEnabled,
+				withObserversWriteByStages: $isObserversEnabled,
+			);
 
 		return array_merge(
 			$permissions,
@@ -43,6 +58,7 @@ class SmartInvoice implements PermissionEntity
 		}
 
 		$isAutomationEnabled = $smartInvoiceFactory->isAutomationEnabled();
+		$isObserversEnabled = $smartInvoiceFactory->isObserversEnabled();
 
 		$result = [];
 		foreach ($smartInvoiceFactory->getCategories() as $category)
@@ -63,7 +79,7 @@ class SmartInvoice implements PermissionEntity
 				null,
 				$funnelName,
 			);
-			$perms = $this->permissions($isAutomationEnabled, $stages, $inheritDescription);
+			$perms = $this->permissions($isAutomationEnabled, $isObserversEnabled, $stages, $inheritDescription);
 
 			$result[] = new EntityDTO(
 				$entityName,

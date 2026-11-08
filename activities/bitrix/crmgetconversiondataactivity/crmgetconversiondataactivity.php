@@ -5,14 +5,27 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\FieldType;
 use Bitrix\Crm;
+use Bitrix\Crm\Binding\DealContactTable;
+use Bitrix\Crm\Binding\EntityBinding;
+use Bitrix\Crm\Binding\LeadContactTable;
+use Bitrix\Crm\Binding\QuoteContactTable;
 use Bitrix\Crm\Conversion\ConversionManager;
 use Bitrix\Crm\Integration\BizProc\Document\Item;
+use Bitrix\Crm\Integration\BizProc\Document\Quote;
 use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Service\Container;
 
 class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigurableActivity
 {
+	private const TARGET_ENTITY_FIELDS = 'TargetEntityFields';
+	private const SOURCE_DOCUMENT_PROPERTIES = 'SourceDocumentProperties';
+	private const SOURCE_DOCUMENT = 'SourceDocument';
+	private const RELATION_PACKAGE_SETTING = 'relationPackage';
+	private const RELATION_PACKAGE_ROLE_SOURCE_DOCUMENT = 'sourceDocument';
+	private const RELATION_PACKAGE_ROLE_TARGET_FIELD = 'targetField';
+
 	private array $fieldsMap = [];
 
 	public function __construct($name)
@@ -21,7 +34,8 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 		$this->arProperties = [
 			'Title' => '',
 			'TargetEntityType' => null,
-			'TargetEntityFields' => null,
+			self::TARGET_ENTITY_FIELDS => null,
+			self::SOURCE_DOCUMENT_PROPERTIES => null,
 		];
 	}
 
@@ -87,9 +101,17 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 				}
 
 				$mappedFields = $wizard->mapEntityFields($targetEntityTypeId, []);
+				if (!empty($mappedFields) && self::isContactOwningTarget($targetEntityTypeId))
+				{
+					unset($mappedFields[Crm\Item::FIELD_NAME_CONTACT_BINDINGS]);
+					$mappedFields[Crm\Item::FIELD_NAME_CONTACT_IDS] = self::loadSourceContactIds(
+						$entityTypeId,
+						(int)$entityId,
+					);
+				}
 			}
 
-			$dstFields = $this->normalizeFields($mappedFields);
+			$dstFields = self::formatUserValues($this->normalizeFields($mappedFields), $targetEntityTypeId);
 		}
 		catch (\Throwable $e)
 		{
@@ -105,10 +127,12 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$this->SetProperties($dstFields);
-		$this->fieldsMap = array_keys($dstFields);
+		$runtimeProperties = self::buildRuntimeProperties($documentId, $dstFields);
 
-		$this->logDebugResult($dstFields);
+		$this->SetProperties($runtimeProperties);
+		$this->fieldsMap = array_keys($runtimeProperties);
+
+		$this->logDebugResult($runtimeProperties);
 
 		return CBPActivityExecutionStatus::Closed;
 	}
@@ -119,9 +143,9 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 		{
 			$config = new Crm\Conversion\LeadConversionConfig();
 		}
-		elseif ($entityTypeId === \CCrmOwnerType::Deal)
+		elseif (in_array($entityTypeId, [\CCrmOwnerType::Deal, \CCrmOwnerType::Quote], true))
 		{
-			$config = ConversionManager::getConfig(\CCrmOwnerType::Deal);
+			$config = ConversionManager::getConfig($entityTypeId);
 			if (!$config)
 			{
 				return null;
@@ -183,7 +207,7 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 
 	/**
 	 * The unified form submits the target entity only, while Execute() and the declared additional
-	 * result also need the derived TargetEntityFields map, so this field owns the write of both.
+	 * result also need the derived field maps, so this field owns both writes.
 	 */
 	private static function getTargetEntityTypePropertySetter(array $documentType): Closure
 	{
@@ -196,18 +220,37 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 			'TargetEntityType' => $targetEntityType,
 		];
 
-		// Build TargetEntityFields from EntityConversionMap
 		if ($targetEntityType && CModule::IncludeModule('crm'))
 		{
 			$srcEntityTypeId = self::resolveSourceEntityTypeId($documentType);
 			if ($srcEntityTypeId !== null)
 			{
+				$properties[self::SOURCE_DOCUMENT_PROPERTIES] = self::buildSourceDocumentProperties($documentType);
+
 				$dstEntityTypeId = \CCrmOwnerType::ResolveID($targetEntityType);
+				$targetDocumentType = \CCrmBizProcHelper::ResolveDocumentType($dstEntityTypeId);
+				if (!is_array($targetDocumentType))
+				{
+					return $properties;
+				}
 
 				$map = self::loadConversionMap($srcEntityTypeId, $dstEntityTypeId);
 				if ($map)
 				{
-					$properties['TargetEntityFields'] = self::buildTargetEntityFields($dstEntityTypeId, $map);
+					$properties[self::TARGET_ENTITY_FIELDS] = self::buildTargetEntityFields(
+						$dstEntityTypeId,
+						$map,
+						$targetDocumentType,
+					);
+
+					if (self::isContactOwningTarget($dstEntityTypeId))
+					{
+						$properties[self::TARGET_ENTITY_FIELDS] = self::addContactIdsField(
+							$properties[self::TARGET_ENTITY_FIELDS],
+							$dstEntityTypeId,
+							$targetDocumentType,
+						);
+					}
 				}
 			}
 		}
@@ -219,11 +262,65 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 	{
 		try
 		{
-			return Container::getInstance()->getConversionMapper()->getMap(
-				new RelationIdentifier($srcEntityTypeId, $dstEntityTypeId),
+			if (\CCrmOwnerType::isUseDynamicTypeBasedApproach($dstEntityTypeId))
+			{
+				return Container::getInstance()->getConversionMapper()->getMap(
+					new RelationIdentifier($srcEntityTypeId, $dstEntityTypeId),
+				);
+			}
+
+			// The stored map of a legacy pair belongs to the legacy converter, which creates and actualizes it
+			// in a format of its own, so it is only read here.
+			$map = Crm\Conversion\EntityConversionMap::load(
+				$srcEntityTypeId,
+				$dstEntityTypeId,
+				['ENABLE_ACTUALIZATION' => false],
 			);
+			if ($map === null)
+			{
+				return self::createLegacyDefaultMap($srcEntityTypeId, $dstEntityTypeId);
+			}
+
+			return $map->isOutOfDate() ? self::createActualizedCopy($map) : $map;
 		}
 		catch (Exception $e)
+		{
+			return null;
+		}
+	}
+
+	/**
+	 * The loaded map is the instance EntityConversionMap::load() caches for the converter, and updateMap()
+	 * changes the items of a map in place, so the user fields added since the map was stored are matched
+	 * on a copy. Storing the actualized map is left to the converter.
+	 */
+	private static function createActualizedCopy(
+		Crm\Conversion\EntityConversionMap $map,
+	): Crm\Conversion\EntityConversionMap
+	{
+		$copy = new Crm\Conversion\EntityConversionMap();
+		$copy->internalize($map->externalize());
+		Crm\Conversion\EntityConversionMapper::updateMap($copy);
+
+		return $copy;
+	}
+
+	private static function createLegacyDefaultMap(
+		int $srcEntityTypeId,
+		int $dstEntityTypeId,
+	): ?Crm\Conversion\EntityConversionMap
+	{
+		try
+		{
+			return match ($srcEntityTypeId)
+			{
+				\CCrmOwnerType::Lead => Crm\Conversion\LeadConversionMapper::createMap($dstEntityTypeId),
+				\CCrmOwnerType::Deal => Crm\Conversion\DealConversionMapper::createMap($dstEntityTypeId),
+				\CCrmOwnerType::Quote => Crm\Conversion\QuoteConversionMapper::createMap($dstEntityTypeId),
+				default => null,
+			};
+		}
+		catch (\Throwable)
 		{
 			return null;
 		}
@@ -268,6 +365,7 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 		{
 			'CCrmDocumentLead' => \CCrmOwnerType::Lead,
 			'CCrmDocumentDeal' => \CCrmOwnerType::Deal,
+			Quote::class => \CCrmOwnerType::Quote,
 			default => null,
 		};
 	}
@@ -416,6 +514,7 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 	private static function buildTargetEntityFields(
 		int $dstEntityTypeId,
 		Crm\Conversion\EntityConversionMap $map,
+		array $targetDocumentType,
 	): array
 	{
 		try
@@ -434,7 +533,7 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 
 		foreach ($map->getItems() as $mapItem)
 		{
-			$fieldId = $mapItem->getDestinationField();
+			$fieldId = self::resolvePackageFieldId($mapItem->getDestinationField());
 			if ($fieldId === '' || $fieldId === '-')
 			{
 				continue;
@@ -446,27 +545,169 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 				{
 					if (isset($documentFields[$multifieldKey]))
 					{
-						$targetEntityFields[$multifieldKey] = $documentFields[$multifieldKey];
+						$targetEntityFields[$multifieldKey] = self::markTargetFieldAsRelationPackage(
+							$documentFields[$multifieldKey],
+							$multifieldKey,
+							$targetDocumentType,
+						);
 					}
 				}
 				continue;
 			}
 
-			$documentField = self::findDocumentField($factory, $fieldId, $documentFields);
-			if ($documentField !== null)
+			$documentFieldId = self::findDocumentFieldId($factory, $fieldId, $documentFields);
+			if ($documentFieldId !== null)
 			{
-				$targetEntityFields[$fieldId] = $documentField;
+				$targetEntityFields[$fieldId] = self::markTargetFieldAsRelationPackage(
+					$documentFields[$documentFieldId],
+					$documentFieldId,
+					$targetDocumentType,
+				);
 			}
 		}
 
 		return $targetEntityFields;
 	}
 
-	private static function findDocumentField(
+	/**
+	 * The legacy converters map the contacts as CONTACT_BINDINGS, which the document of the target does not
+	 * know: the package carries them under the code of the document field.
+	 */
+	private static function resolvePackageFieldId(string $mapDestinationField): string
+	{
+		return $mapDestinationField === Crm\Item::FIELD_NAME_CONTACT_BINDINGS
+			? Crm\Item::FIELD_NAME_CONTACT_IDS
+			: $mapDestinationField
+		;
+	}
+
+	/**
+	 * The contacts of these targets belong to the action itself, not to the conversion map: depending on
+	 * the stored map they come as bindings, as a list or not at all (the map of the lead for the deal).
+	 */
+	private static function isContactOwningTarget(int $dstEntityTypeId): bool
+	{
+		return $dstEntityTypeId === \CCrmOwnerType::Deal || $dstEntityTypeId === \CCrmOwnerType::Quote;
+	}
+
+	private static function addContactIdsField(
+		array $targetEntityFields,
+		int $dstEntityTypeId,
+		array $targetDocumentType,
+	): array
+	{
+		$fieldId = Crm\Item::FIELD_NAME_CONTACT_IDS;
+		if (isset($targetEntityFields[$fieldId]))
+		{
+			return $targetEntityFields;
+		}
+
+		try
+		{
+			$documentFields = Item::getEntityFields($dstEntityTypeId);
+		}
+		catch (\Throwable)
+		{
+			return $targetEntityFields;
+		}
+
+		if (isset($documentFields[$fieldId]))
+		{
+			$targetEntityFields[$fieldId] = self::markTargetFieldAsRelationPackage(
+				$documentFields[$fieldId],
+				$fieldId,
+				$targetDocumentType,
+			);
+		}
+
+		return $targetEntityFields;
+	}
+
+	/**
+	 * @return list<int> The contacts of the source, the primary one first.
+	 */
+	private static function loadSourceContactIds(int $srcEntityTypeId, int $srcEntityId): array
+	{
+		$bindings = match ($srcEntityTypeId)
+		{
+			\CCrmOwnerType::Lead => LeadContactTable::getLeadBindings($srcEntityId),
+			\CCrmOwnerType::Deal => DealContactTable::getDealBindings($srcEntityId),
+			\CCrmOwnerType::Quote => QuoteContactTable::getQuoteBindings($srcEntityId),
+			default => [],
+		};
+
+		$contactIds = EntityBinding::prepareEntityIDs(\CCrmOwnerType::Contact, $bindings);
+		$primaryBinding = EntityBinding::findPrimaryBinding($bindings);
+		if (is_array($primaryBinding))
+		{
+			$primaryContactId = EntityBinding::prepareEntityID(\CCrmOwnerType::Contact, $primaryBinding);
+			$contactIds = [
+				$primaryContactId,
+				...array_filter($contactIds, static fn(int $contactId): bool => $contactId !== $primaryContactId),
+			];
+		}
+
+		return array_values($contactIds);
+	}
+
+	private static function buildSourceDocumentProperties(array $sourceDocumentType): array
+	{
+		return [
+			self::SOURCE_DOCUMENT => [
+				'Name' => GetMessage('CRM_GCDA_SOURCE_DOCUMENT') ?: self::SOURCE_DOCUMENT,
+				'Type' => FieldType::DOCUMENT,
+				'Multiple' => false,
+				'Default' => array_values($sourceDocumentType),
+				'Settings' => [
+					self::RELATION_PACKAGE_SETTING => [
+						'role' => self::RELATION_PACKAGE_ROLE_SOURCE_DOCUMENT,
+					],
+				],
+			],
+		];
+	}
+
+	private static function buildRuntimeProperties(array $documentId, array $dstFields): array
+	{
+		return [
+			...$dstFields,
+			self::SOURCE_DOCUMENT => $documentId,
+		];
+	}
+
+	/**
+	 * The marker addresses the field of the target document form, so it carries the code the field was
+	 * found under, while the property itself keeps the name of the conversion map destination: that name
+	 * is the output the running activity publishes the value under, and an expression refers to it.
+	 */
+	private static function markTargetFieldAsRelationPackage(
+		array $documentField,
+		string $documentFieldId,
+		array $targetDocumentType,
+	): array
+	{
+		$settings = $documentField['Settings'] ?? [];
+		if (!is_array($settings))
+		{
+			$settings = [];
+		}
+
+		$settings[self::RELATION_PACKAGE_SETTING] = [
+			'role' => self::RELATION_PACKAGE_ROLE_TARGET_FIELD,
+			'fieldId' => $documentFieldId,
+			'targetDocumentType' => array_values($targetDocumentType),
+		];
+
+		$documentField['Settings'] = $settings;
+
+		return $documentField;
+	}
+
+	private static function findDocumentFieldId(
 		?Crm\Service\Factory $factory,
 		string $fieldId,
 		array $documentFields,
-	): ?array
+	): ?string
 	{
 		$lookupKeys = [$fieldId];
 		if ($factory)
@@ -480,11 +721,61 @@ class CBPCrmGetConversionDataActivity extends CBPActivity implements IBPConfigur
 		{
 			if ($lookupKey !== '' && isset($documentFields[$lookupKey]))
 			{
-				return $documentFields[$lookupKey];
+				return $lookupKey;
 			}
 		}
 
 		return null;
+	}
+
+	/**
+	 * Fields the target document types as "user" are published in the bizproc user format: to
+	 * CBPHelper::ExtractUsers() an unprefixed number is a GROUP code, not a user id. The type is read
+	 * from the target document by findDocumentFieldId, so a field it knows under another code counts.
+	 */
+	private static function formatUserValues(array $dstFields, int $dstEntityTypeId): array
+	{
+		try
+		{
+			$documentFields = Item::getEntityFields($dstEntityTypeId);
+		}
+		catch (\Throwable)
+		{
+			return $dstFields;
+		}
+
+		$factory = Container::getInstance()->getFactory($dstEntityTypeId);
+
+		foreach ($dstFields as $fieldId => $value)
+		{
+			$documentFieldId = self::findDocumentFieldId($factory, (string)$fieldId, $documentFields);
+			if ($documentFieldId === null || ($documentFields[$documentFieldId]['Type'] ?? '') !== FieldType::USER)
+			{
+				continue;
+			}
+
+			$dstFields[$fieldId] = is_array($value)
+				? array_map(self::toUserValue(...), $value)
+				: self::toUserValue($value);
+		}
+
+		return $dstFields;
+	}
+
+	/**
+	 * Only a bare id is prefixed. Anything else the bizproc user format already accepts - a prefixed
+	 * value, a group code, an extended group like "group_d5" - travels on untouched.
+	 */
+	private static function toUserValue(mixed $value): mixed
+	{
+		if (!is_int($value) && !is_string($value))
+		{
+			return $value;
+		}
+
+		$userId = (int)$value;
+
+		return $userId > 0 && (string)$userId === (string)$value ? 'user_' . $userId : $value;
 	}
 
 	private function normalizeFields(array $mappedFields): array

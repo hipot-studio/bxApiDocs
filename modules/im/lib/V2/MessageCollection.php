@@ -3,7 +3,6 @@
 namespace Bitrix\Im\V2;
 
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
-use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\Comment\CommentPopupItem;
 use Bitrix\Im\V2\Entity\File\FilePopupItem;
 use Bitrix\Im\V2\Entity\Url\UrlCollection;
@@ -11,10 +10,11 @@ use Bitrix\Im\V2\Entity\User\UserPopupItem;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Link\Pin\PinService;
 use Bitrix\Im\V2\Message\AdditionalMessagePopupItem;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\AbstractBlock;
+use Bitrix\Im\V2\Message\Forward\ForwardSourcePopupItem;
 use Bitrix\Im\V2\Message\Param;
 use Bitrix\Im\V2\Message\Reaction\ReactionMessages;
 use Bitrix\Im\V2\Message\Reaction\ReactionPopupItem;
-use Bitrix\Im\V2\Message\ReadService;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Message\Sticker\StickerCollection;
 use Bitrix\Im\V2\Reading\Counter\CountersProvider;
@@ -104,7 +104,6 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		return new static(MessageTable::query()->whereIn('ID', $messageIds)->setOrder($messageOrder)->setSelect($select)->fetchCollection());
 	}
 
-
 	/**
 	 * @param Message[] $messages
 	 * @return static
@@ -148,7 +147,6 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 
 		return $this;
 	}
-
 
 	/**
 	 * @return array<int, int[]>
@@ -285,10 +283,12 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 				foreach ($fileIdsByMessages[$message->getId()] ?? [] as $fileId)
 				{
 					$file = $files->getById($fileId);
-					if ($file !== null)
+					if ($file === null)
 					{
-						$messagesFiles[] = $file->setChatId($message->getChatId());
+						continue;
 					}
+
+					$messagesFiles[] = $file->setChatId($message->getChatId());
 				}
 				$message->fillFiles($messagesFiles);
 			}
@@ -630,7 +630,11 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		}
 
 		$this->fillParams();
+		$this->fillBlockFileNames();
 
+		// Here and in fillBlockFileNames() the builder is taken from the param, not from
+		// Message::getBlocksBuilder(): the message keeps the builder it once resolved, while resetParams()
+		// drops the param, so the kept one can outlive it - and setBlocksBuilder() rewrites the text.
 		foreach ($this as $message)
 		{
 			$builder = $message->getParams()->get(Params::BLOCK)->getValue();
@@ -643,6 +647,60 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 		$this->isBuilderFilled = true;
 
 		return $this;
+	}
+
+	/**
+	 * setBlocksBuilder() rebuilds the payload text of the message, and the text of a file or audio
+	 * block is the names of its files. Left to the blocks, the names would cost a disk read per
+	 * message of the page, so they are read once for the whole collection. The names have to land on the
+	 * very builder instances fillBuilder() sets, hence the same way of getting them.
+	 */
+	protected function fillBlockFileNames(): void
+	{
+		$builders = [];
+		$fileIds = [];
+
+		foreach ($this as $message)
+		{
+			$builder = $message->getParams()->get(Params::BLOCK)->getValue();
+			if ($builder === null)
+			{
+				continue;
+			}
+
+			$builders[] = $builder;
+			foreach ($builder->getFiles() as $fileId)
+			{
+				$fileIds[$fileId] = $fileId;
+			}
+		}
+
+		if (empty($fileIds))
+		{
+			return;
+		}
+
+		$namesById = [];
+		if ($this->isFileFilled)
+		{
+			foreach ($this->getFiles() as $file)
+			{
+				$name = $file->getDiskFile()?->getName();
+				if (!empty($name))
+				{
+					$namesById[$file->getId()] = $name;
+				}
+			}
+		}
+		else
+		{
+			$namesById = AbstractBlock::readFileNames($fileIds);
+		}
+
+		foreach ($builders as $builder)
+		{
+			$builder->blockCollection->fillFileNames($namesById);
+		}
 	}
 
 	/**
@@ -830,6 +888,11 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 	{
 		$additionalMessageIds = array_diff($this->getReplayedMessageIds(), $this->getIds());
 		$popup = [
+			// First on purpose: PopupData::toRestFormat() serializes the items in insertion order, and this
+			// one fills the titles of the whole tree. Placed after AdditionalMessagePopupItem it would fill
+			// the nested collections only after they had already been serialized, so a reply target outside
+			// the loaded window and a pinned message would show no title even to a reader who has access.
+			new ForwardSourcePopupItem($this),
 			new UserPopupItem($this->getUserIds()),
 			new FilePopupItem($this->getFiles()),
 			new AdditionalMessagePopupItem($additionalMessageIds),
@@ -842,17 +905,59 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 			$popup[] = new ReactionPopupItem($this->getReactions());
 		}
 
-		$chat = $this->getCommonChat();
-
-		if (
-			!in_array(CommentPopupItem::class, $excludedList, true)
-			&& $chat instanceof ChannelChat
-		)
+		if (!in_array(CommentPopupItem::class, $excludedList, true))
 		{
-			$popup[] = new CommentPopupItem($chat->getId(), $this->getIds());
+			$commentPopupItem = $this->getCommentPopupItem();
+
+			if (isset($commentPopupItem))
+			{
+				$popup[] = $commentPopupItem;
+			}
 		}
 
 		return new PopupData($popup, $excludedList);
+	}
+
+	private function getCommentPopupItem(): ?CommentPopupItem
+	{
+		$postsByChatId = $this->getIdsGroupedByChatId();
+
+		if (empty($postsByChatId))
+		{
+			return null;
+		}
+
+		if (count($postsByChatId) === 1)
+		{
+			$chat = $this->getCommonChat();
+
+			return $chat->allowsComments() ? new CommentPopupItem($chat->getId(), $this->getIds()) : null;
+		}
+
+		// Parent chats of a multi-chat collection are not loaded one by one: the gate inside the item
+		// asks about a parent only when the page brought a discussion of that parent.
+		return CommentPopupItem::getInstanceByParentMap($postsByChatId)->enableThreadCapabilityGate();
+	}
+
+	/**
+	 * @return array<int, int[]> chat id => ids of its messages
+	 */
+	private function getIdsGroupedByChatId(): array
+	{
+		$ids = [];
+
+		foreach ($this as $message)
+		{
+			$chatId = (int)$message->getChatId();
+			$messageId = (int)$message->getId();
+
+			if ($chatId > 0 && $messageId > 0)
+			{
+				$ids[$chatId][] = $messageId;
+			}
+		}
+
+		return $ids;
 	}
 
 	public function filterByChatId(int $chatId): self
@@ -917,8 +1022,8 @@ class MessageCollection extends Collection implements RestConvertible, PopupData
 					new ExpressionField(
 						'CASE_INSENSITIVE_MESSAGE',
 						"(CASE WHEN %s ILIKE '%%{$filter['SEARCH_MESSAGE']}%%' THEN 1 ELSE 0 END)",
-						['MESSAGE']
-					)
+						['MESSAGE'],
+					),
 				);
 				$query->where('CASE_INSENSITIVE_MESSAGE', '=', '1');
 			}

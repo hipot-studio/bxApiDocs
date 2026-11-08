@@ -73,10 +73,10 @@ class NodeCatalogItemDtoFactory
 	 * Relations-block availability for a node: its explicit availableBlocks descriptor intersected
 	 * with the complexNodeConnections runtime gate — the same gated source TemplateToNodes and
 	 * loadSettings use, so the canvas gate is consistent for a node created from the catalog
-	 * (drag & drop), not only for one loaded from a saved template. Returns null for legacy nodes
-	 * without an explicit descriptor so the frontend keeps its feature-flag fallback.
+	 * (drag & drop), not only for one loaded from a saved template. A node without such a
+	 * descriptor has no relations, and the resolver answers so itself.
 	 */
-	private static function resolveRelationsAvailable(ActivityDescription $description): ?bool
+	private static function resolveRelationsAvailable(ActivityDescription $description): bool
 	{
 		return Container::instance()->getCapabilityCatalogService()->getRelationsAvailabilityForNode(
 			$description,

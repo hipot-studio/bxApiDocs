@@ -10,10 +10,13 @@
 
 namespace Bitrix\Tasks\Util;
 
+use Bitrix\Main\Diag\EventLogger;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Tasks\Util;
 use Bitrix\Tasks\Integration\CRM;
 use Bitrix\Tasks\Integration\Disk;
 use Bitrix\Tasks\Integration\Mail;
+use Bitrix\Tasks\Internals\DataBase\CrmItemIndex;
 
 abstract class UserField // todo: extends Dictionary, to iterate over user field scheme
 {
@@ -496,6 +499,25 @@ abstract class UserField // todo: extends Dictionary, to iterate over user field
 	public static function onAfterUserTypeAdd(array $field)
 	{
 		static::onUserTypeSchemeChange($field, 0);
+
+		// The index only matters once the CRM task field exists, and b_utm_tasks_task is
+		// materialized (CreatePropertyTables) no later than this very Add(). So the moment
+		// the CRM field is registered is exactly when the table is present and the index
+		// becomes relevant — create it then, while the table is still empty. Idempotent and
+		// best-effort: a DDL hiccup must never break user field registration.
+		if (
+			($field['ENTITY_ID'] ?? null) === 'TASKS_TASK'
+			&& ($field['FIELD_NAME'] ?? null) === CRM\UserField::getMainSysUFCode()
+		)
+		{
+			try
+			{
+				CrmItemIndex::ensure();
+			}
+			catch (\Throwable)
+			{
+			}
+		}
 	}
 
 	public static function OnAfterUserTypeUpdate(array $field, $id)
@@ -506,6 +528,110 @@ abstract class UserField // todo: extends Dictionary, to iterate over user field
 	public static function OnAfterUserTypeDelete(array $field, $id)
 	{
 		static::onUserTypeSchemeChange($field, $id);
+
+		$sourceEntityId = (string)($field['ENTITY_ID'] ?? '');
+		$pairedEntityId = match ($sourceEntityId)
+		{
+			'TASKS_TASK' => 'TASKS_TASK_TEMPLATE',
+			'TASKS_TASK_TEMPLATE' => 'TASKS_TASK',
+			default => null,
+		};
+		if ($pairedEntityId === null)
+		{
+			return;
+		}
+
+		$fieldName = (string)($field['FIELD_NAME'] ?? '');
+		if ($fieldName === '')
+		{
+			return;
+		}
+
+		$pairedField = \CUserTypeEntity::GetList(
+			[],
+			[
+				'ENTITY_ID' => $pairedEntityId,
+				'FIELD_NAME' => $fieldName,
+			],
+		)->Fetch();
+		if (!$pairedField)
+		{
+			return;
+		}
+
+		global $APPLICATION;
+
+		$previousApplicationException = $APPLICATION->GetException();
+		$errorCodes = [];
+		$exceptionClass = null;
+		try
+		{
+			$isDeleted = (new \CUserTypeEntity())->Delete((int)$pairedField['ID']);
+			if ($isDeleted !== false)
+			{
+				return;
+			}
+
+			$applicationException = $APPLICATION->GetException();
+			$exceptionClass = $applicationException ? $applicationException::class : null;
+			$errorCodes = ['DELETE_REJECTED'];
+		}
+		catch (\Throwable $throwable)
+		{
+			$exceptionClass = $throwable::class;
+			$errorCodes = ['UNEXPECTED_EXCEPTION'];
+		}
+
+		if ($previousApplicationException === false)
+		{
+			$APPLICATION->ResetException();
+		}
+		elseif ($APPLICATION->GetException() !== $previousApplicationException)
+		{
+			$APPLICATION->ThrowException($previousApplicationException);
+		}
+
+		$context = [
+			'sourceEntityId' => $sourceEntityId,
+			'sourceFieldId' => (int)$id,
+			'pairedEntityId' => $pairedEntityId,
+			'pairedFieldId' => (int)$pairedField['ID'],
+			'fieldName' => $fieldName,
+			'errorCodes' => $errorCodes,
+		];
+		if ($exceptionClass !== null)
+		{
+			$context['exceptionClass'] = $exceptionClass;
+		}
+
+		try
+		{
+			$logger = (new LoggerFactory(alwaysReturnLogger: false))->createById(
+				'tasks.user_field.delete_pair',
+				isCheckEnabledFromRegistry: false,
+				returnDefaultLoggerIfNotExists: false,
+			);
+			$logger ??= new EventLogger(
+				'tasks',
+				'TASKS_USER_FIELD_DELETE_PAIR',
+				static function (array $context, string $message): array {
+					unset($context['level']);
+
+					return [
+						'ITEM_ID' => (string)$context['sourceFieldId'],
+						'DESCRIPTION' => [
+							'message' => $message,
+							'context' => $context,
+						],
+					];
+				},
+			);
+			$logger->error('Failed to delete paired task user field', $context)
+			;
+		}
+		catch (\Throwable)
+		{
+		}
 	}
 
 	public static function getFreeFieldName()

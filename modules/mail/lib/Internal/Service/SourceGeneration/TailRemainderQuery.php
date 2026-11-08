@@ -9,6 +9,8 @@ use Bitrix\Mail\Internals\MessageAccessTable;
 use Bitrix\Mail\MailMessageUidTable;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectPropertyException;
+use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 
 /**
@@ -94,9 +96,40 @@ final class TailRemainderQuery
 	}
 
 	/**
+	 * The remainder of the given folders of the retained generation alone, the letters a CRM activity
+	 * or a task points at among the rest: the walk a hand over asks for again once it brought those
+	 * folders into the new server {@see TailAppendService::reopenForFolders()}.
+	 *
+	 * The probe asks for every folder of every generation of the scope by a branch of its own, so a
+	 * branch reads the placements of that folder alone, by the index of the folder listing
+	 * (IX_MAIL_MESSAGE_UID_GEN_LIST), and the walk costs the size of the folders and not the size of
+	 * the mailbox; the branches of a probe are one statement.
+	 *
+	 * @param string[] $folderHashes The path hashes of the folders of the retained generation.
 	 * @throws ArgumentException|ObjectPropertyException|SystemException
 	 */
-	private function listPage(Context $context, bool $referenced, int $afterMessageId, int $limit): TailRemainderPage
+	public function listFolderPage(
+		Context $context,
+		array $folderHashes,
+		int $afterMessageId = 0,
+		int $limit = self::PAGE_SIZE,
+	): TailRemainderPage
+	{
+		return $this->listPage($context, null, $afterMessageId, $limit, array_values(array_unique($folderHashes)));
+	}
+
+	/**
+	 * @param bool|null $referenced Null takes the letters of both kinds.
+	 * @param string[]|null $folders Path hashes the placements are narrowed to, null for all.
+	 * @throws ArgumentException|ObjectPropertyException|SystemException
+	 */
+	private function listPage(
+		Context $context,
+		?bool $referenced,
+		int $afterMessageId,
+		int $limit,
+		?array $folders = null,
+	): TailRemainderPage
 	{
 		$limit = max($limit, 1);
 		$cursor = max($afterMessageId, 0);
@@ -116,17 +149,17 @@ final class TailRemainderQuery
 
 		while ($walked < $budget)
 		{
-			$probe = $this->probe($context->mailboxId, $retained, $cursor);
+			$probe = $this->probe($context->mailboxId, $retained, $cursor, $folders);
 			$candidates = $probe['ids'];
 			$walked += max(count($candidates), 1);
 			$cursor = $probe['cursor'];
 
 			$placed = $this->findPlacedInPreparedGeneration($context->mailboxId, $prepared, $candidates);
-			$prioritized = $this->findPrioritizedMessages($context->mailboxId, $candidates);
+			$prioritized = $referenced === null ? [] : $this->findPrioritizedMessages($context->mailboxId, $candidates);
 
 			foreach ($candidates as $messageId)
 			{
-				if (isset($placed[$messageId]) || isset($prioritized[$messageId]) !== $referenced)
+				if (isset($placed[$messageId]) || ($referenced !== null && isset($prioritized[$messageId]) !== $referenced))
 				{
 					continue;
 				}
@@ -162,21 +195,46 @@ final class TailRemainderQuery
 	 * a mailbox would be quadratic. The set itself is never guessed at: it comes from
 	 * the scope, and the union of the equalities is the very same condition.
 	 *
+	 * A walk narrowed to some folders asks for each of them by an equality of its own as well, for
+	 * the same reason: the folder follows the generation in the index of the folder listing
+	 * (IX_MAIL_MESSAGE_UID_GEN_LIST), and a list of folders would leave the message id unordered.
+	 * The branches go to the database as one statement, each of them a limited part of a UNION ALL,
+	 * so a probe costs one round trip however many folders and generations it spans.
+	 *
+	 * @param string[]|null $folders Path hashes the placements are narrowed to, null for all.
 	 * @return array{ids: int[], cursor: int, isExhausted: bool}
 	 * @throws ArgumentException|ObjectPropertyException|SystemException
 	 */
-	private function probe(int $mailboxId, GenerationScope $retained, int $cursor): array
+	private function probe(int $mailboxId, GenerationScope $retained, int $cursor, ?array $folders = null): array
 	{
-		$generationIds = $retained->getGenerationIds();
+		$branches = [];
+		foreach ($retained->getGenerationIds() ?? [null] as $generationId)
+		{
+			foreach ($folders ?? [null] as $folder)
+			{
+				$branches[] = $this->branchQuery($mailboxId, $generationId, $cursor, $folder, count($branches));
+			}
+		}
+
+		$query = array_shift($branches);
+		if ($branches !== [])
+		{
+			$query->unionAll(...$branches);
+		}
+
+		/** @var array<int, int[]> $byBranch */
+		$byBranch = [];
+		foreach ($query->exec()->fetchAll() as $row)
+		{
+			$byBranch[(int)$row['BRANCH']][] = (int)$row['MESSAGE_ID'];
+		}
 
 		$messageIds = [];
 		// The highest message id every branch of the probe is complete up to
 		$bound = null;
-
-		foreach ($generationIds ?? [null] as $generationId)
+		foreach ($byBranch as $branch)
 		{
-			$branch = $this->listPlacedMessageIds($mailboxId, $generationId, $cursor);
-
+			sort($branch);
 			foreach ($branch as $messageId)
 			{
 				$messageIds[$messageId] = $messageId;
@@ -218,15 +276,20 @@ final class TailRemainderQuery
 	}
 
 	/**
+	 * One branch of a probe: the placements of that generation after the cursor, oldest first,
+	 * repeated per placement, each row marked with the number of its branch.
+	 *
 	 * @param int|null $generationId null asks without a generation condition at all, which is
 	 *                              what the unfiltered scope of a mailbox without generations means.
-	 * @return int[] Messages of that generation after the cursor, oldest first, repeated per placement.
-	 * @throws ArgumentException|ObjectPropertyException|SystemException
+	 * @param string|null $folder The path hash of the one folder asked for, null for every folder.
+	 * @throws ArgumentException|SystemException
 	 */
-	private function listPlacedMessageIds(int $mailboxId, ?int $generationId, int $cursor): array
+	private function branchQuery(int $mailboxId, ?int $generationId, int $cursor, ?string $folder, int $branch): Query
 	{
 		$query = MailMessageUidTable::query()
 			->addSelect('MESSAGE_ID')
+			->registerRuntimeField(new ExpressionField('BRANCH', (string)$branch))
+			->addSelect('BRANCH')
 			->where('MAILBOX_ID', $mailboxId)
 			// A placement of no logical message carries no letter to assemble, and the cursor starts at 0
 			->where('MESSAGE_ID', '>', $cursor)
@@ -241,10 +304,12 @@ final class TailRemainderQuery
 			$query->addFilter('=GENERATION_ID', $generationId);
 		}
 
-		return array_map(
-			static fn (array $row): int => (int)$row['MESSAGE_ID'],
-			$query->exec()->fetchAll(),
-		);
+		if ($folder !== null)
+		{
+			$query->addFilter('=DIR_MD5', $folder);
+		}
+
+		return $query;
 	}
 
 	/**

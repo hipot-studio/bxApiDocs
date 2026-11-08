@@ -2,22 +2,31 @@
 
 namespace Bitrix\StaffTrack\Integration\Timeman;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Type\DateTime;
+use Bitrix\StaffTrack\Internal\Service\CheckIn\CheckInBacklogService;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
 use Bitrix\Timeman\Form\Schedule\ViolationForm;
 use Bitrix\Timeman\Form\Worktime\WorktimeRecordForm;
 use Bitrix\Timeman\Model\Schedule\Schedule;
 use Bitrix\Timeman\Model\Schedule\ScheduleTable;
 use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecord;
+use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordTable;
 use Bitrix\Timeman\Repository\Worktime\WorktimeRepository;
 
 class WorkDayService
 {
 	private const DEFAULT_WORK_DAY_LENGTH = 28800;
 	private const DAY_LENGTH = 86400;
+
+	/**
+	 * The path runs in the hit that starts the work day, after its answer, so it takes one day of the
+	 * stale tail and leaves the rest to the agent, for which such work is the normal one.
+	 */
+	private const AGGREGATED_DAYS_PER_START = 1;
+
 	private ?\CTimeManUser $timeManUser = null;
 
 	/**
@@ -220,25 +229,61 @@ class WorkDayService
 			return;
 		}
 
-		if (Loader::includeModule('stafftrackmobile') && (new CheckInFeature())->isEnabled())
+		if (!Loader::includeModule('stafftrackmobile') || !(new CheckInFeature())->isEnabled())
 		{
-			(new self())->aggregatePreviousDayCheckIns((int)$params['USER_ID'], (int)$params['ID']);
+			return;
 		}
+
+		$userId = (int)$params['USER_ID'];
+		$recordId = (int)$params['ID'];
+
+		// Behind the answer rather than inside it. The fold of one day is a single read and rewrite that no
+		// limit cuts - REQUEST_TIME_LIMIT bounds the loop of chunks, and a day below REQUEST_MAX_DAY_ROWS
+		// never enters that loop - while a day of an employee who keeps the app open is thousands of points.
+		// The start of a work day is a request somebody is waiting on, so the fold is paid after they have
+		// their answer, as the expensive half of the address queue already is.
+		Application::getInstance()->addBackgroundJob(
+			static fn() => (new self())->aggregatePreviousDayCheckIns($userId, $recordId),
+		);
 	}
 
 	/**
+	 * A push for the employee whose stale tail has piled up - days spent without opening a work day. What
+	 * is due for aggregation and how much of it goes in one call is decided by CheckInBacklogService
+	 * alone; the earlier work day record only tells that the employee has worked before, it no longer
+	 * bounds the aggregation.
+	 *
+	 * One day per call, and that day is bounded by the limit of a hit rather than by the limit of an agent
+	 * run: what the push does not reach is taken by the agent. Called from a background job of the hit, so
+	 * the limit is measured against a worker of the portal and not against the wait of a person.
+	 *
 	 * @param int $userId
 	 * @return void
 	 */
-	private function aggregatePreviousDayCheckIns(int $userId, int $currentRecordId): void
+	protected function aggregatePreviousDayCheckIns(int $userId, int $currentRecordId): void
 	{
 		if (!Loader::includeModule('timeman'))
 		{
 			return;
 		}
 
-		$previousRecord = \Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordTable::query()
-			->setSelect(['RECORDED_START_TIMESTAMP', 'RECORDED_STOP_TIMESTAMP'])
+		if (!$this->hasEarlierClosedWorkDay($userId, $currentRecordId))
+		{
+			return;
+		}
+
+		$this->getCheckInBacklogService()->aggregateUserStaleCheckIns(
+			$userId,
+			time(),
+			self::AGGREGATED_DAYS_PER_START,
+			CheckInBacklogService::REQUEST_TIME_LIMIT,
+		);
+	}
+
+	protected function hasEarlierClosedWorkDay(int $userId, int $currentRecordId): bool
+	{
+		$previousRecord = WorktimeRecordTable::query()
+			->setSelect(['ID'])
 			->where('USER_ID', $userId)
 			->where('ID', '<', $currentRecordId)
 			->where('RECORDED_STOP_TIMESTAMP', '>', 0)
@@ -247,17 +292,11 @@ class WorkDayService
 			->exec()
 			->fetch();
 
-		if (!$previousRecord)
-		{
-			return;
-		}
+		return (bool)$previousRecord;
+	}
 
-		$startTime = DateTime::createFromTimestamp($previousRecord['RECORDED_START_TIMESTAMP']);
-		$endTime = DateTime::createFromTimestamp($previousRecord['RECORDED_STOP_TIMESTAMP']);
-
-		$repository = new \Bitrix\StaffTrack\Internal\Repository\CheckInRepository();
-		$rows = $repository->getCheckInRowsForAggregation($userId, $startTime, $endTime);
-
-		(new \Bitrix\StaffTrack\Public\Services\CheckInAggregator())->aggregate($userId, $rows);
+	protected function getCheckInBacklogService(): CheckInBacklogService
+	{
+		return new CheckInBacklogService();
 	}
 }

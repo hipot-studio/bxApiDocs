@@ -8,12 +8,14 @@ use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Internal\Entity\Debugger\Collections\DebugSessionCollection;
 use Bitrix\Bizproc\Internal\Exception\ErrorBuilder;
 use Bitrix\Bizproc\Public\Command\DebugSession\DeleteAllDebugSessionsCommand;
+use Bitrix\Bizproc\Public\Feature\Debugger\ProcessDebuggerFlag;
 use Bitrix\Bizproc\Public\Provider\DebugSessionProvider;
 use Bitrix\Bizproc\Public\Provider\Params\DebugSession\DebugSessionFilter;
 use Bitrix\Bizproc\Public\Provider\Params\DebugSession\DebugSessionSelect;
 use Bitrix\Bizproc\Public\Provider\Params\DebugSession\DebugSessionSort;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
@@ -26,7 +28,7 @@ class DebugSession extends Controller
 {
 	protected function processBeforeAction(Action $action)
 	{
-		if (Option::get('bizproc', 'debugger_available', 'N') !== 'Y')
+		if (!Feature::isEnabled(ProcessDebuggerFlag::class))
 		{
 			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
 
@@ -38,7 +40,9 @@ class DebugSession extends Controller
 
 	public function getListAction(int $templateId): ?DebugSessionCollection
 	{
-		if (!$this->isAdmin())
+		$currentUserId = (int)CurrentUser::get()->getId();
+
+		if (!$this->isAdmin() && !(new TemplateAccessService())->canPublish($templateId, $currentUserId))
 		{
 			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
 
@@ -47,15 +51,13 @@ class DebugSession extends Controller
 
 		try
 		{
-			$currentUserId = (int)CurrentUser::get()->getId();
-
 			return (new DebugSessionProvider())->getList(new GridParams(
 				pager: (new Pager(100)),
 				filter: new DebugSessionFilter([
 					'USER_ID' => $currentUserId,
 					'TEMPLATE_ID' => $templateId,
 				]),
-				sort: new DebugSessionSort(['START_TIME' => 'ASC']),
+				sort: new DebugSessionSort(['START_TIME' => 'DESC']),
 				select: new DebugSessionSelect(['*']),
 			));
 		}

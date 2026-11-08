@@ -5,7 +5,6 @@ namespace Bitrix\Im\V2\Link\File;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Security\DiskSecurityContext;
-use Bitrix\Im\Model\MessageParamTable;
 use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Link\Push;
 use Bitrix\Im\V2\Message;
@@ -29,7 +28,7 @@ class FileService
 
 	public function save(Message $message): Result
 	{
-		$files = $message->getFiles();
+		$files = $message->getFiles()->getUnique();
 		$links = FileCollection::linkEntityToMessage($files, $message);
 
 		return $this->saveInternal($links);
@@ -49,11 +48,33 @@ class FileService
 			return $result;
 		}
 
-		$entities = new \Bitrix\Im\V2\Entity\File\FileCollection($files, $message->getChatId());
+		$entities = (new \Bitrix\Im\V2\Entity\File\FileCollection($files, $message->getChatId()))->getUnique();
 		/** @var FileCollection $links */
 		$links = FileCollection::linkEntityToMessage($entities, $message);
 
 		return $this->saveInternal($links);
+	}
+
+	/**
+	 * @param int[] $previousFileIds
+	 * @param int[] $currentFileIds
+	 */
+	public function synchronizeFilesFromMessage(
+		array $previousFileIds,
+		array $currentFileIds,
+		Message $message,
+	): Result
+	{
+		$previousFileIds = array_values(array_unique(array_map('intval', $previousFileIds)));
+		$currentFileIds = array_values(array_unique(array_map('intval', $currentFileIds)));
+
+		$addedFileIds = array_values(array_diff($currentFileIds, $previousFileIds));
+		$deletedFileIds = array_values(array_diff($previousFileIds, $currentFileIds));
+
+		$result = $this->saveFilesFromMessage($addedFileIds, $message);
+		$deleteResult = $this->deleteFilesByDiskFileIds($deletedFileIds, $message);
+
+		return $result->addErrors($deleteResult->getErrors());
 	}
 
 	protected function saveInternal(FileCollection $links): Result
@@ -94,6 +115,11 @@ class FileService
 
 	public function deleteFilesByDiskFileIds(array $diskFileIds, Message $message): Result
 	{
+		if (empty($diskFileIds))
+		{
+			return new Result();
+		}
+
 		$links = FileCollection::getByDiskFileIds($diskFileIds, $message);
 
 		return $this->deleteFiles($links);
@@ -169,7 +195,7 @@ class FileService
 			'filter' => $filter,
 			'with' => ['CREATE_USER'],
 			'limit' => $limit,
-			'order' => ['ID' => 'DESC']
+			'order' => ['ID' => 'DESC'],
 		];
 		$securityContext = new DiskSecurityContext($this->getContext()->getUserId());
 		$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck($securityContext, $parameters, ['ID', 'CREATED_BY']);

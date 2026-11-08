@@ -8,6 +8,7 @@ use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
 use Bitrix\Crm\Dto\Validator\StringField;
 use Bitrix\Crm\Dto\Validator\StringStartsWith;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 
 final class UpdateListStage extends Dto
 {
@@ -18,6 +19,7 @@ final class UpdateListStage extends Dto
 	{
 		return [
 			new StringField($this, 'name'),
+			new RequiredField($this, 'name'),
 			new NotEmptyField($this, 'name'),
 
 			new StringField($this, 'color'),

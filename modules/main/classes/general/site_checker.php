@@ -4,10 +4,11 @@ use Bitrix\Main\Application;
 use Bitrix\Main\ModuleTable;
 use Bitrix\Main\Service\Version\BitrixVm;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Type\Callback;
 
 class CSiteCheckerTest
 {
-	const MIN_PHP_VER = '8.1.0';
+	const MIN_PHP_VER = '8.2.0';
 
 	public $arTestVars;
 	public $percent;
@@ -517,6 +518,9 @@ class CSiteCheckerTest
 			'imagecreatefromjpeg' => GetMessage("SC_MOD_GD_JPEG"),
 			'hash' => 'Hash',
 			'highlight_file' => 'PHP Syntax Highlight',
+			'openssl_encrypt' => GetMessage("MAIN_SC_MCRYPT"),
+			'mb_substr' => GetMessage("SC_MOD_MBSTRING"),
+			'token_get_all' => 'Tokenizer',
 		];
 
 		$strError = '';
@@ -526,16 +530,6 @@ class CSiteCheckerTest
 			{
 				$strError .= $desc . "<br>";
 			}
-		}
-
-		if (!function_exists('openssl_encrypt'))
-		{
-			$strError .= GetMessage("MAIN_SC_MCRYPT") . ' OpenSSL';
-		}
-
-		if (!function_exists('mb_substr'))
-		{
-			$strError .= GetMessage("SC_MOD_MBSTRING") . "<br>";
 		}
 
 		if (!in_array('ssl', stream_get_transports()))
@@ -3436,7 +3430,7 @@ class CSiteCheckerTest
 		)
 		{
 			// can't get real HTTP server vars from cron
-			return "CSiteCheckerTest::CommonTest();";
+			return new Callback([self::class, 'CommonTest']);
 		}
 
 		if (
@@ -3445,7 +3439,7 @@ class CSiteCheckerTest
 		)
 		{
 			// Server NTLM is enabled, no way to connect through a socket
-			return "CSiteCheckerTest::CommonTest();";
+			return new Callback([self::class, 'CommonTest']);
 		}
 
 		IncludeModuleLangFile($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/admin/site_checker.php');
@@ -3524,7 +3518,7 @@ class CSiteCheckerTest
 		$_SERVER['REMOTE_ADDR'] = $REMOTE_ADDR;
 		$_SERVER['HTTP_USER_AGENT'] = $HTTP_USER_AGENT;
 
-		return "CSiteCheckerTest::CommonTest();";
+		return new Callback([self::class, 'CommonTest']);
 	}
 
 	public static function PhpTestAgent()
@@ -3540,12 +3534,12 @@ class CSiteCheckerTest
 				'NOTIFY_TYPE' => CAdminNotify::TYPE_ERROR,
 			]);
 
-			return "CSiteCheckerTest::PhpTestAgent();";
+			return new Callback([self::class, 'PhpTestAgent']);
 		}
 
 		CAdminNotify::DeleteByTag('PHP_VERSION');
 
-		return '';
+		return null;
 	}
 }
 

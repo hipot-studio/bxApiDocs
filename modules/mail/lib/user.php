@@ -170,13 +170,23 @@ class User
 			$port = $context->getServer()->getServerPort();
 		}
 
-		$port = in_array($port, array(80, 443)) ? '' : ':'.$port;
+		$port = self::getPortSuffix($port);
 		$path = ltrim(trim($site['DIR'], '/') . '/pub/entry.php', '/');
 
 		$replyTo = sprintf('rpl%s@%s', $userRelation['TOKEN'], $domain);
 		$backUrl = sprintf('%s://%s%s/%s#%s', $scheme, $domain, $port, $path, $userRelation['TOKEN']);
 
 		return array($replyTo, $backUrl);
+	}
+
+	private static function getPortSuffix(int|string|null $port): string
+	{
+		if ($port === null || $port === '' || in_array($port, [80, 443]))
+		{
+			return '';
+		}
+
+		return ':' . $port;
 	}
 
 	/**

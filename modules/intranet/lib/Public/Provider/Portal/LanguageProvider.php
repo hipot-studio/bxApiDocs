@@ -26,6 +26,7 @@ class LanguageProvider
 			$value = [
 				'NAME' => $language['NAME'],
 				'IS_BETA' => in_array($language['ID'], self::BETA_LANGUAGE_LIST),
+				'LANG_TAG' => $language['CODE'] ?: null,
 			];
 
 			if ($language['ID'] === LANGUAGE_ID)

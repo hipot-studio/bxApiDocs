@@ -14,6 +14,7 @@ enum UnifiedLinkPrefix: string
 	case Pres = '/pres/';
 	case Audio = '/audio/';
 	case Board = '/board/';
+	case Folder = '/folder/';
 	case Html = '/html/';
 	case Default = '/file/';
 

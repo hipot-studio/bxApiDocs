@@ -119,30 +119,50 @@ class HiddenStorage
 			: [];
 	}
 
-	public function deleteFiles(array $fileIds): void
+	public function getOrCreateFolder(string $folderCode): ?Folder
+	{
+		if (!isset($this->storage))
+		{
+			return null;
+		}
+
+		if (!$this->storage->canAdd($this->storage->getSecurityContext($this->userId)))
+		{
+			return null;
+		}
+
+		return $this->findOrCreateFolder($folderCode);
+	}
+
+	public function deleteFiles(array $fileIds): array
 	{
 		if (empty($fileIds))
 		{
-			return;
+			return [];
 		}
 
+		$deletedFileIds = [];
 		foreach ($fileIds as $fileId)
 		{
 			$file = File::getById($fileId);
 			if (is_null($file))
 			{
+				$deletedFileIds[] = (int)$fileId;
+
 				continue; // already removed
 			}
 
 			if ($file->getStorage()->getProxyType() instanceof ProxyType)
 			{
 				$securityContext = $file->getStorage()->getSecurityContext($this->userId);
-				if ($file->canDelete($securityContext))
+				if ($file->canDelete($securityContext) && $file->delete($this->userId))
 				{
-					$file->delete($this->userId);
+					$deletedFileIds[] = (int)$fileId;
 				}
 			}
 		}
+
+		return $deletedFileIds;
 	}
 
 	public function fetchFileIdsByStorageFileIds(array $storageFileIds, int $options = 0): array

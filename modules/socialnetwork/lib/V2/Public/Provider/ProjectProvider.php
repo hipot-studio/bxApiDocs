@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Socialnetwork\V2\Public\Provider;
 
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
@@ -12,12 +13,15 @@ use Bitrix\Socialnetwork\Collab\Registry\CollabRegistry;
 use Bitrix\Socialnetwork\V2\Internal\Access\Service\ProjectAccessService;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntity;
+use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityCollection;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityType;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Project;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\ProjectCollection;
 use Bitrix\Socialnetwork\V2\Internal\Entity\UserCollection;
 use Bitrix\Socialnetwork\V2\Internal\Integration;
+use Bitrix\Socialnetwork\V2\Internal\Integration\HumanResources\Service\StructureRelationService;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Provider\ProjectChatDataProvider;
+use Bitrix\Socialnetwork\V2\Internal\Integration\UI\EntitySelector\Provider\DepartmentSelectorItemProvider;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectFeatureRepository;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectRepositoryInterface;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\FeatureAvailabilityService;
@@ -51,6 +55,8 @@ class ProjectProvider
 	private ProjectAccessService $projectAccessService;
 	private ProjectNotificationSettingsService $notificationSettingsService;
 	private Integration\Landing\Service\Project $landingProjectService;
+	private StructureRelationService $structureRelationService;
+	private DepartmentSelectorItemProvider $departmentSelectorItemProvider;
 
 	public function __construct(
 		?ProjectRepositoryInterface $projectRepository = null,
@@ -66,6 +72,8 @@ class ProjectProvider
 		?ProjectAccessService $projectAccessService = null,
 		?ProjectNotificationSettingsService $notificationSettingsService = null,
 		?Integration\Landing\Service\Project $landingProjectService = null,
+		?StructureRelationService $structureRelationService = null,
+		?DepartmentSelectorItemProvider $departmentSelectorItemProvider = null,
 	)
 	{
 		$container = Container::getInstance();
@@ -84,9 +92,15 @@ class ProjectProvider
 		$this->projectAccessService = $projectAccessService ?? $container->getProjectAccessService();
 		$this->notificationSettingsService = $notificationSettingsService ?? $container->get(ProjectNotificationSettingsService::class);
 		$this->landingProjectService = $landingProjectService ?? $container->get(Integration\Landing\Service\Project::class);
+		$this->structureRelationService = $structureRelationService ?? $container->getStructureRelationService();
+		$this->departmentSelectorItemProvider = $departmentSelectorItemProvider ?? new DepartmentSelectorItemProvider();
 	}
 
 	/**
+	 * Returns whether the container is present in the collab registry.
+	 *
+	 * @see \Bitrix\Socialnetwork\Item\Workgroup::isCollabProject() for the new Project only
+	 *
 	 * @param int $groupId
 	 * @return bool
 	 * @throws ArgumentException
@@ -107,9 +121,12 @@ class ProjectProvider
 		$this->landingProjectService->processKnowledgeDeepLink($projectId);
 	}
 
-	public function getById(int $projectId): ?ProjectResponse
+	public function getById(int $projectId, bool $includeSelectorItems = false): ?ProjectResponse
 	{
-		$entity = $this->projectRepository->getById($projectId);
+		$entity = $this->projectRepository->getById(
+			$projectId,
+			resolveLegacyDepartmentNames: $includeSelectorItems,
+		);
 
 		if ($entity === null)
 		{
@@ -121,10 +138,17 @@ class ProjectProvider
 			$this->projectChatDataProvider->getByProjectIds([$projectId]),
 		);
 		$entity = $this->hydrateFeatureToggles($entity);
-		$entity = $this->hydrateOwner($entity);
+		$entity = $includeSelectorItems
+			? $this->hydrateReadModelUsers($entity)
+			: $this->hydrateOwner($entity);
 		$entity = $this->sanitizeMembersForResponse($entity);
 
-		$response = $this->projectMapper->toResponse($entity);
+		$selectorItems = $includeSelectorItems
+			? $this->departmentSelectorItemProvider->getItems($entity->members)
+			: []
+		;
+
+		$response = $this->projectMapper->toResponse($entity, $selectorItems);
 		$response->setNotificationCatalog(
 			$this->notificationSettingsService->buildCatalog($projectId),
 		);
@@ -300,6 +324,19 @@ class ProjectProvider
 		return new FeatureCollection(...$features);
 	}
 
+	/**
+	 * Tools the create form may switch. An existing project is asked about its own through
+	 * {@see hydrateFeatureToggles()}; a project which does not exist yet has nothing to be asked about, so the
+	 * create form asks the portal. Both answers come from the same service, so the form never offers a tool
+	 * create would refuse to turn on.
+	 *
+	 * @return string[]
+	 */
+	public function getToggleableFeatureIdsForCreate(): array
+	{
+		return $this->projectFeatureToggleService->getToggleableFeatureIdsForCreate();
+	}
+
 	public function getBaseFeature(
 		int $projectId,
 		int $userId,
@@ -437,6 +474,89 @@ class ProjectProvider
 		return $this->copyProject($entity, ['owner' => $owner]);
 	}
 
+	private function hydrateReadModelUsers(Project $entity): Project
+	{
+		$userIds = $this->collectReadModelUserIds($entity);
+		if ($userIds === [])
+		{
+			return $entity;
+		}
+
+		$usersById = $this->userService->getUsers($userIds)->indexById();
+		$ownerId = $entity->ownerId ?? 0;
+
+		return $this->copyProject($entity, [
+			'owner' => $ownerId > 0 ? ($usersById[$ownerId] ?? null) : null,
+			'members' => $this->hydrateMembers($entity->members, $usersById),
+			'moderatorMembers' => $this->hydrateMembers($entity->moderatorMembers, $usersById),
+		]);
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function collectReadModelUserIds(Project $entity): array
+	{
+		$userIds = [];
+		if (($entity->ownerId ?? 0) > 0)
+		{
+			$userIds[] = $entity->ownerId;
+		}
+
+		foreach ([$entity->members, $entity->moderatorMembers] as $members)
+		{
+			if ($members === null)
+			{
+				continue;
+			}
+
+			foreach ($members->filterByType(MemberEntityType::User)->getIds() as $userId)
+			{
+				if ($userId > 0)
+				{
+					$userIds[] = $userId;
+				}
+			}
+		}
+
+		return array_values(array_unique($userIds));
+	}
+
+	/**
+	 * @param array<int, \Bitrix\Socialnetwork\V2\Internal\Entity\User> $usersById
+	 */
+	private function hydrateMembers(
+		?MemberEntityCollection $members,
+		array $usersById,
+	): ?MemberEntityCollection
+	{
+		if ($members === null)
+		{
+			return null;
+		}
+
+		$result = [];
+		foreach ($members as $member)
+		{
+			if ($member->type !== MemberEntityType::User)
+			{
+				$result[] = $member;
+				continue;
+			}
+
+			$user = $member->id === null ? null : ($usersById[$member->id] ?? null);
+			$result[] = new MemberEntity(
+				id: $member->id,
+				type: $member->type,
+				withChildNodes: $member->withChildNodes,
+				name: $user?->name,
+				image: $user?->image,
+			);
+		}
+
+		return new MemberEntityCollection(...$result);
+	}
+
 	private function hydrateFeatureToggles(Project $entity): Project
 	{
 		if (($entity->id ?? 0) <= 0)
@@ -461,20 +581,22 @@ class ProjectProvider
 			return $entity;
 		}
 
+		$originalMembersCount = $members->count();
+		$members = $this->structureRelationService->filterVisibleNodesForUser(
+			$members,
+			(int)CurrentUser::get()->getId(),
+		);
 		$excludedUserIds = $this->getExcludedMemberIds($entity);
-		if ($excludedUserIds === [])
-		{
-			return $entity;
-		}
 
 		$filteredMembers = $members->filter(
 			static fn (MemberEntity $member): bool => (
 				$member->type !== MemberEntityType::User
+				|| $excludedUserIds === []
 				|| !in_array($member->id, $excludedUserIds, true)
 			),
 		);
 
-		if ($filteredMembers->count() === $members->count())
+		if ($filteredMembers->count() === $originalMembersCount)
 		{
 			return $entity;
 		}
@@ -487,7 +609,11 @@ class ProjectProvider
 	 */
 	private function getExcludedMemberIds(Project $entity): array
 	{
-		$excludedUserIds = $entity->moderatorMembers?->getIds() ?? [];
+		$excludedUserIds = $entity->moderatorMembers
+			?->filterByType(MemberEntityType::User)
+			->getIds()
+			?? []
+		;
 
 		if (($entity->ownerId ?? 0) > 0)
 		{

@@ -109,59 +109,8 @@ class TextHelper
 		$sanitizer = new \CBXSanitizer();
 		$sanitizer->ApplyDoubleEncode(false);
 
-		//region Method #1 (Disable when CBXSanitizer::DeleteAttributes will be released)
-		$tags = [
-			'a'		=> ['href', 'title','name','style','class','shape','coords','alt','target'],
-			'b'		=> ['style','class'],
-			'br'		=> ['style','class'],
-			'big'		=> ['style','class'],
-			'blockquote'	=> ['title','style','class'],
-			'caption'	=> ['style','class'],
-			'code'		=> ['style','class'],
-			'del'		=> ['title','style','class'],
-			'div'		=> ['title','style','class','align'],
-			'dt'		=> ['style','class'],
-			'dd'		=> ['style','class'],
-			'font'		=> ['color','size','face','style','class'],
-			'h1'		=> ['style','class','align'],
-			'h2'		=> ['style','class','align'],
-			'h3'		=> ['style','class','align'],
-			'h4'		=> ['style','class','align'],
-			'h5'		=> ['style','class','align'],
-			'h6'		=> ['style','class','align'],
-			'hr'		=> ['style','class'],
-			'i'		=> ['style','class'],
-			'img'		=> ['style','class','src','alt','height','width','title'],
-			'ins'		=> ['title','style','class'],
-			'li'		=> ['style','class'],
-			'map'		=> ['shape','coords','href','alt','title','style','class','name'],
-			'ol'		=> ['style','class'],
-			'p'		=> ['style','class','align'],
-			'pre'		=> ['style','class'],
-			's'		=> ['style','class'],
-			'small'		=> ['style','class'],
-			'strong'	=> ['style','class'],
-			'span'		=> ['title','style','class','align'],
-			'sub'		=> ['style','class'],
-			'sup'		=> ['style','class'],
-			'table'		=> ['border','width','style','class','cellspacing','cellpadding'],
-			'tbody'		=> ['align','valign','style','class'],
-			'td'		=> ['width','height','style','class','align','valign','colspan','rowspan'],
-			'tfoot'		=> ['align','valign','style','class','align','valign'],
-			'th'		=> ['width','height','style','class','colspan','rowspan'],
-			'thead'		=> ['align','valign','style','class'],
-			'tr'		=> ['align','valign','style','class'],
-			'u'		=> ['style','class'],
-			'ul'		=> ['style','class']
-		];
-
 		$sanitizer->DelAllTags();
-		$sanitizer->AddTags($tags);
-		//endregion
-		//region Method #2 (Enable when CBXSanitizer::DeleteAttributes will be released)
-		//$sanitizer->SetLevel(\CBXSanitizer::SECURE_LEVEL_LOW);
-		//$sanitizer->DeleteAttributes(array('id'));
-		//endregion
+		$sanitizer->AddTags(self::getSanitizedHtmlTags());
 
 		return $sanitizer->SanitizeHtml($html);
 	}
@@ -209,9 +158,11 @@ class TextHelper
 		$text = $bbcode;
 		$replaced  = 0;
 		$doubleLF = false;
+		// each pass unwraps one nesting level; the limit keeps the cost linear on crafted input
+		$passesLeft = 10;
 		do
 		{
-			$text = preg_replace_callback(
+			$result = preg_replace_callback(
 				"/\\[p](.*?)\\[\\/p](([ \r\t]*)\n?)/isu",
 				static function($matches) use (&$doubleLF) {
 					$result = preg_replace("/^\r?\n|\r?\n$/", '', $matches[1]);
@@ -228,15 +179,21 @@ class TextHelper
 				-1,
 				$replaced
 			);
+			if ($result === null)
+			{
+				break;
+			}
+
+			$text = $result;
 		}
-		while ($replaced > 0);
+		while ($replaced > 0 && --$passesLeft > 0);
 
 		return $text;
 	}
 
 	final public static function convertHtmlToText(string $html, bool $saveBreaks = false): string
 	{
-		$text = preg_replace(['/<p[^>]*>/isu', '/<\\/p[^>]*>/isu'], ['', '<br><br>'], $html);
+		$text = preg_replace(['/<p[^>]*>/isu', '/<\\/p[^>]*>/isu'], ['', '<br><br>'], $html) ?? $html;
 		if (str_ends_with($text, '<br><br>'))
 		{
 			$text = mb_substr($text, 0, -8);
@@ -244,10 +201,272 @@ class TextHelper
 
 		if (!$saveBreaks)
 		{
-			$text = preg_replace('/(<br[^>]*>)+/isu', "\n", $text);
+			$text = preg_replace('/(<br[^>]*>)+/isu', "\n", $text) ?? $text;
 		}
 
 		return strip_tags($text, $saveBreaks ? '<br>' : null);
+	}
+
+	public static function preparePlainTextFromHtmlString(string $html): string
+	{
+		return strip_tags(self::encodeSingleUnsupportedAngleBracketTokens($html));
+	}
+
+	public static function encodeSingleUnsupportedAngleBracketTokens(string $text): string
+	{
+		$openingTagNames = [];
+		if (preg_match_all('/<([^\s\/!\?][^<>]*)>/', $text, $openingMatches) > 0)
+		{
+			foreach ($openingMatches[1] as $openingTokenContent)
+			{
+				$openingTagName = self::extractAngleBracketTokenTagName($openingTokenContent);
+				if ($openingTagName !== '')
+				{
+					$openingTagNames[$openingTagName] = true;
+				}
+			}
+		}
+
+		$closingTagNames = [];
+		if (preg_match_all('/<\s*\/\s*([^<>]+)>/', $text, $closingMatches) > 0)
+		{
+			foreach ($closingMatches[1] as $closingTokenContent)
+			{
+				$closingTagName = self::extractAngleBracketTokenTagName($closingTokenContent);
+				if ($closingTagName !== '')
+				{
+					$closingTagNames[$closingTagName] = true;
+				}
+			}
+		}
+
+		$result = preg_replace_callback(
+			'/<([^<>]*)>/',
+			static function (array $matches) use ($closingTagNames, $openingTagNames): string {
+				if (self::isMarkupAngleBracketToken($matches[1], $closingTagNames, $openingTagNames))
+				{
+					return $matches[0];
+				}
+
+				return htmlspecialcharsbx($matches[0], ENT_COMPAT | ENT_SUBSTITUTE);
+			},
+			$text
+		);
+		if ($result === null)
+		{
+			return $text;
+		}
+
+		return preg_replace('/<(?![^<>]*>)/', '&lt;', $result) ?? $result;
+	}
+
+	private static function isMarkupAngleBracketToken(
+		string $tokenContent,
+		array $closingTagNames,
+		array $openingTagNames
+	): bool
+	{
+		if (preg_match('/^\s/', $tokenContent) === 1)
+		{
+			return false;
+		}
+
+		$tokenContent = trim($tokenContent);
+		if ($tokenContent === '')
+		{
+			return false;
+		}
+
+		if (
+			str_starts_with($tokenContent, '!')
+			|| str_starts_with($tokenContent, '?')
+		)
+		{
+			return true;
+		}
+
+		if (str_starts_with($tokenContent, '/'))
+		{
+			$tagName = self::extractAngleBracketTokenTagName(mb_substr($tokenContent, 1));
+			if ($tagName === '')
+			{
+				return true;
+			}
+
+			return self::isKnownMarkupTagName($tagName) || isset($openingTagNames[$tagName]);
+		}
+
+		$tagName = self::extractAngleBracketTokenTagName($tokenContent);
+		if ($tagName === '')
+		{
+			return true;
+		}
+
+		if (isset($closingTagNames[$tagName]))
+		{
+			return true;
+		}
+
+		return (
+			self::isVoidHtmlTagName($tagName)
+			|| self::isKnownDangerousHtmlTagName($tagName)
+			|| self::isSelfClosingMarkupToken($tokenContent, $tagName)
+			|| self::hasMarkupAttributes($tokenContent)
+		);
+	}
+
+	private static function extractAngleBracketTokenTagName(string $tokenContent): string
+	{
+		$tokenContent = trim($tokenContent);
+		$tokenContent = rtrim($tokenContent, '/');
+		$tokenContent = trim($tokenContent);
+		if (preg_match('/^([^\s\/>]+)/', $tokenContent, $matches) !== 1)
+		{
+			return '';
+		}
+
+		return self::normalizeMarkupTagName(mb_strtolower($matches[1]));
+	}
+
+	private static function isKnownMarkupTagName(string $tagName): bool
+	{
+		return isset(self::getSanitizedHtmlTagNameMap()[$tagName])
+			|| self::isKnownDangerousHtmlTagName($tagName)
+			|| self::isVoidHtmlTagName($tagName)
+			|| self::isCustomHtmlTagName($tagName)
+		;
+	}
+
+	private static function isKnownDangerousHtmlTagName(string $tagName): bool
+	{
+		return $tagName === 'script' || $tagName === 'style';
+	}
+
+	private static function hasMarkupAttributes(string $tokenContent): bool
+	{
+		if (preg_match('/^[^\s\/>]+\s+[a-z_:][a-z0-9:._-]*\s*=/i', $tokenContent) !== 1)
+		{
+			return false;
+		}
+
+		return self::isKnownMarkupTagName(self::extractAngleBracketTokenTagName($tokenContent));
+	}
+
+	private static function isCustomHtmlTagName(string $tagName): bool
+	{
+		return preg_match('/^[a-z][a-z0-9._]*-[a-z0-9._-]*$/', $tagName) === 1;
+	}
+
+	private static function isSelfClosingMarkupToken(string $tokenContent, string $tagName): bool
+	{
+		return str_ends_with(rtrim($tokenContent), '/')
+			&& preg_match('/^[a-z][a-z0-9._-]*$/i', $tagName) === 1
+		;
+	}
+
+	private static function normalizeMarkupTagName(string $tagName): string
+	{
+		$colonPosition = mb_strrpos($tagName, ':');
+		if ($colonPosition === false)
+		{
+			return $tagName;
+		}
+
+		return mb_substr($tagName, $colonPosition + 1);
+	}
+
+	private static function getSanitizedHtmlTagNameMap(): array
+	{
+		static $tagNameMap = null;
+
+		if ($tagNameMap === null)
+		{
+			$tagNameMap = array_fill_keys(array_keys(self::getSanitizedHtmlTags()), true);
+		}
+
+		return $tagNameMap;
+	}
+
+	private static function getSanitizedHtmlTags(): array
+	{
+		return [
+			'a' => ['href', 'title', 'name', 'style', 'class', 'shape', 'coords', 'alt', 'target'],
+			'b' => ['style', 'class'],
+			'br' => ['style', 'class'],
+			'big' => ['style', 'class'],
+			'blockquote' => ['title', 'style', 'class'],
+			'caption' => ['style', 'class'],
+			'code' => ['style', 'class'],
+			'del' => ['title', 'style', 'class'],
+			'div' => ['title', 'style', 'class', 'align'],
+			'dt' => ['style', 'class'],
+			'dd' => ['style', 'class'],
+			'font' => ['color', 'size', 'face', 'style', 'class'],
+			'h1' => ['style', 'class', 'align'],
+			'h2' => ['style', 'class', 'align'],
+			'h3' => ['style', 'class', 'align'],
+			'h4' => ['style', 'class', 'align'],
+			'h5' => ['style', 'class', 'align'],
+			'h6' => ['style', 'class', 'align'],
+			'hr' => ['style', 'class'],
+			'i' => ['style', 'class'],
+			'img' => ['style', 'class', 'src', 'alt', 'height', 'width', 'title'],
+			'ins' => ['title', 'style', 'class'],
+			'li' => ['style', 'class'],
+			'map' => ['shape', 'coords', 'href', 'alt', 'title', 'style', 'class', 'name'],
+			'ol' => ['style', 'class'],
+			'p' => ['style', 'class', 'align'],
+			'pre' => ['style', 'class'],
+			's' => ['style', 'class'],
+			'small' => ['style', 'class'],
+			'strong' => ['style', 'class'],
+			'span' => ['title', 'style', 'class', 'align'],
+			'sub' => ['style', 'class'],
+			'sup' => ['style', 'class'],
+			'table' => ['border', 'width', 'style', 'class', 'cellspacing', 'cellpadding'],
+			'tbody' => ['align', 'valign', 'style', 'class'],
+			'td' => ['width', 'height', 'style', 'class', 'align', 'valign', 'colspan', 'rowspan'],
+			'tfoot' => ['align', 'valign', 'style', 'class', 'align', 'valign'],
+			'th' => ['width', 'height', 'style', 'class', 'colspan', 'rowspan'],
+			'thead' => ['align', 'valign', 'style', 'class'],
+			'tr' => ['align', 'valign', 'style', 'class'],
+			'u' => ['style', 'class'],
+			'ul' => ['style', 'class'],
+		];
+	}
+
+	private static function isVoidHtmlTagName(string $tagName): bool
+	{
+		static $voidHtmlTagNames = [
+			'area',
+			'base',
+			'basefont',
+			'bgsound',
+			'br',
+			'col',
+			'command',
+			'embed',
+			'frame',
+			'hr',
+			'img',
+			'input',
+			'keygen',
+			'link',
+			'menuitem',
+			'meta',
+			'param',
+			'source',
+			'track',
+			'wbr',
+		];
+		static $voidHtmlTagNameMap = null;
+
+		if ($voidHtmlTagNameMap === null)
+		{
+			$voidHtmlTagNameMap = array_fill_keys($voidHtmlTagNames, true);
+		}
+
+		return isset($voidHtmlTagNameMap[$tagName]);
 	}
 
 	final public static function cleanTextByType(?string $text, int $contentType = CCrmContentType::PlainText): string

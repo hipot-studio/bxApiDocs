@@ -337,6 +337,17 @@ class CCrmWebFormEditComponent extends \CBitrixComponent
 
 
 		$canUseCallBack = Loader::includeModule('voximplant');
+		$agreementId = (int)$request->get('AGREEMENT_ID');
+		$storedAcceptBySubmit = 'N';
+		foreach ($this->crmWebForm->get()['AGREEMENTS'] ?? [] as $storedAgreement)
+		{
+			if ((int)$storedAgreement['AGREEMENT_ID'] === $agreementId)
+			{
+				$storedAcceptBySubmit = ($storedAgreement['ACCEPT_BY_SUBMIT'] ?? 'N') === 'Y' ? 'Y' : 'N';
+
+				break;
+			}
+		}
 
 		$params = array(
 			//'ACTIVE' => $request->get('ACTIVE') == 'Y' ? 'Y' : 'N',
@@ -381,8 +392,9 @@ class CCrmWebFormEditComponent extends \CBitrixComponent
 			'BUTTON_COLOR_BG' => $request->get('BUTTON_COLOR_BG'),
 
 			'USE_LICENCE' => $request->get('USE_LICENCE') == 'Y' ? 'Y' : 'N',
-			'AGREEMENT_ID' => (integer) $request->get('AGREEMENT_ID'),
+			'AGREEMENT_ID' => $agreementId,
 			'LICENCE_BUTTON_IS_CHECKED' => $request->get('LICENCE_BUTTON_IS_CHECKED') == 'Y' ? 'Y' : 'N',
+			'LICENCE_BUTTON_ACCEPT_BY_SUBMIT' => $storedAcceptBySubmit,
 
 			'RESULT_SUCCESS_TEXT' => $request->get('USE_RESULT_SUCCESS_TEXT') == 'Y' ? $request->get('RESULT_SUCCESS_TEXT') : '',
 			'RESULT_SUCCESS_URL' => $request->get('USE_RESULT_SUCCESS_URL') == 'Y' ? $request->get('RESULT_SUCCESS_URL') : '',
@@ -933,8 +945,9 @@ class CCrmWebFormEditComponent extends \CBitrixComponent
 			{
 				$formData['AGREEMENTS'] = [[
 					'ID' => $agreementId,
-					'CHECKED' => 'Y',
+					'CHECKED' => WebForm\Embed\Config::isAcceptBySubmitEnabled() ? 'Y' : 'N',
 					'REQUIRED' => 'Y',
+					'ACCEPT_BY_SUBMIT' => WebForm\Embed\Config::isAcceptBySubmitEnabled() ? 'Y' : 'N',
 				]];
 			}
 

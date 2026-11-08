@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Internal\Service\MailTemplate;
 
+use Bitrix\Crm\V2\Internal\Integration\Disk\MailTemplateAttachmentProvider;
 use Bitrix\Crm\V2\Internal\Repository\MailTemplate\LegacyMailTemplateRepository;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -15,12 +16,18 @@ final class MailTemplatePreparationService
 
 	public function __construct(
 		private readonly LegacyMailTemplateRepository $repository = new LegacyMailTemplateRepository(),
+		private readonly MailTemplateAttachmentProvider $attachmentProvider = new MailTemplateAttachmentProvider(),
 	)
 	{
 	}
 
 	/**
-	 * @return Result Data shape on success: array{id: int, subject: string, bodyHtml: string}
+	 * @return Result Data shape on success: array{
+	 *     id: int,
+	 *     subject: string,
+	 *     bodyHtml: string,
+	 *     attachments: list<array{id: int, name: string, size: int, contentType: string|null}>
+	 * }
 	 */
 	public function prepareUniversal(int $templateId, int $userId): Result
 	{
@@ -44,6 +51,12 @@ final class MailTemplatePreparationService
 				\CCrmContentType::Html,
 				$userId,
 			);
+			[$bodyHtml, $attachments] = $this->attachmentProvider->prepare(
+				$bodyHtml,
+				$template['attachmentIds'] ?? [],
+				$userId,
+				$template['id'],
+			);
 			$bodyHtml = $this->sanitizeBodyHtml($bodyHtml);
 			$subject = \CCrmTemplateManager::PrepareTemplate(
 				$template['subject'],
@@ -65,6 +78,7 @@ final class MailTemplatePreparationService
 			'id' => $template['id'],
 			'subject' => $subject,
 			'bodyHtml' => $bodyHtml,
+			'attachments' => $attachments,
 		]);
 	}
 

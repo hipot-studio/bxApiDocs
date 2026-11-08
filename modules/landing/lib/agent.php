@@ -385,7 +385,7 @@ class Agent
 
 	/**
 	 * Remove marked for deleting files.
-	 * @param int|null $count Count of files wich will be deleted per once.
+	 * @param int|null $count Count of files which will be deleted per once.
 	 * @return string
 	 */
 	public static function clearFiles(?int $count = null): string

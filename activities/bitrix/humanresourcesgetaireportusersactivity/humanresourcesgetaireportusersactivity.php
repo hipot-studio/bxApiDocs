@@ -73,12 +73,45 @@ class CBPHumanResourcesGetAiReportUsersActivity extends BaseActivity
 			$usersByRole[NodeMemberRole::Employee->value] ?? [],
 		);
 
+		// Users who turned the day-plan messages off in the assistant chat opt out of every flow
+		// of this agent (welcome, morning plan, evening report), not only of the message nodes.
+		$disabled = self::getDisabledPlannerUsers(array_merge($allUsers, $heads));
+		$allUsers = self::excludeUserIds($allUsers, $disabled);
+		$heads = self::excludeUserIds($heads, $disabled);
+
 		$toBpUsers = static fn(array $ids): array => array_map(static fn(int $id): string => 'user_' . $id, $ids);
 
 		$this->setProperty(self::RETURN_PARAM_USERS, $toBpUsers($allUsers));
 		$this->setProperty(self::RETURN_PARAM_HEADS, $toBpUsers($heads));
 
 		return new ErrorCollection();
+	}
+
+	private static function getDisabledPlannerUsers(array $userIds): array
+	{
+		// is_callable guards a staged update where this file is newer than aiassistant.
+		if (
+			!\Bitrix\Main\Loader::includeModule('aiassistant')
+			|| !is_callable(
+				[\Bitrix\AiAssistant\Core\Im\ImBot::class, 'getPlannerMessageDisabledUserIds'],
+			)
+		)
+		{
+			return [];
+		}
+
+		return array_fill_keys(
+			\Bitrix\AiAssistant\Core\Im\ImBot::getPlannerMessageDisabledUserIds($userIds),
+			true,
+		);
+	}
+
+	private static function excludeUserIds(array $userIds, array $disabled): array
+	{
+		return array_values(array_filter(
+			$userIds,
+			static fn(int $id): bool => !isset($disabled[$id]),
+		));
 	}
 
 	public static function getPropertiesDialogMap(?PropertiesDialog $dialog = null): array

@@ -2,17 +2,12 @@
 
 namespace Bitrix\Disk\Controller;
 
-use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\Driver;
-use Bitrix\Disk\File;
 use Bitrix\Disk\Internals\Error\Error;
-use Bitrix\Disk\Version;
 use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Disk;
 use Bitrix\Disk\UrlManager;
 use Bitrix\Disk\ZipNginx;
-use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
-use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
 
 class CommonActions extends BaseObject
@@ -211,8 +206,15 @@ class CommonActions extends BaseObject
 		return $this->getAllowedOperationsRights($object);
 	}
 
-	public function getArchiveLinkAction(Disk\Type\ObjectCollection $objectCollection)
+	public function getArchiveLinkAction(Disk\Type\ObjectCollection $objectCollection): ?array
 	{
+		if (!$this->canDownloadArchiveObjects($objectCollection, shouldCheckDescendants: false))
+		{
+			$this->addError(new Error('Could not download archive.'));
+
+			return null;
+		}
+
 		$uri = $this->getActionUri(
 			'downloadArchive',
 			[
@@ -241,12 +243,44 @@ class CommonActions extends BaseObject
 		];
 	}
 
-	public function downloadArchiveAction(Disk\Type\ObjectCollection $objectCollection): ZipNginx\Archive
+	public function downloadArchiveAction(Disk\Type\ObjectCollection $objectCollection): ?ZipNginx\Archive
 	{
 		$archiveName = 'archive' . date('y-m-d');
 		$userId = $this->getCurrentUser()?->getId();
 
+		if (!$this->canDownloadArchiveObjects($objectCollection))
+		{
+			$this->addError(new Error('Could not download archive.'));
+
+			return null;
+		}
+
 		return ZipNginx\Archive::createByObjects($archiveName, $objectCollection, $userId);
+	}
+
+	protected function canDownloadArchiveObjects(
+		Disk\Type\ObjectCollection $objectCollection,
+		bool $shouldCheckDescendants = true,
+	): bool
+	{
+		$userId = $this->getCurrentUser()?->getId();
+
+		if (!$userId)
+		{
+			return false;
+		}
+
+		return $this->getArchiveDownloadAccessChecker()->canDownloadObjects(
+			objects: $objectCollection->toArray(),
+			securityContextResolver: static fn(Disk\BaseObject $object) => $object->getStorage()?->getSecurityContext($userId),
+			shouldCheckDescendants: $shouldCheckDescendants,
+			shouldFollowFolderLinks: true,
+		);
+	}
+
+	protected function getArchiveDownloadAccessChecker(): Disk\Internal\Service\Archive\ArchiveDownloadAccessChecker
+	{
+		return new Disk\Internal\Service\Archive\ArchiveDownloadAccessChecker();
 	}
 
 	public function listRecentlyUsedAction()

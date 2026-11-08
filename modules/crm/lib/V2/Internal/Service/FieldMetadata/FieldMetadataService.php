@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Internal\Service\FieldMetadata;
 
 use Bitrix\Crm\V2\Internal\Entity\FieldMetadata\FieldMetadata;
-use Bitrix\Crm\V2\Internal\Repository\Dictionary\EntityTypeTitleProvider;
 use Bitrix\Crm\V2\Internal\Repository\FieldMetadata\FieldMetadataSourceInterface;
-use Bitrix\Crm\V2\Internal\Repository\FieldMetadata\SystemFieldTitleProvider;
 use Bitrix\Crm\V2\Internal\Service\Item\CustomFieldRegistry;
 use Bitrix\Crm\V2\Public\EntityType;
-use Bitrix\Crm\Service\Container;
+use Bitrix\Main\Localization\LocalizableMessage;
 
 /**
  * @internal
@@ -20,16 +18,9 @@ final class FieldMetadataService
 	public function __construct(
 		private readonly FieldMetadataSourceInterface $source,
 		private readonly CustomFieldRegistry $customFieldRegistry,
-		?SystemFieldTitleProvider $systemFieldTitleProvider = null,
-		?EntityTypeTitleProvider $entityTypeTitleProvider = null,
 	)
 	{
-		$this->systemFieldTitleProvider = $systemFieldTitleProvider ?? new SystemFieldTitleProvider();
-		$this->entityTypeTitleProvider = $entityTypeTitleProvider ?? new EntityTypeTitleProvider();
 	}
-
-	private readonly SystemFieldTitleProvider $systemFieldTitleProvider;
-	private readonly EntityTypeTitleProvider $entityTypeTitleProvider;
 
 	/**
 	 * @return FieldMetadata[]
@@ -47,7 +38,7 @@ final class FieldMetadataService
 				continue;
 			}
 
-			$projectedFields[] = $this->projectField($field, $userDefinitions, $entityType, $languageId);
+			$projectedFields[] = $this->projectField($field, $userDefinitions, $languageId);
 		}
 
 		return $projectedFields;
@@ -68,7 +59,7 @@ final class FieldMetadataService
 
 		if (!$field->isUserField && $field->sourceUserFieldName === null)
 		{
-			return $this->projectField($field, [], $entityType, $languageId);
+			return $this->projectField($field, [], $languageId);
 		}
 
 		[$userDefinitions, $visibleUserNames] = $this->getUserFieldContext($entityType, $userId, $languageId);
@@ -77,7 +68,7 @@ final class FieldMetadataService
 			return null;
 		}
 
-		return $this->projectField($field, $userDefinitions, $entityType, $languageId);
+		return $this->projectField($field, $userDefinitions, $languageId);
 	}
 
 	/**
@@ -114,11 +105,10 @@ final class FieldMetadataService
 	private function projectField(
 		FieldMetadata $field,
 		array $userDefinitions,
-		EntityType $entityType,
 		string $languageId,
 	): FieldMetadata
 	{
-		$projectedField = $this->localizeSystemField($field, $entityType, $languageId);
+		$projectedField = $this->localizeSystemField($field, $languageId);
 
 		if ($field->isUserField)
 		{
@@ -148,65 +138,20 @@ final class FieldMetadataService
 			}
 		}
 
-		$relatedEntityTitle = $this->getRelatedEntityTitle($field->name, $languageId);
-		if ($relatedEntityTitle !== null && ($field->title === null || $field->title === $field->name))
-		{
-			$projectedField = $projectedField->withTitleAndDescription($relatedEntityTitle, $field->description);
-		}
-
 		return $projectedField;
-	}
-
-	private function getRelatedEntityTitle(string $fieldName, string $languageId): ?string
-	{
-		if (!str_starts_with($fieldName, 'related'))
-		{
-			return null;
-		}
-
-		$entityCode = substr($fieldName, strlen('related'));
-		if (str_ends_with($entityCode, 'Id'))
-		{
-			$entityCode = substr($entityCode, 0, -2);
-		}
-
-		$relatedEntityType = EntityType::fromCode($entityCode);
-		if ($relatedEntityType === null)
-		{
-			return null;
-		}
-
-		if ($relatedEntityType->isSmartProcess())
-		{
-			$title = Container::getInstance()
-				->getFactory($relatedEntityType->getId())
-				?->getEntityDescription()
-			;
-
-			return $title !== null && $title !== '' ? $title : null;
-		}
-
-		$title = $this->entityTypeTitleProvider->getTitle($relatedEntityType, $languageId);
-
-		return $title !== '' ? $title : null;
 	}
 
 	private function localizeSystemField(
 		FieldMetadata $field,
-		EntityType $entityType,
 		string $languageId,
 	): FieldMetadata
 	{
-		if ($field->isUserField || $field->sourceUserFieldName !== null || $field->title !== $field->name)
+		if ($field->isUserField || $field->sourceUserFieldName !== null || !$field->title instanceof LocalizableMessage)
 		{
 			return $field;
 		}
 
-		$title = $this->systemFieldTitleProvider->getTitle($entityType, $field->name, $languageId);
-		if ($title === null)
-		{
-			return $field;
-		}
+		$title = $field->title->localize($languageId) ?? $field->name;
 
 		return $field->withTitleAndDescription($title, $field->description);
 	}

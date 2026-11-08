@@ -19,6 +19,11 @@ class RunBeforeUpdateEvent
 	 */
 	public function __invoke(array $fields, array $fullTaskData, ?callable $eventFilter = null): array
 	{
+		if ($this->config->isSkipTaskUpdateEvent())
+		{
+			return $fields;
+		}
+
 		$eventTaskData = $fullTaskData;
 
 		foreach (GetModuleEvents('tasks', 'OnBeforeTaskUpdate', true) as $arEvent)

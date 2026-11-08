@@ -379,14 +379,14 @@ class Type
 		}
 		$entityName = (new PermissionEntityTypeHelper($entityTypeId))->getPermissionEntityTypeForCategory(0);
 
-		return $this->permissionsManager->hasPermission($entityName, $operation);
+		return $this->hasTypeLevelPermission($entityName, $operation);
 	}
 
 	private function canDoOperationInCategory(int $entityTypeId, int $categoryId, string $operation): bool
 	{
 		$entityName = (new PermissionEntityTypeHelper($entityTypeId))->getPermissionEntityTypeForCategory($categoryId);
 
-		return $this->permissionsManager->hasPermission($entityName, $operation);
+		return $this->hasTypeLevelPermission($entityName, $operation);
 	}
 
 	private function hasPermissionInAtLeastOneCategory(Factory $factory, string $operation): bool
@@ -394,13 +394,38 @@ class Type
 		foreach ($factory->getCategories() as $category)
 		{
 			$categoryEntityName = (new PermissionEntityTypeHelper($factory->getEntityTypeId()))->getPermissionEntityTypeForCategory($category->getId());
-			if ($this->permissionsManager->hasPermission($categoryEntityName, $operation))
+			if ($this->hasTypeLevelPermission($categoryEntityName, $operation))
 			{
 				return true;
 			}
 		}
 
 		return false;
+	}
+
+	/**
+	 * A coarse answer about a permission entity: may the user do this at all, anywhere in it.
+	 *
+	 * Observers may update the cards they observe - where the block is configured per stage, only on the stages
+	 * the role allows there - so an update is possible here even without a write permission; otherwise list and
+	 * grid surfaces would not offer the inline edit an observer is entitled to.
+	 *
+	 * The contract of that over-approximation: this answer is good for display and as a prefilter, and for
+	 * nothing else. Every write surface, legacy ones included, is required to decide per item through
+	 * {@see Item::canUpdate()} and its neighbours; a surface that writes on this answer alone lets an observer
+	 * update a card it may not touch.
+	 */
+	private function hasTypeLevelPermission(string $permissionEntityType, string $operation): bool
+	{
+		if ($this->permissionsManager->hasPermission($permissionEntityType, $operation))
+		{
+			return true;
+		}
+
+		return
+			$operation === UserPermissions::OPERATION_UPDATE
+			&& $this->permissionsManager->isObserversWriteEnabled($permissionEntityType)
+		;
 	}
 
 	private function canReadSomeItems(?int $automatedSolutionId): bool

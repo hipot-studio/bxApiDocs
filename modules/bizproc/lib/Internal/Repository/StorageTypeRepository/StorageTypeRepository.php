@@ -202,6 +202,30 @@ class StorageTypeRepository implements StorageTypeRepositoryInterface
 		return $this->convertStorageTypesFromOrm($ormStorageTypes);
 	}
 
+	/**
+	 * Exact CODE lookup, served by the unique ix_bp_storage_type_code index. Deliberately not routed through
+	 * StorageTypeFilter: its CODE condition is the substring search of the admin grid, which both scans the
+	 * index and can answer with a storage whose code merely contains the requested one. The whole row is
+	 * selected because the mapper reads every field - a narrower select would trade this single query for
+	 * lazy per-field loads.
+	 */
+	public function getByCode(string $code): ?Entity\StorageType\StorageType
+	{
+		if ($code === '')
+		{
+			return null;
+		}
+
+		$ormStorageType = StorageTypeTable::query()
+			->setSelect(['*'])
+			->setFilter(['=CODE' => $code])
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		return $ormStorageType === null ? null : $this->mapper->convertFromOrm($ormStorageType);
+	}
+
 	public function getById(int $id, array $select = []): ?Entity\StorageType\StorageType
 	{
 		return $this->getList(

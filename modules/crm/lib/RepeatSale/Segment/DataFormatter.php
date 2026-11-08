@@ -35,7 +35,11 @@ final class DataFormatter
 	{
 		if ($this->segments === null)
 		{
-			$this->segments = RepeatSaleSegmentController::getInstance()->getList()->collectValues();
+			$this->segments = RepeatSaleSegmentController::getInstance()->getList([
+				'select' => ['ID', 'TITLE'],
+				// 0 removes the controller's default limit of 10 rows, otherwise old segments would be missing titles
+				'limit' => 0,
+			])->collectValues();
 		}
 
 		return $this->segments;

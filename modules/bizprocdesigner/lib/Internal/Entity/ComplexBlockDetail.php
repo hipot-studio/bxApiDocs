@@ -21,11 +21,19 @@ class ComplexBlockDetail implements Arrayable
 	 * @param bool $filterSupported node-filter availability, mirroring `availableBlocks.filter.available`
 	 *        of the node: its block descriptor decides, and only a node without one falls back to the
 	 *        runtime gate (rollout flag plus a filter-result resolver for the effective document module)
+	 * @param bool $conditionSupported whether the node accepts condition rules, mirroring
+	 *        `availableBlocks.condition.available` - the same flag
+	 *        {@see \Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\ValidateSingleRuleCommand}
+	 *        judges a condition construction by on save. `true` for a node with no descriptor, which is what
+	 *        {@see \Bitrix\Bizproc\Activity\Dto\Complex\BlockAvailability::legacyDefault()} offers it.
+	 *        Deliberately not published in the catalog, like the skipped settings of a sub-action: it is read
+	 *        to decide what to describe to the agent, not offered to it as a writable surface.
 	 */
 	public function __construct(
 		public readonly array $nodeActions,
 		public readonly ?array $fixedDocumentType,
 		public readonly bool $filterSupported,
+		public readonly bool $conditionSupported = true,
 	) {}
 
 	public function toArray(): array

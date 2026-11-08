@@ -44,12 +44,7 @@ class FileCollection extends BaseLinkCollection
 	{
 		$context = $context ?? Locator::getContext();
 
-		$fileOrder = ['ID' => 'DESC'];
-
-		if (isset($order['ID']))
-		{
-			$fileOrder['ID'] = $order['ID'];
-		}
+		$fileOrder = static::resolveOrder($order);
 
 		$query = LinkFileTable::query();
 		static::processDiskFileFilters($query, $context);
@@ -151,7 +146,34 @@ class FileCollection extends BaseLinkCollection
 			$entities->loadParams();
 		}
 
-		return parent::linkEntityToMessage($entities, $message);
+		$links = parent::linkEntityToMessage($entities, $message);
+		$dateCreate = $message->getDateCreate();
+
+		// the tab is ordered by the date of the record, and the column defaults to the moment of the insert:
+		// a file attached to an already sent message would take the date of the edit and land out of place
+		if ($dateCreate !== null)
+		{
+			foreach ($links as $link)
+			{
+				$link->setDateCreate($dateCreate);
+			}
+		}
+
+		return $links;
+	}
+
+	/**
+	 * DATE_CREATE wins over ID: a request that asks for the date order carries both keys, because the REST
+	 * layer always fills ORDER.ID. The date is not unique, so the id resolves the ties in the same direction.
+	 */
+	protected static function resolveOrder(array $order): array
+	{
+		if (isset($order['DATE_CREATE']))
+		{
+			return ['DATE_CREATE' => $order['DATE_CREATE'], 'ID' => $order['DATE_CREATE']];
+		}
+
+		return ['ID' => $order['ID'] ?? 'DESC'];
 	}
 
 	protected static function processFilters(Query $query, array $filter, array $order): void
@@ -163,25 +185,43 @@ class FileCollection extends BaseLinkCollection
 			$query->whereLike('FILE.NAME', "{$filter['SEARCH_FILE_NAME']}%");
 		}
 
-		$subtypes = [];
+		$subtypes = static::resolveSubtypes($filter);
 
+		// null means the request asks for no subtype and no group, so every subtype is read
+		if ($subtypes !== null)
+		{
+			if ($subtypes === [])
+			{
+				// none of the requested values is a known subtype, so the tab stays empty
+				$query->where('ID', 0);
+			}
+			elseif (count($subtypes) > 1)
+			{
+				$query->whereIn('SUBTYPE', $subtypes);
+			}
+			else
+			{
+				$query->where('SUBTYPE', array_values($subtypes)[0]);
+			}
+		}
+	}
+
+	/**
+	 * @return string[]|null Null when the request asks for no subtype and no group.
+	 */
+	protected static function resolveSubtypes(array $filter): ?array
+	{
 		if (isset($filter['SUBTYPE']))
 		{
-			$subtypes = Subtype::getSubtypeFilter($filter['SUBTYPE']);
-		}
-		elseif (isset($filter['GROUP']))
-		{
-			$subtypes = SubtypeGroup::getSubtypeFilter($filter['GROUP']);
+			return Subtype::getSubtypeFilter($filter['SUBTYPE']);
 		}
 
-		if (count($subtypes) > 1)
+		if (isset($filter['GROUP']))
 		{
-			$query->whereIn('SUBTYPE', $subtypes);
+			return SubtypeGroup::getSubtypeFilter($filter['GROUP']);
 		}
-		elseif (count($subtypes) === 1)
-		{
-			$query->where('SUBTYPE', array_values($subtypes)[0]);
-		}
+
+		return null;
 	}
 
 	protected static function processDiskFileFilters(Query $query, Context $context): void

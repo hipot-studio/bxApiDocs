@@ -6,46 +6,47 @@ namespace Bitrix\Vibecodeconnector\Infrastructure\Controller;
 
 use Bitrix\Main\Application;
 use Bitrix\Main\Command\Exception\CommandException;
+use Bitrix\Main\Context;
 use Bitrix\Main\Diag\ExceptionHandlerLog;
 use Bitrix\Main\DI\ServiceLocator;
-use Bitrix\Main\Engine\ActionFilter\Csrf;
-use Bitrix\Main\Engine\ActionFilter\HttpMethod;
-use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\Response;
 use Bitrix\Main\Error;
-use Bitrix\Main\Loader;
 use Bitrix\Main;
 use Bitrix\Main\Request;
 use Bitrix\Vibecodeconnector\Infrastructure\Controller\ActionFilter\CheckIncomingJwt;
+use Bitrix\Vibecodeconnector\Infrastructure\Controller\VibecodePort\Base;
+use Bitrix\Vibecodeconnector\Infrastructure\Controller\VibecodePort\VibeDemo;
 use Bitrix\Vibecodeconnector\Internal\Exception\ProvisioningFailedException;
-use Bitrix\Vibecodeconnector\Internal\Integration\Bitrix24\VibeDemo\VibeDemoActivatorFactory;
+use Bitrix\Vibecodeconnector\Internal\Integration\Bitrix24\VibeDemoGateway;
 use Bitrix\Vibecodeconnector\Internal\Integration\Socialservices\NetworkService;
-use Bitrix\Vibecodeconnector\Internal\Repository\Pairing\PairingRepository;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Release\ReleaseService;
 use Bitrix\Vibecodeconnector\Internal\Service\Messenger\Message\UserListPullMessage;
 use Bitrix\Vibecodeconnector\Internal\Service\Messenger\UserListPullQueueGuard;
-use Bitrix\Vibecodeconnector\Internal\Service\DeveloperKeyService;
 use Bitrix\Vibecodeconnector\Internal\Service\Licensing\ProvisioningAccessGate;
-use Bitrix\Vibecodeconnector\Internal\Service\Licensing\VibeDemo\Activator;
-use Bitrix\Vibecodeconnector\Internal\Service\Provisioning\ApiKey;
-use Bitrix\Vibecodeconnector\Internal\Service\Provisioning\ApplicationKey;
-use Bitrix\Vibecodeconnector\Internal\Service\Provisioning\EntryPoint;
 use Bitrix\Vibecodeconnector\Internal\Service\User\UserAttributesResolver;
 use Bitrix\Vibecodeconnector\Internal\Service\User\UserEventTargetProvider;
-use Throwable;
+use Bitrix\Vibecodeconnector\Public\Service\ProvisioningService;
 
-final class VibecodePort extends Controller implements IncomingServerAware
+class VibecodePort extends Base
 {
+	private const CHANGELOG_MAX_LENGTH = 2000;
+	private const RELEASE_KEY_MAX_LENGTH = 255;
 	private const USER_ATTRIBUTES_LIMIT = 200;
 
 	private NetworkService $networkService;
-	private ?string $incomingServerIss = null;
 	private readonly ?UserListPullQueueGuard $userListPullQueueGuard;
+	private readonly ?VibeDemoGateway $vibeDemoGateway;
+	private ReleaseService $releaseService;
 	private ProvisioningAccessGate $accessGate;
-	private ?Activator $vibeDemoActivator = null;
 
-	public function __construct(?Request $request = null, ?UserListPullQueueGuard $userListPullQueueGuard = null)
+	public function __construct(
+		?Request $request = null,
+		?UserListPullQueueGuard $userListPullQueueGuard = null,
+		?VibeDemoGateway $vibeDemoGateway = null,
+	)
 	{
 		$this->userListPullQueueGuard = $userListPullQueueGuard;
+		$this->vibeDemoGateway = $vibeDemoGateway;
 		parent::__construct($request);
 	}
 
@@ -53,12 +54,8 @@ final class VibecodePort extends Controller implements IncomingServerAware
 	{
 		parent::init();
 		$this->networkService = new NetworkService();
+		$this->releaseService = new ReleaseService();
 		$this->accessGate = new ProvisioningAccessGate();
-	}
-
-	public function setIncomingServerIss(?string $iss): void
-	{
-		$this->incomingServerIss = $iss;
 	}
 
 	public function setAccessGate(ProvisioningAccessGate $accessGate): void
@@ -66,18 +63,9 @@ final class VibecodePort extends Controller implements IncomingServerAware
 		$this->accessGate = $accessGate;
 	}
 
-	public function setVibeDemoActivator(Activator $vibeDemoActivator): void
+	public function setReleaseService(ReleaseService $releaseService): void
 	{
-		$this->vibeDemoActivator = $vibeDemoActivator;
-	}
-
-	protected function getDefaultPreFilters()
-	{
-		return [
-			new HttpMethod([HttpMethod::METHOD_POST]),
-			new CheckIncomingJwt(),
-			new Csrf(false),
-		];
+		$this->releaseService = $releaseService;
 	}
 
 	public function configureActions(): array
@@ -100,15 +88,17 @@ final class VibecodePort extends Controller implements IncomingServerAware
 	{
 		try
 		{
-			$developerKey = (new DeveloperKeyService(EntryPoint::vibecode($this->incomingServerIss)))->issueFor($userId);
+			$webhookUrl = ProvisioningService::forVibecode($this->incomingServerIss, $this->incomingOrigin)
+				->issueDeveloperKey($userId)
+			;
 
 			return Response\AjaxJson::createSuccess(
-				['webhookUrl' => $developerKey->url],
+				['webhookUrl' => $webhookUrl],
 			);
 		}
 		catch (ProvisioningFailedException $exception)
 		{
-			$this->addProvisioningError($exception, 'WEBHOOK_ISSUE_FAILED', userId: $userId);
+			$this->addProvisioningError($exception, 'WEBHOOK_ISSUE_FAILED');
 
 			return Response\AjaxJson::createError($this->errorCollection);
 		}
@@ -122,7 +112,6 @@ final class VibecodePort extends Controller implements IncomingServerAware
 
 	public function getDeveloperKeyByNetworkUserIdAction(string $networkUserId): Response\AjaxJson
 	{
-		$userId = 0;
 		try
 		{
 			$userId = $this->networkService->getUserIdByNetworkId($networkUserId);
@@ -136,15 +125,17 @@ final class VibecodePort extends Controller implements IncomingServerAware
 				return Response\AjaxJson::createError($this->errorCollection);
 			}
 
-			$developerKey = (new DeveloperKeyService(EntryPoint::vibecode($this->incomingServerIss)))->issueFor($userId);
+			$webhookUrl = ProvisioningService::forVibecode($this->incomingServerIss, $this->incomingOrigin)
+				->issueDeveloperKey($userId)
+			;
 
 			return Response\AjaxJson::createSuccess(
-				['webhookUrl' => $developerKey->url],
+				['webhookUrl' => $webhookUrl],
 			);
 		}
 		catch (ProvisioningFailedException $exception)
 		{
-			$this->addProvisioningError($exception, 'WEBHOOK_ISSUE_FAILED', userId: $userId);
+			$this->addProvisioningError($exception, 'WEBHOOK_ISSUE_FAILED');
 
 			return Response\AjaxJson::createError($this->errorCollection);
 		}
@@ -193,16 +184,17 @@ final class VibecodePort extends Controller implements IncomingServerAware
 	{
 		try
 		{
-			$webhookUrl = (new ApiKey\Issuer(
-				EntryPoint::vibecode($this->incomingServerIss),
-				accessGate: $this->accessGate,
-			))->issue($userId, $scopes, $title);
+			$webhookUrl = ProvisioningService::forVibecode(
+				$this->incomingServerIss,
+				$this->incomingOrigin,
+				$this->accessGate,
+			)->issueApiKey($userId, $scopes, $title);
 
 			return Response\AjaxJson::createSuccess(['webhookUrl' => $webhookUrl]);
 		}
 		catch (ProvisioningFailedException $exception)
 		{
-			$this->addProvisioningError($exception, 'APIKEY_ISSUE_ACCESS_FAILED', userId: $userId);
+			$this->addProvisioningError($exception, 'APIKEY_ISSUE_ACCESS_FAILED');
 		}
 		catch (CommandException $exception)
 		{
@@ -243,10 +235,11 @@ final class VibecodePort extends Controller implements IncomingServerAware
 	{
 		try
 		{
-			$app = (new ApplicationKey\Issuer(
-				EntryPoint::vibecode($this->incomingServerIss),
-				accessGate: $this->accessGate,
-			))->issue(
+			$app = ProvisioningService::forVibecode(
+				$this->incomingServerIss,
+				$this->incomingOrigin,
+				$this->accessGate,
+			)->issueApplicationKey(
 				$userId,
 				$handlerUrl,
 				$scopes,
@@ -267,7 +260,7 @@ final class VibecodePort extends Controller implements IncomingServerAware
 		}
 		catch (ProvisioningFailedException $exception)
 		{
-			$this->addProvisioningError($exception, 'APPKEY_INSTALL_ACCESS_FAILED', userId: $userId);
+			$this->addProvisioningError($exception, 'APPKEY_INSTALL_ACCESS_FAILED');
 		}
 		catch (CommandException $exception)
 		{
@@ -279,7 +272,7 @@ final class VibecodePort extends Controller implements IncomingServerAware
 			}
 			else
 			{
-				throw new $previousException();
+				throw $previousException ?? $exception;
 			}
 		}
 		catch (\Throwable $e)
@@ -300,7 +293,6 @@ final class VibecodePort extends Controller implements IncomingServerAware
 	 */
 	public function createApiKeyByNetworkUserIdAction(string $networkUserId, array $scopes, string $title): Response\AjaxJson
 	{
-		$userId = 0;
 		try
 		{
 			$userId = $this->networkService->getUserIdByNetworkId($networkUserId);
@@ -314,16 +306,17 @@ final class VibecodePort extends Controller implements IncomingServerAware
 				return Response\AjaxJson::createError($this->errorCollection);
 			}
 
-			$webhookUrl = (new ApiKey\Issuer(
-				EntryPoint::vibecode($this->incomingServerIss),
-				accessGate: $this->accessGate,
-			))->issue($userId, $scopes, $title);
+			$webhookUrl = ProvisioningService::forVibecode(
+				$this->incomingServerIss,
+				$this->incomingOrigin,
+				$this->accessGate,
+			)->issueApiKey($userId, $scopes, $title);
 
 			return Response\AjaxJson::createSuccess(['webhookUrl' => $webhookUrl]);
 		}
 		catch (ProvisioningFailedException $exception)
 		{
-			$this->addProvisioningError($exception, 'APIKEY_ISSUE_ACCESS_FAILED', userId: $userId);
+			$this->addProvisioningError($exception, 'APIKEY_ISSUE_ACCESS_FAILED');
 		}
 		catch (CommandException $exception)
 		{
@@ -335,7 +328,7 @@ final class VibecodePort extends Controller implements IncomingServerAware
 			}
 			else
 			{
-				throw new $previousException();
+				throw $previousException ?? $exception;
 			}
 		}
 		catch (\Throwable $e)
@@ -364,7 +357,6 @@ final class VibecodePort extends Controller implements IncomingServerAware
 		?string $applicationToken = null,
 	): Response\AjaxJson
 	{
-		$userId = 0;
 		try
 		{
 			$userId = $this->networkService->getUserIdByNetworkId($networkUserId);
@@ -378,10 +370,11 @@ final class VibecodePort extends Controller implements IncomingServerAware
 				return Response\AjaxJson::createError($this->errorCollection);
 			}
 
-			$app = (new ApplicationKey\Issuer(
-				EntryPoint::vibecode($this->incomingServerIss),
-				accessGate: $this->accessGate,
-			))->issue(
+			$app = ProvisioningService::forVibecode(
+				$this->incomingServerIss,
+				$this->incomingOrigin,
+				$this->accessGate,
+			)->issueApplicationKey(
 				$userId,
 				$handlerUrl,
 				$scopes,
@@ -402,7 +395,7 @@ final class VibecodePort extends Controller implements IncomingServerAware
 		}
 		catch (ProvisioningFailedException $exception)
 		{
-			$this->addProvisioningError($exception, 'APPKEY_INSTALL_ACCESS_FAILED', userId: $userId);
+			$this->addProvisioningError($exception, 'APPKEY_INSTALL_ACCESS_FAILED');
 		}
 		catch (CommandException $exception)
 		{
@@ -423,6 +416,48 @@ final class VibecodePort extends Controller implements IncomingServerAware
 		}
 
 		return Response\AjaxJson::createError($this->errorCollection);
+	}
+
+	public function releaseAction(
+		string $externalId = '',
+		int $versionNumber = 0,
+		string $idempotencyKey = '',
+		?string $changelog = null,
+	): Response\AjaxJson
+	{
+		$serverIss = (string)($this->incomingServerIss ?? '');
+		if ($serverIss === '')
+		{
+			Context::getCurrent()->getResponse()->setStatus(403);
+			$this->addError(new Error('Unknown release server', 'RELEASE_UNKNOWN_SERVER'));
+
+			return Response\AjaxJson::createError($this->errorCollection);
+		}
+
+		$externalId = trim($externalId);
+		$idempotencyKey = trim($idempotencyKey);
+		if (
+			$externalId === ''
+			|| mb_strlen($externalId) > self::RELEASE_KEY_MAX_LENGTH
+			|| $versionNumber <= 0
+			|| $idempotencyKey === ''
+			|| mb_strlen($idempotencyKey) > self::RELEASE_KEY_MAX_LENGTH
+			|| ($changelog !== null && mb_strlen($changelog) > self::CHANGELOG_MAX_LENGTH)
+		)
+		{
+			Context::getCurrent()->getResponse()->setStatus(422);
+			$this->addError(new Error('Invalid release payload', 'RELEASE_INVALID_PAYLOAD'));
+
+			return Response\AjaxJson::createError($this->errorCollection);
+		}
+
+		$status = $this->releaseService->release(
+			$serverIss,
+			$externalId,
+			$versionNumber,
+		);
+
+		return Response\AjaxJson::createSuccess(['status' => $status]);
 	}
 
 	public function checkConnectionAction(): Response\AjaxJson
@@ -582,82 +617,33 @@ final class VibecodePort extends Controller implements IncomingServerAware
 
 	public function getVibeDemoStateAction(): Response\AjaxJson
 	{
-		return $this->createVibeDemoResponse(
-			$this->getVibeDemoActivator()->getState(),
-		);
+		return $this->vibeDemo()->getStateAction();
 	}
 
 	public function activateVibeDemoAction(?int $days = null): Response\AjaxJson
 	{
-		return $this->createVibeDemoResponse(
-			$this->getVibeDemoActivator()->activate($days, $this->incomingServerIss),
-		);
+		return $this->vibeDemo()->activateAction($days);
 	}
 
 	public function resetVibeDemoAction(): Response\AjaxJson
 	{
-		return $this->createVibeDemoResponse(
-			$this->getVibeDemoActivator()->reset($this->incomingServerIss),
-		);
+		return $this->vibeDemo()->resetAction();
 	}
 
-	private function getVibeDemoActivator(): Activator
+	private function vibeDemo(): VibeDemo
 	{
-		return $this->vibeDemoActivator ??= VibeDemoActivatorFactory::create();
+		$vibeDemo = new VibeDemo($this->getRequest(), $this->vibeDemoGateway);
+		$vibeDemo->setIncomingServerIss($this->incomingServerIss);
+
+		return $vibeDemo;
 	}
 
-	private function createVibeDemoResponse(Main\Result $result): Response\AjaxJson
+	private function addProvisioningError(ProvisioningFailedException $exception, string $fallbackCode): void
 	{
-		if ($result->isSuccess())
-		{
-			return Response\AjaxJson::createSuccess($result->getData());
-		}
-
-		return Response\AjaxJson::createError($result->getErrorCollection());
-	}
-
-	private function addProvisioningError(
-		ProvisioningFailedException $exception,
-		string $fallbackCode,
-		int $userId = 0,
-	): void
-	{
-		$errorCode = $exception->getErrorCode() ?? $fallbackCode;
-		$customData = $errorCode === ProvisioningAccessGate::ERROR_CODE
-			? $this->getVibePlusUpsellPayload($userId)
-			: null;
-
 		$this->addError(new Error(
 			$exception->getMessage(),
-			$errorCode,
-			$customData,
+			$exception->getErrorCode() ?? $fallbackCode,
+			$exception->getCustomData(),
 		));
-	}
-
-	private function getVibePlusUpsellPayload(int $userId): ?array
-	{
-		try
-		{
-			if (!Loader::includeModule('bitrix24'))
-			{
-				return null;
-			}
-
-			$serviceLocator = ServiceLocator::getInstance();
-			if (!$serviceLocator->has(\Bitrix\Bitrix24\Public\Service\VibePlus\UpsellProjectionProvider::class))
-			{
-				return null;
-			}
-
-			return $serviceLocator
-				->get(\Bitrix\Bitrix24\Public\Service\VibePlus\UpsellProjectionProvider::class)
-				->getProjectionForUser($userId)
-				?->toArray()
-			;
-		}
-		catch (\Throwable)
-		{
-			return null;
-		}
 	}
 }

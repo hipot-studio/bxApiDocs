@@ -221,7 +221,7 @@ class WebpackFile
 
 	/**
 	 * Return JS-string for load assets pack
-	 * File must be builded before
+	 * File must be built before
 	 * @return string
 	 */
 	public function getOutput(): string

@@ -83,6 +83,8 @@ class CrmSignDocumentViewComponent extends Bitrix\Crm\Component\Base
 			return;
 		}
 
+		$this->arResult['documentSigned'] = ($docItem->status ?? null) === \Bitrix\Sign\Type\DocumentStatus::DONE;
+
 		$this->arResult['documentResendEnabled'] = false;
 		if (!\Bitrix\Sign\Type\DocumentScenario::isB2EScenario($docItem->scenario ?? ''))
 		{

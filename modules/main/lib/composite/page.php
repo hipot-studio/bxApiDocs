@@ -171,17 +171,38 @@ class Page
 		}
 
 		$cacheSize = $this->storage->getSize();
-		$written = $this->storage->write($content."<!--".$md5."-->", $md5);
+		$written = $this->storage->write(static::getStoredContent($content, $md5), $md5);
 		if ($written !== false && $this->storage->shouldCountQuota())
 		{
-			$delta = $cacheSize !== false ? $written - $cacheSize : $written;
-			if ($delta !== 0)
-			{
-				Helper::updateCacheFileSize($delta);
-			}
+			Helper::updateCacheFileSize($cacheSize !== false ? $written - $cacheSize : $written);
 		}
 
 		return $written;
+	}
+
+	/**
+	 * Returns the content as the storage keeps it, the checksum wrapper included
+	 * @param string $content
+	 * @param string $md5 the content hash
+	 *
+	 * @return string
+	 */
+	public static function getStoredContent(string $content, string $md5): string
+	{
+		return Helper::wrapContentChecksum($content, $md5);
+	}
+
+	/**
+	 * Returns the length of the content as the storage keeps it, without building the string:
+	 * a copy of a heavy page doubles the peak of the memory
+	 * @param string $content
+	 * @param string $md5 the content hash
+	 *
+	 * @return int
+	 */
+	public static function getStoredContentLength(string $content, string $md5): int
+	{
+		return strlen($content) + Helper::getContentChecksumLength($md5);
 	}
 
 	/**
@@ -217,7 +238,11 @@ class Page
 			Helper::updateCacheFileSize(-$deletedSize);
 		}
 
-		PageManager::deleteByCacheKey($this->cacheKey);
+		if ($deletedSize !== false || !$this->storage->exists())
+		{
+			// a file left on the disk keeps its record: the limit cleanup sees the pages by the table only
+			PageManager::deleteByCacheKey($this->cacheKey);
+		}
 
 		return $deletedSize;
 	}
@@ -237,7 +262,7 @@ class Page
 
 		if ($this->storage->shouldCountQuota())
 		{
-			Helper::updateCacheFileSize(false);
+			Helper::resetCacheFileSize();
 		}
 
 		PageTable::deleteAll();

@@ -105,6 +105,8 @@ class Imap extends Mail\Helper\Mailbox
 	/** @var int[] */
 	private array $lastCompletedUids = [];
 	private int $lastMessageClientErrorCount = 0;
+	private ?DeliveryBoundaryService $deliveryBoundaryService = null;
+	private ?DeliveryContext $deliveryContextOverride = null;
 
 	/**
 	 * The interval of uids each dir was found to hold, by the md5 of its path. Kept per object and
@@ -135,6 +137,25 @@ class Imap extends Mail\Helper\Mailbox
 	 * value stands here, so a walk that never states its completeness deletes nothing by its list.
 	 */
 	protected bool $resyncWalkIncomplete = true;
+
+	/**
+	 * How many letters the dir of the running walk holds, as the server answered when it was opened for
+	 * that walk. The completeness a mailbox without a period of its own can be shown by: every letter of
+	 * the dir has a row of the version it carries now.
+	 *
+	 * Carried in a field for the same reason as {@see $resyncWalkIncomplete}: a parameter of
+	 * finishGenerationReconcile() would break the declaration of an override outside the repository.
+	 */
+	protected ?int $walkedDirLetterCount = null;
+
+	/**
+	 * How many rows of a recreated folder one command brings to the numbers their letters carry now. Each
+	 * of them costs a search on the mail service and a registration. Search requests are split into
+	 * bounded batches so the transport limit does not become a limit of the selected set.
+	 */
+	protected const PLACEMENT_REBIND_SEARCH_BATCH_SIZE = 25;
+	private const PLACEMENT_REBIND_SYNC_BATCH_SIZE = 10;
+	private const PLACEMENT_REBIND_MESSAGE_QUERY_BATCH_SIZE = 500;
 
 	/** The previous syncMessages() stopped because the time quota of the hit ran out */
 	protected bool $stoppedOnTimeQuota = false;
@@ -538,7 +559,7 @@ class Imap extends Mail\Helper\Mailbox
 		return $syncReport;
 	}
 
-	protected function createMessage(Main\Mail\Mail $message, array $fields = array())
+	protected function createMessage(Main\Mail\Mail $message, array $fields = array(), int $authorId = 0)
 	{
 		$dirPath = $this->getDirsHelper()->getOutcomePath() ?: 'INBOX';
 
@@ -551,7 +572,7 @@ class Imap extends Mail\Helper\Mailbox
 			)
 		);
 
-		return parent::createMessage($message, $fields);
+		return parent::createMessage($message, $fields, $authorId);
 	}
 
 	public function syncOutgoing()
@@ -967,6 +988,11 @@ class Imap extends Mail\Helper\Mailbox
 			return false;
 		}
 
+		if (!$this->servesFolderVersion($excerpt, $dirPath))
+		{
+			return false;
+		}
+
 		$body = $this->client->fetch(true, $dirPath, $excerpt['MSG_UID'], '(BODY.PEEK[])', $error);
 
 		if (false === $body)
@@ -997,6 +1023,394 @@ class Imap extends Mail\Helper\Mailbox
 		return $generationId === 0 || $this->peekGenerationScope()->includes($generationId);
 	}
 
+	/**
+	 * Whether the uid of that placement is a uid of the folder as the source keeps it now.
+	 *
+	 * A folder the server has renumbered answers with a UIDVALIDITY of its own, and every uid
+	 * written under the previous one is void: the same number in the new numbering names another
+	 * letter of the same folder, so a download through such a placement would fill the message
+	 * with the body and the attachments of that letter and store them. The generation boundary
+	 * {@see servesPlacement()} says nothing of this - it answers for the hand-over of the whole
+	 * mailbox between sources, while a renumbering happens to a folder of the one source in use.
+	 *
+	 * A placement carrying no version is left to the ordinary path: it is written by version
+	 * unaware code and by the outgoing route, which awaits its uid from the mail service. A folder
+	 * with a known version is refused when the folder cannot report its current version: without
+	 * that proof, the following fetch may address another letter after a recreation.
+	 */
+	private function servesFolderVersion(array $excerpt, string $dirPath): bool
+	{
+		$storedVersion = (int)($excerpt['DIR_UIDV'] ?? 0);
+
+		if ($storedVersion <= 0)
+		{
+			return true;
+		}
+
+		$error = null;
+		$meta = $this->client->select($dirPath, $error);
+
+		if (empty($meta['uidvalidity']))
+		{
+			return false;
+		}
+
+		return (int)$meta['uidvalidity'] === $storedVersion;
+	}
+
+	/**
+	 * A number written under a version the folder has left is no question to ask the server: the folder
+	 * numbers its letters anew, so the answer would be about another letter of it, and a letter answered
+	 * for by mistake stays in the portal for good - that is what keeps the cards of letters the server no
+	 * longer holds in the list of the user. Such a row is left out of the question, and the deletion
+	 * decides about it on what it really knows: the folder does not answer for that number any more.
+	 *
+	 * A folder that cannot be opened is not judged at all: the version it carries is unknown, and the
+	 * request that follows fails the way it always did.
+	 */
+	protected function placementsTheSourceCanBeAskedAbout(array $messagesForRemove, string $dirPath): array
+	{
+		$error = null;
+		$meta = $this->client->select($dirPath, $error);
+		$currentVersion = (int)($meta['uidvalidity'] ?? 0);
+
+		if ($currentVersion <= 0)
+		{
+			return $messagesForRemove;
+		}
+
+		return array_values(array_filter(
+			$messagesForRemove,
+			static function ($row) use ($currentVersion)
+			{
+				$version = (int)($row['DIR_UIDV'] ?? 0);
+
+				// a row awaiting its number from the mail service belongs to no version of the folder
+				return $version === 0 || $version === $currentVersion;
+			}
+		));
+	}
+
+	/**
+	 * The rows of a folder the server has recreated, brought to the numbers that folder keeps their
+	 * letters under now.
+	 *
+	 * A row written under a version the folder has left addresses nothing: the same number names another
+	 * letter of the folder, so a command carried to it would be carried out on that letter. Refusing every
+	 * such row would refuse the letters themselves - a recreated folder stands like that until the
+	 * synchronization has walked it whole, and a letter outside the period of the mailbox stands like that
+	 * for good - so the letter is looked for instead, by the identifier its own header carries. The row
+	 * that addresses it is then registered the ordinary way, which takes the void row over with the letter
+	 * it holds, its links and the date it arrived; the command goes to the row that came out of it.
+	 *
+	 * A letter the folder no longer holds is answered for as well: its row is named with nothing, and the
+	 * caller carries no command to a number that belongs to another letter now.
+	 *
+	 * Searches are grouped by folder and split into bounded batches. The bound limits one IMAP command,
+	 * not the selected set: every unambiguous match is registered before the command is carried out.
+	 *
+	 * @param iterable $rows Rows of b_mail_message_uid with ID, MESSAGE_ID, DIR_MD5 and DIR_UIDV.
+	 * @return Main\Result Success data contains `placements`: old row id => current row id or null.
+	 */
+	public function rebindPlacementsOfPreviousFolderVersion(iterable $rows): Main\Result
+	{
+		$rebound = [];
+		$currentVersions = [];
+		$candidatesByDir = [];
+
+		foreach ($rows as $row)
+		{
+			$messageId = (int)($row['MESSAGE_ID'] ?? 0);
+			$storedVersion = (int)($row['DIR_UIDV'] ?? 0);
+			$dirMd5 = (string)($row['DIR_MD5'] ?? '');
+
+			// A row awaiting its number from the mail service belongs to no version of the folder
+			if ($messageId <= 0 || $storedVersion <= 0 || $dirMd5 === '')
+			{
+				continue;
+			}
+
+			if (!array_key_exists($dirMd5, $currentVersions))
+			{
+				$dirPath = $this->getDirsHelper()->getDirPathByHash($dirMd5);
+
+				if (empty($dirPath))
+				{
+					return $this->failedPlacementRebind();
+				}
+
+				$error = null;
+				$meta = $this->client->select($dirPath, $error);
+				$currentVersion = (int)($meta['uidvalidity'] ?? 0);
+				if ($meta === false || $currentVersion <= 0)
+				{
+					return $this->failedPlacementRebind();
+				}
+
+				$currentVersions[$dirMd5] = [
+					'path' => $dirPath,
+					'version' => $currentVersion,
+				];
+			}
+
+			$dirPath = $currentVersions[$dirMd5]['path'];
+			$currentVersion = $currentVersions[$dirMd5]['version'];
+
+			if ($currentVersion === $storedVersion)
+			{
+				continue;
+			}
+
+			$rebound[(string)$row['ID']] = null;
+			$candidatesByDir[$dirMd5]['path'] = $dirPath;
+			$candidatesByDir[$dirMd5]['version'] = $currentVersion;
+			$candidatesByDir[$dirMd5]['rows'][] = [
+				'id' => (string)$row['ID'],
+				'messageId' => $messageId,
+				'pair' => $row,
+			];
+		}
+
+		if ($candidatesByDir === [])
+		{
+			return $this->successfulPlacementRebind($rebound);
+		}
+
+		$messageIds = [];
+		foreach ($candidatesByDir as $dir)
+		{
+			$messageIds = array_merge($messageIds, array_column($dir['rows'], 'messageId'));
+		}
+		$headerMessageIds = $this->loadHeaderMessageIds($messageIds);
+		$uidsByDirAndMessageId = [];
+		$localMessageIdsByDirAndHeader = [];
+
+		foreach ($candidatesByDir as $dirMd5 => $dir)
+		{
+			$headers = [];
+			foreach ($dir['rows'] as $row)
+			{
+				$headerMessageId = $headerMessageIds[$row['messageId']] ?? '';
+				if ($headerMessageId !== '')
+				{
+					$headers[$headerMessageId] = $headerMessageId;
+				}
+			}
+			$localMessageIdsByDirAndHeader[$dirMd5] = $this->loadLocalMessageIdsByHeader(
+				$dirMd5,
+				array_values($headers),
+			);
+
+			$requestedMessageIds = [];
+			foreach ($localMessageIdsByDirAndHeader[$dirMd5] as $headerMessageId => $localMessageIds)
+			{
+				if (count($localMessageIds) === 1)
+				{
+					$requestedMessageIds[] = $headerMessageId;
+				}
+			}
+
+			foreach (array_chunk($requestedMessageIds, self::PLACEMENT_REBIND_SEARCH_BATCH_SIZE) as $batch)
+			{
+				$matched = $this->client->getUidsByMessageIds($dir['path'], $batch);
+				if ($matched === false)
+				{
+					$this->errors = new Main\ErrorCollection($this->client->getErrors()->toArray());
+
+					return $this->failedPlacementRebind();
+				}
+				if ($this->isTimeQuotaExceeded())
+				{
+					$this->stoppedOnTimeQuota = true;
+
+					return $this->failedPlacementRebind();
+				}
+
+				$uidsByDirAndMessageId[$dirMd5] = array_replace(
+					$uidsByDirAndMessageId[$dirMd5] ?? [],
+					$matched,
+				);
+			}
+		}
+
+		foreach ($candidatesByDir as $dirMd5 => $dir)
+		{
+			$uids = [];
+			$generationPairsByUid = [];
+			foreach ($dir['rows'] as $row)
+			{
+				$headerMessageId = $headerMessageIds[$row['messageId']] ?? '';
+				$matchedUids = $uidsByDirAndMessageId[$dirMd5][$headerMessageId] ?? [];
+				if (
+					count($localMessageIdsByDirAndHeader[$dirMd5][$headerMessageId] ?? []) === 1
+					&& count($matchedUids) === 1
+				)
+				{
+					$uid = (int)reset($matchedUids);
+					$uids[$uid] = $uid;
+					$generationPairsByUid[$uid] = $row['pair'];
+				}
+			}
+
+			foreach (array_chunk(array_values($uids), self::PLACEMENT_REBIND_SYNC_BATCH_SIZE) as $uidBatch)
+			{
+				/*
+					The period of the mailbox is obeyed as everywhere else: a letter outside it gets its row
+					and gives it the letter of the void one - that is the whole repair - while its body is
+					left undownloaded, exactly as the ordinary walk would leave it.
+				*/
+				$batchPairs = array_intersect_key($generationPairsByUid, array_fill_keys($uidBatch, true));
+				$synced = $this->syncMessages(
+					$this->mailbox['ID'],
+					$dir['path'],
+					$uidBatch,
+					ignoreSyncFrom: false,
+					failOnLocalError: true,
+					generationPairsByUid: $batchPairs,
+				);
+
+				$completedUids = array_fill_keys($this->getLastCompletedUids(), true);
+				$unfinishedUids = array_filter(
+					$uidBatch,
+					function (int $uid) use ($completedUids, $batchPairs, $dirMd5, $dir): bool {
+						if (isset($completedUids[$uid]))
+						{
+							return false;
+						}
+
+						$pair = $batchPairs[$uid] ?? [];
+
+						return $this->readPlacementOfFolderVersion(
+							(int)($pair['MESSAGE_ID'] ?? 0),
+							$dirMd5,
+							$dir['version'],
+						) === null;
+					},
+				);
+
+				if (
+					!$synced
+					|| $this->hasStoppedOnTimeQuota()
+					|| $this->getLastDeferredUids() !== []
+					|| $unfinishedUids !== []
+				)
+				{
+					return $this->failedPlacementRebind();
+				}
+			}
+
+			foreach ($dir['rows'] as $row)
+			{
+				$rebound[$row['id']] = $this->readPlacementOfFolderVersion(
+					$row['messageId'],
+					$dirMd5,
+					$dir['version'],
+				);
+			}
+		}
+
+		return $this->successfulPlacementRebind($rebound);
+	}
+
+	/** @param array<string, string|null> $placements */
+	private function successfulPlacementRebind(array $placements): Main\Result
+	{
+		$result = new Main\Result();
+		$result->setData(['placements' => $placements]);
+
+		return $result;
+	}
+
+	/**
+	 * @param string[] $headerMessageIds
+	 * @return array<string, array<int, true>> Header Message-ID => logical message ids in this dir.
+	 */
+	private function loadLocalMessageIdsByHeader(string $dirMd5, array $headerMessageIds): array
+	{
+		$result = [];
+		foreach (array_chunk(array_values(array_unique($headerMessageIds)), self::PLACEMENT_REBIND_MESSAGE_QUERY_BATCH_SIZE) as $batch)
+		{
+			$rows = $this->listMessages([
+				'select' => [
+					'MESSAGE_ID',
+					'HEADER_MESSAGE_ID' => 'MESSAGE_TABLE.MSG_ID',
+				],
+				'filter' => [
+					'=DIR_MD5' => $dirMd5,
+					'>DIR_UIDV' => 0,
+					'==DELETE_TIME' => 0,
+					'@MESSAGE_TABLE.MSG_ID' => $batch,
+				],
+			], false);
+
+			while ($row = $rows->fetch())
+			{
+				$headerMessageId = trim((string)($row['HEADER_MESSAGE_ID'] ?? ''));
+				if ($headerMessageId !== '')
+				{
+					$result[$headerMessageId][(int)$row['MESSAGE_ID']] = true;
+				}
+			}
+		}
+
+		return $result;
+	}
+
+	private function failedPlacementRebind(): Main\Result
+	{
+		$result = new Main\Result();
+		$errors = $this->client->getErrors()->toArray();
+
+		if ($errors === [])
+		{
+			$errors[] = new Main\Error('', 'MAIL_CLIENT_SYNC_ERROR');
+		}
+
+		$result->addErrors($errors);
+
+		return $result;
+	}
+
+	/**
+	 * @param int[] $messageIds
+	 * @return array<int, string> Message table id => Message-ID without surrounding whitespace.
+	 */
+	private function loadHeaderMessageIds(array $messageIds): array
+	{
+		$result = [];
+		foreach (array_chunk(array_values(array_unique($messageIds)), self::PLACEMENT_REBIND_MESSAGE_QUERY_BATCH_SIZE) as $batch)
+		{
+			$rows = Mail\MailMessageTable::getList([
+				'select' => ['ID', 'MSG_ID'],
+				'filter' => ['@ID' => $batch],
+			]);
+
+			while ($row = $rows->fetch())
+			{
+				$result[(int)$row['ID']] = trim((string)($row['MSG_ID'] ?? ''));
+			}
+		}
+
+		return $result;
+	}
+
+	/** The row of that message in that folder under the version the folder carries now, if there is one. */
+	private function readPlacementOfFolderVersion(int $messageId, string $dirMd5, int $version): ?string
+	{
+		$row = Mail\MailMessageUidTable::getRow([
+			'select' => ['ID'],
+			'filter' => [
+				'=MAILBOX_ID' => $this->mailbox['ID'],
+				'=MESSAGE_ID' => $messageId,
+				'=DIR_MD5' => $dirMd5,
+				'=DIR_UIDV' => $version,
+				'==DELETE_TIME' => 0,
+			],
+		]);
+
+		return isset($row['ID']) ? (string)$row['ID'] : null;
+	}
+
 	public function downloadMessageParts(array &$excerpt, Mail\Imap\BodyStructure $bodystructure, $flags = Imap::MESSAGE_PARTS_ALL)
 	{
 		if (empty($excerpt['MSG_UID']) || empty($excerpt['DIR_MD5']) || !$this->servesPlacement($excerpt))
@@ -1006,6 +1420,11 @@ class Imap extends Mail\Helper\Mailbox
 
 		$dirPath = $this->getDirsHelper()->getDirPathByHash($excerpt['DIR_MD5']);
 		if (empty($dirPath))
+		{
+			return false;
+		}
+
+		if (!$this->servesFolderVersion($excerpt, $dirPath))
 		{
 			return false;
 		}
@@ -1125,6 +1544,9 @@ class Imap extends Mail\Helper\Mailbox
 
 			$list[$item['name']] = $item;
 		}
+
+		// The removal below must not trust what this process cached about the prepared generations earlier
+		GenerationScope::invalidateActivePointerCache((int)$this->mailbox['ID']);
 
 		$this->getDirsHelper()->syncDbDirs($list);
 
@@ -1497,6 +1919,14 @@ class Imap extends Mail\Helper\Mailbox
 			return false;
 		}
 
+		$crmImapGateResult = $this->ensureCrmImapGateReady();
+		if (!$crmImapGateResult->isSuccess())
+		{
+			$this->registerCrmImapGateErrors($crmImapGateResult);
+
+			return false;
+		}
+
 		$dir = $this->getDirsHelper()->getDirByPath($dirPath);
 
 		if (!$dir || !$dir->isSync())
@@ -1514,10 +1944,6 @@ class Imap extends Mail\Helper\Mailbox
 		$dir->stopSyncLock();
 
 		$this->lastSyncResult['newMessages'] += $result;
-		if (!$dir->isTrash() && !$dir->isSpam() && !$dir->isDraft() && !$dir->isOutcome())
-		{
-			$this->lastSyncResult['newMessagesNotify'] += $result;
-		}
 
 		return $result;
 	}
@@ -1574,6 +2000,7 @@ class Imap extends Mail\Helper\Mailbox
 	 *        tail unsynced while the run still reports success, so the caller would mark the period as
 	 *        covered and the tail would never be fetched again.
 	 * @param bool $failOnLocalError - false preserves the legacy best-effort behavior
+	 * @param array<int, array> $generationPairsByUid Old placements explicitly matched to fetched UIDs.
 	 * @return bool - success status: in the fail-on-local-error mode a message left without a body makes
 	 *        it false, as it did before the pass learned to go on. A chunk whose list lost letters makes
 	 *        it false in every mode {@see MessageSyncPassResult::markListIncomplete()}. A caller that
@@ -1592,8 +2019,17 @@ class Imap extends Mail\Helper\Mailbox
 		bool $ignoreSyncFrom = true,
 		bool $stopOnEmptyChunk = true,
 		bool $failOnLocalError = false,
+		array $generationPairsByUid = [],
 	)
 	{
+		$crmImapGateResult = $this->ensureCrmImapGateReady();
+		if (!$crmImapGateResult->isSuccess())
+		{
+			$this->registerCrmImapGateErrors($crmImapGateResult);
+
+			return false;
+		}
+
 		$result = $this->syncMessagesPass(
 			$mailboxID,
 			$dirPath,
@@ -1602,6 +2038,7 @@ class Imap extends Mail\Helper\Mailbox
 			$ignoreSyncFrom,
 			$stopOnEmptyChunk,
 			$failOnLocalError,
+			$generationPairsByUid,
 		);
 		$this->lastDeferredUids = $result->getDeferredUids();
 		$this->lastCompletedUids = $result->getCompletedUids();
@@ -1647,6 +2084,7 @@ class Imap extends Mail\Helper\Mailbox
 		bool $ignoreSyncFrom = true,
 		bool $stopOnEmptyChunk = true,
 		bool $failOnLocalError = false,
+		array $generationPairsByUid = [],
 	): MessageSyncPassResult
 	{
 		$this->lastSyncedUid = 0;
@@ -1672,6 +2110,14 @@ class Imap extends Mail\Helper\Mailbox
 
 			return $result;
 		}
+
+		$deliveryBoundary = $this->getDeliveryBoundaryService()->resolve(
+			(int)$dir->getId(),
+			$dir->getDirMd5(),
+			(int)$this->getGenerationContext()->generationId,
+			(int)$uidtoken,
+			fn () => $this->getServerMaximumUid($dir->getPath(), $meta),
+		);
 
 		$chunks = array_chunk($UIDs, 10);
 		$retryUids = $failOnLocalError
@@ -1775,6 +2221,7 @@ class Imap extends Mail\Helper\Mailbox
 			}
 
 			$this->linkWithExistingMessages($messages);
+			$this->linkWithDeclaredGenerationPairs($messages, $generationPairsByUid);
 
 			foreach ($messages as $item)
 			{
@@ -1794,16 +2241,40 @@ class Imap extends Mail\Helper\Mailbox
 				$hashesMap = [];
 				$isStorageFailure = false;
 				$clientErrorsBeforeMessage = count($this->client->getErrors());
-				$syncResult = $this->syncMessage(
-					$dir->getPath(),
+				$deliveryContext = $this->resolveMessageDeliveryContext(
 					$item,
+					$deliveryBoundary,
+					(int)$dir->getId(),
+					(int)$uidtoken,
+					(int)$item['UID'],
+					(bool)$isRecovered,
 					$hashesMap,
-					$ignoreSyncFrom,
-					$isOutgoing,
-					$isRecovered,
-					$failOnLocalError,
-					$failOnLocalError && isset($retryUids[(int)$item['UID']]),
-					$isStorageFailure,
+				);
+				$syncResult = $this->runWithDeliveryContext(
+					$deliveryContext,
+					function () use (
+						$dir,
+						$item,
+						&$hashesMap,
+						$ignoreSyncFrom,
+						$isOutgoing,
+						$isRecovered,
+						$failOnLocalError,
+						$retryUids,
+						&$isStorageFailure,
+					) {
+						return $this->syncMessage(
+							$dir->getPath(),
+							$item,
+							$hashesMap,
+							$ignoreSyncFrom,
+							$isOutgoing,
+							$isRecovered,
+							$failOnLocalError,
+							$failOnLocalError && isset($retryUids[(int)$item['UID']]),
+							$isStorageFailure,
+						);
+					},
 				);
 
 				if ($failOnLocalError)
@@ -1857,6 +2328,32 @@ class Imap extends Mail\Helper\Mailbox
 		}
 
 		return $result;
+	}
+
+	/**
+	 * A caller that has already matched an old placement to an exact UID is more precise than the ordinary
+	 * header-hash lookup: a server may change INTERNALDATE or re-encode the header while keeping the letter.
+	 *
+	 * @param array<int, array> $generationPairsByUid UID => old placement.
+	 */
+	private function linkWithDeclaredGenerationPairs(array &$messages, array $generationPairsByUid): void
+	{
+		foreach ($messages as &$message)
+		{
+			$pair = $generationPairsByUid[(int)($message['UID'] ?? 0)] ?? [];
+			if (empty($pair['ID']) || (int)($pair['MESSAGE_ID'] ?? 0) <= 0)
+			{
+				continue;
+			}
+
+			$message['__generation_pair'] = $pair;
+			$message['__fields']['MESSAGE_ID'] = (int)$pair['MESSAGE_ID'];
+			if (!empty($pair['DATE_INSERT']))
+			{
+				$message['__created'] = $pair['DATE_INSERT'];
+			}
+		}
+		unset($message);
 	}
 
 	/**
@@ -1954,6 +2451,48 @@ class Imap extends Mail\Helper\Mailbox
 	}
 
 	/**
+	 * The error codes of the client that are about reaching the server at all - the connection,
+	 * the greeting, the login - and not about the command the server then refused.
+	 */
+	private const TRANSPORT_ERRORS = [
+		Mail\Imap::ERR_CONNECT,
+		Mail\Imap::ERR_REJECTED,
+		Mail\Imap::ERR_COMMUNICATE,
+		Mail\Imap::ERR_EMPTY_RESPONSE,
+		Mail\Imap::ERR_BAD_SERVER,
+		Mail\Imap::ERR_STARTTLS,
+		Mail\Imap::ERR_AUTH,
+		Mail\Imap::ERR_AUTH_MECH,
+		Mail\Imap::ERR_AUTH_OAUTH,
+	];
+
+	/**
+	 * Whether the client has reported that the server itself could not be reached, as opposed to
+	 * having answered a command with a refusal.
+	 *
+	 * The difference matters to every caller that walks a mailbox command by command: a server
+	 * that turns one command down leaves the rest of the walk meaningful, while a connection that
+	 * is gone makes every command behind it fail for a reason that has nothing to do with the
+	 * letters it names - and counting those as refused letters would end the walk successfully.
+	 *
+	 * The errors of the client accumulate for as long as the engine lives, so this answers "has
+	 * the connection been lost at any point", which is what a caller asking it right after a
+	 * failed command means: once the wire is gone, nothing after it succeeds either.
+	 */
+	public function hasLostTheConnection(): bool
+	{
+		foreach ($this->client->getErrors() as $error)
+		{
+			if (in_array((int)$error->getCode(), self::TRANSPORT_ERRORS, true))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
 	 * The previous {@see syncMessages()} gave the hit back because its time ran out, which
 	 * is a matter of pace and not a failure of the synchronization.
 	 */
@@ -2034,7 +2573,10 @@ class Imap extends Mail\Helper\Mailbox
 
 		$UIDsOnService = \Bitrix\Mail\Helper::getImapUIDsForSpecificDay($mailboxID, $dirPath, $internalDate);
 
-		return $this->syncMessages($mailboxID, $dirPath, $UIDsOnService);
+		return $this->runWithDeliveryContext(
+			DeliveryContext::backfill(),
+			fn () => $this->syncMessages($mailboxID, $dirPath, $UIDsOnService),
+		);
 	}
 
 	protected function syncDirInternal($dir)
@@ -2063,26 +2605,14 @@ class Imap extends Mail\Helper\Mailbox
 		);
 		// The upper UID is valid only for the UIDVALIDITY observed by the same SELECT.
 		$snapshotUidValidity = $historySyncRequired ? (int)$meta['uidvalidity'] : null;
-		$maximumUid = null;
-		if ($historySyncRequired && isset($meta['uidnext']))
-		{
-			$maximumUid = max(0, (int)$meta['uidnext'] - 1);
-		}
-		elseif ($historySyncRequired && (int)$meta['exists'] === 0)
-		{
-			$maximumUid = 0;
-		}
-		elseif ($historySyncRequired)
-		{
-			$lastMessage = $this->client->fetch(
-				false,
-				$dir->getPath(),
-				(string)$meta['exists'],
-				'(UID)',
-				$error,
-			);
-			$maximumUid = isset($lastMessage['UID']) ? (int)$lastMessage['UID'] : null;
-		}
+		$maximumUid = $historySyncRequired ? $this->getServerMaximumUid($dir->getPath(), $meta) : null;
+		$deliveryBoundary = $this->getDeliveryBoundaryService()->resolve(
+			(int)$dir->getId(),
+			$dir->getDirMd5(),
+			(int)$this->getGenerationContext()->generationId,
+			(int)$meta['uidvalidity'],
+			fn () => $maximumUid ?? $this->getServerMaximumUid($dir->getPath(), $meta),
+		);
 
 		$intervalSynchronizationAttempts = 0;
 
@@ -2194,10 +2724,34 @@ class Imap extends Mail\Helper\Mailbox
 					}
 				}
 
-				if ($this->syncMessage($dir->getPath(), $item, $hashesMap, false, $isOutgoing))
+				$deliveryContext = $this->resolveMessageDeliveryContext(
+					$item,
+					$deliveryBoundary,
+					(int)$dir->getId(),
+					(int)$meta['uidvalidity'],
+					(int)$item['UID'],
+					knownMessageIds: $hashesMap,
+				);
+
+				if ($this->runWithDeliveryContext(
+					$deliveryContext,
+					function () use ($dir, $item, &$hashesMap, $isOutgoing) {
+						return $this->syncMessage(
+							$dir->getPath(),
+							$item,
+							$hashesMap,
+							false,
+							$isOutgoing,
+						);
+					},
+				))
 				{
-					$this->lastSyncResult['newMessageId'] = end($hashesMap);
 					$messagesSynced++;
+					if ($deliveryContext->shouldNotify() && $this->isNotificationDir($dir))
+					{
+						$this->lastSyncResult['newMessageId'] = end($hashesMap);
+						$this->lastSyncResult['newMessagesNotify']++;
+					}
 
 					$numberLeftToFillTheBatch--;
 					if($numberLeftToFillTheBatch === 0 and Main\Loader::includeModule('pull'))
@@ -2243,6 +2797,109 @@ class Imap extends Mail\Helper\Mailbox
 		}
 
 		return $messagesSynced;
+	}
+
+	private function getServerMaximumUid(string $dirPath, array $meta): ?int
+	{
+		if (isset($meta['uidnext']))
+		{
+			return max(0, (int)$meta['uidnext'] - 1);
+		}
+
+		if ((int)($meta['exists'] ?? 0) === 0)
+		{
+			return 0;
+		}
+
+		$lastMessage = $this->client->fetch(
+			false,
+			$dirPath,
+			(string)$meta['exists'],
+			'(UID)',
+			$error,
+		);
+
+		return isset($lastMessage['UID']) ? (int)$lastMessage['UID'] : null;
+	}
+
+	private function getDeliveryBoundaryService(): DeliveryBoundaryService
+	{
+		return $this->deliveryBoundaryService ??= new DeliveryBoundaryService(
+			(int)$this->mailbox['ID'],
+			$this->getHistorySyncLogger(),
+		);
+	}
+
+	private function resolveDeliveryContext(
+		?DeliveryBoundary $boundary,
+		int $dirId,
+		int $uidValidity,
+		int $uid,
+		bool $isRecovered = false,
+	): DeliveryContext
+	{
+		if ($this->getGenerationContext()->isMigrationImport())
+		{
+			return DeliveryContext::migration();
+		}
+
+		if ($this->deliveryContextOverride !== null)
+		{
+			return $this->deliveryContextOverride;
+		}
+
+		if ($boundary !== null)
+		{
+			return $boundary->classify(
+				(int)$this->getGenerationContext()->generationId,
+				$uidValidity,
+				$uid,
+				$isRecovered,
+			);
+		}
+
+		return DeliveryContext::withoutBoundary(
+			$this->getDeliveryBoundaryService()->isDirectoryEnabled($dirId)
+				|| $this->getDeliveryBoundaryService()->isMailboxEnabled(),
+			$isRecovered,
+		);
+	}
+
+	private function resolveMessageDeliveryContext(
+		array $message,
+		?DeliveryBoundary $boundary,
+		int $dirId,
+		int $uidValidity,
+		int $uid,
+		bool $isRecovered = false,
+		array $knownMessageIds = [],
+	): DeliveryContext
+	{
+		return $this->resolveDeliveryContext($boundary, $dirId, $uidValidity, $uid, $isRecovered)->forKnownMessage(
+			!empty($message['__fields']['MESSAGE_ID'])
+			|| !is_null($message['__replaces'] ?? null)
+			|| !empty($knownMessageIds[$message['__fields']['HEADER_MD5'] ?? '']),
+		);
+	}
+
+	private function runWithDeliveryContext(DeliveryContext $context, callable $callback): mixed
+	{
+		$previous = $this->deliveryContextOverride;
+		$this->deliveryContextOverride = $context;
+
+		try
+		{
+			return $callback();
+		}
+		finally
+		{
+			$this->deliveryContextOverride = $previous;
+		}
+	}
+
+	private function isNotificationDir(Mail\Internals\Entity\MailboxDirectory $dir): bool
+	{
+		return !$dir->isTrash() && !$dir->isSpam() && !$dir->isDraft() && !$dir->isOutcome();
 	}
 
 	public function resyncDir($dirPath, $numberForResync = false)
@@ -2510,6 +3167,7 @@ class Imap extends Mail\Helper\Mailbox
 		}
 
 		$uidtoken = $meta['uidvalidity'];
+		$this->walkedDirLetterCount = isset($meta['exists']) ? (int)$meta['exists'] : null;
 
 		if ($meta['exists'] > 0)
 		{
@@ -2712,7 +3370,8 @@ class Imap extends Mail\Helper\Mailbox
 			'select' => ['ID'],
 			'filter' => [
 				'=DIR_MD5' => md5($dir->getPath(true)),
-				'<DIR_UIDV' => $uidValidity,
+				'>DIR_UIDV' => 0,
+				'!=DIR_UIDV' => $uidValidity,
 				'==DELETE_TIME' => 0,
 			],
 			'limit' => 1,
@@ -2739,11 +3398,23 @@ class Imap extends Mail\Helper\Mailbox
 			return;
 		}
 
+		/*
+			The walk of the dir reads numbers and flags, while the letters behind them are read back portion
+			by portion over as many runs as it takes. A row is taken over by the row of the new version only
+			when its letter is read back, so deleting the remainder before the dir has been read back whole
+			would delete the letters that simply have not had their turn yet.
+		*/
+		if (!$this->isDirReadBackWhole($dir, $uidValidity))
+		{
+			return;
+		}
+
 		$keptAliveRows = false;
 		$result = $this->unregisterMessages(
 			[
 				'=DIR_MD5' => md5($dir->getPath(true)),
-				'<DIR_UIDV' => $uidValidity,
+				'>DIR_UIDV' => 0,
+				'!=DIR_UIDV' => $uidValidity,
 			],
 			[
 				'info' => 'the directory has been deleted',
@@ -2758,6 +3429,64 @@ class Imap extends Mail\Helper\Mailbox
 		{
 			$this->deleteGenerationReconcileMarker($dir);
 		}
+	}
+
+	/**
+	 * Whether the dir has been read back whole under that version of it - shown, and not assumed.
+	 *
+	 * The mark of the history sync says it for a mailbox that has a period of its own: it is written once
+	 * the search over that period has nothing left to fetch. A mailbox that syncs without a period leaves
+	 * no such mark - its letters come back by the descent over the numbers, which reports nothing of its
+	 * own completeness - and an unproven completeness is answered with no. The remainder of such a dir
+	 * stays where it stood, rather than being deleted on an assumption.
+	 */
+	private function isDirReadBackWhole(Mail\Internals\Entity\MailboxDirectory $dir, int $uidValidity): bool
+	{
+		$boundary = $this->getMinimumSyncDate();
+
+		if ($boundary === false)
+		{
+			return $this->isDirCoveredByItsRows($dir, $uidValidity);
+		}
+
+		return static::isHistoryCoverageMarkerActual(
+			$this->readHistoryCoverageMarker($dir),
+			$uidValidity,
+			(int)$boundary,
+		);
+	}
+
+	/**
+	 * The completeness a mailbox syncing without a period can show: the dir holds a row of the version it
+	 * carries now for every letter the server says is in it. Its letters come back by the descent over the
+	 * numbers, which leaves no mark of its own, while the number of the letters is what the server answered
+	 * when the dir was opened for the walk that has just ended.
+	 *
+	 * Counted the careful way, so that everything unclear keeps the remainder where it is: a walk that
+	 * never learned the number of the letters, and a dir holding more letters than it has rows, are both
+	 * answered with no.
+	 */
+	private function isDirCoveredByItsRows(Mail\Internals\Entity\MailboxDirectory $dir, int $uidValidity): bool
+	{
+		$lettersInTheDir = $this->walkedDirLetterCount;
+
+		if ($lettersInTheDir === null)
+		{
+			return false;
+		}
+
+		$rowsOfTheCurrentVersion = Mail\MailMessageUidTable::getCount(
+			$this->getGenerationScope()->apply([
+				'=MAILBOX_ID' => $this->mailbox['ID'],
+				'=DIR_MD5' => md5($dir->getPath(true)),
+				'=DIR_UIDV' => $uidValidity,
+				'>MSG_UID' => 0,
+				'>MESSAGE_ID' => 0,
+				'==DELETE_TIME' => 0,
+			])
+		);
+
+		return $rowsOfTheCurrentVersion >= $lettersInTheDir;
 	}
 
 	protected function readGenerationReconcileMarker(Mail\Internals\Entity\MailboxDirectory $dir): ?string
@@ -3178,7 +3907,7 @@ class Imap extends Mail\Helper\Mailbox
 		return (string)($storedRow['DIR_MD5'] ?? '') === (string)($fields['DIR_MD5'] ?? '')
 			// an outgoing row awaits its uid from the mail service and belongs to no generation at all
 			&& (int)($storedRow['DIR_UIDV'] ?? 0) > 0
-			&& (int)($storedRow['DIR_UIDV'] ?? 0) < (int)($fields['DIR_UIDV'] ?? 0)
+			&& (int)($storedRow['DIR_UIDV'] ?? 0) !== (int)($fields['DIR_UIDV'] ?? 0)
 			// a row already marked for deletion awaits the ordinary cleanup and is no pair for anything
 			&& (int)($storedRow['DELETE_TIME'] ?? 0) === 0
 		;
@@ -3630,7 +4359,17 @@ class Imap extends Mail\Helper\Mailbox
 			}
 		}
 
+		$deliveryContext = $this->deliveryContextOverride ?? DeliveryContext::unknown();
 		$replaces = $message['__replaces'] ?? null;
+		if (!is_null($replaces))
+		{
+			$deliveryContext = DeliveryContext::repair();
+		}
+		elseif ($this->getGenerationContext()->isMigrationImport())
+		{
+			$deliveryContext = DeliveryContext::migration();
+		}
+		$deliveryContext ??= DeliveryContext::unknown();
 
 		$this->carryOverGenerationPair($message, $fields);
 
@@ -3791,6 +4530,8 @@ class Imap extends Mail\Helper\Mailbox
 					'excerpt' => $fields,
 					'external_id' => $retryExternalId,
 					'migration_import' => $isMigrationImport,
+					'delivery_origin' => $deliveryContext->getOrigin(),
+					'suppress_builtin_notifications' => !$deliveryContext->shouldNotify(),
 					MailMessageTable::FIELD_SANITIZE_ON_VIEW => $this->isSupportSanitizeOnView(),
 				],
 			);
@@ -4550,6 +5291,11 @@ class Imap extends Mail\Helper\Mailbox
 			return false;
 		}
 
+		if (!$this->servesFolderVersion($excerpt, $dirPath))
+		{
+			return false;
+		}
+
 		$message = $this->client->fetch(true, $dirPath, $excerpt['MSG_UID'], '(BODYSTRUCTURE)', $error);
 		if (empty($message['BODYSTRUCTURE']))
 		{
@@ -5007,26 +5753,12 @@ class Imap extends Mail\Helper\Mailbox
 
 		$minimumSyncDate = $this->getMinimumSyncDate();
 
-		$takeFromDown = true;
-
-		/*
-			For period-bounded dirs the history is loaded by syncDirHistoryByPeriod
-			from the server-side date search, so the legacy UID descent stays off:
-			deriving the period boundary from the minimal UID date is unreliable
-			when the UID order does not match the date order (migrated mailboxes).
-		*/
-		$historySyncByDateSearch = $minimumSyncDate !== false
-			&& Mail\Helper\Config\Feature::isHistorySyncByDateSearchEnabled();
-
-		if ($historySyncByDateSearch)
-		{
-			$takeFromDown = false;
-		}
+		$takeFromDown = $minimumSyncDate === false;
 
 		$min = $this->listMessages(
 			array(
 				'select' => array(
-					'MIN' => 'MSG_UID','INTERNALDATE'
+					'MIN' => 'MSG_UID',
 				),
 				'filter' => $filter,
 				'order'  => array(
@@ -5036,11 +5768,6 @@ class Imap extends Mail\Helper\Mailbox
 			),
 			false
 		)->fetch();
-
-		if(!$historySyncByDateSearch && isset($min['INTERNALDATE']) && $minimumSyncDate !== false && $min['INTERNALDATE']->getTimestamp() < $minimumSyncDate)
-		{
-			$takeFromDown = false;
-		}
 
 		$max = $this->listMessages(
 			array(
@@ -5080,11 +5807,6 @@ class Imap extends Mail\Helper\Mailbox
 		?int $expectedUidValidity = null,
 	): void
 	{
-		if (!Mail\Helper\Config\Feature::isHistorySyncByDateSearchEnabled())
-		{
-			return;
-		}
-
 		$boundary = $this->getMinimumSyncDate();
 
 		if ($boundary === false)
@@ -5183,14 +5905,17 @@ class Imap extends Mail\Helper\Mailbox
 			return;
 		}
 
-		$pass = $this->syncMessagesPass(
-			$this->mailbox['ID'],
-			$dir->getPath(),
-			$remaining,
-			false,
-			false,
-			stopOnEmptyChunk: false,
-			failOnLocalError: true,
+		$pass = $this->runWithDeliveryContext(
+			DeliveryContext::backfill(),
+			fn () => $this->syncMessagesPass(
+				$this->mailbox['ID'],
+				$dir->getPath(),
+				$remaining,
+				false,
+				false,
+				stopOnEmptyChunk: false,
+				failOnLocalError: true,
+			),
 		);
 
 		/*
@@ -5424,11 +6149,6 @@ class Imap extends Mail\Helper\Mailbox
 		int $uidValidity,
 	): bool
 	{
-		if (!Mail\Helper\Config\Feature::isHistorySyncByDateSearchEnabled())
-		{
-			return false;
-		}
-
 		$boundary = $this->getMinimumSyncDate();
 		if ($boundary === false)
 		{

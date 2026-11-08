@@ -175,8 +175,13 @@ class GridHeaders
 			'items' => ['' => ''],
 		];
 
-		if (in_array($userField['USER_TYPE']['USER_TYPE_ID'], ['enumeration', 'iblock_section', 'iblock_element']))
+		if (in_array($userField['USER_TYPE']['USER_TYPE_ID'], ['enumeration', 'iblock_section', 'iblock_element'], true))
 		{
+			if ($this->canShowEmptyValueCaption($userField))
+			{
+				$items['DATA']['EMPTY_VALUE_CAPTION'] = $this->getEmptyValueCaption($userField);
+			}
+
 			if (is_callable([$userField['USER_TYPE']['CLASS_NAME'], 'GetList']))
 			{
 				$rsEnum = call_user_func_array([$userField['USER_TYPE']['CLASS_NAME'], 'GetList'], [$userField]);
@@ -231,5 +236,22 @@ class GridHeaders
 		}
 
 		return $items;
+	}
+
+	private function getEmptyValueCaption(array $userField): string
+	{
+		$captionNoValue = trim((string)($userField['SETTINGS']['CAPTION_NO_VALUE'] ?? ''));
+
+		return $captionNoValue !== ''
+			? $captionNoValue
+			: (string)(Loc::getMessage('CRM_GRID_ENUM_EMPTY_VALUE_CAPTION') ?? '')
+		;
+	}
+
+	private function canShowEmptyValueCaption(array $userField): bool
+	{
+		return ($userField['MANDATORY'] ?? 'N') !== 'Y'
+			|| ($userField['SETTINGS']['SHOW_NO_VALUE'] ?? 'Y') !== 'N'
+		;
 	}
 }

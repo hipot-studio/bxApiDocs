@@ -8,8 +8,7 @@ use Bitrix\Disk\Document\Contract\CloudImportInterface;
 use Bitrix\Disk\Document\Contract\FileCreatable;
 use Bitrix\Disk\Document\Models\DocumentService;
 use Bitrix\Disk\Document\OnlyOffice\OnlyOfficeHandler;
-use Bitrix\Disk\Document\Vibeoffice\Configuration as VibeofficeConfiguration;
-use Bitrix\Disk\Document\Vibeoffice\ProjectCohort;
+use Bitrix\Disk\Document\Vibeoffice;
 use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Enum\CustomServerTypes;
@@ -128,10 +127,9 @@ class DocumentHandlersManager
 	 * Otherwise the handler is returned as is (including null for an unknown code). This is the single
 	 * seam where the engine is chosen.
 	 *
-	 * The translation is additionally narrowed by the project cohort: with an allowlist of workgroup
-	 * ids configured ({@see VibeofficeConfiguration::getEnabledGroupIds()}) only opens whose file lives
-	 * in the disk of an allowlisted workgroup are translated (see {@see isVibeofficeAllowedForContext()}).
-	 * An empty allowlist keeps the feature portal-wide (current behaviour).
+	 * The translation is additionally narrowed by the project cohort through
+	 * {@see Vibeoffice\Feature::isEnabledForContext()}. An empty allowlist keeps the feature
+	 * portal-wide (current behaviour).
 	 *
 	 * @param string $serviceCode
 	 * @param DocumentResolveContext|null $context
@@ -145,38 +143,13 @@ class DocumentHandlersManager
 		if (
 			$handler instanceof OnlyOfficeHandler
 			&& VibeofficeHandler::isEnabled()
-			&& $this->isVibeofficeAllowedForContext($context)
+			&& Vibeoffice\Feature::isEnabledForContext($context)
 		)
 		{
 			return $this->getHandlerByCode(VibeofficeHandler::getCode());
 		}
 
 		return $handler;
-	}
-
-	/**
-	 * Decides whether an eligible office open may be narrowed to vibeoffice for the given context.
-	 *
-	 * An empty allowlist keeps the feature portal-wide (current behaviour) and skips the object
-	 * lookup. Otherwise the open is allowed only when its file lives in the disk of an allowlisted
-	 * workgroup; every fail-closed case (no context / no object id / non-group storage) keeps the
-	 * open on OnlyOffice. External access is intentionally not special-cased — the engine is a
-	 * property of the file's storage, identical on every access path.
-	 */
-	private function isVibeofficeAllowedForContext(?DocumentResolveContext $context): bool
-	{
-		$allowed = $this->getVibeofficeConfiguration()->getEnabledGroupIds();
-		if (empty($allowed))
-		{
-			return true;
-		}
-
-		return ProjectCohort::isAllowed(ProjectCohort::resolveGroupId($context), $allowed);
-	}
-
-	private function getVibeofficeConfiguration(): VibeofficeConfiguration
-	{
-		return ServiceLocator::getInstance()->get('disk.vibeofficeConfiguration');
 	}
 
 	/**

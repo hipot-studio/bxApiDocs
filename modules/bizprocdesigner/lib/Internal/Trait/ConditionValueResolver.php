@@ -72,29 +72,21 @@ trait ConditionValueResolver
 	 * document type of the edited template.
 	 *
 	 * A trigger is the one node whose condition is decided before the process starts, on a stub workflow bound
-	 * to the document of its event, so `Document` there names the document type the node publishes
-	 * ({@see \Bitrix\Bizproc\Internal\Service\Activity\ComplexActivityService::getPublishedDocumentTypeForNode()})
-	 * - the very type the settings panel builds the field of the condition by. The condition of every other
-	 * node is decided on the workflow itself ({@see \CBPWorkflow::isNodeConditionMet()}), where `Document` is
-	 * the document of the template: that is why a published type alone is not the answer here, a complex node
-	 * declares one on its class as well.
+	 * to the document its own settings name, so `Document` there is answered by the channel of the condition
+	 * document ({@see \Bitrix\Bizproc\Internal\Service\Activity\ComplexActivityService::getConditionDocumentTypeForNode()}):
+	 * the type a node declares through it, and the published type for a node that declares none. The condition
+	 * of every other node is decided on the workflow itself ({@see \CBPWorkflow::isNodeConditionMet()}), where
+	 * `Document` is the document of the template.
+	 *
+	 * The trigger guard itself lives in that resolver and not here: this is a delegate, so that all three
+	 * writers of a condition - the settings panel, the conversion of rules and the path of an AI draft - are
+	 * served by one answer.
 	 */
 	public function resolveConditionDocumentType(string $activityType, array $activityProperties): ?array
 	{
-		if ($activityType === '')
-		{
-			return null;
-		}
-
-		$container = BizprocContainer::instance();
-		if (!$container->getActivitySearcherService()->isTriggerActivity($activityType))
-		{
-			return null;
-		}
-
-		return $container
+		return BizprocContainer::instance()
 			->getComplexActivityService()
-			->getPublishedDocumentTypeForNode($activityType, $activityProperties)
+			->getConditionDocumentTypeForNode($activityType, $activityProperties)
 		;
 	}
 }

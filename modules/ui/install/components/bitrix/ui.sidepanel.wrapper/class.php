@@ -26,6 +26,71 @@ class UIPageSliderWrapperComponent extends \CBitrixComponent
 			;
 	}
 
+	private function normalizeLeftPanelResizable(mixed $options): array|false
+	{
+		if (!is_array($options))
+		{
+			return false;
+		}
+
+		$requiredIntegerOptions = [
+			'INITIAL_WIDTH',
+			'MIN_WIDTH',
+			'MAX_WIDTH',
+			'MIN_CONTENT_WIDTH',
+			'KEYBOARD_STEP',
+		];
+		foreach ($requiredIntegerOptions as $optionName)
+		{
+			if (!array_key_exists($optionName, $options) || !is_int($options[$optionName]))
+			{
+				return false;
+			}
+		}
+
+		if (
+			$options['MIN_WIDTH'] <= 0
+			|| $options['MAX_WIDTH'] < $options['MIN_WIDTH']
+			|| $options['INITIAL_WIDTH'] < $options['MIN_WIDTH']
+			|| $options['INITIAL_WIDTH'] > $options['MAX_WIDTH']
+			|| $options['MIN_CONTENT_WIDTH'] <= 0
+			|| $options['KEYBOARD_STEP'] <= 0
+		)
+		{
+			return false;
+		}
+
+		$normalizedOptions = [];
+		foreach ($requiredIntegerOptions as $optionName)
+		{
+			$normalizedOptions[$optionName] = $options[$optionName];
+		}
+
+		if (array_key_exists('STORAGE', $options))
+		{
+			$storage = $options['STORAGE'];
+			if (
+				!is_array($storage)
+				|| ($storage['TYPE'] ?? null) !== 'localStorage'
+				|| !is_string($storage['KEY'] ?? null)
+				|| trim($storage['KEY']) === ''
+				|| !is_int($storage['VERSION'] ?? null)
+				|| $storage['VERSION'] !== 1
+			)
+			{
+				return false;
+			}
+
+			$normalizedOptions['STORAGE'] = [
+				'TYPE' => 'localStorage',
+				'KEY' => $storage['KEY'],
+				'VERSION' => 1,
+			];
+		}
+
+		return $normalizedOptions;
+	}
+
 	/**
 	 * Execute component.
 	 */
@@ -37,6 +102,10 @@ class UIPageSliderWrapperComponent extends \CBitrixComponent
 		{
 			$this->arParams['POPUP_COMPONENT_PARAMS'] = [];
 		}
+
+		$this->arParams['LEFT_PANEL_RESIZABLE'] = $this->normalizeLeftPanelResizable(
+			$this->arParams['LEFT_PANEL_RESIZABLE'] ?? null
+		);
 
 		$this->processSliderComponents();
 

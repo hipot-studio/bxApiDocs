@@ -3,6 +3,8 @@
 use Bitrix\Bizproc;
 use Bitrix\Bizproc\Internal\Entity\Workflow\ExecutionPayload;
 use Bitrix\Bizproc\Public\Activity\BaseComplexActivity;
+use Bitrix\Bizproc\Public\ProcessData\Service\ProcessDataCatalogService;
+use Bitrix\Bizproc\Public\ProcessData\Service\ProcessDataMechanicsResolver;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowFilterTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowUserTable;
 use Bitrix\Main;
@@ -26,10 +28,11 @@ class CBPWorkflow
 	private const MAX_FAULT_HANDLING_ATTEMPTS = 3;
 
 	/**
-	 * Why an activity was not executed. Both reasons share the path a deactivated activity has always
+	 * Why an activity was not executed. Every reason shares the path a deactivated activity has always
 	 * taken - closed right away, control handed on - so an unmet condition is a completion, not a fault.
 	 */
 	private const SKIP_REASON_DEACTIVATED = 'deactivated';
+	private const SKIP_REASON_UNRESOLVED_DOCUMENT = 'unresolved_document';
 	private const SKIP_REASON_CONDITION = 'condition';
 
 	private bool $isNew = false;
@@ -198,25 +201,97 @@ class CBPWorkflow
 		{
 			foreach ($workflowVariablesTypes as $k => $v)
 			{
-				$variableValue = $v["Default"] ?? null;
-				if ($documentType && $fieldTypeObject = $documentService->getFieldTypeObject($documentType, $v))
-				{
-					$fieldTypeObject->setDocumentId($arDocumentId);
-					$variableValue = $fieldTypeObject->internalizeValue('Variable', $variableValue);
-				}
-
 				//set defaults on start
-				$rootActivity->setVariable($k, $variableValue);
+				$rootActivity->setVariable(
+					$k,
+					$this->internalizeVariableValue($documentType, $arDocumentId, $v, $v["Default"] ?? null),
+				);
 			}
 		}
 
 		$rootActivity->setPropertiesTypes($workflowParametersTypes);
+
+		$this->initializePairs(
+			$rootActivity,
+			$documentType,
+			$arDocumentId,
+			$workflowParameters,
+			$workflowParametersTypes,
+			$workflowVariablesTypes,
+			(int)$workflowTemplateId,
+		);
+	}
+
+	private function internalizeVariableValue($documentType, array $documentId, $variableType, $value)
+	{
+		$fieldTypeObject = $documentType
+			? $this->getService('DocumentService')->getFieldTypeObject($documentType, $variableType)
+			: null
+		;
+
+		if (!$fieldTypeObject)
+		{
+			return $value;
+		}
+
+		$fieldTypeObject->setDocumentId($documentId);
+
+		return $fieldTypeObject->internalizeValue('Variable', $value);
+	}
+
+	/**
+	 * A key standing both in the parameters and in the variables is a pair only on a template of the new
+	 * mechanics; the template is read once and only when such a key was actually met. The feature flag does
+	 * not stand here on purpose: a template already marked keeps starting the same way after the flag goes
+	 * off, otherwise its working values would silently arrive empty.
+	 */
+	private function initializePairs(
+		CBPActivity $rootActivity,
+		$documentType,
+		array $documentId,
+		$workflowParameters,
+		$workflowParametersTypes,
+		$workflowVariablesTypes,
+		int $workflowTemplateId,
+	): void
+	{
+		if (
+			!is_array($workflowVariablesTypes)
+			|| !is_array($workflowParametersTypes)
+			|| !is_array($workflowParameters)
+		)
+		{
+			return;
+		}
+
+		$pairs = array_filter(
+			(new ProcessDataCatalogService())->findStartValuePairs($workflowParametersTypes, $workflowVariablesTypes),
+			static fn($parameterKey) => array_key_exists($parameterKey, $workflowParameters),
+		);
+
+		if (!$pairs || !(new ProcessDataMechanicsResolver())->isNewMechanics($workflowTemplateId))
+		{
+			return;
+		}
+
+		foreach ($pairs as $variableKey => $parameterKey)
+		{
+			$rootActivity->setVariable(
+				$variableKey,
+				$this->internalizeVariableValue(
+					$documentType,
+					$documentId,
+					$workflowVariablesTypes[$variableKey],
+					$workflowParameters[$parameterKey],
+				),
+			);
+		}
 	}
 
 	public function reload(CBPActivity $rootActivity)
 	{
 		$this->rootActivity = $rootActivity;
-		$rootActivity->setWorkflow($this);
+		$this->goOnInOwnTestRunSession(fn() => $rootActivity->setWorkflow($this));
 
 		switch ($this->getWorkflowStatus())
 		{
@@ -275,7 +350,61 @@ class CBPWorkflow
 			throw new Exception("CanNotResumeInstance");
 		}
 
-		$this->run();
+		$this->goOnInOwnTestRunSession($this->run(...));
+	}
+
+	/**
+	 * A test run is loaded and goes on in a later hit - an event, a timer - where its session is not the current
+	 * one, so it traces into its own session only while it goes, and the session of the hit is given back.
+	 */
+	private function goOnInOwnTestRunSession(callable $continuation): void
+	{
+		$runSession = $this->findOwnTestRunSessionToRestore();
+		if ($runSession === null)
+		{
+			$continuation();
+
+			return;
+		}
+
+		$debugger = $this->runtime->makeDebugger();
+		$outerSession = $debugger->findDebugSession();
+		$debugger->restoreSession($runSession);
+
+		try
+		{
+			$continuation();
+		}
+		finally
+		{
+			$debugger->restoreSession($outerSession);
+			Bizproc\Internal\Container::getDebugSessionService()?->saveSession($runSession);
+		}
+	}
+
+	private function findOwnTestRunSessionToRestore(): ?Bizproc\Internal\Entity\Debugger\DebugSession
+	{
+		if ($this->rootActivity->getOwnTestRunContext() === null)
+		{
+			return null;
+		}
+
+		$currentSession = $this->runtime->getDebugSessionService()?->findDebugSession();
+		if ($currentSession?->getWorkflowId() === $this->getInstanceId())
+		{
+			return null;
+		}
+
+		$sessions = Bizproc\Internal\Container::getDebugSessionRepository()?->getByWorkflowId($this->getInstanceId()) ?? [];
+		foreach ($sessions as $session)
+		{
+			if ($session->isTestRun() && !$session->isEnded())
+			{
+				return $session;
+			}
+		}
+
+		return null;
 	}
 
 	public function save()
@@ -435,6 +564,11 @@ class CBPWorkflow
 	 */
 	public function sendExternalEvent(string $eventName, array $eventParameters = []): void
 	{
+		$this->goOnInOwnTestRunSession(fn() => $this->receiveExternalEvent($eventName, $eventParameters));
+	}
+
+	private function receiveExternalEvent(string $eventName, array $eventParameters): void
+	{
 		$debugSessionService = $this->runtime->getDebugSessionService();
 
 		$debugSessionService?->addTrace(
@@ -512,6 +646,10 @@ class CBPWorkflow
 		if (empty($activityName))
 		{
 			throw new CBPArgumentNullException('activityName');
+		}
+		if (!is_string($activityName))
+		{
+			return null;
 		}
 
 		$activity = null;
@@ -990,11 +1128,22 @@ class CBPWorkflow
 		{
 			$skipReason = self::SKIP_REASON_DEACTIVATED;
 		}
+		elseif ($activity->hasUnresolvedDocumentContext())
+		{
+			// The node names a document of its own and that name leads nowhere. Falling back to the document
+			// of the process is what let an action - a deletion among them - work over the wrong document, so
+			// the node does not run at all. A node naming no document keeps the document of the process, and
+			// templates written before this all do.
+			$skipReason = self::SKIP_REASON_UNRESOLVED_DOCUMENT;
+		}
 		else
 		{
 			$this->publishNodeFilterResults($activity);
 
-			if (!$this->isNodeConditionMet($activity))
+			// After the document: the condition of a node may read a field of the very document it names.
+			// The picked node of a test run is not judged by a condition written for an event that never happened.
+			$isTestRunStartNode = $activity->getTestRunContext()?->isStartNode($activity) ?? false;
+			if (!$isTestRunStartNode && !$this->isNodeConditionMet($activity))
 			{
 				$skipReason = self::SKIP_REASON_CONDITION;
 			}
@@ -1089,6 +1238,7 @@ class CBPWorkflow
 		$phraseId = match ($skipReason)
 		{
 			self::SKIP_REASON_DEACTIVATED => 'BPCGWF_SKIP_NOTE_DEACTIVATED',
+			self::SKIP_REASON_UNRESOLVED_DOCUMENT => 'BPCGWF_SKIP_NOTE_UNRESOLVED_DOCUMENT',
 			self::SKIP_REASON_CONDITION => 'BPCGWF_SKIP_NOTE_CONDITION',
 			// A reason added later must not break the log of a running process over a missing phrase.
 			default => null,
@@ -1119,6 +1269,13 @@ class CBPWorkflow
 	 * Fails closed: `MixedCondition` is a condition of the module, not an activity of the template, and a
 	 * portal missing it can evaluate no condition at all - running the node would ignore what the user
 	 * configured.
+	 *
+	 * A node that names a record of its own has its condition decided on that record here too, by the code the
+	 * check before the start decides it by ({@see Bizproc\Internal\Service\Activity\NodeConditionEvaluator}):
+	 * the document of the process is a pseudo-document carrying no field of the record, so the two verdicts
+	 * would otherwise diverge and an accepted node be skipped without publishing a single return. The
+	 * condition is decided again rather than remembered - the record may have changed since the start was
+	 * accepted, and the node then answers to it as it is now.
 	 */
 	private function isNodeConditionMet(CBPActivity $activity): bool
 	{
@@ -1130,9 +1287,30 @@ class CBPWorkflow
 			return true;
 		}
 
-		return $this->runtime->includeActivityFile('MixedCondition')
-			&& (new CBPMixedCondition($condition))->evaluate($activity)
-		;
+		if (!$this->runtime->includeActivityFile('MixedCondition'))
+		{
+			return false;
+		}
+
+		$mixedCondition = new CBPMixedCondition($condition);
+		if (!Bizproc\Internal\Service\Activity\ComplexActivityService::declaresConditionDocumentChannel($activity))
+		{
+			return $mixedCondition->evaluate($activity);
+		}
+
+		// Read off the root of the process before the evaluator puts the stub of the record in its place
+		// ({@see Bizproc\Activity\BaseTrigger::getEventData()} reads the very same property).
+		$parameters = new Bizproc\Activity\Trigger\TriggerParameters(
+			$this->rootActivity->{CBPDocument::PARAM_TRIGGER_EVENT_DATA} ?? [],
+		);
+
+		return (new Bizproc\Internal\Service\Activity\NodeConditionEvaluator())->isMet(
+			$mixedCondition,
+			$activity,
+			$parameters,
+			$this->getTemplateId(),
+			$this->getDocumentId(),
+		);
 	}
 
 	/**

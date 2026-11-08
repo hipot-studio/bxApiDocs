@@ -9,10 +9,12 @@ use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Vibecodeconnector\Infrastructure\Rest\Validation\Rule\AccessType;
 use Bitrix\Vibecodeconnector\Infrastructure\Rest\Validation\Rule\ItemType;
 use Bitrix\Vibecodeconnector\Infrastructure\Rest\Validation\Rule\OptionalCatalogItemFields;
+use Bitrix\Vibecodeconnector\Infrastructure\Rest\Validation\Rule\PairingIssForbidden;
 use Bitrix\Vibecodeconnector\Infrastructure\Rest\Validation\Rule\ViewUrlRequiredForApplication;
 
 #[ViewUrlRequiredForApplication]
 #[OptionalCatalogItemFields]
+#[PairingIssForbidden]
 class AddRequest extends Request
 {
 	#[Rule\NotEmpty]

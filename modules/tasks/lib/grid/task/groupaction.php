@@ -14,6 +14,7 @@ use Bitrix\Main\Grid\Panel\Actions;
 use Bitrix\Main\Grid\Panel\Types;
 use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Integration\Bitrix24\FeatureDictionary;
+use Bitrix\Tasks\Integration\CRM\CrmInTasksFeature;
 use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\ProjectLimit;
 use Bitrix\Tasks\Flow\FlowFeature;
 use Bitrix\Tasks\Integration\Extranet\User;
@@ -42,6 +43,7 @@ class GroupAction
 	public const ACTION_SET_COLLAB = 'setcollab';
 	public const ACTION_DELETE = 'delete';
 	public const ACTION_SET_FLOW = 'setflow';
+	public const ACTION_BIND_CRM = 'bindcrm';
 
 
 	public function __construct()
@@ -405,6 +407,43 @@ class GroupAction
 					],
 				];
 			}
+		}
+
+		if (CrmInTasksFeature::isOn() && \Bitrix\Main\Loader::includeModule('crm'))
+		{
+			$actionList[] = [
+				'NAME' => Loc::getMessage('TASKS_LIST_GROUP_ACTION_BIND_CRM'),
+				'VALUE' => self::ACTION_BIND_CRM,
+				'ONCHANGE' => [
+					[
+						'ACTION' => Actions::CREATE,
+						'DATA' => [
+							[
+								'TYPE' => Types::TEXT,
+								'ID' => 'action_bind_crm_search',
+								'NAME' => 'ACTION_BIND_CRM_SEARCH',
+							],
+							[
+								'TYPE' => Types::HIDDEN,
+								'ID' => 'action_bind_crm_id',
+								'NAME' => 'crmItemId',
+							],
+						],
+					],
+					[
+						'ACTION' => Actions::CALLBACK,
+						'DATA' => [
+							['JS' => "BX.Tasks.GridActions.initPopupBalloon('crm','action_bind_crm_search','action_bind_crm_id');"],
+						],
+					],
+					[
+						'ACTION' => Actions::CALLBACK,
+						'DATA' => [
+							['JS' => "BX.Tasks.GridActions.setCurrentGroupAction('bindcrm')"],
+						],
+					],
+				],
+			];
 		}
 
 		$actionList[] = [

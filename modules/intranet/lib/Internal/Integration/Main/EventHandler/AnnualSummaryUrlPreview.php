@@ -11,7 +11,7 @@ class AnnualSummaryUrlPreview
 	public static function buildPreview(array $params): string
 	{
 		return '<div style="color: #1F86FF; font-weight: 500; line-height: 17px; margin-bottom: 8px; font-size: 13px;">' . Loc::getMessage("INTRANET_ANNUAL_SUMMARY_URL_PREVIEW_TITLE") . '</div>
-<div><img style="width: 305px; height: 140px" src="/bitrix/images/intranet/annual-summary/rich.png" alt="' . Loc::getMessage("INTRANET_ANNUAL_SUMMARY_URL_PREVIEW_TITLE") . '"></div>';
+<div><img style="width: 305px; height: 140px" src="/bitrix/images/intranet/annual-summary/rich.webp" alt="' . Loc::getMessage("INTRANET_ANNUAL_SUMMARY_URL_PREVIEW_TITLE") . '"></div>';
 	}
 
 	public static function checkUserReadAccess(array $params): bool
@@ -34,7 +34,7 @@ class AnnualSummaryUrlPreview
 		return (new RichData())
 			->setName(Loc::getMessage("INTRANET_ANNUAL_SUMMARY_URL_PREVIEW_TITLE"))
 			->setLink($params['URL'])
-			->setPreviewUrl('/bitrix/images/intranet/annual-summary/rich.png')
+			->setPreviewUrl('/bitrix/images/intranet/annual-summary/rich.webp')
 			->setType(RichData::DYNAMIC_TYPE)
 		;
 	}
@@ -50,7 +50,7 @@ class AnnualSummaryUrlPreview
 		$attach->addLink([
 			'NAME' => Loc::getMessage("INTRANET_ANNUAL_SUMMARY_URL_PREVIEW_TITLE"),
 			'LINK' => $params['URL'],
-			'PREVIEW' => '/bitrix/images/intranet/annual-summary/rich.png',
+			'PREVIEW' => '/bitrix/images/intranet/annual-summary/rich.webp',
 			'WIDTH' => 305,
 			'HEIGHT' => 140,
 		]);

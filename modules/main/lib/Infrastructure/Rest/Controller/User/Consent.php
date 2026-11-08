@@ -6,6 +6,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Infrastructure\Rest\Controller\AbstractController;
 use Bitrix\Main\Infrastructure\Rest\Dto\ConsentDto;
 use Bitrix\Main\Infrastructure\Rest\Service\ConsentService;
+use Bitrix\Main\UserConsent\ConsentUrl;
 use Bitrix\Rest\RestException as LegacyRestException;
 use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Attribute\RequiredGroup;
@@ -36,7 +37,8 @@ class Consent extends AbstractController
 			'AGREEMENT_ID' => $dto->agreementId,
 			'USER_ID' => $this->getInitializedDtoValue($dto, 'userId'),
 			'IP' => $dto->ip,
-			'URL' => $this->getInitializedDtoValue($dto, 'url'),
+			// the stored value is the one the entity rule let through, not the one that was sent
+			'URL' => ConsentUrl::nullifyDisallowed($this->getInitializedDtoValue($dto, 'url')),
 			'ORIGIN_ID' => $this->getInitializedDtoValue($dto, 'originId'),
 			'ORIGINATOR_ID' => $this->getInitializedDtoValue($dto, 'originatorId'),
 		]));

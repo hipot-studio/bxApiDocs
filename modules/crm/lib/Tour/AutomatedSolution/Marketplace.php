@@ -34,7 +34,7 @@ class Marketplace extends Base
 						],
 					],
 				],
-				'iconSrc' => '/bitrix/images/crm/whats_new/automated_solution/marketplace.png',
+				'iconSrc' => '/bitrix/images/crm/whats_new/automated_solution/marketplace.webp',
 			],
 		];
 	}

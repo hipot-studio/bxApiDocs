@@ -5,6 +5,7 @@ namespace Bitrix\HumanResources\Public\Service;
 use Bitrix\HumanResources\Public\Service\Node\UserService;
 use Bitrix\HumanResources\Public\Service\Team\UserService as TeamUserService;
 use Bitrix\HumanResources\Public\Service\Department\UserService as DepartmentUserService;
+use Bitrix\HumanResources\Public\Service\HcmLink\MonitoringService;
 use Bitrix\Main\DI\ServiceLocator;
 
 /**
@@ -80,6 +81,15 @@ class Container
 	public static function getUserDepartmentService(): DepartmentUserService
 	{
 		return self::getService('humanresources.service.public.department.userService');
+	}
+
+	//endregion
+
+	//region HcmLink services
+
+	public static function getHcmLinkMonitoringService(): MonitoringService
+	{
+		return self::getService('humanresources.public.service.hcmLinkMonitoring');
 	}
 
 	//endregion

@@ -14,4 +14,5 @@ enum UserRole: string
 	case SHOP = 'shop';
 	case EXTERNAL = 'external';
 	case IM_GUEST = 'im_guest';
+	case SYSTEM_USER = 'rest_system';
 }

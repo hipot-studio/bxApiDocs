@@ -18,6 +18,7 @@ class IntranetUserSettings extends UserSettings
 	public const INTEGRATOR_FIELD = 'INTEGRATOR';
 	public const VISITOR_FIELD = 'VISITOR';
 	public const OTP_STATUS_FIELD = 'OTP_STATUS';
+	public const SYSTEM_USER_FIELD = 'SYSTEM_USER';
 
 	protected array $filterAvailability;
 
@@ -84,6 +85,8 @@ class IntranetUserSettings extends UserSettings
 				)
 			)
 		;
+
+		$this->filterAvailability[self::SYSTEM_USER_FIELD] = $canEditAllUsers && !$isExtranetSite;
 
 		$this->filterAvailability[self::VISITOR_FIELD] = $canEditAllUsers;
 

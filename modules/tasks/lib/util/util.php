@@ -69,7 +69,7 @@ class Util
 
 	public static function replaceUrlParameters($url, array $paramsToAdd = array(), array $paramsToDelete = array(), array $options = array())
 	{
-		// CHTTP::url*Params() functions does not like #placeholders# in url, so a little trick is needed
+		// replaceQueryParameters() does not like #placeholders# in url, so a little trick is needed
 		$found = array();
 		preg_match_all("/#([a-zA-Z0-9_-]+)#/", $url, $found);
 
@@ -88,13 +88,84 @@ class Util
 		}
 
 		// to avoid adding duplicates and delete other params
-		$url = \CHTTP::urlDeleteParams($url, array_merge(array_keys($paramsToAdd), $paramsToDelete));
-		$url = \CHTTP::urlAddParams($url, $paramsToAdd, $options);
+		$url = static::replaceQueryParameters($url, $paramsToAdd, $paramsToDelete, $options);
 
 		if(!empty($match))
 		{
 			$match = array_flip($match);
 			$url = str_replace(array_keys($match), $match, $url);
+		}
+
+		return $url;
+	}
+
+	/**
+	 * Drops query parameters whose names match keys of $paramsToAdd or values of
+	 * $paramsToDelete, then appends $paramsToAdd to the end of the query.
+	 *
+	 * The query string is processed literally, without parsing it into arrays, so
+	 * parameter names containing brackets or dots are matched as-is.
+	 *
+	 * @param string $url
+	 * @param array $paramsToAdd
+	 * @param array $paramsToDelete
+	 * @param array $options 'encode' urlencodes name and value; 'skip_empty' drops empty values.
+	 * @return string
+	 */
+	private static function replaceQueryParameters($url, array $paramsToAdd, array $paramsToDelete, array $options)
+	{
+		$paramsToRemove = array_merge(array_keys($paramsToAdd), $paramsToDelete);
+
+		$urlParts = explode('?', $url, 2);
+		if (count($urlParts) === 2 && $urlParts[1] !== '')
+		{
+			$pairs = explode('&', $urlParts[1]);
+			foreach ($pairs as $i => $pair)
+			{
+				$nameValue = explode('=', $pair, 2);
+				if (count($nameValue) === 2 && in_array($nameValue[0], $paramsToRemove))
+				{
+					unset($pairs[$i]);
+				}
+			}
+
+			$url = empty($pairs) ? $urlParts[0] : $urlParts[0] . '?' . implode('&', $pairs);
+		}
+
+		$newParams = [];
+		foreach ($paramsToAdd as $name => $value)
+		{
+			if (is_array($value))
+			{
+				continue;
+			}
+			if (!empty($options['skip_empty']) && (string)$value === '')
+			{
+				continue;
+			}
+			if (!empty($options['encode']))
+			{
+				$newParams[] = urlencode($name) . '=' . urlencode($value);
+			}
+			else
+			{
+				$newParams[] = $name . '=' . $value;
+			}
+		}
+
+		if (!empty($newParams))
+		{
+			$separator = (mb_strpos($url, '?') === false ? '?' : '&');
+
+			$fragmentPos = mb_strpos($url, '#');
+			if ($fragmentPos === false)
+			{
+				$url = $url . $separator . implode('&', $newParams);
+			}
+			else
+			{
+				$url = mb_substr($url, 0, $fragmentPos) . $separator . implode('&', $newParams) . mb_substr($url, $fragmentPos);
+			}
 		}
 
 		return $url;

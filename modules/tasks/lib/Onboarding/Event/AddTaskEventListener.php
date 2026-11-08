@@ -16,14 +16,20 @@ final class AddTaskEventListener extends AbstractEventListener
 	public function onTaskAdd(int $taskId, array $fields): EventResult
 	{
 		$eventResult = new EventResult(EventResult::SUCCESS);
+		if (!OnboardingFeature::isAvailable())
+		{
+			return $eventResult;
+		}
 
 		$createdBy = (int)$fields['CREATED_BY'];
 		$responsibleId = (int)$fields['RESPONSIBLE_ID'];
 
 		$commandModels = new CommandModelCollection();
 
-		$counterRepository = $this->container->getCounterRepository();
-		if (!$counterRepository->isLimitReachedByType(Type::InviteToMobile, $createdBy))
+		if (
+			$createdBy > 0
+			&& !$this->container->getCounterRepository()->isLimitReachedByType(Type::InviteToMobile, $createdBy)
+		)
 		{
 			$commandModels->merge($this->getCommandsForInvitationToMobile($taskId, $createdBy));
 		}
@@ -32,6 +38,15 @@ final class AddTaskEventListener extends AbstractEventListener
 		if (
 			$status !== Status::PENDING
 			|| $this->isOnePersonTask($fields)
+		)
+		{
+			$this->saveCommandModels($commandModels);
+
+			return $eventResult;
+		}
+
+		if (
+			$responsibleId <= 0
 		)
 		{
 			$this->saveCommandModels($commandModels);

@@ -21,7 +21,7 @@ final class MyCompany extends Company
 		}
 
 		$crmContainer = Container::getInstance();
-		$limitFilter = !$itemsAmount ? ['limit' => $itemsAmount] : [];
+		$limitFilter = $itemsAmount > 0 ? ['limit' => $itemsAmount] : [];
 		$filter = ['IS_MY_COMPANY' => 'Y'];
 		if (!empty($inIds))
 		{

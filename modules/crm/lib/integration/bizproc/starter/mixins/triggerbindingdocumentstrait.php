@@ -7,10 +7,13 @@ use Bitrix\Crm\Automation\Factory;
 use Bitrix\Crm\Automation\Trigger\Entity\TriggerTable;
 use Bitrix\Crm\EntityManageFacility;
 use Bitrix\Crm\Integration\BizProc\Starter\Mixins\Dto\TriggerBindingDocumentsDto;
+use Bitrix\Crm\Integrity\ActualEntitySelector;
 use Bitrix\Crm\Settings\LeadSettings;
 
 trait TriggerBindingDocumentsTrait
 {
+	private static ?ActualEntitySelector $facilitySelector = null;
+
 	protected static function getBindingDocuments(TriggerBindingDocumentsDto $binding): array
 	{
 		$bindingDocuments = [];
@@ -79,15 +82,21 @@ trait TriggerBindingDocumentsTrait
 		return $documents;
 	}
 
-	private static function getFacilitySelector(): ?\Bitrix\Crm\Integrity\ActualEntitySelector
+	private static function getFacilitySelector(): ?ActualEntitySelector
 	{
-		static $facilitySelector = false;
-		if ($facilitySelector === false)
-		{
-			$facilitySelector = (new EntityManageFacility())->getSelector();
-		}
+		self::$facilitySelector ??= (new EntityManageFacility())->getSelector();
 
-		return $facilitySelector;
+		return self::$facilitySelector;
+	}
+
+	/**
+	 * The selector is shared by every trigger run of the process, and the entities it once resolved survive a new
+	 * setEntity(): a run that does not start from a cleared selector would answer with the client documents of the
+	 * previous one.
+	 */
+	protected static function resetFacilitySelector(): void
+	{
+		self::$facilitySelector?->clear();
 	}
 
 	private static function getDynamicClientBindingDocuments(TriggerBindingDocumentsDto $binding): array

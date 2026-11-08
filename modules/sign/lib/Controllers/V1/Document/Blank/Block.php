@@ -7,6 +7,8 @@ use Bitrix\Sign\Blanks;
 use Bitrix\Sign\Blanks\Block\Factory;
 use Bitrix\Sign\Serializer\ItemPropertyJsonSerializer;
 use Bitrix\Sign\Service;
+use Bitrix\Sign\Service\Placeholder\Restriction\PlaceholderRestrictionService;
+use Bitrix\Sign\Service\Placeholder\Restriction\ScenarioContext;
 use Bitrix\Sign\Repository;
 use Bitrix\Sign\Operation;
 use Bitrix\Sign\Item;
@@ -24,6 +26,7 @@ class Block extends \Bitrix\Sign\Engine\Controller
 	private Repository\BlankRepository $blankRepository;
 	private Repository\MemberRepository $memberRepository;
 	private ItemPropertyJsonSerializer $itemPropertyJsonSerializer;
+	private PlaceholderRestrictionService $placeholderRestrictionService;
 
 	public function __construct(Main\Request $request = null)
 	{
@@ -32,6 +35,7 @@ class Block extends \Bitrix\Sign\Engine\Controller
 		$this->documentRepository = Service\Container::instance()->getDocumentRepository();
 		$this->memberRepository = Service\Container::instance()->getMemberRepository();
 		$this->itemPropertyJsonSerializer = new ItemPropertyJsonSerializer();
+		$this->placeholderRestrictionService = Service\Container::instance()->getPlaceholderRestrictionService();
 
 		parent::__construct($request);
 	}
@@ -222,8 +226,10 @@ class Block extends \Bitrix\Sign\Engine\Controller
 		}
 
 		$blocks = $loadResult->getData()['blocks'] ?? new Item\BlockCollection();
+		// The authoring gate of external blocks judges by the initiator axis only.
+		$scenarioContext = ScenarioContext::fromAxes(initiatedByType: $document->initiatedByType);
 		$blocks = $blocks->filter(
-			fn(Item\Block $block) => $this->filterBlock($document, $block)
+			fn(Item\Block $block) => $this->filterBlock($document, $block, $scenarioContext)
 		);
 
 		$result = [];
@@ -257,7 +263,8 @@ class Block extends \Bitrix\Sign\Engine\Controller
 
 	private function filterBlock(
 		Item\Document $document,
-		Item\Block $block
+		Item\Block $block,
+		ScenarioContext $scenarioContext
 	): bool
 	{
 		if ($block->code === Type\BlockCode::B2E_HCMLINK_REFERENCE)
@@ -285,7 +292,7 @@ class Block extends \Bitrix\Sign\Engine\Controller
 
 			return $document->hcmLinkCompanyId === $hcmLinkCompanyId;
 		}
-		elseif (Type\BlockCode::isB2eRegional($block->code) && $document->isInitiatedByEmployee())
+		elseif ($this->placeholderRestrictionService->isExternalBlockHidden($block->code, $scenarioContext))
 		{
 			return false;
 		}

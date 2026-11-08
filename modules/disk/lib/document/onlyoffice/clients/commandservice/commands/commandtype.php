@@ -8,4 +8,5 @@ enum CommandType: string
 {
 	case Meta = 'meta';
 	case Drop = 'drop';
+	case ForceSave = 'forcesave';
 }

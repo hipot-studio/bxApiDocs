@@ -7,6 +7,7 @@ namespace Bitrix\Mail\Internal\Async\Receiver;
 use Bitrix\Mail\Integration\HumanResources\NodeAccessCodeResolver;
 use Bitrix\Mail\Integration\HumanResources\NodeMemberService;
 use Bitrix\Mail\Integration\Im\Notification;
+use Bitrix\Mail\Integration\MailService\MigrationStatusProvider;
 use Bitrix\Mail\Internal\Async\Message\MailboxMigrationNotificationMessage;
 use Bitrix\Mail\Internals\MailboxAccessTable;
 use Bitrix\Mail\MailboxTable;
@@ -25,6 +26,11 @@ final class MailboxMigrationNotificationReceiver extends AbstractReceiver
 		if (!$message instanceof MailboxMigrationNotificationMessage)
 		{
 			throw new UnprocessableMessageException($message);
+		}
+
+		if (!$this->canDeliver($message))
+		{
+			return;
 		}
 
 		if (!Loader::includeModule('im'))
@@ -54,6 +60,7 @@ final class MailboxMigrationNotificationReceiver extends AbstractReceiver
 					mailboxId: $message->mailboxId,
 					status: $message->status,
 					userIds: $chunk,
+					operationId: $message->operationId ?? null,
 				))->send('mail_migration_notification');
 			}
 
@@ -69,6 +76,42 @@ final class MailboxMigrationNotificationReceiver extends AbstractReceiver
 				$message->status,
 			);
 		}
+	}
+
+	private function canDeliver(MailboxMigrationNotificationMessage $message): bool
+	{
+		if (in_array($message->status, ['running', 'waiting', 'blocked', 'switching'], true))
+		{
+			$status = (new MigrationStatusProvider())->getLatest($message->mailboxId);
+
+			return $status !== null && $status->visibility === 'active'
+				&& (($message->operationId ?? null) === null || $message->operationId === $status->operationId);
+		}
+
+		if (!in_array($message->status, ['done', 'cancelled'], true))
+		{
+			return false;
+		}
+
+		$statusProvider = new MigrationStatusProvider();
+		$status = $statusProvider->getLatest($message->mailboxId);
+		if ($status === null || $status->visibility === 'active')
+		{
+			return false;
+		}
+
+		$operationId = $message->operationId ?? null;
+
+		if ($operationId === null)
+		{
+			return true;
+		}
+
+		$operation = $status->operationId === $operationId
+			? $status
+			: $statusProvider->get($message->mailboxId, $operationId);
+
+		return $operation !== null && $operation->visibility === 'terminal';
 	}
 
 	/** @return \Generator<int> */

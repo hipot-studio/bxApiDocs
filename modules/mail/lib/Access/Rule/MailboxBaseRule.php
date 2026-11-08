@@ -3,6 +3,7 @@
 namespace Bitrix\Mail\Access\Rule;
 
 use Bitrix\Mail\Access\Model\MailboxModel;
+use Bitrix\Mail\Access\MailboxAccessController;
 use Bitrix\HumanResources\Service\Container;
 use Bitrix\Mail\Access\Permission\PermissionVariablesDictionary;
 use Bitrix\Mail\Helper\MailboxAccess;
@@ -45,6 +46,16 @@ class MailboxBaseRule extends AbstractRule
 			return true;
 		}
 
+		$withSubDepartments = ($permissionValue === PermissionVariablesDictionary::VARIABLE_DEPARTMENT_WITH_SUBDEPARTMENTS);
+		if ($this->controller instanceof MailboxAccessController)
+		{
+			$batchAccess = $this->controller->getBatchDepartmentAccess($item->getOwnerId(), $withSubDepartments);
+			if ($batchAccess !== null)
+			{
+				return $batchAccess;
+			}
+		}
+
 		$nodeRepository = Container::getNodeRepository();
 		$userDepartmentCollection = $nodeRepository->findAllByUserId($accessibleUser->getUserId());
 		if ($userDepartmentCollection->empty())
@@ -53,8 +64,6 @@ class MailboxBaseRule extends AbstractRule
 		}
 
 		$userDepartmentIds = $userDepartmentCollection->getIds();
-
-		$withSubDepartments = ($permissionValue === PermissionVariablesDictionary::VARIABLE_DEPARTMENT_WITH_SUBDEPARTMENTS);
 
 		$foundUserIds = NodeMemberService::filterUsersByDepartmentIds(
 			[$item->getOwnerId()],

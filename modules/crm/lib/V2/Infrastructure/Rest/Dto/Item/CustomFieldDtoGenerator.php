@@ -35,9 +35,15 @@ class CustomFieldDtoGenerator
 	public function __construct(
 		protected readonly CustomFieldRegistry $customFieldRegistry,
 		private readonly ?RestIntegrationFactory $restIntegrationFactory = null,
+		?RestCustomFieldDescriptorProvider $customFieldDescriptorProvider = null,
 	)
 	{
+		$this->customFieldDescriptorProvider = $customFieldDescriptorProvider
+			?? new RestCustomFieldDescriptorProvider($this->customFieldRegistry)
+		;
 	}
+
+	private readonly RestCustomFieldDescriptorProvider $customFieldDescriptorProvider;
 
 	/**
 	 * @return DtoField[]
@@ -45,9 +51,9 @@ class CustomFieldDtoGenerator
 	public function generateCustomFields(EntityType $entityType): array
 	{
 		$fields = [];
-		$customFieldDescriptorsMapByName = $this->customFieldRegistry->getCustomFieldDescriptorsMapByName(
-			\CCrmOwnerType::ResolveUserFieldEntityID($entityType->getId()),
-		);
+		$customFieldDescriptorsMapByName = $this->customFieldDescriptorProvider
+			->getCustomFieldDescriptorsMapByName($entityType)
+		;
 		foreach ($customFieldDescriptorsMapByName as $fieldDescriptor)
 		{
 			$field = $this->getCustomField($fieldDescriptor);

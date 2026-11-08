@@ -9,6 +9,8 @@ use Bitrix\Disk\Driver;
 use Bitrix\Disk\EditSession;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Internals\EditSessionTable;
@@ -19,6 +21,7 @@ use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui;
 use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
@@ -40,6 +43,18 @@ class DocumentController extends Internals\Controller
 	const ERROR_COULD_NOT_FIND_STORAGE                  = 'DISK_DOC_CON_22012';
 	const ERROR_COULD_NOT_FIND_FOLDER_FOR_CREATED_FILES = 'DISK_DOC_CON_22013';
 	const ERROR_COULD_NOT_CREATE_FILE                   = 'DISK_DOC_CON_22014';
+
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
+	protected UnifiedLinkUrl $unifiedLinkUrl;
+
+	public function __construct()
+	{
+		parent::__construct();
+
+		$serviceLocator = ServiceLocator::getInstance();
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
+	}
 
 	/** @var string */
 	protected $documentHandlerName;
@@ -181,7 +196,10 @@ class DocumentController extends Internals\Controller
 
 	protected function checkReadPermissions()
 	{
-		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext();
+		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext(
+			$this->shouldCheckUnifiedLinkForFile(),
+		);
+
 		if(!$this->file->canRead($securityContext))
 		{
 			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_DOC_CONTROLLER_ERROR_BAD_RIGHTS'), self::ERROR_BAD_RIGHTS)));
@@ -191,7 +209,10 @@ class DocumentController extends Internals\Controller
 
 	protected function checkUpdatePermissions()
 	{
-		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext();
+		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext(
+			$this->shouldCheckUnifiedLinkForFile(),
+		);
+
 		if(!$this->file->canUpdate($securityContext))
 		{
 			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_DOC_CONTROLLER_ERROR_BAD_RIGHTS'), self::ERROR_BAD_RIGHTS)));
@@ -199,16 +220,33 @@ class DocumentController extends Internals\Controller
 		}
 	}
 
+	private function shouldCheckUnifiedLinkForFile(): bool
+	{
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		return
+			is_string($uls)
+			&& $this->unifiedLinkAccessService->validateUlsForObjectId(
+				objectId: $this->file->getId(),
+				uls: $uls,
+			)
+		;
+	}
+
 	protected function checkLockPermissions()
 	{
-		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext();
+		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext(
+			shouldCheckUnifiedLink: $this->shouldCheckUnifiedLinkForFile(),
+		);
 		
 		return $this->file->canLock($securityContext);
 	}
 	
 	protected function checkUnlockPermissions()
 	{
-		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext();
+		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext(
+			shouldCheckUnifiedLink: $this->shouldCheckUnifiedLinkForFile(),
+		);
 		
 		return $this->file->canUnlock($securityContext);
 	}
@@ -486,7 +524,19 @@ class DocumentController extends Internals\Controller
 			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_DOC_CONTROLLER_ERROR_COULD_NOT_FIND_FOLDER_FOR_CREATED_FILES'), self::ERROR_COULD_NOT_FIND_FOLDER_FOR_CREATED_FILES)));
 			$this->sendJsonErrorResponse();
 		}
-		if(!$folder->canAdd($folder->getStorage()->getCurrentUserSecurityContext()))
+
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		$shouldCheckUnifiedLink =
+			is_string($uls)
+			&& $this->unifiedLinkAccessService
+				->validateUlsForObjectId(
+					objectId: $folder->getId(),
+					uls: $uls,
+				)
+		;
+
+		if(!$folder->canAdd($folder->getStorage()->getCurrentUserSecurityContext($shouldCheckUnifiedLink)))
 		{
 			\CFile::delete($fileId);
 			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_DOC_CONTROLLER_ERROR_BAD_RIGHTS'), self::ERROR_BAD_RIGHTS)));
@@ -552,6 +602,7 @@ class DocumentController extends Internals\Controller
 			'name' => $newFile->getName(),
 			'extension' => $newFile->getExtension(),
 			'nameWithoutExtension' => getFileNameWithoutExtension($newFile->getName()),
+			'uls' => $this->unifiedLinkAccessService->getUlsForObjectId($newFile->getId()),
 		));
 	}
 

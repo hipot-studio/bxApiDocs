@@ -52,7 +52,7 @@ final class ItemDataProvider extends DataProvider
 
 		if ($canDelete)
 		{
-			$actions[] = new DeleteAction($this->factory->getEntityTypeId());
+			$actions[] = new DeleteAction($this->factory->getEntityTypeId(), $this->getGridId());
 		}
 
 		if (!$this->getSettings()->isMyCompany())
@@ -67,6 +67,7 @@ final class ItemDataProvider extends DataProvider
 				$actions[] = new EditAction(
 					$this->factory,
 					$this->context,
+					$this->getGridId(),
 					$this->getCategoryId(),
 					$this->getSettings()->getEditableFieldsWhitelist(),
 					$this->getSettings()->getColumnNameToEditableFieldNameMap(),
@@ -79,14 +80,18 @@ final class ItemDataProvider extends DataProvider
 				&& CallList::isEntityTypeSupported($this->factory->getEntityTypeId())
 			)
 			{
-				$actions[] = new CreateAndStartCallListAction($this->factory->getEntityTypeId());
+				$actions[] = new CreateAndStartCallListAction(
+					$this->factory->getEntityTypeId(),
+					$this->getGridId(),
+				);
 			}
 
 			if ($this->isShowWhatsAppMessageAction())
 			{
 				$actions[] = new WhatsAppMessageAction(
 					$this->factory->getEntityTypeId(),
-					$this->getCategoryId()
+					$this->getCategoryId(),
+					$this->getGridId(),
 				);
 			}
 		}
@@ -159,5 +164,10 @@ final class ItemDataProvider extends DataProvider
 	private function getCategoryId(): ?int
 	{
 		return $this->getSettings()->getCategoryId();
+	}
+
+	private function getGridId(): string
+	{
+		return $this->getSettings()->getID();
 	}
 }

@@ -42,6 +42,16 @@ final class DebugSessionService implements DebugSessionServiceInterface
 		return $session;
 	}
 
+	public function restoreSession(?DebugSession $session): void
+	{
+		$this->debugSession = $session;
+	}
+
+	public function findDebugSession(): ?DebugSession
+	{
+		return $this->debugSession;
+	}
+
 	/**
 	 * @throws DebuggerException
 	 */
@@ -67,13 +77,23 @@ final class DebugSessionService implements DebugSessionServiceInterface
 	 */
 	public function flush(): void
 	{
+		$this->saveSession($this->getDebugSession());
+	}
+
+	/**
+	 * Saves the session with its traces without making it the current one.
+	 *
+	 * @throws Throwable
+	 */
+	public function saveSession(DebugSession $session): void
+	{
 		$connection = Application::getConnection();
 		$connection->startTransaction();
 
 		try
 		{
-			$this->debugSessionRepository->save($this->debugSession);
-			$this->debugTraceRepository->saveCollection($this->debugSession->getTraces());
+			$this->debugSessionRepository->save($session);
+			$this->debugTraceRepository->saveCollection($session->getTraces());
 
 			$connection->commitTransaction();
 		}

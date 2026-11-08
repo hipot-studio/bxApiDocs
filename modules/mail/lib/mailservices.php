@@ -26,6 +26,17 @@ Localization\Loc::loadMessages(__FILE__);
  */
 class MailServicesTable extends Entity\DataManager
 {
+	/**
+	 * The bit of FLAGS marking a service whose connection credentials are issued outside the portal.
+	 *
+	 * Declared here rather than taken from the legacy CMail, although that class holds the two flags
+	 * of the domain mail next to it: this table is read from an autoloaded class on paths where the
+	 * legacy half of the module has not been included, and a constant of a class that is not there
+	 * is a fatal error rather than a false. The legacy constant stays as it is, for the code that
+	 * already reads the flags of a domain beside it.
+	 */
+	public const FLAG_EXTERNAL_CREDENTIALS = 4;
+
 
 	public static function getFilePath()
 	{
@@ -129,19 +140,7 @@ class MailServicesTable extends Entity\DataManager
 			$isDeactivated = isset($data['ACTIVE']) && $data['ACTIVE'] == 'N' && $serviceForUpdate['ACTIVE'] == 'Y';
 			if (($isSiteChanged || $isDeactivated) && $serviceForUpdate['SERVICE_TYPE'] == 'imap')
 			{
-				$emptyService = static::getList(array(
-					'select' => array('ID'),
-					'filter' => array(
-						'=SITE_ID' => $serviceForUpdate['SITE_ID'],
-						'ACTIVE' => 'Y',
-						'=SERVICE_TYPE' => 'imap',
-						'=SERVER' => '',
-						'=PORT' => '',
-						'=ENCRYPTION' => '',
-						'=LINK' => '',
-					),
-					'limit' => 1,
-				))->fetch();
+				$emptyService = static::findEmptyService($serviceForUpdate['SITE_ID'], true);
 			}
 
 			if ($isSiteChanged || $isDeactivated && $emptyService)
@@ -194,6 +193,7 @@ class MailServicesTable extends Entity\DataManager
 		{
 			$icons = array(
 				'bitrix24'	=> '/bitrix/images/mail/mailservice-icon/' . Localization\Loc::getMessage('mail_mailservice_bitrix24_icon'),
+				'mailhost'	=> '/bitrix/images/mail/mailservice-icon/post-mailhost-icon.svg',
 				'gmail'	=> '/bitrix/images/mail/mailservice-icon/post-gmail-icon.svg',
 				'icloud'	=> '/bitrix/images/mail/mailservice-icon/post-icloud-icon.svg',
 				'outlook.com'	=> '/bitrix/images/mail/mailservice-icon/post-outlook-icon.svg',
@@ -213,6 +213,95 @@ class MailServicesTable extends Entity\DataManager
 		}
 
 		return null;
+	}
+
+	/**
+	 * The service a mailbox of a deleted or deactivated one is re-hung onto: an active service of the
+	 * same site carrying no connection data of its own, so that the mailbox keeps its own addresses.
+	 *
+	 * A service whose credentials come from outside is never that one. It has no addresses to hand a
+	 * mailbox of somebody else, and a mailbox that landed on it would lose the right to edit its own -
+	 * the very right it has to keep. The mark is asked of the query and not of the answer: the pick
+	 * takes a single row, so dropping it afterwards would report "no empty service" while the next
+	 * suitable row stands right behind it.
+	 *
+	 * @param bool $imapOnly Whether the mailboxes to re-hang are those of an ordinary IMAP service.
+	 * @return array{ID: int, NAME: string}|null
+	 */
+	private static function findEmptyService($siteId, bool $imapOnly): ?array
+	{
+		$filter = array(
+			'=SITE_ID'    => $siteId,
+			'ACTIVE'      => 'Y',
+			'=SERVER'     => '',
+			'=PORT'       => '',
+			'=ENCRYPTION' => '',
+			'=LINK'       => '',
+			'=EXTERNAL_CREDENTIALS_BIT' => 0,
+		);
+
+		if ($imapOnly)
+		{
+			$filter['=SERVICE_TYPE'] = 'imap';
+		}
+
+		$service = static::getList(array(
+			'select' => array('ID', 'NAME'),
+			'filter' => $filter,
+			// A row of an older portal carries no flags at all, and a null of them means the same as a
+			// zero: the service is an ordinary one.
+			'runtime' => array(
+				new Entity\ExpressionField(
+					'EXTERNAL_CREDENTIALS_BIT',
+					'(COALESCE(%s, 0) & ' . self::FLAG_EXTERNAL_CREDENTIALS . ')',
+					array('FLAGS'),
+				),
+			),
+			'limit' => 1,
+		))->fetch();
+
+		return $service ?: null;
+	}
+
+	/**
+	 * Tells by a service row whether the connection credentials of that service come from outside:
+	 * they are issued elsewhere, delivered with the mailbox and must not be edited on the portal.
+	 * The answer belongs to the service, so it is the same for every mailbox of that service.
+	 */
+	public static function hasExternalCredentials(array $service): bool
+	{
+		return ((int) ($service['FLAGS'] ?? 0) & self::FLAG_EXTERNAL_CREDENTIALS) > 0;
+	}
+
+	/**
+	 * The number of the IMAP service of a site by its name, 0 when the site has no such row.
+	 *
+	 * This is how a name becomes a number: a mailbox handed over to us from outside names the service
+	 * it belongs to, and the directory of the services is ours, so nobody else can answer that.
+	 *
+	 * The directory holds no unique key over a site and a name, so the pick is spelled out: duplicated
+	 * rows must not scatter the mailboxes of one site over different services.
+	 */
+	public static function findImapServiceId(string $siteId, string $name): int
+	{
+		$name = trim($name);
+		if ($siteId === '' || $name === '')
+		{
+			return 0;
+		}
+
+		$service = static::getList([
+			'select' => ['ID'],
+			'filter' => [
+				'=SITE_ID' => $siteId,
+				'=NAME' => $name,
+				'=SERVICE_TYPE' => 'imap',
+			],
+			'order' => ['ID' => 'ASC'],
+			'limit' => 1,
+		])->fetch();
+
+		return $service ? (int)$service['ID'] : 0;
 	}
 
 	public static function getOAuthHelper($data)
@@ -255,17 +344,7 @@ class MailServicesTable extends Entity\DataManager
 			}
 			else
 			{
-				$emptyService = static::getList(array(
-					'filter' => array(
-						'=SITE_ID'    => $serviceForDelete['SITE_ID'],
-						'ACTIVE'      => 'Y',
-						'=SERVER'     => '',
-						'=PORT'       => '',
-						'=ENCRYPTION' => '',
-						'=LINK'       => ''
-					),
-					'limit' => 1
-				))->fetch();
+				$emptyService = static::findEmptyService($serviceForDelete['SITE_ID'], false);
 
 				$mbData = $emptyService
 					? array('SERVICE_ID' => $emptyService['ID'], 'NAME' => $emptyService['NAME'])

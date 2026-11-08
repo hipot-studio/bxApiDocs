@@ -47,4 +47,12 @@ class ProjectChatResolver
 	{
 		return $this->projectChatDataProvider->getProjectIdsByChatIds($chatIds);
 	}
+
+	/**
+	 * Unlike getProjectIdByChatId(), the group is returned whatever its type is.
+	 */
+	public function getGroupIdByChatId(int $chatId): ?int
+	{
+		return $this->projectChatDataProvider->getGroupIdByChatId($chatId);
+	}
 }

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Service\Sync\Access\GroupAccessPublisher;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\RightTable;
 use Bitrix\Main\Loader;
@@ -198,6 +199,15 @@ class SocialnetworkHandlers
 		{
 			return;
 		}
+
+		// before the storage, the relations of the group and the rights naming it: the first two are what
+		// the records are addressed by, the third is what says which objects they are about
+		(new GroupAccessPublisher())->publishGroupRemoved(
+			(int)$storage->getRootObjectId(),
+			(int)$groupId,
+			(int)$storage->getId(),
+		);
+
 		$storage->delete(self::getActivityUserId());
 
 		RightTable::deleteBatch(array('ACCESS_CODE' => "SG{$groupId}_" . SONET_ROLES_OWNER));
@@ -230,6 +240,10 @@ class SocialnetworkHandlers
 			{
 				return;
 			}
+
+			// the storage of the group closes for the user whether they had connected it or not
+			(new GroupAccessPublisher())->publishMembershipChanged((int)$storage->getRootObjectId(), (int)$userId);
+
 			/** @var Sharing $sharing */
 			$sharing = Sharing::load(array(
 				'=TO_ENTITY' => Sharing::CODE_USER . $userId,
@@ -251,49 +265,86 @@ class SocialnetworkHandlers
 			return;
 		}
 
-		$memberRolesList = \Bitrix\Socialnetwork\UserToGroupTable::getRolesMember();
-
-		if(
-			isset($fields['ROLE']) &&
-			in_array($fields['ROLE'], $memberRolesList) &&
-			(
-				empty($fieldsOld)
-				|| !in_array($fieldsOld['ROLE'], $memberRolesList)
-			)
-		)
+		if (!isset($fields['ROLE']))
 		{
-			if(!(isset($fields['USER_ID'])))
+			return;
+		}
+
+		$fieldsOld = is_array($fieldsOld) ? $fieldsOld : [];
+
+		$memberRolesList = \Bitrix\Socialnetwork\UserToGroupTable::getRolesMember();
+		$becameMember = in_array($fields['ROLE'], $memberRolesList);
+
+		// An update that does not cross the line of membership moves no boundary. An old role that was
+		// not handed over is read as the opposite of the new one: the crossing is then assumed rather
+		// than established, and a record too many costs one comparison while a lost one costs the
+		// object itself.
+		$wasMember = isset($fieldsOld['ROLE']) ? in_array($fieldsOld['ROLE'], $memberRolesList) : !$becameMember;
+		if ($becameMember === $wasMember)
+		{
+			return;
+		}
+
+		$relation = self::findGroupRelation($id, $fields, $fieldsOld);
+		if (!$relation)
+		{
+			return;
+		}
+
+		[$userId, $groupId] = $relation;
+
+		$storage = Driver::getInstance()->getStorageByGroupId($groupId);
+		if(!$storage)
+		{
+			return;
+		}
+
+		// A role that became a membership opens the storage of the group just as an addition does, and a
+		// role that stopped being one closes it just as an exclusion does. The feature of files is not
+		// asked about here: it takes no code off the root of the group storage, so the boundary moves
+		// whether it stands or not.
+		(new GroupAccessPublisher())->publishMembershipChanged((int)$storage->getRootObjectId(), (int)$userId);
+
+		if (!$becameMember || !\CSocNetFeatures::isActiveFeature(SONET_ENTITY_GROUP, $groupId, 'files'))
+		{
+			return;
+		}
+
+		$rootObject = $storage->getRootObject();
+		if(!$rootObject->canRead($storage->getSecurityContext($userId)))
+		{
+			return;
+		}
+
+		$errorCollection = new ErrorCollection();
+		Sharing::connectStorageToUserStorage($userId, $userId, $storage, $errorCollection);
+	}
+
+	/**
+	 * The user and the group of the relation that was updated.
+	 *
+	 * An update carries the fields it changes and nothing else, so the pair comes from whichever of the
+	 * three sources holds it: the fields of the update, the row as it stood before it, and the table.
+	 *
+	 * @return array{0: int, 1: int}|null
+	 */
+	private static function findGroupRelation($id, array $fields, array $fieldsOld): ?array
+	{
+		$userId = (int)($fields['USER_ID'] ?? $fieldsOld['USER_ID'] ?? 0);
+		$groupId = (int)($fields['GROUP_ID'] ?? $fieldsOld['GROUP_ID'] ?? 0);
+
+		if ($userId <= 0 || $groupId <= 0)
+		{
+			$query = \CSocNetUserToGroup::getList(array(), array('ID' => $id), false, false, array('USER_ID', 'GROUP_ID'));
+			$row = $query ? $query->fetch() : null;
+			if ($row)
 			{
-				$query = \CSocNetUserToGroup::getList(array(), array('ID' => $id), false, false, array('USER_ID', 'GROUP_ID'));
-				if($query)
-				{
-					$row = $query->fetch();
-					if($row)
-					{
-						$userId = $row['USER_ID'];
-						$groupId = $row['GROUP_ID'];
-					}
-				}
-			}
-
-			if(!empty($userId) && !empty($groupId) && \CSocNetFeatures::isActiveFeature(SONET_ENTITY_GROUP, $groupId, 'files'))
-			{
-				$storage = Driver::getInstance()->getStorageByGroupId($groupId);
-				if(!$storage)
-				{
-					return;
-				}
-
-				$rootObject = $storage->getRootObject();
-				if(!$rootObject->canRead($storage->getSecurityContext($userId)))
-				{
-					return;
-				}
-
-				$errorCollection = new ErrorCollection();
-				Sharing::connectStorageToUserStorage($userId, $userId, $storage, $errorCollection);
+				$userId = $userId > 0 ? $userId : (int)$row['USER_ID'];
+				$groupId = $groupId > 0 ? $groupId : (int)$row['GROUP_ID'];
 			}
 		}
+
+		return $userId > 0 && $groupId > 0 ? [$userId, $groupId] : null;
 	}
 
 	public static function onSocNetUserToGroupAdd($id, $fields)
@@ -333,6 +384,12 @@ class SocialnetworkHandlers
 				{
 					return;
 				}
+
+				// the membership itself opens the storage of the group, whether it is connected or not
+				(new GroupAccessPublisher())->publishMembershipChanged(
+					(int)$storage->getRootObjectId(),
+					(int)$fields['USER_ID']
+				);
 
 				$rootObject = $storage->getRootObject();
 				if(!$rootObject->canRead($storage->getSecurityContext($fields['USER_ID'])))

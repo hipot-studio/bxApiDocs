@@ -20,7 +20,7 @@ class CSearchTags
 			];
 		}
 		$bJoinSearchContent = false;
-		foreach ($arSelect as $key => $value)
+		foreach ($arSelect as $value)
 		{
 			$value = mb_strtoupper($value);
 			switch ($value)
@@ -102,15 +102,15 @@ class CSearchTags
 						{
 							foreach ($p_val as $i => $val2)
 							{
-								$p_val[$i] = $DB->ForSQL($val2);
+								$p_val[$i] = $DB->ForSql($val2);
 							}
 							$p_where = " in ('" . implode("', '", $p_val) . "')";
 						}
 						else
 						{
-							$p_where = " = '" . $DB->ForSQL($p_val) . "'";
+							$p_where = " = '" . $DB->ForSql($p_val) . "'";
 						}
-						$arQueryWhere[] = "EXISTS (SELECT * FROM b_search_content_param WHERE SEARCH_CONTENT_ID = stags.SEARCH_CONTENT_ID AND PARAM_NAME = '" . $DB->ForSQL($p_key) . "' AND PARAM_VALUE " . $p_where . ')';
+						$arQueryWhere[] = "EXISTS (SELECT * FROM b_search_content_param WHERE SEARCH_CONTENT_ID = stags.SEARCH_CONTENT_ID AND PARAM_NAME = '" . $DB->ForSql($p_key) . "' AND PARAM_VALUE " . $p_where . ')';
 					}
 				}
 				break;
@@ -147,7 +147,7 @@ class CSearchTags
 		foreach ($arOrder as $key => $value)
 		{
 			$key = mb_strtoupper($key);
-			$value = mb_strtoupper($value) == 'DESC' ? 'DESC' : 'ASC';
+			$value = mb_strtoupper($value) === 'DESC' ? 'DESC' : 'ASC';
 			switch ($key)
 			{
 			case 'NAME':
@@ -258,7 +258,8 @@ class CSearchTags
 				$arPath = [];
 				foreach ($arTags as $tag)
 				{
-					if ($tag <> '')
+					$tag = trim($tag);
+					if ($tag !== '')
 					{
 						$path = 'b_search_tags/_' . ord(mb_substr($tag, 0, 1));
 					}
@@ -269,7 +270,7 @@ class CSearchTags
 					$arPath[$path] = true;
 				}
 				global $CACHE_MANAGER;
-				foreach ($arPath as $path => $value)
+				foreach ($arPath as $path => $_)
 				{
 					$CACHE_MANAGER->CleanDir($path);
 				}

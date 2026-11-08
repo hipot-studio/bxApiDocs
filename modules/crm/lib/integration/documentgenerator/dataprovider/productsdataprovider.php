@@ -19,6 +19,8 @@ use Bitrix\Crm\Integration\DocumentGenerator\Value\TaxRate;
 
 abstract class ProductsDataProvider extends CrmEntityDataProvider
 {
+	use TotalWeightTrait;
+
 	/** @var Product[] */
 	protected $products;
 	/** @var Tax[] */
@@ -267,7 +269,7 @@ abstract class ProductsDataProvider extends CrmEntityDataProvider
 			$this->data['TOTAL_QUANTITY'] += $product->getRawValue('QUANTITY');
 			$this->data['TOTAL_RAW'] += $product->getRawValue('PRICE_RAW_SUM');
 			$this->data['TOTAL_RAW_BEFORE_DISCOUNT'] += $product->getRawValue('QUANTITY') * $product->getRawValue('PRICE_RAW_NETTO');
-			$crmProducts[] = DataProviderManager::getInstance()->getArray($product, ['rawValue' => true]);
+			$crmProducts[] = $product->getCalculationData();
 		}
 		$calcOptions = [];
 		if(\CCrmTax::isTaxMode())
@@ -374,6 +376,10 @@ abstract class ProductsDataProvider extends CrmEntityDataProvider
 			],
 			'TOTAL_QUANTITY' => [
 				'TITLE' => GetMessage('CRM_DOCGEN_PRODUCTSDATAPROVIDER_TOTAL_QUANTITY_TITLE'),
+			],
+			'TOTAL_WEIGHT' => [
+				'TITLE' => GetMessage('CRM_DOCGEN_PRODUCTSDATAPROVIDER_TOTAL_WEIGHT_TITLE'),
+				'VALUE' => [$this, 'getTotalWeight'],
 			],
 			'TOTAL_QUANTITY_WORDS' => [
 				'TITLE' => GetMessage('CRM_DOCGEN_PRODUCTSDATAPROVIDER_TOTAL_QUANTITY_WORDS_TITLE'),

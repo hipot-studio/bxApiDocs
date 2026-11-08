@@ -141,7 +141,7 @@ class FileResolver
 		return $indexed;
 	}
 
-	private static function isAccessible(?File $diskFile, int $userId): bool
+	public static function isAccessible(?File $diskFile, int $userId): bool
 	{
 		if ($diskFile === null || $diskFile->isDeleted())
 		{

@@ -2,14 +2,14 @@
 
 namespace Bitrix\MailMobile\Internal\Services;
 
-use Bitrix\Mail\Helper\Message;
 use Bitrix\Mail\Helper\Dto\MailMessage;
-use Bitrix\Mail\Helper\MailMessageChainProvider;
 use Bitrix\Mail\Helper\Message\Loader\MessageFilter;
 use Bitrix\Mail\Helper\Message\Loader\QueryBuilder;
 use Bitrix\Mail\Internals\MailboxDirectoryTable;
 use Bitrix\Mail\Internals\MessageAccessTable;
+use Bitrix\MailMobile\Public\Features\FavoritesFeature;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
@@ -23,7 +23,30 @@ class MessageLoader
 	 * @throws ArgumentException
 	 * @throws LoaderException
 	 */
-	public static function getMessageList(MessageFilter $filter, PageNavigation $navigation, bool $hideReadStatuses = false): array
+	public static function getMessageList(
+		MessageFilter $filter,
+		PageNavigation $navigation,
+		bool $hideReadStatuses = false,
+		?bool $favoritesAvailable = null,
+	): array
+	{
+		$messages = static::loadMessageListItems($filter, $navigation, $hideReadStatuses);
+
+		return static::enrichMessageListItems(
+			$messages,
+			$filter,
+			$favoritesAvailable ?? Feature::isEnabled(FavoritesFeature::class),
+		);
+	}
+
+	/**
+	 * @return MailMessage[]
+	 */
+	protected static function loadMessageListItems(
+		MessageFilter $filter,
+		PageNavigation $navigation,
+		bool $hideReadStatuses,
+	): array
 	{
 		$query = QueryBuilder::buildMailMessageListQuery(
 			$filter->getArray(),
@@ -47,6 +70,23 @@ class MessageLoader
 		$folderIds = self::buildFolderIdMap($rows);
 
 		return self::aggregateMessages($rows, $folderIds, $hideReadStatuses);
+	}
+
+	/**
+	 * @param MailMessage[] $messages
+	 * @return MailMessage[]
+	 */
+	protected static function enrichMessageListItems(
+		array $messages,
+		MessageFilter $filter,
+		bool $favoritesAvailable,
+	): array
+	{
+		return (new FavoriteMessageEnricher())->enrich(
+			$messages,
+			$filter->getUserId(),
+			$favoritesAvailable,
+		);
 	}
 
 	/**
@@ -91,31 +131,19 @@ class MessageLoader
 		{
 			if (!array_key_exists($row['MESSAGE_ID'], $messageList))
 			{
-				$message = new MailMessage();
-				$message->id = (int)$row['MESSAGE_ID'];
-				$message->uidId = $row['UID_ID'].'-'.$row['MAILBOX_ID'];
-				$message->mailboxId = (int)$row['MAILBOX_ID'];
-				$message->folderId = $folderIds[$message->mailboxId][$row['DIR_MD5'] ?? ''] ?? null;
-				$message->subject = (string)$row['SUBJECT'];
-				$message->abbreviatedText = self::abbreviateText(
-					Message::getDisplaySnippet((string)$row['BODY'], $message->subject),
+				$message = MailMessage::fromListRow(
+					$row,
+					$folderIds[(int)$row['MAILBOX_ID']][$row['DIR_MD5'] ?? ''] ?? null,
+					$hideReadStatuses,
 				);
-				MailMessageChainProvider::fillRecipients($message, $row);
-				$message->date = (int)(($row['INTERNALDATE'] ?? $row['FIELD_DATE'])->getTimestamp());
 				$messageList[$row['MESSAGE_ID']] = $message;
-
-				if (isset($row['OPTIONS']['attachments']) &&  isset($row['OPTIONS']['attachments']) > 0)
-				{
-					$message->withAttachments = (int)($row['OPTIONS']['attachments']);
-				}
+			}
+			else
+			{
+				$messageList[$row['MESSAGE_ID']]->mergeListRow($row, $hideReadStatuses);
 			}
 
 			self::addBinding($messageList[$row['MESSAGE_ID']], $row);
-
-			if ($row['IS_SEEN'] === 'Y' || $hideReadStatuses)
-			{
-				$messageList[$row['MESSAGE_ID']]->isRead = true;
-			}
 		}
 
 		$sortedMessageList = array_values($messageList);
@@ -132,18 +160,6 @@ class MessageLoader
 		});
 
 		return $sortedMessageList;
-	}
-
-	private static function abbreviateText(string $text): string
-	{
-		$text = str_replace(["\r\n", "\n", "\r", "\t"], ' ', mb_substr($text, 0, 50));
-
-		while (str_contains($text, '  '))
-		{
-			$text = str_replace('  ', ' ', $text);
-		}
-
-		return trim($text);
 	}
 
 	/**
@@ -179,6 +195,9 @@ class MessageLoader
 					break;
 				case MessageAccessTable::ENTITY_TYPE_CALENDAR_EVENT:
 					$message->eventBindId = $entityBindId;
+					break;
+				case MessageAccessTable::ENTITY_TYPE_BLOG_POST:
+					$message->blogPostBindId = $entityBindId;
 					break;
 			}
 		}

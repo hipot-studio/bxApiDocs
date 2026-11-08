@@ -17,6 +17,22 @@ use Bitrix\Main\ORM\Query\Join;
 use Bitrix\Rest\APAuth\PasswordTable;
 use Bitrix\Rest\Internal\Integration\Bitrix24\LicenseScannerStateInvalidator;
 
+/**
+ * Class IncomingWebhookAttributeTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_IncomingWebhookAttribute_Query query()
+ * @method static EO_IncomingWebhookAttribute_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_IncomingWebhookAttribute_Result getById($id)
+ * @method static EO_IncomingWebhookAttribute_Result getList(array $parameters = [])
+ * @method static EO_IncomingWebhookAttribute_Entity getEntity()
+ * @method static \Bitrix\Rest\Internal\Model\EO_IncomingWebhookAttribute createObject($setDefaultValues = true)
+ * @method static \Bitrix\Rest\Internal\Model\EO_IncomingWebhookAttribute_Collection createCollection()
+ * @method static \Bitrix\Rest\Internal\Model\EO_IncomingWebhookAttribute wakeUpObject($row)
+ * @method static \Bitrix\Rest\Internal\Model\EO_IncomingWebhookAttribute_Collection wakeUpCollection($rows)
+ */
 class IncomingWebhookAttributeTable extends DataManager
 {
 	use AddMergeTrait;

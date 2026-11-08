@@ -286,6 +286,52 @@ class RecordIntentStateRepository
 		return $result;
 	}
 
+	/**
+	 * Suppresses the show window until $suppressedUntil without registering a show or an outcome:
+	 * the box is not applicable at all, so the conditions behind it must not be re-evaluated on
+	 * every read. The caller owns the bound, because it is the scope of its own verdict and does
+	 * not have to coincide with PERIOD_END_AT. The bound only moves forward: a period already
+	 * suppressed further ahead keeps its own bound and stays a success. A stale PERIOD_KEY
+	 * suppresses nothing and fails, so the caller can tell a closed window from an untouched one.
+	 */
+	public function suppressPeriod(int $userId, string $periodKey, int $suppressedUntil): Result
+	{
+		$result = new Result();
+
+		$connection = Application::getConnection();
+		$helper = $connection->getSqlHelper();
+
+		$table = $helper->quote(RecordIntentStateTable::getTableName());
+		$userId = (int)$userId;
+		$suppressedUntil = (int)$suppressedUntil;
+		$periodKeySql = "'" . $helper->forSql($periodKey, 32) . "'";
+		$nowUtc = time();
+
+		$connection->queryExecute(
+			"UPDATE {$table}"
+			. " SET SUPPRESSED_UNTIL = {$suppressedUntil}, LAST_REGISTERED_AT = {$nowUtc}"
+			. " WHERE USER_ID = {$userId} AND PERIOD_KEY = {$periodKeySql}"
+			. " AND SUPPRESSED_UNTIL < {$suppressedUntil}"
+		);
+
+		// Affected rows are not the signal here, unlike registerShow/registerOutcome: the bound is
+		// monotonic, so a period suppressed further ahead updates nothing and is still suppressed.
+		// What decides is the state the period ended up in.
+		$state = $this->getByUserId($userId);
+		$isWindowClosed =
+			$state !== null
+			&& $state['PERIOD_KEY'] === $periodKey
+			&& $state['SUPPRESSED_UNTIL'] > $nowUtc
+		;
+
+		if (!$isWindowClosed)
+		{
+			return $result->addError(new Error(self::ERROR_PERIOD_MISMATCH_OR_LIMIT, self::ERROR_PERIOD_MISMATCH_OR_LIMIT));
+		}
+
+		return $result->setData($state);
+	}
+
 	private function normalizeRow(array $row): array
 	{
 		return [

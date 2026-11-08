@@ -9,7 +9,7 @@ class RichTextUserFieldFlag extends AbstractFlag
 {
 	public function enabledByDefault(): bool
 	{
-		return false;
+		return true;
 	}
 
 	public function getRequirements(): array

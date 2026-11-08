@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\WebForm\Internals;
 
 use Bitrix\Main\ORM;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 
 /**
  * Class FormFieldMappingTable
@@ -22,6 +23,7 @@ use Bitrix\Main\ORM;
  */
 class FormFieldMappingTable extends ORM\Data\DataManager
 {
+	use DeleteByFilterTrait;
 
 	public static function getTableName()
 	{

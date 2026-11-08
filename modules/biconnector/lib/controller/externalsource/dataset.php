@@ -2,24 +2,36 @@
 
 namespace Bitrix\BIConnector\Controller\ExternalSource;
 
+use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Service\TableGroupService;
+use Bitrix\BIConnector\Access\Table\TableAccessChecker;
+use Bitrix\BIConnector\ExternalSource\Source\ConnectionFailureException;
 use Bitrix\BIConnector\ExternalSource\SupersetIntegration;
 use Bitrix\BIConnector\ExternalSource\Type;
 use Bitrix\BIConnector\ExternalSource\FieldType;
 use Bitrix\BIConnector\ExternalSource\Validation\ImportDataValidator;
 use Bitrix\BIConnector\ExternalSource\Validation\Rules\RulesProvider;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
-use Bitrix\Main\Engine\Action;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
+use Bitrix\BIConnector\Superset\ActionFilter\BIConstructorAccess;
+use Bitrix\BIConnector\Superset\ActionFilter\ExternalDashboardConfigAccess;
+use Bitrix\BIConnector\Superset\Error\IntegrationErrorPresenter;
+use Bitrix\BIConnector\Superset\Error\UserFacingError;
+use Bitrix\BIConnector\Superset\Logger\Logger;
+use Bitrix\Intranet\ActionFilter\IntranetUser;
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Localization\LocalizableMessage;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
+use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\IO;
 use Bitrix\BIConnector\ExternalSource;
-use Bitrix\BIConnector\Access\AccessController;
-use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Integration\UI\FileUploader;
 use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
@@ -27,13 +39,15 @@ use Bitrix\BIConnector\Integration\UI\FileUploaderController\DatasetUploaderCont
 
 class Dataset extends Controller
 {
+	public const ERROR_SOURCE_TABLE_NOT_FOUND = 'SOURCE_TABLE_NOT_FOUND';
+
 	private const FILE_ROWS_LIMIT = 300000;
 	private const LOG_FILE_SIZE_LIMIT_MB = 10;
 	private const MAX_ERRORS_COUNT = 200;
 	private const DATASET_NAME_MAX_LENGTH = 30;
 
 	/**
-	 * Manager error codes that carry a safe, user-facing reason and may be shown as-is.
+	 * Manager error codes that carry a safe reason and may be re-published as a user-facing error.
 	 * Any other manager error is treated as unexpected/internal and replaced with a generic message.
 	 */
 	private const SAFE_SAVE_ERROR_CODES = [
@@ -41,6 +55,7 @@ class Dataset extends Controller
 		'DUPLICATE_FIELDS',
 		'NAME_EXISTS',
 		'NAME_FORMAT',
+		'EXTERNAL_CODE_FORMAT',
 	];
 
 	private static array $fileMap = [
@@ -52,10 +67,13 @@ class Dataset extends Controller
 	private static array $datasetMap = [
 		'id' => 'ID',
 		'name' => 'NAME',
+		'verboseName' => 'VERBOSE_NAME',
 		'description' => 'DESCRIPTION',
 		'externalCode' => 'EXTERNAL_CODE',
 		'externalName' => 'EXTERNAL_NAME',
 	];
+
+	private ?TableAccessChecker $tableAccessChecker = null;
 
 	private static array $fieldsMap = [
 		'id' => 'ID',
@@ -66,16 +84,27 @@ class Dataset extends Controller
 		'description' => 'DESCRIPTION',
 	];
 
-	protected function processBeforeAction(Action $action): bool
+	protected function getDefaultPreFilters(): array
 	{
-		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_EXTERNAL_DASHBOARD_CONFIG))
-		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_EXTERNAL_SOURCE_DATASET_ACCESS_ERROR_MSGVER_1') ?? ''));
+		$additionalFilters = [
+			new BIConstructorAccess(),
+			new ExternalDashboardConfigAccess(
+				new LocalizableMessage(
+					code: 'BICONNECTOR_CONTROLLER_EXTERNAL_SOURCE_DATASET_ACCESS_ERROR_MSGVER_1',
+					phraseSrcFile: __FILE__,
+				),
+			),
+		];
 
-			return false;
+		if (Loader::includeModule('intranet'))
+		{
+			$additionalFilters[] = new IntranetUser();
 		}
 
-		return parent::processBeforeAction($action);
+		return [
+			...parent::getDefaultPreFilters(),
+			...$additionalFilters,
+		];
 	}
 
 	public function getPrimaryAutoWiredParameter(): ExactParameter
@@ -88,7 +117,7 @@ class Dataset extends Controller
 				$datasetId = (int)$id;
 				if ($datasetId <= 0)
 				{
-					$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1') ?? ''));
+					$this->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1')));
 
 					return null;
 				}
@@ -96,13 +125,13 @@ class Dataset extends Controller
 				$dataset = ExternalSource\DatasetManager::getById($datasetId);
 				if (!$dataset)
 				{
-					$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1') ?? ''));
+					$this->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1')));
 
 					return null;
 				}
 
 				return $dataset;
-			}
+			},
 		);
 	}
 
@@ -121,7 +150,8 @@ class Dataset extends Controller
 
 		if (!$file)
 		{
-			$this->addError(new Error('Empty file'));
+			$errorMessage = Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_FILE_NOT_FOUND');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -155,15 +185,15 @@ class Dataset extends Controller
 		$batchContent = '';
 		$errorsCount = 0;
 
-		foreach ($reader->readAllRowsByOne() as $row)
+		foreach ($reader->readAllRowsByOne() as $fileRowNumber => $row)
 		{
 			$rowsCount++;
 			if ($rowsCount > self::FILE_ROWS_LIMIT)
 			{
 				$this->addError(
-					new Error(
-						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MAX_ROWS') ?? ''
-					)
+					new UserFacingError(
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MAX_ROWS') ?? '',
+					),
 				);
 
 				return null;
@@ -172,7 +202,6 @@ class Dataset extends Controller
 			$rowValidationResult = $validator->validateRow($row);
 			if (!$rowValidationResult->isSuccess())
 			{
-				$rowNumber = $file['hasHeaders'] ? $rowsCount + 1 : $rowsCount;
 				foreach ($rowValidationResult->getErrors() as $error)
 				{
 					$errorsCount++;
@@ -186,7 +215,7 @@ class Dataset extends Controller
 					}
 					$rowContent = str_replace(
 						['#ERROR_NUMBER#', '#MESSAGE#', '#ROW_NUMBER#', '#FIELD_NAME#'],
-						[(string)$errorsCount, htmlspecialcharsbx($error->getMessage()), (string)$rowNumber, htmlspecialcharsbx($fieldName)],
+						[(string)$errorsCount, htmlspecialcharsbx($error->getMessage()), (string)$fileRowNumber, htmlspecialcharsbx($fieldName)],
 						$rowTemplate,
 					);
 					$batchContent .= $rowContent . PHP_EOL;
@@ -230,9 +259,10 @@ class Dataset extends Controller
 	/**
 	 * Adds dataset save errors (from DatasetManager::add/update) to the controller response.
 	 *
-	 * Known validation errors are surfaced as-is so the user sees the real reason.
+	 * Known validation errors are re-published as user-facing ones so the user sees the real reason.
 	 * Any other error is replaced with a generic localized message keeping the stable code,
-	 * so raw ORM/SQL details never reach the client.
+	 * so raw ORM/SQL details never reach the client. Replaced errors go to the journal:
+	 * DatasetManager does not log them itself and their real reason is stored nowhere else.
 	 *
 	 * @param Error[] $errors
 	 * @param string $fallbackMessageCode
@@ -241,19 +271,37 @@ class Dataset extends Controller
 	 */
 	private function addDatasetSaveErrors(array $errors, string $fallbackMessageCode, string $fallbackCode): void
 	{
-		$knownErrors = array_filter(
-			$errors,
-			static fn(Error $error): bool => in_array($error->getCode(), self::SAFE_SAVE_ERROR_CODES, true)
-		);
+		$knownErrors = [];
+		$replacedErrors = [];
+		foreach ($errors as $error)
+		{
+			if (in_array($error->getCode(), self::SAFE_SAVE_ERROR_CODES, true))
+			{
+				$knownErrors[] = new UserFacingError(
+					$error->getMessage(),
+					$error->getCode(),
+					$error->getCustomData(),
+				);
+			}
+			else
+			{
+				$replacedErrors[] = $error;
+			}
+		}
+
+		if (!empty($replacedErrors))
+		{
+			Logger::logErrors($replacedErrors, ['FALLBACK_CODE' => $fallbackCode]);
+		}
 
 		if (!empty($knownErrors))
 		{
-			$this->addErrors(array_values($knownErrors));
+			$this->addErrors($knownErrors);
 
 			return;
 		}
 
-		$this->addError(new Error(Loc::getMessage($fallbackMessageCode) ?? '', $fallbackCode));
+		$this->addError(new UserFacingError(Loc::getMessage($fallbackMessageCode), $fallbackCode));
 	}
 
 	/**
@@ -262,10 +310,21 @@ class Dataset extends Controller
 	 * @param string $type
 	 * @param array $fields
 	 * @param int|null $sourceId
+	 * @param array $tableGroupIds Groups the new table is bound to; at least one is required while the table axis is on.
 	 * @return array|null
 	 */
-	public function addAction(string $type, array $fields, ?int $sourceId = null): ?array
+	public function addAction(string $type, array $fields, ?int $sourceId = null, array $tableGroupIds = []): ?array
 	{
+		$groupIds = null;
+		if ($this->getTableAccessChecker()->isRestricted())
+		{
+			$groupIds = self::normalizeTableGroupIds($tableGroupIds);
+			if (!$this->checkTableGroupsForAdd($groupIds))
+			{
+				return null;
+			}
+		}
+
 		if (!$sourceId)
 		{
 			$sourceId = (int)($fields['connectionSettings']['connectionId'] ?? 0);
@@ -283,9 +342,34 @@ class Dataset extends Controller
 		$datasetFields = $checkBeforeAddData['fields'];
 		$datasetSettings = $checkBeforeAddData['settings'];
 
-		$addResult = ExternalSource\DatasetManager::add($dataset, $datasetFields, $datasetSettings, $sourceId);
+		if ($groupIds !== null && !$this->getTableAccessChecker()->canTakeTableCode((string)$dataset['NAME']))
+		{
+			$this->addTableAccessDeniedError();
+
+			return null;
+		}
+
+		$addResult = ExternalSource\DatasetManager::add(
+			$dataset,
+			$datasetFields,
+			$datasetSettings,
+			$sourceId,
+			$groupIds,
+		);
 		if (!$addResult->isSuccess())
 		{
+			if ($addResult->getErrorCollection()->getErrorByCode(TableGroupService::ERROR_TABLE_CODE_RESERVED))
+			{
+				$this->addError(
+					new UserFacingError(
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NAME_RESERVED_ERROR') ?? '',
+						'TABLE_NAME_RESERVED',
+					)
+				);
+
+				return null;
+			}
+
 			$this->addDatasetSaveErrors($addResult->getErrors(), 'BICONNECTOR_EXTERNAL_SOURCE_DATASET_ADD_ERROR_MSGVER_1', 'ADD_ERROR');
 
 			return null;
@@ -303,10 +387,10 @@ class Dataset extends Controller
 				if (!$importResult->isSuccess())
 				{
 					$this->addError(
-						new Error(
+						new UserFacingError(
 							Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_IMPORT_ERROR') ?? '',
-							'IMPORT_ERROR'
-						)
+							'IMPORT_ERROR',
+						),
 					);
 
 					return null;
@@ -315,20 +399,109 @@ class Dataset extends Controller
 			catch (\Exception)
 			{
 				$this->addError(
-					new Error(
+					new UserFacingError(
 						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_IMPORT_ERROR') ?? '',
-						'IMPORT_ERROR_EXCEPTION'
-					)
+						'IMPORT_ERROR_EXCEPTION',
+					),
 				);
 
 				return null;
 			}
+
+			$this->saveFileParsingSettings((int)$addResultData['id'], $type, $file);
 		}
 
 		return [
 			'id' => $addResultData['id'],
 			'name' => $addResultData['dataset']['NAME'],
 		];
+	}
+
+	private function getTableAccessChecker(): TableAccessChecker
+	{
+		$this->tableAccessChecker ??= new TableAccessChecker();
+
+		return $this->tableAccessChecker;
+	}
+
+	/**
+	 * @param array $tableGroupIds Raw request value.
+	 * @return int[] Positive group ids without repeats, in the order they came.
+	 */
+	private static function normalizeTableGroupIds(array $tableGroupIds): array
+	{
+		$groupIds = [];
+		foreach ($tableGroupIds as $groupId)
+		{
+			$groupId = is_scalar($groupId) ? filter_var($groupId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) : false;
+			if ($groupId !== false)
+			{
+				$groupIds[$groupId] = $groupId;
+			}
+		}
+
+		return array_values($groupIds);
+	}
+
+	/**
+	 * @param int[] $groupIds
+	 */
+	private function checkTableGroupsForAdd(array $groupIds): bool
+	{
+		if (empty($groupIds))
+		{
+			$this->addError(
+				new UserFacingError(
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_TABLE_GROUPS_REQUIRED_ERROR') ?? '',
+					'TABLE_GROUP_REQUIRED',
+				)
+			);
+
+			return false;
+		}
+
+		if (!$this->getTableAccessChecker()->canUseEveryGroup(ActionDictionary::ACTION_BIC_TABLE_EDIT, $groupIds))
+		{
+			$this->addError(
+				new UserFacingError(
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_TABLE_GROUPS_ACCESS_ERROR') ?? '',
+					'TABLE_ACCESS_DENIED',
+				)
+			);
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Adds the TABLE_ACCESS_DENIED error when the action is allowed in none of the groups of the table.
+	 *
+	 * @param string $action One of the table actions of ActionDictionary.
+	 * @param string $tableCode
+	 * @return bool
+	 */
+	private function checkTableAccess(string $action, string $tableCode): bool
+	{
+		if ($this->getTableAccessChecker()->canDo($action, $tableCode))
+		{
+			return true;
+		}
+
+		$this->addTableAccessDeniedError();
+
+		return false;
+	}
+
+	private function addTableAccessDeniedError(): void
+	{
+		$this->addError(
+			new UserFacingError(
+				Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_TABLE_ACCESS_ERROR') ?? '',
+				'TABLE_ACCESS_DENIED',
+			)
+		);
 	}
 
 	private function checkAndPrepareBeforeAdd(string $type, array $fields, ?int $sourceId = null): Result
@@ -338,7 +511,7 @@ class Dataset extends Controller
 		$enumType = ExternalSource\Type::tryFrom($type);
 		if (!$enumType)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1') ?? '', 'UNKNOWN_TYPE'));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1'), 'UNKNOWN_TYPE'));
 
 			return $result;
 		}
@@ -377,21 +550,21 @@ class Dataset extends Controller
 		if (mb_strlen($dataset['NAME']) > self::DATASET_NAME_MAX_LENGTH)
 		{
 			$result->addError(
-				new Error(
+				new UserFacingError(
 					Loc::getMessage(
 						'BICONNECTOR_EXTERNAL_SOURCE_DATASET_NAME_LONG_ERROR',
 						['#MAX_LENGTH#' => self::DATASET_NAME_MAX_LENGTH],
 					) ?? '',
-					'NAME_LENGTH'
-				)
+					'NAME_LENGTH',
+				),
 			);
 		}
 		elseif (in_array($dataset['NAME'], ExternalSource\SupersetServiceIntegration::getTableList(), true))
 		{
 			$result->addError(
-				new Error(
-					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_ALREADY_EXIST_ERROR_MSGVER_1') ?? ''
-				)
+				new UserFacingError(
+					Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_ALREADY_EXIST_ERROR_MSGVER_1') ?? '',
+				),
 			);
 		}
 
@@ -401,12 +574,12 @@ class Dataset extends Controller
 
 		if (empty($datasetFields))
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_FIELDS') ?? '', 'EMPTY_FIELDS'));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_FIELDS'), 'EMPTY_FIELDS'));
 		}
 
 		if (empty($datasetSettings))
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_SETTINGS') ?? '', 'EMPTY_SETTINGS'));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_SETTINGS'), 'EMPTY_SETTINGS'));
 		}
 
 		$result->setData([
@@ -430,6 +603,27 @@ class Dataset extends Controller
 	 */
 	public function updateAction(int $id, string $type, array $fields, ?int $sourceId = null): ?array
 	{
+		if ($this->getTableAccessChecker()->isRestricted())
+		{
+			$existingDataset = ExternalSource\DatasetManager::getById($id);
+			if (!$existingDataset)
+			{
+				$this->addError(
+					new UserFacingError(
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1') ?? '',
+						'NOT_FOUND',
+					)
+				);
+
+				return null;
+			}
+
+			if (!$this->checkTableAccess(ActionDictionary::ACTION_BIC_TABLE_EDIT, (string)$existingDataset->getName()))
+			{
+				return null;
+			}
+		}
+
 		$checkBeforeUpdateResult = $this->checkAndPrepareBeforeUpdate($type, $fields, $sourceId);
 		if (!$checkBeforeUpdateResult->isSuccess())
 		{
@@ -461,10 +655,10 @@ class Dataset extends Controller
 				if (!$importResult->isSuccess())
 				{
 					$this->addError(
-						new Error(
+						new UserFacingError(
 							Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_IMPORT_ERROR') ?? '',
-							'IMPORT_ERROR'
-						)
+							'IMPORT_ERROR',
+						),
 					);
 
 					return null;
@@ -473,20 +667,61 @@ class Dataset extends Controller
 			catch (\Exception)
 			{
 				$this->addError(
-					new Error(
+					new UserFacingError(
 						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_IMPORT_ERROR') ?? '',
-						'IMPORT_ERROR_EXCEPTION'
-					)
+						'IMPORT_ERROR_EXCEPTION',
+					),
 				);
 
 				return null;
 			}
+
+			$this->saveFileParsingSettings($id, $type, $file);
 		}
 
 		return [
 			'id' => $id,
 			'name' => $dataset['NAME'],
 		];
+	}
+
+	/**
+	 * Stores the settings the file was just parsed with.
+	 *
+	 * Called only after the import succeeded: the dataset row is written before the import and
+	 * outside its transaction, so saving the settings any earlier would leave the form showing
+	 * a delimiter the stored data was not parsed with as soon as the import fails.
+	 */
+	private function saveFileParsingSettings(int $datasetId, string $type, array $file): void
+	{
+		if ($type !== ExternalSource\Type::Csv->value)
+		{
+			return;
+		}
+
+		$saveResult = ExternalSource\DatasetManager::saveFileParsingSettings($datasetId, [
+			'delimiter' => $file['delimiter'] ?? null,
+			'encoding' => $file['encoding'] ?? null,
+			'hasHeaders' => $file['hasHeaders'] ?? null,
+		]);
+
+		if ($saveResult->isSuccess())
+		{
+			return;
+		}
+
+		// The data is already imported and cannot be rolled back. Unsaved settings only mean the
+		// form falls back to defaults, so this must not turn a finished import into a failed save.
+		\CEventLog::Add([
+			'SEVERITY' => \CEventLog::SEVERITY_WARNING,
+			'AUDIT_TYPE_ID' => 'BICONNECTOR_CSV_PARSING_SETTINGS_SAVE_ERROR',
+			'MODULE_ID' => 'biconnector',
+			'ITEM_ID' => 'external_source',
+			'DESCRIPTION' => Json::encode([
+				'datasetId' => $datasetId,
+				'errors' => $saveResult->getErrorMessages(),
+			]),
+		]);
 	}
 
 	private function checkAndPrepareBeforeUpdate(string $type, array $fields, ?int $sourceId = null): Result
@@ -496,7 +731,7 @@ class Dataset extends Controller
 		$enumType = ExternalSource\Type::tryFrom($type);
 		if (!$enumType)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1') ?? '', 'UNKNOWN_TYPE'));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1'), 'UNKNOWN_TYPE'));
 
 			return $result;
 		}
@@ -597,11 +832,18 @@ class Dataset extends Controller
 			return null;
 		}
 
+		if (!$file && !$this->canViewPreviewedTable($dataset))
+		{
+			return null;
+		}
+
+		$isRestSourceDiagnosticsEnabled = $this->isRestSourceDiagnosticsEnabled();
 		$viewer = new DatasetViewer(
 			$enumType,
 			$datasetFields,
-			$datasetSettings
+			$datasetSettings,
 		);
+		$viewer->setRestDiagnosticsMode($isRestSourceDiagnosticsEnabled);
 
 		if ($file)
 		{
@@ -621,7 +863,28 @@ class Dataset extends Controller
 		}
 		catch (\Exception $e)
 		{
-			$this->addError(new Error($e->getMessage()));
+			if (self::isSourceTableNotFound($e))
+			{
+				// The source already localized the message and it names only the requested table.
+				$this->addError(new UserFacingError($e->getMessage(), self::ERROR_SOURCE_TABLE_NOT_FOUND));
+
+				return null;
+			}
+
+			if ($e instanceof ConnectionFailureException && $isRestSourceDiagnosticsEnabled)
+			{
+				// The message is localized and names the address only, never its url or a foreign answer.
+				$this->addError(new UserFacingError($e->getMessage(), $e->getFailure()->value, [
+					'address' => $e->getAddress(),
+					'status' => $e->getStatus(),
+				]));
+
+				return null;
+			}
+
+			Logger::logErrors([new Error($e->getMessage())], ['EXCEPTION_CODE' => $e->getCode()]);
+			$errorMessage = Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_VIEW_ERROR');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -640,6 +903,46 @@ class Dataset extends Controller
 		return $viewResponce;
 	}
 
+	/**
+	 * The preview of a stored table shows its rows, so it asks for the view right the way its slider does.
+	 * A table not stored yet has no groups to ask, and a new file is read from the upload.
+	 */
+	private function canViewPreviewedTable(array $dataset): bool
+	{
+		$datasetId = (int)($dataset['ID'] ?? 0);
+		if ($datasetId <= 0 || !$this->getTableAccessChecker()->isRestricted())
+		{
+			return true;
+		}
+
+		$datasetName = self::getDatasetName($datasetId);
+
+		return $datasetName === null || $this->checkTableAccess(ActionDictionary::ACTION_BIC_TABLE_VIEW, $datasetName);
+	}
+
+	private static function getDatasetName(int $datasetId): ?string
+	{
+		$dataset = ExternalSource\Internal\ExternalDatasetTable::getRow([
+			'select' => ['NAME'],
+			'filter' => ['=ID' => $datasetId],
+		]);
+
+		return $dataset === null ? null : (string)$dataset['NAME'];
+	}
+
+	private static function isSourceTableNotFound(\Throwable $e): bool
+	{
+		return $e instanceof ArgumentException && $e->getParameter() === 'entityName';
+	}
+
+	private function isRestSourceDiagnosticsEnabled(): bool
+	{
+		return (new FlagGate())->isEnabled(
+			FlagGate::REST_SOURCE_DIAGNOSTICS,
+			(int)$this->getCurrentUser()?->getId(),
+		);
+	}
+
 	private function checkAndPrepareBeforeView(string $type, array $fields, ?int $sourceId = null): Result
 	{
 		$result = new Result();
@@ -647,7 +950,7 @@ class Dataset extends Controller
 		$enumType = ExternalSource\Type::tryFrom($type);
 		if (!$enumType)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1') ?? '', 'UNKNOWN_TYPE'));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1'), 'UNKNOWN_TYPE'));
 
 			return $result;
 		}
@@ -696,7 +999,7 @@ class Dataset extends Controller
 		{
 			if (ExternalSource\Type::tryFrom($type) === ExternalSource\Type::Csv)
 			{
-				$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_DATA_ERROR') ?? '', 'EMPTY_DATA'));
+				$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_DATA_ERROR'), 'EMPTY_DATA'));
 			}
 
 			return $result;
@@ -713,10 +1016,10 @@ class Dataset extends Controller
 			if ($datasetFields->count() !== count($viewData['data'][0]))
 			{
 				$result->addError(
-					new Error(
+					new UserFacingError(
 						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DIFFERENT_COUNT_FIELDS_ERROR_MSGVER_1') ?? '',
-						'DIFFERENT_COUNT_FIELDS'
-					)
+						'DIFFERENT_COUNT_FIELDS',
+					),
 				);
 
 				return $result;
@@ -741,7 +1044,8 @@ class Dataset extends Controller
 
 		if (!$file)
 		{
-			$this->addError(new Error('Empty file'));
+			$errorMessage = Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_FILE_NOT_FOUND');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -756,7 +1060,7 @@ class Dataset extends Controller
 		$errorsCount = 0;
 		$rowsCount = 0;
 		$result = [];
-		foreach ($reader->readAllRowsByOne() as $row)
+		foreach ($reader->readAllRowsByOne() as $fileRowNumber => $row)
 		{
 			$rowsCount++;
 			if ($rowsLimit !== null && $rowsCount > $rowsLimit)
@@ -767,9 +1071,9 @@ class Dataset extends Controller
 			if ($rowsCount > self::FILE_ROWS_LIMIT)
 			{
 				$this->addError(
-					new Error(
-						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MAX_ROWS') ?? ''
-					)
+					new UserFacingError(
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MAX_ROWS') ?? '',
+					),
 				);
 
 				return null;
@@ -779,7 +1083,7 @@ class Dataset extends Controller
 			if (!$rowValidationResult->isSuccess())
 			{
 				$rowNumber = $file['hasHeaders'] ? $rowsCount + 1 : $rowsCount;
-				$result[$rowNumber] = $rowValidationResult->getErrors();
+				$result[$rowNumber] = self::addFileRowNumber($rowValidationResult->getErrors(), $fileRowNumber);
 				$errorsCount += count($rowValidationResult->getErrors());
 				if ($errorsCount > self::MAX_ERRORS_COUNT)
 				{
@@ -793,6 +1097,18 @@ class Dataset extends Controller
 		];
 	}
 
+	private static function addFileRowNumber(array $errors, int $fileRowNumber): array
+	{
+		return array_map(
+			static fn(Error $error): Error => new Error(
+				$error->getMessage(),
+				$error->getCode(),
+				[...(array)$error->getCustomData(), 'line' => $fileRowNumber],
+			),
+			$errors,
+		);
+	}
+
 	private function checkAndPrepareBeforeFileCheck(string $type, array $fields, ?int $sourceId = null): Result
 	{
 		$result = new Result();
@@ -800,7 +1116,7 @@ class Dataset extends Controller
 		$enumType = ExternalSource\Type::tryFrom($type);
 		if (!$enumType)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1') ?? '', 'UNKNOWN_TYPE'));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_DATASET_TYPE_MSGVER_1'), 'UNKNOWN_TYPE'));
 
 			return $result;
 		}
@@ -847,10 +1163,19 @@ class Dataset extends Controller
 	 */
 	public function deleteAction(int $id): ?bool
 	{
+		if ($this->getTableAccessChecker()->isRestricted())
+		{
+			$dataset = ExternalSource\DatasetManager::getById($id);
+			if ($dataset && !$this->checkTableAccess(ActionDictionary::ACTION_BIC_TABLE_EDIT, (string)$dataset->getName()))
+			{
+				return null;
+			}
+		}
+
 		$deleteResult = ExternalSource\DatasetManager::delete($id);
 		if (!$deleteResult->isSuccess())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_DELETE_ERROR_MSGVER_1') ?? '', 'DELETE_ERROR'));
+			$this->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_DELETE_ERROR_MSGVER_1'), 'DELETE_ERROR'));
 
 			return null;
 		}
@@ -871,12 +1196,20 @@ class Dataset extends Controller
 			return null;
 		}
 
+		if (!$this->checkTableAccess(ActionDictionary::ACTION_BIC_TABLE_VIEW, (string)$dataset->getName()))
+		{
+			return null;
+		}
+
 		$supersetIntegration = new SupersetIntegration();
 		$supersetDatasetsResult = $supersetIntegration->loadSupersetDatasets($dataset);
 
 		if (!$supersetDatasetsResult->isSuccess())
 		{
-			$this->addErrors($supersetDatasetsResult->getErrors());
+			$this->addError(IntegrationErrorPresenter::present(
+				$supersetDatasetsResult->getErrors(),
+				Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_RELATED_SUPERSET_ERROR'),
+			));
 
 			return null;
 		}
@@ -886,6 +1219,11 @@ class Dataset extends Controller
 
 	public function syncFieldAction(ExternalSource\Internal\ExternalDataset $dataset): ?ViewResponce
 	{
+		if (!$this->checkTableAccess(ActionDictionary::ACTION_BIC_TABLE_EDIT, (string)$dataset->getName()))
+		{
+			return null;
+		}
+
 		$sourceId = $dataset->getSourceId();
 
 		$fields = [];
@@ -938,7 +1276,7 @@ class Dataset extends Controller
 		$viewer = new DatasetViewer(
 			$dataset->getEnumType(),
 			$fields,
-			$settings
+			$settings,
 		);
 
 		$viewer
@@ -952,7 +1290,7 @@ class Dataset extends Controller
 		}
 		catch (\Exception)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SYNC_FIELDS_ERROR') ?? ''));
+			$this->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_SYNC_FIELDS_ERROR')));
 
 			return null;
 		}
@@ -974,9 +1312,15 @@ class Dataset extends Controller
 
 	public function exportAction(ExternalSource\Internal\ExternalDataset $dataset, string $exportFormat): ?string
 	{
+		if (!$this->checkTableAccess(ActionDictionary::ACTION_BIC_TABLE_EXPORT, (string)$dataset->getName()))
+		{
+			return null;
+		}
+
 		if (!$dataset || $dataset->getEnumType() !== Type::Csv)
 		{
-			$this->addError(new Error('Invalid dataset specified'));
+			$errorMessage = Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_EXPORT_ERROR_INVALID_DATASET');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -984,7 +1328,8 @@ class Dataset extends Controller
 		$exportType = ExternalSource\Exporter\ExportType::tryFrom($exportFormat);
 		if (!$exportType)
 		{
-			$this->addError(new Error('Invalid export format'));
+			$errorMessage = Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_EXPORT_ERROR_INVALID_FORMAT');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -1006,6 +1351,11 @@ class Dataset extends Controller
 		$file = $result->getData()['file'];
 
 		return $file->getContents();
+	}
+
+	private static function isKnownFieldType(mixed $type): bool
+	{
+		return is_string($type) && FieldType::tryFrom($type) !== null;
 	}
 
 	private function prepareFields(array $fields): Result
@@ -1059,10 +1409,10 @@ class Dataset extends Controller
 					catch (\Exception)
 					{
 						$result->addError(
-							new Error(
+							new UserFacingError(
 								Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_DATA_ERROR') ?? '',
-								'EXCEPTION'
-							)
+								'EXCEPTION',
+							),
 						);
 					}
 				}
@@ -1096,6 +1446,18 @@ class Dataset extends Controller
 
 						$tmpField[self::$fieldsMap[$code]] = $value;
 					}
+				}
+
+				if (array_key_exists('TYPE', $tmpField) && !self::isKnownFieldType($tmpField['TYPE']))
+				{
+					$result->addError(
+						new UserFacingError(
+							Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_UNKNOWN_FIELD_TYPE'),
+							'UNKNOWN_FIELD_TYPE',
+						),
+					);
+
+					return $result;
 				}
 
 				if ($tmpField)
@@ -1157,15 +1519,32 @@ class Dataset extends Controller
 
 	public function getCreateUrlAction(int $id): ?string
 	{
+		if ($this->getTableAccessChecker()->isRestricted())
+		{
+			$restrictedDataset = ExternalSource\DatasetManager::getById($id);
+			if (
+				$restrictedDataset
+				&& !$this->checkTableAccess(ActionDictionary::ACTION_BIC_TABLE_EDIT, (string)$restrictedDataset->getName())
+			)
+			{
+				return null;
+			}
+		}
+
 		if (!SupersetInitializer::isSupersetReady())
 		{
+			$this->addError(IntegrationErrorPresenter::present(
+				[],
+				Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_CREATE_URL_ERROR'),
+			));
+
 			return null;
 		}
 
 		$dataset = ExternalSource\DatasetManager::getById($id);
 		if (!$dataset)
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1') ?? '', 'EDIT_URL_ERROR'));
+			$this->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_NOT_FOUND_ERROR_MSGVER_1')));
 
 			return null;
 		}
@@ -1174,8 +1553,10 @@ class Dataset extends Controller
 		$getDatasetUrlResult = $supersetIntegration->getDatasetCreateUrl($dataset, false);
 		if (!$getDatasetUrlResult->isSuccess())
 		{
-			$error = $getDatasetUrlResult->getError();
-			$this->addError(new Error($error?->getMessage() ?? '', 'EDIT_URL_ERROR'));
+			$this->addError(IntegrationErrorPresenter::present(
+				$getDatasetUrlResult->getErrors(),
+				Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_CREATE_URL_ERROR'),
+			));
 
 			return null;
 		}
@@ -1198,8 +1579,21 @@ class Dataset extends Controller
 
 	public function getCreateUrlByNameAction(string $tableName): ?string
 	{
+		if (
+			$this->getTableAccessChecker()->isRestricted()
+			&& !$this->checkTableAccess(self::getCreateUrlByNameAccessAction($tableName), $tableName)
+		)
+		{
+			return null;
+		}
+
 		if (!SupersetInitializer::isSupersetReady())
 		{
+			$this->addError(IntegrationErrorPresenter::present(
+				[],
+				Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_CREATE_URL_ERROR'),
+			));
+
 			return null;
 		}
 
@@ -1207,8 +1601,10 @@ class Dataset extends Controller
 		$response = $integrator->getDatasetCreateUrl($tableName);
 		if ($response->hasErrors())
 		{
-			$errors = $response->getErrors();
-			$this->addError(new Error($errors[0]?->getMessage() ?? '', 'CREATE_URL_ERROR'));
+			$this->addError(IntegrationErrorPresenter::present(
+				$response->getErrors(),
+				Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_CREATE_URL_ERROR'),
+			));
 
 			return null;
 		}
@@ -1231,6 +1627,17 @@ class Dataset extends Controller
 		}
 
 		return $editUrl;
+	}
+
+	/**
+	 * The section offers the link by name for a system table it lists; an external table is set up by its id,
+	 * which asks for the right to edit it, and its name must not skip that check.
+	 */
+	private static function getCreateUrlByNameAccessAction(string $tableName): string
+	{
+		$isExternalTable = ExternalSource\Internal\ExternalDatasetTable::getCount(['=NAME' => $tableName]) > 0;
+
+		return $isExternalTable ? ActionDictionary::ACTION_BIC_TABLE_EDIT : ActionDictionary::ACTION_BIC_TABLE_VIEW;
 	}
 
 	private function getDefaultDatasetName(ExternalSource\Type $type): string
@@ -1282,7 +1689,7 @@ class Dataset extends Controller
 
 		if (!$row)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_DATA_ERROR') ?? '', 'EMPTY_DATA'));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_DATA_ERROR'), 'EMPTY_DATA'));
 
 			return $result;
 		}
@@ -1295,9 +1702,9 @@ class Dataset extends Controller
 			if ($rowNumber > self::FILE_ROWS_LIMIT)
 			{
 				$result->addError(
-					new Error(
-						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MAX_ROWS') ?? ''
-					)
+					new UserFacingError(
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_DATASET_MAX_ROWS') ?? '',
+					),
 				);
 
 				break;
@@ -1306,9 +1713,9 @@ class Dataset extends Controller
 			if ($valuesCount !== count($row))
 			{
 				$result->addError(
-					new Error(
-						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_IMPORT_ERROR') ?? ''
-					)
+					new UserFacingError(
+						Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_IMPORT_ERROR') ?? '',
+					),
 				);
 
 				break;
@@ -1327,7 +1734,7 @@ class Dataset extends Controller
 		$row = $reader->readAllRowsByOne();
 		if (!$row->current())
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_DATA_ERROR') ?? '', 'EMPTY_DATA'));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EMPTY_DATA_ERROR'), 'EMPTY_DATA'));
 		}
 
 		return $result;

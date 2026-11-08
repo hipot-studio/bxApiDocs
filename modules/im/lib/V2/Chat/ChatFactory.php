@@ -4,7 +4,10 @@ namespace Bitrix\Im\V2\Chat;
 
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
+use Bitrix\Im\V2\Analytics\CopilotAnalytics;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Cache\CacheLevel;
+use Bitrix\Im\V2\Cache\NullEntity;
 use Bitrix\Im\V2\Chat\Cache\ChatCacheRegistry;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
@@ -13,12 +16,15 @@ use Bitrix\Main\Application;
 use Bitrix\Im\V2\Chat\Add\AddResult;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Im\V2\Chat\Cache\ChatMapper;
+use Generator;
 
 class ChatFactory
 {
 	use ContextCustomer;
 
 	private const LOCK_TIMEOUT = 3;
+
+	public const CHATS_FETCH_CHUNK_SIZE = 50;
 
 	protected static self $instance;
 
@@ -291,6 +297,88 @@ class ChatFactory
 		return $this->tryFromCache($chatId, $cacheLevel);
 	}
 
+	/**
+	 * Loads chats by a list of ids and warms up the same cache keys as getChatById, so that subsequent
+	 * per-chat lookups (Chat::getInstance / getChatById) read from the hot cache instead of issuing one
+	 * query per chat. Already cached ids are promoted to the static level without touching the database;
+	 * only true cache misses are selected, one query per chunk. Absence is cached the same way
+	 * getChatById caches it, so a deleted source costs one query for the whole feed rather than one per
+	 * message that was forwarded from it.
+	 *
+	 * Access is not checked and nothing is filtered out: the caller decides what to show.
+	 *
+	 * @param int[] $chatIds
+	 * @return array<int, Chat> Chats by id in the order of $chatIds, unknown ids resolve to NullChat.
+	 */
+	public function getChatsByIds(array $chatIds): array
+	{
+		$ids = array_values(array_unique(array_filter(array_map('intval', $chatIds), static fn (int $id) => $id > 0)));
+		if (empty($ids))
+		{
+			return [];
+		}
+
+		$cacheManager = ServiceLocator::getInstance()->get(ChatCacheRegistry::class)?->getChatDataManager();
+
+		$loadedChats = [];
+		$missedIds = [];
+		foreach ($ids as $id)
+		{
+			$chat = $cacheManager?->get($id, CacheLevel::All)->getResult();
+			if ($chat instanceof Chat)
+			{
+				$cacheManager->set($chat, CacheLevel::Static);
+				$loadedChats[$id] = $chat;
+
+				continue;
+			}
+
+			// Asked of the static level by name, because a negative entry is only ever returned by a
+			// read whose level matches the engine exactly: CacheLevel::All falls through the negative
+			// hit down the chain and comes back as a plain miss (Cache\Engine\BaseCacheEngine::get()).
+			if ($cacheManager?->get($id, CacheLevel::Static)->isNegativeHit() !== true)
+			{
+				$missedIds[] = $id;
+			}
+		}
+
+		// the chat is built by the mapper rather than by initChat(): the object is written into a shared
+		// cache, and initChat() would stamp the context of this factory onto it. Written without tags,
+		// as the per-chat path does: the chat cache is invalidated by id, see cleanCache()
+		$mapper = ServiceLocator::getInstance()->get(ChatMapper::class);
+		foreach ($this->getChatsFromDb($missedIds) as $id => $chatData)
+		{
+			$chat = $mapper($chatData);
+			// writing the chat to the cache serializes it through the counter getters, each of which would
+			// otherwise fill its value with a query of its own. The batch row carries the counters actual,
+			// so the mark spares a query per chat and leaves the cache with the snapshot taken here, the
+			// same trade V2\Sync\ChatsSync makes on its own batch
+			$chat->markFilledNonCachedData(true);
+			$cacheManager?->set($chat, CacheLevel::All);
+			$loadedChats[$id] = $chat;
+		}
+
+		// An id the query did not answer belongs to no chat, and the request must not ask again: the
+		// source of a forwarded message is lifted per message, so every message forwarded from a
+		// deleted chat would otherwise cost a query. The entry is the same NullEntity getChatById
+		// leaves through getOrSet(), but kept to the static level: absence lives for this request,
+		// and a chat created later must not meet it in a shared cache.
+		foreach ($missedIds as $id)
+		{
+			if (!isset($loadedChats[$id]))
+			{
+				$cacheManager?->set(new NullEntity($id), CacheLevel::Static);
+			}
+		}
+
+		$chats = [];
+		foreach ($ids as $id)
+		{
+			$chats[$id] = $loadedChats[$id] ?? new NullChat();
+		}
+
+		return $chats;
+	}
 
 	/**
 	 * @param array $params
@@ -367,6 +455,32 @@ class ChatFactory
 		$chat['ALIAS'] = $chat['_ALIAS'];
 
 		return $chat;
+	}
+
+	/**
+	 * Yields rows chunk by chunk, so raw data of the whole id list is never held at once. The select
+	 * repeats getRawById(): a narrower one would fill the cache with incomplete chats.
+	 *
+	 * @param int[] $ids
+	 * @return Generator<int, array>
+	 */
+	private function getChatsFromDb(array $ids): Generator
+	{
+		foreach (array_chunk($ids, self::CHATS_FETCH_CHUNK_SIZE) as $chunk)
+		{
+			$rows = ChatTable::query()
+				->setSelect(['*', '_ALIAS' => 'ALIAS.ALIAS'])
+				->whereIn('ID', $chunk)
+				->exec()
+			;
+
+			while ($chat = $rows->fetch())
+			{
+				$chat['ALIAS'] = $chat['_ALIAS'];
+
+				yield (int)$chat['ID'] => $chat;
+			}
+		}
 	}
 
 	private function getEntityChatId(string $entityType, string $entityId, ?int $authorId = null): ?int
@@ -447,6 +561,23 @@ class ChatFactory
 		if ($resultChat instanceof Chat && ($params['SKIP_ANALYTICS'] ?? 'N') !== 'Y')
 		{
 			(new ChatAnalytics($resultChat))->addSubmitCreateNew();
+		}
+
+		// BitrixGPT v2 ai-label: create_new_chat for copilot chats under flag.
+		// Respects SKIP_ANALYTICS like submit_create_new above; callers that skip generic
+		// analytics but still need the funnel labels emit them explicitly (see DraftChatService).
+		// The initiator id is pinned before the async label is scheduled: the global context
+		// resolves the current user lazily, which may differ by the time the job runs.
+		if (
+			$resultChat instanceof CopilotChat
+			&& Features::isBitrixGptV2Available()
+			&& ($params['SKIP_ANALYTICS'] ?? 'N') !== 'Y'
+		)
+		{
+			(new CopilotAnalytics($resultChat))
+				->withContextUser($this->getContext()->getUserId())
+				->addCreateNewChat()
+			;
 		}
 
 		return $addResult;

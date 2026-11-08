@@ -45,6 +45,28 @@ class FilterUsersByAccessEvent extends ChatEvent
 		return $userIds;
 	}
 
+	public function getUsersToKeepRelations(): array
+	{
+		$userIds = $this->getParameterFromResult('userIdsToKeepRelations');
+		if (!is_array($userIds))
+		{
+			return [];
+		}
+
+		$input = array_fill_keys(array_map('intval', $this->getUserIds()), true);
+		$normalized = [];
+		foreach ($userIds as $userId)
+		{
+			$userId = (int)$userId;
+			if ($userId > 0 && isset($input[$userId]))
+			{
+				$normalized[$userId] = $userId;
+			}
+		}
+
+		return array_values($normalized);
+	}
+
 	public function getError(): ?AccessError
 	{
 		$error = $this->getParameterFromResult('error');

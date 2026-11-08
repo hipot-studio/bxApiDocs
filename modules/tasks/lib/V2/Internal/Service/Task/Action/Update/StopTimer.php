@@ -22,35 +22,59 @@ class StopTimer
 			return;
 		}
 
-		$taskNotCompleted = (
-			!in_array(
-				(int)$fullTaskData['STATUS'],
-				[Status::COMPLETED, Status::SUPPOSEDLY_COMPLETED],
-				true,
-			)
+		$leftInProgress = (int)$fullTaskData['REAL_STATUS'] !== Status::IN_PROGRESS;
+
+		$timeTrackingDisabled = (
+			array_key_exists('ALLOW_TIME_TRACKING', $fullTaskData)
+			&& $fullTaskData['ALLOW_TIME_TRACKING'] === 'N'
 		);
 
-		$timeTrackingNotDisabled = (
-			!array_key_exists('ALLOW_TIME_TRACKING', $fullTaskData)
-			|| $fullTaskData['ALLOW_TIME_TRACKING'] !== 'N'
-		);
-
-		if ($taskNotCompleted && $timeTrackingNotDisabled)
+		if (!$leftInProgress && !$timeTrackingDisabled)
 		{
 			return;
 		}
 
 		$taskId = (int)$fullTaskData['ID'];
-		$userIds = array_unique([
+		$userIds = array_values(array_unique([
 			$fullTaskData['CREATED_BY'],
 			$fullTaskData['RESPONSIBLE_ID'],
 			...$fullTaskData['ACCOMPLICES'],
-		]);
+			...$this->getFormerMemberIds($changes),
+		]));
 
 		Container::getInstance()->getTimeManagementService()->stopAllTimers(
 			taskId: $taskId,
 			userIds: $userIds,
 			currentUserId: $this->config->getUserId(),
 		);
+	}
+
+	private function getFormerMemberIds(array $changes): array
+	{
+		$userIds = [];
+		foreach (['RESPONSIBLE_ID', 'ACCOMPLICES'] as $field)
+		{
+			if (!isset($changes[$field]) || !is_array($changes[$field]))
+			{
+				continue;
+			}
+
+			$fromValue = (string)($changes[$field]['FROM_VALUE'] ?? '');
+			if ($fromValue === '')
+			{
+				continue;
+			}
+
+			foreach (explode(',', $fromValue) as $userId)
+			{
+				$userId = (int)$userId;
+				if ($userId > 0)
+				{
+					$userIds[] = $userId;
+				}
+			}
+		}
+
+		return $userIds;
 	}
 }

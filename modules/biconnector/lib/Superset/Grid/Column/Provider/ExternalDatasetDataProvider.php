@@ -15,7 +15,15 @@ class ExternalDatasetDataProvider extends DataProvider
 		$result[] =
 			$this->createColumn('NAME')
 				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_COLUMN_TITLE_NAME'))
+				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_COLUMN_TITLE_NAME_MSGVER_1'))
+				->setAlign('left')
+				->setDefault(true)
+		;
+
+		$result[] =
+			$this->createColumn('VERBOSE_NAME')
+				->setType(Type::TEXT)
+				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_COLUMN_TITLE_VERBOSE_NAME'))
 				->setAlign('left')
 				->setDefault(true)
 		;
@@ -45,12 +53,22 @@ class ExternalDatasetDataProvider extends DataProvider
 		;
 
 		$result[] =
+			$this->createColumn('DESCRIPTION')
+				->setType(Type::TEXT)
+				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_COLUMN_TITLE_DESCRIPTION'))
+				->setAlign('left')
+				->setDefault(true)
+				->setWidth(400)
+		;
+
+		$result[] =
 			$this->createColumn('DATE_CREATE')
 				->setType(Type::DATE)
 				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_COLUMN_TITLE_DATE_CREATE'))
 				->setAlign('left')
 				->setDefault(true)
 				->setSort('DATE_CREATE')
+				->setWidth(180)
 		;
 
 		$result[] =
@@ -68,14 +86,7 @@ class ExternalDatasetDataProvider extends DataProvider
 				->setAlign('left')
 				->setDefault(true)
 				->setSort('DATE_UPDATE')
-		;
-
-		$result[] =
-			$this->createColumn('DESCRIPTION')
-				->setType(Type::TEXT)
-				->setName(Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_DATASET_GRID_COLUMN_TITLE_DESCRIPTION'))
-				->setAlign('left')
-				->setDefault(true)
+				->setWidth(180)
 		;
 
 		$result[] =

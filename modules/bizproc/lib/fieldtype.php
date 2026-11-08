@@ -107,6 +107,11 @@ class FieldType
 	public const CONDITIONGROUP = 'conditiongroup';
 
 	/**
+	 * Base type NODEREFERENCE
+	 */
+	public const NODEREFERENCE = 'nodereference';
+
+	/**
 	 * Control render mode - Bizproc Designer
 	 */
 	public const RENDER_MODE_DESIGNER = 1;
@@ -531,6 +536,7 @@ class FieldType
 			static::CONDITIONGROUP => BaseType\ConditionGroup::class,
 			static::TIME => BaseType\Time::class,
 			static::DOCUMENT_TYPE => BaseType\DocumentType::class,
+			static::NODEREFERENCE => BaseType\NodeReference::class,
 		);
 	}
 

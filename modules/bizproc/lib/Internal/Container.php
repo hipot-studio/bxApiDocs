@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Bizproc\Internal;
 
+use Bitrix\Bizproc\Internal\Access\Service\TemplateAuthorshipProvider;
 use Bitrix\Bizproc\Internal\Repository\Debugger\DebugRepository;
 use Bitrix\Bizproc\Internal\Repository\Debugger\DebugSessionRepository;
 use Bitrix\Bizproc\Internal\Repository\Debugger\DebugTraceRepository;
@@ -88,6 +89,11 @@ class Container
 	public static function getAccessRepository(): ?AccessRepositoryInterface
 	{
 		return self::getService('bizproc.access.repository');
+	}
+
+	public static function getTemplateAuthorshipProvider(): ?TemplateAuthorshipProvider
+	{
+		return self::getService('bizproc.access.template.authorship.provider');
 	}
 
 	public static function getAccessRoleMapper(): ?AccessRoleMapper

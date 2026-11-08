@@ -46,7 +46,7 @@ class SearchTasksTool extends BaseTool
 
 	protected function executeStructured(int $userId, ...$args): array
 	{
-		$dto = SearchTasksDto::fromArray($args);
+		$dto = SearchTasksDto::fromArray([...$args, 'userId' => $userId]);
 
 		try
 		{

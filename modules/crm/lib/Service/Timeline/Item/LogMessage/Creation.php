@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage;
 
+use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Service\Timeline\Item\LogMessage;
 use Bitrix\Crm\Service\Timeline\Layout\Action;
 use Bitrix\Crm\Service\Timeline\Layout\Action\Redirect;
@@ -149,7 +150,11 @@ class Creation extends LogMessage
 		if ($descriptionUrl && ($textDescription || $htmlDescription))
 		{
 			return (new Link())
-				->setValue($htmlDescription ? strip_tags($htmlDescription) : $textDescription)
+				->setValue(
+					$htmlDescription
+						? TextHelper::preparePlainTextFromHtmlString($htmlDescription)
+						: $textDescription
+				)
 				->setAction(new Redirect(new Uri($descriptionUrl)))
 			;
 		}

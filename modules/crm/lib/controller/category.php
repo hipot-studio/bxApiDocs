@@ -3,6 +3,8 @@
 namespace Bitrix\Crm\Controller;
 
 use Bitrix\Crm\Category\Entity;
+use Bitrix\Crm\Counter\EntityCounterFactory;
+use Bitrix\Crm\Counter\EntityCounterType;
 use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics\Funnel;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Service;
@@ -87,7 +89,7 @@ class Category extends Base
 		];
 	}
 
-	public function listAction(int $entityTypeId, array $filter = []): ?Page
+	public function listAction(int $entityTypeId, array $filter = [], bool $isCategoryMenu = false): ?Page
 	{
 		$factory = $this->getFactory($entityTypeId);
 		if (!$factory)
@@ -114,6 +116,18 @@ class Category extends Base
 			$filteredCategories = $categories;
 		}
 
+		if ($isCategoryMenu)
+		{
+			$converter = Container::getInstance()->getCategoryConverter();
+			$filteredCategories = array_map(
+				fn(Entity\Category $category): array => $converter->toCategoryMenuJson(
+					$category,
+					$this->getCategoryCounterValue($factory, $category->getId())
+				),
+				$filteredCategories
+			);
+		}
+
 		return new Page(
 			'categories',
 			$filteredCategories,
@@ -121,6 +135,18 @@ class Category extends Base
 				return count($filteredCategories);
 			}
 		);
+	}
+
+	protected function getCategoryCounterValue(Service\Factory $factory, int $categoryId): int
+	{
+		$counter = EntityCounterFactory::create(
+			$factory->getEntityTypeId(),
+			EntityCounterType::ALL,
+			$this->userPermissions->getUserId(),
+			['CATEGORY_ID' => $categoryId]
+		);
+
+		return (int)$counter->getValue();
 	}
 
 	public function deleteAction(int $entityTypeId, int $id): void

@@ -98,7 +98,14 @@ final class Template
 					{
 						$arParams["MONTHLY_WEEK_DAY_NUM"] = 0;
 					}
-					$strRepeat = GetMessage("TASKS_REPEAT_DAY_NUM_".$arParams["MONTHLY_WEEK_DAY_NUM"])." ".GetMessage("TASKS_REPEAT_DAY_".$arParams["MONTHLY_WEEK_DAY"]);
+					$strRepeat =
+						self::getWeekDayNumberMessage(
+							$arParams['MONTHLY_WEEK_DAY_NUM'],
+							$arParams['MONTHLY_WEEK_DAY']
+						)
+						. ' '
+						. Loc::getMessage('TASKS_REPEAT_DAY_2_' . $arParams['MONTHLY_WEEK_DAY'])
+					;
 					if (intval($arParams["MONTHLY_MONTH_NUM_2"]) < 2)
 					{
 						$strRepeat .= " ".GetMessage("TASKS_EVERY_MONTH");
@@ -143,8 +150,11 @@ final class Template
 							'#MONTH#',
 						],
 						[
-							Loc::getMessage('TASKS_REPEAT_DAY_NUM_' . $arParams['YEARLY_WEEK_DAY_NUM']),
-							Loc::getMessage('TASKS_REPEAT_DAY_' . $arParams['YEARLY_WEEK_DAY']),
+							self::getWeekDayNumberMessage(
+								$arParams['YEARLY_WEEK_DAY_NUM'],
+								$arParams['YEARLY_WEEK_DAY']
+							),
+							Loc::getMessage('TASKS_REPEAT_DAY_2_' . $arParams['YEARLY_WEEK_DAY']),
 							Loc::getMessage('TASKS_REPEAT_MONTH_' . $arParams['YEARLY_MONTH_2']),
 						],
 						Loc::getMessage('TASKS_AT_N_DAY_OF_MONTH')
@@ -154,6 +164,33 @@ final class Template
 		}
 
 		return $strRepeat;
+	}
+
+	private static function getWeekDayNumberMessage(int $weekDayNumber, int $weekDay): ?string
+	{
+		$messageId = 'TASKS_REPEAT_DAY_NUM_' . $weekDayNumber;
+		if (!in_array(Loc::getCurrentLang(), ['ru', 'by', 'uz'], true))
+		{
+			return Loc::getMessage($messageId);
+		}
+
+		$genderSuffix = '';
+
+		if (in_array($weekDay, [2, 4, 5], true))
+		{
+			$genderSuffix = '_F';
+		}
+		elseif ($weekDay === 6)
+		{
+			$genderSuffix = '_N';
+		}
+
+		if ($genderSuffix === '')
+		{
+			return Loc::getMessage($messageId);
+		}
+
+		return Loc::getMessage($messageId . $genderSuffix) ?? Loc::getMessage($messageId);
 	}
 
 	private static function taskMessSuffix($number)

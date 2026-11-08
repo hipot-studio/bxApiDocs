@@ -3,12 +3,13 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2019 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 namespace Bitrix\Main\EventLog;
 
 use Bitrix\Main;
+use Bitrix\Main\Type\Callback;
 use Bitrix\Main\ORM\Fields;
 use Bitrix\Main\ORM\Objectify;
 use Bitrix\Main\ORM\Query;
@@ -93,13 +94,13 @@ class Notification
 
 		if($result->isSuccess())
 		{
-			$agent = static::getAgentName($this->getId());
+			$callback = static::getAgentCallback($this->getId());
 
 			if($result instanceof Main\ORM\Data\UpdateResult)
 			{
-				\CAgent::RemoveAgent($agent, "main");
+				\CAgent::RemoveAgent($callback, 'main');
 			}
-			\CAgent::AddAgent($agent, "main", "N", $this->getCheckInterval()*60);
+			\CAgent::AddAgent($callback, "main", "N", $this->getCheckInterval()*60);
 		}
 
 		return $result;
@@ -117,7 +118,7 @@ class Notification
 
 		if($result->isSuccess())
 		{
-			\CAgent::RemoveAgent(static::getAgentName($id), "main");
+			\CAgent::RemoveAgent(static::getAgentCallback($id), 'main');
 		}
 
 		return $result;
@@ -243,7 +244,7 @@ class Notification
 	/**
 	 * Agent function.
 	 * @param int $id Notification ID
-	 * @return string
+	 * @return Callback|null
 	 */
 	public static function checkConditions($id)
 	{
@@ -253,7 +254,7 @@ class Notification
 		if($notification->getAuditTypeId() == '')
 		{
 			//nonexistent
-			return '';
+			return null;
 		}
 
 		$interval = intval($notification->getCheckInterval());
@@ -264,7 +265,7 @@ class Notification
 		$result = $notification->data->save();
 		if(!$result->isSuccess())
 		{
-			return '';
+			return null;
 		}
 
 		$filter = Query\Query::filter()
@@ -304,7 +305,7 @@ class Notification
 			$notification->send();
 		}
 
-		return static::getAgentName($id);
+		return static::getAgentCallback($id);
 	}
 
 	/**
@@ -321,10 +322,10 @@ class Notification
 
 	/**
 	 * @param int $id
-	 * @return string
+	 * @return Callback
 	 */
-	protected static function getAgentName($id)
+	protected static function getAgentCallback($id)
 	{
-		return '\Bitrix\Main\EventLog\Notification::checkConditions('.$id.');';
+		return new Callback([self::class, 'checkConditions'], [$id]);
 	}
 }

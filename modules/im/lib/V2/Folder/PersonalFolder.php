@@ -6,16 +6,14 @@ namespace Bitrix\Im\V2\Folder;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatDialogIdResolver;
 use Bitrix\Im\V2\Common\Normalizer;
-use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
+use Bitrix\Im\V2\Folder\Definition\ChatListDefinition;
+use Bitrix\Im\V2\Folder\Definition\FolderDefinition;
+use Bitrix\Im\V2\Folder\Eligibility\EligibleChatTypes;
 use Bitrix\Main\DI\ServiceLocator;
 
 class PersonalFolder extends BaseFolder
 {
 	public const TYPE = FolderType::Personal->value;
-
-	private const ELIGIBLE_RECENT_SECTIONS = [
-		RecentConfigManager::DEFAULT_SECTION_NAME,
-	];
 
 	/** @var int[]|null preloaded chat ids — populated by {@see FolderProvider::getByUser} batch-load. */
 	protected ?array $chatIds = null;
@@ -61,9 +59,14 @@ class PersonalFolder extends BaseFolder
 		$this->chatIds = Normalizer::toUniquePositiveIntegers($chatIds);
 	}
 
+	public function getDefinition(): FolderDefinition
+	{
+		return new ChatListDefinition($this->getChatIds());
+	}
+
 	public function containsChat(Chat $chat): bool
 	{
-		return in_array((int)$chat->getChatId(), $this->getChatIds(), true);
+		return $this->getDefinition()->containsChat((int)$chat->getChatId());
 	}
 
 	public function canAcceptChat(Chat $chat): bool
@@ -79,7 +82,15 @@ class PersonalFolder extends BaseFolder
 			return false;
 		}
 
-		if (empty(array_intersect($chat->getRecentSections(), self::ELIGIBLE_RECENT_SECTIONS)))
+		// Access alone is not enough: an open chat is accessible without membership, and a folder row
+		// for a chat outside the recent list of its owner would show up nowhere. A hidden relation is
+		// membership too, so the relation is asked for as a whole and not through its IS_HIDDEN.
+		if ($chat->getRelationByUserId($userId) === null)
+		{
+			return false;
+		}
+
+		if (!EligibleChatTypes::isAllowed($chat))
 		{
 			return false;
 		}
@@ -103,21 +114,21 @@ class PersonalFolder extends BaseFolder
 			'type' => self::TYPE,
 			'title' => $this->getTitle(),
 			'sort' => $this->getSort(),
+			'visible' => $this->isVisible(),
+			'description' => $this->getDescription(),
 			'displaysNestedInRoot' => $this->displaysNestedInRoot(),
-			'definition' => [
-				'chats' => $this->buildChats($option),
-			],
+			'definition' => (new ChatListDefinition($this->getChatIds(), $this->resolveDialogIdMap($option)))->toRestFormat(),
 		];
 	}
 
 	/**
-	 * Composition as identity pairs (chatId + dialogId), preserving {@see getChatIds} order.
-	 * Carries identity only — never the full chat entity. Empty composition yields [].
+	 * Dialog ids for the composition, preserving {@see getChatIds} order. Uses the injected
+	 * batch map when present, otherwise resolves this folder's chat ids on its own.
 	 *
 	 * @param array $option see {@see toRestFormat}
-	 * @return array<int, array{chatId: int, dialogId: string}>
+	 * @return array<int, string> chatId => dialogId
 	 */
-	private function buildChats(array $option): array
+	private function resolveDialogIdMap(array $option): array
 	{
 		$chatIds = $this->getChatIds();
 		if ($chatIds === [])
@@ -125,25 +136,14 @@ class PersonalFolder extends BaseFolder
 			return [];
 		}
 
-		$dialogIdMap = isset($option['dialogIdMap']) && is_array($option['dialogIdMap'])
-			? $option['dialogIdMap']
-			: ServiceLocator::getInstance()
-				->get(ChatDialogIdResolver::class)
-				->resolve($chatIds, (int)$this->getUserId())
-		;
-
-		$chats = [];
-		foreach ($chatIds as $chatId)
+		if (isset($option['dialogIdMap']) && is_array($option['dialogIdMap']))
 		{
-			$chatId = (int)$chatId;
-			$chats[] = [
-				'chatId' => $chatId,
-				// Map is complete (resolver returns an entry for every positive chat id); the
-				// fallback is a guard only and defers the "chatNNN" format to its single source.
-				'dialogId' => (string)($dialogIdMap[$chatId] ?? ChatDialogIdResolver::getGroupDialogId($chatId)),
-			];
+			return $option['dialogIdMap'];
 		}
 
-		return $chats;
+		return ServiceLocator::getInstance()
+			->get(ChatDialogIdResolver::class)
+			->resolve($chatIds, (int)$this->getUserId())
+		;
 	}
 }

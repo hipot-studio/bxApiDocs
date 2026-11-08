@@ -203,9 +203,7 @@ class KeyListComponent extends CBitrixComponent implements Controllerable
 	{
 		if ($this->canWrite && Loader::includeModule('biconnector'))
 		{
-			BIConnector\KeyUserTable::deleteByFilter(['=KEY_ID' => $id]);
-
-			return BIConnector\KeyTable::delete($id)->isSuccess();
+			return BIConnector\KeyManager::deleteKey($id)->isSuccess();
 		}
 
 		return false;

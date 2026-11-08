@@ -22,7 +22,7 @@ class TranscribedResultHandler
 	{
 	}
 
-	public function handle(string $resultData, Message $message): bool
+	public function handle(string $resultData, Message $message, int $initiatorId): bool
 	{
 		if (empty($resultData) || !Loader::includeModule('tasks'))
 		{
@@ -36,11 +36,10 @@ class TranscribedResultHandler
 			return false;
 		}
 
-		$authorId = $message->getAuthorId();
 		$taskId = (int)$chat->getEntityId();
 		$messageId = (int)$message->getId();
 
-		if ($authorId <= 0 || $taskId <= 0 || $messageId <= 0)
+		if ($initiatorId <= 0 || $taskId <= 0 || $messageId <= 0)
 		{
 			return false;
 		}
@@ -50,7 +49,7 @@ class TranscribedResultHandler
 			$result = new Result(
 				taskId: $taskId,
 				text: $resultData,
-				author: new User($authorId),
+				author: new User($initiatorId),
 				type: Result\Type::Ai,
 				messageId: $messageId,
 			);
@@ -60,21 +59,23 @@ class TranscribedResultHandler
 			$result = new Result(
 				taskId: $taskId,
 				text: $resultData,
-				author: new User($authorId),
+				author: new User($initiatorId),
 				messageId: $messageId,
 			);
 		}
 
-		(new AutoTaskStatus($message, Status::ResultCreationCompleted, true))->send();
-
 		try
 		{
-			$this->resultService->add($result, $authorId);
+			$this->resultService->add($result, $initiatorId);
 		}
 		catch (SystemException)
 		{
 			return false;
 		}
+
+		// the terminal success is announced only once the result exists: every false of this method
+		// must stay silent so that the caller owns the refusal and no contradictory pair is sent
+		(new AutoTaskStatus($message, $initiatorId, Status::ResultCreationCompleted, true))->send();
 
 		return true;
 	}

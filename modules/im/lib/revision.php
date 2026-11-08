@@ -9,19 +9,19 @@ class Revision
 	/**
 	 * Web Api revision
 	 *
-	 * @filesource synchronize im/install/js/im/im.js:38
+	 * @filesource synchronize im/install/js/im/im.js:46
 	 */
-	const WEB = 130;
+	const WEB = 131;
 
 	/**
 	 * Mobile Api revision
 	 *
 	 * @filesource synchronize immobile/install/mobileapp/immobile/components/im/im.recent/component.js:15
-	 * @filesource synchronize immobile/install/mobileapp/immobile/extensions/im/messenger/application/messenger/extension.js:51
+	 * @filesource synchronize immobile/install/mobileapp/immobile/extensions/im/messenger/application/messenger/extension.js:53
 	 * @filesource synchronize immobile/install/components/bitrix/immobile.webcomponent/webcomponents/im.dialog/bundle/component/src/component.js:3
 	 * @filesource synchronize immobile/install/components/bitrix/immobile.webcomponent/webcomponents/im.dialog/bundle/component/src/mobile_dialog.js:22
 	 */
-	const MOBILE = 26;
+	const MOBILE = 29;
 
 	/**
 	 * Desktop Api revision

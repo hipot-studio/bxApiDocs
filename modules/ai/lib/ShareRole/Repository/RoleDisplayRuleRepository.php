@@ -48,6 +48,11 @@ class RoleDisplayRuleRepository extends BaseRepository
 	 */
 	public function getRulesForRoles(array $rolesIds): array
 	{
+		if ($rolesIds === [])
+		{
+			return [];
+		}
+
 		return RoleDisplayRuleTable::query()
 			->setSelect([
 				'ROLE_ID',
@@ -56,6 +61,7 @@ class RoleDisplayRuleRepository extends BaseRepository
 				'IS_CHECK_INVERT',
 			])
 			->where('NAME', '=', RuleName::Lang->value)
+			->whereIn('ROLE_ID', $rolesIds)
 			->fetchAll()
 		;
 	}

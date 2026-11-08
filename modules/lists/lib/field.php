@@ -361,6 +361,11 @@ class Field
 		return $result;
 	}
 
+	public static function normalizeHtmlEditorContent(string $content): string
+	{
+		return str_replace(["\r\n", "\r"], "\n", $content);
+	}
+
 	/**
 	 * Method of preparing a data structure for the filter.
 	 *

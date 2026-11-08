@@ -11,6 +11,8 @@ use Bitrix\Main\Config\Option;
 
 class Guide
 {
+	public const UNDO_SEND_ONBOARDING_BOUNDARY_ID_OPTION = 'undo_send_onboarding_boundary_id';
+
 	public const USER_OPTION_CATEGORY = 'mail.guide';
 	public const USER_OPTION_MAILBOX_GRID_NAME = 'mailbox_grid_guide_shown';
 	public const USER_OPTION_MAILBOX_GRID_NOT_CIS_NAME = 'mailbox_grid_guide_shown_not_cis';
@@ -24,6 +26,10 @@ class Guide
 	public const USER_OPTION_LABELS_ONBOARDING_NAME = 'labels_onboarding';
 	public const USER_OPTION_LARGE_ATTACHMENT_AHA_NAME = 'large_attachment_aha_shown';
 	public const USER_OPTION_LARGE_ATTACHMENT_POST_SEND_NAME = 'large_attachment_post_send_prompt_suppressed';
+	public const USER_OPTION_UNDO_SEND_NAME = 'undo_send_guide_shown';
+	public const USER_OPTION_UNDO_SEND_READY_NAME = 'undo_send_guide_ready';
+	public const USER_OPTION_UNDO_SEND_AHA_NAME = self::USER_OPTION_UNDO_SEND_NAME;
+	public const UNDO_SEND_BOUNDARY_ID_OPTION = self::UNDO_SEND_ONBOARDING_BOUNDARY_ID_OPTION;
 
 	public static function wasMailboxGridGuideShown(): bool
 	{
@@ -189,6 +195,81 @@ class Guide
 	public static function getLargeAttachmentPostSendPromptOptionName(): string
 	{
 		return self::USER_OPTION_LARGE_ATTACHMENT_POST_SEND_NAME;
+	}
+
+	public static function shouldShowUndoSendGuide(int $userId): bool
+	{
+		if ($userId <= 0 || !Feature::isUndoSendAvailable() || self::wasUndoSendGuideShown($userId))
+		{
+			return false;
+		}
+
+		$previousMailboxId = (int)\CUserOptions::GetOption(
+			'mail',
+			'previous_seen_mailbox_id',
+			0,
+			$userId,
+		);
+		$boundaryId = (int)Option::get('mail', self::UNDO_SEND_BOUNDARY_ID_OPTION, '0');
+		if ($previousMailboxId <= 0 || $boundaryId <= 0 || $previousMailboxId > $boundaryId)
+		{
+			return false;
+		}
+
+		return MailboxTable::getRow([
+			'select' => ['ID'],
+			'filter' => [
+				'=ID' => $previousMailboxId,
+				'=USER_ID' => $userId,
+				'=ACTIVE' => 'Y',
+			],
+		]) !== null;
+	}
+
+	public static function initializeUndoSendOnboardingBoundary(int $boundaryId): void
+	{
+		$missingOption = "\x00absent\x00";
+		if (Option::get('mail', self::UNDO_SEND_ONBOARDING_BOUNDARY_ID_OPTION, $missingOption) !== $missingOption)
+		{
+			return;
+		}
+
+		Option::set('mail', self::UNDO_SEND_ONBOARDING_BOUNDARY_ID_OPTION, (string)max(0, $boundaryId));
+	}
+
+	public static function wasUndoSendGuideShown(int $userId): bool
+	{
+		return \CUserOptions::GetOption(
+			self::USER_OPTION_CATEGORY,
+			self::USER_OPTION_UNDO_SEND_NAME,
+			null,
+			$userId,
+		) === 'Y';
+	}
+
+	public static function getUndoSendGuideOptionName(): string
+	{
+		return self::USER_OPTION_UNDO_SEND_NAME;
+	}
+
+	public static function isUndoSendGuideReady(int $userId): bool
+	{
+		return \CUserOptions::GetOption(
+			self::USER_OPTION_CATEGORY,
+			self::USER_OPTION_UNDO_SEND_READY_NAME,
+			null,
+			$userId,
+		) === 'Y';
+	}
+
+	public static function shouldShowUndoSendAha(int $userId): bool
+	{
+		return self::shouldShowUndoSendGuide($userId);
+	}
+
+	public static function getUndoSendAhaGuideOptionName(): string
+	{
+		return self::getUndoSendGuideOptionName();
 	}
 
 	private static function isCisLicense(): bool

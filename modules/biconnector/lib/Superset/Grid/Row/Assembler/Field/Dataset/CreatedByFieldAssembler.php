@@ -15,7 +15,7 @@ class CreatedByFieldAssembler extends UserFieldAssembler
 
 			return <<<HTML
 				<span class="biconnector-grid-market-cell">
-					<img src="/bitrix/images/biconnector/database-connections/system.png" width="24" height="24" alt="{$authorText}">
+					<img src="/bitrix/images/biconnector/database-connections/system.svg" width="24" height="24" alt="{$authorText}">
 					<span class="biconnector-grid-username">{$authorText}</span>
 				</span>
 			HTML;

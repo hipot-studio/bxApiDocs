@@ -248,7 +248,7 @@ class Preset
 	{
 		$serverAddress = ResourceManager::getServerAddress() . '/bitrix/components/bitrix/crm.button.edit/templates/.default/images/';
 		$defaultCondition = array(
-			'ICON' => $serverAddress . 'upload-girl-mini-1.png',
+			'ICON' => $serverAddress . 'upload-girl-mini-1.webp',
 			'NAME' => Loc::getMessage('CRM_BUTTON_PRESET_HELLO_DEF_NAME'),
 			'TEXT' => Loc::getMessage('CRM_BUTTON_PRESET_HELLO_DEF_TEXT'),
 			'DELAY' => 1,

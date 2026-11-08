@@ -8,7 +8,7 @@ use Bitrix\Crm\V2\Internal\Service\Item\File\Value\FileFieldWriteRequest;
 
 final class FileFieldInputBag
 {
-	/** @var array<string, array{multiple: bool, rawValue: mixed, request: FileFieldWriteRequest}> */
+	/** @var array<string, array{multiple: bool, rawValue: mixed, request: FileFieldWriteRequest, inputFieldName: string}> */
 	private array $entries = [];
 
 	public function add(
@@ -16,12 +16,14 @@ final class FileFieldInputBag
 		bool $multiple,
 		mixed $rawValue,
 		FileFieldWriteRequest $request,
+		?string $inputFieldName = null,
 	): void
 	{
 		$this->entries[$fieldName] = [
 			'multiple' => $multiple,
 			'rawValue' => $rawValue,
 			'request' => $request,
+			'inputFieldName' => $inputFieldName ?? $fieldName,
 		];
 	}
 
@@ -49,5 +51,17 @@ final class FileFieldInputBag
 			static fn(array $entry): FileFieldWriteRequest => $entry['request'],
 			$this->entries,
 		);
+	}
+
+	/** @return array<string, string> */
+	public function getInputFieldNamesByItemFieldName(): array
+	{
+		$result = [];
+		foreach ($this->entries as $fieldName => $entry)
+		{
+			$result[$fieldName] = $entry['inputFieldName'];
+		}
+
+		return $result;
 	}
 }

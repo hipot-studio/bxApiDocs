@@ -179,7 +179,13 @@ final class SaveEntityCommand extends Command
 		{
 			if (!array_key_exists($propId, $originalData))
 			{
-				$data[$propId] = [];
+				$data[$propId] = (
+					$this->entityId === 0
+					&& $propProperty['TYPE'] === 'L'
+					&& ($propProperty['SETTINGS']['ADD_READ_ONLY_FIELD'] ?? 'N') === 'Y'
+						? (array)($propProperty['DEFAULT_VALUE'] ?? null)
+						: []
+				);
 
 				continue;
 			}

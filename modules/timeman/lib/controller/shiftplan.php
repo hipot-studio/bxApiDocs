@@ -10,9 +10,18 @@ use Bitrix\Timeman\Helper\TimeHelper;
 use Bitrix\Timeman\Model\Schedule\ShiftPlan\ShiftPlanTable;
 use Bitrix\Timeman\Service\Schedule\Result\ShiftPlanServiceResult;
 use Bitrix\Timeman\UseCase\Schedule\ShiftPlan as ShiftPlanHandler;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 Loc::loadMessages(__FILE__);
 class ShiftPlan extends Controller
 {
+	protected function getDefaultPreFilters()
+	{
+		return [
+			new ToolEnabledFilter(),
+			...parent::getDefaultPreFilters(),
+		];
+	}
+
 	public function addAction()
 	{
 		$shiftPlanForm = new ShiftPlanForm();

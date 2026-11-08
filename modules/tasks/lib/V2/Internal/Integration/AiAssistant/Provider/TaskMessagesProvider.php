@@ -19,11 +19,12 @@ class TaskMessagesProvider
 	{
 	}
 
-	public function getRecentMessages(int $chatId, int $limit): array
+	public function getRecentMessages(int $chatId, int $limit, ?int $lastId = null): array
 	{
 		$messages = $this->messageRepository->tailByChatIdWithoutSystemMessages(
 			$chatId,
 			$limit,
+			$lastId,
 		);
 
 		if (empty($messages))

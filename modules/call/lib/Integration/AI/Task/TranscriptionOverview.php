@@ -97,13 +97,13 @@ class TranscriptionOverview extends AITask
 		$outcome = $this->task->getOutcome() ?? $this->task->fillOutcome();
 		if (!$outcome)
 		{
-			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
+			return $result->addError(new CallAIError(CallAIError::EMPTY_PAYLOAD_ERROR));// Empty outcome content
 		}
 
 		$call = \Bitrix\Call\Call\Registry::getCallWithId($outcome->getCallId());
 		if (!$call)
 		{
-			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
+			return $result->addError(new CallAIError(CallAIError::EMPTY_PAYLOAD_ERROR));// Empty outcome content
 		}
 
 		$transcription = $outcome->getSenseContent();
@@ -112,7 +112,7 @@ class TranscriptionOverview extends AITask
 			|| !$transcription->hasContent()
 		)
 		{
-			return $result->addError(new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR));// Empty outcome content
+			return $result->addError(new CallAIError(CallAIError::EMPTY_PAYLOAD_ERROR));// Empty outcome content
 		}
 
 		if (

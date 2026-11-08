@@ -33,6 +33,7 @@ class FillFields implements Contract\Operation
 	private DocumentRepository $documentRepository;
 	private Service\Providers\ProfileProvider $profileProvider;
 	private Service\Providers\MemberDynamicFieldInfoProvider $memberDynamicFieldProvider;
+	private Service\Integration\HumanResources\HcmLinkFieldService $hcmLinkFieldService;
 
 	/**
 	 * @param list<array{name: string, value: string}> $fields
@@ -46,12 +47,14 @@ class FillFields implements Contract\Operation
 		?DocumentRepository $documentRepository = null,
 		?Service\Providers\ProfileProvider $profileProvider = null,
 		?Service\Providers\MemberDynamicFieldInfoProvider $memberDynamicFieldProvider = null,
+		?Service\Integration\HumanResources\HcmLinkFieldService $hcmLinkFieldService = null,
 	)
 	{
 		$container = Service\Container::instance();
 		$this->documentRepository = $documentRepository ?? $container->getDocumentRepository();
 		$this->profileProvider = $profileProvider ?? $container->getServiceProfileProvider();
 		$this->memberDynamicFieldProvider = $memberDynamicFieldProvider ?? $container->getMemberDynamicFieldProvider();
+		$this->hcmLinkFieldService = $hcmLinkFieldService ?? $container->getHcmLinkFieldService();
 	}
 
 	public function launch(): Result
@@ -81,6 +84,13 @@ class FillFields implements Contract\Operation
 			if ($this->isMemberDynamicField($fieldCode))
 			{
 				$this->updateMemberDynamicField($field, $fieldCode);
+
+				continue;
+			}
+
+			if ($this->isHcmLinkField($fieldCode))
+			{
+				$this->updateHcmLinkLegalField($field, $document, $fieldCode);
 
 				continue;
 			}
@@ -496,5 +506,65 @@ class FillFields implements Contract\Operation
 		}
 
 		$this->memberDynamicFieldProvider->updateFieldData($this->member->id, $fieldCode, $value);
+	}
+
+	private function isHcmLinkField(string $fieldCode): bool
+	{
+		return str_starts_with($fieldCode, Service\Integration\HumanResources\HcmLinkFieldService::FIELD_PREFIX);
+	}
+
+	/**
+	 * A field of 1C filled by hand in the signing form: the member it was filled for is matched to
+	 * nobody in 1C, so the value has no answer of 1C to come from and settles in the legal field of
+	 * his profile, from where the next document takes it.
+	 *
+	 * A field of 1C never goes further down the chain of the routes: it is not a field of a CRM entity,
+	 * and a type of field with no legal equivalent is written nowhere.
+	 *
+	 * The right to edit the legal data is not asked here on purpose. The route is reached from the
+	 * callback of the signing service - a server to server call with no portal user of its own - and
+	 * the right is checked earlier and elsewhere: the safe lets only the representative and the editor
+	 * into the filling of the fields.
+	 */
+	private function updateHcmLinkLegalField(array $field, Document $document, string $fieldCode): void
+	{
+		// The callback carries no marker of a trusted value today and the fill action of the safe
+		// marks the whole filling trusted, so only a value declared untrusted is dropped here.
+		if (($field['trusted'] ?? true) !== true)
+		{
+			return;
+		}
+
+		$fieldName = $this->hcmLinkFieldService->getLegalInfoFieldNameByFieldName($fieldCode);
+		if ($fieldName === null)
+		{
+			return;
+		}
+
+		$value = $field['value'] ?? null;
+		// An empty value must not wipe the legal data filled earlier.
+		if (!is_string($value) || $value === '')
+		{
+			return;
+		}
+
+		// The member of the callback is the one the fields were filled for, and the representative is
+		// allowed to fill them for another member: the value belongs to the profile of the member.
+		$userId = $this->getUserId($document, $this->member);
+		if ($userId === null)
+		{
+			return;
+		}
+
+		$this->updateProfileField($userId, $fieldName, $value);
+	}
+
+	/**
+	 * The write of the profile of this route, kept a method of its own: the profile provider is final
+	 * and a test has no other way to observe the write.
+	 */
+	protected function updateProfileField(int $userId, string $fieldName, string $value): void
+	{
+		$this->profileProvider->updateFieldData($userId, $fieldName, $value);
 	}
 }

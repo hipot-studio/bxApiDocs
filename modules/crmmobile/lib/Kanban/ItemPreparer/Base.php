@@ -3,6 +3,7 @@
 namespace Bitrix\CrmMobile\Kanban\ItemPreparer;
 
 use Bitrix\Crm\Category\PermissionEntityTypeHelper;
+use Bitrix\Crm\Field\Collection;
 use Bitrix\CrmMobile\Kanban\Dto\Field;
 use Bitrix\CrmMobile\Kanban\ItemPreparer\Counters\ItemCounterFactory;
 use Bitrix\Main\Localization\Loc;
@@ -40,6 +41,12 @@ abstract class Base
 	{
 		$id = $this->getItemId($item);
 		$entityAttributes = ($params['permissionEntityAttributes'] ?? null);
+
+		// strategies pass display values of the whole page keyed by item id
+		if (isset($params['displayValues']))
+		{
+			$params['displayValues'] = $params['displayValues'][$id] ?? [];
+		}
 
 		$fields = $this->prepareFields($item, $params);
 		$fields = $this->addClientToFields($fields, $item, $params);
@@ -226,6 +233,49 @@ abstract class Base
 	protected function isExcludedField(string $fieldName): bool
 	{
 		return in_array($fieldName, static::EXCLUDED_FIELDS, true);
+	}
+
+	/**
+	 * @return Field[]
+	 */
+	protected function prepareFieldsFromDisplayValues(array $displayValues, ?Collection $fieldsCollection): array
+	{
+		if ($fieldsCollection === null)
+		{
+			return [];
+		}
+
+		$fields = [];
+		foreach ($displayValues as $fieldName => $fieldValue)
+		{
+			/** @var \Bitrix\Crm\Field $field */
+			$field = $fieldsCollection->getField($fieldName);
+			if (!$field || !isset($fieldValue['value']) || $this->isExcludedField($field->getName()))
+			{
+				continue;
+			}
+
+			$config = $fieldValue['config'] ?? [];
+			$fieldSettings = $field->getSettings();
+			if (isset($fieldSettings['icon']['url']))
+			{
+				$config['titleIcon']['before']['uri'] = $fieldSettings['icon']['url'];
+			}
+
+			$dtoField = Field::make([
+				'name' => $field->getName(),
+				'title' => $field->getTitle(),
+				'type' => $field->getType(),
+				'value' => $fieldValue['value'],
+				'config' => $config,
+				'multiple' => $field->isMultiple(),
+			]);
+			$this->prepareField($dtoField);
+
+			$fields[] = $dtoField;
+		}
+
+		return $fields;
 	}
 
 	protected function prepareField(Field $field): void

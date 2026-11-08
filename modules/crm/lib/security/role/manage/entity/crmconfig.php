@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Security\Role\Manage\Entity;
 
 use Bitrix\Crm\Security\Role\Manage\DTO\EntityDTO;
 use Bitrix\Crm\Security\Role\Manage\PermissionAttrPresets;
+use Bitrix\Crm\Security\Role\Manage\Permissions\Configuration\OperationPermissions;
 use Bitrix\Crm\Security\Role\Manage\Permissions\WriteConfig;
 
 class CrmConfig implements PermissionEntity
@@ -12,9 +13,10 @@ class CrmConfig implements PermissionEntity
 
 	private function permissions(): array
 	{
-		return [
-			new WriteConfig(PermissionAttrPresets::allowedYesNo())
-		];
+		return array_merge(
+			OperationPermissions::all(),
+			[new WriteConfig(PermissionAttrPresets::allowedYesNo(), showExplanation: true)],
+		);
 	}
 
 	public function make(): array

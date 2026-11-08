@@ -10,19 +10,28 @@ class ActivityControlDto implements Arrayable, \JsonSerializable
 {
 	private array $property;
 	private mixed $value;
+	private array $meta;
 
-	public function __construct(array $property, mixed $value)
+	public function __construct(array $property, mixed $value, array $meta = [])
 	{
 		$this->property = $property;
 		$this->value = $value;
+		$this->meta = $meta;
 	}
 
 	public function toArray(): array
 	{
-		return [
+		$result = [
 			'property' => $this->property,
 			'value' => $this->value,
 		];
+
+		if ($this->meta !== [])
+		{
+			$result['meta'] = $this->meta;
+		}
+
+		return $result;
 	}
 
 	public function jsonSerialize(): array

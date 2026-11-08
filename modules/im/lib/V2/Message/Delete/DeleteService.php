@@ -136,13 +136,16 @@ class DeleteService
 	}
 
 	/**
-	 * @return Result
+	 * An unresolved chat is a failure and not a deletion that happened to remove nothing: the caller
+	 * has no other way to tell "the messages are gone" from "there was nothing to delete them from".
+	 * The chat resolves to NullChat when the collection is empty, when its messages carry no chat, or
+	 * when they belong to different chats.
 	 */
 	public function delete(): Result
 	{
 		if ($this->chat instanceof Chat\NullChat)
 		{
-			return new Result();
+			return (new Result())->addError(new Chat\ChatError(Chat\ChatError::NOT_FOUND));
 		}
 
 		if (!$this->isModeSpecified)
@@ -816,7 +819,8 @@ class DeleteService
 			$triggerMessageId = (int)($messageForEvent['PARAMS'][Message\Params::AI_TASK_TRIGGER_MESSAGE_ID] ?? 0);
 			if ($triggerMessageId > 0)
 			{
-				$taskService->deleteLinkedAutoTask($triggerMessageId);
+				$taskId = (int)($messageForEvent['PARAMS'][Message\Params::AI_TASK_ID] ?? 0);
+				$taskService->deleteLinkedAutoTask($triggerMessageId, $taskId > 0 ? $taskId : null);
 			}
 		}
 	}

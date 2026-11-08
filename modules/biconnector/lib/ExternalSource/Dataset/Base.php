@@ -108,6 +108,18 @@ abstract class Base extends BIConnector\DataSource\BIBuilderDataset
 		return $this->getDataset()->getDescription() ?: $this->getDataset()->getName();
 	}
 
+	protected function getVerboseName(): ?string
+	{
+		$verboseName = trim((string)$this->getDataset()->getVerboseName());
+
+		return $verboseName !== '' ? $verboseName : null;
+	}
+
+	protected function getTableDescriptionFull(): string
+	{
+		return (string)$this->getDataset()->getDescription();
+	}
+
 	protected function getConnector(string $name, BIConnector\DataSourceConnector\FieldCollection $fields, array $datasetInfo): BIConnector\DataSourceConnector\Connector\Base
 	{
 		return Connector\Factory::getConnector($this->getDataset()->getEnumType(), $name, $fields, $datasetInfo);

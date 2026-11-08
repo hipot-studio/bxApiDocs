@@ -14,7 +14,7 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 	{
 		$this->id = 'socnetgroup';
 
-		$this->isNewProjectsOn = Feature::isNewProjectsOn();
+		$this->isNewProjectsOn = self::isNewProjectsFeatureOn();
 	}
 
 	private function getMessage(string $code): string
@@ -24,9 +24,15 @@ class CSocNetGroupAuthProvider extends CAuthProvider implements IProviderInterfa
 
 	private static function resolveMessage(string $code, ?bool $isNewProjectsOn = null): string
 	{
-		$suffix = (($isNewProjectsOn ?? Feature::isNewProjectsOn()) ? '_v2' : '');
+		$suffix = (($isNewProjectsOn ?? self::isNewProjectsFeatureOn()) ? '_v2' : '');
 
 		return GetMessage($code . $suffix) ?: GetMessage($code);
+	}
+
+	// The legacy autoload map outlives the Bitrix\Socialnetwork namespace registration
+	private static function isNewProjectsFeatureOn(): bool
+	{
+		return class_exists(Feature::class) && Feature::isNewProjectsOn();
 	}
 
 	public function UpdateCodes($USER_ID)

@@ -27,6 +27,7 @@ class Result extends AbstractEntity
 		public readonly ?array $rights = [],
 		public readonly ?DiskFileCollection $files = null,
 		public readonly ?int $messageId = null,
+		public readonly ?string $archiveLink = null,
 	)
 	{
 
@@ -63,6 +64,7 @@ class Result extends AbstractEntity
 			rights: static::mapArray($props, 'rights'),
 			files: static::mapEntityCollection($props, 'files', DiskFileCollection::class),
 			messageId: static::mapInteger($props, 'messageId'),
+			archiveLink: static::mapString($props, 'archiveLink'),
 		);
 	}
 
@@ -82,6 +84,7 @@ class Result extends AbstractEntity
 			'rights' => $this->rights,
 			'files' => $this->files?->toArray(),
 			'messageId' => $this->messageId,
+			'archiveLink' => $this->archiveLink,
 		];
 	}
 }

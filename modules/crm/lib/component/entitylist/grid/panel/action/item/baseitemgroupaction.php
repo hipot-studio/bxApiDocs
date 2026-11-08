@@ -28,6 +28,9 @@ abstract class BaseItemGroupAction extends GroupAction
 			return null;
 		}
 
+		// the grid address keeps the id unique: a card shows several panels at once
+		$control['ID'] .= '_' . $this->getGridId();
+
 		foreach ($control['ITEMS'] as &$item)
 		{
 			if ($item['VALUE'] === 'default')
@@ -44,6 +47,11 @@ abstract class BaseItemGroupAction extends GroupAction
 		}
 
 		return $control;
+	}
+
+	final protected function getGridId(): string
+	{
+		return $this->gridSettings->getID();
 	}
 
 	final protected function canUpdateItemsInCategory(): bool

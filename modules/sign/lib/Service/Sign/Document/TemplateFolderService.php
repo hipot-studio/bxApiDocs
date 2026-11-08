@@ -144,11 +144,14 @@ final class TemplateFolderService
 
 			$templateIdsByFolder = $this->templateFolderRepository->getTemplateIdsByFolderId($folderId);
 
-			$updateTemplatesResult = $this->templateRepository->updateVisibilities($templateIdsByFolder, $visibility);
-			if (!$updateTemplatesResult->isSuccess())
+			if ($templateIdsByFolder !== [])
 			{
-				$result->addErrors($updateTemplatesResult->getErrors());
-				throw new SignException('Visibility for the templates has not been updated');
+				$updateTemplatesResult = $this->templateRepository->updateVisibilities($templateIdsByFolder, $visibility);
+				if (!$updateTemplatesResult->isSuccess())
+				{
+					$result->addErrors($updateTemplatesResult->getErrors());
+					throw new SignException('Visibility for the templates has not been updated');
+				}
 			}
 
 			$connection->commitTransaction();
@@ -164,13 +167,16 @@ final class TemplateFolderService
 
 	/**
 	 * @param list<int> $folderIds
+	 * @param int|null $limit caps the relations read; the default of the repository applies when null
 	 * @return TemplateCollection
 	 */
-	public function getTemplatesInFolders(array $folderIds): TemplateCollection
+	public function getTemplatesInFolders(array $folderIds, ?int $limit = null): TemplateCollection
 	{
-		$templateRelations = $this
-			->templateFolderRelationRepository
-			->getAllByParentIdsAndType($folderIds, EntityType::TEMPLATE);
+		$relationRepository = $this->templateFolderRelationRepository;
+		$templateRelations = $limit === null
+			? $relationRepository->getAllByParentIdsAndType($folderIds, EntityType::TEMPLATE)
+			: $relationRepository->getAllByParentIdsAndType($folderIds, EntityType::TEMPLATE, $limit)
+		;
 
 		$templateIds = $templateRelations->getEntityIds();
 

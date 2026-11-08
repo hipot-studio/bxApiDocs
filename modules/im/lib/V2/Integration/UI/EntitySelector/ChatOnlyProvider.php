@@ -38,9 +38,9 @@ class ChatOnlyProvider extends RecentProvider
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	protected function getDefaultDialogItems(): array
+	protected function getDefaultDialogItems(int $limit = self::LIMIT): array
 	{
-		$chatIds = $this->getCommonChatQueryWithOrder()
+		$chatIds = $this->getCommonChatQueryWithOrder(limit: $limit)
 			->fetchCollection()
 			?->getIdList()
 			?? []

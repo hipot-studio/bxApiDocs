@@ -4,9 +4,13 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Reading;
 
 use Bitrix\Im\Model\ChatTable;
+use Bitrix\Im\Model\MessageTable;
+use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Anchor;
 use Bitrix\Im\V2\Async\Promise\BackgroundJobPromise;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeFilterFactory;
+use Bitrix\Im\V2\Chat\Tree\ChatTreeScope;
 use Bitrix\Im\V2\Chat\Tree\ChatTreeScopeFactory;
 use Bitrix\Im\V2\Chat\Type\ChatsByType;
 use Bitrix\Im\V2\Chat\Type\TypeRegistry;
@@ -21,6 +25,10 @@ use Bitrix\Im\V2\Sync;
 
 class Reader
 {
+	// stays below the MySQL eq_range_index_dive_limit default of 200: past that bound the optimizer
+	// estimates IN() by table statistics instead of index dives and drops the range plan
+	private const NOTIFICATION_FETCH_CHUNK_SIZE = 199;
+
 	public function __construct(
 		protected readonly View\ViewUpdater $viewUpdater,
 		protected readonly View\ViewProvider $viewProvider,
@@ -30,6 +38,7 @@ class Reader
 		protected readonly RecentReader $recentReader,
 		protected readonly LastIdUpdater $lastIdUpdater,
 		protected readonly ChatTreeScopeFactory $chatTreeScopeFactory,
+		protected readonly ChatTreeFilterFactory $chatTreeFilterFactory,
 		protected readonly TypeRegistry $typeRegistry,
 	) {}
 
@@ -198,17 +207,20 @@ class Reader
 			return ReadResult::error(new ReadingError(ReadingError::CHAT_NOT_READABLE));
 		}
 
-		$lastMessage = new Message($chat->getLastMessageId());
-		if (!$lastMessage->getId())
-		{
-			return new ReadResult(0, new MessageCollection());
-		}
-
 		$this->counterUpdater->delete()->byChat($chatId)->forUser($userId)->execute();
 		$counter = 0;
 		$previousLastId = $chat->getRelationByUserId($userId)?->getLastId() ?? 0;
+		$lastId = $previousLastId;
 
-		$lastId = $chat->getRelationByUserId($userId)?->updateLastId($lastMessage->getId()) ?? 0;
+		// a chat without a single message of its own still has read-state to clear (the manual
+		// unread mark in recent, sync/pull fan-out) and descendants to cascade into; skip only
+		// the LAST_ID move, which needs an existing last message
+		$lastMessage = new Message($chat->getLastMessageId());
+		if ($lastMessage->getId())
+		{
+			$lastId = $chat->getRelationByUserId($userId)?->updateLastId($lastMessage->getId()) ?? 0;
+		}
+
 		$this->recentReader->read($userId, $chat->getChatId());
 		$this->anchorReadService->readByChatId($chatId, $userId);
 		$chat->onAfterAllMessagesRead($userId);
@@ -278,6 +290,9 @@ class Reader
 			$this->lastIdUpdater->updateByChatIds($counterChatIds, $userId);
 		}
 
+		// runs before the early return below: chat notifications may outlive already cleared counters
+		$this->deleteChildrenNotifications($scope, $userId);
+
 		$affectedChatIds = $this->collectAffectedChatIds($counterChatIds, $recentChatIds, $anchorChatIds);
 		if (empty($affectedChatIds))
 		{
@@ -286,6 +301,68 @@ class Reader
 
 		(new Pull\ReadChildren($chat, $userId))->send();
 		$this->sendAfterReadChatsByTypeBatchEvents($userId, $affectedChatIds);
+	}
+
+	private function deleteChildrenNotifications(ChatTreeScope $scope, int $userId): void
+	{
+		$childChatIds = $this->getChildChatIdsWithRelation($scope, $userId);
+		if (empty($childChatIds))
+		{
+			return;
+		}
+
+		$subTags = [];
+		foreach ($childChatIds as $childChatId)
+		{
+			$subTags[] = "IM_MESS_{$childChatId}_{$userId}";
+		}
+
+		$notificationIds = $this->getNotificationIdsBySubTags($subTags);
+		if (empty($notificationIds))
+		{
+			return;
+		}
+
+		// null sub tag mirrors CIMNotify::DeleteBySubTag($subTag, false, false): with pullActive = false
+		// it nulls the sub tag before deleteList(), so the push queue cleanup by sub tag is skipped there too
+		\CIMNotify::deleteList($notificationIds, ['NOTIFY_SUB_TAG' => null]);
+	}
+
+	/**
+	 * @param string[] $subTags
+	 * @return int[]
+	 */
+	private function getNotificationIdsBySubTags(array $subTags): array
+	{
+		$notificationIds = [];
+		foreach (array_chunk($subTags, self::NOTIFICATION_FETCH_CHUNK_SIZE) as $chunk)
+		{
+			$rows = MessageTable::query()
+				->setSelect(['ID'])
+				->whereIn('NOTIFY_SUB_TAG', $chunk)
+				->fetchAll()
+			;
+
+			array_push($notificationIds, ...array_column($rows, 'ID'));
+		}
+
+		return Normalize::uniquePositiveIntegers($notificationIds);
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function getChildChatIdsWithRelation(ChatTreeScope $scope, int $userId): array
+	{
+		$query = RelationTable::query()
+			->setSelect(['CHAT_ID'])
+			->setDistinct()
+			->where('USER_ID', $userId)
+		;
+
+		$this->chatTreeFilterFactory->forTreeScope($scope)->apply($query);
+
+		return Normalize::uniquePositiveIntegers(array_column($query->fetchAll(), 'CHAT_ID'));
 	}
 
 	/**

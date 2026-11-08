@@ -59,6 +59,9 @@ final class ProjectCopilotChatProvider
 			'USERS' => [$userId],
 			'SEND_GREETING_MESSAGES' => 'Y',
 			'MANAGE_DELETE' => Chat::MANAGE_RIGHTS_NONE,
+			// The chat is created for the member by the platform, not by the member: chat creation
+			// analytics must not count it as a user action.
+			'SKIP_ANALYTICS' => 'Y',
 		];
 
 		$title = Loc::getMessage(self::CHAT_TITLE_MESSAGE_CODE);

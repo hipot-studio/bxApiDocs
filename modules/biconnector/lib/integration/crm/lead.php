@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\BIConnector\Integration\Crm;
 
 use Bitrix\Main\Localization\Loc;
@@ -288,6 +289,12 @@ class Lead
 					'FIELD_NAME' => 'L.OPPORTUNITY',
 					'FIELD_TYPE' => 'double',
 				],
+				//IS_MANUAL_OPPORTUNITY CHAR(1) DEFAULT 'N',
+				'IS_MANUAL_OPPORTUNITY' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => 'L.IS_MANUAL_OPPORTUNITY',
+					'FIELD_TYPE' => 'string',
+				],
 				//CURRENCY_ID VARCHAR (50) DEFAULT NULL,
 				'CURRENCY_ID' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -439,7 +446,12 @@ class Lead
 					'FIELD_TYPE' => 'string',
 				],
 				//TODO:EXCH_RATE DECIMAL(20,4) DEFAULT 1,
-				//TODO:WEBFORM_ID INT (18) UNSIGNED DEFAULT NULL,
+				//WEBFORM_ID INT (18) UNSIGNED DEFAULT NULL,
+				'WEBFORM_ID' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'L.WEBFORM_ID',
+					'FIELD_TYPE' => 'int',
+				],
 				//ORIGINATOR_ID VARCHAR(255) NULL,
 				'ORIGINATOR_ID' => [
 					'IS_METRIC' => 'N', // 'Y'
@@ -482,7 +494,18 @@ class Lead
 				],
 				//TODO:FACE_ID INT(18) NULL,
 				//TODO:SEARCH_CONTENT MEDIUMTEXT NULL,
-				//TODO:IS_MANUAL_OPPORTUNITY CHAR(1) DEFAULT 'N',
+				//MOVED_BY_ID INT UNSIGNED DEFAULT NULL,
+				'MOVED_BY_ID' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => 'L.MOVED_BY_ID',
+					'FIELD_TYPE' => 'int',
+				],
+				//MOVED_TIME DATETIME NULL,
+				'MOVED_TIME' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => 'L.MOVED_TIME',
+					'FIELD_TYPE' => 'datetime',
+				],
 				'UTM_SOURCE' => [
 					'IS_METRIC' => 'N', // 'Y'
 					'FIELD_NAME' => 'UTM_S.VALUE',
@@ -573,6 +596,22 @@ class Lead
 					'JOIN' => 'INNER JOIN b_crm_lead_contact CLC ON CLC.LEAD_ID = L.ID',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_lead_contact CLC ON CLC.LEAD_ID = L.ID',
 				],
+				'CONTACTS' => [
+					'GROUP_CONCAT' => ', ',
+					'GROUP_KEY' => 'CONTACT_IDS',
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'CASE WHEN CLC.CONTACT_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'CLC.CONTACT_ID', "']'") . ', nullif(CC.FULL_NAME, \'\')) END',
+					'FIELD_TYPE' => 'array_string',
+					'TABLE_ALIAS' => 'CLC',
+					'JOIN' => [
+						'INNER JOIN b_crm_lead_contact CLC ON CLC.LEAD_ID = L.ID',
+						'INNER JOIN b_crm_contact CC ON CC.ID = CLC.CONTACT_ID',
+					],
+					'LEFT_JOIN' => [
+						'LEFT JOIN b_crm_lead_contact CLC ON CLC.LEAD_ID = L.ID',
+						'LEFT JOIN b_crm_contact CC ON CC.ID = CLC.CONTACT_ID',
+					],
+				],
 			],
 		];
 
@@ -589,7 +628,7 @@ class Lead
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_lead']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_LEAD_TABLE'] ?: 'crm_lead';
-		$result['crm_lead']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_LEAD_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['crm_lead']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_LEAD_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['crm_lead']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_LEAD_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_LEAD_FIELD_' . $fieldCode] : $fieldCode;

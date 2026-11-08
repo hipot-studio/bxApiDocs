@@ -7,12 +7,15 @@ namespace Bitrix\Landing\Copilot;
 use Bitrix\Landing;
 use Bitrix\Landing\Agent;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
+use Bitrix\Landing\Copilot\Generation\GenerationTimeSliceException;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSite;
 use Bitrix\Landing\Copilot\Generation\Scenario\IScenario;
 use Bitrix\Landing\Copilot\Generation\Scenario\Scenarist;
 use Bitrix\Landing\Copilot\Generation\Timer;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
+use Bitrix\Landing\Copilot\Generation\Type\StepStatuses;
 use Bitrix\Landing\Copilot\Model\GenerationsTable;
+use Bitrix\Landing\Copilot\Model\StepsTable;
 use Bitrix\Landing\Copilot\Services\FirstSiteGenerationService;
 use Bitrix\Landing\Copilot\Services\GenerationErrorStatusMapper;
 use Bitrix\Landing\Metrika;
@@ -26,6 +29,11 @@ use Bitrix\Main\Web\Json;
 /**
  * This class is responsible for generating site content using various managers and connectors.
  * It manages the generation process, scenario execution, metrika analytics, and error handling.
+ *
+ * An instance is either full or narrow: initByIdWithoutHtmlBlocks() skips HTML_BLOCKS, every other
+ * initializer reads them. A narrow instance refuses getHtmlBlocks() with \LogicException and keeps
+ * the stored blocks intact on save(), so it must stay inside the read path that asked for it -
+ * re-read with initById() before handing it to code that works with the blocks.
  */
 class Generation
 {
@@ -37,6 +45,17 @@ class Generation
 
 	private const DATA_METRIKA_KEY = 'metrikaFields';
 	private const DATA_LAST_ERROR_KEY = 'lastError';
+	private const DATA_LAST_ERROR_CODE_KEY = 'lastErrorCode';
+	private const DATA_LAST_FAILURE_KIND_KEY = 'lastFailureKind';
+	private const DATA_ERROR_MARK_ATTEMPTS_KEY = 'errorMarkWriteAttempts';
+
+	/** Runs allowed to retry a step whose Error mark could not be written; after them nothing retries it. */
+	private const MAX_ERROR_MARK_WRITE_ATTEMPTS = 3;
+
+	/** The run ended with a generation error of the domain: the reason is in DATA_LAST_ERROR_CODE_KEY. */
+	public const FAILURE_KIND_DOMAIN = 'domain';
+	/** The run ended with a failure of the infrastructure, which says nothing about the request itself. */
+	public const FAILURE_KIND_NON_DOMAIN = 'nonDomain';
 
 	private int $id;
 	private IScenario $scenario;
@@ -44,6 +63,8 @@ class Generation
 	private ?array $data = null;
 	/** @var list<Data\HtmlBlock> */
 	private array $htmlBlocks = [];
+	/** False when the instance was initialized without reading HTML_BLOCKS. */
+	private bool $htmlBlocksLoaded = true;
 	private int $step;
 	private int $authorId;
 	private ?DateTime $dateFinished = null;
@@ -149,9 +170,21 @@ class Generation
 
 	/**
 	 * @return list<Data\HtmlBlock>
+	 *
+	 * @throws \LogicException When the instance is a narrow one (initByIdWithoutHtmlBlocks()) and the
+	 *   blocks were never read - a programmer error of the calling path, see the class docblock.
 	 */
 	public function getHtmlBlocks(): array
 	{
+		if (!$this->htmlBlocksLoaded)
+		{
+			// silent [] here would be indistinguishable from "there are none" and would let a
+			// read-modify-write of this instance erase the stored blocks
+			throw new \LogicException(
+				'Generation was initialized without HTML_BLOCKS: use initById() to read them.'
+			);
+		}
+
 		return $this->htmlBlocks;
 	}
 
@@ -169,6 +202,7 @@ class Generation
 		}
 
 		$this->htmlBlocks = array_values($htmlBlocks);
+		$this->htmlBlocksLoaded = true;
 	}
 
 	/**
@@ -350,6 +384,27 @@ class Generation
 	 */
 	public function initById(int $generationId): bool
 	{
+		return $this->initByIdInternal($generationId, true);
+	}
+
+	/**
+	 * Answers like initById(), but skips HTML_BLOCKS - a heavy mediumtext that grows while the site
+	 * is being generated. For read paths that never call getHtmlBlocks(), status polling above all.
+	 *
+	 * The rest of the payload is still read, so this answers about a generation; whether the caller
+	 * may have one at all is findDescriptorById().
+	 *
+	 * @param int $generationId Generation ID.
+	 *
+	 * @return bool True if found and initialized, false otherwise.
+	 */
+	public function initByIdWithoutHtmlBlocks(int $generationId): bool
+	{
+		return $this->initByIdInternal($generationId, false);
+	}
+
+	private function initByIdInternal(int $generationId, bool $withHtmlBlocks): bool
+	{
 		if ($generationId <= 0)
 		{
 			return false;
@@ -362,7 +417,7 @@ class Generation
 				->where('ID', '=', $generationId)
 		;
 
-		return $this->initExists($filter);
+		return $this->initExists($filter, $withHtmlBlocks);
 	}
 
 	/**
@@ -412,16 +467,93 @@ class Generation
 	}
 
 	/**
+	 * Reads the identity of a generation without its payload.
+	 * Answers like initById() about existence, scenario, author and both terminal marks,
+	 * but does not read the heavy fields of the generation.
+	 *
+	 * Cheap enough to run on every request; once the job is known to be theirs,
+	 * initByIdWithoutHtmlBlocks() loads what the answer needs.
+	 *
+	 * @param int $generationId Generation ID.
+	 *
+	 * @return Generation\Descriptor|null Descriptor of the generation, or null when initById() would fail too.
+	 */
+	public static function findDescriptorById(int $generationId): ?Generation\Descriptor
+	{
+		if ($generationId <= 0)
+		{
+			return null;
+		}
+
+		$generation = GenerationsTable::query()
+			->where('ID', '=', $generationId)
+			// SITE_DATA is written as a serialized array when the generation is created, so NULL there
+			// marks a record the initialization path cannot use: initExists() leaves siteData unset and
+			// initScenarist() gives up on it. The predicate keeps the answer of this method equal to the
+			// answer of initById() without reading the heavy fields of the generation
+			->whereNotNull('SITE_DATA')
+			->setSelect(['ID', 'SCENARIO', 'CREATED_BY_ID', 'DATE_FINISHED'])
+			->setLimit(1)
+			->fetch()
+		;
+
+		if (!$generation || !class_exists($generation['SCENARIO']))
+		{
+			return null;
+		}
+
+		return new Generation\Descriptor(
+			id: (int)$generation['ID'],
+			scenarioClass: $generation['SCENARIO'],
+			authorId: (int)$generation['CREATED_BY_ID'],
+			isFinished: ($generation['DATE_FINISHED'] ?? null) instanceof DateTime,
+			hasError: self::hasErroredStep((int)$generation['ID']),
+		);
+	}
+
+	/**
+	 * Tells if a step of the generation ended with an error, without reading the generation itself.
+	 *
+	 * The mark is persisted per step in its own table, indexed by generation, so the answer costs
+	 * one light read. It is not the same predicate as Scenarist::isError(): a row whose step has
+	 * left the scenario map counts here and not there, and that direction only drops a wait for a
+	 * job nothing is going to advance.
+	 *
+	 * @param int $generationId Generation ID.
+	 *
+	 * @return bool True when at least one step of the generation is marked as errored.
+	 */
+	private static function hasErroredStep(int $generationId): bool
+	{
+		$step = StepsTable::query()
+			->setSelect(['ID'])
+			->where('GENERATION_ID', '=', $generationId)
+			->where('STATUS', '=', StepStatuses::Error->value)
+			->setLimit(1)
+			->fetch()
+		;
+
+		return (bool)$step;
+	}
+
+	/**
 	 * Initializes this instance with data from an existing generation matching the filter.
 	 * @param Filter\ConditionTree $filter ORM filter for the query.
+	 * @param bool $withHtmlBlocks False to skip the heavy HTML_BLOCKS field.
 	 *
 	 * @return bool True if found and initialized, false otherwise.
 	 */
-	private function initExists(Filter\ConditionTree $filter): bool
+	private function initExists(Filter\ConditionTree $filter, bool $withHtmlBlocks = true): bool
 	{
+		$select = ['ID', 'SCENARIO', 'STEP', 'SITE_DATA', 'DATA', 'CREATED_BY_ID', 'DATE_FINISHED'];
+		if ($withHtmlBlocks)
+		{
+			$select[] = 'HTML_BLOCKS';
+		}
+
 		$generation = GenerationsTable::query()
 			->where($filter)
-			->setSelect(['ID', 'SCENARIO', 'STEP', 'SITE_DATA', 'DATA', 'HTML_BLOCKS', 'CREATED_BY_ID', 'DATE_FINISHED'])
+			->setSelect($select)
 			->fetch()
 		;
 
@@ -464,7 +596,8 @@ class Generation
 			$this->data = $generation['DATA'];
 		}
 
-		$storedHtmlBlocks = $generation['HTML_BLOCKS'] ?? null;
+		$this->htmlBlocksLoaded = $withHtmlBlocks;
+		$storedHtmlBlocks = $withHtmlBlocks ? ($generation['HTML_BLOCKS'] ?? null) : null;
 		$this->hydrateHtmlBlocks(is_array($storedHtmlBlocks) ? $storedHtmlBlocks : null);
 
 		if (!$this->initScenarist())
@@ -553,26 +686,61 @@ class Generation
 
 	/**
 	 * Map execution exceptions to side effects and final result status.
+	 *
+	 * Whether the generation keeps an executor is decided once, for every kind of failure alike, and
+	 * before the first side effect: the writes below - the metrika of the error, the hook of the
+	 * scenario, the save of the state - all go to the same database whose loss suppresses the Error
+	 * mark of the step, so a decision made after them is a decision that a broken connection can skip.
+	 * The answer given to the reader of the generation follows the same decision, or the run would be
+	 * continued by an agent while the editor has already been told to stop watching it.
 	 */
 	private function handleExecutionException(\Throwable $e): bool
 	{
+		$keepsExecutor = $this->decideExecutorRetention($e);
+
 		if ($e instanceof GenerationException)
 		{
-			$this->rememberLastError($e);
-			$this->sendMetrikaError($e);
-			// the scenario hook may mark the generation data (analytics idempotency across resumes),
-			// so the data is persisted after it, not before
-			$this->scenario->onGenerationError($this, $e);
-			$this->save(false);
-			$this->getEvent()->send(self::EVENT_GENERATION_ERROR);
+			try
+			{
+				$this->rememberLastError($e);
+				$this->rememberLastErrorCode($e);
+				$this->rememberFailureKind(self::FAILURE_KIND_DOMAIN);
+				$this->sendMetrikaError($e);
+				// the scenario hook may mark the generation data (analytics idempotency across resumes),
+				// so the data is persisted after it, not before
+				$this->scenario->onGenerationError($this, $e);
+				$this->save(false);
+			}
+			finally
+			{
+				// The executor is returned after the state of the failure has been written and even when
+				// writing it has thrown: setAgent() is a write of its own, so putting it first would let
+				// its failure cost the run the whole record of what happened, while putting it outside
+				// the guard would let any of the writes above cost the generation its executor.
+				$this->finishDomainFailure($keepsExecutor);
+			}
 
 			return false;
 		}
 
-		if ($e instanceof \RuntimeException)
+		// The cooperative exit by the time budget records nothing - it is not a failure, and the step it
+		// leaves behind is still executable.
+		if (!($e instanceof GenerationTimeSliceException))
 		{
-			$this->setAgent();
-			$this->getEvent()->send(self::EVENT_TIMER);
+			$this->rememberNonDomainFailure();
+		}
+
+		// Data a step has written - the applied operations of the change flow, the diagnostic reason of
+		// a failed one - lives on the generation object until something persists it. Only the domain
+		// branch above did, so a non-domain failure lost it: the next poll reloaded the data as it was
+		// before the failed run and answered without what that run had recorded. The write is guarded,
+		// because a failure of the write must not replace the exception that has to travel on, and it
+		// carries the kind above out with it.
+		$this->saveDataQuietly();
+
+		if ($keepsExecutor)
+		{
+			$this->keepExecutor();
 
 			return false;
 		}
@@ -588,6 +756,117 @@ class Generation
 		}
 
 		throw $e;
+	}
+
+	/**
+	 * The one rule about the executor of a failed run, asked before the run records anything.
+	 *
+	 * The generation keeps an executor when it is going to be continued: after a cooperative exit by
+	 * the time budget, which is no failure at all, and after any failure that left no errored step in
+	 * the database - it may have come from outside the step loop (the scenario bookkeeping, a save,
+	 * the finish hook), or its Error mark may have been suppressed on the way to the database. In both
+	 * cases the step stays executable for the next run, and dropping the agent would leave the
+	 * generation running with nothing to reach it.
+	 * "Errored" therefore means errored in the database, not merely on the step object: an errored step
+	 * of the database is the one case that needs no agent, because a repeating agent would find nothing
+	 * to execute and only cost an extra run.
+	 *
+	 * A suppressed mark is also counted here, and that is the only place the counting can happen: only
+	 * a run that has just suppressed the mark knows it did. The count is what the ceiling of the
+	 * retries is read from below, and it travels to the database with the state of the failure.
+	 */
+	private function decideExecutorRetention(\Throwable $e): bool
+	{
+		if ($e instanceof GenerationTimeSliceException)
+		{
+			// The cooperative exit is not counted and never limited: long generations are made of these
+			// exits, and a ceiling over them would stop the main scenario halfway through.
+			return true;
+		}
+
+		if ($this->isError() && !$this->isErrorPersisted())
+		{
+			$this->countErrorMarkWriteAttempt();
+		}
+
+		return !$this->isErrorPersisted();
+	}
+
+	/**
+	 * Executor and answer of a failure that is going to be continued: the agent that reaches the still
+	 * executable step, and the non-terminal event, the same one the cooperative time budget exit sends.
+	 * The terminal event must not be sent here - its listener in the editor stops observing the
+	 * generation, while this generation still has a run ahead of it.
+	 */
+	private function keepExecutor(): void
+	{
+		$this->setAgent();
+		$this->getEvent()->send(self::EVENT_TIMER);
+	}
+
+	/**
+	 * Closes a domain failure by the decision above: the terminal event is sent only to a generation
+	 * nothing is going to continue.
+	 */
+	private function finishDomainFailure(bool $keepsExecutor): void
+	{
+		if ($keepsExecutor)
+		{
+			$this->keepExecutor();
+
+			return;
+		}
+
+		$this->getEvent()->send(self::EVENT_GENERATION_ERROR);
+	}
+
+	/**
+	 * Counts one run whose Error mark did not reach the database.
+	 *
+	 * The agent scheduled for such a run deletes itself on the next pass, so nothing counts the passes
+	 * but this: a mark that keeps failing to be written would otherwise re-execute the step - and its
+	 * requests to the model, and the quota they spend - every ten seconds forever.
+	 */
+	private function countErrorMarkWriteAttempt(): void
+	{
+		$this->setData(self::DATA_ERROR_MARK_ATTEMPTS_KEY, $this->getErrorMarkWriteAttempts() + 1);
+	}
+
+	private function getErrorMarkWriteAttempts(): int
+	{
+		return max(0, (int)$this->getData(self::DATA_ERROR_MARK_ATTEMPTS_KEY));
+	}
+
+	/**
+	 * Whether the attempts to write the Error mark of a step are spent.
+	 *
+	 * The count lives in the data of the generation and is written by the same guarded save as the rest
+	 * of the failure. A run that cannot write the data either leaves the count as it was, and the
+	 * generation degrades to what it did before the ceiling existed - retried until the database
+	 * recovers. That is the most a failure that cannot record anything about itself can do.
+	 */
+	private function isErrorMarkWriteGivenUp(): bool
+	{
+		return $this->getErrorMarkWriteAttempts() >= self::MAX_ERROR_MARK_WRITE_ATTEMPTS;
+	}
+
+	/**
+	 * Persists the generation without letting a failed write outweigh the exception being handled.
+	 *
+	 * Called on the failure paths that have no domain error to report: there the exception on its way
+	 * out is the meaningful one, and a save that fails on the same broken connection must not replace
+	 * it with an error about saving.
+	 */
+	private function saveDataQuietly(): void
+	{
+		try
+		{
+			$this->save(false);
+		}
+		catch (\Throwable)
+		{
+			// the original exception is the one that must reach the caller
+		}
 	}
 
 	/**
@@ -640,9 +919,13 @@ class Generation
 	/**
 	 * Schedules an agent to retry execution.
 	 *
+	 * Executor seam of the generation: which failure keeps an agent and which one is terminal is the
+	 * rule handleExecutionException() is about, and it is observable only here - the scheduling itself
+	 * goes to the agent table and cannot be reached from a test.
+	 *
 	 * @return void
 	 */
-	private function setAgent(): void
+	protected function setAgent(): void
 	{
 		Agent::addUniqueAgent('executeGeneration', [$this->id], 60, 10);
 	}
@@ -752,6 +1035,41 @@ class Generation
 	}
 
 	/**
+	 * Same failure as isError(), but only when the Error status has also reached the database.
+	 *
+	 * A mark that lives on the step object alone leaves the step executable for the next run, so the
+	 * generation keeps an executor and is going to continue. Everything that treats a failure as
+	 * terminal - dropping the agent in handleExecutionException(), the terminal answer and the release
+	 * of the chat reservation in the AI-site use cases - must ask this predicate, or it would end a
+	 * generation that is still going to run.
+	 *
+	 * A scenarist that cannot be initialized answers true, exactly as isError() does and for the same
+	 * reason: prepareExecution() gives up before executePreparedScenario(), no agent is ever set, and
+	 * there is nothing left to continue the generation.
+	 *
+	 * A generation whose attempts to write the mark are spent answers true for that same reason, and
+	 * not because the mark has reached the database - it has not. The predicate says "no executor is
+	 * going to continue this generation", and after the last attempt none is: without this the endless
+	 * retrying would only be traded for an endless "running" answer to everyone reading the generation.
+	 *
+	 * @return bool True when a step is errored and its Error status is persisted.
+	 */
+	public function isErrorPersisted(): bool
+	{
+		if ($this->isErrorMarkWriteGivenUp())
+		{
+			return true;
+		}
+
+		if (!$this->initScenarist())
+		{
+			return true;
+		}
+
+		return $this->scenarist->isErrorPersisted();
+	}
+
+	/**
 	 * Prepares the scenario to restart generation after an error by clearing errors.
 	 *
 	 * @return $this
@@ -763,6 +1081,9 @@ class Generation
 			$this->scenarist->clearErrors();
 		}
 		$this->clearLastError();
+		$this->deleteData(self::DATA_LAST_ERROR_CODE_KEY);
+		$this->deleteData(self::DATA_LAST_FAILURE_KIND_KEY);
+		$this->deleteData(self::DATA_ERROR_MARK_ATTEMPTS_KEY);
 		if (isset($this->id))
 		{
 			$this->save(false);
@@ -799,6 +1120,62 @@ class Generation
 	private function clearLastError(): void
 	{
 		$this->deleteData(self::DATA_LAST_ERROR_KEY);
+	}
+
+	/**
+	 * Remembers which generation error ended the run.
+	 *
+	 * The errored step alone does not say why it failed, and the two reasons a step can fail for are
+	 * answered differently: a step that refused the request and a step that could not perform its check
+	 * at all must not reach the user as the same refusal. The code is the only part of the exception
+	 * that survives the run, and it carries no free text, so it is safe to keep.
+	 */
+	private function rememberLastErrorCode(GenerationException $exception): void
+	{
+		$this->setData(self::DATA_LAST_ERROR_CODE_KEY, $exception->getErrorCode()->value);
+	}
+
+	/**
+	 * Remembers a failure that carries no generation error at all: an infrastructure one.
+	 *
+	 * Without it the absence of an error code is ambiguous - a run that never reached the domain and an
+	 * older generation that predates the code look the same - and a consumer reading the step alone
+	 * would report a step that refused the request where the step only failed to perform its check.
+	 * The error code of the previous failure is dropped with it, or that code would outlive the run it
+	 * describes. The limit record goes with the code, and for a stronger reason: it is read before the
+	 * step and before the kind, so a limit refusal left behind by an earlier run would name the quota
+	 * as the reason of a failure that never asked the domain anything.
+	 *
+	 * The kind travels with the data of the generation, so a failure whose data write is suppressed
+	 * leaves no kind behind. When the Error status of its step was not written either, nothing is lost:
+	 * the step stays executable and the failure is terminal for no one. When the status was written and
+	 * only the data was not - two writes to two tables, which fail apart - the classification falls back
+	 * to what it was before the kind existed: an absent error code read as a refusal. That is the most a
+	 * consumer can do with a failure that recorded nothing about itself.
+	 */
+	private function rememberNonDomainFailure(): void
+	{
+		$this->clearLastError();
+		$this->deleteData(self::DATA_LAST_ERROR_CODE_KEY);
+		$this->rememberFailureKind(self::FAILURE_KIND_NON_DOMAIN);
+	}
+
+	private function rememberFailureKind(string $kind): void
+	{
+		$this->setData(self::DATA_LAST_FAILURE_KIND_KEY, $kind);
+	}
+
+	/**
+	 * Whether the last failure of the generation was an infrastructure one rather than a refusal of the
+	 * domain. Single place the rule lives in: consumers ask the generation instead of reading its data
+	 * and deciding for themselves.
+	 *
+	 * False for a generation that recorded nothing about its failure, which is all that is known about
+	 * the runs that predate the mark.
+	 */
+	public function isLastFailureNonDomain(): bool
+	{
+		return $this->getData(self::DATA_LAST_FAILURE_KIND_KEY) === self::FAILURE_KIND_NON_DOMAIN;
 	}
 
 	private function normalizeMetrikaStatus(mixed $status): ?string
@@ -901,9 +1278,13 @@ class Generation
 	/**
 	 * Saves the current generation state to the database.
 	 *
+	 * Storage seam of the generation, kept apart for the same reason the step status write is: what a
+	 * failed run records about itself - the kind of the failure, its error code, the count of the
+	 * suppressed marks - is a rule of its own, observable without a database only through this call.
+	 *
 	 * @return bool True on success, false otherwise.
 	 */
-	private function save(bool $sendCreateEvent = true): bool
+	protected function save(bool $sendCreateEvent = true): bool
 	{
 		if (!isset(
 			$this->scenario,
@@ -931,9 +1312,14 @@ class Generation
 			'SITE_ID' => $this->siteData->getSiteId(),
 			'SITE_DATA' => $siteData,
 			'DATA' => $this->getData(),
-			'HTML_BLOCKS' => $this->serializeHtmlBlocks(),
 			'CREATED_BY_ID' => $this->getAuthorId(),
 		];
+
+		// an instance initialized without HTML_BLOCKS knows nothing about the stored blocks and must not erase them
+		if ($this->htmlBlocksLoaded)
+		{
+			$fields['HTML_BLOCKS'] = $this->serializeHtmlBlocks();
+		}
 
 		if (isset($this->id) && $this->id)
 		{

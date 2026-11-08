@@ -6,6 +6,7 @@ use Bitrix\Main\Application;
 use Bitrix\Main\Composite\Debug\Logger;
 use Bitrix\Main\Composite\Internals\Model\PageTable;
 use Bitrix\Main\Composite\Internals\Locker;
+use Bitrix\Main\Composite\Internals\PageDeleteBatch;
 use Bitrix\Main\Composite\Internals\PageManager;
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Config\Option;
@@ -39,6 +40,8 @@ final class Engine
 	private static $isCompositeInjected = false;
 	private static $isRedirect = false;
 	private static $isBufferRestarted = false;
+
+	private static $fileQuotaAttempts = self::PAGE_DELETION_ATTEMPTS;
 
 	/**
 	 * use self::getInstance()
@@ -483,7 +486,7 @@ final class Engine
 
 						if ($page->getStorage() instanceof Data\FileStorage)
 						{
-							$freeSpace = strlen($dividedData["static"]) + strlen($dividedData["md5"]);
+							$freeSpace = Page::getStoredContentLength($dividedData["static"], $dividedData["md5"]);
 							self::ensureFileQuota($freeSpace);
 						}
 
@@ -499,13 +502,17 @@ final class Engine
 					}
 				}
 
-				$pageId = PageManager::register(
-					$page->getCacheKey(),
-					array(
-						"CHANGED" => $htmlCacheChanged,
-						"SIZE" => $page->getSize()
-					)
-				);
+				$pageId = null;
+				if (self::shouldRegisterPage($page))
+				{
+					$pageId = PageManager::register(
+						$page->getCacheKey(),
+						[
+							"CHANGED" => $htmlCacheChanged,
+							"SIZE" => $page->getSize(),
+						]
+					);
+				}
 
 				if ($oldContent !== null)
 				{
@@ -802,48 +809,118 @@ final class Engine
 		Application::getInstance()->end(0, $response);
 	}
 
-	private static function ensureFileQuota($requiredFreeSpace = 0)
+	/**
+	 * A record of a page has two consumers: the cleanup by the size limit and the statistics.
+	 * A storage out of the limit with the statistics off has neither, and nobody would ever delete the record
+	 * @param Page $page
+	 * @return bool
+	 */
+	private static function shouldRegisterPage(Page $page): bool
 	{
-		static $tries = 2;
-		if (Helper::checkQuota($requiredFreeSpace) || $tries <= 0)
+		$storage = $page->getStorage();
+		if ($storage === null)
+		{
+			return false;
+		}
+
+		$options = Helper::getOptions();
+
+		return $storage->shouldCountQuota() || $options["WRITE_STATISTIC"] !== "N";
+	}
+
+	/**
+	 * @param int $requiredFreeSpace
+	 * @param array $keptIds records excluded from this pass: the previous one failed to delete their files
+	 * @return void
+	 */
+	private static function ensureFileQuota(int $requiredFreeSpace = 0, array $keptIds = []): void
+	{
+		if (Helper::checkQuota($requiredFreeSpace) || self::$fileQuotaAttempts <= 0)
 		{
 			return;
 		}
 
-		$records = PageTable::getList(
-			array(
-				"select" => array("ID", "CACHE_KEY"),
-				"order" => array("LAST_VIEWED" => "ASC", "ID" => "ASC"),
-				"limit" => self::getDeletionLimit()
-			)
-		);
+		$query = PageTable::query()
+			->setSelect(["ID", "CACHE_KEY"])
+			->setOrder(["LAST_VIEWED" => "ASC", "ID" => "ASC"])
+			->setLimit(self::getDeletionLimit());
 
-		$ids = array();
-		$compositeOptions = Helper::getOptions();
-		$deletedSize = 0.0;
-		while ($record = $records->fetch())
+		if (!empty($keptIds))
 		{
-			$ids[] = $record["ID"];
-			$fileStorage = new Data\FileStorage($record["CACHE_KEY"], array(), $compositeOptions);
-			$deletedSize += doubleval($fileStorage->delete());
+			$query->whereNotIn("ID", $keptIds);
 		}
 
-		PageTable::deleteBatch(array("ID" => $ids));
+		$records = $query->exec();
 
-		Helper::updateCacheFileSize(-$deletedSize);
+		$batch = new PageDeleteBatch();
+		$keptRecords = [];
+		$compositeOptions = Helper::getOptions();
+		$deletedCount = 0;
+		$deletedSize = 0.0;
+		try
+		{
+			while ($record = $records->fetch())
+			{
+				$fileStorage = new Data\FileStorage($record["CACHE_KEY"], [], $compositeOptions);
+				$deletedBytes = $fileStorage->delete();
+				if ($deletedBytes !== false)
+				{
+					$batch->add($record["CACHE_KEY"], doubleval($deletedBytes));
+					$deletedCount++;
+					$deletedSize += doubleval($deletedBytes);
+				}
+				elseif (!$fileStorage->exists())
+				{
+					// the page has no file, the record is an orphan and frees nothing
+					$batch->add($record["CACHE_KEY"]);
+				}
+				else
+				{
+					$keptRecords[$record["ID"]] = $record["CACHE_KEY"];
+				}
+			}
+		}
+		finally
+		{
+			// the accumulator keeps the order of the counter and the records, a break must not lose the bytes
+			$batch->flush();
+		}
+
+		self::logKeptPages($keptRecords);
 
 		Logger::log(array(
 			"TYPE" => Logger::TYPE_CACHE_RESET,
 			"MESSAGE" =>
-				"Pages: ".count($ids)."\n".
+				"Pages: ".$deletedCount."\n".
 				"Size: ".\CFile::formatSize($deletedSize)
 		));
 
 		if (!Helper::checkQuota($requiredFreeSpace))
 		{
-			$tries--;
-			self::ensureFileQuota($requiredFreeSpace);
+			self::$fileQuotaAttempts--;
+			self::ensureFileQuota($requiredFreeSpace, array_merge($keptIds, array_keys($keptRecords)));
 		}
+	}
+
+	/**
+	 * The pages the cleanup failed to delete are excluded from the next pass of the same request,
+	 * the journal is what tells the administrator about them
+	 * @param array $keptRecords cache keys of the kept pages by their record id
+	 * @return void
+	 */
+	private static function logKeptPages(array $keptRecords): void
+	{
+		if (empty($keptRecords) || !Logger::isOn())
+		{
+			return;
+		}
+
+		Logger::log([
+			"TYPE" => Logger::TYPE_CACHE_RESET,
+			"MESSAGE" =>
+				"Kept pages: ".count($keptRecords)."\n".
+				"Keys: ".implode("\n", $keptRecords),
+		]);
 	}
 
 	/**
@@ -1378,14 +1455,11 @@ CSS;
 	public static function onChangeFile($path, $site)
 	{
 		$domains = Helper::getDomains();
-		$bytes = 0.0;
 		foreach ($domains as $domain)
 		{
 			$cacheStorage = new Page($path, $domain);
 			$cacheStorage->delete();
 		}
-
-		Helper::updateQuota(-$bytes);
 	}
 
 	/**

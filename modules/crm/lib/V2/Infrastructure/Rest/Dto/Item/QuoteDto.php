@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item;
 
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Attribute\CrmRelation;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\ItemDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\Dictionary\PersonTypeDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Provider\ItemProvider;
@@ -53,6 +54,7 @@ class QuoteDto extends AbstractItemDto
 	#[InArrayFrom(ItemProvider::class, ['entityTypeId' => OwnerType::DEAL])]
 	public ?int $dealId;
 	#[RelationToOne('dealId', 'id')]
+	#[CrmRelation(OwnerType::DEAL)]
 	public ?ItemDto $deal;
 
 	#[Editable]
@@ -61,6 +63,7 @@ class QuoteDto extends AbstractItemDto
 	#[InArrayFrom(ItemProvider::class, ['entityTypeId' => OwnerType::LEAD])]
 	public ?int $leadId;
 	#[RelationToOne('leadId', 'id')]
+	#[CrmRelation(OwnerType::LEAD)]
 	public ?ItemDto $lead;
 
 	#[Editable]

@@ -59,7 +59,7 @@ final class SelfHostedLicenseSync
 	{
 		self::runSilently(static function (self $sync): void {
 			$sync->forgetShownWarning();
-			$sync->scheduleRestoredWorkNotice();
+			$sync->scheduleTermNotice();
 			$sync->scheduleDelivery();
 		});
 	}
@@ -570,6 +570,82 @@ final class SelfHostedLicenseSync
 	}
 
 	/**
+	 * Which of the two announcements a written term deserves is decided here and not inside the job: the job of
+	 * the restored work spends the record of the stopped work, and a decision taken after it would read the
+	 * portal as one that had never stopped.
+	 *
+	 * The event carries the written value alone - `Option::set()` compares nothing and reports no previous
+	 * value - so the term is compared against the record of the announced grace instead: a term equal to it has
+	 * not moved, and a repeated write of the same date stays silent.
+	 */
+	private function scheduleTermNotice(): void
+	{
+		if (!SupersetHostMode::isSelfHosted())
+		{
+			return;
+		}
+
+		$announcedGrace = (string)Option::get('biconnector', LicenseOption::GRACE_NOTIFIED_TERM, '');
+
+		if (Option::get('biconnector', LicenseOption::WORK_STOPPED, 'N') === 'Y')
+		{
+			// The portal went through its grace and stopped, so the restored work is the only news worth a
+			// message; the announced grace belongs to the term that is gone.
+			$this->forgetAnnouncedGrace($announcedGrace);
+			$this->scheduleRestoredWorkNotice();
+
+			return;
+		}
+
+		if ($announcedGrace === '' || !$this->isTermMovedForward($announcedGrace))
+		{
+			return;
+		}
+
+		$this->forgetAnnouncedGrace($announcedGrace);
+
+		// The stop is recorded by the daily agent, so a renewal that comes after the grace of the old term but before
+		// the agent finds no record while the reports are already gone; the stop is recorded here instead.
+		if ($this->isAnnouncedGraceOver($announcedGrace))
+		{
+			Option::set('biconnector', LicenseOption::WORK_STOPPED, 'Y');
+			$this->scheduleRestoredWorkNotice();
+
+			return;
+		}
+
+		$this->scheduleRenewalNotice();
+	}
+
+	private function isAnnouncedGraceOver(string $announcedGrace): bool
+	{
+		$announcedTerm = DateTime::createFromTimestamp((int)$announcedGrace);
+
+		return SelfHostedLicense::getInstance()->getBlockDateOf($announcedTerm) < new DateTime();
+	}
+
+	private function isTermMovedForward(string $announcedGrace): bool
+	{
+		$expected = $this->readExpectedTimestamp();
+
+		return $expected > 0 && (string)$expected !== $announcedGrace && $expected > time();
+	}
+
+	/**
+	 * Nothing is written when there is nothing to forget: every write of an option drops the cached block of the
+	 * options of the module.
+	 */
+	private function forgetAnnouncedGrace(string $announcedGrace): void
+	{
+		if ($announcedGrace === '')
+		{
+			return;
+		}
+
+		Option::set('biconnector', LicenseOption::GRACE_NOTIFIED_TERM, '');
+	}
+
+	/**
 	 * Put off to the end of the request for the same reason as the delivery: notifying administrators inside the
 	 * foreign activation scenario would make it wait for messages to be written.
 	 */
@@ -577,6 +653,13 @@ final class SelfHostedLicenseSync
 	{
 		Application::getInstance()->addBackgroundJob(static function (): void {
 			(new SelfHostedLicenseNotifier())->notifyAboutRestoredWork();
+		});
+	}
+
+	private function scheduleRenewalNotice(): void
+	{
+		Application::getInstance()->addBackgroundJob(static function (): void {
+			(new SelfHostedLicenseNotifier())->notifyAboutRenewal();
 		});
 	}
 

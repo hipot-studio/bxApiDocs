@@ -17,7 +17,8 @@ final class FieldMapper extends Mapper
 		'requiredGroups' => 'requiredGroups',
 		'filterable' => 'filterable',
 		'sortable' => 'sortable',
-		'editable' => 'editable',
+		'editable' => 'editableGroups',
+		'editableGroups' => 'editableGroups',
 		'multiple' => 'multiple',
 		'elementType' => 'elementType',
 	];
@@ -61,16 +62,19 @@ final class FieldMapper extends Mapper
 						}
 						break;
 					case 'elementType':
-						$dto->elementType = $dtoFieldData[$dtoField] ? 'object' : null;
+						$dto->elementType = $dtoFieldData[$dataField] ? 'object' : null;
+						break;
+					case 'editable':
+						// an empty group list means "editable in every method", so a cast to bool would be wrong here
+						$dto->editable = $dtoFieldData[$dataField] !== null;
 						break;
 					case 'multiple':
 					case 'filterable':
 					case 'sortable':
-					case 'editable':
 						$dto->{$dtoField} = (bool)$dtoFieldData[$dataField];
 						break;
 					default:
-						$dto->{$dtoField} = $dtoFieldData[$dtoField];
+						$dto->{$dtoField} = $dtoFieldData[$dataField];
 						break;
 				}
 			}

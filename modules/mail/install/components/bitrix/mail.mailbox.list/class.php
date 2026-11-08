@@ -84,8 +84,7 @@ class CMailMailboxListComponent extends CBitrixComponent
 
 		$result['GRID_PARAMS']['SHOW_ACTION_PANEL'] = false;
 
-		$result['BULK_ACTIONS_AVAILABLE'] = Feature::isMailboxGridBulkActionsAvailable();
-		if ($result['BULK_ACTIONS_AVAILABLE'])
+		if ($result['HAS_ACCESS_TO_BULK_ACTIONS'])
 		{
 			$result['GRID_PARAMS']['TOP_ACTION_PANEL_RENDER_TO'] = '.mail-mailbox-list-actionpanel-container';
 			$result['GRID_PARAMS']['TOP_ACTION_PANEL_PINNED_MODE'] = true;
@@ -141,6 +140,7 @@ class CMailMailboxListComponent extends CBitrixComponent
 		$accessValues = [];
 
 		$accessValues['HAS_ACCESS_TO_MASS_CONNECT'] = MailAccess::hasCurrentUserAccessToMassConnect();
+		$accessValues['HAS_ACCESS_TO_BULK_ACTIONS'] = MailAccess::hasCurrentUserAccessToMassMailboxActions();
 		$accessValues['HAS_ACCESS_TO_EDIT_PERMISSIONS'] = MailAccess::hasCurrentUserAccessToPermission();
 
 		return $accessValues;

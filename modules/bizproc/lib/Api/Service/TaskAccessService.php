@@ -17,8 +17,8 @@ class TaskAccessService
 	{
 		$this->userId = $userId;
 		$currentUser = \Bitrix\Main\Engine\CurrentUser::get();
-		$userGroups =
-			!is_null($currentUser) && $currentUser->getId() === $userId
+		$userGroups
+			= !is_null($currentUser) && $currentUser->getId() === $userId
 				? $currentUser->getUserGroups()
 				: \CUser::GetUserGroup($userId);
 		$this->isUserAdmin = in_array(1, $userGroups, false);
@@ -41,7 +41,7 @@ class TaskAccessService
 			)
 			{
 				return $response->addError(
-					new Error(Loc::getMessage('BIZPROC_LIB_API_TASK_ACCESS_SERVICE_DELEGATE_ERROR_ONLY_INTRANET_USER'))
+					new Error(Loc::getMessage('BIZPROC_LIB_API_TASK_ACCESS_SERVICE_DELEGATE_ERROR_ONLY_INTRANET_USER')),
 				);
 			}
 		}
@@ -51,7 +51,9 @@ class TaskAccessService
 			return $response->addError(new Error(Loc::getMessage('BIZPROC_LIB_API_TASK_ACCESS_SERVICE_DELEGATE_ERROR_SUBORDINATION')));
 		}
 
-		$isHead = \CBPHelper::checkUserSubordination($this->userId, $toUserId);
+		$isHead
+			= ($this->isCurrentUser($toUserId) && !$this->isCurrentUser($fromUserId))
+			|| \CBPHelper::checkUserSubordination($this->userId, $toUserId);
 		$allowedDelegationTypes = [\CBPTaskDelegationType::AllEmployees];
 		if ($isHead)
 		{

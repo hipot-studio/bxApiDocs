@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Folder\Create;
 
 use Bitrix\Im\V2\Chat\DialogChatIdResolver;
+use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\Folder\Error\IneligibleChatsException;
 use Bitrix\Im\V2\Folder\FolderLimits;
 use Bitrix\Main\Validation\Rule\ElementsType;
@@ -36,7 +37,10 @@ final class FolderFields
 		// otherwise spawn a private chat per surplus dialogId that can never fit the folder.
 		if (FolderLimits::exceedsChatComposition($rawChatIds, $rawDialogIds))
 		{
-			throw new IneligibleChatsException('Folder chat composition exceeds the per-folder limit.');
+			throw new IneligibleChatsException(
+				'Folder chat composition exceeds the per-folder limit.',
+				FolderError::FOLDER_CHATS_LIMIT_EXCEEDED,
+			);
 		}
 
 		$chatIds = $resolver->resolve($rawChatIds, $rawDialogIds, $currentUserId);

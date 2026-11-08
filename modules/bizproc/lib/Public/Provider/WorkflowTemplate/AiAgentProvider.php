@@ -103,6 +103,41 @@ class AiAgentProvider
 	}
 
 	/**
+	 * Server-side guard for handing a launched AI-agent over to another employee.
+	 *
+	 * Returns true only when $templateId is a started launched AI-agent copy (TYPE=Nodes, SYSTEM_CODE
+	 * IS NULL, ACTIVATED_AT set) and the user is its owner (ACTIVATED_BY), an admin or a holder of the
+	 * right to edit this template. Single source of truth for both consumers of the check: the transfer
+	 * action of the controller, which asks it first to answer with a precise error code, and the grid
+	 * action that offers the menu item.
+	 *
+	 * The predicate says nothing about the recipient: the transfer operation checks the new owner itself.
+	 *
+	 * @param int $templateId Template id.
+	 * @param int $userId Acting user id (taken from server-side state, not from the request).
+	 * @param bool $isUserAdmin Whether the user is an admin (bypasses the owner check).
+	 */
+	public function canTransferOwnership(int $templateId, int $userId, bool $isUserAdmin): bool
+	{
+		return $this->aiAgentRepository->canTransferOwnership($templateId, $userId, $isUserAdmin);
+	}
+
+	/**
+	 * Warms canTransferOwnership() for a caller holding a whole page of ids (the AI-agents grid), turning
+	 * the one to three queries per row into two per page. Published here because this facade is a single
+	 * instance per request, while the grid asks the predicate from an action built anew for every row.
+	 *
+	 * An optimization, never a gate: the predicate stays correct without it, only more expensive.
+	 *
+	 * @param array<int, int|string> $templateIds
+	 * @param int $userId Acting user the checks will be asked about (taken from server-side state).
+	 */
+	public function warmupTransferRights(array $templateIds, int $userId): void
+	{
+		$this->aiAgentRepository->warmupTransferRights($templateIds, $userId);
+	}
+
+	/**
 	 * Actuality predicate for a restart target (API-01 ERR-002). True only when $templateId is
 	 * still a started launched AI-agent copy (TYPE=Nodes, SYSTEM_CODE IS NULL, ACTIVATED_AT set),
 	 * regardless of owner. The restart action uses it to tell a stale template (deleted, or changed
@@ -113,6 +148,17 @@ class AiAgentProvider
 	public function isRestartableLaunchedTemplate(int $templateId): bool
 	{
 		return $this->canManageLaunchedTemplate($templateId, 0, isUserAdmin: true, requireStarted: true);
+	}
+
+	/**
+	 * Owner (ACTIVATED_BY) of a launched copy; null when $templateId is not one or carries no owner.
+	 * Published for the second way changeOwner data can be out of date: the copy is still live, but its
+	 * owner is no longer the one the caller saw, and that refusal reads as ERR-002 rather than a denial
+	 * of the right.
+	 */
+	public function getLaunchedCopyOwner(int $templateId): ?int
+	{
+		return $this->aiAgentRepository->getActivatedBy($templateId);
 	}
 
 	/**

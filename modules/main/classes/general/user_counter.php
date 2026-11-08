@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Type\Callback;
 
 class CAllUserCounter
 {
@@ -587,7 +588,7 @@ class CAllUserCounter
 		$time = $DB->CharToDateFunction(GetTime(time()- $days*60*60*24, "FULL"));
 		$DB->Query("DELETE FROM b_user_counter WHERE TIMESTAMP_X <= ".$time);
 
-		return "CUserCounter::DeleteOld();";
+		return new Callback([CUserCounter::class, 'DeleteOld']);
 	}
 
 	public static function Set($user_id, $code, $value, $site_id = SITE_ID, $tag = '', $sendPull = true)

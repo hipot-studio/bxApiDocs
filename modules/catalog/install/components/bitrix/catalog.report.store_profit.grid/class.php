@@ -2,6 +2,7 @@
 
 use Bitrix\Catalog\Component\ReportStoreProfitList;
 use Bitrix\Catalog\Config\State;
+use Bitrix\Catalog\Integration\Report\Quantity\QuantityNormalizer;
 use Bitrix\Currency\CurrencyManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -155,7 +156,7 @@ class CatalogReportStoreProfitGridComponent extends ReportStoreProfitList
 		return $fieldValue;
 	}
 
-	private function prepareMeasureField($fieldValue = null): ?string
+	protected function prepareMeasureField($fieldValue = null): ?string
 	{
 		if (!is_array($fieldValue) || empty($fieldValue))
 		{
@@ -179,7 +180,7 @@ class CatalogReportStoreProfitGridComponent extends ReportStoreProfitList
 		return Loc::getMessage(
 			'STORE_PROFIT_REPORT_GRID_MEASURE_TEMPLATE',
 			[
-				'#NUMBER#' => $number,
+				'#NUMBER#' => QuantityNormalizer::format($number),
 				'#MEASURE_SYMBOL#' => $this->getMeasureSymbol($measureId),
 			]
 		);
@@ -192,7 +193,7 @@ class CatalogReportStoreProfitGridComponent extends ReportStoreProfitList
 		return $measure !== null ? htmlspecialcharsbx($measure['SYMBOL']) : '';
 	}
 
-	private function getMeasures(): array
+	protected function getMeasures(): array
 	{
 		static $measures = [];
 
@@ -208,7 +209,7 @@ class CatalogReportStoreProfitGridComponent extends ReportStoreProfitList
 		return $measures;
 	}
 
-	private function getDefaultMeasureId(): ?string
+	protected function getDefaultMeasureId(): ?string
 	{
 		$defaultMeasure = \CCatalogMeasure::getDefaultMeasure(true) ?? [];
 

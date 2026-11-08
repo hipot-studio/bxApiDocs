@@ -261,7 +261,6 @@ class Agent
 		$avatarType = match ($this->eventType)
 		{
 			static::EVENT_TASK_EXPIRED => ChatAvatarType::Expired,
-			static::EVENT_TASK_EXPIRED_SOON => ChatAvatarType::ExpiredSoon,
 			default => null,
 		};
 

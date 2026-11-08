@@ -135,13 +135,12 @@ final class ProjectAccessCodesProvider extends BaseProvider
 
 	private function makeLink(EO_Workgroup $project): string
 	{
-		$url = \Bitrix\Socialnetwork\Site\GroupUrl::get($project->getId(), $project->getType());
-		if ($project->requireType() !== Type::Collab->value)
+		if ($project->requireType() === Type::Collab->value)
 		{
-			$url .= 'card/';
+			return \Bitrix\Socialnetwork\Site\GroupUrl::get($project->getId(), $project->getType());
 		}
 
-		return $url;
+		return \Bitrix\Socialnetwork\Site\GroupUrl::getCard($project->getId());
 	}
 
 	private function getProjectRoles(EO_Workgroup $project): array

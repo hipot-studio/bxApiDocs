@@ -8,4 +8,5 @@ class StopWorktimeTrigger
 	public const FIELD_RECORD_ID = 'FIELD_RECORD_ID';
 	public const FIELD_IS_FIRST_STOP = 'FIELD_IS_FIRST_STOP';
 	public const FIELD_WORKDAY_START = 'FIELD_WORKDAY_START';
+	public const FIELD_WORKDAY_END = 'FIELD_WORKDAY_END';
 }

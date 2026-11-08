@@ -3,11 +3,10 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Integration\Bitrix24Manager;
-use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\DiskComponent;
 use Bitrix\Disk\Internals\Engine\Contract\SidePanelWrappable;
-use Bitrix\Disk\Internals\ObjectOptionsTable;
 use Bitrix\Disk\Public\Provider\ExternalLinkProvider;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
@@ -32,6 +31,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 
 	protected ExternalLinkProvider $externalLinkProvider;
 	protected UnifiedLinkAccessService $unifiedLinkAccessService;
+	protected UnifiedLinkUrl $unifiedLinkUrl;
 	/** @var \Bitrix\Disk\File */
 	protected $file;
 	/** @var  array */
@@ -40,6 +40,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 	protected $imageSize = array('width' => 600, 'height' => 800);
 
 	protected $componentId = 'file_view_with_version';
+	protected bool $isViewByUnifiedLink = false;
 
 	public function __construct($component = null)
 	{
@@ -48,6 +49,7 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		$serviceLocator = ServiceLocator::getInstance();
 		$this->externalLinkProvider = $serviceLocator->get(ExternalLinkProvider::class);
 		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
 	}
 
 	protected function listActions()
@@ -86,7 +88,9 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			return false;
 		}
 
-		$securityContext = $this->storage->getCurrentUserSecurityContext();
+		$this->isViewByUnifiedLink = $this->isViewByUnifiedLink();
+
+		$securityContext = $this->storage->getCurrentUserSecurityContext($this->isViewByUnifiedLink);
 		if(!$this->file->canRead($securityContext))
 		{
 			$this->showAccessDenied();
@@ -145,7 +149,8 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			$this->setTemplateName('properties');
 		}
 
-		$securityContext = $this->storage->getCurrentUserSecurityContext();
+		$securityContext = $this->storage->getCurrentUserSecurityContext($this->isViewByUnifiedLink);
+		$uls = $this->unifiedLinkAccessService->getUlsForObjectId($this->file->getId());
 		$urlManager = Driver::getInstance()->getUrlManager();
 
 		$this->application->setTitle($this->file->getName());
@@ -158,24 +163,19 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		if ($externalLinkData['ENABLED'])
 		{
 			$realFile = $this->file->getRealObject();
-			$unifiedLinkAccessLevel = $this->unifiedLinkAccessService->check($realFile);
-			$onlyRead = $unifiedLinkAccessLevel === UnifiedLinkAccessLevel::Read;
 
-			if ($onlyRead)
+			$securityContextForRealFile = $realFile
+				->getStorage()
+				?->getCurrentUserSecurityContext($this->isViewByUnifiedLink)
+			;
+
+			if ($securityContextForRealFile)
 			{
-				/** @see \Bitrix\Disk\Controller\AccessRights::checkManageExternalLink */
-				$objectOptions = $realFile->getObjectOptions();
-
-				$allowManagePublicAccessWithViewingRights =
-					$objectOptions[ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ]
-				;
-
-				if (!$allowManagePublicAccessWithViewingRights)
-				{
-					$externalLinkData['ENABLED'] = false;
-				}
+				$externalLinkData['ENABLED'] = $realFile->canManageExternalLink($securityContextForRealFile);
 			}
 		}
+
+		$externalLinkData['SUPPORTS_SHARING_ACCESS_POPUP'] = $this->file->supportsUnifiedLink();
 
 		$externalLink = $this->getExternalLink();
 		if($externalLink)
@@ -185,6 +185,16 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			$externalLinkData['DOWNLOAD_COUNT'] = $externalLink->getDownloadCount();
 			$externalLinkData['HAS_PASSWORD'] = $externalLink->hasPassword();
 			$externalLinkData['CAN_EDIT_SETTINGS'] = $externalLink->canEditSettings();
+			$externalLinkData['AVAILABLE_EDIT'] = $externalLink->availableEdit();
+			$externalLinkData['CAN_EDIT_DOCUMENT'] = null;
+			$externalLinkData['IS_BOARD'] = false;
+
+			if ($externalLinkData['AVAILABLE_EDIT'])
+			{
+				$externalLinkData['CAN_EDIT_DOCUMENT'] = $externalLink->getAccessRight() === $externalLink::ACCESS_RIGHT_EDIT;
+				$externalLinkData['IS_BOARD'] = (int)$this->file->getTypeFile() === TypeFile::FLIPCHART;
+			}
+
 			$externalLinkData['HAS_DEATH_TIME'] = $externalLink->hasDeathTime();
 			$externalLinkData['DEATH_TIME_TIMESTAMP'] = $externalLink->hasDeathTime()? $externalLink->getDeathTime()->getTimestamp() : null;
 			$externalLinkData['DEATH_TIME'] = $externalLink->hasDeathTime()? $externalLink->getDeathTime()->toString() : null;
@@ -210,6 +220,11 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			$viewFile = $urlManager->getPathFileDetail($this->file);
 		}
 
+		if ($this->isViewByUnifiedLink)
+		{
+			$viewFile = $this->unifiedLinkUrl->addUlsToUrl($viewFile, $uls);
+		}
+
 		$isEnabledObjectLock = Configuration::isEnabledObjectLock();
 		$additionalParams = array('canUpdate' => $canUpdate);
 
@@ -224,9 +239,18 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			$previewImage = $urlManager->getUrlForShowPreview($this->file, $this->imageSize);
 		}
 
-		$attr = FileAttributes::buildByFileId($this->file->getFileId(), new Uri($urlManager->getUrlForDownloadFile($this->file)), $this->file)
+		$canDownload = $this->file->canDownload($securityContext);
+		$downloadUrl = $urlManager->getUrlForDownloadFile($this->file);
+
+		if ($this->isViewByUnifiedLink)
+		{
+			$downloadUrl = $this->unifiedLinkUrl->addUlsToUrl($downloadUrl, $uls);
+		}
+
+		$attr = FileAttributes::buildByFileId($this->file->getFileId(), new Uri($downloadUrl), $this->file)
 			->setObjectId($this->file->getId())
 			->setTitle($this->file->getName())
+			->setDownloadDisabled(!$canDownload)
 			->addAction([
 				'type' => 'download',
 			])
@@ -293,6 +317,30 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			;
 		}
 
+		$previewUrl = $urlManager->getUrlForShowFile(
+			file: $this->file,
+			params: [
+				'width' => $this->imageSize['width'],
+				'height' => $this->imageSize['height'],
+			],
+		);
+
+		$showFileUrl = $urlManager->getUrlForShowFile($this->file);
+
+		$historyUrl = CComponentEngine::makePathFromTemplate(
+			template: $this->arParams['PATH_TO_FILE_HISTORY'],
+			arParams: [
+				'FILE_ID' => $this->file->getId(),
+			],
+		);
+
+		if ($this->isViewByUnifiedLink)
+		{
+			$previewUrl = $this->unifiedLinkUrl->addUlsToUrl($previewUrl, $uls);
+			$showFileUrl = $this->unifiedLinkUrl->addUlsToUrl($showFileUrl, $uls);
+			$historyUrl = $this->unifiedLinkUrl->addUlsToUrl($historyUrl, $uls);
+		}
+
 		$this->arResult = array(
 			'STORAGE' => $this->storage,
 			'USE_IN_ENTITIES' => false,
@@ -303,11 +351,13 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			'EXTERNAL_LINK' => $externalLinkData,
 			'FILE' => array(
 				'ID' => $this->file->getId(),
+				'UNIQUE_CODE' => $this->file->getUniqueCode(),
+				'ULS' => $this->isViewByUnifiedLink ? $uls : null,
 				'IS_DELETED' => $this->file->isDeleted(),
 				'IS_IMAGE' => TypeFile::isImage($this->file),
 				'IS_VIDEO' => TypeFile::isVideo($this->file),
 				'IS_EDITABLE' => \Bitrix\Disk\Document\DocumentHandler::isEditable($this->file->getExtension()),
-				'VIEWER' => $this->getViewerHtml(),
+				'VIEWER' => $this->getViewerHtml($uls),
 				'CREATE_USER' => array(
 					'LINK' => $createdByLink,
 					'NAME' => $this->file->getCreateUser()->getFormattedName(),
@@ -326,10 +376,10 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 					'IS_LOCKED_BY_SELF' => false,
 				),
 				'FOLDER_LIST_WEBDAV' => rtrim(end($breadcrumbs), '/') . '/' . $this->file->getName(),
-				'DOWNLOAD_URL' => $urlManager->getUrlForDownloadFile($this->file),
+				'DOWNLOAD_URL' => $downloadUrl,
 
-				'SHOW_PREVIEW_URL' => Driver::getInstance()->getUrlManager()->getUrlForShowFile($this->file, array('width' => $this->imageSize['width'], 'height' => $this->imageSize['height'],)),
-				'SHOW_FILE_URL' => Driver::getInstance()->getUrlManager()->getUrlForShowFile($this->file),
+				'SHOW_PREVIEW_URL' => $previewUrl,
+				'SHOW_FILE_URL' => $showFileUrl,
 				'SHOW_FILE_ABSOLUTE_URL' => $showFileAbsoluteUrl,
 				'SHOW_PREVIEW_IMAGE_URL' => $previewImage,
 			),
@@ -338,14 +388,11 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 			'CAN_RESTORE' => $this->file->canRestore($securityContext),
 			'CAN_SHARE' => $this->file->canShare($securityContext) && Bitrix24Manager::isFeatureEnabled('disk_file_sharing'),
 			'CAN_CHANGE_RIGHTS' => $this->file->canChangeRights($securityContext),
+			'CAN_DOWNLOAD' => $this->file->canDownload($securityContext),
 			'PATH_TO_FILE_VIEW' => $viewFile,
 			'PATH_TO_TRASHCAN_LIST' => $this->file->getStorage()->getProxyType()->getBaseUrlTashcanList(),
-			'PATH_TO_FILE_HISTORY' => CComponentEngine::makePathFromTemplate(
-				$this->arParams['PATH_TO_FILE_HISTORY'],
-				[
-					'FILE_ID' => $this->file->getId(),
-				]
-			),
+			'PATH_TO_FILE_HISTORY' => $historyUrl,
+			'IS_VIEW_BY_UNIFIED_LINK' => $this->isViewByUnifiedLink,
 			//'BREADCRUMBS' => $breadcrumbs,
 		);
 
@@ -434,15 +481,24 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 		$this->includeComponentTemplate($this->arParams['SUBTEMPLATE_NAME'] ?? '');
 	}
 
-	protected function getViewerHtml()
+	protected function getViewerHtml(string $uls)
 	{
 		$urlManager = $this->getUrlManager();
 		$viewerHtml = $previewPath = $transformInfoUrl = null;
 		if (TypeFile::isVideo($this->file) && $this->file->getView()->isHtmlAvailable())
 		{
+			$showViewUrl = $urlManager->getUrlForShowView($this->file);
+			$showFileUrl = $urlManager->getUrlForShowFile($this->file);
+
+			if ($this->isViewByUnifiedLink)
+			{
+				$showViewUrl = $this->unifiedLinkUrl->addUlsToUrl($showViewUrl, $uls);
+				$showFileUrl = $this->unifiedLinkUrl->addUlsToUrl($showFileUrl, $uls);
+			}
+
 			$viewPath = [
-				$urlManager->getUrlForShowView($this->file),
-				$urlManager->getUrlForShowFile($this->file),
+				$showViewUrl,
+				$showFileUrl,
 			];
 			if ($this->file->getPreviewId())
 			{
@@ -1130,4 +1186,15 @@ class CDiskFileViewComponent extends DiskComponent implements Controllerable, Si
 
 		return array_values(Driver::getInstance()->getDocumentHandlersManager()->getHandlersForCreatingFile());
 	}
+
+	private function isViewByUnifiedLink(): bool
+	{
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		return
+			is_string($uls)
+			&& $this->unifiedLinkAccessService->validateUlsForObjectId($this->file->getId(), $uls)
+		;
+	}
+
 }

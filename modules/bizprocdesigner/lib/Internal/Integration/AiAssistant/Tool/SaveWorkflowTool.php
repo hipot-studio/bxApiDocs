@@ -9,8 +9,10 @@ use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\AgentWorkflow
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AiAssistantDraftConverterService;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AiAssistantDraftCreatorService;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AiAvailabilityService;
-use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\DocumentAccessService;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\LastWorkflowService;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\OperationAuthorizationGuard;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\UserAdminResolver;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\ValidationContextFactory;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\AgentBlocksValidator;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\AgentConnectionsValidator;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\SaveWorkflowValidator;
@@ -19,27 +21,27 @@ use Bitrix\Main\Web\Json;
 
 class SaveWorkflowTool extends BizprocDesignerTool
 {
-	private readonly DocumentAccessService $documentAccessService;
 	private readonly AiAssistantDraftCreatorService $aiAssistantDraftCreatorService;
 	private readonly AiAssistantDraftConverterService $aiAssistantDraftConverterService;
 	private readonly LastWorkflowService $lastWorkflowService;
+	private readonly OperationAuthorizationGuard $operationAuthorizationGuard;
 
 	public function __construct(
 		TracedLogger $tracedLogger,
 		?AiAvailabilityService $availabilityService = null,
-		?DocumentAccessService $documentAccessService = null,
 		?AiAssistantDraftCreatorService $aiAssistantDraftCreatorService = null,
 		?AiAssistantDraftConverterService $aiAssistantDraftConverterService = null,
 		?LastWorkflowService $lastWorkflowService = null,
+		?OperationAuthorizationGuard $operationAuthorizationGuard = null,
 	)
 	{
 		parent::__construct($tracedLogger, $availabilityService);
-		$this->documentAccessService = $documentAccessService ?? new DocumentAccessService();
 		$this->aiAssistantDraftCreatorService = $aiAssistantDraftCreatorService ?? Container::getAiAssistantDraftCreatorService();
 		$this->aiAssistantDraftConverterService = $aiAssistantDraftConverterService
 			?? Container::getAiAssistantDraftConverterService()
 		;
 		$this->lastWorkflowService = $lastWorkflowService ?? Container::getAiAssistantLastWorkflowService();
+		$this->operationAuthorizationGuard = $operationAuthorizationGuard ?? new OperationAuthorizationGuard();
 	}
 
 	public function getName(): string
@@ -365,12 +367,14 @@ class SaveWorkflowTool extends BizprocDesignerTool
 			return 'Error: No user saved document type';
 		}
 
-		if (!$this->documentAccessService->canManageDocument(
+		$isUserAdmin = UserAdminResolver::isAdmin($userId);
+		$verdict = $this->operationAuthorizationGuard->authorize(
 			$userId,
 			$documentType,
 			(int)($templateIdentifier->templateId ?? 0),
-			(new \CBPWorkflowTemplateUser($userId))->isAdmin(),
-		))
+			$isUserAdmin,
+		);
+		if (!$verdict->allowed)
 		{
 			return 'Error: User access denied for this document type';
 		}
@@ -380,7 +384,12 @@ class SaveWorkflowTool extends BizprocDesignerTool
 		$validator = new SaveWorkflowValidator(
 			input: $args,
 			documentType: $documentType,
-			source: RequestSource::Marta,
+			context: (new ValidationContextFactory())->create(
+				$templateIdentifier,
+				RequestSource::Marta,
+				$userId,
+				$isUserAdmin,
+			),
 		);
 
 		$validateResult = $validator->validate();

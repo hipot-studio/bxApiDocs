@@ -22,7 +22,6 @@ use Bitrix\Sign\Service\Cache\Memory\Sign\UserCache;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkFieldService;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkService;
-use Bitrix\Sign\Service\Providers\LegalInfoProvider;
 use Bitrix\Sign\Service\Providers\ProfileProvider;
 use Bitrix\Sign\Service\Result\Sign\Block\B2eRequiredFieldsResult;
 use Bitrix\Sign\Service\Sign\MemberService;
@@ -46,7 +45,6 @@ final class FillFields implements Contract\Operation
 	private Item\Field\HcmLink\HcmLinkFieldDelayedValueReferenceMap $hcmLinkValueReferenceMap;
 	private Item\B2e\RequiredFieldsCollection $requiredFieldsCollection;
 	private readonly \Bitrix\Sign\Blanks\Block\Factory $blockFactory;
-	private readonly LegalInfoProvider $legalInfoProvider;
 	private readonly MemberService $memberService;
 	private readonly HcmLinkService $hcmLinkService;
 
@@ -68,7 +66,6 @@ final class FillFields implements Contract\Operation
 		$this->fieldValueRepository = Container::instance()->getFieldValueRepository();
 		$this->hcmLinkFieldService = Container::instance()->getHcmLinkFieldService();
 		$this->blockFactory = new \Bitrix\Sign\Blanks\Block\Factory();
-		$this->legalInfoProvider = Container::instance()->getLegalInfoProvider();
 		$this->memberService = Container::instance()->getMemberService();
 		$this->hcmLinkService = Container::instance()->getHcmLinkService();
 	}
@@ -100,6 +97,9 @@ final class FillFields implements Contract\Operation
 			return new FillFieldsResult(true);
 		}
 		$this->loadSignFields($members);
+		// The values are built for the members of this portion alone, and the filling walks the document
+		// portion by portion with a factory of its own on every one of them.
+		$this->fieldValueFactory->setHcmLinkExclusionMembers($members);
 
 		$blocks = $this->blockRepository->getCollectionByBlankId($this->document->blankId);
 		if (
@@ -628,7 +628,6 @@ final class FillFields implements Contract\Operation
 		Item\Member $member,
 	): Main\Result
 	{
-
 		$item = $requestField->value->getFirst();
 		if (!$item instanceof Item\Field\HcmLink\HcmLinkDelayedValue || $item->value === '')
 		{
@@ -636,20 +635,8 @@ final class FillFields implements Contract\Operation
 		}
 
 		['fieldCode' => $fieldCode] = NameHelper::parse($requestField->name);
-		$parsedName = $this->hcmLinkFieldService->parseName($fieldCode);
-		if ($parsedName === null)
-		{
-			return new Main\Result();
-		}
-
-		$legalType = $this->hcmLinkFieldService->convertHcmLinkIntTypeToLegalInfoType($parsedName->type);
-		if (!$legalType)
-		{
-			return new Main\Result();
-		}
-
-		$field = $this->legalInfoProvider->getLegalInfoFieldByType($legalType);
-		if (!$field)
+		$fieldName = $this->hcmLinkFieldService->getLegalInfoFieldNameByFieldName($fieldCode);
+		if ($fieldName === null)
 		{
 			return new Main\Result();
 		}
@@ -660,7 +647,7 @@ final class FillFields implements Contract\Operation
 			return new Main\Result();
 		}
 
-		return $this->profileProvider->updateFieldData($userId, $field->name, $item->value);
+		return $this->profileProvider->updateFieldData($userId, $fieldName, $item->value);
 	}
 
 	/**

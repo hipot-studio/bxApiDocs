@@ -84,18 +84,26 @@ class Converter
 
 				if ($type === 'S:ECrm')
 				{
-					if (!empty($value) && Loader::includeModule('crm'))
+					foreach ($this->toMobileECrmValues($value, $property, $isMultiple) as [$shortValue, $fullValue])
 					{
-						$crmTypes = array_keys($property['USER_TYPE_SETTINGS'] ?? [], 'Y', true);
-						$firstType = isset($crmTypes[0]) ? \CCrmOwnerTypeAbbr::ResolveByTypeName($crmTypes[0]) : '';
-
-						[$value, $fullValue] = $this->toMobileECrm($value, $firstType);
 						$this->convertedFields[$fieldId]['FULL_CONVERTED_VALUE'][] = $fullValue;
+
+						if ($isMultiple)
+						{
+							$this->convertedValues[$fieldId][] = $shortValue;
+						}
+						else
+						{
+							$this->convertedValues[$fieldId] = $shortValue;
+						}
 					}
-					else
+
+					if ($isMultiple)
 					{
-						$value = null;
+						continue;
 					}
+
+					break;
 				}
 
 				if ($type === 'S:DiskFile' && is_array($value))
@@ -205,8 +213,7 @@ class Converter
 		{
 			if (Loader::includeModule('crm'))
 			{
-				$crmTypes = array_keys($property['USER_TYPE_SETTINGS'] ?? [], 'Y', true);
-				$firstType = isset($crmTypes[0]) ? \CCrmOwnerTypeAbbr::ResolveByTypeName($crmTypes[0]) : '';
+				$firstType = $this->resolveDefaultECrmType($property);
 
 				$defaultValue = (array)($property['DEFAULT_VALUE'] ?? '');
 				$property['DEFAULT_VALUE'] = [];
@@ -266,6 +273,52 @@ class Converter
 		}
 
 		return '';
+	}
+
+	/**
+	 * One `S:ECrm` slot keeps either a single identifier or a flat list of them.
+	 *
+	 * @return array<int, array> pair of short and full value per identifier
+	 */
+	private function toMobileECrmValues($value, array $property, bool $isMultiple): array
+	{
+		if (!$value || !Loader::includeModule('crm'))
+		{
+			return [];
+		}
+
+		$identifiers = array_values(array_filter(
+			is_array($value) ? $value : [$value],
+			static fn($identifier) => is_scalar($identifier) && $identifier
+		));
+		if (!$isMultiple)
+		{
+			$identifiers = array_slice($identifiers, 0, 1);
+		}
+
+		$defaultType = $this->resolveDefaultECrmType($property);
+
+		$values = [];
+		foreach ($identifiers as $identifier)
+		{
+			$values[] = $this->toMobileECrm($identifier, $defaultType);
+		}
+
+		return $values;
+	}
+
+	private function resolveDefaultECrmType(array $property): string
+	{
+		$userTypeSettings = (
+			is_array($property['USER_TYPE_SETTINGS'] ?? null)
+				? $property['USER_TYPE_SETTINGS']
+				: []
+		);
+		unset($userTypeSettings['VISIBLE']);
+
+		$allowedTypes = array_keys($userTypeSettings, 'Y', true);
+
+		return $allowedTypes ? \CCrmOwnerTypeAbbr::ResolveByTypeName((string)$allowedTypes[0]) : '';
 	}
 
 	private function toMobileECrm($value, $defaultType): array

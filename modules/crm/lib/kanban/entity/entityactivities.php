@@ -20,6 +20,8 @@ use CCrmDateTimeHelper;
 class EntityActivities
 {
 	public const ACTIVITY_STAGE_ID = 'ACTIVITY_STAGE_ID';
+	public const SHOW_ALL_STAGE_SEMANTICS = '__SHOW_ALL_STAGE_SEMANTICS';
+	public const STAGE_SEMANTIC_FILTER = '__STAGE_SEMANTIC_FILTER';
 
 	public const STAGE_OVERDUE = 'OVERDUE';
 	public const STAGE_PENDING = 'PENDING';
@@ -323,46 +325,122 @@ class EntityActivities
 
 		$entity = EntityManager::resolveByTypeID($this->entityTypeId);
 
-		if ($entity->getEntityTypeID() === \CCrmOwnerType::Activity)
-		{
-			$responsibleFiledName = 'RESPONSIBLE_ID';
-		}
-		else
-		{
-			$responsibleFiledName = CounterSettings::getInstance()->useActivityResponsible()
-				? 'ACTIVITY_RESPONSIBLE_IDS'
-				: 'ASSIGNED_BY_ID';
-		}
+		$responsibleFieldName = $this->getActivityResponsibleFieldName();
 
 		$counterUserIds = [];
 		$excludeUsers = false;
 
 		$currentUserId = Container::getInstance()->getContext()->getUserId();
-		if (isset($filter[$responsibleFiledName]) || isset($filter['!'.$responsibleFiledName]))
+		if (isset($filter[$responsibleFieldName]) || isset($filter['!' . $responsibleFieldName]))
 		{
 			/** @var UserBasedField $userFieldPrepare */
 			$userFieldPrepare = ServiceLocator::getInstance()->get('crm.filter.fieldsTransform.userBasedField');
-			$userFieldPrepare->transformAll($filter, [$responsibleFiledName], $currentUserId);
+			$userFieldPrepare->transformAll($filter, [$responsibleFieldName], $currentUserId);
 
 			$extractUsers = new ExtractUsersFromFilter();
-			[$counterUserIds, $excludeUsers] = $extractUsers->extract($filter, $responsibleFiledName);
+			[$counterUserIds, $excludeUsers] = $extractUsers->extract($filter, $responsibleFieldName);
 		}
 		else
 		{
 			$counterUserIds[] = $currentUserId;
 		}
 
+		$counterFilterParams = [
+			'MASTER_ALIAS' => $entity->getDbTableAlias(),
+			'MASTER_IDENTITY' => 'ID',
+			'USER_IDS' => $counterUserIds,
+			'EXCLUDE_USERS' => $excludeUsers,
+		];
+
+		$stageSemanticFilter = $this->getStageSemanticFilter($filter);
+		if ($stageSemanticFilter !== null)
+		{
+			$counterFilterParams['STAGE_SEMANTIC_ID'] = $stageSemanticFilter;
+		}
+
 		return array_merge_recursive(
 			$filter,
-			$counter->prepareEntityListFilter(
-				[
-					'MASTER_ALIAS' => $entity->getDbTableAlias(),
-					'MASTER_IDENTITY' => 'ID',
-					'USER_IDS' => $counterUserIds,
-					'EXCLUDE_USERS' => $excludeUsers,
-				]
-			),
+			$counter->prepareEntityListFilter($counterFilterParams),
 		);
+	}
+
+	private function getStageSemanticFilter(array $filter): array|string|null
+	{
+		if ($this->hasActivityFilter($filter))
+		{
+			return null;
+		}
+
+		if (isset($filter[self::STAGE_SEMANTIC_FILTER]) && $filter[self::STAGE_SEMANTIC_FILTER] !== '')
+		{
+			return $filter[self::STAGE_SEMANTIC_FILTER];
+		}
+
+		$stageSemanticFieldName = $this->getStageSemanticFieldName();
+		$stageSemanticFilter = (
+			$stageSemanticFieldName !== null && array_key_exists($stageSemanticFieldName, $filter)
+				? $filter[$stageSemanticFieldName]
+				: null
+		);
+
+		if ($stageSemanticFilter !== null && $stageSemanticFilter !== '' && $stageSemanticFilter !== [])
+		{
+			return $stageSemanticFilter;
+		}
+
+		if (
+			\CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId)
+			&& ($filter[self::SHOW_ALL_STAGE_SEMANTICS] ?? false) === true
+		)
+		{
+			return PhaseSemantics::ALLOWED_SEMANTICS;
+		}
+
+		return $this->getDefaultStageSemanticFilter();
+	}
+
+	private function hasActivityFilter(array $filter): bool
+	{
+		if (!empty($filter['ACTIVITY_COUNTER']))
+		{
+			return true;
+		}
+
+		$responsibleFieldName = $this->getActivityResponsibleFieldName();
+
+		return isset($filter[$responsibleFieldName]) || isset($filter['!' . $responsibleFieldName]);
+	}
+
+	private function getActivityResponsibleFieldName(): string
+	{
+		if ($this->entityTypeId === \CCrmOwnerType::Activity)
+		{
+			return 'RESPONSIBLE_ID';
+		}
+
+		return CounterSettings::getInstance()->useActivityResponsible()
+			? 'ACTIVITY_RESPONSIBLE_IDS'
+			: 'ASSIGNED_BY_ID'
+		;
+	}
+
+	private function getStageSemanticFieldName(): ?string
+	{
+		return match (true) {
+			$this->entityTypeId === \CCrmOwnerType::Lead => 'STATUS_SEMANTIC_ID',
+			$this->entityTypeId === \CCrmOwnerType::Deal => 'STAGE_SEMANTIC_ID',
+			\CCrmOwnerType::isPossibleDynamicTypeId($this->entityTypeId) => 'STAGE_SEMANTIC_ID',
+			default => null,
+		};
+	}
+
+	private function getDefaultStageSemanticFilter(): ?array
+	{
+		return match (true) {
+			$this->entityTypeId === \CCrmOwnerType::Lead,
+			$this->entityTypeId === \CCrmOwnerType::Deal => PhaseSemantics::ALLOWED_SEMANTICS,
+			default => null,
+		};
 	}
 
 	private function getEntityCounterForStage(string $stageId, array $activityCounterFilterValues): ?\Bitrix\Crm\Counter\EntityCounter
@@ -495,7 +573,7 @@ class EntityActivities
 				$lastWeekDay = $this->getLastWeekDay(new DateTime())->add('+8 days');
 
 				$counterExtras['PERIOD_FROM'] = $lastWeekDay;
-				$counterExtras['PERIOD_TO'] = (new DateTime())->setDate(9990, 1, 1)->disableUserTime();
+				$counterExtras['PERIOD_TO'] = CCrmDateTimeHelper::getMaxDatabaseDateObject();
 				$counterExtras['HAS_ANY_INCOMING_CHANEL'] = false;
 				$counterExtras['ONLY_MIN_DEADLINE'] = true;
 
@@ -709,9 +787,7 @@ class EntityActivities
 			return null;
 		}
 
-		$responsibleFieldName = CounterSettings::getInstance()->useActivityResponsible()
-			? 'ACTIVITY_RESPONSIBLE_IDS'
-			: 'ASSIGNED_BY_ID';
+		$responsibleFieldName = $this->getActivityResponsibleFieldName();
 
 		$currentUserId = Container::getInstance()->getContext()->getUserId();
 		$counterUserIds = [];
@@ -731,11 +807,18 @@ class EntityActivities
 			$counterUserIds[] = $currentUserId;
 		}
 
-		// Use ORM query objects (SELECT_TYPE = ENTY) to get entity IDs directly
-		$queries = $counter->getActivityFilterParam([
+		$counterParams = [
 			'USER_IDS' => $counterUserIds,
 			'EXCLUDE_USERS' => $excludeUsers,
-		]);
+		];
+		$stageSemanticFilter = $this->getStageSemanticFilter($filter);
+		if ($stageSemanticFilter !== null)
+		{
+			$counterParams['STAGE_SEMANTIC_ID'] = $stageSemanticFilter;
+		}
+
+		// Use ORM query objects (SELECT_TYPE = ENTY) to get entity IDs directly
+		$queries = $counter->getActivityFilterParam($counterParams);
 
 		$entityIds = [];
 		foreach ($queries as $query)

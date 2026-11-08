@@ -5,6 +5,7 @@ namespace Bitrix\Im\V2\Folder\Update;
 
 use Bitrix\Im\V2\Chat\ChatIds;
 use Bitrix\Im\V2\Chat\DialogChatIdResolver;
+use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\Folder\Error\IneligibleChatsException;
 use Bitrix\Im\V2\Folder\FolderLimits;
 use Bitrix\Main\Validation\Rule\Length;
@@ -58,7 +59,10 @@ final class UpdateFields
 		// path would otherwise create surplus private chats before the downstream capacity check.
 		if (FolderLimits::exceedsChatComposition($safeChatIds, $safeDialogIds))
 		{
-			throw new IneligibleChatsException('Folder chat composition exceeds the per-folder limit.');
+			throw new IneligibleChatsException(
+				'Folder chat composition exceeds the per-folder limit.',
+				FolderError::FOLDER_CHATS_LIMIT_EXCEEDED,
+			);
 		}
 
 		$resolved = $resolver->resolve($safeChatIds, $safeDialogIds, $userId);

@@ -102,25 +102,46 @@ class PullManager
 	/**
 	 * @param array $item
 	 * @param array|null $params
+	 * @param array|null $userIds Previously checked recipients keyed by user ID; null checks permissions on send.
 	 * @return bool
 	 */
-	public function sendItemDeletedEvent(array $item, ?array $params = null): bool
+	public function sendItemDeletedEvent(array $item, ?array $params = null, ?array $userIds = null): bool
 	{
-		return $this->sendItemEvent(self::EVENT_ITEM_DELETED, $item, $params);
+		return $this->sendItemEvent(self::EVENT_ITEM_DELETED, $item, $params, $userIds);
+	}
+
+	/**
+	 * Returns subscribed users who can read the item, keyed by user ID.
+	 *
+	 * @param array $item
+	 * @param array|null $params
+	 * @return array
+	 */
+	public function getItemEventRecipients(array $item, ?array $params = null): array
+	{
+		$kanbanTag = $this->getKanbanTag($params['TYPE'], $params);
+
+		return $this->getSubscribedUserIdsWithItemPermissions($item, $kanbanTag);
 	}
 
 	/**
 	 * @param string $eventName
 	 * @param array $item
 	 * @param array|null $params
+	 * @param array|null $userIds
 	 * @return bool
 	 */
-	protected function sendItemEvent(string $eventName, array $item, ?array $params = null): bool
+	protected function sendItemEvent(
+		string $eventName,
+		array $item,
+		?array $params = null,
+		?array $userIds = null,
+	): bool
 	{
 		$kanbanTag = $this->getKanbanTag($params['TYPE'], $params);
 		$eventParams = $this->prepareItemEventParams($item, $eventName, $params);
 
-		$isKanbanEventSent = $this->sendKanbanEvent($item, $kanbanTag, $eventParams);
+		$isKanbanEventSent = $this->sendKanbanEvent($item, $kanbanTag, $eventParams, $userIds);
 
 		$itemEventName = static::getItemEventName(static::EVENT_ITEM_UPDATED, (string)$params['TYPE'], (int)$item['id']);
 		if ($itemEventName)
@@ -169,8 +190,10 @@ class PullManager
 	 */
 	protected function sendStageEvent(string $eventName, array $item, $params = []): bool
 	{
-		$tag = $this->getKanbanTag($params['TYPE'], $params);
-		$eventParams = $this->prepareStageEventParams($item, self::EVENT_STAGE_UPDATED);
+		$params ??= [];
+
+		$tag = $this->getKanbanTag((string)($params['TYPE'] ?? ''), $params);
+		$eventParams = $this->prepareStageEventParams($item, $eventName, $params);
 
 		return $this->sendUserEvent($tag, $eventParams);
 	}
@@ -182,9 +205,13 @@ class PullManager
 	 */
 	protected function getKanbanTag(string $entityType, ?array $params = null): string
 	{
-		if(isset($params['CATEGORY_ID']))
+		if (is_array($params) && array_key_exists('CATEGORY_ID', $params))
 		{
-			$entityType .= '_' . (int)$params['CATEGORY_ID'];
+			$factory = Container::getInstance()->getFactory(\CCrmOwnerType::ResolveID($entityType));
+			if ($factory?->isCategoriesSupported())
+			{
+				$entityType .= '_' . (int)$params['CATEGORY_ID'];
+			}
 		}
 
 		return static::getEventName(static::EVENT_KANBAN_UPDATED, $entityType);
@@ -234,11 +261,12 @@ class PullManager
 	 * @param $item
 	 * @param string $eventName
 	 * @param array $params
+	 * @param array|null $userIds
 	 * @return bool
 	 */
-	protected function sendKanbanEvent($item, string $eventName, array $params = []): bool
+	protected function sendKanbanEvent($item, string $eventName, array $params = [], ?array $userIds = null): bool
 	{
-		$userIds = $this->getSubscribedUserIdsWithItemPermissions($item, $eventName);
+		$userIds ??= $this->getSubscribedUserIdsWithItemPermissions($item, $eventName);
 
 		if ($params['skipCurrentUser'])
 		{
@@ -272,11 +300,14 @@ class PullManager
 	 * @param string $eventName
 	 * @return array
 	 */
-	protected function prepareStageEventParams($stage, string $eventName = ''): array
+	protected function prepareStageEventParams($stage, string $eventName = '', array $params = []): array
 	{
 		return [
 			'eventName' => $eventName,
-			'stage' => $stage
+			'stage' => $stage,
+			'TYPE' => (string)($params['TYPE'] ?? ''),
+			'CATEGORY_ID' => $params['CATEGORY_ID'] ?? null,
+			'eventId' => $params['EVENT_ID'] ?? null,
 		];
 	}
 

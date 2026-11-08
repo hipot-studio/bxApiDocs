@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\BIConnector\ExternalStatLoggerManager;
 use Bitrix\BIConnector\Internal\Entity\UsageStatEntry;
 use Bitrix\BIConnector\Internal\Entity\UsageStatEntryCollection;
 use Bitrix\BIConnector\Internal\Grid\UsageStat\Settings\UsageStatSettings;
@@ -16,21 +17,33 @@ use Bitrix\BIConnector\Public\Provider\UsageStat\Params\UsageStatFilter;
 use Bitrix\BIConnector\Public\Provider\UsageStat\Params\UsageStatSelect;
 use Bitrix\BIConnector\Public\Provider\UsageStat\Params\UsageStatSort;
 use Bitrix\BIConnector\Public\Provider\UsageStat\UsageStatProvider;
+use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightOptions;
+use Bitrix\BIConnector\Public\Services\AhaMoment\AhaMomentSpotlightResolver;
 use Bitrix\BIConnector\Services\ApacheSuperset;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseView;
+use Bitrix\Biconnector\Internal\Grid\GridStubRenderer;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Provider\Params\GridParams;
 use Bitrix\Main\Provider\Params\Pager;
 use Bitrix\UI\Buttons;
+use Bitrix\UI\Toolbar\ButtonLocation;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 
 class BIConnectorUsageStatComponent extends CBitrixComponent
 {
 	private const GRID_ID_COMMON = 'biconnector_usage_stat';
 	private const GRID_ID_SUPERSET = 'biconnector_usage_stat_superset';
+
+	private const EXT_STAT_ONBOARDING_SPOTLIGHT_ID = 'biconnector-usage-stat-ext-stat-onboarding';
+
+	private const EXT_STAT_BUTTON_ID = 'biconnector-usage-stat-collect-button';
+	private const TOGGLE_EXT_STAT_JS = 'BX.BIConnector.UsageStatGridManager.Instance.toggleExternalStatCollection()';
+
+	private const STUB_IMAGE_PATH = '/bitrix/images/biconnector/workspace-analytic-grid/statistics-empty-state.webp';
 
 	private UsageStatGrid $grid;
 	private bool $isBiBuilderService = false;
@@ -39,6 +52,11 @@ class BIConnectorUsageStatComponent extends CBitrixComponent
 	private UsageStatProvider $provider;
 
 	private bool $viewOverLimit = false;
+
+	private bool $isExternalStatEnabled = false;
+	private int $externalStatHoursLeft = 0;
+	private bool $canToggleExternalStat = false;
+	private array $extStatOnboarding = ['canShow' => false];
 
 	public function onPrepareComponentParams($arParams)
 	{
@@ -63,7 +81,8 @@ class BIConnectorUsageStatComponent extends CBitrixComponent
 		$request = Application::getInstance()->getContext()->getRequest();
 		$this->viewOverLimit = $request->get('over_limit') === 'Y';
 
-		$canView = CurrentUser::get()->canDoOperation('biconnector_key_manage') || $this->isBiBuilderService;
+		$canManageKeys = CurrentUser::get()->canDoOperation('biconnector_key_manage');
+		$canView = $canManageKeys || $this->isBiBuilderService;
 		$this->arResult['CAN_VIEW'] = $canView;
 		if (!$canView)
 		{
@@ -73,6 +92,9 @@ class BIConnectorUsageStatComponent extends CBitrixComponent
 			return;
 		}
 
+		// the toolbar is built inside init(), so the collection state has to be known before it
+		$this->initExternalStatState($canManageKeys);
+
 		$this->init();
 		$this->grid->processRequest();
 		$this->loadRows();
@@ -81,9 +103,64 @@ class BIConnectorUsageStatComponent extends CBitrixComponent
 		$this->arResult['GRID_STUB'] = $this->totalRowsCount === 0 && !$this->hasUserFilter ? $this->getStub() : null;
 		$this->arResult['IS_BI_BUILDER_SERVICE'] = $this->isBiBuilderService;
 		$this->arResult['BICONNECTOR_LIMIT'] = $this->getLimit();
+		$this->arResult['IS_EXTERNAL_STAT_ENABLED'] = $this->isExternalStatEnabled;
+		$this->arResult['EXTERNAL_STAT_HOURS_LEFT'] = $this->externalStatHoursLeft;
+		$this->arResult['CAN_TOGGLE_EXTERNAL_STAT'] = $this->canToggleExternalStat;
+		$this->arResult['EXT_STAT_ONBOARDING'] = $this->extStatOnboarding;
+		$this->arResult['EXT_STAT_BUTTON_ID'] = self::EXT_STAT_BUTTON_ID;
+		// JS switches the caption on toggle, so both variants come from the same phrases as the server render
+		$this->arResult['EXT_STAT_BUTTON_LABELS'] = [
+			'enable' => (string)Loc::getMessage('CT_BBSU_EXT_STAT_ENABLE'),
+			'enabled' => (string)Loc::getMessage('CT_BBSU_EXT_STAT_ENABLED'),
+		];
 		$this->arResult['SELFHOST_LICENSE_NOTICE'] = SelfHostedLicenseView::createForCurrentUser()->getNoticeParams();
 
 		$this->includeComponentTemplate();
+	}
+
+	/**
+	 * The collection window is managed for external BI systems only: BI Builder queries are always logged.
+	 */
+	private function initExternalStatState(bool $canManageKeys): void
+	{
+		if ($this->isBiBuilderService)
+		{
+			return;
+		}
+
+		$this->canToggleExternalStat = $canManageKeys;
+		$this->isExternalStatEnabled = ExternalStatLoggerManager::isActive();
+		$this->externalStatHoursLeft = ExternalStatLoggerManager::getHoursLeft();
+		$this->extStatOnboarding = $this->prepareExtStatOnboarding();
+	}
+
+	/**
+	 * The hint is shown once and marked as viewed by the aha-moment spotlight on the client.
+	 */
+	private function prepareExtStatOnboarding(): array
+	{
+		if (!$this->canToggleExternalStat)
+		{
+			return ['canShow' => false];
+		}
+
+		$config = $this->getAhaMomentSpotlightResolver()->resolve(
+			new AhaMomentSpotlightOptions(
+				baseId: self::EXT_STAT_ONBOARDING_SPOTLIGHT_ID,
+				maxShows: 1,
+			),
+		);
+
+		return [
+			'canShow' => $config->canShow(),
+			'id' => $config->getSpotlightId(),
+			'showDelaySeconds' => $config->getShowDelaySeconds(),
+		];
+	}
+
+	private function getAhaMomentSpotlightResolver(): AhaMomentSpotlightResolver
+	{
+		return ServiceLocator::getInstance()->get('biconnector.service.ahaMomentSpotlightResolver');
 	}
 
 	private function init(): void
@@ -251,6 +328,11 @@ class BIConnectorUsageStatComponent extends CBitrixComponent
 		$request = Application::getInstance()->getContext()->getRequest();
 		$frame = $request->get('IFRAME') === 'Y' ? '&IFRAME=Y' : '';
 
+		if ($this->canToggleExternalStat)
+		{
+			Toolbar::addButton($this->getExternalStatButton(), ButtonLocation::AFTER_TITLE);
+		}
+
 		if ($this->viewOverLimit || $this->getLimit() > 0)
 		{
 			Toolbar::addButton([
@@ -271,6 +353,34 @@ class BIConnectorUsageStatComponent extends CBitrixComponent
 		$refreshButton->addAttribute('title', Loc::getMessage('CT_BBSU_REFRESH'));
 
 		Toolbar::addButton($refreshButton);
+	}
+
+	private function getExternalStatButton(): Buttons\Button
+	{
+		$button = new Buttons\Button([
+			'color' => Buttons\Color::SUCCESS,
+			'size' => Buttons\Size::LARGE,
+			'text' => $this->getExternalStatButtonText(),
+			'id' => self::EXT_STAT_BUTTON_ID,
+			'click' => new Buttons\JsCode(self::TOGGLE_EXT_STAT_JS),
+		]);
+		// an explicit icon also keeps the toolbar from forcing the default "add" one on a success button
+		$button->setIcon($this->isExternalStatEnabled ? Buttons\Icon::STOP : Buttons\Icon::START);
+		// the onboarding hint binds to the rendered node by this attribute
+		$button->setUniqId(self::EXT_STAT_BUTTON_ID);
+		$button->addDataAttribute('testid', 'usage-stat-collect-btn');
+
+		return $button;
+	}
+
+	private function getExternalStatButtonText(): string
+	{
+		if (!$this->isExternalStatEnabled)
+		{
+			return (string)Loc::getMessage('CT_BBSU_EXT_STAT_ENABLE');
+		}
+
+		return (string)Loc::getMessage('CT_BBSU_EXT_STAT_ENABLED');
 	}
 
 	private function buildBaseFilter(): array
@@ -311,6 +421,8 @@ class BIConnectorUsageStatComponent extends CBitrixComponent
 
 	private function getStub(): string
 	{
+		$button = null;
+
 		if ($this->viewOverLimit)
 		{
 			$title = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_OVER_LIMIT_TITLE');
@@ -318,25 +430,52 @@ class BIConnectorUsageStatComponent extends CBitrixComponent
 				? Loc::getMessage('CC_BBUS_EMPTYSTATE_OVER_LIMIT_DESCRIPTION_B24')
 				: Loc::getMessage('CC_BBUS_EMPTYSTATE_OVER_LIMIT_DESCRIPTION'));
 		}
+		elseif ($this->isBiBuilderService)
+		{
+			$title = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_TITLE_SUPERSET_MSGVER_1');
+			$description = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_DESCRIPTION_SUPERSET');
+		}
+		elseif ($this->isExternalStatEnabled)
+		{
+			$title = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_TITLE');
+			$description = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_DESCRIPTION_COLLECTING');
+		}
 		else
 		{
-			if ($this->isBiBuilderService)
-			{
-				$title = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_TITLE_SUPERSET');
-			}
-			else
-			{
-				$title = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_TITLE');
-			}
-			$description = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_DESCRIPTION');
+			$title = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_TITLE');
+			$description = (string)Loc::getMessage('CC_BBUS_EMPTYSTATE_DESCRIPTION_DISABLED');
+			$button = $this->canToggleExternalStat ? $this->getStubEnableButton() : null;
 		}
 
-		return <<<HTML
-			<div class="biconnector-empty">
-				<div class="biconnector-empty__icon --statistic"></div>
-				<div class="main-grid-empty-block-title">{$title}</div>
-				<div class="main-grid-empty-block-description">{$description}</div>
-			</div>
-		HTML;
+		// the stub renderer escapes its content, so the [br] placeholder becomes a newline shown by CSS
+		$description = str_replace('[br]', "\n", $description);
+
+		return GridStubRenderer::render(
+			self::STUB_IMAGE_PATH,
+			$title,
+			$description,
+			$button,
+		);
+	}
+
+	/**
+	 * The grid rebuilds the stub markup on every redraw without a button init pass,
+	 * so the handler is bound as a plain attribute instead of a button event.
+	 */
+	private function getStubEnableButton(): Buttons\Button
+	{
+		$button = new Buttons\Button([
+			'text' => (string)Loc::getMessage('CT_BBSU_EXT_STAT_ENABLE'),
+		]);
+		$button
+			->setAirDesign()
+			->setStyle(Buttons\AirButtonStyle::FILLED_SUCCESS)
+			->setSize(Buttons\Size::MEDIUM)
+		;
+		$button->setIcon(Buttons\Icon::START);
+		$button->addAttribute('onclick', self::TOGGLE_EXT_STAT_JS);
+		$button->addDataAttribute('testid', 'usage-stat-stub-collect-btn');
+
+		return $button;
 	}
 }

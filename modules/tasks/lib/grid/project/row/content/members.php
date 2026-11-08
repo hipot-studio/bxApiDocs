@@ -1,7 +1,12 @@
 <?php
+
 namespace Bitrix\Tasks\Grid\Project\Row\Content;
 
+use Bitrix\Main\Localization\Loc;
+use Bitrix\Tasks\Grid\ControlButtonTrait;
 use Bitrix\Tasks\Grid\Project\Row\Content;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Class Members
@@ -10,6 +15,8 @@ use Bitrix\Tasks\Grid\Project\Row\Content;
  */
 class Members extends Content
 {
+	use ControlButtonTrait;
+
 	public function prepare(): string
 	{
 		$row = $this->getRowData();
@@ -25,6 +32,7 @@ class Members extends Content
 				if ($head['IS_OWNER'] === 'Y')
 				{
 					array_unshift($innerLayouts, $head['LAYOUT']);
+
 					continue;
 				}
 				$innerLayouts[] = $head['LAYOUT'];
@@ -35,14 +43,13 @@ class Members extends Content
 			}
 			$innerLayouts =	implode("\n", $innerLayouts);
 
-			$headsLayout =
-				"<div style='display: inline-block'>"
-					. "<div class='tasks-projects-user-list tasks-projects-user-list--green'>"
+			$headsLayout
+				= "<span style='display: inline-block'>"
+					. "<span class='tasks-projects-user-list tasks-projects-user-list--green'>"
 						. $innerLayouts
 						. $this->makeOtherCounterLayout(((int)$row['NUMBER_OF_MODERATORS'] - $visibleMembersCount))
-					. "</div>"
-				. "</div>"
-			;
+					. "</span>"
+				. "</span>";
 		}
 
 		$usersLayout = '';
@@ -51,7 +58,7 @@ class Members extends Content
 			$users,
 			static function ($user) {
 				return $user['IS_ACCESS_REQUESTING'] !== 'Y';
-			}
+			},
 		);
 		if (count($users) > 0)
 		{
@@ -66,24 +73,25 @@ class Members extends Content
 			}
 			$innerLayouts = implode("\n", $innerLayouts);
 
-			$usersLayout =
-				"<div style='display: inline-block'>"
-					. "<div class='tasks-projects-user-list'>"
+			$usersLayout
+				= "<span style='display: inline-block'>"
+					. "<span class='tasks-projects-user-list'>"
 						. $innerLayouts
 						. $this->makeOtherCounterLayout(
-							((int)$row['NUMBER_OF_MEMBERS'] - (int)$row['NUMBER_OF_MODERATORS'] - $visibleMembersCount)
+							((int)$row['NUMBER_OF_MEMBERS'] - (int)$row['NUMBER_OF_MODERATORS'] - $visibleMembersCount),
 						)
-					. "</div>"
-				. "</div>"
-			;
+					. "</span>"
+				. "</span>";
 		}
 
-		return
-			"<div class='tasks-projects-user-list-container' onclick='{$this->getMembersPopupShowFunction()}'>"
-				. $headsLayout
-				. $usersLayout
-			. "</div>"
-		;
+		return $this->renderControlButton(
+			[
+				'class' => 'tasks-projects-user-list-container',
+				'aria-label' => Loc::getMessage('TASKS_GRID_PROJECT_ROW_CONTENT_MEMBERS_OPEN_LIST'),
+				'onclick' => $this->getMembersPopupShowFunction(),
+			],
+			$headsLayout . $usersLayout,
+		);
 	}
 
 	private function fillUsersLayout(array $users): array
@@ -91,11 +99,10 @@ class Members extends Content
 		foreach ($users as $id => $user)
 		{
 			$style = ($user['PHOTO'] ? "style='background-image: url(\"{$user['PHOTO']}\")'" : '');
-			$users[$id]['LAYOUT'] =
-				"<a class='tasks-projects-user-item' {$style}>"
-					. "<div class='tasks-projects-user-crown'></div>"
-				. "</a>"
-			;
+			$users[$id]['LAYOUT']
+				= "<span class='tasks-projects-user-item' {$style}>"
+					. "<span class='tasks-projects-user-crown'></span>"
+				. "</span>";
 		}
 
 		return $users;
@@ -108,13 +115,14 @@ class Members extends Content
 			return "";
 		}
 
-		return "<div class='tasks-projects-user-count'><span class='tasks-projects-user-plus'>+</span>{$otherCount}</div>";
+		return "<span class='tasks-projects-user-count'><span class='tasks-projects-user-plus'>+</span>{$otherCount}</span>";
 	}
 
 	private function getMembersPopupShowFunction(): string
 	{
 		$row = $this->getRowData();
+		$projectId = (int)$row['ID'];
 
-		return "BX.Tasks.ProjectsInstance.getMembersPopup().show({$row['ID']}, this); event.stopPropagation();";
+		return "BX.Tasks.ProjectsInstance.getMembersPopup().show({$projectId}, this); event.stopPropagation();";
 	}
 }

@@ -17,24 +17,33 @@ use Bitrix\Main\Type\DateTime;
 /**
  * Repeatable initializer of the first source generation (G1) of a mailbox.
  *
- * The single service behind both launch modes: the background stepper walking all
- * existing mailboxes and the priority preparation of one mailbox picked by the user.
- * Both use the same deterministic operation id, so together with the unique index
- * over (MAILBOX_ID, OPERATION_ID) a mailbox can never get two G1 rows.
+ * The single service behind both launch modes: the creation of a mailbox, which assigns the
+ * generation at once {@see onMailboxAdded()}, and the first stage of a migration, which
+ * assigns it to a mailbox that has none yet. Both use the same deterministic operation id, so
+ * together with the unique index over (MAILBOX_ID, OPERATION_ID) a mailbox can never get two
+ * G1 rows. No mode walks the existing mailboxes of the portal: a mailbox nobody migrates keeps
+ * the implicit generation zero for good, and that is what the read paths served before the
+ * feature.
  *
  * The walk of one mailbox is restartable at any point: every step filters by
  * GENERATION_ID = 0 and the finalization order (assign rows, then activate the
  * generation, then set the pointer) keeps the mailbox consistent for the sync
  * context resolver after a crash in between. Physical rows written with the
- * implicit generation 0 after the pointer flip (writers that do not stamp the
- * generation yet) are adopted by any following run; until P2 scopes the reads,
- * rows with generation 0 and G1 stay equally visible to the legacy read paths.
+ * implicit generation 0 after the pointer flip - writers that do not stamp the
+ * generation yet - are adopted by the next run over the same mailbox, and until
+ * one comes they are read as rows of the active source anyway: the generation
+ * zero belongs to every scope by construction {@see GenerationScope::active()}.
  *
- * A run reports how many physical rows it assigned, so its caller tells a mailbox that is
- * making progress from a stalled one without counting what is left over again.
+ * A run reports how many physical rows it assigned, and the one caller that asks is a pass of a
+ * migration {@see MigrationService::run()}: it passes the answer on as the progress of that pass,
+ * which the retry policy of the agent decides by. That is what an unfinished initialization is told
+ * from a moving one by - the remainder is never counted for it, so an unfinished pass that assigned
+ * nothing is a mailbox that is not moving whatever is left of it.
  */
 class BackfillService
 {
+	private readonly RolloutBrakeReader $rolloutBrakeReader;
+
 	public const STATE_LEGACY = 'LEGACY';
 	public const STATE_INITIALIZING_G1 = 'INITIALIZING_G1';
 	public const STATE_G1_READY = 'G1_READY';
@@ -52,11 +61,26 @@ class BackfillService
 	 */
 	public const MIGRATION_STOP_OPTION = 'source_generations_migration_stopped';
 
-	protected const ASSIGN_BATCH_SIZE = 5000;
+	/* The conditions of the rollout, as {@see findMigrationRefusal()} names the one that refused */
+	public const REFUSAL_MIGRATION_STOPPED = 'MIGRATION_STOPPED';
+	public const REFUSAL_FEATURE_DISABLED = 'FEATURE_DISABLED';
+
+	/**
+	 * How many rows one batch of the assignment reads and one statement of it then assigns. The
+	 * value of the steppers of the core (AdminGridOption, AdminFilterOption, UserStepper), and a
+	 * quarter of the portion the batch writers of the module carry: the length of a statement is
+	 * what reaches the binary log and the replay on a replica, so this one stays deliberately low.
+	 */
+	protected const ASSIGN_BATCH_SIZE = 100;
 
 	protected const IMAP_SERVER_TYPES = ['imap', 'controller', 'domain', 'crdomain'];
 
-	/** Physical tables that belong to a generation: table => key column of a batch. */
+	public function __construct(?RolloutBrakeReader $rolloutBrakeReader = null)
+	{
+		$this->rolloutBrakeReader = $rolloutBrakeReader ?? new RolloutBrakeReader();
+	}
+
+	/** Physical tables that belong to a generation: table => the key column a batch is named by. */
 	public const GENERATION_SCOPED_TABLES = [
 		'b_mail_message_uid' => 'ID',
 		'b_mail_mailbox_dir' => 'ID',
@@ -91,6 +115,10 @@ class BackfillService
 	 *
 	 * A positive row budget limits how many physical rows one call may assign; an
 	 * exhausted budget returns INITIALIZING_G1 and the next call continues the walk.
+	 * A deadline bounds the same walk by the wall clock, and it holds for the final
+	 * sweep under the lock as well: what a batch costs depends on the load of the
+	 * database rather than on how many rows are left, so a budget of rows alone does
+	 * not bound a pass.
 	 * The finalization (the last sweep, the activation and the pointer flip) runs
 	 * under the mailbox sync lock, so it never races a running synchronization; a
 	 * busy lock also returns INITIALIZING_G1 to be retried later.
@@ -98,11 +126,15 @@ class BackfillService
 	 * @param int|null $assignedRows Receives how many physical rows this call assigned to the
 	 *                               generation. An unfinished call that assigned none is a
 	 *                               mailbox that is not moving, whatever is left over.
+	 * @param int|null $deadline The wall clock this call may not walk past. Null for a caller
+	 *                           that shares its pass with nobody: the creation of a mailbox and
+	 *                           the manual run over a single mailbox.
 	 */
 	public function ensureFirstGeneration(
 		int $mailboxId,
 		int $rowBudget = self::UNLIMITED_ROW_BUDGET,
 		?int &$assignedRows = null,
+		?int $deadline = null,
 	): string
 	{
 		$assignedRows = 0;
@@ -121,7 +153,7 @@ class BackfillService
 				left with it would pass for a row of the next source after the switch - and a command over
 				it would be admitted and sent to that source with the number of the previous one.
 			*/
-			if ($this->assignPhysicalRows($mailboxId, $pointer, $rowBudget, $assignedRows) === false)
+			if ($this->assignPhysicalRows($mailboxId, $pointer, $rowBudget, $assignedRows, $deadline) === false)
 			{
 				return self::STATE_INITIALIZING_G1;
 			}
@@ -141,7 +173,7 @@ class BackfillService
 			));
 		}
 
-		if ($this->assignPhysicalRows($mailboxId, $generationId, $rowBudget, $assignedRows) === false)
+		if ($this->assignPhysicalRows($mailboxId, $generationId, $rowBudget, $assignedRows, $deadline) === false)
 		{
 			return self::STATE_INITIALIZING_G1;
 		}
@@ -154,8 +186,20 @@ class BackfillService
 
 		try
 		{
-			// Nothing can start a sync while the lock is held, the sweep is final
-			$this->assignPhysicalRows($mailboxId, $generationId, self::UNLIMITED_ROW_BUDGET, $assignedRows);
+			/*
+				Nothing can start a sync while the lock is held, so this sweep is the final one and
+				spends no budget of rows. The clock it shares with the rest of the pass still holds:
+				an unfinished sweep leaves the generation inactive and the pointer where it was,
+				because a row left with the implicit zero would pass for a row of the new source
+				after the flip - and a command over it would be sent there with the wrong number.
+			*/
+			if (
+				$this->assignPhysicalRows($mailboxId, $generationId, self::UNLIMITED_ROW_BUDGET, $assignedRows, $deadline)
+				=== false
+			)
+			{
+				return self::STATE_INITIALIZING_G1;
+			}
 
 			// The resolver requires an ACTIVE generation, so the status goes before the pointer
 			if ($generation['STATUS'] === MailboxSourceGenerationTable::STATUS_PREPARING)
@@ -187,6 +231,11 @@ class BackfillService
 
 	/**
 	 * Physical rows of the mailbox not assigned to any generation yet.
+	 *
+	 * No path of the module counts them: the walk stops on a budget or a clock and never on a
+	 * remainder, and a pass that assigned nothing is how a mailbox that is not moving is told from one
+	 * that is. Kept for the tests, which read the remainder to check that a walk continued where it
+	 * left off - and as the guard the criterion of a count per pass is closed by.
 	 */
 	public function countUnassignedRows(int $mailboxId): int
 	{
@@ -203,19 +252,6 @@ class BackfillService
 		}
 
 		return $count;
-	}
-
-	/**
-	 * The source generation feature resolves only for a mailbox with a completed backfill.
-	 */
-	public function isSourceGenerationEnabled(int $mailboxId): bool
-	{
-		if (!$this->isFeatureEnabled())
-		{
-			return false;
-		}
-
-		return $this->getState($mailboxId) === self::STATE_G1_READY;
 	}
 
 	/**
@@ -237,20 +273,58 @@ class BackfillService
 	}
 
 	/**
-	 * The full admission of a mailbox to a migration of its physical source: the feature
-	 * is on, the emergency brake is off and the first generation of the mailbox is complete.
+	 * The full admission of a mailbox to a migration of its physical source: the feature is on
+	 * and the emergency brake is off. Nothing else - and the readiness of the first generation
+	 * least of all, because the migration builds it by its own first stage. That requirement was
+	 * written for an assignment made in advance, which no longer happens, and without it the
+	 * requirement turned the offer of the move into a dead end.
+	 *
+	 * Both conditions are options of the portal, so the admission asks the database nothing at
+	 * all, not even once per mailbox of a list. The mailbox is still named by the parameter: the
+	 * question is about one mailbox, and the next condition of the rollout - a cohort, a type -
+	 * will depend on it again.
+	 *
+	 * Two things it deliberately leaves to others:
+	 *
+	 * - whether the mailbox is of a type that can move at all. One outside the IMAP family is
+	 *   admitted here and stopped by the migration itself, which has nowhere to take it; the
+	 *   screen offering the move filters the type by {@see supportsServerType()} instead, free of
+	 *   charge, because it holds the row of the mailbox already;
+	 * - the same rule in the shape an operation needs. The conditions and their order are this
+	 *   one answer {@see findMigrationRefusal()}, and
+	 *   {@see MigrationService::findRolloutRefusal()} only gives the refusal an error code.
 	 */
 	public function isMigrationAllowed(int $mailboxId): bool
 	{
-		return !$this->isMigrationStopped()
-			&& $this->isSourceGenerationEnabled($mailboxId)
-		;
+		return $this->findMigrationRefusal($mailboxId) === null;
 	}
 
 	/**
-	 * A new mailbox creates its G1 right away. Never breaks the mailbox creation:
-	 * on any failure (e.g. the schema of an update window) the background stepper
-	 * or the priority run picks the mailbox up later.
+	 * Which condition of the rollout refuses the mailbox, if any does. The set of the conditions
+	 * and the order they are asked in live here alone: an operation needs the same rule with an
+	 * error code of its own, and a second copy of the rule is how the two answers drift apart.
+	 *
+	 * Costs no query, as {@see isMigrationAllowed()} above explains, and takes the mailbox for
+	 * the same reason it does.
+	 *
+	 * @return string|null One of the REFUSAL_* names, null for a mailbox the rollout admits.
+	 */
+	public function findMigrationRefusal(int $mailboxId): ?string
+	{
+		return $this->rolloutBrakeReader->findRefusalNow();
+	}
+
+	/**
+	 * A new mailbox creates its G1 right away. Never breaks the mailbox creation: on any failure
+	 * (e.g. the schema of an update window) the mailbox is left without a generation, and the
+	 * first stage of a migration is what picks it up - the only thing that does. There is no
+	 * background walk behind this call anymore, so a mailbox nothing ever migrates keeps the
+	 * implicit generation zero, which every read path serves as it did before the feature.
+	 *
+	 * Editing a mailbox assigns nothing at all: the creation is the one hook of this service on
+	 * that path {@see \CAllMailBox::Add()}, and {@see \CAllMailBox::Update()} calls nothing of the
+	 * kind. A mailbox whose type is changed to an IMAP one by an edit gets its generation when it
+	 * goes into a migration and not a moment earlier.
 	 */
 	public static function onMailboxAdded(int $mailboxId): void
 	{
@@ -275,16 +349,12 @@ class BackfillService
 	 * The lock is taken without waiting: a busy mailbox is answered with "still initializing", which
 	 * every caller of this path already retries later.
 	 *
-	 * @param int|null $assignedRows Receives how many physical rows this call assigned.
+	 * Neither a budget of rows nor a clock, unlike the entry above: the one caller of this one is the
+	 * creation of a mailbox, which shares its pass with nobody and hands over a mailbox that has no
+	 * physical rows at all - the assignment finds nothing to walk {@see onMailboxAdded()}.
 	 */
-	public function initializeUnderOperationLock(
-		int $mailboxId,
-		int $rowBudget = self::UNLIMITED_ROW_BUDGET,
-		?int &$assignedRows = null,
-	): string
+	public function initializeUnderOperationLock(int $mailboxId): string
 	{
-		$assignedRows = 0;
-
 		if (!OperationLock::acquire($mailboxId))
 		{
 			return self::STATE_INITIALIZING_G1;
@@ -292,7 +362,7 @@ class BackfillService
 
 		try
 		{
-			return $this->ensureFirstGeneration($mailboxId, $rowBudget, $assignedRows);
+			return $this->ensureFirstGeneration($mailboxId);
 		}
 		finally
 		{
@@ -429,6 +499,9 @@ class BackfillService
 			$generationId,
 			$mailboxId,
 		));
+
+		// As every other writer of the pointer does: the scope of a read is derived from it
+		GenerationScope::invalidateActivePointerCache($mailboxId);
 	}
 
 	protected function findBackfillGeneration(int $mailboxId): ?array
@@ -515,25 +588,45 @@ class BackfillService
 	}
 
 	/**
-	 * Assigns unassigned physical rows of the mailbox to the generation in portable
-	 * batches (a key select with LIMIT, then an update by the keys). The old uid row
-	 * identifiers are never touched, only the GENERATION_ID column changes.
+	 * Assigns unassigned physical rows of the mailbox to the generation: a batch of keys is read
+	 * by the index leading with the mailbox and the generation, then one statement assigns the
+	 * whole batch by naming those keys {@see ASSIGN_BATCH_SIZE}.
 	 *
-	 * @param int|null $assignedRows Grows by the rows this call assigned, the ones of an
-	 *                               exhausted budget included.
-	 * @return int|false The budget left, or false when the budget ran out before the end.
+	 * The mailbox stays in the condition beside the keys: the primary key of the placements and
+	 * of the upload queue is the pair of the row and the mailbox, and the row identifier alone is
+	 * a hash of the coordinates of a letter, unique only within one mailbox. The identifiers are
+	 * escaped rather than trusted - the POP3 collection writes the answer of a server into one of
+	 * them {@see \CAllMailBox::GetMessage()}.
+	 *
+	 * The filter of the batch consumes itself, so the walk needs no cursor: an assigned row
+	 * leaves the condition, the next batch of it is the next hundred rows, a repeated run over
+	 * an assigned mailbox reads four empty batches and writes nothing, and an interrupted run
+	 * resumes from the first row that is still unassigned. A cursor over the primary key would
+	 * be worse than none here - no index of the four tables carries the key third, so it would
+	 * either sort the rows of the mailbox or walk the whole table of every mailbox.
+	 *
+	 * The old uid row identifiers are never touched, only the GENERATION_ID column changes.
+	 *
+	 * @param int|null $assignedRows Grows by the rows this call assigned.
+	 * @param int|null $deadline The wall clock the walk may not pass, null for no limit.
+	 * @return int|false The budget left, or false when the walk stopped before the end.
 	 */
 	protected function assignPhysicalRows(
 		int $mailboxId,
 		int $generationId,
 		int $rowBudget,
 		?int &$assignedRows = null,
+		?int $deadline = null,
 	): int|false
 	{
 		$connection = Application::getConnection();
 		$sqlHelper = $connection->getSqlHelper();
 
 		$unlimited = ($rowBudget === self::UNLIMITED_ROW_BUDGET);
+		if (!$unlimited && $rowBudget <= 0)
+		{
+			return false;
+		}
 
 		foreach (self::GENERATION_SCOPED_TABLES as $table => $keyColumn)
 		{
@@ -542,11 +635,6 @@ class BackfillService
 				$batchSize = $unlimited
 					? static::ASSIGN_BATCH_SIZE
 					: min(static::ASSIGN_BATCH_SIZE, $rowBudget);
-
-				if ($batchSize <= 0)
-				{
-					return false;
-				}
 
 				$keys = $connection->query(sprintf(
 					'SELECT %1$s FROM %2$s WHERE MAILBOX_ID = %3$u AND GENERATION_ID = 0 LIMIT %4$u',
@@ -561,27 +649,41 @@ class BackfillService
 					break;
 				}
 
-				$values = array_map(
+				$identifiers = array_map(
 					static fn (array $row): string => "'" . $sqlHelper->forSql((string)$row[$keyColumn]) . "'",
 					$keys,
 				);
 
+				// The generation of zero leaves alone a row a concurrent writer has taken out of this walk
 				$connection->queryExecute(sprintf(
 					'UPDATE %1$s SET GENERATION_ID = %2$u WHERE MAILBOX_ID = %3$u AND GENERATION_ID = 0 AND %4$s IN (%5$s)',
 					$table,
 					$generationId,
 					$mailboxId,
 					$keyColumn,
-					implode(',', $values),
+					implode(', ', $identifiers),
 				));
 
-				$assignedRows = ($assignedRows ?? 0) + count($keys);
+				$assigned = $connection->getAffectedRowsCount();
+				$assignedRows = ($assignedRows ?? 0) + $assigned;
 
 				if (!$unlimited)
 				{
 					$rowBudget -= count($keys);
 				}
 
+				// A whole batch that moved nothing would be read again: it belongs to the next call
+				if ($assigned === 0)
+				{
+					return false;
+				}
+
+				if ((!$unlimited && $rowBudget <= 0) || ($deadline !== null && time() >= $deadline))
+				{
+					return false;
+				}
+
+				// A batch shorter than the one asked for is the end of this table
 				if (count($keys) < $batchSize)
 				{
 					break;

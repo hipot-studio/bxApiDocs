@@ -2,12 +2,19 @@
 
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
+use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
+use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
+use Bitrix\BIConnector\Internal\Operation\Builder\Dashboard\GetDashboardOperation;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
-final class GetDashboardMetaTool extends BaseBiTool
+final class GetDashboardMetaTool extends BaseSubjectAwareBiTool
 {
 	private const CHART_FIELDS = [
 		'id', 'name', 'kind', 'viz_label', 'tab_path', 'description', 'stats', 'stats_omitted', 'column_descriptions',
@@ -20,6 +27,11 @@ final class GetDashboardMetaTool extends BaseBiTool
 	public function getName(): string
 	{
 		return 'get_dashboard_meta';
+	}
+
+	public function getImpact(): OperationImpact
+	{
+		return OperationImpact::Read;
 	}
 
 	public function getDescription(): string
@@ -49,6 +61,7 @@ final class GetDashboardMetaTool extends BaseBiTool
 				'dashboardId' => [
 					'type' => 'integer',
 					'description' => 'Dashboard ID from the list_dashboards tool result.',
+					'minimum' => 1,
 				],
 				'appliedFilters' => [
 					'type' => 'array',
@@ -74,6 +87,7 @@ final class GetDashboardMetaTool extends BaseBiTool
 							],
 						],
 						'required' => ['name', 'value'],
+						'additionalProperties' => false,
 					],
 				],
 				'urlParams' => [
@@ -92,7 +106,31 @@ final class GetDashboardMetaTool extends BaseBiTool
 		];
 	}
 
-	protected function executeStructured(int $userId, ...$args): array
+	protected function executeStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
+	{
+		if (!(new FlagGate())->isEnabled(FlagGate::BUILDER_MCP_OPERATIONS, $userId))
+		{
+			return $this->legacyExecuteStructured($userId, $subject, $args);
+		}
+
+		self::requireBiconnectorModule();
+
+		// Resolved per call: aiassistant keeps a tool as a process-wide singleton.
+		$result = ServiceLocator::getInstance()->get(GetDashboardOperation::class)->execute(
+			(int)$args['dashboardId'],
+			$args['appliedFilters'] ?? [],
+			is_array($args['urlParams'] ?? null) ? $args['urlParams'] : [],
+			new Actor($userId, Channel::Mcp),
+		);
+		if (!$result->isSuccess())
+		{
+			throw self::toMcpException(OperationRefusal::forTool($result));
+		}
+
+		return $result->getData();
+	}
+
+	private function legacyExecuteStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
 	{
 		Loader::includeModule('biconnector');
 
@@ -108,24 +146,35 @@ final class GetDashboardMetaTool extends BaseBiTool
 		$dashboard = $loadResult->getData()['dashboard'];
 		$externalId = (int)$dashboard->getExternalId();
 
+		$pinnedArguments = new PinnedArgumentResolver();
+		$runId = $pinnedArguments->beginRunCall($subject, $userId, $this->getName());
+		$budget = DigestCallBudget::start($runId);
+
 		$filters = new AppliedFilters($userId);
+		// The dashboard config is needed even without caller filters: a dashboard with
+		// its own period default in the builder must not get the portal period on top of it.
+		$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById(
+			$externalId,
+			$budget->getStreamTimeout(0),
+			arbitrateServiceFailure: $runId === null,
+		);
+		if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
+		{
+			$context = ['stage' => 'get_dashboard_meta.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId];
+
+			throw $pinnedArguments->findRunFailure($runId, $userId, $dashboardDtoResp, $context)
+				?? self::integratorFailureException($dashboardDtoResp, $context);
+		}
+		$dashboardDto = $dashboardDtoResp->getData();
 		if (!empty($callerFilters))
 		{
-			$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById($externalId);
-			if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
-			{
-				throw self::integratorFailureException(
-					$dashboardDtoResp,
-					['stage' => 'get_dashboard_meta.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
-				);
-			}
-			$validateResult = $filters->validate($dashboardDtoResp->getData(), $callerFilters);
+			$validateResult = $filters->validate($dashboardDto, $callerFilters);
 			if (!$validateResult->isSuccess())
 			{
 				throw self::toMcpException($validateResult);
 			}
 		}
-		$resolveResult = $filters->resolve($dashboard, $callerFilters);
+		$resolveResult = $filters->resolve($dashboard, $dashboardDto, $callerFilters);
 		if (!$resolveResult->isSuccess())
 		{
 			throw self::toMcpException($resolveResult);
@@ -140,17 +189,30 @@ final class GetDashboardMetaTool extends BaseBiTool
 		}
 		$urlParams = $urlParamsResult->getData()['urlParams'];
 
+		$exhausted = $pinnedArguments->findExhaustedBudget(
+			$runId,
+			$userId,
+			$budget,
+			['stage' => 'get_dashboard_meta.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
+		);
+		if ($exhausted !== null)
+		{
+			throw $exhausted;
+		}
+
 		$response = IntegratorFactory::getInstance()->getDashboardOverview(
 			$externalId,
 			$supersetFilters,
 			$urlParams,
+			$budget->getStreamTimeout(60 * 5),
+			arbitrateServiceFailure: $runId === null,
 		);
 		if ($response->hasErrors())
 		{
-			throw self::integratorFailureException(
-				$response,
-				['stage' => 'get_dashboard_meta.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
-			);
+			$context = ['stage' => 'get_dashboard_meta.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId];
+
+			throw $pinnedArguments->findRunFailure($runId, $userId, $response, $context)
+				?? self::integratorFailureException($response, $context);
 		}
 
 		$rawData = $response->getData();
@@ -208,6 +270,8 @@ final class GetDashboardMetaTool extends BaseBiTool
 		{
 			$result['filter_coverage'] = $rawData['filter_coverage'];
 		}
+
+		$pinnedArguments->completeRunCall($runId, $userId);
 
 		return $result;
 	}

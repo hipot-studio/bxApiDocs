@@ -108,6 +108,8 @@ final class SystemAiAgentLifecycleService
 
 	public const OPERATION_DISABLE = 'disable';
 
+	public const OPERATION_TRANSFER_OWNER = 'transfer_owner';
+
 	/**
 	 * Watchdog deadline of an instance that is being created: an enabling that never reached its final state is
 	 * continued as a removal only after this deadline, so a live operation is not compensated by mistake.
@@ -356,6 +358,256 @@ final class SystemAiAgentLifecycleService
 			self::BACKGROUND_LOCK_TIMEOUT_SECONDS,
 			fn(): SystemAiAgentLifecycleResult => $this->runDisable($identity, respectWatchdog: true),
 		);
+	}
+
+	/**
+	 * Hands the managed instance over to a new owner: the stored owner of the instance and the signature of its
+	 * configuration, which is derived from the owner, are brought in line with the copy in one step.
+	 *
+	 * Called inside the scope of {@see self::runOwnerTransferUnderLock()} and inside the transaction of the caller, in
+	 * that order: the instance row is reread and held by this method, while the row of the copy is already held by
+	 * the conditional update that changed its owner a moment earlier.
+	 *
+	 * The identity of the instance does not change - a transfer never moves the agent into another context - and
+	 * a copy whose integrity was already broken before the transfer is refused instead of being silently repaired
+	 * by a recalculated signature.
+	 *
+	 * @param int $newOwnerId owner the copy of the instance already carries
+	 */
+	public function transferOwner(ManagedAgentInstance $instance, int $newOwnerId): SystemAiAgentLifecycleResult
+	{
+		$identity = self::buildIdentity($instance);
+		if ($identity === null)
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				null,
+				SystemAiAgentErrorCode::OperationFailed,
+				self::CODE_IDENTITY_MISMATCH,
+				instanceId: $instance->getId(),
+			);
+		}
+
+		if ($this->instanceRepository === null)
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::OperationFailed,
+				self::CODE_REPOSITORY_UNAVAILABLE,
+			);
+		}
+
+		if (!self::isLaunchingUserUsable($newOwnerId))
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::InvalidUser,
+				self::CODE_USER_UNUSABLE,
+				instanceId: $instance->getId(),
+			);
+		}
+
+		try
+		{
+			// The instance was read before the lock was taken, so the state it is transferred from is the one the
+			// row holds now; the locking reread also keeps that row until the transaction of the caller ends.
+			$stored = $this->instanceRepository->lockById((int)$instance->getId());
+		}
+		catch (\Throwable $exception)
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::OperationFailed,
+				self::CODE_STORAGE_FAILED,
+				instanceId: $instance->getId(),
+				cause: $exception::class,
+			);
+		}
+
+		if ($stored === null || !$identity->matchesStoredComponents($stored))
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::ConfigurationConflict,
+				self::CODE_IDENTITY_MISMATCH,
+				instanceId: $instance->getId(),
+			);
+		}
+
+		if ($stored->getState() !== ManagedAgentInstanceState::Enabled)
+		{
+			// An instance that is still being created or is already being removed has no settled owner to hand
+			// over, and a transfer would race the very pass that owns its state.
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::OperationConflict,
+				$stored->getState() === ManagedAgentInstanceState::Enabling
+					? self::CODE_ENABLING_IN_PROGRESS
+					: self::CODE_CLEANUP_IN_PROGRESS,
+				instanceId: $stored->getId(),
+			);
+		}
+
+		return $this->reassignInstance($identity, $stored, $newOwnerId);
+	}
+
+	/**
+	 * Verification of the copy against the stored instance and the write of the new owner into the instance.
+	 *
+	 * The new signature is calculated the very way the verification calculates the actual one, so a copy verified
+	 * right after the transfer reproduces the signature that is stored here and {@see self::verifyCopy()} does not
+	 * declare it broken.
+	 */
+	private function reassignInstance(
+		ManagedAgentIdentity $identity,
+		ManagedAgentInstance $instance,
+		int $newOwnerId,
+	): SystemAiAgentLifecycleResult
+	{
+		$copy = $this->readCopy($instance->getTemplateId());
+		if ($copy === null)
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::ConfigurationConflict,
+				self::CODE_COPY_ABSENT,
+				instanceId: $instance->getId(),
+			);
+		}
+
+		// The section descriptors of the source tell which template field declares which activation section, so
+		// the signature cannot be recalculated without an available source, exactly as an enabling cannot.
+		$source = $this->resolver->resolve($identity);
+		if (!$source->isSuccess())
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::AgentNotAvailable,
+				self::firstErrorCode($source),
+				instanceId: $instance->getId(),
+			);
+		}
+
+		$origin = self::readOriginSettings((int)$copy['ID']);
+
+		// The copy already carries the new owner: the conditional update of the caller ran first, while the stored
+		// signature of the instance still belongs to the previous one.
+		$brokenInvariant = $this->verifyCopy(
+			$identity,
+			$instance,
+			$copy,
+			$source->getData(),
+			$origin,
+			copyOwnerId: $newOwnerId,
+		);
+		if ($brokenInvariant !== null)
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::ConfigurationConflict,
+				$brokenInvariant,
+				instanceId: $instance->getId(),
+			);
+		}
+
+		$installedRevision = (string)$origin['version'];
+		$fingerprint = self::calculateActualFingerprint(
+			$identity,
+			$newOwnerId,
+			$installedRevision,
+			self::describeCopy($copy, $source->getData(), $installedRevision),
+		);
+		if ($fingerprint === null)
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::ConfigurationConflict,
+				self::CODE_CONFIGURATION_CHANGED,
+				instanceId: $instance->getId(),
+			);
+		}
+
+		try
+		{
+			$this->instanceRepository->save(ManagedAgentInstance::mapFromArray([
+				...$instance->toArray(),
+				'userId' => $newOwnerId,
+				'configFingerprint' => $fingerprint,
+				'updatedAt' => new DateTime(),
+			]));
+		}
+		catch (\Throwable $exception)
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				$identity,
+				SystemAiAgentErrorCode::OperationFailed,
+				self::CODE_STORAGE_FAILED,
+				instanceId: $instance->getId(),
+				cause: $exception::class,
+			);
+		}
+
+		return $this->succeed(
+			self::OPERATION_TRANSFER_OWNER,
+			$identity,
+			SystemAiAgentLifecycleOutcome::AlreadyEnabled,
+			$instance->getId(),
+			$newOwnerId,
+		);
+	}
+
+	/**
+	 * Runs $body under the named lock of the identity of $instance - the very lock every other operation of the
+	 * lifecycle takes - so a caller never builds the lock name nor picks its timeout on its own.
+	 *
+	 * The lock is taken before $body runs and is released once it has returned, therefore a transaction belongs
+	 * inside $body and never around this call: a lock released while writes are still uncommitted would let the
+	 * background pass of the same instance in before the commit.
+	 *
+	 * @param callable(): Result $body
+	 * @return Result the result of $body, or a failed result with a stable code of the lifecycle when the body
+	 *  never ran at all: the lock was busy, the plumbing was unavailable or the pass itself threw
+	 */
+	public function runOwnerTransferUnderLock(ManagedAgentInstance $instance, callable $body): Result
+	{
+		$identity = self::buildIdentity($instance);
+		if ($identity === null)
+		{
+			return $this->fail(
+				self::OPERATION_TRANSFER_OWNER,
+				null,
+				SystemAiAgentErrorCode::OperationFailed,
+				self::CODE_IDENTITY_MISMATCH,
+				instanceId: $instance->getId(),
+			);
+		}
+
+		$passed = null;
+		$scope = $this->runUnderLock(
+			self::OPERATION_TRANSFER_OWNER,
+			$identity,
+			self::FOREGROUND_LOCK_TIMEOUT_SECONDS,
+			function () use ($body, &$passed): SystemAiAgentLifecycleResult
+			{
+				$passed = $body();
+
+				// The shared scope is typed on the result of the lifecycle and passes this value straight back,
+				// while the answer of the caller is the result of the body and is returned below.
+				return SystemAiAgentLifecycleResult::createSuccess(SystemAiAgentLifecycleOutcome::AlreadyEnabled);
+			},
+		);
+
+		return $passed ?? $scope;
 	}
 
 	/**
@@ -1584,6 +1836,9 @@ final class SystemAiAgentLifecycleService
 	 * stored signature of the instance.
 	 *
 	 * @param array{code: ?string, codeCount: int, version: ?string, versionCount: int} $origin
+	 * @param int|null $copyOwnerId owner the row of the copy is expected to carry, the stored owner of the instance
+	 *  by default: a transfer has already written the new owner into that row while the stored signature of the
+	 *  instance still belongs to the previous one
 	 * @return string|null stable internal code of the broken invariant, or null when the copy is intact
 	 */
 	private function verifyCopy(
@@ -1592,13 +1847,16 @@ final class SystemAiAgentLifecycleService
 		array $copy,
 		array $source,
 		array $origin,
+		?int $copyOwnerId = null,
 	): ?string
 	{
+		$copyOwnerId ??= $instance->getUserId();
+
 		if (
 			$copy['TYPE'] !== WorkflowTemplateType::Nodes->value
 			|| (string)($copy['SYSTEM_CODE'] ?? '') !== ''
 			|| $copy['ACTIVE'] !== 'Y'
-			|| (int)($copy['ACTIVATED_BY'] ?? 0) !== $instance->getUserId()
+			|| (int)($copy['ACTIVATED_BY'] ?? 0) !== $copyOwnerId
 			|| $copy['ACTIVATED_AT'] === null
 			|| $origin['codeCount'] !== 1
 			|| $origin['code'] !== $identity->getSystemCode()

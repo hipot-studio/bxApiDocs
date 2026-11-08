@@ -10,6 +10,7 @@ use Bitrix\Crm\Badge;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Controller\AiQualityAssessmentController;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Entity\AiQualityAssessmentItem;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Entity\AiQualityAssessmentTable;
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\CallScoringEvent;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
 use Bitrix\Crm\Copilot\CallAssessment\ItemFactory;
@@ -33,6 +34,7 @@ use Bitrix\Crm\MultiValueStoreService;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline\AI\Controller;
 use Bitrix\Main;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
 use CCrmActivity;
 use CCrmOwnerType;
@@ -58,8 +60,7 @@ final class ScoreCallV2 extends AbstractOperation
 			&& CCrmActivity::CheckItemUpdatePermission(
 				['ID' => $target->getEntityId()],
 				Container::getInstance()->getUserPermissions($userId)->getCrmPermissions(),
-			)
-		;
+			);
 	}
 
 	public static function isSuitableTarget(ItemIdentifier $target): bool
@@ -364,6 +365,24 @@ final class ScoreCallV2 extends AbstractOperation
 
 	protected static function extractPayloadFromAIResult(AI\Result $result, EO_Queue $job): Dto
 	{
+		return self::extractScorePayloadFromAIResult($result);
+	}
+
+	public static function extractAssessmentFromAIResult(AI\Result $result): ?int
+	{
+		$payload = self::extractScorePayloadFromAIResult($result);
+		if ($payload->hasValidationErrors())
+		{
+			return null;
+		}
+
+		return self::isCriteriaListEmpty($payload->criteriaScores)
+			? null
+			: self::getAssessmentsValue($payload);
+	}
+
+	private static function extractScorePayloadFromAIResult(AI\Result $result): ScoreCallV2Payload
+	{
 		$json = self::extractPayloadPrettifiedData($result);
 		if (empty($json))
 		{
@@ -448,12 +467,10 @@ final class ScoreCallV2 extends AbstractOperation
 
 			$assessmentSettingsId = isset($context)
 				? $context->getParameters()['additionalInfo']['assessment_settings_id'] ?? null
-				: null
-			;
+				: null;
 			$criteriaData = isset($context)
 				? (string)($context->getParameters()['additionalInfo']['criteria_data'] ?? '')
-				: ''
-			;
+				: '';
 			$assessmentSettings = self::getAssessmentSettings($activityId, $assessmentSettingsId);
 			$assessment = self::getAssessmentsValue($payload);
 			$controller = AiQualityAssessmentController::getInstance();
@@ -473,7 +490,7 @@ final class ScoreCallV2 extends AbstractOperation
 						'ACTIVITY_ID' => $activityId,
 						'ASSESSMENT_SETTING_ID' => $assessmentSettings?->getId(),
 						'JOB_ID' => $result->getJobId(),
-						'PROMPT' => $assessmentSettings?->getPrompt(),
+						'PROMPT' => $assessmentSettings?->getPrompt() ?? '',
 						'ASSESSMENT' => $assessment,
 						'ASSESSMENT_AVG' => $controller->getNewAvgAssessmentValue($userId, $assessment),
 						'USE_IN_RATING' => true,
@@ -515,6 +532,13 @@ final class ScoreCallV2 extends AbstractOperation
 				$assessmentSettings?->getLowBorder(),
 			);
 
+			self::sendCallScoringAnalytics(
+				(int)$result->getJobId(),
+				$assessmentSettings?->getId() ?? 0,
+				$assessment,
+				$activityId,
+			);
+
 			if ($prevRatedItemIdList)
 			{
 				AiQualityAssessmentTable::updateMulti(
@@ -530,6 +554,39 @@ final class ScoreCallV2 extends AbstractOperation
 		{
 			self::cleanupJobCallAssessmentBinding($result->getParentJobId(), $activityId);
 		}
+	}
+
+	private static function sendCallScoringAnalytics(
+		int $jobId,
+		int $callAssessmentId,
+		int $callScore,
+		int $activityId,
+	): void
+	{
+		$event = (new CallScoringEvent())
+			->setCallAssessmentId($callAssessmentId)
+			->setCallScore((string)$callScore)
+			->setActivityId($activityId)
+		;
+
+		if ($jobId > 0)
+		{
+			$row = QueueTable::getList([
+				'select' => ['CREATED_TIME', 'FINISHED_TIME'],
+				'filter' => ['=ID' => $jobId],
+				'limit' => 1,
+			])->fetch();
+			$createdTime = $row['CREATED_TIME'] ?? null;
+			$finishedTime = $row['FINISHED_TIME'] ?? null;
+			if ($createdTime instanceof DateTime && $finishedTime instanceof DateTime)
+			{
+				$event->setStepDurationSeconds(
+					$finishedTime->getTimestamp() - $createdTime->getTimestamp(),
+				);
+			}
+		}
+
+		$event->buildEvent()->send();
 	}
 
 	private static function getAssessmentSettings(int $activityId, ?int $assessmentSettingsId = null, ?int $parentJobId = null): ?CallAssessmentItem
@@ -611,7 +668,7 @@ final class ScoreCallV2 extends AbstractOperation
 	{
 		$criteriaList = array_filter(
 			$list,
-			static fn(object $item) => isset($item->met) && is_bool($item->met)
+			static fn(object $item) => isset($item->met) && is_bool($item->met),
 		);
 
 		return empty($criteriaList);
@@ -641,5 +698,4 @@ final class ScoreCallV2 extends AbstractOperation
 
 		$badge->bind($itemIdentifier, $sourceIdentifier);
 	}
-
 }

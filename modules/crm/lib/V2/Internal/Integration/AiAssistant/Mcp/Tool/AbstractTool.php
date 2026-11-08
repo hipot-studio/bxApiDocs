@@ -96,4 +96,14 @@ abstract class AbstractTool extends ToolContract
 	abstract protected function internalExecute(AbstractToolDto $args): ToolResult;
 
 	abstract protected function getArgsDtoClass(): string;
+
+	public function canList(int $userId): bool
+	{
+		return true;
+	}
+
+	public function canRun(int $userId): bool
+	{
+		return true;
+	}
 }

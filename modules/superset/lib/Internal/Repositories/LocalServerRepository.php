@@ -34,6 +34,10 @@ final class LocalServerRepository
 		]);
 	}
 
+	/**
+	 * Not scoped by ACCOUNT_ID on purpose: a verified PORTAL_ID is a secret issued to the portal
+	 * on registration and authenticates it, while ACCOUNT_ID only reflects the current license.
+	 */
 	public function findVerifiedByPortalId(string $portalId): ?Server
 	{
 		return $this->findOne([

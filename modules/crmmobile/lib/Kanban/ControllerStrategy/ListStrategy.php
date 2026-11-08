@@ -2,30 +2,33 @@
 
 namespace Bitrix\CrmMobile\Kanban\ControllerStrategy;
 
+use Bitrix\Crm\Binding\ContactCompanyTable;
 use Bitrix\Crm\Category\Entity\Category;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManager;
 use Bitrix\Crm\Component\EntityList\FieldRestrictionManagerTypes;
 use Bitrix\Crm\Counter\EntityCounterFactory;
 use Bitrix\Crm\Counter\EntityCounterType;
 use Bitrix\Crm\Field\Collection;
+use Bitrix\Crm\FieldMultiTable;
 use Bitrix\Crm\Filter\ClientDataProvider;
 use Bitrix\Crm\Filter\ClientUserFieldDataProvider;
 use Bitrix\Crm\Filter\FactoryOptionable;
 use Bitrix\Crm\Filter\Preset\Company;
 use Bitrix\Crm\Filter\Preset\Contact;
 use Bitrix\Crm\Item;
-use Bitrix\Crm\Kanban\Exception;
+use Bitrix\Crm\Kanban;
+use Bitrix\Crm\Multifield;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Display;
 use Bitrix\Crm\Service\Display\Field;
-use Bitrix\Crm\Service\Factory;
+use Bitrix\CrmMobile\Filter\NumberFields;
 use Bitrix\CrmMobile\Kanban\Client;
-use Bitrix\CrmMobile\Kanban\Entity\ControllerStrategy\FieldNotFoundException;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Filter\DataProvider;
 use Bitrix\Main\Result;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Mobile\Filter\FilterRequest;
 use Bitrix\Crm\Kanban\Entity;
 
 final class ListStrategy extends Base
@@ -38,7 +41,6 @@ final class ListStrategy extends Base
 	protected ?Collection $fieldsCollection = null;
 	protected ?array $fieldsMap = null;
 	protected ?\Bitrix\Main\Grid\Options $gridOptions = null;
-	protected array $factories = [];
 	protected ?DataProvider $provider = null;
 	protected ?DataProvider $ufProvider = null;
 	/** @var DataProvider[]|null */
@@ -49,7 +51,7 @@ final class ListStrategy extends Base
 
 	public function updateItemStage(int $id, int $stageId): Result
 	{
-		throw new Exception('UpdateItemStage not implemented');
+		throw new Kanban\Exception('UpdateItemStage not implemented');
 	}
 
 	public function deleteItem(int $id, array $params = []): Result
@@ -79,7 +81,7 @@ final class ListStrategy extends Base
 			return parent::changeCategory($ids, $categoryId);
 		}
 
-		throw new Exception('Entity categories not supported or disabled');
+		throw new Kanban\Exception('Entity categories not supported or disabled');
 	}
 
 	public function getList(?PageNavigation $pageNavigation): array
@@ -117,9 +119,8 @@ final class ListStrategy extends Base
 		if (!$this->provider)
 		{
 			$filterFactory = Container::getInstance()->getFilterFactory();
-			$settings = $filterFactory->getSettings($this->getEntityTypeId(), $this->getGridId());
 
-			$this->provider = $filterFactory->getDataProvider($settings);
+			$this->provider = $filterFactory->getDataProvider($this->getFilterSettings());
 			if ($this->provider instanceof FactoryOptionable)
 			{
 				$this->provider->setForceUseFactory(true);
@@ -134,9 +135,8 @@ final class ListStrategy extends Base
 		if (!$this->ufProvider)
 		{
 			$filterFactory = Container::getInstance()->getFilterFactory();
-			$settings = $filterFactory->getSettings($this->getEntityTypeId(), $this->getGridId());
 
-			$this->ufProvider = $filterFactory->getUserFieldDataProvider($settings);
+			$this->ufProvider = $filterFactory->getUserFieldDataProvider($this->getFilterSettings());
 		}
 
 		return $this->ufProvider;
@@ -150,8 +150,9 @@ final class ListStrategy extends Base
 		if ($this->clientFilterProviders === null)
 		{
 			$filterFactory = Container::getInstance()->getFilterFactory();
-			$settings = $filterFactory->getSettings($this->getEntityTypeId(), $this->getGridId());
-			$this->clientFilterProviders = $filterFactory->getSupportedClientDataProviders($settings);
+			$this->clientFilterProviders = $filterFactory->getSupportedClientDataProviders(
+				$this->getFilterSettings(),
+			);
 		}
 
 		return $this->clientFilterProviders;
@@ -213,23 +214,22 @@ final class ListStrategy extends Base
 
 	protected function getPreparedFilter(): array
 	{
-		$filter = [];
-
-		if (!empty($this->params['search']))
-		{
-			$filter['FIND'] = $this->params['search'];
-		}
-
+		$filter = $this->getBaseFilter();
 		$filterParams = $this->getFilterParams();
 
-		if (isset($filterParams['CATEGORY_ID']))
+		$presetId = (string)($filterParams['FILTER_PRESET_ID'] ?? '');
+
+		if ($this->usesStoredFilter($presetId))
 		{
-			$filter['CATEGORY_ID'] = (int)$filterParams['CATEGORY_ID'];
+			// read only: the pointer already names the filter the list is under, nothing to write
+			return $this->readStoredFilter($this->getFilterOptions(), $filter);
 		}
 
-		$presetId = ($filterParams['FILTER_PRESET_ID'] ?? null);
-		if ($presetId)
+		if ($presetId !== '')
 		{
+			// the pointer of the list is written under the resolved id too, so it is resolved here and
+			// not only inside setFilterPreset()
+			$presetId = FilterRequest::resolvePresetId($presetId);
 			$filterOptions = $this->getFilterOptions();
 			$this->setFilterPreset($presetId, $filterOptions);
 
@@ -242,44 +242,11 @@ final class ListStrategy extends Base
 
 	protected function setFilterPreset(string $presetId, Options $filterOptions): void
 	{
+		$presetId = FilterRequest::resolvePresetId($presetId);
+
 		// "filter_rows" do not contain restricted columns, but "fields" still contain
 		// we need to remove restricted columns from "fields" to remove them from actual search conditions
-		$filterSettings = $filterOptions->getFilterSettings($presetId);
-		$isFilterSettingsCheckable =
-			isset($filterSettings['fields'], $filterSettings['filter_rows'])
-			&& is_array($filterSettings['fields'])
-			&& is_string($filterSettings['filter_rows'])
-		;
-		if ($isFilterSettingsCheckable)
-		{
-			$fields = $filterSettings['fields'];
-			$filterRows = explode(',', $filterSettings['filter_rows']);
-			$allowedFields = [];
-			foreach ($fields as $fieldName => $fieldValue)
-			{
-				$isFieldAllowed = in_array($fieldName, $filterRows, true);
-				if (!$isFieldAllowed)
-				{
-					$rowsFromFields = Options::getRowsFromFields([$fieldName => '']);
-					$isFieldAllowed = in_array(reset($rowsFromFields), $filterRows, true);
-				}
-				if ($isFieldAllowed)
-				{
-					$allowedFields[$fieldName] = $fieldValue;
-				}
-			}
-
-			if (count($allowedFields) < count($fields))
-			{
-
-				$filterOptions->setFilterSettings(
-					$presetId,
-					['fields' => $allowedFields],
-					false,
-					false,
-				);
-			}
-		}
+		$this->removeValuesWithoutRows($filterOptions, $presetId);
 
 		parent::setFilterPreset($presetId, $filterOptions);
 	}
@@ -377,16 +344,6 @@ final class ListStrategy extends Base
 		return $this->fieldsMap;
 	}
 
-	protected function getFactory(int $entityTypeId): Factory
-	{
-		if (empty($this->factories[$entityTypeId]))
-		{
-			$this->factories[$entityTypeId] = Container::getInstance()->getFactory($entityTypeId);
-		}
-
-		return $this->factories[$entityTypeId];
-	}
-
 	protected function getDisplayedFields(Collection $fieldsCollection, array $fieldsMap): array
 	{
 		$showedFields = $this->getShowedFieldsList($fieldsCollection, $fieldsMap);
@@ -428,6 +385,12 @@ final class ListStrategy extends Base
 
 	protected function getShowedFieldsNames(Collection $fieldsCollection): array
 	{
+		$compactFieldsNames = $this->resolveCompactShowedFields();
+		if ($compactFieldsNames !== null)
+		{
+			return $compactFieldsNames;
+		}
+
 		$options = $this->getCurrentOptions();
 
 		if ($options['columns'] === '' || $options['columns'] === null)
@@ -516,40 +479,6 @@ final class ListStrategy extends Base
 		return [];
 	}
 
-	protected function createField(string $fieldName, Collection $fieldsCollection): Field
-	{
-		$field = $fieldsCollection->getField($fieldName);
-		if (!$field)
-		{
-			throw new FieldNotFoundException('Field: ' . $fieldName . ' not found');
-		}
-
-		$fieldId = $field->getName();
-		if (!empty($field->getUserField()))
-		{
-			return Field::createFromUserField($fieldId, $field->getUserField());
-		}
-
-		$displayField = (Field::createByType($field->getType(), $fieldId))->setTitle($field->getTitle());
-
-		foreach ($field->getSettings() as $name => $setting)
-		{
-			$displayField->addDisplayParam($name, $setting);
-		}
-
-		if ($entityType = $field->getCrmStatusType())
-		{
-			$displayField->addDisplayParam('ENTITY_TYPE', $entityType);
-		}
-
-		if ($valueType = $field->getValueType())
-		{
-			$displayField->addDisplayParam('VALUE_TYPE', $valueType);
-		}
-
-		return $displayField;
-	}
-
 	protected function getSelectFields(array $displayedFields = []): array
 	{
 		$displayedFieldNames = array_keys($displayedFields);
@@ -601,9 +530,9 @@ final class ListStrategy extends Base
 
 	protected function getItems(int $entityTypeId, array $parameters): array
 	{
-		$requestFilter = $parameters['filter'] ?? [];
-
-		$filter = [];
+		// the drawer answers about a field of its own numbers with the keys of a numeric form, while
+		// the provider of the list reads that field as the text one the CRM filter calls it
+		[$filter, $requestFilter] = NumberFields::conditionsAndRest($parameters['filter'] ?? []);
 		$filterFields = $this->getFilterFieldsArray();
 		$this->getProvider()->prepareListFilter($filter, $requestFilter);
 		$this->getUfProvider()->prepareListFilter($filter, $filterFields, $requestFilter);
@@ -620,9 +549,7 @@ final class ListStrategy extends Base
 
 	protected function getFilterFieldsArray(): array
 	{
-		$entityFilter = \Bitrix\Crm\Filter\Factory::createEntityFilter(
-			\Bitrix\Crm\Filter\Factory::createEntitySettings($this->getEntityTypeId(), $this->getGridId()),
-		);
+		$entityFilter = \Bitrix\Crm\Filter\Factory::createEntityFilter($this->getFilterSettings());
 
 		return $entityFilter->getFieldArrays();
 	}
@@ -746,16 +673,15 @@ final class ListStrategy extends Base
 		if ($this->entityTypeId === \CCrmOwnerType::Company)
 		{
 			$clientType = \CCrmOwnerType::ContactName;
-			$companyFactory = $this->getFactory(\CCrmOwnerType::Company);
-
 			$companyIdsMap = [];
+			$companyIds = array_column($items, 'ID');
+			$bindingsByCompany = ContactCompanyTable::getBulkCompanyBindings($companyIds);
 
 			foreach ($items as $item)
 			{
-				$contactItems = $companyFactory->getItem($item['ID'])->getContacts();
-				foreach ($contactItems as $contactItem)
+				foreach ($bindingsByCompany[$item['ID']] ?? [] as $binding)
 				{
-					$companyIdsMap[$contactItem->getId()] = $item['ID'];
+					$companyIdsMap[(int)$binding['CONTACT_ID']] = $item['ID'];
 				}
 			}
 
@@ -830,18 +756,71 @@ final class ListStrategy extends Base
 			->getFactory($entityTypeId)
 			->getItemsFilteredByPermissions($parameters)
 		;
+		$multifieldsByClient = $isCompany
+			? []
+			: $this->getContactMultifields(array_map(static fn (Item $client): int => $client->getId(), $clients))
+		;
 
 		$accessibleEntities = [];
 		foreach ($clients as $client)
 		{
-			$accessibleEntities[$client->getId()] = [
-				'ID' => $client->getId(),
+			$clientId = $client->getId();
+			$accessibleEntities[$clientId] = [
+				'ID' => $clientId,
 				'TITLE' => $isCompany ? $client->getTitle() : $client->getFormattedName(),
-				'FM' => $client->getFm(),
+				'FM' => $isCompany
+					? $client->getFm()
+					: ($multifieldsByClient[$clientId] ?? new Multifield\Collection()),
 			];
 		}
 
 		return $accessibleEntities;
+	}
+
+	/**
+	 * @return array<int, Multifield\Collection>
+	 */
+	private function getContactMultifields(array $contactIds): array
+	{
+		if ($contactIds === [])
+		{
+			return [];
+		}
+
+		$multifieldsByContact = [];
+		$phoneValues = [];
+		$rows = FieldMultiTable::getList([
+			'select' => ['ID', 'ELEMENT_ID', 'TYPE_ID', 'VALUE_TYPE', 'VALUE'],
+			'filter' => [
+				'=ENTITY_ID' => \CCrmOwnerType::ContactName,
+				'@ELEMENT_ID' => $contactIds,
+			],
+			'order' => ['ID' => 'ASC'],
+		]);
+		while ($row = $rows->fetch())
+		{
+			$contactId = (int)$row['ELEMENT_ID'];
+			$multifieldsByContact[$contactId] ??= new Multifield\Collection();
+			$value = Multifield\Assembler::valueByDatabaseRow($row);
+			$multifieldsByContact[$contactId]->add($value);
+
+			if ($value->getTypeId() === \CCrmFieldMulti::PHONE)
+			{
+				$phoneValues[$value->getId()] = $value;
+			}
+		}
+
+		foreach (\CCrmFieldMulti::GetPhoneCountryList(array_keys($phoneValues)) as $fieldId => $countryCode)
+		{
+			if (isset($phoneValues[$fieldId]))
+			{
+				$phoneValues[$fieldId]->setValueExtra(
+					(new Multifield\ValueExtra())->setCountryCode($countryCode),
+				);
+			}
+		}
+
+		return $multifieldsByContact;
 	}
 
 	public function prepareFilterPresets(Entity $entity, array $presets, ?string $defaultPresetName): array

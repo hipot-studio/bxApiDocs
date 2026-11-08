@@ -41,6 +41,24 @@ class CollabFeature
 		return $settings->isToolAvailable(Settings::SONET_TOOLS['collab']);
 	}
 
+	/**
+	 * Checks whether collabs are available for opening.
+	 *
+	 * @return bool
+	 */
+	public static function isAvailableForOpening(): bool
+	{
+		if (Feature::isNewProjectsOn())
+		{
+			return Requirement::checkRequiredModulesForOpening()->isSuccess();
+		}
+
+		return
+			self::isOn()
+			&& self::isFeatureEnabledInPortalSettings()
+			&& Requirement::check()->isSuccess();
+	}
+
 	public static function isOn(): bool
 	{
 		if (static::isDevMode())

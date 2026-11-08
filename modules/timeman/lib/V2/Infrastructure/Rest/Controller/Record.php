@@ -12,6 +12,7 @@ use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Interaction\Response\ListResponse;
 use Bitrix\Timeman\Security\UserPermissionsManager;
 use Bitrix\Timeman\Service\DependencyManager;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 use Bitrix\Timeman\V2\Infrastructure\Rest\Dto\Mapping\RecordDtoMapper;
 use Bitrix\Timeman\V2\Infrastructure\Rest\Dto\Mapping\RecordListRequestMapper;
 use Bitrix\Timeman\V2\Infrastructure\Rest\Dto\RecordDto;
@@ -29,6 +30,14 @@ final class Record extends RestController
 		$this->userId = (int)CurrentUser::get()->getId();
 
 		parent::init();
+	}
+
+	protected function getDefaultPreFilters()
+	{
+		return [
+			new ToolEnabledFilter(),
+			...parent::getDefaultPreFilters(),
+		];
 	}
 
 	public function listAction(

@@ -22,9 +22,10 @@ final class SignatureTemplateProcessorFactory
 	): SignatureTemplateProcessor
 	{
 		$macrosEnabled ??= Feature::isSignatureMacrosAvailable();
+		$providers = [new ImageSignatureTemplateProvider()];
 		if (!$macrosEnabled)
 		{
-			return new SignatureTemplateProcessor(new SignatureTemplateProviderRegistry([]));
+			return new SignatureTemplateProcessor(new SignatureTemplateProviderRegistry($providers));
 		}
 
 		$valueProvider = new CompositeSignatureMacroValueProvider([
@@ -39,8 +40,8 @@ final class SignatureTemplateProcessorFactory
 			),
 		]);
 
-		return new SignatureTemplateProcessor(new SignatureTemplateProviderRegistry([
-			new SignatureMacroProvider($valueProvider),
-		]));
+		$providers[] = new SignatureMacroProvider($valueProvider);
+
+		return new SignatureTemplateProcessor(new SignatureTemplateProviderRegistry($providers));
 	}
 }

@@ -10,6 +10,7 @@ class Reader implements BIConnector\ExternalSource\FileReader\Base
 	private Settings $settings;
 	private $handle;
 	private array $headers;
+	private int $fileRowNumber = 0;
 
 	public function __construct(Settings $settings)
 	{
@@ -42,15 +43,31 @@ class Reader implements BIConnector\ExternalSource\FileReader\Base
 
 		fwrite($this->handle, $fileContent);
 		fseek($this->handle, 0);
+		$this->fileRowNumber = 0;
 
 		if ($this->settings->hasHeaders)
 		{
-			$headers = fgetcsv($this->handle, 0, $this->settings->delimiter, '"', '\\');
+			$headers = $this->readRow();
 			if ($headers)
 			{
 				$this->headers = $headers;
 			}
 		}
+	}
+
+	private function readRow(): array|false
+	{
+		do
+		{
+			$row = fgetcsv($this->handle, 0, $this->settings->delimiter, '"', '\\');
+			if ($row !== false)
+			{
+				$this->fileRowNumber++;
+			}
+		}
+		while ($row === [null]);
+
+		return $row;
 	}
 
 	private function closeFile(): void
@@ -84,7 +101,7 @@ class Reader implements BIConnector\ExternalSource\FileReader\Base
 
 		try
 		{
-			while (($row = fgetcsv($this->handle, 0, $this->settings->delimiter, '"', '\\')) !== false && $i < $n)
+			while (($row = $this->readRow()) !== false && $i < $n)
 			{
 				$rows[] = $row;
 				$i++;
@@ -108,7 +125,7 @@ class Reader implements BIConnector\ExternalSource\FileReader\Base
 		$rows = [];
 		try
 		{
-			while (($row = fgetcsv($this->handle, 0, $this->settings->delimiter, '"', '\\')) !== false)
+			while (($row = $this->readRow()) !== false)
 			{
 				$rows[] = $row;
 			}
@@ -128,9 +145,9 @@ class Reader implements BIConnector\ExternalSource\FileReader\Base
 	{
 		$this->openFile();
 
-		while (($row = fgetcsv($this->handle, 0, $this->settings->delimiter, '"', '\\')) !== false)
+		while (($row = $this->readRow()) !== false)
 		{
-			yield $row;
+			yield $this->fileRowNumber => $row;
 		}
 
 		$this->closeFile();

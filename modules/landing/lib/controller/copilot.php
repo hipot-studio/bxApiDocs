@@ -9,6 +9,7 @@ use Bitrix\Landing\Copilot\Generation\Scenario\IScenario;
 use Bitrix\Landing\Copilot\Generation\Scenario\IStepMetaProvider;
 use Bitrix\Landing\Copilot\Generation\Type\StepStatuses;
 use Bitrix\Landing\Copilot\Model\StepsTable;
+use Bitrix\Landing\Integration\AiAssistant\AiSiteGenerationHelper;
 use Bitrix\Landing\Integration\AiAssistant\Service\AiSiteBindingFinalizer;
 use Bitrix\Landing\Landing;
 use Bitrix\Landing\Manager;
@@ -174,7 +175,7 @@ class Copilot extends Controller
 		$tailwindRuntime = CreateAiSiteState::getTailwindRuntime($generation);
 		$publication = $this->normalizeMagicSitePublication(CreateAiSiteState::getPublication($generation));
 		$creationJournal = CreateAiSiteState::getCreationJournal($generation);
-		$errorMessage = $error ? $this->buildMagicSiteErrorMessage($steps, $tailwindRuntime) : '';
+		$errorMessage = $error ? $this->buildMagicSiteErrorMessage($steps, $tailwindRuntime, $generation) : '';
 		$recoverablePartial = $error
 			&& !empty($creationJournal['recoverablePartial'])
 			&& (int)($creationJournal['siteId'] ?? 0) > 0
@@ -392,7 +393,11 @@ class Copilot extends Controller
 		};
 	}
 
-	private function buildMagicSiteErrorMessage(array $steps, array $tailwindRuntime = []): string
+	private function buildMagicSiteErrorMessage(
+		array $steps,
+		array $tailwindRuntime = [],
+		?Generation $generation = null,
+	): string
 	{
 		$messagesByStepId = $this->getCreateAiSiteErrorMessages();
 		foreach ($steps as $step)
@@ -403,6 +408,14 @@ class Copilot extends Controller
 			}
 
 			$stepId = (int)($step['stepId'] ?? 0);
+			if (
+				$stepId === 15
+				&& $generation !== null
+				&& !AiSiteGenerationHelper::isModerationRefusal($generation, null)
+			)
+			{
+				return 'Failed to check the requested topic.';
+			}
 
 			return $messagesByStepId[$stepId] ?? 'Scenario finished with an error.';
 		}

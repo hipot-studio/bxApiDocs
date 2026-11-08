@@ -31,6 +31,11 @@ class FeedbackFormProvider
 		'user_id' => FILTER_VALIDATE_INT,
 	];
 
+	/**
+	 * Region entries of the mobile feedback forms. Zone and language selection is delegated to
+	 * ui\Form\FeedbackForm, which falls back to the en zone outside CIS and to ru inside it, so
+	 * the isDefault flags below only declare which entry is meant to be the west default.
+	 */
 	public const FORMS = [
 		'copilotRoles' => [
 			'ru-by-kz' => [
@@ -199,16 +204,103 @@ class FeedbackFormProvider
 		],
 	];
 
+	public const FORM_INTEGRATOR_REQUEST = 'integratorPartnerRequest';
+	public const FORM_INTEGRATOR_FEEDBACK = 'integratorFeedback';
+	public const FORM_INTEGRATOR_REFUSAL = 'integratorRefusal';
+
+	/**
+	 * Partner feedback forms are resolved dynamically from ui\FormProvider (the single
+	 * source of truth for region-specific id/sec) instead of being duplicated in FORMS.
+	 */
+	private const PARTNER_FORM_RESOLVERS = [
+		self::FORM_INTEGRATOR_REQUEST => 'getPartnerFormList',
+		self::FORM_INTEGRATOR_FEEDBACK => 'getPartnerFeedbackFormList',
+		self::FORM_INTEGRATOR_REFUSAL => 'getPartnerRefusalFormList',
+	];
+
+	private static array $partnerRegistry = [];
+
 	public static function getFormConfig(string $formId): array
 	{
-		$targetForm = self::FORMS[$formId] ?? null;
-		if (!isset($targetForm) || !is_array($targetForm))
+		return self::buildWebviewConfig(self::resolveRegistry($formId));
+	}
+
+	/**
+	 * Returns the region entry of the form the webview will actually render. The choice is made by
+	 * ui\Form\FeedbackForm, the same mechanism bitrix:ui.feedback.form uses over the very config from
+	 * getFormConfig(), so the form id handed to the page can not drift from the rendered one.
+	 */
+	public static function getFormData(string $formId): array|null
+	{
+		$registry = self::resolveRegistry($formId);
+
+		$currentForm = self::resolveCurrentForm($formId, self::buildWebviewConfig($registry));
+		if ($currentForm === null)
+		{
+			return null;
+		}
+
+		return self::findRegionData($registry, $currentForm);
+	}
+
+	/**
+	 * @return array[] region entries of the form, empty when the form id is unknown
+	 */
+	private static function resolveRegistry(string $formId): array
+	{
+		$staticForm = self::FORMS[$formId] ?? null;
+		if (is_array($staticForm))
+		{
+			return $staticForm;
+		}
+
+		return isset(self::PARTNER_FORM_RESOLVERS[$formId])
+			? self::buildPartnerRegistry($formId)
+			: []
+		;
+	}
+
+	/**
+	 * Reshapes the ui\FormProvider partner list into region entries, so partner forms travel the
+	 * same path as FORMS and need no special case of their own.
+	 */
+	private static function buildPartnerRegistry(string $formId): array
+	{
+		if (isset(self::$partnerRegistry[$formId]))
+		{
+			return self::$partnerRegistry[$formId];
+		}
+
+		if (!Loader::includeModule('ui'))
 		{
 			return [];
 		}
 
+		$resolver = self::PARTNER_FORM_RESOLVERS[$formId];
+		// Partner forms are hosted on the partner portal, not on the default feedback domain.
+		$portalUri = (new \Bitrix\UI\Form\UrlProvider())->getPartnerPortalUrl();
+
+		$entries = [];
+		foreach ((new \Bitrix\UI\Form\FormProvider())->$resolver() as $form)
+		{
+			$entries[] = [
+				'portalZones' => $form['zones'] ?? [],
+				'formId' => $form['id'] ?? null,
+				'lang' => $form['lang'] ?? null,
+				'sec' => $form['sec'] ?? null,
+				'portalUri' => $portalUri,
+			];
+		}
+
+		self::$partnerRegistry[$formId] = $entries;
+
+		return $entries;
+	}
+
+	private static function buildWebviewConfig(array $registry): array
+	{
 		$result = [];
-		foreach ($targetForm as $regionData)
+		foreach ($registry as $regionData)
 		{
 			if (empty($regionData['portalZones'])
 				|| empty($regionData['formId'])
@@ -229,26 +321,30 @@ class FeedbackFormProvider
 		return $result;
 	}
 
-	public static function getFormData(string $formId): array|null
+	private static function resolveCurrentForm(string $formId, array $forms): ?array
 	{
-		$targetForm = self::FORMS[$formId] ?? null;
-		if (!empty($targetForm) && is_array($targetForm))
+		if ($forms === [] || !Loader::includeModule('ui'))
 		{
-			$portalZone = \Bitrix\Main\Application::getInstance()->getLicense()->getRegion() ?: "en";
-			$defaultFormData = null;
-			foreach ($targetForm as $portalZonesData)
-			{
-				if (in_array($portalZone, $portalZonesData['portalZones']))
-				{
-					return $portalZonesData;
-				}
-				if (($portalZonesData['isDefault'] ?? false) === true)
-				{
-					$defaultFormData = $portalZonesData;
-				}
-			}
+			return null;
+		}
 
-			return $defaultFormData;
+		$feedbackForm = new \Bitrix\UI\Form\FeedbackForm($formId);
+		$feedbackForm->setFormParams($forms);
+		$currentForm = $feedbackForm->getCurrentForm();
+
+		return empty($currentForm['id']) ? null : $currentForm;
+	}
+
+	private static function findRegionData(array $registry, array $currentForm): ?array
+	{
+		foreach ($registry as $regionData)
+		{
+			if ((int)($regionData['formId'] ?? 0) === (int)$currentForm['id']
+				&& (string)($regionData['sec'] ?? '') === (string)($currentForm['sec'] ?? '')
+				&& (string)($regionData['lang'] ?? '') === (string)($currentForm['lang'] ?? ''))
+			{
+				return $regionData;
+			}
 		}
 
 		return null;

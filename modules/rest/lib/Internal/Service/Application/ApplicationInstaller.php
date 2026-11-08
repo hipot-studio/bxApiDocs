@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Bitrix\Rest\Internal\Service\Application;
 
 use Bitrix\Main;
+use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Internal\Entity\Application\App;
 use Bitrix\Rest\Internal\Entity\Application\AppAttributeCode;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Internal\Exception\Application\ApplicationNotInstalledException;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\Internal\Repository\IntegrationRepository;
+use Bitrix\Rest\Internal\Service\Embedding\EmbeddingAccessSynchronizer;
 use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 use Bitrix\Rest\Preset\Provider;
 use Bitrix\Rest\Enum\Integration\ElementCodeType;
@@ -20,6 +23,8 @@ class ApplicationInstaller
 		private readonly AppRepository $appRepository,
 		private readonly IntegrationRepository $integrationRepository = new IntegrationRepository(),
 		private readonly SecurityAuditLogger $securityAuditLogger = new SecurityAuditLogger(),
+		private readonly EmbeddingAccessSynchronizer $embeddingAccessSynchronizer
+			= new EmbeddingAccessSynchronizer(),
 	) {}
 
 	/**
@@ -30,6 +35,7 @@ class ApplicationInstaller
 		int $userId,
 		App $app,
 		bool $onlyApi,
+		AppInstallCompletionMode $installCompletionMode,
 		?string $applicationToken = null,
 	): App
 	{
@@ -47,6 +53,8 @@ class ApplicationInstaller
 				'APPLICATION_URL_HANDLER' => $app->getUrl(),
 				'APPLICATION_URL_INSTALL' => $app->getUrlInstall() ?? '',
 				'APPLICATION_ONLY_API' => $onlyApi ? 'Y' : 'N',
+				'APPLICATION_INSTALL_COMPLETION_MODE' => $installCompletionMode->value,
+				'APPLICATION_SKIP_INSTALL_EVENT' => 'Y',
 				'APPLICATION_MOBILE' => $app->isMobile() ? 'Y' : 'N',
 				'APPLICATION_LANG_NAME' => $app->getLangs()->getMenuNames(),
 				'WIDGET_NEEDED' => 'N',
@@ -68,6 +76,11 @@ class ApplicationInstaller
 		$appId = $integration->getAppId();
 
 		$savedApp = $this->appRepository->getById($appId);
+		$shouldFireInstallEvent = $this->applyExistingAppCompletionMode(
+			$savedApp,
+			$installCompletionMode,
+			$existingIntegration !== null,
+		);
 
 		if ($applicationToken !== null)
 		{
@@ -76,6 +89,10 @@ class ApplicationInstaller
 		$savedApp->setExternalAttributes($app->getExternalAttributes());
 
 		$this->appRepository->save($savedApp);
+		if ($shouldFireInstallEvent)
+		{
+			AppTable::install((int)$savedApp->getId());
+		}
 
 		$this->fireApplicationInstalled($integration->getId(), (int)$savedApp->getId(), $userId);
 
@@ -98,9 +115,9 @@ class ApplicationInstaller
 		int $userId,
 		App $app,
 		bool $onlyApi,
+		AppInstallCompletionMode $installCompletionMode,
 		?string $applicationToken = null,
 		?int $initiatorUserId = null,
-		bool $skipTariffCheck = false,
 	): App
 	{
 		$installerUserId = $initiatorUserId ?? $userId;
@@ -121,6 +138,8 @@ class ApplicationInstaller
 				'APPLICATION_URL_HANDLER' => $app->getUrl(),
 				'APPLICATION_URL_INSTALL' => $app->getUrlInstall() ?? '',
 				'APPLICATION_ONLY_API' => $onlyApi ? 'Y' : 'N',
+				'APPLICATION_INSTALL_COMPLETION_MODE' => $installCompletionMode->value,
+				'APPLICATION_SKIP_INSTALL_EVENT' => 'Y',
 				'APPLICATION_MOBILE' => $app->isMobile() ? 'Y' : 'N',
 				'APPLICATION_LANG_NAME' => $app->getLangs()->getMenuNames(),
 				'WIDGET_NEEDED' => 'N',
@@ -129,7 +148,6 @@ class ApplicationInstaller
 			ElementCodeType::APPLICATION->value,
 			$existingIntegration?->getId(),
 			$installerUserId,
-			$skipTariffCheck,
 		);
 		// endregion
 
@@ -151,17 +169,14 @@ class ApplicationInstaller
 		$appId = $integration->getAppId();
 
 		$savedApp = $this->appRepository->getById($appId);
+		$shouldFireInstallEvent = $this->applyExistingAppCompletionMode(
+			$savedApp,
+			$installCompletionMode,
+			$existingIntegration !== null,
+		);
 
 		$savedApp->setAccess('U' . $userId);
 		$savedApp->setAttribute(AppAttributeCode::OwnerUserId->value, (string)$userId);
-		if ($skipTariffCheck)
-		{
-			$savedApp->setAttribute(AppAttributeCode::ForceInstalled->value, 'Y');
-		}
-		else
-		{
-			$savedApp->removeAttribute(AppAttributeCode::ForceInstalled->value);
-		}
 		if ($applicationToken !== null)
 		{
 			$savedApp->setApplicationToken($applicationToken);
@@ -169,6 +184,12 @@ class ApplicationInstaller
 		$savedApp->setExternalAttributes($app->getExternalAttributes());
 
 		$this->appRepository->save($savedApp);
+		if ($shouldFireInstallEvent)
+		{
+			AppTable::install((int)$savedApp->getId());
+		}
+
+		$this->embeddingAccessSynchronizer->syncApp((int)$savedApp->getId());
 
 		$this->fireApplicationInstalled($integration->getId(), (int)$savedApp->getId(), $userId);
 
@@ -181,6 +202,34 @@ class ApplicationInstaller
 		);
 
 		return $savedApp;
+	}
+
+	/**
+	 * Aligns INSTALLED with the requested completion mode and tells the caller whether the install
+	 * event still has to be published. Reinstalling an existing application in immediate mode always
+	 * publishes it, even for an already installed application, the same way
+	 * Marketplace\Application::reinstall() does: a repeated attempt has to deliver the current
+	 * APPLICATION_TOKEN to the handler. Deferred mode never publishes it, the install page does.
+	 *
+	 * The event is published by the caller, after the application record is complete: Event\Sender
+	 * snapshots APPLICATION_TOKEN at publish time, so firing it from inside Provider::saveApp would
+	 * send the fallback token in the very first callback.
+	 */
+	private function applyExistingAppCompletionMode(
+		App $app,
+		AppInstallCompletionMode $installCompletionMode,
+		bool $hasExistingIntegration,
+	): bool
+	{
+		if (!$hasExistingIntegration)
+		{
+			return $app->isInstalled();
+		}
+
+		$shouldBeInstalled = $installCompletionMode === AppInstallCompletionMode::Immediate;
+		$app->setInstalled($shouldBeInstalled);
+
+		return $shouldBeInstalled;
 	}
 
 	private function fireApplicationInstalled(int $integrationId, int $appId, int $userId): void

@@ -5,6 +5,9 @@ namespace Bitrix\BIConnector\Access\Install;
 use Bitrix\BIConnector\Access\Permission\PermissionTable;
 use Bitrix\BIConnector\Access\Role\RoleRelationTable;
 use Bitrix\BIConnector\Access\Role\RoleTable;
+use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
+use Bitrix\BIConnector\Access\TableGroup\TableGroupBindingTable;
+use Bitrix\BIConnector\Access\TableGroup\TableGroupTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupBindingTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupScopeTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
@@ -29,6 +32,22 @@ final class AccessInstaller
 			$result->addErrors($installGroupResult->getErrors());
 
 			return $result;
+		}
+
+		// Roles do not depend on table groups, so a failure here must not leave the portal without roles.
+		$installTableGroupResult = TableGroupInstaller::install();
+		if (!$installTableGroupResult->isSuccess())
+		{
+			$result->addErrors($installTableGroupResult->getErrors());
+		}
+
+		// The composition follows the groups and by the same rule. The catalog is built by the data
+		// source events of other modules, and the order the modules are installed in does not
+		// guarantee they are all there in this hit, so the transition agent repeats this call.
+		$installBindingResult = TableGroupBindingInstaller::install();
+		if (!$installBindingResult->isSuccess())
+		{
+			$result->addErrors($installBindingResult->getErrors());
 		}
 
 		foreach ($roleMap->getRoles() as $role)
@@ -70,6 +89,11 @@ final class AccessInstaller
 		SupersetDashboardGroupTable::deleteByFilter(['>ID' => 0]);
 		SupersetDashboardGroupScopeTable::deleteByFilter(['>ID' => 0]);
 		SupersetDashboardGroupBindingTable::deleteByFilter(['>ID' => 0]);
+		TableGroupTable::deleteByFilter(['>ID' => 0]);
+		TableGroupBindingTable::deleteByFilter(['>ID' => 0]);
+		// The groups are dropped past TableGroupService, so the snapshot of the membership
+		// would keep serving the deleted composition until the end of the hit.
+		TableGroupMembershipService::clearCache();
 	}
 
 	private static function installDefaultGroups(): Result

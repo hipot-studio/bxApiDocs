@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Esg\Handler;
 
+use Bitrix\Main\Application;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\CheckList;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Integration\Im\ChatNotificationInterface;
 use Bitrix\Tasks\V2\Internal\Integration\Im\NotificationType;
+use Bitrix\Tasks\V2\Internal\Integration\Pull\Push\CheckListUpdated;
+use Bitrix\Tasks\V2\Internal\Integration\Pull\Push\Service as PullService;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Detector\ChecklistOperationDetector;
 use Bitrix\Tasks\V2\Internal\Service\Esg\Detector\ChecklistOperation;
@@ -24,12 +29,23 @@ class SaveCheckListHandler
 		private readonly ChatNotificationInterface   $chatNotification,
 		private readonly ChecklistOperationDetector  $operationDetector,
 		private readonly ChecklistOperationGrouper   $operationGrouper,
-		private readonly Logger                       $logger
+		private readonly Logger                       $logger,
+		private readonly PullService                  $pullService,
 	)
 	{
 	}
 
 	public function handle(SaveCheckListCommand $command): void
+	{
+		if (!$command->skipNotification)
+		{
+			$this->sendImNotifications($command);
+		}
+
+		$this->emitPullEvent($command);
+	}
+
+	private function sendImNotifications(SaveCheckListCommand $command): void
 	{
 		try
 		{
@@ -69,6 +85,81 @@ class SaveCheckListHandler
 			// Log error but don't let notification failures affect checklist save
 			$this->logger->logError($e);
 		}
+	}
+
+	private function emitPullEvent(SaveCheckListCommand $command): void
+	{
+		try
+		{
+			$taskId = $command->task->getId();
+			if ($taskId === null)
+			{
+				return;
+			}
+
+			$checkList = $command->pushCheckList;
+			$revision = $command->revision;
+			if ($checkList === null || $revision === null)
+			{
+				return;
+			}
+
+			if (!$this->pullService->isEnabled())
+			{
+				return;
+			}
+
+			$fromAi = $command->fromAi;
+
+			Application::getInstance()->addBackgroundJob(
+				fn () => $this->sendPullEvent($taskId, $checkList, $revision, $fromAi),
+			);
+		}
+		catch (Throwable $e)
+		{
+			$this->logger->logError($e);
+		}
+	}
+
+	private function sendPullEvent(int $taskId, CheckList $checkList, string $revision, bool $fromAi): void
+	{
+		try
+		{
+			$recipients = $this->resolvePullRecipients($taskId);
+			if (empty($recipients))
+			{
+				return;
+			}
+
+			$this->pullService->send(
+				$recipients,
+				new CheckListUpdated(
+					taskId: $taskId,
+					revision: $revision,
+					checklist: $checkList->toArray(),
+					fromAi: $fromAi,
+				),
+			);
+		}
+		catch (Throwable $e)
+		{
+			$this->logger->logError($e);
+		}
+	}
+
+	private function resolvePullRecipients(int $taskId): array
+	{
+		$container = Container::getInstance();
+
+		$memberIds = $container->getTaskRepository()->getById($taskId)?->getMemberIds() ?? [];
+		if (empty($memberIds))
+		{
+			return [];
+		}
+
+		$taskAccessService = $container->getTaskAccessService();
+
+		return $taskAccessService->filterUsersWithAccess($taskId, $memberIds);
 	}
 
 	/**
@@ -141,7 +232,7 @@ class SaveCheckListHandler
 
 			// Add assignee name and ID if present (for auditor/accomplice assignments)
 			if ($operation->getAssigneeName() !== null)
-            {
+			{
 				$args['assignee'] = new User(
 					id: $operation->getAssigneeId(),
 					name: $operation->getAssigneeName()

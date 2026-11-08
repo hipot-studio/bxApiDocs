@@ -10,6 +10,7 @@ use CUserTypeManager;
 use Bitrix\Main\Context;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\Application;
+use Bitrix\Main\Result;
 
 Loc::loadMessages(__FILE__);
 
@@ -25,6 +26,13 @@ class EnumType extends BaseType
 	public const DISPLAY_CHECKBOX = 'CHECKBOX';
 	public const DISPLAY_UI = 'UI';
 	public const DISPLAY_DIALOG = 'DIALOG';
+
+	public static function onBeforeDeleteField(array $userField): Result
+	{
+		(new CUserFieldEnum())->DeleteFieldEnum((int)$userField['ID']);
+
+		return new Result();
+	}
 
 	/**
 	 * @return array

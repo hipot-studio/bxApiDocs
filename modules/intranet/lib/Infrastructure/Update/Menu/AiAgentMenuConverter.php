@@ -6,8 +6,10 @@ namespace Bitrix\Intranet\Infrastructure\Update\Menu;
 
 use CBitrixComponent;
 
+use Bitrix\Bizproc\Public\Feature\AiAgent\AiAgentSectionFlag;
 use Bitrix\Bizproc\Public\Service\AiAgent\RegionAvailabilityServiceInterface;
 use Bitrix\Intranet\Integration\Bizproc;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Update\Stepper;
@@ -66,12 +68,12 @@ class AiAgentMenuConverter extends Stepper
 
 	protected function isAiAgentsAvailable(): bool
 	{
-		if (\Bitrix\Main\Config\Option::get('bizproc', 'feature_ai_agents', 'N') !== 'Y')
+		if (!Loader::includeModule('bizproc'))
 		{
 			return false;
 		}
 
-		if (!Loader::includeModule('bizproc'))
+		if (Feature::isDisabled(AiAgentSectionFlag::class))
 		{
 			return false;
 		}
@@ -91,6 +93,9 @@ class AiAgentMenuConverter extends Stepper
 			->setSelect(['ID'])
 			->where('REAL_USER', 'expr', true)
 			->addFilter('>ID', $lastId)
+			// The next batch starts from the last id of this one, so the walk is only complete while the
+			// batch comes back in ascending order: without it a batch may skip ids it never returned.
+			->addOrder('ID', 'ASC')
 			->setLimit($this->limit)
 			->exec()
 			->fetchAll();

@@ -54,6 +54,28 @@ class SignersListUserRepository
 		return $userIds;
 	}
 
+	/**
+	 * @return list<int>
+	 */
+	public function listUniqueUserIdsByFilter(ConditionTree $filter, int $limit = 0): array
+	{
+		$rows = Internal\SignersList\SignersListUserTable::query()
+			->setSelect(['USER_ID'])
+			->setDistinct()
+			->where($filter)
+			->setLimit(max(0, $limit))
+			->exec()
+		;
+
+		$userIds = [];
+		while ($row = $rows->fetch())
+		{
+			$userIds[] = (int)$row['USER_ID'];
+		}
+
+		return $userIds;
+	}
+
 	public function count(ConditionTree $filter): int
 	{
 		return $this->prepareUserListQuery($filter)->queryCountTotal();

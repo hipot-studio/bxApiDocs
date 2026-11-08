@@ -105,6 +105,11 @@ class InMemoryCheckListRepository implements CheckListRepositoryInterface
 		return $this->idsCache[$key];
 	}
 
+	public function filterExistingIds(array $ids, Entity\CheckList\Type $type): array
+	{
+		return $this->checkListRepository->filterExistingIds($ids, $type);
+	}
+
 	public function getAttachmentIdsByEntity(int $entityId, Entity\CheckList\Type $type): array
 	{
 		$key = "{$entityId}_{$type->value}";

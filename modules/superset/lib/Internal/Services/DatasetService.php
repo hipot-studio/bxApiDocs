@@ -8,6 +8,7 @@ use Bitrix\Superset\Internal\Api;
 use Bitrix\Superset\Internal\HttpStatus;
 use Bitrix\Superset\Internal\Dto;
 use Bitrix\Superset\Internal\Support\AbstractSupersetContext;
+use Bitrix\Superset\Internal\Support\InstanceUnavailableStatus;
 use Bitrix\Superset\Internal\Services\ImportExport\ArchiveRepacker;
 use Bitrix\Superset\Internal\Services\ImportExport\EntitiesImporter;
 
@@ -85,6 +86,39 @@ final class DatasetService extends AbstractSupersetContext
 			return $result;
 		}
 
+		return $this->fetchAll($filter);
+	}
+
+	/**
+	 * Lists every physical (non-virtual) dataset of the instance.
+	 *
+	 * The `dataset_is_null_or_empty` filter on the `sql` column is Superset's server-side way to keep
+	 * only physical tables (virtual datasets always carry a non-empty SQL). Filtering on the instance
+	 * avoids transferring virtual datasets we would drop anyway.
+	 */
+	public function listPhysical(): Main\Result
+	{
+		$filter = [
+			[
+				'col' => 'sql',
+				'opr' => 'dataset_is_null_or_empty',
+				'value' => true,
+			],
+		];
+
+		return $this->fetchAll($filter);
+	}
+
+	/**
+	 * Walks the whole filtered list page by page and returns it flat.
+	 *
+	 * The unbounded mode of {@see self::list()}: the callers that need every dataset at once — the
+	 * by-ids reads, the idempotency check and the physical-dataset sweep — share it instead of each
+	 * paging on its own.
+	 */
+	private function fetchAll(array $filter): Main\Result
+	{
+		$datasetApi = $this->getDatasetApi();
 		$preparedDataset = [];
 		$currentPage = 0;
 
@@ -469,7 +503,9 @@ final class DatasetService extends AbstractSupersetContext
 		if (!$importResult->isSuccess())
 		{
 			return $this->createErrorResult(
-				'DatasetImport. Import dataset errors: ' . implode("\n", $importResult->getErrorMessages())
+				'DatasetImport. Import dataset errors: ' . implode("\n", $importResult->getErrorMessages()),
+				null,
+				InstanceUnavailableStatus::isReportedBy($importResult) ? HttpStatus::DEACTIVATED_INSTANCE : null,
 			);
 		}
 

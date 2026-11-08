@@ -8,6 +8,7 @@ use Bitrix\Crm\Copilot\AiQueueBuffer\Entity\AiQueueBufferItem;
 use Bitrix\Crm\Copilot\AiQueueBuffer\Enum\Status;
 use Bitrix\Crm\Copilot\Restriction\ExecutionDataManager;
 use Bitrix\Crm\Copilot\Restriction\LimitManager;
+use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
@@ -17,6 +18,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use COption;
+use Throwable;
 
 final class Consumer
 {
@@ -120,42 +122,105 @@ final class Consumer
 	private function processItems(Entity\EO_AiQueueBuffer_Collection $items): Result
 	{
 		$successCount = 0;
+		$processedItemIds = [];
 
-		/**
-		 * @var $item AiQueueBuffer
-		 */
-		foreach ($items as $item)
+		try
 		{
-			if ($item->getRetryCount() > self::MAX_RETRY_COUNT)
+			/**
+			 * @var $item AiQueueBuffer
+			 */
+			foreach ($items as $item)
 			{
-				continue;
-			}
+				// the item is charged to this pass before any work on it starts: whatever happens next,
+				// the pass must not leave it behind, and must not drop the items it has not reached yet
+				$processedItemIds[] = $item->getId();
 
-			$provider = Factory::getProvider($item->getProviderId());
-			if ($provider === null)
-			{
-				continue;
-			}
+				try
+				{
+					if ($this->processItem($item))
+					{
+						$successCount++;
+					}
+				}
+				catch (Throwable $exception)
+				{
+					// one broken item must not cancel the rest of the pass
+					AIManager::logger()->critical(
+						'{date}: {class}: Unexpected error while processing buffer item {itemId}'
+						. ' by provider {providerId}: {exception}' . PHP_EOL,
+						[
+							'class' => self::class,
+							'itemId' => $item->getId(),
+							'providerId' => $item->getProviderId(),
+							'exception' => $exception,
+						],
+					);
 
-			// the last processing attempt before the item is dropped: providers that gate on a pending
-			// async prerequisite (repeat-sale transcription) must proceed with what is ready here
-			// instead of deferring forever (partial success)
-			$isFinalAttempt = $item->getRetryCount() >= self::MAX_RETRY_COUNT;
-
-			$result = $provider->process($item->getProviderData(), $isFinalAttempt);
-			if ($result->isSuccess())
-			{
-				$successCount++;
+					try
+					{
+						$this->moveItemToEndOfQueue($item);
+					}
+					catch (Throwable $moveException)
+					{
+						AIManager::logger()->critical(
+							'{date}: {class}: Failed to move buffer item {itemId} to the end of the queue:'
+							. ' {exception}' . PHP_EOL,
+							[
+								'class' => self::class,
+								'itemId' => $item->getId(),
+								'exception' => $moveException,
+							],
+						);
+					}
+				}
 			}
-			elseif ($this->isNeedMoveItemToEndOfQueue($result->getError()))
+		}
+		finally
+		{
+			if (!empty($processedItemIds))
 			{
-				$this->moveItemToEndOfQueue($item);
+				$this->controller->delete($processedItemIds);
 			}
 		}
 
-		$this->controller->delete($items->getIdList());
-
 		return (new Result())->setData(['successCount' => $successCount]);
+	}
+
+	/**
+	 * Returns true when the provider has finished the item, false when the item was skipped or
+	 * deferred. Every failure mode of a single item stays inside the caller's per-item catch.
+	 */
+	private function processItem(AiQueueBuffer $item): bool
+	{
+		if ($item->getRetryCount() > self::MAX_RETRY_COUNT)
+		{
+			return false;
+		}
+
+		$provider = Factory::getProvider($item->getProviderId());
+		if ($provider === null)
+		{
+			return false;
+		}
+
+		// the last processing attempt before the item is dropped: providers that gate on a pending
+		// async prerequisite (repeat-sale transcription) must proceed with what is ready here
+		// instead of deferring forever (partial success)
+		$isFinalAttempt = $item->getRetryCount() >= self::MAX_RETRY_COUNT;
+
+		$result = $provider->process($item->getProviderData(), $isFinalAttempt);
+
+		if ($result->isSuccess())
+		{
+			return true;
+		}
+
+		if ($this->isNeedMoveItemToEndOfQueue($result->getError()))
+		{
+			$this->moveItemToEndOfQueue($item);
+		}
+
+		return false;
 	}
 
 	private function isNeedMoveItemToEndOfQueue(?Error $error = null): bool
@@ -180,7 +245,20 @@ final class Consumer
 		$aiQueueBufferItem = AiQueueBufferItem::createFromEntity($item);
 		$aiQueueBufferItem->incrementRetryCount();
 
-		$this->controller->add($aiQueueBufferItem);
+		$addResult = $this->controller->add($aiQueueBufferItem);
+		if (!$addResult->isSuccess())
+		{
+			AIManager::logger()->critical(
+				'{date}: {class}: Buffer item {itemId} of provider {providerId} is lost: it was removed'
+				. ' from the queue, but the retry row was not added: {errors}' . PHP_EOL,
+				[
+					'class' => self::class,
+					'itemId' => $item->getId(),
+					'providerId' => $item->getProviderId(),
+					'errors' => $addResult->getErrors(),
+				],
+			);
+		}
 	}
 
 	private function getLimit(): int

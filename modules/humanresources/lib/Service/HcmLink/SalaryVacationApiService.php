@@ -5,6 +5,7 @@ namespace Bitrix\HumanResources\Service\HcmLink;
 use Bitrix\HumanResources\Exception\CreationFailedException;
 use Bitrix\HumanResources\Item\HcmLink\Employee;
 use Bitrix\HumanResources\Item\HcmLink\Field;
+use Bitrix\HumanResources\Item\HcmLink\FieldValue;
 use Bitrix\HumanResources\Item\HcmLink\Job;
 use Bitrix\HumanResources\Item\HcmLink\Job\SettingsData;
 use Bitrix\HumanResources\Item\HcmLink\Person;
@@ -34,8 +35,8 @@ use Bitrix\Main\Type\DateTime;
  *  - request() sends the payroll type, optional period, and PIN to 1C;
  *  - getResult() returns the job status and received field values.
  *
- * REST event payloads contain jobId followed by outputData. company is the CRM company ID,
- * companyGuid is the 1C company GUID, and persons contains person GUIDs matching employees.
+ * REST event payloads contain jobId followed by outputData. company carries the portal CRM company
+ * ID, while companyUid carries the 1C organization UID.
  */
 class SalaryVacationApiService
 {
@@ -236,7 +237,7 @@ class SalaryVacationApiService
 		$employeeUid = $employee->code;
 		$personGuid = Container::getHcmLinkPersonRepository()->getById($employee->personId)?->code;
 
-		$recentPinJob = $this->findRecentPinJob($company->id, $employeeUid, $type);
+		$recentPinJob = $this->findRecentPinJob($company->id, $employeeId, $employeeUid, $type);
 		if ($recentPinJob !== null)
 		{
 			return new JobServiceResult($recentPinJob);
@@ -255,7 +256,7 @@ class SalaryVacationApiService
 			type: JobType::PIN_REQUEST,
 			outputData: [
 				'company' => $company->myCompanyId,
-				'companyGuid' => $company->code,
+				'companyUid' => $company->code,
 				'employees' => [$employeeUid],
 				'persons' => $personGuid !== null ? [$personGuid] : [],
 				'date' => (new DateTime())->format(\DateTimeInterface::ATOM),
@@ -318,15 +319,10 @@ class SalaryVacationApiService
 		$personGuid = Container::getHcmLinkPersonRepository()->getById($employee->personId)?->code;
 
 		$fieldUids = [];
-		$documentField = null;
 		$documentFieldCode = $type->getDocumentFieldCode();
 		if ($documentFieldCode !== null)
 		{
-			$documentField = Container::getHcmLinkFieldRepository()->getByUnique($company->id, $documentFieldCode);
-			if ($documentField?->entityType === $type->getFieldEntityType())
-			{
-				$fieldUids[] = $documentField->field;
-			}
+			$fieldUids[] = $documentFieldCode;
 		}
 		else
 		{
@@ -362,7 +358,7 @@ class SalaryVacationApiService
 
 		$outputData = [
 			'company' => $company->myCompanyId,
-			'companyGuid' => $company->code,
+			'companyUid' => $company->code,
 			'employees' => [$employeeUid],
 			'persons' => $personGuid !== null ? [$personGuid] : [],
 			'fields' => $fieldUids,
@@ -382,7 +378,7 @@ class SalaryVacationApiService
 			companyId: $company->id,
 			type: JobType::SALARY_VACATION_REQUEST,
 			outputData: $outputData,
-			settingsData: new SettingsData(documentIdByEmployeeId: [$employeeId => 0]),
+			settingsData: new SettingsData(documentIdByEmployeeId: [$employeeId => $employeeId]),
 		);
 
 		return $this->dispatch($job);
@@ -402,10 +398,12 @@ class SalaryVacationApiService
 
 	private function getResultByJob(?Job $job, int $entityId): array
 	{
-		$resultEntityId = $job?->settingsData?->documentIdByEmployeeId[$entityId] ?? $entityId;
+		$resultEntityId = $job?->type === JobType::FIELD_VALUES
+			? $entityId
+			: ($job?->settingsData?->documentIdByEmployeeId[$entityId] ?? $entityId);
 
 		$fieldIds = [];
-		if ($job !== null && $job->type === JobType::SALARY_VACATION_REQUEST)
+		if ($job !== null && in_array($job->type, [JobType::FIELD_VALUES, JobType::SALARY_VACATION_REQUEST], true))
 		{
 			$requestedUids = (array)($job->outputData['fields'] ?? []);
 			/** @var Field $field */
@@ -487,6 +485,80 @@ class SalaryVacationApiService
 	}
 
 	/**
+	 * Marks the PIN used by a completed document request as consumed and releases
+	 * the completed PIN and document request slots.
+	 */
+	private function consumePin(Job $documentJob, Employee $employee): void
+	{
+		if ($documentJob->type !== JobType::SALARY_VACATION_REQUEST || $documentJob->status !== JobStatus::DONE)
+		{
+			return;
+		}
+
+		$pin = (string)($documentJob->outputData['pin'] ?? '');
+		$type = $this->resolvePayrollType((string)($documentJob->outputData['type'] ?? ''));
+		$userId = Container::getHcmLinkPersonRepository()->getById($employee->personId)?->userId;
+		if ($pin === '' || $type === null || $userId === null || $userId <= 0 || $employee->id === null)
+		{
+			return;
+		}
+
+		$pinJob = $this->findRecentPinJob(
+			$documentJob->companyId,
+			$employee->id,
+			$employee->code,
+			$type,
+			$pin,
+		);
+		if ($pinJob === null)
+		{
+			return;
+		}
+
+		$pinRequestKey = $this->buildRequestThrottleKey(
+			'pin_request',
+			$userId,
+			$documentJob->companyId,
+			$employee->id,
+			$type,
+		);
+		$documentRequestKey = $this->buildRequestThrottleKey(
+			'document_request',
+			$userId,
+			$documentJob->companyId,
+			$employee->id,
+			$type,
+		);
+		if (!$this->connection->lock($pinRequestKey))
+		{
+			return;
+		}
+
+		try
+		{
+			$pinFieldValue = $this->getPinFieldValue($documentJob->companyId, $employee->id, $pinJob);
+			if (
+				$pinFieldValue?->id === null
+				|| !hash_equals($pinFieldValue->value, $pin)
+			)
+			{
+				return;
+			}
+
+			Container::getHcmLinkFieldValueRepository()->removeByIds([$pinFieldValue->id]);
+			$this->storage->deleteMultiple([$pinRequestKey, $documentRequestKey]);
+		}
+		catch (StorageException)
+		{
+			// The PIN is already consumed; the request slot will expire on its own.
+		}
+		finally
+		{
+			$this->connection->unlock($pinRequestKey);
+		}
+	}
+
+	/**
 	 * Returns the controller status response and completed result data.
 	 * Unknown jobs and jobs owned by another employee are represented as EXPIRED.
 	 *
@@ -523,7 +595,7 @@ class SalaryVacationApiService
 		{
 			$response['pin'] = $this->getPin($companyId, (int)$employee->id, $job);
 		}
-		elseif ($job->type === JobType::SALARY_VACATION_REQUEST)
+		elseif (in_array($job->type, [JobType::FIELD_VALUES, JobType::SALARY_VACATION_REQUEST], true))
 		{
 			$result = $this->getResultByJob($job, (int)$employee->id);
 			if (!empty($result['isActual']))
@@ -535,6 +607,11 @@ class SalaryVacationApiService
 					$response['documentHtml'] = (string)$value;
 				}
 			}
+
+			if ($job->type === JobType::SALARY_VACATION_REQUEST)
+			{
+				$this->consumePin($job, $employee);
+			}
 		}
 
 		return $response;
@@ -542,7 +619,7 @@ class SalaryVacationApiService
 
 	private function isJobForEmployee(Job $job, Employee $employee): bool
 	{
-		if (!in_array($job->type, [JobType::PIN_REQUEST, JobType::SALARY_VACATION_REQUEST], true))
+		if (!in_array($job->type, [JobType::PIN_REQUEST, JobType::FIELD_VALUES, JobType::SALARY_VACATION_REQUEST], true))
 		{
 			return false;
 		}
@@ -559,7 +636,10 @@ class SalaryVacationApiService
 		{
 			$jobRepository = Container::getHcmLinkJobRepository();
 			$job = $jobRepository->add($job);
-			if (!empty($job->settingsData?->documentIdByEmployeeId))
+			if (
+				$job->type === JobType::PIN_REQUEST
+				&& !empty($job->settingsData?->documentIdByEmployeeId)
+			)
 			{
 				$job->settingsData->documentIdByEmployeeId = array_fill_keys(
 					array_keys($job->settingsData->documentIdByEmployeeId),
@@ -587,25 +667,83 @@ class SalaryVacationApiService
 	/**
 	 * Returns a recent PIN_REQUEST job for the employee within the throttle interval.
 	 */
-	private function findRecentPinJob(int $companyId, string $employeeUid, PayrollType $type): ?Job
+	private function findRecentPinJob(
+		int $companyId,
+		int $employeeId,
+		string $employeeUid,
+		PayrollType $type,
+		?string $pin = null,
+	): ?Job
 	{
 		$since = (new DateTime())->add('-' . self::PIN_THROTTLE_SECONDS . ' seconds');
 		$jobs = Container::getHcmLinkJobRepository()->getLastByTypeAndDate(
 			JobType::PIN_REQUEST,
 			$since,
 			$companyId,
-			[JobStatus::STARTED->value, JobStatus::IN_PROGRESS->value],
+			[JobStatus::STARTED->value, JobStatus::IN_PROGRESS->value, JobStatus::DONE->value],
 			self::PIN_THROTTLE_SCAN_LIMIT,
 		);
 
 		foreach ($jobs as $job)
 		{
 			if (
-				in_array($employeeUid, (array)($job->outputData['employees'] ?? []), true)
-				&& ($job->outputData['type'] ?? null) === mb_strtolower($type->name)
+				!in_array($employeeUid, (array)($job->outputData['employees'] ?? []), true)
+				|| ($job->outputData['type'] ?? null) !== mb_strtolower($type->name)
 			)
 			{
+				continue;
+			}
+
+			if ($job->status !== JobStatus::DONE)
+			{
+				if ($pin === null)
+				{
+					return $job;
+				}
+
+				continue;
+			}
+
+			$currentPin = $this->getPin($companyId, $employeeId, $job);
+			if ($currentPin !== null && ($pin === null || hash_equals($currentPin, $pin)))
+			{
 				return $job;
+			}
+		}
+
+		return null;
+	}
+
+	private function getPinFieldValue(int $companyId, int $employeeId, ?Job $job = null): ?FieldValue
+	{
+		$pinField = Container::getHcmLinkFieldRepository()->getByUnique($companyId, PinService::FIELD_CODE);
+		if ($pinField === null)
+		{
+			return null;
+		}
+
+		$resultEntityId = $job?->settingsData?->documentIdByEmployeeId[$employeeId] ?? $employeeId;
+		$value = Container::getHcmLinkFieldValueRepository()->getByUnique($resultEntityId, $pinField->id);
+		if (
+			$value === null
+			|| $value->expiredAt === null
+			|| $value->expiredAt->getTimestamp() < time()
+		)
+		{
+			return null;
+		}
+
+		return $value;
+	}
+
+	private function resolvePayrollType(string $type): ?PayrollType
+	{
+		$type = mb_strtoupper($type);
+		foreach (PayrollType::cases() as $payrollType)
+		{
+			if ($payrollType->name === $type)
+			{
+				return $payrollType;
 			}
 		}
 

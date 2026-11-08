@@ -4,6 +4,7 @@ namespace Bitrix\Rest\V3\Exception\Validation;
 
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\LocalizableMessage;
+use Bitrix\Rest\V3\Dto\TypeHelper;
 
 class InvalidRequestFieldTypeException extends RequestValidationException
 {
@@ -13,7 +14,7 @@ class InvalidRequestFieldTypeException extends RequestValidationException
 			code: 'REST_V3_EXCEPTION_VALIDATION_INVALIDREQUESTFIELDTYPEEXCEPTION',
 			replace: [
 				'#FIELD#' => $field,
-				'#TYPE#' => class_exists($type) ? (new \ReflectionClass($type))->getShortName() : $type,
+				'#TYPE#' => TypeHelper::classExists($type) ? (new \ReflectionClass($type))->getShortName() : $type,
 			],
 		);
 		parent::__construct([new Error($message, $field)]);

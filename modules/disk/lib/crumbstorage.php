@@ -101,12 +101,15 @@ class CrumbStorage
 	/**
 	 * Preloads crumbs for objects in a single query.
 	 *
+	 * Objects sharing a parent share its ancestors, so one of them stands for the rest in the query.
+	 *
 	 * @param BaseObject[] $objects Objects.
 	 * @return void
 	 */
 	public function preloadByObjects(array $objects): void
 	{
 		$objectsToLoad = [];
+		$representativesByParentId = [];
 		$rootObjectIds = [];
 		foreach ($objects as $object)
 		{
@@ -133,7 +136,11 @@ class CrumbStorage
 			}
 
 			$objectsToLoad[$objectId] = $object;
-			$rootObjectIds[$objectId] = $object->getStorage()->getRootObjectId();
+			if (!isset($representativesByParentId[$parentId]))
+			{
+				$representativesByParentId[$parentId] = $objectId;
+				$rootObjectIds[$objectId] = $object->getStorage()->getRootObjectId();
+			}
 		}
 
 		if (!$objectsToLoad)
@@ -141,7 +148,8 @@ class CrumbStorage
 			return;
 		}
 
-		$crumbsByObjectId = array_fill_keys(array_keys($objectsToLoad), []);
+		$parentIdsByRepresentative = array_flip($representativesByParentId);
+		$crumbsByParentId = array_fill_keys(array_keys($representativesByParentId), []);
 		$rows = ObjectTable::query()
 			->setSelect([
 				'ID',
@@ -150,7 +158,7 @@ class CrumbStorage
 				'TARGET_OBJECT_ID' => 'PATH_PARENT.OBJECT_ID',
 				'DEPTH_LEVEL' => 'PATH_PARENT.DEPTH_LEVEL',
 			])
-			->whereIn('PATH_PARENT.OBJECT_ID', array_keys($objectsToLoad))
+			->whereIn('PATH_PARENT.OBJECT_ID', array_keys($parentIdsByRepresentative))
 			->where('PATH_PARENT.DEPTH_LEVEL', '>', 0)
 			->where('DELETED_TYPE', ObjectTable::DELETED_TYPE_NONE)
 			->setOrder(['PATH_PARENT.DEPTH_LEVEL' => 'DESC'])
@@ -158,25 +166,26 @@ class CrumbStorage
 		;
 		while ($row = $rows->fetch())
 		{
-			$objectId = (int)$row['TARGET_OBJECT_ID'];
-			$parentId = (int)$row['ID'];
-			if ($parentId === (int)$rootObjectIds[$objectId])
+			$representativeId = (int)$row['TARGET_OBJECT_ID'];
+			$ancestorId = (int)$row['ID'];
+			if ($ancestorId === (int)$rootObjectIds[$representativeId])
 			{
 				continue;
 			}
 
-			$parent = BaseObject::buildFromArray([
+			$ancestor = BaseObject::buildFromArray([
 				'ID' => $row['ID'],
 				'NAME' => $row['NAME'],
 				'TYPE' => $row['TYPE'],
 			]);
-			$crumbsByObjectId[$objectId][$parentId] = $parent->getName();
+			$crumbsByParentId[$parentIdsByRepresentative[$representativeId]][$ancestorId] = $ancestor->getName();
 		}
 
 		foreach ($objectsToLoad as $objectId => $object)
 		{
-			$this->crumbsByObjectId[$objectId] = $crumbsByObjectId[$objectId];
-			$this->crumbsByObjectId[$object->getParentId()] = $crumbsByObjectId[$objectId];
+			$parentId = $object->getParentId();
+			$this->crumbsByObjectId[$parentId] = $crumbsByParentId[$parentId];
+			$this->crumbsByObjectId[$objectId] = $crumbsByParentId[$parentId];
 			$this->crumbsByObjectId[$objectId][$objectId] = $this->fetchNameByObject($object);
 		}
 	}

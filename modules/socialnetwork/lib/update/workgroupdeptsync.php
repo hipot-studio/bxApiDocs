@@ -2,6 +2,7 @@
 
 namespace Bitrix\Socialnetwork\Update;
 
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
 use Bitrix\Main\Update\Stepper;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Config\Option;
@@ -9,6 +10,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Socialnetwork\Item\UserToGroup;
 use Bitrix\Socialnetwork\UserToGroupTable;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 
 Loc::loadMessages(__FILE__);
 
@@ -108,7 +110,10 @@ final class WorkgroupDeptSync extends Stepper
 		}
 
 		$result = [
-			'PLUS' => array_unique(array_diff($newUserList, $membersList)),
+			'PLUS' => ExternalMembershipValidator::filterUsers(
+				(int)$workgroupId,
+				array_unique(array_diff($newUserList, $membersList)),
+			),
 			'MINUS' => array_unique(array_diff($oldUserList, $newUserList)),
 			'OLD_RELATIONS' => $oldRelationList,
 		];
@@ -368,6 +373,9 @@ final class WorkgroupDeptSync extends Stepper
 
 					\CSocNetGroup::setStat($workgroupId);
 				}
+
+				// A stepper outlives the response, so nothing else would clear the tags claimed by this portion
+				DeferredTagCleaner::getInstance()->flush();
 
 				$params['number'] += $counter;
 

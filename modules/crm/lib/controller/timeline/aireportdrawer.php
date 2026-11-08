@@ -10,6 +10,7 @@ use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Dto\ActivityContext;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Dto\DrawerRequest;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Presentation\CallPresentationBuilder;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Presentation\EmailPresentationBuilder;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Presentation\OpenLinePresentationBuilder;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Presentation\PresentationResolver;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Scenario\CallAssessmentScenarioBuilder;
@@ -17,9 +18,12 @@ use Bitrix\Crm\Service\Timeline\AiReportDrawer\Scenario\ScenarioBuilderInterface
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Scenario\ScenarioCode;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Scenario\ScenarioRegistry;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Scenario\SummaryHistoryScenarioBuilder;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Scenario\TranscriptScenarioBuilder;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\ActivityBadgeCleaner;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\ActivityContextLoader;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\CallRecordDataProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\ClientDataProvider;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\EmailThreadActivityProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\ResponsibleDataProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SettingsProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\SummaryDataProvider;
@@ -107,13 +111,41 @@ final class AiReportDrawer extends Base
 		return $result;
 	}
 
-	private function loadScenario(ScenarioCode $scenarioCode, DrawerRequest $request, bool $shouldSubscribeToPull): ?array
+	public function loadTranscriptDrawerAction(int $activityId, int $ownerTypeId, int $ownerId): ?array
+	{
+		if ($activityId <= 0 || $ownerTypeId <= 0 || $ownerId <= 0)
+		{
+			$this->addError(ErrorCode::getNotFoundError());
+
+			return null;
+		}
+
+		$result = $this->loadScenario(
+			ScenarioCode::TRANSCRIPT,
+			new DrawerRequest($activityId, $ownerTypeId, $ownerId),
+			false,
+			false,
+		);
+		if ($result === null)
+		{
+			$this->addError(ErrorCode::getNotFoundError());
+		}
+
+		return $result;
+	}
+
+	private function loadScenario(
+		ScenarioCode $scenarioCode,
+		DrawerRequest $request,
+		bool $shouldSubscribeToPull,
+		bool $shouldExposeErrors = true,
+	): ?array
 	{
 		$currentUserId = (int)$this->getCurrentUser()?->getId();
 		$contextResult = $this->createActivityContextLoader()->load($request, $currentUserId);
 		if (!$contextResult->isSuccess())
 		{
-			$this->addErrors($contextResult->getErrors());
+			$this->exposeScenarioErrors($contextResult->getErrors(), $shouldExposeErrors);
 
 			return null;
 		}
@@ -121,7 +153,10 @@ final class AiReportDrawer extends Base
 		$context = $contextResult->getData()['context'] ?? null;
 		if (!$context instanceof ActivityContext)
 		{
-			$this->addError(new Error('Report drawer context not found'));
+			$this->exposeScenarioErrors(
+				[new Error('Report drawer context not found')],
+				$shouldExposeErrors,
+			);
 
 			return null;
 		}
@@ -134,7 +169,10 @@ final class AiReportDrawer extends Base
 		$scenarioBuilder = $this->createScenarioRegistry()->getByCode($scenarioCode);
 		if (!$scenarioBuilder instanceof ScenarioBuilderInterface)
 		{
-			$this->addError(new Error('Report drawer scenario not found'));
+			$this->exposeScenarioErrors(
+				[new Error('Report drawer scenario not found')],
+				$shouldExposeErrors,
+			);
 
 			return null;
 		}
@@ -142,7 +180,7 @@ final class AiReportDrawer extends Base
 		$result = $scenarioBuilder->build($context);
 		if (!$result->isSuccess())
 		{
-			$this->addErrors($result->getErrors());
+			$this->exposeScenarioErrors($result->getErrors(), $shouldExposeErrors);
 
 			return null;
 		}
@@ -151,12 +189,24 @@ final class AiReportDrawer extends Base
 
 		if (!is_array($drawerData))
 		{
-			$this->addError(new Error('Report drawer data not found'));
+			$this->exposeScenarioErrors(
+				[new Error('Report drawer data not found')],
+				$shouldExposeErrors,
+			);
 
 			return null;
 		}
 
 		return $drawerData;
+	}
+
+	/** @param Error[] $errors */
+	private function exposeScenarioErrors(array $errors, bool $shouldExposeErrors): void
+	{
+		if ($shouldExposeErrors)
+		{
+			$this->addErrors($errors);
+		}
 	}
 
 	private function subscribeToPull(int $activityId, int $userId): void
@@ -246,13 +296,16 @@ final class AiReportDrawer extends Base
 	private function createScenarioRegistry(): ScenarioRegistry
 	{
 		$responsibleDataProvider = new ResponsibleDataProvider();
-		$presentationResolver = new PresentationResolver(
-			new OpenLinePresentationBuilder($responsibleDataProvider),
-			new CallPresentationBuilder(),
-		);
 		$jobRepository = JobRepository::getInstance();
 		$summaryDataProvider = new SummaryDataProvider($jobRepository);
+		$presentationResolver = new PresentationResolver(
+			new OpenLinePresentationBuilder($responsibleDataProvider),
+			new EmailPresentationBuilder($summaryDataProvider, new EmailThreadActivityProvider()),
+			new CallPresentationBuilder(),
+		);
 		$settingsProvider = new SettingsProvider();
+		$activityBadgeCleaner = new ActivityBadgeCleaner();
+		$callRecordDataProvider = new CallRecordDataProvider();
 
 		return new ScenarioRegistry(
 			new CallAssessmentScenarioBuilder(
@@ -260,11 +313,20 @@ final class AiReportDrawer extends Base
 				$summaryDataProvider,
 				$jobRepository,
 				$settingsProvider,
+				$callRecordDataProvider,
 			),
 			new SummaryHistoryScenarioBuilder(
 				$presentationResolver,
 				$summaryDataProvider,
-				new ActivityBadgeCleaner(),
+				$callRecordDataProvider,
+				$activityBadgeCleaner,
+				$settingsProvider,
+			),
+			new TranscriptScenarioBuilder(
+				$presentationResolver,
+				$summaryDataProvider,
+				$callRecordDataProvider,
+				$activityBadgeCleaner,
 				$settingsProvider,
 			),
 		);

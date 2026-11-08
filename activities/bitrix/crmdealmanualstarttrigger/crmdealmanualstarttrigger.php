@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 use Bitrix\Bizproc\Activity\Mixins\ManualStartDocumentTrait;
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Public\Activity\Configurator;
 use Bitrix\Bizproc\Public\Entity\Trigger\Section;
 use Bitrix\Crm\Category\DealCategory;
-use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventInitiatorTrait;
+use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventOutputsTrait;
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Type\DateTime;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -27,7 +27,7 @@ if (!\Bitrix\Main\Loader::includeModule('crm'))
 
 class CBPCrmDealManualStartTrigger extends \CBPManualStartTrigger
 {
-	use EventInitiatorTrait;
+	use EventOutputsTrait;
 	use ManualStartDocumentTrait;
 
 	private const EVENT_INITIATOR_ID = 'Initiator';
@@ -55,8 +55,7 @@ class CBPCrmDealManualStartTrigger extends \CBPManualStartTrigger
 		$initiatorUserId = $this->resolveEventInitiatorUserId();
 		$this->setProperties([
 			static::getReturnDocumentFieldName() => $this->getDocumentId(),
-			self::EVENT_INITIATOR_ID => $initiatorUserId ? 'user_' . $initiatorUserId : null,
-			self::EVENT_DATE_TIME_ID => (new DateTime())->format(DateTime::getFormat()),
+			...static::buildEventOutputs($initiatorUserId),
 		]);
 		$this->setPropertiesTypes([
 			static::getReturnDocumentFieldName() => $this->getReturnDocumentMapTypeForInstance(),
@@ -88,7 +87,12 @@ class CBPCrmDealManualStartTrigger extends \CBPManualStartTrigger
 				'FieldName' => self::PARAM_CATEGORY_ID,
 				'Type' => FieldType::SELECT,
 				'Options' => DealCategory::getSelectListItems(),
+				'Multiple' =>
+					\Bitrix\Main\Loader::includeModule('bizproc')
+					&& method_exists(Configurator::class, 'getSections')
+				,
 				'Required' => true,
+				'AllowSelection' => false,
 			],
 		];
 	}
@@ -96,7 +100,8 @@ class CBPCrmDealManualStartTrigger extends \CBPManualStartTrigger
 	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null): array
 	{
 		$arErrors = [];
-		if (!isset($arTestProperties[self::PARAM_CATEGORY_ID]))
+		$categoryId = $arTestProperties[self::PARAM_CATEGORY_ID] ?? null;
+		if ($categoryId === null || $categoryId === [])
 		{
 			$arErrors[] = [
 				'code' => 'NotExist',
@@ -110,10 +115,39 @@ class CBPCrmDealManualStartTrigger extends \CBPManualStartTrigger
 
 	public function getSection(): ?Section
 	{
-		return new Section(
-			static::getModuleId() . '|' . \CCrmOwnerType::DealName,
-			$this->{self::PARAM_CATEGORY_ID} ?? 0,
+		return $this->getSections()[0] ?? null;
+	}
+
+	public function getSections(): array
+	{
+		$sectionId = static::getModuleId() . '|' . \CCrmOwnerType::DealName;
+
+		return array_map(
+			static fn(string $path): Section => new Section($sectionId, $path),
+			self::resolveCategoryPaths($this->arProperties[self::PARAM_CATEGORY_ID] ?? null),
 		);
+	}
+
+	private static function resolveCategoryPaths(mixed $categoryId): array
+	{
+		if (!is_array($categoryId))
+		{
+			return [(string)($categoryId ?? 0)];
+		}
+
+		$paths = [];
+		foreach ($categoryId as $value)
+		{
+			if (is_array($value))
+			{
+				continue;
+			}
+
+			$path = (string)$value;
+			$paths[$path] = $path;
+		}
+
+		return array_values($paths);
 	}
 
 	protected static function getModuleId(): string

@@ -14,7 +14,7 @@ class StorageListRowAssembler extends RowAssembler
 	{
 		return [
 			new TitleFieldAssembler(['TITLE']),
-			new StringFieldAssembler(['DESCRIPTION', 'CODE']),
+			new StringFieldAssembler(['DESCRIPTION', 'CODE', 'CREATED_TIME']),
 		];
 	}
 }

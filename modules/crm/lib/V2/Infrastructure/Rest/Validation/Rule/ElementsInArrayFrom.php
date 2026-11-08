@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Validation\Rule;
 
 use Attribute;
+use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Provider\Context;
 use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Provider\ValidValuesProviderInterface;
 use Bitrix\Main\Localization\LocalizableMessageInterface;
 use Bitrix\Main\Validation\ValidationError;
@@ -14,6 +15,8 @@ use Bitrix\Rest\Exceptions\ArgumentTypeException;
 #[Attribute(Attribute::TARGET_PROPERTY | Attribute::TARGET_PARAMETER)]
 class ElementsInArrayFrom extends InArrayFrom
 {
+	private ?array $collectionValidValues = null;
+
 	public function __construct(
 		string|ValidValuesProviderInterface $provider,
 		array $contextArgs = [],
@@ -45,19 +48,49 @@ class ElementsInArrayFrom extends InArrayFrom
 			return $result;
 		}
 
-		if (!isset($this->context))
-		{
-			$this->context = $this->buildContext($propertyValue);
-		}
+		$context = $this->buildContext($propertyValue);
+		$previousValidValues = $this->collectionValidValues;
+		$this->collectionValidValues = null;
 
-		foreach ($propertyValue as $value)
+		try
 		{
-			$valueResult = parent::validateProperty($value);
-			$result->addErrors($valueResult->getErrors());
-			$failedValidator ??= $this->getFailedValidator($valueResult);
+			foreach ($propertyValue as $value)
+			{
+				$valueResult = $this->validateWithContext($value, $context);
+				$result->addErrors($valueResult->getErrors());
+				$failedValidator ??= $this->getFailedValidator($valueResult);
+			}
+		}
+		finally
+		{
+			$this->collectionValidValues = $previousValidValues;
 		}
 
 		return $this->replaceWithCustomError($result, $failedValidator);
+	}
+
+	protected function validateWithContext(mixed $propertyValue, Context $context): ValidationResult
+	{
+		$previousContext = $this->context;
+
+		try
+		{
+			return parent::validateWithContext($propertyValue, $context);
+		}
+		finally
+		{
+			$this->context = $previousContext;
+		}
+	}
+
+	protected function getValidValues(): array
+	{
+		if ($this->collectionValidValues === null)
+		{
+			$this->collectionValidValues = parent::getValidValues();
+		}
+
+		return $this->collectionValidValues;
 	}
 
 	public static function __set_state(array $array): static

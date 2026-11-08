@@ -1,9 +1,9 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\SupportPolicy;
 
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
 use Bitrix\Disk\TypeFile;
 
@@ -11,14 +11,20 @@ use Bitrix\Disk\TypeFile;
  * UnifiedLink support policy factory by file types.
  * By default, returns BaseSupportPolicy for unknown types.
  */
-final class SupportPolicyFactory
+final readonly class SupportPolicyFactory
 {
 	/** @var array<int, SupportPolicy> */
-	private readonly array $registry;
+	private array $registry;
 
+	/**
+	 * @param BaseSupportPolicy $baseSupportPolicy
+	 * @param FileSupportPolicy $fileSupportPolicy
+	 * @param DocumentSupportPolicy $documentSupportPolicy
+	 */
 	public function __construct(
-		private readonly BaseSupportPolicy $baseSupportPolicy,
-		private readonly DocumentSupportPolicy $documentSupportPolicy,
+		private BaseSupportPolicy $baseSupportPolicy,
+		private FileSupportPolicy $fileSupportPolicy,
+		private DocumentSupportPolicy $documentSupportPolicy,
 	)
 	{
 		$this->registry = [
@@ -28,16 +34,21 @@ final class SupportPolicyFactory
 	}
 
 	/**
-	 * Returns the policy for the given file.
+	 * Returns the policy for the given object.
 	 * Unknown types receive BaseSupportPolicy.
-	 * @param File $file
+	 *
+	 * @param BaseObject $baseObject
 	 * @return SupportPolicy
 	 */
-	public function create(File $file): SupportPolicy
+	public function create(BaseObject $baseObject): SupportPolicy
 	{
-		$fileType = (int)$file->getTypeFile();
+		if ($baseObject instanceof File)
+		{
+			$fileType = (int)$baseObject->getTypeFile();
 
-		return $this->registry[$fileType] ?? $this->baseSupportPolicy;
+			return $this->registry[$fileType] ?? $this->fileSupportPolicy;
+		}
+
+		return $this->baseSupportPolicy;
 	}
-
 }

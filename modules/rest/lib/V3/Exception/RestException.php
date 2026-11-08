@@ -10,6 +10,10 @@ use Bitrix\Rest\V3\DefaultLanguage;
 abstract class RestException extends SystemException implements RestExceptionInterface
 {
 	protected const STATUS = '400 Bad Request';
+
+	/** Source language of module phrases: used when the requested language has no translation yet. */
+	private const FALLBACK_LANGUAGE = 'ru';
+
 	protected string $status;
 
 	public function __construct(?\Throwable $previous = null, ?string $status = null)
@@ -29,16 +33,25 @@ abstract class RestException extends SystemException implements RestExceptionInt
 
 	protected function getLocalMessage(string $languageCode): string
 	{
-		// include lang file
-		$reflection = new \ReflectionClass($this->getClassWithPhrase());
-		Loc::loadLanguageFile($reflection->getFileName(), $languageCode);
+		$fileName = (new \ReflectionClass($this->getClassWithPhrase()))->getFileName();
 
-		// return final phrase
-		return Loc::getMessage(
-			$this->getMessagePhraseCode(),
-			$this->getMessagePhraseReplacement(),
-			$languageCode,
-		);
+		foreach ([$languageCode, self::FALLBACK_LANGUAGE] as $code)
+		{
+			Loc::loadLanguageFile($fileName, $code);
+
+			$message = Loc::getMessage(
+				$this->getMessagePhraseCode(),
+				$this->getMessagePhraseReplacement(),
+				$code,
+			);
+
+			if ($message !== null)
+			{
+				return $message;
+			}
+		}
+
+		return $this->getMessagePhraseCode();
 	}
 
 	public function output(?string $responseLanguage = null): array

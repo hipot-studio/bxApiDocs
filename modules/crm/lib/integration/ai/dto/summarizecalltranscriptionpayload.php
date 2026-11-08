@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Integration\AI\Dto;
 use Bitrix\Crm\Dto\Caster;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 
 final class SummarizeCallTranscriptionPayload extends Dto
 {
@@ -14,6 +15,7 @@ final class SummarizeCallTranscriptionPayload extends Dto
 	protected function getValidators(array $fields): array
 	{
 		return [
+			new RequiredField($this, 'summary'),
 			new NotEmptyField($this, 'summary'),
 		];
 	}

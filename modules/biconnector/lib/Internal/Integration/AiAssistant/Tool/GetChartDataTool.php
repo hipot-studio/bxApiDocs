@@ -3,14 +3,22 @@
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Exceptions\McpException;
+use Bitrix\AiAssistant\Request\Dto\RequestSubjectDto;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
+use Bitrix\BIConnector\Internal\Feature\FlagGate;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\Operation\OperationImpact;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Postprocess\DashboardDataTransformer;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\Postprocess\TransformerConfig;
 use Bitrix\BIConnector\Internal\Integration\AiAssistant\UrlParameter\UrlParameters;
+use Bitrix\BIConnector\Internal\Operation\Builder\Actor;
+use Bitrix\BIConnector\Internal\Operation\Builder\Channel;
+use Bitrix\BIConnector\Internal\Operation\Builder\Chart\GetChartDataOperation;
+use Bitrix\BIConnector\Internal\Operation\Builder\Chart\GetChartDataQuery;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
-final class GetChartDataTool extends BaseBiTool
+final class GetChartDataTool extends BaseSubjectAwareBiTool
 {
 	private const ROW_LIMIT_DEFAULT = 20;
 	private const ROW_LIMIT_MAX = 300;
@@ -25,6 +33,11 @@ final class GetChartDataTool extends BaseBiTool
 	public function getName(): string
 	{
 		return 'get_chart_data';
+	}
+
+	public function getImpact(): OperationImpact
+	{
+		return OperationImpact::Read;
 	}
 
 	public function getDescription(): string
@@ -72,6 +85,7 @@ final class GetChartDataTool extends BaseBiTool
 				'dashboardId' => [
 					'type' => 'integer',
 					'description' => 'Dashboard ID from the list_dashboards tool result.',
+					'minimum' => 1,
 				],
 				'chartIds' => [
 					'type' => 'array',
@@ -81,6 +95,7 @@ final class GetChartDataTool extends BaseBiTool
 						. 'single request, so prefer batching over multiple calls.',
 					'items' => [
 						'type' => 'integer',
+						'minimum' => 1,
 					],
 					'minItems' => 1,
 					'maxItems' => self::MAX_CHARTS_PER_CALL,
@@ -112,6 +127,7 @@ final class GetChartDataTool extends BaseBiTool
 							],
 						],
 						'required' => ['name', 'value'],
+						'additionalProperties' => false,
 					],
 				],
 				'urlParams' => [
@@ -154,7 +170,56 @@ final class GetChartDataTool extends BaseBiTool
 		];
 	}
 
-	protected function executeStructured(int $userId, ...$args): array
+	protected function executeStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
+	{
+		// A digest run keeps the previous path: its time budget and failure journal live there only.
+		if (
+			!(new FlagGate())->isEnabled(FlagGate::BUILDER_MCP_OPERATIONS, $userId)
+			|| (new PinnedArgumentResolver())->findRunId($subject) !== null
+		)
+		{
+			return $this->legacyExecuteStructured($userId, $subject, $args);
+		}
+
+		self::requireBiconnectorModule();
+
+		$rowLimit = self::ROW_LIMIT_DEFAULT;
+		if (isset($args['rowLimit']) && is_numeric($args['rowLimit']))
+		{
+			$rowLimit = (int)$args['rowLimit'];
+		}
+
+		$offset = 0;
+		if (isset($args['offset']) && is_numeric($args['offset']))
+		{
+			$offset = (int)$args['offset'];
+		}
+
+		$rawChartIds = $args['chartIds'] ?? [];
+
+		// Resolved per call: aiassistant keeps a tool as a process-wide singleton.
+		$result = ServiceLocator::getInstance()->get(GetChartDataOperation::class)->execute(
+			new GetChartDataQuery(
+				(int)$args['dashboardId'],
+				is_array($rawChartIds) ? $rawChartIds : [],
+				$args['appliedFilters'] ?? [],
+				is_array($args['urlParams'] ?? null) ? $args['urlParams'] : [],
+				$rowLimit,
+				$offset,
+				is_string($args['sortBy'] ?? null) ? $args['sortBy'] : null,
+				is_string($args['sortOrder'] ?? null) ? $args['sortOrder'] : 'desc',
+			),
+			new Actor($userId, Channel::Mcp),
+		);
+		if (!$result->isSuccess())
+		{
+			throw self::toMcpException(OperationRefusal::forTool($result));
+		}
+
+		return $result->getData();
+	}
+
+	private function legacyExecuteStructured(int $userId, ?RequestSubjectDto $subject, array $args): array
 	{
 		Loader::includeModule('biconnector');
 
@@ -218,24 +283,37 @@ final class GetChartDataTool extends BaseBiTool
 			);
 		}
 
+		$readChartIds = $requestedChartIds;
+		sort($readChartIds);
+		$pinnedArguments = new PinnedArgumentResolver();
+		$runId = $pinnedArguments->beginRunCall($subject, $userId, $this->getName(), ['chartIds' => $readChartIds]);
+		$budget = DigestCallBudget::start($runId);
+
 		$filters = new AppliedFilters($userId);
+		// The dashboard config is needed even without caller filters: a dashboard with
+		// its own period default in the builder must not get the portal period on top of it.
+		$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById(
+			$externalId,
+			$budget->getStreamTimeout(0),
+			arbitrateServiceFailure: $runId === null,
+		);
+		if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
+		{
+			$context = ['stage' => 'get_chart_data.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId];
+
+			throw $pinnedArguments->findRunFailure($runId, $userId, $dashboardDtoResp, $context)
+				?? self::integratorFailureException($dashboardDtoResp, $context);
+		}
+		$dashboardDto = $dashboardDtoResp->getData();
 		if (!empty($callerFilters))
 		{
-			$dashboardDtoResp = IntegratorFactory::getInstance()->getDashboardById($externalId);
-			if ($dashboardDtoResp->hasErrors() || !$dashboardDtoResp->getData())
-			{
-				throw self::integratorFailureException(
-					$dashboardDtoResp,
-					['stage' => 'get_chart_data.dashboard_metadata', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
-				);
-			}
-			$validateResult = $filters->validate($dashboardDtoResp->getData(), $callerFilters);
+			$validateResult = $filters->validate($dashboardDto, $callerFilters);
 			if (!$validateResult->isSuccess())
 			{
 				throw self::toMcpException($validateResult);
 			}
 		}
-		$resolveResult = $filters->resolve($dashboard, $callerFilters);
+		$resolveResult = $filters->resolve($dashboard, $dashboardDto, $callerFilters);
 		if (!$resolveResult->isSuccess())
 		{
 			throw self::toMcpException($resolveResult);
@@ -256,21 +334,34 @@ final class GetChartDataTool extends BaseBiTool
 			$sort = ['by' => $sortBy, 'order' => $sortOrder];
 		}
 
+		$exhausted = $pinnedArguments->findExhaustedBudget(
+			$runId,
+			$userId,
+			$budget,
+			['stage' => 'get_chart_data.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
+		);
+		if ($exhausted !== null)
+		{
+			throw $exhausted;
+		}
+
 		$response = IntegratorFactory::getInstance()->getDashboardOverview(
 			$externalId,
 			$supersetFilters,
 			$urlParams,
+			$budget->getStreamTimeout(60 * 5),
 			chartIds: $requestedChartIds,
 			sort: $sort,
 			limit: $rowLimit,
 			offset: $offset,
+			arbitrateServiceFailure: $runId === null,
 		);
 		if ($response->hasErrors())
 		{
-			throw self::integratorFailureException(
-				$response,
-				['stage' => 'get_chart_data.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId],
-			);
+			$context = ['stage' => 'get_chart_data.overview', 'dashboard_id' => $dashboardId, 'user_id' => $userId];
+
+			throw $pinnedArguments->findRunFailure($runId, $userId, $response, $context)
+				?? self::integratorFailureException($response, $context);
 		}
 
 		$rawData = $response->getData();
@@ -370,6 +461,8 @@ final class GetChartDataTool extends BaseBiTool
 		{
 			$result['missing_chart_ids'] = $missing;
 		}
+
+		$pinnedArguments->completeRunCall($runId, $userId);
 
 		return $result;
 	}

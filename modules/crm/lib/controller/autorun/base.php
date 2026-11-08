@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Controller\Autorun;
 
 use Bitrix\Crm\Component\EntityList\ClientFieldHelper;
+use Bitrix\Crm\Controller\Autorun\Access\ReadableIdsFilter;
 use Bitrix\Crm\Controller\Autorun\Dto\PreparedData;
 use Bitrix\Crm\Controller\Autorun\Dto\Progress;
 use Bitrix\Crm\Controller\ErrorCode;
@@ -12,6 +13,7 @@ use Bitrix\Crm\ListEntity;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\Router;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Application;
 use Bitrix\Main\Data\LocalStorage\SessionLocalStorage;
 use Bitrix\Main\DB\Connection;
@@ -124,7 +126,10 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 				return null;
 			}
 
-			return ['@ID' => $entityIds];
+			$readableIds = (new ReadableIdsFilter())->narrowToReadable($factory, $entityIds);
+
+			// no error on an unreadable id: the answer must not tell it apart from an id that does not exist
+			return ['@ID' => empty($readableIds) ? [0] : $readableIds];
 		}
 
 		$filterFactory = Container::getInstance()->getFilterFactory();
@@ -325,7 +330,12 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 
 		if ($this->isUseOrmApproach($factory))
 		{
-			return $factory->getItemsCount($parameters['filter'], null, $parameters['runtime'] ?? []);
+			return $factory->getItemsCountFilteredByPermissions(
+				$parameters['filter'],
+				null,
+				UserPermissions::OPERATION_READ,
+				$parameters['runtime'] ?? [],
+			);
 		}
 
 		return ListEntity\Entity::getInstance($factory->getEntityName())->getCount($parameters['filter']);
@@ -357,15 +367,19 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 		$parameters = ['filter' => $filter];
 		GridFilterApplier::getDefault()->apply($parameters, $factory->getEntityTypeId());
 
-		return $factory->getItems([
-			'select' => $this->getSelect(),
-			'filter' => $parameters['filter'],
-			'runtime' => $parameters['runtime'] ?? [],
-			'order' => [
-				'ID' => 'ASC',
+		return $factory->getItemsFilteredByPermissions(
+			[
+				'select' => $this->getSelect(),
+				'filter' => $parameters['filter'],
+				'runtime' => $parameters['runtime'] ?? [],
+				'order' => [
+					'ID' => 'ASC',
+				],
+				'limit' => self::STEP_LIMIT,
 			],
-			'limit' => self::STEP_LIMIT,
-		]);
+			null,
+			UserPermissions::OPERATION_READ,
+		);
 	}
 
 	private function getItemsToProcessViaListEntity(Factory $factory, array $filter): array
@@ -412,6 +426,8 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 
 	private function processItems(Factory $factory, array $itemsToProcess): void
 	{
+		$this->onBeforeItemsProcessing($factory, $itemsToProcess);
+
 		$itemsThatShouldBeProcessed = $this->filterOutSkippableItems($factory, $itemsToProcess, $this->data);
 
 		foreach ($itemsToProcess as $item)
@@ -466,6 +482,17 @@ abstract class Base extends \Bitrix\Crm\Controller\Base
 				}
 			}
 		}
+	}
+
+	/**
+	 * Called once per page of a step, before its items are processed. Does nothing by default.
+	 *
+	 * An heir whose `processItem` reads something per item may warm that read here for the whole page.
+	 *
+	 * @param Item[] $itemsToProcess
+	 */
+	protected function onBeforeItemsProcessing(Factory $factory, array $itemsToProcess): void
+	{
 	}
 
 	protected function filterOutSkippableItems(Factory $factory, array $itemsToProcess, PreparedData $data): array

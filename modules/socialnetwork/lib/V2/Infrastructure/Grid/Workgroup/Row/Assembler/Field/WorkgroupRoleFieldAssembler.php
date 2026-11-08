@@ -163,11 +163,12 @@ class WorkgroupRoleFieldAssembler extends FieldAssembler
 		));
 
 		return '<span class="sonet-ui-grid-request-cont">'
-			. '<span class="ui-label sonet-ui-grid-join"'
+			. '<button type="button" class="ui-label sonet-ui-grid-join"'
+			. ' data-testid="socialnetwork-project-list-join-' . $groupId . '"'
 			. ' onclick="' . $onclick . '"'
 			. '>'
 			. '<span class="ui-label-inner">' . htmlspecialcharsbx($text) . '</span>'
-			. '</span>'
+			. '</button>'
 			. '</span>';
 	}
 
@@ -205,7 +206,7 @@ class WorkgroupRoleFieldAssembler extends FieldAssembler
 			stopPropagation: true,
 		));
 		$joinTitleAttr = $joinTitle !== ''
-			? ' title="' . htmlspecialcharsbx($joinTitle) . '"'
+			? ' title="' . htmlspecialcharsbx($joinTitle) . '" aria-label="' . htmlspecialcharsbx($joinTitle) . '"'
 			: '';
 
 		$cancelTitle = ActionMessage::get(ActionMessage::DELETE_OUTGOING_REQUEST);
@@ -216,19 +217,23 @@ class WorkgroupRoleFieldAssembler extends FieldAssembler
 			stopPropagation: true,
 		));
 		$cancelTitleAttr = $cancelTitle !== ''
-			? ' title="' . htmlspecialcharsbx($cancelTitle) . '"'
+			? ' title="' . htmlspecialcharsbx($cancelTitle) . '" aria-label="' . htmlspecialcharsbx($cancelTitle) . '"'
 			: '';
 
 		return '<span class="sonet-ui-grid-badge-invite-box">'
 			. '<span class="ui-label sonet-ui-grid-badge-invite-accept">'
 			. '<span class="ui-label-inner">' . htmlspecialcharsbx($text) . '</span>'
 			. '</span>'
-			. '<span class="ui-label sonet-ui-grid-badge-accept" onclick="' . $joinOnclick . '"' . $joinTitleAttr . '>'
+			. '<button type="button" class="ui-label sonet-ui-grid-badge-accept"'
+			. ' data-testid="socialnetwork-project-list-accept-invite-' . $groupId . '"'
+			. ' onclick="' . $joinOnclick . '"' . $joinTitleAttr . '>'
 			. '<span class="ui-label-inner"></span>'
-			. '</span>'
-			. '<span class="ui-label sonet-ui-grid-badge-cancel" onclick="' . $cancelOnclick . '"' . $cancelTitleAttr . '>'
+			. '</button>'
+			. '<button type="button" class="ui-label sonet-ui-grid-badge-cancel"'
+			. ' data-testid="socialnetwork-project-list-decline-invite-' . $groupId . '"'
+			. ' onclick="' . $cancelOnclick . '"' . $cancelTitleAttr . '>'
 			. '<span class="ui-label-inner"></span>'
-			. '</span>'
+			. '</button>'
 			. '</span>';
 	}
 
@@ -253,16 +258,18 @@ class WorkgroupRoleFieldAssembler extends FieldAssembler
 			stopPropagation: true,
 		));
 		$titleAttr = $title !== ''
-			? ' title="' . htmlspecialcharsbx($title) . '"'
+			? ' title="' . htmlspecialcharsbx($title) . '" aria-label="' . htmlspecialcharsbx($title) . '"'
 			: '';
 
 		return '<span class="sonet-ui-grid-badge-invite-box">'
 			. '<span class="ui-label sonet-ui-grid-badge-invite">'
 			. '<span class="ui-label-inner">' . htmlspecialcharsbx($text) . '</span>'
 			. '</span>'
-			. '<span class="ui-label sonet-ui-grid-badge-cancel" onclick="' . $onclick . '"' . $titleAttr . '>'
+			. '<button type="button" class="ui-label sonet-ui-grid-badge-cancel"'
+			. ' data-testid="socialnetwork-project-list-cancel-request-' . $groupId . '"'
+			. ' onclick="' . $onclick . '"' . $titleAttr . '>'
 			. '<span class="ui-label-inner"></span>'
-			. '</span>'
+			. '</button>'
 			. '</span>';
 	}
 

@@ -272,12 +272,6 @@ class CustomFieldDataLoader
 					continue;
 				}
 
-				$displayValue = $itemFormattedValuesMap[$itemId][$fieldName] ?? null;
-				if (is_array($displayValue) && count($displayValue) === count($rawValue))
-				{
-					continue;
-				}
-
 				$itemFormattedValuesMap[$itemId][$fieldName] = $this->getFormattedMultipleDisplayValues(
 					$entityTypeId,
 					(int)$itemId,

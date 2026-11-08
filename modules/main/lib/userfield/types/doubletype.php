@@ -40,6 +40,30 @@ class DoubleType extends BaseType
 	}
 
 	/**
+	 * `CUserTypeManager::GetEditFormHTML()` passes the "value comes from the request" flag as the
+	 * third argument, and `BaseType::getEditFormHtml()` drops it. The double field needs it the
+	 * same way the settings form does (@see BaseType::renderSettings()): after a failed check the
+	 * form is redrawn with the value the user typed, and the `main.edit_form` template must show
+	 * it back as typed instead of reading it as a number.
+	 *
+	 * @param array $userField
+	 * @param array|null $additionalParameters
+	 * @param bool $varsFromForm
+	 * @return string
+	 */
+	public static function getEditFormHtml(
+		array $userField,
+		?array $additionalParameters,
+		$varsFromForm = false
+	): string
+	{
+		$additionalParameters ??= [];
+		$additionalParameters['bVarsFromForm'] = $varsFromForm;
+
+		return static::renderEditForm($userField, $additionalParameters);
+	}
+
+	/**
 	 * @param array $userField
 	 * @return array
 	 */

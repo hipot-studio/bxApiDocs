@@ -17,7 +17,9 @@ class MoveFieldParameters extends AbstractParameters
 		return [
 			...parent::getValidators($fields),
 
+			new RequiredField($this, 'sectionName'),
 			new NotEmptyField($this, 'sectionName'),
+			new RequiredField($this, 'fieldName'),
 			new NotEmptyField($this, 'fieldName'),
 		];
 	}

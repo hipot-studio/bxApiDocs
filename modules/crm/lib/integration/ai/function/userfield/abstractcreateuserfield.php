@@ -15,6 +15,7 @@ use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\UserField\FieldNameGenerator;
+use Bitrix\Crm\UserField\UserFieldLimitError;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use CCrmOwnerType;
@@ -108,7 +109,24 @@ abstract class AbstractCreateUserField implements AIFunction
 		}
 
 		$userTypeEntity = new CUserTypeEntity();
-		$id = $userTypeEntity->Add($fields);
+		try
+		{
+			$id = $userTypeEntity->Add($fields);
+		}
+		catch (\Throwable $exception)
+		{
+			if ($compatibilityMode)
+			{
+				$connection->unlock($lockKey);
+			}
+
+			if (UserFieldLimitError::isCreateLimitError($exception))
+			{
+				return Result::fail(UserFieldLimitError::getError());
+			}
+
+			throw $exception;
+		}
 
 		$this->cleanUfCache($entityId);
 		if ($compatibilityMode)
@@ -118,7 +136,13 @@ abstract class AbstractCreateUserField implements AIFunction
 
 		if ($id === false)
 		{
-			return Result::failFromApplication();
+			$result = Result::failFromApplication();
+			if (UserFieldLimitError::hasCreateLimitError($result->getErrors()))
+			{
+				return Result::fail(UserFieldLimitError::getError());
+			}
+
+			return $result;
 		}
 
 

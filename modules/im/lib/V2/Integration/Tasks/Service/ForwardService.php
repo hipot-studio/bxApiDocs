@@ -21,6 +21,16 @@ class ForwardService
 
 	public function forwardMessageToTask(Message $message, int $taskId, int $userId): Result
 	{
+		return $this->forwardMessagesToTask((new MessageCollection())->add($message), $taskId, $userId);
+	}
+
+	public function forwardMessagesToTask(MessageCollection $messages, int $taskId, int $userId): Result
+	{
+		if ($messages->isEmpty())
+		{
+			return new Result();
+		}
+
 		$chat = $this->chatProvider->getChatByTaskId($taskId);
 
 		if ($chat instanceof Chat\NullChat)
@@ -28,10 +38,13 @@ class ForwardService
 			return (new Result())->addError(new ChatError(ChatError::NOT_FOUND));
 		}
 
-		$service = (new Message\Forward\ForwardService($chat))->setContextUser($userId);
+		// the forward is the only trace of the source the task gets, so it carries a message of a
+		// discussion as well: the chat of the task is not a place a user forwards anything into
+		$service = (new Message\Forward\ForwardService($chat))
+			->markAsSystemForward()
+			->setContextUser($userId)
+		;
 
-		$messageCollection = (new MessageCollection())->add($message);
-
-		return $service->createMessages($messageCollection);
+		return $service->createMessages($messages);
 	}
 }

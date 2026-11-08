@@ -2,12 +2,12 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\UnusedElements;
 
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-class OpenAction extends BaseAction
+class OpenAction extends FormatMenuAction
 {
 	public static function getId(): ?string
 	{
@@ -20,7 +20,13 @@ class OpenAction extends BaseAction
 
 		$this->onclick = "BX.BIConnector.UnusedElementsGridManager.Instance.openElement(\"{$openUrl}\")";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['hideInActionPanel'] = true;
+
+		$result['html'] = $this->getMenuItem('--o-open-new');
+
+		return $result;
 	}
 
 	public function processRequest(HttpRequest $request): ?Result

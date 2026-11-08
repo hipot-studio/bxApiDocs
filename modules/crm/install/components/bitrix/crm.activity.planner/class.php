@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Crm\Activity;
+use Bitrix\Crm\Activity\Planner\TypeIconResolver;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Main;
@@ -667,56 +668,7 @@ class CrmActivityPlannerComponent extends \Bitrix\Crm\Component\Base
 
 	private function getTypeIcon($activity)
 	{
-		if ($activity['TYPE_ID'] == \CCrmActivityType::Call)
-		{
-			return $activity['DIRECTION'] == \CCrmActivityDirection::Outgoing ? 'call-outgoing' : 'call';
-		}
-		if ($activity['TYPE_ID'] == \CCrmActivityType::Meeting)
-			return 'meet';
-		if ($activity['TYPE_ID'] == \CCrmActivityType::Email)
-		{
-			return ($activity['DIRECTION'] ?? null) == \CCrmActivityDirection::Outgoing ? 'mail' : 'mail-send';
-		}
-
-		if ($activity['PROVIDER_ID'] == 'CRM_EXTERNAL_CHANNEL')
-		{
-			if (
-				isset($activity['ORIGINATOR_ID']) &&
-				in_array($activity['ORIGINATOR_ID'], array('BITRIX', 'WORDPRESS', 'DRUPAL', 'JOOMLA', 'MAGENTO'))
-			)
-			{
-				return 'cmsplugins';
-			}
-			else
-			{
-				return 'onec';
-			}
-		}
-		if ($activity['PROVIDER_ID'] == 'CRM_LF_MESSAGE')
-			return 'live-feed';
-
-		if ($activity['PROVIDER_ID'] == 'CRM_WEBFORM')
-			return 'form';
-
-		if ($activity['PROVIDER_ID'] == 'IMOPENLINES_SESSION')
-			return 'chat';
-
-		if ($activity['PROVIDER_ID'] == 'VISIT_TRACKER')
-			return 'visit-tracker';
-
-		if ($activity['PROVIDER_ID'] == 'CRM_REQUEST')
-			return 'deal-request';
-
-		if ($activity['PROVIDER_ID'] == 'CALL_LIST')
-			return 'call-list';
-
-		if ($activity['PROVIDER_ID'] == 'CRM_SMS')
-			return 'crm-sms';
-
-		if ($activity['PROVIDER_ID'] == 'REST_APP')
-			return 'rest_app';
-
-		return '';
+		return TypeIconResolver::resolve((array)$activity);
 	}
 
 	private function prepareFilesForView(array $activity)

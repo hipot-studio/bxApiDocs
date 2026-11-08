@@ -10,8 +10,12 @@ use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateSettingsTable;
 use Bitrix\Bizproc\Api\Request\WorkflowStateService\GetAverageWorkflowDurationRequest;
 use Bitrix\Bizproc\Api\Service\WorkflowStateService;
+use Bitrix\Bizproc\Internal\Config\StartListOrder;
 use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Service\Document\DocumentsResolver;
+use Bitrix\Bizproc\Internal\Service\StartList\StartListAccessService;
+use Bitrix\Bizproc\Internal\Service\StartList\StartListOrderService;
+use Bitrix\Bizproc\Internal\Service\StartStat\PopularityReader;
 use Bitrix\Bizproc\Public\Provider\PilotVisibilityProvider;
 use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateUserOptionTable;
 use Bitrix\Main\Engine\Contract\Controllerable;
@@ -20,6 +24,7 @@ use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\UI\Format\BBCode\Converter;
 use Bitrix\UI\Toolbar\Facade\Toolbar;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -33,6 +38,9 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 	private string $filterId = 'bizproc_workflow_start_list_filter';
 
 	private ErrorCollection $errorCollection;
+
+	/** Kept apart so that a case can make the read of the aggregate fail. */
+	private ?PopularityReader $popularityReader = null;
 
 	public function __construct($component = null)
 	{
@@ -376,6 +384,10 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 		return $pageNavigation;
 	}
 
+	/**
+	 * The templates of the grid: what the query found, narrowed to the pairs of template and document
+	 * this employee may really start, and ordered.
+	 */
 	private function fillGridData(): void
 	{
 		$documents = $this->getDocumentContexts();
@@ -388,24 +400,188 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 
 		$resultCollection = $this->buildTemplateQuery($documents)->fetchCollection();
 
+		$sectionService = Container::getSectionService();
+		$templateIds = $resultCollection->getIdList();
+		$templateSectionsMap = $sectionService->getTemplateSectionsMap($templateIds);
+		$templateTriggerSectionsMap = $sectionService->getTemplateTriggerSectionsMap($templateIds);
+
+		$allowedMatches = (new StartListAccessService())->filter(
+			$this->getCurrentUserId(),
+			$this->buildTemplateDocumentMatches(
+				$resultCollection,
+				$documents,
+				$templateSectionsMap,
+				$templateTriggerSectionsMap,
+			),
+		);
+
+		$this->arResult['gridData'] = $this->buildGridRows(
+			$this->orderTemplates($resultCollection, $allowedMatches),
+			$allowedMatches,
+			$this->buildDocumentsByTypeKey($documents),
+		);
+	}
+
+	/**
+	 * Every document of the list a template is offered on, in the order of the documents. What makes a
+	 * pair is the business of the list - the type of the document, a section, a section of a trigger -
+	 * and whether the pair may be started is the business of {@see StartListAccessService}.
+	 *
+	 * @return array<int, list<array{document: array, triggerType: string|null}>>
+	 */
+	private function buildTemplateDocumentMatches(
+		iterable $templates,
+		array $documents,
+		array $templateSectionsMap,
+		array $templateTriggerSectionsMap,
+	): array
+	{
+		$matches = [];
+		foreach ($templates as $template)
+		{
+			$templateId = (int)$template->getId();
+			$templateDocumentType = $template->getDocumentComplexType();
+
+			$templateMatches = [];
+			foreach ($documents as $document)
+			{
+				$documentMatch = $this->resolveTemplateDocumentMatch(
+					$document,
+					$templateDocumentType,
+					$templateSectionsMap[$templateId] ?? [],
+					$templateTriggerSectionsMap[$templateId] ?? [],
+				);
+				if ($documentMatch === null)
+				{
+					continue;
+				}
+
+				$templateMatches[] = [
+					'document' => $document,
+					'triggerType' => $documentMatch['triggerType'],
+				];
+			}
+
+			if ($templateMatches)
+			{
+				$matches[$templateId] = $templateMatches;
+			}
+		}
+
+		return $matches;
+	}
+
+	/**
+	 * The templates to draw, in the order to draw them. The order of the query is what the grid keeps
+	 * until the option of the portal turns the new one on.
+	 *
+	 * @return \Bitrix\Bizproc\Workflow\Template\Tpl[]
+	 */
+	private function orderTemplates(iterable $templates, array $allowedMatches): array
+	{
+		$allowedTemplates = [];
+		foreach ($templates as $template)
+		{
+			if (isset($allowedMatches[(int)$template->getId()]))
+			{
+				$allowedTemplates[] = $template;
+			}
+		}
+
+		return StartListOrder::isEnabled()
+			? $this->applyStartListOrder($allowedTemplates)
+			: $allowedTemplates
+		;
+	}
+
+	/**
+	 * Pinned first, then published for the first time within the novelty window, then by the number of
+	 * manual starts that finished successfully. An unreadable aggregate is not a broken list: every
+	 * template counts as zero, one warning goes to the log, and the rows keep the order of the query.
+	 *
+	 * @param \Bitrix\Bizproc\Workflow\Template\Tpl[] $templates
+	 *
+	 * @return \Bitrix\Bizproc\Workflow\Template\Tpl[]
+	 */
+	private function applyStartListOrder(array $templates): array
+	{
+		if (!$templates)
+		{
+			return [];
+		}
+
+		$now = new \Bitrix\Main\Type\DateTime();
+
+		$items = [];
+		$templatesById = [];
+		foreach ($templates as $template)
+		{
+			$templateId = (int)$template->getId();
+			$templatesById[$templateId] = $template;
+			$items[] = [
+				'id' => $templateId,
+				'pinId' => $template->sysGetRuntime('PIN')?->getId(),
+				'firstPublishedAt' => $template->getFirstPublishedAt(),
+			];
+		}
+
+		$this->popularityReader ??= new PopularityReader();
+
+		$window = PopularityReader::window($now);
+		$read = $this->popularityReader->read(array_keys($templatesById), $window['from'], $window['to']);
+		if (!$read->isSuccess())
+		{
+			$this->warnPopularityIsUnread($read->getErrorMessages());
+		}
+
+		$orderedTemplates = [];
+		$orderedIds = (new StartListOrderService())->getOrderedIds(
+			$items,
+			$read->isSuccess() ? $read->getData()['popularity'] : [],
+			$now,
+		);
+		foreach ($orderedIds as $templateId)
+		{
+			$orderedTemplates[] = $templatesById[$templateId];
+		}
+
+		return $orderedTemplates;
+	}
+
+	/**
+	 * @param string[] $errorMessages
+	 */
+	private function warnPopularityIsUnread(array $errorMessages): void
+	{
+		try
+		{
+			$logger = (new \Bitrix\Main\Diag\LoggerFactory())->createById('bizproc.start_list_order');
+			$logger?->warning('Bizproc: the start list is ordered without the popularity of its templates', [
+				'error' => implode('; ', $errorMessages),
+			]);
+		}
+		catch (\Throwable)
+		{
+			// a log nobody could write is no reason to take the list down
+		}
+	}
+
+	/**
+	 * @param \Bitrix\Bizproc\Workflow\Template\Tpl[] $templates
+	 */
+	private function buildGridRows(array $templates, array $allowedMatches, array $documentsByTypeKey): array
+	{
 		$jsHandlerStart = "BX.Bizproc.Component.WorkflowStartList.Instance.startWorkflow(event, '%s', '%s', %s, %s);";
 
 		$gridData = [];
-		$templateIds = $resultCollection->getIdList();
-		$sectionService = Container::getSectionService();
-		$templateSectionsMap = $sectionService->getTemplateSectionsMap($templateIds);
-		$templateTriggerSectionsMap = $sectionService->getTemplateTriggerSectionsMap($templateIds);
-		$documentsByTypeKey = $this->buildDocumentsByTypeKey($documents);
-		foreach ($resultCollection as $template)
+		foreach ($templates as $template)
 		{
 			$templateId = $template->getId();
 
 			$instancesView = new \Bitrix\Bizproc\UI\WorkflowTemplateInstancesView($templateId);
 			$templateStartData = $this->resolveTemplateStartData(
-				$template,
-				$documents,
-				$templateSectionsMap[$templateId] ?? [],
-				$templateTriggerSectionsMap[$templateId] ?? [],
+				$template->getDocumentComplexType(),
+				$allowedMatches[$templateId],
 			);
 
 			$triggerType = $templateStartData['triggerType'];
@@ -452,7 +628,7 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 			];
 		}
 
-		$this->arResult['gridData'] = $gridData;
+		return $gridData;
 	}
 
 	private function buildTemplateQuery(array $documents): \Bitrix\Main\ORM\Query\Query
@@ -462,7 +638,7 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 
 		$result =
 			WorkflowTemplateTable::query()
-				->setSelect(['ID', 'NAME', 'DESCRIPTION', 'TYPE', 'MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE'])
+				->setSelect($this->getTemplateSelect())
 				->registerRuntimeField(
 					'SECTION',
 					new \Bitrix\Main\ORM\Fields\Relations\Reference(
@@ -540,7 +716,8 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 		static $workflowStateService;
 		$workflowStateService ??= new WorkflowStateService();
 
-		$description = trim((string)$template->getDescription()); // description can be null
+		// description can be null; the converter also trims and collapses whitespace
+		$description = Converter::toPlainText((string)$template->getDescription());
 		if ($description === '')
 		{
 			$description = Loc::getMessage('BIZPROC_WORKFLOW_START_EMPTY_DESCRIPTION_1');
@@ -639,9 +816,32 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 		HTML;
 	}
 
+	/**
+	 * The date of the first publication is read by the new order alone, so a portal that keeps the
+	 * previous one does not pay for a column it never looks at.
+	 */
+	private function getTemplateSelect(): array
+	{
+		$select = ['ID', 'NAME', 'DESCRIPTION', 'TYPE', 'MODULE_ID', 'ENTITY', 'DOCUMENT_TYPE'];
+		if (StartListOrder::isEnabled())
+		{
+			$select[] = 'FIRST_PUBLISHED_AT';
+		}
+
+		return $select;
+	}
+
+	/**
+	 * The new order groups the rows in PHP and keeps the order of equals within a group, so the query
+	 * gives it the base of that order - the name of the template - instead of the sort field, which the
+	 * new order has no place for.
+	 */
 	private function getGridOrder(): array
 	{
-		return ['SORT' => 'ASC'];
+		return StartListOrder::isEnabled()
+			? ['NAME' => 'ASC', 'ID' => 'DESC']
+			: ['SORT' => 'ASC']
+		;
 	}
 
 	private function buildDocumentFilter(
@@ -1074,33 +1274,22 @@ class BizprocWorkflowStartList extends CBitrixComponent implements Errorable, Co
 		return $cache[$cacheKey];
 	}
 
-	private function resolveTemplateStartData(
-		\Bitrix\Bizproc\Workflow\Template\Tpl $template,
-		array $documents,
-		array $templateSections,
-		array $templateTriggerSections,
-	): array
+	/**
+	 * The start of a row is built out of the allowed pairs only, so neither the documents the row offers
+	 * nor the document it prefers can be one the employee may not start the template on.
+	 *
+	 * @param list<array{document: array, triggerType: string|null}> $allowedMatches
+	 */
+	private function resolveTemplateStartData(array $templateDocumentType, array $allowedMatches): array
 	{
-		$templateDocumentType = $template->getDocumentComplexType();
 		$templateStartData = $this->createTemplateStartData($templateDocumentType);
 
-		foreach ($documents as $document)
+		foreach ($allowedMatches as $match)
 		{
-			$documentMatch = $this->resolveTemplateDocumentMatch(
-				$document,
-				$templateDocumentType,
-				$templateSections,
-				$templateTriggerSections,
-			);
-			if ($documentMatch === null)
-			{
-				continue;
-			}
-
 			$this->applyDocumentMatchToTemplateStartData(
 				$templateStartData,
-				$document['documentTypeKey'],
-				$documentMatch['triggerType'],
+				$match['document']['documentTypeKey'],
+				$match['triggerType'],
 			);
 		}
 

@@ -12,6 +12,10 @@ final class TargetDocumentResolver implements TargetDocumentResolverInterface
 {
 	private static array $documentTypeCache = [];
 
+	public function __construct(private readonly ?DynamicTypeScopePolicy $scopePolicy = null)
+	{
+	}
+
 	public function supports(\CBPActivity $activity): bool
 	{
 		$documentType = self::resolveExpectedDocumentType($activity);
@@ -36,7 +40,38 @@ final class TargetDocumentResolver implements TargetDocumentResolverInterface
 			;
 		}
 
-		return is_array($documentId) ? $documentId : self::resolveFallbackDocumentId($activity);
+		if (is_array($documentId))
+		{
+			return $documentId;
+		}
+		if (Resolver::hasTargetFilter($activity))
+		{
+			return [];
+		}
+
+		$fallbackDocumentId = self::resolveFallbackDocumentId($activity);
+		if (!Resolver::isScopedActivity($activity))
+		{
+			return $fallbackDocumentId;
+		}
+
+		$entityTypeId = self::resolveEntityTypeId($fallbackDocumentId);
+		if (
+			$entityTypeId === null
+			|| !Resolver::isEntityTypeInScope($activity, $entityTypeId, $this->scopePolicy)
+		)
+		{
+			return [];
+		}
+
+		if (self::expectsDynamicType($expectedDocumentType))
+		{
+			return \CCrmOwnerType::isUseDynamicTypeBasedApproach($entityTypeId) ? $fallbackDocumentId : [];
+		}
+
+		$expectedType = self::resolveExpectedType($expectedDocumentType);
+
+		return ($expectedType === null || $expectedType === $entityTypeId) ? $fallbackDocumentId : [];
 	}
 
 	public function resolveDocumentType(array $documentId, array $fallbackDocumentType): array
@@ -105,5 +140,19 @@ final class TargetDocumentResolver implements TargetDocumentResolverInterface
 		$rootDocumentId = $activity->getRootActivity()->getDocumentId();
 
 		return is_array($rootDocumentId) ? $rootDocumentId : [];
+	}
+
+	private static function resolveEntityTypeId(array $documentId): ?int
+	{
+		try
+		{
+			[$entityTypeId] = \CCrmBizProcHelper::resolveEntityId($documentId);
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+
+		return (int)$entityTypeId > 0 ? (int)$entityTypeId : null;
 	}
 }

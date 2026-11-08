@@ -39,6 +39,7 @@ class Toolbar
 
 	public static function get(string $context, int $userId = 0): ?static
 	{
+		$context = ToolbarValueNormalizer::normalize($context);
 		$toolbarUserId = $userId > 0 ? $userId : (int)\Bitrix\Main\Engine\CurrentUser::get()->getId();
 
 		$cache = Cache::createInstance();
@@ -67,6 +68,7 @@ class Toolbar
 
 	public static function getOrCreate(string $context, int $userId = 0): static
 	{
+		$context = ToolbarValueNormalizer::normalize($context);
 		$toolbarEntity = static::get($context, $userId);
 		if ($toolbarEntity === null)
 		{
@@ -91,7 +93,7 @@ class Toolbar
 
 	public static function getCacheId(string $prefix, string $context, int $userId): string
 	{
-		return $prefix . '_' . $userId . '_' . md5($context);
+		return $prefix . '_' . $userId . '_' . md5(ToolbarValueNormalizer::normalize($context));
 	}
 
 	public static function getCachePath(int $userId): string
@@ -102,8 +104,8 @@ class Toolbar
 	public function createOrUpdateItem(array $options): Result
 	{
 		$result = new Result();
-		$entityType = $options['entityType'] ?? '';
-		$entityId = $options['entityId'] ?? '';
+		$entityType = ToolbarValueNormalizer::normalize($options['entityType'] ?? '');
+		$entityId = ToolbarValueNormalizer::normalize($options['entityId'] ?? '');
 
 		$item = $this->getItem($entityType, $entityId);
 		if ($item === null)
@@ -141,8 +143,8 @@ class Toolbar
 		return ToolbarItemTable::getList([
 			'filter' => [
 				'=TOOLBAR_ID' => $this->getId(),
-				'=ENTITY_TYPE' => $entityType,
-				'=ENTITY_ID' => $entityId,
+				'=ENTITY_TYPE' => ToolbarValueNormalizer::normalize($entityType),
+				'=ENTITY_ID' => ToolbarValueNormalizer::normalize($entityId),
 			]
 		])->fetchObject();
 	}

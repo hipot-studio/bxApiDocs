@@ -19,6 +19,7 @@ class EventButton extends Button
 	public function jsonSerialize(): array
 	{
 		return [
+			'id' => $this->id,
 			'type' => $this->getType(),
 			'title' => $this->title,
 			'design' => $this->design,
@@ -30,6 +31,7 @@ class EventButton extends Button
 	public function toArray(): array
 	{
 		return [
+			'id' => $this->id,
 			'type' => $this->getType(),
 			'title' => $this->title,
 			'design' => $this->design,

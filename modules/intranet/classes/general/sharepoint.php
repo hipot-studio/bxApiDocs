@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Intranet\Integration\Sharepoint\ServerAllowList;
+
 IncludeModuleLangFile(__FILE__);
 
 class CAllIntranetSharepoint
@@ -481,7 +483,14 @@ class CAllIntranetSharepoint
 		if ($res = CIntranetSharepointQueue::Next($IBLOCK_ID, $cnt))
 		{
 			if (!self::CheckService($res, $res['SP_METHOD']))
+			{
+				if (!ServerAllowList::isAllowed($res['SP_URL']))
+				{
+					CIntranetSharepointQueue::SetMinID($res['ID']);
+				}
+
 				return true;
+			}
 
 			$handler = new $res['HANDLER_CLASS']($res['SP_URL']);
 			$RESULT = call_user_func_array(array($handler, $res['SP_METHOD']), array(CIntranetUtils::makeGUID($res['SP_LIST_ID']), $res['SP_METHOD_PARAMS']));
@@ -902,6 +911,12 @@ class CAllIntranetSharepoint
 				$APPLICATION->ThrowException(GetMessage('SP_ERROR_WRONG_URL'));
 				return false;
 			}
+
+			if (!ServerAllowList::isAllowed($arFields['SP_URL']))
+			{
+				$APPLICATION->ThrowException(GetMessage('SP_ERROR_SERVER_NOT_ALLOWED'));
+				return false;
+			}
 		}
 
 		// zero is a valid value
@@ -950,6 +965,18 @@ class CAllIntranetSharepoint
 		{
 			$APPLICATION->ThrowException(GetMessage('SP_ERROR_MAX_ERRORS'));
 
+			return false;
+		}
+
+		$serverUrl = $arService['SP_URL'];
+		if (is_array($serverUrl))
+		{
+			unset($serverUrl['user'], $serverUrl['pass']);
+		}
+
+		if (!ServerAllowList::isAllowed($serverUrl))
+		{
+			$APPLICATION->ThrowException(GetMessage('SP_ERROR_SERVER_NOT_ALLOWED'));
 			return false;
 		}
 

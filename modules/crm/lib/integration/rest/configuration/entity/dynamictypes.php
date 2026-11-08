@@ -2,11 +2,14 @@
 
 namespace Bitrix\Crm\Integration\Rest\Configuration\Entity;
 
+use Bitrix\Crm\Integration\Analytics\Builder\Automation\Type\CreateEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\Rest\Configuration\Helper;
 use Bitrix\Crm\Model\Dynamic\Type;
 use Bitrix\Crm\Model\Dynamic\TypeTable;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\AddResult;
@@ -94,7 +97,7 @@ class DynamicTypes
 				continue;
 			}
 
-			foreach (['CREATED_BY', 'CREATED_TIME', 'UPDATED_TIME', 'UPDATED_BY'] as $fieldName)
+			foreach (['CREATED_BY', 'CREATED_TIME', 'UPDATED_TIME', 'UPDATED_BY', 'DESCRIPTION'] as $fieldName)
 			{
 				unset($typeFields[$fieldName]);
 			}
@@ -508,6 +511,22 @@ class DynamicTypes
 					$type->delete();
 
 					return $result;
+				}
+
+				try
+				{
+					(new CreateEvent())
+						->setSection(Dictionary::SECTION_AUTOMATION)
+						->setStatus(Dictionary::STATUS_SUCCESS)
+						->setId($type->getId())
+						->setSource($params[Dictionary::CONTEXT_APPLICATION_SOURCE] ?? null)
+						->buildEvent()
+						->send()
+					;
+				}
+				catch (\Throwable $exception)
+				{
+					Application::getInstance()->getExceptionHandler()->writeToLog($exception);
 				}
 			}
 

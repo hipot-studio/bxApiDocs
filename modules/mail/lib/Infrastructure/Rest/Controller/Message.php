@@ -19,6 +19,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\Dto\DtoCollection;
+use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Exception\EntityNotFoundException;
 use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
 use Bitrix\Rest\V3\Interaction\Request\GetRequest;
@@ -36,6 +37,9 @@ use Bitrix\Rest\V3\Interaction\Response\ListResponse;
 class Message extends RestController
 {
 	private const MAX_LIMIT = 200;
+
+	/** Error code of the delete permission refusal carried by the result of MessageActions. */
+	private const DELETE_ACCESS_DENIED_ERROR = 'MAIL_MESSAGE_DELETE_ACCESS_DENIED';
 
 	/**
 	 * Endpoint: mail.message.get
@@ -522,6 +526,15 @@ class Message extends RestController
 
 		if (!$result->isSuccess())
 		{
+			foreach ($result->getErrors() as $error)
+			{
+				// A refusal by rights is not a malformed request: it answers 403, other errors stay 400
+				if ($error->getCode() === self::DELETE_ACCESS_DENIED_ERROR)
+				{
+					throw new AccessDeniedException();
+				}
+			}
+
 			throw new RequestValidationException($result->getErrors());
 		}
 

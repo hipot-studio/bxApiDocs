@@ -79,6 +79,7 @@ class OpenLineAnswerControlTrigger extends OpenLineTrigger
 			[
 				'Id' => 'imolCondition',
 				'Name' => Loc::getMessage('CRM_AUTOMATION_TRIGGER_OPENLINE_ANSWER_CTRL_CONDITION'),
+				'ShowFieldLabel' => false,
 				'Type' => '@condition-group-selector',
 				'Settings' => [
 					'Fields' => $fields,

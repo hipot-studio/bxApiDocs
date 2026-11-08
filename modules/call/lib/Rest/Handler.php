@@ -50,6 +50,27 @@ class Handler extends \IRestService
 
 		$params = array_change_key_case($params, \CASE_UPPER);
 
+		Loader::includeModule('im');
+
+		$aliasData = \Bitrix\Im\Alias::get($params['ALIAS']);
+		if (!$aliasData)
+		{
+			// Uniform guest pre-registration rejection body (variant c): a wrong alias must not be
+			// distinguishable from a missing / inactive / password-protected conference by response body.
+			throw new RestException(
+				Auth::ACCESS_DENIED_ERROR_DESCRIPTION,
+				Auth::ACCESS_DENIED_ERROR_CODE,
+				\CRestServer::STATUS_FORBIDDEN
+			);
+		}
+
+		// Resolve videoconf_id from the auth-gated request. Auth::onRestCheckAuth checks the password
+		// against the OUTER server's videoconf_id; inside a REST batch $server is the batch item whose
+		// getQuery() carries the inner command's params, so read the top-level CRestServer instance to
+		// stay bound to the conference whose password was actually verified (Mantis 251236).
+		$videoconfId = (int)(\CRestServer::instance()->getQuery()['videoconf_id'] ?? 0);
+		self::assertConferenceMatchesAlias($videoconfId, $aliasData);
+
 		//1. check session info $_SESSION['LIVECHAT']['REGISTER'] - already registered?
 		if (
 			isset($_SESSION['CALL']['REGISTER'])
@@ -83,14 +104,6 @@ class Handler extends \IRestService
 				User::getError()->code,
 				\CRestServer::STATUS_WRONG_REQUEST
 			);
-		}
-
-		Loader::includeModule('im');
-
-		$aliasData = \Bitrix\Im\Alias::get($params['ALIAS']);
-		if (!$aliasData)
-		{
-			throw new RestException("Wrong alias.", "WRONG_ALIAS", \CRestServer::STATUS_FORBIDDEN);
 		}
 
 		//3. authorize
@@ -131,6 +144,7 @@ class Handler extends \IRestService
 			'id' => (int)$userData['ID'],
 			'hash' => $userData['HASH'],
 			'created' => $userData['CREATED'],
+			'hasCustomName' => (bool)($userData['HAS_CUSTOM_NAME'] ?? false),
 			'userToken' => \Bitrix\Call\JwtCall::getUserJwt((int)$userData['ID']),
 		];
 
@@ -142,18 +156,60 @@ class Handler extends \IRestService
 		$chatOwnerId = $chatData['chat'][$aliasData['ENTITY_ID']]['owner'];
 
 		$publicLink = $aliasData['LINK'];
+
+		$message = fn (?string $languageId = null) => Loc::getMessage(
+				"IM_VIDEOCONF_NEW_GUEST",
+				['#CHAT_TITLE#' => $chatTitle],
+				$languageId
+			) . "[br]" . "<a href='{$publicLink}'>" . Loc::getMessage("IM_VIDEOCONF_JOIN_LINK", null, $languageId) . "</a>";
+		$title = fn (?string $languageId = null) => Loc::getMessage('IM_VIDEOCONF_NEW_GUEST_TITLE', null, $languageId);
+
 		\CIMNotify::Add([
 			'TO_USER_ID' => $chatOwnerId,
 			'NOTIFY_MODULE' => 'im',
 			'NOTIFY_EVENT' => 'videconf_new_guest',
-			'MESSAGE' => fn (?string $languageId = null) => Loc::getMessage(
-					"IM_VIDEOCONF_NEW_GUEST",
-					['#CHAT_TITLE#' => $chatTitle],
-					$languageId
-				) . "[br]" . "<a href='{$publicLink}'>" . Loc::getMessage("IM_VIDEOCONF_JOIN_LINK", null, $languageId) . "</a>",
+			'NOTIFY_TITLE' => $title,
+			'NOTIFY_MESSAGE' => $message,
+			"PARAMS" => [
+				'COMPONENT_PARAMS' => [
+					'SUBJECT' => $title,
+					'SYSTEM_ICON' => 'videoConf'
+				],
+			],
 		]);
 
 		return $result;
+	}
+
+	/**
+	 * Ensures a conference guest can only be added to the chat of the conference whose password
+	 * was checked. The conference resolved by videoconf_id and the chat resolved by alias must be
+	 * the same, otherwise an open conference could be used to slip into a foreign protected chat.
+	 * Conference activity is not checked here - that stays the responsibility of Auth::onRestCheckAuth.
+	 */
+	private static function assertConferenceMatchesAlias(int $videoconfId, array $aliasData): void
+	{
+		// The match only needs the conference's chat id: select it straight off the joined alias
+		// instead of hydrating the full Conference model (chat, author, relations, decrypted password).
+		$conferenceData = \Bitrix\Call\Model\ConferenceTable::query()
+			->setSelect(['CHAT_ID' => 'ALIAS.ENTITY_ID'])
+			->where('ID', $videoconfId)
+			->where('ALIAS.ENTITY_TYPE', \Bitrix\Call\Conference::ALIAS_TYPE)
+			->setLimit(1)
+			->fetch()
+		;
+
+		if (
+			$conferenceData === false
+			|| (int)$aliasData['ENTITY_ID'] !== (int)$conferenceData['CHAT_ID']
+		)
+		{
+			throw new RestException(
+				Auth::ACCESS_DENIED_ERROR_DESCRIPTION,
+				Auth::ACCESS_DENIED_ERROR_CODE,
+				\CRestServer::STATUS_FORBIDDEN
+			);
+		}
 	}
 
 	/**
@@ -178,16 +234,17 @@ class Handler extends \IRestService
 
 		/** @var \CUser $USER */
 		global $USER;
+		$currentUserId = (int)$USER->GetID();
+
+		Loader::includeModule('im');
+		$relations = self::resolveChatRelationsForNotification((int)($params['CHAT_ID'] ?? 0), $currentUserId);
+
 		if ($USER->GetParam("NAME") != $params['NAME'])
 		{
 			$userManager = new \CUser;
-			$userManager->Update($USER->GetID(), [
+			$userManager->Update($currentUserId, [
 				'NAME' => $params['NAME']
 			]);
-
-			Loader::includeModule('im');
-
-			$relations = \Bitrix\Im\Chat::getRelation($params['CHAT_ID'], ['WITHOUT_COUNTERS' => 'Y']);
 
 			if (Loader::includeModule('pull'))
 			{
@@ -195,7 +252,7 @@ class Handler extends \IRestService
 					'module_id' => 'im',
 					'command' => 'callUserNameUpdate',
 					'params' => [
-						'userId' => $USER->GetID(),
+						'userId' => $currentUserId,
 						'name' => $params['NAME']
 					],
 					'extra' => \Bitrix\Im\Common::getPullExtra()
@@ -208,6 +265,34 @@ class Handler extends \IRestService
 			'hash' => mb_substr($USER->GetParam('XML_ID'), mb_strlen(Auth::AUTH_TYPE) + 1),
 			'userToken' => \Bitrix\Call\JwtCall::getUserJwt($USER->GetID()),
 		];
+	}
+
+	/**
+	 * Resolves the chat relations a guest rename notification may be broadcast to. CHAT_ID comes from
+	 * user input, so membership is verified before any side effect: the relations are both the
+	 * permission check and the recipient list. A foreign chat and a missing one share a single error
+	 * code, so the response cannot be used to probe which chats exist.
+	 *
+	 * @return array<int, array> relations keyed by user id
+	 */
+	private static function resolveChatRelationsForNotification(int $chatId, int $userId): array
+	{
+		if ($chatId <= 0)
+		{
+			throw new RestException("Chat ID can't be empty", "CHAT_ID_EMPTY", \CRestServer::STATUS_WRONG_REQUEST);
+		}
+
+		$relations = \Bitrix\Im\Chat::getRelation($chatId, ['WITHOUT_COUNTERS' => 'Y']);
+		if (!isset($relations[$userId]))
+		{
+			throw new RestException(
+				"You don't have access to this chat",
+				"NO_ACCESS",
+				\CRestServer::STATUS_WRONG_REQUEST
+			);
+		}
+
+		return $relations;
 	}
 
 	/**

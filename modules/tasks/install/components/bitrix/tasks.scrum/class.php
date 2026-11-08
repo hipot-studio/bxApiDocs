@@ -9,6 +9,7 @@ require_once __DIR__ . '/accesscheck.php';
 
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Context;
+use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Error;
 use Bitrix\Main\Errorable;
@@ -41,6 +42,7 @@ use Bitrix\Tasks\Scrum\Service\CacheService;
 use Bitrix\Tasks\Scrum\Service\DefinitionOfDoneService;
 use Bitrix\Tasks\Scrum\Service\EntityService;
 use Bitrix\Tasks\Scrum\Service\EpicService;
+use Bitrix\Tasks\Scrum\Service\ItemQueryService;
 use Bitrix\Tasks\Scrum\Service\ItemService;
 use Bitrix\Tasks\Scrum\Service\RobotService;
 use Bitrix\Tasks\Scrum\Service\TypeService;
@@ -140,6 +142,13 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 			],
 			'updateItemSort' => [
 				'prefilters' => $basePrefilters
+			],
+			'moveItemsBeforeItem' => [
+				'prefilters' => [
+					new ActionFilter\HttpMethod(['POST']),
+					new ActionFilter\Csrf(),
+					...$basePrefilters,
+				]
 			],
 			'updateItem' => [
 				'prefilters' => $basePrefilters
@@ -1267,10 +1276,94 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 		if ($sortInfo)
 		{
-			$itemService->sortItems($this->prepareSortInfo($groupId, $sortInfo), $pushService);
+			$sortedItems = $itemService->sortItems(
+				$this->prepareSortInfo($groupId, $sortInfo),
+				$pushService
+			);
+
+			return ['items' => $sortedItems];
 		}
 
-		return '';
+		return ['items' => []];
+	}
+
+	public function moveItemsBeforeItemAction(): ?array
+	{
+		$this->checkModules();
+
+		$request = Context::getCurrent()->getRequest();
+		$post = $request->getPostList()->toArray();
+
+		$this->debugMode = (isset($post['debugMode']) && $post['debugMode'] === 'Y');
+		$this->userId = Util\User::getId();
+		$groupId = (int)$this->arParams['GROUP_ID'];
+
+		$entityId = (is_numeric($post['entityId'] ?? null) ? (int)$post['entityId'] : 0);
+		$targetItemId = (is_numeric($post['targetItemId'] ?? null) ? (int)$post['targetItemId'] : 0);
+		$itemsToMove = (is_array($post['itemsToMove'] ?? null) ? $post['itemsToMove'] : []);
+
+		$entity = (new EntityService())->getEntityById($entityId);
+		if (
+			$entity->isEmpty()
+			|| $entity->getGroupId() !== $groupId
+			|| !$this->canReadGroupTasks($groupId)
+			|| !Group::can($groupId, Group::ACTION_SORT_TASKS, $this->userId)
+			|| !$this->canAccessItemsToMove($entityId, $targetItemId, $itemsToMove)
+		)
+		{
+			$this->setError(Loc::getMessage('TASKS_SCRUM_SYSTEM_ERROR'));
+
+			return null;
+		}
+
+		$itemService = new ItemService($this->userId);
+		$pushService = (Loader::includeModule('pull') ? new PushService() : null);
+		$updatedItems = $itemService->moveItemsBeforeItem(
+			$itemsToMove,
+			$targetItemId,
+			$entityId,
+			$pushService
+		);
+
+		if ($itemService->getErrors())
+		{
+			$this->setError(Loc::getMessage('TASKS_SCRUM_SYSTEM_ERROR'), $itemService->getErrors());
+
+			return null;
+		}
+
+		return $updatedItems;
+	}
+
+	private function canAccessItemsToMove(int $entityId, int $targetItemId, array $itemsToMove): bool
+	{
+		if (
+			$targetItemId <= 0
+			|| !$itemsToMove
+			|| count($itemsToMove) > ItemQueryService::MAX_MOVE_ITEMS_COUNT
+		)
+		{
+			return false;
+		}
+
+		$itemIds = [$targetItemId];
+		foreach ($itemsToMove as $itemToMove)
+		{
+			if (!is_array($itemToMove) || !is_numeric($itemToMove['id'] ?? null))
+			{
+				return false;
+			}
+
+			$itemId = (int)$itemToMove['id'];
+			if ($itemId <= 0)
+			{
+				return false;
+			}
+
+			$itemIds[] = $itemId;
+		}
+
+		return (new ItemQueryService($this->userId))->canReadRootItems($entityId, $itemIds);
 	}
 
 	public function updateItemAction()
@@ -1997,13 +2090,15 @@ class TasksScrumComponent extends \CBitrixComponent implements Controllerable, E
 
 		$itemService = new ItemService();
 		$taskService = new TaskService($this->userId);
+		$items = $itemService->getItemsByIds($itemIds);
 		$userService = new UserService();
 
 		foreach ($itemIds as $key => $itemId)
 		{
-			$item = $itemService->getItemById($itemId);
+			$item = $items[$itemId] ?? null;
 			if (
-				$item->isEmpty()
+				$item === null
+				|| $item->isEmpty()
 				|| !TaskAccessController::can(
 					$this->userId,
 					ActionDictionary::ACTION_TASK_READ,

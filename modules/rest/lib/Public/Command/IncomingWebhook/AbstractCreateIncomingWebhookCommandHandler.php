@@ -9,6 +9,7 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Repository\Exception\PersistenceException;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Type\Date;
 use Bitrix\Rest\APAuth\PasswordTable;
 use Bitrix\Rest\APAuth\PermissionTable;
 use Bitrix\Rest\Enum\Integration\ElementCodeType;
@@ -83,7 +84,7 @@ abstract class AbstractCreateIncomingWebhookCommandHandler
 		array $scopes,
 		array $attributes,
 		?string $comment = null,
-		bool $skipTariffCheck = false,
+		?Date $dateExpire = null,
 	): IncomingWebhook {
 		$connection = Application::getConnection();
 		$connection->startTransaction();
@@ -98,7 +99,6 @@ abstract class AbstractCreateIncomingWebhookCommandHandler
 				ElementCodeType::IN_WEBHOOK->value,
 				null,
 				$initiatorUserId,
-				$skipTariffCheck,
 			);
 
 			if (($integrationResult['status'] ?? false) !== true || empty($integrationResult['ID']))
@@ -132,6 +132,12 @@ abstract class AbstractCreateIncomingWebhookCommandHandler
 			if ($comment !== null && $comment !== '')
 			{
 				$savedWebhook->setComment($comment);
+				$needsSave = true;
+			}
+
+			if ($dateExpire !== null)
+			{
+				$savedWebhook->setDateExpire($dateExpire);
 				$needsSave = true;
 			}
 

@@ -190,6 +190,31 @@ final class ScopeService
 		;
 	}
 
+	/**
+	 * Checks whether the current user can see at least one dashboard of the given scope.
+	 * Unlike isDashboardsExist(), the view permission of the current user is taken into account.
+	 *
+	 * @param string $scopeCode Code of scope.
+	 *
+	 * @return bool
+	 */
+	public function hasAccessibleDashboards(string $scopeCode): bool
+	{
+		$accessFilter = AccessController::getCurrent()->getEntityFilter(
+			ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
+			SupersetDashboardTable::class,
+		);
+
+		return (bool)SupersetDashboardTable::getList([
+			'select' => ['ID'],
+			'filter' => [
+				...$accessFilter,
+				'=SCOPE.SCOPE_CODE' => $scopeCode,
+			],
+			'limit' => 1,
+		])->fetch();
+	}
+
 	public function isDashboardsExist(string $scopeCode): bool
 	{
 		return SupersetDashboardTable::getCount(

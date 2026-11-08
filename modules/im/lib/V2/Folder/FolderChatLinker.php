@@ -7,6 +7,7 @@ use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Error;
 use Bitrix\Im\V2\Folder\Cache\FolderCache;
+use Bitrix\Im\V2\Folder\Eligibility\EligibleChatTypes;
 use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\Folder\Pin\PinService;
 use Bitrix\Im\V2\Result;
@@ -36,24 +37,29 @@ class FolderChatLinker
 			return $result->addError(new Error(FolderError::FOLDER_SYSTEM_MUTATION_FORBIDDEN));
 		}
 
-		$userId = (int)$folder->getUserId();
-		$folderId = (int)$folder->getId();
-
-		$eligibleChatIds = $this->filterEligibleChats($folder, $chatIds);
-		if (empty($eligibleChatIds))
-		{
-			return $result->addError(new Error(FolderError::FOLDER_CHAT_NOT_ELIGIBLE));
-		}
-
-		$capacityError = $this->ensureCapacity($folder, count($eligibleChatIds));
+		// All-or-nothing: both reasons to refuse are settled before anything is written. Capacity comes
+		// first, so a full folder answers with the limit error even when the set also holds an
+		// ineligible chat.
+		$capacityError = $this->findCapacityError($folder, count($chatIds));
 		if ($capacityError !== null)
 		{
 			return $result->addError($capacityError);
 		}
 
-		$this->persistMembership($folderId, $eligibleChatIds);
-		$this->pinService->syncShadowsOnFolderAttach($folder, $eligibleChatIds);
-		$this->mergeChatIdsIntoFolder($folder, $eligibleChatIds);
+		$ineligibleChatIds = $this->findIneligibleChats($folder, $chatIds);
+		if (!empty($ineligibleChatIds))
+		{
+			return $result->addError(
+				new Error(FolderError::FOLDER_CHAT_NOT_ELIGIBLE, ['chatIds' => $ineligibleChatIds])
+			);
+		}
+
+		$userId = (int)$folder->getUserId();
+		$folderId = (int)$folder->getId();
+
+		$this->persistMembership($folderId, $chatIds);
+		$this->pinService->syncShadowsOnFolderAttach($folder, $chatIds);
+		$this->mergeChatIdsIntoFolder($folder, $chatIds);
 		$this->folderCache->clearByUser($userId);
 
 		return $result;
@@ -184,41 +190,54 @@ class FolderChatLinker
 		}
 	}
 
-	private function filterEligibleChats(PersonalFolder $folder, array $chatIds): array
+	/**
+	 * Chat ids the folder does not accept. An empty result means the whole set is eligible.
+	 * Every write path calls it before its own mutations, so the rule lives in one place.
+	 *
+	 * @param int[] $chatIds
+	 * @return int[]
+	 */
+	public function findIneligibleChats(PersonalFolder $folder, array $chatIds): array
 	{
+		$chatIds = Normalizer::toUniquePositiveIntegers($chatIds);
+		if (empty($chatIds))
+		{
+			return [];
+		}
+
 		$chats = $this->getChats($chatIds, (int)$folder->getUserId());
-		$eligible = [];
-		foreach ($chats as $chat)
-		{
-			if ($folder->canAcceptChat($chat))
+
+		// The eligible recent sections are the same for every chat of the batch, so they are resolved
+		// once around the loop instead of being rebuilt on each admission check.
+		return EligibleChatTypes::withRecentSectionsResolvedOnce(static function () use ($folder, $chats): array {
+			$ineligible = [];
+			foreach ($chats as $chatId => $chat)
 			{
-				$eligible[] = (int)$chat->getChatId();
+				if (!$folder->canAcceptChat($chat))
+				{
+					$ineligible[] = $chatId;
+				}
 			}
-		}
 
-		return $eligible;
+			return $ineligible;
+		});
 	}
 
-	private function getChats(array $chatIds, int $userId): array
-	{
-		$chats = [];
-		foreach ($chatIds as $chatId)
-		{
-			$chats[] = Chat::getInstance($chatId);
-		}
-		Chat::fillSelfRelations($chats, $userId);
-
-		return $chats;
-	}
-
-	private function ensureCapacity(PersonalFolder $folder, int $additional): ?Error
+	/**
+	 * Whether the folder can take $additional chats: null means there is room. Public because a
+	 * caller that writes into several folders has to ask before its first mutation, and asking has
+	 * to be the very same logic as the write. A plain count comparison is not: the check first
+	 * reclaims the membership rows that show up nowhere ({@see reclaimUnusableMembership}), and only
+	 * then refuses.
+	 */
+	public function findCapacityError(PersonalFolder $folder, int $additional): ?Error
 	{
 		if (count($folder->getChatIds()) + $additional <= FolderLimits::MAX_CHATS_PER_FOLDER)
 		{
 			return null;
 		}
 
-		$this->lazyCleanupAtLimit($folder);
+		$this->reclaimUnusableMembership($folder);
 
 		if (count($folder->getChatIds()) + $additional <= FolderLimits::MAX_CHATS_PER_FOLDER)
 		{
@@ -226,6 +245,84 @@ class FolderChatLinker
 		}
 
 		return new Error(FolderError::FOLDER_CHATS_LIMIT_EXCEEDED);
+	}
+
+	/**
+	 * Chat ids stored in the folder whose membership rows can never produce a row in it. Asking only:
+	 * nothing is written, so a caller that also holds an incoming composition can subtract them from
+	 * it before it decides which chats the request adds, and still refuse the request without having
+	 * changed anything. Taking the rows out is then the ordinary {@see deleteChats}.
+	 *
+	 * @return int[]
+	 */
+	public function findStaleMembership(PersonalFolder $folder): array
+	{
+		$existingChatIds = $folder->getChatIds();
+		if (empty($existingChatIds))
+		{
+			return [];
+		}
+
+		$userId = (int)$folder->getUserId();
+
+		$staleChatIds = [];
+		foreach ($this->getChats($existingChatIds, $userId) as $chatId => $chat)
+		{
+			if ($this->isStaleMembership($chat, $userId))
+			{
+				$staleChatIds[] = $chatId;
+			}
+		}
+
+		return $staleChatIds;
+	}
+
+	/**
+	 * The limit path drops the rows itself, and asks about access on top of {@see isStaleMembership}:
+	 * a row of a chat the owner cannot reach holds a slot they cannot use either. Access is asked for
+	 * here alone - it depends on other modules and on the chat tree, so it may say no for a while, and
+	 * a row must not be lost by it outside the check whose refusal that row causes.
+	 */
+	private function reclaimUnusableMembership(PersonalFolder $folder): void
+	{
+		$existingChatIds = $folder->getChatIds();
+		if (empty($existingChatIds))
+		{
+			return;
+		}
+
+		$userId = (int)$folder->getUserId();
+
+		$unusableChatIds = [];
+		foreach ($this->getChats($existingChatIds, $userId) as $chatId => $chat)
+		{
+			if ($this->isStaleMembership($chat, $userId) || !$chat->checkAccess($userId)->isSuccess())
+			{
+				$unusableChatIds[] = $chatId;
+			}
+		}
+
+		if (!empty($unusableChatIds))
+		{
+			$this->deleteChats($folder, $unusableChatIds);
+		}
+	}
+
+	/**
+	 * @param int[] $chatIds
+	 * @return array<int, Chat> requested chat id => chat; a missing chat resolves to a null-object,
+	 *   hence the requested id is the key and never read back from the entity.
+	 */
+	private function getChats(array $chatIds, int $userId): array
+	{
+		$chats = [];
+		foreach ($chatIds as $chatId)
+		{
+			$chats[$chatId] = Chat::getInstance($chatId);
+		}
+		Chat::fillSelfRelations($chats, $userId);
+
+		return $chats;
 	}
 
 	private function persistMembership(int $folderId, array $chatIds): void
@@ -249,39 +346,15 @@ class FolderChatLinker
 		$folder->setChatIds(array_values(array_unique(array_merge($folder->getChatIds(), $newChatIds))));
 	}
 
-	private function lazyCleanupAtLimit(PersonalFolder $folder): void
+	/**
+	 * A membership row of a chat that is gone, or that the owner of the folder is not in: neither can
+	 * ever show a row in the folder, because a folder draws its rows from the recent list of its owner.
+	 * Both facts are local to the folder and its owner and do not come back on their own. Membership is
+	 * the existence of the relation: a hidden one still means the user is in the chat, so IS_HIDDEN is
+	 * not asked about.
+	 */
+	private function isStaleMembership(Chat $chat, int $userId): bool
 	{
-		$existingChatIds = $folder->getChatIds();
-		if (empty($existingChatIds))
-		{
-			return;
-		}
-
-		$userId = (int)$folder->getUserId();
-		$folderId = (int)$folder->getId();
-
-		$staleChatIds = [];
-		foreach ($this->getChats($existingChatIds, $userId) as $chat)
-		{
-			if (!$chat->isExist() || !$chat->checkAccess($userId)->isSuccess())
-			{
-				$staleChatIds[] = (int)$chat->getChatId();
-			}
-		}
-
-		if (empty($staleChatIds))
-		{
-			return;
-		}
-
-		FolderChatTable::deleteBatch([
-			'=FOLDER_ID' => $folderId,
-			'=CHAT_ID' => $staleChatIds,
-		]);
-
-		$this->pinService->syncShadowsOnRemove($folderId, $staleChatIds, $userId);
-
-		// Reflect cleanup in folder's in-memory state so capacity re-check sees the freed slots.
-		$folder->setChatIds(array_values(array_diff($existingChatIds, $staleChatIds)));
+		return !$chat->isExist() || $chat->getRelationByUserId($userId) === null;
 	}
 }

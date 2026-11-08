@@ -2,7 +2,6 @@
 
 namespace Bitrix\Crm\Activity\Provider;
 
-use Bitrix\Crm\CallList\Internals\CallListTable;
 use Bitrix\Crm\WebForm\Internals\FormTable;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
@@ -136,12 +135,24 @@ class CallList extends Base
 
 	public static function getWebformsHtml($activity)
 	{
-		if($activity['ASSOCIATED_ENTITY_ID'] > 0)
-			$callList = CallListTable::getById($activity['ASSOCIATED_ENTITY_ID'])->fetch();
-		else
-			$callList = array(
-				'WEBFORM_ID' => 0
-			);
+		$callList = array(
+			'WEBFORM_ID' => 0
+		);
+		if((int)($activity['ASSOCIATED_ENTITY_ID'] ?? 0) > 0)
+		{
+			try
+			{
+				$callListEntity = \Bitrix\Crm\CallList\CallList::createWithId((int)$activity['ASSOCIATED_ENTITY_ID']);
+				$callList['WEBFORM_ID'] = $callListEntity->getWebformId();
+			}
+			catch (Main\SystemException $e)
+			{
+				if (!in_array((int)$e->getCode(), [403, 404], true))
+				{
+					throw $e;
+				}
+			}
+		}
 
 		$forms = FormTable::getDefaultTypeList(array(
 			'select' => array('ID', 'NAME'),
@@ -333,7 +344,7 @@ class CallList extends Base
 	 * Returns update permission for a callList activity. Returns true if specified user has update permission for,
 	 * at least one bound entity.
 	 * @param array $activityFields Fields of the activity.
-	 * @param null $userId Id of the user.
+	 * @param int|null $userId Id of the user.
 	 * @return bool
 	 */
 	public static function checkUpdatePermission(array $activityFields, $userId = null)
@@ -341,7 +352,11 @@ class CallList extends Base
 		$callListId = $activityFields['ASSOCIATED_ENTITY_ID'];
 		try
 		{
-			$callList = \Bitrix\Crm\CallList\CallList::createWithId($callListId, true);
+			$callList = \Bitrix\Crm\CallList\CallList::createWithId(
+				$callListId,
+				true,
+				static::getCallListLoadOptions($userId),
+			);
 		}
 		catch (Main\SystemException $e)
 		{
@@ -373,7 +388,11 @@ class CallList extends Base
 
 		try
 		{
-			$callList = \Bitrix\Crm\CallList\CallList::createWithId($callListId, true);
+			$callList = \Bitrix\Crm\CallList\CallList::createWithId(
+				$callListId,
+				true,
+				static::getCallListLoadOptions($userId),
+			);
 		}
 		catch (Main\SystemException $e)
 		{
@@ -395,6 +414,16 @@ class CallList extends Base
 		}
 
 		return false;
+	}
+
+	private static function getCallListLoadOptions($userId): array
+	{
+		if ($userId === null)
+		{
+			return [];
+		}
+
+		return ['userId' => (int)$userId];
 	}
 
 	public static function canUseCalendarEvents($providerTypeId = null)

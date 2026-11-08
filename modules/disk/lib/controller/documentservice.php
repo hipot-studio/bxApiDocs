@@ -10,7 +10,9 @@ use Bitrix\Disk\Document\OnlyOffice\RestrictionManager;
 use Bitrix\Disk\Document\Vibeoffice\VibeofficeHandler;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Integration\Baas\BaasSessionBoostService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Main\Context;
 use Bitrix\Main\DI\ServiceLocator;
@@ -21,9 +23,20 @@ use Bitrix\Main\Engine\Response;
 use Bitrix\Main\Error;
 use Bitrix\Main\HttpResponse;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Request;
+use Bitrix\Main\Web\Uri;
 
 final class DocumentService extends Engine\Controller
 {
+	protected UnifiedLinkUrl $unifiedLinkUrl;
+
+	public function __construct(?Request $request = null)
+	{
+		parent::__construct($request);
+
+		$this->unifiedLinkUrl = ServiceLocator::getInstance()->get(UnifiedLinkUrl::class);
+	}
+
 	public function configureActions()
 	{
 		return [
@@ -110,6 +123,10 @@ final class DocumentService extends Engine\Controller
 			return null;
 		}
 		$sessionManager->unlock();
+		$restrictionOutcome = $sessionManager instanceof Document\Vibeoffice\DocumentSessionManager
+			? $sessionManager->getRestrictionOutcome()
+			: null
+		;
 
 		$response = new HttpResponse();
 
@@ -140,6 +157,7 @@ final class DocumentService extends Engine\Controller
 					'POPUP_COMPONENT_TEMPLATE_NAME' => '',
 					'POPUP_COMPONENT_PARAMS' => [
 						'DOCUMENT_SESSION' => $forkedSession,
+						'RESTRICTION_OUTCOME' => $restrictionOutcome,
 						'SHOW_BUTTON_OPEN_NEW_WINDOW' => false,
 					],
 					'PLAIN_VIEW' => true,
@@ -244,10 +262,51 @@ final class DocumentService extends Engine\Controller
 	public function downloadDocumentAction(Document\Models\DocumentSession $documentSession): HttpResponse
 	{
 		$file = $documentSession->getFile();
+
+		$securityContext = $file?->getStorage()?->getSecurityContext(
+			user: $this->getCurrentUser(),
+			shouldCheckUnifiedLink: $this->shouldCheckUnifiedLink($documentSession),
+		);
+
+		if (!$securityContext || !$documentSession->canDownload($securityContext))
+		{
+			$this->addError(new Error('Could not download document.'));
+
+			$response = new HttpResponse();
+			$response->setStatus('403 Forbidden');
+
+			return $response;
+		}
+
 		$response = Response\BFile::createByFileId($file->getFileId(), $file->getName());
 		$response->setCacheTime(Disk\Configuration::DEFAULT_CACHE_TIME);
 
 		return $response;
+	}
+
+	private function shouldCheckUnifiedLink(Document\Models\DocumentSession $documentSession): bool
+	{
+		$file = $documentSession->getFile();
+
+		if (!$file)
+		{
+			return false;
+		}
+
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->getRequest());
+
+		if (!is_string($uls) || $uls === '')
+		{
+			return false;
+		}
+
+		/** @var UnifiedLinkAccessService $unifiedLinkAccessService */
+		$unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
+
+		return $unifiedLinkAccessService->validateUlsForObjectId(
+			objectId: $file->getId(),
+			uls: $uls,
+		);
 	}
 
 	public function goToEditOrPreviewAction($serviceCode, $attachedObjectId = null, $objectId = null, $versionId = null)
@@ -481,13 +540,37 @@ final class DocumentService extends Engine\Controller
 		$urlManager = $driver->getUrlManager();
 		if ($attachedObjectId)
 		{
-			LocalRedirect($urlManager::getUrlToStartEditUfFileByService($attachedObjectId, $documentHandler::getCode()));
+			LocalRedirect(
+				$this->addUnifiedLinkSignatureToUrl(
+					$urlManager::getUrlToStartEditUfFileByService($attachedObjectId, $documentHandler::getCode())
+				)
+			);
 
 		}
 		else
 		{
-			LocalRedirect($urlManager::getUrlForStartEditFile($objectId, $documentHandler::getCode()));
+			LocalRedirect(
+				$this->addUnifiedLinkSignatureToUrl(
+					$urlManager::getUrlForStartEditFile($objectId, $documentHandler::getCode())
+				)
+			);
 		}
+	}
+
+	protected function addUnifiedLinkSignatureToUrl(string $url): string
+	{
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->getRequest());
+
+		if (!is_string($uls) || $uls === '')
+		{
+			return $url;
+		}
+
+		$uri = new Uri($url);
+
+		$this->unifiedLinkUrl->addUlsToUri($uri, $uls);
+
+		return (string)$uri;
 	}
 
 	public function goToCreateAction(

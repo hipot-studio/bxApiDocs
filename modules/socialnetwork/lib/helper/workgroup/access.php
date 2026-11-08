@@ -8,11 +8,13 @@
  */
 namespace Bitrix\Socialnetwork\Helper\Workgroup;
 
+use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Socialnetwork\Permission\GroupAccessController;
 use Bitrix\Socialnetwork\Permission\GroupDictionary;
 use Bitrix\Socialnetwork\Permission\Model\GroupModel;
 use Bitrix\Socialnetwork\Helper;
+use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Socialnetwork\Item\Workgroup\AccessManager;
 use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\WorkgroupTable;
@@ -100,6 +102,83 @@ class Access
 		);
 
 		return $accessManager->canView();
+	}
+
+	/**
+	 * Tells whether the user may view the group, reading the least the decision needs.
+	 *
+	 * @param array $params
+	 *   groupId, userId, checkAdminSession — as in the neighbouring checks;
+	 *   visible — VISIBLE of a row the caller has already read, as a bool, to decide by instead of
+	 *   reading the same row again. The decision still belongs to groupId, so the two cannot
+	 *   disagree; omit the key to have the row read as usual. A raw 'Y'/'N' is rejected rather than
+	 *   cast, because 'N' casts to true and would hand out a hidden group.
+	 */
+	public static function canViewWithMinimalData(array $params = []): bool
+	{
+		$groupId = (int)($params['groupId'] ?? 0);
+		$currentUserId = (int)($params['userId'] ?? Helper\User::getCurrentUserId());
+
+		if ($groupId <= 0 || $currentUserId <= 0)
+		{
+			return false;
+		}
+
+		$suppliedVisible = $params['visible'] ?? null;
+		if ($suppliedVisible !== null && !is_bool($suppliedVisible))
+		{
+			throw new ArgumentTypeException('visible', 'bool');
+		}
+
+		$group = $suppliedVisible === null
+			? WorkgroupTable::getList([
+				'filter' => [
+					'=ID' => $groupId,
+				],
+				'select' => ['ID', 'VISIBLE'],
+			])->fetchObject()
+			: WorkgroupTable::wakeUpObject([
+				'ID' => $groupId,
+				'VISIBLE' => $suppliedVisible,
+			]);
+		if (!$group)
+		{
+			return false;
+		}
+
+		// Keep GroupAccessController as the single source of truth, but give it the only group
+		// fields GroupViewRule needs instead of making it hydrate GroupRegistry.
+		if (static::isRuleEnabled(GroupDictionary::VIEW))
+		{
+			return GroupAccessController::getInstance($currentUserId)->check(
+				GroupDictionary::VIEW,
+				GroupModel::createFromDomainObject(new Workgroup($group->collectValues())),
+			);
+		}
+
+		$currentUserRelation = UserToGroupTable::getList([
+			'filter' => [
+				'=GROUP_ID' => $groupId,
+				'=USER_ID' => $currentUserId,
+			],
+			'select' => [ 'ID', 'ROLE', 'USER_ID', 'GROUP_ID' ],
+		])->fetchObject();
+
+		$accessManagerParams = [
+			'checkAdminSession' => (bool)($params['checkAdminSession'] ?? true),
+		];
+		if ($currentUserId !== Helper\User::getCurrentUserId())
+		{
+			$accessManagerParams['userId'] = $currentUserId;
+		}
+
+		return (new AccessManager(
+			$group,
+			$currentUserRelation,
+			$currentUserRelation,
+			[],
+			$accessManagerParams,
+		))->canView();
 	}
 
 	public static function canModify(array $params = []): bool

@@ -14,8 +14,24 @@ class MessageIndexStepper extends Main\Update\Stepper
 
 	protected static $moduleId = 'mail';
 
+	public static function execAgent()
+	{
+		if (Main\Config\Option::get('mail', 'history_backfill_stopped') !== 'N')
+		{
+			return '';
+		}
+
+		return parent::execAgent();
+	}
+
 	public function execute(array &$option)
 	{
+		if (Main\Config\Option::get('mail', 'history_backfill_stopped') !== 'N')
+		{
+			// Keep the cursor: FINISH_EXECUTION would delete the saved progress.
+			return self::CONTINUE_EXECUTION;
+		}
+
 		if (!isset($option['lastId'], $option['maxId'], $option['phase']))
 		{
 			$maxId = Mail\MailMessageTable::getList(array(

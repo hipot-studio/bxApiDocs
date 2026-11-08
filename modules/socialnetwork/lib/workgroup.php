@@ -11,9 +11,12 @@ namespace Bitrix\Socialnetwork;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
+use Bitrix\Main\ORM\Fields\Field;
 use Bitrix\Main\ORM\Fields\Relations\OneToMany;
 use Bitrix\Main\ORM\Fields\StringField;
+use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Socialnetwork\Internals\Group\GroupEntity;
 use Bitrix\Socialnetwork\Internals\Group\GroupEntityCollection;
 
@@ -39,6 +42,7 @@ class WorkgroupTable extends Entity\DataManager
 {
 	public const AUTO_MEMBERSHIP_YES = 'Y';
 	public const AUTO_MEMBERSHIP_NO = 'N';
+	public const KEYWORDS_MAX_LENGTH = 255;
 
 	public static function getObjectClass(): string
 	{
@@ -89,8 +93,8 @@ class WorkgroupTable extends Entity\DataManager
 			],
 			'NAME' => [
 				'data_type' => 'string',
-				'save_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getSaveModificator'],
-				'fetch_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getFetchModificator'],
+				'save_data_modification' => [Emoji::class, 'getSaveModificator'],
+				'fetch_data_modification' => [Emoji::class, 'getFetchModificator'],
 			],
 			'DESCRIPTION' => [
 				'data_type' => 'text',
@@ -104,6 +108,9 @@ class WorkgroupTable extends Entity\DataManager
 			],
 			'KEYWORDS' => [
 				'data_type' => 'string',
+				'validation' => [self::class, 'validateKeywords'],
+				'save_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getSaveModificator'],
+				'fetch_data_modification' => ['\Bitrix\Main\Text\Emoji', 'getFetchModificator'],
 			],
 			'CLOSED' => [
 				'data_type' => 'boolean',
@@ -187,6 +194,20 @@ class WorkgroupTable extends Entity\DataManager
 
 			(new OneToMany('MEMBERS', UserToGroupTable::class, 'GROUP'))
 				->configureJoinType(Join::TYPE_LEFT),
+		];
+	}
+
+	public static function validateKeywords(): array
+	{
+		return [
+			static function ($value, $primary, array $row, Field $field) {
+				return (new LengthValidator(null, self::KEYWORDS_MAX_LENGTH))->validate(
+					Emoji::encode((string)$value),
+					$primary,
+					$row,
+					$field,
+				);
+			},
 		];
 	}
 

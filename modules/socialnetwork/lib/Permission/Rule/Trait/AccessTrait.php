@@ -3,15 +3,13 @@
 namespace Bitrix\Socialnetwork\Permission\Rule\Trait;
 
 use Bitrix\Socialnetwork\Permission\Model\GroupModel;
+use Bitrix\Socialnetwork\Permission\Rule\GroupRelationCache;
 use Bitrix\Socialnetwork\Internals\Group\GroupEntity;
 use Bitrix\Socialnetwork\Item\Workgroup\AccessManager;
 use Bitrix\Socialnetwork\Space\Member;
-use Bitrix\Socialnetwork\UserToGroupTable;
 
 trait AccessTrait
 {
-	protected static array $relations = [];
-
 	protected function getAccessManager(GroupModel $item, ?int $targetUserId, ?int $currentUserId): AccessManager
 	{
 		$group = $this->getEntityByModel($item);
@@ -26,7 +24,7 @@ trait AccessTrait
 			[],
 			[
 				'userId' => $currentUserId,
-			]
+			],
 		);
 	}
 
@@ -42,17 +40,6 @@ trait AccessTrait
 			return null;
 		}
 
-		$key = $groupId . '_' . $userId;
-
-		if (!isset(self::$relations[$key]))
-		{
-			self::$relations[$key] = UserToGroupTable::query()
-				->setSelect(['ID', 'ROLE', 'USER_ID', 'GROUP_ID', 'INITIATED_BY_TYPE', 'INITIATED_BY_USER_ID', 'AUTO_MEMBER'])
-				->where('GROUP_ID', $groupId)
-				->where('USER_ID', $userId)
-				->fetchObject();
-		}
-
-		return self::$relations[$key];
+		return GroupRelationCache::get($groupId, $userId);
 	}
 }

@@ -16,6 +16,8 @@ class Settings
 {
 	public const CALL_CLOUD_RECORDING_ENABLE = 'call_cloud_recording';
 
+	private static ?bool $cisRegion = null;
+
 	/**
 	 * Aggregates the full set of call settings exposed to the mobile client.
 	 *
@@ -43,7 +45,25 @@ class Settings
 			'mobileCallUIVisibilityTimer' => static::getMobileCallInterfaceVisibilityTimer(),
 			'callInvitePeriod' => static::getCallInvitePeriod(),
 			'gridViewEnabled' => static::isGridViewEnabled(),
+			'finishForAllEnabled' => static::isFinishForAllEnabled(),
+			'autoBalanceEnabled' => static::isAutoBalanceEnabled(),
+			'nqeDowngradeWindowSec' => static::getNqeDowngradeWindowSec(),
+			'nqeUpgradeWindowSec' => static::getNqeUpgradeWindowSec(),
+			'nqeWarmupSec' => static::getNqeWarmupSec(),
+			'nqeHighDowngradePacketsLostPct' => static::getNqeHighDowngradePacketsLostPct(),
+			'nqeHighDowngradeRttMs' => static::getNqeHighDowngradeRttMs(),
+			'nqeHighDowngradeJitterMs' => static::getNqeHighDowngradeJitterMs(),
+			'nqeMedDowngradePacketsLostPct' => static::getNqeMedDowngradePacketsLostPct(),
+			'nqeMedDowngradeRttMs' => static::getNqeMedDowngradeRttMs(),
+			'nqeMedDowngradeJitterMs' => static::getNqeMedDowngradeJitterMs(),
+			'nqeMedUpgradePacketsLostPct' => static::getNqeMedUpgradePacketsLostPct(),
+			'nqeMedUpgradeRttMs' => static::getNqeMedUpgradeRttMs(),
+			'nqeMedUpgradeJitterMs' => static::getNqeMedUpgradeJitterMs(),
+			'nqeLowUpgradePacketsLostPct' => static::getNqeLowUpgradePacketsLostPct(),
+			'nqeLowUpgradeRttMs' => static::getNqeLowUpgradeRttMs(),
+			'nqeLowUpgradeJitterMs' => static::getNqeLowUpgradeJitterMs(),
 			'isLargeMobileCallEnabled' => static::isLargeMobileCallEnabled(),
+			'viewToggleEnabled' => static::isViewToggleEnabled(),
 			'getBigRoomChats' => static::getBigRoomChats(),
 			'ai' => [
 				'serviceEnabled' => static::isAIServiceEnabled(),
@@ -63,6 +83,8 @@ class Settings
 			'isCloudRecordTariffEnabled' => static::isCloudRecordingAvailable(),
 			'isCloudRecordCisRegion' => static::isCisRegion(),
 			'isCloudRecordLogEnabled' => static::isCloudRecordLogEnabled(),
+			'isMetricsEnabled' => static::isMetricsEnabled(),
+			'isMetricsLogsEnabled' => static::isMetricsLogsEnabled(),
 			'syncCallInvitePeriod' => static::getSyncCallInvitePeriod(),
 		], self::getAdditionalMobileOptions());
 	}
@@ -103,13 +125,14 @@ class Settings
 	 */
 	public static function isCisRegion(): bool
 	{
-		static $cached = null;
-		if ($cached === null)
+		// A class property rather than a method static: the license region never changes within a
+		// process, but tests substitute it, and only a class property can be reset for that.
+		if (self::$cisRegion === null)
 		{
-			$cached = \Bitrix\Main\Application::getInstance()->getLicense()->isCis();
+			self::$cisRegion = \Bitrix\Main\Application::getInstance()->getLicense()->isCis();
 		}
 
-		return $cached;
+		return self::$cisRegion;
 	}
 
 	/**
@@ -263,6 +286,25 @@ class Settings
 		}
 
 		return $cached;
+	}
+
+	/**
+	 * TTL (in seconds) for the silent card-only conference notification delivered
+	 * on start / add-during-call reconcile. Larger than the default pull expiry
+	 * (5 s) so a slow client still surfaces the recent card, but bounded so a
+	 * stale card cannot linger.
+	 */
+	private const CONFERENCE_INVITE_TTL = 60;
+
+	/**
+	 * Returns the conference-invite pull TTL (seconds). Single source of the value
+	 * shared by the signaling, event-handler and conference-invite paths.
+	 *
+	 * @return int
+	 */
+	public static function getConferenceInviteTtl(): int
+	{
+		return self::CONFERENCE_INVITE_TTL;
 	}
 
 	/**
@@ -429,6 +471,83 @@ class Settings
 		return $cached;
 	}
 
+	/**
+	 * Whether the mobile "finish call for all" feature is enabled (portal-wide or per-user).
+	 *
+	 * @return bool
+	 */
+	public static function isFinishForAllEnabled(): bool
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			if ((bool)Option::get('call', 'finish_for_all_enabled', false))
+			{
+				$cached = true;
+			}
+			else
+			{
+				$cached = (bool)\CUserOptions::GetOption('call', 'finish_for_all_enabled', false);
+			}
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Whether manual view toggling is available in the mobile call interface.
+	 *
+	 * Portal-level kill-switch / staged rollout only: no per-user fallback.
+	 * Boolean option, off by default: enable with
+	 * Option::set('call', 'view_toggle_enabled', true); disable by setting it
+	 * falsy or deleting it.
+	 *
+	 * @return bool
+	 */
+	public static function isViewToggleEnabled(): bool
+	{
+		return (bool)Option::get('call', 'view_toggle_enabled', false);
+	}
+
+	/**
+	 * Whether a guest (a user without a portal account) may start a call.
+	 *
+	 * Portal-level switch, off by default: enable with
+	 * Option::set('call', 'guest_outgoing_call_enabled', 'Y'); disable with 'N' or by deleting
+	 * the option. Guests answer calls regardless of this option - it only governs starting one.
+	 *
+	 * The value is read for what it says rather than cast to bool: 'N' is the usual way of writing
+	 * "off" for a portal switch, and (bool)'N' is true.
+	 *
+	 * @return bool
+	 */
+	public static function isGuestOutgoingCallEnabled(): bool
+	{
+		$value = Option::get('call', 'guest_outgoing_call_enabled', 'N');
+
+		return in_array($value, ['Y', '1', 'true'], true);
+	}
+
+	/**
+	 * Whether a guest may start a call at a bare user id - a 1-1 dialogue rather than a chat.
+	 *
+	 * The two shapes of a start reach the portal by different schemes: "chatNNN" goes to the conference
+	 * provider, a bare user id always goes to Plain ({@see \Bitrix\Call\Controller\Call::startCallAction}
+	 * for the JWT end of it). Only under the JWT scheme does that start arrive at the webhook, which lets a
+	 * guest through; the classic scheme sends it to CallManager::create, where a bare user id is refused for
+	 * a guest whatever the switch above says - resolving it would create a private chat with an employee.
+	 *
+	 * So the answer for a 1-1 target is the answer above narrowed by the scheme, and it is computed here
+	 * rather than reassembled on every client: three screens ask this question and would each have to know
+	 * which scheme serves which shape.
+	 *
+	 * @return bool
+	 */
+	public static function isGuestOutgoingPrivateCallEnabled(): bool
+	{
+		return self::isGuestOutgoingCallEnabled() && self::isPlainCallsUseNewScheme();
+	}
+
 	public static function isLargeMobileCallEnabled(): bool
 	{
 		static $cached = null;
@@ -522,6 +641,29 @@ class Settings
 	}
 
 	/**
+	 * Whether push-to-talk is enabled for the web client.
+	 *
+	 * @return bool
+	 */
+	public static function isWebPushToTalkEnabled(): bool
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			if (Option::get('call', 'push_to_talk_web_enabled', false))
+			{
+				$cached = true;
+			}
+			else
+			{
+				$cached = (bool)\CUserOptions::GetOption('call', 'push_to_talk_web_enabled', false);
+			}
+		}
+
+		return $cached;
+	}
+
+	/**
 	 * Whether logs to Kibana are enabled.
 	 *
 	 * @return bool
@@ -607,6 +749,293 @@ class Settings
 	}
 
 	/**
+	 * Whether auto balance quality is enabled.
+	 *
+	 * @return bool
+	 */
+	public static function isAutoBalanceEnabled(): bool
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			if (Option::get('call', 'call_auto_balance_enabled', false))
+			{
+				$cached = true;
+			}
+			else
+			{
+				$cached = (bool)\CUserOptions::GetOption('call', 'call_auto_balance_enabled', false);
+			}
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get downgrade window in seconds.
+	 *
+	 * @return int
+	 */
+	public static function getNqeDowngradeWindowSec(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_downgrade_window_sec', 5);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get upgrade window in seconds.
+	 *
+	 * @return int
+	 */
+	public static function getNqeUpgradeWindowSec(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_upgrade_window_sec', 15);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get warmup period in seconds.
+	 *
+	 * @return int
+	 */
+	public static function getNqeWarmupSec(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_warmup_sec', 30);
+		}
+
+		return $cached;
+	}
+
+	//region Quality-specific thresholds (HIGH quality)
+
+	/**
+	 * Get HIGH→MEDIUM packets lost threshold (%).
+	 *
+	 * @return int
+	 */
+	public static function getNqeHighDowngradePacketsLostPct(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_high_downgrade_packets_lost_pct', 5);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get HIGH→MEDIUM RTT threshold (ms).
+	 *
+	 * Delivered for forward-compatibility only. RTT is not part of the v1 composite
+	 * score (reserved for a future version); the value is unused by the client in v1.
+	 *
+	 * @return int
+	 */
+	public static function getNqeHighDowngradeRttMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_high_downgrade_rtt_ms', 100);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get HIGH→MEDIUM jitter threshold (ms).
+	 *
+	 * @return int
+	 */
+	public static function getNqeHighDowngradeJitterMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_high_downgrade_jitter_ms', 30);
+		}
+
+		return $cached;
+	}
+
+	//endregion
+
+	//region Quality-specific thresholds (MEDIUM quality)
+
+	/**
+	 * Get MEDIUM→LOW packets lost threshold (%).
+	 *
+	 * @return int
+	 */
+	public static function getNqeMedDowngradePacketsLostPct(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_med_downgrade_packets_lost_pct', 10);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get MEDIUM→LOW RTT threshold (ms).
+	 *
+	 * Delivered for forward-compatibility only. RTT is not part of the v1 composite
+	 * score (reserved for a future version); the value is unused by the client in v1.
+	 *
+	 * @return int
+	 */
+	public static function getNqeMedDowngradeRttMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_med_downgrade_rtt_ms', 200);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get MEDIUM→LOW jitter threshold (ms).
+	 *
+	 * @return int
+	 */
+	public static function getNqeMedDowngradeJitterMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_med_downgrade_jitter_ms', 50);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get MEDIUM→HIGH packets lost threshold (%).
+	 *
+	 * @return int
+	 */
+	public static function getNqeMedUpgradePacketsLostPct(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_med_upgrade_packets_lost_pct', 2);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get MEDIUM→HIGH RTT threshold (ms).
+	 *
+	 * Delivered for forward-compatibility only. RTT is not part of the v1 composite
+	 * score (reserved for a future version); the value is unused by the client in v1.
+	 *
+	 * @return int
+	 */
+	public static function getNqeMedUpgradeRttMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_med_upgrade_rtt_ms', 80);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get MEDIUM→HIGH jitter threshold (ms).
+	 *
+	 * @return int
+	 */
+	public static function getNqeMedUpgradeJitterMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_med_upgrade_jitter_ms', 25);
+		}
+
+		return $cached;
+	}
+
+	//endregion
+
+	//region Quality-specific thresholds (LOW quality)
+
+	/**
+	 * Get LOW→MEDIUM packets lost threshold (%).
+	 *
+	 * @return int
+	 */
+	public static function getNqeLowUpgradePacketsLostPct(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_low_upgrade_packets_lost_pct', 3);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get LOW→MEDIUM RTT threshold (ms).
+	 *
+	 * Delivered for forward-compatibility only. RTT is not part of the v1 composite
+	 * score (reserved for a future version); the value is unused by the client in v1.
+	 *
+	 * @return int
+	 */
+	public static function getNqeLowUpgradeRttMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_low_upgrade_rtt_ms', 150);
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Get LOW→MEDIUM jitter threshold (ms).
+	 *
+	 * @return int
+	 */
+	public static function getNqeLowUpgradeJitterMs(): int
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			$cached = (int)Option::get('call', 'nqe_low_upgrade_jitter_ms', 40);
+		}
+
+		return $cached;
+	}
+
+	//endregion
+
+	/**
 	 * Whether call metrics collection is enabled.
 	 *
 	 * @return bool
@@ -669,6 +1098,34 @@ class Settings
 			else
 			{
 				$cached = (bool)\CUserOptions::GetOption('call', 'call_cloud_record', false);
+			}
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * Whether the new call core (Vue) must be loaded instead of the legacy core.
+	 *
+	 * Development switch, off by default. Both storages expect the literal 'Y':
+	 *   \Bitrix\Main\Config\Option::set('call', 'call_new_core_enabled', 'Y'); // portal-wide
+	 *   \CUserOptions::SetOption('call', 'call_new_core_enabled', 'Y');       // current user only
+	 * A truthy value of another shape (true, 1) does not enable it.
+	 *
+	 * @return bool
+	 */
+	public static function isNewCoreEnabled(): bool
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			if (Option::get('call', 'call_new_core_enabled', 'N') === 'Y')
+			{
+				$cached = true;
+			}
+			else
+			{
+				$cached = (\CUserOptions::GetOption('call', 'call_new_core_enabled', 'N') === 'Y');
 			}
 		}
 
@@ -799,29 +1256,6 @@ class Settings
 		}
 
 		return $chatIds;
-	}
-
-	/**
-	 * Whether the Vue-based call interface is enabled.
-	 *
-	 * @return bool
-	 */
-	public static function isVueEnabled(): bool
-	{
-		static $cached = null;
-		if ($cached === null)
-		{
-			if (Option::get('call', 'call_vue_enabled', false))
-			{
-				$cached = true;
-			}
-			else
-			{
-				$cached = (bool)\CUserOptions::GetOption('call', 'call_vue_enabled', false);
-			}
-		}
-
-		return $cached;
 	}
 
 	/**
@@ -1017,6 +1451,76 @@ class Settings
 		}
 
 		return (bool)\CUserOptions::GetOption('call', 'call_sync_preset_enabled', false);
+	}
+
+	/**
+	 * Starting a call through the web SDK of syncconnector is available to the current user.
+	 *
+	 * Portal-wide or per-user, off by default: enable with
+	 * Option::set('call', 'sync_call_enabled', true) or
+	 * \CUserOptions::SetOption('call', 'sync_call_enabled', true, false, $userId).
+	 * Refused outright without syncconnector: the menu item starts a call through its web SDK.
+	 *
+	 * @return bool
+	 */
+	public static function isSyncCallEnabled(): bool
+	{
+		static $cached = null;
+		if ($cached === null)
+		{
+			if (!Loader::includeModule('syncconnector'))
+			{
+				$cached = false;
+			}
+			elseif ((bool)Option::get('call', 'sync_call_enabled', false))
+			{
+				$cached = true;
+			}
+			else
+			{
+				$cached = (bool)\CUserOptions::GetOption('call', 'sync_call_enabled', false);
+			}
+		}
+
+		return $cached;
+	}
+
+	/**
+	 * The list of active calls of Sync under the native ones in the messenger is available to the current user.
+	 *
+	 * Portal-wide or per-user, off by default: enable with
+	 * Option::set('call', 'sync_active_calls_enabled', true) or
+	 * \CUserOptions::SetOption('call', 'sync_active_calls_enabled', true, false, $userId).
+	 * Refused outright without syncconnector: the web SDK of syncconnector draws the list.
+	 * Independent of sync_call_enabled, so the list and the start button can be turned on separately.
+	 *
+	 * @return bool
+	 */
+	public static function isSyncActiveCallsEnabled(): bool
+	{
+		static $cached = null;
+		$cached ??= self::readSyncActiveCallsEnabled();
+
+		return $cached;
+	}
+
+	/**
+	 * The uncached reading behind isSyncActiveCallsEnabled(): the process caches the answer, and the suite of the
+	 * module cannot isolate a process, so the reading is pinned on its own.
+	 */
+	private static function readSyncActiveCallsEnabled(): bool
+	{
+		if (!Loader::includeModule('syncconnector'))
+		{
+			return false;
+		}
+
+		if ((bool)Option::get('call', 'sync_active_calls_enabled', false))
+		{
+			return true;
+		}
+
+		return (bool)\CUserOptions::GetOption('call', 'sync_active_calls_enabled', false);
 	}
 
 	/**

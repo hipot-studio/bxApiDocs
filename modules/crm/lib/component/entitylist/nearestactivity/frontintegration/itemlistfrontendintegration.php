@@ -19,7 +19,12 @@ class ItemListFrontendIntegration extends FrontIntegration
 		);
 	}
 
-	public function onClickAddHandler(string $preparedGridId, int $activityId, ItemIdentifier $itemIdentifier): string
+	public function onClickAddHandler(
+		string $preparedGridId,
+		int $activityId,
+		ItemIdentifier $itemIdentifier,
+		array $analyticsContext = [],
+	): string
 	{
 		$addHandler = "BX.Crm.Activity.GridActivitiesManager.showActivityAddingPopup";
 		return "event.stopPropagation(); " . $addHandler . sprintf(
@@ -29,7 +34,7 @@ class ItemListFrontendIntegration extends FrontIntegration
 			$itemIdentifier->getEntityId(),
 			$this->getCurrentUserInfo(),
 			$this->getSettings($itemIdentifier),
-			true,
+			$this->getAnalytics($analyticsContext),
 		);
 	}
 

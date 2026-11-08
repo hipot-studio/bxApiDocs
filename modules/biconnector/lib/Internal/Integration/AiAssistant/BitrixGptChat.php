@@ -15,6 +15,13 @@ use Bitrix\Ui\Public\Services\Copilot\CopilotNameService;
  */
 final class BitrixGptChat
 {
+	private const DETAIL_PAGE_DIR = '/bi/dashboard/detail/';
+
+	public static function isAvailableOnCurrentPage(): bool
+	{
+		return \CSite::InDir(self::DETAIL_PAGE_DIR) && self::isAvailable();
+	}
+
 	public static function isAvailable(): bool
 	{
 		if (!Feature::isBitrixGptBiConstructorEnabled())

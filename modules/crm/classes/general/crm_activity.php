@@ -18,6 +18,8 @@ use Bitrix\Crm\ActivityTable;
 use Bitrix\Crm\Automation\Trigger\ResourceBookingTrigger;
 use Bitrix\Crm\Comparer\ComparerBase;
 use Bitrix\Crm\Entity\Traits\EntityFieldsNormalizer;
+use Bitrix\Crm\Feature;
+use Bitrix\Crm\Feature\ActivityV2;
 use Bitrix\Crm\Integration\Disk\HiddenStorage;
 use Bitrix\Crm\Integration\StorageFileType;
 use Bitrix\Crm\Integration\StorageManager;
@@ -25,6 +27,12 @@ use Bitrix\Crm\Integration\StorageType;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings;
 use Bitrix\Crm\Settings\ActivitySettings;
+use Bitrix\Crm\V2\Internal\Entity\Activity\Enum\CompletionStatus;
+use Bitrix\Crm\V2\Internal\Integration\Calendar\CalendarReentrancyGuard;
+use Bitrix\Crm\V2\Internal\Service\Activity\ActivityOperationContext;
+use Bitrix\Crm\V2\Internal\Service\Activity\Mapper\LegacyInputMapper;
+use Bitrix\Crm\V2\Internal\Service\Activity\Mapper\LegacyOutputMapper;
+use Bitrix\Crm\V2\Internal\Service\Activity\Pipeline\Step\Complete\LoadStateForComplete;
 use Bitrix\Disk\SpecificFolder;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
@@ -80,6 +88,11 @@ class CAllCrmActivity
 	// CRUD -->
 	public static function Add(&$arFields, $checkPerms = true, $regEvent = true, $options = array())
 	{
+		if (Feature::enabled(ActivityV2::class))
+		{
+			return self::addThroughLifecycleService($arFields, $checkPerms, $regEvent, $options);
+		}
+
 		global $DB, $USER_FIELD_MANAGER;
 		if(!is_array($options))
 		{
@@ -483,6 +496,11 @@ class CAllCrmActivity
 
 	public static function Update($ID, $arFields, $checkPerms = true, $regEvent = true, $options = array())
 	{
+		if (Feature::enabled(ActivityV2::class))
+		{
+			return self::updateThroughLifecycleService($ID, $arFields, $checkPerms, $regEvent, $options);
+		}
+
 		self::$LAST_UPDATE_FIELDS = null;
 
 		global $DB, $USER_FIELD_MANAGER;
@@ -1254,6 +1272,11 @@ class CAllCrmActivity
 
 	public static function Delete($ID, $checkPerms = true, $regEvent = true, $options = array())
 	{
+		if (Feature::enabled(ActivityV2::class))
+		{
+			return self::deleteThroughLifecycleService($ID, $checkPerms, $regEvent, $options);
+		}
+
 		global $USER_FIELD_MANAGER;
 		$ID = intval($ID);
 		if(!is_array($options))
@@ -1535,6 +1558,350 @@ class CAllCrmActivity
 
 		return true;
 	}
+
+	//region the facade over the lifecycle service of V2
+
+	/*
+	 * The methods below are the whole of the delegation: they convert formats and nothing else. Every rule of the
+	 * domain lives in the pipeline of its operation, every event is published by a step of that pipeline, and the
+	 * accumulator of the errors of this class is written here because it is a side effect of this class alone - the
+	 * mappers only say what to register.
+	 *
+	 * THE ACCUMULATOR IS EMPTIED WHERE THE LEGACY BRANCH EMPTIES IT, AND THE POINT IS NOT THE ENTRY BUT THE CHECK OF
+	 * THE FIELDS (item A5 of LBS-1, `rebuildFieldsForDataBase`, :2162). An add always reaches that check, so it
+	 * empties the accumulator before it delegates; an update and a completion may be refused above it - over an
+	 * activity that is not there, or over one already in the state a completion asks for - and legacy leaves the
+	 * messages of an earlier failure untouched in exactly those cases. Neither can be told from the answer of an
+	 * operation, so the run says whether the check really ran
+	 * ({@see \Bitrix\Crm\V2\Internal\Service\Activity\Mapper\LegacyOutputMapper::hasCheckedTheFields()}) and the
+	 * pool of the caller is put back where it did not. The order matters as much as the point: emptying the pool
+	 * BEFORE the operation is what keeps the messages a nested legacy write registers on the way, which is what
+	 * legacy leaves its caller with too. A delete empties nothing in either branch.
+	 *
+	 * The calls of `Bitrix\Crm\V2\Internal` are an agreed transitional exception of the V2 regulation: the facade
+	 * needs a slice of the service that is not a whole public contract yet, and it disappears together with the
+	 * legacy branch once the delegation has stabilized.
+	 *
+	 * The positional arguments of the entry points are read exactly as the branch below reads them: the check of the
+	 * rights is compared with true strictly (:1290), while the registration of a history record is truthy (:340).
+	 *
+	 * WHICH WRAPPERS OF SECTION 10 OF LBS-1 REACH V2, AND HOW. The four operations of the service are the whole of
+	 * the routing, so a wrapper is delegated by the operation it is a specialization of:
+	 * - `Complete` and `SetAutoCompleted` are completions and enter the operation of a completion below. The early
+	 *   successful return of a `Complete` that changes nothing (item H1) belongs to a step of that pipeline, which
+	 *   is why neither this region nor the wrapper asks the question;
+	 * - `SetAutoCompletedByOwner` stays the legacy mass operation it is - the selection of the uncompleted
+	 *   activities, the filter by provider and the option about the bindings - and completes each activity it found
+	 *   through the wrapper above;
+	 * - `SetPriority`, `Postpone` / `PostponeToDate` and `HandleStorageElementDeletion` are updates of one column or
+	 *   of a few (items H3 and H5), and they reach V2 without a branch of their own: each of them already writes
+	 *   through `Update()`, which is where the flag is read. A postpone is no operation of the service at all - the
+	 *   `tryPostpone` of the provider and the message it registers stay in the wrapper, and only the write travels.
+	 * The mass operations that write PAST the pipelines (`Rebind`, `ChangeOwner`, `AttachBinding` / `DetachBinding`,
+	 * `DeleteByOwner`, `DeleteBindingsByOwner`, `DeleteUnbound`, item H4) are no operations of the service either and
+	 * are not delegated; the `Add`/`Update`/`Delete` calls they make on their way do go through the facade.
+	 */
+
+	/**
+	 * @param array<string, mixed> $arFields
+	 * @return int|false the identifier of the created activity, or false when the operation was refused.
+	 */
+	private static function addThroughLifecycleService(
+		array &$arFields,
+		mixed $checkPerms,
+		mixed $regEvent,
+		mixed $options,
+	)
+	{
+		$operationContext = LegacyInputMapper::operationContextOf(
+			$arFields,
+			is_array($options) ? $options : [],
+			$checkPerms === true,
+			(bool)$regEvent,
+		);
+
+		// Unconditionally, because the check of the fields of an add always runs - see the note of the region.
+		self::ClearErrors();
+
+		$result = Container::getInstance()->getActivityLifecycleService()->add(
+			LegacyInputMapper::activityOf($arFields, $operationContext),
+			$operationContext,
+		);
+
+		self::registerErrorsOf($result);
+
+		$ID = LegacyOutputMapper::activityIdOf($result);
+		if ($ID === null)
+		{
+			return false;
+		}
+
+		// The contract of section 11 of LBS-1 has two halves and only the facade can perform either: the keys the
+		// operation takes out of the array of its caller - which a merge cannot express - and the values it leaves in
+		// it. The removal goes first, exactly as it does in the legacy branch: the validation takes the deadline of
+		// the caller out and the tail of the same method may then put a derived one back.
+		foreach (LegacyOutputMapper::removedCallerKeysOf($result) as $removedKey)
+		{
+			unset($arFields[$removedKey]);
+		}
+		$arFields = array_merge($arFields, LegacyOutputMapper::callerFieldsOf($result));
+
+		return $ID;
+	}
+
+	/**
+	 * @param array<string, mixed> $arFields
+	 */
+	private static function updateThroughLifecycleService(
+		mixed $ID,
+		array $arFields,
+		mixed $checkPerms,
+		mixed $regEvent,
+		mixed $options,
+	): bool
+	{
+		self::$LAST_UPDATE_FIELDS = null;
+
+		$ID = (int)$ID;
+		if ($ID <= 0)
+		{
+			// An activity that cannot be addressed is an activity that is not there, and the service takes only
+			// an identifier it can address.
+			return false;
+		}
+
+		$operationContext = LegacyInputMapper::operationContextOf(
+			$arFields,
+			is_array($options) ? $options : [],
+			$checkPerms === true,
+			(bool)$regEvent,
+		);
+
+		$errorsOfTheCaller = self::$errors;
+		self::ClearErrors();
+
+		$result = Container::getInstance()->getActivityLifecycleService()->update(
+			$ID,
+			LegacyInputMapper::activityOf($arFields, $operationContext),
+			$operationContext,
+		);
+
+		if (!LegacyOutputMapper::hasCheckedTheFields($result))
+		{
+			// The update never got to the point legacy empties the pool at: an activity that is not there.
+			self::$errors = $errorsOfTheCaller;
+		}
+
+		if (self::isRefusalOfAnActivityThatIsNotThere($result))
+		{
+			return false;
+		}
+
+		self::registerErrorsOf($result);
+
+		return $result->isSuccess();
+	}
+
+	private static function deleteThroughLifecycleService(
+		mixed $ID,
+		mixed $checkPerms,
+		mixed $regEvent,
+		mixed $options,
+	): bool
+	{
+		$ID = (int)$ID;
+		if ($ID <= 0)
+		{
+			return false;
+		}
+
+		$operationContext = LegacyInputMapper::operationContextOf(
+			// A delete has no field array of its own, which is not the same as an empty one.
+			null,
+			is_array($options) ? $options : [],
+			$checkPerms === true,
+			(bool)$regEvent,
+		);
+
+		if (!self::isReadableForDeletion($ID, $checkPerms, $operationContext))
+		{
+			return false;
+		}
+
+		$result = Container::getInstance()->getActivityLifecycleService()->delete($ID, $operationContext);
+
+		self::registerErrorsOf($result);
+
+		return $result->isSuccess();
+	}
+
+	/**
+	 * A completion through the operation of the service, which is where every rule of a completion lives: the state
+	 * the completion is compared with, the early successful return where there is nothing to change (item H1), the
+	 * hook of the provider and the update that performs the write and all of its effects.
+	 *
+	 * THE STATUS OF THE COMPLETION IS PASSED ON ONLY WHERE THE CALLER NAMED ONE. An ordinary completion names none,
+	 * so the check of the fields of the update derives it from the state before the write - which is what keeps an
+	 * automatically completed activity automatically completed.
+	 *
+	 * @param array<string, mixed>|null $options the option array as the wrapper received it.
+	 */
+	private static function completeThroughLifecycleService(
+		int $ID,
+		bool $isCompleted,
+		mixed $options,
+		?CompletionStatus $completionStatus = null,
+	): bool
+	{
+		$operationContext = LegacyInputMapper::operationContextOf(
+			// A completion names its change with its own arguments and hands over no field array at all: the
+			// update it runs below names a field, so the demand about an empty array is none of its business.
+			null,
+			is_array($options) ? $options : [],
+			true,
+			true,
+		);
+
+		$errorsOfTheCaller = self::$errors;
+		self::ClearErrors();
+
+		$result = Container::getInstance()->getActivityLifecycleService()->complete(
+			$ID,
+			$isCompleted,
+			$operationContext,
+			$completionStatus,
+		);
+
+		if (!LegacyOutputMapper::hasCheckedTheFields($result))
+		{
+			// The completion performed no update, so nothing emptied the pool: an activity that is not there, or
+			// one already in the state asked for (item H1).
+			self::$errors = $errorsOfTheCaller;
+		}
+
+		if (self::isRefusalOfAnActivityThatIsNotThere($result))
+		{
+			return false;
+		}
+
+		self::registerErrorsOf($result);
+
+		return $result->isSuccess();
+	}
+
+	/**
+	 * The automatic completion: the same operation with the two statements legacy makes by calling its own update
+	 * directly - the hook a provider gets before a completion is not called at all (item H2), and the status of the
+	 * completion is named by the caller instead of being derived from the state before the write.
+	 *
+	 * @param array<string, mixed>|null $options
+	 */
+	private static function autoCompleteThroughLifecycleService(int $ID, mixed $options): bool
+	{
+		return self::completeThroughLifecycleService(
+			$ID,
+			true,
+			array_merge(is_array($options) ? $options : [], ['SKIP_BEFORE_HANDLER' => true]),
+			CompletionStatus::AutoCompleted,
+		);
+	}
+
+	/**
+	 * Whether the operation was refused because the activity has no row at all. It is the refusal legacy reports
+	 * without a message of any kind - a completion of an activity that is not there (item H1, :4587-4590), an update
+	 * over one (:516-519) and an update whose row disappeared between its write and its re-read (:739-742): the
+	 * reads of the operations have a typed error for it, and the accumulator of this class may not learn about it,
+	 * or a caller counting the messages would see one that legacy never registered.
+	 *
+	 * ONE CODE ANSWERS FOR EVERY ONE OF THOSE READS. Every step that reads a row of an activity refuses with the
+	 * same code, so the constant named below stands for all of them rather than for the completion alone.
+	 */
+	private static function isRefusalOfAnActivityThatIsNotThere(\Bitrix\Main\Result $result): bool
+	{
+		if ($result->isSuccess())
+		{
+			return false;
+		}
+
+		foreach ($result->getErrors() as $error)
+		{
+			if ($error->getCode() !== LoadStateForComplete::ERROR_NOT_FOUND)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * The hidden check of the right to READ the activity a delete is about (:1289, item B2 of LBS-3) - the one check
+	 * of a write path that belongs to the facade and not to the service, because it is a behaviour of this entry
+	 * point rather than a rule of the domain: the service checks only the restriction on removing the record of a
+	 * call.
+	 *
+	 * A REFUSAL IS INDISTINGUISHABLE FROM AN ABSENCE, and that is the contract rather than an oversight (item D15
+	 * of LBS-3): legacy answers a plain false and registers no error, so a caller cannot tell "you may not read it"
+	 * from "there is none". The service is free to have a typed error of its own; none of it comes out here,
+	 * because the operation is never started.
+	 *
+	 * A STATE HANDED OVER BY THE CALLER REPLACES THE READ AND THEREFORE BYPASSES THE CHECK (item E6.7): the mass
+	 * operations of the portal hand one over, and legacy skips its own read for exactly the same reason.
+	 *
+	 * THE READ HAPPENS ONLY WHERE IT CHECKS SOMETHING. In legacy the same read serves two purposes at once - the
+	 * check and the state every row below works on - so it runs whatever the switch says. Here the state is read by
+	 * the pipeline through the boundary of the storage, so a read with the check off would be a query that answers
+	 * a question nobody asked. The switch is read as legacy reads it for this one purpose - truthy, not strictly
+	 * true - which is why an activity of a caller passing 1 is still checked while the restriction on the calls is
+	 * not.
+	 *
+	 * IT ASKS FOR ONE BIT AND MATERIALIZES NO ROW. `GetByID()` would select every column of the table plus the
+	 * joins of its default select to answer a question about a single bit, and nothing here reads the row it
+	 * returns. `GetCount()` is the narrow form of the very same question: it goes through `GetList()`, therefore
+	 * through the same `BuildPermSql()` and the same filter, so the answer is the answer of legacy on every input -
+	 * an activity that is there and readable, one that is there and is not, one that is not there at all.
+	 *
+	 * THE PER-HIT CACHE IS STILL CONSULTED, and that is fidelity rather than an optimization. `GetByID()` answers
+	 * out of it before it looks at the rights at all, so an activity somebody has already read in this hit - with
+	 * the check of the rights off, possibly - counts as readable here today. Skipping the cache would refuse
+	 * deletions that go through now, which is a change of behaviour and not a narrower query.
+	 *
+	 * THE ANSWER STAYS AN ANSWER AND DOES NOT BECOME THE STATE OF THE RUN. Handing the read row on to the
+	 * operation as the state of the caller would make one operation take two different paths by the switch of the
+	 * rights: `ACTUAL_ITEM` is what decides where a delete takes its list of files from
+	 * ({@see self::InnerDelete()}), so an item present only when the rights are checked would change what the
+	 * delete does and not only how much it reads. The second read of the row belongs to the pipeline and is
+	 * removed together with the move of the callers onto the typed access layer.
+	 */
+	private static function isReadableForDeletion(
+		int $ID,
+		mixed $checkPerms,
+		ActivityOperationContext $operationContext,
+	): bool
+	{
+		if (!$checkPerms || $operationContext->getActualItem() !== null)
+		{
+			return true;
+		}
+
+		if (is_array(CCrmEntityHelper::GetCached(self::CACHE_NAME, $ID)))
+		{
+			return true;
+		}
+
+		return self::GetCount(['ID' => $ID]) > 0;
+	}
+
+	private static function registerErrorsOf(\Bitrix\Main\Result $result): void
+	{
+		foreach (LegacyOutputMapper::errorMessagesOf($result) as $message)
+		{
+			self::RegisterError(['text' => $message]);
+		}
+	}
+
+	//endregion
+
 	// <-- CRUD
 	//Service -->
 	protected static function InnerDelete($ID, $options = array())
@@ -1884,14 +2251,7 @@ class CAllCrmActivity
 				$fields[$dateField] = CCrmDateTimeHelper::NormalizeDateTime($fields[$dateField]);
 				if (!CheckDateTime($fields[$dateField]))
 				{
-					self::registerError([
-						'text' => Loc::getMessage(
-							'CRM_ERROR_FIELD_INCORRECT',
-							[
-								'%FIELD_NAME%' => Loc::getMessage('CRM_ACTIVITY_FIELD_' . $dateField)
-							]
-						),
-					]);
+					self::registerError(['text' => self::messageOfAnIncorrectDateTimeField($dateField)]);
 				}
 			}
 		}
@@ -4384,6 +4744,11 @@ class CAllCrmActivity
 			$completed = ((bool)$completed) ? 'Y' : 'N';
 		}
 
+		if (Feature::enabled(ActivityV2::class))
+		{
+			return self::completeThroughLifecycleService($ID, $completed === 'Y', $options);
+		}
+
 		$dbRes = CCrmActivity::GetList(
 			[],
 			['ID'=> $ID, 'CHECK_PERMISSIONS' => 'N'],
@@ -4422,6 +4787,11 @@ class CAllCrmActivity
 		{
 			self::RegisterError(array('text' => 'Invalid arguments are supplied.'));
 			return false;
+		}
+
+		if (Feature::enabled(ActivityV2::class))
+		{
+			return self::autoCompleteThroughLifecycleService($ID, $options);
 		}
 
 		return self::Update($ID, array('COMPLETED' => 'Y', 'STATUS' => CCrmActivityStatus::AutoCompleted), true, true, $options);
@@ -4463,9 +4833,17 @@ class CAllCrmActivity
 				'select' => ['ACTIVITY_ID', 'OWNER_TYPE_ID', 'OWNER_ID'],
 				'filter' => ['@ACTIVITY_ID' => $activityIds],
 			])->fetchAll();
+			// What a binding of an entity WITHOUT STAGES says about the work being open (registry of the intentional
+			// deviations, AUTOCOMPLETE-STAGELESS). Legacy leaves the answer unknown, and `!null === true`, so one
+			// contact binding blocks the auto completion however won the deal beside it is; V2 lets only a binding
+			// that really has an open stage block it, which is this default and nothing else.
+			$defaultOfAStagelessBinding = Feature::enabled(ActivityV2::class) ? true : null;
 			$notClosedBindings = array_filter(
 				$bindings,
-				static fn($item) => !ComparerBase::isClosed(new Bitrix\Crm\ItemIdentifier($item['OWNER_TYPE_ID'], $item['OWNER_ID']))
+				static fn($item) => !ComparerBase::isClosed(
+					new Bitrix\Crm\ItemIdentifier($item['OWNER_TYPE_ID'], $item['OWNER_ID']),
+					$defaultOfAStagelessBinding,
+				)
 			);
 			$filteredActivityIds = array_unique(array_column($notClosedBindings, 'ACTIVITY_ID'));
 			$activityIds = array_diff($activityIds, $filteredActivityIds);
@@ -5041,7 +5419,8 @@ class CAllCrmActivity
 
 	public static function OnCalendarEventEdit($arFields, $bNew, $userId)
 	{
-		if (self::$IGNORE_CALENDAR_EVENTS)
+		// the second guard belongs to the V2 calendar layer: a write it made is our own echo just as well
+		if (self::$IGNORE_CALENDAR_EVENTS || CalendarReentrancyGuard::isIgnoring())
 		{
 			return;
 		}
@@ -5216,7 +5595,8 @@ class CAllCrmActivity
 	}
 	public static function OnCalendarEventDelete($eventID, $arEventFields)
 	{
-		if(self::$IGNORE_CALENDAR_EVENTS)
+		// the second guard belongs to the V2 calendar layer: a write it made is our own echo just as well
+		if(self::$IGNORE_CALENDAR_EVENTS || CalendarReentrancyGuard::isIgnoring())
 		{
 			return;
 		}
@@ -6086,9 +6466,13 @@ class CAllCrmActivity
 		{
 			return false;
 		}
-		if (isset($cache[$ID]))
+
+		// Keyed per user; without explicit permissions the key comes from the same fallback the check uses.
+		$userPermissions ??= CCrmAuthorizationHelper::GetUserPermissions();
+		$userID = (int)$userPermissions->GetUserID();
+		if (isset($cache[$ID][$userID]))
 		{
-			return $cache[$ID];
+			return $cache[$ID][$userID];
 		}
 
 		$bindings = self::GetBindings($ID);
@@ -6098,13 +6482,13 @@ class CAllCrmActivity
 			{
 				if(self::CheckUpdatePermission($binding['OWNER_TYPE_ID'], $binding['OWNER_ID'], $userPermissions))
 				{
-					$cache[$ID] = true;
+					$cache[$ID][$userID] = true;
 
 					return true;
 				}
 			}
 			unset($binding);
-			$cache[$ID] = false;
+			$cache[$ID][$userID] = false;
 
 			return false;
 		}
@@ -6116,7 +6500,7 @@ class CAllCrmActivity
 			&& CCrmOwnerType::IsDefined($ownerTypeID)
 			&& self::CheckUpdatePermission($ownerTypeID, $ownerID, $userPermissions);
 
-		$cache[$ID] = $result;
+		$cache[$ID][$userID] = $result;
 
 		return $result;
 	}
@@ -7411,7 +7795,16 @@ class CAllCrmActivity
 				}
 				else
 				{
-					CCalendarEvent::Delete(array('id' => $calendarEventId, 'bMarkDeleted' => true));
+					// 253583: hand the record over - the calendar reads its own with permission checks
+					$staleEvent = CCalendarEvent::GetById($calendarEventId, false);
+					if (is_array($staleEvent))
+					{
+						CCalendarEvent::Delete([
+							'id' => $calendarEventId,
+							'bMarkDeleted' => true,
+							'Event' => $staleEvent,
+						]);
+					}
 				}
 			}
 		}
@@ -7467,7 +7860,16 @@ class CAllCrmActivity
 		}
 
 		self::$IGNORE_CALENDAR_EVENTS = true;
-		CCalendarEvent::Delete(array('id' => $calendarEventId, 'bMarkDeleted' => true));
+		// 253583: hand the record over - the calendar reads its own with permission checks
+		$event = CCalendarEvent::GetById($calendarEventId, false);
+		if (is_array($event))
+		{
+			CCalendarEvent::Delete([
+				'id' => $calendarEventId,
+				'bMarkDeleted' => true,
+				'Event' => $event,
+			]);
+		}
 		self::$IGNORE_CALENDAR_EVENTS = false;
 		return true;
 	}
@@ -7774,6 +8176,48 @@ class CAllCrmActivity
 		$multiField = $dbMultiFields->Fetch();
 		return is_array($multiField) ? $multiField['VALUE'] : '';
 	}
+
+	/**
+	 * Entry point of the transitional live feed bridge of the V2 pipeline: registration of a log record with the
+	 * messenger notification wired into it. The bridge stands where this call stands in Add(), and the method it
+	 * proxies is private. Nothing but the call belongs here.
+	 *
+	 * @internal Bitrix\Crm\V2\Internal\Service\Activity\Legacy\LivefeedBridge only.
+	 * @param array $arFields Activity fields in the legacy form; ERROR and STORAGE_ELEMENT_IDS are written back.
+	 * @return mixed Log record id, zero when the live feed generates none, false when it could not be created.
+	 */
+	public static function RegisterLiveFeedEventInternal(&$arFields)
+	{
+		return self::RegisterLiveFeedEvent($arFields);
+	}
+
+	/**
+	 * Entry point of the transitional live feed bridge of the V2 pipeline: synchronization of the log records of
+	 * an activity, with the messenger notification about a changed responsible wired into it.
+	 *
+	 * @internal Bitrix\Crm\V2\Internal\Service\Activity\Legacy\LivefeedBridge only.
+	 * @param int $activityID
+	 * @param array $params Parameters of the synchronization, as the Update() pipeline assembles them.
+	 * @return bool False when there was nothing to synchronize: the caller registers a record from scratch then.
+	 */
+	public static function SynchronizeLiveFeedEventInternal($activityID, $params)
+	{
+		return self::SynchronizeLiveFeedEvent($activityID, $params);
+	}
+
+	/**
+	 * Entry point of the transitional live feed bridge of the V2 pipeline: removal of the log records of an activity
+	 * that never reached the recycle bin, together with the relations built out of them.
+	 *
+	 * @internal Bitrix\Crm\V2\Internal\Service\Activity\Legacy\LivefeedBridge only.
+	 * @param int $activityID
+	 * @return void
+	 */
+	public static function UnregisterLiveFeedEventInternal($activityID)
+	{
+		self::UnregisterLiveFeedEvent($activityID);
+	}
+
 	private static function RegisterLiveFeedEvent(&$arFields)
 	{
 		static $contextUserId = false;
@@ -8807,6 +9251,22 @@ class CAllCrmActivity
 			array_filter(self::GetFields(), static function($field) {
 				return $field['TYPE'] === 'datetime';
 			})
+		);
+	}
+
+	/**
+	 * Message a datetime field nobody could read is refused with. Both write paths produce it - the check of the
+	 * fields above and the step of the V2 pipeline that stands for it - so it is one method rather than two copies
+	 * of the same pair of phrases, and the phrases stay in the file that owns them.
+	 *
+	 * Every field of getDateTimeFields() now has a phrase of its own, CRM_ACTIVITY_FIELD_START_TIME included -
+	 * the mismatched CRM_ACTIVITY_FIELD_START_DATE phrase stays declared for whatever else already reads it.
+	 */
+	public static function messageOfAnIncorrectDateTimeField(string $field): string
+	{
+		return (string)Loc::getMessage(
+			'CRM_ERROR_FIELD_INCORRECT',
+			['%FIELD_NAME%' => Loc::getMessage('CRM_ACTIVITY_FIELD_' . $field)],
 		);
 	}
 }

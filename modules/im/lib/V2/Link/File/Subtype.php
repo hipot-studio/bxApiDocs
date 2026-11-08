@@ -9,6 +9,7 @@ enum Subtype: string implements JsonSerializable
 {
 	case Media = 'MEDIA';
 	case Audio = 'AUDIO';
+	case VideoNote = 'VIDEO_NOTE';
 	case Brief = 'BRIEF';
 	case Document = 'DOCUMENT';
 	case Other = 'OTHER';

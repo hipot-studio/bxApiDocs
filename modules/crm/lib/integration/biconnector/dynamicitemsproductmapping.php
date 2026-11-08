@@ -35,7 +35,7 @@ class DynamicItemsProductMapping
 			$result['crm_dynamic_items_prod_' . $type->getEntityTypeId()] = [
 				'TABLE_NAME' => 'b_crm_product_row',
 				'TABLE_DESCRIPTION' => Localization::getMessage('CRM_DYNAMIC_ITEMS_PROD_TABLE', $languageId, $titleReplace) ?? $type->getTitle(),
-				'TABLE_DESCRIPTION_FULL' => Localization::getMessage('CRM_DYNAMIC_ITEMS_PROD_TABLE_DESCRIPTION_FULL', $languageId, $titleReplace) ?? '',
+				'TABLE_DESCRIPTION_FULL' => Localization::getMessage('CRM_DYNAMIC_ITEMS_PROD_TABLE_DESCRIPTION_FULL_MSGVER_1', $languageId, $titleReplace) ?? '',
 				'TABLE_ALIAS' => 'PR',
 				'FILTER' => [
 					'=OWNER_TYPE' => \CCrmOwnerTypeAbbr::ResolveByTypeID($type->getEntityTypeId()),

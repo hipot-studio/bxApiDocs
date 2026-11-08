@@ -13,6 +13,7 @@ use Bitrix\Crm\Dto\Validator\IntegerField;
 use Bitrix\Crm\Dto\Validator\Logic;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
 use Bitrix\Crm\Dto\Validator\ObjectCollectionField;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 use CCrmOwnerType;
 
 final class UpdateListParameters extends Dto
@@ -41,10 +42,12 @@ final class UpdateListParameters extends Dto
 				new IsPossibleDynamicType($this, 'entityTypeId'),
 			]),
 
+			new RequiredField($this, 'categoryId'),
 			new IntegerField($this, 'categoryId', min: 0),
 			new DefinedCategoryIdentifier($this, 'entityTypeId', 'categoryId'),
 
 			new ObjectCollectionField($this, 'stages'),
+			new RequiredField($this, 'stages'),
 			new NotEmptyField($this, 'stages'),
 		];
 	}

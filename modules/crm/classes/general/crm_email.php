@@ -23,6 +23,8 @@ else
 
 class CCrmEMail
 {
+	private const RECOVERED_MAIL_LOCK_TIMEOUT = 5;
+
 	public const ACTIVITY_SETTINGS_NOT_LOADED_ATTACHMENTS_FIELD = 'NOT_LOADED_ATTACHMENTS';
 	public const ACTIVITY_SETTINGS_MAIL_BODY_RESTORE_CHECKED_FIELD = 'MAIL_BODY_RESTORE_CHECKED';
 
@@ -47,6 +49,7 @@ class CCrmEMail
 		return array(
 			'ID'          => 'crm_imap',
 			'NAME'        => GetMessage('CRM_ADD_MESSAGE'),
+			'MANUAL_ADD'  => false,
 			'ACTION_FUNC' => Array('CCrmEMail', 'imapEmailMessageAdd'),
 			'LAZY_ATTACHMENTS' => true,
 			'SANITIZE_ON_VIEW' => true,
@@ -507,17 +510,95 @@ class CCrmEMail
 		addMessage2Log($logEntry, 'crm', 3);
 	}
 
+	private static function normalizeMailboxOptions(mixed $options): array
+	{
+		if (is_array($options))
+		{
+			return $options;
+		}
+
+		if (!is_string($options))
+		{
+			return [];
+		}
+
+		try
+		{
+			$options = @unserialize($options, ['allowed_classes' => false]);
+		}
+		catch (\Throwable)
+		{
+			return [];
+		}
+
+		return is_array($options) ? $options : [];
+	}
+
 	public static function imapEmailMessageAdd($msgFields, $actionVars = null, &$error = null)
+	{
+		$error = null;
+
+		$messageId = (int)($msgFields['ID'] ?? 0);
+		$mailboxId = (int)($msgFields['MAILBOX_ID'] ?? 0);
+		$isRecovered = !empty($msgFields['IS_RECOVERED']);
+
+		if (!$isRecovered || $messageId <= 0 || $mailboxId <= 0)
+		{
+			return self::imapEmailMessageAddInternal($msgFields, $actionVars, $error);
+		}
+
+		if (self::hasMailActivity($mailboxId, $messageId))
+		{
+			return true;
+		}
+
+		$lockName = sprintf('crm_mail_activity_%u_%u', $mailboxId, $messageId);
+		$connection = \Bitrix\Main\Application::getConnection();
+		$isLocked = $connection->lock($lockName, self::RECOVERED_MAIL_LOCK_TIMEOUT);
+		if (!$isLocked)
+		{
+			if (self::hasMailActivity($mailboxId, $messageId))
+			{
+				return true;
+			}
+
+			// The lock owner is already processing this exact message. Do not break the mailbox sync.
+			return true;
+		}
+
+		try
+		{
+			if (self::hasMailActivity($mailboxId, $messageId))
+			{
+				return true;
+			}
+
+			return self::imapEmailMessageAddInternal($msgFields, $actionVars, $error);
+		}
+		finally
+		{
+			$connection->unlock($lockName);
+		}
+	}
+
+	private static function hasMailActivity(int $mailboxId, int $messageId): bool
+	{
+		return \Bitrix\Mail\Internals\MessageAccessTable::getRow([
+			'select' => ['ENTITY_ID'],
+			'filter' => [
+				'=MAILBOX_ID' => $mailboxId,
+				'=MESSAGE_ID' => $messageId,
+				'=ENTITY_TYPE' => \Bitrix\Mail\Internals\MessageAccessTable::ENTITY_TYPE_CRM_ACTIVITY,
+				'>CRM_ACTIVITY.ID' => 0,
+			],
+		]) !== null;
+	}
+
+	private static function imapEmailMessageAddInternal($msgFields, $actionVars = null, &$error = null)
 	{
 		global $DB;
 
 		$error = null;
-
-		//Do not add recovered message to CRM to avoid duplicates
-		if (!empty($msgFields['IS_RECOVERED']))
-		{
-			return false;
-		}
 
 		if (!\CModule::includeModule('crm'))
 		{
@@ -559,6 +640,8 @@ class CCrmEMail
 			return false;
 		}
 
+		$mailbox['OPTIONS'] = static::normalizeMailboxOptions($mailbox['OPTIONS'] ?? null);
+
 		$crmNewEntityOptionName = empty($msgFields['IS_OUTCOME']) ? 'crm_new_entity_in' : 'crm_new_entity_out';
 		static::log(
 			$eventTag,
@@ -568,11 +651,11 @@ class CCrmEMail
 				'MAILBOX_ID' => $msgFields['MAILBOX_ID'],
 				'MSG_HASH' => $msgFields['MSG_HASH'],
 				'OPTIONS' => array_filter(array(
-					'flags' => $mailbox['OPTIONS']['flags'],
-					'crm_sync_from' => $mailbox['OPTIONS']['crm_sync_from'],
+					'flags' => $mailbox['OPTIONS']['flags'] ?? [],
+					'crm_sync_from' => $mailbox['OPTIONS']['crm_sync_from'] ?? null,
 					//'crm_lead_resp' => $mailbox['OPTIONS']['crm_lead_resp'],
 					//'crm_new_lead_for' => $mailbox['OPTIONS']['crm_new_lead_for'],
-					$crmNewEntityOptionName => $mailbox['OPTIONS'][$crmNewEntityOptionName],
+					$crmNewEntityOptionName => $mailbox['OPTIONS'][$crmNewEntityOptionName] ?? null,
 				)),
 				'TAGS' => array_keys(array_filter(array(
 					'IS_INCOME' => empty($msgFields['IS_OUTCOME']),
@@ -748,16 +831,15 @@ class CCrmEMail
 		// skip employees
 		$employeesEmails = array();
 		{
-			$filter = array(
-				'=ACTIVE' => 'Y',
-				'=EMAIL' => $isIncome ? $sender : $rcpt,
-				'IS_REAL_USER' => 'Y',
-			);
-
-			$res = \Bitrix\Main\UserTable::getList(array(
-				'select' => array('ID', 'EMAIL', 'UF_DEPARTMENT'),
-				'filter' => $filter,
-			));
+			$res = \Bitrix\Main\UserTable::query()
+				->setSelect(['ID', 'EMAIL', 'UF_DEPARTMENT'])
+				->setFilter([
+					'=ACTIVE' => 'Y',
+					'=EMAIL' => $isIncome ? $sender : $rcpt,
+				])
+				->where('REAL_USER', 'expr', true)
+				->exec()
+			;
 
 			if ($isIncome)
 			{
@@ -943,7 +1025,7 @@ class CCrmEMail
 		// initialize responsible queue
 		$respQueue = array();
 		{
-			$respOption = array_values(array_unique((array) $mailbox['OPTIONS']['crm_lead_resp']));
+			$respOption = array_values(array_unique((array) ($mailbox['OPTIONS']['crm_lead_resp'] ?? [])));
 			if (empty($respOption) && $mailboxOwnerId > 0)
 			{
 				$respOption = array($mailboxOwnerId);
@@ -1282,7 +1364,7 @@ class CCrmEMail
 				$facility->setRegisterMode($facility::REGISTER_MODE_ONLY_UPDATE);
 			}
 
-			$newEntityType = $mailbox['OPTIONS'][$isIncome ? 'crm_new_entity_in' : 'crm_new_entity_out'];
+			$newEntityType = $mailbox['OPTIONS'][$isIncome ? 'crm_new_entity_in' : 'crm_new_entity_out'] ?? null;
 			if (\CCrmOwnerType::ContactName == $newEntityType && empty($emailFacility->getBindings()))
 			{
 				$newEntityTypeId = \CCrmOwnerType::Contact;
@@ -1384,7 +1466,7 @@ class CCrmEMail
 		);
 
 		$sourceList = \CCrmStatus::getStatusList('SOURCE');
-		$sourceId   = $mailbox['OPTIONS']['crm_lead_source'];
+		$sourceId   = $mailbox['OPTIONS']['crm_lead_source'] ?? null;
 		if (empty($sourceId) || !isset($sourceList[$sourceId]))
 		{
 			if (isset($sourceList['EMAIL']))
@@ -1731,7 +1813,12 @@ class CCrmEMail
 		}
 
 		//Notify the responsible user if a message has been added from ajax sync to CRM
-		if ($userId > 0 && $isIncome && $completed != 'Y')
+		if (\Bitrix\Crm\Integration\Mail\IncomingMessageNotificationPolicy::shouldNotify(
+			$msgFields,
+			(int)$userId,
+			(bool)$isIncome,
+			(string)$completed,
+		))
 		{
 			\CCrmActivity::notify(
 				$activityFields,

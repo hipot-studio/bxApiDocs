@@ -12,6 +12,8 @@ final readonly class CatalogShareState
 	public const AUDIENCE_AUTHENTICATED = 'AUTHENTICATED';
 	public const AUDIENCE_PUBLIC = 'PUBLIC';
 
+	public const DEPARTMENT_FORMAT_ACCESS_CODE = 'access_code';
+
 	/**
 	 * @param list<CatalogShareParticipant> $users
 	 * @param list<CatalogShareParticipant> $departments

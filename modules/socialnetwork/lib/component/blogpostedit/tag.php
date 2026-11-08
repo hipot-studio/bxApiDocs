@@ -12,9 +12,12 @@ class Tag
 		$result = [];
 
 		$blogId = (int)($params['blogId'] ?? 0);
-		$inputTags = (string) ($params['tags'] ?? '');
+		$inputTags = self::normalizeInputTags($params['tags'] ?? '');
 
-		$inputTags = !empty($_POST['TAGS']) ? $_POST['TAGS'] : $inputTags;
+		if (!empty($_POST['TAGS']))
+		{
+			$inputTags = self::normalizeInputTags($_POST['TAGS']);
+		}
 
 		if ($inputTags)
 		{
@@ -27,22 +30,33 @@ class Tag
 			}
 
 			$tags = explode(',', $inputTags);
+			$processedTagList = [];
 			foreach ($tags as $tg)
 			{
 				$tg = trim($tg);
+				$tagKey = mb_strtolower($tg);
 				if (
-					$tg !== ''
-					&& !in_array($blogCategoryList[mb_strtolower($tg)] ?? null, $result, true)
+					$tg === ''
+					|| isset($processedTagList[$tagKey])
 				)
 				{
-					$result[] = (int) (
-						((int) ($blogCategoryList[mb_strtolower($tg)] ?? null) > 0)
-							? $blogCategoryList[mb_strtolower($tg)]
-							: \CBlogCategory::add([
-								'BLOG_ID' => $blogId,
-								'NAME' => $tg,
-							])
-					);
+					continue;
+				}
+				$processedTagList[$tagKey] = true;
+
+				$categoryId = (int)($blogCategoryList[$tagKey] ?? 0);
+				if ($categoryId <= 0)
+				{
+					$categoryId = (int)\CBlogCategory::add([
+						'BLOG_ID' => $blogId,
+						'NAME' => $tg,
+					]);
+				}
+
+				if ($categoryId > 0)
+				{
+					$blogCategoryList[$tagKey] = $categoryId;
+					$result[] = $categoryId;
 				}
 			}
 		}
@@ -62,6 +76,22 @@ class Tag
 		}
 
 		return $result;
+	}
+
+	/**
+	 * A client is free to send TAGS as a list (TAGS[]=first&TAGS[]=second), so the value is reduced
+	 * to the comma separated string the caller code expects.
+	 */
+	private static function normalizeInputTags(mixed $tags): string
+	{
+		if (!is_array($tags))
+		{
+			return is_scalar($tags) ? (string)$tags : '';
+		}
+
+		$scalarTags = array_filter($tags, static fn ($tag) => is_scalar($tag) && (string)$tag !== '');
+
+		return implode(',', array_map(static fn ($tag) => (string)$tag, $scalarTags));
 	}
 
 	public static function parseTagsFromFields(array $params = []): array

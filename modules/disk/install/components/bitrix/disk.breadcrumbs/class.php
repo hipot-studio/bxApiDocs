@@ -64,6 +64,8 @@ class CDiskBreadcrumbsComponent extends \Bitrix\Disk\Internals\BaseComponent
 				'NAME' => $this->arParams['BREADCRUMBS_ROOT']['NAME'],
 				'LINK' => $this->arParams['BREADCRUMBS_ROOT']['LINK'],
 				'ENCODED_LINK' => $this->encodeUrn($this->arParams['BREADCRUMBS_ROOT']['LINK']),
+				'ULS' => $this->arParams['BREADCRUMBS_ROOT']['ULS'] ?? null,
+				'UNIQUE_CODE' => $this->arParams['BREADCRUMBS_ROOT']['UNIQUE_CODE'] ?? null,
 			),
 			'BREADCRUMBS' => $this->processCrumbs($this->arParams['BREADCRUMBS']),
 			'SHOW_ONLY_DELETED' => $this->arParams['SHOW_ONLY_DELETED'],

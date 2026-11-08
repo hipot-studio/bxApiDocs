@@ -34,6 +34,12 @@ final class CollabFolder extends SystemFolder
 		return 'IM_FOLDER_SYSTEM_COLLABS';
 	}
 
+	/** Derived from the title key so that the "projects / collabs" branch cannot drift apart. */
+	public function getDescriptionLangKey(): ?string
+	{
+		return $this->getTitleLangKey() . '_DESCRIPTION';
+	}
+
 	public function isAvailable(int $userId): bool
 	{
 		return Collab::isAvailable();

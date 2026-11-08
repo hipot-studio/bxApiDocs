@@ -21,6 +21,7 @@ final class Factory
 			Type::Rest => new Rest($id),
 			Type::Mysql => new Mysql($id),
 			Type::Pgsql => new Pgsql($id),
+			Type::Clickhouse => new Clickhouse($id),
 			default => throw new SystemException("Unknown type {$type->value}"),
 		};
 	}

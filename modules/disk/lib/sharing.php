@@ -267,7 +267,7 @@ final class Sharing extends Internals\Model
 		}
 		unset($entity, $dataToInsert);
 
-		$forwardTaskId = !empty($data['CAN_FORWARD'])? $rightManager->getTaskIdByName($rightManager::OP_SHARING) : null;
+		$forwardTaskId = !empty($data['CAN_FORWARD'])? $rightManager->getTaskIdByName($rightManager::TASK_SHARING) : null;
 
 		$newRights = array();
 		foreach ($successSharingByEntity as $entity => $sharingModel)

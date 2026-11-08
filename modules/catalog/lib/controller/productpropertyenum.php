@@ -98,10 +98,17 @@ final class ProductPropertyEnum extends ProductPropertyBase
 	 */
 	public function updateAction(int $id, array $fields): ?array
 	{
-		$existsResult = $this->exists($id);
-		if (!$existsResult->isSuccess())
+		$enum = $this->getCatalogEnum($id);
+		if ($enum === null)
 		{
-			$this->addErrors($existsResult->getErrors());
+			$this->addError($this->getErrorEntityNotExists());
+			return null;
+		}
+
+		$iblockPermissionResult = $this->checkIblockModifyPermission((int)$enum['IBLOCK_ID']);
+		if (!$iblockPermissionResult->isSuccess())
+		{
+			$this->addErrors($iblockPermissionResult->getErrors());
 			return null;
 		}
 
@@ -112,7 +119,7 @@ final class ProductPropertyEnum extends ProductPropertyBase
 			return null;
 		}
 
-		$propertyId = $this->get($id)['PROPERTY_ID'];
+		$propertyId = $enum['PROPERTY_ID'];
 
 		$conn = Application::getConnection();
 		$conn->startTransaction();
@@ -155,14 +162,21 @@ final class ProductPropertyEnum extends ProductPropertyBase
 	 */
 	public function deleteAction(int $id): ?bool
 	{
-		$existsResult = $this->exists($id);
-		if (!$existsResult->isSuccess())
+		$enum = $this->getCatalogEnum($id);
+		if ($enum === null)
 		{
-			$this->addErrors($existsResult->getErrors());
+			$this->addError($this->getErrorEntityNotExists());
 			return null;
 		}
 
-		$propertyId = $this->get($id)['PROPERTY_ID'];
+		$iblockPermissionResult = $this->checkIblockModifyPermission((int)$enum['IBLOCK_ID']);
+		if (!$iblockPermissionResult->isSuccess())
+		{
+			$this->addErrors($iblockPermissionResult->getErrors());
+			return null;
+		}
+
+		$propertyId = (int)$enum['PROPERTY_ID'];
 
 		$conn = Application::getConnection();
 		$conn->startTransaction();
@@ -210,13 +224,23 @@ final class ProductPropertyEnum extends ProductPropertyBase
 	protected function exists($id)
 	{
 		$result = new Result();
-		$propertyEnum = $this->get($id);
-		if (!$propertyEnum || !$this->isIblockCatalog((int)$propertyEnum['IBLOCK_ID']))
+		if ($this->getCatalogEnum((int)$id) === null)
 		{
 			$result->addError($this->getErrorEntityNotExists());
 		}
 
 		return $result;
+	}
+
+	private function getCatalogEnum(int $id): ?array
+	{
+		$enum = $this->get($id);
+		if (!$enum || !$this->isIblockCatalog((int)$enum['IBLOCK_ID']))
+		{
+			return null;
+		}
+
+		return $enum;
 	}
 
 	/**

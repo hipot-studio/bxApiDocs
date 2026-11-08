@@ -22,6 +22,11 @@ final class RelatedEntityTypeProvider
 	];
 
 	/**
+	 * Candidates joined to the parents from the relation graph in a smart process context: they go through the
+	 * same filtering as the parents, so only the processable ones among them end up offered.
+	 * The graph does not replace this list: it holds no contact/company pair for a smart process with the
+	 * client fields turned off, where these two still have to be offered.
+	 *
 	 * @var int[]
 	 */
 	private const DYNAMIC_RELATED_ENTITY_TYPE_IDS = [
@@ -36,12 +41,9 @@ final class RelatedEntityTypeProvider
 	/**
 	 * Entity types whose documents the node-filter runtime can actually resolve.
 	 *
-	 * TODO (follow-up, Q-1): replace this static whitelist with a dynamic lookup of
-	 * processable types exposed by the complex node actions (ComplexActivityService).
-	 *
 	 * @var int[]
 	 */
-	private const PROCESSABLE_RELATED_ENTITY_TYPE_IDS = [
+	private const PROCESSABLE_CLASSIC_RELATED_ENTITY_TYPE_IDS = [
 		\CCrmOwnerType::Contact,
 		\CCrmOwnerType::Company,
 	];
@@ -68,8 +70,13 @@ final class RelatedEntityTypeProvider
 	}
 
 	/**
-	 * Returns the related (parent) entity type ids a complex node of the given context may target in
-	 * its filter. Only parents that resolve to a CRM bizproc document type are kept.
+	 * Returns the related entity type ids a complex node of the given context may target in its filter:
+	 * the parents and the children of the context type, joined for a smart process context with a fixed set
+	 * of candidates.
+	 * Only types that resolve to a CRM bizproc document type are kept.
+	 *
+	 * A smart process id is only range-checked here, so a type deleted while its relation stayed in the graph
+	 * is still returned: checking that the type exists is up to the caller.
 	 *
 	 * The relation graph dependency is injectable so the resolution can be unit-tested in isolation;
 	 * when omitted it defaults to the CRM relation manager from the service container.
@@ -87,15 +94,18 @@ final class RelatedEntityTypeProvider
 			return [];
 		}
 
-		$candidateTypeIds = \CCrmOwnerType::isPossibleDynamicTypeId($contextEntityTypeId)
-			? self::DYNAMIC_RELATED_ENTITY_TYPE_IDS
-			: self::getParentEntityTypeIds(
-				$contextEntityTypeId,
-				$relationManager ?? Container::getInstance()->getRelationManager(),
-			)
-		;
+		$relationManager ??= Container::getInstance()->getRelationManager();
 
-		$processableIds = array_flip(self::PROCESSABLE_RELATED_ENTITY_TYPE_IDS);
+		$candidateTypeIds = self::getParentEntityTypeIds($contextEntityTypeId, $relationManager);
+		if (\CCrmOwnerType::isPossibleDynamicTypeId($contextEntityTypeId))
+		{
+			$candidateTypeIds = array_merge(self::DYNAMIC_RELATED_ENTITY_TYPE_IDS, $candidateTypeIds);
+		}
+
+		$candidateTypeIds = array_merge(
+			$candidateTypeIds,
+			self::getChildEntityTypeIds($contextEntityTypeId, $relationManager),
+		);
 
 		$relatedTypeIds = [];
 		foreach ($candidateTypeIds as $entityTypeId)
@@ -103,7 +113,7 @@ final class RelatedEntityTypeProvider
 			if (
 				$entityTypeId > 0
 				&& $entityTypeId !== $contextEntityTypeId
-				&& isset($processableIds[$entityTypeId])
+				&& self::isProcessableRelatedType($entityTypeId)
 				&& is_array(\CCrmBizProcHelper::ResolveDocumentType($entityTypeId))
 			)
 			{
@@ -112,6 +122,19 @@ final class RelatedEntityTypeProvider
 		}
 
 		return array_values($relatedTypeIds);
+	}
+
+	/**
+	 * Smart processes are processable in addition to the whitelist above. The predicate is deliberately
+	 * isPossibleDynamicTypeId(): system types built on the dynamic approach (invoice, documents) stay out.
+	 *
+	 * TODO (follow-up, Q-1): replace this static whitelist with a dynamic lookup of
+	 * processable types exposed by the complex node actions (ComplexActivityService).
+	 */
+	private static function isProcessableRelatedType(int $entityTypeId): bool
+	{
+		return in_array($entityTypeId, self::PROCESSABLE_CLASSIC_RELATED_ENTITY_TYPE_IDS, true)
+			|| \CCrmOwnerType::isPossibleDynamicTypeId($entityTypeId);
 	}
 
 	/**
@@ -131,5 +154,24 @@ final class RelatedEntityTypeProvider
 		}
 
 		return $parentTypeIds;
+	}
+
+	/**
+	 * Child entity type ids of the given entity, taken from the CRM relation graph.
+	 *
+	 * @return int[]
+	 */
+	private static function getChildEntityTypeIds(
+		int $contextEntityTypeId,
+		RelationManager $relationManager
+	): array
+	{
+		$childTypeIds = [];
+		foreach ($relationManager->getChildRelations($contextEntityTypeId) as $relation)
+		{
+			$childTypeIds[] = $relation->getChildEntityTypeId();
+		}
+
+		return $childTypeIds;
 	}
 }

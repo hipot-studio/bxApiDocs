@@ -683,6 +683,25 @@ final class DocumentSession extends Model
 		return $securityContext->canRead($this->getObjectId());
 	}
 
+	public function canDownload(SecurityContext $securityContext): bool
+	{
+		$context = $this->getContext();
+
+		if ($context)
+		{
+			$attachedObject = $context->getAttachedObject();
+
+			if ($attachedObject && $attachedObject->canDownload($securityContext->getUserId()))
+			{
+				return true;
+			}
+		}
+
+		$file = $this->getFile();
+
+		return $file instanceof File && $file->canDownload($securityContext);
+	}
+
 	protected function isSingleUsageOfExternalHash(): bool
 	{
 		return DocumentSessionTable::getCount([

@@ -22,6 +22,8 @@ use Bitrix\Sign\Result\CreateDocumentResult;
 use Bitrix\Sign\Result\Operation\Document\Template\SendResult;
 use Bitrix\Sign\Result\Result;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Service\Placeholder\Restriction\PlaceholderRestrictionService;
+use Bitrix\Sign\Service\Placeholder\Restriction\ScenarioContext;
 use Bitrix\Sign\Service\Providers\MemberDynamicFieldInfoProvider;
 use Bitrix\Sign\Service\Providers\ProfileProvider;
 use Bitrix\Sign\Service\Sign\DocumentService;
@@ -50,6 +52,10 @@ final class Send implements Contract\Operation
 	private readonly ProfileProvider $profileProvider;
 	private readonly MemberDynamicFieldInfoProvider $dynamicFieldProvider;
 	private readonly BlockRepository $blockRepository;
+	private readonly PlaceholderRestrictionService $placeholderRestrictionService;
+
+	/** @var array<int, list<string>> */
+	private array $regionalBlockCodesByBlankId = [];
 
 	/**
 	 * @var list<array{name: string, value: string}>
@@ -72,10 +78,12 @@ final class Send implements Contract\Operation
 		private readonly ?DocumentBlankReplacementConfig $blankReplacementConfig = null,
 		private readonly ?string $externalId = null,
 		private readonly ?string $externalDate = null,
+		private readonly ?string $inviteMessage = null,
 		?DocumentService $documentService = null,
 		?ProfileProvider $profileProvider = null,
 		?MemberDynamicFieldInfoProvider $dynamicFieldProvider = null,
 		?BlockRepository $blockRepository = null,
+		?PlaceholderRestrictionService $placeholderRestrictionService = null,
 	)
 	{
 		$this->documentService = $documentService ?? Container::instance()->getDocumentService();
@@ -85,6 +93,9 @@ final class Send implements Contract\Operation
 		$this->profileProvider = $profileProvider ?? Container::instance()->getServiceProfileProvider();
 		$this->dynamicFieldProvider = $dynamicFieldProvider ?? Container::instance()->getMemberDynamicFieldProvider();
 		$this->blockRepository = $blockRepository ?? Container::instance()->getBlockRepository();
+		$this->placeholderRestrictionService = $placeholderRestrictionService
+			?? Container::instance()->getPlaceholderRestrictionService()
+		;
 	}
 
 	public function launch(): Main\Result|SendResult
@@ -145,12 +156,22 @@ final class Send implements Contract\Operation
 			}
 		}
 
+		// The message the sender attached to the invitation is stored by the write that creates the
+		// document, which happens before configureAndStart schedules the configure agent: the invitation
+		// is built asynchronously from the stored document. Hence the validation before any write.
+		$validateMessageResult = (new Operation\Document\Validation\ValidateInviteMessage($this->inviteMessage))->launch();
+		if (!$validateMessageResult->isSuccess())
+		{
+			return $validateMessageResult;
+		}
+
 		$createResult = (new CreateDocumentFromTemplate(
 			template: $this->template,
 			templateDocument: $document,
 			createdByUserId: $this->responsibleUserId,
 			bindings: $this->bindings,
 			blankReplacementConfig: $this->blankReplacementConfig,
+			inviteMessage: $this->inviteMessage,
 		))->launch();
 		if (!$createResult instanceof CreateDocumentResult)
 		{
@@ -276,22 +297,25 @@ final class Send implements Contract\Operation
 	}
 
 	/**
-	 * A regional field is mandatory for the employee exactly when the blank really contains the matching
-	 * placeholder block: the same condition that makes the UI render the input (see
+	 * A regional field is mandatory for the employee exactly when the document is due the matching regional
+	 * block, which is the condition the restriction config answers for the block creation of configure as
+	 * well, and the one that makes the UI render the input (see
 	 * Controllers\V1\B2e\Document\Template::getFieldsAction). The check runs on the template document before
 	 * CreateDocumentFromTemplate, so invalid input never creates a document that has to be rolled back.
 	 */
 	private function validateRegionalFields(Document $templateDocument): Main\Result
 	{
 		$result = new Main\Result();
-		$regionalBlockCodes = $this->getExistingRegionalBlockCodes($templateDocument->blankId);
 
-		if (in_array(BlockCode::B2E_EXTERNAL_ID, $regionalBlockCodes, true) && $this->getExternalIdValue() === '')
+		if (
+			$this->isRegionalBlockRequired($templateDocument, BlockCode::B2E_EXTERNAL_ID)
+			&& $this->getExternalIdValue() === ''
+		)
 		{
 			return $result->addError($this->makeRegionalFieldError(self::ERROR_CODE_EXTERNAL_ID_REQUIRED));
 		}
 
-		if (!in_array(BlockCode::B2E_EXTERNAL_DATE_CREATE, $regionalBlockCodes, true))
+		if (!$this->isRegionalBlockRequired($templateDocument, BlockCode::B2E_EXTERNAL_DATE_CREATE))
 		{
 			return $result;
 		}
@@ -320,9 +344,10 @@ final class Send implements Contract\Operation
 	 * creation step as MANUAL values, mirroring the company flow. The values are stored on the document
 	 * before configureAndStart schedules the configure agent; when that agent later runs, it reads the
 	 * trusted MANUAL value through FieldValue::getB2eRegionalFieldValue and substitutes the matching
-	 * placeholder. A value is stored only when the created document really has the matching regional block,
-	 * so that without such a block nothing is persisted (otherwise a stray externalId would leak into the
-	 * smart-document title as "No <externalId>"). Employee input is already checked by validateRegionalFields;
+	 * placeholder. A value is stored only when the created document is due the matching regional block (the
+	 * same question the restriction config answers for the block creation itself), so that without such a
+	 * block nothing is persisted (otherwise a stray externalId would leak into the smart-document title as
+	 * "No <externalId>"). Employee input is already checked by validateRegionalFields;
 	 * the date is re-checked here because the created document may carry a replaced blank.
 	 * The company flow keeps using its own per-document change calls.
 	 */
@@ -333,10 +358,8 @@ final class Send implements Contract\Operation
 			return new Main\Result();
 		}
 
-		$regionalBlockCodes = $this->getExistingRegionalBlockCodes($newDocument->blankId);
-
 		$externalId = $this->getExternalIdValue();
-		if ($externalId !== '' && in_array(BlockCode::B2E_EXTERNAL_ID, $regionalBlockCodes, true))
+		if ($externalId !== '' && $this->isRegionalBlockRequired($newDocument, BlockCode::B2E_EXTERNAL_ID))
 		{
 			$result = $this->documentService->modifyExternalId(
 				documentUid: $newDocument->uid,
@@ -353,7 +376,7 @@ final class Send implements Contract\Operation
 		$externalDate = $this->getExternalDateValue();
 		if (
 			$externalDate !== ''
-			&& in_array(BlockCode::B2E_EXTERNAL_DATE_CREATE, $regionalBlockCodes, true)
+			&& $this->isRegionalBlockRequired($newDocument, BlockCode::B2E_EXTERNAL_DATE_CREATE)
 			&& $this->isValidManualExternalDate($externalDate)
 		)
 		{
@@ -373,6 +396,22 @@ final class Send implements Contract\Operation
 	}
 
 	/**
+	 * Whether the document is due the regional block, asked of the single restriction config method the
+	 * block creation of configure uses (Blanks\Block\Factory::shouldCreateRegionalBlock).
+	 */
+	private function isRegionalBlockRequired(Document $document, string $regionalBlockCode): bool
+	{
+		return $this->placeholderRestrictionService->isRegionalBlockRequired(
+			ScenarioContext::fromAxes(initiatedByType: $document->initiatedByType),
+			fn(): bool => in_array(
+				$regionalBlockCode,
+				$this->getExistingRegionalBlockCodes($document->blankId),
+				true,
+			),
+		);
+	}
+
+	/**
 	 * @return list<string>
 	 */
 	private function getExistingRegionalBlockCodes(?int $blankId): array
@@ -382,7 +421,9 @@ final class Send implements Contract\Operation
 			return [];
 		}
 
-		return $this->blockRepository->getExistingB2eRegionalBlockCodesByBlankId($blankId);
+		return $this->regionalBlockCodesByBlankId[$blankId] ??= $this->blockRepository
+			->getExistingB2eRegionalBlockCodesByBlankId($blankId)
+		;
 	}
 
 	private function getExternalIdValue(): string

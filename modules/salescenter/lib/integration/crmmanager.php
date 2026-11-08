@@ -41,6 +41,7 @@ use Bitrix\Salescenter\Analytics;
 use Bitrix\SalesCenter\Component\PaymentSlip;
 use Bitrix\Salescenter\PaymentSlip\PaymentSlipManager;
 use CCrmOwnerType;
+use CCrmSaleHelper;
 
 Main\Localization\Loc::loadMessages(__FILE__);
 
@@ -338,6 +339,63 @@ class CrmManager extends Base
 		}
 
 		return $clientInfo;
+	}
+
+	public function canReadOwnerEntity(int $ownerId, int $ownerTypeId): bool
+	{
+		if ($ownerId <= 0 || !CCrmOwnerType::isCorrectEntityTypeId($ownerTypeId))
+		{
+			return false;
+		}
+
+		$container = Crm\Service\Container::getInstance();
+		if (!$container->getFactory($ownerTypeId))
+		{
+			return false;
+		}
+
+		return $container
+			->getUserPermissions()
+			->item()
+			->canRead($ownerTypeId, $ownerId)
+		;
+	}
+
+	public function canReadContact(int $contactId): bool
+	{
+		return $this->canReadOwnerEntity($contactId, CCrmOwnerType::Contact);
+	}
+
+	public function canAddOrder(): bool
+	{
+		if (!CCrmSaleHelper::isWithOrdersMode())
+		{
+			return true;
+		}
+
+		return Crm\Service\Container::getInstance()
+			->getUserPermissions()
+			->entityType()
+			->canAddItems(CCrmOwnerType::Order)
+		;
+	}
+
+	public function canReadOrder(Order\Order $order): bool
+	{
+		$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions();
+
+		if (CCrmSaleHelper::isWithOrdersMode())
+		{
+			return $userPermissions->item()->canRead(CCrmOwnerType::Order, $order->getId());
+		}
+
+		$binding = $order->getEntityBinding();
+		if ($binding)
+		{
+			return $userPermissions->item()->canRead($binding->getOwnerTypeId(), $binding->getOwnerId());
+		}
+
+		return $userPermissions->entityType()->canReadItems(CCrmOwnerType::Deal);
 	}
 
 	public function isOwnerEntityExists(int $ownerId, int $ownerTypeId): bool
@@ -967,16 +1025,19 @@ class CrmManager extends Base
 		$messageBody = PlaceholderFormatter::convertBBCodeToExternalFormat($messageBody);
 
 		$binding = $order->getEntityBinding();
-		$ownerId = $binding->getOwnerId();
-		$ownerTypeId = $binding->getOwnerTypeId();
-		if ($ownerId && $ownerTypeId)
+		if ($binding)
 		{
-			$messageBody = DocumentGeneratorManager::getInstance()->replacePlaceholdersInText(
-				$ownerTypeId,
-				$ownerId,
-				$messageBody,
-				' '
-			) ?? $messageBody;
+			$ownerId = $binding->getOwnerId();
+			$ownerTypeId = $binding->getOwnerTypeId();
+			if ($ownerId && $ownerTypeId)
+			{
+				$messageBody = DocumentGeneratorManager::getInstance()->replacePlaceholdersInText(
+					$ownerTypeId,
+					$ownerId,
+					$messageBody,
+					' '
+				) ?? $messageBody;
+			}
 		}
 
 		$urlInfoByOrder = LandingManager::getInstance()->getUrlInfoByOrder(

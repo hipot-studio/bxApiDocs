@@ -26,6 +26,8 @@ use Bitrix\Main\ORM\Event;
  */
 class GlobalVarTable extends Main\ORM\Data\DataManager
 {
+	use PropertyValueSerializationTrait;
+
 	public static function getTableName(): string
 	{
 		return 'b_bp_global_var';
@@ -74,7 +76,8 @@ class GlobalVarTable extends Main\ORM\Data\DataManager
 			],
 			'PROPERTY_VALUE' => [
 				'data_type' => 'string',
-				'serialized' => true,
+				'save_data_modification' => [__CLASS__, 'getPropertyValueSaveModifiers'],
+				'fetch_data_modification' => [__CLASS__, 'getPropertyValueFetchModifiers'],
 				'validation' => [__CLASS__, 'validateTextField'],
 				'title' => Main\Localization\Loc::getMessage('BIZPROC_WF_TYPE_GLOBALS_MANAGER_COLUMN_PROPERTY_VALUE_TITLE'),
 			],
@@ -123,6 +126,41 @@ class GlobalVarTable extends Main\ORM\Data\DataManager
 	 */
 	public static function upsertByProperty(string $varId, array $property, int $userId = null)
 	{
+		$fields = static::prepareFieldsByProperty($property, $userId);
+
+		$oldProperty = static::getByPrimary($varId)->fetch();
+		if ($oldProperty)
+		{
+			if (isset($oldProperty['CREATED_BY']))
+			{
+				unset($fields['CREATED_BY'], $fields['CREATED_DATE']);
+			}
+
+			return static::update($varId, $fields);
+		}
+
+		$fields['ID'] = $varId;
+
+		return static::add($fields);
+	}
+
+	/**
+	 * Insert of a value written for the first time: an identifier already standing on the portal answers with
+	 * a duplicate instead of being rewritten. The caller judges the identifier free before the call, and only
+	 * the insert itself holds that judgement against a request writing the same identifier at the same moment.
+	 *
+	 * @throws Main\DB\DuplicateEntryException
+	 */
+	public static function insertByProperty(string $id, array $property, int $userId = null): Main\ORM\Data\AddResult
+	{
+		$fields = static::prepareFieldsByProperty($property, $userId);
+		$fields['ID'] = $id;
+
+		return static::add($fields);
+	}
+
+	private static function prepareFieldsByProperty(array $property, int $userId = null): array
+	{
 		$property = static::normalizePropertyForUpsert($property, $userId);
 
 		// PROPERTY_SETTINGS ?
@@ -146,23 +184,7 @@ class GlobalVarTable extends Main\ORM\Data\DataManager
 			unset($fields['CREATED_BY'], $fields['CREATED_DATE'], $fields['MODIFIED_BY'], $fields['MODIFIED_DATE']);
 		}
 
-		$oldProperty = static::getByPrimary($varId)->fetch();
-		if ($oldProperty)
-		{
-			if (isset($oldProperty['CREATED_BY']))
-			{
-				unset($fields['CREATED_BY'], $fields['CREATED_DATE']);
-			}
-
-			$result = static::update($varId, $fields);
-		}
-		else
-		{
-			$fields['ID'] = $varId;
-			$result = static::add($fields);
-		}
-
-		return $result;
+		return $fields;
 	}
 
 	public static function convertToProperty(array $fields): array

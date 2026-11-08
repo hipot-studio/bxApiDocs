@@ -40,9 +40,9 @@ class AddModeratorsCommand extends AbstractCommand
 
 		foreach ($this->moderatorMembers as $moderator)
 		{
-			if ($moderator->type === MemberEntityType::Department)
+			if ($moderator->type !== MemberEntityType::User)
 			{
-				$result->addError(new ValidationError('Departments cannot be assigned as moderators'));
+				$result->addError(new ValidationError('Only users can be assigned as moderators'));
 
 				break;
 			}

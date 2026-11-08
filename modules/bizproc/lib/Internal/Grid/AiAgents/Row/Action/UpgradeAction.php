@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Internal\Grid\AiAgents\Row\Action;
 
 use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsActionType;
-use Bitrix\Main\Config\Option;
+use Bitrix\Bizproc\Internal\Service\AiAgentGrid\Upgrade\UpgradeFeatureToggle;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 
 class UpgradeAction extends JsGridAction
 {
-	// Dark launch: the upgrade action is hidden until this module flag is turned on.
-	private const FEATURE_OPTION = 'ai_agent_upgrade_enabled';
+	private const TEST_ATTRIBUTE = 'data-test-id';
+	private const TEST_ID = 'bizproc-ai-agents-grid-action-upgrade';
 
 	public static function getId(): string
 	{
@@ -51,12 +51,25 @@ class UpgradeAction extends JsGridAction
 			return null;
 		}
 
-		return parent::getControl($rawFields);
+		$control = parent::getControl($rawFields);
+
+		if (!isset($control))
+		{
+			return null;
+		}
+
+		// The property map of the base class knows no test markers, but the control array reaches the
+		// menu item of main.popup as is, and its attrs are applied to the item node itself. Written out
+		// as an attribute rather than through the dataset for the same reason as in ChangeOwnerAction:
+		// the row re-read after an upgrade goes through the camel-case converter of the ajax answer.
+		$control['attrs'] = [self::TEST_ATTRIBUTE => self::TEST_ID];
+
+		return $control;
 	}
 
 	protected function isEnabled(array $rawFields): bool
 	{
-		$isFeatureEnabled = Option::get('bizproc', self::FEATURE_OPTION, 'N') === 'Y';
+		$isFeatureEnabled = UpgradeFeatureToggle::isEnabled();
 
 		$isNotSystemTemplate = !$this->isSystemTemplate($rawFields);
 

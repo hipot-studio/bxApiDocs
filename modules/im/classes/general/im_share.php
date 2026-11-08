@@ -1,8 +1,10 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Tasks\Item\Task;
 use Bitrix\Tasks\Util;
+use Bitrix\Main\Web\Uri;
 
 class CIMShare
 {
@@ -273,7 +275,7 @@ class CIMShare
 			return false;
 		}
 
-		$link = CHTTP::urlAddParams(CCalendar::GetPathForCalendarEx($this->user_id), array('EVENT_ID' => $eventId));
+		$link = (string)(new Uri(CCalendar::GetPathForCalendarEx($this->user_id)))->addParams(['EVENT_ID' => $eventId]);
 
 		$messageParams = Array('LINK_ACTIVE' => Array((string)$this->user_id));
 

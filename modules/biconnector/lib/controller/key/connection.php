@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\Controller\Key;
 
+use Bitrix\BIConnector\Access\ActionFilter\KeyManageAccess;
 use Bitrix\BIConnector\Manager;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\ActionFilter;
@@ -43,6 +44,7 @@ class Connection extends Controller
 			new ActionFilter\Authentication(),
 			new ActionFilter\Scope(ActionFilter\Scope::REST),
 			new AuthType(AuthType::APPLICATION),
+			new KeyManageAccess(),
 		];
 	}
 }

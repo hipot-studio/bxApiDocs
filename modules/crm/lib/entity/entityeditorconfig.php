@@ -5,6 +5,8 @@ use Bitrix\Crm;
 use Bitrix\Crm\Integration\UI\EntityEditor\Configuration;
 use Bitrix\Crm\Integration\UI\EntityEditor\DefaultEntityConfigFactory;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Main;
 use Bitrix\Ui\EntityForm\Scope;
 
@@ -180,15 +182,28 @@ class EntityEditorConfig
 			}
 			elseif($this->scope === Crm\Entity\EntityEditorConfigScope::COMMON)
 			{
-				return Container::getInstance()->getUserPermissions()->entityEditor()->canEditCommonView();
+				return $this->canManageCommonViews();
 			}
 		}
 		elseif(strcasecmp($operation, EntityEditorConfigOperation::FORCE_COMMON_SCOPE_FOR_ALL) === 0)
 		{
-			return Container::getInstance()->getUserPermissions()->entityEditor()->canEditCommonView();
+			return $this->canManageCommonViews();
 		}
 
 		return false;
+	}
+
+	/**
+	 * The right over the common layout of the card this configuration is of - the write path
+	 * {@see ConfigurationCallSite::EntityEditorConfig} stands for. The card comes from the configuration
+	 * itself, so the contour the right is read in is never named by the caller of the operation.
+	 */
+	private function canManageCommonViews(): bool
+	{
+		return Container::getInstance()->getUserPermissions()->configuration()->canManageCommonViews(
+			ConfigurationCallSite::EntityEditorConfig,
+			ConfigurationScope::ofEntityType($this->entityTypeID, $this->categoryId()),
+		);
 	}
 
 	public function get()

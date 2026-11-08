@@ -25,6 +25,9 @@ use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 class WorkflowTemplateDraftTable extends DataManager
 {
 	use DeleteByFilterTrait;
+	// TEMPLATE_DATA is passed to updateByFilter() already serialized
+	// ({@see Entity\WorkflowTemplateTable::toSerializedForm})
+	use UpdateByFilterTrait;
 
 	public const STATUS_DRAFT = 0;
 	public const STATUS_AUTOSAVE = 1;
@@ -62,6 +65,10 @@ class WorkflowTemplateDraftTable extends DataManager
 				->configureRequired()
 				->configureDefaultValue(0)
 			,
+			(new ORM\Fields\IntegerField('REVISION'))
+				->configureRequired()
+				->configureDefaultValue(0)
+			,
 			(new ORM\Fields\IntegerField('USER_ID'))
 				->configureNullable(false)
 			,
@@ -92,18 +99,26 @@ class WorkflowTemplateDraftTable extends DataManager
 	 */
 	public static function getLatestDraftByTemplateId(int $templateId): ?array
 	{
-		return static::selectLatestDraft($templateId, ['ID', 'STATUS', 'CREATED']);
+		return static::selectLatestDraft($templateId, ['ID', 'STATUS', 'REVISION', 'USER_ID', 'CREATED']);
 	}
 
 	/**
 	 * The freshest draft of the template together with its configuration. Only for callers that really read
 	 * the configuration: it is stored as one blob and is the heaviest column of the table.
 	 *
-	 * @return array<string, mixed>|null null when the template has no draft
+	 * @param int|null $userId narrows the search to the drafts of one user, the way a caller working on behalf
+	 *        of one person needs it: with the editing lock off a template holds a draft per user, and its
+	 *        freshest draft belongs to whoever wrote last, not to the person asking
+	 *
+	 * @return array<string, mixed>|null null when the template has no such draft
 	 */
-	public static function getLatestDraftWithDataByTemplateId(int $templateId): ?array
+	public static function getLatestDraftWithDataByTemplateId(int $templateId, ?int $userId = null): ?array
 	{
-		return static::selectLatestDraft($templateId, ['ID', 'STATUS', 'TEMPLATE_DATA', 'CREATED']);
+		return static::selectLatestDraft(
+			$templateId,
+			['ID', 'STATUS', 'REVISION', 'TEMPLATE_DATA', 'CREATED'],
+			$userId,
+		);
 	}
 
 	/**
@@ -114,6 +129,26 @@ class WorkflowTemplateDraftTable extends DataManager
 		$row = static::getLatestDraftWithDataByTemplateId($templateId);
 
 		return is_array($row['TEMPLATE_DATA'] ?? null) ? $row['TEMPLATE_DATA'] : [];
+	}
+
+	/**
+	 * The revision the client has to come back with on its next write of the draft. A draft is the draft of
+	 * the template only while it is the freshest one: a stale one, and one written past the editor — the one
+	 * a restore of a version creates — have nothing to be compared against and answer with a zero.
+	 */
+	public static function getRevisionIfLatest(int $templateId, int $draftId): int
+	{
+		if ($templateId <= 0 || $draftId <= 0)
+		{
+			return 0;
+		}
+
+		$latestDraft = static::getLatestDraftByTemplateId($templateId);
+
+		return $latestDraft !== null && (int)$latestDraft['ID'] === $draftId
+			? (int)$latestDraft['REVISION']
+			: 0
+		;
 	}
 
 	public static function isRestoredDraft(?array $draftRow): bool
@@ -132,11 +167,19 @@ class WorkflowTemplateDraftTable extends DataManager
 		;
 	}
 
-	private static function selectLatestDraft(int $templateId, array $select): ?array
+	private static function selectLatestDraft(int $templateId, array $select, ?int $userId = null): ?array
 	{
-		$row = static::query()
+		$query = static::query()
 			->setSelect($select)
 			->where('TEMPLATE_ID', $templateId)
+		;
+
+		if ($userId !== null)
+		{
+			$query->where('USER_ID', $userId);
+		}
+
+		$row = $query
 			->setOrder(['CREATED' => 'DESC', 'ID' => 'DESC'])
 			->setLimit(1)
 			->fetch()

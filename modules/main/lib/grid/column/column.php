@@ -101,6 +101,11 @@ class Column
 			$this->setSticked($params['sticked']);
 		}
 
+		if (isset($params['sticked_side']))
+		{
+			$this->setStickedSide($params['sticked_side']);
+		}
+
 		if (isset($params['shift']))
 		{
 			$this->setShift($params['shift']);

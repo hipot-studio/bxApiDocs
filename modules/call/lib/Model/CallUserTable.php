@@ -42,6 +42,124 @@ class CallUserTable extends DataManager
 		return $tableName;
 	}
 
+	/**
+	 * Bulk-set the state of the given users of a call.
+	 *
+	 * @param int[] $userIds
+	 * @param string|null $fromState Only rows currently in this state are updated
+	 *        (compare-and-set). Pass the expected source state on off-lock paths so
+	 *        a concurrent transition is not overwritten.
+	 * @return int[] User ids actually transitioned by this call. With $fromState it
+	 *        is the subset that was in $fromState and got flipped, resolved atomically
+	 *        under a row lock (SELECT ... FOR UPDATE inside a transaction) so the
+	 *        returned set equals the set the UPDATE wrote — callers emit state-change
+	 *        events only for real transitions, never for a user a concurrent
+	 *        answer/decline/hangup moved out of $fromState. Without $fromState it is
+	 *        the full requested set (unconditional update).
+	 */
+	public static function transitionState(int $callId, array $userIds, string $toState, ?string $fromState = null): array
+	{
+		if ($callId <= 0)
+		{
+			return [];
+		}
+
+		$userIds = array_values(array_filter(
+			array_unique(array_map('intval', $userIds)),
+			static fn (int $userId): bool => $userId > 0,
+		));
+		if ($userIds === [])
+		{
+			return [];
+		}
+
+		$connection = Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		$tableName = static::getTableName();
+		$quotedTable = $sqlHelper->quote($tableName);
+		$entity = static::getEntity();
+
+		[$updateClause] = $sqlHelper->prepareUpdate($tableName, ['STATE' => $toState]);
+		if ($updateClause === '')
+		{
+			return [];
+		}
+
+		// Unconditional update: flip every requested row regardless of its current
+		// state. The returned set is exactly the requested ids.
+		if ($fromState === null)
+		{
+			$whereClause = \Bitrix\Main\ORM\Query\Query::buildFilterSql($entity, [
+				'=CALL_ID' => $callId,
+				'@USER_ID' => $userIds,
+			]);
+			if ($whereClause === '')
+			{
+				return [];
+			}
+
+			$connection->queryExecute("UPDATE {$quotedTable} SET {$updateClause} WHERE {$whereClause}");
+
+			return $userIds;
+		}
+
+		// Compare-and-set for off-lock callers. The returned set must be exactly the
+		// rows this call flips: callers dispatch state-change events (e.g. the
+		// "missed" call-log entry) only for real transitions. Reading which rows are
+		// in $fromState and flipping them has to be atomic — a concurrent
+		// answer/decline/hangup could move a user out of $fromState between a plain
+		// read and the UPDATE, and the method would then report a transition that
+		// never happened. Lock the requested participant rows by primary key, read
+		// their live state under the lock, then update exactly the locked rows still
+		// in $fromState, so the returned set equals the written set.
+		$lockWhere = \Bitrix\Main\ORM\Query\Query::buildFilterSql($entity, [
+			'=CALL_ID' => $callId,
+			'@USER_ID' => $userIds,
+		]);
+		if ($lockWhere === '')
+		{
+			return [];
+		}
+
+		$userIdColumn = $sqlHelper->quote('USER_ID');
+		$stateColumn = $sqlHelper->quote('STATE');
+
+		$transitioned = [];
+		$connection->startTransaction();
+		try
+		{
+			$rows = $connection
+				->query("SELECT {$userIdColumn}, {$stateColumn} FROM {$quotedTable} WHERE {$lockWhere} FOR UPDATE")
+				->fetchAll()
+			;
+			foreach ($rows as $row)
+			{
+				if ((string)$row['STATE'] === $fromState)
+				{
+					$transitioned[] = (int)$row['USER_ID'];
+				}
+			}
+
+			if ($transitioned !== [])
+			{
+				$updateWhere = \Bitrix\Main\ORM\Query\Query::buildFilterSql($entity, [
+					'=CALL_ID' => $callId,
+					'@USER_ID' => $transitioned,
+				]);
+				$connection->queryExecute("UPDATE {$quotedTable} SET {$updateClause} WHERE {$updateWhere}");
+			}
+
+			$connection->commitTransaction();
+		}
+		catch (\Throwable $exception)
+		{
+			$connection->rollbackTransaction();
+			throw $exception;
+		}
+
+		return $transitioned;
+	}
+
 	public static function getMap(): array
 	{
 		return [

@@ -4,11 +4,14 @@ namespace Bitrix\DocumentGenerator;
 
 use Bitrix\DocumentGenerator\Body\Docx;
 use Bitrix\DocumentGenerator\DataProvider\ArrayDataProvider;
+use Bitrix\DocumentGenerator\Feature\DocumentTitlePattern as DocumentTitlePatternFeature;
 use Bitrix\DocumentGenerator\Integration\TransformerManager;
 use Bitrix\DocumentGenerator\Model\DocumentTable;
 use Bitrix\DocumentGenerator\Model\ExternalLinkTable;
 use Bitrix\DocumentGenerator\Model\FileTable;
 use Bitrix\DocumentGenerator\Storage\Disk;
+use Bitrix\Main\Config\Feature;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Engine\Response\DataType\ContentUri;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Error;
@@ -41,6 +44,8 @@ class Document
 	public const PDF = 'pdf';
 
 	public const ERROR_NO_TRANSFORMER_MODULE = 'ERROR_NO_TRANSFORMER_MODULE';
+
+	private const LOGGER_ID = 'documentgenerator.Default';
 
 	/** @var array Current field descriptions */
 	protected $fields = [];
@@ -304,10 +309,18 @@ class Document
 			$values = $this->getValues($fieldNames);
 			foreach($fieldNames as $placeholder)
 			{
+				$value = $values[$placeholder];
+				if ($placeholder === 'DocumentTitle' && array_key_exists($placeholder, $this->externalValues))
+				{
+					$value = $this->externalValues[$placeholder];
+				}
+				$isEmpty = $placeholder === 'DocumentTitle'
+					? ($value === null || $value === '')
+					: empty($value);
 				if(
 					isset($this->fields[$placeholder]['REQUIRED'])
 					&& $this->fields[$placeholder]['REQUIRED'] === 'Y'
-					&& empty($values[$placeholder])
+					&& $isEmpty
 				)
 				{
 					$emptyFields[$placeholder] = $this->fields[$placeholder];
@@ -508,13 +521,7 @@ class Document
 		}
 		else
 		{
-			$title = '';
-			if($this->template)
-			{
-				$title .= $this->template->NAME;
-			}
-			$title .= ' '.ltrim($this->getNumber());
-			$this->data['TITLE'] = $title;
+			$title = $this->getLegacyTitle();
 		}
 
 		return $title;
@@ -858,6 +865,21 @@ class Document
 			return $this;
 		}
 		DataProviderManager::getInstance()->setContext(Context::createFromDocument($this));
+		try
+		{
+			$this->processInContext();
+		}
+		finally
+		{
+			DataProviderManager::getInstance()->resetContext();
+		}
+
+		return $this;
+	}
+
+	private function processInContext(): void
+	{
+		$titlePattern = $this->getApplicableTitlePattern();
 		$requiredFields = $this->checkFields();
 		foreach($requiredFields as $placeholder => $field)
 		{
@@ -865,7 +887,17 @@ class Document
 		}
 		if($this->result->isSuccess())
 		{
-			$values = $this->getValues($this->getFieldNames());
+			$rawValueKinds = [];
+			$fieldNames = $this->getFieldNames();
+			if ($titlePattern)
+			{
+				$fieldNames = array_merge($fieldNames, $titlePattern->getSystemFieldNames());
+			}
+			$values = $this->getValues($fieldNames, $rawValueKinds);
+			if ($titlePattern)
+			{
+				$values = $this->applyTitlePattern($titlePattern, $values, $rawValueKinds);
+			}
 			if(!$this->isStampsEnabled())
 			{
 				foreach($this->fields as $placeholder => $field)
@@ -907,10 +939,35 @@ class Document
 				$this->result = $bodyResult;
 			}
 		}
+	}
 
-		DataProviderManager::getInstance()->resetContext();
+	private function applyTitlePattern(TitlePattern $titlePattern, array $values, array $rawValueKinds): array
+	{
+		$titleResult = $titlePattern->validate($this->template, [$this->template->getSourceType()]);
+		if ($titleResult->isSuccess())
+		{
+			$titleResult = $titlePattern->render($values, $rawValueKinds, $this->body->getFieldNames());
+		}
 
-		return $this;
+		if (!$titleResult->isSuccess())
+		{
+			(new LoggerFactory())
+				->createById(self::LOGGER_ID, isCheckEnabledFromRegistry: false)
+				->warning('{method}: could not build title of template {templateId}: {errors}', [
+					'method' => __METHOD__,
+					'templateId' => $this->template->ID,
+					'errors' => implode('; ', $titleResult->getErrorMessages()),
+				]);
+
+			return $values;
+		}
+
+		$title = $titleResult->getData()['title'];
+		$this->data['TITLE'] = $title;
+		$this->values['DocumentTitle'] = $title;
+		$values['DocumentTitle'] = $title;
+
+		return $values;
 	}
 
 	/**
@@ -1092,12 +1149,17 @@ class Document
 	 * @param array $fieldNames
 	 * @return array
 	 */
-	protected function getValues(array $fieldNames): array
+	protected function getValues(array $fieldNames, ?array &$rawValueKinds = null): array
 	{
 		$values = [];
 		foreach($fieldNames as $fieldName)
 		{
-			$values[$fieldName] = $this->normalizeValue($this->getValue($fieldName));
+			$value = $this->getValue($fieldName);
+			if ($rawValueKinds !== null)
+			{
+				$rawValueKinds[$fieldName] = is_object($value) ? get_class($value) : gettype($value);
+			}
+			$values[$fieldName] = $this->normalizeValue($value);
 		}
 
 		return $values;
@@ -1482,31 +1544,6 @@ class Document
 	}
 
 	/**
-	 * Recreate document using the same external values.
-	 *
-	 * @param bool $sendToTransformation
-	 * @param bool $skipTransformationError
-	 * @return Result
-	 */
-	public function actualize(
-		?int $userId = null,
-		bool $sendToTransformation = true,
-		bool $skipTransformationError = false
-	): Result
-	{
-		if ($userId > 0)
-		{
-			$this->setUserId($userId);
-		}
-		// todo only if changed
-		return $this->update(
-			$this->getExternalValues(true),
-			$sendToTransformation,
-			$skipTransformationError
-		);
-	}
-
-	/**
 	 * @param $userId
 	 * @return boolean
 	 */
@@ -1715,9 +1752,49 @@ class Document
 			$extension = $this->body->getFileExtension();
 		}
 
-		$baseName = Path::replaceInvalidFilename($this->getTitle(), fn() => '_');
+		$suffix = '.'.$extension;
+		$baseName = trim(Path::replaceInvalidFilename($this->getTitle(), fn() => '_'));
+		if ($baseName === '')
+		{
+			$baseName = trim(Path::replaceInvalidFilename($this->getLegacyTitle(), fn() => '_'));
+		}
 
-		return $baseName.'.'.$extension;
+		$baseName = mb_strcut($baseName, 0, max(0, 255 - strlen($suffix)), 'UTF-8');
+
+		return $baseName.$suffix;
+	}
+
+	private function getApplicableTitlePattern(): ?TitlePattern
+	{
+		if (
+			!Feature::isEnabled(DocumentTitlePatternFeature::class)
+			|| $this->ID > 0
+			|| array_key_exists('DocumentTitle', $this->externalValues)
+			|| array_key_exists('TITLE', $this->data)
+		)
+		{
+			return null;
+		}
+
+		$pattern = $this->template?->TITLE_PATTERN;
+		if (!is_string($pattern) || $pattern === '')
+		{
+			return null;
+		}
+
+		return new TitlePattern($pattern);
+	}
+
+	private function getLegacyTitle(): string
+	{
+		$title = '';
+		if ($this->template)
+		{
+			$title .= $this->template->NAME;
+		}
+		$title .= ' '.ltrim($this->getNumber());
+
+		return $title;
 	}
 
 	/**

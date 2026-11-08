@@ -5,6 +5,7 @@ namespace Bitrix\Landing\Copilot\Generation\Step\Request;
 
 use Bitrix\Landing\Copilot\Generation\Error;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
+use Bitrix\Landing\Copilot\Generation\GenerationTimeSliceException;
 use Bitrix\Landing\Copilot\Generation\Step\Base\AIStep;
 use Bitrix\Landing\Copilot\Generation\Request;
 use Bitrix\Landing\Copilot\Generation\Type\Errors;
@@ -216,7 +217,7 @@ abstract class RequestMultiple extends AIStep
 	{
 		if (!$this->generation->getTimer()->check())
 		{
-			throw new \RuntimeException("The maximum execution time has been reached, step {$this->stepId} was aborted");
+			throw new GenerationTimeSliceException("The maximum execution time has been reached, step {$this->stepId} was aborted");
 		}
 	}
 

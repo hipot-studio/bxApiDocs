@@ -8,7 +8,7 @@ final class ChecklistAttachmentDto
 {
 	public function __construct(
 		public readonly int $id,
-		public readonly int $fileId,
+		public readonly string $fileId,
 		public readonly string $serverFileId,
 		public readonly string $name,
 		public readonly string $url,

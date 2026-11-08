@@ -2,6 +2,9 @@
 
 use Bitrix\Mail\Dto\SharedSignatureDto;
 use Bitrix\Mail\Helper\Config\Feature;
+use Bitrix\Mail\Internal\Service\Signature\Image\SignatureImageResourceProvider;
+use Bitrix\Mail\Internal\Service\Signature\Template\SignatureTemplateContext;
+use Bitrix\Mail\Internal\Service\Signature\Template\SignatureTemplateProcessor;
 use Bitrix\Mail\Internal\Service\Signature\Template\Macro\SignatureMacroCatalog;
 use Bitrix\Mail\Internals\SharedSignatureAssignmentTable;
 use Bitrix\Mail\Internals\SharedSignatureTable;
@@ -35,6 +38,7 @@ class MailUserSignatureEditComponent extends CBitrixComponent
 		if(!Loader::includeModule('mail'))
 		{
 			$this->showError(Loc::getMessage('MAIL_USERSIGNATURE_MODULE_ERROR'));
+
 			return;
 		}
 
@@ -42,11 +46,11 @@ class MailUserSignatureEditComponent extends CBitrixComponent
 		$this->arResult['showSignatureMacros'] = Feature::isSignatureMacrosAvailable();
 		$this->arResult['signatureMacroCatalog'] = $this->arResult['showSignatureMacros']
 			? (new SignatureMacroCatalog())->getDto()
-			: null
-		;
+			: null;
 		$this->arResult['IFRAME'] = $this->arParams['IFRAME'] == 'Y' || $this->request->get('IFRAME') == 'Y' ? 'Y' : 'N';
 
 		$this->arResult['showSharedSignatureCard'] = $this->canShowSharedSignatureCard();
+		$this->arResult['signatureImagesAvailable'] = Feature::isSignatureImagesAvailable();
 
 		$senders = $this->getSenders();
 		$this->arResult['senderType'] = null;
@@ -102,10 +106,14 @@ class MailUserSignatureEditComponent extends CBitrixComponent
 				$unifiedEntry['signature']->collectValues(),
 				$unifiedEntry['assignments'],
 				null,
-				new AssignmentTargetDirectory()
+				new AssignmentTargetDirectory(),
 			);
 
-			$this->arResult['signature'] = $dto['signature'];
+			$this->arResult['signature'] = $this->resolveSignatureTemplate(
+				(string)$dto['signature'],
+				$signatureId,
+				(int)CurrentUser::get()->getId(),
+			);
 			$this->arResult['assignments'] = $dto['assignments'];
 			$this->arResult['sharedSignatureId'] = $signatureId;
 			$this->arResult['unifiedSignatureId'] = $signatureId;
@@ -122,7 +130,11 @@ class MailUserSignatureEditComponent extends CBitrixComponent
 				return;
 			}
 
-			$this->arResult['signature'] = (string)$unifiedEntry['signature']->get('SIGNATURE');
+			$this->arResult['signature'] = $this->resolveSignatureTemplate(
+				(string)$unifiedEntry['signature']->get('SIGNATURE'),
+				$signatureId,
+				(int)CurrentUser::get()->getId(),
+			);
 			$this->arResult['signatureId'] = $this->findEditableLegacyId(
 				(int)$unifiedEntry['signature']->get('LEGACY_ID'),
 				(int)CurrentUser::get()->getId(),
@@ -189,7 +201,7 @@ class MailUserSignatureEditComponent extends CBitrixComponent
 
 		$this->arResult['senderOptions'] = $this->buildSenderOptions(
 			$senders,
-			(string)($this->arResult['sender'] ?? '')
+			(string)($this->arResult['sender'] ?? ''),
 		);
 
 		global $APPLICATION;
@@ -207,8 +219,44 @@ class MailUserSignatureEditComponent extends CBitrixComponent
 	protected function canShowSharedSignatureCard(): bool
 	{
 		return SharedSignatureService::isSharedInterfaceEnabled()
-			&& SharedSignatureService::canManageSharedScope()
-		;
+			&& SharedSignatureService::canManageSharedScope();
+	}
+
+	protected function resolveSignatureTemplate(string $template, int $signatureId, int $userId): string
+	{
+		try
+		{
+			$resourceSignatureIds = str_contains($template, 'data-bx-mail-signature-image=')
+				? [$signatureId]
+				: [];
+			$resources = $this->createSignatureImageResourceProvider()->getBySignatureIds($resourceSignatureIds);
+			$context = new SignatureTemplateContext(
+				$userId,
+				0,
+				'',
+				'',
+				$resources[$signatureId] ?? [],
+			);
+			$result = $this->createSignatureTemplateProcessor()->resolve($template, $context);
+
+			return $result->isSuccess() ? (string)($result->getData()['html'] ?? '') : $template;
+		}
+		catch (\Throwable $exception)
+		{
+			\Bitrix\Main\Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+
+			return $template;
+		}
+	}
+
+	protected function createSignatureImageResourceProvider(): SignatureImageResourceProvider
+	{
+		return new SignatureImageResourceProvider();
+	}
+
+	protected function createSignatureTemplateProcessor(): SignatureTemplateProcessor
+	{
+		return new SignatureTemplateProcessor();
 	}
 
 	protected function findSenderAssignment(array $assignments): string
@@ -259,8 +307,7 @@ class MailUserSignatureEditComponent extends CBitrixComponent
 
 		return $legacySignature !== null && (int)$legacySignature->getUserId() === $userId
 			? $legacyId
-			: 0
-		;
+			: 0;
 	}
 
 	/**
@@ -354,6 +401,7 @@ class MailUserSignatureEditComponent extends CBitrixComponent
 	protected function getSenders()
 	{
 		\CBitrixComponent::includeComponentClass('bitrix:main.mail.confirm');
+
 		return \MainMailConfirmComponent::prepareMailboxes();
 	}
 }

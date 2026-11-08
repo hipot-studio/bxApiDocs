@@ -9,7 +9,7 @@ final class StartBanner
 {
 	private const SHOWED_OPTION_NAME = 'repeat-sale-showed-start-banner';
 	private const MAX_SHOWED_COUNT = 6;
-	private const INTERVAL_SHOWED = '-1 day';
+	private const INTERVAL_SHOWED = '1 day';
 
 	private ?array $showedStatisticsData = null;
 
@@ -70,7 +70,7 @@ final class StartBanner
 
 		$currentTimestamp = (new Date())->getTimestamp();
 
-		return $lastShowedTimestampWithOffset > $currentTimestamp;
+		return $lastShowedTimestampWithOffset <= $currentTimestamp;
 	}
 
 	private function getShowedStatisticsData(): array

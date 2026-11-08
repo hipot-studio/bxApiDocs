@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Integration\MailService;
 
+use Bitrix\Mail\Internal\Service\SourceGeneration\ManualMigrationControl;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationOperationSchema;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationService;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationStage;
@@ -13,13 +14,21 @@ use Bitrix\Main\Type\DateTime;
 
 final class MigrationStatusProvider
 {
+	/** Everything {@see self::fromRow()} reads; the row itself never leaves this class. */
+	private const STATUS_FIELDS = [
+		'MAILBOX_ID', 'OPERATION_ID', 'EXEC_STATE', 'STAGE', 'SWITCH_AUTHORIZED',
+		'AUTO_RETRY', 'NEXT_RUN', 'LAST_ERROR_CODE', 'ERROR_OWNER',
+	];
+
 	public function __construct(
 		private readonly OperationTracker $tracker = new OperationTracker(),
 		private readonly MigrationOperationSchema $schema = new MigrationOperationSchema(),
+		private readonly ManualMigrationControl $manualControl = new ManualMigrationControl(),
 	)
 	{
 	}
 
+	/** Visibility and identity only: the manual wait costs a row of its own, see getForDisplay(). */
 	public function get(int $mailboxId, string $operationId): ?MigrationStatus
 	{
 		if (!$this->schema->isReady())
@@ -30,6 +39,7 @@ final class MigrationStatusProvider
 		return $this->fromRow($this->tracker->find($mailboxId, $operationId));
 	}
 
+	/** Visibility and identity only: the manual wait costs a row of its own, see getLatestForDisplay(). */
 	public function getLatest(int $mailboxId): ?MigrationStatus
 	{
 		if (!$this->schema->isReady())
@@ -40,6 +50,32 @@ final class MigrationStatusProvider
 		return $this->fromRow($this->tracker->findLatestForMailbox($mailboxId));
 	}
 
+	/** Call where the status text itself is shown or published: it also reads the manual wait. */
+	public function getForDisplay(int $mailboxId, string $operationId): ?MigrationStatus
+	{
+		if (!$this->schema->isReady())
+		{
+			return null;
+		}
+
+		$operation = $this->tracker->find($mailboxId, $operationId);
+
+		return $this->fromRow($operation, $this->isManualWaiting($mailboxId, $operation));
+	}
+
+	/** Call where the status text itself is shown or published: it also reads the manual wait. */
+	public function getLatestForDisplay(int $mailboxId): ?MigrationStatus
+	{
+		if (!$this->schema->isReady())
+		{
+			return null;
+		}
+
+		$operation = $this->tracker->findLatestForMailbox($mailboxId);
+
+		return $this->fromRow($operation, $this->isManualWaiting($mailboxId, $operation));
+	}
+
 	/** @return array<int, MigrationStatus> Statuses indexed by mailbox id. */
 	public function getLatestForMailboxes(array $mailboxIds): array
 	{
@@ -48,12 +84,13 @@ final class MigrationStatusProvider
 			return [];
 		}
 
-		$rows = $this->tracker->findLatestForMailboxes($mailboxIds);
+		$rows = $this->tracker->findLatestForMailboxes($mailboxIds, self::STATUS_FIELDS);
+		$manualWaiting = $this->manualControl->findWaitingMailboxes($rows);
 
 		$statuses = [];
 		foreach ($rows as $mailboxId => $row)
 		{
-			$status = $this->fromRow($row);
+			$status = $this->fromRow($row, isset($manualWaiting[(int)$mailboxId]));
 			if ($status !== null)
 			{
 				$statuses[(int)$mailboxId] = $status;
@@ -63,20 +100,29 @@ final class MigrationStatusProvider
 		return $statuses;
 	}
 
-	public function fromRow(?array $operation): ?MigrationStatus
+	public function fromRow(?array $operation, bool $manualWaiting = false): ?MigrationStatus
 	{
 		if ($operation === null)
 		{
 			return null;
 		}
 
-		$stage = MigrationStage::tryFrom((string)$operation['STAGE']) ?? MigrationStage::Legacy;
+		$knownStage = MigrationStage::tryFrom((string)$operation['STAGE']);
+		$stage = $knownStage ?? MigrationStage::Legacy;
 		$state = (string)$operation['EXEC_STATE'];
-		$status = $this->statusOf($state, $stage);
+		$status = $this->statusOf(
+			$state,
+			$stage,
+			$manualWaiting && ManualMigrationControl::waitingAppliesTo($knownStage, $state),
+		);
 		$authorized = (string)$operation['SWITCH_AUTHORIZED'] === 'Y';
 		$visibility = !$authorized
 			? 'hidden'
-			: (in_array($state, [MigrationOperationTable::STATE_DONE, MigrationOperationTable::STATE_CANCELLED], true)
+			: (in_array($state, [
+				MigrationOperationTable::STATE_DONE,
+				MigrationOperationTable::STATE_CANCELLED,
+				MigrationOperationTable::STATE_NEEDS_ATTENTION,
+			], true)
 				? 'terminal'
 				: 'active');
 
@@ -92,12 +138,32 @@ final class MigrationStatusProvider
 			operationId: (string)$operation['OPERATION_ID'],
 			mailboxId: (int)$operation['MAILBOX_ID'],
 			visibility: $visibility,
-			publicStatus: $visibility === 'hidden' ? null : $status,
+			publicStatus: match (true)
+			{
+				$visibility === 'hidden' => null,
+				$state === MigrationOperationTable::STATE_NEEDS_ATTENTION => 'cancelled',
+				default => $status,
+			},
 		);
 	}
 
-	private function statusOf(string $state, MigrationStage $stage): string
+	private function isManualWaiting(int $mailboxId, ?array $operation): bool
 	{
+		if ($operation === null)
+		{
+			return false;
+		}
+
+		return isset($this->manualControl->findWaitingMailboxes([$mailboxId => $operation])[$mailboxId]);
+	}
+
+	private function statusOf(string $state, MigrationStage $stage, bool $manualWaiting): string
+	{
+		if ($manualWaiting)
+		{
+			return MigrationStatus::STATUS_MANUAL_WAITING;
+		}
+
 		return match ($state)
 		{
 			MigrationOperationTable::STATE_WAITING => 'waiting',

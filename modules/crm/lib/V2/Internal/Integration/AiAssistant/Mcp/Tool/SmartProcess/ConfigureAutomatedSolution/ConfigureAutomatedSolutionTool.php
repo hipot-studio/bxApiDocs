@@ -127,6 +127,14 @@ final class ConfigureAutomatedSolutionTool extends AbstractTool
 				);
 			}
 
+			// Unbinding moves the smart process into CRM, so the types right of CRM is needed as well.
+			if (!$userPermissions->dynamicType()->canAdd(null))
+			{
+				return ToolResult::fail(
+					"Access denied: you do not have permission to manage smart processes of the CRM section.",
+				);
+			}
+
 			$result = (new UnbindTypeFromAutomatedSolution($type, $currentAutomatedSolutionId))->execute();
 			if (!$result->isSuccess())
 			{
@@ -179,6 +187,16 @@ final class ConfigureAutomatedSolutionTool extends AbstractTool
 			return ToolResult::fail(
 				"Access denied: you do not have permission to edit automated solution"
 					. " with ID={$currentAutomatedSolutionId}.",
+			);
+		}
+
+		// Binding moves the smart process into the target workplace, so the types right of that workplace
+		// is needed as well.
+		if (!$userPermissions->dynamicType()->canAdd($automatedSolutionId))
+		{
+			return ToolResult::fail(
+				"Access denied: you do not have permission to manage smart processes of automated solution"
+					. " with ID={$automatedSolutionId}.",
 			);
 		}
 

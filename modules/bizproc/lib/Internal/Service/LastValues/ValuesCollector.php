@@ -142,7 +142,9 @@ class ValuesCollector
 	/**
 	 * The single entry left does not fit by itself: its value is cut down until the whole snapshot fits,
 	 * so a value limit raised above the snapshot one cannot produce a snapshot over the storage limit.
-	 * An entry that does not fit even with an empty value leaves an empty snapshot.
+	 * An entry that does not fit even with an empty value leaves an empty snapshot. A collection of
+	 * document identifiers gives up its items whole and never by bytes: half an identifier addresses no
+	 * document, and the editor reads the identifiers of the snapshot as they are.
 	 */
 	private function shrinkEntry(string $key, CapturedValue $value, int $limit): string
 	{
@@ -173,6 +175,11 @@ class ValuesCollector
 				array_pop($items);
 
 				continue;
+			}
+
+			if ($this->isDocumentCollection($value))
+			{
+				return '{}';
 			}
 
 			$scalar = (string)$items[0];
@@ -248,9 +255,14 @@ class ValuesCollector
 			$type = FieldType::normalizeProperty($property);
 			$typeName = (string)($type['Type'] ?? '') ?: FieldType::STRING;
 
-			return $type['Multiple']
-				? $this->captureCollection($value, $typeName)
-				: $this->captureSingleValue($value, $typeName)
+			if (!$type['Multiple'])
+			{
+				return $this->captureSingleValue($value, $typeName);
+			}
+
+			return $typeName === FieldType::DOCUMENT
+				? $this->captureDocumentCollection($value, $typeName)
+				: $this->captureCollection($value, $typeName)
 			;
 		}
 		catch (\Throwable)
@@ -333,6 +345,52 @@ class ValuesCollector
 	}
 
 	/**
+	 * A multiple document value is counted and stored by documents: an item of the collection is one
+	 * document identifier and it stays whole, because an identifier taken apart addresses nothing and the
+	 * editor reads the identifiers of the snapshot as they are. The value limit is applied on the
+	 * boundaries of the items only, so the collection is closed on the identifier that no longer fits
+	 * instead of keeping a part of it.
+	 */
+	private function captureDocumentCollection(mixed $value, string $type): ?CapturedValue
+	{
+		$limit = $this->config->getValueSizeLimit();
+		$kept = [];
+		$size = 0;
+		$truncated = false;
+		$totalCount = 0;
+		$limitReached = false;
+
+		foreach ($this->enumerateDocumentIds($value) as $documentId)
+		{
+			++$totalCount;
+
+			if ($limitReached)
+			{
+				continue;
+			}
+
+			$documentIdSize = $this->measureDocumentId($documentId);
+			if ($kept !== [] && $size + $documentIdSize > $limit)
+			{
+				$truncated = true;
+				$limitReached = true;
+
+				continue;
+			}
+
+			$kept[] = $documentId;
+			$size += $documentIdSize;
+		}
+
+		if ($kept === [])
+		{
+			return null;
+		}
+
+		return new CapturedValue($kept, $type, true, $truncated, $totalCount);
+	}
+
+	/**
 	 * Yields the items of a collection that have a representation, in the order CBPHelper::flatten() lays
 	 * them out: leaves only, any depth, keys dropped, a value that is not an array is a collection of one.
 	 * Streaming instead of flattening keeps the memory of the capture at the items the snapshot keeps, not
@@ -359,6 +417,36 @@ class ValuesCollector
 		if ($scalar !== null && $scalar !== '')
 		{
 			yield $scalar;
+		}
+	}
+
+	/**
+	 * Yields the document identifiers of a multiple document value, one per document: a top level item is
+	 * one identifier whatever its shape, and nothing below it is walked. Streaming keeps the memory of the
+	 * capture at the identifiers the snapshot keeps, the limit is applied while the walk goes on.
+	 *
+	 * @return \Generator<array|string|int|float|bool>
+	 */
+	private function enumerateDocumentIds(mixed $value): \Generator
+	{
+		foreach (is_array($value) ? $value : [$value] as $item)
+		{
+			if (is_array($item))
+			{
+				if ($item !== [])
+				{
+					// keys are dropped so the identifier is stored as a list, the shape the editor reads
+					yield array_values($item);
+				}
+
+				continue;
+			}
+
+			$scalar = $this->toScalar($item);
+			if ($scalar !== null && $scalar !== '')
+			{
+				yield $scalar;
+			}
 		}
 	}
 
@@ -390,5 +478,19 @@ class ValuesCollector
 	private function measure(string|int|float|bool $value): int
 	{
 		return strlen((string)$value);
+	}
+
+	/**
+	 * A document identifier has no scalar length of its own, and the snapshot stores it encoded, so the
+	 * encoded length is what the value limit is spent on.
+	 */
+	private function measureDocumentId(array|string|int|float|bool $documentId): int
+	{
+		return strlen(Json::encode($documentId));
+	}
+
+	private function isDocumentCollection(CapturedValue $value): bool
+	{
+		return $value->multiple && $value->type === FieldType::DOCUMENT;
 	}
 }

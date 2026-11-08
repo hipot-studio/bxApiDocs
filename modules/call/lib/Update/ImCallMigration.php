@@ -57,21 +57,25 @@ class ImCallMigration extends Stepper
 	private function step1(): void
 	{
 		$connection = \Bitrix\Main\Application::getConnection();
-		$res = $connection->query("SELECT MAX(ID) + 100 as CNT FROM b_im_call");
-		if ($row = $res->fetch())
+		$legacyMaxId = (int)$connection->queryScalar("SELECT MAX(ID) FROM b_im_call");
+		if ($legacyMaxId > 0)
 		{
-			$maxId = (int)$row['CNT'];
-			if ($maxId > 0)
+			// The counter may already be ahead of the legacy ids: the 26.800.0 updater lifts it
+			// synchronously and calls created since then live in b_call_session. Never move it back.
+			$nextId = max($legacyMaxId, (int)$connection->queryScalar("SELECT MAX(ID) FROM b_call_session")) + 100;
+			if ($connection->getType() == 'mysql')
 			{
-				if ($connection->getType() == 'mysql')
-				{
-					$connection->queryExecute("ALTER TABLE b_call_session AUTO_INCREMENT = {$maxId}");
-				}
-				elseif ($connection->getType() == 'pgsql')
-				{
-					// language=PostgreSQL
-					$connection->queryExecute("ALTER SEQUENCE b_call_session_id_seq RESTART WITH {$maxId}");
-				}
+				$connection->queryExecute("ALTER TABLE b_call_session AUTO_INCREMENT = {$nextId}");
+			}
+			elseif ($connection->getType() == 'pgsql')
+			{
+				// language=PostgreSQL
+				$connection->queryExecute("
+					SELECT setval(
+						pg_get_serial_sequence('b_call_session', 'id'),
+						GREATEST({$nextId}, COALESCE(pg_sequence_last_value(pg_get_serial_sequence('b_call_session', 'id')::regclass), 1))
+					)
+				");
 			}
 		}
 		$this->setCurrentStep(1);

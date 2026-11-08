@@ -8,11 +8,14 @@ use Bitrix\Socialnetwork\Collab\Control\CollabService;
 use Bitrix\Socialnetwork\Collab\Control\Command\CollabUpdateCommand;
 use Bitrix\Socialnetwork\Collab\Control\Member\CollabMemberFacade;
 use Bitrix\Socialnetwork\Control\Member\Command\MembersCommand;
+use Bitrix\Socialnetwork\UserToGroupTable;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityCollection;
+use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Member\MemberEntityType;
 use Bitrix\Socialnetwork\V2\Internal\Exceptions\MemberCommandException;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ChatMemberService;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\MemberEntityMapper;
 use Bitrix\Socialnetwork\V2\Internal\Repository\ProjectMemberRepositoryInterface;
+use Bitrix\Socialnetwork\V2\Internal\Service\ProjectAnalytics;
 
 class MemberService
 {
@@ -22,6 +25,7 @@ class MemberService
 		private readonly CollabService $collabService,
 		private readonly ProjectMemberRepositoryInterface $memberRepository,
 		private readonly ChatMemberService $chatMemberService,
+		private readonly ProjectAnalytics $projectAnalytics,
 	)
 	{
 	}
@@ -61,6 +65,23 @@ class MemberService
 
 			throw new MemberCommandException(implode('; ', $errorMessages));
 		}
+
+		// Track only an explicit add by a real user: structure-initiated (department auto-membership) syncs
+		// carry INITIATED_BY_STRUCTURE, and system/convert chat syncs run under userId=0 — both are skipped.
+		// Departments and individual users can arrive in one command (project member selector), so emit a
+		// separate event per entity kind. Chat syncs never carry departments.
+		if ($initiatedByType !== UserToGroupTable::INITIATED_BY_STRUCTURE && $userId > 0)
+		{
+			if ($this->hasEntityType($members, MemberEntityType::User))
+			{
+				$this->projectAnalytics->trackAddProjectUser($projectId, $userId);
+			}
+
+			if ($this->hasEntityType($members, MemberEntityType::Department))
+			{
+				$this->projectAnalytics->trackAddDepartmentToProject($projectId, $userId);
+			}
+		}
 	}
 
 	/**
@@ -82,6 +103,23 @@ class MemberService
 			$errorMessages = array_map(static fn($e) => $e->getMessage(), $result->getErrors());
 
 			throw new MemberCommandException(implode('; ', $errorMessages));
+		}
+
+		// Track only an explicit removal by a real user. Structure (department auto-membership) removals go
+		// straight through CollabMemberFacade, bypassing this service; their chat re-sync reaches here with an
+		// empty member set (members already removed) and exits early above. System/convert syncs run under
+		// userId=0. A department unbind and individual user removals can share one command, so emit per kind.
+		if ($userId > 0)
+		{
+			if ($this->hasEntityType($members, MemberEntityType::User))
+			{
+				$this->projectAnalytics->trackDeleteProjectUser($projectId, $userId);
+			}
+
+			if ($this->hasEntityType($members, MemberEntityType::Department))
+			{
+				$this->projectAnalytics->trackDeleteDepartmentFromProject($projectId, $userId);
+			}
 		}
 	}
 
@@ -194,6 +232,19 @@ class MemberService
 		}
 
 		$this->chatMemberService->addUsersAsStructureMembers($projectId, $structureInitiatedUserIds);
+	}
+
+	private function hasEntityType(MemberEntityCollection $members, MemberEntityType $type): bool
+	{
+		foreach ($members as $member)
+		{
+			if ($member->type === $type)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

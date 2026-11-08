@@ -3,6 +3,7 @@
 namespace Bitrix\Intranet\User\Filter\Provider;
 
 use Bitrix\Intranet\Internal\Integration\Humanresources\UserQueryModifier;
+use Bitrix\Intranet\User;
 use Bitrix\Intranet\User\Filter\ExtranetUserSettings;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Filter\EntityDataProvider;
@@ -14,6 +15,7 @@ class ExtranetUserDataProvider extends EntityDataProvider
 {
 	private ExtranetUserSettings $settings;
 	private UserQueryModifier $userQueryModifier;
+	private ?User $currentUser = null;
 
 	public function __construct(ExtranetUserSettings $settings, ?UserQueryModifier $userQueryModifier = null)
 	{
@@ -55,15 +57,23 @@ class ExtranetUserDataProvider extends EntityDataProvider
 		}
 
 		$result = $rawFilterValue;
+		$isInvitationModeEnabled = $this->isInvitationModeEnabled($rawFilterValue);
+		$isCurrentUserExtranet = $isInvitationModeEnabled
+			? !$this->getCurrentUser()->isIntranet()
+			: $this->getSettings()->isCurrentUserExtranet();
 		if (\CExtranet::getExtranetUserGroupId())
 		{
-			$this->checkExtranetField($result);
+			$this->checkExtranetField($result, $isInvitationModeEnabled);
 		}
-		$this->checkCollaberField($result);
+		$this->checkCollaberField($result, $isInvitationModeEnabled);
 
 		if (
 			!$this->getSettings()->isCurrentUserExtranetAdmin()
 			&& !$this->isExtranetRoleFilterEnabled($rawFilterValue)
+			&& (
+				!$isInvitationModeEnabled
+				|| $isCurrentUserExtranet
+			)
 			&& Loader::includeModule('socialnetwork')
 		)
 		{
@@ -75,7 +85,7 @@ class ExtranetUserDataProvider extends EntityDataProvider
 			$workgroupIdList = (
 				$hasDepartmentFilter
 				&& !$isVisitorFilterEnabled
-				&& !$this->getSettings()->isCurrentUserExtranet()
+				&& !$isCurrentUserExtranet
 			)
 				? []
 				: $this->getSettings()->getWorkgroupIdList();
@@ -83,7 +93,7 @@ class ExtranetUserDataProvider extends EntityDataProvider
 			if (
 				!$hasDepartmentFilter
 				&& !$isVisitorFilterEnabled
-				&& !$this->getSettings()->isCurrentUserExtranet()
+				&& !$isCurrentUserExtranet
 			)
 			{
 				if (!empty($workgroupIdList))
@@ -114,7 +124,7 @@ class ExtranetUserDataProvider extends EntityDataProvider
 			}
 			elseif (
 				$isVisitorFilterEnabled
-				|| $this->getSettings()->isCurrentUserExtranet()
+				|| $isCurrentUserExtranet
 			)
 			{
 				$publicUserIdList = $this->getSettings()->getPublicUserIdList();
@@ -157,20 +167,23 @@ class ExtranetUserDataProvider extends EntityDataProvider
 		return $result;
 	}
 
-	private function checkCollaberField(array &$filterValue): void
+	private function checkCollaberField(array &$filterValue, bool $isInvitationModeEnabled): void
 	{
+		$isFilterAvailable = $this->getSettings()->isFilterAvailable(ExtranetUserSettings::COLLABER_FIELD);
+
 		if (
 			!empty($filterValue[ExtranetUserSettings::COLLABER_FIELD])
-			&& $this->getSettings()->isFilterAvailable(ExtranetUserSettings::COLLABER_FIELD)
+			&& $isFilterAvailable
 			&& $filterValue[ExtranetUserSettings::COLLABER_FIELD] === 'Y'
 		)
 		{
 			$filterValue[] = ['=EXTRANET.ROLE' => 'collaber'];
 		}
 		elseif (
-			!$this->getSettings()->isFilterAvailable(ExtranetUserSettings::COLLABER_FIELD)
+			(!$isFilterAvailable && !$isInvitationModeEnabled)
 			|| (
-				!empty($filterValue[ExtranetUserSettings::COLLABER_FIELD])
+				$isFilterAvailable
+				&& !empty($filterValue[ExtranetUserSettings::COLLABER_FIELD])
 				&& $filterValue[ExtranetUserSettings::COLLABER_FIELD] === 'N'
 			)
 		)
@@ -179,20 +192,23 @@ class ExtranetUserDataProvider extends EntityDataProvider
 		}
 	}
 
-	private function checkExtranetField(array &$filterValue): void
+	private function checkExtranetField(array &$filterValue, bool $isInvitationModeEnabled): void
 	{
+		$isFilterAvailable = $this->getSettings()->isFilterAvailable(ExtranetUserSettings::EXTRANET_FIELD);
+
 		if (
 			!empty($filterValue[ExtranetUserSettings::EXTRANET_FIELD])
-			&& $this->getSettings()->isFilterAvailable(ExtranetUserSettings::EXTRANET_FIELD)
+			&& $isFilterAvailable
 			&& $filterValue[ExtranetUserSettings::EXTRANET_FIELD] === 'Y'
 		)
 		{
 			$filterValue['=EXTRANET.ROLE'] = 'extranet';
 		}
 		elseif (
-			!$this->getSettings()->isFilterAvailable(ExtranetUserSettings::EXTRANET_FIELD)
+			(!$isFilterAvailable && !$isInvitationModeEnabled)
 			|| (
-				!empty($filterValue[ExtranetUserSettings::EXTRANET_FIELD])
+				$isFilterAvailable
+				&& !empty($filterValue[ExtranetUserSettings::EXTRANET_FIELD])
 				&& $filterValue[ExtranetUserSettings::EXTRANET_FIELD] === 'N'
 			)
 		)
@@ -207,6 +223,24 @@ class ExtranetUserDataProvider extends EntityDataProvider
 			!empty($filterValue[ExtranetUserSettings::EXTRANET_FIELD])
 			&& $this->getSettings()->isFilterAvailable(ExtranetUserSettings::EXTRANET_FIELD)
 			&& $filterValue[ExtranetUserSettings::EXTRANET_FIELD] === 'Y';
+	}
+
+	private function isInvitationModeEnabled(array $filterValue): bool
+	{
+		return (
+			($filterValue[ExtranetUserSettings::INVITED_FIELD] ?? null) === 'Y'
+			&& $this->getSettings()->isFilterAvailable(ExtranetUserSettings::INVITED_FIELD)
+		) || (
+			($filterValue[ExtranetUserSettings::WAIT_CONFIRMATION_FIELD] ?? null) === 'Y'
+			&& $this->getSettings()->isFilterAvailable(ExtranetUserSettings::WAIT_CONFIRMATION_FIELD)
+		);
+	}
+
+	private function getCurrentUser(): User
+	{
+		$this->currentUser ??= new User($this->getSettings()->getCurrentUserId());
+
+		return $this->currentUser;
 	}
 
 	public function getWorkgroupUsersSubQuery(array $workgroupIdList): string

@@ -6,8 +6,9 @@ use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Entity\DataView\RowIdentity;
 use Bitrix\Bizproc\Internal\Repository\StorageItemRepository\StorageItemRepositoryInterface;
 use Bitrix\Bizproc\Internal\Exception\StorageItem\DeleteStorageItemException;
+use Bitrix\Bizproc\Public\Feature\DataView\DataViewFlag;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\Config\Feature;
 
 class DeleteStorageItemCommandHandler
 {
@@ -119,7 +120,7 @@ class DeleteStorageItemCommandHandler
 	private function collectDataViewDeletionMarks(array $ids): array
 	{
 
-		if (Option::get('bizproc', 'dataview_enabled', 'N') !== 'Y')
+		if (!Feature::isEnabled(DataViewFlag::class))
 		{
 			return [];
 		}

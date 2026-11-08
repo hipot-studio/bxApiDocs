@@ -19,12 +19,12 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Public\Provider\DashboardDetailInfoProvider;
-use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Model\Dashboard;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardRepository;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
 use Bitrix\BIConnector\Internal\Entity\ValueObject\DashboardDetailInfo\DashboardInfo as DashboardInfoValueObject;
+use Bitrix\BIConnector\Internal\Services\DashboardSettings\DashboardSettingsModeResolver;
 
 Loader::includeModule("biconnector");
 
@@ -134,12 +134,11 @@ class BiconnectorApachesupersetDashboardDetailInfoComponent extends CBitrixCompo
 				? $this->prepareDate($dashboardInfo->getUpdatedDate())
 				: null
 			,
-			'PERIOD' => $this->preparePeriod($dashboardInfo),
 			'RATING_INFO' => $dashboardInfo->getRatingInfo(),
 		];
 	}
 
-	private function prepareInitialResult(): void
+	protected function prepareInitialResult(): void
 	{
 		$this->arResult['ERROR_MESSAGES'] = [];
 		$this->arResult['DASHBOARD_TITLE'] = '';
@@ -182,12 +181,12 @@ class BiconnectorApachesupersetDashboardDetailInfoComponent extends CBitrixCompo
 		);
 	}
 
+	/**
+	 * The settings also open in the reduced mode for a public links controller who can only view the dashboard.
+	 */
 	private function canModifySettingsDashboard(Dashboard $dashboard): bool
 	{
-		return AccessController::getCurrent()->check(
-			ActionDictionary::ACTION_BIC_DASHBOARD_MODIFY_SETTINGS,
-			$this->createDashboardAccessItem($dashboard),
-		);
+		return (new DashboardSettingsModeResolver())->canOpen($this->createDashboardAccessItem($dashboard));
 	}
 
 	private function canDeleteDashboard(Dashboard $dashboard): bool
@@ -306,31 +305,6 @@ class BiconnectorApachesupersetDashboardDetailInfoComponent extends CBitrixCompo
 		}
 
 		return $this->resizeImageGet($iconId, 390, 220);
-	}
-
-	private function preparePeriod(DashboardInfoValueObject $dashboardInfo): ?string
-	{
-		$filterPeriod = $dashboardInfo->getFilterPeriod();
-		if ($filterPeriod === null || $filterPeriod === '')
-		{
-			return null;
-		}
-
-		if ($filterPeriod !== EmbeddedFilter\DateTime::PERIOD_RANGE)
-		{
-			$periodName = EmbeddedFilter\DateTime::getPeriodName($filterPeriod);
-
-			return $periodName !== '' ? $periodName : null;
-		}
-
-		$dateFilterStart = $dashboardInfo->getDateFilterStart();
-		$dateFilterEnd = $dashboardInfo->getDateFilterEnd();
-		if ($dateFilterStart === null || $dateFilterEnd === null)
-		{
-			return null;
-		}
-
-		return "{$dateFilterStart} – {$dateFilterEnd}";
 	}
 
 	private function getDashboardDetailInfoProvider(): DashboardDetailInfoProvider

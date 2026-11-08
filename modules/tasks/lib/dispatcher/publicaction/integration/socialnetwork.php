@@ -66,8 +66,35 @@ final class SocialNetwork extends \Bitrix\Tasks\Dispatcher\PublicAction
 		);
 	}
 
-	public static function getMemberList($groupId)
+	public function getMemberList($groupId)
 	{
-		return \Bitrix\Tasks\Integration\SocialNetwork::getMemberList($groupId);
+		if (!is_int($groupId) && !is_string($groupId))
+		{
+			$this->errors->add('ILLEGAL_ID', 'Group ID is illegal');
+
+			return array();
+		}
+
+		$groupId = filter_var(
+			$groupId,
+			FILTER_VALIDATE_INT,
+			array('options' => array('min_range' => 1))
+		);
+		if ($groupId === false)
+		{
+			$this->errors->add('ILLEGAL_ID', 'Group ID is illegal');
+
+			return array();
+		}
+
+		$members = \Bitrix\Tasks\Integration\SocialNetwork::getMemberList($groupId, $this->userId);
+		if ($members === null)
+		{
+			$this->addForbiddenError();
+
+			return array();
+		}
+
+		return $members;
 	}
 }

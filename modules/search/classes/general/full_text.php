@@ -3,9 +3,16 @@
 class CSearchFullText
 {
 	/**
-	 * @var CSearchFullText
+	 * @var CSearchFullText|null
 	 */
 	protected static $instance = null;
+
+	protected $config = [];
+
+	public function __construct($config = [])
+	{
+		$this->config = $config;
+	}
 
 	/**
 	 * Returns current instance of the full text indexer.
@@ -19,42 +26,39 @@ class CSearchFullText
 			$full_text_engine = COption::GetOptionString('search', 'full_text_engine');
 			if ($full_text_engine === 'sphinx')
 			{
-				self::$instance = new CSearchSphinx;
-				self::$instance->connect(
-					COption::GetOptionString('search', 'sphinx_connection'),
-					COption::GetOptionString('search', 'sphinx_index_name')
-				);
+				self::$instance = new CSearchSphinx([
+					'connection' => COption::GetOptionString('search', 'sphinx_connection'),
+					'index_name' => COption::GetOptionString('search', 'sphinx_index_name'),
+				]);
 			}
 			elseif ($full_text_engine === 'opensearch')
 			{
-				require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/classes/general/backup.php");
-				self::$instance = new CSearchOpenSearch;
-				self::$instance->connect(
-					COption::GetOptionString('search', 'opensearch_connection'),
-					COption::GetOptionString('search', 'opensearch_user'),
-					CPasswordStorage::Get('search@opensearch_password'),
-					COption::GetOptionString('search', 'opensearch_index'),
-				);
+				require_once $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/main/classes/general/backup.php';
+				self::$instance = new CSearchOpenSearch([
+					'connection' => COption::GetOptionString('search', 'opensearch_connection'),
+					'user' => COption::GetOptionString('search', 'opensearch_user'),
+					'password' => CPasswordStorage::Get('search@opensearch_password'),
+					'index_name' => CPageOption::GetOptionString('search', 'opensearch_index') ?: COption::GetOptionString('search', 'opensearch_index'),
+				]);
 			}
 			elseif ($full_text_engine === 'mysql')
 			{
 				self::$instance = new CSearchMysql;
-				self::$instance->connect();
 			}
 			elseif ($full_text_engine === 'pgsql')
 			{
 				self::$instance = new CSearchPgsql;
-				self::$instance->connect();
 			}
 			else
 			{
 				self::$instance = new CSearchStemTable();
 			}
 		}
+
 		return static::$instance;
 	}
 
-	public function connect($connectionString)
+	public function connect($ignoreErrors = false)
 	{
 		return true;
 	}
@@ -75,12 +79,21 @@ class CSearchFullText
 	{
 	}
 
+	public function syncPermission($permission, $arFilter)
+	{
+	}
+
+	public function syncContent($id)
+	{
+		return false;
+	}
+
 	public function search($arParams, $aSort, $aParamsEx, $bTagsCloud)
 	{
 		return false;
 	}
 
-	function searchTitle($phrase = '', $arPhrase = [], $nTopCount = 5, $arParams = [], $bNotFilter = false, $order = '')
+	public function searchTitle($phrase = '', $arPhrase = [], $nTopCount = 5, $arParams = [], $bNotFilter = false, $order = '')
 	{
 		return false;
 	}
@@ -95,7 +108,7 @@ class CSearchFullText
 		return 0;
 	}
 
-	function getRowFormatter()
+	public function getRowFormatter()
 	{
 		return null;
 	}
@@ -103,7 +116,7 @@ class CSearchFullText
 
 class CSearchFormatter
 {
-	function format($r)
+	public function format($r)
 	{
 		return $r;
 	}

@@ -12,6 +12,7 @@ use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Interaction\Response\ArrayResponse;
 use Bitrix\Rest\V3\CacheManager;
+use Bitrix\Rest\V3\Schema\MethodDescription;
 use Bitrix\Rest\V3\Schema\SchemaManager;
 
 final class Scope extends RestController
@@ -29,7 +30,10 @@ final class Scope extends RestController
 		{
 			/** @var SchemaManager $schemaManager */
 			$schemaManager = ServiceLocator::getInstance()->get(SchemaManager::class);
-			$methodDescriptions = $schemaManager->getMethodDescriptions();
+			$methodDescriptions = array_filter(
+				$schemaManager->getMethodDescriptions(),
+				static fn(MethodDescription $methodDescription): bool => $methodDescription->isEnabled && !$methodDescription->isHidden,
+			);
 			$schemaManager->ensureGeneratedDtoClassesLoadedFromMethodDescriptions($methodDescriptions);
 
 			$scopes = [];
@@ -50,6 +54,7 @@ final class Scope extends RestController
 					if ($methodDescription->dtoFqcn && empty($dtos[$methodDescription->dtoFqcn]))
 					{
 						$dtos[$methodDescription->dtoFqcn] = $methodDescription->dtoFqcn::create();
+						$dtoFields[$methodDescription->dtoFqcn] = [];
 
 						/** @var DtoField $dtoField */
 						foreach ($dtos[$methodDescription->dtoFqcn]->getFields() as $dtoField)
@@ -60,13 +65,13 @@ final class Scope extends RestController
 								'description' => $dtoField->getDescription() instanceof LocalizableMessage ? $dtoField->getDescription()->localize($this->responseLanguage) : $dtoField->getDescription(),
 							];
 
-							$dtoFields[$methodDescription->controllerFqcn][$dtoField->getPropertyName()] = $dtoFieldData;
+							$dtoFields[$methodDescription->dtoFqcn][$dtoField->getPropertyName()] = $dtoFieldData;
 						}
-						$dtoFields[$methodDescription->controllerFqcn] = array_values($dtoFields[$methodDescription->controllerFqcn]);
+						$dtoFields[$methodDescription->dtoFqcn] = array_values($dtoFields[$methodDescription->dtoFqcn]);
 					}
 				}
 
-				$scopeFields = $methodDescription->controllerFqcn && isset($dtoFields[$methodDescription->controllerFqcn]) ? $dtoFields[$methodDescription->controllerFqcn] : null;
+				$scopeFields = $methodDescription->dtoFqcn && isset($dtoFields[$methodDescription->dtoFqcn]) ? $dtoFields[$methodDescription->dtoFqcn] : null;
 
 				foreach ($methodDescription->scopes as $scope)
 				{

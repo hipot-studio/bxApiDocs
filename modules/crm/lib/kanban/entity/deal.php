@@ -354,9 +354,9 @@ class Deal extends Entity
 		];
 	}
 
-	public function getGridFilter(?string $filterId = null): array
+	public function getGridFilter(?string $filterId = null, array $extraFieldIds = []): array
 	{
-		$result = parent::getGridFilter($filterId);
+		$result = parent::getGridFilter($filterId, $extraFieldIds);
 
 		$filterOptions = $this->getFilterOptions();
 		if ($filterId)

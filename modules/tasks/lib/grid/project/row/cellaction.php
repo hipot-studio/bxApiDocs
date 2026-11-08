@@ -1,7 +1,11 @@
 <?php
+
 namespace Bitrix\Tasks\Grid\Project\Row;
 
 use Bitrix\Main\Grid;
+use Bitrix\Main\Localization\Loc;
+
+Loc::loadMessages(__FILE__);
 
 /**
  * Class CellAction
@@ -30,8 +34,10 @@ class CellAction
 	 */
 	public function prepare(): array
 	{
-		$groupId = $this->rowData['ID'];
+		$groupId = (int)$this->rowData['ID'];
 		$isPinned = ($this->rowData['IS_PINNED'] === 'Y');
+		$pinLabel = Loc::getMessage('TASKS_GRID_PROJECT_ROW_CELL_ACTION_PIN');
+		$unpinLabel = Loc::getMessage('TASKS_GRID_PROJECT_ROW_CELL_ACTION_UNPIN');
 
 		return [
 			'NAME' => [
@@ -40,8 +46,17 @@ class CellAction
 						Grid\CellActions::PIN,
 						($isPinned ? Grid\CellActionState::ACTIVE : Grid\CellActionState::SHOW_BY_HOVER),
 					],
+					'attributes' => [
+						'role' => 'button',
+						'tabindex' => '0',
+						'aria-pressed' => ($isPinned ? 'true' : 'false'),
+						'aria-label' => ($isPinned ? $unpinLabel : $pinLabel),
+						'data-pin-label' => $pinLabel,
+						'data-unpin-label' => $unpinLabel,
+					],
 					'events' => [
 						'click' => "BX.Tasks.Projects.ActionsController.changePin.bind(BX.Tasks.Projects.ActionsController, {$groupId})",
+						'keydown' => "BX.Tasks.Projects.ActionsController.onPinKeyDown.bind(BX.Tasks.Projects.ActionsController, {$groupId})",
 					],
 				],
 			],

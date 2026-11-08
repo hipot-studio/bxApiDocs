@@ -2,6 +2,7 @@
 
 namespace Bitrix\Socialnetwork\Space;
 
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
 use Bitrix\Socialnetwork\Helper;
 use Bitrix\Socialnetwork\Internals\Member\MemberEntityCollection;
 use Bitrix\Socialnetwork\MemberToGroupTable;
@@ -26,6 +27,14 @@ final class MembersManager
 
 		$inviteUsers = array_diff($usersIds, $invitedUsers);
 		$rejectInviteUsers = array_diff($invitedUsers, $usersIds);
+
+		$preflight = ExternalMembershipValidator::validateUsers(
+			$spaceId, $inviteUsers, \Bitrix\Socialnetwork\UserToGroupTable::ROLE_USER,
+		);
+		if (!$preflight->isSuccess())
+		{
+			throw new \Bitrix\Main\AccessDeniedException(implode('; ', $preflight->getErrorMessages()));
+		}
 
 		$userId = Helper\User::getCurrentUserId();
 		$isAdmin = Helper\Workgroup::isCurrentUserModuleAdmin();

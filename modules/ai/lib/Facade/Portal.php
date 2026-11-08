@@ -127,6 +127,15 @@ class Portal
 		return $runtimeStateProvider !== null && $runtimeStateProvider->isCurrentEditionActive();
 	}
 
+	public static function hasActiveVibePlusEdition(): bool
+	{
+		$runtimeStateProvider = self::getVibePlusRuntimeStateProvider();
+
+		return $runtimeStateProvider !== null
+			&& method_exists($runtimeStateProvider, 'hasActiveVibePlusEdition')
+			&& $runtimeStateProvider->hasActiveVibePlusEdition();
+	}
+
 	public static function isOnVibePlus(): bool
 	{
 		$licenseType = Bitrix24::getLicenseType();

@@ -436,6 +436,7 @@ class Binder
 				return $parameter->getDefaultValue();
 			}
 
+			$serviceLocatorException = null;
 			try
 			{
 				if (class_exists($reflectionType->getName()))
@@ -448,10 +449,8 @@ class Binder
 			}
 			catch (ObjectNotFoundException $exception)
 			{
-				throw new BinderArgumentException(
-					$exception->getMessage(),
-					$parameter
-				);
+				// the DI internals are not a user-facing reason the argument failed to bind
+				$serviceLocatorException = $exception;
 			}
 
 			$exceptionMessage = "Could not find value for parameter to build auto wired argument {{$reflectionType->getName()} \${$parameter->getName()}}";
@@ -462,7 +461,9 @@ class Binder
 
 			throw new BinderArgumentException(
 				$exceptionMessage,
-				$parameter
+				$parameter,
+				[],
+				$serviceLocatorException,
 			);
 		}
 

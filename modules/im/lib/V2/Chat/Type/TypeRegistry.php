@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Chat\ExtendedType;
 use Bitrix\Im\V2\Chat\ExternalChat\ExternalTypeRegistry;
 use Bitrix\Im\V2\Chat\Type;
 use Bitrix\Im\V2\Common\FormatConverter;
+use Bitrix\Im\V2\Import\ImportService;
 use Bitrix\Im\V2\Logger;
 use Bitrix\Im\V2\Recent\Config\RecentConfigManager;
 use Bitrix\Main\SystemException;
@@ -26,7 +27,14 @@ class TypeRegistry
 	private array $byLiteralAndEntity = [];
 	/** @var array<string, array<string, Type>> */
 	private array $byRecentSection = [];
-	/** @var array<string, array<string, Type>> */
+	/**
+	 * Keyed by the source of the entry: {@see Type::getFilterKey()} for the pair exclusions of
+	 * {@see self::registerChatSectionExclusions()}, {@see Type::getRegistryKey()} for the composed
+	 * sections of {@see self::fillByRecentSection()}. The two write under disjoint section names, so
+	 * the schemes cannot meet in one bucket.
+	 *
+	 * @var array<string, array<string, Type>>
+	 */
 	private array $byRecentSectionExclude = [];
 
 	/**
@@ -49,6 +57,52 @@ class TypeRegistry
 			include: array_values($this->byRecentSection[$recentSection] ?? []),
 			exclude: array_values($this->byRecentSectionExclude[$recentSection] ?? []),
 		);
+	}
+
+	/**
+	 * Exclusion check against the very map the section query is built from
+	 * ({@see self::getConditionByRecentSection()}). Matching mirrors the exclude half of
+	 * {@see Query\TypeFilter::toConditionTree()} - an exclusion carrying no entityType covers every
+	 * chat of its literal - so the PHP answer about the sections of a chat and the query agree.
+	 */
+	public function isTypeExcludedFromSection(Type $type, string $section): bool
+	{
+		foreach ($this->byRecentSectionExclude[$section] ?? [] as $excluded)
+		{
+			if (
+				$excluded->literal === $type->literal
+				&& ($excluded->entityType === null || $excluded->entityType === $type->entityType)
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * The sections of a type as the recent selection returns them: the sections the type claims, minus
+	 * the sub-type exclusions of each. Single place where the subtraction happens: consumers keyed by
+	 * type - anchors and the counter collector - and {@see \Bitrix\Im\V2\Chat::getRecentSections()},
+	 * which asks the same question by chat and delegates here.
+	 *
+	 * $hasParent chooses the same branch {@see RecentConfigManager::getRecentSectionsByChat()} does:
+	 * a chat under a parent also claims the composed sections its base sections compose into.
+	 *
+	 * @return string[]
+	 */
+	public function getRecentSectionsMinusExclusions(Type $type, bool $hasParent): array
+	{
+		$sections = $hasParent
+			? $this->recentConfigManager->getAllRecentSectionsByType($type)
+			: $this->recentConfigManager->getBaseRecentSections($type)
+		;
+
+		return array_values(array_filter(
+			$sections,
+			fn(string $section): bool => !$this->isTypeExcludedFromSection($type, $section),
+		));
 	}
 
 	public function getOpenTypeCondition(): TypeCondition
@@ -79,6 +133,24 @@ class TypeRegistry
 			$this->registry,
 			static fn(Type $type) => $type->getExtendedType(camelCase: false) === $extendedType,
 		));
+	}
+
+	/**
+	 * @return Type[]
+	 */
+	public function getTypesByExtendedTypes(array $extendedTypes): array
+	{
+		$types = [];
+
+		foreach ($extendedTypes as $extendedType)
+		{
+			foreach ($this->getAllByExtendedType($extendedType) as $type)
+			{
+				$types[] = $type;
+			}
+		}
+
+		return $types;
 	}
 
 	public function getByLiteralAndEntity(string $literal, ?string $entityType): Type
@@ -131,6 +203,12 @@ class TypeRegistry
 		};
 	}
 
+	/**
+	 * Last step of the resolve ladder: the pair is answered without a registered type behind it. The literal
+	 * is kept as it came - replacing it with the plain chat one made such a chat claim the sections of the C
+	 * letter ({@see RecentConfigManager::getBaseRecentSections()}), while the section query keeps filtering
+	 * by the literal stored in the row and never returns it.
+	 */
 	protected function getFallback(string $literal, ?string $entityType): Type
 	{
 		$fallbackType = $this->fallbackByLiteral[$literal] ?? null;
@@ -145,7 +223,69 @@ class TypeRegistry
 			);
 		}
 
-		return new Type(Chat::IM_TYPE_CHAT, $entityType, $entityType ?? 'CHAT');
+		return new Type($literal, $entityType, $entityType ?? 'CHAT');
+	}
+
+	/**
+	 * Returns the registered type instance the given type stands for instead of a derived one: T+FOO
+	 * resolves to the registered T, while an exact match such as J+GENERAL_CHANNEL resolves to itself.
+	 * Input is expected to come from getByLiteralAndEntity(), which keeps the literal of the pair even when
+	 * nothing is registered under it. A pair that stands for no registered type is returned as it came, so
+	 * that consumers keyed by the type key see the pair itself and not a foreign instance.
+	 */
+	public function normalizeToRegistered(Type $type): Type
+	{
+		$exact = $this->byLiteralAndEntity[$type->literal][$type->entityType ?? ''] ?? null;
+		if ($exact !== null)
+		{
+			return $exact;
+		}
+
+		$base = $this->byLiteralAndEntity[$type->literal][''] ?? null;
+		if ($base !== null)
+		{
+			return $base;
+		}
+
+		return $this->getRegisteredFallback($type);
+	}
+
+	/**
+	 * Third normalization branch: collab literals have no base entry, because both collabs are registered
+	 * with ExtendedType::Sonet only, so their registered instance is reachable through the literal fallback.
+	 * An entity type registered under another literal describes another kind of chat, so such a pair is not
+	 * normalized to the fallback of its literal and keeps its own key.
+	 */
+	private function getRegisteredFallback(Type $type): Type
+	{
+		if ($this->isEntityTypeRegistered($type->entityType))
+		{
+			return $type;
+		}
+
+		$fallbackType = $this->fallbackByLiteral[$type->literal] ?? null;
+		$registered = $fallbackType === null ? null : ($this->registry[$fallbackType->getRegistryKey()] ?? null);
+
+		// a literal with neither entry nor fallback stands for no registered type at all
+		return $registered ?? $type;
+	}
+
+	private function isEntityTypeRegistered(?string $entityType): bool
+	{
+		if (($entityType ?? '') === '')
+		{
+			return false;
+		}
+
+		foreach ($this->byLiteralAndEntity as $byEntityType)
+		{
+			if (isset($byEntityType[$entityType]))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public function getValidatedEntityType(?string $entityType): ?string
@@ -173,6 +313,71 @@ class TypeRegistry
 		$this->loadSystemEntity();
 		$this->loadExternal();
 		$this->registerFallbacks();
+		$this->registerChatSectionExclusions();
+	}
+
+	/**
+	 * Sub-type exclusions of the 'chat' section: a pair TYPE + ENTITY_TYPE kept out of a section its
+	 * extended type belongs to. Every entry here is a chat that carries no conversation of its own, so it
+	 * must stay out of the section however wide the membership rule of the letter gets. An entry carries
+	 * the letter the value is really created on, so the same value may need more than one entry.
+	 *
+	 * An entry is not a registered type: the pair stays unregistered and is only keyed by
+	 * {@see Type::getFilterKey()}, which reads the literal and the entity type. The chat kind name is
+	 * read by nobody, but it repeats the entity type, the way {@see self::requireByLiteralAndEntity()}
+	 * resolves such a pair, so that an entry does not lie about itself.
+	 *
+	 * The registration point stays as the single owner of such exclusions: the section query
+	 * ({@see \Bitrix\Im\V2\Chat\Type\Query\TypeFilter}) and the membership predicate
+	 * ({@see \Bitrix\Im\V2\Folder\Definition\SectionDefinition}) both read the same map, so a pair
+	 * added here keeps the two answers about the sections of a chat in agreement.
+	 */
+	private function registerChatSectionExclusions(): void
+	{
+		/** @var Type[] $exclusions */
+		$exclusions = [
+			// visitor side of an open line: the same conversation is already shown in the paired L chat
+			new Type(
+				Chat::IM_TYPE_CHAT,
+				Chat::ENTITY_TYPE_LIVECHAT,
+				Chat::ENTITY_TYPE_LIVECHAT,
+			),
+			// no conversation: a notice that the transfer of group chats has finished, on a group chat
+			new Type(
+				Chat::IM_TYPE_CHAT,
+				ImportService::IMPORT_GROUP_FINISH_ENTITY_TYPE,
+				ImportService::IMPORT_GROUP_FINISH_ENTITY_TYPE,
+			),
+			// the same notice on an open chat: the notice keeps the letter of the chat being imported
+			new Type(
+				Chat::IM_TYPE_OPEN,
+				ImportService::IMPORT_GROUP_FINISH_ENTITY_TYPE,
+				ImportService::IMPORT_GROUP_FINISH_ENTITY_TYPE,
+			),
+			// no conversation: the same notice for the transfer of one-to-one dialogs, on the dialog itself
+			new Type(
+				Chat::IM_TYPE_PRIVATE,
+				ImportService::IMPORT_PRIVATE_FINISH_ENTITY_TYPE,
+				ImportService::IMPORT_PRIVATE_FINISH_ENTITY_TYPE,
+			),
+			// the same notice on a group chat: the dialog was turned into one before the notice was set
+			new Type(
+				Chat::IM_TYPE_CHAT,
+				ImportService::IMPORT_PRIVATE_FINISH_ENTITY_TYPE,
+				ImportService::IMPORT_PRIVATE_FINISH_ENTITY_TYPE,
+			),
+			// archive mark on the dialog an import replaced: its relations are gone, nobody reads it
+			new Type(
+				Chat::IM_TYPE_PRIVATE,
+				ImportService::IMPORT_ARCHIVE_ENTITY_TYPE,
+				ImportService::IMPORT_ARCHIVE_ENTITY_TYPE,
+			),
+		];
+
+		foreach ($exclusions as $type)
+		{
+			$this->byRecentSectionExclude[RecentConfigManager::CHAT_SECTION_NAME][$type->getFilterKey()] = $type;
+		}
 	}
 
 	private function loadWithLiteral(): void
@@ -273,15 +478,14 @@ class TypeRegistry
 
 	private function fillByRecentSection(Type $type): void
 	{
-		$displayKey = $type->getExtendedType(camelCase: false);
 		$registryKey = $type->getRegistryKey();
 
-		foreach ($this->recentConfigManager->getAllRecentSectionsByType($displayKey) as $section)
+		foreach ($this->recentConfigManager->getAllRecentSectionsByType($type) as $section)
 		{
 			$this->byRecentSection[$section][$registryKey] = $type;
 		}
 
-		foreach ($this->recentConfigManager->getExcludedComposedSections($displayKey) as $section)
+		foreach ($this->recentConfigManager->getExcludedComposedSections($type) as $section)
 		{
 			$this->byRecentSectionExclude[$section][$registryKey] = $type;
 		}

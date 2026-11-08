@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler;
 
 use Bitrix\BIConnector\Superset\Grid\Settings\ExternalDatasetSettings;
+use Bitrix\BIConnector\Superset\Grid\TableGroupRepository;
 use Bitrix\Main\Grid\Row\RowAssembler;
 use Bitrix\Main\Grid\Row\Assembler\Field\StringFieldAssembler;
 
@@ -42,6 +43,7 @@ class ExternalDatasetRowAssembler extends RowAssembler
 			),
 			new StringFieldAssembler(
 				[
+					'VERBOSE_NAME',
 					'DESCRIPTION',
 				],
 			),
@@ -49,11 +51,13 @@ class ExternalDatasetRowAssembler extends RowAssembler
 				[
 					'DATE_CREATE',
 				],
+				timeFormat: Field\Base\DateFieldAssembler::TIME_FORMAT_SHORT,
 			),
 			new Field\Base\DateFieldAssembler(
 				[
 					'DATE_UPDATE',
 				],
+				timeFormat: Field\Base\DateFieldAssembler::TIME_FORMAT_SHORT,
 			),
 			new Field\Dataset\CreatedByFieldAssembler(
 				[
@@ -68,5 +72,29 @@ class ExternalDatasetRowAssembler extends RowAssembler
 				$this->settings,
 			),
 		];
+	}
+
+	/**
+	 * @param array $rowsList
+	 *
+	 * @return array[]
+	 */
+	public function prepareRows(array $rowsList): array
+	{
+		foreach ($rowsList as &$row)
+		{
+			if (($row['data']['ENTITY_TYPE'] ?? '') !== TableGroupRepository::TYPE_GROUP)
+			{
+				continue;
+			}
+
+			// Groups and custom tables are numbered apart, and the grid keys the row and its menu by this id.
+			$groupId = (int)$row['data']['ID'];
+			$row['id'] = $groupId . '_' . TableGroupRepository::TYPE_GROUP;
+			$row['attrs'] = ($row['attrs'] ?? []) + ['data-group-id' => $groupId];
+		}
+		unset($row);
+
+		return parent::prepareRows($rowsList);
 	}
 }

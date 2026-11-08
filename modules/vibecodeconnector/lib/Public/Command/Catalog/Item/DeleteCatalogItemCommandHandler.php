@@ -8,6 +8,7 @@ use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItem;
 use Bitrix\Vibecodeconnector\Internal\Exception\CatalogItemNotFoundException;
 use Bitrix\Vibecodeconnector\Internal\Exception\NotOwnerException;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\CatalogItemRepository;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\NewApps\NewAppsCountInvalidator;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Writer\EntryWriter;
 
 final class DeleteCatalogItemCommandHandler
@@ -15,6 +16,7 @@ final class DeleteCatalogItemCommandHandler
 	public function __construct(
 		private readonly CatalogItemRepository $repository = new CatalogItemRepository(),
 		private readonly EntryWriter $writer = new EntryWriter(),
+		private readonly NewAppsCountInvalidator $newAppsCountInvalidator = new NewAppsCountInvalidator(),
 	)
 	{
 	}
@@ -33,6 +35,7 @@ final class DeleteCatalogItemCommandHandler
 		}
 
 		$this->writer->delete($item);
+		$this->newAppsCountInvalidator->forgetAllFor($item);
 
 		return $item;
 	}

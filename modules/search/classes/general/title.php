@@ -2,17 +2,17 @@
 
 class CSearchTitle extends CDBResult
 {
-	var $_arPhrase = [];
-	var $_arStemFunc;
-	var $minLength = 1;
+	protected $_arPhrase = [];
+	protected $_arStemFunc;
+	protected $minLength = 1;
 
-	function __construct($res = null)
+	public function __construct($res = null)
 	{
 		$this->_arStemFunc = stemming_init(LANGUAGE_ID);
 		parent::__construct($res);
 	}
 
-	function Search($phrase = '', $nTopCount = 5, $arParams = [], $bNotFilter = false, $order = '')
+	public function Search($phrase = '', $nTopCount = 5, $arParams = [], $bNotFilter = false, $order = '')
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$this->_arPhrase = stemming_split($phrase, LANGUAGE_ID);
@@ -43,8 +43,8 @@ class CSearchTitle extends CDBResult
 						,sc.URL as URL
 						,scsite.URL as SITE_URL
 						,scsite.SITE_ID
-						,case when position(\'' . $DB->ForSQL(mb_strtoupper($phrase)) . '\' in upper(sc.TITLE)) > 0 then 1 else 0 end RANK1
-						,position(\'' . $DB->ForSQL(mb_strtoupper($phrase)) . '\' in upper(sc.TITLE)) RANK2
+						,case when position(\'' . $DB->ForSql(mb_strtoupper($phrase)) . '\' in upper(sc.TITLE)) > 0 then 1 else 0 end RANK1
+						,position(\'' . $DB->ForSql(mb_strtoupper($phrase)) . '\' in upper(sc.TITLE)) RANK2
 					FROM
 						b_search_content sc
 						INNER JOIN b_search_content_site scsite ON sc.ID = scsite.SEARCH_CONTENT_ID
@@ -52,7 +52,7 @@ class CSearchTitle extends CDBResult
 						sc.ID in (' . implode(',', $arId) . ")
 						and scsite.SITE_ID = '" . SITE_ID . "'
 					ORDER BY " . (
-						$order == 'rank' ?
+						$order === 'rank' ?
 						'RANK1 DESC, RANK2, TITLE' :
 						'DATE_CHANGE DESC, RANK1 DESC, RANK2, TITLE' ) . '
 				';
@@ -68,7 +68,7 @@ class CSearchTitle extends CDBResult
 		}
 	}
 
-	function setMinWordLength($minLength)
+	public function setMinWordLength($minLength)
 	{
 		$minLength = intval($minLength);
 		if ($minLength > 0)
@@ -77,7 +77,7 @@ class CSearchTitle extends CDBResult
 		}
 	}
 
-	function Fetch()
+	public function Fetch()
 	{
 		static $arSite = [];
 
@@ -94,12 +94,12 @@ class CSearchTitle extends CDBResult
 			$r['DIR'] = $arSite[$site_id]['DIR'];
 			$r['SERVER_NAME'] = $arSite[$site_id]['SERVER_NAME'];
 
-			if ($r['SITE_URL'] <> '')
+			if ($r['SITE_URL'])
 			{
 				$r['URL'] = $r['SITE_URL'];
 			}
 
-			if (mb_substr($r['URL'], 0, 1) == '=')
+			if (str_starts_with($r['URL'], '='))
 			{
 				foreach (GetModuleEvents('search', 'OnSearchGetURL', true) as $arEvent)
 				{
@@ -154,24 +154,24 @@ class CSearchTitle extends CDBResult
 		}
 	}
 
-	function searchTitle($phrase = '', $nTopCount = 5, $arParams = [], $bNotFilter = false, $order = '')
+	public function searchTitle($phrase = '', $nTopCount = 5, $arParams = [], $bNotFilter = false, $order = '')
 	{
 		$DB = CDatabase::GetModuleConnection('search');
-		$bOrderByRank = ($order == 'rank');
+		$bOrderByRank = ($order === 'rank');
 
 		$sqlHaving = [];
 		$sqlWords = [];
 		if (!empty($this->_arPhrase))
 		{
 			$last = true;
-			foreach (array_reverse($this->_arPhrase, true) as $word => $pos)
+			foreach (array_reverse($this->_arPhrase, true) as $word => $_)
 			{
 				if ($last && !preg_match("/[\\n\\r \\t]$/", $phrase))
 				{
 					$last = false;
 					if (mb_strlen($word) >= $this->minLength)
 					{
-						$s = $sqlWords[] = "ct.WORD like '" . $DB->ForSQL($word) . "%'";
+						$s = $sqlWords[] = "ct.WORD like '" . $DB->ForSql($word) . "%'";
 					}
 					else
 					{
@@ -180,7 +180,7 @@ class CSearchTitle extends CDBResult
 				}
 				else
 				{
-					$s = $sqlWords[] = "ct.WORD = '" . $DB->ForSQL($word) . "'";
+					$s = $sqlWords[] = "ct.WORD = '" . $DB->ForSql($word) . "'";
 				}
 
 				if ($s)
@@ -218,7 +218,7 @@ class CSearchTitle extends CDBResult
 					,sc.URL as URL
 					,scsite.URL as SITE_URL
 					,scsite.SITE_ID
-					,case when position('" . $DB->ForSQL(mb_strtoupper($phrase)) . "' in upper(sc.TITLE)) > 0 then 1 else 0 end RANK1
+					,case when position('" . $DB->ForSql(mb_strtoupper($phrase)) . "' in upper(sc.TITLE)) > 0 then 1 else 0 end RANK1
 					,count(1) RANK2
 					,min(ct.POS) RANK3
 				FROM

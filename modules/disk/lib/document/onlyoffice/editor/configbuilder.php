@@ -120,6 +120,13 @@ final class ConfigBuilder
 		return $this;
 	}
 
+	public function allowPrint(bool $allowed): self
+	{
+		$this->permissions['print'] = $allowed;
+
+		return $this;
+	}
+
 	public function hideRulers(): self
 	{
 		$this->customization['hideRulers'] = true;
@@ -299,7 +306,7 @@ final class ConfigBuilder
 				'uploaded' => '',
 				'permissions' => [
 					'chat' => false,
-					'print' => $this->supportPrint(),
+					'print' => $this->supportPrint() && ($this->permissions['print'] ?? true),
 					'download' => $this->permissions['download'] ?? true,
 					'copy' => true,
 					'edit' => $this->permissions['edit'] ?? false,

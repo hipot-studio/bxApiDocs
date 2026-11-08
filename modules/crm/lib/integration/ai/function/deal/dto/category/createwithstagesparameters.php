@@ -7,6 +7,7 @@ use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
 use Bitrix\Crm\Dto\Validator\ObjectCollectionField;
 use Bitrix\Crm\Dto\Validator\StringField;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 use Bitrix\Crm\EO_Status_Collection;
 
 final class CreateWithStagesParameters extends Dto
@@ -28,9 +29,11 @@ final class CreateWithStagesParameters extends Dto
 	{
 		return [
 			new StringField($this, 'name'),
+			new RequiredField($this, 'name'),
 			new NotEmptyField($this, 'name'),
 
 			new ObjectCollectionField($this, 'stages'),
+			new RequiredField($this, 'stages'),
 			new NotEmptyField($this, 'stages'),
 		];
 	}

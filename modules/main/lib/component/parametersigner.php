@@ -52,7 +52,7 @@ class ParameterSigner
 		return static::unserialize($decoded);
 	}
 
-	private static function unserialize(string $str)
+	protected static function unserialize(string $str)
 	{
 		return unserialize($str, ['allowed_classes' => [
 			DateTime::class,

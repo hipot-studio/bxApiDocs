@@ -377,6 +377,56 @@ final class ChangeAiSiteState
 		]);
 	}
 
+	/**
+	 * Result of a change generation reconciled with the operations already applied to the page.
+	 *
+	 * The replace step records every operation as soon as it is applied, but writes the result of the
+	 * whole cycle only after the cycle ends. A failure in the middle therefore leaves the stored
+	 * result behind the page: it still holds the state before the cycle, while the operations say
+	 * blocks have already been changed. Answering from the stored result alone reports zero counters
+	 * for a page that is no longer in its original state.
+	 *
+	 * The two sources are unioned rather than swapped: the stored result carries the skips recorded by
+	 * the selection and preparation steps, which never become applied operations, and the operations
+	 * carry the changes the stored result has not seen yet. A block that has been applied is removed
+	 * from the skips of both, so it is never reported as changed and skipped at once.
+	 *
+	 * @param array $storedResult The result as it was last written by the step.
+	 * @param array $operations The applied operations recorded so far.
+	 *
+	 * @return array Normalized result.
+	 */
+	public static function reconcileResultWithAppliedOperations(array $storedResult, array $operations): array
+	{
+		$stored = self::normalizeResult($storedResult);
+		$applied = self::buildResultFromAppliedOperations($operations);
+
+		$merged = [];
+		foreach (['changedIds', 'updatedIds', 'createdIds', 'deletedIds', 'movedIds', 'skippedIds'] as $key)
+		{
+			$merged[$key] = array_merge($stored[$key], $applied[$key]);
+		}
+
+		// the freshest move result of a block wins, the stored ones fill the gaps
+		$merged['moveResults'] = $applied['moveResults'] + $stored['moveResults'];
+		$merged['skippedReasons'] = $applied['skippedReasons'] + $stored['skippedReasons'];
+
+		$changed = array_flip(self::normalizeIds($merged['changedIds']));
+		$merged['skippedIds'] = array_values(array_filter(
+			$merged['skippedIds'],
+			static fn($id) => !isset($changed[(int)$id]),
+		));
+		foreach (array_keys($merged['skippedReasons']) as $blockId)
+		{
+			if (isset($changed[(int)$blockId]))
+			{
+				unset($merged['skippedReasons'][$blockId]);
+			}
+		}
+
+		return self::normalizeResult($merged);
+	}
+
 	public static function buildResultFromAppliedOperations(array $operations): array
 	{
 		$operations = self::normalizeAppliedOperations($operations);

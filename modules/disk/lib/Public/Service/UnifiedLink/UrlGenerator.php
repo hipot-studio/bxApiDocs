@@ -1,11 +1,12 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Public\Service\UnifiedLink;
 
 
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Folder;
 use Bitrix\Main\Web\Uri;
 
 class UrlGenerator
@@ -20,12 +21,14 @@ class UrlGenerator
 		'pdf',
 	];
 	public const QUERY_PARAM_NO_REDIRECT = 'no_redirect';
+	public const QUERY_PARAM_EXACT_MODE = 'exact_mode';
 	public const QUERY_PARAM_ATTACHED_ID = 'attachedId';
 	public const QUERY_PARAM_VERSION_ID = 'versionId';
 
 	private bool $absolute = false;
 	private bool $editMode = false;
 	private bool $withoutRedirect = false;
+	private bool $exactMode = false;
 	private array $additionalQueryParams = [];
 
 	public function __construct(
@@ -34,20 +37,29 @@ class UrlGenerator
 	{
 	}
 
-	public function build(File $file, ?int $attachedId = null, ?int $versionId = null): string
+	public function build(BaseObject $baseObject, ?int $attachedId = null, ?int $versionId = null): string
 	{
-		$uniqueCode = (string)$file->getRealObject()?->getUniqueCode();
+		$uniqueCode = (string)$baseObject->getRealObject()?->getUniqueCode();
+		$prefix = static::PREFIX;
+		$suffix = '';
 
-		$fileType = FileExtensionMap::getByExtension($file->getExtension());
-		$prefix = UnifiedLinkPrefix::getByFileExtensionMap($fileType)->value;
-		$ext = strtolower($file->getExtension());
-
-		$path = $prefix . $uniqueCode;
-
-		if ($this->editMode && !in_array($ext, self::EXTENSIONS_TO_OPEN_WITHOUT_EDIT_SUFFIX))
+		if ($baseObject instanceof File)
 		{
-			$path .= self::EDIT_SUFFIX;
+			$fileType = FileExtensionMap::getByExtension($baseObject->getExtension());
+			$prefix = UnifiedLinkPrefix::getByFileExtensionMap($fileType)->value;
+			$ext = strtolower($baseObject->getExtension());
+
+			if ($this->editMode && !in_array($ext, self::EXTENSIONS_TO_OPEN_WITHOUT_EDIT_SUFFIX))
+			{
+				$suffix = self::EDIT_SUFFIX;
+			}
 		}
+		elseif ($baseObject instanceof Folder)
+		{
+			$prefix = UnifiedLinkPrefix::Folder->value;
+		}
+
+		$path = $prefix . $uniqueCode . $suffix;
 
 		$uri = (new Uri($this->absolute ? $this->hostUrl : '/'))
 			->setPath($path)
@@ -60,6 +72,11 @@ class UrlGenerator
 		if ($this->withoutRedirect)
 		{
 			$uri->addParams([self::QUERY_PARAM_NO_REDIRECT => 'Y']);
+		}
+
+		if ($this->exactMode)
+		{
+			$uri->addParams([self::QUERY_PARAM_EXACT_MODE => 'Y']);
 		}
 
 		if (!empty($this->additionalQueryParams))
@@ -98,6 +115,13 @@ class UrlGenerator
 		return $this;
 	}
 
+	public function withExactMode(bool $exactMode): static
+	{
+		$this->exactMode = $exactMode;
+
+		return $this;
+	}
+
 	public function setAdditionalQueryParams(array $additionalQueryParams): static
 	{
 		$this->additionalQueryParams = $additionalQueryParams;
@@ -110,6 +134,7 @@ class UrlGenerator
 		$this->absolute = false;
 		$this->editMode = false;
 		$this->withoutRedirect = false;
+		$this->exactMode = false;
 		$this->additionalQueryParams = [];
 	}
 }

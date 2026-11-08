@@ -16,6 +16,7 @@ use Bitrix\Crm\Integration\Analytics\Dictionary;
  * @property-read mixed Title
  * @property-read mixed Responsible
  * @property-read mixed ModifiedBy
+ * @property string|null ErrorMessage
  */
 class CBPTasksChangeResponsibleActivity extends CBPActivity
 {
@@ -28,7 +29,19 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 			"Title" => "",
 			"Responsible" => null,
 			"ModifiedBy" => null,
+			//return
+			"ErrorMessage" => null,
 		);
+
+		$this->setPropertiesTypes([
+			'ErrorMessage' => ['Type' => 'string'],
+		]);
+	}
+
+	protected function reInitialize(): void
+	{
+		parent::reInitialize();
+		$this->ErrorMessage = null;
 	}
 
 	public function Execute()
@@ -43,6 +56,7 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 		if ($documentId[0] !== 'tasks')
 		{
 			$this->trackError(GetMessage('TASKS_CHANGE_RESPONSIBLE_ERROR_NO_TASK'));
+			$this->ErrorMessage = GetMessage('TASKS_CHANGE_RESPONSIBLE_ERROR_NO_TASK');
 
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -50,6 +64,7 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 		if (!$this->canChangeResponsible($documentId))
 		{
 			$this->WriteToTrackingService(GetMessage('TASKS_CHANGE_RESPONSIBLE_NO_PERMISSIONS_MSGVER_1'), 0, CBPTrackingType::Error);
+			$this->ErrorMessage = GetMessage('TASKS_CHANGE_RESPONSIBLE_NO_PERMISSIONS_MSGVER_1');
 
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -85,27 +100,48 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 			if ($targetResponsibles)
 			{
 				$documentResponsible = 'user_'.$targetResponsibles[0];
-				$ds->UpdateDocument(
-					$documentId,
-					[$responsibleFieldName => $documentResponsible],
-					$this->ModifiedBy
-				);
-
-				if (
-					Loader::includeModule('crm')
-					&& method_exists(CCrmBizProcHelper::class, 'sendOperationsAnalytics')
-				)
+				// Attribute to the workflow starter when no explicit
+				// ModifiedBy. method_exists guards bizproc being older than tasks.
+				$modifiedBy = method_exists($this, 'getModifiedByOrStarter')
+					? $this->getModifiedByOrStarter()
+					: $this->ModifiedBy
+				;
+				try
 				{
-					\CCrmBizProcHelper::sendOperationsAnalytics(
-						Dictionary::EVENT_ENTITY_EDIT,
-						$this,
-						$documentType[2] ?? '',
+					$ds->UpdateDocument(
+						$documentId,
+						[$responsibleFieldName => $documentResponsible],
+						$modifiedBy
 					);
 				}
+				catch (Exception $e)
+				{
+					$this->WriteToTrackingService($e->getMessage(), 0, CBPTrackingType::Error);
+					$this->ErrorMessage = $e->getMessage();
+
+					return CBPActivityExecutionStatus::Closed;
+				}
+
+				$this->sendResponsibleChangedAnalytics($documentType);
 			}
 		}
 
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	protected function sendResponsibleChangedAnalytics(array $documentType): void
+	{
+		if (
+			Loader::includeModule('crm')
+			&& method_exists(CCrmBizProcHelper::class, 'sendOperationsAnalytics')
+		)
+		{
+			\CCrmBizProcHelper::sendOperationsAnalytics(
+				Dictionary::EVENT_ENTITY_EDIT,
+				$this,
+				$documentType[2] ?? '',
+			);
+		}
 	}
 
 	public static function ValidateProperties($arTestProperties = array(), CBPWorkflowTemplateUser $user = null)
@@ -239,7 +275,7 @@ class CBPTasksChangeResponsibleActivity extends CBPActivity
 			is_array($rootDocumentId) ? $rootDocumentId : [],
 			$documentId,
 			Tasks\Access\ActionDictionary::ACTION_TASK_CHANGE_RESPONSIBLE,
-			(int)($this->workflow?->getStartedBy() ?? 0),
+			$this->resolveTargetAccessActorId(),
 		);
 	}
 }

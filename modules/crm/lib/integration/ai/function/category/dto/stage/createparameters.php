@@ -36,6 +36,7 @@ final class CreateParameters extends Dto
 			new DefinedCategoryIdentifier($this, 'entityTypeId', 'categoryId'),
 
 			new ObjectField($this, 'fields'),
+			new RequiredField($this, 'fields'),
 			new NotEmptyField($this, 'fields'),
 		];
 	}

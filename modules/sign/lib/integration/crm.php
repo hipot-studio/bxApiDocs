@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\Sign\Integration;
 
 use Bitrix\Crm\EntityPreset;
@@ -23,6 +24,8 @@ use Bitrix\Sign\Document;
 use Bitrix\Sign\Error;
 use Bitrix\Sign\File;
 use Bitrix\Sign\Integration\CRM\FieldCode;
+use Bitrix\Sign\Service\Integration\Crm\CompanyRequisiteFieldPolicy;
+use Bitrix\Sign\Service\Integration\Crm\FieldSelectorService;
 use Bitrix\Sign\Type\FieldType;
 
 Loc::loadMessages(__FILE__);
@@ -106,8 +109,8 @@ class CRM
 		if ($entities[$entityType][$fieldCode] ?? null)
 		{
 			$typeId = $entities[$entityType][$fieldCode]['USER_TYPE_ID'];
-			$value =
-				is_object($value)
+			$value
+				= is_object($value)
 					? $value
 					: (array)$value;
 
@@ -181,7 +184,7 @@ class CRM
 						{
 							$value = $address->toString(
 								FormatService::getInstance()->findDefault(LANGUAGE_ID),
-								\Bitrix\Location\Entity\Address\Converter\StringConverter::STRATEGY_TYPE_TEMPLATE_COMMA
+								\Bitrix\Location\Entity\Address\Converter\StringConverter::STRATEGY_TYPE_TEMPLATE_COMMA,
 							);
 						}
 					}
@@ -203,7 +206,7 @@ class CRM
 		int $entityId,
 		string $fieldCode,
 		?int $documentId = null,
-		?int $presetId = null
+		?int $presetId = null,
 	): ?array
 	{
 		if (!\Bitrix\Main\Loader::includeModule('crm'))
@@ -242,7 +245,7 @@ class CRM
 			$communications = self::getCommunications(
 				$entityId,
 				$factory->getEntityName(),
-				$communicationTypes
+				$communicationTypes,
 			);
 			foreach ($communications as $communication)
 			{
@@ -308,7 +311,7 @@ class CRM
 				static function ($itemVal) use ($statuses) {
 					return $statuses[$itemVal] ?? $itemVal;
 				},
-				(array)$value
+				(array)$value,
 			);
 		}
 		elseif ($entityFieldCode === 'PHOTO')
@@ -461,7 +464,7 @@ class CRM
 		{
 			Error::getInstance()->addError(
 				'DOCUMENT_FORM_NOT_FOUND',
-				Loc::getMessage('SIGN_CORE_INTEGRATION_ERROR_DOCUMENT_FORM_NOT_FOUND')
+				Loc::getMessage('SIGN_CORE_INTEGRATION_ERROR_DOCUMENT_FORM_NOT_FOUND'),
 			);
 
 			return null;
@@ -490,10 +493,10 @@ class CRM
 			$error = $result->getErrors()[0];
 			Error::getInstance()->addError(
 				$error->getCode(),
-				$error->getMessage()
+				$error->getMessage(),
 			);
 		}
-		else if ($fileOld && $fileOld->isExist())
+		elseif ($fileOld && $fileOld->isExist())
 		{
 			$fileOld->unlink();
 		}
@@ -685,7 +688,7 @@ class CRM
 			$entityTypeId,
 			$entityId,
 			[],
-			$presetId
+			$presetId,
 		);
 		$item = \Bitrix\Crm\Integration\Sign\Form::getFieldSet($entityTypeId, $presetId);
 		if ($item)
@@ -699,12 +702,14 @@ class CRM
 					if (is_array($values[$code]) && isset($values[$code]['CITY']))
 					{
 						$address = AddressFormatter::getSingleInstance()
-							->formatTextComma($values[$code]);
+							->formatTextComma($values[$code])
+						;
 
 						$return[$code] = [
 							'label' => $field['label'],
 							'value' => $address,
 						];
+
 						continue;
 					}
 
@@ -738,8 +743,8 @@ class CRM
 			$document->getCompanyId(),
 			self::getMyDefaultPresetId(
 				$document->getEntityId(),
-				$document->getCompanyId()
-			)
+				$document->getCompanyId(),
+			),
 		);
 	}
 
@@ -758,7 +763,7 @@ class CRM
 		return self::getRequisitesEntityFieldSetValues(
 			\CCrmOwnerType::Contact,
 			$contactId,
-			self::getOtherSidePresetId($document->getEntityId())
+			self::getOtherSidePresetId($document->getEntityId()),
 		);
 	}
 
@@ -788,6 +793,7 @@ class CRM
 					$numeratorSettingsUrl->addParams([
 						'IS_HIDE_NUMERATOR_NAME' => 1,
 					]);
+
 					return $numeratorSettingsUrl->getLocator();
 				}
 			}
@@ -813,6 +819,161 @@ class CRM
 		}
 
 		return null;
+	}
+
+	/**
+	 * @return array<string, string>|null Null means that the requested field is not allowed.
+	 */
+	public static function getCompanyRequisiteStringFieldValues(
+		int $companyId,
+		?int $presetId,
+		string $requestedFieldCode,
+	): ?array
+	{
+		if (!Loader::includeModule('crm') || $presetId === null || !\CCrmCompany::isMyCompany($companyId))
+		{
+			return [];
+		}
+
+		$fieldData = self::getCompanyRequisiteStringFieldData($companyId, $presetId);
+
+		return in_array($requestedFieldCode, $fieldData['allowedFieldCodes'], true)
+			? $fieldData['values']
+			: null;
+	}
+
+	/**
+	 * @return array{allowedFieldCodes: list<string>, fieldSetCodes: list<string>, values: array<string, string>}
+	 */
+	public static function getCompanyRequisiteStringFieldData(int $companyId, ?int $presetId): array
+	{
+		if (
+			!Loader::includeModule('crm')
+			|| $presetId === null
+		)
+		{
+			return [
+				'allowedFieldCodes' => [],
+				'fieldSetCodes' => [],
+				'values' => [],
+			];
+		}
+
+		// The company is written to the document without a permission check on the company itself
+		// (DocumentService::modifyCompany), and requisites are read without an ACL check, so only
+		// cards marked as "my company" are readable here, never a counterparty card.
+		if (!\CCrmCompany::isMyCompany($companyId))
+		{
+			return [
+				'allowedFieldCodes' => [],
+				'fieldSetCodes' => [],
+				'values' => [],
+			];
+		}
+
+		$fieldSetCodes = [];
+		try
+		{
+			$requisiteFieldsInfo = EntityRequisite::getFieldsInfo();
+			$fieldConfiguration = (new FieldSelectorService())->getCompanyRequisiteFieldConfiguration($presetId);
+			$fieldSetCodes = $fieldConfiguration['fieldSetCodes'];
+			$fieldCodes = self::resolveCompanyRequisiteStringFieldCodes(
+				$fieldConfiguration['presetFieldCodes'],
+				$fieldConfiguration['fieldSetCodes'],
+				null,
+				is_array($requisiteFieldsInfo) ? $requisiteFieldsInfo : [],
+			);
+			if (empty($fieldCodes))
+			{
+				return [
+					'allowedFieldCodes' => [],
+					'fieldSetCodes' => $fieldSetCodes,
+					'values' => [],
+				];
+			}
+
+			$requisite = EntityRequisite::getSingleInstance()->getList([
+				'select' => $fieldCodes,
+				'filter' => [
+					'=ENTITY_TYPE_ID' => \CCrmOwnerType::Company,
+					'=ENTITY_ID' => $companyId,
+					'=PRESET_ID' => $presetId,
+				],
+				'limit' => 1,
+			])->fetch();
+		}
+		catch (\Bitrix\Main\SystemException $exception)
+		{
+			\Bitrix\Sign\Service\Container::instance()->getLogger('Integration')->error(
+				'Failed to read requisite fields of company {companyId}: {errorText}',
+				[
+					'companyId' => $companyId,
+					'errorText' => $exception->getMessage(),
+				],
+			);
+
+			return [
+				'allowedFieldCodes' => [],
+				'fieldSetCodes' => $fieldSetCodes,
+				'values' => [],
+			];
+		}
+
+		return [
+			'allowedFieldCodes' => $fieldCodes,
+			'fieldSetCodes' => $fieldSetCodes,
+			'values' => self::normalizeCompanyRequisiteStringFieldValues($requisite),
+		];
+	}
+
+	/**
+	 * @param list<string> $presetFieldCodes
+	 * @param list<string> $fieldSetCodes
+	 * @param array<string, array> $requisiteFieldsInfo
+	 * @return list<string>|null Null means that the requested field is not allowed.
+	 */
+	private static function resolveCompanyRequisiteStringFieldCodes(
+		array $presetFieldCodes,
+		array $fieldSetCodes,
+		?string $requestedFieldCode,
+		array $requisiteFieldsInfo,
+	): ?array
+	{
+		$policy = new CompanyRequisiteFieldPolicy();
+		$fieldCodes = [];
+		foreach ($presetFieldCodes as $fieldCode)
+		{
+			if (
+				is_string($fieldCode)
+				&& $policy->isFieldCodeAllowed($fieldCode, $fieldSetCodes)
+				&& ($requisiteFieldsInfo[$fieldCode]['TYPE'] ?? null) === 'string'
+			)
+			{
+				$fieldCodes[] = $fieldCode;
+			}
+		}
+
+		$fieldCodes = array_values(array_unique($fieldCodes));
+
+		return $requestedFieldCode === null || in_array($requestedFieldCode, $fieldCodes, true)
+			? $fieldCodes
+			: null;
+	}
+
+	/**
+	 * @return array<string, string>
+	 */
+	private static function normalizeCompanyRequisiteStringFieldValues(mixed $values): array
+	{
+		if (!is_array($values))
+		{
+			return [];
+		}
+
+		return array_filter(
+			$values,
+			static fn(mixed $value): bool => is_string($value) && $value !== '',
+		);
 	}
 
 	/**
@@ -857,13 +1018,12 @@ class CRM
 
 		$requisites = $documentEntityTypeId === \CCrmOwnerType::SmartB2eDocument
 			? null
-			: self::getLinkedRequisites($documentEntityId, 'MC_REQUISITE_ID')
-		;
+			: self::getLinkedRequisites($documentEntityId, 'MC_REQUISITE_ID');
 
 		if (!$requisites && $companyId > 0)
 		{
 			$defaultRequisite = new DefaultRequisite(
-				new ItemIdentifier(\CCrmOwnerType::Company, $companyId)
+				new ItemIdentifier(\CCrmOwnerType::Company, $companyId),
 			);
 			$defaultRequisite->setCheckPermissions($checkCrmPermissions);
 
@@ -907,7 +1067,7 @@ class CRM
 
 		$saveRequisiteResult = EntityRequisite::getSingleInstance()->add(
 			$requisiteFields,
-			['DISABLE_REQUIRED_USER_FIELD_CHECK' => true]
+			['DISABLE_REQUIRED_USER_FIELD_CHECK' => true],
 		);
 
 		if (!$saveRequisiteResult->isSuccess())
@@ -971,13 +1131,13 @@ class CRM
 					'SIGN_CORE_INTEGRATION_CRM_TEMPLATE_FIELDS_EMPTY',
 					[
 						'{presetName}' => $presetData['NAME'],
-					]
+					],
 				),
 				'SIGN_DOCUMENT_CRM_TEMPLATE_FIELDS_EMPTY',
 				[
-					'href' => '/crm/configs/preset/'.\CCrmOwnerType::Requisite.'/edit/'.$presetId.'/',
+					'href' => '/crm/configs/preset/' . \CCrmOwnerType::Requisite . '/edit/' . $presetId . '/',
 					'button' => Loc::getMessage('SIGN_CORE_INTEGRATION_CRM_TEMPLATE_FIELDS_ADD_ADDITIONAL'),
-				]
+				],
 			));
 		}
 

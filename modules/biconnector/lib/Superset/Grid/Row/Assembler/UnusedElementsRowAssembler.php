@@ -21,10 +21,13 @@ class UnusedElementsRowAssembler extends RowAssembler
 				['DESCRIPTION'],
 				maxLength: 300
 			),
-			new Field\Base\DateFieldAssembler([
-				'DATE_UPDATE',
-				'DATE_CREATE',
-			]),
+			new Field\Base\DateFieldAssembler(
+				[
+					'DATE_UPDATE',
+					'DATE_CREATE',
+				],
+				timeFormat: Field\Base\DateFieldAssembler::TIME_FORMAT_SHORT,
+			),
 		];
 	}
 }

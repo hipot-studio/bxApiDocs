@@ -142,7 +142,8 @@ class SequentialToNodeWorkflow
 			$row['DOCUMENT_TYPE'] = Workflow::getComplexType();
 			$row['AUTO_EXECUTE'] = 0;
 
-			$newId = \CBPWorkflowTemplateLoader::add($row, true);
+			// a conversion carries a process over into another shape and publishes nothing
+			$newId = \CBPWorkflowTemplateLoader::add($row, true, markFirstPublication: false);
 
 			$result->setData(['id' => $newId]);
 		}

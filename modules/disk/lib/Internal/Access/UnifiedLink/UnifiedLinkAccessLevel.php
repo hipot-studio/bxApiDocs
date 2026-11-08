@@ -31,7 +31,7 @@ enum UnifiedLinkAccessLevel: string
 	{
 		return match ($this)
 		{
-			self::Denied => Loc::getMessage('DISK_UNIFIED_LINK_ACCESS_LEVEL_DENIED'),
+			self::Denied => Loc::getMessage('DISK_UNIFIED_LINK_ACCESS_LEVEL_DENIED_MSGVER_1'),
 			self::Read => Loc::getMessage('DISK_UNIFIED_LINK_ACCESS_LEVEL_READ'),
 			self::Edit => Loc::getMessage('DISK_UNIFIED_LINK_ACCESS_LEVEL_EDIT'),
 		};

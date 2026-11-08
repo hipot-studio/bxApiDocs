@@ -394,9 +394,9 @@ class TaskUpdateBlock extends TaskStep
 				continue;
 			}
 
-			foreach ($prefixesNotRemove as $prefixeNotRemove)
+			foreach ($prefixesNotRemove as $prefixNotRemove)
 			{
-				if (str_starts_with($class, $prefixeNotRemove))
+				if (str_starts_with($class, $prefixNotRemove))
 				{
 					return false;
 				}

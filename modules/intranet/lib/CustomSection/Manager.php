@@ -34,6 +34,9 @@ class Manager
 
 	protected Provider\Registry $providerRegistry;
 	protected Repository $repo;
+	protected array $availablePagesCache = [];
+	protected array $systemPagesCache = [];
+	protected array $publicSystemPagesCache = [];
 
 	public function __construct()
 	{
@@ -177,10 +180,16 @@ class Manager
 	 */
 	protected function getAvailablePages(CustomSection $customSection): array
 	{
+		$cacheKey = $customSection->getCode() . '_' . $this->getCurrentUserId();
+		if (array_key_exists($cacheKey, $this->availablePagesCache))
+		{
+			return $this->availablePagesCache[$cacheKey];
+		}
+
 		$pages = $customSection->getPages();
 		if (is_null($pages))
 		{
-			return [];
+			return $this->availablePagesCache[$cacheKey] = [];
 		}
 
 		$availablePages = [];
@@ -192,7 +201,7 @@ class Manager
 			}
 		}
 
-		return $availablePages;
+		return $this->availablePagesCache[$cacheKey] = $availablePages;
 	}
 
 	/**
@@ -240,7 +249,10 @@ class Manager
 
 	protected function compileLeftMenuSectionDescription(CustomSection $customSection): array
 	{
-		$availablePages = $this->getAvailableNotSystemPages($customSection);
+		$availablePages = array_merge(
+			$this->getAvailableNotSystemPages($customSection),
+			$this->getPublicSystemPages($customSection),
+		);
 
 		$page =
 			$this->getUserSelectedFirstPage($customSection->getCode(), $availablePages)
@@ -282,7 +294,17 @@ class Manager
 			'IS_PARENT' => false,
 		];
 
-		foreach ($this->getAvailableNotSystemPages($customSection) as $page)
+		$availablePages = array_merge(
+			$this->getAvailableNotSystemPages($customSection),
+			$this->getPublicSystemPages($customSection),
+		);
+		usort(
+			$availablePages,
+			static fn(CustomSectionPage $firstPage, CustomSectionPage $secondPage): int =>
+				$firstPage->getSort() <=> $secondPage->getSort(),
+		);
+
+		foreach ($availablePages as $page)
 		{
 			$pageUrl = $this->getUrlForPage($customSection->getCode(), $page->getCode());
 			$compiledLeftMenuPages[] = [
@@ -633,19 +655,28 @@ class Manager
 	 */
 	public function getSystemPages(string $customSectionCode, bool $ignorePageAvailability = false): array
 	{
+		$cacheKey = $customSectionCode
+			. ':' . (int)$ignorePageAvailability
+			. ':' . $this->getCurrentUserId()
+		;
+		if (array_key_exists($cacheKey, $this->systemPagesCache))
+		{
+			return $this->systemPagesCache[$cacheKey];
+		}
+
 		$section = $this->repo->getCustomSection($customSectionCode);
 		if (is_null($section))
 		{
-			return [];
+			return $this->systemPagesCache[$cacheKey] = [];
 		}
 
 		$provider = $this->getProvider($section->getModuleId());
 		if (is_null($provider))
 		{
-			return [];
+			return $this->systemPagesCache[$cacheKey] = [];
 		}
 
-		return $provider->getSystemPages($section, $ignorePageAvailability);
+		return $this->systemPagesCache[$cacheKey] = $provider->getSystemPages($section, $ignorePageAvailability);
 	}
 
 	/**
@@ -660,6 +691,33 @@ class Manager
 		return array_map(
 			static fn($page) => $page->getCode(),
 			$this->getSystemPages($customSectionCode, $ignorePageAvailability),
+		);
+	}
+
+	/**
+	 * Return array of system pages that should be shown in public (f.e. in left menu) by custom section code
+	 *
+	 * @param CustomSection $customSection
+	 * @return CustomSectionPage[]
+	 */
+	private function getPublicSystemPages(CustomSection $customSection): array
+	{
+		$currentUserId = $this->getCurrentUserId();
+		$cacheKey = $customSection->getCode() . '_' . $currentUserId;
+		if (array_key_exists($cacheKey, $this->publicSystemPagesCache))
+		{
+			return $this->publicSystemPagesCache[$cacheKey];
+		}
+
+		$provider = $this->getProvider($customSection->getModuleId());
+		if (is_null($provider))
+		{
+			return $this->publicSystemPagesCache[$cacheKey] = [];
+		}
+
+		return $this->publicSystemPagesCache[$cacheKey] = $provider->getPublicSystemPages(
+			$customSection,
+			$currentUserId,
 		);
 	}
 }

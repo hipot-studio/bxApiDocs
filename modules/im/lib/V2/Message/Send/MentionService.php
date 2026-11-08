@@ -105,7 +105,8 @@ class MentionService
 		$mentionedUserIds = $message->getUserIdsToSendMentions();
 		unset($mentionedUserIds[$message->getAuthorId()]);
 
-		$this->sendMentionsToUsers($message, $chat, $mentionedUserIds);
+		// notify tags are built on the chat of the message itself: $chat may be the parent one (comments)
+		$this->sendMentionsToUsers($message, $chat, $mentionedUserIds, (int)$message->getChatId());
 	}
 
 	protected function needToSendPull(): bool
@@ -253,7 +254,7 @@ class MentionService
 		return true;
 	}
 
-	private function sendMentionsToUsers(Message $message, Chat $chat, array $mentionedUserIds): void
+	private function sendMentionsToUsers(Message $message, Chat $chat, array $mentionedUserIds, int $notifyChatId): void
 	{
 		$userGender = $message->getAuthor()?->getGender() === 'F' ? 'F' : 'M';
 		$chatTitle = mb_substr(Text::decodeEmoji($chat->getTitle()), 0, 32);
@@ -268,8 +269,8 @@ class MentionService
 					"NOTIFY_TYPE" => \IM_NOTIFY_FROM,
 					"NOTIFY_MODULE" => "im",
 					"NOTIFY_EVENT" => "mention",
-					"NOTIFY_TAG" => 'IM|MENTION|' . $chat->getChatId(),
-					"NOTIFY_SUB_TAG" => 'IM_MESS_' . $chat->getChatId() . '_' . $userId,
+					"NOTIFY_TAG" => 'IM|MENTION|' . $notifyChatId,
+					"NOTIFY_SUB_TAG" => 'IM_MESS_' . $notifyChatId . '_' . $userId,
 					"NOTIFY_MESSAGE" => $this->prepareNotifyMessage($chatTitle, $message, $userGender),
 					"NOTIFY_MESSAGE_OUT" => $this->prepareNotifyMail($chatTitle, $userGender),
 				];

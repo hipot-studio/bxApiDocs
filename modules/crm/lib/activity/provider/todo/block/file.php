@@ -9,17 +9,30 @@ use Bitrix\Crm\Activity\Provider\ToDo\SaveConfig;
 use Bitrix\Crm\Integration\Disk\HiddenStorage;
 use Bitrix\Crm\Integration\DiskManager;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Main\Web\Uri;
 
 final class File extends Base
 {
 	public const TYPE_NAME = 'file';
+	private array $storageElementIdsToRemove = [];
 
 	public function prepareEntityBefore(OptionallyConfigurable $entity): SaveConfig
 	{
 		$fileTokens = $this->blockData['fileTokens'] ?? [];
 		if (empty($fileTokens) && empty($this->activityData['storageElementIds']))
+		{
+			return $this->getSaveConfig();
+		}
+		if (
+			$entity->getId() !== null
+			&& !\CCrmActivity::CheckUpdatePermission(
+				$entity->getOwner()->getEntityTypeId(),
+				$entity->getOwner()->getEntityId(),
+			)
+		)
 		{
 			return $this->getSaveConfig();
 		}
@@ -29,6 +42,7 @@ final class File extends Base
 		$fileUploader = (new Uploader($fileTokens, $ownerTypeId, $ownerId))
 			->setActivityId($this->activityData['id'] ?? null)
 			->setCurrentStorageElementIds($entity->getStorageElementIds() ?? [])
+			->setDeferDeletion(true)
 		;
 
 		$isCopy = (bool)($entity->getAdditionalFields()['IS_COPY'] ?? false);
@@ -44,15 +58,44 @@ final class File extends Base
 		}
 
 		$storageElementIds = $result->getData()['ids'];
-
-		if (empty($storageElementIds))
-		{
-			return $this->getSaveConfig();
-		}
-
+		$this->storageElementIdsToRemove = $result->getData()['idsToRemove'] ?? [];
 		$this->setStorageElementIds($entity, $storageElementIds);
 
 		return $this->getSaveConfig(true);
+	}
+
+	public function commitDeferredActions(OptionallyConfigurable $entity): Result
+	{
+		$result = new Result();
+		$storageElementIdsToRemove = $this->storageElementIdsToRemove;
+		$this->storageElementIdsToRemove = [];
+
+		if (empty($storageElementIdsToRemove))
+		{
+			return $result;
+		}
+
+		$deletedStorageElementIds = $this->getHiddenStorage($entity->getOwner())
+			->deleteFiles($storageElementIdsToRemove)
+		;
+		$storageElementIdsToRestore = array_values(
+			array_diff($storageElementIdsToRemove, $deletedStorageElementIds),
+		);
+		if (empty($storageElementIdsToRestore))
+		{
+			return $result;
+		}
+
+		$entity->setStorageElementIds(array_values(array_unique([
+			...($entity->getStorageElementIds() ?? []),
+			...$storageElementIdsToRestore,
+		])));
+		$result->setData(['needSave' => true]);
+		$result->addError(
+			new Error('Some Disk files could not be deleted.', 'CRM_ACTIVITY_TODO_FILE_DELETE_FAILED'),
+		);
+
+		return $result;
 	}
 
 	protected function getSaveConfig(bool $needSave = false): SaveConfig

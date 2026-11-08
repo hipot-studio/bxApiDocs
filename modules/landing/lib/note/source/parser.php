@@ -2,6 +2,7 @@
 namespace Bitrix\Landing\Note\Source;
 
 use \Bitrix\Main\Web\DOM;
+use \Bitrix\Landing\Html\DocumentFactory;
 use \Bitrix\Landing\Manager;
 use \Bitrix\Landing\File;
 
@@ -214,7 +215,7 @@ class Parser
 		$count = -1;
 		$blocks = [];
 
-		$dom = new DOM\Document;
+		$dom = DocumentFactory::createForStoredContent();
 		$text = self::convertText($text);
 		$dom->loadHTML($text);
 

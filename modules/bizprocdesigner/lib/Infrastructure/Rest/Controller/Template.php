@@ -105,7 +105,7 @@ final class Template extends AbstractAgentRestController
 		}
 
 		$graph = $this->submittedGraph($request->fields);
-		$result = $this->validateGraph($graph, $identifier->documentDescription);
+		$result = $this->validateSubmission($request->fields, $graph, $identifier);
 
 		return new ValidateResponse(
 			GraphValidationErrorMapper::toReport($result, is_array($graph['blocks']) ? $graph['blocks'] : []),

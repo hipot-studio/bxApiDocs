@@ -143,11 +143,17 @@ class RpaAutomationTaskFieldsComponent extends Bitrix\Rpa\Components\ItemDetail
 		}
 
 		$result = [];
-		$fields = $this->prepareDataToSet($data);
-
 		$task = Driver::getInstance()->getTaskManager()->getTaskById($this->arParams['taskId']);
 		if ($task)
 		{
+			$fieldsToSet = $task['PARAMETERS']['FIELDS_TO_SET'] ?? [];
+			if (!is_array($fieldsToSet))
+			{
+				$fieldsToSet = [];
+			}
+			$fields = $this->prepareDataToSet($this->filterDataByFieldsToSet($data, $fieldsToSet));
+			$fields = $this->filterPreparedDataByFieldsToSet($fields, $fieldsToSet);
+
 			$userId = Driver::getInstance()->getUserId();
 			if (\CBPDocument::PostTaskForm($task, $userId, ['complete' => 'Y', 'fields' => $fields], $errors))
 			{
@@ -168,6 +174,49 @@ class RpaAutomationTaskFieldsComponent extends Bitrix\Rpa\Components\ItemDetail
 		}
 
 		return $result;
+	}
+
+	protected function filterDataByFieldsToSet(array $data, array $fieldsToSet): array
+	{
+		$filteredData = [];
+		$userFields = $this->type->getUserFieldCollection();
+
+		foreach ($fieldsToSet as $fieldName)
+		{
+			if (!is_string($fieldName) || !array_key_exists($fieldName, $data))
+			{
+				continue;
+			}
+
+			$filteredData[$fieldName] = $data[$fieldName];
+			$userField = $userFields->getByName($fieldName);
+			$deletionFieldName = $fieldName . '_del';
+			if (
+				$userField
+				&& $userField->isBaseTypeFile()
+				&& array_key_exists($deletionFieldName, $data)
+			)
+			{
+				$filteredData[$deletionFieldName] = $data[$deletionFieldName];
+			}
+		}
+
+		return $filteredData;
+	}
+
+	protected function filterPreparedDataByFieldsToSet(array $data, array $fieldsToSet): array
+	{
+		$filteredData = [];
+
+		foreach ($fieldsToSet as $fieldName)
+		{
+			if (is_string($fieldName) && array_key_exists($fieldName, $data))
+			{
+				$filteredData[$fieldName] = $data[$fieldName];
+			}
+		}
+
+		return $filteredData;
 	}
 
 	protected function prepareFormParams(): array

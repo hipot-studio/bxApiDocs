@@ -7,8 +7,8 @@ namespace Bitrix\Intranet\Internal\Integration\Security;
 use Bitrix\Intranet\Entity\Type\Phone;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Entity\UserOtp;
-use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Main\OtpSigner;
+use Bitrix\Intranet\Internal\Integration\Main\VerifyEmailService;
 use Bitrix\Intranet\Internal\Integration\Main\VerifyPhoneService;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
 use Bitrix\Intranet\Internal\Service\Otp\RecoverAccessRequestService;
@@ -16,6 +16,7 @@ use Bitrix\Intranet\Internal\Service\Otp\TrustDeviceConfirmation;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
@@ -73,6 +74,36 @@ class PersonalOtp
 		$analyticEvent->send();
 	}
 
+	public function setupSkipDeviceConnect(?string $flowId = null): void
+	{
+		$otp = $this->getOtpByUser()
+			->regenerate(type: OtpType::Push)
+		;
+
+		if ($otp->getType() !== OtpType::Push)
+		{
+			throw new OtpException('Push OTP is not configured as the default type');
+		}
+
+		$initParams = ['skipDeviceConnect' => true];
+		if ($flowId !== null)
+		{
+			$initParams['skipDeviceConnectFlowHash'] = hash('sha256', $flowId);
+		}
+
+		$isSaved = $otp
+			->setInitParams($initParams)
+			->save()
+		;
+
+		if (!$isSaved)
+		{
+			throw new OtpException('Unable to save Push OTP');
+		}
+
+		$this->initOtpInfo();
+	}
+
 	/**
 	 * @throws OtpException
 	 * @throws ArgumentTypeException
@@ -80,6 +111,7 @@ class PersonalOtp
 	public function activate(): void
 	{
 		$this->getOtpByUser()->activate();
+		$this->initOtpInfo();
 	}
 
 	/**
@@ -88,14 +120,6 @@ class PersonalOtp
 	 */
 	public function deactivate($days = 0): void
 	{
-		if (
-			$days === 0
-			&& $this->isPushType()
-			&& MobilePush::createByDefault()->getPromoteMode() === PromoteMode::High
-		) {
-			throw new OtpException('Permanent deactivation is not available');
-		}
-
 		$this->getOtpByUser()->deactivate($days);
 		(new TrustDeviceConfirmation($this))->onDeactivateOtp();
 		(new Analytics\AnalyticsEvent(event: 'turnoff_2fa_employee_temp', tool: 'settings', category: 'security'))->send();
@@ -132,6 +156,14 @@ class PersonalOtp
 		return (bool)$this->getOtpByUser()->canSkipMandatoryByRights();
 	}
 
+	public function isMandatorySkippedIndefinitely(): bool
+	{
+		return !$this->otpInfo->isActive
+			&& $this->otpInfo->isMandatorySkipped === true
+			&& $this->otpInfo->dateDeactivate === null
+		;
+	}
+
 	public function isPushType(): bool
 	{
 		if (!$this->otpInfo->isInitialized)
@@ -142,6 +174,21 @@ class PersonalOtp
 		return $this->otpInfo->type === OtpType::Push;
 	}
 
+	public function hasConnectedPushDevice(): bool
+	{
+		return $this->isPushType() && !$this->isDeviceConnectSkipped();
+	}
+
+	public function isDeviceConnectSkipped(): bool
+	{
+		return ($this->getInitParams()['skipDeviceConnect'] ?? false) === true;
+	}
+
+	public function canSkipDeviceConnect(): bool
+	{
+		return !$this->isPushType() || !$this->isActivated();
+	}
+
 	public function getDeactivateUntil(): ?DateTime
 	{
 		return $this->otpInfo->dateDeactivate;
@@ -149,19 +196,31 @@ class PersonalOtp
 
 	public function getGracePeriod(): ?DateTime
 	{
-		$mobilePush = MobilePush::createByDefault();
+		$personalDate = $this->getDeactivateUntil();
+		if ($personalDate !== null)
+		{
+			return $personalDate;
+		}
 
+		$mobilePush = MobilePush::createByDefault();
 		if (!$this->isPushType() && $mobilePush->gracePeriodEnabled())
 		{
 			return DateTime::createFromTimestamp($mobilePush->getGracePeriod());
 		}
 
-		return $this->getDeactivateUntil();
+		return null;
 	}
 
 	public function getOtpConfig(): array
 	{
 		$config = PushOtp::getPullConfig();
+		$config['canSkipDeviceConnect'] = Option::get('intranet', 'allow_skip_device_connect', 'Y') === 'Y'
+			&& $this->canSkipDeviceConnect()
+			&& \Bitrix\Security\Mfa\Otp::isPushPossible()
+			&& (
+				(new VerifyPhoneService($this->user))->canSendSms()
+				|| (new VerifyEmailService($this->user))->canSendEmail()
+			);
 		$intent = 'pushOtpInit/' . $config['channelTag'];
 		$phoneConfirmed = false;
 
@@ -179,6 +238,9 @@ class PersonalOtp
 
 		return [
 			'pullConfig' =>  $config['pullConfig'] ?? [],
+			'canSkipDeviceConnect' => $config['canSkipDeviceConnect'],
+			'canSendSms' => (new VerifyPhoneService($this->user))->canSendSms(),
+			'canSendEmail' => (new VerifyEmailService($this->user))->canSendEmail(),
 			'ttl' => 600,
 			'intent' => $intent,
 			'email' => $this->getBackupEmail(),

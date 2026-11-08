@@ -19,6 +19,7 @@ use Bitrix\Rest\UsageStatTable;
 use Bitrix\Rest\V3\Attribute\ResolvedBy;
 use Bitrix\Rest\V3\Controller\RestController;
 use Bitrix\Rest\V3\DefaultLanguage;
+use Bitrix\Rest\V3\Enum\CallChannel;
 use Bitrix\Rest\V3\Exception\AccessDeniedException;
 use Bitrix\Rest\V3\Exception\HttpsRequiredException;
 use Bitrix\Rest\V3\Exception\InsufficientScopeException;
@@ -29,6 +30,7 @@ use Bitrix\Rest\V3\Exception\MethodNotFoundException;
 use Bitrix\Rest\V3\Exception\RateLimitException;
 use Bitrix\Rest\V3\Exception\RelationMethodNotFoundException;
 use Bitrix\Rest\V3\Exception\RestException as V3RestException;
+use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
 use Bitrix\Rest\V3\Interaction\Request\BatchRequest;
 use Bitrix\Rest\V3\Interaction\Request\ServerRequest;
 use Bitrix\Rest\V3\Interaction\Response\BatchResponse;
@@ -38,6 +40,7 @@ use Bitrix\Rest\V3\Interaction\Response\ResponseWithRelations;
 use Bitrix\Rest\V3\Schema\MethodDescription;
 use Bitrix\Rest\V3\Schema\SchemaManager;
 use Bitrix\Rest\V3\Schema\Scope;
+use Bitrix\Rest\V3\Structure\FieldsStructure;
 use Bitrix\Rest\Internal;
 use Bitrix\Rest\V3;
 
@@ -144,6 +147,10 @@ class CRestApiServer extends CRestServer
 		$this->initRequestScope($request, $methodDescription);
 
 		$this->checkServerAuth($request);
+		if ($request->getMethod() !== 'batch')
+		{
+			$this->schemaManager->ensureGeneratedDtoClassesLoadedFromMethodDescriptions([$methodDescription]);
+		}
 
 		UsageStatTable::log($this);
 		$logger = new RestServerProcessLogger($this);
@@ -298,6 +305,7 @@ class CRestApiServer extends CRestServer
 		$batchRequest = new BatchRequest($jsonData);
 		$batchResponse = new BatchResponse();
 		$methods = $this->getBatchMethodDescriptions($batchRequest);
+		$this->schemaManager->ensureGeneratedDtoClassesLoadedFromMethodDescriptions($methods);
 		foreach ($batchRequest->getItems() as $index => $item)
 		{
 			$context = $batchResponse->getContext();
@@ -311,8 +319,8 @@ class CRestApiServer extends CRestServer
 			{
 				return $response;
 			}
-			$item->setResponse($response);
 			$batchResponse->addItem($item->getAlias() ?? $index, $response);
+			unset($response);
 		}
 		return $batchResponse;
 	}
@@ -420,7 +428,7 @@ class CRestApiServer extends CRestServer
 			$request->setScopes($methodDescription->scopes ?? null);
 		}
 
-		$availableScope = $this->getAvailableScopeFromRequest($request->getScopes());
+		$availableScope = $this->getAvailableScope($request->getScopes());
 		if ($availableScope === null)
 		{
 			throw new InsufficientScopeException();
@@ -439,10 +447,12 @@ class CRestApiServer extends CRestServer
 		}
 
 		$controller->setDtoClass($methodDescription->dtoFqcn);
+		$controller->setMethodDescription($methodDescription);
 		$controller->setProcessedScope($availableScope);
 		$controller->setResponseLanguage($this->responseLanguage);
 		$controller->setServer($this);
 		$controller->setQueryParams($request->getQuery());
+		$controller->setCallChannel(CallChannel::RestTransport);
 
 		$manager = new RestManager();
 		$autoWirings = $manager->getAutoWirings();
@@ -582,7 +592,7 @@ class CRestApiServer extends CRestServer
 					throw new V3\Exception\MarketSubscriptionRequiredException();
 				}
 
-				if ($exception instanceof Internal\Exception\VibePlus\FeatureNotAvailableOnCurrentPlanExceptionInterface)
+				if ($exception instanceof Internal\Exception\Payment\FeatureNotAvailableOnCurrentPlanExceptionInterface)
 				{
 					throw new V3\Exception\FeatureNotAvailableOnCurrentPlanException($exception);
 				}
@@ -627,7 +637,7 @@ class CRestApiServer extends CRestServer
 		return $this->requestAccess;
 	}
 
-	private function getAvailableScopeFromRequest(array $requiredScopes): null|Scope
+	public function getAvailableScope(array $requiredScopes): null|Scope
 	{
 		foreach ($requiredScopes as $requiredScope)
 		{
@@ -636,6 +646,7 @@ class CRestApiServer extends CRestServer
 				return $this->availableScopes[$requiredScope];
 			}
 		}
+
 		return null;
 	}
 
@@ -718,12 +729,10 @@ class CRestApiServer extends CRestServer
 			if ($key === 'filter')
 			{
 				$queryFilter = $result['filter'] ?? [];
-
 				if (!is_array($queryFilter))
 				{
 					$queryFilter = [];
 				}
-
 				if (is_array($bodyValue))
 				{
 					$result['filter'] = $queryFilter;
@@ -742,11 +751,24 @@ class CRestApiServer extends CRestServer
 
 			if ($key === 'fields' && array_key_exists('fields', $queryParams))
 			{
+				// a body that cannot carry fields is answered as any other malformed request:
+				// dropping it silently would leave a write action with nothing to write and
+				// let a request the caller got wrong look like a completed one
+				if (!is_array($bodyValue))
+				{
+					throw new InvalidRequestFieldTypeException('fields', FieldsStructure::class);
+				}
+
 				$result['fields'] = array_replace_recursive($bodyValue, $queryParams['fields']);
+
 				continue;
 			}
 
-			$result[$key] = $bodyValue;
+			// fixed route params are trusted and must not be overridden by the request body
+			if (!array_key_exists($key, $queryParams))
+			{
+				$result[$key] = $bodyValue;
+			}
 		}
 
 		return $result;

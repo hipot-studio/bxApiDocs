@@ -6,6 +6,7 @@ namespace Bitrix\Mail\Internals;
 
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\StringField;
 
 final class DraftAttachmentTable extends DataManager
@@ -26,6 +27,8 @@ final class DraftAttachmentTable extends DataManager
 			(new StringField('FILE_NAME'))->configureRequired()->configureSize(255),
 			(new IntegerField('FILE_SIZE'))->configureRequired(),
 			(new StringField('CONTENT_TYPE'))->configureSize(255),
+			(new StringField('CONTENT_ID'))->configureSize(255),
+			(new BooleanField('IS_INLINE'))->configureValues('N', 'Y')->configureDefaultValue(false),
 			(new IntegerField('SORT'))->configureRequired()->configureDefaultValue(100),
 		];
 	}

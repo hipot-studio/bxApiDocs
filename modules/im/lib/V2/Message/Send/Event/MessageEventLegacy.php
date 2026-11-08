@@ -9,6 +9,14 @@ use Bitrix\Im\V2\Message;
 
 class MessageEventLegacy
 {
+	/**
+	 * Params withheld from the payload of the event. Handlers of other modules read this surface, so a param that
+	 * has been reaching them stays where it is: only what the messenger has never published is kept out.
+	 */
+	private const INTERNAL_PARAMS = [
+		Message\Params::FILE_ORDER,
+	];
+
 	private Message $message;
 	private bool $withBot = false;
 	private bool $withFiles = false;
@@ -48,7 +56,7 @@ class MessageEventLegacy
 			'DIALOG_ID' => $message->getChat()->getDialogId(),
 			'TO_CHAT_ID' => $message->getChatId(),
 			'MESSAGE_OUT' => $message->getMessageOut() ?? '',
-			'PARAMS' => $message->getEnrichedParams()->toArray(),
+			'PARAMS' => $this->getParamsFields(),
 			'EXTRA_PARAMS' => $message->getPushParams() ?? [],
 			'NOTIFY_MODULE' => $message->getNotifyModule(),
 			'NOTIFY_EVENT' => $message->getNotifyEvent(),
@@ -135,5 +143,17 @@ class MessageEventLegacy
 			'MESSAGE' => $replyMessage->getMessage(),
 			'AUTHOR_ID' => $replyMessage->getAuthorId(),
 		];
+	}
+
+	private function getParamsFields(): array
+	{
+		$params = $this->message->getEnrichedParams()->toArray();
+
+		foreach (self::INTERNAL_PARAMS as $paramName)
+		{
+			unset($params[$paramName]);
+		}
+
+		return $params;
 	}
 }

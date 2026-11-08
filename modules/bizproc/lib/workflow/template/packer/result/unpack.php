@@ -13,6 +13,9 @@ class Unpack extends Main\Result
 	protected $documentFields;
 
 	/** @var array */
+	protected $templateSettings = [];
+
+	/** @var array */
 	protected $requiredApplications;
 
 	/**
@@ -48,6 +51,24 @@ class Unpack extends Main\Result
 	public function setDocumentFields(array $documentFields)
 	{
 		$this->documentFields = $documentFields;
+		return $this;
+	}
+
+	/**
+	 * @return array
+	 */
+	public function getTemplateSettings()
+	{
+		return $this->templateSettings;
+	}
+
+	/**
+	 * @param array $templateSettings
+	 * @return $this
+	 */
+	public function setTemplateSettings(array $templateSettings)
+	{
+		$this->templateSettings = $templateSettings;
 		return $this;
 	}
 

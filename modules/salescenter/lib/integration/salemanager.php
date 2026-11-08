@@ -52,6 +52,14 @@ class SaleManager extends Base
 
 		$orderId = (int)$orderId;
 		$sessionId = (int)$sessionId;
+		$sessionCheck = ImOpenLinesManager::getInstance()->checkClientSessionId($sessionId);
+		if (!$sessionCheck->isSuccess())
+		{
+			$result->addErrors($sessionCheck->getErrors());
+
+			return $result;
+		}
+
 		$order = $orderClass::load($orderId);
 		if(!$order)
 		{

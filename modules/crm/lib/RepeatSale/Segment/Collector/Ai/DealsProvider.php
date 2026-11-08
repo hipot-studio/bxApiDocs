@@ -5,13 +5,16 @@ namespace Bitrix\Crm\RepeatSale\Segment\Collector\Ai;
 use Bitrix\Crm\DealTable;
 use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\PhaseSemantics;
+use Bitrix\Crm\ProductRowTable;
 use Bitrix\Crm\RepeatSale\DataCollector\Activity\ActivityDataCollector;
 use Bitrix\Crm\RepeatSale\DataCollector\Activity\StrategyFactory;
 use Bitrix\Crm\RepeatSale\DataCollector\CopilotMarkerLimitManager;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\Date;
 use CCrmOwnerType;
+use CCrmOwnerTypeAbbr;
 
 final class DealsProvider
 {
@@ -41,7 +44,7 @@ final class DealsProvider
 		;
 
 		// only deals support
-		return DealTable::query()
+		$query = DealTable::query()
 			->setSelect(['ID', 'COMPANY_ID', 'CONTACT_ID'])
 			->where('STAGE_SEMANTIC_ID', PhaseSemantics::SUCCESS)
 			->where('DATE_CREATE', '>=', $start)
@@ -50,6 +53,36 @@ final class DealsProvider
 			->where($ct)
 			->setOrder(['ID' => 'ASC'])
 			->setLimit($this->limit)
+		;
+
+		return $query->where($this->getNotEmptyDealCondition($query));
+	}
+
+	/**
+	 * A deal with neither product rows nor a sum is not a purchase, so it is not a base deal either.
+	 *
+	 * The condition is the one deals are kept by, so the "no rows AND no sum" of the rule stands here
+	 * as its negation: a sum of its own, or rows of their own, is enough to stay.
+	 *
+	 * An unfilled OPPORTUNITY is a zero one: `<> 0` is unknown for NULL and leaves such a deal out on
+	 * its own. The sum is checked first, so the subquery over the product rows runs for the deals of
+	 * zero sum only.
+	 *
+	 * The subquery correlates through the alias of the outer query, baked into the SQL as a string:
+	 * nesting that query into another one would break the correlation.
+	 */
+	private function getNotEmptyDealCondition(Query $query): ConditionTree
+	{
+		$productRowsQuery = ProductRowTable::query()
+			->setSelect(['ID'])
+			->where('OWNER_TYPE', CCrmOwnerTypeAbbr::Deal)
+			->where('OWNER_ID', new SqlExpression('?#.?#', $query->getInitAlias(), 'ID'))
+		;
+
+		return (new ConditionTree())
+			->logic(ConditionTree::LOGIC_OR)
+			->where('OPPORTUNITY', '!=', 0)
+			->whereExists($productRowsQuery)
 		;
 	}
 

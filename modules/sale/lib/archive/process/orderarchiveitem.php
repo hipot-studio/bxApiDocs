@@ -6,7 +6,8 @@ use Bitrix\Main,
 	Bitrix\Main\Localization\Loc,
 	Bitrix\Sale,
 	Bitrix\Sale\Internals,
-	Bitrix\Sale\Archive\Manager;
+	Bitrix\Sale\Archive\Manager,
+	Bitrix\Sale\Archive\Recovery\JsonField;
 
 Loc::loadMessages(__FILE__);
 
@@ -196,28 +197,8 @@ class OrderArchiveItem
 		$preparedOrderData['ORDER_ID'] = $this->getId();
 		$preparedOrderData['DATE_ARCHIVED'] = new Type\DateTime();
 		$preparedOrderData['VERSION'] = Manager::SALE_ARCHIVE_VERSION;
-		$preparedFields = $this->prepareEncodeFields($this->orderDataFields);
-		$preparedOrderData['ORDER_DATA'] = Main\Web\Json::encode($preparedFields);
+		$preparedOrderData['ORDER_DATA'] = JsonField::pack($this->orderDataFields);
 		return Internals\OrderArchiveTable::add($preparedOrderData);
-	}
-
-	private function prepareEncodeFields(array $fields)
-	{
-		foreach ($fields as &$field)
-		{
-			if (is_array($field))
-			{
-				$field = $this->prepareEncodeFields($field);
-			}
-			elseif ($field instanceof Type\Date)
-			{
-				\CTimeZone::Disable();
-				$field = $field->toString();
-				\CTimeZone::Enable();
-			}
-		}
-
-		return $fields;
 	}
 
 	/**
@@ -230,8 +211,7 @@ class OrderArchiveItem
 	{
 		$preparedBasketItems = array_intersect_key($item, array_flip(Manager::getBasketFieldNames()));
 		$preparedBasketItems['ARCHIVE_ID'] = (int)$archivedOrderId;
-		$preparedFields = $this->prepareEncodeFields($item);
-		$preparedBasketItems['BASKET_DATA'] = Main\Web\Json::encode($preparedFields);
+		$preparedBasketItems['BASKET_DATA'] = JsonField::pack($item);
 
 		if (empty($preparedBasketItems['DATE_INSERT']))
 		{

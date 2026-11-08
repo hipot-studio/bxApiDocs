@@ -12,11 +12,16 @@ final class Rest implements Provider
 	private const N_FIRST = 20;
 	private int $sourceId;
 	private ?array $settings = null;
+	private bool $diagnosticsMode = false;
 
 	public function getData(): ProviderDataDto
 	{
 		/* @var ExternalSource\Source\Rest $source */
 		$source = Source\Factory::getSource(ExternalSource\Type::Rest, $this->sourceId);
+		if ($source instanceof Source\Rest && $this->diagnosticsMode)
+		{
+			$source->setDiagnosticsMode(true);
+		}
 
 		$headers = [];
 		$externalCodes = [];
@@ -73,6 +78,16 @@ final class Rest implements Provider
 			$types,
 			$rowCollection,
 		);
+	}
+
+	/**
+	 * In the diagnostics mode a failure of the source names its reason instead of an empty preview.
+	 */
+	public function setDiagnosticsMode(bool $isEnabled): self
+	{
+		$this->diagnosticsMode = $isEnabled;
+
+		return $this;
 	}
 
 	public function setSourceId(int $sourceId): self

@@ -1,4 +1,5 @@
 <?php
+
 namespace Bitrix\BIConnector\Integration\Crm;
 
 use Bitrix\Main\Localization\Loc;
@@ -247,6 +248,22 @@ class DynamicItems
 						'JOIN' => 'INNER JOIN b_crm_contact C ON C.ID = D.CONTACT_ID',
 						'LEFT_JOIN' => 'LEFT JOIN b_crm_contact C ON C.ID = D.CONTACT_ID',
 					],
+					'CONTACTS' => [
+						'GROUP_CONCAT' => ', ',
+						'GROUP_KEY' => 'CONTACTS',
+						'IS_METRIC' => 'N',
+						'FIELD_NAME' => 'CASE WHEN CEC.CONTACT_ID is null THEN null ELSE concat_ws(\' \', ' . $helper->getConcatFunction("'['", 'CEC.CONTACT_ID', "']'") . ', nullif(CC.FULL_NAME, \'\')) END',
+						'FIELD_TYPE' => 'array_string',
+						'TABLE_ALIAS' => 'CEC',
+						'JOIN' => [
+							'INNER JOIN b_crm_entity_contact CEC ON CEC.ENTITY_TYPE_ID = ' . $type->getEntityTypeId() . ' AND CEC.ENTITY_ID = D.ID',
+							'INNER JOIN b_crm_contact CC ON CC.ID = CEC.CONTACT_ID',
+						],
+						'LEFT_JOIN' => [
+							'LEFT JOIN b_crm_entity_contact CEC ON CEC.ENTITY_TYPE_ID = ' . $type->getEntityTypeId() . ' AND CEC.ENTITY_ID = D.ID',
+							'LEFT JOIN b_crm_contact CC ON CC.ID = CEC.CONTACT_ID',
+						],
+					],
 					'OPPORTUNITY' => [
 						'IS_METRIC' => 'Y',
 						'AGGREGATION_TYPE' => 'SUM',
@@ -363,12 +380,20 @@ class DynamicItems
 				],
 			];
 
+			if ($type->getEntityTypeId() === \CCrmOwnerType::SmartInvoice)
+			{
+				$result[$datasetName]['FIELDS']['COMMENTS'] = [
+					'FIELD_NAME' => 'D.COMMENTS',
+					'FIELD_TYPE' => 'string',
+				];
+			}
+
 			if (isset($messages['CRM_DYNAMIC_ITEMS_TABLE_PREFIX']))
 			{
 				$result[$datasetName]['TABLE_DESCRIPTION'] = $messages['CRM_DYNAMIC_ITEMS_TABLE_PREFIX'] . ' ' . $result[$datasetName]['TABLE_DESCRIPTION'];
 			}
 
-			$descriptionFull = $messages['CRM_DYNAMIC_ITEMS_TABLE_DESCRIPTION_FULL'] ?? '';
+			$descriptionFull = $messages['CRM_DYNAMIC_ITEMS_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 			$result[$datasetName]['TABLE_DESCRIPTION_FULL'] = str_replace('#TITLE#', $type->getTitle(), $descriptionFull);
 
 			foreach ($result[$datasetName]['FIELDS'] as $fieldCode => &$fieldInfo)
@@ -408,11 +433,10 @@ class DynamicItems
 								return null;
 							}
 
-							$format =
-								$userField['USER_TYPE_ID'] === 'date'
+							$format
+								= $userField['USER_TYPE_ID'] === 'date'
 									? $dateFormats['date_format_php']
-									: $dateFormats['datetime_format_php']
-							;
+									: $dateFormats['datetime_format_php'];
 
 							return \Bitrix\BIConnector\PrettyPrinter::formatUserFieldAsDate($userField, $value, $format);
 						}
@@ -437,7 +461,7 @@ class DynamicItems
 							{
 								$result = $USER_FIELD_MANAGER->onAfterFetch(
 									$userField,
-									unserialize($value, ['allowed_classes' => \Bitrix\BIConnector\PrettyPrinter::$allowedUnserializeClassesList])
+									unserialize($value, ['allowed_classes' => \Bitrix\BIConnector\PrettyPrinter::$allowedUnserializeClassesList]),
 								);
 							}
 							else
@@ -478,6 +502,7 @@ class DynamicItems
 			$messages = Loc::loadLanguageFile($_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/crm/lib/category/dealcategory.php', $languageId);
 			$name = !empty($messages['CRM_DEAL_CATEGORY_DEFAULT']) ? $messages['CRM_DEAL_CATEGORY_DEFAULT'] : '';
 		}
+
 		return $name;
 	}
 }

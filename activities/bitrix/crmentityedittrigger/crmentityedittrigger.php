@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Public\Activity\ReturnDocumentTrait;
-use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventInitiatorTrait;
+use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventOutputsTrait;
 use Bitrix\Crm\Integration\BizProc\Trigger\CategoryProperty;
 use Bitrix\Crm\Integration\BizProc\Trigger\CrmEntityTriggerTrait;
 use Bitrix\Crm\Integration\BizProc\Trigger\TrackedFieldsProperty;
-use Bitrix\Main\Type\DateTime;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -28,7 +27,7 @@ if (!\Bitrix\Main\Loader::includeModule('crm'))
 class CBPCrmEntityEditTrigger extends CBPEditDocumentTrigger
 {
 	use CrmEntityTriggerTrait;
-	use EventInitiatorTrait;
+	use EventOutputsTrait;
 	use ReturnDocumentTrait;
 
 	private const EVENT_INITIATOR_ID = 'Initiator';
@@ -73,8 +72,7 @@ class CBPCrmEntityEditTrigger extends CBPEditDocumentTrigger
 
 		$this->setProperties([
 			static::getReturnDocumentFieldName() => $document,
-			self::EVENT_INITIATOR_ID => $initiatorUserId ? 'user_' . $initiatorUserId : null,
-			self::EVENT_DATE_TIME_ID => (new DateTime())->format(DateTime::getFormat()),
+			...static::buildEventOutputs($initiatorUserId),
 		]);
 		$this->setPropertiesTypes(
 			static::buildReturnDocumentProperties(is_array($document) ? $document : null)
@@ -104,12 +102,23 @@ class CBPCrmEntityEditTrigger extends CBPEditDocumentTrigger
 		&$errors,
 	): bool
 	{
-		// Route through the canonical BaseTrigger pipeline instead of CBPEditDocumentTrigger's bare
-		// override, so required-Document validation (validateProperties) and Return build
-		// (preparePropertiesDialogValues) run — same path as the create trigger. Forwarding via
-		// static:: preserves late static binding, so getPropertiesMap/validateProperties/
-		// preparePropertiesDialogValues resolve to this trigger and its CRM trait, not to CBPActivity.
-		return static::applyPropertiesDialogValues(
+		if (
+			class_exists(\Bitrix\Bizproc\Activity\BaseTrigger::class)
+			&& method_exists(\Bitrix\Bizproc\Activity\BaseTrigger::class, 'applyPropertiesDialogValues')
+		)
+		{
+			return static::applyPropertiesDialogValues(
+				$documentType,
+				$activityName,
+				$workflowTemplate,
+				$workflowParameters,
+				$workflowVariables,
+				$currentValues,
+				$errors,
+			);
+		}
+
+		return self::applyLegacyPropertiesDialogValues(
 			$documentType,
 			$activityName,
 			$workflowTemplate,
@@ -118,6 +127,55 @@ class CBPCrmEntityEditTrigger extends CBPEditDocumentTrigger
 			$currentValues,
 			$errors,
 		);
+	}
+
+	private static function applyLegacyPropertiesDialogValues(
+		$documentType,
+		$activityName,
+		&$workflowTemplate,
+		&$workflowParameters,
+		&$workflowVariables,
+		$currentValues,
+		&$errors,
+	): bool
+	{
+		$currentValues = is_array($currentValues) ? $currentValues : [];
+		$errors = [];
+		$properties = [];
+
+		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+		$map = static::getPropertiesMap($documentType, $currentValues);
+
+		foreach ($map as $id => $property)
+		{
+			$value = $documentService->getFieldInputValue(
+				$documentType,
+				$property,
+				$property['FieldName'],
+				$currentValues,
+				$errors,
+			);
+
+			if (!empty($errors))
+			{
+				return false;
+			}
+
+			$properties[$id] = $value;
+		}
+
+		$user = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
+		$errors = static::validateProperties($properties, $user);
+		if ($errors)
+		{
+			return false;
+		}
+
+		$properties = static::preparePropertiesDialogValues($documentType, $properties, $currentValues);
+		$currentActivity = &\CBPWorkflowTemplateLoader::findActivityByName($workflowTemplate, $activityName);
+		$currentActivity['Properties'] = $properties;
+
+		return true;
 	}
 
 	/**

@@ -5,6 +5,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\Public\Provider\StorageFieldProvider;
 use Bitrix\Bizproc\Public\Provider\Params\StorageField\StorageFieldFilter;
@@ -51,7 +52,8 @@ class BizprocStorageFieldListComponent extends MainUfListComponent
 			return;
 		}
 
-		if (!(new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin())
+		$accessService = new TemplateAccessService();
+		if (!$accessService->canAccessTemplates() || !$accessService->canEditStorage($this->storageTypeId))
 		{
 			$this->errorCollection->setError(ErrorMessage::ACCESS_DENIED->getError());
 

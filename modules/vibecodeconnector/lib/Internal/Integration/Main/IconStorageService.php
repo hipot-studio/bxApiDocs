@@ -12,7 +12,7 @@ use CFile;
 /**
  * Downloads an icon from a remote URL and stores it in b_file (\CFile::SaveFile).
  */
-final class IconStorageService
+class IconStorageService
 {
 	public const MAX_BYTES = 5 * 1024 * 1024;
 	public const MAX_SIDE = 256;
@@ -21,18 +21,15 @@ final class IconStorageService
 	private const ALLOWED_MIME_PREFIX = 'image/';
 
 	public function __construct(
-		private readonly HttpClient $httpClient = new HttpClient([
-			'redirect' => false,
-			'bodyLengthMax' => self::MAX_BYTES,
-			'streamTimeout' => 10,
-			'socketTimeout' => 10,
-		]),
+		private ?HttpClient $httpClient = null,
 	) {}
 
 	public function downloadAndSave(string $url): ?int
 	{
-		$body = $this->httpClient->get($url);
-		if ($body === false || $this->httpClient->getStatus() !== 200)
+		$httpClient = $this->httpClient();
+
+		$body = $httpClient->get($url);
+		if ($body === false || $httpClient->getStatus() !== 200)
 		{
 			return null;
 		}
@@ -42,7 +39,7 @@ final class IconStorageService
 			return null;
 		}
 
-		$contentType = strtolower((string)$this->httpClient->getHeaders()->get('Content-Type'));
+		$contentType = strtolower((string)$httpClient->getHeaders()->get('Content-Type'));
 		if (!str_starts_with($contentType, self::ALLOWED_MIME_PREFIX) || str_contains($contentType, 'svg'))
 		{
 			return null;
@@ -244,6 +241,16 @@ final class IconStorageService
 		}
 
 		return $urls;
+	}
+
+	private function httpClient(): HttpClient
+	{
+		return $this->httpClient ??= new HttpClient([
+			'redirect' => false,
+			'bodyLengthMax' => self::MAX_BYTES,
+			'streamTimeout' => 10,
+			'socketTimeout' => 10,
+		]);
 	}
 
 	private function getImageInfo(string $path): ?Image\Info

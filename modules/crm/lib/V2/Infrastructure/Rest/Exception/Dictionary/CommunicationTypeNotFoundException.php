@@ -1,0 +1,43 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Bitrix\Crm\V2\Infrastructure\Rest\Exception\Dictionary;
+
+use Bitrix\Rest\V3\Exception\EntityNotFoundException;
+use Bitrix\Rest\V3\Exception\RestException;
+use Bitrix\Rest\V3\Exception\SkipWriteToLogException;
+
+/**
+ * EntityNotFoundException itself cannot be extended here - its constructor is typed int, while a
+ * communication type is addressed by a string code. The phrase and the public error code are reused
+ * so that a missing dictionary entry looks the same to a client as in the other dictionaries.
+ */
+final class CommunicationTypeNotFoundException extends RestException implements SkipWriteToLogException
+{
+	/**
+	 * The code of a value type is a short word, so anything longer is a client mistake: the answer
+	 * echoes the beginning of it and never the whole string the request carried.
+	 */
+	private const MAX_REFLECTED_ID_LENGTH = 32;
+
+	public function __construct(private readonly string $id)
+	{
+		parent::__construct();
+	}
+
+	protected function getClassWithPhrase(): string
+	{
+		return EntityNotFoundException::class;
+	}
+
+	protected function getMessagePhraseCode(): string
+	{
+		return 'REST_V3_EXCEPTION_ENTITYNOTFOUNDEXCEPTION';
+	}
+
+	protected function getMessagePhraseReplacement(): ?array
+	{
+		return ['#ID#' => mb_substr($this->id, 0, self::MAX_REFLECTED_ID_LENGTH)];
+	}
+}

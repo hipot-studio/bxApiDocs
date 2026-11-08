@@ -8,6 +8,7 @@ use Bitrix\Im\Model\RecentTable;
 use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\Model\UserTable;
 use Bitrix\Im\V2\Chat;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat\Access\ParentChainFilterFactory;
 use Bitrix\Im\V2\Chat\Tree\TreeOrigin;
 use Bitrix\Im\V2\Chat\Type\Query\TypeFilter;
@@ -21,10 +22,16 @@ use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserBot;
 use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Im\V2\Entity\User\UserGuest;
+use Bitrix\Im\V2\Folder\Definition\Selection;
+use Bitrix\Im\V2\Folder\FolderProvider;
+use Bitrix\Im\V2\Folder\Query\FolderSearchScope;
+use Bitrix\Im\V2\Folder\Query\SelectionSearchFields;
+use Bitrix\Im\V2\Folder\Query\SelectionSearchFilter;
 use Bitrix\Im\V2\Integration\AI\RoleManager;
 use Bitrix\Im\V2\Integration\HumanResources\Department\Department;
 use Bitrix\Im\V2\Integration\Socialnetwork\Group;
 use Bitrix\Im\V2\Permission;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ORM\Entity;
 use Bitrix\Main\ORM\Fields\BooleanField;
@@ -50,8 +57,10 @@ class RecentProvider extends BaseProvider
 	protected const ENTITY_ID = 'im-recent-v2';
 	protected const LIMIT = 30;
 	protected const TECHNICAL_LIMIT = 1000;
+	public const MENTION_SEARCH_MIN_TOKEN_SIZE = 2;
 	private const ENTITY_TYPE_USER = 'im-user';
 	private const ENTITY_TYPE_CHAT = 'im-chat';
+	private const PARENT_CHAIN_ALIAS = 'SEARCH_CHAIN';
 	protected const ALLOWED_SEARCH_CHAT_TYPES = [
 		Chat::IM_TYPE_CHAT,
 		Chat::IM_TYPE_OPEN,
@@ -63,6 +72,7 @@ class RecentProvider extends BaseProvider
 	];
 
 	private readonly SearchOptions $searchOptions;
+	private ?FolderSearchScope $folderSearchScope = null;
 	private string $preparedSearchString;
 	private string $originalSearchString;
 	private array $userIds;
@@ -76,8 +86,31 @@ class RecentProvider extends BaseProvider
 		parent::__construct();
 	}
 
+	/**
+	 * The constant itself stays protected so that descendants overriding it keep working:
+	 * raising its visibility would be source-incompatible with existing protected overrides.
+	 *
+	 * @return array<string>
+	 */
+	public static function getAllowedSearchChatTypes(): array
+	{
+		return static::ALLOWED_SEARCH_CHAT_TYPES;
+	}
+
 	protected function prepareOptions(array $options): array
 	{
+		if (SearchOptions::isFolderScopeSearch($options) || SearchOptions::isFolderEligibleSearch($options))
+		{
+			// Both folder modes own the type condition themselves and the literal whitelist cannot
+			// express it: a task chat ('X') is not in ALLOWED_SEARCH_CHAT_TYPES at all. This takes nothing away
+			// from a descendant with a narrower whitelist: the option is read by the default mode
+			// only, while a descendant narrows itself through the options it sets on construction,
+			// and those are left untouched here.
+			unset($options[SearchOptions::SEARCH_CHAT_TYPES_OPTION]);
+
+			return $options;
+		}
+
 		if (isset($options[SearchOptions::SEARCH_CHAT_TYPES_OPTION]))
 		{
 			$options[SearchOptions::SEARCH_CHAT_TYPES_OPTION] = $this->filterAllowedChatTypes($options[SearchOptions::SEARCH_CHAT_TYPES_OPTION]);
@@ -109,7 +142,20 @@ class RecentProvider extends BaseProvider
 	{
 		global $USER;
 
-		return $USER->IsAuthorized();
+		if (!$USER->IsAuthorized())
+		{
+			return false;
+		}
+
+		// The only gate of the folder mode: this path skips the prefilters of the module, and
+		// Entity::create() asks the provider before anything else - so one check closes both the
+		// search and the filling of the list before the first keystroke.
+		if ($this->searchOptions->isFolderScopeMode())
+		{
+			return $this->resolveFolderScopeSelection() !== null;
+		}
+
+		return true;
 	}
 
 	public function doSearch(SearchQuery $searchQuery, Dialog $dialog): void
@@ -152,7 +198,7 @@ class RecentProvider extends BaseProvider
 			return;
 		}
 
-		$defaultItems = $this->getDefaultDialogItems();
+		$defaultItems = $this->getDefaultDialogItems($requiredCountToFill);
 
 		rsort($defaultItems);
 		$defaultItems = array_slice($defaultItems, 0, $requiredCountToFill);
@@ -165,12 +211,12 @@ class RecentProvider extends BaseProvider
 
 	protected function fillDialogByRecentDefaultItems(Dialog $dialog): void
 	{
-		$items = $this->getSortedLimitedBlankItems();
+		$items = $this->getSortedLimitedBlankItems(recentOnly: true);
 		$this->fillItems($items);
 		$dialog->addRecentItems($items);
 	}
 
-	protected function getDefaultDialogItems(): array
+	protected function getDefaultDialogItems(int $limit = self::LIMIT): array
 	{
 		if (!$this->searchOptions->shouldFillDefaultItems())
 		{
@@ -184,10 +230,14 @@ class RecentProvider extends BaseProvider
 			return [];
 		}
 
+		$userId = $this->getContext()->getUserId();
+
 		return match (true)
 		{
-			!$this->getContext()->getUser()->isExtranet() => Department::getInstance()->getColleagues(),
-			default => Group::getUsersInSameGroups($this->getContext()->getUserId()),
+			!$this->getContext()->getUser()->isExtranet()
+				=> Department::getInstance()->getColleagueIdsByUserId($userId, $limit),
+			default
+				=> Group::getUsersInSameGroups($userId),
 		};
 	}
 
@@ -372,17 +422,17 @@ class RecentProvider extends BaseProvider
 		return array_filter($chats, static fn($chat) => $chat instanceof Chat\CopilotChat);
 	}
 
-	private function getItemsWithDates(): array
+	private function getItemsWithDates(bool $recentOnly = false): array
 	{
-		$userItemsWithDate = $this->getUserItemsWithDate();
-		$chatItemsWithDate = $this->getChatItemsWithDate();
+		$userItemsWithDate = $this->getUserItemsWithDate($recentOnly);
+		$chatItemsWithDate = $this->getChatItemsWithDate($recentOnly);
 
 		return $this->mergeByKey($userItemsWithDate, $chatItemsWithDate);
 	}
 
-	private function getSortedLimitedBlankItems(): array
+	private function getSortedLimitedBlankItems(bool $recentOnly = false): array
 	{
-		$items = $this->getItemsWithDates();
+		$items = $this->getItemsWithDates($recentOnly);
 		usort($items, function(Item $a, Item $b) {
 			if ($b->getSort() === $a->getSort())
 			{
@@ -405,7 +455,7 @@ class RecentProvider extends BaseProvider
 		return array_slice($items, 0, self::LIMIT);
 	}
 
-	private function getChatItemsWithDate(): array
+	private function getChatItemsWithDate(bool $recentOnly = false): array
 	{
 		if (!$this->searchOptions->isChatSearchEnabled())
 		{
@@ -425,7 +475,7 @@ class RecentProvider extends BaseProvider
 			return $this->getChatItemsWithDateByIds();
 		}
 
-		if ($this->searchOptions->shouldFillDialogByRecent())
+		if ($recentOnly)
 		{
 			return $this->getRecentChatItemsWithOrder();
 		}
@@ -653,8 +703,16 @@ class RecentProvider extends BaseProvider
 				->apply($query);
 		}
 
-		$chatTypeCondition = $this->searchOptions->getChatTypeCondition() ?? new TypeCondition(include: []);
-		$query->where((new TypeFilter($chatTypeCondition, 'TYPE', 'ENTITY_TYPE'))->toConditionTree());
+		if ($this->searchOptions->isFolderScopeMode())
+		{
+			$query->where($this->getFolderScopeFilter()->toConditionTree());
+			$this->applyFolderScopeParentChainFilter($query);
+		}
+		else
+		{
+			$chatTypeCondition = $this->searchOptions->getChatTypeCondition() ?? new TypeCondition(include: []);
+			$query->where((new TypeFilter($chatTypeCondition, 'TYPE', 'ENTITY_TYPE'))->toConditionTree());
+		}
 
 		if ($this->searchOptions->shouldFilterByNullEntityType())
 		{
@@ -688,11 +746,91 @@ class RecentProvider extends BaseProvider
 
 	private function shouldApplyParentChainFilter(): bool
 	{
+		// folder mode checks the chain on its own, see applyFolderScopeParentChainFilter()
+		if ($this->searchOptions->isFolderScopeMode())
+		{
+			return false;
+		}
+
 		return $this->searchOptions->getParentId() !== 0;
+	}
+
+	/**
+	 * In folder mode a branch reaching nested chats shares the query with branches framed to the
+	 * root, so the chain is not joined to every row: a root chat passes on its PARENT_ID alone,
+	 * and only a nested one is checked, by a subquery correlated on the chat id.
+	 *
+	 * The subquery runs for every matching nested chat of such a branch, before the membership
+	 * filter: it pays off while those are few among the matches, and the joins would cost less
+	 * only if nested chats dominated them.
+	 */
+	private function applyFolderScopeParentChainFilter(Query $query): void
+	{
+		// while every branch is framed to the root, there is no nested chat to check
+		if (!$this->getFolderScopeFilter()->containsNestedChats())
+		{
+			return;
+		}
+
+		$chainQuery = ChatTable::query()
+			->setCustomBaseTableAlias(self::PARENT_CHAIN_ALIAS)
+			->setSelect([new ExpressionField('CHAIN_ACCESSIBLE', '1')])
+			->where('ID', new SqlExpression('%s'))
+		;
+		ServiceLocator::getInstance()->get(ParentChainFilterFactory::class)
+			->forUser($this->getContext()->getUserId(), TreeOrigin::forChat())
+			->apply($chainQuery);
+
+		$query->where(
+			Query::filter()
+				->logic('or')
+				->whereNull('PARENT_ID')
+				->where('PARENT_ID', 0)
+				->whereExpr("EXISTS ({$chainQuery->getQuery()})", ['ID'])
+		);
+	}
+
+	/**
+	 * An unavailable scope expands into nothing, and the translator writes that as a false
+	 * condition. In production this is unreachable - {@see self::isAvailable()} closes the path
+	 * before the query is built - but it keeps a direct call to the provider from widening the
+	 * result set instead of emptying it.
+	 */
+	private function getFolderScopeFilter(): SelectionSearchFilter
+	{
+		return new SelectionSearchFilter(
+			$this->resolveFolderScopeSelection() ?? new Selection(),
+			new SelectionSearchFields(
+				typeField: 'TYPE',
+				entityTypeField: 'ENTITY_TYPE',
+				chatIdField: 'ID',
+				parentField: 'PARENT_ID',
+			),
+		);
+	}
+
+	private function resolveFolderScopeSelection(): ?Selection
+	{
+		$this->folderSearchScope ??= new FolderSearchScope(
+			ServiceLocator::getInstance()->get(FolderProvider::class)
+		);
+
+		return $this->folderSearchScope->resolve(
+			$this->searchOptions->getFolderScopeId(),
+			$this->getContext()->getUserId(),
+		);
 	}
 
 	private function getRelationFilter(): ConditionTree
 	{
+		// A personal folder holds only chats the user is in, so an open chat is not offered for
+		// discovery here. A hidden relation is membership too - unlike IS_MEMBER, which counts it as
+		// a non-member to hide the dates of such a chat.
+		if ($this->searchOptions->isFolderEligibleMode())
+		{
+			return Query::filter()->whereNotNull('RELATION.USER_ID');
+		}
+
 		$relationFilter = Query::filter()
 			->whereNotNull('RELATION.USER_ID')
 			->where('RELATION.IS_HIDDEN', 'N')
@@ -710,14 +848,14 @@ class RecentProvider extends BaseProvider
 		;
 	}
 
-	private function getUserItemsWithDate(): array
+	private function getUserItemsWithDate(bool $recentOnly = false): array
 	{
 		$result = [];
 		if (!$this->searchOptions->isUserSearchEnabled())
 		{
 			return $result;
 		}
-		$recentJoinType = $this->searchOptions->shouldFillDialogByRecent() ? Join::TYPE_INNER : Join::TYPE_LEFT;
+		$recentJoinType = $recentOnly ? Join::TYPE_INNER : Join::TYPE_LEFT;
 		$query = UserTable::query()
 			->setSelect([
 				'ID',
@@ -752,7 +890,7 @@ class RecentProvider extends BaseProvider
 		{
 			$query->whereIn('ID', $this->userIds)->setLimit(self::TECHNICAL_LIMIT);
 		}
-		elseif ($this->searchOptions->shouldFillDialogByRecent())
+		elseif ($recentOnly)
 		{
 			$query
 				->setOrder(['RECENT.DATE_LAST_ACTIVITY' => 'DESC', 'IS_INTRANET_USER' => 'DESC', 'DATE_CREATE' => 'DESC'])
@@ -765,6 +903,11 @@ class RecentProvider extends BaseProvider
 		}
 
 		$query->where($this->getIntranetFilter());
+
+		if ($this->searchOptions->shouldExcludeCurrentUser())
+		{
+			$query->whereNot('ID', $this->getContext()->getUserId());
+		}
 
 		if ($this->searchOptions->shouldExcludeGuests())
 		{
@@ -789,7 +932,7 @@ class RecentProvider extends BaseProvider
 				dialogId: (int)$row['ID'],
 				dateMessage: $row['DATE_MESSAGE'],
 				secondDate: $row['DATE_CREATE'],
-				dateLastActivity: $this->searchOptions->shouldFillDialogByRecent() ? $row['DATE_LAST_ACTIVITY'] : null,
+				dateLastActivity: $recentOnly ? $row['DATE_LAST_ACTIVITY'] : null,
 			);
 		}
 
@@ -838,7 +981,8 @@ class RecentProvider extends BaseProvider
 	private function needAddFavoriteChat(array $foundUserItems): bool
 	{
 		return
-			!isset($foundUserItems[$this->getContext()->getUserId()])
+			!$this->searchOptions->shouldExcludeCurrentUser()
+			&& !isset($foundUserItems[$this->getContext()->getUserId()])
 			&& isset($this->originalSearchString)
 			&& static::isPhraseFoundBySearchQuery(Chat\FavoriteChat::getTitlePhrase(), $this->originalSearchString)
 		;
@@ -959,7 +1103,31 @@ class RecentProvider extends BaseProvider
 	private function prepareSearchString(string $searchString): string
 	{
 		$searchString = trim($searchString);
+		$token = Content::prepareStringToken($searchString);
 
-		return Helper::matchAgainstWildcard(Content::prepareStringToken($searchString));
+		if ($this->searchOptions->isMentionSearch())
+		{
+			return Helper::matchAgainstWildcard($token, '*', self::getMentionSearchMinTokenSize());
+		}
+
+		return Helper::matchAgainstWildcard($token);
+	}
+
+	/**
+	 * The mention list searches from a shorter query than the rest of the provider consumers: a wildcard
+	 * matches the beginning of a word already in the index, so a query shorter than the minimal indexed
+	 * word is allowed - a two-letter prefix still finds a longer indexed name. The index setting stays
+	 * the lower bound: a portal that indexes even shorter words keeps its own value.
+	 */
+	public static function getMentionSearchMinTokenSize(): int
+	{
+		$indexMinTokenSize = Helper::getMinTokenSize();
+
+		if (!Features::isMentionInstantSearchAvailable())
+		{
+			return $indexMinTokenSize;
+		}
+
+		return min(self::MENTION_SEARCH_MIN_TOKEN_SIZE, $indexMinTokenSize);
 	}
 }

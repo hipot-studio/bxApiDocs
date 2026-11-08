@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Bizproc\UI\Helpers\DurationFormatter;
 use Bitrix\Iblock\ElementTable;
 use Bitrix\Landing\Vibe\Vibe;
 use Bitrix\Lists\Api\Request\ServiceFactory\GetAverageIBlockTemplateDurationRequest;
@@ -186,17 +187,13 @@ class LandingBlocksMainpageWidgetBP extends LandingBlocksMainpageWidgetBase
 								);
 								if ($averageTimeResult->isSuccess())
 								{
-									$seconds = $averageTimeResult->getAverageDuration();
-									$daysAmount = 0;
-									if ($seconds > 0)
-									{
-										$daysAmount = $this->secondsToDays($seconds);
-									}
-									$businessProcess['AVERAGE_TEXT'] = $this->getPhraseWithDays($daysAmount);
+									$businessProcess['AVERAGE_TEXT'] = $this->formatAverageTime(
+										$averageTimeResult->getAverageDuration()
+									);
 								}
 								else
 								{
-									$businessProcess['AVERAGE_TEXT'] = $this->getPhraseWithDays(0);
+									$businessProcess['AVERAGE_TEXT'] = $this->formatAverageTime(null);
 								}
 							}
 							$businessProcess['COUNT'] = ElementTable::getCount(
@@ -240,6 +237,29 @@ class LandingBlocksMainpageWidgetBP extends LandingBlocksMainpageWidgetBase
 		}
 
 		return $data;
+	}
+
+	/**
+	 * Returns the average duration text formatted the same way as in the business process card.
+	 *
+	 * @param int|null $seconds Average duration in seconds.
+	 *
+	 * @return string Formatted duration or the "no data" phrase.
+	 */
+	protected function formatAverageTime(?int $seconds): string
+	{
+		$text = null;
+		if ($seconds > 0)
+		{
+			$text = DurationFormatter::format($seconds);
+		}
+
+		if ($text === null || $text === '')
+		{
+			$text = Loc::getMessage('CLASS_BLOCK_MP_WIDGET_BP_DAYS_ERROR');
+		}
+
+		return (string)$text;
 	}
 
 	/**

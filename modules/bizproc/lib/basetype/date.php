@@ -138,7 +138,8 @@ class Date extends Base
 		if ($isPublicControl && $allowSelection)
 		{
 			$selectorAttributes = sprintf(
-				'data-role="inline-selector-target" data-selector-type="%s" data-property="%s" ',
+				'data-role="inline-selector-target" data-select-mode="replace" '
+					. 'data-selector-type="%s" data-property="%s" ',
 				htmlspecialcharsbx($fieldType->getType()),
 				htmlspecialcharsbx(Main\Web\Json::encode($fieldType->getProperty()))
 			);
@@ -350,9 +351,7 @@ class Date extends Base
 			}
 			else
 			{
-				$tzOffset = self::extractOffset($field, $request);
-				$value = (static::getType() == FieldType::DATETIME) ?
-					new Value\DateTime($value, $tzOffset) : new Value\Date($value, $tzOffset);
+				$value = self::makeValueObject($value, self::extractOffset($field, $request));
 
 				//have to serialize in design time.
 				$value = $value->serialize();
@@ -375,22 +374,45 @@ class Date extends Base
 			$tz = isset($field['Index']) ? $tz[$field['Index']] : $tz[0];
 		}
 
-		if ($tz === 'current')
+		return self::resolveOffset($tz);
+	}
+
+	/**
+	 * @param mixed $formatted Date in the field format, in the serialized form or a timestamp.
+	 * @param int $offset Offset from the server time in seconds.
+	 * @return Value\Date Value object of the field type.
+	 * @throws Main\ObjectException
+	 */
+	private static function makeValueObject($formatted, int $offset): Value\Date
+	{
+		return (static::getType() === FieldType::DATE)
+			? new Value\Date($formatted, $offset)
+			: new Value\DateTime($formatted, $offset)
+		;
+	}
+
+	/**
+	 * @param mixed $timeZone Timezone identifier, 'current' for the executing user or empty for the server time.
+	 * @return int Offset from the server time in seconds.
+	 * @throws \Exception On unknown timezone identifier.
+	 * @throws \ValueError On a timezone identifier containing a null byte.
+	 */
+	private static function resolveOffset($timeZone): int
+	{
+		if ($timeZone === 'current')
 		{
 			return \CTimeZone::GetOffset();
 		}
-		elseif ($tz)
+
+		if (!is_string($timeZone) || !$timeZone)
 		{
-			$localTime = new \DateTime();
-			$localOffset = $localTime->getOffset();
-
-			$userTime = new \DateTime(null, new \DateTimeZone($tz));
-			$userOffset = $userTime->getOffset();
-
-			return $userOffset - $localOffset;
+			return 0;
 		}
 
-		return 0;
+		$localOffset = (new \DateTime())->getOffset();
+		$zoneOffset = (new \DateTime('now', new \DateTimeZone($timeZone)))->getOffset();
+
+		return $zoneOffset - $localOffset;
 	}
 
 	/**
@@ -455,14 +477,16 @@ class Date extends Base
 
 	public static function internalizeValue(FieldType $fieldType, $context, $value)
 	{
+		if (is_array($value) && is_string($value['value'] ?? null))
+		{
+			return self::internalizeTimeZonedValue($value);
+		}
+
 		if ($value && is_string($value))
 		{
-			$offset = \CTimeZone::GetOffset();
 			try
 			{
-				$obj = (static::getType() === FieldType::DATE)
-					? new Value\Date($value, $offset)
-					: new Value\DateTime($value, $offset);
+				$obj = self::makeValueObject($value, \CTimeZone::GetOffset());
 				//set value if everything is ok
 				if ($obj->getTimestamp() !== null)
 				{
@@ -481,6 +505,48 @@ class Date extends Base
 		}
 
 		return $value;
+	}
+
+	/**
+	 * Internalizes a value passed together with the selected timezone: ['value' => '...', 'tz' => '...'].
+	 * A missing 'tz' key means the timezone of the executing user.
+	 *
+	 * @param array $value
+	 * @return Value\Date|string
+	 */
+	private static function internalizeTimeZonedValue(array $value)
+	{
+		$formatted = $value['value'];
+
+		//an empty value stays empty, as in the plain string branch
+		if (!$formatted)
+		{
+			return $formatted;
+		}
+
+		try
+		{
+			$offset = array_key_exists('tz', $value)
+				? self::resolveOffset($value['tz'])
+				: \CTimeZone::GetOffset()
+			;
+		}
+		catch (\Throwable $exception)
+		{
+			//unknown timezone identifier is treated as the server time
+			$offset = 0;
+		}
+
+		try
+		{
+			$object = self::makeValueObject($formatted, $offset);
+		}
+		catch (Main\ObjectException $exception)
+		{
+			return $formatted;
+		}
+
+		return $object->getTimestamp() !== null ? $object : $formatted;
 	}
 
 	public static function externalizeValue(FieldType $fieldType, $context, $value)

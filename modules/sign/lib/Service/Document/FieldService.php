@@ -4,19 +4,25 @@ namespace Bitrix\Sign\Service\Document;
 
 use Bitrix\Sign\Result\Result;
 use Bitrix\Sign\Service;
+use Bitrix\Sign\Service\Integration\Crm\CompanyRequisiteFieldPolicy;
+use Bitrix\Sign\Service\Integration\Crm\FieldSelectorService;
+use Bitrix\Sign\Service\Providers\LegalInfoProvider;
 use Bitrix\Sign\Type\BlockCode;
 use Bitrix\Sign\Type\FieldType;
-use Bitrix\Sign\Service\Integration\Crm\FieldSelectorService;
 
 class FieldService
 {
+	private readonly CompanyRequisiteFieldPolicy $companyRequisiteFieldPolicy;
+
 	public function __construct(
 		private readonly Service\Providers\ProfileProvider $profileProvider,
 		private readonly Service\Providers\MemberDynamicFieldInfoProvider $memberDynamicFieldProvider,
 		private readonly FieldSelectorService $crmFieldSelectorService,
 		private readonly FieldAccessService $fieldAccessService,
+		?CompanyRequisiteFieldPolicy $companyRequisiteFieldPolicy = null,
 	)
 	{
+		$this->companyRequisiteFieldPolicy = $companyRequisiteFieldPolicy ?? new CompanyRequisiteFieldPolicy();
 	}
 
 	public function loadByUserId(int $currentUserId, array $options = []): Result
@@ -28,6 +34,19 @@ class FieldService
 		}
 
 		$crmFieldsData = $this->filterExcludedFields($crmFieldsResult->getData());
+		$presetId = isset($options['presetId']) && is_numeric($options['presetId'])
+			? (int)$options['presetId']
+			: null
+		;
+		$areRequisitesHidden = (int)($options['hideRequisites'] ?? 1) !== 0;
+		$fieldSetCodes = $areRequisitesHidden
+			? []
+			: $this->crmFieldSelectorService->getCompanyRequisiteFieldSetFieldCodes($presetId)
+		;
+		$crmFieldsData['fields'] = $this->companyRequisiteFieldPolicy->filterSelectorTree(
+			$crmFieldsData['fields'] ?? [],
+			$fieldSetCodes,
+		);
 		$crmFieldsData['options']['permissions']['userField']['addByCategory'] =
 			$this->fieldAccessService->getAddByCategoryPermissions($crmFieldsData, $currentUserId)
 		;
@@ -70,7 +89,12 @@ class FieldService
 		return $crmFieldsData;
 	}
 
-	private function getExcludedFields(): array
+	/**
+	 * Single source of the CRM field denylist: also consumed by the placeholder restriction rule.
+	 *
+	 * @return array<string, list<string>> entity category => entity field names
+	 */
+	public function getExcludedFields(): array
 	{
 		return [
 			'COMPANY' => [
@@ -122,6 +146,31 @@ class FieldService
 			FieldType::POSITION => FieldType::POSITION,
 			FieldType::DATE, FieldType::DATETIME => FieldType::DATE,
 			FieldType::LIST, FieldType::ENUMERATION => FieldType::LIST,
+			FieldType::DOUBLE => FieldType::DOUBLE,
+			FieldType::INTEGER => FieldType::INTEGER,
+			FieldType::ADDRESS => FieldType::ADDRESS,
+			default => FieldType::STRING,
+		};
+	}
+
+	/**
+	 * Semantic type of a profile field. The codes whose meaning the user field type does not carry
+	 * are declared by their owner, LegalInfoProvider::CONTRACT_FIELD_TYPES, next to the codes the
+	 * provider resolves on its own.
+	 */
+	public function resolveProfileFieldType(string $fieldName, string $userFieldType): string
+	{
+		return LegalInfoProvider::CONTRACT_FIELD_TYPES[$fieldName]
+			?? $this->convertUserFieldType($userFieldType)
+		;
+	}
+
+	public function convertCrmFieldType(string $crmFieldType): string
+	{
+		return match ($crmFieldType)
+		{
+			FieldType::DATE, FieldType::DATETIME => FieldType::DATE,
+			FieldType::LIST => FieldType::LIST,
 			FieldType::DOUBLE => FieldType::DOUBLE,
 			FieldType::INTEGER => FieldType::INTEGER,
 			FieldType::ADDRESS => FieldType::ADDRESS,

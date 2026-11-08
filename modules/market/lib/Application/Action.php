@@ -112,6 +112,34 @@ class Action
 
 	private static function isRestOnlyApp($appData): bool
 	{
-		return $appData['OPEN_API'] == 'Y';
+		return !self::hasApplicationPage($appData);
+	}
+
+	private static function hasApplicationPage($appData): bool
+	{
+		if (empty($appData['URL']))
+		{
+			return false;
+		}
+
+		if (($appData['OPEN_API'] ?? null) !== 'Y')
+		{
+			return true;
+		}
+
+		if (!isset($appData['MENU_TITLE']) || !is_array($appData['MENU_TITLE']))
+		{
+			return false;
+		}
+
+		foreach ($appData['MENU_TITLE'] as $title)
+		{
+			if (trim((string)$title) !== '')
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

@@ -244,6 +244,8 @@ class UserProcessor
 		}
 
 		Application::getConnection()->query($sql);
+
+		Counter\CommentsCountCache::drop($this->userId);
 	}
 
 

@@ -11,6 +11,8 @@ use Bitrix\Intranet\Enum\InvitationStatus;
 use Bitrix\Intranet\Internal\Integration\Socialnetwork\FeatureProvider;
 use Bitrix\Intranet\Service\EmailMessage;
 use Bitrix\Intranet\Service\PhoneMessage;
+use Bitrix\Intranet\Service\RateLimitedEmailMessage;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Collab\Collab;
@@ -25,7 +27,7 @@ class CollabInvitationMessageFactory implements InvitationMessageFactoryContract
 	}
 
 
-	public function createEmailEvent(): EmailMessage
+	public function createEmailEvent(): SendableContract
 	{
 		Loc::loadLanguageFile($_SERVER["DOCUMENT_ROOT"] . '/bitrix/modules/intranet/lib/Command/Invitation/InviteUserCollectionToGroupCommand.php');
 		$isCloud = Loader::includeModule('bitrix24');
@@ -57,13 +59,24 @@ class CollabInvitationMessageFactory implements InvitationMessageFactoryContract
 			'USER_LANG' => $userLang,
 		];
 
-		return new EmailMessage(
+		$emailMessage = new EmailMessage(
 			$eventName,
 			$siteId,
 			$params,
 			$messageId,
 			null,
 			$userLang,
+		);
+
+		if ($emailTo === null || $emailTo === '')
+		{
+			return $emailMessage;
+		}
+
+		return new RateLimitedEmailMessage(
+			$emailMessage,
+			$emailTo,
+			ServiceLocator::getInstance()->get('intranet.service.invitation.email-rate-limiter'),
 		);
 	}
 

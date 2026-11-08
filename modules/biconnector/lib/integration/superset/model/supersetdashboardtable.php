@@ -3,6 +3,7 @@
 namespace Bitrix\BIConnector\Integration\Superset\Model;
 
 use Bitrix\BIConnector\Access\Service\RolePermissionService;
+use Bitrix\BIConnector\Internal\Model\SupersetDashboardShareBanTable;
 use Bitrix\BIConnector\Internal\Model\SupersetDashboardShareTable;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\BIConnector\Internal\Model\SupersetDashboardChatTable;
@@ -215,6 +216,12 @@ final class SupersetDashboardTable extends DataManager
 				->configureJoinType(Join::TYPE_LEFT)
 				->configureCascadeDeletePolicy(Fields\Relations\CascadePolicy::FOLLOW)
 			,
+
+			(new ReferenceField(
+				'SHARE_BAN',
+				SupersetDashboardShareBanTable::class,
+				Join::on('this.ID', 'ref.DASHBOARD_ID')
+			))->configureJoinType(Join::TYPE_LEFT),
 		];
 	}
 
@@ -321,6 +328,7 @@ final class SupersetDashboardTable extends DataManager
 		SupersetDashboardGroupBindingTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
 
 		SupersetDashboardShareTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
+		SupersetDashboardShareBanTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
 		SupersetDashboardViewTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
 		SupersetDashboardInfoTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
 		SupersetDashboardChatTable::deleteByFilter(['=DASHBOARD_ID' => $dashboardId]);
@@ -376,32 +384,13 @@ final class SupersetDashboardTable extends DataManager
 			return;
 		}
 
-		$dashboardInfo = SupersetDashboardInfoTable::getRow([
-			'select' => ['ID'],
-			'filter' => ['=DASHBOARD_ID' => $id],
-		]);
-
-		$dashboardInfoId = (int)($dashboardInfo['ID'] ?? 0);
-		if ($dashboardInfoId <= 0)
-		{
-			$addResult = SupersetDashboardInfoTable::add([
-				'DASHBOARD_ID' => $id,
-			]);
-			if (!$addResult->isSuccess())
-			{
-				return;
-			}
-
-			$dashboardInfoId = (int)$addResult->getId();
-		}
-
 		$currentUserId = (int)($fields['MODIFIED_BY_ID'] ?? CurrentUser::get()->getId());
 		if ($currentUserId <= 0)
 		{
 			$currentUserId = null;
 		}
 
-		$updateFields = [
+		$dashboardInfoFields = [
 			'UPDATED_BY_ID' => $currentUserId,
 			'UPDATED_DATE' => $fields['DATE_MODIFY'] ?? new DateTime(),
 		];
@@ -410,16 +399,20 @@ final class SupersetDashboardTable extends DataManager
 		$isStatusChangedToDraft = isset($fields['STATUS']) && $fields['STATUS'] === self::DASHBOARD_STATUS_DRAFT;
 		if ($isStatusChangedToReady)
 		{
-			$updateFields['PUBLISHED_BY_ID'] = $currentUserId;
-			$updateFields['PUBLISHED_DATE'] = $fields['DATE_MODIFY'] ?? new DateTime();
+			$dashboardInfoFields['PUBLISHED_BY_ID'] = $currentUserId;
+			$dashboardInfoFields['PUBLISHED_DATE'] = $fields['DATE_MODIFY'] ?? new DateTime();
 		}
 		elseif ($isStatusChangedToDraft)
 		{
-			$updateFields['PUBLISHED_BY_ID'] = null;
-			$updateFields['PUBLISHED_DATE'] = null;
+			$dashboardInfoFields['PUBLISHED_BY_ID'] = null;
+			$dashboardInfoFields['PUBLISHED_DATE'] = null;
 		}
 
-		SupersetDashboardInfoTable::update($dashboardInfoId, $updateFields);
+		SupersetDashboardInfoTable::merge(
+			array_merge(['DASHBOARD_ID' => $id], $dashboardInfoFields),
+			$dashboardInfoFields,
+			['DASHBOARD_ID'],
+		);
 
 		if (array_key_exists('STATUS', $fields))
 		{

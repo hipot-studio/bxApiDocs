@@ -24,6 +24,7 @@ class MenuItemProvider
 {
 	use ContextCustomer;
 
+	public const SORT_MESSENGER = 0;
 	public const SORT_CHAT = 100;
 	// TODO: replace with event
 	public const SORT_TASKS = 200;
@@ -40,7 +41,7 @@ class MenuItemProvider
 	protected Features $applicationFeatures;
 
 	protected array $phoneSettings;
-	private const GUEST_ALLOWED_MENU_ITEMS = ['chat', 'notification', 'settings'];
+	private const GUEST_ALLOWED_MENU_ITEMS = ['messenger', 'chat', 'notification', 'settings'];
 
 	public function __construct()
 	{
@@ -73,6 +74,12 @@ class MenuItemProvider
 	public function getDefaultMenuItems(): array
 	{
 		return [
+			new MenuItem(
+				id: 'messenger',
+				text: Loc::getMessage('IM_NAVIGATION_MENU_MESSENGER'),
+				isVisible: $this->applicationFeatures->isChatFoldersWebAvailable,
+				sort: self::SORT_MESSENGER,
+			),
 			new MenuItem(
 				id: 'chat',
 				text: Loc::getMessage('IM_NAVIGATION_MENU_CHATS'),
@@ -154,6 +161,7 @@ class MenuItemProvider
 			new MenuItem(
 				id: 'settings',
 				text: Loc::getMessage('IM_NAVIGATION_MENU_SETTINGS'),
+				isVisible: !$this->applicationFeatures->isChatShellNavigationWebAvailable,
 				sort: self::SORT_SETTINGS,
 			),
 		];

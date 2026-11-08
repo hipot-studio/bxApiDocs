@@ -21,6 +21,9 @@ class HoldEntity
 	private const OPTION_CODE = 'hold_access_entity';
 	private const MODULE_ID = 'rest';
 
+	private static ?string $rawList = null;
+	private static array $list = [];
+
 	/**
 	 * Adds entity to hold list
 	 * @param string $type
@@ -188,8 +191,15 @@ class HoldEntity
 	public static function get() : array
 	{
 		$option = Option::get(static::MODULE_ID, static::OPTION_CODE, false);
+		$raw = $option ? (string)$option : '';
 
-		return $option ? Json::decode($option) : [];
+		if ($raw !== self::$rawList)
+		{
+			self::$list = $raw === '' ? [] : Json::decode($raw);
+			self::$rawList = $raw;
+		}
+
+		return self::$list;
 	}
 
 	/**

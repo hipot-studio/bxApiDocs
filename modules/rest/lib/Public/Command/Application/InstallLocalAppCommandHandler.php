@@ -15,24 +15,19 @@ use Bitrix\Rest\Internal\Entity\Application\App;
 use Bitrix\Rest\Internal\Entity\Application\AppAttributeCollection;
 use Bitrix\Rest\Internal\Entity\Application\AppExternalAttribute;
 use Bitrix\Rest\Internal\Entity\Application\AppFactory;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Internal\Service\Application\ApplicationInstaller;
-use Bitrix\Rest\Internal\Service\VibePlus\TariffAccessService;
-use Bitrix\Rest\Service\ServiceContainer;
 
 class InstallLocalAppCommandHandler
 {
 	private ApplicationInstaller $applicationInstaller;
-	private TariffAccessService $tariffAccessService;
 
 	public function __construct(
 		?ApplicationInstaller $applicationInstaller = null,
-		?TariffAccessService $tariffAccessService = null,
 	)
 	{
 		$this->applicationInstaller = $applicationInstaller
 			?? ServiceLocator::getInstance()->get(ApplicationInstaller::class);
-		$this->tariffAccessService = $tariffAccessService
-			?? ServiceContainer::getInstance()->getVibePlusTariffAccessService();
 	}
 
 	/**
@@ -55,8 +50,6 @@ class InstallLocalAppCommandHandler
 			throw new AccessDeniedException('User does not have rights to install a local application');
 		}
 
-		$this->tariffAccessService->ensurePresetAvailable();
-
 		$externalAttributes = new AppAttributeCollection();
 		foreach ($command->attributes as $code => $value)
 		{
@@ -70,7 +63,7 @@ class InstallLocalAppCommandHandler
 			title: $command->title,
 			installUrl: $command->installUrl,
 			mobile: $command->mobile,
-			menuTitles: $command->menuTitles,
+			menuTitles: $command->onlyApi ? [] : $command->menuTitles,
 			externalAttributes: $externalAttributes,
 		);
 
@@ -78,6 +71,11 @@ class InstallLocalAppCommandHandler
 			userId: $command->userId,
 			app: $app,
 			onlyApi: $command->onlyApi,
+			installCompletionMode: AppInstallCompletionMode::resolve(
+				$command->installUrl,
+				$command->onlyApi,
+				$command->installCompletionMode?->value,
+			),
 			applicationToken: $command->applicationToken,
 		);
 	}

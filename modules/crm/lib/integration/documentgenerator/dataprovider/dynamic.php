@@ -15,6 +15,7 @@ use Bitrix\DocumentGenerator\DataProvider\ArrayDataProvider;
 use Bitrix\DocumentGenerator\DataProvider\Filterable;
 use Bitrix\DocumentGenerator\DataProviderManager;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Fields\ScalarField;
 
 abstract class Dynamic extends ProductsDataProvider implements Filterable
 {
@@ -156,18 +157,48 @@ abstract class Dynamic extends ProductsDataProvider implements Filterable
 		return $this->fields;
 	}
 
+	/**
+	 * @return array
+	 */
+	protected function getGetListParameters()
+	{
+		$parameters = parent::getGetListParameters();
+		$excluded = array_fill_keys($this->getUserFieldPlaceholders(), true);
+		$select = [];
+
+		foreach ($this->getEntity()->getFields() as $name => $field)
+		{
+			if ($field instanceof ScalarField && !$field->isPrivate() && !isset($excluded[$name]))
+			{
+				$select[] = $name;
+			}
+		}
+
+		$parameters['select'] = $select;
+
+		return $parameters;
+	}
+
 	protected function fetchData()
 	{
 		parent::fetchData();
-
-		$this->getFields();
 
 		if (isset($this->data['TITLE']) && $this->data['TITLE'] === '')
 		{
 			unset($this->data['TITLE']);
 		}
 
-		foreach ($this->userFieldDescriptions as $name => $description)
+		if (!$this->isLoaded())
+		{
+			if ($this->getFactory())
+			{
+				$this->getCurrencyId();
+			}
+
+			return;
+		}
+
+		foreach ($this->getUserFieldPlaceholders() as $name)
 		{
 			// we should purge values or they will not be processed in self::getUserFieldValue()
 			unset($this->data[$name]);

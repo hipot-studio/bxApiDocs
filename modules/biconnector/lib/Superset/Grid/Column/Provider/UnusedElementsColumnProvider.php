@@ -53,16 +53,6 @@ class UnusedElementsColumnProvider extends DataProvider
 		;
 
 		$result[] =
-			$this->createColumn('DATE_UPDATE')
-				->setEditable(false)
-				->setType(Type::DATE)
-				->setName(Loc::getMessage('BI_UNUSED_ELEMENTS_GRID_COLUMN_NAME_DATE_UPDATE'))
-				->setAlign('left')
-				->setDefault(true)
-				->setSort('DATE_UPDATE')
-		;
-
-		$result[] =
 			$this->createColumn('DATE_CREATE')
 				->setEditable(false)
 				->setType(Type::DATE)
@@ -70,6 +60,19 @@ class UnusedElementsColumnProvider extends DataProvider
 				->setAlign('left')
 				->setDefault(true)
 				->setSort('DATE_CREATE')
+				->setWidth(180)
+
+		;
+
+		$result[] =
+			$this->createColumn('DATE_UPDATE')
+				->setEditable(false)
+				->setType(Type::DATE)
+				->setName(Loc::getMessage('BI_UNUSED_ELEMENTS_GRID_COLUMN_NAME_DATE_UPDATE'))
+				->setAlign('left')
+				->setDefault(true)
+				->setSort('DATE_UPDATE')
+				->setWidth(180)
 		;
 
 		return $result;

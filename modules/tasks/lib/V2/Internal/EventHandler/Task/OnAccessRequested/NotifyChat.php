@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Tasks\V2\Internal\EventHandler\Task\OnAccessRequested;
 
 use Bitrix\Tasks\V2\Internal\Event\Task\OnAccessRequestedEvent;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Action\ChatActionLinkService;
 use Bitrix\Tasks\V2\Internal\Integration\Im\Action\NotifyAccessRequested;
 use Bitrix\Tasks\V2\Internal\Integration\Im\MessageSender;
 
@@ -12,6 +13,7 @@ class NotifyChat
 {
 	public function __construct(
 		private readonly MessageSender $sender,
+		private readonly ChatActionLinkService $chatActionLinkService,
 	)
 	{
 	}
@@ -19,6 +21,8 @@ class NotifyChat
 	public function __invoke(OnAccessRequestedEvent $event): void
 	{
 		$notification = new NotifyAccessRequested(
+			task: $event->task,
+			chatActionLinkService: $this->chatActionLinkService,
 			triggeredBy: $event->triggeredBy,
 		);
 

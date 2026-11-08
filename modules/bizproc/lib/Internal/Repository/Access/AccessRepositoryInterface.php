@@ -16,6 +16,10 @@ use Bitrix\Main\ORM\Data\UpdateResult;
  *
  * The methods are transaction-agnostic: callers that need atomicity (the save service, the installer) open
  * their own transaction/lock around several repository calls.
+ *
+ * One method reads outside those three tables - {@see self::getUserAccessCodes()}, the membership side of the
+ * check. It lives here because it is a data-access read of the same subject and because the alternative was a
+ * raw query in a service.
  */
 interface AccessRepositoryInterface
 {
@@ -51,12 +55,45 @@ interface AccessRepositoryInterface
 	public function getPermissionsByRoleId(int $roleId): PermissionCollection;
 
 	/**
+	 * Reverse direction of {@see self::getPermissionsByRoleIds()}: the roles holding one of $permissionIds with a
+	 * VALUE out of $values. The forward methods answer "what may this role do", and the question "who may act on
+	 * this template" had no way to be asked - the mention hint of the notes asks exactly that.
+	 *
+	 * The values are the multivariables scope, so both template ids and the scope sentinels are accepted; the
+	 * caller states which of them it means. Covered by the (VALUE, PERMISSION_ID) index of the table. An empty
+	 * permission or value list yields an empty result and never "every role".
+	 *
+	 * @param array<int, int|string> $permissionIds
+	 * @param int[] $values
+	 * @return int[]
+	 */
+	public function getRoleIdsByPermissionValues(array $permissionIds, array $values): array;
+
+	/**
 	 * Access codes (role relations) grouped by role. Empty role list yields an empty map.
 	 *
 	 * @param int[] $roleIds
 	 * @return array<int, string[]> role id => access codes
 	 */
 	public function getAccessCodesByRoleIds(array $roleIds): array;
+
+	/**
+	 * Access codes of several users at once, in the very shape the user model of the framework builds them for
+	 * one user ({@see \Bitrix\Main\Access\User\UserModel::buildAccessCodes()}): the rows of the denormalized
+	 * table of the platform plus the signature of every code, chat codes left out. The forward check reads them
+	 * a user per query, so a caller holding a whole set of users pays a query per user for a set it could read
+	 * in one.
+	 *
+	 * Every requested positive id is a key of the answer: a user with no row of their own gets an empty list,
+	 * which is what the per-user read answers for them too. Non-positive ids and an empty input are dropped.
+	 *
+	 * The employee code and the reading of a converted company structure are NOT part of this: they belong to
+	 * `getAccessCodes()` of the model, above the method this one mirrors.
+	 *
+	 * @param int[] $userIds
+	 * @return array<int, string[]> user id => access codes
+	 */
+	public function getUserAccessCodes(array $userIds): array;
 
 	public function addRole(string $name): AddResult;
 

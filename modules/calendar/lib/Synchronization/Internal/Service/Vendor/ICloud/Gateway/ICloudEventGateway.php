@@ -20,7 +20,6 @@ use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Dto\EventList
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Dto\EventResponse;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\UuidGenerator;
 use Bitrix\Main\Web\HttpClient;
 
 class ICloudEventGateway extends AbstractICloudGateway
@@ -35,11 +34,13 @@ class ICloudEventGateway extends AbstractICloudGateway
 	 * @throws NoResponseException
 	 * @throws PreconditionFailedException
 	 */
-	public function createEvent(Event $event, string $iCloudCalendarId): EventResponse
+	public function createEvent(
+		Event $event,
+		string $iCloudCalendarId,
+		string $iCloudEventId,
+	): EventResponse
 	{
 		$this->client->setHeader('Content-type', 'text/calendar');
-
-		$iCloudEventId = UuidGenerator::generateV4();
 
 		$uri = $this->getUri($iCloudCalendarId, $iCloudEventId);
 
@@ -61,6 +62,11 @@ class ICloudEventGateway extends AbstractICloudGateway
 			$uri,
 			$data,
 		);
+
+		if ($this->client->getStatus() === 207)
+		{
+			throw new UnexpectedException('iCloud event write result is unknown', 207);
+		}
 
 		if (!$this->isRequestSuccess())
 		{
@@ -106,6 +112,11 @@ class ICloudEventGateway extends AbstractICloudGateway
 			$uri,
 			$data,
 		);
+
+		if ($this->client->getStatus() === 207)
+		{
+			throw new UnexpectedException('iCloud event write result is unknown', 207);
+		}
 
 		if (!$this->isRequestSuccess())
 		{

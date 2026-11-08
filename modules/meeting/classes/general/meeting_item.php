@@ -194,6 +194,64 @@ WHERE bmi.ID='".$ID."' AND bmu.USER_ID='".$USER_ID."'
 		return false;
 	}
 
+	public static function HasRoleAccess(int $ID): bool
+	{
+		if ($ID <= 0)
+		{
+			return false;
+		}
+
+		$user = $GLOBALS['USER'] ?? null;
+		if (!is_object($user) || (int)$user->GetID() <= 0)
+		{
+			return false;
+		}
+
+		if (!CMeetingItem::GetList([], ['ID' => $ID], false, false, ['ID'])->Fetch())
+		{
+			return false;
+		}
+
+		$meetingIds = [];
+		$instances = CMeetingInstance::GetList([], ['ITEM_ID' => $ID], false, false, ['MEETING_ID']);
+		while ($instance = $instances->Fetch())
+		{
+			$meetingId = (int)$instance['MEETING_ID'];
+			if ($meetingId > 0)
+			{
+				$meetingIds[$meetingId] = $meetingId;
+			}
+		}
+
+		if (!$meetingIds)
+		{
+			return false;
+		}
+
+		$existingIds = [];
+		$meetings = CMeeting::GetList([], ['ID' => array_values($meetingIds)], false, false, ['ID']);
+		while ($meeting = $meetings->Fetch())
+		{
+			$existingId = (int)$meeting['ID'];
+			$existingIds[$existingId] = $existingId;
+		}
+
+		$meetingIds = array_intersect_key($meetingIds, $existingIds);
+
+		foreach ([false, true] as $checkHead)
+		{
+			foreach ($meetingIds as $meetingId)
+			{
+				if (CMeeting::GetUserRole($meetingId, false, $checkHead))
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	public static function SetFiles($ID, $arFiles, $src = null)
 	{
 		global $DB;

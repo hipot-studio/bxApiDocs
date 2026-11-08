@@ -17,10 +17,10 @@ use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\DocumentDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
-use Bitrix\Crm\Integration\UserConsent as CrmIntegrationUserConsent;
 use Bitrix\Crm\Integrity\ActualEntitySelector;
 use Bitrix\Crm\Merger\EntityMerger;
 use Bitrix\Crm\Order\TradingPlatform;
+use Bitrix\Crm\WebForm\Agreement\ConsentRecorder;
 use Bitrix\Crm\WebForm\Debug\ResultEntityDebugLogger;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
@@ -35,7 +35,6 @@ use Bitrix\Crm\Activity\BindingSelector;
 use Bitrix\Crm\ClientInfo;
 use Bitrix\Crm\Integration\Channel\WebFormTracker;
 use Bitrix\Crm\Order\OrderCreator;
-use Bitrix\Main\UserConsent\Consent;
 use Bitrix\Crm\Settings\LayoutSettings;
 use Bitrix\Crm\Tracking;
 use Bitrix\Sale;
@@ -1470,17 +1469,16 @@ class ResultEntity
 			return;
 		}
 
-		foreach ($this->agreements as $agreementId)
-		{
-			Consent::addByContext(
-				$agreementId,
-				CrmIntegrationUserConsent::PROVIDER_CODE,
-				$this->activityId,
-				[
-					'URL' => $this->trace->getUrl()
-				]
-			);
-		}
+		(new ConsentRecorder(
+			(int)$this->formId,
+			(int)$this->resultId,
+			(int)$this->activityId,
+			$this->debugLogger,
+		))->record(
+			$this->agreements,
+			$this->trace->getUrl(),
+			Context::getCurrent()->getRequest()->getRemoteAddress(),
+		);
 	}
 
 	/**
@@ -1661,6 +1659,7 @@ class ResultEntity
 					'IS_USED_USER_CONSENT' => $this->formData['USE_LICENCE'] == 'Y',
 					'AGREEMENTS' => $this->agreements,
 					'IP' => Context::getCurrent()->getRequest()->getRemoteAddress(),
+					'SUBMISSION_URL' => $this->trace->getUrl(),
 					'LINK' => Script::getUrlContext($this->formData)
 				),
 				'VISITED_PAGES' => array_map(

@@ -175,6 +175,28 @@ final class DocumentSessionTable extends DataManager
 		);
 	}
 
+	/**
+	 * The same for a whole portion of keys, asked of the database once.
+	 *
+	 * @param string[] $hashes
+	 */
+	public static function deactivateByHashes(array $hashes): void
+	{
+		if (empty($hashes))
+		{
+			return;
+		}
+
+		parent::updateBatch(
+			[
+				'STATUS' => self::STATUS_NON_ACTIVE,
+			],
+			[
+				'@EXTERNAL_HASH' => $hashes,
+			]
+		);
+	}
+
 	public static function markAsBrokenByHash(string $hash): void
 	{
 		parent::updateBatch(

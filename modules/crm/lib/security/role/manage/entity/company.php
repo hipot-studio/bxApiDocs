@@ -16,7 +16,7 @@ class Company implements PermissionEntity, FilterableByCategory
 
 	private function permissions(): array
 	{
-		return PermissionAttrPresets::crmEntityPreset();
+		return PermissionAttrPresets::crmEntityPreset(withObserversWrite: true);
 	}
 
 	/**

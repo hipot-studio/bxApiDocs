@@ -22,8 +22,7 @@ use Bitrix\Crm\Copilot\CallAssessment\Summary\ManagerSummaryFormatter;
 use Bitrix\Crm\Copilot\CallAssessment\Summary\ManagerSummaryRenderContext;
 use Bitrix\Crm\Copilot\CallAssessment\Summary\SettingsRepository;
 use Bitrix\Crm\Service\Container;
-use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
-use Bitrix\Crm\Integration\Analytics\Builder\AI\GenerateCallCriteriaEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\AI\GenerateManagerSummaryEvent;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Main;
 use CCrmOwnerType;
@@ -629,9 +628,9 @@ final class GenerateManagerSummary extends AbstractOperation
 		return array_values(array_map(static fn($item) => (string)$item, $value));
 	}
 
-	protected static function getJobFinishEventBuilder(): AIBaseEvent
+	protected static function getJobFinishEventBuilder(): GenerateManagerSummaryEvent
 	{
-		return new GenerateCallCriteriaEvent();
+		return new GenerateManagerSummaryEvent();
 	}
 
 	protected static function onAfterSuccessfulJobFinish(Result $result, ?Context $context = null): void

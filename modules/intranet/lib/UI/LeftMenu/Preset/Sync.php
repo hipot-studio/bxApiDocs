@@ -52,6 +52,7 @@ class Sync extends PresetAbstract
 				'menu_bizproc_sect',
 				'menu_ai_agents',
 				'menu_automation',
+				'menu_vibecode',
 				'menu_marketplace_sect',
 				'menu_devops_sect',
 				'menu_mcp_integrations',

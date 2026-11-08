@@ -29,6 +29,7 @@ class Handler
 	const ENTITY_TYPE_CRMQUOTES = 'QUOTES';
 	const ENTITY_TYPE_CRMSMART_INVOICES = 'SMART_INVOICES';
 	const ENTITY_TYPE_CRMDYNAMICS = 'DYNAMICS';
+	private const LAST_DESTINATION_MAX_COUNT = 20;
 
 	public static function getProviderByEntityType(string $entityType)
 	{
@@ -169,7 +170,7 @@ class Handler
 
 		$lastDestinationList = [];
 
-		$limit = 10;
+		$limit = self::LAST_DESTINATION_MAX_COUNT;
 		$conditionList = [
 			[
 				'type' => CCrmOwnerType::ContactName,
@@ -214,6 +215,13 @@ class Handler
 				'multi' => false,
 			],
 			[
+				'type' => CCrmOwnerType::SmartInvoiceName,
+				'index' => static::ENTITY_TYPE_CRMSMART_INVOICES,
+				'counter' => 0,
+				'limit' => $limit,
+				'multi' => false,
+			],
+			[
 				'type' => 'PRODUCT',
 				'index' => static::ENTITY_TYPE_CRMPRODUCTS,
 				'counter' => 0,
@@ -243,10 +251,10 @@ class Handler
 				}
 				unset($doBreak);
 
-				foreach ($conditionList as $condition)
+				foreach ($conditionList as $conditionKey => $condition)
 				{
-					$matches = [];
-					if (preg_match('/^CRM' . $condition['type'] . '(\d+)$/i', $code, $matches))
+					$lastDestinationCode = static::getLastDestinationCode($code, $condition);
+					if ($lastDestinationCode !== null)
 					{
 						if ($condition['counter'] >= $condition['limit'])
 						{
@@ -256,8 +264,8 @@ class Handler
 						{
 							$lastDestinationList[$condition['index']] = [];
 						}
-						$lastDestinationList[$condition['index']][$code] = $code;
-						$condition['counter']++;
+						$lastDestinationList[$condition['index']][$lastDestinationCode] = $lastDestinationCode;
+						$conditionList[$conditionKey]['counter']++;
 						break;
 					}
 					elseif (
@@ -277,7 +285,7 @@ class Handler
 							$lastDestinationList[$index] = [];
 						}
 						$lastDestinationList[$index][$code] = $code;
-						$condition['counter']++;
+						$conditionList[$conditionKey]['counter']++;
 						break;
 					}
 				}
@@ -291,5 +299,24 @@ class Handler
 		}
 
 		return $result;
+	}
+
+	private static function getLastDestinationCode(string $code, array $condition): ?string
+	{
+		if (preg_match('/^CRM' . $condition['type'] . '(\d+)$/i', $code) === 1)
+		{
+			return $code;
+		}
+
+		$smartInvoiceFullPrefix = CrmDynamics::PREFIX_FULL . CCrmOwnerType::SmartInvoice . '_';
+		if (
+			$condition['index'] === static::ENTITY_TYPE_CRMSMART_INVOICES
+			&& preg_match('/^' . preg_quote($smartInvoiceFullPrefix, '/') . '(\d+)$/i', $code, $matches) === 1
+		)
+		{
+			return CrmSmartInvoices::PREFIX_FULL . $matches[1];
+		}
+
+		return null;
 	}
 }

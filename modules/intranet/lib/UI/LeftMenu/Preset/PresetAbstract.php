@@ -1,9 +1,10 @@
 <?php
 namespace Bitrix\Intranet\UI\LeftMenu\Preset;
 
+use Bitrix\Intranet\Internal\MainTool\AccessPolicy;
+use Bitrix\Intranet\Settings\Tools;
 use Bitrix\Intranet\UI\LeftMenu;
 use Bitrix\Main;
-use Bitrix\Intranet\Settings\Tools;
 
 Main\Localization\Loc::loadMessages(__FILE__);
 
@@ -11,6 +12,7 @@ abstract class PresetAbstract implements PresetInterface
 {
 	const CODE = 'undefined_or_abstract_does_not_matter';
 	protected $siteId;
+	private static array $cache = [];
 
 /*	const STRUCTURE = [
 		'shown' => [
@@ -50,9 +52,24 @@ abstract class PresetAbstract implements PresetInterface
 		return static::CODE;
 	}
 
+	public static function clearCache(string $siteId): void
+	{
+		unset(self::$cache[$siteId]);
+	}
+
+	protected function &getCache(): array
+	{
+		$userId = (int)Main\Engine\CurrentUser::get()->getId();
+		$featureEnabled = (int)AccessPolicy::isFeatureEnabled();
+		self::$cache[$this->siteId][$userId][$featureEnabled][static::class] ??= [];
+
+		return self::$cache[$this->siteId][$userId][$featureEnabled][static::class];
+	}
+
 	private function getPlainSort()
 	{
-		static $plainArray;
+		$cache = &$this->getCache();
+		$plainArray = &$cache['plainSort'];
 
 		if ($plainArray)
 		{
@@ -88,7 +105,8 @@ abstract class PresetAbstract implements PresetInterface
 
 	public final function getFinalStructure(): array
 	{
-		static $finalStructure;
+		$cache = &$this->getCache();
+		$finalStructure = &$cache['finalStructure'];
 		if (!$finalStructure)
 		{
 			$finalStructure = $this->getSavedStructure() ?: $this->getToolsStructure() ?: $this->getStructure();
@@ -98,12 +116,17 @@ abstract class PresetAbstract implements PresetInterface
 
 	private function getSavedStructure(): ?array
 	{
-		static $savedStructure;
+		$cache = &$this->getCache();
+		$savedStructure = &$cache['savedStructure'];
 		if ($savedStructure)
 		{
 			return $savedStructure;
 		}
-		$data = \CUserOptions::GetOption("intranet", "left_menu_sorted_items_" . $this->getSiteId());
+		$effective = Manager::getEffectiveState($this->getSiteId());
+		$data = $effective !== null
+			? $effective['sortData']
+			: \CUserOptions::GetOption("intranet", "left_menu_sorted_items_" . $this->getSiteId())
+		;
 
 		if (!$data)
 		{
@@ -154,14 +177,147 @@ abstract class PresetAbstract implements PresetInterface
 		return $savedStructure;
 	}
 
-	public function getToolsStructure(): ?array
+	public static function isForcedSortAllowed(array $data, array $structure): bool
+	{
+		if (!is_array($data['show'] ?? null) || !is_array($data['hide'] ?? null))
+		{
+			return false;
+		}
+
+		if (!isset($data['version']))
+		{
+			foreach (array_merge($data['show'], $data['hide']) as $item)
+			{
+				if (!is_string($item))
+				{
+					return false;
+				}
+			}
+		}
+
+		$candidate = isset($data['version'])
+			? ['shown' => $data['show'], 'hidden' => $data['hide']]
+			: self::oldToNewStructure($data, $structure)
+		;
+		$expected = $structure['shown'] ?? [];
+		$shown = $candidate['shown'];
+		if ($expected === [] || $shown === [])
+		{
+			return false;
+		}
+
+		$expectsVibe = reset($expected) === 'main_page';
+		if ($expectsVibe)
+		{
+			unset($expected[array_key_first($expected)]);
+			if ($expected === [] || reset($shown) !== 'main_page')
+			{
+				return false;
+			}
+		}
+
+		$firstKey = array_key_first($shown);
+		if ($shown[$firstKey] === 'main_page')
+		{
+			unset($shown[$firstKey]);
+		}
+		if ($shown === [])
+		{
+			return false;
+		}
+
+		$protectedIds = ['main_page'];
+		while ($expected !== [])
+		{
+			$expectedKey = array_key_first($expected);
+			$expectedItem = $expected[$expectedKey];
+			$firstKey = array_key_first($shown);
+			if (is_array($expectedItem))
+			{
+				if (
+					$firstKey !== $expectedKey
+					|| !is_array($shown[$firstKey])
+					|| $expectedItem === []
+					|| $shown[$firstKey] === []
+				)
+				{
+					return false;
+				}
+				$protectedIds[] = $expectedKey;
+				$expected = $expectedItem;
+				$shown = $shown[$firstKey];
+			}
+			else
+			{
+				if (!is_string($expectedItem) || $shown[$firstKey] !== $expectedItem)
+				{
+					return false;
+				}
+				$protectedIds[] = $expectedItem;
+				break;
+			}
+		}
+
+		$counts = self::countStructureIds($candidate);
+		foreach ($protectedIds as $itemId)
+		{
+			if ($itemId === 'main_page')
+			{
+				if (
+					isset($counts[$itemId])
+					&& ($counts[$itemId] !== 1 || reset($candidate['shown']) !== $itemId)
+				)
+				{
+					return false;
+				}
+			}
+			elseif (($counts[$itemId] ?? 0) !== 1)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static function countStructureIds(array $structure): array
+	{
+		$counts = [];
+		foreach ($structure as $key => $value)
+		{
+			if (is_string($key))
+			{
+				$counts[$key] = ($counts[$key] ?? 0) + 1;
+			}
+			if (is_array($value))
+			{
+				foreach (self::countStructureIds($value) as $itemId => $count)
+				{
+					$counts[$itemId] = ($counts[$itemId] ?? 0) + $count;
+				}
+			}
+			elseif (is_string($value))
+			{
+				$counts[$value] = ($counts[$value] ?? 0) + 1;
+			}
+		}
+
+		return $counts;
+	}
+
+	public function getToolsStructure(bool $forAllUsers = false): ?array
 	{
 		if ($this instanceof Custom)
 		{
 			return null;
 		}
 
-		if (Manager::hasOwnPreset())
+		$effective = Manager::getEffectiveState($this->getSiteId(), $forAllUsers ? 0 : null);
+		if (
+			$effective !== null
+				? ($effective['source'] === 'forced' || $effective['hasPersonalChoice'])
+				: Manager::hasOwnPreset()
+		)
 		{
 			return null;
 		}
@@ -275,23 +431,33 @@ abstract class PresetAbstract implements PresetInterface
 		foreach ($systemGroups as $groupId => [$visibility, $expectedStructure])
 		{
 			$menu = &$result[$visibility];
-			$foundItems = array_intersect($menu, $expectedStructure);
+			$foundItems = array_filter(
+				$menu,
+				static fn (mixed $item): bool => is_string($item) && in_array($item, $expectedStructure, true),
+			);
 			$menu[$groupId] = array_merge(
 				$menu[$groupId],
 				array_values($foundItems)
 			);
-			$notFoundItems = array_diff($expectedStructure, $menu[$groupId]);
+			$notFoundItems = array_filter(
+				$expectedStructure,
+				static fn (mixed $item): bool => is_array($item) || !in_array($item, $menu[$groupId], true),
+			);
 			if ($visibility === 'shown')
 			{
-				$notFoundItems = array_diff($notFoundItems,
-					array_intersect($result['hidden'], $expectedStructure)
+				$notFoundItems = array_filter(
+					$notFoundItems,
+					static fn (mixed $item): bool => is_array($item) || !in_array($item, $result['hidden'], true),
 				);
 				$menu[$groupId] = array_merge(
 					$menu[$groupId],
-					array_values($notFoundItems)
+					$notFoundItems,
 				);
 			}
-			$result[$visibility] = array_diff($menu, $menu[$groupId]);
+			$result[$visibility] = array_filter(
+				$menu,
+				static fn (mixed $item): bool => is_array($item) || !in_array($item, $menu[$groupId], true),
+			);
 			unset($menu);
 		}
 		return ['shown' => $result['shown'], 'hidden' => $result['hidden']];
@@ -322,7 +488,8 @@ abstract class PresetAbstract implements PresetInterface
 
 	private function getPlainStructure()
 	{
-		static $plainStructure;
+		$cache = &$this->getCache();
+		$plainStructure = &$cache['plainStructure'];
 
 		if (!$plainStructure)
 		{
@@ -343,7 +510,8 @@ abstract class PresetAbstract implements PresetInterface
 
 	public function getItems(): array
 	{
-		static $result;
+		$cache = &$this->getCache();
+		$result = &$cache['items'];
 		if ($result)
 		{
 			return $result;

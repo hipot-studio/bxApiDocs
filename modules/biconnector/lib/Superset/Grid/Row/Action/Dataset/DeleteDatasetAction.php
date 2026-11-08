@@ -2,13 +2,13 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Dataset;
 
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use CUtil;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-class DeleteDatasetAction extends BaseAction
+class DeleteDatasetAction extends FormatMenuAction
 {
 	public static function getId(): ?string
 	{
@@ -36,6 +36,10 @@ class DeleteDatasetAction extends BaseAction
 
 		$this->onclick = "BX.BIConnector.ExternalDatasetManager.Instance.deleteDataset({$datasetId}, \"{$datasetType}\")";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-trashcan', true);
+
+		return $result;
 	}
 }

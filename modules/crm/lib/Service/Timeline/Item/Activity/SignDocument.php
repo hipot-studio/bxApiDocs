@@ -217,7 +217,29 @@ final class SignDocument extends Activity
 
 		unset($items['delete'], $items['view']);
 
+		$copyUidItem = $this->getCopyDocumentUidMenuItem();
+		if ($copyUidItem !== null)
+		{
+			$items['copyUid'] = $copyUidItem;
+		}
+
 		return $items;
+	}
+
+	private function getCopyDocumentUidMenuItem(): ?Layout\Menu\MenuItem
+	{
+		$uid = (string)$this->getSignDocumentItem()?->uid;
+		if ($uid === '')
+		{
+			return null;
+		}
+
+		return (new Layout\Menu\MenuItem((string)Loc::getMessage('CRM_TIMELINE_ACTIVITY_SIGN_DOCUMENT_COPY_UID')))
+			->setAction(
+				(new Layout\Action\JsEvent($this->getType() . ':CopyUid'))
+					->addActionParamString('documentUid', $uid)
+			)
+		;
 	}
 
 	private function getDocumentId(): int

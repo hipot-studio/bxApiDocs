@@ -757,33 +757,70 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 
 	public function getData(int $valuesType = Values::ALL): array
 	{
+		$data = $this->collectValues($this->getSerializableEntityFieldNames(), $valuesType);
+
+		return $this->mapDataKeysToCommonFieldNames($data);
+	}
+
+	/**
+	 * Same as getData(), limited to the given common field names: key order and values are those
+	 * of getData(), fields outside the list are never read.
+	 *
+	 * @internal
+	 *
+	 * @param string[] $commonFieldNames
+	 */
+	public function getDataForFields(array $commonFieldNames, int $valuesType = Values::ALL): array
+	{
+		$requestedCommonFieldNames = array_flip($commonFieldNames);
+
+		$entityFieldNames = array_filter(
+			$this->getSerializableEntityFieldNames(),
+			fn(string $entityFieldName): bool => isset(
+				$requestedCommonFieldNames[$this->getCommonFieldNameByMap($entityFieldName)]
+			),
+		);
+
+		$data = $this->collectValues($entityFieldNames, $valuesType);
+
+		return $this->mapDataKeysToCommonFieldNames($data);
+	}
+
+	private function getSerializableEntityFieldNames(): array
+	{
+		if ($this->entityFieldNames !== null)
+		{
+			return $this->entityFieldNames;
+		}
+
 		//todo temporary decision to avoid error on jsonSerialization of EntityObjects
 		$fieldTypeMask = FieldTypeMask::SCALAR|FieldTypeMask::USERTYPE|FieldTypeMask::EXPRESSION;
 
-		if (is_null($this->entityFieldNames))
+		$entityFieldNames = array_merge(
+			$this->getEntityFieldNames($fieldTypeMask),
+			$this->utmTableClassName::getCodeList(),
+			$this->lastCommunicationDataClass::getCodeList(),
+		);
+
+		if ($this->hasField(static::FIELD_NAME_OBSERVERS))
 		{
-			$this->entityFieldNames = array_merge(
-				$this->getEntityFieldNames($fieldTypeMask),
-				$this->utmTableClassName::getCodeList(),
-				$this->lastCommunicationDataClass::getCodeList(),
-			);
-
-			if ($this->hasField(static::FIELD_NAME_OBSERVERS))
-			{
-				$this->entityFieldNames[] = $this->getEntityFieldNameByMap(static::FIELD_NAME_OBSERVERS);
-			}
-
-			/** @var string[][] $fromImplementation */
-			$fromImplementation = [];
-			foreach ($this->getAllImplementations() as $implementation)
-			{
-				$fromImplementation[] = $implementation->getSerializableFieldNames();
-			}
-			$this->entityFieldNames = array_merge($this->entityFieldNames, ...$fromImplementation);
-			$this->entityFieldNames = array_unique($this->entityFieldNames);
+			$entityFieldNames[] = $this->getEntityFieldNameByMap(static::FIELD_NAME_OBSERVERS);
 		}
-		$data = $this->collectValues($this->entityFieldNames, $valuesType);
 
+		/** @var string[][] $fromImplementation */
+		$fromImplementation = [];
+		foreach ($this->getAllImplementations() as $implementation)
+		{
+			$fromImplementation[] = $implementation->getSerializableFieldNames();
+		}
+
+		$this->entityFieldNames = array_unique(array_merge($entityFieldNames, ...$fromImplementation));
+
+		return $this->entityFieldNames;
+	}
+
+	private function mapDataKeysToCommonFieldNames(array $data): array
+	{
 		$commonFieldNames = array_map([$this, 'getCommonFieldNameByMap'], array_keys($data));
 
 		return array_combine($commonFieldNames, array_values($data));
@@ -1325,23 +1362,82 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	{
 		$this->fillProducts();
 
+		$originalProductsById = [];
+		$originalProducts = $this->hasField(static::FIELD_NAME_PRODUCTS) ? $this->getProductRows() : null;
+		foreach ($originalProducts ?? [] as $originalProduct)
+		{
+			$originalProductId = (int)$originalProduct->getId();
+			if ($originalProductId > 0)
+			{
+				$originalProductsById[$originalProductId] = $originalProduct;
+			}
+		}
+
 		$results = [];
+		$providedOriginalProductIds = [];
+		$successfulOriginalProductIds = [];
+		$productsForEquality = [];
+		$productsToSave = [];
 		foreach ($products as $product)
 		{
+			$productId = (int)$product->getId();
+			$originalProduct = $originalProductsById[$productId] ?? null;
+			if ($originalProduct)
+			{
+				$providedOriginalProductIds[$productId] = true;
+			}
+
 			$normalizationResult = $this->normalizeProduct($product);
 			$results[] = $normalizationResult;
-			if (
-				$normalizationResult->isSuccess()
-				&& !$this->isSameProductInCollection($this->getProductRows() ?? [], $product)
-			)
+			if (!$normalizationResult->isSuccess())
+			{
+				$productsForEquality[] = $product;
+
+				continue;
+			}
+
+			if ($originalProduct)
+			{
+				$successfulOriginalProductIds[$productId] = true;
+				$this->updateProduct($originalProduct, $product);
+
+				continue;
+			}
+
+			$productsForEquality[] = $product;
+			$productsToSave[] = $product;
+		}
+
+		foreach ($productsToSave as $product)
+		{
+			if (!$this->isSameProductInCollection($this->getProductsForEquality($successfulOriginalProductIds), $product))
 			{
 				$this->saveProduct($product);
 			}
 		}
 
-		$this->deleteNotProvidedProducts($products);
+		$this->deleteNotProvidedProducts($providedOriginalProductIds, $productsForEquality);
 
 		return $this->mergeResults($results);
+	}
+
+	/**
+	 * @param array<int, true> $excludedProductIds
+	 *
+	 * @return iterable<ProductRow>
+	 */
+	private function getProductsForEquality(array $excludedProductIds): iterable
+	{
+		foreach ($this->getProductRows() ?? [] as $product)
+		{
+			$productId = (int)$product->getId();
+			if ($productId > 0 && isset($excludedProductIds[$productId]))
+			{
+				continue;
+			}
+
+			yield $product;
+		}
 	}
 
 	/**
@@ -1391,7 +1487,7 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 	}
 
 	/**
-	 * @param EO_ProductRow_Collection|ProductRow[] $products
+	 * @param iterable<ProductRow> $products
 	 * @param ProductRow $productToFind
 	 * @return bool
 	 */
@@ -1413,35 +1509,7 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		$originalProduct = $this->getProductRows() ? $this->getProductRows()->getByPrimary($product->getId()) : null;
 		if ($originalProduct)
 		{
-			$data = $product->collectValues(Values::ALL, FieldTypeMask::SCALAR);
-			// can't change primary key
-			unset($data['ID']);
-
-			foreach ($data as $fieldName => $value)
-			{
-				$originalProduct->set($fieldName, $value);
-			}
-
-			$productReservation = $product->getProductRowReservation();
-			$originalProductReservation = $originalProduct->getProductRowReservation();
-			if ($productReservation && $originalProductReservation)
-			{
-				$data = $productReservation->collectValues(Values::CURRENT, FieldTypeMask::SCALAR);
-				// can't change primary key
-				unset($data['ID']);
-
-				foreach ($data as $fieldName => $value)
-				{
-					$originalProductReservation->set($fieldName, $value);
-				}
-
-				$originalProductReservation->setProductRow($originalProduct);
-			}
-			elseif ($productReservation)
-			{
-				$productReservation->setProductRow($originalProduct);
-				$originalProduct->setProductRowReservation($productReservation);
-			}
+			$this->updateProduct($originalProduct, $product);
 		}
 		else
 		{
@@ -1482,29 +1550,57 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 		}
 	}
 
+	protected function updateProduct(ProductRow $originalProduct, ProductRow $product): void
+	{
+		$data = $product->collectValues(Values::ALL, FieldTypeMask::SCALAR);
+		// can't change primary key
+		unset($data['ID']);
+
+		foreach ($data as $fieldName => $value)
+		{
+			$originalProduct->set($fieldName, $value);
+		}
+
+		$productReservation = $product->getProductRowReservation();
+		$originalProductReservation = $originalProduct->getProductRowReservation();
+		if ($productReservation && $originalProductReservation)
+		{
+			$data = $productReservation->collectValues(Values::CURRENT, FieldTypeMask::SCALAR);
+			// can't change primary key
+			unset($data['ID']);
+
+			foreach ($data as $fieldName => $value)
+			{
+				$originalProductReservation->set($fieldName, $value);
+			}
+
+			$originalProductReservation->setProductRow($originalProduct);
+		}
+		elseif ($productReservation)
+		{
+			$productReservation->setProductRow($originalProduct);
+			$originalProduct->setProductRowReservation($productReservation);
+		}
+	}
+
 	/**
-	 * @param EO_ProductRow_Collection|ProductRow[] $providedProducts
+	 * @param array<int, true> $providedOriginalProductIds
+	 * @param ProductRow[] $productsForEquality
 	 */
-	protected function deleteNotProvidedProducts($providedProducts): void
+	protected function deleteNotProvidedProducts(
+		array $providedOriginalProductIds,
+		array $productsForEquality,
+	): void
 	{
 		if (!$this->getProductRows())
 		{
 			return;
 		}
 
-		$providedIds = [];
-		foreach ($providedProducts as $providedProduct)
-		{
-			if ($providedProduct->getId() > 0)
-			{
-				$providedIds[] = $providedProduct->getId();
-			}
-		}
-
 		foreach ($this->getProductRows() as $existingProduct)
 		{
-			$wasProvided = in_array($existingProduct->getId(), $providedIds, true);
-			$wasSameProvided = $this->isSameProductInCollection($providedProducts, $existingProduct);
+			$wasProvided = isset($providedOriginalProductIds[(int)$existingProduct->getId()]);
+			$wasSameProvided = $this->isSameProductInCollection($productsForEquality, $existingProduct);
 
 			if (
 				!$wasProvided
@@ -2348,8 +2444,6 @@ abstract class Item implements \JsonSerializable, \ArrayAccess, Arrayable
 
 	protected function resetExpressionField(string $commonFieldName): self
 	{
-		$this->loadExpressionField($commonFieldName);
-
 		unset($this->currentValues[$commonFieldName]);
 
 		return $this;

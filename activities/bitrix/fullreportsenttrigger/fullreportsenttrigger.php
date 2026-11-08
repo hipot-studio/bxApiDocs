@@ -8,6 +8,7 @@ use Bitrix\Bizproc\Error;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Result;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Timeman\V2\Internal\Integration\Bizproc\FullReportSentTrigger;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -25,10 +26,16 @@ class CBPFullReportSentTrigger extends BaseTrigger
 	private const RETURN_PARAM_REPORT_ID = 'REPORT_ID';
 	private const RETURN_PARAM_PERIOD_PHRASE = 'PERIOD_PHRASE';
 	private const RETURN_PARAM_SOURCE_TYPE = 'SOURCE_TYPE';
+	private const RETURN_PARAM_PERIOD_FROM = 'PERIOD_FROM';
+	private const RETURN_PARAM_PERIOD_TO = 'PERIOD_TO';
+	private const RETURN_PARAM_EVENT_DATE_TIME = 'EventDateTime';
 
 	public function execute(): int
 	{
 		$context = $this->getRootActivity()->{\CBPDocument::PARAM_TRIGGER_EVENT_DATA} ?? [];
+		$this->{self::RETURN_PARAM_EVENT_DATE_TIME} = $this->createDateTimeValue(
+			$context[FullReportSentTrigger::FIELD_EVENT_DATE_TIME] ?? null,
+		);
 
 		$userId = (int)($context[FullReportSentTrigger::FIELD_USER_ID] ?? 0);
 		if (!empty($userId))
@@ -47,6 +54,12 @@ class CBPFullReportSentTrigger extends BaseTrigger
 		$this->{self::RETURN_PARAM_REPORT_ID} = (int)($context[FullReportSentTrigger::FIELD_REPORT_ID] ?? 0);
 		$this->{self::RETURN_PARAM_PERIOD_PHRASE} = (string)($context[FullReportSentTrigger::FIELD_PERIOD_PHRASE] ?? '');
 		$this->{self::RETURN_PARAM_SOURCE_TYPE} = (string)($context[FullReportSentTrigger::FIELD_SOURCE_TYPE] ?? '');
+		$this->{self::RETURN_PARAM_PERIOD_FROM} = $this->createDateTimeValue(
+			$context[FullReportSentTrigger::FIELD_PERIOD_FROM] ?? null,
+		);
+		$this->{self::RETURN_PARAM_PERIOD_TO} = $this->createDateTimeValue(
+			$context[FullReportSentTrigger::FIELD_PERIOD_TO] ?? null,
+		);
 
 		return CBPActivityExecutionStatus::Closed;
 	}
@@ -63,6 +76,9 @@ class CBPFullReportSentTrigger extends BaseTrigger
 			self::RETURN_PARAM_REPORT_ID => null,
 			self::RETURN_PARAM_PERIOD_PHRASE => null,
 			self::RETURN_PARAM_SOURCE_TYPE => null,
+			self::RETURN_PARAM_PERIOD_FROM => null,
+			self::RETURN_PARAM_PERIOD_TO => null,
+			self::RETURN_PARAM_EVENT_DATE_TIME => null,
 		];
 
 		$this->SetPropertiesTypes([
@@ -86,6 +102,15 @@ class CBPFullReportSentTrigger extends BaseTrigger
 			],
 			self::RETURN_PARAM_SOURCE_TYPE => [
 				'Type' => FieldType::STRING,
+			],
+			self::RETURN_PARAM_PERIOD_FROM => [
+				'Type' => FieldType::DATETIME,
+			],
+			self::RETURN_PARAM_PERIOD_TO => [
+				'Type' => FieldType::DATETIME,
+			],
+			self::RETURN_PARAM_EVENT_DATE_TIME => [
+				'Type' => FieldType::DATETIME,
 			],
 		]);
 	}
@@ -129,5 +154,14 @@ class CBPFullReportSentTrigger extends BaseTrigger
 	protected static function getModuleId(): ?string
 	{
 		return 'timeman';
+	}
+
+	private function createDateTimeValue(mixed $value): ?DateTime
+	{
+		// CBPHelper reads every form a dispatcher may send, including the serialized bizproc datetime
+		// whose trailing offset a plain DateTime constructor would drop.
+		$timestamp = \CBPHelper::makeTimestamp($value);
+
+		return $timestamp > 0 ? DateTime::createFromTimestamp($timestamp) : null;
 	}
 }

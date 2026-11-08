@@ -184,6 +184,13 @@ class CCatalogMenu extends CAdminMenu
 	 */
 	public static function fReplaceUrl($submenu, $urlCurrent)
 	{
+		$uri = new Uri(trim(str_replace(["\t", "\r", "\n"], '', $urlCurrent), "\x00..\x20"));
+		if (!in_array($uri->getScheme(), ['', 'http', 'https'], true))
+		{
+			return $submenu;
+		}
+
+		$urlCurrent = (string)$uri;
 		$urlCurrentDefault = $urlCurrent;
 
 		$arUrlAdd = array("set_filter" => "Y");

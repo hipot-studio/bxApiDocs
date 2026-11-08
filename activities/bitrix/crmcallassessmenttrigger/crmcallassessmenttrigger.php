@@ -192,7 +192,7 @@ class CBPCrmCallAssessmentTrigger extends BaseTrigger implements IBPEventActivit
 		{
 			throw new \LogicException(
 				static::class . '::subscribe() called before event subscription hash was initialized.'
-				. ' Use subscribeAndWait() to start the subscription.'
+				. ' Use subscribeAndWait() to start the subscription.',
 			);
 		}
 
@@ -215,6 +215,15 @@ class CBPCrmCallAssessmentTrigger extends BaseTrigger implements IBPEventActivit
 	{
 		if ($this->isExternalEventIrrelevant($arEventParameters, self::LISTEN_EVENTS))
 		{
+			return;
+		}
+
+		if (!Loader::includeModule('crm') || !Loader::includeModule('ai'))
+		{
+			$this->trackError('Required modules crm and ai are not available');
+			$this->unsubscribe($this);
+			$this->workflow->cancelActivity($this);
+
 			return;
 		}
 

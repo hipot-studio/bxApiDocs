@@ -17,7 +17,7 @@ class ToolsManager
 	private ?array $disabledMenuItemListId = null;
 	private Sorter $sorter;
 	private FirstPageChanger $firstPageChanger;
-	private const CACHE_ID_DISABLED_TOOLS = 'disabled_tools';
+	private const CACHE_ID_DISABLED_TOOLS = 'disabled_tools_v2';
 	private const CACHE_PATH = '/intranet/settings/';
 
 	public static function getInstance(): static

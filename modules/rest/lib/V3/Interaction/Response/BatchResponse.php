@@ -5,7 +5,7 @@ namespace Bitrix\Rest\V3\Interaction\Response;
 class BatchResponse extends Response
 {
 	/**
-	 * @var Response[]
+	 * @var array[]
 	 */
 	private array $items = [];
 
@@ -14,26 +14,20 @@ class BatchResponse extends Response
 	public function addItem(int|string $alias, Response $item): void
 	{
 		$responseData = $item->toArray();
-		if ($responseData['item'])
+		if (!empty($responseData['item']))
 		{
 			$this->context[$alias] = $responseData['item'];
 		}
-		elseif ($responseData['items'])
+		elseif (!empty($responseData['items']))
 		{
 			$this->context[$alias] = $responseData['items'];
 		}
-		$this->items[] = $item;
+		$this->items[] = $responseData;
 	}
 
 	public function toArray(): array
 	{
-		$result = [];
-		foreach ($this->items as $item)
-		{
-			$result[] = $item->toArray();
-		}
-
-		return $result;
+		return $this->items;
 	}
 
 	public function getContext(int|string|null $alias = null): array

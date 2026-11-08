@@ -69,6 +69,18 @@ final class SignatureContextService
 	}
 
 	/**
+	 * The same context as getContext(), with the signature bodies left as HTML with the macros resolved.
+	 * Serves a consumer that renders the signature itself; getContext() serves the mobile REST, which
+	 * takes the bodies already converted to text.
+	 *
+	 * @return array{signatures: array, senders: array}
+	 */
+	public function getResolvedContext(int $userId): array
+	{
+		return $this->resolveContext($userId, true);
+	}
+
+	/**
 	 * Saves or clears a signature choice after checking it against the current context.
 	 */
 	public function setChoice(int $userId, string $senderKey, ?int $signatureId): Result

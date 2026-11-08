@@ -231,9 +231,13 @@ final class NodeRepository
 		NodeActiveFilter $activeFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
 		int $limit = 0,
 		int $offset = 0,
+		?int $viewerUserId = null,
 	): Item\Collection\NodeCollection
 	{
-		$accessFilter = $structureAction ? new NodeAccessFilter($structureAction) : null;
+		$accessFilter = $structureAction
+			? new NodeAccessFilter($structureAction, userId: $viewerUserId)
+			: null
+		;
 
 		return (new NodeDataBuilder())
 			->addFilter(
@@ -244,7 +248,7 @@ final class NodeRepository
 					accessFilter: $accessFilter,
 				),
 			)
-			->setSort(new NodeSort(sort: SortDirection::Asc))
+			->setSort(new NodeSort(sort: SortDirection::Asc, id: SortDirection::Asc))
 			->setLimit($limit)
 			->setOffset($offset)
 			->getAll()

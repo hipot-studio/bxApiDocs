@@ -8,6 +8,7 @@ use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\User;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
+use Bitrix\BIConnector\Integration\Superset\SupersetUserLogin;
 
 final class SupersetUserRepository
 {
@@ -16,6 +17,7 @@ final class SupersetUserRepository
 		$query = UserTable::query()
 			->setSelect([
 				'ID',
+				// the portal login from b_user, not the derived Superset one
 				'LOGIN',
 				'EMAIL',
 				'NAME',
@@ -92,13 +94,37 @@ final class SupersetUserRepository
 		return null;
 	}
 
+	/**
+	 * Resolves the portal user behind a Superset account login.
+	 *
+	 * Establishes the identity and nothing else: neither ACTIVE nor REAL_USER is filtered here, so
+	 * a dismissed employee stays resolvable and the caller decides about access. The lookup is not
+	 * cached - it has to see an account created a moment ago.
+	 */
+	public function getUserIdByLogin(string $login): ?int
+	{
+		if ($login === '')
+		{
+			return null;
+		}
+
+		$row = SupersetUserTable::query()
+			->setSelect(['USER_ID'])
+			->where('LOGIN', $login)
+			->setLimit(1)
+			->fetch()
+		;
+
+		return $row ? (int)$row['USER_ID'] : null;
+	}
+
 	private static function getUsername(int $id): string
 	{
-		return substr(hash('sha1', (string)$id), 0, 16);
+		return SupersetUserLogin::getLogin($id);
 	}
 
 	private static function getEmail(string $username): string
 	{
-		return $username . '@bitrix.info';
+		return SupersetUserLogin::getEmail($username);
 	}
 }

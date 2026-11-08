@@ -260,6 +260,11 @@ class ProjectAccessService implements GridAccessServiceInterface
 		return $this->can($userId, ActionDictionary::CopyLink, $entityId);
 	}
 
+	public function canCopy(int $userId, int $entityId): bool
+	{
+		return $this->can($userId, ActionDictionary::Update, $entityId);
+	}
+
 	public function can(int $userId, ActionDictionary $action, ?int $entityId = null, array $params = []): bool
 	{
 		$this->clearUserError();

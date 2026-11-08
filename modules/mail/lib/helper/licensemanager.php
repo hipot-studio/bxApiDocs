@@ -447,6 +447,11 @@ class LicenseManager
 			return (int) Main\Config\Option::get('mail', 'sync_old_limit2', -1);
 		}
 
+		if (Feature::isUnlimitedMailSyncPeriodEnabled())
+		{
+			return 0;
+		}
+
 		return (int) Bitrix24\Feature::getVariable('mail_sync_old_limit');
 	}
 

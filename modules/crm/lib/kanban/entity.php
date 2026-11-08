@@ -22,6 +22,7 @@ use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\Kanban\Helper\ClientFieldsPreparer;
 use Bitrix\Crm\Observer\Entity\ObserverTable;
+use Bitrix\Crm\PhaseSemantics;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Display\Field;
@@ -1872,7 +1873,7 @@ abstract class Entity
 		];
 	}
 
-	public function getGridFilter(?string $filterId = null): array
+	public function getGridFilter(?string $filterId = null, array $extraFieldIds = []): array
 	{
 		$result = [];
 
@@ -1887,6 +1888,12 @@ abstract class Entity
 		{
 			$usedFields[] = $fieldName;
 		}
+		foreach ($this->getAllowedExtraFilterFieldIds($extraFieldIds) as $fieldName)
+		{
+			$usedFields[] = $fieldName;
+		}
+		$usedFields = array_unique($usedFields);
+
 		foreach ($usedFields as $filterFieldID)
 		{
 			$filterField = $filter->getField($filterFieldID);
@@ -1897,6 +1904,33 @@ abstract class Entity
 		}
 
 		return $result;
+	}
+
+	protected function getAllowedExtraFilterFieldIds(array $extraFieldIds): array
+	{
+		if (empty($extraFieldIds))
+		{
+			return [];
+		}
+
+		$restrictedFieldIds = array_fill_keys($this->getFieldsRestrictions(), true);
+		$result = [];
+
+		foreach ($extraFieldIds as $fieldName)
+		{
+			if (
+				!is_string($fieldName)
+				|| $fieldName === ''
+				|| isset($restrictedFieldIds[$fieldName])
+			)
+			{
+				continue;
+			}
+
+			$result[] = $fieldName;
+		}
+
+		return array_unique($result);
 	}
 
 	public function getFilterLazyLoadParams(): ?array
@@ -2175,6 +2209,16 @@ abstract class Entity
 					$factory = Service\Container::getInstance()->getFactory($typeId);
 					if ($factory)
 					{
+						if (
+							$viewMode === ViewMode::MODE_DEADLINES
+							&& !$factory->isListViewSupported(Service\Router::LIST_VIEW_DEADLINES)
+						)
+						{
+							// no deadline-oriented read-model for this type: fail loudly instead of
+							// silently falling back to the stage-based one
+							return null;
+						}
+
 						$alias = $viewMode === ViewMode::MODE_ACTIVITIES
 							? 'crm.kanban.entity.dynamic.activities'
 							: 'crm.kanban.entity.dynamic';
@@ -2270,24 +2314,57 @@ abstract class Entity
 	 */
 	public function createPullStage(?array $fields = null, ?array $params = null): array
 	{
+		$statusId = (string)($fields['STATUS_ID'] ?? '');
+		$categoryId = $fields['CATEGORY_ID'] ?? null;
+
 		return [
-			'id' => ($fields['STATUS_ID'] ?? ''),
-			'sort' => ($fields['SORT'] ?? ''),
-			'name' => ($fields['NAME'] ?? ''),
-			'name_init' => ($fields['NAME_INIT'] ?? ''),
-			'color' => ($fields['COLOR'] ?? ''),
+			'id' => $statusId,
+			'statusId' => $statusId,
+			'entityId' => (string)($fields['ENTITY_ID'] ?? ''),
+			'sort' => (int)($fields['SORT'] ?? 0),
+			'name' => (string)($fields['NAME'] ?? ''),
+			'name_init' => (string)($fields['NAME_INIT'] ?? ''),
+			'color' => (string)($fields['COLOR'] ?? ''),
+			'semantics' => $fields['SEMANTICS'] ?? null,
+			'type' => $this->getStageType($fields['SEMANTICS'] ?? null),
+			'categoryId' => $categoryId === null ? null : (int)$categoryId,
+			'description' => (string)($fields['DESCRIPTION'] ?? ''),
 		];
 	}
 
 	public function createPullStageByObj(EO_Status $stage): array
 	{
+		$statusId = $stage->getStatusId() ?? '';
+		$categoryId = $stage->getCategoryId();
+
 		return [
-			'id' => $stage->getStatusId() ?? '',
-			'sort' => $stage->getSort() ?? '',
+			'id' => $statusId,
+			'statusId' => $statusId,
+			'entityId' => $stage->getEntityId() ?? '',
+			'sort' => $stage->getSort() ?? 0,
 			'name' => $stage->getName() ?? '',
 			'name_init' => $stage->getNameInit(),
 			'color' => $stage->getColor() ?? '',
+			'semantics' => $stage->getSemantics(),
+			'type' => $this->getStageType($stage->getSemantics()),
+			'categoryId' => $categoryId === null ? null : (int)$categoryId,
+			'description' => $stage->getDescription() ?? '',
 		];
+	}
+
+	private function getStageType(?string $semantics): string
+	{
+		if ($semantics === PhaseSemantics::SUCCESS)
+		{
+			return 'WIN';
+		}
+
+		if ($semantics === PhaseSemantics::FAILURE)
+		{
+			return 'LOOSE';
+		}
+
+		return 'PROGRESS';
 	}
 
 	/**
@@ -2844,6 +2921,16 @@ abstract class Entity
 	public function getSemanticIds(): array
 	{
 		return [];
+	}
+
+	public function shouldShowFinalStagesWithDefaultFilter(): bool
+	{
+		return false;
+	}
+
+	public function shouldShowFinalStagesWithEmptyFilter(): bool
+	{
+		return $this->shouldShowFinalStagesWithDefaultFilter();
 	}
 
 	public function getAllowStages(array $filter = []): array

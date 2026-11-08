@@ -45,9 +45,11 @@ class RouteBuilder
 	 */
 	private const SCOPES = ['crm'];
 
+	private const MCP_TOOL_SET_CODE = 'crm_rest_v3_category';
+
 	private const STATIC_ENTITY_TYPE_IDS = [OwnerType::DEAL, OwnerType::COMPANY, OwnerType::CONTACT];
 
-	/** @var array<string, string> The last segment of the route => the action of the shared controller. */
+	/** @var array<string, string> */
 	private const CATEGORY_ACTIONS = [
 		'add' => 'add',
 		'update' => 'update',
@@ -56,14 +58,14 @@ class RouteBuilder
 		'list' => 'list',
 	];
 
-	/** @var array<string, string> The last segment of the route => the action of the shared controller. */
+	/** @var array<string, string> */
 	private const STAGE_ACTIONS = [
-		'add' => 'addStage',
-		'update' => 'updateStage',
-		'get' => 'getStage',
-		'delete' => 'deleteStage',
-		'list' => 'listStage',
-		'replace' => 'replaceStages',
+		'add' => 'add',
+		'update' => 'update',
+		'get' => 'get',
+		'delete' => 'delete',
+		'list' => 'list',
+		'replace' => 'replace',
 	];
 
 	/**
@@ -140,6 +142,7 @@ class RouteBuilder
 
 		$entityType = $settings->getEntityType();
 		$prefix = 'crm.' . $this->getEntityTypeSegment($entityType) . '.category';
+		$owner = $this->getOwnerName($entityType);
 
 		foreach (self::CATEGORY_ACTIONS as $segment => $action)
 		{
@@ -149,6 +152,7 @@ class RouteBuilder
 				'dtoGenerator' => CategoryDtoGenerator::class,
 				'entityTypeId' => $entityType->getId(),
 				'scopes' => self::SCOPES,
+				'mcp' => $this->buildMcpMetadata($this->getCategoryDescription($segment, $owner)),
 			];
 		}
 
@@ -160,12 +164,61 @@ class RouteBuilder
 		foreach (self::STAGE_ACTIONS as $segment => $action)
 		{
 			$routes[$prefix . '.stage.' . $segment] = [
-				'controller' => Category::class,
+				'controller' => Stage::class,
 				'method' => $action,
 				'dtoFqcn' => StageDto::class,
 				'entityTypeId' => $entityType->getId(),
 				'scopes' => self::SCOPES,
+				'mcp' => $this->buildMcpMetadata($this->getStageDescription($segment, $owner)),
 			];
 		}
+	}
+
+	/**
+	 * @return array<string, mixed>
+	 */
+	private function buildMcpMetadata(string $descriptionOverride): array
+	{
+		return [
+			'export' => true,
+			'toolSetCode' => self::MCP_TOOL_SET_CODE,
+			'descriptionOverride' => $descriptionOverride,
+		];
+	}
+
+	private function getOwnerName(EntityType $entityType): string
+	{
+		return match ($entityType->getId())
+		{
+			OwnerType::DEAL => 'CRM deals',
+			OwnerType::COMPANY => 'CRM companies',
+			OwnerType::CONTACT => 'CRM contacts',
+			default => 'CRM smart process type ' . $entityType->getId(),
+		};
+	}
+
+	private function getCategoryDescription(string $segment, string $owner): string
+	{
+		return match ($segment)
+		{
+			'add' => 'Create a category for ' . $owner . '.',
+			'update' => 'Update a category for ' . $owner . '.',
+			'get' => 'Get a category for ' . $owner . ' by ID.',
+			'delete' => 'Delete a category for ' . $owner . '.',
+			'list' => 'List categories for ' . $owner . '.',
+		};
+	}
+
+	private function getStageDescription(string $segment, string $owner): string
+	{
+		return match ($segment)
+		{
+			'add' => 'Create a stage in a category for ' . $owner . '.',
+			'update' => 'Update a stage in a category for ' . $owner . '.',
+			'get' => 'Get a stage in a category for ' . $owner . ' by ID.',
+			'delete' => 'Delete a stage in a category for ' . $owner . '.',
+			'list' => 'List stages in a category for ' . $owner . '.',
+			'replace' => 'Replace the stages of a category for ' . $owner . '.',
+		};
 	}
 }

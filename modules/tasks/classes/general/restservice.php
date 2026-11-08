@@ -6,6 +6,8 @@
  * @copyright 2001-2013 Bitrix
  */
 
+use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Integration\Rest\Exception\RestException;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Util\User;
@@ -303,7 +305,20 @@ final class CTaskRestService extends IRestService
 				throw new TasksException('Invalid status given', TasksException::TE_WRONG_ARGUMENTS);
 			}
 
-			$oTask = CTaskItem::getInstance($taskId, \Bitrix\Tasks\Util\User::getAdminId());	// act as Admin
+			$userId = User::getId();
+
+			if (!TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_CHANGE_STATUS, $taskId))
+			{
+				// Plain TE_ACTION_NOT_ALLOWED code: TE_ACCESS_DENIED carries the
+				// TE_FLAG_SERIALIZED_ERRORS_IN_MESSAGE bit, which would make the catch below
+				// unserialize the plain-string message into false and crash _emitError.
+				throw new TasksException(
+					'Access denied',
+					TasksException::TE_ACTION_NOT_ALLOWED
+				);
+			}
+
+			$oTask = CTaskItem::getInstance($taskId, $userId);
 			$oTask->update(array('STATUS' => $statusId));
 
 			$parsedReturnValue = null;
@@ -322,8 +337,12 @@ final class CTaskRestService extends IRestService
 			$errCode = $e->getCode();
 			$errMsg  = $e->getMessage();
 
-			if ($e->GetCode() & TasksException::TE_FLAG_SERIALIZED_ERRORS_IN_MESSAGE)
-				$arMessages = unserialize($errMsg, ['allowed_classes' => false]);
+			$serializedMessages = ($e->GetCode() & TasksException::TE_FLAG_SERIALIZED_ERRORS_IN_MESSAGE)
+				? unserialize($errMsg, ['allowed_classes' => false])
+				: false;
+
+			if (is_array($serializedMessages))
+				$arMessages = $serializedMessages;
 			else
 			{
 				$arMessages[] = array(

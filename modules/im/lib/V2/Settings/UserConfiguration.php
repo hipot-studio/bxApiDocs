@@ -7,6 +7,7 @@ use Bitrix\Im\Configuration\General;
 use Bitrix\Im\Configuration\Manager;
 use Bitrix\Im\Model\OptionUserTable;
 use Bitrix\Im\Recent;
+use Bitrix\Im\V2\Analytics\SettingsAnalytics;
 use Bitrix\Im\V2\Result;
 use Bitrix\Im\V2\Settings\Preset\Preset;
 use Bitrix\Im\V2\Settings\Preset\PresetError;
@@ -89,6 +90,11 @@ class UserConfiguration
 			: null
 		;
 
+		$mainReactionBeforeUpdate = ($settingsConfiguration['name'] === Entity\General::DEFAULT_REACTION)
+			? ($this->getGeneralSettings()[Entity\General::DEFAULT_REACTION] ?? null)
+			: null
+		;
+
 		if (!$this->generalPreset->isPersonal($this->userId))
 		{
 			$personalPreset = Preset::getPersonal($this->userId);
@@ -114,6 +120,7 @@ class UserConfiguration
 			[$settingsConfiguration['name'] => $settingsConfiguration['value']]
 		);
 		$this->perfomSideEffect($settingsConfiguration, $settingsBeforeUpdate);
+		$this->sendMainReactionAnalytics($settingsConfiguration, $mainReactionBeforeUpdate);
 
 		if (!$this->generalPreset->general->shouldUpdateSimpleNotifySettings($settingsConfiguration))
 		{
@@ -205,6 +212,31 @@ class UserConfiguration
 		{
 			$this->updatePinSortCost($settingConfiguration, $settingsBeforeUpdate);
 		}
+	}
+
+	/**
+	 * Fires the analytics event once per actual main-reaction change. All entry points
+	 * (message picker, settings; web and mobile) write through this method, so a single
+	 * point covers them without double-counting the cross-device settingsUpdate pull.
+	 */
+	private function sendMainReactionAnalytics(array $settingsConfiguration, ?string $reactionBeforeUpdate): void
+	{
+		if ($settingsConfiguration['name'] !== Entity\General::DEFAULT_REACTION)
+		{
+			return;
+		}
+
+		// Compare against the persisted (normalized) value, exactly as the write path stores it.
+		$persistedReaction = General::checkingValues(
+			[Entity\General::DEFAULT_REACTION => $settingsConfiguration['value']]
+		)[Entity\General::DEFAULT_REACTION] ?? null;
+
+		if ($persistedReaction === null || $persistedReaction === $reactionBeforeUpdate)
+		{
+			return;
+		}
+
+		(new SettingsAnalytics())->addSetMainReaction((int)$this->userId, (string)$persistedReaction);
 	}
 
 	private function updateUserSearch(array $settingsConfiguration): void

@@ -3,6 +3,7 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Integration\TransformerManager;
 use Bitrix\Disk\Internals\AttachedObjectTable;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
@@ -10,6 +11,7 @@ use Bitrix\Disk\Internals\TrackedObjectTable;
 use Bitrix\Disk\Public\Event\OnAfterDeleteAttachedObjectEvent;
 use Bitrix\Disk\Uf\Connector;
 use Bitrix\Disk\Uf\StubConnector;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
@@ -45,10 +47,10 @@ final class AttachedObject extends Internals\Model
 	/** @var Connector */
 	protected $connector;
 
-	protected $operableEntity = array();
+	protected $operableEntity = [];
 
 	/** @var array */
-	private static $storedData = array();
+	private static $storedData = [];
 
 	/**
 	 * Gets the fully qualified name of table class which belongs to current model.
@@ -105,7 +107,7 @@ final class AttachedObject extends Internals\Model
 	 */
 	public static function getStoredDataByObjectId($objectId)
 	{
-		return isset(self::$storedData[$objectId])? self::$storedData[$objectId] : null;
+		return self::$storedData[$objectId] ?? null;
 	}
 
 	/**
@@ -152,6 +154,31 @@ final class AttachedObject extends Internals\Model
 		return $connector->canUpdate($userId);
 	}
 
+	public function canDownload($userId): bool
+	{
+		$file = $this->getFile();
+
+		if (!$file)
+		{
+			return false;
+		}
+
+		if ($this->canUpdate($userId))
+		{
+			return true;
+		}
+
+		if (!$this->canRead($userId))
+		{
+			return false;
+		}
+
+		/** @var DownloadAccess $downloadAccess */
+		$downloadAccess = ServiceLocator::getInstance()->get(DownloadAccess::class);
+
+		return $downloadAccess->checkObjectOption($file);
+	}
+
 	public function canLock($userId)
 	{
 		return $this->canUpdate($userId);
@@ -180,11 +207,10 @@ final class AttachedObject extends Internals\Model
 			return false;
 		}
 		$connector = $this->getConnector();
-		list($operableConnectorClass, ) = Driver::getInstance()->getUserFieldManager()->getConnectorDataByEntityType($this->operableEntity['ENTITY_ID']);
-		$confidenceToOperableEntity =
-			($this->operableEntity['ENTITY_VALUE_ID'] == $this->entityId) &&
-			($operableConnectorClass === $connector::className())
-		;
+		[$operableConnectorClass] = Driver::getInstance()->getUserFieldManager()->getConnectorDataByEntityType($this->operableEntity['ENTITY_ID']);
+		$confidenceToOperableEntity
+			= ($this->operableEntity['ENTITY_VALUE_ID'] == $this->entityId)
+			&& ($operableConnectorClass === $connector::className());
 
 		return $confidenceToOperableEntity;
 	}
@@ -199,9 +225,9 @@ final class AttachedObject extends Internals\Model
 	 */
 	public static function add(array $data, ErrorCollection $errorCollection)
 	{
-		static::checkRequiredInputParams($data, array(
-			'OBJECT_ID', 'ENTITY_ID', 'ENTITY_TYPE', 'MODULE_ID'
-		));
+		self::checkRequiredInputParams($data, [
+			'OBJECT_ID', 'ENTITY_ID', 'ENTITY_TYPE', 'MODULE_ID',
+		]);
 
 		$model = parent::add($data, $errorCollection);
 		if($model && $model->getCreatedBy())
@@ -209,7 +235,7 @@ final class AttachedObject extends Internals\Model
 			$driver = Driver::getInstance();
 			$driver->getRecentlyUsedManager()->push(
 				$model->getCreatedBy(),
-				$model
+				$model,
 			);
 
 			/** @var AttachedObject $model */
@@ -419,12 +445,12 @@ final class AttachedObject extends Internals\Model
 		{
 			$version = $this->getVersion();
 
-			return $version? $version->getName() : '';
+			return $version ? $version->getName() : '';
 		}
 
 		$file = $this->getFile();
 
-		return $file? $file->getName() : '';
+		return $file ? $file->getName() : '';
 	}
 
 	/**
@@ -437,12 +463,12 @@ final class AttachedObject extends Internals\Model
 		{
 			$version = $this->getVersion();
 
-			return $version? $version->getFileId() : null;
+			return $version ? $version->getFileId() : null;
 		}
 
 		$file = $this->getFile();
 
-		return $file? $file->getFileId() : null;
+		return $file ? $file->getFileId() : null;
 	}
 
 	/**
@@ -457,6 +483,7 @@ final class AttachedObject extends Internals\Model
 		{
 			$this->connector = Connector::buildFromAttachedObject($this);
 		}
+
 		return $this->connector;
 	}
 
@@ -471,7 +498,7 @@ final class AttachedObject extends Internals\Model
 		{
 			return;
 		}
-		foreach(static::getModelList(array('filter' => $filter)) as $attachedObject)
+		foreach(self::getModelList(['filter' => $filter]) as $attachedObject)
 		{
 			$attachedObject->delete();
 		}
@@ -503,11 +530,11 @@ final class AttachedObject extends Internals\Model
 		$file = $this->getFile();
 
 		if(
-			$file &&
-			$file->getGlobalContentVersion() == 1 &&
-			$file->countAttachedObjects() == 0 &&
-			$file->getParent() &&
-			$file->getParent()->getCode() === Folder::CODE_FOR_UPLOADED_FILES
+			$file
+			&& $file->getGlobalContentVersion() == 1
+			&& $file->countAttachedObjects() == 0
+			&& $file->getParent()
+			&& $file->getParent()->getCode() === Folder::CODE_FOR_UPLOADED_FILES
 		)
 		{
 			$file->delete(SystemUser::SYSTEM_USER_ID);
@@ -539,7 +566,8 @@ final class AttachedObject extends Internals\Model
 		{
 			return true;
 		}
-		return $this->update(array('ALLOW_AUTO_COMMENT' => 0));
+
+		return $this->update(['ALLOW_AUTO_COMMENT' => 0]);
 	}
 
 	/**
@@ -552,7 +580,8 @@ final class AttachedObject extends Internals\Model
 		{
 			return true;
 		}
-		return $this->update(array('ALLOW_AUTO_COMMENT' => 1));
+
+		return $this->update(['ALLOW_AUTO_COMMENT' => 1]);
 	}
 
 	/**
@@ -562,7 +591,7 @@ final class AttachedObject extends Internals\Model
 	 */
 	public static function getMapAttributes()
 	{
-		return array(
+		return [
 			'ID' => 'id',
 			'OBJECT_ID' => 'objectId',
 			'OBJECT' => 'object',
@@ -576,7 +605,7 @@ final class AttachedObject extends Internals\Model
 			'ENTITY_ID' => 'entityId',
 			'CREATE_TIME' => 'createTime',
 			'CREATED_BY' => 'createdBy',
-		);
+		];
 	}
 
 	/**
@@ -585,10 +614,10 @@ final class AttachedObject extends Internals\Model
 	 */
 	public static function getMapReferenceAttributes()
 	{
-		return array(
+		return [
 			'OBJECT' => File::className(),
 			'VERSION' => Version::className(),
-		);
+		];
 	}
 
 	protected function getStubConnector()
@@ -599,4 +628,4 @@ final class AttachedObject extends Internals\Model
 
 		return $stubConnector;
 	}
-} 
+}

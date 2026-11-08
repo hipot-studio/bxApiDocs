@@ -23,6 +23,7 @@ final class BlankSelector
 				'maxFileSize' => $storage->getUploadDocumentMaxSize(),
 				'imageMaxFileSize' => $storage->getUploadImagesMaxSize(),
 				'maxTotalFileSize' => $storage->getUploadTotalMaxSize(),
+				'maxBatchTotalFileSize' => $storage->getUploadBatchTotalMaxSize(),
 				'maxFileCount' => $storage->getImagesCountLimitForBlankUpload(),
 			],
 			'portalConfig' => [

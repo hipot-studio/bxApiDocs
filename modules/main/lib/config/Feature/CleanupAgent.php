@@ -4,6 +4,7 @@ namespace Bitrix\Main\Config\Feature;
 
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\Type\Callback;
 
 /**
  * Once per day clears records from FeatureFlagTable and FeatureFlagRuleTable,
@@ -17,7 +18,7 @@ final class CleanupAgent
 	{
 	}
 
-	public static function run(): ?string
+	public static function run(): ?Callback
 	{
 		$instance = new static(
 			ServiceLocator::getInstance()->get(Factory::class),
@@ -30,7 +31,7 @@ final class CleanupAgent
 			return null;
 		}
 
-		return __METHOD__ . '();';
+		return new Callback([self::class, __FUNCTION__]);
 	}
 
 	private function runInternal(): bool

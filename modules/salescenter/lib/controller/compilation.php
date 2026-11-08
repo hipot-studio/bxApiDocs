@@ -17,6 +17,7 @@ use Bitrix\SalesCenter\Integration\ImOpenLinesManager;
 use Bitrix\Crm\Binding\OrderEntityTable;
 
 Loc::loadMessages(__FILE__);
+Loc::loadMessages(dirname(__DIR__) . '/integration/imopenlinesmanager.php');
 
 class Compilation extends Base
 {
@@ -86,6 +87,18 @@ class Compilation extends Base
 			return [];
 		}
 
+		$check = ImOpenLinesManager::getInstance()->checkClientSessionId(
+			$options['sessionId'] ?? null,
+			$options['dialogId'] ?? null,
+		);
+		if (!$check->isSuccess())
+		{
+			$this->addErrors($check->getErrors());
+
+			return [];
+		}
+		$options['sessionId'] = $check->getData()['sessionId'];
+
 		$dealId = (int)$options['ownerId'];
 		$dialogId = $options['dialogId'] ?? null;
 		$chatId =$this->normalizeChatId($dialogId);
@@ -120,6 +133,25 @@ class Compilation extends Base
 		{
 			return $data;
 		}
+
+		if (!CatalogManager::getInstance()->isProductCompilationLinkAvailable())
+		{
+			$this->addError(new Error(Loc::getMessage('SALESCENTER_IMOPMANAGER_EMPTY_COMPILATION_LINK')));
+
+			return $data;
+		}
+
+		$check = ImOpenLinesManager::getInstance()->checkClientSessionId(
+			$options['sessionId'] ?? null,
+			$options['dialogId'] ?? null,
+		);
+		if (!$check->isSuccess())
+		{
+			$this->addErrors($check->getErrors());
+
+			return [];
+		}
+		$options['sessionId'] = $check->getData()['sessionId'];
 
 		$dealId = (int)$options['ownerId'];
 		$isNewDeal = false;

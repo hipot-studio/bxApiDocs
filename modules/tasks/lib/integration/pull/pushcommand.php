@@ -38,4 +38,6 @@ abstract class PushCommand
 	public const PROJECT_USER_OPTION_UPDATED = 'project_user_option_changed';
 	public const DEFAULT_DEADLINE_UPDATED = 'default_deadline_changed';
 	public const SKIP_DEADLINE_NOTIFICATION_PERIOD_UPDATED = 'skip_deadline_notification_period_changed';
+
+	public const CHECKLIST_UPDATED = 'checklist_update';
 }

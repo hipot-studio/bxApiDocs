@@ -10,6 +10,7 @@ use Bitrix\Crm\Security\Role\Manage\Permissions\Export;
 use Bitrix\Crm\Security\Role\Manage\Permissions\HideSum;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Import;
 use Bitrix\Crm\Security\Role\Manage\Permissions\MyCardView;
+use Bitrix\Crm\Security\Role\Manage\Permissions\ObserversWrite;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Permission;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Read;
 use Bitrix\Crm\Security\Role\Manage\Permissions\Transition;
@@ -28,7 +29,11 @@ class PermissionAttrPresets
 	/**
 	 * @return Permission[]
 	 */
-	public static function crmEntityPreset(?string $inheritDescription = null): array
+	public static function crmEntityPreset(
+		?string $inheritDescription = null,
+		bool $withObserversWrite = false,
+		bool $withObserversWriteByStages = false,
+	): array
 	{
 		$permissionPreset = (new UserDepartmentAndOpened())
 			->setInheritDescription($inheritDescription);
@@ -50,10 +55,19 @@ class PermissionAttrPresets
 			)
 		;
 
-		return self::createCrmEntityPreset($variants, $dependentVariablesAsSettings);
+		return self::createCrmEntityPreset(
+			$variants,
+			$dependentVariablesAsSettings,
+			$withObserversWrite,
+			$withObserversWriteByStages,
+		);
 	}
 
-	public static function crmEntityPresetWithoutTeams(?string $inheritDescription = null): array
+	public static function crmEntityPresetWithoutTeams(
+		?string $inheritDescription = null,
+		bool $withObserversWrite = false,
+		bool $withObserversWriteByStages = false,
+	): array
 	{
 		$permissionPreset = (new UserDepartmentAndOpened())
 			->setInheritDescription($inheritDescription);
@@ -77,18 +91,29 @@ class PermissionAttrPresets
 			)
 		;
 
-		return self::createCrmEntityPreset($variants, $dependentVariablesAsSettingsWithoutTeams);
+		return self::createCrmEntityPreset(
+			$variants,
+			$dependentVariablesAsSettingsWithoutTeams,
+			$withObserversWrite,
+			$withObserversWriteByStages,
+		);
 	}
 
 	public static function crmEntityPresetAutomation(
 		bool $withTeams = true,
 		?string $inheritDescription = null,
+		bool $withObserversWrite = false,
+		bool $withObserversWriteByStages = false,
 	): array
 	{
 		return array_merge(
 			$withTeams
-					? self::crmEntityPreset($inheritDescription)
-					: self::crmEntityPresetWithoutTeams($inheritDescription),
+					? self::crmEntityPreset($inheritDescription, $withObserversWrite, $withObserversWriteByStages)
+					: self::crmEntityPresetWithoutTeams(
+						$inheritDescription,
+						$withObserversWrite,
+						$withObserversWriteByStages,
+					),
 			[
 				new Automation(self::readWrite()),
 			]
@@ -321,6 +346,44 @@ class PermissionAttrPresets
 		return $variants;
 	}
 
+	/**
+	 * Variants of the observers write permission in a block where it is configured per stage:
+	 * the block itself allows or forbids, a stage may also inherit the value of the block.
+	 */
+	private static function observersWriteWithStages(): Variants
+	{
+		$variants = new Variants();
+
+		$variants->add(
+			'',
+			(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_ALLOWED_NO'),
+			[
+				'useAsEmptyInSection' => true,
+				'useAsNothingSelectedInSubsection' => true,
+				'defaultInSection' => (new ObserversWrite())->getDefaultAttribute() === UserPermissions::PERMISSION_NONE,
+			],
+		);
+
+		$variants->add(
+			BX_CRM_PERM_ALL,
+			(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_TYPE_ALLOWED_YES'),
+			['defaultInSection' => (new ObserversWrite())->getDefaultAttribute() === UserPermissions::PERMISSION_ALL],
+		);
+
+		$variants->add(
+			ObserversWrite::INHERIT,
+			// this control mirrors HideSum; reuse its already-localized "inherit" label instead of a duplicate phrase
+			(string)Loc::getMessage('CRM_SECURITY_ROLE_PERMS_HIDE_SUM_INHERIT_MSGVER_1'),
+			[
+				'hideInSection' => true,
+				'useAsEmptyInSubsection' => true,
+				'isUseGroupHeadValuesInHint' => true,
+			],
+		);
+
+		return $variants;
+	}
+
 	public static function readWrite(): Variants
 	{
 		$variants = new Variants();
@@ -351,12 +414,19 @@ class PermissionAttrPresets
 		return $variants;
 	}
 
-	private static function createCrmEntityPreset(Variants $variants, BaseControlMapper $controlMapper): array
+	private static function createCrmEntityPreset(
+		Variants $variants,
+		BaseControlMapper $controlMapper,
+		bool $withObserversWrite,
+		bool $withObserversWriteByStages,
+	): array
 	{
 		return [
 			new Read($variants, $controlMapper),
 			new Add($variants, $controlMapper),
 			new Write($variants, $controlMapper),
+			// observers write is a sub-case of write, so it follows write and its per-stage rows
+			...($withObserversWrite ? [self::createObserversWrite($withObserversWriteByStages)] : []),
 			new Delete($variants, $controlMapper),
 			new Export($variants, $controlMapper),
 			new Import($variants, $controlMapper),
@@ -364,5 +434,24 @@ class PermissionAttrPresets
 				(new MyCardView())->getDefaultAttribute() === UserPermissions::PERMISSION_ALL,
 			)),
 		];
+	}
+
+	private static function createObserversWrite(bool $canAssignPermissionToStages): ObserversWrite
+	{
+		if ($canAssignPermissionToStages)
+		{
+			return new ObserversWrite(
+				self::observersWriteWithStages(),
+				(new Variables())
+					->addAttrMapping(ObserversWrite::INHERIT, null)
+					// "allow for all roles" must allow; the attribute-level max stays "none" to keep presets off
+					->setMaxValue(UserPermissions::PERMISSION_ALL),
+				canAssignPermissionToStages: true,
+			);
+		}
+
+		return new ObserversWrite(self::allowedYesNo(), (new Toggler())->setDefaultValue(
+			(new ObserversWrite())->getDefaultAttribute() === UserPermissions::PERMISSION_ALL,
+		));
 	}
 }

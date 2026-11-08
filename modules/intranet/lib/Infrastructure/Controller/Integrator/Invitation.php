@@ -60,6 +60,7 @@ class Invitation extends Controller
 			Analytics::ANALYTIC_INVITATION_TYPE_C_SUB_SECTION_INTEGRATOR,
 			true,
 			1,
+			partnerId: (int)($partnerData['partnerId'] ?? 0),
 		);
 
 		return AjaxJson::createSuccess($result->getData());

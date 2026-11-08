@@ -5,22 +5,51 @@ namespace Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service;
 use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Public\Provider\WorkflowTemplate\AiAgentProvider;
 use Bitrix\BizprocDesigner\Internal\Entity\DocumentDescription;
+use Bitrix\BizprocDesigner\Internal\Service\TemplateEditAccess;
 use Bitrix\Main\DI\ServiceLocator;
 
 final readonly class DocumentAccessService
 {
 	private AiAgentProvider $aiAgentProvider;
+	private TemplateEditAccess $templateEditAccess;
 
-	public function __construct(?AiAgentProvider $aiAgentProvider = null)
+	public function __construct(
+		?AiAgentProvider $aiAgentProvider = null,
+		?TemplateEditAccess $templateEditAccess = null,
+	)
 	{
 		$this->aiAgentProvider = $aiAgentProvider
 			?? ServiceLocator::getInstance()->get(AiAgentProvider::class);
+		$this->templateEditAccess = $templateEditAccess ?? new TemplateEditAccess();
 	}
 
 	public function canCreate(int $userId, DocumentDescription $documentType): bool
 	{
 		return \CBPDocument::CanUserOperateDocumentType(
 			\CBPCanUserOperateOperation::CreateWorkflow,
+			$userId,
+			$documentType->toBizprocComplexType(),
+		);
+	}
+
+	/**
+	 * Whether the user may read the elements of this document type, which is what reading its field schema
+	 * asks for.
+	 *
+	 * Deliberately weaker than {@see self::canCreate()}: authoring a template of a type is a configuration
+	 * right, while reading the codes of its fields is the right to see its items. For crm this lands on
+	 * canReadItems() of the entity type, true for anyone with access to at least one of its funnels. The
+	 * asymmetry is accepted on purpose (BRIEF § 6.2, § 15.11) - the stricter right would close the agent to
+	 * everyone without administrative rights in crm, and what is disclosed is the structure of the entity and
+	 * never the values of its records.
+	 *
+	 * Asked once per entity by whoever filters a field list by it ({@see RelatedDocumentFieldPolicy}): a check
+	 * per field would run hundreds of identical permission lookups for one answer.
+	 */
+	public function canViewDocumentType(int $userId, DocumentDescription $documentType): bool
+	{
+		return \CBPDocument::CanUserOperateDocumentType(
+			\CBPCanUserOperateOperation::ViewWorkflow,
 			$userId,
 			$documentType->toBizprocComplexType(),
 		);
@@ -66,6 +95,28 @@ final readonly class DocumentAccessService
 		}
 
 		return $this->canCreate($userId, $documentType);
+	}
+
+	/**
+	 * The template ACL on top of the document guard, for the paths of the external agent that address a
+	 * template of the editor. The agent writes into the very draft a person is editing, and the graph of that
+	 * draft travels back to whoever holds the lease of the template; both belong to the right to edit that
+	 * template, which the wide CreateWorkflow right of the document type is not.
+	 *
+	 * The WORKFLOW pseudo type keeps the document guard alone: the ACL of a launched copy refuses its own
+	 * legitimate owner, whom canManageDocument admits on purpose. A template that has no id yet has no ACL
+	 * either — its creation is the boundary of canManageDocument.
+	 */
+	public function canEditTemplate(int $userId, DocumentDescription $documentType, int $templateId): bool
+	{
+		if ($templateId <= 0 || $this->isWorkflowPseudoType($documentType))
+		{
+			return true;
+		}
+
+		$tpl = $this->templateEditAccess->resolve($templateId);
+
+		return $tpl !== null && $this->templateEditAccess->canEdit($tpl, $userId);
 	}
 
 	private function isWorkflowPseudoType(DocumentDescription $documentType): bool

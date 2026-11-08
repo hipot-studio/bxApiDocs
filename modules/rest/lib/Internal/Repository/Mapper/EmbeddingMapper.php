@@ -29,6 +29,9 @@ class EmbeddingMapper
 			dateCreate: $ormEntity->getDateCreate(),
 			additional: $ormEntity->getAdditional(),
 			options: $ormEntity->getOptions(),
+			moduleId: $ormEntity->getModuleId(),
+			entityType: $ormEntity->getEntityType(),
+			entityId: $ormEntity->getEntityId(),
 		);
 
 		$embedding->setId($ormEntity->getId());
@@ -56,9 +59,9 @@ class EmbeddingMapper
 		$language = new EmbeddingLanguage(
 			embeddingId: $ormEntity->getPlacementId(),
 			languageId: $ormEntity->getLanguageId(),
-    		title: $ormEntity->getTitle(),
-    		description: $ormEntity->getDescription(),
-    		groupName: $ormEntity->getGroupName(),
+			title: $ormEntity->getTitle(),
+			description: $ormEntity->getDescription(),
+			groupName: $ormEntity->getGroupName(),
 		);
 
 		$language->setId($ormEntity->getId());

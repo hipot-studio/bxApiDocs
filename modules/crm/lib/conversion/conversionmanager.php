@@ -22,14 +22,14 @@ class ConversionManager
 
 	protected static $configs = [];
 
-	public static function getConcernedFields($srcEntityTypeID, $srcFieldName)
+	public static function getConcernedFields($srcEntityTypeID, $srcFieldName, ?array $options = null)
 	{
 		$bindings = [];
-		static::prepareBoundFields($srcEntityTypeID, $srcFieldName, $bindings);
+		static::prepareBoundFields($srcEntityTypeID, $srcFieldName, $bindings, $options);
 		return array_values($bindings);
 	}
 
-	protected static function prepareBoundFields($srcEntityTypeID, $srcFieldName, array &$bindings)
+	protected static function prepareBoundFields($srcEntityTypeID, $srcFieldName, array &$bindings, ?array $options = null)
 	{
 		foreach(static::getDestinationEntityTypeIDs($srcEntityTypeID) as $dstEntityTypeID)
 		{
@@ -39,7 +39,7 @@ class ConversionManager
 				continue;
 			}
 
-			$map = EntityConversionMap::load($srcEntityTypeID, $dstEntityTypeID);
+			$map = EntityConversionMap::load($srcEntityTypeID, $dstEntityTypeID, $options);
 			if(!$map)
 			{
 				continue;
@@ -59,13 +59,13 @@ class ConversionManager
 					'FIELD_NAME' => $dstFieldName
 				];
 
-				static::prepareBoundFields($dstEntityTypeID, $dstFieldName, $bindings);
+				static::prepareBoundFields($dstEntityTypeID, $dstFieldName, $bindings, $options);
 				break;
 			}
 		}
 	}
 
-	public static function getParentalField($entityTypeID, $fieldName)
+	public static function getParentalField($entityTypeID, $fieldName, ?array $options = null)
 	{
 		$resultField = [
 			'ENTITY_TYPE_ID' => $entityTypeID,
@@ -80,7 +80,7 @@ class ConversionManager
 			$srcEntityTypeIDs = static::getSourceEntityTypeIDs($resultField['ENTITY_TYPE_ID']);
 			foreach($srcEntityTypeIDs as $srcEntityTypeID)
 			{
-				$map = EntityConversionMap::load($srcEntityTypeID, $resultField['ENTITY_TYPE_ID']);
+				$map = EntityConversionMap::load($srcEntityTypeID, $resultField['ENTITY_TYPE_ID'], $options);
 				if(!$map)
 				{
 					continue;

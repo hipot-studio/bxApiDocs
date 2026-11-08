@@ -42,6 +42,67 @@ class ExternalLinkProvider
 	}
 
 	/**
+	 * @param array<int, int> $objectIds
+	 * @param bool $shouldCache
+	 * @return array<int, ExternalLink>
+	 */
+	public function getForUnifiedLinkAccessCheckCollection(array $objectIds, bool $shouldCache = true): array
+	{
+		$result = [];
+		$objectIdsToLoad = [];
+
+		foreach ($objectIds as $objectId)
+		{
+			$objectId = (int)$objectId;
+
+			if ($objectId <= 0)
+			{
+				continue;
+			}
+
+			if ($shouldCache && array_key_exists($objectId, $this->cache['forUnifiedLinkAccessCheck'] ?? []))
+			{
+				$link = $this->cache['forUnifiedLinkAccessCheck'][$objectId];
+
+				if ($link instanceof ExternalLink)
+				{
+					$result[$objectId] = $link;
+				}
+
+				continue;
+			}
+
+			$objectIdsToLoad[] = $objectId;
+		}
+
+		$objectIdsToLoad = array_values(array_unique($objectIdsToLoad));
+
+		if (empty($objectIdsToLoad))
+		{
+			return $result;
+		}
+
+		$loadedLinks = $this->externalLinkRepository->getForUnifiedLinkAccessCheckCollection($objectIdsToLoad);
+
+		foreach ($objectIdsToLoad as $objectId)
+		{
+			$link = $loadedLinks[$objectId] ?? null;
+
+			if ($link instanceof ExternalLink)
+			{
+				$result[$objectId] = $link;
+			}
+
+			if ($shouldCache)
+			{
+				$this->cache['forUnifiedLinkAccessCheck'][$objectId] = $link;
+			}
+		}
+
+		return $result;
+	}
+
+	/**
 	 * @param mixed $objectId
 	 * @return ExternalLink|null
 	 */

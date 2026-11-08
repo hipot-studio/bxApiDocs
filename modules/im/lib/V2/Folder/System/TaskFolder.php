@@ -27,7 +27,12 @@ final class TaskFolder extends SystemFolder
 
 	public function getTitleLangKey(): string
 	{
-		return 'IM_FOLDER_SYSTEM_TASKS';
+		return 'IM_FOLDER_SYSTEM_TASKS_MSGVER_1';
+	}
+
+	public function getDescriptionLangKey(): ?string
+	{
+		return 'IM_FOLDER_SYSTEM_TASKS_DESCRIPTION';
 	}
 
 	public function isAvailable(int $userId): bool

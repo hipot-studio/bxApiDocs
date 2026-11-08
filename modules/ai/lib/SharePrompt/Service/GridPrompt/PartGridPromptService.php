@@ -40,6 +40,8 @@ class PartGridPromptService extends GridPromptService
 	 */
 	protected function getShareData(array $codesData, int $userId): array
 	{
+		$this->resetShareValidationState(array_column($codesData, 'ACCESS_CODE'));
+
 		$accessRightsDataProvider = $this->getAccessRightsDataProvider();
 		$userGroups = array_flip($this->userAccessRepository->getCodesForUserGroup($userId));
 		$result = [];

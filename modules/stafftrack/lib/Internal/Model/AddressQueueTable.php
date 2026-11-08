@@ -6,10 +6,13 @@ use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
-use Bitrix\Main\ORM\Fields\StringField;
 
 /**
  * Class AddressQueueTable
+ *
+ * Holds which point waits for whose answer, and when that point was taken: the cell of the map a point
+ * belongs to is derived by the pass over the queue from the coordinates, in memory, once per cell of a
+ * batch, but the date has nowhere else to come from once the raw row of the point is folded away.
  *
  * DO NOT WRITE ANYTHING BELOW THIS
  *
@@ -43,14 +46,10 @@ class AddressQueueTable extends DataManager
 				->configurePrimary(true)
 				->configureDefaultValue(0)
 			,
-			(new StringField('GEOHASH_KEY'))
-				->configureSize(64)
-				->configureRequired(true)
-			,
 			(new IntegerField('USER_ID'))
 				->configureRequired(true)
 			,
-			(new DatetimeField('DATE_CREATE'))
+			(new DatetimeField('POINT_DATE'))
 				->configureRequired(true)
 			,
 		];

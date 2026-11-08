@@ -11,9 +11,12 @@ use Bitrix\Rest\Infrastructure\Rest\Dto\IncomingWebhook\IncomingWebhookDto;
 use Bitrix\Rest\Infrastructure\Rest\Dto\IncomingWebhook\IncomingWebhookDtoMapper;
 use Bitrix\Rest\Infrastructure\Rest\Request\AddIncomingWebhookRequest;
 use Bitrix\Rest\Infrastructure\Rest\Request\DeleteIncomingWebhookRequest;
+use Bitrix\Rest\Infrastructure\Rest\Request\ProlongIncomingWebhookRequest;
 use Bitrix\Rest\Infrastructure\Rest\Request\UpdateIncomingWebhookRequest;
 use Bitrix\Rest\Infrastructure\Rest\Scopes\RestDeveloper;
+use Bitrix\Rest\Internal\Service;
 use Bitrix\Rest\Public\Command\IncomingWebhook\CreateIncomingWebhookCommand;
+use Bitrix\Rest\Public\Command\IncomingWebhook\ProlongIncomingWebhookCommand;
 use Bitrix\Rest\Public\Command\IncomingWebhook\UpdateIncomingWebhookCommand;
 use Bitrix\Rest\Public\Command\IncomingWebhook\DeleteIncomingWebhookCommand;
 use Bitrix\Rest\Public\Provider\IncomingWebhookProvider;
@@ -23,7 +26,6 @@ use Bitrix\Rest\Public\Provider\Params\IncomingWebhookSort;
 use Bitrix\Rest\V3\Attribute\DtoType;
 use Bitrix\Rest\V3\Attribute\Scope;
 use Bitrix\Rest\V3\Controller\RestController;
-use Bitrix\Rest\V3\Exception\EntityNotFoundException;
 use Bitrix\Rest\V3\Interaction\Request\ListRequest;
 use Bitrix\Rest\V3\Interaction\Response\DeleteResponse;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
@@ -53,6 +55,7 @@ final class IncomingWebhook extends RestController
 			title: $request->title,
 			scopes: $request->scopes,
 			attributes: $request->attributes,
+			dateExpire: $request->dateExpire ? new Main\Type\Date($request->dateExpire, 'Y-m-d') : null,
 		));
 
 		if (!$result->isSuccess())
@@ -60,7 +63,8 @@ final class IncomingWebhook extends RestController
 			return new GetResponse($this->mapper->nullDto());
 		}
 
-		$webhookData = reset($result->getData());
+		$resultData = $result->getData();
+		$webhookData = reset($resultData);
 
 		return new GetResponse($this->mapper->toDto($webhookData));
 	}
@@ -68,6 +72,7 @@ final class IncomingWebhook extends RestController
 	#[Scope(RestDeveloper::SCOPE)]
 	public function updateAction(
 		UpdateIncomingWebhookRequest $request,
+		Service\IncomingWebhook\PasswordParser $passwordParser,
 	): UpdateResponse
 	{
 		$request->fields->convertToDto();
@@ -75,7 +80,7 @@ final class IncomingWebhook extends RestController
 
 		$result = $this->runCommand(new UpdateIncomingWebhookCommand(
 			userId: (int)$this->getCurrentUser()->getId(),
-			webHookPassword: $request->getWebhookPassword(),
+			webHookPassword: $passwordParser->parse($request->id) ?? '',
 			title: $items['title'] ?? null,
 			scopes: $items['scopes'] ?? null,
 		));
@@ -84,13 +89,29 @@ final class IncomingWebhook extends RestController
 	}
 
 	#[Scope(RestDeveloper::SCOPE)]
+	public function prolongAction(
+		ProlongIncomingWebhookRequest $request,
+		Service\IncomingWebhook\PasswordParser $passwordParser,
+	): UpdateResponse
+	{
+		$result = $this->runCommand(new ProlongIncomingWebhookCommand(
+			userId: (int)$this->getCurrentUser()->getId(),
+			webHookPassword: $passwordParser->parse($request->id) ?? '',
+			dateExpire: new Main\Type\Date($request->dateExpire, 'Y-m-d'),
+		));
+
+		return new UpdateResponse($result->isSuccess());
+	}
+
+	#[Scope(RestDeveloper::SCOPE)]
 	public function deleteAction(
 		DeleteIncomingWebhookRequest $request,
+		Service\IncomingWebhook\PasswordParser $passwordParser,
 	): DeleteResponse
 	{
 		$this->runCommand(new DeleteIncomingWebhookCommand(
 			userId: (int)$this->getCurrentUser()->getId(),
-			webHookPassword: $request->getWebhookPassword(),
+			webHookPassword: $passwordParser->parse($request->id) ?? '',
 		));
 
 		return new DeleteResponse();

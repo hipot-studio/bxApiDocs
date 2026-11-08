@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\TasksMobile\Provider;
 
 use Bitrix\Main\ArgumentException;
@@ -13,17 +15,18 @@ use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\CheckList\CheckListFacade;
 use Bitrix\Tasks\CheckList\Internals\CheckList;
 use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
-use Bitrix\Tasks\Integration\Bitrix24;
 use Bitrix\Tasks\Internals\Task\CheckListTable;
 use Bitrix\Tasks\Internals\Task\CheckListTreeTable;
-use Bitrix\Tasks\Util\Restriction\Bitrix24Restriction\Limit\TaskLimit;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Entity\CheckList\Type;
 use Bitrix\TasksMobile\Dto\ChecklistAttachmentDto;
 
 final class ChecklistProvider
 {
+	/** @var array<string, array> keyed by "userId:entityId" - the items are access-filtered per user */
 	private static array $plainItems = [];
 
-	/** @var array<int, ChecklistAttachmentDto> */
+	/** @var array<string, ChecklistAttachmentDto> keyed by "userId:fileId" - Disk rights are per user */
 	private static array $attachments = [];
 
 	public function __construct(
@@ -33,7 +36,8 @@ final class ChecklistProvider
 		private readonly string $facade = TaskCheckListFacade::class,
 	)
 	{
-		$this->userId = ($userId ?? CurrentUser::get()->getId());
+		// CurrentUser::getId() may be null (anonymous/console) - cast for the int contract
+		$this->userId = (int)($userId ?? CurrentUser::get()->getId());
 		if (!is_subclass_of($this->facade, CheckListFacade::class))
 		{
 			throw new ArgumentException("Parameter 'facade' must be subclass of CheckListFacade");
@@ -100,8 +104,8 @@ final class ChecklistProvider
 					'IT',
 					CheckListTreeTable::class,
 					Join::on('this.ID', 'ref.CHILD_ID'),
-					['join_type' => 'INNER']
-				)
+					['join_type' => 'INNER'],
+				),
 			)
 		;
 
@@ -159,14 +163,271 @@ final class ChecklistProvider
 		return $this->fillAttachments($objectTreeStructure->toTreeArray());
 	}
 
-	private function getPlainCheckListItems($taskId): array
+	/**
+	 * @param bool $isForCopy
+	 * @return array
+	 */
+	public function getChecklistV2(int $entityId, Type $type, bool $isForCopy = false): array
 	{
-		if (!array_key_exists($taskId, self::$plainItems))
+		$items = Container::getInstance()
+			->getCheckListProvider()
+			->getByEntity($entityId, $this->userId, $type)
+			->toArray()
+		;
+
+		// template attachments are Disk-enriched only for tasks; kept as raw V2 {id, fileId}
+		if ($type !== Type::Template)
 		{
-			self::$plainItems[$taskId] = $this->facade::getItemsForEntity($taskId, $this->userId);
+			$items = $this->enrichAttachmentsForItems($items);
 		}
 
-		return self::$plainItems[$taskId];
+		return $isForCopy ? $this->prepareItemsForCopy($items) : $items;
+	}
+
+	/**
+	 * @param array $items
+	 * @return array
+	 */
+	private function prepareItemsForCopy(array $items): array
+	{
+		$nodeIdById = [];
+		foreach ($items as $item)
+		{
+			if (($item['id'] ?? null) !== null)
+			{
+				$nodeIdById[$item['id']] = $item['nodeId'] ?? null;
+			}
+		}
+
+		return array_map(
+			static function (array $item) use ($nodeIdById): array {
+				$parentId = $item['parentId'] ?? null;
+
+				$item['copiedId'] = $item['id'] ?? null;
+				$item['id'] = null;
+				$item['isComplete'] = false;
+
+				// hierarchy of new items is by parentNodeId (server parentId is no longer valid)
+				if ($parentId !== null && $parentId !== 0 && isset($nodeIdById[$parentId]))
+				{
+					$item['parentNodeId'] = $nodeIdById[$parentId];
+				}
+				$item['parentId'] = null;
+
+				return $item;
+			},
+			$items,
+		);
+	}
+
+	/**
+	 * @param array $plainItems
+	 * @return array
+	 */
+	public function buildV2FlatFromPlainItems(array $plainItems): array
+	{
+		$plainItemsById = [];
+		$nodeIdByPlainId = [];
+		$plainChildIdsByParentId = [];
+		foreach ($plainItems as $key => $item)
+		{
+			if (!is_array($item))
+			{
+				continue;
+			}
+
+			$plainId = self::getPlainItemId($item, $key);
+			if ($plainId !== null)
+			{
+				$plainItemsById[$plainId] = $item;
+				$nodeIdByPlainId[$plainId] = self::getPlainItemNodeId($item, $plainId);
+			}
+
+			$parentId = (int)($item['PARENT_ID'] ?? 0);
+			if ($parentId > 0 && $plainId !== null)
+			{
+				$plainChildIdsByParentId[$parentId][] = $plainId;
+			}
+		}
+
+		$completeCache = [];
+
+		return array_values(array_map(
+			static function (array $item) use (
+				$nodeIdByPlainId,
+				$plainChildIdsByParentId,
+				$plainItemsById,
+				&$completeCache
+			): array {
+				$accomplices = [];
+				$auditors = [];
+				foreach (($item['MEMBERS'] ?? []) as $member)
+				{
+					$mapped = ['id' => (int)($member['ID'] ?? 0), 'name' => $member['NAME'] ?? ''];
+					if (($member['TYPE'] ?? '') === 'U')
+					{
+						$auditors[] = $mapped;
+					}
+					else
+					{
+						$accomplices[] = $mapped;
+					}
+				}
+
+				$attachments = [];
+				foreach (($item['ATTACHMENTS'] ?? []) as $id => $attachment)
+				{
+					$attachments[] = is_array($attachment) ? $attachment : ['id' => $id];
+				}
+
+				$rawActions = is_array($item['ACTION'] ?? null) ? $item['ACTION'] : [];
+				$actions = [
+					'modify' => (bool)($rawActions['MODIFY'] ?? false),
+					'remove' => (bool)($rawActions['REMOVE'] ?? false),
+					'toggle' => array_key_exists('TOGGLE', $rawActions) ? (bool)$rawActions['TOGGLE'] : true,
+					'add' => (bool)($rawActions['ADD'] ?? false),
+					'addAccomplice' => (bool)($rawActions['ADD_ACCOMPLICE'] ?? false),
+				];
+
+				$plainId = self::getPlainItemId($item);
+				$isComplete = ($item['IS_COMPLETE'] ?? 'N') === 'Y';
+				if ($plainId !== null)
+				{
+					// a parent with all children complete is complete too
+					$isComplete = $isComplete || self::arePlainItemChildrenComplete(
+						$plainId,
+						$plainChildIdsByParentId,
+						$plainItemsById,
+						$completeCache,
+					);
+				}
+
+				$id = isset($item['ID']) && is_numeric($item['ID']) ? (int)$item['ID'] : null;
+				$nodeId = self::getPlainItemNodeId($item, $plainId);
+				$parentId = (int)($item['PARENT_ID'] ?? 0);
+				$parentNodeId = isset($item['PARENT_NODE_ID']) && $item['PARENT_NODE_ID'] !== 0
+					? (string)$item['PARENT_NODE_ID']
+					: ($parentId > 0 ? ($nodeIdByPlainId[$parentId] ?? null) : null);
+
+				if ($id === null)
+				{
+					// new (no server id): keep the link via nodeId so splitFlatList does not drop it
+					$id = $nodeId;
+					$parentId = $parentNodeId ?? 0;
+				}
+
+				return [
+					'id' => $id,
+					'nodeId' => $nodeId,
+					'parentId' => $parentId,
+					'parentNodeId' => $parentNodeId,
+					'title' => (string)($item['TITLE'] ?? ''),
+					'isComplete' => $isComplete,
+					'isImportant' => ($item['IS_IMPORTANT'] ?? 'N') === 'Y',
+					'sortIndex' => (int)($item['SORT_INDEX'] ?? 0),
+					'accomplices' => $accomplices,
+					'auditors' => $auditors,
+					'attachments' => $attachments,
+					'actions' => $actions,
+					'copiedId' => isset($item['COPIED_ID']) && is_numeric($item['COPIED_ID'])
+						? (int)$item['COPIED_ID']
+						: null,
+				];
+			},
+			$plainItems,
+		));
+	}
+
+	private static function getPlainItemId(array $item, int|string|null $fallbackKey = null): ?int
+	{
+		foreach (['ID', 'COPIED_ID'] as $key)
+		{
+			if (isset($item[$key]) && is_numeric($item[$key]))
+			{
+				return (int)$item[$key];
+			}
+		}
+
+		return is_numeric($fallbackKey) ? (int)$fallbackKey : null;
+	}
+
+	private static function arePlainItemChildrenComplete(
+		int $plainId,
+		array $plainChildIdsByParentId,
+		array $plainItemsById,
+		array &$completeCache
+	): bool
+	{
+		if (array_key_exists($plainId, $completeCache))
+		{
+			return $completeCache[$plainId];
+		}
+
+		$childIds = $plainChildIdsByParentId[$plainId] ?? [];
+		if ($childIds === [])
+		{
+			$completeCache[$plainId] = false;
+
+			return false;
+		}
+
+		foreach ($childIds as $childId)
+		{
+			$child = $plainItemsById[$childId] ?? null;
+			if ($child === null)
+			{
+				$completeCache[$plainId] = false;
+
+				return false;
+			}
+
+			$isChildComplete = ($child['IS_COMPLETE'] ?? 'N') === 'Y'
+				|| self::arePlainItemChildrenComplete(
+					$childId,
+					$plainChildIdsByParentId,
+					$plainItemsById,
+					$completeCache,
+				);
+
+			if (!$isChildComplete)
+			{
+				$completeCache[$plainId] = false;
+
+				return false;
+			}
+		}
+
+		$completeCache[$plainId] = true;
+
+		return true;
+	}
+
+	private static function getPlainItemNodeId(array $item, ?int $plainId): string
+	{
+		$nodeId = (string)($item['NODE_ID'] ?? '');
+		if ($nodeId !== '')
+		{
+			return $nodeId;
+		}
+
+		return $plainId === null ? '' : 'n' . $plainId;
+	}
+
+	private function getPlainCheckListItems(int $taskId): array
+	{
+		$cacheKey = $this->cacheKey($taskId);
+
+		if (!array_key_exists($cacheKey, self::$plainItems))
+		{
+			self::$plainItems[$cacheKey] = $this->facade::getItemsForEntity($taskId, $this->userId);
+		}
+
+		return self::$plainItems[$cacheKey];
+	}
+
+	private function cacheKey(int|string $id): string
+	{
+		return $this->userId . ':' . $id;
 	}
 
 	private function fillAdditionalActionsForCheckListItems(array $checkListItems, int $taskId): array
@@ -193,7 +454,7 @@ final class ChecklistProvider
 		return $checkListItems;
 	}
 
-	public function buildTreeStructure($checkListItems): CheckList
+	public function buildTreeStructure(array $checkListItems): CheckList
 	{
 		$nodeId = 0;
 		$sortIndex = 0;
@@ -215,7 +476,7 @@ final class ChecklistProvider
 		return $result;
 	}
 
-	private function getKeyToSort($items): string
+	private function getKeyToSort(array $items): string
 	{
 		$keyToSort = 'PARENT_ID';
 
@@ -224,6 +485,7 @@ final class ChecklistProvider
 			if (array_key_exists('PARENT_NODE_ID', $item))
 			{
 				$keyToSort = 'PARENT_NODE_ID';
+
 				break;
 			}
 		}
@@ -231,11 +493,15 @@ final class ChecklistProvider
 		return $keyToSort;
 	}
 
-	private function makeTree($nodeId, $root, $sortIndex, $displaySortIndex): CheckList
+	private function makeTree(
+		int|string $nodeId,
+		array $root,
+		int $sortIndex,
+		bool|int|string $displaySortIndex,
+	): CheckList
 	{
-
 		$root['SORT_INDEX'] = $sortIndex;
-		$root['DISPLAY_SORT_INDEX'] = htmlspecialcharsbx($displaySortIndex);
+		$root['DISPLAY_SORT_INDEX'] = htmlspecialcharsbx((string)$displaySortIndex);
 
 		$tree = new CheckList($nodeId, $this->userId, $this->facade, $root);
 
@@ -285,7 +551,7 @@ final class ChecklistProvider
 			$attachments = [];
 			foreach ($tree['FIELDS']['ATTACHMENTS'] as $fileId => $originValue)
 			{
-				$attachments[$fileId] = self::$attachments[$fileId] ?? $originValue;
+				$attachments[$fileId] = self::$attachments[$this->cacheKey($fileId)] ?? $originValue;
 			}
 			$tree['FIELDS']['ATTACHMENTS'] = $attachments;
 		}
@@ -338,6 +604,62 @@ final class ChecklistProvider
 		return $result;
 	}
 
+	/**
+	 * @param array $items tasks.v2.CheckList.get items (each has 'attachments' => [['id'=>int,'fileId'=>string]])
+	 * @return array
+	 */
+	public function enrichAttachmentsForItems(array $items): array
+	{
+		$plainForLoad = [];
+		foreach ($items as $item)
+		{
+			if (!empty($item['attachments']))
+			{
+				$plainForLoad[] = [
+					'ATTACHMENTS' => array_fill_keys(
+						// array_filter drops null ids (an empty key would load a garbage Disk id)
+						array_filter(array_column($item['attachments'], 'id')),
+						true,
+					),
+				];
+			}
+		}
+		$this->loadDiskAttachmentsData($plainForLoad);
+
+		foreach ($items as $index => $item)
+		{
+			if (empty($item['attachments']))
+			{
+				continue;
+			}
+
+			$items[$index]['attachments'] = array_map(
+				function (array $attachment): ChecklistAttachmentDto|array {
+					$id = (int)($attachment['id'] ?? 0);
+					$cached = self::$attachments[$this->cacheKey($id)] ?? null;
+					if ($cached === null)
+					{
+						return $attachment;
+					}
+
+					// fileId keeps its string V2 meaning; Disk operations use serverFileId ('n'+OBJECT_ID)
+					return new ChecklistAttachmentDto(
+						id: $cached->id,
+						fileId: (string)($attachment['fileId'] ?? $cached->fileId),
+						serverFileId: $cached->serverFileId,
+						name: $cached->name,
+						url: $cached->url,
+						type: $cached->type,
+						isUploading: $cached->isUploading,
+					);
+				},
+				$item['attachments'],
+			);
+		}
+
+		return $items;
+	}
+
 	private function loadDiskAttachmentsData(array $plainChecklistItems = []): void
 	{
 		$attachmentIds = [];
@@ -348,7 +670,7 @@ final class ChecklistProvider
 			{
 				$attachmentIds = array_merge(
 					$attachmentIds,
-					array_keys($item['ATTACHMENTS'])
+					array_keys($item['ATTACHMENTS']),
 				);
 			}
 		}
@@ -359,26 +681,27 @@ final class ChecklistProvider
 		}
 
 		$attachmentIds = array_unique(
-			array_map('intval', $attachmentIds)
+			array_map('intval', $attachmentIds),
 		);
 
-		$loadIds = array_diff(
+		$loadIds = array_values(array_filter(
 			$attachmentIds,
-			array_keys(self::$attachments)
-		);
+			fn (int $id): bool => !array_key_exists($this->cacheKey($id), self::$attachments),
+		));
 
 		if (empty($loadIds))
 		{
 			return;
 		}
 
-		$attachments = (new DiskFileProvider())->getDiskFileAttachments($loadIds);
+		$attachments = (new DiskFileProvider($this->userId))->getDiskFileAttachments($loadIds);
 
 		foreach ($attachments as $id => $attachment)
 		{
-			self::$attachments[$id] = new ChecklistAttachmentDto(
+			self::$attachments[$this->cacheKey($id)] = new ChecklistAttachmentDto(
 				id: $id,
-				fileId: $id,
+				// placeholder string fileId (V2 contract); enrichAttachmentsForItems overrides it
+				fileId: (string)$id,
 				serverFileId: 'n' . $attachment['OBJECT_ID'],
 				name: $attachment['NAME'] ?? '',
 				url: $attachment['URL'] ?? '',

@@ -10,10 +10,23 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Mobile\Provider\UserRepository;
 use Bitrix\Tasks\V2\Infrastructure\Controller\Task\Result as TaskResultController;
 use Bitrix\Tasks\V2\Infrastructure\Controller\Task\Result\Message;
+use Bitrix\TasksMobile\Cache\DeadlineCountersResetTrait;
 use Bitrix\TasksMobile\Internal\Dto\Task\ResultDto;
 
 class Result extends JsonController
 {
+	use DeadlineCountersResetTrait;
+
+	/** the reads of the results; the same three the CloseSession attribute below marks */
+	protected function getReadActionNames(): array
+	{
+		return [
+			'tail',
+			'getAll',
+			'get',
+		];
+	}
+
 	/**
 	 * @ajaxAction tasksmobile.v2.Task.Result.tail
 	 *

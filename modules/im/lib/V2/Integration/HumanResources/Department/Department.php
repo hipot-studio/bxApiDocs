@@ -13,8 +13,10 @@ use Bitrix\HumanResources\Item\Collection\NodeCollection;
 use Bitrix\HumanResources\Item\Node;
 use Bitrix\HumanResources\Item\NodeMember;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\UserTable;
 
 class Department extends BaseDepartment
 {
@@ -225,5 +227,80 @@ class Department extends BaseDepartment
 		}
 
 		return $departmentByIds;
+	}
+
+	public function getColleagueIdsByUserId(int $userId, ?int $limit = null, string $order = 'DESC'): array
+	{
+		if ($limit !== null && $limit <= 0)
+		{
+			return [];
+		}
+
+		$departmentIds = $this->getAllDepartmentIdsByUserId($userId);
+
+		if ($departmentIds === [])
+		{
+			return [];
+		}
+
+		$order = $order === 'ASC' ? 'ASC' : 'DESC';
+
+		$query =
+			UserTable::query()
+				->setSelect(['ID'])
+				->setDistinct()
+				->where('ACTIVE', 'Y')
+				->addOrder('ID', $order)
+		;
+
+		if ($limit !== null)
+		{
+			$query->setLimit($limit);
+		}
+
+		$query =
+			\Bitrix\HumanResources\Public\Service\Container::getNodeMemberService()
+				->injectUserNodeSubquery(
+					query: $query,
+					nodeIds: $departmentIds
+				)
+		;
+
+		$result = $query->exec();
+		$colleaguesIds = [];
+
+		while (($row = $result->Fetch()))
+		{
+			$id = (int)$row['ID'];
+			$colleaguesIds[$id] = $id;
+		}
+
+		return array_values($colleaguesIds);
+	}
+
+	protected function getAllDepartmentIdsByUserId(int $userId): array
+	{
+		$userDepartmentIds =
+			\Bitrix\HumanResources\Public\Service\Container::getNodeMemberService()
+				->findAllByEntityIds([$userId])
+				->getUniqueNodeIds()
+		;
+
+		if ($userDepartmentIds === [])
+		{
+			return [];
+		}
+
+		$childDepartmentIds =
+			\Bitrix\HumanResources\Public\Service\Container::getNodeService()
+				->findChildrenByNodeIds(
+					nodeIds: $userDepartmentIds,
+					nodeTypes: [NodeEntityType::DEPARTMENT],
+					depthLevel: DepthLevel::FULL
+				)
+				->getIds()
+		;
+
+		return array_unique(array_merge($userDepartmentIds, $childDepartmentIds));
 	}
 }

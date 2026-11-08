@@ -36,6 +36,7 @@ class Restriction
 	private static ?bool $isTranscriptionActive = null;
 	private static ?bool $isTranscriptionEmotionsActive = null;
 	private static ?bool $isAutoTaskActive = null;
+	private static ?bool $isAiTaskCreationActive = null;
 	private static ?bool $isAvailable = null;
 
 	public function isCopilotActive(): bool
@@ -57,6 +58,17 @@ class Restriction
 		self::$isAutoTaskActive ??= $this->isActiveInternal(Type::AutoTask);
 
 		return self::$isAutoTaskActive;
+	}
+
+	/**
+	 * Доступность создания AI-задачи по явному действию пользователя:
+	 * не зависит от настройки автосоздания задач после расшифровки.
+	 */
+	public function isAiTaskCreationActive(): bool
+	{
+		self::$isAiTaskCreationActive ??= $this->isAiTaskCreationActiveInternal();
+
+		return self::$isAiTaskCreationActive;
 	}
 
 	public function isTranscriptionEmotionsActive(): bool
@@ -274,6 +286,19 @@ class Restriction
 		$settings = Manager::getTuningStorage();
 
 		return (bool)($settings[self::SETTING_AUTO_TASK_CREATION] ?? self::DEFAULT_AUTO_TASK_CREATION_ENABLED);
+	}
+
+	private function isAiTaskCreationActiveInternal(): bool
+	{
+		if (
+			!Loader::includeModule('ai')
+			|| !$this->isAvailable()
+		)
+		{
+			return false;
+		}
+
+		return !empty(Engine::getListAvailable(self::AI_TEXT_CATEGORY));
 	}
 
 	private function isAvailableInternal(): bool

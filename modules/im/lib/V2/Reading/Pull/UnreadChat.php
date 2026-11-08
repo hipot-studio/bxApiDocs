@@ -11,6 +11,7 @@ use Bitrix\Im\V2\Pull\EventType;
 use Bitrix\Im\V2\Pull\RecentPreviewPullTrait;
 use Bitrix\Im\V2\Recent\PreviewSource\PreviewSource;
 use Bitrix\Im\V2\Recent\RecentItem;
+use Bitrix\Main\Type\DateTime;
 
 class UnreadChat extends BaseChatEvent
 {
@@ -18,11 +19,16 @@ class UnreadChat extends BaseChatEvent
 
 	protected int $expiry = 3600;
 
+	/**
+	 * A chat without a recent row (comment chat) has no item to read the row-owned fields from:
+	 * `active` stays false so the client does not add a row, the read-later mark is zero and the
+	 * activity date falls back to the chat's last message.
+	 */
 	public function __construct(
 		protected Chat $chat,
 		protected int $userId,
 		protected int $counter,
-		protected RecentItem $recentItem,
+		protected ?RecentItem $recentItem = null,
 	)
 	{
 		parent::__construct($chat);
@@ -31,16 +37,21 @@ class UnreadChat extends BaseChatEvent
 	protected function getBasePullParamsInternal(): array
 	{
 		return array_merge(
-			$this->getBaseRecentPreviewParams($this->chat, $this->chat->getLastMessage(), $this->recentItem->getDateLastActivity()),
+			$this->getBaseRecentPreviewParams($this->chat, $this->chat->getLastMessage(), $this->getDateLastActivity()),
 			[
 				'parentChatId' => $this->chat->getParentChatId(),
-				'active' => $this->recentItem->isUnread(),
+				'active' => $this->recentItem?->isUnread() ?? false,
 				'muted' => $this->chat->getRelationByUserId($this->userId)?->getNotifyBlock() ?? false,
 				'counter' => $this->counter,
-				'markedId' => $this->recentItem->getMarkedId(),
+				'markedId' => $this->recentItem?->getMarkedId() ?? 0,
 				'lines' => $this->chat->getType() === Chat::IM_TYPE_OPEN_LINE,
 			],
 		);
+	}
+
+	private function getDateLastActivity(): ?DateTime
+	{
+		return $this->recentItem?->getDateLastActivity() ?? $this->chat->getLastMessage()?->getDateCreate();
 	}
 
 	protected function getDiffByUser(int $userId): Diff
@@ -65,7 +76,7 @@ class UnreadChat extends BaseChatEvent
 	 */
 	private function getCollabPreviewDiff(): ?array
 	{
-		if (!Features::isCollabPreviewSourceEnabled())
+		if ($this->recentItem === null || !Features::isCollabPreviewSourceEnabled())
 		{
 			return null;
 		}

@@ -8,6 +8,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Loader;
 use Bitrix\Intranet;
+use Bitrix\Intranet\Internal\Integration\StaffTrack\OfficesTile;
 use Bitrix\Main;
 use Bitrix\Main\Engine;
 
@@ -27,6 +28,7 @@ class IntranetInvitationWidgetComponent extends \CBitrixComponent implements Eng
 		$this->arResult['isCurrentUserAdmin'] = $intranetUser->isAdmin();
 		$this->arResult['isInvitationAvailable'] =  Intranet\Integration\HumanResources\PermissionInvitation::createByCurrentUser()->canInvite();
 		$this->arResult['structureLink'] = '/company/vis_structure.php';
+		$this->arResult['userListLink'] = SITE_DIR . 'company/';
 		$this->arResult['invitationLink'] = $this->arResult['isCurrentUserAdmin'] || $this->arResult['isInvitationAvailable']
 			? Engine\UrlManager::getInstance()->create('getSliderContent', [
 				'c' => 'bitrix:intranet.invitation',
@@ -71,6 +73,7 @@ class IntranetInvitationWidgetComponent extends \CBitrixComponent implements Eng
 			[
 				'type' => 'split', 'height' => 90,
 			],
+			...($this->getOfficesTile() === null ? [] : [['type' => 'item', 'height' => 54]]),
 			[
 				'type' => 'item', 'height' => 41,
 			],
@@ -89,6 +92,11 @@ class IntranetInvitationWidgetComponent extends \CBitrixComponent implements Eng
 	public function getDataAction(): array
 	{
 		return $this->arResult;
+	}
+
+	protected function getOfficesTile(): ?array
+	{
+		return OfficesTile::get();
 	}
 
 	private function shouldShowStructureCounter(): bool

@@ -51,6 +51,9 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const PARAM_TASK_SELECT_FIELD = 'TaskSelectField';
 	private const PARAM_ONLY_OVERDUE = 'OnlyOverdue';
 	private const PARAM_EXCLUDE_RESPONSIBLE_ROLE = 'ExcludeIfAlsoResponsible';
+	private const PARAM_ORDER_FIELD = 'TaskOrderField';
+	private const PARAM_ORDER_DIRECTION = 'TaskOrderDirection';
+	private const PARAM_EXCLUDED_TASK_IDS = 'ExcludedTaskIds';
 	private const PARAM_CONDITION = 'DynamicFilterFields';
 	private const FILTER_CUSTOM_TYPE = 'filterFields';
 	private const FILTER_FIELD_NAME = 'filter_fields';
@@ -58,6 +61,11 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const RETURN_PARAM_COUNTER_TASKS_INFO = 'COUNTER_TASKS_INFO';
 	private const RETURN_PARAM_TASKS_TITLES_LIST = 'TASKS_TITLES_LIST';
 	private const RETURN_PARAM_TASKS_TITLES_BB_LIST = 'TASKS_TITLES_BB_LIST';
+	private const RETURN_PARAM_TASKS_BLOCK_ITEMS_JSON = 'TASKS_BLOCK_ITEMS_JSON';
+	private const RETURN_PARAM_TASK_IDS = 'TASK_IDS';
+	private const RETURN_PARAM_HAS_MORE = 'TASKS_INFO_HAS_MORE';
+	private const RETURN_SUCCEEDED = 'Succeeded';
+	private const SELECT_FIELD_ID = 'id';
 	private const SELECT_FIELD_DESCRIPTION = 'description';
 	private const SELECT_FIELD_STATUS = 'status';
 	private const SELECT_FIELD_DEADLINE = 'deadline';
@@ -68,6 +76,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const SELECT_FIELD_CHECKLISTS = 'checklists';
 	private const SELECT_FIELD_RESULTS = 'results';
 	private const SELECT_FIELD_CHAT = 'chat';
+	private const DISPLAY_TITLE_SEPARATOR = " \u{2014} ";
 	private const SELECT_FIELD_ACTIVITY_DATE = 'activityDate';
 	private const SELECT_FIELD_IS_OVERDUE = 'isOverdue';
 	private const SELECT_FIELD_URL = 'url';
@@ -75,6 +84,9 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private const SELECT_FIELD_PROJECT = 'project';
 	private const SELECT_FIELD_DAYS_WITHOUT_UPDATES = 'daysWithoutUpdates';
 	private const SELECT_FIELD_DAYS_ON_CONTROL = 'daysOnControl';
+	private const SELECT_FIELD_CREATED_DATE = 'createdDate';
+	private const SELECT_FIELD_CLOSED_DATE = 'closedDate';
+	private const SELECT_FIELD_STATUS_CHANGED_DATE = 'statusChangedDate';
 	private const PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE = 'nameForErrorMessage';
 	private const PROPERTY_MAP_FIELD_NAME = 'Name';
 
@@ -99,14 +111,25 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			self::PARAM_TASK_SELECT_FIELD => null,
 			self::PARAM_ONLY_OVERDUE => null,
 			self::PARAM_EXCLUDE_RESPONSIBLE_ROLE => null,
+			self::PARAM_ORDER_FIELD => null,
+			self::PARAM_ORDER_DIRECTION => null,
+			self::PARAM_EXCLUDED_TASK_IDS => null,
 			self::PARAM_CONDITION => ['items' => []],
 			self::RETURN_PARAM_TASKS_INFO_JSON => null,
 			self::RETURN_PARAM_COUNTER_TASKS_INFO => null,
 			self::RETURN_PARAM_TASKS_TITLES_LIST => null,
 			self::RETURN_PARAM_TASKS_TITLES_BB_LIST => null,
+			self::RETURN_PARAM_TASKS_BLOCK_ITEMS_JSON => null,
+			self::RETURN_PARAM_TASK_IDS => null,
+			self::RETURN_PARAM_HAS_MORE => false,
+			self::RETURN_SUCCEEDED => false,
 		];
 
 		$this->setPropertiesTypes([
+			self::PARAM_EXCLUDED_TASK_IDS => [
+				'Type' => FieldType::INT,
+				'Multiple' => true,
+			],
 			self::RETURN_PARAM_TASKS_INFO_JSON => [
 				'Type' => FieldType::JSON,
 			],
@@ -119,6 +142,17 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			self::RETURN_PARAM_TASKS_TITLES_BB_LIST => [
 				'Type' => FieldType::TEXT,
 			],
+			self::RETURN_PARAM_TASKS_BLOCK_ITEMS_JSON => [
+				'Type' => FieldType::TEXT,
+			],
+			self::RETURN_PARAM_TASK_IDS => [
+				'Type' => FieldType::INT,
+				'Multiple' => true,
+			],
+			self::RETURN_PARAM_HAS_MORE => [
+				'Type' => FieldType::BOOL,
+			],
+			self::RETURN_SUCCEEDED => ['Type' => FieldType::BOOL],
 		]);
 	}
 
@@ -126,30 +160,44 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	{
 		parent::reInitialize();
 
-		$this->{self::RETURN_PARAM_TASKS_INFO_JSON} = null;
-		$this->{self::RETURN_PARAM_COUNTER_TASKS_INFO} = null;
-		$this->{self::RETURN_PARAM_TASKS_TITLES_LIST} = null;
-		$this->{self::RETURN_PARAM_TASKS_TITLES_BB_LIST} = null;
+		$this->setProperty(self::RETURN_PARAM_TASKS_INFO_JSON);
+		$this->setProperty(self::RETURN_PARAM_COUNTER_TASKS_INFO);
+		$this->setProperty(self::RETURN_PARAM_TASKS_TITLES_LIST);
+		$this->setProperty(self::RETURN_PARAM_TASKS_TITLES_BB_LIST);
+		$this->setProperty(self::RETURN_PARAM_TASKS_BLOCK_ITEMS_JSON);
+		$this->setProperty(self::RETURN_PARAM_TASK_IDS);
+		$this->setProperty(self::RETURN_PARAM_HAS_MORE, false);
+		$this->setProperty(self::RETURN_SUCCEEDED, false);
 	}
 
 	protected function internalExecute(): ErrorCollection
 	{
 		$errors = new ErrorCollection();
-		$userId = $this->getTargetUserId();
-		$projectId = $this->getTargetProjectId();
-
 		try
 		{
-			[$tasks, $userIdList, $chatIdList] = $this->getTasks($userId, $projectId);
+			$userId = $this->getTargetUserId();
+			$projectId = $this->getTargetProjectId();
+			[$tasks, $userIdList, $chatIdList, $hasMore] = $this->getTasks($userId, $projectId);
 			$formattedTasks = $this->prepareTasks($tasks, $userIdList, $chatIdList);
 			[$titles, $bbTitles] = $this->buildTitleLists($tasks, $userId, $projectId);
-			$this->{self::RETURN_PARAM_TASKS_INFO_JSON} = Json::encode(
-				$formattedTasks,
-				JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+			[, $displayBbTitles] = $this->buildDisplayTitleLists($tasks, $userId, $projectId);
+			$this->setProperty(
+				self::RETURN_PARAM_TASKS_INFO_JSON,
+				Json::encode($formattedTasks, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
 			);
-			$this->{self::RETURN_PARAM_COUNTER_TASKS_INFO} = count($tasks);
-			$this->{self::RETURN_PARAM_TASKS_TITLES_LIST} = implode("\n", $titles);
-			$this->{self::RETURN_PARAM_TASKS_TITLES_BB_LIST} = implode("\n", $bbTitles);
+			$this->setProperty(self::RETURN_PARAM_COUNTER_TASKS_INFO, count($tasks));
+			$this->setProperty(self::RETURN_PARAM_TASKS_TITLES_LIST, implode("\n", $titles));
+			$this->setProperty(self::RETURN_PARAM_TASKS_TITLES_BB_LIST, implode("\n", $bbTitles));
+			$this->setProperty(
+				self::RETURN_PARAM_TASKS_BLOCK_ITEMS_JSON,
+				Json::encode(
+					array_map(static fn(string $title): array => ['text' => substr($title, 2)], $displayBbTitles),
+					JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+				),
+			);
+			$this->setProperty(self::RETURN_PARAM_TASK_IDS, array_map('intval', array_keys($tasks)));
+			$this->setProperty(self::RETURN_PARAM_HAS_MORE, $hasMore);
+			$this->setProperty(self::RETURN_SUCCEEDED, true);
 		}
 		catch (\Throwable $exception)
 		{
@@ -224,7 +272,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_SELECT_FIELD'),
 				'FieldName' => self::PARAM_TASK_SELECT_FIELD,
 				'Type' => FieldType::SELECT,
-				'Default' => array_keys(self::getSelectedFieldsOptions()),
+				'Default' => self::getDefaultSelectedFields(),
 				'Options' => self::getSelectedFieldsOptions(),
 				'Multiple' => true,
 				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_TASK_SELECT_FIELD_NAME'),
@@ -236,8 +284,28 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'Default' => 'N',
 				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_EXCLUDE_RESPONSIBLE_ROLE_NAME'),
 			],
+			self::PARAM_ORDER_FIELD => [
+				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_ORDER_FIELD'),
+				'FieldName' => self::PARAM_ORDER_FIELD,
+				'Type' => FieldType::SELECT,
+				'Options' => self::getOrderFieldOptions(),
+				'Required' => false,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_ORDER_FIELD'),
+			],
+			self::PARAM_ORDER_DIRECTION => [
+				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_ORDER_DIRECTION'),
+				'FieldName' => self::PARAM_ORDER_DIRECTION,
+				'Type' => FieldType::SELECT,
+				'Options' => [
+					'ASC' => Loc::getMessage('TASKS_GET_INFO_FIELD_ORDER_ASC'),
+					'DESC' => Loc::getMessage('TASKS_GET_INFO_FIELD_ORDER_DESC'),
+				],
+				'Required' => false,
+				self::PROPERTY_MAP_FIELD_NAME_FOR_ERROR_MESSAGE => Loc::getMessage('TASKS_GET_INFO_FIELD_ORDER_DIRECTION'),
+			],
 			self::PARAM_CONDITION => [
 				'Name' => Loc::getMessage('TASKS_GET_INFO_FIELD_CONDITION'),
+				'ShowFieldLabel' => false,
 				'FieldName' => self::FILTER_FIELD_NAME,
 				'Type' => FieldType::CUSTOM,
 				'CustomType' => self::FILTER_CUSTOM_TYPE,
@@ -255,9 +323,20 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		];
 	}
 
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		return [
+			self::PARAM_TASK_ACTIVITY_DAYS,
+			self::PARAM_EXCLUDED_TASK_IDS,
+		];
+	}
+
 	protected function prepareProperties(): void
 	{
 		parent::prepareProperties();
+		$this->preparedProperties[self::PARAM_EXCLUDED_TASK_IDS] = $this->parseValue(
+			$this->getRawPropertyValue(self::PARAM_EXCLUDED_TASK_IDS),
+		);
 
 		$this->setDefaultValuesToNullProperties();
 		$this->filterIncorrectSelectTypeProperties();
@@ -368,20 +447,30 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			$filter = array_merge($filter, $this->getLegacyDateFilter());
 		}
 
+		$limit = (int)$this->{self::PARAM_TASK_LIMIT};
+		$filter = array_merge($filter, $this->getExcludedTaskFilter());
+
 		$tasksResult = TaskTable::query()
 			->setSelect($this->getTaskQuerySelectFields())
 			->setFilter($filter)
 			->setGroup(['ID'])
-			->setOrder(['ACTIVITY_DATE' => 'DESC'])
-			->setLimit((int)$this->{self::PARAM_TASK_LIMIT})
+			->setOrder($this->getTaskOrder())
+			->setLimit($limit + 1)
 			->exec()
 		;
 
 		$userIdList = [];
 		$tasks = [];
+		$hasMore = false;
 		$chatIdList = [];
 		while ($row = $tasksResult->fetch())
 		{
+			if (count($tasks) >= $limit)
+			{
+				$hasMore = true;
+				break;
+			}
+
 			$statusCode = $row['STATUS'] ?? null;
 			$status = Bitrix\Tasks\UI\Task\Status::getList()[$statusCode] ?? $statusCode;
 			$tasks[$row['ID']] = [
@@ -397,6 +486,8 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 				'CHAT_ID' => $row['CHAT_ID'] ?? null,
 				'PRIORITY' => $row['PRIORITY'] ?? null,
 				'PROJECT_NAME' => $row['PROJECT_NAME'] ?? null,
+				'CREATED_DATE' => $row['CREATED_DATE'] ?? null,
+				'CLOSED_DATE' => $row['CLOSED_DATE'] ?? null,
 			];
 
 			if (!empty($row['CHAT_ID']))
@@ -415,7 +506,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			}
 		}
 
-		return [$tasks, $userIdList, $chatIdList];
+		return [$tasks, $userIdList, $chatIdList, $hasMore];
 	}
 
 	private function fetchChecklists(array $taskIds, array &$userIdList): array
@@ -689,6 +780,10 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		$showUrl = in_array(self::SELECT_FIELD_URL, $userSelectedFields, true);
 		$showDaysWithoutUpdates = in_array(self::SELECT_FIELD_DAYS_WITHOUT_UPDATES, $userSelectedFields, true);
 		$showDaysOnControl = in_array(self::SELECT_FIELD_DAYS_ON_CONTROL, $userSelectedFields, true);
+		$showId = in_array(self::SELECT_FIELD_ID, $userSelectedFields, true);
+		$showCreatedDate = in_array(self::SELECT_FIELD_CREATED_DATE, $userSelectedFields, true);
+		$showClosedDate = in_array(self::SELECT_FIELD_CLOSED_DATE, $userSelectedFields, true);
+		$showStatusChangedDate = in_array(self::SELECT_FIELD_STATUS_CHANGED_DATE, $userSelectedFields, true);
 		$linkService = Container::getInstance()->getLinkService();
 		$userId = (int)$this->getTargetUserId();
 		$projectId = $this->getTargetProjectId();
@@ -703,7 +798,10 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			$formattedTask = [
 				'TITLE' => $task['TITLE'],
 			];
-
+			if ($showId)
+			{
+				$formattedTask['ID'] = (int)$taskId;
+			}
 			if (!empty($task['DESCRIPTION']))
 			{
 				$formattedTask['DESCRIPTION'] = $task['DESCRIPTION'];
@@ -722,6 +820,25 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			if ($showDeadline && isset($task['DEADLINE']) && $task['DEADLINE'] instanceof DateTime)
 			{
 				$formattedTask['DEADLINE'] = $task['DEADLINE']->format('c');
+			}
+
+			if ($showCreatedDate && isset($task['CREATED_DATE']) && $task['CREATED_DATE'] instanceof DateTime)
+			{
+				$formattedTask['CREATED_DATE'] = $task['CREATED_DATE']->format('c');
+			}
+
+			if ($showClosedDate && isset($task['CLOSED_DATE']) && $task['CLOSED_DATE'] instanceof DateTime)
+			{
+				$formattedTask['CLOSED_DATE'] = $task['CLOSED_DATE']->format('c');
+			}
+
+			if (
+				$showStatusChangedDate
+				&& isset($task['STATUS_CHANGED_DATE'])
+				&& $task['STATUS_CHANGED_DATE'] instanceof DateTime
+			)
+			{
+				$formattedTask['STATUS_CHANGED_DATE'] = $task['STATUS_CHANGED_DATE']->format('c');
 			}
 
 			if (!empty($task['RESPONSIBLE']))
@@ -834,6 +951,59 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		}
 
 		return [$titles, $bbTitles];
+	}
+
+	private function buildDisplayTitleLists(array $tasks, ?int $userId, ?int $projectId): array
+	{
+		$titles = [];
+		$bbTitles = [];
+		$linkService = Container::getInstance()->getLinkService();
+		$group = $projectId !== null
+			? new Bitrix\Tasks\V2\Internal\Entity\Group(id: $projectId)
+			: null
+		;
+		$linkUserId = (int)$userId;
+
+		foreach ($tasks as $taskId => $task)
+		{
+			$title = $this->normalizeDisplayTitle((string)($task['TITLE'] ?? ''));
+			$datePrefix = $this->getDisplayTaskDatePrefix($task);
+			$displayTitle = $datePrefix === '' ? $title : $datePrefix . self::DISPLAY_TITLE_SEPARATOR . $title;
+			$titles[] = '- ' . $displayTitle;
+
+			$taskEntity = new Bitrix\Tasks\V2\Internal\Entity\Task(id: (int)$taskId, group: $group);
+			$url = '/' . ltrim($linkService->get($taskEntity, $linkUserId), '/');
+			$linkedTitle = '[url=' . $url . ']' . $title . '[/url]';
+			$bbTitles[] = '- ' . (
+				$datePrefix === '' ? $linkedTitle : $datePrefix . self::DISPLAY_TITLE_SEPARATOR . $linkedTitle
+			);
+		}
+
+		return [$titles, $bbTitles];
+	}
+
+	private function normalizeDisplayTitle(string $title): string
+	{
+		$title = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $title) ?? '';
+		$title = str_replace(['[', ']'], ['(', ')'], $title);
+
+		return mb_substr(trim(preg_replace('/\s+/u', ' ', $title) ?? ''), 0, 200);
+	}
+
+	private function getDisplayTaskDatePrefix(array $task): string
+	{
+		$field = match ((string)$this->{self::PARAM_ORDER_FIELD})
+		{
+			'DEADLINE' => 'DEADLINE',
+			'STATUS_CHANGED_DATE' => 'STATUS_CHANGED_DATE',
+			'CLOSED_DATE' => 'CLOSED_DATE',
+			'CREATED_DATE' => 'CREATED_DATE',
+			'ACTIVITY_DATE' => 'ACTIVITY_DATE',
+			default => null,
+		};
+		$date = $field === null ? null : ($task[$field] ?? null);
+
+		return $date instanceof DateTime ? $date->format('d.m H:i') : '';
 	}
 
 	private function replaceUserField(array &$list, string $field, array $users, bool $useUnsetEmptyId = false): void
@@ -1088,6 +1258,7 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private static function getSelectedFieldsOptions(): array
 	{
 		return [
+			self::SELECT_FIELD_ID => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_ID'),
 			self::SELECT_FIELD_DESCRIPTION => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_DESCRIPTION'),
 			self::SELECT_FIELD_STATUS => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_STATUS'),
 			self::SELECT_FIELD_DEADLINE => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_DEADLINE'),
@@ -1105,6 +1276,34 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			self::SELECT_FIELD_PROJECT => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_PROJECT'),
 			self::SELECT_FIELD_DAYS_WITHOUT_UPDATES => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_DAYS_WITHOUT_UPDATES'),
 			self::SELECT_FIELD_DAYS_ON_CONTROL => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_DAYS_ON_CONTROL'),
+			self::SELECT_FIELD_CREATED_DATE => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_CREATED_DATE'),
+			self::SELECT_FIELD_CLOSED_DATE => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_CLOSED_DATE'),
+			self::SELECT_FIELD_STATUS_CHANGED_DATE => Loc::getMessage('TASKS_GET_INFO_SELECT_FIELD_STATUS_CHANGED_DATE'),
+		];
+	}
+
+	private static function getDefaultSelectedFields(): array
+	{
+		return array_values(array_diff(
+			array_keys(self::getSelectedFieldsOptions()),
+			[
+				self::SELECT_FIELD_ID,
+				self::SELECT_FIELD_CREATED_DATE,
+				self::SELECT_FIELD_CLOSED_DATE,
+				self::SELECT_FIELD_STATUS_CHANGED_DATE,
+			],
+		));
+	}
+
+	private static function getOrderFieldOptions(): array
+	{
+		return [
+			'ID' => Loc::getMessage('TASKS_GET_INFO_ORDER_FIELD_ID'),
+			'DEADLINE' => Loc::getMessage('TASKS_GET_INFO_ORDER_FIELD_DEADLINE'),
+			'STATUS_CHANGED_DATE' => Loc::getMessage('TASKS_GET_INFO_ORDER_FIELD_STATUS_CHANGED_DATE'),
+			'CREATED_DATE' => Loc::getMessage('TASKS_GET_INFO_ORDER_FIELD_CREATED_DATE'),
+			'CLOSED_DATE' => Loc::getMessage('TASKS_GET_INFO_ORDER_FIELD_CLOSED_DATE'),
+			'ACTIVITY_DATE' => Loc::getMessage('TASKS_GET_INFO_ORDER_FIELD_ACTIVITY_DATE'),
 		];
 	}
 
@@ -1116,6 +1315,40 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private function getTargetUserId(): ?int
 	{
 		return CBPHelper::extractFirstUser($this->{self::PARAM_USER_ID}, $this->getDocumentId());
+	}
+
+	private function getExcludedTaskFilter(): array
+	{
+		$excludedTaskIds = array_values(array_filter(
+			array_map('intval', (array)$this->{self::PARAM_EXCLUDED_TASK_IDS}),
+			static fn(int $taskId): bool => $taskId > 0,
+		));
+
+		return $excludedTaskIds === [] ? [] : ['!@ID' => $excludedTaskIds];
+	}
+
+	private function getTaskOrder(): array
+	{
+		$fieldValue = $this->{self::PARAM_ORDER_FIELD};
+		$directionValue = $this->{self::PARAM_ORDER_DIRECTION};
+		$field = strtoupper((string)(is_array($fieldValue) ? reset($fieldValue) : $fieldValue));
+		$direction = strtoupper((string)(is_array($directionValue) ? reset($directionValue) : $directionValue));
+		if ($field === '' && $direction === '')
+		{
+			return ['ACTIVITY_DATE' => 'DESC'];
+		}
+		if (!array_key_exists($field, self::getOrderFieldOptions()) || !in_array($direction, ['ASC', 'DESC'], true))
+		{
+			throw new \UnexpectedValueException('Unsupported task order.');
+		}
+
+		$order = [$field => $direction];
+		if ($field !== 'ID')
+		{
+			$order['ID'] = 'ASC';
+		}
+
+		return $order;
 	}
 
 	private function getTargetProjectId(): ?int
@@ -1241,7 +1474,13 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 	private function checkSelectRuntimePropertyValue(string $propertyId, bool $isRequired): ?Error
 	{
 		$value = $this->{$propertyId};
-		if (!is_array($value) || ($isRequired && empty($value)))
+		if (!$isRequired && ($value === null || $value === '' || $value === []))
+		{
+			return null;
+		}
+
+		$multiple = (bool)(self::getPropertiesDialogMap()[$propertyId]['Multiple'] ?? false);
+		if (($multiple && !is_array($value)) || (!$multiple && !is_string($value)) || empty($value))
 		{
 			return $this->getIncorrectPropertyError($propertyId);
 		}
@@ -1257,6 +1496,15 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 		];
 
 		$userSelectedFields = (array)$this->{self::PARAM_TASK_SELECT_FIELD};
+		if (in_array(self::SELECT_FIELD_CREATED_DATE, $userSelectedFields, true))
+		{
+			$select[] = 'CREATED_DATE';
+		}
+
+		if (in_array(self::SELECT_FIELD_CLOSED_DATE, $userSelectedFields, true))
+		{
+			$select[] = 'CLOSED_DATE';
+		}
 		if (in_array(self::SELECT_FIELD_DESCRIPTION, $userSelectedFields, true))
 		{
 			$select[] = 'DESCRIPTION';
@@ -1270,7 +1518,10 @@ class CBPTasksGetInfoActivity extends BaseActivity implements IBPConfigurableAct
 			$select[] = 'STATUS';
 		}
 
-		if (in_array(self::SELECT_FIELD_DAYS_ON_CONTROL, $userSelectedFields, true))
+		if (
+			in_array(self::SELECT_FIELD_DAYS_ON_CONTROL, $userSelectedFields, true)
+			|| in_array(self::SELECT_FIELD_STATUS_CHANGED_DATE, $userSelectedFields, true)
+		)
 		{
 			$select[] = 'STATUS_CHANGED_DATE';
 		}

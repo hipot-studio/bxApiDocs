@@ -16,6 +16,7 @@ class Block
 	private bool $allowEdit;
 	private string $emptyStatePlaceholder = '';
 	private int $userId;
+	private array $analyticsContext;
 
 	private FrontIntegration $frontIntegration;
 
@@ -24,6 +25,7 @@ class Block
 		?array           $activity,
 		bool             $allowEdit,
 		FrontIntegration $frontIntegration,
+		array            $analyticsContext = [],
 	)
 	{
 		$this->itemIdentifier = $itemIdentifier;
@@ -33,6 +35,7 @@ class Block
 		$this->emptyStatePlaceholder = Loc::getMessage('CRM_ENTITY_ADD_ACTIVITY_HINT');
 
 		$this->frontIntegration = $frontIntegration;
+		$this->analyticsContext = $analyticsContext;
 	}
 
 	public function render(string $gridManagerId): string
@@ -44,7 +47,12 @@ class Block
 		$activityId = $this->activity['ID'] ?? 0;
 
 		$onViewClick = $this->frontIntegration->onClickViewHandler($preparedGridId, $activityId);
-		$onAddClick = $this->frontIntegration->onClickAddHandler($preparedGridId, $activityId, $this->itemIdentifier);
+		$onAddClick = $this->frontIntegration->onClickAddHandler(
+			$preparedGridId,
+			$activityId,
+			$this->itemIdentifier,
+			$this->analyticsContext,
+		);
 
 		if ($this->activity)
 		{
@@ -67,13 +75,14 @@ class Block
 			if ($isDetailExist)
 			{
 				$activityEl =
-					'<a class="crm-link" target = "_self"href = "#" onclick="' . $onViewClick . '">' .
+					'<a class="crm-link" data-testid="' . $this->getTestId('view') .
+					'" target = "_self"href = "#" onclick="' . $onViewClick . '">' .
 					htmlspecialcharsbx($timeFormatted) .
 					'</a>';
 			}
 
 			$result = '
-				<div class="crm-nearest-activity-wrapper">
+				<div class="crm-nearest-activity-wrapper" data-testid="' . $this->getTestId('block') . '">
 					<div class="crm-list-deal-date crm-nearest-activity-time' . ($isExpired ? '-expiried' : '') . '">' . $activityEl . '</div>
 					<div class="crm-nearest-activity-subject">'
 				. htmlspecialcharsbx($subject)
@@ -82,7 +91,8 @@ class Block
 
 			if ($allowEdit)
 			{
-				$result .= '<div class="crm-nearest-activity-plus" onclick="' . $onAddClick . '"></div>';
+				$result .= '<div class="crm-nearest-activity-plus" data-testid="' . $this->getTestId('add')
+					. '" onclick="' . $onAddClick . '"></div>';
 			}
 
 			$result .= '</div>';
@@ -96,8 +106,11 @@ class Block
 				$responsibleShowUrl = $responsibleData['SHOW_URL'] ?? '';
 
 				$result .= '<div class="crm-list-deal-responsible"><span class="crm-list-deal-responsible-grey">'
-					. htmlspecialcharsbx(Loc::getMessage('CRM_ENTITY_ACTIVITY_FOR_RESPONSIBLE')). '</span><a class="crm-list-deal-responsible-name" target="_blank" href="'
-					. htmlspecialcharsbx($responsibleShowUrl) . '">' . htmlspecialcharsbx($responsibleFullName) . '</a></div>';
+					. htmlspecialcharsbx(Loc::getMessage('CRM_ENTITY_ACTIVITY_FOR_RESPONSIBLE'))
+					. '</span><a class="crm-list-deal-responsible-name" data-testid="'
+					. $this->getTestId('responsible') . '" target="_blank" href="'
+					. htmlspecialcharsbx($responsibleShowUrl) . '">'
+					. htmlspecialcharsbx($responsibleFullName) . '</a></div>';
 			}
 			return $result;
 		}
@@ -106,10 +119,17 @@ class Block
 			$hintText = $this->emptyStatePlaceholder;
 
 			return '<span class="crm-activity-add-hint">' . htmlspecialcharsbx($hintText) . '</span>
-				<a class="crm-activity-add" onclick="' . $onAddClick . '">' . htmlspecialcharsbx(Loc::getMessage('CRM_ENTITY_ADD_ACTIVITY')) . '</a>';
+				<a class="crm-activity-add" data-testid="' . $this->getTestId('add')
+				. '" onclick="' . $onAddClick . '">'
+				. htmlspecialcharsbx(Loc::getMessage('CRM_ENTITY_ADD_ACTIVITY')) . '</a>';
 		}
 
 		return '';
+	}
+
+	private function getTestId(string $element): string
+	{
+		return 'crm-nearest-activity-' . $element . '-' . $this->itemIdentifier->getEntityId();
 	}
 
 	public function setEmptyStatePlaceholder(string $emptyStatePlaceholder): self

@@ -24,6 +24,7 @@ final class CreateParameters extends Dto
 			new RequiredField($this, 'categoryId'),
 			new DefinedCategory($this, CCrmOwnerType::Deal, 'categoryId'),
 
+			new RequiredField($this, 'title'),
 			new NotEmptyField($this, 'title'),
 		];
 	}

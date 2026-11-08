@@ -12,6 +12,7 @@ final readonly class OpenAppPayload
 	public function __construct(
 		public string $actionUrl,
 		public array $fields,
+		public string $appTitle = '',
 	) {
 	}
 }

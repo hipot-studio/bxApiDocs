@@ -20,6 +20,10 @@ final class CreateDocumentFromTemplate implements Contract\Operation
 	private readonly DocumentService $documentService;
 	private readonly DocumentRepository $documentRepository;
 
+	/**
+	 * @param string|null $inviteMessage text of the invitation, normalized and stored by the same
+	 *   write as the title
+	 */
 	public function __construct(
 		private readonly Template $template,
 		private readonly Document $templateDocument,
@@ -27,6 +31,7 @@ final class CreateDocumentFromTemplate implements Contract\Operation
 		private readonly bool $excludeRejected = true,
 		private readonly ?BindingCollection $bindings = null,
 		private readonly ?DocumentBlankReplacementConfig $blankReplacementConfig = null,
+		private readonly ?string $inviteMessage = null,
 		?DocumentService $documentService = null,
 		?DocumentRepository $documentRepository = null,
 	)
@@ -58,6 +63,12 @@ final class CreateDocumentFromTemplate implements Contract\Operation
 		}
 
 		$newDocument->title = $this->template->title;
+		$inviteMessage = DocumentService::normalizeInviteMessage($this->inviteMessage);
+		if ($inviteMessage !== null)
+		{
+			$newDocument->inviteMessage = $inviteMessage;
+		}
+
 		$result = $this->documentRepository->update($newDocument);
 		if (!$result->isSuccess())
 		{

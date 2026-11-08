@@ -8,6 +8,7 @@
  */
 namespace Bitrix\Socialnetwork\Helper;
 
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
 use Bitrix\Main\AccessDeniedException;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
@@ -369,7 +370,9 @@ class Workgroup
 		}
 
 		$cacheTTL = 3600 * 24 * 30;
-		$cacheDir = '/sonet/features_perms_v4/' . FeatureTable::FEATURE_ENTITY_TYPE_GROUP . '/list/' . $userId;
+		$cacheDir = '/sonet/features_perms_v4/' . FeatureTable::FEATURE_ENTITY_TYPE_GROUP . '/list/'
+			. (int)($userId / 1000) . '/' . $userId
+		;
 		$cacheId = implode(' ', [ 'entities_list', $feature, $operation, $userId ]);
 
 		$cache = new \CPHPCache();
@@ -957,7 +960,7 @@ class Workgroup
 		return true;
 	}
 
-	public static function setModerators(array $fields = []): bool
+	public static function setModerators(array $fields = [], ?array &$outcome = null): bool
 	{
 		$groupId = (int)($fields['groupId'] ?? 0);
 		$userIds = array_map('intval', array_filter($fields['userIds'] ?? []));
@@ -976,17 +979,35 @@ class Workgroup
 			throw new AccessDeniedException(Loc::getMessage('SOCIALNETWORK_HELPER_WORKGROUP_ERROR_OPERATION_NO_PERMS'));
 		}
 
+		$allowedUserIds = ExternalMembershipValidator::filterUsers(
+			$groupId, $userIds, UserToGroupTable::ROLE_MODERATOR,
+		);
+		$outcome = [
+			'processedUserIds' => [],
+			'rejectedUserIds' => array_values(array_unique(array_diff($userIds, $allowedUserIds))),
+		];
+		$userIds = $allowedUserIds;
+		$success = true;
+
 		$currentModeratorRelations = static::getCurrentModeratorRelations($groupId);
 		$moderatorsToAdd = array_diff($userIds, array_keys($currentModeratorRelations));
 		$moderatorsToRemove = array_diff_key($currentModeratorRelations, array_fill_keys($userIds, true));
 
 		if (!empty($moderatorsToRemove))
 		{
-			\CSocNetUserToGroup::TransferModerator2Member(
+			$removed = \CSocNetUserToGroup::TransferModerator2Member(
 				$currentUserId,
 				$groupId,
 				$moderatorsToRemove
 			);
+			if ($removed)
+			{
+				array_push($outcome['processedUserIds'], ...array_keys($moderatorsToRemove));
+			}
+			else
+			{
+				$success = false;
+			}
 		}
 
 		if (!empty($moderatorsToAdd))
@@ -995,11 +1016,19 @@ class Workgroup
 
 			if (!empty($memberRelations))
 			{
-				\CSocNetUserToGroup::transferMember2Moderator(
+				$promoted = \CSocNetUserToGroup::transferMember2Moderator(
 					$currentUserId,
 					$groupId,
 					$memberRelations
 				);
+				if ($promoted)
+				{
+					array_push($outcome['processedUserIds'], ...array_keys($memberRelations));
+				}
+				else
+				{
+					$success = false;
+				}
 			}
 
 			$moderatorsToAdd = array_diff($moderatorsToAdd, array_keys($memberRelations), array_keys($ownerRelations));
@@ -1016,12 +1045,19 @@ class Workgroup
 
 				if ($relationId)
 				{
+					$outcome['processedUserIds'][] = $userId;
 					static::sendNotifications($userId, $groupId, $relationId);
+				}
+				else
+				{
+					$success = false;
 				}
 			}
 		}
 
-		return true;
+		$outcome['processedUserIds'] = array_values(array_unique(array_map('intval', $outcome['processedUserIds'])));
+
+		return $success;
 	}
 
 	private static function getCurrentModeratorRelations(int $groupId): array

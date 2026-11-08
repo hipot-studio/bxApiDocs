@@ -5,9 +5,12 @@ namespace Bitrix\TasksMobile\Controller;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\TasksMobile\Cache\DeadlineCountersResetTrait;
 
 class Base extends Controller
 {
+	use DeadlineCountersResetTrait;
+
 	protected function init()
 	{
 		parent::init();
@@ -39,6 +42,15 @@ class Base extends Controller
 	protected function getQueryActionNames(): array
 	{
 		return [];
+	}
+
+	/**
+	 * Closing the session is the mark of an action that reads: it lets the session go exactly because it
+	 * writes nothing. A controller that closes it for a mutation as well states its reads apart from those.
+	 */
+	protected function getReadActionNames(): array
+	{
+		return $this->getQueryActionNames();
 	}
 
 	protected function getDefaultPreFilters(): array

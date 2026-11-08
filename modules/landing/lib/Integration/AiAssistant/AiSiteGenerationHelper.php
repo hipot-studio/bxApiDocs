@@ -9,11 +9,23 @@ use Bitrix\Landing\Copilot\Generation;
 use Bitrix\Landing\Copilot\Generation\Request;
 use Bitrix\Landing\Copilot\Generation\Scenario\CreateAiSiteState;
 use Bitrix\Landing\Copilot\Generation\Step\RequestModerateAiSiteTopic;
+use Bitrix\Landing\Copilot\Generation\Type\Errors;
+use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Generation\Type\StepStatuses;
 use Bitrix\Landing\Copilot\Model\StepsTable;
+use Bitrix\Landing\Integration\AiAssistant\Dto\FailedGenerationContextDto;
+use Bitrix\Landing\Metrika;
 
 final class AiSiteGenerationHelper
 {
+	public const STATUS_RUNNING = 'running';
+	public const STATUS_COMPLETED = 'completed';
+	public const STATUS_FAILED = 'failed';
+
+	public const ERROR_TYPE_LIMIT = 'limit';
+	public const ERROR_TYPE_MODERATION = 'moderation';
+	public const ERROR_TYPE_TECHNICAL = 'technical';
+
 	private const MODERATION_STEP_ID = 15;
 
 	private function __construct()
@@ -41,16 +53,15 @@ final class AiSiteGenerationHelper
 		?array $creationJournal = null,
 		?array $generationSummary = null,
 		?array $limitError = null,
+		?array $failure = null,
 	): array
 	{
-		$isCompleted = $status === 'completed';
+		$isCompleted = $status === self::STATUS_COMPLETED;
 		$publication = is_array($publication) ? $publication : [];
 		$creationJournal = is_array($creationJournal) ? self::normalizeCreationJournal($creationJournal) : null;
 		$limitError = self::normalizeLimitError($limitError);
-		$recoverablePartial = !$isCompleted
-			&& !empty($creationJournal['recoverablePartial'])
-			&& (int)($creationJournal['siteId'] ?? 0) > 0
-		;
+		$failure = self::normalizeFailure($failure, $limitError);
+		$recoverablePartial = !$isCompleted && self::hasRecoverableDraft($creationJournal ?? []);
 
 		return [
 			'jobId' => $jobId,
@@ -59,10 +70,11 @@ final class AiSiteGenerationHelper
 			'pageId' => $isCompleted ? max(0, $pageId) : 0,
 			'message' => $message,
 			'error' => $error,
-			'errorType' => $limitError['type'],
+			'errorType' => $failure['type'],
+			'errorCode' => $failure['code'],
 			'errorText' => $limitError['text'],
 			'sliderCode' => $limitError['sliderCode'],
-			'metrikaStatus' => $limitError['metrikaStatus'],
+			'metrikaStatus' => $failure['metrikaStatus'],
 			'published' => $isCompleted ? (bool)($publication['published'] ?? false) : null,
 			'publicationWarning' => $isCompleted ? ($publication['warning'] ?? null) : null,
 			'publication' => $isCompleted ? self::normalizePublication($publication) : null,
@@ -73,6 +85,55 @@ final class AiSiteGenerationHelper
 			'creationJournal' => $creationJournal,
 			'generationSummary' => $isCompleted ? self::normalizeGenerationSummary($generationSummary) : null,
 		];
+	}
+
+	/**
+	 * Single source of the recoverable-draft verdict of the create flow: the answer names the draft to
+	 * the agent exactly when the binding reservation is kept for it. Everything that decides about a
+	 * draft asks this one expression - the status response above, the failed answer below and the
+	 * binding reaction of both create entry points - so the answer and the reaction can never disagree
+	 * about a draft the user is told about.
+	 */
+	public static function hasRecoverableDraft(array $creationJournal): bool
+	{
+		return !empty($creationJournal['recoverablePartial']) && (int)($creationJournal['siteId'] ?? 0) > 0;
+	}
+
+	/**
+	 * Single shape of the create-flow failed answer (DTO-01): the draft journal and the limit fields
+	 * always travel with it, the message tells a draft-bearing failure from a bare one, and the
+	 * classification comes from the caller - a failed generation resolves it, the
+	 * finished-without-identifiers branch states it outright.
+	 *
+	 * The form lives here, in the owner of the create status response, and nowhere else: the change
+	 * flow has its own failed answer in AiSiteChangeGenerationHelper, and the two are deliberately
+	 * different shapes rather than one shape with optional halves (ADR § 5).
+	 *
+	 * The recoverable-draft verdict is not the caller's: the answer reads the creation journal once and
+	 * asks hasRecoverableDraft() about it, the very method the binding reaction asks, so the draft named
+	 * to the agent is the draft the reservation is kept for.
+	 */
+	public static function buildFailedResponse(
+		Generation $generation,
+		string $jobId,
+		string $error,
+		array $failure,
+	): array
+	{
+		$creationJournal = self::extractCreationJournal($generation);
+		$recoverablePartial = self::hasRecoverableDraft($creationJournal);
+
+		return self::buildStatusResponse(
+			jobId: $jobId,
+			status: 'failed',
+			message: $recoverablePartial
+				? 'Site generation failed after creating a draft site.'
+				: 'Site generation failed.',
+			error: $error,
+			creationJournal: $creationJournal,
+			limitError: self::extractLimitError($generation),
+			failure: $failure,
+		);
 	}
 
 	public static function normalizeLimitError(?array $limitError): array
@@ -99,6 +160,162 @@ final class AiSiteGenerationHelper
 			'sliderCode' => $sliderCode !== '' ? $sliderCode : null,
 			'metrikaStatus' => $metrikaStatus !== '' ? $metrikaStatus : null,
 		];
+	}
+
+	/**
+	 * Classification of a failed generation: refusal kind, machine-readable reason code and the
+	 * funnel status. Shared shape of both flows: ['type' => string, 'code' => ?string,
+	 * 'metrikaStatus' => ?string]. Feed the result to buildStatusResponse(failure: ...).
+	 *
+	 * The failed branch of a use case resolves the errored step and the blocking verdict once and
+	 * hands them over as one FailedGenerationContextDto - the pair cannot be halved. Without a
+	 * context the failure is resolved here from the persisted step instead.
+	 */
+	public static function resolveFailure(
+		Generation $generation,
+		?FailedGenerationContextDto $failedContext = null,
+	): array
+	{
+		$limitError = self::extractLimitError($generation);
+		if ($limitError !== null)
+		{
+			return self::buildFailure(self::ERROR_TYPE_LIMIT, null, $limitError['metrikaStatus']);
+		}
+
+		$generationId = (int)($generation->getId() ?? 0);
+		$stepId = $failedContext?->erroredStepId ?? self::resolveErroredStepId($generationId);
+		if ($stepId === self::MODERATION_STEP_ID && self::isModerationRefusal($generation, $failedContext?->moderationVerdict))
+		{
+			if ($failedContext !== null)
+			{
+				return self::buildModerationFailureForVerdict($failedContext->moderationVerdict);
+			}
+
+			return self::buildModerationFailure($generationId, self::MODERATION_STEP_ID);
+		}
+
+		return self::buildFailure(self::ERROR_TYPE_TECHNICAL, null, Metrika\Statuses::Error->value);
+	}
+
+	/**
+	 * Whether a failed moderation step is a refusal of the request rather than a failure of the check.
+	 *
+	 * The step id alone does not tell them apart. The moderation step refuses with restrictedRequest,
+	 * but it fails like any other request step too - notSendRequest when the request never left,
+	 * notCorrectResponse or dataValidation when the answer carried no readable verdict. Classifying all
+	 * of them as moderation tells the user their topic was rejected by the rules of the product while
+	 * the check simply never happened.
+	 *
+	 * A verdict that has actually been read settles it. Without one a run that failed outside the
+	 * domain settles it the other way: such a failure carries no error code at all, and reading its
+	 * absence as a refusal is what turned a broken database into a forbidden topic. Then the persisted
+	 * error code decides, so a genuine block whose verdict row can no longer be read stays a refusal
+	 * instead of turning technical. A generation with none of the three - nothing was persisted about
+	 * the failure - keeps the older reading of the step id, which is the most that is known about it.
+	 */
+	public static function isModerationRefusal(
+		Generation $generation,
+		?ModerationVerdictDto $moderationVerdict,
+	): bool
+	{
+		if ($moderationVerdict !== null)
+		{
+			return true;
+		}
+
+		if ($generation->isLastFailureNonDomain())
+		{
+			return false;
+		}
+
+		$errorCode = $generation->getData('lastErrorCode');
+		if (
+			!is_int($errorCode)
+			&& !(is_string($errorCode) && $errorCode !== '' && preg_match('/^[0-9]+$/D', $errorCode) === 1)
+		)
+		{
+			return true;
+		}
+
+		return (int)$errorCode === GenerationErrors::restrictedRequest->value;
+	}
+
+	/**
+	 * Moderation refusal classification built from the persisted verdict of the errored step.
+	 * Shared by the create and change failure resolvers, which differ only by the step id.
+	 */
+	public static function buildModerationFailure(int $generationId, int $stepId): array
+	{
+		return self::buildModerationFailureForVerdictCode(
+			self::resolveModerationVerdictCode($generationId, $stepId),
+		);
+	}
+
+	/**
+	 * Same classification built from a verdict the caller has already read, so the failed branch
+	 * reads the blocking request once instead of once per consumer. A null verdict means the verdict
+	 * could not be read, exactly as in the persisted-read path.
+	 */
+	public static function buildModerationFailureForVerdict(?ModerationVerdictDto $verdict): array
+	{
+		return self::buildModerationFailureForVerdictCode(self::resolveVerdictCodeOf($verdict));
+	}
+
+	/**
+	 * Mapping of a moderation verdict code ([DTO-05]) onto the classification triple: a soft block
+	 * carries its own funnel status, every other refusal - an unreadable verdict included - stays on
+	 * the content-policy error status. Kept apart from the persisted read so the rule itself is
+	 * decidable from the code alone.
+	 */
+	public static function buildModerationFailureForVerdictCode(string $verdictCode): array
+	{
+		$metrikaStatus = $verdictCode === Errors::requestNotAllowedSoft->name
+			? Metrika\Statuses::SoftBlockContentPolicy->value
+			: Metrika\Statuses::ErrorContentPolicy->value
+		;
+
+		return self::buildFailure(self::ERROR_TYPE_MODERATION, $verdictCode, $metrikaStatus);
+	}
+
+	/**
+	 * Canonical shape of the classification triple, shared by both flows.
+	 */
+	public static function buildFailure(?string $type, ?string $code, ?string $metrikaStatus): array
+	{
+		$type = trim((string)$type);
+		$code = trim((string)$code);
+		$metrikaStatus = trim((string)$metrikaStatus);
+
+		return [
+			'type' => $type !== '' ? $type : null,
+			'code' => $code !== '' ? $code : null,
+			'metrikaStatus' => $metrikaStatus !== '' ? $metrikaStatus : null,
+		];
+	}
+
+	/**
+	 * Explicit classification wins; without it the response keeps the legacy limit-only behaviour.
+	 * Shared by both flows: the change helper builds the same three fields.
+	 */
+	public static function normalizeFailure(?array $failure, array $limitError): array
+	{
+		if (!is_array($failure) || !isset($failure['type']) || !is_scalar($failure['type']))
+		{
+			return self::buildFailure(
+				(string)($limitError['type'] ?? ''),
+				null,
+				$limitError['metrikaStatus'],
+			);
+		}
+
+		$code = $failure['code'] ?? null;
+		$metrikaStatus = $failure['metrikaStatus'] ?? null;
+
+		return self::buildFailure(
+			trim((string)$failure['type']),
+			is_scalar($code) ? (string)$code : null,
+			is_scalar($metrikaStatus) ? (string)$metrikaStatus : null,
+		);
 	}
 
 	private static function extractFeaturePromoterSliderCode(string $text): string
@@ -143,7 +360,14 @@ final class AiSiteGenerationHelper
 		]);
 	}
 
-	public static function resolveFailureMessage(Generation $generation): string
+	/**
+	 * Reason text of a failed generation. As in resolveFailure(), the errored step and the blocking
+	 * verdict may be handed over already resolved, as one FailedGenerationContextDto.
+	 */
+	public static function resolveFailureMessage(
+		Generation $generation,
+		?FailedGenerationContextDto $failedContext = null,
+	): string
 	{
 		$limitError = self::extractLimitError($generation);
 		if (($limitError['text'] ?? null) !== null)
@@ -151,7 +375,19 @@ final class AiSiteGenerationHelper
 			return (string)$limitError['text'];
 		}
 
-		$stepMessage = self::resolveStepFailureMessage($generation);
+		if ($failedContext !== null)
+		{
+			$stepMessage = self::resolveStepFailureMessageFor(
+				$generation,
+				$failedContext->erroredStepId,
+				$failedContext->moderationVerdict,
+			);
+		}
+		else
+		{
+			$stepMessage = self::resolveStepFailureMessage($generation);
+		}
+
 		if ($stepMessage !== '')
 		{
 			return $stepMessage;
@@ -189,10 +425,68 @@ final class AiSiteGenerationHelper
 	 */
 	public static function isModerationBlockError(Generation $generation): bool
 	{
-		return self::resolveErroredStepId((int)($generation->getId() ?? 0)) === self::MODERATION_STEP_ID;
+		$generationId = (int)($generation->getId() ?? 0);
+		if (self::resolveErroredStepId($generationId) !== self::MODERATION_STEP_ID)
+		{
+			return false;
+		}
+
+		return self::isModerationRefusal(
+			$generation,
+			self::resolveBlockingModerationVerdict($generationId, self::MODERATION_STEP_ID),
+		);
 	}
 
-	private static function resolveErroredStepId(int $generationId): int
+	/**
+	 * The reason a generation was stopped by topic moderation, or null when it stopped for any other
+	 * reason. Answers from the id alone, for a caller that holds the failure of a generation rather
+	 * than the generation itself.
+	 *
+	 * An empty string means the block is there but carries no verdict text of its own: the caller
+	 * still knows it was the topic, and says so in its own words.
+	 */
+	public static function resolveModerationBlockReason(int $generationId): ?string
+	{
+		if (self::resolveErroredStepId($generationId) !== self::MODERATION_STEP_ID)
+		{
+			return null;
+		}
+
+		return self::resolveModerationBlockMessage($generationId, self::MODERATION_STEP_ID);
+	}
+
+	/**
+	 * Same predicate as isModerationBlockError(), decided from an errored step id the caller has
+	 * already resolved: true only for the create-flow moderation step (DTO-03), false for every
+	 * other step and for the "no errored step" id 0. Reads nothing, so the failed branch classifies
+	 * without repeating the persisted step query.
+	 */
+	public static function isModerationBlockStepId(int $erroredStepId): bool
+	{
+		return $erroredStepId === self::MODERATION_STEP_ID;
+	}
+
+	/**
+	 * Same predicate as isModerationBlockStepId(), but over a step that has actually refused the
+	 * request rather than failed its check. A moderation step that could not reach the AI service is
+	 * not a block of the draft: counting it as one spends a consecutive-block attempt of a chat that
+	 * was never told anything about its topic.
+	 */
+	public static function isModerationBlockRefusal(
+		Generation $generation,
+		int $erroredStepId,
+		?ModerationVerdictDto $moderationVerdict,
+	): bool
+	{
+		return self::isModerationBlockStepId($erroredStepId)
+			&& self::isModerationRefusal($generation, $moderationVerdict);
+	}
+
+	/**
+	 * Step id of the last errored step of the generation, or 0 if there is none.
+	 * Single source of the query for both the create and the change flow.
+	 */
+	public static function resolveErroredStepId(int $generationId): int
 	{
 		if ($generationId <= 0)
 		{
@@ -219,10 +513,31 @@ final class AiSiteGenerationHelper
 		return is_array($row) ? (int)($row['STEP_ID'] ?? 0) : 0;
 	}
 
+	/**
+	 * Step message of a generation whose errored step is not known yet: resolves the step and the
+	 * blocking verdict itself, then hands both to the shared message rule.
+	 */
 	private static function resolveStepFailureMessage(Generation $generation): string
 	{
 		$generationId = (int)($generation->getId() ?? 0);
 		$stepId = self::resolveErroredStepId($generationId);
+
+		return self::resolveStepFailureMessageFor(
+			$generation,
+			$stepId,
+			self::resolveModerationVerdictForErroredStep($generationId, $stepId),
+		);
+	}
+
+	/**
+	 * Message rule over an errored step and its blocking verdict, both already read by the caller.
+	 */
+	private static function resolveStepFailureMessageFor(
+		Generation $generation,
+		int $stepId,
+		?ModerationVerdictDto $moderationVerdict,
+	): string
+	{
 		if ($stepId <= 0)
 		{
 			return '';
@@ -232,10 +547,18 @@ final class AiSiteGenerationHelper
 		{
 			// Prefer the localized verdict message (hard: static refusal, soft: reword hint)
 			// saved by the moderation step over the static fallback below.
-			$moderationMessage = self::resolveModerationBlockMessage($generationId, $stepId);
+			$moderationMessage = self::resolveModerationBlockMessageOf($moderationVerdict);
 			if ($moderationMessage !== '')
 			{
 				return $moderationMessage;
+			}
+
+			// The step is also the one that fails when the check could not be made at all. Its static
+			// wording below speaks of a topic that is not allowed, which would be a false statement
+			// about the request the user actually sent.
+			if (!self::isModerationRefusal($generation, $moderationVerdict))
+			{
+				return 'Failed to check the requested topic.';
 			}
 		}
 
@@ -268,9 +591,57 @@ final class AiSiteGenerationHelper
 	 */
 	public static function resolveModerationBlockMessage(int $generationId, int $stepId): string
 	{
+		return self::resolveModerationBlockMessageOf(
+			self::resolveBlockingModerationVerdict($generationId, $stepId),
+		);
+	}
+
+	/**
+	 * Same message built from a verdict the caller has already read.
+	 */
+	public static function resolveModerationBlockMessageOf(?ModerationVerdictDto $verdict): string
+	{
+		return $verdict === null ? '' : RequestModerateAiSiteTopic::resolveUserFacingMessage($verdict);
+	}
+
+	/**
+	 * Machine-readable code of the persisted moderation verdict (DTO-05), or empty string when the
+	 * verdict could not be read. Counterpart of resolveModerationBlockMessage(): the user-facing
+	 * text never carries this code.
+	 */
+	public static function resolveModerationVerdictCode(int $generationId, int $stepId): string
+	{
+		return self::resolveVerdictCodeOf(self::resolveBlockingModerationVerdict($generationId, $stepId));
+	}
+
+	private static function resolveVerdictCodeOf(?ModerationVerdictDto $verdict): string
+	{
+		return $verdict === null ? '' : RequestModerateAiSiteTopic::resolveVerdictCode($verdict);
+	}
+
+	/**
+	 * Blocking verdict of the errored step, or null when the failure is not a moderation block.
+	 * Entry point of the failed branch: read once here, then hand the result to the text and the
+	 * code consumer instead of letting each of them repeat the persisted read.
+	 */
+	public static function resolveModerationVerdictForErroredStep(
+		int $generationId,
+		int $erroredStepId,
+	): ?ModerationVerdictDto
+	{
+		if ($erroredStepId !== self::MODERATION_STEP_ID)
+		{
+			return null;
+		}
+
+		return self::resolveBlockingModerationVerdict($generationId, $erroredStepId);
+	}
+
+	public static function resolveBlockingModerationVerdict(int $generationId, int $stepId): ?ModerationVerdictDto
+	{
 		if ($generationId <= 0 || $stepId <= 0)
 		{
-			return '';
+			return null;
 		}
 
 		try
@@ -279,7 +650,7 @@ final class AiSiteGenerationHelper
 		}
 		catch (\Throwable)
 		{
-			return '';
+			return null;
 		}
 
 		foreach ($requests as $request)
@@ -296,10 +667,10 @@ final class AiSiteGenerationHelper
 				continue;
 			}
 
-			return RequestModerateAiSiteTopic::resolveUserFacingMessage($verdict);
+			return $verdict;
 		}
 
-		return '';
+		return null;
 	}
 
 	private static function normalizePublication(array $publication): array

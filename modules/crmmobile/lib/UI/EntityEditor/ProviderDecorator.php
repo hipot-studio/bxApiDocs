@@ -20,14 +20,16 @@ use Bitrix\Crm\Service\Display\Field\StringField;
 use Bitrix\Crm\Service\Display\Field\RichTextUserField;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\Factory;
+use Bitrix\CrmMobile\Entity\ClientCreation;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\Date;
 use Bitrix\Crm\Multifield\Type\Email;
 use Bitrix\Crm\Multifield\Type\Im;
 use Bitrix\Crm\Multifield\Type\Web;
 use Bitrix\Crm\Multifield\Type\Phone;
 use Bitrix\Main\Web\Json;
-use \Bitrix\Crm\Format\AddressFormatter;
+use Bitrix\Crm\Format\AddressFormatter;
 use Bitrix\UI\EntityEditor\ReturnsEditorFields;
 
 final class ProviderDecorator implements ReturnsEditorFields
@@ -68,16 +70,18 @@ final class ProviderDecorator implements ReturnsEditorFields
 	private ReturnsEditorFields $provider;
 	private Factory $factory;
 	private Item $entity;
+	private ?Item $sourceClient;
 
 	private array $wrappedProviderFields;
 	private array $displayFields;
 	private array $displayItem;
 
-	public function __construct(ReturnsEditorFields $provider, Factory $factory, Item $entity)
+	public function __construct(ReturnsEditorFields $provider, Factory $factory, Item $entity, ?Item $sourceClient = null)
 	{
 		$this->provider = $provider;
 		$this->factory = $factory;
 		$this->entity = $entity;
+		$this->sourceClient = $sourceClient;
 
 		$this->initializeEntityItemWithWrappedData();
 		$this->initializeDisplayItem();
@@ -108,7 +112,10 @@ final class ProviderDecorator implements ReturnsEditorFields
 
 				if ($field->isUserField())
 				{
-					$entityData[$name] = $fieldValue['VALUE'] ?? $this->entity->getDefaultValue($name);
+					$entityData[$name] = $fieldValue instanceof Date
+						? $fieldValue
+						: ($fieldValue['VALUE'] ?? $this->entity->getDefaultValue($name))
+					;
 				}
 				else
 				{
@@ -141,6 +148,23 @@ final class ProviderDecorator implements ReturnsEditorFields
 		if (!isset($this->wrappedProviderFields))
 		{
 			$this->wrappedProviderFields = $this->provider->getFields();
+			if ($this->entity->isNew() && $this->sourceClient !== null)
+			{
+				$clientInfo = $this->factory->getEditorAdapter()->getDataForClientField(
+					$this->sourceClient->getEntityTypeId(),
+					$this->sourceClient->getId(),
+					false,
+				);
+				$initialData = ClientCreation::getInitialData(
+					$this->sourceClient,
+					$this->getEntityTypeId(),
+					$clientInfo,
+				);
+				$this->wrappedProviderFields['ENTITY_DATA'] = array_replace(
+					$this->wrappedProviderFields['ENTITY_DATA'],
+					$initialData,
+				);
+			}
 		}
 
 		return $this->wrappedProviderFields;

@@ -42,4 +42,8 @@ class IncomingWebhookDto extends Dto
 	#[Title("Incoming webhook external attributes")]
 	#[Optional]
 	public ?array $attributes;
+
+	#[Title("Webhook expiration date")]
+	#[Optional]
+	public ?string $dateExpire;
 }

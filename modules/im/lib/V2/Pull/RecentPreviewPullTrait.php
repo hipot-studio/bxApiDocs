@@ -157,6 +157,10 @@ trait RecentPreviewPullTrait
 		$payload = $restAdapter->toRestFormat([
 			'WITHOUT_OWN_REACTIONS' => true,
 			'MESSAGE_ONLY_COMMON_FIELDS' => true,
+			// the base of a preview event is shared by every recipient of the chat, while the title of a
+			// forwarded fragment's source is personal to the reader: without this exclusion the title
+			// resolved for the sender would reach all of them through message.forward
+			'POPUP_DATA_EXCLUDE' => [Message\Forward\ForwardSourcePopupItem::class],
 		]);
 
 		$payload += [

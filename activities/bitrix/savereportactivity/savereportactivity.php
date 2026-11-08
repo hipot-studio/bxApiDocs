@@ -16,6 +16,7 @@ use Bitrix\Timeman\V2\Internal\DI\Container;
 use Bitrix\Timeman\V2\Public\Command\Report\UpsertAiReportCommand;
 use Bitrix\Timeman\V2\Public\Command\Report\UpsertCommand;
 use Bitrix\Timeman\V2\Public\Dto\Report\RecordReportType;
+use Bitrix\Timeman\V2\Public\Provider\RecordProvider;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -27,6 +28,9 @@ class CBPSaveReportActivity extends CBPActivity
 	private const PROP_USER_ID = 'UserId';
 	private const PROP_REPORT_TEXT = 'ReportText';
 	private const PROP_REPORT_TYPE = 'ReportType';
+	private const PROP_RECORD_ID = 'RecordId';
+	private const PROP_CONVERT_MARKDOWN = 'ConvertMarkdown';
+	private const RETURN_SAVED = 'Saved';
 
 	/**
 	 * @throws LoaderException
@@ -41,6 +45,9 @@ class CBPSaveReportActivity extends CBPActivity
 				? RecordReportType::REPORT
 				: null,
 			self::PROP_REPORT_TEXT => null,
+			self::PROP_RECORD_ID => null,
+			self::PROP_CONVERT_MARKDOWN => true,
+			self::RETURN_SAVED => false,
 		];
 
 		$this->setPropertiesTypes([
@@ -53,7 +60,21 @@ class CBPSaveReportActivity extends CBPActivity
 			self::PROP_REPORT_TYPE => [
 				'Type' => FieldType::SELECT,
 			],
+			self::PROP_RECORD_ID => [
+				'Type' => FieldType::INT,
+			],
+			self::PROP_CONVERT_MARKDOWN => [
+				'Type' => FieldType::BOOL,
+			],
+			self::RETURN_SAVED => [
+				'Type' => FieldType::BOOL,
+			],
 		]);
+	}
+
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		return [self::PROP_RECORD_ID, self::PROP_CONVERT_MARKDOWN];
 	}
 
 	/**
@@ -143,6 +164,19 @@ class CBPSaveReportActivity extends CBPActivity
 				'AllowSelection' => false,
 				'Default' => RecordReportType::REPORT,
 			],
+			self::PROP_RECORD_ID => [
+				'Name' => Loc::getMessage('TIMEMAN_SAVE_REPORT_PROP_RECORD_ID'),
+				'FieldName' => 'record_id',
+				'Type' => FieldType::INT,
+				'Required' => false,
+				'Default' => 0,
+			],
+			self::PROP_CONVERT_MARKDOWN => [
+				'Name' => Loc::getMessage('TIMEMAN_SAVE_REPORT_PROP_CONVERT_MARKDOWN'),
+				'FieldName' => 'convert_markdown',
+				'Type' => FieldType::BOOL,
+				'Default' => true,
+			],
 		];
 	}
 
@@ -204,6 +238,13 @@ class CBPSaveReportActivity extends CBPActivity
 		}
 
 		$currentActivity = &CBPWorkflowTemplateLoader::findActivityByName($arWorkflowTemplate, $activityName);
+		foreach (self::getAiPassthroughSettingNames($documentType) as $propertyId)
+		{
+			if (isset($currentActivity['Properties'][$propertyId]))
+			{
+				$properties[$propertyId] = $currentActivity['Properties'][$propertyId];
+			}
+		}
 		$currentActivity['Properties'] = $properties;
 
 		return true;
@@ -252,6 +293,7 @@ class CBPSaveReportActivity extends CBPActivity
 	 */
 	public function execute(): int
 	{
+		$this->{self::RETURN_SAVED} = false;
 		if (!Loader::includeModule('timeman'))
 		{
 			$this->trackError(Loc::getMessage('TIMEMAN_SAVE_REPORT_ERROR_MODULE_NOT_LOADED'));
@@ -259,7 +301,8 @@ class CBPSaveReportActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$userId = $this->resolveUserId();
+		$recordContext = $this->resolveRecordContext();
+		$userId = $recordContext === null ? $this->resolveUserId() : (int)$recordContext['userId'];
 
 		if ($userId === null || $userId <= 0)
 		{
@@ -268,9 +311,9 @@ class CBPSaveReportActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$record = Container::getInstance()
-			->getRecordRepository()
-			->getCurrentRecord($userId, false, false)
+		$record = $recordContext === null
+			? Container::getInstance()->getRecordRepository()->getCurrentRecord($userId, false, false)
+			: (new RecordProvider())->getById((int)$recordContext['recordId'], false, false)
 		;
 
 		if ($record === null || $record->userId !== $userId)
@@ -279,7 +322,6 @@ class CBPSaveReportActivity extends CBPActivity
 
 			return CBPActivityExecutionStatus::Closed;
 		}
-
 		$reportText = (string)$this->{self::PROP_REPORT_TEXT};
 
 		if (CBPHelper::isEmptyValue($reportText))
@@ -289,7 +331,10 @@ class CBPSaveReportActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$reportText = $this->convertMarkdownToBbCode($reportText);
+		if (CBPHelper::getBool($this->{self::PROP_CONVERT_MARKDOWN}))
+		{
+			$reportText = $this->convertMarkdownToBbCode($reportText);
+		}
 
 		$reportType = (string)($this->{self::PROP_REPORT_TYPE} ?? RecordReportType::REPORT);
 		$command = $reportType === RecordReportType::AI_REPORT
@@ -302,8 +347,28 @@ class CBPSaveReportActivity extends CBPActivity
 		{
 			$this->trackError(implode('; ', $result->getErrorMessages()));
 		}
+		else
+		{
+			$this->{self::RETURN_SAVED} = true;
+		}
 
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	private function resolveRecordContext(): ?array
+	{
+		$recordId = (int)$this->{self::PROP_RECORD_ID};
+		if ($recordId <= 0)
+		{
+			return null;
+		}
+
+		$userId = $this->resolveUserId();
+
+		return [
+			'userId' => (int)$userId,
+			'recordId' => $recordId,
+		];
 	}
 
 	private function resolveUserId(): ?int

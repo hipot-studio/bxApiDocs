@@ -3,6 +3,8 @@ namespace Bitrix\Timeman;
 
 use Bitrix\Main\Loader;
 use Bitrix\Rest\RestException;
+use Bitrix\Timeman\Integration\Intranet\Settings;
+use Bitrix\Timeman\V2\Infrastructure\Controller\ActionFilter\ToolEnabledFilter;
 
 Loader::includeModule('rest');
 
@@ -37,6 +39,8 @@ class Rest extends \IRestService
 
 	public static function getSettings($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		global $USER;
 
 		$query = static::prepareQuery($query);
@@ -69,6 +73,8 @@ class Rest extends \IRestService
 
 	public static function getStatus($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		$query = static::prepareQuery($query);
 		$tmUser = static::getUserInstance($query);
 
@@ -140,6 +146,8 @@ class Rest extends \IRestService
 
 	public static function pauseDay($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		$query = static::prepareQuery($query);
 		$tmUser = static::getUserInstance($query);
 
@@ -150,6 +158,8 @@ class Rest extends \IRestService
 
 	public static function openDay($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		$query = static::prepareQuery($query);
 		$tmUser = static::getUserInstance($query);
 
@@ -217,6 +227,8 @@ class Rest extends \IRestService
 
 	public static function closeDay($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		$query = static::prepareQuery($query);
 		$tmUser = static::getUserInstance($query);
 
@@ -290,6 +302,8 @@ class Rest extends \IRestService
 
 	public static function networkRangeGet($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		if (!self::isAdmin())
 		{
 			throw new RestException(
@@ -304,6 +318,8 @@ class Rest extends \IRestService
 
 	public static function networkRangeSet($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		if (!self::isAdmin())
 		{
 			throw new RestException(
@@ -348,6 +364,8 @@ class Rest extends \IRestService
 
 	public static function networkRangeCheck($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		if (!self::isAdmin())
 		{
 			throw new RestException(
@@ -370,6 +388,8 @@ class Rest extends \IRestService
 
 	public static function timeControlReportAdd($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		$query = static::prepareQuery($query);
 
 		$absenceId = isset($query['REPORT_ID'])? $query['REPORT_ID']: $query['ID'];
@@ -412,6 +432,8 @@ class Rest extends \IRestService
 
 	public static function timeControlSettingsGet($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		if (!self::isAdmin())
 		{
 			throw new RestException(
@@ -442,6 +464,8 @@ class Rest extends \IRestService
 
 	public static function timeControlSettingsSet($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		if (!self::isAdmin())
 		{
 			throw new RestException(
@@ -563,6 +587,8 @@ class Rest extends \IRestService
 
 	public static function timeControlReportsSettingsGet($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		$userId = $GLOBALS['USER']->GetId();
 		$subordinateDepartments = \Bitrix\Timeman\Absence::getSubordinateDepartments($userId);
 		foreach ($subordinateDepartments as $id => $value)
@@ -600,6 +626,8 @@ class Rest extends \IRestService
 
 	public static function timeControlReportsUsersGet($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		$query = static::prepareQuery($query);
 
 		$userId = $GLOBALS['USER']->GetId();
@@ -613,6 +641,8 @@ class Rest extends \IRestService
 
 	public static function timeControlReportsGet($query, $n, \CRestServer $server)
 	{
+		self::checkToolEnabled();
+
 		$query = static::prepareQuery($query);
 
 		$userId = $query['USER_ID'];
@@ -705,6 +735,17 @@ class Rest extends \IRestService
 
 
 
+
+	private static function checkToolEnabled(): void
+	{
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
+		{
+			throw new RestException(
+				ToolEnabledFilter::getErrorMessage(),
+				ToolEnabledFilter::ERROR_CODE,
+			);
+		}
+	}
 
 	protected static function prepareQuery(array $query)
 	{

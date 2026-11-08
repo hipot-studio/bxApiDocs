@@ -87,6 +87,7 @@ class SignMasterComponent extends SignBaseComponent
 		$this->setResult('MAX_DOCUMENT_COUNT', GroupService::MAX_DOCUMENT_COUNT);
 		$this->setResult('RESPONSIBLE_NAME', $this->getResponsibleName($document));
 		$this->setResult('CHAT_ID', $this->getChatId());
+		$this->setResult('PRESELECTED_SIGNERS_LIST_ID', $this->getPreselectedSignersListId());
 	}
 
 	private function getDocument(): ?Document
@@ -546,5 +547,31 @@ class SignMasterComponent extends SignBaseComponent
 		$this->documentItem = $documentRepository->getByUid($document->getUid());
 
 		return $this->documentItem;
+	}
+
+	/**
+	 * Signers list the wizard was started for, or zero without an accessible group context.
+	 *
+	 * The identifier comes from the panel address, so read access is checked before passing the
+	 * group to the signers step. The rejected list is intentionally allowed: the user decides
+	 * whether its members should be excluded by the corresponding wizard option.
+	 */
+	private function getPreselectedSignersListId(): int
+	{
+		if (
+			$this->getScenario() !== \Bitrix\Sign\Type\BlankScenario::B2E ||
+			$this->getDocumentMode() === self::MODE_TEMPLATE ||
+			$this->getDocumentItem() !== null
+		)
+		{
+			return 0;
+		}
+
+		$listId = (int)Context::getCurrent()->getRequest()->getQuery('signersListId');
+
+		return Container::instance()->getSignersListAccessService()->hasAccessToRead($listId)
+			? $listId
+			: 0
+			;
 	}
 }

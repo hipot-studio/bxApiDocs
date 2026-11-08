@@ -16,6 +16,7 @@ class NodeSort implements SortInterface
 		public readonly ?SortDirection $depth = null,
 		public readonly ?SortDirection $sort = null,
 		public readonly ?SortDirection $type = null,
+		public readonly ?SortDirection $id = null,
 	)
 	{
 	}
@@ -28,6 +29,7 @@ class NodeSort implements SortInterface
 		$this->addDepthSort();
 		$this->addSort();
 		$this->addTypeSort();
+		$this->addIdSort();
 
 		return $this->orderColumns;
 	}
@@ -60,6 +62,16 @@ class NodeSort implements SortInterface
 		}
 
 		$this->orderColumns[$this->alias . 'TYPE'] = $this->type->value;
+	}
+
+	private function addIdSort(): void
+	{
+		if ($this->id === null)
+		{
+			return;
+		}
+
+		$this->orderColumns[$this->alias . 'ID'] = $this->id->value;
 	}
 
 	public function setCurrentAlias(string $alias): static

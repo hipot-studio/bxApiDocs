@@ -34,7 +34,7 @@ class IntranetAvatarWidget extends \CBitrixComponent
 		$cache = new \CPHPCache;
 
 		$cacheTtl = 3500;
-		$cacheId = 'timeman-work-time-data-v2-' . $currentUserId;
+		$cacheId = 'timeman-work-time-data-v3-' . $currentUserId;
 		$cacheDir = '/timeman/work-time-data/' . $currentUserId;
 
 		if ($cache->initCache($cacheTtl, $cacheId, $cacheDir))

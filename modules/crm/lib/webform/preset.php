@@ -160,7 +160,9 @@ class Preset
 			$formData['USE_LICENCE'] = $agreementId ? 'Y': 'N';
 			if ($agreementId)
 			{
-				$formData['LICENCE_BUTTON_IS_CHECKED'] = 'Y';
+				$acceptBySubmitEnabled = Embed\Config::isAcceptBySubmitEnabled();
+				$formData['LICENCE_BUTTON_IS_CHECKED'] = $acceptBySubmitEnabled ? 'Y' : 'N';
+				$formData['LICENCE_BUTTON_ACCEPT_BY_SUBMIT'] = $acceptBySubmitEnabled ? 'Y' : 'N';
 				$formData['AGREEMENT_ID'] = $agreementId;
 			}
 		}

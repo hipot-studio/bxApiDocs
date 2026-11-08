@@ -21,6 +21,7 @@ use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhook;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\WebhookType;
 use Bitrix\Rest\Internal\Repository\IncomingWebhookRepository;
 use Bitrix\Rest\Internal\Repository\IntegrationRepository;
+use Bitrix\Rest\Internal\Service\PasswordPermission\PermissionListNormalizer;
 use Bitrix\Rest\Internal\Service\Security\SecurityAuditLogger;
 use Bitrix\Rest\Preset\EventController;
 use Bitrix\Rest\Preset\Provider;
@@ -189,10 +190,15 @@ class UpdateIncomingWebhookCommandHandler
 
 		if ($scopes !== null && $webhook->getType() === WebhookType::System)
 		{
-			throw new ArgumentException(
-				'Scopes of a system incoming webhook are managed by its issuer and cannot be changed',
-				'scopes',
-			);
+			if ($this->scopesDifferIgnoringCase($scopes, $webhook->getScopes()))
+			{
+				throw new ArgumentException(
+					'Scopes of a system incoming webhook are managed by its issuer and cannot be changed',
+					'scopes',
+				);
+			}
+
+			$scopes = null;
 		}
 
 		$titleChanged = $title !== null && $title !== '' && $title !== $webhook->getTitle();
@@ -253,9 +259,13 @@ class UpdateIncomingWebhookCommandHandler
 
 	private function replaceScopes(int $passwordId, array $currentScopes, array $scopes): void
 	{
-		// Repeated scopes reach here from the request as is: a second insert of the same
-		// pair would hit the unique index on (PASSWORD_ID, PERM).
-		$scopes = array_unique($scopes);
+		// Repeated scopes reach here from the request as is: the unique index on
+		// (PASSWORD_ID, PERM) compares permission codes case-insensitively, so a second insert
+		// of a pair differing only in case or trailing spaces would hit it.
+		$scopes = (new PermissionListNormalizer())->normalize($scopes);
+
+		// $currentScopes stays raw on purpose and the diffs below stay byte-wise: that is what
+		// marks an already stored 'CRM' obsolete and deletes it before 'crm' is inserted.
 
 		// A webhook without an integration has nothing for the preset handler to denormalize, so
 		// the events would only cost an IntegrationTable lookup per added scope.
@@ -263,6 +273,15 @@ class UpdateIncomingWebhookCommandHandler
 		EventController::disableEvents();
 		try
 		{
+			$obsoleteScopes = array_diff($currentScopes, $scopes);
+			if (!empty($obsoleteScopes))
+			{
+				PermissionTable::deleteByFilter([
+					'=PASSWORD_ID' => $passwordId,
+					'@PERM' => array_values($obsoleteScopes),
+				]);
+			}
+
 			foreach (array_diff($scopes, $currentScopes) as $scope)
 			{
 				$addResult = PermissionTable::add([
@@ -277,15 +296,6 @@ class UpdateIncomingWebhookCommandHandler
 					);
 				}
 			}
-
-			$obsoleteScopes = array_diff($currentScopes, $scopes);
-			if (!empty($obsoleteScopes))
-			{
-				PermissionTable::deleteByFilter([
-					'=PASSWORD_ID' => $passwordId,
-					'@PERM' => array_values($obsoleteScopes),
-				]);
-			}
 		}
 		finally
 		{
@@ -299,6 +309,22 @@ class UpdateIncomingWebhookCommandHandler
 	private function scopesDiffer(array $scopes, array $currentScopes): bool
 	{
 		return array_diff($scopes, $currentScopes) !== [] || array_diff($currentScopes, $scopes) !== [];
+	}
+
+	private function scopesDifferIgnoringCase(array $scopes, array $currentScopes): bool
+	{
+		return $this->scopesDiffer(
+			$this->toCaseInsensitiveSet($scopes),
+			$this->toCaseInsensitiveSet($currentScopes),
+		);
+	}
+
+	private function toCaseInsensitiveSet(array $scopes): array
+	{
+		return array_map(
+			static fn (string $scope): string => mb_strtolower($scope),
+			(new PermissionListNormalizer())->normalize($scopes),
+		);
 	}
 
 	/**

@@ -250,7 +250,7 @@ final class TailwindRuntimeCssService
 
 	private function runWithGlobalRightsOff(callable $callback): mixed
 	{
-		$rightsBefore = Rights::isOn();
+		$rightsBefore = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 		try
 		{

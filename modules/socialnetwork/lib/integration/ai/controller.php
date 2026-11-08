@@ -6,10 +6,12 @@ use Bitrix\AI\Context;
 use Bitrix\AI\Engine;
 use Bitrix\Forum\MessageTable;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Socialnetwork\Integration\AI\User\Author;
 use Bitrix\Socialnetwork\Livefeed\BlogPost;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 
 final class Controller
 {
@@ -107,6 +109,17 @@ final class Controller
 	public static function getTaskContext(string $xmlId): array
 	{
 		$taskId = (int) mb_substr($xmlId, 5);
+
+		$userId = (int) CurrentUser::get()->getId();
+		if ($userId <= 0)
+		{
+			return [];
+		}
+
+		if (!Container::getInstance()->getTaskAccessService()->canRead($userId, $taskId))
+		{
+			return [];
+		}
 
 		$textParser = new \CTextParser();
 

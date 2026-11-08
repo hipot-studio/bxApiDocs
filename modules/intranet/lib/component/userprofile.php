@@ -10,6 +10,7 @@ use Bitrix\Intranet\Entity\Department;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Integration\HumanResources\DepartmentAssigner;
 use Bitrix\Intranet\Internal\Integration\Bitrix24\Admin\RestrictionService;
+use Bitrix\Intranet\Internal\Integration\Humanresources;
 use Bitrix\Intranet\Internal\Repository\User\Profile\ProfileRepository;
 use Bitrix\Intranet\Repository\HrDepartmentRepository;
 use Bitrix\Intranet\Service\UserService;
@@ -399,6 +400,8 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 			}
 		}
 
+		$data = $this->normalizeTimeZoneFields($data);
+
 		$fields = [
 			'NAME', 'LAST_NAME', 'SECOND_NAME', 'PERSONAL_GENDER', 'PERSONAL_BIRTHDAY',
 			'EMAIL', 'PERSONAL_MOBILE', 'PERSONAL_WWW',  'PERSONAL_COUNTRY', 'PERSONAL_CITY', 'PERSONAL_STATE',
@@ -449,6 +452,7 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 				return null;
 			}
 		}
+		$newFields = $changedFields;
 
 		$ufReserved = $this->getFormInstance()->getReservedUfFields();
 
@@ -468,15 +472,22 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 			(int)$this->arParams['ID'] > 0
 		)
 		{
-			$departmentRepository = new HrDepartmentRepository();
-			$newDepartmentCollection = $departmentRepository->findAllByIds($newFields['UF_DEPARTMENT']);
-			$departmentAssigner = new DepartmentAssigner($newDepartmentCollection);
-			$departmentAssigner->reassignUser(new User(id: (int)$this->arParams['ID']));
-			$assignedDepartments = $newFields['UF_DEPARTMENT'];
+			$newDepartmentIds = $this->normalizeDepartmentIds($newFields['UF_DEPARTMENT']);
+			$currentDepartmentIds = $this->normalizeDepartmentIds($this->getUserData()['UF_DEPARTMENT'] ?? []);
+
+			if ($newDepartmentIds !== $currentDepartmentIds)
+			{
+				$departmentRepository = new HrDepartmentRepository();
+				$newDepartmentCollection = $departmentRepository->findAllByIds($newDepartmentIds);
+				$departmentAssigner = new DepartmentAssigner($newDepartmentCollection);
+				$departmentAssigner->reassignUser(new User(id: (int)$this->arParams['ID']));
+				$assignedDepartments = $newDepartmentIds;
+			}
+
 			unset($newFields['UF_DEPARTMENT']);
 		}
 
-		if (!$USER->Update($this->arParams['ID'], $newFields))
+		if (!empty($newFields) && !$USER->Update($this->arParams['ID'], $newFields))
 		{
 			$this->errorCollection[] = new Error($USER->LAST_ERROR);
 			return null;
@@ -617,6 +628,7 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 				}
 				else
 				{
+					$user["IS_VISITOR"] = true;
 					$user["STATUS"] = "visitor";
 				}
 			}
@@ -1168,11 +1180,61 @@ class UserProfile extends \CBitrixComponent implements \Bitrix\Main\Engine\Contr
 		$currentFields = $this->getUserData();
 		foreach ($newFields as $name => $value)
 		{
-			if ((string)$currentFields[$name] !== (string)$newFields[$name])
+			$currentValue = $currentFields[$name] ?? null;
+
+			if (is_array($currentValue) || is_array($value))
+			{
+				if ($currentValue != $value)
+				{
+					$result[$name] = $value;
+				}
+
+				continue;
+			}
+
+			if ((string)$currentValue !== (string)$value)
 			{
 				$result[$name] = $value;
 			}
 		}
+
+		return $result;
+	}
+
+	private function normalizeTimeZoneFields(array $fields): array
+	{
+		if (array_key_exists('TIME_ZONE', $fields) && is_array($fields['TIME_ZONE']))
+		{
+			$timeZone = $fields['TIME_ZONE'];
+			$fields['TIME_ZONE'] = $timeZone['timeZone'] ?? null;
+			$fields['AUTO_TIME_ZONE'] = $timeZone['autoTimeZone'] ?? null;
+		}
+
+		foreach (['TIME_ZONE', 'AUTO_TIME_ZONE'] as $fieldName)
+		{
+			if (array_key_exists($fieldName, $fields) && !is_string($fields[$fieldName]))
+			{
+				unset($fields[$fieldName]);
+			}
+		}
+
+		return $fields;
+	}
+
+	private function normalizeDepartmentIds(array $departmentIds): array
+	{
+		$result = [];
+		foreach ($departmentIds as $departmentId)
+		{
+			$departmentId = (int)$departmentId;
+			if ($departmentId > 0)
+			{
+				$result[] = $departmentId;
+			}
+		}
+
+		$result = array_values(array_unique($result));
+		sort($result);
 
 		return $result;
 	}

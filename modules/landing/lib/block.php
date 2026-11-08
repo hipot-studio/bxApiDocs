@@ -5,6 +5,7 @@ namespace Bitrix\Landing;
 use Bitrix\Landing\Block\BlockRepo;
 use Bitrix\Landing\Block\Menu;
 use Bitrix\Landing\Block\StickyWrapperDetector;
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Landing\AI\SiteBuilder\Tailwind\TailwindRuntimeAssetPolicy;
 use Bitrix\Landing\Site\Type;
 use \Bitrix\Main\Page\Asset;
@@ -40,6 +41,11 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 	 * Pattern for repo code.
 	 */
 	public const REPO_MASK = '/^repo_([\d]+)$/';
+
+	/**
+	 * Internal marker for a landing title in a PHP string parameter.
+	 */
+	public const TITLE_PHP_PARAM_MARKER = '__LANDING_TITLE_PHP_PARAM_7D0EBC31__';
 
 	/**
 	 * Access level: any access denied to all blocks.
@@ -720,9 +726,18 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			{
 				foreach ($data['PREPARE_BLOCK_DATA']['PARAMS'] as $paramName => $paramValue)
 				{
+					// the next save of the component node would print a value like ={expr} as php code
+					if (!is_scalar($paramValue) || str_starts_with((string)$paramValue, '={'))
+					{
+						continue;
+					}
 					$escapedParamName = \EscapePHPString($paramName, "'");
 					$search = "'" . $escapedParamName . "' => '',";
-					$replace = "'" . $escapedParamName . "' => '" . \EscapePHPString($paramValue, "'") . "',";
+					if (is_string($paramValue))
+					{
+						$paramValue = str_replace('#TITLE#', self::TITLE_PHP_PARAM_MARKER, $paramValue);
+					}
+					$replace = "'" . $escapedParamName . "' => '" . \EscapePHPString((string)$paramValue, "'") . "',";
 					$content = str_replace($search, $replace, $content);
 				}
 			}
@@ -2294,10 +2309,10 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			$params,
 			false,
 		);
-		$blockMesage = ob_get_contents();
+		$blockMessage = ob_get_contents();
 		ob_end_clean();
 
-		return $blockMesage;
+		return $blockMessage;
 	}
 
 	/**
@@ -2572,7 +2587,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 										. 'id: ' . $this->id . ', '
 										. 'lid: ' . $this->lid . ', '
 										. 'code: "' . $this->code . '", '
-										. 'sections: "' . implode(',', $sections) . '", '
+										. 'sections: ' . Json::encode(implode(',', $sections)) . ', '
 										. 'repoId: ' . ($this->repoId ? (int)$this->repoId : "null") . ', '
 										. 'php: ' . (mb_strpos($content, '<?') !== false ? 'true' : 'false') . ', '
 										. 'designed: ' . ($this->designed ? 'true' : 'false') . ', '
@@ -3181,7 +3196,44 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			$dynamicFilter = Landing::getDynamicFilter();
 		}
 
-		if (!$edit && Cache::isCaching())
+		$canUseSharedHtmlCache = !$edit && Cache::isCaching();
+		if ($canUseSharedHtmlCache)
+		{
+			$sourceIds = [];
+			$sourceModuleIds = [];
+			foreach ($data as $item)
+			{
+				if (
+					!is_array($item)
+					|| !is_string($item['source'] ?? null)
+					|| !preg_match('/^([a-z][a-z.]+):[A-Za-z][A-Za-z0-9]*$/D', $item['source'], $matches)
+				)
+				{
+					$canUseSharedHtmlCache = false;
+					break;
+				}
+				$sourceIds[] = $item['source'];
+				$sourceModuleIds[$matches[1]] = true;
+			}
+
+			if ($canUseSharedHtmlCache)
+			{
+				$event = new \Bitrix\Main\Event('landing', 'OnBeforeDynamicBlockCache', [
+					'SOURCE_IDS' => array_values(array_unique($sourceIds)),
+				], array_keys($sourceModuleIds));
+				$event->send();
+				foreach ($event->getResults() as $result)
+				{
+					if ($result->getType() === \Bitrix\Main\EventResult::ERROR)
+					{
+						$canUseSharedHtmlCache = false;
+						break;
+					}
+				}
+			}
+		}
+
+		if ($canUseSharedHtmlCache)
 		{
 			$cache = new \CPHPCache();
 			$cacheTime = 3600;
@@ -3651,7 +3703,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 
 		if (!isset($doc[$this->id]))
 		{
-			$doc[$this->id] = new DOM\Document();
+			$doc[$this->id] = DocumentFactory::createForStoredContent();
 			try
 			{
 				$doc[$this->id]->loadHTML($this->content);
@@ -4392,7 +4444,7 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 			$data[$selector] = $item;
 		}
 
-		// wrapper (not realy exist)
+		// wrapper (not really exist)
 		$wrapper = '#' . $this->getAnchor($this->id);
 
 		// find available nodes by manifest from data
@@ -4423,8 +4475,15 @@ class Block extends \Bitrix\Landing\Internals\BaseTable
 				// apply classes to the block
 				if ($selector === $wrapper)
 				{
-					$nodesArray = $doc->getChildNodesArray();
-					$resultList = [array_pop($nodesArray)];
+					$wrapperNode = null;
+					foreach ($doc->getChildNodesArray() as $childNode)
+					{
+						if ($childNode instanceof DOM\Element)
+						{
+							$wrapperNode = $childNode;
+						}
+					}
+					$resultList = $wrapperNode ? [$wrapperNode] : [];
 				}
 				// or by selector
 				else

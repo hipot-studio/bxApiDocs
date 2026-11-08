@@ -23,7 +23,8 @@ final class VibePlusFeatureTrialStrategy implements ActivationStrategy
 
 	public function isApplicable(): bool
 	{
-		return $this->portal->isCloudPortal() && $this->portal->isPaidLicense();
+		return $this->portal->isCloudPortal()
+			&& ($this->portal->isPaidLicense() || $this->portal->isNfrLicense());
 	}
 
 	public function isActivated(): bool
@@ -49,18 +50,15 @@ final class VibePlusFeatureTrialStrategy implements ActivationStrategy
 	public function activate(int $days): void
 	{
 		$featureIds = VibePlusFeatureSet::getDisabledFeatureIds();
-		if ($featureIds === [])
-		{
-			return;
-		}
+		$expireDates = VibePlusFeatureSet::getTrialExpireDates();
 
 		try
 		{
-			$this->granted = $this->portal->grantFeatures($featureIds, $days);
+			$this->granted = $this->portal->grantFeatures(VibePlusFeatureSet::FEATURE_IDS, $days);
 		}
 		catch (\Throwable $exception)
 		{
-			$this->markGrantedFeatures($featureIds);
+			$this->markGrantedFeatures($featureIds, $expireDates);
 
 			throw $exception;
 		}
@@ -71,9 +69,12 @@ final class VibePlusFeatureTrialStrategy implements ActivationStrategy
 		return $this->granted;
 	}
 
-	private function markGrantedFeatures(array $featureIdsBeforeActivation): void
+	private function markGrantedFeatures(array $featureIdsBeforeActivation, array $expireDatesBeforeActivation): void
 	{
-		if (VibePlusFeatureSet::getDisabledFeatureIds() !== $featureIdsBeforeActivation)
+		if (
+			VibePlusFeatureSet::getDisabledFeatureIds() !== $featureIdsBeforeActivation
+			|| VibePlusFeatureSet::getTrialExpireDates() !== $expireDatesBeforeActivation
+		)
 		{
 			$this->granted = true;
 		}

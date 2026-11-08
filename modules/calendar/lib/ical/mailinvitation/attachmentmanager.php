@@ -162,13 +162,38 @@ abstract class AttachmentManager
 				false
 			);
 		}
+		$organizerMailTo = (string)($organizer->getMailTo() ?? '');
+		if ($organizerMailTo === '')
+		{
+			return $this->getReplyAddress();
+		}
 
 		foreach ($boxes as $box)
 		{
 			/** @var Attendee $organizer */
-			if ($box['EMAIL'] === $organizer->getMailTo())
+			if ($box['EMAIL'] === $organizerMailTo)
 			{
-				return $organizer->getMailTo();
+				return $organizerMailTo;
+			}
+		}
+
+		$resolverClass = \Bitrix\Mail\Public\Service\Mailbox\AddressResolver::class;
+		if (class_exists($resolverClass) && method_exists($resolverClass, 'resolveForUser'))
+		{
+			$resolvedMailbox = (new $resolverClass())->resolveForUser(
+				(int)$this->event['MEETING_HOST'],
+				(string)SITE_ID,
+				$organizerMailTo,
+			);
+			if ($resolvedMailbox !== null)
+			{
+				foreach ($boxes as $box)
+				{
+					if ((int)$box['ID'] === $resolvedMailbox->mailboxId)
+					{
+						return $organizerMailTo;
+					}
+				}
 			}
 		}
 

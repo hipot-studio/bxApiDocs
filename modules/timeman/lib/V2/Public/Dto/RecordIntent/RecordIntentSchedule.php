@@ -11,6 +11,10 @@ use Bitrix\Timeman\V2\Internal\Entity\Trait\MapTypeTrait;
  * Public, immutable view of the welcome-box display state (DTO-01). All timestamps are unix seconds
  * UTC; 0 means "not applicable". The internal canShowNow derivative is intentionally not exposed —
  * the consumer derives it from these fields.
+ *
+ * targetStartBasis names the source of targetStartTimestamp (history, schedule, shift, dataCollection or
+ * default; empty when not reported). The target is fixed by the first resolve of the period: once its
+ * sources change within the period and give another target, the basis is period.
  */
 final class RecordIntentSchedule implements Arrayable
 {
@@ -32,6 +36,7 @@ final class RecordIntentSchedule implements Arrayable
 		public readonly int $suppressedUntilTimestamp,
 		public readonly bool $hasTargetAction,
 		public readonly bool $shiftStartable,
+		public readonly string $targetStartBasis = '',
 	)
 	{
 	}
@@ -54,6 +59,7 @@ final class RecordIntentSchedule implements Arrayable
 			suppressedUntilTimestamp: static::mapInteger($props, 'suppressedUntilTimestamp', 0),
 			hasTargetAction: static::mapBool($props, 'hasTargetAction', false),
 			shiftStartable: static::mapBool($props, 'shiftStartable', true),
+			targetStartBasis: static::mapString($props, 'targetStartBasis', ''),
 		);
 	}
 
@@ -75,6 +81,7 @@ final class RecordIntentSchedule implements Arrayable
 			'suppressedUntilTimestamp' => $this->suppressedUntilTimestamp,
 			'hasTargetAction' => $this->hasTargetAction,
 			'shiftStartable' => $this->shiftStartable,
+			'targetStartBasis' => $this->targetStartBasis,
 		];
 	}
 }

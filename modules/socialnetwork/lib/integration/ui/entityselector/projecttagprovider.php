@@ -71,7 +71,12 @@ class ProjectTagProvider extends BaseProvider
 			$query->where('GROUP_ID', $options['groupId']);
 		}
 
-		if (!empty($options['searchQuery'] ?? null) && is_string($options['searchQuery']))
+		$searchQuery = is_string($options['searchQuery'] ?? null)
+			? WorkgroupTagTable::prepareNameForSearch($options['searchQuery'])
+			: ''
+		;
+
+		if ($searchQuery !== '')
 		{
 			$query
 				->setDistinct(true)
@@ -103,7 +108,7 @@ class ProjectTagProvider extends BaseProvider
 								->whereIn('UG.ROLE', UserToGroupTable::getRolesMember())
 						)
 				)
-				->whereLike('NAME', "{$options['searchQuery']}%")
+				->whereLike('NAME', "{$searchQuery}%")
 			;
 		}
 
@@ -125,6 +130,11 @@ class ProjectTagProvider extends BaseProvider
 		$result = [];
 		foreach ($tags as $tag)
 		{
+			if (trim((string)$tag->getName()) === '')
+			{
+				continue;
+			}
+
 			$result[] = self::makeItem($tag, $options);
 		}
 
@@ -185,12 +195,17 @@ class ProjectTagProvider extends BaseProvider
 		foreach ($recentItems as $item)
 		{
 			/** @var RecentItem $item */
-			if ($dialog->getItemCollection()->get(self::$entityId, $item->getId()))
+			$name = trim((string)$item->getId());
+			if ($name === '')
 			{
 				continue;
 			}
 
-			$name = (string)$item->getId();
+			if ($dialog->getItemCollection()->get(self::$entityId, $name))
+			{
+				continue;
+			}
+
 			$dialog->addItem(
 				new Item([
 					'id' => $name,

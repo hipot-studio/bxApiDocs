@@ -8,16 +8,23 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemAccessType;
 use Bitrix\Vibecodeconnector\Internal\Exception\CatalogItemNotFoundException;
 use Bitrix\Vibecodeconnector\Internal\Exception\NotOwnerException;
-use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\AccessRepository;
+use Bitrix\Vibecodeconnector\Internal\Integration\Rest\CatalogItemEmbeddingAccessSynchronizer;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\CatalogItemRepository;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Access\AccessChangeHandler;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Access\AccessWriter;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Access\HiddenAccessCleaner;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\NewApps\NewAppsCountInvalidator;
 
 final class SetCatalogItemAccessCommandHandler
 {
 	public function __construct(
 		private readonly CatalogItemRepository $itemRepository = new CatalogItemRepository(),
-		private readonly AccessRepository $accessRepository = new AccessRepository(),
+		private readonly AccessWriter $accessWriter = new AccessWriter(),
 		private readonly HiddenAccessCleaner $hiddenAccessCleaner = new HiddenAccessCleaner(),
+		private readonly AccessChangeHandler $accessChangeHandler = new AccessChangeHandler(),
+		private readonly CatalogItemEmbeddingAccessSynchronizer $embeddingAccessSynchronizer =
+			new CatalogItemEmbeddingAccessSynchronizer(),
+		private readonly NewAppsCountInvalidator $newAppsCountInvalidator = new NewAppsCountInvalidator(),
 	)
 	{
 	}
@@ -40,17 +47,18 @@ final class SetCatalogItemAccessCommandHandler
 			throw new ArgumentException('accessCodes can be set only for acl items', 'accessCodes');
 		}
 
-		$codes = array_values(array_unique(array_filter(
-			$command->accessCodes,
-			static fn (mixed $code): bool => is_string($code) && trim($code) !== '',
-		)));
+		$result = $this->accessWriter->setAccess($command->catalogItemId, $command->accessCodes);
+		if (!$result->changed)
+		{
+			return;
+		}
 
-		$previousCodes = $this->accessRepository->getCodesForItem($command->catalogItemId);
-		$this->accessRepository->setAccess($command->catalogItemId, $codes);
-
-		if (array_diff($previousCodes, $codes) !== [])
+		if ($result->revoked)
 		{
 			$this->hiddenAccessCleaner->cleanupLostAccess($command->catalogItemId);
 		}
+		$this->newAppsCountInvalidator->forgetAllFor($item);
+		$this->accessChangeHandler->handle($item);
+		$this->embeddingAccessSynchronizer->syncForItem($command->catalogItemId);
 	}
 }

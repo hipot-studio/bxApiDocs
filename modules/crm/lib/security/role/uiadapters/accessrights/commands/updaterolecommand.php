@@ -9,6 +9,7 @@ use Bitrix\Crm\Security\Role\GroupCodeGenerator;
 use Bitrix\Crm\Security\Role\Manage\AttrPreset\UserDepartmentAndOpened;
 use Bitrix\Crm\Security\Role\Manage\DTO\PermissionModel;
 use Bitrix\Crm\Security\Role\Manage\RoleManagementModelBuilder;
+use Bitrix\Crm\Security\Role\PermissionsManager;
 use Bitrix\Crm\Security\Role\Repositories\PermissionRepository;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Commands\DTO\AccessCodeDTO;
 use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Commands\DTO\AccessRightDTO;
@@ -18,6 +19,7 @@ use Bitrix\Crm\Security\Role\UIAdapters\AccessRights\Utils\PermCodeTransformer;
 use Bitrix\Crm\Security\Role\Utils\RoleManagerUtils;
 use Bitrix\Crm\Security\Role\Utils\RolePermissionChecker;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\Service\UserPermissions\Configuration;
 use Bitrix\Crm\Traits\Singleton;
 use Bitrix\Main\Result;
 
@@ -69,6 +71,9 @@ class UpdateRoleCommand
 
 		$this->utils->saleUpdateShopAccess();
 		$this->utils->clearRolesCache();
+		PermissionsManager::clearCache();
+		Configuration::resetOperationsRegistrationCache();
+		RoleManagementModelBuilder::getInstance()->clearEntitiesCache();
 
 		return $result;
 	}

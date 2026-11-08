@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Mail\Internal\Service\Signature\SignaturePlainText;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Mail\Dto\SharedSignatureDto;
@@ -146,7 +147,7 @@ class MailUserSignatureListComponent extends CBitrixComponent
 
 			$columns = [
 				'ID' => $dto['id'],
-				'SIGNATURE' => htmlspecialcharsbx(mb_substr(strip_tags($dto['signature']), 0, 100), ENT_COMPAT, false),
+				'SIGNATURE' => $this->prepareSignatureTitle($dto['signature']),
 				'ASSIGNED_TO' => $this->formatAssignedTo(
 					$dto['scope'],
 					$targetTitles[$dto['id']] ?? [],
@@ -184,6 +185,17 @@ class MailUserSignatureListComponent extends CBitrixComponent
 		$grid['SHOW_ACTION_PANEL'] = false;
 
 		return $grid;
+	}
+
+	protected function prepareSignatureTitle(string $signature): string
+	{
+		$title = SignaturePlainText::fromHtml($signature, 100);
+		if ($title === '')
+		{
+			return htmlspecialcharsbx((string)Loc::getMessage('MAIL_USERSIGNATURE_LIST_SIGNATURE'));
+		}
+
+		return htmlspecialcharsbx($title, ENT_COMPAT, false);
 	}
 
 	/**

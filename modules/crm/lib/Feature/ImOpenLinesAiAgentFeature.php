@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Feature;
 use Bitrix\Crm\Feature\Category\BaseCategory;
 use Bitrix\Crm\Feature\Category\Integration;
 use Bitrix\Crm\Settings\Crm;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
@@ -122,10 +123,13 @@ final class ImOpenLinesAiAgentFeature extends BaseFeature
 			);
 
 		Option::set('bizproc', 'designer_v2', 'Y');
-		Option::set('bizproc', 'feature_ai_agents', 'Y');
 		Option::set('bizproc', 'complex_activity_excluded', 0);
-		Option::set('bizproc', 'is_rag_available', "Y");
 		Option::set('aiassistant', 'node_enabled', 'Y');
+
+		Feature::enable(
+			\Bitrix\Bizproc\Public\Feature\AiAgent\AiAgentSectionFlag::class,
+			\Bitrix\Bizproc\Public\Feature\Rag\KnowledgeBaseFlag::class,
+		);
 
 		ServiceLocator::getInstance()->get(\Bitrix\ImOpenLines\V2\Feature\AiOpenLinesOperatorAgentFeature::class)?->enableFeature();
 		$this->logEnabled();

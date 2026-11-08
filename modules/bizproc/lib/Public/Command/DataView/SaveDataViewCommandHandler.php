@@ -28,6 +28,7 @@ use Bitrix\Bizproc\Public\Command\StorageType\AddStorageTypeCommandHandler;
 use Bitrix\Bizproc\Public\Command\StorageType\UpdateStorageTypeCommand;
 use Bitrix\Bizproc\Public\Command\StorageType\UpdateStorageTypeCommandHandler;
 use Bitrix\Bizproc\Public\DataView\Exception\RecomputeInProgressException;
+use Bitrix\Bizproc\Public\Provider\SourceCatalogProvider;
 use Bitrix\Main\Application;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DI\ServiceLocator;
@@ -39,11 +40,13 @@ final class SaveDataViewCommandHandler
 	private DataViewRepositoryInterface $dataViewRepository;
 	private StorageTypeRepositoryInterface $storageTypeRepository;
 	private StorageFieldRepositoryInterface $storageFieldRepository;
+	private SourceCatalogProvider $sourceCatalog;
 
 	public function __construct()
 	{
 		$locator = ServiceLocator::getInstance();
 		$this->validator = $locator->get('bizproc.service.dataView.validator');
+		$this->sourceCatalog = new SourceCatalogProvider();
 		$this->materializeService = $locator->get('bizproc.service.dataView.materializeService');
 		$this->dataViewRepository = Container::getDataViewRepository();
 		$this->storageTypeRepository = Container::getStorageTypeRepository();
@@ -95,6 +98,11 @@ final class SaveDataViewCommandHandler
 			$ownerTemplateId = $command->ownerTemplateId ?? $existing?->getOwnerTemplateId();
 			ColumnResolver::assertTemplateSourcesOwned($command->definition, $ownerTemplateId);
 			$this->validator->assertReferencedViewsOwned($command->definition, $ownerTemplateId);
+			$this->sourceCatalog->assertDefinitionSourcesAvailable(
+				$command->definition,
+				$command->actorId,
+				$ownerTemplateId,
+			);
 
 			$definition = $command->definition;
 			$columns = $this->validator->assertValid(

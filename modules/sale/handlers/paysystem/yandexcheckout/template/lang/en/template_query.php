@@ -5,5 +5,6 @@ $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_DESCRIPTION_MSGVER_1"] = "Servic
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_DESCRIPTION_SUM_MSGVER_1"] = "Order total: <span class='widget-paysystem-checkout-sum'>#SUM#</span>";
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_ERROR_MESSAGE_FOOTER"] = "Select a different payment option or contact one of our sales representatives.";
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_ERROR_MESSAGE_HEADER"] = "Unfortunately there was an error.";
+$MESS['SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_FORM_ARIA'] = 'YooMoney payment';
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_QIWI_PHONE"] = "Enter phone number in international format: <b>79xxxxxxxxx</b>";
 $MESS["SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_SBERBANK_SMS_PHONE"] = "Prone Number Registered With Sberbank Online";

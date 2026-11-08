@@ -81,16 +81,16 @@ class AIActivityService
 		return $this->isAIScope;
 	}
 
-	/**
-	 * Single visibility gate of an AI scenario for the timeline item/action layer.
-	 *
-	 * The policy is portal-wide: the answer comes from the scenario registry, and nothing about
-	 * the current entity or activity is taken into account. It stays an instance method so that
-	 * a per-entity policy can be added here without changing callers.
-	 */
 	public function isScenarioVisible(string $scenario): bool
 	{
-		return Scenario::isEnabledScenario($scenario);
+		if (!Scenario::isEnabledScenario($scenario))
+		{
+			return false;
+		}
+
+		return $scenario !== Scenario::FILL_FIELDS_SCENARIO
+			|| AIManager::isFillFieldsEnabledForEntityType($this->context->getEntityTypeId())
+		;
 	}
 
 	public function getAIJobResult(int $operationType, ?int $jobId = null): ?Result

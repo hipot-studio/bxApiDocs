@@ -49,20 +49,20 @@ class Office365SectionSynchronizer extends AbstractOffice365Synchronizer impleme
 	 * @throws PersistenceException
 	 * @throws SynchronizerException
 	 */
-	public function sendSection(Section $section): void
+	public function sendSection(Section $section): ?SectionConnection
 	{
 		$connection = $this->getUserConnection($section->getOwner()->getId());
 
 		if (!$connection)
 		{
-			return;
+			return null;
 		}
 
 		$gateway = $this->getUserGateway($connection);
 
 		if (!$gateway)
 		{
-			return;
+			return null;
 		}
 
 		$sectionConnection = $this->getSectionConnection($section->getId(), $connection->getId());
@@ -73,19 +73,25 @@ class Office365SectionSynchronizer extends AbstractOffice365Synchronizer impleme
 
 			$this->connectionManager->updateConnection($connection);
 
-			return;
+			return $sectionConnection;
 		}
 
-		$this->createSection($section, $connection, $gateway);
+		$sectionConnection = $this->createSection($section, $connection, $gateway);
 
 		$this->connectionManager->updateConnection($connection);
+
+		return $sectionConnection;
 	}
 
 	/**
 	 * @throws PersistenceException
 	 * @throws SynchronizerException
 	 */
-	private function createSection(Section $section, Connection $connection, Office365SectionGateway $gateway): void
+	private function createSection(
+		Section $section,
+		Connection $connection,
+		Office365SectionGateway $gateway,
+	): SectionConnection
 	{
 		$sectionConnection =
 			(new SectionConnection())
@@ -130,6 +136,8 @@ class Office365SectionSynchronizer extends AbstractOffice365Synchronizer impleme
 		{
 			$this->sectionConnectionRepository->save($sectionConnection);
 		}
+
+		return $sectionConnection;
 	}
 
 	/**

@@ -3,6 +3,8 @@
 namespace Bitrix\Mail;
 
 use Bitrix\Mail\Helper\Enum\MailboxStatus;
+use Bitrix\Mail\Internal\Agent\DeletedMailboxCleanupAgent;
+use Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill;
 use Bitrix\Mail\Internals\MailboxAccessTable;
 use Bitrix\Mail\Internals\Repository\MailboxAddressAliasRepository;
 use Bitrix\Mail\Internals\Service\Mailbox\AddressBindingResolver;
@@ -46,6 +48,10 @@ class MailboxTable extends Entity\DataManager
 	private static array $onlyIdOwnerCache = [];
 	private static array $sharedCache = [];
 	private static array $onlyIdSharedCache = [];
+	private static int $deferredCacheDepth = 0;
+	private static bool $deferredSharedCacheClean = false;
+	private static bool $deferredEntityCacheClean = false;
+	private static bool $deferredCacheCleanupShutdownRegistered = false;
 
 	public static function getFilePath()
 	{
@@ -153,7 +159,11 @@ class MailboxTable extends Entity\DataManager
 			else
 			{
 				self::rollbackOwnTransaction($connection);
+
+				return $result;
 			}
+
+			DeletedMailboxCleanupAgent::ensureScheduled();
 
 			return $result;
 		}
@@ -212,6 +222,11 @@ class MailboxTable extends Entity\DataManager
 			self::rollbackOwnTransaction($connection);
 
 			throw $exception;
+		}
+
+		if ($mailboxIds !== [])
+		{
+			DeletedMailboxCleanupAgent::ensureScheduled();
 		}
 	}
 
@@ -303,19 +318,24 @@ class MailboxTable extends Entity\DataManager
 				{
 					$mailboxesById = self::getAddressFieldsForIds($mailboxIds);
 					$groups = [];
+					$normalizer = new EmailNormalizer();
 					foreach ($mailboxesById as $mailboxId => $mailbox)
 					{
-						$normalizedEmail = (new EmailNormalizer())->normalizeMailbox($mailbox);
+						$normalizedEmail = $normalizer->normalizeMailbox($mailbox);
 						$groupKey = $normalizedEmail ?? "\0";
 						$groups[$groupKey]['ids'][] = $mailboxId;
 						$groups[$groupKey]['normalizedEmail'] = $normalizedEmail;
+						$groups[$groupKey]['domainHash'] = $normalizer->domainHash($normalizedEmail);
 					}
 
 					foreach ($groups as $group)
 					{
 						$derivedResult = parent::updateMulti(
 							$group['ids'],
-							['EMAIL_NORMALIZED' => $group['normalizedEmail']],
+							[
+								'EMAIL_NORMALIZED' => $group['normalizedEmail'],
+								'EMAIL_DOMAIN_HASH' => $group['domainHash'],
+							],
 							true,
 						);
 						if (!$derivedResult->isSuccess())
@@ -355,6 +375,33 @@ class MailboxTable extends Entity\DataManager
 			self::cleanRuntimeCachesAfterIgnoredBatch($mailboxIds, $ignoreEvents);
 
 			throw $exception;
+		}
+	}
+
+	/**
+	 * Decides whether a mailbox that has just been connected may group its list.
+	 *
+	 * It stores no letter yet, so this is the whole pass of the backfill over it: the check counts
+	 * three empty sets instead of walking history. The rule stays the one of the feature: readiness
+	 * comes from the check and from nowhere else, and everything that can leave the projection behind
+	 * takes it back and arms the background pass.
+	 *
+	 * Never throws: connecting a mailbox must not fail because of a read model.
+	 */
+	private static function decideConversationProjectionReadiness(int $mailboxId): void
+	{
+		if ($mailboxId <= 0)
+		{
+			return;
+		}
+
+		try
+		{
+			(new ConversationBackfill())->completePass($mailboxId, 0);
+		}
+		catch (\Throwable)
+		{
+			// Readiness simply stays unset, and the background pass decides it later.
 		}
 	}
 
@@ -701,6 +748,11 @@ class MailboxTable extends Entity\DataManager
 		{
 			self::cleanOwnerCacheByUserId((int)$mailbox['USER_ID']);
 		}
+
+		if ((string)($mailbox['SERVER_TYPE'] ?? '') === 'imap')
+		{
+			self::decideConversationProjectionReadiness((int)$event->getParameter('id'));
+		}
 	}
 
 	public static function onBeforeAdd(Entity\Event $event): Entity\EventResult
@@ -727,8 +779,11 @@ class MailboxTable extends Entity\DataManager
 				$mailbox = static::getById((int)($primary['ID'] ?? 0))->fetch() ?: [];
 			}
 
+			$normalizer = new EmailNormalizer();
+			$normalizedEmail = $normalizer->normalizeMailbox(array_merge($mailbox, $fields));
 			$result->modifyFields([
-				'EMAIL_NORMALIZED' => (new EmailNormalizer())->normalizeMailbox(array_merge($mailbox, $fields)),
+				'EMAIL_NORMALIZED' => $normalizedEmail,
+				'EMAIL_DOMAIN_HASH' => $normalizer->domainHash($normalizedEmail),
 			]);
 		}
 
@@ -765,6 +820,49 @@ class MailboxTable extends Entity\DataManager
 		return $mailbox;
 	}
 
+	private static function normalizeMailboxOptions(mixed $options): array
+	{
+		if (is_array($options))
+		{
+			return $options;
+		}
+
+		if (!is_string($options))
+		{
+			return [];
+		}
+
+		try
+		{
+			$options = @unserialize($options, ['allowed_classes' => false]);
+		}
+		catch (\Throwable)
+		{
+			return [];
+		}
+
+		if (is_array($options))
+		{
+			return $options;
+		}
+
+		if (!is_string($options))
+		{
+			return [];
+		}
+
+		try
+		{
+			$options = @unserialize($options, ['allowed_classes' => false]);
+		}
+		catch (\Throwable)
+		{
+			return [];
+		}
+
+		return is_array($options) ? $options : [];
+	}
+
 	public static function getMap()
 	{
 		return array(
@@ -791,6 +889,9 @@ class MailboxTable extends Entity\DataManager
 				'data_type' => 'string',
 			),
 			'EMAIL_NORMALIZED' => array(
+				'data_type' => 'string',
+			),
+			'EMAIL_DOMAIN_HASH' => array(
 				'data_type' => 'string',
 			),
 			'USERNAME' => array(
@@ -888,6 +989,13 @@ class MailboxTable extends Entity\DataManager
 				'data_type' => 'integer',
 				'default_value' => 0,
 			),
+			'AVATAR_RESOURCE_ID' => array(
+				'data_type' => 'integer',
+			),
+			'AVATAR_REVISION' => array(
+				'data_type' => 'integer',
+				'default_value' => 0,
+			),
 			'OPTIONS' => array(
 				'data_type'  => 'text',
 				'save_data_modification' => function()
@@ -904,7 +1012,7 @@ class MailboxTable extends Entity\DataManager
 					return array(
 						function ($values)
 						{
-							return unserialize($values, ['allowed_classes' => false]);
+							return static::normalizeMailboxOptions($values);
 						},
 					);
 				},
@@ -925,9 +1033,10 @@ class MailboxTable extends Entity\DataManager
 		;
 	}
 
-	public static function cleanCachesByMailboxId(int $mailboxId): void
+	/** A caller that already holds the row passes its owner instead of making it be read again. */
+	public static function cleanCachesByMailboxId(int $mailboxId, ?int $ownerId = null): void
 	{
-		$ownerId = self::getOwnerId($mailboxId);
+		$ownerId = ($ownerId ?? 0) > 0 ? $ownerId : self::getOwnerId($mailboxId);
 		if ($ownerId > 0)
 		{
 			self::cleanOwnerCacheByUserId($ownerId);
@@ -1029,7 +1138,7 @@ class MailboxTable extends Entity\DataManager
 		}
 	}
 
-	private static function cleanRuntimeFullRowCachesByMailboxId(int $mailboxId): void
+	public static function cleanRuntimeFullRowCachesByMailboxId(int $mailboxId): void
 	{
 		foreach (self::$ownerCache as $userId => $mailboxes)
 		{
@@ -1098,7 +1207,87 @@ class MailboxTable extends Entity\DataManager
 		self::$onlyIdSharedCache = [];
 		self::$sharedCache = [];
 
-		$cacheManager = Cache::createInstance();
-		$cacheManager->cleanDir(self::SHARED_CACHE_DIR);
+		if (self::$deferredCacheDepth > 0)
+		{
+			self::$deferredSharedCacheClean = true;
+
+			return;
+		}
+
+		Cache::createInstance()->cleanDir(self::SHARED_CACHE_DIR);
+	}
+
+	/** Within a deferred scope the entity cache is dropped once at the end of it. */
+	public static function cleanEntityCache(): void
+	{
+		if (self::$deferredCacheDepth > 0)
+		{
+			self::$deferredEntityCacheClean = true;
+
+			return;
+		}
+
+		self::getEntity()->cleanCache();
+	}
+
+	/**
+	 * Defers to the end of the scope the drop of the cache directories that belong to no single
+	 * mailbox: the portal-wide shared one and the one of the entity. The in-memory maps are still
+	 * dropped at once, so a read of the shared mailboxes inside the scope answers from the disk
+	 * directory and may be stale until the scope ends. A fatal error skips `finally`, so the drop is
+	 * asked for on shutdown too: it is lost only when the process itself is killed.
+	 */
+	public static function withDeferredCacheCleanup(callable $run): mixed
+	{
+		self::registerDeferredCacheCleanupOnShutdown();
+		self::$deferredCacheDepth++;
+		try
+		{
+			return $run();
+		}
+		finally
+		{
+			self::$deferredCacheDepth--;
+			if (self::$deferredCacheDepth === 0)
+			{
+				self::flushDeferredCacheCleanup();
+			}
+		}
+	}
+
+	/**
+	 * The last chance of a scope that never reached its end. The depth is dropped as well: after the
+	 * shutdown of the hit there is no scope left to defer anything to.
+	 */
+	public static function flushDeferredCacheCleanupOnShutdown(): void
+	{
+		self::$deferredCacheDepth = 0;
+		self::flushDeferredCacheCleanup();
+	}
+
+	private static function registerDeferredCacheCleanupOnShutdown(): void
+	{
+		if (self::$deferredCacheCleanupShutdownRegistered)
+		{
+			return;
+		}
+
+		self::$deferredCacheCleanupShutdownRegistered = true;
+		register_shutdown_function([self::class, 'flushDeferredCacheCleanupOnShutdown']);
+	}
+
+	private static function flushDeferredCacheCleanup(): void
+	{
+		if (self::$deferredSharedCacheClean)
+		{
+			self::$deferredSharedCacheClean = false;
+			Cache::createInstance()->cleanDir(self::SHARED_CACHE_DIR);
+		}
+
+		if (self::$deferredEntityCacheClean)
+		{
+			self::$deferredEntityCacheClean = false;
+			self::getEntity()->cleanCache();
+		}
 	}
 }

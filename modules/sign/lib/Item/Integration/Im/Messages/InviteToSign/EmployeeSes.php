@@ -2,11 +2,15 @@
 
 namespace Bitrix\Sign\Item\Integration\Im\Messages\InviteToSign;
 
+use Bitrix\Sign\Contract\Chat\Message\HasMemberKey;
+use Bitrix\Sign\Contract\Chat\Message\HasUserMessage;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Integration\Im\Message;
 
-class EmployeeSes extends Message\WithInitiator
+class EmployeeSes extends Message\WithInitiator implements HasUserMessage, HasMemberKey
 {
+	use Message\UserMessageTrait;
+
 	public function __construct(
 		int $fromUser,
 		int $toUser,
@@ -14,11 +18,13 @@ class EmployeeSes extends Message\WithInitiator
 		string $initiatorName,
 		Document $document,
 		string $link,
+		?string $userMessage = null,
 	)
 	{
 		parent::__construct($fromUser, $toUser, $initiatorUserId, $initiatorName);
 		$this->document = $document;
 		$this->link = $link;
+		$this->userMessage = $userMessage;
 	}
 
 	public function getStageId(): string
@@ -36,13 +42,15 @@ class EmployeeSes extends Message\WithInitiator
 			: 'SIGN_CALLBACK_CHAT_INVITE_EMPLOYEE_SES_WITH_INITIATOR_MSGVER_1'
 		;
 
-		return $this->getLocalizedFallbackMessage(
-			$messageId,
-			[
-				'#DOC_NAME#' => $this->getDocumentName($this->getDocument()),
-				'#SIGN_URL#' => $this->getLink(),
-				'#INITIATOR_NAME#' => $this->getInitiatorName(),
-			]
+		return $this->appendUserMessageBlock(
+			$this->getLocalizedFallbackMessage(
+				$messageId,
+				[
+					'#DOC_NAME#' => $this->getDocumentName($this->getDocument()),
+					'#SIGN_URL#' => $this->getLink(),
+					'#INITIATOR_NAME#' => $this->getInitiatorName(),
+				]
+			)
 		);
 	}
 }

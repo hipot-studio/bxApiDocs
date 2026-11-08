@@ -143,7 +143,9 @@ class RoleManager
 	{
 		return [
 			'code' => $role['code'],
-			'name' => $role['name'],
+			'name' => $role['code'] === self::getDefaultRoleCode()
+				? CopilotNameResolver::getInstance()->getName()
+				: $role['name'],
 			'desc' => $role['description'],
 			'avatar' => $role['avatar'],
 			'default' => $role['code'] === self::getDefaultRoleCode(),

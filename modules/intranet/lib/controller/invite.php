@@ -6,6 +6,8 @@ use Bitrix\Bitrix24\Integration\Network\RegisterSettingsSynchronizer;
 use Bitrix\Bitrix24\Portal\Settings\EmailConfirmationRequirements\Type;
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\InviteLimitControl;
 use Bitrix\Intranet\Infrastructure\Controller\ActionFilter\PortalCreatorEmailConfirmationControl;
+use Bitrix\Intranet\Internal\Service\Invitation\AllowedDepartmentResolver;
+use Bitrix\Intranet\Internal\Service\Invitation\RegisterFieldsFilter;
 use Bitrix\Intranet\Service\InviteLinkGenerator;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
@@ -203,7 +205,9 @@ class Invite extends Main\Engine\Controller
 			],
 			'regenerateLinkByCollabId' => [
 				'+prefilters' => [
+					new Main\Engine\ActionFilter\HttpMethod([Main\Engine\ActionFilter\HttpMethod::METHOD_POST]),
 					new Intranet\ActionFilter\InviteToCollabAccessControl(),
+					new Intranet\ActionFilter\CollabInvitationLinkAccessControl(),
 				],
 				'-prefilters' => [
 					Intranet\Infrastructure\Controller\ActionFilter\InviteIntranetAccessControl::class,
@@ -250,6 +254,21 @@ class Invite extends Main\Engine\Controller
 
 	public function registerAction(array $fields)
 	{
+		$fields = RegisterFieldsFilter::filter($fields);
+
+		if (array_key_exists('DEPARTMENT_ID', $fields) || !\CIntranetInviteDialog::isExtranetInvitationAvailable())
+		{
+			$departmentResult = $this->resolveAllowedDepartments($fields['DEPARTMENT_ID'] ?? null);
+			if (!$departmentResult->isSuccess())
+			{
+				$this->addErrors($departmentResult->getErrors());
+
+				return null;
+			}
+
+			$fields['DEPARTMENT_ID'] = $departmentResult->getData()[AllowedDepartmentResolver::DEPARTMENT_IDS_KEY];
+		}
+
 		$result = \Bitrix\Intranet\Invitation::inviteUsers($fields);
 
 		if (!$result->isSuccess())
@@ -258,6 +277,16 @@ class Invite extends Main\Engine\Controller
 		}
 
 		return $result->getData();
+	}
+
+	private function resolveAllowedDepartments(mixed $departmentId): Main\Result
+	{
+		if (!Loader::includeModule('humanresources'))
+		{
+			return AllowedDepartmentResolver::createStructureUnavailableResult();
+		}
+
+		return AllowedDepartmentResolver::createByCurrentUser()->resolve($departmentId);
 	}
 
 	private function inviteUsers(
@@ -438,6 +467,7 @@ class Invite extends Main\Engine\Controller
 			{
 				$errorKey = $this->getReInviteErrorKey($error);
 				$messageCode = match($errorKey) {
+					'ERROR_TIMEOUT_NOT_EXCEEDED' => 'INTRANET_CONTROLLER_INVITE_ERROR_SMS_REINVITE_TIMEOUT',
 					'user_is_not_employee' => 'INTRANET_CONTROLLER_INVITE_ERROR_USER_IS_NOT_EMPLOYEE',
 					'user_not_found' => 'INTRANET_CONTROLLER_INVITE_ERROR_USER_NOT_FOUND',
 					'user_already_confirmed' => 'INTRANET_CONTROLLER_INVITE_ERROR_USER_ALREADY_CONFIRMED',
@@ -601,6 +631,16 @@ class Invite extends Main\Engine\Controller
 
 	private function addReInviteError(Error $error): void
 	{
+		if ($error->getCode() === 'ERROR_TIMEOUT_NOT_EXCEEDED')
+		{
+			$this->addError(new Error(
+				Loc::getMessage('INTRANET_CONTROLLER_INVITE_ERROR_SMS_REINVITE_TIMEOUT'),
+				'ERROR_TIMEOUT_NOT_EXCEEDED',
+			));
+
+			return;
+		}
+
 		if ($error instanceof InviteLimitError)
 		{
 			$this->addError(

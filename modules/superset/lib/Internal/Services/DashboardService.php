@@ -14,6 +14,7 @@ use Bitrix\Superset\Internal\HttpStatus;
 use Bitrix\Superset\Internal\Entities\OwnedEntityIds;
 use Bitrix\Superset\Internal\Dto;
 use Bitrix\Superset\Internal\Support\AbstractSupersetContext;
+use Bitrix\Superset\Internal\Support\InstanceUnavailableStatus;
 use Bitrix\Superset\Internal\Services\ImportExport\ArchiveRepacker;
 use Bitrix\Superset\Internal\Services\ImportExport\EntitiesImporter;
 
@@ -44,7 +45,7 @@ final class DashboardService extends AbstractSupersetContext
 		return $result;
 	}
 
-	public function list(array $ids = [], array $neqIds = []): Main\Result
+	public function list(array $ids = [], array $neqIds = [], ?int $ownerId = null): Main\Result
 	{
 		$filter = [];
 		if (!empty($ids))
@@ -67,6 +68,20 @@ final class DashboardService extends AbstractSupersetContext
 			}
 		}
 
+		if ($ownerId !== null)
+		{
+			if ($ownerId <= 0)
+			{
+				return $this->createErrorResult('Dashboard list was requested for an unresolved owner');
+			}
+
+			$filter[] = [
+				'col' => 'owners',
+				'opr' => 'rel_m_m',
+				'value' => $ownerId,
+			];
+		}
+
 		$preparedDashboards = [];
 		$page = 0;
 		$dashboardApi = $this->getDashboardApi();
@@ -87,10 +102,18 @@ final class DashboardService extends AbstractSupersetContext
 
 			foreach (($decoded['result'] ?? []) as $dashboard)
 			{
-				if (is_array($dashboard))
+				if (!is_array($dashboard))
 				{
-					$preparedDashboards[] = $this->prepareResultDashboard($dashboard);
+					continue;
 				}
+
+				// Superset silently drops the rel_m_m filter for an unknown owner id.
+				if ($ownerId !== null && !$this->isOwnedBy($dashboard, $ownerId))
+				{
+					continue;
+				}
+
+				$preparedDashboards[] = $this->prepareResultDashboard($dashboard);
 			}
 
 			$isRepeatRequest = count($decoded['result'] ?? []) === 100;
@@ -456,7 +479,11 @@ final class DashboardService extends AbstractSupersetContext
 			if (!$importDatasetResult->isSuccess())
 			{
 				return $this->createErrorResult(
-					'Import dataset: ' . implode("\n", $importDatasetResult->getErrorMessages())
+					'Import dataset: ' . implode("\n", $importDatasetResult->getErrorMessages()),
+					null,
+					InstanceUnavailableStatus::isReportedBy($importDatasetResult)
+						? HttpStatus::DEACTIVATED_INSTANCE
+						: null,
 				);
 			}
 
@@ -471,7 +498,11 @@ final class DashboardService extends AbstractSupersetContext
 			if (!$importChartResult->isSuccess())
 			{
 				return $this->createErrorResult(
-					'Import chart: ' . implode("\n", $importChartResult->getErrorMessages())
+					'Import chart: ' . implode("\n", $importChartResult->getErrorMessages()),
+					null,
+					InstanceUnavailableStatus::isReportedBy($importChartResult)
+						? HttpStatus::DEACTIVATED_INSTANCE
+						: null,
 				);
 			}
 
@@ -495,7 +526,11 @@ final class DashboardService extends AbstractSupersetContext
 		if (!$importDashboardResult->isSuccess())
 		{
 			return $this->createErrorResult(
-				'Import dashboard: ' . implode("\n", $importDashboardResult->getErrorMessages())
+				'Import dashboard: ' . implode("\n", $importDashboardResult->getErrorMessages()),
+				null,
+				InstanceUnavailableStatus::isReportedBy($importDashboardResult)
+					? HttpStatus::DEACTIVATED_INSTANCE
+					: null,
 			);
 		}
 
@@ -917,6 +952,14 @@ final class DashboardService extends AbstractSupersetContext
 		$result->setData($decoded['result'] ?? []);
 
 		return $result;
+	}
+
+	private function isOwnedBy(array $supersetDashboard, int $ownerId): bool
+	{
+		$owners = is_array($supersetDashboard['owners'] ?? null) ? $supersetDashboard['owners'] : [];
+		$ownerIds = array_map('intval', array_column($owners, 'id'));
+
+		return in_array($ownerId, $ownerIds, true);
 	}
 
 	private function prepareResultDashboard(array $supersetDashboard): array

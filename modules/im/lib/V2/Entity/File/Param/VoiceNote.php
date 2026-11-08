@@ -16,6 +16,11 @@ class VoiceNote extends BaseParam
 		return ParamName::IsVoiceNote;
 	}
 
+	public function getConflictingParams(): array
+	{
+		return $this->getValue() ? [ParamName::IsVideoNote] : [];
+	}
+
 	public function toArray(): array
 	{
 		return [

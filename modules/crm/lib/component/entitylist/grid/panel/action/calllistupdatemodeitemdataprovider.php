@@ -34,8 +34,18 @@ final class CallListUpdateModeItemDataProvider extends DataProvider
 	public function prepareActions(): array
 	{
 		return [
-			new AddItemsToCallListAction($this->entityTypeId, $this->callListId, $this->callListContext),
+			new AddItemsToCallListAction(
+				$this->entityTypeId,
+				$this->callListId,
+				$this->callListContext,
+				$this->getGridId(),
+			),
 			new ForAllCheckboxAction(),
 		];
+	}
+
+	private function getGridId(): string
+	{
+		return $this->getSettings()->getID();
 	}
 }

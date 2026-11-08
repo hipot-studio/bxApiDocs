@@ -488,10 +488,6 @@ class DocxXml extends Xml
 		{
 			$block['endNode']->parentNode->removeChild($block['endNode']);
 		}
-		if ($indexToPrint)
-		{
-			die;
-		}
 	}
 
 	/**
@@ -516,10 +512,7 @@ class DocxXml extends Xml
 				$linkedPlaceholderNodes = $this->findPlaceholderNodes($linkedPlaceholder);
 				foreach ($linkedPlaceholderNodes as $node)
 				{
-					if (mb_strpos($node->textContent, static::DO_NOT_INSERT_VALUE_MODIFIER) === false)
-					{
-						$tableRowNodes[] = $this->getParentTableRowNode($node);
-					}
+					$tableRowNodes[] = $this->getParentTableRowNode($node);
 				}
 			}
 			$tableRowNodes = $this->getUniqueObjects($tableRowNodes);

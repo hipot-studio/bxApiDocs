@@ -18,7 +18,13 @@ class DefaultDeadlineService
 
 	}
 
-	public function set(DeadlineUserOption $defaultDeadlineUserOption): void
+	/**
+	 * @param (callable(int): DeadlineUserOption)|null $getSavedOption
+	 */
+	public function set(
+		DeadlineUserOption $defaultDeadlineUserOption,
+		?callable $getSavedOption = null,
+	): array
 	{
 		$deadlineUserOption = $this->deadlineUserOptionRepository->getByUserId($defaultDeadlineUserOption->userId);
 
@@ -33,21 +39,32 @@ class DefaultDeadlineService
 
 		$this->deadlineUserOptionRepository->save($deadlineUserOption);
 
+		if ($getSavedOption !== null)
+		{
+			$deadlineUserOption = $getSavedOption($defaultDeadlineUserOption->userId);
+		}
+
+		// every toArray() recalculates the deadline date from the current moment, so the answer and the push
+		// have to share one array: otherwise a minute crossed between them gives the open form two dates
+		$savedOption = $deadlineUserOption->toArray();
+
 		$this->sendPush(
 			$defaultDeadlineUserOption->userId,
 			[
-				'deadline' => $defaultDeadlineUserOption->defaultDeadlineInSeconds,
-				'defaultDeadlineDate' => $deadlineUserOption->toArray()['defaultDeadlineDate'],
-				'canChangeDeadline' => $defaultDeadlineUserOption->canChangeDeadline,
-				'maxDeadlineChangeDate' => $defaultDeadlineUserOption->maxDeadlineChangeDate ? : null,
-				'maxDeadlineChanges' => $defaultDeadlineUserOption->maxDeadlineChanges,
-				'requireDeadlineChangeReason' => $defaultDeadlineUserOption->requireDeadlineChangeReason,
-				'deadlineUserOption' => $deadlineUserOption->toArray(),
+				'deadline' => $savedOption['defaultDeadlineInSeconds'],
+				'defaultDeadlineDate' => $savedOption['defaultDeadlineDate'],
+				'canChangeDeadline' => $savedOption['canChangeDeadline'],
+				'maxDeadlineChangeDate' => $savedOption['maxDeadlineChangeDate'] ?: null,
+				'maxDeadlineChanges' => $savedOption['maxDeadlineChanges'],
+				'requireDeadlineChangeReason' => $savedOption['requireDeadlineChangeReason'],
+				'deadlineUserOption' => $savedOption,
 			],
 		);
+
+		return $savedOption;
 	}
 
-	private function sendPush(int $userId, array $params = []): void
+	protected function sendPush(int $userId, array $params = []): void
 	{
 		PushService::addEvent($userId, [
 			'module_id' => 'tasks',

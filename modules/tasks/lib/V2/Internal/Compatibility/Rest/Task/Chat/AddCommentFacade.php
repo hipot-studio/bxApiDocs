@@ -8,6 +8,7 @@ use Bitrix\Main\Command\Exception\CommandException;
 use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Util\Error;
+use Bitrix\Tasks\V2\Internal\Access\Service\TaskAccessService;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Result\Result;
 use Bitrix\Tasks\V2\Internal\Integration;
@@ -21,6 +22,7 @@ class AddCommentFacade
 
 	public function __construct(
 		private readonly UserRepositoryInterface $userRepository,
+		private readonly TaskAccessService $taskAccessService,
 	)
 	{
 	}
@@ -98,19 +100,27 @@ class AddCommentFacade
 
 		if (!is_numeric($authorId) || $authorId < 1)
 		{
-			$message = Loc::getMessage('TASK_REST_ADD_COMMENT_ACCESS_DENIED');
-			$validateResult->addError(new Error($message));
+			$validateResult->addError(new Error(Loc::getMessage('TASK_REST_ADD_COMMENT_ACCESS_DENIED')));
 
 			return;
 		}
 
-		if (
-			$authorId !== $taskParams->userId
-			&& !$this->userRepository->isExists($authorId)
-		)
+		if ($authorId === $taskParams->userId)
 		{
-			$message = Loc::getMessage('TASK_REST_ADD_COMMENT_ACCESS_DENIED');
-			$validateResult->addError(new Error($message));
+			return;
+		}
+
+		if (!$this->userRepository->isExists($authorId))
+		{
+			$validateResult->addError(new Error(Loc::getMessage('TASK_REST_ADD_COMMENT_ACCESS_DENIED')));
+
+			return;
+		}
+
+		/** impersonating another user as comment author requires that user to have task read access */
+		if (!$this->taskAccessService->canRead($authorId, $taskParams->taskId))
+		{
+			$validateResult->addError(new Error(Loc::getMessage('TASK_REST_ADD_COMMENT_ACCESS_DENIED')));
 		}
 	}
 

@@ -51,6 +51,11 @@ class Dictionary
 		'busy' => 'OPAQUE',
 	];
 
+	const LOCAL_TRANSPARENT = [
+		'TRANSPARENT' => 'free',
+		'OPAQUE' => 'busy',
+	];
+
 	const COMPONENTS = [
 		'vevent' => 'VEVENT',
 		'vcalendar' => 'VCALENDAR',

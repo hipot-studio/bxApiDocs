@@ -55,6 +55,20 @@ abstract class Entity
 	}
 
 	/**
+	 * Clears the runtime caches built around the group bound to the site.
+	 * @param int $entityId Entity id.
+	 * @param string $entityType Entity type.
+	 * @return void
+	 */
+	private static function clearRuntimeCache($entityId, $entityType): void
+	{
+		if ($entityType === self::ENTITY_TYPE_SITE)
+		{
+			Site\Scope\Group::resetRuntimeCache((int)$entityId);
+		}
+	}
+
+	/**
 	 * Returns row id for current binding and entity.
 	 * @param int $entityId Entity id.
 	 * @param string $entityType Entity type.
@@ -129,7 +143,13 @@ abstract class Entity
 		if (!$this->getBindingId($entityId, $entityType))
 		{
 			$this->clearCache();
-			return $this->addBinding($entityId, $entityType) > 0;
+			$success = $this->addBinding($entityId, $entityType) > 0;
+			if ($success)
+			{
+				$this->clearRuntimeCache($entityId, $entityType);
+			}
+
+			return $success;
 		}
 		else
 		{
@@ -150,6 +170,8 @@ abstract class Entity
 		{
 			$this->clearCache();
 			$this->deleteBindingId($bindingId);
+			$this->clearRuntimeCache($entityId, $entityType);
+
 			return true;
 		}
 		else

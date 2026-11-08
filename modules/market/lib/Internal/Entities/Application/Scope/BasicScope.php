@@ -8,6 +8,10 @@ use Bitrix\Main;
 
 class BasicScope
 {
+	private const ICON_ALIASES = [
+		'sign.b2e' => 'userconsent',
+	];
+
 	protected static bool $areLocMessagesLoaded = false;
 
 	protected ?string $description = null;
@@ -34,20 +38,21 @@ class BasicScope
 
 	public function getTitle(): string
 	{
-		return $this->title ??= $this->getLocMessage();
+		return $this->title ??= $this->getLocMessage() ?? ($this->getName() ?: $this->getKey());
 	}
 
 	public function getDescription(): string
 	{
-		return $this->description ??= $this->getLocMessage('_DESCRIPTION');
+		return $this->description ??= $this->getLocMessage('_DESCRIPTION') ?? '';
 	}
 
 	public function getIcon(): string
 	{
 		if ($this->icon === null)
 		{
-			$strippedName = str_replace('/', '', mb_strtolower($this->getKey()));
-			$this->icon = '/bitrix/images/market/scope/market-icon-' . $strippedName . '.svg';
+			$scopeKey = mb_strtolower($this->getKey());
+			$iconName = self::ICON_ALIASES[$scopeKey] ?? str_replace('/', '', $scopeKey);
+			$this->icon = '/bitrix/images/market/scope/market-icon-' . $iconName . '.svg';
 		}
 
 		return $this->icon;
@@ -79,10 +84,43 @@ class BasicScope
 		}
 	}
 
-	protected function getLocMessage(?string $suffix = null): string
+	/**
+	 * Resolves legacy dotted keys first, then falls back to keys with dots replaced by underscores.
+	 * Each key form has an independent consecutive MSGVER chain; any legacy phrase takes precedence. New fallback
+	 * phrases belong to the mirrored language file for this class.
+	 */
+	protected function getLocMessage(?string $suffix = null): ?string
 	{
-		$locKey = mb_strtoupper('REST_SCOPE_' . $this->getKey() . ($suffix ?? ''));
+		$baseKey = mb_strtoupper('REST_SCOPE_' . $this->getKey() . ($suffix ?? ''));
+		$message = static::getLastVersionedLocMessage($baseKey);
+		$normalizedBaseKey = str_replace('.', '_', $baseKey);
 
-		return Main\Localization\Loc::getMessage($locKey) ?? '';
+		if ($message !== null || $normalizedBaseKey === $baseKey)
+		{
+			return $message;
+		}
+
+		return static::getLastVersionedLocMessage($normalizedBaseKey);
+	}
+
+	protected static function getLastVersionedLocMessage(string $baseKey): ?string
+	{
+		$message = static::getLocMessageByKey($baseKey);
+		$version = 1;
+
+		while (($versionedMessage = static::getLocMessageByKey($baseKey . '_MSGVER_' . $version)) !== null)
+		{
+			$message = $versionedMessage;
+			$version++;
+		}
+
+		return $message;
+	}
+
+	protected static function getLocMessageByKey(string $locKey): ?string
+	{
+		$message = Main\Localization\Loc::getMessage($locKey);
+
+		return ($message === null || $message === '') ? null : $message;
 	}
 }

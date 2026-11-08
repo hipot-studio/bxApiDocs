@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\BIConnector\DB\BiAggregationDialectInterface;
 use Bitrix\BIConnector\Manager;
 use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DB\SqlHelper;
@@ -43,20 +44,98 @@ class CBIConnectorSqlBuilder extends CSQLWhere
 		{
 			$this->selectFieldNames[] = $fieldName;
 
-			$formattedFieldName = $this->formatFieldExpression($fieldInfo, $options, $sqlHelper, $selectedTimezone);
+			$formattedFieldName = self::formatFieldExpression($fieldInfo, $options, $sqlHelper, $selectedTimezone);
 
 			$this->select[] = sprintf('%s AS %s', $formattedFieldName, $sqlHelper->quote($fieldName));
 
-			$this->c_joins[$fieldName] = ($this->c_joins[$fieldName] ?? 0) + 1;
-
-			if (isset($fieldInfo['TABLE_ALIAS']))
-			{
-				$this->l_joins[$fieldInfo['TABLE_ALIAS']] = ($this->l_joins[$fieldInfo['TABLE_ALIAS']] ?? 0) + 1;
-			}
+			$this->RegisterSelectedField($fieldName, $fieldInfo);
 		}
 	}
 
-	private function formatFieldExpression(array $fieldInfo, array $options, SqlHelper $sqlHelper, ?string $timezone): string
+	/**
+	 * Counts a field as selected so that GetJoins() emits the joins it needs.
+	 *
+	 * The aggregation path builds its own select list but relies on the same join bookkeeping, which
+	 * is what keeps its row set equal to the one of the raw path.
+	 */
+	public function RegisterSelectedField(string $fieldName, array $fieldInfo): void
+	{
+		$this->c_joins[$fieldName] = ($this->c_joins[$fieldName] ?? 0) + 1;
+
+		if (isset($fieldInfo['TABLE_ALIAS']))
+		{
+			$this->l_joins[$fieldInfo['TABLE_ALIAS']] = ($this->l_joins[$fieldInfo['TABLE_ALIAS']] ?? 0) + 1;
+		}
+	}
+
+	/**
+	 * The select expression of a field, exactly as the raw path builds it.
+	 *
+	 * The dialect is passed explicitly: on the aggregation path resolving the helper from the
+	 * connection again would make the typing by BiAggregationDialectInterface merely declarative.
+	 */
+	public static function GetFieldExpression(
+		array $fieldInfo,
+		array $options,
+		BiAggregationDialectInterface $dialect,
+	): string
+	{
+		$fieldName = self::GetRawFieldExpression($fieldInfo, $dialect);
+		$timezone = \Bitrix\BIConnector\Configuration\DataTimezone::getTimezoneOffset();
+
+		if (self::AppliesTimezoneConversion($fieldInfo, $options))
+		{
+			$fieldExpression = $timezone
+				? $dialect->convertTimezone($fieldName, $dialect->getSessionTimezoneExpression(), $timezone)
+				: $fieldName
+			;
+
+			return $dialect->formatDateExpression($options['datetime_format'], $fieldExpression);
+		}
+
+		if (($fieldInfo['FIELD_TYPE'] ?? '') === 'date' && isset($options['date_format']))
+		{
+			return $dialect->formatDateExpression($options['date_format'], $fieldName);
+		}
+
+		return $fieldName;
+	}
+
+	/**
+	 * The bare column reference of a field, with no date formatting or timezone conversion.
+	 */
+	public static function GetRawFieldExpression(array $fieldInfo, BiAggregationDialectInterface $dialect): string
+	{
+		$fieldName = $fieldInfo['FIELD_NAME'] ?? '';
+
+		if (($fieldInfo['IS_FIELD_NAME_PREPARED'] ?? 'Y') === 'N')
+		{
+			return $dialect->quoteIdentifier($fieldName);
+		}
+
+		return $fieldName;
+	}
+
+	/**
+	 * Whether the select expression of this field shifts it into the data timezone.
+	 *
+	 * The single place that decides it. A filter over the same field has to invert exactly this
+	 * decision: the consumer re-checks the predicate against the value the select list produced, so a
+	 * filter that shifts where the projection does not - or the other way round - silently returns a
+	 * different set of rows. Deciding it twice, once here and once in the filter, is how these two drifted
+	 * apart three times over.
+	 */
+	public static function AppliesTimezoneConversion(array $fieldInfo, array $options): bool
+	{
+		return ($fieldInfo['FIELD_TYPE'] ?? '') === 'datetime' && isset($options['datetime_format']);
+	}
+
+	private static function formatFieldExpression(
+		array $fieldInfo,
+		array $options,
+		SqlHelper $sqlHelper,
+		?string $timezone,
+	): string
 	{
 		$fieldName = $fieldInfo['FIELD_NAME'] ?? '';
 
@@ -65,16 +144,14 @@ class CBIConnectorSqlBuilder extends CSQLWhere
 			$fieldName = $sqlHelper->quote($fieldName);
 		}
 
-		$fieldType = $fieldInfo['FIELD_TYPE'] ?? '';
-
-		if ($fieldType === 'datetime' && isset($options['datetime_format']))
+		if (self::AppliesTimezoneConversion($fieldInfo, $options))
 		{
-			$fieldExpression = $this->applyTimezoneConversion($fieldName, $sqlHelper, $timezone);
+			$fieldExpression = self::applyTimezoneConversion($fieldName, $sqlHelper, $timezone);
 
 			return $sqlHelper->formatDate($options['datetime_format'], $fieldExpression);
 		}
 
-		if ($fieldType === 'date' && isset($options['date_format']))
+		if (($fieldInfo['FIELD_TYPE'] ?? '') === 'date' && isset($options['date_format']))
 		{
 			return $sqlHelper->formatDate($options['date_format'], $fieldName);
 		}
@@ -82,7 +159,7 @@ class CBIConnectorSqlBuilder extends CSQLWhere
 		return $fieldName;
 	}
 
-	private function applyTimezoneConversion(string $fieldName, SqlHelper $sqlHelper, ?string $timezone): string
+	private static function applyTimezoneConversion(string $fieldName, SqlHelper $sqlHelper, ?string $timezone): string
 	{
 		if ($timezone && $sqlHelper instanceof \Bitrix\BIConnector\DB\BiSqlHelperInterface)
 		{
@@ -114,7 +191,14 @@ class CBIConnectorSqlBuilder extends CSQLWhere
 		{
 			if ($counter > 0)
 			{
-				$TABLE_ALIAS = $this->fields[$fieldName]['TABLE_ALIAS'];
+				// A field without a table alias needs no join, and neither JOIN nor LEFT_JOIN can be
+				// present for it.
+				$TABLE_ALIAS = $this->fields[$fieldName]['TABLE_ALIAS'] ?? null;
+				if ($TABLE_ALIAS === null)
+				{
+					continue;
+				}
+
 				if (isset($this->l_joins[$TABLE_ALIAS]) && $this->l_joins[$TABLE_ALIAS])
 				{
 					$resultJoin = $this->fields[$fieldName]['LEFT_JOIN'] ?? false;

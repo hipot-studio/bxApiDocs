@@ -12,6 +12,8 @@ use Bitrix\Tasks\Internals\Attribute\PositiveNumber;
 
 class Pagination
 {
+	private const MAX_LIMIT = 1000;
+
 	protected function __construct(
 		#[PositiveNumber, Nullable]
 		public readonly ?int $limit,
@@ -39,16 +41,16 @@ class Pagination
 	{
 		$pager = new Pager();
 
-		if ($this->limit !== null )
+		if ($this->limit !== null)
 		{
-			$pager->setLimit($this->limit);
+			$pager->setLimit(min($this->limit, self::MAX_LIMIT));
 		}
 
-		if ($this->offset !== null )
+		if ($this->offset !== null)
 		{
 			$pager->setOffset($this->offset);
 		}
-		elseif ($this->page !== null )
+		elseif ($this->page !== null)
 		{
 			$pager->setPage($this->page);
 		}

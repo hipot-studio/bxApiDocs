@@ -1,10 +1,11 @@
 <?php
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();
 
+use Bitrix\Crm\V2\Internal\Service\Currency\CurrencyMutationService;
+use Bitrix\Currency\CurrencyClassifier;
 use Bitrix\Main\Application;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Localization\LanguageTable;
-use Bitrix\Currency\CurrencyClassifier;
 
 Loc::loadMessages(__FILE__);
 
@@ -245,7 +246,17 @@ class CCurrencyClassifierComponent extends \CBitrixComponent
 			else
 			{
 				if ($request->get($lowerCaseFormMode.'_base_for_reports'))
-					CCrmCurrency::SetAccountCurrencyID($currencyId);
+				{
+					$accountingResult = (new CurrencyMutationService())->setAccountingCurrency($currencyId);
+					if (!$accountingResult->isSuccess())
+					{
+						$this->arResult['ERRORS']['ACCOUNTING'] = $accountingResult->getError()?->getMessage()
+							?? Loc::getMessage('CRM_CURRENCY_CLASSIFIER_UPDATE_UNKNOWN_ERROR');
+						$this->writeValuesInResult($lastValues, $afterAdding);
+
+						return;
+					}
+				}
 			}
 
 			if ($currencyId == CCrmCurrency::getInvoiceDefault())

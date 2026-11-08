@@ -13,7 +13,7 @@ final class MemberService
 	{
 		$oldMemberCollection = \Bitrix\HumanResources\Public\Service\Container::getNodeMemberService()->findAllByEntityIds([$fromMemberId]);
 		$newMemberCollection = new NodeMemberCollection();
-		$defaultRoleId = Container::getRoleHelperService()->getEmployeeRoleId();
+		$employeeRoleId = Container::getRoleHelperService()->getEmployeeRoleId();
 
 		foreach($oldMemberCollection as $nodeMember)
 		{
@@ -23,7 +23,7 @@ final class MemberService
 					entityId: $toMemberId,
 					nodeId: $nodeMember->nodeId,
 					active: true,
-					role: $nodeMember->roles[0] ?? $defaultRoleId,
+					role: $employeeRoleId,
 				)
 			);
 		}

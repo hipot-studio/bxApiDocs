@@ -46,6 +46,7 @@ final class StoreProduct extends Base
 
 	public function internalizeArguments($name, $arguments): array
 	{
+		$name = mb_strtolower($name);
 		if ($name === 'bulksave')
 		{
 			return $arguments;
@@ -56,6 +57,7 @@ final class StoreProduct extends Base
 
 	public function externalizeResult($name, $fields): array
 	{
+		$name = mb_strtolower($name);
 		if ($name === 'bulksave')
 		{
 			return $fields;

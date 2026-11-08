@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Internal\Service\Category\Matching;
 
 use Bitrix\Crm\PhaseSemantics;
-use Bitrix\Crm\Stage\DefaultProcessColorGenerator;
+use Bitrix\Crm\Stage\DefaultColorGenerator;
 use Bitrix\Crm\V2\Internal\Entity\Category\StageData;
 
 /**
@@ -40,7 +40,7 @@ final class MatchByPosition implements StageMatchingStrategy
 		// sequence and a stage takes the next one of it only when neither the input nor the stage
 		// itself carries a colour, so which stage ends up with which colour depends on the order the
 		// pass asks in.
-		$colors = new DefaultProcessColorGenerator();
+		$colors = new DefaultColorGenerator();
 
 		$pending = array_values($input);
 
@@ -134,7 +134,7 @@ final class MatchByPosition implements StageMatchingStrategy
 	private static function renamed(
 		StageData $stage,
 		PositionalStageInput $item,
-		DefaultProcessColorGenerator $colors,
+		DefaultColorGenerator $colors,
 	): StageData
 	{
 		return new StageData(
@@ -162,7 +162,7 @@ final class MatchByPosition implements StageMatchingStrategy
 	private static function created(
 		StageData $insertionPoint,
 		PositionalStageInput $item,
-		DefaultProcessColorGenerator $colors,
+		DefaultColorGenerator $colors,
 	): StageData
 	{
 		return new StageData(

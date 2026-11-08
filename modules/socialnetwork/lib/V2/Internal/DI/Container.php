@@ -22,6 +22,7 @@ use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ProjectChatHider;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ProjectChatResolver;
 use Bitrix\Socialnetwork\V2\Internal\Integration\HumanResources\Service\StructureRelationService;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ConvertChatService;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Tasks\Access\TaskAccessService;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Tasks\Service\TaskListService;
 use Bitrix\Socialnetwork\V2\Internal\Repository\CollabOptionRepository;
 use Bitrix\Socialnetwork\V2\Internal\Service\Convert\ConvertService;
@@ -358,6 +359,11 @@ class Container extends AbstractContainer
 	public function getTaskListService(): TaskListService
 	{
 		return $this->get(TaskListService::class);
+	}
+
+	public function getTaskAccessService(): TaskAccessService
+	{
+		return $this->get(TaskAccessService::class);
 	}
 
 	public function getConvertProjectAccessService(): ConvertProjectAccessService

@@ -53,6 +53,14 @@ class Script extends Base
 			];
 		}
 
+		if (!Manager::canUserStartScript((int)$scriptId, (int)$userId))
+		{
+			return [
+				'status' => static::START_STATUS_NOT_PERMITTED,
+				'error' => Loc::getMessage('BIZPROC_CONTROLLER_SCRIPT_CANT_START'),
+			];
+		}
+
 		if (!Manager::checkQueuesCount($scriptId))
 		{
 			return [
@@ -232,12 +240,20 @@ class Script extends Base
 
 	public function execQueueAction(int $queueId)
 	{
+		$userId = (int)$this->getCurrentUser()->getId();
 		$queue = Manager::getQueueById($queueId);
 
 		if (!$queue)
 		{
 			return [
 				'error' => Loc::getMessage('BIZPROC_CONTROLLER_SCRIPT_NOT_EXISTS')
+			];
+		}
+
+		if ($userId !== $queue->getStartedBy() && !Manager::canUserStartScript($queue->getScriptId(), $userId))
+		{
+			return [
+				'error' => Loc::getMessage('BIZPROC_CONTROLLER_SCRIPT_CANT_START')
 			];
 		}
 

@@ -9,6 +9,7 @@ use Bitrix\Calendar\Access\Model\EventModel;
 use Bitrix\Calendar\Application\AttendeeService;
 use Bitrix\Calendar\Core\Builders\EventBuilderFromArray;
 use Bitrix\Calendar\Core\Event\Event;
+use Bitrix\Calendar\Core\Event\LegacyLocationAvailabilityCheckerInterface;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
 use Bitrix\Calendar\Core\Mappers\Factory;
 use Bitrix\Calendar\Core\Role\Role;
@@ -22,12 +23,15 @@ use Bitrix\Calendar\Internals\Exception\ExtranetPermissionDenied;
 use Bitrix\Calendar\Internals\Exception\LocationBusy;
 use Bitrix\Calendar\Internals\Exception\PermissionDenied;
 use Bitrix\Calendar\Internals\Exception\SectionNotFound;
-use Bitrix\Calendar\Rooms\AccessibilityManager;
 use Bitrix\Calendar\Util;
 use Bitrix\Main\DI\ServiceLocator;
 
 class CreateEventHandler implements CommandHandler
 {
+	public function __construct(private readonly LegacyLocationAvailabilityCheckerInterface $locationAvailabilityChecker)
+	{
+	}
+
 	/**
 	 * @throws AttendeeBusy
 	 * @throws ExtranetPermissionDenied
@@ -72,7 +76,8 @@ class CreateEventHandler implements CommandHandler
 			'currentEventDateFrom' => $command->getCurrentDateFrom(),
 			'sendInvitesToDeclined' => $command->isSendInvitesAgain(),
 			'requestUid' => $command->getRequestUid(),
-			'checkLocationOccupancy' => $command->isCheckLocationOccupancy(),
+			'checkLocationOccupancy' => $command->getOccupancyCheckMode(),
+			'checkLocationOccupancyPermission' => true,
 		]);
 
 		if ($createdEvent === null)
@@ -206,7 +211,10 @@ class CreateEventHandler implements CommandHandler
 
 		// Location
 		$entryFields['LOCATION'] = $command->getLocation();
-		$isLocationBusy = !AccessibilityManager::checkAccessibility($command->getLocation(), ['fields' => $entryFields]);
+		$isLocationBusy =
+			$command->getOccupancyCheckMode() !== 'N'
+			&& !$this->locationAvailabilityChecker->isAvailable($command->getLocation(), $entryFields)
+		;
 		if ($isLocationBusy)
 		{
 			throw new LocationBusy();

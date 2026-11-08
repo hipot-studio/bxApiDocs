@@ -10,6 +10,7 @@ namespace Bitrix\Tasks\Processor\Task\Scheduler\RelationManager;
 
 use Bitrix\Main\Entity\ReferenceField;
 use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Integration\Report\Internals\TaskTable;
 use Bitrix\Tasks\Internals\RunTime;
 use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
 use Bitrix\Tasks\Processor\Task\Scheduler\Result\Impact;
@@ -67,7 +68,8 @@ final class Project extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 				// relation data
 				'TASK_ID',
 				'EFFECTIVE_PARENT_ID' => 'PARENT.DEPENDS_ON_ID',
-				'TYPE',
+				'RELATION_TYPE' => 'PARENT.TYPE',
+				'RELATION_DIRECT' => 'PARENT.DIRECT',
 
 				// task data
 				// todo: use Impact::getBaseMixin() here
@@ -90,25 +92,34 @@ final class Project extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 		)), array('INCLUDE_SELF' => true));
 
 		$tasks = array();
-		$parentId = 0;
+		$relationsData = array();
+		$children = array();
 		while($item = $res->fetch())
 		{
 			$taskId = $item['TASK_ID'];
+			$parentId = (int)$item['EFFECTIVE_PARENT_ID'];
+			$relationType = (int)$item['RELATION_TYPE'];
+			$isDirect = (int)$item['RELATION_DIRECT'] === 1;
+
 			unset($item['TASK_ID']);
+			unset($item['RELATION_TYPE']);
+			unset($item['RELATION_DIRECT']);
 			$item['ID'] = $taskId;
 
-			$tasks[$item['EFFECTIVE_PARENT_ID']][$item['ID']] = $item;
-
-			if($taskId == $id)
+			$tasks[$taskId] = $item;
+			if ($taskId != $id && $isDirect && $parentId > 0 && $parentId !== (int)$taskId)
 			{
-				$parentId = $item['EFFECTIVE_PARENT_ID'];
+				$relationsData[$taskId][$parentId] = array(
+					'TYPE' => $relationType,
+				);
+				$children[$parentId][$taskId] = true;
 			}
 
 			//_print_r('----------------- subtask is: '.$item['PARENT_TASK_ID'].' -> '.$item['TASK_ID'].' '.$item['TITLE']);
 		}
 
 		// here we need to skip task which we can not move (and subtrees of such tasks)
-		$tasks = $this->checkCoherence($parentId, $tasks, $result);
+		$tasks = $this->checkCoherence($id, $tasks, $children, $result);
 
 		$relations = array();
 		$relationsFlat = array();
@@ -117,27 +128,34 @@ final class Project extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 			$scheduler = $this->getScheduler();
 			foreach($tasks as $task)
 			{
-				// root task was already rescheduled ($rootImpact)
-				if($task['ID'] == $id)
-				{
-					continue;
-				}
-
 				// todo: Impact class is TEMPORAL, it should be replaced with (or at least inherited from) \Bitrix\Tasks\Item\Task when ready
 				$taskImpact = new Impact($task, $this->getUserId());
-
-				$relation = new Relation($task);
-				$relation->setTask($taskImpact);
-				$relation->setParentTask($scheduler->getImpactById($task['EFFECTIVE_PARENT_ID'])); // update lag here will happen
-
-				$relationsFlat[] = $relation;
-				$relations[$relation->getParentTaskId()][$relation->getTaskId()] = $relation;
-
 				$scheduler->pushQueue($taskImpact->getId(), $scheduler->getRelationProcessor('S'));
 				$scheduler->addImpact($taskImpact);
 			}
 
-			$this->updateRelatedTasks($id, $relations);
+			$parentImpacts = $this->getParentImpacts($relationsData, $scheduler);
+			foreach ($tasks as $task)
+			{
+				$taskId = (int)$task['ID'];
+				foreach ($relationsData[$taskId] ?? array() as $parentTaskId => $relationData)
+				{
+					$parentTask = $scheduler->getImpactById($parentTaskId) ?? ($parentImpacts[$parentTaskId] ?? null);
+					if (!$parentTask)
+					{
+						continue;
+					}
+
+					$relation = new Relation($relationData);
+					$relation->setTask($scheduler->getImpactById($taskId));
+					$relation->setParentTask($parentTask); // update lag here will happen
+
+					$relationsFlat[] = $relation;
+					$relations[$relation->getParentTaskId()][$relation->getTaskId()] = $relation;
+				}
+			}
+
+			$this->updateRelatedTasks($id, $relations, array_fill_keys(array_keys($tasks), true));
 			$this->dumpRelations($relationsFlat);
 		}
 	}
@@ -151,30 +169,59 @@ final class Project extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 	 * @param $id
 	 * @param Relation[][] $relations
 	 */
-	private function updateRelatedTasks($id, array $relations)
+	private function updateRelatedTasks($id, array $relations, array $accessibleTasks)
 	{
-		if(is_array($relations[$id] ?? null))
+		$queue = array($id);
+		$processedTasks = array($id => true);
+		$skippedTasks = array();
+		$incomingRelations = array();
+		foreach ($relations as $outgoingRelations)
 		{
-			foreach($relations[$id] as $relation)
+			foreach ($outgoingRelations as $relation)
 			{
-				if($relation->isProcessed()) // already been here
+				$incomingRelations[$relation->getTaskId()][] = $relation;
+			}
+		}
+
+		$limit = 0;
+		while (count($queue) && $limit < 10000)
+		{
+			$limit++;
+			$parentTaskId = array_shift($queue);
+			foreach ($relations[$parentTaskId] ?? array() as $relation)
+			{
+				$toTaskId = $relation->getTaskId();
+				if (isset($processedTasks[$toTaskId]) || isset($skippedTasks[$toTaskId]))
+				{
+					continue;
+				}
+				if (!$this->areIncomingTasksSettled(
+					$incomingRelations[$toTaskId],
+					$processedTasks,
+					$skippedTasks,
+					$accessibleTasks,
+				))
 				{
 					continue;
 				}
 
-				$toTaskId = $relation->getTaskId();
 				/** @var Impact $toTask */
 				$toTask = $relation->getTask();
-
 				$endDate = $toTask->getEndDatePlan();
 				if(!$endDate) // somehow there are no end date, get out of here asap
 				{
+					$skippedTasks[$toTaskId] = true;
+					$queue[] = $toTaskId;
+
 					continue;
 				}
 
-				$startDate = $relation->getMinDate();
+				$startDate = $this->getLatestMinDate($incomingRelations[$toTaskId]);
 				if (!$startDate)
 				{
+					$skippedTasks[$toTaskId] = true;
+					$queue[] = $toTaskId;
+
 					continue;
 				}
 				$startDate = clone $startDate;
@@ -190,13 +237,88 @@ final class Project extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 
 				$toTask->correctWorkTime($startDate, $endDate, $duration);
 
-				// update $relation lag
-				$relation->updateLag();
-				$relation->setProcessed();
+				foreach ($incomingRelations[$toTaskId] as $incomingRelation)
+				{
+					$incomingRelation->updateLag();
+					$incomingRelation->setProcessed();
+				}
 
-				$this->updateRelatedTasks($toTaskId, $relations);
+				$processedTasks[$toTaskId] = true;
+				$queue[] = $toTaskId;
 			}
 		}
+	}
+
+	private function areIncomingTasksSettled(
+		array $relations,
+		array $processedTasks,
+		array $skippedTasks,
+		array $accessibleTasks
+	)
+	{
+		foreach ($relations as $relation)
+		{
+			$parentTaskId = $relation->getParentTaskId();
+			if (
+				isset($accessibleTasks[$parentTaskId])
+				&& !isset($processedTasks[$parentTaskId])
+				&& !isset($skippedTasks[$parentTaskId])
+			)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private function getLatestMinDate(array $relations)
+	{
+		$latestDate = null;
+		foreach ($relations as $relation)
+		{
+			$minDate = $relation->getMinDate();
+			if ($minDate && (!$latestDate || $minDate->getTimestamp() > $latestDate->getTimestamp()))
+			{
+				$latestDate = $minDate;
+			}
+		}
+
+		return $latestDate;
+	}
+
+	private function getParentImpacts(array $relationsData, $scheduler)
+	{
+		$parentIds = array();
+		foreach ($relationsData as $taskRelations)
+		{
+			foreach ($taskRelations as $parentTaskId => $relationData)
+			{
+				if (!$scheduler->hasImpact($parentTaskId))
+				{
+					$parentIds[$parentTaskId] = true;
+				}
+			}
+		}
+
+		if (empty($parentIds))
+		{
+			return array();
+		}
+
+		$parentImpacts = array();
+		$select = Impact::getBaseMixin()['select'];
+		$select[] = 'ID';
+		$res = TaskTable::getList(array(
+			'filter' => array('@ID' => array_keys($parentIds)),
+			'select' => $select,
+		));
+		while ($task = $res->fetch())
+		{
+			$parentImpacts[$task['ID']] = new Impact($task, $this->getUserId());
+		}
+
+		return $parentImpacts;
 	}
 
 	/**
@@ -205,29 +327,33 @@ final class Project extends \Bitrix\Tasks\Processor\Task\Scheduler\RelationManag
 	 * @param Result $result
 	 * @return array
 	 */
-	private function checkCoherence($id, $tasks, $result)
+	private function checkCoherence($id, $tasks, $children, $result)
 	{
 		$accessible = array();
 		$queue = array($id);
 		$limit = 0;
-		$met = array();
+		$discovered = array($id => true);
 
 		while(count($queue) && $limit < 10000)
 		{
 			$limit++;
 			$nextId = array_shift($queue);
-			if($met[$nextId] ?? null)
-			{
-				//$result->addError('ILLEGAL_STRUCTURE.DEPTH', 'Oops, there is a structure loop ('.$nextId.' met twice)');
-				//break;
-				continue; // just do not go the same way twice
-			}
-			$met[$nextId] = true;
 
-			if(is_array($tasks[$nextId] ?? null))
+			if(is_array($children[$nextId] ?? null))
 			{
-				foreach($tasks[$nextId] as $nextSubId => $nextSub)
+				foreach($children[$nextId] as $nextSubId => $unused)
 				{
+					if (isset($discovered[$nextSubId]))
+					{
+						continue;
+					}
+					$discovered[$nextSubId] = true;
+
+					$nextSub = $tasks[$nextSubId] ?? null;
+					if (!$nextSub)
+					{
+						continue;
+					}
 					if($this->canModifyTask($nextSub))
 					{
 						$accessible[$nextSubId] = $nextSub;

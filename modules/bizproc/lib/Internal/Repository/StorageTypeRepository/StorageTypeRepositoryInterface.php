@@ -86,6 +86,17 @@ interface StorageTypeRepositoryInterface
 	public function getById(int $id, array $select): ?Entity\StorageType\StorageType;
 
 	/**
+	 * Exact CODE lookup (unique index), as opposed to the substring CODE search of the admin grid filter.
+	 *
+	 * @param string $code
+	 * @return Entity\StorageType\StorageType|null
+	 * @throws \Bitrix\Main\ArgumentException
+	 * @throws \Bitrix\Main\ObjectPropertyException
+	 * @throws \Bitrix\Main\SystemException
+	 */
+	public function getByCode(string $code): ?Entity\StorageType\StorageType;
+
+	/**
 	 * @param array $filter
 	 * @param array $select
 	 * @return Entity\StorageType\StorageType|null

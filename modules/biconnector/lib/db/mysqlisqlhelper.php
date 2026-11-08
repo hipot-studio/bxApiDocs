@@ -84,6 +84,16 @@ class MysqliSqlHelper extends \Bitrix\Main\DB\MysqliSqlHelper implements BiSqlHe
 		return $expr;
 	}
 
+	public function getRoundExpression(string $expression, string $scaleExpression): string
+	{
+		return "ROUND(({$expression}), ({$scaleExpression}))";
+	}
+
+	public function castNumericToInt(string $expr): string
+	{
+		return "CAST({$expr} AS SIGNED)";
+	}
+
 	private function convertTimezoneOffsetToSeconds(string $timezoneOffset): int
 	{
 		if (

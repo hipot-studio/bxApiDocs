@@ -258,7 +258,12 @@ abstract class Mesh extends Tree
 				[$idColName, $parentIdColName],
 				$values,
 				[
-					$mpcityColName => new SqlExpression($mpcityColName . '+'.($increment > 0 ? $increment : '1')),
+					$mpcityColName => new SqlExpression(
+						'?#.?# + ?i',
+						static::getTableName(),
+						$mpcityColName,
+						$increment > 0 ? $increment : 1,
+					),
 				],
 			);
 

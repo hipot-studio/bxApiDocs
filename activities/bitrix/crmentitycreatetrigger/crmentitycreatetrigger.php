@@ -3,11 +3,10 @@
 declare(strict_types=1);
 
 use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Activity\Trigger\TriggerParameters;
 use Bitrix\Bizproc\Public\Activity\ReturnDocumentTrait;
-use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventInitiatorTrait;
+use Bitrix\Crm\Integration\BizProc\Activity\Mixins\EventOutputsTrait;
 use Bitrix\Crm\Integration\BizProc\Trigger\CrmEntityTriggerTrait;
-use Bitrix\Main\Localization\Loc;
-use Bitrix\Main\Type\DateTime;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -27,13 +26,11 @@ if (!\Bitrix\Main\Loader::includeModule('crm'))
 class CBPCrmEntityCreateTrigger extends CBPCreateDocumentTrigger
 {
 	use CrmEntityTriggerTrait;
-	use EventInitiatorTrait;
+	use EventOutputsTrait;
 	use ReturnDocumentTrait;
 
 	private const EVENT_INITIATOR_ID = 'Initiator';
 	private const EVENT_DATE_TIME_ID = 'EventDateTime';
-	private const RETURN_ENTITY_TYPE_ID = 'EntityTypeId';
-	private const RETURN_ENTITY_ID = 'EntityId';
 
 	public function __construct($name)
 	{
@@ -61,15 +58,30 @@ class CBPCrmEntityCreateTrigger extends CBPCreateDocumentTrigger
 
 		$this->setProperties([
 			static::getReturnDocumentFieldName() => $document,
-			self::EVENT_INITIATOR_ID => $initiatorUserId ? 'user_' . $initiatorUserId : null,
-			self::EVENT_DATE_TIME_ID => (new DateTime())->format(DateTime::getFormat()),
-			...static::buildReturnValues(is_array($document) ? $document : null),
+			...static::buildEventOutputs($initiatorUserId),
 		]);
 		$this->setPropertiesTypes(
-			static::buildReturnProperties(is_array($document) ? $document : null)
+			static::buildReturnDocumentProperties(is_array($document) ? $document : null)
 		);
 
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	public static function getTestRunResolvedReturnNames(): array
+	{
+		return [
+			self::EVENT_INITIATOR_ID,
+			self::EVENT_DATE_TIME_ID,
+			static::getReturnDocumentFieldName(),
+		];
+	}
+
+	public static function resolveTestRunReturnValues(array $complexDocumentId, int $userId): array
+	{
+		return [
+			...self::buildEventOutputs($userId),
+			static::getReturnDocumentFieldName() => $complexDocumentId,
+		];
 	}
 
 	protected static function preparePropertiesDialogValues(
@@ -80,52 +92,70 @@ class CBPCrmEntityCreateTrigger extends CBPCreateDocumentTrigger
 	{
 		$document = static::resolveDocumentTypeFromDocument((string)($properties['Document'] ?? ''));
 
-		$properties['Return'] = static::buildReturnProperties(
+		$properties['Return'] = static::buildReturnDocumentProperties(
 			$document,
 		);
 
 		return $properties;
 	}
 
-	private static function buildReturnProperties(?array $document): array
+	public static function getConditionDocumentSourceFieldNames(): array
 	{
-		return [
-			...static::buildReturnDocumentProperties($document),
-			self::RETURN_ENTITY_TYPE_ID => [
-				'Name' => Loc::getMessage('BP_CRM_ENTITY_CREATE_TRIGGER_ENTITY_TYPE_ID'),
-				'Type' => FieldType::INT,
-				'Default' => static::resolveEntityTypeIdByDocumentType($document),
-			],
-			self::RETURN_ENTITY_ID => [
-				'Name' => Loc::getMessage('BP_CRM_ENTITY_CREATE_TRIGGER_ENTITY_ID'),
-				'Type' => FieldType::INT,
-				'Default' => null,
-			],
-		];
+		return ['Document'];
 	}
 
-	private static function buildReturnValues(?array $document): array
+	public function getConditionDocumentComplexType(): ?array
 	{
-		if (!$document)
+		return static::resolveConditionDocumentType($this->getRawProperty('Document'));
+	}
+
+	public function getConditionDocumentId(TriggerParameters $parameters): ?array
+	{
+		$conditionType = $this->getConditionDocumentComplexType();
+		$documentId = $parameters->get('Document');
+		if (!static::isConditionDocumentIdOfType($documentId, $conditionType))
 		{
-			return [
-				self::RETURN_ENTITY_TYPE_ID => null,
-				self::RETURN_ENTITY_ID => null,
-			];
+			return null;
 		}
 
-		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($document);
-
-		return [
-			self::RETURN_ENTITY_TYPE_ID => (int)$entityTypeId > 0 ? (int)$entityTypeId : null,
-			self::RETURN_ENTITY_ID => (int)$entityId > 0 ? (int)$entityId : null,
-		];
+		return array_values($documentId);
 	}
 
-	private static function resolveEntityTypeIdByDocumentType(?array $document): ?int
+	private static function resolveConditionDocumentType(mixed $document): ?array
 	{
-		$entityTypeId = (int)CCrmOwnerType::ResolveID((string)($document[2] ?? ''));
+		if (!\CBPHelper::hasStringRepresentation($document))
+		{
+			return null;
+		}
 
-		return $entityTypeId > 0 ? $entityTypeId : null;
+		$documentType = static::resolveDocumentTypeFromDocument((string)$document);
+
+		return static::isComplexDocumentType($documentType) ? $documentType : null;
+	}
+
+	private static function isConditionDocumentIdOfType(mixed $documentId, ?array $conditionType): bool
+	{
+		return static::isComplexDocumentType($documentId)
+			&& $conditionType !== null
+			&& \CBPHelper::isEqualDocumentEntity($documentId, $conditionType)
+		;
+	}
+
+	private static function isComplexDocumentType(mixed $document): bool
+	{
+		if (!is_array($document) || count($document) !== 3)
+		{
+			return false;
+		}
+
+		foreach ($document as $part)
+		{
+			if (!is_string($part) || $part === '')
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 }

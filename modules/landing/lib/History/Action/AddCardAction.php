@@ -3,7 +3,7 @@
 namespace Bitrix\Landing\History\Action;
 
 use Bitrix\Landing\Block;
-use Bitrix\Main\Web\DOM;
+use Bitrix\Landing\Html\DocumentFactory;
 
 class AddCardAction extends BaseAction
 {
@@ -33,7 +33,7 @@ class AddCardAction extends BaseAction
 		$content = '';
 		if ($selector)
 		{
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForStoredContent();
 			$doc->loadHTML($block->getContent());
 			$resultList = $doc->querySelectorAll($selector);
 			if (isset($resultList[$position]))

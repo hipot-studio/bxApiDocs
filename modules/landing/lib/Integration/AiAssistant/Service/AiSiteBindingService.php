@@ -113,6 +113,16 @@ class AiSiteBindingService
 	public const MODERATION_BLOCK_LIMIT = 3;
 
 	/**
+	 * Cooldown window that makes the ceiling above temporary: the limit only holds while the draft
+	 * was touched recently. DATE_MODIFY is the anchor because a blocked draft is not written by
+	 * anyone else - reservation happens after the limit check, and both completion and release
+	 * require a GENERATION_ID the blocked draft does not have.
+	 */
+	public const MODERATION_BLOCK_COOLDOWN_HOURS = 24;
+
+	public const MODERATION_BLOCK_COOLDOWN_SECONDS = self::MODERATION_BLOCK_COOLDOWN_HOURS * 3600;
+
+	/**
 	 * Reaction to a moderation block on a draft: atomically frees the reservation (so the same
 	 * chat can retry) and bumps the consecutive-block counter. Keyed on GENERATION_ID, so repeated
 	 * status polls of the same failed generation cannot double-count (the second call matches 0 rows).
@@ -120,6 +130,33 @@ class AiSiteBindingService
 	 * Create-only: the edit flow does not reserve a binding, so there is nothing to release there.
 	 */
 	public function registerModerationBlock(int $generationId, int $userId): bool
+	{
+		return $this->releaseGenerationReservation($generationId, $userId, true);
+	}
+
+	/**
+	 * Reaction to a terminal failure that left no draft site behind: frees the reservation so the same
+	 * chat can start over, and deliberately leaves MODERATION_BLOCK_COUNT alone - a technical failure
+	 * must not eat the moderation-block attempts of the draft.
+	 *
+	 * Idempotent on the same terms as registerModerationBlock(): keyed on GENERATION_ID, so every poll
+	 * after the first matches 0 rows and returns false.
+	 *
+	 * Create-only: the edit flow does not reserve a binding, so there is nothing to release there.
+	 */
+	public function releaseDraftForFailedGeneration(int $generationId, int $userId): bool
+	{
+		return $this->releaseGenerationReservation($generationId, $userId, false);
+	}
+
+	/**
+	 * Atomically frees the draft reserved by the generation, optionally counting the release as a
+	 * consecutive moderation block. Conditional on GENERATION_ID, so a repeated call is a no-op.
+	 *
+	 * Protected for the same reason as the other storage seams of this class: the counter lives in a
+	 * raw expression, so the in-memory double substitutes the whole statement.
+	 */
+	protected function releaseGenerationReservation(int $generationId, int $userId, bool $countModerationBlock): bool
 	{
 		$generationId = $this->normalizePositiveId($generationId);
 		$userId = $this->normalizePositiveId($userId);
@@ -130,9 +167,10 @@ class AiSiteBindingService
 
 		$connection = Application::getConnection();
 		$sql = sprintf(
-			'UPDATE %s SET GENERATION_ID = NULL, MODERATION_BLOCK_COUNT = MODERATION_BLOCK_COUNT + 1, DATE_MODIFY = %s'
+			'UPDATE %s SET GENERATION_ID = NULL, %sDATE_MODIFY = %s'
 			. ' WHERE GENERATION_ID = %d AND USER_ID = %d AND SITE_ID IS NULL',
 			AiSiteBindingTable::getTableName(),
+			$countModerationBlock ? 'MODERATION_BLOCK_COUNT = MODERATION_BLOCK_COUNT + 1, ' : '',
 			$this->convertToSqlValue(new DateTime()),
 			$generationId,
 			$userId,
@@ -165,6 +203,38 @@ class AiSiteBindingService
 	public function isModerationBlockLimitReached(int $bindingId, int $userId): bool
 	{
 		return $this->getModerationBlockCount($bindingId, $userId) >= self::MODERATION_BLOCK_LIMIT;
+	}
+
+	/**
+	 * Clears the consecutive-block counter of a draft whose cooldown window has expired.
+	 *
+	 * The whole decision lives inside the WHERE of a single UPDATE: nothing reads DATE_MODIFY
+	 * beforehand, so the statement itself is the race gate - out of two concurrent starts on a
+	 * cooled-down draft exactly one gets the reset, the other is refused as still blocked.
+	 */
+	public function resetModerationBlockCountAfterCooldown(int $bindingId, int $userId): bool
+	{
+		$bindingId = $this->normalizePositiveId($bindingId);
+		$userId = $this->normalizePositiveId($userId);
+		if ($bindingId <= 0 || $userId <= 0)
+		{
+			return false;
+		}
+
+		$threshold = (new DateTime())->add('-' . self::MODERATION_BLOCK_COOLDOWN_SECONDS . ' seconds');
+
+		return $this->executeConditionalUpdate(
+			[
+				'MODERATION_BLOCK_COUNT' => 0,
+				'DATE_MODIFY' => new DateTime(),
+			],
+			[
+				"ID = {$bindingId}",
+				"USER_ID = {$userId}",
+				'MODERATION_BLOCK_COUNT >= ' . self::MODERATION_BLOCK_LIMIT,
+				'DATE_MODIFY < ' . $this->convertToSqlValue($threshold),
+			],
+		) === 1;
 	}
 
 	public function getOrCreateForSite(int $userId, int $siteId): int

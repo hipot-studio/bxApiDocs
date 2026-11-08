@@ -416,7 +416,7 @@ class BaseActivity implements OptionallyConfigurable
 					? DateTime::createFromUserTime($data['DEADLINE'])
 					: null
 			)
-			->setDescription($data['DESCRIPTION'])
+			->setDescription((string)($data['DESCRIPTION'] ?? ''))
 			->setSubject($data['SUBJECT'])
 			->setResponsibleId($data['RESPONSIBLE_ID'])
 			->setParentActivityId($data['ASSOCIATED_ENTITY_ID'] ?: null)
@@ -575,15 +575,7 @@ class BaseActivity implements OptionallyConfigurable
 
 		if ($this->getId())
 		{
-			$isSuccess = CCrmActivity::Update($this->getId(), $fields, $this->checkPermissions, true, $options);
-
-			if (!$isSuccess)
-			{
-				foreach (CCrmActivity::GetErrorMessages() as $errorMessage)
-				{
-					$result->addError(new Error($errorMessage));
-				}
-			}
+			$result = $this->performUpdate($fields, $options);
 		}
 		else
 		{
@@ -595,8 +587,7 @@ class BaseActivity implements OptionallyConfigurable
 					],
 				]
 				: $parentActivityBindings;
-			$provider = new \Bitrix\Crm\Activity\Provider\ToDo\ToDo();
-			$result = $provider->createActivity(\Bitrix\Crm\Activity\Provider\ToDo\ToDo::PROVIDER_TYPE_ID_DEFAULT, $fields, $options);
+			$result = $this->performCreate($fields, $options);
 			if ($result->isSuccess())
 			{
 				$this->id = (int)$result->getData()['id'];
@@ -621,6 +612,51 @@ class BaseActivity implements OptionallyConfigurable
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Writes the changed values of the activity that is already stored.
+	 *
+	 * ONE OF THE TWO SEAMS OF THE WRITE. Everything above it - the fields, the check of the rights, the gate of a
+	 * bound calendar event - is the same whichever API performs the write, and which API that is depends on the
+	 * kind of activity: the domain entity of a to-do calls the service of V2 directly while the delegation flag
+	 * is on, every other kind goes on writing through the legacy entry point.
+	 *
+	 * @param array<string, mixed> $fields
+	 * @param array<string, mixed> $options
+	 */
+	protected function performUpdate(array $fields, array $options): Result
+	{
+		$result = new Result();
+		if (CCrmActivity::Update($this->getId(), $fields, $this->checkPermissions, true, $options))
+		{
+			return $result;
+		}
+
+		foreach (CCrmActivity::GetErrorMessages() as $errorMessage)
+		{
+			$result->addError(new Error($errorMessage));
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Creates the activity. The other seam of the write, see above.
+	 *
+	 * @param array<string, mixed> $fields
+	 * @param array<string, mixed> $options
+	 * @return Result the identifier of the created activity under the `id` key of its data.
+	 */
+	protected function performCreate(array $fields, array $options): Result
+	{
+		$provider = new \Bitrix\Crm\Activity\Provider\ToDo\ToDo();
+
+		return $provider->createActivity(
+			\Bitrix\Crm\Activity\Provider\ToDo\ToDo::PROVIDER_TYPE_ID_DEFAULT,
+			$fields,
+			$options,
+		);
 	}
 
 	private function isParentActivityCompleted(int $activityId): bool

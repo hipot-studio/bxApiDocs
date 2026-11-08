@@ -1,9 +1,13 @@
 <?php
+
 namespace Bitrix\IntranetMobile\Controller;
 
 use Bitrix\Bitrix24\Feature;
+use Bitrix\Intranet\Entity\User;
+use Bitrix\Intranet\Internal\Integration\Main\LogoutService;
 use Bitrix\IntranetMobile\Dto\LoginDto;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
+use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\Authentication\Internal\UserDeviceLoginTable;
@@ -62,8 +66,8 @@ class LoginHistory extends Base
 		?PageNavigation $nav = null,
 	): array
 	{
-		$isUserLoginHistoryFeatureEnabled =
-			!Loader::includeModule('bitrix24')
+		$isUserLoginHistoryFeatureEnabled
+			= !Loader::includeModule('bitrix24')
 			|| Feature::isFeatureEnabled('user_login_history');
 		$isLoginHistoryToolAvailable = ToolsManager::getInstance()->checkAvailabilityByToolId('login_history');
 
@@ -89,8 +93,8 @@ class LoginHistory extends Base
 					'DEVICE',
 					UserDeviceTable::class,
 					Join::on('this.DEVICE_ID', 'ref.ID'),
-					['join_type' => Join::TYPE_INNER]
-				)
+					['join_type' => Join::TYPE_INNER],
+				),
 			)
 			->setSelect([
 				'*',
@@ -101,18 +105,46 @@ class LoginHistory extends Base
 			])
 			->setOrder(['LOGIN_DATE' => 'DESC'])
 			->setOffset($nav ? $nav->getOffset() : 0)
-			->setLimit($nav ? min($nav->getLimit(), $this::DEFAULT_LIMIT) : $this::DEFAULT_LIMIT);
+			->setLimit($nav ? min($nav->getLimit(), $this::DEFAULT_LIMIT) : $this::DEFAULT_LIMIT)
+		;
 
 		$result = $query->exec()->fetchAll();
 
 		return $this->prepareResult($result);
 	}
 
-	private function prepareResult($rawItems): array
+	/**
+	 * @restMethod intranetmobile.loginhistory.logoutOtherDevices
+	 */
+	public function logoutOtherDevicesAction(): ?array
+	{
+		$userId = (int)($this->getCurrentUser()?->getId());
+		if ($userId <= 0)
+		{
+			$this->addError(new Error(
+				'Access denied.',
+				'ACCESS_DENIED',
+			));
+
+			return null;
+		}
+
+		$result = (new LogoutService(new User($userId)))->logoutAllExceptCurrentMobileDevice();
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getData();
+	}
+
+	private function prepareResult(array $rawItems): array
 	{
 		return [
 			'items' => array_map([$this, 'prepareItem'], $rawItems),
-			'currentDevice' => $this->getCurrentDevice()
+			'currentDevice' => $this->getCurrentDevice(),
 		];
 	}
 

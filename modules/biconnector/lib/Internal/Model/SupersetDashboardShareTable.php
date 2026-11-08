@@ -73,6 +73,12 @@ class SupersetDashboardShareTable extends DataManager
 				->configureDefaultValue(0),
 			(new Fields\DatetimeField('LOGIN_LOCKED_TILL'))
 				->configureNullable(),
+			(new Fields\IntegerField('DISABLED_BY_ID'))
+				->configureNullable(),
+			(new Fields\DatetimeField('DATE_DISABLED'))
+				->configureNullable(),
+			(new Fields\DatetimeField('DATE_LAST_OPENED'))
+				->configureNullable(),
 			(new ReferenceField(
 				'DASHBOARD',
 				SupersetDashboardTable::class,

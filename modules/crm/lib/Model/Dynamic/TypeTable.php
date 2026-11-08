@@ -11,6 +11,7 @@ use Bitrix\Crm\EventRelationsTable;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Integration\IntranetManager;
+use Bitrix\Crm\MessageSender\CustomTemplate\CrmZone;
 use Bitrix\Crm\Model\AssignedTable;
 use Bitrix\Crm\Model\FieldContentTypeTable;
 use Bitrix\Crm\Model\ItemCategoryTable;
@@ -28,6 +29,7 @@ use Bitrix\Crm\Service\Timeline\Monitor;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\Timeline\TimelineEntry;
 use Bitrix\Crm\V2\Internal\Integration\Rest\V3\SchemaCacheInvalidator;
+use Bitrix\Crm\V2\Internal\Service\Ai\FieldFillPolicyService;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\Config\Option;
@@ -50,6 +52,7 @@ use Bitrix\Main\ORM\Query\Result as QueryResult;
 use Bitrix\Main\Result;
 use Bitrix\Main\Security\Random;
 use Bitrix\Main\SystemException;
+use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UserField;
 
@@ -265,6 +268,13 @@ class TypeTable extends UserField\Internal\TypeDataManager
 			->configureDefaultValue(null)
 			->addValidator([static::class, 'validateDaysBeforeClose'])
 		;
+		$fieldsMap[] = (new ORM\Fields\TextField('DESCRIPTION'))
+			->configureNullable()
+			->addValidator(new ORM\Fields\Validators\LengthValidator(null, 1000))
+			// Emoji::encode() and Emoji::decode() turn NULL into '', and NULL means "no description" here
+			->addSaveDataModifier(static fn(?string $value): ?string => $value === null ? null : Emoji::encode($value))
+			->addFetchDataModifier(static fn(?string $value): ?string => $value === null ? null : Emoji::decode($value))
+		;
 
 		return $fieldsMap;
 	}
@@ -445,6 +455,8 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		EntityConversionMapTable::deleteByEntityTypeId($entityTypeId);
 		EntityRelationTable::deleteByEntityTypeId($entityTypeId);
 		IntranetManager::deleteCustomPagesByEntityTypeId($entityTypeId);
+		FieldFillPolicyService::getInstance()->clearByEntityTypeId($entityTypeId);
+		CrmZone::cleanupTemplatesByEntityType($entityTypeId);
 
 		DynamicController::getInstance($entityTypeId)->eraseAll();
 
@@ -792,7 +804,14 @@ class TypeTable extends UserField\Internal\TypeDataManager
 		}
 
 		static::clearBindingMenuCache();
-		static::clearRestCacheIfSchemaAffected($data, $oldData);
+		if (array_key_exists('TITLE', $data) && $data['TITLE'] !== $oldData['TITLE'])
+		{
+			static::clearRestCache();
+		}
+		else
+		{
+			static::clearRestCacheIfSchemaAffected($data, $oldData);
+		}
 
 		return parent::onAfterUpdate($event);
 	}

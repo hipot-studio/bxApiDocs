@@ -7,6 +7,7 @@ namespace Bitrix\Rest\Internal\Model;
 use Bitrix\Rest\Internal\Entity\Application\AppOrigin;
 use Bitrix\Rest\Internal\Entity\Application\AppPricingModel;
 use Bitrix\Rest\Internal\Entity\Application\AppLicenseState;
+use Bitrix\Rest\Public\Provider\Dto\ApplicationStatus;
 
 enum AppStatus: string
 {
@@ -42,6 +43,19 @@ enum AppStatus: string
 			self::Trial => AppLicenseState::Trial,
 			self::Demo => AppLicenseState::Demo,
 			self::Free, self::Local => null,
+		};
+	}
+
+	public static function toPublicStatus(?string $status): ApplicationStatus
+	{
+		return match (self::tryFrom((string)$status)) {
+			self::Local => ApplicationStatus::Local,
+			self::Free => ApplicationStatus::Free,
+			self::Paid => ApplicationStatus::Paid,
+			self::Demo => ApplicationStatus::Demo,
+			self::Trial => ApplicationStatus::Trial,
+			self::Subscription => ApplicationStatus::Subscription,
+			null => ApplicationStatus::Unknown,
 		};
 	}
 

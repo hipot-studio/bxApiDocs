@@ -30,10 +30,19 @@ final class CatalogItemFilter
 	private ?int $userContextId = null;
 	private bool $includeDeactivated = false;
 	private ?string $pairingIss = null;
+	private ?string $pairingIssOrUnbound = null;
+	private ?string $externalId = null;
+	private ?array $appChatIds = null;
 	private ?bool $hiddenState = null;
+	private ?bool $favoriteState = null;
 	private ?bool $notViewedByUser = null;
 	private ?DateTime $viewSession = null;
 	private ?ConditionTree $where = null;
+	private bool $needsAppChatTeardown = false;
+
+	private bool $needsAppChatSync = false;
+
+	private bool $hasAppChat = false;
 
 	public function id(?int $id): self
 	{
@@ -152,6 +161,18 @@ final class CatalogItemFilter
 		return $this->hiddenState;
 	}
 
+	public function favoriteState(?bool $favoriteState): self
+	{
+		$this->favoriteState = $favoriteState;
+
+		return $this;
+	}
+
+	public function getFavoriteState(): ?bool
+	{
+		return $this->favoriteState;
+	}
+
 	public function notViewedByUser(?bool $notViewedByUser): self
 	{
 		$this->notViewedByUser = $notViewedByUser;
@@ -199,6 +220,42 @@ final class CatalogItemFilter
 		return $this->includeDeactivated;
 	}
 
+	public function needsAppChatTeardown(bool $needs = true): self
+	{
+		$this->needsAppChatTeardown = $needs;
+
+		return $this;
+	}
+
+	public function getNeedsAppChatTeardown(): bool
+	{
+		return $this->needsAppChatTeardown;
+	}
+
+	public function needsAppChatSync(bool $needs = true): self
+	{
+		$this->needsAppChatSync = $needs;
+
+		return $this;
+	}
+
+	public function getNeedsAppChatSync(): bool
+	{
+		return $this->needsAppChatSync;
+	}
+
+	public function hasAppChat(bool $has = true): self
+	{
+		$this->hasAppChat = $has;
+
+		return $this;
+	}
+
+	public function getHasAppChat(): bool
+	{
+		return $this->hasAppChat;
+	}
+
 	public function pairingIss(?string $iss): self
 	{
 		$this->pairingIss = $iss;
@@ -209,6 +266,44 @@ final class CatalogItemFilter
 	public function getPairingIss(): ?string
 	{
 		return $this->pairingIss;
+	}
+
+	public function pairingIssOrUnbound(?string $iss): self
+	{
+		$this->pairingIssOrUnbound = $iss;
+
+		return $this;
+	}
+
+	public function getPairingIssOrUnbound(): ?string
+	{
+		return $this->pairingIssOrUnbound;
+	}
+
+	public function externalId(?string $externalId): self
+	{
+		$this->externalId = $externalId;
+
+		return $this;
+	}
+
+	public function getExternalId(): ?string
+	{
+		return $this->externalId;
+	}
+
+	public function appChatIds(?array $chatIds): self
+	{
+		$this->appChatIds = $chatIds === null
+			? null
+			: array_values(array_unique(array_filter(array_map('intval', $chatIds), static fn (int $id): bool => $id > 0)));
+
+		return $this;
+	}
+
+	public function getAppChatIds(): ?array
+	{
+		return $this->appChatIds;
 	}
 
 	public function getId(): ?int

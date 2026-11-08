@@ -27,12 +27,27 @@ class BaseProviderOptions
 
 	private function initStructureActionAndAccessFilter(array $options): void
 	{
-		$this->structureAction = StructureAction::tryFrom($options['restricted']);
+		$this->structureAction = self::readEnumOption($options, 'restricted', StructureAction::class);
 
 		$this->accessFilter = $this->structureAction
 			? new NodeAccessFilter($this->structureAction, allowedLevels: $this->allowedPermissionLevels)
 			: null
 		;
+	}
+
+	/**
+	 * Reads a string-backed enum option out of raw selector options.
+	 *
+	 * Options come from the client as-is, so a key may be absent or hold a non-string value.
+	 * Both cases mean "not requested" and must yield null instead of a warning or a TypeError.
+	 *
+	 * @param class-string<\BackedEnum> $enumClass
+	 */
+	protected static function readEnumOption(array $options, string $key, string $enumClass): ?\BackedEnum
+	{
+		$value = $options[$key] ?? null;
+
+		return is_string($value) ? $enumClass::tryFrom($value) : null;
 	}
 
 	private function initRestricted(array $options): void

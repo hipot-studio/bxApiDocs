@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Internal\Service\SourceGeneration;
 
+use Bitrix\Mail\Internal\Service\Mailbox\SettingsWriteCoordinator;
+use Bitrix\Mail\Internal\Service\SenderCacheCleaner;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Mail\Internal\SenderTable;
@@ -40,9 +42,12 @@ class SmtpSnapshotSwitcher
 		{
 			foreach ($validated->getErrors() as $error)
 			{
+				$customData = $error->getCustomData();
+				$type = is_array($customData) ? ($customData['type'] ?? null) : null;
 				$result->addError(new Error(
 					MigrationMetrics::withoutSecretsOf($config, $error->getMessage()),
 					self::ERROR_CONNECTION_UNAVAILABLE,
+					is_string($type) ? ['type' => $type] : null,
 				));
 			}
 
@@ -62,6 +67,7 @@ class SmtpSnapshotSwitcher
 	}
 
 	/**
+	 * Joins the caller transaction; cache effects belong to its after-commit phase.
 	 * @param array<string, mixed> $mailbox
 	 * @param array<string, mixed> $smtp
 	 */
@@ -74,43 +80,31 @@ class SmtpSnapshotSwitcher
 	{
 		$result = new Result();
 		$connection = Application::getConnection();
-		$lockedSenderIds = [];
-		$rows = $connection->query(sprintf(
-			"SELECT ID FROM %s WHERE PARENT_MODULE_ID = 'mail' AND PARENT_ID = %u ORDER BY ID FOR UPDATE",
+		$senders = $connection->query(sprintf(
+			"SELECT * FROM %s WHERE PARENT_MODULE_ID = 'mail' AND PARENT_ID = %u ORDER BY ID FOR UPDATE",
 			SenderTable::getTableName(),
 			$mailboxId,
-		));
-		while ($row = $rows->fetch())
-		{
-			$lockedSenderIds[] = (int)$row['ID'];
-		}
-
-		if (count($lockedSenderIds) > 1)
+		))->fetchAll();
+		if (count($senders) > 1)
 		{
 			return $result->addError(new Error(
 				sprintf('The mailbox %u has more than one SMTP sender', $mailboxId),
 				self::ERROR_SENDER_AMBIGUOUS,
 			));
 		}
-
-		$sender = $lockedSenderIds === []
-			? null
-			: SenderTable::getByPrimary($lockedSenderIds[0], [
-				'select' => ['ID', 'EMAIL', 'OPTIONS'],
-			])->fetch()
-		;
-		if ($lockedSenderIds !== [] && $sender === false)
+		$sender = $senders[0] ?? null;
+		if ($sender !== null)
 		{
-			return $result->addError(new Error(
-				'The mailbox SMTP sender is unreadable',
-				self::ERROR_SENDER_WRITE_FAILED,
-			));
+			$sender['OPTIONS'] = SettingsWriteCoordinator::decodeStoredField(
+				SenderTable::class,
+				'OPTIONS',
+				$sender['OPTIONS'],
+			);
 		}
 
 		$options = is_array($sender['OPTIONS'] ?? null)
 			? $sender['OPTIONS']
-			: ['source' => 'mail.client.config']
-		;
+			: ['source' => 'mail.client.config'];
 		$options['smtp'] = $smtp;
 		$storedOptions = SenderTable::getEntity()
 			->getField('OPTIONS')
@@ -157,6 +151,7 @@ class SmtpSnapshotSwitcher
 			$update,
 			$senderId,
 		), $binds);
+
 		return $result->setData(['cacheChange' => [
 			'senderId' => $senderId,
 			'oldEmail' => (string)$sender['EMAIL'],
@@ -171,8 +166,10 @@ class SmtpSnapshotSwitcher
 		$oldEmail = $change['oldEmail'] ?? null;
 		$newEmail = (string)$change['newEmail'];
 
-		Sender::clearSenderCache($senderId, is_string($oldEmail) ? $oldEmail : null);
-		Sender::clearSenderCache($senderId, $newEmail);
-		Sender::clearIdentitySenderCache($senderId, 'mail', $mailboxId);
+		(new SenderCacheCleaner())->clearForSender(
+			$senderId,
+			[is_string($oldEmail) ? $oldEmail : '', $newEmail],
+			[['parentModuleId' => 'mail', 'parentId' => $mailboxId]],
+		);
 	}
 }

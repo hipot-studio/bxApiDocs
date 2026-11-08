@@ -8,6 +8,7 @@
 
 namespace Bitrix\Im;
 
+use Bitrix\Im\V2\Entity\Command\CommandAccessPolicy;
 use Bitrix\Im\V2\Entity\User\Data\BotData;
 use Bitrix\Main,
 	Bitrix\Main\Localization\Loc,
@@ -142,6 +143,8 @@ class Command
 			}
 		}
 
+		\Bitrix\Im\V2\Entity\Command\ChatCommandList::cleanAllCache();
+
 		return $commandId;
 	}
 
@@ -167,6 +170,19 @@ class Command
 				return false;
 		}
 
+		// Use the caller-supplied BOT_ID when known (e.g. Bot::unRegister already has it) to avoid
+		// an N+1 SELECT per command; fall back to a single lookup only when it was not passed.
+		$botId = isset($command['BOT_ID']) ? (int)$command['BOT_ID'] : 0;
+		if ($botId <= 0)
+		{
+			$commandRow = \Bitrix\Im\Model\CommandTable::query()
+				->setSelect(['BOT_ID'])
+				->where('ID', $commandId)
+				->fetch()
+			;
+			$botId = (int)($commandRow['BOT_ID'] ?? 0);
+		}
+
 		\Bitrix\Im\Model\CommandTable::delete($commandId);
 
 		$orm = \Bitrix\Im\Model\CommandLangTable::getList(Array(
@@ -179,6 +195,15 @@ class Command
 
 		$cache = \Bitrix\Main\Data\Cache::createInstance();
 		$cache->cleanDir(self::CACHE_PATH);
+
+		\Bitrix\Im\V2\Entity\Command\ChatCommandList::cleanAllCache();
+
+		// The onAfterDelete ORM hook resolves BOT_ID after the row is gone (always null),
+		// so invalidate the V2 per-bot command cache explicitly here.
+		if ($botId > 0)
+		{
+			\Bitrix\Im\V2\Entity\Command\Command::cleanCache($botId);
+		}
 
 		if (\Bitrix\Main\Loader::includeModule('pull'))
 		{
@@ -214,8 +239,10 @@ class Command
 		if ($appId <> '' && $commands[$commandId]['APP_ID'] != $appId)
 			return false;
 
+		$langChanged = false;
 		if (isset($updateFields['LANG']) && $commands[$commandId]['MODULE_ID'] == 'rest')
 		{
+			$langChanged = true;
 			$orm = \Bitrix\Im\Model\CommandLangTable::getList(Array(
 				'filter' => Array('=COMMAND_ID' => $commandId)
 			));
@@ -294,6 +321,14 @@ class Command
 
 			$cache = \Bitrix\Main\Data\Cache::createInstance();
 			$cache->cleanDir(self::CACHE_PATH);
+		}
+
+		// Skip cache invalidation on a no-op update: an authorized imbot.v2.Command.update with
+		// empty fields must not flush the whole per-chat command-list catalog (avoids a cheap
+		// cache-stampede vector). Invalidate only when a row field or localization actually changed.
+		if (!empty($update) || $langChanged)
+		{
+			\Bitrix\Im\V2\Entity\Command\ChatCommandList::cleanAllCache();
 		}
 
 		return true;
@@ -641,48 +676,45 @@ class Command
 
 		$isExtranet = \Bitrix\Im\User::getInstance($messageFields['FROM_USER_ID'])->isExtranet();
 
+		$chatEntityType = $messageFields['CHAT_ENTITY_TYPE'] ?? null;
+		if ($messageFields['MESSAGE_TYPE'] == IM_MESSAGE_PRIVATE)
+		{
+			$participantBotIds = [(int)$messageFields['TO_USER_ID']];
+		}
+		else
+		{
+			$participantBotIds = array_map('intval', array_keys($relations));
+		}
+
 		$commands = self::getListCache();
 		foreach ($commands as $value)
 		{
-			$chatEntityType = $messageFields['CHAT_ENTITY_TYPE'] ?? null;
-			if (
-				$chatEntityType === 'LIVECHAT'
-				|| (
-					$chatEntityType === 'LINES'
-					&& BotData::getInstance((int)$value['BOT_ID'])->getOpenline() !== 'Y'
-				)
-			)
+			if ($value['COMMAND'] != $command)
 			{
 				continue;
 			}
-			if ($value['COMMAND'] == $command)
-			{
-				if ($value['EXTRANET_SUPPORT'] == 'N' && $isExtranet)
-				{
-					continue;
-				}
-				if ($value['COMMON'] == 'N')
-				{
-					if ($messageFields['MESSAGE_TYPE'] == IM_MESSAGE_PRIVATE)
-					{
-						if ($messageFields['TO_USER_ID'] != $value['BOT_ID'])
-						{
-							continue;
-						}
-					}
-					else
-					{
-						if (!isset($relations[$value['BOT_ID']]))
-						{
-							continue;
-						}
-					}
-				}
 
-				$result[$value['COMMAND_ID']] = $value;
-				$result[$value['COMMAND_ID']]['CONTEXT'] = $messageFields['COMMAND_CONTEXT'];
-				$result[$value['COMMAND_ID']]['EXEC_PARAMS'] = $execParams;
+			$botId = (int)$value['BOT_ID'];
+
+			$openlineByBotId = [];
+			if ($chatEntityType === \Bitrix\Im\V2\Chat::ENTITY_TYPE_LINE)
+			{
+				$openlineByBotId[$botId] = BotData::getInstance($botId)->getOpenline() === 'Y';
 			}
+
+			if (!CommandAccessPolicy::isVisible($value['COMMON'], $botId, $participantBotIds, $chatEntityType, $openlineByBotId))
+			{
+				continue;
+			}
+
+			if ($value['EXTRANET_SUPPORT'] == 'N' && $isExtranet)
+			{
+				continue;
+			}
+
+			$result[$value['COMMAND_ID']] = $value;
+			$result[$value['COMMAND_ID']]['CONTEXT'] = $messageFields['COMMAND_CONTEXT'];
+			$result[$value['COMMAND_ID']]['EXEC_PARAMS'] = $execParams;
 		}
 
 		return $result;

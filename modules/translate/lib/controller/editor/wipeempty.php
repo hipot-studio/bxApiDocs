@@ -145,10 +145,17 @@ class WipeEmpty
 			{
 				$testPath = Translate\IO\Path::replaceLangId($testPath, '#LANG_ID#');
 
-				foreach (self::$enabledLanguagesList as $langId)
+				// the path depends on the language code, so all of them are resolved before the first write
+				$pathsResult = $this->resolveLangFilePaths($testPath, self::$enabledLanguagesList);
+				if (!$pathsResult->isSuccess())
 				{
-					$langRelPath = Translate\IO\Path::replaceLangId($testPath, $langId);
-					$langFullPath = Translate\IO\Path::tidy(self::$documentRoot.'/'.$langRelPath);
+					$this->addError(new Main\Error(Loc::getMessage('TR_CLEAN_FILE_NOT_LANG', ['#FILE#' => $testPath])));
+					$isOk = false;
+				}
+
+				foreach ($pathsResult->getData() as $langId => $langFilePath)
+				{
+					$langFullPath = self::$documentRoot. $langFilePath;
 					$langFullPath = Main\Localization\Translation::convertLangPath($langFullPath, $langId);
 
 					if ($this->removeEmptyParents($langFullPath))
@@ -174,10 +181,17 @@ class WipeEmpty
 					$testPath = Translate\IO\Path::replaceLangId($testPath, '#LANG_ID#');
 				}
 
-				foreach (self::$enabledLanguagesList as $langId)
+				// the path depends on the language code, so all of them are resolved before the first write
+				$pathsResult = $this->resolveLangFilePaths($testPath. '/.nonExistentTestFile.php', self::$enabledLanguagesList);
+				if (!$pathsResult->isSuccess())
 				{
-					$langRelPath = Translate\IO\Path::replaceLangId($testPath. '/.nonExistentTestFile.php', $langId);
-					$langFullPath = Translate\IO\Path::tidy(self::$documentRoot.'/'.$langRelPath);
+					$this->addError(new Main\Error(Loc::getMessage('TR_CLEAN_FILE_NOT_LANG', ['#FILE#' => $testPath])));
+					$isOk = false;
+				}
+
+				foreach ($pathsResult->getData() as $langId => $langFilePath)
+				{
+					$langFullPath = self::$documentRoot. $langFilePath;
 					$langFullPath = Main\Localization\Translation::convertLangPath($langFullPath, $langId);
 
 					if ($this->removeEmptyParents($langFullPath))

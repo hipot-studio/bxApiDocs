@@ -48,6 +48,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 	private const COLLECTION_LIMIT = 500;
 
 	private ?StorageItemProvider $storageItemProvider = null;
+	private bool $isEmptyResult = false;
 
 	public function __construct($name)
 	{
@@ -94,6 +95,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 
 	protected function prepareProperties(): void
 	{
+		$this->isEmptyResult = false;
 		parent::prepareProperties();
 
 		try
@@ -116,12 +118,12 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 	protected function findStorageItemId(): int
 	{
 		$storageId = $this->findStorageId();
-		if (!$storageId)
+		if (!$storageId || (new StorageTypeProvider())->getById($storageId) === null)
 		{
 			return 0;
 		}
 
-		$conditionGroup = new ConditionGroup($this->DynamicFilterFields);
+		$conditionGroup = new ConditionGroup($this->filterFieldsOrNull());
 		$provider = $this->getStorageItemProvider();
 
 		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
@@ -132,12 +134,14 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 			return 0;
 		}
 
-		$item = $provider->getItems([
+		$items = $provider->getItems([
 			'filter' => $filter,
 			'select' => ['ID'],
 			'order' => ['ID' => 'DESC'],
 			'limit' => 1,
-		])?->getFirstCollectionItem();
+		]);
+		$item = $items?->getFirstCollectionItem();
+		$this->isEmptyResult = $items !== null && $item === null;
 
 		return $item ? $item->getId() : 0;
 	}
@@ -160,7 +164,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 	{
 		$errors = parent::checkProperties();
 
-		if ($this->ItemId <= 0)
+		if ($this->ItemId <= 0 && !$this->isEmptyResult)
 		{
 			$errors->setError(new Error(Loc::getMessage('BIZPROC_SRA_ITEM_NOT_FOUND')));
 		}
@@ -263,6 +267,12 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 
 	protected function executeSingleMode(StorageItemProvider $provider): void
 	{
+		$this->clearReturnFields();
+		if ($this->isEmptyResult)
+		{
+			return;
+		}
+
 		$select = $this->getSelectFields();
 		$item = $provider->getById((int)$this->ItemId, $select)?->toArray();
 		if (!$item)
@@ -337,7 +347,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 
 	protected function executeCollectionMode(StorageItemProvider $provider): void
 	{
-		$conditionGroup = new ConditionGroup($this->DynamicFilterFields);
+		$conditionGroup = new ConditionGroup($this->filterFieldsOrNull());
 		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
 
 		$storageId = $this->findStorageId();
@@ -563,7 +573,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		return StorageActivityService::getScopeConsumption();
 	}
 
-	public static function validateProperties($testProperties = [], \CBPWorkflowTemplateUser $user = null)
+	public static function validateProperties($testProperties = [], ?\CBPWorkflowTemplateUser $user = null)
 	{
 		$errors = [];
 
@@ -580,11 +590,9 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 		}
 
 		$hasStorage = !CBPHelper::isEmptyValue($testProperties['StorageId'] ?? null)
-			|| !CBPHelper::isEmptyValue($testProperties['StorageCode'] ?? null)
-		;
+			|| !CBPHelper::isEmptyValue($testProperties['StorageCode'] ?? null);
 		$hasReturnFields = !CBPHelper::isEmptyValue($testProperties['ReturnFields'] ?? null)
-			|| !CBPHelper::isEmptyValue($testProperties['ReturnFieldsByStorageCode'] ?? null)
-		;
+			|| !CBPHelper::isEmptyValue($testProperties['ReturnFieldsByStorageCode'] ?? null);
 
 		if ($hasStorage && !$hasReturnFields)
 		{
@@ -703,6 +711,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 			],
 			'DynamicFilterFields' => [
 				'Name' => Loc::getMessage('BIZPROC_SRA_FILTER_FIELDS_PROPERTY'),
+				'ShowFieldLabel' => false,
 				'FieldName' => 'filter_fields',
 				'Type' => \Bitrix\Bizproc\FieldType::CUSTOM,
 				'Required' => false,
@@ -718,7 +727,7 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 					'returnFieldsIds' => $returnFields,
 					'returnFieldsMap' => $returnFieldsMap,
 					'systemReturnFields' => static::getSystemFields(),
-				]
+				],
 			],
 			'IsExpanded' => [
 				'Name' => '',
@@ -750,6 +759,62 @@ class CBPReadDataStorageActivity extends BaseActivity implements IBPConfigurable
 				'Hidden' => true,
 			],
 		];
+	}
+
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		// Persisted but not typable via getPropertiesMap(): CUSTOM filter tree and the dynamic output field map.
+		return ['DynamicFilterFields', 'OutputFields'];
+	}
+
+	/**
+	 * The filter in the shape the condition group takes, or nothing. A template may carry it otherwise - an older
+	 * save, or a graph an agent sent before the shape of the value was described - and a TypeError here would
+	 * kill the whole process instead of leaving the block to report that it read nothing.
+	 */
+	private function filterFieldsOrNull(): ?array
+	{
+		$filter = $this->DynamicFilterFields;
+		if (!is_array($filter))
+		{
+			return null;
+		}
+
+		if (is_array($filter['items'] ?? null))
+		{
+			$filter['items'] = array_values(array_filter($filter['items'], self::conditionIsTakeable(...)));
+		}
+
+		return $filter;
+	}
+
+	/**
+	 * Whether {@see \Bitrix\Bizproc\Automation\Engine\Condition} can take the condition of a filter item at
+	 * all: it addresses the field and the object by string, while the group accepts an item by a non-empty
+	 * `field` of any type ({@see ConditionGroup::__construct()}), so an array there raises instead of filtering.
+	 * An item the group drops on its own is left to it - dropping it here says nothing new.
+	 *
+	 * Reading by the conditions that are left is deliberate here and deliberately NOT what the delete node does
+	 * ({@see \CBPDeleteDataStorageActivity::prepareFilterContext()}): a read that returned too much is answered
+	 * by looking at what the block output, while a deletion cannot be looked at afterwards.
+	 */
+	private static function conditionIsTakeable(mixed $item): bool
+	{
+		$condition = is_array($item) ? ($item[0] ?? null) : null;
+		if (!is_array($condition))
+		{
+			return true;
+		}
+
+		foreach (['field', 'object'] as $key)
+		{
+			if (isset($condition[$key]) && !is_scalar($condition[$key]))
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	private function clearReturnFields(): void

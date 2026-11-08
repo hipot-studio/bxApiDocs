@@ -3,6 +3,7 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
 use Bitrix\Disk\Internals\EditSessionTable;
 use Bitrix\Disk\Internals\Entity\ModelSynchronizer;
 use Bitrix\Disk\Internals\Error\Error;
@@ -293,7 +294,7 @@ final class FileLink extends File
 	 *
 	 * @param array $file Structure like $_FILES.
 	 * @param int $createdBy Id of user.
-	 * @param bool $disableJoin If set false the method attempts to join version with last version (@see \Bitrix\Disk\File::SECONDS_TO_JOIN_VERSION).
+	 * @param bool $disableJoin If set false the method attempts to join version with last version (@see \Bitrix\Disk\Configuration::getSecondsToJoinVersion()).
 	 * @return Version|null
 	 * @throws \Bitrix\Main\SystemException
 	 */
@@ -455,6 +456,11 @@ final class FileLink extends File
 		{
 			return false;
 		}
+
+		// A link is a place the real object is seen at, and the journal is kept over real objects: the
+		// place went, the file behind it stayed. The record is published inside a cascade too, because
+		// the one record on the root of that cascade names an object of another audience.
+		$this->publishToJournal(ChangeType::Updated, $deletedBy, ['places']);
 
 		$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterDeleteFile", array($this->getId(), $deletedBy, array(
             'STORAGE_ID' => $this->getStorageId(),

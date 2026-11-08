@@ -3,6 +3,7 @@
 namespace Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service;
 
 use Bitrix\Bizproc\Activity\ActivityDescription;
+use Bitrix\Bizproc\Activity\Dto\NodeSettings;
 use Bitrix\Bizproc\Activity\Enum\ActivityNodeType;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\AI\Agent\Generator\TemplateBuilder\ActivityRegistry;
@@ -10,6 +11,8 @@ use Bitrix\Bizproc\Internal\Service\Activity\ComplexActivityService;
 use Bitrix\Bizproc\Internal\Service\Container as BizprocContainer;
 use Bitrix\Bizproc\Public\Service\Activity\ActivityNameGeneratorService;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
+use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
+use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable;
 use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\PortRuleDto;
 use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\Rule\ActionExpressionDto;
 use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\Rule\ConditionExpression\FieldDto;
@@ -46,7 +49,10 @@ use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Entity\Draft;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Layout\AgentBlockGeometry;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Layout\FrameGeometry;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Layout\TopologyLayoutEngine;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\BlockIdGrammar;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\FrameBlockMatcher;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\ValidationProfile;
+use Bitrix\BizprocDesigner\Internal\Service\Container;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Error;
@@ -59,8 +65,6 @@ final class AiAssistantDraftConverterService
 {
 	use AgentBlockNamingTrait;
 
-	private const BLOCK_WIDTH = 200;
-	private const BLOCK_HEIGHT = 50;
 	private const PORT_POSITION = 1;
 	/**
 	 * Titles the complex node's dynamic ports the same way the manual editor does (shared frontend
@@ -73,7 +77,6 @@ final class AiAssistantDraftConverterService
 	private const START_POSITION_X = 300;
 	private const START_POSITION_Y = 50;
 	private const BLOCK_MARGIN = 100;
-	private const TITLE_PROPERTY_NAME = 'Title';
 
 	/** Shared diagnostic channel with the catalog services (no new log channel). */
 	private const LOGGER_ID = 'bizprocdesigner.aiassistant.block_catalog';
@@ -82,6 +85,7 @@ final class AiAssistantDraftConverterService
 
 	private string $uniqueBlockSalt;
 	private ?ActivityRegistry $activityRegistry = null;
+	private ?NodeTopologyResolver $nodeTopologyResolver = null;
 	private readonly AgentBlockMetadataResolver $metadataResolver;
 	private ?ComplexActivityService $complexActivityService = null;
 	private ?ActivityNameGeneratorService $nameGeneratorService = null;
@@ -91,6 +95,29 @@ final class AiAssistantDraftConverterService
 	private array $nodeActionDescriptionCache = [];
 	/** @var array<string, list<string>> ADDITIONAL_RESULT marker keys per normalized activity code */
 	private array $additionalResultKeysCache = [];
+	/** @var array<string, list<string>> passthrough setting names per (normalized activity code, document type) */
+	private array $passthroughSettingNamesCache = [];
+	/** @var array<string, array<string, mixed>> enforced setting values per (normalized code, document type) */
+	private array $enforcedSettingValuesCache = [];
+	/**
+	 * Whether the identifiers of the graph being converted were judged by the grammar on the way in
+	 * ({@see self::makeActivityId}). Read from the profile of the entry rather than from the source itself, so
+	 * the converter asks the very question the check asks ({@see ValidationProfile::enforcesBlockIdGrammar()}).
+	 */
+	private bool $idsHeldToGrammar = false;
+	/** Bound template of the graph being converted; 0 when the caller has none ({@see self::getBaselineActivities}). */
+	private int $baselineTemplateId = 0;
+	/** Draft the graph being converted was read from; 0 when the caller names none ({@see self::carriesSourceName}). */
+	private int $sourceDraftId = 0;
+	/**
+	 * @var array<string, array{Type: string, Properties: array}>|null names of the source graph, read at most once
+	 *      per conversion ({@see self::readSourceNames})
+	 */
+	private ?array $sourceNames = null;
+	/** @var array<int, array|null> published TEMPLATE per id, read lazily and at most once per id */
+	private array $baselineTemplateById = [];
+	/** @var array<int, array<string, array{Type: string, Properties: array}>> published nodes by name, per id */
+	private array $baselineActivitiesById = [];
 
 	public function __construct(?AgentBlockMetadataResolver $metadataResolver = null)
 	{
@@ -101,6 +128,13 @@ final class AiAssistantDraftConverterService
 		);
 	}
 
+	/**
+	 * @param array<string, array{
+	 *     type: string,
+	 *     presetId: string|null,
+	 *     dimensions: array{width: int|null, height: int|null}
+	 * }> $boundBlocks
+	 */
 	public function covertFromAgentInput(
 		int $draftId,
 		int $templateId,
@@ -108,14 +142,26 @@ final class AiAssistantDraftConverterService
 		AgentBlockCollection $blocks,
 		AgentConnectionCollection $connections,
 		array $documentType = [],
-		RequestSource $source = RequestSource::Rest,
+		RequestSource $source = RequestSource::Marta,
+		array $boundBlocks = [],
 	): Draft
 	{
+		// The bound template is the baseline a derived value is restored from when its dialog refuses to answer
+		// ({@see self::applyAdditionalResult}), and one of the two source graphs a name is judged against
+		// ({@see self::carriesSourceName}); nothing else on the ordinary path reads it.
+		$this->baselineTemplateId = $templateId;
+		$this->idsHeldToGrammar = ValidationProfile::fromSource($source)->enforcesBlockIdGrammar();
+
+		// The graph the caller was given, which a name is judged against when the grammar was not asked for one
+		// ({@see self::carriesSourceName}). Dropped per call: one instance of this service converts many graphs.
+		$this->sourceDraftId = $draftId;
+		$this->sourceNames = null;
+
 		return new Draft(
 			draftId: $draftId,
 			templateId: $templateId,
 			userId: $userId,
-			blocks: $this->makeBlocks($blocks, $connections, $documentType, $source),
+			blocks: $this->makeBlocks($blocks, $connections, $documentType, $source, $boundBlocks),
 			connections: $this->makeConnections($connections),
 		);
 	}
@@ -125,6 +171,7 @@ final class AiAssistantDraftConverterService
 		AgentConnectionCollection $connections,
 		array $documentType = [],
 		RequestSource $source = RequestSource::Marta,
+		array $boundBlocks = [],
 	): BlockCollection
 	{
 		$iconMap = $this->metadataResolver->getIconMap();
@@ -165,6 +212,7 @@ final class AiAssistantDraftConverterService
 			}
 
 			$isComplex = $nodeType === NodeType::Complex && $block->rules !== null;
+			$dimensions = $this->resolveBlockDimensions($block, $activityId, $boundBlocks);
 
 			$collection->add(
 				new Block(
@@ -172,13 +220,13 @@ final class AiAssistantDraftConverterService
 					type: $nodeType,
 					x: $pos['x'],
 					y: $pos['y'],
-					width: self::BLOCK_WIDTH,
-					height: self::BLOCK_HEIGHT,
+					width: $dimensions['width'],
+					height: $dimensions['height'],
 					title: $systemName,
 					icon: $iconEntry['icon'] ?? '',
 					ports: $isComplex ? $this->makeComplexPorts($block) : $this->makePortsByBlock($block),
 					activityData: $isComplex
-						? $this->makeComplexActivityData($block, $activityId, $activityType, $documentType)
+						? $this->makeComplexActivityData($block, $activityId, $activityType, $systemName, $documentType)
 						: new ActivityData(
 							name: $activityId,
 							type: $activityType,
@@ -327,16 +375,12 @@ final class AiAssistantDraftConverterService
 		return $collection;
 	}
 
-	/**
-	 * Builds the block ports from the activity description (NODE_SETTINGS.ports via ActivityRegistry),
-	 * so the draft carries the same N-port topology as the node editor. Triggers keep output ports only.
-	 */
 	private function makePortsByBlock(AgentBlock $block): PortCollection
 	{
 		$ports = new PortCollection();
-		$isTrigger = $this->makeNodeType($block->type) === NodeType::Trigger;
+		$isTrigger = $this->makeNodeType($block->type, $block->presetId) === NodeType::Trigger;
 
-		foreach ($this->getActivityRegistry()->getDefaultPorts($block->type) as $port)
+		foreach ($this->getNodeTopology($block)->ports?->toArray() ?? [] as $port)
 		{
 			$direction = PortDirection::tryFrom((string)($port['type'] ?? ''));
 			if ($direction === null)
@@ -349,16 +393,65 @@ final class AiAssistantDraftConverterService
 				continue;
 			}
 
+			$title = (string)($port['title'] ?? '');
 			$ports->add(
 				new Port(
 					id: (string)($port['id'] ?? ''),
 					direction: $direction,
 					position: self::PORT_POSITION,
+					title: $title !== '' ? $title : null,
 				),
 			);
 		}
 
 		return $ports;
+	}
+
+	/**
+	 * @param array<string, array{
+	 *     type: string,
+	 *     presetId: string|null,
+	 *     dimensions: array{width: int|null, height: int|null}
+	 * }> $boundBlocks
+	 * @return array{width: int|null, height: int|null}
+	 */
+	private function resolveBlockDimensions(AgentBlock $block, string $activityId, array $boundBlocks): array
+	{
+		$prev = $boundBlocks[$activityId] ?? null;
+		if (
+			$prev !== null
+			&& $this->canonicalActivityCode((string)$prev['type']) === $this->canonicalActivityCode($block->type)
+			&& $this->normalizePresetId($prev['presetId'] ?? null) === $this->normalizePresetId($block->presetId)
+		)
+		{
+			return $prev['dimensions'];
+		}
+
+		$topology = $this->getNodeTopology($block);
+
+		return ['width' => $topology->width, 'height' => $topology->height];
+	}
+
+	private function canonicalActivityCode(string $activityType): string
+	{
+		return $this->getSearcher()->normalizeActivityCode($activityType);
+	}
+
+	private function getNodeTopology(AgentBlock $block): NodeSettings
+	{
+		return $this->getNodeTopologyResolver()->resolveNodeSettings(
+			$this->describeActivity($block->type, $block->presetId),
+		);
+	}
+
+	private function describeActivity(string $activityType, ?string $presetId): ?ActivityDescription
+	{
+		return $this->getNodeTopologyResolver()->describe($activityType, $presetId);
+	}
+
+	private function getNodeTopologyResolver(): NodeTopologyResolver
+	{
+		return $this->nodeTopologyResolver ??= new NodeTopologyResolver();
 	}
 
 	private function getActivityRegistry(): ActivityRegistry
@@ -425,20 +518,33 @@ final class AiAssistantDraftConverterService
 	 * dictionary (presets applied via {@see ComplexActivityService}) and stored on the host as the
 	 * canonical `Rules` property; the command produces Children/Links/InputNames/OutputNames (and, for
 	 * filters, the host FilterSettings/FilterReturnPropertiesMap/ReturnProperties).
+	 *
+	 * The rule engine keeps the edited template's document type, the context the manual editor saves rules in
+	 * ({@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Activity\Complex::saveSettingsAction}), while the
+	 * sub-actions themselves are assembled in the container's effective one
+	 * ({@see self::resolveSubActionDocumentType}).
 	 */
 	private function makeComplexActivityData(
 		AgentBlock $block,
 		string $activityId,
 		string $activityType,
+		string $systemName,
 		array $documentType,
 	): ActivityData
 	{
-		$portRuleDtoDictionary = $this->buildPortRuleDtoDictionary($block);
+		$portRuleDtoDictionary = $this->buildPortRuleDtoDictionary(
+			$block,
+			$this->resolveSubActionDocumentType($activityType, $documentType),
+		);
 
-		$properties = [
-			self::TITLE_PROPERTY_NAME => $block->title,
-			$this->resolveRulePropertyName($activityType) => $this->serializePortRuleDictionary($portRuleDtoDictionary),
-		];
+		$properties = $this->applyNodeNaming(
+			[
+				$this->resolveRulePropertyName($activityType) => $this->serializePortRuleDictionary($portRuleDtoDictionary),
+			],
+			$block->title,
+			$block->description,
+			$systemName,
+		);
 
 		$hostActivity = new ActivityData(
 			name: $activityId,
@@ -593,13 +699,44 @@ final class AiAssistantDraftConverterService
 	}
 
 	/**
+	 * Document type a container's sub-actions are described and asked under: the container's fixed document
+	 * when it locks one, the edited template's otherwise - the effective type
+	 * ({@see \Bitrix\BizprocDesigner\Internal\Service\Activity\NodeFilterAvailability::resolveEffectiveDocumentType}).
+	 *
+	 * The catalog builds the sub-action settings schema in exactly this context
+	 * ({@see ComplexBlockDetailFactory::build}) and the name/value cross-check judges the agent's settings
+	 * against that schema, so the declarations this path reads for the same sub-action - the enforced values,
+	 * the passthrough names and the settings dialog - have to be asked in it too. Otherwise a container with a
+	 * fixed document would publish its schema in one context and apply the declarations in another.
+	 */
+	private function resolveSubActionDocumentType(string $activityType, array $documentType): array
+	{
+		try
+		{
+			$fixedDocumentType = $this->getComplexActivityService()->getFixedDocumentTypeForNodeAction($activityType);
+
+			return Container::getNodeFilterAvailability()
+				->resolveEffectiveDocumentType($fixedDocumentType, $documentType)
+				?? $documentType
+			;
+		}
+		catch (\Throwable)
+		{
+			// Failure isolation, as everywhere on this path: a container whose fixed document cannot be read
+			// keeps the edited template's type instead of dropping the block out of the draft.
+			return $documentType;
+		}
+	}
+
+	/**
 	 * Maps the nested agent projection (DTO-01) onto the domain rule dictionary (map<portId, PortRuleDto>)
 	 * consumed by {@see ConvertRuleCommand}. This is the symmetric counterpart of the manual editor's
 	 * `extractRulePropertyValue`, so the same command produces an identical sub-graph.
 	 *
+	 * @param array $subActionDocumentType effective document type of the container ({@see self::resolveSubActionDocumentType})
 	 * @return array<string, PortRuleDto>
 	 */
-	private function buildPortRuleDtoDictionary(AgentBlock $block): array
+	private function buildPortRuleDtoDictionary(AgentBlock $block, array $subActionDocumentType): array
 	{
 		$dictionary = [];
 		foreach ($block->rules->portRules as $portId => $rules)
@@ -607,7 +744,10 @@ final class AiAssistantDraftConverterService
 			$ruleDtos = [];
 			foreach ($rules as $rule)
 			{
-				$ruleDtos[] = new RuleDto($rule->id, $this->buildRuleConstructions($rule, $block));
+				$ruleDtos[] = new RuleDto(
+					$rule->id,
+					$this->buildRuleConstructions($rule, $block, $subActionDocumentType),
+				);
 			}
 
 			$dictionary[$portId] = new PortRuleDto($portId, $ruleDtos);
@@ -619,7 +759,11 @@ final class AiAssistantDraftConverterService
 	/**
 	 * @return list<ConstructionDto>
 	 */
-	private function buildRuleConstructions(AgentComplexRule $rule, AgentBlock $block): array
+	private function buildRuleConstructions(
+		AgentComplexRule $rule,
+		AgentBlock $block,
+		array $subActionDocumentType,
+	): array
 	{
 		$constructions = [];
 		$previousWasCondition = false;
@@ -638,12 +782,12 @@ final class AiAssistantDraftConverterService
 				AgentComplexConstruction::TYPE_ACTION => new ConstructionDto(
 					$this->generateConstructionId(),
 					ConstructionType::ACTION,
-					$this->mapActionExpression($expression, $block),
+					$this->mapActionExpression($expression, $block, $subActionDocumentType),
 				),
 				AgentComplexConstruction::TYPE_FILTER => new ConstructionDto(
 					$this->generateConstructionId(),
 					ConstructionType::FILTER,
-					$this->mapFilterExpression($expression),
+					$this->mapFilterExpression($expression, $subActionDocumentType),
 				),
 				AgentComplexConstruction::TYPE_OUTPUT => new ConstructionDto(
 					$this->generateConstructionId(),
@@ -703,12 +847,23 @@ final class AiAssistantDraftConverterService
 	 * editor's palette): the resolved activity class becomes the child Type, the preset title/id are
 	 * stamped, and the agent settings fill the properties. Presets are mandatory - a naive child would
 	 * diverge from the editor.
+	 *
+	 * The values the sub-action's dialog derives on save are then synthesised the same way the flat block
+	 * gets them ({@see self::applySubActionAdditionalResult}), so a sub-action the agent assembled carries
+	 * what one saved by hand would.
+	 *
+	 * @param array $subActionDocumentType the container's effective document type, the context its sub-actions
+	 *        are described and cross-checked in ({@see self::resolveSubActionDocumentType})
 	 */
-	private function mapActionExpression(array $expression, AgentBlock $block): ActionExpressionDto
+	private function mapActionExpression(
+		array $expression,
+		AgentBlock $block,
+		array $subActionDocumentType,
+	): ActionExpressionDto
 	{
 		$activityCode = isset($expression['activityCode']) ? (string)$expression['activityCode'] : '';
 		// `document` binds the sub-action to a document via a bizproc expression `{=<sourceBlockId>:<propertyId>}`
-		// (e.g. `{=<triggerId>:ReturnDocument}`); downstream ({@see ConvertRuleCommand::resolveTargetFilterIdForAction},
+		// (e.g. `{=<triggerId>:ReturnDocument}`); downstream ({@see ConvertRuleCommand::resolveTargetFilterId},
 		// the runtime `setDocumentContext(string)`) parses/consumes it as a string. Accept only a non-empty string
 		// here - a non-string (e.g. a document-type triplet array, an invalid input) is dropped to null instead of
 		// being blindly `(string)`-cast into `"Array"`. Such invalid input is already rejected by
@@ -729,20 +884,38 @@ final class AiAssistantDraftConverterService
 
 		$nodeAction = $this->resolveNodeActionDescription($block->type, $activityCode);
 
-		$properties = $this->normalizeSettings($expression['settings'] ?? null);
-		if (!array_key_exists(self::TITLE_PROPERTY_NAME, $properties))
-		{
-			$properties[self::TITLE_PROPERTY_NAME] = $nodeAction?->getName() ?? '';
-		}
-
 		// Canonical node-action class (PascalCase) - the same value the manual editor keys its `actions`
 		// dictionary by ({@see Complex::loadSettingsAction}). Reused for both the child Type and the
 		// construction actionId so the settings dialog's `actions.get(actionId)` resolves. Falls back to the
 		// raw agent code only when the node-action is unresolved (an out-of-dictionary code the validator owns).
 		$actionClass = $nodeAction?->getClass() ?? $activityCode;
 
+		$settings = $this->normalizeSettings($expression['settings'] ?? null);
+
+		// The name is stamped AFTER the values the activity enforces, the order every manual save uses: the
+		// dialog writes the enforced values first and the title goes over them
+		// ({@see \Bitrix\BizprocDesigner\Public\Command\Activity\Settings\SaveCommandHandler},
+		// {@see \Bitrix\BizprocDesigner\Internal\Command\Activity\Complex\SaveSingleRuleCommand}), which is also
+		// how the flat block is laid out ({@see self::makeActivityProperties}). The sub-action's own name wins
+		// over an enforced one; absent it, the node-action preset's name is the default.
+		$title = array_key_exists(self::TITLE_PROPERTY_NAME, $settings)
+			? $settings[self::TITLE_PROPERTY_NAME]
+			: ($nodeAction?->getName() ?? '')
+		;
+
+		$properties = $this->applyEnforcedSettingValues($settings, $actionClass, $subActionDocumentType);
+		$properties[self::TITLE_PROPERTY_NAME] = $title;
+
+		$childName = $this->generateChildName();
+		$properties = $this->applySubActionAdditionalResult(
+			$properties,
+			$childName,
+			$actionClass,
+			$subActionDocumentType,
+		);
+
 		$activityData = [
-			'Name' => $this->generateChildName(),
+			'Name' => $childName,
 			'Type' => $actionClass,
 			'Activated' => 'Y',
 			'Properties' => $properties,
@@ -776,11 +949,23 @@ final class AiAssistantDraftConverterService
 	 * (`TargetFilterId`). A `filterId` supplied by the reverse projection is reused verbatim so the identity
 	 * survives a round-trip and those references keep resolving; a genuinely new filter (no id) still gets a
 	 * freshly generated name.
+	 *
+	 * Of the two declarations the other write paths read, only one is applied here: the values the backing activity
+	 * enforces, as on the flat block and the sub-action. The derived ADDITIONAL_RESULT descriptors those paths
+	 * synthesise ({@see self::applyAdditionalResult}) are not - no filter activity declares such a key today, so
+	 * this path has nothing to synthesise, and one that starts to has to be brought onto the synthesis deliberately
+	 * rather than being covered by a symmetry the code does not have.
+	 *
+	 * @param array $documentType the container's effective document type ({@see self::resolveSubActionDocumentType})
 	 */
-	private function mapFilterExpression(array $expression): ActionExpressionDto
+	private function mapFilterExpression(array $expression, array $documentType): ActionExpressionDto
 	{
 		$activityCode = isset($expression['activityCode']) ? (string)$expression['activityCode'] : '';
-		$settings = $this->normalizeSettings($expression['settings'] ?? null);
+		$settings = $this->applyEnforcedSettingValues(
+			$this->normalizeSettings($expression['settings'] ?? null),
+			$activityCode,
+			$documentType,
+		);
 
 		$filterName = isset($expression['filterId']) && is_string($expression['filterId']) && $expression['filterId'] !== ''
 			? $expression['filterId']
@@ -890,8 +1075,10 @@ final class AiAssistantDraftConverterService
 	 * system name, adds no Properties.Title; an empty/absent description adds no Properties.EditorComment.
 	 *
 	 * The user-facing Title/EditorComment are laid out AFTER the settings, so a setting that happens to be
-	 * named "Title"/"EditorComment" can never overwrite the block's name/description. Finally the computed
-	 * ADDITIONAL_RESULT descriptors (e.g. a CRM trigger's `Return`) are synthesised via applyAdditionalResult.
+	 * named "Title"/"EditorComment" can never overwrite the block's name/description. The values the activity
+	 * enforces are applied to the settings in between, so they cannot touch the name/description either.
+	 * Finally the computed ADDITIONAL_RESULT descriptors (e.g. a CRM trigger's `Return`) are synthesised via
+	 * applyAdditionalResult.
 	 */
 	private function makeActivityProperties(
 		AgentBlock $block,
@@ -908,17 +1095,108 @@ final class AiAssistantDraftConverterService
 			$map[$setting->name] = $setting->value;
 		}
 
-		if ($block->title !== '' && !$this->isSameNodeName($block->title, $systemName))
-		{
-			$map[self::TITLE_PROPERTY_NAME] = $block->title;
-		}
-
-		if ((string)$block->description !== '')
-		{
-			$map[self::COMMENT_PROPERTY_NAME] = $block->description;
-		}
+		$map = $this->applyEnforcedSettingValues($map, $activityType, $documentType);
+		$map = $this->applyServerOwnedProperties($map, $activityId, $activityType);
+		$map = $this->applyNodeNaming($map, $block->title, $block->description, $systemName);
 
 		return $this->applyAdditionalResult($map, $activityId, $activityType, $documentType);
+	}
+
+	/**
+	 * The editor's own state that the reverse projection never hands the agent
+	 * ({@see AiAssistantWorkflowTemplateConverterService::EDITOR_SERVICE_PROPERTY_NAMES}). Not being handed it,
+	 * the agent cannot send it back, so a name dropped on the read side and left alone here is a value lost on
+	 * the first agent write: a loop a person folded on the canvas would come back unfolded.
+	 *
+	 * Dropped from the input first and restored from the published template only, never from what arrived: the
+	 * value is the server's whether or not a published one exists, so a forged one stays out either way and a
+	 * newly authored block simply has none. The derived descriptors an activity declares through its
+	 * `ADDITIONAL_RESULT` marker are not handled here - they reach the agent and come back, and what happens to
+	 * them is {@see self::applyAdditionalResult()}.
+	 */
+	private function applyServerOwnedProperties(array $properties, string $activityId, string $activityType): array
+	{
+		$names = AiAssistantWorkflowTemplateConverterService::EDITOR_SERVICE_PROPERTY_NAMES;
+
+		foreach ($names as $name)
+		{
+			unset($properties[$name]);
+		}
+
+		return $this->restoreBaselineSettingValues($properties, $activityId, $activityType, $names);
+	}
+
+	/**
+	 * Applies the setting values the activity declares as enforced ({@see \CBPActivity::getAiEnforcedSettingValues}):
+	 * its properties dialog writes them on every save and the agent path never opens that dialog. The declaration
+	 * is a name => value map, so the converter applies it without knowing what any of those settings mean.
+	 *
+	 * A value supplied by the agent is normalised silently rather than refused: a node authored before the dialog
+	 * started writing the value (an imported template, an older agent-built one) must still survive the round-trip,
+	 * and refusing would make the agent stricter than a person importing the same .bpt. A declaration that cannot
+	 * be read leaves the properties untouched ({@see self::getEnforcedSettingValues}).
+	 */
+	private function applyEnforcedSettingValues(array $properties, string $activityCode, array $documentType): array
+	{
+		foreach ($this->getEnforcedSettingValues($activityCode, $documentType) as $name => $value)
+		{
+			$properties[$name] = $value;
+		}
+
+		return $properties;
+	}
+
+	/**
+	 * The activity's enforced name => value declaration, or [] when it declares none. Read the same safe way as its
+	 * passthrough twin - the activity file is included first, so callStaticMethod cannot answer with its
+	 * error-shaped array - and any failure yields no values. Cached per (code, document type) for the same reason
+	 * as the twin: the declaration takes the document type, and a node is asked for it more than once
+	 * ({@see self::applyEnforcedSettingValues}, {@see self::resolveDialogOwnedKeys}).
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function getEnforcedSettingValues(string $activityCode, array $documentType): array
+	{
+		$normalizedCode = $this->getSearcher()->normalizeActivityCode($activityCode);
+		if ($normalizedCode === '')
+		{
+			return [];
+		}
+
+		$code = $normalizedCode . '|' . implode('/', array_map('strval', $documentType));
+
+		if (!array_key_exists($code, $this->enforcedSettingValuesCache))
+		{
+			$enforced = null;
+
+			try
+			{
+				if ($this->getSearcher()->includeActivityFile($activityCode) !== false)
+				{
+					$enforced = \CBPActivity::callStaticMethod(
+						$activityCode,
+						'getAiEnforcedSettingValues',
+						[$documentType],
+					);
+				}
+			}
+			catch (\Throwable)
+			{
+			}
+
+			$values = [];
+			foreach (is_array($enforced) ? $enforced : [] as $name => $value)
+			{
+				if (is_string($name))
+				{
+					$values[$name] = $value;
+				}
+			}
+
+			$this->enforcedSettingValuesCache[$code] = $values;
+		}
+
+		return $this->enforcedSettingValuesCache[$code];
 	}
 
 	/**
@@ -935,6 +1213,19 @@ final class AiAssistantDraftConverterService
 	 * settings) are preserved here rather than re-derived (contract of {@see SaveCommandHandler}). A dialog
 	 * failure (required Document/Fields missing -> false/errors) leaves the settings untouched instead of
 	 * dropping the block: the descriptor is best-effort, the push never fails.
+	 *
+	 * A marker key the activity also declares as passthrough is the dialog's on this path too, exactly as on the
+	 * sub-action ({@see self::applySubActionAdditionalResult}). The reverse projection emits such a key, so the
+	 * agent can send one back and the name check lets it by - but its value is computed from other settings, not
+	 * configured. What the agent sent is therefore dropped before the dialog runs, so a descriptor the dialog does
+	 * not compute (an absent schema) leaves no agent-authored value behind. Keys the agent cannot name in the first
+	 * place (`Return` and the like, excluded from the projection) are untouched by this.
+	 *
+	 * A dialog that refuses altogether is the one case where dropping alone would be wrong: the refusal can come
+	 * from the environment rather than from the agent (a saved `engine` that left the portal), and an agent that
+	 * returned the node unchanged would then silently lose a value it was handed. So the key is restored from the
+	 * published template instead ({@see self::restoreBaselineSettingValues}) - never from the input, so a forged
+	 * value stays out either way.
 	 */
 	private function applyAdditionalResult(
 		array $properties,
@@ -949,10 +1240,16 @@ final class AiAssistantDraftConverterService
 			return $properties;
 		}
 
+		$dialogOwnedKeys = $this->resolveDialogOwnedKeys($markerKeys, $activityType, $documentType);
+		foreach ($dialogOwnedKeys as $key)
+		{
+			unset($properties[$key]);
+		}
+
 		$resolved = $this->resolveDialogProperties($activityId, $activityType, $documentType, $properties);
 		if ($resolved === null)
 		{
-			return $properties;
+			return $this->restoreBaselineSettingValues($properties, $activityId, $activityType, $dialogOwnedKeys);
 		}
 
 		foreach ($markerKeys as $key)
@@ -964,6 +1261,283 @@ final class AiAssistantDraftConverterService
 		}
 
 		return $properties;
+	}
+
+	/**
+	 * The sub-action counterpart of {@see self::applyAdditionalResult}: the AI node's sub-action is the main
+	 * scenario of the agent path, and its dialog also derives a value on save (`jsonPath`, computed from
+	 * `jsonSchema`), which the flat mapping never produced - so the JSON schema's virtual fields stayed
+	 * invisible to the neighbouring nodes until a person re-saved the node by hand.
+	 *
+	 * Narrower than the flat block on purpose: only a marker key the activity itself declares as passthrough
+	 * ({@see \CBPActivity::getAiPassthroughSettingNames}) is synthesised. A sub-action's properties go back to
+	 * the agent as `settings` (the reverse projection strips only `Title`), unlike a flat block's, whose derived
+	 * keys the reverse path drops by name. So a marker key the activity has not declared would come back as a
+	 * setting no schema knows and the name check would refuse it - the round-trip must stay closed, and the
+	 * declaration is what makes it so.
+	 *
+	 * Because the agent sees those keys, it also re-sends them - and what it sent is dropped before the dialog
+	 * runs, exactly as on the flat block ({@see self::applyAdditionalResult}). So the property set follows the
+	 * dialog's answer whole instead of being written over the agent's: a node that switched `returnType` back to
+	 * `text` stops declaring the virtual fields of a JSON schema it no longer has. A dialog that did not answer at
+	 * all falls back to the published template through the same helper as the flat block, which for a sub-action
+	 * means no value at all in practice: its child name is generated afresh on every push, so a sub-action has no
+	 * identity in the baseline to be looked up by.
+	 */
+	private function applySubActionAdditionalResult(
+		array $properties,
+		string $activityId,
+		string $activityType,
+		array $documentType,
+	): array
+	{
+		$declaredKeys = $this->resolveDialogOwnedKeys(
+			$this->getAdditionalResultKeys($activityType),
+			$activityType,
+			$documentType,
+		);
+		if ($declaredKeys === [])
+		{
+			return $properties;
+		}
+
+		foreach ($declaredKeys as $key)
+		{
+			unset($properties[$key]);
+		}
+
+		$resolved = $this->resolveDialogProperties($activityId, $activityType, $documentType, $properties);
+		if ($resolved === null)
+		{
+			return $this->restoreBaselineSettingValues($properties, $activityId, $activityType, $declaredKeys);
+		}
+
+		foreach ($declaredKeys as $key)
+		{
+			if (is_array($resolved[$key] ?? null))
+			{
+				$properties[$key] = $resolved[$key];
+			}
+		}
+
+		return $properties;
+	}
+
+	/**
+	 * Marker keys this path owns: the ones the activity declares as passthrough, minus the ones it also enforces.
+	 * An enforced key carries a value the activity dictates and {@see self::applyEnforcedSettingValues} has already
+	 * written, so it is not the agent's to drop - and the declaration is a scalar, which the array-only lift back
+	 * from the dialog would never restore.
+	 *
+	 * @param list<string> $markerKeys
+	 * @return list<string>
+	 */
+	private function resolveDialogOwnedKeys(array $markerKeys, string $activityType, array $documentType): array
+	{
+		return array_values(array_diff(
+			array_intersect($markerKeys, $this->getPassthroughSettingNames($activityType, $documentType)),
+			array_keys($this->getEnforcedSettingValues($activityType, $documentType)),
+		));
+	}
+
+	/**
+	 * Restores the listed settings from the published template of the bound template id, for a node whose dialog
+	 * refused to answer. The published state is the only value on this path the agent did not author: the draft is
+	 * what the agent itself writes, so reading it back would restore the agent's own input. A node absent from the
+	 * baseline (a newly authored one) keeps no value, which is what the refused dialog leaves behind anyway - and so
+	 * is a baseline node of another type ({@see self::getBaselineProperties}).
+	 *
+	 * @param list<string> $keys
+	 */
+	private function restoreBaselineSettingValues(
+		array $properties,
+		string $activityId,
+		string $activityType,
+		array $keys,
+	): array
+	{
+		if ($keys === [])
+		{
+			return $properties;
+		}
+
+		$baseline = $this->getBaselineProperties($activityId, $activityType);
+		foreach ($keys as $key)
+		{
+			if (array_key_exists($key, $baseline))
+			{
+				$properties[$key] = $baseline[$key];
+			}
+		}
+
+		return $properties;
+	}
+
+	/**
+	 * Properties the published template holds for the node of this name AND this type, or [] when there is no bound
+	 * template, no published state, no such node in it, or a node of another type carries that name.
+	 *
+	 * The name alone would not identify the node: it comes from the agent ({@see self::makeActivityId}) and nothing
+	 * on the write path ties it to a type, so a node named after a neighbour of another type - one that declares the
+	 * same derived key - would otherwise be handed that neighbour's value by a refusal the agent can cause itself.
+	 * The same guard covers the honest case of a reused id.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function getBaselineProperties(string $activityId, string $activityType): array
+	{
+		$type = $this->getSearcher()->normalizeActivityCode($activityType);
+		if ($type === '')
+		{
+			return [];
+		}
+
+		$activity = $this->getBaselineActivities()[$activityId] ?? null;
+
+		return $activity !== null && $activity['Type'] === $type ? $activity['Properties'] : [];
+	}
+
+	/**
+	 * The published template flattened to `name => {normalized type, properties}`, built at most once per id and
+	 * read by the value restore and by {@see self::readSourceNames}. Walks the tree by the same rule as the
+	 * by-name lookup of the dialog entry
+	 * ({@see \CBPWorkflowTemplateLoader::findActivityByName}): depth-first, a node before its children, the first
+	 * node of a name winning - so a nested node is found exactly as a top-level one. Flattening it once is what
+	 * spares that lookup, which takes the template by reference, a copy of the tree per node: a dialog refuses for
+	 * environmental reasons (an engine that left the portal) for every node of that kind at once.
+	 *
+	 * @return array<string, array{Type: string, Properties: array}>
+	 */
+	private function getBaselineActivities(): array
+	{
+		if ($this->baselineTemplateId <= 0)
+		{
+			return [];
+		}
+
+		if (!array_key_exists($this->baselineTemplateId, $this->baselineActivitiesById))
+		{
+			$activities = [];
+			$this->indexBaselineActivities($this->getBaselineTemplate() ?? [], $activities);
+			$this->baselineActivitiesById[$this->baselineTemplateId] = $activities;
+		}
+
+		return $this->baselineActivitiesById[$this->baselineTemplateId];
+	}
+
+	/**
+	 * @param array<string, array{Type: string, Properties: array}> $activities
+	 */
+	private function indexBaselineActivities(array $template, array &$activities): void
+	{
+		foreach ($template as $activity)
+		{
+			if (!is_array($activity))
+			{
+				continue;
+			}
+
+			$name = is_scalar($activity['Name'] ?? null) ? (string)$activity['Name'] : '';
+			$type = is_scalar($activity['Type'] ?? null) ? (string)$activity['Type'] : '';
+
+			if ($name !== '' && !array_key_exists($name, $activities))
+			{
+				$activities[$name] = [
+					'Type' => $this->getSearcher()->normalizeActivityCode($type),
+					'Properties' => is_array($activity['Properties'] ?? null) ? $activity['Properties'] : [],
+				];
+			}
+
+			if (is_array($activity['Children'] ?? null))
+			{
+				$this->indexBaselineActivities($activity['Children'], $activities);
+			}
+		}
+	}
+
+	/**
+	 * The published TEMPLATE of the bound template, read at most once per id and only by the two readers that
+	 * cannot answer without it: a refused dialog restoring a derived value, and a name outside the grammar being
+	 * told apart from one the source graph carries ({@see self::carriesSourceName}). The second never arises on
+	 * the entry held to the grammar, so the external contour still reaches no database here.
+	 */
+	private function getBaselineTemplate(): ?array
+	{
+		if ($this->baselineTemplateId <= 0)
+		{
+			return null;
+		}
+
+		if (!array_key_exists($this->baselineTemplateId, $this->baselineTemplateById))
+		{
+			$this->baselineTemplateById[$this->baselineTemplateId] = $this->loadPublishedTemplate($this->baselineTemplateId);
+		}
+
+		return $this->baselineTemplateById[$this->baselineTemplateId];
+	}
+
+	private function loadPublishedTemplate(int $templateId): ?array
+	{
+		try
+		{
+			$template = WorkflowTemplateTable::query()
+				->where('ID', $templateId)
+				->setSelect(['ID', 'TEMPLATE'])
+				->setLimit(1)
+				->fetchObject()
+				?->getTemplate()
+			;
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+
+		return is_array($template) ? $template : null;
+	}
+
+	/**
+	 * Setting names the activity declares as passthrough - persisted properties that are not fields the agent
+	 * configures ({@see \Bitrix\Bizproc\Integration\AiAssistant\ActivityAiAutoDescriber} folds the same list into
+	 * the description's `skippedSettings`, which is what makes them known names on the way back). Read the same
+	 * safe way as the enforced values - the activity file first, any failure yields no names. Cached per
+	 * (code, document type): the declaration takes the document type, so caching by code alone would carry one
+	 * context's answer into another.
+	 *
+	 * @return list<string>
+	 */
+	private function getPassthroughSettingNames(string $activityCode, array $documentType): array
+	{
+		$normalizedCode = $this->getSearcher()->normalizeActivityCode($activityCode);
+		if ($normalizedCode === '')
+		{
+			return [];
+		}
+
+		$code = $normalizedCode . '|' . implode('/', array_map('strval', $documentType));
+
+		if (!array_key_exists($code, $this->passthroughSettingNamesCache))
+		{
+			$names = null;
+
+			try
+			{
+				if ($this->getSearcher()->includeActivityFile($activityCode) !== false)
+				{
+					$names = \CBPActivity::callStaticMethod($activityCode, 'getAiPassthroughSettingNames', [$documentType]);
+				}
+			}
+			catch (\Throwable)
+			{
+			}
+
+			$this->passthroughSettingNamesCache[$code] = is_array($names)
+				? array_values(array_filter($names, 'is_string'))
+				: []
+			;
+		}
+
+		return $this->passthroughSettingNamesCache[$code];
 	}
 
 	/**
@@ -1057,17 +1631,6 @@ final class AiAssistantDraftConverterService
 		return is_array($activity['Properties'] ?? null) ? $activity['Properties'] : null;
 	}
 
-	/**
-	 * Resolves the node type from the activity description (NODE_TYPE / complex-wrapper class), not from
-	 * the class-name suffix: complex nodes (NODE_TYPE=COMPLEX, a BaseComplexActivity subclass) become
-	 * {@see NodeType::Complex}; triggers and everything else keep their previous Trigger/Simple mapping.
-	 *
-	 * A frame overlay is recognised first, but only for the REST agent ($source) and by the shared
-	 * {@see FrameBlockMatcher} predicate (EmptyBlockActivity + preset FRAME) - the exact identity the input
-	 * validator uses, so the converter and the validator never disagree on what a frame is. Matching by that
-	 * predicate rather than by the raw NODE_TYPE is deliberate: EmptyBlockActivity's NODE_TYPE=frame is
-	 * collapsed to SIMPLE by ActivityRegistry::getNodeType, and only the FRAME-preset variant is a real frame.
-	 */
 	private function makeNodeType(
 		string $agentBlockType,
 		?string $presetId = null,
@@ -1079,23 +1642,127 @@ final class AiAssistantDraftConverterService
 			return NodeType::Frame;
 		}
 
-		$registry = $this->getActivityRegistry();
-
-		if ($registry->isComplexWrapper($agentBlockType))
+		if ($this->getActivityRegistry()->isComplexWrapper($agentBlockType))
 		{
 			return NodeType::Complex;
 		}
 
-		return match ($registry->getNodeType($agentBlockType))
+		$nodeType = $this->getNodeTopologyResolver()->resolveNodeType(
+			$this->describeActivity($agentBlockType, $presetId),
+		);
+
+		return match (ActivityNodeType::tryFrom($nodeType ?? ''))
 		{
 			ActivityNodeType::TRIGGER => NodeType::Trigger,
+			ActivityNodeType::COMPLEX => NodeType::Complex,
+			ActivityNodeType::OPERATORS => NodeType::Operators,
+			ActivityNodeType::SERVICE => NodeType::Services,
+			ActivityNodeType::TOOL => NodeType::Tool,
 			default => NodeType::Simple,
 		};
 	}
 
+	/**
+	 * The system name the block is saved under, which is what a connection addresses and what a `{=id:Output}`
+	 * substitution written in another block resolves by (BRIEF § 4.3).
+	 *
+	 * The rename belongs to the one entry that is NOT held to the grammar, and there it reaches what the assistant
+	 * AUTHORS. The internal assistant is asked for a numeric identifier by the contract of its own tool, and a
+	 * numeric name is the one shape an array of activities keyed by name loses, so a name outside the grammar it
+	 * composed itself is composed anew here
+	 * ({@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Tool\SaveWorkflowTool::getInputSchema()}).
+	 * The composed name is itself within the grammar, so a block Marta wrote can be sent back by the external
+	 * agent that reads the same draft.
+	 *
+	 * A name the SOURCE graph already carries is kept even there ({@see self::carriesSourceName}): the assistant is
+	 * handed the template as it stands ({@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\LastWorkflowService::getAgentTemplate()}),
+	 * and a name it merely sent back is not one it authored. Those are the names this very converter wrote before
+	 * the grammar existed - `MartaGeneratedId-{salt}-{n}`, composed with a separator - and renaming them costs the
+	 * template the same round trip a rename costs on the external contour, with no check on this entry to notice.
+	 *
+	 * On the entry that IS held to it, every identifier reaching this point has already been judged by the very
+	 * same grammar ({@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator\AgentBlockValidator})
+	 * and is written as it arrived: it either fits the grammar, or it is one the published version - or the graph
+	 * the agent was handed - already carries at this very point, which the check accepts as it stands (ALG-02).
+	 * Renaming that second kind is what this rule exists against: the expressions addressing such a name live in
+	 * the settings of other blocks and are rewritten nowhere, so the graph would be saved addressing a node that
+	 * no longer carries the name, and silently (AC-35).
+	 */
 	private function makeActivityId(string $agentBlockId): string
 	{
-		return is_numeric($agentBlockId) ? "MartaGeneratedId-{$this->uniqueBlockSalt}-{$agentBlockId}" : $agentBlockId;
+		$keptAsItArrived = $this->idsHeldToGrammar
+			|| BlockIdGrammar::isAccepted($agentBlockId)
+			|| $this->carriesSourceName($agentBlockId)
+		;
+
+		return $keptAsItArrived
+			? $agentBlockId
+			: "MartaGeneratedId_{$this->uniqueBlockSalt}_{$agentBlockId}"
+		;
+	}
+
+	/**
+	 * Whether the graph the caller was handed already carries this very name - the published version of the bound
+	 * template, or the draft the caller read it from, whichever the assistant was given
+	 * ({@see \Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\LastWorkflowService::getAgentTemplate()}
+	 * answers with the newer of the two, so both are read here and neither is assumed).
+	 *
+	 * The name alone, without the type the check pairs it with on the external contour (ALG-02): there the
+	 * exemption lifts a REFUSAL, and pairing it with the type is what keeps an old name off a new block. Here
+	 * nothing is refused - the entry is not held to the grammar at all - so a pair would buy no strictness and
+	 * would cost the round trip of a node whose type the assistant legitimately changed, whose neighbours go on
+	 * addressing it by name.
+	 */
+	private function carriesSourceName(string $agentBlockId): bool
+	{
+		$this->sourceNames ??= $this->readSourceNames();
+
+		return array_key_exists($agentBlockId, $this->sourceNames);
+	}
+
+	/**
+	 * The names of the source graph, flattened by {@see self::indexBaselineActivities} exactly as the baseline is,
+	 * so a nested node counts the same as a top-level one: an expression resolves a name at any depth.
+	 *
+	 * Read at most once per conversion and only once a name outside the grammar has to be judged, which on the
+	 * entry held to the grammar never happens at all.
+	 *
+	 * @return array<string, array{Type: string, Properties: array}>
+	 */
+	private function readSourceNames(): array
+	{
+		$names = $this->getBaselineActivities();
+		$this->indexBaselineActivities($this->loadDraftTemplate($this->sourceDraftId) ?? [], $names);
+
+		return $names;
+	}
+
+	/** The TEMPLATE of a draft as stored, read the same failure-tolerant way the published one is. */
+	private function loadDraftTemplate(int $draftId): ?array
+	{
+		if ($draftId <= 0)
+		{
+			return null;
+		}
+
+		try
+		{
+			$templateData = WorkflowTemplateDraftTable::query()
+				->where('ID', $draftId)
+				->setSelect(['TEMPLATE_DATA'])
+				->setLimit(1)
+				->fetchObject()
+				?->getTemplateData()
+			;
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+
+		$template = is_array($templateData) ? ($templateData['TEMPLATE'] ?? null) : null;
+
+		return is_array($template) ? $template : null;
 	}
 
 	public function convertDraftToAgentTemplate(Draft $draft): AgentTemplate

@@ -548,7 +548,7 @@ class CLists
 		}
 		else
 		{
-			$errors = CBPDocument::killWorkflow($workflowId);
+			$errors = CBPDocument::killWorkflow($workflowId, true, $documentId);
 			foreach ($errors as $error)
 			{
 				$stringError .= $error['message'];

@@ -21,4 +21,9 @@ enum Status: string
 	{
 		return self::Pending;
 	}
+
+	public function isCompleted(): bool
+	{
+		return $this === self::Completed || $this === self::SupposedlyCompleted;
+	}
 }

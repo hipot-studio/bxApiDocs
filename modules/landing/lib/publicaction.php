@@ -474,7 +474,7 @@ class PublicAction
 	}
 
 	/**
-	 * Get raw data of curring processing.
+	 * Get raw data of current processing.
 	 * @return mixed
 	 */
 	public static function getRawData()
@@ -657,7 +657,11 @@ class PublicAction
 
 		if (empty($restMethods))
 		{
-			$restMethods[self::REST_SCOPE_DEFAULT] = array();
+			$restMethods[self::REST_SCOPE_DEFAULT] = array(
+				\CRestUtil::PLACEMENTS => array(
+					'LANDING_SETTINGS' => array()
+				)
+			);
 			$restMethods[self::REST_SCOPE_CLOUD] = array();
 
 			$classes = array(
@@ -760,11 +764,22 @@ class PublicAction
 		{
 			if (($app = AppTable::getByClientId($app['APP_ID'])))
 			{
+				$rightsWereOn = Rights::isLocalOn();
 				Rights::setOff();
-				Repo::deleteByAppCode($app['CODE']);
-				Placement::deleteByAppId($app['ID']);
-				Demos::deleteByAppCode($app['CODE']);
-				Rights::setOn();
+
+				try
+				{
+					Repo::deleteByAppCode($app['CODE']);
+					Placement::deleteByAppId($app['ID']);
+					Demos::deleteByAppCode($app['CODE']);
+				}
+				finally
+				{
+					if ($rightsWereOn)
+					{
+						Rights::setOn();
+					}
+				}
 			}
 		}
 	}
@@ -813,9 +828,17 @@ class PublicAction
 	 * @param bool $humanFormat Gets data in human format.
 	 * @param bool $onlyActive Gets data only in active states.
 	 * @param array $additionalFilter Additional filter array.
+	 * @param bool $skipInitiatorApps Skip apps known only by INITIATOR_APP_CODE of pages and plain
+	 * blocks: such a mark tells where the page came from, not what it needs, so the export of a site
+	 * asks only for the apps of repo blocks.
 	 * @return array
 	 */
-	public static function getRestStat(bool $humanFormat = false, bool $onlyActive = true, array $additionalFilter = []): array
+	public static function getRestStat(
+		bool $humanFormat = false,
+		bool $onlyActive = true,
+		array $additionalFilter = [],
+		bool $skipInitiatorApps = false
+	): array
 	{
 		$blockCnt = [];
 		$fullStat = [
@@ -836,147 +859,160 @@ class PublicAction
 			$filter['LANDING.SITE_ID'] = $additionalFilter['SITE_ID'];
 		}
 
+		$rightsWereOn = Rights::isLocalOn();
 		Rights::setOff();
 
-		// gets all partners active block, placed on pages
-		$res = Internals\BlockTable::getList([
-			'select' => [
-				'CODE', 'CNT'
-			],
-			'filter' => $filter,
-			'group' => [
-				'CODE'
-			],
-			'runtime' => [
-				new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(*)')
-			]
-		]);
-		while ($row = $res->fetch())
+		try
 		{
-			$blockCnt[mb_substr($row['CODE'], 5)] = $row['CNT'];
-		}
-
-		// gets apps for this blocks
-		$res = Repo::getList([
-			'select' => [
-				'ID', 'APP_CODE'
-			],
-			'filter' => [
-				'ID' => array_keys($blockCnt)
-			]
- 		]);
-		while ($row = $res->fetch())
-		{
-			if (!$row['APP_CODE'])
+			// gets all partners active block, placed on pages
+			$res = Internals\BlockTable::getList([
+				'select' => [
+					'CODE', 'CNT'
+				],
+				'filter' => $filter,
+				'group' => [
+					'CODE'
+				],
+				'runtime' => [
+					new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(*)')
+				]
+			]);
+			while ($row = $res->fetch())
 			{
-				continue;
+				$blockCnt[mb_substr($row['CODE'], 5)] = $row['CNT'];
 			}
-			if (!isset($fullStat[self::REST_USAGE_TYPE_BLOCK][$row['APP_CODE']]))
-			{
-				$fullStat[self::REST_USAGE_TYPE_BLOCK][$row['APP_CODE']] = 0;
-			}
-			$fullStat[self::REST_USAGE_TYPE_BLOCK][$row['APP_CODE']] += $blockCnt[$row['ID']];
-		}
-		unset($blockCnt);
 
-		// gets additional partners active block with not empty INITIATOR_APP_CODE, placed on pages
-		$filter['!CODE'] = $filter['CODE'];
-		unset($filter['CODE']);
-		$filter['!=INITIATOR_APP_CODE'] = null;
-		$res = Internals\BlockTable::getList([
-			'select' => [
-				'INITIATOR_APP_CODE', 'CNT'
-			],
-			'filter' => $filter,
-			'group' => [
-				'INITIATOR_APP_CODE'
-			],
-			'runtime' => [
-				new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(*)')
-			]
-		]);
-		while ($row = $res->fetch())
-		{
-			$appCode = $row['INITIATOR_APP_CODE'];
-			if (!isset($fullStat[self::REST_USAGE_TYPE_BLOCK][$appCode]))
+			// gets apps for this blocks
+			$res = Repo::getList([
+				'select' => [
+					'ID', 'APP_CODE'
+				],
+				'filter' => [
+					'ID' => array_keys($blockCnt)
+				]
+	 		]);
+			while ($row = $res->fetch())
 			{
-				$fullStat[self::REST_USAGE_TYPE_BLOCK][$appCode] = 0;
+				if (!$row['APP_CODE'])
+				{
+					continue;
+				}
+				if (!isset($fullStat[self::REST_USAGE_TYPE_BLOCK][$row['APP_CODE']]))
+				{
+					$fullStat[self::REST_USAGE_TYPE_BLOCK][$row['APP_CODE']] = 0;
+				}
+				$fullStat[self::REST_USAGE_TYPE_BLOCK][$row['APP_CODE']] += $blockCnt[$row['ID']];
 			}
-			$fullStat[self::REST_USAGE_TYPE_BLOCK][$appCode] += $row['CNT'];
-		}
+			unset($blockCnt);
 
-		// gets all partners active pages
-		$filter = [
-			'=DELETED' => 'N',
-			'=ACTIVE' => $activeValues,
-			'=SITE.ACTIVE' => $activeValues,
-			'!=INITIATOR_APP_CODE' => null
-		];
-		if (isset($additionalFilter['SITE_ID']))
-		{
-			$filter['SITE_ID'] = $additionalFilter['SITE_ID'];
-		}
-		$res = Landing::getList([
-			'select' => [
-				'INITIATOR_APP_CODE', 'CNT'
-			],
-			'filter' => $filter,
-			'group' => [
-				'INITIATOR_APP_CODE'
-			],
-			'runtime' => [
-				new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(*)')
-			]
-		]);
-		while ($row = $res->fetch())
-		{
-			$appCode = $row['INITIATOR_APP_CODE'];
-			if (!isset($fullStat[self::REST_USAGE_TYPE_PAGE][$appCode]))
+			// apps known only by the INITIATOR_APP_CODE mark: counted for the statistics, not for the export
+			if (!$skipInitiatorApps)
 			{
-				$fullStat[self::REST_USAGE_TYPE_PAGE][$appCode] = 0;
-			}
-			$fullStat[self::REST_USAGE_TYPE_PAGE][$appCode] += $row['CNT'];
-		}
-
-		// get client id for apps
-		if (!$humanFormat && \Bitrix\Main\Loader::includeModule('rest'))
-		{
-			$appsCode = array_merge(
-				array_keys($fullStat[self::REST_USAGE_TYPE_BLOCK]),
-				array_keys($fullStat[self::REST_USAGE_TYPE_PAGE])
-			);
-			$fullStatNew = [
-				self::REST_USAGE_TYPE_BLOCK => [],
-				self::REST_USAGE_TYPE_PAGE => []
-			];
-			if ($appsCode)
-			{
-				$appsCode = array_unique($appsCode);
-				$res = AppTable::getList([
+				// gets additional partners active block with not empty INITIATOR_APP_CODE, placed on pages
+				unset($filter['=%CODE']);
+				$filter['!=%CODE'] = 'repo_%';
+				$filter['!=INITIATOR_APP_CODE'] = null;
+				$res = Internals\BlockTable::getList([
 					'select' => [
-						'CLIENT_ID', 'CODE'
+						'INITIATOR_APP_CODE', 'CNT'
 					],
-					'filter' => [
-						'=CODE' => $appsCode
+					'filter' => $filter,
+					'group' => [
+						'INITIATOR_APP_CODE'
+					],
+					'runtime' => [
+						new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(*)')
 					]
 				]);
 				while ($row = $res->fetch())
 				{
-					foreach ($fullStat as $code => $stat)
+					$appCode = $row['INITIATOR_APP_CODE'];
+					if (!isset($fullStat[self::REST_USAGE_TYPE_BLOCK][$appCode]))
 					{
-						if (isset($stat[$row['CODE']]))
-						{
-							$fullStatNew[$code][$row['CLIENT_ID']] = $stat[$row['CODE']];
-						}
+						$fullStat[self::REST_USAGE_TYPE_BLOCK][$appCode] = 0;
 					}
+					$fullStat[self::REST_USAGE_TYPE_BLOCK][$appCode] += $row['CNT'];
+				}
+
+				// gets all partners active pages
+				$filter = [
+					'=DELETED' => 'N',
+					'=ACTIVE' => $activeValues,
+					'=SITE.ACTIVE' => $activeValues,
+					'!=INITIATOR_APP_CODE' => null
+				];
+				if (isset($additionalFilter['SITE_ID']))
+				{
+					$filter['SITE_ID'] = $additionalFilter['SITE_ID'];
+				}
+				$res = Landing::getList([
+					'select' => [
+						'INITIATOR_APP_CODE', 'CNT'
+					],
+					'filter' => $filter,
+					'group' => [
+						'INITIATOR_APP_CODE'
+					],
+					'runtime' => [
+						new \Bitrix\Main\Entity\ExpressionField('CNT', 'COUNT(*)')
+					]
+				]);
+				while ($row = $res->fetch())
+				{
+					$appCode = $row['INITIATOR_APP_CODE'];
+					if (!isset($fullStat[self::REST_USAGE_TYPE_PAGE][$appCode]))
+					{
+						$fullStat[self::REST_USAGE_TYPE_PAGE][$appCode] = 0;
+					}
+					$fullStat[self::REST_USAGE_TYPE_PAGE][$appCode] += $row['CNT'];
 				}
 			}
 
-			return $fullStatNew;
+			// get client id for apps
+			if (!$humanFormat && \Bitrix\Main\Loader::includeModule('rest'))
+			{
+				$appsCode = array_merge(
+					array_keys($fullStat[self::REST_USAGE_TYPE_BLOCK]),
+					array_keys($fullStat[self::REST_USAGE_TYPE_PAGE])
+				);
+				$fullStatNew = [
+					self::REST_USAGE_TYPE_BLOCK => [],
+					self::REST_USAGE_TYPE_PAGE => []
+				];
+				if ($appsCode)
+				{
+					$appsCode = array_unique($appsCode);
+					$res = AppTable::getList([
+						'select' => [
+							'CLIENT_ID', 'CODE'
+						],
+						'filter' => [
+							'=CODE' => $appsCode
+						]
+					]);
+					while ($row = $res->fetch())
+					{
+						foreach ($fullStat as $code => $stat)
+						{
+							if (isset($stat[$row['CODE']]))
+							{
+								$fullStatNew[$code][$row['CLIENT_ID']] = $stat[$row['CODE']];
+							}
+						}
+					}
+				}
+
+				return $fullStatNew;
+			}
+
+			return $fullStat;
 		}
-
-		Rights::setOn();
-
-		return $fullStat;
+		finally
+		{
+			if ($rightsWereOn)
+			{
+				Rights::setOn();
+			}
+		}
 	}
 }

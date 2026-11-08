@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Intranet\Integration\Timeman;
 
+use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Config\Option;
 use \Bitrix\Main\Type\Date;
 use Bitrix\Main\Loader;
@@ -45,7 +46,10 @@ class Worktime
 
 	public static function getTMDayDataFromDB()
 	{
-		if (!Loader::includeModule("timeman"))
+		if (
+			!Loader::includeModule("timeman")
+			|| !ToolsManager::getInstance()->checkAvailabilityByToolId('worktime')
+		)
 		{
 			return;
 		}

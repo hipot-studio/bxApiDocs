@@ -65,6 +65,14 @@ class SendingService
 			return $result;
 		}
 
+		$reservation = $this->sendingConfig->getMessageUuidReservation();
+		if ($reservation !== null && $reservation->getUuid() === $message->getUuid())
+		{
+			$this->uuidService = $reservation;
+
+			return $result;
+		}
+
 		$this->uuidService = new Uuid($message->getUuid());
 		$alreadyExists = !$this->uuidService->add();
 		if (!$alreadyExists)

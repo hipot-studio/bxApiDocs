@@ -130,6 +130,7 @@ class Searcher
 
 					if (count(array_intersect($targetTypes, $activityType)) > 0)
 					{
+						$this->filterPresetsByType($activityDescription, $targetTypes);
 						$activityDescription->setPathToActivity($folder . '/' . $dirName);
 						$activities->add($key, $this->applyUnifiedPanelDescriptor($key, $activityDescription));
 					}
@@ -153,6 +154,37 @@ class Searcher
 		}
 
 		return $activities;
+	}
+
+	private function filterPresetsByType(ActivityDescription $description, array $targetTypes): void
+	{
+		$presets = $description->getPresets();
+		if ($presets === null)
+		{
+			return;
+		}
+
+		$filteredPresets = [];
+		foreach ($presets as $preset)
+		{
+			if (array_key_exists('TYPE', $preset))
+			{
+				$presetTypes = array_map(
+					static fn($type) => mb_strtolower(trim((string)$type)),
+					\CBPHelper::flatten($preset['TYPE']),
+				);
+				if (count(array_intersect($targetTypes, $presetTypes)) === 0)
+				{
+					continue;
+				}
+
+				unset($preset['TYPE']);
+			}
+
+			$filteredPresets[] = $preset;
+		}
+
+		$description->setPresets($filteredPresets);
 	}
 
 	public function searchByCode(string $code, ?string $lang = null): ?ActivityDescription
@@ -217,8 +249,25 @@ class Searcher
 	private function copyOfFileDescription(string $normalizedCode): ?ActivityDescription
 	{
 		$description = $this->fileDescriptions[$normalizedCode];
+		if ($description === null)
+		{
+			return null;
+		}
 
-		return $description === null ? null : clone $description;
+		$description = clone $description;
+		$presets = $description->getPresets();
+		if ($presets !== null)
+		{
+			foreach ($presets as &$preset)
+			{
+				unset($preset['TYPE']);
+			}
+			unset($preset);
+
+			$description->setPresets($presets);
+		}
+
+		return $description;
 	}
 
 	/**

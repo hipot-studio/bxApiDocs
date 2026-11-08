@@ -19,6 +19,8 @@ Loc::loadMessages(__FILE__);
 
 class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 {
+	private const ACTION_SESSION_KEY = 'CRM_LOCATION_EDIT_ACTIONS';
+
 	protected $componentData = 	array();
 	protected $dbResult = 		array();
 	protected $errors = 		array('FATAL' => array(), 'NONFATAL' => array());
@@ -99,6 +101,7 @@ class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 			'GET' => $this->request->getQueryList()->toArray(),
 			'POST' => $this->request->getPostList()->toArray(),
 		);
+		$this->componentData['IS_SIDE_PANEL'] = ($this->dbResult['REQUEST']['GET']['IFRAME'] ?? null) === 'Y';
 
 		$this->arParams['PATH_TO_LOCATIONS_LIST'] = CrmCheckPath('PATH_TO_LOCATIONS_LIST', $this->arParams['PATH_TO_LOCATIONS_LIST'], '');
 		$this->arParams['PATH_TO_LOCATIONS_EDIT'] = CrmCheckPath('PATH_TO_LOCATIONS_EDIT', $this->arParams['PATH_TO_LOCATIONS_EDIT'], '?loc_id=#loc_id#&edit');
@@ -126,6 +129,7 @@ class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 	protected function performAction()
 	{
 		$requestMethod = \Bitrix\Main\Context::getCurrent()->getServer()->getRequestMethod();
+		$isSidePanel = $this->componentData['IS_SIDE_PANEL'];
 
 		$this->componentData['FORM_ROWS'] = Helper::getDetailPageRows();
 
@@ -182,6 +186,12 @@ class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 				}
 				else
 				{
+					if($actionSave || $actionApply)
+					{
+						$this->dbResult['ACTION_SUCCESS'] = true;
+						$this->dbResult['ACTION'] = $actionSave ? 'save' : 'apply';
+					}
+
 					$url = $this->dbResult['CALCULATED_BACK_URL'];
 
 					if($actionApply)
@@ -197,6 +207,29 @@ class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 							if($res)
 							{
 								$url = CComponentEngine::MakePathFromTemplate($this->arParams['PATH_TO_LOCATIONS_EDIT'],['loc_id' => intval($res['ID'])]);
+
+								if($isSidePanel)
+								{
+									$actionToken = Main\Security\Random::getString(16);
+									Main\Application::getInstance()->getSession()[self::ACTION_SESSION_KEY][$actionToken] = [
+										'id' => (int)$res['ID'],
+										'action' => 'apply',
+									];
+									$redirectParams = [
+										'location_action_token' => $actionToken,
+										'IFRAME' => 'Y',
+									];
+									$iframeType = (string)($this->dbResult['REQUEST']['GET']['IFRAME_TYPE'] ?? '');
+									if($iframeType !== '')
+									{
+										$redirectParams['IFRAME_TYPE'] = $iframeType;
+									}
+
+									$url = (new Main\Web\Uri($url))
+										->addParams($redirectParams)
+										->getUri()
+									;
+								}
 							}
 						}
 					}
@@ -217,6 +250,11 @@ class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 						}
 					}
 
+					if($actionSave && $isSidePanel)
+					{
+						$url = false;
+					}
+
 					if($url)
 						LocalRedirect($url);
 				}
@@ -231,6 +269,23 @@ class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 	protected function obtainNonCachedData()
 	{
 		$this->dbResult['FORM_DATA'] = array();
+
+		$actionToken = (string)($this->dbResult['REQUEST']['GET']['location_action_token'] ?? '');
+		$session = Main\Application::getInstance()->getSession();
+		$confirmedAction = $session[self::ACTION_SESSION_KEY][$actionToken] ?? null;
+		if($actionToken !== '')
+		{
+			unset($session[self::ACTION_SESSION_KEY][$actionToken]);
+		}
+
+		if(
+			($confirmedAction['action'] ?? null) === 'apply'
+			&& (int)($confirmedAction['id'] ?? 0) === $this->componentData['LOCATION_ID']
+		)
+		{
+			$this->dbResult['ACTION_SUCCESS'] = true;
+			$this->dbResult['ACTION'] = 'apply';
+		}
 
 		if($this->componentData['ACTION_FAILURE']) // we tried to add\update, but failed due to some reason, so get data from request
 		{
@@ -257,8 +312,9 @@ class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 		}
 
 		// special case for PARENT_ID
-		if(!isset($this->dbResult['FORM_DATA']['PARENT_ID']) && intval($this->dbResult['REQUEST']['GET']['PARENT_ID']))
-			$this->dbResult['FORM_DATA']['PARENT_ID'] = intval($this->dbResult['REQUEST']['GET']['PARENT_ID']);
+		$parentId = (int)($this->arParams['PARENT_ID'] ?? $this->dbResult['REQUEST']['GET']['PARENT_ID']);
+		if(!isset($this->dbResult['FORM_DATA']['PARENT_ID']) && $parentId > 0)
+			$this->dbResult['FORM_DATA']['PARENT_ID'] = $parentId;
 
 		$this->dbResult['LOCATION_ID'] = $this->componentData['LOCATION_ID'];
 
@@ -306,6 +362,11 @@ class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 	{
 		$this->arResult =& $this->dbResult;
 		$this->arResult['ERRORS'] =& $this->errors;
+		$this->arResult['IS_SIDE_PANEL'] = $this->componentData['IS_SIDE_PANEL'] ?? false;
+		$this->arResult['TITLE'] = $this->resolveLocationTitle(
+			$this->arResult['FORM_DATA'] ?? [],
+			LANGUAGE_ID,
+		);
 
 		$this->arResult['FORM_ID'] = 'CRM_LOC_EDIT_FORM';
 		$this->arResult['GRID_ID'] = 'CRM_LOC_EDIT_GRID';
@@ -337,6 +398,27 @@ class CBitrixCrmConfigLocationEdit2Component extends CBitrixComponent
 		$this->arResult['EXTERNAL_TABLE_COLUMNS'] = Helper::getExternalMap();
 
 		unset($this->componentData);
+	}
+
+	private function resolveLocationTitle(array $formData, string $languageId): string
+	{
+		$currentNameField = 'NAME_' . mb_strtoupper($languageId);
+		$title = trim((string)($formData[$currentNameField] ?? ''));
+
+		if ($title === '')
+		{
+			foreach ($formData as $fieldId => $value)
+			{
+				if (str_starts_with((string)$fieldId, 'NAME_') && trim((string)$value) !== '')
+				{
+					$title = trim((string)$value);
+
+					break;
+				}
+			}
+		}
+
+		return htmlspecialcharsbx($title);
 	}
 
 	/**

@@ -3,6 +3,7 @@
 namespace Bitrix\Landing\History\Action;
 
 use Bitrix\Landing\Block;
+use Bitrix\Landing\Html\DocumentFactory;
 use \Bitrix\Main\Web\DOM;
 
 class EditStyleAction extends BaseAction
@@ -45,7 +46,7 @@ class EditStyleAction extends BaseAction
 		$block = $params['block'];
 
 		$getValue = static function($content) {
-			$doc = new DOM\Document();
+			$doc = DocumentFactory::createForStoredContent();
 			$doc->loadHTML($content);
 			$children = $doc->getChildNodesArray();
 			$node = array_pop($children);

@@ -20,6 +20,7 @@ class ObserversDto extends Dto
 {
 	#[Editable]
 	#[ElementsType(Type::Integer)]
+	#[ElementType('int')]
 	#[ElementsInArrayFrom(ObserverUserIdProvider::class)]
 	#[Filterable]
 	public array $observersId;

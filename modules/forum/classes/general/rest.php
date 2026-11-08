@@ -181,7 +181,6 @@ class CForumRestService extends IRestService
 	public static function deleteMessage($arFields)
 	{
 		global $USER;
-		static $obCache = null;
 
 		$messageId = intval($arFields['MESSAGE_ID'] ?? 0);
 
@@ -209,58 +208,7 @@ class CForumRestService extends IRestService
 			throw new Exception('No write perms');
 		}
 
-		if (
-			($result = \CForumMessage::Delete($messageId))
-			&& Loader::includeModule('socialnetwork')
-		)
-		{
-			$logIdList = array();
-
-			$res = Bitrix\Socialnetwork\LogTable::getList(array(
-				'filter' => array(
-					'=SOURCE_ID' => $messageId,
-					'@EVENT_ID' => array('forum') // replace with provider getEventId
-				),
-				'select' => array('ID')
-			));
-			while ($logFields = $res->fetch())
-			{
-				if (CSocNetLog::delete($logFields['ID']))
-				{
-					$logIdList[] = intval($logFields['ID']);
-				}
-			}
-
-			if (empty($logIdList))
-			{
-				$res = Bitrix\Socialnetwork\LogCommentTable::getList(array(
-					'filter' => array(
-						'=SOURCE_ID' => $messageId,
-						'@EVENT_ID' => array('forum', 'tasks_comment', 'calendar_comment', 'timeman_entry_comment', 'report_comment', 'photo_comment', 'wiki_comment', 'lists_new_element_comment') // replace with provider getEventId
-					),
-					'select' => array('ID', 'LOG_ID')
-				));
-				while ($logCommentFields = $res->fetch())
-				{
-					if (CSocNetLogComments::delete($logCommentFields['ID']))
-					{
-						$logIdList[] = intval($logFields['LOG_ID']);
-					}
-				}
-			}
-
-			if (!empty($logIdList))
-			{
-				foreach($logIdList as $logId)
-				{
-					if ($obCache === null)
-					{
-						$obCache = new CPHPCache;
-					}
-					$obCache->CleanDir("/sonet/log/".intval($logId / 1000)."/".$logId."/comments/");
-				}
-			}
-		}
+		$result = (new \Bitrix\Forum\Infrastructure\Rest\Service\MessageDeleteService())->delete($messageId);
 
 		return (bool)$result;
 	}
@@ -276,7 +224,7 @@ class CForumRestService extends IRestService
 		$currentUserId = (
 			isset($arFields["USER_ID"])
 			&& intval($arFields["USER_ID"]) > 0
-			&& $USER->isAdmin()
+			&& self::isAdmin()
 				? $arFields["USER_ID"]
 				: $USER->getId()
 		);

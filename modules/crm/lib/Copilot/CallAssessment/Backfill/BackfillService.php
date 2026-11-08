@@ -23,6 +23,7 @@ final class BackfillService
 	public const TRANSCRIPTS_TOKEN_LIMIT = 50000;
 
 	private const MIN_TRANSCRIPTS_FOR_AI = 10;
+	private const MAX_AI_FAILURES = 3;
 	private const INFLIGHT_OPTION_NAME = 'CALL_SCORING_V2_BACKFILL_INFLIGHT';
 	private const TICK_LOCK_NAME = 'crm_call_scoring_v2_backfill_tick';
 
@@ -30,17 +31,25 @@ final class BackfillService
 	private readonly DefaultCriteriaProvider $defaultCriteria;
 	private readonly Dispatcher $dispatcher;
 	private readonly StateRepository $stateRepo;
+	private readonly \Closure $jobLauncher;
 	private ?string $loadedInflightJson = null;
 	private ?GPT $tokenizer = null;
 	/** @var array<int, int> */
 	private array $transcriptTokenCache = [];
 
-	public function __construct()
+	/**
+	 * @param null|\Closure(int, string[]): int $jobLauncher
+	 */
+	public function __construct(?\Closure $jobLauncher = null)
 	{
 		$this->candidates = new CandidatesRepository();
 		$this->defaultCriteria = new DefaultCriteriaProvider();
 		$this->dispatcher = Dispatcher::getInstance();
 		$this->stateRepo = new StateRepository();
+		$this->jobLauncher = $jobLauncher
+			?? fn(int $callAssessmentId, array $transcripts): int
+				=> $this->dispatcher->launchEnrichCallAssessmentJob($callAssessmentId, $transcripts)
+		;
 	}
 
 	public function tick(): bool
@@ -94,10 +103,10 @@ final class BackfillService
 	}
 
 	/**
-	 * @param array<int, array{jobId: int, remainingActivityIds: int[]}> $inflight
+	 * @param array<int, array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}> $inflight
 	 * @param array<int, string> $transcriptsById
 	 * @param array<int, bool> $withoutCriteria
-	 * @return array<int, array{jobId: int, remainingActivityIds: int[]}>
+	 * @return array<int, array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}>
 	 */
 	private function processInflight(
 		array $inflight,
@@ -115,14 +124,46 @@ final class BackfillService
 		{
 			$callAssessmentId = (int)$callAssessmentId;
 			$jobId = (int)($entry['jobId'] ?? 0);
+			$current = array_values(array_map('intval', (array)($entry['currentActivityIds'] ?? [])));
 			$remaining = array_values(array_map('intval', (array)($entry['remainingActivityIds'] ?? [])));
+			$failureCount = max(0, (int)($entry['failureCount'] ?? 0));
+
+			if ($jobId <= 0)
+			{
+				$next = $this->launchNextChunk($callAssessmentId, $remaining, $transcriptsById, $failureCount);
+				if ($next === null)
+				{
+					$this->fallbackToBasicIfStillEmpty($callAssessmentId, $withoutCriteria);
+
+					continue;
+				}
+
+				if ($next['jobId'] <= 0)
+				{
+					$next = $this->recordBackfillFailure(
+						$callAssessmentId,
+						$next,
+						$withoutCriteria,
+						'launch',
+					);
+				}
+
+				if ($next !== null)
+				{
+					$result[$callAssessmentId] = $next;
+				}
+
+				continue;
+			}
 
 			$status = $this->candidates->aiQueueStatus($jobId);
 			if ($status === CandidatesRepository::AI_QUEUE_STATUS_PENDING)
 			{
 				$result[$callAssessmentId] = [
 					'jobId' => $jobId,
+					'currentActivityIds' => $current,
 					'remainingActivityIds' => $remaining,
+					'failureCount' => $failureCount,
 				];
 
 				continue;
@@ -130,7 +171,30 @@ final class BackfillService
 
 			if ($status !== CandidatesRepository::AI_QUEUE_STATUS_SUCCESS)
 			{
-				$this->fallbackToBasicIfStillEmpty($callAssessmentId, $withoutCriteria);
+				$retryActivityIds = array_values(array_unique(array_merge($current, $remaining)));
+				if (empty($current))
+				{
+					$retryActivityIds = array_values(array_unique(array_merge(
+						array_keys($transcriptsById),
+						$retryActivityIds,
+					)));
+				}
+
+				$failed = $this->recordBackfillFailure(
+					$callAssessmentId,
+					[
+						'jobId' => 0,
+						'currentActivityIds' => [],
+						'remainingActivityIds' => $retryActivityIds,
+						'failureCount' => $failureCount,
+					],
+					$withoutCriteria,
+					'job-' . $status,
+				);
+				if ($failed !== null)
+				{
+					$result[$callAssessmentId] = $failed;
+				}
 
 				continue;
 			}
@@ -142,7 +206,7 @@ final class BackfillService
 				continue;
 			}
 
-			$next = $this->launchNextChunk($callAssessmentId, $remaining, $transcriptsById);
+			$next = $this->launchNextChunk($callAssessmentId, $remaining, $transcriptsById, 0);
 			if ($next === null)
 			{
 				$this->fallbackToBasicIfStillEmpty($callAssessmentId, $withoutCriteria);
@@ -150,10 +214,66 @@ final class BackfillService
 				continue;
 			}
 
-			$result[$callAssessmentId] = $next;
+			if ($next['jobId'] <= 0)
+			{
+				$next = $this->recordBackfillFailure(
+					$callAssessmentId,
+					$next,
+					$withoutCriteria,
+					'launch',
+				);
+			}
+
+			if ($next !== null)
+			{
+				$result[$callAssessmentId] = $next;
+			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * @param array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int} $entry
+	 * @param array<int, bool> $withoutCriteria mutated in-place
+	 * @return array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}|null
+	 */
+	private function recordBackfillFailure(
+		int $callAssessmentId,
+		array $entry,
+		array &$withoutCriteria,
+		string $stage,
+	): ?array
+	{
+		$entry['failureCount']++;
+		if ($entry['failureCount'] >= self::MAX_AI_FAILURES)
+		{
+			AIManager::logger()->warning(
+				'{date}: {class}: AI backfill exhausted {limit} attempts for call assessment {callAssessment} ({stage})',
+				[
+					'class' => self::class,
+					'limit' => self::MAX_AI_FAILURES,
+					'callAssessment' => $callAssessmentId,
+					'stage' => $stage,
+				],
+			);
+			$this->fallbackToBasicIfStillEmpty($callAssessmentId, $withoutCriteria);
+
+			return null;
+		}
+
+		AIManager::logger()->warning(
+			'{date}: {class}: AI backfill attempt failed for call assessment {callAssessment} ({stage}); attempt {attempt} of {limit}',
+			[
+				'class' => self::class,
+				'callAssessment' => $callAssessmentId,
+				'stage' => $stage,
+				'attempt' => $entry['failureCount'],
+				'limit' => self::MAX_AI_FAILURES,
+			],
+		);
+
+		return $entry;
 	}
 
 	/**
@@ -176,7 +296,7 @@ final class BackfillService
 
 	/**
 	 * @param int[] $pending
-	 * @param array<int, array{jobId: int, remainingActivityIds: int[]}> $inflight
+	 * @param array<int, array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}> $inflight
 	 * @param int[] $recentActivityIds
 	 * @param array<int, string> $transcriptsById
 	 * @param array<int, bool> $withoutCriteria mutated in-place
@@ -229,7 +349,7 @@ final class BackfillService
 	 * @param int[] $recentActivityIds
 	 * @param array<int, string> $transcriptsById
 	 * @param array<int, bool> $withoutCriteria
-	 * @return array{jobId: int, remainingActivityIds: int[]}|null
+	 * @return array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}|null
 	 */
 	private function startBackfillForCallAssessment(
 		CopilotCallAssessment $callAssessment,
@@ -249,7 +369,7 @@ final class BackfillService
 			return null;
 		}
 
-		$next = $this->launchNextChunk($callAssessment->getId(), $recentActivityIds, $transcriptsById);
+		$next = $this->launchNextChunk($callAssessment->getId(), $recentActivityIds, $transcriptsById, 0);
 		if ($next === null)
 		{
 			$this->saveDefaultCriteria(
@@ -260,6 +380,15 @@ final class BackfillService
 
 			return null;
 		}
+		if ($next['jobId'] <= 0)
+		{
+			return $this->recordBackfillFailure(
+				$callAssessment->getId(),
+				$next,
+				$withoutCriteria,
+				'launch',
+			);
+		}
 
 		return $next;
 	}
@@ -267,12 +396,13 @@ final class BackfillService
 	/**
 	 * @param int[] $activityIds
 	 * @param array<int, string> $transcriptsById
-	 * @return array{jobId: int, remainingActivityIds: int[]}|null
+	 * @return array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}|null
 	 */
 	private function launchNextChunk(
 		int $callAssessmentId,
 		array $activityIds,
 		array $transcriptsById,
+		int $failureCount,
 	): ?array
 	{
 		[$chunkIds, $remaining] = $this->splitByTokenLimit($activityIds, $transcriptsById);
@@ -287,10 +417,15 @@ final class BackfillService
 			$transcripts[] = $transcriptsById[$id];
 		}
 
-		$jobId = $this->dispatcher->launchEnrichCallAssessmentJob($callAssessmentId, $transcripts);
+		$jobId = ($this->jobLauncher)($callAssessmentId, $transcripts);
 		if ($jobId <= 0)
 		{
-			return null;
+			return [
+				'jobId' => 0,
+				'currentActivityIds' => [],
+				'remainingActivityIds' => $activityIds,
+				'failureCount' => $failureCount,
+			];
 		}
 
 		$this->stateRepo->registerMaintenanceJob($jobId, [
@@ -301,13 +436,15 @@ final class BackfillService
 
 		return [
 			'jobId' => $jobId,
+			'currentActivityIds' => $chunkIds,
 			'remainingActivityIds' => $remaining,
+			'failureCount' => $failureCount,
 		];
 	}
 
 	/**
 	 * @param int[] $recentActivityIds
-	 * @param array<int, array{jobId: int, remainingActivityIds: int[]}> $inflight
+	 * @param array<int, array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}> $inflight
 	 * @return array<int, string>
 	 */
 	private function loadTranscripts(array $recentActivityIds, array $inflight): array
@@ -315,6 +452,10 @@ final class BackfillService
 		$activityIds = $recentActivityIds;
 		foreach ($inflight as $entry)
 		{
+			foreach ((array)($entry['currentActivityIds'] ?? []) as $id)
+			{
+				$activityIds[] = (int)$id;
+			}
 			foreach ((array)($entry['remainingActivityIds'] ?? []) as $id)
 			{
 				$activityIds[] = (int)$id;
@@ -471,7 +612,7 @@ final class BackfillService
 	}
 
 	/**
-	 * @return array<int, array{jobId: int, remainingActivityIds: int[]}>
+	 * @return array<int, array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}>
 	 */
 	private function loadInflight(): array
 	{
@@ -504,28 +645,41 @@ final class BackfillService
 		foreach ($decoded as $callAssessmentId => $entry)
 		{
 			$callAssessmentId = (int)$callAssessmentId;
-			$jobId = (int)($entry['jobId'] ?? 0);
-			if ($callAssessmentId <= 0 || $jobId <= 0)
+			$entry = self::normalizeInflightEntry((array)$entry);
+			if (
+				$callAssessmentId <= 0
+				|| ($entry['jobId'] <= 0 && empty($entry['remainingActivityIds']))
+			)
 			{
 				continue;
 			}
 
-			$remaining = array_values(array_filter(
-				array_map('intval', (array)($entry['remainingActivityIds'] ?? [])),
-				static fn($id) => $id > 0,
-			));
-
-			$result[$callAssessmentId] = [
-				'jobId' => $jobId,
-				'remainingActivityIds' => $remaining,
-			];
+			$result[$callAssessmentId] = $entry;
 		}
 
 		return $result;
 	}
 
 	/**
-	 * @param array<int, array{jobId: int, remainingActivityIds: int[]}> $inflight
+	 * @return array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}
+	 */
+	private static function normalizeInflightEntry(array $entry): array
+	{
+		$normalizeIds = static fn(array $ids): array => array_values(array_filter(
+			array_map('intval', $ids),
+			static fn($id) => $id > 0,
+		));
+
+		return [
+			'jobId' => max(0, (int)($entry['jobId'] ?? 0)),
+			'currentActivityIds' => $normalizeIds((array)($entry['currentActivityIds'] ?? [])),
+			'remainingActivityIds' => $normalizeIds((array)($entry['remainingActivityIds'] ?? [])),
+			'failureCount' => max(0, (int)($entry['failureCount'] ?? 0)),
+		];
+	}
+
+	/**
+	 * @param array<int, array{jobId: int, currentActivityIds: int[], remainingActivityIds: int[], failureCount: int}> $inflight
 	 */
 	private function saveInflight(array $inflight): void
 	{

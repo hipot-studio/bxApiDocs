@@ -9,14 +9,18 @@ use Bitrix\Disk\Document\Flipchart\BoardService;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Disk\User;
 use Bitrix\Disk\Version;
 use Bitrix\Main\Application;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Uri;
 
 Loc::loadMessages(__FILE__);
 
@@ -36,6 +40,8 @@ class LocalDocumentController extends Internals\Controller
 
 	const STATUS_NOT_FOUND = 'not_found';
 
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
+	protected UnifiedLinkUrl $unifiedLinkUrl;
 	/** @var  File */
 	protected $file;
 	/** @var int */
@@ -44,6 +50,15 @@ class LocalDocumentController extends Internals\Controller
 	protected $version;
 	/** @var int */
 	protected $versionId;
+
+	public function __construct()
+	{
+		parent::__construct();
+
+		$serviceLocator = ServiceLocator::getInstance();
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
+	}
 
 	public static function isLocalService($serviceName)
 	{
@@ -120,7 +135,10 @@ class LocalDocumentController extends Internals\Controller
 
 	protected function checkReadPermissions()
 	{
-		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext();
+		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext(
+			$this->shouldCheckUnifiedLinkForFile(),
+		);
+
 		if(!$this->file->canRead($securityContext))
 		{
 			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_BAD_RIGHTS'), self::ERROR_BAD_RIGHTS)));
@@ -128,9 +146,25 @@ class LocalDocumentController extends Internals\Controller
 		}
 	}
 
+	protected function shouldCheckUnifiedLinkForFile(): bool
+	{
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		return
+			is_string($uls)
+			&& $this->unifiedLinkAccessService->validateUlsForObjectId(
+				objectId: $this->file->getId(),
+				uls: $uls,
+			)
+		;
+	}
+
 	protected function checkUpdatePermissions()
 	{
-		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext();
+		$securityContext = $this->file->getStorage()->getCurrentUserSecurityContext(
+			$this->shouldCheckUnifiedLinkForFile(),
+		);
+
 		if(!$this->file->canUpdate($securityContext))
 		{
 			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_BAD_RIGHTS'), self::ERROR_BAD_RIGHTS)));
@@ -262,7 +296,17 @@ class LocalDocumentController extends Internals\Controller
 			$this->sendJsonErrorResponse();
 		}
 		$storage = $folder->getStorage();
-		if(!$folder->canAdd($storage->getCurrentUserSecurityContext()))
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		$shouldCheckUnifiedLink =
+			is_string($uls)
+			&& $this->unifiedLinkAccessService->validateUlsForObjectId(
+				objectId: $folder->getId(),
+				uls: $uls,
+			)
+		;
+
+		if(!$folder->canAdd($storage->getCurrentUserSecurityContext($shouldCheckUnifiedLink)))
 		{
 			$this->errorCollection->add(array(new Error(Loc::getMessage('DISK_LOCAL_DOC_CONTROLLER_ERROR_BAD_RIGHTS'), self::ERROR_BAD_RIGHTS)));
 			$this->sendJsonErrorResponse();
@@ -320,6 +364,14 @@ class LocalDocumentController extends Internals\Controller
 
 		$openUrl = null;
 		$urlManager = Driver::getInstance()->getUrlManager();
+		$editUrl = new Uri($urlManager->getUrlForStartEditFile($newFile->getId(), self::CODE));
+		$newFileUls = $this->unifiedLinkAccessService->getUlsForObjectId($newFile->getId());
+
+		$this->unifiedLinkUrl->addUlsToUri(
+			uri: $editUrl,
+			uls: $newFileUls,
+		);
+
 		if ($type === 'board')
 		{
 			$openUrl = $urlManager->getUrlForViewBoard($newFile, false, $calledFromDisk ? 'disk_page' : 'docs_attach');
@@ -331,13 +383,16 @@ class LocalDocumentController extends Internals\Controller
 			'object' => array(
 				'id' => $newFile->getId(),
 				'name' => $newFile->getName(),
+				'uniqueCode' => $newFile->getUniqueCode(),
+				'uls' => $newFileUls,
 				'sizeInt' => $newFile->getSize(),
 				'size' => \CFile::formatSize($newFile->getSize()),
 				'extension' => $newFile->getExtension(),
 				'nameWithoutExtension' => getFileNameWithoutExtension($newFile->getName()),
 			),
 			'folderName' => $storage->getProxyType()->getTitleForCurrentUser() . ' / ' . $folder->getName(),
-			'link' => $urlManager->getUrlForStartEditFile($newFile->getId(), self::CODE),
+			'uls' => $newFileUls,
+			'link' => (string)$editUrl,
 			'openUrl' => $openUrl,
 		));
 	}

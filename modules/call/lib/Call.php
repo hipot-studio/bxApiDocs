@@ -48,6 +48,12 @@ class Call
 		PROVIDER_VOXIMPLANT = 'Voximplant'
 	;
 
+	public const PROVIDERS = [
+		self::PROVIDER_PLAIN,
+		self::PROVIDER_BITRIX,
+		self::PROVIDER_VOXIMPLANT,
+	];
+
 	protected $id;
 	protected $type;
 	protected int $scheme;
@@ -62,6 +68,7 @@ class Call
 	protected $parentId;
 	protected $parentUuid;
 	protected $state;
+	protected ?string $finishPrevState = null;
 	/** @var DateTime|null */
 	protected $startDate;
 	/** @var DateTime|null */
@@ -97,6 +104,15 @@ class Call
 	 */
 	protected function __construct()
 	{
+	}
+
+	/**
+	 * Single source of truth for the provider allowlist: the module handles the
+	 * providers of self::PROVIDERS only, everything else comes from a broken client.
+	 */
+	public static function isProviderSupported(string $provider): bool
+	{
+		return in_array($provider, self::PROVIDERS, true);
 	}
 
 	/**
@@ -236,6 +252,41 @@ class Call
 	{
 		$this->loadUsers();
 		return isset($this->users[$userId]) ? $this->users[$userId] : null;
+	}
+
+	/**
+	 * Whether an empty invite list on a repeated invite is a legitimate "no one left to
+	 * call" no-op rather than an error. Returns true only when there is at least one
+	 * requested recipient and every requested id is already a participant of this call
+	 * AND in a terminal state (DECLINED / BUSY). Any other reason for an empty invite
+	 * list — empty / extranet-filtered input, invalid ids, or users that could not be
+	 * added (capacity) — is NOT terminal and must still surface the empty_users error.
+	 *
+	 * @param int[] $userIds requested recipient ids
+	 */
+	public function areAllRequestedUsersTerminal(array $userIds): bool
+	{
+		$userIds = array_values(array_unique(array_map('intval', $userIds)));
+		if ($userIds === [])
+		{
+			return false;
+		}
+
+		foreach ($userIds as $userId)
+		{
+			if ($userId <= 0)
+			{
+				return false;
+			}
+
+			$callUser = $this->getUser($userId);
+			if (!$callUser || !$callUser->isTerminalState())
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -969,6 +1020,23 @@ class Call
 	}
 
 	/**
+	 * Whether this is a genuine 1-1 ringing call — the single scope predicate for
+	 * device-scoped decline. Canonical source of truth for registration, the decline
+	 * gate, startPush, finish cleanup and the client-facing isDeviceScoped flag, so
+	 * those paths can never drift apart. A call qualifies iff it is TYPE_INSTANT
+	 * (excludes a private chat created as a permanent call) AND its associated entity
+	 * is a private chat (excludes group TYPE_INSTANT calls).
+	 */
+	public function isDeviceScopedRinging(): bool
+	{
+		$entity = $this->getAssociatedEntity();
+
+		return $this->getType() === self::TYPE_INSTANT
+			&& $entity instanceof \Bitrix\Call\Integration\Chat
+			&& $entity->isPrivateChat();
+	}
+
+	/**
 	 * @param string $entityType
 	 * @param int $entityId
 	 * @return void
@@ -1011,6 +1079,85 @@ class Call
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Closed-form membership probe: checks a single `(CALL_ID, USER_ID)` row in
+	 * `b_call_user` without materializing the whole roster via {@see self::loadUsers()}.
+	 *
+	 * @param int $userId Id of the user.
+	 * @return bool
+	 */
+	public function hasUserClosedForm(int $userId): bool
+	{
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		// Already-materialized roster: answer from memory, no extra query.
+		if (is_array($this->users))
+		{
+			return isset($this->users[$userId]);
+		}
+
+		return CallUserTable::getRow([
+			'select' => ['USER_ID'],
+			'filter' => [
+				'=CALL_ID' => $this->getId(),
+				'=USER_ID' => $userId,
+			],
+		]) !== null;
+	}
+
+	/**
+	 * Closed-form counterpart of {@see self::checkAccess()} for a single user.
+	 *
+	 * Preserves the exact access semantics — "call member OR associated-entity
+	 * access" — but performs the membership check as a targeted single-row lookup
+	 * instead of loading the full roster. Use on read/access paths that only need
+	 * to authorize one user.
+	 *
+	 * @param int $userId Id of the user.
+	 * @return bool
+	 */
+	public function checkAccessClosedForm(int $userId): bool
+	{
+		if ($this->hasUserClosedForm($userId))
+		{
+			return true;
+		}
+
+		return (bool)($this->getAssociatedEntity()?->checkAccess($userId));
+	}
+
+	/**
+	 * Targeted single-user read without materializing the whole roster.
+	 * Mirrors how {@see self::loadUsers()} builds a CallUser from a full
+	 * `b_call_user` row, but fetches only the requested `(CALL_ID, USER_ID)` row.
+	 * Use on read paths (e.g. getUserState) that need one participant's state,
+	 * not the whole roster.
+	 *
+	 * @param int $userId Id of the user.
+	 * @return CallUser|null
+	 */
+	public function getUserClosedForm(int $userId): ?CallUser
+	{
+		// Already-materialized roster: reuse it, no extra query.
+		if (is_array($this->users))
+		{
+			return $this->users[$userId] ?? null;
+		}
+
+		$row = CallUserTable::getList([
+			'filter' => [
+				'=CALL_ID' => $this->getId(),
+				'=USER_ID' => $userId,
+			],
+			'limit' => 1,
+		])->fetch();
+
+		return $row ? CallUser::create($row) : null;
 	}
 
 	/**
@@ -1224,7 +1371,8 @@ class Call
 		$sendPush = true,
 		string $sendMode = Signaling::MODE_ALL,
 		bool $isRepeated = false,
-		?array $usersInOtherCalls = null
+		?array $usersInOtherCalls = null,
+		?int $ttl = null
 	): void
 	{
 		$usersInOtherCalls ??= CallFactory::filterUsersInActiveCalls($toUserIds, $this->getId());
@@ -1244,7 +1392,8 @@ class Call
 				sendPush: $sendPush,
 				sendMode: $sendMode,
 				isRepeated: $isRepeated,
-				usersInOtherCalls: $usersInOtherCalls
+				usersInOtherCalls: $usersInOtherCalls,
+				ttl: $ttl,
 			);
 			return;
 		}
@@ -1257,6 +1406,7 @@ class Call
 			sendPush: $sendPush,
 			isRepeated: $isRepeated,
 			usersInOtherCalls: $usersInOtherCalls,
+			ttl: $ttl,
 		);
 	}
 
@@ -1295,36 +1445,295 @@ class Call
 		$this->endpoint = $endpoint;
 	}
 
+	/**
+	 * Facade preserved for every caller other than the finish controllers
+	 * (Recent cleanup, agents, CallController callbacks, sibling teardown in
+	 * terminateAllCallsInChat, onVoximplantConferenceFinished, ...).
+	 */
 	public function finish(): void
 	{
+		if ($this->commitFinish())
+		{
+			$this->finishSideEffects();
+		}
+	}
+
+	/**
+	 * Atomic FINISHED transition — the only work that must run under the
+	 * call_state lock. Sets endDate and flips STATE to FINISHED via
+	 * `UPDATE ... AND STATE != FINISHED`.
+	 *
+	 * @return bool true only when this call performed the transition; a
+	 *         concurrent finish that already committed returns false (no-op),
+	 *         guaranteeing exactly-once side effects. On a lost race the local
+	 *         endDate/state are re-synced from the persisted row so a serialized
+	 *         response never carries an uncommitted timestamp.
+	 */
+	public function commitFinish(): bool
+	{
 		if ($this->endDate instanceof DateTime)
+		{
+			return false;
+		}
+
+		// Set endDate before the transition so the deferred onStateChange() and
+		// getCallDuration() (fired in finishSideEffects) read a populated value.
+		$this->endDate = new DateTime();
+		$prevState = $this->state;
+
+		// Atomic CAS ONLY — no entity side effect. commitFinish() runs under the
+		// call_state lock, so the heavy associatedEntity->onStateChange() (chat
+		// "call finished" message) is NOT fired here via updateState(); it is
+		// deferred to finishSideEffects() (off-lock). This mirrors updateState()'s
+		// pure DB CAS without its onStateChange() call.
+		if (!CallTable::updateState($this->getId(), static::STATE_FINISHED))
+		{
+			// Lost the race: a concurrent finish already committed FINISHED. Re-sync
+			// state/endDate from the persisted row so a caller serializing this
+			// object via toArray() reflects the winner's timestamp, not our local one.
+			// Rehydrate WITHOUT initCall() — it would re-fire onCallStarted for a
+			// classic/plain call (see loadWithoutInit()).
+			$freshCall = ($this->getId()) ? static::loadWithoutInit((int)$this->getId()) : null;
+			if ($freshCall instanceof self)
+			{
+				$this->state = $freshCall->getState();
+				$this->endDate = $freshCall->getEndDate();
+			}
+			else
+			{
+				$this->endDate = null;
+			}
+
+			return false;
+		}
+
+		$this->state = static::STATE_FINISHED;
+		$this->finishPrevState = $prevState;
+
+		return true;
+	}
+
+	/**
+	 * Off-lock finish work. Runs strictly after commitFinish() has written the
+	 * FINISHED state, so every listener and background job observes a persisted
+	 * finished call. Delivery of sendFinish() stays synchronous but off-clock
+	 * (outside the lock); heavy stat aggregation and chat sibling teardown are
+	 * deferred to background jobs.
+	 */
+	public function finishSideEffects(): void
+	{
+		if ($this->getId() && $this->isDeviceScopedRinging())
+		{
+			// Purge the ringing-device registry for this private 1-1 call. Only
+			// device-scoped (private TYPE_INSTANT) calls ever populate it, so group
+			// finishes skip the otherwise pointless DELETE ... KEY IN (...) over the
+			// full roster. Best-effort: the registry is TTL-evicted anyway, and it
+			// must never abort the exactly-once finish teardown that follows
+			// (finishOnController / participant updates / Call::finish broadcast) —
+			// a storage failure here would otherwise leave the call FINISHED with
+			// clients still ringing and no way to replay the one-shot side effects.
+			try
+			{
+				(new RingingDeviceRegistry())->deleteForCall((int)$this->getId(), $this->getUsers());
+			}
+			catch (\Throwable $e)
+			{
+				Application::getInstance()->getExceptionHandler()->writeToLog($e);
+			}
+		}
+
+		$controllerResult = $this->finishOnController();
+		if (!$controllerResult->isSuccess() && $this->getId())
+		{
+			// The room teardown on the media controller failed, but the call is already
+			// committed FINISHED — a repeat finish() takes the fast-path and never re-runs
+			// this teardown, so the room would leak. Re-attempt off-clock; finishCall() is
+			// keyed by UUID and idempotent, so the retry cannot double-finish.
+			Application::getInstance()->addBackgroundJob(
+				[static::class, 'runRetryFinishOnController'],
+				[(int)$this->getId()],
+				Application::JOB_PRIORITY_LOW,
+			);
+		}
+
+		$this->loadUsers();
+
+		// Deferred from commitFinish(): the entity state-change side effect (for a
+		// chat — the "call finished" IM message) is a heavy synchronous write and
+		// runs here, off the call_state lock. It must precede the CALLING→IDLE
+		// transitions below, because the message text depends on participants'
+		// finish-time states (e.g. PlainCall not-answered/declined).
+		if ($this->associatedEntity)
+		{
+			$this->associatedEntity->onStateChange(static::STATE_FINISHED, $this->finishPrevState);
+		}
+
+		$callingUserIds = [];
+		$unavailableUserIds = [];
+		foreach ($this->users as $callUser)
+		{
+			if ($callUser->getState() === CallUser::STATE_CALLING)
+			{
+				$callingUserIds[] = (int)$callUser->getUserId();
+			}
+			elseif ($callUser->getState() === CallUser::STATE_UNAVAILABLE)
+			{
+				$unavailableUserIds[] = (int)$callUser->getUserId();
+			}
+		}
+
+		$callId = $this->getId();
+
+		// Settle participant states in the DB BEFORE broadcasting finish: a client
+		// that receives the Call::finish Pull and immediately queries participant
+		// states must not observe still-ringing CALLING rows (the per-user path used
+		// to flip them before sendFinish()).
+		$transitionedCallingUserIds = [];
+		if ($callingUserIds !== [] && $callId)
+		{
+			// Compare-and-set on the source state: this runs off the call_state lock,
+			// so a concurrent decline/hangup/answer may have already moved a user to a
+			// terminal state — only flip rows still in CALLING, never clobber that.
+			// The returned ids are the users this UPDATE actually moved CALLING→IDLE.
+			$transitionedCallingUserIds = CallUserTable::transitionState(
+				$callId,
+				$callingUserIds,
+				CallUser::STATE_IDLE,
+				CallUser::STATE_CALLING,
+			);
+
+			// Keep the in-memory roster consistent with the bulk UPDATE above —
+			// only for the users actually transitioned.
+			foreach ($transitionedCallingUserIds as $callingUserId)
+			{
+				$this->users[$callingUserId]?->setStateInMemory(CallUser::STATE_IDLE);
+			}
+		}
+
+		$this->getSignaling()->sendFinish();
+
+		if ($callId)
+		{
+			Application::getInstance()->addBackgroundJob(
+				[static::class, 'runSaveStat'],
+				[$callId],
+				Application::JOB_PRIORITY_LOW,
+			);
+		}
+
+		// Replay OnCallUserStateChange off-clock for both finish cohorts in a single
+		// batch — both become a "missed" b_call_userlog row via CallLogService:
+		//   - CALLING→IDLE            — participants who were still ringing;
+		//   - UNAVAILABLE→UNAVAILABLE — participants who were never reached.
+		// Emit the 'calling:idle' change ONLY for users this finish actually moved
+		// CALLING→IDLE (transitionState return), not the whole pre-lock snapshot: a
+		// user concurrently answered (CALLING→READY→IDLE) would otherwise be logged
+		// as "missed" even though they were reached.
+		$changes = [];
+		foreach ($transitionedCallingUserIds as $callingUserId)
+		{
+			$changes[] = [
+				'callId' => $callId,
+				'userId' => $callingUserId,
+				'oldState' => CallUser::STATE_CALLING,
+				'newState' => CallUser::STATE_IDLE,
+			];
+		}
+		foreach ($unavailableUserIds as $unavailableUserId)
+		{
+			$changes[] = [
+				'callId' => $callId,
+				'userId' => $unavailableUserId,
+				'oldState' => CallUser::STATE_UNAVAILABLE,
+				'newState' => CallUser::STATE_UNAVAILABLE,
+			];
+		}
+
+		if ($changes !== [] && $callId)
+		{
+			Application::getInstance()->addBackgroundJob(
+				[EventHandler::class, 'dispatchUserStateChangeEventsBatch'],
+				[$changes],
+				Application::JOB_PRIORITY_NORMAL,
+			);
+		}
+
+		$this->fireCallFinishedEvent();
+	}
+
+	/**
+	 * Hook for provider-specific room teardown on the media controller. Returns the
+	 * teardown Result so finishSideEffects() can retry a failed controller call instead
+	 * of silently leaving the room open. The base call has no controller room.
+	 */
+	protected function finishOnController(): \Bitrix\Main\Result
+	{
+		return new \Bitrix\Main\Result();
+	}
+
+	/**
+	 * Background-job entry point: best-effort retry of the media-controller room teardown
+	 * when {@see self::finishOnController()} failed during finishSideEffects (e.g. the
+	 * controller was briefly unavailable). Because the committed FINISHED state makes a
+	 * repeat finish() take the fast-path — never re-running the teardown — the room would
+	 * otherwise leak. finishCall() is keyed by UUID and idempotent, so this retry cannot
+	 * double-finish. Runs after the response is flushed — must stay public static and accept
+	 * primitives only (no Call instance). A durable outbox with bounded retries is out of scope.
+	 *
+	 * @internal
+	 */
+	public static function runRetryFinishOnController(int $callId): void
+	{
+		if ($callId <= 0)
 		{
 			return;
 		}
 
-		$this->endDate = new DateTime();
-
-		if ($this->updateState(static::STATE_FINISHED))
+		$call = self::loadWithoutInit($callId);
+		if (!$call instanceof Call)
 		{
-			$this->loadUsers();
-			foreach ($this->users as $callUser)
-			{
-				if ($callUser->getState() === CallUser::STATE_CALLING)
-				{
-					$callUser->updateState(CallUser::STATE_IDLE);
-				}
-
-				// so that the call gets into this user's call list
-				if ($callUser->getState() === CallUser::STATE_UNAVAILABLE)
-				{
-					$callUser->updateState(CallUser::STATE_UNAVAILABLE);
-				}
-			}
-			$this->getSignaling()->sendFinish();
-			$this->saveStat();
-
-			$this->fireCallFinishedEvent();
+			return;
 		}
+
+		$result = $call->finishOnController();
+		if (!$result->isSuccess())
+		{
+			// Still failing after the retry — surface it so a leaked controller room is
+			// observable in the log rather than silently lost (the original finding).
+			Application::getInstance()->getExceptionHandler()->writeToLog(
+				new \Bitrix\Main\SystemException(
+					'call: finishOnController retry failed for call ' . $callId . ': '
+					. implode('; ', $result->getErrorMessages())
+				)
+			);
+		}
+	}
+
+	/**
+	 * Background-job entry point for {@see self::saveStat()}. Runs after the
+	 * HTTP response is flushed — must stay public static and accept primitives
+	 * only (no Call instance), re-reading the call by id so the stats reflect
+	 * the persisted finished state.
+	 *
+	 * @internal
+	 */
+	public static function runSaveStat(int $callId): void
+	{
+		if ($callId <= 0)
+		{
+			return;
+		}
+
+		$call = self::loadWithoutInit($callId);
+		if (!$call instanceof Call)
+		{
+			return;
+		}
+
+		// Rehydration reconstructs the call without users; saveStat() needs
+		// $this->users to be an array (count()/iteration), so load them here.
+		$call->loadUsers();
+		$call->saveStat();
 	}
 
 	/**
@@ -1401,6 +1810,13 @@ class Call
 		}
 		else
 		{
+			// STATE and END_DATE on an existing call are owned exclusively by the
+			// atomic transition (CallTable::updateState via updateState()/commitFinish()).
+			// A full-row save() must never write them back: a stale in-memory instance
+			// (e.g. STATE=inviting) would otherwise resurrect a call already committed
+			// FINISHED by a concurrent lock-free path (lost update). INSERT keeps them -
+			// a new row sets its initial STATE/END_DATE intentionally.
+			unset($fields['STATE'], $fields['END_DATE']);
 			CallTable::update($this->id, $fields);
 		}
 	}
@@ -1546,7 +1962,7 @@ class Call
 			{
 				$recorded = true;
 			}
-			if ($user->wasRecorded())
+			if ($user->wasScreenShared())
 			{
 				$screenShared = true;
 			}
@@ -1890,6 +2306,20 @@ class Call
 		}
 
 		return null;
+	}
+
+	/**
+	 * Rehydrate a call from its persisted row WITHOUT running initCall().
+	 */
+	protected static function loadWithoutInit(int $id): ?Call
+	{
+		$row = CallTable::getRowById($id);
+		if (!is_array($row))
+		{
+			return null;
+		}
+
+		return CallFactory::getCallInstance((string)$row['PROVIDER'], $row);
 	}
 
 	public static function loadWithUuid($uuid): ?Call

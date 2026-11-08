@@ -56,10 +56,14 @@ class MessagePopupItem implements PopupDataItem, PopupDataAggregatable
 
 	public function getPopupData(array $excludedList = []): PopupData
 	{
+		// Comment cells are assembled strictly over the top-level collection. A nested producer
+		// arrives after PopupData has already filled the top-level item, so it would re-run the
+		// query and leave author profiles collected by the first pass.
+		$excludedList[] = CommentPopupItem::class;
+
 		if ($this->shortInfo)
 		{
 			$excludedList[] = ReactionPopupItem::class;
-			$excludedList[] = CommentPopupItem::class;
 		}
 
 		return $this->getMessages()->getPopupData($excludedList);

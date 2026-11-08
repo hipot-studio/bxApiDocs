@@ -516,7 +516,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 
 	protected function crmMassAction(): void
 	{
-		if (!Feature::isMailboxGridBulkActionsAvailable())
+		if (!MailAccess::hasCurrentUserAccessToMassMailboxActions())
 		{
 			$this->includeComponentTemplate('access_denied');
 
@@ -719,8 +719,32 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			$dto->skipConnectionValidation = true;
 		}
 
+		$request = Main\Context::getCurrent()->getRequest();
+		$parameters = $request->getPostList()->toArray() + $request->getJsonList()->toArray();
+		$hasExpectedGeneration = array_key_exists('expectedSourceGenerationId', $parameters);
+		$expectedGeneration = $parameters['expectedSourceGenerationId'] ?? null;
+		if (is_string($expectedGeneration) && preg_match('/^(0|[1-9][0-9]*)$/D', $expectedGeneration))
+		{
+			$expectedGeneration = filter_var($expectedGeneration, FILTER_VALIDATE_INT);
+		}
+		if ($expectedGeneration !== null && (!is_int($expectedGeneration) || $expectedGeneration < 0))
+		{
+			$this->error(new Main\Error(
+				(string)Loc::getMessage('MAIL_CLIENT_FORM_ERROR'),
+				Mail\Helper\Dto\MailboxConnect\GeneralSettingsPatch::ERROR_INVALID_PATCH,
+			));
+
+			return;
+		}
+
 		$mailboxConnector = new MailboxConnector();
-		$result = $mailboxConnector->updateMailbox($mailboxId, $dto);
+		$result = $mailboxConnector->updateMailbox(
+			$mailboxId,
+			$dto,
+			expectedSourceGenerationId: $expectedGeneration,
+			hasExpectedSourceGenerationId: $hasExpectedGeneration,
+			requestedFields: $fields,
+		);
 
 		if (!$mailboxConnector->getSuccess())
 		{
@@ -740,39 +764,11 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 	 */
 	public function deleteAction($id)
 	{
-		global $USER;
-
-		$mailbox = Mail\MailboxTable::getList([
-			'filter' => [
-				'=ID' => $id,
-				'=ACTIVE' => 'Y',
-				'=SERVER_TYPE' => 'imap',
-			],
-		])->fetch();
-
-		if (empty($mailbox))
+		$result = MailboxConnector::deleteMailbox((int)$id);
+		if (!$result->isSuccess())
 		{
-			$this->error(Loc::getMessage('MAIL_CLIENT_ELEMENT_NOT_FOUND'));
-
-			return;
+			$this->error($result->getErrors()[0]);
 		}
-
-		$canManage = Mail\Helper\MailboxAccess::hasCurrentUserAccessToEditMailbox($mailbox['ID']);
-		if (!$canManage)
-		{
-			$this->error(Loc::getMessage('MAIL_CLIENT_DENIED'));
-
-			return;
-		}
-
-		\CMailbox::update($mailbox['ID'], ['ACTIVE' => 'N']);
-		self::deleteMailboxSender((int)$mailbox['ID'], $mailbox['EMAIL']);
-
-		\CUserCounter::clear($USER->getId(), 'mail_unseen', $mailbox['LID']);
-		$mailboxSyncManager = new \Bitrix\Mail\Helper\Mailbox\MailboxSyncManager($mailbox['USER_ID']);
-		$mailboxSyncManager->deleteSyncData($mailbox['ID']);
-
-		\CAgent::addAgent(sprintf('Bitrix\Mail\Helper::deleteMailboxAgent(%u);', $mailbox['ID']), 'mail', 'N', 60);
 	}
 
 	protected function error($error, $isOAuth = false, $isSender = false)
@@ -832,6 +828,10 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			}
 
 		}
+		elseif ($error instanceof Main\Error)
+		{
+			$this->errorCollection[] = $error;
+		}
 		else
 		{
 			$this->errorCollection[] = new Main\Error($error);
@@ -888,6 +888,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 				'mail.ru' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_MAILRU'),
 				'office365' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_OFFICE365'),
 				'other' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_IMAP_MSGVER_1'),
+				'mailhost' => Loc::getMessage('MAIL_MAILBOX_SERVICE_NAME_MAILHOST'),
 				default => ucfirst($mailbox['name']),
 			};
 		}
@@ -977,7 +978,7 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 			}
 		}
 
-		if ($mailboxSender || empty($email))
+		if ($mailboxSender || empty($email) || !MailboxConnector::isLegacySenderLookupEnabled())
 		{
 			return $mailboxSender;
 		}
@@ -1040,31 +1041,6 @@ class CMailClientConfigComponent extends CBitrixComponent implements Main\Engine
 		}
 
 		return Sender\UserSenderDataProvider::getUserFormattedName($userId) ?? '';
-	}
-
-	private static function deleteMailboxSender(int $mailboxId): void
-	{
-		$senders = Sender::getByParentId($mailboxId);
-		$senderIds = [];
-		$emails = [];
-		foreach ($senders as $sender)
-		{
-			$senderIds[] = (int)$sender['ID'];
-			if (!in_array($sender['EMAIL'], $emails, true))
-			{
-				$emails[] = $sender['EMAIL'];
-			}
-		}
-
-		if (!empty($senderIds))
-		{
-			Main\Mail\Sender::delete($senderIds);
-		}
-
-		foreach ($emails as $email)
-		{
-			Main\Mail\Sender::clearCustomSmtpCache($email);
-		}
 	}
 
 	private function prepareToolbarButton(bool $isMainMailPage = true): void

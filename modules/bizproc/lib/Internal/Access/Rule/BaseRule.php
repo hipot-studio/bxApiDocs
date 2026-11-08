@@ -41,10 +41,18 @@ class BaseRule extends AbstractRule
 		return (bool)$this->user->getPermission($permissionId);
 	}
 
+	/**
+	 * The branch order matters: "all", then a match by template id, then "own". The template row is read
+	 * on the last branch only, so a holder of a plain scope keeps its current query count.
+	 *
+	 * The portal flag is not read here: the "own" sentinel is already subtracted at the source of the scope
+	 * ({@see \Bitrix\Bizproc\Internal\Access\Model\UserModel::getPermissionMulti}), so the value either is in
+	 * the scope and applies, or is absent altogether.
+	 */
 	private function checkScope(string $permissionId, ?AccessibleItem $item): bool
 	{
 		$scope = $this->user->getPermissionMulti($permissionId);
-		if (empty($scope))
+		if (!$scope)
 		{
 			return false;
 		}
@@ -54,11 +62,33 @@ class BaseRule extends AbstractRule
 			return true;
 		}
 
+		$ownGranted = in_array(PermissionDictionary::VALUE_VARIATION_OWN, $scope, true);
+
 		if ($item === null)
 		{
 			return true;
 		}
 
-		return in_array($item->getId(), $scope, true);
+		$templateId = (int)$item->getId();
+
+		// A row that does not exist yet is decided by the mere presence of "own" in the scope: there is no
+		// authorship to compare against. Named explicitly instead of leaning on the branch above, which
+		// grants on any non-empty scope - for "own" that would be no authorship check at all.
+		if ($templateId <= 0)
+		{
+			return $ownGranted;
+		}
+
+		if (in_array($templateId, $scope, true))
+		{
+			return true;
+		}
+
+		if (!$ownGranted)
+		{
+			return false;
+		}
+
+		return $this->controller->authorship()->isOwn($templateId, $this->user->getUserId());
 	}
 }

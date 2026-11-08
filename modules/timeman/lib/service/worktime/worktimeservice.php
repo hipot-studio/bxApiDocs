@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Timeman\Service\Worktime;
 
+use Bitrix\Bizproc\BaseType\Value;
 use Bitrix\Bizproc\Public\Activity\Trigger\ContextFields\TimemanStartWorktimeTrigger;
 use Bitrix\Bizproc\Starter\Dto\ContextDto;
 use Bitrix\Bizproc\Starter\Enum\Scenario;
@@ -255,7 +256,11 @@ class WorktimeService extends BaseService
 			$this->runAfterRecordSave($actualRecord, $actionListResult->getSchedule(), $actionListResult->getShift(), $recordForm->getFirstEventName());
 
 			if ($actionListResult->getWorktimeAction()->isStart()) {
-				$this->addStartWorkTimeTrigger($actualRecord->getUserId());
+				$this->addStartWorkTimeTrigger(
+					$actualRecord->getUserId(),
+					$actualRecord->getId(),
+					$actualRecord->buildRecordedStartDateTime(),
+				);
 			}
 
 			if ($actionListResult->getWorktimeAction()->isStop()) {
@@ -263,7 +268,8 @@ class WorktimeService extends BaseService
 					$actualRecord->getUserId(),
 					$actualRecord->getId(),
 					$actualRecord->isFirstStop(),
-					$actualRecord->buildRecordedStartDateTime()
+					$actualRecord->buildRecordedStartDateTime(),
+					$actualRecord->buildRecordedStopDateTime() ?: null,
 				);
 			}
 
@@ -276,7 +282,8 @@ class WorktimeService extends BaseService
 					$actualRecord->getUserId(),
 					$actualRecord->getId(),
 					true,
-					$actualRecord->buildRecordedStartDateTime()
+					$actualRecord->buildRecordedStartDateTime(),
+					$actualRecord->buildRecordedStopDateTime() ?: null,
 				);
 			}
 
@@ -514,7 +521,7 @@ class WorktimeService extends BaseService
 		$this->getWorktimeManager()->onBeforeRecordSave($actualRecord, $this->liveFeedManager);
 	}
 
-	private function addStartWorkTimeTrigger(int $userId): ?StartResult
+	private function addStartWorkTimeTrigger(int $userId, int $recordId, ?\DateTime $workdayStart): ?StartResult
 	{
 		if (
 			!Loader::includeModule('bizproc')
@@ -527,6 +534,16 @@ class WorktimeService extends BaseService
 		$fields = [
 			TimemanStartWorktimeTrigger::FIELD_USER_ID => $userId,
 		];
+		if ($recordId > 0 && defined(TimemanStartWorktimeTrigger::class . '::FIELD_RECORD_ID'))
+		{
+			$fields[TimemanStartWorktimeTrigger::FIELD_RECORD_ID] = $recordId;
+		}
+
+		// Modules are updated independently, so the installed bizproc may not know this field yet.
+		if (defined(TimemanStartWorktimeTrigger::class . '::FIELD_WORKDAY_START'))
+		{
+			$fields[TimemanStartWorktimeTrigger::FIELD_WORKDAY_START] = $this->serializeTriggerDateTime($workdayStart);
+		}
 
 		return Starter::getByScenario(Scenario::onEvent)
 			->setContext(new ContextDto('timeman'))
@@ -535,7 +552,13 @@ class WorktimeService extends BaseService
 		;
 	}
 
-	private function addStopWorkTimeTrigger(int $userId, int $recordId, bool $isFirstStop, ?\DateTime $workdayStart = null): ?StartResult
+	private function addStopWorkTimeTrigger(
+		int $userId,
+		int $recordId,
+		bool $isFirstStop,
+		?\DateTime $workdayStart,
+		?\DateTime $workdayEnd,
+	): ?StartResult
 	{
 		if (!Loader::includeModule('bizproc'))
 		{
@@ -546,7 +569,8 @@ class WorktimeService extends BaseService
 			StopWorktimeTrigger::FIELD_USER_ID => $userId,
 			StopWorktimeTrigger::FIELD_RECORD_ID => $recordId,
 			StopWorktimeTrigger::FIELD_IS_FIRST_STOP => $isFirstStop,
-			StopWorktimeTrigger::FIELD_WORKDAY_START => $workdayStart,
+			StopWorktimeTrigger::FIELD_WORKDAY_START => $this->serializeTriggerDateTime($workdayStart),
+			StopWorktimeTrigger::FIELD_WORKDAY_END => $this->serializeTriggerDateTime($workdayEnd),
 		];
 
 		return Starter::getByScenario(Scenario::onEvent)
@@ -554,5 +578,19 @@ class WorktimeService extends BaseService
 			->addEvent('StopWorkTimeTrigger', [], $fields)
 			->start()
 		;
+	}
+
+	/**
+	 * Bizproc datetime scalar, i.e. `31.07.2026 09:00:00 [10800]`. A scalar survives the storage channel the start
+	 * parameters cross, and the trailing offset keeps the employee's instant from being reread in the server timezone.
+	 */
+	private function serializeTriggerDateTime(?\DateTime $dateTime): ?string
+	{
+		if ($dateTime === null)
+		{
+			return null;
+		}
+
+		return (new Value\DateTime($dateTime->getTimestamp(), $dateTime->getOffset()))->serialize();
 	}
 }

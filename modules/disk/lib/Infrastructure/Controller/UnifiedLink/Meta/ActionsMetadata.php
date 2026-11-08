@@ -1,9 +1,9 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Meta;
 
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
 use Bitrix\Main\Application;
 use Bitrix\Main\Diag\ExceptionHandler;
@@ -26,7 +26,7 @@ class ActionsMetadata
 	/** @var SplObjectStorage<UnifiedLinkAccessLevel, string>|null $actionsByAccessLevels */
 	private ?SplObjectStorage $actionsByAccessLevels = null;
 
-	/** @var SplObjectStorage<UnifiedLinkAccessLevel, callable(File): string>|null $urlGeneratorByAccessLevels */
+	/** @var SplObjectStorage<UnifiedLinkAccessLevel, callable(BaseObject): string>|null $urlGeneratorByAccessLevels */
 	private ?SplObjectStorage $urlGeneratorByAccessLevels = null;
 
 	/**
@@ -48,8 +48,13 @@ class ActionsMetadata
 		$this->exceptionHandler = Application::getInstance()->getExceptionHandler();
 	}
 
-	public function shouldRedirectToView(string $actionName, File $file): bool
+	public function shouldRedirectToView(string $actionName, BaseObject $baseObject): bool
 	{
+		if (!$baseObject instanceof File && $actionName !== 'view')
+		{
+			return true;
+		}
+
 		$fileTypes = $this->getRedirectFileTypesByActions()[$actionName] ?? [];
 
 		if (empty($fileTypes))
@@ -57,7 +62,7 @@ class ActionsMetadata
 			return false;
 		}
 
-		$fileType = (int)$file->getTypeFile();
+		$fileType = (int)$baseObject->getTypeFile();
 
 		return in_array($fileType, $fileTypes, true);
 	}
@@ -143,7 +148,7 @@ class ActionsMetadata
 		}
 	}
 
-	public function getUrl(UnifiedLinkAccessLevel $accessLevel, File $file): ?string
+	public function getUrl(UnifiedLinkAccessLevel $accessLevel, BaseObject $baseObject): ?string
 	{
 		if ($this->urlGeneratorByAccessLevels === null)
 		{
@@ -156,7 +161,7 @@ class ActionsMetadata
 		{
 			try
 			{
-				return $urlGenerator($file);
+				return $urlGenerator($baseObject);
 			}
 			catch (Throwable $e)
 			{

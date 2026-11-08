@@ -25,18 +25,25 @@ final class UpdateTaskEventListener extends AbstractEventListener
 			return $eventResult;
 		}
 
-		$task = TaskRegistry::getInstance()->getObject($taskId);
-		if ($task === null)
-		{
-			return $eventResult;
-		}
-
 		$deleteResult = $this->deleteByPair($taskId);
 		if (!$deleteResult->isSuccess())
 		{
 			return $eventResult;
 		}
 
+		if (!OnboardingFeature::isAvailable())
+		{
+			return $eventResult;
+		}
+
+		$task = TaskRegistry::getInstance()->getObject($taskId);
+		if ($task === null)
+		{
+			return $eventResult;
+		}
+
+		$responsibleId = $task->getResponsibleId();
+		$createdBy = $task->getCreatedBy();
 		if ($this->isOnePersonTask($task))
 		{
 			return $eventResult;
@@ -47,12 +54,12 @@ final class UpdateTaskEventListener extends AbstractEventListener
 			return $eventResult;
 		}
 
-		if ($this->isInvitedUser($task->getResponsibleId()))
+		if ($this->isInvitedUser($responsibleId))
 		{
 			return $eventResult;
 		}
 
-		if ($this->isTaskViewed($taskId, $task->getResponsibleId()))
+		if ($this->isTaskViewed($taskId, $responsibleId))
 		{
 			return $eventResult;
 		}
@@ -63,8 +70,8 @@ final class UpdateTaskEventListener extends AbstractEventListener
 		}
 
 		$commandModels = new CommandModelCollection(
-			CommandModelFactory::create(Type::OneDayNotViewed, $taskId, $task->getResponsibleId(), true),
-			CommandModelFactory::create(Type::TwoDaysNotViewed, $taskId, $task->getCreatedBy(), true)
+			CommandModelFactory::create(Type::OneDayNotViewed, $taskId, $responsibleId, true),
+			CommandModelFactory::create(Type::TwoDaysNotViewed, $taskId, $createdBy, true)
 		);
 
 		$this->saveCommandModels($commandModels);

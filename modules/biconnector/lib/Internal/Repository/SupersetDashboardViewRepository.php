@@ -11,6 +11,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Repository\RepositoryInterface;
 use Bitrix\Main\Repository\Exception\PersistenceException;
+use Bitrix\Main\Type\DateTime;
 
 class SupersetDashboardViewRepository implements RepositoryInterface
 {
@@ -98,5 +99,27 @@ class SupersetDashboardViewRepository implements RepositoryInterface
 	public function countViews(int $dashboardId): int
 	{
 		return SupersetDashboardViewTable::getCount(['=DASHBOARD_ID' => $dashboardId]);
+	}
+
+	/**
+	 * The log grows with every report a user opens, so the question "is there anything of theirs
+	 * from before" is answered by the first matching row, not by counting all of them.
+	 *
+	 * @param int $userId
+	 * @param DateTime $viewedBefore
+	 * @return bool
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function hasViewsBefore(int $userId, DateTime $viewedBefore): bool
+	{
+		return (bool)SupersetDashboardViewTable::query()
+			->setSelect(['ID'])
+			->where('USER_ID', $userId)
+			->where('VIEWED_AT', '<', $viewedBefore)
+			->setLimit(1)
+			->fetch()
+		;
 	}
 }

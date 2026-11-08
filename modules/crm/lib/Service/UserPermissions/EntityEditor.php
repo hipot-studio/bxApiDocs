@@ -20,6 +20,7 @@ final class EntityEditor
 		private readonly PermissionsManager $permissionsManager,
 		private readonly Admin $admin,
 		private readonly UserPermissions\EntityPermissions\Admin $entityAdmin,
+		private readonly Configuration $configuration,
 	)
 	{
 	}
@@ -63,11 +64,25 @@ final class EntityEditor
 
 	/**
 	 * Can user edit representation of entity editor in common view
+	 *
+	 * $entityTypeId and $categoryId name the card whose common layout is being read or written, so that
+	 * the answer belongs to the contour that card is configured in ({@see ConfigurationScope}). A
+	 * surface that names no card of its own passes `null` and is answered for CRM as a whole - the
+	 * former check of this path was the global one, so nothing changes for it before the operations are
+	 * registered.
+	 *
+	 * @param int|null $entityTypeId
+	 * @param int|null $categoryId
 	 * @return bool
 	 */
-	public function canEditCommonView(): bool
+	public function canEditCommonView(?int $entityTypeId, ?int $categoryId): bool
 	{
-		return $this->admin->isCrmAdmin();
+		return $this->configuration->canManageCommonViews(
+			ConfigurationCallSite::EntityEditorPermissions,
+			$entityTypeId === null
+				? ConfigurationScope::ofCrm()
+				: ConfigurationScope::ofEntityType($entityTypeId, $categoryId),
+		);
 	}
 
 	/**

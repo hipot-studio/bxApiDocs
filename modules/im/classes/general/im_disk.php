@@ -509,6 +509,31 @@ class CIMDisk
 	 */
 	public static function UploadFileFromDisk($chatId, $files, $text = '', $options = [], $robot = false)
 	{
+		$preparedFiles = self::prepareFilesInChat($chatId, $files, $options, $robot);
+		if ($preparedFiles === false)
+		{
+			return false;
+		}
+
+		return self::createMessageWithFiles($chatId, $preparedFiles, $text, $options, $robot);
+	}
+
+	/**
+	 * Brings files into the chat folder as a copy or a symlink, shares them with the chat members
+	 * and writes messenger file params. Does not create a message.
+	 *
+	 * @internal The first half of {@see UploadFileFromDisk()}, split out so the edit of a message can bring files
+	 *           into the chat without sending one. Not part of the compatibility surface of this class: use
+	 *           {@see UploadFileFromDisk()} from outside the im module.
+	 *
+	 * @param int $chatId
+	 * @param array $files
+	 * @param array $options
+	 * @param bool $robot
+	 * @return array|bool
+	 */
+	public static function prepareFilesInChat($chatId, $files, $options = [], $robot = false)
+	{
 		if ((int)$chatId <= 0 || empty($files))
 		{
 			return false;
@@ -520,38 +545,24 @@ class CIMDisk
 			return false;
 		}
 
-		if (isset($options['USER_ID']))
+		$userId = self::resolveUploadUserId($options);
+		if ($userId === null)
 		{
-			$userId = (int)$options['USER_ID'];
-		}
-		else
-		{
-			$userId = self::GetUserId();
-			if (!$userId)
-			{
-				return false;
-			}
+			return false;
 		}
 
 		$skipUserCheck = isset($options['SKIP_USER_CHECK']) && $options['SKIP_USER_CHECK'] === true;
-		$linesSilentMode = isset($options['LINES_SILENT_MODE']) && $options['LINES_SILENT_MODE'] === true;
 		$makeSymlink = isset($options['SYMLINK']) && $options['SYMLINK'] === true;
-		$templateId = isset($options['TEMPLATE_ID']) && $options['TEMPLATE_ID'] <> '' ? $options['TEMPLATE_ID'] : '';
-		$fileTemplateId = isset($options['FILE_TEMPLATE_ID']) && $options['FILE_TEMPLATE_ID'] <> '' ? $options['FILE_TEMPLATE_ID'] : '';
-		$attach = $options['ATTACH'] ?? null;
 		$asFile = isset($options['AS_FILE']) && $options['AS_FILE'] === 'Y';
-		$params = isset($options['PARAMS']) && is_array($options['PARAMS']) ? $options['PARAMS'] : null;
 		$fileParams =
 			isset($options['FILE_PARAMS']) && is_array($options['FILE_PARAMS'])
 				? $options['FILE_PARAMS']
 				: null
 		;
-
-		$waitFullExecution = $options['WAIT_FULL_EXECUTION'] ?? 'Y';
-		if ($chat->getEntityType() === 'LINES' || $chat->getEntityType() === 'LIVECHAT')
-		{
-			$waitFullExecution = 'Y';
-		}
+		$preloadedFileModels = is_array($options['PRELOADED_FILE_MODELS'] ?? null)
+			? $options['PRELOADED_FILE_MODELS']
+			: []
+		;
 
 		$chatRelation = $chat->getRelations();
 
@@ -578,15 +589,39 @@ class CIMDisk
 		$uploadedFileIds = [];
 		foreach ($files as $fileId)
 		{
+			// a preloaded model is a cache for getFileModel(), never a permission to read the file
+			$preloadedFileModel = $preloadedFileModels[$fileId] ?? null;
+			if (
+				!$preloadedFileModel instanceof File
+				|| !self::canReadFileModel($preloadedFileModel, $skipUserCheck ? 0 : $userId)
+			)
+			{
+				$preloadedFileModel = null;
+			}
+
 			$uploaded = false;
 			if (mb_substr($fileId, 0, 6) === 'upload')
 			{
 				$uploaded = true;
-				$newFile = self::uploadFromLocalDisk($chatId, (int)mb_substr($fileId, 6), $skipUserCheck ? 0 : $userId, $asFile);
+				$sourceFileId = (int)mb_substr($fileId, 6);
+				$newFile = self::uploadFromLocalDisk(
+					$chatId,
+					$sourceFileId,
+					$skipUserCheck ? 0 : $userId,
+					$asFile,
+					$preloadedFileModel,
+				);
 			}
 			else
 			{
-				$newFile = self::SaveFromLocalDisk($chatId, (int)mb_substr($fileId, 4), $makeSymlink, $skipUserCheck? 0: $userId);
+				$sourceFileId = (int)mb_substr($fileId, 4);
+				$newFile = self::saveFromLocalDiskModel(
+					$chatId,
+					$sourceFileId,
+					$makeSymlink,
+					$skipUserCheck ? 0 : $userId,
+					$preloadedFileModel,
+				);
 			}
 
 			if ($newFile)
@@ -652,42 +687,14 @@ class CIMDisk
 			return false;
 		}
 
-		$result['MESSAGE_ID'] = 0;
-
-		$ar = [
-			"TO_CHAT_ID" => $chatId,
-			"FROM_USER_ID" => $userId,
-			"MESSAGE_TYPE" => $chat->getType(),
-			"SILENT_CONNECTOR" => $linesSilentMode?'Y':'N',
-			"SKIP_USER_CHECK" => ($skipUserCheck || !$userId || $chat->getEntityType() == 'LIVECHAT'),
-			"TEMPLATE_ID" => $templateId,
-			"FILE_TEMPLATE_ID" => $fileTemplateId,
-			"FILE_MODELS" => $result['FILE_MODELS'] ?? [],
-			"WAIT_FULL_EXECUTION" => $waitFullExecution,
-		];
-
-		if ($chat->getEntityType() == 'LIVECHAT')
-		{
-			[$lineId] = explode("|", $chat->getEntityId());
-			$ar["EXTRA_PARAMS"] = [
-				"CONTEXT" => "LIVECHAT",
-				"LINE_ID" => $lineId
-			];
-			//TODO: fix 0135872
-			//$ar['SKIP_CONNECTOR'] = 'Y';
-		}
-
-		$ar['FILES'] = $result['DISK_ID'];
-
-		if ($params)
-		{
-			$ar['PARAMS'] = $params;
-		}
+		// params of a file that is not in any chat yet belong to a deleted file whose id came back into use:
+		// an inherited flag would make a plain video a video note. A file already sent keeps its own params
+		IM\V2\Entity\File\ParamCollection::deleteParams(self::selectFilesOutsideChats($result['DISK_ID']));
 
 		if ($fileParams !== null)
 		{
 			$fileParams = self::prepareFileParams(
-				$ar['FILE_MODELS'],
+				$result['FILE_MODELS'],
 				$fileParams,
 				$result['DISK_ID'],
 				$uploadedFileIds
@@ -706,6 +713,79 @@ class CIMDisk
 			{
 				$result['FILES'][$fileId]['id'] = 0;
 			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Creates a message for the files already prepared in the chat folder by prepareFilesInChat().
+	 * Removes the prepared file models when the message was not created.
+	 *
+	 * @param int $chatId
+	 * @param array $result files prepared by prepareFilesInChat()
+	 * @param string $text
+	 * @param array $options
+	 * @param bool $robot
+	 * @return array|bool
+	 */
+	protected static function createMessageWithFiles($chatId, array $result, $text = '', $options = [], $robot = false)
+	{
+		// prepareFilesInChat() has already rejected a missing chat and options naming no user on the same input
+		$chat = IM\V2\Chat::getInstance($chatId);
+		$userId = (int)self::resolveUploadUserId($options);
+
+		$skipUserCheck = isset($options['SKIP_USER_CHECK']) && $options['SKIP_USER_CHECK'] === true;
+		$linesSilentMode = isset($options['LINES_SILENT_MODE']) && $options['LINES_SILENT_MODE'] === true;
+		$sentFromUi = isset($options['SENT_FROM_UI']) && $options['SENT_FROM_UI'] === true;
+		$templateId = isset($options['TEMPLATE_ID']) && $options['TEMPLATE_ID'] <> '' ? $options['TEMPLATE_ID'] : '';
+		$fileTemplateId = isset($options['FILE_TEMPLATE_ID']) && $options['FILE_TEMPLATE_ID'] <> '' ? $options['FILE_TEMPLATE_ID'] : '';
+		$attach = $options['ATTACH'] ?? null;
+		$params = isset($options['PARAMS']) && is_array($options['PARAMS']) ? $options['PARAMS'] : null;
+		$messageUuidReservation = $options['MESSAGE_UUID_RESERVATION'] ?? null;
+
+		$waitFullExecution = $options['WAIT_FULL_EXECUTION'] ?? 'Y';
+		if ($chat->getEntityType() === 'LINES' || $chat->getEntityType() === 'LIVECHAT')
+		{
+			$waitFullExecution = 'Y';
+		}
+
+		$result['MESSAGE_ID'] = 0;
+
+		$ar = [
+			"TO_CHAT_ID" => $chatId,
+			"FROM_USER_ID" => $userId,
+			"MESSAGE_TYPE" => $chat->getType(),
+			"SILENT_CONNECTOR" => $linesSilentMode?'Y':'N',
+			"SKIP_USER_CHECK" => ($skipUserCheck || !$userId || $chat->getEntityType() == 'LIVECHAT'),
+			"TEMPLATE_ID" => $templateId,
+			"FILE_TEMPLATE_ID" => $fileTemplateId,
+			"FILE_MODELS" => $result['FILE_MODELS'] ?? [],
+			"WAIT_FULL_EXECUTION" => $waitFullExecution,
+			"SENT_FROM_UI" => $sentFromUi,
+		];
+
+		if ($messageUuidReservation instanceof \Bitrix\Im\Message\Uuid)
+		{
+			$ar['MESSAGE_UUID_RESERVATION'] = $messageUuidReservation;
+		}
+
+		if ($chat->getEntityType() == 'LIVECHAT')
+		{
+			[$lineId] = explode("|", $chat->getEntityId());
+			$ar["EXTRA_PARAMS"] = [
+				"CONTEXT" => "LIVECHAT",
+				"LINE_ID" => $lineId
+			];
+			//TODO: fix 0135872
+			//$ar['SKIP_CONNECTOR'] = 'Y';
+		}
+
+		$ar['FILES'] = $result['DISK_ID'];
+
+		if ($params)
+		{
+			$ar['PARAMS'] = $params;
 		}
 
 		if ($attach)
@@ -730,6 +810,10 @@ class CIMDisk
 		}
 
 		$result['MESSAGE_ID'] = $messageId;
+		if ($messageUuidReservation instanceof \Bitrix\Im\Message\Uuid)
+		{
+			$messageUuidReservation->updateMessageId((int)$messageId);
+		}
 
 		if (
 			!$robot
@@ -809,6 +893,26 @@ class CIMDisk
 	}
 
 	/**
+	 * @param array $options
+	 * @return int|null null when there is no user to act on behalf of
+	 */
+	protected static function resolveUploadUserId(array $options): ?int
+	{
+		if (isset($options['USER_ID']))
+		{
+			return (int)$options['USER_ID'];
+		}
+
+		$userId = self::GetUserId();
+		if (!$userId)
+		{
+			return null;
+		}
+
+		return $userId;
+	}
+
+	/**
 	 * @param File[] $fileModels
 	 * @param array $params
 	 * @return array
@@ -834,22 +938,61 @@ class CIMDisk
 				continue;
 			}
 
+			$fileParams = [];
 			foreach ($params[$fileId] ?? [] as $name => $value)
 			{
 				$name = $converter->process($name);
 				$uploaded = in_array($fileId, $uploadedFileIds, true);
 
 				$param = IM\V2\Entity\File\Param\ParamName::tryFrom($name);
-				if (!$param?->isValidForFile($file, $uploaded))
+				if (!$param?->isValidForFile($file, $uploaded) || !is_scalar($value))
 				{
 					continue;
 				}
 
-				$result[] = IM\V2\Entity\File\Param\BaseParam::getInstance($fileId, $param, $value)->toArray();
+				$value = (string)$value;
+				if (!$param->isValidValue($value))
+				{
+					continue;
+				}
+
+				$fileParams[$param->value] = IM\V2\Entity\File\Param\BaseParam::getInstance($fileId, $param, $value);
+			}
+
+			foreach ($fileParams as $fileParam)
+			{
+				$result[] = $fileParam->toArray();
 			}
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Params of a file live under the id of its disk object. The send path writes them together with the
+	 * record of the file in a chat, and that record dies with the file, so params found under an id no chat
+	 * knows were left there by a deleted file whose id came back into use.
+	 *
+	 * @param int[] $fileIds
+	 * @return int[]
+	 */
+	protected static function selectFilesOutsideChats(array $fileIds): array
+	{
+		$fileIds = array_values(array_unique(array_filter(array_map('intval', $fileIds))));
+
+		if (empty($fileIds))
+		{
+			return [];
+		}
+
+		$rows = IM\Model\LinkFileTable::query()
+			->setSelect(['DISK_FILE_ID'])
+			->whereIn('DISK_FILE_ID', $fileIds)
+			->setGroup(['DISK_FILE_ID'])
+			->fetchAll()
+		;
+
+		return array_values(array_diff($fileIds, array_map('intval', array_column($rows, 'DISK_FILE_ID'))));
 	}
 
 	protected static function checkDirectlyUseFileAccess(
@@ -887,10 +1030,11 @@ class CIMDisk
 		int $chatId,
 		int $fileId,
 		?int $userId = null,
-		bool $asFile = false
+		bool $asFile = false,
+		?File $fileModel = null,
 	): File|false
 	{
-		$fileModel = self::getFileModel($fileId, $userId);
+		$fileModel ??= self::getFileModel($fileId, $userId);
 		$chat = Bitrix\Im\V2\Chat::getInstance($chatId);
 		if (!isset($fileModel) || $chat instanceof IM\V2\Chat\NullChat)
 		{
@@ -908,6 +1052,8 @@ class CIMDisk
 		if (!$checkResult->isSuccess())
 		{
 			(new IM\V2\Logger('chat_incorrect_file_upload'))->logErrors($checkResult->getErrorCollection());
+
+			return false;
 		}
 
 		$fileModel->increaseGlobalContentVersion();
@@ -1105,7 +1251,29 @@ class CIMDisk
 			return false;
 		}
 
-		$fileModel = self::getFileModel((int)$fileId, $userId);
+		return self::saveFromLocalDiskModel(
+			(int)$chatId,
+			(int)$fileId,
+			$symlink,
+			$userId,
+			self::getFileModel((int)$fileId, $userId),
+		);
+	}
+
+	protected static function saveFromLocalDiskModel(
+		int $chatId,
+		int $fileId,
+		bool $symlink,
+		?int $userId,
+		?File $fileModel,
+	): File|false
+	{
+		if (!self::Enabled())
+		{
+			return false;
+		}
+
+		$fileModel ??= self::getFileModel($fileId, $userId);
 		$folderModel = self::GetFolderModel($chatId);
 		$chat = IM\V2\Chat::getInstance($chatId);
 
@@ -1196,7 +1364,7 @@ class CIMDisk
 		);
 	}
 
-	protected static function getFileModel(int $fileId, ?int $contextUserId): ?File
+	public static function getFileModel(int $fileId, ?int $contextUserId): ?File
 	{
 		if (!self::Enabled())
 		{
@@ -1214,10 +1382,18 @@ class CIMDisk
 			return null;
 		}
 
+		return self::canReadFileModel($fileModel, $contextUserId) ? $fileModel : null;
+	}
+
+	/**
+	 * A context user id of 0 means a system call without a security context.
+	 */
+	protected static function canReadFileModel(File $fileModel, ?int $contextUserId): bool
+	{
 		$storageModel = $fileModel->getStorage();
 		if (!$storageModel)
 		{
-			return null;
+			return false;
 		}
 
 		$securityContext = null;
@@ -1230,12 +1406,7 @@ class CIMDisk
 			$securityContext = $storageModel->getSecurityContext($contextUserId);
 		}
 
-		if ($securityContext && !$fileModel->canRead($securityContext))
-		{
-			return null;
-		}
-
-		return $fileModel;
+		return !$securityContext || $fileModel->canRead($securityContext);
 	}
 
 	/**

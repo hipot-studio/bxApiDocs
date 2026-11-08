@@ -180,6 +180,28 @@ class UserFieldConfig extends Controller
 		return $converter->process($fields);
 	}
 
+	/**
+	 * @param array<string, mixed> $field
+	 * @return array<string, mixed>
+	 */
+	private function applyDefaultSettings(UserFieldAccess $access, array $field): array
+	{
+		if (array_key_exists('SETTINGS', $field) && !is_array($field['SETTINGS']))
+		{
+			return $field;
+		}
+
+		$defaultSettings = $access->getDefaultSettings($field);
+		if (empty($defaultSettings))
+		{
+			return $field;
+		}
+
+		$field['SETTINGS'] = array_merge($defaultSettings, $field['SETTINGS'] ?? []);
+
+		return $field;
+	}
+
 	public function preparePublicData(array $field): array
 	{
 		foreach (UserFieldTable::getLabelFields() as $labelName)
@@ -405,6 +427,8 @@ class UserFieldConfig extends Controller
 			$this->addError($this->getAddAccessDeniedError());
 			return null;
 		}
+
+		$field = $this->applyDefaultSettings($access, $field);
 
 		$fieldName = $field['FIELD_NAME'] ?? '';
 		$entityId = $field['ENTITY_ID'] ?? '';

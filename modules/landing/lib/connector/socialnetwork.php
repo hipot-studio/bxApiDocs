@@ -246,10 +246,6 @@ class SocialNetwork
 				$enable = false;
 			}
 			$title = self::getSocNetMenuTitle($result['Group']['ID']);
-			if ($title !== '')
-			{
-				$title = ' - ' . $title;
-			}
 		}
 		else
 		{
@@ -257,9 +253,14 @@ class SocialNetwork
 			$title = '';
 		}
 
+		if ($title === '')
+		{
+			$title = Loc::getMessage('LANDING_CONNECTOR_SN_TITLE');
+		}
+
 		// build menu params
 		$result['CanView'][self::SETTINGS_CODE] = $enable;
-		$result['Title'][self::SETTINGS_CODE] = Loc::getMessage('LANDING_CONNECTOR_SN_TITLE') . $title;
+		$result['Title'][self::SETTINGS_CODE] = $title;
 		$result['Urls'][self::SETTINGS_CODE] = $url;
 	}
 

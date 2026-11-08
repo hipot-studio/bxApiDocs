@@ -13,6 +13,11 @@ use Bitrix\Sale\TradeBindingEntity;
 
 class ControllerBase extends Base
 {
+	protected function create($actionName)
+	{
+		return parent::create(strtolower($actionName));
+	}
+
 	protected function createViewManager(Action $action)
 	{
 		return new SaleViewManager($action);

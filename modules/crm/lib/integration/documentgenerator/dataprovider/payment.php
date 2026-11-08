@@ -17,6 +17,8 @@ use Bitrix\Sale\Repository\PaymentRepository;
 
 class Payment extends CrmEntityDataProvider
 {
+	use TotalWeightTrait;
+
 	/**
 	 * @var \Bitrix\Crm\Order\Payment
 	 */
@@ -148,6 +150,7 @@ class Payment extends CrmEntityDataProvider
 				'COMMENTS' => ['TITLE' => Loc::getMessage('CRM_DOCGEN_DATAPROVIDER_QUOTE_COMMENTS_TITLE')]
 			];
 
+			Loc::loadMessages(Path::combine(__DIR__, 'productsdataprovider.php'));
 			if (!$this->isLightMode())
 			{
 				$this->fields['ORDER'] = [
@@ -160,7 +163,6 @@ class Payment extends CrmEntityDataProvider
 					'VALUE' => [$this, 'getOrderId'],
 				];
 
-				Loc::loadMessages(Path::combine(__DIR__, 'productsdataprovider.php'));
 				$this->fields['PRODUCTS'] = [
 					'PROVIDER' => ArrayDataProvider::class,
 					'TITLE' => GetMessage('CRM_DOCGEN_PRODUCTSDATAPROVIDER_PRODUCTS_TITLE'),
@@ -172,6 +174,10 @@ class Payment extends CrmEntityDataProvider
 					'VALUE' => [$this, 'loadProducts'],
 				];
 			}
+			$this->fields['TOTAL_WEIGHT'] = [
+				'TITLE' => GetMessage('CRM_DOCGEN_PRODUCTSDATAPROVIDER_TOTAL_WEIGHT_TITLE'),
+				'VALUE' => [$this, 'getTotalWeight'],
+			];
 		}
 
 		return $this->fields;

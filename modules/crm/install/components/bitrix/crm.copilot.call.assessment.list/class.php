@@ -11,6 +11,8 @@ use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Component\EntityList\BadgeBuilder;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Controller\AiQualityAssessmentController;
 use Bitrix\Crm\Copilot\AiQualityAssessment\RatingCalculator;
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\ClickEventBuilder;
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\ClickEventWrapper;
 use Bitrix\Crm\Copilot\CallAssessment\BiReportButton;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentAvailabilityController;
@@ -725,7 +727,7 @@ HTML;
 	private function getMatchBadge(CopilotCallAssessment $callAssessmentItem, array $fieldsData): string
 	{
 		$value = (int)($fieldsData['assessments'][$callAssessmentItem->getId()] ?? 0);
-		if ($value <= 0)
+		if (($fieldsData['callCounts'][$callAssessmentItem->getId()] ?? 0) <= 0)
 		{
 			return '';
 		}
@@ -752,13 +754,14 @@ HTML;
 	private function getMatchField(CopilotCallAssessment $callAssessmentItem, array $fieldsData): string
 	{
 		$badge = $this->getMatchBadge($callAssessmentItem, $fieldsData);
-		$count = $fieldsData['callCounts'][$callAssessmentItem->getId()] ?? 0;
+		$callAssessmentItemId = $callAssessmentItem->getId();
+		$count = $fieldsData['callCounts'][$callAssessmentItemId] ?? 0;
 		if ($count <= 0)
 		{
 			return $badge;
 		}
 
-		$url = $this->getCallsListUri($callAssessmentItem->getId());
+		$url = $this->getCallsListUri($callAssessmentItemId);
 		$text = Loc::getMessagePlural(
 			'CRM_COPILOT_CALL_ASSESSMENT_LIST_MATCH_CALLS_LINK',
 			$count,
@@ -766,8 +769,9 @@ HTML;
 		);
 
 		return $badge . sprintf(
-				'<a class="crm-copilot-call-assessment-list--match-link" href="%s">%s</a>',
+				'<a class="crm-copilot-call-assessment-list--match-link" href="%s" data-call-assessment-id="%d">%s</a>',
 				htmlspecialcharsbx($url->getUri()),
+				$callAssessmentItemId,
 				htmlspecialcharsbx($text),
 			);
 	}
@@ -924,17 +928,21 @@ HTML;
 		$isCopilotEnabled = AIManager::isEnabledInGlobalSettings(GlobalSetting::CallAssessment);
 		$sliderWidth = AIManager::isCallScoringV2Enabled() ? 729 : 700;
 
+		$isV2Enabled = $this->isV2 ? 'true' : 'false';
 		$buttons[UI\Toolbar\ButtonLocation::AFTER_TITLE][] = new UI\Buttons\Button([
 			'color' => UI\Buttons\Color::SUCCESS,
 			'text' => Loc::getMessage('CRM_COMMON_ACTION_CREATE'),
 			'onclick' => new UI\Buttons\JsCode(
-				"(new BX.Crm.Copilot.CallAssessmentList.ActionButton(" . ($isCopilotEnabled ? 'true' : 'false') . ", $sliderWidth)).execute()",
+				"(new BX.Crm.Copilot.CallAssessmentList.ActionButton(" . ($isCopilotEnabled ? 'true' : 'false') . ", $sliderWidth, $isV2Enabled)).execute()",
 			),
 		]);
 
 		if ($this->isV2)
 		{
-			$biReportOnClick = BiReportButton::getInstance()->getOnClickJsCode('crm_copilot_call_assessment_list');
+			$biReportOnClick = ClickEventWrapper::wrap(
+				BiReportButton::getInstance()->getOnClickJsCode('crm_copilot_call_assessment_list'),
+				ClickEventBuilder::BiReport,
+			);
 			if ($biReportOnClick !== null)
 			{
 				$buttons[UI\Toolbar\ButtonLocation::RIGHT][] = new UI\Buttons\Button([
@@ -974,11 +982,17 @@ HTML;
 				'items' => [
 					[
 						'text' => Loc::getMessage('CRM_COPILOT_CALL_ASSESSMENT_LIST_SETTINGS_ASSESSMENT'),
-						'onclick' => $this->buildOpenAgentSetupOnClick(),
+						'onclick' => ClickEventWrapper::wrap(
+							$this->buildOpenAgentSetupOnClick(),
+							ClickEventBuilder::ScriptWizard,
+						),
 					],
 					[
 						'html' => Loc::getMessage('CRM_COPILOT_CALL_ASSESSMENT_LIST_SETTINGS_REPORTING'),
-						'onclick' => $this->buildOpenSummaryMasterOnClick(),
+						'onclick' => ClickEventWrapper::wrap(
+							$this->buildOpenSummaryMasterOnClick(),
+							ClickEventBuilder::SummaryWizard,
+						),
 					],
 				],
 			],

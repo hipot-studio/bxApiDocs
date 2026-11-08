@@ -95,6 +95,51 @@ class TaskChangeAccomplicesRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return true;
 		}
 
+		$isInDepartment = $task->isInMembersDepartments(
+			$this->user->getUserId(),
+			[
+				RoleDictionary::ROLE_RESPONSIBLE,
+				RoleDictionary::ROLE_DIRECTOR,
+				RoleDictionary::ROLE_ACCOMPLICE,
+			],
+		);
+
+		if (
+			$isInDepartment
+			&& !$task->isClosed()
+			&& $this->user->getPermission(PermissionDictionary::TASK_DEPARTMENT_EDIT)
+		)
+		{
+			return true;
+		}
+
+		if (
+			$isInDepartment
+			&& $task->isClosed()
+			&& $this->user->getPermission(PermissionDictionary::TASK_CLOSED_DEPARTMENT_EDIT)
+		)
+		{
+			return true;
+		}
+
+		if (
+			!$isInDepartment
+			&& !$task->isClosed()
+			&& $this->user->getPermission(PermissionDictionary::TASK_NON_DEPARTMENT_EDIT)
+		)
+		{
+			return true;
+		}
+
+		if (
+			!$isInDepartment
+			&& $task->isClosed()
+			&& $this->user->getPermission(PermissionDictionary::TASK_CLOSED_NON_DEPARTMENT_EDIT)
+		)
+		{
+			return true;
+		}
+
 		return false;
 	}
 }

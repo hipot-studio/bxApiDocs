@@ -13,6 +13,7 @@ use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Crm\V2\Internal\Integration\Rest\File\FileUploadGateway;
 use Bitrix\Crm\V2\Internal\Service\Item\File\Value\FileFieldWriteRequest;
 use Bitrix\Crm\V2\Internal\Service\Item\File\Value\FileUploadInput;
+use Bitrix\Crm\V2\Internal\Service\Item\Operation\CategoryDependentFieldException;
 use Bitrix\Crm\V2\Internal\Service\Item\Operation\ItemOperationObserver;
 use Bitrix\Crm\V2\Internal\Service\Item\Operation\ItemOperationRunner;
 use Bitrix\Crm\V2\Internal\Service\Item\Operation\PreparedItemOperation;
@@ -207,7 +208,15 @@ final class FileFieldWriteService
 	{
 		if ($prepared === null)
 		{
-			$prepared = ($this->prepare)($command);
+			try
+			{
+				$prepared = ($this->prepare)($command);
+			}
+			catch (CategoryDependentFieldException $exception)
+			{
+				return (new Result())->addError($exception->getError());
+			}
+
 			$accessResult = ($this->checkAccess)($prepared);
 			if (!$accessResult->isSuccess())
 			{

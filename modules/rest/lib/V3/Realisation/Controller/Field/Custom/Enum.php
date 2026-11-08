@@ -10,7 +10,6 @@ use Bitrix\Rest\V3\Exception\EntityNotFoundException;
 use Bitrix\Rest\V3\Exception\Internal\InternalException;
 use Bitrix\Rest\V3\Exception\Validation\RequiredFieldInRequestException;
 use Bitrix\Rest\V3\Interaction\Request\AddRequest;
-use Bitrix\Rest\V3\Interaction\Request\GetRequest;
 use Bitrix\Rest\V3\Interaction\Request\UpdateRequest;
 use Bitrix\Rest\V3\Interaction\Response\BooleanResponse;
 use Bitrix\Rest\V3\Interaction\Response\GetResponse;
@@ -20,6 +19,7 @@ use Bitrix\Rest\V3\Realisation\Dto\Field\Custom\EnumDto;
 use Bitrix\Rest\V3\Realisation\Dto\Mapping\EnumMapper;
 use Bitrix\Rest\V3\Realisation\Exception\FieldNotFoundException;
 use Bitrix\Rest\V3\Realisation\Request\Field\Custom\Enum\DeleteRequest;
+use Bitrix\Rest\V3\Realisation\Request\Field\Custom\Enum\GetRequest;
 use Bitrix\Rest\V3\Realisation\Request\Field\Custom\Enum\ListRequest;
 use CUserFieldEnum;
 
@@ -73,6 +73,7 @@ final class Enum extends AbstractCustom
 			throw new EntityNotFoundException($request->id);
 		}
 		$enumData = $enumValues[0];
+		$this->assertEnumValueBelongsToEntity($enumData, $request->entityId);
 		$selectedFields = $request->select ? $request->select->getList() : [];
 		$enumDto = $this->mapper->mapOne($enumData, $selectedFields);
 
@@ -131,12 +132,8 @@ final class Enum extends AbstractCustom
 			throw new EntityNotFoundException($request->id);
 		}
 		$enumValue = $enumData[0];
+		$this->assertEnumValueBelongsToEntity($enumValue, $request->entityId);
 
-		$customFields = $this->getCustomFieldsByFieldId($request->entityId, $this->getCurrentUser()->getId(), $this->getResponseLanguage());
-		if (!isset($customFields[$enumValue['USER_FIELD_ID']]))
-		{
-			throw new FieldNotFoundException($enumValue['USER_FIELD_ID']);
-		}
 		$valuesForDelete = [
 			$request->id => ['DEL' => 'Y']
 		];
@@ -162,6 +159,7 @@ final class Enum extends AbstractCustom
 			throw new EntityNotFoundException($request->id);
 		}
 		$enumData = $enumValues[0];
+		$this->assertEnumValueBelongsToEntity($enumData, $dto->entityId);
 		if (empty($updateData))
 		{
 			return new GetResponse($this->mapper->mapOne($enumData));
@@ -180,6 +178,29 @@ final class Enum extends AbstractCustom
 		}
 
 		return new GetResponse($this->mapper->mapOne($enumValues));
+	}
+
+	/**
+	 * A list value is addressed by its own id, whose numbering is independent of the user fields,
+	 * so the field that owns it has to be checked against the entity of the route: otherwise the
+	 * route picks the access check and the caller picks the object of the operation.
+	 *
+	 * A value of another entity is refused exactly as a value that does not exist, the way the sibling
+	 * field methods answer an id of another entity: the answer must tell nothing about the values and
+	 * the owning fields that live outside the entity of the route.
+	 */
+	private function assertEnumValueBelongsToEntity(array $enumValue, string $entityId): void
+	{
+		$owningFieldIsVisible = $this->isCustomFieldVisibleInEntity(
+			$entityId,
+			(int)$enumValue['USER_FIELD_ID'],
+			$this->getCurrentUser()->getId(),
+			$this->getResponseLanguage(),
+		);
+		if (!$owningFieldIsVisible)
+		{
+			throw new EntityNotFoundException((int)$enumValue['ID']);
+		}
 	}
 
 	private function getEnumFields(string $entityId, string $fieldId, ?int $enumId = null): array

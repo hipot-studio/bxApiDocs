@@ -10,6 +10,7 @@ use Bitrix\Sign\Access\Model\UserModel;
 use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
 use Bitrix\Sign\Access\Service\RolePermissionService;
 use Bitrix\Sign\Blank\Block;
+use Bitrix\Sign\Type\BlankFileExtension;
 
 Loc::loadMessages(__FILE__);
 
@@ -18,11 +19,6 @@ Loc::loadMessages(__FILE__);
  */
 class Blank extends \Bitrix\Sign\Internal\BaseTable
 {
-	/**
-	 * Allowed blank extensions.
-	 */
-	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'rtf', 'odt'];
-
 	/**
 	 * Internal class.
 	 * @var string
@@ -682,7 +678,7 @@ class Blank extends \Bitrix\Sign\Internal\BaseTable
 			;
 		}
 
-		if (!in_array($file->getExtension(), self::ALLOWED_EXTENSIONS, true))
+		if (!BlankFileExtension::isAllowed((string)$file->getExtension()))
 		{
 			$result->addError(new \Bitrix\Main\Error(
 				Loc::getMessage('SIGN_CORE_BLANK_ERROR_NOT_ALLOWED_EXTENSIONS'),

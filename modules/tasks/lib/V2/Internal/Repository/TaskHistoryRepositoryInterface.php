@@ -16,4 +16,6 @@ interface TaskHistoryRepositoryInterface
 	public function getLastCreatedDateByFields(int $taskId, array $fields): ?DateTime;
 
 	public function getLastCreatedDatesByFields(array $taskIds, array $fields): array;
+
+	public function count(int $taskId): int;
 }

@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Bitrix\Calendar\Integration\HumanResources;
 
-use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Public\Service\Container;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\Loader;
+use Bitrix\Main\UserTable;
 
 class TeamMemberService
 {
+	private const NODE_BATCH_SIZE = 500;
+
 	/**
 	 * Returns user ids of direct members of the given team nodes.
 	 * Flat membership only: sub-teams are not traversed.
@@ -19,46 +22,45 @@ class TeamMemberService
 	 */
 	public function getDirectMemberUserIds(array $nodeIds): array
 	{
+		$nodeIds = array_values(array_unique(array_filter(
+			array_map('intval', $nodeIds),
+			static fn (int $nodeId): bool => $nodeId > 0,
+		)));
 		if (empty($nodeIds) || !$this->isModuleInstalled())
 		{
 			return [];
 		}
 
 		$nodeMemberService = Container::getNodeMemberService();
-
 		$userIds = [];
-		foreach ($nodeIds as $nodeId)
+		foreach (array_chunk($nodeIds, self::NODE_BATCH_SIZE) as $nodeIdBatch)
 		{
-			$nodeId = (int)$nodeId;
-			if ($nodeId <= 0)
-			{
-				continue;
-			}
-
 			try
 			{
-				// Recalculation may run for a team that was just deleted/moved, or for a code that
-				// points at a non-TEAM node; skip both instead of letting HR fatal on a missing node.
-				$node = Container::getNodeRepository()->getById($nodeId);
-				if ($node?->type !== NodeEntityType::TEAM)
+				$query = UserTable::query()
+					->setSelect(['ID'])
+					->setDistinct()
+					->addOrder('ID')
+				;
+				$nodeMemberService->injectUserNodeSubquery(
+					query: $query,
+					nodeTypes: NodeEntityType::TEAM,
+					active: true,
+					nodeIds: $nodeIdBatch,
+				);
+				$result = $query->exec();
+				while ($user = $result->fetch())
 				{
-					continue;
+					$userIds[(int)$user['ID']] = (int)$user['ID'];
 				}
-
-				$members = $nodeMemberService->getAllEmployees($nodeId, false);
 			}
 			catch (\Throwable)
 			{
 				continue;
 			}
-
-			foreach ($members as $member)
-			{
-				$userIds[] = (int)$member->entityId;
-			}
 		}
 
-		return array_values(array_unique($userIds));
+		return array_values($userIds);
 	}
 
 	private function isModuleInstalled(): bool

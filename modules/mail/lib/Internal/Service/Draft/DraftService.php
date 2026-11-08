@@ -7,14 +7,17 @@ namespace Bitrix\Mail\Internal\Service\Draft;
 use Bitrix\Mail\Helper\Message;
 use Bitrix\Mail\Internal\Entity\Draft\DraftSnapshot;
 use Bitrix\Mail\Internal\Repository\DraftRepository;
+use Bitrix\Mail\Internal\Service\Draft\Contract\DraftServiceInterface;
+use Bitrix\Mail\Internal\Service\Draft\Dto\DraftFromScheduledMessage;
 use Bitrix\Mail\Internal\Service\LargeAttachment\LargeAttachmentService;
+use Bitrix\Mail\Internal\Service\Signature\Image\SignatureImageSendPreparation;
 use Bitrix\Mail\Integration\Disk\LargeAttachmentStorageFactory;
 use Bitrix\Mail\Integration\Disk\LargeAttachmentStorageInterface;
 use Bitrix\Mail\Internals\DraftTable;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
-class DraftService
+class DraftService implements DraftServiceInterface
 {
 	public const ERROR_NOT_FOUND = 'DRAFT_NOT_FOUND';
 	public const ERROR_ACCESS_DENIED = 'DRAFT_ACCESS_DENIED';
@@ -29,17 +32,20 @@ class DraftService
 
 	private readonly DraftRepository $repository;
 	private readonly AttachmentStorage $attachmentStorage;
+	private readonly SignatureImageSendPreparation $signatureImagePreparation;
 	private ?LargeAttachmentStorageInterface $largeAttachmentStorage;
 
 	public function __construct(
 		?DraftRepository $repository = null,
 		?AttachmentStorage $attachmentStorage = null,
 		?LargeAttachmentStorageInterface $largeAttachmentStorage = null,
+		?SignatureImageSendPreparation $signatureImagePreparation = null,
 	)
 	{
 		$this->repository = $repository ?? new DraftRepository();
 		$this->attachmentStorage = $attachmentStorage ?? new AttachmentStorage();
 		$this->largeAttachmentStorage = $largeAttachmentStorage;
+		$this->signatureImagePreparation = $signatureImagePreparation ?? new SignatureImageSendPreparation();
 	}
 
 	public function save(
@@ -77,7 +83,7 @@ class DraftService
 		try
 		{
 			$snapshot = DraftSnapshot::fromArray($snapshotData);
-			$snapshot = $snapshot->withBody(Message::sanitizeHtml($snapshot->body));
+			$snapshot = $snapshot->withBody($this->signatureImagePreparation->sanitizeHtml($snapshot->body));
 		}
 		catch (\Throwable)
 		{
@@ -142,6 +148,61 @@ class DraftService
 		);
 
 		return $result->setData(['draft' => $this->serializeDraft($userId, $draft)]);
+	}
+
+	public function createFromScheduledMessage(DraftFromScheduledMessage $message): Result
+	{
+		$result = new Result();
+
+		try
+		{
+			$attachments = $this->getAttachmentStorage()->prepareTransferred($message->attachments);
+			if ($attachments === null)
+			{
+				return $result->addError(
+					new Error('Draft attachment is unavailable.', self::ERROR_ATTACHMENT_UNAVAILABLE),
+				);
+			}
+
+			$snapshot = DraftSnapshot::fromArray([
+				'clientId' => $this->scheduledMessageClientId($message->userId, $message->scheduledMessageId),
+				'sender' => $message->sender,
+				'to' => (array)($message->recipients['to'] ?? []),
+				'cc' => (array)($message->recipients['cc'] ?? []),
+				'bcc' => (array)($message->recipients['bcc'] ?? []),
+				'subject' => $message->subject,
+				'body' => Message::sanitizeHtml($message->body),
+				'bodyFormat' => 'html',
+				'mode' => $message->mode,
+				'parentMessageId' => $message->parentMessageId,
+				'attachments' => [],
+				'largeAttachments' => $message->largeAttachments,
+			]);
+			$draft = $this->getRepository()->save(
+				userId: $message->userId,
+				contextType: DraftTable::CONTEXT_MAIL,
+				draftId: null,
+				expectedRevision: null,
+				snapshot: $snapshot,
+				crmEntityTypeId: null,
+				crmEntityId: null,
+				attachments: $attachments,
+				manageTransaction: false,
+			);
+			if ($draft === null)
+			{
+				return $result->addError(new Error('Draft was not saved.', self::ERROR_SAVE_FAILED));
+			}
+
+			return $result->setData([
+				'draftId' => $draft->id,
+				'draft' => $this->serializeDraft($message->userId, $draft),
+			]);
+		}
+		catch (\Throwable)
+		{
+			return $result->addError(new Error('Draft was not saved.', self::ERROR_SAVE_FAILED));
+		}
 	}
 
 	public function get(int $userId, int $draftId, ?string $contextType = null): Result
@@ -293,8 +354,7 @@ class DraftService
 							|| (
 								$draft?->crmEntityTypeId === $crmEntityTypeId
 								&& $draft?->crmEntityId === $crmEntityId
-							)
-						;
+							);
 						if ($draft !== null && $isSameCrmContext && $draft->revision !== $expectedRevision)
 						{
 							return $result->addError(
@@ -329,6 +389,20 @@ class DraftService
 		return $this->repository;
 	}
 
+	private function scheduledMessageClientId(int $userId, int $scheduledMessageId): string
+	{
+		$hash = hash('sha256', "mail-scheduled-draft:{$userId}:{$scheduledMessageId}");
+
+		return sprintf(
+			'%s-%s-5%s-%s-%s',
+			substr($hash, 0, 8),
+			substr($hash, 8, 4),
+			substr($hash, 13, 3),
+			'a' . substr($hash, 17, 3),
+			substr($hash, 20, 12),
+		);
+	}
+
 	private function getAttachmentStorage(): AttachmentStorage
 	{
 		return $this->attachmentStorage;
@@ -347,6 +421,7 @@ class DraftService
 		foreach ($largeAttachments as $largeAttachment)
 		{
 			$sourceFileIds = $largeAttachment['sourceFileIds'];
+			$tokenFileIds = $largeAttachment['tokenFileIds'] ?? $sourceFileIds;
 			if (array_diff($sourceFileIds, array_keys($availableSourceIds)) !== [])
 			{
 				continue;
@@ -355,7 +430,7 @@ class DraftService
 			$resolved = LargeAttachmentService::resolveForSend(
 				$userId,
 				$largeAttachment['token'],
-				$sourceFileIds,
+				$tokenFileIds,
 				$this->getLargeAttachmentStorage(),
 			);
 			if (!$resolved->isSuccess())
@@ -369,6 +444,7 @@ class DraftService
 				'publicUrl' => $attachment->publicUrl,
 				'fileIds' => $largeAttachment['fileIds'],
 				'sourceFileIds' => $sourceFileIds,
+				'tokenFileIds' => $tokenFileIds,
 			];
 		}
 
@@ -390,7 +466,7 @@ class DraftService
 			$resolved = LargeAttachmentService::resolveForSend(
 				$userId,
 				$largeAttachment['token'],
-				$largeAttachment['sourceFileIds'],
+				$largeAttachment['tokenFileIds'],
 				$this->getLargeAttachmentStorage(),
 			);
 			$isValid = $resolved->isSuccess();
@@ -402,6 +478,7 @@ class DraftService
 				'publicUrl' => $isValid ? $resolvedAttachment->publicUrl : $largeAttachment['publicUrl'],
 				'fileIds' => $fileIds,
 				'sourceFileIds' => $largeAttachment['sourceFileIds'],
+				'tokenFileIds' => $largeAttachment['tokenFileIds'],
 				'valid' => $isValid,
 			];
 		}

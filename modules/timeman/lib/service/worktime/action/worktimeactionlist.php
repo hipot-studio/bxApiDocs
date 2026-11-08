@@ -143,25 +143,35 @@ class WorktimeActionList
 			return true;
 		}
 
-		if ($record->getRecordedStopTimestamp() > 0)
+		// Only a consistently closed record can open the start: a record still holding an OPENED or PAUSED
+		// status has to be closed first, whatever stop time is already recorded on it.
+		if ($record->isClosed() && $record->getRecordedStopTimestamp() > 0)
 		{
-			if ($this->recordManager->isEligibleToReopen())
-			{
-				$prevShift = $this->buildShiftWithDateByRecord($record);
-				if ($prevShift && $this->userDateTime->getTimestamp() > $prevShift->getDateTimeEnd()->getTimestamp())
-				{
-					$shiftWithDate = $this->getRelevantShiftWithDate($this->userDateTime, $record);
-					if ($shiftWithDate)
-					{
-						return true;
-					}
-				}
-			}
-			else
+			if (!$this->recordManager->isEligibleToReopen())
 			{
 				return true;
 			}
+
+			$prevShift = $this->buildShiftWithDateByRecord($record);
+			if ($prevShift)
+			{
+				if ($this->userDateTime->getTimestamp() <= $prevShift->getDateTimeEnd()->getTimestamp())
+				{
+					// The end of the record's own shift is worth waiting for only while that schedule is still
+					// the user's; otherwise a shift of the current set open right now opens the start.
+					return !$this->recordManager->isRecordScheduleActual()
+						&& $this->getRelevantShiftWithDate($this->userDateTime, $record) !== null;
+				}
+
+				// While the schedule is still the user's, the start keeps waiting for a shift open right now.
+				return !$this->recordManager->isRecordScheduleActual()
+					|| $this->getRelevantShiftWithDate($this->userDateTime, $record) !== null;
+			}
+
+			// Nothing to wait for: the record has no shift of its own and its schedule is no longer the user's.
+			return !$this->recordManager->isRecordScheduleActual();
 		}
+
 		return false;
 	}
 
@@ -323,6 +333,14 @@ class WorktimeActionList
 	private function getRelevantShiftWithDate(\DateTime $userDateTime, ?WorktimeRecord $record)
 	{
 		$prevShift = $this->buildShiftWithDateByRecord($record);
+		// The lower bound the record's shift sets - no day may start on a shift beginning before it - keeps the
+		// user off a shift of their own schedule that has already passed. A schedule that left the set bounds
+		// nothing: its shift must not hide a shift of the current set that starts earlier in the day.
+		if ($this->recordManager && !$this->recordManager->isRecordScheduleActual())
+		{
+			$prevShift = null;
+		}
+
 		return $this->shiftsManager->buildRelevantShiftWithDate($userDateTime, $prevShift);
 	}
 }

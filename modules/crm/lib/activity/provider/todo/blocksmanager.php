@@ -7,11 +7,14 @@ use Bitrix\Crm\Activity\Provider\ToDo\Block\Calendar;
 use Bitrix\Crm\Activity\Provider\ToDo\Block\Client;
 use Bitrix\Crm\Activity\Provider\ToDo\Block\File;
 use Bitrix\Crm\Activity\Provider\ToDo\Block\Link;
+use Bitrix\Main\Result;
 
 final class BlocksManager
 {
 	private OptionallyConfigurable $entity;
 	private bool $needPreSave = false;
+	private array $preparedBlocks = [];
+	private bool $deferredActionsCommitted = false;
 
 	public static function createFromEntity(OptionallyConfigurable $entity): self
 	{
@@ -25,6 +28,7 @@ final class BlocksManager
 
 	public function preEnrichEntity(?array $blocks = []): SaveConfig
 	{
+		$this->startPreparation();
 		$blocksData = $this->getPreparedBlocks($blocks);
 		$activityData = $this->getActivityData();
 
@@ -34,6 +38,10 @@ final class BlocksManager
 			$blockInstance = BlocksFactory::getInstance($blockData['id'], $blockData, $activityData);
 
 			$saveConfig = $blockInstance?->prepareEntityBefore($this->entity);
+			if ($blockInstance)
+			{
+				$this->preparedBlocks[] = $blockInstance;
+			}
 			if ($saveConfig->isNeedSave())
 			{
 				$needSave = true;
@@ -49,6 +57,10 @@ final class BlocksManager
 		bool $preEnrichEntity = true
 	): OptionallyConfigurable
 	{
+		if ($preEnrichEntity)
+		{
+			$this->startPreparation();
+		}
 		$blocksData = $this->getPreparedBlocks($blocks);
 		$activityData = $this->getActivityData();
 
@@ -59,6 +71,10 @@ final class BlocksManager
 			if ($preEnrichEntity)
 			{
 				$blockInstance?->prepareEntityBefore($this->entity);
+				if ($blockInstance)
+				{
+					$this->preparedBlocks[] = $blockInstance;
+				}
 			}
 			$blockInstance?->prepareEntity($this->entity, $skipActiveSectionCheck);
 		}
@@ -66,6 +82,38 @@ final class BlocksManager
 		$this->prepareEnrichedEntity();
 
 		return $this->entity;
+	}
+
+	public function commitDeferredActions(array $saveOptions = []): Result
+	{
+		$result = new Result();
+		if ($this->deferredActionsCommitted)
+		{
+			return $result;
+		}
+
+		$this->deferredActionsCommitted = true;
+		$needSave = false;
+		foreach ($this->preparedBlocks as $block)
+		{
+			$blockResult = $block->commitDeferredActions($this->entity);
+			$needSave = $needSave || (bool)($blockResult->getData()['needSave'] ?? false);
+			$result->addErrors($blockResult->getErrors());
+		}
+
+		if ($needSave)
+		{
+			$saveResult = $this->entity->save($saveOptions);
+			$result->addErrors($saveResult->getErrors());
+		}
+
+		return $result;
+	}
+
+	private function startPreparation(): void
+	{
+		$this->preparedBlocks = [];
+		$this->deferredActionsCommitted = false;
 	}
 
 	protected function getPreparedBlocks(?array $blocks = []): array

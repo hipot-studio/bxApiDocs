@@ -422,7 +422,7 @@ class UserSignature extends Base
 			: (string)($fields['signature'] ?? '')
 		;
 
-		return $this->sanitize($body);
+		return $this->sanitizeSignature($body);
 	}
 
 	private function readRawFields(): array

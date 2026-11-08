@@ -7,6 +7,7 @@ namespace Bitrix\Rest\Internal\Service\IncomingWebhook;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ObjectNotFoundException;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\APAuth\PasswordTable;
 use Bitrix\Rest\APAuth\PermissionTable;
@@ -40,6 +41,7 @@ final class SystemIncomingWebhookCreator
 		array $scopes,
 		array $attributes = [],
 		?string $comment = null,
+		?Date $dateExpire = null,
 	): IncomingWebhook
 	{
 		$this->requireUser($userId);
@@ -63,6 +65,7 @@ final class SystemIncomingWebhookCreator
 					scopes: $scopes,
 					externalAttributes: $this->buildAttributeCollection($attributes),
 					type: WebhookType::System,
+					dateExpire: $dateExpire,
 				);
 
 				$this->repository->save($webhook);

@@ -130,6 +130,54 @@ class AttachmentStorage
 		];
 	}
 
+	public function prepareTransferred(array $attachments): ?array
+	{
+		if ($attachments === [])
+		{
+			return [];
+		}
+		if (!Loader::includeModule('disk'))
+		{
+			return null;
+		}
+
+		$prepared = [];
+		foreach ($attachments as $sort => $attachment)
+		{
+			$fileId = (int)($attachment['FILE_ID'] ?? 0);
+			$file = $fileId > 0 ? \CFile::getFileArray($fileId) : false;
+			if (!is_array($file))
+			{
+				return null;
+			}
+
+			$object = Storage::getObjectByAttachment([
+				'FILE_ID' => $fileId,
+				'FILE_NAME' => (string)($attachment['FILE_NAME'] ?? $file['ORIGINAL_NAME'] ?? ''),
+				'FILE_SIZE' => (int)($file['FILE_SIZE'] ?? 0),
+			], true);
+			if (!$object instanceof File)
+			{
+				return null;
+			}
+
+			$sourceObjectId = (int)($attachment['SOURCE_OBJECT_ID'] ?? 0);
+			$prepared[] = [
+				'FILE_ID' => $fileId,
+				'SOURCE_OBJECT_ID' => $sourceObjectId > 0 ? $sourceObjectId : (int)$object->getId(),
+				'SOURCE_FILE_ID' => $fileId,
+				'FILE_NAME' => (string)($attachment['FILE_NAME'] ?? $object->getName()),
+				'FILE_SIZE' => (int)($file['FILE_SIZE'] ?? 0),
+				'CONTENT_TYPE' => $file['CONTENT_TYPE'] ?? null,
+				'CONTENT_ID' => isset($attachment['CONTENT_ID']) ? (string)$attachment['CONTENT_ID'] : null,
+				'IS_INLINE' => !empty($attachment['IS_INLINE']),
+				'SORT' => ($sort + 1) * 100,
+			];
+		}
+
+		return $prepared;
+	}
+
 	private function copySourceToDraftFolder(
 		int $userId,
 		DraftAttachmentSource $source,
@@ -155,8 +203,7 @@ class AttachmentStorage
 					'sourceObjectId' => (int)$sourceFile->getId(),
 					'sourceFileId' => (int)$sourceFile->getFileId(),
 				]
-				: null
-			;
+				: null;
 		}
 
 		if (
@@ -190,8 +237,7 @@ class AttachmentStorage
 
 			return $copy instanceof File
 				? ['copy' => $copy, 'sourceObjectId' => 0, 'sourceFileId' => $fileId]
-				: null
-			;
+				: null;
 		}
 
 		return null;

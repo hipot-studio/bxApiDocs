@@ -10,6 +10,7 @@ use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\UI\EntitySelector\Converter;
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
 use Bitrix\Socialnetwork\Collab\Control\Member\CollabMemberFacade;
 use Bitrix\Socialnetwork\Control\Member\Command\MembersCommand;
 use Bitrix\Socialnetwork\Helper\Workgroup;
@@ -104,10 +105,11 @@ class StructureSyncService
 			return new RelationSyncResult();
 		}
 
-		$convertedMembers = $this->convertUserIdsToFinderCodes($employeeIds);
-		$result = $this->addMembers($entityId, $createdBy, $convertedMembers);
+		$allowedUserIds = ExternalMembershipValidator::filterUsers($entityId, $employeeIds);
+		$convertedMembers = $this->convertUserIdsToFinderCodes($allowedUserIds);
+		$result = $convertedMembers === [] ? new Result() : $this->addMembers($entityId, $createdBy, $convertedMembers);
 
-		$hasMore = count($employeeIds) === self::BATCH_SIZE;
+		$hasMore = $result->isSuccess() && count($employeeIds) === self::BATCH_SIZE;
 		$syncResult = new RelationSyncResult(
 			hasMore: $hasMore,
 			nextOffset: $hasMore ? $offset + self::BATCH_SIZE : null,

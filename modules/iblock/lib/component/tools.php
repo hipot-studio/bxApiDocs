@@ -127,7 +127,7 @@ class Tools
 					if (!preg_match(self::WEB_PROTOCOL_MASK, $imageData['SRC']))
 					{
 						$imageData['UNSAFE_SRC'] = $imageData['SRC'];
-						$imageData['SAFE_SRC'] = Main\Web\Uri::urnEncode($imageData['SRC'], 'UTF-8');
+						$imageData['SAFE_SRC'] = Main\Web\Uri::urnEncode($imageData['SRC']);
 						$imageData['SRC'] = $imageData['SAFE_SRC'];
 					}
 				}
@@ -181,7 +181,7 @@ class Tools
 			}
 			else
 			{
-				$result = Main\Web\Uri::urnEncode($image['SRC'], 'UTF-8');
+				$result = Main\Web\Uri::urnEncode($image['SRC']);
 			}
 		}
 		else

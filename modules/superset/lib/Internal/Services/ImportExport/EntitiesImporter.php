@@ -2,12 +2,12 @@
 
 namespace Bitrix\Superset\Internal\Services\ImportExport;
 
-use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Superset\Internal\Api;
 use Bitrix\Superset\Internal\Connector\SupersetInstance;
 use Bitrix\Superset\Internal\Entities\Server;
 use Bitrix\Superset\Internal\HttpStatus;
+use Bitrix\Superset\Internal\Support\InstanceUnavailableStatus;
 
 final class EntitiesImporter
 {
@@ -77,7 +77,9 @@ final class EntitiesImporter
 			}
 			else
 			{
-				$result->addError(new Error($datasetApiResult->getAnswer()));
+				$result->addError(
+					InstanceUnavailableStatus::createError($datasetApiResult->getAnswer(), $datasetApiResult)
+				);
 			}
 		}
 		else
@@ -128,7 +130,9 @@ final class EntitiesImporter
 			}
 			else
 			{
-				$result->addError(new Error($chartApiResult->getAnswer()));
+				$result->addError(
+					InstanceUnavailableStatus::createError($chartApiResult->getAnswer(), $chartApiResult)
+				);
 			}
 		}
 		else
@@ -187,7 +191,9 @@ final class EntitiesImporter
 			}
 			else
 			{
-				$result->addError(new Error($dashboardApiResult->getAnswer()));
+				$result->addError(
+					InstanceUnavailableStatus::createError($dashboardApiResult->getAnswer(), $dashboardApiResult)
+				);
 			}
 		}
 		else

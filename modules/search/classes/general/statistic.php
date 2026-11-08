@@ -2,14 +2,14 @@
 
 class CSearchStatistic
 {
-	var $phrase_id = 0;
+	public $phrase_id = 0;
 
-	var $_phrase = false;
-	var $_tags = false;
-	var $_session_id = '';
-	var $_stat_sess_id = false;
+	protected $_phrase = false;
+	protected $_tags = false;
+	protected $_session_id = '';
+	protected $_stat_sess_id = false;
 
-	function __construct($phrase = '', $tags = '')
+	public function __construct($phrase = '', $tags = '')
 	{
 		$phrase = mb_strtolower(trim($phrase, " \t\n\r"));
 		if ($l = mb_strlen($phrase))
@@ -55,7 +55,7 @@ class CSearchStatistic
 		}
 	}
 
-	function PhraseStat($result_count = 0, $page_num = 0)
+	public function PhraseStat($result_count = 0, $page_num = 0)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$DB->StartUsingMasterOnly();
@@ -66,9 +66,9 @@ class CSearchStatistic
 		$strSql = "
 			SELECT *
 			FROM b_search_phrase
-			WHERE SESSION_ID = '" . $DB->ForSQL($this->_session_id) . "'
-			AND " . ($this->_phrase === false ? 'PHRASE IS NULL' : "PHRASE = '" . $DB->ForSQL($this->_phrase) . "'") . '
-			AND ' . ($this->_tags === false ? 'TAGS IS NULL' : "TAGS = '" . $DB->ForSQL($this->_tags) . "'") . '
+			WHERE SESSION_ID = '" . $DB->ForSql($this->_session_id) . "'
+			AND " . ($this->_phrase === false ? 'PHRASE IS NULL' : "PHRASE = '" . $DB->ForSql($this->_phrase) . "'") . '
+			AND ' . ($this->_tags === false ? 'TAGS IS NULL' : "TAGS = '" . $DB->ForSql($this->_tags) . "'") . '
 		';
 		$rs = $DB->Query($strSql);
 		if ($ar = $rs->Fetch())
@@ -83,7 +83,7 @@ class CSearchStatistic
 		{
 			$this->phrase_id = $DB->Add('b_search_phrase',
 				[
-					'~TIMESTAMP_X' => $DB->CurrentTimeFunction(),
+					'~TIMESTAMP_X' => CDatabase::CurrentTimeFunction(),
 					'SITE_ID' => SITE_ID,
 					'~RESULT_COUNT' => $result_count,
 					'~PAGES' => $page_num,
@@ -139,11 +139,11 @@ class CSearchStatistic
 		foreach ($arOrder as $strColumn => $strDirection)
 		{
 			$strColumn = mb_strtoupper($strColumn);
-			$strDirection = mb_strtoupper($strDirection) == 'ASC' ? 'ASC' : 'DESC';
-			if (in_array($strColumn, $arDefSelect))
+			$strDirection = mb_strtoupper($strDirection) === 'ASC' ? 'ASC' : 'DESC';
+			if (in_array($strColumn, $arDefSelect, true))
 			{
 				$arSelect[] = $strColumn;
-				if ($strColumn == 'TIMESTAMP_X')
+				if ($strColumn === 'TIMESTAMP_X')
 				{
 					$arQueryOrder[$strColumn] = 'TMP_TS ' . $strDirection;
 				}
@@ -152,7 +152,7 @@ class CSearchStatistic
 					$arQueryOrder[$strColumn] = $strColumn . ' ' . $strDirection;
 				}
 			}
-			elseif ($strColumn == 'COUNT' && $bGroup)
+			elseif ($strColumn === 'COUNT' && $bGroup)
 			{
 				$arSelect[] = $strColumn;
 				$arQueryOrder[$strColumn] = $strColumn . ' ' . $strDirection;
@@ -164,9 +164,9 @@ class CSearchStatistic
 		foreach ($arSelect as $strColumn)
 		{
 			$strColumn = mb_strtoupper($strColumn);
-			if (in_array($strColumn, $arDefSelect))
+			if (in_array($strColumn, $arDefSelect, true))
 			{
-				if ($strColumn == 'TIMESTAMP_X')
+				if ($strColumn === 'TIMESTAMP_X')
 				{
 					$arQuerySelect['TMP_TS'] = 'sph.' . $strColumn . ' TMP_TS';
 					$arQuerySelect[$strColumn] = $DB->DateToCharFunction('sph.' . $strColumn, 'FULL') . ' ' . $strColumn;
@@ -181,7 +181,7 @@ class CSearchStatistic
 					$arQueryGroup[$strColumn] = 'sph.' . $strColumn;
 				}
 			}
-			elseif ($strColumn == 'COUNT' && $bGroup)
+			elseif ($strColumn === 'COUNT' && $bGroup)
 			{
 				$arQuerySelect[$strColumn] = 'count(*) ' . $strColumn;
 			}
@@ -245,7 +245,7 @@ class CSearchStatistic
 			],
 		]);
 
-		if (count($arQuerySelect) < 1)
+		if (!$arQuerySelect)
 		{
 			$arQuerySelect = ['ID' => 'sph.ID'];
 		}
@@ -338,7 +338,9 @@ class CSearchStatistic
 
 	public static function GetCurrentURL()
 	{
-		$res = (CMain::IsHTTPS() ? 'https' : 'http') . '://';
+		/** @var \Bitrix\Main\HttpRequest $request */
+		$request = \Bitrix\Main\Context::getCurrent()->getRequest();
+		$res = ($request->isHttps() ? 'https' : 'http') . '://';
 
 		$host = $_SERVER['HTTP_HOST'];
 		$res .= $host;
@@ -371,17 +373,17 @@ class CSearchStatistic
 					SELECT *
 					FROM b_search_phrase
 					WHERE ID = ' . $phrase_id . "
-					AND SESSION_ID = '" . $DB->ForSQL(bitrix_sessid()) . "'
+					AND SESSION_ID = '" . $DB->ForSql(bitrix_sessid()) . "'
 					AND URL_TO IS NULL
 				");
-				if ($ar = $rs->Fetch())
+				if ($rs->Fetch())
 				{
-					$URL_TO = $DB->ForSQL(CSearchStatistic::GetCurrentURL(), 2000);
+					$URL_TO = $DB->ForSql(CSearchStatistic::GetCurrentURL(), 2000);
 					$DB->Query("
 						UPDATE b_search_phrase
 						SET URL_TO = '" . $URL_TO . "'
 							,URL_TO_404 = '" . (defined('ERROR_404') ? 'Y' : 'N') . "'
-							,URL_TO_SITE_ID = " . (defined('SITE_ID') ? "'" . $DB->ForSQL(SITE_ID, 2) . "'" : 'null') . '
+							,URL_TO_SITE_ID = " . (defined('SITE_ID') ? "'" . $DB->ForSql(SITE_ID, 2) . "'" : 'null') . '
 						WHERE ID = ' . $phrase_id . '
 					');
 				}

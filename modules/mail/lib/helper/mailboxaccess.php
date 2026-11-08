@@ -13,8 +13,31 @@ use Bitrix\Main\SystemException;
 
 class MailboxAccess extends MailAccess
 {
+	private static array $batchMailboxes = [];
+	private static array $batchSharedMailboxIds = [];
+
+	public static function withMailboxBatch(array $models, int $userId, callable $check): mixed
+	{
+		$previous = [self::$batchMailboxes, self::$batchSharedMailboxIds];
+		self::$batchMailboxes = [$userId => $models];
+		self::$batchSharedMailboxIds = [];
+		try
+		{
+			return $check();
+		}
+		finally
+		{
+			[self::$batchMailboxes, self::$batchSharedMailboxIds] = $previous;
+		}
+	}
+
 	public static function isMailboxOwner(int $mailboxId, int $userId): bool
 	{
+		if (isset(self::$batchMailboxes[$userId][$mailboxId]))
+		{
+			return self::$batchMailboxes[$userId][$mailboxId]->getOwnerId() === $userId;
+		}
+
 		$query = MailboxTable::query()
 			->setSelect(['ID'])
 			->where('ID', $mailboxId)
@@ -27,6 +50,16 @@ class MailboxAccess extends MailAccess
 
 	public static function isMailboxSharedWithUser(int $mailboxId, int $userId): bool
 	{
+		if (isset(self::$batchMailboxes[$userId][$mailboxId]))
+		{
+			self::$batchSharedMailboxIds[$userId] ??= array_fill_keys(
+				self::filterSharedMailboxIds(array_keys(self::$batchMailboxes[$userId]), $userId),
+				true,
+			);
+
+			return isset(self::$batchSharedMailboxIds[$userId][$mailboxId]);
+		}
+
 		$accessCodes = \CAccess::GetUserCodesArray($userId) ?? [];
 		if (empty($accessCodes))
 		{
@@ -51,6 +84,43 @@ class MailboxAccess extends MailAccess
 		}
 
 		return self::isMailboxOwner($mailboxId, $userId);
+	}
+
+	/**
+	 * @param int[] $mailboxIds
+	 * @return int[]
+	 */
+	public static function filterAccessibleMailboxIds(array $mailboxIds, int $userId): array
+	{
+		$mailboxIds = array_values(array_unique(array_filter(array_map('intval', $mailboxIds))));
+		if ($mailboxIds === [] || $userId <= 0)
+		{
+			return [];
+		}
+
+		$ownedRows = MailboxTable::query()
+			->setSelect(['ID'])
+			->whereIn('ID', $mailboxIds)
+			->where('USER_ID', $userId)
+			->fetchAll()
+		;
+		$accessible = array_fill_keys(array_map('intval', array_column($ownedRows, 'ID')), true);
+		$accessCodes = \CAccess::GetUserCodesArray($userId) ?? [];
+		if ($accessCodes !== [])
+		{
+			$sharedRows = MailboxAccessTable::query()
+				->setSelect(['MAILBOX_ID'])
+				->whereIn('MAILBOX_ID', $mailboxIds)
+				->whereIn('ACCESS_CODE', $accessCodes)
+				->fetchAll()
+			;
+			foreach ($sharedRows as $row)
+			{
+				$accessible[(int)$row['MAILBOX_ID']] = true;
+			}
+		}
+
+		return array_keys($accessible);
 	}
 
 	/**
@@ -217,7 +287,20 @@ class MailboxAccess extends MailAccess
 
 	public static function hasCurrentUserAccessToEditMailboxIntegrationCrm(): bool
 	{
-		return self::canPerform(MailActionDictionary::ACTION_MAILBOX_INTEGRATION_CRM_EDIT);
+		return self::hasUserAccessToEditMailboxIntegrationCrm(self::getCurrentUserId());
+	}
+
+	public static function hasUserAccessToEditMailboxIntegrationCrm(int $userId): bool
+	{
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		/** @var MailboxAccessController $controllerClass */
+		$controllerClass = static::getAccessControllerClass();
+
+		return $controllerClass::can($userId, MailActionDictionary::ACTION_MAILBOX_INTEGRATION_CRM_EDIT);
 	}
 
 	public static function hasCurrentUserAccessToViewMailboxIntegrationCrm(): bool

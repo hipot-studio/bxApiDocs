@@ -31,7 +31,7 @@ class Hook
 	const HOOKS_PAGE_DIR = '/bitrix/modules/landing/lib/hook/page';
 
 	/**
-	 * Namespace of repoitory of common hooks (relative current).
+	 * Namespace of repository of common hooks (relative current).
 	 */
 	const HOOKS_NAMESPACE = '\\Hook\\Page\\';
 

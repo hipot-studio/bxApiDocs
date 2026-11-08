@@ -58,8 +58,22 @@ class OrderDocumentHandler
 			return new PaySystem\ServiceResult();
 		}
 
-		$documentInfo = $document->getFile()->getData();
+		$documentResult = $document->getFile();
+		$documentInfo = $documentResult->getData();
 		$result->setData($documentInfo);
+		if ($document->ID === null)
+		{
+			foreach ($documentResult->getErrors() as $error)
+			{
+				$result->addError(PaySystem\Error::createForBuyer(
+					$error->getMessage(),
+					$error->getCode(),
+					$error->getCustomData(),
+				));
+			}
+
+			return $result;
+		}
 
 		$params = array_merge($documentInfo, DocumentGenerator\Model\ExternalLinkTable::getPublicUrlsByDocumentId($document->ID));
 		if(!empty($params['hash']))

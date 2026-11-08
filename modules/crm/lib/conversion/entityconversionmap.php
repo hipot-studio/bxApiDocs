@@ -8,6 +8,8 @@ use Bitrix\Crm\UserField\UserFieldHistory;
 
 class EntityConversionMap
 {
+	private const MAP_VERSION = 3;
+
 	/** @var EntityConversionMap[] $items */
 	protected static $items = array();
 	/** @var int $srcEntityTypeID */
@@ -22,10 +24,16 @@ class EntityConversionMap
 	protected $time = null;
 	/** @var DateTime $syncTime */
 	protected $syncTime = null;
+	/** @var array|null $historySnapshot */
+	protected $historySnapshot = null;
 	/** @var boolean $isSynchronized */
 	//protected $isSynchronized = false;
 	/** @var boolean|null $isOutOfDate */
 	protected $isOutOfDate = null;
+	/** @var int $version */
+	protected $version = self::MAP_VERSION;
+	/** @var bool $isLegacy */
+	protected $isLegacy = false;
 
 	public function __construct($srcEntityTypeID = 0, $dstEntityTypeID = 0)
 	{
@@ -64,8 +72,18 @@ class EntityConversionMap
 		$this->time = $time;
 	}
 
+	public function isLegacy(): bool
+	{
+		return $this->isLegacy;
+	}
+
 	public function isOutOfDate()
 	{
+		if($this->version < self::MAP_VERSION)
+		{
+			return true;
+		}
+
 		if($this->isOutOfDate === null)
 		{
 			$srcLastChanged = UserFieldHistory::getLastChangeTime($this->srcEntityTypeID);
@@ -83,13 +101,59 @@ class EntityConversionMap
 					? $srcLastChanged : $dstLastChanged;
 			}
 
-			$this->isOutOfDate = $lastChanged !== null && $lastChanged->getTimestamp() > $this->time->getTimestamp();
+			$this->isOutOfDate =
+				$lastChanged !== null
+				&& (
+					$lastChanged->getTimestamp() > $this->time->getTimestamp()
+					|| (
+						$this->historySnapshot !== null
+						&& $this->historySnapshot !== $this->createHistorySnapshot()
+					)
+				)
+			;
 		}
 
 		return $this->isOutOfDate;
 	}
 
-	public function createItem($srcFieldID, $dstFieldID = '', array $options = null)
+	public function markAsActual(?DateTime $time = null, ?array $historySnapshot = null)
+	{
+		$this->version = self::MAP_VERSION;
+		$this->isLegacy = false;
+		$this->time = $time ?? new DateTime();
+		$this->historySnapshot = $historySnapshot ?? $this->createHistorySnapshot();
+		$this->isOutOfDate = null;
+	}
+
+	public function actualizeIfOutOfDate(): void
+	{
+		if(!$this->isOutOfDate())
+		{
+			return;
+		}
+
+		$historySnapshot = $this->createHistorySnapshot();
+		EntityConversionMapper::updateMap($this);
+		$this->historySnapshot = $historySnapshot;
+		$this->save();
+	}
+
+	public function createHistorySnapshot(): array
+	{
+		$result = array();
+		foreach(array_unique(array($this->srcEntityTypeID, $this->dstEntityTypeID)) as $entityTypeID)
+		{
+			$time = UserFieldHistory::getLastChangeTime($entityTypeID);
+			if($time !== null)
+			{
+				$result[$entityTypeID] = $time->format(\DateTime::ISO8601);
+			}
+		}
+
+		return $result;
+	}
+
+	public function createItem($srcFieldID, $dstFieldID = '', ?array $options = null)
 	{
 		$item = new EntityConversionMapItem($srcFieldID, $dstFieldID, $options);
 		$this->setItem($item);
@@ -124,38 +188,83 @@ class EntityConversionMap
 
 		$srcID = $item->getSourceField();
 		$this->srcIndex[$srcID] = $item;
+		$this->setDestinationIndexItem($item);
+	}
 
+	public function replaceItemSource(EntityConversionMapItem $item, $srcFieldID)
+	{
+		if($this->srcIndex === null)
+		{
+			$item->setSourceField($srcFieldID);
+			$this->setItem($item);
+
+			return;
+		}
+
+		$oldSrcID = $item->getSourceField();
+		if(isset($this->srcIndex[$oldSrcID]) && $this->srcIndex[$oldSrcID] === $item)
+		{
+			unset($this->srcIndex[$oldSrcID]);
+		}
+
+		$item->setSourceField($srcFieldID);
+		$this->srcIndex[$srcFieldID] = $item;
+		$this->rebuildDestinationIndex();
+	}
+
+	public function removeItem(EntityConversionMapItem $item)
+	{
+		$this->removeItems(array($item));
+	}
+
+	public function removeItems(array $items)
+	{
+		if($this->srcIndex === null)
+		{
+			return;
+		}
+
+		foreach($items as $item)
+		{
+			if(!($item instanceof EntityConversionMapItem))
+			{
+				continue;
+			}
+
+			$srcID = $item->getSourceField();
+			if(isset($this->srcIndex[$srcID]) && $this->srcIndex[$srcID] === $item)
+			{
+				unset($this->srcIndex[$srcID]);
+			}
+		}
+
+		$this->rebuildDestinationIndex();
+	}
+
+	private function rebuildDestinationIndex()
+	{
+		$this->dstIndex = null;
+		foreach($this->srcIndex ?? array() as $item)
+		{
+			$this->setDestinationIndexItem($item);
+		}
+	}
+
+	private function setDestinationIndexItem(EntityConversionMapItem $item)
+	{
 		if($this->dstIndex == null)
 		{
 			$this->dstIndex = array();
 		}
 
-		$dstID = $item->getDestinationField();
-		if($dstID === '')
-		{
-			$dstID = $srcID;
-		}
-		$this->dstIndex[$dstID] = $item;
+		$this->dstIndex[$this->getItemDestinationFieldID($item)] = $item;
 	}
 
-	public function removeItem(EntityConversionMapItem $item)
+	private function getItemDestinationFieldID(EntityConversionMapItem $item)
 	{
-		$srcID = $item->getSourceField();
-		if($this->srcIndex !== null && isset($this->srcIndex[$srcID]))
-		{
-			unset($this->srcIndex[$srcID]);
-		}
-
 		$dstID = $item->getDestinationField();
-		if($dstID === '')
-		{
-			$dstID = $srcID;
-		}
 
-		if($this->dstIndex !== null && isset($this->dstIndex[$dstID]))
-		{
-			unset($this->dstIndex[$dstID]);
-		}
+		return $dstID === '' ? $item->getSourceField() : $dstID;
 	}
 
 	public function removeAllItems()
@@ -189,6 +298,8 @@ class EntityConversionMap
 			'srcEntityTypeID' => $this->srcEntityTypeID,
 			'dstEntityTypeID' => $this->dstEntityTypeID,
 			'time' => $this->time->format(\DateTime::ISO8601),
+			'version' => $this->version,
+			'historySnapshot' => $this->historySnapshot,
 			//'sync' => $this->isSynchronized,
 			'items' => array()
 		);
@@ -213,6 +324,10 @@ class EntityConversionMap
 		{
 			$this->time = new DateTime($params['time'], \DateTime::ISO8601);
 		}
+		$this->version = isset($params['version']) ? (int)$params['version'] : 0;
+		$this->isLegacy = $this->version < self::MAP_VERSION;
+		$this->historySnapshot = isset($params['historySnapshot']) && is_array($params['historySnapshot'])
+			? $params['historySnapshot'] : null;
 
 		//if(isset($params['sync']))
 		//{
@@ -229,6 +344,7 @@ class EntityConversionMap
 			}
 		}
 	}
+
 
 	/**
 	 * Save conversion map
@@ -262,7 +378,7 @@ class EntityConversionMap
 	 * @throws Main\ObjectPropertyException
 	 * @throws Main\SystemException
 	 */
-	public static function load($srcEntityTypeID, $dstEntityTypeID)
+	public static function load($srcEntityTypeID, $dstEntityTypeID, ?array $options = null)
 	{
 		if(!is_int($srcEntityTypeID))
 		{
@@ -275,9 +391,25 @@ class EntityConversionMap
 		}
 
 		$key = "{$srcEntityTypeID}_{$dstEntityTypeID}";
+		$enableActualization = !isset($options['ENABLE_ACTUALIZATION']) || $options['ENABLE_ACTUALIZATION'] === true;
+		$enableLegacyActualization =
+			!$enableActualization
+			&& isset($options['ENABLE_LEGACY_ACTUALIZATION'])
+			&& $options['ENABLE_LEGACY_ACTUALIZATION'] === true
+		;
 		if(isset(self::$items[$key]))
 		{
-			return self::$items[$key];
+			$item = self::$items[$key];
+			if($enableActualization)
+			{
+				$item->actualizeIfOutOfDate();
+			}
+			elseif($enableLegacyActualization && $item->isLegacy())
+			{
+				$item->actualizeIfOutOfDate();
+			}
+
+			return (self::$items[$key] = $item);
 		}
 
 		$query = new Query(EntityConversionMapTable::getEntity());
@@ -300,6 +432,14 @@ class EntityConversionMap
 
 		$item = new EntityConversionMap();
 		$item->internalize($params);
+		if($enableActualization)
+		{
+			$item->actualizeIfOutOfDate();
+		}
+		elseif($enableLegacyActualization && $item->isLegacy())
+		{
+			$item->actualizeIfOutOfDate();
+		}
 
 		return (self::$items[$key] = $item);
 	}

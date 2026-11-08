@@ -40,6 +40,8 @@ class LegacyComment extends BaseController
 		if (!$canRead)
 		{
 			$this->addError(new Error('Access denied'));
+
+			return null;
 		}
 
 		if (!$legacyFeatureService->hasForumComments($taskId))

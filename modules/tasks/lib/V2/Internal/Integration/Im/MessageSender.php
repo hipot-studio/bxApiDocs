@@ -32,6 +32,7 @@ class MessageSender implements MessageSenderInterface
 		private readonly ChatRepositoryInterface $chatRepository,
 		private readonly SendResultAdapter $sendResultAdapter,
 		private readonly EventDispatcher $eventDispatcher,
+		private readonly ProgrammaticMessageMarker $programmaticMessageMarker,
 	)
 	{
 		Loc::loadMessages($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/tasks/lib/V2/Internal/Integration/Im/ChatNotification.php');
@@ -86,6 +87,9 @@ class MessageSender implements MessageSenderInterface
 			->disableNotify()
 			->setImportantFor($notificationRecipients)
 		;
+
+		// Everything built here is a programmatic send, not a user comment.
+		$this->programmaticMessageMarker->markProgrammatic($message);
 
 		$keyboard = $notification->getKeyboard();
 		if ($keyboard !== null)

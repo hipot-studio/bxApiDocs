@@ -203,8 +203,7 @@ class CBPCrmGetCallAssessmentActivity extends CBPActivity implements IBPEventAct
 		{
 			$this->phase = $this->isScoringJobForCurrentAssessment($pendingJob)
 				? self::PHASE_SCORING
-				: self::PHASE_WAIT_SCORING_SLOT
-			;
+				: self::PHASE_WAIT_SCORING_SLOT;
 			$jobId = $pendingJob->getId();
 		}
 
@@ -212,8 +211,7 @@ class CBPCrmGetCallAssessmentActivity extends CBPActivity implements IBPEventAct
 
 		return $outcome === self::WAIT_OUTCOME_PENDING
 			? CBPActivityExecutionStatus::Executing
-			: CBPActivityExecutionStatus::Closed
-		;
+			: CBPActivityExecutionStatus::Closed;
 	}
 
 	private function isScoringJobForCurrentAssessment(EO_Queue $job): bool
@@ -221,8 +219,7 @@ class CBPCrmGetCallAssessmentActivity extends CBPActivity implements IBPEventAct
 		$assessmentSettingsId = $this->getAssessmentSettingsId();
 
 		return $assessmentSettingsId !== null
-			&& JobRepository::getInstance()->getCallAssessmentSettingsIdByJob($job) === $assessmentSettingsId
-		;
+			&& JobRepository::getInstance()->getCallAssessmentSettingsIdByJob($job) === $assessmentSettingsId;
 	}
 
 	// @todo need use new api
@@ -407,7 +404,7 @@ class CBPCrmGetCallAssessmentActivity extends CBPActivity implements IBPEventAct
 		{
 			throw new \LogicException(
 				static::class . '::subscribe() called before event subscription hash was initialized.'
-				. ' Use subscribeAndWaitForJob()/subscribeAndWait() to start the subscription.'
+				. ' Use subscribeAndWaitForJob()/subscribeAndWait() to start the subscription.',
 			);
 		}
 
@@ -430,6 +427,15 @@ class CBPCrmGetCallAssessmentActivity extends CBPActivity implements IBPEventAct
 	{
 		if ($this->isExternalEventIrrelevant($arEventParameters, self::LISTEN_EVENTS))
 		{
+			return;
+		}
+
+		if (!Loader::includeModule('crm') || !Loader::includeModule('ai'))
+		{
+			$this->trackError('Required modules crm and ai are not available');
+			$this->unsubscribe($this);
+			$this->workflow->cancelActivity($this);
+
 			return;
 		}
 
@@ -482,7 +488,11 @@ class CBPCrmGetCallAssessmentActivity extends CBPActivity implements IBPEventAct
 			$aiResult = $this->extractEventObject($arEventParameters, \Bitrix\AI\Result::class);
 			if ($aiResult !== null)
 			{
-				$this->fillCallQuality();
+				$this->CallQuality = ScoreCallV2::extractAssessmentFromAIResult($aiResult);
+				if ($this->CallQuality === null)
+				{
+					$this->fillCallQuality();
+				}
 			}
 			else
 			{
@@ -758,7 +768,7 @@ class CBPCrmGetCallAssessmentActivity extends CBPActivity implements IBPEventAct
 			->getByActivityIdAndJobId((int)$this->ActivityId, $this->jobId)
 		;
 
-		$this->CallQuality = $assessment['ASSESSMENT'] ?? null;
+		$this->CallQuality = isset($assessment['ASSESSMENT']) ? (int)$assessment['ASSESSMENT'] : null;
 	}
 
 	private function extractAssessmentIdFromPayload(\Bitrix\Crm\Integration\AI\Result $result): ?int

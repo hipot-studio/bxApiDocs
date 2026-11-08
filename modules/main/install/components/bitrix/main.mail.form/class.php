@@ -19,11 +19,11 @@ Loc::loadMessages(__FILE__);
 class MainMailFormComponent extends CBitrixComponent implements Controllerable
 {
 	/**
-	 * Cache for compatibility
+	 * Answer of the core signature event, resolved once per hit
 	 *
-	 * @var array
+	 * @var array|null
 	 */
-	private array $signatures;
+	private ?array $signatureContext = null;
 
 	/**
 	 * @param array $params
@@ -470,68 +470,101 @@ class MainMailFormComponent extends CBitrixComponent implements Controllerable
 	}
 
 	/**
-	 * @param array $mailboxes
-	 * @return array
+	 * Signatures of the current user, asked for through the core: the module that owns them answers
+	 * the event and the form knows nothing of its entities.
+	 *
+	 * @return array{signatures: array, signaturesBySender: array}
 	 */
-	protected function loadSignatures(array $mailboxes)
+	private function getSignatureContext(): array
 	{
-		if (!empty($mailboxes))
+		if ($this->signatureContext === null)
 		{
-			$onlyFirst = [];
-			foreach ($this->getSignaturesFromDb() as $sender => $signatureFields)
-			{
-				if (!isset($onlyFirst[$sender]))
-				{
-					$onlyFirst[$sender] = $signatureFields;
-				}
-			}
-			return $onlyFirst;
+			$context = \Bitrix\Main\Mail\Sender::prepareUserMailboxesWithSignatures();
+			$this->signatureContext = [
+				'signatures' => (array)($context['signatures'] ?? []),
+				'signaturesBySender' => (array)($context['signaturesBySender'] ?? []),
+			];
 		}
 
-		return [];
+		return $this->signatureContext;
 	}
 
 	/**
-	 * Get signatures from database
+	 * Signatures available to every sender, keyed by the sender key of the form (`formated`) and
+	 * ordered as the answer of the event orders them.
 	 *
-	 * @return array [sender => [signature,...],...]
-	 * @throws \Bitrix\Main\ArgumentException
-	 * @throws \Bitrix\Main\LoaderException
-	 * @throws \Bitrix\Main\ObjectPropertyException
-	 * @throws \Bitrix\Main\SystemException
+	 * API-02 contract:
+	 *   {'<sender>': [{list, full, signatureId:int, isShared:bool}]}
+	 *
+	 * @return array
 	 */
-	private function getSignaturesFromDb(): array
+	private function getSignaturesBySender(): array
 	{
-		if (!isset($this->signatures))
+		$context = $this->getSignatureContext();
+		$signaturesById = [];
+		foreach ($context['signatures'] as $signature)
 		{
-			$signatures = [];
-			if (
-				\Bitrix\Main\Loader::includeModule('mail')
-				&& class_exists('\\Bitrix\\Mail\\Internals\\UserSignatureTable')
-			)
+			if (is_array($signature) && (int)($signature['id'] ?? 0) > 0)
 			{
-				$signatureList = \Bitrix\Mail\Internals\UserSignatureTable::getList([
-					'order' => ['ID' => 'desc'],
-					'select' => ['ID', 'SIGNATURE', 'SENDER'],
-					'filter' => [
-						'USER_ID' => \Bitrix\Main\Engine\CurrentUser::get()->getId(),
-					],
-				]);
-				while ($signature = $signatureList->fetch())
-				{
-					$signatures[$signature['SENDER']][] = [
-						"list" => $this->getPreparedForTitleSignature((string)$signature['SIGNATURE']),
-						"full" => $signature['SIGNATURE'],
-						// A remembered pick refers to a signature by its identifier. The mail
-						// entity answers with identifiers of the unified signature model, the
-						// same ones the mail resolver compares a remembered pick with.
-						"signatureId" => (int)$signature['ID'],
-					];
-				}
+				$signaturesById[(int)$signature['id']] = $signature;
 			}
-			$this->signatures = $signatures;
 		}
-		return $this->signatures;
+
+		$bySender = [];
+		foreach ($context['signaturesBySender'] as $senderKey => $entry)
+		{
+			$senderSignatures = [];
+			foreach ((array)($entry['availableSignatureIds'] ?? []) as $signatureId)
+			{
+				$signature = $signaturesById[(int)$signatureId] ?? null;
+				if ($signature === null)
+				{
+					continue;
+				}
+
+				$senderTexts = (array)($signature['senderTexts'] ?? []);
+				$body = (string)($senderTexts[$senderKey] ?? $signature['signature'] ?? '');
+				if ($body === '')
+				{
+					continue;
+				}
+
+				$senderSignatures[] = [
+					'list' => $this->getPreparedForTitleSignature($body),
+					'full' => $body,
+					'signatureId' => (int)$signatureId,
+					'isShared' => ($signature['scope'] ?? '') === 'shared',
+				];
+			}
+
+			if (!empty($senderSignatures))
+			{
+				$bySender[(string)$senderKey] = $senderSignatures;
+			}
+		}
+
+		return $bySender;
+	}
+
+	/**
+	 * Signature the mail module substitutes by default for every sender, its own rule already
+	 * applied. Absent key means there is nothing to substitute.
+	 *
+	 * @return array<string, int>
+	 */
+	private function getSelectedSignatureIds(): array
+	{
+		$selection = [];
+		foreach ($this->getSignatureContext()['signaturesBySender'] as $senderKey => $entry)
+		{
+			$signatureId = (int)($entry['selectedSignatureId'] ?? 0);
+			if ($signatureId > 0)
+			{
+				$selection[(string)$senderKey] = $signatureId;
+			}
+		}
+
+		return $selection;
 	}
 
 	/**
@@ -543,13 +576,22 @@ class MainMailFormComponent extends CBitrixComponent implements Controllerable
 	 */
 	private function getPreparedForTitleSignature(string $signature): string
 	{
+		// Line breaks and block ends carry the only word boundary a signature has; strip_tags drops
+		// them silently and glues the name to the text that followed it on the next line.
+		$signature = preg_replace('#<(?:br|/p|/div|/li|/tr|/h[1-6])\b[^>]*>#iu', ' ', $signature);
 		$signature = mb_substr(strip_tags($signature), 0, 500);
 		$signature = preg_replace("#\t#u", " ", $signature);
 		$signature = preg_replace("#\n+#u", "\n", $signature);
 		$signature = preg_replace("# +#u", " ", $signature);
 		$signature = trim($signature);
 		$encoding = "UTF-8";
-		return html_entity_decode($signature, ENT_COMPAT, $encoding);
+		$signature = html_entity_decode($signature, ENT_COMPAT, $encoding);
+		if (preg_match('/^[\s\p{Z}]*$/u', $signature) === 1)
+		{
+			return Loc::getMessage('MAIN_MAIL_FORM_EDITOR_SIGNATURE_SELECT');
+		}
+
+		return $signature;
 	}
 
 	/**
@@ -563,14 +605,12 @@ class MainMailFormComponent extends CBitrixComponent implements Controllerable
 	{
 		$signaturesUrl = (string)($this->arParams['PATH_TO_MAIL_SIGNATURES'] ?? '');
 		$signaturesUrl = str_starts_with($signaturesUrl, '/') ? $signaturesUrl : '/mail/signatures';
-		$params = [
-			'signatures' => $this->loadSignatures($mailboxes), // compatibility
-		];
+		$params = [];
 
 		if (\Bitrix\Main\Loader::includeModule('mail'))
 		{
-			$params['allUserSignatures'] = empty($mailboxes) ? [] : $this->getSignaturesWithShared();
-			$params['signatureChoices'] = empty($mailboxes) ? [] : $this->getSignatureChoices();
+			$params['allUserSignatures'] = empty($mailboxes) ? [] : $this->getSignaturesBySender();
+			$params['signatureSelection'] = empty($mailboxes) ? [] : $this->getSelectedSignatureIds();
 			$params['signatureSelectTitle'] = Loc::getMessage('MAIN_MAIL_FORM_EDITOR_SIGNATURE_SELECT');
 			$params['signatureConfigureTitle'] = Loc::getMessage('MAIN_MAIL_FORM_EDITOR_SIGNATURE_CONFIGURE_MSGVER_1');
 			$params['pathToMailSignatures'] = $signaturesUrl;
@@ -590,133 +630,6 @@ class MainMailFormComponent extends CBitrixComponent implements Controllerable
 	}
 
 	/**
-	 * Returns personal signatures merged with assigned shared signatures.
-	 *
-	 * Personal signatures are keyed by SENDER (string|null) and remain unchanged.
-	 * Assigned shared signatures are placed under the sender key of the mailbox they
-	 * are assigned to (mailbox 'formated'), so a shared signature shows up only for the
-	 * sender it belongs to (AC-010: last shared signature assigned to the mailbox). Each
-	 * shared entry carries isShared=true, signatureId and assignedAt.
-	 *
-	 * API-02 contract:
-	 *   {
-	 *     '<sender>': [{list, full, signatureId:int}]
-	 *       | [{list, full, signatureId:int, isShared:true, assignedAt:int|null}]
-	 *   }
-	 *
-	 * @return array
-	 */
-	private function getSignaturesWithShared(): array
-	{
-		$signatures = $this->getSignaturesFromDb();
-
-		if (
-			!\Bitrix\Main\Loader::includeModule('mail')
-			|| !class_exists('\\Bitrix\\Mail\\Service\\SharedSignature\\SignatureResolver')
-		)
-		{
-			return $signatures;
-		}
-
-		try
-		{
-			$resolver = new \Bitrix\Mail\Service\SharedSignature\SignatureResolver();
-
-			// Map each mailbox to its sender key. The composer client (main.mail.form
-			// script.js getSenderSignatures) resolves the current sender by mailbox.formated
-			// and looks signatures up by formated, then email. Use formated as the per-sender
-			// key so each shared signature lands under the mailbox it is assigned to.
-			$mailboxIds = [];
-			$mailboxSenderKey = [];
-			$mailboxes = \Bitrix\Main\Mail\Sender::prepareUserMailboxes();
-			foreach ($mailboxes as $mailbox)
-			{
-				$mailboxId = (int)($mailbox['mailboxId'] ?? 0);
-				if ($mailboxId <= 0)
-				{
-					continue;
-				}
-				$mailboxIds[$mailboxId] = true;
-				$formated = (string)($mailbox['formated'] ?? '');
-				if ($formated !== '')
-				{
-					$mailboxSenderKey[$mailboxId] = $formated;
-				}
-			}
-
-			// Resolve the whole available-mailbox set at once. Personal signatures have already
-			// been loaded by getSignaturesFromDb(); the batch API returns shared entries only.
-			$sharedSignaturesByMailbox = $resolver->resolveSharedForMailboxes(array_keys($mailboxIds));
-			foreach ($sharedSignaturesByMailbox as $mailboxId => $sharedSignatures)
-			{
-				$senderKey = $mailboxSenderKey[$mailboxId] ?? null;
-				if ($senderKey === null)
-				{
-					continue;
-				}
-				$seenInMailbox = [];
-				foreach ($sharedSignatures as $item)
-				{
-					$sigId = (int)($item['signatureId'] ?? 0);
-					if ($sigId <= 0 || isset($seenInMailbox[$sigId]))
-					{
-						continue;
-					}
-					$seenInMailbox[$sigId] = true;
-					$signatureText = (string)($item['signature'] ?? '');
-					$assignedAt = $item['assignedAt'] ?? null;
-					$signatures[$senderKey][] = [
-						'list' => $this->getPreparedForTitleSignature($signatureText),
-						'full' => $signatureText,
-						'isShared' => true,
-						'signatureId' => $sigId,
-						// Moment of the latest assignment as a unix timestamp. The client weighs a
-						// remembered pick against it: an assignment made later wins over the pick.
-						'assignedAt' => $assignedAt === null ? null : (int)$assignedAt,
-					];
-				}
-			}
-		}
-		catch (\Throwable $e)
-		{
-			// Graceful fallback: return personal signatures only
-		}
-
-		return $signatures;
-	}
-
-	/**
-	 * Signature picks the current user has remembered, keyed by sender: the map the mail module
-	 * stores, handed over as it is. Reading the user option here is not an option — the shape of
-	 * the store belongs to the mail module.
-	 *
-	 * @return array<string, string> Empty when the mail module is missing or too old to know the
-	 *                               store.
-	 */
-	private function getSignatureChoices(): array
-	{
-		if (
-			!\Bitrix\Main\Loader::includeModule('mail')
-			|| !class_exists('\\Bitrix\\Mail\\Service\\SharedSignature\\SignatureChoiceStorage')
-		)
-		{
-			return [];
-		}
-
-		try
-		{
-			$storage = new \Bitrix\Mail\Service\SharedSignature\SignatureChoiceStorage();
-
-			return $storage->getAllChoices((int)\Bitrix\Main\Engine\CurrentUser::get()->getId());
-		}
-		catch (\Throwable $e)
-		{
-			// Graceful fallback: the form works without remembered picks
-			return [];
-		}
-	}
-
-	/**
 	 * Get current user signatures from ajax action
 	 *
 	 * @return array
@@ -724,8 +637,8 @@ class MainMailFormComponent extends CBitrixComponent implements Controllerable
 	public function signaturesAction(): array
 	{
 		return [
-			'signatures' => $this->getSignaturesWithShared(),
-			'signatureChoices' => $this->getSignatureChoices(),
+			'signatures' => $this->getSignaturesBySender(),
+			'signatureSelection' => $this->getSelectedSignatureIds(),
 		];
 	}
 

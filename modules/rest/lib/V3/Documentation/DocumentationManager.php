@@ -15,6 +15,7 @@ use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Dto\DtoField;
 use Bitrix\Rest\V3\Dto\DynamicEnum\DynamicEnumRegistry;
+use Bitrix\Rest\V3\Dto\TypeHelper;
 use Bitrix\Rest\V3\Interaction\Request\Request;
 use Bitrix\Rest\V3\Interaction\Response\AddResponse;
 use Bitrix\Rest\V3\Interaction\Response\AggregateResponse;
@@ -106,8 +107,12 @@ class DocumentationManager
 		$customModuleSchemas = $this->getCustomModuleSchemas();
 		$customModuleMethods = $this->getCustomModuleMethods();
 		$customModuleRoutes = $this->schemaManager->getRouteAliases();
+		$methodDescriptions = array_filter(
+			$this->schemaManager->getMethodDescriptions(),
+			static fn(MethodDescription $methodDescription): bool => $methodDescription->isEnabled && !$methodDescription->isHidden,
+		);
+		$this->schemaManager->ensureGeneratedDtoClassesLoadedFromMethodDescriptions($methodDescriptions);
 		$moduleControllers = $this->schemaManager->getControllersByModules();
-		$methodDescriptions = $this->schemaManager->getMethodDescriptions();
 
 		foreach ($moduleControllers as $moduleId => $controllers)
 		{
@@ -134,7 +139,7 @@ class DocumentationManager
 
 				foreach ($controllerData->getMethods() as $controllerMethodDescription)
 				{
-					if (!$controllerMethodDescription->isEnabled)
+					if (!$controllerMethodDescription->isEnabled || $controllerMethodDescription->isHidden)
 					{
 						continue;
 					}
@@ -174,7 +179,7 @@ class DocumentationManager
 						{
 							foreach ($this->getExtraResponseProperties($returnType) as $extraResponseProperty)
 							{
-								if (is_subclass_of($extraResponseProperty, Dto::class))
+								if (TypeHelper::isDto($extraResponseProperty))
 								{
 									$extraDto = $this->getDtoByClass($extraResponseProperty);
 									if ($extraDto !== null)
@@ -246,7 +251,7 @@ class DocumentationManager
 		foreach ($dto->getFields() as $field)
 		{
 			$type = $field->getPropertyType();
-			if (is_subclass_of($type, Dto::class))
+			if (TypeHelper::isDto($type))
 			{
 				$dto = $this->getDtoByClass($type);
 				if ($dto === null)
@@ -255,7 +260,7 @@ class DocumentationManager
 				}
 				$this->collectDtoSchemas($dto, $customSchemas, $dtoSchemas);
 			}
-			elseif ($type === DtoCollection::class && $field->getElementType() && is_subclass_of($field->getElementType(), Dto::class))
+			elseif ($type === DtoCollection::class && TypeHelper::isDto($field->getElementType()))
 			{
 				$dto = $this->getDtoByClass($field->getElementType());
 				$this->collectDtoSchemas($dto, $customSchemas, $dtoSchemas);
@@ -325,12 +330,16 @@ class DocumentationManager
 				],
 				ListResponse::class => call_user_func(function () use ($dto) {
 					$result = [
-						'type' => 'array',
+						'type' => 'object',
+						'properties' => [
+							'items' => [
+								'type' => 'array',
+								'items' => $dto ? [
+									'$ref' => '#/components/schemas/' . TypeAliasRegistry::toPublicType($dto),
+								] : [],
+							],
+						],
 					];
-					if ($dto !== null)
-					{
-						$result['items'] = ['$ref' => '#/components/schemas/' . TypeAliasRegistry::toPublicType($dto)];
-					}
 
 					return $result;
 				}),
@@ -404,7 +413,7 @@ class DocumentationManager
 
 		foreach (self::AVAILABLE_DEFAULT_RESPONSES as $responseClass)
 		{
-			if (is_subclass_of($returnTypeClass, $responseClass))
+			if (TypeHelper::isSubclassOf($returnTypeClass, $responseClass))
 			{
 				$base = $getResponseByClass($responseClass);
 
@@ -425,7 +434,7 @@ class DocumentationManager
 		}
 
 		// Custom Response subclasses (e.g. DownloadResultResponse): describe public properties.
-		if (is_subclass_of($returnTypeClass, Response::class))
+		if (TypeHelper::isSubclassOf($returnTypeClass, Response::class))
 		{
 			return $baseResponse([
 				'type' => 'object',
@@ -448,7 +457,7 @@ class DocumentationManager
 
 		foreach ($extras as $extraPropertyName => $extraPropertyType)
 		{
-			if (is_subclass_of($extraPropertyType, Dto::class))
+			if (TypeHelper::isDto($extraPropertyType))
 			{
 				$extraProperty = $this->getDtoByClass($extraPropertyType);
 				if ($extraProperty === null)
@@ -470,7 +479,7 @@ class DocumentationManager
 
 	private function getExtraResponseProperties(string $returnTypeClass): array
 	{
-		if (!class_exists($returnTypeClass))
+		if (!TypeHelper::classExists($returnTypeClass))
 		{
 			return [];
 		}
@@ -555,14 +564,14 @@ class DocumentationManager
 			return $this->getDtoCollectionProperty($field);
 		}
 
-		if (is_subclass_of($field->getPropertyType(), Dto::class))
+		if (TypeHelper::isDto($field->getPropertyType()))
 		{
 			$dto = $this->getDtoByClass($field->getPropertyType());
 
 			return ['$ref' => '#/components/schemas/' . TypeAliasRegistry::toPublicType($dto)];
 		}
 
-		if (is_subclass_of($field->getPropertyType(), \BackedEnum::class))
+		if (TypeHelper::isBackedEnum($field->getPropertyType()))
 		{
 			return $this->getBackedEnumFormat($field->getPropertyType());
 		}
@@ -667,7 +676,7 @@ class DocumentationManager
 			return $primitive;
 		}
 
-		if (is_subclass_of($typeName, \BackedEnum::class))
+		if (TypeHelper::isBackedEnum($typeName))
 		{
 			return $this->getBackedEnumFormat($typeName);
 		}

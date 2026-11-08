@@ -14,7 +14,6 @@ class CCrmPaySystem
 	const PERSON_TYPE_NAME_COMPANY = 'CRM_COMPANY';
 	const PERSON_TYPE_NAME_CONTACT = 'CRM_CONTACT';
 
-	private static $arActFiles = array();
 	private static $arCrmCompatibleActs = array(
 		'bill', 'billua', 'billen', 'billde', 'billla', 'billkz', 'billby', 'billbr', 'billfr',
 		'paypal', 'yandexinvoice', 'yandex', 'yandexcheckout', 'invoicedocument', 'bepaid', 'roboxchange',
@@ -27,18 +26,19 @@ class CCrmPaySystem
 
 	public static function LocalGetPSActionParams($fileName)
 	{
-		$arPSCorrespondence = array();
+		$result = (new \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerMetadataProvider())->getByDescriptionFile($fileName);
+		if (!$result->isSuccess())
+		{
+			return array();
+		}
+		$data = $result->getData();
 
-		if (file_exists($fileName) && is_file($fileName))
-			include($fileName);
-
-		if (isset($data))
-			$arPSCorrespondence = self::convertNewToOld($data);
-		return $arPSCorrespondence;
+		return $data['legacyFields'] ?? self::convertNewToOld($data['description']);
 	}
 
 	private static function convertNewToOld($data)
 	{
+		$data['CODES'] = $data['CODES'] ?? [];
 		foreach ($data['CODES'] as &$code)
 		{
 			if (!array_key_exists('GROUP', $code))
@@ -1015,67 +1015,19 @@ class CCrmPaySystem
 
 	private static function LocalGetPSActionDescr($fileName)
 	{
-		$data = array();
-		$psTitle = "";
-		$psDescription = "";
+		$result = (new \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerMetadataProvider())->getByDescriptionFile($fileName);
+		if (!$result->isSuccess())
+		{
+			return array('', '');
+		}
+		$description = $result->getData()['description'];
 
-		if (file_exists($fileName) && is_file($fileName))
-			include($fileName);
-
-		if ($data)
-			return array($data['NAME'], $psDescription);
-
-		return array($psTitle, $psDescription);
+		return array($description['NAME'] ?? '', $description['DESCRIPTION'] ?? '');
 	}
 
-	/**
-	 * @return array
-	 */
 	public static function getActions()
 	{
-		if (!CModule::IncludeModule('sale'))
-			return array();
-
-		if (!empty(self::$arActFiles))
-			return self::$arActFiles;
-
-		$io = CBXVirtualIo::GetInstance();
-
-		$handlerList = \Bitrix\Sale\PaySystem\Manager::getHandlerList();
-		$handlerMap = CSalePaySystemAction::getOldToNewHandlersMap();
-
-		foreach ($handlerList['USER'] as $handler => $title)
-		{
-			self::$arActFiles[$io->ExtractNameFromPath($handler)] = array(
-				"ID" => $io->ExtractNameFromPath($handler),
-				"PATH" => \Bitrix\Sale\PaySystem\Manager::getPathToHandlerFolder($handler),
-				"HANDLER" => $handler,
-				"TITLE" => $title,
-				"NEW_FORMAT" => 'Y'
-			);
-		}
-
-		foreach ($handlerList['SYSTEM'] as $handler => $title)
-		{
-			if (!in_array($handler, self::$arCrmCompatibleActs))
-				continue;
-
-			$path = array_search($handler, $handlerMap);
-			if ($path === false)
-				$path = \Bitrix\Sale\PaySystem\Manager::getPathToHandlerFolder($handler);
-
-			self::$arActFiles[$handler] = array(
-				"ID" => $handler,
-				"PATH" => $path,
-				"HANDLER" => $handler,
-				"TITLE" => $title,
-				"NEW_FORMAT" => 'Y'
-			);
-		}
-
-		sortByColumn(self::$arActFiles, array("ID" => SORT_ASC));
-
-		return self::$arActFiles;
+		return (new \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerMetadataProvider())->getActions(self::$arCrmCompatibleActs);
 	}
 
 	public static function getActionsList()
@@ -1091,22 +1043,25 @@ class CCrmPaySystem
 
 	public static function getActionPath($actionId)
 	{
-		$arActions = self::getActions();
+		$result = (new \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerMetadataProvider())->get(['ACTION_FILE' => $actionId]);
+		if (!$result->isSuccess())
+		{
+			return false;
+		}
+		$handler = $result->getData()['handler'];
+		if ($handler->getClassName() !== null && isset($handler->getFiles()['description']))
+		{
+			return '/bitrix/modules/sale/handlers/paysystem/' . $handler->getCode();
+		}
 
-		if (isset($arActions[$actionId]['PATH']))
-			return $arActions[$actionId]['PATH'];
-
-		return false;
+		return $handler->getServiceFields()['ACTION_FILE'];
 	}
 
 	public static function getActionHandler($actionId)
 	{
-		$arActions = self::getActions();
+		$result = (new \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerMetadataProvider())->get(['ACTION_FILE' => $actionId]);
 
-		if (isset($arActions[$actionId]['HANDLER']))
-			return $arActions[$actionId]['HANDLER'];
-
-		return false;
+		return $result->isSuccess() ? $result->getData()['handler']->getServiceFields()['ACTION_FILE'] : false;
 	}
 
 	public static function getActionSelector($idCorr, $arCorr)
@@ -1501,21 +1456,17 @@ class CCrmPaySystem
 	 */
 	public static function getPSCorrespondence($actFile)
 	{
-		if (!$actFile || !CModule::IncludeModule('sale'))
-			return array();
-
-		$map = CSalePaySystemAction::getOldToNewHandlersMap();
-		if (!in_array($actFile, $map))
-		{
-			$path = self::getActionPath($actFile);
-			if ($path !== false)
-				$actFile = $path;
-		}
-
 		$psMode = func_num_args() > 1 ? func_get_arg(1) : null;
-		$data = \Bitrix\Sale\PaySystem\Manager::getHandlerDescription($actFile, $psMode);
+		$result = (new \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerMetadataProvider())->get([
+			'ACTION_FILE' => $actFile, 'PS_MODE' => $psMode,
+		]);
+		if (!$result->isSuccess())
+		{
+			return array();
+		}
+		$data = $result->getData();
 
-		return self::convertNewToOld($data);
+		return $data['legacyFields'] ?? self::convertNewToOld($data['description']);
 	}
 
 	public static function rewritePSCorrByRqSource($personTypeId, &$params, $options = array())

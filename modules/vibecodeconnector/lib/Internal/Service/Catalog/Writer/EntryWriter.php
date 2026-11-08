@@ -10,12 +10,17 @@ use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemAccessType;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemColors;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemType;
 use Bitrix\Vibecodeconnector\Internal\Integration\Main\IconStorageService;
+use Bitrix\Vibecodeconnector\Internal\Integration\Rest\CatalogItemEmbeddingUnbinder;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\AccessRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\CatalogItemRepository;
+use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\CatalogUserRepository;
+use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\FavoriteRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\HiddenRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\LastOpenedRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\PinRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\ViewedRepository;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Access\AccessChangeHandler;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\AppChat\AppChatService;
 
 final class EntryWriter
 {
@@ -23,11 +28,16 @@ final class EntryWriter
 		private readonly CatalogItemRepository $repository = new CatalogItemRepository(),
 		private readonly PinRepository $pinRepository = new PinRepository(),
 		private readonly HiddenRepository $hiddenRepository = new HiddenRepository(),
+		private readonly FavoriteRepository $favoriteRepository = new FavoriteRepository(),
 		private readonly AccessRepository $accessRepository = new AccessRepository(),
 		private readonly LastOpenedRepository $lastOpenedRepository = new LastOpenedRepository(),
 		private readonly ViewedRepository $viewedRepository = new ViewedRepository(),
+		private readonly CatalogUserRepository $catalogUserRepository = new CatalogUserRepository(),
 		private readonly IconStorageService $iconStorage = new IconStorageService(),
 		private readonly CatalogItemColors $colors = new CatalogItemColors(),
+		private readonly CatalogItemEmbeddingUnbinder $embeddingUnbinder = new CatalogItemEmbeddingUnbinder(),
+		private readonly AppChatService $appChatService = new AppChatService(),
+		private readonly AccessChangeHandler $accessChangeHandler = new AccessChangeHandler(),
 	) {}
 
 	/**
@@ -65,7 +75,7 @@ final class EntryWriter
 		);
 		try
 		{
-			$this->repository->save($item);
+			$this->persist($item);
 		}
 		catch (\Throwable $e)
 		{
@@ -77,12 +87,17 @@ final class EntryWriter
 			throw $e;
 		}
 
+		$this->ensureAppChatBestEffort($item);
+		$this->accessChangeHandler->handle($item);
+
 		return $item;
 	}
 
 	public function save(CatalogItem $item): void
 	{
-		$this->repository->save($item);
+		$this->persist($item);
+		$this->ensureAppChatBestEffort($item);
+		$this->accessChangeHandler->handle($item);
 	}
 
 	/**
@@ -98,7 +113,7 @@ final class EntryWriter
 		$item->setIconFileId($newIconFileId);
 		try
 		{
-			$this->repository->save($item);
+			$this->persist($item);
 		}
 		catch (\Throwable $e)
 		{
@@ -110,6 +125,9 @@ final class EntryWriter
 
 			throw $e;
 		}
+
+		$this->ensureAppChatBestEffort($item);
+		$this->accessChangeHandler->handle($item);
 
 		if ($oldIconFileId !== null && $oldIconFileId !== $newIconFileId)
 		{
@@ -126,7 +144,7 @@ final class EntryWriter
 		$item->setIconFileId($newIconFileId);
 		try
 		{
-			$this->repository->save($item);
+			$this->persist($item);
 		}
 		catch (\Throwable $e)
 		{
@@ -134,6 +152,9 @@ final class EntryWriter
 
 			throw $e;
 		}
+
+		$this->ensureAppChatBestEffort($item);
+		$this->accessChangeHandler->handle($item);
 
 		if ($oldIconFileId === null || $oldIconFileId === $newIconFileId)
 		{
@@ -151,22 +172,68 @@ final class EntryWriter
 			return;
 		}
 
-		$iconFileId = $item->getIconFileId();
+		$this->embeddingUnbinder->unbindByOwner($itemId);
+
+		$connection = Application::getConnection();
+		$currentItem = null;
+		$iconFileId = null;
+		$connection->startTransaction();
+		try
+		{
+			$this->repository->lockById($itemId);
+			$currentItem = $this->repository->getById($itemId);
+			if ($currentItem !== null)
+			{
+				$iconFileId = $currentItem->getIconFileId();
+				$this->appChatService->scheduleDeletion($currentItem);
+				$this->pinRepository->deleteAllForCatalogItem($itemId);
+				$this->hiddenRepository->deleteAllForCatalogItem($itemId);
+				$this->favoriteRepository->deleteAllForCatalogItem($itemId);
+				$this->accessRepository->deleteAllForCatalogItem($itemId);
+				$this->lastOpenedRepository->deleteAllForCatalogItem($itemId);
+				$this->viewedRepository->deleteAllForCatalogItem($itemId);
+				$this->catalogUserRepository->deleteAllForCatalogItem($itemId);
+				$this->repository->delete($itemId);
+			}
+			$connection->commitTransaction();
+		}
+		catch (\Throwable $e)
+		{
+			$connection->rollbackTransaction();
+			throw $e;
+		}
+
+		if ($currentItem !== null && $iconFileId !== null)
+		{
+			try
+			{
+				$this->iconStorage->delete($iconFileId);
+			}
+			catch (\Throwable $exception)
+			{
+				\AddMessage2Log(
+					"Catalog item {$itemId}: icon {$iconFileId} was not deleted, {$exception->getMessage()}",
+					'vibecodeconnector',
+				);
+			}
+		}
+	}
+
+	private function persist(CatalogItem $item): void
+	{
+		if ($item->getType() !== CatalogItemType::Application)
+		{
+			$this->repository->save($item);
+
+			return;
+		}
 
 		$connection = Application::getConnection();
 		$connection->startTransaction();
 		try
 		{
-			$this->pinRepository->deleteAllForCatalogItem($itemId);
-			$this->hiddenRepository->deleteAllForCatalogItem($itemId);
-			$this->accessRepository->deleteAllForCatalogItem($itemId);
-			$this->lastOpenedRepository->deleteAllForCatalogItem($itemId);
-			$this->viewedRepository->deleteAllForCatalogItem($itemId);
-			$this->repository->delete($itemId);
-			if ($iconFileId !== null)
-			{
-				$this->iconStorage->delete($iconFileId);
-			}
+			$this->repository->save($item);
+			$this->repository->bumpAppChatSyncRevision((int)$item->getId());
 			$connection->commitTransaction();
 		}
 		catch (\Throwable $e)
@@ -174,6 +241,28 @@ final class EntryWriter
 			$connection->rollbackTransaction();
 
 			throw $e;
+		}
+	}
+
+	private function ensureAppChatBestEffort(CatalogItem $item): void
+	{
+		try
+		{
+			$this->appChatService->ensureAppChat($item);
+		}
+		catch (\Throwable $exception)
+		{
+			try
+			{
+				\AddMessage2Log(
+					'Catalog item ' . (int)$item->getId() . ': app chat was not provisioned, '
+						. $exception->getMessage(),
+					'vibecodeconnector',
+				);
+			}
+			catch (\Throwable)
+			{
+			}
 		}
 	}
 }

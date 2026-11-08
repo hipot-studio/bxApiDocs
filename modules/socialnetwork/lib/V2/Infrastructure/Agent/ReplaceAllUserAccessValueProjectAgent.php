@@ -13,6 +13,7 @@ use Bitrix\Socialnetwork\Collab\Log\CollabLogEntryCollection;
 use Bitrix\Socialnetwork\Collab\Log\Entry\UpdateCollabLogEntry;
 use Bitrix\Socialnetwork\FeaturePermTable;
 use Bitrix\Socialnetwork\FeatureTable;
+use Bitrix\Socialnetwork\V2\Internal\Entity\RoleType;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\FeatureDictionary;
 use Bitrix\Socialnetwork\WorkgroupTable;
 use CSocNetFeaturesPerms;
@@ -20,9 +21,10 @@ use Throwable;
 
 class ReplaceAllUserAccessValueProjectAgent
 {
-	private const LIMIT_PROJECT_COUNT = 10;
-	private const ACCESS_ROLE_REPLACE_FROM = SONET_ROLES_ALL;
-	private const ACCESS_ROLE_REPLACE_TO = SONET_ROLES_AUTHORIZED;
+	private const LIMIT_PROJECT_COUNT = 1;
+	private const ACCESS_ROLE_REPLACE_FROM = RoleType::All;
+	private const ACCESS_ROLE_REPLACE_TO = RoleType::Authorized;
+	private const ACCESS_ROLE_REPLACE_TO_SECRET = RoleType::User;
 	private const FEATURE_LIST = [
 		FeatureDictionary::Tasks->value,
 		FeatureDictionary::Blog->value,
@@ -52,20 +54,22 @@ class ReplaceAllUserAccessValueProjectAgent
 
 	public function run(int $lastId): bool
 	{
-		$projectIds = $this->getProjectsForReplacePermissions($lastId, self::LIMIT_PROJECT_COUNT);
+		$projects = $this->getProjectsForReplacePermissions($lastId, self::LIMIT_PROJECT_COUNT);
 
-		if (!$projectIds && $this->lastProjectId <= $lastId)
+		if (!$projects && $this->lastProjectId <= $lastId)
 		{
 			return false;
 		}
 
 		$logEntryCollection = new CollabLogEntryCollection();
 
-		foreach ($projectIds as $projectId)
+		foreach ($projects as $project)
 		{
+			$projectId = $project['ID'];
+
 			try
 			{
-				$this->replaceForProject($projectId, $logEntryCollection);
+				$this->replaceForProject($projectId, $project['VISIBLE'], $logEntryCollection);
 			}
 			catch (Throwable $e)
 			{
@@ -87,7 +91,7 @@ class ReplaceAllUserAccessValueProjectAgent
 		$subQuery = FeaturePermTable::query()
 			->setSelect(['ROLE'])
 			->where('FEATURE_ID', new SqlExpression('?#.?#', $query->getInitAlias(), 'ID'))
-			->where('ROLE', self::ACCESS_ROLE_REPLACE_FROM)
+			->where('ROLE', self::ACCESS_ROLE_REPLACE_FROM->value)
 		;
 
 		$query
@@ -117,19 +121,26 @@ class ReplaceAllUserAccessValueProjectAgent
 		$this->lastProjectId = max($projectIds);
 
 		$filteredByType = WorkgroupTable::query()
-			->setSelect(['ID'])
+			->setSelect(['ID', 'VISIBLE'])
 			->whereIn('ID', $projectIds)
 			->whereIn('TYPE', self::GROUP_TYPE_LIST)
 			->fetchAll()
 		;
 
 		return array_map(
-			static fn ($row): int => (int)$row['ID'],
+			static fn ($row): array => [
+				'ID' => (int)$row['ID'],
+				'VISIBLE' => (string)$row['VISIBLE'],
+			],
 			$filteredByType,
 		);
 	}
 
-	private function replaceForProject(int $projectId, CollabLogEntryCollection $logEntryCollection): void
+	private function replaceForProject(
+		int $projectId,
+		string $visibility,
+		CollabLogEntryCollection $logEntryCollection,
+	): void
 	{
 		$permissions = $this->getPermissionsToReplace($projectId);
 		if (!$permissions)
@@ -138,15 +149,16 @@ class ReplaceAllUserAccessValueProjectAgent
 		}
 
 		$userId = $this->getCurrentUserId();
+		$replacementAccessRole = self::getReplacementAccessRole($visibility);
 
 		foreach ($permissions as $permission)
 		{
-			if (!$this->replacePermission($projectId, $permission))
+			if (!$this->replacePermission($projectId, $permission, $replacementAccessRole))
 			{
 				continue;
 			}
 
-			$logEntry = $this->createLogEntry($projectId, $userId, $permission);
+			$logEntry = $this->createLogEntry($projectId, $userId, $permission, $replacementAccessRole);
 			if ($logEntry !== null)
 			{
 				$logEntryCollection->add($logEntry);
@@ -165,19 +177,19 @@ class ReplaceAllUserAccessValueProjectAgent
 			])
 			->where('FEATURE.ENTITY_TYPE', FeatureTable::FEATURE_ENTITY_TYPE_GROUP)
 			->where('FEATURE.ENTITY_ID', $projectId)
-			->where('ROLE', self::ACCESS_ROLE_REPLACE_FROM)
+			->where('ROLE', self::ACCESS_ROLE_REPLACE_FROM->value)
 			->whereIn('FEATURE.FEATURE', self::FEATURE_LIST)
 			->fetchAll()
 		;
 	}
 
-	private function replacePermission(int $projectId, array $permission): bool
+	private function replacePermission(int $projectId, array $permission, string $replacementAccessRole): bool
 	{
 		$featureId = (int)($permission['FEATURE_ID'] ?? 0);
 		$operationId = (string)($permission['OPERATION_ID'] ?? '');
 		$permissionRole = (string)($permission['ROLE'] ?? '');
 
-		if ($featureId <= 0 || $operationId === '' || $permissionRole !== self::ACCESS_ROLE_REPLACE_FROM)
+		if ($featureId <= 0 || $operationId === '' || $permissionRole !== self::ACCESS_ROLE_REPLACE_FROM->value)
 		{
 			return false;
 		}
@@ -187,7 +199,7 @@ class ReplaceAllUserAccessValueProjectAgent
 			$result = CSocNetFeaturesPerms::SetPerm(
 				$featureId,
 				$operationId,
-				self::ACCESS_ROLE_REPLACE_TO,
+				$replacementAccessRole,
 			);
 		}
 		catch (Throwable $exception)
@@ -207,7 +219,12 @@ class ReplaceAllUserAccessValueProjectAgent
 		return true;
 	}
 
-	private function createLogEntry(int $projectId, int $userId, array $permission): ?UpdateCollabLogEntry
+	private function createLogEntry(
+		int $projectId,
+		int $userId,
+		array $permission,
+		string $replacementAccessRole,
+	): ?UpdateCollabLogEntry
 	{
 		$featureName = (string)($permission['FEATURE_NAME'] ?? '');
 		$operationId = (string)($permission['OPERATION_ID'] ?? '');
@@ -224,8 +241,16 @@ class ReplaceAllUserAccessValueProjectAgent
 			collabId: $projectId,
 		))
 			->setFieldName($fieldName)
-			->setPreviousValue(self::ACCESS_ROLE_REPLACE_FROM)
-			->setCurrentValue(self::ACCESS_ROLE_REPLACE_TO)
+			->setPreviousValue(self::ACCESS_ROLE_REPLACE_FROM->value)
+			->setCurrentValue($replacementAccessRole)
+		;
+	}
+
+	private static function getReplacementAccessRole(string $visibility): string
+	{
+		return $visibility === 'N'
+			? self::ACCESS_ROLE_REPLACE_TO_SECRET->value
+			: self::ACCESS_ROLE_REPLACE_TO->value
 		;
 	}
 

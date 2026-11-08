@@ -50,6 +50,31 @@ class AiSiteChatAvailabilityService
 		return AiSiteChatAvailabilityResult::available();
 	}
 
+	public function isAiSiteEditorChatProductAvailable(): bool
+	{
+		return $this->isLandingCopilotAvailable()
+			&& $this->isLandingAiSitesEnabled()
+			&& $this->isLandingCopilotActive();
+	}
+
+	// Lightweight slice of the product check for read-only (status) scenarios:
+	// only the product and rollout option gates, without the tariff/tuning gates
+	// that must guard generation launches.
+	public function checkSitesAiStatusReadAvailability(): AiSiteChatAvailabilityResult
+	{
+		if (!$this->isLandingCopilotAvailable())
+		{
+			return AiSiteChatAvailabilityResult::unavailable(self::ERROR_PRODUCT_UNAVAILABLE);
+		}
+
+		if (!$this->isLandingAiSitesEnabled())
+		{
+			return AiSiteChatAvailabilityResult::unavailable(self::ERROR_FEATURE_DISABLED_BY_OPTION);
+		}
+
+		return AiSiteChatAvailabilityResult::available();
+	}
+
 	public function checkTriggerAvailability(int $bindingId): AiSiteChatAvailabilityResult
 	{
 		if ($bindingId <= 0)

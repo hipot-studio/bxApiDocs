@@ -29,6 +29,7 @@ class AddressTable extends Entity\DataManager
 	public static function getMap()
 	{
 		return [
+			'ID' => ['data_type' => 'integer'],
 			'TYPE_ID' => ['data_type' => 'integer', 'primary' => true, 'required' => true],
 			'ENTITY_TYPE_ID' => ['data_type' => 'integer', 'primary' => true, 'required' => true],
 			'ENTITY_ID' => ['data_type' => 'integer', 'primary' => true, 'required' => true],

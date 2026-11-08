@@ -4,12 +4,15 @@ namespace Bitrix\Im\V2\Message\Update;
 
 use Bitrix\Im\Bot;
 use Bitrix\Im\Model\MessageTable;
+use Bitrix\Im\V2\Application\Features;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\ContextCustomer;
+use Bitrix\Im\V2\Entity\File\FileError;
 use Bitrix\Im\V2\Link\File\FileService;
 use Bitrix\Im\V2\Link\Url\UrlService;
 use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\BlocksBuilder\BuilderService;
+use Bitrix\Im\V2\Message\Contact\ContactMessage;
 use Bitrix\Im\V2\Message\Delete\DeleteService;
 use Bitrix\Im\V2\Message\Params;
 use Bitrix\Im\V2\Result;
@@ -29,7 +32,7 @@ class UpdateService
 	private ?array $chatLastMessage = null;
 	private bool $byEvent = false;
 	private bool $withCheckAccess = true;
-
+	private bool $withTextDerivedUpdate = true;
 
 	public function __construct(Message $message)
 	{
@@ -68,6 +71,17 @@ class UpdateService
 		return $this;
 	}
 
+	/**
+	 * For updates that keep both the message text and the files it carries unchanged: recent freshness
+	 * and the search index follow those, while the update event and the sync log do not.
+	 */
+	public function withoutTextDerivedUpdate(): self
+	{
+		$this->withTextDerivedUpdate = false;
+
+		return $this;
+	}
+
 	public function update(array $fieldsToUpdate): Result
 	{
 		if ($this->withCheckAccess && !$this->canUpdate())
@@ -75,7 +89,14 @@ class UpdateService
 			return (new Result())->addError(new Message\MessageError(Message\MessageError::ACCESS_DENIED));
 		}
 
+		$filesUpdater = Files\FilesUpdater::createFromFields($this->message, $fieldsToUpdate);
+		if ($filesUpdater !== null && !Features::isEditMessageFilesAvailable())
+		{
+			return (new Result())->addError(new FileError(FileError::FEATURE_DISABLED));
+		}
+
 		$previousMessage = clone $this->message;
+		$previousFileIds = $this->getMessageFileIds($this->message);
 
 		$result = $this->fillBuilder($fieldsToUpdate);
 		if (!$result->isSuccess())
@@ -85,9 +106,27 @@ class UpdateService
 
 		$this->message->fill($result->getResult());
 
+		if ($filesUpdater !== null)
+		{
+			$filesResult = $filesUpdater->applyBeforeSave();
+			if (!$filesResult->isSuccess())
+			{
+				return $filesResult;
+			}
+		}
+
 		if ($this->message->isCompletelyEmpty())
 		{
-			return (DeleteService::getInstanceByMessage($this->message))->delete();
+			$messageToDelete = $this->message;
+			if ($filesUpdater !== null)
+			{
+				// the applied composition lives in memory: deletion reads the stored one to clean links up
+				$messageToDelete = (new Message($this->message->getMessageId()))
+					->withContext($this->message->getContext())
+				;
+			}
+
+			return DeleteService::getInstanceByMessage($messageToDelete)->delete();
 		}
 
 		if ($this->message->isViewedByOthers())
@@ -95,18 +134,47 @@ class UpdateService
 			$this->message->getParams()->get(Params::IS_EDITED)->setValue(true);
 		}
 
-		$filesFromText = $this->message->autocompleteParams($this->sendingConfig)->uploadFileFromText();
+		$this->message->autocompleteParams($this->sendingConfig)->uploadFileFromText();
 		$result = $this->message->save();
 		if (!$result->isSuccess())
 		{
+			$filesUpdater?->rollbackPreparedFiles();
+
 			return $result;
 		}
 
-		$this->message->getChat()->sendPushUpdateMessage($this->message);
-		(new Message\Param\PushService())->sendPull($this->message, ['KEYBOARD', 'ATTACH', 'MENU']);
+		$areLinksSynchronized = false;
+		if ($filesUpdater !== null)
+		{
+			$syncLinksResult = $filesUpdater->syncLinks();
+			$areLinksSynchronized = $syncLinksResult->isSuccess();
+			$result->addErrors($syncLinksResult->getErrors());
+		}
+
+		$this->message->getChat()->sendPushUpdateMessage($this->message, $filesUpdater !== null);
+		// an emptied composition reaches the clients only as an explicit empty value, and both publications carry it:
+		// the sets of recipients of the two do not match, so neither of them may be the only one to say it
+		(new Message\Param\PushService())->sendPull($this->message, ['KEYBOARD', 'ATTACH', 'MENU', Params::FILE_ID]);
+
+		// a failed step leaves the queue of the scenario on itself: called out of turn, the finalization would answer
+		// with an internal refusal of its own and the client would get it instead of the real cause
+		if ($filesUpdater !== null && $areLinksSynchronized)
+		{
+			$result->addErrors($filesUpdater->finalize()->getErrors());
+		}
 
 		(new UrlService())->updateUrlsFromMessage($this->message);
-		(new FileService())->saveFilesFromMessage($filesFromText, $this->message);
+		// the file scenario has already brought the links to the composition it applied, so the generic
+		// synchronization is left only what that scenario never saw - the files the text of the message brought in
+		$linkedFileIds = ($filesUpdater !== null && $areLinksSynchronized)
+			? $filesUpdater->getSynchronizedFileIds()
+			: $previousFileIds
+		;
+		(new FileService())->synchronizeFilesFromMessage(
+			$linkedFileIds,
+			$this->getMessageFileIds($this->message),
+			$this->message,
+		);
 
 		$this->onAfterMessageUpdate();
 
@@ -116,25 +184,48 @@ class UpdateService
 		return $result;
 	}
 
+	/**
+	 * @return int[]
+	 */
+	private function getMessageFileIds(Message $message): array
+	{
+		$attachmentFileIds = $message->getParams()->isSet(Params::FILE_ID)
+			? $message->getParams()->get(Params::FILE_ID)->getValue()
+			: [];
+		$builderFileIds = $message->getBlocksBuilder()?->getFiles() ?? [];
+
+		return array_values(array_unique(array_map('intval', array_merge($attachmentFileIds, $builderFileIds))));
+	}
+
 	public function onAfterMessageUpdate(): void
+	{
+		if ($this->withTextDerivedUpdate)
+		{
+			$this->updateTextDerivedState();
+		}
+
+		$this->fireEventAfterMessageUpdate();
+		$this->message->getChat()->onAfterMessageUpdate($this->message);
+	}
+
+	private function updateTextDerivedState(): void
 	{
 		Application::getConnection()->queryExecute("
 			UPDATE b_im_recent
 			SET DATE_UPDATE = NOW()
-			WHERE ITEM_MID = " . $this->message->getId()
+			WHERE ITEM_MID = " . $this->message->getId(),
 		);
 
 		MessageTable::indexRecord($this->message->getId());
-		$this->fireEventAfterMessageUpdate();
-		$this->message->getChat()->onAfterMessageUpdate($this->message);
 	}
 
 	public function canUpdate(): bool
 	{
 		$isMessageDelete = $this->message->getParams()->get(Params::IS_DELETED)->getValue() === true;
 		$isForward = $this->message->getParams()->isSet(Params::FORWARD_ID);
+		$isContactMessage = ContactMessage::is($this->message);
 
-		if ($isMessageDelete || $isForward)
+		if ($isMessageDelete || $isForward || $isContactMessage)
 		{
 			return false;
 		}
@@ -210,8 +301,9 @@ class UpdateService
 			'CHAT_ENTITY_DATA_1' => $chat->getEntityData1(),
 			'CHAT_ENTITY_DATA_2' => $chat->getEntityData2(),
 			'CHAT_ENTITY_DATA_3' => $chat->getEntityData3(),
-			'PARAMS' => $this->message->getParams()->toRestFormat(),
-			'DATE_MODIFY' => new DateTime()
+			// params of the event go through the same border as rest and pull, or the composition loses its order
+			'PARAMS' => $this->message->getEnrichedParams(false)->toRestFormat(),
+			'DATE_MODIFY' => new DateTime(),
 		];
 
 		if ($chat instanceof Chat\PrivateChat)
@@ -247,7 +339,7 @@ class UpdateService
 			(new \Bitrix\Im\V2\EventLog\EventLogger())->logUserMessageEvent(
 				'ONIMV2MESSAGEUPDATE',
 				fn() => (new \Bitrix\Im\V2\Event\EventPayload())->messageUpdate($this->message->getId(), $messageFields),
-				$messageFields
+				$messageFields,
 			);
 		}
 		catch (\Throwable)
@@ -264,7 +356,8 @@ class UpdateService
 		}
 
 		$chat = $this->message->getChat();
-		$builderResult = ServiceLocator::getInstance()->get(BuilderService::class)->create($fieldsToUpdate['BLOCK'], $chat);
+		$builderService = ServiceLocator::getInstance()->get(BuilderService::class);
+		$builderResult = $builderService->create($fieldsToUpdate['BLOCK'], $chat, $this->message->getBlocksBuilder());
 		if (!$builderResult->isSuccess())
 		{
 			return $result->addError($builderResult->getError());

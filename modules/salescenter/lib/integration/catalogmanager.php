@@ -25,6 +25,25 @@ class CatalogManager extends Base
 		return 'catalog';
 	}
 
+	public function canReadProducts(): bool
+	{
+		if (!$this->isEnabled)
+		{
+			return false;
+		}
+
+		return Catalog\Access\AccessController::getCurrent()
+			->check(Catalog\Access\ActionDictionary::ACTION_CATALOG_READ)
+		;
+	}
+
+	public function isProductCompilationLinkAvailable(): bool
+	{
+		$compilationUrlInfo = LandingManager::getInstance()->getCollectionPublicUrlInfo();
+
+		return !empty($compilationUrlInfo['url']);
+	}
+
 	public function getLinkToProductCompilation(int $compilationId, array $productIds): Result
 	{
 		$result = new Result();

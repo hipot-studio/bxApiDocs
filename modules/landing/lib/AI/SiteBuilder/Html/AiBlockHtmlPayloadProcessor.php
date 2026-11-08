@@ -9,7 +9,7 @@ use Bitrix\Landing\Copilot\Data\AiMeta\AiMetaNodes;
 use Bitrix\Landing\Copilot\Services\HtmlBlock\FallbackHtmlTagHelper;
 use Bitrix\Landing\Copilot\Services\HtmlBlock\NodeTagger;
 use Bitrix\Landing\Copilot\Services\Manifest\NodeCollector;
-use Bitrix\Main\Web\DOM;
+use Bitrix\Landing\Html\DocumentFactory;
 use Bitrix\Main\Web\Uri;
 
 final class AiBlockHtmlPayloadProcessor
@@ -154,7 +154,7 @@ final class AiBlockHtmlPayloadProcessor
 	{
 		$html = AiFontAwesomeIconNormalizer::normalizeHtml($html);
 
-		$doc = new DOM\Document();
+		$doc = DocumentFactory::createForUserHtml();
 		$doc->loadHTML('<div id="' . self::ROOT_NODE_ID . '">' . $html . '</div>');
 
 		$root = $doc->querySelector('#' . self::ROOT_NODE_ID);

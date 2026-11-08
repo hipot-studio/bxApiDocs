@@ -6,6 +6,7 @@ use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Mobile\AvaMenu\AbstractMenuItem;
+use Bitrix\Mobile\Tab\Preset\Service\ActiveTabProvider;
 
 class Calendar extends AbstractMenuItem
 {
@@ -19,8 +20,7 @@ class Calendar extends AbstractMenuItem
 	 */
 	public function isAvailable(): bool
 	{
-		$manager = new \Bitrix\Mobile\Tab\Manager($this->context);
-		$activeTabs = $manager->getActiveTabs();
+		$activeTabs = ActiveTabProvider::forContext($this->context)->getActiveTabs();
 
 		if (isset($activeTabs['calendar']))
 		{

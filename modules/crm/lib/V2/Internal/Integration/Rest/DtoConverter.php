@@ -27,6 +27,16 @@ final class DtoConverter
 
 		$propertyName = $publicPropertyName ?? $dtoField->getPropertyName();
 		$elementType = $dtoField->getElementType();
+		if (
+			$dtoField->getPropertyType() === 'array'
+			&& !$dtoField->isMultiple()
+			&& $elementType !== null
+			&& !is_subclass_of($elementType, Dto::class)
+		)
+		{
+			return $value;
+		}
+
 		$isMultiple = $dtoField->isMultiple() || $elementType !== null;
 		if ($isMultiple)
 		{

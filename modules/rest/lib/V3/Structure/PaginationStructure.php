@@ -21,7 +21,7 @@ final class PaginationStructure extends Structure
 
 		if (isset($value['limit']))
 		{
-			if (!is_numeric($value['limit']) || $value['limit'] == 0)
+			if (!is_numeric($value['limit']) || $value['limit'] <= 0)
 			{
 				throw new InvalidPaginationException(['limit' => $value['limit']]);
 			}
@@ -31,7 +31,7 @@ final class PaginationStructure extends Structure
 
 		if (isset($value['offset']))
 		{
-			if (!is_numeric($value['offset']))
+			if (!is_numeric($value['offset']) || $value['offset'] < 0)
 			{
 				throw new InvalidPaginationException(['offset' => $value['offset']]);
 			}

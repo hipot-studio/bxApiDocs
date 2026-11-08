@@ -24,27 +24,44 @@ class Collab
 {
 	public static function isAvailable(): bool
 	{
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return false;
+		}
+
+		if (method_exists(CollabFeature::class, 'isAvailableForOpening'))
+		{
+			return CollabFeature::isAvailableForOpening();
+		}
+
+		if (Feature::isNewProjectsOn())
+		{
+			return Requirement::checkRequiredModules()->isSuccess();
+		}
+
 		return
-			Loader::includeModule('socialnetwork')
-			&& CollabFeature::isOn()
+			CollabFeature::isOn()
 			&& CollabFeature::isFeatureEnabledInPortalSettings()
-			&& Requirement::check()->isSuccess()
-		;
+			&& Requirement::check()->isSuccess();
 	}
 
 	public static function isNewProjectsAvailable(): bool
 	{
 		return
 			Loader::includeModule('socialnetwork')
-			&& Feature::isNewProjectsOn()
-		;
+			&& Feature::isNewProjectsOn();
 	}
 
 	public static function isCreationAvailable(): bool
 	{
 		$userId = User::getCurrent()->getId() ?? 0;
 
-		return self::isAvailable() && Requirement::checkWithAccess($userId)->isSuccess();
+		return
+			Loader::includeModule('socialnetwork')
+			&& CollabFeature::isOn()
+			&& CollabFeature::isFeatureEnabledInPortalSettings()
+			&& Requirement::check()->isSuccess()
+			&& Requirement::checkWithAccess($userId)->isSuccess();
 	}
 
 	public static function updateCollabOption(Chat\CollabChat $chat, string $name, string $value): Result

@@ -44,10 +44,36 @@ class Checklist extends Base
 			new ExactParameter(
 				CheckListItem::class,
 				'checkListItem',
-				static function ($className, $checkListItemId)
+				function (string $className, int $taskId, int $checkListItemId)
 				{
-					$userId = CurrentUser::get()->getId();
-					$fields = TaskCheckListFacade::getList([], ['ID' => $checkListItemId])[$checkListItemId] ?? [];
+					$userId = (int)CurrentUser::get()->getId();
+
+					// the addressed task is checked ahead of the item, so a task the caller may not read
+					// and an item that is not its own end up with the very same errors
+					if (
+						$taskId <= 0
+						|| !TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_READ, $taskId)
+					)
+					{
+						$this->errorCollection->add(
+							[new Error(Loc::getMessage('TASKS_REST_TASK_CHECKLIST_ACCESS_DENIED'))]
+						);
+
+						return null;
+					}
+
+					$filter = ['ID' => $checkListItemId, 'TASK_ID' => $taskId];
+					$fields = TaskCheckListFacade::getList([], $filter)[$checkListItemId] ?? [];
+
+					if (!$fields)
+					{
+						// the action declares a non-nullable item, so null makes the binder reject the call
+						$this->errorCollection->add(
+							[new Error(Loc::getMessage('TASKS_REST_TASK_CHECKLIST_ACCESS_DENIED'))]
+						);
+
+						return null;
+					}
 
 					/** @var ChecklistItem $className */
 					return new $className(0, $userId, TaskCheckListFacade::class, $fields);
@@ -70,6 +96,23 @@ class Checklist extends Base
 	public function saveAction(int $taskId, array $items = [], array $parameters = [])
 	{
 		$userId = CurrentUser::get()->getId();
+
+		$ids = array_values(array_filter(array_map(static fn($item) => (int)($item['ID'] ?? 0), $items)));
+		if ($ids)
+		{
+			$ownItems = TaskCheckListFacade::getList(['ID'], ['TASK_ID' => $taskId, 'ID' => $ids]);
+			foreach ($ids as $id)
+			{
+				if (!isset($ownItems[$id]))
+				{
+					$this->errorCollection->add(
+						[new Error(Loc::getMessage('TASKS_REST_TASK_CHECKLIST_ACCESS_DENIED'))]
+					);
+
+					return null;
+				}
+			}
+		}
 
 		if (!TaskAccessController::can($userId, ActionDictionary::ACTION_CHECKLIST_SAVE, $taskId, $items))
 		{
@@ -104,33 +147,17 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @return array|null
 	 */
-	public function getAction($taskId, CheckListItem $checkListItem)
+	public function getAction(int $taskId, CheckListItem $checkListItem)
 	{
-		try
-		{
-			$task = new CTaskItem($taskId, CurrentUser::get()->getId());
-		}
-		catch (\CTaskAssertException $e)
-		{
-			$this->errorCollection->add([new Error(Loc::getMessage('TASKS_REST_TASK_CHECKLIST_ACCESS_DENIED'))]);
-			return null;
-		}
-
-		if (!$task->checkCanRead())
-		{
-			$this->errorCollection->add([new Error(Loc::getMessage('TASKS_REST_TASK_CHECKLIST_ACCESS_DENIED'))]);
-			return null;
-		}
-
 		return $this->getReturnValue($checkListItem);
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param array $filter
 	 * @param array $select
 	 * @param array $order
@@ -138,7 +165,7 @@ class Checklist extends Base
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	public function listAction($taskId, array $filter = [], array $select = [], array $order = [])
+	public function listAction(int $taskId, array $filter = [], array $select = [], array $order = [])
 	{
 		try
 		{
@@ -168,20 +195,20 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param array $fields
 	 * @return array|null
 	 * @throws ObjectException
 	 * @throws SystemException
 	 */
-	public function addAction($taskId, array $fields)
+	public function addAction(int $taskId, array $fields)
 	{
 		$addResult = TaskCheckListFacade::add($taskId, CurrentUser::get()->getId(), $fields);
 		return $this->getReturn($addResult);
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @param array $fields
 	 * @return array|null
@@ -192,21 +219,21 @@ class Checklist extends Base
 	 * @throws SystemException
 	 * @throws ObjectPropertyException
 	 */
-	public function updateAction($taskId, CheckListItem $checkListItem, array $fields)
+	public function updateAction(int $taskId, CheckListItem $checkListItem, array $fields)
 	{
 		$updateResult = TaskCheckListFacade::update($taskId, CurrentUser::get()->getId(), $checkListItem, $fields);
 		return $this->getReturn($updateResult);
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @return bool|null
 	 * @throws ArgumentException
 	 * @throws NotImplementedException
 	 * @throws SystemException
 	 */
-	public function deleteAction($taskId, CheckListItem $checkListItem)
+	public function deleteAction(int $taskId, CheckListItem $checkListItem)
 	{
 		$deleteResult = TaskCheckListFacade::delete($taskId, CurrentUser::get()->getId(), $checkListItem);
 
@@ -224,7 +251,7 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @return array|null
 	 * @throws ArgumentException
@@ -234,7 +261,7 @@ class Checklist extends Base
 	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function completeAction($taskId, CheckListItem $checkListItem)
+	public function completeAction(int $taskId, CheckListItem $checkListItem)
 	{
 		$completeResult = TaskCheckListFacade::complete($taskId, CurrentUser::get()->getId(), $checkListItem);
 
@@ -252,7 +279,7 @@ class Checklist extends Base
 		return $this->getReturn($completeResult);
 	}
 
-	public function completeAllAction($taskId, CheckListItem $checkListItem)
+	public function completeAllAction(int $taskId, CheckListItem $checkListItem)
 	{
 		$result = [];
 
@@ -266,7 +293,7 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @return array|null
 	 * @throws ArgumentException
@@ -276,21 +303,21 @@ class Checklist extends Base
 	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function renewAction($taskId, CheckListItem $checkListItem)
+	public function renewAction(int $taskId, CheckListItem $checkListItem)
 	{
 		$renewResult = TaskCheckListFacade::renew($taskId, CurrentUser::get()->getId(), $checkListItem);
 		return $this->getReturn($renewResult);
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
-	 * @param $beforeItemId
+	 * @param int $beforeItemId
 	 * @return array|null
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	public function moveBeforeAction($taskId, CheckListItem $checkListItem, $beforeItemId)
+	public function moveBeforeAction(int $taskId, CheckListItem $checkListItem, int $beforeItemId)
 	{
 		$userId = CurrentUser::get()->getId();
 		$position = TaskCheckListFacade::MOVING_POSITION_BEFORE;
@@ -300,14 +327,14 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
-	 * @param $afterItemId
+	 * @param int $afterItemId
 	 * @return array|null
 	 * @throws ArgumentException
 	 * @throws SystemException
 	 */
-	public function moveAfterAction($taskId, CheckListItem $checkListItem, $afterItemId)
+	public function moveAfterAction(int $taskId, CheckListItem $checkListItem, int $afterItemId)
 	{
 		$userId = CurrentUser::get()->getId();
 		$position = TaskCheckListFacade::MOVING_POSITION_AFTER;
@@ -317,14 +344,14 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @param array $members
 	 * @return array|null
 	 * @throws ObjectException
 	 * @throws SystemException
 	 */
-	public function addMembersAction($taskId, CheckListItem $checkListItem, array $members)
+	public function addMembersAction(int $taskId, CheckListItem $checkListItem, array $members)
 	{
 		$userId = CurrentUser::get()->getId();
 		$addMembersResult = TaskCheckListFacade::addMembers($taskId, $userId, $checkListItem, $members);
@@ -333,14 +360,14 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @param array $membersIds
 	 * @return array|null
 	 * @throws ObjectException
 	 * @throws SystemException
 	 */
-	public function removeMembersAction($taskId, CheckListItem $checkListItem, array $membersIds)
+	public function removeMembersAction(int $taskId, CheckListItem $checkListItem, array $membersIds)
 	{
 		$userId = CurrentUser::get()->getId();
 		$removeMembersResult = TaskCheckListFacade::removeMembers($taskId, $userId, $checkListItem, $membersIds);
@@ -349,12 +376,16 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @param array $attachmentParameters
 	 * @return array|null
 	 */
-	public function addAttachmentByContentAction($taskId, CheckListItem $checkListItem, array $attachmentParameters)
+	public function addAttachmentByContentAction(
+		int $taskId,
+		CheckListItem $checkListItem,
+		array $attachmentParameters
+	)
 	{
 		$addAttachmentResult = TaskCheckListFacade::addAttachmentByContent(
 			$taskId,
@@ -367,7 +398,7 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @param array $filesIds
 	 * @return array|null
@@ -378,7 +409,7 @@ class Checklist extends Base
 	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function addAttachmentsFromDiskAction($taskId, CheckListItem $checkListItem, array $filesIds)
+	public function addAttachmentsFromDiskAction(int $taskId, CheckListItem $checkListItem, array $filesIds)
 	{
 		$addAttachmentsResult = TaskCheckListFacade::addAttachmentsFromDisk(
 			$taskId,
@@ -391,7 +422,7 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $taskId
+	 * @param int $taskId
 	 * @param CheckListItem $checkListItem
 	 * @param array $attachmentsIds
 	 * @return array|null
@@ -402,7 +433,7 @@ class Checklist extends Base
 	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function removeAttachmentsAction($taskId, CheckListItem $checkListItem, array $attachmentsIds)
+	public function removeAttachmentsAction(int $taskId, CheckListItem $checkListItem, array $attachmentsIds)
 	{
 		$removeAttachmentsResult = TaskCheckListFacade::removeAttachments(
 			$taskId,

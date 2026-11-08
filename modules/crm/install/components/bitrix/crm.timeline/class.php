@@ -200,6 +200,9 @@ class CCrmTimelineComponent extends CBitrixComponent
 		$this->parser->allow['SMILES'] = 'N';
 
 		$this->arResult['READ_ONLY'] = isset($this->arParams['~READ_ONLY']) && $this->arParams['~READ_ONLY'] === true;
+		$this->arResult['COMMENT_TEXT_EDITOR_ENABLED'] = Crm\Feature::enabled(
+			Crm\Feature\TimelineCommentTextEditor::class
+		);
 		$this->arResult['USER_ID'] = \CCrmSecurityHelper::GetCurrentUserID();
 		$this->arResult['LAYOUT_CURRENT_USER'] = Crm\Service\Timeline\Layout\User::current()->toArray();
 		$this->arResult['PING_SETTINGS'] = (new TodoPingSettingsProvider(

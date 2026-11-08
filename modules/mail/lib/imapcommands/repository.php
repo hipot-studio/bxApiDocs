@@ -3,6 +3,7 @@ namespace Bitrix\Mail\ImapCommands;
 
 use Bitrix\Mail;
 use Bitrix\Mail\Internal\Service\Label\LabelCountersService;
+use Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill;
 use Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope;
 use Bitrix\Main;
 use Bitrix\Main\Entity\ReferenceField;
@@ -10,6 +11,8 @@ use \Bitrix\Mail\Helper\MessageFolder;
 
 class Repository
 {
+	private const NAMED_PLACEMENTS_CHUNK_SIZE = 500;
+
 	private $mailboxId;
 	private $messagesIds;
 
@@ -174,10 +177,10 @@ class Repository
 	/**
 	 * Used to delete small sample of messages from the database ( at the user's request ).
 	 *
-	 * @param array $messagesToDelete Each message in the array must be represented by an associative array containing the "MESSAGE_ID" field.
+	 * @param array $messagesToDelete Each message must contain the "MESSAGE_ID" field.
 	 * @param $mailboxUserId
 	 *
-	 * @return ?int Deleted logical messages, null when the sample holds none.
+	 * @return ?int Number of deleted logical messages or null for an empty input.
 	 */
 	public function deleteMailsCompletely(array $messagesToDelete, $mailboxUserId): ?int
 	{
@@ -189,26 +192,35 @@ class Repository
 		];
 		AddMessage2Log($messageToLog);*/
 
-		$ids = array_map(
-			function ($mail)
-			{
-				return intval($mail['MESSAGE_ID']);
-			},
-			$messagesToDelete
-		);
-
-		if (empty($ids))
+		if (empty($messagesToDelete))
 		{
 			return null;
 		}
 
+		$messagesById = [];
+
+		foreach ($messagesToDelete as $message)
+		{
+			$messageId = (int)($message['MESSAGE_ID'] ?? 0);
+			if ($messageId > 0 && !isset($messagesById[$messageId]))
+			{
+				$messagesById[$messageId] = $message;
+			}
+		}
+
+		$ids = array_keys($messagesById);
+		if (empty($ids))
+		{
+			return 0;
+		}
+
 		$mailFieldsForEvent = [];
 
-		foreach ($messagesToDelete as $item)
+		foreach ($messagesById as $messageId => $item)
 		{
 			$mailFieldsForEvent[] = [
-				'HEADER_MD5' => $item['HEADER_MD5'],
-				'MESSAGE_ID' => $item['MESSAGE_ID'],
+				'HEADER_MD5' => $item['HEADER_MD5'] ?? '',
+				'MESSAGE_ID' => $messageId,
 				'MAILBOX_USER_ID' => $mailboxUserId,
 			];
 		}
@@ -228,41 +240,21 @@ class Repository
 		);
 
 		Mail\Internals\MailMessageMarkTable::deleteByMessages((int)$this->mailboxId, $ids);
-		$this->clearClassifyPending($ids);
 
 		// The uid rows are gone from the server, not from deleteList above: it gets event data without ID.
 		(new LabelCountersService())->handleMessagesDeleted((int)$this->mailboxId, $ids);
 
-		return $this->deleteMailMessageRows($ids);
-	}
+		$affectedRows = $this->deleteMailMessageRows($ids);
 
-	/**
-	 * Cleaned here for the same reason as the marks: the deleted rows never reach an onMailMessageDeleted
-	 * handler. Best effort: a broken cleanup must not break the deletion itself.
-	 *
-	 * @param int[] $ids
-	 */
-	private function clearClassifyPending(array $ids): void
-	{
-		try
-		{
-			$pendingService = new Mail\Internal\Service\Message\ClassifyPendingService();
-			$pendingService->clearMany((int)$this->mailboxId, $ids);
-		}
-		catch (\Throwable $exception)
-		{
-			AddMessage2Log(
-				sprintf(
-					'clearClassifyPending failed: mailboxId=%d, messages=%d, error=%s',
-					(int)$this->mailboxId,
-					count($ids),
-					$exception->getMessage()
-				),
-				'mail',
-				2,
-				false
-			);
-		}
+		/*
+			After the message rows themselves are gone, and not before: while a message is stored it
+			still connects the closure, and the rest of its conversation would be read back as one
+			component. Each removal checks what is left of the conversation and splits it into the
+			components it really consists of.
+		*/
+		(new ConversationBackfill())->removeMessages((int)$this->mailboxId, $ids);
+
+		return $affectedRows;
 	}
 
 	/**
@@ -270,11 +262,25 @@ class Repository
 	 */
 	private function deleteMailMessageRows(array $ids): int
 	{
-		$ids = array_filter(array_map('intval', $ids));
+		$ids = array_values(array_unique(array_filter(
+			array_map('intval', $ids),
+			static fn(int $id): bool => $id > 0,
+		)));
 
 		if (empty($ids))
 		{
 			return 0;
+		}
+
+		$existingIds = [];
+		$messages = Mail\MailMessageTable::query()
+			->setSelect(['ID'])
+			->whereIn('ID', $ids)
+			->exec()
+		;
+		while ($message = $messages->fetch())
+		{
+			$existingIds[] = (int)$message['ID'];
 		}
 
 		/*
@@ -282,12 +288,52 @@ class Repository
 			bindings and thread closure with it. The background cleanup cannot do it later: it
 			works from the placements, and they are already gone.
 		*/
-		foreach ($ids as $id)
+		foreach ($existingIds as $id)
 		{
-			\CMailMessage::delete($id);
+			\CMailMessage::delete($id, (int)$this->mailboxId);
 		}
 
-		return count($ids);
+		return count($existingIds);
+	}
+
+	/**
+	 * The rows the command names, with what tells whether they still address their letters: the folder
+	 * they lie in and the version of it their number was written under.
+	 */
+	public function getNamedPlacements(): iterable
+	{
+		if (empty($this->messagesIds))
+		{
+			return;
+		}
+
+		$count = count($this->messagesIds);
+		for ($offset = 0; $offset < $count; $offset += self::NAMED_PLACEMENTS_CHUNK_SIZE)
+		{
+			$query = Mail\MailMessageUidTable::query()
+				->addSelect('ID')
+				->addSelect('MESSAGE_ID')
+				->addSelect('DIR_MD5')
+				->addSelect('DIR_UIDV')
+				->addSelect('DATE_INSERT')
+				->addSelect('DELETE_TIME')
+				->addSelect('GENERATION_ID')
+				->where('MAILBOX_ID', $this->mailboxId)
+				->whereIn(
+					'ID',
+					array_slice($this->messagesIds, $offset, self::NAMED_PLACEMENTS_CHUNK_SIZE),
+				)
+				->where('MESSAGE_ID', '>', 0)
+				->addFilter('==DELETE_TIME', 0)
+			;
+			$this->applyGenerationScope($query);
+
+			$rows = $query->exec();
+			while ($row = $rows->fetch())
+			{
+				yield $row;
+			}
+		}
 	}
 
 	public function getMessages()
@@ -340,6 +386,8 @@ class Repository
 				->addSelect('MAILBOX_ID')
 				->addSelect('DIR_MD5')
 				->addSelect('DIR_UIDV')
+				// what tells which version of a folder is in force, without asking the server
+				->addSelect('DATE_INSERT')
 				->addSelect('MSG_UID')
 				->addSelect('HEADER_MD5')
 				->addSelect('IS_SEEN')
@@ -355,7 +403,7 @@ class Repository
 			;
 			$this->applyGenerationScope($placementsQuery);
 
-			$messages = $placementsQuery->exec()->fetchAll();
+			$messages = PlacementFolderVersionFilter::dropPreviousVersions($placementsQuery->exec()->fetchAll());
 		}
 
 		return $messages;

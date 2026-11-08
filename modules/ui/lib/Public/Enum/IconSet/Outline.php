@@ -645,6 +645,7 @@ enum Outline: string
 	case SET_KANBAN = 'o-set-kanban';
 	case COOKIES = 'o-cookies';
 	case PAGES = 'o-pages';
+	case VIBE_BLACKHOLE = 'o-vibe-blackhole';
 	case EXCLAMATION_XS = 'exclamation-xs';
 	case EXCLAMATION_S = 'exclamation-s';
 	case EXCLAMATION_M = 'exclamation-m';

@@ -7,11 +7,7 @@ use Bitrix\Crm\Activity\Provider\ToDo;
 use Bitrix\Crm\Field\Collection;
 use Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder;
 use Bitrix\Crm\Integration\Analytics\Builder\AnalyticsEventDto;
-use Bitrix\Crm\Integration\Analytics\Builder\Entity\AddEvent;
-use Bitrix\Crm\Integration\Analytics\Builder\Entity\ConvertEvent;
-use Bitrix\Crm\Integration\Analytics\Builder\Entity\CopyEvent;
-use Bitrix\Crm\Integration\Analytics\Builder\Robot\CreateEvent;
-use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\Analytics\Builder\Entity\CreateEventFactory;
 use Bitrix\Crm\Integration\BizProc\Starter\CrmStarter;
 use Bitrix\Crm\Integration\BizProc\Starter\Dto\RunDataDto;
 use Bitrix\Crm\Integration\PullManager;
@@ -266,26 +262,9 @@ class Add extends Operation
 	protected function sendAnalytics(Result $result): void
 	{
 		$analytics = $this->getContext()->getAnalytics();
-		if ($analytics->isEmpty())
-		{
-			AddEvent::createDefault($this->getItem()->getEntityTypeId())
-				->setSection(Dictionary::SECTION_UNKNOWN)
-				->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)
-				->setActorId($this->getAnalyticsActorId())
-				->buildEvent()
-				->send()
-			;
+		$event = $analytics->isEmpty() ? null : $this->getAnalyticsEvent($analytics, $this->getItem());
 
-			return;
-		}
-
-		$event = $this->getAnalyticsEvent($analytics, $this->getItem());
-
-		$analytics->fillEventBuilder($event);
-
-		$status = $result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR;
-		$event
-			->setStatus($status)
+		CreateEventFactory::create($this->getItem(), $this->getContext(), $result, $event)
 			->setActorId($this->getAnalyticsActorId())
 			->buildEvent()
 			->send()
@@ -294,19 +273,6 @@ class Add extends Operation
 
 	protected function getAnalyticsEvent(AnalyticsEventDto $analytics, Item $item): AbstractBuilder
 	{
-		$event =
-			$analytics->getCategory() === Dictionary::CATEGORY_ROBOT_OPERATIONS
-				? new CreateEvent($item->getEntityTypeId(), $analytics->getType())
-				: null
-		;
-
-		$event ??= match ($analytics->getEvent())
-		{
-			Dictionary::EVENT_ENTITY_COPY => CopyEvent::createDefault($item->getEntityTypeId()),
-			Dictionary::EVENT_ENTITY_CONVERT => ConvertEvent::createDefault($item->getEntityTypeId()),
-			default => AddEvent::createDefault($item->getEntityTypeId()),
-		};
-
-		return $event;
+		return CreateEventFactory::createFromAnalytics($analytics, $item);
 	}
 }

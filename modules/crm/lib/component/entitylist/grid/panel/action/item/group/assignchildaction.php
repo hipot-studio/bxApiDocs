@@ -2,11 +2,11 @@
 
 namespace Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group;
 
+use Bitrix\Crm\Component\EntityList\Grid\Panel\ApplyButton;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Event;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Grid\Panel\Action\Group\GroupChildAction;
 use Bitrix\Main\Grid\Panel\Actions;
-use Bitrix\Main\Grid\Panel\Snippet;
 use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\Grid\Panel\Types;
 use Bitrix\Main\HttpRequest;
@@ -15,7 +15,7 @@ use Bitrix\Main\Result;
 
 final class AssignChildAction extends GroupChildAction
 {
-	public function __construct(private int $entityTypeId)
+	public function __construct(private int $entityTypeId, private string $gridId)
 	{
 	}
 
@@ -39,7 +39,8 @@ final class AssignChildAction extends GroupChildAction
 	{
 		$onchange = new Onchange();
 
-		$hiddenInputId = 'action_assigned_by_id';
+		// the grid address keeps the id unique: a card shows several panels at once
+		$hiddenInputId = 'action_assigned_by_id_' . $this->gridId;
 
 		$onchange->addAction([
 			'ACTION' => Actions::SHOW,
@@ -56,7 +57,7 @@ final class AssignChildAction extends GroupChildAction
 					'ID' => $hiddenInputId,
 					'NAME' => 'ACTION_ASSIGNED_BY_ID'
 				],
-				(new Snippet())->getApplyButton([
+				ApplyButton::forGrid($this->gridId, [
 					'ONCHANGE' => [
 						[
 							'ACTION' => Actions::CALLBACK,
@@ -65,6 +66,7 @@ final class AssignChildAction extends GroupChildAction
 									'JS' =>
 										(new Event('BatchManager:executeAssigment'))
 											->addEntityTypeId($this->entityTypeId)
+											->addGridId($this->gridId)
 											->addValueElementId($hiddenInputId)
 											->buildJsCallback()
 									,
@@ -82,6 +84,7 @@ final class AssignChildAction extends GroupChildAction
 				[
 					'JS' =>
 						(new Event('renderUserTagSelector'))
+							->addGridId($this->gridId)
 							->addParam('targetElementId', $hiddenInputId)
 							->buildJsCallback()
 					,

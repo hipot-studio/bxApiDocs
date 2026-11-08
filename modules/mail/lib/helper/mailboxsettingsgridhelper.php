@@ -17,6 +17,11 @@ use Bitrix\Mail\Helper\Mailbox\CrmImapFilter;
 use Bitrix\Mail\Helper\Mailbox\MailboxSyncManager;
 use Bitrix\Mail\Internals\MailEntityOptionsTable;
 use Bitrix\Mail\Internals\Search\MailboxListSearchIndexTable;
+use Bitrix\Mail\Integration\MailService\AdminMigrationProgressAccess;
+use Bitrix\Mail\Integration\MailService\AdminMigrationProgressProvider;
+use Bitrix\Mail\Internal\Service\SourceGeneration\ManualMigrationControl;
+use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationOperationSchema;
+use Bitrix\Mail\Internal\Service\SourceGeneration\OperationTracker;
 use Bitrix\Mail\Integration\MailService\MigrationStatus;
 use Bitrix\Mail\Integration\MailService\MigrationStatusProvider;
 use Bitrix\Mail\MailServicesTable;
@@ -247,13 +252,46 @@ class MailboxSettingsGridHelper
 	{
 		$mailboxIds = array_column($mailboxes, 'ID');
 		$emails = array_column($mailboxes, 'EMAIL');
+		$migrationStatuses = [];
+		$adminMigrationStatuses = [];
+		$adminProgressAccess = new AdminMigrationProgressAccess();
+		$canReadAdminProgress = $adminProgressAccess->canRead($this->currentUserId);
+		$canShowHiddenAdminProgress = $canReadAdminProgress && $adminProgressAccess->isEarlyDisplayEnabled();
 		try
 		{
-			$migrationStatuses = (new MigrationStatusProvider())->getLatestForMailboxes($mailboxIds);
+			if ($mailboxIds !== [] && (new MigrationOperationSchema())->isReady())
+			{
+				$operations = (new OperationTracker())->findLatestForMailboxes($mailboxIds, [
+					'MAILBOX_ID', 'OPERATION_ID', 'EXEC_STATE', 'STAGE', 'SWITCH_AUTHORIZED',
+					'AUTO_RETRY', 'NEXT_RUN', 'LAST_ERROR_CODE', 'ERROR_OWNER',
+				]);
+				$statusProvider = new MigrationStatusProvider();
+				$adminProgressProvider = new AdminMigrationProgressProvider();
+				$manualWaiting = (new ManualMigrationControl())->findWaitingMailboxes($operations);
+				foreach ($operations as $mailboxId => $operation)
+				{
+					$waitsForGrant = isset($manualWaiting[(int)$mailboxId]);
+					$migrationStatuses[$mailboxId] = $statusProvider->fromRow($operation, $waitsForGrant);
+					if (
+						$canReadAdminProgress
+						&& (
+							$migrationStatuses[$mailboxId]?->visibility === 'active'
+							|| $canShowHiddenAdminProgress
+						)
+					)
+					{
+						$adminMigrationStatuses[$mailboxId] = $adminProgressProvider->getListStatus(
+							$operation,
+							$waitsForGrant,
+						);
+					}
+				}
+			}
 		}
 		catch (\Throwable)
 		{
 			$migrationStatuses = [];
+			$adminMigrationStatuses = [];
 		}
 
 		$emailLimitsAndCounters = $this->getEmailLimitsAndCounters($emails);
@@ -344,6 +382,9 @@ class MailboxSettingsGridHelper
 				$errorMailboxIdsMap,
 				$crmFilterMap[(int)$mailbox['ID']] ?? false,
 				$migrationStatuses[(int)$mailbox['ID']] ?? null,
+				$adminMigrationStatuses[(int)$mailbox['ID']] ?? null,
+				$canReadAdminProgress,
+				$canShowHiddenAdminProgress,
 			);
 		}
 
@@ -494,6 +535,9 @@ class MailboxSettingsGridHelper
 		array $errorMailboxIdsMap = [],
 		bool $isCrmFilterActive = false,
 		?MigrationStatus $migrationStatus = null,
+		?string $adminMigrationStatus = null,
+		bool $canReadAdminProgress = false,
+		bool $canShowHiddenAdminProgress = false,
 	): array
 	{
 		$dataFromOptions = $this->extractDataFromOptions($mailbox);
@@ -534,7 +578,17 @@ class MailboxSettingsGridHelper
 			'OWNER_GENDER' => (string)($mailbox['OWNER_GENDER'] ?? ''),
 			'IS_ORPHAN' => $isOrphan,
 			'EMAIL' => $mailbox['EMAIL'],
-			'SERVICE_NAME' => $mailbox['SERVICE_NAME'],
+			'SERVICE_NAME' => $mailbox['SERVICE_NAME']
+				?? \Bitrix\Mail\Internal\Service\SourceGeneration\ActiveMailboxService::getUnboundServiceName(
+					$mailbox,
+					[
+						'ID' => $mailbox['ACTIVE_GENERATION_ID'],
+						'MAILBOX_ID' => $mailbox['GENERATION_MAILBOX_ID'],
+						'STATUS' => $mailbox['GENERATION_STATUS'],
+						'SERVICE_NAME' => $mailbox['GENERATION_SERVICE_NAME'],
+						'OPERATION_ID' => $mailbox['GENERATION_OPERATION_ID'],
+					],
+				),
 			'COUNTERS' => [
 				'EMAIL' => [
 					'value' => min($actualCount, self::DEFAULT_UNSEEN_LIMIT),
@@ -556,6 +610,10 @@ class MailboxSettingsGridHelper
 			'CAN_EDIT' => $mailbox['CAN_EDIT'] ?? false,
 			'MIGRATION_STATUS' => $migrationStatus?->publicStatus,
 			'MIGRATION_ACTIVE' => $migrationStatus?->visibility === 'active',
+			'MIGRATION_ADMIN_PROGRESS_AVAILABLE' => $adminMigrationStatus !== null,
+			'MIGRATION_ADMIN_PROGRESS_ALLOWED' => $canReadAdminProgress,
+			'MIGRATION_ADMIN_PROGRESS_EARLY_VISIBLE' => $canShowHiddenAdminProgress,
+			'MIGRATION_ADMIN_STATUS' => $adminMigrationStatus,
 		];
 	}
 
@@ -678,6 +736,14 @@ class MailboxSettingsGridHelper
 					),
 				)
 				->registerRuntimeField(
+					'ACTIVE_SOURCE',
+					[
+						'data_type' => \Bitrix\Mail\Internals\MailboxSourceGenerationTable::class,
+						'reference' => ['=this.ACTIVE_GENERATION_ID' => 'ref.ID'],
+						'join_type' => 'LEFT',
+					],
+				)
+				->registerRuntimeField(
 					'SERVICE',
 					[
 						'data_type' => MailServicesTable::class,
@@ -695,6 +761,12 @@ class MailboxSettingsGridHelper
 					'SERVER_TYPE',
 					'PASSWORD',
 					'SERVICE_NAME' => 'SERVICE.NAME',
+					'SERVICE_ID',
+					'ACTIVE_GENERATION_ID',
+					'GENERATION_MAILBOX_ID' => 'ACTIVE_SOURCE.MAILBOX_ID',
+					'GENERATION_STATUS' => 'ACTIVE_SOURCE.STATUS',
+					'GENERATION_SERVICE_NAME' => 'ACTIVE_SOURCE.SERVICE_NAME',
+					'GENERATION_OPERATION_ID' => 'ACTIVE_SOURCE.OPERATION_ID',
 					'OPTIONS',
 					'OWNER_ID' => 'USER_ID',
 					'OWNER_NAME' => 'OWNER.NAME',
@@ -1114,7 +1186,7 @@ class MailboxSettingsGridHelper
 
 					if ($value === 'Y')
 					{
-						$query->whereExpr($sqlHelper->getRegexpOperator('OPTIONS', $crmConnectRegexpSql), []);
+						$query->whereExpr($sqlHelper->getRegexpOperator('%s', $crmConnectRegexpSql), ['OPTIONS']);
 					}
 					elseif ($value === 'N')
 					{
@@ -1122,8 +1194,8 @@ class MailboxSettingsGridHelper
 						$subFilter->logic(ConditionTree::LOGIC_OR);
 						$subFilter->whereNotLike('OPTIONS', '%s:5:"flags"%');
 						$subFilter->whereExpr(
-							sprintf('NOT (%s)', $sqlHelper->getRegexpOperator('OPTIONS', $crmConnectRegexpSql)),
-							[],
+							sprintf('NOT (%s)', $sqlHelper->getRegexpOperator('%s', $crmConnectRegexpSql)),
+							['OPTIONS'],
 						);
 						$query->where($subFilter);
 					}
@@ -1164,14 +1236,14 @@ class MailboxSettingsGridHelper
 							$crmConnectRegexpSql = $this->getCrmConnectRegexpSql();
 
 							$queueFilter = new ConditionTree();
-							$queueFilter->whereExpr($sqlHelper->getRegexpOperator('OPTIONS', $crmConnectRegexpSql), []);
+							$queueFilter->whereExpr($sqlHelper->getRegexpOperator('%s', $crmConnectRegexpSql), ['OPTIONS']);
 
 							$userQueueFilter = new ConditionTree();
 							$userQueueFilter->logic(ConditionTree::LOGIC_OR);
 							foreach ($userIds as $id)
 							{
 								$patternSql = $this->getCrmLeadRespRegexpSql((int)$id);
-								$userQueueFilter->whereExpr($sqlHelper->getRegexpOperator('OPTIONS', $patternSql), []);
+								$userQueueFilter->whereExpr($sqlHelper->getRegexpOperator('%s', $patternSql), ['OPTIONS']);
 							}
 
 							$queueFilter->where($userQueueFilter);

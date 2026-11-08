@@ -35,10 +35,19 @@ class ChecklistEditRule extends \Bitrix\Main\Access\Rule\AbstractRule
 
 		if ($task instanceOf TemplateModel)
 		{
-			return $this->controller->check(ActionDictionary::ACTION_TEMPLATE_EDIT, $task, $params);
+			return
+				$this->controller->check(ActionDictionary::ACTION_TEMPLATE_EDIT, $task, $params)
+				&& $this->isChecklistBoundToItem($this->getModelFromParams($params, $task), $task)
+			;
 		}
 
 		if (!$this->controller->check(ActionDictionary::ACTION_TASK_READ, $task, $params))
+		{
+			return false;
+		}
+
+		$checklist = $this->getModelFromParams($params, $task);
+		if (!$this->isChecklistBoundToItem($checklist, $task))
 		{
 			return false;
 		}
@@ -51,24 +60,20 @@ class ChecklistEditRule extends \Bitrix\Main\Access\Rule\AbstractRule
 			return true;
 		}
 
-		$checklist = $this->getModelFromParams($params);
-		if (
-			$checklist->getEntityId() > 0
-			&& $checklist->getEntityId() !== $task->getId()
-		)
-		{
-			$this->controller->addError(static::class, 'Incorrect checklist data');
-			return false;
-		}
+		// an item that has no stored row yet has no owner, so the shortcuts below must not answer
+		$ownerId = $checklist->getOwnerId();
 
-		if ($checklist->getOwnerId() === $this->user->getUserId())
+		if ($ownerId > 0)
 		{
-			return true;
-		}
+			if ($ownerId === $this->user->getUserId())
+			{
+				return true;
+			}
 
-		if (in_array($checklist->getOwnerId(), $this->user->getAllSubordinates()))
-		{
-			return true;
+			if (in_array($ownerId, $this->user->getAllSubordinates()))
+			{
+				return true;
+			}
 		}
 
 		if (

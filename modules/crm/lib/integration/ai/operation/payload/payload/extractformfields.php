@@ -14,7 +14,7 @@ final class ExtractFormFields extends AbstractPayload implements CalcMarkersInte
 {
 	public static function getAllSuitableFields(int $entityTypeId, string $scope = Context::SCOPE_AI): array
 	{
-		return (new FieldDataProvider($entityTypeId, $scope))->getFieldData();
+		return (new FieldDataProvider($entityTypeId, $scope))->getEnabledForAiFillFieldData();
 	}
 
 	public static function prepareValue(array $data, mixed $value): mixed

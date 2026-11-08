@@ -190,9 +190,12 @@ final class ProductImage extends Controller
 			return null;
 		}
 
-		if ($fields['TYPE'] === 'DETAIL_PICTURE' || $fields['TYPE'] === 'PREVIEW_PICTURE')
+		$isProductPicture = $fields['TYPE'] === 'DETAIL_PICTURE' || $fields['TYPE'] === 'PREVIEW_PICTURE';
+		$previousImageId = 0;
+		if ($isProductPicture)
 		{
 			$updateFields = [$fields['TYPE'] => $fileData];
+			$previousImageId = (int)($product[$fields['TYPE']] ?? 0);
 		}
 		else
 		{
@@ -214,15 +217,26 @@ final class ProductImage extends Controller
 
 		$connection = Application::getConnection();
 		$connection->startTransaction();
+		$imageId = 0;
 		try
 		{
-			if ($fields['TYPE'] === 'DETAIL_PICTURE' || $fields['TYPE'] === 'PREVIEW_PICTURE')
+			if ($isProductPicture)
 			{
 				$error = $this->updateProductImage((int)$product['ID'], $updateFields);
 			}
 			else
 			{
 				$error = $this->updateProductMorePhoto((int)$product['ID'], (int)$product['IBLOCK_ID'], $updateFields);
+			}
+			// MORE_PHOTO is checked after the commit: a rollback there would restore a property
+			// value pointing to a file SetPropertyValues has already removed from the disk
+			if ($error === '' && $isProductPicture)
+			{
+				$imageId = $this->getSavedPictureId((int)$product['ID'], $fields['TYPE'], $previousImageId);
+				if ($imageId <= 0)
+				{
+					$error = 'Product image was not saved.';
+				}
 			}
 		}
 		catch (SqlQueryException)
@@ -238,12 +252,7 @@ final class ProductImage extends Controller
 		}
 		$connection->commitTransaction();
 
-		if ($fields['TYPE'] === 'DETAIL_PICTURE' || $fields['TYPE'] === 'PREVIEW_PICTURE')
-		{
-			$product = $this->getProduct((int)$fields['PRODUCT_ID'], [$fields['TYPE']]);
-			$imageId = $product[$fields['TYPE']];
-		}
-		else
+		if (!$isProductPicture)
 		{
 			$morePhotoIds = $this->getMorePhotoPropertyValues($product);
 			if (!$morePhotoIds)
@@ -252,8 +261,9 @@ final class ProductImage extends Controller
 
 				return null;
 			}
-			$imageId = end($morePhotoIds);
+			$imageId = (int)end($morePhotoIds);
 		}
+
 		$image = FileTable::getRowById($imageId);
 		if (!$image)
 		{
@@ -404,6 +414,18 @@ final class ProductImage extends Controller
 	protected function getEntityTable()
 	{
 		return new FileTable();
+	}
+
+	/**
+	 * An element update reports success even when the file was not saved: the picture field keeps
+	 * its previous value, so only a new file id proves that the image reached the storage.
+	 */
+	private function getSavedPictureId(int $productId, string $type, int $previousImageId): int
+	{
+		$updatedProduct = $this->getProduct($productId, [$type]);
+		$imageId = (int)($updatedProduct[$type] ?? 0);
+
+		return $imageId === $previousImageId ? 0 : $imageId;
 	}
 
 	private function getProduct(int $productId, ?array $select = null): ?array

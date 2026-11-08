@@ -4,7 +4,6 @@ namespace Bitrix\Crm\Controller;
 use Bitrix\Main;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\UserField\Access\Permission\PermissionDictionary;
-use Bitrix\Main\UserField\Access\Permission\UserFieldPermissionTable;
 use Bitrix\Crm;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\UserField\Visibility\VisibilityManager;
@@ -30,12 +29,11 @@ class UserFieldVisibility extends Main\Engine\Controller
 
 	public function saveConfigurationAction($accessCodes, string $fieldName, int $entityTypeId)
 	{
-		UserFieldPermissionTable::saveEntityConfiguration(
+		VisibilityManager::saveEntityConfiguration(
 			$accessCodes,
 			$fieldName,
 			$entityTypeId,
 			PermissionDictionary::USER_FIELD_VIEW,
-			\CCrmOwnerType::ResolveUserFieldEntityID($entityTypeId)
 		);
 	}
 

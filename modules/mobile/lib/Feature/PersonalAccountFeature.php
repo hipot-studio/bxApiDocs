@@ -9,11 +9,13 @@ use Bitrix\Mobile\Config\FeatureFlag;
 
 final class PersonalAccountFeature extends FeatureFlag
 {
+	use MyCompanySectionElement;
+
 	private const OPTION_NAME = 'feature_personal_account_enabled';
 
-	public function isEnabled(): bool
+	protected function isOptionEnabled(): bool
 	{
-		return (bool)Option::get('mobile', self::OPTION_NAME, false);
+		return $this->isOptionOn('mobile', self::OPTION_NAME, false);
 	}
 
 	public function enable(): void

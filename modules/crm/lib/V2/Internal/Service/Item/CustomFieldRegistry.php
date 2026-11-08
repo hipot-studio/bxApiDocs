@@ -164,18 +164,41 @@ class CustomFieldRegistry
 		$fieldDescriptorsMapByName = [];
 		foreach ($customFieldDefinitions as $customFieldDefinition)
 		{
-			$fieldName = $customFieldDefinition['FIELD_NAME'];
-			$fieldType = $customFieldDefinition['USER_TYPE_ID'];
+			if (!is_array($customFieldDefinition))
+			{
+				continue;
+			}
+
+			$fieldName = $customFieldDefinition['FIELD_NAME'] ?? null;
+			$fieldType = $customFieldDefinition['USER_TYPE_ID'] ?? null;
+			if (!is_string($fieldName) || !is_string($fieldType))
+			{
+				continue;
+			}
+
+			$fieldId = $customFieldDefinition['ID'] ?? null;
+			if (is_int($fieldId))
+			{
+				if ($fieldId <= 0)
+				{
+					continue;
+				}
+			}
+			elseif (!is_string($fieldId) || preg_match('/^[1-9]\d*$/D', $fieldId) !== 1)
+			{
+				continue;
+			}
+
 			$isSupportedType = in_array($fieldType, self::FILTERABLE_AND_SORTABLE_TYPES, true);
 			$fieldDescriptorsMapByName[$fieldName] = new CustomFieldDescriptor(
-				(int)$customFieldDefinition['ID'],
+				(int)$fieldId,
 				name: $fieldName,
 				type: $fieldType,
-				isMultiple: $customFieldDefinition['MULTIPLE'] === 'Y',
-				isRequired: $customFieldDefinition['MANDATORY'] === 'Y',
-				isSearchable: $customFieldDefinition['IS_SEARCHABLE'] === 'Y',
+				isMultiple: ($customFieldDefinition['MULTIPLE'] ?? null) === 'Y',
+				isRequired: ($customFieldDefinition['MANDATORY'] ?? null) === 'Y',
+				isSearchable: ($customFieldDefinition['IS_SEARCHABLE'] ?? null) === 'Y',
 				isFilterable: $isSupportedType && ($customFieldDefinition['SHOW_FILTER'] ?? null) !== 'N',
-				isSortable: $isSupportedType && $customFieldDefinition['MULTIPLE'] !== 'Y',
+				isSortable: $isSupportedType && ($customFieldDefinition['MULTIPLE'] ?? null) !== 'Y',
 				entityTypesId: $this->getEntityTypesId($customFieldDefinition),
 				statusTypeId: $this->getStatusTypeId($customFieldDefinition),
 				iBlockId: $this->getIBlockId($customFieldDefinition),
@@ -209,7 +232,20 @@ class CustomFieldRegistry
 		$typeId = $customFieldDefinition['USER_TYPE_ID'] ?? '';
 		if (in_array($typeId, ['iblock_section', 'iblock_element'], true))
 		{
-			return (int)($customFieldDefinition['SETTINGS']['IBLOCK_ID'] ?? 0);
+			$iBlockId = $this->getSettings($customFieldDefinition)['IBLOCK_ID'] ?? null;
+			if (is_int($iBlockId))
+			{
+				return $iBlockId > 0 ? $iBlockId : null;
+			}
+
+			if (!is_string($iBlockId) || preg_match('/^\d+$/D', $iBlockId) !== 1)
+			{
+				return null;
+			}
+
+			$iBlockId = (int)$iBlockId;
+
+			return $iBlockId > 0 ? $iBlockId : null;
 		}
 
 		return null;
@@ -227,14 +263,13 @@ class CustomFieldRegistry
 		}
 
 		$elementTypesId = [];
-		$settings = $customFieldDefinition['SETTINGS'] ?? null;
-		if (!is_array($settings))
+		foreach ($this->getSettings($customFieldDefinition) as $elementTypeName => $isEnabled)
 		{
-			return [];
-		}
+			if (!is_string($elementTypeName))
+			{
+				continue;
+			}
 
-		foreach ($settings as $elementTypeName => $isEnabled)
-		{
 			$entityType = EntityType::fromName($elementTypeName);
 			if ($entityType !== null && ($isEnabled === true || $isEnabled === 'Y'))
 			{
@@ -255,12 +290,22 @@ class CustomFieldRegistry
 
 		// Stored settings may hold the whole entity-type entry instead of its id, the way legacy
 		// readers of this field already expect (see \Bitrix\Crm\UserField\Types\StatusType).
-		$entityType = $customFieldDefinition['SETTINGS']['ENTITY_TYPE'] ?? null;
+		$entityType = $this->getSettings($customFieldDefinition)['ENTITY_TYPE'] ?? null;
 		if (is_array($entityType))
 		{
 			$entityType = $entityType['ID'] ?? null;
 		}
 
 		return is_string($entityType) ? $entityType : null;
+	}
+
+	/**
+	 * @return array<string|int, mixed>
+	 */
+	private function getSettings(array $customFieldDefinition): array
+	{
+		$settings = $customFieldDefinition['SETTINGS'] ?? null;
+
+		return is_array($settings) ? $settings : [];
 	}
 }

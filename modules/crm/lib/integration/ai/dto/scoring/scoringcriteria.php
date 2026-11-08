@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\AI\Dto\Scoring;
 
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 
 class ScoringCriteria extends Dto
 {
@@ -14,6 +15,7 @@ class ScoringCriteria extends Dto
 	protected function getValidators(array $fields): array
 	{
 		return [
+			new RequiredField($this, 'criterion'),
 			new NotEmptyField($this, 'criterion'),
 		];
 	}

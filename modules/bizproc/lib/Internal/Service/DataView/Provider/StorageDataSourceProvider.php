@@ -20,10 +20,15 @@ use Bitrix\Bizproc\Public\DataView\Dto\SourceSchema;
 use Bitrix\Bizproc\Public\DataView\Exception\SourceUnavailableException;
 use Bitrix\Bizproc\Public\DataView\Interface\DataSourceProvider;
 use Bitrix\Bizproc\Public\DataView\Interface\PresentableProvider;
+use Bitrix\Bizproc\Public\DataView\Interface\SourceAvailabilityCapableProvider;
 use Bitrix\Bizproc\Public\Provider\StorageItemProvider;
 use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 
-final class StorageDataSourceProvider implements DataSourceProvider, PresentableProvider
+final class StorageDataSourceProvider implements
+	DataSourceProvider,
+	PresentableProvider,
+	SourceAvailabilityCapableProvider
 {
 	public const MODULE_ID = 'bizproc';
 	public const ENTITY = 'storage';
@@ -45,7 +50,6 @@ final class StorageDataSourceProvider implements DataSourceProvider, Presentable
 		FieldType::DATE,
 		FieldType::DATETIME,
 		FieldType::DOUBLE,
-		FieldType::FILE,
 		FieldType::INT,
 		FieldType::SELECT,
 		FieldType::INTERNALSELECT,
@@ -65,8 +69,15 @@ final class StorageDataSourceProvider implements DataSourceProvider, Presentable
 
 	public function getAvailableSources(int $actorId): array
 	{
+		$filter = [];
+		$closedStorageTypeIds = (new TemplateAccessService())->getClosedStorageTypeIds($actorId);
+		if ($closedStorageTypeIds !== [])
+		{
+			$filter['!ID'] = $closedStorageTypeIds;
+		}
+
 		$descriptors = [];
-		$types = (new StorageTypeProvider())->getStoragesByFilter([], ['ID', 'TITLE', 'CODE']);
+		$types = (new StorageTypeProvider())->getStoragesByFilter($filter, ['ID', 'TITLE', 'CODE']);
 		foreach ($types as $type)
 		{
 			$descriptors[] = new SourceDescriptor(
@@ -83,6 +94,20 @@ final class StorageDataSourceProvider implements DataSourceProvider, Presentable
 	}
 
 	/**
+	 * The catalog holds every storage type the actor may reach, so presence in it is the existence of the
+	 * type named by the source together with the right to edit it; the template context does not narrow it.
+	 */
+	public function isSourceAvailable(SourceRef $source, int $actorId, ?int $templateId): bool
+	{
+		$storageTypeId = $this->resolveStorageTypeId($source);
+
+		return $storageTypeId > 0
+			&& (new StorageTypeProvider())->exists($storageTypeId)
+			&& (new TemplateAccessService())->canEditStorage($storageTypeId, $actorId)
+		;
+	}
+
+	/**
 	 * @throws SourceUnavailableException
 	 */
 	public function getSourceSchema(SourceRef $source): SourceSchema
@@ -94,6 +119,11 @@ final class StorageDataSourceProvider implements DataSourceProvider, Presentable
 		$collection = Container::getStorageFieldRepository()?->getByStorageId($storageTypeId, ['*']);
 		foreach (($collection ?? []) as $field)
 		{
+			if ($field->getType() === FieldType::FILE)
+			{
+				continue;
+			}
+
 			$multiple = (bool)$field->getMultiple();
 			$type = $this->normalizeFieldType($field->getType());
 			$fields[] = new SourceField(
@@ -117,6 +147,10 @@ final class StorageDataSourceProvider implements DataSourceProvider, Presentable
 	{
 		$storageTypeId = $this->resolveStorageTypeId($source);
 		$this->assertTypeAvailable($storageTypeId);
+		if (!(new TemplateAccessService())->canEditStorage($storageTypeId, $actorId))
+		{
+			throw SourceUnavailableException::sourceNotAvailableToActor(self::MODULE_ID, self::ENTITY);
+		}
 
 		$schema = $this->getSourceSchema($source);
 

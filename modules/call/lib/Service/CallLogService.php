@@ -12,6 +12,7 @@ use Bitrix\Call\Counter;
 use Bitrix\Call\Call;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Query\Join;
+use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\Application;
 
@@ -21,6 +22,32 @@ class CallLogService
 	public const MAX_LIMIT = 100;
 	public const DEFAULT_LIMIT = 50;
 	protected const LOCK_TTL = 10; // in seconds
+
+	/**
+	 * How many reads of the journal one page of it may cost.
+	 *
+	 * A page that lost rows to the guest cut is refilled from the rows behind it (@see self::getPage()), and
+	 * that refill has to stop somewhere: a journal whose every row is unreachable would otherwise be walked
+	 * to its end by a single request.
+	 */
+	private const MAX_PAGE_READS = 5;
+
+	/**
+	 * Chats of a user, by user id, for the lifetime of this service. Filled once per page and reused by the
+	 * enrichment of every row on it - see {@see self::isChatMember()}.
+	 *
+	 * @var array<int, array<int>>
+	 */
+	private array $memberChatIds = [];
+
+	/**
+	 * Guest flag of a user, by user id, for the lifetime of this service. The flag decides the scope of both
+	 * halves of the log, so it is asked for on every row, every counter and every push - and it changes only
+	 * with the user themselves, never within one operation.
+	 *
+	 * @var array<int, bool>
+	 */
+	private array $guestFlags = [];
 
 	/**
 	 * Validate and normalize limit value
@@ -35,6 +62,68 @@ class CallLogService
 			return self::DEFAULT_LIMIT;
 		}
 		return max(self::MIN_LIMIT, min($limit, self::MAX_LIMIT));
+	}
+
+	/**
+	 * One page of the journal, enriched and filled up to the size that was asked for.
+	 *
+	 * The client tells the end of the journal by the size of the page: fewer rows than it asked for means
+	 * there is nothing more. An entry whose call data cannot be built is hidden from a guest, so a page
+	 * handed over with those rows simply missing would stop their history silently, with older reachable
+	 * calls sitting right behind it. The gap is filled from those very rows instead.
+	 *
+	 * Cutting by the query alone does not cover this: the query cuts by chat membership, while the
+	 * enrichment comes back empty for reasons that are not on the row - a call session that no longer
+	 * builds, an associated entity that is gone - and none of them is a join.
+	 *
+	 * The refill costs at most MAX_PAGE_READS reads. At the end of the journal the page is short, and there
+	 * that is exactly what it means.
+	 *
+	 * @param int $userId
+	 * @param array $filter
+	 * @param int $lastId
+	 * @param int $limit
+	 * @return array Formatted rows, each with its own 'callData'.
+	 */
+	public function getPage(int $userId, array $filter = [], int $lastId = 0, int $limit = self::DEFAULT_LIMIT): array
+	{
+		$limit = self::normalizeLimit($limit);
+		// Only a guest is narrowed to what they may open, so only their page can come out short.
+		$dropInaccessible = $this->isGuestUser($userId);
+
+		$page = [];
+		$cursor = $lastId;
+		for ($read = 0; $read < self::MAX_PAGE_READS; $read++)
+		{
+			$rows = $this->getList($userId, $filter, $cursor, $limit);
+			if ($rows === [])
+			{
+				break;
+			}
+
+			// The cursor the client itself would send next: the id of the LAST row read, not the smallest one,
+			// so that the refill walks the journal exactly the way paging walks it.
+			$cursor = (int)$rows[array_key_last($rows)]['id'];
+
+			foreach ($rows as $row)
+			{
+				$row['callData'] = $this->getCallData($row, $userId);
+				if ($dropInaccessible && $row['callData'] === [])
+				{
+					continue;
+				}
+
+				$page[] = $row;
+			}
+
+			// A read shorter than the limit is the end of the journal: there is nothing left to refill from.
+			if (count($page) >= $limit || count($rows) < $limit)
+			{
+				break;
+			}
+		}
+
+		return array_slice($page, 0, $limit);
 	}
 
 	/**
@@ -57,13 +146,32 @@ class CallLogService
 			return [];
 		}
 
+		// A guest sees only the calls of the chats they are still in, and that cut is made by the QUERY rather
+		// than by dropping rows from the answer. Dropping after the fact breaks the page: a page short of
+		// PER_PAGE tells the client there is nothing more, so the journal stops paging - and a page filtered
+		// out whole shows up as an empty journal while older reachable calls sit right behind it.
+		// Re-read rather than taken from the cache: the membership is what the page is cut by, and a page
+		// must never be cut by the membership the page before it saw.
+		$guestChatIds = $this->getGuestChatIds($userId, true);
+		if ($guestChatIds === [])
+		{
+			return [];
+		}
+
+		$query = CallUserLogTable::query()
+			->setSelect(['*'])
+			->setFilter($queryFilter)
+			->setOrder(['STATUS_TIME' => 'DESC', 'ID' => 'DESC'])
+			->setLimit(self::normalizeLimit($limit))
+		;
+
+		if ($guestChatIds !== null)
+		{
+			$this->restrictToChats($query, $guestChatIds);
+		}
+
 		$result = [];
-		$dbResult = CallUserLogTable::getList([
-			'select' => ['*'],
-			'filter' => $queryFilter,
-			'order' => ['STATUS_TIME' => 'DESC', 'ID' => 'DESC'],
-			'limit' => self::normalizeLimit($limit)
-		]);
+		$dbResult = $query->exec();
 
 		while ($row = $dbResult->fetch())
 		{
@@ -71,6 +179,186 @@ class CallLogService
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Chats the user is a member of right now, as ids.
+	 *
+	 * One query per page rather than one per row: the membership of a page is asked for once and reused,
+	 * both by the query that cuts the page and by the enrichment that follows it. An empty list means the
+	 * user is in no chat at all, which for a guest is a journal with nothing in it.
+	 *
+	 * @param int $userId
+	 * @return array<int> Chat ids, possibly empty.
+	 */
+	private function getMemberChatIds(int $userId): array
+	{
+		if ($userId <= 0 || !\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return [];
+		}
+
+		$chatIds = [];
+		$rows = \Bitrix\Im\Model\RelationTable::getList([
+			'select' => ['CHAT_ID'],
+			'filter' => ['=USER_ID' => $userId],
+		]);
+		while ($row = $rows->fetch())
+		{
+			$chatIds[] = (int)$row['CHAT_ID'];
+		}
+
+		return $chatIds;
+	}
+
+	/**
+	 * Chats that bound what the user may see, or null when nothing bounds them.
+	 *
+	 * A guest is bound by the chats they are still in: their access boundary is the chat link rather than
+	 * the portal, so a chat they were removed from takes its calls with it. Everybody else is bound by
+	 * nothing beyond the ownership of the journal row itself, and null says exactly that - not "no chats",
+	 * which is what an empty list means and what makes a guest journal empty.
+	 *
+	 * @param int $userId
+	 * @param bool $refresh Re-read the membership instead of reusing what this service already read.
+	 * @return array<int>|null
+	 */
+	private function getGuestChatIds(int $userId, bool $refresh = false): ?array
+	{
+		if (!$this->isGuestUser($userId))
+		{
+			return null;
+		}
+
+		if ($refresh || !isset($this->memberChatIds[$userId]))
+		{
+			$this->memberChatIds[$userId] = $this->getMemberChatIds($userId);
+		}
+
+		return $this->memberChatIds[$userId];
+	}
+
+	/**
+	 * Narrows a query over b_call_userlog down to the calls that belong to the given chats.
+	 *
+	 * The chat of a journal row lives on the call session rather than on the row, hence the join. Rows of
+	 * another source type (voximplant) carry no call session and fall out of the join, which is what the
+	 * cut is meant to do: a guest has no telephony of their own.
+	 *
+	 * @param Query $query Query over CallUserLogTable.
+	 * @param array<int> $chatIds Non-empty; an empty list would leave the query unrestricted (@see Query::whereIn()).
+	 * @return void
+	 */
+	private function restrictToChats(Query $query, array $chatIds): void
+	{
+		$query->registerRuntimeField(
+			'CALL_SESSION',
+			new Reference(
+				'CALL_SESSION',
+				CallTable::class,
+				Join::on('this.SOURCE_CALL_ID', 'ref.ID')
+					->where('this.SOURCE_TYPE', CallUserLogTable::SOURCE_TYPE_CALL),
+				['join_type' => Join::TYPE_LEFT]
+			)
+		);
+		$query->whereIn('CALL_SESSION.CHAT_ID', $chatIds);
+	}
+
+	/**
+	 * Query over the missed-counter rows of the user, narrowed to what they may reach.
+	 *
+	 * The narrowing is a JOIN rather than a list of ids read into PHP: rows hidden from a guest are
+	 * deliberately not deleted (see markAsSeen), so their number is bounded by nothing, and this query
+	 * sits on the read path of the journal and on every counter push.
+	 *
+	 * @param int $userId
+	 * @param array<int>|null $guestChatIds Non-empty chat ids, or null when nothing narrows the user.
+	 * @return Query
+	 */
+	private function createCounterQuery(int $userId, ?array $guestChatIds): Query
+	{
+		$query = CallUserLogCountersTable::query()->where('USER_ID', $userId);
+		if ($guestChatIds === null)
+		{
+			return $query;
+		}
+
+		$query
+			->where('USERLOG.SOURCE_TYPE', CallUserLogTable::SOURCE_TYPE_CALL)
+			->registerRuntimeField(
+				'CALL_SESSION',
+				new Reference(
+					'CALL_SESSION',
+					CallTable::class,
+					Join::on('this.USERLOG.SOURCE_CALL_ID', 'ref.ID'),
+					['join_type' => Join::TYPE_INNER]
+				)
+			)
+			->whereIn('CALL_SESSION.CHAT_ID', $guestChatIds)
+		;
+
+		return $query;
+	}
+
+	/**
+	 * Keeps of the given journal rows the ones the user may actually reach.
+	 *
+	 * The same cut as the list makes, applied to ids that come from outside the list: the counter counts
+	 * them and mark-as-seen writes to them, and both must stay inside the scope the reader is allowed.
+	 *
+	 * @param int $userId
+	 * @param array<int> $logIds
+	 * @return array<int>
+	 */
+	private function filterAccessibleLogIds(int $userId, array $logIds): array
+	{
+		$logIds = array_values(array_unique(array_filter(array_map('intval', $logIds), static fn(int $id) => $id > 0)));
+
+		$guestChatIds = $this->getGuestChatIds($userId);
+		if ($guestChatIds === null || $logIds === [])
+		{
+			return $logIds;
+		}
+		if ($guestChatIds === [])
+		{
+			return [];
+		}
+
+		$query = CallUserLogTable::query()
+			->setSelect(['ID'])
+			->where('USER_ID', $userId)
+			->whereIn('ID', $logIds)
+		;
+		$this->restrictToChats($query, $guestChatIds);
+
+		return array_map('intval', array_column($query->fetchAll(), 'ID'));
+	}
+
+	/**
+	 * Ids of the journal rows that make up the missed counter the user can actually see.
+	 *
+	 * Cut by the query rather than read whole and filtered afterwards: for a guest the rows of a chat
+	 * they were removed from stay in the table for good, so reading all of them first would grow without
+	 * bound on the very path that clears the badge.
+	 *
+	 * @param int $userId
+	 * @return array<int>
+	 */
+	private function getAccessibleCounterLogIds(int $userId): array
+	{
+		$guestChatIds = $this->getGuestChatIds($userId);
+		if ($guestChatIds === [])
+		{
+			return [];
+		}
+
+		return array_map(
+			'intval',
+			array_column(
+				$this->createCounterQuery($userId, $guestChatIds)->setSelect(['USERLOG_ID'])->fetchAll(),
+				'USERLOG_ID'
+			)
+		);
 	}
 
 	/**
@@ -187,12 +475,23 @@ class CallLogService
 	/**
 	 * Get missed calls counter for user
 	 *
+	 * The counter counts what the journal shows, and for a guest that is less than what the table holds:
+	 * a call of a chat they were removed from stays in b_call_userlog and keeps its counter row, while the
+	 * list no longer returns it. Counted without the same cut, the badge would tell a guest about calls
+	 * they cannot open, and mark-as-seen would then hand them the ids of those very rows.
+	 *
 	 * @param int $userId
 	 * @return int
 	 */
 	public function getMissedCounter(int $userId): int
 	{
-		return CallUserLogCountersTable::getCount(['USER_ID' => $userId]);
+		$guestChatIds = $this->getGuestChatIds($userId);
+		if ($guestChatIds === [])
+		{
+			return 0;
+		}
+
+		return (int)$this->createCounterQuery($userId, $guestChatIds)->queryCountTotal();
 	}
 
 	/**
@@ -413,6 +712,19 @@ class CallLogService
 			return [];
 		}
 
+		// The journal row outlives the chat membership - losing a chat does not delete b_call_userlog rows,
+		// and getList() scopes them by USER_ID alone - while everything below reads the CURRENT name, avatar
+		// and chat id. For a guest that combination leaks: a guest kicked out of one chat keeps their session
+		// while any other link is alive (Im\V2\Guest\Auth\AuthorizationService::invalidateGuestUser), so
+		// their own call history would keep answering with live metadata of a chat they can no longer open.
+		// Employees are deliberately left as they are: the same gap exists for them and predates this method
+		// being opened to guests, so narrowing it for everyone belongs to its own task, not to this one.
+		if ($this->isGuestUser($currentUserId) && !$this->isChatMember((int)$callObject->getChatId(), $currentUserId))
+		{
+			return [];
+		}
+
+
 		$result = [
 			'chatId' => $callObject->getChatId(),
 			'title' => $chatEntity->getName($currentUserId) ?: 'Untitled Chat',
@@ -444,6 +756,110 @@ class CallLogService
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Is the user still a member of the chat the call belongs to.
+	 *
+	 * Membership is read straight from b_im_relation rather than through Chat::checkAccess(): that method
+	 * answers differently across core versions - an object on the newer ones, a plain bool on the older -
+	 * and on the older one it stays true for a user who has already been removed from the chat, which is
+	 * exactly the case this guard exists for. The relation row is the ground truth on every version.
+	 *
+	 * The answer is memoised per user for the lifetime of the service: a page of the journal holds many
+	 * calls of the same chat, and asking the database once per row would put a query per row into the main
+	 * guest scenario. getList() fills the same cache in one query before the page is even cut.
+	 *
+	 * @param int $chatId
+	 * @param int $userId
+	 * @return bool
+	 */
+	private function isChatMember(int $chatId, int $userId): bool
+	{
+		if ($chatId <= 0 || $userId <= 0)
+		{
+			return false;
+		}
+
+		// Filled by getList() for the page being enriched, and only for it: a page holds many calls of the
+		// same chat, so asking per row would put a query per row into the main guest scenario. Outside a page
+		// there is nothing to reuse and nothing to go stale - the membership is asked for on the spot.
+		if (isset($this->memberChatIds[$userId]))
+		{
+			return in_array($chatId, $this->memberChatIds[$userId], true);
+		}
+
+		if (!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		$relation = \Bitrix\Im\Model\RelationTable::getRow([
+			'select' => ['ID'],
+			'filter' => ['=CHAT_ID' => $chatId, '=USER_ID' => $userId],
+		]);
+
+		return $relation !== null;
+	}
+
+	/**
+	 * Is the caller a guest user (chat sharing link). Guests reach the journal through the guest REST
+	 * whitelist, and their access boundary is the chat link rather than the portal.
+	 *
+	 * The answer is memoised per user: it is asked for by the enrichment of every row, by the counter and
+	 * by the push, while a cold user cache turns each of those into a query of its own. One page of the
+	 * journal therefore costs one such query instead of one per row.
+	 *
+	 * @param int $userId
+	 * @return bool
+	 */
+	public function isGuestUser(int $userId): bool
+	{
+		if (isset($this->guestFlags[$userId]))
+		{
+			return $this->guestFlags[$userId];
+		}
+
+		if (!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		$user = \Bitrix\Im\V2\Entity\User\User::getInstance($userId);
+
+		return $this->guestFlags[$userId] = ($user->isExist() && $user->isGuest());
+	}
+
+	/**
+	 * Warms the guest flag of several users at once.
+	 *
+	 * A finishing group call replays the journal participant by participant, and asking for the flag inside
+	 * that loop costs one cold user load per participant. Asked for together they cost one batch instead:
+	 * measured on a cold cache, eight participants take 25 queries this way against 35 one by one.
+	 *
+	 * @param array<int> $userIds
+	 * @return void
+	 */
+	public function preloadGuestFlags(array $userIds): void
+	{
+		if (!\Bitrix\Main\Loader::includeModule('im'))
+		{
+			return;
+		}
+
+		$ids = array_values(array_unique(array_filter(
+			array_map('intval', $userIds),
+			fn(int $userId) => $userId > 0 && !isset($this->guestFlags[$userId])
+		)));
+		if ($ids === [])
+		{
+			return;
+		}
+
+		foreach (\Bitrix\Im\V2\Entity\User\UserFactory::getInstance()->getUsersByIds($ids) as $userId => $user)
+		{
+			$this->guestFlags[(int)$userId] = $user->isExist() && $user->isGuest();
+		}
 	}
 
 	/**
@@ -495,6 +911,11 @@ class CallLogService
 	 */
 	public function markAsSeen(int $userId, array $callIds): int
 	{
+		// The only write the journal opens to its reader, and the ids come straight from the client, so the
+		// read cut is applied here too: a guest must not clear - nor be told about, the push below carries
+		// the ids back - the missed calls of a chat they no longer belong to.
+		$callIds = $this->filterAccessibleLogIds($userId, $callIds);
+
 		if (empty($callIds))
 		{
 			return $this->getMissedCounter($userId);
@@ -510,7 +931,10 @@ class CallLogService
 
 		$newCounterValue = $this->getMissedCounter($userId);
 
-		CallLogPushService::sendCounterUpdate($userId, $newCounterValue, $callIds);
+		// Ids go out as strings: that is what the ORM has always given this push, and the app compares them
+		// to its own string ids without normalising either side. Handing it integers would silently stop
+		// the rows from losing their unseen mark on the other sessions of the same user.
+		CallLogPushService::sendCounterUpdate($userId, $newCounterValue, array_map('strval', $callIds));
 
 		return $newCounterValue;
 	}
@@ -523,15 +947,9 @@ class CallLogService
 	 */
 	public function markAllAsSeen(int $userId): int
 	{
-		$callIds = array_column(
-			CallUserLogCountersTable::query()
-				->setSelect(['USERLOG_ID'])
-				->where('USER_ID', $userId)
-				->fetchAll(),
-			'USERLOG_ID'
-		);
-
-		return $this->markAsSeen($userId, $callIds);
+		// "All" is all the user may see - the ids come narrowed, and markAsSeen() narrows what a client
+		// names on its own.
+		return $this->markAsSeen($userId, $this->getAccessibleCounterLogIds($userId));
 	}
 
 	/**
@@ -739,13 +1157,23 @@ class CallLogService
 
 			$callLogData['callData'] = $this->getCallData($callLogData, $userId);
 
+			// Same policy as the read path: a record the guest may not open is not handed to them. Empty
+			// callData means exactly that (see getImCallData), and pushing it anyway would put a nameless row
+			// with no dialog into an open journal - a row a tap does nothing with. The counter update below
+			// still goes out: it carries no chat data and the badge must stay right.
+			$isPushable = !($callLogData['callData'] === [] && $sourceType === CallUserLogTable::SOURCE_TYPE_CALL
+				&& $this->isGuestUser($userId));
+
 			if ($status === CallUserLogTable::STATUS_MISSED && $oldStatus !== CallUserLogTable::STATUS_MISSED)
 			{
 				$this->addToCounter($eventId, $userId);
 			}
 
 			$command = $isUpdate ? 'Update' : 'Add';
-			CallLogPushService::sendCallLog($command, $callLogData);
+			if ($isPushable)
+			{
+				CallLogPushService::sendCallLog($command, $callLogData);
+			}
 			CallLogPushService::sendCounterUpdate($userId, $this->getMissedCounter($userId));
 
 			return $eventId;

@@ -31,10 +31,13 @@ class CheckInFormProvider
 			$data = $geoData->getData();
 		}
 
+		$isFirstManualCheckIn = (new CheckInProvider())->isFirstManualCheckInToday($userId);
+
 		$result->setData([
 			...$data,
 			'workDaySettings' => WorkDayService::getWorkTime($userId),
 			'enabledBySettings' => Feature::isCheckInEnabledBySettings(),
+			'isFirstManualCheckIn' => $isFirstManualCheckIn,
 			...$this->getDialogInfo($userId),
 		]);
 

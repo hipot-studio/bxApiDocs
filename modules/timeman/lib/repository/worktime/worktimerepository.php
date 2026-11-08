@@ -203,6 +203,43 @@ class WorktimeRepository
 			->fetchCollection();
 	}
 
+	/**
+	 * The event log of several records in one read. A caller holding a run of records - the shifts of a work
+	 * day, the records of a period - would otherwise read the log once per record, and that is as many reads
+	 * of one table as there are records.
+	 *
+	 * The entries of all the records come back in a single collection, ordered exactly as the read of one
+	 * record orders them; a caller that needs them apart groups them by WORKTIME_RECORD_ID.
+	 *
+	 * A caller after particular kinds of entries names them in $eventTypes and the read filters by them;
+	 * an empty list reads the whole log.
+	 *
+	 * @param int[] $recordIds
+	 * @param string[] $eventTypes
+	 */
+	public function findAllWorktimeEventsByRecordIds(array $recordIds, array $eventTypes = []): WorktimeEventCollection
+	{
+		if (empty($recordIds))
+		{
+			return new WorktimeEventCollection();
+		}
+
+		$query = WorktimeEventTable::query()
+			->addSelect('*')
+			->whereIn('WORKTIME_RECORD_ID', $recordIds)
+			->addOrder('ACTUAL_TIMESTAMP', 'ASC')
+			->addOrder('ID', 'ASC');
+
+		if (!empty($eventTypes))
+		{
+			$query->whereIn('EVENT_TYPE', $eventTypes);
+		}
+
+		return $query
+			->exec()
+			->fetchCollection();
+	}
+
 	public function findLatestRecord($userId): ?WorktimeRecord
 	{
 		return WorktimeRecordTable::query()

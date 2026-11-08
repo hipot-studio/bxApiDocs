@@ -2,11 +2,13 @@
 
 use Bitrix\Intranet\Integration\Socialnetwork\Collab\CollabProviderData;
 use Bitrix\Intranet\Internal\Factory\Message\CollabJoinMessageFactory;
+use Bitrix\Intranet\Internal\Integration\Main\EventHandler\OtpAuthSuccessAnalytics;
 use Bitrix\Intranet\Internal\Repository\IntranetUserRepository;
 use Bitrix\Intranet\Internal\Service\Otp\OtpBannerSessionDelay;
+use Bitrix\Intranet\Internal\Service\User\FirstAuthorizeInitializationEventHandler;
+use Bitrix\Intranet\Internal\Service\User\InitializeUserCommandRunner;
 use Bitrix\Intranet\Repository\UserRepository;
-use Bitrix\Intranet\Public\Command;
-use Bitrix\Main\Command\Exception\CommandValidationException;
+use Bitrix\Intranet\Public\Type\User\InitializeUserMode;
 use Bitrix\Intranet\Service;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
@@ -409,7 +411,7 @@ class CIntranetEventHandlers
 						&& $arFields["ACTIVE_TO"] <> ''
 					)
 					{
-						$agent = "CIntranetEventHandlers::DeleteLogEntry(".$arFields["ID"].");";
+						$agent = "CIntranetEventHandlers::DeleteLogEntry(".(int)$arFields["ID"].");";
 						CAgent::RemoveAgent($agent, "intranet");
 						CAgent::AddAgent($agent, "intranet", "N", 0, $arFields["ACTIVE_TO"], "Y", $arFields["ACTIVE_TO"]);
 					}
@@ -1022,16 +1024,7 @@ class CIntranetEventHandlers
 
 	public static function OnAfterUserInitialize($userId)
 	{
-		$initializeCommand = new Command\User\InitializeUserCommand($userId);
-
-		try
-		{
-			$initializeCommand->run();
-		}
-		catch (CommandValidationException)
-		{
-			return;
-		}
+		(new InitializeUserCommandRunner())->run((int)$userId, InitializeUserMode::Standard);
 	}
 
 	public static function OnAfterUserAdd($arUser)
@@ -1913,7 +1906,8 @@ RegisterModuleDependences('main', 'OnBeforeProlog', 'intranet', 'CIntranetEventH
 			$user->Update($arParams["user_fields"]["ID"], array("CONFIRM_CODE" => ""));
 		}
 		$userId = (int)$arParams["user_fields"]["ID"];
-		if ($userId > 0 && (!defined('BX_SECURITY_SESSION_VIRTUAL') || BX_SECURITY_SESSION_VIRTUAL !== true))
+		$isVirtualSession = defined('BX_SECURITY_SESSION_VIRTUAL') && BX_SECURITY_SESSION_VIRTUAL === true;
+		if ($userId > 0 && !$isVirtualSession)
 		{
 			if (
 				array_key_exists('LAST_LOGIN', $arParams['user_fields'])
@@ -1926,6 +1920,19 @@ RegisterModuleDependences('main', 'OnBeforeProlog', 'intranet', 'CIntranetEventH
 			(new Service\UserService())->handleAuthorizeById($userId);
 			(new Integration\Im\Desktop\AccountConnection())->handleAuthorizeUser();
 		}
+
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		OtpAuthSuccessAnalytics::send($arParams);
+
+		(new FirstAuthorizeInitializationEventHandler())->handle(
+			eventData: $arParams,
+			isCloud: IsModuleInstalled('bitrix24'),
+			isVirtualSession: $isVirtualSession,
+		);
 	}
 
 	public static function onRestAppInstall($params)

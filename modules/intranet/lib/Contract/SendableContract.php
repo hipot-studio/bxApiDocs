@@ -7,4 +7,6 @@ interface SendableContract
 	public function send(): void;
 
 	public function sendImmediately(): void;
+
+	public function sendImmediatelyWithResult(): bool;
 }

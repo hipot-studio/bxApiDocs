@@ -11,6 +11,8 @@ class TaskInfoResponse
 	public function __construct(
 		public readonly ?string $storyPoints = null,
 		public readonly ?Entity\Epic $epic = null,
+		public readonly ?bool $canCreateEpic = null,
+		public readonly ?bool $canUpdateScrumFields = null,
 	)
 	{
 	}
@@ -20,6 +22,8 @@ class TaskInfoResponse
 		return [
 			'storyPoints' => $this->storyPoints,
 			'epic' => $this->epic?->toArray(),
+			'canCreateEpic' => $this->canCreateEpic,
+			'canUpdateScrumFields' => $this->canUpdateScrumFields,
 		];
 	}
 }

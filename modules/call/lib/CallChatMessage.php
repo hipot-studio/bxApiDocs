@@ -46,7 +46,7 @@ class CallChatMessage
 	public static function makeCloudRecordPrepareMessage(Call $call, Chat $chat): ?Message
 	{
 		$message = new Message();
-		$message->setMessage(self::getPhraseWithCallLink('CALL_CLOUD_RECORDING_PREPARE_MESSAGE_LINK', $call->getId(), $chat));
+		$message->setMessage(self::getPhraseWithCallLink('CALL_CLOUD_RECORDING_PREPARE_MESSAGE_LINK_MSGVER_1', $call->getId(), $chat));
 		$message->markAsSystem(true);
 
 		$params = $message->getParams();

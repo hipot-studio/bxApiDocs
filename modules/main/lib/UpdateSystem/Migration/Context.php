@@ -116,6 +116,23 @@ class Context
 		);
 	}
 
+	/**
+	 * Whether the running file is the module's dev-stand cleanup (`dev/updates/cleanup.php`).
+	 * Only the dev-stand runner executes that file, so the strict current-updater guards do
+	 * not apply there and dropColumn() is allowed.
+	 */
+	public function isCurrentDevCleanup(): bool
+	{
+		if (!$this->isDevMode())
+		{
+			return false;
+		}
+
+		$updaterFilename = str_replace('\\', '/', $this->getUpdaterFilename());
+
+		return (bool)preg_match('#(?:^|/)dev/updates/cleanup\.php$#', $updaterFilename);
+	}
+
 	public function isEtalon(): bool
 	{
 		return $this->isCloud()

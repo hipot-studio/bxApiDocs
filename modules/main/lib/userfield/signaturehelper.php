@@ -20,11 +20,6 @@ class SignatureHelper
 
 	protected static function getSignatureParam(array $fieldParam)
 	{
-		array_walk_recursive($fieldParam, function(&$item)
-		{
-			$item = strval($item);
-		});
-
 		$signatureParam = array(
 			'ENTITY_ID' => $fieldParam['ENTITY_ID'],
 			'FIELD' => $fieldParam['FIELD'],
@@ -32,13 +27,22 @@ class SignatureHelper
 
 		if(!empty($fieldParam['VALUE']))
 		{
-			$fieldParam['VALUE'] = str_replace("\r\n", "\n", $fieldParam['VALUE']);
 			$signatureParam['VALUE'] = $fieldParam['VALUE'];
 		}
 
 		if(!empty($fieldParam['CONTEXT']))
 		{
 			$signatureParam['CONTEXT'] = $fieldParam['CONTEXT'];
+		}
+
+		array_walk_recursive($signatureParam, function(&$item)
+		{
+			$item = strval($item);
+		});
+
+		if(isset($signatureParam['VALUE']))
+		{
+			$signatureParam['VALUE'] = str_replace("\r\n", "\n", $signatureParam['VALUE']);
 		}
 
 		return serialize($signatureParam);

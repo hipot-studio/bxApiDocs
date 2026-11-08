@@ -599,6 +599,10 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 					$blockReplace = [];
 					foreach ($blocksIds as $oldId => $newId)
 					{
+						if (!is_int($oldId) && (!is_string($oldId) || preg_match('/^[0-9]+$/D', $oldId) !== 1))
+						{
+							continue;
+						}
 						$blockReplace['\'#block' . $oldId . '\''] = '\'#block' . $newId . '\'';
 						$blockReplace['"#block' . $oldId . '"'] = '"#block' . $newId . '"';
 					}
@@ -802,14 +806,17 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 								}
 							}
 						}
-						if (mb_strpos($content, '#TITLE#') !== false)
+						if (
+							mb_strpos($content, '#TITLE#') !== false
+							|| mb_strpos($content, \Bitrix\Landing\Block::TITLE_PHP_PARAM_MARKER) !== false
+						)
 						{
 							$updated = true;
-							$content = str_replace(
-								'#TITLE#',
-								\htmlspecialcharsbx($block->getMeta()['LANDING_TITLE']),
-								$content
-							);
+							$htmlTitle = \htmlspecialcharsbx($block->getMeta()['LANDING_TITLE']);
+							$content = strtr($content, [
+								'#TITLE#' => $htmlTitle,
+								\Bitrix\Landing\Block::TITLE_PHP_PARAM_MARKER => \EscapePHPString($htmlTitle, "'"),
+							]);
 						}
 						if ($updated)
 						{
@@ -1226,8 +1233,11 @@ class LandingSiteDemoComponent extends LandingBaseComponent
 				$landingReplace = [];
 				foreach ($this->oldIds as $oldId => $newId)
 				{
-					$landingReplace['\'#landing' . $oldId . '\''] = '\'#landing' . $newId . '\'';
-					$landingReplace['"#landing' . $oldId . '"'] = '"#landing' . $newId . '"';
+					if (is_int($oldId) || (is_string($oldId) && preg_match('/^[0-9]+$/D', $oldId) === 1))
+					{
+						$landingReplace['\'#landing' . $oldId . '\''] = '\'#landing' . $newId . '\'';
+						$landingReplace['"#landing' . $oldId . '"'] = '"#landing' . $newId . '"';
+					}
 					$landingReplaceDynamic['#landing' . $oldId] = '#landing' . $newId;
 				}
 				// update site for some fields

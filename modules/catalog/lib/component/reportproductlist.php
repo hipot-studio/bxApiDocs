@@ -5,6 +5,8 @@ namespace Bitrix\Catalog\Component;
 use Bitrix\Catalog;
 use Bitrix\Catalog\Access\AccessController;
 use Bitrix\Catalog\Access\ActionDictionary;
+use Bitrix\Catalog\Integration\Report\Quantity\ProductRowQuantityCalculator;
+use Bitrix\Catalog\Integration\Report\Quantity\QuantityNormalizer;
 use Bitrix\Catalog\ProductTable;
 use Bitrix\Catalog\StoreDocumentElementTable;
 use Bitrix\Catalog\StoreDocumentTable;
@@ -156,25 +158,20 @@ abstract class ReportProductList extends ProductList
 			}
 		}
 
-		foreach ($productData as $key => $item)
-		{
-			$receivedQuantityAmountDifference = (float)($receivedQuantityAmountDifferenceData[$item['PRODUCT_ID']] ?? 0);
-			$outgoingQuantityAmountDifference = (float)($outgoingQuantityAmountDifferenceData[$item['PRODUCT_ID']] ?? 0);
-			$amountSoldAmountDifference = (float)($amountSoldAmountDifferenceData[$item['PRODUCT_ID']] ?? 0);
-			$item['AMOUNT'] =
-				$item['AMOUNT']
-				- $receivedQuantityAmountDifference
-				+ $outgoingQuantityAmountDifference
-				+ $amountSoldAmountDifference
-			;
+		$periodMovements = [
+			'RECEIVED' => $receivedQuantityData,
+			'OUTGOING' => $outgoingQuantityData,
+			'SOLD' => $amountSoldData,
+		];
+		$afterPeriodMovements = [
+			'RECEIVED' => $receivedQuantityAmountDifferenceData,
+			'OUTGOING' => $outgoingQuantityAmountDifferenceData,
+			'SOLD' => $amountSoldAmountDifferenceData,
+		];
 
-			$receivedQuantity = (float)($receivedQuantityData[$item['PRODUCT_ID']] ?? 0);
-			$outgoingQuantity = (float)($outgoingQuantityData[$item['PRODUCT_ID']] ?? 0);
-			$amountSold = (float)($amountSoldData[$item['PRODUCT_ID']] ?? 0);
-			$item['STARTING_QUANTITY'] = (float)$item['AMOUNT'] - $receivedQuantity + $outgoingQuantity + $amountSold;
-			$item['RECEIVED_QUANTITY'] = (float)($receivedQuantityData[$item['PRODUCT_ID']] ?? 0);
-			$item['AMOUNT_SOLD'] = (float)($amountSoldData[$item['PRODUCT_ID']] ?? 0);
-			$item['QUANTITY'] = (float)$item['AMOUNT'] - (float)$item['QUANTITY_RESERVED'];
+		foreach ($productData as $item)
+		{
+			$item = $this->applyRowQuantities($item, $periodMovements, $afterPeriodMovements);
 			$rows[] = [
 				'id' => $item['ID'],
 				'data' => $item,
@@ -183,6 +180,29 @@ abstract class ReportProductList extends ProductList
 		}
 
 		return $rows;
+	}
+
+	/**
+	 * @param array $periodMovements RECEIVED, OUTGOING, SOLD quantities by product id within the period.
+	 * @param array $afterPeriodMovements The same quantities after the period end.
+	 */
+	protected function applyRowQuantities(array $item, array $periodMovements, array $afterPeriodMovements): array
+	{
+		$productId = $item['PRODUCT_ID'];
+		$source = [
+			'AMOUNT' => $item['AMOUNT'] ?? 0,
+			'QUANTITY_RESERVED' => $item['QUANTITY_RESERVED'] ?? 0,
+		];
+		foreach ($periodMovements as $movement => $quantities)
+		{
+			$source[$movement] = $quantities[$productId] ?? 0;
+		}
+		foreach ($afterPeriodMovements as $movement => $quantities)
+		{
+			$source[$movement . '_AFTER'] = $quantities[$productId] ?? 0;
+		}
+
+		return array_merge($item, (new ProductRowQuantityCalculator())->calculate($source));
 	}
 
 	protected function getGridData(): array
@@ -541,7 +561,7 @@ abstract class ReportProductList extends ProductList
 		return Loc::getMessage(
 			'CATALOG_REPORT_PRODUCT_LIST_MEASURE_TEMPLATE',
 			[
-				'#NUMBER#' => $number,
+				'#NUMBER#' => QuantityNormalizer::format((float)$number),
 				'#MEASURE_SYMBOL#' => $this->getMeasureSymbol($measureId),
 			]
 		);

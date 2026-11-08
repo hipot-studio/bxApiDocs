@@ -190,14 +190,17 @@ class ServiceComment
 
 	public static function processLogEntryCreateEntity(array $params = []): bool
 	{
+		global $USER;
+
 		$entityType = ($params['ENTITY_TYPE'] ?? false);
 		$entityId = (int)($params['ENTITY_ID'] ?? 0);
 		$postEntityType = ($params['POST_ENTITY_TYPE'] ?? false);
 		$sourceEntityType = ($params['SOURCE_ENTITY_TYPE'] ?? false);
 		$sourceEntityId = (int)($params['SOURCE_ENTITY_ID'] ?? 0);
 		$sourceEntityData = (array)($params['SOURCE_ENTITY_DATA'] ?? []);
-		$logId = (int)($params['LOG_ID'] ?? 0);
+		$inputLogId = (int)($params['LOG_ID'] ?? 0);
 		$siteId = ($params['SITE_ID'] ?? SITE_ID);
+		$currentUserId = (is_object($USER) ? (int)$USER->getId() : 0);
 
 		if (in_array($sourceEntityType, [ CommentAux\CreateEntity::SOURCE_TYPE_BLOG_POST, CommentAux\CreateEntity::SOURCE_TYPE_BLOG_COMMENT], true))
 		{
@@ -221,12 +224,30 @@ class ServiceComment
 			return false;
 		}
 
+		if ($currentUserId <= 0)
+		{
+			return false;
+		}
+
 		$entity = static::getEntityData([
 			'entityType' => $entityType,
 			'entityId' => $entityId,
 		]);
 
 		if (empty($entity))
+		{
+			return false;
+		}
+
+		$authorId = static::getEntityAuthorId([
+			'entityType' => $entityType,
+			'entityData' => $entity,
+		]);
+
+		if (
+			$authorId <= 0
+			|| $authorId !== $currentUserId
+		)
 		{
 			return false;
 		}
@@ -238,13 +259,26 @@ class ServiceComment
 			'ENTITY_TYPE' => $sourceEntityType,
 			'ENTITY_ID' => $sourceEntityId,
 			'ADDITIONAL_PARAMS' => $sourceEntityData,
-			'LOG_ID' => $logId
 		]);
 
 		if (!$provider)
 		{
 			return false;
 		}
+
+		$provider->initSourceFields();
+		$logId = (int)$provider->getLogId();
+
+		if (
+			$logId <= 0
+			|| ($inputLogId > 0 && $inputLogId !== $logId)
+			|| !static::canReadLogEntry($logId)
+		)
+		{
+			return false;
+		}
+
+		$provider->setLogId($logId);
 
 		$commentProvider = false;
 		if ($postProvider = Livefeed\Provider::getProvider($postEntityType))
@@ -268,18 +302,7 @@ class ServiceComment
 			$commentProvider->setParentProvider($postProvider);
 		}
 
-		$logId = $provider->getLogId();
-
-		if ($logId <= 0)
-		{
-			$provider->initSourceFields();
-			$logId = $provider->getLogId();
-		}
-
-		if ($logId > 0)
-		{
-			$commentProvider->setLogId($provider->getLogId());
-		}
+		$commentProvider->setLogId($logId);
 
 		$auxData = [
 			'sourceType' => $sourceEntityType,
@@ -287,11 +310,6 @@ class ServiceComment
 			'entityType' => $entityType,
 			'entityId' => $entityId,
 		];
-
-		$authorId = static::getEntityAuthorId([
-			'entityType' => $entityType,
-			'entityData' => $entity,
-		]);
 
 		$sonetCommentData = $commentProvider->add([
 			'SITE_ID' => $siteId,
@@ -418,6 +436,31 @@ class ServiceComment
 		}
 
 		return true;
+	}
+
+	protected static function canReadLogEntry(int $logId): bool
+	{
+		if ($logId <= 0)
+		{
+			return false;
+		}
+
+		$res = \CSocNetLog::getList(
+			[],
+			[
+				'=ID' => $logId,
+			],
+			false,
+			[ 'nTopCount' => 1 ],
+			[ 'ID' ],
+			[
+				'CHECK_RIGHTS' => 'Y',
+				'USE_FOLLOW' => 'N',
+				'USE_SUBSCRIBE' => 'N',
+			]
+		);
+
+		return (bool)$res->fetch();
 	}
 
 	public static function getEntityData(array $params = [])

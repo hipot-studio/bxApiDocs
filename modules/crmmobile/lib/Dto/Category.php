@@ -18,6 +18,27 @@ final class Category extends Dto
 	/** @var bool */
 	public $editable;
 
+	/**
+	 * The configuration capabilities of this funnel, and `null` in each of them where the payload was
+	 * built without the set. `null` is not a refusal: a client reading it falls back to `editable`,
+	 * as DTO-01 requires. The set is therefore stated whole or not at all.
+	 *
+	 * @var bool|null
+	 */
+	public $canOpenSettings;
+
+	/** @var bool|null */
+	public $canManageFunnels;
+
+	/** @var bool|null */
+	public $canManageStages;
+
+	/** @var bool|null */
+	public $canManageTunnels;
+
+	/** @var bool|null */
+	public $canManageCategoryAccess;
+
 	/** @var bool */
 	public $isDefault;
 
@@ -63,6 +84,12 @@ final class Category extends Dto
 			'id' => Type::int(),
 			'name' => Type::string(),
 			'editable' => Type::bool(),
+			// stated whole or not at all, so `null` stays the absence of a decision and never a refusal
+			'canOpenSettings' => Type::bool()->nullable(),
+			'canManageFunnels' => Type::bool()->nullable(),
+			'canManageStages' => Type::bool()->nullable(),
+			'canManageTunnels' => Type::bool()->nullable(),
+			'canManageCategoryAccess' => Type::bool()->nullable(),
 			'isDefault' => Type::bool(),
 			'sort' => Type::int(),
 			'categoriesSupported' => Type::bool(),
@@ -70,7 +97,7 @@ final class Category extends Dto
 			'stagesEnabled' => Type::bool(),
 			'tunnelsEnabled' => Type::bool(),
 			'counter' => Type::int(),
-			'access' => Type::string(),
+			'access' => Type::string()->nullable(),
 			'tunnels' => Type::collection(Tunnel::class),
 			'processStages' => Type::collection(Stage::class),
 			'successStages' => Type::collection(Stage::class),

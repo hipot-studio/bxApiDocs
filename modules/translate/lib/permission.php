@@ -39,7 +39,9 @@ class Permission
 		$allowPath = false;
 		foreach ($initFolders as $oneFolder)
 		{
-			if (\mb_strpos($path, $oneFolder) === 0)
+			// the separator keeps the comparison on a folder boundary: /bitrixEVIL is not /bitrix
+			$oneFolder = \rtrim($oneFolder, '/');
+			if ($path === $oneFolder || \mb_strpos($path, $oneFolder.'/') === 0)
 			{
 				$allowPath = true;
 				break;

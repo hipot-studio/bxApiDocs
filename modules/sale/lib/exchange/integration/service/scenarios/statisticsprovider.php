@@ -8,19 +8,26 @@ use Bitrix\Sale\Exchange\Integration\Service\Command\Line;
 
 class StatisticsProvider
 {
-	public function register(array $params)
+	public function register(array $params): bool
 	{
 		$result = Line\StatisticsProvider::getList(['xmlId'=>$params['xmlId']]);
-
-		if($result['statisticProviders'][0])
+		if (isset($result['error']))
 		{
-			$providerId = $result['statisticProviders'][0]['id'];
+			return false;
+		}
+
+		$providerId = $result['statisticProviders'][0]['id'] ?? null;
+		if ($providerId !== null)
+		{
+			$updateResult = Line\StatisticsProvider::update($providerId, $params);
+			$providerId = $updateResult['statisticProvider']['id'] ?? null;
 		}
 		else
 		{
-			$providerId = Line\StatisticsProvider::add($params)['statisticProvider']['id'];
+			$addResult = Line\StatisticsProvider::add($params);
+			$providerId = $addResult['statisticProvider']['id'] ?? null;
 		}
 
-		return $providerId > 0;
+		return (int)$providerId > 0;
 	}
 }

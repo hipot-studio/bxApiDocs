@@ -5,6 +5,7 @@ use \Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Timeman\Component\BaseComponent;
 use Bitrix\Timeman\Component\ScheduleList\Grid;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 use Bitrix\Timeman\Model\Schedule\Assignment\Department\ScheduleDepartment;
 use Bitrix\Timeman\Model\Schedule\Assignment\Department\ScheduleDepartmentTable;
 use Bitrix\Timeman\Model\Schedule\Assignment\User\ScheduleUserTable;
@@ -57,6 +58,14 @@ class ScheduleListComponent extends BaseComponent
 
 	public function executeComponent()
 	{
+		$toolId = Settings::TOOLS['worktime'];
+		if (!(new Settings())->isToolAvailable($toolId))
+		{
+			$this->includeComponentTemplate('tool-disabled');
+
+			return;
+		}
+
 		$this->getApplication()->setTitle(htmlspecialcharsbx(Loc::getMessage('TM_SCHEDULE_LIST_TITLE')));
 		if (!$this->userPermissionManager->canReadSchedules())
 		{

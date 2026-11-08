@@ -13,6 +13,7 @@ use Bitrix\Socialnetwork\Collab\Integration\IM\Message\ConvertGroupToCollabMessa
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\CopyLinkActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\ActionMessageInterface;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\AcceptUserActionMessage;
+use Bitrix\Socialnetwork\Collab\Integration\IM\Message\ExcludeStructureNodeActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\ExcludeUserActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\InviteGuestActionMessage;
 use Bitrix\Socialnetwork\Collab\Integration\IM\Message\InviteUserActionMessage;
@@ -28,6 +29,10 @@ class ActionMessageFactory
 {
 	use InstanceTrait;
 
+	/**
+	 * Every action type is listed on purpose: an unmapped one must fail loudly instead of silently
+	 * publishing another action's message into the project chat.
+	 */
 	public function getActionMessage(ActionType $action, int $collabId, int $senderId): ActionMessageInterface
 	{
 		return match ($action)
@@ -41,6 +46,7 @@ class ActionMessageFactory
 			ActionType::AddBot => new AddBotActionMessage($collabId, $senderId),
 			ActionType::LeaveUser => new LeaveUserActionMessage($collabId, $senderId),
 			ActionType::ExcludeUser => new ExcludeUserActionMessage($collabId, $senderId),
+			ActionType::ExcludeStructureNode => new ExcludeStructureNodeActionMessage($collabId, $senderId),
 			ActionType::CopyLink => new CopyLinkActionMessage($collabId, $senderId),
 			ActionType::RegenerateLink => new RegenerateLinkActionMessage($collabId, $senderId),
 			ActionType::ConvertGroupToCollab => new ConvertGroupToCollabMessage($collabId, $senderId),
@@ -48,7 +54,7 @@ class ActionMessageFactory
 			ActionType::CreateProject => new ProjectCreateActionMessage($collabId, $senderId),
 			ActionType::CreateProjectRich => new ProjectCreateActionMessageRich($collabId, $senderId),
 			ActionType::JoinBySharingLink => new JoinBySharingLinkActionMessage($collabId, $senderId),
-			default => new JoinUserActionMessage($collabId, $senderId),
+			ActionType::JoinUser => new JoinUserActionMessage($collabId, $senderId),
 		};
 	}
 }

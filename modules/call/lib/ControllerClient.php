@@ -2,6 +2,7 @@
 
 namespace Bitrix\Call;
 
+use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Service\MicroService\BaseSender;
@@ -13,6 +14,16 @@ use Bitrix\Call\Call\ConferenceCall;
  */
 class ControllerClient extends BaseSender
 {
+	// Per-process circuit breaker for room-finish commands: after the first
+	// SLOW failure (transport timeout) further finish requests in the same
+	// process are skipped, so mass finish loops (cleanup agents, stuck-call
+	// termination) do not accumulate sequential HTTP timeouts when the
+	// callcontroller is degraded. Fast business errors cost nothing and must
+	// not leave the rest of a mass loop with open rooms.
+	private static bool $finishRequestsSuspended = false;
+
+	private const FINISH_SUSPEND_SECONDS = 3.0;
+
 	private const SERVICE_MAP = [
 		'ru' => 'https://videocalls.bitrix24.tech',
 		'eu' => 'https://videocalls-de.bitrix.info',
@@ -159,7 +170,57 @@ class ControllerClient extends BaseSender
 			$data['callType'] = 'plain';
 		}
 
-		return $this->performRequest($action, $data);
+		return $this->performFinishRequest($action, $data);
+	}
+
+	/**
+	 * Finishes a plain call room by its uuid when there is no call entity
+	 * on the portal yet (quick hangup racing the startCall webhook).
+	 *
+	 * @see \Bitrix\CallController\Controller\InternalApi::finishPlainAction
+	 * @param string $uuid
+	 * @param int $actionUserId
+	 * @return Result
+	 */
+	public function finishPlainByUuid(string $uuid, int $actionUserId): Result
+	{
+		$data = [
+			'uuid' => $uuid,
+			'actionUserId' => $actionUserId,
+			'callType' => 'plain',
+		];
+
+		$this->httpClientParameters = [
+			'socketTimeout' => 5,
+			'streamTimeout' => 5,
+		];
+
+		return $this->performFinishRequest('callcontroller.InternalApi.finishPlain', $data);
+	}
+
+	/**
+	 * @param string $action
+	 * @param array $data
+	 * @return Result
+	 */
+	private function performFinishRequest(string $action, array $data): Result
+	{
+		if (self::$finishRequestsSuspended)
+		{
+			return (new Result())->addError(new Error(
+				'Room finish request skipped: previous attempt failed in this process',
+				'finish_requests_suspended',
+			));
+		}
+
+		$startedAt = microtime(true);
+		$result = $this->performRequest($action, $data);
+		if (!$result->isSuccess() && (microtime(true) - $startedAt) >= self::FINISH_SUSPEND_SECONDS)
+		{
+			self::$finishRequestsSuspended = true;
+		}
+
+		return $result;
 	}
 
 	/**

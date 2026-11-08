@@ -489,6 +489,7 @@ HTML;
 	{
 		$id = (int)$segment->getId();
 		$fieldId = 'crm-repeat-sale-segment-list-conversion-' . $id;
+		$fieldIdEscaped = CUtil::JSEscape($fieldId);
 		$value = ($fieldsData['totalWinEntities'][$id] ?? 0) / ($fieldsData['totalEntities'][$id] ?? 1);
 
 		$params = Json::encode([
@@ -517,6 +518,12 @@ HTML;
 			<div id="{$fieldId}"></div>
 			<script>
 				BX.ready(() => {
+					const targetNode = document.getElementById('{$fieldIdEscaped}');
+					if (targetNode !== null)
+					{
+						BX.cleanNode(targetNode, false);
+					}
+
 					const roundChartField = new BX.Crm.RepeatSale.SegmentList.RoundChartField({$params});
 
 					roundChartField.init();

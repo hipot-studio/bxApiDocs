@@ -14,6 +14,7 @@ use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Meeting;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Message;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\RestPlacement;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Sharing;
+use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Sync;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Task;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\ToDo;
 use Bitrix\Crm\Component\EntityDetails\TimelineMenuBar\Item\Visit;
@@ -59,6 +60,7 @@ final class Repository
 		return [
 			...$items,
 			new GoToChat($context),
+			new Sync($context),
 			new Email($context),
 			new Delivery($context),
 			new Wait($context),

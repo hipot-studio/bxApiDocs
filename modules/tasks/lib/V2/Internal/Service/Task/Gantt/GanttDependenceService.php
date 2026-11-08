@@ -11,6 +11,10 @@ use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
 use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLink;
 use Bitrix\Tasks\V2\Internal\Exception\Task\DescendentException;
 use Bitrix\Tasks\V2\Internal\Result\Result;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionRecorder;
+use Bitrix\Tasks\V2\Internal\Service\Ranking\EventType;
+use Bitrix\Tasks\V2\Internal\Service\Ranking\RelationKind;
 use Bitrix\Tasks\V2\Internal\Service\Task\ParentService;
 
 class GanttDependenceService
@@ -19,6 +23,7 @@ class GanttDependenceService
 		private readonly ParentService $parentService,
 		private readonly ScheduleService $scheduleService,
 		private readonly GanttLinkService $treeLinkService,
+		private readonly InteractionRecorder $interactionRecorder,
 	)
 	{
 
@@ -49,7 +54,7 @@ class GanttDependenceService
 		return $result;
 	}
 
-	public function add(GanttLink $ganttLink): void
+	public function add(GanttLink $ganttLink, InteractionOrigin $origin = InteractionOrigin::System): void
 	{
 		if (
 			$this->parentService->isDescendantOf((int)$ganttLink->taskId, (int)$ganttLink->dependentId)
@@ -79,6 +84,14 @@ class GanttDependenceService
 			throw new LinkExistsException($message);
 		}
 
+		// Target = the task picked as the dependency, actor = the link creator.
+		$this->interactionRecorder->record(
+			userId: (int)$ganttLink->creatorId,
+			taskId: (int)$ganttLink->dependentId,
+			eventType: EventType::Relation,
+			relationKind: RelationKind::Gantt,
+			origin: $origin,
+		);
 	}
 
 	public function update(GanttLink $ganttLink): void

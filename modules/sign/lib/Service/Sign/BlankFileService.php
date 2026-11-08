@@ -11,12 +11,12 @@ use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Item\Fs\File;
 use Bitrix\Sign\Repository\BlankRepository;
 use Bitrix\Sign\Service\Container;
+use Bitrix\Sign\Type\BlankFileExtension;
 
 class BlankFileService
 {
 	private BlankRepository $blankRepository;
 
-	private const ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pdf', 'doc', 'docx', 'rtf', 'odt'];
 	private const IMAGE_SIZE = [
 		'width' => 1275,
 		'height' => 1650,
@@ -113,7 +113,7 @@ class BlankFileService
 	{
 		$result = new Result();
 
-		if (!in_array(strtolower($file->type), self::ALLOWED_EXTENSIONS, true))
+		if (!BlankFileExtension::isAllowed((string)$file->type))
 		{
 			$result->addError(
 				new \Bitrix\Main\Error(

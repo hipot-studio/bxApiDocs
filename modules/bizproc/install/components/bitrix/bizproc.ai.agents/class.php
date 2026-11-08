@@ -12,6 +12,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 
 use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateSection;
+use Bitrix\Bizproc\Internal\Config\DesignerV2Feature;
 use Bitrix\Bizproc\Internal\Config\Storage;
 use Bitrix\Bizproc\Internal\Service\Feature\AiAgentsFeature;
 use Bitrix\Bizproc\Internal\Grid\AiAgents\AiAgentsGrid;
@@ -110,7 +111,7 @@ class BizprocAiAgentsComponent extends \Bitrix\Bizproc\Automation\Component\Base
 		// harmless.
 		$result['IS_EXISTING_RUNS_WARNING_SPENT'] = $this->storage->isExistingRunsWarningSpent();
 
-		$result['IS_BP_EDITOR_OPEN'] = Option::get('bizproc', 'designer_v2', 'N') === 'Y';
+		$result['IS_BP_EDITOR_OPEN'] = DesignerV2Feature::isEnabled();
 
 		return $result;
 	}

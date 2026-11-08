@@ -351,9 +351,9 @@ class CashboxOrangeData
 			$result['supplierInfo']['name'] = mb_substr($supplier['name'], 0, $maxTagLength - $phoneLength);
 		}
 
-		if (!empty($supplier['supplier_info']['inn']))
+		if (!empty($supplier['inn']))
 		{
-			$result['supplierINN'] = $supplier['supplier_info']['inn'];
+			$result['supplierINN'] = $supplier['inn'];
 		}
 
 		return $result;

@@ -31,6 +31,16 @@ class Mailer extends PHPMailer
 	private const HEADER_CC_REGEX = '/^\s*cc:(?<emails>.+)/im';
 	private const HEADER_BCC_REGEX = '/^\s*bcc:(?<emails>.+)/im';
 
+	/**
+	 * @var array
+	 */
+	public $SMTPOptions = [
+		'ssl' => [
+			'verify_peer' => true,
+			'verify_peer_name' => true,
+		],
+	];
+
 	private $configuration;
 
 	/**

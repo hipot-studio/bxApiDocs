@@ -22,7 +22,7 @@ class Sharing extends Controller
 		array $memberIds = [],
 	): bool
 	{
-		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate($ownerTypeId, $ownerId))
+		if (!$this->canUpdateDeal($ownerTypeId, $ownerId))
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -55,7 +55,7 @@ class Sharing extends Controller
 		array $memberIds,
 	): array
 	{
-		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate($entityTypeId, $entityId))
+		if (!$this->canUpdateDeal($entityTypeId, $entityId))
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -89,7 +89,11 @@ class Sharing extends Controller
 
 	public function onLinkCopiedAction(string $linkHash, int $ownerId, int $ownerTypeId): bool
 	{
-		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate($ownerTypeId, $ownerId))
+		if (
+			!$this->canUpdateExistingItem($ownerTypeId, $ownerId)
+			|| $ownerTypeId !== \CCrmOwnerType::Deal
+			|| Helper::getInstance()->getCrmDealIdByLinkHash($linkHash) !== $ownerId
+		)
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -107,7 +111,11 @@ class Sharing extends Controller
 
 	public function onRuleUpdatedAction(string $linkHash, int $ownerId, int $ownerTypeId): bool
 	{
-		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate($ownerTypeId, $ownerId))
+		if (
+			!$this->canUpdateExistingItem($ownerTypeId, $ownerId)
+			|| $ownerTypeId !== \CCrmOwnerType::Deal
+			|| Helper::getInstance()->getCrmDealIdByLinkHash($linkHash) !== $ownerId
+		)
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -125,7 +133,11 @@ class Sharing extends Controller
 
 	public function getConferenceChatIdAction(int $eventId, int $ownerId, int $ownerTypeId)
 	{
-		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate($ownerTypeId, $ownerId))
+		if (
+			!$this->canUpdateExistingItem($ownerTypeId, $ownerId)
+			|| $ownerTypeId !== \CCrmOwnerType::Deal
+			|| Helper::getInstance()->getCrmDealIdByEventId($eventId) !== $ownerId
+		)
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -143,7 +155,10 @@ class Sharing extends Controller
 
 	public function completeWithStatusAction(int $activityId, int $ownerTypeId, int $ownerId, string $status)
 	{
-		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate($ownerTypeId, $ownerId))
+		if (
+			!$this->canUpdateExistingItem($ownerTypeId, $ownerId)
+			|| !$this->hasActivityBinding($activityId, $ownerTypeId, $ownerId)
+		)
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -161,7 +176,11 @@ class Sharing extends Controller
 
 	public function cancelMeetingAction(int $eventId, int $ownerId, int $ownerTypeId)
 	{
-		if (!\Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->item()->canUpdate($ownerTypeId, $ownerId))
+		if (
+			!$this->canUpdateExistingItem($ownerTypeId, $ownerId)
+			|| $ownerTypeId !== \CCrmOwnerType::Deal
+			|| Helper::getInstance()->getCrmDealIdByEventId($eventId) !== $ownerId
+		)
 		{
 			$this->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -208,5 +227,42 @@ class Sharing extends Controller
 		return [
 			'contactCenterUrl' => \Bitrix\Crm\Service\Container::getInstance()->getRouter()->getContactCenterUrl(),
 		];
+	}
+
+	private function canUpdateDeal(int $entityTypeId, int $entityId): bool
+	{
+		if ($entityTypeId !== \CCrmOwnerType::Deal)
+		{
+			return false;
+		}
+
+		return Container::getInstance()->getUserPermissions()->item()->canUpdate(\CCrmOwnerType::Deal, $entityId);
+	}
+
+	private function canUpdateExistingItem(int $ownerTypeId, int $ownerId): bool
+	{
+		if ($ownerId <= 0 || !\CCrmOwnerType::IsDefined($ownerTypeId))
+		{
+			return false;
+		}
+
+		$container = Container::getInstance();
+
+		return $container->getUserPermissions()->item()->canUpdate($ownerTypeId, $ownerId)
+			&& $container->getFactory($ownerTypeId)?->getItem($ownerId, ['ID']) !== null
+		;
+	}
+
+	private function hasActivityBinding(int $activityId, int $ownerTypeId, int $ownerId): bool
+	{
+		foreach (Helper::getInstance()->getActivityBindings($activityId) as $binding)
+		{
+			if ((int)$binding['OWNER_TYPE_ID'] === $ownerTypeId && (int)$binding['OWNER_ID'] === $ownerId)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 }

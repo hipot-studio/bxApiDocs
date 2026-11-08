@@ -2,11 +2,15 @@
 
 namespace Bitrix\Tasks\Grid\Task\Row\Content;
 
+use Bitrix\Main\Web\Json;
+use Bitrix\Tasks\Grid\ControlButtonTrait;
 use Bitrix\Tasks\Grid\Task\Row\Content;
 use Bitrix\Tasks\Kanban\StagesTable;
 
 class StageId extends Content
 {
+	use ControlButtonTrait;
+
 	public function prepare(): string
 	{
 		$taskId = (int)($this->getRowDataByName('ID'));
@@ -54,35 +58,42 @@ class StageId extends Content
 	{
 		$stageId = (int)$stage['ID'];
 		$currentStage = $this->getParameter('CURRENT_STAGE');
-		$taskId = $this->getParameter('TASK_ID');
-		$title = htmlspecialcharsbx($stage['TITLE']);
-		$currentColor = '#' . htmlspecialcharsbx($currentStage['COLOR']);
-		$color = '#' . htmlspecialcharsbx($stage['COLOR']);
 		$selected = $stageId === (int)$currentStage['ID'] ? 'Y' : 'N';
 		$canChangeStage = $this->getParameters()['CAN_SORT_STAGES'] ?? false;
 
-		$onClick = "BX.PreventDefault();";
-		$class = 'tasks-grid-stage-step';
+		$style = '';
+		if ($this->getParameter('APPLY_CURRENT_STAGE'))
+		{
+			$style = 'background-color:#' . $currentStage['COLOR'] . ';';
+		}
 
 		if ($canChangeStage)
 		{
-			$onClick .= " BX.Tasks.GridActions.onStageSwitch({$taskId}, {$stageId}, \"{$color}\");";
-			$class .= ' --editable';
+			$taskId = $this->getParameter('TASK_ID');
+			$color = Json::encode('#' . $stage['COLOR']);
+			$onClick = "BX.PreventDefault(); BX.Tasks.GridActions.onStageSwitch({$taskId}, {$stageId}, {$color});";
+
+			return $this->renderControlButton(
+				[
+					'class' => 'tasks-grid-stage-step --editable',
+					'title' => $stage['TITLE'],
+					'aria-label' => $stage['TITLE'],
+					'aria-current' => ($selected === 'Y' ? 'step' : ''),
+					'data-stage-id' => $stageId,
+					'data-selected' => $selected,
+					'style' => $style,
+				],
+				'<div class="tasks-grid-stage-step-btn"></div>',
+				$onClick,
+				"'"
+			);
 		}
 
-		$result = "<div title=\"{$title}\" class=\"{$class}\" data-stage-id=\"{$stageId}\" data-selected=\"{$selected}\" onclick='{$onClick}'";
-		if ($this->getParameter('APPLY_CURRENT_STAGE'))
-		{
-			$result .= ' style="background-color:' . $currentColor . ';">';
-		}
-		else
-		{
-			$result .= '>';
-		}
+		$title = htmlspecialcharsbx($stage['TITLE']);
+		$styleAttr = $style === '' ? '' : ' style="' . htmlspecialcharsbx($style) . '"';
 
-		$result .= '<div class="tasks-grid-stage-step-btn"></div></div>';
-
-		return $result;
+		return "<div title=\"{$title}\" class=\"tasks-grid-stage-step\" data-stage-id=\"{$stageId}\" data-selected=\"{$selected}\" onclick='BX.PreventDefault();'{$styleAttr}>"
+			. '<div class="tasks-grid-stage-step-btn"></div></div>';
 	}
 
 	private function getTitleContent(string $title): string

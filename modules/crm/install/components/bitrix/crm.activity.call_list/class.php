@@ -125,7 +125,7 @@ class CrmActivityCallListComponent extends \CBitrixComponent
 
 		$userId = \Bitrix\Crm\Service\Container::getInstance()->getContext()->getUserId();
 		$userPermissions = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions($userId);
-		if (!self::canUpdateCallList($callListId, $userId, $userPermissions))
+		if (!self::canUpdateCallList($callListId, $userId))
 		{
 			$result->addError(\Bitrix\Crm\Controller\ErrorCode::getAccessDeniedError());
 
@@ -141,7 +141,7 @@ class CrmActivityCallListComponent extends \CBitrixComponent
 
 		try
 		{
-			$callList = \Bitrix\Crm\CallList\CallList::createWithId($callListId, true);
+			$callList = \Bitrix\Crm\CallList\CallList::createWithId($callListId, true, ['userId' => $userId]);
 
 			if($callList->getEntityTypeId() != CCrmOwnerType::Undefined && $callList->getEntityTypeId() != $entityTypeId)
 			{
@@ -263,28 +263,24 @@ class CrmActivityCallListComponent extends \CBitrixComponent
 	}
 
 	/*
-	 * A call list has no representation in the crm role model, so its creator defines who may change it.
-	 * The activity carrying the list is not an ownership anchor: every field of it, ASSOCIATED_ENTITY_ID
-	 * and RESPONSIBLE_ID included, is writable through the public activity API.
+	 * A call list has no representation in the crm role model, so its creator (or the user delegated
+	 * to via CallList::canReadByOwner()) defines who may change it. No single activity is trusted as
+	 * an ownership anchor on its own: every field of it, ASSOCIATED_ENTITY_ID and RESPONSIBLE_ID
+	 * included, is writable through the public activity API, and only whoever already passes this
+	 * check may move those fields of an activity that grants delegation.
 	 */
 	private static function canUpdateCallList(
 		int $callListId,
-		int $userId,
-		\Bitrix\Crm\Service\UserPermissions $userPermissions,
+		int $userId
 	): bool
 	{
-		if ($userPermissions->isAdmin())
-		{
-			return true;
-		}
-
 		if ($userId <= 0)
 		{
 			return false;
 		}
 
 		$callList = \Bitrix\Crm\CallList\Internals\CallListTable::getRow([
-			'select' => ['CREATED_BY_ID'],
+			'select' => ['ID', 'CREATED_BY_ID'],
 			'filter' => ['=ID' => $callListId],
 		]);
 
@@ -293,7 +289,7 @@ class CrmActivityCallListComponent extends \CBitrixComponent
 			return false;
 		}
 
-		return (int)$callList['CREATED_BY_ID'] === $userId;
+		return \Bitrix\Crm\CallList\CallList::canReadByOwner($callList, $userId);
 	}
 
 	public function prepareItems(\Bitrix\Crm\CallList\CallList $callList)
@@ -539,14 +535,26 @@ class CrmActivityCallListComponent extends \CBitrixComponent
 
 	protected function executeGetGridPage()
 	{
-		$callList = \Bitrix\Crm\CallList\CallList::createWithId((int)$this->arParams['CALL_LIST_ID']);
-		$this->arResult = array(
-			'CALL_LIST' => $callList->toArray(),
-			'ALLOW_EDIT' => $this->arParams['ALLOW_EDIT']
-		);
+		try
+		{
+			$callList = \Bitrix\Crm\CallList\CallList::createWithId((int)$this->arParams['CALL_LIST_ID']);
+			$this->arResult = array(
+				'CALL_LIST' => $callList->toArray(),
+				'ALLOW_EDIT' => $this->arParams['ALLOW_EDIT']
+			);
 
-		$this->arResult['CALL_LIST']['NEW'] = false;
-		$this->arResult['CALL_LIST']['ITEMS'] = $this->prepareItems($callList);
+			$this->arResult['CALL_LIST']['NEW'] = false;
+			$this->arResult['CALL_LIST']['ITEMS'] = $this->prepareItems($callList);
+		}
+		catch (Main\SystemException $exception)
+		{
+			if (!in_array((int)$exception->getCode(), [403, 404], true))
+			{
+				throw $exception;
+			}
+
+			$this->arResult = array('ERRORS' => Loc::getMessage("CRM_CALL_LIST_ACCESS_DENIED"));
+		}
 		$this->includeComponentTemplate('grid');
 		return $this->arResult;
 	}
@@ -590,10 +598,12 @@ class CrmActivityCallListComponent extends \CBitrixComponent
 			}
 			catch (Main\SystemException $exception)
 			{
-				$result['ERRORS'] =
-					$exception->getCode() === 403
-						? Loc::getMessage("CRM_CALL_LIST_ACCESS_DENIED")
-						: $exception->getMessage();
+				if (!in_array((int)$exception->getCode(), [403, 404], true))
+				{
+					throw $exception;
+				}
+
+				$result['ERRORS'] = Loc::getMessage("CRM_CALL_LIST_ACCESS_DENIED");
 
 				return $result;
 			}
@@ -823,10 +833,12 @@ class CrmActivityCallListComponent extends \CBitrixComponent
 		}
 		catch (\Bitrix\Main\SystemException $exception)
 		{
-			$result['ERRORS'] =
-				$exception->getCode() === 403
-					? Loc::getMessage("CRM_CALL_LIST_ACCESS_DENIED")
-					: $exception->getMessage();
+			if (!in_array((int)$exception->getCode(), [403, 404], true))
+			{
+				throw $exception;
+			}
+
+			$result['ERRORS'] = Loc::getMessage("CRM_CALL_LIST_ACCESS_DENIED");
 		}
 		return $result;
 	}

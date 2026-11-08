@@ -9,12 +9,9 @@ use Bitrix\Crm\Component\EntityDetails;
 use Bitrix\Crm\Entity\RequisiteValidator;
 use Bitrix\Crm\Format\AddressFormatter;
 use Bitrix\Crm\Format\RequisiteAddressFormatter;
-use Bitrix\Crm\Integrity\DuplicateBankDetailCriterion;
-use Bitrix\Crm\Integrity\DuplicateRequisiteCriterion;
-use Bitrix\Crm\Integrity\DuplicateVolatileCriterion;
-use Bitrix\Crm\Integrity\Volatile\FieldCategory;
 use Bitrix\Crm\Requisite\Country;
 use Bitrix\Crm\Requisite\EntityLink;
+use Bitrix\Crm\V2\Internal\Service\Requisite\ExternalFieldSetFilter;
 use Bitrix\Location\Entity\Address;
 use Bitrix\Main;
 use Bitrix\Main\Entity;
@@ -77,6 +74,11 @@ class EntityRequisite
 	public const XML_ID_DEFAULT_PRESET_RU_PERSON = '#CRM_REQUISITE_PRESET_DEF_RU_PERSON#';
 
 	private static $singleInstance = null;
+
+	private ?Crm\V2\Internal\Service\Requisite\RequisiteWriteService $writeService = null;
+
+	private static ?Crm\V2\Internal\Access\Requisite\RequisitePermissions $ownerPermissions = null;
+	private static ?Crm\V2\Internal\Service\Requisite\OwnerResolver $ownerResolver = null;
 
 	private static $fixedPresetList = null;
 	private static $FIELD_INFOS = null;
@@ -851,21 +853,6 @@ class EntityRequisite
 			unset($fields[self::ADDRESS]);
 		}
 
-		// rewrite some fields
-		$entity = RequisiteTable::getEntity();
-		foreach ($entity->getFields() as $field)
-		{
-			$fieldName = $field->getName();
-			if ($field instanceof Entity\BooleanField && array_key_exists($fieldName, $fields))
-			{
-				if ($fields[$fieldName] !== 'Y' && $fields[$fieldName] !== 'N'
-					&& $fields[$fieldName] !== true && $fields[$fieldName] !== false)
-				{
-					$fields[$fieldName] = $field->getDefaultValue();
-				}
-			}
-		}
-
 		$addressOnly = false;
 		if (isset($fields['ADDRESS_ONLY']) &&
 			($fields['ADDRESS_ONLY'] === true || $fields['ADDRESS_ONLY'] === 'Y'))
@@ -890,78 +877,27 @@ class EntityRequisite
 			return $result;
 		}
 
-		$result = RequisiteTable::add($fields);
-		$id = $result->isSuccess() ? (int)$result->getId() : 0;
-		if ($id > 0)
+		[$writeData, $valuesOutsideTheArea] = $this->separateWriteFields($fields);
+
+		$writeResult = $this->getWriteService()->addForLegacyFacade(
+			$writeData,
+			$fields,
+			function ($id) use ($fields, $addresses)
+			{
+				$this->registerNestedAddresses($id, $fields, $addresses);
+			},
+			$valuesOutsideTheArea
+		);
+
+		$result = new Main\ORM\Data\AddResult();
+		if ($writeResult->isSuccess())
 		{
-			$entityTypeId =
-				isset($fields['ENTITY_TYPE_ID'])
-					? (int)$fields['ENTITY_TYPE_ID']
-					: CCrmOwnerType::Undefined
-			;
-			$entityId = isset($fields['ENTITY_ID']) ? (int)$fields['ENTITY_ID'] : 0;
-
-			if (is_array($addresses))
-			{
-				if(!CCrmOwnerType::IsDefined($entityTypeId) || $entityId <= 0)
-				{
-					$entityTypeId = CCrmOwnerType::Requisite;
-					$entityId = $id;
-				}
-
-				foreach($addresses as $addressTypeID => $address)
-				{
-					if(!is_array($address) || empty($address))
-					{
-						continue;
-					}
-
-					EntityAddress::register(
-						CCrmOwnerType::Requisite,
-						$id,
-						$addressTypeID,
-						array(
-							'ANCHOR_TYPE_ID' => $entityTypeId,
-							'ANCHOR_ID' => $entityId,
-							'ADDRESS_1' => isset($address['ADDRESS_1']) ? $address['ADDRESS_1'] : null,
-							'ADDRESS_2' => isset($address['ADDRESS_2']) ? $address['ADDRESS_2'] : null,
-							'CITY' => isset($address['CITY']) ? $address['CITY'] : null,
-							'POSTAL_CODE' => isset($address['POSTAL_CODE']) ? $address['POSTAL_CODE'] : null,
-							'REGION' => isset($address['REGION']) ? $address['REGION'] : null,
-							'PROVINCE' => isset($address['PROVINCE']) ? $address['PROVINCE'] : null,
-							'COUNTRY' => isset($address['COUNTRY']) ? $address['COUNTRY'] : null,
-							'COUNTRY_CODE' => isset($address['COUNTRY_CODE']) ? $address['COUNTRY_CODE'] : null,
-							'LOC_ADDR_ID' => isset($address['LOC_ADDR_ID']) ? (int)$address['LOC_ADDR_ID'] : 0,
-							'LOC_ADDR' => isset($address['LOC_ADDR']) ? $address['LOC_ADDR'] : null
-						)
-					);
-				}
-			}
-
-			if (($entityTypeId === CCrmOwnerType::Company || $entityTypeId === CCrmOwnerType::Contact)
-				&& $entityId > 0)
-			{
-				DuplicateRequisiteCriterion::registerByEntity($entityTypeId, $entityId);
-
-				//region Register volatile duplicate criterion fields
-				DuplicateVolatileCriterion::register(
-					$entityTypeId,
-					$entityId,
-					[FieldCategory::REQUISITE]
-				);
-				//endregion Register volatile duplicate criterion fields
-
-
-				CCrmEntitySelectorHelper::clearPrepareRequisiteDataCacheByEntity($entityTypeId, $entityId);
-			}
-
-			//region Send event
-			$event = new Main\Event('crm', 'OnAfterRequisiteAdd', array('id' => $id, 'fields' => $fields));
-			$event->send();
-			//endregion
+			$result->setId(
+				(int)$writeResult->getData()[Crm\V2\Internal\Service\Requisite\RequisiteWriteService::DATA_KEY_ID]
+			);
 		}
 
-		return $result;
+		return self::carryWriteErrors($writeResult, $result);
 	}
 
 	public function addFromData($entityTypeId, $entityId, $requisiteData)
@@ -1265,10 +1201,16 @@ class EntityRequisite
 	public function update($id, $fields, $options = array())
 	{
 		$id = intval($id);
+		// The owner is read along with the rest so that the write of the area does not read the same row
+		// a second time. The preset goes with it only because the typed target of that write takes three
+		// values; nothing on this line reads it.
 		$requisite = $this->getList(
 			array(
 				'filter' => ['=ID' => $id],
-				'select' => array_merge(['ADDRESS_ONLY'], self::getFileFields()),
+				'select' => array_merge(
+					['ADDRESS_ONLY', 'ENTITY_TYPE_ID', 'ENTITY_ID', 'PRESET_ID'],
+					self::getFileFields()
+				),
 				'limit' => 1,
 			)
 		)->fetch();
@@ -1300,56 +1242,6 @@ class EntityRequisite
 			$addressOnly = true;
 		}
 
-		$entityBeforeUpdate = null;
-		$entityTypeId = CCrmOwnerType::Undefined;
-		$entityId = 0;
-		$entityTypeIdModified = $entityIdModified = false;
-		if (isset($fields['ENTITY_TYPE_ID']))
-		{
-			$entityTypeId = (int)$fields['ENTITY_TYPE_ID'];
-			if ($entityBeforeUpdate === null)
-				$entityBeforeUpdate = EntityRequisite::getOwnerEntityById($id);
-			if (
-				CCrmOwnerType::IsDefined($entityBeforeUpdate['ENTITY_TYPE_ID'])
-				&& $entityBeforeUpdate['ENTITY_ID'] > 0)
-			{
-				if ($entityTypeId !== $entityBeforeUpdate['ENTITY_TYPE_ID'])
-					$entityTypeIdModified = true;
-				if (!$entityIdModified)
-					$entityId = (int)$entityBeforeUpdate['ENTITY_ID'];
-			}
-		}
-		if (isset($fields['ENTITY_ID']))
-		{
-			$entityId = (int)$fields['ENTITY_ID'];
-			if ($entityBeforeUpdate === null)
-				$entityBeforeUpdate = EntityRequisite::getOwnerEntityById($id);
-			if (
-				CCrmOwnerType::IsDefined($entityBeforeUpdate['ENTITY_TYPE_ID'])
-				&& $entityBeforeUpdate['ENTITY_ID'] > 0)
-			{
-				if ($entityId !== $entityBeforeUpdate['ENTITY_ID'])
-					$entityIdModified = true;
-				if (!$entityTypeIdModified)
-					$entityTypeId = (int)$entityBeforeUpdate['ENTITY_TYPE_ID'];
-			}
-		}
-
-		// rewrite some fields
-		$entity = RequisiteTable::getEntity();
-		foreach ($entity->getFields() as $field)
-		{
-			$fieldName = $field->getName();
-			if ($field instanceof Entity\BooleanField && array_key_exists($fieldName, $fields))
-			{
-				if ($fields[$fieldName] !== 'Y' && $fields[$fieldName] !== 'N'
-					&& $fields[$fieldName] !== true && $fields[$fieldName] !== false)
-				{
-					$fields[$fieldName] = $field->getDefaultValue();
-				}
-			}
-		}
-
 		if ($addressOnly)
 		{
 			$fields = $this->clearNonAddressFields($fields);
@@ -1368,202 +1260,28 @@ class EntityRequisite
 			return $result;
 		}
 
-		$result = RequisiteTable::update($id, $fields);
-		if ($result->isSuccess())
-		{
-			if ($addressOnly)
+		[$writeData, $valuesOutsideTheArea] = $this->separateWriteFields($fields);
+
+		$writeResult = $this->getWriteService()->updateForLegacyFacade(
+			$id,
+			new Crm\V2\Internal\Entity\Requisite\RequisiteWriteTarget(
+				(int)$requisite['ENTITY_TYPE_ID'],
+				(int)$requisite['ENTITY_ID'],
+				(int)$requisite['PRESET_ID']
+			),
+			$writeData,
+			$fields,
+			function ($requisiteId) use ($addressOnly, $addresses, $fields, $requisite)
 			{
-				$GLOBALS['USER_FIELD_MANAGER']->Delete($this->getUfId(), $id);
-			}
-			if (is_array($addresses))
-			{
-				foreach($addresses as $addressTypeId => $address)
-				{
-					if(!is_array($address) || empty($address))
-					{
-						continue;
-					}
+				$this->applyNestedChangesAfterUpdate($requisiteId, $addressOnly, $addresses, $fields, $requisite);
+			},
+			$valuesOutsideTheArea
+		);
 
-					if(isset($address['DELETED']) && $address['DELETED'] === 'Y')
-					{
-						RequisiteAddress::unregister(CCrmOwnerType::Requisite, $id, $addressTypeId);
-						continue;
-					}
+		$result = new Main\ORM\Data\UpdateResult();
+		$result->setPrimary(['ID' => $id]);
 
-					$actualAddressFields = array();
-					if(isset($address['ADDRESS_1']))
-					{
-						$actualAddressFields['ADDRESS_1'] = $address['ADDRESS_1'];
-					}
-					if(isset($address['ADDRESS_2']))
-					{
-						$actualAddressFields['ADDRESS_2'] = $address['ADDRESS_2'];
-					}
-					if(isset($address['CITY']))
-					{
-						$actualAddressFields['CITY'] = $address['CITY'];
-					}
-					if(isset($address['POSTAL_CODE']))
-					{
-						$actualAddressFields['POSTAL_CODE'] = $address['POSTAL_CODE'];
-					}
-					if(isset($address['REGION']))
-					{
-						$actualAddressFields['REGION'] = $address['REGION'];
-					}
-					if(isset($address['PROVINCE']))
-					{
-						$actualAddressFields['PROVINCE'] = $address['PROVINCE'];
-					}
-					if(isset($address['COUNTRY']))
-					{
-						$actualAddressFields['COUNTRY'] = $address['COUNTRY'];
-					}
-					if(isset($address['COUNTRY_CODE']))
-					{
-						$actualAddressFields['COUNTRY_CODE'] = $address['COUNTRY_CODE'];
-					}
-					if(isset($address['LOC_ADDR_ID']))
-					{
-						$actualAddressFields['LOC_ADDR_ID'] = (int)$address['LOC_ADDR_ID'];
-					}
-					if(isset($address['LOC_ADDR']))
-					{
-						$actualAddressFields['LOC_ADDR'] = $address['LOC_ADDR'];
-					}
-
-					if(!empty($actualAddressFields))
-					{
-						$dbResult = RequisiteTable::getList(
-							array(
-								'filter' => array('=ID' => $id),
-								'select' => array('ENTITY_TYPE_ID', 'ENTITY_ID')
-							)
-						);
-
-						$actualFields = $dbResult->fetch();
-						if(is_array($actualFields))
-						{
-							$anchorTypeID = isset($actualFields['ENTITY_TYPE_ID']) ? (int)$actualFields['ENTITY_TYPE_ID'] : CCrmOwnerType::Undefined;
-							$anchorID = isset($actualFields['ENTITY_ID']) ? (int)$actualFields['ENTITY_ID'] : 0;
-							if(!CCrmOwnerType::IsDefined($anchorTypeID) || $anchorID <= 0)
-							{
-								$anchorTypeID = CCrmOwnerType::Requisite;
-								$anchorID = $id;
-							}
-
-							$actualAddressFields['ANCHOR_TYPE_ID'] = $anchorTypeID;
-							$actualAddressFields['ANCHOR_ID'] = $anchorID;
-
-							EntityAddress::register(CCrmOwnerType::Requisite, $id, $addressTypeId, $actualAddressFields);
-						}
-					}
-				}
-			}
-			foreach (self::getFileFields() as $fileField)
-			{
-				if (
-					array_key_exists($fileField, $fields)
-					&& $requisite[$fileField] != $fields[$fileField]
-				)
-				{
-					\CFile::Delete($requisite[$fileField]);
-				}
-			}
-
-			if ($entityTypeIdModified || $entityIdModified)
-			{
-				DuplicateRequisiteCriterion::registerByEntity(
-					$entityBeforeUpdate['ENTITY_TYPE_ID'],
-					$entityBeforeUpdate['ENTITY_ID']
-				);
-				DuplicateBankDetailCriterion::registerByEntity(
-					$entityBeforeUpdate['ENTITY_TYPE_ID'],
-					$entityBeforeUpdate['ENTITY_ID']
-				);
-				DuplicateRequisiteCriterion::unregister($entityTypeId, $entityId);
-
-				//region Register volatile duplicate criterion fields
-				DuplicateVolatileCriterion::register(
-					$entityBeforeUpdate['ENTITY_TYPE_ID'],
-					$entityBeforeUpdate['ENTITY_ID'],
-					[FieldCategory::REQUISITE, FieldCategory::BANK_DETAIL]
-				);
-				DuplicateVolatileCriterion::register(
-					$entityTypeId,
-					$entityId,
-					[FieldCategory::REQUISITE, FieldCategory::BANK_DETAIL]
-				);
-				//endregion Register volatile duplicate criterion fields
-			}
-
-			if (isset($fields['ENTITY_TYPE_ID']) && isset($fields['ENTITY_ID']))
-			{
-				DuplicateRequisiteCriterion::registerByEntity(
-					(int)$fields['ENTITY_TYPE_ID'], (int)$fields['ENTITY_ID']
-				);
-
-				//region Register volatile duplicate criterion fields
-				DuplicateVolatileCriterion::register(
-					(int)$fields['ENTITY_TYPE_ID'],
-					(int)$fields['ENTITY_ID'],
-					[FieldCategory::REQUISITE]
-				);
-				//endregion Register volatile duplicate criterion fields
-
-				if ($entityTypeIdModified || $entityIdModified)
-				{
-					DuplicateBankDetailCriterion::registerByEntity(
-						(int)$fields['ENTITY_TYPE_ID'], (int)$fields['ENTITY_ID']
-					);
-
-					//region Register volatile duplicate criterion fields
-					DuplicateVolatileCriterion::register(
-						(int)$fields['ENTITY_TYPE_ID'],
-						(int)$fields['ENTITY_ID'],
-						[FieldCategory::BANK_DETAIL]
-					);
-					//endregion Register volatile duplicate criterion fields
-				}
-			}
-			else
-			{
-				DuplicateRequisiteCriterion::registerByRequisite($id);
-
-				//region Register volatile duplicate criterion fields
-				DuplicateVolatileCriterion::register(
-					CCrmOwnerType::Requisite,
-					$id,
-					[FieldCategory::REQUISITE]
-				);
-				//endregion Register volatile duplicate criterion fields
-
-				if ($entityTypeIdModified || $entityIdModified)
-				{
-					DuplicateBankDetailCriterion::registerByParent(CCrmOwnerType::Requisite, $id);
-
-					//region Register volatile duplicate criterion fields
-					DuplicateVolatileCriterion::register(
-						CCrmOwnerType::Requisite,
-						$id,
-						[FieldCategory::BANK_DETAIL]
-					);
-					//endregion Register volatile duplicate criterion fields
-				}
-			}
-		}
-
-		CCrmEntitySelectorHelper::clearPrepareRequisiteDataCacheByEntity(CCrmOwnerType::Requisite, $id);
-
-		//region Send event
-		if ($result->isSuccess())
-		{
-			$event = new Main\Event('crm', 'OnAfterRequisiteUpdate', array('id' => $id, 'fields' => $fields));
-			$event->send();
-		}
-		//endregion Send event
-
-		return $result;
+		return self::carryWriteErrors($writeResult, $result);
 	}
 
 	public function delete($id, $options = array())
@@ -1574,54 +1292,21 @@ class EntityRequisite
 			'limit' => 1,
 		])->fetch();
 
-		$entityInfo = self::getOwnerEntityById($id);
-
-		EntityLink::unregisterByRequisite($id);
-		RequisiteAddress::deleteByEntityId($id);
-
-		$bankDetail = EntityBankDetail::getSingleInstance();
-		$bankDetail->deleteByEntity(CCrmOwnerType::Requisite, $id);
-
-		$result = RequisiteTable::delete($id);
-
-		if ($result->isSuccess())
-		{
-			foreach (self::getFileFields() as $fileField)
+		$writeResult = $this->getWriteService()->deleteForLegacyFacade(
+			$id,
+			static function () use ($requisite)
 			{
-				if ($requisite[$fileField] > 0)
+				foreach (self::getFileFields() as $fileField)
 				{
-					\CFile::Delete($requisite[$fileField]);
+					if ($requisite[$fileField] > 0)
+					{
+						\CFile::Delete($requisite[$fileField]);
+					}
 				}
 			}
-		}
-		if (
-			$result->isSuccess()
-			&& \CCrmOwnerType::IsDefined($entityInfo['ENTITY_TYPE_ID'])
-			&& $entityInfo['ENTITY_ID'] > 0
-		)
-		{
-			DuplicateRequisiteCriterion::RegisterByEntity($entityInfo['ENTITY_TYPE_ID'], $entityInfo['ENTITY_ID']);
+		);
 
-			//region Register volatile duplicate criterion fields
-			DuplicateVolatileCriterion::register(
-				$entityInfo['ENTITY_TYPE_ID'],
-				$entityInfo['ENTITY_ID'],
-				[FieldCategory::REQUISITE]
-			);
-			//endregion Register volatile duplicate criterion fields
-		}
-
-		CCrmEntitySelectorHelper::clearPrepareRequisiteDataCacheByEntity(CCrmOwnerType::Requisite, $id);
-
-		//region Send event
-		if ($result->isSuccess())
-		{
-			$event = new Main\Event('crm', 'OnAfterRequisiteDelete', array('id' => $id));
-			$event->send();
-		}
-		//endregion Send event
-
-		return $result;
+		return self::carryWriteErrors($writeResult, new Main\ORM\Data\DeleteResult());
 	}
 
 	public function deleteByEntity($entityTypeId, $entityId, $options = array())
@@ -1689,6 +1374,234 @@ class EntityRequisite
 				)
 			);
 		}
+
+		return $result;
+	}
+
+	private function getWriteService(): Crm\V2\Internal\Service\Requisite\RequisiteWriteService
+	{
+		return $this->writeService ??= new Crm\V2\Internal\Service\Requisite\RequisiteWriteService();
+	}
+
+	/**
+	 * Splits a field set of this class into what the write of the area knows and what it does not.
+	 *
+	 * The first part is the typed set the write service takes; the second is everything else, passed to
+	 * the storage as it came - the user fields of the portal, which the table writes itself, and the keys
+	 * the table silently drops, which is how a set naming an address field or a field of no entity at all
+	 * has always behaved.
+	 *
+	 * A value the typed set will not hold goes to the storage as well rather than being refused here: the
+	 * table has always been the one deciding what to do with it, and refusing it now would turn a silent
+	 * loss of a stray value into an exception on any of the callers of this class.
+	 *
+	 * @return array{0: Crm\V2\Internal\Entity\Requisite\RequisiteWriteData, 1: array}
+	 */
+	private function separateWriteFields(array $fields): array
+	{
+		$writeData = Crm\V2\Internal\Entity\Requisite\RequisiteWriteData::of([]);
+		$valuesOutsideTheArea = [];
+
+		foreach ($fields as $name => $value)
+		{
+			$field = Crm\V2\Internal\Repository\Requisite\RequisiteColumnMap::findFieldByColumn((string)$name);
+			if ($field === null)
+			{
+				$valuesOutsideTheArea[$name] = $value;
+				continue;
+			}
+
+			try
+			{
+				$writeData = $writeData->with($field, $value);
+			}
+			catch (Main\ArgumentException)
+			{
+				$valuesOutsideTheArea[$name] = $value;
+			}
+		}
+
+		return [$writeData, $valuesOutsideTheArea];
+	}
+
+	private function registerNestedAddresses($id, $fields, $addresses)
+	{
+		if (!is_array($addresses))
+		{
+			return;
+		}
+
+		$entityTypeId =
+			isset($fields['ENTITY_TYPE_ID'])
+				? (int)$fields['ENTITY_TYPE_ID']
+				: CCrmOwnerType::Undefined
+		;
+		$entityId = isset($fields['ENTITY_ID']) ? (int)$fields['ENTITY_ID'] : 0;
+		if(!CCrmOwnerType::IsDefined($entityTypeId) || $entityId <= 0)
+		{
+			$entityTypeId = CCrmOwnerType::Requisite;
+			$entityId = $id;
+		}
+
+		foreach($addresses as $addressTypeID => $address)
+		{
+			if(!is_array($address) || empty($address))
+			{
+				continue;
+			}
+
+			EntityAddress::register(
+				CCrmOwnerType::Requisite,
+				$id,
+				$addressTypeID,
+				array(
+					'ANCHOR_TYPE_ID' => $entityTypeId,
+					'ANCHOR_ID' => $entityId,
+					'ADDRESS_1' => isset($address['ADDRESS_1']) ? $address['ADDRESS_1'] : null,
+					'ADDRESS_2' => isset($address['ADDRESS_2']) ? $address['ADDRESS_2'] : null,
+					'CITY' => isset($address['CITY']) ? $address['CITY'] : null,
+					'POSTAL_CODE' => isset($address['POSTAL_CODE']) ? $address['POSTAL_CODE'] : null,
+					'REGION' => isset($address['REGION']) ? $address['REGION'] : null,
+					'PROVINCE' => isset($address['PROVINCE']) ? $address['PROVINCE'] : null,
+					'COUNTRY' => isset($address['COUNTRY']) ? $address['COUNTRY'] : null,
+					'COUNTRY_CODE' => isset($address['COUNTRY_CODE']) ? $address['COUNTRY_CODE'] : null,
+					'LOC_ADDR_ID' => isset($address['LOC_ADDR_ID']) ? (int)$address['LOC_ADDR_ID'] : 0,
+					'LOC_ADDR' => isset($address['LOC_ADDR']) ? $address['LOC_ADDR'] : null
+				)
+			);
+		}
+	}
+
+	/**
+	 * What the change of a requisite does to what hangs on it, between the row itself and the effects of
+	 * the write: the user field values an address-only record loses, the nested addresses of the same
+	 * call, and the files a new value of a file field replaced.
+	 */
+	private function applyNestedChangesAfterUpdate($id, $addressOnly, $addresses, $fields, $requisite)
+	{
+		if ($addressOnly)
+		{
+			$GLOBALS['USER_FIELD_MANAGER']->Delete($this->getUfId(), $id);
+		}
+		if (is_array($addresses))
+		{
+			// The row the addresses are anchored to is the same for every type of address and does not
+			// change while they are registered, so it is read once, on the first address that needs it.
+			$actualFields = null;
+			foreach($addresses as $addressTypeId => $address)
+			{
+				if(!is_array($address) || empty($address))
+				{
+					continue;
+				}
+
+				if(isset($address['DELETED']) && $address['DELETED'] === 'Y')
+				{
+					RequisiteAddress::unregister(CCrmOwnerType::Requisite, $id, $addressTypeId);
+					continue;
+				}
+
+				$actualAddressFields = array();
+				if(isset($address['ADDRESS_1']))
+				{
+					$actualAddressFields['ADDRESS_1'] = $address['ADDRESS_1'];
+				}
+				if(isset($address['ADDRESS_2']))
+				{
+					$actualAddressFields['ADDRESS_2'] = $address['ADDRESS_2'];
+				}
+				if(isset($address['CITY']))
+				{
+					$actualAddressFields['CITY'] = $address['CITY'];
+				}
+				if(isset($address['POSTAL_CODE']))
+				{
+					$actualAddressFields['POSTAL_CODE'] = $address['POSTAL_CODE'];
+				}
+				if(isset($address['REGION']))
+				{
+					$actualAddressFields['REGION'] = $address['REGION'];
+				}
+				if(isset($address['PROVINCE']))
+				{
+					$actualAddressFields['PROVINCE'] = $address['PROVINCE'];
+				}
+				if(isset($address['COUNTRY']))
+				{
+					$actualAddressFields['COUNTRY'] = $address['COUNTRY'];
+				}
+				if(isset($address['COUNTRY_CODE']))
+				{
+					$actualAddressFields['COUNTRY_CODE'] = $address['COUNTRY_CODE'];
+				}
+				if(isset($address['LOC_ADDR_ID']))
+				{
+					$actualAddressFields['LOC_ADDR_ID'] = (int)$address['LOC_ADDR_ID'];
+				}
+				if(isset($address['LOC_ADDR']))
+				{
+					$actualAddressFields['LOC_ADDR'] = $address['LOC_ADDR'];
+				}
+
+				if(!empty($actualAddressFields))
+				{
+					if($actualFields === null)
+					{
+						$dbResult = RequisiteTable::getList(
+							array(
+								'filter' => array('=ID' => $id),
+								'select' => array('ENTITY_TYPE_ID', 'ENTITY_ID')
+							)
+						);
+
+						$actualFields = $dbResult->fetch();
+					}
+
+					if(is_array($actualFields))
+					{
+						$anchorTypeID = isset($actualFields['ENTITY_TYPE_ID']) ? (int)$actualFields['ENTITY_TYPE_ID'] : CCrmOwnerType::Undefined;
+						$anchorID = isset($actualFields['ENTITY_ID']) ? (int)$actualFields['ENTITY_ID'] : 0;
+						if(!CCrmOwnerType::IsDefined($anchorTypeID) || $anchorID <= 0)
+						{
+							$anchorTypeID = CCrmOwnerType::Requisite;
+							$anchorID = $id;
+						}
+
+						$actualAddressFields['ANCHOR_TYPE_ID'] = $anchorTypeID;
+						$actualAddressFields['ANCHOR_ID'] = $anchorID;
+
+						EntityAddress::register(CCrmOwnerType::Requisite, $id, $addressTypeId, $actualAddressFields);
+					}
+				}
+			}
+		}
+		foreach (self::getFileFields() as $fileField)
+		{
+			if (
+				array_key_exists($fileField, $fields)
+				&& $requisite[$fileField] != $fields[$fileField]
+			)
+			{
+				\CFile::Delete($requisite[$fileField]);
+			}
+		}
+	}
+
+	/**
+	 * Moves the refusals of the write service into the result the callers of this class expect, keeping
+	 * the shape of the answer as inconstant as it has always been: a refusal of the checks above is a
+	 * plain result of its own, and everything the write itself answers is a result of the ORM.
+	 */
+	private static function carryWriteErrors(Main\Result $writeResult, Main\ORM\Data\Result $result)
+	{
+		foreach ($writeResult->getErrors() as $error)
+		{
+			$result->addError($error);
+		}
+
+		// A result of the ORM complains at its destruction when nobody has read its errors, and the write
+		// has always read them itself before handing the result over.
+		$result->isSuccess();
 
 		return $result;
 	}
@@ -2955,18 +2868,16 @@ class EntityRequisite
 		$entityTypeID = (int)$entityTypeID;
 		$entityID = (int)$entityID;
 
-		$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions();
-		if ($entityTypeID === CCrmOwnerType::Company && $entityID > 0 && \CCrmCompany::isMyCompany($entityID))
+		if ($entityID > 0)
 		{
-			return $userPermissions->myCompany()->canUpdate();
+			return self::getOwnerPermissions()->canUpdate($entityTypeID, $entityID, self::getPermissionUserId());
 		}
 
 		if ($entityTypeID === CCrmOwnerType::Company || $entityTypeID === CCrmOwnerType::Contact)
 		{
-			return $entityID > 0
-				? $userPermissions->item()->canUpdate($entityTypeID, $entityID)
-				: $userPermissions->entityType()->canUpdateItems($entityTypeID)
-			;
+			// A right over the type as a whole is not a right over a record, so the domain has no answer
+			// for it. This is the form the presets ask in, and it stays as it was.
+			return Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canUpdateItems($entityTypeID);
 		}
 
 		return false;
@@ -2977,19 +2888,14 @@ class EntityRequisite
 		$entityTypeID = (int)$entityTypeID;
 		$entityID = (int)$entityID;
 
-		$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions();
-		if ($entityTypeID === CCrmOwnerType::Company && $entityID > 0 && \CCrmCompany::isMyCompany($entityID))
+		if ($entityID > 0)
 		{
-			return $userPermissions->myCompany()->canDelete();
+			return self::getOwnerPermissions()->canDelete($entityTypeID, $entityID, self::getPermissionUserId());
 		}
 
 		if ($entityTypeID === CCrmOwnerType::Company || $entityTypeID === CCrmOwnerType::Contact)
 		{
-			return $entityID > 0
-				? $userPermissions->item()->canDelete($entityTypeID, $entityID)
-				: $userPermissions->entityType()->canDeleteItems($entityTypeID)
-			;
-
+			return Crm\Service\Container::getInstance()->getUserPermissions()->entityType()->canDeleteItems($entityTypeID);
 		}
 
 		return false;
@@ -3000,29 +2906,56 @@ class EntityRequisite
 		$entityTypeID = (int)$entityTypeID;
 		$entityID = (int)$entityID;
 
-		$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions();
 		if ($entityTypeID <= 0 && $entityID <= 0)
 		{
+			$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions();
+
 			return
 				$userPermissions->entityType()->canReadItemsInCategory(CCrmOwnerType::Company, 0)
 				&& $userPermissions->entityType()->canReadItemsInCategory(CCrmOwnerType::Contact, 0)
 			;
 		}
 
-		if ($entityTypeID === CCrmOwnerType::Company && $entityID > 0 && \CCrmCompany::isMyCompany($entityID))
+		if ($entityID > 0)
 		{
-			return $userPermissions->myCompany()->canReadBaseFields($entityID);
+			return self::getOwnerPermissions()->canRead($entityTypeID, $entityID, self::getPermissionUserId());
 		}
 
 		if ($entityTypeID === CCrmOwnerType::Company || $entityTypeID === CCrmOwnerType::Contact)
 		{
-			return $entityID > 0
-				? $userPermissions->item()->canRead($entityTypeID, $entityID)
-				: $userPermissions->entityType()->canReadItemsInCategory($entityTypeID, (int)$categoryId) //  $categoryId should be = 0 instead of null to check access to default category by default
+			//  $categoryId should be = 0 instead of null to check access to default category by default
+			return Crm\Service\Container::getInstance()
+				->getUserPermissions()
+				->entityType()
+				->canReadItemsInCategory($entityTypeID, (int)$categoryId)
 			;
 		}
 
 		return false;
+	}
+
+	/**
+	 * The permission model of the requisite, whole and in one place. The helpers of this class are the
+	 * shape its neighbours - the bank details and the presets - have always asked it in, and each keeps
+	 * its own semantics; what they no longer keep is a rule of their own.
+	 */
+	private static function getOwnerPermissions(): Crm\V2\Internal\Access\Requisite\RequisitePermissions
+	{
+		return self::$ownerPermissions ??= new Crm\V2\Internal\Access\Requisite\RequisitePermissions();
+	}
+
+	private static function getOwnerResolver(): Crm\V2\Internal\Service\Requisite\OwnerResolver
+	{
+		return self::$ownerResolver ??= new Crm\V2\Internal\Service\Requisite\OwnerResolver();
+	}
+
+	/**
+	 * The user the helpers of this class answer for: the one of the CRM context, which is where
+	 * `getUserPermissions()` without an argument has always taken it from.
+	 */
+	private static function getPermissionUserId(): int
+	{
+		return Crm\Service\Container::getInstance()->getContext()->getUserId();
 	}
 
 	public function checkUpdatePermission($id)
@@ -3050,61 +2983,24 @@ class EntityRequisite
 
 	public function validateEntityExists($entityTypeId, $entityId)
 	{
-		$entityTypeId = intval($entityTypeId);
-		$entityId = intval($entityId);
-
-		if (!self::checkEntityType($entityTypeId))
-			return false;
-
-		if ($entityTypeId === CCrmOwnerType::Company)
-		{
-			if (!\CCrmCompany::Exists($entityId))
-				return false;
-		}
-		else if ($entityTypeId === CCrmOwnerType::Contact)
-		{
-			if (!\CCrmContact::Exists($entityId))
-				return false;
-		}
-
-		return true;
+		return self::getOwnerResolver()->exists(intval($entityTypeId), intval($entityId));
 	}
 
 	public function validateEntityReadPermission($entityTypeId, $entityId)
 	{
-		$entityTypeId = intval($entityTypeId);
-		$entityId = intval($entityId);
-
-		if ($entityId <= 0)
-		{
-			return false;
-		}
-
-		$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions();
-		if ($entityTypeId === CCrmOwnerType::Company)
-		{
-			if (\CCrmCompany::isMyCompany($entityId))
-			{
-				return $userPermissions->myCompany()->canReadBaseFields($entityId);
-			}
-
-			return $userPermissions->item()->canRead($entityTypeId, $entityId);
-		}
-		else if ($entityTypeId === CCrmOwnerType::Contact)
-		{
-			if (!$userPermissions->item()->canRead($entityTypeId, $entityId))
-			{
-				return false;
-			}
-		}
-		else
-		{
-			return false;
-		}
-
-		return true;
+		return self::getOwnerPermissions()->canRead(
+			intval($entityTypeId),
+			intval($entityId),
+			self::getPermissionUserId()
+		);
 	}
 
+	/**
+	 * The right to change the owner, asked without the branch of the company of the portal - unlike
+	 * {@see self::checkUpdatePermissionOwnerEntity()}, which asks the same question with it. The two
+	 * disagree today, their callers are different, and levelling them here would change the answer for
+	 * some of those callers, so the rule stays where it is.
+	 */
 	public function validateEntityUpdatePermission($entityTypeId, $entityId)
 	{
 		$entityTypeId = intval($entityTypeId);
@@ -4051,6 +3947,12 @@ class EntityRequisite
 	 */
 	public static function parseFormData(array $formData)
 	{
+		// The form data may come from a source that knows nothing of the preset the requisite is shown
+		// under, so it is narrowed down to what that preset declares before anything is read out of it.
+		// The preset is the one the data names: this method is given nothing else to resolve it by, and
+		// when the data names none the set passes through as it always did.
+		$formData = (new ExternalFieldSetFilter())->filter($formData);
+
 		$fields = array();
 		if(isset($formData['NAME']))
 		{
@@ -6925,6 +6827,42 @@ class EntityRequisite
 				}
 			}
 		}
+	}
+
+	public static function prepareEntityListHeaderSections(array &$headers, string $prefix = 'RQ_'): array
+	{
+		$countryIds = [];
+		$countryMap = [];
+		$pattern = '/^' . preg_quote($prefix, '/') . '(?:RQ_|UF_)\w+\|(\d+)$/u';
+
+		foreach ($headers as &$header)
+		{
+			if (
+				!isset($header['id'])
+				|| !is_string($header['id'])
+				|| !preg_match($pattern, $header['id'], $matches)
+			)
+			{
+				continue;
+			}
+
+			$countryId = (int)$matches[1];
+			$header['section_id'] = self::getEntityListHeaderSectionId($countryId);
+
+			if (!isset($countryMap[$countryId]))
+			{
+				$countryMap[$countryId] = true;
+				$countryIds[] = $countryId;
+			}
+		}
+		unset($header);
+
+		return $countryIds;
+	}
+
+	public static function getEntityListHeaderSectionId(int $countryId): string
+	{
+		return \CCrmOwnerType::RequisiteName . '_' . $countryId;
 	}
 
 	public function normalizeEntityListFields(&$entityFields, $headers, $options = array())

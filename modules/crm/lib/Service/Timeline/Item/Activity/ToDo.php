@@ -960,18 +960,33 @@ class ToDo extends Activity
 	}
 	// endregion
 
+	protected function getCompleteButton(): ?Layout\Header\ChangeStreamButton
+	{
+		if (!$this->isScheduled())
+		{
+			return null;
+		}
+
+		return (new Layout\Header\ChangeStreamButton())
+			->setTypeComplete()
+			->setDisableIfReadonly()
+			->setAction($this->createCompleteAction(Dictionary::CHECKBOX_ELEMENT))
+		;
+	}
+
 	protected function getCompleteAction(): Layout\Action\RunAjaxAction
 	{
-		$action = parent::getCompleteAction();
+		return $this->createCompleteAction(Dictionary::COMPLETE_BUTTON_ELEMENT);
+	}
 
+	private function createCompleteAction(string $element): Layout\Action\RunAjaxAction
+	{
 		$analytics = $this->createGeneralAnalytics()
 			?->setEvent(Dictionary::COMPLETE_EVENT)
-			->setElement(Dictionary::COMPLETE_BUTTON_ELEMENT)
+			->setElement($element)
 		;
 
-		$action->setAnalytics($analytics);
-
-		return $action;
+		return parent::getCompleteAction()->setAnalytics($analytics);
 	}
 
 	// region Internal utils

@@ -66,10 +66,15 @@ class CBPCrmSendEmailActivity extends CBPActivity
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		$rawFromProperty = $this->getRawProperty('MessageFrom');
 		$fromProperty = $this->MessageFrom;
 		if (!$fromProperty) //compatibility
 		{
 			$fromProperty = $this->From;
+			if (!$rawFromProperty)
+			{
+				$rawFromProperty = $this->getRawProperty('From');
+			}
 		}
 
 		$fromInfo = $this->getFromEmail($userId, $fromProperty);
@@ -78,6 +83,13 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		{
 			$this->logDebug();
 			$this->writeError(GetMessage('CRM_SEMA_NO_FROM'), $userId);
+
+			return CBPActivityExecutionStatus::Closed;
+		}
+
+		if (!$this->isSavedSenderAvailable($userId, $rawFromProperty, $fromInfo))
+		{
+			$this->writeError(GetMessage('CRM_SEMA_SENDER_UNAVAILABLE_FOR_RESPONSIBLE'), $userId);
 
 			return CBPActivityExecutionStatus::Closed;
 		}
@@ -209,7 +221,16 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		if ($this->AttachmentType === static::ATTACHMENT_TYPE_DISK)
 		{
 			$attachmentStorageType = Bitrix\Crm\Integration\StorageType::Disk;
-			$attachment = (array)$this->Attachment;
+			$attachment = [];
+
+			foreach ((array)$this->Attachment as $fileId)
+			{
+				$fileId = (int)$fileId;
+				if (\Bitrix\Crm\Integration\DiskManager::checkFileDownloadPermission($fileId, $userId))
+				{
+					$attachment[] = $fileId;
+				}
+			}
 		}
 		else
 		{
@@ -223,7 +244,7 @@ class CBPCrmSendEmailActivity extends CBPActivity
 			{
 				foreach ($attachmentFiles as $fileId)
 				{
-					$arRawFile = CFile::MakeFileArray($fileId);
+					$arRawFile = static::makeAttachmentFileArray($fileId);
 
 					if (is_array($arRawFile))
 					{
@@ -388,7 +409,7 @@ class CBPCrmSendEmailActivity extends CBPActivity
 			'CONTEXT' => $context,
 		];
 
-		if (Crm\WebForm\Manager::isEmbeddingAvailable())
+		if ($this->UseLinkTracker === 'Y' && Crm\WebForm\Manager::isEmbeddingAvailable())
 		{
 			$outgoingParams['TRACK_CLICK']['URL_PARAMS'][Crm\WebForm\Embed\Sign::uriParameterName] = (new Crm\WebForm\Embed\Sign())
 				->addEntity($ownerTypeId, $ownerId)
@@ -492,6 +513,54 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		return CBPActivityExecutionStatus::Closed;
 	}
 
+	/**
+	 * A string must never reach CFile::MakeFileArray: it reads a local file or downloads a URL for one.
+	 */
+	private static function makeAttachmentFileArray(mixed $value): ?array
+	{
+		$fileId = static::normalizeAttachmentFileId($value);
+		// MakeFileArray falls back to the path branch for an id missing in b_file
+		if ($fileId === null || !CFile::GetFileArray($fileId))
+		{
+			return null;
+		}
+
+		$fileArray = CFile::MakeFileArray($fileId);
+
+		return is_array($fileArray) && !empty($fileArray['tmp_name']) ? $fileArray : null;
+	}
+
+	/**
+	 * What an expression resolves to is checked on the run only.
+	 */
+	private static function isAllowedFileAttachmentValue(mixed $value): bool
+	{
+		return static::normalizeAttachmentFileId($value) !== null || static::isExpression($value);
+	}
+
+	private static function normalizeAttachmentFileId(mixed $value): ?int
+	{
+		if (is_int($value))
+		{
+			return $value > 0 ? $value : null;
+		}
+
+		if (!is_string($value))
+		{
+			return null;
+		}
+
+		$value = trim($value, " \t\r\n");
+		if (preg_match('/^[0-9]+$/D', $value) !== 1)
+		{
+			return null;
+		}
+
+		$fileId = (int)$value;
+
+		return $fileId > 0 ? $fileId : null;
+	}
+
 	private function getFromEmail($userId, $from = '')
 	{
 		$userImap = null;
@@ -569,6 +638,37 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		];
 	}
 
+	private function isSavedSenderAvailable(int $userId, mixed $rawFromProperty, array $fromInfo): bool
+	{
+		if (
+			!is_string($rawFromProperty)
+			|| trim($rawFromProperty) === ''
+			|| static::isExpression($rawFromProperty)
+			|| !empty($fromInfo['userImap'])
+		)
+		{
+			return true;
+		}
+
+		$fromEmail = static::normalizeEmail((string)($fromInfo['fromEmail'] ?? ''));
+		$crmEmail = static::normalizeEmail(
+			\CCrmMailHelper::extractEmail(\COption::getOptionString('crm', 'mail', ''))
+		);
+		if ($crmEmail !== '' && $fromEmail === $crmEmail)
+		{
+			return true;
+		}
+
+		return !empty(
+			Main\Mail\Sender\UserSenderDataProvider::getUserAvailableSendersByEmail($fromEmail, $userId)
+		);
+	}
+
+	private static function normalizeEmail(string $email): string
+	{
+		return (new Main\Mail\Address($email))->getEmail() ?? '';
+	}
+
 	private function getToEmail($entityTypeId, $entityId)
 	{
 		$to = '';
@@ -630,6 +730,29 @@ class CBPCrmSendEmailActivity extends CBPActivity
 		if ($arTestProperties["MessageText"] === "")
 		{
 			$arErrors[] = ["code" => "NotExist", "parameter" => "MessageText", "message" => GetMessage("CRM_SEMA_EMPTY_PROP")];
+		}
+
+		if (($arTestProperties['AttachmentType'] ?? static::ATTACHMENT_TYPE_FILE) !== static::ATTACHMENT_TYPE_DISK)
+		{
+			$attachment = CBPHelper::MakeArrayFlat((array)($arTestProperties['Attachment'] ?? []));
+			foreach ($attachment as $value)
+			{
+				if (in_array($value, ['', null, 0, '0'], true))
+				{
+					continue;
+				}
+
+				if (!static::isAllowedFileAttachmentValue($value))
+				{
+					$arErrors[] = [
+						'code' => 'InvalidValue',
+						'parameter' => 'Attachment',
+						'message' => GetMessage('CRM_SEMA_ATTACHMENT_INVALID'),
+					];
+
+					break;
+				}
+			}
 		}
 
 		return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));

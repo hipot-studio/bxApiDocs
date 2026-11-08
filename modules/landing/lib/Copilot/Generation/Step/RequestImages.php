@@ -11,6 +11,7 @@ use Bitrix\Landing\Copilot\Data\Node\Img;
 use Bitrix\Landing\Copilot\Data\Node\Node;
 use Bitrix\Landing\Copilot\Data\Type\NodeType;
 use Bitrix\Landing\Copilot\Generation\Request;
+use Bitrix\Landing\Copilot\Generation\GenerationTimeSliceException;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntityDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Generation\Type\RequestEntities;
@@ -229,7 +230,7 @@ class RequestImages extends RequestMultiple
 			$timer = $this->generation->getTimer();
 			if (!$timer->check())
 			{
-				throw new \RuntimeException("The maximum execution time has been reached, step {$this->stepId} was aborted");
+				throw new GenerationTimeSliceException("The maximum execution time has been reached, step {$this->stepId} was aborted");
 			}
 
 			$prompt = new Prompt($entity->prompt);
@@ -287,10 +288,10 @@ class RequestImages extends RequestMultiple
 			$timer = $this->generation->getTimer();
 			if (!$timer->check())
 			{
-				throw new \RuntimeException("The maximum execution time has been reached, step {$this->stepId} was aborted");
+				throw new GenerationTimeSliceException("The maximum execution time has been reached, step {$this->stepId} was aborted");
 			}
 
-			// todo: collect filter in foreaech and get all relations in one query
+			// todo: collect filter in foreach and get all relations in one query
 			$relation = RequestToEntitiesTable::query()
 				->setSelect(['*'])
 				->where('REQUEST_ID', '=', $request->getId())

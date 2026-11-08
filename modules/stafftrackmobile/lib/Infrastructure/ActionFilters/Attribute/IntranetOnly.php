@@ -18,6 +18,6 @@ final class IntranetOnly implements FilterAttributeInterface
 
 	public function getType(): FilterType
 	{
-		return FilterType::Prefilter;
+		return FilterType::EnablePrefilter;
 	}
 }

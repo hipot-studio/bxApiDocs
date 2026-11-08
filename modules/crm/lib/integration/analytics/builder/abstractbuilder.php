@@ -329,6 +329,13 @@ abstract class AbstractBuilder implements BuilderContract
 	{
 		return $this->setP4($key, $this->normalizeBooleanPValue($value));
 	}
+
+	final public function clearP4(): static
+	{
+		$this->p4 = [];
+
+		return $this;
+	}
 	// endregion
 
 	// region P5

@@ -2,13 +2,23 @@
 
 namespace Bitrix\Mail\Internals;
 
+use Bitrix\Mail\Update\LateServiceBindingStepper;
 use Bitrix\Main\Config\Option;
 
 class MailServiceInstaller
 {
-	private const SERVICES_VERSION = 2;
+	private const SERVICES_VERSION = 3;
 	private const MODULE_NAME = 'mail';
 	private const OPTION_NAME = 'services_version';
+
+	public static function getMailhostService(): array
+	{
+		return [
+			'NAME' => 'mailhost',
+			'SERVICE_TYPE' => 'imap',
+			'FLAGS' => \Bitrix\Mail\MailServicesTable::FLAG_EXTERNAL_CREDENTIALS,
+		];
+	}
 
 	/**
 	 * Install mail services.
@@ -131,8 +141,19 @@ class MailServiceInstaller
 				'SMTP_PASSWORD_AS_IMAP' => 'Y',
 				'UPLOAD_OUTGOING' => 'N',
 			),
+			// Bitrix24 mail hosting. The row carries no connection data on purpose: every such field of
+			// a service is substituted for the value of the mailbox when the mailbox is saved, while
+			// the credentials here are issued per mailbox and arrive with the handover kit - a port
+			// written into the row would be put over the issued one by a plain rename of the mailbox.
+			// The empty row is not offered as the "empty service" a deleted one re-hangs its mailboxes
+			// onto either: that pick skips a service whose credentials come from outside by the mark
+			// itself, so the row needs no value of its own to stay out of it.
+			'mailhost' => self::getMailhostService(),
 		);
 
+		// mailhost stands in every zone: a mailbox can move to our hosting from a portal of any of them.
+		// Its sort is past the last tile and the same everywhere - the showcase never lists the service,
+		// so the number orders nothing.
 		$mailServicesByLang = array(
 			'ru' => array(
 				100  => 'gmail',
@@ -145,6 +166,7 @@ class MailServiceInstaller
 				800  => 'yandex',
 				900  => 'mail.ru',
 				1000 => 'other',
+				1100 => 'mailhost',
 			),
 			'ua' => array(
 				100  => 'gmail',
@@ -155,6 +177,7 @@ class MailServiceInstaller
 				600  => 'yahoo',
 				700  => 'aol',
 				800  => 'other',
+				1100 => 'mailhost',
 			),
 			'en' => array(
 				100 => 'gmail',
@@ -164,7 +187,8 @@ class MailServiceInstaller
 				550 => 'exchangeOnline',
 				600 => 'yahoo',
 				700 => 'aol',
-				800 => 'other'
+				800 => 'other',
+				1100 => 'mailhost'
 			),
 			'de' => array(
 				100 => 'gmail',
@@ -174,7 +198,8 @@ class MailServiceInstaller
 				550 => 'exchangeOnline',
 				600 => 'yahoo',
 				700 => 'aol',
-				800 => 'other'
+				800 => 'other',
+				1100 => 'mailhost'
 			)
 		);
 
@@ -199,6 +224,7 @@ class MailServiceInstaller
 			? $mailServicesByLang[$portalZone]
 			: $mailServicesByLang['en'];
 
+		$added = false;
 		foreach ($mailServicesList as $serviceSort => $serviceName)
 		{
 			$exists = \Bitrix\Mail\MailServicesTable::getRow([
@@ -222,8 +248,26 @@ class MailServiceInstaller
 			$serviceSettings['NAME']         = $serviceName;
 			$serviceSettings['SORT']         = $serviceSort;
 
-			\Bitrix\Mail\MailServicesTable::add($serviceSettings);
+			if (\Bitrix\Mail\MailServicesTable::add($serviceSettings)->isSuccess())
+			{
+				$added = true;
+			}
 		}
+
+		if (!$added)
+		{
+			return;
+		}
+
+		/*
+			The directory of the site gained a row. A mailbox handed over to one of its services from
+			outside carries the number of that service, and a hand-over that happened before the row
+			existed carries a zero instead: the kit names the service, and a name of a row that is not
+			there resolves to nothing. Such a mailbox is owed its number now - and it is asked for in
+			the background, not here: this runs on the page that opens the mail settings, and the
+			mailboxes owed a number are as many as the hand-overs the portal accumulated.
+		*/
+		LateServiceBindingStepper::request();
 	}
 
 	/**

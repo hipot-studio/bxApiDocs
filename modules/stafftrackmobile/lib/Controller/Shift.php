@@ -34,6 +34,7 @@ use Bitrix\StaffTrack\Service\CounterService;
 use Bitrix\StaffTrack\Service\OptionService;
 use Bitrix\StaffTrack\Trait\CurrentUserTrait;
 use Bitrix\Stafftrack\Integration\Pull;
+use Bitrix\StaffTrackMobile\Infrastructure\ActionFilters\CheckInAvailableByRegionFilter;
 
 class Shift extends Controller
 {
@@ -42,6 +43,16 @@ class Shift extends Controller
 	use IntranetUserTrait;
 
 	/**
+	 * The regional gate covers geo features only, so it is set on the single geo action of the
+	 * controller and not on the controller itself: shift actions (loadMain, list, add, update,
+	 * delete, counter) stay available in a region where check-in geo is off.
+	 *
+	 * Closing getGeoInfo is what keeps geo data out of such a region: the address and the map
+	 * snapshot of a shift are accepted only with the signature this action issues
+	 * (\Bitrix\StaffTrack\Controller\Shift::validateGeo), so a shift saved there carries no geo.
+	 * A gate on add, on the contrary, silently dropped the check-in itself, including the
+	 * "not working today" one that carries no geo at all.
+	 *
 	 * @return array[]
 	 */
 	public function configureActions(): array
@@ -55,6 +66,11 @@ class Shift extends Controller
 			'list' => [
 				'+prefilters' => [
 					new CloseSession(),
+				],
+			],
+			'getGeoInfo' => [
+				'+prefilters' => [
+					new CheckInAvailableByRegionFilter(),
 				],
 			],
 		];
@@ -137,6 +153,7 @@ class Shift extends Controller
 		return [
 			'enabledBySettings' => Feature::isCheckInEnabledBySettings(),
 			'isCheckInGeoEnabled' => Feature::isCheckInGeoEnabled(),
+			'isGeoFeaturesAvailableByRegion' => Feature::isGeoFeaturesAvailableByRegion(),
 			'diskFolderId' => $this->getDiskFolderId($userId),
 			'dialogInfo' => $this->getDialogInfo($userId),
 			'isNotWorkingDay' => $this->isNotWorkingDay($date),

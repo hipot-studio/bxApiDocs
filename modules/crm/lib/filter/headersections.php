@@ -3,6 +3,8 @@
 namespace Bitrix\Crm\Filter;
 
 use Bitrix\Crm\Component\EntityList\ClientDataProvider;
+use Bitrix\Crm\EntityPreset;
+use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\Filter;
 use Bitrix\Crm\Traits;
@@ -26,17 +28,60 @@ final class HeaderSections
 			return [];
 		}
 
-		$primaryEntitySection = [
-			'id' => $factory->getEntityName(),
-			'name' => $factory->getEntityDescription(),
-			'default' => true,
-			'selected' => true,
-		];
-
 		return $this->makeSections(
-			$primaryEntitySection,
+			$this->makePrimaryEntitySection($factory),
 			$factory,
 		);
+	}
+
+	public function appendRequisiteGridSections(
+		array $sections,
+		array $countryIds,
+		?Service\Factory $factory = null,
+	): array
+	{
+		$countryIds = array_values(array_unique(array_map('intval', $countryIds)));
+		if (empty($countryIds))
+		{
+			return $sections;
+		}
+
+		$countryList = EntityPreset::getCountryList();
+		$countryIds = array_values(array_filter(
+			$countryIds,
+			static fn (int $countryId): bool => isset($countryList[$countryId]),
+		));
+		if (empty($countryIds))
+		{
+			return $sections;
+		}
+
+		if (empty($sections) && $factory !== null)
+		{
+			$sections[] = $this->makePrimaryEntitySection($factory);
+		}
+
+		$existingSectionIds = array_fill_keys(array_column($sections, 'id'), true);
+		$showCountry = count($countryIds) > 1;
+		$requisiteTitle = CCrmOwnerType::GetDescription(CCrmOwnerType::Requisite);
+
+		foreach ($countryIds as $countryId)
+		{
+			$sectionId = EntityRequisite::getEntityListHeaderSectionId($countryId);
+			if (isset($existingSectionIds[$sectionId]))
+			{
+				continue;
+			}
+
+			$sections[] = [
+				'id' => $sectionId,
+				'name' => $requisiteTitle . ($showCountry ? ' (' . $countryList[$countryId] . ')' : ''),
+				'selected' => false,
+			];
+			$existingSectionIds[$sectionId] = true;
+		}
+
+		return $sections;
 	}
 
 	public function additionalProviders(EntitySettings $settings, Filter\Factory $filterFactory): array
@@ -89,6 +134,16 @@ final class HeaderSections
 		}
 
 		return $sections;
+	}
+
+	private function makePrimaryEntitySection(Service\Factory $factory): array
+	{
+		return [
+			'id' => $factory->getEntityName(),
+			'name' => $factory->getEntityDescription(),
+			'default' => true,
+			'selected' => true,
+		];
 	}
 
 	private function makeClientFieldsSections(bool $hasCompany): array

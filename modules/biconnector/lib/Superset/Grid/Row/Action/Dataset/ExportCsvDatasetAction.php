@@ -6,12 +6,13 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-final class ExportCsvDatasetAction extends BaseAction
+
+final class ExportCsvDatasetAction extends FormatMenuAction
 {
 
 	public static function getId(): ?string
@@ -40,6 +41,10 @@ final class ExportCsvDatasetAction extends BaseAction
 
 		$this->onclick = $onClickHandler;
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-share');
+
+		return $result;
 	}
 }

@@ -11,29 +11,31 @@ use Bitrix\Crm\V2\Public\OwnerType;
 /**
  * @internal
  */
-class StageIdProvider implements ValidValuesProviderInterface
+class StageIdProvider implements ValidValuesProviderInterface, CacheKeyProviderInterface
 {
 	protected const DEFAULT_CATEGORY_ID = 0;
+
+	public static function getCacheKey(Context $context): ?array
+	{
+		$entityTypeId = $context->getExtraArgs()['entityTypeId'] ?? null;
+		if (!is_int($entityTypeId))
+		{
+			return null;
+		}
+
+		return [static::getEntityTypeId($context), static::getCategoryId($context)];
+	}
 
 	/**
 	 * @return string[]
 	 */
 	public static function getValidValues(Context $context): array
 	{
-		static $stagesIdMap = null;
-
 		$userId = $context->getUserId();
 		$entityTypeId = static::getEntityTypeId($context);
 		$categoryId = static::getCategoryId($context);
 
-		if (!isset($stagesIdMap[$userId][$entityTypeId][$categoryId]))
-		{
-			$stagesIdMap[$userId][$entityTypeId][$categoryId] =
-				static::getDictionary()->getAllIdForEntityType(EntityType::fromId($entityTypeId), $categoryId, $userId)
-			;
-		}
-
-		return $stagesIdMap[$userId][$entityTypeId][$categoryId];
+		return static::getDictionary()->getAllIdForEntityType(EntityType::fromId($entityTypeId), $categoryId, $userId);
 	}
 
 	protected static function getDictionary(): StageDictionary

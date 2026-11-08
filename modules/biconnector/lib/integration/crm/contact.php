@@ -1,10 +1,14 @@
 <?php
+
 namespace Bitrix\BIConnector\Integration\Crm;
 
+use Bitrix\Crm\StatusTable;
 use Bitrix\Main\Localization\Loc;
 
 class Contact
 {
+	use CategoryNameTrait;
+
 	/**
 	 * Event handler for onBIConnectorDataSources event.
 	 * Adds a key crm_contact to the second event parameter.
@@ -29,12 +33,30 @@ class Contact
 		$connection = $manager->getDatabaseConnection();
 		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
 		$helper = $connection->getSqlHelper();
+		$contactTypeStatusTable
+			= '(SELECT CTS.STATUS_ID, CTS.NAME '
+			. 'FROM b_crm_status CTS '
+			. 'INNER JOIN ('
+			. 'SELECT STATUS_ID, MIN(ID) AS MIN_ID '
+			. 'FROM b_crm_status '
+			. 'WHERE ENTITY_ID = \'' . StatusTable::ENTITY_ID_CONTACT_TYPE . '\' '
+			. 'GROUP BY STATUS_ID'
+			. ') CTM ON CTM.MIN_ID = CTS.ID)';
 
 		$eventTableName = $params[3];
 		if (!empty($eventTableName) && $eventTableName !== 'crm_contact')
 		{
 			return;
 		}
+
+		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
+		$defaultCategoryName = $messages['CRM_BIC_CONTACT_CATEGORY_DEFAULT_NAME'] ?? '';
+		$categoryName = self::getCategoryNameExpression($helper, $languageId, $defaultCategoryName);
+		$categoryIdLabel = $helper->getConcatFunction("'['", 'C.CATEGORY_ID', "']'");
+		$category = 'concat_ws(\' \', ' . $categoryIdLabel . ', ' . $categoryName . ')';
+		// Both join keys are left joins: the builder reads 'JOIN' only for a column declared without
+		// 'LEFT_JOIN', and an inner join would drop CATEGORY_ID = 0, which has no row in the dictionary.
+		$categoryJoin = 'LEFT JOIN b_crm_item_category DC ON DC.ID = C.CATEGORY_ID';
 
 		$result['crm_contact'] = [
 			'TABLE_NAME' => 'b_crm_contact',
@@ -263,6 +285,14 @@ class Contact
 					'FIELD_NAME' => 'C.TYPE_ID',
 					'FIELD_TYPE' => 'string',
 				],
+				'TYPE_NAME' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'CT.NAME',
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'CT',
+					'JOIN' => 'INNER JOIN ' . $contactTypeStatusTable . ' CT ON CT.STATUS_ID = C.TYPE_ID',
+					'LEFT_JOIN' => 'LEFT JOIN ' . $contactTypeStatusTable . ' CT ON CT.STATUS_ID = C.TYPE_ID',
+				],
 				//TODO:WEBFORM_ID INT (18) UNSIGNED DEFAULT NULL,
 				//ORIGINATOR_ID VARCHAR(255) NULL,
 				'ORIGINATOR_ID' => [
@@ -305,7 +335,28 @@ class Contact
 					'FIELD_TYPE' => 'int',
 				],
 				//TODO:SEARCH_CONTENT MEDIUMTEXT NULL,
-				//TODO:CATEGORY_ID INT UNSIGNED NOT NULL DEFAULT 0,
+				//CATEGORY_ID INT UNSIGNED NOT NULL DEFAULT 0,
+				'CATEGORY_ID' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => 'C.CATEGORY_ID',
+					'FIELD_TYPE' => 'int',
+				],
+				'CATEGORY_NAME' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => $categoryName,
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'DC',
+					'JOIN' => $categoryJoin,
+					'LEFT_JOIN' => $categoryJoin,
+				],
+				'CATEGORY' => [
+					'IS_METRIC' => 'N', // 'Y'
+					'FIELD_NAME' => $category,
+					'FIELD_TYPE' => 'string',
+					'TABLE_ALIAS' => 'DC',
+					'JOIN' => $categoryJoin,
+					'LEFT_JOIN' => $categoryJoin,
+				],
 				'PHONE' => [
 					'GROUP_CONCAT' => ', ',
 					'GROUP_KEY' => 'PHONE',
@@ -386,12 +437,21 @@ class Contact
 					'JOIN' => 'INNER JOIN b_crm_utm UTM_T ON UTM_T.ENTITY_TYPE_ID = ' . \CCrmOwnerType::Contact . ' AND UTM_T.ENTITY_ID = C.ID and UTM_T.CODE = \'' . \Bitrix\Crm\UtmTable::ENUM_CODE_UTM_TERM . '\'',
 					'LEFT_JOIN' => 'LEFT JOIN b_crm_utm UTM_T ON UTM_T.ENTITY_TYPE_ID = ' . \CCrmOwnerType::Contact . ' AND UTM_T.ENTITY_ID = C.ID and UTM_T.CODE = \'' . \Bitrix\Crm\UtmTable::ENUM_CODE_UTM_TERM . '\'',
 				],
+				'COMPANIES' => [
+					'GROUP_CONCAT' => ', ',  // delimiter for an array represented by a string
+					'GROUP_KEY' => 'COMPANIES',
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => 'CCC.COMPANY_ID',
+					'FIELD_TYPE' => 'array_string',
+					'TABLE_ALIAS' => 'CCC',
+					'JOIN' => 'INNER JOIN b_crm_contact_company CCC ON CCC.CONTACT_ID = C.ID',
+					'LEFT_JOIN' => 'LEFT JOIN b_crm_contact_company CCC ON CCC.CONTACT_ID = C.ID',
+				],
 			],
 		];
 
-		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_contact']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_CONTACT_TABLE'] ?: 'crm_contact';
-		$result['crm_contact']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_CONTACT_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['crm_contact']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_CONTACT_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['crm_contact']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode] : $fieldCode;
@@ -403,5 +463,13 @@ class Contact
 			$fieldInfo['FIELD_DESCRIPTION_FULL'] = !empty($messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode . '_FULL']) ? $messages['CRM_BIC_CONTACT_FIELD_' . $fieldCode . '_FULL'] : '';
 		}
 		unset($fieldInfo);
+	}
+
+	protected static function getSystemCategoryCodes(): array
+	{
+		return [
+			\Bitrix\Crm\Service\Factory\SmartDocument::CONTACT_CATEGORY_CODE,
+			\Bitrix\Crm\Integration\Catalog\Contractor\CategoryRepository::CATALOG_CONTRACTOR_CONTACT,
+		];
 	}
 }

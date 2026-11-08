@@ -33,6 +33,7 @@ final class DeleteParameters extends Dto
 
 			new DefinedCategoryIdentifier($this, 'entityTypeId', 'categoryId'),
 
+			new RequiredField($this, 'stageId'),
 			new NotEmptyField($this, 'stageId'),
 		];
 	}

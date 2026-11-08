@@ -48,7 +48,7 @@ class Deal extends Proxy
 		}
 		else
 		{
-			throw new Exception\BatchableException(implode(',', $r->getErrorMessages()));
+			throw static::createBatchableException($r);
 		}
 
 		return $result;
@@ -78,7 +78,7 @@ class Deal extends Proxy
 			}
 			else
 			{
-				throw new Exception\BatchableException(implode(',', $r->getErrorMessages()));
+				throw static::createBatchableException($r);
 			}
 		}
 		return $result;
@@ -107,10 +107,20 @@ class Deal extends Proxy
 			}
 			else
 			{
-				throw new Exception\BatchableException(implode(',', $r->getErrorMessages()));
+				throw static::createBatchableException($r);
 			}
 		}
 		return $result;
+	}
+
+	static protected function createBatchableException(\Bitrix\Main\Result $result): Exception\BatchableException
+	{
+		$tokenError = $result->getErrorCollection()->getErrorByCode(Integration\Rest\Cmd\Base::ERROR_TOKEN_NOT_FOUND);
+
+		return new Exception\BatchableException(
+			implode(',', $result->getErrorMessages()),
+			$tokenError ? (int)$tokenError->getCode() : 0,
+		);
 	}
 
 	public function getSrcEntityTypeId()

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\BizprocDesigner\Internal\Command\Activity\Complex;
 
+use Bitrix\Bizproc\Activity\PropertiesDialog;
+use Bitrix\Bizproc\Activity\ReturnPropertiesResolver;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\PortRuleDto;
 use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\Rule\ActionExpressionDto;
@@ -12,6 +14,7 @@ use Bitrix\BizprocDesigner\Infrastructure\Dto\Activity\Complex\Rule\ConditionExp
 use Bitrix\BizprocDesigner\Infrastructure\Enum\ConstructionType;
 use Bitrix\BizprocDesigner\Internal\Command\AbstractCommand;
 
+use Bitrix\BizprocDesigner\Internal\Service\Activity\ReadableExpressionContextFactory;
 use Bitrix\BizprocDesigner\Internal\Trait\ActivitySettingsDecoder;
 use Bitrix\BizprocDesigner\Internal\Trait\ConditionValueResolver;
 use Bitrix\BizprocDesigner\Internal\Trait\NodeActionResolver;
@@ -28,9 +31,15 @@ class SaveSingleRuleCommand extends AbstractCommand
 	use ConditionValueResolver;
 	use NodeActionResolver;
 
+	private ?ReadableExpressionContextFactory $readableExpressionContextFactory = null;
+
+	/**
+	 * @param array $templateSlice Scheme slice used to build the action property map, with the host node first.
+	 */
 	public function __construct(
 		public readonly PortRuleDto $portRuleDto,
 		public array $documentType,
+		public readonly array $templateSlice = [],
 	)
 	{
 	}
@@ -62,61 +71,93 @@ class SaveSingleRuleCommand extends AbstractCommand
 
 	private function processActionExpressions(PortRuleDto $resultPortRule): Result
 	{
-		$actionExpressionList = $this->extractActionExpressionList($resultPortRule);
-
-		foreach ($actionExpressionList as $actionExpression)
+		foreach ($this->extractActionExpressionList($resultPortRule) as $addressedExpression)
 		{
-			if (empty($actionExpression->rawActivityData))
+			$result = $this->normalizeActionExpression($addressedExpression['expression']);
+			if (!$result->isSuccess())
 			{
-				continue;
+				return $this->addressFailure($result, $addressedExpression['constructionId']);
 			}
-
-			// Node-action-backed ACTION: internalise field values through the backing node-action's
-			// getPropertiesMap (FieldType::extractValue) instead of getActivitySettings, mirroring the
-			// BASE_SETTINGS path. This targets legacy dual activities (robot + node-action, e.g.
-			// CBPIMNotifyActivity): as an ACTION they render the unified getPropertiesMap form
-			// (FieldName message_user_from), but getActivitySettings() routes through their legacy
-			// getPropertiesDialogValues, which reads legacy dialog keys (from_user_id) and never sees
-			// those FieldNames — so every value is dropped and the raw printable string reaches the USER
-			// validator. Legacy-dialog node-actions (CBPSetFieldActivity, CBPCrmCreateToDoActivity) do
-			// not implement IBPConfigurableActivity, so internalizeNodeActionProperties() resolves an
-			// empty propertiesMap and returns null → the getActivitySettings() path below is unchanged.
-			$nodeActionResult = $this->extractNodeActionAction($actionExpression);
-			if ($nodeActionResult !== null)
-			{
-				if (!$nodeActionResult->isSuccess())
-				{
-					return $nodeActionResult;
-				}
-
-				continue;
-			}
-
-			$saveActivityResult = $this->getActivitySettings($actionExpression);
-			if (
-				!$saveActivityResult instanceof Activity\Settings\SaveCommandResult
-				|| !$saveActivityResult->isSuccess()
-			)
-			{
-				return $saveActivityResult;
-			}
-
-			$actionExpression->rawActivityData = null;
-			$activityData = $saveActivityResult->getSettings()?->toArray() ?? [];
-			if (!empty($activityData))
-			{
-				$activityData['Document'] = $actionExpression->document;
-			}
-
-			$actionExpression->activityData = $activityData;
 		}
 
 		return new Result();
 	}
 
 	/**
+	 * Normalise one ACTION or FILTER construction: rawActivityData -> activityData, by the route the activity
+	 * of the construction takes. The address of a failure belongs to the traversal above, so neither this
+	 * step nor the routes it takes know which construction they are working on.
+	 */
+	private function normalizeActionExpression(ActionExpressionDto $actionExpression): Result
+	{
+		if (empty($actionExpression->rawActivityData))
+		{
+			$result = $this->revalidateNormalizedNodeAction($actionExpression->activityData);
+			if (!$result->isSuccess())
+			{
+				return $result;
+			}
+
+			$this->refreshActionReturnProperties($actionExpression, true);
+
+			return new Result();
+		}
+
+		$documentModuleResult = $this->loadActionDocumentModule($actionExpression);
+		if (!$documentModuleResult->isSuccess())
+		{
+			return $documentModuleResult;
+		}
+
+		// Node-action-backed ACTION: internalise field values through the backing node-action's
+		// getPropertiesMap (FieldType::extractValue) instead of getActivitySettings, mirroring the
+		// BASE_SETTINGS path. This targets legacy dual activities (robot + node-action, e.g.
+		// CBPIMNotifyActivity): as an ACTION they render the unified getPropertiesMap form
+		// (FieldName message_user_from), but getActivitySettings() routes through their legacy
+		// getPropertiesDialogValues, which reads legacy dialog keys (from_user_id) and never sees
+		// those FieldNames - so every value is dropped and the raw printable string reaches the USER
+		// validator. Legacy-dialog node-actions (CBPSetFieldActivity, CBPCrmCreateToDoActivity) do
+		// not implement IBPConfigurableActivity, so internalizeNodeActionProperties() resolves an
+		// empty propertiesMap and returns null -> the getActivitySettings() path below is unchanged.
+		$nodeActionResult = $this->extractNodeActionAction($actionExpression);
+		if ($nodeActionResult !== null)
+		{
+			if ($nodeActionResult->isSuccess())
+			{
+				$this->refreshActionReturnProperties($actionExpression);
+			}
+
+			return $nodeActionResult;
+		}
+
+		$saveActivityResult = $this->getActivitySettings($actionExpression);
+		if (
+			!$saveActivityResult instanceof Activity\Settings\SaveCommandResult
+			|| !$saveActivityResult->isSuccess()
+		)
+		{
+			return $saveActivityResult;
+		}
+
+		$actionExpression->rawActivityData = null;
+		$activityData = $saveActivityResult->getSettings()?->toArray() ?? [];
+		if (!empty($activityData))
+		{
+			$activityData['Document'] = $actionExpression->document;
+		}
+
+		$actionExpression->activityData = $activityData;
+		$this->refreshActionReturnProperties($actionExpression);
+
+		return new Result();
+	}
+
+	/**
+	 * The expressions to normalise, each next to the id of the construction carrying it: a failure of the
+	 * traversal is answered with the address of that construction.
+	 *
 	 * @param PortRuleDto $portRuleDto
-	 * @return list<ActionExpressionDto>
+	 * @return list<array{constructionId: string, expression: ActionExpressionDto}>
 	 */
 	private function extractActionExpressionList(PortRuleDto $portRuleDto): array
 	{
@@ -142,7 +183,10 @@ class SaveSingleRuleCommand extends AbstractCommand
 					continue;
 				}
 
-				$actionExpressionList[] = $expression;
+				$actionExpressionList[] = [
+					'constructionId' => $construction->id,
+					'expression' => $expression,
+				];
 			}
 		}
 
@@ -198,6 +242,60 @@ class SaveSingleRuleCommand extends AbstractCommand
 		return new Result();
 	}
 
+	private function loadActionDocumentModule(ActionExpressionDto $actionExpression): Result
+	{
+		$documentTypeResult = $this->extractDocumentType($actionExpression->rawActivityData);
+		if (!$documentTypeResult->isSuccess())
+		{
+			return $documentTypeResult;
+		}
+
+		$documentType = $documentTypeResult->getData()['documentType'] ?? null;
+		if ($documentType === null)
+		{
+			return new Result();
+		}
+
+		$moduleId = (string)($documentType[0] ?? '');
+		if ($moduleId === '' || !Loader::includeModule($moduleId))
+		{
+			return (new Result())->addError(ErrorMessage::ACCESS_DENIED->getCodedError());
+		}
+
+		$actionExpression->rawActivityData = $this->replaceNestedDocumentType(
+			$actionExpression->rawActivityData,
+			$documentType,
+		);
+
+		return new Result();
+	}
+
+	private function refreshActionReturnProperties(
+		ActionExpressionDto $actionExpression,
+		bool $preserveExistingOnEmpty = false,
+	): void
+	{
+		$activityData = $actionExpression->activityData;
+		if (empty($activityData) || empty($activityData['Type']))
+		{
+			return;
+		}
+
+		\CBPRuntime::getRuntime()->includeActivityFile($activityData['Type']);
+		$returnProperties = ReturnPropertiesResolver::resolve($activityData);
+		if (
+			$preserveExistingOnEmpty
+			&& $returnProperties === []
+			&& !empty($activityData['ReturnProperties'])
+		)
+		{
+			return;
+		}
+
+		$activityData['ReturnProperties'] = $returnProperties;
+		$actionExpression->activityData = $activityData;
+	}
+
 	/**
 	 * Runs the shared activity save pipeline for one expression. A success always carries
 	 * Activity\Settings\SaveCommandResult, so the callers narrow the result to it before they read the
@@ -206,13 +304,13 @@ class SaveSingleRuleCommand extends AbstractCommand
 	 */
 	private function getActivitySettings(ActionExpressionDto $actionExpression): Result
 	{
-		$documentTypeResult = $this->extractDocumentType($actionExpression->rawActivityData);
+		$documentTypeResult = $this->resolveAuthorizedDocumentType($actionExpression->rawActivityData);
 		if (!$documentTypeResult->isSuccess())
 		{
 			return $documentTypeResult;
 		}
 
-		$documentType = $documentTypeResult->getData()['documentType'] ?? $this->documentType;
+		$documentType = $documentTypeResult->getData()['documentType'];
 		$rawActivityData = $this->modifyRawActivityDataTemplate(
 			$this->replaceNestedDocumentType($actionExpression->rawActivityData, $documentType),
 		);
@@ -228,8 +326,8 @@ class SaveSingleRuleCommand extends AbstractCommand
 			'properties' => $activityProperties,
 		] = $this->decodeActivitySettings($rawActivityData, $documentType);
 
-		$result =
-			(new Activity\Settings\SaveCommand(
+		$result
+			= (new Activity\Settings\SaveCommand(
 				new Activity\Settings\SaveCommandDto(
 					activity: new Activity\Settings\SaveCommandActivityDto(
 						type: (string)($rawActivityData['activityType'] ?? ''),
@@ -243,7 +341,10 @@ class SaveSingleRuleCommand extends AbstractCommand
 					variables: $workflowVariables,
 					parameters: $workflowParameters,
 					constants: $workflowConstants,
-				)
+				),
+				// The document type the expression is settled under is authorized above, so the labels of the
+				// signature are read under an access this request checked.
+				$this->readableExpressionContextFactory()->createForAuthorizedSchema(...),
 			))
 				->run()
 		;
@@ -268,70 +369,109 @@ class SaveSingleRuleCommand extends AbstractCommand
 	{
 		Loader::requireModule('bizproc');
 
-		foreach ($this->extractBaseSettingsExpressionList($resultPortRule) as $expression)
+		foreach ($this->extractBaseSettingsExpressionList($resultPortRule) as $addressedExpression)
 		{
-			if (empty($expression->rawActivityData))
+			$result = $this->normalizeBaseSettingsExpression($addressedExpression['expression']);
+			if (!$result->isSuccess())
 			{
-				continue;
+				return $this->addressFailure($result, $addressedExpression['constructionId']);
 			}
-
-			$triggerTypeResult = $this->applyNodeTriggerType($expression);
-			if (!$triggerTypeResult->isSuccess())
-			{
-				return $triggerTypeResult;
-			}
-
-			// Node-action-backed base-settings: extract field values through the node-action's
-			// getPropertiesMap (FieldType::extractValue), internalising printable USER/entity values
-			// ("Admin Adminov [1]" -> "user_1") exactly like ACTION constructions do. This must NOT go
-			// through the shared getActivitySettings() pipeline: a legacy dual activity (robot +
-			// node-action, e.g. IMNotifyActivity) extracts via its own getPropertiesDialogValues, which
-			// reads legacy dialog field names and never sees the getPropertiesMap FieldNames that the
-			// base-settings form submits — so every field value is dropped and the raw printable string
-			// reaches the USER validator ("Свойство '…' указано не корректно").
-			$nodeActionResult = $this->extractNodeActionBaseSettings($expression);
-			if ($nodeActionResult !== null)
-			{
-				if (!$nodeActionResult->isSuccess())
-				{
-					return $nodeActionResult;
-				}
-
-				continue;
-			}
-
-			// Guard: an empty id makes modifyRawActivityDataTemplate inject an empty-string key
-			// into the workflow template, so findActivityByName returns null and all field values
-			// are silently lost. Skip the getActivitySettings pipeline; the existing rawActivityData
-			// (if any) remains as-is, which is the safe fallback for a malformed payload.
-			if ((string)($expression->rawActivityData['id'] ?? '') === '')
-			{
-				continue;
-			}
-
-			$saveActivityResult = $this->getActivitySettings(
-				$this->makeActionExpressionForBaseSettings($expression),
-			);
-
-			if (
-				!$saveActivityResult instanceof Activity\Settings\SaveCommandResult
-				|| !$saveActivityResult->isSuccess()
-			)
-			{
-				return $saveActivityResult;
-			}
-
-			$expression->rawActivityData = null;
-			$activityData = $saveActivityResult->getSettings()?->toArray() ?? [];
-			if (!empty($activityData))
-			{
-				$activityData['Document'] = null;
-			}
-
-			$expression->activityData = $activityData;
 		}
 
 		return new Result();
+	}
+
+	/**
+	 * Normalise one BASE_SETTINGS construction. Mirrors normalizeActionExpression(), the address of a
+	 * failure included: it belongs to the traversal above and not to this step.
+	 */
+	private function normalizeBaseSettingsExpression(BaseSettingsExpressionDto $expression): Result
+	{
+		if (empty($expression->rawActivityData))
+		{
+			return $this->revalidateNormalizedNodeAction($expression->activityData);
+		}
+
+		$triggerTypeResult = $this->applyNodeTriggerType($expression);
+		if (!$triggerTypeResult->isSuccess())
+		{
+			return $triggerTypeResult;
+		}
+
+		// Node-action-backed base-settings: extract field values through the node-action's
+		// getPropertiesMap (FieldType::extractValue), internalising printable USER/entity values
+		// ("Admin Adminov [1]" -> "user_1") exactly like ACTION constructions do. This must NOT go
+		// through the shared getActivitySettings() pipeline: a legacy dual activity (robot +
+		// node-action, e.g. IMNotifyActivity) extracts via its own getPropertiesDialogValues, which
+		// reads legacy dialog field names and never sees the getPropertiesMap FieldNames that the
+		// base-settings form submits - so every field value is dropped and the raw printable string
+		// reaches the USER validator.
+		$nodeActionResult = $this->extractNodeActionBaseSettings($expression);
+		if ($nodeActionResult !== null)
+		{
+			return $nodeActionResult;
+		}
+
+		// Guard: an empty id makes modifyRawActivityDataTemplate inject an empty-string key
+		// into the workflow template, so findActivityByName returns null and all field values
+		// are silently lost. Skip the getActivitySettings pipeline; the existing rawActivityData
+		// (if any) remains as-is, which is the safe fallback for a malformed payload.
+		if ((string)($expression->rawActivityData['id'] ?? '') === '')
+		{
+			return new Result();
+		}
+
+		$saveActivityResult = $this->getActivitySettings(
+			$this->makeActionExpressionForBaseSettings($expression),
+		);
+
+		if (
+			!$saveActivityResult instanceof Activity\Settings\SaveCommandResult
+			|| !$saveActivityResult->isSuccess()
+		)
+		{
+			return $saveActivityResult;
+		}
+
+		$expression->rawActivityData = null;
+		$activityData = $saveActivityResult->getSettings()?->toArray() ?? [];
+		if (!empty($activityData))
+		{
+			// A node-action proxy owns a document of its own, exactly as an ACTION does. A host-merged
+			// construction describes the node itself and has none: whose document the node works over
+			// is written in its own Properties, not here.
+			$activityData['Document'] = $expression->actionId !== null ? $expression->document : null;
+		}
+
+		$expression->activityData = $activityData;
+
+		return new Result();
+	}
+
+	/**
+	 * The failure of a construction leaves the traversal addressed: every error is re-assembled carrying the
+	 * id of the construction in customData, the very address the settings panel reveals a blocked row by.
+	 *
+	 * The message and the code are carried over verbatim - other consumers branch on the code, and the
+	 * message comes from the activity, being the text that names the field left empty. The message is taken
+	 * as it is rather than through getMessage(), which flattens a localizable message into a string.
+	 */
+	private function addressFailure(Result $failure, string $constructionId): Result
+	{
+		$addressedFailure = new Result();
+
+		foreach ($failure->getErrors() as $error)
+		{
+			$addressedFailure->addError(
+				new Error(
+					$error->getLocalizableMessage() ?? $error->getMessage(),
+					$error->getCode(),
+					['constructionId' => $constructionId],
+				),
+			);
+		}
+
+		return $addressedFailure;
 	}
 
 	/**
@@ -367,6 +507,10 @@ class SaveSingleRuleCommand extends AbstractCommand
 		$rawActivityData = $expression->rawActivityData ?? [];
 		$savedActivityData = $expression->activityData ?? [];
 
+		// The nested type is read here only to ask the owner module which class replaces the one the node
+		// carries, and no name of that document is read out of it: the checked type belongs to the paths that
+		// do read them ({@see self::resolveAuthorizedDocumentType()}), and a payload refused there is refused
+		// before anything of it reaches the client.
 		$documentTypeResult = $this->extractDocumentType($rawActivityData);
 		if (!$documentTypeResult->isSuccess())
 		{
@@ -392,7 +536,7 @@ class SaveSingleRuleCommand extends AbstractCommand
 		)
 		{
 			return (new Result())->addError(
-				new Error('Trigger type transition is not allowed', 'TRIGGER_TYPE_TRANSITION_NOT_ALLOWED')
+				new Error('Trigger type transition is not allowed', 'TRIGGER_TYPE_TRANSITION_NOT_ALLOWED'),
 			);
 		}
 
@@ -420,8 +564,7 @@ class SaveSingleRuleCommand extends AbstractCommand
 			$template = $this->decodeTemplateData($rawActivityData)['template'];
 			$node = is_array($template)
 				? \CBPWorkflowTemplateLoader::findActivityByName($template, $activityName)
-				: null
-			;
+				: null;
 
 			$templateType = is_array($node) ? (string)($node['Type'] ?? '') : '';
 			if ($templateType !== '')
@@ -434,8 +577,11 @@ class SaveSingleRuleCommand extends AbstractCommand
 	}
 
 	/**
+	 * The expressions to normalise, each next to the id of the construction carrying it, symmetrically to
+	 * extractActionExpressionList().
+	 *
 	 * @param PortRuleDto $portRuleDto
-	 * @return list<BaseSettingsExpressionDto>
+	 * @return list<array{constructionId: string, expression: BaseSettingsExpressionDto}>
 	 */
 	private function extractBaseSettingsExpressionList(PortRuleDto $portRuleDto): array
 	{
@@ -456,7 +602,10 @@ class SaveSingleRuleCommand extends AbstractCommand
 					continue;
 				}
 
-				$list[] = $expression;
+				$list[] = [
+					'constructionId' => $construction->id,
+					'expression' => $expression,
+				];
 			}
 		}
 
@@ -466,8 +615,8 @@ class SaveSingleRuleCommand extends AbstractCommand
 	/**
 	 * Wrap a BaseSettingsExpressionDto into a minimal ActionExpressionDto so that
 	 * the shared getActivitySettings() pipeline (prepareForm / decodeActivitySettings)
-	 * can process it. BASE_SETTINGS has no actionId or document — those fields are
-	 * left null; only rawActivityData and activityData are relevant.
+	 * can process it. The pipeline reads nothing but rawActivityData, so actionId and document are left
+	 * null here; the document of the construction is written onto the settings by the caller.
 	 */
 	private function makeActionExpressionForBaseSettings(BaseSettingsExpressionDto $expression): ActionExpressionDto
 	{
@@ -523,7 +672,7 @@ class SaveSingleRuleCommand extends AbstractCommand
 			'Type' => $activityType,
 			'Activated' => $isActivated ? 'Y' : 'N',
 			'Properties' => $properties,
-			'Document' => null,
+			'Document' => $expression->document,
 		];
 
 		return new Result();
@@ -553,7 +702,11 @@ class SaveSingleRuleCommand extends AbstractCommand
 	 *   - Result(errors) extraction/validation failed;
 	 *   - Result(ok)     data: ['properties' => array, 'activated' => bool].
 	 */
-	private function internalizeNodeActionProperties(string $activityType, array $rawActivityData): ?Result
+	private function internalizeNodeActionProperties(
+		string $activityType,
+		array $rawActivityData,
+		?array $propertiesMap = null,
+	): ?Result
 	{
 		if ($activityType === '')
 		{
@@ -562,13 +715,13 @@ class SaveSingleRuleCommand extends AbstractCommand
 
 		Loader::requireModule('bizproc');
 
-		$documentTypeResult = $this->extractDocumentType($rawActivityData);
+		$documentTypeResult = $this->resolveAuthorizedDocumentType($rawActivityData);
 		if (!$documentTypeResult->isSuccess())
 		{
 			return $documentTypeResult;
 		}
 
-		$documentType = $documentTypeResult->getData()['documentType'] ?? $this->documentType;
+		$documentType = $documentTypeResult->getData()['documentType'];
 
 		['properties' => $request] = $this->decodeActivitySettings(
 			$this->replaceNestedDocumentType($rawActivityData, $documentType),
@@ -579,8 +732,16 @@ class SaveSingleRuleCommand extends AbstractCommand
 		// The document type must reach getPropertiesMap(): fields whose metadata depends on it (select
 		// Options, document field lists) build empty otherwise, and FieldType::extractValue then drops the
 		// submitted value. This is the same document type ActivityControlsBuilder renders the form with.
-		$configurator = \CBPActivity::createConfigurator($activityType, $request, $documentType);
-		$propertiesMap = $configurator->getPropertiesMap();
+		// The scheme slice travels with it for the same reason: a map that reads the host node (its filter
+		// names the actual source type, the declared one only stands in for the area) would otherwise build
+		// its Options for a different type here than the form was rendered with, and extractValue would
+		// drop a correctly chosen value as one outside the list.
+		$propertiesMap ??= \CBPActivity::createConfigurator(
+			$activityType,
+			$request,
+			$documentType,
+			$this->getPropertiesMapContext(),
+		)->getPropertiesMap();
 		if (empty($propertiesMap))
 		{
 			// Not a unified (getPropertiesMap-rendered) node-action — defer to the shared pipeline.
@@ -692,6 +853,91 @@ class SaveSingleRuleCommand extends AbstractCommand
 		return $result;
 	}
 
+	private function getPropertiesMapContext(): array
+	{
+		return $this->templateSlice === [] ? [] : [
+			'Template' => $this->templateSlice,
+			'WorkflowDocumentType' => $this->documentType,
+		];
+	}
+
+	/**
+	 * Rebuilds an already normalized relation action through the contextual property map used by its form.
+	 * Only relation saves carry templateSlice; empty properties remain a compatible untouched placeholder.
+	 */
+	private function revalidateNormalizedNodeAction(?array &$activityData): Result
+	{
+		if ($this->templateSlice === [] || empty($activityData))
+		{
+			return new Result();
+		}
+
+		$activityType = (string)($activityData['Type'] ?? '');
+		if (!$this->isNodeActionBackingType($activityType))
+		{
+			return new Result();
+		}
+
+		$storedProperties = is_array($activityData['Properties'] ?? null)
+			? $activityData['Properties']
+			: []
+		;
+		if ($storedProperties === [])
+		{
+			return new Result();
+		}
+
+		$propertiesMap = \CBPActivity::createConfigurator(
+			$activityType,
+			$storedProperties,
+			$this->documentType,
+			$this->getPropertiesMapContext(),
+		)->getPropertiesMap();
+		if ($propertiesMap === [])
+		{
+			return new Result();
+		}
+
+		$dialog = new PropertiesDialog('', []);
+		$rawActivityData = [];
+		foreach ($propertiesMap as $propertyKey => $fieldProperties)
+		{
+			$value = $storedProperties[$propertyKey] ?? ($fieldProperties['Default'] ?? null);
+			$getter = $fieldProperties['Getter'] ?? null;
+			if ($getter instanceof \Closure)
+			{
+				$value = $getter($dialog, $fieldProperties, $activityData, false);
+			}
+
+			$fieldName = (string)($fieldProperties['FieldName'] ?? $propertyKey);
+			$rawActivityData[$fieldName] = $value;
+		}
+
+		$rawActivityData['id'] = (string)($activityData['Name'] ?? '');
+		$rawActivityData['activityType'] = $activityType;
+		$rawActivityData['activated'] = (string)($activityData['Activated'] ?? 'Y');
+		if (array_key_exists('Title', $storedProperties))
+		{
+			$rawActivityData['title'] = $storedProperties['Title'];
+		}
+
+		$result = $this->internalizeNodeActionProperties($activityType, $rawActivityData, $propertiesMap);
+		if ($result === null || !$result->isSuccess())
+		{
+			return $result ?? new Result();
+		}
+
+		$data = $result->getData();
+		$properties = $data['properties'];
+		if (array_key_exists('Title', $storedProperties))
+		{
+			$properties['Title'] = $data['title'];
+		}
+		$activityData['Properties'] = $properties;
+
+		return new Result();
+	}
+
 	private function processConditionExpressions(PortRuleDto $resultPortRule): Result
 	{
 		$conditionDocumentType = $this->resolveHostNodeConditionDocumentType($resultPortRule);
@@ -729,8 +975,10 @@ class SaveSingleRuleCommand extends AbstractCommand
 	{
 		Loader::requireModule('bizproc');
 
-		foreach ($this->extractBaseSettingsExpressionList($portRule) as $expression)
+		foreach ($this->extractBaseSettingsExpressionList($portRule) as $addressedExpression)
 		{
+			$expression = $addressedExpression['expression'];
+
 			// A node-action proxy construction describes a child activity of its own, not the host node.
 			if ($expression->actionId !== null)
 			{
@@ -775,6 +1023,72 @@ class SaveSingleRuleCommand extends AbstractCommand
 		}
 
 		return $list;
+	}
+
+	/**
+	 * Document type one expression is settled under: the type nested in its payload, or the type of the
+	 * request when it nests none.
+	 *
+	 * A nested type is a second document type in one request, while the request was authorized on the type of
+	 * its own argument alone ({@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Activity\Complex::saveRuleAction()}).
+	 * Everything downstream reads that type as an authorized one - the fields of the document are named by it
+	 * and the readable form of an expression is resolved against it - so the right to create a workflow of it
+	 * is required here, the very check the entrances of the panel make on the type they are called with.
+	 *
+	 * A nested type equal to the type of the request is taken as it stands: that one is authorized already,
+	 * and re-deciding it here would answer a checked request by a second opinion of the same check.
+	 *
+	 * @return Result data: ['documentType' => array] - the type the expression is settled under;
+	 *   ACCESS_DENIED when the nested type is not a registered document or the user may not operate it.
+	 */
+	private function resolveAuthorizedDocumentType(array $rawActivityData): Result
+	{
+		$extractResult = $this->extractDocumentType($rawActivityData);
+		if (!$extractResult->isSuccess())
+		{
+			return $extractResult;
+		}
+
+		$nestedDocumentType = $extractResult->getData()['documentType'] ?? null;
+		if ($nestedDocumentType === null || $this->isSameDocumentType($nestedDocumentType, $this->documentType))
+		{
+			return (new Result())->setData(['documentType' => $this->documentType]);
+		}
+
+		if (!$this->canCreateWorkflow($nestedDocumentType))
+		{
+			return (new Result())->addError(ErrorMessage::ACCESS_DENIED->getCodedError());
+		}
+
+		return (new Result())->setData(['documentType' => $nestedDocumentType]);
+	}
+
+	/**
+	 * One instance per command, shared by every expression it settles: each names its own declarations and
+	 * its own steps, while the descriptors they have in common are described once.
+	 */
+	private function readableExpressionContextFactory(): ReadableExpressionContextFactory
+	{
+		return $this->readableExpressionContextFactory ??= new ReadableExpressionContextFactory();
+	}
+
+	private function canCreateWorkflow(array $documentType): bool
+	{
+		$user = new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
+
+		return \CBPDocument::CanUserOperateDocumentType(
+			\CBPCanUserOperateOperation::CreateWorkflow,
+			$user->getId(),
+			$documentType,
+		);
+	}
+
+	/** The very normalisation the panel paths compare a submitted document type with a stored one by. */
+	private function isSameDocumentType(array $documentType, array $otherDocumentType): bool
+	{
+		return array_map(strval(...), array_values($documentType))
+			=== array_map(strval(...), array_values($otherDocumentType))
+		;
 	}
 
 	/**

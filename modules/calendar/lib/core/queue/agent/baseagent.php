@@ -4,14 +4,16 @@ namespace Bitrix\Calendar\Core\Queue\Agent;
 
 use Bitrix\Calendar\Core\Queue\Interfaces;
 use Bitrix\Calendar\Core\Queue\Interfaces\Processor;
-use Bitrix\Calendar\Internals\Log\Logger;
+use Bitrix\Calendar\Core\Queue\LogContext;
+use Bitrix\Calendar\Core\Queue\QueueLogger;
 use CAgent;
-use Exception;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 abstract class BaseAgent
 {
 	private const TIME_LIMIT = 10;
-	private static ?Logger $logger = null;
+	private static ?LoggerInterface $logger = null;
 
 	protected bool $isEscalated = false;
 
@@ -26,17 +28,34 @@ abstract class BaseAgent
 			$runner->run();
 			self::modifyAgent($runner);
 		}
-		catch(Exception $exception)
+		catch(Throwable $exception)
 		{
-			if (is_null(self::$logger))
-			{
-				self::$logger = new Logger();
-			}
-
-			self::$logger->log($exception);
+			self::logErrorSafely('Queue agent failed', ['exception' => LogContext::fromThrowable($exception)]);
 		}
 
 		return static::getAgentName();
+	}
+
+	/**
+	 * The journal lives in the database as well, and the container it comes from can fail on its
+	 * own. Either failure escaping here would cost the agent the name it returns, and the core
+	 * reschedules the agent by that name alone: without it the row keeps the DATE_CHECK of the pass
+	 * that claimed it and the agent stays silent for the whole lock time.
+	 */
+	private static function logErrorSafely(string $message, array $context): void
+	{
+		try
+		{
+			if (is_null(self::$logger))
+			{
+				self::$logger = QueueLogger::get();
+			}
+
+			self::$logger->error($message, $context);
+		}
+		catch (Throwable)
+		{
+		}
 	}
 
 	/**
@@ -60,21 +79,20 @@ abstract class BaseAgent
 	 *
 	 * @return void
 	 */
-	private static function modifyAgent(BaseAgent $runner)
+	private static function modifyAgent(self $runner)
 	{
 		$agent = CAgent::getList(
 			[],
 			[
 				'MODULE_ID' => self::getModule(),
 				'=NAME' =>self::getAgentName(),
-			]
+			],
 		)->Fetch();
 		if ($agent)
 		{
 			$interval = $runner->isEscalated
 				? $runner->getEscalatedInterval()
-				: $runner->getInterval()
-			;
+				: $runner->getInterval();
 			if ((int)$agent['AGENT_INTERVAL'] !== $interval)
 			{
 				CAgent::Update($agent['ID'],['AGENT_INTERVAL' => $interval]);
@@ -100,7 +118,7 @@ abstract class BaseAgent
 			{
 				$consumer->acknowledge($message);
 			}
-			else if ($result === Interfaces\Processor::REJECT)
+			elseif ($result === Interfaces\Processor::REJECT)
 			{
 				$consumer->reject($message);
 			}

@@ -16,7 +16,14 @@ enum OptionDictionary: string
 	case AhaResultFromMessage = 'aha_result_from_message';
 	case AhaStartTimeTracking = 'aha_start_time_tracking';
 	case AhaTasksAiPromo = 'aha_tasks_ai_promo';
+	case AhaFilesView = 'aha_files_view';
 
 	case StateFlags = 'state.flags';
 	case StateFlagsTemplate = 'state.flags.template';
+
+	case FilesViewMode = 'files_view_mode';
+
+	case OnboardingNoDeadlineCount = 'onboarding_no_deadline_count';
+	case OnboardingSelfAssignStreak = 'onboarding_self_assign_streak';
+	case OnboardingDaysWithoutManualDeadline = 'onboarding_days_without_manual_deadline';
 }

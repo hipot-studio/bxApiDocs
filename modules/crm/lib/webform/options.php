@@ -104,6 +104,11 @@ class Options
 
 		return [
 			'data' => $config['data'],
+			'identification' => [
+				'id' => $config['id'],
+				'sec' => $config['sec'],
+				'address' => $config['address'],
+			],
 
 			'id' => $this->form->getId(),
 			'name' => $formData['NAME'],

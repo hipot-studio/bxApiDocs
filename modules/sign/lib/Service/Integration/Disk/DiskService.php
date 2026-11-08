@@ -83,7 +83,16 @@ class DiskService
 		return $result;
 	}
 
-	public function getEditUrl(Item\Blank $blank, int $userId, ?string $overrideName = null): Main\Result
+	/**
+	 * @param string|null $signDocumentUid Lets the editor page know which document the placeholder
+	 *                                     list of its widget belongs to.
+	 */
+	public function getEditUrl(
+		Item\Blank $blank,
+		int $userId,
+		?string $overrideName = null,
+		?string $signDocumentUid = null,
+	): Main\Result
 	{
 		$result = new Main\Result();
 
@@ -126,7 +135,7 @@ class DiskService
 			return $result->addError(new Main\Error(Loc::getMessage('SIGN_INTEGRATION_DISK_EDITOR_NOT_CONFIGURED')));
 		}
 
-		$editUrl = $this->getUnifiedEditLinkForDiskFile($diskFile);
+		$editUrl = $this->getUnifiedEditLinkForDiskFile($diskFile, $signDocumentUid);
 		if (!$editUrl)
 		{
 			$this->deleteDiskFile($diskFile, $userId);
@@ -224,15 +233,22 @@ class DiskService
 		return (new SetAccessCommand($objectId, $level))->run();
 	}
 
-	protected function getUnifiedEditLinkForDiskFile(\Bitrix\Disk\File $diskFile): string
+	protected function getUnifiedEditLinkForDiskFile(
+		\Bitrix\Disk\File $diskFile,
+		?string $signDocumentUid = null,
+	): string
 	{
 		$urlManager = \Bitrix\Disk\Driver::getInstance()->getUrlManager();
 
+		$queryParams = ['signPlaceholders' => 'Y'];
+		if ($signDocumentUid !== null && $signDocumentUid !== '')
+		{
+			$queryParams['signDocumentUid'] = $signDocumentUid;
+		}
+
 		return $urlManager->getUnifiedEditLink($diskFile, [
 			'absolute' => true,
-			'additionalQueryParams' => [
-				'signPlaceholders' => 'Y',
-			],
+			'additionalQueryParams' => $queryParams,
 		]);
 	}
 

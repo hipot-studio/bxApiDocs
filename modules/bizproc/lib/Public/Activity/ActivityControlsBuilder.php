@@ -5,19 +5,45 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Public\Activity;
 
 use Bitrix\Bizproc\Activity\PropertiesDialog;
+use Bitrix\Bizproc\FieldType;
 use Bitrix\Main\Localization\Loc;
 use Closure;
 use Bitrix\Bizproc\Internal\Entity\Activity\ActivityControllerBuilder\ActivityControlDto;
+use Bitrix\Bizproc\Internal\Integration\Tasks\DocumentFieldTypes\ProjectType;
 
 class ActivityControlsBuilder
 {
 	protected Configurator $configurator;
 	protected array $activity;
+	private ActivityControlsProjectContext $projectContext;
 
-	public function __construct(Configurator $configurator, array $activity)
+	public function __construct(
+		Configurator $configurator,
+		array $activity,
+		?ActivityControlsProjectContext $projectContext = null,
+	)
 	{
 		$this->configurator = $configurator;
 		$this->activity = $activity;
+		$this->projectContext = $projectContext ?? new ActivityControlsProjectContext();
+	}
+
+	public static function hasProjectControls(array $propertiesMap): bool
+	{
+		foreach ($propertiesMap as $property)
+		{
+			if (!is_array($property))
+			{
+				continue;
+			}
+
+			if (self::isProjectControl($property))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -85,7 +111,8 @@ class ActivityControlsBuilder
 	{
 		$propertiesMap = $this->configurator->getPropertiesMap();
 
-		$properties = [];
+		$propertiesData = [];
+		$projectValues = [];
 		foreach ($propertiesMap as $key => $property)
 		{
 			// Skip service properties that belong to the complex-activity framework
@@ -104,10 +131,105 @@ class ActivityControlsBuilder
 			// they must not leak into the serialized control JSON (a Closure encodes as {}).
 			unset($property['Getter'], $property['Setter']);
 
-			$properties[] = new ActivityControlDto($property, $value);
+			if (self::isProjectControl($property) && $this->isTrustedProjectPropertyValue($key, $value))
+			{
+				$projectValues[] = $value;
+			}
+
+			$propertiesData[] = [$key, $property, $value];
+		}
+
+		$this->projectContext->getProjectFieldStateResolver()->preload(
+			$projectValues,
+			$this->projectContext->userId,
+			$this->projectContext->workflowConstants,
+		);
+
+		$properties = [];
+		foreach ($propertiesData as [$key, $property, $value])
+		{
+			$properties[] = new ActivityControlDto($property, $value, $this->buildMeta($key, $property, $value));
 		}
 
 		return $properties;
+	}
+
+	private function buildMeta(string $propertyKey, array $property, mixed $value): array
+	{
+		if (!self::isProjectControl($property))
+		{
+			return [];
+		}
+
+		if (!$this->isTrustedProjectPropertyValue($propertyKey, $value))
+		{
+			return [];
+		}
+
+		$projectState = $this->projectContext->getProjectFieldStateResolver()->resolve(
+			$value,
+			$this->projectContext->userId,
+			$this->projectContext->workflowConstants,
+		);
+		if ($projectState === null)
+		{
+			return [];
+		}
+
+		return ['projectState' => $projectState];
+	}
+
+	private static function isProjectControl(array $property): bool
+	{
+		if (($property['Type'] ?? null) === ProjectType::getType())
+		{
+			return true;
+		}
+
+		if (($property['Type'] ?? null) !== FieldType::ENTITYSELECTOR)
+		{
+			return false;
+		}
+
+		$settings = $property['Settings'] ?? [];
+		if (($settings['entity']['id'] ?? null) === ProjectType::getType())
+		{
+			return true;
+		}
+
+		foreach (($settings['entities'] ?? []) as $entity)
+		{
+			if (($entity['id'] ?? null) === ProjectType::getType())
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function isTrustedProjectPropertyValue(string $propertyKey, mixed $value): bool
+	{
+		if ($this->projectContext->trustedPropertyValues === null)
+		{
+			return true;
+		}
+
+		if (!array_key_exists($propertyKey, $this->projectContext->trustedPropertyValues))
+		{
+			return false;
+		}
+
+		$trustedValueKey = $this->projectContext
+			->getProjectFieldStateResolver()
+			->getProjectValueTrustKey($this->projectContext->trustedPropertyValues[$propertyKey])
+		;
+		if ($trustedValueKey === null)
+		{
+			return false;
+		}
+
+		return $this->projectContext->getProjectFieldStateResolver()->getProjectValueTrustKey($value) === $trustedValueKey;
 	}
 
 	protected function getCurrentValue(string $propertyKey, array $property = [])

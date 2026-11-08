@@ -60,10 +60,40 @@ class CheckListEntityFieldService
 	private function filterBelongsToEntity(array $items, int $entityId, Type $type): array
 	{
 		$entityChecklistIdsMap = $this->getEntityChecklistIdsMap($entityId, $type);
+		$foreignIdsMap = $this->getForeignIdsMap($items, $entityChecklistIdsMap, $type);
+
+		$detachedIdToNodeId = [];
+		foreach ($items as $key => $item)
+		{
+			$id = $item['id'] ?? null;
+
+			if (
+				!$this->checkListIdService->isNew($id)
+				&& !isset($entityChecklistIdsMap[(int)$id])
+				&& !isset($foreignIdsMap[(int)$id])
+			)
+			{
+				$detachedIdToNodeId[(int)$id] = $item['nodeId'] ?? null;
+				$items[$key]['id'] = null;
+			}
+		}
 
 		foreach ($items as $key => $item)
 		{
-			if (!$this->isBelongsToEntity($item, $entityChecklistIdsMap))
+			$parentId = $item['parentId'] ?? null;
+
+			if (
+				!$this->checkListIdService->isNew($parentId)
+				&& array_key_exists((int)$parentId, $detachedIdToNodeId)
+			)
+			{
+				$items[$key]['parentId'] = $detachedIdToNodeId[(int)$parentId];
+			}
+		}
+
+		foreach ($items as $key => $item)
+		{
+			if (!$this->belongsToEntity($items[$key], $entityChecklistIdsMap))
 			{
 				unset($items[$key]);
 			}
@@ -72,15 +102,40 @@ class CheckListEntityFieldService
 		return $items;
 	}
 
-	private function isBelongsToEntity(array $item, array $entityChecklistIdsMap): bool
+	private function getForeignIdsMap(array $items, array $entityChecklistIdsMap, Type $type): array
 	{
-		if (!$this->checkListIdService->isNew($item['id'] ?? null))
+		$detachedIds = [];
+		foreach ($items as $item)
 		{
-			$id = (int)$item['id'];
-			if (!isset($entityChecklistIdsMap[$id]))
+			$id = $item['id'] ?? null;
+
+			if (
+				!$this->checkListIdService->isNew($id)
+				&& !isset($entityChecklistIdsMap[(int)$id])
+			)
 			{
-				return false;
+				$detachedIds[] = (int)$id;
 			}
+		}
+
+		if (empty($detachedIds))
+		{
+			return [];
+		}
+
+		return array_flip($this->checkListRepository->filterExistingIds($detachedIds, $type));
+	}
+
+	private function belongsToEntity(array $item, array $entityChecklistIdsMap): bool
+	{
+		$id = $item['id'] ?? null;
+
+		if (
+			!$this->checkListIdService->isNew($id)
+			&& !isset($entityChecklistIdsMap[(int)$id])
+		)
+		{
+			return false;
 		}
 
 		return $this->isParentBelongsToEntity($item, $entityChecklistIdsMap);

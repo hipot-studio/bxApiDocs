@@ -9,5 +9,8 @@ use Bitrix\Sale\Exchange\Integration\Rest\RemoteProxies\ICmd;
 interface IStatisticsProvider extends ICmd
 {
 	public function add(array $fields);
+
+	public function update($id, array $fields);
+
 	public function getList($select=[], $filter, $order=[], $pageNavigation);
 }

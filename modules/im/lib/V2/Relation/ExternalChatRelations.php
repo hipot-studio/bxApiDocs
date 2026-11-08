@@ -9,9 +9,11 @@ use Bitrix\Im\V2\Chat\ExternalChat\Event\FilterUsersByAccessEvent;
 class ExternalChatRelations extends ChatRelations
 {
 	protected const NEED_ADDITIONAL_FILTER_BY_ACCESS = true;
+	private array $userIdsToKeepRelations = [];
 
 	public function filterUserIdsByAccess(array $userIds): array
 	{
+		$this->userIdsToKeepRelations = [];
 		$userIds = parent::filterUserIdsByAccess($userIds);
 
 		$chat = ExternalChat::getInstance($this->chatId);
@@ -28,6 +30,18 @@ class ExternalChatRelations extends ChatRelations
 			return $userIds;
 		}
 
+		$this->userIdsToKeepRelations = array_fill_keys($event->getUsersToKeepRelations(), true);
+
 		return $event->getUsersWithAccess();
+	}
+
+	protected function filterUserIdsForCleanup(array $deniedUserIds): array
+	{
+		$deniedUserIds = parent::filterUserIdsForCleanup($deniedUserIds);
+
+		return array_values(array_filter(
+			$deniedUserIds,
+			fn (int $userId): bool => !isset($this->userIdsToKeepRelations[$userId]),
+		));
 	}
 }

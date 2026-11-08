@@ -46,7 +46,7 @@ class Conference
 		return $result->setData($conferenceData);
 	}
 
-	public static function updateJoinedStatus(int $conferenceId): Result
+	public static function updateJoinedStatus(int $conferenceId, ?int $meetingId = null): Result
 	{
 		$result = new Result();
 
@@ -55,7 +55,10 @@ class Conference
 			return $result->addError(new Error('Module socialservices is not installed.'));
 		}
 
-		$updateResult = Zoom\Conference::setJoin($conferenceId);
+		$updateResult = $meetingId !== null && method_exists(Zoom\Conference::class, 'setJoinById')
+			? Zoom\Conference::setJoinById($conferenceId, $meetingId)
+			: Zoom\Conference::setJoin($conferenceId)
+		;
 		if (!$updateResult->isSuccess())
 		{
 			return $result->addError(new Error('Error while update join status.'));

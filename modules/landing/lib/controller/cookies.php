@@ -18,7 +18,7 @@ class Cookies extends Controller
 	public function getAgreementsAction(int $siteId): array
 	{
 		$mainAgreement = \Bitrix\Landing\Site\Cookies::getMainAgreement(
-			\Bitrix\Landing\Hook\Page\Cookies::getAgreementIdBySiteId($siteId)
+			\Bitrix\Landing\Hook\Page\Cookies::getSelectedAgreementIdBySiteId($siteId)
 		);
 		$agreements = \Bitrix\Landing\Site\Cookies::getAgreements($siteId, true);
 

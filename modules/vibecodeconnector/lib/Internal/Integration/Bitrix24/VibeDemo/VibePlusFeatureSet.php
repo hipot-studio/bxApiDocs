@@ -33,4 +33,15 @@ final class VibePlusFeatureSet
 	{
 		return self::getDisabledFeatureIds() === [];
 	}
+
+	public static function getTrialExpireDates(): array
+	{
+		$dates = [];
+		foreach (self::FEATURE_IDS as $featureId)
+		{
+			$dates[$featureId] = Feature::getTrialFeatureInfo($featureId)['tillDate'] ?? null;
+		}
+
+		return $dates;
+	}
 }

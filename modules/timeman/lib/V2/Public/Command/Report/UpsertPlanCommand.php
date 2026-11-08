@@ -15,6 +15,7 @@ class UpsertPlanCommand extends AbstractCommand
 		public readonly int $userId,
 		public readonly string $planText,
 		public readonly string $planType,
+		public readonly int $recordId = 0,
 	)
 	{
 	}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\V2\Internal\DI\Container;
@@ -11,12 +12,14 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Entity\UserCollection;
 use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskMutedUserSyncEvent;
-use Bitrix\Tasks\V2\Internal\Event\Task\OnCreatorUpdatedEvent;
 use Bitrix\Tasks\V2\Internal\EventDispatcher\EventDispatcher;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Repository\Mapper\Trait\CastTrait;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationLock;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationRegistry;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationScope;
 
 class MemberService
 {
@@ -26,6 +29,8 @@ class MemberService
 		private readonly UpdateTaskService $updateService,
 		private readonly TaskRepositoryInterface $taskRepository,
 		private readonly EventDispatcher $eventDispatcher,
+		private readonly TaskMutationRegistry $mutationRegistry,
+		private readonly TaskMutationLock $mutationLock,
 	)
 	{
 
@@ -53,21 +58,20 @@ class MemberService
 		UpdateConfig $config,
 	): Task
 	{
-		$task = $this->taskRepository->getById($taskId);
-		if ($task === null)
-		{
-			throw new TaskNotExistsException();
-		}
 
-		$previousCreatorId = $task->creator?->id ?? 0;
+		return $this->mutate($taskId, function () use ($taskId, $creatorId, $responsibleId, $config): Task {
+			$task = $this->taskRepository->getById($taskId);
+			if ($task === null)
+			{
+				throw new TaskNotExistsException();
+			}
 
-		$task = Task::mapFromArray([
-			'id' => $taskId,
-			'creator' => $this->castMember($creatorId),
-			'responsible' => $this->castMember($responsibleId),
-		]);
-
-		return $this->updateService->update($task, $config);
+			return $this->updateService->update(Task::mapFromArray([
+				'id' => $taskId,
+				'creator' => $this->castMember($creatorId),
+				'responsible' => $this->castMember($responsibleId),
+			]), $config);
+		});
 	}
 
 	public function delegate(
@@ -76,39 +80,39 @@ class MemberService
 		UpdateConfig $config
 	): Task
 	{
-		$task = $this->taskRepository->getById($taskId);
-		if ($task === null)
-		{
-			throw new TaskNotExistsException();
-		}
+		return $this->mutate($taskId, function () use ($taskId, $responsibleId, $config): Task {
+			$task = $this->taskRepository->getById($taskId);
+			if ($task === null)
+			{
+				throw new TaskNotExistsException();
+			}
 
-		$data = [
-			'id' => $taskId,
-			'responsible' => $this->castMember($responsibleId),
-			'status' => Task\Status::Pending->value,
-		];
+			$data = [
+				'id' => $taskId,
+				'responsible' => $this->castMember($responsibleId),
+				'status' => Task\Status::Pending->value,
+			];
 
-		$members = $task->getMembers([Role::Creator, Role::Accomplice, Role::Auditor]);
-		if (!$members->findOneById((int)$task->responsible?->id) && !$task->group?->isScrum())
-		{
-			$auditors = $task->auditors ?? new UserCollection();
-			$auditors->add(User::mapFromId((int)$task->responsible->id));
-			$data['auditors'] = $auditors->toArray();
-		}
+			$members = $task->getMembers([Role::Creator, Role::Accomplice, Role::Auditor]);
+			if (!$members->findOneById((int)$task->responsible?->id) && !$task->group?->isScrum())
+			{
+				$auditors = $task->auditors ?? new UserCollection();
+				$auditors->add(User::mapFromId((int)$task->responsible->id));
+				$data['auditors'] = $auditors->toArray();
+			}
 
-		$task = Task::mapFromArray($data);
-		$updatedTask = $this->updateService->update($task, $config);
+			$updatedTask = $this->updateService->update(Task::mapFromArray($data), $config);
 
-		if ($updatedTask->allowsTimeTracking && ($config->getUserId() !== $responsibleId))
-		{
-			$timeManagementService = Container::getInstance()->getTimeManagementService();
-			$timeManagementService->stopTimer(
-				userId: $config->getUserId(),
-				taskId: $taskId,
-			);
-		}
+			if ($updatedTask->allowsTimeTracking && $config->getUserId() !== $responsibleId)
+			{
+				Container::getInstance()->getTimeManagementService()->stopTimer(
+					userId: $config->getUserId(),
+					taskId: $taskId,
+				);
+			}
 
-		return $updatedTask;
+			return $updatedTask;
+		});
 	}
 
 	public function setAuditors(
@@ -117,16 +121,16 @@ class MemberService
 		UpdateConfig $config,
 	): Task
 	{
-		$task = Task::mapFromArray([
-			'id' => $taskId,
-			'auditors' => $this->castMembers($auditorIds),
-		]);
+		return $this->mutate($taskId, function () use ($taskId, $auditorIds, $config): Task {
+			$result = $this->updateService->update(Task::mapFromArray([
+				'id' => $taskId,
+				'auditors' => $this->castMembers($auditorIds),
+			]), $config);
 
-		$result = $this->updateService->update($task, $config);
+			$this->eventDispatcher->dispatch(new OnTaskMutedUserSyncEvent($result));
 
-		$this->eventDispatcher->dispatch(new OnTaskMutedUserSyncEvent($result));
-
-		return $result;
+			return $result;
+		});
 	}
 
 	public function addAuditors(
@@ -135,27 +139,24 @@ class MemberService
 		UpdateConfig $config,
 	): Task
 	{
-		$task = $this->taskRepository->getById($taskId);
-		if ($task === null)
-		{
-			throw new TaskNotExistsException();
-		}
+		return $this->mutate($taskId, function () use ($taskId, $auditorIds, $config): Task {
+			$task = $this->taskRepository->getById($taskId);
+			if ($task === null)
+			{
+				throw new TaskNotExistsException();
+			}
 
-		$current = (array)$task->auditors?->getIdList();
-		$auditors = array_merge($auditorIds, $current);
+			$auditors = array_merge($auditorIds, (array)$task->auditors?->getIdList());
+			Collection::normalizeArrayValuesByInt($auditors, false);
+			$result = $this->updateService->update(Task::mapFromArray([
+				'id' => $taskId,
+				'auditors' => $this->castMembers($auditors),
+			]), $config);
 
-		Collection::normalizeArrayValuesByInt($auditors, false);
+			$this->eventDispatcher->dispatch(new OnTaskMutedUserSyncEvent($result));
 
-		$task = Task::mapFromArray([
-			'id' => $taskId,
-			'auditors' => $this->castMembers($auditors),
-		]);
-
-		$result = $this->updateService->update($task, $config);
-
-		$this->eventDispatcher->dispatch(new OnTaskMutedUserSyncEvent($result));
-
-		return $result;
+			return $result;
+		});
 	}
 
 	public function deleteAuditors(
@@ -164,23 +165,21 @@ class MemberService
 		UpdateConfig $config,
 	): Task
 	{
-		$task = $this->taskRepository->getById($taskId);
-		if ($task === null)
-		{
-			throw new TaskNotExistsException();
-		}
+		return $this->mutate($taskId, function () use ($taskId, $auditorIds, $config): Task {
+			$task = $this->taskRepository->getById($taskId);
+			if ($task === null)
+			{
+				throw new TaskNotExistsException();
+			}
 
-		$current = (array)$task->auditors?->getIdList();
-		$auditors = array_diff($current, $auditorIds);
+			$auditors = array_diff((array)$task->auditors?->getIdList(), $auditorIds);
+			Collection::normalizeArrayValuesByInt($auditors, false);
 
-		Collection::normalizeArrayValuesByInt($auditors, false);
-
-		$task = Task::mapFromArray([
-			'id' => $taskId,
-			'auditors' => $this->castMembers($auditors),
-		]);
-
-		return $this->updateService->update($task, $config);
+			return $this->updateService->update(Task::mapFromArray([
+				'id' => $taskId,
+				'auditors' => $this->castMembers($auditors),
+			]), $config);
+		});
 	}
 
 	public function setAccomplices(
@@ -189,12 +188,10 @@ class MemberService
 		UpdateConfig $config,
 	): Task
 	{
-		$task = Task::mapFromArray([
+		return $this->mutate($taskId, fn (): Task => $this->updateService->update(Task::mapFromArray([
 			'id' => $taskId,
 			'accomplices' => $this->castMembers($accompliceIds),
-		]);
-
-		return $this->updateService->update($task, $config);
+		]), $config));
 	}
 
 	public function addAccomplices(
@@ -203,23 +200,21 @@ class MemberService
 		UpdateConfig $config,
 	): Task
 	{
-		$task = $this->taskRepository->getById($taskId);
-		if ($task === null)
-		{
-			throw new TaskNotExistsException();
-		}
+		return $this->mutate($taskId, function () use ($taskId, $accompliceIds, $config): Task {
+			$task = $this->taskRepository->getById($taskId);
+			if ($task === null)
+			{
+				throw new TaskNotExistsException();
+			}
 
-		$current = (array)$task->accomplices?->getIdList();
-		$accomplices = array_merge($accompliceIds, $current);
+			$accomplices = array_merge($accompliceIds, (array)$task->accomplices?->getIdList());
+			Collection::normalizeArrayValuesByInt($accomplices, false);
 
-		Collection::normalizeArrayValuesByInt($accomplices, false);
-
-		$task = Task::mapFromArray([
-			'id' => $taskId,
-			'accomplices' => $this->castMembers($accomplices),
-		]);
-
-		return $this->updateService->update($task, $config);
+			return $this->updateService->update(Task::mapFromArray([
+				'id' => $taskId,
+				'accomplices' => $this->castMembers($accomplices),
+			]), $config);
+		});
 	}
 
 	public function deleteAccomplices(
@@ -228,22 +223,33 @@ class MemberService
 		UpdateConfig $config,
 	): Task
 	{
-		$task = $this->taskRepository->getById($taskId);
-		if ($task === null)
-		{
-			throw new TaskNotExistsException();
-		}
+		return $this->mutate($taskId, function () use ($taskId, $accompliceIds, $config): Task {
+			$task = $this->taskRepository->getById($taskId);
+			if ($task === null)
+			{
+				throw new TaskNotExistsException();
+			}
 
-		$current = (array)$task->accomplices?->getIdList();
-		$accomplices = array_diff($current, $accompliceIds);
+			$accomplices = array_diff((array)$task->accomplices?->getIdList(), $accompliceIds);
+			Collection::normalizeArrayValuesByInt($accomplices, false);
 
-		Collection::normalizeArrayValuesByInt($accomplices, false);
+			return $this->updateService->update(Task::mapFromArray([
+				'id' => $taskId,
+				'accomplices' => $this->castMembers($accomplices),
+			]), $config);
+		});
+	}
 
-		$task = Task::mapFromArray([
-			'id' => $taskId,
-			'accomplices' => $this->castMembers($accomplices),
-		]);
+	private function mutate(int $taskId, callable $operation): Task
+	{
+		return $this->mutationRegistry->run(
+			Application::getConnection(),
+			function (TaskMutationScope $scope) use ($taskId, $operation): Task {
+				$this->mutationLock->acquire($taskId, $scope);
+				$this->taskRepository->invalidate($taskId);
 
-		return $this->updateService->update($task, $config);
+				return $operation();
+			},
+		);
 	}
 }

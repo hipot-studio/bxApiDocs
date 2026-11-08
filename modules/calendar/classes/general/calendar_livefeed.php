@@ -630,7 +630,7 @@ class CCalendarLiveFeed
 			$accessCodes[] = 'U'.$params["userId"];
 		}
 
-		$accessCodes = array_unique($accessCodes);
+		$accessCodes = self::filterAttendeeAccessCodes($accessCodes, (int)$params['userId']);
 		$attendeeList = CCalendar::GetDestinationUsers($accessCodes);
 
 		if (trim($entryFields["NAME"]) === '')
@@ -753,6 +753,27 @@ class CCalendarLiveFeed
 				}
 			}
 		}
+	}
+
+	private static function filterAttendeeAccessCodes(array $accessCodes, int $userId): array
+	{
+		$filteredCodes = (new \Bitrix\Calendar\Planner\AccessCodeFilter($userId))->filter($accessCodes);
+		foreach ($accessCodes as $code)
+		{
+			if (
+				is_string($code)
+				&& $code !== 'UA'
+				&& !str_starts_with($code, 'U')
+				&& !str_starts_with($code, 'DR')
+				&& !str_starts_with($code, 'SG')
+				&& !str_starts_with($code, \Bitrix\Calendar\Integration\HumanResources\TeamAccessCode::PREFIX)
+			)
+			{
+				$filteredCodes[] = $code;
+			}
+		}
+
+		return array_values(array_unique($filteredCodes));
 	}
 
 	// Called after creation or edition of calendar event

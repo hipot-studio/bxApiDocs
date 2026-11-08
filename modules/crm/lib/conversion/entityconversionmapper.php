@@ -67,14 +67,24 @@ abstract class EntityConversionMapper
 		$fields = $this->getSourceFields();
 		return isset($fields[$fieldName]) ? $fields[$fieldName] : $default;
 	}
-	abstract public function map(EntityConversionMap $map, array $options = null);
+	abstract public function map(EntityConversionMap $map, ?array $options = null);
 	public static function updateMap(EntityConversionMap $map)
 	{
+		$actualTime = new Main\Type\DateTime();
+		$historySnapshot = $map->createHistorySnapshot();
 		//Synchonize dynamic bindings only
 		$srcEntitTypeID = $map->getSourceEntityTypeID();
 		$dstEntitTypeID = $map->getDestinationEntityTypeID();
+		$languageID = defined('LANGUAGE_ID') ? LANGUAGE_ID : '';
+		self::clearUserFieldsCache($srcEntitTypeID);
+		self::clearUserFieldsCache($dstEntitTypeID);
 
-		$outdatedItems = array();
+		self::preloadDynamicEnumerationFields($map, $srcEntitTypeID, $dstEntitTypeID, $languageID);
+		$srcUserFields = self::getUserFields($srcEntitTypeID, $languageID);
+		$dstUserFields = self::getUserFields($dstEntitTypeID, $languageID);
+
+		$outdatedItems = [];
+		$occupiedDstFieldNameMap = [];
 		foreach($map->getItems() as $item)
 		{
 			$srcFieldID = $item->getSourceField();
@@ -86,8 +96,8 @@ abstract class EntityConversionMapper
 
 			$isDynamicSrc = EntityConversionMapItem::isDynamicField($srcFieldID);
 			$isDynamicDst = EntityConversionMapItem::isDynamicField($dstFieldID);
-			$srcField = $isDynamicSrc ? self::getUserField($srcEntitTypeID, $srcFieldID) : null;
-			$dstField = $isDynamicDst ? self::getUserField($dstEntitTypeID, $dstFieldID) : null;
+			$srcField = $isDynamicSrc ? self::getUserField($srcEntitTypeID, $srcFieldID, $languageID) : null;
+			$dstField = $isDynamicDst ? self::getUserField($dstEntitTypeID, $dstFieldID, $languageID) : null;
 
 			if(($isDynamicSrc && $srcField === null) || ($isDynamicDst && $dstField === null))
 			{
@@ -96,59 +106,147 @@ abstract class EntityConversionMapper
 			}
 			elseif($isDynamicSrc && $srcField !== null && $isDynamicDst && $dstField !== null && !$item->isLocked())
 			{
-				$srcCode = UserFieldSynchronizer::getFieldComplianceCode($srcField);
-				$dstCode = UserFieldSynchronizer::getFieldComplianceCode($dstField);
-				if($srcCode !== $dstCode)
+				if(!UserFieldSynchronizer::areUserFieldsCompatible($srcField, $dstField))
 				{
-					$outdatedItems[] = $item;
-					continue;
+					if($map->isLegacy())
+					{
+						$item->markAsLocked(true);
+					}
+					else
+					{
+						$outdatedItems[] = $item;
+						continue;
+					}
 				}
+			}
+
+			if($isDynamicDst)
+			{
+				$occupiedDstFieldNameMap[$dstFieldID] = true;
 			}
 		}
 
 		if(!empty($outdatedItems))
 		{
-			foreach($outdatedItems as $item)
-			{
-				$map->removeItem($item);
-			}
+			$map->removeItems($outdatedItems);
 		}
 
-		$intersections = UserFieldSynchronizer::getIntersection($srcEntitTypeID, $dstEntitTypeID);
+		$intersections = UserFieldSynchronizer::getIntersectionFields(
+			$srcUserFields,
+			$dstUserFields,
+			array_keys($occupiedDstFieldNameMap),
+		);
 		foreach($intersections as $intersection)
 		{
 			$srcFieldID = $intersection['SRC_FIELD_NAME'];
 			$dstFieldID = $intersection['DST_FIELD_NAME'];
 
-			if($map->findItemBySourceID($srcFieldID) === null)
+			if(
+				$map->findItemBySourceID($srcFieldID) === null
+				&& !isset($occupiedDstFieldNameMap[$dstFieldID])
+			)
 			{
 				$map->createItem($srcFieldID, $dstFieldID);
+				$occupiedDstFieldNameMap[$dstFieldID] = true;
+			}
+		}
+
+		$map->markAsActual($actualTime, $historySnapshot);
+	}
+
+	public static function clearUserFieldsCache(int $entityTypeID): void
+	{
+		if(self::$userFields === null)
+		{
+			return;
+		}
+
+		unset(self::$userFields[$entityTypeID]);
+
+		$keyPrefix = "{$entityTypeID}:";
+		foreach(array_keys(self::$userFields) as $cacheKey)
+		{
+			if(is_string($cacheKey) && strncmp($cacheKey, $keyPrefix, strlen($keyPrefix)) === 0)
+			{
+				unset(self::$userFields[$cacheKey]);
 			}
 		}
 	}
-	public static function getUserFields($entityTypeID)
+
+	private static function preloadDynamicEnumerationFields(
+		EntityConversionMap $map,
+		$srcEntityTypeID,
+		$dstEntityTypeID,
+		$languageID
+	): void
 	{
-		if(self::$userFields !== null && isset(self::$userFields[$entityTypeID]))
+		$fields = [];
+		foreach($map->getItems() as $item)
 		{
-			return self::$userFields[$entityTypeID];
+			$srcFieldID = $item->getSourceField();
+			$dstFieldID = $item->getDestinationField();
+			if($dstFieldID === '')
+			{
+				$dstFieldID = $srcFieldID;
+			}
+
+			if(EntityConversionMapItem::isDynamicField($srcFieldID))
+			{
+				self::addEnumerationFieldToPreload(
+					$fields,
+					self::getUserField($srcEntityTypeID, $srcFieldID, $languageID)
+				);
+			}
+
+			if(EntityConversionMapItem::isDynamicField($dstFieldID))
+			{
+				self::addEnumerationFieldToPreload(
+					$fields,
+					self::getUserField($dstEntityTypeID, $dstFieldID, $languageID)
+				);
+			}
 		}
 
-		if(self::$userFields !== null)
+		UserFieldSynchronizer::preloadEnumerationValues($fields);
+	}
+
+	private static function addEnumerationFieldToPreload(array &$fields, ?array $field): void
+	{
+		if(is_array($field) && ($field['USER_TYPE_ID'] ?? '') === 'enumeration')
+		{
+			$fields[] = $field;
+		}
+	}
+
+	public static function getUserFields($entityTypeID, $languageID = null)
+	{
+		$languageID = is_string($languageID) ? $languageID : '';
+		$cacheKey = $languageID === '' ? $entityTypeID : "{$entityTypeID}:{$languageID}";
+		if(self::$userFields !== null && isset(self::$userFields[$cacheKey]))
+		{
+			return self::$userFields[$cacheKey];
+		}
+
+		if(self::$userFields === null)
 		{
 			self::$userFields = array();
 		}
 
 		/** @var \CAllUserTypeManager $USER_FIELD_MANAGER */
 		global $USER_FIELD_MANAGER;
-		self::$userFields[$entityTypeID] = $USER_FIELD_MANAGER->GetUserFields(
-			\CCrmOwnerType::ResolveUserFieldEntityID($entityTypeID)
-		);
+		$args = [\CCrmOwnerType::ResolveUserFieldEntityID($entityTypeID)];
+		if($languageID !== '')
+		{
+			$args[] = 0;
+			$args[] = $languageID;
+		}
+		self::$userFields[$cacheKey] = $USER_FIELD_MANAGER->GetUserFields(...$args);
 
-		return self::$userFields[$entityTypeID];
+		return self::$userFields[$cacheKey];
 	}
-	public static function getUserField($entityTypeID, $fieldName)
+	public static function getUserField($entityTypeID, $fieldName, $languageID = null)
 	{
-		$fields = self::getUserFields($entityTypeID);
+		$fields = self::getUserFields($entityTypeID, $languageID);
 		return isset($fields[$fieldName]) ? $fields[$fieldName] : null;
 	}
 	public static function isUserFieldExists($entityTypeID, $fieldName)
@@ -252,7 +350,7 @@ abstract class EntityConversionMapper
 		}
 	}
 
-	public static function mapUserField($srcEntityTypeID, $srcFieldID, array &$srcFields, $dstEntityTypeID, $dstFieldID, array &$dstFields, array $options = null)
+	public static function mapUserField($srcEntityTypeID, $srcFieldID, array &$srcFields, $dstEntityTypeID, $dstFieldID, array &$dstFields, ?array $options = null)
 	{
 		if(!isset($srcFields[$srcFieldID]))
 		{

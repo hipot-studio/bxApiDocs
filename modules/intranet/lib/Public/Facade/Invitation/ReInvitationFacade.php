@@ -21,6 +21,7 @@ use Bitrix\Intranet\Public\Service\RegistrationService;
 use Bitrix\Intranet\Internal\Factory\Message\CollabInvitationMessageFactory;
 use Bitrix\Intranet\Internal\Factory\Message\ExtranetInvitationMessageFactory;
 use Bitrix\Intranet\Internal\Factory\Message\IntranetInvitationMessageFactory;
+use Bitrix\Intranet\Internal\Error\SmsReInvitationTimeoutError;
 use Bitrix\Intranet\Internal\Strategy\Registration\ReInviteRegistrationStrategy;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
@@ -79,6 +80,15 @@ class ReInvitationFacade extends InvitationFacade
 		}
 		catch (ErrorCollectionException $exception)
 		{
+			$timeoutError = $exception->getErrors()->getErrorByCode(SmsReInvitationTimeoutError::CODE);
+			if ($timeoutError !== null)
+			{
+				$errors = new ErrorCollection();
+				$errors->setError(new SmsReInvitationTimeoutError($timeoutError->getCustomData()));
+
+				throw new InvitationFailedException($errors);
+			}
+
 			$inviteLimitError = $exception->getErrors()->getErrorByCode(InviteLimitError::CODE);
 			if ($inviteLimitError === null)
 			{

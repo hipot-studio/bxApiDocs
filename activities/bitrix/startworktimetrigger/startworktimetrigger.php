@@ -19,6 +19,8 @@ class CBPStartWorkTimeTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 {
 	private const PARAM_USER_IDS = 'USER_IDS';
 	private const RETURN_PARAM_USER = 'USER';
+	private const RETURN_PARAM_RECORD_ID = 'RECORD_ID';
+	private const RETURN_PARAM_WORKDAY_START = 'WORKDAY_START';
 
 	public function execute(): int
 	{
@@ -27,12 +29,35 @@ class CBPStartWorkTimeTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 			return CBPActivityExecutionStatus::Closed;
 		}
 
+		parent::execute();
+
 		$context = $this->getRootActivity()->{\CBPDocument::PARAM_TRIGGER_EVENT_DATA} ?? [];
 		$userId = (int)($context[TimemanStartWorktimeTrigger::FIELD_USER_ID] ?? 0);
+		$recordId = 0;
+		if (defined(TimemanStartWorktimeTrigger::class . '::FIELD_RECORD_ID'))
+		{
+			$recordId = (int)($context[TimemanStartWorktimeTrigger::FIELD_RECORD_ID] ?? 0);
+		}
+		$workdayStart = null;
+		// Modules are updated independently, so the installed bizproc may not know this field yet.
+		if (defined(TimemanStartWorktimeTrigger::class . '::FIELD_WORKDAY_START'))
+		{
+			// The dispatcher hands over the serialized bizproc datetime, which already carries the employee's offset.
+			$workdayStart = $context[TimemanStartWorktimeTrigger::FIELD_WORKDAY_START] ?? null;
+		}
 
 		if (!empty($userId))
 		{
 			$this->{self::RETURN_PARAM_USER} = 'user_' . $userId;
+		}
+
+		if (!empty($workdayStart))
+		{
+			$this->{self::RETURN_PARAM_WORKDAY_START} = $workdayStart;
+		}
+		if ($recordId > 0)
+		{
+			$this->{self::RETURN_PARAM_RECORD_ID} = $recordId;
 		}
 
 		return CBPActivityExecutionStatus::Closed;
@@ -44,11 +69,19 @@ class CBPStartWorkTimeTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 		$this->arProperties = [
 			self::PARAM_USER_IDS => null,
 			self::RETURN_PARAM_USER => null,
+			self::RETURN_PARAM_RECORD_ID => null,
+			self::RETURN_PARAM_WORKDAY_START => null,
 		];
 
 		$this->SetPropertiesTypes([
 			self::RETURN_PARAM_USER => [
 				'Type' => FieldType::USER,
+			],
+			self::RETURN_PARAM_RECORD_ID => [
+				'Type' => FieldType::INT,
+			],
+			self::RETURN_PARAM_WORKDAY_START => [
+				'Type' => FieldType::DATETIME,
 			],
 		]);
 	}

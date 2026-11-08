@@ -86,14 +86,16 @@ abstract class JsGridAction extends BaseAction
 				= isset($control['className'])
 					? $control['className'] . ' ' . $disabledClass
 					: $disabledClass;
+			$control['disabled'] = true;
 
 			unset($control['ONCLICK']);
+			unset($control['onclick']);
 		}
 
 		return $control;
 	}
 
-	private function getActionTitleMessage(array $rawFields): string
+	protected function getActionTitleMessage(array $rawFields): string
 	{
 		if (!$this->isUserAdmin())
 		{

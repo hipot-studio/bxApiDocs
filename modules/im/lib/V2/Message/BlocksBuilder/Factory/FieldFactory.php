@@ -8,12 +8,15 @@ use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\AbstractField;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Background;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Color;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Elements;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\FileId;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\FileIds;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Fold;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Icon;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Id;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\ImageUrl;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Progress;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Rows;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Service;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Size;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Sources;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Status;
@@ -44,7 +47,10 @@ class FieldFactory
 			Field::Sources => Sources::getInstance(),
 			Field::Buttons => Buttons::getInstance(),
 			Field::FileIds => FileIds::getInstance(),
+			Field::FileId => FileId::getInstance(),
 			Field::Background => Background::getInstance(),
+			Field::Progress => Progress::getInstance(),
+			Field::IsService => Service::getInstance(),
 			default => null,
 		};
 	}

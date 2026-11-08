@@ -7,7 +7,9 @@ namespace Bitrix\Rest\Internal\Repository\Mapper;
 use Bitrix\Rest\Internal\Entity\Application\AppAttributeCollection;
 use Bitrix\Rest\Internal\Entity\Application\AppCollection;
 use Bitrix\Rest\Internal\Entity\Application\AppExternalAttribute;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Internal\Entity\Application\AppLang;
+use Bitrix\Rest\Internal\Entity\Application\AppOrigin;
 use Bitrix\Rest\Internal\Model\AppStatus;
 use Bitrix\Rest\Internal\Model\AppLangTable;
 use Bitrix\Rest\AppTable;
@@ -29,18 +31,21 @@ class AppMapper
 		EO_AppLang_Collection|\Closure|null $langs = null,
 	): App
 	{
-		$status = AppStatus::from($ormModel->getStatus());
+		$storedStatus = $ormModel->getStatus();
+		$status = $storedStatus === '' ? null : AppStatus::from($storedStatus);
 
 		$app = new App(
 			clientId: $ormModel->getClientId(),
 			code: $ormModel->getCode(),
 			url: $ormModel->getUrl() ?? '',
 			scope: array_filter(explode(',', $ormModel->getScope() ?? '')),
-			origin: $status->getOrigin(),
-			pricingModel: $status->getPricingModel(),
-			licenseState: $status->getLicenseState(),
+			origin: $status?->getOrigin() ?? AppOrigin::Marketplace,
+			pricingModel: $status?->getPricingModel(),
+			licenseState: $status?->getLicenseState(),
 			active: $ormModel->getActive(),
 			installed: $ormModel->getInstalled(),
+			installCompletionMode: AppInstallCompletionMode::tryFrom((string)$ormModel->getInstallCompletionMode())
+				?? AppInstallCompletionMode::Deferred,
 			urlDemo: $ormModel->getUrlDemo(),
 			urlInstall: $ormModel->getUrlInstall(),
 			urlSettings: $ormModel->getUrlSettings(),
@@ -54,6 +59,7 @@ class AppMapper
 			applicationToken: $ormModel->getApplicationToken(),
 			mobile: $ormModel->getMobile(),
 			userInstall: $ormModel->getUserInstall(),
+			storedStatus: $storedStatus,
 		);
 
 		$app->setId($ormModel->getId());
@@ -98,21 +104,16 @@ class AppMapper
 	{
 		$ormModel = $entity->getId()
 			? EO_App::wakeUp($entity->getId())
-			: AppTable::createObject()
-		;
+			: AppTable::createObject();
 
 		$ormModel
 			->setClientId($entity->getClientId())
 			->setCode($entity->getCode())
 			->setActive($entity->isActive())
 			->setInstalled($entity->isInstalled())
+			->setInstallCompletionMode($entity->getInstallCompletionMode()->value)
 			->setUrl($entity->getUrl())
 			->setScope(implode(',', $entity->getScope()))
-			->setStatus(AppStatus::fromComponents(
-				$entity->getOrigin(),
-				$entity->getPricingModel(),
-				$entity->getLicenseState(),
-			)->value)
 			->setUrlDemo($entity->getUrlDemo())
 			->setUrlInstall($entity->getUrlInstall())
 			->setUrlSettings($entity->getUrlSettings())
@@ -127,6 +128,19 @@ class AppMapper
 			->setMobile($entity->isMobile())
 			->setUserInstall($entity->isUserInstall())
 		;
+
+		// Preserve a legacy empty status when saving unrelated application fields.
+		if (
+			$entity->getStoredStatus() !== ''
+			|| $entity->isStatusChanged()
+		)
+		{
+			$ormModel->setStatus(AppStatus::fromComponents(
+				$entity->getOrigin(),
+				$entity->getPricingModel(),
+				$entity->getLicenseState(),
+			)->value);
+		}
 
 		return $ormModel;
 	}
@@ -190,8 +204,7 @@ class AppMapper
 	{
 		$ormModel = $entity->getId()
 			? EO_AppAttribute::wakeUp($entity->getId())
-			: AppAttributeTable::createObject()
-		;
+			: AppAttributeTable::createObject();
 
 		$ormModel
 			->setAppId($entity->getAppId())
@@ -220,8 +233,7 @@ class AppMapper
 	{
 		$ormModel = $entity->getId()
 			? EO_AppLang::wakeUp($entity->getId())
-			: AppLangTable::createObject()
-		;
+			: AppLangTable::createObject();
 
 		$ormModel
 			->setAppId($entity->getAppId())

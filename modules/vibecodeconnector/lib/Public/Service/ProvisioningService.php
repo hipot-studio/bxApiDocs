@@ -6,6 +6,7 @@ namespace Bitrix\Vibecodeconnector\Public\Service;
 
 use Bitrix\Rest\Public\Contract\Application\RestApplicationInterface;
 use Bitrix\Vibecodeconnector\Internal\Service\DeveloperKeyService;
+use Bitrix\Vibecodeconnector\Internal\Service\Licensing\ProvisioningAccessGate;
 use Bitrix\Vibecodeconnector\Internal\Service\Provisioning\ApiKey;
 use Bitrix\Vibecodeconnector\Internal\Service\Provisioning\ApplicationKey;
 use Bitrix\Vibecodeconnector\Internal\Service\Provisioning\EntryPoint;
@@ -14,6 +15,7 @@ final class ProvisioningService
 {
 	private function __construct(
 		private readonly EntryPoint $entryPoint,
+		private readonly ?ProvisioningAccessGate $accessGate = null,
 	) {
 	}
 
@@ -22,9 +24,13 @@ final class ProvisioningService
 		return new self(EntryPoint::bitrix24());
 	}
 
-	public static function forVibecode(?string $serverIss): self
+	public static function forVibecode(
+		?string $serverIss,
+		?string $origin = null,
+		?ProvisioningAccessGate $accessGate = null,
+	): self
 	{
-		return new self(EntryPoint::vibecode($serverIss));
+		return new self(EntryPoint::vibecode($serverIss, $origin), $accessGate);
 	}
 
 	public function issueDeveloperKey(int $userId): string
@@ -37,7 +43,7 @@ final class ProvisioningService
 	 */
 	public function issueApiKey(int $userId, array $scopes, string $title): string
 	{
-		return (new ApiKey\Issuer($this->entryPoint))->issue($userId, $scopes, $title);
+		return (new ApiKey\Issuer($this->entryPoint, accessGate: $this->accessGate()))->issue($userId, $scopes, $title);
 	}
 
 	/**
@@ -56,7 +62,7 @@ final class ProvisioningService
 		?string $applicationToken = null,
 	): RestApplicationInterface
 	{
-		return (new ApplicationKey\Issuer($this->entryPoint))->issue(
+		return (new ApplicationKey\Issuer($this->entryPoint, accessGate: $this->accessGate()))->issue(
 			$userId,
 			$handlerUrl,
 			$scopes,
@@ -67,5 +73,10 @@ final class ProvisioningService
 			$menuTitles,
 			$applicationToken,
 		);
+	}
+
+	private function accessGate(): ProvisioningAccessGate
+	{
+		return $this->accessGate ?? new ProvisioningAccessGate();
 	}
 }

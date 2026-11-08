@@ -227,6 +227,12 @@ class Activity
 					'FIELD_NAME' => 'A.DEADLINE',
 					'FIELD_TYPE' => 'datetime',
 				],
+				'IS_OVERDUE' => [
+					'IS_METRIC' => 'N',
+					'FIELD_NAME' => "CASE WHEN A.COMPLETED = 'N' AND A.DEADLINE IS NOT NULL"
+						. " AND A.DEADLINE < now() THEN 'Y' ELSE 'N' END",
+					'FIELD_TYPE' => 'string',
+				],
 				//TODO:STORAGE_TYPE_ID TINYINT(1) UNSIGNED NULL,
 				//TODO:STORAGE_ELEMENT_IDS TEXT NULL,
 				//TODO:PARENT_ID INT(1) UNSIGNED NOT NULL DEFAULT 0,
@@ -305,7 +311,7 @@ class Activity
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_activity']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_ACTIVITY_TABLE'] ?: 'crm_activity';
-		$result['crm_activity']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_ACTIVITY_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['crm_activity']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_ACTIVITY_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['crm_activity']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_ACTIVITY_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_ACTIVITY_FIELD_' . $fieldCode] : $fieldCode;

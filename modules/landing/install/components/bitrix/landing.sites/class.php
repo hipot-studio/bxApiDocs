@@ -35,6 +35,8 @@ class LandingSitesComponent extends LandingBaseComponent
 	 * @var array
 	 */
 	protected $rights = [];
+	protected bool $isSearchRequested = false;
+	protected $rawFilter = [];
 
 	/**
 	 * Gets additional access filter for sites.
@@ -103,15 +105,12 @@ class LandingSitesComponent extends LandingBaseComponent
 		{
 			$disabledSiteIds[] = \CExtranet::getExtranetSiteID();
 		}
-		$search = LandingFilterComponent::getFilterRaw(
-			LandingFilterComponent::TYPE_SITE,
-			$this->arParams['TYPE']
-		);
-		if ($search['DELETED'] == 'Y')
+		$search = $this->rawFilter;
+		if (($search['DELETED'] ?? null) === 'Y')
 		{
 			return $sites;
 		}
-		if (isset($search['FIND']) && trim($search['FIND']))
+		if (isset($search['FIND']) && (trim((string)$search['FIND']) !== ''))
 		{
 			$filter['NAME'] = '%' . trim($search['FIND']) . '%';
 		}
@@ -238,7 +237,7 @@ class LandingSitesComponent extends LandingBaseComponent
 			$this->checkParam('PAGE_URL_SITE', '');
 			$this->checkParam('PAGE_URL_SETTINGS', '');
 			$this->checkParam('PAGE_URL_SITE_EDIT', '');
-			$this->checkParam('PAGE_URL_SITE_DESI   GN', '');
+			$this->checkParam('PAGE_URL_SITE_DESIGN', '');
 			$this->checkParam('PAGE_URL_SITE_CONTACTS', '');
 			$this->checkParam('PAGE_URL_LANDING_EDIT', '');
 			$this->checkParam('PAGE_URL_SITE_DOMAIN_EDIT', '');
@@ -250,6 +249,8 @@ class LandingSitesComponent extends LandingBaseComponent
 			{
 				$this->arParams['AI_SITE_CHAT_AVAILABLE'] = false;
 			}
+			$this->checkParam('PRESET_SITES_EMPTY_STATE', false);
+			$this->checkParam('PRESET_SITES_EMPTY_STATE_REMAINING', 0);
 			$this->checkParam('~AGREEMENT', []);
 			$this->checkParam(
 				'PAGE_URL_SITE_EXPORT',
@@ -276,6 +277,10 @@ class LandingSitesComponent extends LandingBaseComponent
 				'bitrix:landing.filter'
 			);
 
+			$this->rawFilter = LandingFilterComponent::getFilterRaw(
+				LandingFilterComponent::TYPE_SITE,
+				$this->arParams['TYPE']
+			);
 			// template data
 			$filter = LandingFilterComponent::getFilter(
 				LandingFilterComponent::TYPE_SITE,
@@ -513,6 +518,13 @@ class LandingSitesComponent extends LandingBaseComponent
 		{
 			$this->arResult['LICENSE'] = \CBitrix24::getLicenseType();
 		}
+		$isIframe = $this->request('IFRAME');
+		if (isset($this->rawFilter['FIND']) && (trim((string)$this->rawFilter['FIND']) !== '') && ($isIframe !== 'Y'))
+		{
+			$this->isSearchRequested = true;
+		}
+
+		$this->arResult['IS_SEARCH_REQUESTED'] = $this->isSearchRequested;
 
 		parent::executeComponent();
 

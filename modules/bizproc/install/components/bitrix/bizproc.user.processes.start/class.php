@@ -20,6 +20,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Web\Uri;
+use Bitrix\UI\Format\BBCode\Converter;
 
 class BizprocUserProcessesStart
 	extends CBitrixComponent
@@ -716,7 +717,8 @@ class BizprocUserProcessesStart
 			$bizprocEditorUrl = str_replace('#ID#', $template['id'], $template['bizprocEditorUrl']);
 			$canEdit = $template['canEdit'] ?? false;
 			$editActions[] = [
-				'TITLE' => $template['description'],
+				// menu item title is a plain tooltip: markup would be shown as is
+				'TITLE' => Converter::toPlainText((string)($template['description'] ?? '')),
 				'TEXT' => $template['name'],
 				'ONCLICK' => "BX.Bizproc.Component.UserProcessesStart.Instance.editTemplate(event, '$bizprocEditorUrl', $canEdit);",
 			];

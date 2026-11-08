@@ -19,8 +19,12 @@ class SetDailyTaskRecurrenceTool extends BaseRecurrenceTool
 		;
 	}
 
-	protected function buildDto(array $args): MakeTaskRecurringDto
+	protected function buildDto(array $args, int $userId): MakeTaskRecurringDto
 	{
-		return MakeTaskRecurringDto::fromArray([...$args, 'period' => Period::Daily->value]);
+		return MakeTaskRecurringDto::fromArray([
+			...$args,
+			'period' => Period::Daily->value,
+			'userId' => $userId,
+		]);
 	}
 }

@@ -16,6 +16,8 @@ final class Analytics
 
 	protected const EVENT = [
 		'create_event' => 'create_event',
+		'accept_event' => 'accept_event',
+		'decline_event' => 'decline_event',
 	];
 
 	public const SECTION = [
@@ -30,7 +32,10 @@ final class Analytics
 	public const SUB_SECTION = [
 		'calendar_personal' => 'calendar_personal',
 		'calendar_collab' => 'calendar_collab',
+		'calendar_project' => 'calendar_project',
+		'calendar' => 'calendar',
 		'chat_textarea' => 'chat_textarea',
+		'stream' => 'stream',
 	];
 
 	public const USER_TYPES = [
@@ -39,21 +44,28 @@ final class Analytics
 		'collaber' => 'user_collaber',
 	];
 
+	public const EVENT_TYPE = [
+		'group' => 'group',
+		'single' => 'single',
+	];
+
 	/**
+	 * @param string $type Event type: 'group' or 'single'
 	 * @param string $section
 	 * @param string|null $subSection
 	 * @param string|null $userType
-	 * @param int|null $collabId
+	 * @param int|null $groupId Group owner id for group calendar events (used as projectId)
 	 * @param int|null $chatId
 	 *
 	 * @return void
 	 * @throws ArgumentException
 	 */
 	public function onEventCreate(
+		string $type,
 		string $section,
 		?string $subSection,
 		?string $userType = null,
-		?int $collabId = 0,
+		?int $groupId = 0,
 		?int $chatId = 0,
 	): void
 	{
@@ -63,6 +75,8 @@ final class Analytics
 			category: self::CALENDAR_CATEGORY
 		);
 
+		$analyticsEvent->setType($type);
+
 		$params = [];
 
 		if (!empty($userType))
@@ -70,9 +84,9 @@ final class Analytics
 			$params['p2'] = $userType;
 		}
 
-		if (!empty($collabId))
+		if (!empty($groupId))
 		{
-			$params['p4'] = 'collabId_' . $collabId;
+			$params['p4'] = 'projectId_' . $groupId;
 		}
 
 		if (!empty($chatId))
@@ -81,6 +95,64 @@ final class Analytics
 		}
 
 		$this->sendAnalytics($analyticsEvent, $section, $subSection, $params);
+	}
+
+	/**
+	 * @param int $eventId
+	 * @param int $userId
+	 * @param int|null $groupId Group owner id for project context (used as projectId)
+	 * @param string|null $subSection Context source sub-section
+	 * @param string|null $userType
+	 * @param string $status 'success' or 'error'
+	 *
+	 * @return void
+	 * @throws ArgumentException
+	 */
+	public function onEventAccept(
+		int $eventId,
+		int $userId,
+		?int $groupId = 0,
+		?string $subSection = null,
+		?string $userType = null,
+		string $status = AnalyticsEvent::STATUS_SUCCESS,
+	): void
+	{
+		$this->sendMeetingStatusEvent(
+			eventName: self::EVENT['accept_event'],
+			groupId: $groupId,
+			subSection: $subSection,
+			userType: $userType,
+			status: $status,
+		);
+	}
+
+	/**
+	 * @param int $eventId
+	 * @param int $userId
+	 * @param int|null $groupId Group owner id for project context (used as projectId)
+	 * @param string|null $subSection Context source sub-section
+	 * @param string|null $userType
+	 * @param string $status 'success' or 'error'
+	 *
+	 * @return void
+	 * @throws ArgumentException
+	 */
+	public function onEventDecline(
+		int $eventId,
+		int $userId,
+		?int $groupId = 0,
+		?string $subSection = null,
+		?string $userType = null,
+		string $status = AnalyticsEvent::STATUS_SUCCESS,
+	): void
+	{
+		$this->sendMeetingStatusEvent(
+			eventName: self::EVENT['decline_event'],
+			groupId: $groupId,
+			subSection: $subSection,
+			userType: $userType,
+			status: $status,
+		);
 	}
 
 	/**
@@ -123,5 +195,39 @@ final class Analytics
 		}
 
 		$analyticsEvent->send();
+	}
+
+	/**
+	 * @throws ArgumentException
+	 */
+	private function sendMeetingStatusEvent(
+		string $eventName,
+		?int $groupId,
+		?string $subSection,
+		?string $userType,
+		string $status,
+	): void
+	{
+		$analyticsEvent = new AnalyticsEvent(
+			event: $eventName,
+			tool: self::TOOL,
+			category: self::CALENDAR_CATEGORY
+		);
+
+		$analyticsEvent->setStatus($status);
+
+		$params = [];
+
+		if (!empty($userType))
+		{
+			$params['p2'] = $userType;
+		}
+
+		if (!empty($groupId))
+		{
+			$params['p4'] = 'projectId_' . $groupId;
+		}
+
+		$this->sendAnalytics($analyticsEvent, self::SECTION['project'], $subSection, $params);
 	}
 }

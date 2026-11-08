@@ -55,14 +55,14 @@ class EventController
 		{
 			$id = intVal($event->getParameter('id'));
 			$fields = $event->getParameter('fields');
-			if ($id > 0 && $fields['STATUS'] == AppTable::STATUS_LOCAL)
+			if ($id > 0 && ($fields['STATUS'] ?? null) == AppTable::STATUS_LOCAL)
 			{
-				$scope = explode(',', $fields['SCOPE']);
+				$scope = explode(',', (string)($fields['SCOPE'] ?? ''));
 				$result = IntegrationTable::add(
 					[
 						'ELEMENT_CODE' => Element::DEFAULT_APPLICATION,
-						'TITLE' => $fields['APP_NAME'],
-						'APP_ID' => $fields['APP_ID'],
+						'TITLE' => $fields['APP_NAME'] ?? '',
+						'APP_ID' => $id,
 						'SCOPE' => $scope,
 						'APPLICATION_ONLY_API' => 'Y',
 						'APPLICATION_NEEDED' => 'Y',

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Category\Entity;
 
 use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\Entry\EntryException;
+use Bitrix\Crm\MessageSender\CustomTemplate\CrmZone;
 use Bitrix\Crm\RepeatSale\Segment\SegmentManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Error;
@@ -111,6 +112,7 @@ class DealCategory extends Category
 		if ($result->isSuccess())
 		{
 			SegmentManager::onCategoryDelete(new CategoryIdentifier($this->getEntityTypeId(), $this->getId()));
+			CrmZone::cleanupTemplatesByTarget($this->getEntityTypeId(), (int)$this->getId());
 			$this->processDeletedEvent();
 			$this->sendEventCategoriesUpdated();
 		}

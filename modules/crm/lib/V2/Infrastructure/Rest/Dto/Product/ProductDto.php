@@ -7,6 +7,7 @@ namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Product;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\V3\Attribute\Filterable;
 use Bitrix\Rest\V3\Attribute\Sortable;
+use Bitrix\Rest\V3\Attribute\Title;
 use Bitrix\Rest\V3\Dto\Dto;
 
 /**
@@ -32,6 +33,7 @@ use Bitrix\Rest\V3\Dto\Dto;
  * `vatId` publishes a reference to a VAT rate while v3 offers no way to list the allowed rates yet.
  * That is a known departure from the regulation, the same one `measureCode` of a product row carries.
  */
+#[Title('CRM catalog product')]
 final class ProductDto extends Dto
 {
 	/** Also the identifier of the iblock element behind the card: the two are the same number. */

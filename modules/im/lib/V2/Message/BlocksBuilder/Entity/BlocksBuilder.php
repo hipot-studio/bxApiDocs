@@ -58,6 +58,14 @@ class BlocksBuilder implements \JsonSerializable
 		return $this->files;
 	}
 
+	/**
+	 * @return int[]
+	 */
+	public function getFilesOfType(BlockType $type): array
+	{
+		return $this->blockCollection->getFilesOfType($type);
+	}
+
 	public function getPayloadText(): string
 	{
 		$text = $this->blockCollection->getPayloadText();

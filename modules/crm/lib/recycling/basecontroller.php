@@ -171,7 +171,11 @@ abstract class BaseController
 			$recyclingEntityID,
 			$this->getEntityTypeID(),
 			$fields,
-			array('ENABLE_SYNCHRONIZATION' => false)
+			array(
+				'ENABLE_SYNCHRONIZATION' => false,
+				'ALLOW_RECYCLING_COMPATIBILITY' => true,
+				'MATCH_BY_BASIC_ATTRIBUTES_ONLY' => true,
+			)
 		);
 		return $fields;
 	}
@@ -258,6 +262,10 @@ abstract class BaseController
 		$synchronizationOptions = isset($options['SYNCHRONIZATION_OPTIONS']) && is_array($options['SYNCHRONIZATION_OPTIONS'])
 			? $options['SYNCHRONIZATION_OPTIONS'] : array();
 		$synchronizationOptions['IS_RECYCLING'] = true;
+		$allowRecyclingCompatibility =
+			($options['ALLOW_RECYCLING_COMPATIBILITY'] ?? $options['ALLOW_SOURCE_ENUMERATION_SUPERSET'] ?? false) === true
+		;
+		$matchByBasicAttributesOnly = ($options['MATCH_BY_BASIC_ATTRIBUTES_ONLY'] ?? false) === true;
 		if (
 			$enableSynchronization
 			&& UserFieldSynchronizer::needForSynchronization(
@@ -277,18 +285,61 @@ abstract class BaseController
 			);
 		}
 
-		$intersections = UserFieldSynchronizer::getIntersection($srcEntityTypeID, $dstEntityTypeID);
+		$srcFields = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields($srcUserFieldEntityID, $srcEntityID);
+		$dstUserFields = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields($dstUserFieldEntityTypeID, 0);
+		$preparedFieldValues = [];
+		if($matchByBasicAttributesOnly)
+		{
+			$intersections = UserFieldSynchronizer::getIntersectionFields(
+				UserFieldSynchronizer::filterFieldsWithValue($srcFields),
+				$dstUserFields,
+				[],
+				true,
+				$allowRecyclingCompatibility,
+				true,
+				function (array $srcField, array $dstField) use (&$preparedFieldValues): bool {
+					$value = null;
+					if(!$this->tryPrepareDestinationUserFieldValue($srcField, $dstField, $value))
+					{
+						return false;
+					}
+
+					$preparedFieldValues[$srcField['FIELD_NAME']][$dstField['FIELD_NAME']] = $value;
+
+					return true;
+				},
+			);
+		}
+		else
+		{
+			$intersections = UserFieldSynchronizer::getIntersection(
+				$srcEntityTypeID,
+				$dstEntityTypeID,
+				'',
+				true,
+				$allowRecyclingCompatibility,
+				false
+			);
+		}
 		if(empty($intersections))
 		{
 			return;
 		}
 
-		$srcFields = $GLOBALS['USER_FIELD_MANAGER']->GetUserFields($srcUserFieldEntityID, $srcEntityID);
-
-		$dstFields = $this->prepareFieldsValue($intersections, $srcFields);
+		$dstFields = $this->prepareFieldsValue(
+			$intersections,
+			$srcFields,
+			$dstUserFields,
+			$preparedFieldValues,
+		);
 	}
 
-	private function prepareFieldsValue(array $intersections, array $srcFields): array
+	private function prepareFieldsValue(
+		array $intersections,
+		array $srcFields,
+		array $dstUserFields,
+		array $preparedFieldValues = [],
+	): array
 	{
 		$dstFields = [];
 		foreach ($intersections as $intersection)
@@ -302,41 +353,110 @@ abstract class BaseController
 				continue;
 			}
 
-			$isMultiple = $srcFieldData['MULTIPLE'] === 'Y';
-			$typeId = $srcFieldData['USER_TYPE_ID'];
-
-			$dstFields[$dstFieldName] = $srcFields[$srcFieldName]['VALUE'];
-
-			if ($typeId === 'file')
+			$dstFieldData = $dstUserFields[$dstFieldName] ?? null;
+			if (!is_array($dstFieldData))
 			{
-				if (!$isMultiple)
+				continue;
+			}
+
+			$value = null;
+			if(array_key_exists($dstFieldName, $preparedFieldValues[$srcFieldName] ?? []))
+			{
+				$value = $preparedFieldValues[$srcFieldName][$dstFieldName];
+			}
+			elseif(!$this->tryPrepareDestinationUserFieldValue($srcFieldData, $dstFieldData, $value))
+			{
+				continue;
+			}
+
+			$dstFields[$dstFieldName] = $value;
+		}
+
+		return $dstFields;
+	}
+
+	private function tryPrepareDestinationUserFieldValue(
+		array $srcFieldData,
+		array $dstFieldData,
+		mixed &$value,
+	): bool
+	{
+		$isMultiple = ($srcFieldData['MULTIPLE'] ?? 'N') === 'Y';
+		$typeId = $srcFieldData['USER_TYPE_ID'] ?? '';
+		$value = $srcFieldData['VALUE'] ?? null;
+
+		if(
+			$typeId === 'enumeration'
+			&& !UserFieldSynchronizer::tryMapEnumerationValueToDestination(
+				$srcFieldData,
+				$dstFieldData,
+				$value,
+				$value,
+			)
+		)
+		{
+			return false;
+		}
+
+		if($typeId === 'file')
+		{
+			if(!$isMultiple)
+			{
+				$file = null;
+				if(\CCrmFileProxy::TryResolveFile($value, $file, ['ENABLE_ID' => true]))
+				{
+					$value = $file;
+				}
+			}
+			elseif(is_array($value))
+			{
+				$files = [];
+				foreach($value as $fileID)
 				{
 					$file = null;
-					if (\CCrmFileProxy::TryResolveFile($srcFieldData['VALUE'], $file, ['ENABLE_ID' => true]))
+					if(\CCrmFileProxy::TryResolveFile($fileID, $file, ['ENABLE_ID' => true]))
 					{
-						$dstFields[$dstFieldName] = $file;
+						$files[] = $file;
 					}
 				}
-				elseif (is_array($srcFieldData['VALUE']))
-				{
-					$files = [];
-					foreach ($srcFieldData['VALUE'] as $fileID)
-					{
-						if (\CCrmFileProxy::TryResolveFile($fileID, $file, ['ENABLE_ID' => true]))
-						{
-							$files[] = $file;
-						}
-					}
 
-					if (!empty($files))
-					{
-						$dstFields[$dstFieldName] = $files;
-					}
+				if(!empty($files))
+				{
+					$value = $files;
 				}
 			}
 		}
 
-		return $dstFields;
+		return $this->isDestinationUserFieldValueValid($dstFieldData, $value);
+	}
+
+	private function isDestinationUserFieldValueValid(array $dstFieldData, mixed $value): bool
+	{
+		$className = $dstFieldData['USER_TYPE']['CLASS_NAME'] ?? null;
+		if(!is_string($className) || !is_callable([$className, 'checkfields']))
+		{
+			return true;
+		}
+
+		if(($dstFieldData['MULTIPLE'] ?? 'N') === 'Y' && is_array($value))
+		{
+			foreach($value as $singleValue)
+			{
+				$isEmpty = $singleValue === null || $singleValue === '' || $singleValue === [];
+				$messages = !$isEmpty
+					? call_user_func_array([$className, 'checkfields'], [$dstFieldData, $singleValue])
+					: []
+				;
+				if(!empty($messages))
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		return empty(call_user_func_array([$className, 'checkfields'], [$dstFieldData, $value]));
 	}
 	//endregion
 

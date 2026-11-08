@@ -46,6 +46,11 @@ final class AppModel implements AccessibleItem
 		return $this->app;
 	}
 
+	public function isInstalled(): bool
+	{
+		return $this->app?->isInstalled() ?? false;
+	}
+
 	public function getOwnerUserId(): ?int
 	{
 		$value = $this->app?->getAttributeValue(AppAttributeCode::OwnerUserId->value);

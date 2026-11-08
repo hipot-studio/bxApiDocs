@@ -11,6 +11,7 @@ use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationStage;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationUserStatusPublisher;
 use Bitrix\Mail\Internal\Service\SourceGeneration\OperationTracker;
 use Bitrix\Mail\Internal\Service\SourceGeneration\RetryPolicy;
+use Bitrix\Mail\Internal\Service\SourceGeneration\RolloutBrakeReader;
 use Bitrix\Mail\Integration\MailService\MigrationStatusProvider;
 use Bitrix\Mail\Internals\MigrationOperationTable;
 use Bitrix\Main\Result;
@@ -29,6 +30,7 @@ final class MigrationOperationAgent
 		private readonly RetryPolicy $retryPolicy = new RetryPolicy(),
 		private readonly MigrationStatusProvider $statusProvider = new MigrationStatusProvider(),
 		private readonly MigrationUserStatusPublisher $statusPublisher = new MigrationUserStatusPublisher(),
+		private readonly RolloutBrakeReader $rolloutBrakeReader = new RolloutBrakeReader(),
 		private readonly ?DateTime $fixedNow = null,
 	)
 	{
@@ -63,6 +65,25 @@ final class MigrationOperationAgent
 		foreach ($pendingPublications as $operation)
 		{
 			$this->flushPublication($operation);
+		}
+
+		try
+		{
+			if ($this->rolloutBrakeReader->findRefusalNow() === null)
+			{
+				$this->tracker->wakeStoppedOperations(self::BATCH_SIZE, $this->now());
+			}
+		}
+		catch (\Throwable)
+		{
+			MigrationMetrics::journalOperation(
+				'operation wake failed',
+				0,
+				'-',
+				0,
+				null,
+				RetryPolicy::ERROR_SCHEDULER_EXCEPTION,
+			);
 		}
 
 		try
@@ -248,19 +269,53 @@ final class MigrationOperationAgent
 		?array $publicStatusBeforeClaim,
 	): void
 	{
-		$stage = $outcome->getData()['stage'] ?? $fallbackStage;
+		$outcomeData = $outcome->getData();
+		$stage = $outcomeData['stage'] ?? $fallbackStage;
 		if (!$stage instanceof MigrationStage)
 		{
 			$stage = $fallbackStage;
 		}
 
+		$errorCode = $this->firstErrorCode($outcome);
+		$retryResumedAt = $outcomeData['manualRetryResumedAt'] ?? null;
+		$leftTheRolloutPause = !$retryResumedAt instanceof DateTime
+			&& $this->leftTheRolloutPause($operation, $errorCode);
+		if ($leftTheRolloutPause)
+		{
+			$retryResumedAt = $this->now();
+		}
+
 		$decision = $this->retryPolicy->decide(
 			$operation,
 			$stage,
-			$this->firstErrorCode($outcome),
-			(bool)($outcome->getData()['progressed'] ?? false),
+			$errorCode,
+			(bool)($outcomeData['progressed'] ?? false),
 			$this->now(),
+			(bool)($outcomeData['manualWaiting'] ?? false),
+			$retryResumedAt,
+			(bool)($outcomeData['manualRetryAttemptsReset'] ?? false),
 		);
+		if ($leftTheRolloutPause)
+		{
+			/*
+				The moment of the release is written down and not only used for this one pass.
+				A pass that made no progress stores the answer of the policy as it stands, so an
+				end of a pause kept in memory alone would be forgotten by the next pass: it would
+				count the budget from before the pause again and hand the operation to a human
+				after all. The manual control of the stages keeps such a mark in a row of its own
+				{@see ManualMigrationControl}; the operations of the transfer have no field for it
+				and no need of one - the moment the transfer is allowed to move again is exactly
+				what the budget of the retries counts from.
+			*/
+			$decision['lastProgress'] = $retryResumedAt;
+			$decision['stalledAttempts'] = 0;
+		}
+
+		$decision['manualVersion'] = array_key_exists('manualVersion', $outcomeData)
+			? $outcomeData['manualVersion']
+			: ($operation['MANUAL_VERSION'] ?? null);
+		$decision['consumeManualRetryResume'] = ($outcomeData['manualRetryResumedAt'] ?? null) instanceof DateTime
+			&& ((bool)($outcomeData['progressed'] ?? false) || !$decision['autoRetry']);
 
 		$publish = $this->publicStatusAfterDecision($operation, $decision) !== $publicStatusBeforeClaim;
 		if (!$this->storeOutcome(
@@ -286,6 +341,28 @@ final class MigrationOperationAgent
 			$stage->value,
 			$decision['errorCode'],
 		);
+	}
+
+	/**
+	 * Whether this pass is the first one after a pause of the rollout: the switches of the
+	 * portal were holding the operation, and now they are not.
+	 *
+	 * It matters because of what such a pause does to the budget of the retries. A transfer
+	 * that made no progress for a day is taken for a stuck one and handed to a human - and a
+	 * portal stopped by the emergency brake for a day made no progress by definition. So the budget is counted from the end of the pause, exactly as the manual
+	 * control of the stages counts it from the moment the operator lets the transfer go on
+	 * {@see ManualMigrationControl}.
+	 *
+	 * The pause itself costs the operation nothing else: while it lasts, every pass is refused
+	 * at the entry and the refusal is classified as a wait {@see RetryPolicy::classifyAccepted()},
+	 * so neither the attempts nor the stage move.
+	 */
+	private function leftTheRolloutPause(array $operation, ?string $errorCode): bool
+	{
+		$pausedBy = [MigrationService::ERROR_MIGRATION_STOPPED, MigrationService::ERROR_FEATURE_DISABLED];
+
+		return in_array((string)($operation['LAST_ERROR_CODE'] ?? ''), $pausedBy, true)
+			&& !in_array((string)$errorCode, $pausedBy, true);
 	}
 
 	private function firstErrorCode(Result $result): ?string
@@ -323,7 +400,14 @@ final class MigrationOperationAgent
 	{
 		try
 		{
-			$stored = $this->tracker->recordOutcome($operation, $decision, $publish, $notify);
+			$stored = $this->tracker->recordOutcome(
+				$operation,
+				$decision,
+				$publish,
+				$notify,
+				$decision['manualVersion'] ?? null,
+				(bool)($decision['consumeManualRetryResume'] ?? false),
+			);
 		}
 		catch (\Throwable)
 		{

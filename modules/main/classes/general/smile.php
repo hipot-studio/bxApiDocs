@@ -3,9 +3,10 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2013 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
+use Bitrix\Main\Type\Callback;
 use Bitrix\Main\Type\DateTime;
 
 IncludeModuleLangFile(__FILE__);
@@ -854,9 +855,9 @@ class CSmile
 	/**
 	 * Onetime command for copy smiles from bitrix/images
 	 *
-	 * @return void
+	 * @return Callback|null
 	 */
-	public static function moveSmilesToUploadAgent(): string
+	public static function moveSmilesToUploadAgent(): ?Callback
 	{
 		$paths = [
 			'smiles' => [
@@ -869,7 +870,7 @@ class CSmile
 			]
 		];
 
-		$returnValue = '';
+		$shouldRepeat = false;
 		foreach ($paths as $path)
 		{
 			$oldPath = $_SERVER["DOCUMENT_ROOT"] . $path['old'];
@@ -883,11 +884,16 @@ class CSmile
 			}
 			else
 			{
-				$returnValue = __METHOD__ . '();';
+				$shouldRepeat = true;
 			}
 		}
 
-		return $returnValue;
+		if ($shouldRepeat)
+		{
+			return new Callback([self::class, __FUNCTION__]);
+		}
+
+		return null;
 	}
 }
 
@@ -1681,4 +1687,3 @@ class CSmileSet
 		return $setId;
 	}
 }
-

@@ -7,6 +7,8 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\Crm\Component\Base;
 use Bitrix\Crm\Copilot\AiQualityAssessment\Entity\AiQualityAssessmentTable;
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\ClickEventBuilder;
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\ClickEventWrapper;
 use Bitrix\Crm\Copilot\CallAssessment\BiReportButton;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
@@ -308,7 +310,10 @@ class CrmCopilotCallAssessmentCallListComponent extends Base
 	{
 		$buttons = [];
 
-		$biReportOnClick = BiReportButton::getInstance()->getOnClickJsCode('crm_copilot_call_assessment_calllist');
+		$biReportOnClick = ClickEventWrapper::wrap(
+			BiReportButton::getInstance()->getOnClickJsCode('crm_copilot_call_assessment_calllist'),
+			ClickEventBuilder::BiReport,
+		);
 		if ($biReportOnClick !== null)
 		{
 			$buttons[UI\Toolbar\ButtonLocation::RIGHT][] = new UI\Buttons\Button([

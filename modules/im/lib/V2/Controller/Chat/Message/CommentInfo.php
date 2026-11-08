@@ -13,7 +13,9 @@ class CommentInfo extends BaseController
 	 */
 	public function listAction(MessageCollection $messages): ?array
 	{
-		$commentInfo = new CommentPopupItem($messages->getCommonChatId(), $messages->getIds());
+		// The thread-capability gate stays off here: the method returns cells regardless of whether
+		// the parent is thread-capable. SameChatMessageFilter keeps the input single-chat.
+		$commentInfo = new CommentPopupItem((int)$messages->getCommonChatId(), $messages->getIds());
 
 		return $this->toRestFormat($commentInfo);
 	}

@@ -13,6 +13,7 @@ use Bitrix\Crm\RelationIdentifier;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service;
 use Bitrix\Crm\UserField\UserFieldManager;
+use Bitrix\Crm\V2\Internal\Service\Type\HubActionUrlResolver;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
@@ -27,6 +28,11 @@ if (!Loader::includeModule('crm'))
 
 class CrmTypeDetailComponent extends Base
 {
+	/**
+	 * The preset the tile "Полный" of the legacy screen hands to the form ({@see Service\Broker\TypePreset}).
+	 */
+	private const FULL_PRESET_ID = 'bitrix:full';
+
 	private const TAB_IDS = [
 		'custom-section',
 		'common',
@@ -118,7 +124,56 @@ class CrmTypeDetailComponent extends Base
 			$type->setCustomSectionId($this->arParams['automatedSolutionId']);
 		}
 
+		// Under the same gate as the hub template below, and for the same reason: the tiles of the
+		// presets are the legacy screen's, and the creation flow of the hub has none of them. With
+		// nothing left to switch the settings on, a draft would arrive with every toggle off and the
+		// created process would come out empty, so the draft of the hub is given the set of the full
+		// preset - the one the tile "Полный" hands to the legacy form. Off the feature, the draft is
+		// exactly the one the legacy screen has always started its tiles from.
+		if (\Bitrix\Crm\Feature::enabled(\Bitrix\Crm\Feature\SmartProcessCrmHub::class))
+		{
+			$this->applyFullPresetToDraftType($type);
+		}
+
 		return $type;
+	}
+
+	/**
+	 * Fills a draft with the settings of the full preset the way the server has always applied the
+	 * fields of a preset: the camelCase keys of the preset are the keys of the form, and what turns
+	 * them into fields of the type is the orm converter ({@see \Bitrix\Crm\Controller\Type::update()}).
+	 * The title of the preset is deliberately left out - it names the tile, not the process, and the
+	 * name is what the person is about to type in the hero of the hub.
+	 */
+	private function applyFullPresetToDraftType(Type $type): void
+	{
+		$preset = null;
+		foreach (Service\Container::getInstance()->getTypePresetBroker()->getList() as $candidate)
+		{
+			if ($candidate->getId() === self::FULL_PRESET_ID)
+			{
+				$preset = $candidate;
+				break;
+			}
+		}
+
+		if ($preset === null)
+		{
+			return;
+		}
+
+		$fields = Service\Container::getInstance()->getOrmObjectConverter()->convertKeysToUpperCase(
+			$preset->getData()
+		);
+		unset($fields['TITLE']);
+
+		foreach ($fields as $name => $value)
+		{
+			if ($type->entity->hasField($name))
+			{
+				$type->set($name, $value);
+			}
+		}
 	}
 
 	public function executeComponent()
@@ -134,12 +189,14 @@ class CrmTypeDetailComponent extends Base
 		$this->arResult['type'] = $this->getType()->jsonSerialize();
 		$this->arResult['isCategoriesControlDisabled'] = false;
 		$this->arResult['isRecyclebinControlDisabled'] = false;
+		$this->arResult['categoriesCount'] = 0;
 		if ($this->type->getIsCategoriesEnabled() && $this->type->getId() > 0)
 		{
 			$factory = Service\Container::getInstance()->getFactory($this->type->getEntityTypeId());
 			if ($factory)
 			{
 				$categories = $factory->getCategories();
+				$this->arResult['categoriesCount'] = count($categories);
 				if (count($categories) > 1)
 				{
 					$this->arResult['isCategoriesControlDisabled'] = true;
@@ -160,7 +217,9 @@ class CrmTypeDetailComponent extends Base
 		$this->arResult['relations'] = $this->getRelations();
 		$this->arResult['isCustomSectionsAvailable'] = Integration\IntranetManager::isCustomSectionsAvailable();
 		$this->arResult['linkedUserFields'] = $this->getLinkedUserFields();
-		$this->arResult['isExternal'] = $this->request->get('isExternal') === 'Y';
+		$this->arResult['isExternal'] = ($this->arParams['isExternal'] ?? null) === true
+			|| $this->request->get('isExternal') === 'Y'
+		;
 		if (!$this->type->getId())
 		{
 			$this->arResult['canEditAutomatedSolution'] = $this->arResult['isExternal']
@@ -182,6 +241,26 @@ class CrmTypeDetailComponent extends Base
 		}
 
 		$this->arResult['permissionsUrl'] = $this->router->getEntityPermissionsUrl($this->type->getEntityTypeId());
+
+		if (\Bitrix\Crm\Feature::enabled(\Bitrix\Crm\Feature\SmartProcessCrmHub::class))
+		{
+			// A draft does carry an entity type id - the default of the field hands it out and burns
+			// it off the sequence every time the screen is opened - but no record of a type stands
+			// behind it yet. Addresses built off such an id look valid and lead nowhere, so a draft
+			// is served no map at all and the action buttons are simply not drawn. The hub is the
+			// form of the creation flow all the same, hence the template either way.
+			if (!$this->type->isNew())
+			{
+				$this->arResult['hubActionUrls'] = (new HubActionUrlResolver())
+					->getActionUrls($this->type->getEntityTypeId())
+				;
+			}
+
+			// The legacy form sends its seed back as a whole, so the description reaches the hub alone
+			$this->arResult['description'] = $this->type->getDescription();
+
+			$this->setTemplateName('hub');
+		}
 
 		$this->includeComponentTemplate();
 	}

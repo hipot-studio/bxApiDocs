@@ -9,6 +9,63 @@ use CCrmOwnerType;
 class AutomaticDuplicateList extends DuplicateList
 {
 	protected $isDirty = null;
+	protected bool $useIndexOrder = false;
+	protected ?array $indexOrderStart = null;
+
+	/**
+	 * Order by (TYPE_ID, ID): follows IX_CRM_DP_AUTOMATIC_INDEX_2, so the first row is read
+	 * without a filesort over all user's items. Deterministic, but not a user-facing order.
+	 */
+	public function enableIndexOrder(bool $useIndexOrder): void
+	{
+		$this->useIndexOrder = $useIndexOrder;
+	}
+
+	public function isIndexOrderEnabled(): bool
+	{
+		return $this->useIndexOrder;
+	}
+
+	/**
+	 * In index order, start from the row (typeId, queueId) inclusive: rows before it are not read.
+	 */
+	public function setIndexOrderStart(int $typeId, int $queueId): void
+	{
+		$this->indexOrderStart = ['TYPE_ID' => $typeId, 'ID' => $queueId];
+	}
+
+	public function resetIndexOrderStart(): void
+	{
+		$this->indexOrderStart = null;
+	}
+
+	/**
+	 * Later types are listed explicitly: a single-type start stays a pure IX_2 prefix range
+	 * without OR, which MySQL could otherwise turn into a PRIMARY range scan.
+	 */
+	private function buildIndexOrderStartFilter(array $typeIds): array
+	{
+		$startTypeId = $this->indexOrderStart['TYPE_ID'];
+		$startTypeFilter = [
+			'=TYPE_ID' => $startTypeId,
+			'>=ID' => $this->indexOrderStart['ID'],
+		];
+
+		$laterTypeIds = array_values(array_filter(
+			$typeIds,
+			static fn($typeId): bool => (int)$typeId > $startTypeId,
+		));
+		if (empty($laterTypeIds))
+		{
+			return $startTypeFilter;
+		}
+
+		return [
+			'LOGIC' => 'OR',
+			$startTypeFilter,
+			['@TYPE_ID' => $laterTypeIds],
+		];
+	}
 
 	public function setIsDirty(bool $isDirty): void
 	{
@@ -212,6 +269,19 @@ class AutomaticDuplicateList extends DuplicateList
 		if ($limit > 0)
 		{
 			$query->setLimit($limit);
+		}
+
+		if ($this->useIndexOrder)
+		{
+			if ($this->indexOrderStart !== null)
+			{
+				$query->addFilter(null, $this->buildIndexOrderStartFilter($typeIDs));
+			}
+
+			$query->addOrder('TYPE_ID', 'ASC');
+			$query->addOrder('ID', 'ASC');
+
+			return $query;
 		}
 
 		$enableSorting = $this->sortTypeID !== DuplicateIndexType::UNDEFINED;

@@ -15,6 +15,7 @@ class DtoFieldDto extends Dto
 	public bool $filterable;
 	public bool $sortable;
 	public bool $editable;
+	public ?array $editableGroups;
 	public bool $multiple;
 	public ?string $elementType;
 }

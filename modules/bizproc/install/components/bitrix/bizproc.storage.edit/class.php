@@ -9,6 +9,7 @@ use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Public\Provider\Params\StorageType\StorageTypeFilter;
 use Bitrix\Bizproc\Public\Provider\Params\StorageType\StorageTypeSort;
 use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Localization\Loc;
@@ -34,14 +35,15 @@ class BizprocStorageEditComponent extends CBitrixComponent
 
 		if (!Loader::includeModule('bizproc'))
 		{
-			$this->showError(Loc::getMessage('BIZPROC_STORAGE_EDIT_MODULE_NOT_INSTALLED') ?? '');
+			$this->errorCollection->setError(new Error(Loc::getMessage('BIZPROC_STORAGE_EDIT_MODULE_NOT_INSTALLED') ?? ''));
 
 			return;
 		}
 
-		if (!(new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin())
+		$accessService = new TemplateAccessService();
+		if (!$accessService->canAccessTemplates())
 		{
-			$this->showError(ErrorMessage::ACCESS_DENIED->get());
+			$this->errorCollection->setError(ErrorMessage::ACCESS_DENIED->getError());
 
 			return;
 		}
@@ -54,6 +56,13 @@ class BizprocStorageEditComponent extends CBitrixComponent
 
 			if ($storageId > 0)
 			{
+				if (!$accessService->canEditStorage($storageId))
+				{
+					$this->errorCollection->setError(ErrorMessage::ACCESS_DENIED->getError());
+
+					return;
+				}
+
 				$provider = new StorageTypeProvider();
 				$this->data = $provider->getById($storageId)?->toArray();
 
@@ -207,13 +216,5 @@ class BizprocStorageEditComponent extends CBitrixComponent
 		global $APPLICATION;
 
 		$APPLICATION->SetTitle($title);
-	}
-
-	private function showError(string $message)
-	{
-		$this->arResult['errorMessage'] = $message;
-		$this->includeComponentTemplate('error');
-
-		return null;
 	}
 }

@@ -1250,12 +1250,12 @@ class ResourceBooking extends \Bitrix\Main\UserField\TypeBase
 		if ($params['fieldName'])
 		{
 			$r = \CUserTypeEntity::getList(array("ID" => "ASC"), array("FIELD_NAME" => $params['fieldName']));
-			if ($r)
+			$fieldProperties = $r ? $r->fetch() : null;
+			if (is_array($fieldProperties))
 			{
-				$fieldProperties = $r->fetch();
 				$resultData['fieldSettings'] = $fieldProperties['SETTINGS'];
 
-				if ($resultData['fieldSettings']['USE_USER_TIMEZONE'] === 'N')
+				if (($resultData['fieldSettings']['USE_USER_TIMEZONE'] ?? null) === 'N')
 				{
 					$resultData['timezoneOffset'] = $resultData['fieldSettings']['TIMEZONE'] ? \CCalendar::GetTimezoneOffset($resultData['fieldSettings']['TIMEZONE']) : intval(date("Z"));
 					$resultData['timezoneOffsetLabel'] = 'UTC'.($resultData['timezoneOffset'] <> 0 ? ' '.($resultData['timezoneOffset'] < 0? '-':'+').sprintf("%02d", ($h = floor(abs($resultData['timezoneOffset'])/3600))).':'.sprintf("%02d", abs($resultData['timezoneOffset']) / 60 - $h * 60) : '');
@@ -1301,7 +1301,8 @@ class ResourceBooking extends \Bitrix\Main\UserField\TypeBase
 
 						if ($entry['DT_SKIP_TIME'] !== "Y")
 						{
-							if ($resultData['fieldSettings']['USE_USER_TIMEZONE'] === 'N')
+							// fieldSettings is absent for public booking fields without ENTITY_FIELD_NAME
+							if (($resultData['fieldSettings']['USE_USER_TIMEZONE'] ?? null) === 'N')
 							{
 								$fromTs -= \CCalendar::GetTimezoneOffset($entry['TZ_FROM']) - $resultData['timezoneOffset'];
 								$toTs -= \CCalendar::GetTimezoneOffset($entry['TZ_TO']) - $resultData['timezoneOffset'];
@@ -1376,20 +1377,12 @@ class ResourceBooking extends \Bitrix\Main\UserField\TypeBase
 				$fromTs = \CCalendar::timestamp($row["DATE_FROM"]);
 				$toTs = \CCalendar::timestamp($row['DATE_TO']);
 
-				if ($row['DT_SKIP_TIME'] !== "Y" && $resultData['fieldSettings']['USE_USER_TIMEZONE'] !== 'N')
+				if ($row['DT_SKIP_TIME'] !== "Y" && ($resultData['fieldSettings']['USE_USER_TIMEZONE'] ?? null) !== 'N')
 				{
-					if ($resultData['fieldSettings']['USE_USER_TIMEZONE'] === 'N')
-					{
-						$fromTs -= \CCalendar::GetTimezoneOffset($entry['TZ_FROM']) - $resultData['timezoneOffset'];
-						$toTs -= \CCalendar::GetTimezoneOffset($entry['TZ_TO']) - $resultData['timezoneOffset'];
-					}
-					else
-					{
-						$fromTs -= $row['~USER_OFFSET_FROM'];
-						$toTs -= $row['~USER_OFFSET_TO'];
-						$fromTs += $deltaOffset;
-						$toTs += $deltaOffset;
-					}
+					$fromTs -= $row['~USER_OFFSET_FROM'];
+					$toTs -= $row['~USER_OFFSET_TO'];
+					$fromTs += $deltaOffset;
+					$toTs += $deltaOffset;
 				}
 
 				$resultData['resourcesAccessibility'][$row['SECT_ID']][] = array(

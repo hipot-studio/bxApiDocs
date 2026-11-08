@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Call\Controller\Exception;
 
 use Bitrix\Rest\V3\Exception\RestException;
+use Bitrix\Rest\V3\Exception\SkipWriteToLogException;
 
-class InvalidDateRangeException extends RestException
+class InvalidDateRangeException extends RestException implements SkipWriteToLogException
 {
 	public function __construct(
 		protected string $reason,

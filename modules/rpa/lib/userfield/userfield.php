@@ -4,6 +4,7 @@ namespace Bitrix\Rpa\UserField;
 
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\NotImplementedException;
+use Bitrix\Main\UserField\Types\BooleanType;
 use Bitrix\Rpa\Model\FieldTable;
 
 class UserField implements \ArrayAccess
@@ -117,12 +118,12 @@ class UserField implements \ArrayAccess
 
 	public function isBaseTypeBoolean(): bool
 	{
-		return ($this->data['USER_TYPE']['BASE_TYPE'] === 'boolean');
+		return ($this->getUserTypeId() === BooleanType::USER_TYPE_ID);
 	}
 
 	public function isBaseTypeNumerical(): bool
 	{
-		return ($this->data['USER_TYPE']['BASE_TYPE'] === 'integer' || $this->data['USER_TYPE']['BASE_TYPE'] === 'double');
+		return ($this->data['USER_TYPE']['BASE_TYPE'] === 'int' || $this->data['USER_TYPE']['BASE_TYPE'] === 'double');
 	}
 
 	public function offsetExists($offset)
@@ -160,8 +161,7 @@ class UserField implements \ArrayAccess
 			return true;
 		}
 
-		// Interpret bool 'false' as non-empty for boolean type
-		if ($this->isBaseTypeBoolean() && (bool)$fieldValue === false)
+		if ($this->isBaseTypeBoolean() && in_array($fieldValue, [false, 0, 0.0, '0'], true))
 		{
 			return false;
 		}
@@ -172,6 +172,11 @@ class UserField implements \ArrayAccess
 		)
 		{
 			return false;
+		}
+
+		if (is_string($fieldValue))
+		{
+			return $fieldValue === '';
 		}
 
 		return empty($fieldValue);

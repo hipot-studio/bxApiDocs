@@ -29,6 +29,7 @@ class PushService
 				'params' => [
 					'id' => $addedItem->getId(),
 					'groupId' => $entity->getGroupId(),
+					'sprintId' => $entity->getEntityType() === EntityForm::SPRINT_TYPE ? $entity->getId() : 0,
 				],
 			]
 		);
@@ -50,6 +51,7 @@ class PushService
 			'params' => [
 				'id' => $updatedItem->getId(),
 				'groupId' => $entity->getGroupId(),
+				'sprintId' => $entity->getEntityType() === EntityForm::SPRINT_TYPE ? $entity->getId() : 0,
 				'sourceId' => $updatedItem->getSourceId(),
 				'tmpId' => $updatedItem->getTmpId(),
 				'storyPoints' => $updatedItem->getStoryPoints(),
@@ -73,6 +75,15 @@ class PushService
 		\Bitrix\Pull\Event::add($recipients, $params);
 	}
 
+	public function sendPlacementChangedEvent(int $groupId): void
+	{
+		\CPullWatch::addToStack('itemActions_' . $groupId, [
+			'module_id' => 'tasks',
+			'command' => 'itemPlacementChanged',
+			'params' => ['groupId' => $groupId],
+		]);
+	}
+
 	public function sendRemoveItemEvent(ItemForm $removedItem): void
 	{
 		$entityService = new EntityService();
@@ -93,6 +104,7 @@ class PushService
 				'params' => [
 					'id' => $removedItem->getId(),
 					'groupId' => $entity->getGroupId(),
+					'sprintId' => $entity->getEntityType() === EntityForm::SPRINT_TYPE ? $entity->getId() : 0,
 				],
 			]
 		);
@@ -168,6 +180,21 @@ class PushService
 				'module_id' => 'tasks',
 				'command' => 'itemSortUpdated',
 				'params' => $updatedItemsInfo,
+			]
+		);
+	}
+
+	public function sendMoveItemEvent(int $groupId, array $entityIds): void
+	{
+		\CPullWatch::addToStack(
+			'itemActions_' . $groupId,
+			[
+				'module_id' => 'tasks',
+				'command' => 'itemMoved',
+				'params' => [
+					'groupId' => $groupId,
+					'entityIds' => $entityIds,
+				],
 			]
 		);
 	}

@@ -15,11 +15,23 @@ class FileMessageEvent extends ChatEvent
 	protected const MEDIA_TYPE = 'media';
 	protected const UNKNOWN_TYPE = 'unknown';
 
-	public function setFilesType(FileCollection $files): self
+	/**
+	 * Resolves a single analytics type string for a file collection.
+	 *
+	 * Extracted as a public static helper so that CopilotAnalytics (tool=ai) can reuse the
+	 * same classification logic without instantiating a FileMessageEvent (private logic made
+	 * accessible with minimal surface change).
+	 *
+	 * Returns the same value that setFilesType() would place in $this->type, except when
+	 * the disk module is unavailable: then it returns 'unknown', while setFilesType()
+	 * leaves the type unset (legacy contract) — callers preserving that contract must
+	 * gate on disk availability themselves.
+	 */
+	public static function resolveFileType(FileCollection $files): string
 	{
 		if (!Loader::includeModule('disk'))
 		{
-			return $this;
+			return self::UNKNOWN_TYPE;
 		}
 
 		$fileMap = [];
@@ -37,21 +49,32 @@ class FileMessageEvent extends ChatEvent
 			&& isset($fileMap[TypeFile::VIDEO])
 		)
 		{
-			$this->type = self::MEDIA_TYPE;
-
-			return $this;
+			return self::MEDIA_TYPE;
 		}
 
 		if ($typeCount > 1)
 		{
-			$this->type = self::MULTI_TYPE;
+			return self::MULTI_TYPE;
+		}
 
-			return $this;
+		if ($typeCount === 0)
+		{
+			return self::UNKNOWN_TYPE;
 		}
 
 		$diskFileType = array_shift($fileMap);
 
-		$this->type = $this->getFileType($diskFileType, $files) ?? self::UNKNOWN_TYPE;
+		return self::resolveFileTypeById((int)$diskFileType, $files) ?? self::UNKNOWN_TYPE;
+	}
+
+	public function setFilesType(FileCollection $files): self
+	{
+		if (!Loader::includeModule('disk'))
+		{
+			return $this;
+		}
+
+		$this->type = self::resolveFileType($files);
 
 		return $this;
 	}
@@ -63,13 +86,15 @@ class FileMessageEvent extends ChatEvent
 		return $this;
 	}
 
-	private function getFileType(int $diskFileType, FileCollection $files): ?string
+	/**
+	 * Maps a single Disk TypeFile id + FileCollection to an analytics type string.
+	 *
+	 * Extracted as a private static so that the public resolveFileType() can call it
+	 * without an instance.
+	 */
+	private static function resolveFileTypeById(int $diskFileType, FileCollection $files): ?string
 	{
-		if (!Loader::includeModule('disk'))
-		{
-			return self::UNKNOWN_TYPE;
-		}
-
+		// Module 'disk' availability is already guaranteed by the sole caller resolveFileType().
 		$diskTypeToAnalyticTypeMap = [
 			TypeFile::IMAGE => 'image',
 			TypeFile::VIDEO => 'video',
@@ -85,12 +110,12 @@ class FileMessageEvent extends ChatEvent
 
 		$type = $diskTypeToAnalyticTypeMap[$diskFileType] ?? null;
 
-		if ($type === 'audio' && $this->isVoice($files))
+		if ($type === 'audio' && self::isVoiceStatic($files))
 		{
 			$type = 'voice';
 		}
 
-		if ($type === 'video' && $this->isVideoCircle($files))
+		if ($type === 'video' && self::isVideoCircleStatic($files))
 		{
 			$type = 'videoCircle';
 		}
@@ -98,7 +123,7 @@ class FileMessageEvent extends ChatEvent
 		return $type;
 	}
 
-	private function isVoice(FileCollection $files): bool
+	private static function isVoiceStatic(FileCollection $files): bool
 	{
 		if (count($files) !== 1)
 		{
@@ -110,7 +135,7 @@ class FileMessageEvent extends ChatEvent
 		return $file instanceof FileItem && $file->isVoiceNote();
 	}
 
-	private function isVideoCircle(FileCollection $files): bool
+	private static function isVideoCircleStatic(FileCollection $files): bool
 	{
 		if (count($files) !== 1)
 		{

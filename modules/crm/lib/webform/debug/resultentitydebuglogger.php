@@ -20,9 +20,9 @@ class ResultEntityDebugLogger
 
 	private LoggerInterface $logger;
 
-	public function __construct()
+	public function __construct(?LoggerInterface $logger = null)
 	{
-		$this->logger = Container::getInstance()->getLogger('Webform');
+		$this->logger = $logger ?? Container::getInstance()->getLogger('Webform');
 	}
 
 	public function setFormId(?int $formId): self
@@ -67,6 +67,33 @@ class ResultEntityDebugLogger
 	public function analyze(): void
 	{
 		$this->checkIfFilesAreNotSavedInCorrespondingEntities();
+	}
+
+	/**
+	 * Reports one legally significant acceptance that the consent journal does not hold.
+	 *
+	 * The trail is read by support and has to stay free of the personal data of the visitor, so it
+	 * carries identifiers and an error code only - never the text of the document, the submitted
+	 * values, the address of the visitor or the security code of the form.
+	 */
+	public function logConsentNotRecorded(
+		int $resultId,
+		int $activityId,
+		int $agreementId,
+		string $errorCode,
+	): void
+	{
+		$this->logger->error(
+			"ResultEntity: Form: $this->formId. Consent of agreement $agreementId"
+			. " is not recorded for result $resultId. Error: $errorCode.",
+			[
+				'formId' => $this->formId,
+				'resultId' => $resultId,
+				'activityId' => $activityId,
+				'agreementId' => $agreementId,
+				'errorCode' => $errorCode,
+			],
+		);
 	}
 
 	private function checkIfFilesAreNotSavedInCorrespondingEntities(): void

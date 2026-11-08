@@ -22,6 +22,7 @@ use Bitrix\Crm\Integration\AI\Operation\Payload\StubFactory;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\AIBaseEvent;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\CallParsingEvent;
+use Bitrix\Crm\Integration\Analytics\Builder\AI\JobFinishEventContract;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Requisite\EntityLink;
@@ -30,10 +31,13 @@ use Bitrix\Crm\Timeline\ActivityController;
 use Bitrix\Crm\Timeline\AI\Controller;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\Error;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
+use Bitrix\Main\ORM\Data\AddResult;
+use Bitrix\Main\ORM\Data\UpdateResult;
 use Bitrix\Main\ORM\Fields\FieldTypeMask;
 use Bitrix\Main\Web\Json;
 use Bitrix\Rest\Marketplace;
@@ -55,6 +59,26 @@ abstract class AbstractOperation
 	protected const PAYLOAD_CLASS = Dto::class;
 	protected const ENGINE_CATEGORY = 'text';
 	protected const ENGINE_CODE = EventHandler::SETTINGS_FILL_ITEM_FROM_CALL_ENGINE_TEXT_CODE;
+
+	/**
+	 * Operations that never report their job finish to analytics. The only place where such silence
+	 * is declared - operations themselves carry no flag.
+	 *
+	 * @see self::constructJobFinishEventBuilder
+	 */
+	private const EXCLUDED_OPERATION_TYPES = [
+		// synthetic target id, no real assessment behind it
+		GroupSuspiciousCalls::TYPE_ID,
+		// test launches must stay out of production analytics
+		Sandbox\FillRepeatSaleTips::TYPE_ID,
+	];
+
+	/** Operations that report a successful job finish through dedicated events. */
+	private const SUCCESS_EXCLUDED_OPERATION_TYPES = [
+		GenerateCallScriptFromDialog::TYPE_ID,
+		SelectCallScoreScript::TYPE_ID,
+		ScoreCallV2::TYPE_ID,
+	];
 
 	// @todo: inject via DI — currently each operation creates its own instance,
 	// and PipelineExecutor/StepFactory create additional ones. Consolidate after AutoLauncher migration.
@@ -148,9 +172,14 @@ abstract class AbstractOperation
 		return $result;
 	}
 
-	private static function isHarmlessDuplicateResult(\Bitrix\Main\Result $checkJobsResult): bool
+	protected function checkPreviousJobsBeforeLaunch(): \Bitrix\Main\Result
 	{
-		$errors = $checkJobsResult->getErrors();
+		return static::checkPreviousJobs($this->target, (int)$this->parentJobId);
+	}
+
+	private static function isHarmlessDuplicateResult(\Bitrix\Main\Result $failedResult): bool
+	{
+		$errors = $failedResult->getErrors();
 		if (empty($errors))
 		{
 			return false;
@@ -175,6 +204,16 @@ abstract class AbstractOperation
 			->where('ENTITY_ID', $target->getEntityId())
 			->where('TYPE_ID', static::TYPE_ID)
 			// we don't care about parent id - only one job of this type is allowed
+			->setLimit(1)
+			->fetchObject()
+		;
+	}
+
+	private static function findJobRowByHash(?string $hash): ?EO_Queue
+	{
+		return QueueTable::query()
+			->setSelect(['ID', 'ENTITY_TYPE_ID', 'ENTITY_ID', 'TYPE_ID', 'EXECUTION_STATUS', 'CREATED_TIME'])
+			->where('HASH', $hash)
 			->setLimit(1)
 			->fetchObject()
 		;
@@ -416,7 +455,7 @@ abstract class AbstractOperation
 			$engine->skipAgreement();
 		}
 
-		$checkJobsResult = static::checkPreviousJobs($this->target, (int)$this->parentJobId);
+		$checkJobsResult = $this->checkPreviousJobsBeforeLaunch();
 		if (!$checkJobsResult->isSuccess())
 		{
 			AIManager::logger()->error(
@@ -463,6 +502,18 @@ abstract class AbstractOperation
 
 		$hash = null;
 		$error = null;
+		$beforeDispatchResult = $this->beforeLaunchDispatch($previousJob);
+		if (!$beforeDispatchResult->isSuccess())
+		{
+			$result->addErrors($beforeDispatchResult->getErrors());
+
+			if (!self::isHarmlessDuplicateResult($beforeDispatchResult))
+			{
+				static::notifyAboutJobError($result, false, target: $this->manualFillTarget);
+			}
+
+			return $result;
+		}
 
 		if (AIManager::isStubMode())
 		{
@@ -603,11 +654,6 @@ abstract class AbstractOperation
 					'operationType' => static::TYPE_ID,
 				],
 			);
-
-			$dbSaveResult = QueueTable::update(
-				$previousJob->getId(),
-				['HASH' => $hash] + $this->getJobUpdateFields(),
-			);
 		}
 		else
 		{
@@ -619,11 +665,8 @@ abstract class AbstractOperation
 					'operationType' => static::TYPE_ID,
 				],
 			);
-
-			$dbSaveResult = QueueTable::add(
-				['HASH' => $hash] + $this->getJobAddFields(),
-			);
 		}
+		$dbSaveResult = $this->saveLaunchResult($hash, $previousJob);
 
 		if (!$dbSaveResult->isSuccess())
 		{
@@ -641,7 +684,13 @@ abstract class AbstractOperation
 
 			$result->addErrors($dbSaveResult->getErrors());
 
-			static::notifyAboutJobError($result, true, false, $this->manualFillTarget);
+			// A hash held by a job that is still alive refuses the launch the same way a duplicate found by
+			// the pre-check does: the first attempt keeps running, so the entity must not get the error badge
+			// and the timeline record of a failure. Any other save failure is reported as before.
+			if (!self::isHarmlessDuplicateResult($dbSaveResult))
+			{
+				static::notifyAboutJobError($result, true, false, $this->manualFillTarget);
+			}
 
 			return $result;
 		}
@@ -687,6 +736,20 @@ abstract class AbstractOperation
 
 	abstract protected function getAIPayload(): \Bitrix\Main\Result;
 
+	protected function beforeLaunchDispatch(?EO_Queue $previousJob): \Bitrix\Main\Result
+	{
+		return new \Bitrix\Main\Result();
+	}
+
+	protected function saveLaunchResult(?string $hash, ?EO_Queue $previousJob): AddResult|UpdateResult
+	{
+		return $this->saveJobRow(
+			$hash,
+			$previousJob?->getId(),
+			['HASH' => $hash] + ($previousJob ? $this->getJobUpdateFields() : $this->getJobAddFields()),
+		);
+	}
+
 	protected function getJobUpdateFields(): array
 	{
 		return [
@@ -715,6 +778,75 @@ abstract class AbstractOperation
 			'ENGINE_ID' => self::$engineId,
 			'NEXT_TYPE_ID' => $this->nextTypeIdOverride ?? Scenario::getNextTypeIdByScenario($this->scenario),
 		];
+	}
+
+	/**
+	 * The single write point of the queue row: a null $previousJobId inserts a new row, an id updates
+	 * that row. The job hash comes from the `ai` module, which is allowed to reuse the hash of a job
+	 * that is still alive, while IX_CRM_AI_QUEUE_HASH forbids a second row with it. A hash held by a
+	 * row other than the one being updated refuses the launch with the "job already exists" error and
+	 * leaves that row untouched. Its execution status and creation time go to the log: a hash held by
+	 * an already finished row makes the refusal permanent instead of a wait for the callback of the
+	 * first attempt.
+	 */
+	private function saveJobRow(?string $hash, ?int $previousJobId, array $fields): AddResult|UpdateResult
+	{
+		$occupiedRow = self::findJobRowByHash($hash);
+
+		if ($occupiedRow === null)
+		{
+			try
+			{
+				return $previousJobId === null
+					? QueueTable::add($fields)
+					: QueueTable::update($previousJobId, $fields)
+				;
+			}
+			catch (DuplicateEntryException)
+			{
+				// the hash was taken between the check above and this write
+				$occupiedRow = self::findJobRowByHash($hash);
+			}
+		}
+
+		if ($occupiedRow !== null)
+		{
+			if ($previousJobId !== null && $occupiedRow->getId() === $previousJobId)
+			{
+				return QueueTable::update($previousJobId, $fields);
+			}
+
+			$isOwnRow = $occupiedRow->getEntityTypeId() === $this->target->getEntityTypeId()
+				&& $occupiedRow->getEntityId() === $this->target->getEntityId()
+				&& (int)$occupiedRow->getTypeId() === static::TYPE_ID
+			;
+
+			if (!$isOwnRow)
+			{
+				AIManager::logger()->critical(
+					'{date}: {class}: AI job {hash} is already taken by the row of entity'
+					. ' {occupiedEntityTypeId}:{occupiedEntityId} in operation {occupiedOperationType}'
+					. ' with status {occupiedExecutionStatus} created at {occupiedCreatedTime},'
+					. ' launch on {target} in operation {operationType} is refused' . PHP_EOL,
+					[
+						'class' => static::class,
+						'hash' => $hash,
+						'occupiedEntityTypeId' => $occupiedRow->getEntityTypeId(),
+						'occupiedEntityId' => $occupiedRow->getEntityId(),
+						'occupiedOperationType' => (int)$occupiedRow->getTypeId(),
+						'occupiedExecutionStatus' => $occupiedRow->getExecutionStatus(),
+						'occupiedCreatedTime' => $occupiedRow->getCreatedTime(),
+						'target' => $this->target,
+						'operationType' => static::TYPE_ID,
+					],
+				);
+			}
+		}
+
+		$refusedResult = new AddResult();
+		$refusedResult->addError(ErrorCode::getJobAlreadyExistsError());
+
+		return $refusedResult;
 	}
 
 	protected function getContextAdditionalInfo(): array
@@ -878,7 +1010,7 @@ abstract class AbstractOperation
 			return $result;
 		}
 
-		$job->setResult(self::encodeResultWithTargetOwner($payload, $event->getParameter('engine')?->getContext()));
+		$job->setResult(self::encodeResultWithContextMetadata($payload, $event->getParameter('engine')?->getContext()));
 		$job->setExecutionStatus(QueueTable::EXECUTION_STATUS_SUCCESS);
 
 		AIManager::logger()->debug(
@@ -934,11 +1066,18 @@ abstract class AbstractOperation
 			static::notifyAboutJobError($result, true, false, $fillTarget);
 		}
 
-		$builder = self::constructJobFinishEventBuilder($job)
-			?->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR)
-		;
+		$builder = self::constructJobFinishEventBuilder($job, $result->isSuccess());
 		if ($builder)
 		{
+			$builder->setStatus($result->isSuccess() ? Dictionary::STATUS_SUCCESS : Dictionary::STATUS_ERROR);
+			// the generic status goes first, so the operation may replace it with its own verdict
+			if ($builder instanceof AIBaseEvent)
+			{
+				// domain enrichment is declared over the base event; an event assembled on its own
+				// (@see GenerateManagerSummaryEvent) has no domain fields to add
+				static::enrichJobFinishEventBuilder($builder, $result);
+			}
+
 			$builder->buildEvent()->send();
 			// send the same analytics only with different TOOL and CATEGORY
 			$builder
@@ -997,10 +1136,10 @@ abstract class AbstractOperation
 			);
 		}
 
-		$builder = self::constructJobFinishEventBuilder($job)
-			?->setStatus(Dictionary::STATUS_ERROR);
+		$builder = self::constructJobFinishEventBuilder($job, false);
 		if ($builder)
 		{
+			$builder->setStatus(Dictionary::STATUS_ERROR);
 			$builder->buildEvent()->send();
 			// send the same analytics only with different TOOL and CATEGORY
 			$builder
@@ -1163,13 +1302,22 @@ abstract class AbstractOperation
 
 		/** @var Dto|null $payload */
 		$payload = null;
+		$fillFieldsEntityAllowed = null;
 
 		if ($job->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_SUCCESS)
 		{
 			$resultsJson = $job->requireResult();
 			if (is_string($resultsJson) && $resultsJson !== '')
 			{
-				$payload = static::constructPayload($resultsJson);
+				$resultsArray = self::decodeResult($resultsJson);
+				if ($resultsArray !== null)
+				{
+					$fillFieldsEntityAllowed = array_key_exists('fillFieldsEntityAllowed', $resultsArray)
+						? (bool)$resultsArray['fillFieldsEntityAllowed']
+						: null
+					;
+					$payload = static::constructPayloadFromArray($resultsArray);
+				}
 			}
 		}
 
@@ -1185,7 +1333,8 @@ abstract class AbstractOperation
 			$job->requireRetryCount(),
 			$job->requireIsManualLaunch(),
 			$job->requireLanguageId(),
-			$job->requireNextTypeId()
+			$job->requireNextTypeId(),
+			$fillFieldsEntityAllowed,
 		);
 
 		if ($job->requireExecutionStatus() === QueueTable::EXECUTION_STATUS_ERROR)
@@ -1202,28 +1351,36 @@ abstract class AbstractOperation
 
 	public static function constructPayload(string $json): ?Dto
 	{
+		$resultsArray = self::decodeResult($json);
+
+		return $resultsArray === null ? null : static::constructPayloadFromArray($resultsArray);
+	}
+
+	private static function decodeResult(string $json): ?array
+	{
 		if (empty($json))
 		{
 			return null;
 		}
 
-		$resultsArray = null;
 		try
 		{
 			$resultsArray = Json::decode($json);
 		}
 		catch (ArgumentException)
 		{
-		}
-
-		if (!is_array($resultsArray))
-		{
 			return null;
 		}
 
+		return is_array($resultsArray) ? $resultsArray : null;
+	}
+
+	private static function constructPayloadFromArray(array $resultsArray): ?Dto
+	{
 		unset(
 			$resultsArray['targetOwnerTypeId'],
 			$resultsArray['targetOwnerId'],
+			$resultsArray['fillFieldsEntityAllowed'],
 		);
 
 		$class = static::PAYLOAD_CLASS;
@@ -1236,15 +1393,21 @@ abstract class AbstractOperation
 		return $payload;
 	}
 
-	private static function encodeResultWithTargetOwner(Dto $payload, ?Context $context): string
+	private static function encodeResultWithContextMetadata(Dto $payload, ?Context $context): string
 	{
-		$targetOwner = self::extractTargetOwnerFromContext($context);
-		if ($targetOwner === [])
+		$metadata = self::extractTargetOwnerFromContext($context);
+		$additionalInfo = $context?->getParameters()['additionalInfo'] ?? null;
+		if (is_array($additionalInfo) && array_key_exists('fillFieldsEntityAllowed', $additionalInfo))
+		{
+			$metadata['fillFieldsEntityAllowed'] = (bool)$additionalInfo['fillFieldsEntityAllowed'];
+		}
+
+		if ($metadata === [])
 		{
 			return Json::encode($payload, 0);
 		}
 
-		return Json::encode($payload->toArray() + $targetOwner, 0);
+		return Json::encode($payload->toArray() + $metadata, 0);
 	}
 
 	private static function extractTargetOwnerFromContext(?Context $context): array
@@ -1302,21 +1465,27 @@ abstract class AbstractOperation
 	{
 		if ($target->getEntityTypeId() !== CCrmOwnerType::Activity)
 		{
-			$parentJob = QueueTable::query()
-				->setSelect(['ID', 'ENTITY_ID', 'ENTITY_TYPE_ID'])
-				->where('ID', $parentJobId)
-				->setLimit(1)
-				->fetchObject()
-			;
-			if ($parentJob?->getEntityTypeId() === CCrmOwnerType::Activity)
-			{
-				return $parentJob->getEntityId();
-			}
-
-			return 0;
+			return self::findParentJobActivityId($parentJobId);
 		}
 
 		return $target->getEntityId();
+	}
+
+	private static function findParentJobActivityId(?int $parentJobId): int
+	{
+		$parentJob = QueueTable::query()
+			->setSelect(['ID', 'ENTITY_ID', 'ENTITY_TYPE_ID'])
+			->where('ID', $parentJobId)
+			->setLimit(1)
+			->fetchObject()
+		;
+
+		if ($parentJob?->getEntityTypeId() === CCrmOwnerType::Activity)
+		{
+			return (int)$parentJob->getEntityId();
+		}
+
+		return 0;
 	}
 
 	private static function extractActivityIdFromJob(EO_Queue $job): int
@@ -1453,19 +1622,117 @@ abstract class AbstractOperation
 		return $cleaned === '' ? null : $cleaned;
 	}
 
-	private static function constructJobFinishEventBuilder(EO_Queue $job): ?AIBaseEvent
+	/**
+	 * What the operation actually ran on. For a call based operation it is the call activity - either the
+	 * job target itself or the one taken from the parent job; for any other operation it is the job target
+	 * as is, and then there is no provider to report.
+	 *
+	 * Read from the job and not from the domain result: the error path builds the event from a generic
+	 * Result that may carry no target at all.
+	 *
+	 * @return array{id: int, typeId: int, provider: ?string}|null Null when there is nothing real to report on.
+	 */
+	private static function resolveAnalyticsTarget(EO_Queue $job): ?array
 	{
-		$activityId = self::extractActivityIdFromJob($job);
-		if ($activityId <= 0)
+		$entityTypeId = (int)$job->getEntityTypeId();
+		$entityId = (int)$job->getEntityId();
+
+		$activityId = $entityTypeId === CCrmOwnerType::Activity
+			? $entityId
+			: self::findParentJobActivityId($job->getParentId())
+		;
+
+		if ($activityId > 0)
+		{
+			$broker = Container::getInstance()->getActivityBroker();
+			$owner = $broker->getOwner($activityId);
+			$provider = $broker->getById($activityId)['PROVIDER_ID'] ?? null;
+			if (!$owner || !$provider)
+			{
+				return null;
+			}
+
+			return [
+				'id' => $activityId,
+				'typeId' => $owner->getEntityTypeId(),
+				'provider' => (string)$provider,
+			];
+		}
+
+		if ($entityId <= 0)
 		{
 			return null;
 		}
 
-		$broker = Container::getInstance()->getActivityBroker();
-		$owner = $broker->getOwner($activityId);
-		$provider = $broker->getById($activityId)['PROVIDER_ID'] ?? null;
-		if (!$owner || !$provider)
+		return [
+			'id' => $entityId,
+			'typeId' => $entityTypeId,
+			'provider' => null,
+		];
+	}
+
+	private static function constructJobFinishEventBuilder(
+		EO_Queue $job,
+		bool $isSuccessfulResult = true,
+	): ?JobFinishEventContract
+	{
+		if (in_array(static::TYPE_ID, self::EXCLUDED_OPERATION_TYPES, true))
 		{
+			AIManager::logger()->info(
+				'{date}: {class}: Skipping analytics because this operation type never reports'
+				. ' its job finish: {job}',
+				[
+					'job' => self::collectJobIdsForLog($job),
+					'class' => static::class,
+				]
+			);
+
+			return null;
+		}
+
+		if (
+			$isSuccessfulResult
+			&& in_array(static::TYPE_ID, self::SUCCESS_EXCLUDED_OPERATION_TYPES, true)
+		)
+		{
+			AIManager::logger()->info(
+				'{date}: {class}: Skipping common analytics because this operation reports'
+				. ' its successful job finish through a dedicated event: {job}',
+				[
+					'job' => self::collectJobIdsForLog($job),
+					'class' => static::class,
+				],
+			);
+
+			return null;
+		}
+
+		if (static::hasSyntheticAnalyticsTarget($job))
+		{
+			AIManager::logger()->info(
+				'{date}: {class}: Skipping analytics because this job ran on a synthetic target'
+				. ' with no real entity behind its id: {job}',
+				[
+					'job' => self::collectJobIdsForLog($job),
+					'class' => static::class,
+				]
+			);
+
+			return null;
+		}
+
+		$target = self::resolveAnalyticsTarget($job);
+		if (!$target)
+		{
+			AIManager::logger()->info(
+				'{date}: {class}: Skipping analytics because job has no analytics target with a real id'
+				. ' - either its call activity is gone or the job target id is empty: {job}',
+				[
+					'job' => self::collectJobIdsForLog($job),
+					'class' => static::class,
+				]
+			);
+
 			return null;
 		}
 
@@ -1475,7 +1742,7 @@ abstract class AbstractOperation
 				'{date}: {class}: Skipping analytics because job doesnt have finishedTime set.'
 				. ' May be this job was created before the update: {job}',
 				[
-					'job' => $job->collectValues(fieldsMask: FieldTypeMask::FLAT),
+					'job' => self::collectJobIdsForLog($job),
 					'class' => static::class,
 				]
 			);
@@ -1483,15 +1750,69 @@ abstract class AbstractOperation
 			return null;
 		}
 
-		return static::getJobFinishEventBuilder()
+		$builder = static::getJobFinishEventBuilder()
 			->setOperationType(static::TYPE_ID)
 			->setCreatedTime($job->requireCreatedTime())
 			->setFinishedTime($job->requireFinishedTime())
 			->setIsManualLaunch($job->requireIsManualLaunch())
-			->setActivityOwnerTypeId($owner->getEntityTypeId())
-			->setActivityId($activityId)
-			->setActivityProvider($provider)
+			->setTargetTypeId($target['typeId'])
+			->setTargetId($target['id'])
 		;
+
+		if ($target['provider'] !== null)
+		{
+			$builder->setTargetProvider($target['provider']);
+		}
+
+		return $builder;
+	}
+
+	/**
+	 * A closed list of job fields for a refusal log entry. The job also carries RESULT - the AI answer
+	 * itself - and ERROR_MESSAGE, and neither of them belongs in the log at info level.
+	 */
+	private static function collectJobIdsForLog(EO_Queue $job): array
+	{
+		$loggableFields = [
+			'ID',
+			'TYPE_ID',
+			'ENTITY_TYPE_ID',
+			'ENTITY_ID',
+			'PARENT_ID',
+			'HASH',
+			'EXECUTION_STATUS',
+			'CREATED_TIME',
+			'FINISHED_TIME',
+		];
+
+		return array_intersect_key(
+			$job->collectValues(fieldsMask: FieldTypeMask::FLAT),
+			array_flip($loggableFields),
+		);
+	}
+
+	/**
+	 * Whether this very job ran on a synthetic target - an id passed only to satisfy the queue, with no
+	 * real entity behind it. Unlike self::EXCLUDED_OPERATION_TYPES, where the whole operation stays
+	 * silent, the operation keeps reporting its other jobs.
+	 *
+	 * @see self::constructJobFinishEventBuilder
+	 */
+	protected static function hasSyntheticAnalyticsTarget(EO_Queue $job): bool
+	{
+		return false;
+	}
+
+	/**
+	 * Lets the operation add its own domain fields to the assembled job finish event - a status of its
+	 * own semantics and extra params. Called only on a successful job finish, where the domain result
+	 * exists, and after the generic status is set, so the operation is free to override it.
+	 *
+	 * The error path builds its event from a generic Result with no domain payload and never calls this.
+	 * Whether the event is sent at all stays with the general flow - the hook cannot cancel the sending.
+	 */
+	protected static function enrichJobFinishEventBuilder(AIBaseEvent $builder, Result $result): void
+	{
 	}
 
 	protected static function setQuality(Engine $engine): void
@@ -1503,5 +1824,5 @@ abstract class AbstractOperation
 	abstract protected static function notifyTimelineAfterSuccessfulJobFinish(Result $result): void;
 	abstract protected static function notifyAboutJobError(Result $result, bool $withSyncBadges = true, bool $withSendAnalytics = true, ?ItemIdentifier $target = null): void;
 	abstract protected static function extractPayloadFromAIResult(\Bitrix\AI\Result $result, EO_Queue $job): Dto;
-	abstract protected static function getJobFinishEventBuilder(): AIBaseEvent;
+	abstract protected static function getJobFinishEventBuilder(): JobFinishEventContract;
 }

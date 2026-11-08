@@ -49,8 +49,19 @@ class CEventCalendar
 			"", $arParams['pageUrl'].'&'
 		);
 		$page = preg_replace(array("/^(.*?)\&$/i","/^(.*?)\?$/i"), "\$1", $page);
+
+		$httpHost = isset($_SERVER['HTTP_HOST']) ? (string)$_SERVER['HTTP_HOST'] : '';
+		// D modifier: without it $ also matches before a trailing newline
+		if (!preg_match('/^(\[[0-9A-Fa-f:.]+\]|[0-9A-Za-z._-]+)(:\d+)?$/D', $httpHost))
+		{
+			if (defined("SITE_SERVER_NAME") && SITE_SERVER_NAME <> '')
+				$httpHost = SITE_SERVER_NAME;
+			else
+				$httpHost = COption::GetOptionString("main", "server_name", $_SERVER["SERVER_NAME"]);
+		}
+
 		$this->pageUrl = $page;
-		$this->fullUrl = (CMain::IsHTTPS() ? "https://" : "http://").$_SERVER['HTTP_HOST'].$page;
+		$this->fullUrl = (CMain::IsHTTPS() ? "https://" : "http://").$httpHost.$page;
 		$this->outerUrl = $GLOBALS['APPLICATION']->GetCurPageParam('', array("action", "bx_event_calendar_request", "clear_cache", "bitrix_include_areas", "bitrix_show_mode", "back_url_admin"), false);
 
 		$this->userIblockId = $arParams['userIblockId'];
@@ -4793,15 +4804,30 @@ END:VEVENT'."\n";
 		return $busy;
 	}
 
+	private static function GetRemindAgentName($arParams)
+	{
+		$ownerId = isset($arParams['ownerId']) ? $arParams['ownerId'] : false;
+		// keeps the historical literal: an empty owner has always been rendered as false, not 0
+		$ownerIdCode = ($ownerId === false || $ownerId === '' || $ownerId === 'false') ? 'false' : (int)$ownerId;
+
+		return "CEventCalendar::SendRemindAgent("
+			.(int)$arParams['iblockId'].", "
+			.(int)$arParams['eventId'].", "
+			.(int)$arParams['userId'].", "
+			."'".EscapePHPString((string)$arParams['pathToPage'], "'")."', "
+			."'".EscapePHPString((string)$arParams['ownerType'], "'")."', "
+			.$ownerIdCode.");";
+	}
+
 	public static function AddAgent($remindTime, $arParams)
 	{
 		CEventCalendar::RemoveAgent($arParams);
-		CAgent::AddAgent("CEventCalendar::SendRemindAgent(".$arParams['iblockId'].", ".$arParams['eventId'].", ".$arParams['userId'].", '".$arParams['pathToPage']."', '".$arParams['ownerType']."', ".$arParams['ownerId'].");", "intranet", "Y", 10, "", "Y", $remindTime);
+		CAgent::AddAgent(CEventCalendar::GetRemindAgentName($arParams), "intranet", "Y", 10, "", "Y", $remindTime);
 	}
 
 	public static function RemoveAgent($arParams)
 	{
-		CAgent::RemoveAgent("CEventCalendar::SendRemindAgent(".$arParams['iblockId'].", ".$arParams['eventId'].", ".$arParams['userId'].", '".$arParams['pathToPage']."', '".$arParams['ownerType']."', ".$arParams['ownerId'].");", "intranet");
+		CAgent::RemoveAgent(CEventCalendar::GetRemindAgentName($arParams), "intranet");
 	}
 
 	public static function SendRemindAgent($iblockId, $eventId, $userId, $pathToPage, $ownerType, $ownerId)

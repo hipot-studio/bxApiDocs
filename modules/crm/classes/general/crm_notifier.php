@@ -136,50 +136,59 @@ class CCrmNotifierSchemeType
 	{
 		return [
 			'crm' => [
-				'incoming_email' => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_ACTIVITY_EMAIL_INCOMING'),
-					'MAIL' => 'Y',
-					'XMPP' => 'Y',
-					'PUSH' => 'N',
+				'PRODUCT_SOURCE' => [
+					'ID' => 'crm',
+					'NAME' => Loc::getMessage('CRM_NOTIFY_PRODUCT_SOURCE_NAME'),
+					'DESCRIPTION' => Loc::getMessage('CRM_NOTIFY_PRODUCT_SOURCE_DESCRIPTION'),
+					'ICON' => ['TYPE' => 'named', 'VALUE' => 'crm'],
+					'SORT' => 300,
 				],
-				'mention' => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_MENTION'),
-					'PUSH' => 'N',
-				],
-				self::WebFormName => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_WEBFORM'),
-					'LIFETIME' => 86400 * 7,
-					'PUSH' => 'N',
-				],
-				self::CallbackName => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_CALLBACK'),
-					'LIFETIME' => 86400 * 7,
-					'PUSH' => 'N',
-				],
-				Notification\Responsible::NOTIFY_EVENT => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_ENTITY_ASSIGNED_BY'),
-					'PUSH' => 'N',
-				],
-				Notification\Observer::NOTIFY_EVENT => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_ENTITY_OBSERVER'),
-					'PUSH' => 'N',
-				],
-				'changeStage' => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_ENTITY_STAGE'),
-					'PUSH' => 'N',
-				],
-				'merge' => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_MERGE'),
-					'PUSH' => 'N',
-				],
-				'pingTodoActivity' => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_PING_TODO_ACTIVITY'),
-					'MAIL' => 'N',
-					'PUSH' => 'Y',
-				],
-				'other' => [
-					'NAME' => GetMessage('CRM_NOTIFY_SCHEME_OTHER'),
-					'PUSH' => 'N',
+				'NOTIFY' => [
+					'incoming_email' => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_ACTIVITY_EMAIL_INCOMING'),
+						'MAIL' => 'Y',
+						'XMPP' => 'Y',
+						'PUSH' => 'N',
+					],
+					'mention' => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_MENTION'),
+						'PUSH' => 'N',
+					],
+					self::WebFormName => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_WEBFORM'),
+						'LIFETIME' => 86400 * 7,
+						'PUSH' => 'N',
+					],
+					self::CallbackName => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_CALLBACK'),
+						'LIFETIME' => 86400 * 7,
+						'PUSH' => 'N',
+					],
+					Notification\Responsible::NOTIFY_EVENT => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_ENTITY_ASSIGNED_BY'),
+						'PUSH' => 'N',
+					],
+					Notification\Observer::NOTIFY_EVENT => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_ENTITY_OBSERVER'),
+						'PUSH' => 'N',
+					],
+					'changeStage' => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_ENTITY_STAGE'),
+						'PUSH' => 'N',
+					],
+					'merge' => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_MERGE'),
+						'PUSH' => 'N',
+					],
+					'pingTodoActivity' => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_PING_TODO_ACTIVITY'),
+						'MAIL' => 'N',
+						'PUSH' => 'Y',
+					],
+					'other' => [
+						'NAME' => GetMessage('CRM_NOTIFY_SCHEME_OTHER'),
+						'PUSH' => 'N',
+					],
 				],
 			],
 		];

@@ -4,6 +4,7 @@ namespace Bitrix\Disk\Internals;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Internal\Repository\UnifiedLinkAccessRepository;
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\DuplicateEntryException;
 use Bitrix\Main\DB\MysqlCommonConnection;
 use Bitrix\Main\Entity;
 use Bitrix\Main\Entity\Result;
@@ -71,6 +72,13 @@ class ObjectTable extends DataManager
 {
 	const TYPE_FOLDER = 2;
 	const TYPE_FILE   = 3;
+
+	/** Subtree membership is checked by joining the path table. */
+	const SUBTREE_CHECK_JOIN   = 'join';
+	/** Subtree membership is checked by EXISTS over the path table, see self::getDescendants(). */
+	const SUBTREE_CHECK_EXISTS = 'exists';
+
+	private const FIELD_SUBTREE_CHECK = 'SUBTREE_CHECK';
 
 	const DELETED_TYPE_NONE  = 0;
 	const DELETED_TYPE_ROOT  = 3;
@@ -489,6 +497,8 @@ class ObjectTable extends DataManager
 	/**
 	 * Move object from node to another node.
 	 * Use this method instead update.
+	 * If the target node already holds an object with the same name (IX_DISK_O_5), returns
+	 * a failed result with the error code ObjectNameService::ERROR_NON_UNIQUE_NAME.
 	 * @param $primary
 	 * @param $newParentId
 	 * @return \Bitrix\Main\Entity\UpdateResult
@@ -522,8 +532,6 @@ class ObjectTable extends DataManager
 		$event = new Entity\Event($entity, self::EVENT_ON_MOVE, array("id"=>$primary, "fields"=>$data));
 		$event->send();
 
-		ObjectPathTable::moveTo($primary['ID'], $newParentId);
-
 		// save data
 		$connection = Main\Application::getConnection();
 		$helper = $connection->getSqlHelper();
@@ -539,11 +547,30 @@ class ObjectTable extends DataManager
 		$where = implode(' AND ', $id);
 
 		$sql = "UPDATE ".$tableName." SET ".$update[0]." WHERE ".$where;
-		$connection->queryExecute($sql, $update[1]);
+		try
+		{
+			$connection->queryExecute($sql, $update[1]);
+		}
+		catch (DuplicateEntryException)
+		{
+			$result = new UpdateResult();
+			$result->addError(new Entity\EntityError(
+				Loc::getMessage('DISK_OBJECT_ENTITY_ERROR_MOVE_NON_UNIQUE_NAME'),
+				ObjectNameService::ERROR_NON_UNIQUE_NAME
+			));
 
+			return $result;
+		}
+
+		// affected rows must be read before ObjectPathTable::moveTo() runs its own queries on this connection
 		$result = new UpdateResult();
 		$result->setAffectedRowsCount($connection);
 		$result->setData(array('PARENT_ID' => $newParentId));
+
+		// the object and the path tree are written by two statements without a transaction, so there is a window
+		// where a listing already shows the new parent while rights are still resolved through the old one.
+		// The path tree goes last on purpose: a failed update above must leave no garbage in it.
+		ObjectPathTable::moveTo($primary['ID'], $newParentId);
 
 		$event = new Entity\Event($entity, self::EVENT_ON_AFTER_MOVE, array("id"=>$primary, "fields"=>$data));
 		$event->send();
@@ -644,7 +671,10 @@ class ObjectTable extends DataManager
 	/**
 	 * Get all descendants by this folder.
 	 * @param       $objectId
-	 * @param array $parameters
+	 * @param array $parameters Key "subtree_check" selects how membership in the subtree is checked:
+	 *                          self::SUBTREE_CHECK_JOIN (default) or self::SUBTREE_CHECK_EXISTS.
+	 *                          With self::SUBTREE_CHECK_EXISTS fields of the path table are not
+	 *                          available in select, filter and order.
 	 * @return Main\DB\ArrayResult|Main\DB\Result
 	 * @throws \Bitrix\Main\ArgumentException
 	 * @throws \Exception
@@ -660,10 +690,76 @@ class ObjectTable extends DataManager
 			$parameters['select'] = array('*');
 		}
 
-		$parameters['filter']['PATH_CHILD.PARENT_ID'] = $objectId;
-		$parameters['filter']['!PATH_CHILD.OBJECT_ID'] = $objectId;
+		$subtreeCheck = $parameters['subtree_check'] ?? self::SUBTREE_CHECK_JOIN;
+		unset($parameters['subtree_check']);
+
+		if ($subtreeCheck === self::SUBTREE_CHECK_EXISTS)
+		{
+			$parameters = static::addSubtreeCheckByExists($parameters, (int)$objectId);
+		}
+		else
+		{
+			$parameters['filter']['PATH_CHILD.PARENT_ID'] = $objectId;
+			$parameters['filter']['!PATH_CHILD.OBJECT_ID'] = $objectId;
+		}
 
 		return static::getList($parameters);
+	}
+
+	/**
+	 * Adds the subtree condition of self::SUBTREE_CHECK_EXISTS to the parameters of getDescendants().
+	 * A caller that has conditions of its own to place after it adds the condition itself; getDescendants()
+	 * then finds it in the filter and leaves it where the caller put it.
+	 *
+	 * The filter of the caller has to be a conjunction: the subtree condition and the exclusion of the
+	 * container are written into its top level, and under "LOGIC" => "OR" they would become alternatives
+	 * of it instead, leaving the answer with the whole table but the container.
+	 *
+	 * @throws Main\ArgumentException When the filter of the caller is not a conjunction.
+	 */
+	public static function addSubtreeCheckByExists(array $parameters, int $objectId): array
+	{
+		$parameters['filter'] ??= array();
+		if (isset($parameters['filter']['LOGIC']) && $parameters['filter']['LOGIC'] !== 'AND')
+		{
+			throw new Main\ArgumentException(
+				'Subtree check by exists requires a conjunctive filter',
+				'parameters[filter][LOGIC]'
+			);
+		}
+
+		if (array_key_exists('=' . self::FIELD_SUBTREE_CHECK, $parameters['filter']))
+		{
+			return $parameters;
+		}
+
+		$parameters['runtime'] ??= array();
+		$parameters['runtime'][] = static::buildSubtreeCheckField($objectId);
+		$parameters['filter']['=' . self::FIELD_SUBTREE_CHECK] = true;
+		// the container is left out by a block of its own: the "!=ID" key belongs to the caller
+		$parameters['filter'][] = array('!=ID' => $objectId);
+
+		return $parameters;
+	}
+
+	/**
+	 * Membership in the subtree as a per row EXISTS instead of a join with the path table.
+	 * Keeps the object table leading in the plan: rows are narrowed by its own indexes and only the
+	 * survivors are probed against the tree by the unique key of the path table.
+	 */
+	private static function buildSubtreeCheckField(int $objectId): Entity\ExpressionField
+	{
+		$pathTable = ObjectPathTable::getTableName();
+
+		return new Entity\ExpressionField(
+			self::FIELD_SUBTREE_CHECK,
+			"CASE WHEN EXISTS(
+				SELECT 1 FROM {$pathTable} path
+				WHERE path.OBJECT_ID = %s AND path.PARENT_ID = {$objectId}
+			) THEN 1 ELSE 0 END",
+			array('ID'),
+			array('data_type' => 'boolean')
+		);
 	}
 
 	/**

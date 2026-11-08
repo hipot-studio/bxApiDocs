@@ -89,13 +89,27 @@ class Address extends Adapter
 
 	private function enrichCurrentFieldsWithPrevious(int $id, array $currentFields): array
 	{
+		if (($currentFields['ADDRESS_DELETE'] ?? null) === 'Y')
+		{
+			return $currentFields;
+		}
+
 		$previousFields = $this->entityAddress::getByOwner($this->addressType, $this->entityTypeId, $id);
 		if (!is_array($previousFields))
 		{
 			return $currentFields;
 		}
 
-		return array_merge($this->mapAddressToCompatibleFields($previousFields), $currentFields);
+		$fields = $currentFields;
+		foreach ($this->mapAddressToCompatibleFields($previousFields) as $fieldName => $value)
+		{
+			if (!array_key_exists($fieldName, $fields))
+			{
+				$fields[$fieldName] = $value;
+			}
+		}
+
+		return $fields;
 	}
 
 	final protected function doPerformAdd(array &$fields, array $compatibleOptions): Result
@@ -148,7 +162,7 @@ class Address extends Adapter
 				continue;
 			}
 
-			$result[$fieldName] = $value;
+			$result[$compatibleFieldName] = $fieldName === 'LOC_ADDR_ID' ? (string)$value : $value;
 		}
 
 		return $result;

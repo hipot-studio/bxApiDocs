@@ -2,10 +2,13 @@
 
 namespace Bitrix\Sign\Repository;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\UpdateResult;
 use Bitrix\Main\Error;
+use Bitrix\Main\IO;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Data\AddResult;
@@ -24,6 +27,8 @@ use Bitrix\Sign\Type\BlankScenario;
 
 class BlankRepository
 {
+	private const IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
 	/**
 	 * @param Item\Blank $item
 	 *
@@ -118,6 +123,30 @@ class BlankRepository
 	}
 
 	/**
+	 * Files are hydrated from their b_file rows and the storage is not touched at all: neither the
+	 * content nor a copy of the file is read here, and a consumer that needs the bytes reads them
+	 * itself by id.
+	 *
+	 * @param list<int> $ids
+	 * @return Item\BlankCollection
+	 */
+	public function getByIds(array $ids): Item\BlankCollection
+	{
+		if (empty($ids))
+		{
+			return new Item\BlankCollection();
+		}
+
+		$models = Internal\BlankTable::query()
+			->setSelect(['*'])
+			->whereIn('ID', $ids)
+			->fetchCollection()
+		;
+
+		return $this->extractItemCollectionFromModelCollection($models, withFileContent: false);
+	}
+
+	/**
 	 * Light-weight placeholder flag lookup: reads only the HAS_PLACEHOLDERS column instead of
 	 * hydrating the whole blank (files and their content) through getById()/extractItemFromModel().
 	 *
@@ -166,10 +195,34 @@ class BlankRepository
 		return $model === null ? null : $this->extractItemFromModel($model);
 	}
 
-	private function extractItemFromModel(Internal\Blank $model): Item\Blank
+	private function extractItemFromModel(Internal\Blank $model, bool $withFileContent = true): Item\Blank
+	{
+		$fileIds = $model->getFileId() ?? [];
+		$files = $withFileContent
+			? $this->hydrateFilesWithContent($fileIds)
+			: $this->hydrateFilesFromMetadata($fileIds)
+		;
+
+		return new Item\Blank(
+			title: $model->getTitle(),
+			fileCollection: $files,
+			status: $model->getStatus(),
+			id: $model->getId(),
+			dateCreate: $model->getDateCreate(),
+			scenario: BlankScenario::getScenarioById($model->getScenario()),
+			createdById: $model->getCreatedById(),
+			forTemplate:  $model->getForTemplate() ?? false,
+			hasPlaceholders: $model->getHasPlaceholders() ?? false,
+		);
+	}
+
+	/**
+	 * @param list<int> $fileIds
+	 */
+	private function hydrateFilesWithContent(array $fileIds): Item\Fs\FileCollection
 	{
 		$files = new Item\Fs\FileCollection();
-		foreach ($model->getFileId() ?? [] as $fileId)
+		foreach ($fileIds as $fileId)
 		{
 			$file = new File($fileId);
 			if ($file->isExist())
@@ -185,16 +238,85 @@ class BlankRepository
 			}
 		}
 
-		return new Item\Blank(
-			title: $model->getTitle(),
-			fileCollection: $files,
-			status: $model->getStatus(),
-			id: $model->getId(),
-			dateCreate: $model->getDateCreate(),
-			scenario: BlankScenario::getScenarioById($model->getScenario()),
-			createdById: $model->getCreatedById(),
-			forTemplate:  $model->getForTemplate() ?? false,
-			hasPlaceholders: $model->getHasPlaceholders() ?? false,
+		return $files;
+	}
+
+	/**
+	 * Builds the files of a blank out of the b_file row alone. Hydration through
+	 * \Bitrix\Sign\File calls CFile::MakeFileArray(), which on a portal with cloud storage
+	 * downloads the whole file from the bucket, while a batch consumer needs the id and the name
+	 * only and reads the bytes itself when it really has to.
+	 *
+	 * A blank whose file is gone from the storage comes back with no files at all, even when its
+	 * other files are in place: a template served without one of its pages is worse than a template
+	 * the caller skips and reports as skipped. All or nothing here also keeps the choice between a
+	 * single file and an archive honest - a two-file blank must not turn into a one-file download
+	 * because one of the two went missing.
+	 *
+	 * @param list<int> $fileIds
+	 */
+	private function hydrateFilesFromMetadata(array $fileIds): Item\Fs\FileCollection
+	{
+		$files = new Item\Fs\FileCollection();
+		foreach ($fileIds as $fileId)
+		{
+			$fileArray = \CFile::GetFileArray($fileId);
+			if (!is_array($fileArray))
+			{
+				return new Item\Fs\FileCollection();
+			}
+
+			$path = $this->getStoredFilePath($fileArray);
+			if ($path !== null && !IO\File::isFileExists($path))
+			{
+				return new Item\Fs\FileCollection();
+			}
+
+			$name = (string)($fileArray['ORIGINAL_NAME'] ?? '');
+			if ($name === '')
+			{
+				$name = (string)($fileArray['FILE_NAME'] ?? '');
+			}
+
+			$type = (string)($fileArray['CONTENT_TYPE'] ?? '');
+			$file = new Item\Fs\File(
+				$name,
+				$path === null ? '' : IO\Path::getDirectory($path),
+				$type,
+				(int)($fileArray['ID'] ?? 0),
+				new Item\Fs\FileContent(),
+				in_array($type, self::IMAGE_CONTENT_TYPES, true),
+			);
+			// The size is taken from the row instead of the unread content: a caller weighing the
+			// operation before it starts has no other way of knowing it without reading the bytes.
+			$file->size = (int)($fileArray['FILE_SIZE'] ?? 0);
+			$files->addItem($file);
+		}
+
+		return $files;
+	}
+
+	/**
+	 * Absolute path of the file in the local storage, or null for a file kept in a cloud bucket:
+	 * such a file has no local copy to look at, so its row is the only evidence available without
+	 * downloading it.
+	 *
+	 * @param array<string, mixed> $fileArray
+	 */
+	private function getStoredFilePath(array $fileArray): ?string
+	{
+		if ((int)($fileArray['HANDLER_ID'] ?? 0) > 0)
+		{
+			return null;
+		}
+
+		$uploadDir = Option::get('main', 'upload_dir', 'upload');
+
+		return IO\Path::combine(
+			Application::getDocumentRoot(),
+			$uploadDir,
+			(string)($fileArray['SUBDIR'] ?? ''),
+			(string)($fileArray['FILE_NAME'] ?? ''),
 		);
 	}
 
@@ -260,10 +382,16 @@ class BlankRepository
 		return Internal\BlankTable::delete($blankId);
 	}
 
-	private function extractItemCollectionFromModelCollection(Internal\BlankCollection $modelCollection): Item\BlankCollection
+	private function extractItemCollectionFromModelCollection(
+		Internal\BlankCollection $modelCollection,
+		bool $withFileContent = true,
+	): Item\BlankCollection
 	{
 		$models = $modelCollection->getAll();
-		$items = array_map($this->extractItemFromModel(...), $models);
+		$items = array_map(
+			fn(Internal\Blank $model): Item\Blank => $this->extractItemFromModel($model, $withFileContent),
+			$models
+		);
 
 		return new Item\BlankCollection(...$items);
 	}

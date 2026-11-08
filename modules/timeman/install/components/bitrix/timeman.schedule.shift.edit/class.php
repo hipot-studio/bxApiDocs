@@ -11,6 +11,7 @@ if (!\Bitrix\Main\Loader::includeModule('timeman'))
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Timeman\Component\BaseComponent;
 use Bitrix\Timeman\Form\Schedule\ShiftForm;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 use Bitrix\Timeman\Repository\Schedule\ShiftRepository;
 use Bitrix\Timeman\Repository\Schedule\ScheduleRepository;
 use Bitrix\Timeman\Service\DependencyManager;
@@ -54,6 +55,14 @@ class TimemanScheduleShiftComponent extends BaseComponent
 	/** @inheritdoc */
 	public function executeComponent()
 	{
+		$toolId = Settings::TOOLS['worktime'];
+		if (!(new Settings())->isToolAvailable($toolId))
+		{
+			$this->includeComponentTemplate('tool-disabled');
+
+			return;
+		}
+
 		$shift = null;
 		if (!$this->arResult['SCHEDULE_ID'])
 		{

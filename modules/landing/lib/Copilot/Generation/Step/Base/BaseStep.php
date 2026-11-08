@@ -15,7 +15,7 @@ abstract class BaseStep implements IStep
 	protected Data\Site $siteData;
 	protected ?int $stepId;
 
-	protected bool $initied = false;
+	protected bool $initialized = false;
 	protected bool $changed = false;
 
 	public function __construct()
@@ -27,7 +27,7 @@ abstract class BaseStep implements IStep
 	 */
 	public function init(Generation $generation, int $stepId): static
 	{
-		if ($this->initied)
+		if ($this->initialized)
 		{
 			return $this;
 		}
@@ -43,7 +43,7 @@ abstract class BaseStep implements IStep
 		$this->generation = $generation;
 		$this->siteData = $generation->getSiteData();
 		$this->stepId = $stepId;
-		$this->initied = true;
+		$this->initialized = true;
 
 		$this->initialize();
 

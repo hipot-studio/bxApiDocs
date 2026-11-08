@@ -48,7 +48,7 @@ class History
 	 */
 	protected static ?int $multiplyId = null;
 
-	// todo: $multiplyId and $multiplyStep - is no static. But need getInstance method and like a singletone style
+	// todo: $multiplyId and $multiplyStep - is no static. But need getInstance method and like a singleton style
 	/**
 	 * Because multiply step is one step, need increase step just once and save value
 	 * @var int|null

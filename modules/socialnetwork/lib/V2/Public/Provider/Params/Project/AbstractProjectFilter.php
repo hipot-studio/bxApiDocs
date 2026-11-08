@@ -9,6 +9,7 @@ use Bitrix\Main\ORM\Query\Filter\Helper;
 use Bitrix\Main\Provider\Params\FilterInterface;
 use Bitrix\Main\Search\Content;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Socialnetwork\Item\Workgroup as WorkgroupItem;
 
 abstract class AbstractProjectFilter implements FilterInterface
 {
@@ -137,13 +138,11 @@ abstract class AbstractProjectFilter implements FilterInterface
 			return;
 		}
 
-		$searchToken = (
-			Content::isIntegerToken($findValue)
-				? Content::prepareIntegerToken($findValue)
-				: Content::prepareStringToken($findValue)
-		);
-
-		if (Content::canUseFulltextSearch($searchToken, Content::TYPE_MIXED))
+		$searchToken = WorkgroupItem::prepareSearchIndexQuery($findValue);
+		if (
+			$searchToken !== ''
+			&& Content::canUseFulltextSearch($searchToken, Content::TYPE_MIXED)
+		)
 		{
 			$filter->whereMatch('SEARCH_INDEX', Helper::matchAgainstWildcard($searchToken));
 		}

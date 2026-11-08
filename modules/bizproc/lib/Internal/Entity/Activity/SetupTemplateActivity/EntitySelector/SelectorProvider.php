@@ -8,9 +8,26 @@ use Bitrix\Main\EventResult;
 final class SelectorProvider
 {
 	/**
+	 * The registry as the event answered it, kept for the lifetime of the provider. Every constant item of a
+	 * wizard form asks whether its selector exists, and the provider is a service-locator singleton, so without
+	 * this the event would be dispatched once per item.
+	 *
+	 * @var SelectorConfiguration[]|null
+	 */
+	private ?array $selectors = null;
+
+	/**
 	 * @return SelectorConfiguration[]
 	 */
 	public function getAll(): array
+	{
+		return $this->selectors ??= $this->collectSelectors();
+	}
+
+	/**
+	 * @return SelectorConfiguration[]
+	 */
+	private function collectSelectors(): array
 	{
 		$selectors = [];
 

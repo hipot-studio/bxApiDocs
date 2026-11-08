@@ -18,6 +18,6 @@ class ActivityDate extends Date
 
 		$date = $this->formatDate($row[$this->fieldKey]);
 
-		return "<span id='changedDate' style='margin-left: 3px'>{$date}</span>";
+		return "<span style='margin-left: 3px'>{$date}</span>";
 	}
 }

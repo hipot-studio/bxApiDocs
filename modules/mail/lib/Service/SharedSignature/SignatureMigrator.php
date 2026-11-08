@@ -69,6 +69,11 @@ class SignatureMigrator
 	 * and must not be able to break it: a portal whose schema is not updated yet keeps working
 	 * through the legacy table, the same way the compatibility adapter does.
 	 *
+	 * The legacy table has no index by owner, so the selection is bounded by the border the
+	 * background stepper confirmed: everything below it has a copy already and would be skipped by
+	 * the pre-check anyway, so the result is the same while the walk over the primary key normally
+	 * meets nothing at all instead of scanning the whole table.
+	 *
 	 * @return int Number of rows copied by this call.
 	 */
 	public function migrateUser(int $userId): int
@@ -80,7 +85,10 @@ class SignatureMigrator
 
 		try
 		{
-			return $this->migrateRows($this->readLegacyRows(['=USER_ID' => $userId]));
+			return $this->migrateRows($this->readLegacyRows([
+				'=USER_ID' => $userId,
+				'>ID' => self::copiedUpTo(),
+			]));
 		}
 		catch (\Throwable)
 		{

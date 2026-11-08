@@ -2,6 +2,10 @@
 
 namespace Bitrix\Intranet\Internals;
 
+/**
+ * @deprecated Retained for legacy CUpdater-based updates. Use
+ * Bitrix\Intranet\Infrastructure\Update\FilesMigration for new Migration-based updates.
+ */
 class Updater
 {
 

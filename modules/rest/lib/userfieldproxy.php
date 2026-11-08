@@ -2,6 +2,7 @@
 namespace Bitrix\Rest;
 use Bitrix\Main;
 use Bitrix\Rest\Api\UserFieldType;
+use Bitrix\Rest\Public\Provider\ApplicationProvider;
 use Bitrix\Rest\UserField\Callback;
 
 abstract class UserFieldProxy
@@ -202,12 +203,12 @@ abstract class UserFieldProxy
 
 		if($server !== null && $server->getAuthType() === OAuth\Auth::AUTH_TYPE)
 		{
-			$clientInfo = AppTable::getByClientId($server->getClientId());
+			$clientInfo = (new ApplicationProvider())->findByClientId((string)$server->getClientId());
 			$placementHandlerList = PlacementTable::getHandlersList(UserFieldType::PLACEMENT_UF_TYPE);
 
 			foreach($placementHandlerList as $handler)
 			{
-				if($handler['APP_ID'] === $clientInfo['ID'])
+				if($handler['APP_ID'] === $clientInfo?->getId())
 				{
 					$result[] = array(
 						'ID' => $handler['ADDITIONAL'],
@@ -558,8 +559,8 @@ abstract class UserFieldProxy
 		{
 			$result['USER_TYPE_ID'] = str_replace($matches[0], '', $result['USER_TYPE_ID']);
 
-			$appInfo = AppTable::getByClientId($matches[1]);
-			$result['USER_TYPE_OWNER'] = $appInfo['CLIENT_ID'];
+			$appInfo = (new ApplicationProvider())->findById((int)$matches[1]);
+			$result['USER_TYPE_OWNER'] = $appInfo?->getClientId();
 		}
 
 		return $result;

@@ -50,7 +50,7 @@ final class Tourist
 	{
 		$events = self::getEvents();
 
-		if ($events[$eventId])
+		if (isset($events[$eventId]))
 		{
 			unset($events[$eventId]);
 			\CUserOptions::SetOption('mobile', 'tourist_events', $events);

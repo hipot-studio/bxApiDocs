@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item;
 
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Address\Address as OwnerAddressController;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Address\OwnerAddressDtoGenerator;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Category\CategoryDtoGenerator;
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Crm\V2\Public\OwnerType;
@@ -59,6 +61,14 @@ final class GeneratedDtoClassLoader
 		if ($generatedCategoryDto !== null)
 		{
 			Generator::generateByDto($generatedCategoryDto);
+
+			return;
+		}
+
+		$generatedOwnerAddressDto = self::regenerateOwnerAddressDto($className);
+		if ($generatedOwnerAddressDto !== null)
+		{
+			Generator::generateByDto($generatedOwnerAddressDto);
 
 			return;
 		}
@@ -142,6 +152,45 @@ final class GeneratedDtoClassLoader
 		}
 
 		return (new CategoryDtoGenerator())->generate($entityTypeId);
+	}
+
+	/**
+	 * The address contract of one entity type of the group `crm.{contact|company}.address.*`, regenerated
+	 * the way the category DTO above is and for the same reason: a dynamic contract is kept out of the
+	 * shared schema cache, so on a warm cache the loop below has nothing to find for it and every answer
+	 * carrying the contract - `get`, `list`, both writes and the OpenAPI document - would fail.
+	 *
+	 * The name of the owner field is not decided here: it is read from
+	 * {@see OwnerAddressController::OWNER_FIELD_NAME_BY_ENTITY_TYPE_ID}, the very map the configuration of
+	 * the route takes the argument of its generator from. An entity type the group publishes no route for
+	 * has no name there and is answered "not mine" rather than generated - a handler of the autoload is
+	 * asked about every name in the namespace and must not throw out of one.
+	 */
+	private static function regenerateOwnerAddressDto(string $className): ?RestGeneratedDto
+	{
+		$prefix = self::BASE_NAMESPACE . 'Address\\OwnerAddress';
+		if (
+			!str_starts_with($className, $prefix)
+			|| !str_ends_with($className, self::CLASS_SUFFIX)
+		)
+		{
+			return null;
+		}
+
+		$code = substr($className, strlen($prefix), -strlen(self::CLASS_SUFFIX));
+		$entityType = EntityType::fromCode($code);
+		if ($entityType === null)
+		{
+			return null;
+		}
+
+		$ownerFieldName = OwnerAddressController::OWNER_FIELD_NAME_BY_ENTITY_TYPE_ID[$entityType->getId()] ?? null;
+		if ($ownerFieldName === null)
+		{
+			return null;
+		}
+
+		return (new OwnerAddressDtoGenerator())->generate($entityType->getId(), $ownerFieldName);
 	}
 
 	private static function getSmartProcessEntityTypeId(string $className): ?int

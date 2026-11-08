@@ -9,7 +9,8 @@ use Bitrix\Bizproc\Internal\Repository\DataViewRepository\DataViewRepositoryInte
 use Bitrix\Bizproc\Internal\Repository\StorageItemRepository\StorageItemRepositoryInterface;
 use Bitrix\Bizproc\Internal\Service\StorageField\FieldCodeService;
 use Bitrix\Bizproc\Internal\Exception\StorageItem\UpdateStorageItemException;
-use Bitrix\Main\Config\Option;
+use Bitrix\Bizproc\Public\Feature\DataView\DataViewFlag;
+use Bitrix\Main\Config\Feature;
 
 class UpdateStorageItemCommandHandler
 {
@@ -60,7 +61,7 @@ class UpdateStorageItemCommandHandler
 		{
 
 			throw new UpdateStorageItemException(
-				sprintf('Unable to acquire data view lock for storage type %d.', $command->storageTypeId)
+				sprintf('Unable to acquire data view lock for storage type %d.', $command->storageTypeId),
 			);
 		}
 
@@ -91,7 +92,7 @@ class UpdateStorageItemCommandHandler
 	private function resolveDataViewRepository(int $storageTypeId): ?DataViewRepositoryInterface
 	{
 
-		if (Option::get('bizproc', 'dataview_enabled', 'N') !== 'Y')
+		if (!Feature::isEnabled(DataViewFlag::class))
 		{
 			return null;
 		}

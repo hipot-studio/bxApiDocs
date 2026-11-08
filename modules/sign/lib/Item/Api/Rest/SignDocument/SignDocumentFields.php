@@ -25,6 +25,7 @@ class SignDocumentFields
 	public ?string $regionDocumentType = null;
 	public ?string $language = null;
 	public ?ExternalSettings $externalSettings = null;
+	public ?string $message = null;
 
 	/**
 	 * Create instance from associative array.
@@ -110,6 +111,11 @@ class SignDocumentFields
 		if (isset($data['externalSettings']) && is_array($data['externalSettings']))
 		{
 			$self->externalSettings = ExternalSettings::fromArray($data['externalSettings']);
+		}
+
+		if (isset($data['message']))
+		{
+			$self->message = is_scalar($data['message']) ? (string)$data['message'] : null;
 		}
 
 		return $self;
@@ -203,5 +209,13 @@ class SignDocumentFields
 	public function getLanguage(): ?string
 	{
 		return $this->language;
+	}
+
+	/**
+	 * Optional text the sender attaches to the invitation to sign.
+	 */
+	public function getMessage(): ?string
+	{
+		return $this->message;
 	}
 }

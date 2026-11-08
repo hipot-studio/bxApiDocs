@@ -1061,6 +1061,7 @@ class CCrmWebFormListComponent extends \CBitrixComponent
 		}
 
 		$this->arResult['PERM_CAN_EDIT'] = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->webForm()->canEdit();
+		$this->arResult['CAN_VIEW_USER_CONSENTS'] = WebForm\Agreement\Access::canViewAcceptedList();
 
 		$this->prepareParams();
 

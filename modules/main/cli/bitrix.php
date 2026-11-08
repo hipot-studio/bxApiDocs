@@ -18,7 +18,9 @@
 require_once 'bootstrap.php';
 
 // initialize symfony
+use Bitrix\Main\DI\ServiceLocator;
 use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Command\Command;
 
 if (class_exists(Application::class) === false)
 {
@@ -47,9 +49,9 @@ foreach ($modules as $moduleId => $_)
 			$moduleCommands = [];
 			foreach ($config['commands'] as $commandClass)
 			{
-				if (is_a($commandClass, \Symfony\Component\Console\Command\Command::class, true))
+				if (is_a($commandClass, Command::class, true))
 				{
-					$moduleCommands[] = new $commandClass();
+					$moduleCommands[] = ServiceLocator::getInstance()->get($commandClass);
 				}
 			}
 

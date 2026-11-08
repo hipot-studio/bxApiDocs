@@ -119,9 +119,9 @@ class NodeRelationService implements Contract\Service\NodeRelationService
 	/**
 	 * @param \Bitrix\HumanResources\Type\RelationEntityType $entityType
 	 * @param int $entityId
-	 * @param array<int> $usersToCompare
+	 * @param list<int> $usersToCompare
 	 *
-	 * @return array<int>
+	 * @return list<int>
 	 * @throws \Bitrix\HumanResources\Exception\TooMuchDataException
 	 */
 	public function getUsersNotInRelation(
@@ -144,6 +144,18 @@ class NodeRelationService implements Contract\Service\NodeRelationService
 			throw new TooMuchDataException();
 		}
 
+		$usersToCompare = array_values(
+			array_filter(
+				array_map(intval(...), $usersToCompare),
+				static fn(int $userId): bool => $userId > 0,
+			)
+		);
+
+		if (count($usersToCompare) === 0)
+		{
+			return [];
+		}
+
 		$commonUsers = $this->nodeMemberRepository->getCommonUsersFromRelation(
 			$entityType,
 			$entityId,
@@ -154,7 +166,7 @@ class NodeRelationService implements Contract\Service\NodeRelationService
 		sort($commonUsers);
 		sort($usersToCompare);
 
-		return array_diff($usersToCompare, $commonUsers);
+		return array_values(array_diff($usersToCompare, $commonUsers));
 	}
 
 	public function linkEntityByNodeId(

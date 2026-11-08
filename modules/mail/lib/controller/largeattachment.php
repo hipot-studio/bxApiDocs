@@ -53,7 +53,7 @@ class LargeAttachment extends Controller
 	 * API-01: places the given Disk files into the sender's system folder and returns the serviceable
 	 * link (DTO-01). The conversion itself is done by the service; the action only gates access.
 	 *
-	 * @param int[] $fileIds Disk\File object ids from the uploader.
+	 * @param int[] $fileIds Explicit Disk\File object ids from the uploader, never bare b_file ids.
 	 * @param int|null $mailboxId Source mailbox (null for an external compose).
 	 * @param string $context Trigger context.
 	 * @param string|null $replacementToken Existing set token when only new files should be appended.
@@ -90,7 +90,7 @@ class LargeAttachment extends Controller
 		}
 
 		$userId = (int)CurrentUser::get()->getId();
-		$fileIds = array_values(array_filter(array_map('intval', $fileIds)));
+		$fileIds = $this->normalizeDiskObjectIds($fileIds);
 
 		$result = LargeAttachmentService::convert($userId, $fileIds, $replacementToken);
 		if (!$result->isSuccess())
@@ -110,6 +110,36 @@ class LargeAttachment extends Controller
 			// folderName is surfaced by the real Disk adapter (phase P4); the stub never reaches this branch.
 			'folderName' => '',
 		];
+	}
+
+	/**
+	 * @return int[]
+	 */
+	private function normalizeDiskObjectIds(array $fileIds): array
+	{
+		$objectIds = [];
+		foreach ($fileIds as $fileId)
+		{
+			if (is_int($fileId))
+			{
+				$objectId = $fileId;
+			}
+			elseif (is_string($fileId) && preg_match('/^[1-9]\d*$/D', $fileId) === 1)
+			{
+				$objectId = (int)$fileId;
+			}
+			else
+			{
+				continue;
+			}
+
+			if ($objectId > 0)
+			{
+				$objectIds[$objectId] = $objectId;
+			}
+		}
+
+		return array_values($objectIds);
 	}
 
 	/**

@@ -29,6 +29,9 @@ final class DocumentData implements \JsonSerializable, Arrayable
 	protected ?int $initiatorUserId = null;
 	protected string $initiatedByType = self::TYPE_COMPANY;
 	protected ?int $annulledMembersCount = null;
+	protected ?string $cancelReason = null;
+	protected ?int $processingTaskId = null;
+	protected ?string $processingTaskTitle = null;
 
 	public function __construct(int $documentId)
 	{
@@ -130,6 +133,18 @@ final class DocumentData implements \JsonSerializable, Arrayable
 		if (isset($data['annulledMembersCount']) && is_numeric($data['annulledMembersCount']))
 		{
 			$eventData->setAnnulledMembersCount((int)$data['annulledMembersCount']);
+		}
+		if (is_string($data['cancelReason'] ?? null))
+		{
+			$eventData->setCancelReason($data['cancelReason']);
+		}
+		if (isset($data['processingTaskId']) && is_numeric($data['processingTaskId']))
+		{
+			$eventData->setProcessingTaskId((int)$data['processingTaskId']);
+		}
+		if (is_string($data['processingTaskTitle'] ?? null))
+		{
+			$eventData->setProcessingTaskTitle($data['processingTaskTitle']);
 		}
 
 		return $eventData;
@@ -401,6 +416,51 @@ final class DocumentData implements \JsonSerializable, Arrayable
 		return $this->annulledMembersCount;
 	}
 
+	/**
+	 * Reason a representative of the company gave while cancelling a document of an employee.
+	 * Typed by a person, so it reaches the page as plain text. Null on every other event.
+	 */
+	public function setCancelReason(?string $cancelReason): DocumentData
+	{
+		$this->cancelReason = $cancelReason;
+
+		return $this;
+	}
+
+	public function getCancelReason(): ?string
+	{
+		return $this->cancelReason;
+	}
+
+	public function setProcessingTaskId(?int $processingTaskId): DocumentData
+	{
+		$this->processingTaskId = $processingTaskId;
+
+		return $this;
+	}
+
+	public function getProcessingTaskId(): ?int
+	{
+		return $this->processingTaskId;
+	}
+
+	/**
+	 * Title the task carried when it was created. Stored with the entry instead of being read
+	 * back from the task: a history record states what happened then, so a later rename or a
+	 * deleted task leaves the record as it was written.
+	 */
+	public function setProcessingTaskTitle(?string $processingTaskTitle): DocumentData
+	{
+		$this->processingTaskTitle = $processingTaskTitle;
+
+		return $this;
+	}
+
+	public function getProcessingTaskTitle(): ?string
+	{
+		return $this->processingTaskTitle;
+	}
+
 	public function toArray(): array
 	{
 		$data = [
@@ -449,6 +509,21 @@ final class DocumentData implements \JsonSerializable, Arrayable
 		if ($this->annulledMembersCount !== null)
 		{
 			$data['annulledMembersCount'] = $this->annulledMembersCount;
+		}
+
+		if ($this->cancelReason !== null)
+		{
+			$data['cancelReason'] = $this->cancelReason;
+		}
+
+		if ($this->processingTaskId !== null)
+		{
+			$data['processingTaskId'] = $this->processingTaskId;
+		}
+
+		if ($this->processingTaskTitle !== null)
+		{
+			$data['processingTaskTitle'] = $this->processingTaskTitle;
 		}
 
 		return $data;

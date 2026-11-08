@@ -74,6 +74,7 @@ final class ErrorHandler
 			'MEMBER_INVALID_PHONE' => Loc::getMessage('SIGN_SERVICE_ERROR_MEMBER_INVALID_PHONE', ['#PHONE#' => $customData['phone'] ?? '']),
 			'MEMBER_PHONE_UNSUPPORTED_COUNTRY_CODE' => Loc::getMessage('SIGN_SERVICE_ERROR_MEMBER_PHONE_UNSUPPORTED_COUNTRY_CODE', ['#PHONE#' => $customData['phone'] ?? '']),
 			'DOCUMENT_SIGNING_EXPIRED' => Loc::getMessage('SIGN_SERVICE_ERROR_DOCUMENT_SIGNING_EXPIRED'),
+			'DOCUMENT_RESEND_WINDOW_EXPIRED' => Loc::getMessage('SIGN_SERVICE_ERROR_DOCUMENT_RESEND_WINDOW_EXPIRED'),
 			'SMS_LIMIT_EXCEEDED' => Loc::getMessage('SIGN_SERVICE_ERROR_SMS_LIMIT_EXCEEDED'),
 			'MEMBERS_NOT_READY_FOR_RESEND' => Loc::getMessage('SIGN_SERVICE_ERROR_MEMBERS_NOT_READY_FOR_RESEND'),
 			'INCORRECT_TAX_ID', 'B2E_COMPANY_NAME_NOT_FOUND' => Loc::getMessage('SIGN_SERVICE_ERROR_INCORRECT_TAX_ID'),
@@ -90,6 +91,16 @@ final class ErrorHandler
 		{
 			'MEMBER_INVALID_PHONE', 'MEMBER_PHONE_UNSUPPORTED_COUNTRY_CODE' => ['phone' => $customData['phone'] ?? ''],
 			'PROVIDER_ERROR' => $customData, //bypass for rest
+			// The state the service reports (DTO-01), by which the sending tells a race with the
+			// background blank assembly from a real divergence. Only these two fields are let
+			// through; an older service sends none of them and keeps the empty result.
+			'DOCUMENT_INCORRECT_STATE' => isset($customData['has'])
+				? [
+					'has' => (string)$customData['has'],
+					'expected' => array_map(strval(...), array_values((array)($customData['expected'] ?? []))),
+				]
+				: []
+			,
 			default => [], // $customData
 		};
 	}

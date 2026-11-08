@@ -33,11 +33,16 @@ class AutomatedSolutionImportedLimit
 		return !$this->isFeatureEnabled();
 	}
 
+	protected function getLicenseType(): string
+	{
+		return \CBitrix24::getLicenseType();
+	}
+
 	protected function isFeatureEnabled(): bool
 	{
 		if ($this->isEnabled())
 		{
-			return $this->feature::isFeatureEnabled(static::FEATURE_NAME);
+			return $this->feature::isFeatureEnabledFor(static::FEATURE_NAME, $this->getLicenseType());
 		}
 
 		return true;

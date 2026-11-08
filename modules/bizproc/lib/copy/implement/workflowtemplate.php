@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Bizproc\Copy\Implement;
 
+use Bitrix\Bizproc\Public\ProcessData\Service\ProcessDataMechanicsResolver;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
@@ -29,9 +30,17 @@ class WorkflowTemplate
 
 	public function prepareFieldsToCopy(array $fields)
 	{
+		$sourceTemplateId = (int)($fields['ID'] ?? 0);
+
 		if (isset($fields['ID']))
 		{
 			unset($fields['ID']);
+		}
+
+		$settingsToCopy = (new ProcessDataMechanicsResolver())->settingsToCopy($fields, $sourceTemplateId);
+		if ($settingsToCopy)
+		{
+			$fields['TEMPLATE_SETTINGS'] = $settingsToCopy;
 		}
 
 		if ($this->targetDocumentType)
@@ -53,7 +62,8 @@ class WorkflowTemplate
 
 		if ($fields)
 		{
-			$result = \CBPWorkflowTemplateLoader::add($fields, true);
+			// a copy inherits neither the date of the first publication of the original nor one of its own
+			$result = \CBPWorkflowTemplateLoader::add($fields, true, markFirstPublication: false);
 		}
 
 		if (!$result)

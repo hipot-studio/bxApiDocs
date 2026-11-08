@@ -22,10 +22,13 @@ class UploaderError extends \Bitrix\Main\Error
 	public const IMAGE_IS_TOO_BIG = 'IMAGE_IS_TOO_BIG';
 
 	public const SAVE_FILE_FAILED = 'SAVE_FILE_FAILED';
+	public const CHECK_FILE_FAILED = 'CHECK_FILE_FAILED';
+	public const FILE_VALIDATION_REASON_DISK_QUOTA = 'disk_quota_exceeded';
 	public const FILE_LOAD_FAILED = 'FILE_LOAD_FAILED';
 	public const FILE_UPLOAD_ACCESS_DENIED = 'FILE_UPLOAD_ACCESS_DENIED';
 	public const FILE_LOAD_ACCESS_DENIED = 'FILE_LOAD_ACCESS_DENIED';
 	public const FILE_REMOVE_ACCESS_DENIED = 'FILE_REMOVE_ACCESS_DENIED';
+	public const FILE_REMOVE_FAILED = 'FILE_REMOVE_FAILED';
 
 	public const INVALID_CONTENT_RANGE = 'INVALID_CONTENT_RANGE';
 	public const INVALID_CONTENT_TYPE = 'INVALID_CONTENT_TYPE';
@@ -79,6 +82,7 @@ class UploaderError extends \Bitrix\Main\Error
 		self::TOO_BIG_REQUEST => 'The content length is too big to process the request.',
 		self::FILE_FIND_FAILED => 'Could not find a file.',
 		self::FILE_MOVE_FAILED => 'Could not move file.',
+		self::FILE_REMOVE_FAILED => 'Could not remove file.',
 		self::FILE_APPEND_NOT_FOUND => 'File not found.',
 		self::CHUNK_NOT_FOUND => 'Could not find chunk file.',
 		self::CHUNK_COPY_FAILED => 'Could not copy chunk file.',

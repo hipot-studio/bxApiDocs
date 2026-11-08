@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\BaseType;
 
+use Bitrix\Bizproc\Internal\Entity\Activity\SettingType;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\FieldType;
@@ -632,6 +633,29 @@ class Select extends Base
 		}
 
 		return parent::convertPropertyToView($fieldType, $viewMode, $property);
+	}
+
+	public static function getAiSettingType(): SettingType
+	{
+		return new SettingType(
+			name: static::getType(),
+			description:
+				'The value is one of the codes listed in the "options" of the setting - send the code, not the'
+				. ' label. When a setting of this type comes without "options", the allowed codes are not a fixed'
+				. ' list: they depend on the portal data or on another setting of the same block, and nothing'
+				. ' checks the value on the way in - a made-up code passes validation and breaks when the process'
+				. ' runs. So do not invent one: ask the user which value to use, or leave the setting out and say'
+				. ' in the answer that it has to be filled in the editor.'
+				. ' Leaving a REQUIRED one out is not a safe default, though: a block computes its outputs from'
+				. ' its own settings when it is saved, so an unfilled required setting can silently leave the'
+				. ' block without outputs that other blocks refer to, and nothing reports it. A trigger is where'
+				. ' this bites: until its required settings are filled it has no outputs at all, and every'
+				. ' "{=<triggerId>:...}" expression written against it points at nothing. So a required setting'
+				. ' of a trigger whose outputs any block of the graph reads is the one case where the draft is'
+				. ' not to be written at all. Before omitting a required setting, check whether anything'
+				. ' downstream reads this block\'s outputs. If it does, say what is missing and stop instead of'
+				. ' writing a graph whose expressions point at nothing.',
+		);
 	}
 
 }

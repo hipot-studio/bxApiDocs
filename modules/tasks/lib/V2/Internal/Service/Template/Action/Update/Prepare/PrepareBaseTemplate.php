@@ -7,6 +7,7 @@ namespace Bitrix\Tasks\V2\Internal\Service\Template\Action\Update\Prepare;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Tasks\Control\Handler\Exception\TemplateFieldValidateException;
 use Bitrix\Tasks\Internals\Task\TemplateTable;
+use Bitrix\Tasks\V2\Internal\Entity\Template\TypeDictionary;
 
 class PrepareBaseTemplate implements PrepareFieldInterface
 {
@@ -22,11 +23,25 @@ class PrepareBaseTemplate implements PrepareFieldInterface
 			return $fields;
 		}
 
+		if ((int)($fullTemplateData['TPARAM_TYPE'] ?? null) === TypeDictionary::NEW_USERS)
+		{
+			throw new TemplateFieldValidateException(
+				Loc::getMessage('TASKS_TEMPLATE_FOR_NEW_USER_CANNOT_BE_SUBTEMPLATE'),
+			);
+		}
+
 		$baseTemplate = TemplateTable::getById($fields['BASE_TEMPLATE_ID'])->fetch();
 
 		if (!$baseTemplate)
 		{
 			throw new TemplateFieldValidateException(Loc::getMessage("TASKS_TEMPLATE_BASE_TEMPLATE_ID_NOT_EXISTS"));
+		}
+
+		if ((int)($baseTemplate['TPARAM_TYPE'] ?? null) === TypeDictionary::NEW_USERS)
+		{
+			throw new TemplateFieldValidateException(
+				Loc::getMessage('TASKS_TEMPLATE_BASE_TEMPLATE_FOR_NEW_USER_CANNOT_BE_BASE'),
+			);
 		}
 
 		// you cannot add a template with both PARENT_ID and BASE_TEMPLATE_ID set. BASE_TEMPLATE_ID has greather priority

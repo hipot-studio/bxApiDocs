@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Mobile\Auth;
 
 use Bitrix\Im\V2\Guest\Auth\GuestApplication;
-use Bitrix\Main\Application as MainApplication;
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\SiteTable;
@@ -33,7 +31,12 @@ if (!Loader::includeModule('im') || !class_exists(GuestApplication::class))
  * of which are part of the guest experience. With a narrow scope, off-scope navigation surfaces
  * as a normal 403 instead of reaching legacy handlers that may not gate on `EXTERNAL_AUTH_ID`.
  *
+ * Scope-error handling stays in the base class, which filters on {@see GuestApplication::handlesScope}
+ * and serves this scope once the handler is registered for it (mobile/install/migrations/events.php).
+ * Mobile-specific: the allow-list and the two predicates overridden below.
+ *
  * @see GuestApplication — base scope (used for web-guest)
+ * @see GuestApplication::onApplicationScopeError() for the shared scope-error handling
  * @see \MobileApplication — broad mobile scope used for employees
  * @see \Bitrix\Im\V2\Guest\Auth\AuthorizationService::authorize() — initial authorize with parent GuestApplication::ID
  * @see checkout.php — overrides applicationId to this one for mobile guest
@@ -103,29 +106,21 @@ class MobileGuestApplication extends GuestApplication
 	}
 
 	/**
-	 * Same intent as {@see GuestApplication::onApplicationScopeError} but bound to our own ID:
-	 * only log out on '/' scope errors, ignore counter/asset off-scope hits so we don't kill
-	 * the session in the middle of an AJAX burst.
+	 * A guest of the native app that lands on an employee profile keeps getting the prolog's 403: the web
+	 * stub page, and the full-page redirect into the web messenger behind it, answer the web contour.
 	 */
-	public static function onApplicationScopeError(Event $event): void
+	protected static function rendersEmployeeProfileStub(): bool
 	{
-		if ($event->getParameter('APPLICATION_ID') !== self::ID)
-		{
-			return;
-		}
+		return false;
+	}
 
-		$request = MainApplication::getInstance()->getContext()->getRequest();
-		if ($request->getDecodedUri() !== '/')
-		{
-			return;
-		}
-
-		global $USER;
-		if (is_object($USER) && $USER->IsAuthorized())
-		{
-			$USER->Logout();
-		}
-
-		\LocalRedirect('/');
+	/**
+	 * The webview sends Sec-Fetch-Mode and Sec-Fetch-Dest on a tap on a link inside a message, but never
+	 * Sec-Fetch-User (measured on the device), so requiring it would leave every guest of the app with
+	 * the empty 403 the scope exit exists to remove. The rest of the signature still holds.
+	 */
+	protected static function requiresUserActivation(): bool
+	{
+		return false;
 	}
 }

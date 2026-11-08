@@ -26,7 +26,7 @@ interface IDepartment
 	/**
 	 * @return int[]
 	 */
-	public function getColleagues(): array;
+	public function getColleagueIdsByUserId(int $userId, ?int $limit = null, string $order = 'DESC'): array;
 
 	public function getEmployeeIdsWithLimit(array $ids, int $limit = 50): array;
 }

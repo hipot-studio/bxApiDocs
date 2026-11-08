@@ -28,13 +28,6 @@ final class CloudSharedKeyLog
 		]);
 	}
 
-	public function recordThrottled(string $reason): void
-	{
-		$this->write(\CEventLog::SEVERITY_INFO, 'THROTTLED', [
-			'reason' => $reason,
-		]);
-	}
-
 	/**
 	 * @param array<string, mixed> $payload
 	 */

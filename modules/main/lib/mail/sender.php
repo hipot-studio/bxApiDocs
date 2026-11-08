@@ -14,8 +14,14 @@ use Bitrix\Main\Mail\Sender\UserSenderDataProvider;
 class Sender
 {
 	public const MAIN_SENDER_SMTP_LIMIT_DECREASE = 'MainSenderSmtpLimitDecrease';
+	public const ON_MAIL_SENDER_LIST_BUILD = 'OnMailSenderListBuild';
 	public const ADDRESS_MISMATCH_ERROR = 'MAIL_SENDER_ADDRESS_MISMATCH';
 	public const SENDER_UNAVAILABLE_ERROR = 'MAIL_SENDER_UNAVAILABLE';
+	/**
+	 * While not 'N', an identity without a usable record keeps the selection by the address of the message.
+	 * The mail module sets 'N' once the records of its mailboxes are bound to them.
+	 */
+	public const IDENTITY_ADDRESS_FALLBACK_OPTION = 'sender_identity_address_fallback';
 	private const MAIN_SENDER_SMTP_SERVER_PATTERN = '/^([a-z0-9-]+\.)+[a-z0-9-]{2,20}$/i';
 	private const AMBIGUOUS_SENDER_CACHE_DIR = '/main/mail/sender_ambiguous';
 	private const AMBIGUOUS_SENDER_AUDIT_TYPE = 'MAIL_SENDER_AMBIGUOUS';
@@ -35,6 +41,14 @@ class Sender
 	private static array $emailLimitCache = [];
 	private static array $addressLimitCache = [];
 	private static array $resolvedSenderIdCache = [];
+
+	/**
+	 * Per-request cache keyed by the resolved user id: consumers ask for the list several times per request.
+	 * Known limitation: a signature choice saved within the same request is not reflected here,
+	 * because the cached answer is returned as is. Today saving the choice and reading the
+	 * signatures are separate requests; merging them would require dropping this entry on save.
+	 */
+	private static array $sendersWithSignaturesCache = [];
 
 	public static function add(array $fields)
 	{
@@ -1011,11 +1025,16 @@ class Sender
 		$identity = $context->getSenderIdentity();
 		$address = self::extractFromAddress($headers);
 
-		// An identity without a usable sender record keeps the address selection it had before identities.
 		$customSmtp = $identity !== null
 			? static::getCustomSmtp($address?->getEmail(), $identity)
 			: false
 		;
+		if (!$customSmtp && $identity !== null && !self::isIdentityAddressFallbackEnabled())
+		{
+			// the address may belong to another owner's record, so the portal transport is used
+			return;
+		}
+
 		if ($customSmtp)
 		{
 			$resolvedEmail = $customSmtp->getFrom();
@@ -1063,6 +1082,11 @@ class Sender
 		{
 			$context->setSmtp($customSmtp);
 		}
+	}
+
+	private static function isIdentityAddressFallbackEnabled(): bool
+	{
+		return Main\Config\Option::get('main', self::IDENTITY_ADDRESS_FALLBACK_OPTION, 'Y') !== 'N';
 	}
 
 	private static function rejectSending(
@@ -1135,6 +1159,210 @@ class Sender
 		}
 
 		return UserSenderDataProvider::getUserAvailableSenders($userId);
+	}
+
+	/**
+	 * Returns the sender list enriched with signatures provided by subscribers of ON_MAIL_SENDER_LIST_BUILD.
+	 * The sender key is opaque for the handlers: it is taken from the `formated` field as is.
+	 *
+	 * @return array{
+	 *     senders: array<int, array<string, mixed>>,
+	 *     signatures: array<int, array{id: int, signature: string, scope: string, senderTexts: array<string, string>}>,
+	 *     signaturesBySender: array<string, array{availableSignatureIds: int[], selectedSignatureId: int|null}>
+	 * }
+	 */
+	public static function prepareUserMailboxesWithSignatures(?int $userId = null): array
+	{
+		$signatureUserId = self::resolveSignatureRequestUserId($userId);
+
+		if ($signatureUserId <= 0)
+		{
+			return self::attachSignaturesToSenders(self::prepareUserMailboxes($userId), $signatureUserId);
+		}
+
+		return self::$sendersWithSignaturesCache[$signatureUserId] ??= self::attachSignaturesToSenders(
+			self::prepareUserMailboxes($signatureUserId),
+			$signatureUserId
+		);
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $senders
+	 */
+	private static function attachSignaturesToSenders(array $senders, int $userId): array
+	{
+		$result = [
+			'senders' => $senders,
+			'signatures' => [],
+			'signaturesBySender' => [],
+		];
+
+		if ($userId <= 0 || empty($senders))
+		{
+			return $result;
+		}
+
+		$eventSenders = self::prepareSignatureEventSenders($senders);
+		if (empty($eventSenders))
+		{
+			return $result;
+		}
+
+		try
+		{
+			$event = new Event(
+				'main',
+				self::ON_MAIL_SENDER_LIST_BUILD,
+				[
+					'userId' => $userId,
+					'senders' => array_values($eventSenders),
+				]
+			);
+			$event->send();
+
+			$merged = self::mergeSignatureEventResults($event->getResults(), array_keys($eventSenders));
+		}
+		catch (\Throwable)
+		{
+			return $result;
+		}
+
+		$result['signatures'] = $merged['signatures'];
+		$result['signaturesBySender'] = $merged['signaturesBySender'];
+
+		return $result;
+	}
+
+	private static function resolveSignatureRequestUserId(?int $userId): int
+	{
+		global $USER;
+
+		if ($userId > 0)
+		{
+			return $userId;
+		}
+
+		if (is_object($USER) && $USER->isAuthorized())
+		{
+			return (int)$USER->getId();
+		}
+
+		return 0;
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $senders
+	 * @return array<string, array<string, mixed>> sender key => event payload item
+	 */
+	private static function prepareSignatureEventSenders(array $senders): array
+	{
+		$eventSenders = [];
+
+		foreach ($senders as $sender)
+		{
+			if (!is_array($sender))
+			{
+				continue;
+			}
+
+			$key = (string)($sender['formated'] ?? '');
+			if ($key === '' || isset($eventSenders[$key]))
+			{
+				continue;
+			}
+
+			$eventSenders[$key] = [
+				'key' => $key,
+				'email' => (string)($sender['email'] ?? ''),
+				'name' => (string)($sender['name'] ?? ''),
+				'mailboxId' => (int)($sender['mailboxId'] ?? 0),
+			];
+		}
+
+		return $eventSenders;
+	}
+
+	/**
+	 * @param \Bitrix\Main\EventResult[] $results
+	 * @param string[] $knownSenderKeys
+	 * @return array{signatures: array<int, array<string, mixed>>, signaturesBySender: array<string, array<string, mixed>>}
+	 */
+	private static function mergeSignatureEventResults(array $results, array $knownSenderKeys): array
+	{
+		$knownSenderKeys = array_flip($knownSenderKeys);
+		$signatures = [];
+		$signaturesBySender = [];
+
+		foreach ($results as $eventResult)
+		{
+			if (!($eventResult instanceof Main\EventResult) || $eventResult->getType() !== Main\EventResult::SUCCESS)
+			{
+				continue;
+			}
+
+			$parameters = $eventResult->getParameters();
+			if (!is_array($parameters))
+			{
+				continue;
+			}
+
+			foreach ((array)($parameters['signatures'] ?? []) as $signature)
+			{
+				if (!is_array($signature) || !isset($signature['id']))
+				{
+					continue;
+				}
+
+				$signatureId = (int)$signature['id'];
+				if ($signatureId <= 0 || isset($signatures[$signatureId]))
+				{
+					continue;
+				}
+
+				$signature['id'] = $signatureId;
+				$signatures[$signatureId] = $signature;
+			}
+
+			foreach ((array)($parameters['senders'] ?? []) as $senderKey => $senderSignatures)
+			{
+				$senderKey = (string)$senderKey;
+				if (!is_array($senderSignatures) || !isset($knownSenderKeys[$senderKey]))
+				{
+					continue;
+				}
+
+				$signaturesBySender[$senderKey] ??= [
+					'availableSignatureIds' => [],
+					'selectedSignatureId' => null,
+				];
+
+				foreach ((array)($senderSignatures['availableSignatureIds'] ?? []) as $signatureId)
+				{
+					$signatureId = (int)$signatureId;
+					if (
+						$signatureId > 0
+						&& !in_array($signatureId, $signaturesBySender[$senderKey]['availableSignatureIds'], true)
+					)
+					{
+						$signaturesBySender[$senderKey]['availableSignatureIds'][] = $signatureId;
+					}
+				}
+
+				$selectedSignatureId = $senderSignatures['selectedSignatureId'] ?? null;
+				if (
+					$signaturesBySender[$senderKey]['selectedSignatureId'] === null
+					&& $selectedSignatureId !== null
+				)
+				{
+					$signaturesBySender[$senderKey]['selectedSignatureId'] = (int)$selectedSignatureId;
+				}
+			}
+		}
+
+		return [
+			'signatures' => array_values($signatures),
+			'signaturesBySender' => $signaturesBySender,
+		];
 	}
 
 	public static function prepareSmtpConfigForSender(array &$smtp): Main\Result

@@ -220,7 +220,7 @@ class Comment extends Configurable
 
 		if ($scope === ContentBlock::SCOPE_MOBILE)
 		{
-			$content = TextHelper::sanitizeBbCode($comment);
+			$content = TextHelper::sanitizeBbCode(TextHelper::removeParagraphs($comment));
 			$block->setScopeMobile();
 		}
 		else

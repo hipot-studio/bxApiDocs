@@ -27,7 +27,7 @@ use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Internals\TaskObject;
 use Bitrix\Tasks\Util\Collection;
-use Bitrix\Tasks\Util\Type\DateTime;
+use Bitrix\Tasks\Util\DateTime\RecipientDateTimeFormatter;
 use Bitrix\Tasks\Util\User;
 use Bitrix\Tasks\Util\UserField;
 use CComponentEngine;
@@ -1238,7 +1238,13 @@ class CommentPoster
 					}
 					$culture = Context::getCurrent()->getCulture();
 					$format = "{$culture->getDayMonthFormat()}, {$culture->getShortTimeFormat()}";
-					$deadline = FormatDate($format, MakeTimeStamp(DateTime::createFromTimestamp($timestamp)));
+					$deadline = RecipientDateTimeFormatter::formatForRecipient(
+						$timestamp,
+						$userId,
+						Loc::getCurrentLang(),
+						$format,
+						false,
+					);
 					$message = str_replace([$timestamp, $start, $end], [$deadline, '', ''], $message);
 					break;
 				case 'DEADLINE_CHANGE':

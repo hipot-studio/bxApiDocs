@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Rest\Internal\Entity\IncomingWebhook;
 
 use Bitrix\Main\Entity\EntityInterface;
+use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 
 class IncomingWebhook implements EntityInterface
@@ -23,6 +24,7 @@ class IncomingWebhook implements EntityInterface
 		private array $scopes = [],
 		private ?IncomingWebhookAttributeCollection $externalAttributes = null,
 		private WebhookType $type = WebhookType::User,
+		private ?Date $dateExpire = null,
 	)
 	{
 	}
@@ -176,5 +178,17 @@ class IncomingWebhook implements EntityInterface
 	public function getExternalAttribute(string $code): ?IncomingWebhookAttribute
 	{
 		return $this->getExternalAttributes()->getByCode($code);
+	}
+
+	public function getDateExpire(): ?Date
+	{
+		return $this->dateExpire;
+	}
+
+	public function setDateExpire(?Date $dateExpire): self
+	{
+		$this->dateExpire = $dateExpire;
+
+		return $this;
 	}
 }

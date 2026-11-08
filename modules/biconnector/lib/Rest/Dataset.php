@@ -2,6 +2,10 @@
 
 namespace Bitrix\BIConnector\Rest;
 
+use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
+use Bitrix\BIConnector\Access\Service\TableGroupService;
+use Bitrix\BIConnector\Access\Table\TableAccessChecker;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceDatasetRelationTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestConnectorTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
@@ -91,6 +95,34 @@ class Dataset extends Base
 				],
 			]
 		];
+	}
+
+	public static function add(array $params, $n, \CRestServer $server): array
+	{
+		return parent::add(self::neutralizeIgnoredTableGroupIds($params), $n, $server);
+	}
+
+	public static function update(array $params, $n, \CRestServer $server): array|bool
+	{
+		return parent::update(self::neutralizeIgnoredTableGroupIds($params), $n, $server);
+	}
+
+	/**
+	 * While the table axis is off the groups are accepted and ignored, so their value is not checked at all.
+	 * The field itself is kept: an update carrying nothing else must still pass as before.
+	 */
+	private static function neutralizeIgnoredTableGroupIds(array $params): array
+	{
+		if (
+			is_array($params['fields'] ?? null)
+			&& array_key_exists('tableGroupIds', $params['fields'])
+			&& !(new TableAccessChecker())->isRestricted()
+		)
+		{
+			$params['fields']['tableGroupIds'] = [];
+		}
+
+		return $params;
 	}
 
 	protected static function getFields(): array
@@ -200,7 +232,20 @@ class Dataset extends Base
 				'isImmutable' => false,
 				'isMultiple' => true,
 			],
+			[
+				'title' => 'tableGroupIds',
+				'type' => 'array',
+				'isRequired' => false,
+				'isReadOnly' => false,
+				'isImmutable' => false,
+				'isMultiple' => true,
+			],
 		];
+	}
+
+	protected static function getListExcludedFields(): array
+	{
+		return ['tableGroupIds'];
 	}
 
 	protected static function addEntity(array $params): Result
@@ -212,6 +257,12 @@ class Dataset extends Base
 			| Converter::TO_UPPER
 		);
 		$fields = $converter->process($params['fields']);
+		$extractResult = self::extractTableGroupIds($fields);
+		if (!$extractResult->isSuccess())
+		{
+			return $extractResult;
+		}
+		$tableGroupIds = $extractResult->getData()['tableGroupIds'];
 		$fields['TYPE'] = Type::Rest->value;
 
 		$datasetFields = $fields['FIELDS'];
@@ -244,20 +295,62 @@ class Dataset extends Base
 			return $result;
 		}
 
+		$checker = new TableAccessChecker();
+		if (!$checker->isRestricted())
+		{
+			$tableGroupIds = null;
+		}
+		elseif ($tableGroupIds === [])
+		{
+			return self::getTableGroupRequiredResult();
+		}
+		elseif ($tableGroupIds !== null)
+		{
+			if (!$checker->canUseEveryGroup(ActionDictionary::ACTION_BIC_TABLE_EDIT, $tableGroupIds))
+			{
+				return self::getAccessDeniedResult();
+			}
+		}
+		else
+		{
+			$userTablesGroupId = TableGroupMembershipService::getUserTablesGroupId();
+			if (
+				$userTablesGroupId === null
+				|| !$checker->canUseGroup(ActionDictionary::ACTION_BIC_TABLE_EDIT, $userTablesGroupId)
+			)
+			{
+				return self::getTableGroupRequiredResult();
+			}
+
+			// Bound explicitly rather than by DynamicTableBindingHandler, which skips the reserved code check
+			$tableGroupIds = [$userTablesGroupId];
+		}
+
+		if ($tableGroupIds !== null && !$checker->canTakeTableCode((string)$dataset['NAME']))
+		{
+			return self::getAccessDeniedResult();
+		}
+
 		if (self::$useOldBehavior)
 		{
-			return RestDatasetManager::addWithDataset(
+			$result = RestDatasetManager::addWithDataset(
 				$dataset,
 				$datasetFields,
-				sourceId: $sourceId
+				sourceId: $sourceId,
+				tableGroupIds: $tableGroupIds,
+			);
+		}
+		else
+		{
+			$result = RestDatasetManager::add(
+				$dataset,
+				$datasetFields,
+				sourceId: $sourceId,
+				tableGroupIds: $tableGroupIds,
 			);
 		}
 
-		return RestDatasetManager::add(
-			$dataset,
-			$datasetFields,
-			sourceId: $sourceId
-		);
+		return self::convertTableGroupErrors($result);
 	}
 
 	protected static function updateEntity(array $params): Result
@@ -291,12 +384,45 @@ class Dataset extends Base
 			| Converter::TO_SNAKE
 			| Converter::TO_UPPER
 		);
-		$datasetInfo = $converter->process($params['fields']);
+		$datasetInfo = $converter->process($params['fields']) ?? [];
+		$extractResult = self::extractTableGroupIds($datasetInfo);
+		if (!$extractResult->isSuccess())
+		{
+			return $extractResult;
+		}
+		$tableGroupIds = $extractResult->getData()['tableGroupIds'];
 
-		return RestDatasetManager::update(
+		$checker = new TableAccessChecker();
+		if (!$checker->isRestricted())
+		{
+			$tableGroupIds = null;
+		}
+		else
+		{
+			$tableCode = (string)$dataset->getName();
+			if (!$checker->canDo(ActionDictionary::ACTION_BIC_TABLE_EDIT, $tableCode))
+			{
+				return self::getAccessDeniedResult();
+			}
+
+			if ($tableGroupIds === [])
+			{
+				return self::getTableGroupRequiredResult();
+			}
+
+			if ($tableGroupIds !== null && !$checker->canChangeTableGroups($tableCode, $tableGroupIds))
+			{
+				return self::getAccessDeniedResult();
+			}
+		}
+
+		$result = RestDatasetManager::update(
 			$datasetId,
-			$datasetInfo ?? [],
+			$datasetInfo,
+			tableGroupIds: $tableGroupIds,
 		);
+
+		return self::convertTableGroupErrors($result);
 	}
 
 	protected static function deleteEntity(array $params): Result
@@ -313,6 +439,11 @@ class Dataset extends Base
 			$result->addError(new Error('Dataset was not found.', 'DATASET_NOT_FOUND'));
 
 			return $result;
+		}
+
+		if (!self::canEditTable((string)$dataset->getName()))
+		{
+			return self::getAccessDeniedResult();
 		}
 
 		if (self::$useOldBehavior)
@@ -487,6 +618,86 @@ class Dataset extends Base
 		return preg_match('/^[a-z][a-z0-9_]*$/', $name ?? '');
 	}
 
+	/**
+	 * Takes the groups of the table out of the converted fields: they are not a column of the dataset.
+	 *
+	 * @param array $fields Fields converted to the keys of the dataset.
+	 *
+	 * @return Result Data key tableGroupIds: null without the field, otherwise the ids without repeats.
+	 */
+	private static function extractTableGroupIds(array &$fields): Result
+	{
+		$result = new Result();
+		if (!array_key_exists('TABLE_GROUP_IDS', $fields))
+		{
+			return $result->setData(['tableGroupIds' => null]);
+		}
+
+		$rawGroupIds = $fields['TABLE_GROUP_IDS'];
+		unset($fields['TABLE_GROUP_IDS']);
+
+		$tableGroupIds = [];
+		foreach ((array)$rawGroupIds as $rawGroupId)
+		{
+			$groupId = filter_var($rawGroupId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+			if ($groupId === false || is_bool($rawGroupId))
+			{
+				return $result->addError(new Error(
+					'Field "tableGroupIds" must be an array of positive integers.',
+					'VALIDATION_INVALID_FIELD_TYPE'
+				));
+			}
+
+			$tableGroupIds[$groupId] = $groupId;
+		}
+
+		return $result->setData(['tableGroupIds' => array_values($tableGroupIds)]);
+	}
+
+	private static function getTableGroupRequiredResult(): Result
+	{
+		return (new Result())->addError(new Error(
+			'Table group is not specified.',
+			'VALIDATION_TABLE_GROUP_REQUIRED'
+		));
+	}
+
+	private static function canEditTable(string $tableCode): bool
+	{
+		$checker = new TableAccessChecker();
+
+		return !$checker->isRestricted() || $checker->canDo(ActionDictionary::ACTION_BIC_TABLE_EDIT, $tableCode);
+	}
+
+	private static function getAccessDeniedResult(): Result
+	{
+		return (new Result())->addError(new Error(
+			self::ACCESS_ERROR['error_description'],
+			self::ACCESS_ERROR['error']
+		));
+	}
+
+	private static function convertTableGroupErrors(Result $result): Result
+	{
+		if ($result->isSuccess())
+		{
+			return $result;
+		}
+
+		foreach ($result->getErrors() as $error)
+		{
+			if ($error->getCode() === TableGroupService::ERROR_TABLE_CODE_RESERVED)
+			{
+				return (new Result())->addError(new Error(
+					'Dataset name is reserved by a system table.',
+					'VALIDATION_DATASET_NAME_RESERVED'
+				));
+			}
+		}
+
+		return $result;
+	}
+
 	public static function fieldsUpdate(array $params, $n, \CRestServer $server): array|bool
 	{
 		\Bitrix\Main\Localization\Loc::setCurrentLang('en');
@@ -526,6 +737,11 @@ class Dataset extends Base
 				'error' => $error->getCode(),
 				'error_description' => $error->getMessage(),
 			]];
+		}
+
+		if (!self::canEditTable((string)$dataset->getName()))
+		{
+			return ['error' => self::ACCESS_ERROR];
 		}
 
 		$result = RestDatasetManager::updateFieldsByDatasetId(

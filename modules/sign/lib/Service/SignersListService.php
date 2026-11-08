@@ -5,6 +5,7 @@ namespace Bitrix\Sign\Service;
 use Bitrix\Main\DB\Order;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\Result;
+use Bitrix\Main\UserTable;
 use Bitrix\Sign\Config;
 use Bitrix\Sign\Item\SignersList;
 use Bitrix\Sign\Item\SignersListUser;
@@ -17,6 +18,8 @@ use Bitrix\Sign\Type\SignersList\UserOptionCode;
 
 class SignersListService
 {
+	private const MAX_SOURCE_USER_COUNT = 1000;
+
 	private readonly SignersListRepository $signersListRepository;
 	private readonly SignersListUserRepository $signersListUserRepository;
 	private readonly Config\Storage $config;
@@ -240,6 +243,64 @@ class SignersListService
 		return $this->signersListUserRepository->list((new ConditionTree())->where('LIST_ID', $listId));
 	}
 
+	/**
+	 * @param list<int> $excludedUserIds
+	 *
+	 * @return list<int>
+	 */
+	public function listSignerUserIds(
+		int $listId,
+		int $limit = self::MAX_SOURCE_USER_COUNT + 1,
+		array $excludedUserIds = [],
+	): array
+	{
+		if ($listId < 1)
+		{
+			return [];
+		}
+
+		return $this->listSignerUserIdsByListIds([$listId], $limit, $excludedUserIds);
+	}
+
+	/**
+	 * @param list<int> $listIds
+	 * @param list<int> $excludedUserIds
+	 *
+	 * @return list<int>
+	 */
+	public function listSignerUserIdsByListIds(
+		array $listIds,
+		int $limit = self::MAX_SOURCE_USER_COUNT + 1,
+		array $excludedUserIds = [],
+	): array
+	{
+		$listIds = $this->normalizePositiveIds($listIds);
+		$limit = min(max(0, $limit), self::MAX_SOURCE_USER_COUNT + 1);
+		if ($listIds === [] || $limit === 0)
+		{
+			return [];
+		}
+
+		$excludedUserIds = $this->normalizePositiveIds($excludedUserIds);
+		$intranetUserQuery = UserTable::query()
+			->setSelect(['ID'])
+			->where('ACTIVE', 'Y')
+			->where('IS_REAL_USER', 'Y')
+			->where('UF_DEPARTMENT', '!=', false)
+		;
+		$filter = (new ConditionTree())
+			->whereIn('LIST_ID', $listIds)
+			->where('USER_ID', '>', 0)
+			->whereIn('USER_ID', $intranetUserQuery)
+		;
+		if ($excludedUserIds !== [])
+		{
+			$filter->whereNotIn('USER_ID', $excludedUserIds);
+		}
+
+		return $this->signersListUserRepository->listUniqueUserIdsByFilter($filter, $limit);
+	}
+
 	public function listRejectedSigners(): SignersListUserCollection
 	{
 		$listId = $this->config->getSignersListRejectedId();
@@ -250,6 +311,52 @@ class SignersListService
 		}
 
 		return $this->listSigners($listId);
+	}
+
+	/**
+	 * Identifiers of the employees who refused the electronic signing, without an item built per
+	 * employee: a caller that only filters user ids by the group pays for the whole composition
+	 * materialized otherwise.
+	 *
+	 * @see self::listRejectedSigners() the same group as items
+	 *
+	 * @return list<int>
+	 */
+	public function listRejectedSignerIds(): array
+	{
+		$listId = $this->config->getSignersListRejectedId();
+
+		if (!$listId)
+		{
+			return [];
+		}
+
+		return $this->signersListUserRepository->listUserIds($listId);
+	}
+
+	/**
+	 * @param list<int> $candidateUserIds
+	 *
+	 * @return list<int>
+	 */
+	public function listRejectedSignerIdsByUserIds(array $candidateUserIds): array
+	{
+		$listId = $this->config->getSignersListRejectedId();
+		$candidateUserIds = $this->normalizePositiveIds($candidateUserIds);
+		if (!$listId || $candidateUserIds === [])
+		{
+			return [];
+		}
+
+		$filter = (new ConditionTree())
+			->where('LIST_ID', $listId)
+			->whereIn('USER_ID', $candidateUserIds)
+		;
+
+		return $this->signersListUserRepository->listUniqueUserIdsByFilter(
+			$filter,
+			count($candidateUserIds),
+		);
 	}
 
 	public function listSignersWithFilter(
@@ -372,6 +479,26 @@ class SignersListService
 	{
 		$users = $this->listSigners($listId);
 		return $users->isEmpty();
+	}
+
+	/**
+	 * @param array<mixed> $ids
+	 *
+	 * @return list<int>
+	 */
+	private function normalizePositiveIds(array $ids): array
+	{
+		$result = [];
+		foreach ($ids as $id)
+		{
+			$id = (int)$id;
+			if ($id > 0)
+			{
+				$result[$id] = true;
+			}
+		}
+
+		return array_keys($result);
 	}
 
 	private function prepareListsFilter(?ConditionTree $filter = null): ConditionTree

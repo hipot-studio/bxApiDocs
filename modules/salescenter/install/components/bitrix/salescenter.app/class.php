@@ -33,6 +33,7 @@ use Bitrix\SalesCenter\Component\PaymentSlip;
 use Bitrix\SalesCenter\Component\ReceivePaymentHelper;
 use Bitrix\SalesCenter\Driver;
 use Bitrix\SalesCenter\Integration\Bitrix24Manager;
+use Bitrix\SalesCenter\Integration\CatalogManager;
 use Bitrix\SalesCenter\Integration\CrmManager;
 use Bitrix\SalesCenter\Integration\ImOpenLinesManager;
 use Bitrix\SalesCenter\Integration\LandingManager;
@@ -50,8 +51,10 @@ if (!Main\Loader::includeModule('sale'))
 /**
  * Class CSalesCenterAppComponent
  */
-class CSalesCenterAppComponent extends CBitrixComponent implements Controllerable
+class CSalesCenterAppComponent extends CBitrixComponent implements Controllerable, Main\Errorable
 {
+	use Main\ErrorableImplementation;
+
 	private const TITLE_LENGTH_LIMIT = 50;
 	private const LIMIT_COUNT_PAY_SYSTEM = 3;
 	private const TEMPLATE_VIEW_MODE = 'view';
@@ -73,11 +76,16 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	/** @var Crm\Item|null */
 	private $item;
 
+	private bool $isAccessDenied = false;
+
 	/**
 	 * @inheritDoc
 	 */
 	public function onPrepareComponentParams($arParams)
 	{
+		$this->errorCollection = new Main\ErrorCollection();
+		$this->isAccessDenied = false;
+
 		if (!Main\Loader::includeModule('salescenter'))
 		{
 			ShowError(Loc::getMessage('SALESCENTER_MODULE_ERROR'));
@@ -104,6 +112,11 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		{
 			$arParams['sessionId'] = intval($this->request->get('sessionId'));
 		}
+
+		$arParams['sessionId'] = ImOpenLinesManager::getInstance()
+			->checkClientSessionId($arParams['sessionId'], $arParams['dialogId'])
+			->getData()['sessionId']
+		;
 
 		if (!isset($arParams['disableSendButton']))
 		{
@@ -161,18 +174,23 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			$arParams['templateMode'] = self::TEMPLATE_CREATE_MODE;
 		}
 
-		$arParams['orderId'] = $this->getOrderIdFromParams($arParams);
-
-		if ($this->needOrderFromEntity($arParams))
+		$isChatContext = ($arParams['context'] === SalesCenter\Component\ContextDictionary::CHAT);
+		if ($isChatContext)
 		{
-			$orderIdList = $this->getOrderIdListByEntityId($arParams['ownerId'], $arParams['ownerTypeId']);
-			if ($orderIdList)
-			{
-				$arParams['orderId'] = current($orderIdList);
-			}
+			$arParams['ownerTypeId'] = CCrmOwnerType::Deal;
 		}
 
-		if ($arParams['context'] === SalesCenter\Component\ContextDictionary::CHAT)
+		$ownerId = (int)$arParams['ownerId'];
+		if (
+			$ownerId > 0
+			&& !CrmManager::getInstance()->canReadOwnerEntity($ownerId, (int)$arParams['ownerTypeId'])
+		)
+		{
+			$arParams['ownerId'] = 0;
+			$this->isAccessDenied = true;
+		}
+
+		if ($isChatContext && (int)$arParams['ownerId'] > 0)
 		{
 			$crmManager = CrmManager::getInstance();
 			if (
@@ -188,7 +206,17 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			{
 				$arParams['ownerId'] = 0;
 			}
-			$arParams['ownerTypeId'] = CCrmOwnerType::Deal;
+		}
+
+		$arParams['orderId'] = $this->getOrderIdFromParams($arParams);
+
+		if ($this->needOrderFromEntity($arParams))
+		{
+			$orderIdList = $this->getOrderIdListByEntityId($arParams['ownerId'], $arParams['ownerTypeId']);
+			if ($orderIdList)
+			{
+				$arParams['orderId'] = current($orderIdList);
+			}
 		}
 
 		$arParams['showModeList'] = (int)$arParams['ownerTypeId'] === CCrmOwnerType::Deal;
@@ -235,6 +263,12 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		)
 		{
 			ShowError(Loc::getMessage('SALESCENTER_ERROR_DEAL_NO_FOUND'));
+			Application::getInstance()->terminate();
+		}
+
+		if ($this->isAccessDenied)
+		{
+			ShowError(Loc::getMessage('SALESCENTER_CRM_PERMISSION_DENIED'));
 			Application::getInstance()->terminate();
 		}
 
@@ -383,6 +417,12 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			$orderClassName = $registry->getOrderClassName();
 
 			$this->order = $orderClassName::load($this->arParams['orderId']);
+			if (!$this->order || !CrmManager::getInstance()->canReadOrder($this->order))
+			{
+				$this->order = null;
+				$this->isAccessDenied = true;
+			}
+
 			if ($this->order)
 			{
 				if ($this->arResult['paymentId'])
@@ -640,7 +680,11 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 						$contactId = (int)$contact->getField('ENTITY_ID');
 						$contact = \CCrmContact::GetById($contactId);
 						$this->arResult['contactName'] = is_array($contact) ? \CCrmContact::PrepareFormattedName($contact) : '';
-						$this->arResult['contactPhone'] = CrmManager::getInstance()->getFormattedContactPhone($contactId);
+						$this->arResult['contactPhone'] =
+							CrmManager::getInstance()->canReadContact($contactId)
+								? CrmManager::getInstance()->getFormattedContactPhone($contactId)
+								: ''
+						;
 					}
 				}
 			}
@@ -1096,6 +1140,11 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	 */
 	private function getDeliveryToList(int $contactId): array
 	{
+		if (!CrmManager::getInstance()->canReadContact($contactId))
+		{
+			return [];
+		}
+
 		return array_values(
 			LocationManager::getInstance()->getFormattedLocations(
 				CrmManager::getInstance()->getClientAddressList($contactId)
@@ -1462,6 +1511,14 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	 */
 	private function getPaySystemList(): array
 	{
+		if (!SaleManager::getInstance()->isManagerAccess())
+		{
+			return [
+				'isSet' => false,
+				'items' => [],
+			];
+		}
+
 		$result = [];
 
 		$result['groups'] = [
@@ -1714,6 +1771,15 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	 */
 	private function getDeliveryList(): array
 	{
+		if (!SaleManager::getInstance()->isManagerAccess())
+		{
+			return [
+				'hasInstallable' => false,
+				'isInstalled' => false,
+				'items' => [],
+			];
+		}
+
 		$handlersCollection = (new SalesCenter\Delivery\Handlers\HandlersRepository())->getCollection();
 
 		$result = [
@@ -1839,6 +1905,11 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	 */
 	private function getCashboxList(): array
 	{
+		if (!SaleManager::getInstance()->isManagerAccess())
+		{
+			return [];
+		}
+
 		$result = [];
 
 		$cashboxPath = $this->getComponentSliderPath('bitrix:salescenter.cashbox');
@@ -2058,6 +2129,11 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	 */
 	private function getMostPopularProducts(int $cnt = 5): array
 	{
+		if (!CatalogManager::getInstance()->canReadProducts())
+		{
+			return [];
+		}
+
 		$catalogIblockId = (int)Main\Config\Option::get('crm', 'default_product_catalog_id');
 
 		if (!Main\Loader::includeModule('iblock')
@@ -2067,6 +2143,11 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 			return [];
 		}
 
+		return $this->fetchMostPopularProducts($catalogIblockId, $cnt);
+	}
+
+	protected function fetchMostPopularProducts(int $catalogIblockId, int $cnt): array
+	{
 		$mostPopularProducts = \CIBlockElement::GetList(
 			[
 				'PRODUCT_RANK' => 'DESC',
@@ -2522,7 +2603,25 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	{
 		$this->arParams = $this->onPrepareComponentParams($arParams);
 
+		if ($this->isAccessDenied)
+		{
+			$this->errorCollection->setError(
+				new Main\Error(Loc::getMessage('SALESCENTER_CRM_PERMISSION_DENIED')),
+			);
+
+			return [];
+		}
+
 		$this->fillComponentResult();
+
+		if ($this->isAccessDenied)
+		{
+			$this->errorCollection->setError(
+				new Main\Error(Loc::getMessage('SALESCENTER_CRM_PERMISSION_DENIED')),
+			);
+
+			return [];
+		}
 
 		return $this->arResult;
 	}
@@ -2566,6 +2665,15 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 		$ownerId = (int)($fields['ownerId'] ?? 0);
 		$ownerTypeId = (int)($fields['ownerTypeId'] ?? 0);
 
+		if (!CrmManager::getInstance()->canReadOwnerEntity($ownerId, $ownerTypeId))
+		{
+			$this->errorCollection->setError(
+				new Main\Error(Loc::getMessage('SALESCENTER_CRM_PERMISSION_DENIED')),
+			);
+
+			return [];
+		}
+
 		$factory = Crm\Service\Container::getInstance()->getFactory($ownerTypeId);
 		if ($factory && $factory->isPaymentsEnabled())
 		{
@@ -2578,7 +2686,11 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 
 		if ($this->item)
 		{
-			$result['contactPhone'] = CrmManager::getInstance()->getItemContactPhoneFormatted($this->item);
+			$result['contactPhone'] =
+				CrmManager::getInstance()->canReadContact((int)$this->item->getContactId())
+					? CrmManager::getInstance()->getItemContactPhoneFormatted($this->item)
+					: ''
+			;
 
 			$contact = CrmManager::getInstance()->getItemContactFields($this->item);
 			$result['title'] = is_array($contact) ? htmlspecialcharsbx($contact['FULL_NAME']) : '';
@@ -2593,6 +2705,15 @@ class CSalesCenterAppComponent extends CBitrixComponent implements Controllerabl
 	 */
 	public function getAjaxDataAction(string $type): array
 	{
+		if (!SaleManager::getInstance()->isManagerAccess())
+		{
+			$this->errorCollection->setError(
+				new Main\Error(Loc::getMessage('SALESCENTER_APP_SALE_ACCESS_DENIED')),
+			);
+
+			return [];
+		}
+
 		$result = [];
 		if (Main\Loader::includeModule('salescenter'))
 		{

@@ -2,7 +2,11 @@
 
 namespace Bitrix\Bizproc\Controller;
 
+use Bitrix\Bizproc\Api\Enum\ErrorMessage;
+use Bitrix\Bizproc\BaseType\File;
+use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Public\Provider\Params;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Provider\Params\GridParams;
 use Bitrix\Main\Provider\Params\Pager;
@@ -14,6 +18,8 @@ use Bitrix\Bizproc\Internal\Entity\StorageType;
 use Bitrix\Bizproc\Internal\Entity\StorageItem;
 use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
 use Bitrix\Bizproc\Public\Provider\StorageItemProvider;
+use Bitrix\Bizproc\Public\Provider\StorageFieldProvider;
+use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Public\Command;
 
 class Storage extends Base
@@ -25,9 +31,15 @@ class Storage extends Base
 		array $select = [],
 	): ?StorageType\StorageTypeCollection
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess())
 		{
 			return null;
+		}
+
+		$closedIds = (new TemplateAccessService())->getClosedStorageTypeIds();
+		if ($closedIds !== [])
+		{
+			$filter['!ID'] = array_merge((array)($filter['!ID'] ?? []), $closedIds);
 		}
 
 		$provider = new StorageTypeProvider();
@@ -42,7 +54,7 @@ class Storage extends Base
 
 	public function getAction(int $id): ?StorageType\StorageType
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess() || !$this->checkStorageTypeAccess($id))
 		{
 			return null;
 		}
@@ -61,7 +73,7 @@ class Storage extends Base
 
 	public function addAction(array $storageType): ?StorageType\StorageType
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess())
 		{
 			return null;
 		}
@@ -96,7 +108,7 @@ class Storage extends Base
 
 	public function updateAction(array $storageType): ?StorageType\StorageType
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess())
 		{
 			return null;
 		}
@@ -107,6 +119,11 @@ class Storage extends Base
 		{
 			$this->addError(ErrorBuilder::build('Storage type identifier is not specified.'));
 
+			return null;
+		}
+
+		if (!$this->checkStorageTypeAccess((int)$storageType['id']))
+		{
 			return null;
 		}
 
@@ -155,7 +172,7 @@ class Storage extends Base
 
 	public function deleteAction(int $id): ?array
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess() || !$this->checkStorageTypeAccess($id))
 		{
 			return null;
 		}
@@ -175,7 +192,7 @@ class Storage extends Base
 
 	public function deleteListAction(array $ids): ?array
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess())
 		{
 			return null;
 		}
@@ -187,6 +204,11 @@ class Storage extends Base
 		{
 			$this->addError(ErrorBuilder::build('Storage type identifiers are not specified.'));
 
+			return null;
+		}
+
+		if (!$this->checkStorageTypesAccess($normalizedIds))
+		{
 			return null;
 		}
 
@@ -210,7 +232,7 @@ class Storage extends Base
 		array $select = ['*'],
 	): ?StorageItem\StorageItemCollection
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess() || !$this->checkStorageTypeAccess($storageTypeId))
 		{
 			return null;
 		}
@@ -227,7 +249,7 @@ class Storage extends Base
 
 	public function getItemAction(int $storageTypeId, int $id): ?StorageItem\StorageItem
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess() || !$this->checkStorageTypeAccess($storageTypeId))
 		{
 			return null;
 		}
@@ -246,7 +268,11 @@ class Storage extends Base
 
 	public function addItemAction(int $storageTypeId, array $storageItem): ?StorageItem\StorageItem
 	{
-		if (!$this->checkAdminAccess())
+		if (
+			!$this->checkStorageAccess()
+			|| !$this->checkStorageTypeAccess($storageTypeId)
+			|| !$this->checkFileValuesUnchanged($storageTypeId, $storageItem)
+		)
 		{
 			return null;
 		}
@@ -282,7 +308,7 @@ class Storage extends Base
 
 	public function updateItemAction(int $storageTypeId, array $storageItem): ?StorageItem\StorageItem
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess() || !$this->checkStorageTypeAccess($storageTypeId))
 		{
 			return null;
 		}
@@ -301,6 +327,11 @@ class Storage extends Base
 		{
 			$this->addError(ErrorBuilder::build('Storage item has not been found.'));
 
+			return null;
+		}
+
+		if (!$this->checkFileValuesUnchanged($storageTypeId, $storageItem, $entity))
+		{
 			return null;
 		}
 
@@ -350,7 +381,7 @@ class Storage extends Base
 
 	public function deleteItemsAction(array $ids): ?array
 	{
-		if (!$this->checkAdminAccess())
+		if (!$this->checkStorageAccess())
 		{
 			return null;
 		}
@@ -359,6 +390,19 @@ class Storage extends Base
 		{
 			$this->addError(ErrorBuilder::build('Storage item identifiers are not specified.'));
 
+			return null;
+		}
+
+		$repository = Container::getStorageItemRepository();
+		if ($repository === null)
+		{
+			$this->addError(ErrorBuilder::build('Storage item repository is not available.'));
+
+			return null;
+		}
+
+		if (!$this->checkStorageTypesAccess($repository->getStorageTypeIdsByItemIds($ids)))
+		{
 			return null;
 		}
 
@@ -375,8 +419,83 @@ class Storage extends Base
 		return $result->getData();
 	}
 
-	protected function checkAdminAccess(): bool
+	protected function checkStorageAccess(): bool
 	{
-		return (new \CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin();
+		return (new TemplateAccessService())->canAccessTemplates();
+	}
+
+	/**
+	 * A bare file id sent here is not checked against the rights of the user,
+	 * while the grid of items renders it as a download link.
+	 */
+	private function checkFileValuesUnchanged(
+		int $storageTypeId,
+		array $storageItem,
+		?StorageItem\StorageItem $storedItem = null,
+	): bool
+	{
+		foreach ((new StorageFieldProvider())->getByStorageId($storageTypeId) as $field)
+		{
+			$code = (string)$field->getCode();
+			if ($field->getType() !== FieldType::FILE || !array_key_exists($code, $storageItem))
+			{
+				continue;
+			}
+
+			$value = $storageItem[$code];
+			if (\CBPHelper::isEmptyValue($value) || $this->sameFileIds($value, $storedItem?->getValueField($code)))
+			{
+				continue;
+			}
+
+			$this->addError(ErrorMessage::INVALID_PARAM_ARG->getError([
+				'#PARAM#' => $code,
+				'#VALUE#' => is_scalar($value) ? (string)$value : '',
+			]));
+
+			return false;
+		}
+
+		return true;
+	}
+
+	private function sameFileIds(mixed $value, mixed $storedValue): bool
+	{
+		$ids = File::toIdList($value);
+
+		return $ids !== null && $ids === array_map('strval', \CBPHelper::flatten($storedValue));
+	}
+
+	protected function checkStorageTypeAccess(int $storageTypeId): bool
+	{
+		if ((new TemplateAccessService())->canEditStorage($storageTypeId))
+		{
+			return true;
+		}
+
+		$this->addError(ErrorMessage::ACCESS_DENIED->getError());
+
+		return false;
+	}
+
+	/**
+	 * @param int[] $storageTypeIds
+	 */
+	protected function checkStorageTypesAccess(array $storageTypeIds): bool
+	{
+		if (!$storageTypeIds)
+		{
+			return true;
+		}
+
+		$closedIds = (new TemplateAccessService())->getClosedStorageTypeIds();
+		if (array_intersect(array_map('intval', $storageTypeIds), $closedIds))
+		{
+			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
+
+			return false;
+		}
+
+		return true;
 	}
 }

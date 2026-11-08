@@ -1457,9 +1457,20 @@ class Cleaner
 			$optionList = Main\Config\Option::getForModule('main.stepper.crm');
 			foreach ($optionList as $name => $value)
 			{
+				// Other crm steppers keep their progress in the same module, leave it intact
+				if (!self::isProgressInfoOptionName((string)$name))
+				{
+					continue;
+				}
+
 				Main\Config\Option::delete('main.stepper.crm', ['name' => $name]);
 			}
 		}
+	}
+
+	private static function isProgressInfoOptionName(string $name): bool
+	{
+		return preg_match('/^' . preg_quote(self::class, '/') . '\d+\z/', $name) === 1;
 	}
 
 	/**

@@ -190,7 +190,7 @@ final class Config
 	public static function getLanguages(bool $skipCache = false): array
 	{
 		static $languages;
-		if ($languages === null)
+		if ($languages === null || $skipCache)
 		{
 			$languages = [];
 			$iterator = Main\Localization\LanguageTable::getList([

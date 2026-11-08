@@ -265,22 +265,28 @@ class CFilterQuery
 
 		$this->m_words[] = $word;
 
+		$connection = \Bitrix\Main\Application::getConnection();
+		$sqlHelper = $connection->getSqlHelper();
+		// PostgreSQL rejects upper() on a non-string column, other databases cast implicitly
+		$castFieldToChar = $connection->getType() === 'pgsql';
+
 		$n = count($this->m_fields);
 		$ret = "";
 		if ($n>1) $ret = "(";
 		for ($i=0; $i<$n; $i++)
 		{
 			$field = $this->m_fields[$i];
+			$fieldAsChar = $castFieldToChar ? $sqlHelper->castToChar($field) : $field;
 			if ($this->procent=="Y")
 			{
 				$ret.= "
-					(upper($field) like upper('%".$DB->ForSqlLike($word, 2000)."%') and $field is not null)
+					(upper($fieldAsChar) like upper('%".$DB->ForSqlLike($word, 2000)."%') and $field is not null)
 					";
 			}
 			elseif (str_contains($word, "%") || str_contains($word, "_"))
 			{
 				$ret.= "
-					(upper($field) like upper('".$DB->ForSqlLike($word, 2000)."') and $field is not null)
+					(upper($fieldAsChar) like upper('".$DB->ForSqlLike($word, 2000)."') and $field is not null)
 					";
 			}
 			else

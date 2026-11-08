@@ -5,6 +5,8 @@ namespace Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service;
 use Bitrix\Bizproc\Activity\ActivityDescription;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\ActivityVisibilityFilter;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\RequestSource;
 use Bitrix\Main\DI\Exception\CircularDependencyException;
 use Bitrix\Main\DI\Exception\ServiceNotFoundException;
 use Bitrix\Main\DI\ServiceLocator;
@@ -14,9 +16,15 @@ use Bitrix\Main\ObjectNotFoundException;
  * Single source of per-activity catalog metadata for the AI block converters and validator.
  *
  * The map is built from the same activity catalog the node editor uses (Searcher over NODE/TRIGGER
- * activities, filtered to the non-excluded ones), so the system node name (ActivityDescription::getName())
- * and the node visuals stay in sync between the forward converter, the reverse converter and the block
- * validator. Keeping it here prevents the name sources from drifting apart.
+ * activities), so the system node name (ActivityDescription::getName()) and the node visuals stay in sync
+ * between the forward converter, the reverse converter and the block validator. Keeping it here prevents the
+ * name sources from drifting apart.
+ *
+ * Excluded activities are dropped for the Marta catalog (fail-closed default), while the reverse REST path keeps
+ * exactly the CLASSes whose EXCLUDED barrier the visibility filter lifts too
+ * ({@see ActivityVisibilityFilter::bypassesExcluded()}), so a system AI agent's own EXCLUDED nodes resolve a
+ * non-empty name on template.validate. The resolver decides names only, never visibility - that is enforced
+ * upstream ({@see BlockDescriptionService::getBlockSettings()}).
  */
 final class AgentBlockMetadataResolver
 {
@@ -35,13 +43,30 @@ final class AgentBlockMetadataResolver
 
 	private ?Searcher $searcher = null;
 
+	private readonly RequestSource $source;
+
+	/**
+	 * @var array<string, true>
+	 */
+	private readonly array $baselineBlockTypes;
+
 	/**
 	 * @param array<string, array<string, mixed>>|null $iconMap Pre-built map (tests inject a fixed one);
 	 *   null loads it lazily from the activity catalog.
+	 * @param RequestSource $source Marta (fail-closed default) drops every excluded activity; Rest keeps the
+	 *   reverse-visible ones the baseline carries. Ignored when $iconMap is given.
+	 * @param array<string, true> $baselineBlockTypes Block types of the published bound template, keyed lowercase;
+	 *   an excluded activity keeps its name only for a type present here. Ignored when $iconMap is given.
 	 */
-	public function __construct(?array $iconMap = null)
+	public function __construct(
+		?array $iconMap = null,
+		RequestSource $source = RequestSource::Marta,
+		array $baselineBlockTypes = [],
+	)
 	{
 		$this->iconMap = $iconMap;
+		$this->source = $source;
+		$this->baselineBlockTypes = $baselineBlockTypes;
 	}
 
 	/**
@@ -125,6 +150,44 @@ final class AgentBlockMetadataResolver
 	}
 
 	/**
+	 * The settings a preset pins on the block, as the description context of that preset.
+	 *
+	 * A block resolves part of its schema from values it is already pinned to - a CRM trigger lists the fields of
+	 * the entity its `Document` names - so a description built without them answers with an empty option list on
+	 * a setting whose values the portal actually knows. Expressions are dropped: they are values to be computed
+	 * when the process runs, not something a schema can be resolved against.
+	 *
+	 * @return array<string, mixed> [] for a block with no preset, an unknown preset, or a preset pinning nothing
+	 */
+	public function presetProperties(string $blockType, ?string $presetId): array
+	{
+		if ($presetId === null || $presetId === '')
+		{
+			return [];
+		}
+
+		$activity = $this->getSearcher()->searchByCode($blockType);
+		$preset = $activity?->getPresetById($presetId);
+		if (!is_array($preset))
+		{
+			return [];
+		}
+
+		$properties = [];
+		foreach ($preset['PROPERTIES'] ?? [] as $name => $value)
+		{
+			if (is_string($value) && (str_starts_with($value, '{=') || str_starts_with($value, '{{=')))
+			{
+				continue;
+			}
+
+			$properties[$name] = $value;
+		}
+
+		return $properties;
+	}
+
+	/**
 	 * Per-type index of preset Document -> preset ID, built lazily from the live activity description and
 	 * memoised per type so repeated lookups across the blocks of one template do not rescan the catalog.
 	 *
@@ -187,10 +250,17 @@ final class AgentBlockMetadataResolver
 		$searcher = $this->getSearcher();
 
 		$iconMap = [];
-		$activities = $searcher
-			->searchByType([ActivityType::NODE->value, ActivityType::TRIGGER->value])
-			->filter(static fn(ActivityDescription $d) => !$d->getExcluded())
-		;
+		$activities = $searcher->searchByType([ActivityType::NODE->value, ActivityType::TRIGGER->value]);
+
+		// An EXCLUDED activity keeps a name only where the visibility filter also lifts its EXCLUDED barrier: on the
+		// Rest path, for a reverse-visible external CLASS whose type the published baseline carries; nothing on Marta.
+		$source = $this->source;
+		$baselineBlockTypes = $this->baselineBlockTypes;
+		$activities = $activities->filter(
+			static fn(ActivityDescription $d, string|int $key): bool =>
+				!$d->getExcluded()
+				|| ActivityVisibilityFilter::bypassesExcluded($d, $source, (string)$key, $baselineBlockTypes),
+		);
 
 		foreach ($activities as $key => $activity)
 		{

@@ -38,7 +38,7 @@ class StoreDocument extends Dataset
 
 	protected function getTableDescriptionFull(): string
 	{
-		return $this->getMessage('CATALOG_STORE_DOCUMENT_TABLE_DESCRIPTION_FULL', '');
+		return $this->getMessage('CATALOG_STORE_DOCUMENT_TABLE_DESCRIPTION_FULL_MSGVER_1', '');
 	}
 
 	/**

@@ -209,6 +209,12 @@ class CompanyDataProvider extends EntityDataProvider implements FactoryOptionabl
 					'partial' => true,
 				]
 			),
+			'OPENED' => $this->createField(
+				'OPENED',
+				[
+					'type' => 'checkbox'
+				]
+			),
 			'OBSERVER_IDS' => $this->createField(
 				'OBSERVER_IDS',
 				[

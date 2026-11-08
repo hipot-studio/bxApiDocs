@@ -62,11 +62,13 @@ class Site
 		$siteId = (int)$event->getParameter('ITEM_CODE');
 		Type::setScope($siteType);
 
-		// set uses app to main manifest
+		// set uses app to main manifest: only the apps of repo blocks, a page or a plain block
+		// marked by INITIATOR_APP_CODE does not need its app to be shown
 		$usedApp = PublicAction::getRestStat(
 			true,
 			false,
-			$siteId ? ['SITE_ID' => $siteId] : []
+			$siteId ? ['SITE_ID' => $siteId] : [],
+			skipInitiatorApps: true,
 		);
 		$usedApp = array_merge(
 			array_keys($usedApp[PublicAction::REST_USAGE_TYPE_BLOCK]),

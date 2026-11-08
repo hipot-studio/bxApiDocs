@@ -43,7 +43,7 @@ final class LogAction implements ActionInterface
 			'segmentId'	=> $segmentId ?? self::UNKNOWN_SEGMENT_ID,
 			'entityTypeId' => $item->getEntityTypeId(),
 			'entityId' => $item->getId(),
-			'phaseSemanticId' => PhaseSemantics::PROCESS,
+			'stageSemanticId' => PhaseSemantics::PROCESS,
 		]);
 
 		return RepeatSaleLogController::getInstance()->add($logItem);

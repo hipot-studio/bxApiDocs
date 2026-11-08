@@ -3,6 +3,8 @@
 use Bitrix\Main\Application;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Loader;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -140,7 +142,16 @@ class CAllSocNetUser
 			{
 				$CACHE_MANAGER->ClearByTag("sonet_user2group_G".$arRelation["GROUP_ID"]);
 				$CACHE_MANAGER->ClearByTag("sonet_user2group_U".$user_id);
-				$CACHE_MANAGER->ClearByTag("sonet_user2group");
+
+				if (DeferredCacheFeature::isOn())
+				{
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_user2group');
+				}
+				else
+				{
+					$CACHE_MANAGER->ClearByTag("sonet_user2group");
+				}
+
 				if ($bIM)
 				{
 					CIMNotify::DeleteByTag("SOCNET|INVITE_GROUP|".$user_id."|". (int)$arRelation["ID"]);

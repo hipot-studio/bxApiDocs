@@ -10,6 +10,7 @@ use Bitrix\Im\V2\Link\BaseLinkItem;
 use Bitrix\Im\V2\Rest\PopupData;
 use Bitrix\Im\V2\Rest\RestEntity;
 use Bitrix\Im\V2\Result;
+use Bitrix\Disk\TypeFile;
 use Bitrix\Main\ArgumentTypeException;
 
 class FileItem extends BaseLinkItem
@@ -124,6 +125,14 @@ class FileItem extends BaseLinkItem
 			return Subtype::Other;
 		}
 
+		// A video note is a video on disk, so this check must stay ahead of the disk type branch. The type is
+		// verified along with the flag: an id of a disk file comes back into use, nothing deletes the params
+		// of the deleted file, and an inherited flag would send a plain file to the tab of the video notes.
+		if ($this->getEntity()->isVideoNote() && (int)$diskFile?->getTypeFile() === TypeFile::VIDEO)
+		{
+			return Subtype::VideoNote;
+		}
+
 		return Subtype::tryFromDiskFileType($diskFile?->getTypeFile());
 	}
 
@@ -226,10 +235,7 @@ class FileItem extends BaseLinkItem
 
 	public function needToAddLink(): bool
 	{
-		if (
-			$this->getAuthorId() === Entity\User\User::SYSTEM_USER_ID
-			|| $this->getEntity()->isVideoNote()
-		)
+		if ($this->getAuthorId() === Entity\User\User::SYSTEM_USER_ID)
 		{
 			return false;
 		}

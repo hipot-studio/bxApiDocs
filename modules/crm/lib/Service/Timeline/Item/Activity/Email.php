@@ -321,14 +321,31 @@ class Email extends AIActivity
 	protected function createViewCopilotSummaryItem(array $list): ?ActionBarItem
 	{
 		$activityId = $this->getRootActivityIdForActions();
-		$languageTitle = $this->getAIService()->withSummarizeActivityId($this->getSummarizeActivityId())->getAILanguage(SummarizeCallTranscription::TYPE_ID);
-		$barItemAction = (new JsEvent('Email::ShowCopilotSummary'))
-			->addActionParamInt('activityId', $activityId)
-			->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
-			->addActionParamInt('ownerId', $this->getContext()->getEntityId())
-			->addActionParamString('languageTitle', $languageTitle)
-			->addActionParamArray('summarizeTranscriptionList', $list)
-		;
+		$isAiReportDrawerEnabled = $this->isAiReportDrawerEnabled();
+		if ($isAiReportDrawerEnabled)
+		{
+			$barItemAction = (new JsEvent('Email::ShowCopilotSummaryDrawer'))
+				->addActionParamInt('activityId', $activityId)
+				->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+				->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+				->addActionParamInt('jobId', null)
+			;
+		}
+		else
+		{
+			$languageTitle = $this
+				->getAIService()
+				->withSummarizeActivityId($this->getSummarizeActivityId())
+				->getAILanguage(SummarizeCallTranscription::TYPE_ID)
+			;
+			$barItemAction = (new JsEvent('Email::ShowCopilotSummary'))
+				->addActionParamInt('activityId', $activityId)
+				->addActionParamInt('ownerTypeId', $this->getContext()->getEntityTypeId())
+				->addActionParamInt('ownerId', $this->getContext()->getEntityId())
+				->addActionParamString('languageTitle', $languageTitle)
+				->addActionParamArray('summarizeTranscriptionList', $list)
+			;
+		}
 		$barItem = (new ActionBarItem())
 			->setSize(ActionBarItem::SIZE_SM)
 			->setDesign(ActionBarItem::DESIGN_AI)
@@ -340,12 +357,17 @@ class Email extends AIActivity
 				)
 			)
 		;
-		if (count($list) > 1)
+		if (!$isAiReportDrawerEnabled && count($list) > 1)
 		{
 			$barItem->setIsDropdown(true);
 		}
 
 		return $barItem;
+	}
+
+	protected function isAiReportDrawerEnabled(): bool
+	{
+		return AIManager::isCallScoringV2Enabled();
 	}
 
 	protected function getAIService(): AIActivityService

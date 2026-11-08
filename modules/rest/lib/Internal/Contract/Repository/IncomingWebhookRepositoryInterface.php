@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Rest\Internal\Contract\Repository;
 
 use Bitrix\Main\Repository\RepositoryInterface;
+use Bitrix\Main\Type\Date;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhook;
 use Bitrix\Rest\Internal\Entity\IncomingWebhook\IncomingWebhookCollection;
 use Bitrix\Rest\Internal\Repository\IncomingWebhook\WebhookFilter;
@@ -32,4 +33,13 @@ interface IncomingWebhookRepositoryInterface extends RepositoryInterface
 	public function getCount(WebhookFilter $filter): int;
 
 	public function exists(WebhookFilter $filter): bool;
+
+	/**
+	 * Prolongs the webhook only while it still matches the prolongable state read by the caller.
+	 *
+	 * @return bool whether the row was updated
+	 */
+	public function prolong(int $passwordId, Date $dateExpire, Date $currentDate): bool;
+
+	public function deactivateIfExpired(int $passwordId, Date $currentDate): void;
 }

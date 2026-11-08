@@ -376,13 +376,12 @@ class Manager
 	 */
 	public static function clearHistoryByContext(array|string $context): void
 	{
-		$res = HistoryTable::query()
-			->setSelect(['ID'])
-			->whereIn('CONTEXT_ID', (array)$context)
-		;
-		while ($row = $res->fetch())
+		$contextIds = (array)$context;
+		if ($contextIds === [])
 		{
-			HistoryTable::delete($row['ID'])->isSuccess();
+			return;
 		}
+
+		HistoryTable::deleteByFilter(['=CONTEXT_ID' => $contextIds]);
 	}
 }

@@ -27,7 +27,7 @@ class User
 
 			$userData = \Bitrix\Main\UserTable::getList(
 				[
-					'select' => ['ID', 'EXTERNAL_AUTH_ID'],
+					'select' => ['ID', 'EXTERNAL_AUTH_ID', 'NAME', 'LAST_NAME'],
 					'filter' => ['=XML_ID' => 'call|'.$userCode]
 				]
 			)->fetch();
@@ -36,7 +36,8 @@ class User
 				return [
 					'ID' => $userData['ID'],
 					'HASH' => $userCode,
-					'CREATED' => false
+					'CREATED' => false,
+					'HAS_CUSTOM_NAME' => self::isCustomName($userData['NAME'], $userData['LAST_NAME']),
 				];
 			}
 		}
@@ -109,8 +110,46 @@ class User
 		return [
 			'ID' => $userId,
 			'HASH' => $userCode,
-			'CREATED' => true
+			'CREATED' => true,
+			'HAS_CUSTOM_NAME' => self::isCustomName($fields['NAME'], $fields['LAST_NAME']),
 		];
+	}
+
+	public static function hasCustomName(int $userId): bool
+	{
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		$userData = \Bitrix\Main\UserTable::getList(
+			[
+				'select' => ['NAME', 'LAST_NAME'],
+				'filter' => [
+					'=ID' => $userId,
+					'=EXTERNAL_AUTH_ID' => self::EXTERNAL_AUTH_ID,
+				],
+			]
+		)->fetch();
+
+		if (!$userData)
+		{
+			return false;
+		}
+
+		return self::isCustomName($userData['NAME'], $userData['LAST_NAME']);
+	}
+
+	private static function isCustomName(?string $name, ?string $lastName): bool
+	{
+		if (trim((string)$lastName) !== '')
+		{
+			return true;
+		}
+
+		$name = trim((string)$name);
+
+		return $name !== '' && $name !== Loc::getMessage('IM_CALL_USER_DEFAULT_NAME');
 	}
 
 	public static function get($userId)

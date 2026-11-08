@@ -10,6 +10,7 @@ use Bitrix\Tasks\V2\Internal\Repository\TaskLogRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Repository\UserRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Result\Result;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 
@@ -26,7 +27,13 @@ class DescriptionService
 
 	}
 
-	public function update(Task $task, int $userId, bool $forceUpdate = false, bool $useConsistency = false): Result
+	public function update(
+		Task $task,
+		int $userId,
+		bool $forceUpdate = false,
+		bool $useConsistency = false,
+		InteractionOrigin $origin = InteractionOrigin::System,
+	): Result
 	{
 		$result = new Result();
 
@@ -47,6 +54,7 @@ class DescriptionService
 			$config = new UpdateConfig(
 				userId: $userId,
 				useConsistency: $useConsistency,
+				origin: $origin,
 			);
 
 			$task = $this->updateTaskService->update($task, $config);

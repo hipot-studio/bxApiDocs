@@ -13,12 +13,14 @@ class LinkButton extends AbstractButton
 		protected readonly string $title,
 		protected readonly string $url,
 		protected readonly ?Design $design = null,
+		protected readonly ?string $id = null,
 	)
 	{}
 
 	public function jsonSerialize(): array
 	{
 		return [
+			'id' => $this->id,
 			'type' => $this->getType(),
 			'title' => $this->title,
 			'design' => $this->design?->value,
@@ -30,9 +32,10 @@ class LinkButton extends AbstractButton
 		string $title,
 		string $url,
 		?Design $design = null,
+		?string $id = null
 	): self
 	{
-		return new self($title, $url, $design);
+		return new self($title, $url, $design, $id);
 	}
 
 	protected function getType(): string

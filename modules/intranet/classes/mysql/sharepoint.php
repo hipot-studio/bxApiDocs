@@ -24,7 +24,7 @@ class CIntranetSharepoint extends CAllIntranetSharepoint
 			"PRIORITY" => array("FIELD" => "S.PRIORITY", "TYPE" => "string")
 		);
 
-		if ($arFilter['SP_LIST_ID']) 
+		if (isset($arFilter['SP_LIST_ID']) && $arFilter['SP_LIST_ID'])
 			$arFilter['SP_LIST_ID'] = CIntranetUtils::checkGUID($arFilter['SP_LIST_ID']);
 		
 		$arSqls = self::PrepareSql($arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields);

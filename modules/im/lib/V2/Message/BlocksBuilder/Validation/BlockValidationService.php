@@ -22,6 +22,11 @@ class BlockValidationService
 	{
 		$blockType = $blockData['type'] ?? '';
 
+		if (!is_string($blockType))
+		{
+			return (new Result())->addError(new BuilderError(BuilderError::INVALID_TYPE_FIELD));
+		}
+
 		foreach ($this->blockFactory->getRequiredFields($blockType) as $field)
 		{
 			if (!array_key_exists($field, $blockData))

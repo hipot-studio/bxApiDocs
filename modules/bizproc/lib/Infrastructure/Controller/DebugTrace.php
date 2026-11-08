@@ -7,13 +7,15 @@ namespace Bitrix\Bizproc\Infrastructure\Controller;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Internal\Entity\Debugger\Collections\DebugTraceCollection;
 use Bitrix\Bizproc\Internal\Exception\ErrorBuilder;
+use Bitrix\Bizproc\Public\Feature\Debugger\ProcessDebuggerFlag;
 use Bitrix\Bizproc\Public\Provider\DebugSessionProvider;
 use Bitrix\Bizproc\Public\Provider\DebugTraceProvider;
 use Bitrix\Bizproc\Public\Provider\Params\DebugTrace\DebugTraceFilter;
 use Bitrix\Bizproc\Public\Provider\Params\DebugTrace\DebugTraceSelect;
 use Bitrix\Bizproc\Public\Provider\Params\DebugTrace\DebugTraceSort;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
@@ -27,7 +29,7 @@ class DebugTrace extends Controller
 {
 	protected function processBeforeAction(Action $action)
 	{
-		if (Option::get('bizproc', 'debugger_available', 'N') !== 'Y')
+		if (!Feature::isEnabled(ProcessDebuggerFlag::class))
 		{
 			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
 
@@ -37,15 +39,12 @@ class DebugTrace extends Controller
 		return true;
 	}
 
-	public function getBySessionIdAction(int $debugSessionId, int $page = 1): ?DebugTraceCollection
+	public function getBySessionIdAction(
+		int $debugSessionId,
+		int $page = 1,
+		?int $afterId = null,
+	): ?DebugTraceCollection
 	{
-		if (!$this->isAdmin())
-		{
-			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
-
-			return null;
-		}
-
 		try
 		{
 			$session = (new DebugSessionProvider())->getById($debugSessionId, false);
@@ -53,7 +52,7 @@ class DebugTrace extends Controller
 			if ($session === null)
 			{
 				$this->addError(new Error(
-					Loc::getMessage('BIZPROC_INFRASTRUCTURE_CONTROLLER_DEBUG_SESSION_NOT_FOUND'),
+					Loc::getMessage('BIZPROC_INFRASTRUCTURE_CONTROLLER_DEBUG_SESSION_NOT_FOUND') ?? '',
 				));
 
 				return null;
@@ -66,10 +65,25 @@ class DebugTrace extends Controller
 				return null;
 			}
 
+			$pager = new Pager(50);
+			$filter = ['DEBUG_SESSION_ID' => $debugSessionId];
+			$sort = ['TIMESTAMP' => 'ASC'];
+
+			if ($afterId === null)
+			{
+				$pager->setPage($page > 0 ? $page : 1);
+			}
+			else
+			{
+				$filter['>ID'] = $afterId;
+				// a cursor by id has to be read in the order of id, or rows are lost on a page border
+				$sort = ['ID' => 'ASC'];
+			}
+
 			return (new DebugTraceProvider())->getList(new GridParams(
-				pager: (new Pager(50))->setPage($page > 0 ? $page : 1),
-				filter: new DebugTraceFilter(['DEBUG_SESSION_ID' => $debugSessionId]),
-				sort: new DebugTraceSort(['TIMESTAMP' => 'ASC']),
+				pager: $pager,
+				filter: new DebugTraceFilter($filter),
+				sort: new DebugTraceSort($sort),
 				select: new DebugTraceSelect(['ID', 'KEY', 'TYPE', 'MESSAGE', 'DATA', 'CONTEXT', 'TIMESTAMP']),
 			));
 		}
@@ -82,18 +96,27 @@ class DebugTrace extends Controller
 		}
 	}
 
-	private function isAdmin(): bool
-	{
-		return $this->getUser()->isAdmin();
-	}
-
 	private function getUser(): CBPWorkflowTemplateUser
 	{
 		return new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser);
 	}
 
+	/** A session without a template has no publish right to check, so it stays with the administrator. */
 	private function canAccess(\Bitrix\Bizproc\Internal\Entity\Debugger\DebugSession $debugSession): bool
 	{
-		return $debugSession->getUserId() === $this->getUser()->getId();
+		$user = $this->getUser();
+		if ($debugSession->getUserId() !== $user->getId())
+		{
+			return false;
+		}
+
+		if ($user->isAdmin())
+		{
+			return true;
+		}
+
+		$templateId = $debugSession->getTemplateId();
+
+		return $templateId !== null && (new TemplateAccessService())->canPublish($templateId, $user->getId());
 	}
 }

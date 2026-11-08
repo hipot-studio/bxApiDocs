@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Request\Structure;
 
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\AddressDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\ItemDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\ItemIdentifierDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\MoneyDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\ItemDtoGenerator;
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Rest\V3\Attribute\Filterable;
 use Bitrix\Rest\V3\Dto\Dto;
@@ -47,6 +49,21 @@ final class ItemListFilterStructure extends Structure
 
 	public static function create(mixed $value, string $dtoClass, Request $request): self
 	{
+		$value = (array)$value;
+		if (
+			array_is_list($value)
+			&& count($value) === 1
+			&& is_array($value[0])
+			&& self::isGroup($value[0])
+		)
+		{
+			$value = $value[0];
+		}
+		if (!array_key_exists('type', $value) && self::isGroup($value))
+		{
+			$value['type'] = 'filter';
+		}
+
 		$dto = self::getDto($dtoClass);
 		if ($dto === null)
 		{
@@ -59,7 +76,7 @@ final class ItemListFilterStructure extends Structure
 			'inItems' => 0,
 		];
 
-		return self::normalizeNode((array)$value, $dtoClass, $request, $dto, true, 1, $budget);
+		return self::normalizeNode($value, $dtoClass, $request, $dto, true, 1, $budget);
 	}
 
 	/**
@@ -295,6 +312,10 @@ final class ItemListFilterStructure extends Structure
 		{
 			return self::normalizeCollectionIdentifierCondition($fieldName, $operator, $value);
 		}
+		if (self::isRelatedCrmObjectIdField($dto, $fieldName))
+		{
+			return self::normalizeRelatedCrmObjectIdCondition($fieldName, $operator, $value);
+		}
 
 		if (self::isComplexCustomField($field))
 		{
@@ -417,16 +438,17 @@ final class ItemListFilterStructure extends Structure
 		Dto $rootDto,
 	): Condition {
 		$parts = explode('.', $path);
+		if (count($parts) > 1 && self::isCrmRelationPath($parts, $rootDto))
+		{
+			return self::normalizeCrmRelationCondition($parts, $operator, $value, $request, $rootDto);
+		}
+
 		if (count($parts) !== 2)
 		{
 			throw new InvalidFilterException($path);
 		}
 
 		[$parentName, $childName] = $parts;
-		if (!isset($rootDto->getFields()[$parentName]))
-		{
-			throw new UnknownDtoPropertyException($rootDto->getShortName(), $parentName);
-		}
 		if (!in_array($parentName, self::DOT_PATH_PARENTS, true))
 		{
 			throw new InvalidFilterException($path);
@@ -437,6 +459,10 @@ final class ItemListFilterStructure extends Structure
 		)
 		{
 			throw new InvalidFilterException([$path, $operator->value, $value]);
+		}
+		if (!isset($rootDto->getFields()[$parentName]))
+		{
+			throw new UnknownDtoPropertyException($rootDto->getShortName(), $parentName);
 		}
 
 		$parentField = $rootDto->getFields()[$parentName];
@@ -456,7 +482,8 @@ final class ItemListFilterStructure extends Structure
 
 		if ($value === null)
 		{
-			if (!$childField->isNullable() || !in_array($operator, [Operator::Equal, Operator::NotEqual], true))
+			$isRelationIdentifier = $childField->getPropertyName() === 'id';
+			if ((!$childField->isNullable() && !$isRelationIdentifier) || !in_array($operator, [Operator::Equal, Operator::NotEqual], true))
 			{
 				throw new InvalidFilterException([$path, $operator->value, $value]);
 			}
@@ -479,6 +506,217 @@ final class ItemListFilterStructure extends Structure
 		return new Condition($path, $normalized->getOperator(), $normalized->getRightOperand());
 	}
 
+	/**
+	 * @param string[] $parts
+	 */
+	private static function isCrmRelationPath(array $parts, Dto $rootDto): bool
+	{
+		$relation = $rootDto->getFields()[$parts[0]] ?? null;
+		if (!$relation instanceof DtoField)
+		{
+			return false;
+		}
+
+		$targetDtoClass = $relation->getElementType() ?? $relation->getPropertyType();
+
+		return self::isCrmRelationDto($targetDtoClass);
+	}
+
+	private static function isCrmRelationDto(mixed $dtoClass): bool
+	{
+		if (!is_string($dtoClass))
+		{
+			return false;
+		}
+
+		return (new ItemDtoGenerator())->isGeneratedDtoClass($dtoClass);
+	}
+
+	/**
+	 * @param string[] $parts
+	 */
+	private static function normalizeCrmRelationCondition(
+		array $parts,
+		Operator $operator,
+		mixed $value,
+		Request $request,
+		Dto $rootDto,
+	): Condition
+	{
+		if (count($parts) < 2 || count($parts) > 3)
+		{
+			throw new InvalidFilterException(implode('.', $parts));
+		}
+
+		$parentName = $parts[0];
+		$parentField = $rootDto->getFields()[$parentName] ?? null;
+		if (!$parentField instanceof DtoField)
+		{
+			throw new UnknownDtoPropertyException($rootDto->getShortName(), $parentName);
+		}
+
+		$childDtoClass = $parentField->getElementType() ?? $parentField->getPropertyType();
+		if (!self::isCrmRelationDto($childDtoClass))
+		{
+			throw new InvalidFilterException(implode('.', $parts));
+		}
+
+		$childDto = self::getDto($childDtoClass);
+		if ($childDto === null)
+		{
+			$childDto = $childDtoClass::create();
+			self::addDto($childDto);
+		}
+
+		$childName = $parts[1];
+		$childField = $childDto->getFields()[$childName] ?? null;
+		if (!$childField instanceof DtoField)
+		{
+			throw new UnknownDtoPropertyException($childDto->getShortName(), $childName);
+		}
+
+		self::validateCrmRelationScope($request, $parentName, $childName, $rootDto, $childDto);
+
+		if (count($parts) === 2)
+		{
+			if ($childField->getPropertyType() === DtoCollection::class || is_subclass_of($childField->getPropertyType(), Dto::class))
+			{
+				throw new InvalidFilterException(implode('.', $parts));
+			}
+
+			if (!$childField->isFilterable() && $childName !== 'id')
+			{
+				throw new DtoFieldRequiredAttributeException($childDto->getShortName(), $childName, Filterable::class);
+			}
+
+			return self::normalizeRelationLeafCondition(
+				implode('.', $parts),
+				$childName,
+				$operator,
+				$value,
+				$request,
+				$childDtoClass,
+				$childField,
+			);
+		}
+
+		$nestedName = $parts[2];
+		if (!in_array($childName, [...self::MULTIFIELD_DOT_PATH_PARENTS, 'utm', 'lastCommunication'], true))
+		{
+			throw new InvalidFilterException(implode('.', $parts));
+		}
+
+		$nestedDtoClass = $childField->getElementType() ?? $childField->getPropertyType();
+		if (!is_subclass_of($nestedDtoClass, Dto::class))
+		{
+			throw new InvalidFilterException(implode('.', $parts));
+		}
+
+		$nestedDto = self::getDto($nestedDtoClass);
+		if ($nestedDto === null)
+		{
+			$nestedDto = $nestedDtoClass::create();
+			self::addDto($nestedDto);
+		}
+		$nestedField = self::getFilterableField($nestedDto, $nestedName);
+		if (
+			in_array($childName, self::MULTIFIELD_DOT_PATH_PARENTS, true)
+			&& (
+				!in_array($operator, [Operator::Equal, Operator::In], true)
+				|| ($operator === Operator::In && $value === [])
+			)
+		)
+		{
+			throw new InvalidFilterException([implode('.', $parts), $operator->value, $value]);
+		}
+
+		return self::normalizeRelationLeafCondition(
+			implode('.', $parts),
+			$nestedName,
+			$operator,
+			$value,
+			$request,
+			$nestedDtoClass,
+			$nestedField,
+		);
+	}
+
+	private static function normalizeRelationLeafCondition(
+		string $path,
+		string $fieldName,
+		Operator $operator,
+		mixed $value,
+		Request $request,
+		string $dtoClass,
+		DtoField $field,
+	): Condition
+	{
+		if ($value === null)
+		{
+			$isRelationIdentifier = $field->getPropertyName() === 'id';
+			if ((!$field->isNullable() && !$isRelationIdentifier) || !in_array($operator, [Operator::Equal, Operator::NotEqual], true))
+			{
+				throw new InvalidFilterException([$path, $operator->value, $value]);
+			}
+
+			return new Condition($path, $operator, null);
+		}
+
+		$value = self::normalizeFloatOperand($field, $value);
+		if ($field->getPropertyName() === 'id' && !$field->isFilterable())
+		{
+			$values = $operator === Operator::In ? $value : [$value];
+			foreach ((array)$values as $item)
+			{
+				if (!is_int($item))
+				{
+					throw new InvalidRequestFieldTypeException($path, 'int');
+				}
+			}
+
+			return new Condition($path, $operator, $value);
+		}
+
+		$standard = FilterStructure::create(
+			[$fieldName, $operator->value, $value],
+			$dtoClass,
+			$request,
+		);
+		$normalized = $standard->getConditions()[0] ?? null;
+		if (!$normalized instanceof Condition)
+		{
+			throw new InvalidFilterException([$path, $operator->value, $value]);
+		}
+
+		return new Condition($path, $normalized->getOperator(), $normalized->getRightOperand());
+	}
+
+	private static function validateCrmRelationScope(
+		Request $request,
+		string $parentName,
+		string $childName,
+		Dto $rootDto,
+		Dto $childDto,
+	): void
+	{
+		$availableFields = $request->getOptions()['scope']?->fields ?? [];
+		if ($availableFields === [])
+		{
+			return;
+		}
+
+		if (!in_array($parentName, $availableFields, true))
+		{
+			throw new UnknownDtoPropertyException($rootDto->getShortName(), $parentName);
+		}
+
+		$baseItemDto = self::getDto(ItemDto::class) ?? ItemDto::create();
+		if (!isset($baseItemDto->getFields()[$childName]))
+		{
+			throw new UnknownDtoPropertyException($childDto->getShortName(), $childName);
+		}
+	}
+
 	private static function getFilterableField(Dto $dto, string $fieldName): DtoField
 	{
 		if (!isset($dto->getFields()[$fieldName]))
@@ -487,12 +725,63 @@ final class ItemListFilterStructure extends Structure
 		}
 
 		$field = $dto->getFields()[$fieldName];
-		if (!$field->isFilterable())
+		if (!$field->isFilterable() && !self::isRelatedCrmObjectIdField($dto, $fieldName))
 		{
 			throw new DtoFieldRequiredAttributeException($dto->getShortName(), $fieldName, Filterable::class);
 		}
 
 		return $field;
+	}
+
+	private static function isRelatedCrmObjectIdField(Dto $dto, string $fieldName): bool
+	{
+		foreach ($dto->getFields() as $field)
+		{
+			$relation = $field->getRelation();
+			if (
+				$relation !== null
+				&& $relation->thisField === $fieldName
+				&& self::isCrmRelationDto($field->getElementType() ?? $field->getPropertyType())
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function normalizeRelatedCrmObjectIdCondition(
+		string $fieldName,
+		Operator $operator,
+		mixed $value,
+	): Condition
+	{
+		if ($value === null)
+		{
+			if (!in_array($operator, [Operator::Equal, Operator::NotEqual], true))
+			{
+				throw new InvalidFilterException([$fieldName, $operator->value, $value]);
+			}
+
+			return new Condition($fieldName, $operator, null);
+		}
+
+		if ($operator === Operator::Between && (!is_array($value) || count($value) !== 2))
+		{
+			throw new InvalidFilterException([$fieldName, $operator->value, $value]);
+		}
+
+		$values = in_array($operator, [Operator::In, Operator::Between], true) ? $value : [$value];
+		foreach ((array)$values as $item)
+		{
+			if (!is_int($item))
+			{
+				throw new InvalidRequestFieldTypeException($fieldName, 'int');
+			}
+		}
+
+		return new Condition($fieldName, $operator, $value);
 	}
 
 	private static function normalizeCollectionIdentifierCondition(

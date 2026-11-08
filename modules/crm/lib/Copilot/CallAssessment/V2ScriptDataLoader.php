@@ -36,6 +36,9 @@ final class V2ScriptDataLoader
 	public function buildEmpty(string $defaultTitle): array
 	{
 		$data = CallAssessmentItem::createFromArray(['title' => $defaultTitle])->toArray();
+		$data['prompt'] = '';
+		$data['isHintEnabled'] = false;
+		$data['hasHint'] = false;
 		$data['clientTypeIds'] = [ClientType::ANY->value];
 		$data['callTypeId'] = CallType::ALL->value;
 		$data['criteria'] = [];

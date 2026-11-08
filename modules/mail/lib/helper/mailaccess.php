@@ -12,9 +12,14 @@ use Bitrix\Mail\Helper\Config\Feature;
 use Bitrix\Main\Access\BaseAccessController;
 use Bitrix\Main\Access\Permission\PermissionDictionary as PermissionDictionaryAlias;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Error;
 
 class MailAccess
 {
+	public const ERROR_MASS_ACTIONS_DISABLED = 'MASS_CONNECT_DISABLED';
+	public const ERROR_MASS_ACTIONS_LICENSE_DENIED = 'MASS_CONNECT_LICENSE_DENIED';
+	public const ERROR_MASS_ACTIONS_ACCESS_DENIED = 'MASS_CONNECT_ACCESS_DENIED';
+
 	public static function hasCurrentUserAccessToMailboxGrid(): bool
 	{
 		return self::checkGridAction(MailActionDictionary::ACTION_MAILBOX_LIST_VIEW);
@@ -34,6 +39,54 @@ class MailAccess
 		return self::hasCurrentUserAccessToMailboxManagement();
 	}
 
+	/**
+	 * Both conditions behind mass connect and the flows of it: the tariff feature and the right to
+	 * manage employee mailboxes, which hasCurrentUserAccessToMassConnect() answers about alone. The
+	 * switch of the grid bulk actions is deliberately not among them.
+	 */
+	public static function getMassConnectDenial(): ?Error
+	{
+		if (!LicenseManager::isMailboxesMassConnectEnabled())
+		{
+			return new Error(
+				'Mass mailbox connection is not allowed',
+				self::ERROR_MASS_ACTIONS_LICENSE_DENIED,
+			);
+		}
+
+		if (!self::hasCurrentUserAccessToMassConnect())
+		{
+			return new Error(
+				'Access denied',
+				self::ERROR_MASS_ACTIONS_ACCESS_DENIED,
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Every condition behind a mass action of the mailbox grid: its own switch on top of everything
+	 * mass connect itself asks about.
+	 */
+	public static function getMassMailboxActionsDenial(): ?Error
+	{
+		if (!Feature::isMailboxGridBulkActionsAvailable())
+		{
+			return new Error(
+				'Mass mailbox actions are turned off',
+				self::ERROR_MASS_ACTIONS_DISABLED,
+			);
+		}
+
+		return self::getMassConnectDenial();
+	}
+
+	public static function hasCurrentUserAccessToMassMailboxActions(): bool
+	{
+		return self::getMassMailboxActionsDenial() === null;
+	}
+
 	public static function hasCurrentUserAccessToSharedSignatureManagement(): bool
 	{
 		if (!Feature::isSharedSignaturePermissionAvailable())
@@ -44,6 +97,34 @@ class MailAccess
 		}
 
 		return self::canPerform(MailActionDictionary::ACTION_SHARED_SIGNATURE_MANAGE);
+	}
+
+	/**
+	 * The acting user is passed explicitly: REST and the AI tool do not always act on behalf of
+	 * the session user. While the feature is off, deletion stays allowed for everyone.
+	 */
+	public static function hasUserAccessToMessageDeletion(?int $userId = null): bool
+	{
+		if (!Feature::isMessageDeletePermissionAvailable())
+		{
+			return true;
+		}
+
+		return self::canUserPerform(
+			MailActionDictionary::ACTION_MESSAGE_DELETE,
+			$userId ?? self::getCurrentUserId(),
+		);
+	}
+
+	/**
+	 * The permission is installed on every portal, so while the feature is off it grants nothing:
+	 * the section hides it and every write of a sender photo refuses.
+	 */
+	public static function hasCurrentUserAccessToSenderAvatarManagement(): bool
+	{
+		return Feature::isSenderAvatarAvailable()
+			&& static::canPerform(MailActionDictionary::ACTION_SENDER_AVATAR_MANAGE)
+		;
 	}
 
 	public static function hasCurrentUserAccessToPermission(): bool
@@ -108,8 +189,12 @@ class MailAccess
 
 	protected static function canPerform(string $action, ?int $itemId = null): bool
 	{
-		$userId = self::getCurrentUserId();
-		if (!$userId)
+		return self::canUserPerform($action, self::getCurrentUserId(), $itemId);
+	}
+
+	protected static function canUserPerform(string $action, int $userId, ?int $itemId = null): bool
+	{
+		if ($userId <= 0)
 		{
 			return false;
 		}

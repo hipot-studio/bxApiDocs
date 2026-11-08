@@ -3,17 +3,13 @@
 namespace Bitrix\DiskMobile\Controller;
 
 use Bitrix\Disk\BaseObject;
-use Bitrix\Disk\Controller\DataProviders\ChildrenDataProvider;
+use Bitrix\Disk\Controller\UnifiedLinkActions;
 use Bitrix\DiskMobile\SearchEntity;
 use Bitrix\DiskMobile\SearchType;
 use Bitrix\Main\Engine\ActionFilter\CloseSession;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\DataType\Page;
-use Bitrix\Main\NotImplementedException;
-use Bitrix\Main\SystemException;
+use Bitrix\Main\Error;
 use Bitrix\Main\UI\PageNavigation;
-
-use Bitrix\Disk;
 use Bitrix\Disk\Controller\Types;
 use Bitrix\Main\Engine\Response;
 
@@ -23,6 +19,11 @@ class Folder extends BaseFileList
 	{
 		return [
 			'getChildren' => [
+				'+prefilters' => [
+					new CloseSession(),
+				],
+			],
+			'getChildrenByUnifiedLink' => [
 				'+prefilters' => [
 					new CloseSession(),
 				],
@@ -55,6 +56,61 @@ class Folder extends BaseFileList
 		}
 
 		return $this->respondAll($id, $order, $showRights === 'Y', $context, $search, $searchContext, $pageNavigation);
+	}
+
+	public function getChildrenByUnifiedLinkAction(
+		string $uniqueCode,
+		array $order = [],
+		string $showRights = 'Y',
+		array $context = [],
+		string $search = null,
+	): ?array
+	{
+		$showRights = $showRights === 'Y';
+		$searchScope = (string)$search !== '' ? 'subfolders' : 'currentFolder';
+		$searchOrder = (string)$search !== '' ? ['UPDATE_TIME' => 'DESC'] : null;
+
+		/** @var array|null $page */
+		$page = $this->forward(
+			UnifiedLinkActions::class,
+			'getChildren',
+			[
+				'uniqueCode' => $uniqueCode,
+				'search' => $search,
+				'searchScope' => $searchScope,
+				'showRights' => $showRights,
+				'context' => $context,
+				'order' => $searchOrder ?? $order,
+			],
+		);
+
+		if (!$this->errorCollection->isEmpty())
+		{
+			return null;
+		}
+
+		if (!is_array($page))
+		{
+			$this->addError(new Error('Could not load folder children.'));
+
+			return null;
+		}
+
+		$folderId = $page['folderId'] ?? null;
+
+		if (!is_int($folderId) || $folderId <= 0)
+		{
+			$this->addError(new Error('Could not find folder.'));
+
+			return null;
+		}
+
+		return $this->buildFolderListResponse(
+			items: $page['items'] ?? [],
+			folderId: $folderId,
+			showRights: $showRights,
+			currentFolderRights: $page['currentFolderRights'] ?? [],
+		);
 	}
 
 	/**
@@ -212,18 +268,40 @@ class Folder extends BaseFileList
 
 		if ($page)
 		{
-			$response['items'] = $page->getItems();
-			$response = $this->withUsers($response);
-			$response = $this->withRealStorageIds($response);
-			$response = $this->withStorages($response);
-			$response['items'] = $this->withExternalLink($response['items']);
+			$response = $this->buildFolderListResponse($page->getItems(), $id, $showRights);
+		}
 
-			$tag = "object_$id";
-			$this->subscribeToPullEvents($response['items'], [ $tag ]);
+		return $response;
+	}
 
-			if ($showRights)
+	private function buildFolderListResponse(
+		array $items,
+		int $folderId,
+		bool $showRights = true,
+		?array $currentFolderRights = null,
+	): ?array
+	{
+		$response = [
+			...$this->getDefaultResponse(),
+			'currentFolderRights' => [],
+		];
+
+		$response['items'] = $items;
+		$response = $this->withUsers($response);
+		$response = $this->withRealStorageIds($response);
+		$response = $this->withStorages($response);
+		$response['items'] = $this->withExternalLink($response['items']);
+
+		$tag = "object_$folderId";
+		$this->subscribeToPullEvents($response['items'], [$tag]);
+
+		if ($showRights)
+		{
+			$response['currentFolderRights'] = $currentFolderRights ?? $this->getRights($folderId);
+
+			if ($response['currentFolderRights'] === null)
 			{
-				$response['currentFolderRights'] = $this->getRights($id);
+				return null;
 			}
 		}
 

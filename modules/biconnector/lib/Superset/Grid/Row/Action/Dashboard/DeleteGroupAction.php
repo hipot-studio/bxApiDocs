@@ -9,8 +9,10 @@ use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-final class DeleteGroupAction extends BaseDashboardAction
+
+final class DeleteGroupAction extends FormatMenuAction
 {
 	public static function getId(): ?string
 	{

@@ -127,7 +127,7 @@ class AlfabankLegacyHandler extends PaySystem\ServiceHandler implements PaySyste
 			{
 				$paymentState = $orderStatusData['paymentAmountInfo']['paymentState'];
 				if (($paymentState === self::PAYMENT_STATE_CREATED)
-					&& ((int)$payment->getSum() === (int)($orderStatusData['amount'] / 100))
+					&& $this->isSumCorrect($payment, $orderStatusData)
 				)
 				{
 					$formUrl = $this->getUrl($payment, 'formUrl');
@@ -335,6 +335,11 @@ class AlfabankLegacyHandler extends PaySystem\ServiceHandler implements PaySyste
 		return PriceMaths::roundByFormatCurrency($sberbankAmount, $currency) === PriceMaths::roundByFormatCurrency($payment->getSum(), $currency);
 	}
 
+	private function getMinorAmount($sum, string $currency): int
+	{
+		return (int)round(PriceMaths::roundByFormatCurrency((float)$sum, $currency) * 100);
+	}
+
 	/**
 	 * @param Request $request
 	 * @param $secretKey
@@ -445,7 +450,7 @@ class AlfabankLegacyHandler extends PaySystem\ServiceHandler implements PaySyste
 		$url = $this->getUrl($payment, 'refund.do');
 		$params = $this->getMerchantParams($payment);
 		$params['orderId'] = $payment->getField('PS_INVOICE_ID');
-		$params['amount'] = PriceMaths::roundByFormatCurrency($refundableSum, $payment->getCurrency()) * 100;
+		$params['amount'] = $this->getMinorAmount($refundableSum, $payment->getCurrency());
 
 		$sendResult = $this->send($url, $params);
 		if (!$sendResult->isSuccess())
@@ -591,7 +596,7 @@ class AlfabankLegacyHandler extends PaySystem\ServiceHandler implements PaySyste
 
 	$params = [
 		'orderNumber' => $this->getOrderNumber($payment, $attempt),
-		'amount' => (int)(PriceMaths::roundByFormatCurrency($payment->getSum(), $payment->getCurrency()) * 100),
+		'amount' => $this->getMinorAmount($payment->getSum(), $payment->getCurrency()),
 		'returnUrl' => $this->getSuccessUrl($payment),
 		'failUrl' => $this->getFailUrl($payment),
 		'jsonParams' => self::encode($jsonParams)

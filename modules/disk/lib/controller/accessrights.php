@@ -5,12 +5,14 @@ namespace Bitrix\Disk\Controller;
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Controller\ActionFilter\RequiredParameter;
 use Bitrix\Disk\Document\DocumentHandler;
+use Bitrix\Disk\Document\OnlyOffice\Service\OnlyOfficeSessionTerminationService;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter\UnifiedLinkAccessChecker;
 use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internal\Command\UnifiedLink\SetAccessCommand;
 use Bitrix\Disk\Internal\Enum\ExternalLinkDisableReason;
 use Bitrix\Disk\Internal\Enum\MembersAccessDisableReason;
+use Bitrix\Disk\Internal\Enum\SharingMemberType;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\File;
 use \Bitrix\Disk\Folder;
@@ -35,6 +37,7 @@ use Bitrix\Disk\User;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessCheckHandler;
+use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkParentFoldersAccessCheckHandler;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
@@ -47,8 +50,13 @@ final class AccessRights extends Engine\Controller
 
 	public function __construct(?Request $request = null)
 	{
-		$this->requiredParameterFilter = new RequiredParameter('file', false);
-		$this->readAccessChecker = new UnifiedLinkAccessChecker(UnifiedLinkAccessLevel::Read);
+		$this->requiredParameterFilter = new RequiredParameter('object', false);
+
+		$this->readAccessChecker = new UnifiedLinkAccessChecker(
+			targetAccessLevel: UnifiedLinkAccessLevel::Read,
+			argumentName: 'object',
+		);
+
 		$this->externalLinkProvider = ServiceLocator::getInstance()->get(ExternalLinkProvider::class);
 
 		parent::__construct($request);
@@ -94,10 +102,10 @@ final class AccessRights extends Engine\Controller
 	{
 		return [
 			new ExactParameter(
-				File::class,
-				'file',
-				function ($className, string $uniqueCode): ?File {
-					return File::loadByUniqueCode($uniqueCode);
+				BaseObject::class,
+				'object',
+				function ($className, string $uniqueCode): ?BaseObject {
+					return BaseObject::loadByUniqueCode($uniqueCode);
 				},
 			),
 		];
@@ -120,18 +128,22 @@ final class AccessRights extends Engine\Controller
 		}
 
 		$canUpdate = $object->canUpdate($securityContext);
-		$onlyRead = !$canUpdate;
 
-		return $this->getInternal($object, $onlyRead, $canUpdate);
+		return $this->getInternal($object, $canUpdate, $securityContext);
 	}
 
-	public function getUnifiedAction(?File $file): ?array
+	public function getUnifiedAction(?BaseObject $object): ?array
 	{
 		$accessLevel = $this->readAccessChecker->getAccessLevel();
-		$onlyRead = $accessLevel === UnifiedLinkAccessLevel::Read;
 		$canEdit = $accessLevel->value >= UnifiedLinkAccessLevel::Edit->value;
+		$securityContext = $object?->getStorage()?->getCurrentUserSecurityContext(true);
 
-		return $this->getInternal($file, $onlyRead, $canEdit);
+		if (!$securityContext)
+		{
+			return null;
+		}
+
+		return $this->getInternal($object, $canEdit, $securityContext);
 	}
 
 	public function setAction($objectId): void
@@ -168,10 +180,14 @@ final class AccessRights extends Engine\Controller
 		$this->processActionChangeSharingAndRights($object, $securityContext);
 	}
 
-	private function getPublicLinkData(File $file, bool $onlyRead, bool $isObjectEditable)
+	private function getPublicLinkData(
+		BaseObject $baseObject,
+		bool $isObjectEditable,
+		Disk\Security\SecurityContext $securityContext,
+	)
 	{
-		$realFile = $file->getRealObject();
-		$extLink = $this->externalLinkProvider->getForUse($realFile->getId());
+		$realObject = $baseObject->getRealObject();
+		$extLink = $this->externalLinkProvider->getForUse($realObject->getId());
 		$ttl = null;
 		$rightsList = null;
 
@@ -197,35 +213,43 @@ final class AccessRights extends Engine\Controller
 			'canEditSettings' => $extLink ? $extLink->canEditSettings() : true,
 			'publicLinkTtl' => $ttl,
 			'password' => $extLink ? $extLink->hasPassword() : null,
-			'disableReason' => $this->checkManageExternalLink($realFile, $onlyRead),
+			'disableReason' => $this->checkManageExternalLink($realObject, $securityContext),
 			'rightsList' => $rightsList,
 		];
 	}
 
-	public function setPublicLinkRightsAction(File $file): ?array
+	public function setPublicLinkRightsAction(BaseObject $object): ?array
 	{
-		$securityContext = $file->getStorage()?->getCurrentUserSecurityContext();
-		if (!$securityContext || !$file->canRead($securityContext))
+		$securityContext = $object->getStorage()?->getCurrentUserSecurityContext();
+		if (!$securityContext || !$object->canRead($securityContext))
 		{
 			return null;
 		}
 
-		$canUpdate = $file->canUpdate($securityContext);
-		$onlyRead = !$canUpdate;
+		$canUpdate = $object->canUpdate($securityContext);
 
-		return $this->setPublicLinkRights($file, $onlyRead, $canUpdate);
+		return $this->setPublicLinkRights($object, $canUpdate, $securityContext);
 	}
 
-	public function setUnifiedPublicLinkRightsAction(?File $file): ?array
+	public function setUnifiedPublicLinkRightsAction(?BaseObject $object): ?array
 	{
 		$accessLevel = $this->readAccessChecker->getAccessLevel();
-		$onlyRead = $accessLevel === UnifiedLinkAccessLevel::Read;
 		$canEdit = $accessLevel->value >= UnifiedLinkAccessLevel::Edit->value;
+		$securityContext = $object?->getStorage()?->getCurrentUserSecurityContext(true);
 
-		return $this->setPublicLinkRights($file, $onlyRead, $canEdit);
+		if (!$securityContext)
+		{
+			return null;
+		}
+
+		return $this->setPublicLinkRights($object, $canEdit, $securityContext);
 	}
 
-	protected function getInternal(File|Folder $object, bool $onlyRead, bool $canEdit): ?array
+	protected function getInternal(
+		BaseObject $object,
+		bool $canEdit,
+		Disk\Security\SecurityContext $securityContext,
+	): ?array
 	{
 		$isFolder = $object instanceof Folder;
 		$objectOptions = $object->getRealObject()->getObjectOptions();
@@ -236,18 +260,28 @@ final class AccessRights extends Engine\Controller
 			'fileName' => $object->getName(),
 			'typeFile' => $isFolder ? null : $object->getTypeFile(),
 			'isFolder' => $isFolder,
-			'allowManagePublicAccessWithViewingRights' => $objectOptions[ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ],
+			'allowManagePublicAccessWithViewingRights' =>
+				$objectOptions[ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ]
+			,
 			'allowDownloadingWithViewingRights'	=> $objectOptions[ObjectOptionsTable::NAME_ALLOW_DOWNLOAD_ON_READ],
 			'membersAccessDisableReason' => $membersAccessDisableReason,
 			'membersAccess' => $this->processActionShowSharingDetailChangeRights($object, $membersAccessDisableReason),
-			'publicLink' => $isFolder ? null : $this->getPublicLinkData($object, $onlyRead, $isObjectEditable),
+			'publicLink' => $this->getPublicLinkData(
+				$object,
+				$isObjectEditable,
+				$securityContext,
+			),
 		];
 	}
 
-	protected function setPublicLinkRights(File $file, bool $onlyRead, bool $canEdit): ?array
+	protected function setPublicLinkRights(
+		BaseObject $baseObject,
+		bool $canEdit,
+		Disk\Security\SecurityContext $securityContext,
+	): ?array
 	{
-		$realFile = $file->getRealObject();
-		$checkManageExternalLinkError = $this->checkManageExternalLink($realFile, $onlyRead);
+		$realObject = $baseObject->getRealObject();
+		$checkManageExternalLinkError = $this->checkManageExternalLink($realObject, $securityContext);
 
 		if ($checkManageExternalLinkError instanceof ExternalLinkDisableReason)
 		{
@@ -262,19 +296,32 @@ final class AccessRights extends Engine\Controller
 		}
 
 		$data = $this->getRequest()->getJsonList()->toArray();
-		$extLink = $this->externalLinkProvider->getForUse($realFile->getId());
+		$extLink = $this->externalLinkProvider->getForUse($realObject->getId());
 		$enabled = boolval($data['enabled'] ?? false);
-		$isObjectEditable = $canEdit && $this->isObjectEditable($realFile);
+		$isObjectEditable = $canEdit && $this->isObjectEditable($realObject);
 		$settingsFields = ['rights', 'canDownloadWithReadAccess', 'newPassword', 'publicLinkTtl'];
 
 		if (!$enabled)
 		{
 			if ($extLink)
 			{
-				$extLink->delete();
+				$externalLinkId = (int)$extLink->getId();
+				if ($extLink->delete())
+				{
+					Application::getInstance()->addBackgroundJob(
+						static function () use ($realObject, $externalLinkId) {
+							$service = new OnlyOfficeSessionTerminationService($realObject);
+							$service->terminateSessionsByExternalLink($externalLinkId);
+						},
+					);
+				}
 			}
 
-			return $this->getPublicLinkData($realFile, $onlyRead, $isObjectEditable); // todo: work on return values
+			return $this->getPublicLinkData(
+				$realObject,
+				$isObjectEditable,
+				$securityContext,
+			);
 		}
 
 		if ($extLink && array_key_exists('canEditSettings', $data))
@@ -334,15 +381,15 @@ final class AccessRights extends Engine\Controller
 				$addData['DEATH_TIME'] = DateTime::createFromTimestamp($publicLinkTtl);
 			}
 
-			$extLink = $realFile->addExternalLink($addData);
+			$extLink = $realObject->addExternalLink($addData);
 			if (!$extLink)
 			{
-				$this->addErrors($realFile->getErrors());
+				$this->addErrors($realObject->getErrors());
 
 				return null;
 			}
 
-			return $this->getPublicLinkData($realFile, $onlyRead, $isObjectEditable);
+			return $this->getPublicLinkData($realObject, $isObjectEditable, $securityContext);
 		}
 
 		if ($isObjectEditable && isset($data['rights']))
@@ -387,7 +434,7 @@ final class AccessRights extends Engine\Controller
 			}
 		}
 
-		return $this->getPublicLinkData($realFile, $onlyRead, $isObjectEditable);
+		return $this->getPublicLinkData($realObject, $isObjectEditable, $securityContext);
 	}
 
 	private function hasAnyKey(array $data, array $keys): bool
@@ -412,7 +459,7 @@ final class AccessRights extends Engine\Controller
 
 	/** @see DiskFolderListAjaxController::processActionShowSharingDetailChangeRights() */
 	private function processActionShowSharingDetailChangeRights(
-		File|Folder $object,
+		BaseObject $object,
 		?MembersAccessDisableReason $disableReason,
 	)
 	{
@@ -420,7 +467,7 @@ final class AccessRights extends Engine\Controller
 		$securityContext = $object->getStorage()?->getCurrentUserSecurityContext();
 		if (!$securityContext || !$object->canRead($securityContext))
 		{
-			return false;
+			return $this->getUnifiedLinkOnlyMembersAccess($object);
 		}
 		//user has only read right. And he can't see on another sharing
 		if (!$object->canShare($securityContext) && !$object->canChangeRights($securityContext))
@@ -433,13 +480,15 @@ final class AccessRights extends Engine\Controller
 					'name' => $user->getFormattedName(),
 					'right' => $rightsManager->getPseudoMaxTaskByObjectForUser($object, $user->getId()),
 					'avatar' => $user->getAvatarSrc(),
+					'ownAvatar' => $user->getOwnAvatarSrc(),
 					'type' => 'users',
+					'memberType' => SharingMemberType::forUser($user)?->value,
 				)
 			);
 		}
 		else
 		{
-			$entityList = $object->getMembersOfSharing();
+			$entityList = self::sortMembersByGrantOrder($object->getMembersOfSharing());
 		}
 
 		$selected = array();
@@ -487,12 +536,32 @@ final class AccessRights extends Engine\Controller
 
 		$realObject = $object->getRealObject();
 
-		if ($realObject instanceof File && $realObject->supportsUnifiedLink())
+		if ($realObject->supportsUnifiedLink())
 		{
 			$response['unifiedLink'] = $this->getUnifiedLinkData($realObject);
 		}
 
 		return $response;
+	}
+
+	/**
+	 * Orders members the way the access was granted, which is the order the user picked them in.
+	 * {@see BaseObject::getMembersOfSharing()} walks entity types one after another, so a user added
+	 * between two departments lands after both of them once the popup reloads the rights.
+	 * Only this popup is reordered: the same list is served to the file grid, the folder list and the
+	 * file view panel, and those keep the grouping by type.
+	 * A member with no sharing id keeps its place relative to the others: sorting is stable since PHP 8.
+	 * @param array $members Members of sharing.
+	 * @return array
+	 */
+	private static function sortMembersByGrantOrder(array $members): array
+	{
+		usort(
+			$members,
+			static fn(array $a, array $b): int => (int)($a['sharingId'] ?? 0) <=> (int)($b['sharingId'] ?? 0),
+		);
+
+		return $members;
 	}
 
 	protected function getOwner(BaseObject $object): array
@@ -516,27 +585,92 @@ final class AccessRights extends Engine\Controller
 		];
 	}
 
-	private function getUnifiedLinkData(File $object): array
+	/**
+	 * Visitor without direct rights sees no members, but still has to get the link he came by.
+	 */
+	private function getUnifiedLinkOnlyMembersAccess(BaseObject $object): array|false
 	{
-		$link = Driver::getInstance()->getUrlManager()->getUnifiedLink($object, [
-			'absolute' => true,
-		]);
+		$realObject = $object->getRealObject();
+		if (!$realObject->supportsUnifiedLink())
+		{
+			return false;
+		}
+
+		$parentFoldersAccessLevel = $this->getUnifiedLinkParentFoldersAccessLevel($realObject);
+		$accessLevel = $this->getUnifiedLinkCurrentAccessLevel($realObject, $parentFoldersAccessLevel);
+		if ($accessLevel === UnifiedLinkAccessLevel::Denied)
+		{
+			return false;
+		}
 
 		return [
-			'link' => $link,
-			'currentAccessLevel' => $this->getUnifiedLinkCurrentAccessLevel($object),
-			'availableAccessLevels' => array_map(static fn (UnifiedLinkAccessLevel $accessLevel) => [
-				'value' => $accessLevel->value,
-				'name' => $accessLevel->getTitle(),
-			], UnifiedLinkAccessLevel::cases()),
+			'members' => [],
+			'canChangeRights' => false,
+			'unifiedLink' => $this->getUnifiedLinkData($realObject, $accessLevel),
 		];
 	}
 
-	private function getUnifiedLinkCurrentAccessLevel(File $object): UnifiedLinkAccessLevel
+	private function getUnifiedLinkData(
+		BaseObject $baseObject,
+		?UnifiedLinkAccessLevel $accessLevel = null,
+	): array
+	{
+		$link = Driver::getInstance()->getUrlManager()->getUnifiedLink($baseObject, [
+			'absolute' => true,
+		]);
+
+		$parentFoldersAccessLevel = $this->getUnifiedLinkParentFoldersAccessLevel($baseObject);
+
+		return [
+			'link' => $link,
+			'currentAccessLevel' => $accessLevel
+				?? $this->getUnifiedLinkCurrentAccessLevel($baseObject, $parentFoldersAccessLevel)
+			,
+			'availableAccessLevels' => array_map(static fn (UnifiedLinkAccessLevel $accessLevel) => [
+				'value' => $accessLevel->value,
+				'name' => $accessLevel->getTitle(),
+			], $this->getUnifiedLinkAvailableAccessLevels($parentFoldersAccessLevel)),
+		];
+	}
+
+	protected function getUnifiedLinkParentFoldersAccessLevel(BaseObject $baseObject): UnifiedLinkAccessLevel
 	{
 		$userId = (int)CurrentUser::get()->getId();
+		// An anonymous request resolves to the system user, who is an intranet one by definition
+		// and would be granted the level of the link.
+		if ($userId <= 0)
+		{
+			return UnifiedLinkAccessLevel::Denied;
+		}
 
-		return (new UnifiedLinkAccessCheckHandler($userId))->check($object);
+		return (new UnifiedLinkParentFoldersAccessCheckHandler($userId))->check($baseObject);
+	}
+
+	protected function getUnifiedLinkAvailableAccessLevels(UnifiedLinkAccessLevel $parentFoldersAccessLevel): array
+	{
+		return array_values(array_filter(
+			UnifiedLinkAccessLevel::cases(),
+			static fn (UnifiedLinkAccessLevel $accessLevel): bool => $accessLevel->value >= $parentFoldersAccessLevel->value,
+		));
+	}
+
+	protected function getUnifiedLinkCurrentAccessLevel(
+		BaseObject $baseObject,
+		UnifiedLinkAccessLevel $parentFoldersAccessLevel,
+	): UnifiedLinkAccessLevel
+	{
+		$userId = (int)CurrentUser::get()->getId();
+		if ($userId <= 0)
+		{
+			return UnifiedLinkAccessLevel::Denied;
+		}
+
+		$currentAccessLevel = (new UnifiedLinkAccessCheckHandler($userId))->check($baseObject);
+
+		return $parentFoldersAccessLevel->value > $currentAccessLevel->value
+			? $parentFoldersAccessLevel
+			: $currentAccessLevel
+		;
 	}
 
 	/**
@@ -572,11 +706,11 @@ final class AccessRights extends Engine\Controller
 	}
 
 	protected function processActionChangeSharingAndRights(
-		File|Folder $object,
+		BaseObject $object,
 		Disk\Security\SecurityContext $securityContext,
 	)
 	{
-		Driver::getInstance()->getTrackedObjectManager()->refresh($object);
+		Driver::getInstance()->getTrackedObjectManager()->refresh($object, $this->getUser()->getId());
 
 		$isBoard = $object instanceof File && $object->getTypeFile() == TypeFile::FLIPCHART;
 		$isFolder = $object instanceof Folder;
@@ -592,6 +726,18 @@ final class AccessRights extends Engine\Controller
 				$unifiedLinkNewAccessLevel = UnifiedLinkAccessLevel::tryFrom($unifiedLinkData['newAccessLevel']);
 				if ($unifiedLinkNewAccessLevel !== null)
 				{
+					if (!$this->isUnifiedLinkAccessLevelAllowed($object->getRealObject(), $unifiedLinkNewAccessLevel))
+					{
+						$this->addError(new Error(
+							message: 'Access level is lower than allowed.',
+							code: 'DISK_UNIFIED_LINK_ACCESS_LEVEL_RESTRICTED',
+						));
+
+						$this->sendJsonErrorResponse([
+							'unifiedLinkChangeError' => true,
+						]);
+					}
+
 					$result = (new SetAccessCommand($object->getRealObjectId(), $unifiedLinkNewAccessLevel))->run();
 
 					if ($result->isSuccess())
@@ -787,6 +933,14 @@ final class AccessRights extends Engine\Controller
 		}
 	}
 
+	protected function isUnifiedLinkAccessLevelAllowed(
+		BaseObject $baseObject,
+		UnifiedLinkAccessLevel $accessLevel,
+	): bool
+	{
+		return $accessLevel->value >= $this->getUnifiedLinkParentFoldersAccessLevel($baseObject)->value;
+	}
+
 	/**
 	 * @param BaseObject $object
 	 * @return void
@@ -968,12 +1122,26 @@ final class AccessRights extends Engine\Controller
 		return null;
 	}
 
-	protected function checkManageExternalLink(File $file, bool $onlyRead): ?ExternalLinkDisableReason
+	protected function checkManageExternalLink(
+		BaseObject $baseObject,
+		Disk\Security\SecurityContext $securityContext,
+	): ?ExternalLinkDisableReason
 	{
-		$isBoardType = (int)$file->getTypeFile() === TypeFile::BOARD;
-		$featureName = $isBoardType ? 'disk_board_external_link' : 'disk_manual_external_link';
+		if ($baseObject instanceof Folder)
+		{
+			$featureName = 'disk_manual_external_folder';
+		}
+		elseif ($baseObject instanceof File)
+		{
+			$isBoardType = (int)$baseObject->getTypeFile() === TypeFile::BOARD;
+			$featureName = $isBoardType ? 'disk_board_external_link' : 'disk_manual_external_link';
+		}
+		else
+		{
+			$featureName = null;
+		}
 
-		if (!Bitrix24Manager::isFeatureEnabled($featureName))
+		if (is_string($featureName) && !Bitrix24Manager::isFeatureEnabled($featureName))
 		{
 			return ExternalLinkDisableReason::Feature;
 		}
@@ -983,18 +1151,9 @@ final class AccessRights extends Engine\Controller
 			return ExternalLinkDisableReason::Option;
 		}
 
-		if ($onlyRead)
+		if (!$baseObject->canManageExternalLink($securityContext))
 		{
-			$objectOptions = $file->getObjectOptions();
-
-			$allowManagePublicAccessWithViewingRights =
-				$objectOptions[ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ]
-			;
-
-			if (!$allowManagePublicAccessWithViewingRights)
-			{
-				return ExternalLinkDisableReason::FileOption;
-			}
+			return ExternalLinkDisableReason::ObjectOption;
 		}
 
 		return null;

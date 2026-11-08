@@ -8,6 +8,7 @@ use Bitrix\Main\Localization\Loc;
 if(!\Bitrix\Main\Loader::includeModule('rpa'))
 {
 	ShowError(\Bitrix\Main\Localization\Loc::getMessage('RPA_MODULE_ERROR'));
+
 	return;
 }
 
@@ -63,6 +64,7 @@ class RpaRouterComponent extends Bitrix\Rpa\Components\Base
 		{
 			$this->getApplication()->SetTitle(\Bitrix\Main\Localization\Loc::getMessage('RPA_TOP_PANEL_PANEL'));
 			$this->includeComponentTemplate();
+
 			return;
 		}
 
@@ -82,6 +84,10 @@ class RpaRouterComponent extends Bitrix\Rpa\Components\Base
 		$this->arResult['componentName'] = $componentName;
 		$this->arResult['componentParameters'] = $parseResult->getComponentParameters();
 		$this->arResult['templateName'] = $parseResult->getTemplateName();
+		$this->arResult['restoreItemSlider']
+			= $componentName === 'bitrix:rpa.item.detail'
+			&& Main\Application::getInstance()->getContext()->getRequest()->get('__rpa_slider_restore') === '1'
+			&& empty(Main\Application::getInstance()->getContext()->getRequest()->get('IFRAME'));
 
 		$this->includeComponentTemplate();
 	}

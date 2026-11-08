@@ -19,6 +19,7 @@ class IncomingWebhookDtoMapper
 		$dto->dateCreate = $webhook->getDateCreate()?->toString();
 		$dto->userId = $webhook->getUserId();
 		$dto->attributes = $this->mapExternalAttributes($webhook)->toArray();
+		$dto->dateExpire = $webhook->getDateExpire()?->format('Y-m-d');
 
 		$dto->url = \CRestUtil::getWebhookEndpoint($webhook->getPassword(), $webhook->getUserId());
 
@@ -49,6 +50,7 @@ class IncomingWebhookDtoMapper
 		$dto->dateCreate = $webhook->getDateCreate()?->toString();
 		$dto->userId = $webhook->getUserId();
 		$dto->url = $webhook->getWebhookUrl();
+		$dto->dateExpire = $webhook->getDateExpire()?->format('Y-m-d');
 
 		return $dto;
 	}
@@ -61,6 +63,7 @@ class IncomingWebhookDtoMapper
 		$dto->active = false;
 		$dto->userId = null;
 		$dto->attributes = [];
+		$dto->dateExpire = null;
 
 		return $dto;
 	}

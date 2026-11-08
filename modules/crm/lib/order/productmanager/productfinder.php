@@ -163,4 +163,43 @@ trait ProductFinder
 
 		return false;
 	}
+
+	/**
+	 * Search entity product by its own row id.
+	 *
+	 * Rows of products outside the catalog have no PRODUCT_ID to match on, and the basket item
+	 * keeps the row id in its XML_ID.
+	 *
+	 * @param array $productList
+	 * @param int $rowId
+	 * @param array $usedIndexes accumulates used basket items in the format ['productID' => ['basketId1', 'basketId2', ...]].
+	 * In general, you can send a variable with an empty array, as the method is used, it will be filled in.
+	 *
+	 * @return false|int|string
+	 */
+	protected function searchProductByRowId(array $productList, int $rowId, array & $usedIndexes)
+	{
+		if ($rowId === 0)
+		{
+			return false;
+		}
+
+		foreach ($productList as $index => $item)
+		{
+			$productId = (int)($item['PRODUCT_ID'] ?? 0);
+			$usedIndexes[$productId] ??= [];
+			if (in_array($index, $usedIndexes[$productId], true))
+			{
+				continue;
+			}
+
+			if ($rowId === (int)($item['ID'] ?? 0))
+			{
+				$usedIndexes[$productId][] = $index;
+				return $index;
+			}
+		}
+
+		return false;
+	}
 }

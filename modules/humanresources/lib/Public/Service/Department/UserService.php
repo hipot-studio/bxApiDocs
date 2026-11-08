@@ -2,6 +2,7 @@
 
 namespace Bitrix\HumanResources\Public\Service\Department;
 
+use Bitrix\HumanResources\Config\Storage;
 use Bitrix\HumanResources\Exception\WrongStructureItemException;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
 use Bitrix\HumanResources\Item\Collection\NodeMemberCollection;
@@ -10,8 +11,12 @@ use Bitrix\HumanResources\Service\Container;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Item\NodeMember;
+use Bitrix\HumanResources\Model\NodeMemberTable;
 use Bitrix\HumanResources\Util\StructureHelper;
 use Bitrix\Main\DB\SqlQueryException;
+use Bitrix\Main\Loader;
+use Bitrix\Main\ORM\Query\Query;
+use Bitrix\Main\UserTable;
 
 class UserService
 {
@@ -232,6 +237,81 @@ class UserService
 		}
 
 		return InternalContainer::getNodeMemberRepository()->getExistingEntityIds($intIds);
+	}
+
+	/**
+	 * Filters user IDs by the same active department membership rules as {@see isEmployee()}.
+	 *
+	 * Before company structure conversion, UF_DEPARTMENT is checked in one UserTable query.
+	 * After conversion, active DEPARTMENT memberships are checked in one membership query.
+	 * Node activity is deliberately ignored to match {@see isEmployee()}.
+	 *
+	 * @param int[] $userIds
+	 * @return int[]
+	 */
+	public function filterActiveEmployeeIds(array $userIds): array
+	{
+		$userIds = array_values(array_unique(array_map(
+			'intval',
+			array_filter($userIds, static fn($id): bool => is_numeric($id) && (int)$id > 0),
+		)));
+		if (empty($userIds))
+		{
+			return [];
+		}
+
+		if ($this->isCompanyStructureConverted())
+		{
+			$employeeIds = array_column(
+				$this->createActiveDepartmentMemberQuery()
+					->setSelect(['ENTITY_ID'])
+					->whereIn('ENTITY_ID', $userIds)
+					->where('ENTITY_TYPE', MemberEntityType::USER->value)
+					->where('NODE.TYPE', NodeEntityType::DEPARTMENT->value)
+					->where('ACTIVE', true)
+					->setGroup(['ENTITY_ID'])
+					->fetchAll(),
+				'ENTITY_ID',
+			);
+		}
+		else
+		{
+			if (!Loader::includeModule('intranet'))
+			{
+				return [];
+			}
+
+			$employeeIds = array_column(
+				$this->createLegacyEmployeeQuery()
+					->setSelect(['ID'])
+					->whereIn('ID', $userIds)
+					->where('UF_DEPARTMENT', '!=', false)
+					->fetchAll(),
+				'ID',
+			);
+		}
+
+		$employeeIdSet = array_fill_keys(array_map('intval', $employeeIds), true);
+
+		return array_values(array_filter(
+			$userIds,
+			static fn(int $userId): bool => isset($employeeIdSet[$userId]),
+		));
+	}
+
+	protected function isCompanyStructureConverted(): bool
+	{
+		return Storage::instance()->isCompanyStructureConverted();
+	}
+
+	protected function createLegacyEmployeeQuery(): Query
+	{
+		return UserTable::query();
+	}
+
+	protected function createActiveDepartmentMemberQuery(): Query
+	{
+		return NodeMemberTable::query();
 	}
 
 	/**

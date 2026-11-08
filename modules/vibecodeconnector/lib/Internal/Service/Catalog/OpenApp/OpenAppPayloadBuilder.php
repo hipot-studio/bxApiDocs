@@ -4,27 +4,37 @@ declare(strict_types=1);
 
 namespace Bitrix\Vibecodeconnector\Internal\Service\Catalog\OpenApp;
 
-use Bitrix\Main\Security\Random;
 use Bitrix\Vibecodeconnector\Internal\Dto\Catalog\OpenApp\OpenAppPayload;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItem;
 use Bitrix\Vibecodeconnector\Internal\Exception\OpenAppException;
 use Bitrix\Vibecodeconnector\Internal\Integration\Main\MainPortalFieldsProvider;
+use Bitrix\Vibecodeconnector\Internal\Integration\Main\PortalUserProvider;
 use Bitrix\Vibecodeconnector\Internal\Integration\Socialservices\NetworkService;
 use Bitrix\Vibecodeconnector\Internal\Repository\Pairing\PairingRepository;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Transition\TransitionFieldsBuilder;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Transition\TransitionSurface;
 use Bitrix\Vibecodeconnector\Internal\Service\Endpoint\BaseEndpointProvider;
 use Bitrix\Vibecodeconnector\Internal\Service\Endpoint\EndpointResolver;
 
 final class OpenAppPayloadBuilder
 {
+	private readonly TransitionFieldsBuilder $fieldsBuilder;
+
 	public function __construct(
 		private readonly BaseEndpointProvider $baseEndpointProvider = new BaseEndpointProvider(),
 		private readonly PairingRepository $pairingRepository = new PairingRepository(),
-		private readonly MainPortalFieldsProvider $portalFieldsProvider = new MainPortalFieldsProvider(),
-		private readonly NetworkService $networkService = new NetworkService(),
+		MainPortalFieldsProvider $portalFieldsProvider = new MainPortalFieldsProvider(),
+		NetworkService $networkService = new NetworkService(),
+		PortalUserProvider $portalUserProvider = new PortalUserProvider(),
 	) {
+		$this->fieldsBuilder = new TransitionFieldsBuilder(
+			$portalFieldsProvider,
+			$networkService,
+			$portalUserProvider,
+		);
 	}
 
-	public function build(CatalogItem $item, int $userId): OpenAppPayload
+	public function build(CatalogItem $item, int $userId, array $embeddingFields = []): OpenAppPayload
 	{
 		$externalId = trim((string)$item->getExternalId());
 		if ($externalId === '')
@@ -44,33 +54,16 @@ final class OpenAppPayloadBuilder
 			);
 		}
 
-		$fields = [
-			'BX_TYPE' => $this->portalFieldsProvider->getPortalType(),
-			'BX_LICENCE' => $this->portalFieldsProvider->getLicenseCode(),
-			'BX_REGION' => $this->portalFieldsProvider->getLicenseRegion(),
-			'SERVER_NAME' => $this->portalFieldsProvider->getServerName(),
-			'BITRIX_USER_ID' => (string)$userId,
-		];
-
-		if ($this->networkService->isCloudPortal())
-		{
-			$networkUserId = $this->networkService->getUserNetworkId($userId);
-			if ($networkUserId !== null)
-			{
-				$fields['BX_NETWORK_USER_ID'] = $networkUserId;
-			}
-		}
-
-		$fields += [
-			'EXTERNAL_ID' => $externalId,
-			'TS' => (string)time(),
-			'NONCE' => Random::getString(32, true),
-		];
-		$fields['BX_HASH'] = $this->portalFieldsProvider->sign($fields);
+		$fields = $this->fieldsBuilder->build(
+			TransitionSurface::App,
+			$userId,
+			['EXTERNAL_ID' => $externalId] + $embeddingFields,
+		);
 
 		return new OpenAppPayload(
 			(new EndpointResolver($endpointUrl))->microservice() . '/open-app/',
 			$fields,
+			trim((string)$item->getTitle()),
 		);
 	}
 

@@ -213,7 +213,7 @@ abstract class AbstractRelationTaskProvider
 		return ['ids' => $taskIds, 'statuses' => $statuses];
 	}
 
-	public function getTasksWithSubTaskIds(array $ids): TaskCollection
+	public function getTasksWithSubTaskIds(array $ids, int $userId): TaskCollection
 	{
 		Collection::normalizeArrayValuesByInt($ids, false);
 
@@ -222,7 +222,15 @@ abstract class AbstractRelationTaskProvider
 			return new TaskCollection();
 		}
 
+		$ids = $this->filterByReadAccess($ids, $userId);
+
+		if (empty($ids))
+		{
+			return new TaskCollection();
+		}
+
 		$subTaskIds = $this->subTaskRepository->getSubTaskIdsByParentIds($ids);
+		$subTaskIds = $this->filterSubTaskIdsByReadAccess($subTaskIds, $userId);
 
 		return $this->relationTaskMapper->mapSubTaskIdsCollection(
 			ids: $ids,
@@ -236,6 +244,7 @@ abstract class AbstractRelationTaskProvider
 			'id',
 			'title',
 			'responsible',
+			'creator',
 			'deadline',
 			'status',
 			'group',
@@ -251,6 +260,7 @@ abstract class AbstractRelationTaskProvider
 			'id' => 'ID',
 			'title' => 'TITLE',
 			'responsible' => 'RESPONSIBLE_ID',
+			'creator' => 'CREATED_BY',
 			'deadline' => 'DEADLINE',
 			'status' => 'STATUS',
 			'group' => 'GROUP_ID',
@@ -313,6 +323,9 @@ abstract class AbstractRelationTaskProvider
 
 	protected function getUsers(array $tasks): UserCollection
 	{
+		// Only responsible users are hydrated in bulk. RelationTaskMapper exposes the
+		// creator as an id-only user (SC-005) and never reads it from this collection,
+		// so bulk-loading CREATED_BY would be dead weight.
 		$userIds = array_column($tasks, 'RESPONSIBLE_ID');
 
 		Collection::normalizeArrayValuesByInt($userIds, false);

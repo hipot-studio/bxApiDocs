@@ -14,8 +14,6 @@ use Bitrix\Main\Result;
 
 interface SystemFileFieldHandler
 {
-	public function getRestFieldName(): string;
-
 	public function getFieldName(): string;
 
 	public function isMultiple(): bool;

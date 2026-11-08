@@ -54,7 +54,7 @@ class CreateTaskDto
 			description: static::mapString($props, 'description'),
 			creatorId: static::mapInteger($props, 'creatorId'),
 			responsibleId: static::mapInteger($props, 'responsibleId'),
-			deadlineTs: static::mapTimestampWithTimeZone($props, 'deadlineDate'),
+			deadlineTs: static::mapDeadlineTimestamp($props),
 			groupId: static::mapInteger($props, 'groupId'),
 			priority: static::mapBackedEnum($props, 'priority', Priority::class),
 			status: static::mapBackedEnum($props, 'status', Status::class),
@@ -62,5 +62,15 @@ class CreateTaskDto
 			auditorIds: static::mapArray($props, 'auditorIds', 'intval'),
 			parentId: static::mapInteger($props, 'parentTaskId'),
 		);
+	}
+
+	private static function mapDeadlineTimestamp(array $props): ?int
+	{
+		if (static::mapBool($props, 'withoutDeadline') === true)
+		{
+			return 0;
+		}
+
+		return static::mapTimestampWithTimeZone($props, 'deadlineDate');
 	}
 }

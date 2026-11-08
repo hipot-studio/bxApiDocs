@@ -86,6 +86,14 @@ class ValidationService
 			return $result->addError(new BuilderError(BuilderError::EMPTY_ELEMENTS));
 		}
 
+		foreach ($builderData['elements'] as $blockData)
+		{
+			if (!is_array($blockData))
+			{
+				return $result->addError(new BuilderError(BuilderError::INVALID_ELEMENTS));
+			}
+		}
+
 		return $result;
 	}
 }

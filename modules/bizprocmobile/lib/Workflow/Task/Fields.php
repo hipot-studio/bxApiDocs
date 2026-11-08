@@ -15,6 +15,7 @@ class Fields
 	/** @var PendingFile[] */
 	private array $pendingFiles = [];
 	private int $taskId;
+	private ?Converter $converter = null;
 
 	public function __construct(int $taskId)
 	{
@@ -37,26 +38,29 @@ class Fields
 					: null
 			;
 
-			$converter =
+			$this->converter =
 				(new Converter($taskFields, $documentId, $fields))
 					->setContext(Converter::CONTEXT_TASK, ['taskId' => $this->taskId])
-					->toWeb()
+					->beginAttempt($userId)
 			;
 
-			$this->pendingFiles = $converter->getPendingFiles();
-			$fields = $converter->getConvertedValues();
+			$this->converter->toWeb();
+			$this->pendingFiles = $this->converter->getPendingFiles();
+			$fields = $this->converter->getConvertedValues();
 		}
 
 		return $fields;
 	}
 
+	public function compensateAttempt(): \Bitrix\Main\Result
+	{
+		return $this->converter?->compensateAttempt() ?? new \Bitrix\Main\Result();
+	}
+
 	public function savePendingFiles(): void
 	{
-		foreach ($this->pendingFiles as $pendingFile)
-		{
-			$pendingFile->makePersistent();
-		}
-
+		$this->converter?->acceptAttempt();
+		$this->converter?->completeAttempt();
 		$this->pendingFiles = [];
 	}
 }

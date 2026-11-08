@@ -9,6 +9,8 @@ use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Access\Component\PermissionConfig;
 use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
+use Bitrix\BIConnector\Access\Service\TableGroupService;
+use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardGroupTable;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
 use Bitrix\Main;
@@ -87,7 +89,24 @@ class ApacheSupersetConfigPermissionsComponent
 		$this->arResult['USER_GROUPS'] = $configPermissions->getUserGroups();
 		$this->arResult['ACCESS_RIGHTS'] = $configPermissions->getAccessRights();
 		$this->arResult['NEW_GROUP_PERMISSIONS'] = PermissionDictionary::getNewGroupPermissions();
+		$this->arResult['NEW_TABLE_GROUP_PERMISSIONS'] = PermissionDictionary::getNewTableGroupPermissions();
 		$this->initDashboardGroups();
+		$this->initTableGroups();
+	}
+
+	private function initTableGroups(): void
+	{
+		// Without the axis the matrix has no table group section, and the catalog is expensive to build.
+		if (!Feature::isTablePermissionsEnabled())
+		{
+			$this->arResult['TABLE_GROUPS'] = [];
+			$this->arResult['TABLES'] = [];
+
+			return;
+		}
+
+		$this->arResult['TABLE_GROUPS'] = TableGroupService::getGroups();
+		$this->arResult['TABLES'] = TableGroupService::getTables();
 	}
 
 	private function initDashboardGroups(): void

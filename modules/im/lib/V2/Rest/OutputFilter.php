@@ -39,6 +39,7 @@ class OutputFilter
 		'COPILOT_MCP_AUTH_ID',
 		'AI_ASSISTANT_MCP_AUTH_ID',
 		'AI_TASK_TRIGGER_MESSAGE_ID',
+		'AI_TASK_ID',
 	];
 
 	public static function filterForEventLog(array $payload): array

@@ -4,16 +4,35 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Request\Structure;
 
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Form\FormDto;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Dto\DtoField;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\ItemDto;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\ItemDtoGenerator;
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\User\EmployeeDto;
+use Bitrix\Crm\V2\Internal\Service\Item\ItemFieldMapper;
+use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Rest\V3\Exception\InvalidSelectException;
 use Bitrix\Rest\V3\Exception\UnknownDtoPropertyException;
 use Bitrix\Rest\V3\Interaction\Request\Request;
+use Bitrix\Rest\V3\Realisation\Dto\FileDto;
 use Bitrix\Rest\V3\Structure\Structure;
 
 final class SelectStructure extends Structure
 {
+	private const MULTIFIELD_FIELDS = ['phone', 'email', 'web', 'im'];
+
+	private const UTM_FIELDS = ['source', 'medium', 'campaign', 'content', 'term'];
+
+	private const LAST_COMMUNICATION_FIELDS = [
+		'communicationTime',
+		'callTime',
+		'emailTime',
+		'imolTime',
+		'webformTime',
+	];
+
 	/** @var string[] */
 	private array $items = [];
 
@@ -50,6 +69,10 @@ final class SelectStructure extends Structure
 
 			[$fieldName, $nestedFieldName] = array_pad(explode('.', $item, 2), 2, null);
 			$field = $dto->getFields()[$fieldName] ?? null;
+			if ($field === null && self::isCustomFieldDataField($fieldName))
+			{
+				$field = self::addGeneratedCustomFieldDataField($dto, $fieldName);
+			}
 			if (
 				$field === null
 				|| ($availableFields !== [] && !in_array($fieldName, $availableFields, true))
@@ -65,7 +88,7 @@ final class SelectStructure extends Structure
 				continue;
 			}
 
-			self::processNestedField($fieldName, $nestedFieldName, $field, $dto, $structure);
+			self::processNestedField($fieldName, $nestedFieldName, $field, $dto, $structure, $availableFields);
 		}
 
 		return $structure;
@@ -90,8 +113,14 @@ final class SelectStructure extends Structure
 
 		$childDto = self::getOrCreateDto($childDtoClass);
 		self::appendRelationField($structure, $fieldName, $field);
-		$structure->fullRelationFields[$fieldName] = true;
+		if (self::isCrmRelationField($field))
+		{
+			self::appendNestedItem($structure, $fieldName, 'id');
 
+			return;
+		}
+
+		$structure->fullRelationFields[$fieldName] = true;
 		foreach (self::getScalarPropertyFieldNames($childDto) as $childFieldName)
 		{
 			self::appendNestedItem($structure, $fieldName, $childFieldName);
@@ -104,6 +133,7 @@ final class SelectStructure extends Structure
 		DtoField $field,
 		Dto $dto,
 		self $structure,
+		array $availableFields,
 	): void
 	{
 		if (str_starts_with($fieldName, 'UF_') && !str_ends_with($fieldName, '_data'))
@@ -118,9 +148,48 @@ final class SelectStructure extends Structure
 		}
 
 		$childDto = self::getOrCreateDto($childDtoClass);
+		$nestedPath = explode('.', $nestedFieldName);
+		if (count($nestedPath) > 1)
+		{
+			self::processWhitelistedSecondLevelField(
+				$fieldName,
+				$nestedPath,
+				$field,
+				$childDto,
+				$dto,
+				$structure,
+				$availableFields,
+			);
+
+			return;
+		}
+
+		$nestedField = $childDto->getFields()[$nestedFieldName] ?? null;
+		if ($nestedField === null && self::isCustomFieldDataField($nestedFieldName))
+		{
+			$nestedField = self::addGeneratedCustomFieldDataField($childDto, $nestedFieldName);
+		}
 		if (
-			str_contains($nestedFieldName, '.')
-			|| !isset($childDto->getFields()[$nestedFieldName])
+			$nestedField === null
+			|| (
+				$availableFields !== []
+				&& self::isCrmRelationField($field)
+				&& !self::isBaseItemField($nestedFieldName)
+			)
+			|| (
+				self::resolveChildDtoClass($nestedField) !== null
+				&& !($dto instanceof FormDto)
+				&& !(
+					(
+						self::isCrmRelationField($field)
+						&& (
+							self::isAllowedWholeSecondLevelField($nestedFieldName, $nestedField)
+							|| self::isSupportedRelatedItemField($nestedFieldName, $nestedField)
+						)
+					)
+					|| self::isAllowedSecondLevelField($fieldName, $nestedFieldName, $field)
+				)
+			)
 		)
 		{
 			throw new UnknownDtoPropertyException($childDto->getShortName(), $nestedFieldName);
@@ -128,6 +197,159 @@ final class SelectStructure extends Structure
 
 		self::appendRelationField($structure, $fieldName, $field);
 		self::appendNestedItem($structure, $fieldName, $nestedFieldName);
+	}
+
+	private static function isBaseItemField(string $fieldName): bool
+	{
+		return self::getOrCreateDto(ItemDto::class)->getFields()[$fieldName] !== null;
+	}
+
+	/**
+	 * @param string[] $nestedPath
+	 */
+	private static function processWhitelistedSecondLevelField(
+		string $fieldName,
+		array $nestedPath,
+		DtoField $field,
+		Dto $childDto,
+		Dto $parentDto,
+		self $structure,
+		array $availableFields,
+	): void
+	{
+		if (!self::isCrmRelationField($field) || count($nestedPath) !== 2)
+		{
+			throw new UnknownDtoPropertyException($parentDto->getShortName(), $fieldName . '.' . implode('.', $nestedPath));
+		}
+
+		[$nestedFieldName, $secondLevelFieldName] = $nestedPath;
+		$nestedField = $childDto->getFields()[$nestedFieldName] ?? null;
+		if (
+			$nestedField === null
+			|| !self::isSelectableSecondLevelField($nestedFieldName, $secondLevelFieldName, $nestedField)
+		)
+		{
+			throw new UnknownDtoPropertyException($childDto->getShortName(), implode('.', $nestedPath));
+		}
+		if ($availableFields !== [] && !self::isBaseItemField($nestedFieldName))
+		{
+			throw new UnknownDtoPropertyException($childDto->getShortName(), implode('.', $nestedPath));
+		}
+
+		self::appendRelationField($structure, $fieldName, $field);
+		self::appendNestedItem($structure, $fieldName, implode('.', $nestedPath));
+	}
+
+	private static function isSelectableSecondLevelField(
+		string $fieldName,
+		string $nestedFieldName,
+		DtoField $field,
+	): bool
+	{
+		if (self::isAllowedSecondLevelField($fieldName, $nestedFieldName, $field))
+		{
+			return true;
+		}
+
+		return self::isFileDtoField($field)
+			&& in_array($nestedFieldName, ['id', 'name', 'url', 'downloadUrl'], true);
+	}
+
+	private static function isSupportedRelatedItemField(string $fieldName, DtoField $field): bool
+	{
+		return ItemFieldMapper::isDictionaryRelationField($fieldName)
+			|| self::resolveChildDtoClass($field) === EmployeeDto::class
+			|| self::isFileDtoField($field)
+		;
+	}
+
+	private static function isFileDtoField(DtoField $field): bool
+	{
+		return self::resolveChildDtoClass($field) === FileDto::class;
+	}
+
+	private static function isAllowedSecondLevelField(
+		string $fieldName,
+		string $nestedFieldName,
+		DtoField $field,
+	): bool
+	{
+		if (in_array($fieldName, self::MULTIFIELD_FIELDS, true))
+		{
+			return $field->getPropertyType() === DtoCollection::class
+				&& in_array($nestedFieldName, ['id', 'valueTypeId', 'valueType', 'value'], true);
+		}
+
+		if ($fieldName === 'utm')
+		{
+			return in_array($nestedFieldName, self::UTM_FIELDS, true);
+		}
+
+		if ($fieldName === 'lastCommunication')
+		{
+			return in_array($nestedFieldName, self::LAST_COMMUNICATION_FIELDS, true);
+		}
+
+		return false;
+	}
+
+	private static function isAllowedWholeSecondLevelField(string $fieldName, DtoField $field): bool
+	{
+		return (
+			in_array($fieldName, self::MULTIFIELD_FIELDS, true)
+			&& $field->getPropertyType() === DtoCollection::class
+		)
+			|| self::isCustomFieldDataField($fieldName)
+			|| $fieldName === 'utm'
+			|| $fieldName === 'lastCommunication';
+	}
+
+	private static function isCustomFieldDataField(string $fieldName): bool
+	{
+		return str_starts_with($fieldName, 'UF_') && str_ends_with($fieldName, '_data');
+	}
+
+	private static function addGeneratedCustomFieldDataField(Dto $dto, string $fieldName): ?DtoField
+	{
+		$dtoClass = $dto::class;
+		$generator = new ItemDtoGenerator();
+		if (!$generator->isGeneratedDtoClass($dtoClass))
+		{
+			return null;
+		}
+
+		$entityType = $generator->getEntityTypeByGeneratedDtoClass($dtoClass);
+		if ($entityType === null)
+		{
+			return null;
+		}
+
+		$generatedDto = (new ItemDtoGenerator())->generate($entityType->getId());
+		foreach ($generatedDto->fields as $field)
+		{
+			if ($field->getPropertyName() !== $fieldName)
+			{
+				continue;
+			}
+
+			$dto->getFields()->add($field);
+
+			return $field;
+		}
+
+		return null;
+	}
+
+	private static function isCrmRelationField(DtoField $field): bool
+	{
+		$childDtoClass = self::resolveChildDtoClass($field);
+		if ($childDtoClass === null)
+		{
+			return false;
+		}
+
+		return is_a($childDtoClass, ItemDto::class, true)
+			|| (new ItemDtoGenerator())->isGeneratedDtoClass($childDtoClass);
 	}
 
 	private static function resolveChildDtoClass(DtoField $field): ?string

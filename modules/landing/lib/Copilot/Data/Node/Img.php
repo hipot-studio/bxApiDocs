@@ -464,7 +464,7 @@ class Img extends Node
 		}
 
 		// todo: need rights?
-		$rightsBefore = Rights::isOn();
+		$rightsBefore = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 
 		$dataToSave = [];

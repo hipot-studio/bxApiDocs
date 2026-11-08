@@ -4,7 +4,7 @@ namespace Bitrix\Calendar\Application\Command;
 
 class UpdateEventCommand implements Command, BusyAttendees
 {
-	private bool $checkLocationOccupancy;
+	private string $occupancyCheckMode;
 	private int $requestUid;
 	private bool $sendInvitesAgain;
 	private array $ufFields;
@@ -74,7 +74,7 @@ class UpdateEventCommand implements Command, BusyAttendees
 		array $ufFields,
 		bool $sendInvitesAgain,
 		int $requestUid,
-		bool $checkLocationOccupancy,
+		string $occupancyCheckMode,
 		?int $maxAttendees,
 	)
 	{
@@ -111,13 +111,13 @@ class UpdateEventCommand implements Command, BusyAttendees
 		$this->ufFields = $ufFields;
 		$this->sendInvitesAgain = $sendInvitesAgain;
 		$this->requestUid = $requestUid;
-		$this->checkLocationOccupancy = $checkLocationOccupancy;
+		$this->occupancyCheckMode = $occupancyCheckMode;
 		$this->maxAttendees = $maxAttendees;
 	}
 
-	public function isCheckLocationOccupancy(): bool
+	public function getOccupancyCheckMode(): string
 	{
-		return $this->checkLocationOccupancy;
+		return $this->occupancyCheckMode;
 	}
 
 	public function getRequestUid(): int

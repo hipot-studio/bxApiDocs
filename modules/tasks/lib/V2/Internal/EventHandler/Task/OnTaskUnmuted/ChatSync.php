@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\EventHandler\Task\OnTaskUnmuted;
 
-use Bitrix\Im\Chat;
 use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskUnmutedEvent;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
+use Bitrix\Tasks\V2\Internal\Logger;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
 
 class ChatSync
 {
 	public function __construct(
 		private readonly ChatRepositoryInterface $repository,
+		private readonly Chat $chat,
+		private readonly Logger $logger,
 	)
 	{
 	}
@@ -27,10 +30,21 @@ class ChatSync
 			return;
 		}
 
-		Chat::mute(
-			action: false,
-			chatId: $chatId,
-			userId: $event->user->id,
-		);
+		try
+		{
+			if (!$this->chat->muteChat($chatId, $event->user->id, false))
+			{
+				$this->logger->logWarning([
+					'message' => 'Could not sync task chat unmute',
+					'taskId' => $event->task->id,
+					'chatId' => $chatId,
+					'userId' => $event->user->id,
+				]);
+			}
+		}
+		catch (\Throwable $e)
+		{
+			$this->logger->logError($e);
+		}
 	}
 }

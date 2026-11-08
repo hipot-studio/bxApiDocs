@@ -9,6 +9,10 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Timeline\Entity\NoteTable;
+use Bitrix\Crm\Timeline\LogMessage\TodoCreatedActivityData;
+use Bitrix\Crm\V2\Internal\Service\Activity\Provider\ProviderRegistry;
+use Bitrix\Crm\V2\Internal\Service\Activity\Provider\TimelineCapabilitySet;
+use Bitrix\Crm\V2\Internal\Service\Activity\Provider\TimelineParticipationInterface;
 use Bitrix\Main;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\Loc;
@@ -28,6 +32,10 @@ class ActivityController extends EntityController
 	private static $userID = null;
 	/** @var  \CCrmPerms|null */
 	private static $userPermissions = null;
+	/** @var array|null the identifiers of the providers whose activities belong in the timeline */
+	private static ?array $providersOfTheTimeline = null;
+	/** @var array<string, true>|null the identifiers of the providers this controller serves, as a set */
+	private static ?array $providersServedByTheController = null;
 
 	//region EntityController
 	public function getEntityTypeID()
@@ -107,14 +115,24 @@ class ActivityController extends EntityController
 				]
 			);
 
+			$scheduledData = $pullEventData[$ownerID];
+			if (empty($scheduledData['BINDINGS']) || !is_array($scheduledData['BINDINGS']))
+			{
+				$scheduledData['BINDINGS'] = $bindings;
+			}
+
 			foreach($bindings as $binding)
 			{
 				$entityItemIdentifier = Crm\ItemIdentifier::createFromArray($binding);
-				if ($entityItemIdentifier)
+				if (
+					$entityItemIdentifier
+					&& $this->isDetailsPageChannelActive($entityItemIdentifier)
+				)
 				{
-					$this->sendPullEventOnAddScheduled(
+					$scheduledData = $this->prepareScheduledData($scheduledData, $entityItemIdentifier);
+					$this->sendPreparedPullEventOnAddScheduled(
 						$entityItemIdentifier,
-						$pullEventData[$ownerID],
+						$scheduledData,
 						$params['CURRENT_USER'] ?? null
 					);
 				}
@@ -215,15 +233,25 @@ class ActivityController extends EntityController
 					? null
 					: (DateTime::createFromUserTime($fields['DEADLINE'])->getTimestamp())
 			);
-			$activityData = [
-				'DESCRIPTION' => $fields['DESCRIPTION'] ?? '',
-				'ASSOCIATED_ENTITY_ID' => $fields['ASSOCIATED_ENTITY_ID'],
-				'DEADLINE_TIMESTAMP' => $deadlineTimestamp,
-			];
-			if ($duration)
-			{
-				$activityData['DURATION'] = $duration;
-			}
+			$activityData = TodoCreatedActivityData::fromArray(
+				array_merge(
+					[
+						TodoCreatedActivityData::FIELD_DESCRIPTION => '',
+						TodoCreatedActivityData::FIELD_DESCRIPTION_TYPE => \CCrmContentType::BBCode,
+						TodoCreatedActivityData::FIELD_ASSOCIATED_ENTITY_ID => 0,
+						TodoCreatedActivityData::FIELD_DEADLINE_TIMESTAMP => $deadlineTimestamp,
+						TodoCreatedActivityData::FIELD_DURATION => $duration,
+					],
+					array_intersect_key(
+						$fields,
+						array_flip([
+							TodoCreatedActivityData::FIELD_DESCRIPTION,
+							TodoCreatedActivityData::FIELD_DESCRIPTION_TYPE,
+							TodoCreatedActivityData::FIELD_ASSOCIATED_ENTITY_ID,
+						])
+					)
+				)
+			);
 
 			$logMessageController = LogMessageController::getInstance();
 			$timelineEntryId = $logMessageController->onCreate(
@@ -233,7 +261,7 @@ class ActivityController extends EntityController
 					'ASSOCIATED_ENTITY_TYPE_ID' => \CCrmOwnerType::Activity,
 					'ASSOCIATED_ENTITY_ID' => $ownerID,
 					'SETTINGS' => [
-						'ACTIVITY_DATA' => $activityData,
+						'ACTIVITY_DATA' => $activityData->toArray(),
 					],
 				],
 				LogMessageType::TODO_CREATED,
@@ -417,6 +445,7 @@ class ActivityController extends EntityController
 						Activity\Provider\Bizproc\Task::getId(),
 						Activity\Provider\RepeatSale::getId(),
 						Activity\Provider\EntityExclusion::getId(),
+						Activity\Provider\Visit::getId(),
 					]
 				)
 			)
@@ -466,6 +495,12 @@ class ActivityController extends EntityController
 			);
 		}
 
+		$scheduledData = $pullEventData[$ownerID];
+		if (empty($scheduledData['BINDINGS']) || !is_array($scheduledData['BINDINGS']))
+		{
+			$scheduledData['BINDINGS'] = $currentBindings;
+		}
+
 		foreach ($currentBindings as $binding)
 		{
 			$entityItemIdentifier = Crm\ItemIdentifier::createFromArray($binding);
@@ -499,11 +534,15 @@ class ActivityController extends EntityController
 						// if activity has been marked as not completed
 						// need to create new scheduled activity instead of update existed:
 					{
-						$this->sendPullEventOnAddScheduled(
-							$entityItemIdentifier,
-							$pullEventData[$ownerID],
-							$params['CURRENT_USER'] ?? null
-						);
+						if ($this->isDetailsPageChannelActive($entityItemIdentifier))
+						{
+							$scheduledData = $this->prepareScheduledData($scheduledData, $entityItemIdentifier);
+							$this->sendPreparedPullEventOnAddScheduled(
+								$entityItemIdentifier,
+								$scheduledData,
+								$params['CURRENT_USER'] ?? null
+							);
+						}
 					}
 					else
 					{
@@ -723,71 +762,64 @@ class ActivityController extends EntityController
 	}
 
 	/**
+	 * The providers whose activities belong in the timeline, as their descriptors in the registry declare it.
+	 *
 	 * @return array
 	 */
 	private static function getActivityProviders(): array
 	{
-		return [
-			Activity\Provider\WebForm::getId(),
-			Activity\Provider\Wait::getId(),
-			Activity\Provider\Request::getId(),
-			Activity\Provider\OpenLine::getId(),
-			Activity\Provider\RestApp::getId(),
-			Activity\Provider\Delivery::getId(),
-			Activity\Provider\Zoom::getId(),
-			Activity\Provider\CallTracker::getId(),
-			Activity\Provider\StoreDocument::getId(),
-			Activity\Provider\Document::getId(),
-			Activity\Provider\SignDocument::getId(),
-			Activity\Provider\SignB2eDocument::getId(),
-			Activity\Provider\ToDo\ToDo::getId(),
-			Activity\Provider\Payment::getId(),
-			Activity\Provider\ConfigurableRestApp::getId(),
-			Activity\Provider\CalendarSharing::getId(),
-			Activity\Provider\Tasks\Comment::getId(),
-			Activity\Provider\Tasks\Task::getId(),
-			Activity\Provider\Bizproc\Workflow::getId(),
-			Activity\Provider\Bizproc\Comment::getId(),
-			Activity\Provider\Bizproc\Task::getId(),
-			Activity\Provider\Booking\Booking::getId(),
-			Activity\Provider\Booking\WaitListItem::getId(),
-			Activity\Provider\RepeatSale::getId(),
-			Activity\Provider\EntityExclusion::getId(),
-		];
+		if (self::$providersOfTheTimeline === null)
+		{
+			self::$providersOfTheTimeline = array_keys(self::getProvidersDeclaringTimelineParticipation(
+				static fn(TimelineCapabilitySet $capabilities): bool => $capabilities->isTimelineSupported()
+			));
+		}
+
+		return self::$providersOfTheTimeline;
 	}
 
 	protected static function isActivityProviderSupported(string $providerId): bool
 	{
-		return in_array(
-			$providerId,
-			[
-				Activity\Provider\WebForm::getId(),
-				Activity\Provider\Wait::getId(),
-				Activity\Provider\Request::getId(),
-				Activity\Provider\OpenLine::getId(),
-				Activity\Provider\Sms::getId(),
-				Activity\Provider\WhatsApp::getId(),
-				Activity\Provider\Telegram::getId(),
-				Activity\Provider\Notification::getId(),
-				Activity\Provider\RestApp::getId(),
-				Activity\Provider\Visit::getId(),
-				Activity\Provider\Zoom::getId(),
-				Activity\Provider\Document::getId(),
-				Activity\Provider\SignDocument::getId(),
-				Activity\Provider\SignB2eDocument::getId(),
-				Activity\Provider\ToDo\ToDo::getId(),
-				Activity\Provider\ConfigurableRestApp::getId(),
-				Activity\Provider\CalendarSharing::getId(),
-				Activity\Provider\Tasks\Comment::getId(),
-				Activity\Provider\Tasks\Task::getId(),
-				Activity\Provider\Bizproc\Workflow::getId(),
-				Activity\Provider\Bizproc\Comment::getId(),
-				Activity\Provider\Bizproc\Task::getId(),
-				Activity\Provider\RepeatSale::getId(),
-				Activity\Provider\EntityExclusion::getId(),
-			],
-			true
-		);
+		if (self::$providersServedByTheController === null)
+		{
+			self::$providersServedByTheController = self::getProvidersDeclaringTimelineParticipation(
+				static fn(TimelineCapabilitySet $capabilities): bool
+					=> $capabilities->isSupportedByTimelineController()
+			);
+		}
+
+		return isset(self::$providersServedByTheController[$providerId]);
+	}
+
+	/**
+	 * The identifiers of the providers whose declaration about the timeline satisfies the given question, as a
+	 * set. Remembered by the callers above for the whole hit, the way the literal lists these two questions used
+	 * to be answered from were constant within one: the composition of the registry does not change either.
+	 *
+	 * NO CONDITION OF A PROVIDER APPLIES HERE, because both questions are asked about activities that are already
+	 * stored - a conference recorded while the module of social services was installed belongs in the timeline
+	 * after it is gone, a deal of repeat sales keeps its place after the feature is switched off, and the literal
+	 * lists held both unconditionally. That is why the maps are read through
+	 * {@see TimelineParticipationInterface} rather than through the composition of the registry.
+	 *
+	 * @param callable(TimelineCapabilitySet): bool $declares
+	 * @return array<string, true>
+	 */
+	private static function getProvidersDeclaringTimelineParticipation(callable $declares): array
+	{
+		/** @var TimelineParticipationInterface $registry */
+		$registry = ServiceLocator::getInstance()->get(ProviderRegistry::SERVICE_CODE);
+
+		$providerIds = [];
+		foreach ($registry->getTimelineParticipants() as $providerId => $descriptor)
+		{
+			if ($declares($descriptor->getTimelineCapabilities()))
+			{
+				$providerIds[$providerId] = true;
+			}
+		}
+
+		return $providerIds;
 	}
 
 	public static function synchronizeBindings($ownerID, array $bindings)
@@ -1138,7 +1170,6 @@ class ActivityController extends EntityController
 				'RECORD_LENGTH' => $recordLength,
 				'RECORD_LENGTH_FORMATTED_SHORT' => Activity\Provider\Visit::getFormattedLength($fields, 'SHORT'),
 				'RECORD_LENGTH_FORMATTED_FULL' => Activity\Provider\Visit::getFormattedLength($fields, 'FULL'),
-				'VK_PROFILE' => Activity\Provider\Visit::getVkProfile($fields)
 			);
 		}
 		elseif($providerID === Activity\Provider\RestApp::getId())
@@ -1319,9 +1350,32 @@ class ActivityController extends EntityController
 	 * @param int|null $userId
 	 * @return void
 	 */
-	public function sendPullEventOnAddScheduled(ItemIdentifier $itemIdentifier, array $scheduledData, int $userId = null): void
+	public function sendPullEventOnAddScheduled(
+		ItemIdentifier $itemIdentifier,
+		array $scheduledData,
+		int $userId = null
+	): void
 	{
-		if (!Container::getInstance()->getTimelinePusher()->isDetailsPageChannelActive($itemIdentifier))
+		if (!$this->isDetailsPageChannelActive($itemIdentifier))
+		{
+			return;
+		}
+		if (!$this->canSendScheduledDataToItem($scheduledData, $itemIdentifier))
+		{
+			return;
+		}
+
+		$scheduledData = $this->prepareScheduledData($scheduledData, $itemIdentifier);
+		$this->sendPreparedPullEventOnAddScheduled($itemIdentifier, $scheduledData, $userId);
+	}
+
+	public function sendPreparedPullEventOnAddScheduled(
+		ItemIdentifier $itemIdentifier,
+		array $scheduledData,
+		int $userId = null
+	): void
+	{
+		if (!$this->canSendScheduledDataToItem($scheduledData, $itemIdentifier))
 		{
 			return;
 		}
@@ -1344,9 +1398,32 @@ class ActivityController extends EntityController
 	 * @param int|null $userId
 	 * @return void
 	 */
-	public function sendPullEventOnUpdateScheduled(ItemIdentifier $itemIdentifier, array $scheduledData, int $userId = null): void
+	public function sendPullEventOnUpdateScheduled(
+		ItemIdentifier $itemIdentifier,
+		array $scheduledData,
+		int $userId = null
+	): void
 	{
-		if (!Container::getInstance()->getTimelinePusher()->isDetailsPageChannelActive($itemIdentifier))
+		if (!$this->isDetailsPageChannelActive($itemIdentifier))
+		{
+			return;
+		}
+		if (!$this->canSendScheduledDataToItem($scheduledData, $itemIdentifier))
+		{
+			return;
+		}
+
+		$scheduledData = $this->prepareScheduledData($scheduledData, $itemIdentifier);
+		$this->sendPreparedPullEventOnUpdateScheduled($itemIdentifier, $scheduledData, $userId);
+	}
+
+	public function sendPreparedPullEventOnUpdateScheduled(
+		ItemIdentifier $itemIdentifier,
+		array $scheduledData,
+		int $userId = null
+	): void
+	{
+		if (!$this->canSendScheduledDataToItem($scheduledData, $itemIdentifier))
 		{
 			return;
 		}
@@ -1359,6 +1436,114 @@ class ActivityController extends EntityController
 		{
 			(new Crm\Service\Timeline\Item\Pusher($item))->sendUpdateEvent();
 		}
+	}
+
+	public function prepareScheduledData(array $scheduledData, ?ItemIdentifier $itemIdentifier = null): array
+	{
+		if (empty($scheduledData))
+		{
+			return $scheduledData;
+		}
+
+		$activityId = (int)($scheduledData['ID'] ?? 0);
+		if ($activityId <= 0)
+		{
+			return $scheduledData;
+		}
+
+		if (!array_key_exists('IS_INCOMING_CHANNEL', $scheduledData))
+		{
+			$isIncomingChannel = \Bitrix\Crm\Activity\IncomingChannel::getInstance()->isIncomingChannel($activityId);
+			$scheduledData['IS_INCOMING_CHANNEL'] = $isIncomingChannel ? 'Y' : 'N';
+		}
+		if (!array_key_exists('LIGHT_COUNTER_AT', $scheduledData))
+		{
+			$lightTimeRepository = ServiceLocator::getInstance()->get('crm.activity.actcounterlighttimerepo');
+			$scheduledData['LIGHT_COUNTER_AT'] = $lightTimeRepository->queryLightTimeByActivityId($activityId);
+		}
+
+		$items = [$activityId => $scheduledData];
+		$needsBoundData =
+			!array_key_exists('NOTE', $items[$activityId])
+			|| !array_key_exists('REST_APP_LAYOUT_BLOCKS', $items[$activityId])
+		;
+		if (
+			$needsBoundData
+			&& $itemIdentifier !== null
+			&& !$this->isActivityBoundToItem($activityId, $itemIdentifier, $scheduledData)
+		)
+		{
+			return $scheduledData;
+		}
+
+		if (!array_key_exists('NOTE', $items[$activityId]))
+		{
+			$items = NoteTable::loadForItems($items, NoteTable::NOTE_TYPE_ACTIVITY);
+			if (isset($items[$activityId]) && !array_key_exists('NOTE', $items[$activityId]))
+			{
+				$items[$activityId]['NOTE'] = null;
+			}
+		}
+		if (
+			isset($items[$activityId])
+			&& !array_key_exists('REST_APP_LAYOUT_BLOCKS', $items[$activityId])
+		)
+		{
+			$items = (new Crm\Timeline\Entity\Repository\RestAppLayoutBlocksRepository())
+				->loadForItems($items, Crm\Timeline\Entity\RestAppLayoutBlocksTable::ACTIVITY_ITEM_TYPE)
+			;
+			if (isset($items[$activityId]) && !array_key_exists('REST_APP_LAYOUT_BLOCKS', $items[$activityId]))
+			{
+				$items[$activityId]['REST_APP_LAYOUT_BLOCKS'] = [];
+			}
+		}
+
+		return $items[$activityId] ?? $scheduledData;
+	}
+
+	private function canSendScheduledDataToItem(array $scheduledData, ItemIdentifier $itemIdentifier): bool
+	{
+		$activityId = (int)($scheduledData['ID'] ?? 0);
+		if ($activityId <= 0)
+		{
+			return false;
+		}
+
+		return $this->isActivityBoundToItem($activityId, $itemIdentifier, $scheduledData);
+	}
+
+	private function isActivityBoundToItem(
+		int $activityId,
+		ItemIdentifier $itemIdentifier,
+		array $scheduledData
+	): bool
+	{
+		foreach (($scheduledData['BINDINGS'] ?? []) as $binding)
+		{
+			$ownerTypeId = (int)($binding['OWNER_TYPE_ID'] ?? $binding['ENTITY_TYPE_ID'] ?? 0);
+			$ownerId = (int)($binding['OWNER_ID'] ?? $binding['ENTITY_ID'] ?? 0);
+			if (
+				$ownerTypeId === $itemIdentifier->getEntityTypeId()
+				&& $ownerId === $itemIdentifier->getEntityId()
+			)
+			{
+				return true;
+			}
+		}
+
+		return (bool)Crm\ActivityBindingTable::query()
+			->setSelect(['ID'])
+			->where('ACTIVITY_ID', $activityId)
+			->where('OWNER_TYPE_ID', $itemIdentifier->getEntityTypeId())
+			->where('OWNER_ID', $itemIdentifier->getEntityId())
+			->setLimit(1)
+			->fetch()
+		;
+	}
+
+	protected function isDetailsPageChannelActive(ItemIdentifier $itemIdentifier): bool
+	{
+		return Container::getInstance()->getTimelinePusher()->isDetailsPageChannelActive($itemIdentifier);
 	}
 
 	/**
@@ -1399,15 +1584,7 @@ class ActivityController extends EntityController
 			return null;
 		}
 
-		$activityId = (int)$scheduledData['ID'];
-		if (!array_key_exists('IS_INCOMING_CHANNEL', $scheduledData))
-		{
-			$scheduledData['IS_INCOMING_CHANNEL'] = \Bitrix\Crm\Activity\IncomingChannel::getInstance()->isIncomingChannel($activityId) ? 'Y' : 'N';
-		}
-		if (!array_key_exists('LIGHT_COUNTER_AT', $scheduledData))
-		{
-			$scheduledData['LIGHT_COUNTER_AT'] = ServiceLocator::getInstance()->get('crm.activity.actcounterlighttimerepo')->queryLightTimeByActivityId($activityId);
-		}
+		$scheduledData = $this->prepareScheduledData($scheduledData, $context->getIdentifier());
 
 		return Container::getInstance()->getTimelineScheduledItemFactory()::createItem(
 			$context,
@@ -1445,15 +1622,6 @@ class ActivityController extends EntityController
 
 		$activityId = (int)$activity['ID'];
 
-		if (!array_key_exists('IS_INCOMING_CHANNEL', $activity))
-		{
-			$activity['IS_INCOMING_CHANNEL'] = \Bitrix\Crm\Activity\IncomingChannel::getInstance()->isIncomingChannel($activityId) ? 'Y' : 'N';
-		}
-		if (!array_key_exists('LIGHT_COUNTER_AT', $activity))
-		{
-			$activity['LIGHT_COUNTER_AT'] = ServiceLocator::getInstance()->get('crm.activity.actcounterlighttimerepo')->queryLightTimeByActivityId($activityId);
-		}
-
 		$isCompleted = ($activity['COMPLETED'] ?? 'N') === 'Y';
 		if ($isCompleted || $forceUpdateHistoryItems)
 		{
@@ -1484,14 +1652,15 @@ class ActivityController extends EntityController
 					'ENABLE_PERMISSION_CHECK' => false,
 				]
 			);
-			$items = NoteTable::loadForItems($items, NoteTable::NOTE_TYPE_ACTIVITY);
-			$items = (new Crm\Timeline\Entity\Repository\RestAppLayoutBlocksRepository())
-				->loadForItems($items, Crm\Timeline\Entity\RestAppLayoutBlocksTable::ACTIVITY_ITEM_TYPE)
-			;
-
 			foreach ($identifiers as $identifier)
 			{
-				$this->sendPullEventOnUpdateScheduled($identifier, $scheduledData, $userId);
+				if (!$this->isDetailsPageChannelActive($identifier))
+				{
+					continue;
+				}
+
+				$scheduledData = $this->prepareScheduledData($scheduledData, $identifier);
+				$this->sendPreparedPullEventOnUpdateScheduled($identifier, $scheduledData, $userId);
 			}
 		}
 	}

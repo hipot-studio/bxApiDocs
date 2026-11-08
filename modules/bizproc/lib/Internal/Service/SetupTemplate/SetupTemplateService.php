@@ -4,8 +4,11 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Internal\Service\SetupTemplate;
 
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
+use Bitrix\Bizproc\Internal\Entity\Activity\SetupTemplateActivity\ItemType;
 use Bitrix\Bizproc\Internal\Event\SetupTemplateUserInputEvent;
 use Bitrix\Bizproc\Internal\Event\SetupTemplateValidationEvent;
+use Bitrix\Bizproc\Internal\Integration\Tasks\DocumentFieldTypes\ProjectFieldStateResolver;
+use Bitrix\Bizproc\Internal\Integration\Tasks\DocumentFieldTypes\ProjectType;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\EventManager;
@@ -20,6 +23,12 @@ class SetupTemplateService
 	private ?ErrorCollection $errors = null;
 	private bool $eventReceived = false;
 	private ?int $eventHandler = null;
+	private ProjectFieldStateResolver $projectFieldStateResolver;
+
+	public function __construct(?ProjectFieldStateResolver $projectFieldStateResolver = null)
+	{
+		$this->projectFieldStateResolver = $projectFieldStateResolver ?? new ProjectFieldStateResolver();
+	}
 
 	/**
 	 * @todo Pass parameters by DTO when there will be more of them
@@ -103,6 +112,93 @@ class SetupTemplateService
 		}
 
 		return \CBPSetupTemplateActivity::filterBlocksByConstantCodes($rawBlocks, $constantCodes);
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $blocks
+	 * @param array<string, mixed> $constantValues
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function enrichProjectConstantBlocks(
+		array $blocks,
+		array $constantValues,
+		int $userId,
+	): array
+	{
+		if ($blocks === [] || $constantValues === [] || $userId <= 0)
+		{
+			return $blocks;
+		}
+
+		$projectConstantValues = $this->collectProjectConstantValues($blocks, $constantValues);
+		$this->projectFieldStateResolver->preloadDirect($projectConstantValues, $userId);
+
+		foreach ($blocks as &$block)
+		{
+			if (!is_array($block['items'] ?? null))
+			{
+				continue;
+			}
+
+			foreach ($block['items'] as &$item)
+			{
+				$constantId = $item['id'] ?? null;
+				if (!$this->isProjectConstantWithValue($item, $constantValues))
+				{
+					continue;
+				}
+
+				$projectState = $this->projectFieldStateResolver->resolveDirect(
+					$constantValues[$constantId],
+					$userId,
+				);
+				if ($projectState === null)
+				{
+					continue;
+				}
+
+				$item['meta']['projectState'] = $projectState;
+			}
+			unset($item);
+		}
+		unset($block);
+
+		return $blocks;
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $blocks
+	 * @param array<string, mixed> $constantValues
+	 * @return list<mixed>
+	 */
+	private function collectProjectConstantValues(array $blocks, array $constantValues): array
+	{
+		$projectConstantValues = [];
+		foreach ($blocks as $block)
+		{
+			foreach ((array)($block['items'] ?? []) as $item)
+			{
+				$constantId = $item['id'] ?? null;
+				if ($this->isProjectConstantWithValue($item, $constantValues))
+				{
+					$projectConstantValues[] = $constantValues[$constantId];
+				}
+			}
+		}
+
+		return $projectConstantValues;
+	}
+
+	private function isProjectConstantWithValue(mixed $item, array $constantValues): bool
+	{
+		$constantId = is_array($item) ? ($item['id'] ?? null) : null;
+
+		return is_array($item)
+			&& ($item['itemType'] ?? null) === ItemType::Constant->value
+			&& ($item['constantType'] ?? null) === ProjectType::getType()
+			&& is_string($constantId)
+			&& array_key_exists($constantId, $constantValues)
+		;
 	}
 
 	/**

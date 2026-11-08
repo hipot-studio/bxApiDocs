@@ -10,6 +10,7 @@ use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Rule\ElementsType;
 use Bitrix\Crm\V2\Public\OwnerType;
 use Bitrix\Main\Validation\Rule\Enum\Type;
 use Bitrix\Rest\V3\Attribute\Editable;
+use Bitrix\Rest\V3\Attribute\ElementType;
 use Bitrix\Rest\V3\Attribute\Filterable;
 use Bitrix\Rest\V3\Dto\Dto;
 
@@ -19,6 +20,7 @@ class ContactCompanyBindingsDto extends Dto
 
 	#[Editable]
 	#[ElementsType(Type::Integer)]
+	#[ElementType('int')]
 	#[ElementsInArrayFrom(
 		ItemProvider::class,
 		['entityTypeId' => OwnerType::COMPANY],

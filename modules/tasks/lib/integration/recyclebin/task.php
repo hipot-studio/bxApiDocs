@@ -299,6 +299,14 @@ class Task implements Recyclebinable
 
 	public static function moveFromRecyclebin(Entity $entity): Result|bool
 	{
+		if (!Bitrix24::checkFeatureEnabled(FeatureDictionary::TASK_RECYCLE_BIN_RESTORE))
+		{
+			$restricted = new Result();
+			$restricted->addError(new Error(Loc::getMessage('TASKS_RECYCLEBIN_RESTORE_RESTRICTED')));
+
+			return $restricted;
+		}
+
 		$result = new Result();
 
 		$taskId = $entity->getEntityId();

@@ -37,6 +37,7 @@ class AddProjectService
 		private readonly ProjectInputNormalizer $projectInputNormalizer,
 		private readonly WorkgroupFieldService $workgroupFieldService,
 		private readonly ProjectNotificationSettingsService $notificationSettingsService,
+		private readonly ProjectAnalytics $projectAnalytics,
 	)
 	{
 	}
@@ -67,7 +68,7 @@ class AddProjectService
 			'ownerId' => $project->ownerId ?? $userId,
 			'name' => $project->name,
 			'description' => $project->description,
-			'features' => $this->projectCreateFeatures->getFeatures(),
+			'features' => $this->projectCreateFeatures->getFeatures($project->features),
 			'permissions' => $project->rawPermissions,
 			'members' => $members !== null
 				? $this->memberEntityMapper->toAccessCodes($members)
@@ -93,6 +94,15 @@ class AddProjectService
 			return (new Result())->addError(new Error('Base feature is invalid'));
 		}
 
+		if ($project->tagNames !== null)
+		{
+			$tagValidation = $this->projectTagRepository->validate($project->tagNames);
+			if (!$tagValidation->isSuccess())
+			{
+				return (new Result())->addErrors($tagValidation->getErrors());
+			}
+		}
+
 		$addCommand = CollabAddCommand::createFromArray($data)
 			->setInitiatorId($userId)
 			->addOption(new ConvertStatusOption(ConvertStatus::NotRequired->value))
@@ -108,10 +118,14 @@ class AddProjectService
 			$addCommand->setDateFinish($project->dates->finish);
 		}
 
+		// Structure nodes are validated one layer down, by CollabService::validateStructureNodes(), so that the
+		// create and the update paths refuse the same composition with the same code.
 		$result = $this->projectCollabAddService->addProject(
 			command: $addCommand,
 			project: $project,
 		);
+
+		$isOpened = $project->privacyType !== PrivacyType::Closed;
 
 		$collab = $result->getCollab();
 		if ($collab === null)
@@ -120,6 +134,12 @@ class AddProjectService
 		}
 
 		$projectId = $collab->getId();
+
+		$this->projectAnalytics->trackSetProjectName(
+			groupId: $projectId,
+			name: $project->name,
+			isOpened: $isOpened,
+		);
 
 		if ($baseFeatureId !== '')
 		{
@@ -132,7 +152,11 @@ class AddProjectService
 
 		if ($project->tagNames !== null)
 		{
-			$this->projectTagRepository->save($projectId, $project->tagNames);
+			$tagResult = $this->projectTagRepository->save($projectId, $project->tagNames);
+			if (!$tagResult->isSuccess())
+			{
+				return (new Result())->addErrors($tagResult->getErrors());
+			}
 		}
 
 		if ($project->publication !== null)

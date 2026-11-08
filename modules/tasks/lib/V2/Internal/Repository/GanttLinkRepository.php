@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Repository;
 
+use Bitrix\Main\ArgumentException;
+use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Fields\ExpressionField;
+use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Internals\Task\ProjectDependenceTable;
 use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLink;
 use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLinkCollection;
@@ -17,7 +20,7 @@ class GanttLinkRepository implements GanttLinkRepositoryInterface
 {
 	public function __construct(
 		private readonly GanttLinkMapper $ganttLinkMapper,
-		private readonly LinkTypeMapper $linkTypeMapper
+		private readonly LinkTypeMapper $linkTypeMapper,
 	)
 	{
 
@@ -29,7 +32,8 @@ class GanttLinkRepository implements GanttLinkRepositoryInterface
 			->setSelect(['TASK_ID', 'DEPENDS_ON_ID', 'TYPE'])
 			->where('TASK_ID', $taskId)
 			->whereIn('DEPENDS_ON_ID', $dependentIds)
-			->fetchAll();
+			->fetchAll()
+		;
 
 		if (empty($rows))
 		{
@@ -45,13 +49,32 @@ class GanttLinkRepository implements GanttLinkRepositoryInterface
 		return $result;
 	}
 
-	public function getTaskLinks(int $taskId): GanttLinkCollection
+	/**
+	 * @throws ArgumentException
+	 * @throws ObjectPropertyException
+	 * @throws SystemException
+	 */
+	public function getTaskLinks(int $taskId, ?int $limit = null, ?int $offset = null): GanttLinkCollection
 	{
-		$rows = ProjectDependenceTable::query()
+		$query = ProjectDependenceTable::query()
 			->setSelect(['TASK_ID', 'DEPENDS_ON_ID', 'TYPE', 'CREATOR_ID'])
 			->where('TASK_ID', $taskId)
-			->exec()
-			->fetchAll();
+			->where('DIRECT', 1)
+			->whereNot('DEPENDS_ON_ID', $taskId)
+			->setOrder(['DEPENDS_ON_ID' => 'ASC'])
+		;
+
+		if ($limit !== null)
+		{
+			$query->setLimit($limit);
+		}
+
+		if ($offset !== null)
+		{
+			$query->setOffset($offset);
+		}
+
+		$rows = $query->exec()->fetchAll();
 
 		if (empty($rows))
 		{
@@ -72,7 +95,8 @@ class GanttLinkRepository implements GanttLinkRepositoryInterface
 			->setSelect(['TASK_ID', 'DEPENDS_ON_ID', 'TYPE', 'CREATOR_ID'])
 			->whereIn('TASK_ID', $taskIds)
 			->exec()
-			->fetchAll();
+			->fetchAll()
+		;
 
 		if (empty($rows))
 		{

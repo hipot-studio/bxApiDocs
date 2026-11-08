@@ -428,7 +428,7 @@ class File
 		if ($fileId > 0 && $assetId > 0)
 		{
 			self::add($fileId, $assetId, self::ENTITY_TYPE_ASSET);
-			self::markAssetRebuilded($assetId);
+			self::markAssetRebuilt($assetId);
 			// todo: res from add and check error
 		}
 	}
@@ -494,11 +494,21 @@ class File
 	}
 
 	/**
-	 * When file rebuilded - delete old files (marked as "need rebuild") for current asset ID (current landing)
+	 * @deprecated Use markAssetRebuilt().
 	 * @param int|int[] $assetId Id of landing to which attached asset.
 	 * @return void
 	 */
 	public static function markAssetRebuilded($assetId): void
+	{
+		self::markAssetRebuilt($assetId);
+	}
+
+	/**
+	 * When file rebuilt - delete old files (marked as "need rebuild") for current asset ID (current landing)
+	 * @param int|int[] $assetId Id of landing to which attached asset.
+	 * @return void
+	 */
+	public static function markAssetRebuilt($assetId): void
 	{
 		if(!is_array($assetId))
 		{

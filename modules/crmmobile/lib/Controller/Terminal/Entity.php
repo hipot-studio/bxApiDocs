@@ -4,11 +4,15 @@ declare(strict_types = 1);
 
 namespace Bitrix\CrmMobile\Controller\Terminal;
 
+use Bitrix\Crm\Engine\ActionFilter\CheckReadPermission;
+use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\CrmMobile\Controller\PrimaryAutoWiredEntity;
 use Bitrix\CrmMobile\Controller\Terminal\Actions\Entity\InitializeAction;
 use Bitrix\CrmMobile\Controller\Terminal\Actions\Entity\CreatePaymentAction;
 use Bitrix\CrmMobile\Controller\Terminal\Actions\Entity\OpenPaymentPayAction;
 use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Main\Engine\AutoWire\Parameter;
 use Bitrix\CrmMobile\Controller\BaseJson;
 use Bitrix\Main\Loader;
 
@@ -24,7 +28,18 @@ Loader::requireModule('seo');
 class Entity extends BaseJson
 {
 	use PrimaryAutoWiredEntity;
-	
+
+	public function getAutoWiredParameters(): array
+	{
+		return [
+			...parent::getAutoWiredParameters(),
+			new Parameter(
+				UserPermissions::class,
+				static fn (): UserPermissions => Container::getInstance()->getUserPermissions(),
+			),
+		];
+	}
+
 	public function configureActions(): array
 	{
 		return [
@@ -48,6 +63,7 @@ class Entity extends BaseJson
 		return [
 			...parent::getDefaultPreFilters(),
 			new ActionFilter\Scope(ActionFilter\Scope::NOT_REST),
+			new CheckReadPermission(),
 		];
 	}
 }

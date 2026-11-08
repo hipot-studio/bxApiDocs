@@ -5,11 +5,15 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 	die();
 }
 
+use Bitrix\Bizproc\Activity\Mixins\TargetDocumentResolverTrait;
+use Bitrix\Bizproc\Public\Activity\Interface\FixedDocumentComplexActivity;
 use Bitrix\Crm;
 use Bitrix\Crm\Activity\Access\CatalogAccessChecker;
 
 class CBPCrmGetProductRowActivity extends CBPActivity
 {
+	use TargetDocumentResolverTrait;
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -55,7 +59,8 @@ class CBPCrmGetProductRowActivity extends CBPActivity
 			$this->writeDebugInfo($this->getDebugInfo(['RowId' => $rowId]));
 		}
 
-		$product = Crm\Automation\Connectors\Product::fetchFromTableByFilter(['ID' => $rowId]);
+		$filter = $this->buildRowFilter($rowId);
+		$product = $filter === null ? null : Crm\Automation\Connectors\Product::fetchFromTableByFilter($filter);
 
 		if (!$product)
 		{
@@ -89,6 +94,32 @@ class CBPCrmGetProductRowActivity extends CBPActivity
 		$this->logReturnProperties();
 
 		return CBPActivityExecutionStatus::Closed;
+	}
+
+	private function buildRowFilter(int $rowId): ?array
+	{
+		if (!$this->parent instanceof FixedDocumentComplexActivity)
+		{
+			return ['ID' => $rowId];
+		}
+
+		$documentId = $this->resolveTargetDocumentId();
+		if (empty($documentId))
+		{
+			return null;
+		}
+
+		[$entityTypeId, $entityId] = CCrmBizProcHelper::resolveEntityId($documentId);
+		if ($entityId <= 0)
+		{
+			return null;
+		}
+
+		return [
+			'=ID' => $rowId,
+			'=OWNER_TYPE' => CCrmOwnerTypeAbbr::ResolveByTypeID($entityTypeId),
+			'=OWNER_ID' => $entityId,
+		];
 	}
 
 	private function logReturnProperties()

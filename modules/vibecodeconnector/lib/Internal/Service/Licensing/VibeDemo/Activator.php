@@ -130,7 +130,7 @@ class Activator
 
 	private function runActivation(ActivationStrategy $strategy, ?int $days): array
 	{
-		if ($strategy->isActivated())
+		if (!$this->isVibePlusTrial($strategy) && $strategy->isActivated())
 		{
 			return $this->activationResult($strategy, $days);
 		}
@@ -196,7 +196,7 @@ class Activator
 
 	private function resolveDuration(ActivationStrategy $strategy, ?int $days): int
 	{
-		if (!$this->marker->isMarked())
+		if ($this->isVibePlusTrial($strategy) || !$this->marker->isMarked())
 		{
 			return $days ?? ActivationStrategy::DEFAULT_DURATION_DAYS;
 		}
@@ -220,15 +220,20 @@ class Activator
 
 	private function markTrialActivated(ActivationStrategy $strategy, ?DateTime $expireDate): void
 	{
-		if (!$this->marker->isMarked())
+		if ($this->hasGrantedTrial($strategy) || !$this->marker->isMarked())
 		{
 			$this->marker->mark(
 				$expireDate,
 				basename(str_replace('\\', '/', $strategy::class)),
-				$strategy instanceof VibePlusEditionTrialStrategy
-					|| $strategy instanceof VibePlusFeatureTrialStrategy,
+				$this->isVibePlusTrial($strategy),
 			);
 		}
+	}
+
+	private function isVibePlusTrial(ActivationStrategy $strategy): bool
+	{
+		return $strategy instanceof VibePlusEditionTrialStrategy
+			|| $strategy instanceof VibePlusFeatureTrialStrategy;
 	}
 
 	private function successResult(bool $granted, ?string $expireDate): Result

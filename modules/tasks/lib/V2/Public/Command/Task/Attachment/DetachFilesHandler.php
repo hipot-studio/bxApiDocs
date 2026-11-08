@@ -19,6 +19,7 @@ class DetachFilesHandler
 			userId: $command->userId,
 			fileIds: $command->fileIds,
 			useConsistency: $command->useConsistency,
+			origin: $command->origin,
 		);
 	}
 }

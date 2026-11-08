@@ -16,6 +16,7 @@ use Bitrix\Main\Text\StringHelper;
 use Bitrix\Rest\V3\Attribute\OrmEntity;
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
+use Bitrix\Rest\V3\Dto\TypeHelper;
 use Bitrix\Rest\V3\Exception\ClassRequireAttributeException;
 use Bitrix\Rest\V3\Exception\Internal\OrmSaveException;
 use Bitrix\Rest\V3\Exception\InvalidPaginationException;
@@ -226,7 +227,7 @@ class OrmRepository extends Repository
 			if ($value !== null && isset($dtoFields[$dtoProperty]))
 			{
 				$propertyType = $dtoFields[$dtoProperty]->getPropertyType();
-				if (is_subclass_of($propertyType, \BackedEnum::class))
+				if (TypeHelper::isBackedEnum($propertyType))
 				{
 					$value = self::coerceOrmValueToEnum($propertyType, $value, $dtoProperty);
 				}

@@ -217,7 +217,7 @@ class Status extends Controller
 				&& is_string($itemInfo['VALUE'])
 				&& mb_strlen($itemInfo['VALUE']) <= 100
 			);
-			$isListHasInvalidValue = !$isValidValue;
+			$isListHasInvalidValue = !$isValidValue || !$this->isValidDescription($itemInfo);
 			if ($isListHasInvalidValue)
 			{
 				break;
@@ -238,6 +238,27 @@ class Status extends Controller
 		return $result;
 	}
 
+	private function isValidDescription(array $itemInfo): bool
+	{
+		foreach (['DESCRIPTION', 'description'] as $fieldName)
+		{
+			if (!array_key_exists($fieldName, $itemInfo) || $itemInfo[$fieldName] === null)
+			{
+				continue;
+			}
+
+			if (
+				!is_string($itemInfo[$fieldName])
+				|| strlen($itemInfo[$fieldName]) > CCrmStatus::DESCRIPTION_MAX_LENGTH
+			)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	protected function getItems(string $statusTypeId): array
 	{
 		$statusList = [];
@@ -250,6 +271,7 @@ class Status extends Controller
 				'ID' => $statusInfo['STATUS_ID'],
 				'XML_ID' => '',
 				'SORT' => $statusInfo['SORT'],
+				'DESCRIPTION' => (string)($statusInfo['DESCRIPTION'] ?? ''),
 			];
 		}
 
@@ -294,6 +316,7 @@ class Status extends Controller
 				$newStatusMap[$statusInfo['ID']] = true;
 				$origFields = $statusMap[$statusInfo['ID']];
 				$updateFields = [];
+				$description = $statusInfo['DESCRIPTION'] ?? $statusInfo['description'] ?? null;
 				if ($origFields['NAME'] !== $statusInfo['VALUE'])
 				{
 					$updateFields['NAME'] = $statusInfo['VALUE'];
@@ -302,6 +325,13 @@ class Status extends Controller
 				else if ($origFields['SORT'] !== $sortString)
 				{
 					$updateFields['SORT'] = $sortString;
+				}
+				if (
+					$description !== null
+					&& (string)($origFields['DESCRIPTION'] ?? '') !== (string)$description
+				)
+				{
+					$updateFields['DESCRIPTION'] = (string)$description;
 				}
 				if (!empty($updateFields))
 				{
@@ -321,6 +351,10 @@ class Status extends Controller
 				}
 				$addFields['NAME'] = $statusInfo['VALUE'];
 				$addFields['SORT'] = $sortString;
+				if (isset($statusInfo['DESCRIPTION']) || isset($statusInfo['description']))
+				{
+					$addFields['DESCRIPTION'] = (string)($statusInfo['DESCRIPTION'] ?? $statusInfo['description']);
+				}
 				$actions['add'][] = ['INDEX' => $index, 'FIELDS' => $addFields];
 			}
 		}

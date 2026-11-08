@@ -15,7 +15,7 @@ class BooleanField extends BaseSimpleField
 
 		foreach ((array)$fieldValue as $value)
 		{
-			$yesNoValue = $this->prepareValue($value);
+			$yesNoValue = $this->prepareValue($value, $displayOptions);
 
 			if (!$this->isMultiple())
 			{
@@ -53,16 +53,27 @@ class BooleanField extends BaseSimpleField
 
 	protected function isChecked($value): bool
 	{
-		return ($value === true || $value === 'Y' || $value === 1 || $value === '1');
+		return $value === true || $value === 'Y' || $value === 1 || $value === '1';
 	}
 
 	/**
 	 * @param $value
+	 * @param Options $displayOptions
 	 * @return string
 	 */
-	protected function prepareValue($value): string
+	protected function prepareValue($value, Options $displayOptions): string
 	{
-		return $this->isChecked($value) ? $this->getYesMessage() : $this->getNoMessage();
+		$message = $this->isChecked($value) ? $this->getYesMessage() : $this->getNoMessage();
+		if ($this->isExportContext() || $displayOptions->isShowOnlyText())
+		{
+			$this->setWasRenderedAsHtml(false);
+
+			return $message;
+		}
+
+		$this->setWasRenderedAsHtml(true);
+
+		return $this->sanitizeString($message);
 	}
 
 	private function getYesMessage(): string

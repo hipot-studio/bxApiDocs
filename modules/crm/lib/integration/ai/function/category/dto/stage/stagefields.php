@@ -19,6 +19,7 @@ final class StageFields extends Dto
 	protected function getValidators(array $fields): array
 	{
 		return [
+			new RequiredField($this, 'name'),
 			new NotEmptyField($this, 'name'),
 
 			new RequiredField($this, 'semantics'),

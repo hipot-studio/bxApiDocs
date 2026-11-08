@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Integration\AI\Dto;
 
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 
 class SingleFieldFillPayload extends Dto
 {
@@ -17,8 +18,10 @@ class SingleFieldFillPayload extends Dto
 	protected function getValidators(array $fields): array
 	{
 		return [
+			new RequiredField($this, 'name'),
 			new NotEmptyField($this, 'name'),
 
+			new RequiredField($this, 'aiValue'),
 			new NotEmptyField($this, 'aiValue'),
 		];
 	}

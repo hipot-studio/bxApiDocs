@@ -211,7 +211,7 @@ class ICloudSectionSynchronizer extends AbstractICloudSynchronizer implements Se
 	 * @throws PersistenceException
 	 * @throws SynchronizerException
 	 */
-	public function sendSection(Section $section): void
+	public function sendSection(Section $section): ?SectionConnection
 	{
 		$ownerId = (int)$section->getOwner()?->getId();
 
@@ -224,7 +224,7 @@ class ICloudSectionSynchronizer extends AbstractICloudSynchronizer implements Se
 
 		if (!$connection)
 		{
-			return;
+			return null;
 		}
 
 		$this->configureLoggerContext($ownerId, $section->getId());
@@ -239,12 +239,14 @@ class ICloudSectionSynchronizer extends AbstractICloudSynchronizer implements Se
 
 			$this->connectionManager->updateConnection($connection);
 
-			return;
+			return $sectionConnection;
 		}
 
-		$this->createSection($section, $connection, $gateway);
+		$sectionConnection = $this->createSection($section, $connection, $gateway);
 
 		$this->connectionManager->updateConnection($connection);
+
+		return $sectionConnection;
 	}
 
 	/**
@@ -255,7 +257,7 @@ class ICloudSectionSynchronizer extends AbstractICloudSynchronizer implements Se
 		Section $section,
 		Connection $connection,
 		ICloudSectionGateway $gateway,
-	): void
+	): SectionConnection
 	{
 		$sectionConnection =
 			(new SectionConnection())
@@ -299,6 +301,8 @@ class ICloudSectionSynchronizer extends AbstractICloudSynchronizer implements Se
 		{
 			$this->sectionConnectionRepository->save($sectionConnection);
 		}
+
+		return $sectionConnection;
 	}
 
 	/**

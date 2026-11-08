@@ -55,6 +55,17 @@ final class Price extends Controller implements EventBindInterface
 
 		if ($r->isSuccess())
 		{
+			$fields['PRODUCT']['ID'] = self::normalizeId($fields['PRODUCT']['ID'] ?? null);
+			$r = $this->checkPermissionIBlockElementPriceModify($fields['PRODUCT']['ID']);
+		}
+
+		if ($r->isSuccess())
+		{
+			$r = $this->checkPricesBelongToProduct($fields['PRODUCT']['ID'], $fields['PRODUCT']['PRICES']);
+		}
+
+		if ($r->isSuccess())
+		{
 			$r = $this->modifyBefore($fields);
 			if($r->isSuccess())
 			{
@@ -123,7 +134,8 @@ final class Price extends Controller implements EventBindInterface
 		}
 
 		$fields = array_merge($price, $fields);
-		return $this->modifySingleProductPrice($fields);
+
+		return $this->modifySingleProductPrice((int)$price['PRODUCT_ID'], $fields);
 	}
 
 	/**
@@ -134,11 +146,11 @@ final class Price extends Controller implements EventBindInterface
 	{
 		unset($fields['ID']);
 
-		return $this->modifySingleProductPrice($fields);
+		return $this->modifySingleProductPrice(self::normalizeId($fields['PRODUCT_ID'] ?? null), $fields);
 	}
 	//endregion
 
-	private function modifySingleProductPrice(array $fields): ?array
+	private function modifySingleProductPrice(int $productId, array $fields): ?array
 	{
 		$resultGroupType = GroupTable::getRowById((int)$fields['CATALOG_GROUP_ID']);
 		if (!$resultGroupType)
@@ -153,7 +165,7 @@ final class Price extends Controller implements EventBindInterface
 			$entityTable::getList(
 				[
 					'filter' => [
-						'=PRODUCT_ID' => $fields['PRODUCT_ID'],
+						'=PRODUCT_ID' => $productId,
 						'=CATALOG_GROUP_ID' => $fields['CATALOG_GROUP_ID'],
 					]
 				]
@@ -162,14 +174,14 @@ final class Price extends Controller implements EventBindInterface
 		;
 
 		$prices = array_combine(array_column($prices, 'ID'), $prices);
-		$prices[$fields['ID']] = $fields;
+		$prices[$fields['ID'] ?? 0] = $fields;
 
 		$r = $this->modifyValidate($prices);
 		if ($r->isSuccess())
 		{
 			$r = $this->modify([
 				'PRODUCT' => [
-					'ID' => $fields['PRODUCT_ID'],
+					'ID' => $productId,
 					'PRICES' => [$fields]
 				]
 			]);
@@ -191,22 +203,29 @@ final class Price extends Controller implements EventBindInterface
 	protected function modify($fields)
 	{
 		$ids = [];
-		$productId = $fields['PRODUCT']['ID'];
+		$productId = self::normalizeId($fields['PRODUCT']['ID']);
 		$prices = $fields['PRODUCT']['PRICES'];
 
 		$r = $this->checkPermissionIBlockElementPriceModify($productId);
+		if ($r->isSuccess())
+		{
+			$r = $this->checkPricesBelongToProduct($productId, $prices);
+		}
+
 		if($r->isSuccess())
 		{
 			foreach ($prices as $price)
 			{
 				if(isset($price['ID']))
 				{
+					$priceId = self::normalizeId($price['ID']);
 					self::normalizeFields($price);
+					$price['ID'] = $priceId;
 
-					$result = \Bitrix\Catalog\Model\Price::update($price['ID'], $price);
+					$result = \Bitrix\Catalog\Model\Price::update($priceId, $price);
 					if($result->isSuccess())
 					{
-						$ids[] = $price['ID'];
+						$ids[] = $priceId;
 					}
 				}
 				else
@@ -240,29 +259,85 @@ final class Price extends Controller implements EventBindInterface
 		return $r;
 	}
 
+	private function checkPricesBelongToProduct(int $productId, array $prices): Result
+	{
+		$result = new Result();
+
+		$priceIds = [];
+		foreach ($prices as $price)
+		{
+			if (!isset($price['ID']))
+			{
+				continue;
+			}
+
+			$priceId = self::normalizeId($price['ID']);
+			if (
+				$priceId === 0
+				|| (isset($price['PRODUCT_ID']) && self::normalizeId($price['PRODUCT_ID']) !== $productId)
+			)
+			{
+				$result->addError($this->getErrorElementPriceModifyAccessDenied());
+
+				return $result;
+			}
+
+			$priceIds[$priceId] = $priceId;
+		}
+
+		if (empty($priceIds))
+		{
+			return $result;
+		}
+
+		$ownPriceCount = PriceTable::getCount([
+			'@ID' => array_values($priceIds),
+			'=PRODUCT_ID' => $productId,
+		]);
+		if ($ownPriceCount !== count($priceIds))
+		{
+			$result->addError($this->getErrorElementPriceModifyAccessDenied());
+		}
+
+		return $result;
+	}
+
 	protected function modifyBefore($fields)
 	{
-		$productId = $fields['PRODUCT']['ID'];
+		$productId = self::normalizeId($fields['PRODUCT']['ID']);
 
 		$ids = [];
 		$prices = $fields['PRODUCT']['PRICES'];
 		foreach ($prices as $price)
 		{
-			$ids[]=$price['ID'];
+			if (isset($price['ID']))
+			{
+				$ids[] = self::normalizeId($price['ID']);
+			}
 		}
 
 		$entityTable = $this->getEntityTable();
 
-		$res = $entityTable::getList(['filter'=>['PRODUCT_ID'=>$productId]]);
+		$res = $entityTable::getList(['filter' => ['=PRODUCT_ID' => $productId]]);
 		while ($item = $res->fetch())
 		{
-			if(in_array($item['ID'], $ids) == false)
+			if (!in_array(self::normalizeId($item['ID']), $ids, true))
 			{
 				$entityTable::delete($item['ID']);
 			}
 		}
 
 		return new Result();
+	}
+
+	private static function normalizeId(mixed $value): int
+	{
+		if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1)
+		{
+			$value = (int)$value;
+		}
+
+		return is_int($value) && $value > 0 ? $value : 0;
 	}
 
 	private static function normalizeFields(array &$fields)
@@ -488,9 +563,26 @@ final class Price extends Controller implements EventBindInterface
 		return new PriceTable();
 	}
 
-	protected function deleteValidate($id)
+	protected function deleteValidate(int $id): Result
 	{
-		return new Result();
+		$price = PriceTable::getRow([
+			'select' => [
+				'ID',
+				'PRODUCT_ID',
+			],
+			'filter' => [
+				'=ID' => $id,
+			],
+		]);
+		if ($price === null)
+		{
+			$result = new Result();
+			$result->addError($this->getErrorEntityNotExists());
+
+			return $result;
+		}
+
+		return $this->checkPermissionIBlockElementPriceModify((int)$price['PRODUCT_ID']);
 	}
 
 	//region checkPermissionController
@@ -539,16 +631,28 @@ final class Price extends Controller implements EventBindInterface
 	//endregion
 
 	//region checkPermissionIBlock
-	private function checkPermissionIBlockElementPriceModify($productId)
+	private function checkPermissionIBlockElementPriceModify(int $productId): Result
 	{
 		$r = new Result();
+
+		if ($productId <= 0)
+		{
+			$r->addError($this->getErrorElementPriceModifyAccessDenied());
+
+			return $r;
+		}
 
 		$iblockId = \CIBlockElement::GetIBlockByID($productId);
 		if(!\CIBlockElementRights::UserHasRightTo($iblockId, $productId, self::IBLOCK_ELEMENT_EDIT_PRICE))
 		{
-			$r->addError(new Error('Access Denied', 200040300030));
+			$r->addError($this->getErrorElementPriceModifyAccessDenied());
 		}
 		return $r;
+	}
+
+	private function getErrorElementPriceModifyAccessDenied(): Error
+	{
+		return new Error('Access Denied', 200040300030);
 	}
 	//endregion
 }

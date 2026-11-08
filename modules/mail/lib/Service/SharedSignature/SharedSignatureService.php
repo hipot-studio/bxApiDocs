@@ -6,6 +6,8 @@ namespace Bitrix\Mail\Service\SharedSignature;
 
 use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Integration\Main\SenderProvider;
+use Bitrix\Mail\Internal\Service\Signature\Image\SignatureImageBindingService;
+use Bitrix\Mail\Internal\Service\Signature\Template\SignatureTemplateCanonicalizationContext;
 use Bitrix\Mail\Internal\Service\Signature\Template\SignatureTemplateProcessor;
 use Bitrix\Mail\Internal\Service\Signature\Template\SignatureTemplateProcessorFactory;
 use Bitrix\Mail\Internals\Entity\SharedSignature;
@@ -32,14 +34,17 @@ class SharedSignatureService
 	private const INTERFACE_OPTION_NAME = 'shared_signature_enabled';
 	private readonly SenderIdentityResolver $senderIdentityResolver;
 	private SignatureTemplateProcessor $templateProcessor;
+	private SignatureImageBindingService $imageBindingService;
 
 	public function __construct(
 		?SenderIdentityResolver $senderIdentityResolver = null,
 		?SignatureTemplateProcessor $templateProcessor = null,
+		?SignatureImageBindingService $imageBindingService = null,
 	)
 	{
 		$this->senderIdentityResolver = $senderIdentityResolver ?? new SenderIdentityResolver();
 		$this->templateProcessor = $templateProcessor ?? SignatureTemplateProcessorFactory::create();
+		$this->imageBindingService = $imageBindingService ?? new SignatureImageBindingService();
 	}
 
 	/**
@@ -292,7 +297,7 @@ class SharedSignatureService
 			return $result;
 		}
 
-		$currentUserId = (int)CurrentUser::get()->getId();
+		$currentUserId = $this->getCurrentUserId();
 		$ownerId = (int)($fields['ownerId'] ?? $currentUserId);
 		if (!$this->canCreate($scope, $ownerId, $currentUserId))
 		{
@@ -301,7 +306,10 @@ class SharedSignatureService
 			return $result;
 		}
 
-		$canonicalizeResult = $this->canonicalizeSignature((string)($fields['signature'] ?? ''));
+		$canonicalizeResult = $this->canonicalizeSignature(
+			(string)($fields['signature'] ?? ''),
+			new SignatureTemplateCanonicalizationContext($currentUserId),
+		);
 		if (!$canonicalizeResult->isSuccess())
 		{
 			$result->addErrors($canonicalizeResult->getErrors());
@@ -309,6 +317,14 @@ class SharedSignatureService
 			return $result;
 		}
 		$fields['signature'] = (string)($canonicalizeResult->getData()['template'] ?? '');
+		$prepareResult = $this->imageBindingService->prepare($fields['signature'], $currentUserId);
+		if (!$prepareResult->isSuccess())
+		{
+			$result->addErrors($prepareResult->getErrors());
+
+			return $result;
+		}
+		$imageIds = $prepareResult->getData()['imageIds'] ?? [];
 
 		$assignments = $this->normalizeAssignmentsForWrite(
 			$scope,
@@ -354,6 +370,15 @@ class SharedSignatureService
 				return $result;
 			}
 
+			$bindingResult = $this->imageBindingService->sync($signatureId, $imageIds);
+			if (!$bindingResult->isSuccess())
+			{
+				$connection->rollbackTransaction();
+				$result->addErrors($bindingResult->getErrors());
+
+				return $result;
+			}
+
 			$connection->commitTransaction();
 
 			$result->setData(['id' => $signatureId]);
@@ -386,6 +411,7 @@ class SharedSignatureService
 	public function update(int $id, array $fields, ?array $assignments = null, bool $allowMailboxRoundTrip = false): Result
 	{
 		$result = new Result();
+		$imageIds = null;
 
 		$signature = SharedSignatureTable::getById($id)->fetchObject();
 		if ($signature === null)
@@ -411,7 +437,7 @@ class SharedSignatureService
 			return $result;
 		}
 
-		$currentUserId = (int)CurrentUser::get()->getId();
+		$currentUserId = $this->getCurrentUserId();
 		$scope = (string)($fields['scope'] ?? $signature->get('SCOPE'));
 		$scopeChanged = array_key_exists('scope', $fields)
 			&& (string)$fields['scope'] !== (string)$signature->get('SCOPE');
@@ -470,7 +496,11 @@ class SharedSignatureService
 
 		if (array_key_exists('signature', $fields))
 		{
-			$canonicalizeResult = $this->canonicalizeSignature((string)$fields['signature']);
+			$currentUserId = $this->getCurrentUserId();
+			$canonicalizeResult = $this->canonicalizeSignature(
+				(string)$fields['signature'],
+				new SignatureTemplateCanonicalizationContext($currentUserId, $id),
+			);
 			if (!$canonicalizeResult->isSuccess())
 			{
 				$result->addErrors($canonicalizeResult->getErrors());
@@ -478,6 +508,14 @@ class SharedSignatureService
 				return $result;
 			}
 			$fields['signature'] = (string)($canonicalizeResult->getData()['template'] ?? '');
+			$prepareResult = $this->imageBindingService->prepare($fields['signature'], $currentUserId, $id);
+			if (!$prepareResult->isSuccess())
+			{
+				$result->addErrors($prepareResult->getErrors());
+
+				return $result;
+			}
+			$imageIds = $prepareResult->getData()['imageIds'] ?? [];
 		}
 
 		$connection = Application::getConnection();
@@ -520,6 +558,18 @@ class SharedSignatureService
 				}
 			}
 
+			if ($imageIds !== null)
+			{
+				$bindingResult = $this->imageBindingService->sync($id, $imageIds);
+				if (!$bindingResult->isSuccess())
+				{
+					$connection->rollbackTransaction();
+					$result->addErrors($bindingResult->getErrors());
+
+					return $result;
+				}
+			}
+
 			$connection->commitTransaction();
 		}
 		catch (\Throwable $e)
@@ -532,9 +582,17 @@ class SharedSignatureService
 		return $result;
 	}
 
-	protected function canonicalizeSignature(string $signature): Result
+	protected function canonicalizeSignature(
+		string $signature,
+		?SignatureTemplateCanonicalizationContext $context = null,
+	): Result
 	{
-		return $this->templateProcessor->canonicalize($signature);
+		return $this->templateProcessor->canonicalize($signature, $context);
+	}
+
+	protected function getCurrentUserId(): int
+	{
+		return (int)CurrentUser::get()->getId();
 	}
 
 	/**
@@ -558,7 +616,7 @@ class SharedSignatureService
 			return $result;
 		}
 
-		if (!$this->canModify($signature))
+		if (!$this->canModify($signature, $this->getCurrentUserId()))
 		{
 			$result->addError(self::accessDeniedError());
 
@@ -578,6 +636,15 @@ class SharedSignatureService
 			{
 				$connection->rollbackTransaction();
 				$result->addErrors($deleteAssignResult->getErrors());
+
+				return $result;
+			}
+
+			$bindingResult = $this->imageBindingService->deleteBySignature($id);
+			if (!$bindingResult->isSuccess())
+			{
+				$connection->rollbackTransaction();
+				$result->addErrors($bindingResult->getErrors());
 
 				return $result;
 			}

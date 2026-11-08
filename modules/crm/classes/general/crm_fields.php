@@ -3,6 +3,7 @@
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Crm\UserField\UserFieldHistory;
+use Bitrix\Crm\UserField\UserFieldLimitError;
 use Bitrix\Iblock\UserField\Types\ElementType;
 use Bitrix\Iblock\UserField\Types\SectionType;
 use Bitrix\Main;
@@ -647,7 +648,22 @@ class CCrmFields
 	public function AddField($arField)
 	{
 		$obUserField = new CUserTypeEntity();
-		$ID = $obUserField->Add($arField);
+		try
+		{
+			$ID = $obUserField->Add($arField);
+		}
+		catch (Throwable $exception)
+		{
+			if (UserFieldLimitError::isCreateLimitError($exception))
+			{
+				$this->SetError(UserFieldLimitError::getAdminExceptionMessage());
+				$this->CheckError();
+
+				return false;
+			}
+
+			throw $exception;
+		}
 		$res = $ID > 0;
 
 		if ($res)
@@ -666,11 +682,16 @@ class CCrmFields
 			$this->cUFM->CleanCache();
 			$this->arUFList = $this->GetUserFields($this->sUFEntityID, 0, LANGUAGE_ID);
 
-			UserFieldHistory::processCreation(CCrmOwnerType::ResolveIDByUFEntityID($this->sUFEntityID), $ID);
+			UserFieldHistory::processCreation(CCrmOwnerType::ResolveIDByUFEntityID($this->sUFEntityID), $ID, false);
 		}
 		else
 		{
 			$ex = $GLOBALS["APPLICATION"]->GetException();
+			if (UserFieldLimitError::isCreateLimitError($ex))
+			{
+				$this->SetError(UserFieldLimitError::getAdminExceptionMessage());
+				$this->CheckError();
+			}
 
 		}
 

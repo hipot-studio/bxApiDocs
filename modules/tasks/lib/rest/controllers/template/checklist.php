@@ -36,10 +36,36 @@ class Checklist extends Base
 			new ExactParameter(
 				CheckListItem::class,
 				'checkListItem',
-				static function ($className, $checkListItemId)
+				function (string $className, int $templateId, int $checkListItemId)
 				{
-					$userId = CurrentUser::get()->getId();
-					$fields = TemplateCheckListFacade::getList([], ['ID' => $checkListItemId])[$checkListItemId];
+					$userId = (int)CurrentUser::get()->getId();
+
+					// the addressed template is checked ahead of the item, so a template the caller may not
+					// read and an item that is not its own end up with the very same errors
+					if (
+						$templateId <= 0
+						|| !TemplateAccessController::can($userId, ActionDictionary::ACTION_TEMPLATE_READ, $templateId)
+					)
+					{
+						$this->errorCollection->add(
+							[new Error(Loc::getMessage('TASKS_REST_TEMPLATE_CHECKLIST_ACCESS_DENIED'))]
+						);
+
+						return null;
+					}
+
+					$filter = ['ID' => $checkListItemId, 'TEMPLATE_ID' => $templateId];
+					$fields = TemplateCheckListFacade::getList([], $filter)[$checkListItemId] ?? [];
+
+					if (!$fields)
+					{
+						// the action declares a non-nullable item, so null makes the binder reject the call
+						$this->errorCollection->add(
+							[new Error(Loc::getMessage('TASKS_REST_TEMPLATE_CHECKLIST_ACCESS_DENIED'))]
+						);
+
+						return null;
+					}
 
 					/** @var ChecklistItem $className */
 					return new $className(0, $userId, TemplateCheckListFacade::class, $fields);
@@ -49,23 +75,17 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
 	 * @return array|null
 	 */
-	public function getAction($templateId, CheckListItem $checkListItem)
+	public function getAction(int $templateId, CheckListItem $checkListItem)
 	{
-		if (!TemplateAccessController::can((int) CurrentUser::get()->getId(), ActionDictionary::ACTION_TEMPLATE_READ, (int) $templateId))
-		{
-			$this->errorCollection->add([new Error(Loc::getMessage('TASKS_REST_TEMPLATE_CHECKLIST_ACCESS_DENIED'))]);
-			return null;
-		}
-
 		return $this->getReturnValue($checkListItem);
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param array $filter
 	 * @param array $select
 	 * @param array $order
@@ -74,9 +94,11 @@ class Checklist extends Base
 	 * @throws NotImplementedException
 	 * @throws SystemException
 	 */
-	public function listAction($templateId, array $filter = [], array $select = [], array $order = [])
+	public function listAction(int $templateId, array $filter = [], array $select = [], array $order = [])
 	{
-		if (!TemplateAccessController::can((int) CurrentUser::get()->getId(), ActionDictionary::ACTION_TEMPLATE_READ, (int) $templateId))
+		$userId = (int)CurrentUser::get()->getId();
+
+		if (!TemplateAccessController::can($userId, ActionDictionary::ACTION_TEMPLATE_READ, $templateId))
 		{
 			$this->errorCollection->add([new Error(Loc::getMessage('TASKS_REST_TEMPLATE_CHECKLIST_ACCESS_DENIED'))]);
 			return null;
@@ -94,7 +116,7 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param array $fields
 	 * @return array|null
 	 * @throws ArgumentException
@@ -104,14 +126,21 @@ class Checklist extends Base
 	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function addAction($templateId, array $fields)
+	public function addAction(int $templateId, array $fields)
 	{
+		// the rights are resolved for the addressed template, and this call addresses none
+		if ($templateId <= 0)
+		{
+			$this->errorCollection->add([new Error(Loc::getMessage('TASKS_REST_TEMPLATE_CHECKLIST_ACCESS_DENIED'))]);
+			return null;
+		}
+
 		$addResult = TemplateCheckListFacade::add($templateId, CurrentUser::get()->getId(), $fields);
 		return $this->getReturn($addResult);
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
 	 * @param array $fields
 	 * @return array|null
@@ -122,7 +151,7 @@ class Checklist extends Base
 	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function updateAction($templateId, CheckListItem $checkListItem, array $fields)
+	public function updateAction(int $templateId, CheckListItem $checkListItem, array $fields)
 	{
 		$updateResult = TemplateCheckListFacade::update(
 			$templateId,
@@ -135,14 +164,14 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
 	 * @return bool|null
 	 * @throws ArgumentException
 	 * @throws NotImplementedException
 	 * @throws SystemException
 	 */
-	public function deleteAction($templateId, CheckListItem $checkListItem)
+	public function deleteAction(int $templateId, CheckListItem $checkListItem)
 	{
 		$deleteResult = TemplateCheckListFacade::delete($templateId, CurrentUser::get()->getId(), $checkListItem);
 
@@ -160,7 +189,7 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
 	 * @return array|null
 	 * @throws ArgumentException
@@ -170,14 +199,14 @@ class Checklist extends Base
 	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function completeAction($templateId, CheckListItem $checkListItem)
+	public function completeAction(int $templateId, CheckListItem $checkListItem)
 	{
 		$completeResult = TemplateCheckListFacade::complete($templateId, CurrentUser::get()->getId(), $checkListItem);
 		return $this->getReturn($completeResult);
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
 	 * @return array|null
 	 * @throws ArgumentException
@@ -187,22 +216,22 @@ class Checklist extends Base
 	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function renewAction($templateId, CheckListItem $checkListItem)
+	public function renewAction(int $templateId, CheckListItem $checkListItem)
 	{
 		$renewResult = TemplateCheckListFacade::renew($templateId, CurrentUser::get()->getId(), $checkListItem);
 		return $this->getReturn($renewResult);
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
-	 * @param $beforeItemId
+	 * @param int $beforeItemId
 	 * @return array|null
 	 * @throws ArgumentException
 	 * @throws NotImplementedException
 	 * @throws SystemException
 	 */
-	public function moveBeforeAction($templateId, CheckListItem $checkListItem, $beforeItemId)
+	public function moveBeforeAction(int $templateId, CheckListItem $checkListItem, int $beforeItemId)
 	{
 		$userId = CurrentUser::get()->getId();
 		$position = TemplateCheckListFacade::MOVING_POSITION_BEFORE;
@@ -212,15 +241,15 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
-	 * @param $afterItemId
+	 * @param int $afterItemId
 	 * @return array|null
 	 * @throws ArgumentException
 	 * @throws NotImplementedException
 	 * @throws SystemException
 	 */
-	public function moveAfterAction($templateId, CheckListItem $checkListItem, $afterItemId)
+	public function moveAfterAction(int $templateId, CheckListItem $checkListItem, int $afterItemId)
 	{
 		$userId = CurrentUser::get()->getId();
 		$position = TemplateCheckListFacade::MOVING_POSITION_AFTER;
@@ -270,12 +299,16 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
 	 * @param array $attachmentParameters
 	 * @return array|null
 	 */
-	public function addAttachmentByContentAction($templateId, CheckListItem $checkListItem, array $attachmentParameters)
+	public function addAttachmentByContentAction(
+		int $templateId,
+		CheckListItem $checkListItem,
+		array $attachmentParameters
+	)
 	{
 		$addAttachmentResult = TemplateCheckListFacade::addAttachmentByContent(
 			$templateId,
@@ -288,7 +321,7 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
 	 * @param array $filesIds
 	 * @return array|null
@@ -299,7 +332,7 @@ class Checklist extends Base
 	 * @throws SqlQueryException
 	 * @throws SystemException
 	 */
-	public function addAttachmentsFromDiskAction($templateId, CheckListItem $checkListItem, array $filesIds)
+	public function addAttachmentsFromDiskAction(int $templateId, CheckListItem $checkListItem, array $filesIds)
 	{
 		$addAttachmentsResult = TemplateCheckListFacade::addAttachmentsFromDisk(
 			$templateId,
@@ -312,7 +345,7 @@ class Checklist extends Base
 	}
 
 	/**
-	 * @param $templateId
+	 * @param int $templateId
 	 * @param CheckListItem $checkListItem
 	 * @param array $attachmentsIds
 	 * @return array|null
@@ -323,7 +356,7 @@ class Checklist extends Base
 	 * @throws SystemException
 	 * @throws ObjectPropertyException
 	 */
-	public function removeAttachmentsAction($templateId, CheckListItem $checkListItem, array $attachmentsIds)
+	public function removeAttachmentsAction(int $templateId, CheckListItem $checkListItem, array $attachmentsIds)
 	{
 		$removeAttachmentsResult = TemplateCheckListFacade::removeAttachments(
 			$templateId,

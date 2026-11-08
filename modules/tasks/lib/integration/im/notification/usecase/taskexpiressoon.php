@@ -7,7 +7,7 @@ use Bitrix\Tasks\Integration\Extranet\User;
 use Bitrix\Tasks\Integration\IM\Notification;
 use Bitrix\Tasks\Internals\Notification\Message;
 use Bitrix\Tasks\Internals\TaskObject;
-use Bitrix\Tasks\UI;
+use Bitrix\Tasks\Util\DateTime\RecipientDateTimeFormatter;
 
 class TaskExpiresSoon
 {
@@ -65,9 +65,13 @@ class TaskExpiresSoon
 	private function createNotification(string $locKey, Message $message, TaskObject $task): Notification
 	{
 		$title = new Notification\Task\Title($task);
-		$deadline = clone $task->getDeadline();
-		$deadline->addSecond(\CTimeZone::GetOffset($message->getRecepient()->getId(), true));
-		$formattedDeadline = $deadline->format(UI::getHumanTimeFormat($deadline->getTimestamp()));
+		$recepient = $message->getRecepient();
+		$formattedDeadline = RecipientDateTimeFormatter::formatTimeForRecipient(
+			$task->getDeadline()->getTimestamp(),
+			$recepient->getId(),
+			$recepient->getLang(),
+			true,
+		);
 
 		$notification = new Notification(
 			$locKey,
@@ -81,7 +85,7 @@ class TaskExpiresSoon
 		$notification->addTemplate(
 			new Notification\Template(
 				'#TASK_TITLE#',
-				$title->getFormatted($message->getRecepient()->getLang())
+				$title->getFormatted($recepient->getLang())
 			)
 		);
 

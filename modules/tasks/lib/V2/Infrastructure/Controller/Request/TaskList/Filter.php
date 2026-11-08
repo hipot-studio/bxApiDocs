@@ -26,12 +26,32 @@ class Filter
 
 	public static function createFromArray(array $parameters): self
 	{
+		$parameters = array_map(
+			static fn ($condition) => is_array($condition)
+				? [
+					self::normalizeStringValue($condition['field'] ?? $condition[0] ?? ''),
+					self::normalizeStringValue($condition['operator'] ?? $condition[1] ?? ''),
+					$condition['value'] ?? $condition[2] ?? null,
+				]
+				: ['', '', null],
+			$parameters,
+		);
+
 		$preparedParameters = array_map(
-			static fn ($condition) => new FilterItem(...$condition),
+			static fn ($condition) => new FilterItem(
+				(string)$condition[0],
+				$condition[1],
+				$condition[2],
+			),
 			$parameters,
 		);
 
 		return new self($preparedParameters);
+	}
+
+	private static function normalizeStringValue(mixed $value): string
+	{
+		return is_scalar($value) ? (string)$value : '';
 	}
 
 	/**
@@ -47,7 +67,7 @@ class Filter
 			if ($mappedField === null)
 			{
 				throw new ValidationException([
-					new ValidationError(sprintf('Unknown field %s', $item->field))
+					new ValidationError(sprintf('Unknown field %s', $item->field)),
 				]);
 			}
 
@@ -55,7 +75,7 @@ class Filter
 			if ($mappedOperator === null)
 			{
 				throw new ValidationException([
-					new ValidationError(sprintf('Unknown operator %s', $item->field))
+					new ValidationError(sprintf('Unknown operator %s', $item->field)),
 				]);
 			}
 
@@ -75,7 +95,7 @@ class Filter
 			)
 			{
 				throw new ValidationException([
-					new ValidationError(sprintf('Field `%s` data is invalid', $item->field))
+					new ValidationError(sprintf('Field `%s` data is invalid', $item->field)),
 				]);
 			}
 

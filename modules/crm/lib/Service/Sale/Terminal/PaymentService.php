@@ -137,6 +137,19 @@ final class PaymentService
 		$result = new Result();
 
 		$order = $this->findOrder($createOptions);
+		if ($createOptions->shouldCheckOrderPermissions() && \CCrmSaleHelper::isWithOrdersMode())
+		{
+			$userPermissions = Crm\Service\Container::getInstance()->getUserPermissions();
+			$canAccessOrder = $order
+				? $userPermissions->item()->canRead(\CCrmOwnerType::Order, $order->getId())
+				: $userPermissions->entityType()->canAddItems(\CCrmOwnerType::Order);
+			if (!$canAccessOrder)
+			{
+				return $result->addError($order
+					? Crm\Controller\ErrorCode::getOrderReadAccessDeniedError()
+					: Crm\Controller\ErrorCode::getOrderCreationAccessDeniedError());
+			}
+		}
 
 		$builderDataResult = $this->getDataForBuilder($products, $createOptions, $order);
 		if (!$builderDataResult->isSuccess())

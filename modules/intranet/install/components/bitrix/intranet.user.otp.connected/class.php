@@ -19,6 +19,7 @@ use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\PhoneNumber\Format;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Config\Option;
 use Bitrix\Security\Mfa\OtpType;
 
 Loc::loadMessages(__FILE__);
@@ -103,6 +104,7 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		$this->arResult["OTP"]["IS_EXIST"] = $personalOtp->isInitialized();
 		$this->arResult["OTP"]["TYPE"] = $personalOtp->getType();
 		$this->arResult["OTP"]["DEVICE_INFO"] = $mobilePush->getDeviceInfo();
+		$this->arResult['OTP']['HAS_CONNECTED_PUSH_DEVICE'] = $personalOtp->hasConnectedPushDevice();
 		$this->arResult["OTP"]["ARE_RECOVERY_CODES_ENABLED"] = $otpSettings->isRecoveredCodesEnabled();
 		$this->arResult["OTP"]["CAN_USE_RECOVERED_CODES"] = $personalOtp->isActivated()
 			&& $otpSettings->isRecoveredCodesEnabled()
@@ -128,12 +130,18 @@ class CSecurityUserOtpConnected extends CBitrixComponent
 		$this->arResult['OTP']['EMAIL'] = $otpConfig['email'] ?? '';
 		$this->arResult['PROVIDE_EMAIL_OTP'] = $verifyEmail->canSendEmail();
 		$this->arResult['PROVIDE_SMS_OTP'] = $verifyPhone->canSendSms();
+		$this->arResult['OTP']['CAN_SKIP_DEVICE_CONNECT'] = $user->isCurrent()
+			&& $canEditOtp
+			&& $personalOtp->canSkipDeviceConnect()
+			&& Option::get('intranet', 'allow_skip_device_connect', 'Y') === 'Y'
+			&& \Bitrix\Security\Mfa\Otp::isPushPossible()
+			&& ($verifyPhone->canSendSms() || $verifyEmail->canSendEmail());
 
 		$dateDeactivate = $personalOtp->getDeactivateUntil();
 		$this->arResult["OTP"]["NUM_LEFT_DAYS"] = $dateDeactivate
 			? FormatDate('ddiff', time()-60*60*24,  MakeTimeStamp($dateDeactivate) - 1)
 			: '';
-		$this->arResult["OTP"]["DAY_LIST"] = (new DayListProvider())->getList();
+		$this->arResult["OTP"]["DAY_LIST"] = (new DayListProvider())->getList($user);
 
 		if ($personalOtp->isPushType() && $personalOtp->isActivated())
 		{

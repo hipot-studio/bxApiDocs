@@ -5,9 +5,8 @@ namespace Bitrix\Disk\Internals\Engine\ActionFilter;
 use Bitrix\Disk\AttachedObject;
 use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\Document\TrackedObject;
-use Bitrix\Disk\File;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
-use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSignature;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Storage;
 use Bitrix\Disk\Type;
@@ -25,14 +24,16 @@ class CheckReadPermission extends ActionFilter\Base
 
 	protected $currentUser;
 	protected UnifiedLinkAccessService $unifiedLinkAccessService;
-	protected UnifiedLinkSignature $unifiedLinkSignature;
+	protected UnifiedLinkUrl $unifiedLinkUrl;
 
 	public function __construct()
 	{
 		parent::__construct();
+
+		$serviceLocator = ServiceLocator::getInstance();
 		$this->currentUser = CurrentUser::get();
-		$this->unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
-		$this->unifiedLinkSignature = new UnifiedLinkSignature();
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
 	}
 
 	public function onBeforeAction(Event $event)
@@ -133,22 +134,21 @@ class CheckReadPermission extends ActionFilter\Base
 			return false;
 		}
 
-		$uls = $this->action->getController()->getRequest()->getQuery('_uls');
-
-		// Cheapest conjunct first: the access chain of the link is walked only for a request that carries
-		// a signature naming this pair. Every conjunct stays obligatory — the signature opens nothing on
-		// its own.
-		if (
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->action->getController()->getRequest());
+		$shouldCheckUnifiedLink =
 			is_string($uls)
 			&& $file->supportsUnifiedLink()
-			&& $this->unifiedLinkSignature->validateUlsForVersion((int)$file->getId(), (int)$version->getId(), $uls)
-			&& $this->unifiedLinkAccessService->check($file)->canRead()
-		)
-		{
-			return true;
-		}
+			&& $this->unifiedLinkAccessService->validateUlsForVersion(
+				objectId: $file->getId(),
+				versionId: $version->getId(),
+				uls: $uls,
+			)
+		;
 
-		$securityContext = $file->getStorage()?->getSecurityContext($this->currentUser->getId());
+		$securityContext = $file->getStorage()?->getSecurityContext(
+			user: $this->currentUser->getId(),
+			shouldCheckUnifiedLink: $shouldCheckUnifiedLink,
+		);
 		if (!$securityContext)
 		{
 			$this->addReadError();
@@ -168,23 +168,22 @@ class CheckReadPermission extends ActionFilter\Base
 
 	protected function checkObject(BaseObject $object): bool
 	{
-		$uls = $this->action->getController()->getRequest()->getQuery('_uls');
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->action->getController()->getRequest());
 
-		// Cheapest conjunct first: the access chain of the link is walked only for a request that carries
-		// a signature naming this object. Every conjunct stays obligatory — the signature opens nothing on
-		// its own.
-		if (
-			$object instanceof File
-			&& is_string($uls)
+		$shouldCheckUnifiedLink =
+			is_string($uls)
 			&& $object->supportsUnifiedLink()
-			&& $this->unifiedLinkSignature->validateUlsForObjectId((int)$object->getId(), $uls)
-			&& $this->unifiedLinkAccessService->check($object)->canRead()
-		)
-		{
-			return true;
-		}
+			&& $this->unifiedLinkAccessService->validateUlsForObjectId(
+				objectId: $object->getId(),
+				uls: $uls,
+			)
+		;
 
-		$securityContext = $object->getStorage()?->getSecurityContext($this->currentUser->getId());
+		$securityContext = $object->getStorage()?->getSecurityContext(
+			user: $this->currentUser->getId(),
+			shouldCheckUnifiedLink: $shouldCheckUnifiedLink,
+		);
+
 		if (!$securityContext)
 		{
 			return false;

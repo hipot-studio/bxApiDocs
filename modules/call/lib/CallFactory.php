@@ -104,14 +104,19 @@ class CallFactory
 	}
 
 	/**
+	 * Finds a call by UUID and resolves its concrete class from the persisted
+	 * PROVIDER, so callers do not have to know the provider in advance.
+	 * Uses getCallInstance() (no initCall()) to avoid re-firing start-side
+	 * effects on an already-running or finished call.
+	 *
 	 * @return Call|BitrixCall|null
 	 */
-	public static function searchActiveByUuid(string $provider, string $uuid): ?Call
+	public static function searchActiveByUuid(string $uuid): ?Call
 	{
 		$fields = self::searchByUuid($uuid);
 		if ($fields)
 		{
-			return self::createWithArray($provider, $fields);
+			return self::getCallInstance($fields['PROVIDER'] ?? Call::PROVIDER_PLAIN, $fields);
 		}
 
 		return null;

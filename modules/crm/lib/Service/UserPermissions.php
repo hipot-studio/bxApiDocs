@@ -8,10 +8,12 @@ use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Security\AttributesProvider;
 use Bitrix\Crm\Security\EntityPermission\MyCompany;
 use Bitrix\Crm\Security\Role\PermissionsManager;
+use Bitrix\Crm\Service\UserPermissions\Activity;
 use Bitrix\Crm\Service\UserPermissions\Admin;
 use Bitrix\Crm\Service\UserPermissions\AutomatedSolution;
 use Bitrix\Crm\Service\UserPermissions\AutomatedSolutionEvent;
 use Bitrix\Crm\Service\UserPermissions\Automation;
+use Bitrix\Crm\Service\UserPermissions\Configuration;
 use Bitrix\Crm\Service\UserPermissions\CopilotCallAssessment;
 use Bitrix\Crm\Service\UserPermissions\DynamicType;
 use Bitrix\Crm\Service\UserPermissions\EntityEditor;
@@ -74,6 +76,7 @@ class UserPermissions
 	protected ?AutomatedSolution $automatedSolutionPermissions = null;
 	protected ?AutomatedSolutionEvent $automatedSolutionEventPermissions = null;
 	protected ?Automation $automationPermissions = null;
+	protected ?Configuration $configurationPermissions = null;
 	protected ?DynamicType $dynamicTypePermissions = null;
 	protected ?EntityEditor $entityEditorPermissions = null;
 	protected ?Category $entityCategoryPermissions = null;
@@ -89,6 +92,7 @@ class UserPermissions
 	protected ?ItemFromOpenLine $itemFromOpenLinePermissions = null;
 	protected ?MessageSender $messageSender = null;
 	protected ?Event $eventPermissions = null;
+	protected ?Activity $activityPermissions = null;
 
 	/**
 	 * @deprecated
@@ -299,6 +303,26 @@ class UserPermissions
 	}
 
 	/**
+	 * Granular configuration permissions of CRM and of every automated solution
+	 * @return Configuration
+	 */
+	public function configuration(): Configuration
+	{
+		if (!$this->configurationPermissions)
+		{
+			$this->configurationPermissions = new Configuration(
+				$this->getPermissionsManager(),
+				$this->admin(),
+				$this->automatedSolution(),
+				$this->entityAdmin(),
+				$this->automation(),
+			);
+		}
+
+		return $this->configurationPermissions;
+	}
+
+	/**
 	 * Manage permissions for dynamic entity types
 	 * @return DynamicType
 	 */
@@ -307,9 +331,8 @@ class UserPermissions
 		if (!$this->dynamicTypePermissions)
 		{
 			$this->dynamicTypePermissions = new DynamicType(
-				$this->automatedSolution(),
-				$this->admin(),
 				$this->entityAdmin(),
+				$this->configuration(),
 			);
 		}
 
@@ -329,6 +352,7 @@ class UserPermissions
 				$this->getPermissionsManager(),
 				$this->admin(),
 				$this->entityAdmin(),
+				$this->configuration(),
 			);
 		}
 
@@ -344,8 +368,8 @@ class UserPermissions
 		if (!$this->entityCategoryPermissions)
 		{
 			$this->entityCategoryPermissions = new Category(
-				$this->entityAdmin(),
 				$this->entityType(),
+				$this->configuration(),
 			);
 		}
 
@@ -516,6 +540,22 @@ class UserPermissions
 		}
 
 		return $this->messageSender;
+	}
+
+	/**
+	 * Manage permissions of an activity
+	 * @return Activity
+	 */
+	public function activity(): Activity
+	{
+		if (!$this->activityPermissions)
+		{
+			$this->activityPermissions = new Activity(
+				$this->getUserId(),
+			);
+		}
+
+		return $this->activityPermissions;
 	}
 
 	public function getAttributesProvider(): AttributesProvider

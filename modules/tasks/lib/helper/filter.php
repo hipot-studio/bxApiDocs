@@ -12,6 +12,7 @@ use Bitrix\Tasks\Filter\Preset\ResponsiblePreset;
 use Bitrix\Tasks\Filter\PresetProvider;
 use Bitrix\Tasks\Filter\Scope;
 use Bitrix\Tasks\Flow\FlowFeature;
+use Bitrix\Tasks\Integration\CRM\CrmInTasksFeature;
 use Bitrix\Tasks\Internals\Counter\Deadline;
 use Bitrix\Tasks\Internals\Counter\Role;
 use Bitrix\Tasks\Internals\Counter\Type;
@@ -787,6 +788,27 @@ class Filter extends Common
 			];
 		}
 
+		if (
+			in_array('CRM_ITEM', $fields, true)
+			&& CrmInTasksFeature::isOn()
+			&& \Bitrix\Main\Loader::includeModule('crm')
+		)
+		{
+			$filter['CRM_ITEM'] = [
+				'id' => 'CRM_ITEM',
+				'name' => Loc::getMessage('TASKS_FILTER_CRM_ITEM'),
+				'type' => 'entity_selector',
+				'params' => [
+					'multiple' => 'Y',
+					'addEntityIdToResult' => 'Y',
+					'dialogOptions' => [
+						'context' => 'TASKS_FILTER_CRM_ITEM',
+						'entities' => $this->getCrmFilterEntities(),
+					],
+				],
+			];
+		}
+
 		if (FlowFeature::isOn())
 		{
 			$filter['FLOW'] = [
@@ -969,6 +991,15 @@ class Filter extends Common
 			'ACTIVITY_DATE',
 			'FLOW',
 		];
+
+		if (CrmInTasksFeature::isOn())
+		{
+			$tagIndex = array_search('TAG', $fields, true);
+			if ($tagIndex !== false)
+			{
+				array_splice($fields, $tagIndex + 1, 0, ['CRM_ITEM']);
+			}
+		}
 
 		if ((int)$this->getGroupId() > 0)
 		{
@@ -1366,6 +1397,34 @@ class Filter extends Common
 		}
 
 		return $filter;
+	}
+
+	/**
+	 * CRM entity-selector entities for the "CRM element" filter field. Mirrors the task card set
+	 * (deal/contact/company/lead/smart_invoice/dynamic_multiple) and additionally enables the synthetic
+	 * items: "whole type" for every provider and a single "no CRM binding" item on the first one.
+	 */
+	private function getCrmFilterEntities(): array
+	{
+		$entities = [];
+		$isFirst = true;
+		foreach (['deal', 'contact', 'company', 'lead', 'smart_invoice', 'dynamic_multiple'] as $entityId)
+		{
+			$entities[] = [
+				'id' => $entityId,
+				'dynamicLoad' => true,
+				'dynamicSearch' => true,
+				'options' => [
+					'showTab' => true,
+					'allowAllCategories' => true,
+					'allowAllTypeItem' => true,
+					'allowUnboundItem' => $isFirst,
+				],
+			];
+			$isFirst = false;
+		}
+
+		return $entities;
 	}
 
 	/**

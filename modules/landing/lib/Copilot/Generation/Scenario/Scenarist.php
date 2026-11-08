@@ -10,6 +10,7 @@ use Bitrix\Landing\Copilot\Generation\Step\Base\IStep;
 use Bitrix\Landing\Copilot\Generation\Step\Base\RuntimeRequestQuotaProvider;
 use Bitrix\Landing\Copilot\Generation\Type\GenerationErrors;
 use Bitrix\Landing\Copilot\Generation\GenerationException;
+use Bitrix\Landing\Copilot\Generation\GenerationTimeSliceException;
 use Bitrix\Landing\Copilot\Generation\Type\RequestQuotaDto;
 use Bitrix\Landing\Copilot\Generation\Type\ScenarioStepDto;
 use Bitrix\Landing\Copilot\Generation\Type\StepStatuses;
@@ -42,6 +43,13 @@ class Scenarist
 	 * @var array<int, list<int>>|null
 	 */
 	private ?array $normalizedAsyncRelations = null;
+
+	/**
+	 * @var bool Whether every Error status set on a step has also reached the database. Flipped by
+	 *   markStepErroredSafely() when it suppresses a failed write, and never flipped back: a run that
+	 *   could not persist the mark must keep an executor for the generation.
+	 */
+	private bool $erroredStepMarkPersisted = true;
 
 	/**
 	 * @var callable|null Callback invoked when the step ID changes and must be saved.
@@ -231,6 +239,23 @@ class Scenarist
 	}
 
 	/**
+	 * Whether the errored step is terminal for everyone, not just for this process: the Error status
+	 * is both set in memory and written to the database.
+	 *
+	 * The two differ exactly when the status write has been suppressed by markStepErroredSafely().
+	 * The step object then says Error while the database still says the step is executable, so the
+	 * next run would load it as unfinished. A caller that decides whether the generation still needs
+	 * an executor must ask this, not isError(): dropping the executor over a mark that was never
+	 * written is what leaves a generation running with nothing to continue it.
+	 *
+	 * @return bool True if a step is errored and its Error status has been persisted.
+	 */
+	public function isErrorPersisted(): bool
+	{
+		return $this->isError() && $this->erroredStepMarkPersisted;
+	}
+
+	/**
 	 * Prepares the scenario to restart generation after an error by clearing errors in all steps.
 	 *
 	 * @return void
@@ -334,9 +359,13 @@ class Scenarist
 	/**
 	 * Executes the scenario, running steps in order and handling errors, quotas, and analytics.
 	 *
+	 * Any step exception except the cooperative time budget exit marks the step as errored and is rethrown as is.
+	 *
 	 * @return void
 	 *
-	 * @throws GenerationException If a step fails or a quota is exceeded.
+	 * @throws GenerationException If a quota is exceeded.
+	 * @throws GenerationTimeSliceException If a step exits by the execution time budget.
+	 * @throws \Throwable If a step fails.
 	 */
 	public function execute(): void
 	{
@@ -372,9 +401,15 @@ class Scenarist
 			{
 				$this->executeStep($stepDto);
 			}
-			catch (GenerationException $e)
+			catch (GenerationTimeSliceException $e)
 			{
-				$this->saveStepStatus($stepDto, StepStatuses::Error);
+				// cooperative exit by the time budget: the step is still executable, do not mark it as errored
+				throw $e;
+			}
+			catch (\Throwable $e)
+			{
+				$this->markStepErroredSafely($stepDto);
+
 				throw $e;
 			}
 
@@ -615,37 +650,157 @@ class Scenarist
 	}
 
 	/**
+	 * Marks the step as errored, suppressing any failure of the status write itself.
+	 *
+	 * The write goes to the database and may fail on exactly the same class of problems (deadlock, lost connection)
+	 * that has just broken the step. Such a failure must neither replace the original step exception nor stop it
+	 * from being rethrown.
+	 *
+	 * A suppressed write is the only case where the step stays "running" forever, so the reason is written to the
+	 * generation log before it is swallowed: without that entry the failure leaves no trace at all.
+	 *
+	 * @param ScenarioStepDto $step The step to mark.
+	 *
+	 * @return void
+	 */
+	private function markStepErroredSafely(ScenarioStepDto $step): void
+	{
+		try
+		{
+			if (!$this->saveStepStatus($step, StepStatuses::Error))
+			{
+				// A storage that refuses the write without throwing leaves exactly the same state as one
+				// that throws - the mark on the step object only - so it must be read the same way.
+				$this->erroredStepMarkPersisted = false;
+			}
+		}
+		catch (\Throwable $writeException)
+		{
+			// The mark stays in memory only: isErrorPersisted() answers false from here on, so the
+			// generation keeps an executor and the step is marked again on the next run.
+			$this->erroredStepMarkPersisted = false;
+
+			// the original step exception is the one that must reach the generation exception handler
+			$this->logErroredStepMarkFailure($step, $writeException);
+		}
+	}
+
+	/**
+	 * Internal-only trace of a suppressed Error-status write: generation id, step id and the class of the write
+	 * exception. The exception message is deliberately left out - it may carry SQL text - and nothing here changes
+	 * how the original step exception travels.
+	 *
+	 * @param ScenarioStepDto $step The step whose status write has failed.
+	 * @param \Throwable $writeException The failure of the status write itself.
+	 *
+	 * @return void
+	 */
+	private function logErroredStepMarkFailure(ScenarioStepDto $step, \Throwable $writeException): void
+	{
+		try
+		{
+			if (!Generation\Log::isEnabled())
+			{
+				return;
+			}
+
+			$generationId = (int)($this->generation->getId() ?? 0);
+
+			(new Generation\Log($generationId))->add(sprintf(
+				'Failed to mark step as errored: generationId=%d, stepId=%d, writeException=%s',
+				$generationId,
+				(int)$step->stepId,
+				$writeException::class,
+			));
+		}
+		catch (\Throwable)
+		{
+			// logging must never outweigh the original step exception
+		}
+	}
+
+	/**
 	 * Saves the status of a scenario step to the database.
+	 *
+	 * The status is set on the step object first and always, and the answer tells whether it also
+	 * reached the storage: a write that fails without throwing - an unsuccessful Result - leaves the
+	 * step executable in the database exactly as a thrown one does, and the caller of the Error status
+	 * has to know the difference.
 	 *
 	 * @param ScenarioStepDto $step The step whose status is being saved.
 	 * @param StepStatuses $status The new status.
 	 *
-	 * @return void
+	 * @return bool True when the status reached the storage.
 	 */
-	private function saveStepStatus(ScenarioStepDto $step, StepStatuses $status): void
+	private function saveStepStatus(ScenarioStepDto $step, StepStatuses $status): bool
 	{
 		$step->status = $status;
 
 		if (!isset($step->entityId))
 		{
-			$resAdd = StepsTable::add([
-				'GENERATION_ID' => $this->generation->getId(),
-				'STEP_ID' => $step->stepId,
-				'CLASS' => $step->step::class,
-				'STATUS' => $status->value,
-			]);
-
-			if ($resAdd->isSuccess())
+			$entityId = $this->addStepRow(
+				(int)$this->generation->getId(),
+				$step->stepId,
+				$step->step::class,
+				$status,
+			);
+			if ($entityId === null)
 			{
-				$step->entityId = $resAdd->getId();
+				return false;
 			}
 
-			return;
+			$step->entityId = $entityId;
+
+			return true;
 		}
 
-		StepsTable::update($step->entityId, [
+		return $this->updateStepRow($step->entityId, $status);
+	}
+
+	/**
+	 * Storage seam of the step status write: persists a new step row and answers with its id, or null
+	 * when the row could not be added.
+	 *
+	 * Kept apart from saveStepStatus() so that the rule above - which status is written, for which step,
+	 * and whether it is written at all - can be observed without a database. The Error status of a failed
+	 * step is the only thing standing between a broken step and a generation that stays running forever,
+	 * so the fact of the write is worth asserting on its own.
+	 *
+	 * @param int $generationId Owner of the step row.
+	 * @param int $stepId Scenario step id.
+	 * @param string $stepClass Class of the step, stored for diagnostics.
+	 * @param StepStatuses $status Status to persist.
+	 *
+	 * @return int|null Id of the new row, or null when it was not added.
+	 */
+	protected function addStepRow(int $generationId, int $stepId, string $stepClass, StepStatuses $status): ?int
+	{
+		$resAdd = StepsTable::add([
+			'GENERATION_ID' => $generationId,
+			'STEP_ID' => $stepId,
+			'CLASS' => $stepClass,
 			'STATUS' => $status->value,
 		]);
+
+		return $resAdd->isSuccess() ? (int)$resAdd->getId() : null;
+	}
+
+	/**
+	 * Storage seam of the step status write over an already persisted step row. Answers with the fact
+	 * of the write for the same reason addStepRow() does: an unsuccessful Result is a step that stayed
+	 * executable in the database, and reading it as a written mark is what declares a still runnable
+	 * generation terminal.
+	 *
+	 * @param int $entityId Row of the step.
+	 * @param StepStatuses $status Status to persist.
+	 *
+	 * @return bool True when the row was moved to the status.
+	 */
+	protected function updateStepRow(int $entityId, StepStatuses $status): bool
+	{
+		return StepsTable::update($entityId, [
+			'STATUS' => $status->value,
+		])->isSuccess();
 	}
 
 	/**

@@ -44,7 +44,8 @@ final class BIConnectorSupersetDashboardPubComponent extends CBitrixComponent
 			return;
 		}
 
-		if (!$share->isValid())
+		$banRepository = ServiceLocator::getInstance()->get('biconnector.repository.shareBan');
+		if (!$share->isValid() || $banRepository->isBanned($share->getDashboardId()))
 		{
 			$this->arResult['STATUS'] = 'ERROR';
 			$this->includeComponentTemplate();

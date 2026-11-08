@@ -8,6 +8,11 @@ class Extranet
 {
 	const CACHE_TOKEN_TTL = 2592000; // 1 month
 
+	/** @var string[] tags claimed within this process, cleared once by the background job */
+	private static array $tagsToClear = [];
+
+	private static bool $tagClearingScheduled = false;
+
 	public static function checkModules()
 	{
 		return \Bitrix\Main\Loader::includeModule('extranet') && \Bitrix\Main\Loader::includeModule("socialnetwork");
@@ -72,6 +77,12 @@ class Extranet
 
 		if (count($groups) <= 0)
 		{
+			// Both contexts were opened above: leaving them open keeps an output buffer and a tag
+			// stack entry alive for the rest of the hit, and every tag registered later sticks to
+			// this cache path as well.
+			$taggedCache->abortTagCache();
+			$cache->abortDataCache();
+
 			return false;
 		}
 
@@ -185,6 +196,144 @@ class Extranet
 		});
 
 		return array_merge($intranetUsers, $extranetUsers);
+	}
+
+	/**
+	 * getGroup() hides users with a pending CONFIRM_CODE, so an invited person stays invisible
+	 * until the first login empties that code. The code lives in b_user while the cached list is
+	 * tagged by group membership alone, so accepting an invitation invalidates nothing on its own.
+	 */
+	public static function isInviteConfirmation(array $userFields): bool
+	{
+		if (!array_key_exists('CONFIRM_CODE', $userFields))
+		{
+			return false;
+		}
+
+		// OnAfterUserUpdate fires even when the update itself failed, and the outcome comes in RESULT.
+		if (array_key_exists('RESULT', $userFields) && !$userFields['RESULT'])
+		{
+			return false;
+		}
+
+		return (string)$userFields['CONFIRM_CODE'] === '';
+	}
+
+	/**
+	 * @param int[] $groupIds
+	 * @return string[]
+	 */
+	public static function getGroupCacheTags(array $groupIds): array
+	{
+		return array_map(static fn($groupId) => 'sonet_user2group_G' . (int)$groupId, $groupIds);
+	}
+
+	/**
+	 * Drops the cached lists of everyone who shares an extranet group with this user: the entry
+	 * is keyed by the asking user, so the owner of a stale list is never the one who just logged in.
+	 */
+	public static function clearGroupCacheForUser(int $userId): void
+	{
+		if ($userId <= 0 || !self::checkModules())
+		{
+			return;
+		}
+
+		// Employees are not skipped here: getGroup() caches lists for them too, and an invited
+		// employee of an extranet group is hidden from those lists by the very same filter.
+		// The query below is narrow and indexed by USER_ID, so the empty case is the cheap exit
+		// for mass dismissal and for the invitation stepper.
+		$tags = self::claimTagsToClear(self::getGroupCacheTags(self::getGroupIds($userId)));
+		if (empty($tags) || self::$tagClearingScheduled)
+		{
+			return;
+		}
+
+		// Clearing a tag renames cache directories of everyone sharing the group, so it leaves the
+		// request. A group shared by several users of one batch is cleared once, not once per user.
+		self::$tagClearingScheduled = true;
+
+		\Bitrix\Main\Application::getInstance()->addBackgroundJob(static function(): void {
+			$taggedCache = \Bitrix\Main\Application::getInstance()->getTaggedCache();
+			$failure = null;
+
+			// terminate() exits right after the job queue, so there is no second attempt: a tag
+			// that fails must not take the rest of the batch with it.
+			foreach (self::takeClaimedTags() as $tag)
+			{
+				try
+				{
+					$taggedCache->clearByTag($tag);
+				}
+				catch (\Throwable $e)
+				{
+					$failure ??= $e;
+				}
+			}
+
+			if ($failure !== null)
+			{
+				throw $failure;
+			}
+		});
+	}
+
+	/**
+	 * @param string[] $tags
+	 * @return string[] the tags of this batch not claimed earlier in the process
+	 */
+	public static function claimTagsToClear(array $tags): array
+	{
+		$newTags = array_values(array_diff($tags, self::$tagsToClear));
+		self::$tagsToClear = array_merge(self::$tagsToClear, $newTags);
+
+		return $newTags;
+	}
+
+	/**
+	 * @return string[] everything claimed so far, leaving the registry ready for the next batch
+	 */
+	public static function takeClaimedTags(): array
+	{
+		$tags = self::$tagsToClear;
+
+		self::$tagsToClear = [];
+		self::$tagClearingScheduled = false;
+
+		return $tags;
+	}
+
+	public static function isTagClearingScheduled(): bool
+	{
+		return self::$tagClearingScheduled;
+	}
+
+	/**
+	 * @return int[]
+	 */
+	protected static function getGroupIds(int $userId): array
+	{
+		$db = \CSocNetUserToGroup::GetList(
+			[],
+			[
+				'USER_ID' => $userId,
+				'<=ROLE' => SONET_ROLES_USER,
+				'GROUP_SITE_ID' => \CExtranet::GetExtranetSiteID(),
+				'GROUP_ACTIVE' => 'Y',
+				'GROUP_CLOSED' => 'N',
+			],
+			false,
+			false,
+			['ID', 'GROUP_ID']
+		);
+
+		$groupIds = [];
+		while ($row = $db->GetNext(true, false))
+		{
+			$groupIds[] = (int)$row['GROUP_ID'];
+		}
+
+		return $groupIds;
 	}
 
 	protected static function getAccessibleExtranetUsers(int $currentUserId, bool $filterActiveUser = true): array

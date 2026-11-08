@@ -12,12 +12,12 @@ namespace Bitrix\Crm\V2\Internal\Integration\Rest\V3;
  * the type table are the single place every such change goes through, so that is where the calls
  * come from.
  *
- * Of a type row only the capability flags shape the schema: {@see \Bitrix\Crm\V2\Public\EntityTypeSettings}
- * reads nothing else off it, and both the routes of an entity type
+ * Capability flags shape the routes and fields of the schema: {@see \Bitrix\Crm\V2\Public\EntityTypeSettings}
+ * supplies the settings, and both the routes of an entity type
  * ({@see \Bitrix\Crm\V2\Infrastructure\Rest\CustomController\Category\RouteBuilder}) and the fields of
  * its DTO ({@see \Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\ItemDtoGenerator}) are derived from those
- * settings alone. Dropping the schema is a `cleanDir` over the cache of every module, so renaming a
- * type or any other save of its row must not pay for it.
+ * settings. Type titles also appear in the cached descriptions, so renaming a type invalidates the
+ * schema. Other changes to its row do not need to pay for that `cleanDir` over the shared REST cache.
  *
  * Only the schema is dropped here. The composition of the types themselves lives in another cache
  * with its own invalidation, which the type events do on their own before calling in.

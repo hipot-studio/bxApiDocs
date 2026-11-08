@@ -22,9 +22,13 @@ trait YandexARTCommonTrait
 			$region = Application::getInstance()->getLicense()->getRegion();
 		}
 
-		return ($region === 'ru' || $region === 'by');
+		return $this->isAvailableInRegion($region);
 	}
 
+	protected function isAvailableInRegion(?string $region): bool
+	{
+		return ($region === 'ru' || $region === 'by');
+	}
 
 	/**
 	 * @inheritDoc
@@ -36,7 +40,6 @@ trait YandexARTCommonTrait
 		return [
 			'modelUri' => self::MODEL,
 			'generationOptions' => [
-				'seed' => self::DEFAULT_SEED,
 				'aspectRatio' => [
 					'widthRatio' => $format['widthRatio'],
 					'heightRatio' => $format['heightRatio'],
@@ -86,7 +89,6 @@ trait YandexARTCommonTrait
 
 		return [
 			'generationOptions' => [
-				'seed' => self::DEFAULT_SEED,
 				'aspectRatio' => [
 					'widthRatio' => $format['widthRatio'],
 					'heightRatio' => $format['heightRatio'],

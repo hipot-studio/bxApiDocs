@@ -8,6 +8,7 @@
 namespace Bitrix\Crm\WebForm\Internals;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\Localization\Loc;
 
 Loc::loadMessages(__FILE__);
@@ -30,6 +31,8 @@ Loc::loadMessages(__FILE__);
  */
 class FieldDependenceTable extends Entity\DataManager
 {
+	use DeleteByFilterTrait;
+
 	const ACTION_ENUM_SHOW = 'show';
 	const ACTION_ENUM_HIDE = 'hide';
 	const ACTION_ENUM_CHANGE = 'change';

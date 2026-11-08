@@ -24,6 +24,14 @@ class EntityTypeSettings
 	private bool $readRecyclebinFromSettings = false;
 
 	/**
+	 * Client flags of a smart process live in its Type config row, which the type settings screen
+	 * mutates and saves within the same request, while {@see self::of} keeps one instance for the
+	 * whole process. Profiles built by {@see self::createSmartProcessSettings} read the flags on
+	 * access; an explicitly constructed instance keeps the values it was given.
+	 */
+	private bool $readClientFlagsFromType = false;
+
+	/**
 	 * @param array<int, EntityType> $parentEntityTypesMap
 	 */
 	public function __construct(
@@ -275,21 +283,9 @@ class EntityTypeSettings
 		$entityTypeId = $entityType->getId();
 		$type = Container::getInstance()->getTypeByEntityTypeId($entityTypeId);
 
-		// hasContactBindings == hasCompany == "Client abstraction enabled" in legacy semantics.
-		$hasContactBindings = $type?->getIsClientEnabled() ?? false;
-
-		// Dynamic::isClientCompanyEnabled / isClientContactEnabled have id-based branches:
-		//   SmartInvoice → company-side always true
-		//   SmartDocument → contact-side always true
-		//   custom SmartProcess (128+) → both follow isClientEnabled
-		$hasClientCompany =
-			$entityTypeId === OwnerType::SMART_INVOICE
-			|| ($hasContactBindings && EntityType::isPossibleSmartProcessTypeId($entityTypeId))
-		;
-		$hasClientContact =
-			$entityTypeId === OwnerType::SMART_DOCUMENT
-			|| $hasClientCompany
-		;
+		// Client flags are not passed to the constructor: the getters read them from the live Type
+		// row on access (see $readClientFlagsFromType), so a flag switched after this snapshot was
+		// built is still visible through the cached instance.
 
 		// SmartB2eDocument hardcodes products = false; others read from $type.
 		$hasProducts = match ($entityTypeId)
@@ -356,7 +352,7 @@ class EntityTypeSettings
 			default => $type?->getIsCountersEnabled() ?? false,
 		};
 
-		return new static(
+		$settings = new static(
 			entityType: $entityType,
 			hasCategories: $type?->getIsCategoriesEnabled() ?? false,
 			isCategoriesSupported: true, // Dynamic default
@@ -366,13 +362,8 @@ class EntityTypeSettings
 			hasSource: $type?->getIsSourceEnabled() ?? false,
 			hasProducts: $hasProducts,
 			hasObservers: $type?->getIsObserversEnabled() ?? false,
-			hasContactBindings: $hasContactBindings,
 			hasCompanyBindings: false, // smart-* are not Contact
-			hasCompany: $hasContactBindings,
 			hasMyCompany: $type?->getIsMycompanyEnabled() ?? false,
-			hasClientFields: $hasClientContact || $hasClientCompany,
-			hasClientContact: $hasClientContact,
-			hasClientCompany: $hasClientCompany,
 			hasMultifields: false, // Dynamic doesn't override; base default false
 			hasCrmTracking: false, // Dynamic::isCrmTrackingEnabled is final → false
 			hasDocumentGeneration: $type?->getIsDocumentsEnabled() ?? false,
@@ -390,6 +381,9 @@ class EntityTypeSettings
 			hasLastActivity: $isLastActivitySupported,
 			isLastActivitySupported: $isLastActivitySupported,
 		);
+		$settings->readClientFlagsFromType = true;
+
+		return $settings;
 	}
 
 	private static function smartInvoiceTableExists(): bool
@@ -500,6 +494,12 @@ class EntityTypeSettings
 
 	public function hasContactBindings(): bool
 	{
+		if ($this->readClientFlagsFromType)
+		{
+			// hasContactBindings == hasCompany == "Client abstraction enabled" in legacy semantics.
+			return $this->isClientEnabledInType();
+		}
+
 		return $this->hasContactBindings;
 	}
 
@@ -510,6 +510,11 @@ class EntityTypeSettings
 
 	public function hasCompany(): bool
 	{
+		if ($this->readClientFlagsFromType)
+		{
+			return $this->isClientEnabledInType();
+		}
+
 		return $this->hasCompany;
 	}
 
@@ -520,17 +525,46 @@ class EntityTypeSettings
 
 	public function hasClientFields(): bool
 	{
+		if ($this->readClientFlagsFromType)
+		{
+			return $this->hasClientContact() || $this->hasClientCompany();
+		}
+
 		return $this->hasClientFields;
 	}
 
 	public function hasClientContact(): bool
 	{
+		if ($this->readClientFlagsFromType)
+		{
+			// Dynamic::isClientContactEnabled id-based branch: SmartDocument → always true.
+			return $this->entityType->getId() === OwnerType::SMART_DOCUMENT
+				|| $this->hasClientCompany();
+		}
+
 		return $this->hasClientContact;
 	}
 
 	public function hasClientCompany(): bool
 	{
+		if ($this->readClientFlagsFromType)
+		{
+			// Dynamic::isClientCompanyEnabled id-based branches: SmartInvoice → always true,
+			// custom SmartProcess (128+) → follows isClientEnabled.
+			$entityTypeId = $this->entityType->getId();
+
+			return $entityTypeId === OwnerType::SMART_INVOICE
+				|| ($this->isClientEnabledInType() && EntityType::isPossibleSmartProcessTypeId($entityTypeId));
+		}
+
 		return $this->hasClientCompany;
+	}
+
+	private function isClientEnabledInType(): bool
+	{
+		$type = Container::getInstance()->getTypeByEntityTypeId($this->entityType->getId());
+
+		return $type?->getIsClientEnabled() ?? false;
 	}
 
 	public function hasMultifields(): bool

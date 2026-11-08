@@ -66,7 +66,7 @@ class StoreAmount
 
 	public function getStoreAmountGridId(): string
 	{
-		return self::GRID_NAME . '_' . $this->getEntityId();
+		return self::GRID_NAME;
 	}
 
 	public function getStoresCount(): int

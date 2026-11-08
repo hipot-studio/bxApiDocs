@@ -5,7 +5,9 @@ use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Integration\Collab\CollabService;
 use Bitrix\Disk\Document\DocumentHandler;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\QuickAccess\FileDataParameterService;
 use Bitrix\Disk\Search\Reindex\BaseObjectIndex;
 use Bitrix\Disk\Search\Reindex\ExtendedIndex;
@@ -18,7 +20,6 @@ use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Disk\Ui\Text;
 use Bitrix\Disk\UserConfiguration;
 use Bitrix\Disk\ZipNginx;
-use Bitrix\Disk\Document\Contract;
 use Bitrix\Disk\Document\LocalDocumentController;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\ExternalLink;
@@ -57,7 +58,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Search\Content;
-use Bitrix\Main\Security\Sign\Signer;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\UI\Filter\Options;
@@ -102,8 +102,10 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	/** @var CollabService */
 	private $collabService;
 	private bool $isUserCollaber = false;
+	private bool $isViewByUnifiedLink = false;
 	private ?Cookie $readOnlyCollabFolderStateCookie = null;
 	private UnifiedLinkAccessService $unifiedLinkAccessService;
+	private UnifiedLinkUrl $unifiedLinkUrl;
 	private ?array $analytics = null;
 	private FileDataParameterService $fileDataParameterService;
 
@@ -115,6 +117,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		$this->fileDataParameterService = $serviceLocator->get('disk.fileDataParameterService');
 		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
 	}
 
 	protected function processBeforeAction($actionName)
@@ -140,6 +143,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		$this->collabService = new CollabService();
 		$this->isUserCollaber = $this->isCollaber();
+		$this->isViewByUnifiedLink = $this->isViewByUnifiedLink();
 
 		return true;
 	}
@@ -220,6 +224,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			$this->arParams['PATH_TO_GROUP'] = '/';
 		}
 
+		if (!is_array($this->arParams['RELATIVE_ITEMS'] ?? null))
+		{
+			$this->arParams['RELATIVE_ITEMS'] = [];
+		}
+
 		if (!empty($this->arParams['TRASH_MODE']))
 		{
 			$this->trashMode = true;
@@ -296,7 +305,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$errorsInGridActions = $this->processGridActions();
 		$this->setPageTitle();
 
-		$securityContext = $this->storage->getCurrentUserSecurityContext();
+		$securityContext = $this->storage->getCurrentUserSecurityContext($this->isViewByUnifiedLink);
 		$proxyType = $this->storage->getProxyType();
 
 		$connectedGroupObject = $this->getConnectedGroupObject();
@@ -317,6 +326,15 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		$this->setUiFlagForReadonlyCollabFolderState($canAddInCurrentFolder);
 
+		if ($this->isViewByUnifiedLink)
+		{
+			$currentFolderUls = $this->getUlsForNavigation($this->folder->getId());
+		}
+		else
+		{
+			$currentFolderUls = null;
+		}
+
 		$this->arResult = [
 			'GRID_INFORMATION' => $this->information,
 			'ERRORS_IN_GRID_ACTIONS' => $errorsInGridActions->toArray(),
@@ -331,6 +349,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				'NAME' => $this->folder->getName(),
 				'IS_DELETED' => $this->folder->isDeleted(),
 				'CAN_ADD' => $canAddInCurrentFolder,
+				'ULS' => $currentFolderUls,
+				'UNIQUE_CODE' => $this->folder->getUniqueCode(),
 				'CREATE_TIME' => $this->folder->getCreateTime(),
 				'UPDATE_TIME' => $this->folder->getUpdateTime(),
 			],
@@ -359,6 +379,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			'RELATIVE_PATH_ENCODED' => $this->getUrlManager()->encodeUrn($this->arParams['RELATIVE_PATH']),
 			'BREADCRUMBS' => $this->getBreadcrumbs(),
 			'BREADCRUMBS_ROOT' => $this->getRootBreadcrumb(),
+			'DESTINATION_ROOT_OBJECT' => $this->getDestinationRootObject(),
 			'URL_TO_DETACH_OBJECT' => '?action=detachConnectedObject',
 			'ENABLED_MOD_ZIP' => ZipNginx\Configuration::isEnabled(),
 			'ENABLED_EXTERNAL_LINK' => Configuration::isEnabledExternalLink(),
@@ -367,7 +388,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			'TRASHCAN_TTL' => Configuration::getTrashCanTtl(),
 			'CLOUD_DOCUMENT' => $this->getConfigurationOfCloudDocument(),
 			'PATH_TO_DISK_VOLUME' => $this->buildPathToDiskVolume(),
-			'PATH_TO_USER_TRASHCAN_LIST' => $this->storage->getProxyType()->getBaseUrlTashcanList(),
+			'PATH_TO_USER_TRASHCAN_LIST' => $this->buildPathToUserTrashcanList(),
 			'DOCUMENT_HANDLERS' => $this->getDocumentHandlersForCreatingFile(),
 			'STATUS_BIZPROC' => $this->storage->isEnabledBizProc() && Loader::includeModule("bizproc"),
 			'SHOW_SEARCH_NOTICE' => \Bitrix\Main\Config\Option::get('disk', 'needBaseObjectIndex', 'x') !== 'N',
@@ -376,76 +397,124 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			'IS_COLLABER_TOUR_ON_ADD_BUTTON_VIEWED' => $this->isCollaberTourOnAddButtonViewed(),
 			'READONLY_COLLAB_FOLDER_STATE_COOKIE_NAME' => $this->getReadOnlyCollabFolderStateCookie()->getName(),
 			'ANALYTICS' => $this->analytics,
+			'IS_VIEW_BY_UNIFIED_LINK' => $this->isViewByUnifiedLink,
 		];
 
 		$user = $this->getUser();
-		$showFileUniqueCode = $this->request->getQuery('show_file_code');
+		$showObjectUniqueCode = $this->request->getQuery('show_object_code');
 
-		if ($user instanceof CUser && is_string($showFileUniqueCode) && $showFileUniqueCode !== '')
+		if ($user instanceof CUser && is_string($showObjectUniqueCode) && $showObjectUniqueCode !== '')
 		{
-			$fileForShow = File::loadByUniqueCode($showFileUniqueCode);
+			$objectForShow = BaseObject::loadByUniqueCode($showObjectUniqueCode);
 
-			if ($fileForShow instanceof File && $this->unifiedLinkAccessService->check($fileForShow)->canRead())
+			$accessLevel = $objectForShow instanceof BaseObject
+				? $this->unifiedLinkAccessService->check($objectForShow)
+				: null;
+
+			if ($accessLevel instanceof UnifiedLinkAccessLevel && $accessLevel->canRead())
 			{
 				$urlManager = $this->getUrlManager();
-				$downloadUrl = new Uri($urlManager->getUrlForDownloadFile($fileForShow));
-				$uls = (new Signer())->getSignature($fileForShow->getId());
+				$uls = $this->unifiedLinkAccessService->getUlsForObjectId($objectForShow->getId());
 
-				$downloadUrlParams = [
-					'_uls' => $uls,
-				];
-				$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($fileForShow);
-				if ($encryptedFileData !== null)
+				if ($objectForShow instanceof File)
 				{
-					$downloadUrlParams[FileDataParameterService::PARAMETER_NAME] = $encryptedFileData;
-				}
-				$downloadUrl->addParams($downloadUrlParams);
+					$unifiedLinkSecurityContext = $objectForShow->getStorage()->getCurrentUserSecurityContext(true);
+					$canDownload = $objectForShow->canDownload($unifiedLinkSecurityContext);
 
-				$fileForShowData = $fileForShow->getFile();
-				$fileForShowData[FileAttributes::KEY_FILE_OBJECT] = $fileForShow;
-				$attr = FileAttributes::buildByFileData($fileForShowData, '');
+					$sourceUrl = $canDownload
+						? $urlManager->getUrlForDownloadFile($objectForShow)
+						: $urlManager->getUrlForShowFile($objectForShow);
 
-				// trigger unified link set
-				$attr->toDataSet();
+					$sourceUri = new Uri($sourceUrl);
+					$sourceUrlParams = $this->unifiedLinkUrl->addUlsToParams([], $uls);
 
-				$showFileResult = [
-					'url' => $attr->getAttribute(FileAttributes::ATTRIBUTE_UNIFIED_LINK),
-					'downloadUrl' => (string)$downloadUrl,
-					'type' => $attr->getViewerType(),
-					'name' => $fileForShow->getName(),
-				];
+					if ($canDownload)
+					{
+						$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($objectForShow);
 
-				$viewerTypeClass = $attr->getAttribute('data-viewer-type-class');
-				if (is_string($viewerTypeClass) && $viewerTypeClass !== '')
-				{
-					$showFileResult['viewerTypeClass'] = $viewerTypeClass;
-				}
+						if ($encryptedFileData !== null)
+						{
+							$sourceUrlParams[FileDataParameterService::PARAMETER_NAME] = $encryptedFileData;
+						}
+					}
 
-				$markdownUrl = $attr->getAttribute(FileAttributes::ATTRIBUTE_MARKDOWN_URL);
-				if (is_string($markdownUrl) && $markdownUrl !== '')
-				{
-					$markdownUri = new Uri($markdownUrl);
+					$sourceUri->addParams($sourceUrlParams);
 
-					$markdownUri->addParams([
-						'_uls' => $uls,
+					$objectId = $objectForShow->getId();
+					$fileForShowData = $objectForShow->getFile();
+					$fileForShowData[FileAttributes::KEY_FILE_OBJECT] = $objectForShow;
+
+					$attr = FileAttributes::buildByFileData($fileForShowData, $sourceUri)
+						->setObjectId($objectId)
+						->setTitle($objectForShow->getName())
+						->setAttribute('data-uls', $uls)
+						->setDownloadDisabled(!$canDownload)
+						->addAction([
+							'type' => 'download',
+						])
+						->addAction([
+							'type' => 'copyToMe',
+							'text' => Loc::getMessage('DISK_ACTION_SAVE_TO_OWN_FILES'),
+							'action' => "BX.Disk.Viewer.Actions.runActionCopyToMe",
+							'params' => [
+								'objectId' => $objectId,
+								'uls' => $uls,
+							],
+							'extension' => 'disk.viewer.actions',
+							'buttonIconClass' => 'ui-btn-icon-cloud',
+						])
+					;
+
+					// trigger unified link set
+					$attr->toDataSet();
+
+					$markdownUrl = $attr->getAttribute(FileAttributes::ATTRIBUTE_MARKDOWN_URL);
+
+					if (is_string($markdownUrl) && $markdownUrl !== '')
+					{
+						$markdownUri = new Uri($markdownUrl);
+
+						$markdownUri->addParams([
+							'_uls' => $uls,
+						]);
+
+						$attr->setAttribute(FileAttributes::ATTRIBUTE_MARKDOWN_URL, (string)$markdownUri);
+					}
+
+					$tiffPreviewUrl = $attr->getAttribute(FileAttributes::ATTRIBUTE_TIFF_PREVIEW_URL);
+					if (is_string($tiffPreviewUrl) && $tiffPreviewUrl !== '')
+					{
+						$tiffPreviewUri = new Uri($tiffPreviewUrl);
+
+						$tiffPreviewUri->addParams([
+							'_uls' => $uls,
+						]);
+
+						$attr->setAttribute(FileAttributes::ATTRIBUTE_TIFF_PREVIEW_URL, (string)$tiffPreviewUri);
+					}
+
+					$isBoard = (int)$objectForShow->getTypeFile() === TypeFile::BOARD;
+
+					if ($accessLevel->canEdit() && !$isBoard)
+					{
+						$this->addEditActionToViewerAttributes($attr, $objectForShow, $uls);
+					}
+
+					$attr->addAction([
+						'type' => 'info',
+						'action' => 'BX.Disk.Viewer.Actions.runActionInfo',
+						'params' => [
+							'objectId' => $objectId,
+							'uls' => $uls,
+						],
+						'extension' => 'disk.viewer.actions',
 					]);
 
-					$showFileResult['markdownUrl'] = (string)$markdownUri;
+					$this->arResult['SHOW_OBJECT'] = [
+						'type' => 'file',
+						'attributes' => (string)$attr,
+					];
 				}
-
-				$tiffPreviewUrl = $attr->getAttribute(FileAttributes::ATTRIBUTE_TIFF_PREVIEW_URL);
-				if (is_string($tiffPreviewUrl) && $tiffPreviewUrl !== '')
-				{
-					$tiffPreviewUri = new Uri($tiffPreviewUrl);
-
-					$tiffPreviewUri->addParams([
-						'_uls' => $uls,
-					]);
-
-					$showFileResult['tiffPreviewUrl'] = (string)$tiffPreviewUri;
-				}
-
-				$this->arResult['SHOW_FILE'] = $showFileResult;
 			}
 		}
 
@@ -457,6 +526,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			{
 				/** @var BaseObject $object */
 				$object = $row['object'];
+				$uls = $this->getUlsForNavigation($object->getId());
+				$objectUls = $this->unifiedLinkAccessService->getUlsForObjectId($object->getId());
 
 				$dataSet = null;
 				$viewerAttributes = $row['data']['VIEWER_ATTRS'] ?? null;
@@ -465,11 +536,18 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					$dataSet = $viewerAttributes->toDataSet();
 				}
 
+				if ($this->isViewByUnifiedLink && $object instanceof Folder)
+				{
+					$dataSet['uls'] = $uls;
+				}
+
 				$info = [
 					'id' => $row['id'],
 					'name' => $object->getName(),
+					'uniqueCode' => $this->isViewByUnifiedLink ? $object->getUniqueCode() : null,
 					'isFolder' => $object instanceof Folder,
 					'isFile' => $object instanceof File,
+					'canDownload' => (bool)$row['attrs']['data-can-download'],
 					'isMailAttachments' => ($object instanceof Folder) && $object->getCode() === SpecificFolder::CODE_FOR_MAIL_ATTACHMENTS,
 					'canAdd' => ($object instanceof Folder) && $object->canAdd($securityContext),
 					'canDelete' => $object->canDelete($securityContext),
@@ -485,6 +563,13 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 				if ($object instanceof File && TypeFile::isImage($object))
 				{
+					$unifiedLinkGetParam = [];
+
+					if ($this->isViewByUnifiedLink)
+					{
+						$unifiedLinkGetParam = $this->unifiedLinkUrl->addUlsToParams($unifiedLinkGetParam, $objectUls);
+					}
+
 					$quickAccessGetParam = [];
 					$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($object);
 					if ($encryptedFileData !== null)
@@ -497,6 +582,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 						'signature' => ParameterSigner::getImageSignature($object->getId(), 400, 400),
 						'width' => 400,
 						'height' => 400,
+						...$unifiedLinkGetParam,
 						...$quickAccessGetParam,
 					]);
 				}
@@ -558,7 +644,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$isEnabledObjectLock = Configuration::isEnabledObjectLock();
 		$isEnabledShowExtendedRights = $this->storage->isEnabledShowExtendedRights();
 		$isItTimeToShowBizProc = $this->isItTimeToShowBizProc();
-		$securityContext = $this->storage->getCurrentUserSecurityContext();
+		$securityContext = $this->storage->getCurrentUserSecurityContext($this->isViewByUnifiedLink);
 		$proxyType = $this->storage->getProxyType();
 		$isStorageCurrentUser = $proxyType instanceof ProxyType\User && $proxyType->getTitleForCurrentUser() !== $proxyType->getTitle();
 
@@ -566,11 +652,16 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$nav = $this->gridOptions->getNavigation();
 		$nav->initFromUri();
 
-		$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck(
-			$securityContext,
-			[],
-			['ID', 'CREATED_BY'],
-		);
+		$parameters = [];
+
+		if (!$this->isViewByUnifiedLink)
+		{
+			$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck(
+				securityContext: $securityContext,
+				parameters: $parameters,
+				specificColumns: ['ID', 'CREATED_BY'],
+			);
+		}
 
 		$parameters['order'] = $this->gridOptions->getOrderForOrm();
 
@@ -590,16 +681,35 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		$parameters = $this->modifyByFilter($parameters);
 
 		$parameters['select'] = ['ID'];
-		$parameters['limit'] = $pageSize + 1; // +1 because we want to know about existence next page
+		// +1 lets orm resolve the total on the last page without a dedicated count query
+		$parameters['limit'] = $pageSize + 1;
 		$parameters['offset'] = $nav->getOffset();
+		$parameters['count_total'] = true;
 
 		$objectIds = [];
-		foreach (ObjectTable::getList($parameters) as $row)
+		$objectIdsCursor = ObjectTable::getList($parameters);
+		foreach ($objectIdsCursor as $row)
 		{
 			$objectIds[] = $row['ID'];
 		}
+		$totalObjectCount = (int)$objectIdsCursor->getCount();
 
-		$this->folder->preloadOperationsForSpecifiedObjects($objectIds, $securityContext);
+		// a page past the last one is empty, and for an empty page orm reports the offset as the
+		// total; only a query from the start of the list tells the real count
+		if (!$objectIds && $nav->getOffset() > 0)
+		{
+			$countParameters = $parameters;
+			$countParameters['limit'] = 1;
+			$countParameters['offset'] = 0;
+
+			$totalObjectCount = (int)ObjectTable::getList($countParameters)->getCount();
+		}
+
+		$this->folder->preloadOperationsForSpecifiedObjects(
+			$objectIds,
+			$securityContext,
+			shouldPreloadDownloadAccess: true,
+		);
 		$isShowFromDifferentLevels = $this->isShowFromDifferentLevels($parameters['filter']);
 		$sharedObjectIds = [];
 		if (!$this->isTrashMode() && $objectIds)
@@ -663,6 +773,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			/** @var File|Folder $object */
 			$name = $object->getName();
 			$objectId = $object->getId();
+			$uls = $this->getUlsForNavigation($objectId);
+			$objectUls = $this->unifiedLinkAccessService->getUlsForObjectId($objectId);
 			$exportData = [
 				'TYPE' => $object->getType(),
 				'NAME' => $name,
@@ -672,10 +784,16 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 			$isFolder = $object instanceof Folder;
 			$isFile = !$isFolder;
-			$supportsUnifiedLink = $isFile && $object->supportsUnifiedLink();
+			$supportsUnifiedLink = $object->supportsUnifiedLink();
 			$supportsSharingAccessPopup = $supportsUnifiedLink;
+			$shouldUseUnifiedLink = $this->shouldUseUnifiedLinkForObject($object, $isStorageCurrentUser);
 			$fileType = $isFile ? (int)$object->getTypeFile() : null;
 			$isBoard = $fileType === TypeFile::FLIPCHART;
+			$downloadSecurityContext = $shouldUseUnifiedLink
+				? $this->storage->getCurrentUserSecurityContext(true)
+				: $securityContext
+			;
+			$canDownload = $object->canDownload($downloadSecurityContext);
 			$canMarkDeleted = $object->canMarkDeleted($securityContext);
 			$canDelete = $object->canDelete($securityContext);
 
@@ -713,7 +831,24 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			{
 				if ($isFolder)
 				{
-					$exportData['OPEN_URL'] = $urlManager->encodeUrn(rtrim($listingPage, '/') . '/' . $object->getOriginalName() . '/');
+					$openUrl = rtrim($listingPage, '/') . '/' . $object->getOriginalName() . '/';
+
+					if ($shouldUseUnifiedLink)
+					{
+						$openUrl = $this->unifiedLinkUrl->addUlsToUrl($openUrl, $uls);
+					}
+
+					$exportData['OPEN_URL'] = $urlManager->encodeUrn($openUrl);
+
+					if ($shouldUseUnifiedLink)
+					{
+						$ulsJs = htmlspecialcharsbx(CUtil::JSEscape($uls));
+						$ulsJs = "'$ulsJs'";
+					}
+					else
+					{
+						$ulsJs = 'null';
+					}
 
 					$openAction = [
 						'id' => 'open',
@@ -723,7 +858,9 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 						'href' => $exportData['OPEN_URL'],
 						'onclick' => "BX.Disk['FolderListClass_{$this->componentId}'].openFolderByContextMenu(this, event, {$objectId}, {
 							id: {$objectId},
-							name: '" . CUtil::JSEscape($name) . "'
+							name: '" . CUtil::JSEscape($name) . "',
+							uniqueCode: '" . CUtil::JSEscape($object->getUniqueCode()) . "',
+							uls: $ulsJs,
 						});",
 					];
 				}
@@ -742,6 +879,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				}
 				else
 				{
+					if ($shouldUseUnifiedLink)
+					{
+						$detailPageFile = $this->unifiedLinkUrl->addUlsToUrl($detailPageFile, $objectUls);
+					}
+
 					$exportData['OPEN_URL'] = $urlManager->encodeUrn($detailPageFile);
 					$openAction = [
 						'id' => 'open',
@@ -775,35 +917,83 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					];
 				}
 
-				if ($isFile)
+				if ($isFile && $canDownload)
 				{
-					$actions[] = [
-						'className' => 'disk-folder-list-context-menu-item',
-						'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_download.svg',
-						"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_DOWNLOAD'),
-						"href" => $urlManager->getUrlForDownloadFile($object),
-					];
-				}
-				elseif ($isFolder && $possibleToDownloadArchive && !$object->isDeleted())
-				{
-					$uriToDownloadArchive = UrlManager::getInstance()->create('disk.api.folder.downloadArchive', [
-						'folderId' => $objectId,
-					]);
+					$downloadUrl = $urlManager->getUrlForDownloadFile($object);
+
+					if ($shouldUseUnifiedLink)
+					{
+						$downloadUrl = $this->unifiedLinkUrl->addUlsToUrl($downloadUrl, $objectUls);
+					}
 
 					$actions[] = [
 						'className' => 'disk-folder-list-context-menu-item',
+						'attrs' => [
+							'data-testid' => 'disk-folder-list-file-download-menu-item',
+						],
+						'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_download.svg',
+						"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_DOWNLOAD'),
+						"href" => $downloadUrl,
+					];
+				}
+				elseif (
+					$isFolder
+					&& $possibleToDownloadArchive
+					&& !$object->isDeleted()
+					&& $canDownload
+				)
+				{
+					if ($shouldUseUnifiedLink)
+					{
+						$folderUniqueCodeJs = CUtil::JSEscape($object->getUniqueCode());
+						$folderUniqueCodeJs = "'$folderUniqueCodeJs'";
+
+						$downloadArchiveAction = "
+							event.preventDefault();
+							BX.Disk.FolderListClass_{$this->getComponentId()}.downloadFolderArchiveByUnifiedLink($folderUniqueCodeJs);
+						";
+
+						$uriToDownloadArchive = '#';
+					}
+					else
+					{
+						$uriToDownloadArchive = UrlManager::getInstance()->create(
+							action: 'disk.api.folder.downloadArchive',
+							params: [
+								'folderId' => $objectId,
+							],
+						);
+
+						$downloadArchiveAction = "
+							event.preventDefault();
+							BX.Disk.FolderListClass_{$this->getComponentId()}.checkFileLimit('" . $objectId . "', '" . $uriToDownloadArchive . "', " . $ulsJs . ");
+						";
+					}
+
+					$actions[] = [
+						'className' => 'disk-folder-list-context-menu-item',
+						'attrs' => [
+							'data-testid' => 'disk-folder-list-folder-download-menu-item',
+						],
 						'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_download.svg',
 						'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_DOWNLOAD'),
 						'href' => $uriToDownloadArchive,
-						"onclick" => "
-							event.preventDefault();
-							BX.Disk.FolderListClass_{$this->getComponentId()}.checkFileLimit('" . $objectId . "', '" . $uriToDownloadArchive . "');
-						",
+						'onclick' => $downloadArchiveAction,
 					];
 				}
 
 				if ($object->isDeleted() && $object->canRestore($securityContext))
 				{
+					if ($this->isViewByUnifiedLink)
+					{
+						$uniqueCodeJs = CUtil::JSEscape($object->getUniqueCode());
+						$uniqueCodeJs = "'$uniqueCodeJs'";
+					}
+					else
+					{
+						$uniqueCodeJs = 'null';
+					}
+
 					$actions[] = [
 						"text" => Loc::getMessage('DISK_TRASHCAN_ACT_RESTORE'),
 						'className' => 'disk-folder-list-context-menu-item',
@@ -811,7 +1001,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 							object: {
 								id: {$object->getId()},
 								name: '" . CUtil::JSEscape($name) . "',
-								isFolder: " . ($isFolder? 'true' : 'false') . "
+								isFolder: " . ($isFolder ? 'true' : 'false') . ",
+								uniqueCode: $uniqueCodeJs,
 							 }
 						})",
 					];
@@ -836,13 +1027,13 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					];
 				}
 
-				if ($isFolder)
-				{
-					$internalLink = $urlManager->getUrlFocusController('openFolderList', ['folderId' => $object->getId()], true);
-				}
-				elseif ($supportsUnifiedLink)
+				if ($supportsUnifiedLink)
 				{
 					$internalLink = $urlManager->getUnifiedLink($object, ['absolute' => true]);
+				}
+				elseif ($isFolder)
+				{
+					$internalLink = $urlManager->getUrlFocusController('openFolderList', ['folderId' => $object->getId()], true);
 				}
 				else
 				{
@@ -922,8 +1113,12 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 						'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_SHARE_COMPLEX'),
 						'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_share.svg',
 						'className' => 'disk-folder-list-context-menu-item',
+						'attrs' => [
+							'data-testid' => 'disk-folder-list-share-menu-item',
+						],
 						'dataset' => [
 							'preventCloseContextMenu' => true,
+							'testid' => 'disk-folder-list-menu-share-section',
 						],
 						'items' => $actionToShare,
 					];
@@ -964,13 +1159,10 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 						"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_COPY'),
 						'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_copy.svg',
 						'className' => 'disk-folder-list-context-menu-item',
-						"onclick" => "BX.Disk['FolderListClass_{$this->componentId}'].openCopyModalWindow({
-							id: {$this->storage->getRootObjectId()},
-							canAdd: " . (int)$this->storage->canAdd($securityContext) . ",
-							name: '" . CUtil::JSEscape($storageTitle) . "'
-						}, {
+						"onclick" => "BX.Disk['FolderListClass_{$this->componentId}'].openCopyModalWindow(BX.Disk['FolderListClass_{$this->componentId}'].destinationRootObject, {
 							id: {$objectId},
-							name: '" . CUtil::JSEscape($name) . "'
+							name: '" . CUtil::JSEscape($name) . "',
+							uls: " . ($this->isViewByUnifiedLink ? "'" . CUtil::JSEscape($objectUls) . "'" : 'null') . "
 						});",
 					];
 
@@ -980,13 +1172,10 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 							"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_MOVE'),
 							'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_move.svg',
 							'className' => 'disk-folder-list-context-menu-item',
-							"onclick" => "BX.Disk['FolderListClass_{$this->componentId}'].openMoveModalWindow({
-								id: {$this->storage->getRootObjectId()},
-								canAdd: " . (int)$this->storage->canAdd($securityContext) . ",
-								name: '" . CUtil::JSEscape($storageTitle) . "'
-							}, {
+							"onclick" => "BX.Disk['FolderListClass_{$this->componentId}'].openMoveModalWindow(BX.Disk['FolderListClass_{$this->componentId}'].destinationRootObject, {
 								id: {$objectId},
-								name: '" . CUtil::JSEscape($name) . "'
+								name: '" . CUtil::JSEscape($name) . "',
+								uls: " . ($this->isViewByUnifiedLink ? "'" . CUtil::JSEscape($objectUls) . "'" : 'null') . "
 							});",
 						];
 					}
@@ -1022,6 +1211,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 						],
 					);
 
+					if ($shouldUseUnifiedLink)
+					{
+						$linkOnHistory = $this->unifiedLinkUrl->addUlsToUrl($linkOnHistory, $objectUls);
+					}
+
 					$actions[] = [
 						'text' => Loc::getMessage('DISK_FOLDER_LIST_ACT_SHOW_HISTORY'),
 						'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_history.svg',
@@ -1046,7 +1240,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					$columnsBizProc,
 					$bizprocIcon,
 					$exportData,
-					(string)$row['ID']
+					(string)$row['ID'],
 				);
 			}
 
@@ -1078,6 +1272,16 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				)
 			)
 			{
+				if ($this->isViewByUnifiedLink)
+				{
+					$uniqueCodeJs = CUtil::JSEscape($object->getUniqueCode());
+					$uniqueCodeJs = "'$uniqueCodeJs'";
+				}
+				else
+				{
+					$uniqueCodeJs = 'null';
+				}
+
 				$actions[] = [
 					"text" => Loc::getMessage('DISK_FOLDER_LIST_ACT_MARK_DELETED'),
 					'icon' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_remove.svg',
@@ -1087,7 +1291,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 								id: {$objectId},
 								name: '" . CUtil::JSEscape($name) . "',
 								isDeleted: " . ($object->isDeleted() ? 'true' : 'false') . ",
-								isFolder: " . ($isFolder ? 'true' : 'false') . "
+								isFolder: " . ($isFolder ? 'true' : 'false') . ",
+								uniqueCode: $uniqueCodeJs,
 							 },
 							canMarkDeleted: " . ($canMarkDeleted ? 'true' : 'false') . ",
 							canDelete: " . ($canDelete ? 'true' : 'false') . "
@@ -1098,25 +1303,41 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			if ($isFolder)
 			{
 				$nameSpecialChars = htmlspecialcharsbx($name);
+				$ulsSpecialChars = htmlspecialcharsbx($uls);
+				$uniqueCodeSpecialChars = htmlspecialcharsbx($object->getUniqueCode());
+
 				$columnName = "
 					<table class=\"bx-disk-object-name\"><tr>
 							<td style=\"width: 45px;\">
 								<div data-object-id=\"{$objectId}\" class=\"js-disk-grid-open-folder bx-file-icon-container-small {$iconClass}\"></div>
 							</td>
-							<td><a class=\"bx-disk-folder-title js-disk-grid-folder\" id=\"disk_obj_{$objectId}\" href=\"{$exportData['OPEN_URL']}\" data-object-id=\"{$objectId}\" data-can-add=\"{$object->canAdd($securityContext)}\" onclick=\"BX.Disk['FolderListClass_{$this->componentId}'].openFolderByAnchor(this, event);\">{$nameSpecialChars}</a></td>
+							<td><a class=\"bx-disk-folder-title js-disk-grid-folder\" id=\"disk_obj_{$objectId}\" href=\"{$exportData['OPEN_URL']}\" data-object-id=\"{$objectId}\" data-can-add=\"{$object->canAdd($securityContext)}\" data-unique-code=\"$uniqueCodeSpecialChars\" data-uls=\"$ulsSpecialChars\" onclick=\"BX.Disk['FolderListClass_{$this->componentId}'].openFolderByAnchor(this, event);\">{$nameSpecialChars}</a></td>
 					</tr></table>
 				";
 			}
 			else
 			{
-				$sourceUri = new Uri($urlManager->getUrlForDownloadFile($object));
+				$sourceUrl = $canDownload
+					? $urlManager->getUrlForDownloadFile($object)
+					: $urlManager->getUrlForShowFile($object);
 
-				$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($object);
-				if ($encryptedFileData !== null)
+				$sourceUri = new Uri($sourceUrl);
+
+				if ($shouldUseUnifiedLink)
 				{
-					$sourceUri->addParams([
-						FileDataParameterService::PARAMETER_NAME => $encryptedFileData,
-					]);
+					$this->unifiedLinkUrl->addUlsToUri($sourceUri, $objectUls);
+				}
+
+				if ($canDownload)
+				{
+					$encryptedFileData = $this->fileDataParameterService->getEncryptedFileData($object);
+
+					if ($encryptedFileData !== null)
+					{
+						$sourceUri->addParams([
+							FileDataParameterService::PARAMETER_NAME => $encryptedFileData,
+						]);
+					}
 				}
 
 				$fileData = [
@@ -1130,52 +1351,42 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				$attr = $this->buildItemAttributes($object, $sourceUri, $fileData)
 					->setTitle($object->getName())
 					->setGroupBy($this->componentId)
-					->addAction([
+					->setDownloadDisabled(!$canDownload)
+				;
+
+				if ($canDownload)
+				{
+					$attr->addAction([
 						'type' => 'download',
-					])
-					->addAction([
+					]);
+					$attr->addAction([
 						'type' => 'copyToMe',
 						'text' => Loc::getMessage('DISK_ACTION_SAVE_TO_OWN_FILES'),
 						'action' => "BX.Disk.Viewer.Actions.runActionCopyToMe",
 						'params' => [
 							'objectId' => $objectId,
+							'uls' => $shouldUseUnifiedLink ? $objectUls : null,
 						],
 						'extension' => 'disk.viewer.actions',
 						'buttonIconClass' => 'ui-btn-icon-cloud',
-					])
-				;
+						'attrs' => [
+							'data-testid' => 'disk-folder-list-copy-to-me-viewer-action',
+						],
+					]);
+				}
 
-				if ($isFile && $object->canUpdate($securityContext))
+				if ($shouldUseUnifiedLink)
 				{
-					$documentName = \CUtil::JSEscape($name);
-					$items = [];
-					if (DocumentHandler::isEditable($object->getExtension()))
-					{
-						foreach ($this->getDocumentHandlersForEditingFile() as $handlerData)
-						{
-							$items[] = [
-								'text' => $handlerData['name'],
-								'onclick' => "BX.Disk.Viewer.Actions.runActionEdit({name: '" . CUtil::JSEscape($documentName) . "', objectId: {$objectId}, serviceCode: '{$handlerData['code']}'})",
-							];
-						}
-					}
+					$attr->setAttribute('data-uls', $objectUls);
+				}
 
-					if (!$isBoard)
-					{
-						$attr->addAction(
-							[
-								'type' => 'edit',
-								'buttonIconClass' => ' ',
-								'action' => 'BX.Disk.Viewer.Actions.runActionDefaultEdit',
-								'params' => [
-									'objectId' => $objectId,
-									'name' => $documentName,
-									'dependsOnService' => $items ? null : LocalDocumentController::getCode(),
-								],
-								'items' => $items,
-							],
-						);
-					}
+				if ($isFile && $object->canUpdate($securityContext) && !$isBoard)
+				{
+					$this->addEditActionToViewerAttributes(
+						attr: $attr,
+						file: $object,
+						uls: $shouldUseUnifiedLink ? $objectUls : null,
+					);
 				}
 
 				$attr->addAction([
@@ -1183,6 +1394,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					'action' => 'BX.Disk.Viewer.Actions.runActionInfo',
 					'params' => [
 						'objectId' => $objectId,
+						'uls' => $shouldUseUnifiedLink ? $objectUls : null,
 					],
 					'extension' => 'disk.viewer.actions',
 				]);
@@ -1312,21 +1524,30 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				$columns['BIZPROC'] = $columnsBizProc["BIZPROC"];
 			}
 
+			$attrs = [
+				'data-testid' => "disk-folder-list-grid-row-{$objectId}",
+				'data-can-destroy' => (int)$canDelete,
+				'data-can-download' => $canDownload,
+				'data-is-folder' => $isFolder,
+				'data-is-file' => !$isFolder,
+			];
+
+			if ($this->isViewByUnifiedLink)
+			{
+				$attrs['data-unique-code'] = $object->getUniqueCode();
+			}
+
 			$rows[] = [
 				'id' => $objectId,
 				'object' => $object,
 				'data' => $exportData,
 				'columns' => $columns,
-				'attrs' => [
-					'data-can-destroy' => (int)$canDelete,
-					'data-is-folder' => $isFolder,
-					'data-is-file' => !$isFolder,
-				],
+				'attrs' => $attrs,
 				'actions' => $actions,
 			];
 		}
 
-		$nav->setRecordCount($nav->getOffset() + $countObjectsOnPage);
+		$nav->setRecordCount($totalObjectCount);
 
 		$grid['HEADERS'] = $this->getGridHeaders();
 		$grid['NAV_OBJECT'] = $nav;
@@ -1441,6 +1662,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		];
 		//
 		$downloadButton = [
+			'ID' => 'disk-folder-list-group-download-button',
 			'ICON' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_download.svg',
 			'TYPE' => Grid\Panel\Types::BUTTON,
 			'NAME' => Loc::getMessage('DISK_FOLDER_LIST_ACT_DOWNLOAD'),
@@ -1462,7 +1684,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		{
 			$buttons = [
 				$restoreLink,
-				$destroyLink,
+				$this->isViewByUnifiedLink ? null : $destroyLink,
 			];
 		}
 		else
@@ -1490,6 +1712,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		if (isset($possibleFileData['ID'], $possibleFileData['CONTENT_TYPE']))
 		{
 			$possibleFileData[FileAttributes::KEY_FILE_OBJECT] = $file;
+
 			return FileAttributes::buildByFileData($possibleFileData, $sourceUri)
 				->setObjectId($file->getId())
 			;
@@ -1498,6 +1721,41 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return FileAttributes::tryBuildByFileId($file->getFileId(), $sourceUri, $file)
 			->setObjectId($file->getId())
 		;
+	}
+
+	private function addEditActionToViewerAttributes(FileAttributes $attr, File $file, ?string $uls = null): void
+	{
+		$documentName = \CUtil::JSEscape($file->getName());
+		$items = [];
+
+		if (DocumentHandler::isEditable($file->getExtension()))
+		{
+			$objectUlsJs = CUtil::JSEscape($uls ?? '');
+			$objectId = $file->getId();
+
+			foreach ($this->getDocumentHandlersForEditingFile() as $handlerData)
+			{
+				$items[] = [
+					'text' => $handlerData['name'],
+					'onclick' => "BX.Disk.Viewer.Actions.runActionEdit({name: '" . CUtil::JSEscape($documentName) . "', objectId: {$objectId}, serviceCode: '{$handlerData['code']}', uls: '{$objectUlsJs}'})",
+				];
+			}
+		}
+
+		$attr->addAction(
+			[
+				'type' => 'edit',
+				'buttonIconClass' => ' ',
+				'action' => 'BX.Disk.Viewer.Actions.runActionDefaultEdit',
+				'params' => [
+					'objectId' => $file->getId(),
+					'name' => $documentName,
+					'dependsOnService' => $items ? null : LocalDocumentController::getCode(),
+					'uls' => $uls,
+				],
+				'items' => $items,
+			],
+		);
 	}
 
 	private function getListingPage(BaseObject $object, $relativePath = null)
@@ -1605,6 +1863,11 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			{
 				$filter['>DELETE_TIME'] = DateTime::createFromTimestamp(time() - $ttl * 86400);
 			}
+
+			if ($this->isViewByUnifiedLink)
+			{
+				$filter['DELETED_BY'] = CurrentUser::get()->getId();
+			}
 		}
 		else
 		{
@@ -1628,7 +1891,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			|| $filterData['FILTER_APPLIED'] != true
 		)
 		{
-			$parameters['filter'] = array_merge($parameters['filter'], $filter);
+			$parameters['filter'] = array_merge($parameters['filter'] ?? [], $filter);
 
 			return $parameters;
 		}
@@ -1769,7 +2032,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			{
 				$filter[SharingTable::className() . ':LINK_OBJECT.LINK_STORAGE_ID'] = $this->storage->getId();
 				$filter['=' . SharingTable::className() . ':LINK_OBJECT.TO_ENTITY'] = Sharing::CODE_USER . $this->getUser()->getId();
-				$filter['!='. SharingTable::className() . ':LINK_OBJECT.FROM_ENTITY'] = Sharing::CODE_USER . $this->getUser()->getId();
+				$filter['!=' . SharingTable::className() . ':LINK_OBJECT.FROM_ENTITY'] = Sharing::CODE_USER . $this->getUser()->getId();
 			}
 			if ($filterData['SHARED'] == self::FILTER_SHARED_FROM_ME)
 			{
@@ -1907,12 +2170,13 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				}
 				$url = $this->arParams['PATH_TO_DISK_START_BIZPROC'];
 				$url .= "?back_url=" . urlencode($this->application->getCurPageParam());
-				$url .= (mb_strpos($url, "?") === false ? "?" : "&")."workflow_template_id=" . $workflowTemplate["ID"] . $old . '&' . bitrix_sessid_get();
+				$url .= (mb_strpos($url, "?") === false ? "?" : "&") . "workflow_template_id=" . $workflowTemplate["ID"] . $old . '&' . bitrix_sessid_get();
 				$temporary[$workflowTemplate["ID"]] = $workflowTemplate;
 				$temporary[$workflowTemplate["ID"]]['NAME'] = $templateName;
 				$temporary[$workflowTemplate["ID"]]['URL'] = $url;
 			}
 		}
+
 		return $temporary;
 	}
 
@@ -1923,7 +2187,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		array $columnsBizProc,
 		array $bizprocIcon,
 		array $exportData,
-		string $rowId
+		string $rowId,
 	)
 	{
 		$storageId = $this->storage->getId();
@@ -2043,31 +2307,31 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				if ($documentState['WORKFLOW_STATUS'] > 0 || empty($documentState['WORKFLOW_STATUS']))
 				{
 					$tasksWorkflow = CBPDocument::getUserTasksForWorkflow($this->getUser()->GetID(), $documentState["ID"]);
-					$columnsBizProc["BIZPROC"] =
-						'<div class="bizproc-item-title">'.htmlspecialcharsbx($documentState["TEMPLATE_NAME"]).': '.
-						'<span class="bizproc-item-title bizproc-state-title" style="">'.
-						'<a href="'.$exportData["OPEN_URL"].'?action=showBp">'.
-						($documentState["STATE_TITLE"] <> '' ? htmlspecialcharsbx($documentState["STATE_TITLE"]) : htmlspecialcharsbx($documentState["STATE_NAME"])).
-						'</a>'.
-						'</span>'.
-						'</div>';
+					$columnsBizProc["BIZPROC"]
+						= '<div class="bizproc-item-title">' . htmlspecialcharsbx($documentState["TEMPLATE_NAME"]) . ': '
+						. '<span class="bizproc-item-title bizproc-state-title" style="">'
+						. '<a href="' . $exportData["OPEN_URL"] . '?action=showBp">'
+						. ($documentState["STATE_TITLE"] <> '' ? htmlspecialcharsbx($documentState["STATE_TITLE"]) : htmlspecialcharsbx($documentState["STATE_NAME"]))
+						. '</a>'
+						. '</span>'
+						. '</div>';
 					$columnsBizProc['BIZPROC'] = str_replace("'", "\"", $columnsBizProc['BIZPROC']);
 
-					$bizprocIcon["BIZPROC"] = "<div class=\"element-bizproc-status bizproc-statuses ".
-						(!($documentState["ID"] == '' || $documentState["WORKFLOW_STATUS"] == '') ?
-							'bizproc-status-'.(empty($tasksWorkflow) ? "inprogress" : "attention") : '').
-						"\" onmouseover='BX.hint(this, \"".addslashes($columnsBizProc["BIZPROC"])."\")'></div>";
+					$bizprocIcon["BIZPROC"] = "<div class=\"element-bizproc-status bizproc-statuses "
+						. (!($documentState["ID"] == '' || $documentState["WORKFLOW_STATUS"] == '')
+							? 'bizproc-status-' . (empty($tasksWorkflow) ? "inprogress" : "attention") : '')
+						. "\" onmouseover='BX.hint(this, \"" . addslashes($columnsBizProc["BIZPROC"]) . "\")'></div>";
 
 					if (!empty($tasksWorkflow))
 					{
 						$tmp = [];
 						foreach ($tasksWorkflow as $val)
 						{
-							$url = CComponentEngine::makePathFromTemplate($this->arParams["PATH_TO_DISK_TASK"], array("ID" => $val["ID"]));
-							$url .= "?back_url=".urlencode($this->application->getCurPageParam());
-							$tmp[] = '<a href="'.$url.'">'.$val["NAME"].'</a>';
+							$url = CComponentEngine::makePathFromTemplate($this->arParams["PATH_TO_DISK_TASK"], ["ID" => $val["ID"]]);
+							$url .= "?back_url=" . urlencode($this->application->getCurPageParam());
+							$tmp[] = '<a href="' . $url . '">' . $val["NAME"] . '</a>';
 						}
-						$columnsBizProc["BIZPROC"] .= '<div class="bizproc-tasks">'.implode(", ", $tmp).'</div>';
+						$columnsBizProc["BIZPROC"] .= '<div class="bizproc-tasks">' . implode(", ", $tmp) . '</div>';
 
 						return [$actions, $columnsBizProc, $bizprocIcon];
 					}
@@ -2098,17 +2362,17 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 					}
 				}
 
-				$columnsBizProc["BIZPROC"] =
-					'<span class="bizproc-item-title">'.
-					Loc::getMessage("DISK_FOLDER_LIST_GRID_BIZPROC").': <a href="'.$exportData["OPEN_URL"].'?action=showBp" title="'.
-					Loc::getMessage("DISK_FOLDER_LIST_GRID_BIZPROC_TITLE").'">'.count($documentStates).'</a></span>'.
-					(!empty($tasks) ?
-						'<br /><span class="bizproc-item-title">'.
-						Loc::getMessage("DISK_FOLDER_LIST_GRID_BIZPROC_TASKS").': <a href="'.$this->arParams["PATH_TO_DISK_TASK_LIST"].'" title="'.
-						Loc::getMessage("DISK_FOLDER_LIST_GRID_BIZPROC_TASKS_TITLE").'">'.count($tasks).'</a></span>' : '');
-				$bizprocIcon["BIZPROC"] = "<div class=\"element-bizproc-status bizproc-statuses ".
-					($inprogress ? ' bizproc-status-'.(empty($tasks) ? "inprogress" : "attention") : '').
-					"\" onmouseover='BX.hint(this, \"".addslashes($columnsBizProc['BIZPROC'])."\")'></div>";
+				$columnsBizProc["BIZPROC"]
+					= '<span class="bizproc-item-title">'
+					. Loc::getMessage("DISK_FOLDER_LIST_GRID_BIZPROC") . ': <a href="' . $exportData["OPEN_URL"] . '?action=showBp" title="'
+					. Loc::getMessage("DISK_FOLDER_LIST_GRID_BIZPROC_TITLE") . '">' . count($documentStates) . '</a></span>'
+					. (!empty($tasks)
+						? '<br /><span class="bizproc-item-title">'
+						. Loc::getMessage("DISK_FOLDER_LIST_GRID_BIZPROC_TASKS") . ': <a href="' . $this->arParams["PATH_TO_DISK_TASK_LIST"] . '" title="'
+						. Loc::getMessage("DISK_FOLDER_LIST_GRID_BIZPROC_TASKS_TITLE") . '">' . count($tasks) . '</a></span>' : '');
+				$bizprocIcon["BIZPROC"] = "<div class=\"element-bizproc-status bizproc-statuses "
+					. ($inprogress ? ' bizproc-status-' . (empty($tasks) ? "inprogress" : "attention") : '')
+					. "\" onmouseover='BX.hint(this, \"" . addslashes($columnsBizProc['BIZPROC']) . "\")'></div>";
 
 				return [$actions, $columnsBizProc, $bizprocIcon];
 			}
@@ -2237,7 +2501,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 				[
 					'ACTION' => '',
 					'user_id' => CurrentUser::get()->getId(),
-				]
+				],
 			);
 		}
 
@@ -2333,7 +2597,6 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return $gridActionsErrorCollection;
 	}
 
-
 	private function copyObject($objectId, $targetFolderId)
 	{
 		static $targetList = [];
@@ -2390,7 +2653,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		}
 
 		/** @var Folder|File $object */
-		$object = BaseObject::loadById((int)$objectId, array('STORAGE'));
+		$object = BaseObject::loadById((int)$objectId, ['STORAGE']);
 		if (!$object)
 		{
 			return false;
@@ -2424,7 +2687,15 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			return false;
 		}
 
-		if (!$object->canRename($object->getStorage()->getCurrentUserSecurityContext()))
+		if (
+			$this->isViewByUnifiedLink
+			&& (int)$object->getParentId() !== (int)$this->folder->getRealObjectId()
+		)
+		{
+			return false;
+		}
+
+		if (!$object->canRename($object->getStorage()->getCurrentUserSecurityContext($this->isViewByUnifiedLink)))
 		{
 			return false;
 		}
@@ -2511,11 +2782,43 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 	private function getRootBreadcrumb()
 	{
 		$proxyType = $this->storage->getProxyType();
+		$rootObject = $this->storage->getRootObject();
 
 		return [
 			'NAME' => $proxyType->getTitleForCurrentUser(),
 			'LINK' => $proxyType->getBaseUrlFolderList(),
 			'ID' => $this->isTrashMode() ? null : $this->storage->getRootObjectId(),
+			'ULS' => $this->isViewByUnifiedLink ? $this->getUlsForNavigation($this->storage->getRootObjectId()) : null,
+			'UNIQUE_CODE' => $this->isViewByUnifiedLink ? $rootObject?->getUniqueCode() : null,
+		];
+	}
+
+	private function getDestinationRootObject(): array
+	{
+		if (!$this->isViewByUnifiedLink || $this->isTrashMode())
+		{
+			$securityContext = $this->storage->getCurrentUserSecurityContext($this->isViewByUnifiedLink);
+
+			return [
+				'id' => $this->storage->getRootObjectId(),
+				'canAdd' => $this->storage->canAdd($securityContext),
+				'name' => $this->storage->getProxyType()->getTitleForCurrentUser(),
+			];
+		}
+
+		$userStorage = Driver::getInstance()->getStorageByUserId($this->getUser()->getId());
+
+		if (!$userStorage)
+		{
+			return [];
+		}
+
+		$securityContext = $userStorage->getCurrentUserSecurityContext();
+
+		return [
+			'id' => $userStorage->getRootObjectId(),
+			'canAdd' => $userStorage->canAdd($securityContext),
+			'name' => $userStorage->getProxyType()->getTitleForCurrentUser(),
 		];
 	}
 
@@ -2525,6 +2828,8 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 
 		$crumbs = [];
 		$parts = explode('/', trim($this->arParams['RELATIVE_PATH'], '/'));
+		$uniqueCodesById = $this->getBreadcrumbUniqueCodesById($this->arParams['RELATIVE_ITEMS']);
+
 		foreach ($this->arParams['RELATIVE_ITEMS'] as $i => $item)
 		{
 			if (empty($item))
@@ -2533,41 +2838,95 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			}
 
 			$path = implode('/', (array_slice($parts, 0, $i + 1)));
-			$crumbs[] = [
+
+			$link = rtrim(
+				string: CComponentEngine::MakePathFromTemplate(
+					template: $template,
+					arParams: [
+						'PATH' => $path,
+						'TRASH_PATH' => $path,
+					],
+				),
+				characters: '/',
+			) . '/';
+
+			$crumb = [
 				'ID' => $item['ID'],
 				'NAME' => Text::cleanTrashCanSuffix($item['NAME']),
-				'LINK' => rtrim(
-					CComponentEngine::MakePathFromTemplate(
-						$template,
-						[
-							'PATH' => $path,
-							'TRASH_PATH' => $path,
-						],
-					),
-					'/',
-				) . '/',
 			];
+
+			if ($this->isViewByUnifiedLink)
+			{
+				$uls = $this->getUlsForNavigation($item['ID']);
+				$link = $this->unifiedLinkUrl->addUlsToUrl($link, $uls);
+				$crumb['ULS'] = $uls;
+				$crumb['UNIQUE_CODE'] = $uniqueCodesById[$item['ID']] ?? null;
+			}
+
+			$crumb['LINK'] = $link;
+
+			$crumbs[] = $crumb;
 		}
 
 		if ($this->isTrashMode())
 		{
+			$trashcanCrumb = [
+				'ID' => $this->storage->getRootObjectId(),
+				'NAME' => Loc::getMessage('DISK_TRASHCAN_NAME'),
+				'LINK' => $this->buildPathToUserTrashcanList(),
+			];
+
+			if ($this->isViewByUnifiedLink)
+			{
+				$trashcanCrumb['ULS'] = $this->getUlsForNavigation($this->storage->getRootObjectId());
+				$trashcanCrumb['UNIQUE_CODE'] = $this->storage->getRootObject()?->getUniqueCode();
+			}
+
 			array_unshift(
 				$crumbs,
-				[
-					'ID' => $this->storage->getRootObjectId(),
-					'NAME' => Loc::getMessage('DISK_TRASHCAN_NAME'),
-					'LINK' => CComponentEngine::MakePathFromTemplate(
-						$this->arParams['PATH_TO_TRASHCAN_LIST'],
-						[
-							'TRASH_PATH' => '',
-						],
-					),
-				],
+				$trashcanCrumb,
 			);
 		}
 
-
 		return $crumbs;
+	}
+
+	private function getBreadcrumbUniqueCodesById(array $relativeItems): array
+	{
+		if (!$this->isViewByUnifiedLink)
+		{
+			return [];
+		}
+
+		$folderIds = [];
+
+		foreach ($relativeItems as $item)
+		{
+			if (!empty($item['ID']))
+			{
+				$folderIds[] = (int)$item['ID'];
+			}
+		}
+
+		if (empty($folderIds))
+		{
+			return [];
+		}
+
+		$uniqueCodesById = [];
+
+		$folders = Folder::getModelList([
+			'filter' => [
+				'@ID' => array_values(array_unique($folderIds)),
+			],
+		]);
+
+		foreach ($folders as $folder)
+		{
+			$uniqueCodesById[$folder->getId()] = $folder->getUniqueCode();
+		}
+
+		return $uniqueCodesById;
 	}
 
 	private function getConfigurationOfCloudDocument()
@@ -2759,6 +3118,70 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return false;
 	}
 
+	private function isViewByUnifiedLink(): bool
+	{
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		if (!is_string($uls))
+		{
+			return false;
+		}
+
+		if ($this->isTrashMode())
+		{
+			return $this->unifiedLinkAccessService->validateTrashUlsForObjectId(
+				objectId: $this->storage->getRootObjectId(),
+				uls: $uls,
+			);
+		}
+
+		if (!$this->unifiedLinkAccessService->validateUlsForObjectId($this->folder->getId(), $uls))
+		{
+			return false;
+		}
+
+		$accessResult = $this->unifiedLinkAccessService->checkAll($this->folder);
+
+		return $accessResult->getMaxAccessLevel()->canRead()
+			&& !$accessResult->isOnlyPermissionSystemAccess();
+	}
+
+	private function buildPathToUserTrashcanList(): string
+	{
+		$url = $this->storage->getProxyType()->getBaseUrlTashcanList();
+
+		if (!$this->isViewByUnifiedLink)
+		{
+			return $url;
+		}
+
+		$uri = new Uri($url);
+
+		$this->unifiedLinkUrl->addUlsToUri(
+			uri: $uri,
+			uls: $this->unifiedLinkAccessService->getTrashUlsForObjectId($this->storage->getRootObjectId()),
+		);
+
+		return (string)$uri;
+	}
+
+	private function getUlsForNavigation(mixed $objectId): string
+	{
+		if ($this->isTrashMode())
+		{
+			return $this->unifiedLinkAccessService->getTrashUlsForObjectId($this->storage->getRootObjectId());
+		}
+
+		return $this->unifiedLinkAccessService->getUlsForObjectId($objectId);
+	}
+
+	private function shouldUseUnifiedLinkForObject(BaseObject $object, bool $isStorageCurrentUser): bool
+	{
+		return $this->isViewByUnifiedLink
+			|| ($isStorageCurrentUser && $object->isLink() && $object->supportsUnifiedLink())
+		;
+	}
+
 	private function isCollaberTourOnAddButtonViewed(): bool
 	{
 		$user = $this->getUser();
@@ -2945,7 +3368,7 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		}
 
 		$uniqueCode = null;
-		if ($supportsSharingAccessPopup && $object instanceof File)
+		if ($supportsSharingAccessPopup)
 		{
 			$uniqueCode = $object->getUniqueCode();
 		}
@@ -2954,7 +3377,6 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 			$closeActionsMenu,
 			$objectId,
 			$objectName,
-			$isFolder,
 			$supportsSharingAccessPopup,
 			$mode,
 			$uniqueCode,
@@ -2971,6 +3393,12 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		return [
 			'id' => 'share',
 			'className' => 'disk-folder-list-context-menu-item',
+			'attrs' => [
+				'data-testid' => 'disk-folder-list-sharing-access-menu-item',
+			],
+			'dataset' => [
+				'testid' => 'disk-folder-list-menu-sharing',
+			],
 			'text' => $text,
 			'onclick' => $clickJsHandler,
 		];
@@ -2998,37 +3426,27 @@ class CDiskFolderListComponent extends DiskComponent implements Controllerable
 		string $closeActionsMenu,
 		int $objectId,
 		string $objectName,
-		bool $isFolder,
 		bool $supportsSharingAccessPopup,
 		string $mode,
 		?string $uniqueCode = null,
 	): string
 	{
-		$isFolderJs = $isFolder ? 'true' : 'false';
 		$escapedObjectName = CUtil::JSEscape($objectName);
+		$escapedMode = CUtil::JSEscape($mode);
 		$escapedUniqueCode = ($uniqueCode === null || $uniqueCode === '')
 			? 'null'
 			: "'" . CUtil::JSEscape($uniqueCode) . "'";
 
 		if (!$supportsSharingAccessPopup)
 		{
-			$legacyMethodByMode = [
-				'without-edit' => 'showSharingDetailWithoutEdit',
-				'with-change-rights' => 'showSharingDetailWithChangeRights',
-				'with-sharing' => 'showSharingDetailWithSharing',
-			];
-			$legacyMethod = $legacyMethodByMode[$mode] ?? 'showSharingDetailWithChangeRights';
-
 			return <<<JS
 {$closeActionsMenu}
-BX.Runtime.loadExtension('disk.sharing-legacy-popup').then((exports) => {
-	const popup = new exports.LegacyPopup();
-	popup.{$legacyMethod}({
-		object: {
-			id: {$objectId},
-			name: '{$escapedObjectName}',
-			isFolder: {$isFolderJs}
-		}
+BX.Runtime.loadExtension('disk.sharing-members-popup').then((exports) => {
+	const popup = new exports.SharingMembersPopup();
+	popup.open({
+		objectId: {$objectId},
+		objectName: '{$escapedObjectName}',
+		mode: '{$escapedMode}'
 	});
 });
 JS;

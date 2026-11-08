@@ -4,6 +4,7 @@ namespace Bitrix\Tasks\Grid\Task\Row\Content;
 use Bitrix\Main;
 use Bitrix\Main\Web\Json;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Tasks\Grid\ControlButtonTrait;
 use Bitrix\Tasks\Grid\Task\Row\Content;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Util\User;
@@ -15,6 +16,8 @@ use Bitrix\Tasks\Util\User;
  */
 class UserName extends Content
 {
+	use ControlButtonTrait;
+
 	/**
 	 * @return string
 	 * @throws Main\ArgumentException
@@ -85,7 +88,7 @@ class UserName extends Content
 		}
 
 		$userName = htmlspecialcharsbx(User::formatName($user));
-		$userNameElement = "<span class='tasks-grid-avatar ui-icon ui-icon-common-user{$userEmptyAvatar}{$userIcon}'><i{$userAvatar}></i></span>"
+		$userNameElement = "<span class='tasks-grid-avatar ui-icon ui-icon-common-user{$userEmptyAvatar}{$userIcon}' aria-hidden='true'><i{$userAvatar}></i></span>"
 			."<span class='tasks-grid-username-inner{$userIcon}'>{$userName}</span>"
 			."<span class='tasks-grid-filter-remove'></span>";
 
@@ -107,8 +110,18 @@ class UserName extends Content
 			$selector .= ' tasks-grid-filter-active';
 		}
 
+		$onClick = "BX.PreventDefault(); BX.Tasks.GridActions.toggleFilter({$encodedData}, {$selected})";
+
 		return "<div class='tasks-grid-username-wrapper'>"
-			."<a class='$selector' onclick='BX.PreventDefault(); BX.Tasks.GridActions.toggleFilter({$encodedData}, {$selected})' href='javascript:void(0)'>{$userNameElement}</a>"
-			."</div>";
+			. $this->renderControlButton(
+				[
+					'class' => $selector,
+					'aria-pressed' => ($selected ? 'true' : 'false'),
+				],
+				$userNameElement,
+				$onClick,
+				"'"
+			)
+			. "</div>";
 	}
 }

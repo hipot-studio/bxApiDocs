@@ -143,6 +143,56 @@ final class ChatCounterCollection implements \IteratorAggregate, \Countable
 
 	/**
 	 * @internal
+	 *
+	 * @return array<int, ChatCounterItem> every node of the tree, nested children included
+	 */
+	public function getAllItems(): array
+	{
+		$items = [];
+		foreach ($this->items as $item)
+		{
+			$items[$item->chatId] = $item;
+			$items += $item->getChildren()->getAllItems();
+		}
+
+		return $items;
+	}
+
+	/**
+	 * @internal
+	 *
+	 * @param array<int, int> $subtrahends chatId => how many unread messages of the chat are excluded
+	 */
+	public function withSubtrahends(array $subtrahends): self
+	{
+		$items = [];
+		$isChanged = false;
+		foreach ($this->items as $item)
+		{
+			$children = $item->getChildren()->withSubtrahends($subtrahends);
+			$ownCounter = max(0, $item->ownCounter - ($subtrahends[$item->chatId] ?? 0));
+			// An untouched subtree returns the very same collection, so identity tells there is nothing to rebuild.
+			if ($ownCounter === $item->ownCounter && $children === $item->getChildren())
+			{
+				$items[$item->chatId] = $item;
+				continue;
+			}
+
+			$isChanged = true;
+			$items[$item->chatId] = new ChatCounterItem(
+				chatId: $item->chatId,
+				parentChatId: $item->parentChatId,
+				ownCounter: $ownCounter,
+				isMuted: $item->isMuted,
+				children: $children,
+			);
+		}
+
+		return $isChanged ? new self($items, $this->parentByChatId) : $this;
+	}
+
+	/**
+	 * @internal
 	 */
 	public function merge(self $collection): self
 	{

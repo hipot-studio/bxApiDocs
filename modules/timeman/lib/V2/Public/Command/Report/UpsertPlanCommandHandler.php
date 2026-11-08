@@ -9,12 +9,17 @@ use Bitrix\Main\Result;
 use Bitrix\Timeman\Integration\Pull\PushEvent;
 use Bitrix\Timeman\Integration\Pull\PushService;
 use Bitrix\Timeman\V2\Internal\DI\Container;
+use Bitrix\Timeman\V2\Internal\Repository\RecordRepository;
 use Bitrix\Timeman\V2\Internal\Service\ReportService;
 use Bitrix\Timeman\V2\Public\Dto\Report\RecordReportType;
 
 class UpsertPlanCommandHandler
 {
-	public function __construct(private readonly ReportService $service)
+	public function __construct(
+		private readonly ReportService $service,
+		private readonly ?RecordRepository $recordRepository = null,
+		private readonly ?PushService $pushService = null,
+	)
 	{
 	}
 
@@ -36,9 +41,10 @@ class UpsertPlanCommandHandler
 			return $result;
 		}
 
-		$record = Container::getInstance()
-			->getRecordRepository()
-			->getCurrentRecord($command->userId, false, false)
+		$recordRepository = $this->recordRepository ?? Container::getInstance()->getRecordRepository();
+		$record = $command->recordId > 0
+			? $recordRepository->getById($command->recordId, false, false)
+			: $recordRepository->getCurrentRecord($command->userId, false, false)
 		;
 
 		if ($record === null || $record->userId !== $command->userId)
@@ -61,7 +67,7 @@ class UpsertPlanCommandHandler
 			return $saveResult;
 		}
 
-		(new PushService())->sendEvent(
+		($this->pushService ?? new PushService())->sendEvent(
 			new PushEvent(
 				command: 'day_plan_ready',
 				recipients: [$command->userId],

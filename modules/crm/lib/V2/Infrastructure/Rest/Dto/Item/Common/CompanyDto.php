@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common;
 
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Attribute\CrmRelation;
 use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Provider\ItemProvider;
 use Bitrix\Crm\V2\Infrastructure\Rest\Validation\Rule\InArrayFrom;
 use Bitrix\Crm\V2\Public\OwnerType;
@@ -22,5 +23,6 @@ class CompanyDto extends Dto
 	public ?int $companyId;
 
 	#[RelationToOne('companyId', 'id')]
+	#[CrmRelation(OwnerType::COMPANY)]
 	public ?ItemDto $company;
 }

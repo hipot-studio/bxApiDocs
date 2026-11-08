@@ -3,7 +3,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2025 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 class PHPParser
@@ -334,17 +334,7 @@ class PHPParser
 		$arComponents = [];
 		$componentNumber = -1;
 
-		$bInComponent = false;
-		$bInPHP = false;
-
-		$bInString = false;
-		$quoteChar = "";
-		$bSlashed = false;
-
-		$string = false;
-		$instruction = "";
-
-		//mb_substr is catastrophic slow, so in UTF we use array of characters
+		//mb_substr is catastrophically slow, so in UTF we use array of characters
 		$allChars = preg_split('//u', $scriptContent, -1, PREG_SPLIT_NO_EMPTY);
 
 		if ($allChars === false)
@@ -353,15 +343,45 @@ class PHPParser
 		}
 
 		$scriptContentLength = mb_strlen($scriptContent);
-		$arAllStr = [];
-		$ind = -1;
-		while ($ind < $scriptContentLength - 1)
+		foreach (static::ParseFile($scriptContent) as $phpBlock)
 		{
-			$ind++;
-			$ch = $allChars[$ind];
+			$blockStart = $phpBlock[0];
+			$blockEnd = $phpBlock[1];
+			$blockSource = $phpBlock[2];
 
-			if ($bInPHP)
+			if (strtolower(substr($blockSource, 0, 5)) === '<?php')
 			{
+				$codeStart = $blockStart + 5;
+			}
+			elseif (str_starts_with($blockSource, '<?='))
+			{
+				$codeStart = $blockStart + 3;
+			}
+			else
+			{
+				$codeStart = $blockStart + 2;
+			}
+
+			$hasRealCloseTag = $blockEnd <= $scriptContentLength
+				&& mb_substr($scriptContent, $blockEnd - 2, 2) === '?>'
+			;
+			$codeEnd = $hasRealCloseTag ? $blockEnd - 2 : min($blockEnd - 2, $scriptContentLength);
+
+			$bInComponent = false;
+			$bInString = false;
+			$quoteChar = "";
+			$bSlashed = false;
+
+			$string = false;
+			$instruction = "";
+			$arAllStr = [];
+
+			$ind = $codeStart - 1;
+			while ($ind < $codeEnd - 1)
+			{
+				$ind++;
+				$ch = $allChars[$ind];
+
 				if (!$bInString)
 				{
 					if (!$bInComponent && $instruction <> '')
@@ -407,9 +427,9 @@ class PHPParser
 						{
 							$endPos = mb_strpos($scriptContent, "\n", $ind + 2);
 
-							if ($endPos === false)
+							if ($endPos === false || $endPos >= $codeEnd)
 							{
-								$ind = $scriptContentLength - 1;
+								$ind = $codeEnd - 1;
 							}
 							else
 							{
@@ -422,9 +442,9 @@ class PHPParser
 						{
 							$endPos = mb_strpos($scriptContent, "*/", $ind + 2);
 
-							if ($endPos === false)
+							if ($endPos === false || $endPos + 2 > $codeEnd)
 							{
-								$ind = $scriptContentLength - 1;
+								$ind = $codeEnd - 1;
 							}
 							else
 							{
@@ -443,26 +463,7 @@ class PHPParser
 						continue;
 					}
 
-					if ($ch == "?" && $ind < $scriptContentLength - 2 && $allChars[$ind + 1] == ">")
-					{
-						$ind += 1;
-						if ($bInComponent)
-						{
-							$bInComponent = false;
-							$arComponents[$componentNumber]["END"] = $ind - 1;
-							$arComponents[$componentNumber]["DATA"] = static::GetComponentParams(preg_replace("#[ \r\n\t]#", "", $instruction), $arAllStr);
-						}
-						$instruction = "";
-						$bInPHP = false;
-						continue;
-					}
-
 					$instruction .= $ch;
-
-					if ($ch == " " || $ch == "\r" || $ch == "\n" || $ch == "\t")
-					{
-						continue;
-					}
 				}
 				else
 				{
@@ -481,20 +482,21 @@ class PHPParser
 					$string .= $ch;
 				}
 			}
-			else
+
+			if ($hasRealCloseTag)
 			{
-				if ($ch == "<")
+				if ($string !== false)
 				{
-					if ($ind < $scriptContentLength - 5 && $allChars[$ind + 1] . $allChars[$ind + 2] . $allChars[$ind + 3] . $allChars[$ind + 4] == "?php")
+					if ($bInComponent)
 					{
-						$bInPHP = true;
-						$ind += 4;
+						$arAllStr[] = $string;
+						$instruction .= chr(1) . (count($arAllStr) - 1) . chr(2);
 					}
-					elseif ($ind < $scriptContentLength - 2 && $allChars[$ind + 1] == "?")
-					{
-						$bInPHP = true;
-						$ind += 1;
-					}
+				}
+				if ($bInComponent)
+				{
+					$arComponents[$componentNumber]["END"] = $codeEnd;
+					$arComponents[$componentNumber]["DATA"] = static::GetComponentParams(preg_replace("#[ \r\n\t]#", "", $instruction), $arAllStr);
 				}
 			}
 		}
@@ -651,104 +653,61 @@ class PHPParser
 	public static function ParseFile($filesrc, $limit = false)
 	{
 		$arScripts = [];
-		$p = 0;
-		$nLen = mb_strlen($filesrc);
-		while (($p = mb_strpos($filesrc, "<?", $p)) !== false)
+		$activeStart = null;
+		$cursor = 0;
+
+		foreach (token_get_all($filesrc) as $token)
 		{
-			$i = $p + 2;
-			$bSlashed = false;
-			$bInString = false;
-			$quote_ch = "";
-			while ($i < $nLen - 1)
+			if (is_array($token))
 			{
-				$i++;
-				$ch = mb_substr($filesrc, $i, 1);
-				if (!$bInString)
-				{
-					//comment
-					if ($ch == "/" && $i + 1 < $nLen)
-					{
-						//php tag
-						$posnext = mb_strpos($filesrc, "?>", $i);
-						if ($posnext === false)
-						{
-							//no final tag
-							break;
-						}
-						$posnext += 2;
-
-						$ti = 0;
-						if (mb_substr($filesrc, $i + 1, 1) == "*" && ($ti = mb_strpos($filesrc, "*/", $i + 2)) !== false)
-						{
-							$ti += 2;
-						}
-						elseif (mb_substr($filesrc, $i + 1, 1) == "/" && ($ti = mb_strpos($filesrc, "\n", $i + 2)) !== false)
-						{
-							$ti += 1;
-						}
-
-						if ($ti)
-						{
-							// begin ($i) and end ($ti) of comment
-							// проверим что раньше конец скрипта или конец комментария (например в одной строке "//comment ? >")
-							if ($ti > $posnext && mb_substr($filesrc, $i + 1, 1) != "*")
-							{
-								// скрипт закончился раньше комментария
-								// вырежем скрипт
-								$arScripts[] = [$p, $posnext, mb_substr($filesrc, $p, $posnext - $p)];
-								break;
-							}
-							else
-							{
-								// комментарий закончился раньше скрипта
-								$i = $ti - 1;
-							}
-						}
-						continue;
-					}
-
-					if ($ch == "?" && $i + 1 < $nLen && mb_substr($filesrc, $i + 1, 1) == ">")
-					{
-						$i = $i + 2;
-						$arScripts[] = [$p, $i, mb_substr($filesrc, $p, $i - $p)];
-						break;
-					}
-				}
-
-				if ($bInString && $ch == "\\" && !$bSlashed)
-				{
-					$bSlashed = true;
-					continue;
-				}
-
-				if ($ch == "\"" || $ch == "'")
-				{
-					if ($bInString)
-					{
-						if (!$bSlashed && $quote_ch == $ch)
-						{
-							$bInString = false;
-						}
-					}
-					else
-					{
-						$bInString = true;
-						$quote_ch = $ch;
-					}
-				}
-
-				$bSlashed = false;
+				$tokenId = $token[0];
+				$tokenText = $token[1];
 			}
-			if ($i >= $nLen)
+			else
 			{
-				break;
+				$tokenId = null;
+				$tokenText = $token;
 			}
-			if ($limit && count($arScripts) == $limit)
+
+			$tokenStart = $cursor;
+			$tokenEnd = $cursor + mb_strlen($tokenText);
+			$cursor = $tokenEnd;
+
+			if (
+				$activeStart === null
+				&& ($tokenId === T_OPEN_TAG || $tokenId === T_OPEN_TAG_WITH_ECHO)
+			)
 			{
-				break;
+				$activeStart = $tokenStart;
 			}
-			$p = $i;
+
+			if ($activeStart !== null && $tokenId === T_CLOSE_TAG)
+			{
+				$blockEnd = str_starts_with($tokenText, "?>") ? $tokenStart + 2 : $tokenEnd;
+				$arScripts[] = [
+					$activeStart,
+					$blockEnd,
+					mb_substr($filesrc, $activeStart, $blockEnd - $activeStart),
+				];
+				$activeStart = null;
+
+				if ($limit && count($arScripts) >= $limit)
+				{
+					break;
+				}
+			}
 		}
+
+		if ($activeStart !== null && (!$limit || count($arScripts) < $limit))
+		{
+			$blockEnd = $cursor + 2;
+			$arScripts[] = [
+				$activeStart,
+				$blockEnd,
+				mb_substr($filesrc, $activeStart, $cursor - $activeStart) . "?>",
+			];
+		}
+
 		return $arScripts;
 	}
 
@@ -888,57 +847,10 @@ class PHPParser
 	public static function getPhpChunks($filesrc, $limit = false)
 	{
 		$chunks = [];
-		$chunk = '';
-		$php = false;
-		if (function_exists("token_get_all"))
-		{
-			foreach (token_get_all($filesrc) as $token)
-			{
-				if ($php)
-				{
-					if (is_array($token))
-					{
-						$chunk .= $token[1];
-						if ($token[0] === T_CLOSE_TAG)
-						{
-							$chunks[] = $chunk;
-							$chunk = '';
-							$php = false;
-							if ($limit && count($chunks) == $limit)
-							{
-								break;
-							}
-						}
-					}
-					else
-					{
-						$chunk .= $token;
-					}
-				}
-				else
-				{
-					if (is_array($token))
-					{
-						if ($token[0] === T_OPEN_TAG || $token[0] === T_OPEN_TAG_WITH_ECHO)
-						{
-							$chunk .= $token[1];
-							$php = true;
-						}
-					}
-				}
-			}
-		}
-		else
-		{
-			foreach (static::ParseFile($filesrc, $limit) as $chunk)
-			{
-				$chunks[] = $chunk[2];
-			}
-		}
 
-		if ($php && $chunk != '')
+		foreach (static::ParseFile($filesrc, $limit) as $chunk)
 		{
-			$chunks[] = $chunk;
+			$chunks[] = $chunk[2];
 		}
 
 		return $chunks;

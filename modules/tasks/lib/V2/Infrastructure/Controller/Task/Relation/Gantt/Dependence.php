@@ -16,6 +16,7 @@ use Bitrix\Tasks\V2\Internal\Access\Task\Gantt\Permission\Update;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission\Read;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Task\GanttLink;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Internal\Service\Task\Gantt\GanttDependenceService;
 use Bitrix\Tasks\V2\Public\Command\Gantt\AddDependenceCommand;
 use Bitrix\Tasks\V2\Public\Command\Gantt\DeleteDependenceCommand;
@@ -125,6 +126,7 @@ class Dependence extends BaseController
 			userId: $this->userId,
 			linkType: $ganttLink->type,
 			useConsistency: true,
+			origin: InteractionOrigin::Ui,
 		))->run();
 
 		if (!$result->isSuccess())

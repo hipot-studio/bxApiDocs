@@ -2,11 +2,11 @@
 
 namespace Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group;
 
+use Bitrix\Crm\Component\EntityList\Grid\Panel\ApplyButton;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Event;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Grid\Panel\Action\Group\GroupChildAction;
 use Bitrix\Main\Grid\Panel\Actions;
-use Bitrix\Main\Grid\Panel\Snippet;
 use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
@@ -16,6 +16,7 @@ final class RestartAutomationChildAction extends GroupChildAction
 {
 	public function __construct(
 		private int $entityTypeId,
+		private string $gridId,
 	)
 	{
 	}
@@ -50,13 +51,14 @@ final class RestartAutomationChildAction extends GroupChildAction
 		$callback =
 			(new Event('BatchManager:restartAutomation'))
 				->addEntityTypeId($this->entityTypeId)
+				->addGridId($this->gridId)
 				->buildJsCallback()
 		;
 
 		$onchange->addAction([
 			'ACTION' => Actions::CREATE,
 			'DATA' => [
-				(new Snippet())->getApplyButton([
+				ApplyButton::forGrid($this->gridId, [
 					'ONCHANGE' => [
 						[
 							'ACTION' => Actions::CALLBACK,

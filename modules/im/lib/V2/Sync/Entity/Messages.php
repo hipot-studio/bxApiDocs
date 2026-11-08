@@ -49,11 +49,21 @@ class Messages implements Entity
 		return 'messageSync';
 	}
 
+	/**
+	 * ALG-02: a message present in both lists travels as added, not as updated: an added message
+	 * carries the full set of fields, while the client applies updates only to messages it knows.
+	 * The order of subtractions is normative: completely deleted messages stay subtracted from the
+	 * updated ones, otherwise a deleted message would arrive as updated.
+	 */
 	public function toRestFormat(array $option = []): ?array
 	{
 		return [
-			'addedMessages' => array_diff($this->addedMessageIds, $this->updatedMessageIds),
-			'updatedMessages' => array_diff($this->updatedMessageIds, $this->completeDeletedMessageIds),
+			'addedMessages' => $this->addedMessageIds,
+			'updatedMessages' => array_diff(
+				$this->updatedMessageIds,
+				$this->addedMessageIds,
+				$this->completeDeletedMessageIds,
+			),
 			'completeDeletedMessages' => $this->completeDeletedMessageIds,
 		];
 	}

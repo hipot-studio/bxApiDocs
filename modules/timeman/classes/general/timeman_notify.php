@@ -1,6 +1,7 @@
 <?
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 use Bitrix\Timeman\Model\Worktime\Record\WorktimeRecordTable;
 
 IncludeModuleLangFile(__FILE__);
@@ -18,6 +19,11 @@ class CTimeManNotify
 		}
 		$ENTRY_ID = intval($ENTRY_ID);
 		if ($ENTRY_ID <= 0)
+		{
+			return false;
+		}
+
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
 		{
 			return false;
 		}
@@ -82,6 +88,7 @@ class CTimeManNotify
 
 			$arRes = $dbRes->Fetch();
 
+			$logID = false;
 			$bSend = false;
 			if ($arRes)
 			{
@@ -112,7 +119,7 @@ class CTimeManNotify
 
 				}
 			}
-			else if ($SEND_TYPE !== 'U')
+			elseif ($SEND_TYPE !== 'U')
 			{
 				$logID = CSocNetLog::Add($arSoFields, false);
 
@@ -154,6 +161,10 @@ class CTimeManNotify
 	protected static function NotifyImNew($arEntry)
 	{
 		if(!CModule::IncludeModule("im"))
+		{
+			return false;
+		}
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
 		{
 			return false;
 		}
@@ -215,6 +226,10 @@ class CTimeManNotify
 	protected static function NotifyImApprove($arEntry)
 	{
 		if(!CModule::IncludeModule("im"))
+		{
+			return false;
+		}
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
 		{
 			return false;
 		}
@@ -902,6 +917,11 @@ class CTimeManNotify
 		global $DB, $USER;
 		CModule::IncludeModule("socialnetwork");
 
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
+		{
+			return false;
+		}
+
 		$result = false;
 		$LOG_ID = CTimeManNotify::SendMessage($arFields["ENTRY_ID"], 'A');
 
@@ -937,6 +957,7 @@ class CTimeManNotify
 	{
 		if (
 			CModule::IncludeModule("im")
+			&& (new Settings())->isToolAvailable(Settings::TOOLS['worktime'])
 			&& intval($arFields["USER_ID"]) > 0
 			&& intval($arFields["ENTRY_ID"]) > 0
 		)

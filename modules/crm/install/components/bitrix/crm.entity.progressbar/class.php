@@ -285,6 +285,7 @@ class CCrmEntityProgressBarComponent extends CBitrixComponent
 			$items[] = array(
 				'NAME' => $name,
 				'STATUS_ID' => $stepID,
+				'HAS_DESCRIPTION' => (string)($info['DESCRIPTION'] ?? '') !== '',
 				'COLOR' => $color,
 				'IS_PASSED' => $isPassed,
 				'IS_VISIBLE' => $isVisible,

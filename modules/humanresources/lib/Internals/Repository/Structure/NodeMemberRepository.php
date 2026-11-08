@@ -41,6 +41,12 @@ final class NodeMemberRepository
 	private const CACHE_TTL = 86400;
 	public const NODE_MEMBER_CACHE_DIR = '/node/member/';
 
+	/**
+	 * @param bool|null $memberActive Activity of the membership record itself and not of the node:
+	 *                                true - only active memberships (default), false - only inactive,
+	 *                                null - no ACTIVE filter. A dismissal turns the membership off before
+	 *                                the event about it is raised, so the filter of that event reads with null.
+	 */
 	public function findAllByEntityIds(
 		array $entityIds,
 		MemberEntityType $memberEntityType = MemberEntityType::USER,
@@ -51,6 +57,7 @@ final class NodeMemberRepository
 		NodeActiveFilter $nodeActiveFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
 		?int $userId = null,
 		bool $withVirtualUsers = true,
+		?bool $memberActive = true,
 	): NodeMemberCollection
 	{
 		$entityIds = array_map('intval', array_filter($entityIds, 'is_numeric'));
@@ -77,6 +84,7 @@ final class NodeMemberRepository
 						entityIdFilter: EntityIdFilter::fromEntityIds($entityIds),
 						entityType: $memberEntityType,
 						nodeFilter: $nodeFilter,
+						active: $memberActive,
 						withVirtualUsers: $withVirtualUsers,
 					),
 				)

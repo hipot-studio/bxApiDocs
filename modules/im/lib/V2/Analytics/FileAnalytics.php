@@ -6,11 +6,15 @@ namespace Bitrix\Im\V2\Analytics;
 
 use Bitrix\Im\V2\Analytics\Event\FileMessageEvent;
 use Bitrix\Im\V2\Analytics\Event\MediaMessageEvent;
+use Bitrix\Im\V2\Chat\ChannelChat;
+use Bitrix\Im\V2\Chat\CollabChat;
+use Bitrix\Im\V2\Chat\CommentChat;
 use Bitrix\Im\V2\Entity\File\Param\ParamName;
 use Bitrix\Im\V2\Entity\File\ParamCollection;
 use Bitrix\Im\V2\Integration\AI\Transcription\LaunchType;
 use Bitrix\Im\V2\Integration\AI\Transcription\Result\TranscribeResult;
 use Bitrix\Im\V2\Message;
+use Bitrix\Main\Loader;
 
 class FileAnalytics extends AbstractAnalytics
 {
@@ -38,7 +42,7 @@ class FileAnalytics extends AbstractAnalytics
 		});
 	}
 
-	public function addAttachFilesEvent(Message $message): void
+	public function addAttachFilesEvent(Message $message, ?string $fileType = null): void
 	{
 		$files = $message->getFiles();
 		$fileCount = $files->count();
@@ -47,9 +51,14 @@ class FileAnalytics extends AbstractAnalytics
 			return;
 		}
 
+		// Legacy contract: without the disk module the im-label goes out with no type at all.
 		$this
 			->createFileMessageEvent(self::ATTACH_FILE)
-			?->setFilesType($files)
+			?->setType(
+				Loader::includeModule('disk')
+					? ($fileType ?? FileMessageEvent::resolveFileType($files))
+					: null
+			)
 			?->setFileP3($fileCount)
 			?->send()
 		;
@@ -82,11 +91,38 @@ class FileAnalytics extends AbstractAnalytics
 
 		if ($category !== null)
 		{
-			$this->createMediaMessageEvent($eventName, $category)
+			$event = $this->createMediaMessageEvent($eventName, $category)
 				?->setStatus($statusCode)
 				?->setP2($this->formatLaunchType($launchType))
-				?->send();
+			;
+
+			if ($this->hasProjectP4())
+			{
+				// transcripts do not report the project; p4 values of other chats stay untouched
+				$event?->setP4(null);
+			}
+
+			$event?->send();
 		}
+	}
+
+	/**
+	 * Mirrors the branches of ChatEvent::setChatP4() that resolve to projectId_: the project chat
+	 * itself and any chat under it except channels and comments, which keep their parentChatId_.
+	 */
+	private function hasProjectP4(): bool
+	{
+		if ($this->chat instanceof CollabChat)
+		{
+			return true;
+		}
+
+		if ($this->chat instanceof ChannelChat || $this->chat instanceof CommentChat)
+		{
+			return false;
+		}
+
+		return $this->chat->hasParent() && $this->chat->getParentChat() instanceof CollabChat;
 	}
 
 	protected function createMediaMessageEvent(string $eventName, string $category): ?MediaMessageEvent

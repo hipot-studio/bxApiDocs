@@ -18,6 +18,7 @@ class MenuList
 	public const SECTION_BIZPROC = 'bizproc';
 	public const SECTION_CRM_DYNAMIC = 'crm_dynamic';
 	public const SECTION_MARKETPLACE = 'marketplace';
+	public const SECTION_ANALYTICS = 'analytics';
 	public const SECTION_TOOLS = 'tools';
 	public const SECTION_DEVELOPMENT = 'development';
 	public const SECTION_CALL_LIST = 'call_list';
@@ -67,6 +68,7 @@ class MenuList
 			$this->createSection(self::SECTION_BIZPROC, Loc::getMessage('MENU_BIZPROC_SECTION_TITLE'), 500),
 			$this->createSection(self::SECTION_CRM_DYNAMIC, Loc::getMessage('MENU_CRM_DYNAMIC_SECTION_TITLE'), 600),
 			$this->createSection(self::SECTION_MARKETPLACE, Loc::getMessage('MENU_MARKETPLACE_SECTION_TITLE'), 700),
+			$this->createSection(self::SECTION_ANALYTICS, Loc::getMessage('MENU_ANALYTICS_SECTION_TITLE'), 800),
 			$this->createSection(self::SECTION_DEVELOPMENT, 'Development', 2000),
 		];
 	}

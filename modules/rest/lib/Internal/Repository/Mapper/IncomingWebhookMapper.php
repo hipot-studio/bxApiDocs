@@ -31,6 +31,7 @@ class IncomingWebhookMapper
 			scopes: $scopes,
 			externalAttributes: $externalAttributes,
 			type: $this->toWebhookType((string)$ormModel->getType()),
+			dateExpire: $ormModel->getDateExpire(),
 		);
 
 		$webhook->setId($ormModel->getId());
@@ -55,6 +56,7 @@ class IncomingWebhookMapper
 			->setDateCreate($entity->getDateCreate())
 			->setDateLogin($entity->getDateLogin())
 			->setLastIp($entity->getLastIp())
+			->setDateExpire($entity->getDateExpire())
 		;
 
 		return $ormModel;

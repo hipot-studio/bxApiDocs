@@ -177,7 +177,13 @@ class ScheduleRepository
 			];
 		}
 		/** @var ScheduleUserTable|Department\ScheduleDepartmentTable $assignClassName */
-		return $assignClassName::updateMulti($primaries, ['STATUS' => $excluded], true);
+		$result = $assignClassName::updateMulti($primaries, ['STATUS' => $excluded], true);
+		if ($result->isSuccess())
+		{
+			$this->invalidateAssignmentCache($assignName, $assignIds);
+		}
+
+		return $result;
 	}
 
 	public function updateBatchUsers($scheduleId, $userIds, $excluded)
@@ -210,7 +216,13 @@ class ScheduleRepository
 				'STATUS' => (int)$user->getStatus(),
 			];
 		}
-		return ScheduleUserTable::addMulti($values, true);
+		$result = ScheduleUserTable::addMulti($values, true);
+		if ($result->isSuccess())
+		{
+			$this->invalidateAssignmentCache('USER_ID', array_column($values, 'USER_ID'));
+		}
+
+		return $result;
 	}
 
 	/**
@@ -233,7 +245,13 @@ class ScheduleRepository
 				'STATUS' => (int)$department->getStatus(),
 			];
 		}
-		return Department\ScheduleDepartmentTable::addMulti($values, true);
+		$result = Department\ScheduleDepartmentTable::addMulti($values, true);
+		if ($result->isSuccess())
+		{
+			(new \Bitrix\Timeman\V2\Internal\Service\AutomaticModeConfigurationCache())->invalidateAll();
+		}
+
+		return $result;
 	}
 
 	public function deleteUsersAssignments($scheduleOrId, $userIds = [])
@@ -267,7 +285,23 @@ class ScheduleRepository
 		Application::getConnection()->query(
 			'DELETE FROM ' . $tableName . " WHERE SCHEDULE_ID = $scheduleId AND $assignIdName IN (" . implode(',', $ids) . ")"
 		);
+		$this->invalidateAssignmentCache($assignIdName, $ids);
 		return (new Result());
+	}
+
+	private function invalidateAssignmentCache(string $field, array $ids): void
+	{
+		$cache = new \Bitrix\Timeman\V2\Internal\Service\AutomaticModeConfigurationCache();
+		if ($field !== 'USER_ID')
+		{
+			$cache->invalidateAll();
+
+			return;
+		}
+		foreach ($ids as $userId)
+		{
+			$cache->invalidateUser((int)$userId);
+		}
 	}
 
 	private function convertEachToInt($ids)

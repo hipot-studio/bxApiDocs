@@ -2,6 +2,7 @@
 
 namespace Bitrix\BIConnector\ExternalSource;
 
+use Bitrix\BIConnector\Access\Service\TableGroupService;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDataset;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\Main\Application;
@@ -12,9 +13,15 @@ use Bitrix\Main\Result;
 
 final class RestDatasetManager extends DatasetManager
 {
-	public static function addWithDataset(array $dataset, array $fields, array $settings = [], ?int $sourceId = null): Result
+	public static function addWithDataset(
+		array $dataset,
+		array $fields,
+		array $settings = [],
+		?int $sourceId = null,
+		?array $tableGroupIds = null,
+	): Result
 	{
-		$result = parent::add($dataset, $fields, $settings, $sourceId);
+		$result = parent::add($dataset, $fields, $settings, $sourceId, $tableGroupIds);
 		if (!$result->isSuccess())
 		{
 			return $result;
@@ -58,6 +65,12 @@ final class RestDatasetManager extends DatasetManager
 
 	public static function deleteWithDataset(int $id): Result
 	{
+		$dataset = self::getById($id);
+		if (!$dataset)
+		{
+			return new Result();
+		}
+
 		$connection = Application::getInstance()->getConnection();
 		$connection->startTransaction();
 
@@ -73,7 +86,7 @@ final class RestDatasetManager extends DatasetManager
 			'biconnector',
 			self::EVENT_ON_AFTER_DELETE_DATASET,
 			[
-				'dataset' => self::getById($id),
+				'dataset' => $dataset,
 			]
 		);
 		$event->send();
@@ -95,6 +108,8 @@ final class RestDatasetManager extends DatasetManager
 		}
 
 		$connection->commitTransaction();
+		// The unbinding reset the caches before the commit, so a hit in between may have cached the old bindings
+		TableGroupService::resetGroupCaches();
 
 		return $result;
 	}

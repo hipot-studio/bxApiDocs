@@ -23,6 +23,7 @@ final class CreateSystemIncomingWebhookCommandHandler
 			scopes: $command->scopes,
 			attributes: $command->attributes,
 			comment: $command->comment,
+			dateExpire: $command->dateExpire,
 		);
 	}
 }

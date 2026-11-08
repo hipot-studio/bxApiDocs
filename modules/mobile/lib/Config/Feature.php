@@ -7,6 +7,9 @@ namespace Bitrix\Mobile\Config;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ModuleManager;
 
+/**
+ * @deprecated Use Bitrix\Main\Config\Feature instead
+ */
 final class Feature
 {
 	/**
@@ -43,7 +46,8 @@ final class Feature
 
 		self::loadFlags();
 
-		$moduleId = self::$flagModuleMap[$flag];
+		// A consumer module may ask about a flag this version of mobile does not ship yet.
+		$moduleId = self::$flagModuleMap[$flag] ?? null;
 
 		if (
 			$moduleId

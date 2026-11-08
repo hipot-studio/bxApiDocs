@@ -39,7 +39,10 @@ final readonly class AutomationSliderQueryService
 			$scenarios[] = [
 				'code' => $code,
 				'title' => Loc::getMessage($scenario['titleId']),
-				'description' => Loc::getMessage($scenario['descriptionId']),
+				'description' => Loc::getMessage(
+					$scenario['descriptionId'],
+					['#COPILOT_NAME#' => AIManager::getCopilotName()],
+				),
 				'channels' => $this->collectChannelStates($settings, $code, $scenario),
 				'availability' => $availabilityMap[$code] ?? $this->unavailableState(),
 			];

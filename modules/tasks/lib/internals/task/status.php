@@ -34,4 +34,12 @@ abstract class Status extends Base
 			self::IN_PROGRESS,
 		];
 	}
+
+	public static function getCompletedStatuses(): array
+	{
+		return [
+			self::SUPPOSEDLY_COMPLETED,
+			self::COMPLETED,
+		];
+	}
 }

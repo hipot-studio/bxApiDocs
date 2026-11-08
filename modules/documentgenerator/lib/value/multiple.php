@@ -19,7 +19,11 @@ class Multiple extends Value
 
 		$modifier = preg_replace('#mseparator=\d#', '', $modifier);
 		$modifier = preg_replace('#mfirst=[y,n]#', '', $modifier);
-		$modifier = preg_replace('#[,+]#', ',', $modifier);
+		$modifier = preg_replace_callback(
+			'#add=\s*\+|[,+]#',
+			static fn (array $matches): string => str_starts_with($matches[0], 'add=') ? $matches[0] : ',',
+			$modifier,
+		);
 		$modifier = trim($modifier, ',');
 		$separator = $this->getSeparatorByCode($options['mseparator']);
 		$isFirst = $options['mfirst'];

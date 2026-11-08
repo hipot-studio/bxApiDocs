@@ -1157,24 +1157,29 @@ class CrmStoreDocumentDetailComponent extends Crm\Component\EntityDetails\BaseCo
 
 		$this->entityData['USER_LIST_SELECT'] = $this->getDefaultUserList();
 
-		$categoryParams = CCrmComponentHelper::getEntityClientFieldCategoryParams(CCrmOwnerType::OrderShipment);
+		$isClientRecentBySectionEnabled = Crm\Feature::enabled(Crm\Feature\ClientRecentBySection::class);
+		[$recentCategory, $clientCategoryEntityTypeId] = $isClientRecentBySectionEnabled
+			? ['crm.store.document.details', CCrmOwnerType::StoreDocument]
+			: ['crm.deal.details', CCrmOwnerType::OrderShipment]
+		;
+		$categoryParams = CCrmComponentHelper::getEntityClientFieldCategoryParams($clientCategoryEntityTypeId);
 		$this->entityData['LAST_COMPANY_INFOS'] = Crm\Controller\Action\Entity\SearchAction::prepareSearchResultsJson(
 			Crm\Controller\Entity::getRecentlyUsedItems(
-				'crm.deal.details',
+				$recentCategory,
 				'company',
 				[
 					'EXPAND_ENTITY_TYPE_ID' => CCrmOwnerType::Company,
-					'EXPAND_CATEGORY_ID' => $categoryParams[CCrmOwnerType::Company]['categoryId'],
+					'EXPAND_CATEGORY_ID' => $categoryParams[CCrmOwnerType::Company]['categoryId'] ?? 0,
 				]
 			)
 		);
 		$this->entityData['LAST_CONTACT_INFOS'] = Crm\Controller\Action\Entity\SearchAction::prepareSearchResultsJson(
 			Crm\Controller\Entity::getRecentlyUsedItems(
-				'crm.deal.details',
+				$recentCategory,
 				'contact',
 				[
 					'EXPAND_ENTITY_TYPE_ID' => CCrmOwnerType::Contact,
-					'EXPAND_CATEGORY_ID' => $categoryParams[CCrmOwnerType::Contact]['categoryId'],
+					'EXPAND_CATEGORY_ID' => $categoryParams[CCrmOwnerType::Contact]['categoryId'] ?? 0,
 				]
 			)
 		);

@@ -6,6 +6,8 @@ $GLOBALS["SONET_FEATURES_CACHE"] = array();
 
 use Bitrix\Socialnetwork\FeatureTable;
 use Bitrix\Socialnetwork\Integration;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 
 class CAllSocNetFeatures
 {
@@ -171,8 +173,16 @@ class CAllSocNetFeatures
 			$DB->Commit();
 			if (defined("BX_COMP_MANAGED_CACHE"))
 			{
-				$CACHE_MANAGER->ClearByTag('sonet_features');
 				$CACHE_MANAGER->ClearByTag("sonet_feature_".$ID);
+
+				if (DeferredCacheFeature::isOn())
+				{
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_features');
+				}
+				else
+				{
+					$CACHE_MANAGER->ClearByTag('sonet_features');
+				}
 			}
 
 			FeatureTable::cleanCache();
@@ -250,8 +260,16 @@ class CAllSocNetFeatures
 
 			if (defined("BX_COMP_MANAGED_CACHE"))
 			{
-				$CACHE_MANAGER->ClearByTag('sonet_features');
 				$CACHE_MANAGER->ClearByTag("sonet_feature_".$ID);
+
+				if (DeferredCacheFeature::isOn())
+				{
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_features');
+				}
+				else
+				{
+					$CACHE_MANAGER->ClearByTag('sonet_features');
+				}
 			}
 
 			FeatureTable::cleanCache();

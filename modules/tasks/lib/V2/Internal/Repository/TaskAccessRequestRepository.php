@@ -69,4 +69,12 @@ class TaskAccessRequestRepository implements TaskAccessRequestRepositoryInterfac
 	{
 		TaskAccessRequestTable::deleteByFilter(['=USER_ID' => $userId]);
 	}
+
+	public function clearByUserAndTaskId(int $userId, int $taskId): void
+	{
+		TaskAccessRequestTable::deleteByFilter([
+			'=USER_ID' => $userId,
+			'=TASK_ID' => $taskId,
+		]);
+	}
 }

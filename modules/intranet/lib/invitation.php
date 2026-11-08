@@ -12,6 +12,10 @@ use Bitrix\Intranet\Counters\Synchronizations\TotalInvitationSynchronization;
 use Bitrix\Intranet\Counters\Synchronizations\WaitConfirmationResetSynchronization;
 use Bitrix\Intranet\Counters\Synchronizations\WaitConfirmationSynchronization;
 use Bitrix\Intranet\Integration\HumanResources\PermissionInvitation;
+use Bitrix\Intranet\Internal\Integration\Bitrix24\License\InvitationLimiter;
+use Bitrix\Intranet\Internal\Integration\Bitrix24\PortalCreatorService;
+use Bitrix\Intranet\Internal\Service\Invitation\InvitationCounterResyncService;
+use Bitrix\Intranet\Internal\Service\Invitation\InvitationCounterResyncTarget;
 use Bitrix\Intranet\Internals\InvitationTable;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentOutOfRangeException;
@@ -334,6 +338,17 @@ class Invitation
 		return PermissionInvitation::createByCurrentUser()->canInvite();
 	}
 
+	/**
+	 * Portal-level gate for sending a brand-new invitation: mirrors the two portal prefilters of the
+	 * new-invite action (daily invitation limit and portal creator email confirmation). Does not
+	 * cover the user's invite right or the integrator count limit. Reinvite is not affected.
+	 */
+	public static function isNewInvitationAvailable(): bool
+	{
+		return !(new InvitationLimiter())->isExceeded()
+			&& (new PortalCreatorService())->isPortalCreatorEmailConfirmed();
+	}
+
 	public static function canCurrentUserInviteByPhone(): bool
 	{
 		return
@@ -388,18 +403,14 @@ class Invitation
 
 	public static function addResyncAllCountersTask(?User $user): void
 	{
-		static $userIdList = [];
-		static $forAdmins = true;
-		$needSyncForAdmins = $forAdmins && empty($userIdList);
+		static $scheduledUserIdList = [];
 
-		if ($needSyncForAdmins || !in_array($user?->getId(), $userIdList))
+		$userId = (int)$user?->getId();
+
+		if (!in_array($userId, $scheduledUserIdList, true))
 		{
 			Application::getInstance()->addBackgroundJob(fn() => static::fullSyncCounterByUser($user));
-			if ($user instanceof User)
-			{
-				$userIdList[] = $user->getId();
-			}
-			$forAdmins = false;
+			$scheduledUserIdList[] = $userId;
 		}
 	}
 
@@ -565,15 +576,35 @@ class Invitation
 			return true;
 		}
 
-		$ownUser = $deleteUser->fetchOriginatorUser();
+		$resyncTarget = new InvitationCounterResyncTarget($deleteUser->fetchOriginatorUser());
 
 		$eventManager = EventManager::getInstance();
-		$eventManager->addEventHandler(
+		$deleteHandlerKey = null;
+		$fireHandlerKey = static::scheduleCounterResyncOnFire(
+			$userId,
+			$resyncTarget,
+			static function() use ($eventManager, &$deleteHandlerKey): void {
+				$eventManager->removeEventHandler('main', 'OnAfterUserDelete', $deleteHandlerKey);
+			},
+		);
+		$deleteHandlerKey = $eventManager->addEventHandler(
 			'main',
 			'OnAfterUserDelete',
-			function(int $userId) use ($ownUser)
-			{
-				static::addResyncAllCountersTask($ownUser);
+			static function(int $deletedUserId) use (
+				$userId,
+				$resyncTarget,
+				$fireHandlerKey,
+				$eventManager,
+				&$deleteHandlerKey,
+			): void {
+				if ($deletedUserId !== $userId)
+				{
+					return;
+				}
+
+				$eventManager->removeEventHandler('main', 'OnAfterUserDelete', $deleteHandlerKey);
+				$eventManager->removeEventHandler('intranet', 'onAfterUserFire', $fireHandlerKey);
+				(new InvitationCounterResyncService())->resync($resyncTarget);
 
 				if (\Bitrix\Main\Loader::includeModule('pull'))
 				{
@@ -581,14 +612,67 @@ class Invitation
 						'module_id' => 'intranet',
 						'command' => 'userDeleted',
 						'params' => [
-							'userId' => $userId,
+							'userId' => $deletedUserId,
 						],
 					]);
 				}
-			}
+			},
 		);
 
 		return true;
+	}
+
+	public static function onBeforeUserFireHandler(Event $event): void
+	{
+		$user = $event->getParameter('user');
+
+		if (!$user instanceof Entity\User)
+		{
+			return;
+		}
+
+		$userId = (int)$user->getId();
+
+		$resyncTarget = (new InvitationCounterResyncService())->captureTarget($user);
+
+		if ($resyncTarget === null)
+		{
+			return;
+		}
+
+		static::scheduleCounterResyncOnFire($userId, $resyncTarget);
+	}
+
+	private static function scheduleCounterResyncOnFire(
+		int $userId,
+		InvitationCounterResyncTarget $resyncTarget,
+		?\Closure $onFire = null,
+	): int
+	{
+		$eventManager = EventManager::getInstance();
+		$handlerKey = $eventManager->addEventHandler(
+			'intranet',
+			'onAfterUserFire',
+			static function(Event $event) use ($userId, $resyncTarget, $eventManager, $onFire, &$handlerKey): void {
+				$firedUser = $event->getParameter('user');
+
+				if (!$firedUser instanceof Entity\User || (int)$firedUser->getId() !== $userId)
+				{
+					return;
+				}
+
+				$eventManager->removeEventHandler('intranet', 'onAfterUserFire', $handlerKey);
+
+				if ($onFire !== null)
+				{
+					$onFire();
+				}
+
+				(new InvitationCounterResyncService())->resync($resyncTarget);
+			},
+		);
+
+		return $handlerKey;
 	}
 
 	public static function onSocNetUserToGroupAddHandler($ID, $data)

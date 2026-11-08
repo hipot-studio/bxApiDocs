@@ -14,9 +14,9 @@ class ChannelChat extends GroupChat
 {
 	private const MESSAGE_COMPONENT_START_CHANNEL = 'ChannelCreationMessage';
 
-	public function canHaveChild(Chat $child): bool
+	public function allowsComments(): bool
 	{
-		return $child instanceof CommentChat;
+		return true;
 	}
 
 	public function extendPullWatch(): void

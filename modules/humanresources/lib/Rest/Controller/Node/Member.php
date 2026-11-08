@@ -7,6 +7,7 @@ namespace Bitrix\HumanResources\Rest\Controller\Node;
 use Bitrix\HumanResources\Access\Model\NodeModel;
 use Bitrix\HumanResources\Rest\Trait\NodeControllerTrait;
 use Bitrix\HumanResources\Access\StructureActionDictionary;
+use Bitrix\HumanResources\Exception\DeleteFailedException;
 use Bitrix\HumanResources\Rest\Dto\NodeMemberDto;
 use Bitrix\HumanResources\Rest\RequestParams;
 use Bitrix\HumanResources\Internals\Service\Container as InternalContainer;
@@ -200,9 +201,27 @@ class Member extends RestController
 			]);
 		}
 
-		Container::getNodeMemberService()->saveUsersToDepartment($node, $userIds);
+		$this->saveMembers($node, $userIds);
 
 		return new ArrayResponse(['success' => true]);
+	}
+
+	/**
+	 * Removing a member can be legitimately refused by the service: the user is in their last
+	 * department, or the per-user lock is held by a concurrent change.
+	 */
+	private function saveMembers(\Bitrix\HumanResources\Item\Node $node, array $userIds): void
+	{
+		try
+		{
+			Container::getNodeMemberService()->saveUsersToDepartment($node, $userIds);
+		}
+		catch (DeleteFailedException $e)
+		{
+			throw new RequestValidationException([
+				new Error($e->getMessage(), 'MEMBER_DELETE_FAILED'),
+			]);
+		}
 	}
 
 	private function getNodeWithAccessCheck(

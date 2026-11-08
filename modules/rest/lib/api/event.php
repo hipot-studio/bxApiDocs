@@ -9,13 +9,13 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\AccessException;
-use Bitrix\Rest\AppTable;
 use Bitrix\Rest\AuthTypeException;
 use Bitrix\Rest\EventOfflineTable;
 use Bitrix\Rest\EventTable;
 use Bitrix\Rest\HandlerHelper;
 use Bitrix\Rest\LicenseException;
 use Bitrix\Rest\OAuth\Auth;
+use Bitrix\Rest\Public\Provider\ApplicationProvider;
 use Bitrix\Rest\RestException;
 use Bitrix\Rest\Exceptions;
 
@@ -214,9 +214,9 @@ class Event extends \IRestService
 			throw new Exceptions\ArgumentNullException("HANDLER");
 		}
 
-		$clientInfo = AppTable::getByClientId($server->getClientId());
+		$appId = static::getApplicationId($server);
 
-		if($eventCallback == '' || HandlerHelper::checkCallback($eventCallback, $clientInfo))
+		if($eventCallback == '' || HandlerHelper::checkCallback($eventCallback))
 		{
 			$scopeList = $server->getAuthScope();
 			$scopeList[] = \CRestUtil::GLOBAL_SCOPE;
@@ -231,7 +231,7 @@ class Event extends \IRestService
 					if(is_array($eventInfo))
 					{
 						$eventHandlerFields = array(
-							'APP_ID' => $clientInfo['ID'],
+							'APP_ID' => $appId,
 							'EVENT_NAME' => $eventName,
 							'EVENT_HANDLER' => $eventCallback,
 							'CONNECTOR_ID' => $connectorId,
@@ -270,7 +270,7 @@ class Event extends \IRestService
 							}
 						}
 
-						$lockKey = implode('|', [$clientInfo['ID'], $eventName, $eventCallback, $connectorId, $eventUser]);
+						$lockKey = implode('|', [$appId, $eventName, $eventCallback, $connectorId, $eventUser]);
 
 						if (Application::getConnection()->lock($lockKey))
 						{
@@ -379,12 +379,13 @@ class Event extends \IRestService
 			throw new Exceptions\ArgumentNullException('HANDLER');
 		}
 
-		$clientInfo = AppTable::getByClientId($server->getClientId());
+		$appId = static::getApplicationId($server);
 
 		$filter = array(
-			'=APP_ID' => $clientInfo["ID"],
+			'=APP_ID' => $appId,
 			'=EVENT_NAME' => $eventName,
 			'=EVENT_HANDLER' => $eventCallback,
+			'=VERSION' => \Bitrix\Rest\Internal\Entity\Event::VERSION_REST_V1,
 		);
 
 		if($eventType === EventTable::TYPE_OFFLINE)
@@ -440,10 +441,11 @@ class Event extends \IRestService
 
 		$result = array();
 
-		$clientInfo = AppTable::getByClientId($server->getClientId());
+		$appId = static::getApplicationId($server);
 
 		$filter = array(
-			"=APP_ID" => $clientInfo["ID"],
+			"=APP_ID" => $appId,
+			'=VERSION' => \Bitrix\Rest\Internal\Entity\Event::VERSION_REST_V1,
 		);
 
 		if(!\CRestUtil::isAdmin())
@@ -489,12 +491,12 @@ class Event extends \IRestService
 			throw new AuthTypeException();
 		}
 
-		$clientInfo = AppTable::getByClientId($server->getClientId());
+		$appId = static::getApplicationId($server);
 
 		foreach(GetModuleEvents("rest", "OnRestAppTest", true) as $event)
 		{
 			ExecuteModuleEventEx($event, array(array(
-				"APP_ID" => $clientInfo["ID"],
+				"APP_ID" => $appId,
 				"QUERY" => $query
 			)));
 		}
@@ -545,9 +547,9 @@ class Event extends \IRestService
 
 		$order = static::sanitizeOrder($order);
 
-		$clientInfo = AppTable::getByClientId($server->getClientId());
+		$appId = static::getApplicationId($server);
 
-		$queryFilter['=APP_ID'] = $clientInfo['ID'];
+		$queryFilter['=APP_ID'] = $appId;
 		$queryFilter['=CONNECTOR_ID'] = $connectorId;
 		$queryFilter['=ERROR'] = $getErrors ? 1 : 0;
 
@@ -593,7 +595,7 @@ class Event extends \IRestService
 
 		if ($clearEvents && count($result) > 0)
 		{
-			EventOfflineTable::clearEvents($processId, $clientInfo['ID'], $connectorId);
+			EventOfflineTable::clearEvents($processId, $appId, $connectorId);
 		}
 
 		return array(
@@ -626,7 +628,7 @@ class Event extends \IRestService
 			throw new Exceptions\ArgumentNullException('PROCESS_ID');
 		}
 
-		$clientInfo = AppTable::getByClientId($server->getClientId());
+		$appId = static::getApplicationId($server);
 
 		if (isset($query['message_id']))
 		{
@@ -648,7 +650,7 @@ class Event extends \IRestService
 				$listIds[] = $messageId;
 			}
 
-			EventOfflineTable::clearEventsByMessageId($processId, $clientInfo['ID'], $connectorId, $listIds);
+			EventOfflineTable::clearEventsByMessageId($processId, $appId, $connectorId, $listIds);
 		}
 		else
 		{
@@ -673,7 +675,7 @@ class Event extends \IRestService
 				}
 			}
 
-			EventOfflineTable::clearEvents($processId, $clientInfo['ID'], $connectorId, $listIds);
+			EventOfflineTable::clearEvents($processId, $appId, $connectorId, $listIds);
 		}
 
 		return true;
@@ -709,10 +711,10 @@ class Event extends \IRestService
 			throw new Exceptions\ArgumentException('Value must be array of MESSAGE_ID values', 'message_id');
 		}
 
-		$clientInfo = AppTable::getByClientId($server->getClientId());
+		$appId = static::getApplicationId($server);
 		if(count($messageId) > 0)
 		{
-			EventOfflineTable::markError($processId, $clientInfo['ID'], $connectorId, $messageId);
+			EventOfflineTable::markError($processId, $appId, $connectorId, $messageId);
 		}
 
 		return true;
@@ -742,9 +744,9 @@ class Event extends \IRestService
 
 		$order = static::sanitizeOrder($order, array('ID', 'TIMESTAMP_X', 'EVENT_NAME', 'MESSAGE_ID', 'PROCESS_ID', 'ERROR'));
 
-		$clientInfo = AppTable::getByClientId($server->getClientId());
+		$appId = static::getApplicationId($server);
 
-		$queryFilter['=APP_ID'] = $clientInfo['ID'];
+		$queryFilter['=APP_ID'] = $appId;
 
 		$getEventQuery = EventOfflineTable::query();
 
@@ -790,6 +792,14 @@ class Event extends \IRestService
 			"count" => $getEventQuery->queryCountTotal(),
 			"offset" => $navParams['offset']
 		));
+	}
+
+	private static function getApplicationId(\CRestServer $server): ?int
+	{
+		return (new ApplicationProvider())
+			->findByClientId((string)$server->getClientId())
+			?->getId()
+		;
 	}
 
 	protected static function sanitizeFilter($filter, array $availableFields = null, $valueCallback = null, array $availableOperations = null)

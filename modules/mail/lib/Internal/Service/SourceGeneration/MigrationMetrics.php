@@ -42,6 +42,9 @@ final class MigrationMetrics
 	/** The tail of the transfer: the letters the module puts onto the new source itself */
 	public const SCOPE_TAIL = 'tail';
 
+	/** The catching up pass: what the user did to their letters while the transfer ran */
+	public const SCOPE_REPLAY = 'replay';
+
 	public const PROCESSED = 'processed';
 	public const MATCHED = 'matched';
 	public const NEW = 'new';
@@ -126,6 +129,46 @@ final class MigrationMetrics
 	 * beyond reach.
 	 */
 	public const ENVELOPE_ONLY = 'envelope_only';
+
+	/* Counters of the action replay pass */
+
+	/** Letters the pass looked at: the ones with a live placement on both sides */
+	public const PAIRS = 'pairs';
+
+	/** Move commands the pass handed to the new source and the row of which it repainted */
+	public const MOVED = 'moved';
+
+	/**
+	 * Letters of a move command the new source would not carry out. One command carries every
+	 * letter travelling between one pair of folders, so a refusal of it is counted for each of
+	 * them. Nothing is rolled back and no repeat is scheduled, which makes this counter the whole
+	 * record of what did not reach the server.
+	 *
+	 * A source that cannot be reached at all is not among them: the pass refuses as a whole and
+	 * holds the switch back instead of counting the mailbox refused letter by letter.
+	 */
+	public const MOVE_REFUSED = 'move_refused';
+
+	/** Read states written as an intention for the next synchronization of the folder to push */
+	public const READ_INTENTS = 'read_intents';
+
+	/**
+	 * Readings that did not make it over: the new source turned the flag command down, the letter
+	 * was moved anyway, and the reading of it is lost. Not a letter held back - the move is the
+	 * promise the transfer is made of and the reading is the smaller thing - and not a delivery
+	 * postponed either: the move leaves the row with no number, the synchronization of the new
+	 * folder brings the letter in as a row of its own carrying the flags the server holds, and
+	 * nothing afterwards pushes the reading the row was still waiting to. So the letter is where
+	 * the portal wants it and reads on the new source the way the new source had it, and this is
+	 * the count of the letters that happened to.
+	 */
+	public const FLAG_REFUSED = 'flag_refused';
+
+	/**
+	 * Letters whose role the prepared generation keeps no folder of - a new source without a
+	 * spam folder, say. Such a letter is left where it is; the counter is what says so.
+	 */
+	public const UNROUTED = 'unrouted';
 
 	/** Gauges: the last measurement wins over the stored one */
 	public const BATCH_TIME_MAX = 'batch_ms_max';

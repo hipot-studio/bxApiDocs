@@ -6,6 +6,7 @@ use Bitrix\Catalog\v2\Contractor\Provider\Manager;
 use Bitrix\Crm\Binding\ContactCompanyTable;
 use Bitrix\Crm\Binding\DealContactTable;
 use Bitrix\Crm\Binding\LeadContactTable;
+use Bitrix\Crm\Component\EntityList\Grid\Panel\GroupActionsParameter;
 use Bitrix\Crm\Conversion\Entity\EntityConversionMapTable;
 use Bitrix\Crm\Conversion\Entity\EO_EntityConversionMap;
 use Bitrix\Crm\Conversion\Entity\EO_EntityConversionMap_Collection;
@@ -994,6 +995,26 @@ class RelationManager
 			$addEventName = 'CrmCreateDynamicFrom' . ucfirst(\Bitrix\Crm\Integration\Analytics\Dictionary::getAnalyticsEntityType($parentEntityTypeId));
 			if ($factory && $serviceUrl)
 			{
+				$groupActionsParameter = GroupActionsParameter::forListComponent(
+					$router->getItemListComponentName($entityTypeId)
+				);
+
+				$componentParams = [
+					'GRID_ID_SUFFIX' => 'PARENT_' . \CCrmOwnerType::ResolveName($parentEntityTypeId) . '_DETAILS',
+					'TAB_ID' => $tabCode,
+					'ENABLE_TOOLBAR' => true,
+					'PRESERVE_HISTORY' => true,
+					'PARENT_ENTITY_TYPE_ID' => $parentEntityTypeId,
+					'PARENT_ENTITY_ID' => $parentEntityId,
+					'ADD_EVENT_NAME' => $addEventName,
+					'EXTENDED_INTERNAL_MODE' => true,
+					'ANALYTICS' => [
+						// we dont know where from this component was opened from - it could be anywhere on portal
+						'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::getAnalyticsEntityType($parentEntityTypeId) . '_section',
+						'c_sub_section' => Dictionary::SUB_SECTION_DETAILS,
+					],
+				] + $groupActionsParameter;
+
 				$tab = [
 					'id' => $tabCode,
 					'name' => $factory->getEntityDescriptionInPlural(),
@@ -1003,21 +1024,7 @@ class RelationManager
 							'template' => '',
 							'signedParameters' => $router->signChildrenItemsComponentParams(
 								$entityTypeId,
-								[
-									'GRID_ID_SUFFIX' => 'PARENT_' . \CCrmOwnerType::ResolveName($parentEntityTypeId) . '_DETAILS',
-									'TAB_ID' => $tabCode,
-									'ENABLE_TOOLBAR' => true,
-									'PRESERVE_HISTORY' => true,
-									'PARENT_ENTITY_TYPE_ID' => $parentEntityTypeId,
-									'PARENT_ENTITY_ID' => $parentEntityId,
-									'ADD_EVENT_NAME' => $addEventName,
-									'EXTENDED_INTERNAL_MODE' => true,
-									'ANALYTICS' => [
-										// we dont know where from this component was opened from - it could be anywhere on portal
-										'c_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::getAnalyticsEntityType($parentEntityTypeId) . '_section',
-										'c_sub_section' => Dictionary::SUB_SECTION_DETAILS,
-									],
-								],
+								$componentParams,
 							),
 						],
 					],

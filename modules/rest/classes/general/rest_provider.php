@@ -694,6 +694,7 @@ class CRestProvider extends IRestService
 	 * @return array|mixed|null|string
 	 *
 	 * @throws AccessException
+	 * @throws Exceptions\ArgumentTypeException
 	 */
 	public static function appOptionGet($params, $n, CRestServer $server)
 	{
@@ -707,6 +708,11 @@ class CRestProvider extends IRestService
 		if(!$USER->IsAuthorized())
 		{
 			throw new AccessException("User authorization required");
+		}
+
+		if(isset($params['option']) && !is_string($params['option']))
+		{
+			throw new Exceptions\ArgumentTypeException('option', 'string');
 		}
 
 		$appOptions = Option::get("rest", "options_".$server->getClientId());

@@ -7,6 +7,7 @@ use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Integration\ImBot\BizprocBot;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
@@ -23,6 +24,7 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 	private const RETURN_PARAM_ACTUAL_BOT_ID = 'ActualBotId';
 	private const RETURN_PARAM_CHAT_ID = 'chatId';
 	private const RETURN_PARAM_IS_GROUP_CHAT = 'isGroupChat';
+	private const RETURN_PARAM_EVENT_DATE_TIME = 'EventDateTime';
 	private const FIELD_DOCUMENT_ID = 'DOCUMENT_ID';
 
 	public function execute(): int
@@ -46,10 +48,14 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 		}
 
 		$this->{self::RETURN_PARAM_MESSAGE} = (string)($context[BizprocBot::FIELD_MESSAGE] ?? '');
-		$this->{self::RETURN_PARAM_SENDER} = 'user_' . $senderId;
+		if ($senderId > 0)
+		{
+			$this->{self::RETURN_PARAM_SENDER} = 'user_' . $senderId;
+		}
 		$this->{self::RETURN_PARAM_ACTUAL_BOT_ID} = $botId;
 		$this->{self::RETURN_PARAM_CHAT_ID} = (int)($context['TO_CHAT_ID'] ?? $context['CHAT_ID'] ?? 0);
 		$this->{self::RETURN_PARAM_IS_GROUP_CHAT} = ($context['MESSAGE_TYPE'] ?? null) === IM_MESSAGE_CHAT;
+		$this->{self::RETURN_PARAM_EVENT_DATE_TIME} = (new DateTime())->format(DateTime::getFormat());
 
 		return CBPActivityExecutionStatus::Closed;
 	}
@@ -66,6 +72,7 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 			self::RETURN_PARAM_ACTUAL_BOT_ID => null,
 			self::RETURN_PARAM_CHAT_ID => null,
 			self::RETURN_PARAM_IS_GROUP_CHAT => null,
+			self::RETURN_PARAM_EVENT_DATE_TIME => null,
 		];
 
 		$this->SetPropertiesTypes([
@@ -74,6 +81,7 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 			self::RETURN_PARAM_ACTUAL_BOT_ID => ['Type' => FieldType::INT],
 			self::RETURN_PARAM_CHAT_ID => ['Type' => FieldType::INT],
 			self::RETURN_PARAM_IS_GROUP_CHAT => ['Type' => FieldType::BOOL],
+			self::RETURN_PARAM_EVENT_DATE_TIME => ['Type' => FieldType::DATETIME],
 		]);
 	}
 
@@ -101,7 +109,7 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 		];
 	}
 
-	public static function validateProperties($arTestProperties = [], CBPWorkflowTemplateUser $user = null): array
+	public static function validateProperties($arTestProperties = [], ?CBPWorkflowTemplateUser $user = null): array
 	{
 		$errors = [];
 		foreach (self::getPropertiesMap([]) as $id => $property)
@@ -149,15 +157,15 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 	{
 		$dialog = new PropertiesDialog(
 			__FILE__, [
-			'documentType' => $documentType,
-			'activityName' => $activityName,
-			'workflowTemplate' => $arWorkflowTemplate,
-			'workflowParameters' => $arWorkflowParameters,
-			'workflowVariables' => $arWorkflowVariables,
-			'currentValues' => $arCurrentValues,
-			'formName' => $formName,
-			'siteId' => $siteId,
-		],
+				'documentType' => $documentType,
+				'activityName' => $activityName,
+				'workflowTemplate' => $arWorkflowTemplate,
+				'workflowParameters' => $arWorkflowParameters,
+				'workflowVariables' => $arWorkflowVariables,
+				'currentValues' => $arCurrentValues,
+				'formName' => $formName,
+				'siteId' => $siteId,
+			],
 		);
 
 		$dialog->setMap(static::getPropertiesMap($documentType));
@@ -186,7 +194,7 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 				$property,
 				$property['FieldName'],
 				$currentValues,
-				$errors
+				$errors,
 			);
 
 			if (!empty($errors))
@@ -199,7 +207,7 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 
 		$errors = self::validateProperties(
 			$properties,
-			new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser)
+			new CBPWorkflowTemplateUser(CBPWorkflowTemplateUser::CurrentUser),
 		);
 
 		if ($errors)
@@ -239,7 +247,7 @@ class CBPImBotNewMessageTrigger extends \Bitrix\Bizproc\Activity\BaseTrigger
 
 		$allowedSenderIds = CBPHelper::ExtractUsers(
 			$this->{self::PARAM_SENDER_IDS},
-			$parameters->get(self::FIELD_DOCUMENT_ID)
+			$parameters->get(self::FIELD_DOCUMENT_ID),
 		);
 		if (!$this->checkUsersUseAbility($allowedSenderIds, $senderId))
 		{

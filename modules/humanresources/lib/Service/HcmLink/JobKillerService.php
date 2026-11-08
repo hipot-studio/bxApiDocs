@@ -16,9 +16,12 @@ class JobKillerService
 {
 	private const NEXT_EXECUTION_OFFSET = 300;
 	private const LIMIT = 50;
-	private const TTL = '-2 hour';
 
-	private const MAX_EVENT_COUNT_BEFORE_CANCEL = 2;
+	// Read by the HcmLink monitoring summary: the threshold of a stuck job and the number of
+	// attempts before the agent gives up must not get a second source of truth.
+	public const TTL = '-2 hour';
+
+	public const MAX_EVENT_COUNT_BEFORE_CANCEL = 2;
 
 	private JobRepository $jobRepository;
 
@@ -134,7 +137,9 @@ class JobKillerService
 	private function existsNotFinished(): bool
 	{
 		$collection = $this->jobRepository->listByStatusListAndDate(
-			statusList: JobStatus::getNotFinished(),
+			statusList: array_map(
+				static fn(\BackedEnum $status) => $status->value, JobStatus::getNotFinished(),
+			),
 			limit: 1,
 		);
 

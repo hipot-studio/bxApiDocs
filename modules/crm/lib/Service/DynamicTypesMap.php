@@ -430,5 +430,28 @@ class DynamicTypesMap
 		$cache->clean(static::DYNAMIC_COLLECTION_CACHE_ID, static::DYNAMIC_COLLECTION_CACHE_PATH);
 		$this->isTypesLoaded = false;
 		$this->typesCollection = null;
+		$this->types = [];
+		$this->stageFieldNames = [];
+		$this->isAutomationEnabled = [];
+		$this->isStagesEnabled = [];
+		$this->isCategoriesEnabled = [];
+		$this->invalidateCategoriesCache();
+		\CCrmStatus::invalidateStageGroups();
+	}
+
+	/**
+	 * Categories and stages are loaded once per instance. After a category is added or deleted, an already loaded
+	 * instance keeps serving the old set, so consumers like the default permissions scenario see no categories
+	 * for a freshly created type. This reset makes the next load() fetch categories and stages again.
+	 */
+	public function invalidateCategoriesCache(): void
+	{
+		$this->isCategoriesLoaded = false;
+		$this->isStagesLoaded = false;
+		$this->categories = [];
+		$this->categoryIds = [];
+		$this->defaultCategoryIds = [];
+		$this->stageEntityIds = [];
+		$this->stages = [];
 	}
 }

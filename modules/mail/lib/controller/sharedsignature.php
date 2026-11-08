@@ -104,7 +104,7 @@ class SharedSignature extends Base
 			$rawSignature = $rawSignature !== '' ? $rawSignature : $signature;
 		}
 
-		$sanitizedSignature = $this->sanitize($rawSignature);
+		$sanitizedSignature = $this->sanitizeSignature($rawSignature);
 		if ($sanitizedSignature === '')
 		{
 			$this->addError(new Error(Loc::getMessage('MAIL_SIGNATURE_ERROR_EMPTY_BODY'), 422));
@@ -159,7 +159,7 @@ class SharedSignature extends Base
 		$rawSignature = (string)$this->getRequest()->getPostList()->getRaw('signature');
 		if ($rawSignature !== '' || $signature !== null)
 		{
-			$sanitizedSignature = $this->sanitize($rawSignature !== '' ? $rawSignature : (string)$signature);
+			$sanitizedSignature = $this->sanitizeSignature($rawSignature !== '' ? $rawSignature : (string)$signature);
 			if ($sanitizedSignature === '')
 			{
 				$this->addError(new Error(Loc::getMessage('MAIL_SIGNATURE_ERROR_EMPTY_BODY'), 422));

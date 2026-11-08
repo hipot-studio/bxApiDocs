@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Type\Callback;
+
 class CCaptchaAgent
 {
 	public static function DeleteOldCaptcha($sec = 3600)
@@ -9,9 +11,8 @@ class CCaptchaAgent
 		$sec = intval($sec);
 
 		$time = $DB->CharToDateFunction(GetTime(time()-$sec,"FULL"));
-		if (!$DB->Query("DELETE FROM b_captcha WHERE DATE_CREATE <= ".$time))
-			return false;
+		$DB->Query("DELETE FROM b_captcha WHERE DATE_CREATE <= ".$time);
 
-		return "CCaptchaAgent::DeleteOldCaptcha(".$sec.");";
+		return new Callback([self::class, 'DeleteOldCaptcha'], [$sec]);
 	}
 }

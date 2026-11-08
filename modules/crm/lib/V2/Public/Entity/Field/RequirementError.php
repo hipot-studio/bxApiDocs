@@ -1,0 +1,22 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Bitrix\Crm\V2\Public\Entity\Field;
+
+/**
+ * The closed set of expected refusals reported while reading a field requirement.
+ */
+enum RequirementError: string
+{
+	case ACCESS_DENIED = 'ACCESS_DENIED';
+	case ENTITY_TYPE_NOT_SUPPORTED = 'ENTITY_TYPE_NOT_SUPPORTED';
+	case ENTITY_TYPE_NOT_FOUND = 'ENTITY_TYPE_NOT_FOUND';
+	case CATEGORY_ID_REQUIRED = 'CATEGORY_ID_REQUIRED';
+	case CATEGORY_ID_NOT_ALLOWED = 'CATEGORY_ID_NOT_ALLOWED';
+	case CATEGORY_ID_INVALID = 'CATEGORY_ID_INVALID';
+	case CATEGORY_NOT_FOUND = 'CATEGORY_NOT_FOUND';
+	case CATEGORY_ENTITY_TYPE_MISMATCH = 'CATEGORY_ENTITY_TYPE_MISMATCH';
+	case FIELD_NOT_FOUND = 'FIELD_NOT_FOUND';
+	case CONFIGURATION_CONFLICT = 'CONFIGURATION_CONFLICT';
+}

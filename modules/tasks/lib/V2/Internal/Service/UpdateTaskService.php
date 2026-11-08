@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Command\Exception\CommandValidationException;
 use Bitrix\Tasks\Control\Exception\TaskNotExistsException;
 use Bitrix\Tasks\Control\Exception\TaskUpdateException;
@@ -12,11 +13,15 @@ use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Repository\TaskRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 use Bitrix\Tasks\V2\Internal\Service\Esg\EgressController;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionRecorder;
+use Bitrix\Tasks\V2\Internal\Service\Ranking\EventType;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunBizProc;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunCrm;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\RunUpdateEvent;
+use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateSearchIndex;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\UpdateUserFields;
+use Bitrix\Tasks\V2\Internal\Service\Task\Mutation\TaskMutationRegistry;
 use Bitrix\Tasks\V2\Internal\Service\Task\UpdateService;
 use Bitrix\Tasks\V2\Public\Command\Task\UpdateTaskCommand;
 
@@ -27,6 +32,8 @@ class UpdateTaskService
 		private readonly ConsistencyResolverInterface $consistencyResolver,
 		private readonly TaskRepositoryInterface $taskRepository,
 		private readonly EgressController $egressController,
+		private readonly InteractionRecorder $interactionRecorder,
+		private readonly TaskMutationRegistry $mutationRegistry,
 	)
 	{
 	}
@@ -44,20 +51,61 @@ class UpdateTaskService
 			throw new WrongTaskIdException();
 		}
 
-		if ($config->isUseConsistency())
+		$hasMutationScope = $this->mutationRegistry->active(Application::getConnection()) !== null;
+		if ($config->isUseConsistency() && !$hasMutationScope)
 		{
-			[$task, $fields, $taskBefore, $taskObjectBefore, $sourceTaskData] = $this->consistencyResolver->resolve('task.update')->wrap(
-				fn (): array => $this->updateService->update($task, $config)
+			[
+				$task,
+				$fields,
+				$taskBefore,
+				$taskObjectBefore,
+				$sourceTaskData,
+				$fullTaskData,
+				$searchIndexFields,
+			] = $this->consistencyResolver->resolve('task.update')->wrap(
+				fn (): array => $this->updateService->update(
+					task: $task,
+					config: $config,
+					deferSearchIndex: true,
+				),
 			);
 		}
 		else
 		{
-			[$task, $fields, $taskBefore, $taskObjectBefore, $sourceTaskData] = $this->updateService->update($task, $config);
+			[
+				$task,
+				$fields,
+				$taskBefore,
+				$taskObjectBefore,
+				$sourceTaskData,
+				$fullTaskData,
+				$searchIndexFields,
+			] = $this->updateService->update(
+				task: $task,
+				config: $config,
+				deferSearchIndex: true,
+			);
 		}
 
-		(new UpdateUserFields($config))($fields, $task->id);
+		// Outside the consistency wrapper: a rolled back update must not add weight.
+		// Re-entrant updates count once - the recorder dedups within the request.
+		$this->interactionRecorder->record(
+			userId: $config->getUserId(),
+			taskId: (int)$task->id,
+			eventType: EventType::Update,
+			relationKind: null,
+			origin: $config->getOrigin(),
+		);
 
-		$this->taskRepository->invalidate($task->id);
+		try
+		{
+			(new UpdateUserFields($config))($fields, $task->id);
+		}
+		finally
+		{
+			(new UpdateSearchIndex())($fullTaskData, $searchIndexFields);
+			$this->taskRepository->invalidate($task->id);
+		}
 
 		(new RunUpdateEvent($config))(
 			$fields,

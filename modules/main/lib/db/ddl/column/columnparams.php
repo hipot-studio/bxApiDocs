@@ -19,6 +19,8 @@ final class ColumnParams
 		private readonly ?int $size = null,
 		private readonly bool $unsigned = false,
 		private readonly bool $autoincrement = false,
+		/** Lower bound for the autoincrement counter; a closure is resolved to ?int before rendering. */
+		private readonly int|\Closure|null $autoincrementStartWith = null,
 		// varchar / char / varbinary
 		private readonly ?int $length = null,
 		// float family
@@ -59,6 +61,11 @@ final class ColumnParams
 	public function isAutoincrement(): bool
 	{
 		return $this->autoincrement;
+	}
+
+	public function getAutoincrementStartWith(): int|\Closure|null
+	{
+		return $this->autoincrementStartWith;
 	}
 
 	public function getLength(): ?int

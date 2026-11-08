@@ -1,6 +1,7 @@
 <?php
 namespace Bitrix\Intranet\UI\LeftMenu;
 
+use Bitrix\Intranet\Internal\Integration\Vibecodeconnector\LeftMenuItemProvider;
 use Bitrix\Intranet\Integration\Templates\Air\AirTemplate;
 use Bitrix\Intranet\Settings\Tools\ToolsManager;
 use Bitrix\Intranet\Portal\FirstPage;
@@ -9,6 +10,7 @@ use Bitrix\Intranet\UI\LeftMenu\MenuItem;
 use Bitrix\Intranet\UI\LeftMenu\Preset\Manager;
 use Bitrix\Intranet\UI\LeftMenu\Preset\Social;
 use Bitrix\Main\Loader;
+use Bitrix\Rest\PlacementTable;
 
 class Menu
 {
@@ -17,7 +19,7 @@ class Menu
 	protected $siteId;
 	protected MainFirstPage $mainPage;
 
-	public function __construct(array $menuItemsData, User $user)
+	public function __construct(array $menuItemsData, User $user, ?int $userId = null)
 	{
 		$this->user = $user;
 		$this->siteId = defined('SITE_ID') ? SITE_ID : self::getDefaultSiteId();
@@ -50,7 +52,7 @@ class Menu
 			$this->setItem($item);
 		}
 
-		foreach ($this->getSavedUserMenuItems() as $class => $data)
+		foreach ($this->getSavedUserMenuItems($userId) as $class => $data)
 		{
 			if (is_array($data))
 			{
@@ -70,6 +72,19 @@ class Menu
 			}
 		}
 
+		foreach ((new Favorites\ProjectSectionDecorator())->apply($this->items) as $itemToHide)
+		{
+			$this->unsetItem($itemToHide);
+		}
+		if ($userId !== null)
+		{
+			$item = (new LeftMenuItemProvider())->getForUser($userId, $this->getSiteId());
+			if ($item !== null)
+			{
+				$this->setItem($item);
+			}
+		}
+
 		if ($this->mainPage->isEnabled())
 		{
 			$this->setItem(new MenuItem\MainPageItem([
@@ -82,7 +97,7 @@ class Menu
 	public static function getDefaultForCurrentUser(): self
 	{
 		$userId = \Bitrix\Intranet\CurrentUser::get()->getId();
-		$menu = new self(self::getDefaultMenuItems(), new User());
+		$menu = new self(self::getDefaultMenuItems(), new User(), $userId);
 		$isCollaber =
 			Loader::includeModule('extranet')
 			&& \Bitrix\Extranet\Service\ServiceContainer::getInstance()->getCollaberService()->isCollaberById($userId)
@@ -98,7 +113,7 @@ class Menu
 		return $this->siteId;
 	}
 
-	protected function getSavedUserMenuItems(): array
+	protected function getSavedUserMenuItems(?int $userId): array
 	{
 		return [
 			MenuItem\ItemAdminShared::class =>
@@ -106,16 +121,66 @@ class Menu
 					\COption::GetOptionString('intranet', 'left_menu_items_to_all_'.$this->getSiteId())
 					, ['allowed_classes' => false]
 				),
-			MenuItem\ItemRestApplication::class =>
-				unserialize(
-					\COption::GetOptionString('intranet', 'left_menu_items_marketplace_'.$this->getSiteId())
-					, ['allowed_classes' => false]
-				),
+			MenuItem\ItemRestApplication::class => $this->getMarketplaceMenuItems($userId),
 			MenuItem\ItemUserSelf::class =>
 				\CUserOptions::GetOption('intranet', 'left_menu_self_items_'.$this->getSiteId()),
 			MenuItem\ItemUserFavorites::class =>
 				\CUserOptions::GetOption('intranet', 'left_menu_standard_items_'.$this->getSiteId()),
 		];
+	}
+
+	protected function getMarketplaceMenuItems(?int $userId): array
+	{
+		$savedItems = $this->getSavedMarketplaceMenuItems();
+
+		$hasPlacementItems = false;
+		foreach ($savedItems as $item)
+		{
+			if ((int)($item['PLACEMENT_ID'] ?? 0) > 0)
+			{
+				$hasPlacementItems = true;
+				break;
+			}
+		}
+
+		if (!$hasPlacementItems)
+		{
+			return $savedItems;
+		}
+
+		$accessiblePlacementIdMap = array_fill_keys(
+			$this->getAccessiblePlacementIds((int)$userId),
+			true
+		);
+
+		return array_values(array_filter(
+			$savedItems,
+			static function ($item) use ($accessiblePlacementIdMap) {
+				$placementId = (int)($item['PLACEMENT_ID'] ?? 0);
+
+				return $placementId <= 0 || isset($accessiblePlacementIdMap[$placementId]);
+			}
+		));
+	}
+
+	protected function getSavedMarketplaceMenuItems(): array
+	{
+		$savedItems = unserialize(
+			\COption::GetOptionString('intranet', 'left_menu_items_marketplace_' . $this->getSiteId()),
+			['allowed_classes' => false]
+		);
+
+		return is_array($savedItems) ? $savedItems : [];
+	}
+
+	protected function getAccessiblePlacementIds(int $userId): array
+	{
+		if ($userId <= 0 || !Loader::includeModule('rest'))
+		{
+			return [];
+		}
+
+		return PlacementTable::getAccessibleHandlerIds(\CIntranetRestService::LEFT_MENU, $userId);
 	}
 
 	protected function setItem($item)

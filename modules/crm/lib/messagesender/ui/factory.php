@@ -9,6 +9,8 @@ use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Item;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\MessageSender\Channel\Correspondents\ToRepository;
+use Bitrix\Crm\MessageSender\CustomTemplate\CrmTemplateTargetId;
+use Bitrix\Crm\MessageSender\UI\Editor\Scene\BaseScene;
 use Bitrix\Crm\MessageSender\UI\Factory\Registry;
 use Bitrix\Crm\Multifield\Type\Phone;
 use Bitrix\Crm\Service\Container;
@@ -21,6 +23,7 @@ use Bitrix\MessageService\Public\UI\MessageEditor\ContentProvider;
 use Bitrix\MessageService\Public\UI\MessageEditor\ContentProvider\Copilot;
 use Bitrix\MessageService\Public\UI\MessageEditor\ContentProvider\Files;
 use Bitrix\MessageService\Public\UI\MessageEditor\Context;
+use Bitrix\MessageService\Public\UI\MessageEditor\Editor as MessageEditor;
 use Bitrix\MessageService\Public\UI\MessageEditor\Scene;
 use Bitrix\MessageService\Public\UI\MessageEditor\ViewChannel;
 
@@ -35,7 +38,7 @@ final class Factory
 		$this->registry = ServiceLocator::getInstance()->get(Registry::class);
 	}
 
-	public function createEditor(Scene $scene, Context $context): \Bitrix\MessageService\Public\UI\MessageEditor\Editor
+	public function createEditor(Scene $scene, Context $context): MessageEditor
 	{
 		$factory = ServiceLocator::getInstance()->get('messageservice.public.ui.factory');
 		$editor = $factory->createEditor($scene, $context);
@@ -44,6 +47,65 @@ final class Factory
 		$editor->setContentProviders(
 			$this->getContentProviders($context, $editor->getViewChannels() ?? [])
 		);
+
+		// Custom-template selector layout flags are a mounting-surface policy, not a factory
+		// concern: each host (timeline, payment, document) decides whether the selector and its
+		// "create" CTA are shown. The factory stays policy-free; Layout defaults both flags off.
+		return $editor;
+	}
+
+	/**
+	 * Build a {@see MessageEditor} pre-configured for the «custom template» editing modal.
+	 *
+	 * The CRM factory owns the "{entityTypeId}:{categoryId}" targetId format and parses it
+	 * through {@see CrmTemplateTargetId}. This keeps the editor assembly independent from the
+	 * messageservice custom-template zone registry while still using the exact same parser/formatter
+	 * as the CRM zone provider.
+	 */
+	public function createCustomTemplateEditor(string $sceneId, string $targetId, int $userId): ?MessageEditor
+	{
+		$parsed = CrmTemplateTargetId::fromString($targetId);
+		if ($parsed === null)
+		{
+			return null;
+		}
+
+		$scene = $this->getScene($sceneId);
+		if ($scene === null)
+		{
+			return null;
+		}
+
+		$context = new Context(
+			userId: $userId,
+			customData: $parsed->toArray(),
+		);
+
+		// The template modal discards the whole send-flow surface (addressees, view channels,
+		// promo banners, saved preferences). Building the editor through the messageservice
+		// factory would pay for sender enumeration and preferences lookup on every open just to
+		// throw the result away, so assemble a bare editor and configure only the authoring parts.
+		$editor = new MessageEditor($scene, $context);
+
+		$editor
+			->setToList([])
+			->setViewChannels([])
+			->setContentProviders($this->getTemplateEditorContentProviders($context))
+		;
+
+		$editor->getLayout()
+			->setHeaderShown(false)
+			->setFooterShown(false)
+			->setSendButtonShown(false)
+			->setCancelButtonShown(false)
+			->setMessagePreviewShown(false)
+			->setToSelectorShown(false)
+			->setChannelSelectorShown(false)
+			->setMessageTextReadOnly(false)
+			->setContentProvidersShown(true)
+			->setEmojiButtonShown(true)
+			->setMessageLengthCounterShown(true)
+		;
 
 		return $editor;
 	}
@@ -67,6 +129,19 @@ final class Factory
 	}
 
 	/**
+	 * @return BaseScene[]
+	 */
+	public function getScenes(): array
+	{
+		if (!Loader::includeModule('messageservice'))
+		{
+			return [];
+		}
+
+		return $this->registry->getScenes();
+	}
+
+	/**
 	 * @param ViewChannel[] $viewChannels
 	 * @return ContentProvider[]
 	 */
@@ -79,16 +154,38 @@ final class Factory
 
 		return [
 			new Files(),
-			new Copilot([
-				'isLocked' => !AIManager::isEnabledInGlobalSettings(GlobalSetting::MessageSenderEditor),
-				'moduleId' => 'crm',
-				'category' => Loader::includeModule('ai') ? \Bitrix\AI\SharePrompt\Enums\Category::CRM_MESSAGE_EDITOR->value : null,
-				'contextId' => 'crm.messagesender.editor',
-			]),
+			$this->createCopilotProvider(),
 			new Editor\ContentProvider\CrmValues($context),
 			new Editor\ContentProvider\SalesCenter($context, $canSendMessage),
 			new Editor\ContentProvider\Documents($context),
 		];
+	}
+
+	/**
+	 * Content providers available inside the custom-template editor modal.
+	 * Limited to {@see Editor\ContentProvider\CrmValues}, {@see Copilot} and {@see Files}
+	 * (emoji is a built-in editor capability); SalesCenter and Documents are send-only
+	 * and never reach the template editor.
+	 *
+	 * @return ContentProvider[]
+	 */
+	private function getTemplateEditorContentProviders(Context $context): array
+	{
+		return [
+			new Editor\ContentProvider\CrmValues($context),
+			$this->createCopilotProvider(),
+			new Files(),
+		];
+	}
+
+	private function createCopilotProvider(): Copilot
+	{
+		return new Copilot([
+			'isLocked' => !AIManager::isEnabledInGlobalSettings(GlobalSetting::MessageSenderEditor),
+			'moduleId' => 'crm',
+			'category' => Loader::includeModule('ai') ? \Bitrix\AI\SharePrompt\Enums\Category::CRM_MESSAGE_EDITOR->value : null,
+			'contextId' => 'crm.messagesender.editor',
+		]);
 	}
 
 	private function getToList(Context $context): array

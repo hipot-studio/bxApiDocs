@@ -34,7 +34,7 @@ class Error
 	}
 
 	/**
-	 * Returns first error frm errors stack.
+	 * Returns first error from errors stack.
 	 * @return \Bitrix\Main\Error|null
 	 */
 	public function getFirstError(): ?\Bitrix\Main\Error

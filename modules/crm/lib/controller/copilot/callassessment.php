@@ -4,6 +4,8 @@ namespace Bitrix\Crm\Controller\Copilot;
 
 use Bitrix\Crm\Controller\Base;
 use Bitrix\Crm\Controller\ErrorCode;
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\CreateScriptEvent;
+use Bitrix\Crm\Copilot\CallAssessment\Analytics\CriteriaGenEvent;
 use Bitrix\Crm\Copilot\CallAssessment\CallAssessmentItem;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentController;
 use Bitrix\Crm\Copilot\CallAssessment\Controller\CopilotCallAssessmentCriteriaController;
@@ -14,6 +16,7 @@ use Bitrix\Crm\Copilot\CallAssessment\Enum\AutoCheckType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\AvailabilityType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\CallType;
 use Bitrix\Crm\Copilot\CallAssessment\Enum\ClientType;
+use Bitrix\Crm\Copilot\CallAssessment\HintStateResolver;
 use Bitrix\Crm\Copilot\CallAssessment\PromptsChecker;
 use Bitrix\Crm\Copilot\CallAssessment\ScriptEditChangeDetector;
 use Bitrix\Crm\Copilot\CallAssessment\V2ScriptDataLoader;
@@ -26,6 +29,8 @@ use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\Connection;
+use Bitrix\Main\DB\TransactionException;
 use Bitrix\Main\Engine\ActionFilter\Scope;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Error;
@@ -41,6 +46,7 @@ final class CallAssessment extends Base
 		'title',
 		'description',
 		'prompt',
+		'isHintEnabled',
 		'clientTypeIds',
 		'callTypeId',
 		'autoCheckTypeId',
@@ -66,6 +72,8 @@ final class CallAssessment extends Base
 		?int $id = null,
 		array $criteria = [],
 		?string $eventId = null,
+		bool $criteriaGeneratedByAi = false,
+		?int $aiGeneratedCriteriaCount = null,
 	): Result
 	{
 		if (!Container::getInstance()->getUserPermissions()->copilotCallAssessment()->canEdit())
@@ -77,7 +85,13 @@ final class CallAssessment extends Base
 
 		if (AIManager::isCallScoringV2Enabled())
 		{
-			return $this->saveV2($id ?? 0, $callAssessmentItem, $criteria);
+			return $this->saveV2(
+				$id ?? 0,
+				$callAssessmentItem,
+				$criteria,
+				$criteriaGeneratedByAi,
+				$aiGeneratedCriteriaCount,
+			);
 		}
 
 		return $this->saveV1($callAssessmentItem, $id, $eventId);
@@ -137,6 +151,10 @@ final class CallAssessment extends Base
 				->setStatus($isNeedExtractCriteria ? QueueTable::EXECUTION_STATUS_PENDING : $entity->getStatus())
 				->setCode($entity->getCode())
 			;
+			if ($callAssessmentItem->isHintEnabled() === null)
+			{
+				$callAssessmentItem->setHintEnabled($entity->getIsHintEnabled());
+			}
 
 			$context = clone Container::getInstance()->getContext();
 			$context->setEventId($eventId);
@@ -361,6 +379,7 @@ final class CallAssessment extends Base
 				: $scriptName,
 			'description' => '',
 			'prompt' => '',
+			'isHintEnabled' => false,
 			'gist' => null,
 			'clientTypeIds' => $clientTypeIds,
 			'callTypeId' => $callTypeId ?? CallType::ALL->value,
@@ -381,13 +400,33 @@ final class CallAssessment extends Base
 		return (int)$addResult->getId();
 	}
 
-	private function saveV2(int $id, CallAssessmentItem $patch, array $criteria): Result
+	private function saveV2(
+		int $id,
+		CallAssessmentItem $patch,
+		array $criteria,
+		bool $criteriaGeneratedByAi = false,
+		?int $aiGeneratedCriteriaCount = null,
+	): Result
 	{
 		$result = new Result();
+		if (!$patch->areHintFieldsValid())
+		{
+			$this->addError(new Error(
+				'Prompt and isHintEnabled must be provided together with valid types',
+				ErrorCode::INVALID_ARG_VALUE,
+			));
+
+			return $result;
+		}
 
 		if ($id <= 0)
 		{
-			return $this->createV2($patch, $criteria);
+			return $this->createV2(
+				$patch,
+				$criteria,
+				$criteriaGeneratedByAi,
+				$aiGeneratedCriteriaCount,
+			);
 		}
 
 		$entity = CopilotCallAssessmentController::getInstance()->getById($id);
@@ -425,7 +464,7 @@ final class CallAssessment extends Base
 			$updateResult = CopilotCallAssessmentController::getInstance()->update($id, $item);
 			if (!$updateResult->isSuccess())
 			{
-				$connection->rollbackTransaction();
+				$this->rollbackTransactionSafely($connection);
 				$this->addErrors($updateResult->getErrors());
 
 				return $result;
@@ -434,7 +473,7 @@ final class CallAssessment extends Base
 			$syncResult = (new CriteriaWriter())->sync($id, $payloadCriteria);
 			if (!$syncResult->isSuccess())
 			{
-				$connection->rollbackTransaction();
+				$this->rollbackTransactionSafely($connection);
 				$this->addErrors($syncResult->getErrors());
 
 				return $result;
@@ -444,7 +483,7 @@ final class CallAssessment extends Base
 		}
 		catch (\Throwable $e)
 		{
-			$connection->rollbackTransaction();
+			$this->rollbackTransactionSafely($connection);
 			$this->addError(new Error($e->getMessage()));
 
 			return $result;
@@ -465,7 +504,12 @@ final class CallAssessment extends Base
 		return $result;
 	}
 
-	private function createV2(CallAssessmentItem $patch, array $criteria): Result
+	private function createV2(
+		CallAssessmentItem $patch,
+		array $criteria,
+		bool $criteriaGeneratedByAi = false,
+		?int $aiGeneratedCriteriaCount = null,
+	): Result
 	{
 		$result = new Result();
 
@@ -481,10 +525,13 @@ final class CallAssessment extends Base
 		}
 
 		$patchData = $patch->toArray();
+		$prompt = $patch->areHintFieldsProvided() ? $patch->getPrompt() : '';
+		$isHintEnabled = $patch->areHintFieldsProvided() ? $patch->isHintEnabled() : false;
 		$item = CallAssessmentItem::createFromArray([
 			'title' => $patchData['title'],
 			'description' => $patchData['description'] ?? '',
-			'prompt' => '',
+			'prompt' => $prompt,
+			'isHintEnabled' => $isHintEnabled,
 			'gist' => null,
 			'clientTypeIds' => $patchData['clientTypeIds'],
 			'callTypeId' => $patchData['callTypeId'] ?? CallType::ALL->value,
@@ -503,7 +550,7 @@ final class CallAssessment extends Base
 			$addResult = CopilotCallAssessmentController::getInstance()->add($item);
 			if (!$addResult->isSuccess())
 			{
-				$connection->rollbackTransaction();
+				$this->rollbackTransactionSafely($connection);
 				$this->addErrors($addResult->getErrors());
 
 				return $result;
@@ -514,7 +561,7 @@ final class CallAssessment extends Base
 			$syncResult = (new CriteriaWriter())->sync($newId, $payloadCriteria);
 			if (!$syncResult->isSuccess())
 			{
-				$connection->rollbackTransaction();
+				$this->rollbackTransactionSafely($connection);
 				$this->addErrors($syncResult->getErrors());
 
 				return $result;
@@ -524,15 +571,57 @@ final class CallAssessment extends Base
 		}
 		catch (\Throwable $e)
 		{
-			$connection->rollbackTransaction();
+			$this->rollbackTransactionSafely($connection);
 			$this->addError(new Error($e->getMessage()));
 
 			return $result;
 		}
 
+		(new CreateScriptEvent())
+			->setCallAssessmentId($newId)
+			->setIsManualLaunch(true)
+			->buildEvent()
+			->send()
+		;
+
+		if ($criteriaGeneratedByAi)
+		{
+			$persistedCriteriaCount = count(CopilotCallAssessmentCriteriaController::getInstance()->getList([
+				'select' => ['ID'],
+				'filter' => ['=ASSESSMENT_ID' => $newId],
+			]));
+			$criteriaCount = $aiGeneratedCriteriaCount === null
+				? $persistedCriteriaCount
+				: max(0, min($aiGeneratedCriteriaCount, $persistedCriteriaCount))
+			;
+
+			if ($criteriaCount > 0)
+			{
+				(new CriteriaGenEvent())
+					->setCallAssessmentId($newId)
+					->setCriteriaCount($criteriaCount)
+					->setIsManualLaunch(true)
+					->buildEvent()
+					->send()
+				;
+			}
+		}
+
 		$result->setData(['data' => (new V2ScriptDataLoader())->loadById($newId)]);
 
 		return $result;
+	}
+
+	private function rollbackTransactionSafely(Connection $connection): void
+	{
+		try
+		{
+			$connection->rollbackTransaction();
+		}
+		catch (TransactionException)
+		{
+			// MySQL restores the savepoint before reporting that nested rollbacks are unsupported.
+		}
 	}
 
 	private function launchReviewIfChanged(
@@ -622,6 +711,19 @@ final class CallAssessment extends Base
 		{
 			$merged['callTypeId'] = $patchData['callTypeId'];
 		}
+		if ($patch->areHintFieldsProvided())
+		{
+			$merged['prompt'] = $patch->getPrompt();
+			$merged['isHintEnabled'] = $patch->isHintEnabled();
+		}
+		elseif ($merged['isHintEnabled'] === null)
+		{
+			$merged['isHintEnabled'] = (new HintStateResolver())->resolve(
+				null,
+				$entity->getPrompt(),
+				$entity->getCode(),
+			);
+		}
 
 		return CallAssessmentItem::createFromArray($merged);
 	}
@@ -697,7 +799,16 @@ final class CallAssessment extends Base
 			return [];
 		}
 
-		return array_intersect_key($data, array_flip(self::CLIENT_EDITABLE_ITEM_FIELDS));
+		$data = array_intersect_key($data, array_flip(self::CLIENT_EDITABLE_ITEM_FIELDS));
+		foreach (['isHintEnabled', 'isAiImprovementEnabled'] as $field)
+		{
+			if (($data[$field] ?? null) === 'true' || ($data[$field] ?? null) === 'false')
+			{
+				$data[$field] = $data[$field] === 'true';
+			}
+		}
+
+		return $data;
 	}
 
 	private function getCurrentUserId(): int

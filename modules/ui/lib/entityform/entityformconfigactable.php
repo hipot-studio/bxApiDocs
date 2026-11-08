@@ -37,7 +37,7 @@ class EntityFormConfigAcTable extends Entity\DataManager
 			]),
 			new Entity\StringField('ACCESS_CODE', [
 				'required' => true,
-				'size' => 10
+				'size' => 11
 			]),
 			new Entity\ReferenceField(
 				'USER_ACCESS',

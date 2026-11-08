@@ -45,6 +45,8 @@ final class Version extends Base
 	{
 		$version = $this->get($id);
 
+		$this->assertCanDownload($version->getObject());
+
 		$fileData = $version->getFile();
 		if(!$fileData)
 		{

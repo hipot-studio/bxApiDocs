@@ -58,11 +58,16 @@ class Options extends \CGridOptions
 
 
 	/**
-	 * Sets width of grid columns
+	 * Sets width of grid columns.
+	 *
+	 * The columns the user has dragged are added to the ones already stored for the current view,
+	 * and a column is kept in that list only while it has a size.
+	 *
 	 * @param number | null $expand
 	 * @param array $sizes
+	 * @param string[] $resizedColumns ids of the columns the user has dragged
 	 */
-	public function setColumnsSizes($expand, $sizes)
+	public function setColumnsSizes($expand, $sizes, array $resizedColumns = [])
 	{
 		$columns = array();
 		foreach ((array) $sizes as $name => $width)
@@ -73,10 +78,33 @@ class Options extends \CGridOptions
 				$columns[$name] = $width;
 		}
 
+		$resized = [];
+		foreach (array_merge($this->getResizedColumns(), $resizedColumns) as $name)
+		{
+			$name = is_scalar($name) ? trim((string)$name) : '';
+			if ($name !== '' && isset($columns[$name]))
+			{
+				$resized[$name] = $name;
+			}
+		}
+
 		$this->all_options['views'][$this->currentView]['columns_sizes'] = array(
 			'expand'  => is_scalar($expand) ? round((float) $expand, 8) : 1,
-			'columns' => $columns
+			'columns' => $columns,
+			'resized' => array_values($resized),
 		);
+	}
+
+
+	/**
+	 * Gets ids of the columns the user has dragged in the current view
+	 * @return string[]
+	 */
+	public function getResizedColumns(): array
+	{
+		$resized = $this->all_options['views'][$this->currentView]['columns_sizes']['resized'] ?? null;
+
+		return is_array($resized) ? $resized : [];
 	}
 
 

@@ -93,6 +93,11 @@ final class ViewedRepository
 			return;
 		}
 
+		if (AccessCodes::grantsEveryone($itemAccessCodes))
+		{
+			return;
+		}
+
 		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
 
@@ -130,12 +135,6 @@ final class ViewedRepository
 		$query = 'SELECT 1 FROM ' . $userAccess
 			. ' WHERE ' . $userAccess . '.' . $helper->quote('USER_ID') . ' = ' . $userIdExpression
 		;
-
-		// `AU` has no row in b_user_access: it stands for every user that has codes at all.
-		if (in_array(AccessCodes::ACCESS_CODE_AUTHORIZED, $codes, true))
-		{
-			return $query;
-		}
 
 		$quotedCodes = array_map(
 			static fn(string $code): string => "'" . $helper->forSql($code) . "'",

@@ -6,12 +6,17 @@ namespace Bitrix\Timeman\Integration\Pull;
 
 use Bitrix\Main;
 use Bitrix\Pull\Event;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 
 class PushService
 {
 	public function sendEvent(PushEvent $event): void
 	{
 		if (!Main\Loader::includeModule('pull'))
+		{
+			return;
+		}
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
 		{
 			return;
 		}
@@ -25,6 +30,10 @@ class PushService
 	public function subscribeByTag(string $tag, int $userId): void
 	{
 		if (!Main\Loader::includeModule('pull'))
+		{
+			return;
+		}
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
 		{
 			return;
 		}

@@ -5,6 +5,8 @@ use Bitrix\Bizproc\Activity\PropertiesDialog;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Api\Request\WorkflowTemplateService\SetConstantsRequest;
 use Bitrix\Bizproc\Api\Response\WorkflowTemplateService\SetConstantsResponse;
+use Bitrix\Bizproc\Api\Service\WorkflowTemplateService;
+use Bitrix\Bizproc\BaseType\ValueRule;
 use Bitrix\Bizproc\Error;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\FileUploader\SetupTemplateUploaderController;
@@ -27,11 +29,16 @@ use Bitrix\Bizproc\Internal\Event\SetupTemplateUserInputEvent;
 use Bitrix\Bizproc\Internal\Event\SetupTemplateValidationEvent;
 use Bitrix\Bizproc\Internal\Integration\BI\Dashboard\DocumentFieldTypes\BIDashboardType;
 use Bitrix\Bizproc\Internal\Integration\Rag\DocumentFieldTypes\RagKnowledgeBaseType;
+use Bitrix\Bizproc\Internal\Integration\Tasks\DocumentFieldTypes\ProjectFieldStateResolver;
 use Bitrix\Bizproc\Internal\Integration\Tasks\DocumentFieldTypes\ProjectType;
 use Bitrix\Bizproc\Internal\Integration\UI\UploaderHelper;
 use Bitrix\Bizproc\Internal\Service\DocumentField\AccessValidationService;
 use Bitrix\Bizproc\Internal\Service\Pilot\SettingsFreezeGate;
+use Bitrix\Bizproc\Internal\Service\SetupTemplate\DescriptionMarkup;
 use Bitrix\Bizproc\Internal\Service\SetupTemplate\SetupTemplateConstantsService;
+use Bitrix\Bizproc\Public\Entity\Activity\SetupTemplateActivity\SetupBlocksParseResult;
+use Bitrix\Bizproc\Public\Entity\Activity\SetupTemplateActivity\SetupConstantDeclaration;
+use Bitrix\Bizproc\Public\Entity\Activity\SetupTemplateActivity\SetupParseError;
 use Bitrix\Bizproc\Workflow\Template\Entity\EO_WorkflowTemplate;
 use Bitrix\Bizproc\WorkflowTemplateTable;
 use Bitrix\Main\DI\ServiceLocator;
@@ -55,6 +62,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 	private const PUSH_COMMAND = 'setupTemplateActivityBlocks';
 	private const ERROR_MESSAGE = 'message';
 	private const ERROR_CODE = 'code';
+	private const ERROR_BLOCK_POSITION = 'blockPosition';
+	private const ERROR_ITEM_POSITION = 'itemPosition';
 	private const ERROR_CONSTANT = 'constant';
 	private const ERROR_CODE_NOT_EXIST = 'NotExist';
 	private const ERROR_CODE_INVALID_STRUCTURE = 'InvalidStructJson';
@@ -63,7 +72,26 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 	private const EXPIRES_IN = 24 * 60 * 60;
 	private const CONSTANT_SETTINGS_ENTITYSELECTOR_SELECTOR_ID = 'selectorId';
 	private const CONSTANT_SETTINGS_ENTITYSELECTOR_SELECTOR = 'selector';
+	private const VALUE_RULE_BOUND_MAX_DIGITS = 10;
+	private const PARSED_BLOCKS_MEMO_LIMIT = 8;
+
+	/** Bounds of a description the form can render as markup, see withoutUnsupportedMarkup(). */
+	private const DESCRIPTION_MAX_LENGTH = 20000;
+	private const DESCRIPTION_MAX_TAG_COUNT = 5000;
+	private const DESCRIPTION_MAX_NESTING_DEPTH = 50;
+
+	/**
+	 * The tokenizer of the form reads a tag as the name and then everything up to the first closing
+	 * bracket, so counting has to read it the same way: what the tokenizer opens is what costs.
+	 */
+	private const DESCRIPTION_TAG_PATTERN = '#\\[(?P<closing>/?)(?P<name>[a-z0-9_]+|\\*)[^\\]]*\\]#iu';
+
+	private const DESCRIPTION_LIST_TAG = 'list';
+	private const DESCRIPTION_LIST_ITEM_TAG = '*';
 	private int $subscriptionId = 0;
+
+	/** @var array<string, array{collection: ?BlockCollection, errors: array}> parsed blocks by payload */
+	private static array $parsedBlocksMemo = [];
 
 	public function __construct($name)
 	{
@@ -262,6 +290,13 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 		];
 	}
 
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		// Persisted but not typable via getPropertiesMap() (which maps only `blocks`, as CUSTOM):
+		// the blocks payload plus the setup `user` (starter expression) and `description` settings.
+		return ['blocks', 'user', 'description'];
+	}
+
 	public function execute(): int
 	{
 		// the values belong to the template and not to the employee, so a frozen template opens the form
@@ -349,19 +384,21 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 	): void
 	{
 		$model = $this->getTemplateNameAndDescriptionModel();
-		$blocksWithValues = $this->appendConstantInfoToBlocks($blocks);
+		$blocksWithValues = $this->appendConstantInfoToBlocks($blocks, $userId);
+		// the setup form renders the description with the BBCode formatter, so the stored markup goes as is
+		$templateDescription = self::withoutUnsupportedMarkup($model?->getDescription());
 
 		$this->sendCurrentDataEvent(
 			blocks: $blocksWithValues,
 			templateName: $model?->getName(),
-			templateDescription: $model?->getDescription(),
+			templateDescription: $templateDescription,
 		);
 
 		$this->sendPush(
 			userId: $userId,
 			blocks: $blocksWithValues,
 			templateName: $model?->getName(),
-			templateDescription: $model?->getDescription(),
+			templateDescription: $templateDescription,
 		);
 	}
 
@@ -506,14 +543,15 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 	 * of every block that retains at least one requested constant. Blocks without any requested
 	 * constant are dropped entirely, and item order inside a kept block is preserved.
 	 *
-	 * Used by the AI-agent upgrade fill scenario (P3.T2) to render only the NEW required
-	 * constants of the reference template in the existing setup-template UI, without
-	 * starting a setup workflow. Structural items are kept so the wizard shows section
-	 * headers and hints, not bare fields. Parsing is delegated to validateAndParseBlocks()
-	 * so the block/constant contract is not duplicated.
+	 * Two callers: the AI-agent upgrade fill scenario renders only the NEW required constants
+	 * of the reference template in the existing setup-template UI, without starting a setup
+	 * workflow, and the save of a template checks the stored values of the constants whose
+	 * value rule it changes. Structural items are kept for the UI, which shows section headers
+	 * and hints instead of bare fields; the check of the values ignores them. Parsing is
+	 * delegated to validateAndParseBlocks() so the block/constant contract is not duplicated.
 	 *
 	 * @param string|array|null $inputBlocks Raw blocks (JSON string or array) from the
-	 *   reference SetupTemplateActivity 'blocks' property.
+	 *   'blocks' property of a SetupTemplateActivity.
 	 * @param list<string> $constantCodes Constant codes to keep.
 	 * @return array Filtered blocks as an array (empty when nothing matches).
 	 */
@@ -588,6 +626,43 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 	}
 
 	/**
+	 * Value rules the setup constants of the given raw blocks declare, keyed by constant code. A constant
+	 * without a rule is absent from the result, and null means the blocks were refused - the validation of
+	 * the tree reports that on its own.
+	 *
+	 * @return array<string, array>|null
+	 */
+	public static function collectConstantValueRules(string|array|null $inputBlocks): ?array
+	{
+		$errors = [];
+		$blocks = self::validateAndParseBlocks($inputBlocks, $errors);
+		if ($blocks === null || !empty($errors))
+		{
+			return null;
+		}
+
+		$valueRules = [];
+		foreach ($blocks as $block)
+		{
+			foreach ($block->items as $item)
+			{
+				if (!$item instanceof Constant)
+				{
+					continue;
+				}
+
+				$rule = $item->settings[ValueRule::SETTINGS_KEY] ?? null;
+				if (is_array($rule) && !empty($rule))
+				{
+					$valueRules[$item->id] = $rule;
+				}
+			}
+		}
+
+		return $valueRules;
+	}
+
+	/**
 	 * Instance-free field-definition validation of submitted constant values against setup blocks.
 	 *
 	 * Mirrors the field-type/format portion of validateConstants() but without the running-instance
@@ -657,7 +732,128 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 		return $invalid;
 	}
 
+	/**
+	 * Instance-free public reading of a setup wizard form structure.
+	 *
+	 * Facade over validateAndParseBlocks(): it parses the raw blocks and converts the internal form
+	 * collection into the public snapshot, so a caller outside bizproc learns what the form declares
+	 * without depending on the module's internal entities. Reads only - no activity instance, no
+	 * running workflow, nothing stored. On a structural error the snapshot carries error codes and
+	 * positions but no messages: parse messages are localized for the wizard owner.
+	 *
+	 * @param array $rawBlocks Raw blocks of a SetupTemplateActivity 'blocks' property.
+	 */
+	public static function parseSetupBlocks(array $rawBlocks): SetupBlocksParseResult
+	{
+		$errors = [];
+		$collection = self::validateAndParseBlocks($rawBlocks, $errors);
+
+		if ($collection === null || !empty($errors))
+		{
+			// A failure must never look like a form that declares nothing, so an unreported
+			// failure still travels out as one structural error.
+			$parseErrors = self::toSetupParseErrors($errors)
+				?: [new SetupParseError(self::ERROR_CODE_INVALID_STRUCTURE)]
+			;
+
+			return new SetupBlocksParseResult(errors: $parseErrors);
+		}
+
+		$declarations = [];
+		$itemCount = 0;
+		$blockPosition = 0;
+
+		// A successful parse keeps every block and item in input order, so counting them here
+		// reproduces the 1-based positions the parser reports to the wizard owner.
+		foreach ($collection as $block)
+		{
+			++$blockPosition;
+			$itemCount += count($block->items);
+
+			$itemPosition = 0;
+			foreach ($block->items as $item)
+			{
+				++$itemPosition;
+				if ($item instanceof Constant)
+				{
+					$declarations[] = self::toSetupConstantDeclaration($item, $blockPosition, $itemPosition);
+				}
+			}
+		}
+
+		return new SetupBlocksParseResult($declarations, $itemCount);
+	}
+
+	private static function toSetupConstantDeclaration(
+		Constant $constant,
+		int $blockPosition,
+		int $itemPosition,
+	): SetupConstantDeclaration
+	{
+		return new SetupConstantDeclaration(
+			code: $constant->id,
+			name: $constant->name,
+			type: $constant->constantType,
+			description: $constant->description,
+			multiple: $constant->multiple,
+			options: $constant->options,
+			settings: $constant->settings,
+			default: $constant->default,
+			blockPosition: $blockPosition,
+			itemPosition: $itemPosition,
+		);
+	}
+
+	/**
+	 * @param array $errors Parse errors as makeValidationError() builds them.
+	 * @return list<SetupParseError>
+	 */
+	private static function toSetupParseErrors(array $errors): array
+	{
+		$parseErrors = [];
+		foreach ($errors as $error)
+		{
+			$parseErrors[] = new SetupParseError(
+				(string)($error[self::ERROR_CODE] ?? self::ERROR_CODE_INVALID_STRUCTURE),
+				$error[self::ERROR_BLOCK_POSITION] ?? null,
+				$error[self::ERROR_ITEM_POSITION] ?? null,
+			);
+		}
+
+		return $parseErrors;
+	}
+
+	/**
+	 * Memoized by the payload: one save of a template parses the same blocks several times, and a parse is
+	 * two json_decode plus the validation of every item.
+	 */
 	protected static function validateAndParseBlocks(string|array|null $inputBlocks, array &$errors): ?BlockCollection
+	{
+		$key = md5(serialize($inputBlocks));
+		if (!isset(self::$parsedBlocksMemo[$key]))
+		{
+			if (count(self::$parsedBlocksMemo) >= self::PARSED_BLOCKS_MEMO_LIMIT)
+			{
+				array_shift(self::$parsedBlocksMemo);
+			}
+
+			$parsingErrors = [];
+			self::$parsedBlocksMemo[$key] = [
+				'collection' => self::parseBlocksPayload($inputBlocks, $parsingErrors),
+				'errors' => $parsingErrors,
+			];
+		}
+
+		$parsed = self::$parsedBlocksMemo[$key];
+		if ($parsed['errors'])
+		{
+			$errors = array_merge($errors, $parsed['errors']);
+		}
+
+		return $parsed['collection'];
+	}
+
+	private static function parseBlocksPayload(string|array|null $inputBlocks, array &$errors): ?BlockCollection
 	{
 		if (empty($inputBlocks) || (!is_string($inputBlocks) && !is_array($inputBlocks)))
 		{
@@ -709,7 +905,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 					Loc::getMessage(
 						'BIZPROC_SETUP_TEMPLATE_ACTIVITY_PROPERTY_BLOCK_ITEMS_EMPTY',
 						['#blockPosition#' => $blockPosition],
-					)
+					),
+					blockPosition: $blockPosition,
 				);
 
 				continue;
@@ -768,7 +965,9 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 							'#itemPosition#' => $itemPosition,
 							'#blockPosition#' => $blockPosition,
 						],
-					)
+					),
+					blockPosition: $blockPosition,
+					itemPosition: $itemPosition,
 				);
 
 				continue;
@@ -818,7 +1017,9 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 						'#itemPosition#' => $itemPosition,
 						'#blockPosition#' => $blockPosition,
 					],
-				)
+				),
+				blockPosition: $blockPosition,
+				itemPosition: $itemPosition,
 			);
 		}
 		elseif (!is_string($item[$key]))
@@ -832,6 +1033,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 						'#blockPosition#' => $blockPosition,
 					]
 				),
+				blockPosition: $blockPosition,
+				itemPosition: $itemPosition,
 			);
 		}
 	}
@@ -877,6 +1080,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 						'#blockPosition#' => $blockPosition,
 					]
 				),
+				blockPosition: $blockPosition,
+				itemPosition: $itemPosition,
 			);
 		}
 
@@ -902,6 +1107,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 							'#blockPosition#' => $blockPosition,
 						]
 					),
+					blockPosition: $blockPosition,
+					itemPosition: $itemPosition,
 				);
 			}
 		}
@@ -936,6 +1143,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 							'#blockPosition#' => $blockPosition,
 						]
 					),
+					blockPosition: $blockPosition,
+					itemPosition: $itemPosition,
 				);
 			}
 		}
@@ -955,6 +1164,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 						'#blockPosition#' => $blockPosition,
 					]
 				),
+				blockPosition: $blockPosition,
+				itemPosition: $itemPosition,
 			);
 		}
 
@@ -977,8 +1188,22 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 							'#blockPosition#' => $blockPosition,
 						]
 					),
+					blockPosition: $blockPosition,
+					itemPosition: $itemPosition,
 				);
 			}
+		}
+
+		$constantSettings = $arrayItem['settings'] ?? [];
+		if (is_array($constantSettings) && is_string($constantType) && $constantType !== '')
+		{
+			self::validateConstantSettings(
+				$constantType,
+				$constantSettings,
+				$blockPosition,
+				$itemPosition,
+				$errors,
+			);
 		}
 
 		if (!empty($errors))
@@ -997,6 +1222,211 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			$arrayItem['settings'] ?? [],
 			self::normalizeConstantDefault($arrayItem['default'] ?? ''),
 		);
+	}
+
+	/**
+	 * The rule is listed per constant type, not per base type of the field, so it stays away from the types
+	 * inheriting IntType and StringType.
+	 */
+	private static function supportsConstantValueRule(string $constantType): bool
+	{
+		return match ($constantType)
+		{
+			FieldType::INT, FieldType::STRING, FieldType::TEXT => true,
+			default => false,
+		};
+	}
+
+	/**
+	 * The value rule of the settings only: any other key of the settings is not this validator's business,
+	 * the keys inside the rule are checked by validateConstantValueRule().
+	 */
+	private static function validateConstantSettings(
+		string $constantType,
+		array $settings,
+		int $blockPosition,
+		int $itemPosition,
+		array &$errors,
+	): void
+	{
+		if (!array_key_exists(ValueRule::SETTINGS_KEY, $settings))
+		{
+			return;
+		}
+
+		// the key is refused for a type that declares no rule whatever its value stands for
+		if (!self::supportsConstantValueRule($constantType))
+		{
+			$errors[] = self::makeValidationError(
+				Loc::getMessage(
+					'BIZPROC_SETUP_TEMPLATE_ACTIVITY_VALIDATOR_VALUE_RULE_NOT_SUPPORTED',
+					[
+						'#itemPosition#' => $itemPosition,
+						'#blockPosition#' => $blockPosition,
+					]
+				),
+			);
+
+			return;
+		}
+
+		$rule = $settings[ValueRule::SETTINGS_KEY];
+		if (empty($rule))
+		{
+			// an empty rule is no rule at all
+			return;
+		}
+
+		self::validateConstantValueRule($constantType, $rule, $blockPosition, $itemPosition, $errors);
+	}
+
+	/**
+	 * The contract of a value rule for a caller that holds the rule alone, outside any tree of blocks: the
+	 * positions of the block and of the item mean nothing there, so only the verdict is returned.
+	 */
+	public static function isValidConstantValueRule(string $constantType, mixed $rule): bool
+	{
+		if (!self::supportsConstantValueRule($constantType))
+		{
+			return false;
+		}
+
+		$errors = [];
+		self::validateConstantValueRule($constantType, $rule, 0, 0, $errors);
+
+		return $errors === [];
+	}
+
+	private static function validateConstantValueRule(
+		string $constantType,
+		mixed $rule,
+		int $blockPosition,
+		int $itemPosition,
+		array &$errors,
+	): void
+	{
+		if (!is_array($rule))
+		{
+			$errors[] = self::makeValidationError(
+				Loc::getMessage(
+					'BIZPROC_SETUP_TEMPLATE_ACTIVITY_VALIDATOR_IS_ARRAY',
+					[
+						'#name#' => Loc::getMessage('BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_CONSTANT_EDIT_VALUE_RULE'),
+						'#itemPosition#' => $itemPosition,
+						'#blockPosition#' => $blockPosition,
+					]
+				),
+			);
+
+			return;
+		}
+
+		$boundLabels = $constantType === FieldType::INT
+			? [
+				ValueRule::MIN => 'BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_CONSTANT_EDIT_VALUE_RULE_MIN',
+				ValueRule::MAX => 'BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_CONSTANT_EDIT_VALUE_RULE_MAX',
+			]
+			: [
+				ValueRule::MAX_LENGTH => 'BIZPROC_SETUP_TEMPLATE_ACTIVITY_LABEL_CONSTANT_EDIT_VALUE_RULE_MAX_LENGTH',
+			]
+		;
+
+		$hasInvalidBound = false;
+		foreach ($rule as $key => $value)
+		{
+			$key = (string)$key;
+			if (!isset($boundLabels[$key]))
+			{
+				$errors[] = self::makeValidationError(
+					Loc::getMessage(
+						'BIZPROC_SETUP_TEMPLATE_ACTIVITY_VALIDATOR_VALUE_RULE_KEY_UNKNOWN',
+						[
+							'#name#' => self::keyForMessage($key),
+							'#itemPosition#' => $itemPosition,
+							'#blockPosition#' => $blockPosition,
+						]
+					),
+				);
+
+				continue;
+			}
+
+			if (!self::isIntegerValueRuleBound($value))
+			{
+				$hasInvalidBound = true;
+				$errors[] = self::makeValidationError(
+					Loc::getMessage(
+						'BIZPROC_SETUP_TEMPLATE_ACTIVITY_VALIDATOR_IS_INT',
+						[
+							'#name#' => Loc::getMessage($boundLabels[$key]),
+							'#itemPosition#' => $itemPosition,
+							'#blockPosition#' => $blockPosition,
+						]
+					),
+				);
+			}
+		}
+
+		if ($hasInvalidBound)
+		{
+			return;
+		}
+
+		$bounds = array_intersect_key($rule, $boundLabels);
+
+		if (
+			isset($bounds[ValueRule::MIN], $bounds[ValueRule::MAX])
+			&& (int)$bounds[ValueRule::MIN] > (int)$bounds[ValueRule::MAX]
+		)
+		{
+			$errors[] = self::makeValidationError(
+				Loc::getMessage(
+					'BIZPROC_SETUP_TEMPLATE_ACTIVITY_VALIDATOR_VALUE_RULE_RANGE',
+					[
+						'#itemPosition#' => $itemPosition,
+						'#blockPosition#' => $blockPosition,
+					]
+				),
+			);
+		}
+
+		if (isset($bounds[ValueRule::MAX_LENGTH]) && (int)$bounds[ValueRule::MAX_LENGTH] <= 0)
+		{
+			$errors[] = self::makeValidationError(
+				Loc::getMessage(
+					'BIZPROC_SETUP_TEMPLATE_ACTIVITY_VALIDATOR_VALUE_RULE_MAX_LENGTH_POSITIVE',
+					[
+						'#itemPosition#' => $itemPosition,
+						'#blockPosition#' => $blockPosition,
+					]
+				),
+			);
+		}
+	}
+
+	/**
+	 * A key of the settings arrives from the client and the message about it travels back to the browser, so
+	 * only a short safe subset of the key is reflected.
+	 */
+	private static function keyForMessage(string $key): string
+	{
+		return mb_substr((string)preg_replace('/[^A-Za-z0-9_.-]/', '', $key), 0, 32);
+	}
+
+	/**
+	 * A bound reaches the server as a number from the client and as its decimal string after a round trip
+	 * through the description of a template, so both forms are a bound. The pattern ends with /D so that a
+	 * trailing newline is not a bound, and the digits are capped: a longer bound saturates on reading and
+	 * stops limiting anything at all.
+	 */
+	private static function isIntegerValueRuleBound(mixed $value): bool
+	{
+		if (!is_int($value) && !is_string($value))
+		{
+			return false;
+		}
+
+		return preg_match('/^-?\d{1,' . self::VALUE_RULE_BOUND_MAX_DIGITS . '}$/D', (string)$value) === 1;
 	}
 
 	/**
@@ -1128,6 +1558,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 						'#blockPosition#' => $blockPosition,
 					]
 				),
+				blockPosition: $blockPosition,
+				itemPosition: $itemPosition,
 			);
 		}
 
@@ -1195,17 +1627,40 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 				]
 			),
 			self::ERROR_CODE_UNKNOWN_ITEM_TYPE,
+			blockPosition: $blockPosition,
+			itemPosition: $itemPosition,
 		);
 
 		return null;
 	}
 
-	private static function makeValidationError(?string $message, string $code = self::ERROR_CODE_NOT_EXIST): array
+	/**
+	 * The message is localized and written for the wizard owner, so the place an error was found at
+	 * is also kept as data: parseSetupBlocks() reports positions to callers that must not read texts.
+	 */
+	private static function makeValidationError(
+		?string $message,
+		string $code = self::ERROR_CODE_NOT_EXIST,
+		?int $blockPosition = null,
+		?int $itemPosition = null,
+	): array
 	{
-		return [
+		$error = [
 			self::ERROR_MESSAGE => $message,
 			self::ERROR_CODE => $code,
 		];
+
+		if ($blockPosition !== null)
+		{
+			$error[self::ERROR_BLOCK_POSITION] = $blockPosition;
+		}
+
+		if ($itemPosition !== null)
+		{
+			$error[self::ERROR_ITEM_POSITION] = $itemPosition;
+		}
+
+		return $error;
 	}
 
 	/**
@@ -1406,6 +1861,27 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 	}
 
 	/**
+	 * Type codes a setup wizard constant may use for the given document type.
+	 *
+	 * Narrow public reading of the same list the settings panel is built from: only the codes travel
+	 * out, never the localized titles or the entity-selector registry. `entityselector` is part of
+	 * the list exactly when the panel offers it, i.e. when the registry holds at least one selector.
+	 *
+	 * @param array $documentType Complex document type the constants belong to.
+	 * @return list<string>
+	 */
+	public static function getAllowedConstantTypes(array $documentType): array
+	{
+		$types = [];
+		foreach (self::getConstantConfigurationList($documentType) as $configuration)
+		{
+			$types[] = (string)$configuration->toArray()['type'];
+		}
+
+		return $types;
+	}
+
+	/**
 	 * @param array|null $documentType
 	 * @return array<ConstantConfiguration>
 	 */
@@ -1466,29 +1942,80 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 		return $constantConfigurationList;
 	}
 
-	private function appendConstantInfoToBlocks(BlockCollection $blocks): BlockCollection
+	private function appendConstantInfoToBlocks(BlockCollection $blocks, int $userId): BlockCollection
 	{
 		$patchedCollection = new BlockCollection();
+		$projectFieldStateResolver = new ProjectFieldStateResolver();
+		$projectFieldStateResolver->preloadDirect(
+			$this->collectProjectConstantValues($blocks),
+			$userId,
+		);
+
 		foreach ($blocks as $block)
 		{
-			$patchedCollection->add(new Block($this->appendConstantInfoToItemCollection($block->items)));
+			$patchedCollection->add(new Block(
+				$this->appendConstantInfoToItemCollection(
+					$block->items,
+					$userId,
+					$projectFieldStateResolver,
+				),
+			));
 		}
 
 		return $patchedCollection;
 	}
 
-	private function appendConstantInfoToItemCollection(ItemCollection $items): ItemCollection
+	/**
+	 * @return list<mixed>
+	 */
+	private function collectProjectConstantValues(BlockCollection $blocks): array
+	{
+		$projectConstantValues = [];
+		foreach ($blocks as $block)
+		{
+			foreach ($block->items as $item)
+			{
+				if (!$item instanceof Constant || $item->constantType !== ProjectType::getType())
+				{
+					continue;
+				}
+
+				$projectConstantValues[] = self::resolveConstantDefault(
+					$item->constantType,
+					$item->multiple,
+					$this->getConstant($item->id),
+					$item->default,
+				);
+			}
+		}
+
+		return $projectConstantValues;
+	}
+
+	private function appendConstantInfoToItemCollection(
+		ItemCollection $items,
+		int $userId,
+		ProjectFieldStateResolver $projectFieldStateResolver,
+	): ItemCollection
 	{
 		$patchedItems = new ItemCollection();
 		foreach ($items as $item)
 		{
-			$patchedItems->add($this->appendConstantInfoToItem($item));
+			$patchedItems->add($this->appendConstantInfoToItem(
+				$item,
+				$userId,
+				$projectFieldStateResolver,
+			));
 		}
 
 		return $patchedItems;
 	}
 
-	private function appendConstantInfoToItem(Item $item): Item
+	private function appendConstantInfoToItem(
+		Item $item,
+		int $userId,
+		ProjectFieldStateResolver $projectFieldStateResolver,
+	): Item
 	{
 		if (!$item instanceof Constant)
 		{
@@ -1517,6 +2044,13 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			$settings[self::CONSTANT_SETTINGS_ENTITYSELECTOR_SELECTOR] = $selectorConfiguration?->toArray() ?? [];
 		}
 
+		$meta = $this->getProjectConstantMeta(
+			$item,
+			$defaultValue,
+			$userId,
+			$projectFieldStateResolver,
+		);
+
 		return new Constant(
 			id: $item->id,
 			name: $item->name,
@@ -1527,7 +2061,233 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 			options: $item->options,
 			settings: $settings,
 			default: $defaultValue,
+			meta: $meta,
 		);
+	}
+
+	/**
+	 * The description editor gives the author emphasis, lists and links, and no way to put a picture,
+	 * a video, a spoiler or a code block into the text. Such markup still reaches the column through
+	 * import, the REST API and values stored before the editor existed, and the form renders what it
+	 * is given, so the value is brought back to the markup the editor produces on the only path the
+	 * description takes to the form.
+	 *
+	 * Dropping the forbidden tags keeps the bounds of the block ones, so the text around a spoiler
+	 * or a quote does not become one word. A media block written as strict markup goes next, with
+	 * its url: the closing tag says where the url ends. That pass runs before the escaping, because
+	 * after it the brackets of the block are entities and the block has no strict form left to match.
+	 *
+	 * Every bracket left that is not strict markup turns into an entity, which the parser of the
+	 * form reads back as a bracket — user text like `[руб]` reaches the reader as it was written.
+	 * A media tag with no closing one, or in a form that is not strict markup, survives that as
+	 * allowed markup and is taken out after it alone, leaving its url as plain text: by the grammar
+	 * of the form the content of such a tag is the whole rest of the description, so taking it would
+	 * cost the author the text written after the tag.
+	 *
+	 * The allowed markup is brought to the one spelling the tokenizer of the form reads as a pair
+	 * last: it looks for the closing tag of an opening one by the name as written, so `[B]…[/b]` and
+	 * `[b]…[/b ]` — forms the column takes through import and the REST API — would reach the reader
+	 * as the tags themselves instead of the text they format.
+	 *
+	 * What is left is markup the form can render. Whether it can render it at a price the reader can
+	 * afford is a separate question, and isTooHeavyToRenderAsMarkup() answers it last, once the value
+	 * is exactly the one the form will be given. A description past the bounds goes down to plain
+	 * text, and every bracket of that text is escaped again: the form parses whatever it is given,
+	 * and text taken out of markup carries brackets the parser would read as markup of its own.
+	 */
+	private static function withoutUnsupportedMarkup(?string $description): ?string
+	{
+		if ($description === null)
+		{
+			return $description;
+		}
+
+		$description = DescriptionMarkup::stripForbiddenBbTagsKeepingBlockBounds($description);
+		$description = DescriptionMarkup::stripMediaBlocks($description);
+		$description = DescriptionMarkup::stripMediaBbTags(
+			DescriptionMarkup::escapeDanglingBrackets($description)
+		);
+		$description = DescriptionMarkup::canonicalizeAllowedBbTags($description);
+
+		return self::isTooHeavyToRenderAsMarkup($description)
+			? DescriptionMarkup::escapeBrackets(DescriptionMarkup::toPlainText($description))
+			: $description
+		;
+	}
+
+	/**
+	 * The form renders the description with the BBCode formatter of `ui`, and both halves of that
+	 * formatter walk the value without a bound: the tokenizer looks for the closing tag of every
+	 * paired one by scanning the whole rest of the text, and the formatter calls itself once per
+	 * level of nesting. Neither is a problem for what an author writes, and the column is a MySQL
+	 * `text` that takes tens of thousands of characters through import and the REST API, so a value
+	 * built to be heavy costs the reader of the wizard seconds of a frozen tab or — past a few
+	 * thousand levels — a stack overflow that leaves the description blank.
+	 *
+	 * Measured in Chrome on the real extension: 500 nested tags 70 ms, 1 000 227 ms, 2 000 889 ms,
+	 * and between 2 200 and 2 500 the stack breaks. Opening tags left unclosed cost the same, because
+	 * the parser keeps a level open for each of them to the end of the text: 3 000 of them break the
+	 * stack inside 9 000 characters. What an author writes stays far below all of it — a list of 500
+	 * items is 13 ms, 65 000 characters of plain text 18 ms — so the bounds below sit above anything
+	 * a person types and far under the point where the formatter is in trouble.
+	 *
+	 * Past any of them the description reaches the form as plain text, which is what the reader saw
+	 * before the form learned to render markup, rather than as thousands of raw tags on the screen.
+	 */
+	private static function isTooHeavyToRenderAsMarkup(string $description): bool
+	{
+		if (self::getLengthTheFormReads($description) > self::DESCRIPTION_MAX_LENGTH)
+		{
+			return true;
+		}
+
+		preg_match_all(self::DESCRIPTION_TAG_PATTERN, $description, $tags, PREG_SET_ORDER);
+
+		if (count($tags) > self::DESCRIPTION_MAX_TAG_COUNT)
+		{
+			return true;
+		}
+
+		return self::getMarkupNestingDepth($tags) > self::DESCRIPTION_MAX_NESTING_DEPTH;
+	}
+
+	/**
+	 * An escaped bracket is spelled with five characters and reaches the reader as the one the author
+	 * wrote, so it is worth one here as well. Counting it as five made the length say how the value is
+	 * spelled rather than how much of it the form has to render, and a description the editor itself
+	 * accepts — its own bound is 16 000 characters — lost its markup over a few hundred brackets of
+	 * plain text.
+	 */
+	private static function getLengthTheFormReads(string $description): int
+	{
+		return mb_strlen(str_replace(['&#91;', '&#93;'], ['[', ']'], $description));
+	}
+
+	/**
+	 * Counts the tags open at once the way the stack machine of the form does — the `normalizeTokens`
+	 * of ui/install/js/ui/bbcode/parser/src/parser.js — because only a count that follows the same
+	 * rules says how deep the form will actually go.
+	 *
+	 * A closing tag looks down the stack for the nearest open tag of the same name and takes it out
+	 * with everything opened inside it; one that matches nothing is text to the form and leaves the
+	 * stack alone. Taking a level off every closing tag instead reads `[b][/i]` repeated as one level
+	 * while the form builds one level per pair. Names are compared in lower case, the way the
+	 * tokenizer of the form stores them, so `[B]…[/b]` closes.
+	 *
+	 * A tag never closed keeps its level to the end of the value: that is what makes a run of opening
+	 * tags cost as much as nesting the same tags into each other.
+	 */
+	private static function getMarkupNestingDepth(array $tags): int
+	{
+		$openTags = [];
+		$openCounts = [];
+		$maxDepth = 0;
+
+		foreach ($tags as $tag)
+		{
+			$name = mb_strtolower($tag['name']);
+
+			if ($tag['closing'] !== '')
+			{
+				self::closeMarkupTag($openTags, $openCounts, $name);
+
+				continue;
+			}
+
+			if ($name === self::DESCRIPTION_LIST_ITEM_TAG)
+			{
+				if (($openCounts[self::DESCRIPTION_LIST_TAG] ?? 0) === 0)
+				{
+					continue;
+				}
+
+				self::closeListItemOfTheSameList($openTags, $openCounts);
+			}
+
+			$openTags[] = $name;
+			$openCounts[$name] = ($openCounts[$name] ?? 0) + 1;
+			$maxDepth = max($maxDepth, count($openTags));
+		}
+
+		return $maxDepth;
+	}
+
+	/**
+	 * Takes the nearest open tag of the name out together with everything opened inside it. A name
+	 * that is not open at all is left alone: such a closing tag is text to the form, and taking a
+	 * level off for it is what let a value of mismatched pairs pass as flat.
+	 */
+	private static function closeMarkupTag(array &$openTags, array &$openCounts, string $name): void
+	{
+		if (($openCounts[$name] ?? 0) === 0)
+		{
+			return;
+		}
+
+		for ($position = count($openTags) - 1; $position >= 0; --$position)
+		{
+			if ($openTags[$position] === $name)
+			{
+				self::dropOpenTagsFrom($openTags, $openCounts, $position);
+
+				return;
+			}
+		}
+	}
+
+	/**
+	 * A `[*]` closes the item standing before it, but only an item of the same list: an item of the
+	 * list this one is nested in stays open, so nested lists keep their levels. Reaching the list
+	 * itself first means there is no item of it open yet.
+	 */
+	private static function closeListItemOfTheSameList(array &$openTags, array &$openCounts): void
+	{
+		for ($position = count($openTags) - 1; $position >= 0; --$position)
+		{
+			if ($openTags[$position] === self::DESCRIPTION_LIST_TAG)
+			{
+				return;
+			}
+
+			if ($openTags[$position] === self::DESCRIPTION_LIST_ITEM_TAG)
+			{
+				self::dropOpenTagsFrom($openTags, $openCounts, $position);
+
+				return;
+			}
+		}
+	}
+
+	private static function dropOpenTagsFrom(array &$openTags, array &$openCounts, int $position): void
+	{
+		foreach (array_splice($openTags, $position) as $closedTag)
+		{
+			--$openCounts[$closedTag];
+		}
+	}
+
+	private function getProjectConstantMeta(
+		Constant $item,
+		string|array $defaultValue,
+		int $userId,
+		ProjectFieldStateResolver $projectFieldStateResolver,
+	): array
+	{
+		if ($item->constantType !== ProjectType::getType())
+		{
+			return [];
+		}
+
+		$projectState = $projectFieldStateResolver->resolveDirect(
+			$defaultValue,
+			$userId,
+		);
+		if ($projectState === null)
+		{
+			return [];
+		}
+
+		return ['projectState' => $projectState];
 	}
 
 	private function getTemplateNameAndDescriptionModel(): ?EO_WorkflowTemplate
@@ -1577,6 +2337,8 @@ class CBPSetupTemplateActivity extends CBPActivity implements IBPEventActivity, 
 						'#blockPosition#' => $blockPosition,
 					]
 				),
+				blockPosition: $blockPosition,
+				itemPosition: $itemPosition,
 			);
 		}
 

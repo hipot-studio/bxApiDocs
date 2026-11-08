@@ -9,6 +9,7 @@ use Bitrix\Tasks\Internals\Notification\Message;
 use Bitrix\Tasks\Internals\Notification\User;
 use Bitrix\Tasks\Internals\Notification\UserRepositoryInterface;
 use Bitrix\Tasks\Internals\TaskObject;
+use Bitrix\Tasks\Util\DateTime\RecipientDateTimeFormatter;
 
 class TaskCreated
 {
@@ -40,7 +41,6 @@ class TaskCreated
 
 		$locKey = 'TASKS_NEW_TASK_MESSAGE';
 		$nameTemplate = $metadata->getParams()['user_params']['NAME_TEMPLATE'] ?? null;
-		$serverTimeZoneOffset = $metadata->getUserRepository()->getUserTimeZoneOffset(0);
 
 		$description = '';
 
@@ -66,13 +66,13 @@ class TaskCreated
 
 		if ($task->getDeadline())
 		{
-			// Get unix timestamp for DEADLINE
-			$utsDeadline = $task->getDeadline()->getTimestamp();
-			$recepientTimeZoneOffset = $userRepository->getUserTimeZoneOffset($recepient->getId(), true);
-
-			// Make bitrix timestamp for given user
-			$bitrixTsDeadline = $utsDeadline + $recepientTimeZoneOffset;
-			$deadlineAsString = \Bitrix\Tasks\UI::formatDateTime($bitrixTsDeadline, '^'.\Bitrix\Tasks\UI::getDateTimeFormat());
+			$deadlineAsString = RecipientDateTimeFormatter::formatForRecipient(
+				$task->getDeadline()->getTimestamp(),
+				$recepient->getId(),
+				$recepient->getLang(),
+				'^' . \Bitrix\Tasks\UI::getDateTimeFormat(),
+				true,
+			);
 
 			$description .= Loc::getMessage('TASKS_MESSAGE_DEADLINE', null, $recepient->getLang());
 			$description .= ': ' . $deadlineAsString . "\r\n";

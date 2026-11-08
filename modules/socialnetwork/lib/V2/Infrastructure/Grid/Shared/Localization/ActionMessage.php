@@ -10,6 +10,8 @@ class ActionMessage
 {
 	public const VIEW = 'ACTION_VIEW';
 	public const JOIN = 'ACTION_JOIN';
+	public const PIN = 'ACTION_PIN';
+	public const UNPIN = 'ACTION_UNPIN';
 	public const DELETE_OUTGOING_REQUEST = 'ACTION_DELETE_OUTGOING_REQUEST';
 	public const ADD_TO_FAVORITES = 'ACTION_ADD_TO_FAVORITES';
 	public const REMOVE_FROM_FAVORITES = 'ACTION_REMOVE_FROM_FAVORITES';

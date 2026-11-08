@@ -14,6 +14,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\ORM\Data\DeleteResult;
 use Bitrix\Main\ORM\Data\UpdateResult;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Result;
 use Bitrix\Main\Text\HtmlFilter;
@@ -37,8 +38,13 @@ class Scope
 
 	protected const TYPE_USER = 'user';
 	protected const TYPE_PROJECT = 'project';
+	protected const TYPE_PROJECT_ACCESS_CODES = 'project-access-codes';
+	protected const TYPE_SOCNETGROUPS = AccessCode::TYPE_SOCNETGROUP;
 	protected const TYPE_DEPARTMENT = 'department';
 	protected const TYPE_STRUCTURE_NODE = 'structure-node';
+	protected const TYPE_ACCESS_USER = AccessCode::TYPE_USER;
+	protected const TYPE_ACCESS_DEPARTMENT = AccessCode::TYPE_DEPARTMENT;
+	protected const TYPE_ACCESS_STRUCTURE_DEPARTMENT = AccessCode::TYPE_STRUCTURE_DEPARTMENT;
 
 	protected static array $instances = [];
 	private static array $userScopeIdsCache = [];
@@ -80,6 +86,162 @@ class Scope
 		return $this->getScopes($entityTypeId, $moduleId, false, $loadMetadata);
 	}
 
+	/**
+	 * Returns visible scopes keyed by ID, with access codes but without member metadata.
+	 *
+	 * @param string $entityTypeId
+	 * @param string|null $moduleId
+	 * @param bool $excludeEmptyAccessCode
+	 * @param int $limit
+	 * @param int $offset
+	 * @param bool|null $onAdd
+	 * @param bool|null $onUpdate
+	 * @param bool $exactEntityTypeId
+	 * @return array
+	 */
+	public function getUserScopesPage(
+		string $entityTypeId,
+		?string $moduleId,
+		bool $excludeEmptyAccessCode,
+		int $limit,
+		int $offset,
+		?bool $onAdd = null,
+		?bool $onUpdate = null,
+		bool $exactEntityTypeId = false,
+	): array
+	{
+		$isAdminForEntity = $this->isAdminForEntity($entityTypeId, $moduleId);
+		$filter = $exactEntityTypeId
+			? ['=ENTITY_TYPE_ID' => $entityTypeId]
+			: ['@ENTITY_TYPE_ID' => ($this->getEntityTypeIdMap()[$entityTypeId] ?? [$entityTypeId])]
+		;
+		if ($excludeEmptyAccessCode)
+		{
+			$filter['!=ACCESS_CODE'] = '';
+		}
+		if (!$isAdminForEntity)
+		{
+			$accessCodes = $this->getCurrentUserAccessCodes();
+			$this->prepareAccessCodes($accessCodes);
+			if ($accessCodes === [])
+			{
+				return [];
+			}
+
+			$filter['@ACCESS_CODE'] = $accessCodes;
+		}
+
+		if ($moduleId !== null)
+		{
+			$filter['=CATEGORY'] = $moduleId;
+		}
+		if ($onAdd !== null)
+		{
+			$filter[] = ['=ON_ADD' => $onAdd ? 'Y' : 'N'];
+		}
+		if ($onUpdate !== null)
+		{
+			$filter[] = ['=ON_UPDATE' => $onUpdate ? 'Y' : 'N'];
+		}
+
+		$scopeIds = EntityFormConfigTable::query()
+			->setSelect(['ID'])
+			->registerRuntimeField(new ExpressionField(
+				'ACCESS_CODE',
+				'%s',
+				['\\Bitrix\\Ui\\EntityForm\\EntityFormConfigAcTable:CONFIG.ACCESS_CODE'],
+			))
+			->setFilter($filter)
+			->setDistinct(true)
+			->setOrder(['ID' => 'ASC'])
+			->setLimit($limit)
+			->setOffset($offset)
+			->fetchAll()
+		;
+		$scopeIds = array_column($scopeIds, 'ID');
+		if (empty($scopeIds))
+		{
+			return [];
+		}
+
+		$scopes = EntityFormConfigTable::query()
+			->setSelect([
+				'ID',
+				'NAME',
+				'CONFIG',
+				'CATEGORY',
+				'AUTO_APPLY_SCOPE',
+				'ON_ADD',
+				'ON_UPDATE',
+				'ENTITY_TYPE_ID',
+			])
+			->whereIn('ID', $scopeIds)
+			->exec()
+		;
+		$scopesById = [];
+		while ($scope = $scopes->fetch())
+		{
+			$scopesById[$scope['ID']] = [
+				'NAME' => $scope['NAME'],
+				'CONFIG' => $scope['CONFIG'],
+				'CATEGORY' => $scope['CATEGORY'],
+				'AUTO_APPLY_SCOPE' => $scope['AUTO_APPLY_SCOPE'],
+				'ON_ADD' => $scope['ON_ADD'],
+				'ON_UPDATE' => $scope['ON_UPDATE'],
+				'ENTITY_TYPE_ID' => $scope['ENTITY_TYPE_ID'],
+			];
+		}
+
+		$accessCodes = EntityFormConfigAcTable::query()
+			->setSelect(['CONFIG_ID', 'ACCESS_CODE'])
+			->whereIn('CONFIG_ID', $scopeIds)
+			->exec()
+		;
+		while ($accessCode = $accessCodes->fetch())
+		{
+			$scopeId = $accessCode['CONFIG_ID'];
+			if (isset($scopesById[$scopeId]))
+			{
+				$scopesById[$scopeId]['ACCESS_CODES'][$accessCode['ACCESS_CODE']] = $accessCode['ACCESS_CODE'];
+			}
+		}
+
+		$result = [];
+		foreach ($scopeIds as $scopeId)
+		{
+			if (isset($scopesById[$scopeId]))
+			{
+				$result[$scopeId] = $scopesById[$scopeId];
+			}
+		}
+
+		return $result;
+	}
+
+	public function getUserScopeConfigs(string $entityTypeId, string $moduleId): EO_EntityFormConfig_Collection
+	{
+		$isAdminForEntity = $this->isAdminForEntity($entityTypeId, $moduleId);
+		$filter = ScopeListFilter
+			::getInstance($moduleId)
+			->prepareFilter($entityTypeId, $isAdminForEntity, true, $this)
+		;
+		if (!$isAdminForEntity && empty($filter['@ID']))
+		{
+			return EntityFormConfigTable::createCollection();
+		}
+
+		return EntityFormConfigTable::query()
+			->setSelect([
+				'ID',
+				'NAME',
+				'CONFIG',
+				'ACCESS_CODE' => '\Bitrix\Ui\EntityForm\EntityFormConfigAcTable:CONFIG.ACCESS_CODE',
+			])
+			->setFilter($filter)
+			->fetchCollection()
+		;
+	}
+
 	private function getScopes(
 		string $entityTypeId,
 		?string $moduleId = null,
@@ -119,10 +281,16 @@ class Scope
 					$result[$scope['ID']]['ON_ADD'] = $scope['ON_ADD'];
 					$result[$scope['ID']]['ON_UPDATE'] = $scope['ON_UPDATE'];
 					$result[$scope['ID']]['ENTITY_TYPE_ID'] = $scope['ENTITY_TYPE_ID'];
+					if ($loadMetadata)
+					{
+						$result[$scope['ID']]['MEMBERS'] ??= [];
+						$result[$scope['ID']]['ACCESS_CODES'] ??= [];
+					}
 					if (
 						$loadMetadata
 						&& !isset($result[$scope['ID']]['ACCESS_CODES'][$scope['ACCESS_CODE']])
 						&& isset($scope['ACCESS_CODE'])
+						&& AccessCode::isValid((string)$scope['ACCESS_CODE'])
 					)
 					{
 						$accessCode = new AccessCode($scope['ACCESS_CODE']);
@@ -130,8 +298,11 @@ class Scope
 							$accessCode->getEntityType(),
 							$accessCode->getEntityId(),
 						);
+						$metadata = $member->getMetaData();
+						$metadata['accessCode'] = $scope['ACCESS_CODE'];
+
 						$result[$scope['ID']]['ACCESS_CODES'][$scope['ACCESS_CODE']] = $scope['ACCESS_CODE'];
-						$result[$scope['ID']]['MEMBERS'][$scope['ACCESS_CODE']] = $member->getMetaData();
+						$result[$scope['ID']]['MEMBERS'][$scope['ACCESS_CODE']] = $metadata;
 					}
 				}
 			}
@@ -196,13 +367,30 @@ class Scope
 
 	protected function prepareAccessCodes(array &$accessCodes): void
 	{
-		$accessCodes = array_filter($accessCodes, static fn($code) => mb_strpos($code, 'CHAT') !== 0);
-
-		foreach ($accessCodes as &$accessCode)
+		$result = [];
+		foreach ($accessCodes as $accessCode)
 		{
-			$accessCode = preg_replace('|^(SG\d*?)(_[K,A,M])$|', '$1', $accessCode);
+			if (mb_strpos($accessCode, 'CHAT') === 0)
+			{
+				continue;
+			}
+
+			$matches = [];
+			if (preg_match('/^(SG[1-9][0-9]*?)_([AEKM])$/D', $accessCode, $matches) === 1)
+			{
+				$result[] = $matches[1];
+				if (in_array($matches[2], ['A', 'E', 'K'], true))
+				{
+					$result[] = $accessCode;
+				}
+
+				continue;
+			}
+
+			$result[] = $accessCode;
 		}
-		unset($accessCode);
+
+		$accessCodes = array_values(array_unique($result));
 	}
 
 	/**
@@ -273,18 +461,18 @@ class Scope
 		$this->setScopeWithName($categoryName, $guid, $configScopeType, $userScopeId, $userId);
 	}
 
-	public function setCreateScope(string $moduleId, string $categoryName, string $guid, string $configScopeType, int $userScopeId = 0): void
+	public function setCreateScope(string $moduleId, string $categoryName, string $guid, string $configScopeType, int $userScopeId = 0, ?int $userId = null): void
 	{
 		$scopeName = self::getScopeNameOnAdd($moduleId, $guid);
 
-		$this->setScopeWithName($categoryName, $guid, $configScopeType, $userScopeId, null, $scopeName);
+		$this->setScopeWithName($categoryName, $guid, $configScopeType, $userScopeId, $userId, $scopeName);
 	}
 
-	public function setEditScope(string $moduleId, string $categoryName, string $guid, string $configScopeType, int $userScopeId = 0): void
+	public function setEditScope(string $moduleId, string $categoryName, string $guid, string $configScopeType, int $userScopeId = 0, ?int $userId = null): void
 	{
 		$scopeName = self::getScopeNameOnUpdate($moduleId, $guid);
 
-		$this->setScopeWithName($categoryName, $guid, $configScopeType, $userScopeId, null, $scopeName);
+		$this->setScopeWithName($categoryName, $guid, $configScopeType, $userScopeId, $userId, $scopeName);
 	}
 
 	private function setScopeWithName(
@@ -323,8 +511,60 @@ class Scope
 		array $accessCodes,
 		array $config,
 		array $params = [],
+		bool $useBatchAccessCodeWrite = false,
 	) {
-		if (empty($name))
+		$createdConfigId = null;
+
+		return $this->setScopeConfigInternal(
+			$moduleId,
+			$entityTypeId,
+			$name,
+			$accessCodes,
+			$config,
+			$params,
+			$useBatchAccessCodeWrite,
+			$createdConfigId,
+			false,
+		);
+	}
+
+	public function setScopeConfigWithCreatedId(
+		string $moduleId,
+		string $entityTypeId,
+		string $name,
+		array $accessCodes,
+		array $config,
+		array $params,
+		bool $useBatchAccessCodeWrite,
+		?int &$createdConfigId,
+	) {
+		return $this->setScopeConfigInternal(
+			$moduleId,
+			$entityTypeId,
+			$name,
+			$accessCodes,
+			$config,
+			$params,
+			$useBatchAccessCodeWrite,
+			$createdConfigId,
+			true,
+		);
+	}
+
+	private function setScopeConfigInternal(
+		string $moduleId,
+		string $entityTypeId,
+		string $name,
+		array $accessCodes,
+		array $config,
+		array $params,
+		bool $useBatchAccessCodeWrite,
+		?int &$createdConfigId,
+		bool $returnBatchAccessCodeErrors,
+	) {
+		$createdConfigId = null;
+
+		if ($name === '')
 		{
 			$errors['name'] = new Error(Loc::getMessage('FIELD_REQUIRED'));
 		}
@@ -364,29 +604,49 @@ class Scope
 		if ($result->isSuccess())
 		{
 			$configId = $result->getId();
-			foreach ($accessCodes as $ac)
+			$createdConfigId = $configId;
+			if ($useBatchAccessCodeWrite)
 			{
-				EntityFormConfigAcTable::add([
-					'ACCESS_CODE' => $ac['id'],
-					'CONFIG_ID' => $configId,
-				]);
+				$accessCodeMap = [];
+				foreach ($accessCodes as $ac)
+				{
+					$accessCodeMap[$ac['id']] = $ac['entityId'];
+				}
+				$accessCodeResult = $this->addAccessCodes($configId, $accessCodeMap);
+				if ($returnBatchAccessCodeErrors && !$accessCodeResult->isSuccess())
+				{
+					return $accessCodeResult->getErrors();
+				}
+			}
+			else
+			{
+				foreach ($accessCodes as $ac)
+				{
+					EntityFormConfigAcTable::add([
+						'ACCESS_CODE' => $ac['id'],
+						'CONFIG_ID' => $configId,
+					]);
+				}
 			}
 
-			Application::getInstance()->addBackgroundJob(
-				static fn() => Scope::getInstance()->forceSetScopeToUsers(
-					new EntityEditorConfigDto(
-						$params['categoryName'] ?? '',
-						$entityTypeId,
-						EntityEditorConfigScope::CUSTOM,
-						$result->getId(),
-						null,
+			if ($forceSetToUsers)
+			{
+				Application::getInstance()->addBackgroundJob(
+					static fn() => Scope::getInstance()->forceSetScopeToUsers(
+						new EntityEditorConfigDto(
+							$params['categoryName'] ?? '',
+							$entityTypeId,
+							EntityEditorConfigScope::CUSTOM,
+							$result->getId(),
+							null,
 							$availableOnAdd,
 							$availableOnUpdate,
+						),
+						true,
+						$accessCodes,
 					),
-					$forceSetToUsers,
-					$accessCodes,
-				),
-			);
+				);
+			}
 
 			return $configId;
 		}
@@ -401,27 +661,97 @@ class Scope
 	{
 		foreach ($accessCodes as $key => $item)
 		{
-			if ($item['entityId'] === self::TYPE_USER)
-			{
-			$accessCodes[$key]['id'] = self::CODE_USER . (int)$item['id'];
-			}
-			elseif ($item['entityId'] === self::TYPE_DEPARTMENT)
-			{
-				$accessCodes[$key]['id'] = self::CODE_DEPARTMENT . (int)$item['id'];
-			}
-			elseif ($item['entityId'] === self::TYPE_PROJECT)
-			{
-				$accessCodes[$key]['id'] = self::CODE_PROJECT . (int)$item['id'];
-			}
-			elseif ($item['entityId'] === self::TYPE_STRUCTURE_NODE)
-			{
-				$accessCodes[$key]['id'] = self::CODE_STRUCTURE_DEPARTMENT . (int)$item['id'];
-			}
-			else
+			$accessCode = $this->normalizeAccessCodeItem($item);
+			if ($accessCode === null)
 			{
 				unset($accessCodes[$key]);
+
+				continue;
+			}
+
+			$accessCodes[$key]['id'] = $accessCode;
+		}
+	}
+
+	private function normalizeAccessCodeItem(array $item): ?string
+	{
+		$entityId = $item['entityId'] ?? $item['type'] ?? null;
+		$id = $item['id'] ?? null;
+		if (!is_string($entityId) || (!is_int($id) && !is_string($id)))
+		{
+			return null;
+		}
+
+		$id = trim((string)$id);
+
+		return match ($entityId)
+		{
+			self::TYPE_ACCESS_USER,
+			self::TYPE_USER => $this->normalizeSimpleAccessCode(self::CODE_USER, $id),
+			self::TYPE_ACCESS_DEPARTMENT,
+			self::TYPE_DEPARTMENT => $this->normalizeDepartmentAccessCode($id, 'D', self::CODE_DEPARTMENT),
+			self::TYPE_ACCESS_STRUCTURE_DEPARTMENT,
+			self::TYPE_STRUCTURE_NODE => $this->normalizeDepartmentAccessCode($id, 'SND', self::CODE_STRUCTURE_DEPARTMENT),
+			self::TYPE_PROJECT => $this->normalizeProjectAccessCode($id),
+			self::TYPE_PROJECT_ACCESS_CODES,
+			self::TYPE_SOCNETGROUPS => $this->normalizeProjectAccessCode($id, true),
+			default => null,
+		};
+	}
+
+	private function normalizeSimpleAccessCode(string $prefix, string $id): ?string
+	{
+		if (preg_match('/^' . preg_quote($prefix, '/') . '([1-9][0-9]*)$/D', $id) === 1)
+		{
+			return $id;
+		}
+
+		if (preg_match('/^[1-9][0-9]*$/D', $id) === 1)
+		{
+			return $prefix . $id;
+		}
+
+		return null;
+	}
+
+	private function normalizeDepartmentAccessCode(string $id, string $directPrefix, string $recursivePrefix): ?string
+	{
+		foreach ([$directPrefix, $recursivePrefix] as $prefix)
+		{
+			if (preg_match('/^' . preg_quote($prefix, '/') . '([1-9][0-9]*)$/D', $id) === 1)
+			{
+				return $id;
 			}
 		}
+
+		$matches = [];
+		if (preg_match('/^([1-9][0-9]*):F$/D', $id, $matches) === 1)
+		{
+			return $directPrefix . $matches[1];
+		}
+
+		if (preg_match('/^[1-9][0-9]*$/D', $id) === 1)
+		{
+			return $recursivePrefix . $id;
+		}
+
+		return null;
+	}
+
+	private function normalizeProjectAccessCode(string $id, bool $preserveRole = false): ?string
+	{
+		$matches = [];
+		if (preg_match('/^' . self::CODE_PROJECT . '([1-9][0-9]*)(_[AEK])?$/D', $id, $matches) === 1)
+		{
+			return self::CODE_PROJECT . $matches[1] . ($preserveRole ? ($matches[2] ?? '') : '');
+		}
+
+		if (preg_match('/^[1-9][0-9]*$/D', $id) === 1)
+		{
+			return self::CODE_PROJECT . $id;
+		}
+
+		return null;
 	}
 
 	protected function forceSetScopeToUsers(EntityEditorConfigDto $config, bool $forceSetToUsers, array $accessCodes = []): void
@@ -511,6 +841,18 @@ class Scope
 		$result =  EntityFormConfigTable::update($scopeId, $fields);
 
 		$optionCategory = $scopeObject->getOptionCategory();
+		$onAdd = array_key_exists('ON_ADD', $fields)
+			? $fields['ON_ADD'] === 'Y'
+			: $scopeObject->getOnAdd()
+		;
+		$onUpdate = array_key_exists('ON_UPDATE', $fields)
+			? $fields['ON_UPDATE'] === 'Y'
+			: $scopeObject->getOnUpdate()
+		;
+		$autoApplyScope = array_key_exists('AUTO_APPLY_SCOPE', $fields)
+			? $fields['AUTO_APPLY_SCOPE'] === 'Y'
+			: $scopeObject->getAutoApplyScope()
+		;
 
 		$newScopeName = $this->getScopeName(
 			new EntityEditorConfigDto(
@@ -519,12 +861,12 @@ class Scope
 				EntityEditorConfigScope::CUSTOM,
 				$scopeObject->getId(),
 				null,
-				$fields['ON_ADD'] === 'Y',
-				$fields['ON_UPDATE'] === 'Y',
+				$onAdd,
+				$onUpdate,
 			),
 		);
 
-		if ($fields['AUTO_APPLY_SCOPE'] === 'Y')
+		if ($autoApplyScope)
 		{
 			Application::getInstance()->addBackgroundJob(static function() use ($scopeId, $optionCategory, $oldScopeName, $newScopeName) {
 				if ($oldScopeName !== $newScopeName)
@@ -547,6 +889,12 @@ class Scope
 			return [];
 		}
 
+		$accessCodes = $this->normalizeAccessCodeMap($accessCodes);
+		if ($accessCodes === [])
+		{
+			return $this->getScopeMembers($configId);
+		}
+
 		$this->removeScopeMembers($configId);
 		$this->addAccessCodes($configId, $accessCodes);
 
@@ -562,6 +910,63 @@ class Scope
 		}
 
 		return $scopeMembers;
+	}
+
+	private function normalizeAccessCodeMap(array $accessCodes): array
+	{
+		$result = [];
+		foreach ($accessCodes as $accessCode => $item)
+		{
+			$normalizedAccessCode = $this->normalizeAccessCodeKey($accessCode);
+			$normalizedAccessCode ??= is_array($item)
+				? $this->normalizeAccessCodeItem($item)
+				: $this->normalizeAccessCodeItem([
+					'entityId' => $item,
+					'id' => $accessCode,
+				])
+			;
+			if ($normalizedAccessCode === null)
+			{
+				continue;
+			}
+
+			$result[$normalizedAccessCode] = (new AccessCode($normalizedAccessCode))->getEntityType();
+		}
+
+		return $result;
+	}
+
+	private function normalizeAccessCodeKey(mixed $accessCode): ?string
+	{
+		if (!is_string($accessCode))
+		{
+			return null;
+		}
+
+		$accessCode = trim($accessCode);
+		if ($accessCode === '' || !$this->isSupportedAccessCode($accessCode))
+		{
+			return null;
+		}
+
+		return $accessCode;
+	}
+
+	private function isSupportedAccessCode(string $accessCode): bool
+	{
+		return preg_match('/^(?:(?:U|D|DR|SND|SNDR)[1-9][0-9]*|SG[1-9][0-9]*(?:_[AEK])?)$/D', $accessCode) === 1;
+	}
+
+	public function replaceScopeAccessCodes(int $configId, array $accessCodes = []): Result
+	{
+		if (!EntityFormConfigTable::getById($configId)->fetchObject())
+		{
+			return (new Result())->addError(new Error('Configuration not found'));
+		}
+
+		$this->removeScopeMembers($configId);
+
+		return $this->addAccessCodes($configId, $accessCodes);
 	}
 
 	public function addAccessCodes(int $configId, array $accessCodes): Result
@@ -595,9 +1000,17 @@ class Scope
 		{
 			foreach ($accessCodes as $accessCodeEntity)
 			{
+				if (!AccessCode::isValid((string)$accessCodeEntity['ACCESS_CODE']))
+				{
+					continue;
+				}
+
 				$accessCode = new AccessCode($accessCodeEntity['ACCESS_CODE']);
 				$member = (new DataProvider())->getEntity($accessCode->getEntityType(), $accessCode->getEntityId());
-				$result[$accessCodeEntity['ACCESS_CODE']] = $member->getMetaData();
+				$metadata = $member->getMetaData();
+				$metadata['accessCode'] = $accessCodeEntity['ACCESS_CODE'];
+
+				$result[$accessCodeEntity['ACCESS_CODE']] = $metadata;
 			}
 		}
 
@@ -621,9 +1034,9 @@ class Scope
 		));
 	}
 
-	private function setScopeToDepartment(EntityEditorConfigDto $config, int $departmentId): void
+	private function setScopeToDepartment(EntityEditorConfigDto $config, int $departmentId, bool $withAllChildNodes = true): void
 	{
-		$userIds = $this->getUserIdsByDepartment($departmentId);
+		$userIds = $this->getUserIdsByDepartment($departmentId, $withAllChildNodes);
 		foreach ($userIds as $userId)
 		{
 			$config->setUserId($userId);
@@ -631,9 +1044,13 @@ class Scope
 		}
 	}
 
-	private function setScopeToSocialGroup(EntityEditorConfigDto $config, int $socialGroupId): void
+	private function setScopeToSocialGroup(
+		EntityEditorConfigDto $config,
+		int $socialGroupId,
+		?string $accessRole = null,
+	): void
 	{
-		$userIds = $this->getUserIdsBySocialGroup($socialGroupId);
+		$userIds = $this->getUserIdsBySocialGroup($socialGroupId, $accessRole);
 		foreach ($userIds as $userId)
 		{
 			$config->setUserId($userId);
@@ -641,9 +1058,9 @@ class Scope
 		}
 	}
 
-	private function setScopeToStructureDepartment(EntityEditorConfigDto $config, mixed $structureDepartmentId): void
+	private function setScopeToStructureDepartment(EntityEditorConfigDto $config, mixed $structureDepartmentId, bool $withAllChildNodes = true): void
 	{
-		$userIds = $this->getUserIdsByStructureDepartment($structureDepartmentId);
+		$userIds = $this->getUserIdsByStructureDepartment((int)$structureDepartmentId, $withAllChildNodes);
 		foreach ($userIds as $userId)
 		{
 			$config->setUserId($userId);
@@ -673,7 +1090,8 @@ class Scope
 				return;
 			}
 
-			if (empty($fields['ROLE']) && $fields['ROLE'] !== UserToGroupTable::ROLE_USER)
+			$memberRole = is_string($fields['ROLE'] ?? null) ? $fields['ROLE'] : null;
+			if ($memberRole === null)
 			{
 				return;
 			}
@@ -687,17 +1105,22 @@ class Scope
 					return;
 				}
 
-				$memberId = $userToGroup->getUserId();
-				$socialGroupId = $userToGroup->getGroupId();
+				$memberId = empty($fields['USER_ID']) ? (int)$userToGroup->getUserId() : (int)$fields['USER_ID'];
+				$socialGroupId = empty($fields['GROUP_ID']) ? (int)$userToGroup->getGroupId() : (int)$fields['GROUP_ID'];
 			}
 			else
 			{
-				$memberId = $fields['USER_ID'];
-				$socialGroupId = $fields['GROUP_ID'];
+				$memberId = (int)$fields['USER_ID'];
+				$socialGroupId = (int)$fields['GROUP_ID'];
+			}
+
+			if (!in_array($memberRole, UserToGroupTable::getRolesMember(), true))
+			{
+				return;
 			}
 
 			$scopeType = EntityEditorConfigScope::CUSTOM;
-			$scopes = Scope::getInstance()->getScopesBySocialGroupId($socialGroupId, true);
+			$scopes = Scope::getInstance()->getScopesBySocialGroupId($socialGroupId, true, $memberRole);
 
 			self::applyScopesToMember($scopes, $scopeType, $memberId);
 		});
@@ -723,16 +1146,29 @@ class Scope
 		return $accessCodes;
 	}
 
-	private function getScopesBySocialGroupId(int $socialGroupId, bool $onlyAutoApplyView = false): array
+	private function getScopesBySocialGroupId(
+		int $socialGroupId,
+		bool $onlyAutoApplyView = false,
+		?string $memberRole = null,
+	): array
 	{
-		$accessCode = 'SG' . $socialGroupId;
+		$accessCodes = ['SG' . $socialGroupId];
+		foreach ($this->getSocialGroupAccessRolesByMemberRole($memberRole) as $accessRole)
+		{
+			$accessCodes[] = 'SG' . $socialGroupId . '_' . $accessRole;
+		}
 
-		return $this->getScopesByAccessCode($accessCode, $onlyAutoApplyView);
+		return $this->getScopesByAccessCodes($accessCodes, $onlyAutoApplyView);
 	}
 
 	private function getScopesByAccessCode(string $accessCode, bool $onlyAutoApplyView = false)
 	{
-		$filter = ['=ACCESS_CODE' => $accessCode];
+		return $this->getScopesByAccessCodes([$accessCode], $onlyAutoApplyView);
+	}
+
+	private function getScopesByAccessCodes(array $accessCodes, bool $onlyAutoApplyView = false)
+	{
+		$filter = ['@ACCESS_CODE' => array_values(array_unique($accessCodes))];
 		if ($onlyAutoApplyView)
 		{
 			$filter['=CONFIG.AUTO_APPLY_SCOPE'] = 'Y';
@@ -746,6 +1182,26 @@ class Scope
 		;
 
 		return $scopes->getConfigList();
+	}
+
+	private function getSocialGroupAccessRolesByMemberRole(?string $memberRole): array
+	{
+		return match ($memberRole)
+		{
+			UserToGroupTable::ROLE_OWNER => [
+				UserToGroupTable::ROLE_OWNER,
+				UserToGroupTable::ROLE_MODERATOR,
+				UserToGroupTable::ROLE_USER,
+			],
+			UserToGroupTable::ROLE_MODERATOR => [
+				UserToGroupTable::ROLE_MODERATOR,
+				UserToGroupTable::ROLE_USER,
+			],
+			UserToGroupTable::ROLE_USER => [
+				UserToGroupTable::ROLE_USER,
+			],
+			default => [],
+		};
 	}
 
 	public function setScopeForEligibleUsers(int $scopeId): void
@@ -817,24 +1273,38 @@ class Scope
 				$config->setUserId($matches[2]);
 				$this->setScopeToUser($config);
 			}
+			elseif (preg_match('/'. AccessCode::AC_DEPARTMENT . '/', $accessCode, $matches))
+			{
+				$this->setScopeToDepartment($config, $matches[2], false);
+			}
 			elseif (preg_match('/'. AccessCode::AC_ALL_DEPARTMENT . '/', $accessCode, $matches))
 			{
 				$this->setScopeToDepartment($config, $matches[2]);
 			}
 			elseif (preg_match('/'. AccessCode::AC_SOCNETGROUP . '/', $accessCode, $matches))
 			{
-				$this->setScopeToSocialGroup($config, $matches[2]);
+				$this->setScopeToSocialGroup($config, $matches[2], isset($matches[3]) ? trim($matches[3], '_') : null);
 			}
 			elseif (preg_match('/'. AccessCode::AC_ALL_STRUCTURE_DEPARTMENT . '/', $accessCode, $matches))
 			{
 				$this->setScopeToStructureDepartment($config, $matches[2]);
 			}
+			elseif (preg_match('/'. AccessCode::AC_STRUCTURE_DEPARTMENT . '/', $accessCode, $matches))
+			{
+				$this->setScopeToStructureDepartment($config, $matches[2], false);
+			}
 		}
 	}
 
-	private function getUserIdsBySocialGroup(int $socialGroupId): array
+	private function getUserIdsBySocialGroup(int $socialGroupId, ?string $accessRole = null): array
 	{
 		if (!\Bitrix\Main\Loader::includeModule('socialnetwork'))
+		{
+			return [];
+		}
+
+		$roles = $this->getSocialGroupMemberRolesByAccessRole($accessRole);
+		if ($roles === [])
 		{
 			return [];
 		}
@@ -843,11 +1313,7 @@ class Scope
 			->setSelect(['USER_ID'])
 			->setFilter([
 				'=GROUP_ID' => $socialGroupId,
-				'@ROLE' => [
-					UserToGroupTable::ROLE_MODERATOR,
-					UserToGroupTable::ROLE_USER,
-					UserToGroupTable::ROLE_OWNER,
-				],
+				'@ROLE' => $roles,
 			])
 			->fetchCollection()
 		;
@@ -861,20 +1327,41 @@ class Scope
 		return $userIds;
 	}
 
-	private function getUserIdsByDepartment(int $departmentId): array
+	private function getSocialGroupMemberRolesByAccessRole(?string $accessRole): array
 	{
-		return $this->getUserIdsByAccessCode($departmentId, 'DR');
+		return match ($accessRole)
+		{
+			UserToGroupTable::ROLE_OWNER => [
+				UserToGroupTable::ROLE_OWNER,
+			],
+			UserToGroupTable::ROLE_MODERATOR => [
+				UserToGroupTable::ROLE_OWNER,
+				UserToGroupTable::ROLE_MODERATOR,
+			],
+			UserToGroupTable::ROLE_USER,
+			null => [
+				UserToGroupTable::ROLE_OWNER,
+				UserToGroupTable::ROLE_MODERATOR,
+				UserToGroupTable::ROLE_USER,
+			],
+			default => [],
+		};
 	}
 
-	private function getUserIdsByStructureDepartment(int $departmentId): array
+	private function getUserIdsByDepartment(int $departmentId, bool $withAllChildNodes = true): array
 	{
-		return $this->getUserIdsByAccessCode($departmentId, 'SNDR');
+		return $this->getUserIdsByAccessCode($departmentId, 'D', $withAllChildNodes);
 	}
 
-	private function getUserIdsByAccessCode(int $departmentId, string $code): array
+	private function getUserIdsByStructureDepartment(int $departmentId, bool $withAllChildNodes = true): array
+	{
+		return $this->getUserIdsByAccessCode($departmentId, 'SND', $withAllChildNodes);
+	}
+
+	private function getUserIdsByAccessCode(int $departmentId, string $code, bool $withAllChildNodes = true): array
 	{
 		$userIds = [];
-		if (!\Bitrix\Main\Loader::includeModule('humanresources') || !in_array($code, ['DR', 'SNDR'], true))
+		if (!\Bitrix\Main\Loader::includeModule('humanresources') || !in_array($code, ['D', 'SND'], true))
 		{
 			return $userIds;
 		}
@@ -887,7 +1374,7 @@ class Scope
 			return $userIds;
 		}
 
-		$allEmp = $hrServiceLocator::getNodeMemberService()->getAllEmployees($node->id, true);
+		$allEmp = $hrServiceLocator::getNodeMemberService()->getAllEmployees($node->id, $withAllChildNodes);
 		foreach ($allEmp->getIterator() as $emp)
 		{
 			$userIds[] = $emp->entityId;
@@ -957,23 +1444,33 @@ class Scope
 		foreach ($accessCodes as $accessCode)
 		{
 			$matches = [];
-			if (preg_match(AccessCode::AC_USER, $accessCode, $matches))
+			if (preg_match('/'. AccessCode::AC_USER . '/', $accessCode, $matches))
 			{
-				$userIds = [$matches[1]];
+				$userIds[] = (int)$matches[2];
 			}
-			elseif (preg_match(AccessCode::AC_ALL_DEPARTMENT, $accessCode, $matches))
+			elseif (preg_match('/'. AccessCode::AC_DEPARTMENT . '/', $accessCode, $matches))
 			{
-				$userIds = $this->getUserIdsByDepartment($matches[1]);
+				array_push($userIds, ...$this->getUserIdsByDepartment((int)$matches[2], false));
 			}
-			elseif (preg_match(AccessCode::AC_SOCNETGROUP, $accessCode, $matches))
+			elseif (preg_match('/'. AccessCode::AC_ALL_DEPARTMENT . '/', $accessCode, $matches))
 			{
-				$userIds = $this->getUserIdsBySocialGroup($matches[1]);
+				array_push($userIds, ...$this->getUserIdsByDepartment((int)$matches[2]));
 			}
-			elseif (preg_match(AccessCode::AC_ALL_STRUCTURE_DEPARTMENT, $accessCode, $matches))
+			elseif (preg_match('/'. AccessCode::AC_SOCNETGROUP . '/', $accessCode, $matches))
 			{
-				$userIds = $this->getUserIdsByStructureDepartment($matches[1]);
+				array_push($userIds, ...$this->getUserIdsBySocialGroup((int)$matches[2], isset($matches[3]) ? trim($matches[3], '_') : null));
+			}
+			elseif (preg_match('/'. AccessCode::AC_STRUCTURE_DEPARTMENT . '/', $accessCode, $matches))
+			{
+				array_push($userIds, ...$this->getUserIdsByStructureDepartment((int)$matches[2], false));
+			}
+			elseif (preg_match('/'. AccessCode::AC_ALL_STRUCTURE_DEPARTMENT . '/', $accessCode, $matches))
+			{
+				array_push($userIds, ...$this->getUserIdsByStructureDepartment((int)$matches[2]));
 			}
 		}
+
+		$userIds = array_unique($userIds);
 
 		foreach ($userIds as $userId)
 		{
@@ -1004,7 +1501,11 @@ class Scope
 		$newAccessCodes = [];
 		foreach ($accessCodes as $code)
 		{
-			$newAccessCodes[] = $this->unpackAccessCode($code);
+			$accessCode = $this->unpackAccessCode($code);
+			if ($accessCode !== null)
+			{
+				$newAccessCodes[] = $accessCode;
+			}
 		}
 
 		return $this->setScopeConfig(
@@ -1026,6 +1527,13 @@ class Scope
 				'id' => str_replace(self::CODE_USER, '', $accessCode),
 			];
 		}
+		if (preg_match('/^SG[1-9][0-9]*_[AEK]$/D', $accessCode) === 1)
+		{
+			return [
+				'entityId' => self::TYPE_PROJECT_ACCESS_CODES,
+				'id' => $accessCode,
+			];
+		}
 		if (str_starts_with($accessCode, self::CODE_PROJECT))
 		{
 			return [
@@ -1033,18 +1541,33 @@ class Scope
 				'id' => str_replace(self::CODE_PROJECT, '', $accessCode),
 			];
 		}
-		if (str_starts_with($accessCode, self::CODE_DEPARTMENT))
+		$matches = [];
+		if (preg_match('/^D([1-9][0-9]*)$/D', $accessCode, $matches) === 1)
 		{
 			return [
 				'entityId' => self::TYPE_DEPARTMENT,
-				'id' => str_replace(self::CODE_DEPARTMENT, '', $accessCode),
+				'id' => $matches[1] . ':F',
 			];
 		}
-		if (str_starts_with($accessCode, self::CODE_STRUCTURE_DEPARTMENT))
+		if (preg_match('/^DR([1-9][0-9]*)$/D', $accessCode, $matches) === 1)
+		{
+			return [
+				'entityId' => self::TYPE_DEPARTMENT,
+				'id' => $matches[1],
+			];
+		}
+		if (preg_match('/^SND([1-9][0-9]*)$/D', $accessCode, $matches) === 1)
 		{
 			return [
 				'entityId' => self::TYPE_STRUCTURE_NODE,
-				'id' => str_replace(self::CODE_STRUCTURE_DEPARTMENT, '', $accessCode),
+				'id' => $matches[1] . ':F',
+			];
+		}
+		if (preg_match('/^SNDR([1-9][0-9]*)$/D', $accessCode, $matches) === 1)
+		{
+			return [
+				'entityId' => self::TYPE_STRUCTURE_NODE,
+				'id' => $matches[1],
 			];
 		}
 

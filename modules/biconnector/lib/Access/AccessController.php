@@ -5,6 +5,7 @@ namespace Bitrix\BIConnector\Access;
 use Bitrix\BIConnector\Access\Filter\Factory\BIConstructorFilterFactory;
 use Bitrix\BIConnector\Access\Model\DashboardAccessItem;
 use Bitrix\BIConnector\Access\Model\UserAccessItem;
+use Bitrix\BIConnector\Access\Rule\AbstractVariableRule;
 use Bitrix\BIConnector\Access\Rule\BaseRule;
 use Bitrix\BIConnector\Access\Rule\Factory\BIConstructorRuleFactory;
 use Bitrix\BIConnector\Access\Rule\VariableRule;
@@ -116,7 +117,7 @@ final class AccessController extends BaseAccessController
 		$params = ['action' => $action];
 
 		return
-			$ruleObject instanceof VariableRule
+			$ruleObject instanceof AbstractVariableRule
 				? $ruleObject->getPermissionMultiValues($params)
 				: $ruleObject->getPermissionValue($params)
 		;
@@ -146,7 +147,7 @@ final class AccessController extends BaseAccessController
 	public function getAllowedGroupValue(string $action): ?array
 	{
 		$ruleObject = $this->ruleFactory->createFromAction($action, $this);
-		if (!$ruleObject instanceof VariableRule)
+		if (!$ruleObject instanceof AbstractVariableRule)
 		{
 			return null;
 		}

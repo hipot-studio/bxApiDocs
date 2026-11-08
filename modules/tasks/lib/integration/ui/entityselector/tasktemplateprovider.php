@@ -152,10 +152,15 @@ class TaskTemplateProvider extends BaseProvider
 		$templates = $this->getTemplates(['ids' => $templateIds]);
 
 		$templateIds = array_fill_keys($templateIds, null);
-		$templates = array_replace($templateIds, $templates);
+		$templates = array_filter(array_replace($templateIds, $templates));
 
 		foreach ($templates as $id => $title)
 		{
+			if ($title === null)
+			{
+				continue;
+			}
+
 			if ($dialog->getItemCollection()->count() >= static::LIMIT)
 			{
 				break;
@@ -214,7 +219,7 @@ class TaskTemplateProvider extends BaseProvider
 		return $templates;
 	}
 
-	private function getFilterByOptions(array $options): array
+	protected function getFilterByOptions(array $options): array
 	{
 		$filter = [];
 

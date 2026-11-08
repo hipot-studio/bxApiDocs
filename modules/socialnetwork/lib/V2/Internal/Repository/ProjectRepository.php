@@ -9,7 +9,6 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
-use Bitrix\Main\UserTable;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\AllowGuestsInvitationField;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\CanGuestCopyTextOption;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\CanGuestScreenshotOption;
@@ -18,6 +17,7 @@ use Bitrix\Socialnetwork\Collab\Control\Option\Type\ManageMessagesOption;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\MessagesAutoDeleteDelay;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\ShowHistoryOption;
 use Bitrix\Socialnetwork\Collab\Control\Option\Type\WhoCanInviteOption;
+use Bitrix\Socialnetwork\Internals\Group\GroupEntity;
 use Bitrix\Socialnetwork\Internals\Group\GroupEntityCollection;
 use Bitrix\Socialnetwork\Collab\Permission\UserRole;
 use Bitrix\Socialnetwork\UserToGroupTable;
@@ -36,7 +36,6 @@ use Bitrix\Socialnetwork\V2\Internal\Integration\Extranet\Service\ExtranetUserSe
 use Bitrix\Socialnetwork\V2\Internal\Repository\Mapper\ProjectMapper;
 use Bitrix\Socialnetwork\V2\Internal\Repository\Workgroup\WorkgroupQueryTrait;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\FeatureStatesOnConvertService;
-use Bitrix\Socialnetwork\V2\Internal\Service\NameService;
 use Bitrix\Socialnetwork\V2\Internal\Integration\HumanResources\Service\StructureRelationService;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\V2\Internal\Service\Project\HasCollabersService;
@@ -49,6 +48,17 @@ class ProjectRepository implements ProjectRepositoryInterface
 	use WorkgroupQueryTrait;
 
 	private const CACHE_TTL = 10;
+
+	// VISIBLE is not part of the read model: it is what the view permission is decided by, so the row
+	// carries it to spare the permission check a second read of the same row.
+	private const VIEW_INFO_FIELDS = [
+		'ID',
+		'VISIBLE',
+		'DESCRIPTION',
+		'GOAL',
+		'PROJECT_DATE_START',
+		'PROJECT_DATE_FINISH',
+	];
 
 	private const DEFAULT_PERMISSIONS = [
 		'calendar' => [],
@@ -95,7 +105,6 @@ class ProjectRepository implements ProjectRepositoryInterface
 
 	public function __construct(
 		private readonly ProjectMapper $projectMapper,
-		private readonly NameService $nameService,
 		private readonly StructureRelationService $structureRelationService,
 		private readonly ExtranetUserService $extranetUserService,
 		private readonly CollabOptionRepository $collabOptionRepository,
@@ -105,7 +114,7 @@ class ProjectRepository implements ProjectRepositoryInterface
 	{
 	}
 
-	public function getById(int $projectId): ?Project
+	public function getById(int $projectId, bool $resolveLegacyDepartmentNames = false): ?Project
 	{
 		if ($projectId <= 0)
 		{
@@ -143,7 +152,10 @@ class ProjectRepository implements ProjectRepositoryInterface
 		$tags = $this->getTagsByGroupId($projectId);
 		$options = $this->getOptionsByGroupId($projectId);
 		$permissions = $this->getPermissionsByGroupId($projectId);
-		[$members, $moderatorMembers] = $this->getMembersByGroupId($projectId);
+		[$members, $moderatorMembers] = $this->getMembersByGroupId(
+			$projectId,
+			$resolveLegacyDepartmentNames,
+		);
 		$hasCollabers = $this->getHasCollabers($projectId);
 		$image = $this->findImageById($this->extractImageId($groupRow));
 
@@ -156,6 +168,51 @@ class ProjectRepository implements ProjectRepositoryInterface
 			hasCollabers: $hasCollabers,
 			image: $image,
 			options: $options,
+		);
+	}
+
+	public function getViewInfoById(int $projectId): ?Project
+	{
+		$viewInfoRow = $this->findViewInfoRow($projectId);
+
+		return $viewInfoRow === null ? null : $this->mapViewInfoRow($viewInfoRow);
+	}
+
+	/**
+	 * Tags are read by a query of their own on purpose: joined onto the project row they return
+	 * it once per tag, and DESCRIPTION and GOAL are TEXT - an unbounded number of tags would
+	 * multiply both on the wire and in PHP memory.
+	 */
+	public function findViewInfoRow(int $projectId): ?ProjectViewInfoRow
+	{
+		if ($projectId <= 0)
+		{
+			return null;
+		}
+
+		$groupRow = WorkgroupTable::query()
+			->setSelect(self::VIEW_INFO_FIELDS)
+			->where('ID', $projectId)
+			->exec()
+			->fetch()
+		;
+
+		if (!is_array($groupRow))
+		{
+			return null;
+		}
+
+		return new ProjectViewInfoRow(
+			group: GroupEntity::wakeUpObject($groupRow),
+			tags: $this->getTagsByGroupId($projectId),
+		);
+	}
+
+	public function mapViewInfoRow(ProjectViewInfoRow $viewInfoRow): Project
+	{
+		return $this->projectMapper->mapFromOrmRow(
+			groupRow: $viewInfoRow->group->collectValues(),
+			tags: $viewInfoRow->tags,
 		);
 	}
 
@@ -353,9 +410,27 @@ class ProjectRepository implements ProjectRepositoryInterface
 		return is_numeric($row['IMAGE_ID'] ?? null) ? (int)$row['IMAGE_ID'] : 0;
 	}
 
+	// A row may hold no type at all, and an inequality never matches NULL, so such a row is taken in
+	// explicitly. A legacy scrum stays out of it: the scrum grid classifies a row by its scrum master alone
+	// (ScrumRepository::applyTypeFilter()), so a typeless scrum would otherwise sit in the project and the
+	// scrum lists at once
 	protected function applyTypeFilter(Query $query): void
 	{
-		$query->whereNot('TYPE', Type::Scrum->value);
+		$query->where(
+			Query::filter()
+				->logic('or')
+				->whereNot('TYPE', Type::Scrum->value)
+				->where(
+					Query::filter()
+						->whereNull('TYPE')
+						->where(
+							Query::filter()
+								->logic('or')
+								->whereNull('SCRUM_MASTER_ID')
+								->where('SCRUM_MASTER_ID', '<=', 0)
+						)
+				)
+		);
 	}
 
 	protected function getExtranetUserService(): ExtranetUserService
@@ -471,7 +546,7 @@ class ProjectRepository implements ProjectRepositoryInterface
 	/**
 	 * @return array{MemberEntityCollection, MemberEntityCollection}
 	 */
-	private function getMembersByGroupId(int $groupId): array
+	private function getMembersByGroupId(int $groupId, bool $resolveLegacyDepartmentNames): array
 	{
 		$rows = UserToGroupTable::getList([
 			'filter' => [
@@ -484,8 +559,6 @@ class ProjectRepository implements ProjectRepositoryInterface
 		])->fetchAll();
 
 		$userIds = array_map(static fn(array $row): int => (int)$row['USER_ID'], $rows);
-		$userNames = $this->loadUserNames($userIds);
-
 		$roleMap = [];
 		$autoMemberMap = [];
 		foreach ($rows as $row)
@@ -504,7 +577,6 @@ class ProjectRepository implements ProjectRepositoryInterface
 			$entity = new MemberEntity(
 				id: $userId,
 				type: MemberEntityType::User,
-				name: $userNames[$userId] ?? null,
 			);
 
 			// Legacy auto-members are represented via linked departments, not as individual members.
@@ -521,38 +593,12 @@ class ProjectRepository implements ProjectRepositoryInterface
 			}
 		}
 
-		$members->merge($this->structureRelationService->getLinkedDepartments($groupId));
+		$members->merge($this->structureRelationService->getLinkedNodes(
+			$groupId,
+			$resolveLegacyDepartmentNames,
+		));
 
 		return [$members, $moderators];
-	}
-
-	/**
-	 * @param int[] $userIds
-	 * @return array<int, string>
-	 */
-	private function loadUserNames(array $userIds): array
-	{
-		if (empty($userIds))
-		{
-			return [];
-		}
-
-		$rows = UserTable::getList([
-			'filter' => ['=ID' => $userIds],
-			'select' => ['ID', 'NAME', 'LAST_NAME', 'SECOND_NAME', 'LOGIN', 'TITLE'],
-		])->fetchAll();
-
-		$result = [];
-		foreach ($rows as $row)
-		{
-			$name = $this->nameService->format($row);
-			if ($name !== '')
-			{
-				$result[(int)$row['ID']] = $name;
-			}
-		}
-
-		return $result;
 	}
 
 	private function getHasCollabers(int $projectId): bool
@@ -637,7 +683,7 @@ class ProjectRepository implements ProjectRepositoryInterface
 			return Type::tryFrom($row['TYPE']);
 		}
 
-		if (isset($row['SCRUM_MASTER_ID']))
+		if ((int)($row['SCRUM_MASTER_ID'] ?? 0) > 0)
 		{
 			return Type::Scrum;
 		}

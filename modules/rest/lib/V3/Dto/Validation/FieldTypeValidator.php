@@ -8,9 +8,9 @@ use Bitrix\Main\Type\Date;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Validation\ValidationError;
 use Bitrix\Main\Validation\ValidationResult;
-use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Dto\DtoField;
+use Bitrix\Rest\V3\Dto\TypeHelper;
 use Bitrix\Rest\V3\Exception\Validation\InvalidRequestFieldTypeException;
 use Bitrix\Rest\V3\Structure\FieldsValidator;
 
@@ -38,12 +38,12 @@ class FieldTypeValidator extends DtoFieldValidator
 		$dateTimeClass = strtolower(DateTime::class);
 		$dateClass = strtolower(Date::class);
 
-		if (is_subclass_of($field->getPropertyType(), Dto::class))
+		if (TypeHelper::isDto($field->getPropertyType()))
 		{
 			return $field->getPropertyType() === get_class($value);
 		}
 
-		if (is_subclass_of($type, \BackedEnum::class))
+		if (TypeHelper::isBackedEnum($type))
 		{
 			return $value instanceof $type;
 		}

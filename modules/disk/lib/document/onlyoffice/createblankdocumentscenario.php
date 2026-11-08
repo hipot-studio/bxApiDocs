@@ -2,8 +2,6 @@
 
 namespace Bitrix\Disk\Document\OnlyOffice;
 
-use Bitrix\Disk\Analytics\DiskAnalytics;
-use Bitrix\Disk\Analytics\Enum\DocumentHandlerType;
 use Bitrix\Disk\Analytics\Enum\DocumentTypeEnum;
 use Bitrix\Disk\Document\Flipchart\BoardService;
 use Bitrix\Disk\Driver;
@@ -42,12 +40,13 @@ final class CreateBlankDocumentScenario
 		string $typeFile,
 		Folder $targetFolder,
 		array $analytics = [],
+		bool $shouldCheckUnifiedLink = false,
 	): Result
 	{
 		$result = new Result();
 
 		$storage = $targetFolder->getStorage();
-		if (!$targetFolder->canAdd($storage->getSecurityContext($this->userId)))
+		if (!$targetFolder->canAdd($storage->getSecurityContext($this->userId, $shouldCheckUnifiedLink)))
 		{
 			$result->addError(new Error('Bad rights. Could not add file to the folder.'));
 

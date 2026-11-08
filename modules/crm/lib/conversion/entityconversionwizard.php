@@ -191,13 +191,30 @@ class EntityConversionWizard
 			{
 				if ($this->isMobileContext)
 				{
-					return Container::getInstance()->getRouter()->getMobileItemDetailUrl(
+					$url = Container::getInstance()->getRouter()->getMobileItemDetailUrl(
+						$destinationEntityTypeId,
+						$destinationId,
+					);
+				}
+				else
+				{
+					$url = Container::getInstance()->getRouter()->getItemDetailUrl(
 						$destinationEntityTypeId,
 						$destinationId,
 					);
 				}
 
-				return Container::getInstance()->getRouter()->getItemDetailUrl($destinationEntityTypeId, $destinationId);
+				if (!$url)
+				{
+					return null;
+				}
+
+				$analyticsEventBuilder = \Bitrix\Crm\Integration\Analytics\Builder\Entity\ConvertOpenEvent::createDefault(
+					$destinationEntityTypeId,
+				);
+				$analyticsEventBuilder->setSrcEntityTypeId($this->getEntityTypeID());
+
+				return $analyticsEventBuilder->buildUri($url);
 			}
 		}
 

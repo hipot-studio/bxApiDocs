@@ -136,6 +136,29 @@ class EventPayload
 		];
 	}
 
+	public function formSubmit(int $messageId, array $params, ?Message $message = null): array
+	{
+		// Reuse the message the caller already loaded (the controller passes the full domain
+		// Message into Bot::onFormSubmit) instead of re-hydrating it by id in loadMessageRest /
+		// loadAdditionalMessagesRest. getMessage() self-corrects if the id does not match.
+		if ($message !== null && $message->getId() === $messageId)
+		{
+			$this->message = $message;
+		}
+
+		return [
+			'actionId' => $params['ACTION_ID'] ?? '',
+			'blockId' => $params['BLOCK_ID'] ?? '',
+			'buttonId' => $params['BUTTON_ID'] ?? '',
+			'values' => $params['VALUES'] ?? [],
+			'message' => $this->loadMessageRest($messageId),
+			'chat' => $this->loadChatRest((int)($params['CHAT_ID'] ?? 0)),
+			'user' => $this->loadUserRest((int)($params['USER_ID'] ?? 0)),
+			'language' => $this->getLanguage(),
+			'additionalMessages' => $this->loadAdditionalMessagesRest($messageId),
+		];
+	}
+
 	public function loadBotRest(int $botId): array
 	{
 		if ($botId <= 0)

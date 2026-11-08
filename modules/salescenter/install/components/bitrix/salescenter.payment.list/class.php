@@ -105,6 +105,8 @@ class SalesCenterPaymentListComponent extends CBitrixComponent
 
 	private function prepareResult(): void
 	{
+		$this->applySessionAccess();
+
 		$this->arResult = SalesCenter\Driver::getInstance()->getManagerParams();
 
 		$this->arResult['grid']['id'] = self::GRID_ID;
@@ -133,6 +135,14 @@ class SalesCenterPaymentListComponent extends CBitrixComponent
 		$this->arResult['isSitePublished'] = SalesCenter\Integration\LandingManager::getInstance()->isSitePublished();
 
 		$this->arResult['phpSession'] = bitrix_sessid();
+	}
+
+	protected function applySessionAccess(): void
+	{
+		$this->arParams['sessionId'] = SalesCenter\Integration\ImOpenLinesManager::getInstance()
+			->checkClientSessionId($this->arParams['sessionId'])
+			->getData()['sessionId']
+		;
 	}
 
 	private function getOrderIdList(): array

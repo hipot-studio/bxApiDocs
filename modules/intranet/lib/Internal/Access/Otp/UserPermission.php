@@ -11,6 +11,7 @@ class UserPermission
 {
 	public function __construct(
 		private readonly User $user,
+		private ?OtpSettings $otpSettings = null,
 	) {
 	}
 
@@ -36,27 +37,62 @@ class UserPermission
 			return false;
 		}
 
-		$otpSettings = new OtpSettings();
-		$isMandatoryForUser = false;
+		return $this->isSelfWithoutMandatoryOtp() || $this->canCurrentUserEdit();
+	}
 
-		if ($otpSettings->isMandatoryUsing())
+	public function canDefer(): bool
+	{
+		return $this->canCurrentUserEdit();
+	}
+
+	public function canSetIndefinitePeriod(): bool
+	{
+		if ($this->user->isIntegrator())
 		{
-			$personalSettings = $otpSettings->getPersonalSettingsByUserId($this->user->getId());
-			$isMandatoryForUser = $personalSettings?->isRequired() ?? false;
+			return false;
 		}
 
-		return (!$isMandatoryForUser && $this->user->isCurrent()) || $this->canCurrentUserEdit();
+		return $this->canCurrentUserEdit();
 	}
 
 	public function canCurrentUserEdit(): bool
+	{
+		return self::canCurrentUserEditOtp();
+	}
+
+	public static function canCurrentUserEditOtp(): bool
 	{
 		global $USER;
 
 		return $USER->CanDoOperation('security_edit_user_otp');
 	}
 
+	private function isSelfWithoutMandatoryOtp(): bool
+	{
+		if (!$this->user->isCurrent())
+		{
+			return false;
+		}
+
+		$otpSettings = $this->getOtpSettings();
+
+		if (!$otpSettings->isMandatoryUsing())
+		{
+			return true;
+		}
+
+		$personalSettings = $otpSettings->getPersonalSettingsByUserId($this->user->getId());
+
+		return !($personalSettings?->isRequired() ?? false);
+	}
+
 	private function isCurrentIntegrator(): bool
 	{
 		return $this->user->isCurrent() && $this->user->isIntegrator();
+	}
+
+	private function getOtpSettings(): OtpSettings
+	{
+		return $this->otpSettings ??= new OtpSettings();
 	}
 }

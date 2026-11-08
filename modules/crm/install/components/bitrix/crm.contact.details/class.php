@@ -358,6 +358,7 @@ class CCrmContactDetailsComponent
 								'ENABLE_TOOLBAR' => true,
 								'PRESERVE_HISTORY' => true,
 								'EXTENDED_INTERNAL_MODE' => true,
+								'ENABLE_GROUP_ACTIONS' => 'Y',
 								'ADD_EVENT_NAME' => 'CrmCreateQuoteFromContact',
 								'ANALYTICS' => [
 									// we dont know where from this component was opened from - it could be anywhere on portal
@@ -1200,7 +1201,7 @@ class CCrmContactDetailsComponent
 
 	public function prepareEntityFieldAttributeConfigs()
 	{
-		if(!$this->entityFieldAttributeConfig)
+		if($this->entityFieldAttributeConfig === null)
 		{
 			$this->entityFieldAttributeConfig = FieldAttributeManager::getEntityConfigurations(
 				CCrmOwnerType::Contact,
@@ -1225,6 +1226,10 @@ class CCrmContactDetailsComponent
 		$enumerationFields = array();
 
 		$visibilityConfig = $this->prepareEntityFieldvisibilityConfigs(CCrmOwnerType::Contact);
+		$aiFillPolicyConfigs = Crm\Service\EditorAdapter::prepareEntityFieldAiFillPolicyConfigs(
+			CCrmOwnerType::Contact,
+			$userFields
+		);
 
 		foreach($userFields as $userField)
 		{
@@ -1287,6 +1292,11 @@ class CCrmContactDetailsComponent
 			if(isset($visibilityConfig[$fieldName]))
 			{
 				$data['visibilityConfigs'] = $visibilityConfig[$fieldName];
+			}
+
+			if(isset($aiFillPolicyConfigs[$fieldName]))
+			{
+				$data['aiFillPolicy'] = $aiFillPolicyConfigs[$fieldName];
 			}
 
 			$this->userFieldInfos[$fieldName] = array(

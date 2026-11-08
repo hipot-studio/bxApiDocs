@@ -4,10 +4,13 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\Callback;
+use Bitrix\Main\SystemException;
+use Bitrix\Main\Application;
 
 Loc::loadMessages(__FILE__);
 
@@ -24,33 +27,12 @@ class CAgent
 	 *
 	 *
 	 * @param string $name  Строка PHP для запуска агента-функции.<br /><br /><hr /><br /><br />
-	 *
-	 *
-	 *
 	 * @param string $module = "" Идентификатор модуля. Необходим для подключения файлов модуля.<br>Необязательный. По умолчанию пустой.<br /><br /><hr /><br /><br />
-	 *
-	 *
-	 *
 	 * @param string $period = "N" <p>Если значение - "Y", то очередная дата запуска агента (<i>next_exec</i>) будет рассчитываться как:</p> <pre><i>next_exec</i> = <i>next_exec</i> + <i>interval</i></pre> Т.е. при очередном запуске, если прошло уже больше времени чем указано в параметре <i>interval</i>, агент сначала будет запускаться ровно столько раз сколько он должен был запуститься (т.е. столько раз сколько он "пропустил"), а затем, когда <i>next_exec</i> достигнет либо превысит текущую дату, он будет в дальнейшем запускаться с периодичностью указанной в параметре <i>interval</i>. Как правило, подобное используется в агентах которые должны гарантированно запуститься определённое количество раз. <p>Значение period = "Y" соответствует настройке агента в административной панели <strong>Периодичность выполнения</strong>: точно в указанное время.</p> <p>Если значение - "N", то очередная дата запуска агента (<i>next_exec</i>) будет рассчитываться как:</p> <pre><i>next_exec</i> = дата последнего запуска + <i>interval</i></pre>Т.е. агент после первого запуска будет в дальнейшем запускаться с периодичностью указанной в параметре <i>interval</i>. <p>Значение period = "N" соответствует настройке агента в административной панели <strong>Периодичность выполнения</strong>: через заданный интервал.</p> Параметр необязательный, по умолчанию - "N".<br /><br /><hr /><br /><br />
-	 *
-	 *
-	 *
 	 * @param int $interval = 86400 Интервал (в секундах), с какой периодичностью запускать агента.<br> Необязательный. По умолчанию - 86400 (1 сутки).<br /><br /><hr /><br /><br />
-	 *
-	 *
-	 *
 	 * @param string $datecheck = "" Дата первой проверки "не пора ли запустить агент" в формате текущего языка.<br> Необязательный. По умолчанию - текущее время.<br /><br /><hr /><br /><br />
-	 *
-	 *
-	 *
 	 * @param string $active = "Y" Активность агента (Y|N).<br> Необязательный. По умолчанию - "Y" (активен).<br /><br /><hr /><br /><br />
-	 *
-	 *
-	 *
 	 * @param string $next_exec = "" Дата первого запуска агента в формате текущего языка.<br>Необязательный. По умолчанию - текущее время. (С версии 3.1.4)<br /><br /><hr /><br /><br />
-	 *
-	 *
-	 *
 	 * @param int $sort = 100 Индекс сортировки позволяющий указать порядок запуска данного агента относительно других агентов для которых подошло время запуска.<br>Необязательный. По умолчанию - 100. (С версии 3.2.9)<br /><br /><hr /><br /><br />
 	 * @param bool|int $user_id user<br /><br /><hr /><br /><br />
 	 * @param bool $existError = true return error, if agent already exist<br /><br /><hr /><br /><br />
@@ -75,15 +57,17 @@ class CAgent
 	{
 		global $DB, $APPLICATION;
 
+		$name = static::normalizeName($name);
+
 		$z = $DB->Query("
 			SELECT ID
 			FROM b_agent
-			WHERE NAME = '".$DB->ForSql($name)."'
-			AND USER_ID".($user_id? " = ".(int)$user_id: " IS NULL")
+			WHERE NAME = '" . $DB->ForSql($name) . "'
+			AND USER_ID" . ($user_id ? " = " . (int)$user_id : " IS NULL")
 		);
 		if (!($agent = $z->Fetch()))
 		{
-			$arFields = array(
+			$arFields = [
 				"MODULE_ID" => $module,
 				"SORT" => $sort,
 				"NAME" => $name,
@@ -91,10 +75,12 @@ class CAgent
 				"AGENT_INTERVAL" => $interval,
 				"IS_PERIOD" => $period,
 				"USER_ID" => $user_id,
-			);
+			];
 			$next_exec = (string)$next_exec;
 			if ($next_exec != '')
+			{
 				$arFields["NEXT_EXEC"] = $next_exec;
+			}
 
 			$ID = CAgent::Add($arFields);
 			return $ID;
@@ -102,19 +88,21 @@ class CAgent
 		else
 		{
 			if (!$existError)
+			{
 				return $agent['ID'];
+			}
 
 			if ($APPLICATION instanceof CMain)
 			{
-				$e = new CAdminException(array(
-					array(
+				$e = new CAdminException([
+					[
 						"id" => "agent_exist",
 						"text" => ($user_id
-							? Loc::getMessage("MAIN_AGENT_ERROR_EXIST_FOR_USER", array('#AGENT#' => $name, '#USER_ID#' => $user_id))
-							: Loc::getMessage("MAIN_AGENT_ERROR_EXIST_EXT", array('#AGENT#' => $name))
-						)
-					)
-				));
+							? Loc::getMessage("MAIN_AGENT_ERROR_EXIST_FOR_USER", ['#AGENT#' => $name, '#USER_ID#' => $user_id])
+							: Loc::getMessage("MAIN_AGENT_ERROR_EXIST_EXT", ['#AGENT#' => $name])
+						),
+					],
+				]);
 				$APPLICATION->throwException($e);
 			}
 			return false;
@@ -125,19 +113,30 @@ class CAgent
 	{
 		global $DB, $CACHE_MANAGER;
 
+		if (is_set($arFields, "NAME"))
+		{
+			$arFields["NAME"] = static::normalizeName($arFields["NAME"]);
+		}
+
 		if (CAgent::CheckFields($arFields))
 		{
 			if (!is_set($arFields, "NEXT_EXEC"))
+			{
 				$arFields["~NEXT_EXEC"] = $DB->GetNowDate();
+			}
 
 			if (CACHED_b_agent !== false)
+			{
 				$CACHE_MANAGER->CleanDir("agents");
+			}
 
 			$ID = $DB->Add("b_agent", $arFields);
 			foreach (GetModuleEvents("main", "OnAfterAgentAdd", true) as $arEvent)
-				ExecuteModuleEventEx($arEvent, array(
+			{
+				ExecuteModuleEventEx($arEvent, [
 					$arFields,
-				));
+				]);
+			}
 
 			return $ID;
 		}
@@ -148,16 +147,22 @@ class CAgent
 	{
 		global $DB;
 
+		$name = static::normalizeName($name);
+
 		if (trim($module) == '')
-			$module = "AND (MODULE_ID is null or ".$DB->Length("MODULE_ID")." = 0)";
+		{
+			$module = "AND (MODULE_ID is null or " . $DB->Length("MODULE_ID") . " = 0)";
+		}
 		else
-			$module = "AND MODULE_ID = '".$DB->ForSql($module, 50)."'";
+		{
+			$module = "AND MODULE_ID = '" . $DB->ForSql($module, 50) . "'";
+		}
 
 		$strSql = "
 				DELETE FROM b_agent
-				WHERE NAME = '".$DB->ForSql($name)."'
-				".$module."
-				AND  USER_ID".($user_id ? " = ".(int)$user_id : " IS NULL");
+				WHERE NAME = '" . $DB->ForSql($name) . "'
+				" . $module . "
+				AND  USER_ID" . ($user_id ? " = " . (int)$user_id : " IS NULL");
 
 		$DB->Query($strSql);
 	}
@@ -168,9 +173,11 @@ class CAgent
 		$id = intval($id);
 
 		if ($id <= 0)
+		{
 			return false;
+		}
 
-		$DB->Query("DELETE FROM b_agent WHERE ID = ".$id);
+		$DB->Query("DELETE FROM b_agent WHERE ID = " . $id);
 
 		return true;
 	}
@@ -181,7 +188,7 @@ class CAgent
 
 		if ($module <> '')
 		{
-			$strSql = "DELETE FROM b_agent WHERE MODULE_ID='".$DB->ForSql($module,255)."'";
+			$strSql = "DELETE FROM b_agent WHERE MODULE_ID='" . $DB->ForSql($module, 255) . "'";
 			$DB->Query($strSql);
 		}
 	}
@@ -193,20 +200,32 @@ class CAgent
 
 		$ID = intval($ID);
 
-		if(is_set($arFields, "ACTIVE") && $arFields["ACTIVE"]!="Y")
-			$arFields["ACTIVE"]="N";
-		if(is_set($arFields, "IS_PERIOD") && $arFields["IS_PERIOD"]!="Y")
-			$arFields["IS_PERIOD"]="N";
-		if(!is_set($arFields, "NAME"))
-			$ign_name = true;
-
-		if(CAgent::CheckFields($arFields, $ign_name))
+		if (is_set($arFields, "ACTIVE") && $arFields["ACTIVE"] != "Y")
 		{
-			if(CACHED_b_agent !== false)
+			$arFields["ACTIVE"] = "N";
+		}
+		if (is_set($arFields, "IS_PERIOD") && $arFields["IS_PERIOD"] != "Y")
+		{
+			$arFields["IS_PERIOD"] = "N";
+		}
+		if (!is_set($arFields, "NAME"))
+		{
+			$ign_name = true;
+		}
+		else
+		{
+			$arFields["NAME"] = static::normalizeName($arFields["NAME"]);
+		}
+
+		if (CAgent::CheckFields($arFields, $ign_name))
+		{
+			if (CACHED_b_agent !== false)
+			{
 				$CACHE_MANAGER->CleanDir("agents");
+			}
 
 			$strUpdate = $DB->PrepareUpdate("b_agent", $arFields);
-			$strSql = "UPDATE b_agent SET ".$strUpdate." WHERE ID=".$ID;
+			$strSql = "UPDATE b_agent SET " . $strUpdate . " WHERE ID=" . $ID;
 			$res = $DB->Query($strSql);
 			return $res;
 		}
@@ -216,17 +235,17 @@ class CAgent
 
 	public static function GetById($ID)
 	{
-		return CAgent::GetList(Array(), Array("ID"=>intval($ID)));
+		return CAgent::GetList([], ["ID" => intval($ID)]);
 	}
 
-	public static function GetList($arOrder = Array("ID" => "DESC"), $arFilter = array())
+	public static function GetList($arOrder = ["ID" => "DESC"], $arFilter = [])
 	{
 		global $DB;
 
-		$arSqlSearch = array();
-		$arSqlOrder = array();
+		$arSqlSearch = [];
+		$arSqlOrder = [];
 
-		$arOFields = array(
+		$arOFields = [
 			"ID" => "A.ID",
 			"ACTIVE" => "A.ACTIVE",
 			"IS_PERIOD" => "A.IS_PERIOD",
@@ -237,8 +256,8 @@ class CAgent
 			"AGENT_INTERVAL" => "A.AGENT_INTERVAL",
 			"NEXT_EXEC" => "A.NEXT_EXEC",
 			"DATE_CHECK" => "A.DATE_CHECK",
-			"SORT" => "A.SORT"
-		);
+			"SORT" => "A.SORT",
+		];
 
 		if (!is_array($arFilter))
 		{
@@ -251,53 +270,57 @@ class CAgent
 				continue;
 			}
 
-			switch(strtoupper($key))
+			switch (strtoupper($key))
 			{
 				case "ID":
-					$arSqlSearch[] = "A.ID=".(int)$val;
+					$arSqlSearch[] = "A.ID=" . (int)$val;
 					break;
 				case "ACTIVE":
 					$t_val = mb_strtoupper($val);
-					if($t_val == "Y" || $t_val == "N")
-						$arSqlSearch[] = "A.ACTIVE='".$t_val."'";
+					if ($t_val == "Y" || $t_val == "N")
+					{
+						$arSqlSearch[] = "A.ACTIVE='" . $t_val . "'";
+					}
 					break;
 				case "IS_PERIOD":
 					$t_val = mb_strtoupper($val);
-					if($t_val=="Y" || $t_val=="N")
-						$arSqlSearch[] = "A.IS_PERIOD='".$t_val."'";
+					if ($t_val == "Y" || $t_val == "N")
+					{
+						$arSqlSearch[] = "A.IS_PERIOD='" . $t_val . "'";
+					}
 					break;
 				case "NAME":
-					$arSqlSearch[] = "A.NAME LIKE '".$DB->ForSQLLike($val)."'";
+					$arSqlSearch[] = "A.NAME LIKE '" . $DB->ForSQLLike($val) . "'";
 					break;
 				case "=NAME":
-					$arSqlSearch[] = "A.NAME = '".$DB->ForSQL($val)."'";
+					$arSqlSearch[] = "A.NAME = '" . $DB->ForSQL($val) . "'";
 					break;
 				case "MODULE_ID":
-					$arSqlSearch[] = "A.MODULE_ID = '".$DB->ForSQL($val)."'";
+					$arSqlSearch[] = "A.MODULE_ID = '" . $DB->ForSQL($val) . "'";
 					break;
 				case "USER_ID":
-					$arSqlSearch[] = "A.USER_ID ".(intval($val)<=0?"IS NULL":"=".intval($val));
+					$arSqlSearch[] = "A.USER_ID " . (intval($val) <= 0 ? "IS NULL" : "=" . intval($val));
 					break;
 				case "LAST_EXEC":
 					$arr = ParseDateTime($val, CLang::GetDateFormat());
-					if($arr)
+					if ($arr)
 					{
-						$date2 = mktime(0, 0, 0, $arr["MM"], $arr["DD"]+1, $arr["YYYY"]);
-						$arSqlSearch[] = "A.LAST_EXEC>=".$DB->CharToDateFunction($DB->ForSql($val), "SHORT")." AND A.LAST_EXEC<".$DB->CharToDateFunction(ConvertTimeStamp($date2), "SHORT");
+						$date2 = mktime(0, 0, 0, $arr["MM"], $arr["DD"] + 1, $arr["YYYY"]);
+						$arSqlSearch[] = "A.LAST_EXEC>=" . $DB->CharToDateFunction($DB->ForSql($val), "SHORT") . " AND A.LAST_EXEC<" . $DB->CharToDateFunction(ConvertTimeStamp($date2), "SHORT");
 					}
 					break;
 				case "NEXT_EXEC":
 					$arr = ParseDateTime($val);
-					if($arr)
+					if ($arr)
 					{
-						$date2 = mktime(0, 0, 0, $arr["MM"], $arr["DD"]+1, $arr["YYYY"]);
-						$arSqlSearch[] = "A.NEXT_EXEC>=".$DB->CharToDateFunction($DB->ForSql($val), "SHORT")." AND A.NEXT_EXEC<".$DB->CharToDateFunction(ConvertTimeStamp($date2), "SHORT");
+						$date2 = mktime(0, 0, 0, $arr["MM"], $arr["DD"] + 1, $arr["YYYY"]);
+						$arSqlSearch[] = "A.NEXT_EXEC>=" . $DB->CharToDateFunction($DB->ForSql($val), "SHORT") . " AND A.NEXT_EXEC<" . $DB->CharToDateFunction(ConvertTimeStamp($date2), "SHORT");
 					}
 					break;
 			}
 		}
 
-		foreach($arOrder as $by => $order)
+		foreach ($arOrder as $by => $order)
 		{
 			$by = mb_strtoupper($by);
 			$order = mb_strtoupper($order);
@@ -307,19 +330,19 @@ class CAgent
 				{
 					$order = "DESC";
 				}
-				$arSqlOrder[] = $arOFields[$by]." ".$order;
+				$arSqlOrder[] = $arOFields[$by] . " " . $order;
 			}
 		}
 
-		$strSql = "SELECT A.ID, A.MODULE_ID, A.USER_ID, B.LOGIN, B.NAME as USER_NAME, B.LAST_NAME, A.SORT, ".
-			"A.NAME, A.ACTIVE, A.RUNNING, ".
-			$DB->DateToCharFunction("A.LAST_EXEC")." as LAST_EXEC, ".
-			$DB->DateToCharFunction("A.NEXT_EXEC")." as NEXT_EXEC, ".
-			$DB->DateToCharFunction("A.DATE_CHECK")." as DATE_CHECK, ".
-			"A.AGENT_INTERVAL, A.IS_PERIOD, A.RETRY_COUNT ".
+		$strSql = "SELECT A.ID, A.MODULE_ID, A.USER_ID, B.LOGIN, B.NAME as USER_NAME, B.LAST_NAME, A.SORT, " .
+			"A.NAME, A.ACTIVE, A.RUNNING, " .
+			$DB->DateToCharFunction("A.LAST_EXEC") . " as LAST_EXEC, " .
+			$DB->DateToCharFunction("A.NEXT_EXEC") . " as NEXT_EXEC, " .
+			$DB->DateToCharFunction("A.DATE_CHECK") . " as DATE_CHECK, " .
+			"A.AGENT_INTERVAL, A.IS_PERIOD, A.RETRY_COUNT " .
 			"FROM b_agent A LEFT JOIN b_user B ON(A.USER_ID = B.ID)";
-		$strSql .= !empty($arSqlSearch) ? " WHERE ".implode(" AND ", $arSqlSearch) : "";
-		$strSql .= !empty($arSqlOrder) ? " ORDER BY ".implode(", ", $arSqlOrder) : "";
+		$strSql .= !empty($arSqlSearch) ? " WHERE " . implode(" AND ", $arSqlSearch) : "";
+		$strSql .= !empty($arSqlOrder) ? " ORDER BY " . implode(", ", $arSqlOrder) : "";
 
 		$res = $DB->Query($strSql);
 
@@ -330,12 +353,14 @@ class CAgent
 	{
 		global $DB, $APPLICATION;
 
-		$errMsg = array();
+		$errMsg = [];
 
-		if(!$ign_name && (!is_set($arFields, "NAME") || mb_strlen(trim($arFields["NAME"])) <= 2))
-			$errMsg[] = array("id" => "NAME", "text" => Loc::getMessage("MAIN_AGENT_ERROR_NAME"));
+		if (!$ign_name && (!is_set($arFields, "NAME") || mb_strlen(trim($arFields["NAME"])) <= 2))
+		{
+			$errMsg[] = ["id" => "NAME", "text" => Loc::getMessage("MAIN_AGENT_ERROR_NAME")];
+		}
 
-		if(
+		if (
 			array_key_exists("NEXT_EXEC", $arFields)
 			&& (
 				$arFields["NEXT_EXEC"] == ""
@@ -343,28 +368,28 @@ class CAgent
 			)
 		)
 		{
-			$errMsg[] = array("id" => "NEXT_EXEC", "text" => Loc::getMessage("MAIN_AGENT_ERROR_NEXT_EXEC"));
+			$errMsg[] = ["id" => "NEXT_EXEC", "text" => Loc::getMessage("MAIN_AGENT_ERROR_NEXT_EXEC")];
 		}
 
-		if(
+		if (
 			array_key_exists("DATE_CHECK", $arFields)
 			&& $arFields["DATE_CHECK"] <> ""
 			&& !$DB->IsDate($arFields["DATE_CHECK"], false, false, "FULL")
 		)
 		{
-			$errMsg[] = array("id" => "DATE_CHECK", "text" => Loc::getMessage("MAIN_AGENT_ERROR_DATE_CHECK"));
+			$errMsg[] = ["id" => "DATE_CHECK", "text" => Loc::getMessage("MAIN_AGENT_ERROR_DATE_CHECK")];
 		}
 
-		if(
+		if (
 			array_key_exists("LAST_EXEC", $arFields)
 			&& $arFields["LAST_EXEC"] <> ""
 			&& !$DB->IsDate($arFields["LAST_EXEC"], false, false, "FULL")
 		)
 		{
-			$errMsg[] = array("id" => "LAST_EXEC", "text" => Loc::getMessage("MAIN_AGENT_ERROR_LAST_EXEC"));
+			$errMsg[] = ["id" => "LAST_EXEC", "text" => Loc::getMessage("MAIN_AGENT_ERROR_LAST_EXEC")];
 		}
 
-		if(!empty($errMsg))
+		if (!empty($errMsg))
 		{
 			if ($APPLICATION instanceof CMain)
 			{
@@ -389,6 +414,42 @@ class CAgent
 		return null;
 	}
 
+	protected static function normalizeName($name)
+	{
+		if ($name instanceof Callback)
+		{
+			return $name->toJson();
+		}
+
+		return $name;
+	}
+
+	protected static function normalizeExecutionResult($result): ?string
+	{
+		if ($result instanceof Callback)
+		{
+			return $result->toJson();
+		}
+
+		if ($result == '')
+		{
+			return null;
+		}
+
+		return (string)$result;
+	}
+
+	public static function getAgentName($name)
+	{
+		$callback = Callback::tryFromJson((string)$name);
+		if ($callback === null)
+		{
+			return $name;
+		}
+
+		return (string)$callback;
+	}
+
 	public static function CheckAgents()
 	{
 		define("START_EXEC_AGENTS_1", microtime(true));
@@ -396,8 +457,10 @@ class CAgent
 		define("BX_CHECK_AGENT_START", true);
 
 		//For a while agents will execute only on primary cluster group
-		if((defined("NO_AGENT_CHECK") && NO_AGENT_CHECK===true) || (defined("BX_CLUSTER_GROUP") && BX_CLUSTER_GROUP !== 1))
+		if ((defined("NO_AGENT_CHECK") && NO_AGENT_CHECK === true) || (defined("BX_CLUSTER_GROUP") && BX_CLUSTER_GROUP !== 1))
+		{
 			return null;
+		}
 
 		$res = CAgent::ExecuteAgents();
 
@@ -422,7 +485,7 @@ class CAgent
 		}
 
 		$saved_time = 0;
-		$cache_id = "agents".$str_crontab;
+		$cache_id = "agents" . $str_crontab;
 		if (CACHED_b_agent !== false && $CACHE_MANAGER->Read(CACHED_b_agent, $cache_id, "agents"))
 		{
 			$saved_time = $CACHE_MANAGER->Get($cache_id);
@@ -432,7 +495,7 @@ class CAgent
 			}
 		}
 
-		$connection = \Bitrix\Main\Application::getConnection();
+		$connection = Application::getConnection();
 		$helper = $connection->getSqlHelper();
 
 		$strSql = "
@@ -442,14 +505,14 @@ class CAgent
 				ACTIVE = 'Y'
 				AND NEXT_EXEC <= " . $helper->getCurrentDateTimeFunction() . "
 				AND (DATE_CHECK IS NULL OR DATE_CHECK <= " . $helper->getCurrentDateTimeFunction() . ")
-				".$str_crontab."
+				" . $str_crontab . "
 			LIMIT 1
 		";
 
 		$db_result_agents = $DB->Query($strSql);
 		if ($db_result_agents->Fetch())
 		{
-			if(!$connection->lock($cache_id))
+			if (!$connection->lock($cache_id))
 			{
 				return "";
 			}
@@ -462,30 +525,36 @@ class CAgent
 				$ar = $rs->Fetch();
 
 				if (!$ar || $ar["DATE_DIFF"] < 0)
+				{
 					$date_diff = 0;
+				}
 				elseif ($ar["DATE_DIFF"] > CACHED_b_agent)
+				{
 					$date_diff = CACHED_b_agent;
+				}
 				else
+				{
 					$date_diff = $ar["DATE_DIFF"];
+				}
 
 				if ($saved_time > 0)
 				{
 					$CACHE_MANAGER->Clean($cache_id, "agents");
 					$CACHE_MANAGER->Read(CACHED_b_agent, $cache_id, "agents");
 				}
-				$CACHE_MANAGER->Set($cache_id, intval(time()+$date_diff));
+				$CACHE_MANAGER->Set($cache_id, intval(time() + $date_diff));
 			}
 
 			return "";
 		}
 
 		$strSql =
-			"SELECT ID, NAME, AGENT_INTERVAL, IS_PERIOD, MODULE_ID, RETRY_COUNT ".
-			"FROM b_agent ".
-			"WHERE ACTIVE = 'Y' ".
-			"	AND NEXT_EXEC <= " . $helper->getCurrentDateTimeFunction() . " ".
-			"	AND (DATE_CHECK IS NULL OR DATE_CHECK <= " . $helper->getCurrentDateTimeFunction() . ") ".
-			$str_crontab.
+			"SELECT ID, NAME, AGENT_INTERVAL, IS_PERIOD, MODULE_ID, RETRY_COUNT " .
+			"FROM b_agent " .
+			"WHERE ACTIVE = 'Y' " .
+			"	AND NEXT_EXEC <= " . $helper->getCurrentDateTimeFunction() . " " .
+			"	AND (DATE_CHECK IS NULL OR DATE_CHECK <= " . $helper->getCurrentDateTimeFunction() . ") " .
+			$str_crontab .
 			" ORDER BY RUNNING ASC, SORT desc ";
 
 		// limit selection to prevent excessive UPDATE
@@ -497,22 +566,22 @@ class CAgent
 
 		$db_result_agents = $DB->Query($strSql);
 		$ids = '';
-		$agents_array = array();
+		$agents_array = [];
 		while ($db_result_agents_array = $db_result_agents->Fetch())
 		{
 			$agents_array[] = $db_result_agents_array;
-			$ids .= ($ids <> ''? ', ':'').$db_result_agents_array["ID"];
+			$ids .= ($ids <> '' ? ', ' : '') . $db_result_agents_array["ID"];
 		}
 		if ($ids <> '')
 		{
-			$strSql = "UPDATE b_agent SET DATE_CHECK = " . $helper->addSecondsToDateTime(self::LOCK_TIME) . " WHERE ID IN (".$ids.")";
+			$strSql = "UPDATE b_agent SET DATE_CHECK = " . $helper->addSecondsToDateTime(self::LOCK_TIME) . " WHERE ID IN (" . $ids . ")";
 			$DB->Query($strSql);
 		}
 
 		$connection->unlock($cache_id);
 
 		/** @var callable|false $logFunction */
-		$logFunction = (defined("BX_AGENTS_LOG_FUNCTION") && function_exists(BX_AGENTS_LOG_FUNCTION)? BX_AGENTS_LOG_FUNCTION : false);
+		$logFunction = (defined("BX_AGENTS_LOG_FUNCTION") && function_exists(BX_AGENTS_LOG_FUNCTION) ? BX_AGENTS_LOG_FUNCTION : false);
 
 		ignore_user_abort(true);
 		$startTime = time();
@@ -530,14 +599,16 @@ class CAgent
 				$logFunction($arAgent, "start");
 			}
 
-			if ($arAgent["MODULE_ID"] <> '' && $arAgent["MODULE_ID"]!="main")
+			if ($arAgent["MODULE_ID"] <> '' && $arAgent["MODULE_ID"] != "main")
 			{
 				if (!CModule::IncludeModule($arAgent["MODULE_ID"]))
+				{
 					continue;
+				}
 			}
 
 			//update the agent to the running state - if it fails it'll go to the end of the list on the next try
-			$DB->Query("UPDATE b_agent SET RUNNING = 'Y', RETRY_COUNT = RETRY_COUNT+1 WHERE ID = ".$arAgent["ID"]);
+			$DB->Query("UPDATE b_agent SET RUNNING = 'Y', RETRY_COUNT = RETRY_COUNT+1 WHERE ID = " . $arAgent["ID"]);
 
 			//these vars can be assigned within agent code
 			$pPERIOD = $arAgent["AGENT_INTERVAL"];
@@ -549,16 +620,32 @@ class CAgent
 
 			try
 			{
-				$eval_result = "";
-				$e = eval("\$eval_result=".$arAgent["NAME"]);
+				$callback = Callback::tryFromJson((string)$arAgent["NAME"]);
+				if ($callback !== null)
+				{
+					$e = null;
+					$eval_result = call_user_func_array($callback->getCallback(), $callback->getArguments());
+				}
+				else
+				{
+					$eval_result = "";
+					$e = eval('$eval_result=' . $arAgent["NAME"]);
+				}
+				$nextName = static::normalizeExecutionResult($eval_result);
 			}
 			catch (Throwable $exception)
 			{
 				CTimeZone::Enable();
 
-				$application = \Bitrix\Main\Application::getInstance();
+				$application = Application::getInstance();
 				$exceptionHandler = $application->getExceptionHandler();
-				$exceptionHandler->writeToLog(new \Bitrix\Main\SystemException("Error in agent {$arAgent["NAME"]}.", 0, '', 0, $exception));
+				$exceptionHandler->writeToLog(new SystemException(
+					"Error in agent " . static::getAgentName($arAgent["NAME"]) . ".",
+					0,
+					'',
+					0,
+					$exception
+				));
 
 				continue;
 			}
@@ -567,37 +654,37 @@ class CAgent
 
 			if ($logFunction)
 			{
-				$logFunction($arAgent, "finish", $eval_result, $e);
+				$logFunction($arAgent, "finish", $nextName ?? '', $e);
 			}
 
 			if ($e === false)
 			{
 				continue;
 			}
-			elseif ($eval_result == '')
+			elseif ($nextName === null)
 			{
-				$strSql = "DELETE FROM b_agent WHERE ID = ".$arAgent["ID"];
+				$strSql = "DELETE FROM b_agent WHERE ID = " . $arAgent["ID"];
 			}
 			else
 			{
-				if ($logFunction && function_exists('token_get_all'))
+				if (!($eval_result instanceof Callback) && $logFunction && function_exists('token_get_all'))
 				{
-					if (count(token_get_all("<?php ".$eval_result)) < 3)
+					if (count(token_get_all("<?php " . $nextName)) < 3)
 					{
 						//probably there is an error in the result
-						$logFunction($arAgent, "not_callable", $eval_result, $e);
+						$logFunction($arAgent, "not_callable", $nextName, $e);
 					}
 				}
 
 				$strSql = "
 					UPDATE b_agent SET
-						NAME = '".$DB->ForSQL($eval_result)."',
+						NAME = '" . $DB->ForSQL($nextName) . "',
 						LAST_EXEC = " . $helper->getCurrentDateTimeFunction() . ",
-						NEXT_EXEC = " . $helper->addSecondsToDateTime($pPERIOD, $arAgent["IS_PERIOD"]=="Y"? "NEXT_EXEC" : null) . ",
+						NEXT_EXEC = " . $helper->addSecondsToDateTime($pPERIOD, $arAgent["IS_PERIOD"] == "Y" ? "NEXT_EXEC" : null) . ",
 						DATE_CHECK = NULL,
 						RUNNING = 'N',
 						RETRY_COUNT = 0
-					WHERE ID = ".$arAgent["ID"];
+					WHERE ID = " . $arAgent["ID"];
 			}
 			$DB->Query($strSql);
 		}

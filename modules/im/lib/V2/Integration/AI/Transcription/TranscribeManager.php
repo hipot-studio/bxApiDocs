@@ -53,7 +53,17 @@ final class TranscribeManager
 		$this->messageId = $messageId;
 	}
 
-	public function transcribeFile(LaunchType $launchType = LaunchType::Auto): TranscribeResult
+	/**
+	 * @param array $additionalContextParams context parameters known to the caller already.
+	 * @param \Closure|null $deferredContextParams context parameters that cost something to
+	 *        produce, as a provider of the same shape. Every short circuit below stands before it
+	 *        is called, so a launch that queues nothing never pays for them, @see self::sendAiQuery().
+	 */
+	public function transcribeFile(
+		LaunchType $launchType = LaunchType::Auto,
+		array $additionalContextParams = [],
+		?\Closure $deferredContextParams = null
+	): TranscribeResult
 	{
 		$result = new TranscribeResult($this->createErrorFileItem());
 
@@ -90,7 +100,7 @@ final class TranscribeManager
 			Application::getConnection()->unlock($this->getLockName());
 		}
 
-		$result = $this->sendAiQuery($launchType);
+		$result = $this->sendAiQuery($launchType, $additionalContextParams, $deferredContextParams);
 
 		if ($result->isSuccess())
 		{
@@ -229,7 +239,16 @@ final class TranscribeManager
 		return TranscribeQueueManager::getInstance()->inQueue($this->fileId, $this->chatId);
 	}
 
-	protected function sendAiQuery(LaunchType $launchType): TranscribeResult
+	/**
+	 * @param \Closure|null $deferredContextParams @see self::transcribeFile(). Called here and
+	 *        nowhere earlier: this is the first point past the short circuits of transcribeFile(),
+	 *        so the work behind it happens only for a launch that really goes to the queue.
+	 */
+	protected function sendAiQuery(
+		LaunchType $launchType,
+		array $additionalContextParams,
+		?\Closure $deferredContextParams = null
+	): TranscribeResult
 	{
 		$result = new TranscribeResult($this->createErrorFileItem());
 
@@ -240,6 +259,12 @@ final class TranscribeManager
 			'messageId' => $this->messageId,
 			'launchType' => $launchType->value,
 		];
+
+		$contextParams = array_merge(
+			$contextParams,
+			$additionalContextParams,
+			$deferredContextParams === null ? [] : $deferredContextParams()
+		);
 
 		$fileId = $this->fileId;
 		$file = \CFile::GetFileArray($fileId);
@@ -286,6 +311,11 @@ final class TranscribeManager
 				})
 				->completionsInQueue()
 			;
+
+			if ($result->isSuccess())
+			{
+				$result->setNewJobQueued(true);
+			}
 		}
 
 		return $result;
@@ -293,13 +323,23 @@ final class TranscribeManager
 
 	protected function getEngine(Context $context): ?Engine
 	{
-		$engineName = (new Manager())->getItem(Restriction::SETTING_TRANSCRIPTION_PROVIDER)?->getValue();
-		if (empty($engineName))
+		// the provider name is portal-wide, but building Tuning\Manager fires onTuningLoad
+		// across modules - memoize it for the hit, the multiselect flow calls this in a loop.
+		// only a successfully resolved name is cached: an empty provider must not stick for
+		// the rest of the process (it can be configured between calls)
+		static $engineName = null;
+		if ($engineName === null)
 		{
-			return null;
+			$resolvedName = (string)((new Manager())->getItem(Restriction::SETTING_TRANSCRIPTION_PROVIDER)?->getValue() ?? '');
+			if ($resolvedName === '')
+			{
+				return null;
+			}
+
+			$engineName = $resolvedName;
 		}
 
-		return Engine::getByCode((string)$engineName, $context);
+		return Engine::getByCode($engineName, $context);
 	}
 
 	protected function sendTranscribeEvent(

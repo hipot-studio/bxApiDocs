@@ -13,6 +13,11 @@ final class DatasetProvider extends AbstractPublicEntryPoint
 		return $this->getService()->list($ids, $neqIds, $page, $pageSize);
 	}
 
+	public function listPhysical(): Result
+	{
+		return $this->getService()->listPhysical();
+	}
+
 	public function listByTableName(string $tableName): Result
 	{
 		return $this->getService()->listByTableName($tableName);

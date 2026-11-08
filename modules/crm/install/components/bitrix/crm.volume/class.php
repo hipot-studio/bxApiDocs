@@ -72,7 +72,12 @@ class CrmVolumeComponent extends \CBitrixComponent
 			$this->arParams['SEF_MODE'] = 'N';
 		}
 
-		if ($this->arParams['SEF_MODE'] === 'Y' && !empty($this->arParams['SEF_FOLDER']))
+		if ($this->isSettingsHubMode())
+		{
+			$this->arParams['RELATIVE_PATH'] = $this->arParams['SETTINGS_HUB_URL'];
+			$this->arParams['AJAX_PATH'] = (new Main\Web\Uri($this->arParams['SETTINGS_HUB_URL']))->getPath();
+		}
+		elseif ($this->arParams['SEF_MODE'] === 'Y' && !empty($this->arParams['SEF_FOLDER']))
 		{
 			$this->arParams['RELATIVE_PATH'] = $this->arParams['SEF_FOLDER'];
 		}
@@ -179,7 +184,10 @@ class CrmVolumeComponent extends \CBitrixComponent
 				break;
 		}
 
-		if (!$this->checkAccessPermissions($checkCsrfToken))
+		if (
+			($this->isSettingsHubMode() && $checkCsrfToken && !$this->request->isPost())
+			|| !$this->checkAccessPermissions($checkCsrfToken)
+		)
 		{
 			if ($this->isAjaxRequest())
 			{
@@ -365,7 +373,30 @@ class CrmVolumeComponent extends \CBitrixComponent
 	 */
 	private function getAction()
 	{
+		if ($this->isSettingsHubMode())
+		{
+			$action = $this->request->get('action');
+			$allowedActions = [
+				self::ACTION_DEFAULT,
+				self::ACTION_MEASURE,
+				self::ACTION_MEASURE_FILE,
+				self::ACTION_MEASURE_ACTIVITY,
+				self::ACTION_MEASURE_EVENT,
+				self::ACTION_PURIFY,
+				self::ACTION_SETUP_TASK,
+				self::ACTION_CANCEL_TASKS,
+			];
+
+			return in_array($action, $allowedActions, true) ? $action : self::ACTION_DEFAULT;
+		}
+
 		return isset($this->arParams['ACTION']) ? $this->arParams['ACTION'] : self::ACTION_DEFAULT;
+	}
+
+	private function isSettingsHubMode(): bool
+	{
+		return is_string($this->arParams['SETTINGS_HUB_URL'] ?? null)
+			&& $this->arParams['SETTINGS_HUB_URL'] !== '';
 	}
 
 	/**
@@ -1864,6 +1895,18 @@ class CrmVolumeComponent extends \CBitrixComponent
 	 */
 	public function getActionUrl($params = array())
 	{
+		if ($this->isSettingsHubMode())
+		{
+			$uri = new Main\Web\Uri($this->arParams['SETTINGS_HUB_URL']);
+			$uri->addParams($params);
+			$uri->addParams([
+				'IFRAME' => 'Y',
+				'IFRAME_TYPE' => 'SIDE_SLIDER',
+			]);
+
+			return $uri->getUri();
+		}
+
 		if (!empty($params['action']))
 		{
 			$action = $params['action'];

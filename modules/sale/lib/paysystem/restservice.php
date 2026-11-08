@@ -756,6 +756,8 @@ class RestService extends \IRestService
 			throw new RestException('Parameter value SETTINGS[CLIENT_TYPE] is invalid', self::ERROR_CHECK_FAILURE);
 		}
 
+		self::checkHandlerSettingsFields($params['SETTINGS']);
+
 		$dbRes = Internals\PaySystemRestHandlersTable::getList([
 			'filter' => [
 				'=CODE' => $params['CODE']
@@ -804,12 +806,26 @@ class RestService extends \IRestService
 			throw new RestException('Parameter FIELDS is not defined', self::ERROR_CHECK_FAILURE);
 		}
 
-		if (
-			isset($params['SETTINGS']['CLIENT_TYPE'])
-			&& !ClientType::isValid((string)$params['SETTINGS']['CLIENT_TYPE'])
-		)
+		if (array_key_exists('SETTINGS', $params['FIELDS']))
 		{
-			throw new RestException('Parameter value SETTINGS[CLIENT_TYPE] is invalid', self::ERROR_CHECK_FAILURE);
+			$settings = $params['FIELDS']['SETTINGS'];
+			if (!is_array($settings))
+			{
+				throw new RestException('Parameter FIELDS[SETTINGS] is invalid', self::ERROR_CHECK_FAILURE);
+			}
+
+			if (
+				isset($settings['CLIENT_TYPE'])
+				&& !ClientType::isValid((string)$settings['CLIENT_TYPE'])
+			)
+			{
+				throw new RestException(
+					'Parameter value FIELDS[SETTINGS][CLIENT_TYPE] is invalid',
+					self::ERROR_CHECK_FAILURE
+				);
+			}
+
+			self::checkHandlerSettingsFields($settings);
 		}
 
 		$paySystemRestHandlers = Internals\PaySystemRestHandlersTable::getList(array(
@@ -843,6 +859,46 @@ class RestService extends \IRestService
 			if ($dbRes->fetch())
 			{
 				throw new RestException('Handler already exists!', self::ERROR_HANDLER_ALREADY_EXIST);
+			}
+		}
+	}
+
+	private static function checkHandlerSettingsFields(array $settings): void
+	{
+		foreach (['FORM_DATA', 'CHECKOUT_DATA', 'IFRAME_DATA'] as $mode)
+		{
+			if (!isset($settings[$mode]) || !is_array($settings[$mode]))
+			{
+				continue;
+			}
+
+			if (!array_key_exists('FIELDS', $settings[$mode]))
+			{
+				continue;
+			}
+
+			$fields = $settings[$mode]['FIELDS'];
+			if (!is_array($fields))
+			{
+				throw new RestException(
+					"Parameter SETTINGS[{$mode}][FIELDS] is invalid",
+					self::ERROR_CHECK_FAILURE
+				);
+			}
+
+			foreach ($fields as $field)
+			{
+				if (
+					!is_array($field)
+					|| !array_key_exists('CODE', $field)
+					|| (!is_array($field['CODE']) && (!is_string($field['CODE']) || $field['CODE'] === ''))
+				)
+				{
+					throw new RestException(
+						"Parameter SETTINGS[{$mode}][FIELDS] contains invalid field",
+						self::ERROR_CHECK_FAILURE
+					);
+				}
 			}
 		}
 	}

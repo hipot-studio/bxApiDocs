@@ -3,6 +3,7 @@
 namespace Bitrix\Mail\ImapCommands;
 
 use Bitrix\Mail;
+use Bitrix\Mail\Helper\MailAccess;
 use Bitrix\Mail\Internals\MailboxDirectoryTable;
 use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
@@ -15,6 +16,16 @@ class MailsFoldersManager extends SyncInternalManager
 {
 	public function deleteMails($deleteImmediately = false)
 	{
+		// Before initData() and before the deferred push targets: a refused command leaves
+		// the mail server and the pending notifications untouched
+		if (!MailAccess::hasUserAccessToMessageDeletion($this->getActingUserId()))
+		{
+			return (new Main\Result())->addError(new Main\Error(
+				Loc::getMessage('MAIL_MESSAGE_DELETE_ACCESS_DENIED'),
+				'MAIL_MESSAGE_DELETE_ACCESS_DENIED',
+			));
+		}
+
 		$result = $this->initData(MailboxDirectoryTable::TYPE_TRASH);
 		if (!$result->isSuccess())
 		{

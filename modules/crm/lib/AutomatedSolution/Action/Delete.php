@@ -49,16 +49,21 @@ final class Delete implements Action
 			);
 		}
 
-		$customSectionDeleteResult = CustomSectionTable::delete($automatedSolution->getIntranetCustomSectionId());
-		if (!$customSectionDeleteResult->isSuccess())
-		{
-			$overallResult->addErrors($customSectionDeleteResult->getErrors());
-		}
+		$lifecycleResult = Container::getInstance()->getAutomatedSolutionVibeLifecycleService()->delete(
+			$this->automatedSolutionId,
+			static function (array $state): Result {
+				$customSectionDeleteResult = CustomSectionTable::delete((int)$state['INTRANET_CUSTOM_SECTION_ID']);
+				if (!$customSectionDeleteResult->isSuccess())
+				{
+					return (new Result())->addErrors($customSectionDeleteResult->getErrors());
+				}
 
-		$automatedSolutionDeleteResult = $automatedSolution->delete();
-		if (!$automatedSolutionDeleteResult->isSuccess())
+				return AutomatedSolutionTable::delete((int)$state['ID']);
+			},
+		);
+		if (!$lifecycleResult->isSuccess())
 		{
-			$overallResult->addErrors($automatedSolutionDeleteResult->getErrors());
+			return $overallResult->addErrors($lifecycleResult->getErrors());
 		}
 
 		Container::getInstance()->getDynamicTypesMap()->invalidateTypesCollectionCache();

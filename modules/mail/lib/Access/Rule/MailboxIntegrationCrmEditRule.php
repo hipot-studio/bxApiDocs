@@ -31,7 +31,6 @@ class MailboxIntegrationCrmEditRule extends AbstractRule
 		);
 
 		return $permissionValue === PermissionDictionaryAlias::VALUE_YES
-			&& \Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm()
-		;
+			&& \Bitrix\Mail\Integration\Crm\Permissions::getInstance()->hasAccessToCrm($this->user->getUserId());
 	}
 }

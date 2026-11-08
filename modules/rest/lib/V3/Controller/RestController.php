@@ -13,6 +13,7 @@ use Bitrix\Rest\V3\DefaultLanguage;
 use Bitrix\Rest\V3\DeferredModeAwareInterface;
 use Bitrix\Rest\V3\Dto\Mapping\Mapper;
 use Bitrix\Rest\V3\Dto\Mapping\MapperRegistry;
+use Bitrix\Rest\V3\Enum\CallChannel;
 use Bitrix\Rest\V3\Exception\ClassRequireAttributeException;
 use Bitrix\Rest\V3\Exception\Internal\InternalException;
 use Bitrix\Rest\V3\Exception\LogicException;
@@ -28,6 +29,7 @@ use Bitrix\Rest\V3\Interaction\Response\ResponseWithRelations;
 use Bitrix\Rest\V3\Controller\ActionFilter\IdempotencyFilter;
 use Bitrix\Rest\V3\Idempotency\IdempotencyKeyResolver;
 use Bitrix\Rest\V3\Idempotency\IdempotencyService;
+use Bitrix\Rest\V3\Schema\MethodDescription;
 use Bitrix\Rest\V3\Schema\Scope;
 use Bitrix\Rest\V3\Structure\Filtering\FilterStructure;
 use CRestServer;
@@ -53,7 +55,11 @@ abstract class RestController extends Controller
 
 	protected ?array $queryParams = null;
 
+	protected ?MethodDescription $methodDescription = null;
+
 	protected ?CRestServer $server = null;
+
+	private CallChannel $callChannel = CallChannel::RestTransport;
 
 	/**
 	 * Cached idempotency filter instance, shared between pre- and post-filter
@@ -366,9 +372,37 @@ abstract class RestController extends Controller
 		return $this;
 	}
 
+	/**
+	 * Schema description of the running method. Set by every call channel while building
+	 * the controller; filters that need the schema of the route read it from here.
+	 */
+	public function getMethodDescription(): ?MethodDescription
+	{
+		return $this->methodDescription;
+	}
+
+	public function setMethodDescription(?MethodDescription $methodDescription): self
+	{
+		$this->methodDescription = $methodDescription;
+
+		return $this;
+	}
+
 	public function getServer(): ?CRestServer
 	{
 		return $this->server;
+	}
+
+	public function setCallChannel(CallChannel $channel): self
+	{
+		$this->callChannel = $channel;
+
+		return $this;
+	}
+
+	public function getCallChannel(): CallChannel
+	{
+		return $this->callChannel;
 	}
 
 	protected function isOrmDeferredMode(): bool

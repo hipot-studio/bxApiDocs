@@ -34,6 +34,55 @@ class SettingCollection extends AbstractCollection implements Arrayable
 	}
 
 	/**
+	 * The settings an external agent may author. The rest of the categories never reach the published schema:
+	 * a carried name is answered by its own list, and a server-owned value is not the agent's to send.
+	 */
+	public function filterEditable(): static
+	{
+		$editable = new static();
+		foreach ($this as $setting)
+		{
+			if ($setting->category->isEditable())
+			{
+				$editable->add($setting);
+			}
+		}
+
+		return $editable;
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getNamesByCategory(SettingCategory $category): array
+	{
+		$names = [];
+		foreach ($this as $setting)
+		{
+			if ($setting->category === $category)
+			{
+				$names[] = $setting->name;
+			}
+		}
+
+		return array_values(array_unique($names));
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	public function getNames(): array
+	{
+		$names = [];
+		foreach ($this as $setting)
+		{
+			$names[] = $setting->name;
+		}
+
+		return $names;
+	}
+
+	/**
 	 * @return array<string, string> [type => description,...]
 	 */
 	public function getDescribedSettingTypesMap(): array

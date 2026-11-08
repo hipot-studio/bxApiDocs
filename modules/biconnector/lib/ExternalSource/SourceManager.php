@@ -9,6 +9,7 @@ use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
+use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\BIConnector\Superset\ExternalSource\ExternalSql\SourceProvider;
 use Bitrix\Main\Application;
 use Bitrix\Main\Engine\CurrentUser;
@@ -21,6 +22,11 @@ use Bitrix\Main\Web\Json;
 
 class SourceManager
 {
+	/**
+	 * Setting codes that must never leave the storage.
+	 */
+	public const SECRET_SETTING_CODES = ['password'];
+
 	/**
 	 * Keys - connection type - 1c, mysql, pgsql etc.
 	 * Values - array with fields required to connect to database.
@@ -90,16 +96,30 @@ class SourceManager
 			$defaultPorts = [
 				ExternalSource\Type::Mysql->value => 3306,
 				ExternalSource\Type::Pgsql->value => 5432,
+				ExternalSource\Type::Clickhouse->value => ExternalSource\Source\DB\ClickhouseConnection::DEFAULT_PORT,
+			];
+
+			// ClickHouse is reached over its HTTP interface, so the scheme of the address is what
+			// tells the source whether the connection has to be encrypted.
+			$hostPlaceholders = [
+				ExternalSource\Type::Mysql->value => 'db.example.com',
+				ExternalSource\Type::Pgsql->value => 'db.example.com',
+				ExternalSource\Type::Clickhouse->value => 'https://clickhouse.example.com',
 			];
 
 			foreach (SourceProvider::getExternalSqlTypes() as $type)
 			{
+				if ($type === ExternalSource\Type::Clickhouse->value && !self::isClickhouseConnectionsAvailable())
+				{
+					continue;
+				}
+
 				$result[$type] = [
 					[
 						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_HOST') ?? '',
 						'type' => ExternalSource\SourceSettingType::String->value,
 						'code' => 'host',
-						'placeholder' => 'http://localhost_23740259475',
+						'placeholder' => $hostPlaceholders[$type] ?? 'http://localhost_23740259475',
 					],
 					[
 						'name' => Loc::getMessage('EXTERNAL_CONNECTION_FIELD_PORT') ?? '',
@@ -160,6 +180,15 @@ class SourceManager
 				'type' => ExternalSource\Type::Pgsql->value,
 				'name' => 'PostgreSQL',
 			];
+
+			if (self::isClickhouseConnectionsAvailable())
+			{
+				$result[] = [
+					'code' => ExternalSource\Type::Clickhouse->value,
+					'type' => ExternalSource\Type::Clickhouse->value,
+					'name' => 'ClickHouse',
+				];
+			}
 		}
 
 		if (Loader::includeModule('rest'))
@@ -191,6 +220,11 @@ class SourceManager
 	public static function isExternalSqlConnectionsAvailable(): bool
 	{
 		return Feature::isExternalSqlDatasetEnabled();
+	}
+
+	public static function isClickhouseConnectionsAvailable(): bool
+	{
+		return Feature::isClickhouseSourceEnabled();
 	}
 
 	public static function isExternalConnectionsAvailable(): bool
@@ -320,7 +354,7 @@ class SourceManager
 
 		if (empty($data['title'] ?? null))
 		{
-			$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE') ?? ''));
+			$result->addError(new UserFacingError(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE')));
 
 			return $result;
 		}
@@ -329,9 +363,20 @@ class SourceManager
 		if (!$type)
 		{
 			$result->addError(
-				new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_UNKNOWN_TYPE', [
+				new UserFacingError(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_UNKNOWN_TYPE', [
 					'#CONNECTION_TYPE#' => htmlspecialcharsbx($data['type'] ?? ''),
 				]) ?? ''),
+			);
+
+			return $result;
+		}
+
+		if ($type === ExternalSource\Type::Clickhouse && !self::isClickhouseConnectionsAvailable())
+		{
+			$result->addError(
+				new UserFacingError(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_UNKNOWN_TYPE', [
+					'#CONNECTION_TYPE#' => htmlspecialcharsbx($data['type'] ?? ''),
+				])),
 			);
 
 			return $result;
@@ -363,7 +408,7 @@ class SourceManager
 			$source = ExternalSourceTable::getById($sourceId)->fetchObject();
 			if (!$source)
 			{
-				$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_NOT_FOUND') ?? ''));
+				$result->addError(new UserFacingError(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_NOT_FOUND')));
 
 				return $result;
 			}
@@ -442,7 +487,7 @@ class SourceManager
 
 		if (empty($data['title'] ?? null))
 		{
-			$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE') ?? ''));
+			$result->addError(new UserFacingError(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE')));
 
 			return $result;
 		}
@@ -538,9 +583,9 @@ class SourceManager
 					'type' => $requiredField['type'],
 				];
 			}
-			elseif ($source->getType() !== Type::Rest->value)
+			elseif ($source->getType() !== Type::Rest->value && ($requiredField['required'] ?? true))
 			{
-				$result->addError(new Error(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE') ?? ''));
+				$result->addError(new UserFacingError(Loc::getMessage('EXTERNAL_CONNECTION_ERROR_FIELDS_INCOMPLETE')));
 
 				return $result;
 			}
@@ -553,11 +598,38 @@ class SourceManager
 		return $result;
 	}
 
+	/**
+	 * Connection settings safe to hand outside: secrets are kept in storage and never returned.
+	 *
+	 * @return array<string, string> Setting code => value.
+	 */
+	public static function getPublicSettings(ExternalSource\Internal\ExternalSource $source): array
+	{
+		$publicSettings = [];
+		foreach (self::getSourceSettings($source) as $setting)
+		{
+			$code = (string)$setting->getCode();
+			if (in_array($code, self::SECRET_SETTING_CODES, true))
+			{
+				continue;
+			}
+
+			$publicSettings[$code] = (string)$setting->getValue();
+		}
+
+		return $publicSettings;
+	}
+
 	public static function getSourceSettings(ExternalSource\Internal\ExternalSource $source): ExternalSourceSettingsCollection
+	{
+		return self::getSourceSettingsBySourceId((int)$source->getId());
+	}
+
+	public static function getSourceSettingsBySourceId(int $sourceId): ExternalSourceSettingsCollection
 	{
 		return ExternalSourceSettingsTable::getList([
 			'filter' => [
-				'=SOURCE_ID' => $source->getId(),
+				'=SOURCE_ID' => $sourceId,
 			],
 		])
 			->fetchCollection()
@@ -570,7 +642,8 @@ class SourceManager
 		$source = ExternalSourceTable::getById($id)->fetchObject();
 		if (!$source)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SOURCE_ERROR_NOT_FOUND') ?? ''));
+			$errorMessage = Loc::getMessage('EXTERNAL_CONNECTION_ERROR_NOT_FOUND');
+			$result->addError(new UserFacingError($errorMessage));
 
 			return $result;
 		}

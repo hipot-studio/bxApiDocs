@@ -3,7 +3,6 @@ if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true)
 	die();
 
 use Bitrix\Main\Config\Option;
-use Bitrix\Main\Context;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorableImplementation;
@@ -25,7 +24,9 @@ class SocialnetworkCopyChecker extends CBitrixComponent implements Controllerabl
 	protected function listKeysSignedParameters()
 	{
 		return [
-			"queueId"
+			"moduleId",
+			"errorOption",
+			"queueId",
 		];
 	}
 
@@ -68,14 +69,11 @@ class SocialnetworkCopyChecker extends CBitrixComponent implements Controllerabl
 
 	public function deleteErrorOptionAction()
 	{
-		$request = Context::getCurrent()->getRequest();
-		$post = $request->getPostList()->toArray();
-
-		if (!empty($post["moduleId"]) && !empty($post["errorOption"]))
+		if (!empty($this->arParams["moduleId"]) && !empty($this->arParams["errorOption"]))
 		{
 			Option::delete(
-				$post["moduleId"],
-				["name" => $post["errorOption"].$this->arParams["queueId"]]
+				$this->arParams["moduleId"],
+				["name" => $this->arParams["errorOption"].$this->arParams["queueId"]]
 			);
 		}
 	}

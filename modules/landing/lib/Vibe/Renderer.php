@@ -40,17 +40,24 @@ class Renderer
 		);
 	}
 
-	public function renderSettings(): void
+	/**
+	 * Renders the Vibe settings section.
+	 *
+	 * @param VibeRenderOptions|null $renderOptions
+	 * @return void
+	 */
+	public function renderSettings(?VibeRenderOptions $renderOptions = null): void
 	{
-		self::includeSettingsComponent([$this->vibe]);
+		self::includeSettingsComponent([$this->vibe], $renderOptions);
 	}
 
 	/**
 	 * @param array<Vibe> $vibes
+	 * @param VibeRenderOptions|null $renderOptions
 	 * @return void
 	 * @throws ArgumentTypeException
 	 */
-	public static function renderSettingsGroup(array $vibes = null): void
+	public static function renderSettingsGroup(?array $vibes = null, ?VibeRenderOptions $renderOptions = null): void
 	{
 		foreach ($vibes as $index => $item)
 		{
@@ -60,13 +67,14 @@ class Renderer
 			}
 		}
 
-		self::includeSettingsComponent($vibes);
+		self::includeSettingsComponent($vibes, $renderOptions);
 	}
 
 	/**
 	 * @param Vibe[] $vibes
+	 * @param VibeRenderOptions|null $renderOptions
 	 */
-	private static function includeSettingsComponent(array $vibes): void
+	private static function includeSettingsComponent(array $vibes, ?VibeRenderOptions $renderOptions = null): void
 	{
 		global $APPLICATION;
 		$APPLICATION->IncludeComponent(
@@ -74,6 +82,7 @@ class Renderer
 			'',
 			[
 				'vibes' => $vibes,
+				'renderOptions' => $renderOptions ?? new VibeRenderOptions(),
 			],
 		);
 	}

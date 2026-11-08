@@ -159,6 +159,11 @@ final class DraftSnapshot
 				(array)($largeAttachment['sourceFileIds'] ?? $fileIds),
 			)));
 			sort($sourceFileIds, SORT_NUMERIC);
+			$tokenFileIds = array_values(array_unique(array_map(
+				'intval',
+				(array)($largeAttachment['tokenFileIds'] ?? $sourceFileIds),
+			)));
+			sort($tokenFileIds, SORT_NUMERIC);
 			if (
 				$token === ''
 				|| strlen($token) > 4096
@@ -170,6 +175,9 @@ final class DraftSnapshot
 				|| $sourceFileIds === []
 				|| $sourceFileIds[0] <= 0
 				|| count($sourceFileIds) !== count($fileIds)
+				|| $tokenFileIds === []
+				|| $tokenFileIds[0] <= 0
+				|| count($tokenFileIds) !== count($fileIds)
 			)
 			{
 				throw new \InvalidArgumentException('Invalid draft large attachment.');
@@ -180,6 +188,7 @@ final class DraftSnapshot
 				'publicUrl' => $publicUrl,
 				'fileIds' => $fileIds,
 				'sourceFileIds' => $sourceFileIds,
+				'tokenFileIds' => $tokenFileIds,
 			];
 		}
 
@@ -203,9 +212,14 @@ final class DraftSnapshot
 			throw new \InvalidArgumentException('Invalid draft sender email.');
 		}
 
+		// Two connections of one address share the formatted string, so the mailbox of the draft is kept
+		// to restore the exact one the letter was written from.
+		$mailboxId = (int)($sender['mailboxId'] ?? 0);
+
 		return [
 			'name' => trim((string)($sender['name'] ?? '')),
 			'email' => $email,
+			...($mailboxId > 0 ? ['mailboxId' => $mailboxId] : []),
 		];
 	}
 

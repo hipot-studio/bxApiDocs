@@ -25,6 +25,7 @@ class NodeMemberService
 		?StructureAction $structureAction = null,
 		NodeActiveFilter $nodeActiveFilter = NodeActiveFilter::ONLY_GLOBAL_ACTIVE,
 		bool $withVirtualUsers = true,
+		?bool $memberActive = true,
 	): NodeMemberCollection
 	{
 		return InternalContainer::getNodeMemberRepository()->findAllByEntityIds(
@@ -36,6 +37,7 @@ class NodeMemberService
 			structureAction: $structureAction,
 			nodeActiveFilter: $nodeActiveFilter,
 			withVirtualUsers: $withVirtualUsers,
+			memberActive: $memberActive,
 		);
 	}
 

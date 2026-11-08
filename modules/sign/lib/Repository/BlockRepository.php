@@ -112,6 +112,34 @@ class BlockRepository
 	}
 
 	/**
+	 * @return list<string>
+	 */
+	public function getPlaceholderAliasesByBlankId(int $blankId): array
+	{
+		if ($blankId <= 0)
+		{
+			return [];
+		}
+
+		$rows = Internal\BlockTable::query()
+			->setSelect(['DATA'])
+			->where('BLANK_ID', $blankId)
+			->exec()
+		;
+		$aliases = [];
+		while ($row = $rows->fetch())
+		{
+			$alias = $row['DATA']['placeholderAlias'] ?? null;
+			if (is_string($alias) && $alias !== '')
+			{
+				$aliases[] = $alias;
+			}
+		}
+
+		return array_values(array_unique($aliases, SORT_STRING));
+	}
+
+	/**
 	 * Returns which B2E regional block codes (registration number / creation date) exist for the blank,
 	 * regardless of role or party. A persistent regional block is a faithful signal that the matching
 	 * placeholder is present in the document, because such blocks are created only from real placeholders

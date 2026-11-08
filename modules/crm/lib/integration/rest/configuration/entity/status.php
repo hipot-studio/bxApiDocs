@@ -611,6 +611,11 @@ class Status
 			return $result;
 		}
 		$itemList = $import['CONTENT']['DATA'];
+		$descriptionError = static::getDescriptionValidationError($itemList['ITEMS'] ?? []);
+		if ($descriptionError !== null)
+		{
+			return ['ERROR_EXCEPTION' => $descriptionError];
+		}
 		$entityTypes = CCrmStatus::GetEntityTypes();
 
 		if(!empty($itemList['ENTITY']['ID']) && !empty($itemList['ITEMS']))
@@ -704,6 +709,7 @@ class Status
 								->setName($item['NAME'])
 								->setColor($color)
 								->setSemantics($semantics)
+								->setDescription((string)($item['DESCRIPTION'] ?? ''))
 							;
 
 							$resultCollection->add($existingCouple);
@@ -721,6 +727,7 @@ class Status
 							->setSystem(false)
 							->setColor($color)
 							->setSemantics($semantics)
+							->setDescription((string)($item['DESCRIPTION'] ?? ''))
 						;
 
 						$resultCollection->add($newStatus);
@@ -809,6 +816,7 @@ class Status
 										->setColor($color)
 										->setSemantics($semantics)
 										->setCategoryId($categotyId)
+										->setDescription((string)($item['DESCRIPTION'] ?? ''))
 									;
 									$resultCollection->add($existingCouple);
 									unset($existsStatuses[$newStatusId]);
@@ -825,6 +833,7 @@ class Status
 										->setColor($color)
 										->setSemantics($semantics)
 										->setCategoryId($categotyId)
+										->setDescription((string)($item['DESCRIPTION'] ?? ''))
 									;
 									$resultCollection->add($newStatus);
 								}
@@ -967,6 +976,7 @@ class Status
 										->setColor($color)
 										->setSemantics($semantics)
 										->setCategoryId($categoryId)
+										->setDescription((string)($item['DESCRIPTION'] ?? ''))
 									;
 									$resultCollection->add($existingCouple);
 									unset($existsStatuses[$newStatusId]);
@@ -983,6 +993,7 @@ class Status
 										->setColor($color)
 										->setSemantics($semantics)
 										->setCategoryId($categoryId)
+										->setDescription((string)($item['DESCRIPTION'] ?? ''))
 									;
 									$resultCollection->add($newStatus);
 								}
@@ -1033,7 +1044,8 @@ class Status
 								[
 									'NAME' => $item['NAME'],
 									'NAME_INIT' => $item['NAME'],
-									'SORT' => intVal($item['SORT'])
+									'SORT' => intVal($item['SORT']),
+									'DESCRIPTION' => (string)($item['DESCRIPTION'] ?? ''),
 								]
 							);
 							unset($oldList[$key]);
@@ -1047,7 +1059,8 @@ class Status
 									'NAME' => $item['NAME'],
 									'NAME_INIT' => $item['NAME'],
 									'SORT' => intVal($item['SORT']),
-									'SYSTEM' => 'N'
+									'SYSTEM' => 'N',
+									'DESCRIPTION' => (string)($item['DESCRIPTION'] ?? ''),
 								]
 							);
 						}
@@ -1069,6 +1082,28 @@ class Status
 		}
 
 		return $result;
+	}
+
+	private static function getDescriptionValidationError(array $items): ?string
+	{
+		foreach ($items as $item)
+		{
+			$description = $item['DESCRIPTION'] ?? null;
+			if ($description !== null && !is_string($description))
+			{
+				return CCrmStatus::DESCRIPTION_INVALID_TYPE_ERROR;
+			}
+
+			if (strlen($description ?? '') > CCrmStatus::DESCRIPTION_MAX_LENGTH)
+			{
+				return Loc::getMessage(
+					'CRM_ERROR_CONFIGURATION_IMPORT_DESCRIPTION_TOO_LONG',
+					['#MAX_LENGTH#' => (string)CCrmStatus::DESCRIPTION_MAX_LENGTH],
+				);
+			}
+		}
+
+		return null;
 	}
 
 	/**

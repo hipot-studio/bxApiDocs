@@ -19,7 +19,7 @@ class CountryProvider extends BaseProvider
 	public const GLOBAL_COUNTRY_CODE = 'XX';
 
 	private const AVATAR_PATH = '/bitrix/js/crm/entity-selector/src/images/';
-	private const AVATAR_EXT = 'png';
+	private const AVATAR_EXT = 'webp';
 	private const METADATA_PATH = '/bitrix/js/main/phonenumber/metadata.json';
 
 	protected string $metadataFilename;

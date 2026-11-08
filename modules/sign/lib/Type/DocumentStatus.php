@@ -56,8 +56,22 @@ final class DocumentStatus
 		return in_array($document->status, self::getFinalStatuses(), true);
 	}
 
+	/**
+	 * Statuses of a document nothing has been sent for yet. From `ready` on the sending is under way:
+	 * the configuration has left for the external service and the invitations are being formed.
+	 *
+	 * @return list<self::*>
+	 */
+	public static function getEditable(): array
+	{
+		return [
+			self::NEW,
+			self::UPLOADED,
+		];
+	}
+
 	public static function isEditableByDocument(Document $document): bool
 	{
-		return in_array($document->status, [self::NEW, self::UPLOADED], true);
+		return in_array($document->status, self::getEditable(), true);
 	}
 }

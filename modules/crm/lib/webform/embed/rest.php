@@ -12,8 +12,13 @@ use Bitrix\Main;
 use Bitrix\Main\Config\Option;
 use Bitrix\Rest\RestException;
 use Bitrix\Crm\WebForm;
+use Bitrix\Crm\WebForm\Telemetry\Recorder;
+use Bitrix\Crm\WebForm\Telemetry\RecorderInterface;
+use Bitrix\Crm\WebForm\Telemetry\SourceContextSigner;
+use Bitrix\Crm\WebForm\Telemetry\SubmissionClassifier;
 use Bitrix\Crm\UI\Webpack;
 use Bitrix\Crm\SiteButton\Guest;
+use Throwable;
 
 /**
  * Class Rest
@@ -37,10 +42,11 @@ class Rest
 	 * Fill form.
 	 *
 	 * @param array $query Query parameters.
+	 * @param RecorderInterface|null $telemetryRecorder Telemetry recorder.
 	 * @return array
 	 * @throws RestException
 	 */
-	public static function fillForm($query)
+	public static function fillForm($query, ?RecorderInterface $telemetryRecorder = null)
 	{
 		$formId = empty($query['id']) ? null : (int) $query['id'];
 		$securityCode = empty($query['sec']) ? null : $query['sec'];
@@ -52,14 +58,16 @@ class Rest
 			: null;
 		$trace = empty($query['trace']) ? null : $query['trace'];
 		$consents = $query['consents'] ?? '';
-		$consents = $consents ? Main\Web\Json::decode($consents) : [];
-		$consents = is_array($consents) ? $consents : [];
+		$explicitConsents = $query['explicitConsents'] ?? '';
+		$displayedSubmitAgreements = $query['displayedSubmitAgreements'] ?? '';
 		$recaptchaResponse = empty($query['recaptcha']) ? null : $query['recaptcha'];
 		$yandexSmartCaptchaResponse = empty($query['yandexSmartCaptcha']) ? null : $query['yandexSmartCaptcha'];
 		$signString = empty($query['security_sign']) ? null : $query['security_sign'];
 		//$entities = empty($query['entities']) ? null : $query['entities'];
 
 		$form = null;
+		$telemetryContext = null;
+		$isValidationFailure = false;
 
 		try
 		{
@@ -77,7 +85,7 @@ class Rest
 				self::printErrors(["Parameter `sec` required."]);
 			}
 
-			$form = new WebForm\Form($formId);
+			$form = new WebForm\Form($formId, null, $telemetryRecorder);
 			if (!$form->checkSecurityCode($securityCode))
 			{
 				self::printErrors(["Parameter `security_sign` is invalid."]);
@@ -87,6 +95,17 @@ class Rest
 			{
 				self::printErrors(["Form with id=`$formId` is disabled."]);
 			}
+
+			$telemetryContext = self::prepareTelemetryContext($query, $formId);
+
+			$consents = $consents ? Main\Web\Json::decode($consents) : [];
+			$consents = is_array($consents) ? $consents : [];
+			$explicitConsents = $explicitConsents ? Main\Web\Json::decode($explicitConsents) : [];
+			$explicitConsents = is_array($explicitConsents) ? $explicitConsents : [];
+			$displayedSubmitAgreements = $displayedSubmitAgreements
+				? Main\Web\Json::decode($displayedSubmitAgreements)
+				: [];
+			$displayedSubmitAgreements = is_array($displayedSubmitAgreements) ? $displayedSubmitAgreements : [];
 
 			if ($form->isUsedCaptcha())
 			{
@@ -132,6 +151,11 @@ class Rest
 				}
 			}
 
+			if ($telemetryContext !== null)
+			{
+				self::startTelemetry($telemetryContext, $formId, $telemetryRecorder);
+			}
+
 			$fill = $form->fill();
 
 			///////////////////
@@ -143,8 +167,14 @@ class Rest
 				->setTrace($trace)
 				->setValues($values)
 				->setConsents($consents)
+				->setExplicitConsents($explicitConsents)
+				->setDisplayedSubmitAgreements($displayedSubmitAgreements)
 				->setProperties($properties)
 			;
+			if ($telemetryContext !== null)
+			{
+				$fill->setTelemetryContext($telemetryContext);
+			}
 
 			if ($signString)
 			{
@@ -155,12 +185,23 @@ class Rest
 				}
 			}
 
+			$agreementsResult = $fill->resolveAgreements();
+			if (!$agreementsResult->isSuccess())
+			{
+				$isValidationFailure = true;
+				if ($telemetryContext !== null)
+				{
+					self::markTelemetryError($telemetryContext['attemptId'], $telemetryRecorder, 'validation');
+				}
+				self::printErrors($agreementsResult->getErrorMessages());
+			}
+
 			$result = $fill->save();
 			if (!$result->getId())
 			{
+				$isValidationFailure = true;
 				self::printErrors($result->getErrors());
 			}
-
 
 			$gid = $result->getResultEntity()->getTrace()->getGid();
 			if (!$gid)
@@ -194,17 +235,89 @@ class Rest
 				]
 			];
 		}
-		catch (RestException $restException)
+		catch (Throwable $exception)
 		{
+			if ($telemetryContext !== null && !$isValidationFailure)
+			{
+				self::markTelemetryError($telemetryContext['attemptId'], $telemetryRecorder);
+			}
+
 			return [
 				'resultId' => null,
 				'pay' => false,
-				'message' => $form ? $form->getFailureText() : $restException->getMessage(),
+				'message' => $form ? $form->getFailureText() : $exception->getMessage(),
 				'gid' => null,
 				'redirect' => [],
 				'refill' => []
 			];
 		}
+	}
+
+	private static function startTelemetry(
+		array $context,
+		int $formId,
+		?RecorderInterface $recorder,
+	): void
+	{
+		try
+		{
+			$recorder ??= new Recorder();
+			$recorder->start(
+				$context['attemptId'],
+				$formId,
+				$context['source'],
+				Main\Context::getCurrent()->getRequest()->getUserAgent(),
+			);
+		}
+		catch (Throwable)
+		{
+		}
+	}
+
+	private static function prepareTelemetryContext(array $query, int $formId): ?array
+	{
+		$attemptId = $query['attemptId'] ?? null;
+		if (!self::isUuidV4($attemptId))
+		{
+			return null;
+		}
+
+		$source = SubmissionClassifier::SOURCE_UNKNOWN;
+		$signString = $query['telemetry_sign'] ?? null;
+		if (is_string($signString) && $signString !== '')
+		{
+			$source = (new SourceContextSigner())->verify($signString, $formId)
+				?? SubmissionClassifier::SOURCE_UNKNOWN
+			;
+		}
+
+		return [
+			'attemptId' => $attemptId,
+			'source' => $source,
+		];
+	}
+
+	private static function markTelemetryError(
+		string $attemptId,
+		?RecorderInterface $recorder,
+		string $errorType = 'other',
+	): void
+	{
+		try
+		{
+			($recorder ?? new Recorder())->markError($attemptId, $errorType);
+		}
+		catch (Throwable)
+		{
+		}
+	}
+
+	private static function isUuidV4(mixed $attemptId): bool
+	{
+		return is_string($attemptId) && preg_match(
+			'/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+			$attemptId,
+		) === 1;
 	}
 
 	/**
@@ -234,7 +347,58 @@ class Rest
 			self::printErrors(["Parameter `sec` required."]);
 		}
 
-		$cacheKey = 'WebForm:'.$formId.':'.($securityCode ? substr(md5($securityCode),-6) : '').':'.($loaderOnly ? '1' : '0');
+		if (!empty($query['agreementsOnly']))
+		{
+			$cachePath = '/crm/webform/rest_get_form/' . $formId . '/';
+			$cacheKey = 'WebFormAgreements:' . $formId
+				. ':' . hash('sha256', $securityCode)
+				. ':' . (Config::isAcceptBySubmitEnabled() ? '1' : '0')
+			;
+			$cache = Main\Application::getInstance()->getCache();
+			if ($cache->initCache(15, $cacheKey, $cachePath))
+			{
+				return $cache->getVars();
+			}
+
+			$form = new WebForm\Form($formId);
+			if (!$form->checkSecurityCode($securityCode))
+			{
+				self::printErrors(["Parameter `security_sign` is invalid."]);
+			}
+
+			if (!$form->isActive())
+			{
+				self::printErrors(["Form with id=`$formId` is disabled."]);
+			}
+
+			$cache->startDataCache();
+			$taggedCache = Main\Application::getInstance()->getTaggedCache();
+			$taggedCache->startTagCache($cachePath);
+			$taggedCache->registerTag(WebForm\Form::getCacheTag($formId));
+			$taggedCache->endTagCache();
+
+			$response = ['agreements' => (new Config($form))->getAgreements()];
+			$cache->endDataCache($response);
+
+			return $response;
+		}
+
+		$telemetrySource = SubmissionClassifier::SOURCE_SITE;
+		$telemetrySign = $query[SourceContextSigner::PARAMETER] ?? null;
+		if (is_string($telemetrySign))
+		{
+			$telemetrySource = (new SourceContextSigner())->verify($telemetrySign, $formId)
+				?? SubmissionClassifier::SOURCE_SITE
+			;
+		}
+
+		$cacheKey = 'WebForm:'
+			. $formId
+			. ':' . ($securityCode ? substr(md5($securityCode), -6) : '')
+			. ':' . ($loaderOnly ? '1' : '0')
+			. ':' . $telemetrySource
+			. ':' . (Config::isAcceptBySubmitEnabled() ? '1' : '0')
+		;
 		$cachePath = '/crm/webform/rest_get_form/'.$formId.'/';
 		$ttl = 1800; // 30 min
 		$cache = \Bitrix\Main\Application::getInstance()->getCache();
@@ -266,7 +430,7 @@ class Rest
 			}
 
 			$appPack = Webpack\Form\App::instance();
-			$scripts = WebForm\Script::getListContext($form->get(), []);
+			$scripts = WebForm\Script::getListContext($form->get(), [], null, $telemetrySource);
 
 			$response = [
 				'config' => $loaderOnly ? null : (new Config($form))->toArray(),

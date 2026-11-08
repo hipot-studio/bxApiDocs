@@ -12,7 +12,10 @@ use Bitrix\Intranet;
 use Bitrix\Intranet\Entity\User;
 use Bitrix\Intranet\Enum\InvitationMessageType;
 use Bitrix\Intranet\Enum\InvitationStatus;
+use Bitrix\Intranet\Exception\ErrorCollectionException;
 use Bitrix\Intranet\Integration\Socialnetwork;
+use Bitrix\Intranet\Internal\Error\InvitationResendTimeoutError;
+use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\Config\Option;
@@ -20,6 +23,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
+use Bitrix\Main\SystemException;
 use Bitrix\Socialnetwork\Collab\Collab;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 
@@ -150,6 +154,7 @@ class InviteUserCollectionToGroupCommand implements Command
 		}
 
 		$extranetAvailable = Loader::includeModule('extranet');
+		$skippedUserIds = [];
 		foreach ($userCollection as $user)
 		{
 			if (
@@ -158,11 +163,64 @@ class InviteUserCollectionToGroupCommand implements Command
 				&& $user->isCollaber()
 			)
 			{
-				$messageFactory = $this->getMessageFactory($type, $user, $group);
-				$messageFactory->createEmailEvent()
-					->sendImmediately();
+				if (!$this->sendEmailToUser($user, $group, $type))
+				{
+					$skippedUserIds[] = (int)$user->getId();
+				}
 			}
 		}
+
+		$this->logSkippedByResendTimeout($skippedUserIds);
+	}
+
+	private function sendEmailToUser(User $user, Collab $group, InvitationMessageType $type): bool
+	{
+		try
+		{
+			$this->sendInvitationEmail($user, $group, $type);
+		}
+		catch (ErrorCollectionException $exception)
+		{
+			if ($exception->getErrors()->getErrorByCode(InvitationResendTimeoutError::CODE) === null)
+			{
+				throw $exception;
+			}
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * @param list<int> $skippedUserIds
+	 */
+	protected function logSkippedByResendTimeout(array $skippedUserIds): void
+	{
+		if (empty($skippedUserIds))
+		{
+			return;
+		}
+
+		$this->logException(
+			new SystemException(
+				'Collab invitation email is skipped by resend timeout for '
+				. count($skippedUserIds) . ' user(s): ' . implode(', ', $skippedUserIds) . '.',
+			),
+		);
+	}
+
+	protected function logException(\Throwable $exception): void
+	{
+		Application::getInstance()->getExceptionHandler()->writeToLog($exception);
+	}
+
+	protected function sendInvitationEmail(User $user, Collab $group, InvitationMessageType $type): void
+	{
+		$this->getMessageFactory($type, $user, $group)
+			->createEmailEvent()
+			->sendImmediately()
+		;
 	}
 
 	private function getMessageFactory(InvitationMessageType $type, User $user, Collab $group): InvitationMessageFactoryContract

@@ -11,6 +11,7 @@ class UserMiniProfileDto implements \JsonSerializable
 		public AccessDto $access,
 		public ?DetailInfoDto $detailInfo = null,
 		public ?StructureDto $structure = null,
+		public bool $isLocationAvailable = false,
 	) {}
 
 	public function jsonSerialize(): array
@@ -20,6 +21,7 @@ class UserMiniProfileDto implements \JsonSerializable
 			'detailInfo' => $this->detailInfo,
 			'structure' => $this->structure,
 			'access' => $this->access,
+			'isLocationAvailable' => $this->isLocationAvailable,
 		];
 	}
 }

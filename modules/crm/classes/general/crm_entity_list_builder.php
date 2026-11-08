@@ -226,6 +226,7 @@ class CCrmEntityListBuilder
 		{
 			$arSelectFields = array();
 		}
+		$arSelectFields = array_filter($arSelectFields, 'is_string');
 
 		if(count($arSelectFields) > 0 && !in_array('*', $arSelectFields, true) && !in_array('ID', $arSelectFields, true))
 		{

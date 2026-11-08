@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Bitrix\TasksMobile\Service\Template;
 
 use Bitrix\Crm\Service\Display;
@@ -7,8 +9,8 @@ use Bitrix\Crm\Service\Display\Field;
 use Bitrix\Main\Loader;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
-use Bitrix\Tasks\CheckList\Task\TaskCheckListFacade;
-use Bitrix\Tasks\CheckList\Template\TemplateCheckListFacade;
+use Bitrix\Tasks\Access\TemplateAccessController;
+use Bitrix\Tasks\V2\Internal\Entity\CheckList\Type;
 use Bitrix\TasksMobile\Dto\DiskFileDto;
 use Bitrix\TasksMobile\Dto\RelatedCrmItemDto;
 use Bitrix\TasksMobile\UserField\Dto\UserFieldDto;
@@ -18,8 +20,8 @@ use Bitrix\TasksMobile\Provider as TasksMobileProvider;
 
 final class TaskTemplateDataBuilder
 {
-	private $userId;
-	private $templateId;
+	private int $userId;
+	private int $templateId;
 
 	public function __construct(int $userId, int $templateId)
 	{
@@ -37,7 +39,7 @@ final class TaskTemplateDataBuilder
 		$canReadTask = TaskAccessController::can(
 			$this->userId,
 			ActionDictionary::ACTION_TASK_READ,
-			$taskId
+			$taskId,
 		);
 
 		if (!$canReadTask)
@@ -45,16 +47,29 @@ final class TaskTemplateDataBuilder
 			return null;
 		}
 
-		$items = (new TasksMobileProvider\ChecklistProvider($this->userId, TaskCheckListFacade::class))
-			->getChecklistTree($taskId, true);
+		$items = (new TasksMobileProvider\ChecklistProvider($this->userId))
+			->getChecklistV2($taskId, Type::Task, true)
+		;
 
 		return empty($items) ? null : $items;
 	}
 
 	public function prepareChecklist(): ?array
 	{
-		$items = (new TasksMobileProvider\ChecklistProvider($this->userId, TemplateCheckListFacade::class))
-			->getChecklistTree($this->templateId, true);
+		$canReadTemplate = TemplateAccessController::can(
+			$this->userId,
+			ActionDictionary::ACTION_TEMPLATE_READ,
+			$this->templateId,
+		);
+
+		if (!$canReadTemplate)
+		{
+			return null;
+		}
+
+		$items = (new TasksMobileProvider\ChecklistProvider($this->userId))
+			->getChecklistV2($this->templateId, Type::Template, true)
+		;
 
 		return empty($items) ? null : $items;
 	}
@@ -85,8 +100,8 @@ final class TaskTemplateDataBuilder
 		}
 
 		$ufCrmTask = CRM\UserField::getSysUFScheme()[$ufCrmTaskCode];
-		$displayField =
-			Field::createByType('crm', $ufCrmTaskCode)
+		$displayField
+			= Field::createByType('crm', $ufCrmTaskCode)
 				->setIsMultiple($ufCrmTask['MULTIPLE'] === 'Y')
 				->setIsUserField(true)
 				->setUserFieldParams($ufCrmTask)
@@ -104,12 +119,12 @@ final class TaskTemplateDataBuilder
 		)
 		{
 			$elements = array_values(
-				array_combine($items->toArray(), $res[$ufCrmTaskCode]['config']['entityList'])
+				array_combine($items->toArray(), $res[$ufCrmTaskCode]['config']['entityList']),
 			);
 
 			return array_map(
 				fn($fields) => RelatedCrmItemDto::make($fields),
-				$elements
+				$elements,
 			);
 		}
 

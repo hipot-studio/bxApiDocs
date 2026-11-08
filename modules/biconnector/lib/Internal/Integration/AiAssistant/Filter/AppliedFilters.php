@@ -3,7 +3,7 @@
 namespace Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter;
 
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto;
-use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
+use Bitrix\BIConnector\Integration\Superset\Model;
 use Bitrix\BIConnector\Superset\Dashboard\EmbeddedFilter;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
@@ -11,7 +11,7 @@ use Bitrix\Main\Type\Date;
 
 final class AppliedFilters
 {
-	private const MAX_PERIOD_DAYS = 366;
+	public const MAX_PERIOD_DAYS = 366;
 
 	/**
 	 * Filter types whose value is a column predicate the assistant may pass
@@ -80,12 +80,24 @@ final class AppliedFilters
 	}
 
 	/**
-	 * Resolve final applied_filters list with the dashboard's default period
-	 * filled in if the caller didn't pass one. Validates caller-supplied period.
+	 * Resolve final applied_filters list with the default period filled in if
+	 * the caller didn't pass one. Validates caller-supplied period.
+	 *
+	 * The default is filled in only for a dashboard whose period the portal resolves:
+	 * a dashboard with its own default in the Superset builder gets no period from here,
+	 * exactly as it gets none in the embedded url ({@see EmbeddedFilter\NativeFilterBuilder}).
+	 * Superset applies that default itself when the request carries no period, so the
+	 * numbers the assistant gets are the ones the dashboard shows. Which interval that
+	 * was, the overview response does not tell: `meta.period` only echoes a period the
+	 * portal has sent.
 	 *
 	 * On success, `getData()['filters']` holds the resolved list.
 	 */
-	public function resolve(SupersetDashboard $dashboard, array $appliedFilters): Result
+	public function resolve(
+		Model\SupersetDashboard $dashboard,
+		Dto\Dashboard $dashboardConfig,
+		array $appliedFilters,
+	): Result
 	{
 		$result = new Result();
 
@@ -104,19 +116,16 @@ final class AppliedFilters
 			}
 		}
 
-		if ($hasPeriod)
+		if ($hasPeriod || EmbeddedFilter\DateTime::isResolvedByDashboard($dashboardConfig->nativeFilterConfig))
 		{
 			return $result->setData(['filters' => $appliedFilters]);
 		}
 
-		$resolved = self::resolveDashboardDefaultPeriod($dashboard);
-		if ($resolved !== null)
-		{
-			$appliedFilters[] = [
-				'name' => 'period',
-				'value' => $resolved,
-			];
-		}
+		$defaultPeriod = self::resolveDashboardDefaultPeriod($dashboard);
+		$appliedFilters[] = [
+			'name' => 'period',
+			'value' => self::trimPeriodToYearLimit($defaultPeriod) ?? $defaultPeriod,
+		];
 
 		return $result->setData(['filters' => $appliedFilters]);
 	}
@@ -318,15 +327,45 @@ final class AppliedFilters
 	}
 
 	/**
-	 * TODO: reuse EmbeddedFilter\DateTime once getDateStart/getDateEnd return Date
-	 * (currently typed `?string` but return Date — coerced to DD.MM.YYYY).
+	 * The period the dashboard resolves to at send time, in the same bounds the
+	 * caller may pass. It comes from the global BI setting: it is what the dashboard
+	 * itself is opened with once it has no period of its own. Bounds are taken from
+	 * the same embedded filter the dashboard is opened with.
+	 *
+	 * @return array{from: string, to: string} Inclusive bounds.
 	 */
-	private static function resolveDashboardDefaultPeriod(SupersetDashboard $dashboard): ?array
+	public static function resolveDashboardDefaultPeriod(Model\SupersetDashboard $dashboard): array
 	{
-		$period = $dashboard->getFilterPeriod();
+		$dateFilter = new EmbeddedFilter\DateTime(new Model\Dashboard($dashboard));
+		$from = $dateFilter->getDateStart();
+		$to = clone($dateFilter->getDateEnd());
+
+		// Calendar presets arrive with the end already shifted to the half-open
+		// bound Superset expects, `range` bounds stay as the setting stores them.
+		// The agent is answered with an inclusive period, and the shift back is
+		// done by {@see convertToSupersetExtraFormData}.
+		if ($dateFilter->getPeriod() !== EmbeddedFilter\DateTime::PERIOD_RANGE)
+		{
+			$to->add('-1 day');
+		}
+
+		return [
+			'from' => $from->format('Y-m-d'),
+			'to' => $to->format('Y-m-d'),
+		];
+	}
+
+	/**
+	 * Resolve a period explicitly selected outside the dashboard. An empty code
+	 * leaves the period to Superset and therefore produces no portal-side bounds.
+	 *
+	 * @return array{from: string, to: string}|null
+	 */
+	public static function resolvePeriodCode(?string $period): ?array
+	{
 		if ($period === '' || $period === null)
 		{
-			$period = EmbeddedFilter\DateTime::getDefaultPeriod();
+			return null;
 		}
 
 		if ($period === EmbeddedFilter\DateTime::PERIOD_NONE)
@@ -334,19 +373,15 @@ final class AppliedFilters
 			return null;
 		}
 
-		$today = new Date();
-
 		if ($period === EmbeddedFilter\DateTime::PERIOD_RANGE)
 		{
-			$from = $dashboard->getDateFilterStart() ?? EmbeddedFilter\DateTime::getDefaultDateStart();
-			$to = $dashboard->getDateFilterEnd() ?? EmbeddedFilter\DateTime::getDefaultDateEnd();
-
 			return [
-				'from' => $from->format('Y-m-d'),
-				'to' => $to->format('Y-m-d'),
+				'from' => EmbeddedFilter\DateTime::getDefaultDateStart()->format('Y-m-d'),
+				'to' => EmbeddedFilter\DateTime::getDefaultDateEnd()->format('Y-m-d'),
 			];
 		}
 
+		$today = new Date();
 		if ($period === EmbeddedFilter\DateTime::PERIOD_CURRENT_MONTH)
 		{
 			return [
@@ -355,9 +390,37 @@ final class AppliedFilters
 			];
 		}
 
-		if ($period === EmbeddedFilter\DateTime::PERIOD_CURRENT_YEAR)
+		if ($period === EmbeddedFilter\DateTime::PERIOD_PREVIOUS_MONTH)
+		{
+			$from = (clone $today)->setDate((int)$today->format('Y'), (int)$today->format('m'), 1)->add('-1 month');
+			$to = (clone $today)->setDate((int)$today->format('Y'), (int)$today->format('m'), 1)->add('-1 day');
+
+			return ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d')];
+		}
+
+		if (
+			$period === EmbeddedFilter\DateTime::PERIOD_CURRENT_WEEK
+			|| $period === EmbeddedFilter\DateTime::PERIOD_PREVIOUS_WEEK
+		)
+		{
+			$weekDay = (int)$today->format('N');
+			$weekShift = $period === EmbeddedFilter\DateTime::PERIOD_PREVIOUS_WEEK ? -7 : 0;
+			$from = (clone $today)->add(sprintf('%+d days', $weekShift - $weekDay + 1));
+			$to = (clone $from)->add('+6 days');
+
+			return ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d')];
+		}
+
+		if (
+			$period === EmbeddedFilter\DateTime::PERIOD_CURRENT_YEAR
+			|| $period === EmbeddedFilter\DateTime::PERIOD_PREVIOUS_YEAR
+		)
 		{
 			$year = (int)$today->format('Y');
+			if ($period === EmbeddedFilter\DateTime::PERIOD_PREVIOUS_YEAR)
+			{
+				$year--;
+			}
 
 			return [
 				'from' => sprintf('%d-01-01', $year),
@@ -365,36 +428,77 @@ final class AppliedFilters
 			];
 		}
 
-		if ($period === EmbeddedFilter\DateTime::PERIOD_CURRENT_WEEK)
+		// Rolling codes belong to the digest selector contract. They remain valid
+		// explicit overrides even though the global BI setting accepts only the
+		// canonical calendar presets after Version14.
+		$lastDays = [
+			'last_7' => 7,
+			'last_30' => 30,
+			'last_90' => 90,
+			'last_180' => 180,
+			'last_365' => 365,
+		][$period] ?? null;
+		if ($lastDays !== null)
 		{
-			$weekDay = (int)$today->format('w');
-			$weekDay = $weekDay === 0 ? 7 : $weekDay;
-			$from = (clone $today)->add('-' . ($weekDay - 1) . ' days');
-			$to = (clone $today)->add('+' . (7 - $weekDay) . ' days');
-
-			return ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d')];
-		}
-
-		$lastDaysMap = [
-			EmbeddedFilter\DateTime::PERIOD_LAST_7 => 7,
-			EmbeddedFilter\DateTime::PERIOD_LAST_30 => 30,
-			EmbeddedFilter\DateTime::PERIOD_LAST_90 => 90,
-			EmbeddedFilter\DateTime::PERIOD_LAST_180 => 180,
-			EmbeddedFilter\DateTime::PERIOD_LAST_365 => 365,
-		];
-		if (isset($lastDaysMap[$period]))
-		{
-			// The UI shifts the end for `range` and `current_*` only: a `last_N`
-			// period goes to Superset as `[today−N : today)`, without today.
-			// Its inclusive end is therefore yesterday, and the unconditional
-			// shift in {@see convertToSupersetExtraFormData} restores exactly
-			// the bound the dashboard uses.
-			$from = (clone $today)->add('-' . $lastDaysMap[$period] . ' days');
-			$to = (clone $today)->add('-1 day');
-
-			return ['from' => $from->format('Y-m-d'), 'to' => $to->format('Y-m-d')];
+			return [
+				'from' => (clone $today)->add('-' . $lastDays . ' days')->format('Y-m-d'),
+				'to' => (clone $today)->add('-1 day')->format('Y-m-d'),
+			];
 		}
 
 		return null;
+	}
+
+	/**
+	 * Narrows an inclusive period to the same limit enforced for caller-supplied filters.
+	 * The end stays fixed so a historical report keeps the latest part of its configured range.
+	 *
+	 * @param array{from: string, to: string}|null $period
+	 *
+	 * @return array{from: string, to: string}|null Trimmed bounds, or null when no trimming is needed.
+	 */
+	public static function trimPeriodToYearLimit(?array $period): ?array
+	{
+		if ($period === null)
+		{
+			return null;
+		}
+
+		$from = self::parsePeriodDate($period['from'] ?? null);
+		$to = self::parsePeriodDate($period['to'] ?? null);
+		if ($from === null || $to === null || $to < $from)
+		{
+			return null;
+		}
+
+		$secondsInDay = 86400;
+		$inclusiveDays = (int)(($to - $from) / $secondsInDay) + 1;
+		if ($inclusiveDays <= self::MAX_PERIOD_DAYS)
+		{
+			return null;
+		}
+
+		$trimmedFrom = $to - (self::MAX_PERIOD_DAYS - 1) * $secondsInDay;
+
+		return [
+			'from' => gmdate('Y-m-d', $trimmedFrom),
+			'to' => gmdate('Y-m-d', $to),
+		];
+	}
+
+	private static function parsePeriodDate(mixed $date): ?int
+	{
+		if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date))
+		{
+			return null;
+		}
+
+		$timestamp = strtotime($date . ' UTC');
+		if ($timestamp === false || gmdate('Y-m-d', $timestamp) !== $date)
+		{
+			return null;
+		}
+
+		return $timestamp;
 	}
 }

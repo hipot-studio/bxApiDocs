@@ -11,7 +11,6 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\AddReminderToo
 
 class ReminderSchemaBuilder extends BaseSchemaBuilder
 {
-	public const DATE_FORMAT = 'c';
 	public const DEFAULT_REMIND_BY = RemindBy::Date;
 	public const DEFAULT_REMIND_VIA = RemindVia::Notification;
 
@@ -44,11 +43,7 @@ class ReminderSchemaBuilder extends BaseSchemaBuilder
 			'remindAt' => [
 				'type' => 'string',
 				'format' => 'date-time',
-				'description' =>
-					"When to send the reminder, in '"
-					. BaseSchemaBuilder::DATE_FORMAT
-					. "' format (e.g., '2024/08/15 10:00')."
-				,
+				'description' => 'When to send the reminder.' . BaseSchemaBuilder::DATE_TIME_NOTE,
 			],
 			'recipient' => [
 				'type' => 'string',

@@ -6,10 +6,15 @@ use Bitrix\Main;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\NotImplementedException;
 use Bitrix\Main\UserTable;
+use Bitrix\Tasks\Access\AccessCacheLoader;
+use Bitrix\Tasks\Access\ActionDictionary;
+use Bitrix\Tasks\Access\TaskAccessController;
 use Bitrix\Tasks\Flow\FlowRegistry;
 use Bitrix\Tasks\Flow\Path\FlowPathMaker;
 use Bitrix\Tasks\Integration\Bizproc\Automation\Factory;
 use Bitrix\Tasks\Integration\Bizproc\Starter\TasksModuleSettings;
+use Bitrix\Tasks\Integration\CRM\UserField as CrmUserField;
+use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\Mark;
 use Bitrix\Tasks\Internals\Task\MemberTable;
 use Bitrix\Main\Type\DateTime;
@@ -182,6 +187,23 @@ class Task implements \IBPWorkflowDocument
 		return null;
 	}
 
+	/**
+	 * Status code => name map of the STATUS document field. Public so that an activity needing only these
+	 * options does not have to build the whole field set.
+	 *
+	 * @return array<int, string>
+	 */
+	public static function getStatusOptions(): array
+	{
+		return [
+			Status::PENDING => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_PENDING_1'),
+			Status::IN_PROGRESS => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_IN_PROGRESS'),
+			Status::SUPPOSEDLY_COMPLETED => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_SUPPOSEDLY_COMPLETED'),
+			Status::COMPLETED => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_COMPLETED'),
+			Status::DEFERRED => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_DEFERRED'),
+		];
+	}
+
 	public static function getDocumentFields($documentType)
 	{
 		$fields = [
@@ -208,18 +230,12 @@ class Task implements \IBPWorkflowDocument
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS'),
 				'Type' => 'select',
 				//'Editable' => true,
-				'Options' => [
-					Status::PENDING => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_PENDING_1'),
-					Status::IN_PROGRESS => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_IN_PROGRESS'),
-					Status::SUPPOSEDLY_COMPLETED => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_SUPPOSEDLY_COMPLETED'),
-					Status::COMPLETED => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_COMPLETED'),
-					Status::DEFERRED => Loc::getMessage('TASKS_BP_DOCUMENT_STATUS_DEFERRED'),
-				],
+				'Options' => static::getStatusOptions(),
 			],
 			'RESPONSIBLE_ID' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_ASSIGNEE_ID'),
 				'Type' => 'user',
-				//'Editable' => true
+				'Editable' => true,
 			],
 			'DATE_START' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_DATE_START'),
@@ -228,6 +244,7 @@ class Task implements \IBPWorkflowDocument
 			'DURATION_PLAN' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_DURATION_PLAN'),
 				'Type' => 'int',
+				'Editable' => true,
 			],
 			'DURATION_FACT' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_DURATION_FACT'),
@@ -236,7 +253,7 @@ class Task implements \IBPWorkflowDocument
 			'TIME_ESTIMATE' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_TIME_ESTIMATE'),
 				'Type' => 'int',
-				//'Editable' => true
+				'Editable' => true,
 			],
 			'DEADLINE' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_DEADLINE'),
@@ -321,7 +338,7 @@ class Task implements \IBPWorkflowDocument
 			'GROUP_ID' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_GROUP_ID_INT'),
 				'Type' => 'int',
-				//'Editable' => true
+				'Editable' => true,
 			],
 			'GROUP_ID_PRINTABLE' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_GROUP_ID_PRINTABLE'),
@@ -330,6 +347,13 @@ class Task implements \IBPWorkflowDocument
 			'PARENT_ID' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_PARENT_ID'),
 				'Type' => 'int',
+				'Editable' => true,
+			],
+			'DEPENDS_ON' => [
+				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_DEPENDS_ON'),
+				'Type' => 'int',
+				'Editable' => true,
+				'Multiple' => true,
 			],
 			'ACCOMPLICES' => [
 				'Name' => Loc::getMessage('TASKS_BP_DOCUMENT_ACCOMPLICES'),
@@ -354,6 +378,19 @@ class Task implements \IBPWorkflowDocument
 				'Type' => 'int',
 			],
 		];
+
+		$crmField = self::getCrmSystemUserField();
+		if ($crmField)
+		{
+			$fields[$crmField['FIELD_NAME']] = [
+				'Name' => ($crmField['EDIT_FORM_LABEL'][LANGUAGE_ID] ?? null)
+					?: Loc::getMessage('TASKS_BP_DOCUMENT_CRM_ITEMS'),
+				'Type' => $crmField['USER_TYPE_ID'],
+				'Editable' => true,
+				'Multiple' => \CBPHelper::getBool($crmField['MULTIPLE']),
+				'Options' => $crmField['SETTINGS'],
+			];
+		}
 
 		if (isset($documentType) && (self::isPlanTask($documentType) || self::isPersonalTask($documentType)))
 		{
@@ -567,11 +604,12 @@ class Task implements \IBPWorkflowDocument
 
 			//int
 			'IS_IMPORTANT',
+			'GROUP_ID',
+			'PARENT_ID',
+			'DEPENDS_ON',
 			'DURATION_PLAN',
 			'TIME_ESTIMATE',
 			'MARK',
-			'STAGE_ID',
-			'STATUS',
 
 			//user
 			'RESPONSIBLE_ID',
@@ -588,11 +626,60 @@ class Task implements \IBPWorkflowDocument
 			'ALLOW_TIME_TRACKING',
 			//'MATCH_WORK_TIME',
 			'TASK_CONTROL',
-			'ADD_IN_REPORT',
 		];
+
+		$crmField = self::getCrmSystemUserField();
+		if ($crmField)
+		{
+			$whiteFieldsList[] = $crmField['FIELD_NAME'];
+		}
+
 		$whiteFieldsList = array_merge($whiteFieldsList, array_keys(self::getFieldsCreatedByUser()));
 
+		return static::updateDocumentFields($documentId, $fields, $modifiedById, $whiteFieldsList);
+	}
+
+	public static function updateDocumentStatus($documentId, int $status, $modifiedById = null)
+	{
+		return static::updateDocumentFields($documentId, ['STATUS' => $status], $modifiedById, ['STATUS']);
+	}
+
+	private static function updateDocumentFields($documentId, array $fields, $modifiedById, array $whiteFieldsList)
+	{
 		$fields = array_intersect_key($fields, array_flip($whiteFieldsList));
+
+		if (array_key_exists('DEPENDS_ON', $fields))
+		{
+			$fields['DEPENDS_ON'] = array_values(
+				array_unique(array_map('intval', (array)$fields['DEPENDS_ON']))
+			);
+		}
+
+		$crmFieldName = CrmUserField::getMainSysUFCode();
+		$hasCrmItems = array_key_exists($crmFieldName, $fields);
+		$hasDependencies = array_key_exists('DEPENDS_ON', $fields);
+		$actorId = (int)$modifiedById;
+
+		if (($hasCrmItems || $hasDependencies) && $actorId <= 0)
+		{
+			throw new Main\SystemException(Loc::getMessage('TASKS_BP_DOCUMENT_UPDATE_ERROR'));
+		}
+
+		if (
+			$hasCrmItems
+			&& !static::canChangeCrmItems((array)$fields[$crmFieldName], $actorId, (int)$documentId)
+		)
+		{
+			throw new Main\SystemException(Loc::getMessage('TASKS_BP_DOCUMENT_UPDATE_ERROR'));
+		}
+
+		if (
+			$hasDependencies
+			&& !static::canChangeTaskDependencies($fields['DEPENDS_ON'], $actorId, (int)$documentId)
+		)
+		{
+			throw new Main\SystemException(Loc::getMessage('TASKS_BP_DOCUMENT_UPDATE_ERROR'));
+		}
 
 		if (isset($fields['RESPONSIBLE_ID']))
 		{
@@ -712,17 +799,86 @@ class Task implements \IBPWorkflowDocument
 			\Bitrix\Tasks\Util\User::setOccurAsId($modifiedById);
 		}
 
-		$task = new \CTasks();
-		$result =  $task->update($documentId, $fields, [
-			'CHECK_RIGHTS_ON_FILES' => 'N',
-			'AUTHOR_ID' => $modifiedById ?: 1,
-			'USER_ID' => $modifiedById ?: 1,
-			'ANALYTICS_DATA' => self::getAnalyticsDataForUpdate($fields),
-		]);
+		try
+		{
+			$task = static::createTaskUpdater();
+			$result = $task->Update($documentId, $fields, [
+				'CHECK_RIGHTS_ON_FILES' => 'N',
+				'AUTHOR_ID' => $modifiedById ?: 1,
+				'USER_ID' => $modifiedById ?: 1,
+				'ANALYTICS_DATA' => self::getAnalyticsDataForUpdate($fields),
+			]);
 
-		\Bitrix\Tasks\Util\User::setOccurAsId($prevOccurAsUserId);
+			if ($result === false)
+			{
+				throw new Main\SystemException(Loc::getMessage('TASKS_BP_DOCUMENT_UPDATE_ERROR'));
+			}
 
-		return $result;
+			return $result;
+		}
+		finally
+		{
+			\Bitrix\Tasks\Util\User::setOccurAsId($prevOccurAsUserId);
+		}
+	}
+
+	protected static function createTaskUpdater(): \CTasks
+	{
+		return new \CTasks();
+	}
+
+	protected static function canChangeCrmItems(array $crmItemIds, int $userId, int $taskId): bool
+	{
+		return Container::getInstance()
+			->getCrmAccessService()
+			->canChangeCrmItems($crmItemIds, $userId, $taskId)
+		;
+	}
+
+	/**
+	 * Mirrors CrmAccessService::canChangeCrmItems: only the symmetric difference between the
+	 * requested and the stored set is checked, so both linking and unlinking need access.
+	 *
+	 * @param list<int> $dependsOn
+	 */
+	protected static function canChangeTaskDependencies(array $dependsOn, int $userId, int $taskId): bool
+	{
+		$current = Container::getInstance()->getRelatedTaskRepository()->getRelatedTaskIds($taskId);
+
+		$changed = array_values(
+			array_unique(
+				array_merge(
+					array_diff($dependsOn, $current),
+					array_diff($current, $dependsOn),
+				)
+			)
+		);
+		if (empty($changed))
+		{
+			return true;
+		}
+
+		// Batch preload keeps the cost independent of the number of dependencies.
+		(new AccessCacheLoader())->preloadForReadAccess($userId, $changed);
+
+		$registry = TaskRegistry::getInstance();
+		foreach ($changed as $dependencyId)
+		{
+			if (
+				!$registry->isLoadedAndExists($dependencyId)
+				|| !TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_READ, $dependencyId)
+			)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static function getCrmSystemUserField(): ?array
+	{
+		return CrmUserField::getSysUFScheme()[CrmUserField::getMainSysUFCode()] ?? null;
 	}
 
 	public static function deleteDocument($documentId)
@@ -1001,7 +1157,7 @@ class Task implements \IBPWorkflowDocument
 				}
 			}
 		}
-		else
+		elseif (!isset($required['GROUP_ID']) || (($fields['GROUP_ID'] ?? null) <= 0))
 		{
 			$fields['GROUP_ID'] = null;
 		}

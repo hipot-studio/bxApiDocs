@@ -11,6 +11,7 @@ namespace Bitrix\Rest\APAuth;
 use Bitrix\Main\Authentication\ApplicationPasswordTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Rest\Internal\Service\PasswordPermission\PermissionListNormalizer;
 
 Loc::loadMessages(__FILE__);
 
@@ -66,7 +67,7 @@ class Application extends \Bitrix\Main\Authentication\Application
 
 		if($res->isSuccess())
 		{
-			$scopeList = array_unique($scopeList);
+			$scopeList = (new PermissionListNormalizer())->normalize($scopeList);
 			foreach($scopeList as $scope)
 			{
 				PermissionTable::add(array(

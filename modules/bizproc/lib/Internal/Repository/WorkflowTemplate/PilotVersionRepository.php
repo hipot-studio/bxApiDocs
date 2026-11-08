@@ -29,18 +29,7 @@ class PilotVersionRepository
 	 */
 	public function lockTemplateForUpdate(int $templateId): bool
 	{
-		if ($templateId <= 0)
-		{
-			return false;
-		}
-
-		$row = Application::getConnection()->query(
-			'SELECT ID FROM '. WorkflowTemplateTable::getTableName()
-			. ' WHERE ID = '. $templateId
-			. ' FOR UPDATE',
-		)->fetch();
-
-		return $row !== false;
+		return WorkflowTemplateTable::lockRow($templateId);
 	}
 
 	public function getByTemplateId(int $templateId): ?PilotVersion

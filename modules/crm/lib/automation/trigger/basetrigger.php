@@ -9,6 +9,7 @@ use Bitrix\Bizproc\Starter\Starter;
 use Bitrix\Crm\Automation\Factory;
 use Bitrix\Crm\Integration\BizProc\Starter\Mixins\Dto\TriggerBindingDocumentsDto;
 use Bitrix\Crm\Integration\BizProc\Starter\Mixins\TriggerBindingDocumentsTrait;
+use Bitrix\Crm\Integration\BizProc\TestRunEntity;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main;
 use Bitrix\Ui\Public\Enum\IconSet\Outline;
@@ -68,6 +69,8 @@ class BaseTrigger extends \Bitrix\Bizproc\Automation\Trigger\BaseTrigger
 
 	public static function execute(array $bindings, ?array $inputData = null, bool $useEntitySearch = true)
 	{
+		static::resetFacilitySelector();
+
 		$triggersSent = false;
 		$triggersApplied = false;
 
@@ -185,6 +188,11 @@ class BaseTrigger extends \Bitrix\Bizproc\Automation\Trigger\BaseTrigger
 	protected static function sendTrigger(array $document, ?array $inputData = null)
 	{
 		[$entityTypeId, $entityId] = $document;
+		if (TestRunEntity::isTestRun((int)$entityTypeId, (int)$entityId))
+		{
+			return false;
+		}
+
 		if (!Factory::isAutomationRunnable($entityTypeId))
 		{
 			return false;

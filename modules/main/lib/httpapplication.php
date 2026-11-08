@@ -3,7 +3,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2022 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 namespace Bitrix\Main;
 
@@ -236,9 +236,12 @@ class HttpApplication extends Application
 
 	private function processRunError(\Throwable $e, ErrorCollection $errorCollection): void
 	{
-		$errorCollection[] = new Error($e->getMessage(), $e->getCode());
-
 		$debugMode = $this->isDebugMode();
+		$errorCollection[] = new Error(
+			$debugMode ? $e->getMessage() : Controller::INTERNAL_ERROR_MESSAGE,
+			$e->getCode()
+		);
+
 		if ($debugMode)
 		{
 			$errorCollection[] = new Error(Diag\ExceptionHandlerFormatter::format($e));

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\Disk\EventHandler\OnAfterDeleteAttachedObject\Action;
 
+use Bitrix\Disk\Uf\FileUserType;
 use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
+use Bitrix\Tasks\V2\Internal\Integration\Disk\Service\FileBbCodeService;
 use CUserTypeManager;
 
 trait DetachFileFromUserFieldTrait
@@ -34,6 +36,31 @@ trait DetachFileFromUserFieldTrait
 		];
 
 		$ufManager->Update($entityCode, $entityId, $fields, self::SYSTEM_USER_ID);
+	}
+
+	private function stripDetachedFileFromDescription(
+		FileBbCodeService $fileBbCodeService,
+		string $description,
+		int $attachId,
+		int $objectId,
+	): ?string
+	{
+		if (!$fileBbCodeService->containsBbCode($description))
+		{
+			return null;
+		}
+
+		$cleanedDescription = $fileBbCodeService->stripDetachedBbCodes(
+			$description,
+			[$attachId, FileUserType::NEW_FILE_PREFIX . $objectId],
+		);
+
+		if ($cleanedDescription === $description)
+		{
+			return null;
+		}
+
+		return preg_replace('/ {2,}/', ' ', $cleanedDescription);
 	}
 
 	private function getUfManager(): CUserTypeManager

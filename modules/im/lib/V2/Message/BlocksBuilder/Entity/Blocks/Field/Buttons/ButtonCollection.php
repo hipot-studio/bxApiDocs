@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Buttons;
 
 use Bitrix\Im\V2\Registry;
+use Bitrix\Main\Security\Random;
 
 /**
  * @implements \IteratorAggregate<int,Button>
@@ -15,12 +16,22 @@ class ButtonCollection extends Registry implements \JsonSerializable
 	public static function create(array $buttonsData): self
 	{
 		$collection = new self();
+		$seenIds = [];
 
 		foreach ($buttonsData as $linePosition => $buttonLine)
 		{
 			foreach ($buttonLine as $buttonData)
 			{
 				$buttonData['linePosition'] = $linePosition;
+
+				$id = (string)($buttonData['id'] ?? '');
+				if ($id === '' || isset($seenIds[$id]))
+				{
+					$id = self::generateUniqueId($seenIds);
+				}
+				$buttonData['id'] = $id;
+				$seenIds[$id] = true;
+
 				$button = Button::create($buttonData);
 				if ($button !== null)
 				{
@@ -30,6 +41,17 @@ class ButtonCollection extends Registry implements \JsonSerializable
 		}
 
 		return $collection;
+	}
+
+	private static function generateUniqueId(array $seenIds): string
+	{
+		do
+		{
+			$id = Random::getString(13, true);
+		}
+		while (isset($seenIds[$id]));
+
+		return $id;
 	}
 
 	public function jsonSerialize(): ?array

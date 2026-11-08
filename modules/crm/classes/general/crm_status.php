@@ -7,6 +7,9 @@ IncludeModuleLangFile(__FILE__);
 use Bitrix\Crm\Attribute\FieldAttributeManager;
 use Bitrix\Crm\Category\DealCategory;
 use Bitrix\Crm\EntityRequisite;
+use Bitrix\Crm\PhaseSemantics;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
@@ -17,9 +20,26 @@ class CCrmStatus
 
 	public const PREFIX_USER_CREATED = 'UC';
 	public const DEFAULT_SORT = 10;
+	public const DESCRIPTION_MAX_LENGTH = 65535;
+	public const DESCRIPTION_INVALID_TYPE_ERROR = 'The field DESCRIPTION must be a string.';
 
 	protected $entityId = '';
 	private static $FIELD_INFOS;
+
+	/**
+	 * The entity type and the funnel of every dictionary of the registry, memoized for the process.
+	 *
+	 * @var array<string, array{entityTypeId: int, categoryId: int|null}|null>|null
+	 * @see resolveStageGroupScope()
+	 */
+	private static $stageGroups;
+
+	/**
+	 * Whether a dictionary the registry did not hold has already rebuilt it in this process.
+	 *
+	 * @see resolveStageGroupScope()
+	 */
+	private static $stageGroupsRebuilt = false;
 
 	private $LAST_ERROR = '';
 
@@ -62,6 +82,9 @@ class CCrmStatus
 				'NAME' => [
 					'TYPE' => 'string',
 					'ATTRIBUTES' => [CCrmFieldInfoAttr::Required]
+				],
+				'DESCRIPTION' => [
+					'TYPE' => 'string',
 				],
 				'NAME_INIT' => [
 					'TYPE' => 'string',
@@ -441,12 +464,14 @@ class CCrmStatus
 		}
 
 		$name = trim($arFields['NAME'] ?? '');
+		$description = (string)($arFields['DESCRIPTION'] ?? '');
 		$semantics = empty($arFields['SEMANTICS']) ? \Bitrix\Crm\PhaseSemantics::PROCESS : $arFields['SEMANTICS'];
 
 		$result = StatusTable::add([
 			'ENTITY_ID' => $this->entityId,
 			'STATUS_ID' => $this->addPrefixToStatusId($statusId),
 			'NAME' => $name,
+			'DESCRIPTION' => $description,
 			'NAME_INIT' => $arFields['SYSTEM'] === 'Y' ? $name : '',
 			'SORT' => $arFields['SORT'],
 			'SYSTEM' => $arFields['SYSTEM'] === 'Y'? 'Y': 'N',
@@ -484,18 +509,21 @@ class CCrmStatus
 			return false;
 		}
 
-		$arFields['SORT'] = (int)($arFields['SORT'] ?? 0);
-		if ($arFields['SORT'] <= 0)
+		$arFields_u = [];
+		if (array_key_exists('SORT', $arFields))
 		{
-			$arFields['SORT'] = self::DEFAULT_SORT;
+			$arFields['SORT'] = (int)$arFields['SORT'];
+			if ($arFields['SORT'] <= 0)
+			{
+				$arFields['SORT'] = self::DEFAULT_SORT;
+			}
+
+			$arFields_u['SORT'] = $arFields['SORT'];
 		}
 
-		$arFields_u['SORT'] = $arFields['SORT'];
-
-		$name = trim($arFields['NAME'] ?? '');
-		if (!empty($name))
+		if (array_key_exists('NAME', $arFields))
 		{
-			$arFields_u['NAME'] = $name;
+			$arFields_u['NAME'] = trim($arFields['NAME'] ?? '');
 		}
 
 		if (isset($arFields['SYSTEM']))
@@ -534,10 +562,17 @@ class CCrmStatus
 			$arFields_u['SEMANTICS'] = $arFields['SEMANTICS'];
 		}
 
+		if (array_key_exists('DESCRIPTION', $arFields))
+		{
+			$arFields_u['DESCRIPTION'] = (string)($arFields['DESCRIPTION'] ?? '');
+		}
+
 		$result = StatusTable::update($ID, $arFields_u);
 		if (!$result->isSuccess())
 		{
 			$this->LAST_ERROR = $result->getErrorMessages()[0];
+
+			return false;
 		}
 
 		return $ID;
@@ -978,6 +1013,31 @@ class CCrmStatus
 	private function CheckFields(array $arFields, bool $bCheckStatusId = true): bool
 	{
 		$aMsg = [];
+		if (
+			array_key_exists('DESCRIPTION', $arFields)
+			&& $arFields['DESCRIPTION'] !== null
+			&& !is_string($arFields['DESCRIPTION'])
+		)
+		{
+			$aMsg[] = [
+				'id' => 'DESCRIPTION',
+				'text' => self::DESCRIPTION_INVALID_TYPE_ERROR,
+			];
+		}
+		elseif (
+			array_key_exists('DESCRIPTION', $arFields)
+			&& $arFields['DESCRIPTION'] !== null
+			&& strlen($arFields['DESCRIPTION']) > self::DESCRIPTION_MAX_LENGTH
+		)
+		{
+			$aMsg[] = [
+				'id' => 'DESCRIPTION',
+				'text' => GetMessage(
+					'CRM_STATUS_ERR_DESCRIPTION_MAX_LENGTH_EXCEEDED',
+					['#MAX_LENGTH#' => (string)self::DESCRIPTION_MAX_LENGTH],
+				),
+			];
+		}
 
 		if (
 			$bCheckStatusId
@@ -1285,7 +1345,7 @@ class CCrmStatus
 	public static function GetDefaultDealStages($namespace = ''): array
 	{
 		$prefix = empty($namespace) ? '' :  "{$namespace}:";
-		$colorGenerator = new \Bitrix\Crm\Stage\DefaultProcessColorGenerator();
+		$colorGenerator = new \Bitrix\Crm\Stage\DefaultColorGenerator();
 
 		return [
 			[
@@ -1328,7 +1388,7 @@ class CCrmStatus
 				'STATUS_ID' => "{$prefix}WON",
 				'SORT' => 60,
 				'SYSTEM' => 'Y',
-				'COLOR' => '#7BD500',
+				'COLOR' => $colorGenerator->generate(PhaseSemantics::SUCCESS),
 				'SEMANTICS' => \Bitrix\Crm\PhaseSemantics::SUCCESS,
 			],
 			[
@@ -1336,7 +1396,7 @@ class CCrmStatus
 				'STATUS_ID' => "{$prefix}LOSE",
 				'SORT' => 70,
 				'SYSTEM' => 'Y',
-				'COLOR' => '#FF5752',
+				'COLOR' => $colorGenerator->generate(PhaseSemantics::FAILURE),
 				'SEMANTICS' => \Bitrix\Crm\PhaseSemantics::FAILURE,
 			],
 			[
@@ -1344,7 +1404,7 @@ class CCrmStatus
 				'STATUS_ID' => "{$prefix}APOLOGY",
 				'SORT' => 80,
 				'SYSTEM' => 'N',
-				'COLOR' => '#FF5752',
+				'COLOR' => $colorGenerator->generate(PhaseSemantics::FAILURE),
 				'SEMANTICS' => \Bitrix\Crm\PhaseSemantics::FAILURE,
 			]
 		];
@@ -1766,19 +1826,126 @@ class CCrmStatus
 	}
 	//endregion
 	//region user permissions
-	public static function CheckCreatePermission(): bool
+	/**
+	 * $entityId is the dictionary the status belongs to. Only the stage groups of a funnel follow the
+	 * granular stage right; every other dictionary of this class - sources, industries, honorifics -
+	 * keeps the CRM administrator check, and so does a caller that names no dictionary at all.
+	 */
+	public static function CheckCreatePermission(?string $entityId = null): bool
 	{
-		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin();
+		return static::checkStagesPermission($entityId);
 	}
 
-	public static function CheckUpdatePermission($ID): bool
+	public static function CheckUpdatePermission($ID, ?string $entityId = null): bool
 	{
-		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin();
+		return static::checkStagesPermission($entityId);
 	}
 
-	public static function CheckDeletePermission($ID): bool
+	public static function CheckDeletePermission($ID, ?string $entityId = null): bool
 	{
-		return \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions()->isCrmAdmin();
+		return static::checkStagesPermission($entityId);
+	}
+
+	protected static function checkStagesPermission(?string $entityId): bool
+	{
+		$userPermissions = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions();
+		$scope = static::resolveStageGroupScope($entityId);
+		if($scope === null)
+		{
+			return $userPermissions->isCrmAdmin();
+		}
+
+		return $userPermissions->configuration()->canManageStages(ConfigurationCallSite::StatusDictionary, $scope);
+	}
+
+	/**
+	 * The contour of the funnel whose stages $entityId holds, and null when the dictionary is not a
+	 * stage group at all. The registry of the dictionaries tells the two apart: a stage group is an
+	 * entry naming the entity type its stages belong to.
+	 *
+	 * The registry is built once per process rather than once per check: GetEntityTypes() raises the
+	 * invoice settings, the smart invoice and smart document factories, the deal funnels and the whole
+	 * map of the dynamic types, and a REST batch asks this fifty times over. A dictionary name the memo
+	 * does not hold rebuilds it once per process and is remembered as absent after that, so names that
+	 * are no stage group - which the client is free to invent - cost one rebuild between them all.
+	 *
+	 * A name is remembered no longer than the set of the dictionaries stands: creating or deleting a
+	 * funnel or a dynamic type forgets the registry through {@see invalidateStageGroups()}.
+	 */
+	protected static function resolveStageGroupScope(?string $entityId): ?ConfigurationScope
+	{
+		if($entityId === null || $entityId === '')
+		{
+			return null;
+		}
+
+		if(self::$stageGroups === null)
+		{
+			self::$stageGroups = static::loadStageGroups();
+		}
+
+		if(!array_key_exists($entityId, self::$stageGroups))
+		{
+			if(!self::$stageGroupsRebuilt)
+			{
+				self::$stageGroupsRebuilt = true;
+				$knownAbsent = array_filter(self::$stageGroups, static function($stageGroup) {
+					return $stageGroup === null;
+				});
+				// The fresh registry wins wherever the two disagree, so a name that has become a stage
+				// group since stops being remembered as absent.
+				self::$stageGroups = static::loadStageGroups() + $knownAbsent;
+			}
+
+			self::$stageGroups += [$entityId => null];
+		}
+
+		$stageGroup = self::$stageGroups[$entityId];
+		if($stageGroup === null)
+		{
+			return null;
+		}
+
+		return ConfigurationScope::ofEntityType($stageGroup['entityTypeId'], $stageGroup['categoryId']);
+	}
+
+	/**
+	 * Forgets the registry, so that the next question rebuilds it.
+	 *
+	 * The set of the dictionaries changes with the funnels and the dynamic types of the portal, and
+	 * without this an answer given once holds for the rest of the process: a deleted funnel keeps
+	 * granting its stages, and a funnel created a moment ago is refused them.
+	 */
+	public static function invalidateStageGroups(): void
+	{
+		self::$stageGroups = null;
+		self::$stageGroupsRebuilt = false;
+	}
+
+	/**
+	 * The entity type and the funnel of every dictionary of the registry, null for the ones that are no
+	 * stage group. Nothing but the entries themselves is read here - the contour of the one dictionary
+	 * being asked about is resolved by the caller, exactly as often as before.
+	 *
+	 * @return array<string, array{entityTypeId: int, categoryId: int|null}|null>
+	 */
+	protected static function loadStageGroups(): array
+	{
+		$stageGroups = [];
+		foreach(static::GetEntityTypes() as $dictionaryId => $entityType)
+		{
+			$entityTypeId = (int)($entityType['ENTITY_TYPE_ID'] ?? 0);
+
+			$stageGroups[$dictionaryId] = $entityTypeId > 0
+				? [
+					'entityTypeId' => $entityTypeId,
+					'categoryId' => isset($entityType['CATEGORY_ID']) ? (int)$entityType['CATEGORY_ID'] : null,
+				]
+				: null
+			;
+		}
+
+		return $stageGroups;
 	}
 
 	public static function CheckReadPermission($ID = 0): bool

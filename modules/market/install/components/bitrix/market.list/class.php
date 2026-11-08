@@ -7,7 +7,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\ObjectException;
 use Bitrix\Main\Type\Date;
 use Bitrix\Market\AppFavoritesTable;
-use Bitrix\Market\Application\VibePlusApplicationLimit;
+use Bitrix\Market\Application\ApplicationLimit;
 use Bitrix\Market\History;
 use Bitrix\Market\Link;
 use Bitrix\Market\ListTemplates\BaseTemplate;
@@ -46,16 +46,20 @@ class MarketList extends CBitrixComponent implements Controllerable, Loadable
 		$this->arParams['COMPONENT_NAME'] = 'bitrix:market.list';
 
 		$this->arResult['APPS'] = [];
-		$vibePlusApplicationLimit = (new VibePlusApplicationLimit())->getProjection();
+		$applicationLimit = (new ApplicationLimit())->getProjection();
 
 		$template = $this->getTemplateClass($this->arParams);
+		if ($template instanceof Installed) {
+			$template->enableToolbarInfo();
+		}
+
 		if ($template instanceof BaseTemplate) {
 			$template->setResult();
 			$this->arResult = $template->getInfo();
 			$this->prepareApps($this->arParams);
 		}
 
-		$this->arResult['VIBE_PLUS_APPLICATION_LIMIT'] = $vibePlusApplicationLimit;
+		$this->arResult['VIBE_PLUS_APPLICATION_LIMIT'] = $applicationLimit;
 	}
 
 	public function getAjaxData($params): array

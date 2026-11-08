@@ -418,6 +418,7 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 
 		// fetching tasks by ids
 		$builtQuery = $this->buildListQuery(
+			pagination: new Pagination(limit: 0),
 			filter: new Filter(
 				filter: (new ConditionTree())->whereIn('id', $taskIds),
 				skipAccessCheck: true,
@@ -487,6 +488,40 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 		$userIds = array_unique($taskMembers->map(fn (Entity\TaskMember $taskMember) => $taskMember->userId));
 		$taskUsers = $this->userRepository->getByIds($userIds);
 
+		$taskMembersByTaskId = [];
+		foreach ($taskMembers as $taskMember)
+		{
+			if ($taskMember->taskId === null)
+			{
+				continue;
+			}
+
+			$taskMembersByTaskId[$taskMember->taskId][] = $taskMember;
+		}
+
+		$tagsByTaskId = [];
+		foreach ($tagCollection as $tag)
+		{
+			$tagTaskId = $tag->task?->id;
+			if ($tagTaskId === null)
+			{
+				continue;
+			}
+
+			$tagsByTaskId[$tagTaskId][] = $tag;
+		}
+
+		$linksByTaskId = [];
+		foreach ($ganttLinksCollection as $link)
+		{
+			if ($link->taskId === null)
+			{
+				continue;
+			}
+
+			$linksByTaskId[$link->taskId][] = $link;
+		}
+
 		$taskCollection = new Entity\TaskCollection();
 		foreach ($tasks as $taskData)
 		{
@@ -494,13 +529,13 @@ class TaskReadRepository implements TaskReadRepositoryInterface
 
 			$task = $this->taskMapper->mapFromArray(
 				taskData: $taskData,
-				taskMembers: $taskMembers->filter(fn (Entity\TaskMember $item) => $item->taskId === $taskId),
+				taskMembers: new Entity\TaskMemberCollection(...($taskMembersByTaskId[$taskId] ?? [])),
 				members: $taskUsers,
 				crmItems: $crmItemCollection->findAllByIds($taskData['UF_CRM_TASK'] ?? []),
-				tags: $tagCollection->filter(fn (Entity\Tag $tag) => $tag->task?->id === $taskId),
+				tags: new TagCollection(...($tagsByTaskId[$taskId] ?? [])),
 				groups: $groupCollection,
 				flows: $flowCollection,
-				links: $ganttLinksCollection->filter(fn (Entity\Task\GanttLink $link) => $link->taskId === $taskId),
+				links: new Entity\Task\GanttLinkCollection(...($linksByTaskId[$taskId] ?? [])),
 			);
 
 			$taskCollection->add($task);

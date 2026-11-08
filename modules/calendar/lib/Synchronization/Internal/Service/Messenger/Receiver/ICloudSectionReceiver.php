@@ -19,7 +19,7 @@ class ICloudSectionReceiver extends AbstractSectionReceiver
 	{
 		if ($message instanceof SectionCreatedMessage || $message instanceof SectionUpdatedMessage)
 		{
-			return new SendSectionCommand($section);
+			return new SendSectionCommand($section, isSectionCreated: $message instanceof SectionCreatedMessage);
 		}
 
 		return null;

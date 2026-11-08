@@ -33,11 +33,13 @@ class SearchTasksDto
 
 	public static function fromArray(array $props): self
 	{
+		$userId = static::mapInteger($props, 'userId');
+
 		return new self(
 			title: static::mapString($props, 'title'),
 			description: static::mapString($props, 'description'),
-			deadlineFrom: static::mapFormattedDateTime($props, 'deadlineFrom'),
-			deadlineTo: static::mapFormattedDateTime($props, 'deadlineTo'),
+			deadlineFrom: static::mapFormattedDateTime($props, 'deadlineFrom', $userId),
+			deadlineTo: static::mapFormattedDateTime($props, 'deadlineTo', $userId),
 			groupId: static::mapInteger($props, 'groupId'),
 			responsibleId: static::mapInteger($props, 'responsibleId'),
 			creatorId: static::mapInteger($props, 'creatorId'),

@@ -2,10 +2,10 @@
 
 namespace Bitrix\Mobile\Internal\Onboarding\Region;
 
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
-use Bitrix\Mobile\Config\Feature;
-use Bitrix\Mobile\Feature\OnboardingPushFeature;
+use Bitrix\Mobile\Public\Feature\OnboardingPushFlag;
 use Bitrix\Mobile\Internal\Onboarding\Checkers\PortalAgeChecker;
 use Bitrix\Mobile\Internal\Onboarding\Conditions\PushSendConditionChain;
 use Bitrix\Mobile\Internal\Onboarding\PushType;
@@ -63,7 +63,7 @@ class RegionConfig
 
 	public function isSupported(): bool
 	{
-		return Feature::isEnabled(OnboardingPushFeature::class) && $this->isEnabled;
+		return Feature::isEnabled(OnboardingPushFlag::class) && $this->isEnabled;
 	}
 
 	public function onDay(int $day, Closure $callback): self

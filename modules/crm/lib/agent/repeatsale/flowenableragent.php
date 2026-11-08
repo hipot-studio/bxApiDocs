@@ -36,6 +36,7 @@ class FlowEnablerAgent extends AgentBase
 				Dictionary::TOOL_CRM,
 				Dictionary::CATEGORY_SYSTEM_INFORM,
 			);
+			$event->setP4('enable-mode-auto-after-close');
 			$event->send();
 
 			FlowController::getInstance()->deleteExpectedOptions();

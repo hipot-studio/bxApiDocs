@@ -4,30 +4,31 @@ namespace Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Tool;
 
 use Bitrix\AiAssistant\Facade\TracedLogger;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AiAvailabilityService;
-use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\DocumentAccessService;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\DocumentFieldService;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\LastWorkflowService;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\OperationAuthorizationGuard;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\UserAdminResolver;
 use Bitrix\BizprocDesigner\Internal\Service\Container;
 use Bitrix\Main\Web\Json;
 
 class SearchDocumentFieldsTool extends BizprocDesignerTool
 {
-	private readonly DocumentAccessService $documentAccessService;
 	private readonly DocumentFieldService $documentFieldService;
 	private readonly LastWorkflowService $lastWorkflowService;
+	private readonly OperationAuthorizationGuard $operationAuthorizationGuard;
 
 	public function __construct(
 		TracedLogger $tracedLogger,
 		?AiAvailabilityService $availabilityService = null,
-		?DocumentAccessService $documentAccessService = null,
 		?DocumentFieldService $documentFieldService = null,
 		?LastWorkflowService $lastWorkflowService = null,
+		?OperationAuthorizationGuard $operationAuthorizationGuard = null,
 	)
 	{
 		parent::__construct($tracedLogger, $availabilityService);
-		$this->documentAccessService = $documentAccessService ?? new DocumentAccessService();
 		$this->documentFieldService = $documentFieldService ?? new DocumentFieldService();
 		$this->lastWorkflowService = $lastWorkflowService ?? Container::getAiAssistantLastWorkflowService();
+		$this->operationAuthorizationGuard = $operationAuthorizationGuard ?? new OperationAuthorizationGuard();
 	}
 
 	public function getName(): string
@@ -64,12 +65,13 @@ class SearchDocumentFieldsTool extends BizprocDesignerTool
 			return 'Error: No user saved document type';
 		}
 
-		if (!$this->documentAccessService->canManageDocument(
+		$verdict = $this->operationAuthorizationGuard->authorize(
 			$userId,
 			$documentType,
 			(int)($identifier->templateId ?? 0),
-			(new \CBPWorkflowTemplateUser($userId))->isAdmin(),
-		))
+			UserAdminResolver::isAdmin($userId),
+		);
+		if (!$verdict->allowed)
 		{
 			return 'Error: User access denied for this document type';
 		}

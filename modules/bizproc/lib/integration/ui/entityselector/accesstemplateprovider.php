@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Bitrix\Bizproc\Integration\UI\EntitySelector;
 
 use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
+use Bitrix\Bizproc\Internal\Access\OwnTemplatesOption;
+use Bitrix\Bizproc\Internal\Access\Permission\PermissionDictionary;
 use Bitrix\Bizproc\Internal\Service\DelegationScopeValidator;
 use Bitrix\Bizproc\Public\Provider\PermissionMatrixProvider;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\Collection;
@@ -50,6 +53,16 @@ class AccessTemplateProvider extends BaseProvider
 	/** The only item container rendered while the dialog is in dropdown mode. */
 	private const TAB_ID = 'recents';
 
+	private const OWN_TEMPLATES_PHRASE = 'BIZPROC_ACCESS_RIGHTS_OWN_TEMPLATES';
+
+	/**
+	 * Lang source of the sentinel caption, relative to the lib directory of the module. The phrase is shared with
+	 * the page variables so the item never gets two different captions in one interface, and it therefore lives in
+	 * the lang file of the permissions page provider. Loc resolves a phrase by the file that asks for it, so this
+	 * one is loaded by hand: this file has no lang file of its own and must not grow a second copy of the phrase.
+	 */
+	private const OWN_TEMPLATES_PHRASE_SOURCE = '/Internal/Integration/UI/AccessRights/V2/AccessRightsProvider.php';
+
 	private ?bool $templateAdmin = null;
 
 	public function __construct(
@@ -77,6 +90,14 @@ class AccessTemplateProvider extends BaseProvider
 		if (!$this->isAvailable())
 		{
 			return;
+		}
+
+		// On top of the page, not in place of one of its templates: ITEMS_LIMIT stays the threshold of the
+		// template page. The sentinel comes with the items and not from makeScopeQuery(), which is a query over
+		// templates alone.
+		if (OwnTemplatesOption::isEnabled())
+		{
+			$dialog->addItem($this->makeOwnTemplatesItem());
 		}
 
 		// addItems(), not addRecentItem(): the latter fills the recent collection of the dialog, which is the
@@ -115,13 +136,20 @@ class AccessTemplateProvider extends BaseProvider
 			return [];
 		}
 
+		// Before normalizeArrayValuesByInt(): it keeps positive values only and would drop the sentinel without a
+		// word, leaving a granted right impossible to revoke - the dialog would never show the item picked.
+		$items = $this->resolveOwnTemplatesItems($ids);
+
 		Collection::normalizeArrayValuesByInt($ids, false);
 		if (!$ids)
 		{
-			return [];
+			return $items;
 		}
 
-		return $this->makeItems($this->fetchTemplates(array_slice($ids, 0, self::MAX_RESOLVE_IDS)));
+		return [
+			...$items,
+			...$this->makeItems($this->fetchTemplates(array_slice($ids, 0, self::MAX_RESOLVE_IDS))),
+		];
 	}
 
 	/**
@@ -152,6 +180,18 @@ class AccessTemplateProvider extends BaseProvider
 	public static function makeTitlePostfix(int $id): string
 	{
 		return sprintf(' [%s]', $id);
+	}
+
+	/**
+	 * Caption of the "own templates" sentinel, shared with the page variables so the item never gets two
+	 * different captions in one interface. The phrase lives in the lang file of the permissions page provider
+	 * and Loc resolves a phrase by the file that asks for it, so that file is loaded by hand here.
+	 */
+	public static function makeOwnTemplatesTitle(): string
+	{
+		Loc::loadLanguageFile(dirname(__DIR__, 3) . self::OWN_TEMPLATES_PHRASE_SOURCE);
+
+		return (string)Loc::getMessage(self::OWN_TEMPLATES_PHRASE);
 	}
 
 	/**
@@ -312,5 +352,45 @@ class AccessTemplateProvider extends BaseProvider
 			'tabs' => [self::TAB_ID],
 			'saveable' => false,
 		]);
+	}
+
+	/**
+	 * The sentinel of the "own templates" scope, shaped after the "all" item of the rights matrix. Not built by
+	 * makeItem(): the id is a scope value and not a template id, so it carries no id postfix and stays out of
+	 * search results.
+	 */
+	private function makeOwnTemplatesItem(): Item
+	{
+		return new Item([
+			'id' => PermissionDictionary::VALUE_VARIATION_OWN,
+			'entityId' => static::ENTITY_ID,
+			'title' => self::makeOwnTemplatesTitle(),
+			'tabs' => [self::TAB_ID],
+			'saveable' => false,
+			'searchable' => false,
+		]);
+	}
+
+	/**
+	 * The sentinel resolved out of a preselected value list. It is not a template, so it never reaches the
+	 * template lookup and is never replaced by the placeholder of a missing template.
+	 *
+	 * @param array<int, int|string> $ids
+	 * @return Item[]
+	 */
+	private function resolveOwnTemplatesItems(array $ids): array
+	{
+		if (!OwnTemplatesOption::isEnabled())
+		{
+			return [];
+		}
+
+		$granted = in_array(
+			PermissionDictionary::VALUE_VARIATION_OWN,
+			array_map(static fn ($id): int => (int)$id, $ids),
+			true,
+		);
+
+		return $granted ? [$this->makeOwnTemplatesItem()] : [];
 	}
 }

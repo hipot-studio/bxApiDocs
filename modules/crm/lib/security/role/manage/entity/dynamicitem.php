@@ -16,13 +16,24 @@ class DynamicItem implements PermissionEntity, FilterableByTypes, FilterableByCa
 	private function permissions(
 		bool $isAutomationEnabled,
 		bool $isStagesEnabled,
+		bool $isObserversEnabled,
+		bool $isObserversWriteByStages,
 		array $stages,
 		?string $inheritDescription,
 	): array
 	{
 		$permissions = $isAutomationEnabled
-			? PermissionAttrPresets::crmEntityPresetAutomation(true, $inheritDescription)
-			: PermissionAttrPresets::crmEntityPreset($inheritDescription)
+			? PermissionAttrPresets::crmEntityPresetAutomation(
+				true,
+				$inheritDescription,
+				withObserversWrite: $isObserversEnabled,
+				withObserversWriteByStages: $isObserversWriteByStages,
+			)
+			: PermissionAttrPresets::crmEntityPreset(
+				$inheritDescription,
+				$isObserversEnabled,
+				$isObserversWriteByStages,
+			)
 		;
 
 		$permissions = array_merge(
@@ -56,7 +67,10 @@ class DynamicItem implements PermissionEntity, FilterableByTypes, FilterableByCa
 			$isAutomationEnabled = $typesMap->isAutomationEnabled($entityTypeId);
 			$isStagesEnabled = $typesMap->isStagesEnabled($entityTypeId);
 			$isCategoriesEnabled = $typesMap->isCategoriesEnabled($entityTypeId);
+			$isObserversEnabled = (bool)$type->getIsObserversEnabled();
 			$isStagesType = $type->getIsStagesEnabled();
+			// the variant control belongs only to a block that really gets the stage sub-rows below
+			$isObserversWriteByStages = $isObserversEnabled && $isStagesType;
 			$stagesFieldName = $typesMap->getStagesFieldName($entityTypeId);
 
 			$categories = $this->filterItemCategories($typesMap->getCategories($entityTypeId));
@@ -91,6 +105,8 @@ class DynamicItem implements PermissionEntity, FilterableByTypes, FilterableByCa
 				$perms = $this->permissions(
 					$isAutomationEnabled,
 					$isStagesEnabled,
+					$isObserversEnabled,
+					$isObserversWriteByStages,
 					$stages,
 					$inheritDescription,
 				);

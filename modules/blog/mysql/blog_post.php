@@ -265,6 +265,20 @@ class CBlogPost extends CAllBlogPost
 		}
 
 		$arOldPost = CBlogPost::GetByID($ID);
+		$importantFieldChangeRequested = (
+			array_key_exists("UF_BLOG_POST_IMPRTNT", $arFields)
+			|| array_key_exists("UF_IMPRTANT_DATE_END", $arFields)
+		);
+		$datePublishChangeRequested = (
+			array_key_exists("DATE_PUBLISH", $arFields)
+			|| array_key_exists("DATE_PUBLISH", $arFields1)
+		);
+		$checkImportantCacheState = defined("BX_COMP_MANAGED_CACHE");
+		$importantUserFieldsBefore = [];
+		if ($checkImportantCacheState && $importantFieldChangeRequested)
+		{
+			$importantUserFieldsBefore = $USER_FIELD_MANAGER->GetUserFields("BLOG_POST", $ID);
+		}
 
 		if(is_array($arFields["ATTACH_IMG"]))
 		{
@@ -314,10 +328,17 @@ class CBlogPost extends CAllBlogPost
 		if ($ID)
 		{
 			$arNewPost = CBlogPost::GetByID($ID);
-			if($arNewPost["PUBLISH_STATUS"] != $arOldPost["PUBLISH_STATUS"]  || $arNewPost["BLOG_ID"] != $arOldPost["BLOG_ID"])
+			$blogIdChanged = ($arOldPost["BLOG_ID"] != $arNewPost["BLOG_ID"]);
+			$publishStatusChanged = ($arOldPost["PUBLISH_STATUS"] != $arNewPost["PUBLISH_STATUS"]);
+			$datePublishChanged = (
+				$datePublishChangeRequested
+				&& $arOldPost["DATE_PUBLISH"] != $arNewPost["DATE_PUBLISH"]
+			);
+			$rightsChanged = false;
+			if ($publishStatusChanged || $blogIdChanged)
 				CBlog::SetStat($arNewPost["BLOG_ID"]);
 
-			if ($arNewPost["BLOG_ID"] != $arOldPost["BLOG_ID"])
+			if ($blogIdChanged)
 				CBlog::SetStat($arOldPost["BLOG_ID"]);
 
 			if (is_set($arFields, "PERMS_POST"))
@@ -329,6 +350,66 @@ class CBlogPost extends CAllBlogPost
 			{
 				$arFields["SC_PERM_OLD"] = CBlogPost::GetSocNetPermsCode($ID);
 				$arFields["SC_PERM"] = CBlogPost::UpdateSocNetPerms($ID, $arFields["SOCNET_RIGHTS"], $arNewPost);
+				$oldSocNetPerms = (array)$arFields["SC_PERM_OLD"];
+				$newSocNetPerms = (array)$arFields["SC_PERM"];
+				sort($oldSocNetPerms, SORT_STRING);
+				sort($newSocNetPerms, SORT_STRING);
+				$rightsChanged = ($oldSocNetPerms != $newSocNetPerms);
+			}
+			$checkActualImportantCacheState = (
+				$checkImportantCacheState
+				&& (
+					$importantFieldChangeRequested
+					|| $publishStatusChanged
+					|| $datePublishChanged
+					|| $rightsChanged
+					|| $blogIdChanged
+				)
+			);
+			$importantUserFieldsAfter = [];
+			if ($checkActualImportantCacheState)
+			{
+				$importantUserFieldsAfter = $USER_FIELD_MANAGER->GetUserFields("BLOG_POST", $ID);
+			}
+			$wasImportant = (
+				(int)(
+					($importantFieldChangeRequested
+						? $importantUserFieldsBefore
+						: $importantUserFieldsAfter)["UF_BLOG_POST_IMPRTNT"]["VALUE"] ?? 0
+				) > 0
+			);
+			$isImportant = (
+				(int)($importantUserFieldsAfter["UF_BLOG_POST_IMPRTNT"]["VALUE"] ?? 0) > 0
+			);
+			$importantStateChanged = (
+				$importantFieldChangeRequested
+				&& (
+					(
+						array_key_exists("UF_BLOG_POST_IMPRTNT", $arFields)
+						&& (int)($importantUserFieldsBefore["UF_BLOG_POST_IMPRTNT"]["VALUE"] ?? 0)
+							!== (int)($importantUserFieldsAfter["UF_BLOG_POST_IMPRTNT"]["VALUE"] ?? 0)
+					)
+					|| (
+						array_key_exists("UF_IMPRTANT_DATE_END", $arFields)
+						&& serialize($importantUserFieldsBefore["UF_IMPRTANT_DATE_END"]["VALUE"] ?? null)
+							!== serialize($importantUserFieldsAfter["UF_IMPRTANT_DATE_END"]["VALUE"] ?? null)
+					)
+				)
+			);
+
+			if (
+				$checkActualImportantCacheState
+				&& ($wasImportant || $isImportant)
+				&& (
+					$importantStateChanged
+					|| $publishStatusChanged
+					|| $datePublishChanged
+					|| $rightsChanged
+					|| $blogIdChanged
+				)
+			)
+			{
+				$CACHE_MANAGER->ClearByTag("blogpost_important_all");
 			}
 
 			foreach(GetModuleEvents("blog", "OnPostUpdate", true) as $arEvent)
@@ -917,10 +998,10 @@ class CBlogPost extends CAllBlogPost
 							"SELECT SRX.ID ".
 							"FROM b_blog_socnet_rights SRX ".
 							"LEFT JOIN b_user_access UA ON (UA.ACCESS_CODE = SRX.ENTITY AND UA.USER_ID = ".intval($arFilter["FOR_USER"]).") ".
-							"WHERE P.ID = SRX.POST_ID 
-								AND (
-									".($currentExtranetSite ? "" : " (SRX.ENTITY = 'AU') OR ")." 
-									(UA.ACCESS_CODE = SRX.ENTITY AND UA.USER_ID = ".intval($arFilter["FOR_USER"]).") ".
+							"WHERE P.ID = SRX.POST_ID ".
+								"AND ( ".
+									($currentExtranetSite ? "" : " (SRX.ENTITY = 'AU') OR ").
+									"(UA.ACCESS_CODE = SRX.ENTITY AND UA.USER_ID = ".intval($arFilter["FOR_USER"]).") ".
 									($currentExtranetSite ? " AND NOT (SRX.ENTITY = 'G2') " : "").
 								")".
 						")";

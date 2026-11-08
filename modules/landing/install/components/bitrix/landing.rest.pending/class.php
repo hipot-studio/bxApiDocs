@@ -1,4 +1,5 @@
 <?php
+
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 {
 	die();
@@ -29,10 +30,11 @@ class LandingRestPendingComponent extends \CBitrixComponent
 	{
 		$res = \Bitrix\Rest\AppTable::getList([
 			'filter' => [
-				'=CODE' => $appCode
-			]
+				'=CODE' => $appCode,
+			],
 		]);
 		$return = $res->fetch();
+
 		return $return ? $return : null;
 	}
 
@@ -46,13 +48,13 @@ class LandingRestPendingComponent extends \CBitrixComponent
 	{
 		$res = \Bitrix\Landing\Repo::getList([
 			'select' => [
-				'ID', 'APP_CODE'
+				'ID', 'APP_CODE',
 			],
 			'filter' => [
 				'=APP_CODE' => $appCode,
-				'=XML_ID' => $xmlId
-			]
- 		]);
+				'=XML_ID' => $xmlId,
+			],
+		]);
 		if ($row = $res->fetch())
 		{
 			return $row;
@@ -85,6 +87,29 @@ class LandingRestPendingComponent extends \CBitrixComponent
 	}
 
 	/**
+	 * Returns landing context reused across pending blocks on the same page.
+	 * @param int $landingId Landing id.
+	 * @return Landing
+	 */
+	protected function getLandingInstance(int $landingId): Landing
+	{
+		static $landingCache = [];
+
+		if (!isset($landingCache[$landingId]))
+		{
+			$landingCache[$landingId] = Landing::createInstance(
+				$landingId,
+				[
+					'skip_blocks' => true,
+					'check_permissions' => false,
+				],
+			);
+		}
+
+		return $landingCache[$landingId];
+	}
+
+	/**
 	 * Save new data in the block.
 	 * @param int $blockId Block id.
 	 * @param int $repoId Repo id.
@@ -98,11 +123,11 @@ class LandingRestPendingComponent extends \CBitrixComponent
 		// get current block data
 		$blockData = BlockTable::getList([
 			'select' => [
-				'ID', 'PARENT_ID'
+				'ID', 'PARENT_ID',
 			],
 			'filter' => [
-				'ID' => $blockId
-			]
+				'ID' => $blockId,
+			],
 		])->fetch();
 		if (!$blockData)
 		{
@@ -112,7 +137,7 @@ class LandingRestPendingComponent extends \CBitrixComponent
 		$content = Block::getContentFromRepository($newCode);
 		$res = BlockTable::update($blockId, [
 			'CODE' => $newCode,
-			'CONTENT' => $content
+			'CONTENT' => $content,
 		]);
 		// and update by API block content
 		if ($res->isSuccess())
@@ -124,8 +149,8 @@ class LandingRestPendingComponent extends \CBitrixComponent
 			foreach (['landing', 'block'] as $key)
 			{
 				if (
-					isset($data['replace'][$key]) &&
-					is_array($data['replace'][$key])
+					isset($data['replace'][$key])
+					&& is_array($data['replace'][$key])
 				)
 				{
 					foreach ($data['replace'][$key] as $oldId => $newId)
@@ -140,24 +165,26 @@ class LandingRestPendingComponent extends \CBitrixComponent
 					str_replace(
 						array_keys($replace),
 						array_values($replace),
-						$blockInstance->getContent()
-					)
+						$blockInstance->getContent(),
+					),
 				);
 			}
 			// save
 			$blockInstance->save();
 			$this->updateSite(
-				$blockInstance->getSiteId()
+				$blockInstance->getSiteId(),
 			);
 			if ($view)
 			{
-				$blockInstance->view(Landing::getEditMode());
+				$landing = $this->getLandingInstance((int)$blockInstance->getLandingId());
+				$blockInstance->view(Landing::getEditMode(), $landing);
 			}
 			if ($blockData['PARENT_ID'])
 			{
 				return $this->updateBlock($blockData['PARENT_ID'], $repoId, $data, false);
 			}
 		}
+
 		return true;
 	}
 
@@ -168,8 +195,8 @@ class LandingRestPendingComponent extends \CBitrixComponent
 	public function executeComponent(): void
 	{
 		if (
-			!isset($this->arParams['~BLOCK_ID']) ||
-			$this->arParams['~BLOCK_ID'] <= 0
+			!isset($this->arParams['~BLOCK_ID'])
+			|| $this->arParams['~BLOCK_ID'] <= 0
 		)
 		{
 			return;
@@ -195,7 +222,7 @@ class LandingRestPendingComponent extends \CBitrixComponent
 			{
 				$replace = unserialize(
 					base64_decode($this->arParams['~REPLACE']),
-					['allowed_classes' => false]
+					['allowed_classes' => false],
 				);
 				if (!is_array($replace))
 				{
@@ -203,20 +230,20 @@ class LandingRestPendingComponent extends \CBitrixComponent
 				}
 			}
 			if (
-				is_array($data) &&
-				isset($data['repo_block']['app_code']) &&
-				isset($data['repo_block']['xml_id']) &&
-				is_string($data['repo_block']['app_code']) &&
-				is_string($data['repo_block']['xml_id'])
+				is_array($data)
+				&& isset($data['repo_block']['app_code'])
+				&& isset($data['repo_block']['xml_id'])
+				&& is_string($data['repo_block']['app_code'])
+				&& is_string($data['repo_block']['xml_id'])
 			)
 			{
 				$this->arResult['APP_CODE'] = $data['repo_block']['app_code'];
 				$this->arResult['APP_INFO'] = $this->getAppInfo(
-					$data['repo_block']['app_code']
+					$data['repo_block']['app_code'],
 				);
 				$repoRow = $this->getRepoId(
 					$data['repo_block']['app_code'],
-					$data['repo_block']['xml_id']
+					$data['repo_block']['xml_id'],
 				);
 				if ($repoRow)
 				{

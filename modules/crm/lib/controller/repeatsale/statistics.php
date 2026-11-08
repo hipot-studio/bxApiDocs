@@ -3,7 +3,6 @@
 namespace Bitrix\Crm\Controller\RepeatSale;
 
 use Bitrix\Crm\Controller\ErrorCode;
-use Bitrix\Crm\RepeatSale\Log\Controller\RepeatSaleLogController;
 use Bitrix\Crm\RepeatSale\Statistics\DataProvider;
 use Bitrix\Crm\RepeatSale\Statistics\PeriodType;
 use Bitrix\Crm\Service\Container;
@@ -35,7 +34,7 @@ final class Statistics extends Base
 			return [];
 		}
 
-		return (new DataProvider(RepeatSaleLogController::getInstance()))->getData($periodType);
+		return (new DataProvider())->getData($periodType);
 	}
 	// endregion
 

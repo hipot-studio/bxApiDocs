@@ -11,6 +11,9 @@ use Bitrix\Im\V2\Analytics\Event\ChatEvent;
 use Bitrix\Im\V2\Analytics\Event\GuestInviteEvent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\CollabChat;
+use Bitrix\Im\V2\Entity\User\UserCollaber;
+use Bitrix\Im\V2\Entity\User\UserExternal;
+use Bitrix\Im\V2\Entity\User\UserGuest;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\SharingLink\GuestChatLink;
 use Bitrix\Im\V2\SharingLink\InviteMethod;
@@ -20,6 +23,11 @@ use Bitrix\Main\Loader;
 class ChatAnalytics extends AbstractAnalytics
 {
 	public const SUBMIT_CREATE_NEW = 'submit_create_new';
+	public const ACTIVATE_NEW_CHAT = 'activate_new_chat';
+	public const ACTIVATE_SECTION_FROM_TEXT_REQUEST = 'from_text_request';
+	public const ACTIVATE_SECTION_OTHER = 'other';
+	public const SECTION_CHAT_ADD_POPUP = 'chat_add_popup';
+	public const ELEMENT_PLUS_BUTTON = 'plus_button';
 	protected const ADD_DEPARTMENT = 'add_department';
 	protected const ADD_USER = 'add_user';
 	protected const DELETE_USER = 'delete_user';
@@ -46,6 +54,58 @@ class ChatAnalytics extends AbstractAnalytics
 				?->send()
 			;
 		});
+	}
+
+	/**
+	 * Emits activate_new_chat (tool=im, category=copilot) — the funnel-bottom label fired on the
+	 * real draft→active transition of a copilot chat. Paired with submit_create_new (funnel top).
+	 *
+	 * c_section: from_text_request (user message, incl. suggest click — byte-identical on the
+	 * backend) | other (system messages and non-message activations: pin/description/color/title/update).
+	 *
+	 * The event carries no p1 per the analyst spec (a copilot-only label, so chatType_copilot would
+	 * be a constant with no analytical value); type=copilot, p5=chatId_*, p2 is guest-aware (local).
+	 */
+	public function addActivateNewChat(string $section): void
+	{
+		$this->async(fn () => $this->buildActivateNewChatEvent($section)?->send());
+	}
+
+	protected function buildActivateNewChatEvent(string $section): ?ChatEvent
+	{
+		$event = $this->createChatEvent(self::ACTIVATE_NEW_CHAT);
+		if ($event === null)
+		{
+			return null;
+		}
+
+		$event
+			->setChatType()
+			->setP1(null)
+			->setSection($section)
+			->setP2($this->resolveActivateNewChatP2())
+		;
+
+		return $event;
+	}
+
+	/**
+	 * Guest-aware p2 for activate_new_chat ONLY. The shared ChatEvent::setChatP2 is deliberately
+	 * left untouched so that p2 of the other chat-level im-labels (add_user/delete_user/
+	 * submit_create_new) is not changed. UserGuest extends UserExternal, so it must be matched first.
+	 * Resolved from the analytics context (the pinned initiator), not from the chat context.
+	 */
+	private function resolveActivateNewChatP2(): string
+	{
+		$user = $this->getContext()->getUser();
+
+		return match (true)
+		{
+			$user instanceof UserGuest => 'user_guest',
+			$user instanceof UserCollaber => 'user_collaber',
+			$user instanceof UserExternal => 'user_extranet',
+			default => 'user_intranet',
+		};
 	}
 
 	public function addAddUser(AddUsersConfig $config): void
@@ -163,16 +223,18 @@ class ChatAnalytics extends AbstractAnalytics
 		return new GuestInviteEvent($eventName, $this->chat, $this->getContext()->getUserId());
 	}
 
-	protected function addChatEditEvent(string $eventName): void
+	protected function addChatEditEvent(string $eventName, ?string $section = null, ?string $element = null): void
 	{
 		if ($this->chat instanceof CollabChat)
 		{
 			return;
 		}
 
-		$this->async(function () use ($eventName) {
+		$this->async(function () use ($eventName, $section, $element) {
 			$this
 				->createChatEvent($eventName)
+				?->setSection($section)
+				?->setElement($element)
 				?->send()
 			;
 		});
@@ -188,9 +250,9 @@ class ChatAnalytics extends AbstractAnalytics
 		});
 	}
 
-	public function addAddDepartment(): void
+	public function addAddDepartment(?string $section = null, ?string $element = null): void
 	{
-		$this->addChatEditEvent(self::ADD_DEPARTMENT);
+		$this->addChatEditEvent(self::ADD_DEPARTMENT, $section, $element);
 	}
 
 	public function addDeleteDepartment(): void
@@ -286,11 +348,27 @@ class ChatAnalytics extends AbstractAnalytics
 		return self::$blockSingleUserEvents[$this->chat->getId()] ?? false;
 	}
 
+	protected function isChatTypeAllowed(Chat $chat, ?string $event = null): bool
+	{
+		// A project chat is an ExternalChat descendant, but its creation is a user action and stays in analytics.
+		if ($event === self::SUBMIT_CREATE_NEW && $chat instanceof CollabChat)
+		{
+			return $this->checkChatEntityTypeAvailability($chat, $event);
+		}
+
+		return parent::isChatTypeAllowed($chat, $event);
+	}
+
 	protected function getUnavailableChatTypesForEvent(?string $event = null): array
 	{
 		$unavailableTypes = match ($event)
 		{
-			self::SUBMIT_CREATE_NEW => [Chat\PrivateChat::class, Chat\ExternalChat::class],
+			self::SUBMIT_CREATE_NEW => [
+				Chat\PrivateChat::class,
+				Chat\ExternalChat::class,
+				// created lazily on the first notification, not by a user action
+				Chat\NotifyChat::class,
+			],
 			default => [],
 		};
 

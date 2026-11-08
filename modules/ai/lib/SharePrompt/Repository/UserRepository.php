@@ -28,6 +28,11 @@ class UserRepository extends BaseRepository
 	 */
 	public function getMainUserData(array $userIdList): array
 	{
+		if (empty($userIdList))
+		{
+			return [];
+		}
+
 		return UserTable::query()
 			->setSelect([
 				'ID',

@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main;
+use Bitrix\Main\Type\Callback;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -95,8 +96,8 @@ class UpdateTools
 		return $update_res;
 	}
 
-	public static function clearUpdatesCacheAgent()
+	public static function clearUpdatesCacheAgent(): ?Callback
     {
-		return '';
+		return null;
     }
 }

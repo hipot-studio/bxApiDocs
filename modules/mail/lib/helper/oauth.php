@@ -382,7 +382,9 @@ abstract class OAuth
 
 		if ($result->isSuccess())
 		{
-			$this->storedTokenRow = array_merge($row, [
+			// The row is merged over the one already read, so a field left out of the update
+			// keeps its stored value instead of disappearing from the cached row.
+			$this->storedTokenRow = array_merge((array)$this->storedTokenRow, $row, [
 				'ID' => $id,
 				'UID' => $this->storedUid,
 			]);
@@ -393,31 +395,102 @@ abstract class OAuth
 	{
 		$storedTokenRow = $this->fetchStoredToken();
 
-		if (empty($storedTokenRow) || !isset($storedTokenRow['REFRESH_TOKEN']))
+		if (empty($storedTokenRow) || empty($storedTokenRow['REFRESH_TOKEN']))
 		{
+			// A renewal that cannot even start leaves in the entity only a token whose lifetime is
+			// not over: an expired one handed out afterwards would look alive to IMAP and SMTP,
+			// while a live one is still the token of the mailbox.
+			$this->oauthEntity->setToken(self::tokenStillAlive($storedTokenRow));
+			// Nothing was asked of the provider here, so it named no code.
+			$this->logRenewFailure((int)($storedTokenRow['ID'] ?? 0), '');
+
 			return false;
 		}
 
 		$this->setOAuthEntityTokens($storedTokenRow);
 		$this->oauthEntity->setToken(null);
 
-		if ($this->oauthEntity->getNewAccessToken($storedTokenRow['REFRESH_TOKEN']))
+		if (!$this->oauthEntity->getNewAccessToken($storedTokenRow['REFRESH_TOKEN']))
 		{
-			$tokenData = $this->oauthEntity->getTokenData();
+			$this->oauthEntity->setToken(self::tokenStillAlive($storedTokenRow));
+			$this->logRenewFailure((int)$storedTokenRow['ID'], $this->getProviderRefreshErrorCode());
 
-			$this->setStoredToken(
-				[
-					'TOKEN' => $tokenData['access_token'],
-					'REFRESH_TOKEN' => $tokenData['refresh_token'],
-					'TOKEN_EXPIRES' => $tokenData['expires_in'],
-				],
-				(int)$storedTokenRow['ID']
-			);
-
-			return true;
+			return false;
 		}
 
-		return false;
+		$tokenData = $this->oauthEntity->getTokenData();
+
+		$row = [
+			'TOKEN' => $tokenData['access_token'],
+			'TOKEN_EXPIRES' => $tokenData['expires_in'],
+		];
+
+		if (!empty($tokenData['refresh_token']))
+		{
+			$row['REFRESH_TOKEN'] = $tokenData['refresh_token'];
+		}
+
+		$this->setStoredToken($row, (int)$storedTokenRow['ID']);
+
+		return true;
+	}
+
+	private function logRenewFailure(int $oauthId, string $providerErrorCode): void
+	{
+		(new Main\Diag\LoggerFactory())->createById('mail.OAuth')?->error(
+			// The formatter substitutes the context into the placeholders of the template only,
+			// so a template without them reaches the journal carrying nothing.
+			'OAuth token renewal failed. providerErrorCode={providerErrorCode}, oauthId={oauthId}',
+			self::buildRenewFailureLogContext($providerErrorCode, $oauthId),
+		);
+	}
+
+	/**
+	 * The stored token while its lifetime is not over, null otherwise: a refused renewal hands out
+	 * no expired token and takes away no live one.
+	 *
+	 * TOKEN_EXPIRES is a unix time, and zero there means the lifetime is unknown - not something
+	 * to hand out on a refusal.
+	 *
+	 * @param array|bool|null $storedTokenRow Row of the token storage.
+	 * @return string|null
+	 */
+	private static function tokenStillAlive(array|bool|null $storedTokenRow): ?string
+	{
+		$row = (array)$storedTokenRow;
+
+		return !empty($row['TOKEN']) && (int)($row['TOKEN_EXPIRES'] ?? 0) > time()
+			? (string)$row['TOKEN']
+			: null;
+	}
+
+	/**
+	 * Payload of the renewal failure record: the provider error code and the OAuth row.
+	 *
+	 * Neither the token nor the refresh token belongs here - a journal is read by more people
+	 * than a mailbox has.
+	 *
+	 * @param string $providerErrorCode Provider error code, already reduced to an identifier.
+	 * @param int $oauthId OAuth row ID, zero when the row was not found.
+	 * @return array{providerErrorCode: string, oauthId: int}
+	 */
+	private static function buildRenewFailureLogContext(string $providerErrorCode, int $oauthId): array
+	{
+		return [
+			'providerErrorCode' => $providerErrorCode,
+			'oauthId' => $oauthId,
+		];
+	}
+
+	/**
+	 * The provider error code is known only to the service specific layer; a service that does
+	 * not report one leaves the refusal unexplained, which is still a refusal.
+	 *
+	 * @return string
+	 */
+	protected function getProviderRefreshErrorCode(): string
+	{
+		return '';
 	}
 
 	/**
@@ -466,9 +539,10 @@ abstract class OAuth
 
 			if (empty($token) || $item['TOKEN_EXPIRES'] > 0 && $item['TOKEN_EXPIRES'] < $expireThreshold)
 			{
-				$this->renewTokens();
-
-				$token = $this->oauthEntity->getToken();
+				// The branch is entered by the freshness gap, not by the expiry itself, so a refused
+				// renewal still hands out the stored token while its lifetime is not over - and
+				// nothing once it is.
+				$token = $this->renewTokens() ? $this->oauthEntity->getToken() : self::tokenStillAlive($item);
 			}
 		}
 
@@ -741,7 +815,7 @@ abstract class OAuth
 	 * @param string $errorCode Provider `error` parameter.
 	 * @return string
 	 */
-	private static function sanitizeProviderErrorCode(string $errorCode): string
+	public static function sanitizeProviderErrorCode(string $errorCode): string
 	{
 		return mb_substr(preg_replace('/[^A-Za-z0-9_.-]/', '', $errorCode), 0, 64);
 	}

@@ -7,9 +7,10 @@ namespace Bitrix\Bizproc\Infrastructure\Controller;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Public\Command\Debug\DisableDebugCommand;
 use Bitrix\Bizproc\Public\Command\Debug\EnableDebugForTemplateCommand;
+use Bitrix\Bizproc\Public\Feature\Debugger\ProcessDebuggerFlag;
 use Bitrix\Bizproc\Public\Provider\DebugProvider;
 use Bitrix\Main\Application;
-use Bitrix\Main\Config\Option;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Engine\Action;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
@@ -22,7 +23,7 @@ class Debug extends Controller
 {
 	protected function processBeforeAction(Action $action)
 	{
-		if (Option::get('bizproc', 'debugger_available', 'N') !== 'Y')
+		if (!Feature::isEnabled(ProcessDebuggerFlag::class))
 		{
 			$this->addError(ErrorMessage::ACCESS_DENIED->getError());
 

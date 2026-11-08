@@ -27,26 +27,35 @@ use Bitrix\TasksMobile\Feature\ChatFeature;
 
 class Task extends Base
 {
+	private const READ_ACTIONS = [
+		'get',
+		'getUserListTasks',
+		'getUserPlannerTasks',
+		'getUserDeadlineTasks',
+		'getProjectListTasks',
+		'getProjectPlannerTasks',
+		'getProjectDeadlineTasks',
+		'getProjectKanbanTasks',
+		'getDashboardSettings',
+	];
+
+	/** these write, and they close the session all the same: dragging a task across the board needs none of it */
+	private const STAGE_MOVE_ACTIONS = [
+		'updateUserPlannerTaskStage',
+		'updateUserDeadlineTaskStage',
+		'updateProjectPlannerTaskStage',
+		'updateProjectDeadlineTaskStage',
+		'updateProjectKanbanTaskStage',
+	];
+
 	protected function getQueryActionNames(): array
 	{
-		return [
-			'get',
-			'getUserListTasks',
-			'getUserPlannerTasks',
-			'getUserDeadlineTasks',
-			'getProjectListTasks',
-			'getProjectPlannerTasks',
-			'getProjectDeadlineTasks',
-			'getProjectKanbanTasks',
-			'getDashboardSettings',
-			'getRelatedTasksAndSubTasksByTaskId',
+		return [...self::READ_ACTIONS, ...self::STAGE_MOVE_ACTIONS];
+	}
 
-			'updateUserPlannerTaskStage',
-			'updateUserDeadlineTaskStage',
-			'updateProjectPlannerTaskStage',
-			'updateProjectDeadlineTaskStage',
-			'updateProjectKanbanTaskStage',
-		];
+	protected function getReadActionNames(): array
+	{
+		return self::READ_ACTIONS;
 	}
 
 	/**
@@ -931,9 +940,13 @@ class Task extends Base
 			$projectId = !empty($result['task']->groupId) ? (int)$result['task']->groupId : 0;
 			if ($projectId !== 0 && $withStageData)
 			{
+				// same as the card read: the client drops the stage counters, so they are not asked for
 				$stagesProvider = new StageProvider($this->getCurrentUser()?->getId());
 				$result['stageId'] = $stagesProvider->getProjectTaskStageId($taskId, $projectId);
-				$result['kanban'] =  $stagesProvider->getProjectStages($projectId, $taskId)->getData();
+				$result['kanban'] = $stagesProvider
+					->getProjectStages($projectId, $taskId, withCounters: false)
+					->getData()
+				;
 			}
 		}
 

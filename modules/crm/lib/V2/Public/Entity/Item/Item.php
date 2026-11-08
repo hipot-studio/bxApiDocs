@@ -47,6 +47,7 @@ abstract class Item implements EntityInterface
 	public const source = 'source';
 	public const webform = 'webform';
 	public const lastCommunication = 'lastCommunication';
+	public const trackingSourceId = 'trackingSourceId';
 
 	// Field name constants — HasStages trait
 	public const stageId = 'stageId';
@@ -95,6 +96,7 @@ abstract class Item implements EntityInterface
 
 	private array $changedFields = [];
 	private bool $restricted = false;
+	private bool $baseFieldsReadable = false;
 
 	// Identity (read-only, set by Mapper/Handler)
 	private ?int $id = null;
@@ -131,6 +133,8 @@ abstract class Item implements EntityInterface
 	private ?Source $source = null;
 	private ?Webform $webform = null;
 	private ?LastCommunication $lastCommunication = null;
+	// The source of the trace of the last binding of the item, loaded on demand
+	private ?int $trackingSourceId = null;
 
 	// Custom fields (UF_*)
 	private array $customFields = [];
@@ -154,7 +158,7 @@ abstract class Item implements EntityInterface
 	 */
 	public function getCaption(): string
 	{
-		if (!$this->canRead())
+		if (!$this->canRead() && !$this->baseFieldsReadable)
 		{
 			return $this->getRestrictedCaption();
 		}
@@ -185,6 +189,15 @@ abstract class Item implements EntityInterface
 	public function markAsRestricted(): void
 	{
 		$this->restricted = true;
+	}
+
+	/**
+	 * @internal Used by Provider when only base fields are readable.
+	 */
+	public function markAsRestrictedWithBaseFields(): void
+	{
+		$this->restricted = true;
+		$this->baseFieldsReadable = true;
 	}
 
 	// --- Changed-tracking ---
@@ -533,6 +546,19 @@ abstract class Item implements EntityInterface
 		return $this;
 	}
 
+	public function getTrackingSourceId(): ?int
+	{
+		return $this->trackingSourceId;
+	}
+
+	public function setTrackingSourceId(?int $trackingSourceId): static
+	{
+		$this->trackingSourceId = $trackingSourceId;
+		$this->markChanged(self::trackingSourceId);
+
+		return $this;
+	}
+
 	// --- Custom fields (UF_*) ---
 
 	public function getCustomField(string $name): mixed
@@ -716,6 +742,7 @@ abstract class Item implements EntityInterface
 			self::source => $this->source = $value,
 			self::webform => $this->webform = $value,
 			self::lastCommunication => $this->lastCommunication = $value,
+			self::trackingSourceId => $this->trackingSourceId = $value,
 			self::lastActivityTime => $this->lastActivityTime = $value,
 			self::lastActivityById => $this->lastActivityById = $value,
 			self::lastActivityBy => $this->lastActivityBy = $value,

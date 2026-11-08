@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Security\Role\Manage\Entity;
 
 use Bitrix\Crm\Security\Role\Manage\DTO\EntityDTO;
 use Bitrix\Crm\Security\Role\Manage\PermissionAttrPresets;
+use Bitrix\Crm\Security\Role\Manage\Permissions\Configuration\OperationPermissions;
 use Bitrix\Crm\Security\Role\Manage\Permissions\WriteConfig;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Localization\Loc;
@@ -35,22 +36,24 @@ final class AutomatedSolutionConfig implements PermissionEntity, FilterableByAut
 
 	private function permissions(): array
 	{
-		return [
-			new WriteConfig(PermissionAttrPresets::allowedYesNo()),
-		];
+		return array_merge(
+			OperationPermissions::all(),
+			[new WriteConfig(PermissionAttrPresets::allowedYesNo(), showExplanation: true, isAutomatedSolutionContour: true)],
+		);
 	}
 
 	private function getAutomatedSolutions(): array
 	{
 		$manager = Container::getInstance()->getAutomatedSolutionManager();
+		$automatedSolutions = $manager->getAutomatedSolutionsForPermissions();
 		if ($this->filterByAutomatedSolutionId !== null)
 		{
-			$automatedSolution = $manager->getAutomatedSolution($this->filterByAutomatedSolutionId);
+			$automatedSolution = $automatedSolutions[$this->filterByAutomatedSolutionId] ?? null;
 
 			return $automatedSolution === null ? [] : [$automatedSolution];
 		}
 
-		return $manager->getExistingAutomatedSolutions();
+		return $automatedSolutions;
 	}
 
 	public static function generateEntity(int $automatedSolutionId): string

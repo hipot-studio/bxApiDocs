@@ -4,10 +4,11 @@ namespace Bitrix\Disk\Controller;
 
 use Bitrix\Disk;
 use Bitrix\Disk\Controller\Response\PreviewResponseBuilder;
-use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Access\DownloadAccess;
 use Bitrix\Disk\Internals\Engine;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Security\ParameterSigner;
+use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Engine\ActionFilter\Authentication;
@@ -15,7 +16,6 @@ use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response;
 use Bitrix\Main\NotImplementedException;
-use Bitrix\Main\ObjectException;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UI\PageNavigation;
 
@@ -32,7 +32,7 @@ class TrackedObject extends BaseObject
 			'+prefilters' => [
 				new Authentication(true),
 				new Main\Engine\ActionFilter\CloseSession(),
-			]
+			],
 		];
 		$configureActions['showPreview'] = [
 			'-prefilters' => [
@@ -49,10 +49,11 @@ class TrackedObject extends BaseObject
 							return $argument->getId();
 						}
 					}
+
 					return null;
 				}),
 				new Main\Engine\ActionFilter\CloseSession(),
-			]
+			],
 		];
 
 		return $configureActions;
@@ -75,7 +76,7 @@ class TrackedObject extends BaseObject
 	public function getAction(
 		Disk\Document\TrackedObject $object,
 		CurrentUser $currentUser,
-		bool $showRights = false
+		bool $showRights = false,
 	): array
 	{
 		$rights = null;
@@ -85,17 +86,27 @@ class TrackedObject extends BaseObject
 			$rights = $rightsManager->getAvailableActionsByTrackedObject($object, $currentUser->getId());
 		}
 
-		return $this->exportToArray($object, $rights);
+		return $this->exportToArray($object, (int)$currentUser->getId(), $rights);
 	}
 
 	private function exportToArray(
 		Disk\Document\TrackedObject $object,
+		int $userId,
 		?array $rights = null,
+		?SecurityContext $downloadSecurityContext = null,
 	): array
 	{
-		$links = [
+		$file = $object->getFile();
+		$canDownload = $this->canDownloadTrackedObject($object, $userId, $downloadSecurityContext);
+		$links = [];
+
+		if ($canDownload)
+		{
 			/** @see TrackedObject::downloadAction */
-			'download' => $this->getActionUri('download', ['id' => $object->getId()]),
+			$links['download'] = $this->getActionUri('download', ['id' => $object->getId()]);
+		}
+
+		$links += [
 			/** @see TrackedObject::showPreviewAction */
 			'preview' => $this->getActionUri('showPreview', [
 				'id' => $object->getId(),
@@ -115,7 +126,7 @@ class TrackedObject extends BaseObject
 					'rights' => $rights,
 					'links' => $links,
 					'file' => [
-						...$object->getFile()->jsonSerialize(),
+						...$file->jsonSerialize(),
 					],
 				],
 			];
@@ -125,18 +136,58 @@ class TrackedObject extends BaseObject
 			'trackedObject' => [
 				'id' => (int)$object->getId(),
 				'updateTime' => $object->getUpdateTime(),
-				'file' => $object->getFile()->jsonSerialize(),
+				'file' => $file->jsonSerialize(),
 				'links' => $links,
 			],
 		];
 	}
 
+	private function canDownloadTrackedObject(
+		Disk\Document\TrackedObject $object,
+		int $userId,
+		?SecurityContext $securityContext = null,
+	): bool
+	{
+		$file = $object->getFile();
+
+		if (!$file)
+		{
+			return false;
+		}
+
+		$securityContext ??= $file->getStorage()?->getSecurityContext($userId);
+
+		if (!$securityContext)
+		{
+			return false;
+		}
+
+		return $file->canDownload($securityContext);
+	}
+
 	public function getByIdsAction(
 		Disk\Type\TrackedObjectCollection $trackedObjectCollection,
 		CurrentUser $currentUser,
-		bool $showRights = false
+		bool $showRights = false,
 	): array
 	{
+		$files = [];
+
+		foreach ($trackedObjectCollection as $trackedObject)
+		{
+			$file = $trackedObject->getFile();
+
+			if ($file instanceof Disk\File)
+			{
+				$files[] = $file;
+			}
+		}
+
+		$securityContextsByFileId = DownloadAccess::preloadForFilesBySecurityContext(
+			$files,
+			(int)$currentUser->getId(),
+		);
+
 		$items = [];
 		foreach ($trackedObjectCollection as $trackedObject)
 		{
@@ -147,7 +198,17 @@ class TrackedObject extends BaseObject
 				$rights = $rightsManager->getAvailableActionsByTrackedObject($trackedObject, $currentUser->getId());
 			}
 
-			$items[] = $this->exportToArray($trackedObject, $rights);
+			$file = $trackedObject->getFile();
+			$downloadSecurityContext = $file instanceof Disk\File
+				? ($securityContextsByFileId[spl_object_id($file)] ?? null)
+				: null;
+
+			$items[] = $this->exportToArray(
+				$trackedObject,
+				(int)$currentUser->getId(),
+				$rights,
+				$downloadSecurityContext,
+			);
 		}
 
 		return [
@@ -171,7 +232,7 @@ class TrackedObject extends BaseObject
 		Main\Engine\CurrentUser $currentUser,
 		PageNavigation $pageNavigation,
 		bool $showRights = false,
-		string $search = null
+		?string $search = null,
 	): ?array
 	{
 		$limit = $pageNavigation?->getLimit() ?: 50;
@@ -226,12 +287,23 @@ class TrackedObject extends BaseObject
 		];
 
 		$items = array_flip($fileIds);
+		$models = [];
 		$fileDataResult = Disk\File::getList($dataParameters);
+
 		foreach ($fileDataResult as $row)
 		{
 			/** @var Disk\File $model */
 			$model = Disk\File::buildFromRow($row);
+			$models[] = $model;
+		}
 
+		$securityContextsByFileId = DownloadAccess::preloadForFilesBySecurityContext(
+			$models,
+			(int)$currentUser->getId(),
+		);
+
+		foreach ($models as $model)
+		{
 			$modelId = (int)$model->getId();
 			$trackedObjectId = $fileToTrackObjectIds[$modelId];
 			$file = $model->jsonSerialize();
@@ -239,15 +311,25 @@ class TrackedObject extends BaseObject
 			$items[$modelId] = [
 				'trackedObject' => [
 					'id' => $trackedObjectId,
-					'links' => [
-						/** @see TrackedObject::downloadAction */
-						'download' => $this->getActionUri('download', ['id' => $trackedObjectId]),
-						/** @see \Bitrix\Disk\Controller\File::showPreviewAction() */
-						/** @see \Bitrix\Disk\Controller\File::showImageAction() */
-						'preview' => $file['links']['preview'] ?? null,
-					],
+					'links' => [],
 					'file' => $file,
 				],
+			];
+
+			$downloadSecurityContext = $securityContextsByFileId[spl_object_id($model)] ?? $securityContext;
+
+			if ($model->canDownload($downloadSecurityContext))
+			{
+				/** @see TrackedObject::downloadAction */
+				$items[$modelId]['trackedObject']['links']['download'] = $this->getActionUri('download', [
+					'id' => $trackedObjectId,
+				]);
+			}
+
+			$items[$modelId]['trackedObject']['links'] += [
+				/** @see \Bitrix\Disk\Controller\File::showPreviewAction() */
+				/** @see \Bitrix\Disk\Controller\File::showImageAction() */
+				'preview' => $file['links']['preview'] ?? null,
 			];
 
 			if ($showRights)
@@ -308,13 +390,32 @@ class TrackedObject extends BaseObject
 
 	public function downloadAction(Disk\Document\TrackedObject $object)
 	{
-		$response = Response\BFile::createByFileId($object->getFile()->getFileId(), $object->getFile()->getName());
+		$file = $object->getFile();
+
+		if (!$file)
+		{
+			$this->addError(new Error('Could not find file'));
+
+			return null;
+		}
+
+		$storage = $file->getStorage();
+		$securityContext = $storage?->getSecurityContext($this->getCurrentUser()->getId());
+
+		if (!$securityContext || !$file->canDownload($securityContext))
+		{
+			$this->addError(new Error('Could not download file'));
+
+			return null;
+		}
+
+		$response = Response\BFile::createByFileId($file->getFileId(), $file->getName());
 		$response->setCacheTime(Disk\Configuration::DEFAULT_CACHE_TIME);
 
 		return $response;
 	}
 
-	public function showPreviewAction(Disk\Document\TrackedObject $object, int $width = 0, int $height = 0, string $exact = null): ?Main\Response
+	public function showPreviewAction(Disk\Document\TrackedObject $object, int $width = 0, int $height = 0, ?string $exact = null): ?Main\Response
 	{
 		return (new PreviewResponseBuilder())->createByFile($object->getFile(), $width, $height, $exact);
 	}

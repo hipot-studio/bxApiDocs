@@ -112,8 +112,28 @@ trait NodeFilterResultProperties
 			{
 				$results[$allPropertyId] = $result['documentIds'] ?? [];
 			}
+
+			foreach (self::getAdditionalResults($result) as $key => $documentId)
+			{
+				$additionalPropertyId = $filterId . '_' . $key;
+				if (array_key_exists($additionalPropertyId, $returnPropertiesMap))
+				{
+					$results[$additionalPropertyId] = $documentId;
+				}
+			}
 		}
 
 		$activity->setProperties($results);
+	}
+
+	/**
+	 * Documents of another module the filter publishes beside the ones it found, declared by
+	 * {@see \Bitrix\Bizproc\Public\Activity\Interface\NodeFilterAdditionalResultProvider}.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private static function getAdditionalResults(array $filterResult): array
+	{
+		return is_array($filterResult['additional'] ?? null) ? $filterResult['additional'] : [];
 	}
 }

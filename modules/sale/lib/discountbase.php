@@ -5777,8 +5777,8 @@ abstract class DiscountBase
 		{
 			$calculator = ServiceLocator::getInstance()->get('sale.discountCalculator');
 			$rate = $calculator->calculateDiscountRate($basePrice, $basePrice - $discount);
-			$result = (int)$rate;
-			if ($result < 0)
+			$result = round($rate);
+			if ($rate < 0)
 			{
 				$result = 0;
 			}

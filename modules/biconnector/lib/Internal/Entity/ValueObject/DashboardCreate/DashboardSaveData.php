@@ -12,7 +12,6 @@ final class DashboardSaveData
 		public readonly array $params,
 		public readonly array $coverImage = [],
 		public readonly array $galleryImage = [],
-		public readonly array $period = [],
 		public readonly int $externalId = 0,
 		public readonly bool $externalPublished = false,
 	)
@@ -45,10 +44,5 @@ final class DashboardSaveData
 		$tempFileIds = $this->galleryImage['tempFileIds'] ?? [];
 
 		return is_array($tempFileIds) ? $tempFileIds : [];
-	}
-
-	public function getPeriodData(): array
-	{
-		return $this->period;
 	}
 }

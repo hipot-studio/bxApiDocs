@@ -27,7 +27,19 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 			"Title" => "",
 			"TargetStatus" => null,
 			"ModifiedBy" => null,
+			//return
+			"ErrorMessage" => null,
 		);
+
+		$this->setPropertiesTypes([
+			'ErrorMessage' => ['Type' => 'string'],
+		]);
+	}
+
+	protected function reInitialize(): void
+	{
+		parent::reInitialize();
+		$this->ErrorMessage = null;
 	}
 
 	public function Execute()
@@ -61,10 +73,30 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 		if (!$this->canChangeStatus($targetStatus))
 		{
 			$this->WriteToTrackingService(GetMessage('TASKS_CHANGE_STATUS_NO_PERMISSIONS'), 0, CBPTrackingType::Error);
+			$this->ErrorMessage = GetMessage('TASKS_CHANGE_STATUS_NO_PERMISSIONS');
+
 			return CBPActivityExecutionStatus::Closed;
 		}
 
-		$ds->UpdateDocument($documentId, ['STATUS' => $targetStatus], $this->ModifiedBy);
+		// Attribute to the workflow starter when no explicit
+		// ModifiedBy. method_exists guards bizproc being older than tasks.
+		$modifiedBy = method_exists($this, 'getModifiedByOrStarter')
+			? $this->getModifiedByOrStarter()
+			: $this->ModifiedBy
+		;
+		$statusDocumentId = $documentId;
+		$statusDocumentId[1] = Tasks\Integration\Bizproc\Document\TaskStatusUpdate::class;
+		try
+		{
+			$ds->UpdateDocument($statusDocumentId, ['STATUS' => $targetStatus], $modifiedBy);
+		}
+		catch (Exception $e)
+		{
+			$this->WriteToTrackingService($e->getMessage(), 0, CBPTrackingType::Error);
+			$this->ErrorMessage = $e->getMessage();
+
+			return CBPActivityExecutionStatus::Closed;
+		}
 
 		if (
 			Loader::includeModule('crm')
@@ -220,7 +252,7 @@ class CBPTasksChangeStatusActivity extends CBPActivity
 			is_array($rootDocumentId) ? $rootDocumentId : [],
 			$documentId,
 			Tasks\Access\ActionDictionary::ACTION_TASK_CHANGE_STATUS,
-			(int)($this->workflow?->getStartedBy() ?? 0),
+			$this->resolveTargetAccessActorId(),
 		);
 	}
 }

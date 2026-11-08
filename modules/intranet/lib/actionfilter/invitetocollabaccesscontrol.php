@@ -10,6 +10,7 @@ use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Socialnetwork\Collab;
+use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Socialnetwork\Internals\Registry\GroupRegistry;
 use Bitrix\Intranet\Integration\Socialnetwork\Collab\CollabProviderData;
 
@@ -17,82 +18,117 @@ class InviteToCollabAccessControl extends ActionFilter\Base
 {
 	public function onBeforeAction(Event $event): ?EventResult
 	{
-		if (
-			Loader::includeModule('socialnetwork')
-			&& !Collab\CollabFeature::isOn()
-			&& !Collab\CollabFeature::isFeatureEnabled()
-			&& !Collab\Requirement::check()->isSuccess()
-		)
-		{
-			$this->addError(new Error(
-				Loc::getMessage('INTRANET_COLLAB_ACCESS_CONTROL_PORTAL_ACCESS_DENIED')
-			));
-
-			return new EventResult(EventResult::ERROR, null, null, $this);
-		}
-
-		if (
-			Loader::includeModule('extranet')
-			&& !Extranet\PortalSettings::getInstance()->isEnabledCollabersInvitation()
-		)
-		{
-			$this->addError(new Error(
-				Loc::getMessage('INTRANET_COLLAB_ACCESS_CONTROL_PORTAL_INVITATION_COLLABERS_DISABLED')
-			));
-
-			return new EventResult(EventResult::ERROR, null, null, $this);
-		}
-
 		$collabId = $this->getAction()->getArguments()['collabId']
 			?? $this->getAction()->getBinder()->getMethodParams()['collabId']
 			?? null;
 
-		if ($collabId)
+		if (!$collabId)
 		{
-			$group = GroupRegistry::getInstance()->get($collabId);
+			$this->addError(new Error('Collab ID is not specified.'));
 
-			if (!($group instanceof Collab\Collab))
-			{
-				$this->addError(new Error(
-					Loc::getMessage('INTRANET_COLLAB_ACCESS_CONTROL_COLLAB_NOT_FOUND')
-				));
-
-				return new EventResult(EventResult::ERROR, null, null, $this);
-			}
-
-			if (!(new CollabProviderData())->isAllowedGuestsInvitation($collabId))
-			{
-				$this->addError(new Error(
-					Loc::getMessage('INTRANET_COLLAB_ACCESS_CONTROL_GUEST_INVITATION_FORBIDDEN')
-				));
-
-				return new EventResult(EventResult::ERROR, null, null, $this);
-			}
-
-			$canInviteCurrentUser = Collab\Access\CollabAccessController::can(
-				$this->getAction()->getCurrentUser()?->getId(),
-				Collab\Access\CollabDictionary::INVITE,
-				$collabId
-			);
-
-			if (!$canInviteCurrentUser)
-			{
-				$this->addError(new Error(
-					Loc::getMessage('INTRANET_COLLAB_ACCESS_CONTROL_USER_ACCESS_DENIED')
-				));
-
-				return new EventResult(EventResult::ERROR, null, null, $this);
-			}
+			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
-		else
+
+		if (
+			!Loader::includeModule('socialnetwork')
+			|| !Collab\Requirement::checkRequiredModules()->isSuccess()
+			|| !Loader::includeModule('extranet')
+		)
+		{
+			return $this->denyAccess(
+				'INTRANET_COLLAB_ACCESS_CONTROL_PORTAL_ACCESS_DENIED',
+				'COLLAB_INVITE_MODULES_UNAVAILABLE',
+			);
+		}
+
+		if (!Extranet\PortalSettings::getInstance()->isEnabledCollabersInvitation())
+		{
+			return $this->denyAccess(
+				'INTRANET_COLLAB_ACCESS_CONTROL_PORTAL_INVITATION_COLLABERS_DISABLED',
+				'COLLAB_INVITE_PORTAL_DISABLED',
+			);
+		}
+
+		$group = GroupRegistry::getInstance()->get($collabId);
+		if (!$group instanceof Collab\Collab)
 		{
 			$this->addError(new Error(
-				'Collab ID is not specified.'
+				$this->getErrorMessage('INTRANET_COLLAB_ACCESS_CONTROL_COLLAB_NOT_FOUND'),
 			));
 
 			return new EventResult(EventResult::ERROR, null, null, $this);
 		}
 
+		$canInviteCurrentUser = Collab\Access\CollabAccessController::can(
+			$this->getAction()->getCurrentUser()?->getId(),
+			Collab\Access\CollabDictionary::INVITE,
+			$collabId,
+		);
+
+		if (!$canInviteCurrentUser)
+		{
+			return $this->denyAccess(
+				'INTRANET_COLLAB_ACCESS_CONTROL_USER_ACCESS_DENIED',
+				'COLLAB_INVITE_ACCESS_DENIED',
+			);
+		}
+
+		if (!Collab\CollabFeature::isOn())
+		{
+			return $this->denyAccess(
+				'INTRANET_COLLAB_ACCESS_CONTROL_PORTAL_ACCESS_DENIED',
+				'COLLAB_INVITE_TECHNICAL_DISABLED',
+			);
+		}
+
+		if (!Collab\CollabFeature::isFeatureEnabled())
+		{
+			return $this->denyAccess(
+				'INTRANET_COLLAB_ACCESS_CONTROL_PORTAL_ACCESS_DENIED',
+				'COLLAB_INVITE_FEATURE_UNAVAILABLE',
+			);
+		}
+
+		$requirementResult = Collab\Requirement::check();
+		if (!$requirementResult->isSuccess())
+		{
+			$this->addError(new Error(
+				$requirementResult->getErrors()[0]->getMessage(),
+				'COLLAB_INVITE_EXTRANET_NOT_CONFIGURED',
+			));
+
+			return new EventResult(EventResult::ERROR, null, null, $this);
+		}
+
+		if (!(new CollabProviderData())->isAllowedGuestsInvitation($collabId))
+		{
+			return $this->denyAccess(
+				'INTRANET_COLLAB_ACCESS_CONTROL_GUEST_INVITATION_FORBIDDEN',
+				'COLLAB_INVITE_GROUP_DISABLED',
+			);
+		}
+
 		return null;
+	}
+
+	private function denyAccess(string $messageCode, string $errorCode): EventResult
+	{
+		$this->addError(new Error($this->getErrorMessage($messageCode), $errorCode));
+
+		return new EventResult(EventResult::ERROR, null, null, $this);
+	}
+
+	private function getErrorMessage(string $code): ?string
+	{
+		if (
+			Loader::includeModule('socialnetwork')
+			&& class_exists(Feature::class)
+			&& Feature::isNewProjectsOn()
+		)
+		{
+			return Loc::getMessage($code . '_V2') ?? Loc::getMessage($code);
+		}
+
+		return Loc::getMessage($code);
 	}
 }

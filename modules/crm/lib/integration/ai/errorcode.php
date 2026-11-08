@@ -10,6 +10,7 @@ final class ErrorCode
 	public const AI_NOT_AVAILABLE = 'AI_NOT_AVAILABLE';
 	public const AI_DISABLED = 'AI_IS_DISABLED';
 	public const AI_SCENARIO_DISABLED = 'AI_SCENARIO_DISABLED';
+	public const AI_FILL_FIELDS_ENTITY_DISABLED = 'AI_FILL_FIELDS_ENTITY_DISABLED';
 	public const LICENSE_NOT_ACCEPTED = 'LICENSE_NOT_ACCEPTED';
 	public const NOT_FOUND = \Bitrix\Crm\Controller\ErrorCode::NOT_FOUND;
 	public const FILE_NOT_FOUND = \Bitrix\Crm\Controller\ErrorCode::FILE_NOT_FOUND;
@@ -29,11 +30,16 @@ final class ErrorCode
 	public const OPERATION_TYPE_NOT_SUPPORTED = 'OPERATION_TYPE_NOT_SUPPORTED';
 	public const OPERATION_IS_PENDING = 'OPERATION_IS_PENDING';
 	public const PAYLOAD_IS_EMPTY_ERROR_CODE = 'PAYLOAD_IS_EMPTY';
+	public const CALL_ASSESSMENT_TRIGGER_LAUNCH_FAILED = 'CALL_ASSESSMENT_TRIGGER_LAUNCH_FAILED';
 	public const CALL_ASSESSMENT_AGENT_RESTORE_IN_PROGRESS = 'CALL_ASSESSMENT_AGENT_RESTORE_IN_PROGRESS';
 	public const CALL_ASSESSMENT_AGENT_SYSTEM_TEMPLATE_MISSING = 'CALL_ASSESSMENT_AGENT_SYSTEM_TEMPLATE_MISSING';
 	public const CALL_ASSESSMENT_AGENT_SYSTEM_TEMPLATE_REJECTED = 'CALL_ASSESSMENT_AGENT_SYSTEM_TEMPLATE_REJECTED';
 	public const CALL_ASSESSMENT_AGENT_LAUNCH_FAILED = 'CALL_ASSESSMENT_AGENT_LAUNCH_FAILED';
 	public const CALL_ASSESSMENT_AGENT_INVARIANT_NOT_CONFIRMED = 'CALL_ASSESSMENT_AGENT_INVARIANT_NOT_CONFIRMED';
+	public const CALL_SCRIPT_EMPTY_RESPONSE = 'CALL_SCRIPT_EMPTY_RESPONSE';
+	public const CALL_SCRIPT_JSON_NOT_FOUND = 'CALL_SCRIPT_JSON_NOT_FOUND';
+	public const CALL_SCRIPT_INVALID_JSON = 'CALL_SCRIPT_INVALID_JSON';
+	public const CALL_SCRIPT_NO_VALID_CRITERIA = 'CALL_SCRIPT_NO_VALID_CRITERIA';
 
 	public static function getAINotAvailableError(): Error
 	{
@@ -57,6 +63,18 @@ final class ErrorCode
 		return new Error(
 			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_SCENARIO_DISABLED'),
 			self::AI_SCENARIO_DISABLED
+		);
+	}
+
+	public static function getFillFieldsEntityDisabledError(int $entityTypeId): Error
+	{
+		return new Error(
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_FILL_FIELDS_ENTITY_DISABLED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
+			self::AI_FILL_FIELDS_ENTITY_DISABLED,
+			['entityTypeId' => $entityTypeId]
 		);
 	}
 
@@ -152,6 +170,17 @@ final class ErrorCode
 		);
 	}
 
+	public static function getCallScriptResponseError(string $code): Error
+	{
+		return new Error(
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
+			$code,
+		);
+	}
+
 	public static function getNotSuitableTargetError(): Error
 	{
 		return new Error(
@@ -222,6 +251,17 @@ final class ErrorCode
 		return new Error(
 			Loc::getMessage('CRM_INTEGRATION_AI_ERROR_NOT_ENOUGH_MESSAGES'),
 			self::INVALID_ARG_VALUE
+		);
+	}
+
+	public static function getCallAssessmentTriggerLaunchFailedError(): Error
+	{
+		return new Error(
+			Loc::getMessage(
+				'CRM_INTEGRATION_AI_ERROR_ENGINE_FAILED',
+				['#COPILOT_NAME#' => AIManager::getCopilotName()]
+			),
+			self::CALL_ASSESSMENT_TRIGGER_LAUNCH_FAILED
 		);
 	}
 

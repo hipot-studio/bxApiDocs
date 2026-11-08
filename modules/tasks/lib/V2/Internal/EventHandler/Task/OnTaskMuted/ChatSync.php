@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\EventHandler\Task\OnTaskMuted;
 
-use Bitrix\Im\Chat;
 use Bitrix\Tasks\V2\Internal\Event\Task\OnTaskMutedEvent;
+use Bitrix\Tasks\V2\Internal\Integration\Im\Chat;
 use Bitrix\Tasks\V2\Internal\Logger;
 use Bitrix\Tasks\V2\Internal\Repository\ChatRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Traits\MutexTrait;
@@ -16,6 +16,7 @@ class ChatSync
 
 	public function __construct(
 		private readonly ChatRepositoryInterface $chatRepository,
+		private readonly Chat $chat,
 		private readonly Logger $logger,
 	)
 	{
@@ -49,11 +50,15 @@ class ChatSync
 
 		try
 		{
-			Chat::mute(
-				action: true,
-				chatId: $chatId,
-				userId: $event->user->id,
-			);
+			if (!$this->chat->muteChat($chatId, $event->user->id, true))
+			{
+				$this->logger->logWarning([
+					'message' => 'Could not sync task chat mute',
+					'taskId' => $event->task->id,
+					'chatId' => $chatId,
+					'userId' => $event->user->id,
+				]);
+			}
 		}
 		catch (\Throwable $e)
 		{

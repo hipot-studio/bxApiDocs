@@ -116,17 +116,9 @@ final class WorkflowEntity extends Entity
 						$this->hasAccess = false;
 					}
 
-					if (!$this->hasAccess && Loader::includeModule("iblock"))
+					if (!$this->hasAccess && $workflowId)
 					{
-						$documentId = \CBPStateService::GetStateDocumentId($workflowId);
-						$elementQuery = \CIBlockElement::getList(
-							array(), array("ID" => $documentId[2]), false, false, array("IBLOCK_ID"));
-						$element = $elementQuery->fetch();
-						if ($element['IBLOCK_ID'])
-						{
-							$this->hasAccess = \CIBlockElementRights::userHasRightTo(
-								$element["IBLOCK_ID"], $documentId[2], "element_read");
-						}
+						$this->hasAccess = $this->canReadDocumentElement($workflowId);
 					}
 				}
 			}
@@ -137,5 +129,47 @@ final class WorkflowEntity extends Entity
 		}
 
 		return $this->hasAccess;
+	}
+
+	private function canReadDocumentElement(string $workflowId): bool
+	{
+		$documentId = \CBPStateService::getStateDocumentId($workflowId);
+		if (!is_array($documentId) || !isset($documentId[0], $documentId[1], $documentId[2]))
+		{
+			return false;
+		}
+
+		[$moduleId, $documentClass, $elementId] = $documentId;
+		if (
+			!is_string($moduleId)
+			|| $moduleId === ''
+			|| !Loader::includeModule($moduleId)
+			|| !Loader::includeModule('iblock')
+			|| !is_string($documentClass)
+			|| !is_a($documentClass, \CIBlockDocument::class, true)
+		)
+		{
+			return false;
+		}
+
+		$elementId = (string)$elementId;
+		if (preg_match('/^[0-9]+$/D', $elementId) !== 1 || (int)$elementId <= 0)
+		{
+			return false;
+		}
+
+		$element = \CIBlockElement::getList(
+			[],
+			['ID' => (int)$elementId],
+			false,
+			false,
+			['ID', 'IBLOCK_ID'],
+		)->fetch();
+		if (!$element || (int)$element['IBLOCK_ID'] <= 0)
+		{
+			return false;
+		}
+
+		return \CIBlockElementRights::userHasRightTo((int)$element['IBLOCK_ID'], (int)$elementId, 'element_read');
 	}
 }

@@ -2,13 +2,14 @@
 
 namespace Bitrix\Disk\Security;
 
-
+use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Security\Sign\Signer;
 
 final class ParameterSigner
 {
 	const SALT_IMAGE_SIZE     = 'disk.image.size';
 	const SALT_ARCHIVE        = 'disk.archive';
+	const SALT_UNIFIED_ARCHIVE = 'disk.unified.archive';
 	const SALT_ENTITY_ARCHIVE = 'disk.entity.archive';
 
 	/**
@@ -19,7 +20,7 @@ final class ParameterSigner
 	 * @param int $width Width (px).
 	 * @param int $height Height (px).
 	 * @return string
-	 * @throws \Bitrix\Main\ArgumentTypeException
+	 * @throws ArgumentTypeException
 	 */
 	public static function getImageSignature($id, $width, $height)
 	{
@@ -49,12 +50,56 @@ final class ParameterSigner
 	 *
 	 * @param array $ids List of id.
 	 * @return string
-	 * @throws \Bitrix\Main\ArgumentTypeException
+	 * @throws ArgumentTypeException
 	 */
 	public static function getArchiveSignature(array $ids)
 	{
 		$sign = new Signer;
 		return $sign->getSignature(self::prepareList($ids), self::SALT_ARCHIVE);
+	}
+
+	/**
+	 * @param string $parentUniqueCode
+	 * @param array $uniqueCodes
+	 * @param bool $skipRootFolder
+	 * @return string
+	 * @throws ArgumentTypeException
+	 */
+	public static function getUnifiedArchiveSignature(
+		string $parentUniqueCode,
+		array $uniqueCodes,
+		bool $skipRootFolder = false,
+	): string
+	{
+		$sign = new Signer();
+
+		return $sign->getSignature(
+			value: $parentUniqueCode . '|' . self::prepareList($uniqueCodes) . '|' . (int)$skipRootFolder,
+			salt: self::SALT_UNIFIED_ARCHIVE,
+		);
+	}
+
+	/**
+	 * @param string $signature
+	 * @param string $parentUniqueCode
+	 * @param array $uniqueCodes
+	 * @param bool $skipRootFolder
+	 * @return bool
+	 */
+	public static function validateUnifiedArchiveSignature(
+		string $signature,
+		string $parentUniqueCode,
+		array $uniqueCodes,
+		bool $skipRootFolder = false,
+	): bool
+	{
+		$sign = new Signer();
+
+		return $sign->validate(
+			value: $parentUniqueCode . '|' . self::prepareList($uniqueCodes) . '|' . (int)$skipRootFolder,
+			signature: $signature,
+			salt: self::SALT_UNIFIED_ARCHIVE,
+		);
 	}
 
 	/**

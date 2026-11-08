@@ -2,6 +2,7 @@
 
 namespace Bitrix\Intranet\UI\LeftMenu\Preset;
 
+use Bitrix\Intranet\Internal\MainTool\AccessPolicy;
 use \Bitrix\Main;
 use \Bitrix\Intranet\UI\LeftMenu;
 
@@ -17,7 +18,9 @@ class Custom extends PresetAbstract
 	public function getStructure(): array
 	{
 		$structure = unserialize(
-			\COption::GetOptionString('intranet', 'left_menu_custom_preset_sort', ''),
+			AccessPolicy::isFeatureEnabled()
+				? \COption::GetOptionString('intranet', 'left_menu_custom_preset_sort', '', $this->getSiteId())
+				: \COption::GetOptionString('intranet', 'left_menu_custom_preset_sort', ''),
 			['allowed_classes' => false],
 		);
 		$structure = is_array($structure) ? [
@@ -62,14 +65,17 @@ class Custom extends PresetAbstract
 
 	public function getItems(): array
 	{
-		static $result;
+		$cache = &$this->getCache();
+		$result = &$cache['customItems'];
 		if ($result)
 		{
 			return $result;
 		}
 		$result = parent::getItems();
 		$items = unserialize(
-			\COption::GetOptionString('intranet', 'left_menu_custom_preset_items', ''),
+			AccessPolicy::isFeatureEnabled()
+				? \COption::GetOptionString('intranet', 'left_menu_custom_preset_items', '', $this->getSiteId())
+				: \COption::GetOptionString('intranet', 'left_menu_custom_preset_items', ''),
 			['allowed_classes' => false],
 		);
 		$items = (is_array($items) ? $items : []);

@@ -12,6 +12,7 @@ use Bitrix\Main\Security\Random;
 use Bitrix\Main\Web\Json;
 use Bitrix\Superset\Internal\Api;
 use Bitrix\Superset\Internal\HttpStatus;
+use Bitrix\Superset\Internal\Support\InstanceUnavailableStatus;
 use Symfony\Component\Yaml\Exception\ParseException;
 use Symfony\Component\Yaml\Yaml;
 
@@ -153,7 +154,7 @@ final class ArchiveRepacker
 		if (!$actualizeResult->isSuccess())
 		{
 			return $result->addErrors([
-				new Error('Cannot actualize dashboards'),
+				InstanceUnavailableStatus::createWrappingError('Cannot actualize dashboards', $actualizeResult),
 				...$actualizeResult->getErrors(),
 			]);
 		}
@@ -419,7 +420,11 @@ final class ArchiveRepacker
 		)
 		{
 			return $result->addErrors([
-				new Error("Cannot get list of existing datasets on superset instance (response code {$datasetListResult->getHttpStatus()})"),
+				InstanceUnavailableStatus::createError(
+					'Cannot get list of existing datasets on superset instance'
+						. " (response code {$datasetListResult->getHttpStatus()})",
+					$datasetListResult
+				),
 				new Error($datasetListResult->getAnswer()),
 				...$datasetListResult->getErrors(),
 			]);

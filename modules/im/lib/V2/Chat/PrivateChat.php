@@ -30,6 +30,7 @@ use Bitrix\Im\V2\Chat\Add\AddResult;
 class PrivateChat extends Chat
 {
 	protected const EXTRANET_CAN_SEE_HISTORY = true;
+	protected const EXTRANET_CAN_SEE_HISTORY_ON_EXPLICIT_ADD = true;
 	protected array $dialogIdCache = [];
 
 	protected function getDefaultType(): string
@@ -255,10 +256,10 @@ class PrivateChat extends Chat
 		return $this;
 	}
 
-	public function sendPushUpdateMessage(Message $message): void
+	public function sendPushUpdateMessage(Message $message, bool $compositionUpdated = false): void
 	{
 		$pushFormat = new Message\PushFormat($message);
-		$push = $pushFormat->formatMessageUpdate();
+		$push = $pushFormat->formatMessageUpdate($compositionUpdated);
 
 		$participantIds = $this->getRelations()->getUserIds();
 

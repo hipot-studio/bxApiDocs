@@ -28,6 +28,8 @@ class CheckListMapper
 
 	public function mapToEntity(array $checkList): Entity\CheckList
 	{
+		$files = $this->getMemberPhotos($checkList);
+
 		$items = [];
 		foreach ($checkList as $id => $item)
 		{
@@ -42,11 +44,6 @@ class CheckListMapper
 				$item['MEMBERS'],
 				static fn (array $member): bool => $member['TYPE'] === RoleDictionary::ROLE_AUDITOR,
 			);
-
-			$allMembers = array_merge($accomplices, $auditors);
-			$fileIds = array_unique(array_column($allMembers, 'PERSONAL_PHOTO'));
-			Collection::normalizeArrayValuesByInt($fileIds, false);
-			$files = $fileIds ? $this->fileRepository->getByIds($fileIds) : null;
 
 			[$entityId, $entityType] = match (true)
 			{
@@ -80,6 +77,20 @@ class CheckListMapper
 		}
 
 		return new Entity\CheckList(...$items);
+	}
+
+	private function getMemberPhotos(array $checkList): ?Entity\FileCollection
+	{
+		$fileIds = [];
+		foreach ($checkList as $item)
+		{
+			$fileIds[] = array_column($item['MEMBERS'] ?? [], 'PERSONAL_PHOTO');
+		}
+
+		$fileIds = array_unique(array_merge([], ...$fileIds));
+		Collection::normalizeArrayValuesByInt($fileIds, false);
+
+		return $fileIds ? $this->fileRepository->getByIds($fileIds) : null;
 	}
 
 	public function mapToNodes(array $checkList): Nodes

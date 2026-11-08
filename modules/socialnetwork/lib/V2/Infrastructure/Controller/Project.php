@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Socialnetwork\V2\Infrastructure\Controller;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
 use Bitrix\Main\Error;
 use Bitrix\Socialnetwork\V2\Infrastructure\Controller\Trait\ProjectAutoWireTrait;
@@ -22,10 +23,12 @@ use Bitrix\Socialnetwork\V2\Public\Command\Project\SwitchPinCommand;
 use Bitrix\Socialnetwork\V2\Public\Command\Project\UpdateProjectCommand;
 use Bitrix\Socialnetwork\V2\Public\Command\Project\UpdateProjectTagsCommand;
 use Bitrix\Socialnetwork\V2\Public\Dto;
-use Bitrix\Socialnetwork\V2\Public\Grid\PinMode;
 use Bitrix\Socialnetwork\V2\Public\Dto\Project\ProjectResponse;
+use Bitrix\Socialnetwork\V2\Public\Dto\Project\ProjectViewInfoResponse;
+use Bitrix\Socialnetwork\V2\Public\Grid\PinMode;
 use Bitrix\Socialnetwork\V2\Public\Provider\ProjectMemberProvider;
 use Bitrix\Socialnetwork\V2\Public\Provider\ProjectProvider;
+use Bitrix\Socialnetwork\V2\Public\Provider\ProjectViewInfoProvider;
 use CSocNetUser;
 
 class Project extends BaseController
@@ -69,7 +72,7 @@ class Project extends BaseController
 			return null;
 		}
 
-		$projectResponse = $projectProvider->getById($project->id);
+		$projectResponse = $projectProvider->getById($project->id, includeSelectorItems: true);
 		if ($projectResponse === null)
 		{
 			return null;
@@ -88,12 +91,30 @@ class Project extends BaseController
 	}
 
 	/**
+	 * @ajaxAction socialnetwork.V2.Project.getViewInfo
+	 */
+	public function getViewInfoAction(
+		#[Permission\Read]
+		Dto\Project\Project $project,
+		ProjectViewInfoProvider $projectViewInfoProvider,
+	): ?ProjectViewInfoResponse
+	{
+		if ($project->id === null)
+		{
+			return null;
+		}
+
+		return $projectViewInfoProvider->getViewInfoById($project->id);
+	}
+
+	/**
 	 * @ajaxAction socialnetwork.V2.Project.add
 	 */
 	public function addAction(
 		#[Permission\Create]
 		Dto\Project\Project $project,
 		ProjectProvider $projectProvider,
+		ProjectsTrialService $projectsTrialService,
 	): ?ProjectResponse
 	{
 		$result = (new AddProjectCommand(
@@ -117,21 +138,27 @@ class Project extends BaseController
 			return null;
 		}
 
-		$this->turnOnProjectsTrialIfNeeded();
+		$this->turnOnProjectsTrialIfNeeded($projectsTrialService);
 
-		return $projectProvider->getById($projectId);
+		return $projectProvider->getById($projectId, includeSelectorItems: true);
 	}
 
-	private function turnOnProjectsTrialIfNeeded(): void
+	private function turnOnProjectsTrialIfNeeded(
+		ProjectsTrialService $projectsTrialService,
+	): void
 	{
-		try
-		{
-			Container::getInstance()->get(ProjectsTrialService::class)->turnOnTrialIfNeeded();
-		}
-		catch (\Throwable $e)
-		{
-			$this->writeToLogException($e);
-		}
+		Application::getInstance()->addBackgroundJob(
+			function () use ($projectsTrialService): void {
+				try
+				{
+					$projectsTrialService->turnOnTrialIfNeeded();
+				}
+				catch (\Throwable $e)
+				{
+					$this->writeToLogException($e);
+				}
+			},
+		);
 	}
 
 	/**
@@ -164,7 +191,7 @@ class Project extends BaseController
 			return null;
 		}
 
-		return $projectProvider->getById($projectId);
+		return $projectProvider->getById($projectId, includeSelectorItems: true);
 	}
 
 	/**
@@ -349,23 +376,34 @@ class Project extends BaseController
 		ProjectProvider $projectProvider,
 	): ?array
 	{
-		$projectId = (
+		// Resolved the same way as the gate: for a group which is not a collab this holds its own id
+		$groupId = (
 			$project->id
-			?? Container::getInstance()->getProjectChatResolver()->getProjectIdByChatId((int)($project->chatId))
+			?? Container::getInstance()->getProjectChatResolver()->getGroupIdByChatId((int)($project->chatId))
 		);
 
-		if (!$projectId)
+		if (!$groupId)
 		{
 			return null;
 		}
 
 		$isCurrentUserModuleAdmin = CSocNetUser::isCurrentUserModuleAdmin();
 
-		return $projectProvider->getBaseFeature(
-			projectId: $projectId,
+		$baseFeature = $projectProvider->getBaseFeature(
+			projectId: $groupId,
 			userId: $this->userId,
 			isCurrentUserModuleAdmin: $isCurrentUserModuleAdmin,
-		)?->toArray();
+		);
+
+		if ($baseFeature === null)
+		{
+			return null;
+		}
+
+		$result = $baseFeature->toArray();
+		$result['projectId'] = $groupId;
+
+		return $result;
 	}
 
 	/**
@@ -420,7 +458,7 @@ class Project extends BaseController
 	 * @ajaxAction socialnetwork.V2.Project.copy
 	 */
 	public function copyAction(
-		#[Permission\Read]
+		#[Permission\Copy]
 		Dto\Project\Project $sourceProject,
 		#[Permission\Create]
 		Dto\Project\Project $project,
@@ -451,6 +489,6 @@ class Project extends BaseController
 			return null;
 		}
 
-		return $projectProvider->getById($projectId);
+		return $projectProvider->getById($projectId, includeSelectorItems: true);
 	}
 }

@@ -8,16 +8,18 @@ use Bitrix\Main\ArgumentException;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItem;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemAccessType;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemType;
-use Bitrix\Vibecodeconnector\Internal\Repository\Pairing\PairingRepository;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Icon\IconFileResolver;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Identity\KnownPairingIss;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\NewApps\NewAppsCountInvalidator;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Writer\EntryWriter;
 
 final class CreateCatalogItemCommandHandler
 {
 	public function __construct(
 		private readonly EntryWriter $writer = new EntryWriter(),
-		private readonly PairingRepository $pairingRepository = new PairingRepository(),
+		private readonly KnownPairingIss $knownPairingIss = new KnownPairingIss(),
 		private readonly IconFileResolver $iconFileResolver = new IconFileResolver(),
+		private readonly NewAppsCountInvalidator $newAppsCountInvalidator = new NewAppsCountInvalidator(),
 	)
 	{
 	}
@@ -43,7 +45,7 @@ final class CreateCatalogItemCommandHandler
 
 		$iconFileId = $this->iconFileResolver->resolve($command->iconUrl, $pairingIss);
 
-		return $this->writer->create(
+		$item = $this->writer->create(
 			title: trim($command->title),
 			type: $type,
 			accessType: $accessType,
@@ -56,6 +58,10 @@ final class CreateCatalogItemCommandHandler
 			pairingIss: $pairingIss,
 			iconFileId: $iconFileId,
 		);
+
+		$this->newAppsCountInvalidator->forgetAllFor($item);
+
+		return $item;
 	}
 
 	private function resolvePairingIss(?string $iss): ?string
@@ -66,10 +72,7 @@ final class CreateCatalogItemCommandHandler
 			return null;
 		}
 
-		if ($this->pairingRepository->findByIss($iss) === null)
-		{
-			throw new ArgumentException('Unknown pairing iss', 'iss');
-		}
+		$this->knownPairingIss->assert($iss);
 
 		return $iss;
 	}

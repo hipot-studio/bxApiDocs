@@ -112,6 +112,23 @@ abstract class GlobalsManager
 		);
 	}
 
+	/**
+	 * Write of a value under an identifier judged free: a row already standing under it refuses the write
+	 * instead of taking it, so a request taking the same identifier at the same moment does not end up
+	 * rewriting a value it never saw.
+	 *
+	 * @throws \Bitrix\Main\DB\DuplicateEntryException
+	 */
+	public static function insertByProperty($id, $property, int $userId = null): Result
+	{
+		$table = static::getTableEntity();
+		$result = $table::insertByProperty($id, $property, $userId);
+
+		static::clearStaticCache(static::getCacheId());
+
+		return $result;
+	}
+
 	public static function delete($id): bool
 	{
 		$table = static::getTableEntity();

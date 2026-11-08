@@ -22,4 +22,7 @@ enum Field: string
 	case Buttons = 'buttons';
 	case FileIds = 'fileIds';
 	case Background = 'background';
+	case FileId = 'fileId';
+	case Progress = 'progress';
+	case IsService = 'isService';
 }

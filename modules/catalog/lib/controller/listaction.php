@@ -43,7 +43,7 @@ trait ListAction
 		return new Page(
 			$this->getServiceListName(),
 			$this->getList($params['select'], $params['filter'], $params['order'], $pageNavigation),
-			$__calculateTotalCount ? $this->count($filter) : 0
+			$__calculateTotalCount ? $this->count($params['filter']) : 0
 		);
 	}
 

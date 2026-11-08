@@ -166,13 +166,10 @@ class Messenger
 	 */
 	public function deleteMessage(Message $message, int $mode = 0): Result
 	{
-		$result = new Result();
-
 		$deleteService = DeleteService::getInstanceByMessage($message);
 		$deleteService->setMode(DeletionMode::tryFrom($mode));
-		$deleteService->delete();
 
-		return $result;
+		return $deleteService->delete();
 	}
 
 	/**

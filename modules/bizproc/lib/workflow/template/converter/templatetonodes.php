@@ -6,22 +6,33 @@ use Bitrix\Bizproc\Activity\ActivityDescription;
 use Bitrix\Bizproc\Activity\Dto\NodePorts;
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Internal\Service\Container;
+use Bitrix\Bizproc\Runtime\ActivitySearcher\Activities;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Bizproc\Activity\ContentBlockResolver;
+use Bitrix\Bizproc\Activity\Dto\ContentBlockContext;
 use Bitrix\Bizproc\Activity\ReturnPropertiesResolver;
 
 final class TemplateToNodes
 {
 	/**
-	 * @param bool $complexNodeConnectionsAvailable Verdict of the rollout option of the feature
-	 *     (`bizprocdesigner`/`complex_node_connections_available`), passed in by the editor: the option belongs
-	 *     to that module. It gates the relations block of a node and the surface a translated node is served
-	 *     by ({@see \Bitrix\Bizproc\Internal\Service\Activity\UnifiedPanelDescriptorProvider::isSurfaceAvailableForNode()}).
+	 * @param bool $complexNodeConnectionsAvailable Verdict of the designer feature flag
+	 *     \Bitrix\BizprocDesigner\Public\Feature\Node\ComplexNodeConnectionsFlag, passed in by the editor. It
+	 *     gates the relations block of a node and the surface a translated node is served by
+	 *     ({@see \Bitrix\Bizproc\Internal\Service\Activity\UnifiedPanelDescriptorProvider::isSurfaceAvailableForNode()}).
+	 * @param Activities|null $catalog The catalog of the node and trigger activities, when the caller has
+	 *     already walked it out for a judgement of its own on the same request: the walk reads five folders and
+	 *     includes every `.description.php` in them, and nothing about it differs between the two callers. Left
+	 *     out, the converter walks it itself, which is what every caller loading a scheme does.
+	 * @param ?ContentBlockContext $baseContentBlockContext Context of the caller, passed in by the editor the
+	 *     same way: the readable form of an expression needs the document type and the declarations of the
+	 *     schema, and the converter is handed a tree of activities alone. No context means no readable form.
 	 */
 	public function __construct(
 		private readonly array $template,
 		private readonly bool $complexNodeConnectionsAvailable = false,
+		private readonly ?Activities $catalog = null,
+		private readonly ?ContentBlockContext $baseContentBlockContext = null,
 	)
 	{}
 
@@ -76,9 +87,12 @@ final class TemplateToNodes
 		// template, not the palette catalog. Excluded (rolled-out) activities must
 		// still resolve icon/color/ports for their existing blocks.
 		$defaultActivities =
-			$searcher->searchByType(
-				[ActivityType::NODE->value, ActivityType::TRIGGER->value],
-				$documentType
+			(
+				$this->catalog
+				?? $searcher->searchByType(
+					[ActivityType::NODE->value, ActivityType::TRIGGER->value],
+					$documentType
+				)
 			)
 				->sort()
 		;
@@ -113,11 +127,6 @@ final class TemplateToNodes
 					$relationsAvailableMap[$id] = $this->resolveRelationsAvailable($presetActivity);
 				}
 			}
-			else
-			{
-				$auxCapabilityMap[$class] = $activity->getNodeSettings()?->ports?->aux !== null;
-				$relationsAvailableMap[$class] = $this->resolveRelationsAvailable($activity);
-			}
 
 			// Base entry for every activity, presets or not: a saved node whose PresetId the descriptor
 			// no longer declares falls back to it instead of losing its icon, color and default title.
@@ -127,6 +136,11 @@ final class TemplateToNodes
 				'CONTENT_BLOCK_COLOR' => $activity->getContentBlockColor(),
 				'TITLE' => $activity->getName(),
 			];
+
+			// The capabilities of a class are entered under the class as well, so a saved block carrying no
+			// PresetId at all is answered by the base declaration of its activity instead of by a map miss.
+			$auxCapabilityMap[$class] ??= $activity->getNodeSettings()?->ports?->aux !== null;
+			$relationsAvailableMap[$class] ??= $this->resolveRelationsAvailable($activity);
 
 			$nodeTypesMap[$class] = $activity->getNodeType();
 
@@ -182,9 +196,9 @@ final class TemplateToNodes
 					$activityType .= '_' . $child['PresetId'];
 				}
 
-				// Only the visuals fall back to the base entry: the capability maps below resolve an unknown
-				// preset to their neutral default (no aux ports, no explicit relations descriptor), which is
-				// what a node with such a preset resolved before the base entry existed.
+				// Only the visuals fall back from a preset key to the base one: the capability maps below hold
+				// an entry for the bare class too, but a node naming a preset the descriptor no longer
+				// declares keeps resolving to their neutral default (no aux ports, no relations).
 				$visuals = $iconMap[$activityType] ?? $iconMap[$rawActivityType] ?? [];
 				$icon = $visuals['CODE'] ?? null;
 				$color = $visuals['COLOR'] ?? null;
@@ -194,9 +208,9 @@ final class TemplateToNodes
 				$shouldShowAuxPorts = $activityType !== null && ($auxCapabilityMap[$activityType] ?? false);
 
 				// Per-node relations-block availability so the canvas gate matches the
-				// node-settings store WITHOUT opening settings. Non-null only for nodes with
-				// an explicit availableBlocks descriptor; null keeps the legacy fallback path.
-				$relationsAvailable = $activityType !== null ? ($relationsAvailableMap[$activityType] ?? null) : null;
+				// node-settings store WITHOUT opening settings. True only for a node whose
+				// declaration offers the relations block: an unknown type has none.
+				$relationsAvailable = $activityType !== null && ($relationsAvailableMap[$activityType] ?? false);
 
 				return [
 					'id' => $node['id'],
@@ -243,10 +257,10 @@ final class TemplateToNodes
 	/**
 	 * Relations-block availability for a node: its explicit availableBlocks descriptor intersected
 	 * with the same runtime gate CapabilityCatalogService applies for loadSettings, so the canvas
-	 * and the settings panel always agree. Returns null when the node has no explicit descriptor
-	 * (legacy nodes) so the frontend keeps its prior feature-flag fallback and behaviour does not change.
+	 * and the settings panel always agree. A node without such a descriptor has no relations, so the
+	 * resolver answers false and the frontend has nothing left to decide on its own.
 	 */
-	private function resolveRelationsAvailable(ActivityDescription $description): ?bool
+	private function resolveRelationsAvailable(ActivityDescription $description): bool
 	{
 		return Container::instance()
 			->getCapabilityCatalogService()
@@ -299,7 +313,7 @@ final class TemplateToNodes
 
 	private function transformBlockActivities(array $activities): array
 	{
-		$contentBlocks = ContentBlockResolver::resolveForTemplate($activities);
+		$contentBlocks = ContentBlockResolver::resolveForTemplate($activities, $this->baseContentBlockContext);
 
 		foreach ($activities as &$activity)
 		{

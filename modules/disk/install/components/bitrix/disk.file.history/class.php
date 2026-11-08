@@ -2,11 +2,14 @@
 
 use Bitrix\Disk\Configuration;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\Internals\DiskComponent;
 use Bitrix\Disk\Internals\Engine\Contract\SidePanelWrappable;
 use Bitrix\Disk\TypeFile;
 use Bitrix\Disk\Ui\FileAttributes;
 use Bitrix\Disk\Version;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
@@ -23,10 +26,22 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 	const ERROR_COULD_NOT_FIND_OBJECT  = 'DISK_FH_22001';
 	const ERROR_COULD_NOT_FIND_VERSION = 'DISK_FH_22002';
 
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
+	protected UnifiedLinkUrl $unifiedLinkUrl;
 	/** @var \Bitrix\Disk\File */
 	protected $file;
 
 	protected $componentId = 'file_history';
+	protected bool $isViewByUnifiedLink = false;
+
+	public function __construct($component = null)
+	{
+		parent::__construct($component);
+
+		$serviceLocator = ServiceLocator::getInstance();
+		$this->unifiedLinkAccessService = $serviceLocator->get(UnifiedLinkAccessService::class);
+		$this->unifiedLinkUrl = $serviceLocator->get(UnifiedLinkUrl::class);
+	}
 
 	protected function processBeforeAction($actionName)
 	{
@@ -37,7 +52,8 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 			return false;
 		}
 
-		$securityContext = $this->storage->getCurrentUserSecurityContext();
+		$this->isViewByUnifiedLink = $this->isViewByUnifiedLink();
+		$securityContext = $this->storage->getCurrentUserSecurityContext($this->isViewByUnifiedLink);
 		if (!$this->file->canRead($securityContext))
 		{
 			$this->showAccessDenied();
@@ -71,7 +87,9 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 			'VERSION_GRID' => $this->getVersionGridData($gridId),
 			'FILE' => [
 				'ID' => $this->file->getId(),
-			]
+				'UNIQUE_CODE' => $this->file->getUniqueCode(),
+			],
+			'IS_VIEW_BY_UNIFIED_LINK' => $this->isViewByUnifiedLink,
 		];
 
 		$this->includeComponentTemplate();
@@ -115,21 +133,40 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 			]
 		);
 
-		$securityContext = $this->storage->getCurrentUserSecurityContext();
+		$securityContext = $this->storage->getCurrentUserSecurityContext($this->isViewByUnifiedLink);
+		$canManageVersions = $this->file->canManageVersions($securityContext);
+		$fileId = (int)$this->file->getId();
+		$fileNameForJs = CUtil::JSEscape($this->file->getName());
 		$urlManager = \Bitrix\Disk\Driver::getInstance()->getUrlManager();
 		$rows = [];
 		foreach ($this->arResult['ITEMS'] as $version)
 		{
-			/** @var $version Version */
 			$objectArray = $version->toArray();
-			$actions = [
-				[
-					"text" => Loc::getMessage('DISK_FILE_VIEW_HISTORY_ACT_DOWNLOAD'),
-					"href" => $urlManager->getUrlForDownloadVersion($version),
-				],
-			];
+			$actions = [];
+			$canDownload = $this->file->canDownload($securityContext);
+			$versionId = (int)$version->getId();
+			$downloadUrl = $urlManager->getUrlForDownloadVersion($version);
 
-			if ($this->file->canRestore($securityContext))
+			if ($this->isViewByUnifiedLink)
+			{
+				$versionUls = $this->unifiedLinkAccessService->getUlsForVersion(
+					objectId: $version->getObjectId(),
+					versionId: $version->getId(),
+				);
+				$downloadUrl = $this->unifiedLinkUrl->addUlsToUrl($downloadUrl, $versionUls);
+			}
+			if ($canDownload)
+			{
+				$actions[] = [
+					"text" => Loc::getMessage('DISK_FILE_VIEW_HISTORY_ACT_DOWNLOAD'),
+					"href" => $downloadUrl,
+					'attrs' => [
+						'data-testid' => 'disk-file-history-download-menu-item',
+					],
+				];
+			}
+
+			if ($canManageVersions)
 			{
 				if ((int)$this->file->getTypeFile() !== TypeFile::FLIPCHART)
 				{
@@ -137,40 +174,53 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 						"text" => Loc::getMessage('DISK_FILE_VIEW_HISTORY_ACT_RESTORE'),
 						"onclick" => "BX.Disk['FileHistoryComponent_{$this->getComponentId()}'].openRestoreConfirm({
 							object: {
-								id: {$this->file->getId()},
-								name: '{$this->file->getName()}'
+								id: {$fileId},
+								name: '{$fileNameForJs}'
 							},
 							version: {
-								id: {$version->getId()}
+								id: {$versionId}
 							}
 						})",
 					];
 				}
 
-				if ($this->file->canDelete($securityContext))
-				{
-					$actions[] = [
-						"id" => "delete",
-						"text" => Loc::getMessage('DISK_FILE_VIEW_HISTORY_ACT_DELETE'),
-						"onclick" => "BX.Disk['FileHistoryComponent_{$this->getComponentId()}'].openDeleteConfirm({
-							object: {
-								id: {$this->file->getId()},
-								name: '{$this->file->getName()}'
-							},
-							version: {
-								id: {$version->getId()}
-							}
-						})",
-					];
-				}
+				$actions[] = [
+					"id" => "delete",
+					"text" => Loc::getMessage('DISK_FILE_VIEW_HISTORY_ACT_DELETE'),
+					"onclick" => "BX.Disk['FileHistoryComponent_{$this->getComponentId()}'].openDeleteConfirm({
+						object: {
+							id: {$fileId},
+							name: '{$fileNameForJs}'
+						},
+						version: {
+							id: {$versionId}
+						}
+					})",
+				];
 			}
 
 			$fileFromVersion = $version->getObject();
 
-			$attr = FileAttributes::tryBuildByFileId($version->getFileId(), new Uri($urlManager->getUrlForDownloadVersion($version)), $fileFromVersion, $version)
+			$sourceUrl = $canDownload
+				? $downloadUrl
+				: $urlManager->getUrlForShowVersionView($version)
+			;
+
+			if ($this->isViewByUnifiedLink && !$canDownload)
+			{
+				$sourceUrl = $this->unifiedLinkUrl->addUlsToUrl($sourceUrl, $versionUls);
+			}
+
+			$attr = FileAttributes::tryBuildByFileId(
+				$version->getFileId(),
+				new Uri($sourceUrl),
+				$fileFromVersion,
+				$version,
+			)
 				->setTitle($version->getName())
 				->setGroupBy($this->componentId)
 				->setVersionId($version->getId())
+				->setDownloadDisabled(!$canDownload)
 			;
 
 			if ((int)$this->file->getTypeFile() === TypeFile::FLIPCHART)
@@ -202,7 +252,7 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 				'data' => $objectArray,
 				'columns' => [
 					'FORMATTED_SIZE' => CFile::formatSize($version->getSize()),
-					'NAME' => "<span style='cursor: pointer;' {$attr}>" . $version->getName() . "</span>",
+					'NAME' => "<button type=\"button\" class=\"disk-file-history-version-name\" data-testid=\"disk-file-history-version-name\" {$attr}>" . htmlspecialcharsbx($version->getName()) . "</button>",
 					'CREATE_USER' => $anchorCreateUser,
 					'CREATE_TIME_VERSION' => $version->getCreateTime(),
 					'CREATE_TIME_FILE' => $version->getObjectCreateTime(),
@@ -259,5 +309,15 @@ class CDiskFileHistoryComponent extends DiskComponent implements SidePanelWrappa
 		}
 
 		return $versionRows;
+	}
+
+	private function isViewByUnifiedLink(): bool
+	{
+		$uls = $this->unifiedLinkUrl->getUlsFromRequest($this->request);
+
+		return
+			is_string($uls)
+			&& $this->unifiedLinkAccessService->validateUlsForObjectId($this->file->getId(), $uls)
+		;
 	}
 }

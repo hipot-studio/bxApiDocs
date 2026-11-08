@@ -24,6 +24,9 @@ final readonly class VersionChoice
 	/**
 	 * @param array|null $executableFields the shape {@see \CBPWorkflowTemplateLoader::loadWorkflowFromArray()}
 	 *     reads; null for the common version, which the runtime keeps loading by the template id
+	 * @param bool $carriesOwnConstants whether the constants of the instance come from the executable fields
+	 *     instead of the published row of the template ({@see \CBPActivity::setConstantsTypes()}). True for a
+	 *     draft alone: the published row of a template running its pilot version keeps holding its constants
 	 */
 	private function __construct(
 		public bool $isPilot,
@@ -31,6 +34,7 @@ final readonly class VersionChoice
 		public AudienceMatch $audienceMatch,
 		public ?string $surface,
 		public ?array $executableFields,
+		public bool $carriesOwnConstants = false,
 	)
 	{
 	}
@@ -80,19 +84,46 @@ final readonly class VersionChoice
 			revision: $revision,
 			audienceMatch: AudienceMatch::Matched,
 			surface: $surface,
-			executableFields: [
-				// the instance stays bound to the live template row, so the id is the one of the template
-				'ID' => $templateId,
-				'TEMPLATE' => $executableFields['TEMPLATE'] ?? [],
-				'PARAMETERS' => $executableFields['PARAMETERS'] ?? [],
-				'VARIABLES' => $executableFields['VARIABLES'] ?? [],
-				'CONSTANTS' => $executableFields['CONSTANTS'] ?? [],
-			],
+			executableFields: self::executableFieldsOf($templateId, $executableFields),
+		);
+	}
+
+	/**
+	 * The saved draft of the template as the scheme of one instance: a test run executes what the editor
+	 * has last saved, constants included, while the published row and everybody starting it stay untouched.
+	 *
+	 * The audience is not asked about: a draft belongs to the editor of the template and to nobody else,
+	 * so no pilot ever competes with it.
+	 *
+	 * @param string $revision the fingerprint of the draft, {@see
+	 *     \Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable::getRevisionIfLatest()} as a string
+	 */
+	public static function draft(int $templateId, array $executableFields, string $revision): self
+	{
+		return new self(
+			isPilot: false,
+			revision: $revision,
+			audienceMatch: AudienceMatch::NotApplicable,
+			surface: null,
+			executableFields: self::executableFieldsOf($templateId, $executableFields),
+			carriesOwnConstants: true,
 		);
 	}
 
 	public static function parameterSchemaToken(array $parameters): string
 	{
 		return hash('sha256', serialize($parameters));
+	}
+
+	private static function executableFieldsOf(int $templateId, array $executableFields): array
+	{
+		return [
+			// the instance stays bound to the live template row, so the id is the one of the template
+			'ID' => $templateId,
+			'TEMPLATE' => $executableFields['TEMPLATE'] ?? [],
+			'PARAMETERS' => $executableFields['PARAMETERS'] ?? [],
+			'VARIABLES' => $executableFields['VARIABLES'] ?? [],
+			'CONSTANTS' => $executableFields['CONSTANTS'] ?? [],
+		];
 	}
 }

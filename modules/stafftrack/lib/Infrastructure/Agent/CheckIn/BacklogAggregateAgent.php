@@ -2,7 +2,7 @@
 
 namespace Bitrix\StaffTrack\Infrastructure\Agent\CheckIn;
 
-use Bitrix\StaffTrack\Public\Services\CheckInBacklogService;
+use Bitrix\StaffTrack\Public\Services\CheckInService;
 
 class BacklogAggregateAgent
 {
@@ -33,7 +33,7 @@ class BacklogAggregateAgent
 
 		try
 		{
-			$hasMore = (new CheckInBacklogService())->aggregateStaleCheckIns();
+			$hasMore = CheckInService::getInstance()->aggregateStaleCheckIns();
 
 			if ($hasMore)
 			{

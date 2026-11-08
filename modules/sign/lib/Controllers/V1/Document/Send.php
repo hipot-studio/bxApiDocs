@@ -5,7 +5,6 @@ namespace Bitrix\Sign\Controllers\V1\Document;
 use Bitrix\Sign\Access\AccessController;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Attribute;
-use Bitrix\Sign\Helper\IterationHelper;
 use Bitrix\Sign\Item\Api\Document\Signing\ResendMessageRequest;
 use Bitrix\Sign\Item\Document;
 use Bitrix\Sign\Item\Member;
@@ -132,11 +131,10 @@ class Send extends \Bitrix\Sign\Engine\Controller
 		DocumentCollection $documents,
 	): DocumentCollection
 	{
+		$accessibleIds = $accessController->filterAccessibleIds(self::RESEND_ACCESS_ACTIONS, $documents);
+
 		return $documents->filter(
-			static fn(Document $document): bool => IterationHelper::any(
-				self::RESEND_ACCESS_ACTIONS,
-				static fn(string $action): bool => $accessController->checkByItem($action, $document),
-			),
+			static fn(Document $document): bool => isset($accessibleIds[$document->getId()]),
 		);
 	}
 

@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Landing\Vibe;
 
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\EventManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Landing\Vibe\Provider\AbstractVibeProvider;
 use Bitrix\Landing\Vibe\Provider\VibeContextDto;
 use Bitrix\Landing;
@@ -541,21 +543,35 @@ class Vibe
 		return $res->isSuccess();
 	}
 
-	public function delete()
+	public function delete(): Result
 	{
+		$result = new Result();
+
 		if (isset($this->siteId))
 		{
 			$guard = new Site\ScopeGuard(Site\Type::SCOPE_CODE_VIBE);
 			$guard->start();
-			Site::markDelete($this->siteId);
+			$siteDeleteResult = Site::markDelete($this->siteId);
+			$result->addErrors($siteDeleteResult->getErrors());
+			if (!$siteDeleteResult->isSuccess())
+			{
+				return $result;
+			}
 		}
 
 		if (isset($this->entityId))
 		{
-			Model\VibeTable::delete($this->entityId);
+			$vibeDeleteResult = Model\VibeTable::delete($this->entityId);
+			$result->addErrors($vibeDeleteResult->getErrors());
+			if (!$vibeDeleteResult->isSuccess())
+			{
+				return $result;
+			}
 		}
 
 		Option::delete('landing', ['name' => $this->getPreviewOptionCode()]);
+
+		return $result;
 	}
 
 	/**
@@ -745,6 +761,22 @@ class Vibe
 		}
 
 		return true;
+	}
+
+	/**
+	 * Portal zone for region dependent widget content. Works without the bitrix24 module (box, preview stand).
+	 * @return string
+	 */
+	public static function getPortalZone(): string
+	{
+		if (Loader::includeModule('bitrix24'))
+		{
+			return (string)\CBitrix24::getPortalZone();
+		}
+
+		$region = Application::getInstance()->getLicense()->getRegion();
+
+		return (string)($region ?: Landing\Manager::getZone());
 	}
 
 	/**

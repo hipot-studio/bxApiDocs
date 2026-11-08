@@ -9,6 +9,10 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
+use Bitrix\BIConnector\Access\Permission\PermissionDictionary;
+use Bitrix\BIConnector\Access\Service\TableGroupMembershipService;
+use Bitrix\BIConnector\Access\Service\TableGroupService;
+use Bitrix\BIConnector\Access\Table\TableAccessChecker;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceRestTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BIConnector\ExternalSource\SupersetIntegration;
@@ -30,6 +34,11 @@ class DatasetImportV2Component extends CBitrixComponent
 {
 	private const FIRST_N_ROW = 20;
 	private const SYSTEM_PREVIEW_ROWS = 30;
+
+	private ?TableAccessChecker $tableAccessChecker = null;
+
+	/** @var array<int, array{id: int, name: string, type: string}>|null */
+	private ?array $editableTableGroups = null;
 
 	public function onPrepareComponentParams($arParams)
 	{
@@ -76,6 +85,14 @@ class DatasetImportV2Component extends CBitrixComponent
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_APP_NOT_FOUND');
 		}
+		elseif (
+			self::isNewDataset($arParams)
+			&& $this->getTableAccessChecker()->isRestricted()
+			&& empty($this->getEditableTableGroups())
+		)
+		{
+			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_CSV_IMPORT_TABLE_CREATE_ACCESS_ERROR');
+		}
 
 		return parent::onPrepareComponentParams($arParams);
 	}
@@ -112,11 +129,7 @@ class DatasetImportV2Component extends CBitrixComponent
 	{
 		$this->arResult['initialData'] = [
 			'config' => [
-				'fileProperties' => [
-					'encoding' => Const\Encoding::UTF8->value,
-					'separator' => Const\Delimiter::COMMA->value,
-					'firstLineHeader' => true,
-				],
+				'fileProperties' => $this->getDefaultFileProperties(),
 				'dataFormats' => [
 					FieldType::Date->value => Const\Date::Ymd_dash->value,
 					FieldType::DateTime->value => Const\DateTime::Ymd_dash_His_colon->value,
@@ -142,13 +155,168 @@ class DatasetImportV2Component extends CBitrixComponent
 
 			$this->arResult['initialData']['config']['connectionProperties'] = $connectionProperties;
 		}
+
+		if ($this->isNewDatasetMode() && $this->getTableAccessChecker()->isRestricted())
+		{
+			$this->arResult['initialData']['config']['tableGroupIds'] = $this->getDefaultTableGroupIds();
+		}
+	}
+
+	/**
+	 * Single source of the parsing defaults: loadDataset() falls back to the very same values
+	 * for datasets saved before the settings were stored, so they must not drift apart.
+	 */
+	private function getDefaultFileProperties(): array
+	{
+		return [
+			'encoding' => Const\Encoding::UTF8->value,
+			'separator' => Const\Delimiter::COMMA->value,
+			'firstLineHeader' => true,
+		];
+	}
+
+	/**
+	 * Parsing settings the dataset was actually imported with.
+	 *
+	 * The whole set is always returned: the config below is merged with a top-level spread, so a
+	 * partial array would silently drop the keys it omits. Empty attributes mean the dataset was
+	 * saved before the settings were stored — the form then shows the same defaults as before.
+	 *
+	 * fileToken is deliberately left out: its absence is what keeps the parsing options read-only
+	 * until a replacement file is uploaded.
+	 */
+	private function internalizeFileProperties(ExternalSource\Internal\ExternalDataset $dataset): array
+	{
+		$defaults = $this->getDefaultFileProperties();
+
+		// The three attributes are written together, so the delimiter alone tells whether the set
+		// exists. The headers flag cannot answer that on its own: BooleanField turns a stored NULL
+		// into false, making "unknown" indistinguishable from "explicitly off".
+		$delimiter = (string)($dataset->getCsvDelimiter() ?? '');
+		if ($delimiter === '')
+		{
+			return $defaults;
+		}
+
+		$encoding = (string)($dataset->getCsvEncoding() ?? '');
+
+		return [
+			'encoding' => $encoding !== '' ? $encoding : $defaults['encoding'],
+			'separator' => $delimiter,
+			'firstLineHeader' => (bool)$dataset->getCsvHasHeaders(),
+		];
 	}
 
 	private function isNewDatasetMode(): bool
 	{
-		return $this->arParams['datasetId'] <= 0
-			&& $this->arParams['sourceId'] !== ExternalSource\Type::System->value
+		return self::isNewDataset($this->arParams);
+	}
+
+	private static function isNewDataset(array $params): bool
+	{
+		return $params['datasetId'] <= 0
+			&& $params['sourceId'] !== ExternalSource\Type::System->value
 		;
+	}
+
+	private function getTableAccessChecker(): TableAccessChecker
+	{
+		$this->tableAccessChecker ??= new TableAccessChecker();
+
+		return $this->tableAccessChecker;
+	}
+
+	/**
+	 * A table the user may not view is answered as a missing one, the way the section does not list it.
+	 */
+	private function canViewTable(string $tableCode): bool
+	{
+		return $this->getTableAccessChecker()->canDo(ActionDictionary::ACTION_BIC_TABLE_VIEW, $tableCode);
+	}
+
+	/**
+	 * Groups a new table may be put in: those where the user has the right to edit tables.
+	 *
+	 * @return array<int, array{id: int, name: string, type: string}>
+	 */
+	private function getEditableTableGroups(): array
+	{
+		if ($this->editableTableGroups !== null)
+		{
+			return $this->editableTableGroups;
+		}
+
+		$this->editableTableGroups = [];
+		foreach (TableGroupService::getGroups() as $group)
+		{
+			$groupId = PermissionDictionary::getTableGroupIdFromPermission($group['id']);
+			if (
+				$groupId > 0
+				&& $this->getTableAccessChecker()->canUseGroup(ActionDictionary::ACTION_BIC_TABLE_EDIT, $groupId)
+			)
+			{
+				$this->editableTableGroups[] = [
+					'id' => $groupId,
+					'name' => $group['name'],
+					'type' => $group['type'],
+				];
+			}
+		}
+
+		return $this->editableTableGroups;
+	}
+
+	/**
+	 * A new table starts in the user tables group when the user may put it there; the user may change the choice.
+	 *
+	 * @return int[]
+	 */
+	private function getDefaultTableGroupIds(): array
+	{
+		$userTablesGroupId = TableGroupMembershipService::getUserTablesGroupId();
+		if ($userTablesGroupId === null)
+		{
+			return [];
+		}
+
+		$editableGroupIds = array_column($this->getEditableTableGroups(), 'id');
+
+		return in_array($userTablesGroupId, $editableGroupIds, true) ? [$userTablesGroupId] : [];
+	}
+
+	/**
+	 * Groups the table is bound to, limited to those the user may view, as the table list shows them.
+	 *
+	 * @param string $tableCode
+	 *
+	 * @return array<int, array{id: int, name: string, type: string}>
+	 */
+	private function getVisibleTableGroups(string $tableCode): array
+	{
+		$tableGroupIds = array_flip(TableGroupMembershipService::getGroupIdsByTableCode($tableCode));
+		if (empty($tableGroupIds))
+		{
+			return [];
+		}
+
+		$result = [];
+		foreach (TableGroupService::getGroups() as $group)
+		{
+			$groupId = PermissionDictionary::getTableGroupIdFromPermission($group['id']);
+			if (
+				isset($tableGroupIds[$groupId])
+				&& $this->getTableAccessChecker()->canUseGroup(ActionDictionary::ACTION_BIC_TABLE_VIEW, $groupId)
+			)
+			{
+				$result[] = [
+					'id' => $groupId,
+					'name' => $group['name'],
+					'type' => $group['type'],
+				];
+			}
+		}
+
+		return $result;
 	}
 
 	private function getConnectionTitle(int $connectionId): string
@@ -186,22 +354,37 @@ class DatasetImportV2Component extends CBitrixComponent
 		$provider = new SystemDatasetProvider();
 		$tableData = $tableName !== '' ? $provider->getByName($tableName) : null;
 
-		if ($tableData === null)
+		if ($tableData === null || !$this->canViewTable($tableName))
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_DATASET_NOT_FOUND_MSGVER_1');
 
 			return;
 		}
 
-		$fullDescription = is_array($tableData['TABLE_DESCRIPTION_FULL'] ?? null)
-			? ''
-			: (string)($tableData['TABLE_DESCRIPTION_FULL'] ?? '')
-		;
-		$shortDescription = is_array($tableData['TABLE_DESCRIPTION'] ?? null)
-			? ''
-			: (string)($tableData['TABLE_DESCRIPTION'] ?? '')
-		;
+		$fullDescription = '';
+		if (!is_array($tableData['TABLE_DESCRIPTION_FULL'] ?? null))
+		{
+			$fullDescription = (string)($tableData['TABLE_DESCRIPTION_FULL'] ?? '');
+		}
+
+		$shortDescription = '';
+		if (!is_array($tableData['TABLE_DESCRIPTION'] ?? null))
+		{
+			$shortDescription = (string)($tableData['TABLE_DESCRIPTION'] ?? '');
+		}
 		$description = $fullDescription !== '' ? $fullDescription : $shortDescription;
+
+		$name = (string)$tableData['NAME'];
+
+		// A human name exists only when the short description differs from the technical name.
+		// Without one the name field stays empty, while the slider title falls back to the code.
+		$verboseName = '';
+		$displayName = $name;
+		if ($shortDescription !== '' && $shortDescription !== $name)
+		{
+			$verboseName = $shortDescription;
+			$displayName = $shortDescription;
+		}
 
 		unset($this->arResult['initialData']['config']['connectionProperties']);
 
@@ -209,10 +392,16 @@ class DatasetImportV2Component extends CBitrixComponent
 		$datasetProperties = [
 			'id' => 0,
 			'name' => $tableData['NAME'],
+			'verboseName' => $verboseName,
+			'displayName' => $displayName,
 			'description' => $description,
 			'isSystem' => true,
 			'externalDatasets' => $externalDatasets,
 		];
+		if ($this->getTableAccessChecker()->isRestricted())
+		{
+			$datasetProperties['tableGroups'] = $this->getVisibleTableGroups($name);
+		}
 
 		$createPhysicalUrl = $this->getSystemDatasetCreateUrl($tableName, false, $externalDatasets);
 		if ($createPhysicalUrl !== null)
@@ -406,7 +595,7 @@ class DatasetImportV2Component extends CBitrixComponent
 	{
 		$datasetId = $this->arParams['datasetId'];
 		$dataset = DatasetManager::getById($datasetId);
-		if (!$dataset)
+		if (!$dataset || !$this->canViewTable((string)$dataset->getName()))
 		{
 			$this->arResult['ERROR_MESSAGES'][] = Loc::getMessage('BICONNECTOR_DATASET_NOT_FOUND_MSGVER_1');
 
@@ -421,6 +610,17 @@ class DatasetImportV2Component extends CBitrixComponent
 			'fieldsSettings' => $this->internalizeDatasetFields($datasetFields),
 			'dataFormats' => $this->internalizeDatasetSettings($datasetSettings),
 		];
+
+		$canEdit = $this->getTableAccessChecker()->canDo(ActionDictionary::ACTION_BIC_TABLE_EDIT, $dataset->getName());
+		$result['datasetProperties']['canEdit'] = $canEdit;
+		$result['datasetProperties']['canExport'] = $this->getTableAccessChecker()->canDo(
+			ActionDictionary::ACTION_BIC_TABLE_EXPORT,
+			$dataset->getName(),
+		);
+		if ($this->getTableAccessChecker()->isRestricted())
+		{
+			$result['datasetProperties']['tableGroups'] = $this->getVisibleTableGroups($dataset->getName());
+		}
 
 		if ($dataset->getEnumType() !== ExternalSource\Type::Csv)
 		{
@@ -456,17 +656,12 @@ class DatasetImportV2Component extends CBitrixComponent
 					'connectionIsSupportMapping' => $isSupportMapping ?? false,
 				];
 
-				$externalDatasets = $result['datasetProperties']['externalDatasets'] ?? [];
-				$createPhysicalUrl = $this->getPhysicalDatasetCreateUrl($dataset, $externalDatasets);
-				if ($createPhysicalUrl !== null)
+				if ($canEdit)
 				{
-					$connectionProperties['createPhysicalDatasetUrl'] = $createPhysicalUrl;
-				}
-
-				$createVirtualUrl = $this->getVirtualDatasetCreateUrl($dataset);
-				if ($createVirtualUrl !== null)
-				{
-					$connectionProperties['createVirtualDatasetUrl'] = $createVirtualUrl;
+					$connectionProperties = [
+						...$connectionProperties,
+						...$this->getDatasetCreateUrls($dataset, $result['datasetProperties']['externalDatasets'] ?? []),
+					];
 				}
 
 				$result['connectionProperties'] = $connectionProperties;
@@ -475,17 +670,14 @@ class DatasetImportV2Component extends CBitrixComponent
 
 		if ($dataset->getEnumType() === ExternalSource\Type::Csv)
 		{
-			$externalDatasets = $result['datasetProperties']['externalDatasets'] ?? [];
-			$createPhysicalUrl = $this->getPhysicalDatasetCreateUrl($dataset, $externalDatasets);
-			if ($createPhysicalUrl !== null)
-			{
-				$result['datasetProperties']['createPhysicalDatasetUrl'] = $createPhysicalUrl;
-			}
+			$result['fileProperties'] = $this->internalizeFileProperties($dataset);
 
-			$createVirtualUrl = $this->getVirtualDatasetCreateUrl($dataset);
-			if ($createVirtualUrl !== null)
+			if ($canEdit)
 			{
-				$result['datasetProperties']['createVirtualDatasetUrl'] = $createVirtualUrl;
+				$result['datasetProperties'] = [
+					...$result['datasetProperties'],
+					...$this->getDatasetCreateUrls($dataset, $result['datasetProperties']['externalDatasets'] ?? []),
+				];
 			}
 		}
 
@@ -500,11 +692,36 @@ class DatasetImportV2Component extends CBitrixComponent
 		}
 	}
 
+	/**
+	 * Creating a dataset in Superset belongs to editing the table, so without the right no link is offered.
+	 *
+	 * @return array{createPhysicalDatasetUrl?: string, createVirtualDatasetUrl?: string}
+	 */
+	private function getDatasetCreateUrls(ExternalSource\Internal\ExternalDataset $dataset, array $externalDatasets): array
+	{
+		$urls = [];
+
+		$createPhysicalUrl = $this->getPhysicalDatasetCreateUrl($dataset, $externalDatasets);
+		if ($createPhysicalUrl !== null)
+		{
+			$urls['createPhysicalDatasetUrl'] = $createPhysicalUrl;
+		}
+
+		$createVirtualUrl = $this->getVirtualDatasetCreateUrl($dataset);
+		if ($createVirtualUrl !== null)
+		{
+			$urls['createVirtualDatasetUrl'] = $createVirtualUrl;
+		}
+
+		return $urls;
+	}
+
 	private function internalizeDataset(ExternalSource\Internal\ExternalDataset $dataset): array
 	{
 		return [
 			'id' => $dataset->getId(),
 			'name' => $dataset->getName() ?? '',
+			'verboseName' => $dataset->getVerboseName() ?? '',
 			'description' => $dataset->getDescription() ?? '',
 			'externalCode' => $dataset->getExternalCode() ?? '',
 			'externalName' => $dataset->getExternalName() ?? '',
@@ -715,6 +932,13 @@ class DatasetImportV2Component extends CBitrixComponent
 			'connections' => $this->getExternalConnections(),
 			'isSupersetReady' => SupersetInitializer::isSupersetReady(),
 		];
+
+		if ($this->isNewDatasetMode())
+		{
+			$isTablePermissionsEnabled = $this->getTableAccessChecker()->isRestricted();
+			$this->arResult['appParams']['isTablePermissionsEnabled'] = $isTablePermissionsEnabled;
+			$this->arResult['appParams']['tableGroups'] = $isTablePermissionsEnabled ? $this->getEditableTableGroups() : [];
+		}
 	}
 
 	private function getTimezones(): array

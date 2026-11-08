@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item;
 
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Attribute\CrmRelation;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\ItemDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\Dictionary\HonorificDto;
@@ -29,6 +30,7 @@ class ContactDto extends AbstractItemDto
 	#[InArrayFrom(ItemProvider::class, ['entityTypeId' => OwnerType::COMPANY])]
 	public ?int $companyId;
 	#[RelationToOne('companyId', 'id')]
+	#[CrmRelation(OwnerType::COMPANY)]
 	public ?ItemDto $company;
 
 	#[Filterable]
@@ -36,6 +38,7 @@ class ContactDto extends AbstractItemDto
 	#[InArrayFrom(ItemProvider::class, ['entityTypeId' => OwnerType::LEAD])]
 	public ?int $leadId;
 	#[RelationToOne('leadId', 'id')]
+	#[CrmRelation(OwnerType::LEAD)]
 	public ?ItemDto $lead;
 
 	#[Editable]
@@ -48,6 +51,7 @@ class ContactDto extends AbstractItemDto
 
 	#[RelationToMany('companiesId', 'id', ['id' => 'ASC'])]
 	#[ElementType(ItemDto::class)]
+	#[CrmRelation(OwnerType::COMPANY)]
 	public ?DtoCollection $companies;
 
 	#[Editable]

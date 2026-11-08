@@ -27,7 +27,6 @@ class RegularTaskReplicated
 
 		$locKey = 'TASKS_REGULAR_TASK_REPLICATED';
 		$nameTemplate = $metadata->getParams()['user_params']['NAME_TEMPLATE'] ?? null;
-		$serverTimeZoneOffset = $metadata->getUserRepository()->getUserTimeZoneOffset(0);
 
 		$description = '';
 
@@ -50,20 +49,6 @@ class RegularTaskReplicated
 			$description .= Loc::getMessage('TASKS_MESSAGE_AUDITORS', null, $recipient->getLang());
 			$description .= ': ' . $auditors . "\r\n";
 		}
-
-		// if ($task->getDeadline())
-		// {
-		// 	// Get unix timestamp for DEADLINE
-		// 	$utsDeadline = $task->getDeadline()->getTimestamp() - $serverTimeZoneOffset;
-		// 	$recepientTimeZoneOffset = $userRepository->getUserTimeZoneOffset($recipient->getId());
-		//
-		// 	// Make bitrix timestamp for given user
-		// 	$bitrixTsDeadline = $utsDeadline + $recepientTimeZoneOffset;
-		// 	$deadlineAsString = \Bitrix\Tasks\UI::formatDateTime($bitrixTsDeadline, '^'.\Bitrix\Tasks\UI::getDateTimeFormat());
-		//
-		// 	$description .= Loc::getMessage('TASKS_MESSAGE_DEADLINE', null, $recipient->getLang());
-		// 	$description .= ': ' . $deadlineAsString . "\r\n";
-		// }
 
 		$notification = new Notification(
 			$locKey,

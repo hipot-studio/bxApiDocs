@@ -49,9 +49,10 @@ final class BlockTypeMapper extends AbstractAgentMapper
 
 	/**
 	 * The nested `block` part is lifted into the same dto - that is what makes the read of one block a
-	 * flat object of the same resource. The rest is transferred as the domain emits it, so the
-	 * conditional emission of returnFields, typesDescription, defaultValues, defaultSettings and
-	 * complexActions is not duplicated here.
+	 * flat object of the same resource. The rest is transferred as the domain emits it, so neither the
+	 * unconditional emission of settings, carriedSettings, settingConstraints, returnFields and
+	 * typesDescription nor the conditional emission of defaultValues, defaultSettings and complexActions
+	 * is duplicated here.
 	 */
 	private function mapDetail(BlockTypeDetail $detail, array $fields): BlockTypeDto
 	{

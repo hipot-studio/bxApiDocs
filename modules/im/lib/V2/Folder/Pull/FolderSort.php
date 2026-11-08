@@ -8,7 +8,8 @@ use Bitrix\Im\V2\Pull\EventType;
 class FolderSort extends BaseFolderEvent
 {
 	/**
-	 * @param int[] $folderIds full ordered list of visible folder ids
+	 * @param int[] $folderIds canonical server order of every top-level folder of the user,
+	 *                         hidden and unavailable ones included: a client keeps what it knows
 	 */
 	public function __construct(
 		private readonly array $folderIds,

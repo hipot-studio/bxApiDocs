@@ -17,7 +17,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
 /**
- * Load sections and blocks. Manage, filtred.
+ * Load sections and blocks. Manage, filtered.
  */
 class BlockRepo
 {

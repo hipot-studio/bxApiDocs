@@ -1421,7 +1421,9 @@ class TimemanWorktimeGridComponent extends Timeman\Component\BaseComponent
 			'stExportId' => $stExportId,
 			'managerId' => $stExportManagerId,
 			'sToken' => 's'.time(),
-			'signedParameters' => ParameterSigner::signParameters($componentName, $componentParams),
+			'signedParameters' => method_exists(\Bitrix\Timeman\Controller\Export::class, 'signExportParameters')
+				? \Bitrix\Timeman\Controller\Export::signExportParameters($componentName, $componentParams)
+				: ParameterSigner::signParameters($componentName, $componentParams),
 		];
 	}
 }

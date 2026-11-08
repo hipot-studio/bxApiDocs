@@ -13,6 +13,22 @@ use Bitrix\Main\ORM\Fields\TextField;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Rest\Internal\Entity\DeferredBatch\Status;
 
+/**
+ * Class DeferredBatchTable
+ *
+ * DO NOT WRITE ANYTHING BELOW THIS
+ *
+ * <<< ORMENTITYANNOTATION
+ * @method static EO_DeferredBatch_Query query()
+ * @method static EO_DeferredBatch_Result getByPrimary($primary, array $parameters = [])
+ * @method static EO_DeferredBatch_Result getById($id)
+ * @method static EO_DeferredBatch_Result getList(array $parameters = [])
+ * @method static EO_DeferredBatch_Entity getEntity()
+ * @method static \Bitrix\Rest\Internal\Model\EO_DeferredBatch createObject($setDefaultValues = true)
+ * @method static \Bitrix\Rest\Internal\Model\EO_DeferredBatch_Collection createCollection()
+ * @method static \Bitrix\Rest\Internal\Model\EO_DeferredBatch wakeUpObject($row)
+ * @method static \Bitrix\Rest\Internal\Model\EO_DeferredBatch_Collection wakeUpCollection($rows)
+ */
 class DeferredBatchTable extends DataManager
 {
 	public static function getTableName(): string

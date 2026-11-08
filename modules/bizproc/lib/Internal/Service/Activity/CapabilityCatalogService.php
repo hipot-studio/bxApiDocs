@@ -75,7 +75,7 @@ class CapabilityCatalogService
 		}
 
 		$availableBlocks = $this->resolveAvailableBlocks(
-			$description->getComplexActivitySettings(),
+			$description,
 			$filterAvailable,
 			$relationsAvailable,
 			$filterModuleSupported,
@@ -187,7 +187,7 @@ class CapabilityCatalogService
 		}
 
 		$blocks = $this->resolveAvailableBlocks(
-			$description->getComplexActivitySettings(),
+			$description,
 			$filterAvailable,
 			$relationsAvailable,
 			$filterModuleSupported,
@@ -202,36 +202,31 @@ class CapabilityCatalogService
 	 * Relations-block availability for canvas/catalog consumers, gated the same way as
 	 * applyRuntimeGates(): a declared relations block stays available only when the node declares
 	 * the relation action its cards are filled with and the runtime flag allows it, so the canvas
-	 * never diverges from the settings panel. Returns null when the availability cannot be decided
-	 * from the descriptor — legacy nodes keep the frontend feature-flag fallback.
+	 * never diverges from the settings panel. The verdict is two-valued: a node whose descriptor
+	 * says nothing about relations has none, so no consumer is left with an undecided state to
+	 * interpret on its own.
 	 *
 	 * @param ActivityDescription $description
 	 * @param bool $relationsAvailable Runtime gate (complexNodeConnections feature).
-	 * @return bool|null
+	 * @return bool
 	 */
 	public function getRelationsAvailabilityForNode(
 		ActivityDescription $description,
 		bool $relationsAvailable,
-	): ?bool
+	): bool
 	{
 		$settings = $description->getComplexActivitySettings();
-		if ($settings === null)
-		{
-			return null;
-		}
-
-		if ($settings->relationAction === null)
+		if ($settings === null || $settings->relationAction === null)
 		{
 			return false;
 		}
 
-		$availableBlocks = $settings->availableBlocks;
-		if ($availableBlocks === null)
+		if ($settings->availableBlocks?->isAvailable(NodeBlockType::RELATIONS) !== true)
 		{
-			return null;
+			return false;
 		}
 
-		return $availableBlocks->isAvailable(NodeBlockType::RELATIONS) && $relationsAvailable;
+		return $relationsAvailable;
 	}
 
 	private function buildCacheKey(
@@ -274,39 +269,56 @@ class CapabilityCatalogService
 	/**
 	 * Resolve availableBlocks from explicit declaration or fall back to the legacy default.
 	 *
-	 * A node that declares complex settings offers the relations block only with a declared relation
-	 * action: without it the card has no action to select and could never be filled, so the surface
-	 * is reported unavailable no matter what the runtime flag says. A legacy node without settings
-	 * keeps the plain runtime-flag fallback — the same undecided state getRelationsAvailabilityForNode()
-	 * reports as null — so the canvas and the settings panel cannot diverge on such nodes.
+	 * The relations block is offered only to a node that declares it next to the relation action its
+	 * cards are filled with: without the action the card has no action to select and could never be
+	 * filled, and without the declared block the node has no relations at all. A node without an
+	 * availableBlocks declaration therefore gets the legacy default with relations off - whether it
+	 * declares a relation action or not - which is the verdict getRelationsAvailabilityForNode()
+	 * reports for the very same node, so the panel never offers a block the save path would discard.
 	 *
-	 * @param \Bitrix\Bizproc\Activity\Dto\Complex\Settings|null $settings
+	 * @param ActivityDescription $description Description of the node itself: it decides the declaration
+	 *     path and, through Properties.BaseSettingsAction, the base-settings block.
 	 * @param bool $filterAvailable Decides the filter block only for a node without a declaration.
-	 * @param bool $relationsAvailable
+	 * @param bool $relationsAvailable Runtime gate, applied to a declared relations block alone.
 	 * @param bool $filterModuleSupported Gates a declared filter block; see applyRuntimeGates().
 	 * @return BlockAvailability
 	 */
 	private function resolveAvailableBlocks(
-		?\Bitrix\Bizproc\Activity\Dto\Complex\Settings $settings,
+		ActivityDescription $description,
 		bool $filterAvailable,
 		bool $relationsAvailable,
 		bool $filterModuleSupported,
 	): BlockAvailability
 	{
-		$relationsAvailable = $relationsAvailable
-			&& ($settings === null || $settings->relationAction !== null)
+		$settings = $description->getComplexActivitySettings();
+
+		$blocks = ($settings !== null && $settings->availableBlocks !== null)
+			? $this->applyRuntimeGates(
+				$settings->availableBlocks,
+				$relationsAvailable && $settings->relationAction !== null,
+				$filterModuleSupported,
+			)
+			: $this->buildLegacyDefaultAvailableBlocks($filterAvailable)
 		;
 
-		if ($settings !== null && $settings->availableBlocks !== null)
+		$properties = $description->get('PROPERTIES');
+		$isComplexNode = strtolower((string)$description->getNodeType()) === ActivityNodeType::COMPLEX->value;
+		$hasBaseSettingsAction = is_array($properties)
+			&& (string)($properties['BaseSettingsAction'] ?? '') !== '';
+
+		$baseSettings = $blocks->get(NodeBlockType::BASE_SETTINGS);
+		if ($isComplexNode && !$hasBaseSettingsAction && $baseSettings?->available)
 		{
-			return $this->applyRuntimeGates(
-				$settings->availableBlocks,
-				$relationsAvailable,
-				$filterModuleSupported,
+			// A complex node has no settings of its own: the block renders the form of the action named
+			// in Properties.BaseSettingsAction, so without that name it would open empty. Returns a copy:
+			// the declared descriptor is never mutated.
+			$blocks = BlockAvailability::fromArrayData($blocks->toArray())->set(
+				NodeBlockType::BASE_SETTINGS,
+				new AvailableBlock(available: false, constraints: $baseSettings->constraints),
 			);
 		}
 
-		return $this->buildLegacyDefaultAvailableBlocks($filterAvailable, $relationsAvailable);
+		return $blocks;
 	}
 
 	/**
@@ -352,13 +364,14 @@ class CapabilityCatalogService
 
 	/**
 	 * Build legacy-compatible default BlockAvailability for nodes without an explicit declaration:
-	 * condition+action+output always available; filter by filterSupported rule;
-	 * relations by complexNodeConnections; base-settings/group/storages = false.
+	 * base-settings+condition+action+output always available; filter by filterSupported rule; relations
+	 * off, because an undeclared block is no block; group/storages = false.
 	 * The set itself lives on the descriptor DTO, so a node declaring the same default (the installed
-	 * CRM complex nodes do) reads it from one place instead of repeating the map.
+	 * CRM complex nodes do) reads it from one place instead of repeating the map - and a node that does
+	 * declare relations passes them in there, not through this default.
 	 */
-	private function buildLegacyDefaultAvailableBlocks(bool $filterAvailable, bool $relationsAvailable): BlockAvailability
+	private function buildLegacyDefaultAvailableBlocks(bool $filterAvailable): BlockAvailability
 	{
-		return BlockAvailability::legacyDefault($filterAvailable, $relationsAvailable);
+		return BlockAvailability::legacyDefault($filterAvailable);
 	}
 }

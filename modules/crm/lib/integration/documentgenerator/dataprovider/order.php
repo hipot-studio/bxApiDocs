@@ -464,7 +464,7 @@ class Order extends ProductsDataProvider
 
 	public static function getProductProviderDataByBasketItem(array $basketItem, ItemIdentifier $owner, string $currencyId): array
 	{
-		return [
+		$result = [
 			'ID' => $basketItem['ID'],
 			'OWNER_ID' => $owner->getEntityId(),
 			'OWNER_TYPE' => $owner->getEntityTypeId(),
@@ -484,6 +484,13 @@ class Order extends ProductsDataProvider
 			'PRODUCT_VARIANT' => self::getProductVariantByBasketItem($basketItem),
 			'CURRENCY_ID' => $currencyId,
 		];
+
+		if (array_key_exists('WEIGHT', $basketItem) && $basketItem['WEIGHT'] !== null)
+		{
+			$result['WEIGHT'] = $basketItem['WEIGHT'];
+		}
+
+		return $result;
 	}
 
 	private static function getDiscountRateByBasketItem(array $basketItem) : float

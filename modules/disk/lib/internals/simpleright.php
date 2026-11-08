@@ -122,22 +122,25 @@ final class SimpleRightTable extends DataManager
 	{
 		$objectId = (int)$objectId;
 		$connection = Application::getInstance()->getConnection();
+		$tableName = static::getTableName();
 		$pathTable = ObjectPathTable::getTableName();
+		// MySQL gets the join form: the plan for IN (subquery) is not guaranteed. The optimizer picks it by
+		// cost, and on a large enough subtree, or when the semi-join transformation is unavailable, it scans
+		// the whole target table; the join keeps index access on OBJECT_ID either way. PostgreSQL plans that
+		// subquery as a hash semi join, so the portable branch stays on it.
 		if ($connection instanceof MysqlCommonConnection)
 		{
 			$sql = "
-				DELETE r FROM b_disk_simple_right r
-				WHERE r.OBJECT_ID IN (
-					SELECT p.OBJECT_ID
-					FROM {$pathTable} p
-					WHERE p.PARENT_ID = {$objectId}
-				)
+				DELETE r
+				FROM {$tableName} r
+					INNER JOIN {$pathTable} p ON p.OBJECT_ID = r.OBJECT_ID
+				WHERE p.PARENT_ID = {$objectId}
 			";
 		}
 		else
 		{
 			$sql = "
-				DELETE FROM b_disk_simple_right r
+				DELETE FROM {$tableName} r
 				WHERE r.OBJECT_ID IN (
 					SELECT p.OBJECT_ID
 					FROM {$pathTable} p

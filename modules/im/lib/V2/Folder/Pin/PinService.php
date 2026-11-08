@@ -8,10 +8,13 @@ use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Error;
+use Bitrix\Im\V2\Folder\Definition\CompositeDefinition;
+use Bitrix\Im\V2\Folder\Definition\SelectionResolver;
 use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\Folder\Folder;
 use Bitrix\Im\V2\Folder\FolderBootstrapper;
 use Bitrix\Im\V2\Folder\FolderProvider;
+use Bitrix\Im\V2\Folder\System\AllFolder;
 use Bitrix\Im\V2\Folder\System\AllOpenChannelFolder;
 use Bitrix\Im\V2\Folder\System\DefaultFolder;
 use Bitrix\Im\V2\Pull\Event\ChatPin;
@@ -41,7 +44,7 @@ class PinService
 		// Pinning a copilot draft chat is the first user action with it: turn it
 		// into a real chat before any recent row is created, otherwise the draft
 		// would leak into recent while still hidden from search.
-		Chat\CopilotChat::activateDraftIfNeeded($chat);
+		Chat\CopilotChat::activateDraftIfNeeded($chat, initiatorId: $userId);
 
 		// Lazy bootstrap is required for legacy fan-out across system folders.
 		$this->folderBootstrapper->ensureSystemFolders($userId);
@@ -82,31 +85,131 @@ class PinService
 
 		$recent = $this->recentProvider->getItemsByChatIds($userId, $chatIds);
 
-		$rows = [];
+		$pinnedChatIds = [];
 		foreach ($recent as $item)
 		{
-			if (!$item->isPinned())
+			if ($item->isPinned())
 			{
-				continue;
+				$pinnedChatIds[] = $item->getChatId();
 			}
-			$rows[] = [
-				'FOLDER_ID' => $folder->getId(),
-				'CHAT_ID' => $item->getChatId(),
-				'PIN_SORT' => 0,
-				'USER_ID' => $userId,
-				'FOLDER_PARENT_ID' => $folder->getParentId(),
-			];
 		}
 
-		if (empty($rows))
+		if (empty($pinnedChatIds))
 		{
 			return;
 		}
 
-		FolderPinTable::multiplyInsertWithoutDuplicate(
-			$rows,
-			['UNIQUE_FIELDS' => ['FOLDER_ID', 'CHAT_ID']]
-		);
+		$this->insertShadowRows($folder, $userId, $pinnedChatIds);
+
+		$this->pinCache->clearByUser($userId);
+	}
+
+	/**
+	 * Shadow hygiene when sources are toggled off in a composite folder (ALG-03
+	 * syncShadowsOnRemove(folder, sourceCodes)): drops the folder's b_im_folder_pin
+	 * shadows whose chat belongs to one of the removed sources, then resets PinCache.
+	 * Called by {@see \Bitrix\Im\V2\Folder\Source\FolderSourceService::updateSources()}; the
+	 * folded-Selection guard in {@see \Bitrix\Im\V2\Folder\FolderRecentProvider}
+	 * already hides such shadows, this physically garbage-collects them.
+	 *
+	 * The whole set of one save at once, not a call per source: PinCache::clearByUser is a real
+	 * tag invalidation, so a per-source loop would read the pins cold on every step and repeat
+	 * the recent query as many times as sources were switched off.
+	 *
+	 * Named *OnSourcesRemove to avoid colliding with the chat-list primitive
+	 * {@see self::syncShadowsOnRemove()} it delegates to.
+	 *
+	 * @param string[] $sourceCodes stored codes of the sources that left the composition
+	 */
+	public function syncShadowsOnSourcesRemove(Folder $folder, array $sourceCodes): void
+	{
+		$folderId = (int)($folder->getId() ?? 0);
+		$userId = (int)($folder->getUserId() ?? 0);
+		$sourceCodes = array_values(array_filter(
+			$sourceCodes,
+			static fn ($code): bool => is_string($code) && $code !== '',
+		));
+		if ($folderId <= 0 || $userId <= 0 || $sourceCodes === [])
+		{
+			return;
+		}
+
+		$pinnedShadowIds = $this->pinProvider->getByFolder($folder)->getPinnedChatIds();
+		if ($pinnedShadowIds === [])
+		{
+			return;
+		}
+
+		// No owner on purpose: garbage collection must still resolve a source the user
+		// can no longer see, otherwise its shadows would stay behind forever.
+		$selection = (new CompositeDefinition($sourceCodes))->toSelection();
+
+		// The shadows themselves narrow the read: the removed sections are matched against at
+		// most LIMIT_PINS_PER_FOLDER chats instead of being scanned whole.
+		$staleShadowChatIds = (new SelectionResolver($this->recentProvider))
+			->matchingChatIds($selection, $userId, $pinnedShadowIds)
+		;
+
+		$this->syncShadowsOnRemove($folderId, $staleShadowChatIds, $userId);
+	}
+
+	/**
+	 * Add-side of the same hygiene: writes the folder's b_im_folder_pin shadows for the globally
+	 * pinned chats that belong to the composition the save left enabled, then resets PinCache.
+	 * Without it a pin was lost for good - switching a source off collected the shadows of its
+	 * chats and switching it back on wrote none.
+	 *
+	 * The source of truth of a pin is b_im_recent.PINNED='Y' and not the shadows of the folder,
+	 * whose set drifts both ways, so the candidates are the globally pinned chats of the user
+	 * ({@see RecentProvider::getPinnedChatIds()}) - a set already capped by the global pin limit.
+	 *
+	 * The whole enabled composition is resolved, not the sources this save switched on: the remove
+	 * side matches by source codes, so it collects the shadow of a chat belonging to a removed and
+	 * a surviving source at once, and only a pass over the full composition brings such a shadow
+	 * back within the same save.
+	 *
+	 * Neither the per-folder pin limit nor a sort order is computed (PIN_SORT = 0): the shadows of
+	 * a composite folder are a subset of the global pins, which carry their own limit; the
+	 * neighbouring shadow writers check no limit either; and the read cuts the pinned block by
+	 * LIMIT_PINS_PER_FOLDER anyway ({@see \Bitrix\Im\V2\Folder\FolderRecentProvider}). Writing the
+	 * same shadow again - a repeated save, two tabs, a source switched on twice - is safe through
+	 * the unique index UIX_B_IM_FOLDER_PIN_1.
+	 *
+	 * @param string[] $sourceCodes stored codes of the sources the composition keeps enabled
+	 */
+	public function syncShadowsOnSourcesEnabled(Folder $folder, array $sourceCodes): void
+	{
+		$folderId = (int)($folder->getId() ?? 0);
+		$userId = (int)($folder->getUserId() ?? 0);
+		$sourceCodes = array_values(array_filter(
+			$sourceCodes,
+			static fn ($code): bool => is_string($code) && $code !== '',
+		));
+		if ($folderId <= 0 || $userId <= 0 || $sourceCodes === [])
+		{
+			return;
+		}
+
+		$pinnedChatIds = $this->recentProvider->getPinnedChatIds($userId);
+		if ($pinnedChatIds === [])
+		{
+			return;
+		}
+
+		// No owner on purpose, as on the remove side: a source unavailable to the user is part of
+		// the stored composition all the same, and its pins must not stay outside the folder.
+		$selection = (new CompositeDefinition($sourceCodes))->toSelection();
+
+		// The global pins narrow the read the same way the shadows narrow it there.
+		$memberChatIds = (new SelectionResolver($this->recentProvider))
+			->matchingChatIds($selection, $userId, $pinnedChatIds)
+		;
+		if ($memberChatIds === [])
+		{
+			return;
+		}
+
+		$this->insertShadowRows($folder, $userId, $memberChatIds);
 
 		$this->pinCache->clearByUser($userId);
 	}
@@ -214,6 +317,35 @@ class PinService
 		FolderPinTable::deleteBatch(['=USER_ID' => $userId]);
 
 		$this->pinCache->clearByUser($userId);
+	}
+
+	/**
+	 * One shadow row per chat under the folder, idempotent through UIX_B_IM_FOLDER_PIN_1. Shared by
+	 * the two paths that pin a set of chats into a single folder; the caller resets PinCache, since
+	 * it is the one that knows whether it had anything to write.
+	 *
+	 * @param int[] $chatIds non-empty
+	 */
+	private function insertShadowRows(Folder $folder, int $userId, array $chatIds): void
+	{
+		$parentId = $folder->getParentId();
+
+		$rows = [];
+		foreach ($chatIds as $chatId)
+		{
+			$rows[] = [
+				'FOLDER_ID' => $folder->getId(),
+				'CHAT_ID' => $chatId,
+				'PIN_SORT' => 0,
+				'USER_ID' => $userId,
+				'FOLDER_PARENT_ID' => $parentId,
+			];
+		}
+
+		FolderPinTable::multiplyInsertWithoutDuplicate(
+			$rows,
+			['UNIQUE_FIELDS' => ['FOLDER_ID', 'CHAT_ID']]
+		);
 	}
 
 	private function pinChatLegacy(int $userId, Chat $chat): Result
@@ -324,13 +456,40 @@ class PinService
 				continue;
 			}
 
-			if ($folder->containsChat($chat))
+			if ($this->isShadowMember($folder, $chat))
 			{
 				$matching[] = $folder;
 			}
 		}
 
 		return $matching;
+	}
+
+	/**
+	 * Membership as the write path needs it: the composite "All" is asked without an owner,
+	 * so it answers against its whole stored composition instead of the sources available to
+	 * the user right now. With the owner in place a pin made while the release gate is closed
+	 * leaves no shadow, while unpin still deletes shadows in every folder - the set could only
+	 * shrink, and opening the gate would show a tab with the freshest pins missing.
+	 *
+	 * Same rule as the two neighbouring write paths, which pass no owner either
+	 * ({@see self::syncShadowsOnSourcesRemove()},
+	 * {@see FolderBootstrapper::migrateLegacyPinsToAllFolder()}). Reading stays filtered: the
+	 * tail and the pinned block are both constrained by the Selection of the owned instance
+	 * ({@see \Bitrix\Im\V2\Folder\FolderRecentProvider}), so a shadow of an unavailable source
+	 * cannot surface.
+	 */
+	private function isShadowMember(Folder $folder, Chat $chat): bool
+	{
+		if ($folder instanceof AllFolder)
+		{
+			$unowned = clone $folder;
+			$unowned->setUserId(null);
+
+			return $unowned->containsChat($chat);
+		}
+
+		return $folder->containsChat($chat);
 	}
 
 	/**

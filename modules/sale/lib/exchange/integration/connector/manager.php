@@ -31,17 +31,17 @@ class Manager
 
 		$result['PLACEMENTS'][] = [
 			'PLACEMENT'=>$registry->getPlacement(),
-			'HANDLER'=>$registry->getPlacmentHandler()
+			'HANDLER'=>$registry->getPlacmentHandler(),
 		];
 
 		$result['PLACEMENTS'][] = [
 			'PLACEMENT'=>$neworder->getPlacement(),
-			'HANDLER'=>$neworder->getPlacmentHandler()
+			'HANDLER'=>$neworder->getPlacmentHandler(),
 		];
 
 		$result['OPTIONS'] = ['url'=>$this->app->getAppUrl()];
 
-		(new Scenarios\Connector())->delete($result);
+		$this->createConnector()->delete($result);
 
 		Token::delete($this->app->getCode());
 
@@ -50,7 +50,7 @@ class Manager
 		static::unRegisterEvents();
 	}
 
-	public function add()
+	public function add(string $externalServerHost): bool
 	{
 		$registry = new IntegrationB24Registry($this->app);
 		$neworder = new IntegrationB24NewOrder($this->app);
@@ -74,15 +74,35 @@ class Manager
 		$result['PROVIDER'] = [
 			'xmlId'=>$this->app->getCode(),
 			'name'=> (string)\Bitrix\Main\Config\Option::get('main', 'site_name'),
-			'externalServerHost'=> (string)\Bitrix\Main\Config\Option::get('main', 'server_name',
-				\Bitrix\Main\Application::getInstance()->getContext()->getRequest()->getHttpHost())
+			'externalServerHost'=>$externalServerHost,
 		];
 
-		(new Scenarios\Connector())->add($result);
+		try
+		{
+			$isAdded = $this->createConnector()->add($result);
+		}
+		catch (\Throwable)
+		{
+			$isAdded = false;
+		}
+
+		if (!$isAdded)
+		{
+			Token::delete($this->app->getCode());
+
+			return false;
+		}
 
 		\CAgent::AddAgent('\\Bitrix\\Sale\\Exchange\\Integration\\Agent\\Statistic::modify();', 'sale', 'N', 3600);
 
 		static::registerEvents();
+
+		return true;
+	}
+
+	protected function createConnector(): Scenarios\Connector
+	{
+		return new Scenarios\Connector();
 	}
 
 	protected static function registerEvents()
@@ -191,4 +211,3 @@ class Manager
 		//endregion
 	}
 }
-

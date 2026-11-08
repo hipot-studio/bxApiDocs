@@ -7,6 +7,8 @@ use Bitrix\Main\Application;
 use Bitrix\Main\ORM\Fields\BooleanField;
 use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\ORM\Data\AddStrategy\Contract\AddStrategy;
+use Bitrix\Main\ORM\Data\AddStrategy\Merge;
 use Bitrix\Main\ORM\Data\AddStrategy\Trait\MergeByDefaultTrait;
 
 /**
@@ -28,6 +30,14 @@ use Bitrix\Main\ORM\Data\AddStrategy\Trait\MergeByDefaultTrait;
 class EntityUncompletedActivityTable extends \Bitrix\Main\Entity\DataManager
 {
 	use MergeByDefaultTrait;
+
+	protected static function getMergeStrategy(): AddStrategy
+	{
+		return new Merge(
+			static::getEntity(),
+			['ENTITY_ID', 'ENTITY_TYPE_ID', 'RESPONSIBLE_ID', 'IS_INCOMING_CHANNEL', 'MIN_DEADLINE'],
+		);
+	}
 
 	public static function getTableName()
 	{

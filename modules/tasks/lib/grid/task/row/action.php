@@ -135,10 +135,11 @@ class Action
 		}
 		if ($actions['COMPLETE'])
 		{
+			$checkListArgs = self::getCheckListJsArgs($this->rowData);
 			$taskRowActions[] = [
 				'id' => 'complete',
 				'text' => GetMessageJS('TASKS_GRID_TASK_ROW_ACTION_COMPLETE'),
-				'onclick' => 'BX.Tasks.GridActions.action("complete", '.$taskId.');',
+				'onclick' => "BX.Tasks.GridActions.action('complete', {$taskId}, {$checkListArgs});",
 			];
 		}
 		if ($actions['RENEW'])
@@ -278,6 +279,14 @@ class Action
 		}
 
 		return $taskRowActions;
+	}
+
+	public static function getCheckListJsArgs(array $rowData): string
+	{
+		$work = (int)($rowData['CHECK_LIST']['WORK'] ?? 0);
+		$complete = (int)($rowData['CHECK_LIST']['COMPLETE'] ?? 0);
+
+		return "{ checkList: { work: {$work}, complete: {$complete} } }";
 	}
 
 	/**

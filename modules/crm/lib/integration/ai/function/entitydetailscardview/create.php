@@ -12,6 +12,8 @@ use Bitrix\Crm\Integration\UI\EntityEditor\MartaAIMarksRepository;
 use Bitrix\Crm\Result;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Loader;
 use Bitrix\Ui\EntityForm\Scope;
@@ -45,7 +47,17 @@ final class Create implements AIFunction
 			return Result::failModuleNotInstalled('ui');
 		}
 
-		if (!$this->permissions->isAdminForEntity($parameters->entityTypeId, $parameters->categoryId))
+		// Naming other users grants them the layout as well, which keeps the former administrative check;
+		// creating a layout for oneself is the granular right of the common views of the card.
+		$hasOtherUsers = array_diff($parameters->userIds, [$this->currentUserId]) !== [];
+		$canCreate = !$hasOtherUsers
+			? $this->permissions->configuration()->canManageCommonViews(
+				ConfigurationCallSite::AiCardViewCreate,
+				ConfigurationScope::ofEntityType($parameters->entityTypeId, $parameters->categoryId),
+			)
+			: $this->permissions->isAdminForEntity($parameters->entityTypeId, $parameters->categoryId)
+		;
+		if (!$canCreate)
 		{
 			return Result::failAccessDenied();
 		}

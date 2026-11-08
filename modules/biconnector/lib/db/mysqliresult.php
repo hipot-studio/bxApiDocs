@@ -1,6 +1,8 @@
 <?php
 namespace Bitrix\BIConnector\DB;
 
+use Bitrix\Main\DB\SqlQueryException;
+
 class MysqliResult extends \Bitrix\Main\DB\MysqliResult
 {
 	protected $rowData = null;
@@ -27,7 +29,10 @@ class MysqliResult extends \Bitrix\Main\DB\MysqliResult
 		$stmt = $this->resource;
 		if (!$this->rowData)
 		{
-			$stmt->execute();
+			if ($stmt->execute() === false)
+			{
+				throw new SqlQueryException('Mysql query error', $stmt->error);
+			}
 
 			$c = $stmt->field_count;
 			$this->rowData = [];
@@ -41,19 +46,23 @@ class MysqliResult extends \Bitrix\Main\DB\MysqliResult
 			call_user_func_array([ $stmt, 'bind_result'], $this->rowDataReference);
 		}
 
-		if ($stmt->fetch())
+		$fetchResult = $stmt->fetch();
+		if ($fetchResult === false)
 		{
-			$row = [];
-			foreach ($this->rowData as $v)
-			{
-				$row[] = $v; //dereference
-			}
-
-			return $row;
+			throw new SqlQueryException('Mysql fetch error', $stmt->error);
 		}
-		else
+
+		if ($fetchResult === null)
 		{
 			return false;
 		}
+
+		$row = [];
+		foreach ($this->rowData as $v)
+		{
+			$row[] = $v; //dereference
+		}
+
+		return $row;
 	}
 }

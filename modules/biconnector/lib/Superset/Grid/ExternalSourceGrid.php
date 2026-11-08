@@ -5,11 +5,13 @@ namespace Bitrix\BIConnector\Superset\Grid;
 
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\ExternalSourceRowAssembler;
 use Bitrix\BIConnector\Superset\Grid\Settings\ExternalSourceSettings;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Filter\Settings;
 use Bitrix\Main\Grid\Column\Columns;
 use Bitrix\Main\Grid\Grid;
 use Bitrix\Main\Grid\Row\Rows;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * @method ExternalSourceSettings getSettings()
@@ -66,5 +68,28 @@ final class ExternalSourceGrid extends Grid
 				new Settings(['ID' => $this->getId()])
 			),
 		);
+	}
+
+	public static function getFilterPresets(): array
+	{
+		$currentUser = CurrentUser::get();
+
+		return [
+			'active' => [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_FILTER_PRESET_ACTIVE') ?? '',
+				'fields' => [
+					'ACTIVE' => 'Y',
+				],
+				'default' => true,
+			],
+			'mine' => [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_EXTERNAL_SOURCE_GRID_FILTER_PRESET_MINE') ?? '',
+				'sort' => 200,
+				'fields' => [
+					'CREATED_BY_ID' => [$currentUser->getId()],
+					'CREATED_BY_ID_label' => [$currentUser->getFormattedName()],
+				],
+			],
+		];
 	}
 }

@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Category\Entity;
 
 use Bitrix\Crm\CategoryIdentifier;
 use Bitrix\Crm\EntityAddressType;
+use Bitrix\Crm\MessageSender\CustomTemplate\CrmZone;
 use Bitrix\Crm\Model\EO_ItemCategory;
 use Bitrix\Crm\RepeatSale\Segment\SegmentManager;
 use Bitrix\Crm\Service\Container;
@@ -222,6 +223,7 @@ class ItemCategory extends Category
 		if ($result->isSuccess())
 		{
 			SegmentManager::onCategoryDelete(new CategoryIdentifier($this->getEntityTypeId(), $this->getId()));
+			CrmZone::cleanupTemplatesByTarget($this->getEntityTypeId(), (int)$this->getId());
 			$this->processDeletedEvent();
 			$this->sendEventCategoriesUpdated();
 		}

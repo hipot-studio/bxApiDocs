@@ -751,6 +751,11 @@ class Email extends Activity\Provider\Base
 	{
 		if (IsModuleInstalled('mail') && Loader::includeModule('mail'))
 		{
+			if (static::hasMailMessageViewSanitizer())
+			{
+				return \Bitrix\Mail\Helper\Message::sanitizeHtmlForMessageView($html);
+			}
+
 			return \Bitrix\Mail\Helper\Message::sanitizeHtml($html, true);
 		}
 		$sanitizer = new \CBXSanitizer();
@@ -759,6 +764,16 @@ class Email extends Activity\Provider\Base
 		$sanitizer->addTags(['style' => []]);
 
 		return $sanitizer->sanitizeHtml($html);
+	}
+
+	/**
+	 * Mail added sanitizeHtmlForMessageView() in the 2026-08-04 update, and modules reach a portal
+	 * independently, so crm may run next to an older mail. Drop this check together with the
+	 * sanitizeHtml($html, true) fallback in a later update, once such portals are gone.
+	 */
+	protected static function hasMailMessageViewSanitizer(): bool
+	{
+		return method_exists(\Bitrix\Mail\Helper\Message::class, 'sanitizeHtmlForMessageView');
 	}
 
 	/**

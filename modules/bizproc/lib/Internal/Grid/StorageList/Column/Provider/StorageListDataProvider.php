@@ -42,6 +42,12 @@ class StorageListDataProvider extends DataProvider
 				->setSort('CODE')
 				->setDefault(true)
 			,
+
+			$this->createColumn('CREATED_TIME')
+				->setType(Type::DATE)
+				->setName($entity->getField('CREATED_TIME')->getTitle())
+				->setDefault(true)
+			,
 		];
 	}
 }

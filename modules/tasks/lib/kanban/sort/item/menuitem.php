@@ -17,6 +17,8 @@ class MenuItem
 	protected string $html = '';
 	protected string $className = '';
 	protected string $onClick = '';
+	protected bool $delimiter = false;
+	protected bool $focusable = true;
 	protected array $params = [];
 
 	protected ItemCollection $items;
@@ -62,6 +64,11 @@ class MenuItem
 		return $this->html;
 	}
 
+	public function isFocusable(): bool
+	{
+		return $this->focusable;
+	}
+
 	public function setClassName(string $className): static
 	{
 		$this->className = $className;
@@ -83,6 +90,19 @@ class MenuItem
 	public function setHtml(string $html): static
 	{
 		$this->html = $html;
+		return $this;
+	}
+
+	// main.popup draws a line instead of an item, so a delimiter carries no content of its own
+	public function setDelimiter(): static
+	{
+		$this->delimiter = true;
+		return $this;
+	}
+
+	public function setFocusable(bool $focusable): static
+	{
+		$this->focusable = $focusable;
 		return $this;
 	}
 
@@ -108,11 +128,47 @@ class MenuItem
 		return $this;
 	}
 
+	public function setField(string $field): static
+	{
+		if ($field === '')
+		{
+			return $this;
+		}
+
+		$this->params['field'] = $field;
+		return $this;
+	}
+
+	public function setDirection(string $direction): static
+	{
+		if (!in_array($direction, [static::SORT_ASC, static::SORT_DESC], true))
+		{
+			return $this;
+		}
+
+		$this->params['direction'] = $direction;
+		return $this;
+	}
+
+	// direction to apply to the field when the menu has no direction chosen
+	public function setDefaultDirection(string $direction): static
+	{
+		if (!in_array($direction, [static::SORT_ASC, static::SORT_DESC], true))
+		{
+			return $this;
+		}
+
+		$this->params['defaultDirection'] = $direction;
+		return $this;
+	}
+
 	public function isSub(): bool
 	{
 		return ($this->params['type'] ?? null) === MenuItem::TYPE_SUB;
 	}
 
+	// sub items share the params of their owner, and the js side reads that list shape
+	// as the mark of the custom sort item
 	public function addItem(self $item): static
 	{
 		$this->items->add($item);
@@ -127,6 +183,11 @@ class MenuItem
 			'html' => $this->getHtml(),
 		];
 
+		if ($this->delimiter)
+		{
+			$data['delimiter'] = true;
+		}
+
 		if(!empty($this->getClassName()))
 		{
 			$data['className'] = $this->getClassName();
@@ -135,6 +196,11 @@ class MenuItem
 		if(!empty($this->getOnClick()))
 		{
 			$data['onclick'] = $this->getOnClick();
+		}
+
+		if (!$this->isFocusable())
+		{
+			$data['focusable'] = false;
 		}
 
 		if (!empty($this->getParams()))

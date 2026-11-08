@@ -9,6 +9,7 @@ use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Integration\Disk\Validation\Rule\NewFiles;
 use Bitrix\Tasks\V2\Internal\Result\Result;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Public\Command\AbstractCommand;
 use Exception;
 
@@ -22,6 +23,7 @@ class AttachFilesCommand extends AbstractCommand
 		#[NewFiles]
 		public readonly array $fileIds,
 		public readonly bool $useConsistency = false,
+		public readonly InteractionOrigin $origin = InteractionOrigin::System,
 	)
 	{
 

@@ -6,7 +6,6 @@ namespace Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Process
 
 // TODO: Remove API from sync when we switch to the new one
 use Bitrix\Calendar\Core\Builders\EventBuilderFromArray;
-use Bitrix\Calendar\Sync\Dictionary;
 use Bitrix\Calendar\Synchronization\Internal\Entity\EventConnection;
 use Bitrix\Calendar\Synchronization\Internal\Entity\SectionConnection;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\ICloud\Dto\EventResponse;
@@ -53,7 +52,7 @@ class EventConnectionBuilder
 
 		$event = (new EventBuilderFromArray($eventFields))->build();
 
-		$data = $this->buildData($eventFields);
+		$data = $this->buildData($item->eventData);
 
 		return
 			(new EventConnection())
@@ -61,16 +60,13 @@ class EventConnectionBuilder
 				->setConnection($sectionConnection->getConnection())
 				->setVendorEventId($item->id)
 				->setRecurrenceId($item->eventData['RECURRING_EVENT_ID'] ?? null)
-				->setLastSyncStatus(Dictionary::SYNC_STATUS['success'])
-				->setEntityTag($item->etag)
-				->setVendorVersionId($item->getVersion())
 				->setData($data)
 		;
 	}
 
 	private function buildData(array $eventFields): array
 	{
-		$data = [];
+		$data = ['icloudImportPending' => true];
 
 		if (!empty($eventFields['ATTENDEE']) || !empty($eventFields['ORGANIZER_ENTITY']))
 		{
@@ -92,7 +88,7 @@ class EventConnectionBuilder
 
 	private function parseInvitedAttendees(array $eventFields, array &$data): void
 	{
-		$attendees = $eventFields['ATTENDEE'];
+		$attendees = $eventFields['ATTENDEE'] ?? [];
 
 		if (!empty($attendees))
 		{

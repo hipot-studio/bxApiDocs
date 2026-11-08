@@ -28,6 +28,7 @@ final class Quote extends Item implements
 	public const terms = 'terms';
 	public const quoteNumber = 'quoteNumber';
 	public const dealId = 'dealId';
+	public const deal = 'deal';
 	public const leadId = 'leadId';
 	public const actualDate = 'actualDate';
 	public const personTypeId = 'personTypeId';
@@ -44,6 +45,7 @@ final class Quote extends Item implements
 	private ?string $quoteNumber = null;
 	private ?int $dealId = null;
 	private ?int $leadId = null;
+	private ?Deal $deal = null;
 	private ?Lead $lead = null;
 	private ?Date $actualDate = null;
 	private ?int $personTypeId = null;
@@ -104,6 +106,11 @@ final class Quote extends Item implements
 		$this->markChanged(self::dealId);
 
 		return $this;
+	}
+
+	public function getDeal(): ?Deal
+	{
+		return $this->deal;
 	}
 
 	public function getLeadId(): ?int
@@ -198,6 +205,7 @@ final class Quote extends Item implements
 			self::terms => $this->terms = $value,
 			self::quoteNumber => $this->quoteNumber = $value,
 			self::dealId => $this->dealId = $value,
+			self::deal => $this->deal = $value,
 			self::leadId => $this->leadId = $value,
 			'lead' => $this->lead = $value,
 			self::actualDate => $this->actualDate = $value,

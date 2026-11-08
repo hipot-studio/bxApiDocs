@@ -2,8 +2,10 @@
 
 namespace Bitrix\Sale\Controller\Action\Entity;
 
+use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
 use Bitrix\Sale;
+use Bitrix\Sale\Services\PaySystem\Restrictions;
 use Bitrix\Sale\PaySystem\Internals\InitiatePayException;
 
 final class InitiatePayAction extends Sale\Controller\Action\BaseAction
@@ -39,6 +41,27 @@ final class InitiatePayAction extends Sale\Controller\Action\BaseAction
 	 */
 	private $payment;
 
+	private int $restrictionMode = Restrictions\Manager::MODE_CLIENT;
+
+	/**
+	 * Sets the restriction mode used to check the requested pay system.
+	 *
+	 * @param int $mode Restrictions\Manager::MODE_CLIENT | Restrictions\Manager::MODE_MANAGER
+	 * @return $this
+	 * @throws ArgumentException
+	 */
+	public function setRestrictionMode(int $mode): self
+	{
+		if ($mode !== Restrictions\Manager::MODE_CLIENT && $mode !== Restrictions\Manager::MODE_MANAGER)
+		{
+			throw new ArgumentException('Unsupported restriction mode', 'mode');
+		}
+
+		$this->restrictionMode = $mode;
+
+		return $this;
+	}
+
 	/**
 	 * @param array $fields
 	 *   paymentId - required
@@ -61,6 +84,7 @@ final class InitiatePayAction extends Sale\Controller\Action\BaseAction
 			$this->initRegistry();
 			$this->initPaymentEntities();
 			$this->checkPaymentAllowed();
+			$this->checkPaySystemAvailable();
 			$this->initiatePay();
 		}
 		catch (InitiatePayException $e)
@@ -209,6 +233,26 @@ final class InitiatePayAction extends Sale\Controller\Action\BaseAction
 			throw new InitiatePayException(
 				'access error',
 				Sale\Controller\ErrorEnumeration::INITIATE_PAY_ACTION_ORDER_ACCESS_ERROR
+			);
+		}
+	}
+
+	/**
+	 * @throws InitiatePayException
+	 */
+	private function checkPaySystemAvailable(): void
+	{
+		$availablePaySystems = Sale\PaySystem\Manager::getListWithRestrictions(
+			$this->payment,
+			$this->restrictionMode
+		);
+		$availableIds = array_map('intval', array_keys($availablePaySystems));
+
+		if (!in_array((int)$this->service->getField('ID'), $availableIds, true))
+		{
+			throw new InitiatePayException(
+				'payment service not found',
+				Sale\Controller\ErrorEnumeration::INITIATE_PAY_ACTION_PAYMENT_SERVICE_NOT_FOUND
 			);
 		}
 	}

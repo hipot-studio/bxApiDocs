@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Integration;
 
+use Bitrix\Bizproc\Integration\Im\TemplateNoteNotification;
 use Bitrix\Main\Localization\Loc;
 
 class NotifySchema
@@ -28,6 +29,11 @@ class NotifySchema
 						"DISABLED" => [
 							IM_NOTIFY_FEATURE_PUSH,
 						],
+					],
+					TemplateNoteNotification::NOTIFY_EVENT => [
+						'NAME' => Loc::getMessage('BIZPROC_NOTIFY_SCHEMA_TEMPLATE_NOTE_MENTION'),
+						'MAIL' => 'N',
+						'PUSH' => 'Y',
 					],
 				],
 			],

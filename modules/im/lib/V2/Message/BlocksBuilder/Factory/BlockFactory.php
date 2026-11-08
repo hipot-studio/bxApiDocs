@@ -6,6 +6,8 @@ namespace Bitrix\Im\V2\Message\BlocksBuilder\Factory;
 
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\AbstractBlock;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\AiAssistantSearch;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\AudioBlock;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\FileBlock;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Gallery;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\LineDivider;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Map;
@@ -17,6 +19,7 @@ use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Title;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\UnorderedList;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlockType;
 use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Card;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\FormBlock;
 
 class BlockFactory
 {
@@ -35,6 +38,9 @@ class BlockFactory
 			BlockType::AiAssistantSearch => AiAssistantSearch::create($blockData),
 			BlockType::Card => Card::create($blockData),
 			BlockType::Gallery => Gallery::create($blockData),
+			BlockType::Form => FormBlock::create($blockData),
+			BlockType::File => FileBlock::create($blockData),
+			BlockType::Audio => AudioBlock::create($blockData),
 			default => null,
 		};
 	}
@@ -54,6 +60,9 @@ class BlockFactory
 			BlockType::AiAssistantSearch => AiAssistantSearch::getRequiredFields(),
 			BlockType::Card => Card::getRequiredFields(),
 			BlockType::Gallery => Gallery::getRequiredFields(),
+			BlockType::Form => FormBlock::getRequiredFields(),
+			BlockType::File => FileBlock::getRequiredFields(),
+			BlockType::Audio => AudioBlock::getRequiredFields(),
 			default => [],
 		};
 	}

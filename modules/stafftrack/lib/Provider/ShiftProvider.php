@@ -10,9 +10,6 @@ use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type\Date;
-use Bitrix\StaffTrack\Access\Model\ShiftModel;
-use Bitrix\StaffTrack\Access\ShiftAccessController;
-use Bitrix\StaffTrack\Access\ShiftAction;
 use Bitrix\StaffTrack\Dictionary\Status;
 use Bitrix\StaffTrack\Helper\DateHelper;
 use Bitrix\StaffTrack\Model\ShiftTable;
@@ -276,24 +273,13 @@ class ShiftProvider
 		$limit > 0 && $query->setLimit($limit);
 	}
 
-	/**
-	 * @param ShiftCollection $collection
-	 * @return array
-	 * @throws \Bitrix\Main\Access\Exception\UnknownActionException
-	 */
 	public function prepareClientData(ShiftCollection $collection): array
 	{
 		$result = [];
-		$accessController = ShiftAccessController::getInstance($this->userId);
 
 		foreach ($collection as $value)
 		{
-			$accessModel = ShiftModel::createFromObject($value);
-
-			if ($accessController->check(ShiftAction::VIEW, $accessModel))
-			{
-				$result[] = $value->toArray();
-			}
+			$result[] = $value->toArray();
 		}
 
 		return $result;

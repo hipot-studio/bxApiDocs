@@ -5,7 +5,9 @@ namespace Bitrix\Sale\Exchange\Integration\Controller;
 
 
 use Bitrix\Main\Engine\Action;
+use Bitrix\Main\Engine\ActionFilter\Authentication;
 use Bitrix\Main\Error;
+use Bitrix\Main\Event;
 use Bitrix\Rest\Integration\Controller\Base;
 use Bitrix\Sale\Rest\View\SaleViewManager;
 use Bitrix\Sale\Exchange\Integration\Entity\B24IntegrationStatProviderTable;
@@ -19,10 +21,11 @@ class StatisticProvider extends Base
 	public function getFieldsAction()
 	{
 		$view = $this->getViewManager()
-			->getView($this);
+			->getView($this)
+		;
 
 		return ['STATISTIC_PROVIDER'=>$view->prepareFieldInfos(
-			$view->getFields()
+			$view->getFields(),
 		)];
 	}
 
@@ -41,7 +44,7 @@ class StatisticProvider extends Base
 	{
 		return new Page('STATISTIC_PROVIDERS',
 			$this->getList($select, $filter, $order, $pageNavigation),
-			$this->count($filter)
+			$this->count($filter),
 		);
 	}
 
@@ -63,6 +66,7 @@ class StatisticProvider extends Base
 		else
 		{
 			$this->addErrors($r->getErrors());
+
 			return null;
 		}
 	}
@@ -94,6 +98,7 @@ class StatisticProvider extends Base
 
 
 		$this->addErrors($r->getErrors());
+
 		return null;
 	}
 
@@ -110,7 +115,7 @@ class StatisticProvider extends Base
 	{
 		$r = $this->existsByFilter([
 			'XML_ID'=>$fields['XML_ID'],
-			'!ID'=>$id
+			'!ID'=>$id,
 		]);
 		if($r->isSuccess() === false)
 		{
@@ -127,6 +132,7 @@ class StatisticProvider extends Base
 
 
 		$this->addErrors($r->getErrors());
+
 		return null;
 	}
 
@@ -148,6 +154,7 @@ class StatisticProvider extends Base
 		else
 		{
 			$this->addErrors($r->getErrors());
+
 			return null;
 		}
 	}
@@ -158,28 +165,50 @@ class StatisticProvider extends Base
 		return new SaleViewManager($action);
 	}
 
+	protected function processBeforeAction(Action $action)
+	{
+		global $USER;
+
+		if (!($USER instanceof \CUser) || !$USER->GetID())
+		{
+			$authentication = (new Authentication())->bindAction($action);
+			$authentication->onBeforeAction(
+				new Event('main', static::getFullEventName(static::EVENT_ON_BEFORE_ACTION)),
+			);
+			$this->addErrors($authentication->getErrors());
+
+			return false;
+		}
+
+		return parent::processBeforeAction($action);
+	}
+
 	protected function getEntityTable()
 	{
 		return new B24IntegrationStatProviderTable();
 	}
 
-	protected function checkReadPermissionEntity()
+	protected function checkReadPermissionEntity(): Result
 	{
-		return new Result();
+		$result = new Result();
+
+		if (\CMain::GetGroupRight('sale') === 'D')
+		{
+			$result->addError(new Error('Access Denied', 200040300010));
+		}
+
+		return $result;
 	}
 
-	protected function checkCreatePermissionEntity()
+	protected function checkModifyPermissionEntity(): Result
 	{
-		return new Result();
-	}
+		$result = new Result();
 
-	protected function checkUpdatePermissionEntity()
-	{
-		return new Result();
-	}
+		if (\CMain::GetGroupRight('sale') !== 'W')
+		{
+			$result->addError(new Error('Access Denied', 200040300020));
+		}
 
-	protected function checkDeletePermissionEntity()
-	{
-		return new Result();
+		return $result;
 	}
 }

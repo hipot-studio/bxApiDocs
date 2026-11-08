@@ -22,6 +22,8 @@ use Bitrix\Rest\Lang;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Rest\Internal\Access\AppAccessChecker;
 use Bitrix\Rest\Internal\Entity\Application\App;
+use Bitrix\Rest\Internal\Exception\Embedding\EmbeddingHandlerAlreadyBoundException;
+use Bitrix\Rest\Internal\Service\Embedding\EmbeddingConflictGuard;
 use Bitrix\Main\DI\ServiceLocator;
 
 class Placement extends \IRestService
@@ -156,7 +158,7 @@ class Placement extends \IRestService
 
 			if (
 				$placementBind['USER_ID'] !== PlacementTable::DEFAULT_USER_ID_VALUE
-				&& $placementInfo['user_mode'] !== true
+				&& ($placementInfo['user_mode'] ?? null) !== true
 			)
 			{
 				throw new RestException(
@@ -177,6 +179,11 @@ class Placement extends \IRestService
 					throw new Exceptions\ArgumentTypeException($field, 'string');
 				}
 			};
+
+			if (array_key_exists('LANG_ALL', $params) && !is_array($params['LANG_ALL']))
+			{
+				throw new Exceptions\ArgumentTypeException('LANG_ALL', 'array');
+			}
 
 			if (empty($params['LANG_ALL']))
 			{
@@ -207,6 +214,11 @@ class Placement extends \IRestService
 				];
 				foreach ($params['LANG_ALL'] as $langCode => $langItem)
 				{
+					if (!is_array($langItem))
+					{
+						throw new Exceptions\ArgumentTypeException('LANG_ALL.' . $langCode, 'array');
+					}
+
 					foreach ($fieldList as $field)
 					{
 						$ensureValueIsString($langItem[$field] ?? '', 'LANG_ALL.' . $langCode . '.' . $field);
@@ -219,13 +231,13 @@ class Placement extends \IRestService
 			$placementBind = Lang::mergeFromLangAll($placementBind);
 			unset($placementBind['LANG_ALL']);
 
-			if ($placementInfo['max_count'] > 0)
+			if (($placementInfo['max_count'] ?? 0) > 0)
 			{
 				$filter = [
 					'=APP_ID' => $placementBind['APP_ID'],
 					'=PLACEMENT' => $placementBind['PLACEMENT'],
 				];
-				if ($placementInfo['user_mode'] === true)
+				if (($placementInfo['user_mode'] ?? null) === true)
 				{
 					$filter['=USER_ID'] = [
 						PlacementTable::DEFAULT_USER_ID_VALUE,
@@ -294,8 +306,22 @@ class Placement extends \IRestService
 
 			if (Application::getConnection()->lock($lockKey))
 			{
-				$result = PlacementTable::add($placementBind);
-				Application::getConnection()->unlock($lockKey);
+				try
+				{
+					$result = EmbeddingConflictGuard::run(static fn() => PlacementTable::add($placementBind));
+				}
+				catch (EmbeddingHandlerAlreadyBoundException $exception)
+				{
+					throw new RestException(
+						message: $exception->getMessage(),
+						code: $exception::ERROR_CODE,
+						previous: $exception,
+					);
+				}
+				finally
+				{
+					Application::getConnection()->unlock($lockKey);
+				}
 			}
 			else
 			{
@@ -558,7 +584,7 @@ class Placement extends \IRestService
 		}
 
 		$placement = mb_strtoupper($params['PLACEMENT']);
-		$placementHandler = $params['HANDLER'];
+		$placementHandler = $params['HANDLER'] ?? '';
 
 		if ($placement == '')
 		{
@@ -569,7 +595,7 @@ class Placement extends \IRestService
 
 		$placementList = static::getPlacementList($server);
 
-		if (array_key_exists($placement, $placementList) && !$placementList[$placement]['private'])
+		if (array_key_exists($placement, $placementList) && empty($placementList[$placement]['private']))
 		{
 			$appInfo = static::getApplicationInfo($server);
 

@@ -5,6 +5,8 @@ namespace Bitrix\Superset\Internal\Services;
 use Bitrix\Main;
 use Bitrix\Superset\Internal\Api;
 use Bitrix\Superset\Internal\HttpStatus;
+use Bitrix\Superset\Internal\RequestResult;
+use Bitrix\Superset\Internal\SqlLab\SqlLabErrorCode;
 use Bitrix\Superset\Internal\Support\AbstractSupersetContext;
 use Bitrix\Superset\Internal\Support\SqlReadOnlyClassifier;
 
@@ -13,6 +15,23 @@ final class SqlLabService extends AbstractSupersetContext
 	private const SCHEMA = 'bitrix24';
 	private const DEFAULT_ROW_LIMIT = 1000;
 	private const MAX_ROW_LIMIT = 10000;
+	private const LIMITED_FACTORS = [
+		'QUERY',
+		'DROPDOWN',
+		'QUERY_AND_DROPDOWN',
+	];
+	private const ERROR_TYPE_TO_CODE = [
+		'SYNTAX_ERROR' => SqlLabErrorCode::INVALID_QUERY,
+		'QUERY_SECURITY_ACCESS_ERROR' => SqlLabErrorCode::ACCESS_DENIED,
+		'TABLE_SECURITY_ACCESS_ERROR' => SqlLabErrorCode::ACCESS_DENIED,
+		'QUERY_TIMEOUT_ERROR' => SqlLabErrorCode::TIMEOUT,
+	];
+	private const ERROR_MESSAGES = [
+		SqlLabErrorCode::INVALID_QUERY => 'SQL query is invalid',
+		SqlLabErrorCode::ACCESS_DENIED => 'Access to SQL query data is denied',
+		SqlLabErrorCode::TIMEOUT => 'SQL query timed out',
+		SqlLabErrorCode::UNAVAILABLE => 'SQL Lab is unavailable',
+	];
 
 	/**
 	 * Executes a read-only SQL query through Superset SQL Lab (synchronous mode)
@@ -22,9 +41,9 @@ final class SqlLabService extends AbstractSupersetContext
 	 * {@see SqlReadOnlyClassifier}: only a single read-only SELECT (or
 	 * WITH ... SELECT) is allowed, everything else (DML/DDL, multiple statements,
 	 * SELECT ... INTO, obfuscation via comments or string literals) is rejected
-	 * with HTTP 422 regardless of the caller or of Superset's own `allow_dml`
-	 * flag. This makes the read-only guarantee independent of transport (box vs
-	 * cloud) and of the BI database configuration.
+	 * regardless of the caller or of Superset's own `allow_dml` flag. This makes
+	 * the read-only guarantee independent of transport (box vs cloud) and of the
+	 * BI database configuration.
 	 *
 	 * @param string $sql Raw SQL SELECT to execute against the BI (Trino) database.
 	 * @param int|null $limit Row cap applied by Superset (queryLimit). Clamped to 1..MAX_ROW_LIMIT.
@@ -35,16 +54,20 @@ final class SqlLabService extends AbstractSupersetContext
 		$sql = trim($sql);
 		if ($sql === '')
 		{
-			return $this->createErrorResult('SQL is required', null, HttpStatus::UNPROCESSABLE_ENTITY);
+			return $this->createSqlLabErrorResult(
+				SqlLabErrorCode::INVALID_QUERY,
+				HttpStatus::UNPROCESSABLE_ENTITY,
+				detail: 'SQL is required',
+			);
 		}
 
 		$classification = (new SqlReadOnlyClassifier())->classify($sql);
 		if (!$classification->isReadOnly)
 		{
-			return $this->createErrorResult(
-				(string)$classification->reason,
-				null,
+			return $this->createSqlLabErrorResult(
+				SqlLabErrorCode::INVALID_QUERY,
 				HttpStatus::UNPROCESSABLE_ENTITY,
+				detail: (string)$classification->reason,
 			);
 		}
 
@@ -53,7 +76,13 @@ final class SqlLabService extends AbstractSupersetContext
 		$databaseResult = $this->getDatabaseService()->getTrinoDatabaseId();
 		if (!$databaseResult->isSuccess())
 		{
-			return $databaseResult;
+			// $databaseResult carries infrastructure diagnostics (connection addresses, API
+			// status codes), not something about the user's query: keep it out of detail, which
+			// the AI channel unwraps verbatim (see BiToolBehaviour::describeSqlLabError).
+			return $this->createSqlLabErrorResult(
+				SqlLabErrorCode::UNAVAILABLE,
+				HttpStatus::SERVICE_UNAVAILABLE,
+			);
 		}
 		$databaseId = (int)$databaseResult->getData()['id'];
 
@@ -70,25 +99,29 @@ final class SqlLabService extends AbstractSupersetContext
 		$decoded = $this->decode($requestResult->getAnswer());
 		$status = is_array($decoded) ? (string)($decoded['status'] ?? '') : '';
 
-		// Superset returns HTTP 200 with {"status":"failed","errors":[...]} for SQL
-		// errors (syntax, timeout, table access). Surface that message verbatim so
-		// the agent can fix and retry its query (PRD AC-008 / AC-031).
+		// Superset reports a query-level failure as HTTP 200 with {"status":"failed"}: the transport
+		// is healthy, so the answer stays 4xx. The stable code carries the classification, while a 5xx
+		// would move the whole portal to SUPERSET_STATUS_ERROR.
 		if ($status === 'failed')
 		{
-			$message = $this->extractSqlLabError($decoded) ?? 'SQL execution failed';
-
-			return $this->createErrorResult($message, $requestResult, HttpStatus::UNPROCESSABLE_ENTITY);
+			return $this->createSqlLabErrorResult(
+				$this->resolveErrorCode($decoded),
+				HttpStatus::UNPROCESSABLE_ENTITY,
+				$requestResult,
+				$this->extractSqlLabError($decoded),
+			);
 		}
 
 		if (!$requestResult->isSuccess() || $requestResult->getHttpStatus() !== HttpStatus::OK)
 		{
-			$message = $this->extractSqlLabError($decoded);
-			if ($message !== null)
-			{
-				return $this->createErrorResult($message, $requestResult, $requestResult->getHttpStatus());
-			}
+			$httpStatus = $requestResult->getHttpStatus();
 
-			return $this->createRequestErrorResult($requestResult, 'Executing SQL query');
+			return $this->createSqlLabErrorResult(
+				$this->resolveErrorCode($decoded),
+				$httpStatus >= HttpStatus::BAD_REQUEST ? $httpStatus : HttpStatus::BAD_GATEWAY,
+				$requestResult,
+				$this->extractSqlLabError($decoded),
+			);
 		}
 
 		$columns = [];
@@ -114,10 +147,59 @@ final class SqlLabService extends AbstractSupersetContext
 			'rows' => $rows,
 			'rowCount' => count($rows),
 			'limit' => $queryLimit,
-			'limitingFactor' => (string)($query['limitingFactor'] ?? ''),
+			'truncated' => $this->resolveTruncated($query),
 		]);
 
 		return $result;
+	}
+
+	/**
+	 * Maps an allow-listed SQL Lab error type to a stable public code.
+	 */
+	private function resolveErrorCode(?array $decoded): string
+	{
+		if (!is_array($decoded))
+		{
+			return SqlLabErrorCode::UNAVAILABLE;
+		}
+
+		$errors = $decoded['errors'] ?? null;
+		if (!is_array($errors))
+		{
+			return SqlLabErrorCode::UNAVAILABLE;
+		}
+
+		foreach ($errors as $error)
+		{
+			if (!is_array($error))
+			{
+				continue;
+			}
+
+			$errorType = $error['error_type'] ?? null;
+			if (is_string($errorType) && isset(self::ERROR_TYPE_TO_CODE[$errorType]))
+			{
+				return self::ERROR_TYPE_TO_CODE[$errorType];
+			}
+		}
+
+		return SqlLabErrorCode::UNAVAILABLE;
+	}
+
+	private function resolveTruncated(array $query): ?bool
+	{
+		$limitingFactor = $query['limitingFactor'] ?? null;
+		if (!is_string($limitingFactor))
+		{
+			return null;
+		}
+
+		if (in_array($limitingFactor, self::LIMITED_FACTORS, true))
+		{
+			return true;
+		}
+
+		return $limitingFactor === 'NOT_LIMITED' ? false : null;
 	}
 
 	/**
@@ -136,17 +218,44 @@ final class SqlLabService extends AbstractSupersetContext
 			return (string)$errors[0]['message'];
 		}
 
-		if (isset($decoded['error']) && is_string($decoded['error']) && $decoded['error'] !== '')
+		foreach (['error', 'message'] as $key)
 		{
-			return $decoded['error'];
-		}
-
-		if (isset($decoded['message']) && is_string($decoded['message']) && $decoded['message'] !== '')
-		{
-			return $decoded['message'];
+			$message = $decoded[$key] ?? null;
+			if (is_string($message) && $message !== '')
+			{
+				return $message;
+			}
 		}
 
 		return null;
+	}
+
+	/**
+	 * $httpStatus describes the transport and is read by the proxy controller; $detail keeps the
+	 * verbatim Superset text for the AI channel, while the REST boundary answers with $code alone.
+	 */
+	private function createSqlLabErrorResult(
+		string $code,
+		int $httpStatus,
+		?RequestResult $requestResult = null,
+		?string $detail = null,
+	): Main\Result
+	{
+		$result = new Main\Result();
+		$result->addError(new Main\Error(
+			self::ERROR_MESSAGES[$code] ?? self::ERROR_MESSAGES[SqlLabErrorCode::UNAVAILABLE],
+			$code,
+			$detail === null || $detail === '' ? null : ['detail' => $detail],
+		));
+
+		$data = ['httpStatus' => $httpStatus];
+		if ($requestResult !== null)
+		{
+			$data['requestResult'] = $requestResult;
+		}
+		$result->setData($data);
+
+		return $result;
 	}
 
 	private function getDatabaseService(): DatabaseService

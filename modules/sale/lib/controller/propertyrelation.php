@@ -150,7 +150,7 @@ class PropertyRelation extends ControllerBase
 	{
 		if($name == 'deletebyfilter')
 		{
-			$r = $this->checkReadPermissionEntity();
+			$r = $this->checkModifyPermissionEntity();
 		}
 		else
 		{

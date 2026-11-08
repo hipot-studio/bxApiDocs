@@ -25,8 +25,10 @@ final class MoveBetweenStageParameters extends Dto
 			new RequiredField($this, 'categoryId'),
 			new DefinedCategory($this, CCrmOwnerType::Deal, 'categoryId'),
 
+			new RequiredField($this, 'from'),
 			new NotEmptyField($this, 'from'),
 
+			new RequiredField($this, 'to'),
 			new NotEmptyField($this, 'to'),
 		];
 	}

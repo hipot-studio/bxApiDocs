@@ -35,6 +35,11 @@ class ChangeAiSiteTool extends BaseTool
 		return 'Starts AI page-change generation and returns either status=running with a jobId or status=completed with final siteId and pageId.';
 	}
 
+	protected function isFeatureLimitedToolVisible() : bool
+	{
+		return true;
+	}
+
 	protected function getInputSchemaDefinition(): array
 	{
 		return $this->schema->build();

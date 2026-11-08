@@ -205,7 +205,7 @@ class RequestPreviewImage extends RequestSingle
 		$additionalFields = [
 			'METAOG_IMAGE' => $previewSrc,
 		];
-		$rightsBefore = Rights::isOn();
+		$rightsBefore = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 		try
 		{

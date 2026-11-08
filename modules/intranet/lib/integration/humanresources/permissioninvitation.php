@@ -3,7 +3,9 @@
 namespace Bitrix\Intranet\Integration\HumanResources;
 
 use Bitrix\HumanResources\Config\Storage;
+use Bitrix\HumanResources\Public\Service\Container as HumanResourcesContainer;
 use Bitrix\HumanResources\Service\Access\Structure\StructureAccessService;
+use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\HumanResources\Type\StructureAction;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Entity\Department;
@@ -66,6 +68,31 @@ class PermissionInvitation
 	public function canInviteToDepartment(Department $department): bool
 	{
 		return $this->structureAccessService->canDoActionWithTheNode($department->getId());
+	}
+
+	/**
+	 * Bulk pre-check for the departments the structure access filter already confirms.
+	 * The filter is narrower than canInviteToDepartment(): it also requires the structure view permission
+	 * and the employee status. So its result is a subset to skip per-node checks for, never a replacement.
+	 *
+	 * @param int[] $departmentIds
+	 * @return int[]
+	 */
+	public function filterConfirmedInvitableDepartmentIds(array $departmentIds): array
+	{
+		if ($departmentIds === [] || $this->userId !== CurrentUser::get()?->getId())
+		{
+			return [];
+		}
+
+		return HumanResourcesContainer::getNodeService()
+			->findAllByIds(
+				nodeIds: $departmentIds,
+				nodeTypes: [NodeEntityType::DEPARTMENT],
+				structureAction: StructureAction::InviteUserAction,
+			)
+			->getIds()
+		;
 	}
 
 	/**

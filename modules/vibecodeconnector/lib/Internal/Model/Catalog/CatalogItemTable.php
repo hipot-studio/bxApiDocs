@@ -42,9 +42,17 @@ final class CatalogItemTable extends DataManager
 
 			(new IntegerField('CHAT_ID')),
 
+			(new IntegerField('MESSENGER_CHAT_ID')),
+
 			(new StringField('EXTERNAL_ID'))
 				->configureSize(255)
 				->addValidator(new LengthValidator(null, 255)),
+
+			(new StringField('APP_IDENTITY_HASH'))
+				->configureSize(64)
+				->configureNullable()
+				->configureUnique()
+				->addValidator(new LengthValidator(64, 64)),
 
 			(new TextField('DESCRIPTION')),
 
@@ -77,6 +85,18 @@ final class CatalogItemTable extends DataManager
 				->addValidator(new LengthValidator(null, 255)),
 
 			(new DatetimeField('DEACTIVATED_AT')),
+
+			(new IntegerField('LAST_RELEASE_VERSION')),
+
+			(new IntegerField('APP_CHAT_SYNC_REVISION')),
+
+			(new IntegerField('APP_CHAT_SYNCED_REVISION')),
+
+			(new IntegerField('APP_CHAT_TEARDOWN_PENDING'))->configureNullable(),
+
+			(new IntegerField('APP_CHAT_SYNC_PENDING'))->configureNullable(),
+
+			(new IntegerField('APP_CHAT_WELCOME_MESSAGE_ID'))->configureNullable(),
 
 			(new DatetimeField('CREATED_AT'))
 				->configureRequired(),

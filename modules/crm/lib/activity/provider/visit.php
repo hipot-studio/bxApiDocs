@@ -7,7 +7,6 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use CBitrix24;
 use CCrmActivityDirection;
-use CCrmFieldMulti;
 use CCrmOwnerType;
 use CUserOptions;
 use CUtil;
@@ -131,49 +130,6 @@ class Visit extends Base
 				. GetMessage("CRM_ACTIVITY_PROVIDER_VISIT_SEC") : '')
 			: sprintf("%02d:%02d", $minutes, $seconds)
 		;
-	}
-
-	public static function getVkProfile(array $activity)
-	{
-		static $cache = [];
-
-		$entityType = CCrmOwnerType::ResolveName($activity['OWNER_TYPE_ID']);
-		$entityId = $activity['OWNER_ID'];
-		$indexName = $entityType . '_' . $entityId;
-
-		if (isset($cache[$indexName]))
-		{
-			return $cache[$indexName];
-		}
-
-		$found = false;
-		$cursor = CCrmFieldMulti::GetList(
-			[
-				'ID' => 'asc',
-			],
-			[
-				'ENTITY_ID' => $entityType,
-				'ELEMENT_ID' => $entityId,
-			]
-		);
-
-		while ($row = $cursor->Fetch())
-		{
-			if ($row['TYPE_ID'] === 'WEB' && $row['VALUE_TYPE'] === 'VK')
-			{
-				$cache[$entityType . '_' . $entityId] = $row['VALUE'];
-				$found = true;
-
-				break;
-			}
-		}
-
-		if (!$found)
-		{
-			$cache[$entityType . '_' . $entityId] = '';
-		}
-
-		return $cache[$entityType . '_' . $entityId];
 	}
 
 	protected static function hasConsent()

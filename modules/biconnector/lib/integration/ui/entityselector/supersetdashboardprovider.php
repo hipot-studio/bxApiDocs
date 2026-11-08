@@ -134,10 +134,10 @@ class SupersetDashboardProvider extends BaseProvider
 	{
 		return match ($dashboard->getType())
 		{
-			SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-system.png',
-			SupersetDashboardTable::DASHBOARD_TYPE_MARKET => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-market.png',
-			SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-custom.png',
-			default => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-system.png',
+			SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM => '/bitrix/images/biconnector/database-connections/system.svg',
+			SupersetDashboardTable::DASHBOARD_TYPE_MARKET => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-market.webp',
+			SupersetDashboardTable::DASHBOARD_TYPE_CUSTOM => '/bitrix/images/biconnector/superset-dashboard-selector/icon-type-custom.webp',
+			default => '/bitrix/images/biconnector/database-connections/system.svg',
 		};
 	}
 }

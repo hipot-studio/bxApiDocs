@@ -11,9 +11,10 @@ use Bitrix\BIConnector\Integration\Superset\Registrar;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Cache\CacheManager;
 use Bitrix\BIConnector\Superset\DomainLinkService;
+use Bitrix\BIConnector\Superset\Error\IntegrationErrorPresenter;
+use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\BIConnector\Superset\KeyManager;
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -46,7 +47,8 @@ class Superset extends Controller
 	{
 		if (!AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SETTINGS_ACCESS))
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_CACHE_RIGHTS_ERROR') ?? ''));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_CACHE_RIGHTS_ERROR');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return null;
 		}
@@ -54,13 +56,12 @@ class Superset extends Controller
 		$cacheManager = CacheManager::getInstance();
 		if (!$cacheManager->canClearCache())
 		{
-			$time = $cacheManager->getNextClearTimeout();
-			$errorMessage = Loc::getMessagePlural(
+			$minutes = (int)ceil($cacheManager->getNextClearTimeout() / 60);
+			$this->addError(UserFacingError::fromPhrasePlural(
 				'BICONNECTOR_CONTROLLER_SUPERSET_CACHE_TIMEOUT',
-				ceil($time / 60),
-				['#COUNT#' => ceil($time / 60)],
-			) ?? '';
-			$this->addError(new Error($errorMessage));
+				$minutes,
+				['#COUNT#' => $minutes],
+			));
 
 			return null;
 		}
@@ -68,7 +69,10 @@ class Superset extends Controller
 		$clearResult = $cacheManager->clear();
 		if (!$clearResult->isSuccess())
 		{
-			$this->addErrors($clearResult->getErrors());
+			$this->addError(IntegrationErrorPresenter::present(
+				$clearResult->getErrors(),
+				Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_CACHE_CLEAR_ERROR'),
+			));
 
 			return null;
 		}
@@ -82,14 +86,16 @@ class Superset extends Controller
 	{
 		if (Loader::includeModule('bitrix24'))
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_DELETE_LOCAL_ERROR_ONLY_BOX')));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_DELETE_LOCAL_ERROR_ONLY_BOX');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return;
 		}
 
 		if (!AccessController::getCurrent()->getUser()->isAdmin())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_DELETE_LOCAL_ERROR_RIGHTS')));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_DELETE_LOCAL_ERROR_RIGHTS');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return;
 		}
@@ -108,14 +114,16 @@ class Superset extends Controller
 	{
 		if (!AccessController::getCurrent()->getUser()->isAdmin())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_ERROR_RIGHTS')));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_ERROR_RIGHTS');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return;
 		}
 
 		if (!SupersetInitializer::isRebindRequired())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_NOT_REQUIRED')));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_NOT_REQUIRED');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return;
 		}
@@ -123,7 +131,10 @@ class Superset extends Controller
 		$rebindResult = Registrar::getRegistrar()->rebind();
 		if (!$rebindResult->isSuccess())
 		{
-			$this->addErrors($rebindResult->getErrors());
+			$this->addError(IntegrationErrorPresenter::present(
+				$rebindResult->getErrors(),
+				Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_REBIND_ERROR'),
+			));
 
 			return;
 		}
@@ -148,14 +159,16 @@ class Superset extends Controller
 	{
 		if (Loader::includeModule('bitrix24'))
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_LINK_ADDRESS_ERROR_ONLY_BOX')));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_LINK_ADDRESS_ERROR_ONLY_BOX');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return;
 		}
 
 		if (!AccessController::getCurrent()->getUser()->isAdmin())
 		{
-			$this->addError(new Error(Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_LINK_ADDRESS_ERROR_RIGHTS')));
+			$errorMessage = Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_LINK_ADDRESS_ERROR_RIGHTS');
+			$this->addError(new UserFacingError($errorMessage));
 
 			return;
 		}
@@ -163,7 +176,10 @@ class Superset extends Controller
 		$result = DomainLinkService::getInstance()->linkAddress();
 		if (!$result->isSuccess())
 		{
-			$this->addErrors($result->getErrors());
+			$this->addError(IntegrationErrorPresenter::present(
+				$result->getErrors(),
+				Loc::getMessage('BICONNECTOR_CONTROLLER_SUPERSET_LINK_ADDRESS_ERROR'),
+			));
 		}
 	}
 }

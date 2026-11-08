@@ -7,6 +7,7 @@ namespace Bitrix\Im\V2\Integration\AiAssistant\Tools;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Entity\User\UserCollection;
 use Bitrix\Im\V2\Integration\AiAssistant\Tools\Dto\SearchPrivateChatsByNameDto;
+use Bitrix\Im\V2\Integration\AiAssistant\ToolScope;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Validation\ValidationService;
 use Bitrix\Main\Web\Json;
@@ -16,6 +17,11 @@ class SearchPrivateChatsByNameTool extends BaseImTool
 {
 	private const SEARCH_LIMIT = 100;
 
+	protected function getScope(): ToolScope
+	{
+		return ToolScope::Read;
+	}
+
 	public function getName(): string
 	{
 		return 'search_private_chats_by_name';
@@ -23,7 +29,10 @@ class SearchPrivateChatsByNameTool extends BaseImTool
 
 	public function getDescription(): string
 	{
-		return "Searches for private chats by user name. Returns an array of private chat dialogId and their names. "
+		return "Searches for private chats by user name. The search matches users, not existing chats: "
+			. "it returns an array of private chat dialogId (each one is the matched user's ID) and user names. "
+			. "A returned dialogId may point to a conversation that has not started yet: every other tool reports "
+			. "such a dialog as not found, and only send_message can start it. "
 			. "This tool works exclusively with private chats and does not search group chats.";
 	}
 

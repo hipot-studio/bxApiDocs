@@ -9,6 +9,7 @@ use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\Collection;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Config\Option;
 
@@ -237,6 +238,11 @@ abstract class Base extends ValueCollection
 		])->fetchAll();
 
 		$this->document['PRODUCT_IDS'] = array_column($productRows, 'ID');
+
+		$catalogProductIds = array_column($productRows, 'PRODUCT_ID');
+		Collection::normalizeArrayValuesByInt($catalogProductIds, false);
+		$this->document['PRODUCT_IDS_CATALOG'] = $catalogProductIds;
+
 		$this->document['PRODUCT_IDS_PRINTABLE'] = '';
 
 		if (!empty($productRows))

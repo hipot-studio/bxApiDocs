@@ -40,24 +40,31 @@ final class CreateActivityAction implements ActionInterface
 			return $this->getErrorResult();
 		}
 
-		$activityId = $this->addActivity(
+		$saveResult = $this->addActivity(
 			$item,
 			$clientItem,
 			$assignmentUserId,
 			$context,
 			$segmentItem,
 		);
-		if ($activityId === null)
+		if ($saveResult === null || !$saveResult->isSuccess())
 		{
-			return $this->getErrorResult();
+			return $this->getErrorResult($saveResult);
 		}
 
 		return $prevActionResult;
 	}
 
-	private function getErrorResult(): Result
+	private function getErrorResult(?Result $sourceResult = null): Result
 	{
-		return (new Result())->addError(new Error(Loc::getMessage('CRM_REPEAT_SALE_ACTION_CREATE_ACTIVITY_ERROR')));
+		$result = (new Result())->addError(new Error(Loc::getMessage('CRM_REPEAT_SALE_ACTION_CREATE_ACTIVITY_ERROR')));
+
+		if ($sourceResult !== null)
+		{
+			$result->addErrors($sourceResult->getErrors());
+		}
+
+		return $result;
 	}
 
 	private function addActivity(
@@ -67,7 +74,7 @@ final class CreateActivityAction implements ActionInterface
 		?Context $context = null,
 		?SegmentItem $segmentItem = null,
 	)
-	: ?int
+	: ?Result
 	{
 		$segmentId = $segmentItem?->getId() ?? 0;
 		if ($segmentId <= 0)
@@ -117,14 +124,11 @@ final class CreateActivityAction implements ActionInterface
 			->setCheckPermissions(false)
 		;
 
-		$activityId = null;
 		$analyticsStatus = \Bitrix\Crm\Integration\Analytics\Dictionary::STATUS_ERROR;
 		$saveResult = $activity->save();
 		if ($saveResult->isSuccess())
 		{
 			$analyticsStatus = \Bitrix\Crm\Integration\Analytics\Dictionary::STATUS_SUCCESS;
-
-			$activityId = $activity->getId();
 		}
 
 		AddActivityEvent::createDefault($identifier->getEntityTypeId())
@@ -136,7 +140,7 @@ final class CreateActivityAction implements ActionInterface
 			->send()
 		;
 
-		return $activityId;
+		return $saveResult;
 	}
 
 	private function resolveClientFromItem(Item $clientItem): array
@@ -177,8 +181,7 @@ final class CreateActivityAction implements ActionInterface
 	private function isAutomaticProcessingAllowed(): bool
 	{
 		$isAiEnabled = AIManager::isAiCallProcessingEnabled()
-			&& AIManager::isEnabledInGlobalSettings(GlobalSetting::RepeatSale)
-		;
+			&& AIManager::isEnabledInGlobalSettings(GlobalSetting::RepeatSale);
 
 		if (!$isAiEnabled)
 		{

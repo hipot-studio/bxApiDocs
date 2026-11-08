@@ -74,10 +74,11 @@ class ImportSite extends Blank
 			if ($fileId > 0)
 			{
 				$unpackFile = $structure->getUnpackFile($fileId);
-				if ($unpackFile)
+				$savedFileId = $unpackFile ? AppConfiguration::saveFile($unpackFile) : null;
+				if ($savedFileId > 0)
 				{
-					$data['ADDITIONAL_FIELDS'][$hookCode] = AppConfiguration::saveFile($unpackFile);
-					$files[] = $data['ADDITIONAL_FIELDS'][$hookCode];
+					$data['ADDITIONAL_FIELDS'][$hookCode] = $savedFileId;
+					$files[] = $savedFileId;
 				}
 				else
 				{
@@ -89,7 +90,7 @@ class ImportSite extends Blank
 		$res = Site::add($data);
 		if (!$res->isSuccess())
 		{
-			// todo: add exceptin
+			// todo: add exception
 			return;
 		}
 

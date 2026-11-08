@@ -1,12 +1,68 @@
 <?php
 namespace Bitrix\Intranet\UI\LeftMenu\Preset;
 
-use \Bitrix\Main;
-use \Bitrix\Intranet\UI\LeftMenu;
+use Bitrix\Intranet\Internal\MainTool;
+use Bitrix\Intranet\UI\LeftMenu;
+use Bitrix\Main;
 
 class Manager
 {
 	protected static $presets = [];
+	private static array $effectiveStates = [];
+
+	public static function getEffectiveState(string $siteId, ?int $userId = null): ?array
+	{
+		if (!MainTool\AccessPolicy::isFeatureEnabled())
+		{
+			return null;
+		}
+
+		$isCommonScope = $userId === 0;
+		$userId ??= static::getCurrentUserId();
+		if (!$isCommonScope && $userId <= 0)
+		{
+			return null;
+		}
+		if (array_key_exists($userId, self::$effectiveStates[$siteId] ?? []))
+		{
+			return self::$effectiveStates[$siteId][$userId];
+		}
+		if (!$isCommonScope && !static::createAccessPolicy()->isUserInAudience($userId))
+		{
+			self::$effectiveStates[$siteId][$userId] = null;
+
+			return null;
+		}
+
+		$repository = new MainTool\Repository();
+		$provider = new MainTool\StateProvider(
+			$repository,
+			new MainTool\AvailabilityProvider(),
+			new MainTool\AccessPolicy(),
+		);
+		$snapshot = $repository->readSnapshot($siteId, $userId);
+		$effectiveState = $provider->resolve($snapshot);
+		$effectiveState['commonPresetId'] = $snapshot['common']['presetId'];
+		self::$effectiveStates[$siteId][$userId] = $effectiveState;
+
+		return self::$effectiveStates[$siteId][$userId];
+	}
+
+	protected static function createAccessPolicy(): MainTool\AccessPolicy
+	{
+		return new MainTool\AccessPolicy();
+	}
+
+	protected static function getCurrentUserId(): int
+	{
+		return (int)Main\Engine\CurrentUser::get()->getId();
+	}
+
+	public static function clearCache(string $siteId): void
+	{
+		unset(self::$effectiveStates[$siteId], self::$presets[$siteId]);
+		PresetAbstract::clearCache($siteId);
+	}
 
 	public static function getAllPresets(string $siteId): array
 	{
@@ -59,6 +115,12 @@ class Manager
 
 	protected static function getCurrentPresetId(string $siteId): string
 	{
+		$effective = self::getEffectiveState($siteId);
+		if ($effective !== null)
+		{
+			return $effective['presetId'] ?? '';
+		}
+
 		//personal
 		$presetId = \CUserOptions::GetOption('intranet', 'left_menu_preset_'.$siteId);
 		//global
@@ -82,6 +144,11 @@ class Manager
 	public static function hasOwnPreset(): bool
 	{
 		$siteId = defined('SITE_ID') ? SITE_ID : LeftMenu\Menu::getDefaultSiteId();
+		$effective = self::getEffectiveState($siteId);
+		if ($effective !== null)
+		{
+			return $effective['hasPersonalChoice'];
+		}
 
 		 return \CUserOptions::GetOption('intranet', 'left_menu_preset_' . $siteId, 'N') !== 'N';
 	}

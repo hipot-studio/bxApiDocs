@@ -4,23 +4,23 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Internal\Repository\FieldMetadata;
 
+use Bitrix\Crm\V2\Internal\Entity\FieldMetadata\SystemFieldTitle;
 use Bitrix\Crm\V2\Internal\Service\Item\FieldRegistry;
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Crm\V2\Public\EntityTypeSettings;
 use Bitrix\Crm\V2\Public\OwnerType;
-use Bitrix\Main\Localization\Loc;
 
 final class SystemFieldTitleProvider
 {
-	private const COMMON_LANGUAGE_SOURCE_FILE = __DIR__ . '/../../../../../lib/Service/Localization.php';
+	private const COMMON_LANGUAGE_SOURCE_FILE = 'lib/Service/Localization.php';
 
-	private const GENERAL_LEGACY_LANGUAGE_SOURCE_DIRECTORY = __DIR__ . '/../../../../../classes/general';
+	private const GENERAL_LEGACY_LANGUAGE_SOURCE_DIRECTORY = 'classes/general';
 
 	private const GENERAL_LEGACY_LANGUAGE_SOURCE_FILE = self::GENERAL_LEGACY_LANGUAGE_SOURCE_DIRECTORY . '/crm_document.php';
 
 	private const CLOSED_LEGACY_LANGUAGE_SOURCE_FILE = self::GENERAL_LEGACY_LANGUAGE_SOURCE_DIRECTORY . '/crm_quote.php';
 
-	private const LEAD_CLOSED_LEGACY_LANGUAGE_SOURCE_FILE = __DIR__ . '/../../../../../lib/filter/leaddataprovider.php';
+	private const LEAD_CLOSED_LEGACY_LANGUAGE_SOURCE_FILE = 'lib/filter/leaddataprovider.php';
 
 	private const LANGUAGE_FILE_BY_ENTITY_TYPE = [
 		OwnerType::LEAD => 'crm_lead.php',
@@ -98,29 +98,14 @@ final class SystemFieldTitleProvider
 		],
 	];
 
-	public function getTitle(EntityType $entityType, string $fieldName, string $language): ?string
+	public function getTitle(EntityType $entityType, string $fieldName): SystemFieldTitle
 	{
-		foreach ($this->getMessageCandidates($entityType, $fieldName, $language) as [$sourceFile, $messageCode])
-		{
-			$messages = $this->getMessages($sourceFile, $language);
-			$message = $messages[$messageCode] ?? null;
-			if (is_string($message) && $message !== '')
-			{
-				return $message;
-			}
-		}
-
-		return null;
+		return new SystemFieldTitle($this->getMessageCandidates($entityType, $fieldName), $fieldName);
 	}
 
 	/** @return array<int, array{0: string, 1: string}> */
-	private function getMessageCandidates(EntityType $entityType, string $fieldName, string $language): array
+	private function getMessageCandidates(EntityType $entityType, string $fieldName): array
 	{
-		if (!preg_match('/^[a-z]{2}$/i', $language))
-		{
-			return [];
-		}
-
 		$legacyFieldNames = $this->getLegacyFieldNames($entityType, $fieldName);
 		$commonLanguageFile = self::COMMON_LANGUAGE_SOURCE_FILE;
 		$entityLanguageFile = $this->getEntityLanguageFile($entityType);
@@ -136,7 +121,7 @@ final class SystemFieldTitleProvider
 					['CRM_TYPE_ITEM_FIELD_', 'CRM_COMMON_'],
 					$commonLanguageFile,
 				),
-				$this->getClosedLegacyCandidates($entityType, $fieldName, $language),
+				$this->getClosedLegacyCandidates($entityType, $fieldName),
 				$multifieldLegacyCandidates,
 				$observerLegacyCandidates,
 				$contactBindingLegacyCandidates,
@@ -340,49 +325,4 @@ final class SystemFieldTitleProvider
 		return self::GENERAL_LEGACY_LANGUAGE_SOURCE_DIRECTORY . "/{$fileName}";
 	}
 
-	/** @return array<string, string> */
-	private function getMessages(string $sourceFile, string $language): array
-	{
-		/** @var array<string, array<string, string>> $messagesBySourceFileAndLanguage */
-		static $messagesBySourceFileAndLanguage = [];
-		$cacheKey = $sourceFile . ':' . $language;
-
-		if (array_key_exists($cacheKey, $messagesBySourceFileAndLanguage))
-		{
-			return $messagesBySourceFileAndLanguage[$cacheKey];
-		}
-
-		return $messagesBySourceFileAndLanguage[$cacheKey] = (static function (array $loadedMessages): array {
-			$messages = [];
-			$versions = [];
-			foreach ($loadedMessages as $messageCode => $message)
-			{
-				if (!is_string($message))
-				{
-					continue;
-				}
-
-				if (preg_match('/^(.*)_MSGVER_(\d+)$/', $messageCode, $matches) === 1)
-				{
-					$baseMessageCode = $matches[1];
-					$version = (int)$matches[2];
-					if (!isset($versions[$baseMessageCode]) || $version > $versions[$baseMessageCode])
-					{
-						$messages[$baseMessageCode] = $message;
-						$versions[$baseMessageCode] = $version;
-					}
-
-					continue;
-				}
-
-				if (!array_key_exists($messageCode, $messages))
-				{
-					$messages[$messageCode] = $message;
-					$versions[$messageCode] = 0;
-				}
-			}
-
-			return $messages;
-		})(Loc::loadLanguageFile($sourceFile, $language));
-	}
 }

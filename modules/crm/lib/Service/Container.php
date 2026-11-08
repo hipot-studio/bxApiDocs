@@ -31,6 +31,11 @@ use Bitrix\Crm\Service\Sign\B2e\TriggerService;
 use Bitrix\Crm\Service\Sign\B2e\TypeService;
 use Bitrix\Crm\Summary\SummaryFactory;
 use Bitrix\Crm\Timeline;
+use Bitrix\Crm\V2\Internal\Access\Activity\ActivityAccess;
+use Bitrix\Crm\V2\Internal\Service\Activity\ActivityLifecycleService;
+use Bitrix\Crm\V2\Internal\Service\Activity\ActivityServiceFactory;
+use Bitrix\Crm\V2\Internal\Service\Activity\Provider\ProviderRegistry;
+use Bitrix\Crm\V2\Internal\Service\Activity\Provider\ProviderRegistryInterface;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\InvalidOperationException;
@@ -656,6 +661,20 @@ class Container
 		return ServiceLocator::getInstance()->get('crm.customSection.automatedSolutionManager');
 	}
 
+	public function getVibeRepository(): ?Integration\Landing\Vibe\VibeRepository
+	{
+		return
+			Integration\Landing\Vibe\VibeRepository::isVibeAvailable()
+				? ServiceLocator::getInstance()->get('crm.customSection.vibeRepository')
+				: null
+		;
+	}
+
+	public function getAutomatedSolutionVibeLifecycleService(): \Bitrix\Crm\AutomatedSolution\Vibe\LifecycleService
+	{
+		return ServiceLocator::getInstance()->get('crm.customSection.vibeLifecycleService');
+	}
+
 	public function getSignB2eTypeService(): TypeService
 	{
 		return ServiceLocator::getInstance()->get('crm.service.sign.b2e.type');
@@ -762,5 +781,56 @@ class Container
 	public function getLastActivity(): LastActivity
 	{
 		return ServiceLocator::getInstance()->get('crm.service.lastActivity');
+	}
+
+	/**
+	 * The single registry of the providers of activities. It is a service of the hit, and this is a typed way of
+	 * reaching that very service: a second registry would split what the legacy enumeration and V2 see.
+	 */
+	public function getActivityProviderRegistry(): ProviderRegistryInterface
+	{
+		return ServiceLocator::getInstance()->get(ProviderRegistry::SERVICE_CODE);
+	}
+
+	/**
+	 * What a user may do with an activity.
+	 *
+	 * ONE INSTANCE PER HIT, AND THAT IS A REQUIREMENT RATHER THAN AN OPTIMIZATION. The decisions remembered
+	 * within a hit and the preloaded bindings live in this object, and the step of a pipeline that saves the
+	 * bindings of an activity forgets it here after a real change. Assembled twice, the two copies would not see
+	 * each other's invalidation, and a check after a write would answer from a stale decision.
+	 */
+	public function getActivityAccess(): ActivityAccess
+	{
+		$identifier = static::getIdentifierByClassName(ActivityAccess::class);
+		if (!ServiceLocator::getInstance()->has($identifier))
+		{
+			ServiceLocator::getInstance()->addInstance(
+				$identifier,
+				(new ActivityServiceFactory())->createActivityAccess($this->getActivityProviderRegistry()),
+			);
+		}
+
+		return ServiceLocator::getInstance()->get($identifier);
+	}
+
+	/**
+	 * The lifecycle of an activity: add, update, delete, complete.
+	 *
+	 * One instance per hit as well, so that whoever holds the service and whoever holds the access rules hold the
+	 * same collaborators.
+	 */
+	public function getActivityLifecycleService(): ActivityLifecycleService
+	{
+		$identifier = static::getIdentifierByClassName(ActivityLifecycleService::class);
+		if (!ServiceLocator::getInstance()->has($identifier))
+		{
+			ServiceLocator::getInstance()->addInstance(
+				$identifier,
+				(new ActivityServiceFactory())->createActivityLifecycleService(),
+			);
+		}
+
+		return ServiceLocator::getInstance()->get($identifier);
 	}
 }

@@ -8,6 +8,7 @@ use Bitrix\Bitrix24\Public\Service\VibePlus\RuntimeStateProvider;
 use Bitrix\Main\Application;
 use Bitrix\Bitrix24;
 use Bitrix\Bitrix24\License\Market;
+use Bitrix\Intranet\ActionFilter\IntranetUser;
 use Bitrix\Main\Engine;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Result;
@@ -17,11 +18,27 @@ class InfoHelper extends Engine\Controller
 {
 	private const POPUP_PROVIDER_TEST_CODE_LIST = [];
 
+	public function configureActions(): array
+	{
+		if (!Loader::includeModule('intranet'))
+		{
+			return [];
+		}
+
+		return [
+			'activateDemoLicense' => [
+				'+prefilters' => [
+					new IntranetUser(),
+				],
+			],
+		];
+	}
+
 	public function getInitParamsAction(
 		string $type = FeaturePromoter\ProviderType::SLIDER,
 		string $code = '',
 		string $currentUrl = '',
-		?string $featureId = null
+		?string $featureId = null,
 	): array
 	{
 		$configuration = new FeaturePromoter\ProviderConfiguration($type, $code, $currentUrl, $featureId);
@@ -29,11 +46,12 @@ class InfoHelper extends Engine\Controller
 		return (new FeaturePromoter\ProviderFactory())->createProvider($configuration)->getRendererParameters();
 	}
 
-	public function activateDemoLicenseAction()
+	public function activateDemoLicenseAction(): array
 	{
-		$result	= [
+		$result = [
 			'success' => 'N',
 		];
+
 		if (Loader::includeModule('bitrix24') && defined('BX24_HOST_NAME'))
 		{
 			if (
@@ -52,6 +70,14 @@ class InfoHelper extends Engine\Controller
 			if ($res->isSuccess())
 			{
 				$result['success'] = 'Y';
+			}
+			else
+			{
+				$error = $res->getError();
+				if ($error !== null)
+				{
+					$result['error'] = $error->jsonSerialize();
+				}
 			}
 		}
 

@@ -5,6 +5,9 @@ namespace Bitrix\Crm\Automation;
 use Bitrix\Bizproc;
 use Bitrix\Bizproc\Automation\Engine\Robot;
 use Bitrix\Crm;
+use Bitrix\Crm\Controller\ErrorCode;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Main;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
@@ -35,6 +38,76 @@ class TunnelManager
 	protected function isAvailable(): bool
 	{
 		return Factory::isAutomationAvailable($this->entityTypeId);
+	}
+
+	/**
+	 * Whether $userId may write the tunnels of the funnel the stage $srcStage stands in - the user the
+	 * template is saved as, the same one every write method here takes.
+	 *
+	 * The funnel is resolved from the stage on the server and is never the one the request names: the
+	 * robot of a tunnel is written into the template of that stage. $srcCategoryHint is the funnel the
+	 * request names and says nothing but which funnel to read first: it is taken only once the server
+	 * has found the stage standing there, and a hint naming any other funnel leaves the answer of the
+	 * full resolution untouched. The funnel the tunnel leads to is deliberately not consulted
+	 * ({@see Crm\Service\UserPermissions\Configuration::canManageTunnels()}), and neither is
+	 * `isAutomationEnabled()` - that one says the screen may show tunnels, not that this user may write
+	 * them.
+	 *
+	 * A stage the entity type does not have leaves the contour without a funnel, the entity type as a
+	 * whole.
+	 */
+	protected function canWriteTunnels(int $userId, string $srcStage, ?int $srcCategoryHint = null): bool
+	{
+		return Crm\Service\Container::getInstance()
+			->getUserPermissions($userId)
+			->configuration()
+			->canManageTunnels(
+				ConfigurationCallSite::TunnelManager,
+				ConfigurationScope::ofEntityType(
+					$this->entityTypeId,
+					$this->resolveCategoryId($srcStage, $srcCategoryHint),
+				),
+			)
+		;
+	}
+
+	private function resolveCategoryId(string $stageId, ?int $hintCategoryId = null): ?int
+	{
+		$factory = Crm\Service\Container::getInstance()->getFactory($this->entityTypeId);
+		if ($factory === null)
+		{
+			return null;
+		}
+
+		$stage = $this->findStageInCategory($factory, $stageId, $hintCategoryId) ?? $factory->getStage($stageId);
+		$categoryId = $stage?->getCategoryId();
+
+		return $categoryId === null ? null : (int)$categoryId;
+	}
+
+	/**
+	 * The stage as $categoryId holds it, and null when that funnel does not hold it - one funnel read
+	 * instead of every funnel of the entity type ({@see Crm\Service\Broker\Stage::getById()}). The
+	 * funnel itself is looked up first: an id the entity type has no funnel for must not reach
+	 * {@see Crm\Service\Factory::getStagesEntityId()}, which creates the default funnel of a smart
+	 * process when asked for one.
+	 */
+	private function findStageInCategory(Crm\Service\Factory $factory, string $stageId, ?int $categoryId): ?Crm\EO_Status
+	{
+		if ($categoryId === null || !$factory->isCategoriesSupported() || $factory->getCategory($categoryId) === null)
+		{
+			return null;
+		}
+
+		return $factory->getStageFromCategory($categoryId, $stageId);
+	}
+
+	/**
+	 * The funnel the request names, when it names a numeric one at all.
+	 */
+	private static function categoryHint(mixed $categoryId): ?int
+	{
+		return is_numeric($categoryId) ? (int)$categoryId : null;
 	}
 
 	/**
@@ -136,6 +209,12 @@ class TunnelManager
 			return $result;
 		}
 
+		if (!$this->canWriteTunnels($userId, $srcStage, $srcCategory))
+		{
+			$result->addError(ErrorCode::getAccessDeniedError());
+			return $result;
+		}
+
 		if ($srcCategory === $dstCategory)
 		{
 			$result->addError(new Error(Loc::getMessage('CRM_AUTOMATION_TUNNEL_ADD_ERROR_SAME_CATEGORY2')));
@@ -189,6 +268,12 @@ class TunnelManager
 			return $result;
 		}
 
+		if (!$this->canWriteTunnels($userId, $tunnel['srcStage'], self::categoryHint($tunnel['srcCategory'] ?? null)))
+		{
+			$result->addError(ErrorCode::getAccessDeniedError());
+			return $result;
+		}
+
 		$template = new Bizproc\Automation\Engine\Template($this->documentType, $tunnel['srcStage']);
 
 		if ($template->isExternalModified())
@@ -231,6 +316,12 @@ class TunnelManager
 		if (!$this->isAvailable())
 		{
 			$result->addError(new Error(Loc::getMessage('CRM_AUTOMATION_TUNNEL_UNAVAILABLE')));
+			return $result;
+		}
+
+		if (!$this->canWriteTunnels($userId, $tunnel['srcStage'], self::categoryHint($tunnel['srcCategory'] ?? null)))
+		{
+			$result->addError(ErrorCode::getAccessDeniedError());
 			return $result;
 		}
 
@@ -447,6 +538,12 @@ class TunnelManager
 		if (!$this->isAvailable())
 		{
 			$result->addError(new Error(Loc::getMessage('CRM_AUTOMATION_TUNNEL_UNAVAILABLE')));
+			return $result;
+		}
+
+		if (!$this->canWriteTunnels($userId, $stageId))
+		{
+			$result->addError(ErrorCode::getAccessDeniedError());
 			return $result;
 		}
 

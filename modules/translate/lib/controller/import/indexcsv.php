@@ -207,20 +207,27 @@ class IndexCsv
 			{
 				continue;
 			}
-			if (Translate\IO\Path::isLangDir($filePath, true) !== true)
-			{
-				continue;
-			}
-			$filePath = Translate\IO\Path::normalize('/'.$filePath);
 
-			if (isset($uniquePaths[$filePath]))
-			{
-				continue;
-			}
-
+			$indexedPath = '';
 			foreach ($this->languageList as $languageId)
 			{
-				$langFilePath = Translate\IO\Path::replaceLangId($filePath, $languageId);
+				$pathResult = Translate\IO\Path::resolveAllowedLangFile($filePath, $languageId);
+				if (!$pathResult->isSuccess())
+				{
+					// the language code takes part in the check, so the neighbouring languages of
+					// the same row still have to be indexed
+					continue;
+				}
+
+				$langFilePath = $pathResult->getData()['path'];
+				$indexedPath = $pathResult->getData()['normalizedPath'];
+
+				// the normalized path does not depend on the language, so the first language that
+				// resolves decides for the whole row
+				if (isset($uniquePaths[$indexedPath]))
+				{
+					continue 2;
+				}
 
 				$fullPath = self::$documentRoot. $langFilePath;
 				$fullPath = Main\Localization\Translation::convertLangPath($fullPath, $languageId);
@@ -236,7 +243,8 @@ class IndexCsv
 
 				if ($langFile->getFileIndex()->getId() <= 0)
 				{
-					$topPath = $pathIndexer->constructAncestorsByPath($filePath);
+					// the path tree keeps a file path as the csv spells it, language code included
+					$topPath = $pathIndexer->constructAncestorsByPath($indexedPath);
 
 					if ($topPath['ID'] > 0)
 					{
@@ -248,13 +256,17 @@ class IndexCsv
 				$langFile->updatePhraseIndex();
 			}
 
-			$uniquePaths[$filePath] = 1;
+			// an empty language list leaves nothing to remember: the loop above has not run
+			if ($indexedPath !== '')
+			{
+				$uniquePaths[$indexedPath] = 1;
+			}
 			$this->processedItems ++;
 
 			if ($this->instanceTimer()->hasTimeLimitReached())
 			{
 				$this->seekLine = $currentLine;
-				$this->seekPath = $filePath;
+				$this->seekPath = $indexedPath;
 				break;
 			}
 		}

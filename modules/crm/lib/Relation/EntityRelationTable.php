@@ -9,6 +9,7 @@ use Bitrix\Main\Entity\Event;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\ORM\Data\AddStrategy\Trait\MergeByDefaultTrait;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields\DatetimeField;
 use Bitrix\Main\ORM\Fields\EnumField;
 use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\Result;
@@ -54,6 +55,7 @@ class EntityRelationTable extends DataManager
 				->configureRequired()
 				->configureValues(RelationType::getAll())
 				->configureDefaultValue(RelationType::BINDING),
+			new DatetimeField('CREATED_TIME'),
 		];
 	}
 

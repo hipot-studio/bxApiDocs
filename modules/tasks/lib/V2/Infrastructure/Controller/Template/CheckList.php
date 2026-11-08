@@ -17,6 +17,7 @@ use Bitrix\Tasks\V2\Public\Command\Template\CheckList\RenewCheckListItemsCommand
 use Bitrix\Tasks\V2\Public\Command\CheckList\CollapseCheckListCommand;
 use Bitrix\Tasks\V2\Public\Command\CheckList\ExpandCheckListCommand;
 use Bitrix\Tasks\V2\Public\Command\Template\CheckList\SaveCheckListCommand;
+use Bitrix\Tasks\V2\Public\Command\Template\CheckList\SetHideCompletedCommand;
 use Bitrix\Tasks\V2\Public\Provider\CheckListProvider;
 
 class CheckList extends BaseController
@@ -153,6 +154,27 @@ class CheckList extends BaseController
 
 		$result = (new ExpandCheckListCommand(
 			checkListId: $checkListId,
+			userId: $this->userId,
+		))->run();
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * @ajaxAction tasks.V2.Template.CheckList.setHideCompleted
+	 */
+	#[CloseSession]
+	public function setHideCompletedAction(bool $hide): bool
+	{
+		$result = (new SetHideCompletedCommand(
+			hide: $hide,
 			userId: $this->userId,
 		))->run();
 

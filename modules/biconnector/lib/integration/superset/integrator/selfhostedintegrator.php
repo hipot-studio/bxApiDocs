@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Integration\Superset\Integrator;
 
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\CultureFormatter;
+use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\SqlExecutionContext;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Dto\User;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Logger\IntegratorEventLogger;
 use Bitrix\BIConnector\Integration\Superset\Integrator\Logger\IntegratorLogger;
@@ -14,6 +15,7 @@ use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboard;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SelfHostedConnectionService;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetUserTable;
+use Bitrix\Main\Command\AbstractCommand;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\IO;
@@ -26,6 +28,10 @@ use Bitrix\Superset\Public\Dto\ServerReferenceDto;
 use Bitrix\Superset\Public\Dto\SupersetUserReferenceDto;
 use Bitrix\Superset\Public\Dto\SupersetUserRuntimeDto;
 use Bitrix\Superset\Public\Commands\Cache\InvalidateSupersetCacheCommand;
+use Bitrix\Superset\Public\Commands\Cache\InvalidateSupersetPermissionCacheCommand;
+use Bitrix\Superset\Public\Commands\Chart\CreateChartCommand;
+use Bitrix\Superset\Public\Commands\Chart\DeleteChartsCommand;
+use Bitrix\Superset\Public\Commands\Chart\UpdateChartCommand;
 use Bitrix\Superset\Public\Commands\Dashboard\CopyDashboardCommand;
 use Bitrix\Superset\Public\Commands\Dashboard\CreateEmptyDashboardCommand;
 use Bitrix\Superset\Public\Commands\Dashboard\DeleteDashboardsCommand;
@@ -35,6 +41,8 @@ use Bitrix\Superset\Public\Commands\Dashboard\SetDashboardOwnerCommand;
 use Bitrix\Superset\Public\Commands\Dashboard\UpdateDashboardCommand;
 use Bitrix\Superset\Public\Commands\Database\ChangeDatabaseTokenCommand;
 use Bitrix\Superset\Public\Commands\Dataset\CreateDatasetCommand;
+use Bitrix\Superset\Public\Commands\Dataset\CreateDatasetFromSqlCommand;
+use Bitrix\Superset\Public\Commands\Dataset\CreateVirtualDatasetCommand;
 use Bitrix\Superset\Public\Commands\Dataset\DeleteDatasetCommand;
 use Bitrix\Superset\Public\Commands\Dataset\InitRequiredDatasetCommand;
 use Bitrix\Superset\Public\Commands\License\ResetSelfHostedLicenseCommand;
@@ -42,6 +50,7 @@ use Bitrix\Superset\Public\Commands\License\SetBoxLicenseExpirationCommand;
 use Bitrix\Superset\Public\Commands\License\SetSelfHostedEditionVerdictCommand;
 use Bitrix\Superset\Public\Commands\License\SetSelfHostedLicenseExpirationCommand;
 use Bitrix\Superset\Public\Commands\Server\SetServerTimezoneCommand;
+use Bitrix\Superset\Public\Commands\SqlLab\ExecuteSqlCommand;
 use Bitrix\Superset\Public\Commands\Dataset\UpdateDatasetCommand;
 use Bitrix\Superset\Public\Commands\Subscription\SetSubscriptionExpirationCommand;
 use Bitrix\Superset\Public\Commands\Subscription\SyncSubscriptionRequireCommand;
@@ -55,6 +64,7 @@ use Bitrix\Superset\Public\Commands\User\UpdateSupersetUserCommand;
 use Bitrix\Superset\Public\Providers\ChartProvider;
 use Bitrix\Superset\Public\Providers\DashboardProvider;
 use Bitrix\Superset\Public\Providers\DatasetProvider;
+use Bitrix\Superset\Public\Providers\TableProvider;
 use Bitrix\Superset\Public\Providers\UnusedElementsProvider;
 use Bitrix\Superset\Public\Providers\UserProvider;
 
@@ -73,6 +83,35 @@ class SelfHostedIntegrator implements IntegratorInterface
 	 */
 	private const LICENSE_DELIVERY_SOCKET_TIMEOUT = 5;
 	private const LICENSE_DELIVERY_STREAM_TIMEOUT = 15;
+
+	/**
+	 * Timeouts of the permission cache reset. The connection bound is short - the reset carries no data and is
+	 * sent from the background job of an ordinary hit, so a person saving a role or a role relation waits out
+	 * whatever this call waits out, and an instance that does not answer at all has to cost them seconds.
+	 *
+	 * The answer bound is deliberately NOT short, and this is the non-obvious half. A slow but successful reset
+	 * must not be written down as a failure: the mark then stays pending and the tail agent re-sends it every
+	 * retry window for as long as the scan stays slow, so the cost of giving up too early is paid over and over.
+	 *
+	 * No budget is promised on the other side of this branch: the point of the instance bounds nothing for us.
+	 * The value is therefore ours on both branches and kept equal on both: what it bounds is the wait of the
+	 * person who saved the rights, and that wait must not depend on where the portal happens to live.
+	 */
+	private const PERMISSION_CACHE_RESET_SOCKET_TIMEOUT = 5;
+	private const PERMISSION_CACHE_RESET_STREAM_TIMEOUT = 30;
+
+	/**
+	 * The build of the instance that first answers /api/v1/bitrix_cache/clear_permissions.
+	 *
+	 * Below it the route does not exist, and the call has to be refused here rather than sent: what an
+	 * instance without the route answers is not told apart from a reset that deleted nothing, so an old
+	 * box would look like a portal whose rights are being reset - while none of them ever were.
+	 *
+	 * A placeholder until that build is stamped: the check is wired, only the number moves. Note that
+	 * the version of the instance is kept for a day, so an upgraded box keeps being refused until the
+	 * kept value expires or SelfHostedConnectionService::getSupersetVersion(true) drops it.
+	 */
+	private const PERMISSION_CACHE_RESET_REQUIRED_VERSION = '6.0.0_bx1000';
 
 	static private ?self $instance = null;
 
@@ -112,7 +151,12 @@ class SelfHostedIntegrator implements IntegratorInterface
 		return new IntegratorEventLogger();
 	}
 
-	private function createDefaultRequest(string $action): IntegratorRequest
+	protected function runSupersetCommand(AbstractCommand $command): Result
+	{
+		return $command->run();
+	}
+
+	protected function createDefaultRequest(string $action): IntegratorRequest
 	{
 		return (new IntegratorRequest())
 			->setAction($action)
@@ -311,15 +355,42 @@ class SelfHostedIntegrator implements IntegratorInterface
 	{
 		$ids = (isset($filter['ids']) && is_array($filter['ids'])) ? $filter['ids'] : [];
 		$neqIds = (isset($filter['neqIds']) && is_array($filter['neqIds'])) ? $filter['neqIds'] : [];
+		$ownedByRequestUser = !empty($filter['ownedByRequestUser']);
 
-		$handler = function () use ($ids, $neqIds): IntegratorResponse {
+		$handler = function (IntegratorRequest $request) use ($ids, $neqIds, $ownedByRequestUser): IntegratorResponse {
 			$server = $this->getServer();
 			if ($server === null)
 			{
 				return $this->buildServerNotConfiguredResponse();
 			}
 
-			$result = (new DashboardProvider($server))->list($ids, $neqIds);
+			$provider = new DashboardProvider($server);
+			if ($ownedByRequestUser)
+			{
+				if (!method_exists($provider, 'listOwnedBy'))
+				{
+					return new IntegratorResponse(
+						status: IntegratorResponse::STATUS_NO_ACCESS,
+						errors: [new Error('Installed superset module cannot filter dashboards by owner')],
+					);
+				}
+
+				$ownerId = $this->resolveRequestUserExternalId($request, $server);
+				if ($ownerId === null)
+				{
+					return new IntegratorResponse(
+						status: IntegratorResponse::STATUS_NO_ACCESS,
+						errors: [new Error('Superset user of the request was not resolved')],
+					);
+				}
+
+				$result = $provider->listOwnedBy($ownerId, $ids, $neqIds);
+			}
+			else
+			{
+				$result = $provider->list($ids, $neqIds);
+			}
+
 			if (!$result->isSuccess())
 			{
 				return $this->buildErrorResponse($result);
@@ -338,8 +409,15 @@ class SelfHostedIntegrator implements IntegratorInterface
 			));
 		};
 
+		$requestParams = [];
+		if ($ownedByRequestUser)
+		{
+			$requestParams['ownedByRequestUser'] = true;
+		}
+
 		return $this
 			->createDefaultRequest('selfhosted/dashboard/listByFilter')
+			->setParams($requestParams)
 			->setHandler($handler)
 			->perform()
 		;
@@ -348,7 +426,11 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
-	public function getDashboardById(int $dashboardId): IntegratorResponse
+	public function getDashboardById(
+		int $dashboardId,
+		int $streamTimeout = 0,
+		bool $arbitrateServiceFailure = true,
+	): IntegratorResponse
 	{
 		$handler = function () use ($dashboardId): IntegratorResponse {
 			$server = $this->getServer();
@@ -429,6 +511,16 @@ class SelfHostedIntegrator implements IntegratorInterface
 			->setHandler($handler)
 			->perform()
 		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function getDemoEmbeddedCredentials(string $reportCode, string $lang): IntegratorResponse
+	{
+		return $this->buildErrorResponse(
+			(new Result())->addError(new Error('Demo reports are not supported in self-hosted mode'))
+		);
 	}
 
 	/**
@@ -788,6 +880,8 @@ class SelfHostedIntegrator implements IntegratorInterface
 		array $sort = [],
 		?int $limit = null,
 		int $offset = 0,
+		bool $arbitrateServiceFailure = true,
+		?User $user = null,
 	): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
@@ -820,11 +914,16 @@ class SelfHostedIntegrator implements IntegratorInterface
 			return $this->buildDataResponse($result->getData());
 		};
 
-		return $this
+		$request = $this
 			->createDefaultRequest('selfhosted/dashboard/getOverview')
 			->setHandler($handler)
-			->perform()
 		;
+		if ($user !== null)
+		{
+			$request->setUser($user);
+		}
+
+		return $request->perform();
 	}
 
 	/**
@@ -838,6 +937,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 		?string $search = null,
 		?int $limit = null,
 		int $streamTimeout = 60,
+		bool $arbitrateServiceFailure = true,
 	): IntegratorResponse
 	{
 		if (!self::isAiToolsFeatureEnabled())
@@ -1206,6 +1306,134 @@ class SelfHostedIntegrator implements IntegratorInterface
 
 	// endregion
 
+	// region SQL Lab
+
+	/**
+	 * @inheritDoc
+	 */
+	public function executeSql(
+		string $sql,
+		?int $limit = null,
+		?SqlExecutionContext $context = null,
+	): IntegratorResponse
+	{
+		if (!($context?->isRest() ?? false) && !self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function (IntegratorRequest $request) use ($sql, $limit): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$user = $request->getUser();
+			$supersetUser = $user === null ? null : $this->getSupersetUser($server, $user->id);
+			if ($supersetUser === null)
+			{
+				return $this->buildErrorResponse(
+					(new Result())->addError(new Error(
+						'Current superset user not found',
+						IntegratorResponse::STATUS_NO_ACCESS,
+					)),
+				);
+			}
+
+			$result = $this->runSupersetCommand(new ExecuteSqlCommand($server, $sql, $limit, $supersetUser));
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		$request = $this->createDefaultRequest('selfhosted/sqllab/execute');
+		if ($context !== null)
+		{
+			$request->setUser($context->user);
+		}
+
+		return $request
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	// endregion
+
+	// region Table
+
+	/**
+	 * @inheritDoc
+	 */
+	public function listTables(?string $schema = null): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($schema): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new TableProvider($server))->list($schema);
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/table/list')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function getTableMetadata(string $tableName, ?string $schema = null): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($tableName, $schema): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new TableProvider($server))->getMetadata($tableName, $schema);
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/table/getMetadata')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	// endregion
+
 	// region Dataset
 
 	/**
@@ -1246,6 +1474,38 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
+	public function getPhysicalDatasetList(): IntegratorResponse
+	{
+		$handler = function (): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new DatasetProvider($server))->listPhysical();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			$data = $result->getData();
+
+			return $this->buildDataResponse($data['datasets'] ?? []);
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/dataset/listPhysical')
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
 	public function getDatasetById(int $id): IntegratorResponse
 	{
 		$handler = function () use ($id): IntegratorResponse {
@@ -1261,7 +1521,12 @@ class SelfHostedIntegrator implements IntegratorInterface
 				return $this->buildErrorResponse($result);
 			}
 
-			return $this->buildDataResponse($result->getData());
+			// Return the dataset unwrapped ({id, table_name, owners, ...}) to match
+			// the cloud proxy (SupersetProxy Controller\Dataset::getAction) and
+			// getDatasetByName() below. DatasetProvider::getById() wraps it in
+			// ['dataset' => ...]; without this unwrap box callers read $data['id']
+			// off the wrapper and never find the dataset.
+			return $this->buildDataResponse($result->getData()['dataset'] ?? []);
 		};
 
 		return $this
@@ -1302,6 +1567,53 @@ class SelfHostedIntegrator implements IntegratorInterface
 	/**
 	 * @inheritDoc
 	 */
+	public function listDatasets(
+		array $ids = [],
+		array $neqIds = [],
+		?int $page = null,
+		?int $pageSize = null
+	): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($ids, $neqIds, $page, $pageSize): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new DatasetProvider($server))->list($ids, $neqIds, $page, $pageSize);
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			$data = $result->getData();
+
+			// Bounded mode keeps the full {datasets, count} envelope; legacy mode
+			// returns a flat array for callers that iterate the list directly.
+			if ($pageSize !== null)
+			{
+				return $this->buildDataResponse(is_array($data) ? $data : []);
+			}
+
+			return $this->buildDataResponse($data['datasets'] ?? []);
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/dataset/list')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
 	public function createDataset(array $fields): IntegratorResponse
 	{
 		$handler = function () use ($fields): IntegratorResponse {
@@ -1330,6 +1642,100 @@ class SelfHostedIntegrator implements IntegratorInterface
 
 		return $this
 			->createDefaultRequest('selfhosted/dataset/create')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function createVirtualDataset(
+		string $datasetName,
+		string $sourceTable,
+		array $columns,
+		?string $sourceSchema = null,
+	): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($datasetName, $sourceTable, $columns, $sourceSchema): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$ownerId = $this->getCurrentUserExternalId($server);
+			if ($ownerId === null)
+			{
+				return $this->buildErrorResponse(
+					(new Result())->addError(new Error('Current superset user not found'))
+				);
+			}
+
+			$result = (new CreateVirtualDatasetCommand(
+				$server,
+				$datasetName,
+				$sourceTable,
+				$columns,
+				$ownerId,
+				$sourceSchema,
+			))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/dataset/createVirtual')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function createDatasetFromSql(string $datasetName, string $sql): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($datasetName, $sql): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$ownerId = $this->getCurrentUserExternalId($server);
+			if ($ownerId === null)
+			{
+				return $this->buildErrorResponse(
+					(new Result())->addError(new Error('Current superset user not found'))
+				);
+			}
+
+			$result = (new CreateDatasetFromSqlCommand($server, $datasetName, $sql, $ownerId))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/dataset/createFromSql')
 			->setHandler($handler)
 			->perform()
 		;
@@ -1514,6 +1920,186 @@ class SelfHostedIntegrator implements IntegratorInterface
 
 	// endregion
 
+	// region Chart
+
+	/**
+	 * @inheritDoc
+	 */
+	public function listCharts(
+		array $ids = [],
+		?string $nameFilter = null,
+		?int $page = null,
+		?int $pageSize = null
+	): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($ids, $nameFilter, $page, $pageSize): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new ChartProvider($server))->list($ids, $nameFilter, $page, $pageSize);
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/chart/list')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function getChartById(int $id): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($id): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new ChartProvider($server))->getById($id);
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			$data = $result->getData();
+
+			return $this->buildDataResponse($data['chart'] ?? []);
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/chart/get')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function createChart(array $payload): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($payload): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new CreateChartCommand($server, $payload))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			$data = $result->getData();
+
+			return $this->buildDataResponse($data['chart'] ?? []);
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/chart/create')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function updateChart(int $id, array $fields): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($id, $fields): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new UpdateChartCommand($server, $id, $fields))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			$data = $result->getData();
+
+			return $this->buildDataResponse($data['chart'] ?? []);
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/chart/update')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function deleteChart(int $id): IntegratorResponse
+	{
+		if (!self::isAiToolsFeatureEnabled())
+		{
+			return self::aiToolsDisabledResponse();
+		}
+
+		$handler = function () use ($id): IntegratorResponse {
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new DeleteChartsCommand($server, [$id]))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		return $this
+			->createDefaultRequest('selfhosted/chart/delete')
+			->setHandler($handler)
+			->perform()
+		;
+	}
+
+	// endregion
+
 	// region Unused elements
 
 	/**
@@ -1610,6 +2196,52 @@ class SelfHostedIntegrator implements IntegratorInterface
 			->setHandler($handler)
 			->perform()
 		;
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function clearPermissionCache(): IntegratorResponse
+	{
+		$handler = function (): IntegratorResponse
+		{
+			$server = $this->getServer();
+			if ($server === null)
+			{
+				return $this->buildServerNotConfiguredResponse();
+			}
+
+			$result = (new InvalidateSupersetPermissionCacheCommand(
+				$server,
+				self::PERMISSION_CACHE_RESET_SOCKET_TIMEOUT,
+				self::PERMISSION_CACHE_RESET_STREAM_TIMEOUT,
+			))->run();
+			if (!$result->isSuccess())
+			{
+				return $this->buildErrorResponse($result);
+			}
+
+			return $this->buildDataResponse($result->getData());
+		};
+
+		$request = $this
+			->createDefaultRequest('selfhosted/cache/clearPermissions')
+			->setHandler($handler)
+			->removeBefore(Middleware\UserAccess::getMiddlewareId())
+			->removeBefore(Middleware\RequiredDatasetSync::getMiddlewareId())
+		;
+
+		$server = $this->getServer();
+		if ($server !== null)
+		{
+			// The version is asked of the instance, so the check is added only when there is one to ask.
+			// Without a server the handler answers "not configured", and that is the more precise of the two.
+			$request->addBefore(
+				new Middleware\SupersetVersionCheck($server, self::PERMISSION_CACHE_RESET_REQUIRED_VERSION)
+			);
+		}
+
+		return $request->perform();
 	}
 
 	/**
@@ -1885,7 +2517,15 @@ class SelfHostedIntegrator implements IntegratorInterface
 		$errorCode = IntegratorResponse::STATUS_SERVER_ERROR;
 		$errors = $result->getErrors();
 		$this->logger->logErrors($errors);
-		if (!empty($errors))
+		$declaredStatus = $result->getData()['httpStatus'] ?? null;
+		if (is_int($declaredStatus) && $declaredStatus >= 100 && $declaredStatus <= 599)
+		{
+			// A symbolic error code carries no status, so a facade states it next to the code:
+			// without it a query-level failure would answer 500 and StatusArbiter would move the
+			// whole portal to SUPERSET_STATUS_ERROR.
+			$errorCode = $declaredStatus;
+		}
+		elseif (!empty($errors))
 		{
 			$code = (int)$errors[0]->getCode();
 			if ($code > 0)
@@ -1915,8 +2555,9 @@ class SelfHostedIntegrator implements IntegratorInterface
 	private function getCurrentUserExternalId(ServerReferenceDto $server): ?int
 	{
 		$bitrixUserId = CurrentUser::get()->getId();
+		$externalId = $this->getSupersetUser($server, $bitrixUserId)?->getExternalId();
 
-		return $this->getSupersetUser($server, $bitrixUserId)?->getExternalId();
+		return ($externalId !== null && $externalId > 0) ? $externalId : null;
 	}
 
 	/**
@@ -1932,15 +2573,15 @@ class SelfHostedIntegrator implements IntegratorInterface
 	private function resolveRequestUserExternalId(IntegratorRequest $request, ServerReferenceDto $server): ?int
 	{
 		$user = $request->getUser();
-		if ($user !== null)
-		{
-			return $this->getSupersetUser($server, $user->id)?->getExternalId();
-		}
+		$externalId = $user !== null
+			? $this->getSupersetUser($server, $user->id)?->getExternalId()
+			: $this->getCurrentUserExternalId($server)
+		;
 
-		return $this->getCurrentUserExternalId($server);
+		return ($externalId !== null && $externalId > 0) ? $externalId : null;
 	}
 
-	private function getSupersetUser(ServerReferenceDto $server, int $bitrixUserId): ?SupersetUserReferenceDto
+	protected function getSupersetUser(ServerReferenceDto $server, int $bitrixUserId): ?SupersetUserReferenceDto
 	{
 		$biUser = SupersetUserTable::getList([
 			'select' => ['CLIENT_ID'],
@@ -2009,6 +2650,7 @@ class SelfHostedIntegrator implements IntegratorInterface
 			published: $data['published'] ?? true,
 			nativeFilterConfig: $jsonMetadata['native_filter_configuration'] ?? [],
 			dateModify: $dateModify,
+			jsonMetadata: $jsonMetadata,
 		);
 	}
 

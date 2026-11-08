@@ -44,6 +44,15 @@ class DepartmentProvider extends BaseProvider
 			isset($options['allowOnlyUserDepartments']) && $options['allowOnlyUserDepartments'] === true
 		);
 
+		$this->options['allowedDepartmentIds'] = null;
+		if (array_key_exists('allowedDepartmentIds', $options) && is_array($options['allowedDepartmentIds']))
+		{
+			$this->options['allowedDepartmentIds'] = array_values(array_unique(array_filter(
+				array_map('intval', $options['allowedDepartmentIds']),
+				static fn(int $departmentId): bool => $departmentId > 0,
+			)));
+		}
+
 		$this->options['allowSelectRootDepartment'] = $this->getSelectMode() === self::MODE_DEPARTMENTS_ONLY;
 		if (isset($options['allowSelectRootDepartment']) && is_bool($options['allowSelectRootDepartment']))
 		{
@@ -216,8 +225,13 @@ class DepartmentProvider extends BaseProvider
 
 	}
 
-	private function getAllowOnlyUserDepartment(): ?array
+	private function getAllowedDepartmentIds(): ?array
 	{
+		if (is_array($this->options['allowedDepartmentIds']))
+		{
+			return $this->options['allowedDepartmentIds'];
+		}
+
 		$result = null;
 		if ($this->options['allowOnlyUserDepartments'] === true)
 		{
@@ -261,7 +275,7 @@ class DepartmentProvider extends BaseProvider
 
 	private function fillDepartments(Dialog $dialog, EO_Section_Collection $departments, ?bool $forceDynamic = null)
 	{
-		$allowDepartment = $this->getAllowOnlyUserDepartment();
+		$allowDepartment = $this->getAllowedDepartmentIds();
 		$parents = [];
 		$parentIdList = [];
 		foreach ($departments as $department)
@@ -559,6 +573,25 @@ class DepartmentProvider extends BaseProvider
 			$filter['!=XML_ID'] = 'im_bot';
 		}
 
+		$depthLevel = (
+			isset($options['depthLevel'])
+			&& is_int($options['depthLevel'])
+			&& $options['depthLevel'] > 0
+		)
+			? $options['depthLevel']
+			: null;
+
+		$allowedDepartmentFilter = $this->getAllowedDepartmentSubtreeFilter($structureIBlockId, $depthLevel);
+		if ($allowedDepartmentFilter !== null)
+		{
+			if (empty($allowedDepartmentFilter))
+			{
+				return new EO_Section_Collection();
+			}
+
+			$filter[] = $allowedDepartmentFilter;
+		}
+
 		$rootDepartment = null;
 		$rootDepartmentId = self::getRootDepartmentId();
 		if ($rootDepartmentId > 0)
@@ -579,15 +612,15 @@ class DepartmentProvider extends BaseProvider
 			}
 		}
 
-		if (!empty($options['depthLevel']) && is_int($options['depthLevel']))
+		if ($depthLevel !== null && $allowedDepartmentFilter === null)
 		{
 			if ($rootDepartment)
 			{
-				$filter['<=DEPTH_LEVEL'] = $options['depthLevel'] + $rootDepartment->getDepthLevel();
+				$filter['<=DEPTH_LEVEL'] = $depthLevel + $rootDepartment->getDepthLevel();
 			}
 			else
 			{
-				$filter['<=DEPTH_LEVEL'] = $options['depthLevel'];
+				$filter['<=DEPTH_LEVEL'] = $depthLevel;
 			}
 		}
 
@@ -597,6 +630,48 @@ class DepartmentProvider extends BaseProvider
 			'order' => ['LEFT_MARGIN' => 'asc'],
 			'limit' => $limit,
 		])->fetchCollection();
+	}
+
+	private function getAllowedDepartmentSubtreeFilter(int $structureIBlockId, ?int $depthLevel = null): ?array
+	{
+		$allowedDepartmentIds = $this->getAllowedDepartmentIds();
+		if ($allowedDepartmentIds === null)
+		{
+			return null;
+		}
+
+		if (empty($allowedDepartmentIds))
+		{
+			return [];
+		}
+
+		$filter = [
+			'LOGIC' => 'OR',
+		];
+		$result = SectionTable::getList([
+			'select' => ['LEFT_MARGIN', 'RIGHT_MARGIN', 'DEPTH_LEVEL'],
+			'filter' => [
+				'=IBLOCK_ID' => $structureIBlockId,
+				'=ACTIVE' => 'Y',
+				'@ID' => $allowedDepartmentIds,
+			],
+		]);
+
+		while ($department = $result->fetch())
+		{
+			$departmentFilter = [
+				'>=LEFT_MARGIN' => (int)$department['LEFT_MARGIN'],
+				'<=RIGHT_MARGIN' => (int)$department['RIGHT_MARGIN'],
+			];
+			if ($depthLevel !== null)
+			{
+				$departmentFilter['<=DEPTH_LEVEL'] = (int)$department['DEPTH_LEVEL'] + $depthLevel;
+			}
+
+			$filter[] = $departmentFilter;
+		}
+
+		return count($filter) > 1 ? $filter : [];
 	}
 
 	protected function getSubdepartmentsCount($departmentId, ?int $limit = null)

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Workflow\Template;
 
+use Bitrix\Bizproc\Api\Enum\Template\TemplateChangeAuthorType;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
@@ -61,8 +62,39 @@ class WorkflowTemplateChangeTable extends DataManager
 				->configureSerializeCallback([Entity\WorkflowTemplateTable::class, 'toSerializedForm'])
 				->configureUnserializeCallback([Entity\WorkflowTemplateTable::class, 'getFromSerializedForm'])
 			,
+			// Scalar mirror of SNAPSHOT: a blob is out of reach of an index, and the cleanup asks for the
+			// events without a body on every pass.
+			(new ORM\Fields\BooleanField('HAS_SNAPSHOT'))
+				->configureValues('N', 'Y')
+				->configureDefaultValue(false)
+			,
 			(new ORM\Fields\DatetimeField('TEMPLATE_MODIFIED'))
 				->configureNullable()
+			,
+			(new ORM\Fields\IntegerField('AUTHOR_TYPE'))
+				->configureRequired()
+				->configureDefaultValue(TemplateChangeAuthorType::Human->value)
+			,
+			(new ORM\Fields\StringField('AI_TOOL'))
+				->configureNullable()
+				->configureSize(50)
+			,
+			(new ORM\Fields\IntegerField('INITIATOR_USER_ID'))
+				->configureNullable()
+			,
+			(new ORM\Fields\StringField('REQUEST_SOURCE'))
+				->configureNullable()
+				->configureSize(20)
+			,
+			(new ORM\Fields\ArrayField('CHANGES'))
+				->configureNullable()
+				->configureSerializeCallback([Entity\WorkflowTemplateTable::class, 'toSerializedForm'])
+				->configureUnserializeCallback([Entity\WorkflowTemplateTable::class, 'getFromSerializedForm'])
+			,
+			(new ORM\Fields\ArrayField('CHANGES_SUMMARY'))
+				->configureNullable()
+				->configureSerializeCallback([Entity\WorkflowTemplateTable::class, 'toSerializedForm'])
+				->configureUnserializeCallback([Entity\WorkflowTemplateTable::class, 'getFromSerializedForm'])
 			,
 			new ORM\Fields\Relations\Reference(
 				'TEMPLATE',

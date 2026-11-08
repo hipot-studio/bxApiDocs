@@ -67,8 +67,21 @@ class MaskManifest
 	 */
 	public static function onCheckAccess(string $type, array $manifest): array
 	{
+		$code = $manifest['CODE'] ?? '';
+
+		if ($code === static::USER_MASKS_MANIFEST_CODE)
+		{
+			$userId = (int)Main\Engine\CurrentUser::get()->getId();
+
+			return [
+				'result' => $userId > 0,
+				'message' => '',
+			];
+		}
+
 		return [
-			'result' => true
+			'result' => false,
+			'message' => '',
 		];
 	}
 

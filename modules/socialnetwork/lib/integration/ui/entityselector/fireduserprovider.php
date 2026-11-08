@@ -8,6 +8,9 @@ use Bitrix\Main\Entity\Query;
 use Bitrix\Main\EO_User;
 use Bitrix\Main\EO_User_Collection;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ORM\Entity;
+use Bitrix\Main\ORM\Fields\Relations\Reference;
+use Bitrix\Main\ORM\Query\Join;
 use Bitrix\UI\EntitySelector\Dialog;
 use Bitrix\UI\EntitySelector\Item;
 use Bitrix\UI\EntitySelector\Tab;
@@ -15,6 +18,9 @@ use Bitrix\UI\EntitySelector\Tab;
 class FiredUserProvider extends UserProvider
 {
 	protected const ENTITY_ID = 'fired-user';
+
+	// Name of the runtime field for the join below, so it must not collide with a field of b_user
+	private const REFERENCE_RUNTIME_FIELD = 'REFERENCED_ENTITY';
 
 	protected function prepareOptions(array $options = []): void
 	{
@@ -36,6 +42,7 @@ class FiredUserProvider extends UserProvider
 			$this->options['referenceAdditionalFilter'] = $options['referenceAdditionalFilter'];
 		}
 
+		// Accepted for contract compatibility only: getQuery() builds every condition from fieldName
 		if (isset($options['referenceFieldName']) && is_string($options['referenceFieldName']))
 		{
 			$this->options['referenceFieldName'] = $options['referenceFieldName'];
@@ -70,51 +77,62 @@ class FiredUserProvider extends UserProvider
 			&& !empty($options['fieldName'])
 		)
 		{
-			/*
-			 * If a referenceClass is not null,
-			 * then we reduce the list of fired users only have reference in the referenceClass entity
-			 */
-			$sqlHelper = Application::getConnection()->getSqlHelper();
-			$fieldName = $sqlHelper->quote($options['fieldName']);
-			$tableName = mb_strtolower($query->getEntity()->getCode());
-
-			$preparedWhere = [];
-			$referenceAdditionalFilter = $options['referenceAdditionalFilter'] ?? [];
-			$referenceClassTableName = $options['referenceClass']::getTableName();
-			foreach ($referenceAdditionalFilter as $filterFieldName => $filterFieldValue)
-			{
-				$preparedWhere[] = $sqlHelper->prepareAssignment(
-					$referenceClassTableName,
-					$filterFieldName,
-					$filterFieldValue,
-				);
-			}
-
-			$where = array_merge(["{$fieldName} = {$tableName}.ID"], $preparedWhere);
-
-			$query->whereExists(new SqlExpression(
-				"SELECT 1 FROM "
-				. $options['referenceClass']::getTableName()
-				. " WHERE " . implode(' AND ', $where)
-			));
-
-			$derivedTableQuery = $options['referenceClass']::query()
-				->addSelect($options['referenceFieldName'])
-				->addGroup($options['referenceFieldName'])
-			;
-			$entity = \Bitrix\Main\ORM\Entity::getInstanceByQuery($derivedTableQuery);
-
+			// Reduce the list to the users referenced by the given field of the referenceClass entity
 			$query->registerRuntimeField(
-				'ASSIGNED_BY_ID',
-				(new \Bitrix\Main\ORM\Fields\Relations\Reference(
-					'ASSIGNED_BY_ID',
-					$entity,
-					\Bitrix\Main\ORM\Query\Join::on('this.ID', 'ref.' . $options['referenceFieldName'])
-				))->configureJoinType(\Bitrix\Main\ORM\Query\Join::TYPE_INNER)
+				(new Reference(
+					self::REFERENCE_RUNTIME_FIELD,
+					self::getReferencedEntity($options),
+					Join::on('this.ID', 'ref.' . $options['fieldName']),
+				))->configureJoinType(Join::TYPE_INNER),
 			);
+
+			if (!empty($options['referenceAdditionalFilter']))
+			{
+				self::addReferenceAdditionalFilter($query, $options);
+			}
 		}
 
 		return $query;
+	}
+
+	/**
+	 * Distinct values of the given field, so that the join reads the entity table once
+	 * and does not multiply user rows. The additional filter is deliberately left out: no existing
+	 * index serves the grouping under it, and the join loses its loose index scan.
+	 */
+	private static function getReferencedEntity(array $options): Entity
+	{
+		$referenceQuery = $options['referenceClass']::query()
+			->addSelect($options['fieldName'])
+			->addGroup($options['fieldName'])
+		;
+
+		return Entity::getInstanceByQuery($referenceQuery);
+	}
+
+	/**
+	 * The filter runs over the same field of the same table as the join above, so it only narrows the
+	 * users the join returned - and it is this check, not the join, that makes the selection exact.
+	 */
+	private static function addReferenceAdditionalFilter(Query $query, array $options): void
+	{
+		$sqlHelper = Application::getConnection()->getSqlHelper();
+		$referenceTableName = $options['referenceClass']::getTableName();
+		$userTableAlias = mb_strtolower($query->getEntity()->getCode());
+
+		$where = [$sqlHelper->quote($options['fieldName']) . " = {$userTableAlias}.ID"];
+		foreach ($options['referenceAdditionalFilter'] as $filterFieldName => $filterFieldValue)
+		{
+			$where[] = $sqlHelper->prepareAssignment(
+				$referenceTableName,
+				$filterFieldName,
+				$filterFieldValue,
+			);
+		}
+
+		$query->whereExists(new SqlExpression(
+			'SELECT 1 FROM ' . $referenceTableName . ' WHERE ' . implode(' AND ', $where),
+		));
 	}
 
 	protected static function sendOnFiredUserProviderQueryEvent(array $options): void

@@ -7,7 +7,9 @@ namespace Bitrix\Socialnetwork\V2\Internal\Integration\Im\Provider;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Type\Collection;
+use Bitrix\Socialnetwork\Item\Workgroup\Type;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Im\Service\ChatColorResolver;
+use Bitrix\Socialnetwork\WorkgroupTable;
 
 class ProjectChatDataProvider
 {
@@ -114,6 +116,60 @@ class ProjectChatDataProvider
 			return [];
 		}
 
+		return $this->resolveProjectIds($chatIds);
+	}
+
+	public function getProjectIdByChatId(int $chatId): ?int
+	{
+		if ($chatId <= 0 || !$this->isAvailable())
+		{
+			return null;
+		}
+
+		return $this->resolveProjectIds([$chatId])[$chatId] ?? null;
+	}
+
+	/**
+	 * Unlike getProjectIdByChatId(), the group is returned whatever its type is.
+	 */
+	public function getGroupIdByChatId(int $chatId): ?int
+	{
+		if ($chatId <= 0 || !$this->isAvailable())
+		{
+			return null;
+		}
+
+		return $this->getGroupIdsByChatIds([$chatId])[$chatId] ?? null;
+	}
+
+	/**
+	 * Project is resolved only for a chat whose group is actually a collab.
+	 *
+	 * @param int[] $chatIds
+	 * @return array<int, int> map chatId => projectId
+	 */
+	private function resolveProjectIds(array $chatIds): array
+	{
+		$groupIdByChatId = $this->getGroupIdsByChatIds($chatIds);
+		if ($groupIdByChatId === [])
+		{
+			return [];
+		}
+
+		$collabIds = $this->getCollabIds(array_values($groupIdByChatId));
+
+		return array_filter(
+			$groupIdByChatId,
+			static fn (int $groupId): bool => isset($collabIds[$groupId]),
+		);
+	}
+
+	/**
+	 * @param int[] $chatIds
+	 * @return array<int, int> map chatId => groupId
+	 */
+	private function getGroupIdsByChatIds(array $chatIds): array
+	{
 		$result = [];
 
 		$res = ChatTable::getList([
@@ -127,34 +183,44 @@ class ProjectChatDataProvider
 		while ($chat = $res->fetch())
 		{
 			$chatId = (int)($chat['ID'] ?? 0);
-			$projectId = (int)($chat['ENTITY_ID'] ?? 0);
-			if ($chatId > 0 && $projectId > 0)
+			$groupId = (int)($chat['ENTITY_ID'] ?? 0);
+			if ($chatId > 0 && $groupId > 0)
 			{
-				$result[$chatId] = $projectId;
+				$result[$chatId] = $groupId;
 			}
 		}
 
 		return $result;
 	}
 
-	public function getProjectIdByChatId(int $chatId): ?int
+	/**
+	 * Type is read from the table to avoid relying on a cached group snapshot.
+	 *
+	 * @param int[] $groupIds
+	 * @return array<int, true> set of collab group ids
+	 */
+	private function getCollabIds(array $groupIds): array
 	{
-		if ($chatId <= 0 || !$this->isAvailable())
-		{
-			return null;
-		}
+		$result = [];
 
-		$chat = ChatTable::getRow([
-			'select' => ['ENTITY_ID'],
+		$res = WorkgroupTable::getList([
+			'select' => ['ID'],
 			'filter' => [
-				'=ID' => $chatId,
-				'=ENTITY_TYPE' => self::CHAT_ENTITY_TYPE,
+				'@ID' => array_values(array_unique($groupIds)),
+				'=TYPE' => Type::Collab->value,
 			],
 		]);
 
-		$projectId = (int)($chat['ENTITY_ID'] ?? 0);
+		while ($group = $res->fetch())
+		{
+			$groupId = (int)($group['ID'] ?? 0);
+			if ($groupId > 0)
+			{
+				$result[$groupId] = true;
+			}
+		}
 
-		return $projectId > 0 ? $projectId : null;
+		return $result;
 	}
 
 	private function isAvailable(): bool

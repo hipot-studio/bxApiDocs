@@ -33,6 +33,9 @@ class CashboxYooKassa extends CashboxPaySystem
 	private const MARK_CODE_BASE64 = 1;
 	private const MARK_CODE_NOT_ENCODING = 2;
 
+	private const MEASURE_SENDING_ENABLED = 'Y';
+	private const MEASURE_SENDING_DISABLED = 'N';
+
 	private const SETTLEMENT_TYPE_PREPAYMENT = 'prepayment';
 	private const CHECK_TYPE_PAYMENT = 'payment';
 
@@ -95,13 +98,12 @@ class CashboxYooKassa extends CashboxPaySystem
 			array_push($items, ...$this->splitItemForPriceQuantityApi($item));
 		}
 
+		$isMeasureSendingEnabled = $this->isMeasureSendingEnabled();
+
 		foreach ($items as $item)
 		{
 			$vat = $this->getValueFromSettings('VAT', $item['vat']);
 			$vat = $vat ?? $this->getValueFromSettings('VAT', 'NOT_VAT');
-
-			$measure = $this->getValueFromSettings('MEASURE', $item['measure_code']);
-			$measure = $measure ?? $this->getValueFromSettings('MEASURE', 'DEFAULT');
 
 			$receiptItem = [
 				'description' => mb_substr($item['name'], 0, self::MAX_NAME_LENGTH),
@@ -111,10 +113,21 @@ class CashboxYooKassa extends CashboxPaySystem
 				],
 				'vat_code' => (int)$vat,
 				'quantity' => (string)$item['quantity'],
-				'measure' => (string)$measure,
 				'payment_subject' => $paymentObjectMap[$item['payment_object']],
 				'payment_mode' => $paymentMode,
 			];
+
+			if ($isMeasureSendingEnabled)
+			{
+				$measure = $this->getValueFromSettings('MEASURE', $item['measure_code']);
+				$measure = $measure ?? $this->getValueFromSettings('MEASURE', 'DEFAULT');
+				if ($measure === 'other')
+				{
+					$measure = 'another';
+				}
+
+				$receiptItem['measure'] = (string)$measure;
+			}
 
 			$markCodeEncoding = $this->getValueFromSettings('MARK', 'CODE') ?? self::MARK_CODE_BASE64;
 
@@ -155,6 +168,23 @@ class CashboxYooKassa extends CashboxPaySystem
 		}
 
 		return $fields;
+	}
+
+	/**
+	 * Measure (tag 2108) exists only in FFD 1.2. A cashbox behind YooKassa working on FFD 1.05
+	 * rejects a receipt that carries it, so the seller can turn the sending off.
+	 *
+	 * Saved settings are read directly rather than through getValueFromSettings(): a cashbox that
+	 * has never saved this key does not carry it in SETTINGS, and the accessor would fall back to
+	 * getSettings(), which rebuilds the whole settings schema through VatTable and CCatalogMeasure
+	 * on every receipt. The default is the same constant getSettings() declares, so both stay in step.
+	 */
+	private function isMeasureSendingEnabled(): bool
+	{
+		$settings = (array)$this->getField('SETTINGS');
+		$send = $settings['MEASURE']['SEND'] ?? self::MEASURE_SENDING_ENABLED;
+
+		return $send !== self::MEASURE_SENDING_DISABLED;
 	}
 
 	private function buildPositionMarkCode(array $item): array
@@ -493,6 +523,11 @@ class CashboxYooKassa extends CashboxPaySystem
 		}
 
 		$measureItems = [
+			'SEND' => [
+				'TYPE' => 'Y/N',
+				'LABEL' => Loc::getMessage('SALE_CASHBOX_YOOKASSA_SETTINGS_MEASURE_SEND'),
+				'VALUE' => self::MEASURE_SENDING_ENABLED,
+			],
 			'DEFAULT' => [
 				'TYPE' => 'STRING',
 				'LABEL' => Loc::getMessage('SALE_CASHBOX_MEASURE_SUPPORT_SETTINGS_DEFAULT_VALUE'),

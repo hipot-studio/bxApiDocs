@@ -78,23 +78,23 @@ class ChatMessage extends CallChatMessage
 		switch ($errorCode)
 		{
 			case CallAIError::AI_MODULE_ERROR:
-				$errorMessage = static::getMessage('ERROR_AI_MODULE_ERROR');
+				$errorMessage = static::getMessage('ERROR_AI_MODULE_ERROR_MSGVER_1');
 				break;
 
 			case CallAIError::AI_UNAVAILABLE_ERROR:
 			case 'AI_ENGINE_ERROR_SERVICE_IS_NOT_AVAILABLE_BY_TARIFF':
-				$errorMessage = static::getMessage('CALL_NOTIFY_COPILOT_ERROR_TARIFF_RESTRICTION');
+				$errorMessage = static::getMessage('CALL_NOTIFY_COPILOT_ERROR_TARIFF_RESTRICTION_MSGVER_1');
 				break;
 
 			case CallAIError::AI_SETTINGS_ERROR:
-				$errorMessage = static::getMessage('CALL_NOTIFY_COPILOT_ERROR_SETTINGS_RESTRICTION', [
+				$errorMessage = static::getMessage('CALL_NOTIFY_COPILOT_ERROR_SETTINGS_RESTRICTION_MSGVER_1', [
 					'#LINK#' => CallAISettings::getHelpUrl(),
 				]);
 				break;
 
 			case CallAIError::AI_NOT_ENOUGH_BAAS_ERROR:
 			case 'AI_ENGINE_ERROR_LIMIT_IS_EXCEEDED':
-				$errorMessage = static::getMessage('CALL_NOTIFY_COPILOT_ERROR_ERROR_LIMIT_BAAS', [
+				$errorMessage = static::getMessage('CALL_NOTIFY_COPILOT_ERROR_ERROR_LIMIT_BAAS_MSGVER_1', [
 					'#LINK#' => CallAIBaasService::getBaasUrl(),
 				]);
 				break;
@@ -115,13 +115,13 @@ class ChatMessage extends CallChatMessage
 						}
 					}
 					$errorMessage = $hasAdmin
-						? static::getMessage('CALL_NOTIFY_COPILOT_ERROR_AGREEMENT_RESTRICTION_B24_ADMIN', ['#LINK#' => '/'])
-						: static::getMessage('CALL_NOTIFY_COPILOT_ERROR_AGREEMENT_RESTRICTION_B24');
+						? static::getMessage('CALL_NOTIFY_COPILOT_ERROR_AGREEMENT_RESTRICTION_B24_ADMIN_MSGVER_1')
+						: static::getMessage('CALL_NOTIFY_COPILOT_ERROR_AGREEMENT_RESTRICTION_B24_MSGVER_1');
 				}
 				else
 				{
 					//box
-					$errorMessage = static::getMessage('CALL_NOTIFY_COPILOT_ERROR_AGREEMENT_RESTRICTION_BOX', [
+					$errorMessage = static::getMessage('CALL_NOTIFY_COPILOT_ERROR_AGREEMENT_RESTRICTION_BOX_MSGVER_1', [
 						'#LINK#' => CallAISettings::getAgreementUrl(),
 					]);
 				}
@@ -166,7 +166,7 @@ class ChatMessage extends CallChatMessage
 
 		$call = \Bitrix\Call\Call\Registry::getCallWithId($callId);
 
-		$message = self::makeMessageWithCallLink('CALL_NOTIFY_TASK_COMPLETE', $callId, $chat);
+		$message = self::makeMessageWithCallLink('CALL_NOTIFY_TASK_COMPLETE_MSGVER_1', $callId, $chat);
 
 		$attach = new \CIMMessageParamAttach();
 		$attach->SetColor(self::COPILOT_COLOR);
@@ -231,7 +231,7 @@ class ChatMessage extends CallChatMessage
 			{
 				$efficiency .= " ($efficiencyDesc)";
 			}
-			$attach->AddMessage('[br][b]' . static::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY', ['#EFFICIENCY#' => $efficiency]) . '[/b]');
+			$attach->AddMessage('[br][b]' . static::getMessage('CALL_NOTIFY_COPILOT_EFFICIENCY_MSGVER_1', ['#EFFICIENCY#' => $efficiency]) . '[/b]');
 		}
 
 		if ($overview?->agenda)
@@ -377,7 +377,7 @@ class ChatMessage extends CallChatMessage
 
 		$attach->AddDelimiter(['COLOR' => '#00ace3', 'SIZE' => 400]);
 		$link = CallAISettings::getDisclaimerUrl();
-		$attach->AddMessage('[i]'. static::getMessage('CALL_NOTIFY_COPILOT_DISCLAIMER', ['#DISCLAIMER#' => $link]). '[/i]');
+		$attach->AddMessage('[i]'. static::getMessage('CALL_NOTIFY_COPILOT_DISCLAIMER_MSGVER_1', ['#DISCLAIMER#' => $link]). '[/i]');
 
 		$message
 			->setAttach($attach)
@@ -394,13 +394,13 @@ class ChatMessage extends CallChatMessage
 
 	public static function generateTaskCompleteMessage(Outcome $outcome, Chat $chat): ?Message
 	{
-		return self::makeMessageWithCallLink('CALL_NOTIFY_TASK_COMPLETE', $outcome->getCallId(), $chat);
+		return self::makeMessageWithCallLink('CALL_NOTIFY_TASK_COMPLETE_MSGVER_1', $outcome->getCallId(), $chat);
 	}
 
 	public static function generateCallFinishedMessage(Call $call, Chat $chat): ?Message
 	{
 		$callId = $call->getId();
-		$message = self::makeMessageWithCallLink('CALL_NOTIFY_TASK_START_V2', $callId, $chat);
+		$message = self::makeMessageWithCallLink('CALL_NOTIFY_TASK_START_V2_MSGVER_1', $callId, $chat);
 		$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
 			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_START,
 			'CALL_ID' => $callId,
@@ -412,7 +412,7 @@ class ChatMessage extends CallChatMessage
 	public static function generateWaitMessage(Call $call, Chat $chat): ?Message
 	{
 		$callId = $call->getId();
-		$message = self::makeMessageWithCallLink('CALL_NOTIFY_TASK_WAIT', $callId, $chat);
+		$message = self::makeMessageWithCallLink('CALL_NOTIFY_TASK_WAIT_MSGVER_1', $callId, $chat);
 		$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
 			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_WAIT,
 			'CALL_ID' => $callId,
@@ -423,7 +423,7 @@ class ChatMessage extends CallChatMessage
 
 	public static function generateTaskStartMessage(int $callId, Chat $chat): ?Message
 	{
-		$message = self::makeMessageWithCallLink('CALL_NOTIFY_TASK_START_V2', $callId, $chat);
+		$message = self::makeMessageWithCallLink('CALL_NOTIFY_TASK_START_V2_MSGVER_1', $callId, $chat);
 		$message->getParams()->get(Params::COMPONENT_PARAMS)->setValue([
 			'MESSAGE_TYPE' => NotifyService::MESSAGE_TYPE_AI_START,
 			'CALL_ID' => $callId,
@@ -434,7 +434,7 @@ class ChatMessage extends CallChatMessage
 
 	public static function generateTaskFailedMessage(int $callId, \Bitrix\Main\Error $error, Chat $chat): ?Message
 	{
-		$mess = self::getPhraseWithCallLink('CALL_NOTIFY_TASK_FAILED', $callId, $chat);
+		$mess = self::getPhraseWithCallLink('CALL_NOTIFY_TASK_FAILED_MSGVER_1', $callId, $chat);
 
 		if ($errorMessage = self::getErrorMessage($error, $chat))
 		{
@@ -570,6 +570,7 @@ class ChatMessage extends CallChatMessage
 	protected static function getMessage(string $code, ?array $replace = null): string
 	{
 		Loc::loadMessages(__FILE__);
+		$replace = ($replace ?? []) + ['#COPILOT_NAME#' => CallAISettings::getCopilotName()];
 		return parent::getMessage($code, $replace);
 	}
 }

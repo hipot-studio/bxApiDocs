@@ -18,6 +18,11 @@ final class DashboardProvider extends AbstractPublicEntryPoint
 		return $this->getService()->list($ids, $neqIds);
 	}
 
+	public function listOwnedBy(int $ownerId, array $ids = [], array $neqIds = []): Result
+	{
+		return $this->getService()->list($ids, $neqIds, $ownerId);
+	}
+
 	public function getEmbedded(int $dashboardId): Result
 	{
 		return $this->getService()->getEmbedded($dashboardId);

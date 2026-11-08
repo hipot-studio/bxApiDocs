@@ -15,6 +15,8 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
 use Bitrix\Socialnetwork\Helper;
 use Bitrix\Socialnetwork\Item;
+use Bitrix\Socialnetwork\V2\Internal\DI\Container;
+use Bitrix\Socialnetwork\V2\Internal\Service\ProjectAnalytics;
 use Bitrix\Tasks\Ui;
 
 class SpacesContentComponent extends \CBitrixComponent
@@ -123,6 +125,8 @@ class SpacesContentComponent extends \CBitrixComponent
 				$this->prepareDiscussionsResult();
 			}
 
+			$this->trackOpenFilesSection();
+
 			$this->includeComponentTemplate($componentTemplate);
 		}
 		catch (SystemException $exception)
@@ -132,6 +136,19 @@ class SpacesContentComponent extends \CBitrixComponent
 
 			$this->includeComponentTemplate('error');
 		}
+	}
+
+	private function trackOpenFilesSection(): void
+	{
+		if ($this->arResult['pageId'] !== 'files')
+		{
+			return;
+		}
+
+		Container::getInstance()->get(ProjectAnalytics::class)->trackOpenFilesSectionFromRequest(
+			(int)$this->arResult['groupId'],
+			(int)$this->arResult['userId'],
+		);
 	}
 
 	/**

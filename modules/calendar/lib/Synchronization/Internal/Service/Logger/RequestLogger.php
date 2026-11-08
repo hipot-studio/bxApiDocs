@@ -16,7 +16,7 @@ class RequestLogger extends DatabaseLogger
 
 	public function log($level, string|\Stringable $message, array $context = []): void
 	{
-		if (Option::get('calendar', 'log_enabled', 'N') !== 'Y')
+		if (!$this->isEnabled())
 		{
 			return;
 		}
@@ -24,6 +24,15 @@ class RequestLogger extends DatabaseLogger
 		$context = $this->formatContext($context);
 
 		parent::log($level, $message, $context);
+	}
+
+	/**
+	 * Synchronization writes its trace only while the debug option asks for it. A subclass whose
+	 * trace is the only account of what happened says so by answering differently.
+	 */
+	protected function isEnabled(): bool
+	{
+		return Option::get('calendar', 'log_enabled', 'N') === 'Y';
 	}
 
 	public function setUserId(int $userId): self

@@ -15,11 +15,16 @@ use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 
 class ChatTaskLinkService
 {
+	/**
+	 * @param bool $isPartial the task was built without part of the selected sources (multiselect
+	 *        flow only); reported to the initiator together with the terminal success
+	 */
 	public function linkFromMessage(
 		int $taskId,
 		Message $message,
 		int $userId,
 		TaskType $taskType = TaskType::Task,
+		bool $isPartial = false,
 	): void
 	{
 		$chatId = $message->getChatId();
@@ -35,7 +40,7 @@ class ChatTaskLinkService
 			return;
 		}
 
-		(new AutoTaskStatus($message, Status::TaskCreationCompleted, true))->send();
+		(new AutoTaskStatus($message, $userId, Status::TaskCreationCompleted, true, $isPartial))->send();
 
 		Application::getInstance()->addBackgroundJob(
 			static function() use ($chatId, $messageId, $taskId, $userId, $taskType)

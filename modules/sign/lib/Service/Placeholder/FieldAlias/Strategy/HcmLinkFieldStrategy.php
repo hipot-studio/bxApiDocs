@@ -11,7 +11,7 @@ use Bitrix\Sign\Type\BlockCode;
 
 class HcmLinkFieldStrategy extends AbstractAliasStrategy implements PreloadableStrategyInterface
 {
-	private const ALIAS_PREFIX = '1C';
+	public const ALIAS_PREFIX = '1C';
 
 	private HcmLinkFieldService $hcmLinkFieldService;
 

@@ -6,6 +6,7 @@ use Bitrix\Bizproc\Api\Data\WorkflowTemplateService\WorkflowTemplate;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Api\Enum\Template\TemplatePublicationType;
 use Bitrix\Bizproc\Api\Enum\Template\WorkflowTemplateType;
+use Bitrix\Bizproc\Api\Request\WorkflowTemplateHistoryService\RecordChangeRequest;
 use Bitrix\Bizproc\Api\Request\WorkflowTemplateHistoryService\RecordPublicationRequest;
 use Bitrix\Bizproc\Api\Request\WorkflowTemplateService as WorkflowTemplateRequest;
 use Bitrix\Bizproc\Api\Response\Error;
@@ -15,6 +16,7 @@ use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Internal\Config\TemplateHistory;
 use Bitrix\Bizproc\Internal\Entity\WorkflowTemplate\VersionChoice;
 use Bitrix\Bizproc\Internal\Repository\WorkflowTemplate\WorkflowTemplateRepository;
+use Bitrix\Bizproc\Workflow\Template\AgentOwnedMetadata;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Workflow\Template\WorkflowTemplateDraftTable;
 use Bitrix\Bizproc\Internal\Access\Permission\PermissionDictionary;
@@ -25,6 +27,8 @@ use Bitrix\Bizproc\Internal\Service\Trigger\Schedule\ScheduledTriggerSyncService
 use Bitrix\Bizproc\Internal\Service\WorkflowTemplate\PublishTemplateConstantsAccessPolicy;
 use Bitrix\Bizproc\Internal\Service\WorkflowTemplate\TemplateConstantsAccessPolicyInterface;
 use Bitrix\Bizproc\Internal\Service\WorkflowTemplate\TemplatePersistAccessService;
+use Bitrix\Bizproc\Internal\Service\ProcessData\ProcessDataFeature;
+use Bitrix\Bizproc\Public\ProcessData\Service\ProcessDataMechanicsResolver;
 use Bitrix\Bizproc\Public\Provider\PilotVisibilityProvider;
 use Bitrix\Bizproc\Public\Provider\TemplateAccessProvider;
 use Bitrix\Bizproc\Public\Service\TemplateAccessService;
@@ -37,6 +41,18 @@ use Bitrix\Main\Repository\Exception\PersistenceException;
 class WorkflowTemplateService
 {
 	private const TRACK_ON_INTERVAL = 7 * 86400; // 7 days in seconds
+
+	// A draft born of the editor counts from one: zero is reserved for the drafts written past it, where
+	// there is nothing to compare a revision against.
+	private const FIRST_DRAFT_REVISION = 1;
+	private const JOURNALED_STATE_FIELDS = [
+		'TEMPLATE',
+		'NAME',
+		'DESCRIPTION',
+		'PARAMETERS',
+		'VARIABLES',
+		'CONSTANTS',
+	];
 	private WorkflowAccessService $accessService;
 	private TemplateAccessService $templateAccessService;
 	private TemplateAccessProvider $templateAccessProvider;
@@ -125,6 +141,58 @@ class WorkflowTemplateService
 			=== WorkflowTemplateType::Nodes->value;
 	}
 
+	/**
+	 * The PROCESS_DATA marker belongs to the server: whatever a client sent under that name is dropped, and
+	 * the marker is put back only for a nodes template being created while the feature is on. It is set once,
+	 * at birth, and never removed - an existing template can neither gain it nor lose it here. The check does
+	 * not depend on checkAccess: the designer authorizes the creation in the controller and creates the row
+	 * with the check off.
+	 */
+	private function applyProcessDataMarker(int $templateId, WorkflowTemplate $template): array
+	{
+		$fields = $template->getFields();
+		$settings = is_array($fields['TEMPLATE_SETTINGS'] ?? null) ? $fields['TEMPLATE_SETTINGS'] : [];
+		unset($settings[ProcessDataMechanicsResolver::MARKER]);
+
+		if (
+			$templateId <= 0
+			&& ProcessDataFeature::isEnabled()
+			&& $this->isNewNodesTemplate($fields, $template->getDocumentType())
+		)
+		{
+			$settings[ProcessDataMechanicsResolver::MARKER] = ProcessDataMechanicsResolver::MARKER_VALUE;
+		}
+
+		$fields['TEMPLATE_SETTINGS'] = $settings;
+
+		ProcessDataMechanicsResolver::clearMarkerCache($templateId);
+
+		return $fields;
+	}
+
+	/**
+	 * The type of a row decides which ACL owns it: a Nodes template answers to the template ACL, everything
+	 * else falls back onto the legacy CreateWorkflow gate. The type is derived from TEMPLATE and AUTO_EXECUTE,
+	 * and this path may write both, so without the refusal the holder of a per-template right could publish
+	 * once with another root and take its own row out of that ACL for good.
+	 *
+	 * The save is refused rather than half-applied: the product offers no transition out of the node editor, so
+	 * keeping the type while storing a foreign graph would leave the row with a type its own content denies.
+	 * Only requests that asked for the access check are measured - internal callers keep writing through, and
+	 * conversion by import stays where it was, on the legacy right of the document type.
+	 */
+	private function takesTemplateOutOfNodes(int $templateId, array $fields): bool
+	{
+		if (!($this->getTemplateAccessInfo($templateId)['isNodes'] ?? false))
+		{
+			return false;
+		}
+
+		$computedType = \CBPWorkflowTemplateLoader::getLoader()->getTemplateType($fields, $templateId);
+
+		return $computedType !== null && $computedType !== WorkflowTemplateType::Nodes->value;
+	}
+
 	public function getList(
 		WorkflowTemplateRequest\GridTemplateRequest $request,
 	): WorkflowTemplateResponse\GridTemplateResponse
@@ -154,11 +222,16 @@ class WorkflowTemplateService
 			$query->setOffset($request->getOffset());
 		}
 
-		if (!empty($filters = $request->getOrmFilter()))
+		$filters = $request->getOrmFilter();
+		if ($filters)
 		{
 			$query->setFilter($filters);
 		}
-		elseif (!empty($searchQuery = $request->getFilterSearchQuery()))
+
+		// The line of search of the header narrows what the filter already asks for: where() is a separate
+		// handler joined with AND, so the search stays conjunctive with the conditions of the filter.
+		$searchQuery = (string)$request->getFilterSearchQuery();
+		if ($searchQuery !== '')
 		{
 			$query->where(
 				Query::filter()
@@ -176,6 +249,16 @@ class WorkflowTemplateService
 		);
 		foreach ($entityFilter as $filterKey => $filterValue)
 		{
+			// The area may arrive as a nested ConditionTree, which the array filter cannot carry: setFilterChains()
+			// only recurses into arrays and would hand the object over to CSQLWhere. where() is a separate
+			// handler joined with AND, so the restrictions above stay conjunctive with the area.
+			if ($filterKey === TemplateAccessProvider::SCOPE_CONDITION_KEY)
+			{
+				$query->where($filterValue);
+
+				continue;
+			}
+
 			$query->addFilter($filterKey, $filterValue);
 		}
 
@@ -324,11 +407,15 @@ class WorkflowTemplateService
 		try
 		{
 			$user = new \CBPWorkflowTemplateUser($request->userId);
-			\CBPWorkflowTemplateLoader::update($request->templateId, [
-				'CONSTANTS' => $constants,
-				'USER_ID' => $user->getId(),
-				'MODIFIER_USER' => $user,
-			]);
+			\CBPWorkflowTemplateLoader::update(
+				$request->templateId,
+				[
+					'CONSTANTS' => $constants,
+					'USER_ID' => $user->getId(),
+					'MODIFIER_USER' => $user,
+				],
+				actorId: $user->getId(),
+			);
 		}
 		catch (\CBPWorkflowTemplateValidationException $exception)
 		{
@@ -469,6 +556,28 @@ class WorkflowTemplateService
 		bool $withoutCommonVersion = false,
 	): WorkflowTemplateResponse\SaveTemplateResponse
 	{
+		return $this->saveTemplateInternal($request, $withoutCommonVersion, invalidateCache: true);
+	}
+
+	/**
+	 * Saves a template as part of a transaction opened by the caller.
+	 *
+	 * The caller invalidates the cache after its transaction commits.
+	 */
+	public function saveTemplateInOuterTransaction(
+		WorkflowTemplateRequest\SaveTemplateRequest $request,
+		bool $withoutCommonVersion = false,
+	): WorkflowTemplateResponse\SaveTemplateResponse
+	{
+		return $this->saveTemplateInternal($request, $withoutCommonVersion, invalidateCache: false);
+	}
+
+	private function saveTemplateInternal(
+		WorkflowTemplateRequest\SaveTemplateRequest $request,
+		bool $withoutCommonVersion,
+		bool $invalidateCache,
+	): WorkflowTemplateResponse\SaveTemplateResponse
+	{
 		$response = new WorkflowTemplateResponse\SaveTemplateResponse();
 		$isNewNodesTemplate = false;
 		$canPublishNewNodesTemplate = false;
@@ -508,7 +617,7 @@ class WorkflowTemplateService
 		try {
 			$template = WorkflowTemplate::createFromRequest($request);
 			$templateId = $template->getTemplateId();
-			$fields = $template->getFields();
+			$fields = $this->applyProcessDataMarker($templateId, $template);
 			if ($isNewNodesTemplate && !$canPublishNewNodesTemplate)
 			{
 				$fields['TEMPLATE'] = [];
@@ -523,7 +632,20 @@ class WorkflowTemplateService
 				return $response;
 			}
 
-			$writeResponse = $this->writeTemplate($templateId, $fields, $request, $withoutCommonVersion);
+			if ($request->checkAccess && $this->takesTemplateOutOfNodes($templateId, $fields))
+			{
+				$response->addError(ErrorMessage::WRONG_TEMPLATE->getError());
+
+				return $response;
+			}
+
+			$writeResponse = $this->writeTemplate(
+				$templateId,
+				$fields,
+				$request,
+				$withoutCommonVersion,
+				$invalidateCache,
+			);
 			if (!$writeResponse->isSuccess())
 			{
 				$response->addErrors($writeResponse->getErrors());
@@ -564,6 +686,7 @@ class WorkflowTemplateService
 		array $fields,
 		WorkflowTemplateRequest\SaveTemplateRequest $request,
 		bool $withoutCommonVersion,
+		bool $invalidateCache,
 	): WorkflowTemplateResponse\SaveTemplateResponse
 	{
 		$response = new WorkflowTemplateResponse\SaveTemplateResponse();
@@ -575,13 +698,30 @@ class WorkflowTemplateService
 		{
 			if ($templateId > 0)
 			{
+				$draftError = $this->getPublicationDraftError($request);
+				if ($draftError !== null)
+				{
+					self::rollback($connection);
+					$response->addError($draftError);
+
+					return $response;
+				}
+
 				$publicationResponse = $this->writeCommonVersion($templateId, $fields, $request->user->getId());
 			}
 			else
 			{
 				// Creating a template publishes nothing: the journal only remembers the birth, so the
 				// history stays empty until the user publishes for the first time.
-				$templateId = (int)\CBPWorkflowTemplateLoader::add($fields);
+				// Authorship comes from the user this save was authorized for, not from the global one: it
+				// decides the "own templates" scope, so the two must be the same person by construction.
+				// A creation without a common version is not a publication either: the first one for
+				// everyone dates the template later.
+				$templateId = (int)\CBPWorkflowTemplateLoader::add(
+					$fields,
+					actorId: $request->user->getId(),
+					markFirstPublication: !$withoutCommonVersion,
+				);
 				$publicationResponse = new RecordPublicationResponse();
 				if (
 					$withoutCommonVersion
@@ -595,7 +735,7 @@ class WorkflowTemplateService
 
 				if (!$this->recordCreation($templateId, $request))
 				{
-					$connection->rollbackTransaction();
+					self::rollback($connection);
 					$response->addError(ErrorMessage::TEMPLATE_HISTORY_UNAVAILABLE->getCodedError());
 
 					return $response;
@@ -604,26 +744,90 @@ class WorkflowTemplateService
 		}
 		catch (\Throwable $exception)
 		{
-			$connection->rollbackTransaction();
+			self::rollback($connection);
 
 			throw $exception;
 		}
 
 		if (!$publicationResponse->isSuccess())
 		{
-			$connection->rollbackTransaction();
+			self::rollback($connection);
 			$response->addErrors($publicationResponse->getErrors());
 
 			return $response;
 		}
 
 		$connection->commitTransaction();
-		if ($isUpdate)
+		if ($isUpdate && $invalidateCache)
 		{
 			\CBPWorkflowTemplateLoader::invalidateCachesAfterUpdate($templateId, $fields);
 		}
 
 		return $response->setTemplateId($templateId);
+	}
+
+	private function getPublicationDraftError(
+		WorkflowTemplateRequest\SaveTemplateRequest $request,
+	): ?\Bitrix\Bizproc\Error
+	{
+		if (!$request->useEditConflictGuard || $request->draftRevision === null)
+		{
+			return null;
+		}
+
+		$latestDraft = WorkflowTemplateDraftTable::getLatestDraftByTemplateId($request->templateId);
+		if ($latestDraft === null || (int)$latestDraft['ID'] !== $request->draftId)
+		{
+			return $this->createDraftNotFoundError($latestDraft === null ? 0 : (int)$latestDraft['ID']);
+		}
+
+		$storedRevision = (int)$latestDraft['REVISION'];
+		if ($storedRevision !== $request->draftRevision)
+		{
+			return $this->createRevisionConflictError($storedRevision, (int)$latestDraft['USER_ID']);
+		}
+
+		$affected = WorkflowTemplateDraftTable::updateByFilter(
+			[
+				'=ID' => $request->draftId,
+				'=TEMPLATE_ID' => $request->templateId,
+				'=REVISION' => $storedRevision,
+			],
+			['REVISION' => $storedRevision + 1],
+		);
+		if ($affected === 0)
+		{
+			$latestDraft = WorkflowTemplateDraftTable::getLatestDraftByTemplateId($request->templateId);
+			if ($latestDraft === null || (int)$latestDraft['ID'] !== $request->draftId)
+			{
+				return $this->createDraftNotFoundError($latestDraft === null ? 0 : (int)$latestDraft['ID']);
+			}
+
+			return $this->createRevisionConflictError(
+				(int)$latestDraft['REVISION'],
+				(int)$latestDraft['USER_ID'],
+			);
+		}
+
+		return null;
+	}
+
+	/**
+	 * Rolls the write back, whether the transaction of the write is the outer one or a savepoint inside the
+	 * transaction of a caller. In the nested case the platform rolls back to the savepoint and only then
+	 * reports the nested rollback as unsupported: that report must not replace the refusal being returned,
+	 * which is what the caller is waiting for. Same idiom as
+	 * {@see \CBPWorkflowTemplateLoader::rollbackTransaction()}.
+	 */
+	private static function rollback(\Bitrix\Main\DB\Connection $connection): void
+	{
+		try
+		{
+			$connection->rollbackTransaction();
+		}
+		catch (\Bitrix\Main\DB\TransactionException)
+		{
+		}
 	}
 
 	/**
@@ -659,11 +863,14 @@ class WorkflowTemplateService
 			return $response;
 		}
 
+		// Authorship comes from the user this write was authorized for, not from the global one: it decides
+		// the "own templates" scope, so the two must be the same person by construction.
 		\CBPWorkflowTemplateLoader::update(
 			$templateId,
 			$fields,
 			deferCacheInvalidation: true,
 			publishesCommonVersion: true,
+			actorId: $userId,
 		);
 		$this->templatePersistAccessService->resetTemplateAccessInfo($templateId);
 
@@ -692,9 +899,15 @@ class WorkflowTemplateService
 	 */
 	private function isVersionedSave(int $templateId, array $fields): bool
 	{
-		return TemplateHistory::isEnabled()
+		return $this->isJournaledTemplate($templateId)
 			&& array_key_exists('TEMPLATE', $fields)
 			&& !\CBPHelper::isEmptyValue($fields['TEMPLATE'])
+		;
+	}
+
+	private function isJournaledTemplate(int $templateId): bool
+	{
+		return TemplateHistory::isEnabled()
 			&& ($this->getTemplateAccessInfo($templateId)['inHistory'] ?? false)
 		;
 	}
@@ -861,6 +1074,7 @@ class WorkflowTemplateService
 	): WorkflowTemplateResponse\SaveTemplateDraftResponse
 	{
 		$response = new WorkflowTemplateResponse\SaveTemplateDraftResponse();
+		$saveStartedAt = microtime(true);
 
 		if ($request->checkAccess)
 		{
@@ -897,6 +1111,22 @@ class WorkflowTemplateService
 				return $response;
 			}
 
+			if ($request->useEditConflictGuard)
+			{
+				$latestDraft = $request->templateId > 0
+					? WorkflowTemplateDraftTable::getLatestDraftByTemplateId($request->templateId)
+					: null
+				;
+
+				$draftError = $this->getDraftWriteError($request, $latestDraft);
+				if ($draftError !== null)
+				{
+					$response->addError($draftError);
+
+					return $response;
+				}
+			}
+
 			$saveRequest = new \Bitrix\Bizproc\Api\Request\WorkflowTemplateService\SaveTemplateRequest(
 				$request->templateId,
 				$request->parameters,
@@ -906,7 +1136,9 @@ class WorkflowTemplateService
 			);
 			$template = WorkflowTemplate::createFromRequest($saveRequest);
 			$templateId = $template->getTemplateId() > 0 ? $template->getTemplateId() : null;
-			$fields = $template->getFields();
+			// A draft of a template that does not exist yet has nowhere to store the marker, so it travels
+			// in the fields of the draft alone: the row is written by the publication that follows.
+			$fields = $this->applyProcessDataMarker($request->templateId, $template);
 
 			$tpl = \Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable::createObject();
 			$availableFields = [
@@ -935,52 +1167,163 @@ class WorkflowTemplateService
 			$tpl->setEntity($entity);
 			$tpl->setDocumentType($documentType);
 
+			$isJournaled = $this->isJournaledTemplate($request->templateId);
+			$prevState = [];
+
+			$latestDraft = $templateId
+				? WorkflowTemplateDraftTable::getLatestDraftByTemplateId($templateId)
+				: null;
 
 			if ($request->draftId)
 			{
 				$draft = WorkflowTemplateDraftTable::getByPrimary($request->draftId)->fetchObject();
 				if (!$draft || $draft->getTemplateId() !== $templateId)
 				{
-					$response->addError(ErrorMessage::ACCESS_DENIED->getError());
+					$response->addError(
+						$request->useEditConflictGuard
+							? $this->createDraftNotFoundError($latestDraft === null ? 0 : (int)$latestDraft['ID'])
+							: ErrorMessage::ACCESS_DENIED->getCodedError(),
+					);
 
 					return $response;
 				}
 
-				$result = WorkflowTemplateDraftTable::update(
-					$request->draftId,
-					[
-						'MODULE_ID' => $tpl->getModuleId(),
-						'ENTITY' => $tpl->getEntity(),
-						'DOCUMENT_TYPE' => $tpl->getDocumentType(),
-						'TEMPLATE_ID' => $templateId,
-						'TEMPLATE_DATA' => $tpl->collectValues(),
-						'USER_ID' => $request->user->getId(),
-						'CREATED' => new \Bitrix\Main\Type\DateTime(),
-					],
-				);
-			}
-			else
-			{
-				$result = WorkflowTemplateDraftTable::add([
+				if (
+					$this->isDraftNewerThanSave($draft->getCreated(), $saveStartedAt)
+					|| $this->isDraftNewerThanSave($latestDraft['CREATED'] ?? null, $saveStartedAt)
+				)
+				{
+					$response->addError(ErrorMessage::TEMPLATE_DRAFT_CONFLICT->getCodedError());
+
+					return $response;
+				}
+
+				// Not the data of the draft being updated: a save may land on a draft that is no longer the
+				// freshest one of the template, and the journal line has to tell what changed for the person.
+				if ($isJournaled)
+				{
+					$prevState = $this->getDraftBaseState($request->templateId);
+				}
+
+				$boundDraftData = is_array($draft->getTemplateData()) ? $draft->getTemplateData() : [];
+
+				$draftFields = [
 					'MODULE_ID' => $tpl->getModuleId(),
 					'ENTITY' => $tpl->getEntity(),
 					'DOCUMENT_TYPE' => $tpl->getDocumentType(),
 					'TEMPLATE_ID' => $templateId,
-					'TEMPLATE_DATA' => $tpl->collectValues(),
+					'TEMPLATE_DATA' => self::toDraftTemplateData(
+						$tpl->collectValues(),
+						$boundDraftData,
+						$request->fieldsToClaim,
+					),
 					'USER_ID' => $request->user->getId(),
 					'CREATED' => new \Bitrix\Main\Type\DateTime(),
-				]);
+				];
+
+				if ($request->useEditConflictGuard)
+				{
+					$storedRevision = (int)$latestDraft['REVISION'];
+					$draftFields['TEMPLATE_DATA'] = WorkflowTemplateTable::toSerializedForm(
+						$draftFields['TEMPLATE_DATA'],
+					);
+					$draftFields['REVISION'] = $storedRevision + 1;
+
+					$affected = WorkflowTemplateDraftTable::updateByFilter(
+						[
+							'=ID' => $request->draftId,
+							'=TEMPLATE_ID' => $request->templateId,
+							'=REVISION' => $storedRevision,
+						],
+						$draftFields,
+					);
+
+					if ($affected === 0)
+					{
+						$response->addError($this->createRevisionConflictErrorFromStorage($request->templateId));
+
+						return $response;
+					}
+
+					$response
+						->setTemplateDraftId($request->draftId)
+						->setDraftRevision($storedRevision + 1)
+					;
+				}
+				else
+				{
+					$result = WorkflowTemplateDraftTable::update($request->draftId, $draftFields);
+					if (!$result->isSuccess())
+					{
+						$response->addErrors($result->getErrors());
+
+						return $response;
+					}
+
+					$response->setTemplateDraftId((int)$result->getId());
+				}
 			}
-
-
-			if (!$result->isSuccess())
+			else
 			{
-				$response->addErrors($result->getErrors());
+				if ($this->isDraftNewerThanSave($latestDraft['CREATED'] ?? null, $saveStartedAt))
+				{
+					$response->addError(ErrorMessage::TEMPLATE_DRAFT_CONFLICT->getCodedError());
 
-				return $response;
+					return $response;
+				}
+
+				// Read before the write: the draft being added becomes the freshest one of the template.
+				if ($isJournaled)
+				{
+					$prevState = $this->getDraftBaseState($request->templateId);
+				}
+
+				$draftFields = [
+					'MODULE_ID' => $tpl->getModuleId(),
+					'ENTITY' => $tpl->getEntity(),
+					'DOCUMENT_TYPE' => $tpl->getDocumentType(),
+					'TEMPLATE_ID' => $templateId,
+					'TEMPLATE_DATA' => self::toDraftTemplateData(
+						$tpl->collectValues(),
+						[],
+						$request->fieldsToClaim,
+					),
+					'USER_ID' => $request->user->getId(),
+					'CREATED' => new \Bitrix\Main\Type\DateTime(),
+				];
+				if ($request->useEditConflictGuard)
+				{
+					$draftFields['REVISION'] = self::FIRST_DRAFT_REVISION;
+				}
+
+				$result = WorkflowTemplateDraftTable::add($draftFields);
+
+				if (!$result->isSuccess())
+				{
+					$response->addErrors($result->getErrors());
+
+					return $response;
+				}
+
+				$response->setTemplateDraftId((int)$result->getId());
+				if ($request->useEditConflictGuard)
+				{
+					$response->setDraftRevision(self::FIRST_DRAFT_REVISION);
+				}
 			}
 
-			$response->setTemplateDraftId((int)$result->getId());
+			if ($isJournaled)
+			{
+				$this->historyService->recordChange(
+					new RecordChangeRequest(
+						templateId: $request->templateId,
+						attribution: $request->attribution,
+						prevState: $prevState,
+						nextState: $tpl->collectValues(),
+						isTemplateJournaled: true,
+					),
+				);
+			}
 		}
 		catch (\Throwable $exception)
 		{
@@ -988,6 +1331,54 @@ class WorkflowTemplateService
 		}
 
 		return $response;
+	}
+
+	private function getDraftBaseState(int $templateId): array
+	{
+		$draft = WorkflowTemplateDraftTable::getLatestDraftWithDataByTemplateId($templateId);
+		if ($draft !== null)
+		{
+			return is_array($draft['TEMPLATE_DATA'])
+				? AgentOwnedMetadata::stripFrom($draft['TEMPLATE_DATA'])
+				: []
+			;
+		}
+
+		$live = WorkflowTemplateTable::query()
+			->setSelect(self::JOURNALED_STATE_FIELDS)
+			->where('ID', $templateId)
+			->setLimit(1)
+			->fetch()
+		;
+
+		return $live ?: [];
+	}
+
+	/**
+	 * @param array<string, mixed> $snapshot
+	 * @param array<string, mixed> $boundDraftData
+	 * @param list<string> $fieldsToClaim
+	 * @return array<string, mixed>
+	 */
+	private static function toDraftTemplateData(
+		array $snapshot,
+		array $boundDraftData,
+		array $fieldsToClaim,
+	): array
+	{
+		return AgentOwnedMetadata::applyTo(
+			$snapshot,
+			AgentOwnedMetadata::nextOwnedFields($boundDraftData, $snapshot, $fieldsToClaim),
+		);
+	}
+
+	/**
+	 * A draft written after this save started carries a graph this request never saw: writing over it
+	 * would roll back whoever wrote it - a second tab, a version restore, a pilot publication.
+	 */
+	private function isDraftNewerThanSave(?\Bitrix\Main\Type\DateTime $draftCreated, float $saveStartedAt): bool
+	{
+		return $draftCreated !== null && $draftCreated->getTimestamp() > $saveStartedAt;
 	}
 
 	public function loadTemplateDraft(
@@ -1021,6 +1412,69 @@ class WorkflowTemplateService
 		}
 
 		return $response;
+	}
+
+	/**
+	 * The two checks that guard a draft write (ALG-02): the draft of the request must still be the draft of
+	 * the template, and its stored content must be the one the writer saw.
+	 *
+	 * @param array<string, mixed>|null $latestDraft freshest draft of the template, null when it has none
+	 */
+	private function getDraftWriteError(
+		WorkflowTemplateRequest\SaveTemplateDraftRequest $request,
+		?array $latestDraft,
+	): ?\Bitrix\Bizproc\Error
+	{
+		if (!$request->draftId)
+		{
+			// A writer with no draft of its own would create a second one beside the living draft of the
+			// template, and the editor only ever reads the freshest.
+			return $latestDraft === null ? null : $this->createDraftNotFoundError((int)$latestDraft['ID']);
+		}
+
+		if ($latestDraft === null || (int)$latestDraft['ID'] !== $request->draftId)
+		{
+			return $this->createDraftNotFoundError($latestDraft === null ? 0 : (int)$latestDraft['ID']);
+		}
+
+		$storedRevision = (int)$latestDraft['REVISION'];
+
+		// Whether the revision applies is decided by the stored value: a zero there means there is nothing to
+		// compare against. A request with no revision at all is an old client, and the revision is protection
+		// from a lost write, not a boundary of access - the boundary is held by the lease.
+		if ($storedRevision > 0 && $request->revision !== null && $request->revision !== $storedRevision)
+		{
+			return $this->createRevisionConflictError($storedRevision, (int)$latestDraft['USER_ID']);
+		}
+
+		return null;
+	}
+
+	private function createDraftNotFoundError(int $draftId): \Bitrix\Bizproc\Error
+	{
+		return ErrorMessage::DRAFT_NOT_FOUND->getCodedError(customData: ['draftId' => $draftId]);
+	}
+
+	private function createRevisionConflictError(int $revision, int $userId): \Bitrix\Bizproc\Error
+	{
+		return ErrorMessage::DRAFT_REVISION_CONFLICT->getCodedError(customData: [
+			'revision' => $revision,
+			'userId' => $userId,
+		]);
+	}
+
+	/**
+	 * The state the racing writer left behind: the row is read again exactly because the conditional write
+	 * proved the values of the read before it are gone.
+	 */
+	private function createRevisionConflictErrorFromStorage(int $templateId): \Bitrix\Bizproc\Error
+	{
+		$latestDraft = WorkflowTemplateDraftTable::getLatestDraftByTemplateId($templateId);
+
+		return $this->createRevisionConflictError(
+			$latestDraft === null ? 0 : (int)$latestDraft['REVISION'],
+			$latestDraft === null ? 0 : (int)$latestDraft['USER_ID'],
+		);
 	}
 
 	// Existence-only delete guard: a row is "present" by primary key, independent of SYSTEM_CODE,

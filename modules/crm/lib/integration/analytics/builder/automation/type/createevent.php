@@ -9,6 +9,7 @@ final class CreateEvent extends AbstractBuilder
 {
 	private ?int $id = null;
 	private ?string $presetId = null;
+	private ?string $source = null;
 
 	protected function getTool(): string
 	{
@@ -29,6 +30,13 @@ final class CreateEvent extends AbstractBuilder
 		return $this;
 	}
 
+	public function setSource(?string $source): self
+	{
+		$this->source = $source;
+
+		return $this;
+	}
+
 	protected function buildCustomData(): array
 	{
 		if ($this->id > 0)
@@ -38,6 +46,10 @@ final class CreateEvent extends AbstractBuilder
 		if ($this->presetId)
 		{
 			$this->setP4('preset', $this->presetId);
+		}
+		if (in_array($this->source, [Dictionary::SOURCE_MARKETPLACE, Dictionary::SOURCE_LOCAL], true))
+		{
+			$this->setP5(Dictionary::P5_KEY_SOURCE, $this->source);
 		}
 
 		return [

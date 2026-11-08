@@ -75,6 +75,35 @@ class UserService
 		;
 	}
 
+	/**
+	 * @param int[] $userIds
+	 * @return array
+	 */
+	public function getUserLanguagesMapByUserIds(array $userIds): array
+	{
+		if ($userIds === [])
+		{
+			return [];
+		}
+
+		$res = UserTable::query()
+			->whereIn('ID', array_values($userIds))
+			->setSelect([
+				'ID',
+				'NOTIFICATION_LANGUAGE_ID',
+			])->exec()
+			->fetchCollection()
+			;
+
+		$map = [];
+		foreach ($res as $row)
+		{
+			$map[$row->getId()] = $row->getNotificationLanguageId() ?? null;
+		}
+
+		return $map;
+	}
+
 	public function getGender(int $userId): Gender
 	{
 		$profileGender = UserTable::getById($userId)?->fetchObject()?->getPersonalGender();

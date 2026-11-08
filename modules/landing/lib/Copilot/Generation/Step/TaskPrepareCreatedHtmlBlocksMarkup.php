@@ -41,7 +41,7 @@ class TaskPrepareCreatedHtmlBlocksMarkup extends TaskStep
 
 		$landingId = $this->resolveLandingId();
 
-		$rightsBefore = Rights::isOn();
+		$rightsBefore = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 		try
 		{

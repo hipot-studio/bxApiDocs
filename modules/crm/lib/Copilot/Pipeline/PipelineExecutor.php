@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\Copilot\Pipeline;
 
-use Bitrix\AI\Context;
-use Bitrix\AI\Model\QueueTable as AIQueueTable;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
+use Bitrix\Crm\Integration\AI\Operation\AbstractOperation;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\Result;
 use Bitrix\Crm\ItemIdentifier;
@@ -96,6 +95,7 @@ final readonly class PipelineExecutor
 		Result $completedResult,
 		string $scenarioName,
 		?ItemIdentifier $manualFillTarget = null,
+		array $contextExtra = [],
 	): void
 	{
 		$scenario = $this->scenarioRegistry->getByName($scenarioName);
@@ -104,7 +104,12 @@ final readonly class PipelineExecutor
 			return;
 		}
 
-		$context = $this->buildContextFromResult($completedResult, $scenarioName, $manualFillTarget);
+		$context = $this->buildContextFromResult(
+			$completedResult,
+			$scenarioName,
+			$manualFillTarget,
+			$contextExtra,
+		);
 
 		if ($context->getActivityId() <= 0)
 		{
@@ -202,16 +207,7 @@ final readonly class PipelineExecutor
 		// auto path — TargetResolver keeps resolving the priority Deal/Lead as before.
 		$operation->setManualFillTarget($context->getManualTarget());
 
-		// Forward owner-extra so it survives every step in email-chain pipelines.
-		// Keys absent for call/openline — no effect on those flows.
-		foreach (['targetOwnerTypeId', 'targetOwnerId', 'triggerDirection'] as $ownerKey)
-		{
-			$ownerValue = $context->getExtra($ownerKey);
-			if ($ownerValue !== null)
-			{
-				$operation->setContextExtra($ownerKey, $ownerValue);
-			}
-		}
+		$this->forwardContextExtras($operation, $context);
 
 		// Only set explicit NEXT_TYPE_ID for scenarios that have unique step transitions.
 		// FULL scenario uses null NEXT_TYPE_ID (from Scenario::getNextTypeIdByScenario('full'))
@@ -226,6 +222,18 @@ final readonly class PipelineExecutor
 		}
 
 		return $operation->launch();
+	}
+
+	private function forwardContextExtras(AbstractOperation $operation, StepContext $context): void
+	{
+		foreach (['targetOwnerTypeId', 'targetOwnerId', 'triggerDirection', 'fillFieldsEntityAllowed'] as $key)
+		{
+			$value = $context->getExtra($key);
+			if ($value !== null)
+			{
+				$operation->setContextExtra($key, $value);
+			}
+		}
 	}
 
 	/**
@@ -277,6 +285,7 @@ final readonly class PipelineExecutor
 		Result $completedResult,
 		string $scenarioName,
 		?ItemIdentifier $manualFillTarget = null,
+		array $contextExtra = [],
 	): StepContext
 	{
 		$activityId = $completedResult->getTarget()?->getEntityId() ?? 0;
@@ -316,9 +325,21 @@ final readonly class PipelineExecutor
 			$activityProvider = is_array($activity) ? ($activity['PROVIDER_ID'] ?? null) : null;
 		}
 
-		$extra = $activityProvider === \Bitrix\Crm\Activity\Provider\Email::getId()
-			? $this->recoverExtraFromJob($completedResult->getJobId())
-			: [];
+		$includeOwnerKeys = $activityProvider === \Bitrix\Crm\Activity\Provider\Email::getId();
+		$extra = $this->filterContextExtra($contextExtra, $includeOwnerKeys);
+		$fillFieldsEntityAllowed = $completedResult->getFillFieldsEntityAllowedSnapshot();
+		if (!array_key_exists('fillFieldsEntityAllowed', $extra) && $fillFieldsEntityAllowed !== null)
+		{
+			$extra['fillFieldsEntityAllowed'] = $fillFieldsEntityAllowed;
+		}
+
+		if ($includeOwnerKeys)
+		{
+			$extra = array_replace(
+				$this->recoverExtraFromJob($completedResult->getJobId(), true),
+				$extra,
+			);
+		}
 
 		$context = new StepContext(
 			activityId: $activityId,
@@ -340,54 +361,27 @@ final readonly class PipelineExecutor
 		return $context;
 	}
 
-	private function recoverExtraFromJob(?int $jobId): array
+	private function recoverExtraFromJob(?int $jobId, bool $includeOwnerKeys): array
 	{
-		if (!$jobId)
-		{
-			return [];
-		}
+		return $this->filterContextExtra(
+			JobRepository::getInstance()->getContextAdditionalInfoByJobId($jobId),
+			$includeOwnerKeys,
+		);
+	}
 
-		$crmJob = QueueTable::query()
-			->setSelect(['HASH'])
-			->where('ID', $jobId)
-			->fetchObject()
-		;
-
-		$hash = $crmJob?->getHash();
-		if (!$hash)
-		{
-			return [];
-		}
-
-		$aiRow = AIQueueTable::query()
-			->setSelect(['CONTEXT'])
-			->where('HASH', $hash)
-			->setLimit(1)
-			->fetch()
-		;
-
-		$contextJson = $aiRow['CONTEXT'] ?? null;
-		if (!is_string($contextJson) || $contextJson === '')
-		{
-			return [];
-		}
-
-		try
-		{
-			$context = Context::unpack($contextJson);
-		}
-		catch (\Throwable)
-		{
-			return [];
-		}
-
-		$additionalInfo = $context->getParameters()['additionalInfo'] ?? [];
-		if (!is_array($additionalInfo))
-		{
-			return [];
-		}
-
+	private function filterContextExtra(array $additionalInfo, bool $includeOwnerKeys): array
+	{
 		$extra = [];
+		if (array_key_exists('fillFieldsEntityAllowed', $additionalInfo))
+		{
+			$extra['fillFieldsEntityAllowed'] = (bool)$additionalInfo['fillFieldsEntityAllowed'];
+		}
+
+		if (!$includeOwnerKeys)
+		{
+			return $extra;
+		}
+
 		if (isset($additionalInfo['targetOwnerTypeId']))
 		{
 			$extra['targetOwnerTypeId'] = (int)$additionalInfo['targetOwnerTypeId'];

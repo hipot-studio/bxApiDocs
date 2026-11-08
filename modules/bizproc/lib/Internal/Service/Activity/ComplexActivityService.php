@@ -91,6 +91,30 @@ class ComplexActivityService
 	];
 
 	/**
+	 * Methods whose presence on a class declares the channel of the condition document: "the condition of this
+	 * node is decided not on the document of the process, but on the record of its own event".
+	 *
+	 * - `public static getConditionDocumentSourceFieldNames(): array` - `FieldName`s of the own properties map of
+	 *   the class whose values decide the document of the condition;
+	 * - `public getConditionDocumentComplexType(): ?array` - complex type of that document by the properties of
+	 *   the node, null while the condition is decided on the document of the process;
+	 * - `public getConditionDocumentId(TriggerParameters $parameters): ?array` - complex identifier
+	 *   `[moduleId, entity, documentId]` of the record the condition is to be decided on.
+	 *
+	 * Declaring the channel and publishing a document type are answers to different questions, and a class does
+	 * not do both: a published type would carry the real document into the forms of the child actions and into
+	 * the catalog. An invalid answer is treated as no answer: neither building the settings nor checking before
+	 * the start may fail over what a node returns here.
+	 *
+	 * @var array<string, bool> Name of the method, and whether the class declares it static.
+	 */
+	private const CONDITION_DOCUMENT_CHANNEL_METHODS = [
+		'getConditionDocumentSourceFieldNames' => true,
+		'getConditionDocumentComplexType' => false,
+		'getConditionDocumentId' => false,
+	];
+
+	/**
 	 * The children a node served by the unified settings panel may carry: the service activities of a
 	 * conditional branch, the actions of the catalog of the node and the relation action its descriptor names.
 	 * The one answer both surfaces of the panel read
@@ -243,12 +267,7 @@ class ComplexActivityService
 			return null;
 		}
 
-		$provider = Container::instance()->getUnifiedPanelDescriptorProvider();
-		if (in_array(
-			$this->searcher->normalizeActivityCode($activityType),
-			$provider->getTriggerCodesWithoutDocument(),
-			true,
-		))
+		if ($this->isTriggerWithoutDocument($activityType))
 		{
 			return null;
 		}
@@ -275,20 +294,179 @@ class ComplexActivityService
 			return null;
 		}
 
-		if (!is_array($documentType) || count($documentType) !== 3)
+		if (!self::isComplexDocumentType($documentType))
 		{
 			return null;
+		}
+
+		return $documentType === Workflow::getComplexType() ? null : array_values($documentType);
+	}
+
+	/**
+	 * Document type the condition of a node is decided on: the type the node declares through the channel
+	 * ({@see self::declaresConditionDocumentChannel()}), and the published type for a node that declares none.
+	 *
+	 * The order of the guards is the contract and not a matter of style. "Not a trigger" answers first,
+	 * because the condition of an ordinary node is decided inside the process ({@see \CBPWorkflow::isNodeConditionMet()});
+	 * were that guard to come after the channel, this would start answering with a type for non-triggers and
+	 * the values of the condition of every complex node with a fixed document would be normalized by it.
+	 *
+	 * The second summand is what keeps the answer unchanged for the four families whose process runs on the
+	 * document of the event - the native CRM entity create/edit nodes, the field change of an entity and the
+	 * file creation on the disk: the published type is the right answer for them, so they declare no channel.
+	 *
+	 * @param array $activityProperties Properties of the node being asked about, as the template carries them.
+	 */
+	public function getConditionDocumentTypeForNode(string $activityType, array $activityProperties): ?array
+	{
+		if ($activityType === '' || !$this->searcher->isTriggerActivity($activityType))
+		{
+			return null;
+		}
+
+		if ($this->resolveConditionDocumentTriggerClass($activityType) === null)
+		{
+			return $this->getPublishedDocumentTypeForNode($activityType, $activityProperties);
+		}
+
+		return $this->resolveDeclaredConditionDocumentType($activityType, $activityProperties);
+	}
+
+	/**
+	 * `FieldName`s of the properties of a node whose values decide the document of its condition, as the class
+	 * declares them ({@see self::CONDITION_DOCUMENT_CHANNEL_METHODS}); empty for a node that declares no channel.
+	 *
+	 * No instance is raised on this path: the answer belongs to the class, and every summand of it is either
+	 * memoized or a lookup the request has already paid for.
+	 */
+	public function getConditionDocumentSourceFieldNames(string $activityType): array
+	{
+		if ($activityType === '' || !$this->searcher->isTriggerActivity($activityType))
+		{
+			return [];
+		}
+
+		if ($this->isTriggerWithoutDocument($activityType))
+		{
+			return [];
+		}
+
+		$className = $this->resolveConditionDocumentTriggerClass($activityType);
+		if ($className === null)
+		{
+			return [];
+		}
+
+		// The detection has passed, so this method is declared by the class itself, public and static.
+		return $className::getConditionDocumentSourceFieldNames();
+	}
+
+	private function resolveDeclaredConditionDocumentType(string $activityType, array $activityProperties): ?array
+	{
+		try
+		{
+			$activity = \CBPActivity::createInstance($activityType, '');
+			if (!self::declaresConditionDocumentChannel($activity))
+			{
+				return null;
+			}
+
+			$activity->initializeFromArray($activityProperties);
+			$documentType = $activity->getConditionDocumentComplexType();
+		}
+		catch (\Throwable)
+		{
+			// Asked while a settings panel is being opened or a template saved: neither surface may break
+			// over a node whose own module answers with something it cannot complete.
+			return null;
+		}
+
+		return self::isComplexDocumentType($documentType) ? array_values($documentType) : null;
+	}
+
+	/**
+	 * Whether a node declares the channel of the condition document
+	 * ({@see self::CONDITION_DOCUMENT_CHANNEL_METHODS}), asked of its class or of an instance of it.
+	 *
+	 * The declaration is read off the methods and not off an interface on purpose, and this is not a tidier
+	 * spelling of the same thing. `implements` is resolved when the class of the node is declared, so a node of
+	 * another module would fatal on every portal where that module is already updated and `bizproc` is not yet -
+	 * on the behaviour of today, at existing templates, before a single call. The detection by name is what lets
+	 * a node of a foreign module declare the channel with no update dependency on `bizproc`, and bringing an
+	 * interface back would bring that fatal back with it.
+	 *
+	 * All three methods or none: a part of the channel is no channel. Visibility and staticness are part of the
+	 * check because both readers call these methods from outside - that is the guarantee the compiler used to
+	 * give here, and nothing else gives it now.
+	 */
+	public static function declaresConditionDocumentChannel(object|string $activity): bool
+	{
+		foreach (self::CONDITION_DOCUMENT_CHANNEL_METHODS as $method => $isStatic)
+		{
+			if (!method_exists($activity, $method))
+			{
+				return false;
+			}
+
+			$declared = new \ReflectionMethod($activity, $method);
+			if (!$declared->isPublic() || $declared->isStatic() !== $isStatic)
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
+	 * Name of the class of a node that declared the channel, null for every other node - including a node
+	 * whose activity file names no class at all.
+	 */
+	private function resolveConditionDocumentTriggerClass(string $activityType): ?string
+	{
+		CBPRuntime::getRuntime()->includeActivityFile($activityType);
+
+		$className = 'CBP' . $activityType;
+		if (!class_exists($className) || !self::declaresConditionDocumentChannel($className))
+		{
+			return null;
+		}
+
+		return $className;
+	}
+
+	/**
+	 * A trigger whose event carries no document ({@see UnifiedPanelDescriptorProvider::getTriggerCodesWithoutDocument()})
+	 * - the very list that withholds the condition block from it.
+	 */
+	private function isTriggerWithoutDocument(string $activityType): bool
+	{
+		$provider = Container::instance()->getUnifiedPanelDescriptorProvider();
+
+		return in_array(
+			$this->searcher->normalizeActivityCode($activityType),
+			$provider->getTriggerCodesWithoutDocument(),
+			true,
+		);
+	}
+
+	/** A complex identifier - a document type, a document id - is three non-empty strings, and nothing else. */
+	public static function isComplexDocumentType(mixed $documentType): bool
+	{
+		if (!is_array($documentType) || count($documentType) !== 3)
+		{
+			return false;
 		}
 
 		foreach ($documentType as $part)
 		{
 			if (!is_string($part) || $part === '')
 			{
-				return null;
+				return false;
 			}
 		}
 
-		return $documentType === Workflow::getComplexType() ? null : array_values($documentType);
+		return true;
 	}
 
 	/**

@@ -434,7 +434,7 @@ class NodeMemberService implements Contract\Service\NodeMemberService
 		if (!$connection->lock($lockName, $timeout))
 		{
 			throw (new DeleteFailedException(
-				'You can\'t remove nodeMember now',
+				Loc::getMessage('HUMANRESOURCES_NODE_MEMBER_SERVICE_CANT_REMOVE_USER_NOW'),
 			));
 		}
 

@@ -3,6 +3,7 @@
 namespace Bitrix\Im\V2;
 
 use Bitrix\Disk\Folder;
+use Bitrix\Disk\Storage;
 use Bitrix\Im\Alias;
 use Bitrix\Im\V2\Analytics\MessageAnalytics;
 use Bitrix\Im\V2\Chat\Background\Background;
@@ -16,9 +17,11 @@ use Bitrix\Im\V2\Entity\User\UserType;
 use Bitrix\Im\V2\Folder\FolderCascadeHandler;
 use Bitrix\Im\V2\Integration\AI\AIHelper;
 use Bitrix\Im\V2\Integration\Call\CallToken;
+use Bitrix\Im\V2\Integration\HumanResources\Structure;
 use Bitrix\Im\Recent;
 use Bitrix\Im\V2\Integration\AI\Restriction;
 use Bitrix\Im\V2\Integration\Socialnetwork\Group;
+use Bitrix\Im\V2\Message\BlocksBuilder\Entity\BlockType;
 use Bitrix\Im\V2\Message\Send\MentionService;
 use Bitrix\Im\V2\Message\Send\PushService;
 use Bitrix\Im\V2\Message\Send\SendingService;
@@ -42,6 +45,7 @@ use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
@@ -185,6 +189,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	private const CHUNK_SIZE = 1000;
 	protected const EXTRANET_CAN_SEE_HISTORY = true;
+	protected const EXTRANET_CAN_SEE_HISTORY_ON_EXPLICIT_ADD = false;
 	protected const MAX_USERS_TO_DISABLE_DELETE_MESSAGE = 50;
 
 	protected array $accessCache = [];
@@ -301,8 +306,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 	protected Background $background;
 	protected TextFieldEnabled $textFieldEnabled;
 
-	protected RecentConfigManager $recentConfigManager;
-
 	protected RelationProvider $relationProvider;
 
 	protected bool $isFilledNonCachedData = false;
@@ -323,7 +326,6 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		}
 
 		$this->messageRegistry = new Registry;
-		$this->recentConfigManager = Main\DI\ServiceLocator::getInstance()->get(RecentConfigManager::class);
 	}
 
 	//region Users
@@ -373,7 +375,12 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return $result;
 		}
 
-		if ($id !== null && ($result->getResult()['IS_CHANGES'] ?? true) === true)
+		if ($id === null && $this->getChatId() !== null)
+		{
+			// The id may have been asked for before the chat existed, and the cache keeps that absence
+			self::cleanCache($this->getChatId());
+		}
+		elseif ($id !== null && ($result->getResult()['IS_CHANGES'] ?? true) === true)
 		{
 			self::cleanCache($id, false);
 		}
@@ -422,7 +429,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public function getRecentSections(): array
 	{
-		return $this->recentConfigManager->getRecentSectionsByChat($this);
+		return ServiceLocator::getInstance()
+			->get(Chat\Type\TypeRegistry::class)
+			->getRecentSectionsMinusExclusions($this->getChatType(), $this->hasParent())
+		;
 	}
 
 	public function getRecentSectionsForGuest(): array
@@ -858,9 +868,16 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return;
 		}
 
+		$skippedFileIds = $this->getFileIdsToSkipTranscription($message);
+
 		/** @var FileItem $file */
 		foreach ($message->getFiles() as $file)
 		{
+			if (isset($skippedFileIds[$file->getId()]))
+			{
+				continue;
+			}
+
 			if ($file->isTranscribable())
 			{
 				$transcribeManager = new Im\V2\Integration\AI\Transcription\TranscribeManager(
@@ -875,6 +892,35 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 				return;
 			}
 		}
+	}
+
+	/**
+	 * Neither the audio block nor the file block has a place for a transcription: they render the file
+	 * themselves and carry no transcription text or button, so recognition of such a file would be paid
+	 * for with nowhere to show the result. The gallery keeps its old behaviour - the block is older than
+	 * these two. A file the message also carries as a plain attachment is transcribed as before: the
+	 * attachment does have a place to show it.
+	 *
+	 * @return array<int, true>
+	 */
+	private function getFileIdsToSkipTranscription(Message $message): array
+	{
+		$builder = $message->getBlocksBuilder();
+		if ($builder === null)
+		{
+			return [];
+		}
+
+		$blockFileIds = array_merge(
+			$builder->getFilesOfType(BlockType::Audio),
+			$builder->getFilesOfType(BlockType::File),
+		);
+		$attachmentFileIds = $message->getParams()->isSet(Message\Params::FILE_ID)
+			? $message->getParams()->get(Message\Params::FILE_ID)->getValue()
+			: []
+		;
+
+		return array_fill_keys(array_diff($blockFileIds, $attachmentFileIds), true);
 	}
 
 	protected function processMessageAnalyticsOnAfterSend(Message $message): void
@@ -943,9 +989,34 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			previewSource: $this->buildCollabPreviewSourcePiggyback($message),
 		);
 
+		$this->markParentMessageAsUpdated($parentChat, $raiseUserIds);
+
 		ServiceLocator::getInstance()->get(AncestorContextSender::class)->send($this, $metaUserIds);
 
 		return new Result();
+	}
+
+	/**
+	 * EVENT-01: a change of a discussion marks its root post as updated, so the delta page brings
+	 * the fresh discussion data along with the post. The context of the record is the parent chat:
+	 * with the discussion itself as context the log filter would drop the event.
+	 *
+	 * @param int[] $raiseUserIds
+	 */
+	protected function markParentMessageAsUpdated(Chat $parentChat, array $raiseUserIds): void
+	{
+		$parentMessageId = $this->getParentMessageId();
+
+		if ($parentMessageId <= 0 || empty($raiseUserIds) || !$parentChat->allowsComments())
+		{
+			return;
+		}
+
+		Sync\Logger::getInstance()->add(
+			new Sync\Event(Sync\Event::ADD_EVENT, Sync\Event::UPDATED_MESSAGE_ENTITY, $parentMessageId),
+			$raiseUserIds,
+			$parentChat
+		);
 	}
 
 	protected function buildCollabPreviewSourcePiggyback(Message $message): ?Im\V2\Recent\PreviewSource\CollabPreviewSourcePiggyback
@@ -1411,7 +1482,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return new Result();
 	}
 
-	public function sendPushUpdateMessage(Message $message): void
+	public function sendPushUpdateMessage(Message $message, bool $compositionUpdated = false): void
 	{
 		return;
 	}
@@ -2295,6 +2366,52 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	public function canHaveChild(Chat $child): bool
 	{
+		// a short circuit, not a rule: the service refuses such a parent on its own, but only past the resolve
+		// of the child type, which this spares along with the lookup of the service itself
+		if (!$this->isExist())
+		{
+			return false;
+		}
+
+		return ServiceLocator::getInstance()
+			->get(Chat\Tree\Relation\TreeRelationService::class)
+			->canHaveChild($this, $child)
+		;
+	}
+
+	/**
+	 * The same question narrowed to the child kind threads are made of. Kept private on purpose:
+	 * admissibility belongs to the parent-child pair, not to the chat, so there is no public reader.
+	 */
+	private function canHaveCommentChild(): bool
+	{
+		// a short circuit, not a rule: the service refuses such a parent on its own, and this spares two
+		// ServiceLocator lookups and the resolve of the comment type on every chat of a list payload
+		if (!$this->isExist())
+		{
+			return false;
+		}
+
+		$commentType = ServiceLocator::getInstance()
+			->get(Chat\Type\TypeRegistry::class)
+			->getByLiteralAndEntity(self::IM_TYPE_COMMENT, null)
+		;
+
+		return ServiceLocator::getInstance()
+			->get(Chat\Tree\Relation\TreeRelationService::class)
+			->canHaveChildOfType($this, $commentType)
+		;
+	}
+
+	/**
+	 * Tells whether messages of this chat can carry discussions.
+	 * Single place that decides the set of thread-capable parents: once the relation registry
+	 * of the chat tree lands, this predicate starts answering wider without changes at call sites.
+	 *
+	 * @return bool
+	 */
+	public function allowsComments(): bool
+	{
 		return false;
 	}
 
@@ -2486,13 +2603,13 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$this->diskFolder = $folder;
 	}
 
-	public function getOrCreateDiskFolder(): ?Folder
+	public function getOrCreateDiskFolder(?Storage $storage = null): ?Folder
 	{
 		$folder = $this->getDiskFolder();
 
 		if ($folder === null)
 		{
-			$folder = $this->createDiskFolder();
+			$folder = $this->createDiskFolder($storage);
 			$this->setDiskFolder($folder);
 		}
 
@@ -2533,9 +2650,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		return $folder;
 	}
 
-	protected function createDiskFolder(): ?Folder
+	protected function createDiskFolder(?Storage $storage = null): ?Folder
 	{
-		$storage = \CIMDisk::GetStorage($this->chatId);
+		$storage ??= \CIMDisk::GetStorage($this->chatId);
 
 		if (!$storage)
 		{
@@ -3156,7 +3273,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			self::MANAGE_RIGHTS_NONE => Loc::getMessage('IM_CHAT_CAN_POST_NONE'),
 			self::MANAGE_RIGHTS_MEMBER => Loc::getMessage('IM_CHAT_CAN_POST_ALL_MSGVER_1'),
 			self::MANAGE_RIGHTS_OWNER => Loc::getMessage('IM_CHAT_CAN_POST_OWNER_MSGVER_1'),
-			self::MANAGE_RIGHTS_MANAGERS => Loc::getMessage('IM_CHAT_CAN_POST_MANAGERS_MSGVER_1')
+			self::MANAGE_RIGHTS_MANAGERS => Loc::getMessage('IM_CHAT_CAN_POST_MANAGERS_MSGVER_2')
 		];
 	}
 
@@ -3513,8 +3630,10 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 
 	protected function createRelation(int $userId, AddUsersConfig $config): Relation
 	{
+		$user = Im\V2\Entity\User\User::getInstance($userId);
 		$hideHistory = $config->hideHistory ?? false;
-		$hideHistory = (!static::EXTRANET_CAN_SEE_HISTORY && Im\V2\Entity\User\User::getInstance($userId)->isExtranet()) ? true : $hideHistory;
+		$hideHistory = (!static::EXTRANET_CAN_SEE_HISTORY && $user->isExtranet()) ? true : $hideHistory;
+		$hideHistory = $this->mustHideHistoryOnExplicitAdd($user, $config) ? true : $hideHistory;
 
 		$relation = new Relation();
 		$relation
@@ -3533,6 +3652,20 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		}
 
 		return $relation;
+	}
+
+	/**
+	 * Members brought in by the org structure sync always see the history: hiding it there would make
+	 * linking a node change what its people can read.
+	 */
+	protected function mustHideHistoryOnExplicitAdd(Im\V2\Entity\User\User $user, AddUsersConfig $config): bool
+	{
+		if (static::EXTRANET_CAN_SEE_HISTORY_ON_EXPLICIT_ADD || $config->reason === Reason::STRUCTURE)
+		{
+			return false;
+		}
+
+		return $user->isExtranet() || $user->isCollaber();
 	}
 
 	protected function getValidUsersToAdd(array $userIds): array
@@ -3583,6 +3716,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$allUserIds = $this->getRelations()->getUserIds();
 
 		$eventPayloads = [];
+		$botSetChanged = false;
 
 		foreach ($usersToAdd as $userId)
 		{
@@ -3610,7 +3744,15 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 					"CHAT_ENTITY_ID" => $this->getEntityId(),
 					"ACCESS_HISTORY" => (int)$relation->getStartCounter() === 0,
 				]);
+
+				$botSetChanged = true;
 			}
+		}
+
+		if ($botSetChanged)
+		{
+			// bot set changed: per-chat command list cache is stale
+			Im\V2\Entity\Command\ChatCommandList::cleanCache((int)$chatId);
 		}
 
 		try
@@ -3664,12 +3806,27 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			return (new Result())->addError(new UserError(UserError::NOT_FOUND));
 		}
 
+		// Whoever asked the structure verifies the answer afterwards, so a caller that asked in batch is
+		// not made to pay for a question per member - see restoreMembersHeldByStructure().
+		$verifyStructureAfterDelete = false;
+
 		if (!$config->skipCheckReason && $userRelation->getReason() !== Reason::DEFAULT)
 		{
-			return (new Result())->addError(new UserError(UserError::DELETE_FROM_STRUCTURE_SYNC));
+			// The mark outlives the membership that created it, so it cannot be the whole answer: keep the
+			// restriction unless the structure states the user is no longer held.
+			$holdsUser = $config->structureHoldsUser ?? (new Structure($this))->holdsUser($userId);
+
+			if ($holdsUser !== false)
+			{
+				return (new Result())->addError(new UserError(UserError::DELETE_FROM_STRUCTURE_SYNC));
+			}
+
+			$verifyStructureAfterDelete = $config->structureHoldsUser === null;
 		}
 
-		if ($this->getAuthorId() === $userId)
+		$deletedAuthorId = $this->getAuthorId() === $userId ? $userId : null;
+
+		if ($deletedAuthorId !== null)
 		{
 			$this->changeAuthor();
 		}
@@ -3677,18 +3834,404 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 		$userRelation->delete();
 		$this->getRelationFacade()?->onAfterRelationDelete($userId);
 
-		$this->processUpdateStateAfterUserDelete($userId, $config)->save();
-		$this->sendPushUserDelete($userId, $relations);
-		$this->sendEventUserDelete($userId);
-		$this->disableUserDeleteMessage($config->skipRecent);
-		$this->sendMessageUserDelete($userId, $config);
-		$this->sendNotificationUserDelete($userId, $config);
+		try
+		{
+			$this->processUpdateStateAfterUserDelete($userId, $config)->save();
+			$this->sendPushUserDelete($userId, $relations);
+			$this->sendEventUserDelete($userId);
+			$this->disableUserDeleteMessage($config->skipRecent);
+			$this->sendMessageUserDelete($userId, $config);
+			$this->sendNotificationUserDelete($userId, $config);
 
-		(new Im\V2\Analytics\ChatAnalytics($this))->addDeleteUser();
+			(new Im\V2\Analytics\ChatAnalytics($this))->addDeleteUser();
 
-		$this->cleanupGuestAfterUserDelete($userId, $config);
+			$this->cleanupGuestAfterUserDelete($userId, $config);
+			$this->onUserDeleteCompleted($userId, $config);
+		}
+		catch (\Throwable $deletionError)
+		{
+			// The relation is gone and the steps above are the ones that tell anyone about it, so the
+			// verification is owed to the deletion that happened, not to the call that reached its end.
+			if ($verifyStructureAfterDelete)
+			{
+				$this->restoreMembersHeldByStructureQuietly([$userId], $deletedAuthorId);
+			}
+
+			throw $deletionError;
+		}
+
+		if ($verifyStructureAfterDelete)
+		{
+			$this->restoreMembersHeldByStructure([$userId], $deletedAuthorId);
+		}
 
 		return new Result();
+	}
+
+	/**
+	 * The last step of a completed deletion, and the place for whatever a chat type does once a member
+	 * has left. It runs before the verification below on purpose: the verification can put the member
+	 * back, and a collab would otherwise take them out of its project while the chat holds them again.
+	 */
+	protected function onUserDeleteCompleted(int $userId, DeleteUserConfig $config): void
+	{
+	}
+
+	/**
+	 * The answer that allowed a deletion was true of the moment it was read, and a change that holds the
+	 * user again right after it starts an addition sync that adds nobody - the user is still in the chat
+	 * at that point. Asking once more after the deletion closes the window from both sides: an earlier
+	 * change is answered here, a later one meets a chat the user has left. An unanswered question
+	 * restores nobody.
+	 *
+	 * The restoration is a write on an answer of a moment too, so verifyRestoredMembers() checks it the
+	 * same way. Both writes belong to the sync, so both are made as the system: in a collab the right to
+	 * exclude a member is not the right to invite them back.
+	 *
+	 * @param list<int> $userIds members deleted on an answer of "not held"
+	 * @param int|null $deletedAuthorId the author among them, if the deletion took the author out
+	 */
+	public function restoreMembersHeldByStructure(array $userIds, ?int $deletedAuthorId = null): void
+	{
+		if (empty($userIds))
+		{
+			return;
+		}
+
+		if ($this->getContext()->getUserId() !== 0)
+		{
+			// On this instance and not on a copy: the verification goes on working with the chat after
+			// both writes, and a copy would answer from a state those writes left behind here.
+			$callerContext = $this->context;
+			$this->setContext((new Context())->setUserId(0));
+
+			try
+			{
+				$this->restoreMembersHeldByStructure($userIds, $deletedAuthorId);
+			}
+			finally
+			{
+				$this->setContext($callerContext);
+			}
+
+			return;
+		}
+
+		$heldAgain = $this->filterHeldByStructure($userIds, true);
+
+		if (empty($heldAgain))
+		{
+			return;
+		}
+
+		try
+		{
+			$restored = $this->addMembersHeldByStructure($heldAgain);
+		}
+		catch (\Throwable $restorationError)
+		{
+			// Relations are saved before everything the addition does about them, so a failure among
+			// those steps leaves members back in the chat with a mark the structure may no longer
+			// justify. What did come back is read from the relations and gets the check it is owed.
+			$this->verifyRestoredMembersQuietly($this->membersOfTheChat($heldAgain), $deletedAuthorId);
+
+			throw $restorationError;
+		}
+
+		$this->verifyRestoredMembers($restored, $deletedAuthorId);
+	}
+
+	/**
+	 * The other half of the verification: what came back is asked about once more, and whoever the
+	 * structure has released since is taken out again - with the author put back first, because the
+	 * deletion handed the chat to a stand-in before any of this.
+	 *
+	 * @param list<int> $restored members the chat did take back
+	 */
+	private function verifyRestoredMembers(array $restored, ?int $deletedAuthorId): void
+	{
+		if (empty($restored))
+		{
+			return;
+		}
+
+		if ($deletedAuthorId !== null)
+		{
+			$this->restoreAuthor($deletedAuthorId);
+		}
+
+		$removedAgain = [];
+		$keptByTheChat = [];
+
+		foreach ($this->filterHeldByStructure($restored, false) as $userId)
+		{
+			// The answer was asked for here, so the removal carries it instead of asking per member.
+			// What verifies it is the question below, asked once for the whole set.
+			$this->deleteUser(
+				$userId,
+				new DeleteUserConfig(withMessage: false, withNotification: false, structureHoldsUser: false),
+			);
+
+			// A removal is a request too: a chat type that cancels it, or narrows it down to other
+			// members, answers with an empty success. Taken for a removal, that would end the recursion
+			// on a member who is still in the chat.
+			if ($this->getRelations()->hasUser($userId, $this->getId()))
+			{
+				$keptByTheChat[] = $userId;
+			}
+			else
+			{
+				$removedAgain[] = $userId;
+			}
+		}
+
+		if (!empty($keptByTheChat))
+		{
+			$this->reportRefusedRemoval($keptByTheChat);
+		}
+
+		$this->restoreMembersHeldByStructure($removedAgain, $deletedAuthorId);
+	}
+
+	/**
+	 * The same check while the restoration that called for it is already failing: its own failure is a
+	 * trace and not an exception, or the caller would hear about the compensation instead of the cause.
+	 */
+	private function verifyRestoredMembersQuietly(array $restored, ?int $deletedAuthorId): void
+	{
+		try
+		{
+			$this->verifyRestoredMembers($restored, $deletedAuthorId);
+		}
+		catch (\Throwable $verificationError)
+		{
+			$this->reportFailedVerification($restored, $verificationError);
+		}
+	}
+
+	/**
+	 * @param list<int> $userIds
+	 * @return list<int> those of them the chat holds a relation for
+	 */
+	private function membersOfTheChat(array $userIds): array
+	{
+		$relations = $this->getRelations();
+
+		return array_values(array_filter(
+			$userIds,
+			fn (int $userId): bool => $relations->hasUser($userId, $this->getId()),
+		));
+	}
+
+	/**
+	 * Adding is a request, not a fact: a chat type can refuse it or narrow it down. Counting a member it
+	 * turned away as restored would be worse than losing them - the check that follows would take out of
+	 * the chat a member who is not in it, and report it as a restoration.
+	 *
+	 * @param list<int> $userIds
+	 * @return list<int> the members the chat did take back
+	 */
+	private function addMembersHeldByStructure(array $userIds): array
+	{
+		$this->addUsers(
+			$userIds,
+			new AddUsersConfig(hideHistory: false, withMessage: false, reason: Reason::STRUCTURE),
+		);
+
+		$restored = $this->membersOfTheChat($userIds);
+		$refused = array_values(array_diff($userIds, $restored));
+
+		if (!empty($refused))
+		{
+			$this->reportRefusedRestoration($refused);
+		}
+
+		return $restored;
+	}
+
+	/**
+	 * The verification of a membership change that already landed, run while the call that made it is
+	 * failing: its own failure is reported and not thrown, or the caller would hear about it instead of
+	 * the cause. Public because the owner of the verification is whoever asked the structure, which on
+	 * the batch path is the caller.
+	 */
+	public function restoreMembersHeldByStructureQuietly(array $userIds, ?int $deletedAuthorId): void
+	{
+		try
+		{
+			$this->restoreMembersHeldByStructure($userIds, $deletedAuthorId);
+		}
+		catch (\Throwable $verificationError)
+		{
+			$this->reportFailedVerification($userIds, $verificationError);
+		}
+	}
+
+	private function reportFailedVerification(array $userIds, \Throwable $error): void
+	{
+		try
+		{
+			$this->writeFailedVerificationWarning($userIds, $error);
+		}
+		catch (\Throwable)
+		{
+			// There is nowhere left to report a broken logger to.
+		}
+	}
+
+	protected function writeFailedVerificationWarning(array $userIds, \Throwable $error): void
+	{
+		(new LoggerFactory())->createById('im.HumanResources.RestoreMembers')?->warning(
+			'The membership the company structure owns was left unverified after a failed change',
+			[
+				'chatId' => (int)$this->getId(),
+				'userIds' => $userIds,
+				'error' => $error->getMessage(),
+			],
+		);
+	}
+
+	/**
+	 * A refusal is the end of the road for such a member: both syncs of the change have run and no event
+	 * is left to notice the gap. The chat cannot overrule the refusal, so it leaves a trace - and the
+	 * trace is diagnostics, so a broken logger must not undo a restoration that did succeed.
+	 *
+	 * @param list<int> $userIds
+	 */
+	private function reportRefusedRestoration(array $userIds): void
+	{
+		try
+		{
+			$this->writeRefusedRestorationWarning($userIds);
+		}
+		catch (\Throwable)
+		{
+			// There is nowhere left to report a broken logger to.
+		}
+	}
+
+	/**
+	 * @param list<int> $userIds
+	 */
+	protected function writeRefusedRestorationWarning(array $userIds): void
+	{
+		(new LoggerFactory())->createById('im.HumanResources.RestoreMembers')?->warning(
+			'The chat refused to take back members the company structure holds',
+			[
+				'chatId' => (int)$this->getId(),
+				'userIds' => $userIds,
+			],
+		);
+	}
+
+	/**
+	 * The mirror of the refusal above: the structure released the member, the chat will not let them go,
+	 * and the sync of that release has run. The mark left behind is harmless now that the deletion
+	 * decides by the structure - and clearing it would put the member out of the structure's reach.
+	 *
+	 * @param list<int> $userIds
+	 */
+	private function reportRefusedRemoval(array $userIds): void
+	{
+		try
+		{
+			$this->writeRefusedRemovalWarning($userIds);
+		}
+		catch (\Throwable)
+		{
+			// There is nowhere left to report a broken logger to.
+		}
+	}
+
+	/**
+	 * @param list<int> $userIds
+	 */
+	protected function writeRefusedRemovalWarning(array $userIds): void
+	{
+		(new LoggerFactory())->createById('im.HumanResources.RestoreMembers')?->warning(
+			'The chat refused to take out members the company structure has released',
+			[
+				'chatId' => (int)$this->getId(),
+				'userIds' => $userIds,
+			],
+		);
+	}
+
+	/**
+	 * A deletion that takes the author out hands the chat to a stand-in, and the restoration returns an
+	 * ordinary member, so a chat whose owner the structure still holds would keep an owner nobody chose.
+	 *
+	 * Only the hand-over is undone, and only while the chat is still where it left it: an owner chosen
+	 * meanwhile - by an owner change, or by the agent that reassigns the chats of a fired employee - is
+	 * a decision of its own. The condition travels with the write because none of those paths locks.
+	 *
+	 * The stand-in keeps the manager flag: nothing here can tell a granted flag from a borrowed one.
+	 */
+	private function restoreAuthor(int $authorId): void
+	{
+		$standInAuthorId = $this->getAuthorId();
+
+		if ($standInAuthorId === $authorId)
+		{
+			return;
+		}
+
+		$relation = $this->getRelations()->getByUserId($authorId, $this->getId());
+
+		if ($relation === null)
+		{
+			return;
+		}
+
+		if (!ChatTable::updateAuthorIdIfUnchanged((int)$this->getId(), (int)$standInAuthorId, $authorId))
+		{
+			return;
+		}
+
+		// The write went by filter, so the update event did not refresh this instance: left looking
+		// unsaved, the field would be written again, and unconditionally, by the next save.
+		$this->onAfterOrmUpdate(['AUTHOR_ID' => $authorId]);
+		$relation->setManager(true);
+		$this->getRelations()->save(true);
+		$this->announceRestoredAuthor($authorId);
+	}
+
+	/**
+	 * The chat has an owner again and nothing has said so yet: both pushes are formed before this point
+	 * - the addition even names the stand-in as the owner - and neither save announces a field. So the
+	 * field goes out as a field, and the role event the way the owner change of the module sends it.
+	 */
+	private function announceRestoredAuthor(int $authorId): void
+	{
+		(new Im\V2\Pull\Event\ChatFieldsUpdate($this, ['ownerId' => $authorId]))->send();
+
+		(new Main\Event('im', 'OnChangeUserRoles', [
+			'chatId' => $this->getChatId(),
+			'userIds' => [$authorId],
+			'role' => self::ROLE_OWNER,
+		]))->send();
+	}
+
+	/**
+	 * The users the structure answered $expected about. Only an explicit answer counts on either side:
+	 * unknown neither restores anybody nor takes anybody back out.
+	 *
+	 * @param list<int> $userIds
+	 * @return list<int>
+	 */
+	private function filterHeldByStructure(array $userIds, bool $expected): array
+	{
+		$matched = [];
+
+		foreach ((new Structure($this))->holdsUsers($userIds) as $userId => $holdsUser)
+		{
+			if ($holdsUser === $expected)
+			{
+				$matched[] = $userId;
+			}
+		}
+
+		return $matched;
 	}
 
 	/**
@@ -3914,6 +4457,9 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 				"CHAT_ENTITY_TYPE" => $this->getEntityType(),
 				"CHAT_ENTITY_ID" => $this->getEntityId(),
 			]);
+
+			// bot set changed: per-chat command list cache is stale
+			Im\V2\Entity\Command\ChatCommandList::cleanCache((int)$this->getId());
 		}
 
 		if (!empty($this->getEntityType()))
@@ -4163,6 +4709,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'isNew' => $this->isNew(),
 			'textFieldEnabled' => $this->getTextFieldEnabled()->get(),
 			'backgroundId' => $this->getBackground()->get(),
+			'canHaveThreads' => $this->canHaveCommentChild(),
 		];
 
 		if ($option['CHAT_WITH_DATE_MESSAGE'] ?? false)
@@ -4226,6 +4773,7 @@ abstract class Chat implements RegistryEntry, ActiveRecord, RestEntity, PopupDat
 			'textFieldEnabled' => $this->getTextFieldEnabled()->get(),
 			'backgroundId' => $this->getBackground()->get(),
 			'guestCount' => $this->containsGuest() ? (new GuestCounter($this))->getGuestCount() : 0,
+			'canHaveThreads' => $this->canHaveCommentChild(),
 		];
 	}
 

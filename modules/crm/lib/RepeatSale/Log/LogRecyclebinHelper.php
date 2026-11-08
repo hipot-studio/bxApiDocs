@@ -33,6 +33,7 @@ final class LogRecyclebinHelper
 
 	public function restore(int $newEntityId, array $logItem): AddResult
 	{
+		unset($logItem['ID']);
 		$logItem['ENTITY_ID'] = $newEntityId;
 		$logItem['CREATED_AT'] = (new DateTime($logItem['CREATED_AT']))->disableUserTime();
 

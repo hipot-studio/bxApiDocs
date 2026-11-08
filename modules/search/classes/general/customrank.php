@@ -3,7 +3,7 @@ IncludeModuleLangFile(__FILE__);
 
 class CSearchCustomRank
 {
-	var $LAST_ERROR = '';
+	public $LAST_ERROR = '';
 
 	public static function GetList($aSort = [], $aFilter = [])
 	{
@@ -14,7 +14,7 @@ class CSearchCustomRank
 		{
 			$val = $DB->ForSql($val);
 			$key = mb_strtoupper($key);
-			if ($val == '')
+			if ($val === '')
 			{
 				continue;
 			}
@@ -35,7 +35,7 @@ class CSearchCustomRank
 		$arOrder = [];
 		foreach ($aSort as $key => $val)
 		{
-			$ord = (mb_strtoupper($val) <> 'ASC' ? 'DESC' : 'ASC');
+			$ord = (mb_strtoupper($val) !== 'ASC' ? 'DESC' : 'ASC');
 			$key = mb_strtoupper($key);
 			switch ($key)
 			{
@@ -111,20 +111,20 @@ class CSearchCustomRank
 		return $DB->Query('DELETE FROM b_search_custom_rank WHERE ID=' . $ID);
 	}
 
-	function CheckFields($arFields)
+	public function CheckFields($arFields)
 	{
 		$this->LAST_ERROR = '';
 
-		if (is_set($arFields, 'SITE_ID') && $arFields['SITE_ID'] == '')
+		if (is_set($arFields, 'SITE_ID') && $arFields['SITE_ID'] === '')
 		{
 			$this->LAST_ERROR .= GetMessage('customrank_error_site') . '<br>';
 		}
-		if (is_set($arFields, 'MODULE_ID') && $arFields['MODULE_ID'] == '')
+		if (is_set($arFields, 'MODULE_ID') && $arFields['MODULE_ID'] === '')
 		{
 			$this->LAST_ERROR .= GetMessage('customrank_error_module') . '<br>';
 		}
 
-		if ($this->LAST_ERROR <> '')
+		if ($this->LAST_ERROR !== '')
 		{
 			return false;
 		}
@@ -134,7 +134,7 @@ class CSearchCustomRank
 		}
 	}
 
-	function Add($arFields)
+	public function Add($arFields)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 
@@ -146,7 +146,7 @@ class CSearchCustomRank
 		return $DB->Add('b_search_custom_rank', $arFields);
 	}
 
-	function Update($ID, $arFields)
+	public function Update($ID, $arFields)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$ID = intval($ID);
@@ -159,16 +159,16 @@ class CSearchCustomRank
 		unset($arFields['ID']);
 
 		$strUpdate = $DB->PrepareUpdate('b_search_custom_rank', $arFields);
-		if ($strUpdate != '')
+		if ($strUpdate)
 		{
-			$strSql =
-				'UPDATE b_search_custom_rank SET ' . $strUpdate . ' ' . 'WHERE ID=' . $ID;
+			$strSql = 'UPDATE b_search_custom_rank SET ' . $strUpdate . ' ' . 'WHERE ID=' . $ID;
+
 			return $DB->Query($strSql);
 		}
 		return true;
 	}
 
-	function StartUpdate()
+	public function StartUpdate()
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		$strSql = "
@@ -188,11 +188,11 @@ class CSearchCustomRank
 		return $rs;
 	}
 
-	function NextUpdate()
+	public function NextUpdate()
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 
-		$rs = $this->GetList(
+		$rs = static::GetList(
 			[
 				'SITE_ID' => 'ASC',
 				'MODULE_ID' => 'ASC',
@@ -214,17 +214,17 @@ class CSearchCustomRank
 					SELECT *
 					FROM b_search_content_site scs
 					WHERE scs.SEARCH_CONTENT_ID = b_search_content.ID
-					AND scs.SITE_ID = '" . $DB->ForSQL($ar['SITE_ID']) . "'
+					AND scs.SITE_ID = '" . $DB->ForSql($ar['SITE_ID']) . "'
 				)
-				AND MODULE_ID='" . $DB->ForSQL($ar['MODULE_ID']) . "'
-				" . ($ar['PARAM1'] != '' ? "AND PARAM1='" . $DB->ForSQL($ar['PARAM1']) . "'" : '') . '
-				' . ($ar['PARAM2'] != '' ? "AND PARAM2='" . $DB->ForSQL($ar['PARAM2']) . "'" : '') . '
-				' . ($ar['ITEM_ID'] != '' ? "AND ITEM_ID='" . $DB->ForSQL($ar['ITEM_ID']) . "'" : '') . '
+				AND MODULE_ID='" . $DB->ForSql($ar['MODULE_ID']) . "'
+				" . ($ar['PARAM1'] != '' ? "AND PARAM1='" . $DB->ForSql($ar['PARAM1']) . "'" : '') . '
+				' . ($ar['PARAM2'] != '' ? "AND PARAM2='" . $DB->ForSql($ar['PARAM2']) . "'" : '') . '
+				' . ($ar['ITEM_ID'] != '' ? "AND ITEM_ID='" . $DB->ForSql($ar['ITEM_ID']) . "'" : '') . '
 			';
 			$upd = $DB->Query($strSql);
 			if ($upd)
 			{
-				$upd = $this->Update($ar['ID'], ['APPLIED' => 'Y']);
+				$this->Update($ar['ID'], ['APPLIED' => 'Y']);
 			}
 			else
 			{
@@ -232,7 +232,7 @@ class CSearchCustomRank
 			}
 		}
 
-		if ($this->LAST_ERROR == '')
+		if ($this->LAST_ERROR === '')
 		{
 			$res = ['DONE' => 0, 'TODO' => 0];
 			$strSql = '
@@ -243,11 +243,11 @@ class CSearchCustomRank
 			$rs = $DB->Query($strSql);
 			while ($ar = $rs->Fetch())
 			{
-				if ($ar['APPLIED'] == 'Y')
+				if ($ar['APPLIED'] === 'Y')
 				{
 					$res['DONE'] = $ar['C'];
 				}
-				elseif ($ar['APPLIED'] == 'N')
+				elseif ($ar['APPLIED'] === 'N')
 				{
 					$res['TODO'] = $ar['C'];
 				}
@@ -305,7 +305,7 @@ class CSearchCustomRank
 				$rs = CForumTopic::GetByID($param2);
 				if (is_array($rs))
 				{
-					$name = htmlspecialcharsex($rs['TITLE']);
+					$name = htmlspecialcharsEx($rs['TITLE']);
 				}
 			}
 			elseif ($param1 !== false)
@@ -313,7 +313,7 @@ class CSearchCustomRank
 				$rs = CForumNew::GetByID($param1);
 				if (is_array($rs))
 				{
-					$name = htmlspecialcharsex($rs['NAME']);
+					$name = htmlspecialcharsEx($rs['NAME']);
 				}
 			}
 			else
@@ -356,19 +356,19 @@ class CSearchCustomRank
 	public static function ModulesSelectBox($sFieldName, $sValue, $sDefaultValue = '', $sFuncName = '', $field = 'class="typeselect"')
 	{
 		$s = '<select name="' . $sFieldName . '" id="' . $sFieldName . '" ' . $field;
-		if ($sFuncName <> '')
+		if ($sFuncName !== '')
 		{
 			$s .= ' OnChange="' . $sFuncName . '"';
 		}
 		$s .= '>' . "\n";
 
-		$s1 = '<option value="main"' . ($sValue == 'main' ? ' selected' : '') . '>' . GetMessage('customrank_files') . '</option>' . "\n";
+		$s1 = '<option value="main"' . ($sValue === 'main' ? ' selected' : '') . '>' . GetMessage('customrank_files') . '</option>' . "\n";
 		foreach (CSearchParameters::GetModulesList() as $module_id => $module_name)
 		{
-			$s1 .= '<option value="' . $module_id . '"' . ($sValue == $module_id ? ' selected' : '') . '>' . htmlspecialcharsEx($module_name) . '</option>' . "\n";
+			$s1 .= '<option value="' . $module_id . '"' . ($sValue === $module_id ? ' selected' : '') . '>' . htmlspecialcharsEx($module_name) . '</option>' . "\n";
 		}
 
-		if ($sDefaultValue <> '')
+		if ($sDefaultValue)
 		{
 			$s .= "<option value='NOT_REF'>" . htmlspecialcharsEx($sDefaultValue) . '</option>';
 		}

@@ -10,6 +10,7 @@ use Bitrix\Im\V2\Common\ContextCustomer;
 use Bitrix\Im\V2\Common\FieldAccessImplementation;
 use Bitrix\Im\V2\Common\RegistryEntryImplementation;
 use Bitrix\Im\V2\Error;
+use Bitrix\Im\V2\Folder\Definition\FolderDefinition;
 use Bitrix\Im\V2\Folder\Error\FolderError;
 use Bitrix\Im\V2\RegistryEntry;
 use Bitrix\Im\V2\Result;
@@ -169,6 +170,18 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 		return $this;
 	}
 
+	/** Top-level folder attribute: whether the folder is shown as a tab/panel entry. */
+	public function isVisible(): bool
+	{
+		return true;
+	}
+
+	/** Top-level folder attribute: optional subtitle. */
+	public function getDescription(): ?string
+	{
+		return null;
+	}
+
 	public function displaysNestedInRoot(): bool
 	{
 		return false;
@@ -179,6 +192,11 @@ abstract class BaseFolder implements ArrayAccess, Folder, RegistryEntry
 		return $this->getParentId() === 0 && $this->displaysNestedInRoot()
 			? null
 			: $this->getParentId();
+	}
+
+	public function getSearchDefinition(): FolderDefinition
+	{
+		return $this->getDefinition();
 	}
 
 	/**

@@ -11,6 +11,7 @@ use Bitrix\Crm\V2\Internal\Service\Item\CustomFieldRegistry;
 use Bitrix\Crm\V2\Internal\Service\Item\FieldDescriptor;
 use Bitrix\Crm\V2\Internal\Service\Item\FieldRegistry;
 use Bitrix\Crm\V2\Internal\Service\Item\FieldType;
+use Bitrix\Crm\V2\Internal\Service\Item\LegacyFieldNameResolver;
 use Bitrix\Crm\V2\Public\Entity\File;
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Crm\V2\Public\ItemId;
@@ -52,7 +53,7 @@ class ItemFieldMapper
 				continue;
 			}
 
-			self::setLegacyFieldValue($legacyItem, $descriptor, $value);
+			self::setLegacyFieldValue($legacyItem, $descriptor, $value, $registry);
 		}
 
 		self::copyCustomFieldsToLegacy($v2Item, $legacyItem);
@@ -112,8 +113,44 @@ class ItemFieldMapper
 			}
 
 			$value = self::getV2FieldValue($v2Item, $descriptor);
-			self::setLegacyFieldValue($legacyItem, $descriptor, $value);
+			self::setLegacyFieldValue($legacyItem, $descriptor, $value, $registry);
 		}
+	}
+
+	/**
+	 * Finds a field that the item writes but its target category disables.
+	 *
+	 * The category is applied only to a clone: mapping must not partially change the real item before
+	 * the command is refused. UTM and multifields use several legacy field names, so their check has
+	 * to use the same legacy representation as the write mapper.
+	 */
+	public static function findChangedFieldDisabledInCategory(Item $v2Item, LegacyItem $legacyItem): ?string
+	{
+		$registry = FieldRegistry::getInstance($v2Item->getEntityType());
+		$categoryItem = clone $legacyItem;
+		$categoryDescriptor = $registry->getField(Item::categoryId);
+		if ($categoryDescriptor !== null && in_array(Item::categoryId, $v2Item->getChangedFieldNames(), true))
+		{
+			$categoryItem->set($categoryDescriptor->ormName, $v2Item->getCategoryId());
+		}
+
+		foreach ($v2Item->getChangedFieldNames() as $fieldName)
+		{
+			if ($fieldName === Item::categoryId)
+			{
+				continue;
+			}
+
+			foreach (LegacyFieldNameResolver::resolve($fieldName, $registry) as $legacyFieldName)
+			{
+				if ($categoryItem->isFieldDisabled($legacyFieldName))
+				{
+					return $fieldName;
+				}
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -125,9 +162,12 @@ class ItemFieldMapper
 	 */
 	public static function syncFromLegacy(LegacyItem $legacyItem, Item $v2Item): void
 	{
+		$registry = FieldRegistry::getInstance($v2Item->getEntityType());
+
 		// Scalar copy (shared with {@see syncFromOrm()}).
 		self::copyScalarFields(
 			$v2Item,
+			$registry,
 			fn(string $ormName): bool => $legacyItem->hasField($ormName),
 			fn(string $ormName): mixed => $legacyItem->get($ormName),
 		);
@@ -135,12 +175,11 @@ class ItemFieldMapper
 		// Multifields are not on the legacy row directly — they live inside the FM bag and
 		// need per-type extraction. Reverse conversion of ProductRow/Bindings is intentionally
 		// skipped (handled by Loaders on the read path; not needed on the write-back path).
-		$registry = FieldRegistry::getInstance($v2Item->getEntityType());
 		foreach ($registry->getFields() as $descriptor)
 		{
 			if ($descriptor->type === FieldType::MultifieldCollection)
 			{
-				$value = self::extractMultifieldFromLegacy($legacyItem, $descriptor->name);
+				$value = self::extractMultifieldFromLegacy($legacyItem, $descriptor->name, $registry);
 				if ($value !== null)
 				{
 					$v2Item->internalSet($descriptor->name, $value);
@@ -181,23 +220,31 @@ class ItemFieldMapper
 	 *
 	 * @param EntityObject $eo Result of {@see DataManager::getByPrimary()->fetchObject()} or similar.
 	 * @param Item $item Target V2 Item (must match $eo's entity type).
+	 * @param FieldRegistry $registry Registry of $item's entity type. Resolved by the caller once
+	 *                                per read and reused for the whole batch of items.
 	 * @param ?array $selectedOrmFields If non-null, only fields whose ORM name is in this list are
 	 *                                  copied. Pass the same select that was used to query $eo.
 	 *                                  Pass null — or a list containing `'*'` — to copy every
 	 *                                  Registry field that the EO actually has.
 	 */
-	public static function syncFromOrm(EntityObject $eo, Item $item, ?array $selectedOrmFields = null): void
+	public static function syncFromOrm(
+		EntityObject $eo,
+		Item $item,
+		FieldRegistry $registry,
+		?array $selectedOrmFields = null,
+	): void
 	{
-		$selectFilter = ($selectedOrmFields === null || in_array('*', $selectedOrmFields, true))
+		$selectedOrmNames = ($selectedOrmFields === null || in_array('*', $selectedOrmFields, true))
 			? null
-			: array_flip($selectedOrmFields)
+			: $selectedOrmFields
 		;
 
 		self::copyScalarFields(
 			$item,
+			$registry,
 			fn(string $ormName): bool => $eo->entity->hasField($ormName),
 			fn(string $ormName): mixed => $eo->get($ormName),
-			$selectFilter,
+			$selectedOrmNames,
 		);
 	}
 
@@ -212,16 +259,16 @@ class ItemFieldMapper
 	 * name the type does not declare as a UF at all.
 	 *
 	 * @param string[] $ufNames raw `UF_*` names to hydrate (already resolved against the entity type)
+	 * @param array<string, CustomFieldDescriptor> $descriptors descriptor map of the entity type,
+	 *        resolved by the caller once per read and reused for the whole batch of items
 	 */
-	public static function syncCustomFieldsFromOrm(EntityObject $eo, Item $item, array $ufNames): void
+	public static function syncCustomFieldsFromOrm(
+		EntityObject $eo,
+		Item $item,
+		array $ufNames,
+		array $descriptors,
+	): void
 	{
-		if (empty($ufNames))
-		{
-			return;
-		}
-
-		$descriptors = CustomFieldRegistry::getInstance()->getEntityDescriptorsMap($item->getEntityType());
-
 		foreach ($ufNames as $ufName)
 		{
 			$descriptor = $descriptors[$ufName] ?? null;
@@ -340,55 +387,61 @@ class ItemFieldMapper
 	}
 
 	/**
-	 * Walk every {@see FieldRegistry} entry on $target's type and copy scalar values from a
-	 * source addressed via two callbacks. Skips:
+	 * Copy scalar values onto $target, walking the columns the caller asked for and taking each
+	 * descriptor from the registry's reverse index ({@see FieldRegistry::getScalarFieldsByOrmName()}).
+	 * The cost follows the size of the select, not the field count of the entity type. A null
+	 * `$selectedOrmNames` means "every scalar of the type": the index is then walked whole.
 	 *
-	 *   - relation collections (multifields/productRows/bindings) and Utm — loaded separately;
-	 *   - fields the source doesn't have ({@see EntityObject::entity}'s schema / legacy field map);
-	 *   - fields not in the optional `$selectFilter` (a flipped ORM-name set; null ⇒ no filter).
+	 * Skips:
+	 *
+	 *   - columns the type has no scalar field for: `UF_*` names, `PARENT_ID_*` and columns added
+	 *     for the permission check all travel in the same select. Relation collections
+	 *     (multifields/productRows/bindings) and Utm are not in the index at all - they are loaded
+	 *     separately and can never be copied here;
+	 *   - fields the source doesn't have ({@see EntityObject::entity}'s schema / legacy field map):
+	 *     the registry is filtered by the ORM schema, but a source object can still carry less.
 	 *
 	 * @param callable(string $ormName): bool  $hasField
 	 * @param callable(string $ormName): mixed $getValue
-	 * @param array<string, mixed>|null        $selectFilter `array_flip`'d allowed ORM names, or null for "all".
+	 * @param string[]|null                    $selectedOrmNames requested ORM columns, or null for "all".
 	 */
 	private static function copyScalarFields(
 		Item $target,
+		FieldRegistry $registry,
 		callable $hasField,
 		callable $getValue,
-		?array $selectFilter = null,
+		?array $selectedOrmNames = null,
 	): void
 	{
-		$registry = FieldRegistry::getInstance($target->getEntityType());
+		$scalarFields = $registry->getScalarFieldsByOrmName();
 
-		foreach ($registry->getFields() as $descriptor)
+		// "Every scalar" walks the index directly: no key list to allocate and no lookup to do,
+		// the descriptor comes with the key.
+		if ($selectedOrmNames === null)
 		{
-			if (in_array(
-				$descriptor->type,
-				[
-					FieldType::MultifieldCollection,
-					FieldType::ProductRowCollection,
-					FieldType::ContactBindingCollection,
-					FieldType::CompanyBindingCollection,
-					FieldType::ObserverCollection,
-					FieldType::Utm,
-				],
-				true,
-			))
+			foreach ($scalarFields as $ormName => $descriptor)
+			{
+				if (!$hasField($ormName))
+				{
+					continue;
+				}
+
+				$value = self::castOrmValueToFieldType($getValue($ormName), $descriptor->type);
+				$target->internalSet($descriptor->name, $value);
+			}
+
+			return;
+		}
+
+		foreach ($selectedOrmNames as $ormName)
+		{
+			$descriptor = $scalarFields[$ormName] ?? null;
+			if ($descriptor === null || !$hasField($ormName))
 			{
 				continue;
 			}
 
-			if ($selectFilter !== null && !isset($selectFilter[$descriptor->ormName]))
-			{
-				continue;
-			}
-
-			if (!$hasField($descriptor->ormName))
-			{
-				continue;
-			}
-
-			$value = self::castOrmValueToFieldType($getValue($descriptor->ormName), $descriptor->type);
+			$value = self::castOrmValueToFieldType($getValue($ormName), $descriptor->type);
 			$target->internalSet($descriptor->name, $value);
 		}
 	}
@@ -460,16 +513,13 @@ class ItemFieldMapper
 	/**
 	 * Extract multifield collection of specific type from legacy Item's FM field.
 	 */
-	private static function extractMultifieldFromLegacy(LegacyItem $legacyItem, string $fieldName): mixed
+	private static function extractMultifieldFromLegacy(
+		LegacyItem $legacyItem,
+		string $fieldName,
+		FieldRegistry $registry,
+	): mixed
 	{
-		$typeId = match ($fieldName)
-		{
-			'phones' => 'PHONE',
-			'emails' => 'EMAIL',
-			'webs' => 'WEB',
-			'ims' => 'IM',
-			default => null,
-		};
+		$typeId = LegacyFieldNameResolver::resolve($fieldName, $registry)[0] ?? null;
 
 		if ($typeId === null)
 		{
@@ -549,7 +599,12 @@ class ItemFieldMapper
 	/**
 	 * Set a field value on legacy Item.
 	 */
-	private static function setLegacyFieldValue(LegacyItem $legacyItem, FieldDescriptor $descriptor, mixed $value): void
+	private static function setLegacyFieldValue(
+		LegacyItem $legacyItem,
+		FieldDescriptor $descriptor,
+		mixed $value,
+		FieldRegistry $registry,
+	): void
 	{
 		if ($descriptor->type === FieldType::ContactBindingCollection)
 		{
@@ -575,7 +630,7 @@ class ItemFieldMapper
 
 		if ($descriptor->type === FieldType::MultifieldCollection)
 		{
-			self::applyMultifieldToLegacy($legacyItem, $descriptor->name, $value);
+			self::applyMultifieldToLegacy($legacyItem, $descriptor->name, $value, $registry);
 
 			return;
 		}
@@ -848,21 +903,19 @@ class ItemFieldMapper
 	 * Apply a V2 multifield collection to legacy Item's FM field.
 	 * phones/emails/webs/ims all map to the single FM field with different type IDs.
 	 */
-	private static function applyMultifieldToLegacy(LegacyItem $legacyItem, string $fieldName, ?\Bitrix\Main\Entity\EntityCollection $collection): void
+	private static function applyMultifieldToLegacy(
+		LegacyItem $legacyItem,
+		string $fieldName,
+		?\Bitrix\Main\Entity\EntityCollection $collection,
+		FieldRegistry $registry,
+	): void
 	{
 		if ($collection === null)
 		{
 			return;
 		}
 
-		$typeId = match ($fieldName)
-		{
-			'phones' => 'PHONE',
-			'emails' => 'EMAIL',
-			'webs' => 'WEB',
-			'ims' => 'IM',
-			default => null,
-		};
+		$typeId = LegacyFieldNameResolver::resolve($fieldName, $registry)[0] ?? null;
 
 		if ($typeId === null)
 		{

@@ -18,6 +18,8 @@ use Bitrix\Main\File\Image\Rectangle;
 use Bitrix\Main\File\Internal;
 use Bitrix\Main\ORM\Query;
 use Bitrix\Main\Security;
+use Bitrix\Main\Type\Callback;
+use Bitrix\Main\Web\Http\Etag;
 use Bitrix\Main\Web\Http\Range;
 use Bitrix\Main\Application;
 use Bitrix\Main\FileTable;
@@ -3095,7 +3097,8 @@ function ImgShw(ID, width, height, alt)
 			{
 				//Handle ETag
 				$ETag = md5($filename . $filesize . $filetime);
-				if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && $_SERVER['HTTP_IF_NONE_MATCH'] === $ETag)
+				$ifNoneMatch = $_SERVER['HTTP_IF_NONE_MATCH'] ?? null;
+				if (Etag::matches($ifNoneMatch, $ETag))
 				{
 					$response
 						->setStatus("304 Not Modified")
@@ -3106,13 +3109,14 @@ function ImgShw(ID, width, height, alt)
 					static::terminate();
 				}
 
-				$response->addHeader("ETag", $ETag);
+				$response->addHeader("ETag", Etag::quote($ETag));
 
 				//Handle Last Modified
 				if ($filetime > 0)
 				{
 					$lastModified = gmdate('D, d M Y H:i:s', $filetime) . ' GMT';
-					if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) && $_SERVER['HTTP_IF_MODIFIED_SINCE'] === $lastModified)
+					// If-Modified-Since is evaluated only without If-None-Match (RFC 7232, section 6)
+					if ($ifNoneMatch === null && ($_SERVER['HTTP_IF_MODIFIED_SINCE'] ?? null) === $lastModified)
 					{
 						$response
 							->setStatus("304 Not Modified")
@@ -3435,7 +3439,7 @@ function ImgShw(ID, width, height, alt)
 		return false;
 	}
 
-	public static function DeleteHashAgent()
+	public static function DeleteHashAgent(): ?Callback
 	{
 		global $DB;
 
@@ -3457,10 +3461,10 @@ function ImgShw(ID, width, height, alt)
 		{
 			$DB->Query("DELETE FROM b_file_hash WHERE FILE_ID IN (" . implode(',', $delete) . ")");
 
-			return __METHOD__ . '();';
+			return new Callback([self::class, __FUNCTION__]);
 		}
 
-		return '';
+		return null;
 	}
 }
 

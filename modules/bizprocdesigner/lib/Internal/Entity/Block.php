@@ -17,8 +17,8 @@ final class Block implements EntityInterface, Arrayable
 		public NodeType $type = NodeType::Simple,
 		public int $x = 0,
 		public int $y = 0,
-		public int $width = 0,
-		public int $height = 0,
+		public ?int $width = null,
+		public ?int $height = null,
 		public string $title = '',
 		public string $icon = '',
 		public PortCollection $ports = new PortCollection(),
@@ -53,8 +53,8 @@ final class Block implements EntityInterface, Arrayable
 			$type,
 			(int)($data['position']['x'] ?? 0),
 			(int)($data['position']['y'] ?? 0),
-			(int)($data['dimensions']['width'] ?? 0),
-			(int)($data['dimensions']['height'] ?? 0),
+			self::readDimension($data['dimensions']['width'] ?? null),
+			self::readDimension($data['dimensions']['height'] ?? null),
 			(string)($data['node']['title'] ?? ''),
 			(string)($data['node']['icon'] ?? ''),
 			(new PortCollection())->fill($data['ports']),
@@ -63,6 +63,11 @@ final class Block implements EntityInterface, Arrayable
 			is_int($contentBlockColor) ? $contentBlockColor : null,
 			$frameData,
 		);
+	}
+
+	private static function readDimension(mixed $value): ?int
+	{
+		return $value === null ? null : (int)$value;
 	}
 
 	public function toArray(): array

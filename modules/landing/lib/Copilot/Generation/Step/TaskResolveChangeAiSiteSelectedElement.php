@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Bitrix\Landing\Copilot\Generation\Step;
 
 use Bitrix\Landing\Copilot\Generation\GenerationException;
+use Bitrix\Landing\Copilot\Generation\Log;
 use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteState;
 use Bitrix\Landing\Copilot\Generation\Step\Base\TaskStep;
 use Bitrix\Landing\Copilot\Generation\Step\Helper\ChangeAiSiteDomHelper;
@@ -192,7 +193,27 @@ class TaskResolveChangeAiSiteSelectedElement extends TaskStep
 			'reason' => $reason,
 			'detail' => $detail,
 		]);
+		$this->logSelectionFailure($reason, $message, $detail);
 
 		throw new GenerationException(GenerationErrors::dataValidation, $message);
+	}
+
+	/**
+	 * Keeps the service codes and the full technical message in the internal diagnostic channel: the
+	 * user-facing text is worded from the codes by ChangeAiSiteSelectedElementErrorMessages, so the log
+	 * is the only place they stay readable for support.
+	 */
+	private function logSelectionFailure(string $reason, string $message, string $detail): void
+	{
+		if (!Log::isEnabled())
+		{
+			return;
+		}
+
+		(new Log($this->generation->getId()))->add(
+			'ChangeAiSite selected element resolve failed: ' . $reason
+			. ($detail === '' ? '' : ' (' . $detail . ')')
+			. ': ' . $message,
+		);
 	}
 }

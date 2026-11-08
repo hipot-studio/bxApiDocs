@@ -72,6 +72,8 @@ class MakeTaskRecurringDto
 
 	public static function fromArray(array $props): self
 	{
+		$userId = static::mapInteger($props, 'userId');
+
 		return new static(
 			taskId: static::mapInteger($props, 'taskId'),
 			workdayOnly: static::mapBool($props, 'workdayOnly') ?? false,
@@ -93,9 +95,9 @@ class MakeTaskRecurringDto
 			yearlyWeekDay: static::mapInteger($props, 'yearlyWeekDay') ?? 0,
 			yearlyMonth2: static::mapInteger($props, 'yearlyMonth2') ?? 0,
 			time: static::mapString($props, 'time') ?? ReplicateParams::DEFAULT_TIME,
-			startDate: static::mapFormattedDateTime($props, 'startDate'),
+			startDate: static::mapFormattedDateTime($props, 'startDate', $userId),
 			repeatTill: static::mapBackedEnum($props, 'repeatTill', RepeatTill::class) ?? RepeatTill::ENDLESS,
-			endDate: static::mapFormattedDateTime($props, 'endDate'),
+			endDate: static::mapFormattedDateTime($props, 'endDate', $userId),
 			times: static::mapInteger($props, 'times') ?? 0,
 		);
 	}

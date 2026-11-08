@@ -119,6 +119,14 @@ class Cloud extends BaseReceiver implements IdempotentReplayable
 			return ['result' => true];
 		}
 
+		// Claim-before-send on the (callId, CLOUD_RECORD_PREPARE) key: the DB check above is
+		// not atomic under concurrent recordingPrepare callbacks. A loser acks the duplicate
+		// as an idempotent success, exactly like the DB-hit branch above.
+		if (!NotifyService::getInstance()->claim($call->getId(), NotifyService::MESSAGE_TYPE_CLOUD_RECORD_PREPARE))
+		{
+			return ['result' => true];
+		}
+
 		$message = CallChatMessage::makeCloudRecordPrepareMessage($call, $chat);
 
 		$sendingConfig = (new SendingConfig())

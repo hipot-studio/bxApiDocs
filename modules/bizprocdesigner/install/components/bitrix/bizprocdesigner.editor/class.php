@@ -6,13 +6,17 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 }
 
 use Bitrix\BizprocDesigner\Infrastructure\Enum\StartTrigger;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\CopilotOptionsService;
+use Bitrix\BizprocDesigner\Internal\Integration\Main\Service\HotkeysOptionsService;
 
 use Bitrix\Bizproc\Activity\Enum\ActivityType;
 use Bitrix\Bizproc\Api;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Internal\Service\Feature\BpDesignerFeature;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Errorable;
 use Bitrix\Main\ErrorableImplementation;
 use Bitrix\Main\ErrorCollection;
@@ -53,6 +57,11 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 		)
 		? (string)$_REQUEST['back_url']
 		: null;
+
+		// TPL-02: only a positive integer note identifier travels further, never a request string.
+		$requestedNoteId = $_REQUEST['noteId'] ?? null;
+		$noteId = is_scalar($requestedNoteId) ? (int)$requestedNoteId : 0;
+		$params['NOTE_ID'] = $noteId > 0 ? $noteId : null;
 
 		if (!isset($params['MODULE_ID'], $params['ENTITY'], $params['DOCUMENT_TYPE']))
 		{
@@ -100,9 +109,19 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 			$this->fillStartTrigger($this->arParams['START_TRIGGER']);
 		}
 
-		$user = new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser);
+		$templateId = (int)($this->arParams['ID'] ?? 0);
+		$documentType = [
+			$this->arParams['MODULE_ID'] ?? '',
+			$this->arParams['ENTITY'] ?? '',
+			$this->arParams['DOCUMENT_TYPE'] ?? '',
+		];
 
-		if (!$user->isAdmin())
+		$accessService = new TemplateAccessService();
+		$canEdit = $templateId > 0
+			? $accessService->canEdit($templateId, null, $documentType)
+			: $accessService->canCreate(null, $documentType);
+
+		if (!$canEdit)
 		{
 			$this->arResult['ERROR_TITLE'] = Loc::getMessage('BIZPROCDESIGNER_EDITOR_ACCESS_RIGHTS_ERROR_TITLE') ?? '';
 			$this->arResult['ERROR_SUBTITLE'] = Loc::getMessage('BIZPROCDESIGNER_EDITOR_ACCESS_RIGHTS_ERROR_SUBTITLE') ?? '';
@@ -117,14 +136,28 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 			$this->fillLegacyModeResult();
 		}
 
-		$this->arResult['templateId'] = (int)($this->arParams['ID'] ?? 0);
-		$this->arResult['documentType'] = \CBPHelper::normalizeComplexDocumentId(
-			[
-				$this->arParams['MODULE_ID'] ?? '',
-				$this->arParams['ENTITY'] ?? '',
-				$this->arParams['DOCUMENT_TYPE'] ?? '',
-			],
+		// A node action is not part of ALL_NODES — that list holds nodes, activities and triggers — so its
+		// renderer.js would never reach the page, and a FieldType::CUSTOM control of such an action would
+		// have nothing to draw it. Collected apart, for script loading only: the legacy activity list the
+		// template publishes as arAllActivities stays as it was.
+		$this->arResult['NODE_ACTIONS'] = $this->getNodeActions($documentType);
+
+		$this->arResult['templateId'] = $templateId;
+		$this->arResult['documentType'] = \CBPHelper::normalizeComplexDocumentId($documentType);
+		// DTO-02: editability flags consumed by the chart editor (JS).
+		$this->arResult['canEdit'] = $canEdit;
+		$this->arResult['canPublish'] = $accessService->canPublish($templateId, null, $documentType);
+		// CFG-01: null means the description editor shows no AI button; so does an unresolved user.
+		$currentUserId = (int)CurrentUser::get()->getId();
+		$this->arResult['initCopilotOptions'] = (new CopilotOptionsService())->resolveOptions(
+			$currentUserId > 0 ? $currentUserId : null,
+			$templateId,
 		);
+		// DTO-01: the raw personal option; the frontend drops whatever it cannot vouch for.
+		$this->arResult['initHotkeys'] = (new HotkeysOptionsService())->resolveBindings($currentUserId);
+		// TPL-02: the note the interface focuses on right after the template opens. Existence is not
+		// checked here: a completed note is a normal case, and the interface reports it as unavailable.
+		$this->arResult['noteId'] = $this->arParams['NOTE_ID'] ?? null;
 
 		$this->includeComponentTemplate();
 	}
@@ -153,6 +186,18 @@ class BizprocdesignerEditorComponent extends \CBitrixComponent implements Errora
 				->searchByType([ActivityType::NODE->value, ActivityType::ACTIVITY->value, ActivityType::TRIGGER->value], $documentType)
 				->computeDescriptionFilter($documentType)
 				->sort()
+		;
+	}
+
+	private function getNodeActions(array $documentType): \Bitrix\Bizproc\Runtime\ActivitySearcher\Activities
+	{
+		/** @var Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher $activitySearcher */
+		$activitySearcher = ServiceLocator::getInstance()->get('bizproc.runtime.activitysearcher.searcher');
+
+		return $activitySearcher
+			->searchByType([ActivityType::NODE_ACTION->value], $documentType)
+			->computeDescriptionFilter($documentType)
+			->sort()
 		;
 	}
 

@@ -9,12 +9,17 @@ use Bitrix\Intranet\Internal\Enum\Otp\PromoteMode;
 use Bitrix\Intranet\Internal\Integration\Security\OtpSettings;
 use Bitrix\Intranet\Internal\Integration\Security\PersonalOtp;
 use Bitrix\Intranet\Internal\Integration\Vibecodeconnector\PermissionSource as VibecodePermissionSource;
+use Bitrix\Intranet\Internal\Repository\MandatoryOtpAuditRepository;
+use Bitrix\Intranet\Internal\Service\Otp\MandatoryOtpPolicy;
+use Bitrix\Intranet\Internal\Service\Otp\MandatoryPeriodProvider;
 use Bitrix\Intranet\Internal\Service\Otp\MobilePush;
+use Bitrix\Intranet\Internal\Service\Otp\OtpEmailFromService;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Intranet\Service\MobileAppSettings;
 use Bitrix\Intranet\Settings\Controls\Section;
 use Bitrix\Intranet\Settings\Controls\Selector;
 use Bitrix\Intranet\Settings\Controls\Switcher;
+use Bitrix\Intranet\Settings\Controls\Text;
 use Bitrix\Intranet\Settings\Search\SearchEngine;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\DI\ServiceLocator;
@@ -31,6 +36,8 @@ use Bitrix\Intranet\Integration;
 class SecuritySettings extends AbstractSettings
 {
 	public const TYPE = 'security';
+	private const OTP_EMAIL_FROM_FIELD = 'SECURITY_OTP_EMAIL_FROM';
+	private const OTP_EMAIL_FROM_VISIBILITY_OPTION = 'allow_show_change_2fa_email_send';
 
 	private bool $isCloud;
 	private array $deviceHistoryDays;
@@ -40,6 +47,10 @@ class SecuritySettings extends AbstractSettings
 	private ?PersonalOtp $personalOtp;
 	private Integration\Rest\AccessPolicy $integrationAccessPolicy;
 	private VibecodePermissionSource $vibecodePermissionSource;
+	private MandatoryOtpPolicy $mandatoryOtpPolicy;
+	private MandatoryPeriodProvider $mandatoryPeriodProvider;
+	private MandatoryOtpAuditRepository $mandatoryOtpAuditRepository;
+	private UserRepository $userRepository;
 
 	public function __construct(array $data = [])
 	{
@@ -61,10 +72,14 @@ class SecuritySettings extends AbstractSettings
 		}
 		$this->mobileAppService = ServiceLocator::getInstance()->get('intranet.option.mobile_app');
 		$this->otpSettings = new OtpSettings();
-		$this->user = (new UserRepository())->getUserById((int)CurrentUser::get()->getId());
+		$this->userRepository = new UserRepository();
+		$this->user = $this->userRepository->getUserById((int)CurrentUser::get()->getId());
 		$this->personalOtp = ($this->user && $this->otpSettings->isAvailable()) ? new PersonalOtp($this->user) : null;
 		$this->integrationAccessPolicy = new Integration\Rest\AccessPolicy();
 		$this->vibecodePermissionSource = new VibecodePermissionSource();
+		$this->mandatoryOtpPolicy = new MandatoryOtpPolicy();
+		$this->mandatoryPeriodProvider = new MandatoryPeriodProvider($this->otpSettings);
+		$this->mandatoryOtpAuditRepository = new MandatoryOtpAuditRepository();
 	}
 
 	public function validate(): ErrorCollection
@@ -74,6 +89,38 @@ class SecuritySettings extends AbstractSettings
 		if (!Loader::includeModule('security'))
 		{
 			$errors->setError(new Error(Loc::getMessage('INTRANET_SETTINGS_SECURITY_MODULE_ERROR')));
+		}
+
+		if (
+			array_key_exists('SECURITY_OTP_DAYS', $this->data)
+			&& $this->mandatoryOtpPolicy->isMandatorySettingShownOnPortal()
+			&& !$this->mandatoryPeriodProvider->isAllowedRawPeriod($this->data['SECURITY_OTP_DAYS'])
+		)
+		{
+			$errors->setError(new Error(
+				Loc::getMessage('INTRANET_SETTINGS_SECURITY_WRONG_OTP_DAYS_ERROR'),
+				0,
+				[
+					'page' => $this->getType(),
+					'field' => 'SECURITY_OTP_DAYS',
+				]),
+			);
+		}
+
+		if (
+			$this->isOtpEmailFromSettingAvailable()
+			&& array_key_exists(self::OTP_EMAIL_FROM_FIELD, $this->data)
+			&& !$this->isOtpEmailFromValid($this->data[self::OTP_EMAIL_FROM_FIELD])
+		)
+		{
+			$errors->setError(new Error(
+				Loc::getMessage('INTRANET_SETTINGS_SECURITY_OTP_EMAIL_FROM_ERROR'),
+				0,
+				[
+					'page' => $this->getType(),
+					'field' => self::OTP_EMAIL_FROM_FIELD,
+				],
+			));
 		}
 
 		foreach ($this->data as $inputName => $ipStringList)
@@ -132,14 +179,35 @@ class SecuritySettings extends AbstractSettings
 
 	public function save(): Result
 	{
+		$result = new Result();
+		$ipAccessRightsResult = $this->saveIpAccessRights();
+		if (!$ipAccessRightsResult->isSuccess())
+		{
+			foreach ($ipAccessRightsResult->getErrors() as $error)
+			{
+				$result->addError(new Error(
+					$error->getMessage(),
+					$error->getCode(),
+					[
+						'page' => $this->getType(),
+						'field' => 'SECURITY_IP_ACCESS_1_IP',
+					],
+				));
+			}
+		}
+
+		$this->saveIndependentSettings();
+
+		return $result;
+	}
+
+	protected function saveIndependentSettings(): void
+	{
 		$this->saveOtpSettings();
-		$this->saveIpAccessRights();
 		$this->saveDeviceHistorySettings();
 		$this->saveDataLeakProtectionSettings();
 		$this->saveRestIntegrationSettings();
 		$this->saveVibecodePermissionSource();
-
-		return new Result();
 	}
 
 	public function get(): SettingsInterface
@@ -174,25 +242,22 @@ class SecuritySettings extends AbstractSettings
 			}
 			$data['SECURITY_PUSH_OTP_PROVIDE_HIGH'] = $mobilePushOtp->getPromoteMode() === PromoteMode::High;
 
-			if (!$data['SECURITY_PUSH_OTP_PROVIDE_HIGH'])
+			if ($this->mandatoryOtpPolicy->isMandatorySettingShownOnPortal())
 			{
 				$data['SECURITY_OTP'] = $otpData['SECURITY_OTP'];
-				$data['SECURITY_OTP_DAYS'] = [];
+				$data['SECURITY_OTP_DAYS'] = [
+					'CURRENT' => true,
+					'ITEMS' => $this->mandatoryPeriodProvider->getList(),
+				];
 
-				for ($i = 5; $i <= 10; $i++)
+				if (!$data['SECURITY_OTP'])
 				{
-					$current = $i === $otpData['SECURITY_OTP_DAYS'];
+					$disabledBy = $this->getMandatoryOtpDisabledBy();
 
-					if ($current)
+					if ($disabledBy !== null)
 					{
-						$data['SECURITY_OTP_DAYS']['CURRENT'] = true;
+						$data['SECURITY_OTP_DISABLED_BY'] = $disabledBy;
 					}
-
-					$data['SECURITY_OTP_DAYS']['ITEMS'][] = [
-						'value' => $i,
-						'name' => FormatDate('ddiff', time() - 60 * 60 * 24 * $i),
-						'selected' => $current,
-					];
 				}
 			}
 		}
@@ -203,7 +268,7 @@ class SecuritySettings extends AbstractSettings
 
 		if ($data['IP_ACCESS_RIGHTS_ENABLED'])
 		{
-			$data['IP_ACCESS_RIGHTS'] = $this->getIpAccessRights();
+			$data['IP_ACCESS_RIGHTS'] = $this->getIpAccessRights(Rights::getInstance());
 		}
 
 		$data['DEVICE_HISTORY_SETTINGS'] = $this->getDeviceHistorySettings();
@@ -233,6 +298,23 @@ class SecuritySettings extends AbstractSettings
 				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SECURITY_OTP_MSGVER_1'),
 				$otpData['SECURITY_OTP'] ? 'Y' : 'N',
 			);
+
+			$data['fieldAllowSkipDeviceConnect'] = new Switcher(
+				'settings-security-field-allow-skip-device-connect',
+				'ALLOW_SKIP_DEVICE_CONNECT',
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_SKIP_DEVICE_CONNECT'),
+				Option::get('intranet', 'allow_skip_device_connect', 'Y'),
+			);
+
+			if ($this->isOtpEmailFromSettingAvailable())
+			{
+				$data['fieldSecurityOtpEmailFrom'] = new Text(
+					'settings-security-field-otp-email-from',
+					self::OTP_EMAIL_FROM_FIELD,
+					Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SECURITY_OTP_EMAIL_FROM'),
+					Option::get('intranet', OtpEmailFromService::OPTION_NAME, ''),
+				);
+			}
 		}
 
 
@@ -415,6 +497,26 @@ class SecuritySettings extends AbstractSettings
 		return $result;
 	}
 
+	/**
+	 * @return array{USER_NAME: string, DATE: string}|null
+	 */
+	private function getMandatoryOtpDisabledBy(): ?array
+	{
+		$record = $this->mandatoryOtpAuditRepository->getLastDisabling();
+
+		if ($record === null)
+		{
+			return null;
+		}
+
+		$user = $this->userRepository->getUserById($record['userId']);
+
+		return [
+			'USER_NAME' => $user?->getFormattedName(useLogin: true, useHtmlSpec: false) ?? '',
+			'DATE' => ConvertTimeStamp($record['timestamp'], 'FULL'),
+		];
+	}
+
 	private function getDeviceHistorySettings(): Selector
 	{
 		$deviseHistoryDaysEnabled = (
@@ -445,7 +547,7 @@ class SecuritySettings extends AbstractSettings
 		);
 	}
 
-	private function saveDeviceHistorySettings(): void
+	protected function saveDeviceHistorySettings(): void
 	{
 		global $USER;
 
@@ -463,7 +565,7 @@ class SecuritySettings extends AbstractSettings
 		}
 	}
 
-	private function saveDataLeakProtectionSettings(): void
+	protected function saveDataLeakProtectionSettings(): void
 	{
 		if (isset($this->data['disable_copy_screenshot']))
 		{
@@ -504,32 +606,56 @@ class SecuritySettings extends AbstractSettings
 		}
 	}
 
-	private function saveOtpSettings(): void
+	protected function saveOtpSettings(): void
 	{
-		if (MobilePush::createByDefault()->getPromoteMode() === PromoteMode::High)
+		if (isset($this->data['ALLOW_SKIP_DEVICE_CONNECT']))
+		{
+			Option::set(
+				'intranet',
+				'allow_skip_device_connect',
+				$this->data['ALLOW_SKIP_DEVICE_CONNECT'] === 'Y' ? 'Y' : 'N',
+			);
+		}
+
+		if ($this->isOtpEmailFromSettingAvailable())
+		{
+			$normalizedEmailFrom = $this->normalizeOtpEmailFrom($this->data[self::OTP_EMAIL_FROM_FIELD] ?? null);
+			if (
+				$normalizedEmailFrom !== null
+				&& Option::get('intranet', OtpEmailFromService::OPTION_NAME, '') !== $normalizedEmailFrom
+			)
+			{
+				Option::set('intranet', OtpEmailFromService::OPTION_NAME, $normalizedEmailFrom);
+			}
+		}
+
+		if (!$this->mandatoryOtpPolicy->isMandatorySettingShownOnPortal())
 		{
 			return;
 		}
 
-		$isMandatory = isset($this->data['SECURITY_OTP']) && $this->data['SECURITY_OTP'] === 'Y';
-
-		if ($this->personalOtp->isActivated())
+		if (array_key_exists('SECURITY_OTP', $this->data))
 		{
-			$this->otpSettings->setMandatoryUsing($isMandatory);
-		}
+			$isMandatory = $this->data['SECURITY_OTP'] === 'Y';
 
-		if ($isMandatory && !$this->otpSettings->isDefaultTypePush() && $this->personalOtp?->isPushType())
-		{
-			$this->otpSettings->setDefaultType(Security\Mfa\OtpType::Push);
+			if (!$isMandatory || $this->personalOtp?->isActivated())
+			{
+				$this->otpSettings->setMandatoryUsing($isMandatory);
+			}
+
+			if ($isMandatory && !$this->otpSettings->isDefaultTypePush() && $this->personalOtp?->isPushType())
+			{
+				$this->otpSettings->setDefaultType(Security\Mfa\OtpType::Push);
+			}
 		}
 
 		if (isset($this->data['SECURITY_OTP_DAYS']))
 		{
-			$numDays = (int)$this->data['SECURITY_OTP_DAYS'];
+			$rawDays = $this->data['SECURITY_OTP_DAYS'];
 
-			if ($numDays > 0)
+			if ($this->mandatoryPeriodProvider->isAllowedRawPeriod($rawDays))
 			{
-				$this->otpSettings->setSkipMandatoryDays($numDays);
+				$this->otpSettings->setSkipMandatoryDays((int)$rawDays);
 			}
 		}
 
@@ -543,11 +669,26 @@ class SecuritySettings extends AbstractSettings
 		}
 	}
 
-	private function getIpAccessRights(): array
+	private function isOtpEmailFromSettingAvailable(): bool
+	{
+		return Option::get('intranet', self::OTP_EMAIL_FROM_VISIBILITY_OPTION, 'N') === 'Y';
+	}
+
+	private function isOtpEmailFromValid(mixed $otpEmailFrom): bool
+	{
+		return $this->normalizeOtpEmailFrom($otpEmailFrom) !== null;
+	}
+
+	private function normalizeOtpEmailFrom(mixed $value): ?string
+	{
+		return is_string($value) ? OtpEmailFromService::normalize($value) : null;
+	}
+
+	private function getIpAccessRights(Rights $rights): array
 	{
 		$result = [];
 
-		$ipRights = Rights::getInstance()->getIpAccessRights();
+		$ipRights = $rights->getIpAccessRights();
 
 		if (!empty($ipRights))
 		{
@@ -584,7 +725,7 @@ class SecuritySettings extends AbstractSettings
 		return $result;
 	}
 
-	private function saveVibecodePermissionSource(): void
+	protected function saveVibecodePermissionSource(): void
 	{
 		if (!isset($this->data['vibecode_permission_source']) || !$this->vibecodePermissionSource->isAvailable())
 		{
@@ -594,83 +735,85 @@ class SecuritySettings extends AbstractSettings
 		$this->vibecodePermissionSource->setVibecodeSource($this->data['vibecode_permission_source'] === 'Y');
 	}
 
-	private function saveRestIntegrationSettings(): void
+	protected function saveRestIntegrationSettings(): void
 	{
 		if ($this->integrationAccessPolicy->isIncomingWebhookAccessPolicyEnabled())
 		{
 			$this->integrationAccessPolicy->setIncomingWebhookCreatorGroupList(
-				$this->data['rest_incoming_webhook_create_own_rights'] ?? []
+				$this->data['rest_incoming_webhook_create_own_rights'] ?? [],
 			);
 
 			if ($this->integrationAccessPolicy->isLocalAppAccessPolicyEnabled())
 			{
 				$this->integrationAccessPolicy->setLocalAppCreatorGroupList(
-					$this->data['rest_local_app_create_rights'] ?? []
+					$this->data['rest_local_app_create_rights'] ?? [],
 				);
 				$this->integrationAccessPolicy->setPersonalAppCreatorGroupList(
-					$this->data['rest_personal_app_create_rights'] ?? []
+					$this->data['rest_personal_app_create_rights'] ?? [],
 				);
 			}
 		}
 	}
 
-	private function saveIpAccessRights(): void
+	protected function saveIpAccessRights(): Result
 	{
-		if ($this->isCloud && Feature::isFeatureEnabled('ip_access_rights'))
+		if (!$this->isCloud || !Feature::isFeatureEnabled('ip_access_rights'))
 		{
-			$userRightList = [];
-			$ipRightList = [];
-
-			foreach ($this->data as $key => $value)
-			{
-				if (mb_strpos($key, 'SECURITY_IP_ACCESS_') !== false)
-				{
-					$right = str_replace('SECURITY_IP_ACCESS_', '', $key);
-
-					if (mb_strpos($key, '_USERS') !== false)
-					{
-						$right = str_replace('_USERS', '', $right);
-						$userRightList[$right] = $value;
-					}
-					elseif (mb_strpos($key, '_IP') !== false)
-					{
-						$right = str_replace('_IP', '', $right);
-						$ipRightList[$right] = $value;
-					}
-				}
-			}
-
-			$ipSettings = [];
-
-			foreach ($ipRightList as $right => $ipListString)
-			{
-				if (array_key_exists($right, $userRightList) && is_array($userRightList[$right]))
-				{
-					$ipList = array_map('trim', explode(',', $ipListString));
-
-					foreach ($userRightList[$right] as $user)
-					{
-						if (!is_string($user) || empty($user))
-						{
-							continue;
-						}
-
-						$user = $this->normalizeIpAccessRight($user);
-
-						if (empty($ipSettings[$user]))
-						{
-							$ipSettings[$user] = $ipList;
-						}
-						else
-						{
-							$ipSettings[$user] = array_unique(array_merge($ipSettings[$user], $ipList));
-						}
-					}
-				}
-			}
-
-			Rights::getInstance()->saveIpAccessRights($ipSettings);
+			return new Result();
 		}
+
+		$userRightList = [];
+		$ipRightList = [];
+
+		foreach ($this->data as $key => $value)
+		{
+			if (mb_strpos($key, 'SECURITY_IP_ACCESS_') !== false)
+			{
+				$right = str_replace('SECURITY_IP_ACCESS_', '', $key);
+
+				if (mb_strpos($key, '_USERS') !== false)
+				{
+					$right = str_replace('_USERS', '', $right);
+					$userRightList[$right] = $value;
+				}
+				elseif (mb_strpos($key, '_IP') !== false)
+				{
+					$right = str_replace('_IP', '', $right);
+					$ipRightList[$right] = $value;
+				}
+			}
+		}
+
+		$ipSettings = [];
+
+		foreach ($ipRightList as $right => $ipListString)
+		{
+			if (array_key_exists($right, $userRightList) && is_array($userRightList[$right]))
+			{
+				$ipList = array_map('trim', explode(',', $ipListString));
+
+				foreach ($userRightList[$right] as $user)
+				{
+					if (!is_string($user) || empty($user))
+					{
+						continue;
+					}
+
+					$user = $this->normalizeIpAccessRight($user);
+
+					if (empty($ipSettings[$user]))
+					{
+						$ipSettings[$user] = $ipList;
+					}
+					else
+					{
+						$ipSettings[$user] = array_unique(array_merge($ipSettings[$user], $ipList));
+					}
+				}
+			}
+		}
+
+		return Rights::getInstance()->saveIpAccessRights($ipSettings);
 	}
 
 	private function normalizeIpAccessRight(string $accessCode): string

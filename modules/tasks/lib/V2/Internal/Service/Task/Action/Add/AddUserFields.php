@@ -10,7 +10,7 @@ use Bitrix\Tasks\V2\Internal\Entity\UF\UserField;
 use Bitrix\Tasks\V2\Internal\Integration\CRM\Repository\CrmItemRepositoryInterface;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Add\Trait\ConfigTrait;
 use Bitrix\Tasks\V2\Internal\Service\Trait\UserFieldTrait;
-use CBPHelper;
+use Stringable;
 
 class AddUserFields
 {
@@ -34,29 +34,46 @@ class AddUserFields
 			if (
 				!array_key_exists($key, $userFields)
 				|| array_key_exists($key, UserField::TASK_SYSTEM_USER_FIELDS)
-				|| $userFields[$key]['USER_TYPE_ID'] !== 'boolean'
 			)
 			{
 				continue;
 			}
 
-			if (is_bool($value))
+			$userField = $userFields[$key];
+
+			if ($userField['USER_TYPE_ID'] === 'boolean')
 			{
-				$fields[$key] = $value;
+				if (is_bool($value))
+				{
+					$fields[$key] = $value;
+
+					continue;
+				}
+
+				$fields[$key] = $this->normalizeBooleanUserFieldValue($value);
 
 				continue;
 			}
 
-			if (is_string($value) && mb_strtolower($value) === 'y')
+			if (
+				$userField['USER_TYPE_ID'] === 'string'
+				&& $userField['MULTIPLE'] !== 'Y'
+				&& is_array($value)
+			)
 			{
-				$value = true;
-			}
-			else
-			{
-				$value = false;
-			}
+				$normalizedValue = $this->normalizeSingleStringUserFieldValue($value);
 
-			$fields[$key] = $value;
+				if ($normalizedValue === null)
+				{
+					unset($fields[$key]);
+
+					continue;
+				}
+
+				$fields[$key] = $normalizedValue;
+
+				continue;
+			}
 		}
 
 		$userId = $this->config->getCheckUserFields() ? $this->config->getUserId() : 0;
@@ -65,5 +82,53 @@ class AddUserFields
 		Container::getInstance()->get(CrmItemRepositoryInterface::class)->invalidate($taskId);
 
 		return $result;
+	}
+
+	private function normalizeBooleanUserFieldValue(mixed $value): bool
+	{
+		return $value === true
+			|| $value === 1
+			|| $value === '1'
+			|| $value === 'y'
+			|| $value === 'Y';
+	}
+
+	private function normalizeSingleStringUserFieldValue(array $value): ?string
+	{
+		$values = [];
+		$this->collectStringUserFieldValues($value, $values);
+		$normalizedValue = implode(', ', $values);
+
+		if ($normalizedValue === '')
+		{
+			return null;
+		}
+
+		return $normalizedValue;
+	}
+
+	private function collectStringUserFieldValues(array $values, array &$result): void
+	{
+		foreach ($values as $value)
+		{
+			if (is_array($value))
+			{
+				$this->collectStringUserFieldValues($value, $result);
+
+				continue;
+			}
+
+			if (
+				!is_scalar($value)
+				&& !$value instanceof Stringable
+			)
+			{
+				$result[] = '';
+
+				continue;
+			}
+
+			$result[] = (string)$value;
+		}
 	}
 }

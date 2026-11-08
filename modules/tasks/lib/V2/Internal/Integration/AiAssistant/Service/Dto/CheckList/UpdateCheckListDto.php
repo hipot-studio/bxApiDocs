@@ -13,9 +13,10 @@ class UpdateCheckListDto
 
 	public function __construct(
 		#[PositiveNumber]
-		public readonly ?int $checkListId  = null,
+		public readonly ?int $checkListId = null,
 		public readonly ?string $title = null,
 		public readonly ?int $sortIndex = null,
+		public readonly ?bool $isComplete = null,
 	)
 	{
 	}
@@ -26,6 +27,7 @@ class UpdateCheckListDto
 			checkListId: static::mapInteger($props, 'checkListId'),
 			title: static::mapString($props, 'title'),
 			sortIndex: static::mapInteger($props, 'sortIndex'),
+			isComplete: static::mapBool($props, 'isComplete'),
 		);
 	}
 
@@ -34,6 +36,7 @@ class UpdateCheckListDto
 		return
 			$this->title === null
 			&& $this->sortIndex === null
+			&& $this->isComplete === null
 		;
 	}
 

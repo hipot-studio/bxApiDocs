@@ -8,11 +8,14 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
 use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Service\DocumentField\FieldValueFormatter;
 use Bitrix\Bizproc\Internal\Service\StorageField\FieldService;
+use Bitrix\Bizproc\Public\Feature\DataView\DataViewFlag;
+use Bitrix\Bizproc\Public\Service\TemplateAccessService;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\Public\Provider\StorageItemProvider;
 use Bitrix\Bizproc\Public\Provider\StorageTypeProvider;
 use Bitrix\Bizproc\Public\Provider\Params\StorageItem\StorageItemFilter;
 use Bitrix\Bizproc\Public\Provider\Params\StorageItem\StorageItemSort;
+use Bitrix\Main\Config\Feature;
 use Bitrix\Main\Provider\Params\GridParams;
 use Bitrix\Main\Provider\Params\Pager;
 use Bitrix\Main\Loader;
@@ -55,7 +58,7 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 		if (!$this->storageTypeId)
 		{
 			$this->errorCollection[] = new \Bitrix\Main\Error(
-				Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_NO_STORAGE_TYPE_ID')
+				Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_NO_STORAGE_TYPE_ID'),
 			);
 
 			return;
@@ -64,13 +67,14 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 		if (!Loader::includeModule('bizproc'))
 		{
 			$this->errorCollection->setError(new \Bitrix\Main\Error(
-				Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_MODULE_NOT_INSTALLED')
+				Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_MODULE_NOT_INSTALLED'),
 			));
 
 			return;
 		}
 
-		if (!(new CBPWorkflowTemplateUser(\CBPWorkflowTemplateUser::CurrentUser))->isAdmin())
+		$accessService = new TemplateAccessService();
+		if (!$accessService->canAccessTemplates() || !$accessService->canEditStorage($this->storageTypeId))
 		{
 			$this->errorCollection->setError(ErrorMessage::ACCESS_DENIED->getError());
 
@@ -81,7 +85,7 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 		if (!$this->storageTypeProvider->exists($this->storageTypeId))
 		{
 			$this->errorCollection[] = new \Bitrix\Main\Error(
-				Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_NO_STORAGE_TYPE_ID')
+				Loc::getMessage('BIZPROC_STORAGE_ITEM_LIST_NO_STORAGE_TYPE_ID'),
 			);
 
 			return;
@@ -95,7 +99,7 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 
 	protected function resolveIsDataView(): bool
 	{
-		if (\Bitrix\Main\Config\Option::get('bizproc', 'dataview_enabled', 'N') !== 'Y')
+		if (!Feature::isEnabled(DataViewFlag::class))
 		{
 			return false;
 		}
@@ -137,11 +141,11 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 						[
 							'text' => Loc::getMessage('BIZPROC_STORAGE_ITEM_STORAGE_DELETE') ?? '',
 							'onclick' => new \Bitrix\UI\Buttons\JsCode(
-								'BX.Bizproc.Component.StorageItemList.removeStorage(' . $this->storageTypeId . ');'
-							)
+								'BX.Bizproc.Component.StorageItemList.removeStorage(' . $this->storageTypeId . ');',
+							),
 						],
 					],
-				]
+				],
 			);
 			Toolbar::addButton($settingsMenu, ButtonLocation::RIGHT);
 		}
@@ -242,15 +246,14 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 			'CREATED_BY' => htmlspecialcharsbx($field['createdBy']),
 			'CREATED_TIME' => $field['createdAt'] ? DateTime::createFromTimestamp($field['createdAt']) : null,
 			'UPDATED_BY' => htmlspecialcharsbx($field['updatedBy']),
-			'UPDATED_TIME' => $field['updatedAt'] ? DateTime::createFromTimestamp($field['updatedAt']) : null
+			'UPDATED_TIME' => $field['updatedAt'] ? DateTime::createFromTimestamp($field['updatedAt']) : null,
 		];
 
 		foreach ($this->getFieldValueFormatters() as $code => $formatter)
 		{
 			$formattedValue = array_key_exists($code, $presentedRow)
 				? (string)$presentedRow[$code]
-				: $formatter->format($field[$code] ?? null)
-			;
+				: $formatter->format($field[$code] ?? null);
 
 			$fieldColumns[strtoupper($code)] = htmlspecialcharsbx($formattedValue);
 		}
@@ -316,11 +319,10 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 	{
 		if (!$this->gridId)
 		{
-			$this->gridId =
-				!empty($this->arParams['gridId'])
+			$this->gridId
+				= !empty($this->arParams['gridId'])
 					? $this->arParams['gridId']
-					: 'bizproc-storage-item-list' . $this->storageTypeId
-			;
+					: 'bizproc-storage-item-list' . $this->storageTypeId;
 		}
 
 		return $this->gridId;
@@ -378,7 +380,7 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 		$grid['AJAX_ID'] = \CAjax::GetComponentID(
 			'bitrix:main.ui.grid',
 			'',
-			''
+			'',
 		);
 		$grid['SHOW_PAGESIZE'] = true;
 		$grid['SHOW_SELECTED_COUNTER'] = true;
@@ -389,7 +391,7 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 		$grid['PAGE_SIZES'] = [
 			['NAME' => '10', 'VALUE' => '10'],
 			['NAME' => '20', 'VALUE' => '20'],
-			['NAME' => '50', 'VALUE' => '50']
+			['NAME' => '50', 'VALUE' => '50'],
 		];
 
 		return $grid;
@@ -521,7 +523,7 @@ class BizprocStorageItemListComponent extends CBitrixComponent
 					'SECOND_NAME' => $user['SECOND_NAME'] ?? '',
 				],
 				true,
-				false
+				false,
 			);
 		}
 

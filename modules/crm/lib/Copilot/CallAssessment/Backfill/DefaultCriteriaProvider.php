@@ -6,6 +6,7 @@ namespace Bitrix\Crm\Copilot\CallAssessment\Backfill;
 
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessment;
 use Bitrix\Crm\Copilot\CallAssessment\FillPreliminaryCallAssessments;
+use Bitrix\Crm\Copilot\CallAssessment\HintStateResolver;
 use Bitrix\Main\Localization\Loc;
 
 final class DefaultCriteriaProvider
@@ -76,12 +77,9 @@ final class DefaultCriteriaProvider
 
 	private function isPromptUnchanged(CopilotCallAssessment $callAssessment): bool
 	{
-		$reference = FillPreliminaryCallAssessments::getReferencePromptByCode((string)$callAssessment->getCode());
-		if ($reference === null)
-		{
-			return false;
-		}
-
-		return trim($callAssessment->getPrompt()) === trim($reference);
+		return (new HintStateResolver())->isShippedReference(
+			$callAssessment->getPrompt(),
+			(string)$callAssessment->getCode(),
+		);
 	}
 }

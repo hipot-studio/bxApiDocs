@@ -66,6 +66,18 @@ class Epic extends BaseController
 			return null;
 		}
 
+		if (!Group::can($epic->getGroupId(), Group::ACTION_CREATE_TASKS, $this->userId))
+		{
+			$this->errorCollection->setError(
+				new Error(
+					Loc::getMessage('TASKS_EC_ERROR_ACCESS_DENIED'),
+					self::ERROR_ACCESS_DENIED
+				)
+			);
+
+			return null;
+		}
+
 		$epic->setDescription($post['description'] ?? null);
 		$epic->setCreatedBy($post['createdBy'] ?? $this->userId);
 

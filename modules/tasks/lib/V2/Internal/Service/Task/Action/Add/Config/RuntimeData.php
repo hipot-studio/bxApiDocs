@@ -11,6 +11,7 @@ class RuntimeData
 {
 	private ?Processor\Task\Result $shiftResult;
 	private bool $isCommentAdded;
+	private bool $clientDeadlineProvided;
 	private array $fields;
 	private array $fullTaskData;
 	private TaskObject $task;
@@ -18,10 +19,12 @@ class RuntimeData
 	public function __construct(
 		?Processor\Task\Result $shiftResult = null,
 		bool $isCommentAdded = false,
+		bool $clientDeadlineProvided = false,
 	)
 	{
 		$this->shiftResult = $shiftResult;
 		$this->isCommentAdded = $isCommentAdded;
+		$this->clientDeadlineProvided = $clientDeadlineProvided;
 	}
 
 	public function getShiftResult(): ?Processor\Task\Result
@@ -44,6 +47,24 @@ class RuntimeData
 	public function setIsCommentAdded(bool $isCommentAdded): RuntimeData
 	{
 		$this->isCommentAdded = $isCommentAdded;
+
+		return $this;
+	}
+
+	/**
+	 * Whether the client supplied a deadline itself. Captured before the add
+	 * prepare pipeline may substitute the user's default auto deadline, so the
+	 * onboarding SC-003 counter can tell a manual deadline apart from an
+	 * automatically applied one.
+	 */
+	public function isClientDeadlineProvided(): bool
+	{
+		return $this->clientDeadlineProvided;
+	}
+
+	public function setClientDeadlineProvided(bool $clientDeadlineProvided): RuntimeData
+	{
+		$this->clientDeadlineProvided = $clientDeadlineProvided;
 
 		return $this;
 	}

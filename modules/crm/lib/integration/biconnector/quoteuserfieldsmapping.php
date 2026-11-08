@@ -22,6 +22,7 @@ final class QuoteUserFieldsMapping
 			'TABLE_NAME' => 'b_uts_crm_quote',
 			'TABLE_ALIAS' => 'QUF',
 			'TABLE_DESCRIPTION' =>  Localization::getMessage('CRM_QUOTE_UF_TABLE', $languageId),
+			'TABLE_DESCRIPTION_FULL' => Localization::getMessage('CRM_QUOTE_UF_TABLE_DESCRIPTION_FULL', $languageId) ?? '',
 			'FIELDS' => [
 				'QUOTE_ID' => [
 					'IS_PRIMARY' => 'Y',

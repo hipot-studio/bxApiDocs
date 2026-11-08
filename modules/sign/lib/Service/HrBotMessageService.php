@@ -237,24 +237,24 @@ class HrBotMessageService
 	 * Two independent recipients, each actor-gated: the signing employee and the
 	 * document initiator (createdById - always a live person: the manual initiator
 	 * or the Responsible of a robot/activity/1C launch). The actor is always
-	 * excluded. When the employee equals the initiator, only the employee card is
-	 * sent: the initiator card would be its full duplicate - same recipient, same
-	 * single signing. All arguments are passed explicitly; the method never reads
-	 * "who is in the request".
+	 * excluded. When the employee equals the initiator, only the initiator card is
+	 * sent: the two would be full duplicates - same recipient, same single signing -
+	 * and the initiator card is the one that keeps the link to the signing process,
+	 * which this recipient can open on their own document. All arguments are passed
+	 * explicitly; the method never reads "who is in the request".
 	 */
 	public function handleMemberAnnulled(Document $document, Member $signer, bool $annul, int $actorUserId): Result
 	{
 		$result = new Result();
 
 		$employeeUserId = $this->memberService->getUserIdForMember($signer, $document);
+		$employeeIsInitiator = $employeeUserId !== null && $employeeUserId === $document->createdById;
 
-		$result->addErrors(
-			$this->sendMemberAnnulledToEmployee($document, $signer, $annul, $actorUserId)->getErrors()
-		);
-
-		if ($employeeUserId !== null && $employeeUserId === $document->createdById)
+		if (!$employeeIsInitiator)
 		{
-			return $result;
+			$result->addErrors(
+				$this->sendMemberAnnulledToEmployee($document, $signer, $annul, $actorUserId)->getErrors()
+			);
 		}
 
 		$result->addErrors(
@@ -268,8 +268,11 @@ class HrBotMessageService
 	 * Same as handleMemberAnnulled() for a set of signer records of one document,
 	 * changed by one action: a card per employee plus a single aggregated card to
 	 * the initiator, never one per record. The initiator card reports how many
-	 * signings the action changed. It is dropped when it would duplicate the only
-	 * employee card: one changed signing whose single recipient is the initiator.
+	 * signings the action changed. When the two would duplicate each other - one
+	 * changed signing whose single recipient is the initiator - the employee card
+	 * is the one dropped, so the recipient keeps the card with the link to the
+	 * signing process of their own document. That recipient is known only after the
+	 * loop, so their employee card waits for the decision instead of going out.
 	 *
 	 * The employee fan-out is inherent - every employee has their own chat with the
 	 * bot, so N changed records mean N cards - and it is what makes this delivery
@@ -301,6 +304,7 @@ class HrBotMessageService
 		$link = null;
 		$signerCount = 0;
 		$recipients = [];
+		$initiatorOwnSigners = [];
 
 		foreach ($signers as $signer)
 		{
@@ -319,6 +323,17 @@ class HrBotMessageService
 				if ($recipientId !== null)
 				{
 					$recipients[$recipientId] = true;
+				}
+
+				if ($recipientId !== null && $recipientId === $document->createdById)
+				{
+					// Held back: whether these cards duplicate the aggregated one is
+					// decided below, once the whole set is known. Every record is kept,
+					// not just the first one: one user can hold several signings of the
+					// same document, and each of them is its own card.
+					$initiatorOwnSigners[] = $signer;
+
+					continue;
 				}
 
 				$result->addErrors(
@@ -341,17 +356,39 @@ class HrBotMessageService
 		}
 
 		$soleRecipientId = count($recipients) === 1 ? array_key_first($recipients) : null;
-		if (
+		$heldCardDuplicatesAggregated =
 			$annulledCount === 1
 			&& $soleRecipientId !== null
 			&& $document->createdById !== null
 			&& $soleRecipientId === $document->createdById
-		)
+		;
+
+		if (!$heldCardDuplicatesAggregated)
 		{
-			// The aggregated card would duplicate the only employee card, so the
-			// initiator keeps just that one. A recipient that did not resolve is
-			// not in the set, so the aggregated card still goes out.
-			return $result;
+			// The aggregated card reports other signings too, so the initiator still
+			// needs the personal cards about their own ones.
+			foreach ($initiatorOwnSigners as $heldSigner)
+			{
+				try
+				{
+					$result->addErrors(
+						$this
+							->sendMemberAnnulledToEmployee(
+								$document,
+								$heldSigner,
+								$annul,
+								$actorUserId,
+								$actorName,
+								$link,
+							)
+							->getErrors()
+					);
+				}
+				catch (\Throwable $e)
+				{
+					$result->addError(new Error($e->getMessage()));
+				}
+			}
 		}
 
 		try
@@ -636,7 +673,7 @@ class HrBotMessageService
 		$initiatorUserId = $document->createdById;
 		$initiatorName = $this->memberService->getUserRepresentedName($initiatorUserId);
 
-		return match ($member->role)
+		$message = match ($member->role)
 		{
 			Role::ASSIGNEE => $userIdTo !== $document->createdById
 				? new Im\Messages\InviteToSign\CompanyWithInitiator($userIdFrom, $userIdTo, $initiatorUserId, $initiatorName, $document, $signingLink)
@@ -652,11 +689,15 @@ class HrBotMessageService
 		,
 			Role::SIGNER => match ($providerCode)
 			{
-				ProviderCode::GOS_KEY => new Im\Messages\InviteToSign\Goskey($userIdFrom, $userIdTo, $initiatorUserId, $initiatorName, $document, $signingLink),
-				default => new Im\Messages\InviteToSign\EmployeeSes($userIdFrom, $userIdTo, $initiatorUserId, $initiatorName, $document, $signingLink),
+				ProviderCode::GOS_KEY => new Im\Messages\InviteToSign\Goskey($userIdFrom, $userIdTo, $initiatorUserId, $initiatorName, $document, $signingLink, $document->inviteMessage),
+				default => new Im\Messages\InviteToSign\EmployeeSes($userIdFrom, $userIdTo, $initiatorUserId, $initiatorName, $document, $signingLink, $document->inviteMessage),
 			},
 			default => null,
 		};
+
+		// The card carries the member record it is addressed to, so that the signing domain can find
+		// it again by that key and repaint it once this participant is no longer expected to act.
+		return $message?->setMember($member);
 	}
 
 	/**

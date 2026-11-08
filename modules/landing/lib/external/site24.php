@@ -172,7 +172,7 @@ class Site24
 		));
 
 		$httpClient->setHeader('User-Agent', 'Bitrix24 Sites');
-		if (in_array($license->getRegion(), ['ru', 'by', 'kz', 'uz']))
+		if ($license->isCis())
 		{
 			$answer = $httpClient->post('https://c.bitrix24.ru/pub.php', $params);
 		}

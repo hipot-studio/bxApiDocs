@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item;
 
+use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Attribute\CrmRelation;
 use Bitrix\Crm\StatusTable;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\ItemDto;
 use Bitrix\Crm\V2\Infrastructure\Rest\Dto\Item\Common\Dictionary\DealTypeDto;
@@ -40,11 +41,13 @@ class DealDto extends AbstractItemDto
 	#[InArrayFrom(ItemProvider::class, ['entityTypeId' => OwnerType::QUOTE])]
 	public ?int $quoteId;
 	#[RelationToOne('quoteId', 'id')]
+	#[CrmRelation(OwnerType::QUOTE)]
 	public ?ItemDto $quote;
 	#[Filterable]
 	#[Sortable]
 	public ?int $leadId;
 	#[RelationToOne('leadId', 'id')]
+	#[CrmRelation(OwnerType::LEAD)]
 	public ?ItemDto $lead;
 	#[Filterable]
 	#[Sortable]

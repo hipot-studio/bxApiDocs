@@ -14,10 +14,11 @@ use Bitrix\Rest\V3\Exception\Internal\InternalException;
 use Bitrix\Rest\V3\Exception\Internal\OrmSaveException;
 use Bitrix\Rest\V3\Exception\RestException;
 use Bitrix\Rest\V3\Exception\Validation\RequestValidationException;
-use Bitrix\Vibecodeconnector\Internal\Exception\CatalogItemNotFoundException;
 
 trait CommandRunner
 {
+	use DomainExceptionMapper;
+
 	/**
 	 * @throws AccessDeniedException
 	 * @throws EntityNotFoundException
@@ -38,38 +39,11 @@ trait CommandRunner
 		catch (CommandException $exception)
 		{
 			$previousException = $exception->getPrevious();
+			$mappedException = $previousException === null
+				? null
+				: $this->mapDomainException($previousException);
 
-			if ($previousException instanceof RestException)
-			{
-				throw $previousException;
-			}
-
-			if ($previousException instanceof CatalogItemNotFoundException)
-			{
-				throw new EntityNotFoundException($previousException->catalogItemId);
-			}
-
-			if ($previousException instanceof Main\AccessDeniedException)
-			{
-				throw new AccessDeniedException($previousException);
-			}
-
-			if ($previousException instanceof Main\ArgumentException)
-			{
-				throw new RequestValidationException([
-					new Main\Error(
-						$previousException->getMessage(),
-						$previousException->getParameter() !== '' ? (string)$previousException->getParameter() : null,
-					),
-				]);
-			}
-
-			if ($previousException instanceof Main\Repository\Exception\PersistenceException)
-			{
-				throw new OrmSaveException($previousException);
-			}
-
-			throw new InternalException($exception);
+			throw $mappedException ?? new InternalException($exception);
 		}
 
 		if (!$result->isSuccess())

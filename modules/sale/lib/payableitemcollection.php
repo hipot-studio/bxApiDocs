@@ -168,7 +168,7 @@ class PayableItemCollection extends Internals\EntityCollection
 		{
 			/** @var BasketItem $entity */
 			$entity = $item->getEntityObject();
-			if ($entity->getBasketCode() === $basketItem->getBasketCode())
+			if ($entity === null || $entity->getBasketCode() === $basketItem->getBasketCode())
 			{
 				$r = $item->delete();
 				if (!$r->isSuccess())

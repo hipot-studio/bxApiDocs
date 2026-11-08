@@ -1,5 +1,7 @@
 <?php
 
+use Bitrix\Main\Web\Uri;
+
 IncludeModuleLangFile(__FILE__);
 
 class CSecurityIPRule
@@ -1264,7 +1266,7 @@ class CSecurityIPRule
 		if (mb_strpos($uri, '/') !== 0)
 			return false;
 
-		if (CHTTP::isPathTraversalUri($uri))
+		if ((new Uri($uri))->isPathTraversal())
 			return false;
 
 		return true;

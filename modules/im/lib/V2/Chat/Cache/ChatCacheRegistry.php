@@ -65,7 +65,7 @@ class ChatCacheRegistry extends DomainCacheRegistry
 				entityType: self::CHAT_DATA,
 				ttl: $this->getTtl(),
 				domain: 'chat',
-				version: 9,
+				version: 10,
 				partitioningLevels: 1,
 			),
 			new ChatMapper()

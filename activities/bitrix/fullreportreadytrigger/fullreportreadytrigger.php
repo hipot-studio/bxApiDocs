@@ -8,6 +8,7 @@ use Bitrix\Bizproc\Error;
 use Bitrix\Bizproc\FieldType;
 use Bitrix\Bizproc\Result;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Type\DateTime;
 use Bitrix\Timeman\V2\Internal\Integration\Bizproc\FullReportReadyTrigger;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -20,9 +21,12 @@ class CBPFullReportReadyTrigger extends BaseTrigger
 	private const PARAM_USER_IDS = 'USER_IDS';
 	private const RETURN_PARAM_USER = 'USER';
 	private const RETURN_PARAM_MANAGER = 'MANAGER';
+	private const RETURN_PARAM_EVENT_DATE_TIME = 'EventDateTime';
 
 	public function execute(): int
 	{
+		$this->{self::RETURN_PARAM_EVENT_DATE_TIME} = (new DateTime())->format(DateTime::getFormat());
+
 		$context = $this->getRootActivity()->{\CBPDocument::PARAM_TRIGGER_EVENT_DATA} ?? [];
 
 		$userId = (int)($context[FullReportReadyTrigger::FIELD_USER_ID] ?? 0);
@@ -47,6 +51,7 @@ class CBPFullReportReadyTrigger extends BaseTrigger
 			self::PARAM_USER_IDS => null,
 			self::RETURN_PARAM_USER => null,
 			self::RETURN_PARAM_MANAGER => null,
+			self::RETURN_PARAM_EVENT_DATE_TIME => null,
 		];
 
 		$this->SetPropertiesTypes([
@@ -55,6 +60,9 @@ class CBPFullReportReadyTrigger extends BaseTrigger
 			],
 			self::RETURN_PARAM_MANAGER => [
 				'Type' => FieldType::USER,
+			],
+			self::RETURN_PARAM_EVENT_DATE_TIME => [
+				'Type' => FieldType::DATETIME,
 			],
 		]);
 	}

@@ -35,6 +35,21 @@ class Chat
 		return Im\V2\Chat::getInstance($chatId);
 	}
 
+	protected function getChatAvatar(): ChatAvatar
+	{
+		return new ChatAvatar();
+	}
+
+	public function muteChat(int $chatId, int $userId, bool $action): bool
+	{
+		if (!Loader::includeModule('im'))
+		{
+			return false;
+		}
+
+		return Im\Chat::mute($chatId, $action, $userId);
+	}
+
 	public static function onRegisterType(RegisterTypeEvent $event): EventResult
 	{
 		$parameters = [
@@ -119,8 +134,14 @@ class Chat
 			return $result->addError(new Error('IM module is not installed'));
 		}
 
-		$chatAvatar = new ChatAvatar();
-		$avatarId = $chatAvatar->ensureFileId($chatAvatar->getTypeByTask($task));
+		$chatAvatar = $this->getChatAvatar();
+		$avatarType = $chatAvatar->getTypeByTask($task);
+		$avatarId = $chatAvatar->ensureFileId($avatarType);
+		$avatarEnabled = $chatAvatar->isEnabled();
+		if ($avatarEnabled && $avatarId <= 0)
+		{
+			return $result->addError(new Error('Task chat avatar file is not available'));
+		}
 
 		$factory = ChatFactory::getInstance();
 		$chatResult = $factory->addUniqueChat([
@@ -146,6 +167,14 @@ class Chat
 		if ($alreadyExists && $chatId > 0)
 		{
 			$this->updateParentChat($task->cloneWith(['chatId' => $chatId]));
+		}
+		if ($chatId > 0 && $avatarEnabled && $alreadyExists)
+		{
+			$avatarResult = $this->updateChatAvatar($task->cloneWith(['chatId' => $chatId]), $avatarType);
+			if (!$avatarResult->isSuccess())
+			{
+				return $result->addErrors($avatarResult->getErrors());
+			}
 		}
 
 		$result->setData(['alreadyExists' => $alreadyExists]);
@@ -297,31 +326,68 @@ class Chat
 		$repository->delete($taskId);
 	}
 
-	public function updateChatAvatar(Task $task, ChatAvatarType $avatarType): void
+	public function updateChatAvatar(Task $task, ChatAvatarType $avatarType): Result
 	{
+		$result = new Result();
+
 		if (!Loader::includeModule('im'))
 		{
-			return;
+			return $result->addError(new Error('IM module is not installed'));
 		}
 
 		if (!$task->chatId)
 		{
-			return;
-		}
-
-		$avatarFileId = (new ChatAvatar())->ensureFileId($avatarType);
-		if (empty($avatarFileId))
-		{
-			return;
+			return $result;
 		}
 
 		$chat = $this->getImChat($task->chatId);
-		if ($chat->getAvatarId() === $avatarFileId)
+		if (($chat->getChatId() ?? 0) <= 0)
 		{
-			return;
+			return $result;
 		}
 
-		(new Im\V2\Entity\File\ChatAvatar($chat))->updateSystemAvatar(
+		$previousAvatarFileId = (int)$chat->getAvatarId();
+		if ($previousAvatarFileId > 0 && !$this->isSystemAvatarFileId($previousAvatarFileId))
+		{
+			return $result;
+		}
+
+		$avatarFileId = $this->getTaskChatAvatarFileId($avatarType);
+		if (empty($avatarFileId))
+		{
+			return $result->addError(new Error('Task chat avatar file is not available'));
+		}
+
+		if ($previousAvatarFileId === $avatarFileId)
+		{
+			return $result;
+		}
+
+		$avatarResult = $this->updateSystemAvatar($chat, $avatarFileId);
+		if (!$avatarResult->isSuccess())
+		{
+			$chat->setAvatarId($previousAvatarFileId);
+			Im\V2\Chat::cleanCache($task->chatId);
+
+			return $result->addErrors($avatarResult->getErrors());
+		}
+
+		return $result;
+	}
+
+	protected function getTaskChatAvatarFileId(ChatAvatarType $avatarType): int
+	{
+		return (new ChatAvatar())->ensureFileId($avatarType);
+	}
+
+	protected function isSystemAvatarFileId(int $fileId): bool
+	{
+		return (new ChatAvatarPublisher())->isSystemFileId($fileId);
+	}
+
+	protected function updateSystemAvatar(Im\V2\Chat $chat, int $avatarFileId): Im\V2\Result
+	{
+		return (new Im\V2\Entity\File\ChatAvatar($chat))->updateSystemAvatar(
 			avatar: $avatarFileId,
 			withMessage: false,
 			skipRecent: true,

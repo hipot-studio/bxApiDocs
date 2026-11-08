@@ -69,9 +69,12 @@ class ScenarioMenuItem
 		'id' => 'whatsapp',
 		'data' => ['extension' => 'landing.ui.panel.formsettingspanel.content.whatsapp'],
 	];
+	// Раздел не имеет собственного content-экстеншна с 25.800.0: клик перехватывается
+	// в landing.ui.panel.formsettingspanel (onSidebarButtonClick -> onFormDesignClick)
+	// и открывает общий слайдер дизайна, минуя getContent()/loadExtension.
 	public const DESIGN = [
 		'id' => 'design',
-		'data' => ['extension' => 'landing.ui.panel.formsettingspanel.content.design'],
+		'data' => [],
 	];
 
 	/**

@@ -127,6 +127,7 @@ final class ExecutionTimeFactory
 			? $this->parsedReplicateParameter['WEEK_DAYS'] : [1]; // days 1 - 7
 
 		$weekDaysNumbers = array_map('intval', $weekDaysNumbers);
+		sort($weekDaysNumbers, SORT_NUMERIC);
 		$preferredDateTime = $this->stripTime($this->baseExecutionTimeTS) + $this->creatorPreferredTimeTS;
 		$date = $preferredDateTime;
 

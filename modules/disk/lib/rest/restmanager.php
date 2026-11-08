@@ -3,7 +3,9 @@
 namespace Bitrix\Disk\Rest;
 
 use Bitrix\Disk\Driver;
+use Bitrix\Disk\Infrastructure\Rest\Sync\ContentDownload;
 use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Service\Sync\ContentLinkProvider;
 use Bitrix\Disk\Internals\Diag;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
@@ -88,6 +90,16 @@ final class RestManager extends IRestService implements IErrorable
 
 	/**
 	 * Builds list of REST methods which provides module disk.
+	 *
+	 * The download of the synchronisation contour stands apart from the scope of Disk on purpose. It is
+	 * reached by a link minted inside a V3 method, and a V3 server names no scope of its own, so the
+	 * signed token that carries the link can only ever be a token of the global scope - the platform's
+	 * own deferred batch reaches its result file exactly this way. Asking the caller for the scope of
+	 * Disk, which also writes, is what the contour exists not to do. Nothing is opened by putting it
+	 * here: it is a private method, out of the published list, and it opens only what the signed grant
+	 * inside the link names, to the caller that grant was issued to, and only while the rights of Disk
+	 * still allow it.
+	 *
 	 * @return array
 	 */
 	public static function onRestServiceBuildDescription()
@@ -104,7 +116,13 @@ final class RestManager extends IRestService implements IErrorable
 		unset($methodName);
 
 		return array(
-			Driver::INTERNAL_MODULE_ID => $methods
+			Driver::INTERNAL_MODULE_ID => $methods,
+			\CRestUtil::GLOBAL_SCOPE => array(
+				ContentLinkProvider::DOWNLOAD_METHOD => array(
+					'callback' => array(ContentDownload::class, 'download'),
+					'options' => array('private' => true),
+				),
+			),
 		);
 	}
 

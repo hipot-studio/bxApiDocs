@@ -7,13 +7,11 @@ use Bitrix\Bitrix24\Strategy\InvitationPushNotification\UnacceptedInvitationsStr
 use Bitrix\Main\Data\Cache;
 use Bitrix\Main\Loader;
 use Bitrix\Bitrix24\Service\InvitationPushNotificationService;
-use Bitrix\Mobile\Tourist;
 
 class InvitationAhaMoment
 {
 	private const CACHE_TTL = 3600; // 1 hour
 	private const CACHE_DIR = '/bx/mobile_invitation_aha_moment';
-	public const FIRST_INVITE_TOURIST_EVENT = 'mobile_invitation_first_aha_moment';
 
 	public function getUnacceptedInvitesAhaMoment(): ?PushNotification
 	{
@@ -24,12 +22,6 @@ class InvitationAhaMoment
 
 		$userId = $this->getB24UserId();
 		if ($userId === null)
-		{
-			return null;
-		}
-
-		$events = Tourist::getEvents();
-		if (!array_key_exists(self::FIRST_INVITE_TOURIST_EVENT, $events))
 		{
 			return null;
 		}
@@ -79,40 +71,6 @@ class InvitationAhaMoment
 		{
 			return false;
 		}
-	}
-
-	public function getFirstInviteAhaMoment(): ?PushNotification
-	{
-		$events = Tourist::getEvents();
-		if (array_key_exists(self::FIRST_INVITE_TOURIST_EVENT, $events))
-		{
-			return null;
-		}
-
-		if (!Loader::includeModule('bitrix24') || !Loader::includeModule('intranet'))
-		{
-			return null;
-		}
-
-		$userId = $this->getB24UserId();
-		if ($userId === null)
-		{
-			return null;
-		}
-
-		try
-		{
-			if (self::hasUnacceptedInvitation())
-			{
-				return $this->buildNotification($userId);
-			}
-		}
-		catch (\Throwable)
-		{
-			return null;
-		}
-
-		return null;
 	}
 
 	private function getB24UserId(): ?int

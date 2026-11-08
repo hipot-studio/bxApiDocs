@@ -7,6 +7,7 @@ use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Result;
 use Bitrix\Socialnetwork\Item\Workgroup;
 use Bitrix\Tasks\Access\ActionDictionary;
 use Bitrix\Tasks\Access\TaskAccessController;
@@ -15,11 +16,16 @@ use Bitrix\Tasks\Internals\Task\Status;
 use Bitrix\Tasks\Internals\TaskTable;
 use Bitrix\Tasks\Scrum\Service\ItemService;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Tasks\V2\Internal\DI\Container;
+use Bitrix\Tasks\V2\Internal\Service\Task\Completion\CheckListCompletionService;
+use Bitrix\Tasks\V2\Internal\Service\Task\Completion\CheckListCompletionSnapshotService;
+use Bitrix\Tasks\V2\Internal\Service\Task\Completion\TaskCompletionService;
 
 class Task extends Controller
 {
 	const ERROR_COULD_NOT_LOAD_MODULE = 'TASKS_STC_01';
 	const ERROR_ACCESS_DENIED = 'TASKS_STC_02';
+	const ERROR_TASK_COMPLETION_FAILED = 'TASKS_STC_03';
 
 	protected function processBeforeAction(Action $action)
 	{
@@ -37,12 +43,7 @@ class Task extends Controller
 
 		if ($taskId && !TaskAccessController::can($userId, ActionDictionary::ACTION_TASK_READ, $taskId))
 		{
-			$this->errorCollection->setError(
-				new Error(
-					Loc::getMessage('TASKS_STC_ERROR_ACCESS_DENIED'),
-					self::ERROR_ACCESS_DENIED
-				)
-			);
+			$this->addAccessDeniedError();
 
 			return false;
 		}
@@ -61,12 +62,7 @@ class Task extends Controller
 
 		if (!$taskId && !Group::canReadGroupTasks($userId, $groupId))
 		{
-			$this->errorCollection->setError(
-				new Error(
-					Loc::getMessage('TASKS_STC_ERROR_ACCESS_DENIED'),
-					self::ERROR_ACCESS_DENIED
-				)
-			);
+			$this->addAccessDeniedError();
 
 			return false;
 		}
@@ -188,7 +184,38 @@ class Task extends Controller
 	 * @throws \Bitrix\Main\ObjectPropertyException
 	 * @throws \Bitrix\Main\SystemException
 	 */
-	public function getTasksAction(int $groupId, array $taskIds): array
+	public function getTasksAction(int $groupId, array $taskIds, ?int $checkListTaskId = null): array
+	{
+		$tasks = $this->loadTasks($groupId, $taskIds);
+		if ($checkListTaskId === null)
+		{
+			return $tasks;
+		}
+
+		$requestedTaskIds = array_map('intval', $taskIds);
+		if (
+			!in_array($checkListTaskId, $requestedTaskIds, true)
+			|| !array_key_exists($checkListTaskId, $tasks)
+			|| !$this->canPerformTaskAction(
+				User::getId(),
+				ActionDictionary::ACTION_TASK_READ,
+				$checkListTaskId,
+			)
+		)
+		{
+			$this->addAccessDeniedError();
+
+			return $tasks;
+		}
+
+		$tasks[$checkListTaskId]['checkListCompletionSnapshot'] = $this->getCheckListCompletionSnapshot(
+			$checkListTaskId,
+		);
+
+		return $tasks;
+	}
+
+	protected function loadTasks(int $groupId, array $taskIds): array
 	{
 		$tasks = [];
 
@@ -209,22 +236,108 @@ class Task extends Controller
 		return $tasks;
 	}
 
-	public function completeTaskAction(int $taskId): bool
+	protected function getCheckListCompletionSnapshot(int $taskId): ?array
 	{
-		$taskId = (int) $taskId;
+		return $this->getService(CheckListCompletionSnapshotService::class)->getByTaskId($taskId);
+	}
 
+	public function completeTaskAction(int $taskId, bool $completeWithChecklist = false): bool
+	{
 		$userId = User::getId();
-
-		if (!TaskAccessController::can($userId,  ActionDictionary::ACTION_TASK_COMPLETE, $taskId))
+		if ($this->isTaskCompleted($taskId))
 		{
+			if (!$this->canPerformTaskAction($userId, ActionDictionary::ACTION_TASK_READ, $taskId))
+			{
+				$this->addAccessDeniedError();
+
+				return false;
+			}
+
+			return true;
+		}
+
+		// Both variants share the completion rule, including the required result; only the checklist differs
+		if (!$this->canCompleteTaskWithChecklist($taskId, $userId))
+		{
+			$this->addAccessDeniedError();
+
 			return false;
 		}
 
-		$task = \CTaskItem::getInstance($taskId, $userId);
+		if ($completeWithChecklist)
+		{
+			$completionResult = $this->completeChecklist($taskId, $userId);
+			if (!$completionResult->isSuccess())
+			{
+				$this->addErrors($completionResult->getErrors());
 
-		$task->complete();
+				return false;
+			}
+		}
+
+		$isCompleted = $this->completeTask($taskId, $userId);
+		if (!$isCompleted)
+		{
+			$this->addError(new Error(
+				Loc::getMessage('TASKS_STC_ERROR_COMPLETION_FAILED'),
+				self::ERROR_TASK_COMPLETION_FAILED,
+			));
+
+			return false;
+		}
 
 		return true;
+	}
+
+	protected function addAccessDeniedError(): void
+	{
+		$this->addError(new Error(
+			Loc::getMessage('TASKS_STC_ERROR_ACCESS_DENIED'),
+			self::ERROR_ACCESS_DENIED,
+		));
+	}
+
+	protected function isTaskCompleted(int $taskId): bool
+	{
+		return $this->getTaskCompletionService()->hasFinalStatus($taskId);
+	}
+
+	protected function canCompleteTaskWithChecklist(int $taskId, int $userId): bool
+	{
+		return $this->getTaskCompletionService()->canCompleteWithChecklist($taskId, $userId);
+	}
+
+	protected function getTaskCompletionService(): TaskCompletionService
+	{
+		return $this->getService(TaskCompletionService::class);
+	}
+
+	protected function canPerformTaskAction(int $userId, string $action, int $taskId): bool
+	{
+		return TaskAccessController::can($userId, $action, $taskId);
+	}
+
+	protected function completeChecklist(int $taskId, int $userId): Result
+	{
+		return $this->getService(CheckListCompletionService::class)->completeForTask($taskId, $userId);
+	}
+
+	protected function completeTask(int $taskId, int $userId): bool
+	{
+		$task = \CTaskItem::getInstance($taskId, $userId);
+		$task->complete();
+
+		return $this->isTaskCompleted($taskId);
+	}
+
+	/**
+	 * @template T of object
+	 * @param class-string<T> $className
+	 * @return T
+	 */
+	protected function getService(string $className): object
+	{
+		return Container::getInstance()->get($className);
 	}
 
 	public function renewTaskAction(int $taskId): bool
@@ -262,7 +375,14 @@ class Task extends Controller
 	 */
 	public function proceedParentTaskAction(int $taskId): bool
 	{
-		$itemService = new ItemService();
+		if (!$this->canPerformTaskAction(User::getId(), ActionDictionary::ACTION_TASK_COMPLETE, $taskId))
+		{
+			$this->addAccessDeniedError();
+
+			return false;
+		}
+
+		$itemService = $this->getItemService();
 
 		$item = $itemService->getItemBySourceId($taskId);
 		if ($item->isEmpty())
@@ -273,6 +393,11 @@ class Task extends Controller
 		$item->getInfo()->setVisibilitySubtasks('N');
 
 		return $itemService->changeItem($item);
+	}
+
+	protected function getItemService(): ItemService
+	{
+		return new ItemService();
 	}
 
 	/**

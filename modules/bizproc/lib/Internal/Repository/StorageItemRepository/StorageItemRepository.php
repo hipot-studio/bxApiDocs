@@ -131,6 +131,35 @@ class StorageItemRepository implements StorageItemRepositoryInterface
 		return $counts;
 	}
 
+	public function getStorageTypeIdsByItemIds(array $itemIds): array
+	{
+		$ids = array_values(array_unique(array_filter(array_map('intval', $itemIds), static fn(int $id) => $id > 0)));
+		if (!$ids)
+		{
+			return [];
+		}
+
+		$dataManager = Container::getStorageRecordDataManager();
+
+		$storageTypeIds = [];
+		foreach (array_chunk($ids, self::QUERY_CHUNK) as $chunk)
+		{
+			$result = $dataManager::query()
+				->setSelect(['STORAGE_ID'])
+				->whereIn('ID', $chunk)
+				->setGroup(['STORAGE_ID'])
+				->exec()
+			;
+
+			while ($row = $result->fetch())
+			{
+				$storageTypeIds[(int)$row['STORAGE_ID']] = (int)$row['STORAGE_ID'];
+			}
+		}
+
+		return array_values($storageTypeIds);
+	}
+
 	public function exists(int $id): bool
 	{
 		$dataManager = Container::getStorageRecordDataManager();

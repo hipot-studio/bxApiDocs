@@ -360,7 +360,7 @@ class Sprint extends Controller
 
 		$groupId = (is_numeric($post['groupId']) ? (int) $post['groupId'] : 0);
 
-		$sprintService = new SprintService();
+		$sprintService = new SprintService($userId);
 
 		if (!$sprintService->canStartSprint($userId, $groupId))
 		{

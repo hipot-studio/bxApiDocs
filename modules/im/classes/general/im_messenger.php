@@ -131,6 +131,11 @@ class CIMMessenger
 			$messageObject = self::getMessageObject($arFields);
 
 			$config = new \Bitrix\Im\V2\Message\Send\SendingConfig($arFields);
+			$messageUuidReservation = $arFields['MESSAGE_UUID_RESERVATION'] ?? null;
+			if ($messageUuidReservation instanceof Message\Uuid)
+			{
+				$config->setMessageUuidReservation($messageUuidReservation);
+			}
 
 			$chat = $messageObject->getChat()->withContextUser($messageObject->getContext()->getUserId());
 
@@ -971,6 +976,14 @@ class CIMMessenger
 		;
 		if (!$message)
 			return false;
+		if (
+			!$convert
+			&& ($message['PARAMS']['COMPONENT_ID'] ?? null)
+				=== \Bitrix\Im\V2\Message\Contact\ContactMessage::COMPONENT_ID
+		)
+		{
+			return false;
+		}
 
 
 		$dateText = Array();
@@ -3050,6 +3063,7 @@ class CIMMessenger
 	public static function SendMention($params)
 	{
 		$params['CHAT_ID'] = intval($params['CHAT_ID']);
+		$params['NOTIFY_CHAT_ID'] = intval($params['NOTIFY_CHAT_ID'] ?? 0) ?: $params['CHAT_ID'];
 		if (!isset($params['MESSAGE']) || $params['CHAT_ID'] <= 0)
 		{
 			return false;
@@ -3075,6 +3089,7 @@ class CIMMessenger
 			$parentChat = $chat->getParentChat();
 			return self::SendMention([
 				'CHAT_ID' => $parentChat->getId(),
+				'NOTIFY_CHAT_ID' => $chat->getId(),
 				'PARENT_MID' => $chat->getParentMessageId(),
 				'CHAT_TITLE' => htmlspecialcharsbx(Text::decodeEmoji($parentChat->getTitle())),
 				'CHAT_RELATION' => self::getChatRelationForMention($parentChat, $mentionUsers),
@@ -3145,8 +3160,8 @@ class CIMMessenger
 						"NOTIFY_TYPE" => IM_NOTIFY_FROM,
 						"NOTIFY_MODULE" => "im",
 						"NOTIFY_EVENT" => "mention",
-						"NOTIFY_TAG" => 'IM|MENTION|'.$params['CHAT_ID'],
-						"NOTIFY_SUB_TAG" => 'IM_MESS_'.$params['CHAT_ID'].'_'.$userId,
+						"NOTIFY_TAG" => 'IM|MENTION|'.$params['NOTIFY_CHAT_ID'],
+						"NOTIFY_SUB_TAG" => 'IM_MESS_'.$params['NOTIFY_CHAT_ID'].'_'.$userId,
 						'NOTIFY_MESSAGE' => $notifyTextCallback,
 						'NOTIFY_MESSAGE_OUT' => $notifyMailCallback,
 					);
@@ -3635,7 +3650,11 @@ class CIMMessenger
 			{
 				$file = array_values($message['files'])[0];
 
-				if ($file['type'] === 'image')
+				if ($file['isVoiceNote'] ?? false)
+				{
+					$fileName = MobilePush::getVoiceNoteSuffixForPush($file);
+				}
+				else if ($file['type'] === 'image')
 				{
 					$fileName = Text::getEmoji($file['type']).' '.GetMessage('IM_MESSAGE_IMAGE');
 				}

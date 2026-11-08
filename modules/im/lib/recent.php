@@ -5,7 +5,6 @@ namespace Bitrix\Im;
 use Bitrix\Im\Model\MessageParamTable;
 use Bitrix\Im\Model\MessageUnreadTable;
 use Bitrix\Im\Model\RecentTable;
-use Bitrix\Im\Model\RelationTable;
 use Bitrix\Im\V2\Chat\Background\Background;
 use Bitrix\Im\V2\Chat\Copilot\CopilotPopupItem;
 use Bitrix\Im\V2\Chat\Copilot\CopilotTitle;
@@ -44,10 +43,6 @@ use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ORM\Fields\ExpressionField;
-use Bitrix\Main\ORM\Fields\Relations\Reference;
-use Bitrix\Main\ORM\Query\Join;
-use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Json;
 use Bitrix\Pull\Event;
@@ -338,9 +333,18 @@ class Recent
 				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_COLLAB;
 				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_OPEN_COLLAB;
 			}
-			if (!RecentConfigManager::EXTERNAL_CHAT_USE_DEFAULT_RECENT_SECTION)
+			$externalTypesInDefaultSection = RecentConfigManager::getInstance()->getExternalTypesInDefaultSection();
+			if ($externalTypesInDefaultSection === [])
 			{
 				$skipTypes[] = \Bitrix\Im\V2\Chat::IM_TYPE_EXTERNAL;
+			}
+			else
+			{
+				$ormParams['filter'][] = [
+					'LOGIC' => 'OR',
+					['!=ITEM_TYPE' => \Bitrix\Im\V2\Chat::IM_TYPE_EXTERNAL],
+					['@CHAT.ENTITY_TYPE' => $externalTypesInDefaultSection],
+				];
 			}
 			if (!empty($skipTypes))
 			{
@@ -768,6 +772,7 @@ class Recent
 				'MESSAGE_FILE' => $param['MESSAGE_FILE'] ?? false,
 				'MESSAGE_STICKER' => $param['STICKER'] ?? null,
 				'BLOCK' => $param['BLOCK'] ?? false,
+				'MESSAGE_COMPONENT_ID' => $param['COMPONENT_ID'] ?? null,
 			];
 
 			$blocks[$messageId] = self::formatMessage($row, $messageOptions, $shortInfo);
@@ -1162,7 +1167,7 @@ class Recent
 		if ($isIntranetInstalled && !$isIntranet)
 		{
 			$subQuery = User::getInstance($userId) instanceof UserGuest
-				? self::getGuestSharedUsersQuery($userId)
+				? Group::getGuestSharedUsersQuery($userId)
 				: Group::getExtranetAccessibleUsersQuery($userId)
 			;
 			if ($subQuery !== null)
@@ -1189,24 +1194,6 @@ class Recent
 			'filter' => $filter,
 			'runtime' => $runtime,
 		];
-	}
-
-	private static function getGuestSharedUsersQuery(int $userId): Query
-	{
-		$query = RelationTable::query();
-		$query->addSelect(new ExpressionField('DISTINCT_USER_ID', 'DISTINCT %s', 'OTHER.USER_ID'));
-		$query->registerRuntimeField(
-			new Reference(
-				'OTHER',
-				RelationTable::class,
-				Join::on('this.CHAT_ID', 'ref.CHAT_ID'),
-				['join_type' => Join::TYPE_INNER]
-			)
-		);
-		$query->where('USER_ID', $userId);
-		$query->whereNot('MESSAGE_TYPE', \IM_MESSAGE_PRIVATE);
-
-		return $query;
 	}
 
 	private static function formatRow($row, $options = []): ?array
@@ -1430,6 +1417,10 @@ class Recent
 		if ($messageChatId !== null)
 		{
 			$message['CHAT_ID'] = $messageChatId;
+		}
+		if (isset($row['MESSAGE_COMPONENT_ID']))
+		{
+			$message['COMPONENT_ID'] = $row['MESSAGE_COMPONENT_ID'];
 		}
 
 		return $message;
@@ -2477,6 +2468,15 @@ class Recent
 			{
 				$result[$messageId]['BLOCK'] = true;
 			}
+			// Only the contact card is exported: the legacy recent block carries no COMPONENT_PARAMS,
+			// so any other component id would reach the client as a half-filled message.
+			elseif (
+				$paramName === Message\Params::COMPONENT_ID
+				&& $item['PARAM_VALUE'] === Message\Contact\ContactMessage::COMPONENT_ID
+			)
+			{
+				$result[$messageId]['COMPONENT_ID'] = $item['PARAM_VALUE'];
+			}
 		}
 
 		return self::fillFiles($result, $fileIds);
@@ -2495,6 +2495,7 @@ class Recent
 		}
 
 		$files = FileCollection::initByDiskFilesIds($fileIds);
+		$files->loadParams();
 
 		foreach ($fileIds as $messageId => $fileId)
 		{
@@ -2509,6 +2510,8 @@ class Recent
 					'ID' => $file->getId(),
 					'TYPE' => $file->getContentType(),
 					'NAME' => $file->getDiskFile()->getName(),
+					'IS_VOICE_NOTE' => $file->isVoiceNote(),
+					'DURATION' => $file->getDuration(),
 				];
 			}
 		}
@@ -2533,6 +2536,7 @@ class Recent
 			$rows[$key]['RELATION_USER_ID'] = $row['RELATION_ID'] ? $userId : null;
 			$rows[$key]['MESSAGE_STICKER'] = $params[$messageId]['STICKER'] ?? null;
 			$rows[$key]['BLOCK'] = $params[$messageId]['BLOCK'] ?? false;
+			$rows[$key]['MESSAGE_COMPONENT_ID'] = $params[$messageId]['COMPONENT_ID'] ?? null;
 		}
 
 		return $rows;

@@ -234,6 +234,38 @@ class SmsManager implements ICanSendMessage
 		return $info;
 	}
 
+	/**
+	 * Returns configurable senders available in CRM settings.
+	 *
+	 * @return array
+	 */
+	public static function getConfigurableSenderInfoList(): array
+	{
+		$disabledProviders = [];
+		if (
+			Main\ModuleManager::isModuleInstalled('bitrix24')
+			&& LANGUAGE_ID === 'ua'
+			&& Main\Loader::includeModule('messageservice')
+		)
+		{
+			$disabledProviders = [
+				MessageService\Sender\Sms\SmsRu::ID,
+				MessageService\Sender\Sms\SmsAssistentBy::ID,
+			];
+		}
+
+		$senders = [];
+		foreach (static::getSenderInfoList() as $sender)
+		{
+			if ($sender['isConfigurable'] && !in_array($sender['id'], $disabledProviders, true))
+			{
+				$senders[] = $sender;
+			}
+		}
+
+		return $senders;
+	}
+
 	public static function getSenderById(string $senderId): ?MessageService\Sender\Base
 	{
 		return static::canUse()
@@ -477,7 +509,7 @@ class SmsManager implements ICanSendMessage
 	 */
 	public static function getEntityPhoneCommunications($entityTypeId, $entityId)
 	{
-		return (new Communications((int)$entityTypeId, (int)$entityId))->setCheckPermissions(false)->get();
+		return (new Communications((int)$entityTypeId, (int)$entityId))->get();
 	}
 
 	/**

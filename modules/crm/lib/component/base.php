@@ -234,7 +234,7 @@ abstract class Base extends \CBitrixComponent implements Errorable
 			$menu[] = [
 				'id' => 'toolbar-category-' . $category->getId(),
 				'categoryId' => $category->getId(),
-				'text' => htmlspecialcharsbx($category->getName()),
+				'name' => $category->getName(),
 				'href' => $this->getListUrl($category->getId()),
 			];
 		}

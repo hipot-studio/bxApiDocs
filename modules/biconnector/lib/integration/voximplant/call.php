@@ -240,7 +240,7 @@ class Call
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['telephony_call']['TABLE_DESCRIPTION'] = $messages['VI_BIC_CALL_TABLE'] ?: 'telephony_call';
-		$result['telephony_call']['TABLE_DESCRIPTION_FULL'] = $messages['VI_BIC_CALL_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['telephony_call']['TABLE_DESCRIPTION_FULL'] = $messages['VI_BIC_CALL_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['telephony_call']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['VI_BIC_CALL_FIELD_' . $fieldCode]) ? $messages['VI_BIC_CALL_FIELD_' . $fieldCode] : $fieldCode;

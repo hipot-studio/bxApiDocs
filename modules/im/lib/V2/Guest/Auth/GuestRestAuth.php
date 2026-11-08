@@ -96,6 +96,29 @@ class GuestRestAuth
 		'call.callmanager.getuserstate',
 		'call.callmanager.getusers',
 		'call.callmanager.finish',
+
+		// Call log (guest scenario): read-only history plus clearing the missed-calls badge.
+		// Entry deletion (delete), per-entry seen marks and getChat stay excluded: a guest reads
+		// the log but never edits it. getChat is the most sensitive of them: it resolves a private
+		// chat by an arbitrary userId.
+		'call.calllog.list',
+		'call.calllog.markallasseen',
+	];
+
+	/**
+	 * Allowed alone, but never inside a batch: these end the guest's own session.
+	 *
+	 * Batch is authorized once for the whole payload — {@see \CRestServerBatchItem::checkAuth()}
+	 * re-checks only the scope, so no sub-command returns here. The session-ending call deliberately
+	 * keeps the CUser of the CURRENT request authorized (see
+	 * {@see AuthorizationService::invalidateCurrentGuestSession()}), so every command queued after it
+	 * would still run as the guest whose session has just died. V2 methods need no such guard: each
+	 * im.v2.* sub-command passes {@see \Bitrix\Im\V2\Controller\Filter\AuthorizationPrefilter}.
+	 *
+	 * Lower case, matched against the already lowered batch command.
+	 */
+	protected const BATCH_FORBIDDEN_METHODS = [
+		'im.chat.leave',
 	];
 
 	/**
@@ -128,14 +151,24 @@ class GuestRestAuth
 			return false;
 		}
 
-		if (!Features::isChatWithGuestsAvailable(GuestService::getInstance()->getCurrentInviterId()))
+		$token = Token::createFromRequest();
+
+		if ($token === null && !$isSessionGuest)
 		{
 			return null;
 		}
 
-		$token = Token::createFromRequest();
+		// A visitor handed over to the public scope of the portal keeps the token cookie on purpose, so the
+		// return through the invite link finds the same guest. Their calls belong to the page that took
+		// them over: step aside and let that scope authorize them, instead of judging the call by the guest
+		// whitelist. Only for a visitor without a guest session of ours - stepping aside for one would hand
+		// the call to SessionAuth, which knows no whitelist at all.
+		if (!$isSessionGuest && $token !== null && self::isHandedToPortalPublicScope($token))
+		{
+			return null;
+		}
 
-		if ($token === null && !$isSessionGuest)
+		if (!Features::isChatWithGuestsAvailable(GuestService::getInstance()->getCurrentInviterId()))
 		{
 			return null;
 		}
@@ -217,6 +250,14 @@ class GuestRestAuth
 		return false;
 	}
 
+	/** The token lookup is memoized per request, so asking here costs the later authentication nothing. */
+	private static function isHandedToPortalPublicScope(Token $token): bool
+	{
+		$userId = AuthenticationService::getInstance()->findUserByToken($token);
+
+		return $userId !== null && AuthorizationService::getInstance()->isGuestScopeSuspended($userId);
+	}
+
 	private static function isMethodAllowed(): bool
 	{
 		$server = \CRestServer::instance();
@@ -224,53 +265,85 @@ class GuestRestAuth
 
 		if ($method === 'batch')
 		{
-			return self::isBatchAllowed($server);
+			// Same key normalization as CRestProvider::methodsBatch(): with both "cmd" and "CMD"
+			// in the query the executor keeps the last one, so reading a literal "cmd" would
+			// check commands that never run.
+			$query = array_change_key_case($server->getQuery() ?? [], CASE_UPPER);
+
+			return self::isEveryBatchCommandAllowed($query['CMD'] ?? null);
 		}
 
-		if (self::isControllerMethod($method))
+		return self::isMethodAllowedForGuest($method);
+	}
+
+	/**
+	 * Tells whether an old REST method is allowed for a guest user.
+	 *
+	 * @param string $method Method name in any case, e.g. "call.CallLog.list".
+	 */
+	private static function isMethodAllowedForGuest(string $method): bool
+	{
+		$methodLower = mb_strtolower($method);
+
+		if (self::isControllerMethod($methodLower))
 		{
 			return true;
 		}
 
-		return in_array($method, self::getAllowedMethodsLower(), true);
+		return in_array($methodLower, self::getAllowedMethodsLower(), true);
 	}
 
-	private static function isControllerMethod(string $method): bool
+	/**
+	 * Tells whether every command of a batch request is allowed for a guest user.
+	 * A single disallowed command rejects the whole batch.
+	 *
+	 * @param mixed $commands Raw "cmd" value of the batch request.
+	 */
+	private static function isEveryBatchCommandAllowed(mixed $commands): bool
 	{
-		return str_starts_with($method, 'im.v2.');
-	}
-
-	private static function isBatchAllowed(\CRestServer $server): bool
-	{
-		$query = $server->getQuery();
-		if (empty($query['cmd']) || !is_array($query['cmd']))
+		if (!is_array($commands) || $commands === [])
 		{
 			return false;
 		}
 
-		$allowedMethods = self::getAllowedMethodsLower();
-
-		foreach ($query['cmd'] as $command)
+		foreach ($commands as $command)
 		{
 			if (!is_string($command))
 			{
 				return false;
 			}
 
-			$questionPos = mb_strrpos($command, '?');
-			$method = $questionPos !== false
-				? mb_substr($command, 0, $questionPos)
-				: $command
-			;
+			// parse_url() plus 'path' is exactly how CRestProvider::methodsBatch() reads the name.
+			// Do not switch to Bitrix\Main\Web\Uri here, even though the core best practice asks
+			// for it by default: another parser would drift from the executor and reopen the bypass.
+			$parts = parse_url($command);
+			if (!is_array($parts) || !isset($parts['path']))
+			{
+				return false;
+			}
 
-			$methodLower = mb_strtolower($method);
-			if (!self::isControllerMethod($methodLower) && !in_array($methodLower, $allowedMethods, true))
+			$methodLower = mb_strtolower($parts['path']);
+
+			// Kept from master: im.chat.leave ends the guest session, and CRestServerBatchItem::checkAuth()
+			// re-checks only the scope, so every command queued after it would still run as the guest whose
+			// session has just died. Applied to the path parse_url() gave, not to the raw command.
+			if (in_array($methodLower, static::BATCH_FORBIDDEN_METHODS, true))
+			{
+				return false;
+			}
+
+			if (!self::isMethodAllowedForGuest($methodLower))
 			{
 				return false;
 			}
 		}
 
 		return true;
+	}
+
+	private static function isControllerMethod(string $method): bool
+	{
+		return str_starts_with(mb_strtolower($method), 'im.v2.');
 	}
 
 	/**

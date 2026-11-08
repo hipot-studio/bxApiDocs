@@ -5,6 +5,7 @@ namespace Bitrix\Sale\Delivery\Rest;
 use Bitrix\Main;
 use Bitrix\Sale\Delivery\Requests;
 use Bitrix\Sale\Delivery;
+use Bitrix\Rest\AccessException;
 use Bitrix\Rest\RestException;
 
 if (!Main\Loader::includeModule('rest'))
@@ -51,11 +52,9 @@ class RequestService extends BaseService
 		self::checkDeliveryPermission();
 		$params = self::prepareIncomingParams($query);
 
-		$requestId = self::getRequestId(
-			self::getDeliveryId($params, 'DELIVERY_ID'),
-			$params,
-			'REQUEST_ID'
-		);
+		$delivery = self::getDelivery($params, 'DELIVERY_ID');
+		self::checkAccessToRequestDelivery($delivery, $server);
+		$requestId = self::getRequestId($delivery->getId(), $params, 'REQUEST_ID');
 
 		$fields = [];
 
@@ -267,8 +266,9 @@ class RequestService extends BaseService
 		self::checkDeliveryPermission();
 		$params = self::prepareIncomingParams($query);
 
-		$deliveryId = self::getDeliveryId($params, 'DELIVERY_ID');
-		$requestId = self::getRequestId($deliveryId, $params, 'REQUEST_ID');
+		$delivery = self::getDelivery($params, 'DELIVERY_ID');
+		self::checkAccessToRequestDelivery($delivery, $server);
+		$requestId = self::getRequestId($delivery->getId(), $params, 'REQUEST_ID');
 
 		$deleteResult = Requests\Manager::deleteDeliveryRequest($requestId);
 		if (!$deleteResult->isSuccess())
@@ -292,7 +292,7 @@ class RequestService extends BaseService
 		$params = self::prepareIncomingParams($query);
 
 		$delivery = self::getDelivery($params, 'DELIVERY_ID');
-
+		self::checkAccessToRequestDelivery($delivery, $server);
 		$requestId = self::getRequestId($delivery->getId(), $params, 'REQUEST_ID');
 
 		Requests\Manager::sendMessage(
@@ -303,18 +303,6 @@ class RequestService extends BaseService
 		);
 
 		return true;
-	}
-
-	/**
-	 * @param array $params
-	 * @param string $key
-	 * @return int
-	 */
-	private static function getDeliveryId(array $params, string $key): int
-	{
-		$delivery = self::getDelivery($params, $key);
-
-		return $delivery->getId();
 	}
 
 	/**
@@ -344,6 +332,17 @@ class RequestService extends BaseService
 		}
 
 		return $delivery;
+	}
+
+	private static function checkAccessToRequestDelivery(Delivery\Services\Base $delivery, \CRestServer $server): void
+	{
+		$ownerService = $delivery::isProfile() ? $delivery->getParentService() : $delivery;
+		$ownerServiceData = $ownerService ? Delivery\Services\Manager::getById($ownerService->getId()) : null;
+
+		if (!$ownerServiceData || !self::hasAccessToDelivery($ownerServiceData, $server->getClientId()))
+		{
+			throw new AccessException();
+		}
 	}
 
 	/**

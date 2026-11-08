@@ -138,12 +138,6 @@ final class BaasManager
 
 	private static function isMarketSubscriptionEnabled(): bool
 	{
-		static $enabled;
-		if ($enabled === null)
-		{
-			$enabled = (new Client())->isSubscriptionAvailable();
-		}
-
-		return $enabled;
+		return (new Client())->isSubscriptionAvailable();
 	}
 }

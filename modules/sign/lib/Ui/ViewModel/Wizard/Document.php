@@ -87,6 +87,7 @@ final class Document implements Arrayable
 			'hcmLinkDocumentTypeSettingId' => $this->document->hcmLinkDocumentTypeSettingId,
 
 			'dateSignUntilUserTime' => $this->document->dateSignUntil?->toUserTime()->format('Y-m-d H:i:s'),
+			'inviteMessage' => $this->document->inviteMessage,
 		];
 	}
 }

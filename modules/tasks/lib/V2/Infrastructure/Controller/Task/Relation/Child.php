@@ -10,11 +10,16 @@ use Bitrix\Main\Provider\Params\SelectInterface;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\Validation\Rule\ElementsType;
 use Bitrix\Main\Validation\Rule\Enum\Type;
+use Bitrix\Main\Validation\Rule\InArray;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Access\Service\TaskRightService;
 use Bitrix\Tasks\V2\Internal\Access\Task\ActionDictionary;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionRecorder;
+use Bitrix\Tasks\V2\Internal\Service\Ranking\EventType;
+use Bitrix\Tasks\V2\Internal\Service\Ranking\RelationKind;
 use Bitrix\Tasks\V2\Internal\Service\Task\ParentService;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\DeleteParentRelationCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\SetParentRelationCommand;
@@ -100,7 +105,7 @@ class Child extends BaseController
 	): array
 	{
 		return [
-			'tasks' => $subTaskProvider->getTasksWithSubTaskIds($taskIds),
+			'tasks' => $subTaskProvider->getTasksWithSubTaskIds($taskIds, $this->userId),
 		];
 	}
 
@@ -114,7 +119,12 @@ class Child extends BaseController
 		Entity\TaskCollection $tasks,
 		TaskRightService $taskRightService,
 		ParentService $parentService,
+		InteractionRecorder $interactionRecorder,
 		bool $noOverride = false,
+		// Only the two kinds this action can create: an unknown value would pass
+		// silently as a subtask and log a wrong target.
+		#[InArray([RelationKind::Parent->value, RelationKind::Subtask->value])]
+		string $relationKind = RelationKind::Subtask->value,
 	): ?array
 	{
 		$permissions = $taskRightService->getTaskRightsBatch(
@@ -125,7 +135,12 @@ class Child extends BaseController
 
 		$parentMap = $parentService->getParentIds($tasks->getIdList());
 
+		// Both selectors collapse into this action, so only the discriminator from
+		// the front tells which task the user actually picked.
+		$isParentSelector = ($relationKind === RelationKind::Parent->value);
+
 		$response = [];
+		$recordTargets = [];
 		foreach ($tasks as $subTask)
 		{
 			$subTaskId = (int)$subTask->id;
@@ -157,8 +172,21 @@ class Child extends BaseController
 			if ($response[$subTaskId] === false)
 			{
 				$this->addErrors($result->getErrors());
+
+				continue;
 			}
+
+			$recordTargets[] = $isParentSelector ? (int)$task->id : $subTaskId;
 		}
+
+		// One batched write for the whole dialog selection.
+		$interactionRecorder->recordBatch(
+			userId: $this->userId,
+			taskIds: $recordTargets,
+			eventType: EventType::Relation,
+			relationKind: $isParentSelector ? RelationKind::Parent : RelationKind::Subtask,
+			origin: InteractionOrigin::Ui,
+		);
 
 		return $response;
 	}

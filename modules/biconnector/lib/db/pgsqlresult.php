@@ -3,6 +3,9 @@ namespace Bitrix\BIConnector\DB;
 
 class PgsqlResult extends \Bitrix\Main\DB\PgsqlResult
 {
+	// Fixed OID of the built-in bytea type; pg_field_type() would make the extension read the whole pg_type catalog
+	private const BYTEA_OID = 17;
+
 	protected $rowData = null;
 	protected $rowDataReference = null;
 
@@ -73,8 +76,7 @@ class PgsqlResult extends \Bitrix\Main\DB\PgsqlResult
 					$fieldsCount = pg_num_fields($this->resource);
 					for ($i = 0; $i < $fieldsCount; $i++)
 					{
-						$fieldType = pg_field_type($this->resource, $i);
-						if ($fieldType === 'bytea')
+						if ((int)pg_field_type_oid($this->resource, $i) === self::BYTEA_OID)
 						{
 							$this->byteaFieldIndexes[] = $i;
 						}

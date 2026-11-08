@@ -24,7 +24,7 @@ class Analytics
 	public const ANALYTIC_INVITATION_TYPE_C_SUB_SECTION_EMAIL = 'tab_by_email';
 	public const ANALYTIC_INVITATION_TYPE_C_SUB_SECTION_MASS = 'tab_mass';
 	public const ANALYTIC_INVITATION_TYPE_C_SUB_SECTION_DEPARTMENT = 'tab_department';
-	public const ANALYTIC_INVITATION_TYPE_C_SUB_SECTION_INTEGRATOR = 'tab_integrator';
+	public const ANALYTIC_INVITATION_TYPE_C_SUB_SECTION_INTEGRATOR = 'tab_by_integrator';
 
 	private function send(array $data): void
 	{
@@ -172,9 +172,11 @@ class Analytics
 		int $analyticEmails = 0,
 		int $analyticPhones = 0,
 		bool $isSelectedDepartments = false,
+		?int $partnerId = null,
 	): void
 	{
 		$analyticData = $this->getData();
+		$analytic = [];
 
 		$analyticBase = [
 			'tool' => self::ANALYTIC_TOOL,
@@ -190,24 +192,44 @@ class Analytics
 
 		if ($analyticEmails > 0)
 		{
-			$analytic[] = array_merge($analyticBase, [
+			$emailAnalytic = array_merge($analyticBase, [
 				'type' => self::ANALYTIC_INVITATION_TYPE_EMAIL,
-				'p2' => self::ANALYTIC_PARAM_EMPLOYEE_COUNT . $analyticEmails,
 			]);
+			$p2 = $this->getInvitationP2($subSection, $analyticEmails, $partnerId);
+			if ($p2 !== null)
+			{
+				$emailAnalytic['p2'] = $p2;
+			}
+			$analytic[] = $emailAnalytic;
 		}
 
 		if ($analyticPhones > 0)
 		{
-			$analytic[] = array_merge($analyticBase, [
+			$phoneAnalytic = array_merge($analyticBase, [
 				'type' => self::ANALYTIC_INVITATION_TYPE_PHONE,
-				'p2' => self::ANALYTIC_PARAM_EMPLOYEE_COUNT . $analyticPhones,
 			]);
+			$p2 = $this->getInvitationP2($subSection, $analyticPhones, $partnerId);
+			if ($p2 !== null)
+			{
+				$phoneAnalytic['p2'] = $p2;
+			}
+			$analytic[] = $phoneAnalytic;
 		}
 
 		if (!empty($analytic))
 		{
 			$this->send($analytic);
 		}
+	}
+
+	private function getInvitationP2(string $subSection, int $employeeCount, ?int $partnerId): ?string
+	{
+		if ($subSection === self::ANALYTIC_INVITATION_TYPE_C_SUB_SECTION_INTEGRATOR)
+		{
+			return $partnerId > 0 ? 'integratorId_' . $partnerId : null;
+		}
+
+		return self::ANALYTIC_PARAM_EMPLOYEE_COUNT . $employeeCount;
 	}
 
 	private function getAdmin(): string

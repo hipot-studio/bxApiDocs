@@ -292,8 +292,19 @@ class ChatTable extends Entity\DataManager
 			static::updateIndexRecord($chatIndex);
 		}
 
-		$chatId = (int)$event->getParameter("id")['ID'];
+		static::applyAfterUpdate((int)$event->getParameter("id")['ID'], $fields);
 
+		return new Entity\EventResult();
+	}
+
+	/**
+	 * What an update of a chat row owes besides the row itself: the chat cache, the state of the
+	 * instances already loaded by this request and the entry in the sync log. All three hang on the
+	 * update event, so a write that cannot go through update() would silently skip them - hence one
+	 * implementation with two callers instead of a copy of this handler next to every such write.
+	 */
+	protected static function applyAfterUpdate(int $chatId, array $fields): void
+	{
 		if (static::needCacheInvalidate($fields))
 		{
 			Chat::cleanCache($chatId);
@@ -314,8 +325,36 @@ class ChatTable extends Entity\DataManager
 			static fn () => Chat::getInstance($chatId)->getRelations()->getUserIds(),
 			Chat::getInstance($chatId)
 		);
+	}
 
-		return new Entity\EventResult();
+	/**
+	 * Writes the owner only while the owner is still $expectedAuthorId. The condition and the write are
+	 * one statement on purpose: as a read and then a write they leave a window in which another request
+	 * can choose an owner. update() carries no condition besides the primary key, so the write goes by
+	 * filter, and the bookkeeping of the update event is applied by hand instead of being lost with it.
+	 *
+	 * $expectedAuthorId and $authorId must differ: a write of the value the row already holds is not a
+	 * change, and this reports it as not applied.
+	 *
+	 * @return bool whether the row was still where the caller left it, and so whether the write applied
+	 */
+	public static function updateAuthorIdIfUnchanged(int $chatId, int $expectedAuthorId, int $authorId): bool
+	{
+		$connection = static::getEntity()->getConnection();
+
+		static::updateByFilter(
+			['=ID' => $chatId, '=AUTHOR_ID' => $expectedAuthorId],
+			['AUTHOR_ID' => $authorId],
+		);
+
+		if ($connection->getAffectedRowsCount() < 1)
+		{
+			return false;
+		}
+
+		static::applyAfterUpdate($chatId, ['AUTHOR_ID' => $authorId]);
+
+		return true;
 	}
 
 	public static function onAfterDelete(Event $event)

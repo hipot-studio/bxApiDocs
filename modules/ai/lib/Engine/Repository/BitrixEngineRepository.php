@@ -62,7 +62,7 @@ class BitrixEngineRepository
 			}
 		}
 
-		if (empty($values))
+		if (!empty($values))
 		{
 			BitrixEngineTable::addMulti($values, true);
 		}
@@ -97,10 +97,13 @@ class BitrixEngineRepository
 		}
 
 		$this->deactivateEngines(
-			BitrixEngineTable::query()
-				->setSelect(['ID'])
-				->whereIn('CLASS', $providersClasses)
-				->fetchAll()
+			array_map(
+				static fn(array $row): int => (int)$row['ID'],
+				BitrixEngineTable::query()
+					->setSelect(['ID'])
+					->whereIn('CLASS', $providersClasses)
+					->fetchAll(),
+			)
 		);
 	}
 

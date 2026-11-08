@@ -9,4 +9,9 @@ interface Param
 	public function getFileId(): int;
 	public function getValue(): string|int|bool;
 	public function toArray(): array;
+
+	/**
+	 * @return ParamName[] Parameters that cannot stay on the file next to this one.
+	 */
+	public function getConflictingParams(): array;
 }

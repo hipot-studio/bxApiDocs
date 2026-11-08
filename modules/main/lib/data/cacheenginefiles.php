@@ -10,6 +10,7 @@ use Bitrix\Main\Data\Internal\CacheCleanPathTable;
 class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 {
 	protected const LOCK_FILE = '/bitrix/cache/cacheCleanJob_lock.php';
+	protected const DELETE_BATCH_SIZE = 1000;
 	protected int $written = 0;
 	protected int $read = 0;
 	protected string $path = '';
@@ -423,15 +424,16 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 
 	/**
 	 * Deletes one cache directory. Works no longer than etime.
+	 * Returns true when the directory is gone for good and its record may leave the queue.
 	 * @param integer $etime Timestamp when to stop working.
 	 * @param array $path Record from b_cache_tag.
-	 * @return void
+	 * @return bool
 	 */
-	protected function deleteOneDir(int $etime = 0, array $path = []): void
+	protected function deleteOneDir(int $etime = 0, array $path = []): bool
 	{
 		if (empty($path))
 		{
-			return;
+			return false;
 		}
 
 		$deleteFromQueue = false;
@@ -474,10 +476,7 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 			$deleteFromQueue = true;
 		}
 
-		if ($deleteFromQueue)
-		{
-			CacheCleanPathTable::delete($path['ID']);
-		}
+		return $deleteFromQueue;
 	}
 
 	/**
@@ -513,16 +512,30 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 			->setLimit($count + $delta)
 			->exec();
 
+		$cleaned = [];
+		$fetched = 0;
+
 		while($path = $paths->fetch())
 		{
-			$this->deleteOneDir($etime, $path);
-			$deleted++;
+			$fetched++;
+
+			// an unfinished directory keeps its record: the next run picks it up and counts nothing here
+			if ($this->deleteOneDir($etime, $path))
+			{
+				$cleaned[] = $path['ID'];
+				$deleted++;
+			}
 
 			if (time() > $etime)
 			{
 				$interrupted = true;
 				break;
 			}
+		}
+
+		foreach (array_chunk($cleaned, self::DELETE_BATCH_SIZE) as $batch)
+		{
+			CacheCleanPathTable::deleteByFilter(['@ID' => $batch]);
 		}
 
 		$managedCache->read(604800, 'delCount');
@@ -535,7 +548,8 @@ class CacheEngineFiles implements CacheEngineInterface, CacheEngineStatInterface
 			$managedCache->setImmediate('delCount', $deleted);
 		}
 
-		if ($deleted == 0)
+		// the queue is idle only when it had nothing to offer: an unfinished directory keeps the flag on
+		if ($fetched === 0)
 		{
 			$managedCache->read(3600, 'needClean');
 			$managedCache->setImmediate('needClean', 'N');

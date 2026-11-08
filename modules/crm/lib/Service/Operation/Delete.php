@@ -21,6 +21,7 @@ class Delete extends Operation
 {
 	/** @var Cleaning\Cleaner */
 	protected $cleaner;
+	private array $pullEventUserIds = [];
 
 	public function setCleaner(Cleaning\Cleaner $cleaner): self
 	{
@@ -67,6 +68,14 @@ class Delete extends Operation
 
 	protected function save(): Result
 	{
+		$data = $this->getPullData();
+		$params = ['TYPE' => \CCrmOwnerType::ResolveName($this->itemBeforeSave->getEntityTypeId())];
+		if (isset($data['CATEGORY_ID']))
+		{
+			$params['CATEGORY_ID'] = $data['CATEGORY_ID'];
+		}
+		$this->pullEventUserIds = PullManager::getInstance()->getItemEventRecipients(['id' => $data['ID']], $params);
+
 		$result = $this->item->delete();
 
 		if (!$result->isSuccess())
@@ -200,7 +209,7 @@ class Delete extends Operation
 
 	protected function sendPullEvent(): void
 	{
-		PullManager::getInstance()->sendItemDeletedEvent($this->pullItem, $this->pullParams);
+		PullManager::getInstance()->sendItemDeletedEvent($this->pullItem, $this->pullParams, $this->pullEventUserIds);
 	}
 
 	protected function getPullData(): array

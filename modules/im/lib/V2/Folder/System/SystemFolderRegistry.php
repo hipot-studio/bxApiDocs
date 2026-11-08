@@ -25,6 +25,11 @@ class SystemFolderRegistry
 			new SystemFolderPrototype(AllOpenChannelFolder::CODE, static fn (): SystemFolder => new AllOpenChannelFolder()),
 			new SystemFolderPrototype(CollabFolder::CODE, static fn (): SystemFolder => new CollabFolder()),
 			new SystemFolderPrototype(OpenLineFolder::CODE, static fn (): SystemFolder => new OpenLineFolder()),
+			new SystemFolderPrototype(AllFolder::CODE, static fn (): SystemFolder => new AllFolder()),
+			new SystemFolderPrototype(ChatFolder::CODE, static fn (): SystemFolder => new ChatFolder()),
+			new SystemFolderPrototype(ChannelFolder::CODE, static fn (): SystemFolder => new ChannelFolder()),
+			new SystemFolderPrototype(TaskRootFolder::CODE, static fn (): SystemFolder => new TaskRootFolder()),
+			new SystemFolderPrototype(VibecodeAppFolder::CODE, static fn (): SystemFolder => new VibecodeAppFolder()),
 		];
 
 		return $this->prototypes;

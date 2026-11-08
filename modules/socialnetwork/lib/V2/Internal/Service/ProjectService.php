@@ -209,7 +209,7 @@ class ProjectService
 					'id' => $user->id,
 					'ID' => $user->id,
 				]),
-				'FORMATTED_NAME' => htmlspecialcharsback($user->name ?? ''),
+				'FORMATTED_NAME' => htmlspecialcharsbx($user->name ?? ''),
 				'ROLE' => $user->role?->value ?? '',
 			];
 		}

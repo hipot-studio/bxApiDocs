@@ -2,13 +2,13 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Source;
 
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use CUtil;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-class DeleteSourceAction extends BaseAction
+class DeleteSourceAction extends FormatMenuAction
 {
 
 	public static function getId(): ?string
@@ -37,6 +37,10 @@ class DeleteSourceAction extends BaseAction
 
 		$this->onclick = "BX.BIConnector.ExternalSourceManager.Instance.deleteSource({$id}, '{$moduleId}')";
 
-		return parent::getControl($rawFields);
+		$result = parent::getControl($rawFields);
+
+		$result['html'] = $this->getMenuItem('--o-trashcan', true);
+
+		return $result;
 	}
 }

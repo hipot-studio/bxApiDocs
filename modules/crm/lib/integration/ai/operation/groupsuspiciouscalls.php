@@ -46,7 +46,7 @@ final class GroupSuspiciousCalls extends AbstractOperation
 
 	public static function isAccessGranted(int $userId, ItemIdentifier $target): bool
 	{
-		return $userId === Dispatcher::SYSTEM_USER_ID && self::isSuitableTarget($target);
+		return $userId === Dispatcher::getSystemUserId() && self::isSuitableTarget($target);
 	}
 
 	public static function isSuitableTarget(ItemIdentifier $target): bool
@@ -149,6 +149,7 @@ final class GroupSuspiciousCalls extends AbstractOperation
 		return new GroupSuspiciousCallsPayload(['groups' => $groups]);
 	}
 
+	// Required by the contract, but unreachable: this type is in AbstractOperation::EXCLUDED_OPERATION_TYPES.
 	protected static function getJobFinishEventBuilder(): AIBaseEvent
 	{
 		return new GenerateCallCriteriaEvent();

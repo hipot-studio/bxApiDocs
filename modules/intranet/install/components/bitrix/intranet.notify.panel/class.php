@@ -27,6 +27,7 @@ class IntranetNotifyPanelComponent extends \CBitrixComponent implements Controll
 
 	public function onPrepareComponentParams($arParams): array
 	{
+		$this->arResult['collaboration_balloon_menu_id'] = false;
 		$this->arResult['config'] = [
 			'isAdmin' => CurrentUser::get()->isAdmin(),
 			'notify' => $this->getNotifyConfiguration(),

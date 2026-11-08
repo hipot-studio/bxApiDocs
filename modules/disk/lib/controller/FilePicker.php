@@ -44,6 +44,12 @@ class FilePicker extends Controller
 					new ActionFilter\CloseSession(),
 				],
 			],
+			'getViewerAttributes' => [
+				'+prefilters' => [
+					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),
+					new ActionFilter\CloseSession(),
+				],
+			],
 		];
 	}
 
@@ -56,6 +62,7 @@ class FilePicker extends Controller
 		int $pageSize = Provider::DEFAULT_PAGE_SIZE,
 		bool $includeTotal = false,
 		?array $signedConfig = null,
+		int $page = Provider::DEFAULT_PAGE,
 	): ?array
 	{
 		$startedAt = microtime(true);
@@ -96,6 +103,7 @@ class FilePicker extends Controller
 				$filterResult->getData()['filter'],
 				$pageSize,
 				$includeTotal,
+				$page,
 			),
 			'getInitialStage',
 			$pageSize,
@@ -264,6 +272,44 @@ class FilePicker extends Controller
 				$allowedFileTypes,
 			),
 			'resolveSelection',
+			null,
+			false,
+			$isSigned,
+			$startedAt,
+		);
+	}
+
+	/**
+	 * The signed config is validated and bound to the user and the site as everywhere else, but it does not
+	 * narrow the answer: the right to preview a file is the right to read it, not a match with the types the
+	 * host allows to select.
+	 */
+	public function getViewerAttributesAction(
+		CurrentUser $currentUser,
+		array $objectIds,
+		?array $signedConfig = null,
+	): ?array
+	{
+		$startedAt = microtime(true);
+		$isSigned = $signedConfig !== null;
+		$signedConfigResult = $this->createSignedConfig($signedConfig, $currentUser);
+		if (!$signedConfigResult->isSuccess())
+		{
+			return $this->processResult(
+				$signedConfigResult,
+				'getViewerAttributes',
+				null,
+				false,
+				$isSigned,
+				$startedAt,
+			);
+		}
+
+		$signedConfig = $signedConfigResult->getData()['signedConfig'];
+
+		return $this->processResult(
+			$this->createProvider($currentUser, $signedConfig)->getViewerAttributes($objectIds),
+			'getViewerAttributes',
 			null,
 			false,
 			$isSigned,

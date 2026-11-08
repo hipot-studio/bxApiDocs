@@ -2,6 +2,7 @@
 
 namespace Bitrix\AI\SharePrompt\Service\GridPrompt;
 
+use Bitrix\AI\Entity\AccessCodeTrait;
 use Bitrix\AI\Entity\TranslateTrait;
 use Bitrix\AI\Integration\Socialnetwork\GroupService;
 use Bitrix\AI\SharePrompt\Repository\GridPromptRepository;
@@ -34,6 +35,7 @@ class GridPromptService
 {
 	use UserPhoto;
 	use TranslateTrait;
+	use AccessCodeTrait;
 
 	const MAX_SHARE_DATA = 5;
 
@@ -42,6 +44,11 @@ class GridPromptService
 	protected string $allUsersEntityName;
 
 	protected string $nameFormat;
+
+	/** @var list<int> */
+	protected array $pageGroupIds = [];
+
+	protected ?array $notVisibleGroupIdSet = null;
 
 	public function __construct(
 		protected GridPromptRepository $gridPromptRepository,
@@ -207,6 +214,22 @@ class GridPromptService
 	 */
 	protected function fillSharing(array $prompts, int $userId): array
 	{
+		$pageCodes = [];
+		foreach ($prompts as $prompt)
+		{
+			if (empty($prompt['SHARE_CODES']))
+			{
+				continue;
+			}
+
+			foreach (explode(',', $prompt['SHARE_CODES']) as $code)
+			{
+				$pageCodes[$code] = $code;
+			}
+		}
+
+		$this->resetShareValidationState(array_values($pageCodes));
+
 		$sharingInfoDto = $this->getSharingInfoDto();
 		$format = $this->getNameFormat();
 
@@ -328,15 +351,15 @@ class GridPromptService
 
 	protected function getShareDTO(AccessRightEntityInterface $entity, array $userGroups, string $code): ShareDto
 	{
-		if (!array_key_exists($entity->getId(), $this->groupService->getNotVisibleGroupListInKeys()))
-		{
-			return new ShareDto($entity->getName(), $code, $entity->getAvatar());
-		}
-
+		$accessCode = new AccessCode($code);
 		$name = $entity->getName();
 		$img = $entity->getAvatar();
 
-		if (!array_key_exists($code, $userGroups))
+		if (
+			$accessCode->getEntityType() === AccessCode::TYPE_SOCNETGROUP
+			&& !array_key_exists($code, $userGroups)
+			&& isset($this->getNotVisibleGroupIdSet()[$accessCode->getEntityId()])
+		)
 		{
 			$name = $this->getHiddenName();
 			$img = null;
@@ -428,6 +451,27 @@ class GridPromptService
 		}
 
 		return $this->allUsersEntityName;
+	}
+
+	/**
+	 * Collects the group ids of the codes to validate and drops the memoized predicate.
+	 *
+	 * @param string[] $codes
+	 */
+	protected function resetShareValidationState(array $codes): void
+	{
+		$this->pageGroupIds = $this->collectEntityIds($codes, AccessCode::TYPE_SOCNETGROUP);
+		$this->notVisibleGroupIdSet = null;
+	}
+
+	protected function getNotVisibleGroupIdSet(): array
+	{
+		if (is_null($this->notVisibleGroupIdSet))
+		{
+			$this->notVisibleGroupIdSet = array_flip($this->groupService->getNotVisibleGroupIds($this->pageGroupIds));
+		}
+
+		return $this->notVisibleGroupIdSet;
 	}
 
 	protected function getCodeForUser(int $userId): string

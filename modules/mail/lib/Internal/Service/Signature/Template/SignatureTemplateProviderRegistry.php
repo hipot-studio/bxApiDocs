@@ -9,6 +9,11 @@ final class SignatureTemplateProviderRegistry
 	/** @var array<string, SignatureTemplateProvider> */
 	private array $providers = [];
 
+	public static function createDefault(): self
+	{
+		return new self([new ImageSignatureTemplateProvider()]);
+	}
+
 	/** @param iterable<SignatureTemplateProvider> $providers */
 	public function __construct(iterable $providers)
 	{

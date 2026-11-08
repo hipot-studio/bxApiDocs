@@ -2,10 +2,9 @@
 
 namespace Bitrix\Mobile\TariffPlanRestriction\Provider;
 
-use Bitrix\Bitrix24\License;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
-use Bitrix\Main\Loader;
+use Bitrix\Mobile\Internal\Integration\Bitrix24\License;
 use Bitrix\Mobile\TariffPlanRestriction\Dto\FeatureRestrictionDto;
 
 class TariffPlanRestrictionProvider
@@ -47,18 +46,11 @@ class TariffPlanRestrictionProvider
 
 	public function isDemoAvailable(): bool
 	{
-		return (
-			Loader::includeModule('bitrix24')
-			&& License::getCurrent()->getDemo()->isAvailable()
-		);
+		return (new License())->isDemoAvailable();
 	}
 
 	public function activateDemo(): bool
 	{
-		return (
-			Loader::includeModule('bitrix24')
-			&& License::getCurrent()->getDemo()->isAvailable()
-			&& !License::getCurrent()->getDemo()->activate()->isSuccess()
-		);
+		return (new License())->activateDemo();
 	}
 }

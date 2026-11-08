@@ -25,7 +25,8 @@ class MailboxDirectoryHelper
 	{
 		$this->mailboxId = (int)$mailboxId;
 		$this->userId = $userId;
-		$this->generationScope = $generationScope ?? GenerationScope::forMailbox($this->mailboxId);
+		// A caller that names no scope gets the folders serving the mailbox, prepared ones aside
+		$this->generationScope = $generationScope ?? GenerationScope::servingMailbox($this->mailboxId);
 		$this->storage = new MailboxDirectoryStorage($mailboxId, $this->generationScope);
 		$this->errors = new ErrorCollection();
 	}
@@ -166,6 +167,11 @@ class MailboxDirectoryHelper
 
 	public function getDirByHash($hash)
 	{
+		if (!$hash)
+		{
+			return null;
+		}
+
 		$dir = $this->storage->getByHash($hash);
 
 		if ($dir != null)
@@ -182,15 +188,19 @@ class MailboxDirectoryHelper
 		{
 			case MailboxDirectoryTable::TYPE_INCOME:
 				return $this->getIncomePath();
+
 				break;
 			case MailboxDirectoryTable::TYPE_OUTCOME:
 				return $this->getOutcomePath();
+
 				break;
 			case MailboxDirectoryTable::TYPE_SPAM:
 				return $this->getSpamPath();
+
 				break;
 			case MailboxDirectoryTable::TYPE_TRASH:
 				return $this->getTrashPath();
+
 				break;
 			default:
 				return '';
@@ -247,6 +257,7 @@ class MailboxDirectoryHelper
 	{
 		$syncDirs = $this->getSyncDirs();
 		$filteredDirs = array_filter($syncDirs, static fn ($dir) => !$dir->isInvisibleToCounters());
+
 		return array_values(array_map(static fn ($dir) => $dir->getDirMd5(), $filteredDirs));
 	}
 
@@ -283,7 +294,7 @@ class MailboxDirectoryHelper
 		foreach ($mailboxIds as $mailboxId)
 		{
 			$helper = Mailbox::createInstance($mailboxId, false);
-			if (!($helper instanceof Mailbox))
+			if (!$helper instanceof Mailbox)
 			{
 				continue;
 			}
@@ -308,7 +319,7 @@ class MailboxDirectoryHelper
 		foreach ($mailboxIds as $mailboxId)
 		{
 			$helper = Mailbox::createInstance((int)$mailboxId, false);
-			if (!($helper instanceof Mailbox))
+			if (!$helper instanceof Mailbox)
 			{
 				continue;
 			}
@@ -467,7 +478,7 @@ class MailboxDirectoryHelper
 					$dirObj,
 					$systemDirMap,
 					$directoriesWithNumberOfUnreadMessages,
-					true
+					true,
 				);
 				$list[] = $folderData;
 			}
@@ -485,7 +496,7 @@ class MailboxDirectoryHelper
 		$dir,
 		array $systemDirMap,
 		array $directoriesWithNumberOfUnreadMessages,
-		bool $isHidden = false
+		bool $isHidden = false,
 	): array
 	{
 		$id = $dir->getId();
@@ -582,20 +593,20 @@ class MailboxDirectoryHelper
 			$bSort = $b->getName();
 
 			if (
-				$a->isSpam() ||
-				$a->isTrash() ||
-				$a->isDraft() ||
-				$a->isOutcome()
+				$a->isSpam()
+				|| $a->isTrash()
+				|| $a->isDraft()
+				|| $a->isOutcome()
 			)
 			{
 				$aSort = 1000;
 			}
 
 			if (
-				$b->isSpam() ||
-				$b->isTrash() ||
-				$b->isDraft() ||
-				$b->isOutcome()
+				$b->isSpam()
+				|| $b->isTrash()
+				|| $b->isDraft()
+				|| $b->isOutcome()
 			)
 			{
 				$bSort = 1000;
@@ -827,7 +838,7 @@ class MailboxDirectoryHelper
 			$this->mailboxId,
 			$parent->getId(),
 			$parent->getLevel() + 1,
-			$this->generationScope
+			$this->generationScope,
 		);
 	}
 
@@ -837,7 +848,7 @@ class MailboxDirectoryHelper
 			$this->mailboxId,
 			$parent->getPath(true) . $parent->getDelimiter() . '%',
 			$parent->getLevel() + 1,
-			$this->generationScope
+			$this->generationScope,
 		);
 	}
 
@@ -859,14 +870,14 @@ class MailboxDirectoryHelper
 					'GENERATION_ID' => $this->generationScope->getStampGenerationId(),
 					'NAME'        => Emoji::encode($dir['name']),
 					'PATH'        => Emoji::encode($dir['path']),
-					'LEVEL'       => isset($dir['level']) ? $dir['level'] : 1,
-					'PARENT_ID'   => isset($dir['parent_id']) ? $dir['parent_id'] : null,
-					'ROOT_ID'     => isset($dir['root_id']) ? $dir['root_id'] : null,
+					'LEVEL'       => $dir['level'] ?? 1,
+					'PARENT_ID'   => $dir['parent_id'] ?? null,
+					'ROOT_ID'     => $dir['root_id'] ?? null,
 					'FLAGS'       => MailboxDirectoryHelper::getFlags($dir['flags']),
 					'DELIMITER'   => $dir['delim'],
 					'DIR_MD5'     => md5(Emoji::encode($dir['path'])),
 					'IS_SYNC'     => $dir['is_sync'],
-					'IS_INCOME'   => mb_strtoupper($dir['name']) === 'INBOX',
+					'IS_INCOME'   => (int)($dir['level'] ?? 1) === 1 && mb_strtoupper($dir['name']) === 'INBOX',
 					'IS_OUTCOME'  => preg_grep('/^ \x5c Sent $/ix', $dir['flags']),
 					'IS_DRAFT'    => preg_grep('/^ \x5c Drafts $/ix', $dir['flags']),
 					'IS_TRASH'    => preg_grep('/^ \x5c Trash $/ix', $dir['flags']),
@@ -874,7 +885,7 @@ class MailboxDirectoryHelper
 					'IS_DISABLED' => preg_grep('/^ \x5c Noselect $/ix', $dir['flags']),
 				];
 			},
-			$diffDirs
+			$diffDirs,
 		);
 
 		if (!empty($addRows))
@@ -897,7 +908,7 @@ class MailboxDirectoryHelper
 			{
 				return $flagsA > $flagsB ? 1 : -1;
 			}
-			else if ($delimA !== $delimB)
+			if ($delimA !== $delimB)
 			{
 				return $delimA > $delimB ? 1 : -1;
 			}
@@ -918,8 +929,8 @@ class MailboxDirectoryHelper
 				$dbDir->getId(),
 				[
 					'DELIMITER' => $row['delim'],
-					'FLAGS' => MailboxDirectoryHelper::getFlags($row['flags']),
-				]
+					'FLAGS' => self::getFlags($row['flags']),
+				],
 			);
 		}
 	}
@@ -944,14 +955,14 @@ class MailboxDirectoryHelper
 		}
 	}
 
-	public function toggleSyncDirs($dirs)
+	public function toggleSyncDirs($dirs, bool $activateSync = true)
 	{
 		$enableRows = [];
 		$disableRows = [];
 
 		foreach ($dirs as $dir)
 		{
-			$hash = isset($dir['dirMd5']) ? $dir['dirMd5'] : null;
+			$hash = $dir['dirMd5'] ?? null;
 			$value = isset($dir['value']) ? intval($dir['value']) : 0;
 
 			if (!$hash || !in_array($value, [MailboxDirectoryTable::ACTIVE, MailboxDirectoryTable::INACTIVE]))
@@ -979,8 +990,11 @@ class MailboxDirectoryHelper
 			MailboxDirectory::updateSyncDirs($disableRows, MailboxDirectoryTable::INACTIVE, $this->mailboxId, $this->generationScope);
 		}
 
-		$mailboxHelper = Mailbox::createInstance($this->mailboxId);
-		$mailboxHelper->activateSync();
+		if ($activateSync)
+		{
+			$mailboxHelper = Mailbox::createInstance($this->mailboxId);
+			$mailboxHelper->activateSync();
+		}
 	}
 
 	public function saveDirsTypes($dirs)
@@ -990,7 +1004,7 @@ class MailboxDirectoryHelper
 			$type = !empty($dir['type']) ? $dir['type'] : null;
 			$hash = !empty($dir['dirMd5']) ? $dir['dirMd5'] : null;
 
-			if (!MailboxDirectoryHelper::isDirsTypes($type) || !$hash)
+			if (!self::isDirsTypes($type) || !$hash)
 			{
 				continue;
 			}
@@ -1004,8 +1018,8 @@ class MailboxDirectoryHelper
 				MailboxDirectory::update(
 					$result->getId(),
 					[
-						$type => MailboxDirectoryTable::ACTIVE
-					]
+						$type => MailboxDirectoryTable::ACTIVE,
+					],
 				);
 			}
 		}
@@ -1015,11 +1029,290 @@ class MailboxDirectoryHelper
 	{
 		$dbDirs = $this->getAllOneLevel();
 
+		$this->syncDbDirsLevel($dirs, $dbDirs);
+	}
+
+	/**
+	 * Stores a complete IMAP LIST snapshot without flattening its hierarchy.
+	 *
+	 * @param array<int, array<string, mixed>> $dirs
+	 */
+	public function syncDbDirsSnapshot(array $dirs): void
+	{
+		$snapshot = $this->normalizeDbDirsSnapshot($dirs);
+		$directoriesByLevel = [];
+		$storedDirectories = $this->getDirs();
+
+		foreach ($snapshot as $path => $dir)
+		{
+			$directoriesByLevel[$dir['level']][$path] = $dir;
+		}
+		ksort($directoriesByLevel);
+
+		foreach ($directoriesByLevel as $level => $directories)
+		{
+			foreach ($directories as $path => $directory)
+			{
+				$parentPath = $directory['parent_path'];
+				if ($parentPath === null)
+				{
+					continue;
+				}
+
+				$parent = $storedDirectories[$parentPath] ?? null;
+				if ($parent === null)
+				{
+					throw new \RuntimeException(sprintf('The parent IMAP directory %s was not saved', $parentPath));
+				}
+
+				$directories[$path] += [
+					'parent_id' => $parent->getId(),
+					'root_id' => $parent->getRootId() ?: $parent->getId(),
+				];
+			}
+
+			$storedAtLevel = [];
+			foreach ($storedDirectories as $stored)
+			{
+				if ((int)$stored->getLevel() === $level)
+				{
+					$storedAtLevel[$stored->getPath()] = $stored;
+				}
+			}
+
+			$this->syncDbDirsLevel($directories, $storedAtLevel, false);
+			foreach (array_keys($storedAtLevel) as $path)
+			{
+				unset($storedDirectories[$path]);
+			}
+			foreach ($this->fetchDbDirsAtLevel($level) as $path => $stored)
+			{
+				$storedDirectories[$path] = $stored;
+			}
+			$this->setDirs($storedDirectories);
+		}
+
+		$this->updateCache();
+		$this->assertDbDirsSnapshot($snapshot);
+	}
+
+	/**
+	 * Adds folders to the stored ones of the scope and touches nothing else: a path already stored is
+	 * skipped, and no stored folder is updated or removed. The parent of a folder is either stored or
+	 * among the added ones.
+	 *
+	 * @param array<int, array<string, mixed>> $dirs In the shape of {@see syncDbDirsSnapshot()}.
+	 */
+	public function appendDbDirsSnapshot(array $dirs): void
+	{
+		$this->updateCache();
+		$this->reloadDirs();
+		$storedDirectories = $this->getDirs();
+		$added = array_diff_key($this->normalizeDbDirsSnapshot($dirs, $storedDirectories), $storedDirectories);
+		if ($added === [])
+		{
+			return;
+		}
+
+		$directoriesByLevel = [];
+		foreach ($added as $path => $dir)
+		{
+			$directoriesByLevel[$dir['level']][$path] = $dir;
+		}
+		ksort($directoriesByLevel);
+
+		foreach ($directoriesByLevel as $level => $directories)
+		{
+			foreach ($directories as $path => $directory)
+			{
+				$parentPath = $directory['parent_path'];
+				if ($parentPath === null)
+				{
+					continue;
+				}
+
+				$parent = $storedDirectories[$parentPath] ?? null;
+				if ($parent === null)
+				{
+					throw new \RuntimeException(sprintf('The parent IMAP directory %s was not saved', $parentPath));
+				}
+
+				$directories[$path] += [
+					'parent_id' => $parent->getId(),
+					'root_id' => $parent->getRootId() ?: $parent->getId(),
+				];
+			}
+
+			$this->addSyncDirs($directories, $storedDirectories);
+			foreach ($this->fetchDbDirsAtLevel($level) as $path => $stored)
+			{
+				$storedDirectories[$path] = $stored;
+			}
+		}
+
+		$this->updateCache();
+		$this->reloadDirs();
+		$stored = $this->getDirs();
+		foreach ($added as $path => $expected)
+		{
+			$directory = $stored[$path] ?? null;
+			$parent = $expected['parent_path'] === null ? null : ($stored[$expected['parent_path']] ?? null);
+			if (
+				$directory === null
+				|| (int)$directory->getLevel() !== $expected['level']
+				|| (int)$directory->getParentId() !== ($parent?->getId() ?? 0)
+			)
+			{
+				throw new \RuntimeException(sprintf('The added IMAP directory %s was not saved', $path));
+			}
+		}
+	}
+
+	private function syncDbDirsLevel(array $dirs, array $dbDirs, bool $refreshCache = true): void
+	{
 		$this->addSyncDirs($dirs, $dbDirs);
 		$this->updateSyncDirs($dirs, $dbDirs);
 		$this->removeSyncDirs($dirs, $dbDirs);
 
-		$this->updateCache();
+		if ($refreshCache)
+		{
+			$this->updateCache();
+		}
+	}
+
+	/** @return array<string, MailboxDirectoryEntity> */
+	private function fetchDbDirsAtLevel(int $level): array
+	{
+		$rows = MailboxDirectoryTable::getList([
+			'filter' => $this->generationScope->apply([
+				'=MAILBOX_ID' => $this->mailboxId,
+				'=LEVEL' => $level,
+			]),
+			'order' => ['ID' => 'ASC'],
+		]);
+		$directories = [];
+		while ($directory = $rows->fetchObject())
+		{
+			$directories[$directory->getPath()] = $directory;
+		}
+
+		return $directories;
+	}
+
+	/**
+	 * @param array<int, array<string, mixed>> $dirs
+	 * @param array<string, mixed> $storedDirectories Stored folders by path, which a parent may be one of.
+	 * @return array<string, array<string, mixed>>
+	 */
+	private function normalizeDbDirsSnapshot(array $dirs, array $storedDirectories = []): array
+	{
+		$snapshot = [];
+
+		foreach ($dirs as $dir)
+		{
+			$path = (string)($dir['name'] ?? '');
+			$delimiter = (string)($dir['delim'] ?? '');
+			$parts = $dir['path'] ?? null;
+
+			if ($path === '' || !is_array($parts) || $parts === [])
+			{
+				throw new \UnexpectedValueException('An IMAP directory snapshot has no full path');
+			}
+
+			$parts = array_map('strval', array_values($parts));
+			if (in_array('', $parts, true))
+			{
+				throw new \UnexpectedValueException(sprintf('The IMAP directory %s has an empty path segment', $path));
+			}
+			if (count($parts) > 1 && ($delimiter === '' || mb_strtoupper($delimiter) === 'NIL'))
+			{
+				throw new \UnexpectedValueException(sprintf('The IMAP directory %s has no hierarchy delimiter', $path));
+			}
+			if (implode($delimiter, $parts) !== $path)
+			{
+				throw new \UnexpectedValueException(sprintf('The IMAP directory path %s is inconsistent', $path));
+			}
+			if (isset($snapshot[$path]))
+			{
+				throw new \UnexpectedValueException(sprintf('The IMAP directory %s is listed more than once', $path));
+			}
+
+			$level = count($parts);
+			$parentPath = $level > 1 ? implode($delimiter, array_slice($parts, 0, -1)) : null;
+			$dir['name'] = (string)end($parts);
+			$dir['path'] = $path;
+			$dir['level'] = $level;
+			$dir['parent_path'] = $parentPath;
+			$snapshot[$path] = $dir;
+		}
+
+		foreach ($snapshot as $path => $dir)
+		{
+			$parentPath = $dir['parent_path'];
+			if ($parentPath !== null && !isset($snapshot[$parentPath]) && !isset($storedDirectories[$parentPath]))
+			{
+				throw new \UnexpectedValueException(sprintf(
+					'The parent IMAP directory %s of %s is missing from the snapshot',
+					$parentPath,
+					$path,
+				));
+			}
+		}
+
+		return $snapshot;
+	}
+
+	/**
+	 * @param array<string, array<string, mixed>> $snapshot
+	 */
+	private function assertDbDirsSnapshot(array $snapshot): void
+	{
+		$this->reloadDirs();
+		$stored = $this->getDirs();
+		$storedPaths = array_keys($stored);
+		$snapshotPaths = array_keys($snapshot);
+		sort($storedPaths);
+		sort($snapshotPaths);
+
+		if ($storedPaths !== $snapshotPaths)
+		{
+			throw new \RuntimeException('The complete IMAP directory snapshot was not saved');
+		}
+
+		foreach ($snapshot as $path => $expected)
+		{
+			$directory = $stored[$path] ?? null;
+			$parentPath = $expected['parent_path'];
+			$parent = $parentPath === null ? null : ($stored[$parentPath] ?? null);
+			$expectedParentId = $parent?->getId() ?? 0;
+			$expectedRootId = $parent === null ? 0 : ($parent->getRootId() ?: $parent->getId());
+
+			if (
+				$directory === null
+				|| $directory->getDelimiter() !== $expected['delim']
+				|| (int)$directory->getLevel() !== $expected['level']
+				|| (int)$directory->getParentId() !== $expectedParentId
+				|| (int)$directory->getRootId() !== $expectedRootId
+			)
+			{
+				throw new \RuntimeException(sprintf(
+					'The topology of IMAP directory %s was not saved: expected %s, got %s',
+					$path,
+					json_encode([
+						'delimiter' => $expected['delim'],
+						'level' => $expected['level'],
+						'parentId' => $expectedParentId,
+						'rootId' => $expectedRootId,
+					]),
+					json_encode($directory === null ? null : [
+						'delimiter' => $directory->getDelimiter(),
+						'level' => $directory->getLevel(),
+						'parentId' => $directory->getParentId(),
+						'rootId' => $directory->getRootId(),
+					]),
+				));
+			}
+		}
 	}
 
 	public function updateMessageCount($id, $count)
@@ -1034,9 +1327,9 @@ class MailboxDirectoryHelper
 			[
 				MailboxDirectoryTable::TYPE_OUTCOME,
 				MailboxDirectoryTable::TYPE_TRASH,
-				MailboxDirectoryTable::TYPE_SPAM
+				MailboxDirectoryTable::TYPE_SPAM,
 			],
-			true
+			true,
 		))
 		{
 			return true;
@@ -1048,6 +1341,7 @@ class MailboxDirectoryHelper
 	public static function getFlags(array $flags)
 	{
 		sort($flags);
+
 		return implode(' ', $flags);
 	}
 

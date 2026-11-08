@@ -152,21 +152,8 @@ class CashboxAtolFarm extends Cashbox implements IPrintImmediately, ICheckable
 	{
 		$context = Main\Application::getInstance()->getContext();
 		$scheme = $context->getRequest()->isHttps() ? 'https' : 'http';
-		$server = $context->getServer();
-		$domain = $server->getServerName();
 
-		if (preg_match('/^(?<domain>.+):(?<port>\d+)$/', $domain, $matches))
-		{
-			$domain = $matches['domain'];
-			$port   = $matches['port'];
-		}
-		else
-		{
-			$port = $server->getServerPort();
-		}
-		$port = in_array($port, array(80, 443)) ? '' : ':'.$port;
-
-		return sprintf('%s://%s%s/bitrix/tools/sale_farm_check_print.php', $scheme, $domain, $port);
+		return sprintf('%s://%s/bitrix/tools/sale_farm_check_print.php', $scheme, Manager::getSiteHost());
 	}
 
 	/**

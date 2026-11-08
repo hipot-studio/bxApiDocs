@@ -11,6 +11,7 @@ use Bitrix\Main\Validation\Rule\PositiveNumber;
 use Bitrix\Main\Validation\Rule\Recursive\Validatable;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 use Bitrix\Socialnetwork\V2\Public\Dto;
+use Bitrix\Socialnetwork\V2\Public\Validation\Rule\TeamsSupported;
 
 class AddMembersCommand extends AbstractCommand
 {
@@ -19,6 +20,7 @@ class AddMembersCommand extends AbstractCommand
 		public readonly int $projectId,
 		#[NotEmpty]
 		#[Validatable]
+		#[TeamsSupported]
 		public readonly ?Dto\Project\MemberCollection $members,
 		#[PositiveNumber]
 		public readonly int $userId,

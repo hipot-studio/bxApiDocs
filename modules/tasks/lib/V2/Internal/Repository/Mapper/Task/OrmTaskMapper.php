@@ -561,7 +561,7 @@ class OrmTaskMapper
 			$fields['TASK_CONTROL'] = $task->needsControl;
 		}
 
-		if ($task->plannedDuration)
+		if ($task->plannedDuration !== null)
 		{
 			$fields['DURATION_PLAN'] = $task->plannedDuration;
 		}

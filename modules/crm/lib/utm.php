@@ -175,7 +175,7 @@ class UtmTable extends Entity\DataManager
 
 	public static function getEntityUtm(int $entityTypeId, int $entityId): array
 	{
-		$cacheKay = $entityTypeId . '_' . $entityId;
+		$cacheKay = self::getCacheKey($entityTypeId, $entityId);
 
 		if (isset(static::$entityUtmCache[$cacheKay]))
 		{
@@ -273,6 +273,16 @@ class UtmTable extends Entity\DataManager
 			throw new Main\ArgumentException('Must be greater than zero.', 'newEntityID');
 		}
 
+		// the target may keep stale tags with the same codes, the moved ones win
+		$movedCodes = array_column(
+			static::getList([
+				'select' => ['CODE'],
+				'filter' => ['=ENTITY_TYPE_ID' => $oldEntityTypeID, '=ENTITY_ID' => $oldEntityID],
+			])->fetchAll(),
+			'CODE'
+		);
+		static::deleteEntityUtmCodes($newEntityTypeID, $newEntityID, $movedCodes);
+
 		Main\Application::getConnection()->queryExecute(
 			"UPDATE b_crm_utm SET ENTITY_TYPE_ID = {$newEntityTypeID}, ENTITY_ID = {$newEntityID} WHERE ENTITY_TYPE_ID = {$oldEntityTypeID} AND ENTITY_ID = {$oldEntityID}"
 		);
@@ -318,9 +328,57 @@ class UtmTable extends Entity\DataManager
 		return $resultList;
 	}
 
+	/** @internal */
+	public static function warmupEntityUtmCache(int $entityTypeId, array $entityIds): void
+	{
+		$idsToLoad = [];
+		foreach ($entityIds as $entityId)
+		{
+			$entityId = (int)$entityId;
+			if ($entityId > 0 && !isset(self::$entityUtmCache[self::getCacheKey($entityTypeId, $entityId)]))
+			{
+				$idsToLoad[$entityId] = $entityId;
+			}
+		}
+
+		if (empty($idsToLoad))
+		{
+			return;
+		}
+
+		$utmByEntity = array_fill_keys($idsToLoad, []);
+		$dbResult = static::getList([
+			'filter' => [
+				'=ENTITY_TYPE_ID' => $entityTypeId,
+				'@ENTITY_ID' => array_values($idsToLoad),
+			],
+			// the primary key order a per-entity read gets
+			'order' => ['ENTITY_ID' => 'ASC', 'CODE' => 'ASC'],
+		]);
+		while ($row = $dbResult->fetch())
+		{
+			$utmByEntity[(int)$row['ENTITY_ID']][$row['CODE']] = $row['VALUE'];
+		}
+
+		foreach ($utmByEntity as $entityId => $utm)
+		{
+			self::$entityUtmCache[self::getCacheKey($entityTypeId, $entityId)] = $utm;
+		}
+	}
+
+	/** @internal */
+	public static function cleanRuntimeCache(): void
+	{
+		self::$entityUtmCache = [];
+	}
+
 	private static function invalidateEntityUtmCache(int $entityTypeId, int $entityId): void
 	{
-		$cacheKay = $entityTypeId . '_' . $entityId;
-		unset(static::$entityUtmCache[$cacheKay]);
+		unset(self::$entityUtmCache[self::getCacheKey($entityTypeId, $entityId)]);
+	}
+
+	private static function getCacheKey(int $entityTypeId, int $entityId): string
+	{
+		return $entityTypeId . '_' . $entityId;
 	}
 }

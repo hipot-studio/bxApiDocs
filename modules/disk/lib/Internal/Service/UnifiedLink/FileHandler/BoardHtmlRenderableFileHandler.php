@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink\FileHandler;
@@ -24,7 +23,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Web\Uri;
 
-class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
+class BoardHtmlRenderableFileHandler implements HtmlRenderableHandler
 {
 	private TrackedObjectManager $trackedObjectManager;
 	private SessionCommandFactory $sessionCommandFactory;
@@ -40,17 +39,17 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 		$this->exceptionHandler = Application::getInstance()->getExceptionHandler();
 	}
 
-	public function view(): FileHandlerOperationResult
+	public function view(): HandlerOperationResult
 	{
 		return $this->handle(DocumentSession::TYPE_VIEW);
 	}
 
-	public function edit(): FileHandlerOperationResult
+	public function edit(): HandlerOperationResult
 	{
 		return $this->handle(DocumentSession::TYPE_EDIT);
 	}
 
-	private function handle(int $type): FileHandlerOperationResult
+	private function handle(int $type): HandlerOperationResult
 	{
 		$createInternalSessionCommand = $this->sessionCommandFactory->createCreateInternalSessionCommand($type, true);
 
@@ -62,12 +61,12 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 		{
 			$this->exceptionHandler->writeToLog($e);
 
-			return FileHandlerOperationResult::createFromException($e);
+			return HandlerOperationResult::createFromException($e);
 		}
 
 		if (!$sessionCreationResult->isSuccess())
 		{
-			return FileHandlerOperationResult::createError($sessionCreationResult->getErrorCollection());
+			return HandlerOperationResult::createError($sessionCreationResult->getErrorCollection());
 		}
 
 		/** @var DocumentSession $documentSession */
@@ -85,7 +84,7 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 				],
 			);
 
-			return FileHandlerOperationResult::createError(
+			return HandlerOperationResult::createError(
 				new ErrorCollection([new Error('Board service profile is not resolved')]),
 			);
 		}
@@ -111,7 +110,7 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 		}
 	}
 
-	private function showEditor(DocumentSession $documentSession): FileHandlerOperationResult
+	private function showEditor(DocumentSession $documentSession): HandlerOperationResult
 	{
 		$downloadUrl = (new DocumentDownloadUrlService())->build($documentSession, applyLegacyHttpDowngrade: true);
 
@@ -134,7 +133,9 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 					'AVATAR_URL' => $avatarUri,
 					'SHOW_TEMPLATES_MODAL' => $showTemplatesModal,
 					'EXTERNAL_LINK_MODE' => false,
-					'UNIFIED_LINK_ACCESS_ONLY' => !$documentSession->canUserRead(CurrentUser::get()),
+					// The chain has answered for the uniqueCode by now, so the page of the board is the
+					// proof of the link the description of its header is told about.
+					'UNIFIED_LINK_MODE' => true,
 					'FILE_UNIQUE_CODE' => $documentSession->getFile()?->getUniqueCode(),
 					'ORIGINAL_FILE' => $this->file,
 				],
@@ -145,7 +146,7 @@ class BoardHtmlRenderableFileHandler implements HtmlRenderableFileHandler
 			],
 		);
 
-		return FileHandlerOperationResult::createSuccess($content);
+		return HandlerOperationResult::createSuccess($content);
 	}
 
 	private function getCurrentUser(): CurrentUser

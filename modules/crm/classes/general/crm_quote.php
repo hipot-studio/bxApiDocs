@@ -3441,24 +3441,13 @@ class CAllCrmQuote
 			return false;
 		}
 
-		$paymentData = \CCrmQuote::prepareSalePaymentData($quoteFields);
-		if (!is_array($paymentData))
-		{
-			$error = 'COULD NOT PREPARE PAYMENT DATA!';
-			return false;
-		}
-
 		$dbPaySysAction = \CSalePaySystemAction::getList(
-			array(),
-			array(
-				'PAY_SYSTEM_ID'  => $pay_system_id,
-				'PERSON_TYPE_ID' => $quoteFields['PERSON_TYPE_ID'],
-			),
+			[],
+			['PAY_SYSTEM_ID' => $pay_system_id, 'PERSON_TYPE_ID' => $quoteFields['PERSON_TYPE_ID']],
 			false,
 			false,
-			array('ACTION_FILE', 'PARAMS', 'ENCODING')
+			['ID', 'ACTION_FILE', 'ENCODING'],
 		);
-
 		$paySysActionFields = $dbPaySysAction->fetch();
 		if (!is_array($paySysActionFields))
 		{
@@ -3466,11 +3455,13 @@ class CAllCrmQuote
 			return false;
 		}
 
-		$actionFilePath = $paySysActionFields['ACTION_FILE'] ?? '';
+		$resolution = (new \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerGuard())->resolve(
+			$paySysActionFields,
+			\Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerCatalog::PURPOSE_LEGACY_PRINT,
+		);
 		if (
-			!is_string($actionFilePath)
-			|| $actionFilePath === ''
-			|| \Bitrix\Sale\PaySystem\Manager::isRestHandler($actionFilePath)
+			!$resolution->isSuccess()
+			|| \Bitrix\Sale\PaySystem\Manager::isRestHandler($paySysActionFields['ACTION_FILE'])
 		)
 		{
 			$error = 'COULD NOT FIND PAYMENT SYSTEM ACTION FILE!';
@@ -3478,71 +3469,74 @@ class CAllCrmQuote
 			return false;
 		}
 
-		$actionFilePath = $_SERVER['DOCUMENT_ROOT'].$actionFilePath;
-		$actionFilePath = str_replace('\\', '/', $actionFilePath);
-		while (mb_substr($actionFilePath, mb_strlen($actionFilePath) - 1, 1) == '/')
-			$actionFilePath = mb_substr($actionFilePath, 0, mb_strlen($actionFilePath) - 1);
-
-		if (!file_exists($actionFilePath))
+		$paramsResult = (new \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerMetadataProvider())->getParameters(
+			$paySysActionFields, (int)$quoteFields['PERSON_TYPE_ID'],
+		);
+		if (!$paramsResult->isSuccess())
 		{
 			$error = 'COULD NOT FIND PAYMENT SYSTEM ACTION FILE!';
+
 			return false;
 		}
-		else if (is_dir($actionFilePath))
+		$paySysActionFields['PARAMS'] = serialize($paramsResult->getData()['params']);
+		$resolution = (new \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerGuard())->resolve(
+			$paySysActionFields, \Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerCatalog::PURPOSE_LEGACY_PRINT,
+		);
+		if (!$resolution->isSuccess())
 		{
-			$actionFilePath = $actionFilePath.'/payment.php';
-			if (!file_exists($actionFilePath))
+			$error = 'COULD NOT FIND PAYMENT SYSTEM ACTION FILE!';
+
+			return false;
+		}
+
+		$paymentData = \CCrmQuote::prepareSalePaymentData($quoteFields);
+		if (!is_array($paymentData))
+		{
+			$error = 'COULD NOT PREPARE PAYMENT DATA!';
+			return false;
+		}
+
+		$handler = $resolution->getData()['handler'];
+		$operation = \Bitrix\Crm\V2\Internal\Service\PaySystem\PrintOperation::getCurrent();
+		$ownsOperation = $operation === null;
+		$operation ??= new \Bitrix\Crm\V2\Internal\Service\PaySystem\PrintOperation(
+			'quote', 'email_attachment', 'quote_save_pdf',
+		);
+
+		return $operation->run(static function () use (
+			$handler, $paymentData, $operation, $ownsOperation, $quote_id, &$error,
+		) {
+			$result = (new \Bitrix\Crm\V2\Internal\Service\PaySystem\QuoteRenderer())->render(
+				$handler, $paymentData, $operation, true, true,
+			);
+			if (!$result->isSuccess())
 			{
-				$error = 'COULD NOT FIND PAYMENT SYSTEM ACTION FILE!';
+				$error = 'COULD NOT GENERATE PDF!';
+
 				return false;
 			}
-		}
 
-		\CSalePaySystemAction::initParamArrays(
-			$paymentData['ORDER'],
-			0,
-			$paySysActionFields['PARAMS'],
-			array(
-				"PROPERTIES"     => $paymentData['PROPERTIES'],
-				"BASKET_ITEMS"   => $paymentData['CART_ITEMS'],
-				'TAX_LIST'       => $paymentData['TAX_LIST'],
-				'REQUISITE'      => $paymentData['REQUISITE'],
-				'BANK_DETAIL'    => $paymentData['BANK_DETAIL'],
-				'CRM_COMPANY'    => $paymentData['CRM_COMPANY'],
-				'CRM_CONTACT'    => $paymentData['CRM_CONTACT'],
-				'MC_REQUISITE'   => $paymentData['MC_REQUISITE'],
-				'MC_BANK_DETAIL' => $paymentData['MC_BANK_DETAIL'],
-				'CRM_MYCOMPANY'  => $paymentData['CRM_MYCOMPANY']
-			),
-			$paymentData['PAYMENT'],
-			$paymentData['SHIPMENT']
-		);
+			$fileID = \CFile::saveFile([
+				'name' => "quote_{$quote_id}.pdf",
+				'type' => 'application/pdf',
+				'content' => $result->getData()['content'],
+				'MODULE_ID' => 'crm',
+			], 'crm');
+			if ($fileID <= 0)
+			{
+				$error = 'COULD NOT SAVE FILE!';
 
-		$origRequest = $_REQUEST;
-		$_REQUEST['pdf'] = true;
-		$_REQUEST['GET_CONTENT'] = 'Y';
+				return false;
+			}
 
-		$pdfContent = include($actionFilePath);
+			$operation->markGenerated($handler->getCode());
+			if ($ownsOperation)
+			{
+				$operation->complete();
+			}
 
-		$_REQUEST['pdf'] = $origRequest['pdf'] ?? false;
-		$_REQUEST['GET_CONTENT'] = $origRequest['GET_CONTENT'] ?? 'N';
-
-		$fileName = "quote_{$quote_id}.pdf";
-		$fileData = array(
-			'name' => $fileName,
-			'type' => 'application/pdf',
-			'content' => $pdfContent,
-			'MODULE_ID' => 'crm'
-		);
-
-		$fileID = \CFile::saveFile($fileData, 'crm');
-		if ($fileID <= 0)
-		{
-			$error = 'COULD NOT SAVE FILE!';
-			return false;
-		}
-
-		return $fileID;
+			return $fileID;
+		});
 	}
 
 	public static function existsEntityWithStatus($statusId)

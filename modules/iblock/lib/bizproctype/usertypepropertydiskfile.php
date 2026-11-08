@@ -203,6 +203,8 @@ if (Loader::requireModule('bizproc'))
 		{
 			if (defined('BX_MOBILE'))
 			{
+				static::cleanErrors();
+
 				return self::extractValueMobile($fieldType, $field, $request);
 			}
 

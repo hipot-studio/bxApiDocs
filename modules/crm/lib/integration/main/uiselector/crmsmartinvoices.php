@@ -14,6 +14,8 @@ class CrmSmartInvoices extends CrmDynamics
 {
 	public const PREFIX_SHORT = 'SI_';
 	public const PREFIX_FULL = 'CRMSMART_INVOICE';
+	private const SELECTED_ENTITIES_MAX_COUNT = 300;
+	private const IDS_QUERY_CHUNK_SIZE = 300;
 
 	protected static function getOwnerType(): int
 	{
@@ -69,7 +71,7 @@ class CrmSmartInvoices extends CrmDynamics
 			'ADDITIONAL_INFO' => [
 				'GROUPS_LIST' => [
 					'crmsmart_invoices' => [
-						'TITLE' => Loc::getMessage('MAIN_UI_SELECTOR_TITLE_CRMSMART_INVOICE'),
+						'TITLE' => $this->getGroupTitle(),
 						'TYPE_LIST' => [ $entityType ],
 						'DESC_LESS_MODE' => 'N',
 						'SORT' => 40
@@ -85,39 +87,85 @@ class CrmSmartInvoices extends CrmDynamics
 		}
 
 		$entityOptions = $params['options'] ?? [];
-		$prefix = static::getPrefix($entityOptions);
 
 		$lastItems = $params['lastItems'] ?? [];
+		$selectedItems = $params['selectedItems'] ?? [];
 
 		$lastEntitiesIdList = [];
-		if(!empty($lastItems[$entityType . '_MULTI']))
+		if (!empty($lastItems[$entityType]))
 		{
-			if(!empty($lastItems[$entityType]))
-			{
-				$result['ITEMS_LAST'] = array_map(
-					static function($code) use ($prefix) {
-						return preg_replace('/^'.self::PREFIX_FULL . '(\d+)$/', $prefix . '$1', $code);
-					},
-					array_values($lastItems[$entityType])
-				);
-				foreach ($lastItems[$entityType] as $value)
-				{
-					$lastEntitiesIdList[] = str_replace(self::PREFIX_FULL, '', $value);
-				}
-			}
+			$lastEntitiesIdList = $this->getEntityIdsByCodes(
+				$lastItems[$entityType],
+				$entityOptions,
+				static::ENTITIES_MAX_COUNT
+			);
+			$result['ITEMS_LAST'] = $this->getEntityCodesByIds($lastEntitiesIdList, $entityOptions);
 		}
 
+		$selectedEntitiesIdList = [];
+		if (!empty($selectedItems[$entityType]))
+		{
+			$selectedEntitiesIdList = $this->getEntityIdsByCodes(
+				$selectedItems[$entityType],
+				$entityOptions,
+				self::SELECTED_ENTITIES_MAX_COUNT
+			);
+		}
+
+		$entitiesIdList = array_merge($selectedEntitiesIdList, $lastEntitiesIdList);
+		$entitiesIdList = array_unique($entitiesIdList);
+		$entitiesIdList = array_slice(
+			$entitiesIdList,
+			0,
+			count($selectedEntitiesIdList) + static::ENTITIES_MAX_COUNT
+		);
+
+		$entitiesList = [];
+
+		if (!empty($entitiesIdList))
+		{
+			$entitiesList = $this->getByIdsResultItemsChunked($entitiesIdList, $entityOptions);
+		}
+
+		if (
+			empty($lastEntitiesIdList)
+			|| empty(array_intersect($result['ITEMS_LAST'], array_keys($entitiesList)))
+		)
+		{
+			$lastEntitiesList = $this->getLastEntitiesResultItems($entityOptions);
+			$result['ITEMS_LAST'] = array_keys($lastEntitiesList);
+			$entitiesList += $lastEntitiesList;
+		}
+
+		$result['ITEMS'] = $entitiesList;
+
+		return $result;
+	}
+
+	protected function getGroupTitle(): ?string
+	{
+		return Loc::getMessage('MAIN_UI_SELECTOR_TITLE_CRMSMART_INVOICE');
+	}
+
+	protected function getByIdsSelect(): array
+	{
+		return [
+			Item::FIELD_NAME_ID,
+			Item::FIELD_NAME_TITLE,
+			Item::FIELD_NAME_BEGIN_DATE,
+			Item::FIELD_NAME_CREATED_TIME,
+		];
+	}
+
+	private function getLastEntitiesResultItems(array $entityOptions): array
+	{
+		$prefix = static::getPrefix($entityOptions);
 		$entitiesList = [];
 
 		$list = Container::getInstance()->getFactory(static::getOwnerType())->getItemsFilteredByPermissions([
 			'order' => ['ID' => 'DESC'],
 			'limit' => 10,
-			'select' => [
-				Item::FIELD_NAME_ID,
-				Item::FIELD_NAME_TITLE,
-				Item::FIELD_NAME_BEGIN_DATE,
-				Item::FIELD_NAME_CREATED_TIME,
-			],
+			'select' => $this->getByIdsSelect(),
 		]);
 
 		foreach ($list as $item)
@@ -125,14 +173,70 @@ class CrmSmartInvoices extends CrmDynamics
 			$entitiesList[$prefix . $item['ID']] = static::prepareEntity($item, $entityOptions);
 		}
 
-		if (empty($lastEntitiesIdList))
+		return $entitiesList;
+	}
+
+	private function getByIdsResultItemsChunked(array $ids, array $options): array
+	{
+		$result = [];
+
+		foreach (array_chunk($ids, self::IDS_QUERY_CHUNK_SIZE) as $idsChunk)
 		{
-			$result['ITEMS_LAST'] = array_keys($entitiesList);
+			$result += $this->getByIdsResultItems($idsChunk, $options);
 		}
 
-		$result['ITEMS'] = $entitiesList;
-
 		return $result;
+	}
+
+	private function getEntityIdsByCodes(array $codes, array $options, ?int $limit = null): array
+	{
+		$ids = [];
+
+		foreach ($codes as $code)
+		{
+			$id = $this->getEntityIdByCode((string)$code, $options);
+			if ($id === null)
+			{
+				continue;
+			}
+
+			$ids[$id] = $id;
+			if ($limit !== null && count($ids) >= $limit)
+			{
+				break;
+			}
+		}
+
+		return array_values($ids);
+	}
+
+	private function getEntityIdByCode(string $code, array $options): ?int
+	{
+		$prefixList = [
+			self::PREFIX_FULL,
+			static::getPrefix($options),
+			CrmDynamics::PREFIX_FULL . CCrmOwnerType::SmartInvoice . '_',
+		];
+
+		foreach ($prefixList as $prefix)
+		{
+			if (preg_match('/^' . preg_quote($prefix, '/') . '(\d+)$/', $code, $matches) === 1)
+			{
+				return (int)$matches[1];
+			}
+		}
+
+		return null;
+	}
+
+	private function getEntityCodesByIds(array $ids, array $options): array
+	{
+		$prefix = static::getPrefix($options);
+
+		return array_map(
+			static fn(int $id): string => $prefix . $id,
+			$ids
+		);
 	}
 
 	public function getTabList($params = []): array

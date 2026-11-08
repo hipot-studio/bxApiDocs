@@ -14,6 +14,7 @@ class ExternalSourceActionDataProvider extends DataProvider
 	{
 		return [
 			new EditSourceAction(),
+			new CreateDatasetSourceAction(),
 			new ActivateSourceAction(),
 			new DeactivateSourceAction(),
 			new DeleteSourceAction(),

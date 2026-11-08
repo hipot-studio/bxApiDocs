@@ -19,6 +19,7 @@ use Bitrix\HumanResources\Service\UserService;
 use Bitrix\HumanResources\Type\MemberEntityType;
 use Bitrix\HumanResources\Type\NodeEntityType;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\Event;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\UserTable;
@@ -106,6 +107,59 @@ class UserEventHandler
 		}
 
 		NewToOldEventHandler::clearCacheInBackground();
+	}
+
+	public static function onAfterUserFire(Event $event): void
+	{
+		if (!Storage::instance()->isCompanyStructureConverted(false))
+		{
+			return;
+		}
+
+		$user = $event->getParameter('user');
+		if (!$user instanceof \Bitrix\Intranet\Entity\User)
+		{
+			return;
+		}
+
+		$userId = (int)$user->getId();
+		if ($userId <= 0)
+		{
+			return;
+		}
+
+		try
+		{
+			$result = Container::getNodeMemberRepository()
+				->setActiveByEntityTypeAndEntityId(MemberEntityType::USER, $userId, false)
+			;
+
+			if (!$result->isSuccess())
+			{
+				self::logFiredUserDeactivationFailure($userId, implode('; ', $result->getErrorMessages()));
+			}
+		}
+		catch (ObjectPropertyException|ArgumentException|SystemException $exception)
+		{
+			self::logFiredUserDeactivationFailure($userId, $exception->getMessage());
+		}
+
+		NewToOldEventHandler::clearCacheInBackground();
+		Container::getCacheManager()->clean(sprintf(UserService::USER_DEPARTMENT_EXISTS_KEY, $userId));
+	}
+
+	private static function logFiredUserDeactivationFailure(int $userId, string $reason): void
+	{
+		Container::getStructureLogger()
+			->write(
+				[
+					'message' => 'Fired user node member deactivation failure: ' . $reason,
+					'entityType' => LoggerEntityType::MEMBER_USER->name,
+					'entityId' => $userId,
+					'userId' => \Bitrix\Main\Engine\CurrentUser::get()->getId(),
+				],
+			)
+		;
 	}
 
 	private static function updateNodeMemberLink(array $fields): void

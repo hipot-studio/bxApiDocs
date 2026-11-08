@@ -99,6 +99,8 @@ class NavigationBarPanel
 
 	public function setItems(array $ids, string $activeId = ''): self
 	{
+		$requestedActiveId = $activeId;
+
 		if (empty($activeId) || !in_array($activeId, $this->getAllowableItemsList(false, false), true))
 		{
 			$activeId = self::ID_LIST;
@@ -118,6 +120,11 @@ class NavigationBarPanel
 
 			if ($id === self::ID_AUTOMATION)
 			{
+				if (!$this->isAutomationItemAvailable($requestedActiveId))
+				{
+					continue;
+				}
+
 				$automationButton = Helper::getNavigationBarItems($this->entityTypeId, $this->categoryId);
 				if (!empty($automationButton))
 				{
@@ -136,13 +143,22 @@ class NavigationBarPanel
 					}
 				}
 
-				$this->items[] = [
+				$item = [
 					'id' => $id,
 					'name' => Loc::getMessage(self::LANG_MAP[$id]),
 					'active' => $id === $activeId,
 					'lockedCallback' => $lockedCallback,
 					'url' => $this->getUrl($id),
 				];
+
+				if ($id === self::ID_REPEAT_SALE)
+				{
+					// entity context is not known on the client side, e.g. to build a category-aware redirect url
+					$item['entityTypeId'] = $this->entityTypeId;
+					$item['categoryId'] = $this->categoryId;
+				}
+
+				$this->items[] = $item;
 			}
 		}
 
@@ -176,6 +192,14 @@ class NavigationBarPanel
 		}
 
 		return $names;
+	}
+
+	private function isAutomationItemAvailable(string $activeId): bool
+	{
+		return !(
+			$this->entityTypeId === CCrmOwnerType::Lead
+			&& $activeId === self::ID_ACTIVITY
+		);
 	}
 
 	public function setBinding(string $key): self

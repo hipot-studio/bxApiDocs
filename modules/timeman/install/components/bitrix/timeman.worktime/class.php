@@ -5,6 +5,7 @@ use \Bitrix\Main;
 use \Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Timeman\Component\BaseComponent;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 use CComponentEngine;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
@@ -97,6 +98,13 @@ class WorktimeComponent extends BaseComponent
 
 	public function executeComponent()
 	{
+		if (!(new Settings())->isToolAvailable(Settings::TOOLS['worktime']))
+		{
+			$this->includeComponentTemplate('tool-disabled');
+
+			return;
+		}
+
 		$this->arParams['SEF_MODE'] = isset($this->arParams['SEF_MODE']) ? $this->arParams['SEF_MODE'] : 'Y';
 		$this->arParams['SEF_FOLDER'] = isset($this->arParams['SEF_FOLDER']) ? $this->arParams['SEF_FOLDER'] : '/timeman/';
 		$this->arParams['ELEMENT_ID'] = isset($this->arParams['ELEMENT_ID']) ? $this->arParams['ELEMENT_ID'] : $this->request->get('id');

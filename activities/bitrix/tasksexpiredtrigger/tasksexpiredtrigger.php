@@ -26,12 +26,16 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 	private const RETURN_PARAM_TASK_ID = 'TASK_ID';
 	private const RETURN_PARAM_TASK_TITLE = 'TASK_TITLE';
 	private const RETURN_PARAM_TASK_CREATED_DATE = 'TASK_CREATED_DATE';
+	private const RETURN_PARAM_TASK_STATUS = 'TASK_STATUS';
+	private const RETURN_PARAM_TASK_DEADLINE = 'TASK_DEADLINE';
 	private const RETURN_PARAM_TASK_RESPONSIBLE = 'TASK_RESPONSIBLE';
 	private const RETURN_PARAM_TASK_URL = 'TASK_URL';
 	private const RETURN_PARAM_RETURN_DOCUMENT = 'ReturnDocument';
 	private const FIELD_TASK_ID = 'ID';
 	private const FIELD_TASK_TITLE = 'TITLE';
 	private const FIELD_TASK_CREATED_DATE = 'CREATED_DATE';
+	private const FIELD_TASK_STATUS = 'STATUS';
+	private const FIELD_TASK_DEADLINE = 'DEADLINE';
 	private const FIELD_TASK_RESPONSIBLE_ID = 'RESPONSIBLE_ID';
 
 	public function execute(): int
@@ -45,7 +49,9 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 
 		$taskId = (int)($context[self::FIELD_TASK_ID] ?? 0);
 		$taskTitle = (string)($context[self::FIELD_TASK_TITLE] ?? '');
-		$taskCreateDate = (int)($context[self::FIELD_TASK_CREATED_DATE] ?? 0);
+		$taskCreateDate = $this->createDateTimeValue($context[self::FIELD_TASK_CREATED_DATE] ?? null);
+		$taskStatus = (int)($context[self::FIELD_TASK_STATUS] ?? 0);
+		$taskDeadline = $this->createDateTimeValue($context[self::FIELD_TASK_DEADLINE] ?? null);
 		$taskResponsibleId = (int)($context[self::FIELD_TASK_RESPONSIBLE_ID] ?? 0);
 
 		if (!empty($taskId))
@@ -58,9 +64,19 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 			$this->{self::RETURN_PARAM_TASK_TITLE} = $taskTitle;
 		}
 
-		if (!empty($taskCreateDate))
+		if ($taskCreateDate !== null)
 		{
-			$this->{self::RETURN_PARAM_TASK_CREATED_DATE} = DateTime::createFromTimestamp($taskCreateDate);
+			$this->{self::RETURN_PARAM_TASK_CREATED_DATE} = $taskCreateDate;
+		}
+
+		if ($taskStatus > 0)
+		{
+			$this->{self::RETURN_PARAM_TASK_STATUS} = $taskStatus;
+		}
+
+		if ($taskDeadline !== null)
+		{
+			$this->{self::RETURN_PARAM_TASK_DEADLINE} = $taskDeadline;
 		}
 
 		if (!empty($taskResponsibleId))
@@ -86,6 +102,8 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 			self::RETURN_PARAM_TASK_ID => null,
 			self::RETURN_PARAM_TASK_TITLE => null,
 			self::RETURN_PARAM_TASK_CREATED_DATE => null,
+			self::RETURN_PARAM_TASK_STATUS => null,
+			self::RETURN_PARAM_TASK_DEADLINE => null,
 			self::RETURN_PARAM_TASK_RESPONSIBLE => null,
 			self::RETURN_PARAM_TASK_URL => null,
 			self::RETURN_PARAM_RETURN_DOCUMENT => null,
@@ -100,6 +118,13 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 			],
 			self::RETURN_PARAM_TASK_CREATED_DATE => [
 				'Type' => FieldType::DATETIME
+			],
+			self::RETURN_PARAM_TASK_STATUS => [
+				'Type' => FieldType::SELECT,
+				'Options' => self::getTaskStatusOptions(),
+			],
+			self::RETURN_PARAM_TASK_DEADLINE => [
+				'Type' => FieldType::DATETIME,
 			],
 			self::RETURN_PARAM_TASK_RESPONSIBLE => [
 				'Type' => FieldType::USER
@@ -225,6 +250,16 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 		return Result::createOk();
 	}
 
+	public static function getTaskStatusOptions(): array
+	{
+		if (!Loader::includeModule('tasks'))
+		{
+			return [];
+		}
+
+		return Task::getStatusOptions();
+	}
+
 	private static function getProjectOptions(): array
 	{
 		if (!Loader::includeModule('socialnetwork'))
@@ -254,6 +289,15 @@ class CBPTasksExpiredTrigger extends Activity\BaseTrigger
 	protected static function getModuleId(): ?string
 	{
 		return 'tasks';
+	}
+
+	protected function createDateTimeValue(mixed $value): ?DateTime
+	{
+		// CBPHelper reads every form a dispatcher may send, including the serialized bizproc datetime
+		// whose trailing offset a plain DateTime constructor would drop.
+		$timestamp = \CBPHelper::makeTimestamp($value);
+
+		return $timestamp > 0 ? DateTime::createFromTimestamp($timestamp) : null;
 	}
 
 	private function makeTaskUrl(int $taskId): ?string

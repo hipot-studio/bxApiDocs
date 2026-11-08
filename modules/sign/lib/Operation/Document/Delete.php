@@ -38,6 +38,8 @@ class Delete implements OperationContract
 		{
 			return $checkResult;
 		}
+		$documentId = (int)$this->document->id;
+		$blankId = $this->document->blankId;
 
 		$result = $this->deleteMembers();
 		if (!$result->isSuccess())
@@ -54,7 +56,21 @@ class Delete implements OperationContract
 			}
 		}
 
-		return $this->documentRepository->delete($this->document);
+		$result = $this->documentRepository->delete($this->document);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		if ($blankId !== null)
+		{
+			Container::instance()
+				->getDocumentPlaceholderCacheService()
+				->deleteRawPlaceholders($documentId, $blankId)
+			;
+		}
+
+		return $result;
 	}
 
 	private function check(): Main\Result

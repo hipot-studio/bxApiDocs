@@ -28,19 +28,54 @@ use DateTime;
 
 IncludeModuleLangFile($_SERVER['DOCUMENT_ROOT'] . BX_ROOT . '/modules/calendar/classes/general/calendar.php');
 
+final class OccupancyAwareRecurringEventRules extends RecurringEventRules
+{
+	public function __construct(RecurringEventRules $source, private string $sourceType)
+	{
+		parent::__construct($source->getFrequency(), $source->getInterval());
+		if ($source->getCount() !== null)
+		{
+			$this->setCount($source->getCount());
+		}
+		if ($source->getUntil() !== null)
+		{
+			$this->setUntil($source->getUntil());
+		}
+		$this->setByDay($source->getByday());
+	}
+
+	public function getSourceType(): string
+	{
+		return $this->sourceType;
+	}
+}
+
 class EventBuilderFromArray extends EventBuilder
 {
+	public const RRULE_SOURCE_REQUEST = 'request';
+	public const RRULE_SOURCE_PERSISTED = 'persisted';
+
 	/**
 	 * @var array
 	 */
 	protected $fields;
 
+	private ?string $rruleInputType = null;
+
 	/**
 	 * @param array $fields
+	 * @param string $rruleSource
 	 */
-	public function __construct(array $fields)
+	public function __construct(array $fields, string $rruleSource = self::RRULE_SOURCE_REQUEST)
 	{
 		$this->fields = $fields;
+		if (is_string($this->fields['RRULE'] ?? null))
+		{
+			$this->rruleInputType = $rruleSource === self::RRULE_SOURCE_PERSISTED
+				? \CCalendarEvent::OCCUPANCY_RRULE_SOURCE_PERSISTED_STRING
+				: \CCalendarEvent::OCCUPANCY_RRULE_SOURCE_REQUEST_STRING
+			;
+		}
 		$this->prepareRecurrenceRuleField();
 	}
 
@@ -112,7 +147,13 @@ class EventBuilderFromArray extends EventBuilder
 				$this->fields['RRULE']['UNTIL'] = \CCalendarEvent::convertDateToCulture($this->fields['RRULE']['UNTIL']);
 			}
 
-			return $this->prepareRecurringRule($this->fields['RRULE']);
+			$rule = $this->prepareRecurringRule($this->fields['RRULE']);
+			if ($rule !== null && $this->rruleInputType !== null)
+			{
+				return new OccupancyAwareRecurringEventRules($rule, $this->rruleInputType);
+			}
+
+			return $rule;
 		}
 		else
 		{

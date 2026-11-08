@@ -21,11 +21,13 @@ class SignConfigPermissionsComponent extends SignBaseComponent
 		if ($this->request->getQuery('resetAccessRights') === 'y'
 			&& $this->accessController->check(ActionDictionary::ACTION_ACCESS_RIGHTS))
 		{
-			if (\Bitrix\Main\Loader::includeModule('crm'))
-			{
-				\Bitrix\Crm\Integration\Sign\Access::installDefaultRoles(true);
-				\Bitrix\Sign\Access\Install\AccessInstaller::install(true);
-			}
+			// Both halves of the reset are done by one call under one lock: taken between them, the lock of
+			// the permission table could be missing for the sign half alone, and the reset would leave the
+			// portal with the CRM roles created anew and the rows of the roles it had just dropped. A reset
+			// that could not take the lock changes nothing and raises - the exception is left to surface,
+			// because this query is a service entry point with no link to it anywhere, and the one who typed
+			// it needs to know the reset did not run rather than read the unchanged rights as reset.
+			\Bitrix\Sign\Access\Install\AccessInstaller::reinstallWithCrmRoles();
 		}
 	}
 	

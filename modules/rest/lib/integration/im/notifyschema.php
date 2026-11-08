@@ -11,6 +11,13 @@ class NotifySchema
 		return [
 			'rest' => [
 				'NAME' => Loc::getMessage('REST_NOTIFY_SCHEMA_BLOCK_TITLE'),
+				'PRODUCT_SOURCE' => [
+					'ID' => 'rest',
+					'NAME' => Loc::getMessage('REST_NOTIFY_SCHEMA_PRODUCT_SOURCE_NAME'),
+					'DESCRIPTION' => Loc::getMessage('REST_NOTIFY_SCHEMA_PRODUCT_SOURCE_DESCRIPTION'),
+					'ICON' => ['TYPE' => 'named', 'VALUE' => 'apps'],
+					'SORT' => 900,
+				],
 				'NOTIFY' => [
 					'app_install' => [
 						'NAME' => Loc::getMessage('REST_NOTIFY_SCHEMA_APP_INSTALL'),

@@ -136,6 +136,13 @@ class DealProductRow
 					'FIELD_NAME' => 'PR.QUANTITY',
 					'FIELD_TYPE' => 'double',
 				],
+				...ProductRowAmounts::getFieldsDescription(
+					$helper,
+					$languageId,
+					'D',
+					'INNER JOIN b_crm_deal D ON D.ID = PR.OWNER_ID',
+					'LEFT JOIN b_crm_deal D ON D.ID = PR.OWNER_ID'
+				),
 				//DISCOUNT_TYPE_ID TINYINT(1) UNSIGNED NULL,
 				'DISCOUNT_TYPE' => [
 					'FIELD_NAME' => 'concat_ws(\' \', ' . $helper->getConcatFunction('\'[\'', 'PR.DISCOUNT_TYPE_ID', '\']\'') . ', ' . str_replace('#FIELD_NAME#', 'PR.DISCOUNT_TYPE_ID', $discountSql) . ')',
@@ -220,7 +227,7 @@ class DealProductRow
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['crm_deal_product_row']['TABLE_DESCRIPTION'] = $messages['CRM_BIC_DEAL_PRODUCT_ROW_TABLE'] ?? 'crm_deal_product_row';
-		$result['crm_deal_product_row']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_DEAL_PRODUCT_ROW_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['crm_deal_product_row']['TABLE_DESCRIPTION_FULL'] = $messages['CRM_BIC_DEAL_PRODUCT_ROW_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['crm_deal_product_row']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			$fieldInfo['FIELD_DESCRIPTION'] = !empty($messages['CRM_BIC_DEAL_PRODUCT_ROW_FIELD_' . $fieldCode]) ? $messages['CRM_BIC_DEAL_PRODUCT_ROW_FIELD_' . $fieldCode] : $fieldCode;

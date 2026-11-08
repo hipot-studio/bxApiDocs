@@ -16,6 +16,14 @@ use Bitrix\Main\Error;
 
 class Bot extends BotController
 {
+	private const USER_PROPERTY_ALIASES = [
+		'NAME' => ['name', 'NAME'],
+		'LAST_NAME' => ['lastName', 'LAST_NAME'],
+		'COLOR' => ['color', 'COLOR'],
+		'WORK_POSITION' => ['workPosition', 'WORK_POSITION'],
+		'PERSONAL_GENDER' => ['gender', 'PERSONAL_GENDER'],
+	];
+
 	protected function processBeforeAction(Action $action): bool
 	{
 		$restServer = $this->resolveRestServer();
@@ -148,7 +156,7 @@ class Bot extends BotController
 		}
 		unset($properties['avatar']);
 
-		$userProperties = $this->mapUserProperties($properties);
+		$userProperties = $this->mapUserPropertiesForRegister($properties);
 		$dbBackgroundId = Background::normalizeBackgroundId($backgroundId);
 
 		$botToken = $this->resolveBotToken();
@@ -246,7 +254,11 @@ class Bot extends BotController
 			}
 			unset($rawProperties['avatar']);
 
-			$botUpdateFields['PROPERTIES'] = $this->mapUserProperties($rawProperties);
+			$mappedProperties = $this->mapUserPropertiesForUpdate($rawProperties);
+			if ($mappedProperties !== [])
+			{
+				$botUpdateFields['PROPERTIES'] = $mappedProperties;
+			}
 		}
 
 		if (isset($fields['isHidden']))
@@ -486,15 +498,56 @@ class Bot extends BotController
 		return $avatar;
 	}
 
-	private function mapUserProperties(array $properties): array
+	/**
+	 * Registration builds the whole profile snapshot: an absent key becomes an empty value.
+	 */
+	private function mapUserPropertiesForRegister(array $properties): array
 	{
-		$mapped = [
-			'NAME' => $properties['name'] ?? $properties['NAME'] ?? '',
-			'LAST_NAME' => $properties['lastName'] ?? $properties['LAST_NAME'] ?? '',
-			'COLOR' => self::normalizeColorCode($properties['color'] ?? $properties['COLOR'] ?? ''),
-			'WORK_POSITION' => $properties['workPosition'] ?? $properties['WORK_POSITION'] ?? '',
-			'PERSONAL_GENDER' => $properties['gender'] ?? $properties['PERSONAL_GENDER'] ?? '',
-		];
+		return $this->mapUserProperties($properties, false);
+	}
+
+	/**
+	 * Update maps only the keys the application has sent: an absent key must not reach the profile,
+	 * because an empty value overwrites the stored one.
+	 *
+	 * Diverging here from the internal bot update path of im is intentional: partial semantics
+	 * belongs to the REST module boundary.
+	 */
+	private function mapUserPropertiesForUpdate(array $properties): array
+	{
+		return $this->mapUserProperties($properties, true);
+	}
+
+	private function mapUserProperties(array $properties, bool $onlyProvided): array
+	{
+		$mapped = [];
+		foreach (self::USER_PROPERTY_ALIASES as $field => $aliases)
+		{
+			$value = null;
+			foreach ($aliases as $alias)
+			{
+				if (isset($properties[$alias]))
+				{
+					$value = $properties[$alias];
+					break;
+				}
+			}
+
+			if ($value === null && $onlyProvided)
+			{
+				continue;
+			}
+
+			$mapped[$field] = $value ?? '';
+		}
+
+		if (isset($mapped['COLOR']))
+		{
+			// a non-scalar color is treated as an empty one: Bot::update() never applies it
+			$mapped['COLOR'] = is_scalar($mapped['COLOR'])
+				? self::normalizeColorCode((string)$mapped['COLOR'])
+				: '';
+		}
 
 		if (isset($properties['PERSONAL_PHOTO']))
 		{

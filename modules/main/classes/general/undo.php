@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Main\Application;
+use Bitrix\Main\Type\Callback;
 
 IncludeModuleLangFile(__FILE__);
 
@@ -181,7 +182,7 @@ class CUndo
 
 		$CACHE_MANAGER->CleanDir("b_undo");
 
-		return "CUndo::CleanUpOld();";
+		return new Callback([self::class, 'CleanUpOld']);
 	}
 
 	public static function ShowUndoMessage($ID)

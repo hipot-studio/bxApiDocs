@@ -1,0 +1,41 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Bitrix\Vibecodeconnector\Public\Command\Catalog\Item\Favorite;
+
+use Bitrix\Main\AccessDeniedException;
+use Bitrix\Vibecodeconnector\Internal\Exception\CatalogItemNotFoundException;
+use Bitrix\Vibecodeconnector\Internal\Integration\Main\AccessCodes;
+use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\CatalogItemRepository;
+use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\FavoriteRepository;
+
+final class FavoriteCatalogItemCommandHandler
+{
+	public function __construct(
+		private readonly CatalogItemRepository $itemRepository = new CatalogItemRepository(),
+		private readonly FavoriteRepository $favoriteRepository = new FavoriteRepository(),
+		private readonly AccessCodes $accessCodes = new AccessCodes(),
+	)
+	{
+	}
+
+	public function __invoke(FavoriteCatalogItemCommand $command): void
+	{
+		if ($this->itemRepository->getById($command->catalogItemId) === null)
+		{
+			throw new CatalogItemNotFoundException($command->catalogItemId);
+		}
+
+		if (!$this->itemRepository->isAccessibleToUser(
+			$command->catalogItemId,
+			$command->userId,
+			$this->accessCodes->getUserCodesForItems($command->userId, [$command->catalogItemId]),
+		))
+		{
+			throw new AccessDeniedException('User has no access to this catalog item');
+		}
+
+		$this->favoriteRepository->upsert($command->userId, $command->catalogItemId);
+	}
+}

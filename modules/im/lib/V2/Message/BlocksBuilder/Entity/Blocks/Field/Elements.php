@@ -13,6 +13,11 @@ class Elements extends AbstractField
 {
 	public function validate(mixed $field, ?BlockType $blockType = null): Result
 	{
+		if ($blockType === BlockType::Form)
+		{
+			return FormFields::getInstance()->validate($field, $blockType);
+		}
+
 		$result = new Result();
 
 		if (!is_array($field))

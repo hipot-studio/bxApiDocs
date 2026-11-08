@@ -33,6 +33,18 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 
 	private const RETURN_PROPERTY_DOCUMENT = 'Document';
 
+	private const SUPPORTED_FILTER_FIELD_TYPES = [
+		FieldType::DOUBLE,
+		FieldType::INT,
+		FieldType::USER,
+		FieldType::STRING,
+		FieldType::BOOL,
+		FieldType::SELECT,
+		FieldType::DATE,
+		FieldType::DATETIME,
+		FieldType::TEXT,
+	];
+
 	public function __construct($name)
 	{
 		parent::__construct($name);
@@ -307,21 +319,25 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 
 		$factory = Container::getInstance()->getFactory($entityTypeId);
 		$originalFieldsCollection = isset($factory) ? $factory->getFieldsCollection() : null;
+		$dealParentFieldId = Crm\Service\ParentFieldManager::getParentFieldName(\CCrmOwnerType::Deal);
 
 		$map = [];
 
-		$supportedFieldTypes = [
-			FieldType::DOUBLE,
-			FieldType::INT,
-			FieldType::USER,
-			FieldType::STRING,
-			FieldType::BOOL,
-		];
 		foreach (Crm\Automation\Helper::getDocumentFields($documentType) as $fieldId => $field)
 		{
 			if ($fieldId === 'OBSERVER_IDS')
 			{
 				$fieldId = Crm\Item::FIELD_NAME_OBSERVERS;
+			}
+
+			if ($fieldId === $dealParentFieldId)
+			{
+				$field = array_merge($field, [
+					'Type' => FieldType::INT,
+					'BaseType' => FieldType::INT,
+					'Options' => null,
+					'Multiple' => false,
+				]);
 			}
 
 			$isEntityField = true;
@@ -330,7 +346,7 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 				$isEntityField = $originalFieldsCollection->hasField($factory->getCommonFieldNameByMap($fieldId));
 			}
 			if (
-				in_array($field['Type'], $supportedFieldTypes, true)
+				in_array($field['Type'], self::SUPPORTED_FILTER_FIELD_TYPES, true)
 				&& !static::isInternalField($fieldId)
 				&& $isEntityField
 			)
@@ -398,6 +414,7 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 		array $contextDocumentType,
 		bool $onlyDynamicEntities = false,
 		bool $includeRelatedEntityTypes = false,
+		?string $contextActivityType = null,
 	): array
 	{
 		$allEntityTypeOptions = [];
@@ -414,7 +431,13 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 			}
 		}
 
-		if ($onlyDynamicEntities)
+		// Decided before the dynamic types: the node resolves an element of the context type or of a type
+		// related to it, so a smart process outside the relation graph would be offered and resolve nothing.
+		if ($includeRelatedEntityTypes)
+		{
+			$entityTypeOptions = [];
+		}
+		elseif ($onlyDynamicEntities)
 		{
 			$entityTypeOptions = array_filter(
 				$allEntityTypeOptions,
@@ -422,10 +445,6 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 					=> CCrmOwnerType::isPossibleDynamicTypeId((int)$entityTypeId),
 				ARRAY_FILTER_USE_BOTH,
 			);
-		}
-		elseif ($includeRelatedEntityTypes)
-		{
-			$entityTypeOptions = [];
 		}
 		else
 		{
@@ -439,6 +458,16 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 				$allEntityTypeOptions,
 				$contextDocumentType,
 			);
+		}
+
+		$scope = \Bitrix\Crm\Integration\BizProc\NodeFilter\DynamicTypeScope::fromActivityType(
+			$contextActivityType,
+		);
+		if ($scope !== null)
+		{
+			$entityTypeOptions = \Bitrix\Crm\Integration\BizProc\NodeFilter\DynamicTypeScopePolicy::getRequestInstance()
+				->filterEntityTypeOptions($scope, $entityTypeOptions)
+			;
 		}
 
 		$filterFieldsMap = [];
@@ -458,7 +487,61 @@ class CBPCrmGetDynamicInfoActivity extends \Bitrix\Bizproc\Activity\BaseActivity
 			'entityTypeOptions' => $entityTypeOptions,
 			'filterFieldsMap' => $filterFieldsMap,
 			'documentTypeMap' => $documentTypeMap,
+			'entityTypeBadges' => static::getEntityTypeBadges($entityTypeOptions),
 		];
+	}
+
+	/**
+	 * Type::getCustomSectionId() holds an automated solution id despite its legacy name, and "no automated solution"
+	 * is stored both as NULL and as 0: portals kept the 0 written by crm.type.update before e18cdcd60158.
+	 *
+	 * @return array<int|string, string>
+	 */
+	private static function getEntityTypeBadges(array $entityTypeOptions): array
+	{
+		$userPermissions = Container::getInstance()->getUserPermissions();
+
+		// Read on the first type that needs a title, never for a list where nothing is bound. Indexed by ID:
+		// the manager keys the list by INTRANET_CUSTOM_SECTION_ID and searches it by ID linearly.
+		$automatedSolutionsById = null;
+
+		$entityTypeBadges = [];
+		foreach (array_keys($entityTypeOptions) as $entityTypeId)
+		{
+			$type = Container::getInstance()->getTypeByEntityTypeId((int)$entityTypeId);
+			$automatedSolutionId = (int)($type?->getCustomSectionId() ?? 0);
+			if ($automatedSolutionId <= 0)
+			{
+				continue;
+			}
+
+			// The badge names a section of the left menu, so it is given on the very condition that menu shows
+			// the section: see CustomSectionProvider::isAvailable(). The list of types itself is not filtered by
+			// permissions, and this map must not name what the menu keeps hidden.
+			if (
+				!$userPermissions->entityType()->canReadItems((int)$entityTypeId)
+				&& !$userPermissions->dynamicType()->canUpdate((int)$entityTypeId)
+			)
+			{
+				continue;
+			}
+
+			$automatedSolutionsById ??= array_column(
+				Container::getInstance()->getAutomatedSolutionManager()->getExistingAutomatedSolutions(),
+				null,
+				'ID',
+			);
+
+			$title = trim((string)($automatedSolutionsById[$automatedSolutionId]['TITLE'] ?? ''));
+			if ($title === '')
+			{
+				continue;
+			}
+
+			$entityTypeBadges[$entityTypeId] = $title;
+		}
+
+		return $entityTypeBadges;
 	}
 
 	/**

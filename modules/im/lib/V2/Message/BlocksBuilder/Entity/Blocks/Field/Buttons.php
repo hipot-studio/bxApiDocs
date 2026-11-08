@@ -14,6 +14,21 @@ class Buttons extends AbstractField
 {
 	public function validate(mixed $field, ?BlockType $blockType = null): Result
 	{
+		$result = $this->validateStructure($field);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		return match ($blockType)
+		{
+			BlockType::Form => $this->validateByForm($result),
+			default => $result,
+		};
+	}
+
+	protected function validateStructure(mixed $field): Result
+	{
 		$result = new Result();
 
 		if (!is_array($field) || empty($field))
@@ -39,6 +54,34 @@ class Buttons extends AbstractField
 		}
 
 		return $result->setResult($buttonsResult);
+	}
+
+	protected function validateByForm(Result $result): Result
+	{
+		$buttonsResult = $result->getResult();
+
+		$buttons = [];
+		foreach ($buttonsResult as $buttonLine)
+		{
+			foreach ($buttonLine as $button)
+			{
+				$buttons[] = $button;
+			}
+		}
+
+		// v1 allows exactly one submit button. The rule is structured to be relaxed in the next version
+		// to "at least one button, among which there is a requestButton" without changing the shape here.
+		if (count($buttons) !== 1)
+		{
+			return (new Result())->addError(new BuilderError(BuilderError::FORM_BUTTONS_COUNT_INVALID));
+		}
+
+		if (($buttons[0]['type'] ?? null) !== Type::RequestButton->value)
+		{
+			return (new Result())->addError(new BuilderError(BuilderError::FORM_BUTTON_TYPE_INVALID));
+		}
+
+		return $result;
 	}
 
 	protected function validateButtonLine(array $buttons): Result
@@ -72,6 +115,7 @@ class Buttons extends AbstractField
 		{
 			Type::LinkButton => $this->validateByLink($button),
 			Type::EventButton => $this->validateByEvent($button),
+			Type::RequestButton => $this->validateByRequest($button),
 			default => (new Result())->addError(new BuilderError(BuilderError::WRONG_BUTTON_TYPE)),
 		};
 	}
@@ -101,6 +145,7 @@ class Buttons extends AbstractField
 		}
 
 		return $result->setResult([
+			'id' => (string)($button['id'] ?? ''),
 			'title' => $title,
 			'type' => Type::LinkButton->value,
 			'design' => $this->validateDesign($button),
@@ -129,11 +174,43 @@ class Buttons extends AbstractField
 		}
 
 		return $result->setResult([
+			'id' => (string)($button['id'] ?? ''),
 			'title' => $title,
 			'type' => Type::EventButton->value,
 			'design' => $this->validateDesign($button),
 			'actionId' => $actionId,
 			'actionParams' => $this->validateActionParam($button),
+		]);
+	}
+
+	protected function validateByRequest(array $button): Result
+	{
+		$result = $this->validateTitle($button);
+		if (!$result->isSuccess())
+		{
+			return $result;
+		}
+
+		$title = $result->getResult();
+
+		$actionId = $button['actionId'] ?? null;
+		if (!is_string($actionId))
+		{
+			return $result->addError(new BuilderError(BuilderError::INVALID_ACTION_ID_FIELD));
+		}
+		if (empty($actionId))
+		{
+			return $result->addError(new BuilderError(BuilderError::EMPTY_ACTION_ID_FIELD));
+		}
+
+		return $result->setResult([
+			'id' => (string)($button['id'] ?? ''),
+			'title' => $title,
+			'type' => Type::RequestButton->value,
+			'design' => $this->validateDesign($button),
+			'actionId' => $actionId,
+			'actionParams' => $this->validateActionParam($button),
+			'disabled' => self::validateBoolValue($button['disabled'] ?? false),
 		]);
 	}
 

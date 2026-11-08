@@ -4,26 +4,41 @@ namespace Bitrix\StaffTrack\Public\Provider;
 
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
-use Bitrix\Main\Type\Date;
-use Bitrix\Main\UserTable;
 use Bitrix\StaffTrack\Dictionary\Option;
-use Bitrix\StaffTrack\Internal\Integration\Bizproc\PlanningService;
+use Bitrix\StaffTrack\Feature;
+use Bitrix\StaffTrack\Internal\Integration\HumanResources\Service\NodeSettingsService;
 use Bitrix\StaffTrack\Internal\Integration\Timeman\WorkDayService;
-use Bitrix\StaffTrack\Internal\Integration\Timeman\WorkReportService;
 use Bitrix\StaffTrack\Provider\OptionProvider;
 use Bitrix\StaffTrack\Service\OptionService;
 use Bitrix\StaffTrackMobile\Public\Features\CheckInFeature;
 
 class CheckInOnboardingProvider
 {
-	private const NEW_PORTAL_THRESHOLD_DATE = '2026-05-28';
-	private const NEW_PORTAL_ONBOARDING_DELAY_SECONDS = 3 * 7 * 86400;
+	public const GEO_AHA_STATE_SHOWN = 'shown';
+	public const GEO_AHA_STATE_PENDING = 'pending';
+
+	private const GEO_AHA_STATES = [
+		self::GEO_AHA_STATE_SHOWN,
+		self::GEO_AHA_STATE_PENDING,
+	];
 
 	private const MAX_SHOWS = 4;
 	private const SHOW_INTERVAL_SECONDS = 7 * 86400;
 
 	private const ONBOARDING_OPTION_MODULE = 'stafftrack';
 	private const ONBOARDING_NODE_OPTION_PREFIX = 'check_in_onboarding_node_';
+
+	private OptionService $optionService;
+	private OptionProvider $optionProvider;
+
+	public function __construct(
+		?OptionService $optionService = null,
+		?OptionProvider $optionProvider = null,
+	)
+	{
+		$this->optionService = $optionService ?? OptionService::getInstance();
+		$this->optionProvider = $optionProvider ?? OptionProvider::getInstance();
+	}
 
 	public function getShouldShow(int $userId): bool
 	{
@@ -47,11 +62,6 @@ class CheckInOnboardingProvider
 			return false;
 		}
 
-		if ($this->isAiDayPlannerRequiredButMissing())
-		{
-			return false;
-		}
-
 		if ($this->isEnabledForDepartments($userId))
 		{
 			return false;
@@ -67,32 +77,30 @@ class CheckInOnboardingProvider
 
 	public function registerShown(int $userId): void
 	{
-		$optionService = OptionService::getInstance();
-		$optionService->save(
+		$this->optionService->save(
 			$userId,
 			Option::CHECKIN_ONBOARDING_BANNER_COUNT,
 			(string)($this->getShownCount($userId) + 1),
 		);
-		$optionService->save(
+		$this->optionService->save(
 			$userId,
 			Option::CHECKIN_ONBOARDING_BANNER_LAST_SHOWN_AT,
 			(string)time(),
 		);
 
-		OptionProvider::getInstance()->invalidateCache($userId);
+		$this->optionProvider->invalidateCache($userId);
 	}
 
 	public function enableAll(): void
 	{
-		(new CheckInSettingsProvider())->enableAutoCheckIn();
+		if (Feature::isGeoFeaturesAvailableByRegion())
+		{
+			(new CheckInSettingsProvider())->enableAutoCheckIn();
+
+			WorkDayService::enableDayStartCheckIn();
+		}
 
 		WorkDayService::enableWorkShiftOption();
-		WorkDayService::enableDayStartCheckIn();
-
-		if (WorkReportService::isPlanningServiceEnabled())
-		{
-			WorkReportService::enableWorkReportOption();
-		}
 
 		$userId = (int)CurrentUser::get()->getId();
 		$this->enableByUser($userId);
@@ -106,8 +114,8 @@ class CheckInOnboardingProvider
 
 	private function enableByUser(int $userId): void
 	{
-		OptionService::getInstance()->save($userId, Option::CHECKIN_ONBOARDING_ENABLED, 'Y');
-		OptionProvider::getInstance()->invalidateCache($userId);
+		$this->optionService->save($userId, Option::CHECKIN_ONBOARDING_ENABLED, 'Y');
+		$this->optionProvider->invalidateCache($userId);
 	}
 
 	private function isEnabledForDepartments(int $userId): bool
@@ -159,73 +167,109 @@ class CheckInOnboardingProvider
 
 	private function getOptionValue(int $userId, Option $option): ?string
 	{
-		return OptionProvider::getInstance()->getOption($userId, $option)?->getValue();
+		return $this->optionProvider->getOption($userId, $option)?->getValue();
 	}
 
-	public function isPlanningServiceEnabled(): bool
+	public function isEmployeeOnboardingShown(int $userId): bool
 	{
-		return WorkReportService::isPlanningServiceEnabled();
+		return $this->getOptionValue($userId, Option::CHECKIN_ONBOARDING_EMPLOYEE_SHOWN) === 'Y';
+	}
+
+	public function markEmployeeOnboardingShown(int $userId): void
+	{
+		$this->optionService->save(
+			$userId,
+			Option::CHECKIN_ONBOARDING_EMPLOYEE_SHOWN,
+			'Y',
+		);
+
+		$this->optionProvider->invalidateCache($userId);
+	}
+
+	public function getEmployeeAhaResumeIndex(int $userId): int
+	{
+		return (int)($this->getOptionValue($userId, Option::CHECKIN_ONBOARDING_EMPLOYEE_AHA_RESUME) ?? 0);
+	}
+
+	public function setEmployeeAhaResumeIndex(int $userId, int $index): void
+	{
+		$this->optionService->save(
+			$userId,
+			Option::CHECKIN_ONBOARDING_EMPLOYEE_AHA_RESUME,
+			(string)$index,
+		);
+
+		$this->optionProvider->invalidateCache($userId);
+	}
+
+	public function getEmployeeGeoAhaState(int $userId): ?string
+	{
+		$state = $this->getOptionValue($userId, Option::CHECKIN_ONBOARDING_EMPLOYEE_GEO_AHA_STATE);
+
+		return in_array($state, self::GEO_AHA_STATES, true) ? $state : null;
+	}
+
+	public function setEmployeeGeoAhaState(int $userId, string $state): void
+	{
+		if (!in_array($state, self::GEO_AHA_STATES, true))
+		{
+			return;
+		}
+
+		$currentState = $this->getEmployeeGeoAhaState($userId);
+
+		if ($currentState === $state || $currentState === self::GEO_AHA_STATE_SHOWN)
+		{
+			return;
+		}
+
+		$this->optionService->save(
+			$userId,
+			Option::CHECKIN_ONBOARDING_EMPLOYEE_GEO_AHA_STATE,
+			$state,
+		);
+
+		$this->optionProvider->invalidateCache($userId);
 	}
 
 	public function canShowMobileOnboardingFor(int $userId): bool
 	{
+		if (DepartmentProvider::isHeadOrDeputyOfDepartment($userId))
+		{
+			return !$this->isEnabledByUser($userId);
+		}
+
+		if ($this->isEmployeeOnboardingShown($userId))
+		{
+			return false;
+		}
+
+		if (!WorkDayService::isDayStartCheckInEnabled())
+		{
+			return false;
+		}
+
+		return (new NodeSettingsService())->isAutoCheckInEnabled($userId);
+	}
+
+	/**
+	 * Tells whether auto check-in is already enabled in every node the user manages.
+	 *
+	 * @param int $userId
+	 * @return bool
+	 */
+	public function isCheckInEnabledForHierarchy(int $userId): bool
+	{
+		if ($userId <= 0 || !Feature::isGeoFeaturesAvailableByRegion())
+		{
+			return false;
+		}
+
 		if (!DepartmentProvider::isHeadOrDeputyOfDepartment($userId))
 		{
 			return false;
 		}
 
-		if ($this->isAiDayPlannerRequiredButMissing())
-		{
-			return false;
-		}
-
-		if ($this->isEnabledByUser($userId) || $this->isEnabledForDepartments($userId))
-		{
-			return false;
-		}
-
-		return !$this->isWithinNewPortalDelay();
-	}
-
-	private function isAiDayPlannerRequiredButMissing(): bool
-	{
-		return PlanningService::isAiAgentRegionAvailable()
-			&& !PlanningService::existsSystemDayAgent();
-	}
-
-	public function isWithinNewPortalDelay(): bool
-	{
-		$portalCreateTimestamp = $this->getPortalCreateTimestamp();
-		if ($portalCreateTimestamp === null)
-		{
-			return false;
-		}
-
-		$newPortalThreshold = (new Date(self::NEW_PORTAL_THRESHOLD_DATE, 'Y-m-d'))->getTimestamp();
-		if ($portalCreateTimestamp < $newPortalThreshold)
-		{
-			return false;
-		}
-
-		return time() < $portalCreateTimestamp + self::NEW_PORTAL_ONBOARDING_DELAY_SECONDS;
-	}
-
-	private function getPortalCreateTimestamp(): ?int
-	{
-		if (Loader::includeModule('bitrix24'))
-		{
-			$timestamp = (int)\CBitrix24::getCreateTime();
-			if ($timestamp > 0)
-			{
-				return $timestamp;
-			}
-		}
-
-		$admin = UserTable::getList([
-			'select' => ['DATE_REGISTER'],
-			'filter' => ['=ID' => 1],
-		])->fetchObject();
-
-		return $admin?->getDateRegister()?->getTimestamp();
+		return (new NodeSettingsService())->isAutoCheckInEnabledInSettings($userId);
 	}
 }

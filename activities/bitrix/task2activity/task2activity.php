@@ -14,9 +14,13 @@ use Bitrix\Bizproc\Result\ResultDto;
 use Bitrix\Crm\Activity\Provider\Tasks\Task;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 
+use Bitrix\Disk\Driver;
+use Bitrix\Disk\File;
+use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Text\Emoji;
+use Bitrix\Main\Web\Uri;
 
 use Bitrix\Tasks;
 use Bitrix\Tasks\Flow\Provider\FlowProvider;
@@ -36,6 +40,26 @@ class CBPTask2Activity extends CBPActivity implements
 	private $isInEventActivityMode = false;
 	private static $cycleCounter = [];
 	const CYCLE_LIMIT = 3;
+	const CHECK_LIST_ITEMS_MAX_COUNT = 50;
+	const CHECK_LIST_ITEM_MAX_LENGTH = 500;
+	const CHECK_LISTS_MAX_COUNT = 10;
+
+	/**
+	 * Opens a check list inside the flat value of the property: the element carrying it is a title,
+	 * every element after it is an item of that check list. Language independent on purpose - the value
+	 * of a template is read by portals of any language, and the user never sees the prefix itself.
+	 */
+	public const CHECK_LIST_TITLE_PREFIX = '[CHECKLIST]';
+
+	/** An item whose own text starts with the prefix carries this in front of it. */
+	private const CHECK_LIST_ESCAPE = '\\';
+
+	/** The channel of row kinds the properties dialog prints next to the values of the field (TPL-01). */
+	public const CHECK_LIST_KINDS_FIELD = 'CHECK_LIST_ITEM_KINDS';
+	public const CHECK_LIST_TITLE_KIND = 'title';
+	public const CHECK_LIST_ITEM_KIND = 'item';
+
+	private const SECURE_FILE_URL_SCHEMES = ['http', 'https', 'ftp', 'ftps'];
 
 	private static array $arAllowedTasksFieldNames = [
 		'TITLE',
@@ -272,35 +296,53 @@ class CBPTask2Activity extends CBPActivity implements
 				{
 					$canUseDisk = \Bitrix\Disk\Configuration::isSuccessfullyConverted();
 
+					$templateUserId = (int)$this->getTemplateUserId();
+
 					if ($canUseDisk && $this->canUploadFilesToDisk($rawFields[$fieldName]))
 					{
-						$fields[$fieldName] = $this->uploadFilesToDisk($fields[$fieldName], $fields['CREATED_BY']);
+						$fields[$fieldName] = $this->uploadFilesToDisk($fields[$fieldName], $templateUserId);
 					}
 					elseif (is_array($fields[$fieldName]))
 					{
-						$filesToUpload = [];
-						foreach ($fields[$fieldName] as $key => $fileId)
-						{
-							if ($canUseDisk && !empty($fileId))
-							{
-								$diskFile = \Bitrix\Disk\File::load(['XML_ID' => (string)$fileId]);
+						$storage = Driver::getInstance()->getStorageByUserId($templateUserId);
 
-								if ((!is_string($fileId) || mb_substr($fileId, 0, 1) !== 'n') && is_null($diskFile))
+						if ($storage === null)
+						{
+							$fields[$fieldName] = [];
+						}
+						else
+						{
+							$securityContext = $storage->getSecurityContext($templateUserId);
+
+							$filesToUpload = [];
+							foreach ($fields[$fieldName] as $key => $fileId)
+							{
+								if ($canUseDisk && !empty($fileId))
 								{
-									$filesToUpload[] = $fileId;
-									unset($fields[$fieldName][$key]);
-								}
-								elseif (is_string($fileId) && mb_substr($fileId, 0, 1) !== 'n')
-								{
-									$fields[$fieldName][$key] = 'n' . $diskFile->getId();
+									$diskFile = File::load(['STORAGE_ID' => $storage->getId(), 'XML_ID' => (string)$fileId]);
+
+									if ($diskFile !== null && !$diskFile->canRead($securityContext))
+									{
+										continue;
+									}
+
+									if ((!is_string($fileId) || mb_substr($fileId, 0, 1) !== 'n') && is_null($diskFile))
+									{
+										$filesToUpload[] = $fileId;
+										unset($fields[$fieldName][$key]);
+									}
+									elseif (is_string($fileId) && mb_substr($fileId, 0, 1) !== 'n')
+									{
+										$fields[$fieldName][$key] = 'n' . $diskFile->getId();
+									}
 								}
 							}
-						}
 
-						$fields[$fieldName] = array_merge(
-							$fields[$fieldName],
-							$this->uploadFilesToDisk($filesToUpload, $fields['CREATED_BY'])
-						);
+							$fields[$fieldName] = array_merge(
+								$fields[$fieldName],
+								$this->uploadFilesToDisk($filesToUpload, $templateUserId),
+							);
+						}
 					}
 				}
 
@@ -473,48 +515,17 @@ class CBPTask2Activity extends CBPActivity implements
 			return false;
 		}
 
-		$checkListItems = $this->CheckListItems;
-		if ($checkListItems && is_array($checkListItems))
+		// grouping is read from the template, before expressions are substituted: a value coming from
+		// a field of the document must not be able to open a check list of its own
+		$checkLists = static::parseCheckLists($this->getRawProperty('CheckListItems'));
+		if ($checkLists)
 		{
-			$taskItem = CTaskItem::getInstance($result, $arFieldsChecked['CREATED_BY']);
-
-			foreach ($checkListItems as $checkListItem)
-			{
-				if ($checkListItem)
-				{
-					if (is_array($checkListItem))
-					{
-						$checkListItem = implode(', ', \CBPHelper::MakeArrayFlat($checkListItem));
-					}
-					$checkListItem = trim((string)$checkListItem);
-					if ($checkListItem === '')
-					{
-						continue;
-					}
-
-					\CTaskCheckListItem::add($taskItem, ['TITLE' => $checkListItem]);
-				}
-			}
-
-			if (count(array_filter($checkListItems)) === count($checkListItems))
-			{
-				if ($this->workflow->isDebug())
-				{
-					$map = $this->getDebugInfo(
-						['CHECK_LIST_ITEMS' => $checkListItems], [
-																   "CHECK_LIST_ITEMS" => [
-																	   "Name" => Loc::getMessage(
-																		   "BPSA_CHECK_LIST_ITEMS"
-																	   ),
-																	   "Type" => "string",
-																	   "Required" => false,
-																	   "Multiple" => true,
-																   ],
-															   ]
-					);
-					$this->writeDebugInfo($map);
-				}
-			}
+			$this->writeCheckListDebugInfo(
+				$this->createCheckLists(
+					CTaskItem::getInstance($result, $arFieldsChecked['CREATED_BY']),
+					$checkLists,
+				)
+			);
 		}
 
 		$this->TaskId = $result;
@@ -556,28 +567,100 @@ class CBPTask2Activity extends CBPActivity implements
 		return is_string($value) && CBPActivity::isExpression($value);
 	}
 
-	protected function uploadFilesToDisk($fileIds, $userId) : array
+	protected function uploadFilesToDisk($files, $userId) : array
 	{
-		if(is_null($fileIds))
+		if ($userId <= 0)
 		{
 			return [];
 		}
-		if(!is_array($fileIds))
+
+		if (is_null($files))
 		{
-			$fileIds = [$fileIds];
+			return [];
+		}
+
+		if (!is_array($files))
+		{
+			$files = [$files];
 		}
 
 		$diskFilesIds = [];
-		foreach ($fileIds as $id)
+		foreach ($files as $file)
 		{
-			$file = CFile::MakeFileArray($id);
-			if(is_array($file))
+			$fileArray = $this->resolveFile($file);
+
+			if ($fileArray === null)
 			{
-				$uploadedFile = \Bitrix\Tasks\Integration\Disk\UserField::uploadFile($file, $userId);
+				continue;
+			}
+
+			$uploadedFile = \Bitrix\Tasks\Integration\Disk\UserField::uploadFile($fileArray, $userId);
+
+			if ($uploadedFile->isSuccess())
+			{
 				$diskFilesIds[] = $uploadedFile->getData()['ATTACHMENT_ID'];
 			}
 		}
+
 		return $diskFilesIds;
+	}
+
+	private function resolveFile(mixed $file): ?array
+	{
+		if (is_numeric($file))
+		{
+			$fileArray = CFile::MakeFileArray($file);
+		}
+		elseif (is_string($file))
+		{
+			$fileUrl = self::getSecureFileUrl($file);
+			if ($fileUrl === null)
+			{
+				return null;
+			}
+
+			$fileArray = CFile::MakeFileArray($fileUrl);
+		}
+		else
+		{
+			return null;
+		}
+
+		// A failed download still returns an array, but without the file itself.
+		return (is_array($fileArray) && !empty($fileArray['tmp_name'])) ? $fileArray : null;
+	}
+
+	private static function getSecureFileUrl(string $file): ?string
+	{
+		$file = trim($file);
+		if ($file === '')
+		{
+			return null;
+		}
+
+		$uri = new Uri($file);
+		$scheme = mb_strtolower($uri->getScheme());
+		if ($scheme !== '' && !in_array($scheme, self::SECURE_FILE_URL_SCHEMES, true))
+		{
+			return null;
+		}
+
+		if ($uri->getHost() === '')
+		{
+			// The activity runs in agents too, so the portal host comes from the settings, not from the request.
+			$uri = new Uri(UrlManager::getInstance()->getHostUrl() . '/' . ltrim($file, '/'));
+		}
+
+		if (
+			$uri->getHost() === ''
+			|| $uri->isPathTraversal()
+			|| !in_array(mb_strtolower($uri->getScheme()), self::SECURE_FILE_URL_SCHEMES, true)
+		)
+		{
+			return null;
+		}
+
+		return $uri->getUri();
 	}
 
 	protected function assertDateField($dateField, $dateFieldValue)
@@ -1077,6 +1160,8 @@ class CBPTask2Activity extends CBPActivity implements
 			}
 		}
 
+		// must run before extraction: it is the raw value of the form the check lists are composed from
+		$checkListFormErrors = static::composeCheckListItemsValue($currentValues);
 
 		$map = static::getPropertiesDialogMap();
 		foreach ($map['Fields']['Map'] as $taskFieldId => $taskField)
@@ -1130,6 +1215,12 @@ class CBPTask2Activity extends CBPActivity implements
 			);
 		}
 
+		// must run after both extraction loops: every extractValue() call overwrites the errors array
+		$errors = array_merge(
+			$errors,
+			$checkListFormErrors ?: static::collectCheckListItemsErrors($properties['CheckListItems'] ?? null),
+		);
+
 		if (!$errors)
 		{
 			$errors = array_merge($errors, static::validateProperties($properties));
@@ -1143,6 +1234,496 @@ class CBPTask2Activity extends CBPActivity implements
 		$currentActivity['Properties'] = $properties;
 
 		return true;
+	}
+
+	/**
+	 * The value of the property assembled from the two channels of the form (TPL-01). The kinds channel
+	 * is the mark of authorship as well: a request without it was written past the dialog - by the robot
+	 * of the automation among others - and its value passes through untouched, prefixes and all.
+	 *
+	 * @return array the errors of the form, empty when there are none
+	 */
+	private static function composeCheckListItemsValue(array &$currentValues): array
+	{
+		if (!isset($currentValues[static::CHECK_LIST_KINDS_FIELD]))
+		{
+			return [];
+		}
+
+		$kinds = static::readCheckListChannel($currentValues[static::CHECK_LIST_KINDS_FIELD]);
+		$texts = static::readCheckListChannel($currentValues['CHECK_LIST_ITEMS'] ?? []);
+
+		// a default here would hide an outdated form, a partial delivery and a forged request alike,
+		// and every one of them would end up merging check lists
+		$isMalformed = count($kinds) !== count($texts) || array_filter($texts, 'is_array');
+
+		if ($isMalformed)
+		{
+			return [[
+				'code' => 'CheckListFormMalformed',
+				'parameter' => 'CHECK_LIST_ITEMS',
+				'message' => Loc::getMessage('BPSA_CHECK_LIST_FORM_ERROR'),
+			]];
+		}
+
+		$currentValues['CHECK_LIST_ITEMS'] = static::composeCheckListValues(
+			array_map(static fn ($text): string => (string)$text, $texts),
+			array_map(static fn ($kind): string => is_array($kind) ? '' : (string)$kind, $kinds),
+		);
+
+		return [];
+	}
+
+	private static function readCheckListChannel($channel): array
+	{
+		return array_values(is_array($channel) ? $channel : [$channel]);
+	}
+
+	private static function collectCheckListItemsErrors($items): array
+	{
+		if (!is_array($items))
+		{
+			return [];
+		}
+
+		$errors = [];
+		$lists = static::parseCheckLists($items);
+
+		if (count($lists) > static::CHECK_LISTS_MAX_COUNT)
+		{
+			$errors[] = [
+				'code' => 'CheckListsCountExceeded',
+				'parameter' => 'CHECK_LIST_ITEMS',
+				'message' => Loc::getMessage(
+					'BPSA_CHECK_LISTS_COUNT_ERROR',
+					['#LIMIT#' => static::CHECK_LISTS_MAX_COUNT]
+				),
+			];
+		}
+
+		foreach ($lists as $list)
+		{
+			if (count($list['items']) > static::CHECK_LIST_ITEMS_MAX_COUNT)
+			{
+				$errors[] = [
+					'code' => 'CheckListItemsCountExceeded',
+					'parameter' => 'CHECK_LIST_ITEMS',
+					'message' => Loc::getMessage(
+						'BPSA_CHECK_LIST_ITEMS_COUNT_ERROR',
+						['#LIMIT#' => static::CHECK_LIST_ITEMS_MAX_COUNT]
+					),
+				];
+
+				break;
+			}
+		}
+
+		// the length is measured over the parsed text: the service prefix of a title and the escape of
+		// an item are ours, and a title of exactly the limit must not fail over characters we added
+		foreach ($lists as $list)
+		{
+			$lengthError = static::findCheckListLengthError($list);
+			if ($lengthError !== null)
+			{
+				$errors[] = $lengthError;
+
+				break;
+			}
+		}
+
+		return $errors;
+	}
+
+	private static function findCheckListLengthError(array $list): ?array
+	{
+		foreach ($list['items'] as $item)
+		{
+			if (mb_strlen($item) > static::CHECK_LIST_ITEM_MAX_LENGTH)
+			{
+				return [
+					'code' => 'CheckListItemLengthExceeded',
+					'parameter' => 'CHECK_LIST_ITEMS',
+					'message' => Loc::getMessage(
+						'BPSA_CHECK_LIST_ITEM_LENGTH_ERROR',
+						['#LIMIT#' => static::CHECK_LIST_ITEM_MAX_LENGTH]
+					),
+				];
+			}
+		}
+
+		if (mb_strlen($list['title']) > static::CHECK_LIST_ITEM_MAX_LENGTH)
+		{
+			return [
+				'code' => 'CheckListTitleLengthExceeded',
+				'parameter' => 'CHECK_LIST_ITEMS',
+				'message' => Loc::getMessage(
+					'BPSA_CHECK_LIST_TITLE_LENGTH_ERROR',
+					['#LIMIT#' => static::CHECK_LIST_ITEM_MAX_LENGTH]
+				),
+			];
+		}
+
+		return null;
+	}
+
+	/**
+	 * The items of a stored check list, keyed by the position each one holds in the property.
+	 * Empty items are dropped here exactly as extraction drops them on saving, so the properties
+	 * dialog shows and execution creates the very items the limits are counted over.
+	 *
+	 * @return array<int, string>
+	 */
+	public static function reduceCheckListItemsToStrings($items): array
+	{
+		if (!is_array($items))
+		{
+			$items = [$items];
+		}
+
+		$strings = [];
+		$number = 0;
+		foreach ($items as $item)
+		{
+			$number++;
+			$string = static::reduceCheckListItemToString($item);
+			if ($string !== '')
+			{
+				$strings[$number] = $string;
+			}
+		}
+
+		return $strings;
+	}
+
+	// the only definition of the item text: saving must measure exactly what execution creates
+	private static function reduceCheckListItemToString($item): string
+	{
+		if (is_array($item))
+		{
+			$item = implode(', ', \CBPHelper::MakeArrayFlat($item));
+		}
+
+		return trim((string)$item);
+	}
+
+	/**
+	 * A root per parsed check list, its items as children of that very root (ALG-02).
+	 *
+	 * Expressions are evaluated here, after the grouping is settled: the title on its own, the items of
+	 * a group as one list, so that an item written as an expression of several values keeps unfolding
+	 * into several items instead of collapsing into a comma separated string. A template written past
+	 * the properties dialog carries a check list of any size, so the limits the dialog refuses to save
+	 * are applied here as well: the task keeps what fits.
+	 *
+	 * @param list<array{hasTitle: bool, title: string, items: list<string>}> $checkLists
+	 * @return list<string> the items of every check list with the expressions substituted, in order
+	 */
+	private function createCheckLists(CTaskItem $taskItem, array $checkLists): array
+	{
+		$skippedListsCount = count($checkLists) - static::CHECK_LISTS_MAX_COUNT;
+		$checkLists = array_slice($checkLists, 0, static::CHECK_LISTS_MAX_COUNT);
+
+		$resolvedItems = [];
+		$number = 0;
+		foreach ($checkLists as $checkList)
+		{
+			$number++;
+
+			$title = static::reduceCheckListItemToString($this->parseValue($checkList['title']));
+			$items = static::reduceCheckListItemsToStrings(
+				$this->parseValue(static::keepCheckListItemsApart($checkList['items']))
+			);
+			$skippedItemsCount = count($items) - static::CHECK_LIST_ITEMS_MAX_COUNT;
+			$items = array_slice($items, 0, static::CHECK_LIST_ITEMS_MAX_COUNT, true);
+
+			if (!$items)
+			{
+				continue;
+			}
+
+			if (mb_strlen($title) > static::CHECK_LIST_ITEM_MAX_LENGTH)
+			{
+				$this->WriteToTrackingService(
+					Loc::getMessage('BPSA_CHECK_LIST_ADD_ERROR_MSGVER_1', ['#LIST_NUMBER#' => (string)$number]),
+					0,
+					CBPTrackingType::Error
+				);
+				continue;
+			}
+
+			$resolvedItems = array_merge($resolvedItems, array_values($items));
+
+			$root = null;
+			try
+			{
+				$root = \CTaskCheckListItem::add($taskItem, [
+					'TITLE' => $title === ''
+						? Loc::getMessage('BPSA_CHECK_LIST_TITLE', ['#NUMBER#' => (string)$number])
+						: $title,
+					'PARENT_ID' => 0,
+					'SORT_INDEX' => $number - 1,
+				]);
+			}
+			catch (\Throwable)
+			{
+				$this->WriteToTrackingService(
+					Loc::getMessage('BPSA_CHECK_LIST_ADD_ERROR_MSGVER_1', ['#LIST_NUMBER#' => (string)$number]),
+					0,
+					CBPTrackingType::Error
+				);
+			}
+
+			// the note about the items left out speaks of a check list that exists: a root that failed
+			// has already been reported, and nothing was added to it
+			if ($root !== null)
+			{
+				$this->createCheckListItems($taskItem, $root->getId(), $items, $number);
+
+				if ($skippedItemsCount > 0)
+				{
+					$this->WriteToTrackingService(
+						Loc::getMessage(
+							'BPSA_CHECK_LIST_ITEMS_COUNT_LIMITED_MSGVER_1',
+							[
+								'#LIMIT#' => (string)static::CHECK_LIST_ITEMS_MAX_COUNT,
+								'#COUNT#' => (string)$skippedItemsCount,
+								'#LIST_NUMBER#' => (string)$number,
+							]
+						),
+						0,
+						CBPTrackingType::Custom
+					);
+				}
+			}
+		}
+
+		if ($skippedListsCount > 0)
+		{
+			$this->WriteToTrackingService(
+				Loc::getMessage(
+					'BPSA_CHECK_LISTS_COUNT_LIMITED',
+					[
+						'#LIMIT#' => (string)static::CHECK_LISTS_MAX_COUNT,
+						'#COUNT#' => (string)$skippedListsCount,
+					]
+				),
+				0,
+				CBPTrackingType::Custom
+			);
+		}
+
+		return $resolvedItems;
+	}
+
+	/**
+	 * An array of exactly two strings is read by the engine as a pair of an object and a field of it
+	 * (`CBPActivity::getPropertyValueRecursive()`), so a check list of two items named after one would
+	 * collapse into a single value of the document. An empty element past the end leaves the list a
+	 * list of items; it carries no text and is dropped with the other empty ones.
+	 *
+	 * @param list<string> $items
+	 * @return list<string>
+	 */
+	private static function keepCheckListItemsApart(array $items): array
+	{
+		return count($items) === 2 ? [...$items, ''] : $items;
+	}
+
+	/**
+	 * The items of the check lists are what the debug panel shows for the field, never the value of the
+	 * property: the value carries the service prefix of the format and the titles of the check lists,
+	 * and a title belongs to no message of the log (ADR, AC-026).
+	 *
+	 * @param list<string> $items
+	 */
+	private function writeCheckListDebugInfo(array $items): void
+	{
+		if (!$items || !$this->workflow->isDebug())
+		{
+			return;
+		}
+
+		$this->writeDebugInfo($this->getDebugInfo(
+			['CHECK_LIST_ITEMS' => $items],
+			[
+				'CHECK_LIST_ITEMS' => [
+					'Name' => Loc::getMessage('BPSA_CHECK_LIST_ITEMS'),
+					'Type' => 'string',
+					'Required' => false,
+					'Multiple' => true,
+				],
+			]
+		));
+	}
+
+	/**
+	 * The position of an item inside its own check list is passed as the sort index: without it every
+	 * single item makes the compatibility layer reread the whole check list tree of the task.
+	 *
+	 * Empty expressions leave gaps in sort indexes; tracking uses consecutive item numbers.
+	 *
+	 * @param array<int, string> $items
+	 */
+	private function createCheckListItems(CTaskItem $taskItem, int $rootId, array $items, int $listNumber): void
+	{
+		$number = 0;
+		foreach ($items as $position => $text)
+		{
+			$number++;
+
+			try
+			{
+				\CTaskCheckListItem::add($taskItem, [
+					'TITLE' => $text,
+					'PARENT_ID' => $rootId,
+					'SORT_INDEX' => $position,
+				]);
+			}
+			catch (\Throwable)
+			{
+				// neither the text of an item nor the title of a check list ever reaches the tracking
+				// service: a log of the workflow is readable by anyone who sees the process
+				$this->WriteToTrackingService(
+					Loc::getMessage(
+						'BPSA_CHECK_LIST_ITEM_ADD_ERROR_MSGVER_1',
+						['#NUMBER#' => (string)$number, '#LIST_NUMBER#' => (string)$listNumber]
+					),
+					0,
+					CBPTrackingType::Error
+				);
+			}
+		}
+	}
+
+	/**
+	 * The check lists a stored value carries: an element opening with the service prefix starts a new one,
+	 * the elements after it are its items, and items met before any title form the first check list.
+	 * A value with no title at all is the format every template saved before the feature holds, and it
+	 * parses into exactly one check list with `hasTitle` false - a state the composing side has to keep
+	 * apart from a title whose text is empty, or a round trip through the dialog would rewrite the value.
+	 *
+	 * Grouping is read from the template, before any expression is substituted: text returned by an
+	 * expression never opens a check list, whatever it starts with.
+	 *
+	 * @return list<array{hasTitle: bool, title: string, items: list<string>}>
+	 */
+	public static function parseCheckLists($values): array
+	{
+		$lists = [];
+		$current = null;
+
+		foreach (static::reduceCheckListItemsToStrings($values) as $raw)
+		{
+			if (str_starts_with($raw, static::CHECK_LIST_TITLE_PREFIX))
+			{
+				$lists[] = [
+					'hasTitle' => true,
+					'title' => mb_substr($raw, mb_strlen(static::CHECK_LIST_TITLE_PREFIX)),
+					'items' => [],
+				];
+				$current = array_key_last($lists);
+
+				continue;
+			}
+
+			if ($current === null)
+			{
+				$lists[] = ['hasTitle' => false, 'title' => '', 'items' => []];
+				$current = array_key_last($lists);
+			}
+
+			$lists[$current]['items'][] = static::unescapeCheckListItem($raw);
+		}
+
+		return $lists;
+	}
+
+	/**
+	 * The check lists a request of the form carries, read off its two channels (TPL-01): the kind of a
+	 * row decides what it becomes, its text never does. A row the kinds channel does not reach stays an
+	 * item - a request whose channels differ in length is refused on saving anyway
+	 * (see composeCheckListItemsValue()), and the dialog redrawn with that refusal keeps every heading
+	 * the user typed instead of silently turning the names into items of the check list before them.
+	 *
+	 * @return list<array{hasTitle: bool, title: string, items: list<string>}>
+	 */
+	public static function readCheckListForm($texts, $kinds): array
+	{
+		$texts = static::readCheckListChannel($texts);
+		$kinds = static::readCheckListChannel($kinds);
+
+		$lists = [];
+		foreach ($texts as $position => $rawText)
+		{
+			$text = static::reduceCheckListItemToString($rawText);
+
+			if (($kinds[$position] ?? null) === static::CHECK_LIST_TITLE_KIND)
+			{
+				$lists[] = ['hasTitle' => true, 'title' => $text, 'items' => []];
+
+				continue;
+			}
+
+			if ($text === '')
+			{
+				continue;
+			}
+
+			if ($lists === [])
+			{
+				$lists[] = ['hasTitle' => false, 'title' => '', 'items' => []];
+			}
+
+			$lists[array_key_last($lists)]['items'][] = $text;
+		}
+
+		return $lists;
+	}
+
+	/**
+	 * The value of the property built from the two channels of the form (TPL-01): the kind of a row
+	 * decides what it becomes, its text never does. An empty title is printed as well - dropping it
+	 * would merge a check list into the one before it.
+	 *
+	 * @param list<string> $texts
+	 * @param list<string> $kinds
+	 * @return list<string>
+	 */
+	private static function composeCheckListValues(array $texts, array $kinds): array
+	{
+		$values = [];
+
+		foreach ($texts as $position => $text)
+		{
+			$values[] = ($kinds[$position] ?? null) === static::CHECK_LIST_TITLE_KIND
+				? static::CHECK_LIST_TITLE_PREFIX . $text
+				: static::escapeCheckListItem($text);
+		}
+
+		return $values;
+	}
+
+	private static function escapeCheckListItem(string $text): string
+	{
+		return preg_match(static::makeCheckListPrefixPattern('*'), $text) === 1
+			? static::CHECK_LIST_ESCAPE . $text
+			: $text;
+	}
+
+	private static function unescapeCheckListItem(string $text): string
+	{
+		return preg_match(static::makeCheckListPrefixPattern('+'), $text) === 1
+			? mb_substr($text, mb_strlen(static::CHECK_LIST_ESCAPE))
+			: $text;
+	}
+
+	private static function makeCheckListPrefixPattern(string $quantifier): string
+	{
+		return '/^'
+			. preg_quote(static::CHECK_LIST_ESCAPE, '/')
+			. $quantifier
+			. preg_quote(static::CHECK_LIST_TITLE_PREFIX, '/')
+			. '/';
 	}
 
 	private static function extractUserField(array $field, array $currentValues): \Bitrix\Main\Result

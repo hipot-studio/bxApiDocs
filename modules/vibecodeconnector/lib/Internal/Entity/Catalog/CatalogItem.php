@@ -19,6 +19,7 @@ final class CatalogItem implements EntityInterface
 		private string $color,
 		private ?int $iconFileId = null,
 		private ?int $chatId = null,
+		private ?int $appChatId = null,
 		private ?string $externalId = null,
 		private ?string $description = null,
 		private ?string $editUrl = null,
@@ -88,6 +89,18 @@ final class CatalogItem implements EntityInterface
 	public function setChatId(?int $chatId): self
 	{
 		$this->chatId = $chatId;
+
+		return $this;
+	}
+
+	public function getAppChatId(): ?int
+	{
+		return $this->appChatId;
+	}
+
+	public function setAppChatId(?int $appChatId): self
+	{
+		$this->appChatId = $appChatId;
 
 		return $this;
 	}

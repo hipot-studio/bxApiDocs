@@ -10,6 +10,10 @@ use Bitrix\Tasks\V2\Internal\Entity\HistoryLog;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\User;
 use Bitrix\Tasks\V2\Internal\Repository\RelatedTaskRepositoryInterface;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionRecorder;
+use Bitrix\Tasks\V2\Internal\Service\Ranking\EventType;
+use Bitrix\Tasks\V2\Internal\Service\Ranking\RelationKind;
 use Bitrix\Tasks\V2\Internal\Service\Task\Action\Update\Config\UpdateConfig;
 use Bitrix\Tasks\V2\Internal\Service\UpdateTaskService;
 
@@ -19,11 +23,17 @@ class RelatedTaskService
 		private readonly RelatedTaskRepositoryInterface $relatedTaskRepository,
 		private readonly UpdateTaskService $updateService,
 		private readonly HistoryService $historyService,
+		private readonly InteractionRecorder $interactionRecorder,
 	)
 	{
 	}
 
-	public function add(int $taskId, array $relatedTaskIds, int $userId): Task
+	public function add(
+		int $taskId,
+		array $relatedTaskIds,
+		int $userId,
+		InteractionOrigin $origin = InteractionOrigin::System,
+	): Task
 	{
 		Collection::normalizeArrayValuesByInt($relatedTaskIds, false);
 
@@ -60,6 +70,16 @@ class RelatedTaskService
 			taskId: $taskId,
 			userId: $userId,
 			dependsOn: $new,
+		);
+
+		// Targets = only the links this call created: re-picking an already related
+		// task must not add weight again.
+		$this->interactionRecorder->recordBatch(
+			userId: $userId,
+			taskIds: array_values(array_diff($relatedTaskIds, $previous)),
+			eventType: EventType::Relation,
+			relationKind: RelationKind::Related,
+			origin: $origin,
 		);
 
 		return $updatedTask->cloneWith(['dependsOn' => $new]);

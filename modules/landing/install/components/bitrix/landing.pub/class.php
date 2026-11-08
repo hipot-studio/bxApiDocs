@@ -29,6 +29,9 @@ Loc::loadMessages(__FILE__);
 
 class LandingPubComponent extends LandingBaseComponent
 {
+	private const SEARCH_HIGHLIGHT_MAX_QUERY_LENGTH = 255;
+	private const SEARCH_HIGHLIGHT_MAX_PHRASES = 10;
+
 	/**
 	 * Special page - robots.txt
 	 * @var boolean
@@ -53,6 +56,13 @@ class LandingPubComponent extends LandingBaseComponent
 	 * @var boolean
 	 */
 	protected $isSignedPreview = false;
+
+	/**
+	 * Preview opened by the route of the "Sites" section (PORTAL_PREVIEW), as opposed to the signed
+	 * link and to the DRAFT_MODE preview.
+	 * @var bool
+	 */
+	protected bool $isPortalPreview = false;
 
 	/**
 	 * SEF variables.
@@ -142,8 +152,8 @@ class LandingPubComponent extends LandingBaseComponent
 	 * travels with every device preview though, so the same predicate has to be re-evaluated here
 	 * — otherwise the sandbox workarounds (storage shim, inlined fonts, suppressed cookie banner)
 	 * would be paid for by a preview opened on the site's own domain, where no sandbox is ever set.
-	 * A cloud preview is no longer such a case: its link is built on the portal host by
-	 * Site\PreviewUrl, so there the same-origin branch really runs.
+	 * A cloud preview is no longer such a case: its address is the route of the "Sites" section
+	 * built by Site\PortalPreview on the portal host, so there the same-origin branch really runs.
 	 * @param string $parentOrigin Validated portal origin from MARKER-01.
 	 * @return bool
 	 */
@@ -156,23 +166,20 @@ class LandingPubComponent extends LandingBaseComponent
 	}
 
 	/**
-	 * Returns true when the signed preview is served on the portal origin and has to be
-	 * sandboxed by the page itself, not only by the editor frame around it.
-	 *
-	 * In Bitrix24 (cloud and box alike) that is every valid signed preview: Site::getPublicHash()
-	 * binds the signature to the host of the request and the link is built on that same host, so
-	 * a signature that checks out was issued for this very origin. The site manager is left as
-	 * is — there the signature is bound to the site domain, and a preview on a domain of its own
-	 * shares nothing with the portal.
+	 * Returns true when the preview is served on the portal origin and has to be sandboxed by the
+	 * page itself, not only by the editor frame around it. The route of the "Sites" section runs on
+	 * the portal host wherever it is registered, so it is sandboxed on its own: the registration
+	 * goes by the scope of the section (landing.start), not by Manager::isB24(). The signed preview
+	 * shares that origin in Bitrix24 only - the site manager keeps its own domain and is left out.
 	 * @return bool
 	 */
-	private function isSandboxedSignedPreview(): bool
+	private function isSandboxedPreview(): bool
 	{
-		return $this->isSignedPreview && Manager::isB24();
+		return $this->isPortalPreview || ($this->isSignedPreview && Manager::isB24());
 	}
 
 	/**
-	 * Gives the signed preview document an opaque origin via the CSP sandbox directive.
+	 * Gives the preview document an opaque origin via the CSP sandbox directive.
 	 *
 	 * In preview the hooks read their draft values (Hook::setEditMode()). Under the portal origin
 	 * a script of the page would run with the portal session of whoever opens the link: the
@@ -194,7 +201,7 @@ class LandingPubComponent extends LandingBaseComponent
 	 * needs (storage shim, inlined fonts) are the same as for the device frame — see the caller.
 	 * @return void
 	 */
-	private function sandboxSignedPreview(): void
+	private function sandboxPreview(): void
 	{
 		Application::getInstance()->getContext()->getResponse()->addHeader(
 			'Content-Security-Policy',
@@ -657,11 +664,133 @@ class LandingPubComponent extends LandingBaseComponent
 	}
 
 	/**
+	 * Does this site get the cloud form of the preview url - the route of the "Sites" section?
+	 *
+	 * Decided by the row of the site the address points to, the very source the link builders read
+	 * (Site::getPublicUrl(), Landing::getPublicUrl()): the SITE_TYPE parameter holds the scope of
+	 * the process, and the public entry point (pub/site/index.php) includes the component without
+	 * it, so a gate built on that parameter would answer for another type than the one the button
+	 * hands the address out for. An unreadable row leaves the type unknown, and the signature is
+	 * then refused by the scope of the process - such an address resolves to nothing anyway.
+	 * @param int|string $siteId Site id taken from the address.
+	 * @return bool
+	 */
+	private function isCloudPreviewOfSite($siteId): bool
+	{
+		$row = Site::getList([
+			'select' => [
+				'TYPE',
+			],
+			'filter' => [
+				'ID' => (int)$siteId,
+				'=DELETED' => ['Y', 'N'],
+				'CHECK_PERMISSIONS' => 'N',
+			],
+		])->fetch();
+		$siteType = $row ? (string)$row['TYPE'] : null;
+
+		return Site\PortalPreview::isCloud(
+			// the builders lower the b24 flag for a site of the site manager, so the gate does too
+			Manager::isB24() && $siteType !== 'SMN',
+			Manager::isCloudDisable(),
+			$siteType
+		);
+	}
+
+	/**
+	 * Address of the favicon of the site: the picture of the FAVICON hook, or the stock icon of the
+	 * component. The favicon branch of detectPage() serves it under /favicon.ico of the site, and the
+	 * portal preview links it by this address directly, as the route has no such path.
+	 * @param int $siteId Site id.
+	 * @return string
+	 */
+	private function getSiteFaviconPath(int $siteId): string
+	{
+		$path = '/bitrix/components/bitrix/landing.pub/favicon.ico';
+		$hooksSite = Hook::getForSite($siteId);
+		if (isset($hooksSite['FAVICON']))
+		{
+			$fields = $hooksSite['FAVICON']->getFields();
+			if (
+				isset($fields['PICTURE']) &&
+				$fields['PICTURE']->getValue()
+			)
+			{
+				$path = (string)\Bitrix\Landing\File::getFilePath(
+					$fields['PICTURE']->getValue()
+				) ?: $path;
+			}
+		}
+
+		return $path;
+	}
+	/**
+	 * Authorize the reserved Vibe route before resolving any page or resource.
+	 */
+	protected function prepareVibeDetailPath(): bool
+	{
+		if (!Manager::isB24())
+		{
+			return true;
+		}
+
+		$path = rawurldecode(ltrim((string)($this->arParams['PATH'] ?? ''), '/'));
+		if ($path !== 'vibe' && !str_starts_with($path, 'vibe/'))
+		{
+			return true;
+		}
+
+		$parts = explode('/', $path, 3);
+		$siteId = filter_var($parts[1] ?? '', FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+		$detailPath = $parts[2] ?? '';
+		$validPath = $siteId !== false
+			&& (string)$siteId === ($parts[1] ?? '')
+			&& trim($detailPath, '/') !== ''
+			&& !preg_match('/[\x00-\x1F\x7F\\\\?#]/', $path)
+			&& !array_intersect(explode('/', $detailPath), ['.', '..']);
+		if ($validPath && Manager::getUserId() > 0)
+		{
+			$site = Site::getList([
+				'select' => ['ID', 'TYPE'],
+				'filter' => ['ID' => $siteId, '=TYPE' => 'VIBE', 'CHECK_PERMISSIONS' => 'N'],
+			])->fetch();
+			$vibe = $site && $site['TYPE'] === 'VIBE'
+				? \Bitrix\Landing\Vibe\Vibe::createBySiteId($siteId)
+				: null;
+			if (
+				$vibe
+				&& $vibe->getSiteId() === $siteId
+				&& $vibe->getLandingId() > 0
+				&& $vibe->canView()
+				&& (\Bitrix\Landing\Vibe\Vibe::isFeatureEnable() || $vibe->isFreeTariffMode())
+			)
+			{
+				$this->arParams['PATH'] = $siteId . '/' . $detailPath;
+				$this->arParams['LID'] = 0;
+				$this->arParams['SITE_ID'] = $siteId;
+				$this->arParams['SITE_TYPE'] = 'VIBE';
+				$this->arParams['TYPE'] = 'VIBE';
+				$this->arParams['DRAFT_MODE'] = 'Y';
+				$this->arParams['NOT_CHECK_DOMAIN'] = 'Y';
+				return true;
+			}
+		}
+
+		$this->setHttpStatusOnce(self::ERROR_STATUS_NOT_FOUND);
+		return false;
+	}
+
+	/**
 	 * Detect landing by path.
 	 * @return int|false Detected landing id or false.
 	 */
 	public function detectPage()
 	{
+		if (!$this->prepareVibeDetailPath())
+		{
+			return false;
+		}
+
 		// parse url
 		$serverHost = $this->arParams['HTTP_HOST'] ?? null;
 		$requestedPage = '/' . $this->arParams['PATH'];
@@ -723,18 +852,25 @@ class LandingPubComponent extends LandingBaseComponent
 		{
 			$this->isPreviewMode = true;
 		}
+		// in the cloud the draft is opened by the route of the section, so the signature below is
+		// left to the box and to the scopes the route does not serve. The signature itself is
+		// checked first: the gate reads the row of the site, and a plain public hit must not pay
+		// for that query.
 		else if (
-			// for base work
 			(
-				($requestedPageParts[0] ?? null) == 'preview' &&
-				Site::isPublicHashValid($siteId ?? 0, $requestedPageParts[1] ?? null)
+				// for base work
+				(
+					($requestedPageParts[0] ?? null) == 'preview' &&
+					Site::isPublicHashValid($siteId ?? 0, $requestedPageParts[1] ?? null)
+				)
+				||
+				// for cloud version
+				(
+					$this->request('landing_mode') == 'preview' &&
+					Site::isPublicHashValid($siteId ?? 0, $this->request('hash'))
+				)
 			)
-			||
-			// for cloud version
-			(
-				$this->request('landing_mode') == 'preview' &&
-				Site::isPublicHashValid($siteId ?? 0, $this->request('hash'))
-			)
+			&& !$this->isCloudPreviewOfSite($siteId ?? 0)
 		)
 		{
 			$this->isPreviewMode = true;
@@ -788,21 +924,7 @@ class LandingPubComponent extends LandingBaseComponent
 		}
 		elseif ($landingUrl == 'favicon' || $landingUrl == 'favicon.php' || $landingUrl == 'favicon.ico')
 		{
-			$path = '/bitrix/components/bitrix/landing.pub/favicon.ico';
-			$hooksSite = Hook::getForSite($siteId);
-			if (isset($hooksSite['FAVICON']))
-			{
-				$fields = $hooksSite['FAVICON']->getFields();
-				if (
-					isset($fields['PICTURE']) &&
-					$fields['PICTURE']->getValue()
-				)
-				{
-					$path = \Bitrix\Landing\File::getFilePath(
-						$fields['PICTURE']->getValue()
-					);
-				}
-			}
+			$path = $this->getSiteFaviconPath((int)$siteId);
 
 			Manager::getApplication()->restartBuffer();
 			header('Content-type: image/x-icon');
@@ -1012,21 +1134,48 @@ class LandingPubComponent extends LandingBaseComponent
 		$folderFilter = $this->getFolderFilter($landingUrl . '/' . $landingSubUrl, $site['ID']);
 		if ($folderFilter)
 		{
+			// first level folder: code may only look like dynamic one, so exact original code has priority
+			$folderCodeOriginal = null;
+			if (
+				$landingCodeOriginal !== null
+				&& $landingSubUrl !== ''
+				&& !str_contains($landingCodeOriginal, '/')
+				&& isset($folderFilter['=CODE'])
+			)
+			{
+				$folderCodeOriginal = mb_strtolower($landingCodeOriginal);
+				$folderFilter['=CODE'] = [$folderFilter['=CODE'], $folderCodeOriginal];
+			}
 			$folderFilter['==AREAS.ID'] = null;
 			$folderFilter['SITE_ID'] = $site['ID'];
 			$folderFilter['=ACTIVE'] = $this->isPreviewMode ? ['Y', 'N'] : 'Y';
 			$folderFilter['CHECK_PERMISSIONS'] = $this->arParams['CHECK_PERMISSIONS'];
 			$res = Landing::getList(array(
 				'select' => [
-					'ID', 'ACTIVE', 'DELETED'
+					'ID', 'CODE', 'ACTIVE', 'DELETED'
 				],
 				'filter' => $folderFilter,
 				'order' => [
 					'ID' => 'asc'
 				],
-				'limit' => 1
+				'limit' => ($folderCodeOriginal === null) ? 1 : 2
 			));
-			if ($row = $res->fetch())
+			$row = null;
+			while ($folderRow = $res->fetch())
+			{
+				$row ??= $folderRow;
+				if (
+					$folderCodeOriginal !== null
+					&& mb_strtolower((string)$folderRow['CODE']) === $folderCodeOriginal
+				)
+				{
+					$row = $folderRow;
+					$this->dynamicFilterId = 0;
+					$this->dynamicElementId = 0;
+					break;
+				}
+			}
+			if ($row)
 			{
 				$landingIdExec = $checkExecId($row);
 				if ($landingIdExec)
@@ -1538,19 +1687,42 @@ class LandingPubComponent extends LandingBaseComponent
 			return;
 		}
 
-		$query = \htmlspecialcharsbx($this->request('q'));
+		$rawQuery = $this->request('q');
+		if (!is_string($rawQuery) || mb_strlen($rawQuery) > self::SEARCH_HIGHLIGHT_MAX_QUERY_LENGTH)
+		{
+			return;
+		}
+
+		$query = \htmlspecialcharsbx($rawQuery);
 		if (!$query)
 		{
 			return;
 		}
 
+		$phrases = explode(' ', $query);
+		\trimArr($phrases, true);
+		if (!$phrases || count($phrases) > self::SEARCH_HIGHLIGHT_MAX_PHRASES)
+		{
+			return;
+		}
+
+		// phrases are literals, not patterns
+		$phrasesPattern = implode(
+			'|',
+			array_map(
+				static fn(string $phrase): string => preg_quote($phrase, '#'),
+				$phrases
+			)
+		);
+
 		Cache::disableCache();
 
 		$eventManager = EventManager::getInstance();
 		$eventManager->addEventHandler('landing', 'onBlockPublicView',
-			function(Event $event) use($query)
+			function(Event $event) use($query, $phrasesPattern)
 			{
 				$outputContent = $event->getParameter('outputContent');
+				$originalContent = $outputContent;
 
 				// SEARCH replaces
 				$isSearch =
@@ -1565,11 +1737,9 @@ class LandingPubComponent extends LandingBaseComponent
 					{
 						return $outputContent;
 					}
-					$phrases = explode(' ', $query);
-					\trimArr($phrases, true);
 					// try to find search phrases in real content (between tags)
 					$found = preg_match_all(
-						'#>[^<]*(' . implode('|', $phrases) . ')[^<]*<#isu',
+						'#>[^<]*(' . $phrasesPattern . ')[^<]*<#isu',
 						$outputContent,
 						$matches
 					);
@@ -1579,12 +1749,21 @@ class LandingPubComponent extends LandingBaseComponent
 						{
 							// highlight found phrases
 							$outerNew = preg_replace(
-								'#([^\s;>]*(' . implode('|', $phrases) . ')[^\s<&!.,]*)#isu',
+								'#([^\s;>]*(' . $phrasesPattern . ')[^\s<&!.,]*)#isu',
 								'<span class="landing-highlight">$1</span>',
 								$outer
 							);
+							if ($outerNew === null)
+							{
+								continue;
+							}
 							$outputContent = str_replace($outer, $outerNew, $outputContent);
 						}
+					}
+					// highlighting must never bring the PHP open tag into the content
+					if (strpos($outputContent, '<?') !== false)
+					{
+						return $originalContent;
 					}
 				}
 
@@ -1845,10 +2024,23 @@ class LandingPubComponent extends LandingBaseComponent
 			$this->checkParam('SHOW_EDIT_PANEL', 'N');
 			$this->checkParam('SKIP_404', 'N');
 			$this->checkParam('DRAFT_MODE', 'N');
+			$this->checkParam('PORTAL_PREVIEW', 'N');
 			$this->checkParam('PAGE_URL_LANDING_VIEW', '');
 			$this->checkParam('PAGE_URL_SITES', '');
 			$this->checkParam('PAGE_URL_SITE_SHOW', '');
 			$this->checkParam('PAGE_URL_ROLES', '');
+
+			// the route brings the page ready as LID, so the preview is raised here, not by detectPage()
+			if ($this->arParams['PORTAL_PREVIEW'] === 'Y')
+			{
+				$this->isPortalPreview = true;
+				$this->isPreviewMode = true;
+			}
+
+			if (!$this->prepareVibeDetailPath())
+			{
+				return;
+			}
 
 			$this->arParams['TYPE'] = $this->arParams['SITE_TYPE'];
 
@@ -1897,6 +2089,11 @@ class LandingPubComponent extends LandingBaseComponent
 				self::$landingMain['LANDING_INSTANCE'] = $landing;
 				$this->arResult['LANDING'] = $landing;
 				$this->arResult['SITE_RELATIVE_URL'] = Site::getPublicUrl($landing->getSiteId(), true, false);
+				// the route of the section serves no /favicon.ico of the site, and /pub/site/ of the
+				// portal host is closed to the clients of the cloud: the icon is linked by its own address
+				$this->arResult['FAVICON_URL'] = $this->isPortalPreview
+					? $this->getSiteFaviconPath((int)$landing->getSiteId())
+					: '';
 				$this->arResult['SPECIAL_TYPE'] = $this->getSpecialTypeSiteByLanding($landing);
 				$this->arResult['DOMAIN'] = $this->getParentDomain();
 				$this->arResult['COPY_LINK'] = $this->getCopyLinkPath();
@@ -1907,15 +2104,16 @@ class LandingPubComponent extends LandingBaseComponent
 				// the device-preview postMessage responder only for the editor device preview.
 				// The responder is needed by every device preview, sandboxed or not; the workarounds
 				// behind the device-preview mode are needed only by a sandboxed one — the editor
-				// frame under a sandbox attribute, or the signed preview under the CSP sandbox.
+				// frame under a sandbox attribute, or the signed and the portal preview under the
+				// CSP sandbox.
 				$this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'] = $this->getDevicePreviewParentOrigin();
-				$sandboxedSignedPreview = $this->isSandboxedSignedPreview();
-				if ($sandboxedSignedPreview)
+				$sandboxedPreview = $this->isSandboxedPreview();
+				if ($sandboxedPreview)
 				{
-					$this->sandboxSignedPreview();
+					$this->sandboxPreview();
 				}
 				if (
-					$sandboxedSignedPreview
+					$sandboxedPreview
 					|| (
 						$this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'] !== ''
 						&& $this->isSandboxedDevicePreview($this->arResult['DEVICE_PREVIEW_PARENT_ORIGIN'])

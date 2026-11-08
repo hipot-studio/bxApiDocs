@@ -11,6 +11,7 @@ use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemAccessType;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemType;
 use Bitrix\Vibecodeconnector\Internal\Exception\CatalogItemNotFoundException;
 use Bitrix\Vibecodeconnector\Internal\Exception\NotOwnerException;
+use Bitrix\Vibecodeconnector\Internal\Integration\Rest\CatalogItemEmbeddingAccessSynchronizer;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\AccessRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\CatalogItemRepository;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\HiddenRepository;
@@ -18,6 +19,7 @@ use Bitrix\Vibecodeconnector\Internal\Integration\Main\IconStorageService;
 use Bitrix\Vibecodeconnector\Internal\Repository\Catalog\ViewedRepository;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Access\HiddenAccessCleaner;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Icon\IconFileResolver;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\NewApps\NewAppsCountInvalidator;
 use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Writer\EntryWriter;
 
 final class UpdateCatalogItemCommandHandler
@@ -31,6 +33,9 @@ final class UpdateCatalogItemCommandHandler
 		private readonly HiddenRepository $hiddenRepository = new HiddenRepository(),
 		private readonly ViewedRepository $viewedRepository = new ViewedRepository(),
 		private readonly HiddenAccessCleaner $hiddenAccessCleaner = new HiddenAccessCleaner(),
+		private readonly CatalogItemEmbeddingAccessSynchronizer $embeddingAccessSynchronizer =
+			new CatalogItemEmbeddingAccessSynchronizer(),
+		private readonly NewAppsCountInvalidator $newAppsCountInvalidator = new NewAppsCountInvalidator(),
 	)
 	{
 	}
@@ -55,7 +60,14 @@ final class UpdateCatalogItemCommandHandler
 			$resolvedIconFileId = $this->iconFileResolver->resolve($rawIconUrl, $preloaded->getPairingIss());
 		}
 
-		$result = $this->updateInTransaction($command, $resolvedIconFileId);
+		$accessTypeChanged = false;
+		$result = $this->updateInTransaction($command, $resolvedIconFileId, $accessTypeChanged);
+
+		if ($accessTypeChanged)
+		{
+			$this->newAppsCountInvalidator->forgetAllForAccessTypeChangeOf($result->item);
+			$this->embeddingAccessSynchronizer->syncForItem($command->catalogItemId);
+		}
 
 		if (array_key_exists('iconUrl', $command->fields) && $result->displacedIconFileId !== null)
 		{
@@ -70,6 +82,7 @@ final class UpdateCatalogItemCommandHandler
 	private function updateInTransaction(
 		UpdateCatalogItemCommand $command,
 		?int $resolvedIconFileId,
+		bool &$accessTypeChanged,
 	): UpdateCatalogItemCommandResult
 	{
 		$iconPersisted = false;
@@ -79,7 +92,13 @@ final class UpdateCatalogItemCommandHandler
 		{
 			if (!CatalogItemRepository::supportsRowLocking())
 			{
-				return $this->updateLockedItem($command, $resolvedIconFileId, $iconPersisted, $displacedIconFileId);
+				return $this->updateLockedItem(
+					$command,
+					$resolvedIconFileId,
+					$iconPersisted,
+					$displacedIconFileId,
+					$accessTypeChanged,
+				);
 			}
 
 			$connection = Application::getConnection();
@@ -87,7 +106,13 @@ final class UpdateCatalogItemCommandHandler
 
 			try
 			{
-				$result = $this->updateLockedItem($command, $resolvedIconFileId, $iconPersisted, $displacedIconFileId);
+				$result = $this->updateLockedItem(
+					$command,
+					$resolvedIconFileId,
+					$iconPersisted,
+					$displacedIconFileId,
+					$accessTypeChanged,
+				);
 				$connection->commitTransaction();
 			}
 			catch (\Throwable $e)
@@ -124,6 +149,7 @@ final class UpdateCatalogItemCommandHandler
 		?int $resolvedIconFileId,
 		bool &$iconPersisted,
 		?int &$displacedIconFileId,
+		bool &$accessTypeChanged,
 	): UpdateCatalogItemCommandResult
 	{
 		$this->repository->lockById($command->catalogItemId);
@@ -183,7 +209,6 @@ final class UpdateCatalogItemCommandHandler
 
 			$item->setAccessType($accessType);
 		}
-
 		if (array_key_exists('iconFileId', $fields))
 		{
 			$newIconFileId = $fields['iconFileId'] !== null ? (int)$fields['iconFileId'] : null;
@@ -215,6 +240,8 @@ final class UpdateCatalogItemCommandHandler
 			// codes, so their marks go the same way as on a private switch above.
 			$this->hiddenAccessCleaner->cleanupLostAccess($command->catalogItemId);
 		}
+
+		$accessTypeChanged = $item->getAccessType() !== $previousAccessType;
 
 		return new UpdateCatalogItemCommandResult($item, $displacedIconFileId);
 	}

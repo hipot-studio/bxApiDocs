@@ -41,6 +41,11 @@ class CBPCodeCondition extends CBPActivityCondition
 		return array_merge($arErrors, parent::validateProperties($value, $user));
 	}
 
+	public static function requiresAdminToAuthor()
+	{
+		return true;
+	}
+
 	public static function GetPropertiesDialog(
 		$documentType,
 		$arWorkflowTemplate,

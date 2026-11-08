@@ -14,12 +14,14 @@ class EventButton extends AbstractButton
 		protected readonly string $actionId,
 		protected readonly ?Design $design = null,
 		protected readonly ?array $actionParams = null,
+		protected readonly ?string $id = null,
 	)
 	{}
 
 	public function jsonSerialize(): array
 	{
 		return [
+			'id' => $this->id,
 			'type' => $this->getType(),
 			'title' => $this->title,
 			'design' => $this->design?->value,
@@ -32,10 +34,11 @@ class EventButton extends AbstractButton
 		string $title,
 		string $actionId,
 		?Design $design = null,
-		?array $actionParams = null
+		?array $actionParams = null,
+		?string $id = null
 	): self
 	{
-		return new self($title, $actionId, $design, $actionParams);
+		return new self($title, $actionId, $design, $actionParams, $id);
 	}
 
 	protected function getType(): string

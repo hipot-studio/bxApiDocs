@@ -26,13 +26,20 @@ class UserMapper
 
 	public function mapToCollection(array $users, ?FileCollection $files = null): UserCollection
 	{
+		if (empty($users))
+		{
+			return new UserCollection();
+		}
+
 		$result = [];
+		$filesById = $this->indexFilesById($files);
+		$collaberIds = array_fill_keys($this->extranetUserService->getCollaberIds(), true);
 
 		foreach ($users as $user)
 		{
 			$userId = (int)$user['ID'];
 			$personalPhoto = !empty($user['PERSONAL_PHOTO'])
-				? $files?->findOneById((int)$user['PERSONAL_PHOTO'])
+				? ($filesById[(int)$user['PERSONAL_PHOTO']] ?? null)
 				: null;
 
 			$gender = $user['PERSONAL_GENDER'] ?? '';
@@ -41,7 +48,7 @@ class UserMapper
 			$result[] = new User(
 				id: $userId,
 				name: $this->nameService->format($user),
-				type: $this->resolveUserType($user),
+				type: $this->resolveUserType($user, $collaberIds),
 				image: $personalPhoto instanceof File
 					? $this->photoService->resize($personalPhoto)
 					: null,
@@ -53,11 +60,26 @@ class UserMapper
 		return new UserCollection(...$result);
 	}
 
-	private function resolveUserType(array $user): Type
+	private function indexFilesById(?FileCollection $files): array
+	{
+		$result = [];
+
+		foreach ($files ?? [] as $file)
+		{
+			if ($file->id !== null && !isset($result[$file->id]))
+			{
+				$result[$file->id] = $file;
+			}
+		}
+
+		return $result;
+	}
+
+	private function resolveUserType(array $user, array $collaberIds): Type
 	{
 		$userId = (int)$user['ID'];
 
-		if ($this->extranetUserService->isCollaber($userId))
+		if (isset($collaberIds[$userId]))
 		{
 			return Type::Collaber;
 		}

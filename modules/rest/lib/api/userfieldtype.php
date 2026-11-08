@@ -12,6 +12,8 @@ use Bitrix\Rest\RestException;
 use Bitrix\Rest\UserField\Callback;
 use Bitrix\Rest\Lang;
 use Bitrix\Rest\Exceptions;
+use Bitrix\Rest\Internal\Exception\Embedding\EmbeddingHandlerAlreadyBoundException;
+use Bitrix\Rest\Internal\Service\Embedding\EmbeddingConflictGuard;
 
 class UserFieldType extends \IRestService
 {
@@ -119,9 +121,9 @@ class UserFieldType extends \IRestService
 			throw new Exceptions\ArgumentNullException("HANDLER");
 		}
 
-		$appInfo = AppTable::getByClientId($server->getClientId());;
+		$appInfo = AppTable::getByClientId($server->getClientId());
 
-		HandlerHelper::checkCallback($placementHandler, $appInfo);
+		HandlerHelper::checkCallback($placementHandler);
 
 		$placementBind = array(
 			'APP_ID' => $appInfo['ID'],
@@ -152,7 +154,18 @@ class UserFieldType extends \IRestService
 		}
 		unset($placementBind['LANG_ALL']);
 
-		$result = PlacementTable::add($placementBind);
+		try
+		{
+			$result = EmbeddingConflictGuard::run(static fn() => PlacementTable::add($placementBind));
+		}
+		catch (EmbeddingHandlerAlreadyBoundException $exception)
+		{
+			throw new RestException(
+				message: $exception->getMessage(),
+				code: $exception::ERROR_CODE,
+				previous: $exception,
+			);
+		}
 		if (!$result->isSuccess())
 		{
 			$errorMessage = $result->getErrorMessages();
@@ -203,8 +216,7 @@ class UserFieldType extends \IRestService
 		$updateFields = array();
 		if(!empty($param['HANDLER']))
 		{
-			$appInfo = AppTable::getByClientId($server->getClientId());;
-			HandlerHelper::checkCallback($param['HANDLER'], $appInfo);
+			HandlerHelper::checkCallback($param['HANDLER']);
 
 			$updateFields['PLACEMENT_HANDLER'] = $param['HANDLER'];
 		}
@@ -246,7 +258,20 @@ class UserFieldType extends \IRestService
 			$placementInfo = $dbRes->fetch();
 			if($placementInfo)
 			{
-				$updateResult = PlacementTable::update($placementInfo['ID'], $updateFields);
+				try
+				{
+					$updateResult = EmbeddingConflictGuard::run(
+						static fn() => PlacementTable::update($placementInfo['ID'], $updateFields),
+					);
+				}
+				catch (EmbeddingHandlerAlreadyBoundException $exception)
+				{
+					throw new RestException(
+						message: $exception->getMessage(),
+						code: $exception::ERROR_CODE,
+						previous: $exception,
+					);
+				}
 				if($updateResult->isSuccess())
 				{
 					PlacementLangTable::deleteByPlacement($placementInfo['ID']);

@@ -24,8 +24,7 @@ final class AttachedObject extends Engine\Controller
 		$configureActions = parent::configureActions();
 
 		$configureActions['download'] =
-		$configureActions['showMarkdown'] =
-		$configureActions['showHtml'] = [
+		$configureActions['showMarkdown'] = [
 			'-prefilters' => [
 				Main\Engine\ActionFilter\Csrf::class,
 				Main\Engine\ActionFilter\Authentication::class,
@@ -35,6 +34,16 @@ final class AttachedObject extends Engine\Controller
 				new Main\Engine\ActionFilter\CloseSession(),
 			]
 		];
+		$configureActions['showHtml'] = $configureActions['showMarkdown'];
+		$configureActions['showHtml']['+prefilters'] = array_values(array_filter(
+			$configureActions['showHtml']['+prefilters'],
+			static fn(object $filter): bool => !$filter instanceof Main\Engine\ActionFilter\Authentication,
+		));
+		$configureActions['showHtml']['-prefilters'][] = Engine\ActionFilter\CheckReadPermission::class;
+		$configureActions['showHtml']['+prefilters'][] = new Engine\ActionFilter\CheckHtmlViewerReadPermission();
+		$configureActions['showHtml']['+prefilters'][] = new Main\Engine\ActionFilter\HttpMethod([
+			Main\Engine\ActionFilter\HttpMethod::METHOD_GET,
+		]);
 		$configureActions['showTiffPreview'] = $configureActions['showMarkdown'];
 		$configureActions['showTiffPreview']['+prefilters'][] = new Main\Engine\ActionFilter\HttpMethod([
 			Main\Engine\ActionFilter\HttpMethod::METHOD_GET,
@@ -115,6 +124,13 @@ final class AttachedObject extends Engine\Controller
 	public function copyToMeAction(Disk\AttachedObject $attachedObject)
 	{
 		$currentUserId = $this->getCurrentUser()->getId();
+		if (!$this->canCopyToMe($attachedObject, $currentUserId))
+		{
+			$this->addError(new Error('Could not copy file to storage for current user'));
+
+			return null;
+		}
+
 		$userStorage = Driver::getInstance()->getStorageByUserId($currentUserId);
 		if (!$userStorage)
 		{
@@ -157,6 +173,11 @@ final class AttachedObject extends Engine\Controller
 		return (new File())->getAction($newFile);
 	}
 
+	private function canCopyToMe(Disk\AttachedObject $attachedObject, int $userId): bool
+	{
+		return $attachedObject->canDownload($userId);
+	}
+
 	public function runPreviewGenerationAction(Disk\AttachedObject $attachedObject)
 	{
 		$file = $attachedObject->getFile();
@@ -197,6 +218,13 @@ final class AttachedObject extends Engine\Controller
 			$this->addError(new Error('Could not find file'));
 
 			return;
+		}
+
+		if (!$attachedObject->canDownload($this->getCurrentUser()->getId()))
+		{
+			$this->addError(new Error('Could not download file'));
+
+			return null;
 		}
 
 		$response = Response\BFile::createByFileId($file->getFileId(), $attachedObject->getName());

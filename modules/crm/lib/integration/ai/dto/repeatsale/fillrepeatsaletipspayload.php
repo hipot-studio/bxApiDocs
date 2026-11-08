@@ -12,6 +12,13 @@ final class FillRepeatSaleTipsPayload extends Dto
 	public ?CustomerInfo $customerInfo = null;
 	public ?ActionPlan $actionPlan = null;
 
+	/**
+	 * Optional and not nullable on purpose: the same DTO is rebuilt from the JSON of already finished
+	 * jobs (AbstractOperation::constructPayloadFromArray), where the key is absent, and Dto::toArray()
+	 * drops nulls.
+	 */
+	public bool $noRecommendation = false;
+
 	protected function getValidators(array $fields): array
 	{
 		return [
@@ -25,6 +32,7 @@ final class FillRepeatSaleTipsPayload extends Dto
 					if (
 						empty($fields['customerInfo'])
 						&& empty($fields['actionPlan'])
+						&& empty($fields['noRecommendation'])
 					)
 					{
 						$result->addError(ErrorCode::getInvalidPayloadError());

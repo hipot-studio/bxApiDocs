@@ -278,6 +278,7 @@ class StagesTable extends DataManager
 			],
 			'order' => [
 				'SORT' => 'ASC',
+				'ID' => 'ASC',
 			],
 		]);
 		while ($row = $res->fetch())
@@ -548,6 +549,7 @@ class StagesTable extends DataManager
 			],
 			'order' => [
 				'SORT' => 'ASC',
+				'ID' => 'ASC',
 			],
 		]);
 		while ($row = $res->fetch())
@@ -785,6 +787,39 @@ class StagesTable extends DataManager
 		self::mergeZeroStageCountIntoFirstStage($res, $firstStageId);
 
 		return $res;
+	}
+
+	/**
+	 * Returns the number of tasks in the combined personal unplanned column.
+	 */
+	public static function getPersonalUnplannedCount(
+		array $filter,
+		mixed $userId = false,
+		int $targetUserId = 0
+	): int
+	{
+		if ($userId === false)
+		{
+			$userId = User::getId();
+		}
+
+		$query = new TaskQuery((int)$userId);
+		$query->setWhere($filter);
+		if ($targetUserId > 0)
+		{
+			$query->setBehalfUser($targetUserId);
+		}
+
+		try
+		{
+			return (new TaskList())->getCount($query);
+		}
+		catch (Exception $e)
+		{
+			LogFacade::logThrowable($e);
+
+			return 0;
+		}
 	}
 
 	private static function findFirstStageIdForGroupMode(array $stageList): ?int

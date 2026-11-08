@@ -239,6 +239,10 @@ class Important extends Base
 			$CACHE_MANAGER->clearByTag('BLOG_POST_IMPRTNT'.$postId."_".$currentUserId);
 			$CACHE_MANAGER->clearByTag('BLOG_POST_IMPRTNT'."_USER_".$currentUserId);
 		}
+		else
+		{
+			\Bitrix\Socialnetwork\Livefeed\ImportantPostCache::clear($currentUserId);
+		}
 
 		$options = [
 			[
@@ -259,4 +263,3 @@ class Important extends Base
 		];
 	}
 }
-

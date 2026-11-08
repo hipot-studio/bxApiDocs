@@ -14,7 +14,12 @@ use Bitrix\Main\Result;
 
 final class AddItemsToCallListAction implements Action
 {
-	public function __construct(private int $entityTypeId, private int $callListId, private string $callListContext)
+	public function __construct(
+		private int $entityTypeId,
+		private int $callListId,
+		private string $callListContext,
+		private string $gridId,
+	)
 	{
 	}
 
@@ -45,6 +50,7 @@ final class AddItemsToCallListAction implements Action
 					'JS' =>
 						(new Event('CallList:addItemsToCallList'))
 							->addEntityTypeId($this->entityTypeId)
+							->addGridId($this->gridId)
 							->addParam('callListId', $this->callListId)
 							->addParam('callListContext', $this->callListContext)
 							->buildJsCallback()

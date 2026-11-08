@@ -23,6 +23,8 @@ class User
 {
 	public const EXTERNAL_AUTH_ID_SYSTEM = 'rest_system';
 
+	private array $changedFields = [];
+
 	public function __construct(
 		private ?int $id = null,
 		private ?string $login = null,
@@ -40,6 +42,7 @@ class User
 		private ?string $lid = null,
 		private ?string $languageId = null,
 		private ?string $personalMobile = null,
+		private ?string $personalGender = null,
 		private ?string $workPosition = null,
 		private ?string $password = null,
 		private mixed $ufCrmEntity = null, //UF_USER_CRM_ENTITY
@@ -66,7 +69,7 @@ class User
 
 	public function setUfCrmEntity(mixed $ufCrmEntity): void
 	{
-		$this->ufCrmEntity = $ufCrmEntity;
+		$this->setValue('ufCrmEntity', 'UF_USER_CRM_ENTITY', $ufCrmEntity);
 	}
 
 	public function getLanguageId(): ?string
@@ -76,7 +79,7 @@ class User
 
 	public function setLanguageId(?string $languageId): void
 	{
-		$this->languageId = $languageId;
+		$this->setValue('languageId', 'LANGUAGE_ID', $languageId);
 	}
 
 	public function getLid(): ?string
@@ -86,7 +89,7 @@ class User
 
 	public function setLid(?string $lid): void
 	{
-		$this->lid = $lid;
+		$this->setValue('lid', 'LID', $lid);
 	}
 
 	public function getAuthPhoneNumber(): ?string
@@ -96,7 +99,7 @@ class User
 
 	public function setAuthPhoneNumber(?string $authPhoneNumber): void
 	{
-		$this->authPhoneNumber = $authPhoneNumber;
+		$this->setValue('authPhoneNumber', 'PHONE_NUMBER', $authPhoneNumber);
 	}
 
 	public function getPersonalMobile(): ?string
@@ -106,7 +109,17 @@ class User
 
 	public function setPersonalMobile(?string $personalMobile): void
 	{
-		$this->personalMobile = $personalMobile;
+		$this->setValue('personalMobile', 'PERSONAL_MOBILE', $personalMobile);
+	}
+
+	public function getGender(): ?string
+	{
+		return $this->personalGender;
+	}
+
+	public function setGender(?string $personalGender): void
+	{
+		$this->personalGender = $personalGender;
 	}
 
 	public function getInviteStatus(): InvitationStatus
@@ -248,7 +261,7 @@ class User
 
 	public function setExternalAuthId(?string $externalAuthId): void
 	{
-		$this->externalAuthId = $externalAuthId;
+		$this->setValue('externalAuthId', 'EXTERNAL_AUTH_ID', $externalAuthId);
 	}
 
 	public function getActive(): ?bool
@@ -258,7 +271,7 @@ class User
 
 	public function setActive(?bool $active): void
 	{
-		$this->active = $active;
+		$this->setValue('active', 'ACTIVE', $active);
 	}
 
 	public function getXmlId(): ?string
@@ -268,7 +281,7 @@ class User
 
 	public function setXmlId(?string $xmlId): void
 	{
-		$this->xmlId = $xmlId;
+		$this->setValue('xmlId', 'XML_ID', $xmlId);
 	}
 
 	public function getPhoneNumber(): ?string
@@ -288,7 +301,7 @@ class User
 
 	public function setGroupIds(?array $groupIds): void
 	{
-		$this->groupIds = $groupIds;
+		$this->setValue('groupIds', 'GROUP_ID', $groupIds);
 	}
 
 	public function getConfirmCode(): ?string
@@ -298,7 +311,7 @@ class User
 
 	public function setConfirmCode(?string $confirmCode): void
 	{
-		$this->confirmCode = $confirmCode;
+		$this->setValue('confirmCode', 'CONFIRM_CODE', $confirmCode);
 	}
 
 	public function getId(): ?int
@@ -318,7 +331,7 @@ class User
 
 	public function setLogin(?string $login): void
 	{
-		$this->login = $login;
+		$this->setValue('login', 'LOGIN', $login);
 	}
 
 	public function getEmail(): ?string
@@ -328,7 +341,7 @@ class User
 
 	public function setEmail(?string $email): void
 	{
-		$this->email = $email;
+		$this->setValue('email', 'EMAIL', $email);
 	}
 
 	public function getName(): ?string
@@ -338,7 +351,7 @@ class User
 
 	public function setName(?string $name): void
 	{
-		$this->name = $name;
+		$this->setValue('name', 'NAME', $name);
 	}
 
 	public function getLastName(): ?string
@@ -348,7 +361,7 @@ class User
 
 	public function setLastName(?string $lastName): void
 	{
-		$this->lastName = $lastName;
+		$this->setValue('lastName', 'LAST_NAME', $lastName);
 	}
 
 	public function getSecondName(): ?string
@@ -380,7 +393,7 @@ class User
 
 	public function setPassword(string $password): void
 	{
-		$this->password = $password;
+		$this->setValue('password', 'PASSWORD', $password);
 	}
 
 	public function getPassword(): ?string
@@ -395,7 +408,7 @@ class User
 
 	public function setPersonalPhoto(?int $personalPhoto): void
 	{
-		$this->personalPhoto = $personalPhoto;
+		$this->setValue('personalPhoto', 'PERSONAL_PHOTO', $personalPhoto);
 	}
 
 	public function getLastLogin(): ?Date
@@ -405,7 +418,7 @@ class User
 
 	public function setLastLogin(?Date $lastLogin): void
 	{
-		$this->lastLogin = $lastLogin;
+		$this->setValue('lastLogin', 'LAST_LOGIN', $lastLogin);
 	}
 
 	public function isCurrent(): bool
@@ -422,7 +435,7 @@ class User
 
 	public function setWorkPosition(?string $workPosition): void
 	{
-		$this->workPosition = $workPosition;
+		$this->setValue('workPosition', 'WORK_POSITION', $workPosition);
 	}
 
 	/**
@@ -439,5 +452,36 @@ class User
 	public function setInvitedVia(?InvitationType $invitedVia): void
 	{
 		$this->invitedVia = $invitedVia;
+	}
+
+	public function getChangedFields(): array
+	{
+		return array_keys($this->changedFields);
+	}
+
+	public function clearChangedFields(): void
+	{
+		$this->changedFields = [];
+	}
+
+	private function setValue(string $propertyName, string $fieldName, mixed $value): void
+	{
+		if ($this->valuesAreEqual($this->{$propertyName}, $value))
+		{
+			return;
+		}
+
+		$this->{$propertyName} = $value;
+		$this->changedFields[$fieldName] = true;
+	}
+
+	private function valuesAreEqual(mixed $currentValue, mixed $newValue): bool
+	{
+		if ($currentValue instanceof Date && $newValue instanceof Date)
+		{
+			return $currentValue->getTimestamp() === $newValue->getTimestamp();
+		}
+
+		return $currentValue === $newValue;
 	}
 }

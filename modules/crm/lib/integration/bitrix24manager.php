@@ -81,8 +81,8 @@ class Bitrix24Manager
 		}
 
 		if(!(ModuleManager::isModuleInstalled('bitrix24')
-			&& Loader::includeModule('bitrix24'))
-			&& method_exists('CBitrix24', 'IsLicensePaid'))
+			&& Loader::includeModule('bitrix24')
+			&& method_exists('CBitrix24', 'IsLicensePaid')))
 		{
 			return (self::$hasPurchasedLicense = false);
 		}
@@ -102,8 +102,8 @@ class Bitrix24Manager
 		}
 
 		if(!(ModuleManager::isModuleInstalled('bitrix24')
-			&& Loader::includeModule('bitrix24'))
-			&& method_exists('CBitrix24', 'IsDemoLicense'))
+			&& Loader::includeModule('bitrix24')
+			&& method_exists('CBitrix24', 'IsDemoLicense')))
 		{
 			return (self::$hasDemoLicense = false);
 		}
@@ -123,8 +123,8 @@ class Bitrix24Manager
 		}
 
 		if(!(ModuleManager::isModuleInstalled('bitrix24')
-			&& Loader::includeModule('bitrix24'))
-			&& method_exists('CBitrix24', 'IsNfrLicense'))
+			&& Loader::includeModule('bitrix24')
+			&& method_exists('CBitrix24', 'IsNfrLicense')))
 		{
 			return (self::$hasNfrLicense = false);
 		}
@@ -144,8 +144,8 @@ class Bitrix24Manager
 		}
 
 		if(!(ModuleManager::isModuleInstalled('bitrix24')
-			&& Loader::includeModule('bitrix24'))
-			&& method_exists('CBitrix24', 'IsExtraUsers'))
+			&& Loader::includeModule('bitrix24')
+			&& method_exists('CBitrix24', 'IsExtraUsers')))
 		{
 			return (self::$hasPurchasedUsers = false);
 		}
@@ -165,8 +165,8 @@ class Bitrix24Manager
 		}
 
 		if(!(ModuleManager::isModuleInstalled('bitrix24')
-			&& Loader::includeModule('bitrix24'))
-			&& method_exists('CBitrix24', 'IsExtraDiskSpace'))
+			&& Loader::includeModule('bitrix24')
+			&& method_exists('CBitrix24', 'IsExtraDiskSpace')))
 		{
 			return (self::$hasPurchasedDiskSpace = false);
 		}

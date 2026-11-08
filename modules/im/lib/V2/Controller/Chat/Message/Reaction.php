@@ -26,7 +26,7 @@ class Reaction extends BaseController
 			return null;
 		}
 
-		return [];
+		return ['result' => true];
 	}
 
 	/**
@@ -45,7 +45,7 @@ class Reaction extends BaseController
 			return null;
 		}
 
-		return [];
+		return ['result' => true];
 	}
 
 	/**

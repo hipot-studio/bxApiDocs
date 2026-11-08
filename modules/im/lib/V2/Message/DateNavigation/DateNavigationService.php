@@ -24,32 +24,33 @@ class DateNavigationService
 
 	private const DATE_FORMAT = 'Y-m-d';
 	private const SECONDS_IN_DAY = 86400;
-	private const MAX_TIMEZONE_OFFSET = 50400;
-	private const MIN_TIMEZONE_OFFSET = -43200;
 
 	private Chat $chat;
-	private int $userTimeOffset;
+	private UserTimezone $userTimezone;
 	private ?int $startId = null;
 	private ?DateTime $tariffLimitDate = null;
 	private bool $isTariffLimitResolved = false;
 
-	public function __construct(Chat $chat, int $userTimeOffset)
+	public function __construct(Chat $chat, UserTimezone $userTimezone)
 	{
 		$this->chat = $chat;
-		$this->userTimeOffset = $userTimeOffset;
+		$this->userTimezone = $userTimezone;
 	}
 
-	// Accepts the client UTC offset in seconds as the source of truth; falls back to the portal user timezone.
-	public static function createForClientOffset(Chat $chat, ?int $clientUtcOffset): self
+	/**
+	 * The timezone identifier is the preferred input and wins over the offset when both are sent:
+	 * it is the only one of the two that knows what the offset was on each date of the request.
+	 * An identifier the server does not know is answered with null - taking the offset instead
+	 * would answer a wrong day without anything telling the client the identifier was dropped.
+	 */
+	public static function createForClient(Chat $chat, ?string $timezoneId, ?int $clientUtcOffset): ?self
 	{
-		if ($clientUtcOffset === null)
-		{
-			return new self($chat, \CTimeZone::GetOffset());
-		}
+		$userTimezone = ($timezoneId === null || $timezoneId === '')
+			? UserTimezone::createByClientOffset($clientUtcOffset)
+			: UserTimezone::createById($timezoneId)
+		;
 
-		$clientUtcOffset = max(min($clientUtcOffset, self::MAX_TIMEZONE_OFFSET), self::MIN_TIMEZONE_OFFSET);
-
-		return new self($chat, $clientUtcOffset - (int)date('Z'));
+		return $userTimezone === null ? null : new self($chat, $userTimezone);
 	}
 
 	public static function parseDate(string $value): ?Date
@@ -81,24 +82,26 @@ class DateNavigationService
 			return $result->addError(new DateNavigationError(DateNavigationError::WRONG_RANGE));
 		}
 
-		$queryResult = $this->getVisibleMessagesQuery()
-			->registerRuntimeField(new ExpressionField('MESSAGE_DAY', $this->getUserDayExpression(), 'DATE_CREATE'))
-			->setSelect(['MESSAGE_DAY'])
-			->where('DATE_CREATE', '>=', $this->toServerTime($from))
-			->where('DATE_CREATE', '<', $this->toServerTime((clone $to)->add('1 day')))
-			->setGroup(['MESSAGE_DAY'])
-			->setOrder(['MESSAGE_DAY' => 'ASC'])
-			->exec()
-		;
+		$segments = $this->userTimezone->getSegments(
+			$this->userTimezone->getDayStart($from),
+			$this->userTimezone->getDayStart((clone $to)->add('1 day')),
+		);
 
 		$days = [];
-		while ($row = $queryResult->fetch())
+		foreach ($segments as $segment)
 		{
-			$days[] = $this->formatDayValue($row['MESSAGE_DAY']);
+			foreach ($this->getDaysOfSegment($segment) as $day)
+			{
+				$days[$day] = true;
+			}
 		}
 
+		// the day a clock change falls on is answered by both parts around it, and the parts of a
+		// range are asked for one by one, so the calendar is assembled instead of concatenated
+		ksort($days, SORT_STRING);
+
 		return $result->setResult(new Calendar(
-			$days,
+			array_keys($days),
 			$this->getBoundaryDate('ASC'),
 			$this->getBoundaryDate('DESC'),
 		));
@@ -112,9 +115,11 @@ class DateNavigationService
 	{
 		$result = new Result();
 
+		// the tiebreaker picks the row, and the row is the answer: messages of one second are told
+		// apart by ID, otherwise the same date resolves into different messages from call to call
 		$row = $this->getVisibleMessagesQuery()
 			->setSelect(['ID', 'DATE_CREATE'])
-			->where('DATE_CREATE', '>=', $this->toServerTime($date))
+			->where('DATE_CREATE', '>=', $this->userTimezone->getDayStart($date))
 			->setOrder(['DATE_CREATE' => 'ASC', 'ID' => 'ASC'])
 			->setLimit(1)
 			->fetch()
@@ -127,8 +132,33 @@ class DateNavigationService
 
 		return $result->setResult(new ResolvedDate(
 			(int)$row['ID'],
-			$this->toUserDateString($row['DATE_CREATE']),
+			$this->userTimezone->getDay($row['DATE_CREATE']),
 		));
+	}
+
+	/**
+	 * @return string[]
+	 */
+	private function getDaysOfSegment(TimeSegment $segment): array
+	{
+		$queryResult = $this->getVisibleMessagesQuery()
+			->registerRuntimeField(
+				new ExpressionField('MESSAGE_DAY', $this->getUserDayExpression($segment), 'DATE_CREATE')
+			)
+			->setSelect(['MESSAGE_DAY'])
+			->where('DATE_CREATE', '>=', $segment->getFrom())
+			->where('DATE_CREATE', '<', $segment->getTo())
+			->setGroup(['MESSAGE_DAY'])
+			->exec()
+		;
+
+		$days = [];
+		while ($row = $queryResult->fetch())
+		{
+			$days[] = $this->formatDayValue($row['MESSAGE_DAY']);
+		}
+
+		return $days;
 	}
 
 	private function getVisibleMessagesQuery(): Query
@@ -169,11 +199,18 @@ class DateNavigationService
 		return $this->tariffLimitDate;
 	}
 
+	/**
+	 * The answer is the day of the boundary message and never the message itself, so the rows sharing
+	 * the boundary DATE_CREATE are interchangeable here and the order among them decides nothing -
+	 * which is why nothing but DATE_CREATE is read. An ID tiebreaker would only cost the index path:
+	 * measured on PostgreSQL, it turns 0.02-0.05 ms into 15.8-146 ms on chats of 200-310 thousand
+	 * messages. Compare with resolveDate(), where the row picked IS the answer and the tiebreaker stays.
+	 */
 	private function getBoundaryDate(string $direction): ?string
 	{
 		$row = $this->getVisibleMessagesQuery()
-			->setSelect(['ID', 'DATE_CREATE'])
-			->setOrder(['DATE_CREATE' => $direction, 'ID' => $direction])
+			->setSelect(['DATE_CREATE'])
+			->setOrder(['DATE_CREATE' => $direction])
 			->setLimit(1)
 			->fetch()
 		;
@@ -183,7 +220,7 @@ class DateNavigationService
 			return null;
 		}
 
-		return $this->toUserDateString($row['DATE_CREATE']);
+		return $this->userTimezone->getDay($row['DATE_CREATE']);
 	}
 
 	// The DB driver converts a native DATE column by result metadata: mysqli returns Type\Date, pgsql returns a string.
@@ -197,28 +234,18 @@ class DateNavigationService
 		return mb_substr((string)$value, 0, 10);
 	}
 
-	private function getUserDayExpression(): string
+	private function getUserDayExpression(TimeSegment $segment): string
 	{
 		$sqlHelper = Application::getConnection()->getSqlHelper();
+		$userTimeOffset = $segment->getUserTimeOffset();
 
-		if ($this->userTimeOffset === 0)
+		if ($userTimeOffset === 0)
 		{
 			return $sqlHelper->getDatetimeToDateFunction('%s');
 		}
 
 		return $sqlHelper->getDatetimeToDateFunction(
-			$sqlHelper->addSecondsToDateTime($this->userTimeOffset, '%s')
+			$sqlHelper->addSecondsToDateTime($userTimeOffset, '%s')
 		);
-	}
-
-	// Day boundaries come from the user's wall clock, so the moment is shifted back to server time before comparing with DATE_CREATE.
-	private function toServerTime(Date $date): DateTime
-	{
-		return DateTime::createFromTimestamp($date->getTimestamp() - $this->userTimeOffset);
-	}
-
-	private function toUserDateString(DateTime $dateTime): string
-	{
-		return DateTime::createFromTimestamp($dateTime->getTimestamp() + $this->userTimeOffset)->format(self::DATE_FORMAT);
 	}
 }

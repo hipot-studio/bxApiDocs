@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 
+use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Service\Timeline\Layout\Action;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock;
 use Bitrix\Main\Web\Uri;
@@ -36,14 +37,15 @@ class ContentBlockFactory
 		?string $delimiter = null,
 	): LineOfTextBlocks
 	{
+		$html = TextHelper::encodeSingleUnsupportedAngleBracketTokens($html);
+
 		$lineOfTextBlocks = new LineOfTextBlocks();
 		if (isset($delimiter))
 		{
 			$lineOfTextBlocks->setDelimiter($delimiter);
 		}
 
-		preg_match_all('/<([^\s>]+)(.*?)>((.*?)<\/\1>)?|(?<=^|>)(.+?)(?=$|<)/i',$html,$result);
-		// assign the result to the variable
+		preg_match_all('/<([^\s>]+)(.*?)>((.*?)<\/\1>)?|(?<=^|>)(.+?)(?=$|<)/i', $html, $result);
 		foreach ($result[0] as $index => $text)
 		{
 			$block = null;

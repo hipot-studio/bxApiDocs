@@ -6,12 +6,14 @@ namespace Bitrix\Im\V2\Message\BlocksBuilder\Entity\Blocks\Field\Buttons;
 
 abstract class Button implements \JsonSerializable
 {
+	protected string $id;
 	protected string $title;
 	protected string $design;
 	protected int $linePosition;
 
 	protected function __construct(array $buttonData)
 	{
+		$this->id = (string)($buttonData['id'] ?? '');
 		$this->linePosition = $buttonData['linePosition'];
 		$this->title = $buttonData['title'];
 		$this->design = $buttonData['design'] ?? Design::Filled->value;
@@ -23,6 +25,7 @@ abstract class Button implements \JsonSerializable
 		{
 			Type::LinkButton->value => new LinkButton($buttonData),
 			Type::EventButton->value => new EventButton($buttonData),
+			Type::RequestButton->value => new RequestButton($buttonData),
 			default => null,
 		};
 	}
@@ -37,6 +40,16 @@ abstract class Button implements \JsonSerializable
 	public abstract function toArray(): array;
 
 	public abstract function getType(): string;
+
+	public function getId(): string
+	{
+		return $this->id;
+	}
+
+	public function setId(string $id): void
+	{
+		$this->id = $id;
+	}
 
 	public function getLinePosition(): int
 	{

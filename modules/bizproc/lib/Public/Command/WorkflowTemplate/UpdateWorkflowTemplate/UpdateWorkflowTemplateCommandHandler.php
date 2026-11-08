@@ -7,6 +7,8 @@ namespace Bitrix\Bizproc\Public\Command\WorkflowTemplate\UpdateWorkflowTemplate;
 use Bitrix\Bizproc\Api\Enum\ErrorMessage;
 use Bitrix\Bizproc\Internal\Container;
 use Bitrix\Bizproc\Internal\Repository\WorkflowTemplate\WorkflowTemplateRepository;
+use Bitrix\Bizproc\Workflow\Template\AgentOwnedMetadataService;
+use Bitrix\Main\Application;
 use Bitrix\Main\ORM\Data\UpdateResult;
 
 class UpdateWorkflowTemplateCommandHandler
@@ -19,6 +21,55 @@ class UpdateWorkflowTemplateCommandHandler
 	}
 
 	public function __invoke(UpdateWorkflowTemplateCommand $command): UpdateResult
+	{
+		if ($command->agentOwnedMetadataToRelease === [])
+		{
+			return $this->updateTemplate($command);
+		}
+
+		// Writing the live row and releasing the ownership marker are one change of the metadata, so a
+		// half-applied pair is not allowed: the field would stand on the row while the claim of the agent
+		// still stood on the draft, and the next reload would put the agent value back over it (AGT-TPL-01).
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+
+		try
+		{
+			$result = $this->updateTemplate($command);
+			if ($result->isSuccess())
+			{
+				$releaseResult = (new AgentOwnedMetadataService())->release(
+					$command->templateId,
+					$command->agentOwnedMetadataToRelease,
+				);
+
+				$result->addErrors($releaseResult->getErrors());
+				if ($releaseResult->isSuccess() && $releaseResult->getData() !== [])
+				{
+					$result->setData(array_merge($result->getData(), $releaseResult->getData()));
+				}
+			}
+		}
+		catch (\Throwable $exception)
+		{
+			$connection->rollbackTransaction();
+
+			throw $exception;
+		}
+
+		if ($result->isSuccess())
+		{
+			$connection->commitTransaction();
+		}
+		else
+		{
+			$connection->rollbackTransaction();
+		}
+
+		return $result;
+	}
+
+	private function updateTemplate(UpdateWorkflowTemplateCommand $command): UpdateResult
 	{
 		$result = $this->repository->updateTemplate($command->templateId, $command->data);
 

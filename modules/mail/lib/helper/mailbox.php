@@ -5,8 +5,10 @@ namespace Bitrix\Mail\Helper;
 use Bitrix\Mail;
 use Bitrix\Mail\Helper\Mailbox\MailboxSyncManager;
 use Bitrix\Mail\Internal\Entity\SourceGeneration\Context;
-use Bitrix\Mail\Internal\Service\SourceGeneration\ContextResolver;
+use Bitrix\Mail\Internal\Service\Mailbox\CrmImapGateReconciler;
 use Bitrix\Mail\Internal\Service\Mailbox\MailboxEmailOccupancyService;
+use Bitrix\Mail\Internal\Service\Message\Conversation\ConversationBackfill;
+use Bitrix\Mail\Internal\Service\SourceGeneration\ContextResolver;
 use Bitrix\Mail\Internal\Service\SourceGeneration\GenerationScope;
 use Bitrix\Mail\Internal\Service\SourceGeneration\Matching\MessageMatcher;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationMessageImporter;
@@ -14,6 +16,7 @@ use Bitrix\Mail\Internals\MessageUploadQueueTable;
 use Bitrix\Mail\MailboxTable;
 use Bitrix\Mail\MailMessageUidTable;
 use Bitrix\Mail\MailServicesTable;
+use Bitrix\Mail\Service\Message\SendFailure;
 use Bitrix\Main;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -34,10 +37,22 @@ abstract class Mailbox
 	const MESSAGE_SET_OLD_STATUS_LIMIT_AT_A_TIME = 500;
 	const NUMBER_OF_BROKEN_MESSAGES_TO_RESYNCHRONIZE = 2;
 	const NUMBER_OF_INCOMPLETE_MESSAGES_TO_REMOVE = 10;
+	private const MAX_OUTGOING_ATTEMPTS = 5;
+	private const OUTGOING_AUTHOR_OPTION = 'outgoingAuthorId';
 
 	const MAIL_SERVICES_ONLY_FOR_THE_RU_ZONE = [
 		'yandex',
 		'mail.ru',
+	];
+
+	/*
+		Services a mailbox is never connected to by hand: it gets there by moving to our hosting, and
+		its credentials are issued outside. A tile in the showcase would open a form that ends nowhere.
+		Hiding happens here, in the showcase list only - a mailbox already on such a service reads its
+		row directly and keeps the name and the icon.
+	*/
+	const MAIL_SERVICES_HIDDEN_FROM_THE_SHOWCASE = [
+		'mailhost',
 	];
 
 	/*
@@ -104,6 +119,11 @@ abstract class Mailbox
 
 		while ($service = $res->fetch())
 		{
+			if (in_array($service['NAME'], self::MAIL_SERVICES_HIDDEN_FROM_THE_SHOWCASE, true))
+			{
+				continue;
+			}
+
 			if(!self::isRuZone() && in_array($service['NAME'], self::MAIL_SERVICES_ONLY_FOR_THE_RU_ZONE, true))
 			{
 				continue;
@@ -120,6 +140,8 @@ abstract class Mailbox
 				'encryption' => $service['ENCRYPTION'],
 				'token' => $service['TOKEN'],
 				'flags' => $service['FLAGS'],
+				// Told apart from the raw flags on purpose: the client must not do the bit arithmetic.
+				'externalCredentials' => MailServicesTable::hasExternalCredentials($service),
 				'sort' => $service['SORT'],
 			];
 
@@ -223,12 +245,16 @@ abstract class Mailbox
 			->where('MAILBOX_ID', $mailboxId)
 		;
 
-		$generationIds = $this->peekGenerationScope()->getGenerationIds();
-		if ($generationIds !== null)
+		/*
+			The map is keyed by the folder path hash, and a folder of another generation answers to
+			the same hash as the folder serving the user now - the one retained by an earlier switch
+			and the one of a generation being prepared alike. The scope of the folders is the same
+			one the tree of the mailbox is read by, so the counters describe the folders the user is
+			looking at and not another epoch of them.
+		*/
+		foreach ($this->peekDirectoryScope()->apply([]) as $condition => $value)
 		{
-			// The map is keyed by the folder path hash, and a folder of a retained generation
-			// answers to the same hash as the folder serving the user now
-			$query->whereIn('GENERATION_ID', $generationIds);
+			$query->addFilter($condition, $value);
 		}
 
 		$res = $query->exec();
@@ -505,19 +531,13 @@ abstract class Mailbox
 	public function getProviderCode(): string
 	{
 		$serviceId = $this->getServiceId();
-
-		if ($serviceId <= 0)
-		{
-			return '';
-		}
-
-		$service = MailServicesTable::getByPrimary(
-			$serviceId,
-			[
-				'select' => ['NAME'],
-				'cache' => ['ttl' => 86400],
-			],
-		)->fetch();
+		$service = $serviceId > 0
+			? MailServicesTable::getByPrimary(
+				$serviceId,
+				['select' => ['NAME'], 'cache' => ['ttl' => 86400]],
+			)->fetch()
+			: \Bitrix\Mail\Internal\Service\SourceGeneration\ActiveMailboxService::resolve($this->mailbox)
+		;
 
 		if ($service && !empty($service['NAME']))
 		{
@@ -619,19 +639,39 @@ abstract class Mailbox
 	}
 
 	/**
-	 * Whether the sync lock of the mailbox is free at this very moment, asked of the database.
-	 * A migration holds this lock over the final synchronization of the source it retains, and
-	 * that is the guarantee it rests on: no letter of the retained source lands after the hand
-	 * over.
+	 * Moves the lease of the sync lock this pass holds to now, by a compare-and-set on the value it
+	 * took. False when the value in the database is not ours any more.
 	 */
-	private function isSyncLockFree(): bool
+	private function renewSyncLock(): bool
 	{
-		$lock = (int)Main\Application::getConnection()->queryScalar(sprintf(
-			'SELECT SYNC_LOCK FROM b_mail_mailbox WHERE ID = %u',
+		$connection = Main\Application::getConnection();
+		$held = (int)$this->mailbox['SYNC_LOCK'];
+		$now = time();
+
+		if ($now === $held)
+		{
+			// An update to the same value changes no row, so the ownership is asked instead
+			return (int)$connection->queryScalar(sprintf(
+				'SELECT SYNC_LOCK FROM b_mail_mailbox WHERE ID = %u',
+				(int)$this->mailbox['ID'],
+			)) === $held;
+		}
+
+		$connection->queryExecute(sprintf(
+			'UPDATE b_mail_mailbox SET SYNC_LOCK = %u WHERE ID = %u AND SYNC_LOCK = %u',
+			$now,
 			(int)$this->mailbox['ID'],
+			$held,
 		));
 
-		return time() - $lock >= static::getTimeout();
+		if ($connection->getAffectedRowsCount() !== 1)
+		{
+			return false;
+		}
+
+		$this->mailbox['SYNC_LOCK'] = $now;
+
+		return true;
 	}
 
 	/**
@@ -657,6 +697,25 @@ abstract class Mailbox
 		return $this->generationContext !== null
 			? GenerationScope::fromContext($this->generationContext)
 			: GenerationScope::forMailbox((int)$this->mailbox['ID'])
+		;
+	}
+
+	/**
+	 * The scope of the folders of this run. For a run carrying a context it is the scope above
+	 * - an import reads and writes the folders of the generation it prepares - and for a run
+	 * without one it hides the generations the mailbox is preparing: their folders are written
+	 * when a snapshot is accepted, before the pass that moves the pointer, so an unfiltered
+	 * read would show the user the tree of a source nobody handed the mailbox over to.
+	 *
+	 * The letters of this run keep {@see peekGenerationScope()} on purpose. In that same window
+	 * a prepared generation has folders and not a single placement - the import of the letters
+	 * starts after the pointer has moved - so the reads of the letters have nothing to hide.
+	 */
+	protected function peekDirectoryScope(): GenerationScope
+	{
+		return $this->generationContext !== null
+			? GenerationScope::fromContext($this->generationContext)
+			: GenerationScope::servingMailbox((int)$this->mailbox['ID'])
 		;
 	}
 
@@ -851,7 +910,15 @@ abstract class Mailbox
 		while ($item = $messages->fetch())
 		{
 			$dirPath = $this->getDirsHelper()->getDirPathByHash($item['DIR_MD5']);
-			$this->syncMessages($mailboxId, $dirPath, [$item['MSG_UID']], true);
+			$this->syncMessages(
+				$mailboxId,
+				$dirPath,
+				[$item['MSG_UID']],
+				true,
+				true,
+				true,
+				true,
+			);
 
 			if(Main\Loader::includeModule('pull'))
 			{
@@ -1171,15 +1238,29 @@ abstract class Mailbox
 			return false;
 		}
 
+		$crmImapGateResult = $this->ensureCrmImapGateReady();
+		if (!$crmImapGateResult->isSuccess())
+		{
+			$this->registerCrmImapGateErrors($crmImapGateResult);
+
+			return false;
+		}
+
 		/*
-			The lock is asked of the database again and not taken from this instance: the value it holds
-			was loaded when the instance was created, and the three calls below already change the data
-			of the mailbox - the outgoing upload, the consistency repair and the resync of the start
-			page. An instance with a stale snapshot would run all three beside a synchronization that
-			holds the lock, and lose the exchange below afterwards, having changed the mailbox anyway.
-			Refusing here changes no outcome for anyone: the exchange would have failed as well.
+			The lock is taken in the database before anything of the mailbox changes, and not only asked
+			about: the value this instance holds was loaded when the instance was created, and the three
+			calls below already change the data of the mailbox - the outgoing upload with the folder sync
+			that removes the folders the server does not list, the consistency repair and the resync of
+			the start page. Taken only after them, the lock left those three beside a hand-over or the
+			acceptance of a snapshot that hold it, and the folders a prepared generation had just written
+			could be removed. Losing the exchange here refuses the pass as a busy mailbox.
 		*/
-		if (!$this->mailboxLockHeldByCaller && !$this->isSyncLockFree())
+		$lockSql = sprintf(
+			'UPDATE b_mail_mailbox SET SYNC_LOCK = %u WHERE ID = %u AND (SYNC_LOCK IS NULL OR SYNC_LOCK < %u)',
+			$this->mailbox['SYNC_LOCK'], $this->mailbox['ID'], $this->mailbox['SYNC_LOCK'] - static::getTimeout()
+		);
+
+		if (!$this->mailboxLockHeldByCaller && !$DB->query($lockSql)->affectedRowsCount())
 		{
 			$this->lastSyncRefusal = static::SYNC_REFUSAL_SYNC_LOCKED;
 
@@ -1188,20 +1269,30 @@ abstract class Mailbox
 
 		$this->session = md5(uniqid(''));
 
-		$this->syncOutgoing();
-		$this->restoringConsistency();
-		$this->reSyncStartPage();
+		try
+		{
+			$this->syncOutgoing();
+			$this->restoringConsistency();
+			$this->reSyncStartPage();
+		}
+		catch (\Throwable $exception)
+		{
+			// A lock taken by this pass is given back, or the mailbox stays refused until it expires
+			if (!$this->mailboxLockHeldByCaller)
+			{
+				$DB->query(sprintf(
+					'UPDATE b_mail_mailbox SET SYNC_LOCK = 0 WHERE ID = %u AND SYNC_LOCK = %u',
+					$this->mailbox['ID'],
+					$this->mailbox['SYNC_LOCK']
+				));
+				$this->mailbox['SYNC_LOCK'] = 0;
+			}
 
-		$lockSql = sprintf(
-			'UPDATE b_mail_mailbox SET SYNC_LOCK = %u WHERE ID = %u AND (SYNC_LOCK IS NULL OR SYNC_LOCK < %u)',
-			$this->mailbox['SYNC_LOCK'], $this->mailbox['ID'], $this->mailbox['SYNC_LOCK'] - static::getTimeout()
-		);
+			throw $exception;
+		}
 
-		/*
-		If the time record for blocking synchronization has not been added to the table,
-		we will have to abort synchronization
-		*/
-		if (!$this->mailboxLockHeldByCaller && !$DB->query($lockSql)->affectedRowsCount())
+		// The first steps may outlive the lease: another pass that took the expired lock owns the mailbox now
+		if (!$this->mailboxLockHeldByCaller && !$this->renewSyncLock())
 		{
 			$this->lastSyncRefusal = static::SYNC_REFUSAL_DB_LOCK_LOST;
 
@@ -1315,6 +1406,17 @@ abstract class Mailbox
 		}
 
 		return $count;
+	}
+
+	protected function ensureCrmImapGateReady(): Main\Result
+	{
+		return (new CrmImapGateReconciler())->ensureReady((int)$this->mailbox['ID']);
+	}
+
+	protected function registerCrmImapGateErrors(Main\Result $result): void
+	{
+		$this->errors->add($result->getErrors());
+		$this->warnings->add($result->getErrors());
 	}
 
 	public function getSyncStatus()
@@ -1647,6 +1749,7 @@ abstract class Mailbox
 		}
 
 		$scope = $this->getGenerationScope();
+		$conversationBackfill = new ConversationBackfill();
 
 		do
 		{
@@ -1680,6 +1783,10 @@ abstract class Mailbox
 				if (empty($item['UID']))
 				{
 					\CMailMessage::delete($item['MESSAGE_ID'], (int)$this->mailbox['ID']);
+					$conversationBackfill->removeMessages(
+						(int)$this->mailbox['ID'],
+						[(int)$item['MESSAGE_ID']],
+					);
 				}
 
 				Mail\Internals\MessageDeleteQueueTable::deleteList($scope->apply(array(
@@ -2006,6 +2113,13 @@ abstract class Mailbox
 
 		$dirPath = $this->getDirsHelper()->getDirPathByHash($messagesForRemove[0]['DIR_MD5']);
 
+		$messagesForRemove = $this->placementsTheSourceCanBeAskedAbout($messagesForRemove, (string)$dirPath);
+
+		if (empty($messagesForRemove))
+		{
+			return [];
+		}
+
 		// an implementation of the check that knows nothing of failed requests leaves the list empty
 		$this->unansweredUidsOfLastCheck = [];
 
@@ -2023,6 +2137,15 @@ abstract class Mailbox
 		$unansweredMessages = self::selectMessagesByUids($messagesForRemove, $this->unansweredUidsOfLastCheck);
 
 		return self::selectMessagesByUids($messagesForRemove, $aliveUids);
+	}
+
+	/**
+	 * Of the rows the deletion is about to ask the source about, the ones it can still be asked about at
+	 * all. Answered by the engine, which alone knows what its source is; the base answers with all of them.
+	 */
+	protected function placementsTheSourceCanBeAskedAbout(array $messagesForRemove, string $dirPath): array
+	{
+		return $messagesForRemove;
 	}
 
 	/** @return array rows of the sample whose uid the list names */
@@ -2083,27 +2206,78 @@ abstract class Mailbox
 		}
 		$params[MailMessageTable::FIELD_SANITIZE_ON_VIEW] ??= $this->isSupportSanitizeOnView();
 
-		return \CMailMessage::addMessage(
+		$messageId = \CMailMessage::addMessage(
 			$this->mailbox['ID'],
 			$body,
 			$this->mailbox['CHARSET'] ?: $this->mailbox['LANG_CHARSET'],
 			$params
 		);
+
+		/*
+			The single funnel of every save of a letter, so the conversation projection is brought up to
+			date right here: the closure of the letter is written inside addMessage above, and the pull
+			command that makes the client reload its list is sent later, after syncMessage() returns.
+			No transaction of the synchronization is open at this point, which is what the projection
+			requires - see the contract of ConversationIndexer.
+		*/
+		Helper\Message::syncConversationProjection((int)$this->mailbox['ID'], (int)$messageId);
+
+		return $messageId;
 	}
 
-	public function mail(array $params)
+	/**
+	 * @param int $authorId Who is told when the letter cannot be sent; without one the refusal is only shown
+	 * on the screen of the letter.
+	 */
+	public function mail(array $params, ?callable $onQueued = null, int $authorId = 0)
 	{
 		class_exists('Bitrix\Mail\Helper');
 
 		$message = new Mail\DummyMail($params);
 
-		$messageUid = $this->createMessage($message);
+		$messageUid = $this->createMessage($message, [], $authorId);
 
-		Mail\Internals\MessageUploadQueueTable::add(array(
-			'ID' => $messageUid,
-			'MAILBOX_ID' => $this->mailbox['ID'],
-			'GENERATION_ID' => $this->getGenerationContext()->generationId,
-		));
+		if ($onQueued === null)
+		{
+			Mail\Internals\MessageUploadQueueTable::add(array(
+				'ID' => $messageUid,
+				'MAILBOX_ID' => $this->mailbox['ID'],
+				'GENERATION_ID' => $this->getGenerationContext()->generationId,
+			));
+		}
+		else
+		{
+			$connection = Main\Application::getConnection();
+			$connection->startTransaction();
+			try
+			{
+				$queueResult = Mail\Internals\MessageUploadQueueTable::add(array(
+					'ID' => $messageUid,
+					'MAILBOX_ID' => $this->mailbox['ID'],
+					'GENERATION_ID' => $this->getGenerationContext()->generationId,
+				));
+				if (!$queueResult->isSuccess())
+				{
+					throw new Main\SystemException('Could not queue outgoing message.');
+				}
+
+				$onQueued();
+				$connection->commitTransaction();
+			}
+			catch (\Throwable $exception)
+			{
+				try
+				{
+					$connection->rollbackTransaction();
+				}
+				catch (Main\DB\TransactionException)
+				{
+					// Nested rollback has already restored the savepoint.
+				}
+
+				throw $exception;
+			}
+		}
 
 		\CAgent::addAgent(
 			sprintf(
@@ -2114,7 +2288,7 @@ abstract class Mailbox
 		);
 	}
 
-	protected function createMessage(Main\Mail\Mail $message, array $fields = array())
+	protected function createMessage(Main\Mail\Mail $message, array $fields = array(), int $authorId = 0)
 	{
 		$messageUid = sprintf('%x%x', time(), rand(0, 0xffffffff));
 		$body = sprintf(
@@ -2134,6 +2308,7 @@ abstract class Mailbox
 				'seen' => true,
 				'trackable' => true,
 				'origin' => true,
+				'outgoing_author_id' => $authorId,
 			)
 		);
 
@@ -2179,7 +2354,7 @@ abstract class Mailbox
 				'filter' => $this->peekGenerationScope()->apply(array(
 					'>=UPLOAD_QUEUE.SYNC_STAGE' => 0,
 					'<UPLOAD_QUEUE.SYNC_LOCK' => time() - static::getTimeout(),
-					'<UPLOAD_QUEUE.ATTEMPTS' => 5,
+					'<UPLOAD_QUEUE.ATTEMPTS' => self::MAX_OUTGOING_ATTEMPTS,
 				)),
 				'order' => array(
 					'UPLOAD_QUEUE.SYNC_LOCK' => 'ASC',
@@ -2364,7 +2539,7 @@ abstract class Mailbox
 			}
 		);
 
-		$success = Main\Mail\Mail::send(array_merge(
+		$mailParams = array_merge(
 			$outgoingParams,
 			array(
 				'TRACK_READ' => array(
@@ -2378,13 +2553,23 @@ abstract class Mailbox
 				//),
 				'CONTEXT' => $context,
 			)
-		));
+		);
+		$sendResult = null;
+		if (method_exists(Main\Mail\Mail::class, 'sendResult'))
+		{
+			$sendResult = Main\Mail\Mail::sendResult($mailParams);
+			$success = $sendResult->isSuccess();
+		}
+		else
+		{
+			$success = Main\Mail\Mail::send($mailParams);
+		}
 
 		$eventManager->removeEventHandler('main', 'OnBeforeMailSend', $eventKey);
 
 		if ($excerpt['UPLOAD_STAGE'] < 2 && !$success)
 		{
-			$sendingError = $this->getContextSendingError($context);
+			$sendingError = $this->resolvePermanentSendError($excerpt, $context, $sendResult);
 			if ($sendingError !== null)
 			{
 				$this->completeOutgoingWithError($excerpt, $sendingError);
@@ -2455,6 +2640,28 @@ abstract class Mailbox
 		return;
 	}
 
+	/**
+	 * A refusal of the sender is final at once, since a retry goes through the same record. Any other failure
+	 * is retried, and becomes final only when the last attempt fails too: past it the queue skips the letter.
+	 */
+	private function resolvePermanentSendError(array $excerpt, object $context, ?Main\Result $sendResult): ?Main\Error
+	{
+		$controlledError = SendFailure::getControlledError($sendResult) ?? $this->getContextSendingError($context);
+		if ($controlledError !== null)
+		{
+			return $controlledError;
+		}
+
+		if ((int)$excerpt['UPLOAD_ATTEMPTS'] + 1 < self::MAX_OUTGOING_ATTEMPTS)
+		{
+			return null;
+		}
+
+		$transportMessage = $sendResult?->getErrorMessages()[0] ?? '';
+
+		return new Main\Error($transportMessage ?: 'Failed to send email.', SendFailure::CODE_SEND_FAILED);
+	}
+
 	private function getContextSendingError(object $context): ?Main\Error
 	{
 		return method_exists($context, 'getSendingError') ? $context->getSendingError() : null;
@@ -2469,29 +2676,24 @@ abstract class Mailbox
 			],
 			[
 				'SYNC_LOCK' => 0,
-				'ATTEMPTS' => 5,
+				'ATTEMPTS' => self::MAX_OUTGOING_ATTEMPTS,
 			],
 		);
 
 		$options = is_array($excerpt['__OPTIONS'] ?? null) ? $excerpt['__OPTIONS'] : [];
-		$options['sendError'] = [
-			'code' => $error->getCode(),
-			'message' => $error->getMessage(),
-		];
-		Mail\MailMessageTable::update((int)$excerpt['__ID'], ['OPTIONS' => $options]);
+		SendFailure::markMessageFailed((int)$excerpt['__ID'], $options, $error);
+
+		Mail\Integration\Im\Notification::notifyUserAboutMessageSendFailed(
+			(int)($options[self::OUTGOING_AUTHOR_OPTION] ?? 0),
+			(int)$excerpt['__ID'],
+			(string)($excerpt['__SUBJECT'] ?? ''),
+			(string)$error->getCode(),
+		);
 	}
 
 	public static function getPermanentSendError(array $message): ?Main\Error
 	{
-		$options = is_array($message['OPTIONS'] ?? null) ? $message['OPTIONS'] : [];
-		$sendError = is_array($options['sendError'] ?? null) ? $options['sendError'] : [];
-		$message = trim((string)($sendError['message'] ?? ''));
-		if ($message === '')
-		{
-			return null;
-		}
-
-		return new Main\Error($message, (string)($sendError['code'] ?? ''));
+		return SendFailure::getMessageFailure($message);
 	}
 
 	/**
@@ -2822,7 +3024,7 @@ abstract class Mailbox
 
 	public function getDirsHelper(?int $userId = null): Mail\Helper\MailboxDirectoryHelper
 	{
-		$scope = $this->peekGenerationScope();
+		$scope = $this->peekDirectoryScope();
 
 		if ($userId !== null)
 		{

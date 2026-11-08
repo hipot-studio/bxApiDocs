@@ -11,7 +11,6 @@ use Bitrix\Landing\Integration\AiAssistant\Dto\CreateAiSiteDto;
 use Bitrix\Landing\Integration\AiAssistant\Schema\Site\CreateAiSiteSchema;
 use Bitrix\Landing\Integration\AiAssistant\Tool\BaseTool;
 use Bitrix\Landing\Integration\AiAssistant\UseCase\CreateAiSiteHandler;
-use Bitrix\Landing\Rights;
 use Bitrix\Main\Validation\ValidationService;
 
 class CreateAiSiteTool extends BaseTool
@@ -71,11 +70,6 @@ class CreateAiSiteTool extends BaseTool
 
 			return $this->runInUserContext($effectiveUserId, function() use ($dto, $effectiveUserId)
 			{
-				$this->assertPermission(
-					Rights::hasAdditionalRight(Rights::ADDITIONAL_RIGHTS['create']),
-					'Access denied. You do not have permission to create landing sites.',
-				);
-
 				return $this->handler->handle($dto, $effectiveUserId);
 			});
 		}

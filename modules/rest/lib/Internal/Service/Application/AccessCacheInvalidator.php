@@ -11,7 +11,11 @@ class AccessCacheInvalidator
 	public static function clear(): void
 	{
 		PlacementTable::clearHandlerCache();
+		static::clearLeftMenuCache();
+	}
 
+	public static function clearLeftMenuCache(): void
+	{
 		if (defined('BX_COMP_MANAGED_CACHE'))
 		{
 			global $CACHE_MANAGER;

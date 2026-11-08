@@ -14,7 +14,7 @@ use Bitrix\Main\Result;
 
 final class CreateAndStartCallListAction implements Action
 {
-	public function __construct(private int $entityTypeId)
+	public function __construct(private int $entityTypeId, private string $gridId)
 	{
 	}
 
@@ -45,6 +45,7 @@ final class CreateAndStartCallListAction implements Action
 					'JS' =>
 						(new Event('CallList:createAndStartCallList'))
 							->addEntityTypeId($this->entityTypeId)
+							->addGridId($this->gridId)
 							->buildJsCallback()
 					,
 				]

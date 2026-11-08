@@ -7,6 +7,7 @@ use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Dto\Validator;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
 use Bitrix\Crm\Dto\Validator\ScalarCollectionField;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
@@ -28,6 +29,7 @@ final class ExtractScoringCriteriaPayload extends Dto
 	{
 		return [
 			new ScalarCollectionField($this, 'criteria', null, true),
+			new RequiredField($this, 'criteria'),
 			new NotEmptyField($this, 'criteria'),
 			new class($this) extends Validator {
 				public function validate(array $fields): Result

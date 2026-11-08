@@ -46,6 +46,8 @@ class ThemePicker
 
 	public const DEFAULT_THEME_ID = 'light:vibecode';
 
+	private const CUSTOM_THEME_ID_PREFIX = 'custom_';
+
 	private static $instance = null;
 	private static $config = null;
 
@@ -173,6 +175,101 @@ class ThemePicker
 	public static function isAvailable()
 	{
 		return !Loader::includeModule("bitrix24") || \Bitrix\Bitrix24\Release::isAvailable("17.5.0");
+	}
+
+	public static function resolveAccessibleEntityId(
+		string $entityType,
+		int $requestedEntityId,
+		int $currentUserId,
+	): ?int
+	{
+		if ($currentUserId <= 0)
+		{
+			return null;
+		}
+
+		if ($entityType === self::ENTITY_TYPE_USER)
+		{
+			return $currentUserId;
+		}
+
+		if (
+			$entityType === self::ENTITY_TYPE_SONET_GROUP
+			&& $requestedEntityId > 0
+			&& static::canCurrentUserModifyGroup($currentUserId, $requestedEntityId)
+		)
+		{
+			return $requestedEntityId;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Resolves the entity context available for the requested action.
+	 *
+	 * @return array{entityType: string, entityId: int}|null
+	 */
+	public static function resolveAccessibleEntityContext(
+		string $action,
+		string $entityType,
+		int $requestedEntityId,
+		int $currentUserId,
+	): ?array
+	{
+		if (
+			!in_array(
+				$action,
+				['save', 'save-blurred-image', 'getlist', 'create', 'remove', 'hide-hint'],
+				true,
+			)
+		)
+		{
+			return null;
+		}
+
+		if ($action === 'hide-hint')
+		{
+			$entityType = self::ENTITY_TYPE_USER;
+		}
+		elseif ($action === 'create' && $entityType === '')
+		{
+			$entityType = self::ENTITY_TYPE_USER;
+		}
+		elseif (
+			$action === 'getlist'
+			&& $entityType === self::ENTITY_TYPE_SONET_GROUP
+			&& $requestedEntityId <= 0
+		)
+		{
+			$entityType = self::ENTITY_TYPE_USER;
+		}
+
+		$entityId = static::resolveAccessibleEntityId($entityType, $requestedEntityId, $currentUserId);
+		if ($entityId === null)
+		{
+			return null;
+		}
+
+		return [
+			'entityType' => $entityType,
+			'entityId' => $entityId,
+		];
+	}
+
+	protected static function canCurrentUserModifyGroup(int $currentUserId, int $groupId): bool
+	{
+		if (!Loader::includeModule('socialnetwork'))
+		{
+			return false;
+		}
+
+		$permissions = \Bitrix\Socialnetwork\Helper\Workgroup::getPermissions([
+			'userId' => $currentUserId,
+			'groupId' => $groupId,
+		]);
+
+		return ($permissions['UserCanModifyGroup'] ?? false) === true;
 	}
 
 	public static function canSetDefaultTheme(): bool
@@ -688,6 +785,7 @@ class ThemePicker
 
 		$customTheme = array(
 			"id" => $customThemeId,
+			"title" => static::getCustomThemeTitle($customThemeId),
 			"css" => $this->getBaseThemeCss($baseThemeId),
 			"removable" => true,
 			"new" => false,
@@ -754,6 +852,41 @@ class ThemePicker
 		$customTheme["style"] = $style;
 
 		return $customTheme;
+	}
+
+	public static function getCustomThemeTitle(string $themeId): string
+	{
+		$createdAt = static::getCustomThemeCreationTime($themeId);
+		if ($createdAt === null)
+		{
+			return (string)Loc::getMessage('INTRANET_B24_INTEGRATION_CUSTOM_THEME_TITLE');
+		}
+
+		// FormatDate keeps the site culture formats without the viewer's timezone offset:
+		// the title must be identical for every consumer, including other users' themes.
+		// A context without a site (CLI, agent) carries no culture: default formats keep the moment.
+		$culture = Application::getInstance()->getContext()->getCulture();
+		$dateFormat = $culture?->getLongDateFormat() ?? 'j F Y';
+		$timeFormat = $culture?->getLongTimeFormat() ?? 'H:i:s';
+		$format = $dateFormat . ' ' . $timeFormat;
+
+		return (string)Loc::getMessage(
+			'INTRANET_B24_INTEGRATION_CUSTOM_THEME_TITLE_WITH_DATE',
+			['#DATE_TIME#' => FormatDate($format, $createdAt)]
+		);
+	}
+
+	private static function getCustomThemeCreationTime(string $themeId): ?int
+	{
+		[, $subThemeId] = static::getThemeIdParts($themeId);
+		if (!is_string($subThemeId))
+		{
+			return null;
+		}
+
+		$pattern = '/^' . preg_quote(self::CUSTOM_THEME_ID_PREFIX, '/') . '([0-9]{10})$/D';
+
+		return preg_match($pattern, $subThemeId, $matches) === 1 ? (int)$matches[1] : null;
 	}
 
 	protected function validateBgImage(array $customTheme, $option = "bgImage"): bool
@@ -1093,7 +1226,7 @@ class ThemePicker
 
 	public function getCustomThemePrefix()
 	{
-		return "custom_";
+		return self::CUSTOM_THEME_ID_PREFIX;
 	}
 
 	private static function isValidTemplateId($templateId)

@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Workflow\Template\Packer;
 
+use Bitrix\Bizproc\Public\ProcessData\Service\ProcessDataMechanicsResolver;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
 use Bitrix\Bizproc\Workflow\Template\Tpl;
 use Bitrix\Main;
@@ -52,7 +53,7 @@ class Bpt extends BasePacker
 			self::replaceVariablesDocumentFieldsAliases($tplData['CONSTANTS'], $documentFieldsAliasesMap);
 		}
 
-		return [
+		$package = [
 			"VERSION" => 2,
 			"TEMPLATE" => $tplData["TEMPLATE"],
 			"PARAMETERS" => $tplData["PARAMETERS"],
@@ -60,6 +61,18 @@ class Bpt extends BasePacker
 			"CONSTANTS" => $tplData["CONSTANTS"],
 			"DOCUMENT_FIELDS" => $documentFields,
 		];
+
+		// the key is added to a marked template alone: the format version does not change and the file of
+		// any other template stays byte for byte the one of today. The marker of the stored template decides
+		// it, not the feature: a file exported without it would import as a legacy template
+		if ((new ProcessDataMechanicsResolver())->isMarked([], (int)$tpl->getId()))
+		{
+			$package['TEMPLATE_SETTINGS'] = [
+				ProcessDataMechanicsResolver::MARKER => ProcessDataMechanicsResolver::MARKER_VALUE,
+			];
+		}
+
+		return $package;
 	}
 
 	public function pack(Tpl $tpl)
@@ -109,6 +122,11 @@ class Bpt extends BasePacker
 		if (is_array($datumTmp['DOCUMENT_FIELDS'] ?? null))
 		{
 			$result->setDocumentFields($datumTmp['DOCUMENT_FIELDS']);
+		}
+
+		if (is_array($datumTmp['TEMPLATE_SETTINGS'] ?? null))
+		{
+			$result->setTemplateSettings($datumTmp['TEMPLATE_SETTINGS']);
 		}
 
 		return $result;

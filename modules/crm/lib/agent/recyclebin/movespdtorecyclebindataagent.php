@@ -237,50 +237,151 @@ final class MoveSpdToRecycleBinDataAgent extends AgentBase
 		$fieldTypeManager = UserFieldHelper::getInstance()->getManager();
 		$languageId = Application::getInstance()->getContext()->getLanguage();
 
-		$recycledFields = $fieldTypeManager?->GetUserFields($this->getSpdEntityName($this->entityTypeId, false), $recycleBinId, $languageId);
+		$recycledFields = $fieldTypeManager?->GetUserFields(
+			$this->getSpdEntityName($this->entityTypeId, false),
+			$recycleBinId,
+			$languageId
+		) ?? [];
 
-		$entityFields = $fieldTypeManager?->GetUserFields(\CCrmOwnerType::ResolveUserFieldEntityID($this->entityTypeId), 0, $languageId);
+		$entityFields = $fieldTypeManager?->GetUserFields(
+			\CCrmOwnerType::ResolveUserFieldEntityID($this->entityTypeId),
+			0,
+			$languageId
+		) ?? [];
 
-		$intersections = UserFieldSynchronizer::getIntersectionFields($entityFields, $recycledFields);
+		$preparedFieldValues = [];
+		$intersections = UserFieldSynchronizer::getIntersectionFields(
+			UserFieldSynchronizer::filterFieldsWithValue($recycledFields),
+			$entityFields,
+			[],
+			true,
+			true,
+			true,
+			function (array $srcField, array $dstField) use (&$preparedFieldValues): bool {
+				$value = null;
+				if(!$this->tryPrepareFieldValue($srcField, $dstField, $value))
+				{
+					return false;
+				}
+
+				$preparedFieldValues[$srcField['FIELD_NAME']][$dstField['FIELD_NAME']] = $value;
+
+				return true;
+			},
+		);
 		if (empty($intersections))
 		{
 			return [];
 		}
 
-		return $this->prepareFieldsData($intersections, $recycledFields);
+		return $this->prepareFieldsData(
+			$intersections,
+			$recycledFields,
+			$entityFields,
+			$preparedFieldValues,
+		);
 	}
 
-	private function prepareFieldsData(array $intersections, array $recycledFields): array
+	private function prepareFieldsData(
+		array $intersections,
+		array $recycledFields,
+		array $entityFields,
+		array $preparedFieldValues = [],
+	): array
 	{
 		$fieldsData = [];
 		foreach ($intersections as $intersection)
 		{
+			$srcFieldName = $intersection['SRC_FIELD_NAME'];
 			$dstFieldName = $intersection['DST_FIELD_NAME'];
 
-			$restoredField = $recycledFields[$dstFieldName] ?? null;
+			$restoredField = $recycledFields[$srcFieldName] ?? null;
 			if (!is_array($restoredField))
 			{
 				continue;
 			}
-			if (
-				$restoredField['VALUE'] === null
-				|| $restoredField['VALUE'] === ''
-				|| $restoredField['VALUE'] === []
-				|| $restoredField['VALUE'] === false
-			)
+
+			$liveField = $entityFields[$dstFieldName] ?? null;
+			if (!is_array($liveField))
 			{
 				continue;
+			}
+
+			if(array_key_exists($dstFieldName, $preparedFieldValues[$srcFieldName] ?? []))
+			{
+				$value = $preparedFieldValues[$srcFieldName][$dstFieldName];
+			}
+			else
+			{
+				$value = null;
+				if(!$this->tryPrepareFieldValue($restoredField, $liveField, $value))
+				{
+					continue;
+				}
 			}
 
 			$field = [
 				'USER_TYPE_ID' => $restoredField['USER_TYPE_ID'],
 				'MULTIPLE' => $restoredField['MULTIPLE'],
-				'VALUE' => $restoredField['VALUE'],
+				'VALUE' => $value,
 			];
 
-			$fieldsData[$intersection['SRC_FIELD_NAME']] = $field;
+			$fieldsData[$dstFieldName] = $field;
 		}
 
 		return $fieldsData;
+	}
+
+	private function tryPrepareFieldValue(array $srcField, array $dstField, mixed &$value): bool
+	{
+		$value = $srcField['VALUE'] ?? null;
+		if(
+			($srcField['USER_TYPE_ID'] ?? '') === 'enumeration'
+			&& !UserFieldSynchronizer::tryMapEnumerationValueToDestination(
+				$srcField,
+				$dstField,
+				$value,
+				$value,
+			)
+		)
+		{
+			return false;
+		}
+
+		return $this->isFieldValueValid($dstField, $value);
+	}
+
+	private function isFieldValueValid(array $field, mixed $value): bool
+	{
+		if(($field['USER_TYPE_ID'] ?? '') === 'file')
+		{
+			return true;
+		}
+
+		$className = $field['USER_TYPE']['CLASS_NAME'] ?? null;
+		if(!is_string($className) || !is_callable([$className, 'checkfields']))
+		{
+			return true;
+		}
+
+		if(($field['MULTIPLE'] ?? 'N') === 'Y' && is_array($value))
+		{
+			foreach($value as $singleValue)
+			{
+				$isEmpty = $singleValue === null || $singleValue === '' || $singleValue === [];
+				$messages = !$isEmpty
+					? call_user_func_array([$className, 'checkfields'], [$field, $singleValue])
+					: []
+				;
+				if(!empty($messages))
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+
+		return empty(call_user_func_array([$className, 'checkfields'], [$field, $value]));
 	}
 }

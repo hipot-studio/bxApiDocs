@@ -3,11 +3,12 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2016 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 namespace Bitrix\Main\Mail;
 
 use Bitrix\Main;
+use Bitrix\Main\Type\Callback;
 
 class EventManager
 {
@@ -142,7 +143,7 @@ class EventManager
 	}
 
 	/**
-	 * @return string
+	 * @return Callback
 	 * @throws Main\ArgumentNullException
 	 */
 	public static function cleanUpAgent()
@@ -161,8 +162,10 @@ class EventManager
 			. " AND NOT EXISTS(SELECT e.ID FROM b_event e WHERE e.ID=EVENT_ID)";
 		$connection->query($strSql);
 
+		$attachmentAgent = new Callback([self::class, 'cleanUpAttachmentAgent']);
+
 		\CAgent::addAgent(
-			self::class . '::cleanUpAttachmentAgent();',
+			$attachmentAgent,
 			'main',
 			"N",
 			60,
@@ -170,13 +173,13 @@ class EventManager
 			"Y"
 		);
 
-		return "CEvent::CleanUpAgent();";
+		return new Callback([\CEvent::class, 'CleanUpAgent']);
 	}
 
 	/**
 	 * Agent for clean up event attachments.
 	 *
-	 * @return string
+	 * @return Callback|null
 	 */
 	public static function cleanUpAttachmentAgent()
 	{
@@ -198,7 +201,10 @@ class EventManager
 			$connection->query($strSql);
 		}
 
-		return !empty($rows) ? self::class . '::cleanUpAttachmentAgent();' : '';
+		return !empty($rows)
+			? new Callback([self::class, 'cleanUpAttachmentAgent'])
+			: null
+		;
 	}
 
 	/**

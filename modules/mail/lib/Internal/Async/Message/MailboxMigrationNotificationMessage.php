@@ -13,6 +13,7 @@ final class MailboxMigrationNotificationMessage extends AbstractMessage
 		public readonly string $status,
 		/** @var int[] */
 		public readonly array $userIds = [],
+		public readonly ?string $operationId = null,
 	)
 	{
 	}

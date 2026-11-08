@@ -256,6 +256,11 @@ class Workgroup implements Main\Type\Contract\Arrayable, Main\Type\Contract\Json
 		return $invited + $ordinary + $moderators + $owner;
 	}
 
+	/**
+	 * Returns whether the container carries the project flag.
+	 *
+	 * @see Workgroup::isCollabProject() for the new Project only
+	 */
 	public function isProject(): bool
 	{
 		if ($this->getType() === Type::Project)
@@ -282,6 +287,16 @@ class Workgroup implements Main\Type\Contract\Arrayable, Main\Type\Contract\Json
 	public function isCollab(): bool
 	{
 		return $this->getType() === Type::Collab;
+	}
+
+	/**
+	 * Returns whether the container is a new Project.
+	 *
+	 * @see \Bitrix\Socialnetwork\Provider\GroupProvider::isCollabProject() the same predicate by group id
+	 */
+	public function isCollabProject(): bool
+	{
+		return $this->isCollab() && $this->isProject();
 	}
 
 	public function getDefaultSprintDuration(): int
@@ -715,6 +730,7 @@ class Workgroup implements Main\Type\Contract\Arrayable, Main\Type\Contract\Json
 			'fields' => $fields,
 		));
 
+		$content = Main\Text\Emoji::encode($content);
 		$content = self::prepareToken($content);
 
 		$event = new Main\Event(
@@ -748,6 +764,7 @@ class Workgroup implements Main\Type\Contract\Arrayable, Main\Type\Contract\Json
 						$eventContent
 					));
 
+					$eventContent = Main\Text\Emoji::encode($eventContent);
 					$eventContent = self::prepareToken($eventContent);
 					if (!empty($eventContent))
 					{
@@ -779,6 +796,25 @@ class Workgroup implements Main\Type\Contract\Arrayable, Main\Type\Contract\Json
 	public static function prepareToken($str)
 	{
 		return str_rot13($str);
+	}
+
+	/**
+	 * Prepare a user query so it matches SEARCH_INDEX built by setIndex().
+	 */
+	public static function prepareSearchIndexQuery(string $query): string
+	{
+		$query = Main\Text\Emoji::encode(trim($query));
+		if ($query === '')
+		{
+			return '';
+		}
+
+		if (Main\Search\Content::isIntegerToken($query))
+		{
+			return Main\Search\Content::prepareIntegerToken($query);
+		}
+
+		return self::prepareToken($query);
 	}
 
 	public static function getInitiatePermOptionsList(array $params = []): array

@@ -398,16 +398,57 @@ class MobilePush
 		{
 			$file = reset($files);
 
-			$attachmentSuffix = match ($file['type'] ?? '')
+			if ($file['isVoiceNote'] ?? false)
 			{
-				'image' => Text::getEmoji('image') .' '. Loc::getMessage('IM_MESSAGE_IMAGE'),
-				'audio' => Text::getEmoji('audio') .' '. Loc::getMessage('IM_MESSAGE_AUDIO'),
-				'video' => Text::getEmoji('video') .' '. Loc::getMessage('IM_MESSAGE_VIDEO'),
-				default => Text::getEmoji('file', Loc::getMessage('IM_MESSAGE_FILE') . ':') . ' ' . $file['name'],
-			};
+				$attachmentSuffix = self::getVoiceNoteSuffixForPush($file);
+			}
+			else
+			{
+				$attachmentSuffix = match ($file['type'] ?? '')
+				{
+					'image' => Text::getEmoji('image') .' '. Loc::getMessage('IM_MESSAGE_IMAGE'),
+					'audio' => Text::getEmoji('audio') .' '. Loc::getMessage('IM_MESSAGE_AUDIO'),
+					'video' => Text::getEmoji('video') .' '. Loc::getMessage('IM_MESSAGE_VIDEO'),
+					default => Text::getEmoji('file', Loc::getMessage('IM_MESSAGE_FILE') . ':') . ' ' . $file['name'],
+				};
+			}
 		}
 
 		return $attachmentSuffix;
+	}
+
+	public static function getVoiceNoteSuffixForPush(array $file): string
+	{
+		Message::loadPhrases();
+
+		$duration = (int)($file['duration'] ?? 0);
+		if ($duration > 0)
+		{
+			$phrase = Loc::getMessage(
+				'IM_MESSAGE_VOICE_NOTE_WITH_DURATION',
+				['#DURATION#' => self::formatMediaDuration($duration)]
+			);
+		}
+		else
+		{
+			$phrase = Loc::getMessage('IM_MESSAGE_VOICE_NOTE');
+		}
+
+		return Text::getEmoji('audio') . ' ' . $phrase;
+	}
+
+	private static function formatMediaDuration(int $seconds): string
+	{
+		$hours = intdiv($seconds, 3600);
+		$minutes = intdiv($seconds % 3600, 60);
+		$restSeconds = $seconds % 60;
+
+		if ($hours > 0)
+		{
+			return sprintf('%d:%02d:%02d', $hours, $minutes, $restSeconds);
+		}
+
+		return sprintf('%02d:%02d', $minutes, $restSeconds);
 	}
 
 	protected static function getAttachDescription(array $attach): string
@@ -599,6 +640,18 @@ class MobilePush
 				{
 					$file['isVideoNote'] = 'Y';
 				}
+				if (!empty($value['isVoiceNote']))
+				{
+					$file['isVoiceNote'] = 'Y';
+				}
+				if (!empty($value['isTranscribable']))
+				{
+					$file['isTranscribable'] = 'Y';
+				}
+				if (!empty($value['duration']))
+				{
+					$file['duration'] = (int)$value['duration'];
+				}
 
 				$result['files'][$key] = $file;
 			}
@@ -705,6 +758,9 @@ class MobilePush
 			'width' => 88,
 			'height' => 89,
 			'isVideoNote' => 801,
+			'isVoiceNote' => 802,
+			'isTranscribable' => 803,
+			'duration' => 804,
 
 			'sections' => 90,
 		];

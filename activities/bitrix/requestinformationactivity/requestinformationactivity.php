@@ -10,6 +10,7 @@ use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Bizproc\Activity\Mixins\ErrorHandling;
+use Bitrix\Bizproc\Internal\Integration\UI\TaskFileUploaderContext;
 use Bitrix\Bizproc\UI\Helpers\TaskTextDecoder;
 use Bitrix\Main\Type\DateTime;
 
@@ -615,6 +616,9 @@ class CBPRequestInformationActivity extends CBPCompositeActivity implements
 		{
 			$request = $_REQUEST;
 
+			// taken from the task already checked rather than from the client
+			$request[TaskFileUploaderContext::REQUEST_TASK_ID_KEY] = $task['ID'] ?? null;
+
 			foreach ($_FILES as $k => $v)
 			{
 				if (array_key_exists("name", $v))
@@ -711,10 +715,14 @@ class CBPRequestInformationActivity extends CBPCompositeActivity implements
 				if ($fieldTypeObject)
 				{
 					$fieldTypeObject->setDocumentId($task["PARAMETERS"]["DOCUMENT_ID"]);
-					$result[$propertyId] = $fieldTypeObject->internalizeValue(
-						$task['ACTIVITY_NAME'],
-						$values[$propertyId] ?? null
-					);
+
+					$value = $values[$propertyId] ?? null;
+					if ($fieldTypeObject->getBaseType() === Bizproc\FieldType::FILE)
+					{
+						$value = static::acceptTaskFileValue($task, $propertyId, $value);
+					}
+
+					$result[$propertyId] = $fieldTypeObject->internalizeValue($task['ACTIVITY_NAME'], $value);
 				}
 
 				if (
@@ -735,6 +743,51 @@ class CBPRequestInformationActivity extends CBPCompositeActivity implements
 		}
 
 		return $result;
+	}
+
+	/**
+	 * The ids of the files the rule of the type takes for a file field, keeping the fields of a decision in
+	 * step with the form of the card: the fields are sent as they are, so nothing but the rule itself tells
+	 * a file of the field from any other file the performer could name by its number. An expression names
+	 * no file and is let through as it is - it is evaluated later, inside the process.
+	 */
+	protected static function acceptTaskFileValue($task, $propertyId, $value)
+	{
+		$isMultiple = is_array($value);
+		$values = $isMultiple ? $value : [$value];
+		$fileIds = array_filter($values, static fn($singleValue) => is_numeric($singleValue));
+
+		// the context is a read of the task plus a parse of its controls, so it is built only for a value
+		// that names files at all
+		$acceptedIds = [];
+		if ($fileIds)
+		{
+			$taskContext = TaskFileUploaderContext::createFromTask(
+				(int)($task['ID'] ?? 0),
+				static::CONTROLS_PREFIX . $propertyId
+			);
+
+			// the whole value at once: a multiple field would otherwise pay a select per value of it
+			$acceptedIds = $taskContext === null
+				? []
+				: array_flip(Bizproc\BaseType\File::acceptTaskFileIds($taskContext, $fileIds))
+			;
+		}
+
+		$result = [];
+		foreach ($values as $singleValue)
+		{
+			if (CBPActivity::isExpression($singleValue))
+			{
+				$result[] = $singleValue;
+			}
+			elseif (is_numeric($singleValue) && isset($acceptedIds[(int)$singleValue]))
+			{
+				$result[] = (int)$singleValue;
+			}
+		}
+
+		return $isMultiple ? $result : ($result[0] ?? null);
 	}
 
 	protected static function validateTaskEventParameters($arTask, $eventParameters)

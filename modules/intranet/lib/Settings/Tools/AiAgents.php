@@ -20,7 +20,7 @@ final class AiAgents extends Tool
 	public function isAvailable(): bool
 	{
 		return ModuleManager::isModuleInstalled('bizproc')
-			&& \Bitrix\Main\Config\Option::get('bizproc', 'feature_ai_agents', 'N') === 'Y';
+			&& \Bitrix\Main\Config\Feature::isEnabled(\Bitrix\Bizproc\Public\Feature\AiAgent\AiAgentSectionFlag::class);
 	}
 
 	public function getSubgroupsIds(): array
@@ -41,5 +41,10 @@ final class AiAgents extends Tool
 	public function getLeftMenuPath(): ?string
 	{
 		return '/bizproc/ai/agents/';
+	}
+
+	public function getSettingsPath(): ?string
+	{
+		return SITE_DIR . 'bizproc/ai/agents/';
 	}
 }

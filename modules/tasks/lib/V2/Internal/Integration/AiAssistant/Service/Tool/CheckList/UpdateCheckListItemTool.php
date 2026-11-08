@@ -33,7 +33,7 @@ class UpdateCheckListItemTool extends BaseTool
 
 	public function getDescription(): string
 	{
-		return 'Updates the name or order of an existing checklist item.';
+		return 'Updates the name, order, or completion status of an existing checklist item';
 	}
 
 	protected function execute(int $userId, ...$args): string

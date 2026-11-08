@@ -24,6 +24,7 @@ final class CommonUserDto extends Dto
 		public ?bool $isCollaber = null,
 		public ?bool $isExtranet = null,
 		public ?bool $isGuest = null,
+		public ?bool $isSystemUser = null,
 		public ?string $personalMobile = null,
 		public ?string $personalPhone = null,
 		public ?string $lastActivityDate = null,

@@ -57,6 +57,9 @@ class Xscan extends Controller
 						case '!m':
 							$filter[] = ['!%SRC' => '/bitrix/modules'];
 							break;
+						case '!mod':
+							$filter[] = ['!=MESSAGE' => '[201] file was modified'];
+							break;
 						case 'pop':
 							$filter[] = ['LOGIC' => 'OR',
 								['%SRC' => '/prolog_after.php'], ['%SRC' => '/index.php'],

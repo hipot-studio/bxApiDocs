@@ -24,11 +24,21 @@ class Synchronizer extends Engine\Controller
 
 	public function getDefaultSettingsAction()
 	{
+		if (!$this->checkReadPermission())
+		{
+			return null;
+		}
+
 		return $this->getSettings();
 	}
 
 	public function setDefaultSettingsAction()
 	{
+		if (!$this->checkModifyPermission())
+		{
+			return null;
+		}
+
 		$r = new Result();
 		$manager = new \Bitrix\Sale\Rest\Synchronization\Manager();
 
@@ -91,6 +101,31 @@ class Synchronizer extends Engine\Controller
 
 			return null;
 		}
+	}
+
+	protected function checkReadPermission(): bool
+	{
+		return $this->checkSalePermission($this->getSalePermission() > 'D');
+	}
+
+	protected function checkModifyPermission(): bool
+	{
+		return $this->checkSalePermission($this->getSalePermission() >= 'W');
+	}
+
+	protected function getSalePermission(): string
+	{
+		return (string)$GLOBALS['APPLICATION']->GetGroupRight('sale');
+	}
+
+	private function checkSalePermission(bool $isAllowed): bool
+	{
+		if (!$isAllowed)
+		{
+			$this->addError(new Error('Access Denied'));
+		}
+
+		return $isAllowed;
 	}
 
 	public function isActiveAction()

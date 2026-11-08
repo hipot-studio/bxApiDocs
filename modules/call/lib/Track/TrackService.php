@@ -240,7 +240,7 @@ final class TrackService
 		{
 			(new CloudRecordAnalytics($call))
 				->sendTelemetry(
-					source: null,
+					source: $track,
 					status: 'error',
 					errorCode: 'unsupported_mime_type',
 					event: 'cloud_track_processing_error',
@@ -487,7 +487,7 @@ final class TrackService
 		{
 			$log && $logger->error("Ignoring track:{$track->getUrl()}, track #{$track->getExternalTrackId()}. Call #{$track->getCallId()} was too short.");
 
-			$error = new CallAIError(CallAIError::AI_RECORD_TOO_SHORT);
+			$error = new CallAIError(CallAIError::RECORD_TOO_SHORT);
 
 
 			$aiService = AI\CallAIService::getInstance();

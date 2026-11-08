@@ -41,13 +41,7 @@ class TaskProvider extends BaseProvider
 
 	public function doSearch(SearchQuery $searchQuery, Dialog $dialog): void
 	{
-		$dialog->addItems(
-			$this->getTaskItems([
-				'searchQuery' => $searchQuery->getQuery(),
-				'parentId' => $this->getParentId($dialog),
-				'excludeIds' => $this->getExcludeIds($dialog),
-			])
-		);
+		$dialog->addItems($this->getTaskItems($this->getSearchOptions($searchQuery, $dialog)));
 	}
 
 	public function fillDialog(Dialog $dialog): void
@@ -69,6 +63,16 @@ class TaskProvider extends BaseProvider
 		$this->addTab($dialog);
 	}
 
+	protected function getSearchOptions(SearchQuery $searchQuery, Dialog $dialog): array
+	{
+		return [
+			'searchQuery' => $searchQuery->getQuery(),
+			'parentId' => $this->getParentId($dialog),
+			'excludeIds' => $this->getExcludeIds($dialog),
+			'editableOnly' => $this->isEditableOnly($dialog),
+		];
+	}
+
 	protected function fillWithRecentItems(Dialog $dialog): void
 	{
 		if ($dialog->getRecentItems()->count() <= 0)
@@ -76,11 +80,14 @@ class TaskProvider extends BaseProvider
 			return;
 		}
 
-		$tasks = $this->getTasks([
+		$options = [
 			'ids' => $this->getRecentItemsIds($dialog),
 			'parentId' => $this->getParentId($dialog),
 			'excludeIds' => $this->getExcludeIds($dialog),
-		]);
+			'editableOnly' => $this->isEditableOnly($dialog),
+		];
+
+		$tasks = $this->filterBrowsableTasks($this->getTasks($options), $options);
 		foreach ($dialog->getRecentItems()->getAll() as $item)
 		{
 			/** @var RecentItem $item */
@@ -105,6 +112,29 @@ class TaskProvider extends BaseProvider
 
 			$dialog->addItem(static::makeItem($itemId, $title, $supertitle));
 		}
+	}
+
+	/**
+	 * The extension point for narrowing the tasks a dialog offers to browse. Here it covers the
+	 * recent items only: doSearch() and fillDialog() build their lists through getTaskItems(), which
+	 * offers everything the filter of the request returned. An heir that has to narrow those lists
+	 * too reads them itself and passes them through this same seam, as TaskWithIdProvider does.
+	 *
+	 * Dialogs that share an entity may differ in the server rules on a selectable task, so the
+	 * narrowing is not applied to all of them at once: it is switched on by the options of the entity,
+	 * which reach the seam through $options together with the options the tasks were read by.
+	 *
+	 * Must not be called from getSelectedItems(), getTaskItems() or getTasks(): these serve the
+	 * preselected items, which stay in the dialog regardless of what an heir filters by. Calling
+	 * the seam from there would silently drop already linked tasks from the selection.
+	 *
+	 * @param array<int, array> $tasks Tasks keyed by id.
+	 * @param array $options Options the tasks were read by, including the switches of the narrowing.
+	 * @return array<int, array>
+	 */
+	protected function filterBrowsableTasks(array $tasks, array $options = []): array
+	{
+		return $tasks;
 	}
 
 	protected function addTab(Dialog $dialog): void
@@ -202,7 +232,14 @@ class TaskProvider extends BaseProvider
 			&& is_numeric($options['parentId'])
 		)
 		{
-			$filter['PARENT_ID'] = [$options['parentId'], 0];
+			// A task without a parent is stored both as PARENT_ID = 0 and as PARENT_ID IS NULL, and an
+			// IN() list never matches NULL, so the NULL half gets an OR branch of its own (a false value
+			// of a number field is what the filter builder turns into IS NULL).
+			$filter['::SUBFILTER-PARENT_ID'] = [
+				'::LOGIC' => 'OR',
+				'::SUBFILTER-PARENT_ID-VALUES' => ['PARENT_ID' => [$options['parentId'], 0]],
+				'::SUBFILTER-PARENT_ID-NULL' => ['PARENT_ID' => false],
+			];
 		}
 
 		if (
@@ -305,6 +342,39 @@ class TaskProvider extends BaseProvider
 		}
 
 		return $excludeIds;
+	}
+
+	protected function getGroupId(Dialog $dialog): int
+	{
+		$groupId = 0;
+		$entity = $dialog->getEntity(static::$entityId);
+
+		if ($entity !== null)
+		{
+			$taskOptions = $entity->getOptions();
+
+			if (isset($taskOptions['groupId']) && is_numeric($taskOptions['groupId']))
+			{
+				$groupId = (int)$taskOptions['groupId'];
+			}
+		}
+
+		return $groupId;
+	}
+
+	protected function isEditableOnly(Dialog $dialog): bool
+	{
+		$editableOnly = false;
+		$entity = $dialog->getEntity(static::$entityId);
+
+		if ($entity !== null)
+		{
+			$taskOptions = $entity->getOptions();
+
+			$editableOnly = !empty($taskOptions['editableOnly']);
+		}
+
+		return $editableOnly;
 	}
 
 	protected static function getSupertitleByStatus(int $status): ?string

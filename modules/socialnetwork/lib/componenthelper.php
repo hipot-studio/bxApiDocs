@@ -3524,6 +3524,16 @@ class ComponentHelper
 		return $allowToAll;
 	}
 
+	/**
+	 * Marker of the post form accepting a recipient set chosen by the caller.
+	 * Modules are released independently, so a neighbouring module tells the feature apart
+	 * by the existence of this method, not by the signature of the form init action.
+	 */
+	public static function isPostFormPreselectedRecipientsSupported(): bool
+	{
+		return true;
+	}
+
 	public static function getLivefeedStepper()
 	{
 		$res = array();
@@ -4427,6 +4437,46 @@ class ComponentHelper
 					}
 				}
 				else
+				{
+					$resultFields['ERROR_MESSAGE'] = Loc::getMessage('SONET_HELPER_NO_PERMISSIONS');
+				}
+			}
+		}
+
+		if (
+			!empty($newUserIdList)
+			&& !$extranetUser
+			&& Loader::includeModule('extranet')
+			&& !\CExtranet::isExtranetAdmin()
+		)
+		{
+			$targetUserIdList = array_values(array_unique(array_filter(
+				$newUserIdList,
+				static fn(int $userId): bool => $userId > 0,
+			)));
+			$newExtranetUserIdList = [];
+			$extranetUserGroupId = (int)\CExtranet::getExtranetUserGroupID();
+
+			if ($extranetUserGroupId > 0 && !empty($targetUserIdList))
+			{
+				$relationResult = \Bitrix\Main\UserGroupTable::getList([
+					'filter' => [
+						'=GROUP_ID' => $extranetUserGroupId,
+						'@USER_ID' => $targetUserIdList,
+					],
+					'select' => [ 'USER_ID' ],
+				]);
+				while ($relationFields = $relationResult->fetch())
+				{
+					$newExtranetUserIdList[] = (int)$relationFields['USER_ID'];
+				}
+			}
+
+			if (!empty($newExtranetUserIdList))
+			{
+				$availableExtranetUserIdList = \CExtranet::getMyGroupsUsersSimple(\CExtranet::getExtranetSiteID());
+
+				if (!empty(array_diff($newExtranetUserIdList, $availableExtranetUserIdList)))
 				{
 					$resultFields['ERROR_MESSAGE'] = Loc::getMessage('SONET_HELPER_NO_PERMISSIONS');
 				}

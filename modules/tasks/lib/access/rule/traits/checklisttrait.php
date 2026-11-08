@@ -3,9 +3,12 @@
 
 namespace Bitrix\Tasks\Access\Rule\Traits;
 
+use Bitrix\Main\Access\AccessibleItem;
 use Bitrix\Tasks\Access\Model\ChecklistModel;
+use Bitrix\Tasks\Access\Model\TemplateModel;
 use Bitrix\Tasks\CheckList\Internals\CheckList;
 use Bitrix\Tasks\Internals\Task\MemberTable;
+use Bitrix\Tasks\V2\Internal\Entity\CheckList\Type;
 
 trait ChecklistTrait
 {
@@ -23,9 +26,38 @@ trait ChecklistTrait
 
 	/**
 	 * @param $params
+	 * @param AccessibleItem $item - task or template the checklist is checked against
 	 * @return ChecklistModel
 	 */
-	private function getModelFromParams($params): ChecklistModel
+	private function getModelFromParams($params, AccessibleItem $item): ChecklistModel
+	{
+		return $this->createModelFromParams($params)->setContext($this->resolveContext($item));
+	}
+
+	/**
+	 * @param ChecklistModel $checklist
+	 * @param AccessibleItem $item
+	 * @return bool
+	 */
+	private function isChecklistBoundToItem(ChecklistModel $checklist, AccessibleItem $item): bool
+	{
+		$entityId = $checklist->getEntityId();
+
+		if ($entityId > 0 && $entityId !== $item->getId())
+		{
+			$this->controller->addError(static::class, 'Incorrect checklist data');
+
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * @param $params
+	 * @return ChecklistModel
+	 */
+	private function createModelFromParams($params): ChecklistModel
 	{
 		if ($params instanceof ChecklistModel)
 		{
@@ -34,7 +66,8 @@ trait ChecklistTrait
 
 		if (is_array($params) && !$this->isList($params))
 		{
-			return ChecklistModel::createFromArray($params);
+			// a plain array reaches the rules from the transport, so it carries no trusted attributes
+			return ChecklistModel::createFromRequest($params);
 		}
 
 		if ($params instanceof CheckList)
@@ -48,6 +81,15 @@ trait ChecklistTrait
 		}
 
 		return new ChecklistModel();
+	}
+
+	/**
+	 * @param AccessibleItem $item
+	 * @return Type
+	 */
+	private function resolveContext(AccessibleItem $item): Type
+	{
+		return ($item instanceof TemplateModel) ? Type::Template : Type::Task;
 	}
 
 	/**

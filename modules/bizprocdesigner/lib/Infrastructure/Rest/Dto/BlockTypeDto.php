@@ -16,7 +16,8 @@ use Bitrix\Rest\V3\Dto\Dto;
  * There is no separate detail resource, because BlockTypeDetail is itself a composition around
  * BlockType: reading a block answers with the same resource, flat, with the detail parts filled in.
  * In the listing they stay uninitialized and are absent from the payload instead of weighing every
- * catalog entry down with empty keys.
+ * catalog entry down with empty keys. The hasSettings flag travels the other way: only the listing
+ * carries it, because that is where the schema itself is not answered.
  *
  * Property order mirrors the domain: BlockType::toArray() first, then the remaining keys of
  * BlockTypeDetail::toArray(). The whole resource is read-only - the agent reads the catalog, never
@@ -31,10 +32,22 @@ class BlockTypeDto extends Dto
 
 	public ?string $presetId;
 
+	#[Description('Whether the block has an editable settings schema. Comes only in the catalog listing.')]
+	public bool $hasSettings;
+
 	#[Description('Settings schema of the block. Comes only when a single block is read.')]
 	public array $settings;
 
-	#[Description('Output properties of the block. Comes only when a single block that has any is read.')]
+	#[Description(
+		'Setting names whose value may only be carried over from the published template.'
+		. ' Comes only when a single block is read.'
+	)]
+	public array $carriedSettings;
+
+	#[Description('Cross-setting rules of the block. Comes only when a single block is read.')]
+	public array $settingConstraints;
+
+	#[Description('Output properties of the block. Comes only when a single block is read.')]
 	public array $returnFields;
 
 	/** Untyped on purpose: the keys are setting type names, so there is no fixed schema. */

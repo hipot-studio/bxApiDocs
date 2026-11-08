@@ -521,12 +521,25 @@ class BizprocWorkflowInstances extends \CBitrixComponent
 		$action = $this->request->getPost('action');
 		$idFromAction = $this->request->getPost('id');
 
+		// the handler runs on every render of the page, a plain GET included: a render carrying nothing
+		// to stop is over before check_bitrix_sessid(), whose first call writes the fixed session id
+		if (!$gridIds && !$action)
+		{
+			return;
+		}
+
 		$killIds = [];
 		if (!empty($gridIds) && check_bitrix_sessid() && $this->isAdmin())
 		{
 			$killIds = (array)$gridIds;
 		}
-		elseif (!empty($action) && $action === 'deleteRow' && !empty($idFromAction) && check_bitrix_sessid())
+		elseif (
+			!empty($action)
+			&& $action === 'deleteRow'
+			&& !empty($idFromAction)
+			&& check_bitrix_sessid()
+			&& $this->isAdmin()
+		)
 		{
 			$killIds[] = $idFromAction;
 		}

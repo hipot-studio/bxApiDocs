@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Validator;
 
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\GraphErrorCode;
-use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Enum\RequestSource;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Error\GraphError;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Result;
@@ -20,9 +19,10 @@ use Bitrix\Main\Web\Json;
  * code
  * ({@see \Bitrix\BizprocDesigner\Infrastructure\Rest\Controller\AbstractAgentRestController::validateGraphLimits()}).
  *
- * Applied to the external agent only: the numbers are calibrated against templates of a test portal, and a
- * false refusal costs an editor user more than it costs an agent - extending them to Marta is a product
- * decision with a calibration of its own.
+ * Applied under the profile of the external contour only ({@see ValidationProfile::enforcesGraphLimits()}): the
+ * numbers are calibrated against templates of a test portal, and a false refusal costs an editor user more than
+ * it costs an agent - extending them to the internal assistant is a product decision with a calibration of its
+ * own.
  *
  * A refusal names both the bound and what was submitted: a write replaces the whole graph, so an agent not
  * told by how much it overshot has nothing to shrink towards.
@@ -68,9 +68,9 @@ final class GraphLimitsValidator
 	 * graph already refused, and a graph over the settings bound would otherwise answer with a problem per
 	 * oversized value on top of it.
 	 */
-	public function validate(mixed $blocks, mixed $connections, RequestSource $source): Result
+	public function validate(mixed $blocks, mixed $connections, ValidationProfile $profile): Result
 	{
-		if ($source !== RequestSource::Rest)
+		if (!$profile->enforcesGraphLimits())
 		{
 			return new Result();
 		}

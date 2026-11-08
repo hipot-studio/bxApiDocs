@@ -52,11 +52,15 @@ class AddService
 	}
 
 	/**
-	 * @return array{Entity\Task, array}
+	 * @return array{Entity\Task, array, array}
 	 *
 	 * @throws TaskNotExistsException
 	 */
-	public function add(Entity\Task $task, AddConfig $config): array
+	public function add(
+		Entity\Task $task,
+		AddConfig $config,
+		bool $deferSearchIndex = false,
+	): array
 	{
 		$this->loadMessages();
 
@@ -112,7 +116,10 @@ class AddService
 
 		$fullTaskData = $compatibilityRepository->getTaskData($fields['ID']);
 
-		(new AddSearchIndex())($fullTaskData);
+		if (!$deferSearchIndex)
+		{
+			(new AddSearchIndex())($fullTaskData);
+		}
 
 		(new CleanCache($config))($fullTaskData);
 
@@ -146,7 +153,7 @@ class AddService
 			throw new TaskNotExistsException();
 		}
 
-		return [$task, $fields];
+		return [$task, $fields, $fullTaskData];
 	}
 
 	private function loadMessages(): void

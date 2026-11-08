@@ -68,6 +68,11 @@ class Dynamic extends Kanban\Entity
 		return $this->factory->isStagesEnabled();
 	}
 
+	public function shouldShowFinalStagesWithDefaultFilter(): bool
+	{
+		return $this->factory->isStagesEnabled();
+	}
+
 	public function isCustomPriceFieldsSupported(): bool
 	{
 		return false;
@@ -188,22 +193,8 @@ class Dynamic extends Kanban\Entity
 
 	protected function doGetDataToCalculateTotalSums(string $fieldSum, array $filter, array $runtime): array
 	{
-		if ($this->factory->isStagesEnabled())
-		{
-			ItemDataProvider::processStageSemanticFilter($filter, $filter);
-		}
-		unset($filter[ItemDataProvider::FIELD_STAGE_SEMANTIC]);
-
-		$userPermissions = Container::getInstance()->getUserPermissions();
-		$filter = $userPermissions->itemsList()->applyAvailableItemsFilter(
-			$filter,
-			[
-				(new \Bitrix\Crm\Category\PermissionEntityTypeHelper($this->getTypeId()))->getPermissionEntityTypeForCategory($this->getCategoryId())
-			]
-		);
-
 		$queryParameters = [
-			'filter' => $filter,
+			'filter' => $this->prepareTotalSumsFilter($filter),
 			'select' => [
 				$this->getStageFieldName(),
 				new ExpressionField($fieldSum, 'SUM(%s)', Item::FIELD_NAME_OPPORTUNITY_ACCOUNT),
@@ -224,6 +215,24 @@ class Dynamic extends Kanban\Entity
 		}
 
 		return $data;
+	}
+
+	protected function prepareTotalSumsFilter(array $filter): array
+	{
+		if ($this->factory->isStagesEnabled())
+		{
+			ItemDataProvider::processStageSemanticFilter($filter, $filter);
+		}
+		unset($filter[ItemDataProvider::FIELD_STAGE_SEMANTIC]);
+
+		$userPermissions = Container::getInstance()->getUserPermissions();
+
+		return $userPermissions->itemsList()->applyAvailableItemsFilter(
+			$filter,
+			[
+				(new \Bitrix\Crm\Category\PermissionEntityTypeHelper($this->getTypeId()))->getPermissionEntityTypeForCategory($this->getCategoryId())
+			]
+		);
 	}
 
 	public function fillStageTotalSums(array $filter, array $runtime, array &$stages): void

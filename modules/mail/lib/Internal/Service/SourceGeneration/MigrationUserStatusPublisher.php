@@ -20,7 +20,7 @@ class MigrationUserStatusPublisher
 
 	public function publish(int $mailboxId, string $operationId, bool $notify = false): void
 	{
-		$status = $this->statusProvider->get($mailboxId, $operationId);
+		$status = $this->statusProvider->getForDisplay($mailboxId, $operationId);
 		if ($status === null || $status->visibility === 'hidden')
 		{
 			return;
@@ -30,7 +30,7 @@ class MigrationUserStatusPublisher
 		if (Loader::includeModule('pull'))
 		{
 			\CPullWatch::addToStack(
-				'mail_mailbox_' . $mailboxId,
+				['mail_mailbox_' . $mailboxId, 'mail_mailbox_migration_' . $mailboxId],
 				[
 					'module_id' => 'mail',
 					'command' => self::COMMAND,
@@ -39,11 +39,14 @@ class MigrationUserStatusPublisher
 			);
 		}
 
-		if ($notify)
+		if ($notify && in_array($status->publicStatus, [
+			'running', 'waiting', 'blocked', 'switching', 'done', 'cancelled',
+		], true))
 		{
 			(new MailboxMigrationNotificationMessage(
 				mailboxId: $mailboxId,
 				status: (string)$status->publicStatus,
+				operationId: $operationId,
 			))->send('mail_migration_notification');
 		}
 	}

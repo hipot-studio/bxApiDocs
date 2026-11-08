@@ -13,6 +13,9 @@ class Analytics
 	public const STATUS_SUCCESS = 'success';
 	public const STATUS_ERROR = 'error';
 
+	// c_element of the files section link built by Collab\Link\LinkManager; mirrors the feature-menu JS config.
+	public const ELEMENT_FILES_BUTTON = 'files_button';
+
 	public static function getInstance(): static
 	{
 		if (!isset(static::$instances[static::class]))

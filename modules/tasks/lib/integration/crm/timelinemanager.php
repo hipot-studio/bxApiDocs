@@ -101,6 +101,11 @@ class TimeLineManager
 			return $this;
 		}
 
+		if ($this->taskRepository->getBindings()->isEmpty())
+		{
+			return $this;
+		}
+
 		$this->eventsController->addEvent(new OnTaskExpired($this->taskRepository->getTask(), $this->userId));
 
 		return $this;

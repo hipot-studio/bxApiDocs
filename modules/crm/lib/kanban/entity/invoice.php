@@ -72,7 +72,7 @@ class Invoice extends Entity
 		];
 	}
 
-	public function getGridFilter(?string $filterId = null): array
+	public function getGridFilter(?string $filterId = null, array $extraFieldIds = []): array
 	{
 		$filter = [];
 
@@ -128,6 +128,19 @@ class Invoice extends Entity
 			],
 			$columns
 		);
+		foreach ($this->getAllowedExtraFilterFieldIds($extraFieldIds) as $fieldName)
+		{
+			if (isset($filter[$fieldName]))
+			{
+				continue;
+			}
+
+			$filterField = $this->getFilter()->getField($fieldName);
+			if ($filterField)
+			{
+				$filter[$fieldName] = $filterField->toArray();
+			}
+		}
 
 		return $filter;
 	}

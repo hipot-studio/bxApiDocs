@@ -6,6 +6,7 @@ use Bitrix\Main\Data\Cache;
 use Bitrix\Main\ORM\Fields\CryptoField;
 use Bitrix\Main\Security\Cipher;
 use Bitrix\Main\Security\SecurityException;
+use Bitrix\StaffTrack\Feature;
 use Bitrix\StaffTrack\Internal\Geo\GeohashKey;
 use Bitrix\StaffTrack\Internal\Repository\AddressRepository;
 
@@ -17,6 +18,11 @@ class AddressCache
 
 	public static function get(string $geohash): ?string
 	{
+		if (!Feature::isGeoEncryptionAvailable())
+		{
+			return null;
+		}
+
 		$cacheId = self::getCacheId($geohash);
 		$cache = Cache::createInstance();
 
@@ -49,11 +55,21 @@ class AddressCache
 
 	public static function set(string $geohash, string $address): void
 	{
+		if (!Feature::isGeoEncryptionAvailable())
+		{
+			return;
+		}
+
 		self::setByKey(GeohashKey::hash($geohash), $address);
 	}
 
 	public static function setByKey(string $geohashKey, string $address): void
 	{
+		if (!Feature::isGeoEncryptionAvailable())
+		{
+			return;
+		}
+
 		$cacheId = 'addr_' . $geohashKey;
 		$cache = Cache::createInstance();
 
@@ -76,9 +92,9 @@ class AddressCache
 
 	private static function encryptAddress(string $address): ?string
 	{
-		if ($address === '' || !CryptoField::cryptoAvailable())
+		if ($address === '')
 		{
-			return $address;
+			return null;
 		}
 
 		try

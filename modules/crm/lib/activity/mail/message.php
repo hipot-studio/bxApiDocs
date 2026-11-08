@@ -9,10 +9,6 @@ use Bitrix\Crm\Item;
 use Bitrix\Crm\Security\PermissionToken;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\ArgumentException;
-use Bitrix\Mail\Internals\UserSignatureTable;
-use Bitrix\Mail\Service\SharedSignature\AssignmentResolver;
-use Bitrix\Mail\Service\Signature\SignatureTemplateResolver;
-use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -249,81 +245,45 @@ class Message
 		return $contact;
 	}
 
-	protected static function getGeneralSignature()
-	{
-		static $generalSignature;
-
-		if (is_null($generalSignature))
-		{
-			global $USER;
-			$userId = $USER->getId();
-
-			$signatureList = UserSignatureTable::getList([
-				'select' => ["SIGNATURE"],
-				'order' => ['ID' => 'desc'],
-				'filter' => [
-					'=SENDER' => '',
-					'USER_ID' => $userId,
-				],
-				'limit' => 1,
-			])->fetchAll();
-
-			$generalSignature = $signatureList[0]['SIGNATURE'] ?? '';
-		}
-
-		return $generalSignature;
-	}
-
+	/**
+	 * @deprecated Signatures no longer belong to CRM: the mail module answers the core event
+	 *             OnMailSenderListBuild and hands the signature over already picked for the sender.
+	 *             This method stays only for callers outside the monorepo and works through that
+	 *             path, so for a sender of the current user it returns the same signature as every
+	 *             other consumer.
+	 *
+	 *             Behaviour differs in one case. An address that is not among the senders available
+	 *             to the current user now yields an empty string; it used to yield the general
+	 *             signature of the user - the one bound to no sender at all. A signature is resolved
+	 *             for a specific sender now, and an address nobody can send from is not one, so
+	 *             there is nothing to resolve it against.
+	 *
+	 *             To get the same data the new way, read the sender list with its signatures
+	 *             (@see below): every sender carries the signature picked for it. An address missing
+	 *             from that list has no signature by design.
+	 * @see \Bitrix\Main\Mail\Sender::prepareUserMailboxesWithSignatures() for the whole sender
+	 *      list with signatures, or self::getSenderList() for the CRM plain text shape.
+	 */
 	public static function getSignature($email, $name)
 	{
-		$userId = CurrentUser::get()->getId();
-
-		$signatureList = UserSignatureTable::getList([
-			'select' => ["SIGNATURE"],
-			'order' => ['ID' => 'desc'],
-			'filter' => [
-				'=SENDER' => (trim($name).' <'.trim($email).'>'),
-				'=USER_ID' => $userId,
-			],
-			'limit' => 1,
-		])->fetchAll();
-
-		if (isset($signatureList[0]['SIGNATURE']))
-		{
-			$signature = $signatureList[0]['SIGNATURE'];
-		}
-		else
-		{
-			// Old signature format
-			$signatureList = UserSignatureTable::getList([
-				'select' => ["SIGNATURE"],
-				'order' => ['ID' => 'desc'],
-				'filter' => [
-					'=SENDER' => trim($email),
-					'=USER_ID' => $userId,
-				],
-				'limit' => 1,
-			])->fetchAll();
-		}
-
-		$signature ??= $signatureList[0]['SIGNATURE'] ?? self::getGeneralSignature();
-
-		return self::resolveSignatureTemplate(
-			(string)$signature,
-			(int)$userId,
+		$context = self::getSenderContext();
+		$senderKey = self::findSenderKey(
+			(array)($context['senders'] ?? []),
 			trim((string)$email),
 			trim((string)$name),
 		);
+
+		return self::resolveSenderSignature($context, $senderKey);
 	}
 
 	public static function getSenderList(): array
 	{
-		$mailboxes = Sender::prepareUserMailboxes();
+		$context = self::getSenderContext();
+		$signaturesById = self::indexSignaturesById($context);
+		$signaturesBySender = (array)($context['signaturesBySender'] ?? []);
 		$senders = [];
-		$userId = (int)CurrentUser::get()->getId();
-		$signatureMap = self::loadSignatureMap($userId);
 
-		foreach ($mailboxes as $sender)
+		foreach ((array)($context['senders'] ?? []) as $sender)
 		{
 			$builtContact = self::buildContact([
 				'email' => $sender['email'] ?? '',
@@ -331,18 +291,12 @@ class Message
 				'id' => $sender['userId'] ?? 0,
 				'isUser' => true,
 			]);
-			$signature = self::resolveSignature(
-				$signatureMap,
-				(string)($sender['email'] ?? ''),
-				(string)($sender['name'] ?? ''),
+			$signature = self::resolveSelectedSignatureText(
+				(string)($sender['formated'] ?? ''),
+				$signaturesById,
+				$signaturesBySender,
 			);
-			$signature = self::resolveSignatureTemplate(
-				$signature,
-				$userId,
-				trim((string)($sender['email'] ?? '')),
-				trim((string)($sender['name'] ?? '')),
-			);
-			$builtContact['signature'] = Converter::htmlToText($signature);
+			$builtContact['signature'] = $signature === '' ? '' : Converter::htmlToText($signature);
 
 			$senders[] = $builtContact;
 		}
@@ -354,69 +308,135 @@ class Message
 	}
 
 	/**
-	 * @return array<string, string>
+	 * Modules are updated independently, so crm can reach a portal before the main version
+	 * that publishes the signature API. Without the core method the sender list is still built,
+	 * just without signatures.
+	 *
+	 * Drop this fallback together with hasCoreSignatureContext() and getPlainSenderList()
+	 * once the main version carrying prepareUserMailboxesWithSignatures() is delivered to clients.
+	 *
+	 * @return array<string, mixed>
 	 */
-	protected static function loadSignatureMap(int $userId): array
+	private static function getSenderContext(): array
 	{
-		$map = [];
-		$signatureList = UserSignatureTable::getList([
-			'select' => ['SENDER', 'SIGNATURE'],
-			'order' => ['ID' => 'desc'],
-			'filter' => ['=USER_ID' => $userId],
-		]);
-		while ($signature = $signatureList->fetch())
+		if (!static::hasCoreSignatureContext())
 		{
-			$key = AssignmentResolver::normalizeSenderKey((string)($signature['SENDER'] ?? ''));
-			if (!array_key_exists($key, $map))
-			{
-				$map[$key] = (string)($signature['SIGNATURE'] ?? '');
-			}
+			return ['senders' => static::getPlainSenderList()];
 		}
 
-		return $map;
+		return Sender::prepareUserMailboxesWithSignatures();
+	}
+
+	protected static function hasCoreSignatureContext(): bool
+	{
+		return method_exists(Sender::class, 'prepareUserMailboxesWithSignatures');
 	}
 
 	/**
-	 * @param array<string, string> $signatureMap
+	 * @return array<int, mixed>
 	 */
-	protected static function resolveSignature(array $signatureMap, string $email, string $name): string
+	protected static function getPlainSenderList(): array
 	{
-		$email = trim($email);
-		$name = trim($name);
-		if ($name !== '' && $email !== '')
+		return Sender::prepareUserMailboxes();
+	}
+
+	/**
+	 * @param array<string, mixed> $context sender list enriched with signatures
+	 */
+	private static function resolveSenderSignature(array $context, string $senderKey): string
+	{
+		return self::resolveSelectedSignatureText(
+			$senderKey,
+			self::indexSignaturesById($context),
+			(array)($context['signaturesBySender'] ?? []),
+		);
+	}
+
+	/**
+	 * @param array<string, mixed> $context
+	 * @return array<int, array<string, mixed>>
+	 */
+	private static function indexSignaturesById(array $context): array
+	{
+		$signaturesById = [];
+		foreach ((array)($context['signatures'] ?? []) as $signature)
 		{
-			$key = AssignmentResolver::normalizeSenderKey($name . ' <' . $email . '>');
-			if (array_key_exists($key, $signatureMap))
+			$id = is_array($signature) ? (int)($signature['id'] ?? 0) : 0;
+			if ($id > 0)
 			{
-				return $signatureMap[$key];
+				$signaturesById[$id] = $signature;
 			}
 		}
 
-		$key = AssignmentResolver::normalizeSenderKey($email);
-		if (array_key_exists($key, $signatureMap))
-		{
-			return $signatureMap[$key];
-		}
-
-		return $signatureMap[''] ?? '';
+		return $signaturesById;
 	}
 
-	protected static function resolveSignatureTemplate(
-		string $signature,
-		int $userId,
-		string $email,
-		string $name,
+	/**
+	 * Signature text the core preselected for the sender, with macros already resolved.
+	 *
+	 * @param array<int, array<string, mixed>> $signaturesById
+	 * @param array<string, mixed> $signaturesBySender
+	 */
+	private static function resolveSelectedSignatureText(
+		string $senderKey,
+		array $signaturesById,
+		array $signaturesBySender,
 	): string
 	{
-		if (!class_exists(SignatureTemplateResolver::class))
+		if ($senderKey === '')
 		{
-			return $signature;
+			return '';
 		}
 
-		static $templateResolver;
-		$templateResolver ??= new SignatureTemplateResolver();
+		$selectedId = (int)($signaturesBySender[$senderKey]['selectedSignatureId'] ?? 0);
+		$signature = $signaturesById[$selectedId] ?? null;
+		if (!is_array($signature))
+		{
+			return '';
+		}
 
-		return $templateResolver->resolve($signature, $userId, $email, $name);
+		$senderTexts = (array)($signature['senderTexts'] ?? []);
+
+		return (string)($senderTexts[$senderKey] ?? $signature['signature'] ?? '');
+	}
+
+	/**
+	 * @param array<int, mixed> $senders
+	 */
+	private static function findSenderKey(array $senders, string $email, string $name): string
+	{
+		if ($email === '')
+		{
+			return '';
+		}
+
+		$fallbackKey = '';
+		foreach ($senders as $sender)
+		{
+			if (!is_array($sender))
+			{
+				continue;
+			}
+
+			$senderEmail = trim((string)($sender['email'] ?? ''));
+			$key = (string)($sender['formated'] ?? '');
+			if ($key === '' || mb_strtolower($senderEmail) !== mb_strtolower($email))
+			{
+				continue;
+			}
+
+			if (trim((string)($sender['name'] ?? '')) === $name)
+			{
+				return $key;
+			}
+
+			if ($fallbackKey === '')
+			{
+				$fallbackKey = $key;
+			}
+		}
+
+		return $fallbackKey;
 	}
 
 	/**

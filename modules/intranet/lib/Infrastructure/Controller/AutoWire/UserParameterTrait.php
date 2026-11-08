@@ -43,6 +43,7 @@ trait UserParameterTrait
 				'LOGIN',
 				'EMAIL',
 				'LAST_LOGIN',
+				'PERSONAL_PHOTO',
 				'EXTERNAL_AUTH_ID',
 			]);
 	}

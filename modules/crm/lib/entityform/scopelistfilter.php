@@ -15,6 +15,14 @@ final class ScopeListFilter extends \Bitrix\Ui\EntityForm\ScopeListFilter
 
 	private ?Factory $factory;
 
+	public function prepareEntityEditorFilter(string $entityTypeId, bool $isAdminForEntity, Scope $scope): array
+	{
+		$filter = parent::prepareEntityEditorFilter($entityTypeId, $isAdminForEntity, $scope);
+		$filter['=CATEGORY'] = 'crm';
+
+		return $filter;
+	}
+
 	public function prepareFilter(string $entityTypeId, bool $isAdminForEntity, bool $excludeEmptyAccessCode, Scope $scope): array
 	{
 		$this->factory = Container::getInstance()->getFactory($this->getCrmEntityTypeIdByEntityTypeId($entityTypeId));

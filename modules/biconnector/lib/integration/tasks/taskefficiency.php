@@ -36,7 +36,7 @@ class TaskEfficiency extends Dataset
 
 	protected function getTableDescriptionFull(): string
 	{
-		return $this->getMessage('TASK_EFFICIENCY_TABLE_DESCRIPTION_FULL', '');
+		return $this->getMessage('TASK_EFFICIENCY_TABLE_DESCRIPTION_FULL_MSGVER_1', '');
 	}
 
 	protected function onBeforeEvent(): Result

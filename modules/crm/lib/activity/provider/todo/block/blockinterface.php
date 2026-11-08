@@ -4,6 +4,7 @@ namespace Bitrix\Crm\Activity\Provider\ToDo\Block;
 
 use Bitrix\Crm\Activity\Provider\ToDo\OptionallyConfigurable;
 use Bitrix\Crm\Activity\Provider\ToDo\SaveConfig;
+use Bitrix\Main\Result;
 
 interface BlockInterface
 {
@@ -16,4 +17,5 @@ interface BlockInterface
 	public function prepareEntity(OptionallyConfigurable $entity, bool $skipActiveSectionCheck = false): void;
 	public function getOptions(OptionallyConfigurable $entity): array;
 	public function prepareEntityBefore(OptionallyConfigurable $entity): SaveConfig;
+	public function commitDeferredActions(OptionallyConfigurable $entity): Result;
 }

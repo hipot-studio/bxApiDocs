@@ -4,6 +4,8 @@ namespace Bitrix\Crm\EntityForm;
 
 use Bitrix\Crm\Entity\EntityEditorOptionParser;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Ui\EntityForm\Scope;
 
 class ScopeAccess extends \Bitrix\Ui\EntityForm\ScopeAccess
@@ -34,6 +36,12 @@ class ScopeAccess extends \Bitrix\Ui\EntityForm\ScopeAccess
 	}
 
 	/**
+	 * Not a path of the common card views: every live scope operation of a CRM card goes through
+	 * {@see isAdminForEntityTypeId()}, and the parent methods that would reach this one - `canUpdate()`
+	 * and `canAddByEntityTypeId()` - are overridden here. It stays on the global check on purpose: it
+	 * names no card, so the contextual right of one cannot answer for it, while dropping the override
+	 * would hand the answer to the permissive default of the parent.
+	 *
 	 * @return bool
 	 */
 	public function canAdd(): bool
@@ -78,11 +86,19 @@ class ScopeAccess extends \Bitrix\Ui\EntityForm\ScopeAccess
 		return true;
 	}
 
+	/**
+	 * Not a path of the common card views either, for the same reason as {@see canAdd()}: the parent
+	 * `isAdminForEntityTypeId()` that would reach it is overridden here.
+	 */
 	public function isAdmin(): bool
 	{
 		return Container::getInstance()->getUserPermissions($this->userId)->isAdmin();
 	}
 
+	/**
+	 * The live contextual entry of the surface: every scope operation of the CRM card reaches it, and
+	 * the card is named by the option name the scope was saved under ("deal_details_C21").
+	 */
 	public function isAdminForEntityTypeId(string $entityTypeId): bool
 	{
 		$parseResult = $this->editorOptionParser->parse($entityTypeId);
@@ -93,7 +109,11 @@ class ScopeAccess extends \Bitrix\Ui\EntityForm\ScopeAccess
 
 		return Container::getInstance()
 			->getUserPermissions($this->userId)
-			->isAdminForEntity($parseResult->entityTypeId(), $parseResult->categoryId());
+			->configuration()
+			->canManageCommonViews(
+				ConfigurationCallSite::ScopeAccess,
+				ConfigurationScope::ofEntityType($parseResult->entityTypeId(), $parseResult->categoryId()),
+			);
 	}
 
 	public function canUseOnAddOnUpdateSegregation(): bool

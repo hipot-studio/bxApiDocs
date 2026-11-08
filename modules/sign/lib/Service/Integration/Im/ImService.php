@@ -8,7 +8,9 @@ use Bitrix\Main;
 use Bitrix\Sign\Contract\Chat\GroupChatMessage;
 use Bitrix\Sign\Contract\Chat\Message\HasAnnulledCount;
 use Bitrix\Sign\Contract\Chat\Message\HasInitiator;
+use Bitrix\Sign\Contract\Chat\Message\HasMemberKey;
 use Bitrix\Sign\Contract\Chat\Message\HasRecipient;
+use Bitrix\Sign\Contract\Chat\Message\HasUserMessage;
 use Bitrix\Sign\Contract\Chat\Message;
 use Bitrix\Sign\Item\Member;
 use Bitrix\Sign\Service\Container;
@@ -18,19 +20,22 @@ use CIMDisk;
 
 class ImService
 {
-	private const IM_COMPONENT_ID = 'SignMessage';
+	public const IM_COMPONENT_ID = 'SignMessage';
 	private const DOC_TITLE_LENGTH_LIMIT = 50;
 
 	private MemberService $memberService;
 	private DocumentService $documentService;
+	private MessageTextSanitizer $messageTextSanitizer;
 
 	public function __construct(
 		?MemberService $memberService = null,
 		?DocumentService $documentService = null,
+		?MessageTextSanitizer $messageTextSanitizer = null,
 	)
 	{
 		$this->memberService = $memberService ?? Container::instance()->getMemberService();
 		$this->documentService = $documentService ?? Container::instance()->getDocumentService();
+		$this->messageTextSanitizer = $messageTextSanitizer ?? Container::instance()->getMessageTextSanitizer();
 	}
 
 	public function getById(int $id): ?Chat
@@ -223,7 +228,25 @@ class ImService
 			],
 		];
 
-		if ($member = $message->getMember())
+		// A top-level scalar is the only thing the chat indexes for lookup by parameter value, so the
+		// key that lets the domain find this card again lives here and not inside COMPONENT_PARAMS.
+		if ($message instanceof HasMemberKey && ($member = $message->getMember()) && $member->id !== null)
+		{
+			$params[HasMemberKey::MEMBER_KEY_PARAM] = $member->id;
+
+			// The card is born in the state the domain is in as it leaves. An invitation callback can
+			// arrive late or a second time - after this participant finished, or after the document
+			// itself ended - and the sweeps that mute cards have all run by then, so a card sent
+			// active would keep calling for an action nobody expects any more.
+			$params['COMPONENT_PARAMS'][InviteCardService::ACTION_COMPLETED_KEY] =
+				InviteCardService::isActionOver($member, $message->getDocument())
+			;
+		}
+
+		// Deliberately not reached by an invitation card: it carries a member only as the lookup key
+		// above, and never described its recipient in the block. Opening this branch for it would both
+		// change what the card shows and read the document twice on every card sent.
+		if (!($message instanceof HasMemberKey) && ($member = $message->getMember()))
 		{
 			$params['COMPONENT_PARAMS']['USER'] = $this->buildUserContext($member);
 		}
@@ -238,6 +261,16 @@ class ImService
 		if ($message instanceof HasInitiator)
 		{
 			$params['COMPONENT_PARAMS']['INITIATOR'] = $this->buildInitiatorContext($message);
+		}
+
+		if ($message instanceof HasUserMessage)
+		{
+			$userMessage = $this->messageTextSanitizer->toSafeBBCode($message->getUserMessage());
+
+			if ($userMessage !== '')
+			{
+				$params['COMPONENT_PARAMS']['USER_MESSAGE'] = $userMessage;
+			}
 		}
 
 		if ($message instanceof HasAnnulledCount && $message->getAnnulledCount() !== null)

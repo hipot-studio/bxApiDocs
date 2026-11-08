@@ -6,10 +6,14 @@ namespace Bitrix\Mail\Internal\Entity\MailTemplate;
 
 final readonly class PreparedTemplate
 {
+	/**
+	 * @param list<PreparedTemplateAttachment> $attachments
+	 */
 	public function __construct(
 		private TemplateReference $reference,
 		private string $subject,
 		private string $bodyHtml,
+		private array $attachments = [],
 	)
 	{
 	}
@@ -27,5 +31,13 @@ final readonly class PreparedTemplate
 	public function getBodyHtml(): string
 	{
 		return $this->bodyHtml;
+	}
+
+	/**
+	 * @return list<PreparedTemplateAttachment>
+	 */
+	public function getAttachments(): array
+	{
+		return $this->attachments;
 	}
 }

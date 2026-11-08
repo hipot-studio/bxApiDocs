@@ -38,6 +38,7 @@ class UserMapper
 			lid: $userData['LID'] ?? null,
 			languageId: $userData['LANGUAGE_ID'] ?? null,
 			personalMobile: $userData['PERSONAL_MOBILE'] ?? null,
+			personalGender: $userData['PERSONAL_GENDER'] ?? null,
 			workPosition: $userData['WORK_POSITION'] ?? null,
 			password: $userData['PASSWORD'] ?? null,
 			ufCrmEntity: $userData['UF_USER_CRM_ENTITY'] ?? null,
@@ -45,8 +46,11 @@ class UserMapper
 		);
 	}
 
-	public function convertToArray(User $user): array
+	public function convertToArray(User $user, ?array $fieldNames = null): array
 	{
+		$fieldMap = $fieldNames === null ? null : array_flip($fieldNames);
+		$isRequired = static fn(string $fieldName): bool => $fieldMap !== null && isset($fieldMap[$fieldName]);
+
 		$userData = [
 			'ID' => $user->getId() ?? null,
 			'LOGIN' => $user->getLogin() ?? null,
@@ -64,31 +68,40 @@ class UserMapper
 			'UF_USER_CRM_ENTITY' => $user->getUfCrmEntity() ?? null,
 		];
 
-		if ($user->getPhoneNumber())
+		if ($user->getPhoneNumber() || $isRequired('PHONE_NUMBER'))
 		{
 			$userData['PHONE_NUMBER'] = $user->getPhoneNumber();
 		}
 
-		if (!is_null($user->getGroupIds()))
+		if (!is_null($user->getGroupIds()) || $isRequired('GROUP_ID'))
 		{
 			$userData['GROUP_ID'] = $user->getGroupIds();
 		}
 
-		if ($user->getPersonalMobile())
+		if ($user->getPersonalMobile() || $isRequired('PERSONAL_MOBILE'))
 		{
 			$userData['PERSONAL_MOBILE'] = $user->getPersonalMobile();
 		}
 
-		if (!is_null($user->getActive()))
+		if (!is_null($user->getGender()))
+		{
+			$userData['PERSONAL_GENDER'] = $user->getGender();
+		}
+
+		if (!is_null($user->getActive()) || $isRequired('ACTIVE'))
 		{
 			$userData['ACTIVE'] = $user->getActive() ? 'Y' : 'N';
 		}
 
-		if (!is_null($user->getLastLogin()))
+		if (!is_null($user->getLastLogin()) || $isRequired('LAST_LOGIN'))
 		{
 			$userData['LAST_LOGIN'] = $user->getLastLogin();
 		}
 
+		if ($fieldMap !== null)
+		{
+			$userData = array_intersect_key($userData, $fieldMap);
+		}
 
 		return $userData;
 	}

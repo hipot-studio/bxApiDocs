@@ -19,6 +19,13 @@ class CSocNetNotifySchema
 		$arResult = [
 			"socialnetwork" => [
 				"NAME" => Loc::getMessage('SONET_NS_SONET_GROUP_TITLE' . $messageKeySuffix),
+				"PRODUCT_SOURCE" => [
+					"ID" => "socialnetwork",
+					"NAME" => Loc::getMessage('SONET_NS_PRODUCT_SOURCE_NAME'),
+					"DESCRIPTION" => Loc::getMessage('SONET_NS_PRODUCT_SOURCE_DESCRIPTION'),
+					"ICON" => ["TYPE" => "named", "VALUE" => "open_channels"],
+					"SORT" => 1100,
+				],
 				"NOTIFY" => [
 					"invite_group" => [
 						"NAME" => Loc::getMessage("SONET_NS_INVITE_GROUP_INFO_MSGVER_1" . $messageKeySuffix),

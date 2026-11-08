@@ -4,7 +4,7 @@
  * Bitrix Framework
  * @package bitrix
  * @subpackage main
- * @copyright 2001-2024 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main;
@@ -4772,94 +4772,25 @@ function SetMenuTypes($armt, $site = '', $description = false)
 	return COption::SetOptionString('fileman', "menutypes", addslashes(serialize($armt)), $description, $site);
 }
 
-function ParseFileContent($filesrc, $params = [])
+function ParseFileContent($filesrc)
 {
 	/////////////////////////////////////
 	// Parse prolog, epilog, title
 	/////////////////////////////////////
 	$filesrc = trim($filesrc);
 	$prolog = $epilog = '';
+	$phpChunks = str_contains($filesrc, '<?') ? PHPParser::getPhpChunks($filesrc) : [];
+	$isPhpPrologFound = false;
 
-	$php_doubleq = false;
-	$php_singleq = false;
-	$php_comment = false;
-	$php_star_comment = false;
-	$php_line_comment = false;
-
-	if (!empty($params["use_php_parser"]) && str_starts_with($filesrc, "<?"))
+	if (str_starts_with($filesrc, '<?') && !empty($phpChunks))
 	{
-		$phpChunks = PHPParser::getPhpChunks($filesrc);
-		if (!empty($phpChunks))
+		$prolog = $phpChunks[0];
+		if (!str_starts_with($filesrc, $prolog) && str_ends_with($prolog, '?>'))
 		{
-			$prolog = $phpChunks[0];
-			$filesrc = mb_substr($filesrc, mb_strlen($prolog));
+			$prolog = mb_substr($prolog, 0, -2);
 		}
-	}
-	elseif (str_starts_with($filesrc, "<?"))
-	{
-		$fl = mb_strlen($filesrc);
-		$p = 2;
-		while ($p < $fl)
-		{
-			$ch2 = mb_substr($filesrc, $p, 2);
-			$ch1 = mb_substr($ch2, 0, 1);
-
-			if ($ch2 == "?>" && !$php_doubleq && !$php_singleq && !$php_star_comment)
-			{
-				$p += 2;
-				break;
-			}
-			elseif (!$php_comment && $ch2 == "//" && !$php_doubleq && !$php_singleq)
-			{
-				$php_comment = $php_line_comment = true;
-				$p++;
-			}
-			elseif ($php_line_comment && ($ch1 == "\n" || $ch1 == "\r" || $ch2 == "?>"))
-			{
-				$php_comment = $php_line_comment = false;
-			}
-			elseif (!$php_comment && $ch2 == "/*" && !$php_doubleq && !$php_singleq)
-			{
-				$php_comment = $php_star_comment = true;
-				$p++;
-			}
-			elseif ($php_star_comment && $ch2 == "*/")
-			{
-				$php_comment = $php_star_comment = false;
-				$p++;
-			}
-			elseif (!$php_comment)
-			{
-				if (($php_doubleq || $php_singleq) && $ch2 == "\\\\")
-				{
-					$p++;
-				}
-				elseif (!$php_doubleq && $ch1 == '"')
-				{
-					$php_doubleq = true;
-				}
-				elseif ($php_doubleq && $ch1 == '"' && mb_substr($filesrc, $p - 1, 1) != '\\')
-				{
-					$php_doubleq = false;
-				}
-				elseif (!$php_doubleq)
-				{
-					if (!$php_singleq && $ch1 == "'")
-					{
-						$php_singleq = true;
-					}
-					elseif ($php_singleq && $ch1 == "'" && mb_substr($filesrc, $p - 1, 1) != '\\')
-					{
-						$php_singleq = false;
-					}
-				}
-			}
-
-			$p++;
-		}
-
-		$prolog = mb_substr($filesrc, 0, $p);
-		$filesrc = mb_substr($filesrc, $p);
+		$filesrc = mb_substr($filesrc, mb_strlen($prolog));
+		$isPhpPrologFound = true;
 	}
 	elseif (preg_match("'(.*?<title>.*?</title>)(.*)$'is", $filesrc, $reg))
 	{
@@ -4881,22 +4812,21 @@ function ParseFileContent($filesrc, $params = [])
 		}
 	}
 
-	if (str_ends_with($filesrc, "?>"))
+	if (!empty($phpChunks) && (!$isPhpPrologFound || count($phpChunks) > 1))
 	{
-		if (isset($phpChunks) && count($phpChunks) > 1)
+		$epilog = $phpChunks[count($phpChunks) - 1];
+		if (!str_ends_with($filesrc, $epilog) && str_ends_with($epilog, '?>'))
 		{
-			$epilog = $phpChunks[count($phpChunks) - 1];
+			$epilog = mb_substr($epilog, 0, -2);
+		}
+
+		if ($epilog !== '' && str_ends_with($filesrc, $epilog))
+		{
 			$filesrc = mb_substr($filesrc, 0, -mb_strlen($epilog));
 		}
 		else
 		{
-			$p = mb_strlen($filesrc) - 2;
-			while (($p > 0) && (mb_substr($filesrc, $p, 2) != "<?"))
-			{
-				$p--;
-			}
-			$epilog = mb_substr($filesrc, $p);
-			$filesrc = mb_substr($filesrc, 0, $p);
+			$epilog = '';
 		}
 	}
 

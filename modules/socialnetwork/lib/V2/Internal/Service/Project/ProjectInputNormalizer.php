@@ -15,7 +15,7 @@ class ProjectInputNormalizer
 	/**
 	 * Normalizes members/moderatorMembers input:
 	 * - keeps only supported entity types for each field
-	 * - deduplicates by entity id with "last wins"
+	 * - deduplicates by entity id and node scope with "last wins": both scopes of one node are kept
 	 * - removes moderator users from regular members
 	 */
 	public function normalizeMembers(
@@ -54,7 +54,7 @@ class ProjectInputNormalizer
 	{
 		$normalizedMembers = $this->normalizeUpdateCollection(
 			$members,
-			[MemberEntityType::User, MemberEntityType::Department],
+			[MemberEntityType::User, MemberEntityType::Department, MemberEntityType::Team],
 		);
 		$normalizedModeratorMembers = $this->normalizeUpdateCollection(
 			$moderatorMembers,
@@ -80,7 +80,7 @@ class ProjectInputNormalizer
 	{
 		$normalizedMembersBeforeModeratorFilter = $this->normalizeCollection(
 			$members,
-			[MemberEntityType::User, MemberEntityType::Department],
+			[MemberEntityType::User, MemberEntityType::Department, MemberEntityType::Team],
 		);
 		$normalizedModeratorMembers = $this->normalizeCollection(
 			$moderatorMembers,
@@ -216,9 +216,10 @@ class ProjectInputNormalizer
 		return new MemberEntity(
 			id: $member->id,
 			type: $member->type,
-			withChildNodes: $member->type === MemberEntityType::Department
-				? $member->withChildNodes !== false
-				: null,
+			// Structure nodes (departments and teams) carry a scope, a user never does
+			withChildNodes: $member->type === MemberEntityType::User
+				? null
+				: $member->withChildNodes !== false,
 			name: $member->name,
 			image: $member->image,
 		);
@@ -294,10 +295,11 @@ class ProjectInputNormalizer
 			return null;
 		}
 
-		return match ($member->type)
-		{
-			MemberEntityType::User => 'user:' . $member->id,
-			MemberEntityType::Department => 'department:' . $member->id,
-		};
+		$scope = $member->type === MemberEntityType::User
+			? ''
+			: ':' . (int)($member->withChildNodes === true)
+		;
+
+		return $member->type->value . ':' . $member->id . $scope;
 	}
 }

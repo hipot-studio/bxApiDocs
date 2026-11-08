@@ -8,10 +8,12 @@
 namespace Bitrix\Crm\Tracking;
 
 use Bitrix\Crm\Communication;
+use Bitrix\Crm\Feature;
 use Bitrix\Crm\Integration;
 use Bitrix\Crm\Integration\Bitrix24\Product;
 use Bitrix\Intranet;
 use Bitrix\Landing;
+use Bitrix\Main\Config;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 
@@ -292,6 +294,18 @@ class Provider
 			];
 		}
 
+		if (self::isAvitoAvailable())
+		{
+			$list[] = [
+				'CODE' => Source\Base::Avito,
+				'ICON_CLASS' => 'ui-icon ui-icon-service-avito',
+				'ICON_COLOR' => '#0af',
+				'CONFIGURABLE' => true,
+				'ADVERTISABLE' => false,
+				'HAS_PATH_TO_LIST' => true,
+			];
+		}
+
 		$list[] = [
 			'ID' => 0,
 			'CODE' => 'organic',
@@ -325,6 +339,11 @@ class Provider
 		}
 
 		return $list;
+	}
+
+	public static function isAvitoAvailable(): bool
+	{
+		return Product::isRegionRussian(true) && Config\Feature::isEnabled(Feature\AvitoTrackingSource::class);
 	}
 
 	/**

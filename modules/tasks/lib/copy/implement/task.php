@@ -252,6 +252,11 @@ class Task extends Base
 			$fields["PARENT_ID"] = $container->getParentId();
 		}
 
+		if (array_key_exists('DEADLINE', $fields) && $fields['DEADLINE'] === null)
+		{
+			$fields['DEADLINE'] = '';
+		}
+
 		// it's really possible:
 		// http://jabber.bx/view.php?id=161576
 		// http://jabber.bx/view.php?id=162694

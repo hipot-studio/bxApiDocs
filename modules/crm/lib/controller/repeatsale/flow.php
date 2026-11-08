@@ -74,6 +74,11 @@ final class Flow extends Base
 			return false;
 		}
 
+		if (RepeatSaleSegmentController::getInstance()->getFoundClientsCount() <= 0)
+		{
+			return false;
+		}
+
 		$expectedDate = (new DateTime())->add('1 day')->disableUserTime();
 		$this->saveFlowExpectedOptions($expectedDate, $this->getCurrentUser()?->getId() ?? 1);
 		$this->addFlowEnablerAgent();
@@ -196,6 +201,7 @@ final class Flow extends Base
 			Dictionary::TOOL_CRM,
 			Dictionary::CATEGORY_SYSTEM_INFORM,
 		);
+		$event->setP4('enable-mode-auto-after-close');
 		$event->send();
 	}
 }

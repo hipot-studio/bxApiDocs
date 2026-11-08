@@ -9,6 +9,7 @@ use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItem;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemAccessType;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemForUser;
 use Bitrix\Vibecodeconnector\Internal\Entity\Catalog\CatalogItemType;
+use Bitrix\Vibecodeconnector\Internal\Service\Catalog\Identity\AppIdentityHash;
 
 final class CatalogItemMapper
 {
@@ -29,6 +30,7 @@ final class CatalogItemMapper
 			color: (string)$row['COLOR'],
 			iconFileId: isset($row['ICON_FILE_ID']) ? (int)$row['ICON_FILE_ID'] : null,
 			chatId: isset($row['CHAT_ID']) ? (int)$row['CHAT_ID'] : null,
+			appChatId: isset($row['MESSENGER_CHAT_ID']) ? (int)$row['MESSENGER_CHAT_ID'] : null,
 			externalId: $row['EXTERNAL_ID'] ?? null,
 			description: $row['DESCRIPTION'] ?? null,
 			editUrl: $row['EDIT_URL'] ?? null,
@@ -56,6 +58,8 @@ final class CatalogItemMapper
 			isPinned: (bool)($row['IS_PINNED'] ?? false),
 			isOwnedByUser: (bool)($row['IS_OWNED_BY_USER'] ?? false),
 			isHidden: (bool)($row['IS_HIDDEN'] ?? false),
+			isLastOpened: (bool)($row['IS_LAST_OPENED'] ?? false),
+			isFavorite: (bool)($row['IS_FAVORITE'] ?? false),
 		);
 	}
 
@@ -69,7 +73,12 @@ final class CatalogItemMapper
 			'TYPE' => $item->getType()->value,
 			'ICON_FILE_ID' => $item->getIconFileId(),
 			'CHAT_ID' => $item->getChatId(),
+			'MESSENGER_CHAT_ID' => $item->getAppChatId(),
 			'EXTERNAL_ID' => $item->getExternalId(),
+			'APP_IDENTITY_HASH' => AppIdentityHash::calculate(
+				$item->getPairingIss(),
+				$item->getExternalId(),
+			),
 			'DESCRIPTION' => $item->getDescription(),
 			'EDIT_URL' => $item->getEditUrl(),
 			'VIEW_URL' => $item->getViewUrl(),
@@ -78,6 +87,10 @@ final class CatalogItemMapper
 			'COLOR' => $item->getColor(),
 			'PAIRING_ISS' => $item->getPairingIss(),
 			'DEACTIVATED_AT' => $item->getDeactivatedAt(),
+			'APP_CHAT_TEARDOWN_PENDING' => $item->getDeactivatedAt() !== null
+				&& (int)$item->getAppChatId() > 0
+					? 1
+					: null,
 			'CREATED_AT' => $item->getCreatedAt(),
 			'UPDATED_AT' => $item->getUpdatedAt(),
 		];

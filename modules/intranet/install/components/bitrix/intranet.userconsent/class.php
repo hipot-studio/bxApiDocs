@@ -1,5 +1,6 @@
 <?
 
+use Bitrix\Intranet\UserConsent\Access;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ErrorCollection;
 use Bitrix\Main\UserConsent\Agreement;
@@ -142,6 +143,15 @@ class IntranetUserConsentComponent extends CBitrixComponent
 
 	public function executeComponent()
 	{
+		// Nothing is read before the check: the denial must not tell whether an agreement
+		// or an acceptance of it exists.
+		if (!Access::canView())
+		{
+			ShowError(GetMessage('ACCESS_DENIED'));
+
+			return;
+		}
+
 		$this->errors = new \Bitrix\Main\ErrorCollection();
 		$this->initParams();
 		if (!$this->checkRequiredParams())

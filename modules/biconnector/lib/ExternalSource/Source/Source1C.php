@@ -10,6 +10,7 @@ use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceSettingsCollection;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalSourceTable;
 use Bitrix\BIConnector\ExternalSource\SourceManager;
+use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Error;
@@ -60,7 +61,7 @@ class Source1C extends Base
 		if ($connectResult->getData()['statusCode'] === 404)
 		{
 			$result = new Result();
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_CONNECTION_NOT_FOUND') ?? ''));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_CONNECTION_NOT_FOUND')));
 
 			return $result;
 		}
@@ -360,14 +361,14 @@ class Source1C extends Base
 					return $result;
 				}
 			}
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_PASSWORD') ?? ''));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_PASSWORD')));
 
 			return $result;
 		}
 
 		if ($client->getStatus() === 0)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_WRONG_HOST') ?? ''));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_WRONG_HOST')));
 
 			return $result;
 		}
@@ -401,7 +402,7 @@ class Source1C extends Base
 			return $result;
 		}
 
-		$result->addError(new Error(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_CANT_CONNECT') ?? ''));
+		$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_1C_CONNECTION_ERROR_CANT_CONNECT')));
 
 		return $result;
 	}

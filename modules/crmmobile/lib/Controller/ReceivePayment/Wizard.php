@@ -2,6 +2,7 @@
 
 namespace Bitrix\CrmMobile\Controller\ReceivePayment;
 
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Integration\NotificationsManager;
 use Bitrix\Crm\Integration\SmsManager;
 use Bitrix\Crm\Item;
@@ -33,6 +34,11 @@ class Wizard extends Base
 
 	public function initializeAction(Item $entity, array $resendData = []): array
 	{
+		if (!$this->prepareResendData($resendData))
+		{
+			return [];
+		}
+
 		return [
 			'steps' => [
 				'contact' => $this->getClientStepProps(),
@@ -45,7 +51,45 @@ class Wizard extends Base
 
 	public function getProductGridAction(Item $entity, array $resendData = []): array
 	{
+		if (!$this->prepareResendData($resendData))
+		{
+			return [];
+		}
+
 		return $this->getProductStepProps($entity, $resendData);
+	}
+
+	private function prepareResendData(array &$resendData): bool
+	{
+		if (($resendData['resendMessageMode'] ?? null) !== true)
+		{
+			return true;
+		}
+
+		$documentId = $resendData['documentId'] ?? null;
+		if (is_string($documentId) && preg_match('/^[0-9]+$/D', $documentId) === 1)
+		{
+			$documentId = ltrim($documentId, '0');
+			$maxDocumentId = (string)PHP_INT_MAX;
+			if (
+				strlen($documentId) < strlen($maxDocumentId)
+				|| (strlen($documentId) === strlen($maxDocumentId) && strcmp($documentId, $maxDocumentId) <= 0)
+			)
+			{
+				$documentId = (int)$documentId;
+			}
+		}
+
+		if (!is_int($documentId) || $documentId <= 0)
+		{
+			$this->addErrors($this->markErrorsAsPublic([ErrorCode::getGeneralError()]));
+
+			return false;
+		}
+
+		$resendData['documentId'] = $documentId;
+
+		return true;
 	}
 
 	private function getClientStepProps()

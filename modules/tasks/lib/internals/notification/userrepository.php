@@ -188,11 +188,6 @@ class UserRepository implements UserRepositoryInterface
 		return array_filter(array_map(fn (int $userId): ?User => static::$cache[$userId] ?? null, $userIds));
 	}
 
-	public function getUserTimeZoneOffset(int $userId, bool $force = false): int
-	{
-		return \Bitrix\Tasks\Util\User::getTimeZoneOffset($userId, false, $force);
-	}
-
 	private function ignoreRecepient(int $recepientId, array $options): bool
 	{
 		return (

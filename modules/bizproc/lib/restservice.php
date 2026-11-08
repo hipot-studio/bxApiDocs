@@ -1001,8 +1001,18 @@ class RestService extends \IRestService
 			static::getCurrentUserId(),
 			PermissionDictionary::BIZPROC_TEMPLATE_EDIT,
 		);
+		$scopeCondition = null;
 		foreach ($entityFilter as $filterKey => $filterValue)
 		{
+			// The area may arrive as a nested ConditionTree, which the array filter cannot carry: it is
+			// applied through where() below and stays conjunctive with the filter keys of the request.
+			if ($filterKey === TemplateAccessProvider::SCOPE_CONDITION_KEY)
+			{
+				$scopeCondition = $filterValue;
+
+				continue;
+			}
+
 			$filter[$filterKey] = $filterValue;
 		}
 
@@ -1018,14 +1028,21 @@ class RestService extends \IRestService
 		$order = static::getOrder($params['ORDER'] ?? null, $fields, ['ID' => 'ASC']);
 		$shouldCountTotal = ($n >= 0);
 
-		$iterator = WorkflowTemplateTable::getList(array(
-			'select' => $select,
-			'filter' => $filter,
-			'order' => $order,
-			'limit' => static::LIST_LIMIT,
-			'offset' => max(0, (int)$n),
-			'count_total' => $shouldCountTotal,
-		));
+		$query = WorkflowTemplateTable::query()
+			->setSelect($select)
+			->setFilter($filter)
+			->setOrder($order)
+			->setLimit(static::LIST_LIMIT)
+			->setOffset(max(0, (int)$n))
+			->countTotal($shouldCountTotal)
+		;
+
+		if ($scopeCondition !== null)
+		{
+			$query->where($scopeCondition);
+		}
+
+		$iterator = $query->exec();
 
 		$countTotal = $shouldCountTotal ? $iterator->getCount() : 0;
 
@@ -1378,11 +1395,27 @@ class RestService extends \IRestService
 				continue;
 			}
 
+			// read before the property is normalized: the fields of the decision are keyed by this code
+			// afterwards (CBPRequestInformationActivity::prepareResponseFields)
+			$fieldName = (string)$property['Name'];
+
 			$property = FieldType::normalizeProperty($property);
 			$fieldTypeObject = $documentService->getFieldTypeObject($task["PARAMETERS"]["DOCUMENT_TYPE"], $property);
 			if ($fieldTypeObject)
 			{
 				$fieldTypeObject->setDocumentId($task["PARAMETERS"]["DOCUMENT_ID"]);
+
+				// a file field is given the bytes of the file and not an id of one; whatever the type saves
+				// out of them is taken by BaseType\File::acceptTaskFileIds() and by nothing else
+				if ($fieldTypeObject->getBaseType() === FieldType::FILE)
+				{
+					// the task being performed wins over a setting of the template
+					$fieldTypeObject->setSettings(
+						BaseType\File::taskFieldSettings((int)($task['ID'] ?? 0), $fieldName)
+						+ $fieldTypeObject->getSettings()
+					);
+				}
+
 				$result[$property['Name']] = $fieldTypeObject->internalizeValue(FieldType::VALUE_CONTEXT_REST, $values[$property['Name']]);
 			}
 		}

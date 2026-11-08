@@ -74,9 +74,21 @@ class LandingSiteDemoPreviewComponent extends LandingSiteDemoComponent
 				$this->arResult['EXTERNAL_IMPORT'] = [];
 				$this->arResult['TEMPLATE'] = $demo[$code];
 				$this->arResult['TEMPLATE']['URL_PREVIEW'] = $this->getUrlPreview($code, $demo[$code]);
-				$this->arResult['RIGHTS_CREATE'] = Rights::hasAdditionalRight(
-					Rights::ADDITIONAL_RIGHTS['create']
-				);
+				// a page inside an existing site needs the edit right to it, not the right to create sites
+				$rightsSiteId = (int)$this->arParams['SITE_ID'];
+				if ($rightsSiteId > 0)
+				{
+					$this->arResult['RIGHTS_CREATE'] = Rights::hasAccessForSite(
+						$rightsSiteId,
+						Rights::ACCESS_TYPES['edit']
+					);
+				}
+				else
+				{
+					$this->arResult['RIGHTS_CREATE'] = Rights::hasAdditionalRight(
+						Rights::ADDITIONAL_RIGHTS['create']
+					);
+				}
 				$this->arResult['NEEDED_SUBSCRIPTION'] = $bySubscription ?? false;
 
 				// check external import (additional step after submit create)

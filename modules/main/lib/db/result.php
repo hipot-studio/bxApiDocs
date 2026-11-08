@@ -198,7 +198,7 @@ abstract class Result implements \IteratorAggregate
 			foreach ($this->serializedFields as $field)
 			{
 				if (isset($data[$field]))
-					$data[$field] = unserialize($data[$field]);
+					$data[$field] = unserialize($data[$field], ['allowed_classes' => false]);
 			}
 		}
 

@@ -122,6 +122,28 @@ class MessageRepository
 	}
 
 	/**
+	 * Returns the availability time of the nearest new message, or null if the queue has no new messages.
+	 *
+	 * @throws SystemException
+	 */
+	public function getNextAvailableAt(string $queueId): ?DateTime
+	{
+		/** @var MessengerMessageTable $tableClass */
+		$tableClass = $this->tableEntity->getDataClass();
+
+		$row = $tableClass::query()
+			->setSelect(['AVAILABLE_AT'])
+			->where('QUEUE_ID', '=', $queueId)
+			->where('STATUS', '=', MessageStatus::New->value)
+			->setOrder(['AVAILABLE_AT' => 'ASC'])
+			->setLimit(1)
+			->fetch()
+		;
+
+		return $row ? $row['AVAILABLE_AT'] : null;
+	}
+
+	/**
 	 * @throws SystemException
 	 */
 	private function buildReadyMessageQuery(string $queueId): Query

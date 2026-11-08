@@ -10,14 +10,17 @@ use Bitrix\Disk\Document\Flipchart\FramePolicy;
 use Bitrix\Disk\Document\Flipchart\JwtService;
 use Bitrix\Disk\Document\Models\DocumentSession;
 use Bitrix\Disk\Document\Models\GuestUser;
-use Bitrix\Disk\document\SharingControlType;
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\File;
-use Bitrix\Disk\Integration\Bitrix24Manager;
+use Bitrix\Disk\Internal\Service\DocumentHeader\HeaderCompositionService;
+use Bitrix\Disk\Internal\Service\DocumentHeader\OpeningContextFactory;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkUrl;
 use Bitrix\Disk\User;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\UrlManager;
 use Bitrix\Main\Localization\Loc;
@@ -40,8 +43,9 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 
 	const DEFAULT_DISPLAY_VARIANT = 'desktop';
 
+	const MOBILE_DISPLAY_VARIANT = 'mobile';
+
 	private bool $isExternalLinkMode = false;
-	private bool $unifiedLinkAccessOnly = false;
 	private bool $isViewMode = false;
 	private bool $isEditMode = false;
 	private ?DocumentSession $session = null;
@@ -54,6 +58,8 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 	private function generateToken(JwtService $jwt): ?string
 	{
 		$session = $this->session;
+		$annotationsClaims = $this->getAnnotationsClaims();
+		$commentsClaims = $this->getCommentsClaims();
 
 		if ($this->isNewElement())
 		{
@@ -67,7 +73,7 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 
 		return $jwt->generateToken(
 			$this->isViewMode,
-			[
+			array_merge([
 				'user_id' => $this->arParams['USER_ID'],
 				'username' => $this->arParams['USERNAME'],
 				'avatar_url' => $this->arParams['AVATAR_URL'] ?? null,
@@ -81,8 +87,133 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 					'action' => 'open',
 					'value1' => $this->isNewElement() ? 'new_element' : 'old_element',
 				],
-			],
+			], $annotationsClaims, $commentsClaims),
 		);
+	}
+
+	/**
+	 * @return array{annotations_access: string, annotations_api_url?: string}
+	 */
+	private function getAnnotationsClaims(): array
+	{
+		$apiUrl = Configuration::getAnnotationsApiUrl();
+		if ($apiUrl === null)
+		{
+			return ['annotations_access' => 'none'];
+		}
+
+		$currentUser = CurrentUser::get();
+		$isUnifiedLinkMode = (bool)($this->arParams['UNIFIED_LINK_MODE'] ?? false);
+		$userId = (string)$this->arParams['USER_ID'];
+		$requiresReadPermission = $this->isViewMode
+			|| ($this->isEditMode && !self::isPersonalUserId($userId));
+		$canRead = $requiresReadPermission
+			&& (
+				$this->isExternalLinkMode
+				|| $isUnifiedLinkMode
+				|| $this->session->canUserRead($currentUser)
+			);
+		$canEdit = $this->isEditMode
+			&& ($isUnifiedLinkMode || $this->session->canUserEdit($currentUser));
+
+		return self::buildAnnotationsClaims(
+			$this->isViewMode,
+			$this->isEditMode,
+			$canRead,
+			$canEdit,
+			$userId,
+			$apiUrl,
+		);
+	}
+
+	/**
+	 * @return array{annotations_access: string, annotations_api_url?: string}
+	 */
+	private static function buildAnnotationsClaims(
+		bool $isViewMode,
+		bool $isEditMode,
+		bool $canRead,
+		bool $canEdit,
+		string $userId,
+		?string $apiUrl,
+	): array
+	{
+		if ($apiUrl === null)
+		{
+			return ['annotations_access' => 'none'];
+		}
+
+		$access = 'none';
+		if ($isViewMode && $canRead)
+		{
+			$access = 'read';
+		}
+		elseif ($isEditMode && $canEdit)
+		{
+			$access = self::isPersonalUserId($userId) ? 'write' : ($canRead ? 'read' : 'none');
+		}
+
+		$claims = ['annotations_access' => $access];
+		if ($access !== 'none')
+		{
+			$claims['annotations_api_url'] = $apiUrl;
+		}
+
+		return $claims;
+	}
+
+	/**
+	 * @return array{comments_api_url?: string, can_comment?: bool}
+	 */
+	private function getCommentsClaims(): array
+	{
+		$isUnifiedLinkMode = (bool)($this->arParams['UNIFIED_LINK_MODE'] ?? false);
+		$canEdit = $this->isEditMode
+			&& ($isUnifiedLinkMode || $this->session->canUserEdit(CurrentUser::get()));
+
+		return self::buildCommentsClaims(
+			Configuration::getCommentsApiUrl(),
+			$this->session->getVersionId() !== null,
+			$canEdit,
+			(string)$this->arParams['USER_ID'],
+		);
+	}
+
+	/**
+	 * Comments belong to the live board only, so a historical version session gets no address.
+	 * Flip lets a session create comments only with `can_comment`, so the flag repeats the write
+	 * rule of the comments API: an editing registered user writes, a reader and a guest only read.
+	 * The API stays the final authority and checks the current rights on every request.
+	 *
+	 * @return array{comments_api_url?: string, can_comment?: bool}
+	 */
+	private static function buildCommentsClaims(
+		?string $apiUrl,
+		bool $isHistoricalVersion,
+		bool $canEdit,
+		string $userId,
+	): array
+	{
+		if ($apiUrl === null || $isHistoricalVersion)
+		{
+			return [];
+		}
+
+		return [
+			'comments_api_url' => $apiUrl,
+			'can_comment' => $canEdit && self::isRegisteredUserId($userId),
+		];
+	}
+
+	private static function isRegisteredUserId(string $userId): bool
+	{
+		return preg_match('/^[1-9][0-9]{0,18}$/D', $userId) === 1;
+	}
+
+	private static function isPersonalUserId(string $userId): bool
+	{
+		return preg_match('/^[1-9][0-9]{0,18}$/D', $userId) === 1
+			|| preg_match('/^~[a-zA-Z0-9_-]+$/D', $userId) === 1;
 	}
 
 	private function getDisplayVariant()
@@ -175,19 +306,74 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		// Task wiring is only for boards served by the new service - the vendor app has no task
 		// protocol, and emptying shareElementInBitrix there would strip its own create-task item.
 		$this->arResult['TASKS_ENABLED'] = Configuration::isTasksEnabled() && $profile === ServiceProfile::New;
+
+		$this->arResult['ANNOTATIONS_ENABLED'] = Configuration::isAnnotationsEnabled();
+		$this->arResult['TAGS_ENABLED'] = Configuration::isTagsEnabled();
+		$this->arResult['COMMENTS_ENABLED'] = Configuration::isCommentsEnabled();
 	}
 
-	private function prepareOtherParams(User $user): void
+	private function prepareOtherParams(): void
 	{
-		$featureBlocker = Bitrix24Manager::filterJsAction('disk_board_external_link', '');
+		$displayVariant = $this->getDisplayVariant();
 
-		$this->arResult['SHOULD_BLOCK_EXTERNAL_LINK_FEATURE'] = (bool)$featureBlocker;
-		$this->arResult['BLOCKER_EXTERNAL_LINK_FEATURE'] = $featureBlocker;
-		$this->arResult['SHOULD_SHOW_SHARING_BUTTON'] = $this->shouldShowSharingButton($user);
-		$this->arResult['SHARING_CONTROL_TYPE'] = $this->getSharingControlType()->value;
-		$this->arResult['DISPLAY_VARIANT'] = $this->getDisplayVariant();
-		$this->arResult['UNIFIED_LINK_ACCESS_ONLY'] = $this->unifiedLinkAccessOnly;
-		$this->arResult['FILE_UNIQUE_CODE'] = $this->arParams['FILE_UNIQUE_CODE'] ?? '';
+		$this->arResult['DISPLAY_VARIANT'] = $displayVariant;
+		$this->arResult['HEADER_COMPOSITION'] = $displayVariant === self::MOBILE_DISPLAY_VARIANT
+			? null
+			: $this->buildHeaderComposition()
+		;
+	}
+
+	/**
+	 * The header is drawn from the description the page carries, so the page it belongs to computes it.
+	 * An absent description is not an error of the page: the header then asks the controller for it.
+	 *
+	 * The mobile variant of the page renders no container for the header at all, so it is not described
+	 * either: nothing there would read the answer (@see templates/.default/template.php).
+	 */
+	private function buildHeaderComposition(): ?array
+	{
+		$locator = ServiceLocator::getInstance();
+		$userId = (int)CurrentUser::get()->getId();
+
+		return $locator
+			->get(HeaderCompositionService::class)
+			->composeForPage(
+				$locator->get(OpeningContextFactory::class)->fromDocumentSession(
+					$this->session,
+					$userId,
+					$this->hasUnifiedLinkProof(),
+				),
+				$userId,
+			)
+		;
+	}
+
+	/**
+	 * The description is told whether the visitor holds the unified link of the board, and the page knows
+	 * it two ways: the unified link drew the page itself - the handler reaches this component only after
+	 * the chain answered for the uniqueCode it was given - or the request carries the signature of the
+	 * object, which is how the transition from the viewer arrives. The shells of the office editors
+	 * decide it the same way {@see \Bitrix\Disk\Internal\Component\DocumentHeaderPage}.
+	 */
+	private function hasUnifiedLinkProof(): bool
+	{
+		if ($this->arParams['UNIFIED_LINK_MODE'] ?? false)
+		{
+			return true;
+		}
+
+		$objectId = (int)$this->session?->getObjectId();
+		if ($objectId <= 0)
+		{
+			return false;
+		}
+
+		$locator = ServiceLocator::getInstance();
+		$uls = $locator->get(UnifiedLinkUrl::class)->getUlsFromRequest(Context::getCurrent()->getRequest());
+
+		return $uls !== null
+			&& $locator->get(UnifiedLinkAccessService::class)->validateUlsForObjectId($objectId, $uls)
+		;
 	}
 
 	protected function prepareParams(): void
@@ -198,7 +384,6 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		{
 			$this->session = $this->arParams['DOCUMENT_SESSION'];
 			$this->isExternalLinkMode = (bool)($this->arParams['EXTERNAL_LINK_MODE'] ?? false);
-			$this->unifiedLinkAccessOnly = (bool)($this->arParams['UNIFIED_LINK_ACCESS_ONLY'] ?? false);
 			$this->isViewMode = $this->session->getType() === DocumentSession::TYPE_VIEW;
 			$this->isEditMode = $this->session->getType() === DocumentSession::TYPE_EDIT;
 		}
@@ -215,10 +400,8 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 			throw new SystemException('Frame policy cannot be applied: headers are already sent');
 		}
 
-		$user = $this->getCurrentUser();
-
 		$this->prepareSdkParams();
-		$this->prepareOtherParams($user);
+		$this->prepareOtherParams();
 		$this->includeComponentTemplate();
 		$this->sendAnalytics();
 	}
@@ -287,54 +470,4 @@ class CDiskFlipchartViewerComponent extends DiskComponent
 		return GuestUser::create();
 	}
 
-	private function getSharingControlType(): SharingControlType
-	{
-		$currentUser = CurrentUser::get();
-		$canUserChangeRights = $this->session->canUserChangeRights($currentUser);
-		$canUserShare = $this->session->canUserShare($currentUser);
-
-		// todo: block by feature?
-
-		if (!$canUserChangeRights && !$canUserShare)
-		{
-			return SharingControlType::WithoutEdit;
-		}
-
-		if ($canUserChangeRights)
-		{
-			return SharingControlType::WithChangeRights;
-		}
-
-		if ($canUserShare)
-		{
-			return SharingControlType::WithSharing;
-		}
-
-		return SharingControlType::WithoutEdit;
-	}
-
-	/**
-	 * @param User $user
-	 * @return bool
-	 */
-	private function shouldShowSharingButton(User $user): bool
-	{
-		if (!$this->isValidUserForSharing($user))
-		{
-			return false;
-		}
-
-		$isUnifiedLinkPage = !empty($this->arParams['FILE_UNIQUE_CODE']);
-
-		return $this->isEditMode || $isUnifiedLinkPage;
-	}
-
-	/**
-	 * @param User $user
-	 * @return bool
-	 */
-	private function isValidUserForSharing(User $user): bool
-	{
-		return $user->isIntranetUser() || $user->isCollaber();
-	}
 }

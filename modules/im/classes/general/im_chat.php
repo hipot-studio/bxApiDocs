@@ -12,6 +12,8 @@ use Bitrix\Imopenlines\Model\SessionTable;
 use Bitrix\Im\V2\Sync;
 use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Web\Uri;
+use Bitrix\Main\Loader;
 
 class CIMChat
 {
@@ -177,7 +179,7 @@ class CIMChat
 		$crmEntityId = null;
 		if (
 			$chatData['TYPE'] == IM_MESSAGE_OPEN_LINE
-			&& \Bitrix\Main\Loader::includeModule('imopenlines')
+			&& Loader::includeModule('imopenlines')
 		)
 		{
 			$explodeData = explode('|', $chatData['ENTITY_DATA_1']);
@@ -212,7 +214,7 @@ class CIMChat
 		}
 		else if (
 			$chatData['TYPE'] == IM_MESSAGE_OPEN_LINE
-			&& \Bitrix\Main\Loader::includeModule('imopenlines')
+			&& Loader::includeModule('imopenlines')
 			&& \Bitrix\ImOpenLines\Config::canJoin($lineId, $crmEntityType, $crmEntityId)
 		)
 		{
@@ -263,7 +265,7 @@ class CIMChat
 		{
 			if (
 				$chatData['TYPE'] == IM_MESSAGE_OPEN_LINE
-				&& \Bitrix\Main\Loader::includeModule('imopenlines')
+				&& Loader::includeModule('imopenlines')
 				&& \Bitrix\ImOpenLines\Model\RecentTable::getCount([
 					'=CHAT_ID' => $toChatId,
 					'=USER_ID' => $fromUserId,
@@ -502,11 +504,14 @@ class CIMChat
 		return $arResult;
 	}
 
-	function GetLastMessageLimit($chatId, $messageStartId, $messageEndId = 0, $loadExtraData = false, $bTimeZone = true, $order = 'DESC')
+	function GetLastMessageLimit($chatId, $messageStartId, $messageEndId = 0, $loadExtraData = false, $bTimeZone = true, $order = 'DESC', $limit = 0, $lastId = 0, $lastDate = 0)
 	{
 		$messageStartId = intval($messageStartId);
 		$messageEndId = intval($messageEndId);
 		$chatId = intval($chatId);
+		$limit = intval($limit);
+		$lastId = intval($lastId);
+		$lastDate = intval($lastDate);
 
 		if ($chatId <= 0)
 		{
@@ -521,9 +526,52 @@ class CIMChat
 			return false;
 		}
 
+		$paginated = ($limit > 0 || $lastId > 0);
+
 		global $DB;
 		if (!$bTimeZone)
 			CTimeZone::Disable();
+
+		$keysetFilter = "";
+		if ($lastId > 0)
+		{
+			if ($lastDate > 0)
+			{
+				// Self-contained compound cursor (DATE_CREATE, ID): the boundary date is carried by the
+				// caller, so the cursor stays valid even if the boundary message is physically deleted
+				// between pages. Compared as a timestamp via the same expression used for the output,
+				// which keeps it consistent with the NEXT_DATE the caller received.
+				$cursorDate = (string)$lastDate;
+				$cursorExpr = $DB->DatetimeToTimestampFunction('M.DATE_CREATE');
+			}
+			else
+			{
+				// Backward-compatible fallback (cursor without a date): resolve the boundary date from the
+				// row, scoped to the same chat and message window so a foreign LAST_ID cannot probe.
+				$cursorDate = "(SELECT DATE_CREATE FROM b_im_message WHERE ID = ".$lastId."
+					AND CHAT_ID = ".$chatId."
+					AND ID >= ".$messageStartId.
+					($messageEndId > 0? " AND ID <= ".$messageEndId: "").")";
+				$cursorExpr = "M.DATE_CREATE";
+			}
+
+			if ($order == 'ASC')
+			{
+				$keysetFilter = "
+				AND (
+					".$cursorExpr." > ".$cursorDate."
+					OR (".$cursorExpr." = ".$cursorDate." AND M.ID > ".$lastId.")
+				)";
+			}
+			else
+			{
+				$keysetFilter = "
+				AND (
+					".$cursorExpr." < ".$cursorDate."
+					OR (".$cursorExpr." = ".$cursorDate." AND M.ID < ".$lastId.")
+				)";
+			}
+		}
 
 		$strSql = "
 			SELECT
@@ -539,8 +587,14 @@ class CIMChat
 				M.CHAT_ID = ".$chatId."
 				AND M.ID >= ".$messageStartId."
 				".($messageEndId > 0? "AND M.ID <= ".$messageEndId: "")."
-			ORDER BY M.DATE_CREATE ".($order == 'ASC'? 'ASC': 'DESC')."
+				".$keysetFilter."
+			ORDER BY M.DATE_CREATE ".($order == 'ASC'? 'ASC': 'DESC').($paginated? ", M.ID ".($order == 'ASC'? 'ASC': 'DESC'): "")."
 		";
+
+		if ($limit > 0)
+		{
+			$strSql = $DB->TopSql($strSql, $limit);
+		}
 
 		if (!$bTimeZone)
 			CTimeZone::Enable();
@@ -615,14 +669,20 @@ class CIMChat
 			$arResult['userInChat']  = $arChat['userInChat'];
 			$arResult['userChatBlockStatus'] = $arChat['userChatBlockStatus'];
 
-			$ar = CIMContactList::GetUserData(array(
-					'ID' => $arUsers[$chatId],
-					'DEPARTMENT' => ($bDepartment? 'Y': 'N'),
-					'USE_CACHE' => 'N'
-				)
-			);
-			$arResult['users'] = $ar['users'];
-			$arResult['userInGroup']  = $ar['userInGroup'];
+			// Empty page (a normal pagination outcome) has no authors: GetUserData() returns false for an
+			// empty ID list, so skip it and keep the already-initialized empty users/userInGroup arrays.
+			$authorIds = $arUsers[$chatId] ?? array();
+			if (!empty($authorIds))
+			{
+				$ar = CIMContactList::GetUserData(array(
+						'ID' => $authorIds,
+						'DEPARTMENT' => ($bDepartment? 'Y': 'N'),
+						'USE_CACHE' => 'N'
+					)
+				);
+				$arResult['users'] = $ar['users'];
+				$arResult['userInGroup']  = $ar['userInGroup'];
+			}
 			$arResult['chat'] = $arChat['chat'];
 		}
 
@@ -1172,7 +1232,7 @@ class CIMChat
 						$linesChatIds[] = (int)$arRes['CHAT_ID'];
 					}
 				}
-				elseif (\Bitrix\Main\Loader::includeModule('imbot'))
+				elseif (Loader::includeModule('imbot'))
 				{
 					if (in_array($arRes["ENTITY_TYPE"], [\Bitrix\ImBot\Bot\Support24::CHAT_ENTITY_TYPE, \Bitrix\ImBot\Bot\Network::CHAT_ENTITY_TYPE], true))
 					{
@@ -1400,7 +1460,7 @@ class CIMChat
 		{
 			/** @var \Bitrix\Imbot\Bot\SupportBot $classSupport */
 			if (
-				\Bitrix\Main\Loader::includeModule('bitrix24')
+				Loader::includeModule('bitrix24')
 				&& \Bitrix\ImBot\Bot\Support24::isEnabled()
 			)
 			{
@@ -1554,6 +1614,7 @@ class CIMChat
 		if (
 			$chat->getType() == IM_MESSAGE_OPEN_LINE
 			&& $chat->getAuthorId() == 0
+			&& !IM\User::getInstance($this->user_id)->isConnector()
 		)
 		{
 			return false;
@@ -2927,7 +2988,7 @@ class CIMChat
 			'SEND' => CIMChat::CanSendMessageToGeneralChat(($USER instanceof \CUser) ? (int)$USER->GetID() : null)
 		];
 
-		if (\Bitrix\Main\Loader::includeModule('imbot'))
+		if (Loader::includeModule('imbot'))
 		{
 			self::$entityOption[\Bitrix\ImBot\Service\Notifier::CHAT_ENTITY_TYPE] = [
 				'AVATAR' => false,
@@ -2965,7 +3026,7 @@ class CIMChat
 			];
 		}
 
-		if (\Bitrix\Main\Loader::includeModule('tasks'))
+		if (Loader::includeModule('tasks'))
 		{
 			$path = \CTasksTools::GetOptionPathTaskUserEntry(SITE_ID, "/company/personal/user/#user_id#/tasks/task/view/#task_id#/");
 			$path = str_replace(Array('#user_id#', '#task_id#'), Array(($USER instanceof \CUser) ? (int)$USER->GetId() : 0, '#ID#'), mb_strtolower($path));
@@ -2981,10 +3042,11 @@ class CIMChat
 			);
 		}
 
-		if (\Bitrix\Main\Loader::includeModule('calendar'))
+		if (Loader::includeModule('calendar'))
 		{
 			$path = \CCalendar::GetPathForCalendarEx(($USER instanceof \CUser) ? (int)$USER->GetId() : 0);
-			$path = \CHTTP::urlAddParams($path, ['EVENT_ID' => '#ID#']);
+			$path = (string)(new Uri($path))->addParams(['EVENT_ID' => '__ID__']);
+			$path = str_replace('__ID__', '#ID#', $path);
 
 			self::$entityOption[\CCalendar::CALENDAR_CHAT_ENTITY_TYPE] = Array(
 				'AVATAR' => true,
@@ -2997,7 +3059,7 @@ class CIMChat
 			);
 		}
 
-		if (\Bitrix\Main\Loader::includeModule('crm'))
+		if (Loader::includeModule('crm'))
 		{
 			self::$entityOption['CRM'] = Array(
 				'AVATAR' => false,
@@ -3010,7 +3072,7 @@ class CIMChat
 			);
 		}
 
-		if (\Bitrix\Main\Loader::includeModule('voximplant'))
+		if (Loader::includeModule('voximplant'))
 		{
 			self::$entityOption['CALL'] = Array(
 				'AVATAR' => true,

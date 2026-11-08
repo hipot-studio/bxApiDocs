@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\Collab\Control\Handler\Add;
 
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectNotFoundException;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageBuffer;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageFactory;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 use Bitrix\Socialnetwork\Control\Command\AddCommand;
@@ -40,7 +41,13 @@ class AddMessageHandler implements AddHandlerInterface
 				'goal' => $command->getGoal(),
 				'dateStart' => $command->getDateStart(),
 				'dateFinish' => $command->getDateFinish(),
+				'ownerId' => $command->getOwnerId(),
+				'members' => $this->collectMembers($command),
 			]);
+
+			// The card has just named the composition the project is created with, so the handlers that build
+			// that composition add their members to the chat without announcing them once more.
+			ActionMessageBuffer::getInstance()->suppressMemberMessages($entity->getId());
 		}
 		else
 		{
@@ -52,5 +59,18 @@ class AddMessageHandler implements AddHandlerInterface
 		}
 
 		return new HandlerResult();
+	}
+
+	/**
+	 * Moderators travel with the members: the card shows who is in the project, not how the rights are split.
+	 *
+	 * @return string[] access codes of people, departments and teams
+	 */
+	private function collectMembers(AddCommand $command): array
+	{
+		return array_merge(
+			$command->getMembers() ?? [],
+			$command->getModeratorMembers() ?? [],
+		);
 	}
 }

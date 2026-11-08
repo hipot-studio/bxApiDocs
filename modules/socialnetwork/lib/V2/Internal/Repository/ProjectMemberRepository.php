@@ -39,7 +39,7 @@ class ProjectMemberRepository implements ProjectMemberRepositoryInterface
 			$rows,
 		);
 
-		foreach ($this->structureRelationService->getLinkedDepartmentAccessCodes($groupId) as $accessCode)
+		foreach ($this->structureRelationService->getLinkedNodeAccessCodes($groupId) as $accessCode)
 		{
 			$codes[] = $accessCode;
 		}

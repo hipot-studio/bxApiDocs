@@ -57,7 +57,7 @@ class UserRepository
 		);
 	}
 
-	private static function getEmployeeStatus(array $user): int
+	public static function getEmployeeStatus(array $user): int
 	{
 		if ($user['ACTIVE'] === 'Y')
 		{

@@ -10,8 +10,10 @@ namespace Bitrix\Tasks\Internals\Counter\Processor;
 
 
 use Bitrix\Main\Application;
+use Bitrix\Tasks\Internals\Counter\CommentsCountCache;
 use Bitrix\Tasks\Internals\Counter\CounterDictionary;
 use Bitrix\Tasks\Internals\Counter\CounterTable;
+use Bitrix\Tasks\Internals\Counter\Loader;
 
 trait CommandTrait
 {
@@ -55,6 +57,25 @@ trait CommandTrait
 		";
 
 		Application::getConnection()->query($sql);
+
+		$canDeleteCountedFlag
+			= $userId !== 0
+			&& (empty($types) || in_array(CounterDictionary::COUNTER_FLAG_COUNTED, $types, true))
+			&& (empty($tasksIds) || in_array(0, $tasksIds, true))
+			&& (empty($groupIds) || in_array(0, $groupIds, true));
+		if ($canDeleteCountedFlag)
+		{
+			(new Loader($userId))->resetCache();
+		}
+		elseif ($userId !== 0)
+		{
+			CommentsCountCache::drop($userId);
+		}
+		else
+		{
+			// Rows of every user are gone and the query gives no way to tell which users they belonged to.
+			CommentsCountCache::dropAll();
+		}
 	}
 
 	/**
@@ -69,6 +90,8 @@ trait CommandTrait
 			VALUES ({$userId}, 0, 0, '". CounterDictionary::COUNTER_FLAG_COUNTED ."', 1)
 		";
 		Application::getConnection()->query($sql);
+
+		(new Loader($userId))->resetCache();
 	}
 
 	/**
@@ -78,8 +101,11 @@ trait CommandTrait
 	private function batchInsert(array $data): void
 	{
 		$req = [];
+		$userIds = [];
 		foreach ($data as $row)
 		{
+			$userIds[(int)$row['USER_ID']] = true;
+
 			$row = [
 				'USER_ID'	=> $row['USER_ID'],
 				'TASK_ID'	=> $row['TASK_ID'],
@@ -104,5 +130,10 @@ trait CommandTrait
 		";
 
 		Application::getConnection()->query($sql);
+
+		foreach (array_keys($userIds) as $userId)
+		{
+			CommentsCountCache::drop($userId);
+		}
 	}
 }

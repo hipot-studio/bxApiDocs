@@ -16,6 +16,7 @@ use Bitrix\Tasks\Integration\SocialNetwork\Group;
 use Bitrix\Tasks\Scrum\Service\BacklogService;
 use Bitrix\Tasks\Scrum\Service\UserService;
 use Bitrix\Tasks\Util\User;
+use Bitrix\Main\Web\Uri;
 
 class Calendar extends Controller
 {
@@ -351,7 +352,7 @@ class Calendar extends Controller
 		}
 
 		$pathToCalendar = \CCalendar::getPathForCalendarEx($userId);
-		$pathToEvent = \CHTTP::urlAddParams($pathToCalendar, ['EVENT_ID' => $event['ID']]);
+		$pathToEvent = (string)(new Uri($pathToCalendar))->addParams(['EVENT_ID' => $event['ID']]);
 
 		$data = [
 			'ID' => $event['ID'],
@@ -446,7 +447,7 @@ class Calendar extends Controller
 		{
 			$pathToCalendar = \CCalendar::getPathForCalendarEx($userId);
 
-			$pathToEvent = \CHTTP::urlAddParams($pathToCalendar, ['EVENT_ID' => $eventData['ID']]);
+			$pathToEvent = (string)(new Uri($pathToCalendar))->addParams(['EVENT_ID' => $eventData['ID']]);
 
 			$chatMessageFields = [
 				'FROM_USER_ID' => $userId,

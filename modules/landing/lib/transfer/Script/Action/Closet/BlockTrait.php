@@ -27,10 +27,14 @@ trait BlockTrait
 		$ratio = $this->context->getRatio();
 		$blocks = $ratio->get(RatioPart::Blocks) ?? [];
 		$blocksPending = $ratio->get(RatioPart::BlocksPending) ?? [];
+		// anything but an array here is a malformed archive, and a warning would abort the import step
+		$archiveBlocks = is_array($data['BLOCKS'] ?? null) ? $data['BLOCKS'] : [];
 
-		foreach ($data['BLOCKS'] as $oldBlockId => $block)
+		foreach ($archiveBlocks as $oldBlockId => $block)
 		{
-			if (is_array($block) && !empty($block))
+			// the old id is a part of the link rewrite regex later on, so an archive
+			// with anything but an integer id is not trusted (mantis 257039)
+			if (is_int($oldBlockId) && is_array($block) && !empty($block))
 			{
 				$pending = false;
 				$newBlockId = $this->importBlock(

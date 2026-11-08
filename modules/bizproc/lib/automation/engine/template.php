@@ -387,7 +387,8 @@ class Template
 		$result = new Result();
 		try
 		{
-			$raw['ID'] = \CBPWorkflowTemplateLoader::add($raw, $userId === 1);
+			// an automation template is no process of the start list, whatever AUTO_EXECUTE a subclass picks
+			$raw['ID'] = \CBPWorkflowTemplateLoader::add($raw, $userId === 1, markFirstPublication: false);
 			$result->setData(array('ID' => $raw['ID']));
 
 			$raw['MODULE_ID'] = $documentType[0];

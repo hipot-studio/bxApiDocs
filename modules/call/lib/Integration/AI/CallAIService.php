@@ -89,7 +89,7 @@ final class CallAIService
 
 		if ($track->getType() != Track::TYPE_TRACK_PACK)
 		{
-			return $result->addError(new CallAIError(CallAIError::AI_UNSUPPORTED_TRACK_ERROR, 'Unsupported track format'));
+			return $result->addError(new CallAIError(CallAIError::UNSUPPORTED_TRACK_ERROR, 'Unsupported track format'));
 		}
 
 		$task = new Task\TranscribeCallRecord();
@@ -195,7 +195,7 @@ final class CallAIService
 		{
 			$log && $logger->error('Empty payload for AI');
 
-			$error = new CallAIError(CallAIError::AI_EMPTY_PAYLOAD_ERROR);
+			$error = new CallAIError(CallAIError::EMPTY_PAYLOAD_ERROR);
 			$call = Registry::getCallWithId($task->getCallId());
 
 			(new FollowUpAnalytics($call))
@@ -389,7 +389,7 @@ final class CallAIService
 			if (!$trackPack)
 			{
 				// Explicit retry but track pack was never delivered — a delivery failure, not a wait timeout.
-				return $result->addError(new CallAIError(CallAIError::AI_TRACKPACK_NOT_RECEIVED));
+				return $result->addError(new CallAIError(CallAIError::TRACK_PACK_NOT_FOUND_ERROR));
 			}
 
 			return $this->processTrack($trackPack);
@@ -434,6 +434,27 @@ final class CallAIService
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Latest AI task id for the call (any sense type) as a claim discriminator that tells
+	 * one analysis attempt from the next. Every restart adds a fresh task: a full restart a
+	 * new TRANSCRIBE task, a dependent-only restart (transcription already done) new
+	 * OVERVIEW/SUMMARY tasks. Keying on the newest id — not the TRANSCRIBE one, which is
+	 * reused on a dependent-only restart — makes the discriminator advance on every attempt,
+	 * so a new attempt's AI_START wins its own send-guard claim instead of being muted by the
+	 * previous attempt's live claim.
+	 */
+	public function getCurrentAnalysisAttemptId(int $callId): ?string
+	{
+		$row = CallAITaskTable::getList([
+			'select' => ['ID'],
+			'filter' => ['=CALL_ID' => $callId],
+			'order' => ['ID' => 'DESC'],
+			'limit' => 1,
+		])?->fetch();
+
+		return $row ? (string)$row['ID'] : null;
 	}
 
 	/**
@@ -987,7 +1008,7 @@ final class CallAIService
 		}
 		if ($taskCompleted == count($waitForTasks))
 		{
-			return $result;//ок
+			return $result;
 		}
 
 		// Check track_pack
@@ -1012,7 +1033,7 @@ final class CallAIService
 			]);
 		}
 
-		return $result->addError(new CallAIError(CallAIError::AI_TRACKPACK_NOT_RECEIVED));
+		return $result->addError(new CallAIError(CallAIError::TRACK_PACK_NOT_FOUND_TIMEOUT));
 	}
 	//endregion
 

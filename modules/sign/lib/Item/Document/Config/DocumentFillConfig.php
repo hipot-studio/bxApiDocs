@@ -22,6 +22,7 @@ class DocumentFillConfig implements Contract\Item
 		public ?DocumentMemberConfig     $responsibleUser,
 		public ?DocumentExternalSettings $externalSettings,
 		public ?string                   $language,
+		public ?string                   $message = null,
 	)
 	{
 	}

@@ -1,8 +1,11 @@
-<?
+<?php
+
 IncludeModuleLangFile(__FILE__);
 
 use Bitrix\Security\RedirectRuleTable;
 use Bitrix\Main\SiteDomainTable;
+use Bitrix\Main\Application;
+use Bitrix\Main\Web\Uri;
 
 class CSecurityRedirect
 {
@@ -16,18 +19,23 @@ class CSecurityRedirect
 			define("BX_SECURITY_LOCAL_REDIRECT", true);
 		}
 
-		$kernelSession = \Bitrix\Main\Application::getInstance()->getKernelSession();
-		if ($kernelSession->isStarted() && $kernelSession->has("LOCAL_REDIRECTS"))
+		$application = Application::getInstance();
+		$kernelSession = $application->getKernelSession();
+		$localSession = null;
+		$localRedirects = array("C" => 1, "R" => ($_SERVER["HTTP_REFERER"] ?? ''));
+		if ($kernelSession->isStarted())
 		{
-			if ($kernelSession["LOCAL_REDIRECTS"]["C"] == 0 && $kernelSession["LOCAL_REDIRECTS"]["R"] == '')
+			$localSession = $application->getLocalSession('security_redirect');
+			if (isset($localSession["LOCAL_REDIRECTS"]))
 			{
-				$kernelSession["LOCAL_REDIRECTS"]["R"] = ($_SERVER["HTTP_REFERER"] ?? '');
+				$localRedirects = $localSession["LOCAL_REDIRECTS"];
+				if ($localRedirects["C"] == 0 && $localRedirects["R"] == '')
+				{
+					$localRedirects["R"] = ($_SERVER["HTTP_REFERER"] ?? '');
+				}
+				$localRedirects["C"]++;
 			}
-			$kernelSession["LOCAL_REDIRECTS"]["C"]++;
-		}
-		else
-		{
-			$kernelSession["LOCAL_REDIRECTS"] = array("C" => 1, "R" => ($_SERVER["HTTP_REFERER"] ?? ''));
+			$localSession["LOCAL_REDIRECTS"] = $localRedirects;
 		}
 
 		if ($skip_security_check)
@@ -46,7 +54,7 @@ class CSecurityRedirect
 		$bSkipCheck = false;
 		if (preg_match('~^(?:http|https)://~iD', $url_l))
 		{
-			$uri = new \Bitrix\Main\Web\Uri($url_l);
+			$uri = new Uri($url_l);
 			$destinationHost = $uri->getHost();
 
 			if (defined("BX24_HOST_NAME"))
@@ -66,7 +74,7 @@ class CSecurityRedirect
 				$arSite = false;
 			}
 
-			if (!$bSkipCheck && $arSite && $arSite["SERVER_NAME"])
+			if ($arSite && $arSite["SERVER_NAME"])
 			{
 				$bSkipCheck = $destinationHost === $arSite["SERVER_NAME"];
 			}
@@ -103,9 +111,9 @@ class CSecurityRedirect
 
 		if (!$bSkipCheck && preg_match("/^(http|https|ftp):\\/\\//i", $url_l))
 		{
-			if ($kernelSession["LOCAL_REDIRECTS"]["C"] > 1)
+			if ($localRedirects["C"] > 1)
 			{
-				$REFERER_TO_CHECK = $kernelSession["LOCAL_REDIRECTS"]["R"];
+				$REFERER_TO_CHECK = $localRedirects["R"];
 			}
 			else
 			{
@@ -126,16 +134,20 @@ class CSecurityRedirect
 			if ($good && COption::GetOptionString("security", "redirect_href_sign") == "Y")
 			{
 				$sid = static::GetSeed();
-				$good &=  static::Sign($sid, $url) === $_GET["af"];
+				$good &=  static::Sign($sid, $url) === ($_GET["af"] ?? null);
 			}
 
-			$host = (new \Bitrix\Main\Web\Uri($url))->getHost();
+			$host = (new Uri($url))->getHost();
 
 			if (!$good || ($host != '' && $host != $_SERVER['HTTP_HOST'])){
-				\Bitrix\Main\Application::getInstance()->getKernelSession()["LOCAL_REDIRECTS"] = [
+				$localRedirects = [
 					"C" => 0,
 					"R" => ''
 				];
+				if ($localSession !== null)
+				{
+					$localSession["LOCAL_REDIRECTS"] = $localRedirects;
+				}
 			}
 
 			if (!$good)
@@ -174,7 +186,7 @@ class CSecurityRedirect
 					{
 						$converter = CBXPunycode::GetConverter();
 						$converted = $converter->Encode($arMatch[3]);
-						$converted = $converted ? $converted : $arMatch[3];
+						$converted = $converted ?: $arMatch[3];
 						$url_e = $arMatch[1].$arMatch[2]. $converted .mb_substr($url_c, mb_strlen($arMatch[1].$arMatch[2].$arMatch[3]));
 					}
 					else
@@ -229,7 +241,7 @@ class CSecurityRedirect
 </body>
 </html>
 		<?
-					die();
+					$application->terminate();
 				}
 				else
 				{
@@ -265,10 +277,15 @@ class CSecurityRedirect
 		//so it's only true referer
 		if (!defined("BX_SECURITY_LOCAL_REDIRECT"))
 		{
-			\Bitrix\Main\Application::getInstance()->getKernelSession()["LOCAL_REDIRECTS"] = [
-				"C" => 0,
-				"R" => ($_SERVER["HTTP_REFERER"] ?? '')
-			];
+			$application = Application::getInstance();
+			$kernelSession = $application->getKernelSession();
+			if ($kernelSession->isStarted())
+			{
+				$application->getLocalSession('security_redirect')["LOCAL_REDIRECTS"] = [
+					"C" => 0,
+					"R" => ($_SERVER["HTTP_REFERER"] ?? '')
+				];
+			}
 		}
 
 		if (COption::GetOptionString("security", "redirect_href_sign") == "Y")
@@ -488,6 +505,4 @@ class CSecurityRedirect
 		);
 		return $res;
 	}
-
 }
-?>

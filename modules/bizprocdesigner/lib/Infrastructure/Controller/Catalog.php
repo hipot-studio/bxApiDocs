@@ -10,6 +10,7 @@ use Bitrix\Bizproc\Public\Entity\Document\Workflow;
 use Bitrix\Bizproc\Public\Service\ActivityGroup\GroupVisibilityServiceInterface;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Activities;
 use Bitrix\Bizproc\Runtime\ActivitySearcher\Searcher;
+use Bitrix\BizprocDesigner\Infrastructure\Catalog\NodeCatalogLayout;
 use Bitrix\BizprocDesigner\Infrastructure\Dto\Catalog\NodeCatalogItemDtoFactory;
 use Bitrix\Main\Engine\JsonController;
 use Bitrix\Main\Loader;
@@ -82,13 +83,11 @@ class Catalog extends JsonController
 
 		$groups = array_values(array_filter($groups, static fn($group) => !empty($group['items'])));
 
+		$layout = new NodeCatalogLayout();
 		$groups = array_map(
-			static function ($group) {
+			static function ($group) use ($layout) {
 				$nodeCatalogItemDtoFactory = new NodeCatalogItemDtoFactory();
-				usort(
-					$group['items'],
-					static fn($a, $b) => ($a->getSort() ?? INF) <=> ($b->getSort() ?? INF)
-				);
+				$group['items'] = $layout->sort((string)$group['id'], $group['items']);
 
 				$group['items'] = array_map(
 					static fn($activityDescription) => $nodeCatalogItemDtoFactory->createByDescription($activityDescription),

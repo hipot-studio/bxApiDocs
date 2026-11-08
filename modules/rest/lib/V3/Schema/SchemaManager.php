@@ -5,6 +5,7 @@ namespace Bitrix\Rest\V3\Schema;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Localization\LocalizableMessage;
 use Bitrix\Rest\V3\CacheManager;
+use Bitrix\Rest\V3\Dto\Generator;
 
 final class SchemaManager
 {
@@ -102,15 +103,6 @@ final class SchemaManager
 			$methodDescription = $this->getMethodDescriptions()[$actionUri] ?? null;
 		}
 
-		if ($methodDescription === null)
-		{
-			return $methodDescription;
-		}
-
-		// Restore only the found module's DTOs. Do not materialize all modules on
-		// unknown-method lookups: getMethodDescriptions() is reachable before auth.
-		$this->controllerDataManager->ensureGeneratedDtoClassesLoaded($methodDescription->module);
-
 		return $methodDescription;
 	}
 
@@ -121,10 +113,7 @@ final class SchemaManager
 
 	public function getControllersByModules(): array
 	{
-		$byModule = $this->controllerDataManager->getData()['byModule'] ?? [];
-		$this->ensureGeneratedDtoClassesLoadedForModules(...array_keys($byModule));
-
-		return $byModule;
+		return $this->controllerDataManager->getData()['byModule'] ?? [];
 	}
 
 	/**
@@ -135,13 +124,30 @@ final class SchemaManager
 	 */
 	public function ensureGeneratedDtoClassesLoadedFromMethodDescriptions(array $methodDescriptions): void
 	{
-		$moduleIds = [];
+		$dtoFqcns = [];
 		foreach ($methodDescriptions as $methodDescription)
 		{
-			$moduleIds[$methodDescription->module] = $methodDescription->module;
+			if ($methodDescription->dtoFqcn !== null)
+			{
+				$dtoFqcns[$methodDescription->dtoFqcn] = $methodDescription->dtoFqcn;
+			}
+
+			$dtoClass = $methodDescription->queryParams['dtoClass'] ?? null;
+			if (is_string($dtoClass))
+			{
+				$dtoFqcns[$dtoClass] = $dtoClass;
+			}
 		}
 
-		$this->ensureGeneratedDtoClassesLoadedForModules(...array_values($moduleIds));
+		if ($dtoFqcns === [])
+		{
+			return;
+		}
+
+		foreach ($this->controllerDataManager->getGeneratedDtoClosure(...$dtoFqcns) as $generatedDto)
+		{
+			Generator::generateByDto($generatedDto);
+		}
 	}
 
 	private function ensureGeneratedDtoClassesLoadedForModules(string ...$moduleIds): void

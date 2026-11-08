@@ -53,6 +53,9 @@ class VisibilityManager
 			$permissionId,
 			CCrmOwnerType::ResolveUserFieldEntityID($entityTypeId),
 		);
+
+		UserFieldPermissionTable::cleanCache();
+		static::cleanUserFieldsAccessCodesCache($entityTypeId);
 	}
 
 	/**
@@ -165,6 +168,11 @@ class VisibilityManager
 		}
 
 		return self::prepareFieldsAccessCodes($fields, $accessCodesInfo);
+	}
+
+	private static function cleanUserFieldsAccessCodesCache(int $entityTypeId): void
+	{
+		unset(self::$userFieldAccessCodes[$entityTypeId]);
 	}
 
 	private static function loadUserFieldsAccessCodes(int $entityTypeID): array

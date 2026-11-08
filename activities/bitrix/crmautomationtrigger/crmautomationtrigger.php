@@ -9,7 +9,6 @@ use Bitrix\Bizproc\Result;
 use Bitrix\Bizproc\Error;
 use Bitrix\Crm\Automation\Target\BaseTarget;
 use Bitrix\Crm\Automation\Trigger\BaseTrigger;
-use Bitrix\Crm\Automation\Trigger\EmailSentTrigger;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
@@ -136,7 +135,9 @@ class CBPCrmAutomationTrigger extends Bitrix\Bizproc\Activity\BaseTrigger
 		/** @var class-string<BaseTrigger> $triggerClass */
 		$triggerClass = $context['Properties']['TriggerClass'] ?? $context['TriggerClass'] ?? '';
 		$document = $context['Properties']['Document'] ?? $context['Document'] ?? '';
+		$condition = $context['Properties']['condition'] ?? $context['condition'] ?? null;
 		$complexDocumentType = self::resolveDocumentTypeFromDocument($document);
+		$isConditionHidden = self::isConditionBlockAvailable($context) && !self::isConditionConfigured($condition);
 
 		$map = [
 			'TriggerClass' => [
@@ -168,18 +169,20 @@ class CBPCrmAutomationTrigger extends Bitrix\Bizproc\Activity\BaseTrigger
 			],
 			'condition' => [
 				'Name' => Loc::getMessage('BP_CRM_CRMAT_CONDITION'),
+				'ShowFieldLabel' => false,
 				'FieldName' => 'condition',
 				'Type' => FieldType::CUSTOM,
 				'CustomType'=> '@trigger-condition-settings',
+				'Hidden' => $isConditionHidden,
 			],
 		];
 
-		if ($triggerClass === EmailSentTrigger::class)
+		if ($isConditionHidden)
 		{
-			$map['condition']['ShowFieldLabel'] = false;
+			// A hidden control comes as a bare input, and an input carries a group as "[object Object]".
+			$map['condition']['Getter'] = static fn(): string => '';
 		}
-
-		if (!empty($complexDocumentType))
+		elseif (!empty($complexDocumentType))
 		{
 			$map['condition']['Settings'] = self::getConditionSettings($complexDocumentType);
 		}
@@ -195,6 +198,37 @@ class CBPCrmAutomationTrigger extends Bitrix\Bizproc\Activity\BaseTrigger
 		}
 
 		return $map;
+	}
+
+	/**
+	 * Whether the external condition block is offered to this node - the answer of the owner of the panel,
+	 * put into the properties map context. Not protected from a forged verdict and needs none: the flat
+	 * paths ({@see \Bitrix\Bizproc\Activity\BaseTrigger::applyPropertiesDialogValues()}) hand the values
+	 * of the client in as that context, and forging it buys nothing - `Hidden` and `Getter` are read by the
+	 * rendering alone, while the extraction of the value ignores both.
+	 */
+	private static function isConditionBlockAvailable(array $context): bool
+	{
+		return is_array($context['Properties'] ?? null) && ($context['ConditionBlockAvailable'] ?? null) === true;
+	}
+
+	/** Configured means at least one item naming a field: both empty forms of the property answer false. */
+	private static function isConditionConfigured(mixed $value): bool
+	{
+		if (!is_array($value) || !is_array($value['items'] ?? null))
+		{
+			return false;
+		}
+
+		foreach ($value['items'] as $item)
+		{
+			if (!empty($item[0]['field']))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -433,5 +467,53 @@ class CBPCrmAutomationTrigger extends Bitrix\Bizproc\Activity\BaseTrigger
 		}
 
 		return is_subclass_of($triggerClass, BaseTrigger::class);
+	}
+
+	/**
+	 * `FieldName`s of the own properties whose values decide the document of the condition. These three
+	 * methods are the declaration of the channel itself: `bizproc` reads it off their names, so the node
+	 * needs no update dependency on it
+	 * ({@see \Bitrix\Bizproc\Internal\Service\Activity\ComplexActivityService::declaresConditionDocumentChannel()}).
+	 */
+	public static function getConditionDocumentSourceFieldNames(): array
+	{
+		return ['Document'];
+	}
+
+	/** Complex type of the document of the condition, null while it is decided on the document of the process. */
+	public function getConditionDocumentComplexType(): ?array
+	{
+		return self::resolveConditionDocumentType($this->getRawPropertyValue('Document'));
+	}
+
+	/** Complex identifier `[moduleId, entity, documentId]` of the record the condition is decided on. */
+	public function getConditionDocumentId(TriggerParameters $parameters): ?array
+	{
+		if (self::resolveConditionDocumentType($this->getRawPropertyValue('Document')) === null)
+		{
+			return null;
+		}
+
+		/** @var ?BaseTarget $target */
+		$target = $parameters->get('TARGET');
+
+		return $target?->getComplexDocumentId();
+	}
+
+	/**
+	 * The `Document` property as a complex document type, and only in its full `module@entity@type` form.
+	 * The length is checked here because the shared parser is a bare `explode()`, and its four other
+	 * consumers keep feeding it values of any shape.
+	 */
+	private static function resolveConditionDocumentType(mixed $document): ?array
+	{
+		if (!is_string($document))
+		{
+			return null;
+		}
+
+		$documentType = self::resolveDocumentTypeFromDocument($document);
+
+		return $documentType !== null && count($documentType) === 3 ? $documentType : null;
 	}
 }

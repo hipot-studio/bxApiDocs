@@ -11,6 +11,7 @@ use Bitrix\Mail\Internal\Entity\Draft\DraftAttachmentFingerprint;
 use Bitrix\Mail\Internal\Entity\Draft\DraftPage;
 use Bitrix\Mail\Internal\Entity\Draft\DraftSnapshot;
 use Bitrix\Mail\Internal\Entity\Draft\DraftView;
+use Bitrix\Mail\Internal\Service\DateTime\UtcDateTimeFormatter;
 use Bitrix\Mail\Internals\DraftAttachmentTable;
 use Bitrix\Mail\Internals\DraftTable;
 use Bitrix\Main\Application;
@@ -67,11 +68,13 @@ class DraftRepository
 	 * hands out the bindings the save has just replaced, so the send would attach the files of a revision
 	 * it never showed and disclose them to its own recipients.
 	 *
-	 * The send needs three identifiers and nothing else: the stored copy, the file it was copied from,
-	 * which a restored body still references in bxacid links, and its Disk object, by which a restored
-	 * body references an inline image. The read model of the form, its links and previews are not built.
+	 * The send needs four identifiers and nothing else: the stored copy, the file it was copied from,
+	 * which a restored body still references in bxacid links, its Disk object, by which a restored body
+	 * references an inline image, and the source object the copy was made of, by which a consumer binds a
+	 * copy to the converted set it belongs to. The read model of the form, its links and previews are not
+	 * built.
 	 *
-	 * @return list<array{fileId: int, sourceFileId: int, objectId: int}>
+	 * @return list<array{fileId: int, sourceFileId: int, sourceObjectId: int, objectId: int}>
 	 */
 	public function findClaimedAttachments(
 		int $userId,
@@ -94,7 +97,7 @@ class DraftRepository
 		}
 
 		$query = DraftAttachmentTable::query()
-			->setSelect(['FILE_ID', 'SOURCE_FILE_ID', 'OBJECT_ID' => 'AVAILABLE_OBJECT.ID'])
+			->setSelect(['FILE_ID', 'SOURCE_FILE_ID', 'SOURCE_OBJECT_ID', 'OBJECT_ID' => 'AVAILABLE_OBJECT.ID'])
 			->registerRuntimeField(
 				new Reference(
 					'CLAIMED_DRAFT',
@@ -145,6 +148,7 @@ class DraftRepository
 			$attachments[$fileId] = [
 				'fileId' => $fileId,
 				'sourceFileId' => (int)$row['SOURCE_FILE_ID'],
+				'sourceObjectId' => (int)($row['SOURCE_OBJECT_ID'] ?? 0),
 				'objectId' => (int)$row['OBJECT_ID'],
 			];
 		}
@@ -161,6 +165,7 @@ class DraftRepository
 		?int $crmEntityTypeId = null,
 		?int $crmEntityId = null,
 		array $attachments = [],
+		bool $manageTransaction = true,
 	): ?DraftView
 	{
 		$this->lastSaveWasIdempotent = false;
@@ -186,7 +191,10 @@ class DraftRepository
 		];
 
 		$connection = Application::getConnection();
-		$connection->startTransaction();
+		if ($manageTransaction)
+		{
+			$connection->startTransaction();
+		}
 		try
 		{
 			if ($draftId === null)
@@ -211,7 +219,7 @@ class DraftRepository
 					)
 					{
 						$this->lastSaveFailure = self::SAVE_FAILURE_CONFLICT;
-						$connection->rollbackTransaction();
+						$this->rollbackIfOwned($connection, $manageTransaction);
 
 						return null;
 					}
@@ -228,11 +236,11 @@ class DraftRepository
 						if ($view === null)
 						{
 							$this->lastSaveFailure = self::SAVE_FAILURE_TECHNICAL;
-							$connection->rollbackTransaction();
+							$this->rollbackIfOwned($connection, $manageTransaction);
 
 							return null;
 						}
-						$connection->commitTransaction();
+						$this->commitIfOwned($connection, $manageTransaction);
 
 						return $view;
 					}
@@ -245,7 +253,7 @@ class DraftRepository
 					)
 					{
 						$this->lastSaveFailure = self::SAVE_FAILURE_CONFLICT;
-						$connection->rollbackTransaction();
+						$this->rollbackIfOwned($connection, $manageTransaction);
 
 						return null;
 					}
@@ -262,7 +270,7 @@ class DraftRepository
 							) !== null
 								? self::SAVE_FAILURE_CONFLICT
 								: self::SAVE_FAILURE_TECHNICAL;
-						$connection->rollbackTransaction();
+						$this->rollbackIfOwned($connection, $manageTransaction);
 
 						return null;
 					}
@@ -276,7 +284,7 @@ class DraftRepository
 			)
 			{
 				$this->lastSaveFailure = self::SAVE_FAILURE_CONFLICT;
-				$connection->rollbackTransaction();
+				$this->rollbackIfOwned($connection, $manageTransaction);
 
 				return null;
 			}
@@ -287,14 +295,14 @@ class DraftRepository
 			{
 				throw new \RuntimeException('Saved draft was not found.');
 			}
-			$connection->commitTransaction();
+			$this->commitIfOwned($connection, $manageTransaction);
 
 			return $view;
 		}
 		catch (\Throwable)
 		{
 			$this->lastSaveFailure = self::SAVE_FAILURE_TECHNICAL;
-			$connection->rollbackTransaction();
+			$this->rollbackIfOwned($connection, $manageTransaction);
 
 			return null;
 		}
@@ -303,6 +311,22 @@ class DraftRepository
 	public function wasLastSaveIdempotent(): bool
 	{
 		return $this->lastSaveWasIdempotent;
+	}
+
+	private function commitIfOwned(\Bitrix\Main\DB\Connection $connection, bool $manageTransaction): void
+	{
+		if ($manageTransaction)
+		{
+			$connection->commitTransaction();
+		}
+	}
+
+	private function rollbackIfOwned(\Bitrix\Main\DB\Connection $connection, bool $manageTransaction): void
+	{
+		if ($manageTransaction)
+		{
+			$connection->rollbackTransaction();
+		}
 	}
 
 	public function getLastSaveFailure(): ?string
@@ -374,25 +398,135 @@ class DraftRepository
 		$attachmentCountsByDraftId = $this->loadAvailableAttachmentCountsByDraftIds(array_column($rows, 'ID'));
 		foreach ($rows as $row)
 		{
-			$recipients = Json::decode((string)$row['RECIPIENTS_DATA']);
-			$sender = $row['SENDER_DATA'] !== null ? Json::decode((string)$row['SENDER_DATA']) : null;
-			$items[] = [
-				'id' => (int)$row['ID'],
-				'revision' => (int)$row['REVISION'],
-				'sender' => $sender,
-				'recipients' => array_merge(
-					$recipients['to'] ?? [],
-					$recipients['cc'] ?? [],
-					$recipients['bcc'] ?? [],
-				),
-				'subject' => (string)($row['SUBJECT'] ?? ''),
-				'bodyPreview' => (string)($row['BODY_PREVIEW'] ?? ''),
-				'updatedAt' => $row['DATE_MODIFY']->format(DATE_ATOM),
-				'attachmentCount' => $attachmentCountsByDraftId[(int)$row['ID']] ?? 0,
-			];
+			$items[] = $this->toListRow($row, $attachmentCountsByDraftId[(int)$row['ID']] ?? 0);
 		}
 
 		return new DraftPage($items, $total, $page, $pageSize);
+	}
+
+	/**
+	 * Active mail drafts of the user, newest first, in the row model of {@see self::listMail()} and
+	 * paired with the message a reply draft answers. A new or forwarded draft reports no parent, so
+	 * a caller that groups by conversation keeps it as a row of its own.
+	 *
+	 * The bound is the keyset the grid orders by: drafts modified before the given moment, and of
+	 * that very moment only those below the given identifier.
+	 *
+	 * @return list<array{view: array, parentMessageId: int, updatedAt: DateTime}>
+	 */
+	public function listActiveMailDrafts(
+		int $userId,
+		int $limit,
+		?DateTime $modifiedBefore = null,
+		int $idBefore = 0,
+	): array
+	{
+		$query = $this->buildActiveMailDraftQuery($userId)
+			->setOrder(['DATE_MODIFY' => 'DESC', 'ID' => 'DESC'])
+			->setLimit(max(1, $limit))
+		;
+		if ($modifiedBefore !== null)
+		{
+			$query->where(
+				Query::filter()
+					->logic('or')
+					->where('DATE_MODIFY', '<', $modifiedBefore)
+					->where(
+						Query::filter()
+							->where('DATE_MODIFY', $modifiedBefore)
+							->where('ID', '<', $idBefore),
+					),
+			);
+		}
+
+		return $this->toActiveMailDraftRows($query->fetchAll());
+	}
+
+	/**
+	 * The given active mail drafts of the user, in the row model of {@see self::listActiveMailDrafts()}
+	 * and keyed by identifier. A draft of another owner, of another context or already gone is simply
+	 * absent from the answer.
+	 *
+	 * @param int[] $draftIds
+	 * @return array<int, array{view: array, parentMessageId: int, updatedAt: DateTime}>
+	 */
+	public function findActiveMailDraftsByIds(int $userId, array $draftIds): array
+	{
+		$draftIds = array_values(array_unique(array_map('intval', $draftIds)));
+		if ($draftIds === [])
+		{
+			return [];
+		}
+
+		$drafts = [];
+		$rows = $this->buildActiveMailDraftQuery($userId)->whereIn('ID', $draftIds)->fetchAll();
+		foreach ($this->toActiveMailDraftRows($rows) as $draft)
+		{
+			$drafts[(int)$draft['view']['id']] = $draft;
+		}
+
+		return $drafts;
+	}
+
+	private function buildActiveMailDraftQuery(int $userId): Query
+	{
+		return DraftTable::query()
+			->setSelect([
+				'ID',
+				'REVISION',
+				'SENDER_DATA',
+				'RECIPIENTS_DATA',
+				'SUBJECT',
+				'BODY_PREVIEW',
+				'DATE_MODIFY',
+				'COMPOSE_MODE',
+				'PARENT_MESSAGE_ID',
+			])
+			->where('USER_ID', $userId)
+			->where('CONTEXT_TYPE', DraftTable::CONTEXT_MAIL)
+			->where('STATUS', DraftTable::STATUS_ACTIVE)
+			->where('DATE_EXPIRE', '>', new DateTime())
+		;
+	}
+
+	/**
+	 * @return list<array{view: array, parentMessageId: int, updatedAt: DateTime}>
+	 */
+	private function toActiveMailDraftRows(array $rows): array
+	{
+		$attachmentCountsByDraftId = $this->loadAvailableAttachmentCountsByDraftIds(array_column($rows, 'ID'));
+
+		return array_map(
+			fn(array $row): array => [
+				'view' => $this->toListRow($row, $attachmentCountsByDraftId[(int)$row['ID']] ?? 0),
+				'parentMessageId' => $row['COMPOSE_MODE'] === DraftTable::COMPOSE_MODE_REPLY
+					? (int)$row['PARENT_MESSAGE_ID']
+					: 0,
+				'updatedAt' => $row['DATE_MODIFY'],
+			],
+			$rows,
+		);
+	}
+
+	/** Row model of the drafts list. */
+	private function toListRow(array $row, int $attachmentCount): array
+	{
+		$recipients = Json::decode((string)$row['RECIPIENTS_DATA']);
+
+		return [
+			'id' => (int)$row['ID'],
+			'revision' => (int)$row['REVISION'],
+			'sender' => $row['SENDER_DATA'] !== null ? Json::decode((string)$row['SENDER_DATA']) : null,
+			'recipients' => array_merge(
+				$recipients['to'] ?? [],
+				$recipients['cc'] ?? [],
+				$recipients['bcc'] ?? [],
+			),
+			'subject' => (string)($row['SUBJECT'] ?? ''),
+			'bodyPreview' => (string)($row['BODY_PREVIEW'] ?? ''),
+			'updatedAt' => UtcDateTimeFormatter::format($row['DATE_MODIFY']),
+			'attachmentCount' => $attachmentCount,
+		];
 	}
 
 	private function applyAvailableAttachmentFilter(ConditionTree $filter, bool $hasAttachments): void
@@ -1122,5 +1256,113 @@ class DraftRepository
 		$plainBody = trim(strip_tags(html_entity_decode($body, ENT_QUOTES | ENT_HTML5)));
 
 		return mb_substr($plainBody, 0, 200);
+	}
+
+	/**
+	 * Converted large attachment sets the claimed draft carries, or an empty list when the claim does not
+	 * hold. The claim is the same statement the attachment copies are released under, so a send that may
+	 * not have the files of a draft may not learn about its sets either.
+	 *
+	 * A set is described by what a send needs to recognise it: its token, the public address the message
+	 * body has to carry and the files it holds. The read model of the form is not built here.
+	 *
+	 * @return list<array{token: string, publicUrl: string, fileIds: int[], sourceFileIds: int[]}>
+	 */
+	public function findClaimedLargeAttachments(
+		int $userId,
+		int $draftId,
+		string $contextType,
+		int $expectedRevision,
+		?string $expectedClientId = null,
+		?int $crmEntityTypeId = null,
+		?int $crmEntityId = null,
+	): array
+	{
+		if ($userId <= 0 || $draftId <= 0 || $expectedRevision <= 0)
+		{
+			return [];
+		}
+
+		$query = DraftTable::query()
+			->setSelect(['LARGE_ATTACHMENTS_DATA'])
+			->where('ID', $draftId)
+			->where('USER_ID', $userId)
+			->where('CONTEXT_TYPE', $contextType)
+			->where('STATUS', DraftTable::STATUS_ACTIVE)
+			->where('DATE_EXPIRE', '>', new DateTime())
+			->where('REVISION', $expectedRevision)
+		;
+		if ($expectedClientId !== null && $expectedClientId !== '')
+		{
+			$query->where('CLIENT_ID', $expectedClientId);
+		}
+		if ($crmEntityTypeId !== null)
+		{
+			$query
+				->where('CRM_ENTITY_TYPE_ID', $crmEntityTypeId)
+				->where('CRM_ENTITY_ID', $crmEntityId)
+			;
+		}
+
+		$row = $query->fetch();
+		if ($row === false || ($row['LARGE_ATTACHMENTS_DATA'] ?? null) === null)
+		{
+			return [];
+		}
+
+		return self::decodeLargeAttachments((string)$row['LARGE_ATTACHMENTS_DATA']);
+	}
+
+	/**
+	 * @return list<array{token: string, publicUrl: string, fileIds: int[], sourceFileIds: int[]}>
+	 */
+	private static function decodeLargeAttachments(string $data): array
+	{
+		try
+		{
+			$decoded = Json::decode($data);
+		}
+		catch (\Throwable $exception)
+		{
+			(new LoggerFactory())->createById('mail.Draft')?->error(
+				'Could not read the large attachments of a draft: {error}',
+				['error' => $exception->getMessage()],
+			);
+
+			return [];
+		}
+
+		if (!is_array($decoded))
+		{
+			return [];
+		}
+
+		$largeAttachments = [];
+		foreach ($decoded as $largeAttachment)
+		{
+			if (!is_array($largeAttachment))
+			{
+				continue;
+			}
+
+			$token = trim((string)($largeAttachment['token'] ?? ''));
+			$fileIds = array_values(array_unique(array_map('intval', (array)($largeAttachment['fileIds'] ?? []))));
+			if ($token === '' || $fileIds === [])
+			{
+				continue;
+			}
+
+			$largeAttachments[] = [
+				'token' => $token,
+				'publicUrl' => trim((string)($largeAttachment['publicUrl'] ?? '')),
+				'fileIds' => $fileIds,
+				'sourceFileIds' => array_values(array_unique(array_map(
+					'intval',
+					(array)($largeAttachment['sourceFileIds'] ?? $fileIds),
+				))),
+			];
+		}
+
+		return $largeAttachments;
 	}
 }

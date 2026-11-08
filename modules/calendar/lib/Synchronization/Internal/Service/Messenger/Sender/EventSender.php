@@ -58,6 +58,22 @@ class EventSender
 	}
 
 	/**
+	 * Enqueues a creation for a single vendor by event id.
+	 *
+	 * The id is enough to enqueue, so the catch-up export of a section does not have to materialize
+	 * its events as Event objects just to send them.
+	 *
+	 * @throws ConfigurationException
+	 * @throws MessageSendingException
+	 */
+	public function sendCreatedMessageForVendor(int $eventId, string $vendorCode): void
+	{
+		$message = new EventCreatedMessage($eventId);
+
+		$this->sendMessageForVendorByEventId($eventId, $message, $vendorCode);
+	}
+
+	/**
 	 * @throws ConfigurationException
 	 * @throws MessageSendingException
 	 */
@@ -264,9 +280,18 @@ class EventSender
 	 */
 	private function sendMessageForVendor(Event $event, EventMessage $message, string $vendorCode): void
 	{
+		$this->sendMessageForVendorByEventId($event->getId(), $message, $vendorCode);
+	}
+
+	/**
+	 * @throws ConfigurationException
+	 * @throws MessageSendingException
+	 */
+	private function sendMessageForVendorByEventId(int $eventId, EventMessage $message, string $vendorCode): void
+	{
 		if ($queue = $this->getQueue($vendorCode))
 		{
-			$itemIdParam = new ItemIdParam($event->getId());
+			$itemIdParam = new ItemIdParam($eventId);
 			$delayParam = new DelayParam(15);
 
 			try

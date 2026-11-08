@@ -30,7 +30,13 @@ class SetStateCommand extends AbstractCommand
 
 		try
 		{
-			$handler($this);
+			$deadlineUserOption = $handler($this);
+			if ($deadlineUserOption !== null)
+			{
+				$result->setDataValues([
+					'deadlineUserOption' => $deadlineUserOption,
+				]);
+			}
 
 			return $result;
 		}

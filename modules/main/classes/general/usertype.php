@@ -8,8 +8,11 @@
  */
 
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\SqlExpression;
+use Bitrix\Main\Type\Callback;
 use Bitrix\Main\UserFieldTable;
 use Bitrix\Main\UserFieldLangTable;
+use Bitrix\Main\UserField\Internal\UserFieldHelper;
 use Bitrix\Main\ORM\Fields;
 
 IncludeModuleLangFile(__FILE__);
@@ -676,7 +679,7 @@ class CAllUserTypeEntity extends CDBResult
 		// events
 		foreach (GetModuleEvents("main", "OnBeforeUserTypeUpdate", true) as $arEvent)
 		{
-			if (ExecuteModuleEventEx($arEvent, [&$arFields]) === false)
+			if (ExecuteModuleEventEx($arEvent, [&$arFields, $ID]) === false)
 			{
 				if ($APPLICATION->GetException())
 				{
@@ -830,30 +833,33 @@ class CAllUserTypeEntity extends CDBResult
 			$entityId = strtolower($arField["ENTITY_ID"]);
 
 			$arType = $USER_FIELD_MANAGER->GetUserType($arField["USER_TYPE_ID"]);
-			//We need special handling of file type properties
 			if ($arType)
 			{
-				if ($arType["BASE_TYPE"] == "file" && $commonEventResult['PROVIDE_STORAGE'])
+				$arField['USER_TYPE'] = $arType;
+				if (UserFieldHelper::hasValuesDeleteHandler($arField) && $commonEventResult['PROVIDE_STORAGE'])
 				{
-					// only if we store values
-					if ($arField["MULTIPLE"] == "Y")
+					$cleanupResult = UserFieldHelper::cleanupUserFieldValuesBeforeDelete(
+						$arField,
+						static::getStoredValues($arField, $entityId),
+					);
+					if (!$cleanupResult->isSuccess())
 					{
-						$strSql = "SELECT VALUE_INT AS VALUE FROM b_utm_" . $entityId . " WHERE FIELD_ID=" . $arField["ID"];
-					}
-					else
-					{
-						$strSql = "SELECT " . $arField["FIELD_NAME"] . " AS VALUE FROM b_uts_" . $entityId;
-					}
-					$rsFile = $DB->Query($strSql);
-					while ($arFile = $rsFile->Fetch())
-					{
-						CFile::Delete($arFile["VALUE"]);
+						$APPLICATION->ThrowException(
+							$cleanupResult->getError()?->getMessage() ?? 'Could not delete user field values.',
+						);
+
+						return false;
 					}
 				}
-				elseif ($arType["BASE_TYPE"] == "enum")
+
+				$fieldCleanupResult = UserFieldHelper::cleanupUserFieldDefinitionBeforeDelete($arField);
+				if (!$fieldCleanupResult->isSuccess())
 				{
-					$obEnum = new CUserFieldEnum;
-					$obEnum->DeleteFieldEnum($arField["ID"]);
+					$APPLICATION->ThrowException(
+						$fieldCleanupResult->getError()?->getMessage() ?? 'Could not delete user field.',
+					);
+
+					return false;
 				}
 			}
 
@@ -876,8 +882,21 @@ class CAllUserTypeEntity extends CDBResult
 				$DB->Query("DELETE FROM b_utm_" . $entityId . " WHERE FIELD_ID = '" . $ID . "'");
 
 				// delayed column drop
+				$callback = new Callback([CUserTypeEntity::class, 'syncColumnsAgent'], [$arField['ENTITY_ID']]);
+
 				CTimeZone::Disable();
-				CAgent::AddAgent("CUserTypeEntity::syncColumnsAgent('{$arField["ENTITY_ID"]}');", 'main', 'N', 1, '', 'Y', ConvertTimeStamp(time() + 30, 'FULL'), 100, false, false);
+				CAgent::AddAgent(
+					$callback,
+					'main',
+					'N',
+					1,
+					'',
+					'Y',
+					ConvertTimeStamp(time() + 30, 'FULL'),
+					100,
+					false,
+					false
+				);
 				CTimeZone::Enable();
 			}
 		}
@@ -902,13 +921,18 @@ class CAllUserTypeEntity extends CDBResult
 
 		$rs = true;
 		$rsFields = $this->GetList([], ["ENTITY_ID" => $entity_id]);
-		//We need special handling of file and enum type properties
 		while ($arField = $rsFields->Fetch())
 		{
 			$arType = $USER_FIELD_MANAGER->GetUserType($arField["USER_TYPE_ID"]);
-			if ($arType && ($arType["BASE_TYPE"] == "file" || $arType["BASE_TYPE"] == "enum"))
+			if (
+				$arType
+				&& UserFieldHelper::hasDeleteLifecycle(['USER_TYPE' => $arType])
+			)
 			{
-				$this->Delete($arField["ID"]);
+				if ($this->Delete($arField["ID"]) === false)
+				{
+					return false;
+				}
 			}
 		}
 
@@ -932,6 +956,48 @@ class CAllUserTypeEntity extends CDBResult
 		$DB->Query("DROP TABLE IF EXISTS b_utm_" . $entityId);
 
 		return $rs;
+	}
+
+	private static function getStoredValues(array $field, string $entityId): iterable
+	{
+		$connection = Application::getConnection();
+		if ($field['MULTIPLE'] === 'Y')
+		{
+			$query = new SqlExpression(
+				'SELECT ?# AS ?# FROM ?# WHERE ?# = ?i',
+				static::getMultipleValueColumn($field['USER_TYPE']['BASE_TYPE']),
+				'VALUE',
+				'b_utm_' . $entityId,
+				'FIELD_ID',
+				(int)$field['ID'],
+			);
+		}
+		else
+		{
+			$query = new SqlExpression(
+				'SELECT ?# AS ?# FROM ?#',
+				$field['FIELD_NAME'],
+				'VALUE',
+				'b_uts_' . $entityId,
+			);
+		}
+
+		$queryResult = $connection->query($query->compile());
+		while ($row = $queryResult->fetch())
+		{
+			yield $row['VALUE'];
+		}
+	}
+
+	private static function getMultipleValueColumn(string $baseType): string
+	{
+		return match ($baseType)
+		{
+			'int', 'file', 'enum' => 'VALUE_INT',
+			'double' => 'VALUE_DOUBLE',
+			'datetime' => 'VALUE_DATE',
+			default => 'VALUE',
+		};
 	}
 
 	protected static function cleanCache(string $entityId): void
@@ -965,7 +1031,7 @@ class CAllUserTypeEntity extends CDBResult
 		return $res;
 	}
 
-	public static function syncColumnsAgent(string $entityId): string
+	public static function syncColumnsAgent(string $entityId): ?Callback
 	{
 		global $DB;
 
@@ -976,7 +1042,7 @@ class CAllUserTypeEntity extends CDBResult
 
 		if (!$connection->isTableExists($table))
 		{
-			return '';
+			return null;
 		}
 
 		// prevents concurrent execution
@@ -1011,7 +1077,7 @@ class CAllUserTypeEntity extends CDBResult
 		$connection->unlock('uf_sync_' . $entityId);
 
 		// one time agent
-		return '';
+		return null;
 	}
 }
 

@@ -6,6 +6,8 @@ namespace Bitrix\Socialnetwork\V2\Internal\Integration\Calendar\Service;
 
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
+use Bitrix\Main\Type\DateTime;
+use Bitrix\Socialnetwork\V2\Internal\Integration\Calendar\Dto\GroupMeetingDto;
 use Bitrix\Socialnetwork\V2\Internal\Integration\Calendar\Provider\GroupEventProvider;
 
 class CalendarListService
@@ -42,5 +44,34 @@ class CalendarListService
 		}
 
 		return $this->groupEventProvider->getEventsPaged(groupId: $groupId, limit: $limit, lastId: $lastId) ?? [];
+	}
+
+	/**
+	 * Meetings are read on behalf of $userId: the calendar permission check is applied,
+	 * so meetings whose title is hidden from this user are not returned.
+	 *
+	 * @return list<GroupMeetingDto>
+	 * @throws LoaderException
+	 */
+	public function getFinishedProjectMeetings(
+		int $groupId,
+		int $userId,
+		?DateTime $from = null,
+		?DateTime $to = null,
+		int $limit = 10,
+	): array
+	{
+		if (!Loader::includeModule('calendar'))
+		{
+			return [];
+		}
+
+		return $this->groupEventProvider->getFinishedProjectMeetings(
+			groupId: $groupId,
+			userId: $userId,
+			from: $from,
+			to: $to,
+			limit: $limit,
+		);
 	}
 }

@@ -9,6 +9,10 @@ class Variables extends BaseControlMapper
 {
 	private array $uiValueToAttrMap = [];
 
+	/** Overrides for the mass actions of the matrix; by default the attribute-level bounds of the permission */
+	private ?string $minValueForUi = null;
+	private ?string $maxValueForUi = null;
+
 	public function getType(): string
 	{
 		return PermissionDictionary::TYPE_VARIABLES;
@@ -42,12 +46,26 @@ class Variables extends BaseControlMapper
 
 	public function getMinValue(): string
 	{
-		return $this->permission->getMinAttributeValue();
+		return $this->minValueForUi ?? $this->permission->getMinAttributeValue();
 	}
 
 	public function getMaxValue(): string
 	{
-		return $this->permission->getMaxAttributeValue();
+		return $this->maxValueForUi ?? $this->permission->getMaxAttributeValue();
+	}
+
+	public function setMinValue(?string $value): self
+	{
+		$this->minValueForUi = $value;
+
+		return $this;
+	}
+
+	public function setMaxValue(?string $value): self
+	{
+		$this->maxValueForUi = $value;
+
+		return $this;
 	}
 
 	public function addAttrMapping(string $uiValue, ?string $attr): self

@@ -41,37 +41,33 @@ final class UserFieldConfigFacade
 		return $access;
 	}
 
+	/**
+	 * The list keeps one shape whether or not the caller is restricted: the legacy path answered
+	 * with the raw type map without restrictions and with a trimmed map under them, so its answer
+	 * changed with the rights of the caller.
+	 *
+	 * @return Result data: array{types: list<array>}
+	 */
 	public function getTypes(string $moduleId, ?array $scopes = null): Result
 	{
 		$access = $this->getAccess($moduleId, $scopes);
 		$restrictedTypes = array_flip($access->getRestrictedTypes());
 
 		global $USER_FIELD_MANAGER;
-		$types = $USER_FIELD_MANAGER->GetUserType();
 
-		if (empty($restrictedTypes))
+		$types = [];
+		foreach ($USER_FIELD_MANAGER->GetUserType() as $id => $type)
 		{
-			return (new Result())->setData([
-				'types' => $types,
-			]);
-		}
-
-		$result = [];
-		foreach ($types as $id => $type)
-		{
-			if (!isset($restrictedTypes[$id]))
+			if (isset($restrictedTypes[$id]))
 			{
-				$result[$id] = [
-					'userTypeId' => $type['USER_TYPE_ID'],
-					'description' => $type['DESCRIPTION'],
-				];
+				continue;
 			}
+
+			$types[] = $type;
 		}
 
 		return (new Result())->setData([
-			'types' => [
-				'types' => $result,
-			],
+			'types' => $types,
 		]);
 	}
 

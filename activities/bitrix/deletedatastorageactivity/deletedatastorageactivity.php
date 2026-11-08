@@ -26,6 +26,7 @@ use Bitrix\Bizproc\Internal\Service\StorageActivity\StorageActivityService;
  * @property-write int ItemId
  * @property-write string DeleteMode
  * @property-write string StorageCode
+ * @property-write string IsExpanded
  */
 class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurableActivity, IBPEventActivity, IBPActivityExternalEventListener, ActivityContentBlockProviderInterface, ContentBlockScopeConsumerInterface
 {
@@ -33,6 +34,9 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 
 	private const DELETE_MODE_MULTIPLE = 'multiple';
 	private const DELETE_MODE_ALL = 'all';
+
+	/** The field the fail-closed filter contradicts itself on: every storage carries it, so it always resolves. */
+	private const FAIL_CLOSED_FILTER_FIELD = 'ID';
 
 	private ?array $filterCache = null;
 
@@ -46,6 +50,7 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 			'ItemId' => 0,
 			'DeleteMode' => static::DELETE_MODE_MULTIPLE,
 			'StorageCode' => '',
+			'IsExpanded' => 'Y',
 		];
 
 		$this->setPropertiesTypes([
@@ -306,6 +311,7 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 			],
 			'DynamicFilterFields' => [
 				'Name' => Loc::getMessage('BIZPROC_SDA_FILTER_FIELDS_PROPERTY'),
+				'ShowFieldLabel' => false,
 				'FieldName' => 'filter_fields',
 				'Type' => FieldType::CONDITIONGROUP,
 				'Required' => false,
@@ -326,16 +332,96 @@ class CBPDeleteDataStorageActivity extends BaseActivity implements IBPConfigurab
 					],
 				],
 			],
+			'IsExpanded' => [
+				'Name' => '',
+				'FieldName' => 'is_expanded',
+				'Type' => FieldType::STRING,
+				'Required' => false,
+				'AllowSelection' => false,
+				'Hidden' => true,
+				'Default' => 'Y',
+			],
 		];
 	}
 
+	public static function getAiPassthroughSettingNames(array $documentType): array
+	{
+		// DynamicFilterFields persists as a CONDITIONGROUP filter tree, which getPropertiesMap() types as a
+		// scalar, so only a passthrough keeps the delete filter through the reverse round-trip.
+		return ['DynamicFilterFields'];
+	}
+
+	/**
+	 * A saved filter carrying a condition the engine cannot read selects NOTHING here, rather than selecting by
+	 * the conditions that are left. The multiple mode deletes every record the filter selects
+	 * ({@see self::deleteStorageItemIds()}), so a filter short of a condition deletes records the saved value
+	 * never asked for - and a deletion cannot be looked at afterwards and undone.
+	 *
+	 * This is where the two storage nodes deliberately differ: the read node keeps the readable conditions and
+	 * reads by them ({@see \CBPReadDataStorageActivity::filterFieldsOrNull()}), because reading too much is
+	 * answered by the block's own output, while deleting too much is answered by nothing.
+	 *
+	 * A value the group cannot read at all is unchanged by this: it yields an empty filter, and the mode then
+	 * refuses the block with "record not found" ({@see self::checkProperties()}).
+	 */
 	private function prepareFilterContext(int $storageId): array
 	{
-		$conditionGroup = new ConditionGroup($this->DynamicFilterFields);
+		if ($this->hasUnreadableCondition())
+		{
+			return $this->getImpossibleOrmFilter(self::FAIL_CLOSED_FILTER_FIELD);
+		}
+
+		$conditionGroup = new ConditionGroup($this->filterFieldsOrNull());
 		$documentType = \Bitrix\Bizproc\Public\Entity\Document\Workflow::getComplexType();
 		$fieldsMap = StorageActivityService::getFilteringFieldsMap($storageId);
 
-		return $this->getOrmFilter($conditionGroup, $documentType, $fieldsMap);
+		$filter = $this->getOrmFilter($conditionGroup, $documentType, $fieldsMap);
+
+		return $this->isOrmFilterComplete() ? $filter : $this->getImpossibleOrmFilter(self::FAIL_CLOSED_FILTER_FIELD);
+	}
+
+	/**
+	 * The filter in the shape the condition group takes, or nothing. A template may carry it otherwise - an older
+	 * save, or a graph an agent sent before the shape of the value was described - and a TypeError here would
+	 * kill the whole process instead. A filter left with no condition deletes nothing: the multiple mode refuses
+	 * the block with "record not found" ({@see self::checkProperties()}).
+	 */
+	private function filterFieldsOrNull(): ?array
+	{
+		return is_array($this->DynamicFilterFields) ? $this->DynamicFilterFields : null;
+	}
+
+	/** Reject conditions lost or coerced by ConditionGroup before EntityFilter can diagnose them. */
+	private function hasUnreadableCondition(): bool
+	{
+		$items = is_array($this->DynamicFilterFields) ? ($this->DynamicFilterFields['items'] ?? null) : null;
+		if (!is_array($items))
+		{
+			return false;
+		}
+
+		foreach ($items as $item)
+		{
+			$condition = is_array($item) ? ($item[0] ?? null) : null;
+			if (
+				!is_array($condition)
+				|| empty($condition['field'])
+				|| !is_string($condition['operator'] ?? null)
+			)
+			{
+				return true;
+			}
+
+			foreach (['field', 'object'] as $key)
+			{
+				if (isset($condition[$key]) && !is_scalar($condition[$key]))
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	private function getPreparedFilter(int $storageId): array

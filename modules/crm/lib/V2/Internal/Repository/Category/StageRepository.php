@@ -229,10 +229,10 @@ class StageRepository implements StageRepositoryInterface
 		{
 			// From the tail of the set towards its head. A position is not weighed against the other
 			// stages on an update the way it is on an add ({@see StatusTable::onBeforeUpdate()} against
-			// {@see StatusTable::onBeforeAdd()}), but every one of them reaches
-			// {@see \Bitrix\Crm\Attribute\FieldAttributeManager::processPhaseSortModification()} with the
-			// neighbours the stage has at that very moment. Laying a set out spreads it towards its
-			// tail, so moving the far end first keeps the stages in order the whole way through.
+			// {@see StatusTable::onBeforeAdd()}), and the direction no longer decides what the field
+			// attributes end up as: {@see \Bitrix\Crm\Attribute\FieldAttributeManager::processPhaseSortModification()}
+			// rebuilds them from the whole order of stages, the same result for any chain of
+			// intermediate states it walks through. The direction is kept as it was.
 			foreach (array_reverse($ordered, true) as $position => $stage)
 			{
 				$sort = ($position + 1) * self::SORT_STEP;

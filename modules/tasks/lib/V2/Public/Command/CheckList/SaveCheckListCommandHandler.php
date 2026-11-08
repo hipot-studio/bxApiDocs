@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Public\Command\CheckList;
 
-use Bitrix\Tasks\V2\Internal\Entity;
 use Bitrix\Tasks\V2\Internal\Service\CheckList\CheckListService;
+use Bitrix\Tasks\V2\Internal\Service\CheckList\SaveCheckListResult;
 use Bitrix\Tasks\V2\Internal\Service\Consistency\ConsistencyResolverInterface;
 
 class SaveCheckListCommandHandler
@@ -17,24 +17,36 @@ class SaveCheckListCommandHandler
 	{
 	}
 
-	public function __invoke(SaveCheckListCommand $command): Entity\Task
+	public function __invoke(SaveCheckListCommand $command): SaveCheckListResult
+	{
+		$taskId = (int)$command->task->getId();
+
+		return $this->save($command, $taskId);
+	}
+
+	private function save(SaveCheckListCommand $command, int $taskId): SaveCheckListResult
 	{
 		if ($command->useConsistency)
 		{
 			return $this->consistencyResolver->resolve('task.checklist.save')->wrap(
-				fn (): Entity\Task => $this->checkListService->save(
+				fn (): SaveCheckListResult => $this->checkListService->save(
 					checklists: (array)$command->task->checklist,
-					taskId: (int)$command->task->getId(),
+					taskId: $taskId,
 					userId: $command->updatedBy,
 					skipNotification: $command->skipNotification,
+					baseRevision: $command->baseRevision,
+					fromAi: $command->fromAi,
 				)
 			);
 		}
+
 		return $this->checkListService->save(
 			checklists: (array)$command->task->checklist,
-			taskId: (int)$command->task->getId(),
+			taskId: $taskId,
 			userId: $command->updatedBy,
 			skipNotification: $command->skipNotification,
+			baseRevision: $command->baseRevision,
+			fromAi: $command->fromAi,
 		);
 	}
 }

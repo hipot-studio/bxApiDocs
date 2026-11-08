@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Internal\Service\UnifiedLink;
@@ -33,6 +32,26 @@ class Configuration
 	public static function setDefaultAccessLevel(UnifiedLinkAccessLevel $unifiedLinkAccessLevel): void
 	{
 		Option::set('disk', 'unified_link.default_access_level', $unifiedLinkAccessLevel->value);
+	}
+
+	public static function getFolderDefaultAccessLevel(): UnifiedLinkAccessLevel
+	{
+		$accessLevel = Option::get(
+			moduleId: 'disk',
+			name: 'unified_link.folder_default_access_level',
+			default: UnifiedLinkAccessLevel::Denied->value,
+		);
+
+		return UnifiedLinkAccessLevel::tryFrom($accessLevel) ?? UnifiedLinkAccessLevel::Denied;
+	}
+
+	public static function setFolderDefaultAccessLevel(UnifiedLinkAccessLevel $unifiedLinkAccessLevel): void
+	{
+		Option::set(
+			moduleId: 'disk',
+			name: 'unified_link.folder_default_access_level',
+			value: $unifiedLinkAccessLevel->value,
+		);
 	}
 
 	public static function setFileTypeSupport(int $fileType, bool $isSupported = true): void

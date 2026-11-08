@@ -81,6 +81,19 @@ interface BiSqlHelperInterface
 	public function castIntToChar(string $expr): string;
 
 	/**
+	 * Returns SQL expression that rounds a numeric expression to the given number of decimals.
+	 *
+	 * Both arguments are wrapped in parentheses, so the scale may be an expression (e.g. a CASE
+	 * over a currency code) and not only a literal.
+	 *
+	 * @param string $expression Numeric column or expression to round.
+	 * @param string $scaleExpression Number of decimals: a literal or an SQL expression.
+	 *
+	 * @return string
+	 */
+	public function getRoundExpression(string $expression, string $scaleExpression): string;
+
+	/**
 	 * Returns SQL expression that casts a numeric expression to character type for
 	 * string operations (e.g. TRIM).
 	 *
@@ -93,4 +106,20 @@ interface BiSqlHelperInterface
 	 * @return string
 	 */
 	public function castNumericToChar(string $expr): string;
+
+	/**
+	 * Returns SQL expression that casts a numeric expression to a 64-bit integer.
+	 *
+	 * Intended for numeric columns and expressions used as a join key against an integer primary
+	 * key. Unlike castToInt(), the source value is already numeric, so the cast needs no guard and
+	 * never fails on rows of unrelated types. Text values are handled by castToInt().
+	 *
+	 * The target is 64-bit on every dialect: the source columns hold numeric(18,4), and a narrower
+	 * target would abort the statement with an overflow on a value that does not fit it.
+	 *
+	 * @param string $expr Numeric column or expression.
+	 *
+	 * @return string
+	 */
+	public function castNumericToInt(string $expr): string;
 }

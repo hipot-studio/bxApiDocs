@@ -783,6 +783,8 @@ final class FromTemplate extends Util\Replicator\Task
 		$weekNumber = intval($arParams["EVERY_WEEK"]);
 		$currentDay = date("N", $baseTime); // day 1 - 7
 		$days = is_array($arParams["WEEK_DAYS"]) && sizeof(array_filter($arParams["WEEK_DAYS"])) ? $arParams["WEEK_DAYS"] : array(1); // days 1 - 7
+		$days = array_map('intval', $days);
+		sort($days, SORT_NUMERIC);
 
 		$preferredDateTime = static::stripTime($baseTime) + $preferredTime;
 		$date = $preferredDateTime;

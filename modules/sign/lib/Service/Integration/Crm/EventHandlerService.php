@@ -14,7 +14,7 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Sign\Callback\Messages\Member\MemberStatusChanged;
 use Bitrix\Sign\Integration\CRM\Model\EventData;
 use Bitrix\Crm\Activity\Provider\SignDocument;
-use \Bitrix\Crm;
+use Bitrix\Crm;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Type\Member\ChannelType;
 use Bitrix\Sign\Type\Member\Role;

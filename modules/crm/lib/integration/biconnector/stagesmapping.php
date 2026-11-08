@@ -10,6 +10,15 @@ use Bitrix\Main\Localization\Loc;
 
 class StagesMapping
 {
+	/**
+	 * Dynamic types whose stages are stored under their own entity name instead of the DYNAMIC_{typeId} prefix.
+	 */
+	private const OWN_NAME_ENTITY_TYPE_IDS = [
+		\CCrmOwnerType::SmartInvoice,
+		\CCrmOwnerType::SmartDocument,
+		\CCrmOwnerType::SmartB2eDocument,
+	];
+
 	public static function getMapping(MysqliSqlHelper|PgsqlSqlHelper $helper, string $languageId): array
 	{
 		/** @var \Bitrix\Main\DB\SqlHelper&\Bitrix\BIConnector\DB\BiSqlHelperInterface $helper */
@@ -18,34 +27,62 @@ class StagesMapping
 			$helper->castToInt('split_part(S.ENTITY_ID, \'_\', 2)')
 		);
 
+		$prefixFilter = [];
+		$prefixFilterFields = [];
+		$prefixEntityTypeIdCases = '';
+		$prefixCategoryNameCases = '';
+		$defaultCategoryName = $helper->forSql(static::getDefaultCategoryName($languageId));
+		foreach (static::getStagesEntityIdPrefixes() as $entityTypeId => $prefix)
+		{
+			$filterKey = 'ENTITY_ID_' . $entityTypeId;
+			$prefixFilter[$filterKey] = $prefix . '%';
+			$prefixFilterFields[$filterKey] = [
+				'IS_METRIC' => 'N',
+				'FIELD_NAME' => 'S.ENTITY_ID',
+				'FIELD_TYPE' => 'string',
+			];
+
+			$condition = 'S.ENTITY_ID LIKE \'' . $helper->forSql($prefix) . '%\'';
+			$prefixEntityTypeIdCases .= "    WHEN {$condition} THEN {$entityTypeId} \n";
+			$prefixCategoryNameCases .= "    WHEN {$condition} THEN coalesce(CIC.NAME, '{$defaultCategoryName}')\n";
+		}
+
 		return [
 			'TABLE_NAME' => 'b_crm_status',
 			'TABLE_ALIAS' => 'S',
 			'FILTER' => [
-				[ //ENTITY_ID = 'STATUS' OR ENTITY_ID like 'DEAL_STAGE%' OR ENTITY_ID like 'DYNAMIC%STAGE%'
-					'LOGIC' => 'OR',
-					'=ENTITY_ID_LEAD' => 'STATUS',
-					'ENTITY_ID_DEAL' => 'DEAL_STAGE%',
-					'ENTITY_ID_SMART' => 'DYNAMIC%STAGE%',
-				],
+				array_merge(
+					[
+						//ENTITY_ID = 'STATUS' OR ENTITY_ID like 'DEAL_STAGE%' OR ENTITY_ID like 'DYNAMIC%STAGE%'
+						//or ENTITY_ID like '{ENTITY_NAME}_STAGE_%' for the types with their own entity name
+						'LOGIC' => 'OR',
+						'=ENTITY_ID_LEAD' => 'STATUS',
+						'ENTITY_ID_DEAL' => 'DEAL_STAGE%',
+						'ENTITY_ID_SMART' => 'DYNAMIC%STAGE%',
+					],
+					$prefixFilter,
+				),
 			],
-			'FILTER_FIELDS' => [
-				'ENTITY_ID_LEAD' => [
-					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'S.ENTITY_ID',
-					'FIELD_TYPE' => 'string',
+			'FILTER_FIELDS' => array_merge(
+				[
+					'ENTITY_ID_LEAD' => [
+						'IS_METRIC' => 'N',
+						'FIELD_NAME' => 'S.ENTITY_ID',
+						'FIELD_TYPE' => 'string',
+					],
+					'ENTITY_ID_DEAL' => [
+						'IS_METRIC' => 'N',
+						'FIELD_NAME' => 'S.ENTITY_ID',
+						'FIELD_TYPE' => 'string',
+					],
+					'ENTITY_ID_SMART' => [
+						'IS_METRIC' => 'N',
+						'FIELD_NAME' => 'S.ENTITY_ID',
+						'FIELD_TYPE' => 'string',
+					],
 				],
-				'ENTITY_ID_DEAL' => [
-					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'S.ENTITY_ID',
-					'FIELD_TYPE' => 'string',
-				],
-				'ENTITY_ID_SMART' => [
-					'IS_METRIC' => 'N',
-					'FIELD_NAME' => 'S.ENTITY_ID',
-					'FIELD_TYPE' => 'string',
-				],
-			],
+				$prefixFilterFields,
+			),
 			'FIELDS' => [
 				//  ID int NOT NULL AUTO_INCREMENT,
 				'ID' => [
@@ -60,7 +97,7 @@ class StagesMapping
 					'FIELD_NAME' => 'CASE  
     WHEN S.ENTITY_ID LIKE \'DEAL_STAGE%\' THEN 2 
     WHEN (LEFT(S.ENTITY_ID, 7) = \'DYNAMIC\') THEN ' . $entityIdSql . '
-    ELSE 1 
+' . $prefixEntityTypeIdCases . '    ELSE 1
     END',
 					'FIELD_TYPE' => 'int',
 				],
@@ -87,7 +124,7 @@ class StagesMapping
 					'FIELD_NAME' => 'CASE
     WHEN S.ENTITY_ID LIKE \'DEAL_STAGE%\' THEN coalesce(CDC.NAME, \'' . $helper->forSql(static::getDefaultDealCategoryName($languageId)) . '\')
     WHEN (LEFT(S.ENTITY_ID, 7) = \'DYNAMIC\') THEN CIC.NAME
-    ELSE \'\'
+' . $prefixCategoryNameCases . '    ELSE \'\'
     END',
 					'FIELD_TYPE' => 'string',
 					'TABLE_ALIAS' => 'multiple_join',
@@ -111,6 +148,37 @@ class StagesMapping
 				],
 			]
 		];
+	}
+
+	/**
+	 * @return array<int, string> Entity type id => the ENTITY_ID prefix its stages are stored under.
+	 */
+	private static function getStagesEntityIdPrefixes(): array
+	{
+		$prefixes = [];
+		foreach (static::OWN_NAME_ENTITY_TYPE_IDS as $entityTypeId)
+		{
+			$prefixes[$entityTypeId] = \CCrmOwnerType::ResolveName($entityTypeId) . '_STAGE_';
+		}
+
+		return $prefixes;
+	}
+
+	/**
+	 * Returns default pipeline label of dynamic types.
+	 */
+	private static function getDefaultCategoryName(string $languageId): string
+	{
+		$languageFile = $_SERVER['DOCUMENT_ROOT'] . '/bitrix/modules/crm/lib/Service/Localization.php';
+		$messages = Loc::loadLanguageFile($languageFile, $languageId);
+		$name = $messages['CRM_TYPE_CATEGORY_DEFAULT_NAME'] ?? '';
+		if ($name === '')
+		{
+			$messages = Loc::loadLanguageFile($languageFile, 'en');
+			$name = $messages['CRM_TYPE_CATEGORY_DEFAULT_NAME'] ?? '';
+		}
+
+		return $name;
 	}
 
 	/**

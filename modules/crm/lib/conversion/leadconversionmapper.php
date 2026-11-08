@@ -175,6 +175,7 @@ class LeadConversionMapper extends EntityConversionMapper
 			//region Deal Map Static Field Bindings
 			$map->createItem('TITLE');
 			$map->createItem('OPPORTUNITY');
+			$map->createItem('IS_MANUAL_OPPORTUNITY');
 			$map->createItem('CURRENCY_ID');
 			$map->createItem('COMMENTS');
 			$map->createItem('OPENED');
@@ -218,7 +219,7 @@ class LeadConversionMapper extends EntityConversionMapper
 	 * @param array|null $options Mapping options.
 	 * @return array
 	 */
-	public function map(EntityConversionMap $map, array $options = null)
+	public function map(EntityConversionMap $map, ?array $options = null)
 	{
 		$srcFields = $this->getSourceFields();
 		if(empty($srcFields))
@@ -344,7 +345,25 @@ class LeadConversionMapper extends EntityConversionMapper
 				{
 					$dstFields = $this->prepareProductRowsPrices($dstEntityTypeID, $dstFields, $options);
 					$totalInfo = \CCrmProductRow::CalculateTotalInfo('D', 0, false, $dstFields, $dstFields['PRODUCT_ROWS']);
-					$dstFields['OPPORTUNITY'] = isset($totalInfo['OPPORTUNITY']) ? $totalInfo['OPPORTUNITY'] : 1.0;
+					$isManualOpportunity = (
+						($dstFields['IS_MANUAL_OPPORTUNITY'] ?? $srcFields['IS_MANUAL_OPPORTUNITY'] ?? 'N') === 'Y'
+					);
+					if (
+						$isManualOpportunity
+						&& !isset($dstFields['OPPORTUNITY'])
+						&& isset($srcFields['OPPORTUNITY'])
+					)
+					{
+						$dstFields['OPPORTUNITY'] = $srcFields['OPPORTUNITY'];
+					}
+					if ($isManualOpportunity && !isset($dstFields['IS_MANUAL_OPPORTUNITY']))
+					{
+						$dstFields['IS_MANUAL_OPPORTUNITY'] = 'Y';
+					}
+					if (!$isManualOpportunity)
+					{
+						$dstFields['OPPORTUNITY'] = isset($totalInfo['OPPORTUNITY']) ? $totalInfo['OPPORTUNITY'] : 1.0;
+					}
 					$dstFields['TAX_VALUE'] = isset($totalInfo['TAX_VALUE']) ? $totalInfo['TAX_VALUE'] : 0.0;
 				}
 

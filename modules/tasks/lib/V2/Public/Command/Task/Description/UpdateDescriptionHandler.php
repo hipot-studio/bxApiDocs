@@ -23,6 +23,7 @@ class UpdateDescriptionHandler
 			userId: $command->userId,
 			forceUpdate: $command->forceUpdate,
 			useConsistency: $command->useConsistency,
+			origin: $command->origin,
 		);
 	}
 }

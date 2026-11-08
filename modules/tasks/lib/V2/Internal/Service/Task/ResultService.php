@@ -43,6 +43,10 @@ class ResultService
 	public const RESULT_EDIT = 'RESULT_EDIT';
 	public const RESULT_REMOVE = 'RESULT_REMOVE';
 
+	// Each normalization pass peels one nesting level of empty blocks, so an unbounded walk costs
+	// O(length x depth) on crafted deep nesting. Mirrored in result-editor.js getPreparedText().
+	private const MAX_EMPTY_BLOCK_PASSES = 16;
+
 	public function __construct(
 		private readonly UpdateTaskService $updateTaskService,
 		private readonly PushService $pushService,
@@ -95,23 +99,27 @@ class ResultService
 			$fileIds = array_map(static fn (int $fileId): string => 'n' . $fileId, $fileIds);
 		}
 
+		$messageText = $message->text ?? '';
+
 		$result = new Result(
 			taskId: $message->chat->entityId,
-			text: mb_strlen($message->text) > 0 ? $message->text : Loc::getMessage('TASKS_RESULT_SERVICE_DEFAULT_TITLE_FROM_MESSAGE'),
+			text: mb_strlen($messageText) > 0 ? $messageText : Loc::getMessage('TASKS_RESULT_SERVICE_DEFAULT_TITLE_FROM_MESSAGE'),
 			fileIds: $fileIds,
 			previewId: $message->previewId,
 			messageId: $message->getId(),
 		);
 
-		return $this->create($result, $userId);
+		return $this->create($result, $userId, notificationText: $messageText);
 	}
 
-	public function create(Result $result, int $userId, bool $skipNotification = false): Result
+	public function create(Result $result, int $userId, bool $skipNotification = false, ?string $notificationText = null): Result
 	{
 		if ($result->taskId === null)
 		{
 			throw new InvalidArgumentException('Task id must be set');
 		}
+
+		$this->assertNotEmpty($result->text, $result->fileIds);
 
 		// check if task exists
 		$this->getTask((int)$result->taskId);
@@ -168,7 +176,7 @@ class ResultService
 				? NotificationType::ResultFromMessage
 				: NotificationType::ResultAdded
 			;
-			$this->notifyChat($result, $userId, $notifyType);
+			$this->notifyChat($result, $userId, $notifyType, $notificationText);
 		}
 
 		if (!empty($uf))
@@ -225,6 +233,8 @@ class ResultService
 			previewId: $result->previewId ?? $resultInDb->previewId,
 			messageId: $resultInDb->messageId,
 		);
+
+		$this->assertNotEmpty($updatedResult->text, $updatedResult->fileIds);
 
 		$this->taskResultRepository->save($updatedResult, $userId);
 
@@ -368,7 +378,7 @@ class ResultService
 		$this->sendPush(self::COMMAND_DELETE, $result);
 	}
 
-	private function notifyChat(Result $result, int $userId, NotificationType $notificationType): void
+	private function notifyChat(Result $result, int $userId, NotificationType $notificationType, ?string $notificationText = null): void
 	{
 		$task = $this->getTask((int)$result->taskId);
 
@@ -379,7 +389,7 @@ class ResultService
 			task: $task,
 			args: [
 				'triggeredBy' => $triggeredBy,
-				'resultText' => $result->getText(),
+				'resultText' => $notificationText ?? $result->getText(),
 				'dateTs' => $result->createdAtTs,
 				'fileIds' => $result->fileIds ?? [],
 				'messageId' => $result->messageId ?? 0,
@@ -387,6 +397,50 @@ class ResultService
 				'resultId' => $result->getId(),
 			],
 		);
+	}
+
+	private function assertNotEmpty(?string $text, ?array $fileIds): void
+	{
+		// a file alone satisfies the invariant, so the text does not have to be normalized at all
+		if (!empty($fileIds))
+		{
+			return;
+		}
+
+		// Mirror the frontend emptiness rule (result-editor.js getPreparedText):
+		// strip empty BBCode paragraphs, block containers and lists so they count as empty.
+		// Keep the whitespace set aligned with JavaScript trim(); PCRE \s also matches U+0085.
+		$preparedText = preg_replace(
+			'/\[p]\n|\[p][\x{0009}-\x{000D}\p{Z}\x{FEFF}]*\[\/p]|\[\/p]/iu',
+			'',
+			(string)$text,
+		) ?? '';
+
+		$passes = 0;
+		do
+		{
+			$previousText = $preparedText;
+			$preparedText = preg_replace(
+				'/\[(quote|code|spoiler)][\x{0009}-\x{000D}\p{Z}\x{FEFF}]*\[\/\1]/iu',
+				'',
+				$preparedText,
+			) ?? '';
+			$preparedText = preg_replace(
+				'/\[list(?:=[^\]]+)?](?:[\x{0009}-\x{000D}\p{Z}\x{FEFF}]*\[\*])*[\x{0009}-\x{000D}\p{Z}\x{FEFF}]*\[\/list]/iu',
+				'',
+				$preparedText,
+			) ?? '';
+			++$passes;
+		}
+		while ($preparedText !== $previousText && $passes < self::MAX_EMPTY_BLOCK_PASSES);
+
+		$isTextEmpty = preg_match('/[^\x{0009}-\x{000D}\p{Z}\x{FEFF}]/u', $preparedText) !== 1;
+
+		// a result must contain either non-empty text or at least one file (files are handled above)
+		if ($isTextEmpty)
+		{
+			throw new InvalidArgumentException(Loc::getMessage('TASKS_RESULT_SERVICE_EMPTY_RESULT'));
+		}
 	}
 
 	private function getTask(int $taskId): Task

@@ -21,6 +21,15 @@ final class UpgradeAvailabilityDto
 		public readonly string $currentVersionLabel = '',
 		/** Human-readable label of the available reference version; null when no upgrade. */
 		public readonly ?string $newVersionLabel = null,
+		/**
+		 * The copy was actually compared against its reference, so hasNewVersion and isCustomized
+		 * carry an answer. False means the comparison did not happen (no installed version, no
+		 * reference, or a revision that could not be computed) and both flags mean nothing:
+		 * the two of them being false must not be read as "up to date".
+		 */
+		public readonly bool $isComparable = false,
+		/** SIG-ORIGIN: the copy is linked to a system template, even if that template is gone. */
+		public readonly bool $hasSystemOrigin = false,
 	) {}
 
 	/**
@@ -29,6 +38,8 @@ final class UpgradeAvailabilityDto
 	 *     isCustomized: bool,
 	 *     currentVersionLabel: string,
 	 *     newVersionLabel: string|null,
+	 *     isComparable: bool,
+	 *     hasSystemOrigin: bool,
 	 * }
 	 */
 	public function toArray(): array
@@ -38,6 +49,8 @@ final class UpgradeAvailabilityDto
 			'isCustomized' => $this->isCustomized,
 			'currentVersionLabel' => $this->currentVersionLabel,
 			'newVersionLabel' => $this->newVersionLabel,
+			'isComparable' => $this->isComparable,
+			'hasSystemOrigin' => $this->hasSystemOrigin,
 		];
 	}
 }

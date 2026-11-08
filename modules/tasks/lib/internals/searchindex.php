@@ -10,6 +10,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Tasks\Internals\Log\Log;
 use Bitrix\Tasks\Internals\Task\Search\Builder\IndexBuilder;
 use Bitrix\Tasks\Internals\Task\Search\Exception\SearchIndexException;
+use Bitrix\Tasks\Internals\Task\Search\RepositoryInterface;
 use Bitrix\Tasks\Internals\Task\SearchIndexTable;
 use Bitrix\Tasks\UI;
 use Bitrix\Tasks\Update\FullTasksIndexer;
@@ -23,11 +24,11 @@ use CSearch;
  */
 class SearchIndex
 {
-	public static function setTaskSearchIndex(int $taskId): void
+	public static function setTaskSearchIndex(int $taskId, ?RepositoryInterface $repository = null): void
 	{
 		try
 		{
-			$searchIndex = (new IndexBuilder($taskId))->build();
+			$searchIndex = (new IndexBuilder($taskId, $repository))->build();
 			SearchIndexTable::set($taskId, 0, $searchIndex);
 		}
 		catch (SearchIndexException $exception)

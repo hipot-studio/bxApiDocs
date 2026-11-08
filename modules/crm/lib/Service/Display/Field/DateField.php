@@ -22,7 +22,7 @@ class DateField extends BaseSimpleField
 
 	protected function getFormattedValueForKanban($fieldValue, int $itemId, Options $displayOptions)
 	{
-		if ($this->isUserField())
+		if ($this->isUserField() && !$this->isMultiple())
 		{
 			return parent::getFormattedValueForKanban($fieldValue, $itemId, $displayOptions);
 		}
@@ -46,13 +46,24 @@ class DateField extends BaseSimpleField
 	protected function getTimeZoneParams(): array
 	{
 		$displayParams = $this->getDisplayParams();
-		$format = ($displayParams['DATETIME_FORMAT'] ?? $this->getDefaultDatetimeFormat());
+		$format = $this->shouldUseDefaultDateFormat()
+			? $this->getDefaultDatetimeFormat()
+			: ($displayParams['DATETIME_FORMAT'] ?? $this->getDefaultDatetimeFormat())
+		;
 		$offset = \CTimeZone::GetOffset();
 
 		return [
 			'format' => $format,
 			'offset' => $offset,
 		];
+	}
+
+	private function shouldUseDefaultDateFormat(): bool
+	{
+		return $this->isUserField()
+			&& $this->isMultiple()
+			&& $this->getContext() === \Bitrix\Crm\Service\Display\Field::KANBAN_CONTEXT
+		;
 	}
 
 	protected function getFormattedValueForMobile($fieldValue, int $itemId, Options $displayOptions): array
@@ -146,6 +157,11 @@ class DateField extends BaseSimpleField
 	 */
 	protected function getTimestamp($value, int $timeZoneOffset): int
 	{
+		if ($value instanceof DateTime && !$value->isUserTimeEnabled())
+		{
+			return $value->getTimestamp();
+		}
+
 		if ($value instanceof DateTime || $value instanceof \DateTime)
 		{
 			return $value->getTimestamp() + $timeZoneOffset;

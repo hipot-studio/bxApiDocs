@@ -68,6 +68,13 @@ class FormTable extends ORM\Data\DataManager
 				'required' => true,
 				'default_value' => new DateTime(),
 			),
+			'DATE_MODIFY' => array(
+				'data_type' => 'datetime',
+				'required' => true,
+				'default_value' => static function (ORM\Objectify\EntityObject $form): DateTime {
+					return $form->get('DATE_CREATE');
+				},
+			),
 			'ACTIVE' => array(
 				'data_type' => 'boolean',
 				'required' => true,
@@ -283,6 +290,9 @@ class FormTable extends ORM\Data\DataManager
 	{
 		$fields = $event->getParameter('fields');
 		$result = new ORM\EventResult();
+		$result->modifyFields(array(
+			'DATE_MODIFY' => $event->getParameter('object')->get('DATE_CREATE'),
+		));
 		if(isset($fields['ENTITY_SCHEME']) && $fields['ENTITY_SCHEME'])
 		{
 			$fields['ENTITY_SCHEME'] = intval($fields['ENTITY_SCHEME']);
@@ -298,7 +308,11 @@ class FormTable extends ORM\Data\DataManager
 		$data = $event->getParameters();
 		$formId = $data['primary']['ID'];
 		$fields['CAPTION'] = (isset($fields['CAPTION']) && $fields['CAPTION']) ? $fields['CAPTION'] : '';
-		static::update($formId, array('CODE' => '', 'CAPTION' => $fields['CAPTION']));
+		static::update($formId, array(
+			'CODE' => '',
+			'CAPTION' => $fields['CAPTION'],
+			'DATE_MODIFY' => $event->getParameter('object')->get('DATE_MODIFY'),
+		));
 
 		return $result;
 	}
@@ -309,6 +323,18 @@ class FormTable extends ORM\Data\DataManager
 		$result = new ORM\EventResult();
 		$data = $event->getParameters();
 		$formId = $data['primary']['ID'];
+		$modifiedFields = array();
+		if (!array_key_exists('DATE_MODIFY', $fields))
+		{
+			$sqlHelper = static::getEntity()->getConnection()->getSqlHelper();
+			$modifiedTimeColumn = $sqlHelper->quote('DATE_MODIFY');
+			$currentTime = $sqlHelper->convertToDbDateTime(new DateTime());
+			$incrementedModifiedTime = $sqlHelper->addSecondsToDateTime(1, $modifiedTimeColumn);
+			$modifiedFields['DATE_MODIFY'] = new Main\DB\SqlExpression(
+				"CASE WHEN {$modifiedTimeColumn} IS NULL OR {$modifiedTimeColumn} < {$currentTime}"
+				. " THEN {$currentTime} ELSE {$incrementedModifiedTime} END",
+			);
+		}
 		if(isset($fields['ENTITY_SCHEME']) && $fields['ENTITY_SCHEME'])
 		{
 			$fields['ENTITY_SCHEME'] = intval($fields['ENTITY_SCHEME']);
@@ -318,7 +344,7 @@ class FormTable extends ORM\Data\DataManager
 			$oldData = static::getRowById($event->getParameter('id'));
 			if($oldData['ACTIVE'] != $fields['ACTIVE'])
 			{
-				$result->modifyFields(array('ACTIVE_CHANGE_DATE' => new DateTime()));
+				$modifiedFields['ACTIVE_CHANGE_DATE'] = new DateTime();
 			}
 		}
 		else
@@ -331,7 +357,12 @@ class FormTable extends ORM\Data\DataManager
 			$code = \CUtil::translit($fields['CAPTION'], Context::getCurrent()->getLanguage());
 			$code = str_replace(array('"', "'", '`'), array("", "", ""), $code);
 			$code = $formId . ($code ? '_' . $code : '');
-			$result->modifyFields(array('CODE' => $code));
+			$modifiedFields['CODE'] = $code;
+		}
+
+		if ($modifiedFields)
+		{
+			$result->modifyFields($modifiedFields);
 		}
 
 		return $result;

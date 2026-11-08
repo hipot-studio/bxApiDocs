@@ -2,7 +2,11 @@
 
 require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/socialnetwork/classes/general/user_group.php");
 
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidationContext;
 use Bitrix\Main\ModuleManager;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredCacheFeature;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 use Bitrix\Socialnetwork\Internals\Counter;
 use Bitrix\Socialnetwork\Util;
 use Bitrix\Socialnetwork\Internals\EventService;
@@ -12,7 +16,13 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 	/***************************************/
 	/********  DATA MODIFICATION  **********/
 	/***************************************/
-	public static function Add($arFields, bool $skipCheckFields = false, bool $skipStatistics = false, bool $delayEvents = false)
+	public static function Add(
+		$arFields,
+		bool $skipCheckFields = false,
+		bool $skipStatistics = false,
+		bool $delayEvents = false,
+		?ExternalMembershipValidationContext $validationContext = null,
+	)
 	{
 		global $DB, $CACHE_MANAGER;
 		$connection = \Bitrix\Main\Application::getConnection();
@@ -25,13 +35,36 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 			return false;
 		}
 
+		$groupId = (int)($arFields['GROUP_ID'] ?? 0);
+		$userId = (int)($arFields['USER_ID'] ?? 0);
+		$role = (string)($arFields['ROLE'] ?? '');
+		if (
+			!($validationContext?->consume($groupId, $userId, $role) ?? false)
+			&& !ExternalMembershipValidator::checkUsers($groupId, [$userId], $role)
+		)
+		{
+			return false;
+		}
+
+		$hasBeforeHandlers = false;
 		$db_events = GetModuleEvents("socialnetwork", "OnBeforeSocNetUserToGroupAdd");
 		while ($arEvent = $db_events->Fetch())
 		{
+			$hasBeforeHandlers = true;
+			$validationContext?->invalidate();
 			if (ExecuteModuleEventEx($arEvent, array(&$arFields)) === false)
 			{
 				return false;
 			}
+		}
+
+		if ($hasBeforeHandlers && !ExternalMembershipValidator::checkUsers(
+			(int)($arFields['GROUP_ID'] ?? 0),
+			[(int)($arFields['USER_ID'] ?? 0)],
+			(string)($arFields['ROLE'] ?? ''),
+		))
+		{
+			return false;
 		}
 
 		$arInsert = $DB->PrepareInsert("b_sonet_user2group", $arFields);
@@ -69,6 +102,11 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 
 		if ($ID)
 		{
+			\Bitrix\Socialnetwork\Permission\Rule\GroupRelationCache::invalidate(
+				(int)$arFields['GROUP_ID'],
+				(int)$arFields['USER_ID'],
+			);
+
 			if (!$skipStatistics)
 			{
 				CSocNetGroup::SetStat($arFields["GROUP_ID"], $arFields['INITIATED_BY_USER_ID'] ?? 0);
@@ -79,6 +117,7 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 			$events = GetModuleEvents("socialnetwork", "OnSocNetUserToGroupAdd");
 			while ($arEvent = $events->Fetch())
 			{
+				$validationContext?->invalidate();
 				if ($delayEvents)
 				{
 					static::delayJob(static fn () => ExecuteModuleEventEx($arEvent, array($ID, &$arFields)));
@@ -119,7 +158,15 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 			{
 				$CACHE_MANAGER->ClearByTag("sonet_user2group_G".$arFields["GROUP_ID"]);
 				$CACHE_MANAGER->ClearByTag("sonet_user2group_U".$arFields["USER_ID"]);
-				$CACHE_MANAGER->ClearByTag("sonet_user2group");
+
+				if (DeferredCacheFeature::isOn())
+				{
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_user2group');
+				}
+				else
+				{
+					$CACHE_MANAGER->ClearByTag("sonet_user2group");
+				}
 			}
 
 			Counter\CounterService::addEvent(Counter\Event\EventDictionary::EVENT_WORKGROUP_USER_ADD, [
@@ -134,7 +181,7 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 		return $ID;
 	}
 
-	public static function Update($ID, $arFields)
+	public static function Update($ID, $arFields, ?ExternalMembershipValidationContext $validationContext = null)
 	{
 		global $DB, $APPLICATION, $CACHE_MANAGER;
 
@@ -150,6 +197,17 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 			return false;
 		}
 
+		$groupId = (int)($arFields['GROUP_ID'] ?? $arUser2GroupOld['GROUP_ID']);
+		$userId = (int)($arFields['USER_ID'] ?? $arUser2GroupOld['USER_ID']);
+		$role = (string)($arFields['ROLE'] ?? $arUser2GroupOld['ROLE']);
+		if (
+			!($validationContext?->consume($groupId, $userId, $role) ?? false)
+			&& !ExternalMembershipValidator::checkUsers($groupId, [$userId], $role)
+		)
+		{
+			return false;
+		}
+
 		$arFields1 = Util::getEqualityFields($arFields);
 
 		if (!self::CheckFields("UPDATE", $arFields, $ID))
@@ -157,13 +215,25 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 			return false;
 		}
 
+		$hasBeforeHandlers = false;
 		$db_events = GetModuleEvents("socialnetwork", "OnBeforeSocNetUserToGroupUpdate");
 		while ($arEvent = $db_events->Fetch())
 		{
+			$hasBeforeHandlers = true;
+			$validationContext?->invalidate();
 			if (ExecuteModuleEventEx($arEvent, array($ID, $arFields)) === false)
 			{
 				return false;
 			}
+		}
+
+		if ($hasBeforeHandlers && !ExternalMembershipValidator::checkUsers(
+			(int)($arFields['GROUP_ID'] ?? $arUser2GroupOld['GROUP_ID']),
+			[(int)($arFields['USER_ID'] ?? $arUser2GroupOld['USER_ID'])],
+			(string)($arFields['ROLE'] ?? $arUser2GroupOld['ROLE']),
+		))
+		{
+			return false;
 		}
 
 		$strUpdate = $DB->PrepareUpdate("b_sonet_user2group", $arFields);
@@ -176,6 +246,15 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 				"	".$strUpdate." ".
 				"WHERE ID = ".$ID." ";
 			$DB->Query($strSql);
+
+			\Bitrix\Socialnetwork\Permission\Rule\GroupRelationCache::invalidate(
+				(int)$arUser2GroupOld['GROUP_ID'],
+				(int)$arUser2GroupOld['USER_ID'],
+			);
+			\Bitrix\Socialnetwork\Permission\Rule\GroupRelationCache::invalidate(
+				(int)($arFields['GROUP_ID'] ?? $arUser2GroupOld['GROUP_ID']),
+				(int)($arFields['USER_ID'] ?? $arUser2GroupOld['USER_ID']),
+			);
 
 			CSocNetGroup::SetStat($arUser2GroupOld["GROUP_ID"]);
 			CSocNetSearch::OnUserRelationsChange($arUser2GroupOld["USER_ID"]);
@@ -190,6 +269,7 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 			$events = GetModuleEvents("socialnetwork", "OnSocNetUserToGroupUpdate");
 			while ($arEvent = $events->Fetch())
 			{
+				$validationContext?->invalidate();
 				ExecuteModuleEventEx($arEvent, array($ID, $arFields, $arUser2GroupOld));
 			}
 
@@ -218,7 +298,15 @@ class CSocNetUserToGroup extends CAllSocNetUserToGroup
 			{
 				$CACHE_MANAGER->ClearByTag("sonet_user2group_G".$arUser2GroupOld["GROUP_ID"]);
 				$CACHE_MANAGER->ClearByTag("sonet_user2group_U".$arUser2GroupOld["USER_ID"]);
-				$CACHE_MANAGER->ClearByTag("sonet_user2group");
+
+				if (DeferredCacheFeature::isOn())
+				{
+					DeferredTagCleaner::getInstance()->clearByTag('sonet_user2group');
+				}
+				else
+				{
+					$CACHE_MANAGER->ClearByTag("sonet_user2group");
+				}
 			}
 
 			Counter\CounterService::addEvent(Counter\Event\EventDictionary::EVENT_WORKGROUP_USER_UPDATE, [

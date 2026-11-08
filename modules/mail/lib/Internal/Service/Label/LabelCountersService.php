@@ -262,10 +262,20 @@ class LabelCountersService
 		// The label list hides spam and trash (MessageFilter::addLabel), so the badge counts the same rows.
 		$excludedDirs = MailboxDirectoryHelper::getSpamAndTrashDirsMd5ForMailboxes([$mailboxId]);
 
+		// Messages carrying one of the labels being recounted. The seen-copies subquery below is narrowed
+		// to them: without it every recount walks the whole mailbox, and a mark-as-read of a single letter
+		// costs as much as a mailbox of any size.
+		$labelledMessages = MessageLabelTable::query()
+			->setSelect(['MESSAGE_ID'])
+			->where('MAILBOX_ID', $mailboxId)
+			->whereIn('LABEL_ID', $labelIds)
+		;
+
 		// A message has a uid row per folder, so it stays unread until any visible copy is seen.
 		$seenMessages = $this->visibleCopiesQuery($mailboxId, $excludedDirs)
 			->setSelect(['MESSAGE_ID'])
 			->whereIn('IS_SEEN', self::SEEN_STATUSES)
+			->whereIn('MESSAGE_ID', $labelledMessages)
 		;
 
 		$query = MessageLabelTable::query()

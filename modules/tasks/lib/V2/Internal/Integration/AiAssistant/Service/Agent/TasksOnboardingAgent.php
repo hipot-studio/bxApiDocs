@@ -17,6 +17,7 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\CheckList\Dele
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\CheckList\DeleteCheckListTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\CheckList\UpdateCheckListItemTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\CheckList\UpdateCheckListTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\GetTaskHistoryTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Member\AddCurrentUserAsAuditorTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Member\AddAccomplicesTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Member\AddAuditorsTool;
@@ -25,6 +26,7 @@ use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Member\DeleteA
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\SearchUsersTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\AddReminderTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\AddResultTool;
+use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\GetChatMessagesTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\SendChatMessageTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\ClearTaskDeadlineTool;
 use Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Tool\Task\CreateTaskTool;
@@ -88,6 +90,7 @@ class TasksOnboardingAgent extends BaseAgent
 			DeleteTaskTool::class,
 			DetachTaskFromGroupTool::class,
 			GetTaskByIdTool::class,
+			GetTaskHistoryTool::class,
 			SearchTasksTool::class,
 			UpdateTaskTool::class,
 			AddReminderTool::class,
@@ -97,6 +100,7 @@ class TasksOnboardingAgent extends BaseAgent
 
 		if (FormV2Feature::isOn())
 		{
+			$tools[] = GetChatMessagesTool::class;
 			$tools[] = SendChatMessageTool::class;
 		}
 

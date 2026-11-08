@@ -13,8 +13,13 @@ use Bitrix\Disk\Internals\ObjectTable;
 use Bitrix\Disk\Internals\RightTable;
 use Bitrix\Disk\Internals\SharingTable;
 use Bitrix\Disk\Internals\SimpleRightTable;
+use Bitrix\Disk\Internals\UniqueCode;
 use Bitrix\Disk\Internals\VersionTable;
 use Bitrix\Disk\Internal\Service\Folder\DeletionRestriction;
+use Bitrix\Disk\Internal\Service\Sync\Access\PlacementAccessPublisher;
+use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeRecord;
+use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
+use Bitrix\Disk\Internal\Service\Sync\Journal\TombstoneReason;
 use Bitrix\Disk\ProxyType\Group;
 use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
@@ -43,6 +48,9 @@ class Folder extends BaseObject
 	const CODE_FOR_CREATED_FILES  = SpecificFolder::CODE_FOR_CREATED_FILES;
 	const CODE_FOR_SAVED_FILES    = SpecificFolder::CODE_FOR_SAVED_FILES;
 	const CODE_FOR_UPLOADED_FILES = SpecificFolder::CODE_FOR_UPLOADED_FILES;
+
+	/** Operations of \CSQLWhere holding a field to a value or a set of them: "FIELD", "=FIELD", "==FIELD", "@FIELD". */
+	private const NARROWING_OPERATIONS = ['E', 'I', 'SE', 'IN'];
 
 	/** @var bool */
 	protected $hasSubFolders;
@@ -118,14 +126,22 @@ class Folder extends BaseObject
 		$securityContext->preloadOperationsForChildren($this->id);
 	}
 
-	public function preloadOperationsForSpecifiedObjects(array $ids, SecurityContext $securityContext)
+	public function preloadOperationsForSpecifiedObjects(
+		array $ids,
+		SecurityContext $securityContext,
+		bool $shouldPreloadDownloadAccess = false,
+	)
 	{
 		if (!$ids)
 		{
 			return;
 		}
 
-		$securityContext->preloadOperationsForSpecifiedObjects($this->id, $ids);
+		$securityContext->preloadOperationsForSpecifiedObjects(
+			$this->id,
+			$ids,
+			$shouldPreloadDownloadAccess,
+		);
 	}
 
 	/**
@@ -138,6 +154,11 @@ class Folder extends BaseObject
 	 */
 	public static function add(array $data, ErrorCollection $errorCollection)
 	{
+		if (!isset($data['UNIQUE_CODE']))
+		{
+			$data['UNIQUE_CODE'] = (new UniqueCode())->generateForNewFile();
+		}
+
 		/** @var Folder $folder */
 		$folder = parent::add($data, $errorCollection);
 		if($folder && !$folder->isDeleted())
@@ -335,10 +356,12 @@ class Folder extends BaseObject
 		$data['PARENT'] = $this;
 
 		/** @var File $fileModel */
-		$fileModel = $this->processAdd($data, $this->errorCollection, $generateUniqueName);
+		$fileModel = $this->processAdd($data, $this->errorCollection, ObjectTable::TYPE_FILE, $generateUniqueName);
 		if ($fileModel)
 		{
 			Driver::getInstance()->getRightsManager()->setAsNewLeaf($fileModel, $rights);
+			// after the rights of the new object are written: they are what its audience is read from
+			$fileModel->publishToJournal(ChangeType::Created, $fileModel->getCreatedBy());
 
 			$objectEvent = $this->makeObjectEvent(
 				'objectAdded',
@@ -359,10 +382,19 @@ class Folder extends BaseObject
 		return $fileModel;
 	}
 
-	private function processAdd(array $data, ErrorCollection $errorCollection, bool $generateUniqueName = false, int $countStepsToGenerateName = 0): File|null
+	private function processAdd(
+		array $data,
+		ErrorCollection $errorCollection,
+		int $type,
+		bool $generateUniqueName = false,
+		int $countStepsToGenerateName = 0
+	): BaseObject|null
 	{
 		$connection = Application::getConnection();
-		$shouldUseTransaction = $generateUniqueName && $connection->getType() === 'pgsql';
+		// a duplicate swallowed here (by the retry, or by the domain error of addSubFolder()) leaves an outer
+		// pgsql transaction aborted, so such an attempt runs in a transaction of its own
+		$swallowsDuplicateEntry = $generateUniqueName || $type === ObjectTable::TYPE_FOLDER;
+		$shouldUseTransaction = $swallowsDuplicateEntry && $connection->getType() === 'pgsql';
 		if ($shouldUseTransaction)
 		{
 			$connection->startTransaction();
@@ -370,7 +402,12 @@ class Folder extends BaseObject
 
 		try
 		{
-			$fileModel = File::add($data, $errorCollection);
+			$objectModel = match ($type)
+			{
+				ObjectTable::TYPE_FOLDER => Folder::add($data, $errorCollection),
+				ObjectTable::TYPE_FILE => File::add($data, $errorCollection),
+				default => throw new ArgumentException("Unknown object type {$type}"),
+			};
 		}
 		catch (DuplicateEntryException $exception)
 		{
@@ -389,7 +426,7 @@ class Folder extends BaseObject
 					);
 				}
 
-				$nameService = new ObjectNameService($data['NAME'], $this->id, ObjectTable::TYPE_FILE);
+				$nameService = new ObjectNameService($data['NAME'], $this->id, $type);
 				$nameService->requireUniqueName();
 
 				$result = $nameService->prepareName();
@@ -401,6 +438,7 @@ class Folder extends BaseObject
 				return $this->processAdd(
 					$data,
 					$errorCollection,
+					$type,
 					$generateUniqueName,
 					$countStepsToGenerateName
 				);
@@ -423,12 +461,17 @@ class Folder extends BaseObject
 			$connection->commitTransaction();
 		}
 
-		if (!$fileModel)
+		if (!$objectModel)
 		{
 			return null;
 		}
 
-		return $fileModel;
+		return $objectModel;
+	}
+
+	private function createNonUniqueNameError(): Error
+	{
+		return new Error(Loc::getMessage('DISK_FOLDER_MODEL_ERROR_NON_UNIQUE_NAME'), self::ERROR_NON_UNIQUE_NAME);
 	}
 
 	/**
@@ -460,6 +503,12 @@ class Folder extends BaseObject
 
 		$driver = Driver::getInstance();
 		$driver->getRightsManager()->setAsNewLeaf($fileLinkModel, $rights);
+		// a link is a place the real object is seen at, and the journal is kept over real objects
+		$fileLinkModel->publishToJournal(
+			ChangeType::Created,
+			$fileLinkModel->getCreatedBy(),
+			['places'],
+		);
 
 		if (!$fileLinkModel->isDeleted())
 		{
@@ -607,13 +656,31 @@ class Folder extends BaseObject
 		$data['PARENT_ID'] = $this->id;
 		$data['STORAGE_ID'] = $this->storageId;
 
-		$folderModel = Folder::add($data, $this->errorCollection);
+		try
+		{
+			/** @var Folder $folderModel */
+			$folderModel = $this->processAdd(
+				$data,
+				$this->errorCollection,
+				ObjectTable::TYPE_FOLDER,
+				$generateUniqueName
+			);
+		}
+		catch (DuplicateEntryException)
+		{
+			$this->errorCollection[] = $this->createNonUniqueNameError();
+
+			return null;
+		}
+
 		if(!$folderModel)
 		{
 			return null;
 		}
 		$this->changeSelfUpdateTime();
 		Driver::getInstance()->getRightsManager()->setAsNewLeaf($folderModel, $rights);
+		// after the rights of the new object are written: they are what its audience is read from
+		$folderModel->publishToJournal(ChangeType::Created, $folderModel->getCreatedBy());
 
 		$objectEvent = $this->makeObjectEvent(
 			'objectAdded',
@@ -660,6 +727,27 @@ class Folder extends BaseObject
 		}
 		$this->changeSelfUpdateTime();
 		Driver::getInstance()->getRightsManager()->setAsNewLeaf($fileLinkModel, $rights);
+		// a link is a place the real object is seen at, and the journal is kept over real objects
+		$fileLinkModel->publishToJournal(
+			ChangeType::Created,
+			$fileLinkModel->getCreatedBy(),
+			['places'],
+		);
+
+		if (!$fileLinkModel->isDeleted())
+		{
+			// The record above carries the card of the folder and answers for the folder alone, while
+			// the link is a place of everything under it too. The pair is published on purpose: the
+			// card is what brings the folder itself into the memory of the client, and the signal
+			// below is what moves the places of its descendants.
+			//
+			// A link made straight into the trashcan is left out: the places of that subtree were
+			// told of by the record of the deletion that made it.
+			(new PlacementAccessPublisher())->publishSubtreeConnected(
+				(int)$fileLinkModel->getRealObjectId(),
+				(int)$fileLinkModel->getId(),
+			);
+		}
 
 		$objectEvent = $this->makeObjectEvent(
 			'objectAdded',
@@ -711,7 +799,7 @@ class Folder extends BaseObject
 			$data['NAME'] = Ui\Text::appendTrashCanSuffix($data['NAME']);
 			if (!static::isUniqueName($data['NAME'], $this->id))
 			{
-				$this->errorCollection[] = new Error(Loc::getMessage('DISK_FOLDER_MODEL_ERROR_NON_UNIQUE_NAME'), self::ERROR_NON_UNIQUE_NAME);
+				$this->errorCollection[] = $this->createNonUniqueNameError();
 
 				return null;
 			}
@@ -816,7 +904,10 @@ class Folder extends BaseObject
 	/**
 	 * Gets all descendants objects by the folder.
 	 * @param SecurityContext $securityContext Security context.
-	 * @param array           $parameters Parameters.
+	 * @param array           $parameters Parameters. Key "subtree_check" selects how membership in the
+	 *                        subtree is checked, see ObjectTable::SUBTREE_CHECK_*. With
+	 *                        ObjectTable::SUBTREE_CHECK_EXISTS objects come without DEPTH_LEVEL and
+	 *                        are not ordered by it.
 	 * @param int             $orderDepthLevel Order for depth level (default asc).
 	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
 	 * @return BaseObject[]
@@ -845,11 +936,35 @@ class Folder extends BaseObject
 		{
 			$parameters['filter']['DELETED_TYPE'] = ObjectTable::DELETED_TYPE_NONE;
 		}
-		$parameters['select']['DEPTH_LEVEL'] = 'PATH_CHILD.DEPTH_LEVEL';
+
+		$useSubtreeCheckByExists = $this->useSubtreeCheckByExists($parameters);
+		$parameters['subtree_check'] = $useSubtreeCheckByExists
+			? ObjectTable::SUBTREE_CHECK_EXISTS
+			: ObjectTable::SUBTREE_CHECK_JOIN
+		;
+
+		if ($useSubtreeCheckByExists)
+		{
+			// storage of a descendant always matches the storage of its container, so the condition
+			// narrows candidates by an index on the object table before the subtree is checked
+			if (!static::hasNarrowingConditionOnField($parameters['filter'], 'STORAGE_ID'))
+			{
+				$parameters['filter']['=STORAGE_ID'] = $this->storageId;
+			}
+
+			// the cheap subtree condition is written ahead of the expensive rights check below: the
+			// database promises no order of evaluation, but the plans seen here keep the one written
+			$parameters = ObjectTable::addSubtreeCheckByExists($parameters, (int)$this->id);
+		}
+		else
+		{
+			$parameters['select']['DEPTH_LEVEL'] = 'PATH_CHILD.DEPTH_LEVEL';
+		}
+
 		$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck($securityContext, $parameters, array('ID', 'CREATED_BY'));
 
 		$data = FolderTable::getDescendants($this->id, static::prepareGetListParameters($parameters))->fetchAll();
-		if($orderDepthLevel !== null)
+		if(!$useSubtreeCheckByExists && $orderDepthLevel !== null)
 		{
 			Collection::sortByColumn($data, array('DEPTH_LEVEL' => $orderDepthLevel));
 		}
@@ -862,6 +977,52 @@ class Folder extends BaseObject
 		unset($item);
 
 		return $modelData;
+	}
+
+	/**
+	 * The mode is requested by the caller and may be switched off portal wide: it relies on an object
+	 * keeping the storage of its container, and the option is the way back to the join if it does not.
+	 */
+	private function useSubtreeCheckByExists(array $parameters): bool
+	{
+		return
+			($parameters['subtree_check'] ?? null) === ObjectTable::SUBTREE_CHECK_EXISTS
+			&& Configuration::isEnabledSubtreeCheckByExists()
+		;
+	}
+
+	/**
+	 * Tells whether the filter already holds the field to a value or a set of them.
+	 *
+	 * Such a condition of the caller is left alone: a second one beside it either says the same thing twice
+	 * or contradicts it. An operation holding the field to nothing ("!=", ">", "%=") is not that condition
+	 * and gets a condition of the mode next to it, so the index the mode counts on stays in the plan.
+	 *
+	 * The key is read by the parser the ORM itself reads it with, so the set of operations understood here
+	 * is the one understood there. Keys of the top level are the whole question: a condition of a nested
+	 * block belongs to a key of its own and is never the one overwritten by an assignment to the top level.
+	 */
+	private static function hasNarrowingConditionOnField(array $filter, string $field): bool
+	{
+		$sqlWhere = new \CSQLWhere();
+		foreach (array_keys($filter) as $key)
+		{
+			if (!is_string($key))
+			{
+				continue;
+			}
+
+			$condition = $sqlWhere->makeOperation($key);
+			if (
+				$condition['FIELD'] === $field
+				&& in_array($condition['OPERATION'], self::NARROWING_OPERATIONS, true)
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -1136,6 +1297,8 @@ class Folder extends BaseObject
 			}
 
 			$object = BaseObject::buildFromArray($objectRow);
+			// the journal takes one record on the root of the restore, below
+			$object->journalCascadeChild = true;
 
 			/** @var Folder|File */
 			if($object instanceof Folder)
@@ -1203,6 +1366,18 @@ class Folder extends BaseObject
 			'order' => array('DEPTH_LEVEL' => 'DESC')
 		);
 
+		// One record on the root of the cascade. Its audience is taken here, because the rights it is
+		// read from are torn down object by object below; the record itself is published after the
+		// loop, once the tree is provably gone. A cascade that broke halfway would otherwise order the
+		// client to forget a folder the portal goes on holding; what such a cascade did take away is
+		// buried object by object instead, with the same audience.
+		$publishesTombstone = !$this->isLink();
+		$tombstoneAudience = $publishesTombstone ? $this->captureTombstoneAudience() : null;
+
+		// What the loop did take away, remembered for the records a broken cascade owes them below.
+		$goneFolderIds = [];
+		$goneFileIds = [];
+
 		$success = true;
 		$objectIterator = FolderTable::getList(static::prepareGetListParameters($parameters));
 		foreach ($objectIterator as $objectRow)
@@ -1216,17 +1391,26 @@ class Folder extends BaseObject
 			{
 				$object = BaseObject::buildFromArray($objectRow);
 			}
+			$object->journalCascadeChild = true;
 
 			/** @var Folder|File */
 			if($object instanceof Folder)
 			{
 				/** @see \Bitrix\Disk\Folder::deleteNonRecursive */
 				$success = $object->deleteNonRecursive($deletedBy, $bypassDeletionRestriction);
+				if ($success && !$object->isLink())
+				{
+					$goneFolderIds[] = (int)$object->getId();
+				}
 			}
 			elseif($object instanceof File)
 			{
 				/** @see \Bitrix\Disk\File::delete */
 				$success = $object->delete($deletedBy);
+				if ($success && !$object->isLink())
+				{
+					$goneFileIds[] = (int)$object->getId();
+				}
 			}
 
 			if (!$success)
@@ -1240,7 +1424,71 @@ class Folder extends BaseObject
 			}
 		}
 
-		return $success;
+		if (!$success)
+		{
+			$this->publishTombstonesOfTheCascadeThatBroke(
+				$goneFolderIds,
+				$goneFileIds,
+				$deletedBy,
+				$tombstoneAudience,
+			);
+
+			return false;
+		}
+
+		if ($publishesTombstone)
+		{
+			$this->publishTombstoneToJournal($deletedBy, $tombstoneAudience);
+		}
+
+		return true;
+	}
+
+	/**
+	 * The objects a broken cascade already took away, buried one by one.
+	 *
+	 * A cascade that went through says everything with the one record on its root. One that stopped
+	 * halfway has no such record to make - the root is still on the portal, and burying it would order
+	 * the client to forget a folder the portal goes on holding - while everything the loop had reached
+	 * by then is gone all the same, and nothing else in the contour goes looking for it.
+	 *
+	 * The audience is the one taken on the root before the loop: the rights these objects were visible
+	 * by are torn down together with them, so by now there is nothing left to read. A descendant that
+	 * carried rights of its own is therefore reached only as far as the audience of the root goes.
+	 * Whoever held a file of the subtree by an interaction alone is buried by a record of their own,
+	 * published row by row while the rows were still there
+	 * ({@see \Bitrix\Disk\Internal\Service\Sync\Journal\TrackedSetCleanupPublisher}).
+	 *
+	 * @param int[] $goneFolderIds
+	 * @param int[] $goneFileIds
+	 * @param string[]|null $audienceCodes
+	 */
+	private function publishTombstonesOfTheCascadeThatBroke(
+		array $goneFolderIds,
+		array $goneFileIds,
+		$deletedBy,
+		?array $audienceCodes,
+	): void
+	{
+		$writer = $this->getJournalWriter();
+		$gone = [
+			ChangeRecord::RESOURCE_FOLDER => $goneFolderIds,
+			ChangeRecord::RESOURCE_FILE => $goneFileIds,
+		];
+
+		foreach ($gone as $resourceType => $objectIds)
+		{
+			foreach ($objectIds as $objectId)
+			{
+				$writer->publishTombstoneOfGoneObject(
+					$resourceType,
+					$objectId,
+					TombstoneReason::Deleted,
+					$this->normalizeDeletedBy($deletedBy),
+					$audienceCodes,
+				);
+			}
+		}
 	}
 
 	protected function deleteNonRecursive($deletedBy, bool $bypassDeletionRestriction = false)
@@ -1251,6 +1499,19 @@ class Folder extends BaseObject
 
 			return false;
 		}
+
+		// The audience of the tombstone is taken before the rights it is read from are torn down; the
+		// record itself waits for the row of the folder to be gone. A link is not the object it points
+		// at, and the object goes on living without it.
+		$publishesTombstone = !$this->journalCascadeChild && !$this->isLink();
+		$tombstoneAudience = $publishesTombstone ? $this->captureTombstoneAudience() : null;
+
+		// The codes a link carries are taken here for the same reason and by the same rule: they come
+		// from the nearest right above it, and the rights of the link are torn down below.
+		$placementAudience = $this->isLink()
+			? (new PlacementAccessPublisher())->captureCodes((int)$this->getId())
+			: []
+		;
 
 		foreach($this->getSharingsAsReal() as $sharing)
 		{
@@ -1286,7 +1547,27 @@ class Folder extends BaseObject
 			return false;
 		}
 
-		if(!$this->isLink())
+		if ($publishesTombstone)
+		{
+			$this->publishTombstoneToJournal($deletedBy, $tombstoneAudience);
+		}
+
+		if($this->isLink())
+		{
+			// A link is a place the real object is seen at, and the journal is kept over real objects:
+			// the place went, the object behind it stayed. The record is published inside a cascade too,
+			// because the one record on the root of that cascade names an object of another audience.
+			$this->publishToJournal(ChangeType::Updated, $deletedBy, ['places']);
+
+			// What the link was a place of reaches below the folder, and the record above names the
+			// folder alone. Left unsaid, the places of the descendants go on pointing at the parent of
+			// a link that is no longer there - a path leading nowhere, which nothing else repairs.
+			(new PlacementAccessPublisher())->publishSubtreeDisconnected(
+				(int)$this->getRealObjectId(),
+				$placementAudience,
+			);
+		}
+		else
 		{
 			//todo potential - very hard operation.
 			foreach(Folder::getModelList(array('filter' => array('REAL_OBJECT_ID' => $this->id))) as $link)

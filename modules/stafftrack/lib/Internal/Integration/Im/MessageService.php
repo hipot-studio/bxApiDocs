@@ -10,8 +10,10 @@ use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Im\V2\Service\Locator;
 use Bitrix\StaffTrack\Dictionary\Option;
+use Bitrix\StaffTrack\Feature;
 use Bitrix\StaffTrack\Service\OptionService;
 use Bitrix\StaffTrack\Internal\Integration\HumanResources\DepartmentProvider;
+use Bitrix\StaffTrack\Internal\Integration\Im\Blocks\CheckInBlocksMessageSender;
 
 class MessageService
 {
@@ -42,20 +44,17 @@ class MessageService
 			return $result->addError(new Error('Dialog ids not found'));
 		}
 
+		if (Feature::isCheckInV2MessageAvailable())
+		{
+			return (new CheckInBlocksMessageSender())->send($checkInDto);
+		}
+
 		$userId = (int)CurrentUser::get()->getId();
 		$messageIds = [];
 
 		foreach ($checkInDto->dialogIds as $dialogId)
 		{
-			$chatId = self::getChatId($dialogId, $userId);
-			if (empty($chatId))
-			{
-				continue;
-			}
-
-			$messageText = !empty(trim($checkInDto->description)) ? $checkInDto->description : Loc::getMessage('STAFFTRACK_DEFAULT_CHECK_IN_DESCRIPTION');
-			self::sendBaseMessage($checkInDto, $dialogId, $chatId, $userId, $messageText);
-			$messageId = self::sendGeoMessage($checkInDto, $dialogId, $userId, $messageText);
+			$messageId = self::sendPlainToDialog($checkInDto, (string)$dialogId, $userId, $checkInDto->fileIds);
 			if (!empty($messageId))
 			{
 				$messageIds[] = $messageId;
@@ -138,23 +137,43 @@ class MessageService
 		return (int)\Bitrix\Im\Dialog::getChatId($dialogId, $userId);
 	}
 
-	private static function sendBaseMessage(CheckInDto $checkInDto, string $dialogId, int $chatId, int $userId, string $message): void
+	/**
+	 * @param list<int> $fileIds
+	 */
+	public static function sendPlainToDialog(CheckInDto $checkInDto, string $dialogId, int $userId, array $fileIds): int
 	{
-		if (!empty($checkInDto->fileIds))
+		$chatId = self::getChatId($dialogId, $userId);
+		if (empty($chatId))
 		{
-			$fileIds = [];
+			return 0;
+		}
+
+		$messageText = !empty(trim($checkInDto->description)) ? $checkInDto->description : Loc::getMessage('STAFFTRACK_DEFAULT_CHECK_IN_DESCRIPTION');
+		self::sendBaseMessage($dialogId, $chatId, $userId, $messageText, $fileIds);
+
+		return self::sendGeoMessage($checkInDto, $dialogId, $userId, $messageText);
+	}
+
+	/**
+	 * @param list<int> $fileIds
+	 */
+	private static function sendBaseMessage(string $dialogId, int $chatId, int $userId, string $message, array $fileIds): void
+	{
+		if (!empty($fileIds))
+		{
+			$diskFileIds = [];
 			$params = [
 				'USER_ID' => $userId,
 			];
 
-			foreach ($checkInDto->fileIds as $fileId)
+			foreach ($fileIds as $fileId)
 			{
-				$fileIds[] = 'disk' . $fileId;
+				$diskFileIds[] = 'disk' . $fileId;
 			}
 
 			\CIMDisk::UploadFileFromDisk(
 				$chatId,
-				$fileIds,
+				$diskFileIds,
 				$message,
 				$params
 			);

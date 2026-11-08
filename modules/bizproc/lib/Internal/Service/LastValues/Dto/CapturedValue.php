@@ -11,9 +11,9 @@ namespace Bitrix\Bizproc\Internal\Service\LastValues\Dto;
 final class CapturedValue implements \JsonSerializable
 {
 	/**
-	 * @param string|int|float|bool|array $value scalar or a flat list of scalars
+	 * @param string|int|float|bool|array $value scalar, a flat list of scalars or a list of document identifiers
 	 * @param string $type bizproc field type
-	 * @param bool $multiple when true, $value is a flat list
+	 * @param bool $multiple when true, $value is a list
 	 * @param bool $truncated value was cut by the capture limit
 	 * @param int|null $totalCount number of captured items before the limit cut, null for a single value
 	 */

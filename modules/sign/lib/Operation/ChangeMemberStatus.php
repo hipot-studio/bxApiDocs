@@ -13,6 +13,7 @@ use Bitrix\Sign\Service\B2e\MyDocumentsGrid;
 use Bitrix\Sign\Service\HrBotMessageService;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\Integration\HumanResources\HcmLinkService;
+use Bitrix\Sign\Service\Integration\Im\InviteCardService;
 use Bitrix\Sign\Service\Sign\Document\ProviderCodeService;
 use Bitrix\Sign\Service\Sign\LegalLogService;
 use Bitrix\Sign\Service\Sign\MemberService;
@@ -41,6 +42,7 @@ final class ChangeMemberStatus implements Contract\Operation
 	private readonly MyDocumentsGrid\EventService $myDocumentGridService;
 	private readonly AnalyticService $analyticService;
 	private readonly HcmLinkService $hcmLinkService;
+	private readonly InviteCardService $inviteCardService;
 	private readonly LoggerInterface $logger;
 
 	public function __construct(
@@ -61,6 +63,7 @@ final class ChangeMemberStatus implements Contract\Operation
 		$this->myDocumentGridService = Container::instance()->getMyDocumentGridEventService();
 		$this->analyticService = Container::instance()->getAnalyticService();
 		$this->hcmLinkService = Container::instance()->getHcmLinkService();
+		$this->inviteCardService = Container::instance()->getInviteCardService();
 		$this->logger = $logger ?? Container::instance()->getLogger('Operation');
 	}
 
@@ -108,6 +111,9 @@ final class ChangeMemberStatus implements Contract\Operation
 			$this->member->dateStatusChanged =  new Main\Type\DateTime();
 		}
 		$oldStatus = $this->member->status;
+		// Whether this participant was expected to act as things stood, taken while the object still
+		// carries the old status. Read below, where the card is marked.
+		$actionWasOver = InviteCardService::isActionOver($this->member, $this->document);
 		$this->member->status = $this->status;
 		if ($this->member->dateSigned === null && $this->status === Type\MemberStatus::DONE)
 		{
@@ -118,6 +124,26 @@ final class ChangeMemberStatus implements Contract\Operation
 		if (!$updateResult->isSuccess())
 		{
 			return $result->addErrors($updateResult->getErrors());
+		}
+
+		// Right here on purpose, and not at the end of the method: the status is already committed,
+		// while the B2E block below can still return early. The call is subordinate to signing. It
+		// never throws and its failure never reaches this result, which the callers read as the
+		// outcome of the signing itself. B2E only: HR bot cards exist nowhere else.
+		//
+		// And only where this very change ends the action. The operation runs on every status change,
+		// and most of them are steps between two states that both expect an action - the card is the
+		// same before and after, and asking for it would cost a lookup over the whole parameter table
+		// of the chat. What the participant is left holding does not depend on this: a card leaves
+		// already carrying the state of the domain, and a document that ends without moving its
+		// participants is caught where it is stopped.
+		if (
+			Type\DocumentScenario::isB2EScenario($this->document->scenario ?? '')
+			&& !$actionWasOver
+			&& InviteCardService::isActionOver($this->member, $this->document)
+		)
+		{
+			$this->inviteCardService->markCompletedForMember($this->member);
 		}
 
 		$this->processMemberStatusChange($this->member, $this->document, $oldStatus);

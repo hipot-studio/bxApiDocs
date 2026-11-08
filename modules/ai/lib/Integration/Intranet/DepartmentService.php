@@ -2,14 +2,18 @@
 
 namespace Bitrix\AI\Integration\Intranet;
 
-use Bitrix\Iblock\SectionTable;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
-use Bitrix\Main\UserAccessTable;
 
 class DepartmentService
 {
+	public function __construct(
+		protected DepartmentRepository $departmentRepository
+	)
+	{
+	}
+
 	protected static function getStructureIBlockId(): int
 	{
 		return (int)Option::get('intranet', 'iblock_structure', 0);
@@ -27,34 +31,50 @@ class DepartmentService
 		}
 	}
 
-	public function getDepartments(): array
+	/**
+	 * Returns the subset of the passed ids whose structure section is active.
+	 *
+	 * @param int[] $departmentIds
+	 * @return list<int>
+	 */
+	public function getExistingDepartmentIds(array $departmentIds): array
 	{
-		if ($this->hasIntranet())
+		$ids = $this->normalizeIds($departmentIds);
+		if (empty($ids))
 		{
-			$structureIBlockId = self::getStructureIBlockId();
-			if ($structureIBlockId <= 0)
-			{
-				return [];
-			}
-
-			$query = SectionTable::query()
-				->setSelect([
-					'ID',
-					'NAME',
-					'DEPTH_LEVEL',
-					'IBLOCK_SECTION_ID',
-					'LEFT_MARGIN',
-					'RIGHT_MARGIN',
-				])
-				->setOrder(['LEFT_MARGIN' => 'asc'])
-				->where('IBLOCK_ID', $structureIBlockId)
-				->where('ACTIVE', 'Y')
-				->fetchCollection()
-			;
-
-			return $query->getIdList();
+			return [];
 		}
 
-		return [];
+		if (!$this->hasIntranet())
+		{
+			return [];
+		}
+
+		$structureIBlockId = static::getStructureIBlockId();
+		if ($structureIBlockId <= 0)
+		{
+			return [];
+		}
+
+		return $this->departmentRepository->getExistingIds($ids, $structureIBlockId);
+	}
+
+	/**
+	 * @param int[] $ids
+	 * @return list<int>
+	 */
+	private function normalizeIds(array $ids): array
+	{
+		$result = [];
+		foreach ($ids as $id)
+		{
+			$id = (int)$id;
+			if ($id > 0)
+			{
+				$result[$id] = $id;
+			}
+		}
+
+		return array_values($result);
 	}
 }

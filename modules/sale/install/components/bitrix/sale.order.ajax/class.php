@@ -48,6 +48,11 @@ class SaleOrderAjax extends \CBitrixComponent
 	const DELIVERY_BLOCK = 'DELIVERY';
 	const PROPERTY_BLOCK = 'PROPERTY';
 
+	private const EXTRA_SERVICE_TYPES_WITH_OWN_NORMALIZATION = [
+		Delivery\ExtraServices\Quantity::class,
+		\Sale\Handlers\Delivery\Additional\ExtraServices\Lift::class,
+	];
+
 	/** @var Order $order */
 	protected $order;
 	/** @var Sale\Basket\Storage $basketStorage */
@@ -4013,10 +4018,23 @@ class SaleOrderAjax extends \CBitrixComponent
 			}
 
 			$deliveryExtraServices = $this->arUserResult['DELIVERY_EXTRA_SERVICES'] ?? null;
-			if (!empty($deliveryExtraServices[$deliveryId]) && is_array($deliveryExtraServices))
+			if (
+				!empty($deliveryExtraServices[$deliveryId])
+				&& is_array($deliveryExtraServices)
+				&& is_array($deliveryExtraServices[$deliveryId])
+			)
 			{
-				$shipment->setExtraServices($deliveryExtraServices[$deliveryId]);
-				$deliveryObj->getExtraServices()->setValues($deliveryExtraServices[$deliveryId]);
+				$extraServices = $deliveryObj->getExtraServices();
+				$allowedValues = $this->filterDeliveryExtraServices(
+					$deliveryExtraServices[$deliveryId],
+					$extraServices
+				);
+
+				if (!empty($allowedValues))
+				{
+					$shipment->setExtraServices($allowedValues);
+					$extraServices->setValues($allowedValues);
+				}
 			}
 
 			$shipmentCollection->calculateDelivery();
@@ -4034,6 +4052,73 @@ class SaleOrderAjax extends \CBitrixComponent
 				'CURRENCY' => $order->getCurrency(),
 			]);
 		}
+	}
+
+	protected function filterDeliveryExtraServices(array $values, Delivery\ExtraServices\Manager $extraServices): array
+	{
+		$result = [];
+
+		foreach ($values as $extraServiceId => $value)
+		{
+			$item = $extraServices->getItem($extraServiceId);
+			if ($item === null)
+			{
+				continue;
+			}
+
+			if (!$item->canUserEditValue())
+			{
+				continue;
+			}
+
+			if (!is_scalar($value))
+			{
+				continue;
+			}
+
+			if ($item instanceof Delivery\ExtraServices\Enum)
+			{
+				$params = $item->getParams();
+				$prices = is_array($params['PRICES'] ?? null) ? $params['PRICES'] : [];
+
+				if (!array_key_exists((string)$value, $prices))
+				{
+					continue;
+				}
+
+				$result[$extraServiceId] = $value;
+
+				continue;
+			}
+
+			$type = $item->getParams()['TYPE'] ?? null;
+
+			if ($type === 'Y/N')
+			{
+				if ($value !== 'Y' && $value !== 'N')
+				{
+					continue;
+				}
+
+				$result[$extraServiceId] = $value;
+
+				continue;
+			}
+
+			if (in_array(get_class($item), self::EXTRA_SERVICE_TYPES_WITH_OWN_NORMALIZATION, true))
+			{
+				// The object model is shared and the caller applies the filtered values itself.
+				$normalized = clone $item;
+				$normalized->setValue($value);
+				$result[$extraServiceId] = $normalized->getValue();
+
+				continue;
+			}
+
+			// Any other type is denied: only the type itself knows which values are valid for it.
+		}
+
+		return $result;
 	}
 
 	protected function initDeliveryServices(Shipment $shipment)

@@ -50,7 +50,7 @@ final class ItemListRequestMapper
 		$order = [];
 		foreach ($request->order->getList() as $fieldName => $direction)
 		{
-			$order[$this->itemDtoMapper->mapDtoFieldNameToItem($fieldName) ?? $fieldName] = $direction;
+			$order[$this->itemDtoMapper->mapDtoFieldNameToItemForSort($fieldName) ?? $fieldName] = $direction;
 		}
 		if (!array_key_exists('id', $order))
 		{

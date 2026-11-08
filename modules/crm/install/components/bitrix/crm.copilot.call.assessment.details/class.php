@@ -112,6 +112,9 @@ class CCrmCopilotCallAssessmentDetailsComponent extends Base
 			$this->arResult['data']['criteria'] = $v2Data['criteria'];
 			$this->arResult['data']['filters'] = $v2Data['filters'];
 			$this->arResult['data']['isAiImprovementEnabled'] = $v2Data['isAiImprovementEnabled'];
+			$this->arResult['data']['prompt'] = $v2Data['prompt'];
+			$this->arResult['data']['isHintEnabled'] = $v2Data['isHintEnabled'];
+			$this->arResult['data']['hasHint'] = $v2Data['hasHint'];
 			$this->arResult['data']['updatedAt'] = $v2Data['updatedAt'] ?? null;
 			$this->arResult['data']['processedCallsCount'] = $v2Data['processedCallsCount'] ?? 0;
 			$this->arResult['data']['isGeneratedByCopilot'] = $v2Data['isGeneratedByCopilot'] ?? false;

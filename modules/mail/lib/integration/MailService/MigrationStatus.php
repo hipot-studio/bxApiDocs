@@ -6,6 +6,8 @@ namespace Bitrix\Mail\Integration\MailService;
 
 final class MigrationStatus
 {
+	public const STATUS_MANUAL_WAITING = 'manual_waiting';
+
 	public function __construct(
 		public readonly string $status,
 		public readonly ?string $reason,

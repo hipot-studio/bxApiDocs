@@ -175,13 +175,7 @@ class Factory
 
 	public static function canUseBizprocDesigner()
 	{
-		if (Loader::includeModule('bitrix24'))
-		{
-			$feature = 'crm_automation_designer';
-			return Feature::isFeatureEnabled($feature);
-		}
-
-		return true;
+		return DesignerAvailability::getInstance()->isAvailable();
 	}
 
 	public static function isBizprocDesignerSupported(int $entityTypeId): bool
@@ -452,8 +446,10 @@ class Factory
 					Trigger\GuestReturnTrigger::className(),
 					Trigger\OpenLineTrigger::className(),
 					Trigger\OpenLineMessageTrigger::className(),
+					Trigger\OpenLineOutgoingMessageTrigger::className(),
 					Trigger\OpenLineAnswerControlTrigger::className(),
 					Trigger\OpenLineAnswerTrigger::className(),
+					Trigger\OpenLineCloseTrigger::className(),
 					Trigger\ResourceBookingTrigger::className(),
 					Trigger\DocumentCreateTrigger::className(),
 					Trigger\DocumentViewTrigger::className(),

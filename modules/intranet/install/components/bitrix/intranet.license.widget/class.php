@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Intranet\CurrentUser;
+use Bitrix\Intranet\License\Widget\Content\VibeBalance;
 use Bitrix\Main\Application;
 use Bitrix\Main\Loader;
 
@@ -34,13 +35,26 @@ class IntranetLicenseWidgetComponent extends \CBitrixComponent
 			$items[] = ['type' => 'item', 'height' => 55];
 		}
 
+		$vibeBalance = (new VibeBalance())->getConfiguration();
+		$this->arResult['vibeBalance'] = $vibeBalance;
+		if (
+			($vibeBalance['isAvailable'] ?? false) === true
+			&& (
+				(($vibeBalance['balanceState'] ?? null) === 'available' && ($vibeBalance['balance'] ?? null) !== null)
+				|| (($vibeBalance['balanceState'] ?? null) === 'unavailable' && !empty($vibeBalance['dashboardUrl']))
+			)
+		)
+		{
+			$items[] = ['type' => 'item', 'height' => 31];
+		}
+
 		$items[] = ['type' => 'item', 'height' => 31];
 		$items[] = ['type' => 'item', 'height' => 26];
 		$items[] = ['type' => 'split', 'height' => 19];
 
 		return [
 			'header' => false,
-			'footer' => true,
+			'footer' => ['count' => 1],
 			'items' => $items,
 		];
 	}

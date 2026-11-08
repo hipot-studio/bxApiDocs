@@ -15,6 +15,25 @@ class UserFieldSynchronizer
 {
 	use VisibilityConfig;
 
+	private const COMPATIBILITY_HISTORY_VERSION = 3;
+	private const ENUMERATION_VALUE_HASH_CHUNK_SIZE = 100;
+	private const IBLOCK_BINDING_USER_FIELD_TYPES = [
+		'iblock_element' => true,
+		'iblock_section' => true,
+	];
+	private const VALUE_VALIDATED_RECYCLING_TYPES = [
+		'boolean' => true,
+		'date' => true,
+		'datetime' => true,
+		'double' => true,
+		'enumeration' => true,
+		'file' => true,
+		'integer' => true,
+		'string' => true,
+		'string_formatted' => true,
+		'url' => true,
+	];
+
 	/** @var DateTime[]|null $items*/
 	private static $timestamps = null;
 	/** @var array|null $history*/
@@ -22,10 +41,12 @@ class UserFieldSynchronizer
 
 	/** @var array|null $existedFieldNameMap*/
 	public static $existedFieldNameMap = array();
+	private static array $enumerationValueHashes = [];
+	private static array $enumerationValues = [];
 
 	/**
 	* Check if destination type fields need for synchronization with source fields.
-	* Matches are searched by comparing field labels.
+	* Matches are searched by comparing field compatibility.
 	* @static
 	* @param int $srcEntityTypeID Source Entity Type ID
 	* @param int $dstEntityTypeID Destination Entity Type ID
@@ -36,13 +57,17 @@ class UserFieldSynchronizer
 	public static function needForSynchronization($srcEntityTypeID, $dstEntityTypeID, $languageID = '', array $options = array())
 	{
 		$isRecycling = (isset($options['IS_RECYCLING']) && $options['IS_RECYCLING'] === true);
+		$fieldNames = isset($options['FIELD_NAME']) ? (array)$options['FIELD_NAME'] : null;
 
 		$fieldsToCreate = self::getSynchronizationFields(
 			$srcEntityTypeID,
 			$dstEntityTypeID,
 			$languageID,
 			false,
-			$isRecycling
+			$isRecycling,
+			false,
+			false,
+			$fieldNames
 		);
 		if(!empty($fieldsToCreate))
 		{
@@ -56,7 +81,11 @@ class UserFieldSynchronizer
 				$srcEntityTypeID,
 				$languageID,
 				false,
-				$isRecycling
+				$isRecycling,
+				true,
+				$isRecycling,
+				null,
+				false
 			);
 			if(!empty($fieldsToDelete))
 			{
@@ -79,7 +108,11 @@ class UserFieldSynchronizer
 		$dstEntityTypeID,
 		$languageID = '',
 		$forced = false,
-		$isRecycling = false
+		$isRecycling = false,
+		bool $allowRecyclingCompatibility = false,
+		bool $matchByBasicAttributesOnly = false,
+		?array $fieldNames = null,
+		bool $skipUnsynchronizableFields = true
 	)
 	{
 		if(!is_int($srcEntityTypeID))
@@ -102,7 +135,7 @@ class UserFieldSynchronizer
 		}
 
 		$historyItem = self::getHistoryItem($srcEntityTypeID, $dstEntityTypeID);
-		if($historyItem !== null && !$forced)
+		if($historyItem !== null && !$forced && self::isHistoryItemCompatible($historyItem))
 		{
 			$srcLastChanged = UserFieldHistory::getLastChangeTime($srcEntityTypeID);
 			$dstLastChanged = UserFieldHistory::getLastChangeTime($dstEntityTypeID);
@@ -153,33 +186,7 @@ class UserFieldSynchronizer
 		global $USER_FIELD_MANAGER;
 
 		$dstFields = $USER_FIELD_MANAGER->GetUserFields($dstUfEntityID, 0, $languageID);
-
-		$map = array();
-		foreach($dstFields as $field)
-		{
-			$label = self::getFieldComplianceCode($field);
-			if($label === '')
-			{
-				continue;
-			}
-
-			$typeID = $field['USER_TYPE_ID'];
-			if(!isset($map[$typeID]))
-			{
-				$map[$typeID] = array();
-			}
-
-			$isMultiple = $field['MULTIPLE'] === 'Y' ? 'Y' : 'N';
-			if(!isset($map[$typeID][$isMultiple]))
-			{
-				$map[$typeID][$isMultiple] = array();
-			}
-
-			if(!isset($map[$typeID][$isMultiple][$label]))
-			{
-				$map[$typeID][$isMultiple][$label] = $field['FIELD_NAME'];
-			}
-		}
+		$map = self::prepareCompatibilityFieldMap($dstFields);
 
 		self::$existedFieldNameMap = array();
 		$results = array();
@@ -189,6 +196,12 @@ class UserFieldSynchronizer
 		{
 			$srcFields = VisibilityManager::getVisibleUserFields($srcFields);
 		}
+
+		if($fieldNames !== null)
+		{
+			$srcFields = self::filterFieldsByName($srcFields, $fieldNames);
+		}
+		self::preloadEnumerationValueHashes($srcFields, $map, true);
 
 		foreach($srcFields as $field)
 		{
@@ -203,15 +216,27 @@ class UserFieldSynchronizer
 			{
 				continue;
 			}
-
-			$isMultiple = $field['MULTIPLE'] === 'Y' ? 'Y' : 'N';
-			if( !(isset($map[$typeID]) && isset($map[$typeID][$isMultiple]) && isset($map[$typeID][$isMultiple][$label])) )
+			$dstFieldName = self::findCompatibleFieldName(
+				$field,
+				$map,
+				[],
+				false,
+				$allowRecyclingCompatibility,
+				false,
+				$matchByBasicAttributesOnly
+			);
+			if($dstFieldName === null)
 			{
+				if($skipUnsynchronizableFields && !self::isUserFieldSynchronizable($field))
+				{
+					continue;
+				}
+
 				$results[] = $field;
 			}
 			else
 			{
-				self::$existedFieldNameMap[$field['FIELD_NAME']] = $map[$typeID][$isMultiple][$label];
+				self::$existedFieldNameMap[$field['FIELD_NAME']] = $dstFieldName;
 			}
 		}
 
@@ -222,9 +247,10 @@ class UserFieldSynchronizer
 
 		$historyItem['check'] = new DateTime();
 		$historyItem['required'] = !empty($results);
+		$historyItem['version'] = self::COMPATIBILITY_HISTORY_VERSION;
 		self::setHistoryItem($srcEntityTypeID, $dstEntityTypeID, $historyItem);
 
-		return $results;
+		return array_values($results);
 	}
 
 	public static function isUserFieldTypeSupported($userFieldTypeID)
@@ -232,9 +258,39 @@ class UserFieldSynchronizer
 		return $userFieldTypeID !== 'resourcebooking';
 	}
 
+	private static function isUserFieldSynchronizable(array $field): bool
+	{
+		$typeId = $field['USER_TYPE_ID'] ?? '';
+		if(!isset(self::IBLOCK_BINDING_USER_FIELD_TYPES[$typeId]))
+		{
+			return true;
+		}
+
+		$settings = self::prepareUserFieldSettings($field['SETTINGS'] ?? []);
+
+		return (int)($settings['IBLOCK_ID'] ?? 0) > 0;
+	}
+
+	private static function prepareUserFieldSettings(mixed $settings): array
+	{
+		if(is_array($settings))
+		{
+			return $settings;
+		}
+
+		if(!is_string($settings))
+		{
+			return [];
+		}
+
+		$unserializedSettings = @unserialize($settings, ['allowed_classes' => false]);
+
+		return is_array($unserializedSettings) ? $unserializedSettings : [];
+	}
+
 	/**
 	 * Synchronize source type fields with destination type fields.
-	 * Matches are searched by comparing field labels.
+	 * Matches are searched by comparing field compatibility.
 	 * If a source field is not found in the destination type, it will be created there.
 	 * @static
 	 * @param int $srcEntityTypeID Source Entity Type ID
@@ -263,7 +319,11 @@ class UserFieldSynchronizer
 				$srcEntityTypeID,
 				$languageID,
 				true,
-				$isRecycling
+				$isRecycling,
+				true,
+				$isRecycling,
+				null,
+				false
 			);
 			foreach($fieldsToDelete as $field)
 			{
@@ -275,20 +335,36 @@ class UserFieldSynchronizer
 		}
 
 		$entityID = \CCrmOwnerType::ResolveUserFieldEntityID($dstEntityTypeID);
+		if(isset($filter['FIELD_NAME']))
+		{
+			$filter['FIELD_NAME'] = is_array($filter['FIELD_NAME'])
+				? $filter['FIELD_NAME']
+				: array($filter['FIELD_NAME'])
+			;
+		}
+
 		$fieldsToCreateDraft = self::getSynchronizationFields(
 			$srcEntityTypeID,
 			$dstEntityTypeID,
 			$languageID,
 			true,
-			$isRecycling
+			$isRecycling,
+			false,
+			false,
+			$filter['FIELD_NAME'] ?? null
 		);
+		if(isset($filter['FIELD_NAME']))
+		{
+			$fieldsToCreateDraft = self::filterFieldsByName($fieldsToCreateDraft, $filter['FIELD_NAME']);
+		}
+
 		$labelMap = [];
 		foreach ($fieldsToCreateDraft as $index => $field)
 		{
-			$label = self::getFieldComplianceCode($field);
-			if($label !== '' && !isset($labelMap[$label]))
+			$compatibilityKey = self::getCompatibilityKey($field);
+			if($compatibilityKey !== '' && !isset($labelMap[$compatibilityKey]))
 			{
-				$labelMap[$label] = $index;
+				$labelMap[$compatibilityKey] = $index;
 			}
 		}
 		$fieldsToCreate = [];
@@ -300,7 +376,6 @@ class UserFieldSynchronizer
 
 		if(isset($filter['FIELD_NAME']))
 		{
-			$filter['FIELD_NAME'] = is_array($filter['FIELD_NAME']) ? $filter['FIELD_NAME'] : array($filter['FIELD_NAME']);
 			foreach(self::$existedFieldNameMap as $existedSrcFieldName => $existedDstFieldName)
 			{
 				if(!in_array($existedSrcFieldName, $filter['FIELD_NAME']))
@@ -320,6 +395,10 @@ class UserFieldSynchronizer
 
 			$typeID = $srcField['USER_TYPE_ID'];
 			if(!self::isUserFieldTypeSupported($typeID))
+			{
+				continue;
+			}
+			if(!self::isUserFieldSynchronizable($srcField))
 			{
 				continue;
 			}
@@ -470,10 +549,26 @@ class UserFieldSynchronizer
 		$historyItem['sync'] = new DateTime();
 		$historyItem['check'] = new DateTime();
 		$historyItem['required'] = false;
+		$historyItem['version'] = self::COMPATIBILITY_HISTORY_VERSION;
 		self::setHistoryItem($srcEntityTypeID, $dstEntityTypeID, $historyItem);
 
 		return array_merge(self::$existedFieldNameMap, $synchronizedFieldNameMap);
 	}
+
+	private static function filterFieldsByName(array $fields, array $fieldNames): array
+	{
+		$fieldNameMap = array_fill_keys($fieldNames, true);
+
+		return array_values(
+			array_filter(
+				$fields,
+				static function(array $field) use ($fieldNameMap): bool {
+					return isset($fieldNameMap[$field['FIELD_NAME'] ?? null]);
+				}
+			)
+		);
+	}
+
 	public static function markAsSynchronized($srcEntityTypeID, $dstEntityTypeID)
 	{
 		$historyItem = self::getHistoryItem($srcEntityTypeID, $dstEntityTypeID);
@@ -484,18 +579,26 @@ class UserFieldSynchronizer
 
 		$historyItem['check'] = new DateTime();
 		$historyItem['required'] = false;
+		$historyItem['version'] = self::COMPATIBILITY_HISTORY_VERSION;
 		self::setHistoryItem($srcEntityTypeID, $dstEntityTypeID, $historyItem);
 	}
 	/**
 	* Compares source type fields with destination type fields.
-	* Matches are searched by comparing field labels.
+	* Matches are searched by comparing field compatibility.
 	* @static
 	* @param int $srcEntityTypeID Source Entity Type ID
 	* @param int $dstEntityTypeID Destination Entity Type ID
 	* @param string $languageID Language
 	* @return array
 	*/
-	public static function getIntersection($srcEntityTypeID, $dstEntityTypeID, $languageID = '')
+	public static function getIntersection(
+		$srcEntityTypeID,
+		$dstEntityTypeID,
+		$languageID = '',
+		bool $allowUnsupportedTypes = false,
+		bool $allowRecyclingCompatibility = false,
+		bool $matchByBasicAttributesOnly = false
+	)
 	{
 		if(!is_string($languageID) || $languageID === '')
 		{
@@ -513,37 +616,29 @@ class UserFieldSynchronizer
 		$srcFields = $USER_FIELD_MANAGER->GetUserFields($srcUfEntityID, 0, $languageID);
 		$dstFields = $USER_FIELD_MANAGER->GetUserFields($dstUfEntityID, 0, $languageID);
 
-		return self::getIntersectionFields($srcFields, $dstFields);
+		return self::getIntersectionFields(
+			$srcFields,
+			$dstFields,
+			[],
+			$allowUnsupportedTypes,
+			$allowRecyclingCompatibility,
+			$matchByBasicAttributesOnly
+		);
 	}
 
-	public static function getIntersectionFields(array $srcFields, array $dstFields): array
+	public static function getIntersectionFields(
+		array $srcFields,
+		array $dstFields,
+		array $excludedDstFieldNames = [],
+		bool $allowUnsupportedTypes = false,
+		bool $allowRecyclingCompatibility = false,
+		bool $matchByBasicAttributesOnly = false,
+		?callable $destinationFieldFilter = null,
+	): array
 	{
-		$map = [];
-		foreach($dstFields as $field)
-		{
-			$label = self::getFieldComplianceCode($field);
-			if($label === '')
-			{
-				continue;
-			}
-
-			$typeID = $field['USER_TYPE_ID'];
-			if(!isset($map[$typeID]))
-			{
-				$map[$typeID] = [];
-			}
-
-			$isMultiple = $field['MULTIPLE'] === 'Y' ? 'Y' : 'N';
-			if(!isset($map[$typeID][$isMultiple]))
-			{
-				$map[$typeID][$isMultiple] = [];
-			}
-
-			if(!isset($map[$typeID][$isMultiple][$label]))
-			{
-				$map[$typeID][$isMultiple][$label] = ['NAME' => $field['FIELD_NAME'], 'IS_BUSY' => false];
-			}
-		}
+		$map = self::prepareCompatibilityFieldMap($dstFields, $allowUnsupportedTypes);
+		self::preloadEnumerationValueHashes($srcFields, $map);
+		$excludedDstFieldNameMap = array_fill_keys($excludedDstFieldNames, true);
 
 		$results = [];
 
@@ -555,26 +650,957 @@ class UserFieldSynchronizer
 				continue;
 			}
 
-			if(isset($results[$label]))
+			$typeID = $field['USER_TYPE_ID'];
+			if(!$allowUnsupportedTypes && !self::isUserFieldTypeSupported($typeID))
 			{
 				continue;
 			}
 
-			$typeID = $field['USER_TYPE_ID'];
-			$isMultiple = $field['MULTIPLE'] === 'Y' ? 'Y' : 'N';
-			if(isset($map[$typeID]) && isset($map[$typeID][$isMultiple]) && isset($map[$typeID][$isMultiple][$label])
-				&& !($map[$typeID][$label]['IS_BUSY'] ?? null))
+			if(!self::hasCompatibleFieldCandidates($field, $map, $allowRecyclingCompatibility, $matchByBasicAttributesOnly))
 			{
-				$results[$label] = [
+				continue;
+			}
+
+			$compatibilityKey = self::getCompatibilityKey($field, $matchByBasicAttributesOnly);
+			if($compatibilityKey === '' || isset($results[$compatibilityKey]))
+			{
+				continue;
+			}
+
+			$dstFieldName = self::findCompatibleFieldName(
+				$field,
+				$map,
+				$excludedDstFieldNameMap,
+				true,
+				$allowRecyclingCompatibility,
+				$allowUnsupportedTypes,
+				$matchByBasicAttributesOnly,
+				$destinationFieldFilter,
+			);
+			if($dstFieldName !== null)
+			{
+				$results[$compatibilityKey] = [
 					'LABEL' => $label,
 					'SRC_FIELD_NAME' => $field['FIELD_NAME'],
-					'DST_FIELD_NAME' => $map[$typeID][$isMultiple][$label]['NAME'],
+					'DST_FIELD_NAME' => $dstFieldName,
 				];
-				$map[$typeID][$isMultiple][$label]['IS_BUSY'] = true;
 			}
 		}
 
 		return $results;
+	}
+
+	/**
+	 * Checks whether two user fields can safely share conversion or synchronization mapping.
+	 *
+	 * @param array $srcField Source user field.
+	 * @param array $dstField Destination user field.
+	 * @return bool
+	 */
+	public static function areUserFieldsCompatible(
+		array $srcField,
+		array $dstField,
+		bool $allowRecyclingCompatibility = false,
+		bool $allowUnsupportedTypes = false,
+		bool $matchByBasicAttributesOnly = false
+	): bool
+	{
+		$srcTypeID = $srcField['USER_TYPE_ID'] ?? '';
+		$dstTypeID = $dstField['USER_TYPE_ID'] ?? '';
+		if($srcTypeID === '' || $srcTypeID !== $dstTypeID)
+		{
+			return false;
+		}
+
+		if(!$allowUnsupportedTypes && !self::isUserFieldTypeSupported($srcTypeID))
+		{
+			return false;
+		}
+
+		$srcMultiple = ($srcField['MULTIPLE'] ?? 'N') === 'Y' ? 'Y' : 'N';
+		$dstMultiple = ($dstField['MULTIPLE'] ?? 'N') === 'Y' ? 'Y' : 'N';
+		if($srcMultiple !== $dstMultiple)
+		{
+			return false;
+		}
+
+		if(self::getFieldComplianceCode($srcField) !== self::getFieldComplianceCode($dstField))
+		{
+			return false;
+		}
+
+		if($matchByBasicAttributesOnly && self::canUseValueValidatedRecyclingCompatibility($srcTypeID))
+		{
+			return true;
+		}
+
+		if($srcTypeID === 'enumeration')
+		{
+			return $allowRecyclingCompatibility
+				? self::areEnumerationFieldsOverlapping($srcField, $dstField)
+				: self::areEnumerationFieldsCompatible($srcField, $dstField)
+			;
+		}
+
+		if($allowRecyclingCompatibility)
+		{
+			return self::areSignificantSettingsCompatibleForRecycle($srcField, $dstField);
+		}
+
+		return self::getSignificantSettingsSignature($srcField) === self::getSignificantSettingsSignature($dstField);
+	}
+
+	private static function prepareCompatibilityFieldMap(array $fields, bool $allowUnsupportedTypes = false): array
+	{
+		$result = [];
+		foreach($fields as $field)
+		{
+			$label = self::getFieldComplianceCode($field);
+			$typeID = $field['USER_TYPE_ID'] ?? '';
+			if(
+				$label === ''
+				|| $typeID === ''
+				|| (!$allowUnsupportedTypes && !self::isUserFieldTypeSupported($typeID))
+			)
+			{
+				continue;
+			}
+
+			$isMultiple = ($field['MULTIPLE'] ?? 'N') === 'Y' ? 'Y' : 'N';
+			$settingsSignature = $typeID === 'enumeration' ? '' : self::getSignificantSettingsSignature($field);
+			$result[$typeID][$isMultiple][$label][$settingsSignature][] = [
+				'FIELD' => $field,
+				'NAME' => $field['FIELD_NAME'],
+				'IS_BUSY' => false,
+			];
+		}
+
+		return $result;
+	}
+
+	private static function hasCompatibleFieldCandidates(
+		array $srcField,
+		array $map,
+		bool $allowRecyclingCompatibility = false,
+		bool $matchByBasicAttributesOnly = false
+	): bool
+	{
+		$label = self::getFieldComplianceCode($srcField);
+		$typeID = $srcField['USER_TYPE_ID'] ?? '';
+		$isMultiple = ($srcField['MULTIPLE'] ?? 'N') === 'Y' ? 'Y' : 'N';
+		if($label === '' || $typeID === '' || !isset($map[$typeID][$isMultiple][$label]))
+		{
+			return false;
+		}
+
+		if(
+			$typeID === 'enumeration'
+			|| $allowRecyclingCompatibility
+			|| (
+				$matchByBasicAttributesOnly
+				&& self::canUseValueValidatedRecyclingCompatibility($typeID)
+			)
+		)
+		{
+			return true;
+		}
+
+		$settingsSignature = self::getSignificantSettingsSignature($srcField);
+
+		return isset($map[$typeID][$isMultiple][$label][$settingsSignature]);
+	}
+
+	private static function findCompatibleFieldName(
+		array $srcField,
+		array &$map,
+		array $excludedFieldNames = [],
+		bool $markAsBusy = true,
+		bool $allowRecyclingCompatibility = false,
+		bool $allowUnsupportedTypes = false,
+		bool $matchByBasicAttributesOnly = false,
+		?callable $destinationFieldFilter = null,
+	): ?string
+	{
+		$label = self::getFieldComplianceCode($srcField);
+		$typeID = $srcField['USER_TYPE_ID'] ?? '';
+		$isMultiple = ($srcField['MULTIPLE'] ?? 'N') === 'Y' ? 'Y' : 'N';
+		if(
+			$label === ''
+			|| $typeID === ''
+			|| !isset($map[$typeID][$isMultiple][$label])
+		)
+		{
+			return null;
+		}
+
+		$settingsSignatures = (
+			$typeID === 'enumeration'
+			|| $allowRecyclingCompatibility
+			|| (
+				$matchByBasicAttributesOnly
+				&& self::canUseValueValidatedRecyclingCompatibility($typeID)
+			)
+		)
+			? array_keys($map[$typeID][$isMultiple][$label])
+			: [self::getSignificantSettingsSignature($srcField)]
+		;
+
+		foreach($settingsSignatures as $settingsSignature)
+		{
+			if(!isset($map[$typeID][$isMultiple][$label][$settingsSignature]))
+			{
+				continue;
+			}
+
+			foreach($map[$typeID][$isMultiple][$label][$settingsSignature] as &$candidate)
+			{
+				if(
+					$candidate['IS_BUSY']
+					|| isset($excludedFieldNames[$candidate['NAME']])
+					|| !self::areUserFieldsCompatible(
+						$srcField,
+						$candidate['FIELD'],
+						$allowRecyclingCompatibility,
+						$allowUnsupportedTypes,
+						$matchByBasicAttributesOnly
+					)
+					|| (
+						$destinationFieldFilter !== null
+						&& !$destinationFieldFilter($srcField, $candidate['FIELD'])
+					)
+				)
+				{
+					continue;
+				}
+
+				if($markAsBusy)
+				{
+					$candidate['IS_BUSY'] = true;
+				}
+
+				return $candidate['NAME'];
+			}
+			unset($candidate);
+		}
+
+		return null;
+	}
+
+	private static function getCompatibilityKey(array $field, bool $matchByBasicAttributesOnly = false): string
+	{
+		$label = self::getFieldComplianceCode($field);
+		$typeID = $field['USER_TYPE_ID'] ?? '';
+		if($label === '' || $typeID === '')
+		{
+			return '';
+		}
+
+		$isMultiple = ($field['MULTIPLE'] ?? 'N') === 'Y' ? 'Y' : 'N';
+
+		return $typeID . ':' . $isMultiple . ':' . $label . ':'
+			. (
+				$matchByBasicAttributesOnly && self::canUseValueValidatedRecyclingCompatibility($typeID)
+					? ''
+					: self::getSignificantSettingsSignature($field)
+			)
+		;
+	}
+
+	private static function canUseValueValidatedRecyclingCompatibility(string $typeID): bool
+	{
+		return isset(self::VALUE_VALIDATED_RECYCLING_TYPES[$typeID]);
+	}
+
+	private static function getSignificantSettingsSignature(array $field): string
+	{
+		$typeID = $field['USER_TYPE_ID'] ?? '';
+		if($typeID === 'enumeration')
+		{
+			return implode('|', self::getEnumerationValueHashes($field));
+		}
+
+		$settings = isset($field['SETTINGS']) && is_array($field['SETTINGS']) ? $field['SETTINGS'] : [];
+		$significantSettings = [];
+		foreach(self::getSignificantSettingNames($typeID, $settings) as $settingName)
+		{
+			$value = array_key_exists($settingName, $settings) ? $settings[$settingName] : null;
+			$significantSettings[$settingName] = self::normalizeSignificantSettingValue(
+				$typeID,
+				$settingName,
+				$value
+			);
+		}
+
+		if(empty($significantSettings))
+		{
+			return '';
+		}
+
+		ksort($significantSettings);
+
+		return md5(serialize($significantSettings));
+	}
+
+	private static function getSignificantSettingNames(string $typeID, array $settings = []): array
+	{
+		switch($typeID)
+		{
+			case 'integer':
+			case 'double':
+				return ['MIN_VALUE', 'MAX_VALUE', 'PRECISION'];
+
+			case 'datetime':
+				return ['USE_TIMEZONE'];
+
+			case 'string':
+			case 'string_formatted':
+				return ['MIN_LENGTH', 'MAX_LENGTH', 'REGEXP'];
+
+			case 'url':
+				return ['MIN_LENGTH', 'MAX_LENGTH'];
+
+			case 'file':
+				return ['MAX_ALLOWED_SIZE', 'EXTENSIONS'];
+
+			case 'crm':
+				$names = ['LEAD', 'CONTACT', 'COMPANY', 'DEAL', 'QUOTE', 'SMART_INVOICE', 'ORDER'];
+				foreach($settings as $name => $value)
+				{
+					if(
+						is_string($name)
+						&& self::isDynamicCrmSettingName($name)
+						&& self::normalizeSignificantSettingValue($typeID, $name, $value) === 'Y'
+					)
+					{
+						$names[] = $name;
+					}
+				}
+
+				return $names;
+
+			case 'crm_status':
+				return ['ENTITY_TYPE'];
+
+			case 'hlblock':
+				return ['HLBLOCK_ID'];
+
+			case 'iblock_element':
+			case 'iblock_section':
+				return ['IBLOCK_ID'];
+
+			default:
+				return [];
+		}
+	}
+
+	private static function isDynamicCrmSettingName(string $name): bool
+	{
+		return preg_match('/^DYNAMIC_\\d+$/', $name) === 1;
+	}
+
+	private static function normalizeSignificantSettingValue(string $typeID, string $settingName, mixed $value): mixed
+	{
+		if(
+			$typeID === 'crm'
+			&& (
+				in_array($settingName, ['LEAD', 'CONTACT', 'COMPANY', 'DEAL', 'QUOTE', 'SMART_INVOICE', 'ORDER'], true)
+				|| self::isDynamicCrmSettingName($settingName)
+			)
+		)
+		{
+			return $value === 'Y' ? 'Y' : 'N';
+		}
+
+		if($typeID === 'datetime' && $settingName === 'USE_TIMEZONE')
+		{
+			return $value === 'N' ? 'N' : 'Y';
+		}
+
+		if($typeID === 'double' && in_array($settingName, ['MIN_VALUE', 'MAX_VALUE'], true))
+		{
+			return (float)$value;
+		}
+
+		if(
+			in_array($settingName, ['MIN_VALUE', 'MAX_VALUE', 'PRECISION', 'MIN_LENGTH', 'MAX_LENGTH'], true)
+			|| ($typeID === 'file' && $settingName === 'MAX_ALLOWED_SIZE')
+		)
+		{
+			return (int)$value;
+		}
+
+		if(
+			in_array($typeID, ['string', 'string_formatted'], true)
+			&& $settingName === 'REGEXP'
+		)
+		{
+			return is_string($value) ? $value : '';
+		}
+
+		if($typeID === 'file' && $settingName === 'EXTENSIONS')
+		{
+			return self::normalizeFileExtensions($value);
+		}
+
+		return $value;
+	}
+
+	private static function normalizeFileExtensions(mixed $value): array
+	{
+		if($value === null || $value === '')
+		{
+			return [];
+		}
+
+		$extensions = is_array($value) ? $value : explode(',', (string)$value);
+		$result = [];
+		foreach($extensions as $key => $extension)
+		{
+			if($extension === true)
+			{
+				$extension = $key;
+			}
+
+			$extension = mb_strtolower(trim((string)$extension));
+			if($extension !== '')
+			{
+				$result[$extension] = true;
+			}
+		}
+		ksort($result);
+
+		return array_keys($result);
+	}
+
+	private static function areSignificantSettingsCompatibleForRecycle(array $srcField, array $dstField): bool
+	{
+		$typeID = $srcField['USER_TYPE_ID'] ?? '';
+		$srcSettings = isset($srcField['SETTINGS']) && is_array($srcField['SETTINGS']) ? $srcField['SETTINGS'] : [];
+		$dstSettings = isset($dstField['SETTINGS']) && is_array($dstField['SETTINGS']) ? $dstField['SETTINGS'] : [];
+
+		switch($typeID)
+		{
+			case 'integer':
+			case 'double':
+				return self::isMinimumRestrictionCompatible($srcSettings, $dstSettings, $typeID, 'MIN_VALUE')
+					&& self::isMaximumRestrictionCompatible($srcSettings, $dstSettings, $typeID, 'MAX_VALUE')
+					&& self::isPrecisionRestrictionCompatible($srcSettings, $dstSettings, $typeID)
+				;
+
+			case 'string':
+			case 'string_formatted':
+				return self::isMinimumRestrictionCompatible($srcSettings, $dstSettings, $typeID, 'MIN_LENGTH')
+					&& self::isMaximumRestrictionCompatible($srcSettings, $dstSettings, $typeID, 'MAX_LENGTH')
+					&& self::isRegexpRestrictionCompatible($srcSettings, $dstSettings, $typeID)
+				;
+
+			case 'url':
+				return self::isMinimumRestrictionCompatible($srcSettings, $dstSettings, $typeID, 'MIN_LENGTH')
+					&& self::isMaximumRestrictionCompatible($srcSettings, $dstSettings, $typeID, 'MAX_LENGTH')
+				;
+
+			case 'file':
+				return self::isMaximumRestrictionCompatible($srcSettings, $dstSettings, $typeID, 'MAX_ALLOWED_SIZE')
+					&& self::isFileExtensionsRestrictionCompatible($srcSettings, $dstSettings)
+				;
+
+			default:
+				return self::getSignificantSettingsSignature($srcField) === self::getSignificantSettingsSignature($dstField);
+		}
+	}
+
+	private static function isMinimumRestrictionCompatible(
+		array $srcSettings,
+		array $dstSettings,
+		string $typeID,
+		string $settingName
+	): bool
+	{
+		$srcValue = self::normalizeSignificantSettingValue($typeID, $settingName, $srcSettings[$settingName] ?? null);
+		$dstValue = self::normalizeSignificantSettingValue($typeID, $settingName, $dstSettings[$settingName] ?? null);
+
+		return $dstValue <= $srcValue;
+	}
+
+	private static function isMaximumRestrictionCompatible(
+		array $srcSettings,
+		array $dstSettings,
+		string $typeID,
+		string $settingName
+	): bool
+	{
+		$srcValue = self::normalizeSignificantSettingValue($typeID, $settingName, $srcSettings[$settingName] ?? null);
+		$dstValue = self::normalizeSignificantSettingValue($typeID, $settingName, $dstSettings[$settingName] ?? null);
+		if($srcValue <= 0 || $dstValue <= 0)
+		{
+			return $dstValue <= 0;
+		}
+
+		return $srcValue <= $dstValue;
+	}
+
+	private static function isRegexpRestrictionCompatible(array $srcSettings, array $dstSettings, string $typeID): bool
+	{
+		$srcRegexp = self::normalizeSignificantSettingValue($typeID, 'REGEXP', $srcSettings['REGEXP'] ?? null);
+		$dstRegexp = self::normalizeSignificantSettingValue($typeID, 'REGEXP', $dstSettings['REGEXP'] ?? null);
+
+		return $dstRegexp === '' || $dstRegexp === $srcRegexp;
+	}
+
+	private static function isPrecisionRestrictionCompatible(array $srcSettings, array $dstSettings, string $typeID): bool
+	{
+		$srcPrecision = self::normalizeSignificantSettingValue($typeID, 'PRECISION', $srcSettings['PRECISION'] ?? null);
+		$dstPrecision = self::normalizeSignificantSettingValue($typeID, 'PRECISION', $dstSettings['PRECISION'] ?? null);
+
+		return $srcPrecision <= $dstPrecision;
+	}
+
+	private static function isFileExtensionsRestrictionCompatible(array $srcSettings, array $dstSettings): bool
+	{
+		$srcExtensions = self::normalizeFileExtensions($srcSettings['EXTENSIONS'] ?? null);
+		$dstExtensions = self::normalizeFileExtensions($dstSettings['EXTENSIONS'] ?? null);
+		if(empty($dstExtensions))
+		{
+			return true;
+		}
+
+		if(empty($srcExtensions))
+		{
+			return false;
+		}
+
+		$dstExtensionMap = array_fill_keys($dstExtensions, true);
+		foreach($srcExtensions as $extension)
+		{
+			if(!isset($dstExtensionMap[$extension]))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static function areEnumerationFieldsCompatible(array $srcField, array $dstField): bool
+	{
+		$srcHashes = self::getEnumerationValueHashes($srcField);
+		if(empty($srcHashes))
+		{
+			return true;
+		}
+
+		$dstHashes = array_flip(self::getEnumerationValueHashes($dstField));
+		foreach($srcHashes as $srcHash)
+		{
+			if(!isset($dstHashes[$srcHash]))
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	private static function areEnumerationFieldsOverlapping(array $srcField, array $dstField): bool
+	{
+		$srcHashes = self::getEnumerationValueHashes($srcField);
+		if(empty($srcHashes))
+		{
+			return true;
+		}
+
+		$dstHashes = array_flip(self::getEnumerationValueHashes($dstField));
+		foreach($srcHashes as $srcHash)
+		{
+			if(isset($dstHashes[$srcHash]))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	public static function preloadEnumerationValues(array $fields): void
+	{
+		self::loadEnumerationValueHashes($fields);
+	}
+
+	public static function clearEnumerationValueCache(int $fieldId): void
+	{
+		unset(self::$enumerationValueHashes[$fieldId], self::$enumerationValues[$fieldId]);
+	}
+
+	public static function filterFieldsWithValue(array $fields): array
+	{
+		$result = [];
+		foreach($fields as $fieldName => $field)
+		{
+			if(!is_array($field) || !self::isUserFieldValueFilled($field['VALUE'] ?? null))
+			{
+				continue;
+			}
+
+			$result[$fieldName] = $field;
+		}
+
+		return $result;
+	}
+
+	public static function tryMapEnumerationValueToDestination(array $srcField, array $dstField, mixed $value, mixed &$mappedValue): bool
+	{
+		$mappedValue = $value;
+		if(
+			($srcField['USER_TYPE_ID'] ?? '') !== 'enumeration'
+			|| ($dstField['USER_TYPE_ID'] ?? '') !== 'enumeration'
+		)
+		{
+			return true;
+		}
+
+		$selectedValues = self::normalizeEnumerationSelectedValues($value);
+		if(empty($selectedValues))
+		{
+			$mappedValue = ($srcField['MULTIPLE'] ?? 'N') === 'Y' ? [] : null;
+			return true;
+		}
+
+		$srcValueMap = self::getEnumerationValueMapById($srcField);
+		$dstValueMap = self::getEnumerationIdMapByValueHash($dstField);
+		$mappedValues = [];
+		$isMultiple = ($srcField['MULTIPLE'] ?? 'N') === 'Y';
+		foreach($selectedValues as $selectedValue)
+		{
+			$srcValue = $srcValueMap[(string)$selectedValue] ?? null;
+			if($srcValue === null)
+			{
+				if($isMultiple)
+				{
+					continue;
+				}
+
+				return false;
+			}
+
+			$hash = md5((string)$srcValue);
+			if(!isset($dstValueMap[$hash]))
+			{
+				if($isMultiple)
+				{
+					continue;
+				}
+
+				return false;
+			}
+
+			$mappedValues[] = $dstValueMap[$hash];
+		}
+
+		if(empty($mappedValues))
+		{
+			return false;
+		}
+
+		$mappedValue = $isMultiple
+			? $mappedValues
+			: $mappedValues[0]
+		;
+
+		return true;
+	}
+
+	private static function isUserFieldValueFilled(mixed $value): bool
+	{
+		if(is_array($value))
+		{
+			foreach($value as $singleValue)
+			{
+				if(self::isUserFieldValueFilled($singleValue))
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		return $value !== null && $value !== '' && $value !== false;
+	}
+
+	private static function preloadEnumerationValueHashes(
+		array $srcFields,
+		array $map,
+		bool $includeMissingSourceFields = false
+	): void
+	{
+		$fields = [];
+		foreach($srcFields as $srcField)
+		{
+			if(($srcField['USER_TYPE_ID'] ?? '') !== 'enumeration')
+			{
+				continue;
+			}
+
+			$label = self::getFieldComplianceCode($srcField);
+			$isMultiple = ($srcField['MULTIPLE'] ?? 'N') === 'Y' ? 'Y' : 'N';
+			if($label === '')
+			{
+				continue;
+			}
+
+			if(!isset($map['enumeration'][$isMultiple][$label]))
+			{
+				if($includeMissingSourceFields)
+				{
+					$fields[] = $srcField;
+				}
+
+				continue;
+			}
+
+			$fields[] = $srcField;
+			foreach($map['enumeration'][$isMultiple][$label] as $candidates)
+			{
+				foreach($candidates as $candidate)
+				{
+					$fields[] = $candidate['FIELD'];
+				}
+			}
+		}
+
+		self::loadEnumerationValueHashes($fields);
+	}
+
+	private static function loadEnumerationValueHashes(array $fields): void
+	{
+		$fieldIds = [];
+		foreach($fields as $field)
+		{
+			$fieldId = (int)($field['ID'] ?? 0);
+			if($fieldId <= 0 || array_key_exists($fieldId, self::$enumerationValueHashes))
+			{
+				continue;
+			}
+
+			if(isset($field['ENUM']) && is_array($field['ENUM']))
+			{
+				self::setCachedEnumerationValues($fieldId, $field['ENUM']);
+			}
+			elseif(isset($field['VALUES']) && is_array($field['VALUES']))
+			{
+				self::setCachedEnumerationValues($fieldId, $field['VALUES']);
+			}
+			elseif(($field['USER_TYPE_ID'] ?? '') === 'enumeration')
+			{
+				$fieldIds[$fieldId] = $fieldId;
+			}
+		}
+
+		if(empty($fieldIds))
+		{
+			return;
+		}
+
+		foreach($fieldIds as $fieldId)
+		{
+			self::$enumerationValueHashes[$fieldId] = [];
+			self::$enumerationValues[$fieldId] = [];
+		}
+
+		foreach(array_chunk(array_values($fieldIds), self::ENUMERATION_VALUE_HASH_CHUNK_SIZE) as $fieldIdChunk)
+		{
+			$dbResult = \CUserFieldEnum::GetList(
+				['USER_FIELD_ID' => 'ASC'],
+				['USER_FIELD_ID' => $fieldIdChunk],
+				false
+			);
+			while($enum = $dbResult->Fetch())
+			{
+				$fieldId = (int)($enum['USER_FIELD_ID'] ?? 0);
+				if($fieldId <= 0 || !isset(self::$enumerationValueHashes[$fieldId]))
+				{
+					continue;
+				}
+
+				$value = $enum['VALUE'] ?? null;
+				if($value !== null)
+				{
+					self::$enumerationValueHashes[$fieldId][] = md5((string)$value);
+					self::$enumerationValues[$fieldId][] = $enum;
+				}
+			}
+		}
+
+		foreach($fieldIds as $fieldId)
+		{
+			self::$enumerationValueHashes[$fieldId] = array_values(
+				array_unique(self::$enumerationValueHashes[$fieldId])
+			);
+			sort(self::$enumerationValueHashes[$fieldId]);
+			self::$enumerationValues[$fieldId] = self::normalizeEnumerationValues(self::$enumerationValues[$fieldId]);
+		}
+	}
+
+	private static function getEnumerationValueHashes(array $field): array
+	{
+		$fieldId = (int)($field['ID'] ?? 0);
+		if($fieldId > 0 && array_key_exists($fieldId, self::$enumerationValueHashes))
+		{
+			return self::$enumerationValueHashes[$fieldId];
+		}
+
+		$values = self::getEnumerationValues($field);
+		$hashes = self::prepareEnumerationValueHashes($values);
+		if($fieldId > 0)
+		{
+			self::$enumerationValueHashes[$fieldId] = $hashes;
+			self::$enumerationValues[$fieldId] = self::normalizeEnumerationValues($values);
+		}
+
+		return $hashes;
+	}
+
+	private static function getEnumerationValues(array $field): array
+	{
+		$fieldId = (int)($field['ID'] ?? 0);
+		if($fieldId > 0 && array_key_exists($fieldId, self::$enumerationValues))
+		{
+			return self::$enumerationValues[$fieldId];
+		}
+
+		if(isset($field['ENUM']) && is_array($field['ENUM']))
+		{
+			$values = $field['ENUM'];
+		}
+		elseif(isset($field['VALUES']) && is_array($field['VALUES']))
+		{
+			$values = $field['VALUES'];
+		}
+		elseif(($field['USER_TYPE_ID'] ?? '') === 'enumeration' && $fieldId > 0)
+		{
+			$values = [];
+			$dbResult = \CUserFieldEnum::GetList(
+				['USER_FIELD_ID' => 'ASC'],
+				['USER_FIELD_ID' => $fieldId],
+				false
+			);
+			while($enum = $dbResult->Fetch())
+			{
+				$values[] = $enum;
+			}
+		}
+		else
+		{
+			$values = [];
+		}
+
+		$values = self::normalizeEnumerationValues($values);
+		if($fieldId > 0)
+		{
+			self::$enumerationValues[$fieldId] = $values;
+		}
+
+		return $values;
+	}
+
+	private static function setCachedEnumerationValues(int $fieldId, array $values): void
+	{
+		self::$enumerationValues[$fieldId] = self::normalizeEnumerationValues($values);
+		self::$enumerationValueHashes[$fieldId] = self::prepareEnumerationValueHashes(
+			self::$enumerationValues[$fieldId]
+		);
+	}
+
+	private static function normalizeEnumerationValues(array $values): array
+	{
+		$result = [];
+		foreach($values as $value)
+		{
+			if(!is_array($value) || !isset($value['ID']) || !array_key_exists('VALUE', $value))
+			{
+				continue;
+			}
+
+			$result[] = $value;
+		}
+
+		return $result;
+	}
+
+	private static function getEnumerationValueMapById(array $field): array
+	{
+		$map = [];
+		foreach(self::getEnumerationValues($field) as $value)
+		{
+			if(!is_array($value) || !isset($value['ID']) || !array_key_exists('VALUE', $value))
+			{
+				continue;
+			}
+
+			$map[(string)$value['ID']] = $value['VALUE'];
+		}
+
+		return $map;
+	}
+
+	private static function getEnumerationIdMapByValueHash(array $field): array
+	{
+		$map = [];
+		foreach(self::getEnumerationValues($field) as $value)
+		{
+			if(!is_array($value) || !isset($value['ID']) || !array_key_exists('VALUE', $value))
+			{
+				continue;
+			}
+
+			$hash = md5((string)$value['VALUE']);
+			if(!isset($map[$hash]))
+			{
+				$map[$hash] = $value['ID'];
+			}
+		}
+
+		return $map;
+	}
+
+	private static function normalizeEnumerationSelectedValues(mixed $value): array
+	{
+		$values = is_array($value) ? $value : [$value];
+		$result = [];
+		foreach($values as $selectedValue)
+		{
+			if(is_array($selectedValue))
+			{
+				$selectedValue = $selectedValue['VALUE'] ?? $selectedValue['ID'] ?? null;
+			}
+
+			if($selectedValue === null || $selectedValue === '')
+			{
+				continue;
+			}
+
+			$result[] = $selectedValue;
+		}
+
+		return $result;
+	}
+
+	private static function prepareEnumerationValueHashes(array $values): array
+	{
+		$hashes = [];
+		foreach($values as $value)
+		{
+			$value = is_array($value) ? ($value['VALUE'] ?? null) : $value;
+			if($value !== null)
+			{
+				$hashes[] = md5((string)$value);
+			}
+		}
+
+		$hashes = array_values(array_unique($hashes));
+		sort($hashes);
+
+		return $hashes;
 	}
 
 	public static function getDifference($srcEntityTypeID, $dstEntityTypeID, $languageID = '')
@@ -730,7 +1756,8 @@ class UserFieldSynchronizer
 						'dst' => $dstEntityTypeID,
 						'sync' => $sync !== '' ? new DateTime($sync, \DateTime::ISO8601) : null,
 						'check' => $check !== '' ? new DateTime($check, \DateTime::ISO8601) : null,
-						'required' => isset($item['required']) ? $item['required'] : null
+						'required' => isset($item['required']) ? $item['required'] : null,
+						'version' => isset($item['version']) ? (int)$item['version'] : 0,
 					);
 				}
 				catch(Main\ObjectException $e)
@@ -762,7 +1789,8 @@ class UserFieldSynchronizer
 				'dst' => \CCrmOwnerType::ResolveName($item['dst']),
 				'sync' => $sync !== null ? $sync->format(\DateTime::ISO8601) : '',
 				'check' => $check !== null ? $check->format(\DateTime::ISO8601) : '',
-				'required' => isset($item['required']) ? $item['required'] : null
+				'required' => isset($item['required']) ? $item['required'] : null,
+				'version' => isset($item['version']) ? (int)$item['version'] : 0,
 			);
 		}
 
@@ -771,38 +1799,44 @@ class UserFieldSynchronizer
 
 	private static function getDifferenceFromOther(array $srcFields, array $dstFields): array
 	{
-		$srcMap = self::prepareFieldMap($srcFields);
-		$dstMap = self::prepareFieldMap($dstFields);
-
+		$dstMap = self::prepareCompatibilityFieldMap($dstFields);
+		self::preloadEnumerationValueHashes($srcFields, $dstMap);
 		$result = [];
-		foreach ($srcMap as $typeID => $fieldMapByMultiple)
+		foreach($srcFields as $field)
 		{
-			foreach ($fieldMapByMultiple as $isMultiple => $fieldMap)
+			$label = self::getFieldComplianceCode($field);
+			if($label === '')
 			{
-				if (!isset($dstMap[$typeID][$isMultiple]))
-				{
-					foreach ($fieldMap as $label => $fieldName)
-					{
-						$result[$label] = [
-							'LABEL' => $label,
-							'SRC_FIELD_NAME' => $fieldName,
-						];
-					}
-					continue;
-				}
-
-				$diffMap = array_diff_key($fieldMap, $dstMap[$typeID][$isMultiple]);
-
-				foreach ($diffMap as $label => $fieldName)
-				{
-					$result[$label] = [
-						'LABEL' => $label,
-						'SRC_FIELD_NAME' => $fieldName,
-					];
-				}
+				continue;
 			}
+
+			$typeID = $field['USER_TYPE_ID'];
+			if(!self::isUserFieldTypeSupported($typeID))
+			{
+				continue;
+			}
+
+			$compatibilityKey = self::getCompatibilityKey($field);
+			if(
+				$compatibilityKey === ''
+				|| isset($result[$compatibilityKey])
+				|| self::findCompatibleFieldName($field, $dstMap, [], false) !== null
+			)
+			{
+				continue;
+			}
+
+			$result[$compatibilityKey] = [
+				'LABEL' => $label,
+				'SRC_FIELD_NAME' => $field['FIELD_NAME'],
+			];
 		}
 
 		return $result;
+	}
+
+	private static function isHistoryItemCompatible(array $historyItem): bool
+	{
+		return (int)($historyItem['version'] ?? 0) >= self::COMPATIBILITY_HISTORY_VERSION;
 	}
 }

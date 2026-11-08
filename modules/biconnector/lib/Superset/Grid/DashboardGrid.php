@@ -7,12 +7,14 @@ use Bitrix\BIConnector\Integration\Superset\SupersetController;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Superset\Grid\Row\Assembler\DashboardRowAssembler;
 use Bitrix\BIConnector\Superset\Grid\Settings\DashboardSettings;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Engine\Response\Converter;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Filter\Settings;
 use Bitrix\Main\Grid\Column\Columns;
 use Bitrix\Main\Grid\Grid;
 use Bitrix\Main\Grid\Row\Rows;
+use Bitrix\Main\Localization\Loc;
 
 /**
  * @method DashboardSettings getSettings()
@@ -53,7 +55,6 @@ final class DashboardGrid extends Grid
 				'TAGS',
 				'SCOPE',
 				'GROUPS',
-				'FILTER_PERIOD',
 				'ID',
 				'URL_PARAMS',
 			],
@@ -74,6 +75,43 @@ final class DashboardGrid extends Grid
 				new Settings(['ID' => $this->getId()]),
 			),
 		);
+	}
+
+	public static function getFilterPresets(): array
+	{
+		$currentUser = CurrentUser::get();
+
+		return [
+			'mine' => [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_PRESET_MINE') ?? '',
+				'sort' => 100,
+				'fields' => [
+					'CREATED_BY_ID' => [$currentUser->getId()],
+					'CREATED_BY_ID_label' => [$currentUser->getFormattedName()],
+				],
+			],
+			'system' => [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_PRESET_SYSTEM') ?? '',
+				'sort' => 200,
+				'fields' => [
+					'TYPE' => Model\SupersetDashboardTable::DASHBOARD_TYPE_SYSTEM,
+				],
+			],
+			'drafts' => [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_PRESET_DRAFT') ?? '',
+				'sort' => 300,
+				'fields' => [
+					'STATUS' => [Model\SupersetDashboardTable::DASHBOARD_STATUS_DRAFT],
+				],
+			],
+			'market' => [
+				'name' => Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_FILTER_PRESET_MARKET') ?? '',
+				'sort' => 400,
+				'fields' => [
+					'TYPE' => Model\SupersetDashboardTable::DASHBOARD_TYPE_MARKET,
+				],
+			],
+		];
 	}
 
 	public static function prepareDashboardRowData(Model\Dashboard $dashboard, array $additionalOptions = []): array

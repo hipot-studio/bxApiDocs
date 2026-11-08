@@ -11,6 +11,7 @@ use Bitrix\Mobile\Trait\PublicErrorsTrait;
 use Bitrix\Catalog;
 use Bitrix\Crm\Activity\TodoPingSettingsProvider;
 use Bitrix\Crm\Component\EntityDetails\ComponentMode;
+use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Conversion;
 use Bitrix\Crm\Engine\ActionFilter\CheckReadMyCompanyPermission;
 use Bitrix\Crm\Engine\ActionFilter\CheckReadPermission;
@@ -36,6 +37,7 @@ use Bitrix\CrmMobile\AhaMoments\GoToChat;
 use Bitrix\CrmMobile\AhaMoments\Yoochecks;
 use Bitrix\CrmMobile\Command\SaveEntityCommand;
 use Bitrix\CrmMobile\Controller\Filter\CheckRestrictions;
+use Bitrix\CrmMobile\Entity\ClientCreation;
 use Bitrix\CrmMobile\Entity\FactoryProvider;
 use Bitrix\CrmMobile\ProductGrid\ProductGridQuery;
 use Bitrix\CrmMobile\Query\EntityEditor;
@@ -48,6 +50,7 @@ use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Type\DateTime;
+use Bitrix\Main\Type\Dictionary;
 use Bitrix\Main\UI\EntitySelector\EntityUsageTable;
 use Bitrix\Mobile\Helpers\ReadsApplicationErrors;
 use Bitrix\Mobile\UI\DetailCard\Configurator;
@@ -258,9 +261,15 @@ class EntityDetails extends Controller
 	 */
 	public function loadMainAction(Factory $factory, Item $entity, CurrentUser $currentUser): array
 	{
+		$sourceClient = $this->getClientCreationSource($entity);
+		if ($this->getErrors())
+		{
+			return [];
+		}
+
 		$this->registerEntityViewedEvent($factory, $entity);
 
-		$entityEditorQuery = new EntityEditor($factory, $entity, $this->getEditorParams($entity));
+		$entityEditorQuery = new EntityEditor($factory, $entity, $this->getEditorParams($entity), $sourceClient);
 		$result = [
 			'editor' => $entityEditorQuery->execute(),
 		];
@@ -354,6 +363,91 @@ class EntityDetails extends Controller
 		}
 
 		return $params;
+	}
+
+	private function hasClientCreationContext(): bool
+	{
+		foreach ($this->getSourceParametersList() as $parameters)
+		{
+			if ($parameters instanceof Dictionary)
+			{
+				$parameters = $parameters->getValues();
+			}
+
+			if (array_key_exists('sourceEntityTypeId', $parameters))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function getClientCreationSource(Item $entity, ?int $categoryId = null): ?Item
+	{
+		if (!$entity->isNew() || !$this->hasClientCreationContext())
+		{
+			return null;
+		}
+
+		$sourceEntityTypeId = $this->findInSourceParametersList('sourceEntityTypeId');
+		$sourceEntityId = $this->findInSourceParametersList('sourceEntityId');
+		foreach ([$sourceEntityTypeId, $sourceEntityId] as $value)
+		{
+			if (
+				(!is_int($value) && !is_string($value))
+				|| filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false
+			)
+			{
+				$this->addError(ErrorCode::getNotFoundError());
+
+				return null;
+			}
+		}
+
+		$conversionParameters = Conversion\EntityConversionWizard::getQueryParamSource();
+		$conflictingParameters = [
+			'copy',
+			'client',
+			'contact_id',
+			...self::STATIC_CONVERSION_QUERY_PARAMS,
+			...array_values($conversionParameters),
+		];
+		foreach ($conflictingParameters as $parameter)
+		{
+			if ($this->findInSourceParametersList($parameter))
+			{
+				$this->addError(ErrorCode::getAccessDeniedError());
+
+				return null;
+			}
+		}
+
+		$container = Container::getInstance();
+		$clientCreation = new ClientCreation(
+			$container,
+			$container->getUserPermissions(),
+			$container->getIntranetToolsManager(),
+		);
+		$result = $clientCreation->resolveSource((int)$sourceEntityTypeId, (int)$sourceEntityId);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		$source = $result->getData()['source'];
+		$categoryId ??= $entity->isCategoriesSupported() ? $entity->getCategoryId() : null;
+		$result = $clientCreation->checkTarget($source, $entity->getEntityTypeId(), $categoryId);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $source;
 	}
 
 	private function getCommonPermissions(): array
@@ -679,7 +773,13 @@ class EntityDetails extends Controller
 	 */
 	public function getRequiredFieldsAction(Factory $factory, Item $entity, array $fieldCodes = []): array
 	{
-		$entityEditorQuery = new EntityEditor($factory, $entity, $this->getEditorParams($entity));
+		$sourceClient = $this->getClientCreationSource($entity);
+		if ($this->getErrors())
+		{
+			return [];
+		}
+
+		$entityEditorQuery = new EntityEditor($factory, $entity, $this->getEditorParams($entity), $sourceClient);
 
 		return $entityEditorQuery->execute($fieldCodes);
 	}
@@ -721,6 +821,17 @@ class EntityDetails extends Controller
 		?array $analyticsData = null,
 	): ?int
 	{
+		$validationCategoryId = $categoryId;
+		if ($validationCategoryId === null && isset($data[Item::FIELD_NAME_CATEGORY_ID]))
+		{
+			$validationCategoryId = (int)$data[Item::FIELD_NAME_CATEGORY_ID];
+		}
+		$this->getClientCreationSource($entity, $validationCategoryId);
+		if ($this->getErrors())
+		{
+			return null;
+		}
+
 		// setCompatibleData overrides all previous filled fields, so we need to fill category explicitly
 		if ($categoryId !== null && $entity->isCategoriesSupported())
 		{

@@ -170,6 +170,7 @@ class Booking extends BaseController
 	public function addListAction(array $bookingList): Entity\Booking\BookingCollection|null
 	{
 		$collection = new Entity\Booking\BookingCollection();
+		$errors = [];
 
 		foreach ($bookingList as $fields)
 		{
@@ -179,7 +180,9 @@ class Booking extends BaseController
 			}
 			catch (Exception $exception)
 			{
-				$booking = null;
+				$errors[] = ErrorBuilder::buildFromException($exception);
+
+				continue;
 			}
 
 			if (
@@ -187,25 +190,39 @@ class Booking extends BaseController
 				&& $booking->getResourceCollection()->count() > 1
 			)
 			{
-				continue;
-			}
+				$errors[] = new Error('Multi-resource booking feature is not available');
 
-			if ($booking === null)
-			{
 				continue;
 			}
 
 			$addBookingCommand = new AddBookingCommand(
 				createdBy: (int)CurrentUser::get()->getId(),
-				booking: Entity\Booking\Booking::mapFromArray($fields),
+				booking: $booking,
 				allowOverbooking: true,
 			);
 
 			$result = $addBookingCommand->run();
-			if ($result->isSuccess() && $result->getBooking())
+			if (!$result->isSuccess())
 			{
-				$collection->add($result->getBooking());
+				array_push($errors, ...$result->getErrors());
+
+				continue;
 			}
+
+			$createdBooking = $result->getBooking();
+			if ($createdBooking)
+			{
+				$collection->add($createdBooking);
+			}
+		}
+
+		/**
+		 * A batch where at least one booking was created stays a success: the client drops the data of
+		 * a response that carries errors, and the bookings already created would go with it.
+		 */
+		if ($collection->isEmpty() && !empty($errors))
+		{
+			$this->addErrors($errors);
 		}
 
 		return $collection;

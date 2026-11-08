@@ -169,7 +169,7 @@ class MessageEventManager
 
 		if (!empty($missingKeys) && !empty($filter))
 		{
-			$fieldsData = $this->getMailMessagesList($filter, $missingKeys);
+			$fieldsData = $this->getMailMessagesList($filter, $requiredKeys);
 		}
 		$results = [];
 		foreach ($fieldsData as $index => $mailFieldsData)

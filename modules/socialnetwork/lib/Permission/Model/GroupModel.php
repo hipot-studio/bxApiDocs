@@ -50,6 +50,15 @@ class GroupModel implements AccessModelInterface
 		return $model;
 	}
 
+	public static function createFromDomainObject(Workgroup $group): static
+	{
+		$model = new static();
+		$model->id = $group->getId();
+		$model->group = $group;
+
+		return $model;
+	}
+
 	public function getId(): int
 	{
 		return $this->id;

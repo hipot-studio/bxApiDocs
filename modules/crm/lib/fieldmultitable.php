@@ -165,6 +165,7 @@ class FieldMultiTable extends DataManager
 				'=ENTITY_ID' => \CCrmOwnerType::ResolveName($owner->getEntityTypeId()),
 				'=ELEMENT_ID' => $owner->getEntityId(),
 			],
+			'order' => ['ID' => 'ASC'],
 		]);
 	}
 
@@ -176,6 +177,7 @@ class FieldMultiTable extends DataManager
 				'=ENTITY_ID' => \CCrmOwnerType::ResolveName($entityTypeId),
 				'@ELEMENT_ID' => $entityIds,
 			],
+			'order' => ['ID' => 'ASC'],
 		]);
 	}
 

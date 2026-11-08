@@ -8,6 +8,7 @@ use Bitrix\Im\V2\Message;
 use Bitrix\Im\V2\Message\Send\SendingConfig;
 use Bitrix\Im\V2\Message\Send\SendResult;
 use Bitrix\Im\V2\MessageCollection;
+use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Im\V2\Relation\AddUsersConfig;
 use Bitrix\Im\V2\Relation\DeleteUserConfig;
 use Bitrix\Im\V2\RelationCollection;
@@ -22,6 +23,7 @@ use Bitrix\Pull\Event;
 class OpenLineChat extends EntityChat
 {
 	protected const EXTRANET_CAN_SEE_HISTORY = true;
+	protected const EXTRANET_CAN_SEE_HISTORY_ON_EXPLICIT_ADD = true;
 
 	protected $entityMap = [
 		'entityId' => [
@@ -185,6 +187,43 @@ class OpenLineChat extends EntityChat
 	protected function getDefaultEntityType(): string
 	{
 		return self::ENTITY_TYPE_LINE;
+	}
+
+	public function getManageUsersDelete(): ?string
+	{
+		return $this::MANAGE_RIGHTS_MEMBER;
+	}
+
+	public function canDo(Action $action, mixed $target = null): bool
+	{
+		if ($action === Action::Kick && !$this->canKick($target))
+		{
+			return false;
+		}
+
+		return parent::canDo($action, $target);
+	}
+
+	protected function canKick(mixed $target): bool
+	{
+		$actorId = $this->getContext()->getUserId();
+		if (is_int($target) && $target === $actorId)
+		{
+			return true; // self-kick becomes Leave in Permission::specifyAction
+		}
+
+		$actor = User::getInstance($actorId);
+		if ($actor->isBot() || $actor->isConnector() || $actor->isExtranet())
+		{
+			return false;
+		}
+
+		if (is_int($target) && User::getInstance($target)->isConnector())
+		{
+			return false;
+		}
+
+		return true;
 	}
 
 	protected function checkAccessInternal(int $userId): Result

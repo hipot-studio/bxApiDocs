@@ -12,8 +12,19 @@ class CMailContactAvatarComponent extends \CBitrixComponent
 	public function executeComponent()
 	{
 		$page = 'avatar_default';
-		$mailContact = $this->arParams['mailContact'];
-		$this->arResult['avatarSize'] = ($this->arParams['avatarSize'] && is_numeric($this->arParams['avatarSize'])) ? (int)$this->arParams['avatarSize'] : 22;
+		$imageUrl = trim((string)($this->arParams['imageUrl'] ?? ''));
+		$this->arResult['testId'] = isset($this->arParams['testId'])
+			&& is_string($this->arParams['testId'])
+			&& preg_match('/^[a-z0-9-]+$/D', $this->arParams['testId']) === 1
+				? $this->arParams['testId']
+				: ''
+		;
+		$mailContact = $this->arParams['mailContact'] ?? null;
+		$fileId = 0;
+		$color = '';
+		$initials = '';
+		$avatarSize = $this->arParams['avatarSize'] ?? null;
+		$this->arResult['avatarSize'] = $avatarSize && is_numeric($avatarSize) ? (int)$avatarSize : 22;
 		if (!empty($mailContact) && is_array($mailContact))
 		{
 			$fileId = !empty($mailContact['FILE_ID']) ? $mailContact['FILE_ID'] : 0;
@@ -24,8 +35,8 @@ class CMailContactAvatarComponent extends \CBitrixComponent
 				$initials = $mailContact['ICON']['INITIALS'];
 			}
 		}
-		$email = $this->arParams['email'];
-		$name = $this->arParams['name'];
+		$email = $this->arParams['email'] ?? null;
+		$name = $this->arParams['name'] ?? null;
 
 		$s = $this->arResult['avatarSize'];
 		$this->arResult['initialsFontSize'] = floor($s / 2) - abs($s % 2 - floor($s / 2) % 2);
@@ -62,6 +73,14 @@ class CMailContactAvatarComponent extends \CBitrixComponent
 				$this->arResult['COLOR'] = $color;
 				$this->arResult['INITIALS'] = $initials;
 			}
+		}
+
+		// A protected url is served by an access controller, so the contact image or the initials stay
+		// underneath it and become visible when the request is refused.
+		if ($imageUrl !== '')
+		{
+			$this->arResult['imageUrl'] = $imageUrl;
+			$page = 'avatar_url';
 		}
 
 		$this->includeComponentTemplate($page);

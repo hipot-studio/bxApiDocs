@@ -25,6 +25,13 @@ interface PersonRepository
 
 	public function getMappedUserIdsByCompanyId(int $companyId): array;
 
+	/**
+	 * @param array<int> $userIds
+	 *
+	 * @return array<int> those of the passed users who hold a person link in the company
+	 */
+	public function filterMappedUserIds(int $companyId, array $userIds): array;
+
 	public function getByIdsExcludeMapped(array $ids, int $companyId): PersonCollection;
 
 	public function getListByIds(array $ids): PersonCollection;
@@ -38,6 +45,13 @@ interface PersonRepository
 	public function countAllMappedByCompanyId(int $companyId, ?ConditionTree $filter = null): int;
 
 	public function deleteLink(PersonCollection $personCollection): PersonCollection;
+
+	/**
+	 * @param array<int> $userIds
+	 *
+	 * @return int count of persons that lost their link
+	 */
+	public function dropLinksByUserIds(int $companyId, array $userIds): int;
 
 	public function getById(int $id): ?Person;
 

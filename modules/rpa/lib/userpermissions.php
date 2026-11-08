@@ -44,7 +44,6 @@ class UserPermissions
 	public function __construct(int $userId)
 	{
 		$this->userId = $userId;
-		$this->loadUserPermissions();
 	}
 
 	public function getUserId(): int
@@ -164,25 +163,9 @@ class UserPermissions
 		{
 			return false;
 		}
-		if(static::canMoveAnywhere())
+		if($this->canAddItemsToType($type->getId()))
 		{
 			return true;
-		}
-		if($this->isSimplePermissionsForTheFirstStage())
-		{
-			$firstStage = $type->getFirstStage();
-			if($firstStage && $firstStage->getId() === $stageId && $this->canAddItemsToType($type->getId()))
-			{
-				return true;
-			}
-		}
-		if(self::isAlwaysCanMoveToTheNextStage())
-		{
-			$stage = $type->getStages()->getByPrimary($stageId);
-			if($stage && !$stage->isSuccess() && !$stage->isFail())
-			{
-				return true;
-			}
 		}
 
 		return $this->canPerform(self::ENTITY_STAGE, $stageId, self::ACTION_MOVE);
@@ -196,27 +179,34 @@ class UserPermissions
 		{
 			return false;
 		}
-
-		if(static::canMoveAnywhere())
+		if($this->canAddItemsToType($item->getType()->getId()))
 		{
-			return true;
+			$result = true;
 		}
-
 		// moving forward
-		if($this->isSimplePermissionsForTheFirstStage())
+		if(!$result && $this->isSimplePermissionsForTheFirstStage())
 		{
 			$firstStage = $item->getType()->getFirstStage();
 			$result = ($firstStage && $firstStage->getId() === $fromStageId && $item->getCreatedBy() === $this->userId);
 		}
 		if(!$result && $this->canPerform(self::ENTITY_STAGE, $fromStageId, self::ACTION_MOVE))
 		{
+			$result = true;
+		}
+
+		if($result && static::canMoveAnywhere())
+		{
+			return true;
+		}
+
+		if($result)
+		{
 			$result = $this->isMovingFromStageToStageAvailable($item->getType(), $fromStageId, $toStageId);
 		}
 		// move back
 		if(!$result && $this->isMoverAlwaysCanMoveBack() && $item->getMovedBy() === $this->userId)
 		{
-			$toStage = $item->getType()->getStages()->getByPrimary($toStageId);
-			$result = ($toStage && isset($toStage->getPossibleNextStageIds()[$fromStageId]));
+			$result = $this->isMovingBackAvailable($item->getType(), $fromStageId, $toStageId);
 		}
 
 		return $result;
@@ -304,6 +294,13 @@ class UserPermissions
 	{
 		$fromStage = $type->getStages()->getByPrimary($fromStageId);
 		return ($fromStage && isset($fromStage->getPossibleNextStageIds()[$toStageId]));
+	}
+
+	protected function isMovingBackAvailable(Type $type, int $fromStageId, int $toStageId): bool
+	{
+		$toStage = $type->getStages()->getByPrimary($toStageId);
+
+		return $toStage && isset($toStage->getPossibleNextStageIds()[$fromStageId]);
 	}
 
 	protected function getNextStageId(Type $type, int $stageId): ?int
@@ -396,7 +393,7 @@ class UserPermissions
 			$firstStageId = $firstStage->getId();
 		}
 		$viewableStageIds = [];
-		foreach($this->permissions as $entity => $permission)
+		foreach($this->getPermissions() as $entity => $permission)
 		{
 			if(preg_match('/^'.static::ENTITY_STAGE.'(\d+)$/', $entity, $matches))
 			{
@@ -435,7 +432,7 @@ class UserPermissions
 	protected function getViewableTypeIds(): array
 	{
 		$viewableTypeIds = [];
-		foreach($this->permissions as $entity => $permission)
+		foreach($this->getPermissions() as $entity => $permission)
 		{
 			if(preg_match('/^'.static::ENTITY_TYPE.'(\d+)$/', $entity, $matches))
 			{
@@ -470,7 +467,7 @@ class UserPermissions
 	protected function getEditableTypeIds(): array
 	{
 		$editableTypeIds = [];
-		foreach($this->permissions as $entity => $permissions)
+		foreach($this->getPermissions() as $entity => $permissions)
 		{
 			if(preg_match('/^'.static::ENTITY_TYPE.'(\d+)$/', $entity, $matches))
 			{
@@ -578,11 +575,7 @@ class UserPermissions
 			return;
 		}
 
-		$permissions = PermissionTable::getList(['filter' => [
-			'@ACCESS_CODE' => $userAccessCodes
-		]]);
-
-		while($permission = $permissions->fetch())
+		foreach ($this->fetchPermissionRows($userAccessCodes) as $permission)
 		{
 			$entityCode = $permission['ENTITY'].$permission['ENTITY_ID'];
 			if (
@@ -593,6 +586,26 @@ class UserPermissions
 				$this->permissions[$entityCode][$permission['ACTION']] = $permission['PERMISSION'];
 			}
 		}
+	}
+
+	protected function fetchPermissionRows(array $accessCodes): iterable
+	{
+		return PermissionTable::getList([
+			'select' => ['ENTITY', 'ENTITY_ID', 'ACTION', 'PERMISSION'],
+			'filter' => [
+				'@ACCESS_CODE' => $accessCodes,
+			],
+		]);
+	}
+
+	protected function getPermissions(): array
+	{
+		if ($this->permissions === null)
+		{
+			$this->loadUserPermissions();
+		}
+
+		return $this->permissions ?? [];
 	}
 
 	public function isAdmin(): bool
@@ -630,10 +643,11 @@ class UserPermissions
 			return true;
 		}
 		$entityCode = $entity.$entityId;
+		$permissions = $this->getPermissions();
 
 		return (
-			isset($this->permissions[$entityCode][$action]) &&
-			$this->permissions[$entityCode][$action] > self::PERMISSION_NONE
+			isset($permissions[$entityCode][$action]) &&
+			$permissions[$entityCode][$action] > self::PERMISSION_NONE
 		);
 	}
 

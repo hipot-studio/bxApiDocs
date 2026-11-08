@@ -32,5 +32,6 @@ interface DebugSessionRepositoryInterface
 
 	public function deleteOlderThan(int $days): int;
 
-	public function deleteByUserId(int $userId): int;
+	/** @param int[] $keptSessionIds */
+	public function deleteByUserId(int $userId, array $keptSessionIds = []): int;
 }

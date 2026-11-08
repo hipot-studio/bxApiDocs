@@ -41,10 +41,20 @@ class SalesCenterOrderComponent extends CBitrixComponent
 			return false;
 		}
 
+		$this->applySessionAccess();
+
 		$this->arResult['orderId'] = $this->arParams['orderId'];
 		$this->arResult['extras'] = $this->getExtras();
 
 		$this->includeComponentTemplate();
+	}
+
+	protected function applySessionAccess(): void
+	{
+		$this->arParams['sessionId'] = \Bitrix\SalesCenter\Integration\ImOpenLinesManager::getInstance()
+			->checkClientSessionId($this->arParams['sessionId'])
+			->getData()['sessionId']
+		;
 	}
 
 	/**

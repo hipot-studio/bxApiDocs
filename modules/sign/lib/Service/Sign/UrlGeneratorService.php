@@ -126,6 +126,21 @@ class UrlGeneratorService
 		return $uri->getUri();
 	}
 
+	/**
+	 * Address of the B2E wizard. Zero list identifier opens it without a group context.
+	 */
+	public function makeOpenWizardForSignersListUrl(int $signersListId = 0): string
+	{
+		$uri = new Uri(self::B2E_WIZARD_URL);
+
+		if ($signersListId > 0)
+		{
+			$uri->addParams(['signersListId' => $signersListId]);
+		}
+
+		return $uri->getUri();
+	}
+
 	public function makeB2eKanbanCategoryUrl(int $categoryId): string
 	{
 		$url = new Uri(self::B2E_KANBAN_URL);

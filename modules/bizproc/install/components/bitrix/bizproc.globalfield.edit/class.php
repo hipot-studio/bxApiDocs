@@ -134,6 +134,7 @@ HTML;
 			$baseTypes[Bizproc\FieldType::INTERNALSELECT],
 			$baseTypes[Bizproc\FieldType::FILE],
 			$baseTypes[Bizproc\FieldType::CONDITIONGROUP],
+			$baseTypes[Bizproc\FieldType::NODEREFERENCE],
 		);
 
 		$documentService = CBPRuntime::getRuntime()->getDocumentService();

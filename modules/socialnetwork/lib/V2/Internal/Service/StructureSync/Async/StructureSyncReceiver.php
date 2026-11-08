@@ -7,6 +7,8 @@ namespace Bitrix\Socialnetwork\V2\Internal\Service\StructureSync\Async;
 use Bitrix\Main\Messenger\Entity\MessageInterface;
 use Bitrix\Main\Messenger\Internals\Exception\Receiver\UnprocessableMessageException;
 use Bitrix\Main\Messenger\Receiver\AbstractReceiver;
+use Bitrix\Main\SystemException;
+use Bitrix\Socialnetwork\V2\Internal\Cache\DeferredTagCleaner;
 use Bitrix\Socialnetwork\V2\Internal\DI\Container;
 use Bitrix\Socialnetwork\V2\Internal\Service\StructureSync\RelationSyncResult;
 use Bitrix\Socialnetwork\V2\Internal\Service\StructureSync\StructureSyncService;
@@ -14,6 +16,19 @@ use Bitrix\Socialnetwork\V2\Internal\Service\StructureSync\StructureSyncService;
 class StructureSyncReceiver extends AbstractReceiver
 {
 	protected function process(MessageInterface $message): void
+	{
+		try
+		{
+			$this->handle($message);
+		}
+		finally
+		{
+			// The worker outlives the response, so nothing else would clear the tags claimed by this message
+			DeferredTagCleaner::getInstance()->flush();
+		}
+	}
+
+	private function handle(MessageInterface $message): void
 	{
 		$service = $this->getService();
 
@@ -50,6 +65,11 @@ class StructureSyncReceiver extends AbstractReceiver
 			),
 			default => throw new UnprocessableMessageException($message),
 		};
+
+		if ($message instanceof RelationAddedMessage && $result instanceof RelationSyncResult && !$result->isSuccess())
+		{
+			throw new SystemException(implode('; ', $result->getErrorMessages()));
+		}
 
 		if ($result instanceof RelationSyncResult && $result->hasMore && $message instanceof AbstractRelationMessage)
 		{

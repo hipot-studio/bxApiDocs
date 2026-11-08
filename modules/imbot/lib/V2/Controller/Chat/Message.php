@@ -11,11 +11,13 @@ use Bitrix\Im\V2\Controller\Filter\PlatformContext;
 use Bitrix\Im\V2\Entity\User\User;
 use Bitrix\Im\V2\Message\Delete\DeleteService;
 use Bitrix\Im\V2\Message\Delete\DeletionMode;
+use Bitrix\Im\V2\Message\Forward\ForwardMessageCollection;
+use Bitrix\Im\V2\Message\Forward\ForwardResultFormatter;
+use Bitrix\Im\V2\Message\Forward\ForwardService;
 use Bitrix\Im\V2\Message\MessageError;
 use Bitrix\Im\V2\Message\MessageService;
 use Bitrix\Im\V2\Message\Send\FieldsValidationService;
 use Bitrix\Im\V2\MessageCollection;
-use Bitrix\Im\V2\Message\Forward\ForwardService;
 use Bitrix\Im\V2\Permission\Action;
 use Bitrix\Imbot\V2\Controller\BotController;
 use Bitrix\Main\Engine\AutoWire\ExactParameter;
@@ -67,7 +69,13 @@ class Message extends BotController
 					}
 
 					$forwardIds = array_map('intval', $forwardIds);
-					$messageCollection = new MessageCollection($forwardIds);
+					$messageCollection = new ForwardMessageCollection($forwardIds);
+					if ($messageCollection->count() !== count(array_unique($forwardIds)))
+					{
+						$this->addError(new MessageError(MessageError::NOT_FOUND));
+
+						return null;
+					}
 
 					if ($this->botId > 0)
 					{
@@ -81,7 +89,7 @@ class Message extends BotController
 					{
 						$messageId = $message->getId();
 						$uuid = array_search($messageId, $forwardIds, true);
-						if ($uuid)
+						if (is_string($uuid))
 						{
 							$message->setForwardUuid($uuid);
 
@@ -160,35 +168,57 @@ class Message extends BotController
 		}
 
 		$fields = $result->getResult();
-		$fields['SKIP_USER_CHECK'] = 'Y';
+		$messageId = null;
 
-		$messageId = \CIMMessenger::Add($fields);
+		if (!empty($fields))
+		{
+			$fields['SKIP_USER_CHECK'] = 'Y';
+			$messageId = \CIMMessenger::Add($fields);
+		}
 
 		if ($forwardMessages?->count() > 0)
 		{
 			$forwardResult = (new ForwardService($chat))
 				->setContext($this->getBotContext())
 				->createMessages($forwardMessages);
-
-			if (!$forwardResult->isSuccess())
-			{
-				$this->addErrors($forwardResult->getErrors());
-
-				return null;
-			}
+			$forwardResultFormatter = new ForwardResultFormatter($forwardResult);
 		}
 
-		if ($messageId === false && !isset($forwardResult))
+		if ($messageId === false && !isset($forwardResultFormatter))
 		{
 			$this->addError(new MessageError(MessageError::SENDING_FAILED));
 
 			return null;
 		}
+		if (!$messageId && isset($forwardResultFormatter) && !$forwardResultFormatter->hasSuccess())
+		{
+			$errors = $forwardResultFormatter->getErrors();
+			if (empty($errors))
+			{
+				$this->addError(new MessageError(MessageError::SENDING_FAILED));
+			}
+			else
+			{
+				$this->addErrors($errors);
+			}
 
-		return [
+			return null;
+		}
+
+		$response = [
 			'id' => $messageId ?: null,
-			'uuidMap' => isset($forwardResult) ? $forwardResult->getResult() : [],
+			'uuidMap' => isset($forwardResultFormatter) ? $forwardResultFormatter->getUuidMap() : [],
+			'failureMap' => isset($forwardResultFormatter) ? $forwardResultFormatter->getFailureMap() : [],
 		];
+		$legacyFailureMap = isset($forwardResultFormatter)
+			? $forwardResultFormatter->getLegacyFailureMap()
+			: [];
+		if (!empty($legacyFailureMap))
+		{
+			$response['legacyFailureMap'] = $legacyFailureMap;
+		}
+
+		return $response;
 	}
 
 	/**

@@ -95,7 +95,7 @@ class EntitySelector extends Base
 		\Bitrix\Main\UI\Extension::load('bizproc.bp-entity-selector');
 
 		$name = static::generateControlName($field);
-		$controlId = static::generateControlId($field);
+		$controlId = static::generateControlId($field) . '_' . Main\Security\Random::getString(8);
 
 		$config = static::getEntitySelectorConfig($fieldType, $value);
 

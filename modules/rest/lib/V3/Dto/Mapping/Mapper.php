@@ -4,6 +4,7 @@ namespace Bitrix\Rest\V3\Dto\Mapping;
 
 use Bitrix\Rest\V3\Dto\Dto;
 use Bitrix\Rest\V3\Dto\DtoCollection;
+use Bitrix\Rest\V3\Dto\TypeHelper;
 use Bitrix\Rest\V3\Exception\LogicException;
 
 abstract class Mapper
@@ -86,10 +87,9 @@ abstract class Mapper
 
 			$isMultipleEmbedded = $relation === null
 				&& $propertyType === DtoCollection::class
-				&& $elementType !== null
-				&& is_subclass_of($elementType, Dto::class);
+				&& TypeHelper::isDto($elementType);
 			$isSingleEmbedded = $relation === null
-				&& is_subclass_of($propertyType, Dto::class);
+				&& TypeHelper::isDto($propertyType);
 
 			if ($relation === null && !$isMultipleEmbedded && !$isSingleEmbedded)
 			{
@@ -122,7 +122,7 @@ abstract class Mapper
 			if ($isMultiple)
 			{
 				$nestedDtoClass = $elementType;
-				if ($nestedDtoClass !== null && is_subclass_of($nestedDtoClass, Dto::class))
+				if (TypeHelper::isDto($nestedDtoClass))
 				{
 					$rawNested = $rawItem[$fieldName];
 					if ($isMultipleEmbedded && $rawNested === null && $field->isNullable())
@@ -137,7 +137,7 @@ abstract class Mapper
 					}
 				}
 			}
-			elseif (is_subclass_of($propertyType, Dto::class))
+			elseif (TypeHelper::isDto($propertyType))
 			{
 				$dto->{$fieldName} = $this->resolveNested($propertyType, $rawItem[$fieldName], $childFields);
 			}

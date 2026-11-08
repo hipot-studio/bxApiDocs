@@ -30,7 +30,7 @@ use Bitrix\Bizproc\Internal\Repository\AiAgent\ManagedAgentResourceRepositoryInt
  *
  * The batch is deleted from the table directly and not through
  * {@see \Bitrix\Bizproc\Public\Command\StorageItem\DeleteStorageItemCommandHandler}, which is what marks a
- * deleted row for the recalculation of an analytical view while dataview_enabled is on. A row of a copy never
+ * deleted row for the recalculation of an analytical view while the data-view feature is on. A row of a copy never
  * needs that mark, by two independent properties of the schema: the mark is put on rows whose WORKFLOW_ID
  * is one of the two markers of a view ({@see \Bitrix\Bizproc\Internal\Entity\DataView\RowIdentity}), while a
  * row a copy writes carries the id of the workflow that wrote it; and the rows of a view are written with

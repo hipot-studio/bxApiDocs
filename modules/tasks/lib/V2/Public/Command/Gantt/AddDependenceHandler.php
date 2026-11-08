@@ -29,12 +29,12 @@ class AddDependenceHandler
 		if ($command->useConsistency)
 		{
 			$this->consistencyResolver->resolve('task.gantt.add.dependence')->wrap(
-				fn() => $this->ganttDependenceService->add($entity),
+				fn() => $this->ganttDependenceService->add($entity, $command->origin),
 			);
 		}
 		else
 		{
-			$this->ganttDependenceService->add($entity);
+			$this->ganttDependenceService->add($entity, $command->origin);
 		}
 	}
 }

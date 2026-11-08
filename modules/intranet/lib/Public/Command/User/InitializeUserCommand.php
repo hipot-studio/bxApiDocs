@@ -11,10 +11,14 @@ use Bitrix\Main\Result;
 use Bitrix\Main\Validation\ValidationResult;
 use Bitrix\Intranet;
 use Bitrix\Intranet\Public\Service;
+use Bitrix\Intranet\Public\Type\User\InitializeUserMode;
 
 class InitializeUserCommand extends AbstractCommand
 {
-	public function __construct(public readonly int $userId)
+	public function __construct(
+		public readonly int $userId,
+		public readonly InitializeUserMode $mode = InitializeUserMode::Standard,
+	)
 	{
 	}
 

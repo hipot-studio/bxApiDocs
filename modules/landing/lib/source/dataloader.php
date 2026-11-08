@@ -234,7 +234,7 @@ abstract class DataLoader
 	}
 
 	/**
-	 * Returns additinal option value, if exists.
+	 * Returns additional option value, if exists.
 	 *
 	 * @param string $index Option name.
 	 * @return mixed|null

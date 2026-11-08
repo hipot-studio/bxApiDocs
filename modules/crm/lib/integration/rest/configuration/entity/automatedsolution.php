@@ -4,10 +4,13 @@ namespace Bitrix\Crm\Integration\Rest\Configuration\Entity;
 
 use Bitrix\Crm\AutomatedSolution\AutomatedSolutionManager;
 use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
+use Bitrix\Crm\Integration\Analytics\Builder\Automation\AutomatedSolution\CreateEvent;
+use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\IntranetManager;
 use Bitrix\Crm\Integration\Rest\Configuration\Helper;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Intranet\CustomSection\Entity\CustomSectionTable;
+use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 use Bitrix\Rest\Configuration\Manifest;
@@ -95,6 +98,9 @@ class AutomatedSolution
 		$automatedSolutions = [];
 		foreach ($manager->getExistingAutomatedSolutions() as $automatedSolution)
 		{
+			// the description is shown by the hub only and is not a part of the configuration
+			unset($automatedSolution['DESCRIPTION']);
+
 			if ($isSingleMode)
 			{
 				if ($automatedSolutionCode === ($automatedSolution['CODE'] ?? ''))
@@ -189,6 +195,30 @@ class AutomatedSolution
 			CustomSectionTable::delete($intranetSectionId);
 
 			return $result->addErrors($automatedSolutionResult->getErrors());
+		}
+
+		try
+		{
+			$source = $params[Dictionary::CONTEXT_APPLICATION_SOURCE] ?? null;
+			$applicationCode = $params[Dictionary::CONTEXT_APPLICATION_CODE] ?? null;
+			if ($source !== Dictionary::SOURCE_MARKETPLACE || !is_string($applicationCode))
+			{
+				$applicationCode = null;
+			}
+
+			(new CreateEvent())
+				->setSection(Dictionary::SECTION_AUTOMATION)
+				->setStatus(Dictionary::STATUS_SUCCESS)
+				->setId($automatedSolution->getId())
+				->setSource($source)
+				->setApplicationCode($applicationCode)
+				->buildEvent()
+				->send()
+			;
+		}
+		catch (\Throwable $exception)
+		{
+			Application::getInstance()->getExceptionHandler()->writeToLog($exception);
 		}
 
 		$result->setData(

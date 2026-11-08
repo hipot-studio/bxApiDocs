@@ -17,19 +17,40 @@ class CheckInNormalizer
 	{
 		$timestamp = self::extractTimestamp($data['DATE_CREATE'] ?? null);
 
+		$hasGeo = self::hasGeo($data);
+
 		return [
 			'id' => (int)($data['ID'] ?? 0),
 			'userId' => (int)$data['USER_ID'],
 			'entityType' => (int)($data['ENTITY_TYPE'] ?? 1),
 			'description' => Emoji::decode($data['DESCRIPTION'] ?? ''),
 			'address' => $data['ADDRESS'] ?? '',
-			'latitude' => (float)($data['LATITUDE'] ?? 0),
-			'longitude' => (float)($data['LONGITUDE'] ?? 0),
+			'latitude' => $hasGeo ? (float)$data['LATITUDE'] : null,
+			'longitude' => $hasGeo ? (float)$data['LONGITUDE'] : null,
 			'files' => $resolvedFiles,
-			'dateCreate' => $timestamp > 0
-				? date('Y-m-d H:i:s', $timestamp + (int)($data['USER_TIMEZONE'] ?? $timezoneOffset))
-				: '',
+			'dateCreate' => self::formatDateCreate($timestamp, $data, $timezoneOffset),
 		];
+	}
+
+	public static function formatDateCreate(int $timestamp, array $data, int $timezoneOffset = 0): string
+	{
+		if ($timestamp <= 0)
+		{
+			return '';
+		}
+
+		return date('Y-m-d H:i:s', $timestamp + (int)($data['USER_TIMEZONE'] ?? $timezoneOffset));
+	}
+
+	/**
+	 * @param array $data
+	 * @return bool
+	 */
+	public static function hasGeo(array $data): bool
+	{
+		return isset($data['LATITUDE'], $data['LONGITUDE'])
+			&& $data['LATITUDE'] !== ''
+			&& $data['LONGITUDE'] !== '';
 	}
 
 	private static function extractTimestamp(mixed $value): int

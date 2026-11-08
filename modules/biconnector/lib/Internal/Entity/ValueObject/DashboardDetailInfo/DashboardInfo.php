@@ -18,10 +18,6 @@ class DashboardInfo
 		private readonly ?DateTime $publishedDate,
 		private readonly ?int $updatedById,
 		private readonly ?DateTime $updatedDate,
-		private readonly ?string $filterPeriod = null,
-		private readonly ?string $dateFilterStart = null,
-		private readonly ?string $dateFilterEnd = null,
-		private readonly bool $includeLastFilterDate = false,
 		private readonly ?string $appCode = null,
 		private readonly array $ratingInfo = [],
 	)
@@ -81,26 +77,6 @@ class DashboardInfo
 	public function getUpdatedDate(): ?DateTime
 	{
 		return $this->updatedDate;
-	}
-
-	public function getFilterPeriod(): ?string
-	{
-		return $this->filterPeriod;
-	}
-
-	public function getDateFilterStart(): ?string
-	{
-		return $this->dateFilterStart;
-	}
-
-	public function getDateFilterEnd(): ?string
-	{
-		return $this->dateFilterEnd;
-	}
-
-	public function isIncludeLastFilterDate(): bool
-	{
-		return $this->includeLastFilterDate;
 	}
 
 	public function getAppCode(): ?string

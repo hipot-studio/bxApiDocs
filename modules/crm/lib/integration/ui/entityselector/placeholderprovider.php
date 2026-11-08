@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Integration\UI\EntitySelector;
 
+use Bitrix\Crm\Category\ItemCategoryUserField;
 use Bitrix\Crm\Integration\DocumentGeneratorManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\DocumentGenerator\DataProviderManager;
@@ -75,6 +76,8 @@ class PlaceholderProvider extends BaseProvider
 
 	protected string $viewType;
 	protected int $entityTypeId;
+	protected ?int $categoryId;
+	private array $entityCategoryDependentCache = [];
 
 	public function __construct(array $options = [])
 	{
@@ -82,6 +85,7 @@ class PlaceholderProvider extends BaseProvider
 
 		$this->entityTypeId = (int)($options['entityTypeId'] ?? 0);
 		$this->viewType = $options['viewType'] ?? static::ITEMS_VIEW_TYPE_TREE;
+		$this->categoryId = isset($options['categoryId']) ? (int)$options['categoryId'] : null;
 	}
 
 	public function isAvailable(): bool
@@ -137,6 +141,7 @@ class PlaceholderProvider extends BaseProvider
 		);
 
 		$placeholders = $this->filterItems($placeholders);
+		$placeholders = $this->filterUserFieldsByCategory($placeholders);
 		if ($this->viewType === static::ITEMS_VIEW_TYPE_LIST)
 		{
 			return $this->makeItemsAsFlatList($placeholders);
@@ -201,19 +206,98 @@ class PlaceholderProvider extends BaseProvider
 
 				$valueArr = array_slice(explode('.', $value), 2, -1);
 				$val = implode('.', $valueArr);
-				$isUfField = str_starts_with($val, 'UF_CRM')
-					&& (
-						str_contains($value, 'TITLE')
-						|| str_contains($value, 'ITEM.VALUE')
-					)
-				;
 
 				return
 					empty($valueArr)												// entity placeholders
 					|| in_array($val, static::ITEM_ID_WHITE_LIST)	// white list placeholders
-					|| ($isUfField && static::INCLUDE_UF_ITEMS_TO_WHITE_LIST)
+					|| (static::isUserField($value) && static::INCLUDE_UF_ITEMS_TO_WHITE_LIST)
 				;
 			}
+		);
+	}
+
+	protected static function isUserField(string $value): bool
+	{
+		// The user field name sits at segment index 2 (e.g. "this.SOURCE.UF_CRM_123"),
+		// the same position extractUserFieldName() reads. The previous check dropped the
+		// trailing segment and required a TITLE/ITEM.VALUE suffix, which silently excluded
+		// scalar user fields (string/number/...) whose value carries no such suffix — they
+		// leaked past category scoping in both the selector and the insert-time cut.
+		$segments = explode('.', $value);
+
+		return isset($segments[2]) && str_starts_with($segments[2], 'UF_CRM');
+	}
+
+	protected static function extractUserFieldName(string $value): string
+	{
+		return explode('.', $value)[2] ?? '';
+	}
+
+	protected function isEntityCategoryDependent(): bool
+	{
+		// Keyed by entity type because MultiplePlaceholderProvider reuses
+		// $this->entityTypeId across several entity types in a single pass.
+		$this->entityCategoryDependentCache[$this->entityTypeId] ??=
+			(new ItemCategoryUserField($this->entityTypeId))->isCategoryDependent();
+
+		return $this->entityCategoryDependentCache[$this->entityTypeId];
+	}
+
+	protected function isCategoryDependentField(string $value): bool
+	{
+		return static::isUserField($value) && $this->isEntityCategoryDependent();
+	}
+
+	/**
+	 * Keep only the user fields visible in the current category.
+	 *
+	 * Opt-in: applies only when a category id is supplied and the entity type is
+	 * category-governed (Contact/Company). Base fields and user fields of
+	 * category-agnostic entity types pass through untouched. Only the user-field
+	 * subset is run through the category filter so an empty mapping does not wipe
+	 * the base fields.
+	 */
+	protected function filterUserFieldsByCategory(array $input): array
+	{
+		if ($this->categoryId === null)
+		{
+			return $input;
+		}
+
+		$categoryUserFields = new ItemCategoryUserField($this->entityTypeId);
+		if (!$categoryUserFields->isCategoryDependent())
+		{
+			return $input;
+		}
+
+		$userFieldKeys = [];
+		foreach ($input as $key => $row)
+		{
+			$value = $row['VALUE'] ?? $key;
+			if (static::isUserField($value))
+			{
+				$userFieldKeys[$key] = static::extractUserFieldName($value);
+			}
+		}
+
+		if (empty($userFieldKeys))
+		{
+			return $input;
+		}
+
+		$allowedUserFields = $categoryUserFields->filter($this->categoryId, array_flip($userFieldKeys));
+
+		return array_filter(
+			$input,
+			static function (string $key) use ($userFieldKeys, $allowedUserFields): bool {
+				if (!isset($userFieldKeys[$key]))
+				{
+					return true;
+				}
+
+				return isset($allowedUserFields[$userFieldKeys[$key]]);
+			},
+			ARRAY_FILTER_USE_KEY
 		);
 	}
 
@@ -260,6 +344,8 @@ class PlaceholderProvider extends BaseProvider
 				'customData' => [
 					'value' =>  $row['VALUE'] ?? $placeholder,
 					'entityTypeName' => static::ENTITY_ID,
+					'isUf' => static::isUserField($row['VALUE'] ?? $placeholder),
+					'categoryDependent' => $this->isCategoryDependentField($row['VALUE'] ?? $placeholder),
 				],
 			]);
 		}
@@ -362,6 +448,8 @@ class PlaceholderProvider extends BaseProvider
 					'customData' => [
 						'value' => $leave['VALUE'] ?? $placeholder,
 						'entityTypeName' => $parentId,
+						'isUf' => static::isUserField($leave['VALUE'] ?? $placeholder),
+						'categoryDependent' => $this->isCategoryDependentField($leave['VALUE'] ?? $placeholder),
 						'fieldName' => str_replace(
 							Document::THIS_PLACEHOLDER . '.' . Template::MAIN_PROVIDER_PLACEHOLDER . $parentId,
 							'',

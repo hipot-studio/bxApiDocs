@@ -25,4 +25,12 @@ interface CommandServiceClientInterface
 	 * @return Result
 	 */
 	public function drop(string $documentKey, array $userIds): Result;
+
+	/**
+	 * Asks the editor server to hand over the document it holds under the key, as a save of its own.
+	 * @link https://api.onlyoffice.com/docs/docs-api/additional-api/command-service/forcesave/
+	 * @param string $documentKey Document identifier
+	 * @return Result
+	 */
+	public function forceSave(string $documentKey): Result;
 }

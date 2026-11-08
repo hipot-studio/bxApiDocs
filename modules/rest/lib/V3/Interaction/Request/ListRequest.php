@@ -7,7 +7,7 @@ use Bitrix\Rest\V3\Structure\Ordering\OrderStructure;
 use Bitrix\Rest\V3\Structure\SelectStructure;
 use Bitrix\Rest\V3\Structure\PaginationStructure;
 
-class ListRequest extends Request
+class ListRequest extends Request implements OffsetPaginatedListRequest
 {
 	public ?SelectStructure $select = null;
 

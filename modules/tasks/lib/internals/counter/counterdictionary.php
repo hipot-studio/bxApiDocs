@@ -200,4 +200,12 @@ class CounterDictionary
 			array_values(self::MAP_COMMENTS),
 		);
 	}
+
+	public static function getCommentsCounterTypes(): array
+	{
+		return array_merge(
+			array_values(self::MAP_COMMENTS),
+			array_values(self::MAP_MUTED_COMMENTS),
+		);
+	}
 }

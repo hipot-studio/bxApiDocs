@@ -2,6 +2,7 @@
 
 namespace Bitrix\Bizproc\Workflow\Template;
 
+use Bitrix\Bizproc\Public\ProcessData\Service\ProcessDataMechanicsResolver;
 use Bitrix\Main\ORM;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\Validators\LengthValidator;
@@ -66,6 +67,8 @@ class WorkflowTemplateSettingsTable extends DataManager
 		{
 			static::delete($row['ID']);
 		}
+
+		ProcessDataMechanicsResolver::clearMarkerCache();
 	}
 
 	public static function addMultiSettings(array $rows): void

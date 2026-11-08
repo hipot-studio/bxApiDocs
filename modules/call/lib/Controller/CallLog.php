@@ -2,6 +2,9 @@
 
 namespace Bitrix\Call\Controller;
 
+use Bitrix\Call\Controller\ActionFilter\DenyGuest;
+use Bitrix\Call\Controller\ActionFilter\SameOrigin;
+use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\Controller;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Error;
@@ -22,6 +25,29 @@ class CallLog extends Controller
 	{
 		parent::__construct();
 		$this->service = new CallLogService();
+	}
+
+	public function configureActions(): array
+	{
+		// The journal is the only thing a guest is given here: reading it and clearing their own badge.
+		// Everything else is denied at the action, because the guest allow-list it used to rely on covers
+		// the REST transport alone (@see DenyGuest).
+		$denyGuest = ['+prefilters' => [new DenyGuest()]];
+
+		return [
+			// A guest is authorised by the session cookie alone (@see \Bitrix\Im\V2\Guest\Auth\GuestRestAuth),
+			// and the Csrf filter does not run in the REST scope. POST takes away the GET navigation, Origin
+			// takes away the cross-site form; the clients already send POST and no Origin or a bare portal host.
+			'markAllAsSeen' => [
+				'+prefilters' => [
+					new ActionFilter\HttpMethod([ActionFilter\HttpMethod::METHOD_POST]),
+					new SameOrigin(),
+				],
+			],
+			'markAsSeen' => $denyGuest,
+			'delete' => $denyGuest,
+			'getChat' => $denyGuest,
+		];
 	}
 
 	/**
@@ -48,14 +74,13 @@ class CallLog extends Controller
 
 		try
 		{
-			// Get call events
-			$calls = $this->service->getList($userId, $filter, $lastId, $count);
-
-			// Enrich with call data
-			foreach ($calls as &$call)
-			{
-				$call['callData'] = $this->service->getCallData($call, $userId);
-			}
+			// Get call events, enriched and filled up to $count. For a guest an IM call they may no longer
+			// open comes back without data (see CallLogService::getImCallData): such an entry is dropped
+			// rather than shown nameless, and the page is refilled from behind rather than handed over short
+			// (see CallLogService::getPage) - the clients page by the size of the answer.
+			// The drop is guest-only on purpose - for everyone else an entry without data is what the journal
+			// has always shown, and changing that belongs to its own task.
+			$calls = $this->service->getPage($userId, $filter, $lastId, $count);
 
 			// Get missed counter
 			$missedCounter = $this->service->getMissedCounter($userId);

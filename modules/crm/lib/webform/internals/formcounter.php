@@ -8,6 +8,7 @@
 namespace Bitrix\Crm\WebForm\Internals;
 
 use Bitrix\Main\Entity;
+use Bitrix\Main\ORM\Data\Internal\DeleteByFilterTrait;
 use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Crm\WebForm\Helper;
@@ -32,6 +33,8 @@ Loc::loadMessages(__FILE__);
  */
 class FormCounterTable extends Entity\DataManager
 {
+	use DeleteByFilterTrait;
+
 	public static function getTableName()
 	{
 		return 'b_crm_webform_counter';

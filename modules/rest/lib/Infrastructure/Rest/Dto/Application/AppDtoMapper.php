@@ -84,6 +84,11 @@ class AppDtoMapper
 			$dto->installed = $app->isInstalled();
 		}
 
+		if ($this->shouldRenderField('installCompletionMode', $request))
+		{
+			$dto->installCompletionMode = $app->getInstallCompletionMode()->value;
+		}
+
 		if ($this->shouldRenderField('dateCreate', $request))
 		{
 			$dto->dateCreate = $app->getDateCreate()?->toString();

@@ -35,6 +35,15 @@ class StorageFieldFilter implements FilterInterface
 			$result->where('STORAGE_ID', '=', (int)$this->filter['STORAGE_ID']);
 		}
 
+		if (isset($this->filter['!STORAGE_ID']))
+		{
+			$excludedStorageIds = array_map('intval', (array)$this->filter['!STORAGE_ID']);
+			if ($excludedStorageIds !== [])
+			{
+				$result->whereNotIn('STORAGE_ID', $excludedStorageIds);
+			}
+		}
+
 		if (isset($this->filter['CODE']))
 		{
 			if (is_array($this->filter['CODE']))
@@ -51,12 +60,6 @@ class StorageFieldFilter implements FilterInterface
 		{
 			$name = (string)$this->filter['NAME'];
 			$result->whereLike('NAME', "%{$name}%");
-		}
-
-		if (isset($this->filter['STORAGE_ID']))
-		{
-			$name = $this->filter['STORAGE_ID'];
-			$result->where('STORAGE_ID', $name);
 		}
 
 		return $result;

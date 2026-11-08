@@ -18,6 +18,7 @@ class MoneyType extends BaseType
 
 	private const STRICT_FIELD_FORMAT = '/^\-?[0-9]+\.?[0-9]*\|[A-Z]{3}$/';
 	private const LIGHT_FIELD_FORMAT = '/^\-?[0-9]+\.?[0-9]*(\|[A-Z]{3})?$/';
+	private const CURRENCY_FORMAT = '/^[A-Z]{3}$/D';
 
 	public static function getDescription(): array
 	{
@@ -38,7 +39,7 @@ class MoneyType extends BaseType
 	public static function checkFields(array $userField, $value): array
 	{
 		$fieldName = HtmlFilter::encode(
-			$userField['EDIT_FORM_LABEL'] ?: $userField['FIELD_NAME']
+			$userField['EDIT_FORM_LABEL'] ?: $userField['FIELD_NAME'],
 		);
 
 		$result = [];
@@ -52,7 +53,7 @@ class MoneyType extends BaseType
 					'text' => Loc::getMessage('USER_TYPE_MONEY_ERR_BAD_SINGLE_FORMAT',
 						[
 							'#FIELD_NAME#' => $fieldName,
-						]
+						],
 					),
 				];
 			}
@@ -73,9 +74,10 @@ class MoneyType extends BaseType
 							'text' => Loc::getMessage('USER_TYPE_MONEY_ERR_BAD_ROW_FORMAT',
 								[
 									'#FIELD_NAME#' => $fieldName,
-								]
+								],
 							),
 						];
+
 						break;
 					}
 				}
@@ -89,7 +91,7 @@ class MoneyType extends BaseType
 						'text' => Loc::getMessage('USER_TYPE_MONEY_ERR_BAD_SINGLE_FORMAT',
 							[
 								'#FIELD_NAME#' => $fieldName,
-							]
+							],
 						),
 					];
 				}
@@ -126,7 +128,7 @@ class MoneyType extends BaseType
 				{
 					return '';
 				}
-				$currency = CurrencyManager::getBaseCurrency();
+				$currency = self::getDefaultCurrency($userField);
 			}
 
 			return static::formatToDB($value, $currency);
@@ -143,6 +145,7 @@ class MoneyType extends BaseType
 	 */
 	public static function prepareSettings(array $userField): array
 	{
+		$defaultCurrency = self::getDefaultCurrency($userField);
 		$defaultValue = $userField['SETTINGS']['DEFAULT_VALUE'] ?? null;
 		if (!is_string($defaultValue))
 		{
@@ -151,15 +154,23 @@ class MoneyType extends BaseType
 		[$value, $currency] = static::unFormatFromDb($defaultValue);
 		if ($value !== '')
 		{
-			if($currency === '')
+			if (
+				$currency === ''
+				|| preg_match(self::CURRENCY_FORMAT, $currency) !== 1
+			)
 			{
 				$currency = CurrencyManager::getBaseCurrency();
 			}
 			$value = static::formatToDB($value, $currency);
+			if (CurrencyManager::isCurrencyExist($currency))
+			{
+				$defaultCurrency = $currency;
+			}
 		}
 
 		return [
 			'DEFAULT_VALUE' => $value,
+			'DEFAULT_CURRENCY' => $defaultCurrency,
 		];
 	}
 
@@ -210,6 +221,20 @@ class MoneyType extends BaseType
 		return $result;
 	}
 
+	private static function getDefaultCurrency(array $userField): string
+	{
+		$defaultCurrency = $userField['SETTINGS']['DEFAULT_CURRENCY'] ?? null;
+		if (
+			is_string($defaultCurrency)
+			&& CurrencyManager::isCurrencyExist($defaultCurrency)
+		)
+		{
+			return $defaultCurrency;
+		}
+
+		return (string)CurrencyManager::getBaseCurrency();
+	}
+
 	private static function checkValueFormat(array $userField, $value): bool
 	{
 		if ($value === '' || $value === null)
@@ -237,8 +262,7 @@ class MoneyType extends BaseType
 
 		$format = $isStrictFormat
 			? self::STRICT_FIELD_FORMAT
-			: self::LIGHT_FIELD_FORMAT
-		;
+			: self::LIGHT_FIELD_FORMAT;
 		$prepared = [];
 		if (!preg_match($format, $value, $prepared))
 		{

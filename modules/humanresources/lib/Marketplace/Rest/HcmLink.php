@@ -9,6 +9,8 @@ use Bitrix\HumanResources\Item\HcmLink\FieldValue;
 use Bitrix\HumanResources\Item\HcmLink\Job;
 use Bitrix\HumanResources\Item\HcmLink\Person;
 use Bitrix\HumanResources\Service\Container;
+use Bitrix\HumanResources\Service\HcmLink\CompanyDisconnectService;
+use Bitrix\HumanResources\Service\HcmLink\ExclusionService;
 use Bitrix\HumanResources\Service\HcmLink\PinService;
 use Bitrix\HumanResources\Type\HcmLink\FieldEntityType;
 use Bitrix\HumanResources\Type\HcmLink\FieldType;
@@ -38,6 +40,9 @@ class HcmLink extends IRestService
 {
 	public const MODULE_ID = 'humanresources';
 	public const SCOPE = 'humanresources.hcmlink';
+	private const FIELD_CODE_ALIASES = [
+		'РасчетныйЛисток' => 'РасчётныйЛисток',
+	];
 
 	public const LIMIT = 100;
 	public const LIMIT_MAX = 1000;
@@ -197,12 +202,8 @@ class HcmLink extends IRestService
 			if ($savedCompany !== null)
 			{
 				$company->id = $savedCompany->id;
-				$company = $companyRepository->update($company);
 			}
-			else
-			{
-				$company = $companyRepository->add($company);
-			}
+			$company = $companyRepository->save($company);
 
 			$fieldIdsForDelete = array_map(
 				fn() => true,
@@ -260,21 +261,24 @@ class HcmLink extends IRestService
 	{
 		self::checkAuth($restServer);
 
-		$companyRepository = Container::getHcmLinkCompanyRepository();
-		$FieldRepository = Container::getHcmLinkFieldRepository();
-
 		try
 		{
 			$id = (int)$query['id'] ?? 0;
-			$company = $companyRepository->getById($id);
+			$result = Container::getHcmLinkCompanyDisconnectService()->disconnect($id);
 
-			if ($company === null)
+			if (!$result->isSuccess())
 			{
-				throw new ObjectNotFoundException("Company {$id} not found");
-			}
+				// Only the missing company keeps its historical answer. Any other failure of the shared
+				// service must not be dressed up as "not found": the set of codes it returns grows with
+				// the cascade, and 1C would be told the company is absent while it is not.
+				$error = $result->getErrors()[0];
+				if ($error->getCode() === CompanyDisconnectService::ERROR_COMPANY_NOT_FOUND)
+				{
+					throw new ObjectNotFoundException("Company {$id} not found");
+				}
 
-			$FieldRepository->deleteByCompany($company->id);
-			$companyRepository->delete($company->id);
+				throw new RestException($error->getMessage(), $error->getCode());
+			}
 
 			return true;
 		}
@@ -592,6 +596,8 @@ class HcmLink extends IRestService
 				$employeeList = [];
 			}
 
+			$matchedUserIds = [];
+
 			foreach ($employeeList as $i => $employee)
 			{
 				$employeeUuid = (string)$employee['employee'] ?? '';
@@ -611,6 +617,11 @@ class HcmLink extends IRestService
 					$data['patronymicName'] ?? '',
 				);
 
+				$userId =
+					array_key_exists('userId', $employee)
+						? self::normalizeUserId($employee['userId'])
+						: null;
+
 				$person = $personRepository->getByUnique($company->id, $personUuid);
 				if ($person === null)
 				{
@@ -619,16 +630,26 @@ class HcmLink extends IRestService
 							companyId: $company->id,
 							code: $personUuid,
 							title: $title,
-							userId: $employee['userId'] ?? null,
+							userId: $userId,
 						),
 					);
 				}
 				else
 				{
 					$person->title = $title;
-					$person->userId = $employee['userId'] ?? $person->userId;
+					// only a number relinks the person: a missing key, an explicit null and a value that
+					// is not a number all mean "not changed" and keep the link the person already has
+					if (is_numeric($employee['userId'] ?? null))
+					{
+						$person->userId = (int)$employee['userId'];
+					}
 
 					$personRepository->update($person);
+				}
+
+				if ($userId !== null && $userId > 0)
+				{
+					$matchedUserIds[$userId] = $userId;
 				}
 
 				if ($person->id)
@@ -642,6 +663,8 @@ class HcmLink extends IRestService
 					);
 				}
 			}
+
+			self::dropExclusionsOfMatchedUsers($company->id, array_values($matchedUserIds));
 		}
 
 		catch (Exception $e)
@@ -761,6 +784,7 @@ class HcmLink extends IRestService
 			foreach ($data as $i => $fieldValue)
 			{
 				$fieldCode = $fieldValue['field'] ?? '';
+				$fieldCode = self::FIELD_CODE_ALIASES[$fieldCode] ?? $fieldCode;
 				$field = $fieldRepository->getByUnique($company->id, $fieldCode);
 				if (is_null($field))
 				{
@@ -804,9 +828,17 @@ class HcmLink extends IRestService
 				}
 
 				$uniqueId = $employee->id;
+				$jobSlotId = $job?->settingsData?->documentIdByEmployeeId[$employee->id] ?? null;
 				if ($isPinRequest || $isSalaryVacationRequest)
 				{
-					$uniqueId = $job?->settingsData?->documentIdByEmployeeId[$employee->id] ?? null;
+					// Results of these jobs are isolated per job and are accepted only into its slot.
+					$uniqueId = $jobSlotId;
+				}
+				elseif ($field->entityType === FieldEntityType::DOCUMENT && $jobSlotId !== null)
+				{
+					// A DOCUMENT field belongs to the requesting document, not to the employee:
+					// sign puts the signer id into the slot and reads the value back by it.
+					$uniqueId = $jobSlotId;
 				}
 
 				if (!$uniqueId)
@@ -1102,6 +1134,38 @@ class HcmLink extends IRestService
 			'error' => $e->getCode(),
 			'error_description' => 'Operation failed',
 		];
+	}
+
+	/**
+	 * The value arrives from the external answer as it is, and the person keeps it in a typed
+	 * property: anything but a number would take the whole upload down with a TypeError.
+	 */
+	private static function normalizeUserId(mixed $userId): int
+	{
+		return is_numeric($userId) ? (int)$userId : 0;
+	}
+
+	/**
+	 * The data of 1C wins over the exclusion: a user the upload has matched is no longer excluded.
+	 * The removal covers the whole received list at once and is split by the limit of a single call,
+	 * because one upload brings up to self::LIMIT_MAX records.
+	 *
+	 * @param array<int> $userIds
+	 */
+	private static function dropExclusionsOfMatchedUsers(int $companyId, array $userIds): void
+	{
+		if ($userIds === [])
+		{
+			return;
+		}
+
+		$exclusionService = Container::getHcmLinkExclusionService();
+
+		foreach (array_chunk($userIds, ExclusionService::USER_IDS_LIMIT) as $userIdsChunk)
+		{
+			// no actor: the removal comes from the external system, not from a portal user
+			$exclusionService->removeExclusions($companyId, $userIdsChunk, null);
+		}
 	}
 
 	protected static function getFormattedName(?string $firstName, ?string $lastName, ?string $secondName): string

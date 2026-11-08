@@ -1,7 +1,8 @@
 <?php
 namespace Bitrix\BIConnector\ExternalSource\Internal;
 
-use Bitrix\Main\Error;
+use Bitrix\BIConnector\Superset\Error\UserFacingEntityError;
+use Bitrix\BIConnector\Superset\Error\UserFacingError;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
 use Bitrix\Main\ORM\Fields\BooleanField;
@@ -181,7 +182,11 @@ class ExternalSourceTable extends DataManager
 		{
 			foreach ($validationResult->getErrors() as $error)
 			{
-				$result->addError(new EntityError($error->getMessage()));
+				$result->addError(
+					$error instanceof UserFacingError
+						? new UserFacingEntityError($error->getMessage())
+						: new EntityError($error->getMessage()),
+				);
 			}
 		}
 
@@ -194,7 +199,7 @@ class ExternalSourceTable extends DataManager
 		$relations = ExternalSourceDatasetRelationTable::getBySourceId($sourceId);
 		if ($relations)
 		{
-			$result->addError(new Error(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EXTERNAL_SOURCE_DELETE_RELATION_ERROR_MSGVER_2') ?? '', 409));
+			$result->addError(new UserFacingError(Loc::getMessage('BICONNECTOR_EXTERNAL_SOURCE_EXTERNAL_SOURCE_DELETE_RELATION_ERROR_MSGVER_2'), 409));
 		}
 
 		return $result;

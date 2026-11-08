@@ -3,6 +3,12 @@ declare(strict_types=1);
 
 namespace Bitrix\Im\V2\Folder\Error;
 
+use Bitrix\Main\Localization\Loc;
+
+// Registers lang/ru/lib/V2/Folder/Error/FolderError.php: phrases for these codes are looked up by
+// Bitrix\Im\V2\Error, and its own lazy-load path points at lang/.../V2/Error.php, not at this file.
+Loc::loadMessages(__FILE__);
+
 final class FolderError
 {
 	public const FOLDER_LIMIT_EXCEEDED = 'FOLDER_LIMIT_EXCEEDED';

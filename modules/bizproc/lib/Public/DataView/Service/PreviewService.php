@@ -11,7 +11,7 @@ use Bitrix\Bizproc\Internal\Service\DataView\DataViewValidator;
 use Bitrix\Bizproc\Internal\Service\DataView\ValuePresenter;
 use Bitrix\Bizproc\Public\DataView\Exception\KeyTypeMismatchException;
 use Bitrix\Bizproc\Public\DataView\Exception\RowLimitExceededException;
-use Bitrix\Bizproc\Public\DataView\Exception\SourceUnavailableException;
+use Bitrix\Bizproc\Public\Provider\SourceCatalogProvider;
 use Bitrix\Main\DI\ServiceLocator;
 
 final class PreviewService
@@ -23,6 +23,7 @@ final class PreviewService
 	private CombineEngine $combineEngine;
 	private DataViewValidator $validator;
 	private ValuePresenter $valuePresenter;
+	private SourceCatalogProvider $sourceCatalog;
 
 	public function __construct(
 		?CombineEngine $combineEngine = null,
@@ -34,11 +35,12 @@ final class PreviewService
 		$this->combineEngine = $combineEngine ?? $locator->get('bizproc.service.dataView.combineEngine');
 		$this->validator = $validator ?? $locator->get('bizproc.service.dataView.validator');
 		$this->valuePresenter = $valuePresenter ?? $locator->get('bizproc.service.dataView.valuePresenter');
+		$this->sourceCatalog = new SourceCatalogProvider();
 	}
 
 	public function preview(array $definition, int $limit, int $actorId, ?int $ownerTemplateId = null): array
 	{
-		$columns = $this->resolveColumns($definition, $ownerTemplateId);
+		$columns = $this->resolveColumns($definition, $actorId, $ownerTemplateId);
 		$definition['columns'] = $columns;
 
 		$view = new DataView(id: null, storageTypeId: 0, definition: $definition);
@@ -75,7 +77,7 @@ final class PreviewService
 		?int $ownerTemplateId = null,
 	): array
 	{
-		$columns = $this->resolveColumns($definition, $ownerTemplateId);
+		$columns = $this->resolveColumns($definition, $actorId, $ownerTemplateId);
 		$definition['columns'] = $columns;
 
 		$view = new DataView(id: null, storageTypeId: 0, definition: $definition);
@@ -121,10 +123,11 @@ final class PreviewService
 	 *
 	 * @return array<int, array{code: string, source: string, title: string, type: string, multiple: bool}>
 	 */
-	private function resolveColumns(array $definition, ?int $ownerTemplateId): array
+	private function resolveColumns(array $definition, int $actorId, ?int $ownerTemplateId): array
 	{
 		ColumnResolver::assertTemplateSourcesOwned($definition, $ownerTemplateId);
 		$this->validator->assertReferencedViewsOwned($definition, $ownerTemplateId);
+		$this->sourceCatalog->assertDefinitionSourcesAvailable($definition, $actorId, $ownerTemplateId);
 
 		return $this->validator->assertValid($definition);
 	}

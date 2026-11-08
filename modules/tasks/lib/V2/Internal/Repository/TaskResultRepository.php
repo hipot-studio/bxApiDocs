@@ -63,7 +63,8 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 		$results = ResultTable::query()
 			->setSelect($select)
 			->whereIn('ID', $resultIds)
-			->fetchCollection();
+			->fetchCollection()
+		;
 
 		if ($results->isEmpty())
 		{
@@ -193,6 +194,40 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 		return $map;
 	}
 
+	public function getCurrentUserResultMessageMap(int $taskId, int $userId, int $limit): array
+	{
+		$rows = ResultTable::query()
+			->setSelect(['ID', 'CREATED_BY', 'MESSAGE_ID' => 'MESSAGE.MESSAGE_ID'])
+			->where('TASK_ID', $taskId)
+			->setOrder(['ID' => 'DESC'])
+			->setLimit($limit)
+			->exec()
+			->fetchAll()
+		;
+
+		$map = [];
+		foreach ($rows as $row) // ID DESC keeps the largest result ID for duplicate message IDs.
+		{
+			if ((int)$row['CREATED_BY'] !== $userId)
+			{
+				continue;
+			}
+
+			if ($row['MESSAGE_ID'] === null)
+			{
+				continue;
+			}
+
+			$messageId = (int)$row['MESSAGE_ID'];
+			if (!array_key_exists($messageId, $map))
+			{
+				$map[$messageId] = (int)$row['ID'];
+			}
+		}
+
+		return $map;
+	}
+
 	public function save(Result $entity, int $userId): int
 	{
 		$data = [
@@ -256,7 +291,7 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 			->setOrder(['ID' => 'DESC'])
 			->exec()
 			->fetchCollection()
-			;
+		;
 	}
 
 	public function getByCommentId(int $commentId): ?\Bitrix\Tasks\Internals\Task\Result\Result
@@ -266,14 +301,15 @@ class TaskResultRepository implements TaskResultRepositoryInterface
 			->where('COMMENT_ID', $commentId)
 			->exec()
 			->fetchObject()
-			;
+		;
 	}
 
 	public function isExists(int $taskId, int $commentId = 0): bool
 	{
 		$query = ResultTable::query()
 			->setSelect([new ExpressionField('1', '1')])
-			->where('TASK_ID', $taskId);
+			->where('TASK_ID', $taskId)
+		;
 
 		if ($commentId > 0)
 		{

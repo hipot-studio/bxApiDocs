@@ -3,6 +3,7 @@ declare(strict_types = 1);
 
 namespace Bitrix\Im\V2\Controller;
 
+use Bitrix\Im\V2\Analytics\FolderAnalytics;
 use Bitrix\Im\V2\Chat\DialogChatIdResolver;
 use Bitrix\Im\V2\Common\Normalizer;
 use Bitrix\Im\V2\Folder\Create\FolderFields;
@@ -14,6 +15,7 @@ use Bitrix\Im\V2\Folder\FolderLimits;
 use Bitrix\Im\V2\Folder\FolderProvider;
 use Bitrix\Im\V2\Folder\FolderService;
 use Bitrix\Im\V2\Folder\Sort\FolderSortService;
+use Bitrix\Im\V2\Folder\Source\FolderSourceService;
 use Bitrix\Im\V2\Folder\Update\UpdateFields;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\AutoWire\BinderArgumentException;
@@ -57,7 +59,7 @@ class Folder extends BaseController
 			throw new BinderArgumentException(
 				$exception->getMessage(),
 				'',
-				[new Error($exception->getMessage(), FolderError::FOLDER_CHAT_NOT_ELIGIBLE)],
+				[new Error($exception->getMessage(), $exception->getErrorCode())],
 			);
 		}
 	}
@@ -77,7 +79,7 @@ class Folder extends BaseController
 			throw new BinderArgumentException(
 				$exception->getMessage(),
 				'',
-				[new Error($exception->getMessage(), FolderError::FOLDER_CHAT_NOT_ELIGIBLE)],
+				[new Error($exception->getMessage(), $exception->getErrorCode())],
 			);
 		}
 	}
@@ -280,5 +282,90 @@ class Folder extends BaseController
 		}
 
 		return ['result' => true];
+	}
+
+	/**
+	 * The answer carries two named collections instead of one entity, so it goes out flat -
+	 * an entity wrapper would only hide one of them.
+	 *
+	 * @restMethod im.v2.Folder.getSources
+	 */
+	public function getSourcesAction(
+		\Bitrix\Im\V2\Folder\Folder $folder,
+		FolderSourceService $folderSourceService,
+	): ?array
+	{
+		$result = $folderSourceService->getSources($folder);
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return $result->getSourceList()?->toRestFormat();
+	}
+
+	/**
+	 * The default of `$sourceCodes` is load bearing: the form transport of the clients does not tell
+	 * an empty array from a missing key, so "every source switched off" reaches us as a request
+	 * without the parameter at all. Absent means the empty set (API-02).
+	 *
+	 * @restMethod im.v2.Folder.updateSources
+	 */
+	public function updateSourcesAction(
+		\Bitrix\Im\V2\Folder\Folder $folder,
+		FolderSourceService $folderSourceService,
+		array $sourceCodes = [],
+	): ?array
+	{
+		$result = $folderSourceService->updateSources(
+			$folder,
+			$this->normalizeSourceCodes($sourceCodes),
+		);
+
+		// Before the fork of the answer: every outcome reachable here is a submit of the screen and
+		// is reported, the refusal included. The owner is taken from the folder and not from the
+		// current user for the reason the write path names - a pair passed in can disagree.
+		(new FolderAnalytics((int)$folder->getUserId()))->addSubmitAllSettings(
+			$result->getDisabledSourceCodes(),
+			$result->getError()?->getCode(),
+		);
+
+		if (!$result->isSuccess())
+		{
+			$this->addErrors($result->getErrors());
+
+			return null;
+		}
+
+		return ['sourceFolders' => $result->getSourceFolders()];
+	}
+
+	/**
+	 * Source codes as the service takes them: unique non-empty strings. Deliberately nothing
+	 * smarter - which of the codes are real sources is decided by the canonical registry inside
+	 * the service, and a code it does not know is dropped there without an error (API-02).
+	 *
+	 * @return string[]
+	 */
+	private function normalizeSourceCodes(array $sourceCodes): array
+	{
+		$normalized = [];
+		foreach ($sourceCodes as $code)
+		{
+			if (!is_scalar($code))
+			{
+				continue;
+			}
+
+			$code = (string)$code;
+			if ($code !== '')
+			{
+				$normalized[$code] = $code;
+			}
+		}
+
+		return array_values($normalized);
 	}
 }

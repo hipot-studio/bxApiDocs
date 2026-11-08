@@ -2,10 +2,10 @@
 
 namespace Bitrix\Crm\Kanban\Entity;
 
-use Bitrix\Crm\Filter\ItemDataProvider;
+use Bitrix\Crm\Item;
 use Bitrix\Crm\Item\SmartInvoice as SmartInvoiceItem;
 use Bitrix\Crm\Kanban\Entity\Deadlines\DeadlinesStageManager;
-use Bitrix\Crm\Search\SearchEnvironment;
+use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Error;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
@@ -15,6 +15,9 @@ class SmartInvoiceDeadlines extends SmartInvoice
 	private DeadlinesStageManager $deadlinesManager;
 
 	private string $dateFieldName;
+
+	/** @var array<int, bool> */
+	private array $canDisplaySumsByCategory = [];
 
 	public function __construct()
 	{
@@ -38,23 +41,92 @@ class SmartInvoiceDeadlines extends SmartInvoice
 		return $this->deadlinesManager->stagesList();
 	}
 
-	public function fillStageTotalSums(array $filter, array $runtime, array &$stages): void
+	/**
+	 * Aggregates every period with its own query, as the stages are virtual and cannot be grouped by.
+	 *
+	 * Opts out of TotalSumsCache: its key does not tell the view modes apart, and the bounds of the periods
+	 * move with the current date.
+	 */
+	protected function getDataToCalculateTotalSums(string $fieldSum, array $filter, array $runtime): array
 	{
-		if (isset($filter['SEARCH_CONTENT']))
+		$data = [];
+
+		$this->factory->createItem();
+		$dataClass = $this->factory->getDataClass();
+		foreach ($this->deadlinesManager->stagesList() as $stage)
 		{
-			SearchEnvironment::prepareSearchFilter($this->getTypeId(), $filter, [
-				'ENABLE_PHONE_DETECTION' => false,
-			]);
-			unset($filter['SEARCH_CONTENT']);
+			$stageId = $stage['STATUS_ID'];
+			$queryParameters = [
+				'filter' => $this->prepareTotalSumsFilter($this->deadlinesManager->applyStageFilter($stageId, $filter)),
+				'select' => [
+					new ExpressionField($fieldSum, 'SUM(%s)', Item::FIELD_NAME_OPPORTUNITY_ACCOUNT),
+					new ExpressionField('CNT', 'COUNT(1)'),
+				],
+			];
+			if (!empty($runtime))
+			{
+				$queryParameters['runtime'] = $runtime;
+			}
+
+			$row = $dataClass::getList($queryParameters)->fetch();
+			$data[] = [
+				$this->getStageFieldName() => $stageId,
+				$fieldSum => (float)($row[$fieldSum] ?? 0),
+				'CNT' => (int)($row['CNT'] ?? 0),
+			];
 		}
 
-		ItemDataProvider::processStageSemanticFilter($filter, $filter);
-		unset($filter[ItemDataProvider::FIELD_STAGE_SEMANTIC]);
-		foreach ($stages as &$stage)
+		return $data;
+	}
+
+	/**
+	 * A period gathers invoices of every stage, so its sum is shown only when sums are shown in all of them.
+	 */
+	public function havePermissionToDisplayColumnSum(string $stageId): bool
+	{
+		return $this->canDisplaySums();
+	}
+
+	public function prepareItemCommonFields(array $item): array
+	{
+		$item = parent::prepareItemCommonFields($item);
+		if (!$this->canDisplaySums())
 		{
-			$stageFilter = $this->deadlinesManager->applyStageFilter($stage['id'], $filter);
-			$stage['count'] = $this->factory->getItemsCountFilteredByPermissions($stageFilter);
+			$item['PRICE'] = 0.0;
+			$item['PRICE_FORMATTED'] = $this->getHiddenPriceFormattedText($item['CURRENCY_FORMAT']);
+			$item['OPPORTUNITY_VALUE'] = 0.0;
+			$item[Item::FIELD_NAME_OPPORTUNITY_ACCOUNT] = null;
+			$item['OPPORTUNITY']['SUM'] = null;
 		}
+
+		return $item;
+	}
+
+	/**
+	 * Every stage of the category counts, the ones excluded by the filter too: the rule does not depend on it.
+	 */
+	private function canDisplaySums(): bool
+	{
+		$categoryId = (int)$this->categoryId;
+		if (!isset($this->canDisplaySumsByCategory[$categoryId]))
+		{
+			$canDisplay = true;
+			foreach ($this->factory->getStages($categoryId) as $stage)
+			{
+				$canDisplay = $this->userPermissions->kanban()->canReadKanbanSumInStage(
+					$this->getTypeId(),
+					$categoryId,
+					$stage->getStatusId(),
+				);
+				if (!$canDisplay)
+				{
+					break;
+				}
+			}
+			$this->canDisplaySumsByCategory[$categoryId] = $canDisplay;
+		}
+
+		return $this->canDisplaySumsByCategory[$categoryId];
 	}
 
 	public function getItems(array $parameters): \CDBResult
@@ -93,11 +165,6 @@ class SmartInvoiceDeadlines extends SmartInvoice
 			$this->factory
 				->getUpdateOperation($item)
 				->launch();
-	}
-
-	public function isTotalPriceSupported(): bool
-	{
-		return false;
 	}
 
 	public function isRecurringSupported(): bool

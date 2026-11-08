@@ -8,18 +8,20 @@ use Bitrix\Main\Type\DateTime;
 use Bitrix\Main\Web\Uri;
 use Bitrix\Main;
 use Bitrix\Rest\Internal\Access\AppAccessChecker;
+use Bitrix\Rest\Internal\Integration\Market\ApplicationLimitProvider;
 use Bitrix\Rest\Internal\Service\Application\ApplicationInstallationFinalizer;
 use Bitrix\Rest\PlacementTable;
 use Bitrix\Rest\Engine\Access;
 use Bitrix\Rest\AppLangTable;
-use Bitrix\Rest\Event\Sender;
 use Bitrix\Rest\OAuthService;
 use Bitrix\Rest\AppLogTable;
 use Bitrix\Rest\EventTable;
 use Bitrix\Rest\Analytic;
 use Bitrix\Rest\AppTable;
+use Bitrix\Rest\Internal\Entity\Application\AppInstallCompletionMode;
 use Bitrix\Rest\Internal\Repository\Application\AppRepository;
 use Bitrix\Rest\Public\Command\Application\Access\SetAppAccessCommand;
+use Bitrix\Rest\Public\Provider\ApplicationProvider;
 use CRestUtil;
 
 Loc::loadMessages(__FILE__);
@@ -40,6 +42,74 @@ class Application
 	public static function getContextUserId(): ?int
 	{
 		return self::$contextUserId;
+	}
+
+	private static function resolveInstallCompletionMode(array $appDetailInfo): AppInstallCompletionMode
+	{
+		if ($appDetailInfo['OPEN_API'] === 'Y' || empty($appDetailInfo['INSTALL_URL']))
+		{
+			return AppInstallCompletionMode::Immediate;
+		}
+
+		return AppInstallCompletionMode::Deferred;
+	}
+
+	private static function hasMenuTitle(array $appDetailInfo): bool
+	{
+		if (!isset($appDetailInfo['MENU_TITLE']) || !is_array($appDetailInfo['MENU_TITLE']))
+		{
+			return false;
+		}
+
+		foreach ($appDetailInfo['MENU_TITLE'] as $langName)
+		{
+			if (trim((string)$langName) !== '')
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private static function describeInstallationFailure(
+		Main\Result $failure,
+		array $appDetailInfo,
+		array $fallback
+	): array
+	{
+		$errors = $failure->getErrorCollection();
+		$limitExceeded = $errors->getErrorByCode(
+			ApplicationInstallationFinalizer::ERROR_MARKET_APPLICATION_LIMIT_EXCEEDED,
+		);
+		if ($limitExceeded !== null)
+		{
+			$limitReached = [
+				'error' => ApplicationInstallationFinalizer::ERROR_MARKET_APPLICATION_LIMIT_EXCEEDED,
+				'errorDescription' => Loc::getMessage('RMP_ERROR_ACCESS_DENIED'),
+				'helperCode' => Access::getHelperCode(
+					Access::ACTION_INSTALL,
+					Access::ENTITY_TYPE_APP,
+					$appDetailInfo,
+				),
+			];
+			$applicationLimit = (new ApplicationLimitProvider())->getProjection();
+			if ($applicationLimit !== null)
+			{
+				$limitReached['vibePlusApplicationLimit'] = $applicationLimit;
+			}
+
+			return $limitReached;
+		}
+
+		$lockFailed = $errors->getErrorByCode(ApplicationInstallationFinalizer::ERROR_LOCK_NOT_ACQUIRED) !== null;
+		$updateFailed = $errors->getErrorByCode(ApplicationInstallationFinalizer::ERROR_UPDATE_FAILED) !== null;
+
+		$fallback['errorDescription'] = $lockFailed || $updateFailed
+			? Loc::getMessage('RMP_INSTALL_ERROR')
+			: implode('<br />', $failure->getErrorMessages());
+
+		return $fallback;
 	}
 
 	public static function install($code, $version = false, $checkHash = false, $installHash = false, $from = null) : array
@@ -149,13 +219,15 @@ class Application
 					}
 					elseif ($installResult['result'])
 					{
+						$installCompletionMode = self::resolveInstallCompletionMode($appDetailInfo);
 						$appFields = [
 							'CLIENT_ID' => $installResult['result']['client_id'],
 							'CODE' => $appDetailInfo['CODE'],
 							'ACTIVE' => AppTable::ACTIVE,
-							'INSTALLED' => ($appDetailInfo['OPEN_API'] === 'Y' || empty($appDetailInfo['INSTALL_URL']))
+							'INSTALLED' => $installCompletionMode === AppInstallCompletionMode::Immediate
 								? AppTable::INSTALLED
 								: AppTable::NOT_INSTALLED,
+							'INSTALL_COMPLETION_MODE' => $installCompletionMode->value,
 							'URL' => $appDetailInfo['URL'],
 							'URL_DEMO' => $appDetailInfo['DEMO_URL'],
 							'URL_INSTALL' => $appDetailInfo['INSTALL_URL'],
@@ -191,23 +263,27 @@ class Application
 							|| $appDetailInfo['TYPE'] === AppTable::TYPE_BIC_DASHBOARD
 						)
 						{
+							$installCompletionMode = AppInstallCompletionMode::Deferred;
 							$appFields['INSTALLED'] = AppTable::NOT_INSTALLED;
+							$appFields['INSTALL_COMPLETION_MODE'] = $installCompletionMode->value;
 						}
 
 						$shouldFinalizeInstallation = $appFields['INSTALLED'] === AppTable::INSTALLED;
-						$existingApp = AppTable::getByClientId($appFields['CLIENT_ID']);
+						$existingApp = (new ApplicationProvider())->findByClientId(
+							(string)$appFields['CLIENT_ID']
+						);
 						$appFieldsToSave = $appFields;
 						$requiresFinalization = $shouldFinalizeInstallation
-							&& (!$existingApp || $existingApp['INSTALLED'] !== AppTable::INSTALLED);
+							&& ($existingApp === null || $existingApp->isInstalled() !== true);
 						if ($requiresFinalization)
 						{
 							$appFieldsToSave['ACTIVE'] = AppTable::INACTIVE;
 							$appFieldsToSave['INSTALLED'] = AppTable::NOT_INSTALLED;
 						}
 
-						if ($existingApp)
+						if ($existingApp !== null)
 						{
-							$addResult = AppTable::update($existingApp['ID'], $appFieldsToSave);
+							$addResult = AppTable::update($existingApp->getId(), $appFieldsToSave);
 						}
 						else
 						{
@@ -229,7 +305,7 @@ class Application
 
 						if ($addResult->isSuccess())
 						{
-							if ($existingApp)
+							if ($existingApp !== null)
 							{
 								AppLogTable::log($appId, AppLogTable::ACTION_TYPE_UPDATE);
 							}
@@ -280,39 +356,16 @@ class Application
 								}
 							}
 
-							if ($appDetailInfo['OPEN_API'] === 'Y' && !empty($appFields['URL_INSTALL']))
-							{
-								// checkCallback is already called inside checkFields
-								$result = EventTable::add(
-									[
-										'APP_ID' => $appId,
-										'EVENT_NAME' => 'ONAPPINSTALL',
-										'EVENT_HANDLER' => $appFields['URL_INSTALL'],
-									]
-								);
-								if ($result->isSuccess())
-								{
-									Sender::bind('rest', 'OnRestAppInstall');
-								}
-							}
+							EventTable::syncInstallEventHandlers(
+								(int)$appId,
+								$installCompletionMode,
+								(string)($appFields['URL_INSTALL'] ?? '')
+							);
 
-							if (!empty($appFields['URL_INSTALL']))
+							if ($installCompletionMode === AppInstallCompletionMode::Immediate)
 							{
-								// checkCallback is already called inside checkFields
-								$result = EventTable::add(
-									[
-										'APP_ID' => $appId,
-										'EVENT_NAME' => 'ONAPPUSERREADY',
-										'EVENT_HANDLER' => $appFields['URL_INSTALL'],
-									]
-								);
-								if ($result->isSuccess())
-								{
-									Sender::bind('rest', 'OnRestAppUserReady');
-								}
+								AppTable::install($appId);
 							}
-
-							AppTable::install($appId);
 
 							$redirect = false;
 							$open = false;
@@ -333,7 +386,8 @@ class Application
 									]
 								);
 								$redirect = $uri->getUri();
-								$open = $appDetailInfo['OPEN_API'] !== 'Y';
+								$open = !empty($appDetailInfo['URL'])
+									&& ($appDetailInfo['OPEN_API'] !== 'Y' || self::hasMenuTitle($appDetailInfo));
 							}
 							else
 							{
@@ -366,7 +420,7 @@ class Application
 								'installed' => AppTable::isInstalled($appId),
 								'redirect' => $redirect,
 								'openSlider' => $sliderUrl,
-								'canShowForm' => $appDetailInfo['OPEN_API'] === 'Y' && !empty($appFields['URL_SETTINGS'])
+								'canShowForm' => !empty($appFields['URL_SETTINGS'])
 							];
 
 							Analytic::logToFile(
@@ -377,41 +431,7 @@ class Application
 						}
 						else
 						{
-							$limitError = $addResult->getErrorCollection()->getErrorByCode(
-								ApplicationInstallationFinalizer::ERROR_MARKET_APPLICATION_LIMIT_EXCEEDED,
-							);
-							if ($limitError !== null)
-							{
-								$result = [
-									'error' => ApplicationInstallationFinalizer::ERROR_MARKET_APPLICATION_LIMIT_EXCEEDED,
-									'errorDescription' => Loc::getMessage('RMP_ERROR_ACCESS_DENIED'),
-									'helperCode' => Access::getHelperCode(
-										Access::ACTION_INSTALL,
-										Access::ENTITY_TYPE_APP,
-										$appDetailInfo,
-									),
-								];
-								$vibePlusApplicationLimit = self::getVibePlusApplicationLimitProjection();
-								if ($vibePlusApplicationLimit !== null)
-								{
-									$result['vibePlusApplicationLimit'] = $vibePlusApplicationLimit;
-								}
-							}
-							elseif (
-								$addResult->getErrorCollection()->getErrorByCode(
-									ApplicationInstallationFinalizer::ERROR_LOCK_NOT_ACQUIRED,
-								) !== null
-								|| $addResult->getErrorCollection()->getErrorByCode(
-									ApplicationInstallationFinalizer::ERROR_UPDATE_FAILED,
-								) !== null
-							)
-							{
-								$result['errorDescription'] = Loc::getMessage('RMP_INSTALL_ERROR');
-							}
-							else
-							{
-								$result['errorDescription'] = implode('<br />', $addResult->getErrorMessages());
-							}
+							$result = self::describeInstallationFailure($addResult, $appDetailInfo, $result);
 						}
 					}
 				}
@@ -472,23 +492,6 @@ class Application
 		}
 		catch (\Throwable)
 		{
-		}
-	}
-
-	private static function getVibePlusApplicationLimitProjection(): ?array
-	{
-		try
-		{
-			if (!Main\Loader::includeModule('market'))
-			{
-				return null;
-			}
-
-			return (new \Bitrix\Market\Application\VibePlusApplicationLimit())->getProjection();
-		}
-		catch (\Throwable)
-		{
-			return null;
 		}
 	}
 
@@ -590,23 +593,60 @@ class Application
 				// delete user application params to trigger installation event
 				\CUserOptions::DeleteOption('app_options', 'params_' . $appInfo['CLIENT_ID'] . '_' . $appInfo['VERSION']);
 
-				if (empty($appInfo['MENU_NAME']) && empty($appInfo['MENU_NAME_DEFAULT']))
+				$installCompletionMode = AppInstallCompletionMode::tryFrom(
+					(string)($appInfo['INSTALL_COMPLETION_MODE'] ?? '')
+				) ?? (
+					empty($appInfo['URL_INSTALL'])
+						? AppInstallCompletionMode::Immediate
+						: AppInstallCompletionMode::Deferred
+				);
+
+				if ($installCompletionMode === AppInstallCompletionMode::Immediate)
 				{
-					AppTable::install($appInfo['ID']);
-					$result = ['success' => 1];
+					$updateResult = AppTable::update(
+						$appInfo['ID'],
+						[
+							'INSTALLED' => AppTable::INSTALLED,
+						]
+					);
+					if ($updateResult->isSuccess())
+					{
+						AppTable::install($appInfo['ID']);
+						$result = ['success' => 1];
+					}
+					else
+					{
+						$result = ['error' => Loc::getMessage('RMP_INSTALL_ERROR')];
+					}
 				}
-				elseif (!empty($appInfo['URL_INSTALL']))
+				else
 				{
-					$appFields = [
-						'INSTALLED' => 'N',
-					];
+					$updateResult = AppTable::update(
+						$appInfo['ID'],
+						[
+							'INSTALLED' => AppTable::NOT_INSTALLED,
+						]
+					);
+					if ($updateResult->isSuccess())
+					{
+						$result = ['success' => 1];
 
-					AppTable::update($appInfo['ID'], $appFields);
-
-					$result = [
-						'success' => 1,
-						'redirect' => CRestUtil::getApplicationPage($appInfo['ID']),
-					];
+						// deferred completion happens inside the application page, so an application
+						// without a page has nowhere to send the admin to
+						$hasApplicationPage = !AppInstallCompletionMode::isApiOnly([
+							$appInfo['MENU_NAME'],
+							$appInfo['MENU_NAME_DEFAULT'],
+							$appInfo['MENU_NAME_LICENSE'],
+						]);
+						if ($hasApplicationPage)
+						{
+							$result['redirect'] = CRestUtil::getApplicationPage($appInfo['ID']);
+						}
+					}
+					else
+					{
+						$result = ['error' => Loc::getMessage('RMP_INSTALL_ERROR')];
+					}
 				}
 			}
 			else
@@ -629,15 +669,15 @@ class Application
 			return [];
 		}
 
-		$appInfo = AppTable::getByClientId($appId);
-		if (!$appInfo)
+		$appInfo = (new ApplicationProvider())->findById((int)$appId);
+		if ($appInfo === null)
 		{
 			return [];
 		}
 
-		if ($appInfo['CODE'])
+		if ((string)$appInfo->getCode() !== '')
 		{
-			Analytic::logToFile('setAppRight', $appInfo['CODE'], $appInfo['CODE']);
+			Analytic::logToFile('setAppRight', $appInfo->getCode(), $appInfo->getCode());
 		}
 
 		$codes = [];
@@ -658,7 +698,7 @@ class Application
 		{
 			$commandResult = (new SetAppAccessCommand(
 				userId: $userId,
-				clientId: $appInfo['CLIENT_ID'],
+				clientId: (string)$appInfo->getClientId(),
 				accessCodes: $codes,
 			))->run();
 		}

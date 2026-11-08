@@ -3,6 +3,8 @@
 namespace Bitrix\Im\V2\Analytics\Event;
 
 use Bitrix\Im\V2\Analytics\ChatAnalytics;
+use Bitrix\Im\V2\Application\Features;
+use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\Ai\AiAssistantPrivateChat;
 use Bitrix\Im\V2\Chat\ChannelChat;
 use Bitrix\Im\V2\Chat\CollabChat;
@@ -80,6 +82,9 @@ class ChatEvent extends Event
 		'chatType_user' => ['instanceof' => PrivateChat::class],
 	];
 
+	private ?CollabChat $parentCollabMemo = null;
+	private bool $parentCollabResolved = false;
+
 	protected function setDefaultParams(): self
 	{
 		$this
@@ -96,7 +101,8 @@ class ChatEvent extends Event
 	{
 		if ($this->chat instanceof ExternalChat)
 		{
-			$this->type = $this->chat->getExtendedType();
+			$extendedType = $this->chat->getExtendedType();
+			$this->type = $extendedType === 'collab' ? 'project' : $extendedType;
 
 			return $this;
 		}
@@ -140,7 +146,8 @@ class ChatEvent extends Event
 	{
 		if ($this->chat instanceof ExternalChat)
 		{
-			$this->p1 = 'chatType_' . $this->chat->getExtendedType();
+			$extendedType = $this->chat->getExtendedType();
+			$this->p1 = $extendedType === 'collab' ? 'chatType_project' : 'chatType_' . $extendedType;
 
 			return $this;
 		}
@@ -171,7 +178,7 @@ class ChatEvent extends Event
 
 	protected function setChatP2(): self
 	{
-		if ($this->chat instanceof CopilotChat)
+		if ($this->chat instanceof CopilotChat && !Features::isBitrixGptV2Available())
 		{
 			$engineCode = $this->chat->getEngineCode();
 			$engineName = (new EngineManager())->getEngineNameByCode($engineCode) ?? '';
@@ -198,19 +205,40 @@ class ChatEvent extends Event
 	{
 		if ($this->chat instanceof CollabChat)
 		{
-			$this->p4 = 'collabId_' . ($this->chat->getEntityId() ?? 0);
+			$entityId = $this->chat->getEntityId();
+			if ((int)$entityId > 0)
+			{
+				$this->p4 = 'projectId_' . $entityId;
+			}
 
 			return $this;
+		}
+
+		if (!($this->chat instanceof ChannelChat) && !($this->chat instanceof CommentChat))
+		{
+			$parentCollab = $this->getParentCollab();
+			if ($parentCollab !== null)
+			{
+				$entityId = $parentCollab->getEntityId();
+				if ((int)$entityId > 0)
+				{
+					$this->p4 = 'projectId_' . $entityId;
+				}
+
+				return $this;
+			}
 		}
 
 		if ($this->chat instanceof CopilotChat)
 		{
-			$role = (new RoleManager())->getMainRole($this->chat->getChatId()) ?? '';
-			$this->p4 = 'role_' . self::convertUnderscore($role);
+			if (!Features::isBitrixGptV2Available())
+			{
+				$role = (new RoleManager())->getMainRole($this->chat->getChatId()) ?? '';
+				$this->p4 = 'role_' . self::convertUnderscore($role);
+			}
 
 			return $this;
 		}
-
 
 		$parentChatId = $this->chat->getParentChatId();
 		$this->p4 = 'parentChatId_' . ($parentChatId ?? 0);
@@ -240,10 +268,46 @@ class ChatEvent extends Event
 		return match (true)
 		{
 			$this->chat instanceof ChannelChat || $this->chat instanceof CommentChat => 'channel',
+			$this->isProjectChild() => 'project',
 			$this->chat instanceof CopilotChat => 'copilot',
-			$this->chat instanceof CollabChat => 'collab',
+			$this->chat instanceof CollabChat => 'project',
 			$this->chat instanceof VideoConfChat && $additionalCategories => 'videoconf',
 			default => 'chat',
 		};
+	}
+
+	private function isProjectChild(): bool
+	{
+		return $this->getParentCollab() !== null;
+	}
+
+	public function setChat(Chat $chat): self
+	{
+		$this->parentCollabMemo = null;
+		$this->parentCollabResolved = false;
+
+		return parent::setChat($chat);
+	}
+
+	private function getParentCollab(): ?CollabChat
+	{
+		if ($this->parentCollabResolved)
+		{
+			return $this->parentCollabMemo;
+		}
+
+		$this->parentCollabResolved = true;
+
+		if (!$this->chat->hasParent())
+		{
+			$this->parentCollabMemo = null;
+
+			return null;
+		}
+
+		$parentChat = $this->chat->getParentChat();
+		$this->parentCollabMemo = $parentChat instanceof CollabChat ? $parentChat : null;
+
+		return $this->parentCollabMemo;
 	}
 }

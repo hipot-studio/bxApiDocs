@@ -6,6 +6,7 @@ use Bitrix\Tasks\Internals\Task\Search\Conversion\ConverterFactory;
 use Bitrix\Tasks\Internals\Task\Search\Exception\SearchIndexException;
 use Bitrix\Tasks\Internals\Task\Search\IndexBuilderInterface;
 use Bitrix\Tasks\Internals\Task\Search\Repository\TaskRepository;
+use Bitrix\Tasks\Internals\Task\Search\RepositoryInterface;
 
 class IndexBuilder implements IndexBuilderInterface
 {
@@ -14,9 +15,9 @@ class IndexBuilder implements IndexBuilderInterface
 	private ConverterFactory $factory;
 	private string $index = '';
 
-	public function __construct(private int $taskId)
+	public function __construct(private int $taskId, ?RepositoryInterface $repository = null)
 	{
-		$this->factory = new ConverterFactory(new TaskRepository($this->taskId));
+		$this->factory = new ConverterFactory($repository ?? new TaskRepository($this->taskId));
 	}
 
 	/**

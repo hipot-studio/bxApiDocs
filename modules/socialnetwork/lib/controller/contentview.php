@@ -5,6 +5,8 @@ namespace Bitrix\Socialnetwork\Controller;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Error;
 use Bitrix\Main\Engine\ActionFilter;
+use Bitrix\Socialnetwork\Item\ContentView\ContentViewAccessService;
+use Bitrix\Socialnetwork\Item\ContentView\UserListService;
 use Bitrix\Socialnetwork\Item\UserContentView;
 
 class ContentView extends Base
@@ -108,29 +110,19 @@ class ContentView extends Base
 				: ''
 		);
 
-		if ($contentId === '')
-		{
-			$this->addError(new Error('Empty Content ID', 'SONET_CONTROLLER_CONTENTVIEW_EMPTY_CONTENT_ID'));
-			return null;
-		}
-
 		if (!Loader::includeModule('socialnetwork'))
 		{
 			$this->addError(new Error('Cannot include Socialnetwork module', 'SONET_CONTROLLER_CONTENTVIEW_NO_SOCIALNETWORK_MODULE'));
 			return null;
 		}
 
-		$userList = UserContentView::getUserList([
-			'contentId' => $contentId,
-			'page' => $page,
-			'pathToUserProfile' => $pathToUserProfile
-		]);
+		$userListService = new UserListService(new ContentViewAccessService());
 
-		$result['items'] = $userList['items'];
-		$result['itemsCount'] = count($result['items']);
-		$result['hiddenCount'] = $userList['hiddenCount'];
-
-		return $result;
+		return $userListService->getUserList(
+			$contentId,
+			$this->getCurrentUser()->getId(),
+			$page,
+			$pathToUserProfile,
+		);
 	}
 }
-

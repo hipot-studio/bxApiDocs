@@ -2,13 +2,10 @@
 
 namespace Bitrix\Intranet\Integration\Rest;
 
+use Bitrix\Intranet\Internal\Integration\Rest\EmbeddingMenuProvider;
 use Bitrix\Main\Event;
 use Bitrix\Main\EventResult;
-use Bitrix\Main\Loader;
-use Bitrix\Rest\Lang;
-use Bitrix\Rest\PlacementTable;
 use Bitrix\Main\Config\Option;
-use Bitrix\Rest\Marketplace\Url;
 
 class EventHandler
 {
@@ -25,10 +22,11 @@ class EventHandler
 	public static function onRegisterPlacementLeftMenu(Event $event): EventResult
 	{
 		$id = (int)$event->getParameter('ID');
+		$embeddingMenuProvider = new EmbeddingMenuProvider();
 
-		if ($id > 0 && Loader::includeModule('rest'))
+		if ($id > 0 && $embeddingMenuProvider->isAvailable())
 		{
-			return static::reloadPlacementLeftMenu();
+			return static::reloadPlacementLeftMenu($embeddingMenuProvider);
 		}
 
 		return new EventResult(EventResult::ERROR);
@@ -45,26 +43,29 @@ class EventHandler
 	public static function onUnRegisterPlacementLeftMenu(Event $event): EventResult
 	{
 		$id = (int)$event->getParameter('ID');
+		$embeddingMenuProvider = new EmbeddingMenuProvider();
 
-		if ($id > 0 && Loader::includeModule('rest'))
+		if ($id > 0 && $embeddingMenuProvider->isAvailable())
 		{
-			return static::reloadPlacementLeftMenu();
+			return static::reloadPlacementLeftMenu($embeddingMenuProvider);
 		}
 
 		return new EventResult(EventResult::ERROR);
 	}
 
-	private static function reloadPlacementLeftMenu()
+	private static function reloadPlacementLeftMenu(EmbeddingMenuProvider $embeddingMenuProvider)
 	{
+		$siteId = defined('SITE_ID') ? SITE_ID : static::getDefaultSiteId();
+
 		$menuList = [];
 		$placementList = [];
-		$option = Option::get('intranet', 'left_menu_items_marketplace_' . SITE_ID);
+		$option = Option::get('intranet', 'left_menu_items_marketplace_' . $siteId);
 		if (!empty($option))
 		{
 			$menuList = unserialize($option, ['allowed_classes' => false]);
 			foreach ($menuList as $key => $item)
 			{
-				if ((int)$item['PLACEMENT_ID'] > 0)
+				if ((int)($item['PLACEMENT_ID'] ?? 0) > 0)
 				{
 					$placementList[$item['PLACEMENT_ID']] = $key;
 				}
@@ -72,68 +73,26 @@ class EventHandler
 		}
 
 		$needSave = false;
-		$res = PlacementTable::getList(
-			[
-				'filter' => [
-					'=PLACEMENT' => \CIntranetRestService::LEFT_MENU,
-				],
-				'select' => [
-					'ID',
-					'ICON_ID',
-					'TITLE',
-					'GROUP_NAME',
-					'COMMENT',
-					'APP_ID',
-					'ADDITIONAL',
-				],
-			]
-		);
-
-		foreach ($res->fetchCollection() as $handler)
+		foreach ($embeddingMenuProvider->getLeftMenuItems(\CIntranetRestService::LEFT_MENU) as $placement)
 		{
-			if ($placementList[$handler->getId()])
+			if (isset($placementList[$placement->id]))
 			{
-				unset($placementList[$handler->getId()]);
+				unset($placementList[$placement->id]);
 				continue;
 			}
-			$title = $handler->getTitle();
-			$data = [
-				'TITLE' => '',
-			];
-
-			$handler->fillLangAll();
-			if (!is_null($handler->getLangAll()))
-			{
-				foreach ($handler->getLangAll() as $lang)
-				{
-					$data['LANG_ALL'][$lang->getLanguageId()] = [
-						'TITLE' => $lang->getTitle(),
-						'DESCRIPTION' => $lang->getDescription(),
-						'GROUP_NAME' => $lang->getGroupName(),
-					];
-				}
-			}
-
-			$data = Lang::mergeFromLangAll($data);
-			if ($data['TITLE'] !== '')
-			{
-				$title = $data['TITLE'];
-			}
-
-			if ($title === '')
+			if ($placement->leftMenuTitle === '')
 			{
 				continue;
 			}
 
-			$url = Url::getApplicationPlacementUrl($handler->getId());
 			$menuList[] = [
-				'ID' => crc32($url),
-				'LINK' => $url,
-				'TEXT' => $title,
+				'ID' => crc32($placement->url),
+				'LINK' => $placement->url,
+				'TEXT' => $placement->leftMenuTitle,
 				'ADDITIONAL_LINKS' => [
-					$url,
+					$placement->url,
 				],
-				'PLACEMENT_ID' => $handler->getId(),
+				'PLACEMENT_ID' => $placement->id,
 			];
 			$needSave = true;
 		}
@@ -148,9 +107,9 @@ class EventHandler
 		{
 			Option::set(
 				'intranet',
-				'left_menu_items_marketplace_' . SITE_ID,
+				'left_menu_items_marketplace_' . $siteId,
 				serialize($menuList),
-				SITE_ID
+				$siteId
 			);
 
 			if (defined('BX_COMP_MANAGED_CACHE'))
@@ -163,5 +122,12 @@ class EventHandler
 		}
 
 		return new EventResult(EventResult::ERROR);
+	}
+
+	private static function getDefaultSiteId(): string
+	{
+		$defaultSiteId = \CSite::GetDefSite();
+
+		return is_string($defaultSiteId) && $defaultSiteId !== '' ? $defaultSiteId : 's1';
 	}
 }

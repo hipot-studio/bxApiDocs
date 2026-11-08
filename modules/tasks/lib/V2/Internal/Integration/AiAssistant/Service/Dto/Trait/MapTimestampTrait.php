@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Integration\AiAssistant\Service\Dto\Trait;
 
-use Bitrix\Tasks\Util\User;
-
 trait MapTimestampTrait
 {
 	use MapDateTimeTrait;
@@ -16,17 +14,10 @@ trait MapTimestampTrait
 		string $userKey = 'userId',
 	): ?int
 	{
-		$dateTime = static::mapFormattedDateTime($props, $dateTimeKey);
-
-		$timestamp = $dateTime?->getTimestamp();
-
-		if ($timestamp === null)
-		{
-			return null;
-		}
-
 		$userId = static::mapInteger($props, $userKey);
 
-		return $userId ? $timestamp - User::getTimeZoneOffset($userId) : $timestamp;
+		$dateTime = static::mapFormattedDateTime($props, $dateTimeKey, $userId);
+
+		return $dateTime?->getTimestamp();
 	}
 }

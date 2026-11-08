@@ -42,13 +42,20 @@ class ToggleIsActiveAction extends BaseGridAction
 
 		$this->fillEvent($requestDTO->needActivate, $requestDTO->shareType);
 
-		$this->getService()->changeActivatePrompt(
+		$updateResult = $this->getService()->changeActivatePrompt(
 			$requestDTO->promptId,
 			$requestDTO->needActivate,
 			$requestDTO->userId
 		);
 
 		$result = new Result();
+		if (!$updateResult->isSuccess())
+		{
+			$result->addErrors($updateResult->getErrors());
+
+			return $result;
+		}
+
 		$result->setData([
 			'id' => $requestDTO->promptCode,
 			'IS_ACTIVE' => $requestDTO->needActivate,

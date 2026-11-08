@@ -124,6 +124,18 @@ final class GenerateCallCriteria extends AbstractOperation
 		return new GenerateCallCriteriaEvent();
 	}
 
+	/**
+	 * The synthetic target belongs to the create mode alone, and creation is launched only from the
+	 * suspicious calls grouping, so such a job always carries a parent job. Enrichment passes no parent
+	 * and runs on the id of a real script, so it keeps reporting its job finish.
+	 */
+	protected static function hasSyntheticAnalyticsTarget(EO_Queue $job): bool
+	{
+		return (int)$job->getParentId() > 0
+			&& (int)$job->getEntityId() === Dispatcher::SYNTHETIC_TARGET_ID
+		;
+	}
+
 	protected static function onAfterSuccessfulJobFinish(Result $result, ?Context $context = null): void
 	{
 		/** @var GenerateCallCriteriaPayload $payload */

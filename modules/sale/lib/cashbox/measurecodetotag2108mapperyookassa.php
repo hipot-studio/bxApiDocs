@@ -43,5 +43,5 @@ class MeasureCodeToTag2108MapperYooKassa extends MeasureCodeToTag2108Mapper
 		'2554' => 'terabyte',
 	];
 
-	protected const UNKNOWN_TYPE = 'other';
+	protected const UNKNOWN_TYPE = 'another';
 }

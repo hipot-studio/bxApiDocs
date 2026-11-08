@@ -61,10 +61,20 @@ trait CommandRunner
 
 			if (
 				$previousException instanceof
-					Internal\Exception\VibePlus\FeatureNotAvailableOnCurrentPlanExceptionInterface
+					Internal\Exception\Payment\FeatureNotAvailableOnCurrentPlanExceptionInterface
 			)
 			{
 				throw new \Bitrix\Rest\V3\Exception\FeatureNotAvailableOnCurrentPlanException($previousException);
+			}
+
+			if ($previousException instanceof Internal\Exception\IncomingWebhook\CannotProlongIncomingWebhookException)
+			{
+				throw new Infrastructure\Rest\Exception\CannotProlongIncomingWebhookException($previousException);
+			}
+
+			if ($previousException instanceof Internal\Exception\IncomingWebhook\CannotReduceIncomingWebhookExpirationException)
+			{
+				throw new Infrastructure\Rest\Exception\CannotReduceIncomingWebhookExpirationException($previousException);
 			}
 
 			if ($previousException instanceof Main\AccessDeniedException)
@@ -87,6 +97,17 @@ trait CommandRunner
 			if ($previousException instanceof \Bitrix\Rest\AccessException)
 			{
 				throw new AccessDeniedException($previousException);
+			}
+
+			if (
+				$previousException instanceof \Bitrix\Rest\RestException
+				&& $previousException->getPrevious() instanceof
+					Internal\Exception\Embedding\EmbeddingHandlerAlreadyBoundException
+			)
+			{
+				throw new Infrastructure\Rest\Exception\EmbeddingHandlerAlreadyBoundException(
+					$previousException->getPrevious(),
+				);
 			}
 
 			if ($previousException instanceof \Bitrix\Rest\RestException)

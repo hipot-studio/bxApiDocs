@@ -424,23 +424,50 @@ class Map
 			];
 		}
 
-		// check block/nodes style notation
-		if (!isset($manifest['style']['block']) && !isset($manifest['style']['nodes']))
-		{
-			$manifest['style'] = [
-				'block' => ['type' => Block::DEFAULT_WRAPPER_STYLE],
-				'nodes' => $manifest['style'],
-			];
-		}
+		return self::prepareStyleManifest($manifest, $additional);
+	}
+
+	/**
+	 * Brings style to the block/nodes notation and puts the design settings of the map into it.
+	 *
+	 * A repo block carries its manifest from REST as it was registered, so neither style, nor
+	 * style.nodes, nor the style entry of the map node is guaranteed to be an array here:
+	 * Block::getManifest() normalizes style only later, after the subtype has run.
+	 *
+	 * The result holds exactly block and nodes, because that is the only shape
+	 * Block::getManifest() leaves alone: any other one it wraps into nodes a second time, which
+	 * would bury the style entry of the map node in style.nodes.nodes. An absent block stays empty
+	 * on purpose - the wrapper style, including the widget type of Vibe, belongs to
+	 * Block::getManifest() and is filled there.
+	 */
+	protected static function prepareStyleManifest(array $manifest, array $additional): array
+	{
+		$style = is_array($manifest['style'] ?? null) ? $manifest['style'] : [];
+
+		$hasNotation = isset($style['block']) || isset($style['nodes']);
+		$block = is_array($style['block'] ?? null) ? $style['block'] : [];
+		$nodes = is_array($style['nodes'] ?? null) ? $style['nodes'] : [];
+		unset($style['block'], $style['nodes']);
+
+		// what is left of style is the legacy notation: the map of selectors lies right under it
+		$manifest['style'] = [
+			'block' => $hasNotation ? $block : ['type' => Block::DEFAULT_WRAPPER_STYLE],
+			'nodes' => array_merge($style, $nodes),
+		];
+
 		if (!empty($additional))
 		{
-			if (!isset($manifest['style']['nodes'][self::MAP_SELECTOR]['additional']))
+			if (!is_array($manifest['style']['nodes'][self::MAP_SELECTOR] ?? null))
+			{
+				$manifest['style']['nodes'][self::MAP_SELECTOR] = [];
+			}
+			if (!is_array($manifest['style']['nodes'][self::MAP_SELECTOR]['additional'] ?? null))
 			{
 				$manifest['style']['nodes'][self::MAP_SELECTOR]['additional'] = [];
 			}
 			$manifest['style']['nodes'][self::MAP_SELECTOR]['additional'][] = $additional;
 		}
-		else
+		elseif (is_array($manifest['style']['nodes'][self::MAP_SELECTOR] ?? null))
 		{
 			unset($manifest['style']['nodes'][self::MAP_SELECTOR]['additional']);
 		}

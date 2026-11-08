@@ -10,6 +10,7 @@ enum ActivityNodeType: string
 	case SIMPLE = 'simple';
 	case TRIGGER = 'trigger';
 	case FRAME = 'frame';
+	case POOL = 'pool';
 	case TOOL = 'tool';
 	case SERVICE = 'services';
 	case OPERATORS = 'operators';

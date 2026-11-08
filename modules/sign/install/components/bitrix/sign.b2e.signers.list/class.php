@@ -16,7 +16,6 @@ use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Sign\Access\ActionDictionary;
 use Bitrix\Sign\Access\Model\UserModel;
 use Bitrix\Sign\Access\Permission\SignPermissionDictionary;
-use Bitrix\Sign\Access\Service\RolePermissionService;
 use Bitrix\Sign\Config\Storage;
 use Bitrix\Sign\Repository\UserRepository;
 use Bitrix\Sign\Service\Container;
@@ -47,8 +46,6 @@ final class SignB2eSignersList extends SignBaseComponent
 	private readonly \Bitrix\Sign\Service\Sign\UrlGeneratorService $urlGeneratorService;
 	private readonly \Bitrix\Sign\Service\Integration\Socialnetwork\FeedPostService $feedPostService;
 	private UserModel $currentUserAccessModel;
-	/** @var array<int|string, string|null> */
-	private array $currentUserPermissionValuesCache = [];
 	/** @var array<string, mixed>|null */
 	private ?array $sortRequest = null;
 	private ?bool $canCurrentUserAddDocument = null;
@@ -195,14 +192,13 @@ final class SignB2eSignersList extends SignBaseComponent
 		// pins and emptiness of the whole page are read in one call each, never per row
 		$listIds = $lists->getIds();
 		$pinnedListIds = $this->signersListService->listPinnedListIds($this->getCurrentUserId(), $listIds);
-		$nonEmptyListIds = $this->signersListService->listNonEmptyListIds($listIds);
 
 		return array_map(
 			fn(\Bitrix\Sign\Item\SignersList $list): array => $this->mapListToGridData(
 				$list,
 				$responsibleUsers,
 				in_array((int)$list->id, $pinnedListIds, true),
-				in_array((int)$list->id, $nonEmptyListIds, true),
+				in_array((int)$list->id, $this->notEmptyListIds, true),
 			),
 			$lists->toArray(),
 		);
@@ -285,6 +281,13 @@ final class SignB2eSignersList extends SignBaseComponent
 
 		if ($hasSigners && $this->canCurrentUserAddDocument())
 		{
+			$wizardUrl = CUtil::JSEscape($this->urlGeneratorService->makeOpenWizardForSignersListUrl($listId));
+			$actions[] = [
+				'phrase' => 'SIGN_B2E_SIGNERS_LIST_ACTION_OPEN_WIZARD',
+				'handler' => "{$controller}.openWizard('{$wizardUrl}')",
+				'dataset' => ['testid' => 'sign-b2e-signers-list-row-open-wizard'],
+			];
+
 			// the grid encodes the action list itself (Json::encode + HtmlFilter::encode)
 			$sendUrl = CUtil::JSEscape($this->urlGeneratorService->makeTemplateSendUrl($listId));
 			$actions[] = [
@@ -721,14 +724,10 @@ final class SignB2eSignersList extends SignBaseComponent
 
 	private function getValueForPermissionFromCurrentUser(string|int $permissionId): ?string
 	{
-		$permissionService = new RolePermissionService();
-
-		$this->currentUserPermissionValuesCache[$permissionId] ??= $permissionService->getValueForPermission(
+		return Container::instance()->getRolePermissionService()?->getValueForPermission(
 			$this->getCurrentUserAccessModel()->getRoles(),
 			$permissionId,
 		);
-
-		return $this->currentUserPermissionValuesCache[$permissionId];
 	}
 
 	private function getResponsibleByList(\Bitrix\Sign\Item\SignersList $list): ?int

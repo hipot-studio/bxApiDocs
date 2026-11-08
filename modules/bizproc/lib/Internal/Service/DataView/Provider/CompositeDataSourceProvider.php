@@ -13,6 +13,7 @@ use Bitrix\Bizproc\Public\DataView\Dto\StampConstantDescriptor;
 use Bitrix\Bizproc\Public\DataView\Exception\SourceUnavailableException;
 use Bitrix\Bizproc\Public\DataView\Interface\DataSourceProvider;
 use Bitrix\Bizproc\Public\DataView\Interface\PresentableProvider;
+use Bitrix\Bizproc\Public\DataView\Interface\SourceAvailabilityCapableProvider;
 use Bitrix\Bizproc\Public\DataView\Interface\StampConstantProvider;
 use Bitrix\Bizproc\Public\DataView\Interface\TemplateContextCapableProvider;
 
@@ -25,7 +26,8 @@ final class CompositeDataSourceProvider implements
 	DataSourceProvider,
 	TemplateContextCapableProvider,
 	StampConstantProvider,
-	PresentableProvider
+	PresentableProvider,
+	SourceAvailabilityCapableProvider
 {
 	public const MODULE_ID = 'bizproc';
 
@@ -63,6 +65,43 @@ final class CompositeDataSourceProvider implements
 			$this->collectSources($this->storageProvider, $templateId, $actorId),
 			$this->collectSources($this->variablesProvider, $templateId, $actorId),
 		);
+	}
+
+	/**
+	 * The composed provider that owns the entity answers about the source itself when it can;
+	 * otherwise the source is looked up in the catalog of that provider alone, not of the whole module.
+	 */
+	public function isSourceAvailable(SourceRef $source, int $actorId, ?int $templateId): bool
+	{
+		try
+		{
+			$provider = $this->resolveProvider($source);
+		}
+		catch (SourceUnavailableException)
+		{
+			return false;
+		}
+
+		if ($provider instanceof SourceAvailabilityCapableProvider)
+		{
+			return $provider->isSourceAvailable($source, $actorId, $templateId);
+		}
+
+		$descriptors = ($templateId !== null && $templateId > 0)
+			? $this->collectSources($provider, $templateId, $actorId)
+			: $provider->getAvailableSources($actorId)
+		;
+
+		$identity = $source->identity();
+		foreach ($descriptors as $descriptor)
+		{
+			if ($descriptor->toSourceRef()->identity() === $identity)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**

@@ -2,25 +2,22 @@
 
 namespace Bitrix\BIConnector\Controller;
 
+use Bitrix\BIConnector\Access\ActionFilter\KeyManageAccess;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\Controller;
-use Bitrix\Main\Engine\ActionFilter;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\BIConnector\KeyManager;
-use Bitrix\Main\ErrorCollection;
 use Bitrix\BIConnector\KeyTable;
+use Bitrix\BIConnector\Manager;
 use Bitrix\BIConnector\Integration\Superset\Integrator\IntegratorFactory;
-use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
 use Bitrix\BIConnector\Services\ApacheSuperset;
 use Bitrix\BIConnector\Superset\KeyManager as SupersetKeyManager;
 use Bitrix\Main\Error;
-use Bitrix\Main\Loader;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Rest\AppTable;
 use Bitrix\Rest\Engine\ActionFilter\AuthType;
-use Bitrix\BIConnector\KeyUserTable;
 
 /**
  * Class Key
@@ -44,7 +41,6 @@ class Key extends Controller
 		'DATE_CREATE',
 		'TIMESTAMP_X',
 		'CREATED_BY',
-		'ACCESS_KEY',
 		'CONNECTION',
 	];
 
@@ -61,24 +57,23 @@ class Key extends Controller
 	 */
 	public function addAction($fields, \CRestServer $server)
 	{
-		$userId = isset($fields['USER_ID']) ? (int)$fields['USER_ID'] : 0;
-		$fields['USER_ID'] = $this->prepareUserId($userId);
+		// the key always belongs to the caller, USER_ID from the request is ignored
+		$fields['USER_ID'] = $this->prepareUserId();
 		$res = KeyManager::save(
 			[
 				'APP_ID' => $this->getAppId($server),
 				'CONNECTION' => $fields['CONNECTION'] ?? '',
 				'USER_ID' => $fields['USER_ID'],
-				'ACCESS_KEY' => $fields['ACCESS_KEY'] ?? '',
 				'ACTIVE' => ($fields['ACTIVE'] ?? 'N') === 'Y',
-			]
+			],
 		);
-		if ($res instanceof ErrorCollection)
+		if (!$res->isSuccess())
 		{
-			$result = $this->prepareErrorsForRest('ADD', $res);
+			$result = $this->prepareErrorsForRest('ADD', $res->getErrorCollection());
 		}
 		else
 		{
-			$result = (int)$res;
+			$result = (int)($res->getData()['ID'] ?? 0);
 		}
 
 		return $result;
@@ -160,6 +155,11 @@ class Key extends Controller
 			'error_description' => 'Key not found.',
 		];
 
+		if (!is_array($fields))
+		{
+			$fields = [];
+		}
+
 		$appId = $this->getAppId($server);
 		if ($appId > 0)
 		{
@@ -170,25 +170,27 @@ class Key extends Controller
 						'=APP_ID' => $appId,
 					],
 					'select' => [
-						'ID', 'CREATED_BY'
+						'ID',
 					],
 				]
 			);
 			if ($item = $list->fetch())
 			{
-				$userId = $this->prepareUserId();
-				if ($userId !== (int)$item['CREATED_BY'] && !\CRestUtil::isAdmin())
-				{
-					return [
-						'error' => 'ACCESS_DENIED',
-						'error_description' => 'Access denied.',
-					];
-				}
-
 				$save = [];
 				if (array_key_exists('CONNECTION', $fields))
 				{
-					$save['CONNECTION'] = $fields['CONNECTION'];
+					// a non-string value cannot name a connection and must not reach the array offset
+					$connection = $fields['CONNECTION'];
+					$connections = Manager::getInstance()->getConnections();
+					if (!is_string($connection) || !isset($connections[$connection]))
+					{
+						return [
+							'error' => 'WRONG_CONNECTION',
+							'error_description' => 'Connection not found.',
+						];
+					}
+
+					$save['CONNECTION'] = $connection;
 				}
 				if (array_key_exists('ACTIVE', $fields))
 				{
@@ -247,16 +249,18 @@ class Key extends Controller
 			);
 			if ($item = $list->fetch())
 			{
-				KeyUserTable::deleteByFilter(
-					[
-						'=KEY_ID' => $item['ID'],
-					]
-				);
-
-				$deleteResult = KeyTable::delete($item['ID']);
+				$deleteResult = KeyManager::deleteKey((int)$item['ID']);
 				if (!$deleteResult->isSuccess())
 				{
-					$result = $this->prepareErrorsForRest('DELETE', $deleteResult->getErrorCollection());
+					if (
+						$deleteResult->getErrorCollection()->getErrorByCode(KeyManager::ERROR_KEY_NOT_FOUND) === null
+					)
+					{
+						$result = $this->prepareErrorsForRest(
+							'DELETE',
+							$deleteResult->getErrorCollection(),
+						);
+					}
 				}
 				else
 				{
@@ -331,7 +335,7 @@ class Key extends Controller
 			}
 		}
 
-		return $result ?: ['*'];
+		return $result ?: self::ALLOW_SELECT_FIELDS;
 	}
 
 	/**
@@ -453,7 +457,7 @@ class Key extends Controller
 		$response = $integrator->changeBiconnectorToken($accessKey);
 		if ($response->hasErrors())
 		{
-			SupersetKeyManager::deleteKey($accessKey);
+			SupersetKeyManager::deleteAccessKey($accessKey);
 
 			$this->addError(new Error('Failed to update token in Superset'));
 
@@ -484,8 +488,9 @@ class Key extends Controller
 	public function getDefaultPreFilters()
 	{
 		return [
-			new ActionFilter\Authentication(),
+			...parent::getDefaultPreFilters(),
 			new AuthType(AuthType::APPLICATION),
+			new KeyManageAccess(),
 		];
 	}
 }

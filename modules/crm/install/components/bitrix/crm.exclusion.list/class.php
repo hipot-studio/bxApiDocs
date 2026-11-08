@@ -91,32 +91,49 @@ class CrmExclusionListComponent extends CBitrixComponent implements Controllerab
 
 		// create nav
 		$nav = new PageNavigation("page-crm-exclusion");
-		$nav->allowAllRecords(false)->setPageSize(10)->initFromUri();
+		$nav->allowAllRecords(false)->setPageSize($this->getPageSize())->initFromUri();
 
 		// get rows
-		$list = Exclusion\Store::getList(array(
-			'select' => array(
-				'ID', 'COMMENT', 'TYPE_ID', 'CODE', 'DATE_INSERT'
-			),
-			'filter' => $this->getDataFilter(),
-			'offset' => $nav->getOffset(),
-			'limit' => $nav->getLimit(),
-			'count_total' => true,
-			'order' => $this->getGridOrder()
-		));
+		$filter = $this->getDataFilter();
+		$list = $this->getList($nav, $filter, true);
+		$totalCount = $list->getCount();
+		$nav->setRecordCount($totalCount);
+
+		if ($nav->getPageCount() > 0 && $nav->getCurrentPage() > $nav->getPageCount())
+		{
+			$nav->setCurrentPage($nav->getPageCount());
+			$list = $this->getList($nav, $filter);
+		}
+
 		foreach ($list as $item)
 		{
 			$item['TYPE_NAME'] = Communication\Type::getCaption($item['TYPE_ID']);
 			$this->arResult['ROWS'][] = $item;
 		}
 
-		$this->arResult['TOTAL_ROWS_COUNT'] = $list->getCount();
-
-		// set rec count to nav
-		$nav->setRecordCount($list->getCount());
+		$this->arResult['TOTAL_ROWS_COUNT'] = $totalCount;
 		$this->arResult['NAV_OBJECT'] = $nav;
 
 		return true;
+	}
+
+	protected function getList(PageNavigation $nav, array $filter, bool $countTotal = false)
+	{
+		$params = array(
+			'select' => array(
+				'ID', 'COMMENT', 'TYPE_ID', 'CODE', 'DATE_INSERT'
+			),
+			'filter' => $filter,
+			'offset' => $nav->getOffset(),
+			'limit' => $nav->getLimit(),
+			'order' => $this->getGridOrder(),
+		);
+		if ($countTotal)
+		{
+			$params['count_total'] = true;
+		}
+
+		return Exclusion\Store::getList($params);
 	}
 
 	protected function getDataFilter()
@@ -168,6 +185,30 @@ class CrmExclusionListComponent extends CBitrixComponent implements Controllerab
 		}
 
 		return array($by => $order);
+	}
+
+	protected function getPageSize()
+	{
+		$defaultPageSize = 10;
+		$pageSizes = array(10, 20, 50, 100);
+
+		$gridOptions = new GridOptions($this->arParams['GRID_ID']);
+		$currentOptions = $gridOptions->getCurrentOptions();
+		$pageSizeValue = $currentOptions['page_size'] ?? $defaultPageSize;
+		$pageSizeString = is_scalar($pageSizeValue) ? (string)$pageSizeValue : '';
+		$pageSize = (int)$pageSizeString;
+		if (
+			in_array($pageSizeString, array_map('strval', $pageSizes), true)
+			&& in_array($pageSize, $pageSizes, true)
+		)
+		{
+			return $pageSize;
+		}
+
+		$gridOptions->setPageSize($defaultPageSize);
+		$gridOptions->save();
+
+		return $defaultPageSize;
 	}
 
 	protected function setUiGridColumns()

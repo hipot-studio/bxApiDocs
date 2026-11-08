@@ -4,6 +4,7 @@ namespace Bitrix\AI\ShareRole\Service;
 
 use Bitrix\AI\Container;
 use Bitrix\AI\Controller\ShareRole;
+use Bitrix\AI\Entity\AccessCodeTrait;
 use Bitrix\AI\Enum\RoleAvatarSize;
 use Bitrix\AI\Facade\User;
 use Bitrix\AI\Helper;
@@ -28,6 +29,8 @@ use CFile;
 
 class RoleService
 {
+	use AccessCodeTrait;
+
 	private const INITIAL_CHAT_ACTIONS = [
 		'universal_how_to_properly_write_a_business_letter',
 		'universal_ideas_on_how_to_make_meetings_more_concise_and_substantive',
@@ -156,11 +159,28 @@ class RoleService
 		return new RoleForUpdateDto($roleData);
 	}
 
-	private function removeDeletedAccessCodes(string $accessCodes): string
+	protected function removeDeletedAccessCodes(string $accessCodes): string
 	{
 		$accessCodesArray = explode(',', $accessCodes);
-		$groupCodes = $this->groupService->getAllGroupCodes();
-		$departmentCodes = $this->departmentService->getDepartments();
+
+		$ids = $this->collectEntityIdsByTypes(
+			$accessCodesArray,
+			[AccessCode::TYPE_SOCNETGROUP, AccessCode::TYPE_DEPARTMENT]
+		);
+		$groupIds = $ids[AccessCode::TYPE_SOCNETGROUP];
+		$departmentIds = $ids[AccessCode::TYPE_DEPARTMENT];
+
+		$existingGroupIdSet = [];
+		if (!empty($groupIds))
+		{
+			$existingGroupIdSet = array_flip($this->groupService->getExistingGroupIds($groupIds));
+		}
+
+		$existingDepartmentIdSet = [];
+		if (!empty($departmentIds))
+		{
+			$existingDepartmentIdSet = array_flip($this->departmentService->getExistingDepartmentIds($departmentIds));
+		}
 
 		$result = [];
 		foreach ($accessCodesArray as $code)
@@ -175,17 +195,16 @@ class RoleService
 				continue;
 			}
 
-			if ($codeType !== AccessCode::TYPE_SOCNETGROUP && $codeType !== AccessCode::TYPE_DEPARTMENT)
+			if ($codeType === AccessCode::TYPE_SOCNETGROUP && isset($existingGroupIdSet[$codeId]))
 			{
+				$result[] = $code;
 				continue;
 			}
 
-			if (!in_array($codeId, $departmentCodes, true) && !in_array($codeId, $groupCodes, true))
+			if ($codeType === AccessCode::TYPE_DEPARTMENT && isset($existingDepartmentIdSet[$codeId]))
 			{
-				continue;
+				$result[] = $code;
 			}
-
-			$result[] = $code;
 		}
 
 		return implode(',', $result);
@@ -285,9 +304,7 @@ class RoleService
 
 	public function changeActivateRoles(array $roleIds, bool $needActivate, int $userId): Result
 	{
-		$this->roleRepository->changeActivateRoles($roleIds, $needActivate, $userId);
-
-		return new Result();
+		return $this->roleRepository->changeActivateRoles($roleIds, $needActivate, $userId);
 	}
 
 	public function getMainRoleDataByCodes(array $roleCodes): array

@@ -169,4 +169,36 @@ class OldDepartment extends BaseDepartment
 			parent: isset($department['IBLOCK_SECTION_ID']) ? (int)$department['IBLOCK_SECTION_ID']: null
 		);
 	}
+
+	public function getColleagueIdsByUserId(int $userId, ?int $limit = null, string $order = 'DESC'): array
+	{
+		if ($limit !== null && $limit <= 0)
+		{
+			return [];
+		}
+
+		$result = \CIntranetUtils::getDepartmentColleagues($userId, true, false, 'Y', ['ID']);
+		$colleaguesIds = [];
+
+		while (($row = $result->Fetch()))
+		{
+			$id = (int)$row['ID'];
+			$colleaguesIds[$id] = $id;
+		}
+
+		$colleaguesIds = array_values($colleaguesIds);
+
+		$order = $order === 'ASC' ? 'ASC' : 'DESC';
+		if ($order === 'DESC')
+		{
+			rsort($colleaguesIds);
+		}
+
+		if ($limit !== null)
+		{
+			$colleaguesIds = array_slice($colleaguesIds, 0, $limit);
+		}
+
+		return $colleaguesIds;
+	}
 }

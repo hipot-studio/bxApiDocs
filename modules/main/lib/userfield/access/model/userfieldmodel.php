@@ -130,4 +130,9 @@ class UserFieldModel implements \Bitrix\Main\Access\AccessibleItem
 
 		return static::$permissions;
 	}
+
+	public static function cleanCache(): void
+	{
+		static::$permissions = null;
+	}
 }

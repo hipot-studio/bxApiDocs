@@ -15,7 +15,13 @@ class DateNavigation extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.Message.DateNavigation.getCalendar
 	 */
-	public function getCalendarAction(Chat $chat, string $from, string $to, ?int $timezoneOffset = null): ?array
+	public function getCalendarAction(
+		Chat $chat,
+		string $from,
+		string $to,
+		?int $timezoneOffset = null,
+		?string $timezoneId = null,
+	): ?array
 	{
 		if (!$this->checkAvailability())
 		{
@@ -31,7 +37,13 @@ class DateNavigation extends BaseController
 			return null;
 		}
 
-		$result = DateNavigationService::createForClientOffset($chat, $timezoneOffset)->getCalendar($fromDate, $toDate);
+		$service = $this->getService($chat, $timezoneId, $timezoneOffset);
+		if ($service === null)
+		{
+			return null;
+		}
+
+		$result = $service->getCalendar($fromDate, $toDate);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -45,7 +57,12 @@ class DateNavigation extends BaseController
 	/**
 	 * @restMethod im.v2.Chat.Message.DateNavigation.resolveDate
 	 */
-	public function resolveDateAction(Chat $chat, string $date, ?int $timezoneOffset = null): ?array
+	public function resolveDateAction(
+		Chat $chat,
+		string $date,
+		?int $timezoneOffset = null,
+		?string $timezoneId = null,
+	): ?array
 	{
 		if (!$this->checkAvailability())
 		{
@@ -60,7 +77,13 @@ class DateNavigation extends BaseController
 			return null;
 		}
 
-		$result = DateNavigationService::createForClientOffset($chat, $timezoneOffset)->resolveDate($targetDate);
+		$service = $this->getService($chat, $timezoneId, $timezoneOffset);
+		if ($service === null)
+		{
+			return null;
+		}
+
+		$result = $service->resolveDate($targetDate);
 		if (!$result->isSuccess())
 		{
 			$this->addErrors($result->getErrors());
@@ -69,6 +92,18 @@ class DateNavigation extends BaseController
 		}
 
 		return $this->toRestFormat($result->getResult());
+	}
+
+	private function getService(Chat $chat, ?string $timezoneId, ?int $timezoneOffset): ?DateNavigationService
+	{
+		$service = DateNavigationService::createForClient($chat, $timezoneId, $timezoneOffset);
+
+		if ($service === null)
+		{
+			$this->addError(new DateNavigationError(DateNavigationError::WRONG_TIMEZONE));
+		}
+
+		return $service;
 	}
 
 	private function checkAvailability(): bool

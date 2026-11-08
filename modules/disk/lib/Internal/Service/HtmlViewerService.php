@@ -20,6 +20,11 @@ use Bitrix\Main\SystemException;
  * headers (a sandbox Content-Security-Policy) and the sandboxed iframe on the client. This is a
  * deliberate departure from the markdown path, which sanitizes via CBXSanitizer.
  *
+ * When the viewer is enabled a served document may load external https resources and run external
+ * scripts making network requests: the CSP is deliberately permissive there. Isolation no longer rests
+ * on closing those channels but on the sandbox opaque origin (allow-scripts without allow-same-origin),
+ * which keeps the document off the portal session.
+ *
  * What is served is kept in step with what the viewer opens: HtmlViewerPolicy decides both, so the
  * endpoint never hands out a non-html file as text/html.
  *
@@ -31,18 +36,6 @@ use Bitrix\Main\SystemException;
  */
 class HtmlViewerService
 {
-	// Google Fonts is the only external origin a document may reach, split across the two directives it
-	// needs. Every other network channel is closed — no script host, no image host, connect-src 'none' —
-	// so a script inside the document has nothing to carry content out with. Script hosts are absent by
-	// design: an external script would restore arbitrary code execution and defeat the model (ADR § 6).
-	private const STYLE_HOSTS = [
-		'https://fonts.googleapis.com',
-	];
-
-	private const FONT_HOSTS = [
-		'https://fonts.gstatic.com',
-	];
-
 	// The charset of the stub pages, which are built here, and the fallback for a document that declares
 	// none. The lookup window matches the browser prescan: a document declaring its charset further down
 	// is not read as such by the browser either.
@@ -234,22 +227,23 @@ class HtmlViewerService
 
 	/**
 	 * Builds the sandbox Content-Security-Policy served on every response (success and error stubs alike).
-	 * Portal-configured hosts widen only the passive resource groups (style/font/img); script-src stays
-	 * inline-only so no external code executes.
+	 *
+	 * With the viewer enabled the policy is deliberately permissive: passive resources (style/font/img/media)
+	 * and scripts may reach any https origin, and connect-src is open so external scripts can make network
+	 * requests. This intentionally lifts the former ban on external scripts; isolation rests on the sandbox
+	 * opaque origin, not on closing these channels.
 	 */
 	private function buildContentSecurityPolicy(): string
 	{
-		$extraHosts = Configuration::getHtmlViewerAllowedHosts();
-
 		return implode('; ', [
 			'sandbox allow-scripts',
 			"default-src 'none'",
-			"script-src 'unsafe-inline'",
-			$this->passiveDirective('style-src', ["'unsafe-inline'", ...self::STYLE_HOSTS], $extraHosts),
-			$this->passiveDirective('font-src', ['data:', ...self::FONT_HOSTS], $extraHosts),
-			$this->passiveDirective('img-src', ['data:', 'blob:'], $extraHosts),
-			'media-src data: blob:',
-			"connect-src 'none'",
+			"script-src 'unsafe-inline' 'unsafe-eval' https:",
+			"style-src 'unsafe-inline' https:",
+			'font-src data: https:',
+			'img-src data: blob: https:',
+			'media-src data: blob: https:',
+			'connect-src https:',
 			"worker-src 'none'",
 			"frame-src 'none'",
 			"object-src 'none'",
@@ -258,11 +252,6 @@ class HtmlViewerService
 			"frame-ancestors 'self'",
 			"webrtc 'block'",
 		]);
-	}
-
-	private function passiveDirective(string $name, array $sources, array $extraHosts): string
-	{
-		return implode(' ', [$name, ...$sources, ...$extraHosts]);
 	}
 
 	private function buildErrorPage(string $phraseCode): string

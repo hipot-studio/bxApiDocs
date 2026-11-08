@@ -31,6 +31,11 @@ final class ProjectSettingsValidator
 			$dto->knowledgeSettings,
 			$dto->knowledgeDelete,
 		);
+
+		$this->validateDateRange(
+			$this->parseDate($dto->dateStart),
+			$this->parseDate($dto->dateFinish),
+		);
 	}
 
 	public function validateChatSettings(
@@ -102,6 +107,51 @@ final class ProjectSettingsValidator
 			'MEMBER' => SONET_ROLES_USER,
 			default => null,
 		};
+	}
+
+	/**
+	 * Reads a project date bound. The write mapper reuses this method, so a value accepted here
+	 * always reaches the command as the very same timestamp.
+	 *
+	 * @return int|null null clears the bound
+	 * @throws \RuntimeException when the value cannot be read as a date
+	 */
+	public function parseDate(?string $date): ?int
+	{
+		if ($date === null || $date === '')
+		{
+			return null;
+		}
+
+		// getEditSettings returns both bounds as unix timestamps and reports a missing one as 0.
+		if ($this->isUnixTimestamp($date))
+		{
+			$timestamp = (int)$date;
+
+			return $timestamp === 0 ? null : $timestamp;
+		}
+
+		$timestamp = strtotime($date);
+		if ($timestamp === false)
+		{
+			throw new \RuntimeException(Loc::getMessage('MOBILE_PROJECT_SETTINGS_VALIDATOR_INCORRECT_DATE'));
+		}
+
+		return $timestamp;
+	}
+
+	public function validateDateRange(?int $startTs, ?int $finishTs): void
+	{
+		if ($startTs !== null && $finishTs !== null && $finishTs < $startTs)
+		{
+			throw new \RuntimeException(Loc::getMessage('MOBILE_PROJECT_SETTINGS_VALIDATOR_INCORRECT_DATE'));
+		}
+	}
+
+	private function isUnixTimestamp(string $date): bool
+	{
+		// ctype is not installed on portals, so the digit check goes through preg_match.
+		return preg_match('/^-?[0-9]+$/D', $date) === 1;
 	}
 
 	private function isAllowedMessagesAutoDeleteDelay(int $delay): bool

@@ -39,6 +39,12 @@ class GetAiSiteChangeStatusTool extends BaseTool
 		return $this->schema->build();
 	}
 
+	// Read-only status polling stays available past the tariff and copilot tuning gates.
+	protected function isTariffGateRequired(): bool
+	{
+		return false;
+	}
+
 	protected function executeStructured(int $userId, ...$args): array
 	{
 		$dto = GetAiSiteChangeStatusDto::fromArray($args);

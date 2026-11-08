@@ -1,6 +1,10 @@
 <?php
 
 use Bitrix\Main\Grid\Options;
+use Bitrix\Main\Grid\Panel\Actions;
+use Bitrix\Main\Grid\Panel\DefaultValue;
+use Bitrix\Main\Grid\Panel\Snippet\Button;
+use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\PageNavigation;
@@ -89,6 +93,7 @@ class MainUfListComponent extends ConfigComponent
 		])->fetchAll();
 		$this->getPageNavigation()->setRecordCount(UserFieldTable::getCount($filter));
 
+		$this->arResult['moduleId'] = $this->moduleId;
 		$this->arResult['grid'] = $this->prepareGrid($data);
 
 		$this->includeComponentTemplate();
@@ -129,8 +134,174 @@ class MainUfListComponent extends ConfigComponent
 		return $this->pageNavigation;
 	}
 
+	protected function isMassDeleteTarget(): bool
+	{
+		if ($this->moduleId !== 'crm' || !$this->entityId || !Loader::includeModule('crm'))
+		{
+			return false;
+		}
+
+		$entityTypeId = $this->getCrmEntityTypeId();
+		$targetEntityTypeIds = [];
+		if (defined('CCrmOwnerType::Quote'))
+		{
+			$targetEntityTypeIds[] = \CCrmOwnerType::Quote;
+		}
+		if (defined('CCrmOwnerType::SmartInvoice'))
+		{
+			$targetEntityTypeIds[] = \CCrmOwnerType::SmartInvoice;
+		}
+
+		$excludedEntityTypeIds = [];
+		if (defined('CCrmOwnerType::SmartDocument'))
+		{
+			$excludedEntityTypeIds[] = \CCrmOwnerType::SmartDocument;
+		}
+		if (defined('CCrmOwnerType::SmartB2eDocument'))
+		{
+			$excludedEntityTypeIds[] = \CCrmOwnerType::SmartB2eDocument;
+		}
+
+		return in_array($entityTypeId, $targetEntityTypeIds, true)
+			|| (
+				!in_array($entityTypeId, $excludedEntityTypeIds, true)
+				&& method_exists(\CCrmOwnerType::class, 'isUseDynamicTypeBasedApproach')
+				&& \CCrmOwnerType::isUseDynamicTypeBasedApproach($entityTypeId)
+			)
+		;
+	}
+
+	protected function getCrmEntityTypeId(): int
+	{
+		if (!Loader::includeModule('crm') || !class_exists(\CCrmOwnerType::class))
+		{
+			return 0;
+		}
+
+		return (int)\CCrmOwnerType::ResolveIDByUFEntityID($this->entityId);
+	}
+
+	protected function canDeleteField(array $field, ?bool $canDeleteCrmFields = null): bool
+	{
+		if ($this->moduleId === 'crm')
+		{
+			return ($canDeleteCrmFields ?? $this->canDeleteCrmFieldsByEntityType())
+				&& !$this->isCrmFieldImmutable($field)
+			;
+		}
+
+		try
+		{
+			return $this->access->canDelete((int)$field['ID']);
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
+	protected function isCrmFieldImmutable(array $field): bool
+	{
+		$entityId = (string)($field['ENTITY_ID'] ?? '');
+		$fieldName = (string)($field['FIELD_NAME'] ?? '');
+		if (
+			defined('CCrmInvoice::USER_FIELD_ENTITY_ID')
+			&& $entityId === \CCrmInvoice::USER_FIELD_ENTITY_ID
+			&& method_exists(\CCrmInvoice::class, 'GetUserFieldsReserved')
+		)
+		{
+			return in_array($fieldName, \CCrmInvoice::GetUserFieldsReserved(), true);
+		}
+
+		if (
+			defined('CCrmCompany::USER_FIELD_ENTITY_ID')
+			&& $entityId === \CCrmCompany::USER_FIELD_ENTITY_ID
+			&& method_exists(\CCrmCompany::class, 'getMyCompanyAdditionalUserFields')
+		)
+		{
+			return array_key_exists($fieldName, \CCrmCompany::getMyCompanyAdditionalUserFields());
+		}
+
+		return false;
+	}
+
+	protected function canDeleteCrmFieldsByEntityType(): bool
+	{
+		if ($this->moduleId !== 'crm' || !Loader::includeModule('crm'))
+		{
+			return false;
+		}
+
+		$entityTypeId = $this->getCrmEntityTypeId();
+		if ($entityTypeId <= 0)
+		{
+			return false;
+		}
+
+		try
+		{
+			$userId = (int)$GLOBALS['USER']->GetID();
+			$userPermissions = \Bitrix\Crm\Service\Container::getInstance()->getUserPermissions($userId);
+			$scope = \Bitrix\Crm\Service\UserPermissions\ConfigurationScope::ofEntityType($entityTypeId);
+
+			return $userPermissions->configuration()->canDeleteFields(
+				\Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite::UserFieldAccess,
+				$scope
+			);
+		}
+		catch (\Throwable)
+		{
+			return false;
+		}
+	}
+
+	protected function buildGridActions(): array
+	{
+		$deleteButton = new Button();
+		$deleteButton
+			->setClass(DefaultValue::REMOVE_BUTTON_CLASS)
+			->setId($this->getGridId() . '_delete_button')
+			->setText(Loc::getMessage('MAIN_FIELD_CONFIG_LIST_ACTION_PANEL_DELETE') ?? '')
+			->setTitle(Loc::getMessage('MAIN_FIELD_CONFIG_LIST_ACTION_PANEL_DELETE') ?? '')
+		;
+
+		$onchange = new Onchange();
+		foreach ($this->getMultipleDeleteAction() as $action)
+		{
+			$onchange->addAction($action);
+		}
+		$deleteButton->setOnchange($onchange);
+
+		return [
+			'GROUPS' => [
+				[
+					'ITEMS' => [
+						$deleteButton->toArray(),
+					],
+				],
+			],
+		];
+	}
+
+	protected function getMultipleDeleteAction(): array
+	{
+		return [
+			[
+				'ACTION' => Actions::CALLBACK,
+				'DATA' => [
+					[
+						'JS' => 'BX.Main.UserFieldConfigList.Instance?.showDeleteConfirmation();',
+					],
+				],
+			],
+		];
+	}
+
 	protected function prepareGrid(array $fields): array
 	{
+		$isMassDeleteTarget = $this->isMassDeleteTarget();
+		$canDeleteCrmFields = $isMassDeleteTarget ? $this->canDeleteCrmFieldsByEntityType() : null;
+		$hasDeletableRows = false;
 		$grid = [
 			'GRID_ID' => $this->getGridId(),
 		];
@@ -139,11 +310,18 @@ class MainUfListComponent extends ConfigComponent
 		{
 			foreach($fields as $field)
 			{
+				$canDelete = !$isMassDeleteTarget || $this->canDeleteField($field, $canDeleteCrmFields);
 				$grid['ROWS'][] = [
 					'id' => $field['ID'],
 					'data' => $field,
 					'columns' => $this->getFieldColumns($field),
+					'editable' => $canDelete,
 				];
+
+				if($isMassDeleteTarget && $canDelete)
+				{
+					$hasDeletableRows = true;
+				}
 			}
 		}
 
@@ -160,9 +338,14 @@ class MainUfListComponent extends ConfigComponent
 		$grid['AJAX_ID'] = \CAjax::GetComponentID('bitrix:main.ui.grid', '', '');
 		$grid['SHOW_PAGESIZE'] = true;
 		$grid['PAGE_SIZES'] = [['NAME' => '10', 'VALUE' => '10'], ['NAME' => '20', 'VALUE' => '20'], ['NAME' => '50', 'VALUE' => '50']];
-		$grid['SHOW_ROW_CHECKBOXES'] = false;
-		$grid['SHOW_CHECK_ALL_CHECKBOXES'] = false;
-		$grid['SHOW_ACTION_PANEL'] = false;
+		$grid['SHOW_ROW_CHECKBOXES'] = $isMassDeleteTarget && $hasDeletableRows;
+		$grid['SHOW_CHECK_ALL_CHECKBOXES'] = $isMassDeleteTarget && $hasDeletableRows;
+		$grid['SHOW_SELECTED_COUNTER'] = $isMassDeleteTarget && $hasDeletableRows;
+		$grid['SHOW_ACTION_PANEL'] = $isMassDeleteTarget && $hasDeletableRows;
+		if($isMassDeleteTarget && $hasDeletableRows)
+		{
+			$grid['ACTION_PANEL'] = $this->buildGridActions();
+		}
 
 		return $grid;
 	}

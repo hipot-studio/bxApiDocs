@@ -6,10 +6,10 @@ use Bitrix\Crm\Activity\Provider\OpenLine;
 use Bitrix\Crm\Integration\OpenLineManager;
 use Bitrix\Crm\Service\Broker\User;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Dto\ActivityContext;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\DateTimeFormatter;
+use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\ManagerListPreparer;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\MessageProvider;
 use Bitrix\Crm\Service\Timeline\AiReportDrawer\Support\ResponsibleDataProvider;
-use Bitrix\Main\Type\Collection;
-use Bitrix\Main\Type\DateTime;
 
 final class OpenLinePresentationBuilder implements ActivityPresentationBuilderInterface
 {
@@ -43,7 +43,7 @@ final class OpenLinePresentationBuilder implements ActivityPresentationBuilderIn
 					$this->getOpenLinesClientName($context->activity),
 					$clientData,
 				),
-				'managers' => $this->prepareOpenLinesSubtitleManagers(
+				'managers' => ManagerListPreparer::prepare(
 					$this->getOpenLinesManagers($context->activity),
 				),
 			],
@@ -112,52 +112,6 @@ final class OpenLinePresentationBuilder implements ActivityPresentationBuilderIn
 			'clientDetailsUrl' => null,
 			'isCrmContact' => false,
 		];
-	}
-
-	private function prepareOpenLinesSubtitleManagers(array $managers): array
-	{
-		$managersById = [];
-
-		foreach ($managers as $manager)
-		{
-			$managerId = (int)($manager['responsibleId'] ?? 0);
-			if ($managerId <= 0)
-			{
-				continue;
-			}
-
-			$workedAtTs = (int)($manager['workedAtTs'] ?? 0);
-			if (
-				isset($managersById[$managerId])
-				&& (int)($managersById[$managerId]['workedAtTs'] ?? 0) >= $workedAtTs
-			)
-			{
-				continue;
-			}
-
-			$managersById[$managerId] = [
-				'responsibleId' => $managerId,
-				'responsibleName' => $manager['responsibleName'] ?? '',
-				'responsibleAvatarUrl' => $manager['responsibleAvatarUrl'] ?? '',
-				'responsibleProfileUrl' => $manager['responsibleProfileUrl'] ?? '',
-				'rating' => $manager['rating'] ?? 0,
-				'workedAtTs' => $workedAtTs,
-			];
-		}
-
-		Collection::sortByColumn($managersById, [
-			'workedAtTs' => SORT_DESC,
-			'responsibleName' => SORT_ASC,
-		]);
-
-		return array_map(
-			static function(array $manager): array {
-				unset($manager['workedAtTs']);
-
-				return $manager;
-			},
-			$managersById,
-		);
 	}
 
 	private function getOpenLinesSessionData(array $activity): array
@@ -286,7 +240,26 @@ final class OpenLinePresentationBuilder implements ActivityPresentationBuilderIn
 
 	private function extractTimestamp(mixed $value): ?int
 	{
-		return $this->normalizeDateTime($value)?->getTimestamp();
+		if ($value instanceof \Bitrix\Main\Type\DateTime)
+		{
+			return $value->getTimestamp();
+		}
+
+		if (!is_string($value) || $value === '')
+		{
+			return null;
+		}
+
+		try
+		{
+			return (new \Bitrix\Main\Type\DateTime($value, \Bitrix\Main\Type\DateTime::getFormat()))
+				->getTimestamp()
+			;
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
 	}
 
 	private function getOpenLinesGuestName(): ?string
@@ -306,16 +279,12 @@ final class OpenLinePresentationBuilder implements ActivityPresentationBuilderIn
 
 	private function prepareOpenLinesDateTime(mixed $dateTimeValue, int $currentUserId): string
 	{
-		$dateTime = $this->normalizeDateTime($dateTimeValue);
-
-		return $dateTime ? $this->formatPopupDateTime($dateTime, $currentUserId) : '-';
+		return DateTimeFormatter::format($dateTimeValue, $currentUserId) ?? '-';
 	}
 
 	private function prepareOpenLinesEndDateTime(array $activity, int $currentUserId): string
 	{
-		$endTime = $this->normalizeDateTime($activity['END_TIME'] ?? null);
-
-		return $endTime ? $this->formatPopupDateTime($endTime, $currentUserId) : '-';
+		return DateTimeFormatter::format($activity['END_TIME'] ?? null, $currentUserId) ?? '-';
 	}
 
 	private function prepareOpenLinesChatTitle(string $userCode): string
@@ -334,47 +303,6 @@ final class OpenLinePresentationBuilder implements ActivityPresentationBuilderIn
 		}
 
 		return $sourceList[$connectorType] ?? ($sourceList['livechat'] ?? '-');
-	}
-
-	private function normalizeDateTime(mixed $value): ?DateTime
-	{
-		if ($value instanceof DateTime)
-		{
-			return $value;
-		}
-
-		if (!is_string($value) || $value === '')
-		{
-			return null;
-		}
-
-		try
-		{
-			return new DateTime($value, DateTime::getFormat());
-		}
-		catch (\Throwable)
-		{
-			return null;
-		}
-	}
-
-	private function formatPopupDateTime(DateTime $dateTime, int $currentUserId): string
-	{
-		$dateTime = $currentUserId > 0
-			? \CCrmDateTimeHelper::getUserTime($dateTime, $currentUserId)
-			: $dateTime->toUserTime()
-		;
-
-		$timestamp = $dateTime->getTimestamp();
-		$culture = \Bitrix\Main\Application::getInstance()->getContext()->getCulture();
-		$longDateFormat = $culture?->getLongDateFormat() ?? 'j F';
-		$shortTimeFormat = $culture?->getShortTimeFormat() ?? 'H:i';
-
-		return sprintf(
-			'%s, %s',
-			FormatDate($longDateFormat, $timestamp),
-			FormatDate($shortTimeFormat, $timestamp),
-		);
 	}
 
 	private function getOpenLinesDialogId(array $activity): ?string

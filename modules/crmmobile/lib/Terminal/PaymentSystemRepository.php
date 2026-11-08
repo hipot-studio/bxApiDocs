@@ -6,7 +6,6 @@ use Bitrix\Sale\Payment;
 use Bitrix\Crm\Terminal\Config\TerminalPaysystemManager;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
-use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Type;
 use Bitrix\Sale\Internals\PaySystemRestHandlersTable;
 use Bitrix\Sale\PaySystem;
@@ -238,7 +237,7 @@ class PaymentSystemRepository
 		}
 
 		$zone = null;
-		if (ModuleManager::isModuleInstalled('bitrix24'))
+		if (Loader::includeModule('bitrix24'))
 		{
 			$zone = \CBitrix24::getPortalZone();
 		}

@@ -11,14 +11,24 @@ use CBPArgumentException;
 
 class SaveCommand extends AbstractCommand
 {
-	public function __construct(public readonly SaveCommandDto $data)
+	/**
+	 * @param ?\Closure $readableExpressionContextResolver How the readable form of an expression is resolved
+	 *     for the saved node, handed on to the handler as it stands - the contract, and what passing none of
+	 *     it costs, are described at {@see SaveCommandHandler::__construct()}.
+	 */
+	public function __construct(
+		public readonly SaveCommandDto $data,
+		private readonly ?\Closure $readableExpressionContextResolver = null,
+	)
 	{}
 
 	protected function execute(): SaveCommandResult
 	{
 		try
 		{
-			$result = (new SaveCommandHandler())($this);
+			$result = (new SaveCommandHandler(
+				readableExpressionContextResolver: $this->readableExpressionContextResolver,
+			))($this);
 		}
 		catch (LoaderException | CBPArgumentException $e)
 		{

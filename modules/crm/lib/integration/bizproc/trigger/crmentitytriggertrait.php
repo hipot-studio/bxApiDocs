@@ -142,8 +142,8 @@ trait CrmEntityTriggerTrait
 			return Result::createError(new Error('entity type mismatch'));
 		}
 
-		$expectedCategoryId = CategoryProperty::normalizeId($this->getActivityProperty(self::CATEGORY_ID_PROPERTY));
-		if ($expectedCategoryId === null)
+		$expectedCategoryIds = CategoryProperty::normalizeIds($this->getActivityProperty(self::CATEGORY_ID_PROPERTY));
+		if ($expectedCategoryIds === [])
 		{
 			return Result::createOk();
 		}
@@ -153,7 +153,7 @@ trait CrmEntityTriggerTrait
 		);
 
 		return
-			$expectedCategoryId === $actualCategoryId
+			in_array($actualCategoryId, $expectedCategoryIds, true)
 				? Result::createOk()
 				: Result::createError(new Error('category mismatch'))
 		;
@@ -172,6 +172,33 @@ trait CrmEntityTriggerTrait
 			($categoryId = CategoryProperty::normalizeId($this->getActivityProperty(self::CATEGORY_ID_PROPERTY))) !== null
 				? (string)$categoryId
 				: null,
+		);
+	}
+
+	protected function getSections(): array
+	{
+		if (!CategoryProperty::supportsMultipleCategories())
+		{
+			return parent::getSections();
+		}
+
+		$entityTypeId = CategoryProperty::resolveEntityTypeId($this->getActivityProperty('Document'));
+		if ($entityTypeId <= 0)
+		{
+			return [];
+		}
+
+		$categoryIds = CategoryProperty::normalizeIds($this->getActivityProperty(self::CATEGORY_ID_PROPERTY));
+		if ($categoryIds === [])
+		{
+			return [$this->getSection()];
+		}
+
+		$sectionId = static::getModuleId() . '|' . \CCrmOwnerType::ResolveName($entityTypeId);
+
+		return array_map(
+			static fn(int $categoryId): Section => new Section($sectionId, (string)$categoryId),
+			$categoryIds,
 		);
 	}
 
@@ -333,6 +360,21 @@ trait CrmEntityTriggerTrait
 					ActivityGroup::PAYMENT->value,
 				],
 			];
+		}
+
+		foreach ($presets as $index => $preset)
+		{
+			$document = static::resolveDocumentTypeFromDocument($preset['PROPERTIES']['Document'] ?? null);
+			if ($document === null)
+			{
+				continue;
+			}
+
+			$presets[$index]['PROPERTIES'] = static::preparePropertiesDialogValues(
+				$document,
+				$preset['PROPERTIES'] ?? [],
+				[],
+			);
 		}
 
 		return $presets;

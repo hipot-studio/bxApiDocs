@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Rest\V3\Exception;
 
 use Bitrix\Main\Localization\Loc;
-use Bitrix\Rest\Internal\Exception\VibePlus\FeatureNotAvailableOnCurrentPlanExceptionInterface;
+use Bitrix\Rest\Internal\Exception\Payment\FeatureNotAvailableOnCurrentPlanExceptionInterface;
 
 class FeatureNotAvailableOnCurrentPlanException extends RestException implements
 	FeatureNotAvailableOnCurrentPlanExceptionInterface,

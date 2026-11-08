@@ -2,8 +2,10 @@
 
 namespace Bitrix\Intranet\Settings;
 
+use Bitrix\Bitrix24\Config\Feature\ClosingDocumentsFlag;
 use Bitrix\Bitrix24\Integration\Network\ProfileService;
 use Bitrix\Bitrix24\License;
+use Bitrix\Bitrix24\ClosingDocuments\Access as ClosingDocumentsAccess;
 use Bitrix\Bitrix24\Portal\Remove\Verification\VerificationFactory;
 use Bitrix\Intranet\CurrentUser;
 use Bitrix\Intranet\Integration\Market\Label;
@@ -18,6 +20,7 @@ use Bitrix\Intranet\Settings\Controls\Text;
 use Bitrix\Intranet\Settings\Search\SearchEngine;
 use Bitrix\Intranet\User;
 use Bitrix\Bitrix24\Portal;
+use Bitrix\Main;
 use Bitrix\Main\Application;
 use Bitrix\Main\Error;
 use Bitrix\Main\ErrorCollection;
@@ -40,7 +43,7 @@ class ConfigurationSettings extends AbstractSettings
 	public const TYPE = 'configuration';
 
 	private array $locationSourceRepository = [];
-	private const YANDEX_API_URL = 'https://yandex.ru/dev/commercial/doc/ru/concepts/jsapi-geocoder#jsapi-geocoder';
+	private const YANDEX_API_URL = 'https://yandex.ru/maps-api/console';
 	private const GOOGLE_API_KEY = 'https://developers.google.com/maps/documentation/javascript/get-api-key';
 	private const TIME_FORMAT_VALUE_24 = 24;
 	private const TIME_FORMAT_VALUE_12 = 12;
@@ -101,6 +104,7 @@ class ConfigurationSettings extends AbstractSettings
 		if ($this->isBitrix24)
 		{
 			$this->setAllCanBuyTariff();
+			$this->setClosingDocumentsAudience();
 			$this->setDefaultEmailFrom();
 		}
 
@@ -259,6 +263,21 @@ class ConfigurationSettings extends AbstractSettings
 				$this->data["allCanBuyTariff"]
 			);
 		}
+	}
+
+	private function setClosingDocumentsAudience(): void
+	{
+		if (!isset($this->data['closingDocumentsAllEmployees']))
+		{
+			return;
+		}
+
+		ClosingDocumentsAccess::saveAudience(
+			$this->data['closingDocumentsAllEmployees'] === 'Y',
+			is_array($this->data['closingDocumentsAudience'] ?? null)
+				? $this->data['closingDocumentsAudience']
+				: [],
+		);
 	}
 
 	private function setDefaultEmailFrom(): void
@@ -420,11 +439,41 @@ class ConfigurationSettings extends AbstractSettings
 			$data["allCanBuyTariff"] = new Switcher(
 				'settings-configuration-field-allCanBuyTariff',
 				'allCanBuyTariff',
-				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALL_CAN_BUY_TARIFF'),
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALL_CAN_BUY_TARIFF_MSGVER_1'),
 				$this->getAllCanBuyTariff()['value'],
-				['on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALL_CAN_BUY_TARIFF_CLICK_ON')],
+				['on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALL_CAN_BUY_TARIFF_CLICK_ON_MSGVER_1')],
 				isEnable: $this->getAllCanBuyTariff()['isEnable'],
 			);
+
+			if (
+				Main\Config\Feature::isEnabled(ClosingDocumentsFlag::class)
+				&& License::getCurrent()->isCIS()
+			)
+			{
+				$closingDocumentsAudience = ClosingDocumentsAccess::getAudience();
+				$data['sectionClosingDocuments'] = new Section(
+					'settings-configuration-section-closing-documents',
+					Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CLOSING_DOCUMENTS'),
+					'ui-icon-set --file-2',
+					false,
+				);
+				$data['closingDocumentsAllEmployees'] = new Switcher(
+					'settings-configuration-field-closingDocumentsAllEmployees',
+					'closingDocumentsAllEmployees',
+					Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_CLOSING_DOCUMENTS_ALL_EMPLOYEES'),
+					$closingDocumentsAudience['allEmployees'] ? 'Y' : 'N',
+					[
+						'on' => Loc::getMessage('INTRANET_SETTINGS_CLOSING_DOCUMENTS_DESCRIPTION_ALL'),
+						'off' => Loc::getMessage('INTRANET_SETTINGS_CLOSING_DOCUMENTS_DESCRIPTION_AUDIENCE'),
+					],
+				);
+				$data['closingDocumentsAudience'] = new Selector(
+					'settings-configuration-field-closingDocumentsAudience',
+					'closingDocumentsAudience[]',
+					Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_CLOSING_DOCUMENTS_AUDIENCE'),
+					ClosingDocumentsAccess::getAccessCodes($closingDocumentsAudience),
+				);
+			}
 		}
 
 		//TODO: commented on issue task#488392
@@ -925,6 +974,7 @@ class ConfigurationSettings extends AbstractSettings
 			'settings-configuration-section-letters' => Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_MAILS'),
 			'settings-configuration-section-maps_in_product' => Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CONFIGURATION_MAPS_PRODUCT'),
 			'settings-configuration-section-other' => Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_ADDITIONAL_SETTINGS'),
+			'settings-configuration-section-closing-documents' => Loc::getMessage('INTRANET_SETTINGS_SECTION_TITLE_CLOSING_DOCUMENTS'),
 		];
 
 		if (!empty($this->getMapsProviderCRM()))
@@ -954,7 +1004,9 @@ class ConfigurationSettings extends AbstractSettings
 				'allowUserInstallApplication' => Label::isRenamedMarket()
 					? Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_ALL_USER_INSTALL_APPLICATION_MSGVER_1')
 					: Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_ALL_USER_INSTALL_APPLICATION'),
-				'allCanBuyTariff' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALL_CAN_BUY_TARIFF'),
+				'allCanBuyTariff' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALL_CAN_BUY_TARIFF_MSGVER_1'),
+				'closingDocumentsAllEmployees' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_CLOSING_DOCUMENTS_ALL_EMPLOYEES'),
+				'closingDocumentsAudience' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_CLOSING_DOCUMENTS_AUDIENCE'),
 				//TODO: commented on issue task#488392
 				//'collectGeoData' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_COLLECT_GEO_DATA'),
 			]);

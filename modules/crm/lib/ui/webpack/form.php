@@ -4,6 +4,7 @@ namespace Bitrix\Crm\UI\Webpack;
 
 use Bitrix\Main\ModuleManager;
 use Bitrix\Main\Loader;
+use Bitrix\Main\Result;
 use Bitrix\Crm\UI\Webpack;
 use Bitrix\Crm\WebForm;
 
@@ -237,6 +238,10 @@ class Form extends Webpack\Base
 			$this->getId(),
 			$options['sec']
 		]);
+		if (isset($options['telemetrySign']) && is_string($options['telemetrySign']))
+		{
+			$this->tagAttributes['data-b24-form-telemetry-sign'] = $options['telemetrySign'];
+		}
 
 		return $this;
 	}
@@ -249,5 +254,30 @@ class Form extends Webpack\Base
 		$result = parent::build();
 		WebForm\Form::cleanCacheByTag($this->getId());
 		return $result;
+	}
+
+	/**
+	 * Removes the package of the form: its file, then the registry entry pointing at it.
+	 * Both form delete paths call it. A form that was never built has no entry, which is not a failure.
+	 */
+	public function delete(): Result
+	{
+		$primary = ['ENTITY_TYPE' => static::$type, 'ENTITY_ID' => $this->getId()];
+		$row = Internals\WebpackTable::getRow(['select' => ['FILE_ID'], 'filter' => $primary]);
+		if ($row === null)
+		{
+			return new Result();
+		}
+
+		// Through the file storage rather than off the disk: content shared with other files is
+		// reference-counted, so the content, and while referenced even the b_file row, may stay.
+		// The file goes first, so a failed removal of the entry leaves it naming the file.
+		$fileId = (int)($row['FILE_ID'] ?? 0);
+		if ($fileId > 0)
+		{
+			\CFile::Delete($fileId);
+		}
+
+		return Internals\WebpackTable::delete($primary);
 	}
 }

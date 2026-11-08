@@ -8,6 +8,7 @@ use Bitrix\Main\ORM\Objectify\Values;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Main\UserConsent\Internals;
 use Bitrix\Main\UserConsent\Consent;
+use Bitrix\Main\UserConsent\ConsentUrl;
 use Bitrix\Main\UI\Filter\Options as FilterOptions;
 
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true)
@@ -317,7 +318,7 @@ class MainUserConsentConsentListComponent extends CBitrixComponent
 		$this->includeComponentTemplate();
 	}
 
-	private function prepareRowsActions()
+	protected function prepareRowsActions()
 	{
 		foreach ($this->arResult['ROWS'] as $index => $data)
 		{
@@ -330,9 +331,16 @@ class MainUserConsentConsentListComponent extends CBitrixComponent
 
 			if ($data['ORIGIN'] && $data['ORIGIN_PATH'])
 			{
-				$data['ORIGIN'] = '<a href="'.
-					htmlspecialcharsbx(CUtil::JSEscape($data['ORIGIN_PATH'])).
-					'" target="_blank">' .htmlspecialcharsbx($data['ORIGIN']) .'</a>';
+				if (ConsentUrl::isAllowed($data['ORIGIN_PATH']))
+				{
+					$data['ORIGIN'] = '<a href="'.
+						htmlspecialcharsbx(CUtil::JSEscape($data['ORIGIN_PATH'])).
+						'" target="_blank">' .htmlspecialcharsbx($data['ORIGIN']) .'</a>';
+				}
+				else
+				{
+					$data['ORIGIN'] = htmlspecialcharsbx($data['ORIGIN']);
+				}
 			}
 			else
 			{
@@ -352,10 +360,18 @@ class MainUserConsentConsentListComponent extends CBitrixComponent
 			if ($data['URL'])
 			{
 				$styleString = 'max-width: 400px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;';
-				$data['URL'] = '<div style="' . $styleString . '"><a href="' .
-					htmlspecialcharsbx(CUtil::JSEscape($data['URL'])) . '" target="_blank">'
-					.htmlspecialcharsbx($data['URL'])
-					.'</a></div>';
+				if (ConsentUrl::isAllowed($data['URL']))
+				{
+					$urlContent = '<a href="' .
+						htmlspecialcharsbx(CUtil::JSEscape($data['URL'])) . '" target="_blank">'
+						.htmlspecialcharsbx($data['URL'])
+						.'</a>';
+				}
+				else
+				{
+					$urlContent = htmlspecialcharsbx($data['URL']);
+				}
+				$data['URL'] = '<div style="' . $styleString . '">' . $urlContent . '</div>';
 			}
 
 			$actions = array();

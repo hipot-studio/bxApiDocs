@@ -12,12 +12,19 @@ use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\UserPermissions;
+use Bitrix\Crm\Settings\Mode;
 use Bitrix\CrmMobile\Controller\Action;
 use Bitrix\CrmMobile\CustomSections;
 use Bitrix\CrmMobile\Entity\FactoryProvider;
 use Bitrix\CrmMobile\Kanban\Entity;
 use Bitrix\CrmMobile\Kanban\GridId;
+use Bitrix\CrmMobile\Kanban\View\ItemViewType;
+use Bitrix\CrmMobile\Kanban\View\ViewTypeStorage;
+use Bitrix\CrmMobile\Public\Feature\CompactListItem;
 use Bitrix\ImOpenlines\Security\Permissions;
+use Bitrix\Main\Config\Feature;
+use Bitrix\Main\Event;
+use Bitrix\Main\EventResult;
 use Bitrix\Main\Loader;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Crm\Integration\Im;
@@ -41,6 +48,7 @@ class GetTabsAction extends Action
 
 		return [
 			'tabs' => $this->getTabs($userPermissions, $customSectionId),
+			'crmMode' => [Mode::CLASSIC => 'CLASSIC', Mode::SIMPLE => 'SIMPLE'][Mode::getCurrent()],
 			'user' => \CCrmViewHelper::getUserInfo(),
 			'restrictions' => [
 				'crmMode' => !\Bitrix\CrmMobile\Entity\RestrictionManager::isEntityRestricted(\CCrmOwnerType::Deal)
@@ -63,6 +71,7 @@ class GetTabsAction extends Action
 		$result = [];
 		$searchRestriction = RestrictionManager::getSearchLimitRestriction();
 		$infoHelperId = $searchRestriction->getMobileInfoHelperId();
+		$isCompactViewAvailable = Feature::isEnabled(CompactListItem::class);
 
 		foreach (FactoryProvider::getAvailableFactories() as $factory)
 		{
@@ -142,6 +151,8 @@ class GetTabsAction extends Action
 					'presetId' => $this->getCurrentFilterPresetId($filterOptions),
 					'defaultFilterId' => $this->getDefaultFilterId($filterOptions),
 					'sortType' => $this->getSortType($entityTypeName, $categoryId),
+					'compactViewAvailable' => $isCompactViewAvailable,
+					'viewType' => $this->getViewType($isCompactViewAvailable, $entityTypeId),
 					'smartActivitySettings' => $this->getSmartActivitySettings($factory, $permissions),
 					'reminders' => (new TodoPingSettingsProvider($entityTypeId, (int)$categoryId))->fetchSelectedValues(),
 				],
@@ -155,10 +166,48 @@ class GetTabsAction extends Action
 				],
 			];
 		}
+
+		// External tabs never reach TabSorter: it sorts by entity type id, while their id is an
+		// arbitrary string. They keep the order the handlers returned and follow the entity tabs.
+		$externalTabs = $this->getExternalTabs($result, $userPermissions, $customSectionId);
+
 		CustomSections\TabSorter::sort($result, $customSectionId);
 		$this->prepareActiveTab($result);
 
-		return $result;
+		return array_merge($result, $externalTabs);
+	}
+
+	private function getExternalTabs(array $tabs, UserPermissions $userPermissions, ?int $customSectionId): array
+	{
+		$event = new Event('crmmobile', 'onGetTabs', [
+			'tabs' => $tabs,
+			'customSectionId' => $customSectionId,
+			'userPermissions' => $userPermissions,
+		]);
+		$event->send();
+
+		$externalTabs = [];
+		foreach ($event->getResults() as $eventResult)
+		{
+			if ($eventResult->getType() !== EventResult::SUCCESS)
+			{
+				continue;
+			}
+
+			$parameters = $eventResult->getParameters();
+			$resultTabs = is_array($parameters) ? ($parameters['tabs'] ?? null) : null;
+			if (!is_array($resultTabs))
+			{
+				continue;
+			}
+
+			foreach ($resultTabs as $tab)
+			{
+				$externalTabs[] = $tab;
+			}
+		}
+
+		return $externalTabs;
 	}
 
 	private function hasRegisterTelegramConnector(): bool
@@ -252,6 +301,16 @@ class GetTabsAction extends Action
 		}
 
 		return null;
+	}
+
+	private function getViewType(bool $isCompactViewAvailable, int $entityTypeId): string
+	{
+		if (!$isCompactViewAvailable)
+		{
+			return ItemViewType::Default->value;
+		}
+
+		return ViewTypeStorage::get($entityTypeId)->value;
 	}
 
 	private function getSmartActivitySettings(Factory $factory, array $permissions = []): ?array
@@ -369,7 +428,7 @@ class GetTabsAction extends Action
 	{
 		foreach ($tabs as &$tab)
 		{
-			if (!$tab['selectable'])
+			if (empty($tab['selectable']))
 			{
 				continue;
 			}

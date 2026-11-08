@@ -77,14 +77,13 @@ class UserDictionary
 	 */
 	private function getAvailableUsersId(array $filterUsersId): array
 	{
-		$userList = UserTable::getList([
-			'select' => ['ID'],
-			'filter' => [
-				'=ACTIVE' => 'Y',
-				'=IS_REAL_USER' => 'Y',
-				'@ID' => array_values(array_unique($filterUsersId)),
-			],
-		]);
+		$userList = UserTable::query()
+			->setSelect(['ID'])
+			->where('ACTIVE', 'Y')
+			->where('REAL_USER', 'expr', true)
+			->whereIn('ID', array_values(array_unique($filterUsersId)))
+			->exec()
+		;
 
 		$result = [];
 		$isCheckIntranet = Loader::includeModule('intranet');

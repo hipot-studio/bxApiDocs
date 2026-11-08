@@ -19,6 +19,7 @@ use Bitrix\Calendar\Synchronization\Internal\Exception\ApiException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\DtoValidationException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Exception;
 use Bitrix\Calendar\Synchronization\Internal\Exception\LogicException;
+use Bitrix\Calendar\Synchronization\Internal\Exception\NoLogSynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Repository\RepositoryReadException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\SynchronizerException;
 use Bitrix\Calendar\Synchronization\Internal\Exception\Vendor\NotAuthorizedException;
@@ -30,6 +31,7 @@ use Bitrix\Calendar\Synchronization\Internal\Repository\EventConnectionRepositor
 use Bitrix\Calendar\Synchronization\Internal\Repository\SectionConnectionRepository;
 use Bitrix\Calendar\Synchronization\Internal\Service\ConnectionManager;
 use Bitrix\Calendar\Synchronization\Internal\Service\EventSynchronizerInterface;
+use Bitrix\Calendar\Synchronization\Internal\Service\Lock\ExportLock;
 use Bitrix\Calendar\Synchronization\Internal\Service\Logger\RequestLogger;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Common\EventSynchronizerTrait;
 use Bitrix\Calendar\Synchronization\Internal\Service\Vendor\Office365\Dto\EventListResponse;
@@ -54,6 +56,7 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 		private readonly EventConnectionRepository $eventConnectionRepository,
 		private readonly EventImportProcessor $importProcessor,
 		private readonly EventRepository $eventRepository,
+		private readonly ExportLock $exportLock,
 		ConnectionProvider $connectionProvider,
 		ConnectionManager $connectionManager,
 		SectionConnectionRepository $sectionConnectionRepository,
@@ -94,7 +97,7 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 
 		if (!$sectionConnection)
 		{
-			throw new SynchronizerException(
+			throw new NoLogSynchronizerException(
 				sprintf(
 					'Section connection for section "%s" not found (event: "%s")',
 					$event->getSection()->getId(),
@@ -113,6 +116,26 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 			return;
 		}
 
+		$this->exportLock->withEventLock(
+			(int)$connection->getId(),
+			$event,
+			fn() => $this->exportEventConnection($event, $connection, $sectionConnection, $gateway),
+		);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws PersistenceException
+	 * @throws RepositoryReadException
+	 * @throws SynchronizerException
+	 */
+	private function exportEventConnection(
+		Event $event,
+		Connection $connection,
+		SectionConnection $sectionConnection,
+		Office365EventGateway $gateway,
+	): void
+	{
 		$eventConnection = $this->getEventConnection($event->getId(), $connection->getId());
 
 		if ($eventConnection)
@@ -448,6 +471,27 @@ class Office365EventSynchronizer extends AbstractOffice365Synchronizer implement
 			return;
 		}
 
+		$this->exportLock->withEventLock(
+			(int)$connection->getId(),
+			$event,
+			fn() => $this->exportInstanceConnection($event, $connection, $sectionConnection, $gateway),
+		);
+	}
+
+	/**
+	 * @throws ArgumentException
+	 * @throws PersistenceException
+	 * @throws RepositoryReadException
+	 * @throws SynchronizerException
+	 * @throws LogicException
+	 */
+	private function exportInstanceConnection(
+		Event $event,
+		Connection $connection,
+		SectionConnection $sectionConnection,
+		Office365EventGateway $gateway,
+	): void
+	{
 		$eventConnection = $this->getEventConnection($event->getId(), $connection->getId());
 
 		if ($eventConnection && $eventConnection->getVendorEventId())

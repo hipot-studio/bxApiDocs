@@ -109,6 +109,18 @@ class ItemCategoryUserField
 		ItemCategoryUserFieldTable::deleteByUserFieldName($fieldName, $this->entityTypeId);
 	}
 
+	/**
+	 * Whether user fields of this entity type are scoped to a category.
+	 *
+	 * Only Contact and Company keep per-category user field visibility; for every
+	 * other entity type (Deal, Lead, smart processes) user fields are shared
+	 * across categories.
+	 */
+	public function isCategoryDependent(): bool
+	{
+		return $this->isSupported();
+	}
+
 	public function filter(int $categoryId, array $fields): array
 	{
 		if(!$this->isSupported())

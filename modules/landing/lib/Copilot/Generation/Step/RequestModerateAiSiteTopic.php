@@ -162,6 +162,18 @@ class RequestModerateAiSiteTopic extends RequestSingle
 		return Error::createError(Errors::requestNotAllowedHard)->message;
 	}
 
+	/**
+	 * Machine-readable code of the refusal, same values as Error::createError() puts into its code.
+	 * Service-only: it never gets mixed into resolveUserFacingMessage().
+	 */
+	public static function resolveVerdictCode(ModerationVerdictDto $verdict): string
+	{
+		return $verdict->isSoftBlock()
+			? Errors::requestNotAllowedSoft->name
+			: Errors::requestNotAllowedHard->name
+		;
+	}
+
 	private function resolveVerdict(): ?ModerationVerdictDto
 	{
 		$result = $this->request?->getResult();

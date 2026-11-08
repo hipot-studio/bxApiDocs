@@ -41,6 +41,7 @@ class Message extends BaseController
 			return null;
 		}
 
+		$userId = (int)$this->getCurrentUser()->getId();
 		$triggerMessageId = $message->getParams()
 			->get(Params::COPILOT_TRIGGER_MESSAGE_ID)
 			->getValue()
@@ -56,7 +57,7 @@ class Message extends BaseController
 		$triggerMessage = new \Bitrix\Im\V2\Message($triggerMessageId);
 		if (
 			!$triggerMessage->getMessageId()
-			|| !$triggerMessage->checkAccess($this->getCurrentUser()->getId())->isSuccess()
+			|| !$triggerMessage->checkAccess($userId)->isSuccess()
 		)
 		{
 			$this->addError(new CopilotError(CopilotError::REGENERATE_NOT_AVAILABLE));
@@ -68,7 +69,7 @@ class Message extends BaseController
 			$message->getChat(),
 			$message,
 			$triggerMessage,
-			$this->getCurrentUser()->getId()
+			$userId
 		);
 
 		return ['result' => true];

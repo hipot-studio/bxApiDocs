@@ -10,7 +10,7 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\UI\PageNavigation;
 use Bitrix\Market\Application\Action;
 use Bitrix\Market\Application\License;
-use Bitrix\Market\Application\VibePlusApplicationLimit;
+use Bitrix\Market\Application\ApplicationLimit;
 use Bitrix\Market\Application\Versions;
 use Bitrix\Market\Rest\Actions;
 use Bitrix\Market\Rest\Transport;
@@ -25,6 +25,13 @@ use CRestUtil;
 class Installed extends BaseTemplate
 {
 	private const FILTER_UPDATES = 'updates';
+
+	private bool $toolbarInfoEnabled = false;
+
+	public function enableToolbarInfo(): void
+	{
+		$this->toolbarInfoEnabled = true;
+	}
 
 	public function setResult(bool $isAjax = false)
 	{
@@ -76,9 +83,9 @@ class Installed extends BaseTemplate
 			$this->result['SELECTED_TAG'] = Installed::FILTER_UPDATES;
 		}
 
-		$isVibePlusLimitMode = $this->isVibePlusLimitMode();
-		if ($isVibePlusLimitMode) {
-			$countedApplicationCodes = (new VibePlusApplicationLimit())->getCountedApplicationCodes();
+		$isApplicationLimitMode = $this->isApplicationLimitMode();
+		if ($isApplicationLimitMode) {
+			$countedApplicationCodes = (new ApplicationLimit())->getCountedApplicationCodes();
 			$filter = [
 				'!=STATUS' => AppTable::STATUS_LOCAL,
 				'=INSTALLED' => AppTable::INSTALLED,
@@ -98,7 +105,7 @@ class Installed extends BaseTemplate
 		}
 
 		if (
-			!$isVibePlusLimitMode
+			!$isApplicationLimitMode
 			&& (
 				(isset($this->filter['tag']) && $this->filter['tag'] == Installed::FILTER_UPDATES)
 				|| $isFilterUpdates
@@ -143,7 +150,6 @@ class Installed extends BaseTemplate
 		$publishedApps = [];
 		if (!empty($appCodes)) {
 			$appsBuy = Client::getBuy($appCodes);
-			$this->setAdditionalInfo($appsBuy);
 			if (isset($appsBuy['ITEMS']) && is_array($appsBuy['ITEMS'])) {
 				foreach ($appsBuy['ITEMS'] as $key => $app) {
 					$publishedApps[] = $this->result['APPS'][$key]['CODE'];
@@ -176,10 +182,7 @@ class Installed extends BaseTemplate
 			}
 		}
 
-		if (empty($appCodes)) {
-			$response = Transport::instance()->call(Actions::METHOD_TOTAL_APPS);
-			$this->setAdditionalInfo($response);
-		}
+		$this->applyToolbarInfo();
 
 		$unpublishedApps = array_diff($appCodes, $publishedApps);
 
@@ -212,6 +215,15 @@ class Installed extends BaseTemplate
 		$this->result['APPS'] = array_values($this->result['APPS']);
 	}
 
+	private function applyToolbarInfo(): void
+	{
+		if (!$this->toolbarInfoEnabled) {
+			return;
+		}
+
+		$this->setAdditionalInfo(Transport::instance()->call(Actions::METHOD_TOTAL_APPS));
+	}
+
 	private function setAdditionalInfo($response)
 	{
 		if (is_array($response)) {
@@ -242,7 +254,7 @@ class Installed extends BaseTemplate
 		return $dbApps->getCount();
 	}
 
-	private function isVibePlusLimitMode(): bool
+	private function isApplicationLimitMode(): bool
 	{
 		$request = Context::getCurrent()->getRequest();
 

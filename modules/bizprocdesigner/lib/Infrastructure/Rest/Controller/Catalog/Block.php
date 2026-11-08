@@ -7,8 +7,11 @@ namespace Bitrix\BizprocDesigner\Infrastructure\Rest\Controller\Catalog;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Controller\AbstractAgentRestController;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Dto\BlockTypeDto;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\BlockCatalogUnavailableException;
+use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\BlockContextRejectedException;
+use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\BlockContextResolutionFailedException;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Exception\BlockTypeNotFoundException;
 use Bitrix\BizprocDesigner\Infrastructure\Rest\Request\BlockGetRequest;
+use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\BlockContextRejectionResult;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\BlockDescriptionResult;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Result\BlockSettingsResult;
 use Bitrix\BizprocDesigner\Internal\Integration\AiAssistant\Service\AgentBlockCatalogService;
@@ -63,8 +66,14 @@ final class Block extends AbstractAgentRestController
 	 * Returns one block of the catalog: the same resource as a catalog entry, with its settings
 	 * schema and the rest of the detail filled in.
 	 *
+	 * A context of setting values narrows what the block is described with, so a map whose keys the block
+	 * resolves from its own values answers with them. The context never chooses the document type: the
+	 * catalog is read for the type of the template the token is bound to, exactly as without one.
+	 *
 	 * @restMethod bizprocdesigner.catalog.block.get
 	 * @throws AccessDeniedException
+	 * @throws BlockContextRejectedException
+	 * @throws BlockContextResolutionFailedException
 	 * @throws BlockTypeNotFoundException
 	 * @throws EntityNotFoundException
 	 * @throws LoaderException
@@ -77,7 +86,20 @@ final class Block extends AbstractAgentRestController
 			$identifier->documentDescription,
 			$request->id,
 			$request->presetId ?? '',
+			$request->contextSettings,
+			$identifier->templateId,
 		);
+
+		// A context the block cannot be described in is about the request, not about the resource: the block
+		// itself was read, and a 404 here would send the agent looking for another type instead of correcting
+		// what it sent.
+		if ($result instanceof BlockContextRejectionResult)
+		{
+			throw $result->isResolutionFailure()
+				? new BlockContextResolutionFailedException($result->getErrors())
+				: new BlockContextRejectedException($result->getErrors())
+			;
+		}
 
 		// Every reason a single block is refused - unknown type, unknown preset, a type whose description
 		// does not build - is also a reason the listing leaves it out, so the two actions agree. The refusal

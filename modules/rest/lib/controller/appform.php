@@ -39,6 +39,13 @@ class AppForm extends Controller
 
 	public function getConfigAction(string $clientId, string $type, array $formData = []): AjaxJson
 	{
+		if (!\CRestUtil::checkAppAccess($clientId))
+		{
+			$this->errorCollection->setError(new Error('Application access denied', 'ACCESS_DENIED'));
+
+			return AjaxJson::createDenied($this->errorCollection);
+		}
+
 		try
 		{
 			$app = new \Bitrix\Rest\App($clientId);

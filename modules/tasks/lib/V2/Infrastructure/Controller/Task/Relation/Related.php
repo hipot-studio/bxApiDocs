@@ -13,6 +13,7 @@ use Bitrix\Main\Validation\Rule\Enum\Type;
 use Bitrix\Tasks\V2\Infrastructure\Controller\BaseController;
 use Bitrix\Tasks\V2\Internal\Access\Task\Permission;
 use Bitrix\Tasks\V2\Internal\Entity;
+use Bitrix\Tasks\V2\Internal\Service\Interaction\InteractionOrigin;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\AddRelatedTaskCommand;
 use Bitrix\Tasks\V2\Public\Command\Task\Relation\DeleteRelatedTaskCommand;
 use Bitrix\Tasks\V2\Public\Provider\Params\Relation\RelationTaskParams;
@@ -106,6 +107,7 @@ class Related extends BaseController
 				relatedTaskId: $relatedTaskId,
 				userId: $this->userId,
 				useConsistency: true,
+				origin: InteractionOrigin::Ui,
 			))->run();
 
 			$response[$relatedTaskId] = $result->isSuccess();

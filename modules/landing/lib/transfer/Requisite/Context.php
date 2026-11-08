@@ -145,6 +145,13 @@ class Context
 		return $this;
 	}
 
+	public function setStructure(Configuration\Structure $structure): self
+	{
+		$this->structure = $structure;
+
+		return $this;
+	}
+
 	public function getStructure(): ?Configuration\Structure
 	{
 		return $this->structure ?? null;

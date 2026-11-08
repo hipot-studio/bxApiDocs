@@ -4,6 +4,8 @@ namespace Bitrix\Crm\Component\EntityDetails\Traits;
 
 use Bitrix\BIConnector\Integration\Crm\Contact;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Crm\UserField\Router;
 
 trait InitializeUFConfig
@@ -14,7 +16,14 @@ trait InitializeUFConfig
 	private function initializeUFConfig(): void
 	{
 		$entityTypeId = $this->factory->getEntityTypeId();
-		$enableUfCreation = Container::getInstance()->getUserPermissions($this->userID)->isAdminForEntity($entityTypeId);
+		$enableUfCreation = Container::getInstance()
+			->getUserPermissions($this->userID)
+			->configuration()
+			->canManageFields(
+				ConfigurationCallSite::ItemDetailsFieldCreation,
+				ConfigurationScope::ofEntityType($entityTypeId),
+			)
+		;
 
 		$this->arResult['ENABLE_USER_FIELD_CREATION'] = $enableUfCreation;
 		$this->arResult['USER_FIELD_ENTITY_ID'] = $this->userFieldEntityID;

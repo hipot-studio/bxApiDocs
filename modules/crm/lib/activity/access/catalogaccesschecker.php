@@ -25,6 +25,11 @@ class CatalogAccessChecker
 		;
 	}
 
+	public static function getErrorMessage(): string
+	{
+		return Loc::getMessage('CRM_ACTIVITY_ACCESS_CATALOG_ACCESS_CHECKER_ERROR_MESSAGE') ?? '';
+	}
+
 	/**
 	 * Callback for dialod renderer.
 	 *
@@ -35,7 +40,7 @@ class CatalogAccessChecker
 	public static function getDialogRenderer(): callable
 	{
 		return static function () {
-			$message = Loc::getMessage('CRM_ACTIVITY_ACCESS_CATALOG_ACCESS_CHECKER_ERROR_MESSAGE');
+			$message = self::getErrorMessage();
 
 			return "<div class=\"ui-alert ui-alert-danger\">
 				<span class=\"ui-alert-message\">{$message}</span>

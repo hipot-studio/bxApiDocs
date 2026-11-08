@@ -16,8 +16,8 @@ use Bitrix\Rest\V3\Dto\DtoCollection;
  *
  * An item is an associative array keyed by the dto property names, and the keys it carries decide what
  * the response holds: the listing passes the header only (id, name, documentType, modified, hasDraft),
- * getting a template and adding a draft pass draftId and the graph as well. Fields nobody passed stay
- * uninitialized and are therefore absent from the payload instead of coming back empty.
+ * getting a template and adding a draft pass the description, draftId and the graph as well. Fields nobody
+ * passed stay uninitialized and are therefore absent from the payload instead of coming back empty.
  */
 final class TemplateMapper extends AbstractAgentMapper
 {
@@ -37,6 +37,7 @@ final class TemplateMapper extends AbstractAgentMapper
 	 *     documentType?: DocumentDescription,
 	 *     modified?: ?string,
 	 *     hasDraft?: bool,
+	 *     description?: string,
 	 *     draftId?: ?int,
 	 *     blocks?: AgentBlockCollection,
 	 *     connections?: AgentConnectionCollection,

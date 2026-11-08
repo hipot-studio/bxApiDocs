@@ -86,7 +86,7 @@ class Creator
 			return $result;
 		}
 
-		$rightsState = Rights::isOn();
+		$rightsState = Rights::isLocalOn();
 		Rights::setOff();
 		try
 		{

@@ -237,7 +237,7 @@ class UserOptionService
 				'TASK_ID' => $userOption->taskId,
 				'USER_ID' => $userOption->userId,
 				'OPTION' => $userOption->code,
-				'ADDED' => true,
+				'ADDED' => false,
 			]
 		);
 
@@ -356,7 +356,7 @@ class UserOptionService
 			parameters: [
 				'TASK_ID' => $firstOption->taskId,
 				'OPTION' => $firstOption->code,
-				'ADDED' => true,
+				'ADDED' => false,
 			],
 		);
 

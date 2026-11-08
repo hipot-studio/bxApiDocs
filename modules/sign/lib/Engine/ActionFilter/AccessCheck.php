@@ -16,9 +16,11 @@ use Bitrix\Sign\Repository\Document\SafeFolderRepository;
 use Bitrix\Sign\Repository\Document\TemplateFolderRepository;
 use Bitrix\Sign\Repository\Document\TemplateRepository;
 use Bitrix\Sign\Repository\DocumentRepository;
+use Bitrix\Sign\Repository\MemberRepository;
 use Bitrix\Sign\Service\Container;
 use Bitrix\Sign\Service\SignersListService;
-use BItrix\Sign\Type\Access\AccessibleItemType;
+use Bitrix\Sign\Type\Access\AccessibleItemType;
+use Bitrix\Sign\Type\Access\ItemIdentifierType;
 
 final class AccessCheck extends Main\Engine\ActionFilter\Base
 {
@@ -31,16 +33,20 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 	private array $rules = [];
 	/** @var list<LogicRule>  */
 	private array $logicRules = [];
+	/** @var array<string, list<Main\Access\AccessibleItem>> */
+	private array $accessibleItemsCache = [];
 	private readonly TemplateRepository $templateRepository;
 	private readonly TemplateFolderRepository $templateFolderRepository;
 	private readonly SafeFolderRepository $safeFolderRepository;
 	private readonly SignersListService $signersListService;
+	private readonly MemberRepository $memberRepository;
 
 	public function __construct()
 	{
 		parent::__construct();
 
 		$this->documentRepository = Container::instance()->getDocumentRepository();
+		$this->memberRepository = Container::instance()->getMemberRepository();
 		$this->templateRepository = Container::instance()->getDocumentTemplateRepository();
 		$this->templateFolderRepository = Container::instance()->getTemplateFolderRepository();
 		$this->safeFolderRepository = Container::instance()->getSafeFolderRepository();
@@ -58,7 +64,12 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 	{
 		if ($attribute instanceof ActionAccess)
 		{
-			return $this->addRule($attribute->permission, $attribute->itemType, $attribute->itemIdOrUidRequestKey);
+			return $this->addRule(
+				$attribute->permission,
+				$attribute->itemType,
+				$attribute->itemIdOrUidRequestKey,
+				$attribute->identifiedBy,
+			);
 		}
 
 		return $this->addLogicRuleFromAttribute($attribute);
@@ -68,9 +79,15 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 		string $accessPermission,
 		?string $itemType = null,
 		?string $itemIdOrUidRequestKey = null,
+		?string $identifiedBy = null,
 	): self
 	{
-		$this->rules[$accessPermission] = $this->createRuleWithPayload($accessPermission, $itemType, $itemIdOrUidRequestKey);
+		$this->rules[$accessPermission] = $this->createRuleWithPayload(
+			$accessPermission,
+			$itemType,
+			$itemIdOrUidRequestKey,
+			$identifiedBy,
+		);
 
 		return $this;
 	}
@@ -81,7 +98,8 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 			fn(ActionAccess $condition) => $this->createRuleWithPayload(
 				$condition->permission,
 				$condition->itemType,
-				$condition->itemIdOrUidRequestKey
+				$condition->itemIdOrUidRequestKey,
+				$condition->identifiedBy,
 			),
 			$logicAttribute->conditions,
 		);
@@ -167,10 +185,18 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 			}
 			else
 			{
-				$rule->passes = $this->checkPermission(
-					$rule->accessPermission,
-					$this->createAccessibleItems($rule),
-				);
+				$accessibleItems = $this->createAccessibleItems($rule);
+				if ($accessibleItems === [] && $rule->identifiedBy !== null)
+				{
+					// The rule resolves its item through another entity, so an empty result means
+					// the request named an entity that does not exist. Falling back to a global
+					// permission check would let an owner-scoped grant through — fail-closed.
+					$rule->passes = false;
+				}
+				else
+				{
+					$rule->passes = $this->checkPermission($rule->accessPermission, $accessibleItems);
+				}
 			}
 		}
 
@@ -190,6 +216,14 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 			return [];
 		}
 
+		// Branches of a logic rule usually share the same object: request sources do not change
+		// while the action is being processed, so the object is resolved once per type and key.
+		$cacheKey = $rule->itemType . '|' . ($rule->identifiedBy ?? '') . '|' . $rule->itemIdOrUidRequestKey;
+		if (isset($this->accessibleItemsCache[$cacheKey]))
+		{
+			return $this->accessibleItemsCache[$cacheKey];
+		}
+
 		$idOrUid = $this->resolveItemIdentifier($rule->itemIdOrUidRequestKey);
 		if ($idOrUid === null)
 		{
@@ -197,15 +231,10 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 		}
 
 		$idsOrUids = $this->convertIdOrUidToArray($idOrUid);
-		$items = match ($rule->itemType)
-		{
-			AccessibleItemType::DOCUMENT => $this->getDocumentByIds($idsOrUids),
-			AccessibleItemType::TEMPLATE => $this->getTemplatesByIds($idsOrUids),
-			AccessibleItemType::TEMPLATE_FOLDER => $this->getTemplateFoldersByIds($idsOrUids),
-			AccessibleItemType::SAFE_FOLDER => $this->getSafeFoldersByIds($idsOrUids),
-			AccessibleItemType::SIGNERS_LIST => $this->getSignersListsByIds($idsOrUids),
-			default => null,
-		};
+		$items = $rule->identifiedBy === null
+			? $this->createItemsByOwnIdentifier($rule->itemType, $idsOrUids)
+			: $this->createItemsByRelatedIdentifier($rule->identifiedBy, $idsOrUids)
+		;
 
 		$accessItems = [];
 		if ($items instanceof \Traversable)
@@ -220,12 +249,47 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 			}
 		}
 
+		$this->accessibleItemsCache[$cacheKey] = $accessItems;
+
 		return $accessItems;
 	}
 
-	private function createRuleWithPayload(string $accessPermission, ?string $itemType, ?string $itemIdOrUidRequestKey): RuleWithPayload
+	private function createItemsByOwnIdentifier(string $itemType, array $idsOrUids): ?\Traversable
 	{
-		return new RuleWithPayload($accessPermission, $itemType, $itemIdOrUidRequestKey);
+		return match ($itemType)
+		{
+			AccessibleItemType::DOCUMENT => $this->getDocumentByIds($idsOrUids),
+			AccessibleItemType::TEMPLATE => $this->getTemplatesByIds($idsOrUids),
+			AccessibleItemType::TEMPLATE_FOLDER => $this->getTemplateFoldersByIds($idsOrUids),
+			AccessibleItemType::SAFE_FOLDER => $this->getSafeFoldersByIds($idsOrUids),
+			AccessibleItemType::SIGNERS_LIST => $this->getSignersListsByIds($idsOrUids),
+			default => null,
+		};
+	}
+
+	/**
+	 * Resolves the access item from an identifier of a related entity. A member has no permission
+	 * of its own: the action on it is authorized by the permission on the document the member
+	 * belongs to. The kind of identifier comes from the attribute, so a uid made of digits is
+	 * never read as a primary key.
+	 */
+	private function createItemsByRelatedIdentifier(string $identifiedBy, array $idsOrUids): ?DocumentCollection
+	{
+		return match ($identifiedBy)
+		{
+			ItemIdentifierType::MEMBER_UID => $this->getDocumentsByMemberUids($idsOrUids),
+			default => null,
+		};
+	}
+
+	private function createRuleWithPayload(
+		string $accessPermission,
+		?string $itemType,
+		?string $itemIdOrUidRequestKey,
+		?string $identifiedBy = null,
+	): RuleWithPayload
+	{
+		return new RuleWithPayload($accessPermission, $itemType, $itemIdOrUidRequestKey, $identifiedBy);
 	}
 
 	private function hasInvalidItemIdentifier(RuleWithPayload $rule): bool
@@ -240,9 +304,40 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 			return true;
 		}
 
+		// An unknown object type resolves to nothing, and an empty resolution means a global
+		// permission check: a typo in the attribute would silently turn an item-aware rule into a
+		// category-level one. Same reason as below — a configuration error must not open a rule.
+		if (!in_array($rule->itemType, AccessibleItemType::getAll(), true))
+		{
+			return true;
+		}
+
+		// A rule that resolves the item through another entity must name a supported pair:
+		// an unknown one is a configuration error and must not reach a global permission check.
+		if ($rule->identifiedBy !== null && !$this->isRelatedIdentifierSupported($rule))
+		{
+			return true;
+		}
+
+		// Every action addressed by a related identifier takes a scalar one, and the filter runs
+		// before the binder rejects anything else. An array would otherwise be turned into a single
+		// unbounded WHERE IN of whatever size the caller sent.
+		if ($rule->identifiedBy !== null && is_array($this->resolveItemIdentifier($rule->itemIdOrUidRequestKey)))
+		{
+			return true;
+		}
+
 		// The identifier must come from exactly one request source: fail-closed, so neither a missing
 		// key nor presence in several sources degrades an item-aware rule into a global check.
 		return $this->countParameterSources($rule->itemIdOrUidRequestKey) !== 1;
+	}
+
+	private function isRelatedIdentifierSupported(RuleWithPayload $rule): bool
+	{
+		// A member identifier resolves to the document the member belongs to.
+		return $rule->itemType === AccessibleItemType::DOCUMENT
+			&& in_array($rule->identifiedBy, ItemIdentifierType::getAll(), true)
+		;
 	}
 
 	/**
@@ -340,6 +435,32 @@ final class AccessCheck extends Main\Engine\ActionFilter\Base
 		}
 
 		return new DocumentCollection();
+	}
+
+	/**
+	 * Only the document id is read, member items are not hydrated: the filter runs before every
+	 * action of the member controller.
+	 */
+	private function getDocumentsByMemberUids(array $uids): DocumentCollection
+	{
+		$memberUids = [];
+		foreach ($uids as $value)
+		{
+			if (is_string($value) && $value !== '')
+			{
+				$memberUids[] = $value;
+			}
+		}
+
+		return empty($memberUids)
+			? new DocumentCollection()
+			: $this->listDocumentsByIds($this->memberRepository->listDocumentIdsByMemberUids($memberUids))
+		;
+	}
+
+	private function listDocumentsByIds(array $documentIds): DocumentCollection
+	{
+		return $this->documentRepository->listByIds(array_values(array_unique($documentIds)));
 	}
 
 	private function getTemplatesByIds(array $idsOrUids): TemplateCollection

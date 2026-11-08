@@ -18,7 +18,7 @@ class WorkgroupFilterRepository implements WorkgroupFilterRepositoryInterface
 
 	public function getGroupIdsByTag(string $tag): array
 	{
-		$tag = trim($tag);
+		$tag = WorkgroupTagTable::prepareNameForSearch($tag);
 		if ($tag === '')
 		{
 			return [];

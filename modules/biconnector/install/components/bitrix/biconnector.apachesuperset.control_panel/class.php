@@ -10,6 +10,8 @@ use Bitrix\BIConnector\Access\ActionDictionary;
 use Bitrix\BIConnector\Configuration\Feature;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\SupersetInitializer;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\AiAgentsEntrySource;
+use Bitrix\BIConnector\Internal\Integration\AiAssistant\AiAgentsSection;
 use Bitrix\BIConnector\Superset\MarketAccessManager;
 use Bitrix\BIConnector\Superset\MarketDashboardManager;
 use Bitrix\BIConnector\Superset\Selfhost\License\SelfHostedLicenseLock;
@@ -103,7 +105,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			$result[] = [
 				$item['NAME'] ?? $item['TEXT'] ?? '',
 				($item['URL'] ?? null),
-				[],
+				$item['ADDITIONAL_URL'] ?? [],
 				[
 					'DEPTH_LEVEL' => $depthLevel,
 					'FROM_IBLOCK' => true,
@@ -124,11 +126,31 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 
 	private function prepareMenuItems(): void
 	{
+		$aiAgentsMenuItems = [];
+		if (AiAgentsSection::isAvailable())
+		{
+			$path = AiAgentsSection::getPath();
+			$aiAgentsMenuItems[] = [
+				'ID' => 'ai_agents',
+				'TEXT' => Loc::getMessage('BICONNECTOR_SUPERSET_CONTROL_PANEL_AI_AGENTS'),
+				'URL' => AiAgentsSection::getUrl(AiAgentsEntrySource::SOURCE_MENU),
+				'ADDITIONAL_URL' => [$path],
+				'IS_ACTIVE' => $this->request->getRequestedPageDirectory() === $path,
+				'IS_LOCKED' => false,
+			];
+		}
+
+		$this->arResult['MENU_ITEMS'] = [
+			...$this->getSupersetMenuItems(),
+			...$aiAgentsMenuItems,
+		];
+	}
+
+	private function getSupersetMenuItems(): array
+	{
 		if (!$this->canRenderMenuItems())
 		{
-			$this->arResult['MENU_ITEMS'] = [];
-
-			return;
+			return [];
 		}
 
 		\Bitrix\Main\Loader::includeModule('ui');
@@ -152,7 +174,7 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			],
 		];
 
-		$isFeatureEnabled = Feature::isBuilderEnabled();
+		$isFeatureEnabled = $this->isBuilderEnabled();
 		if ($isFeatureEnabled)
 		{
 			$menuItems[] = [
@@ -251,6 +273,17 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			}
 		}
 
+		if ($isFeatureEnabled && $this->canControlShares())
+		{
+			$settingsItems[] = [
+				'ID' => 'PUBLIC_LINKS',
+				'TEXT' => Loc::getMessage('BICONNECTOR_CONTROL_PANEL_MENU_ITEM_PUBLIC_LINKS'),
+				'ON_CLICK' => "BX.SidePanel.Instance.open('"
+					. \CUtil::JSEscape('/bitrix/components/bitrix/biconnector.share.registry/slider.php')
+					. "', {cacheable: false})",
+			];
+		}
+
 		if ($settingsItems)
 		{
 			$menuItems[] = [
@@ -266,7 +299,17 @@ class ApacheSupersetControlPanel extends CBitrixComponent implements Errorable
 			$menuItems = self::lockMenuItems($menuItems);
 		}
 
-		$this->arResult['MENU_ITEMS'] = $menuItems;
+		return $menuItems;
+	}
+
+	protected function isBuilderEnabled(): bool
+	{
+		return Feature::isBuilderEnabled();
+	}
+
+	protected function canControlShares(): bool
+	{
+		return AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SHARE_CONTROL);
 	}
 
 	/**

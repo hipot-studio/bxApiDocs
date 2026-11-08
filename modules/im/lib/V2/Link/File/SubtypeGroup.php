@@ -16,7 +16,7 @@ enum SubtypeGroup: string implements JsonSerializable
 		return match ($subtype)
 		{
 			Subtype::Media => self::Media,
-			Subtype::Audio => self::Audio,
+			Subtype::Audio, Subtype::VideoNote => self::Audio,
 			Subtype::Brief => self::Brief,
 			Subtype::Document, Subtype::Other => self::File,
 		};
@@ -50,7 +50,7 @@ enum SubtypeGroup: string implements JsonSerializable
 		return match ($this)
 		{
 			self::Media => [Subtype::Media],
-			self::Audio => [Subtype::Audio],
+			self::Audio => [Subtype::Audio, Subtype::VideoNote],
 			self::Brief => [Subtype::Brief],
 			self::File => [Subtype::Document, Subtype::Other],
 		};

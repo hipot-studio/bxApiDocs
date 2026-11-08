@@ -11,7 +11,8 @@ use Bitrix\Main\LoaderException;
 
 class BizprocDesignerPullManager
 {
-	private const MODULE_ID = 'bizprocdesigner';
+	/** The sender of every event of this module, the tag-addressed ones included ({@see TemplateNoteWatch}). */
+	public const MODULE_ID = 'bizprocdesigner';
 
 	public static function OnGetDependentModule(): array
 	{
@@ -41,13 +42,24 @@ class BizprocDesignerPullManager
 	 */
 	public function sendEvent(int $recipientId, BizprocDesignerPullEvent $event, array $params = []): bool
 	{
-		if (!$this->isPullModuleAvailable())
+		return $this->sendEventToUsers([$recipientId], $event, $params);
+	}
+
+	/**
+	 * The same event to several users at once: a draft of the editor belongs both to the one who asked for it
+	 * and to the one editing the template right now.
+	 *
+	 * @param array<int> $recipientIds
+	 */
+	public function sendEventToUsers(array $recipientIds, BizprocDesignerPullEvent $event, array $params = []): bool
+	{
+		if ($recipientIds === [] || !$this->isPullModuleAvailable())
 		{
 			return false;
 		}
 
-		return \CPullStack::AddByUser(
-			$recipientId,
+		return \CPullStack::AddByUsers(
+			$recipientIds,
 			$this->buildParams($event, $params)
 		);
 	}

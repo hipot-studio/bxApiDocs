@@ -99,6 +99,7 @@ class Task extends Base
 			'sortFloat' => $scrumTask->getSortFloat(),
 			'createdBy' => $scrumTask->getCreatedBy(),
 			'modifiedBy' => $scrumTask->getModifiedBy(),
+			'groupId' => $entity->getGroupId(),
 		];
 	}
 

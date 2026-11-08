@@ -8,6 +8,7 @@
  */
 namespace Bitrix\Socialnetwork\Item;
 
+use Bitrix\Socialnetwork\Collab\Control\ExternalMembershipValidator;
 use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Loader;
@@ -149,7 +150,10 @@ class UserToGroup
 		{
 			$updateFields['ROLE'] = $params['ROLE'];
 		}
-		\CSocNetUserToGroup::update($relationId, $updateFields);
+		if (!\CSocNetUserToGroup::update($relationId, $updateFields))
+		{
+			return;
+		}
 
 		if (
 			!$notyfy
@@ -767,6 +771,11 @@ class UserToGroup
 		if (!$currentUserId)
 		{
 			return $result;
+		}
+
+		if (!ExternalMembershipValidator::checkUsers($groupId, $userIdList, UserToGroupTable::ROLE_MODERATOR))
+		{
+			return false;
 		}
 
 		$ownerRelationIdList = [];

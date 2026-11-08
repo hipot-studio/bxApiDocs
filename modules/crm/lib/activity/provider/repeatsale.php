@@ -106,14 +106,14 @@ final class RepeatSale extends Base
 		if ($payload->actionPlan)
 		{
 			$actionPlanResult[] = sprintf(
-				"\r\n✅ %s",
+				"\r\n[b]%s[/b]",
 				Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_ACTION', null, $languageId),
 			);
 
 			if (!self::isEmptyString($payload->actionPlan->bestWayToContact))
 			{
 				$actionPlanResult[] = sprintf(
-					"\r\n📞 %s",
+					"\r\n— %s",
 					$payload->actionPlan->bestWayToContact
 				);
 			}
@@ -121,7 +121,7 @@ final class RepeatSale extends Base
 			if (!self::isEmptyString($payload->actionPlan->salesOpportunity))
 			{
 				$actionPlanResult[] = sprintf(
-					"\r\n💡 %s",
+					"\r\n— %s",
 					$payload->actionPlan->salesOpportunity
 				);
 			}
@@ -129,7 +129,7 @@ final class RepeatSale extends Base
 			if (!self::isEmptyString($payload->actionPlan->serviceImprovementSuggestions))
 			{
 				$actionPlanResult[] = sprintf(
-					"\r\n🎁 %s",
+					"\r\n— %s",
 					$payload->actionPlan->serviceImprovementSuggestions
 				);
 			}
@@ -144,7 +144,7 @@ final class RepeatSale extends Base
 		if ($payload->customerInfo)
 		{
 			$summaryResult[] = sprintf(
-				"\r\n📘 %s",
+				"\r\n[b]%s[/b]",
 				Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_INFO', null, $languageId),
 			);
 
@@ -154,7 +154,7 @@ final class RepeatSale extends Base
 			)
 			{
 				$summaryResult[] = sprintf(
-					"\r\n📌 [b]%s[/b] %s – %s",
+					"\r\n[b]%s[/b] %s – %s",
 					Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_LAST_PURCHASE', null, $languageId),
 					$payload->customerInfo->lastPurchaseDate ?? '',
 					$payload->customerInfo->lastPurchaseDetails ?? ''
@@ -164,7 +164,7 @@ final class RepeatSale extends Base
 			if (!self::isEmptyString($payload->customerInfo->ordersOverview))
 			{
 				$summaryResult[] = sprintf(
-					"\r\n📌 [b]%s[/b] %s",
+					"\r\n[b]%s[/b] %s",
 					Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_ORDERS_OVERVIEW', null, $languageId),
 					$payload->customerInfo->ordersOverview
 				);
@@ -173,7 +173,7 @@ final class RepeatSale extends Base
 			if (!self::isEmptyString($payload->customerInfo->detailedIssuesSummary))
 			{
 				$summaryResult[] = sprintf(
-					"\r\n📌 [b]%s[/b] %s",
+					"\r\n[b]%s[/b] %s",
 					Loc::getMessage('CRM_ACTIVITY_PROVIDER_REPEAT_SALE_ISSUES', null, $languageId),
 					$payload->customerInfo->detailedIssuesSummary
 				);

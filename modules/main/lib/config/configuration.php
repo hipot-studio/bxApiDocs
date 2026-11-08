@@ -235,6 +235,16 @@ final class Configuration implements \ArrayAccess, \Iterator, \Countable
 		return null;
 	}
 
+	public function isReadonly(string $name): bool
+	{
+		if (!$this->isLoaded)
+		{
+			$this->loadConfiguration();
+		}
+
+		return !empty($this->data[$name]['readonly']);
+	}
+
 	public function offsetExists($offset): bool
 	{
 		if (!$this->isLoaded)

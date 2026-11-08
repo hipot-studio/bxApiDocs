@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Service\Timeline\Item\LogMessage;
 
+use Bitrix\Crm\Format\TextHelper;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\Timeline\Context;
 use Bitrix\Crm\Service\Timeline\Item\LogMessage;
@@ -11,6 +12,7 @@ use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\EditableDescription;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\LineOfTextBlocks;
 use Bitrix\Crm\Service\Timeline\Layout\Body\ContentBlock\Text;
 use Bitrix\Crm\Service\Timeline\Layout\Common\Icon;
+use Bitrix\Crm\Timeline\LogMessage\TodoCreatedActivityData;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type\DateTime;
 use CCrmActivity;
@@ -43,23 +45,38 @@ class TodoCreated extends LogMessage
 
 	public function getContentBlocks(): ?array
 	{
-		$activityData = $this->getModel()->getSettings()['ACTIVITY_DATA'];
+		$settings = $this->getModel()->getSettings();
+		$historyActivityData = $this->getHistoryItemModel()?->get('ASSOCIATED_ENTITY') ?? [];
+		$defaultDescriptionType = isset($historyActivityData['DESCRIPTION_TYPE'])
+			? (int)$historyActivityData['DESCRIPTION_TYPE']
+			: null
+		;
+		$activityData = TodoCreatedActivityData::fromArray(
+			(array)($settings['ACTIVITY_DATA'] ?? []),
+			$defaultDescriptionType
+		);
 
-		$baseActivityId = $activityData['ASSOCIATED_ENTITY_ID'] ?? 0;
-		$deadlineTimestamp = $activityData['DEADLINE_TIMESTAMP'] ?? null;
-		$description = trim($activityData['DESCRIPTION'] ?? '');
-		$calendarEventId = $this->getHistoryItemModel()?->get('ASSOCIATED_ENTITY')['CALENDAR_EVENT_ID'] ?? null;
+		$baseActivityId = $activityData->getAssociatedEntityId();
+		$deadlineTimestamp = $activityData->getDeadlineTimestamp();
+		$description = trim($activityData->getDescription());
+		$calendarEventId = $historyActivityData['CALENDAR_EVENT_ID'] ?? null;
 		$duration = null;
 		if ($calendarEventId)
 		{
-			$duration = $activityData['DURATION'] ?? null;
+			$duration = $activityData->getDuration();
 		}
 
-		// Temporarily removes [p] for mobile compatibility
-		$descriptionType = (int)$this->getHistoryItemModel()?->get('ASSOCIATED_ENTITY')['DESCRIPTION_TYPE'] ?? null;
-		if ($this->getContext()->getType() === Context::MOBILE && $descriptionType === \CCrmContentType::BBCode)
+		$descriptionType = $activityData->getDescriptionType();
+		if ($description !== '')
 		{
-			$description = \Bitrix\Crm\Format\TextHelper::removeParagraphs($description);
+			$description = $this->prepareDescription($description, $descriptionType);
+			if (
+				$this->getContext()->getType() === Context::MOBILE
+				&& $descriptionType === \CCrmContentType::BBCode
+			)
+			{
+				$description = TextHelper::removeParagraphs($description);
+			}
 		}
 
 		$result = [];
@@ -121,9 +138,34 @@ class TodoCreated extends LogMessage
 				->setEditable(false)
 				->setHeight(EditableDescription::HEIGHT_SHORT)
 				->setUseBBCodeEditor(true)
+				->setAllowFiles(false)
 			;
 		}
 
 		return $result;
 	}
+
+	private function prepareDescription(string $description, int $descriptionType): string
+	{
+		if ($descriptionType === \CCrmContentType::BBCode)
+		{
+			return $description;
+		}
+
+		return $this->cleanTextByType(
+			TextHelper::encodeSingleUnsupportedAngleBracketTokens($description),
+			$descriptionType
+		);
+	}
+
+	private function cleanTextByType(string $text, int $descriptionType): string
+	{
+		if ($descriptionType === \CCrmContentType::Html)
+		{
+			return TextHelper::convertHtmlToText($text);
+		}
+
+		return TextHelper::cleanTextByType($text, $descriptionType);
+	}
+
 }

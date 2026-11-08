@@ -10,6 +10,7 @@ use Bitrix\Calendar\Synchronization\Public\Service\SynchronizationFeature;
 use Bitrix\Calendar\UserSettings;
 use Bitrix\Calendar\Util;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Diag\LoggerFactory;
 use Bitrix\Main\Loader;
 use Bitrix\Main\ObjectNotFoundException;
 use Bitrix\Main\Type;
@@ -450,28 +451,13 @@ class CCalendarSync
 		{
 			$ownerId = $arFields['OWNER_ID'] ?? null;
 
-			// Here we check if parent event was created in exchange calendar and if it is meeting
-			// If yes, we expect that it was already created in MS Exchange server
-			// and we don't need to dublicate this entry.
-			if (
-				self::isExchangeMeetingEnabled()
-				&& ($arFields['IS_MEETING'] ?? null)
-				&& ($arFields['MEETING_HOST'] ?? null) != $ownerId
-				&& CCalendar::IsExchangeEnabled($arFields['MEETING_HOST'] ?? null)
-			)
+			// If the meeting host is an Exchange user, the attendee will receive the event via iMIP
+			// from the organizer's Exchange copy, so skip exporting the attendee's self-copy to avoid duplicates.
+			if (self::shouldSkipInviteeExchangeExport($arFields))
 			{
-				$parentEvent = CCalendarEvent::GetById($arFields['PARENT_ID']);
-				if ($parentEvent['DAV_EXCH_LABEL'])
-				{
-					$parentSection = CCalendarSect::GetById($parentEvent['SECT_ID'], false);
-					if (
-						$parentSection['IS_EXCHANGE']
-						&& $parentSection['DAV_EXCH_CAL'] <> ''
-						&& $parentSection['DAV_EXCH_CAL'] !== 0)
-					{
-						return;
-					}
-				}
+				self::removeInviteeExchangeCopy($arFields, $event, $ownerId);
+
+				return true;
 			}
 
 			if (
@@ -779,6 +765,168 @@ class CCalendarSync
 			self::$handleExchangeMeeting = COption::GetOptionString('calendar', 'sync_exchange_meeting', false);
 		}
 		return self::$handleExchangeMeeting;
+	}
+
+	private static function shouldSkipInviteeExchangeExport(array $arFields): bool
+	{
+		$ownerId = $arFields['OWNER_ID'] ?? null;
+
+		return self::isExchangeMeetingEnabled()
+			&& ($arFields['IS_MEETING'] ?? null)
+			&& ($arFields['MEETING_HOST'] ?? null) != $ownerId
+			&& CCalendar::IsExchangeEnabled($arFields['MEETING_HOST'] ?? null)
+			&& self::isHostCopyExportedToExchange($arFields);
+	}
+
+	/**
+	 * The invitation reaches the attendee by iMIP only if the organizer's own copy lands in Exchange,
+	 * and the export runs through the section, not through the mailbox: an Exchange user whose meeting
+	 * section is a regular one keeps his copy on the portal only.
+	 */
+	private static function isHostCopyExportedToExchange(array $arFields): bool
+	{
+		$hostId = (int)($arFields['MEETING_HOST'] ?? 0);
+
+		return self::isExchangeSection((int)CCalendar::GetMeetingSection($hostId))
+			|| self::isExchangeSection(self::getHostOwnEventSectionId($arFields, $hostId));
+	}
+
+	/**
+	 * A meeting held in the organizer's own calendar has no separate copy for him: his copy is the
+	 * parent event itself, kept in the section chosen on creation rather than in the meeting one.
+	 */
+	private static function getHostOwnEventSectionId(array $arFields, int $hostId): int
+	{
+		$parentId = (int)($arFields['PARENT_ID'] ?? 0);
+		if ($parentId <= 0)
+		{
+			return 0;
+		}
+
+		$parentEvent = CCalendarEvent::GetById($parentId, false);
+
+		return $parentEvent
+			&& ($parentEvent['CAL_TYPE'] ?? null) === 'user'
+			&& (int)($parentEvent['OWNER_ID'] ?? 0) === $hostId
+				? (int)($parentEvent['SECTION_ID'] ?? 0)
+				: 0
+		;
+	}
+
+	private static function isExchangeSection(int $sectionId): bool
+	{
+		if ($sectionId <= 0)
+		{
+			return false;
+		}
+
+		$section = CCalendarSect::GetById($sectionId, false);
+
+		return $section
+			&& $section['IS_EXCHANGE']
+			&& $section['DAV_EXCH_CAL'] <> ''
+			&& $section['DAV_EXCH_CAL'] !== 0
+		;
+	}
+
+	/**
+	 * Removes the invitee's self-copy previously exported to Exchange. The guard stops updating it,
+	 * so left in place it would freeze with outdated data.
+	 * A failed removal is not fatal: the copy is dropped on the next save of the meeting.
+	 */
+	private static function removeInviteeExchangeCopy(array &$arFields, $event, $ownerId): void
+	{
+		if (empty($event['DAV_EXCH_LABEL']) || empty($event['DAV_XML_ID']))
+		{
+			return;
+		}
+
+		// The invitee has no mailbox left to delete from, neither now nor on any later save.
+		if (!CCalendar::IsExchangeEnabled($ownerId))
+		{
+			$arFields['DAV_EXCH_LABEL'] = '';
+
+			return;
+		}
+
+		if (!self::hasHostCopyExchangeLabel($arFields, $event))
+		{
+			return;
+		}
+
+		$deleteResult = CDavExchangeCalendar::DoDeleteItem($ownerId, $event['DAV_XML_ID']);
+
+		if ($deleteResult === true || self::isExchangeItemMissing($deleteResult))
+		{
+			$arFields['DAV_EXCH_LABEL'] = '';
+
+			return;
+		}
+
+		// The registry check is off on purpose: this log is the only trace the branch leaves,
+		// and it would stay empty until someone enabled the logger id by hand.
+		(new LoggerFactory())->createById('calendar.sync.exchange', isCheckEnabledFromRegistry: false)?->warning(
+			'Failed to remove the invitee Exchange copy of a meeting: '
+			. 'user {userId}, event {eventId}, item {itemXmlId}, errors {errors}',
+			[
+				'userId' => $ownerId,
+				'eventId' => $event['ID'] ?? null,
+				'itemXmlId' => $event['DAV_XML_ID'],
+				'errors' => is_array($deleteResult) ? $deleteResult : [],
+			]
+		);
+	}
+
+	/**
+	 * Skipping the export goes by the organizer's section, but the removal is irreversible and waits for
+	 * his copy to actually reach Exchange: with no copy there, no iMIP replaces the one being dropped.
+	 * A parent event holds its own id in PARENT_ID, so one query finds that copy in either layout.
+	 */
+	private static function hasHostCopyExchangeLabel(array $arFields, $event): bool
+	{
+		$parentId = (int)($arFields['PARENT_ID'] ?? 0) ?: (int)($event['PARENT_ID'] ?? 0);
+		$hostId = (int)($arFields['MEETING_HOST'] ?? 0);
+
+		if ($parentId <= 0 || $hostId <= 0)
+		{
+			return false;
+		}
+
+		$hostCopy = Internals\EventTable::query()
+			->setSelect(['ID'])
+			->where('PARENT_ID', $parentId)
+			->where('OWNER_ID', $hostId)
+			->where('ACTIVE', 'Y')
+			->where('DELETED', 'N')
+			->whereNot('DAV_EXCH_LABEL', '')
+			->setLimit(1)
+			->fetch()
+		;
+
+		return $hostCopy !== false;
+	}
+
+	/**
+	 * Exchange answers with a missing item when the copy is already gone - deleted by hand in Outlook,
+	 * for one. Keeping the label in that case would send a delete request on every save of the meeting
+	 * and never clear it.
+	 */
+	private static function isExchangeItemMissing($deleteResult): bool
+	{
+		if (!is_array($deleteResult))
+		{
+			return false;
+		}
+
+		foreach ($deleteResult as $error)
+		{
+			if (is_array($error) && ($error[0] ?? null) === 'ErrorItemNotFound')
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	public static function isTaskListSyncEnabled()

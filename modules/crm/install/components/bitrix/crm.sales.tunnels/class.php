@@ -12,6 +12,10 @@ use Bitrix\Crm\Integration\Analytics\Builder\FunnelAnalytics;
 use Bitrix\Crm\Integration\PullManager;
 use Bitrix\Crm\Integration\Sender\Rc;
 use Bitrix\Crm\PhaseSemantics;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
+use Bitrix\Main\Application;
+use Bitrix\Main\DB\TransactionException;
 use Bitrix\Main\Engine\Contract\Controllerable;
 use Bitrix\Main\Error;
 use Bitrix\Main\IO\Path;
@@ -70,9 +74,12 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 			return;
 		}
 
-		if(!$this->userPermissions->isAdminForEntity($this->factory->getEntityTypeId()))
+		// The screen shows funnels, their stages and the tunnels between them, and every one of those is
+		// a right of its own: whoever holds any of them gets the screen, and each write action below
+		// asks for the one it needs.
+		if (!$this->canManageFunnels() && !$this->canManageStages() && !$this->canManageTunnels())
 		{
-			$this->addError(new Error(Loc::getMessage('CRM_SALES_TUNNELS_ACCESS_DENIED2')));
+			$this->addAccessDeniedError();
 
 			return;
 		}
@@ -216,6 +223,9 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 					? false
 					: $access
 			);
+			$category['ARE_TUNNELS_EDITABLE'] = $this->canManageTunnelsInCategory(
+				$this->factory->isCategoriesSupported() ? (int)$categoryId : null,
+			);
 			$this->categories[] = $category;
 		}
 
@@ -311,9 +321,11 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 
 		$this->arResult['isCategoryEditable'] = $this->isCategoryEditable();
 		$this->arResult['isCategoryCreatable'] = $this->isCategoryCreatable();
+		$this->arResult['isCategoryAccessEditable'] = $this->isCategoryAccessEditable();
 		$this->arResult['isAutomationEnabled'] = $this->isAutomationEnabled();
 		$this->arResult['isStagesEnabled'] = $this->factory->isStagesEnabled();
 		$this->arResult['areStagesEditable'] = $this->areStagesEditable();
+		$this->arResult['areTunnelsEditable'] = $this->areTunnelsEditable();
 		$this->arResult['isAvailableGenerator'] = $this->isAvailableGenerator();
 
 		$this->arResult['robotsUrl'] = $this->getRobotsUrl();
@@ -329,22 +341,130 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 
 	private function isCategoryEditable()
 	{
-		$entityTypeId = $this->factory->getEntityTypeId();
-		return Crm\Service\Container::getInstance()->getUserPermissions()->isAdminForEntity($entityTypeId)
-			&& $entityTypeId !== \CCrmOwnerType::Lead;
+		// A lead has no funnels at all, which is a condition of the screen and not of the right.
+		return $this->canManageFunnels() && $this->factory->getEntityTypeId() !== \CCrmOwnerType::Lead;
 	}
 
 	private function isCategoryCreatable()
 	{
-		$entityTypeId = $this->factory->getEntityTypeId();
-		return Crm\Service\Container::getInstance()->getUserPermissions()->isAdminForEntity($entityTypeId)
-			&& $entityTypeId !== \CCrmOwnerType::Lead;
+		return $this->canManageFunnels() && $this->factory->getEntityTypeId() !== \CCrmOwnerType::Lead;
+	}
+
+	/**
+	 * The access of a funnel is a right of its own, and a lead has no funnel to give access to - the same
+	 * screen condition the funnel buttons carry.
+	 */
+	private function isCategoryAccessEditable(): bool
+	{
+		return $this->canManageCategoryAccess() && $this->factory->getEntityTypeId() !== \CCrmOwnerType::Lead;
 	}
 
 	private function areStagesEditable()
 	{
-		$entityTypeId = $this->factory->getEntityTypeId();
-		return Crm\Service\Container::getInstance()->getUserPermissions()->isAdminForEntity($entityTypeId);
+		return $this->canManageStages();
+	}
+
+	/**
+	 * The tunnel right of the screen as a whole. Every funnel carries the right of its own funnel
+	 * (`ARE_TUNNELS_EDITABLE` of {@see getCategories()}), and this one is what is left for the funnel the
+	 * screen offers to create and for a funnel that arrives without a right of its own.
+	 */
+	private function areTunnelsEditable(): bool
+	{
+		return $this->canManageTunnels();
+	}
+
+	private function canManageFunnels(): bool
+	{
+		return $this->configuration()->canManageFunnels(
+			ConfigurationCallSite::SalesTunnelsComponent,
+			$this->getConfigurationScope(),
+		);
+	}
+
+	private function canManageStages(): bool
+	{
+		return $this->configuration()->canManageStages(
+			ConfigurationCallSite::SalesTunnelsComponent,
+			$this->getConfigurationScope(),
+		);
+	}
+
+	/**
+	 * The right in any one funnel of the entity type, which is what a screen showing every funnel of it
+	 * opens for. What each funnel of it permits is another question - {@see canManageTunnelsInCategory()}.
+	 */
+	private function canManageTunnels(): bool
+	{
+		foreach ($this->getTunnelCategoryIds() as $categoryId)
+		{
+			if ($this->canManageTunnelsInCategory($categoryId))
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * The tunnels of one funnel: a tunnel belongs to the funnel it starts in, and the write actions of it
+	 * are checked in that same contour - {@see Crm\Automation\TunnelManager::canWriteTunnels()}, which
+	 * resolves the funnel from the stage on the server. A `null` funnel is the entity type as a whole,
+	 * which is all an entity type without funnels has to ask about.
+	 */
+	private function canManageTunnelsInCategory(?int $categoryId): bool
+	{
+		return $this->configuration()->canManageTunnels(
+			ConfigurationCallSite::SalesTunnelsComponent,
+			ConfigurationScope::ofEntityType($this->factory->getEntityTypeId(), $categoryId),
+		);
+	}
+
+	/**
+	 * The funnels the screen shows, as the contours their tunnels belong to. An entity type with no funnel
+	 * of its own - a lead - is a single contour of the entity type, and so is one whose funnels are not
+	 * made yet.
+	 *
+	 * @return array<int, int|null>
+	 */
+	private function getTunnelCategoryIds(): array
+	{
+		if (!$this->factory->isCategoriesSupported())
+		{
+			return [null];
+		}
+
+		$categoryIds = [];
+		foreach ($this->factory->getCategories() as $category)
+		{
+			$categoryIds[] = $category->getId();
+		}
+
+		return $categoryIds === [] ? [null] : $categoryIds;
+	}
+
+	private function canManageCategoryAccess(): bool
+	{
+		return $this->configuration()->canManageCategoryAccess(
+			ConfigurationCallSite::SalesTunnelsComponent,
+			$this->getConfigurationScope(),
+		);
+	}
+
+	private function configuration(): Crm\Service\UserPermissions\Configuration
+	{
+		return $this->userPermissions->configuration();
+	}
+
+	/**
+	 * The contour of the entity type, without a funnel: this is the form the screen used to ask its
+	 * check in, and every capability of it but the tunnels is decided for the entity type as a whole.
+	 * The tunnels are asked for in the contour of their own funnel - {@see canManageTunnelsInCategory()}.
+	 */
+	private function getConfigurationScope(): ConfigurationScope
+	{
+		return ConfigurationScope::ofEntityType($this->factory->getEntityTypeId());
 	}
 
 	private function isAutomationEnabled()
@@ -360,6 +480,11 @@ class SalesTunnels extends Bitrix\Crm\Component\Base implements Controllerable
 			return Bitrix\Crm\Integration\Sender\Rc\Service::canUse();
 		}
 		return false;
+	}
+
+	private function addAccessDeniedError(): void
+	{
+		$this->addError(new Error(Loc::getMessage('CRM_SALES_TUNNELS_ACCESS_DENIED2')));
 	}
 
 	private function showError($message): void
@@ -414,6 +539,13 @@ HTML;
 		{
 			return null;
 		}
+		if (!$this->canManageFunnels())
+		{
+			$this->addAccessDeniedError();
+
+			return null;
+		}
+
 		$categoryParams = [];
 		if (isset($data['name']) && is_string($data['name']))
 		{
@@ -480,6 +612,12 @@ HTML;
 		{
 			return;
 		}
+		if (!$this->canManageFunnels())
+		{
+			$this->addAccessDeniedError();
+
+			return;
+		}
 		$category = $this->factory->getCategory((int)$data['id']);
 		if (!$category)
 		{
@@ -516,6 +654,13 @@ HTML;
 		{
 			return;
 		}
+		if (!$this->canManageCategoryAccess())
+		{
+			$this->addAccessDeniedError();
+
+			return;
+		}
+
 		$entityTypeId = $this->factory->getEntityTypeId();
 		$categoryId = (int)$data['id'];
 
@@ -558,6 +703,13 @@ HTML;
 			return;
 		}
 
+		if (!$this->canManageCategoryAccess())
+		{
+			$this->addAccessDeniedError();
+
+			return;
+		}
+
 		RolePermissionLogContext::getInstance()->set([
 			'component' => 'crm.sales.tunnels',
 			'scenario' => 'copy access between funnels',
@@ -587,6 +739,12 @@ HTML;
 		$this->init();
 		if($this->getErrors())
 		{
+			return;
+		}
+		if (!$this->canManageFunnels())
+		{
+			$this->addAccessDeniedError();
+
 			return;
 		}
 		$category = $this->factory->getCategory((int)$data['id']);
@@ -687,25 +845,33 @@ HTML;
 		{
 			return null;
 		}
+		if (!$this->validateStageScope($data))
+		{
+			return null;
+		}
 		$status = new CCrmStatus($data['entityId']);
-
-		$id = $status->Add([
-			'NAME' => $data['name'],
-			'SORT' => $data['sort'],
-			'COLOR' => $data['color'],
-			'SEMANTICS' => (isset($data['semantics']) &&
-				in_array($data['semantics'], [PhaseSemantics::SUCCESS, PhaseSemantics::FAILURE], true))
-				? $data['semantics']
-				: null,
-			'CATEGORY_ID' => $data['categoryId'],
-		]);
+		$id = isset($data['afterStageId'])
+			? $this->addStageAfter($status, $data, (int)$data['afterStageId'])
+			: $status->Add($this->buildNewStageFields($data, (int)$data['sort']))
+		;
 
 		if (!$id)
 		{
-			$this->addError(new Error(Loc::getMessage('CRM_SALES_STAGE_CREATE_ERROR')));
+			if ($this->getErrors())
+			{
+				return null;
+			}
+
+			$errorMessage = trim((string)$status->GetLastError());
+			$this->addError(new Error(
+				$errorMessage !== ''
+					? $errorMessage
+					: Loc::getMessage('CRM_SALES_STAGE_CREATE_ERROR')
+			));
 			return null;
 		}
 
+		$this->factory->purgeStagesCache();
 		$stage = $this->getStageById($id);
 		if ($stage === null)
 		{
@@ -719,10 +885,124 @@ HTML;
 		];
 	}
 
+	private function addStageAfter(CCrmStatus $status, array $data, int $afterStageId): ?int
+	{
+		$connection = Application::getConnection();
+		$connection->startTransaction();
+
+		try
+		{
+			$stages = Crm\StatusTable::getList([
+				'select' => ['ID', 'SORT'],
+				'filter' => ['=ENTITY_ID' => $data['entityId']],
+				'order' => ['SORT' => 'ASC', 'ID' => 'ASC'],
+			])->fetchAll();
+			$afterStageIndex = array_search($afterStageId, array_map('intval', array_column($stages, 'ID')), true);
+			if ($afterStageIndex === false)
+			{
+				$this->rollbackStageTransaction($connection);
+				$this->addError(new Error(Loc::getMessage('CRM_SALES_TUNNELS_STAGE_NOT_FOUND')));
+
+				return null;
+			}
+
+			$id = $status->Add(
+				$this->buildNewStageFields($data, (int)$stages[$afterStageIndex]['SORT'] + 1),
+			);
+			if (!$id)
+			{
+				$this->rollbackStageTransaction($connection);
+
+				return null;
+			}
+
+			array_splice($stages, $afterStageIndex + 1, 0, [[
+				'ID' => $id,
+				'SORT' => 0,
+			]]);
+			$sort = 10;
+			foreach ($stages as $stage)
+			{
+				if ((int)$stage['SORT'] !== $sort)
+				{
+					$updatedId = $status->Update((int)$stage['ID'], ['SORT' => $sort]);
+					$errorMessage = trim((string)$status->GetLastError());
+					if (!$updatedId || $errorMessage !== '')
+					{
+						$this->rollbackStageTransaction($connection);
+						$this->addError(new Error(
+							$errorMessage !== ''
+								? $errorMessage
+								: Loc::getMessage('CRM_SALES_STAGE_UPDATE_ERROR'),
+						));
+
+						return null;
+					}
+				}
+
+				$sort += 10;
+			}
+
+			$connection->commitTransaction();
+
+			return (int)$id;
+		}
+		catch (\Throwable $exception)
+		{
+			$this->rollbackStageTransaction($connection);
+
+			throw $exception;
+		}
+	}
+
+	private function buildNewStageFields(array $data, int $sort): array
+	{
+		return [
+			'NAME' => $data['name'],
+			'SORT' => $sort,
+			'COLOR' => $data['color'],
+			'DESCRIPTION' => $data['description'] ?? '',
+			'SEMANTICS' => (isset($data['semantics'])
+				&& in_array($data['semantics'], [PhaseSemantics::SUCCESS, PhaseSemantics::FAILURE], true))
+				? $data['semantics']
+				: null,
+			'CATEGORY_ID' => $data['categoryId'],
+		];
+	}
+
+	private function rollbackStageTransaction(?\Bitrix\Main\DB\Connection &$connection): void
+	{
+		if ($connection === null)
+		{
+			return;
+		}
+
+		$transactionConnection = $connection;
+		$connection = null;
+		try
+		{
+			$transactionConnection->rollbackTransaction();
+		}
+		catch (TransactionException $exception)
+		{
+			if ($exception->getMessage() !== 'Nested rollbacks are unsupported.')
+			{
+				throw $exception;
+			}
+		}
+	}
+
 	public function updateStageAction(array $data): array
 	{
 		$this->init();
 		if($this->getErrors())
+		{
+			return [
+				'success' => false,
+				'errors' => $this->getErrorMessages(),
+			];
+		}
+		if (!$this->validateStageScope($data))
 		{
 			return [
 				'success' => false,
@@ -755,12 +1035,20 @@ HTML;
 			}
 
 			$fields['COLOR'] = $data['color'] ?? '';
+			if (array_key_exists('description', $data))
+			{
+				$fields['DESCRIPTION'] = $data['description'];
+			}
 
 			$id = $status->Update($data['stageId'], $fields);
+			$errorMessage = trim((string)$status->GetLastError());
 
-			if (!$id)
+			if (!$id || $errorMessage !== '')
 			{
-				$response['errors'][] = Loc::getMessage('CRM_SALES_STAGE_UPDATE_ERROR');
+				$response['errors'][] = $errorMessage !== ''
+					? $errorMessage
+					: Loc::getMessage('CRM_SALES_STAGE_UPDATE_ERROR')
+				;
 				return $response;
 			}
 
@@ -777,11 +1065,63 @@ HTML;
 		return $response;
 	}
 
+	private function validateStageScope(array &$data): bool
+	{
+		$entityTypeId = $this->factory->getEntityTypeId();
+		$categoryId = (int)($data['categoryId'] ?? 0);
+		if (
+			!$this->factory->isCategoriesSupported()
+			&& $entityTypeId === \CCrmOwnerType::Lead
+			&& $categoryId === \CCrmOwnerType::Lead
+		)
+		{
+			$categoryId = 0;
+			$data['categoryId'] = $categoryId;
+		}
+
+		$isCategoryValid = $this->factory->isCategoriesSupported()
+			? $this->factory->getCategory($categoryId) !== null
+			: $categoryId === 0;
+		try
+		{
+			$expectedEntityId = $isCategoryValid
+				? $this->factory->getStagesEntityId($categoryId)
+				: null
+			;
+		}
+		catch (\Throwable)
+		{
+			$expectedEntityId = null;
+		}
+
+		if (
+			!$isCategoryValid
+			|| !is_string($expectedEntityId)
+			|| !isset($data['entityId'])
+			|| !is_string($data['entityId'])
+			|| !hash_equals($expectedEntityId, $data['entityId'])
+			|| !$this->canManageStages()
+		)
+		{
+			$this->addAccessDeniedError();
+
+			return false;
+		}
+
+		return true;
+	}
+
 	public function removeStageAction(array $data): void
 	{
 		$this->init();
 		if($this->getErrors())
 		{
+			return;
+		}
+		if (!$this->canManageStages())
+		{
+			$this->addAccessDeniedError();
+
 			return;
 		}
 		$stage = $this->factory->getStage($data['statusId']);
@@ -796,6 +1136,7 @@ HTML;
 			if (!$result->isSuccess())
 			{
 				$this->addErrors($result->getErrors());
+				return;
 			}
 
 			$this->sendStagePullEvent('STAGE_DELETED', $stage->collectValues());

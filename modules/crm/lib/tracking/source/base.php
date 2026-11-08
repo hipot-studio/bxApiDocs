@@ -28,6 +28,7 @@ class Base
 	const Other = 'other';
 	const Sender = 'sender-mail';
 	const OneC = '1c';
+	public const Avito = 'avito';
 
 	/** @var string $code Code. */
 	protected $code;

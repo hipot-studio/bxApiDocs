@@ -2,13 +2,13 @@
 
 namespace Bitrix\BIConnector\Superset\Grid\Row\Action\Source;
 
-use Bitrix\Main\Grid\Row\Action\BaseAction;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Result;
 use CUtil;
+use Bitrix\BIConnector\Superset\Grid\Row\Action\FormatMenuAction;
 
-final class ActivateSourceAction extends BaseAction
+final class ActivateSourceAction extends FormatMenuAction
 {
 
 	public static function getId(): ?string
@@ -35,7 +35,11 @@ final class ActivateSourceAction extends BaseAction
 		{
 			$this->onclick = "BX.BIConnector.ExternalSourceManager.Instance.changeActivitySource({$id}, '{$moduleId}')";
 
-			return parent::getControl($rawFields);
+			$result = parent::getControl($rawFields);
+
+			$result['html'] = $this->getMenuItem('--play-l');
+
+			return $result;
 		}
 
 		return null;

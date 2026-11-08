@@ -2,13 +2,13 @@
 
 namespace Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group;
 
+use Bitrix\Crm\Component\EntityList\Grid\Panel\ApplyButton;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Event;
 use Bitrix\Crm\Conversion\LeadConversionScheme;
 use Bitrix\Crm\Service\UserPermissions;
 use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Grid\Panel\Action\Group\GroupChildAction;
 use Bitrix\Main\Grid\Panel\Actions;
-use Bitrix\Main\Grid\Panel\Snippet;
 use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\Grid\Panel\Types;
 use Bitrix\Main\HttpRequest;
@@ -24,12 +24,17 @@ final class ConvertChildAction extends GroupChildAction
 
 	public static function isConversionPermitted(int $entityTypeId, UserPermissions $userPermissions): bool
 	{
-		$schemes = (new self($entityTypeId, $userPermissions))->getConversionSchemesDropdownItems();
+		// this probe only reads the conversion schemes, it never emits an event
+		$schemes = (new self($entityTypeId, $userPermissions, ''))->getConversionSchemesDropdownItems();
 
 		return !empty($schemes);
 	}
 
-	public function __construct(private int $entityTypeId, private UserPermissions $userPermissions)
+	public function __construct(
+		private int $entityTypeId,
+		private UserPermissions $userPermissions,
+		private string $gridId,
+	)
 	{
 	}
 
@@ -59,7 +64,8 @@ final class ConvertChildAction extends GroupChildAction
 			],
 		]);
 
-		$dropdownContainerId = 'action_batch_convert';
+		// the grid address keeps the id unique: a card shows several panels at once
+		$dropdownContainerId = 'action_batch_convert_' . $this->gridId;
 		$dropdownValueId = $dropdownContainerId . '_control';
 
 		$onchange->addAction([
@@ -72,7 +78,7 @@ final class ConvertChildAction extends GroupChildAction
 					'ITEMS' => $this->getConversionSchemesDropdownItems(),
 				],
 
-				(new Snippet())->getApplyButton([
+				ApplyButton::forGrid($this->gridId, [
 					'ONCHANGE' => [
 						[
 							'ACTION' => Actions::CALLBACK,
@@ -80,6 +86,7 @@ final class ConvertChildAction extends GroupChildAction
 								[
 									'JS' =>
 										(new Event('BatchManager:executeConversion'))
+											->addGridId($this->gridId)
 											->addValueElementId($dropdownValueId)
 											->buildJsCallback()
 									,

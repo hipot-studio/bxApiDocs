@@ -34,7 +34,8 @@ class CCrmDedupeAutosearchComponent extends CBitrixComponent implements \Bitrix\
 			$this->errorCollection->setError(new Error('Wrong status', 'AUTOSEARCH_WRONG_STATUS'));
 			return [];
 		}
-		[$successCount, $conflictsCount] = $this->getSuccessAndConflictCount($userSettings);
+		// explicit request from the settings popup: recalculate instead of the cached value
+		[$successCount, $conflictsCount] = $this->getSuccessAndConflictCount($userSettings, true);
 
 		return [
 			'successCount' => $successCount,
@@ -86,13 +87,12 @@ class CCrmDedupeAutosearchComponent extends CBitrixComponent implements \Bitrix\
 		$list->setScope($scope);
 		$list->setStatusIDs([ Integrity\DuplicateStatus::PENDING ]);
 
-		$list->setSortTypeID($entityTypeId === \CCrmOwnerType::Company
-			? Integrity\DuplicateIndexType::ORGANIZATION
-			: Integrity\DuplicateIndexType::PERSON
-		);
-		$list->setSortOrder(SORT_ASC);
+		// One group per step and the user sees only progress: take items in index order
+		// instead of sorting all remaining items by name on every step.
+		$list->enableIndexOrder(true);
 
-		if (!($progressData['MERGE_DATA'] ?? null))
+		$isMergeDataStored = (bool)($progressData['MERGE_DATA'] ?? null);
+		if (!$isMergeDataStored)
 		{
 			$progressData['MERGE_DATA'] = [
 				'TOTAL' => $list->getRootItemCount(),
@@ -104,9 +104,11 @@ class CCrmDedupeAutosearchComponent extends CBitrixComponent implements \Bitrix\
 			];
 		}
 
-		$items = $list->getRootItems(0, 1);
-		if(empty($items))
+		$item = $this->getNextMergeItem($list, $progressData['MERGE_DATA']['CURSOR'] ?? null);
+		if ($item === null)
 		{
+			unset($progressData['MERGE_DATA']['CURSOR']);
+
 			if (
 				$progressData['MERGE_DATA']['CONFLICT'] > 0 ||
 				$progressData['MERGE_DATA']['ERROR'] > 0
@@ -125,6 +127,7 @@ class CCrmDedupeAutosearchComponent extends CBitrixComponent implements \Bitrix\
 				Integrity\DuplicateStatus::ERROR
 			]);
 			$progressData['MERGE_DATA']['SUCCESS'] = $progressData['MERGE_DATA']['TOTAL'] - $list->getRootItemCount();
+			Integrity\AutoSearchConflictCountCache::clean($entityTypeId, $userId);
 			$userSettings->setProgressData($progressData);
 
 			$userSettings->calcAndSetNextExecTime();
@@ -151,8 +154,11 @@ class CCrmDedupeAutosearchComponent extends CBitrixComponent implements \Bitrix\
 		}
 		$result['STATUS'] = 'SUCCESS';
 
-		/** @var $item Integrity\Duplicate */
-		$item = $items[0];
+		$progressData['MERGE_DATA']['CURSOR'] = [
+			'TYPE_ID' => (int)$item->getCriterion()->getIndexTypeID(),
+			'ID' => (int)$item->getQueueId(),
+		];
+
 		$rootEntityID = $item->getRootEntityID();
 		$criterion = $item->getCriterion();
 		$entityIDs = $criterion->getEntityIDs($entityTypeId, $rootEntityID, $userId, $enablePermissionCheck, ['limit' => 50	]);
@@ -182,6 +188,11 @@ class CCrmDedupeAutosearchComponent extends CBitrixComponent implements \Bitrix\
 				)
 			);
 
+			// merge data is first stored by a step that merges, so TOTAL is counted as before
+			if ($isMergeDataStored)
+			{
+				$userSettings->setProgressData($progressData);
+			}
 			$userSettings
 				->setMergeActivityDate(new \Bitrix\Main\Type\DateTime())
 				->save();
@@ -422,7 +433,29 @@ class CCrmDedupeAutosearchComponent extends CBitrixComponent implements \Bitrix\
 		return $this->errorCollection->getErrorByCode($code);
 	}
 
-	protected function getSuccessAndConflictCount($userSettings): array
+	/**
+	 * Conflicts stay in the index and would precede pending groups on every step, so the step
+	 * resumes from the group taken last time. Inclusive: a group left pending comes back and
+	 * PREV_IDS catches it. Before completing, one scan from the start picks up groups that became
+	 * available behind the cursor (root reassigned, access granted).
+	 */
+	private function getNextMergeItem(Integrity\AutomaticDuplicateList $list, ?array $cursor): ?Integrity\Duplicate
+	{
+		if ($cursor !== null)
+		{
+			$list->setIndexOrderStart((int)$cursor['TYPE_ID'], (int)$cursor['ID']);
+			$items = $list->getRootItems(0, 1);
+			$list->resetIndexOrderStart();
+			if (!empty($items))
+			{
+				return $items[0];
+			}
+		}
+
+		return $list->getRootItems(0, 1)[0] ?? null;
+	}
+
+	protected function getSuccessAndConflictCount($userSettings, bool $forceRecalculate = false): array
 	{
 		$progressData = $userSettings->getProgressData();
 		$successCount = (int)$progressData['MERGE_DATA']['SUCCESS'];
@@ -450,8 +483,14 @@ class CCrmDedupeAutosearchComponent extends CBitrixComponent implements \Bitrix\
 					Integrity\DuplicateStatus::ERROR
 				]);
 
-				$rootItemsCount = $list->getRootItemCount();
-				$conflictCount = max(0, $rootItemsCount);
+				// Runs on every CRM list page while conflicts are being resolved: the exact COUNT
+				// is cached and dropped by the resolution paths (see AutoSearchConflictCountCache).
+				$conflictCount = Integrity\AutoSearchConflictCountCache::get(
+					(int)$userSettings->getEntityTypeId(),
+					(int)$userSettings->getUserId(),
+					static fn() => max(0, (int)$list->getRootItemCount()),
+					$forceRecalculate
+				);
 			}
 			else
 			{

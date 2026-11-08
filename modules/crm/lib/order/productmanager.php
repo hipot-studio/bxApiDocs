@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Order;
 use Bitrix\Catalog;
 use Bitrix\Catalog\VatTable;
 use Bitrix\Crm;
+use Bitrix\Crm\Order\OrderDealSynchronizer\Products\BasketXmlId;
 use Bitrix\Crm\Order\OrderDealSynchronizer\Products\ProductRowXmlId;
 use Bitrix\Main;
 use Bitrix\Main\Loader;
@@ -601,6 +602,14 @@ class ProductManager
 				if ($index === false)
 				{
 					$index = $this->searchProductById($resultProductList, $productId, $usedIndexes);
+				}
+
+				if ($index === false && $productId === 0)
+				{
+					$rowId = BasketXmlId::getRowIdFromXmlId(
+						(string)(($orderBasketProduct['XML_ID'] ?? '') ?: ($product['innerId'] ?? ''))
+					);
+					$index = $this->searchProductByRowId($resultProductList, (int)$rowId, $usedIndexes);
 				}
 
 				if ($index !== false)

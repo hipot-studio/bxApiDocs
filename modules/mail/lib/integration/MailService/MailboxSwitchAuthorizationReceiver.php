@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bitrix\Mail\Integration\MailService;
 
+use Bitrix\Mail\Internal\Service\Mailbox\SettingsWriteCoordinator;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationService;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationStage;
 use Bitrix\Mail\Internal\Service\SourceGeneration\MigrationMetrics;
@@ -71,6 +72,14 @@ final class MailboxSwitchAuthorizationReceiver
 		{
 			$connection->startTransaction();
 			$transactionStarted = true;
+			$locked = (new SettingsWriteCoordinator())->lockWithinTransaction($mailboxId, true, $operationId);
+			if (!$locked->isSuccess())
+			{
+				$connection->rollbackTransaction();
+				$transactionStarted = false;
+
+				return RetryPolicy::enrichCommandResult($locked->setData(['stage' => MigrationStage::Legacy]));
+			}
 			$result = $this->migrationService->authorizeSwitchUnderLock($mailboxId, $operationId);
 			$stage = $result->getData()['stage'] ?? MigrationStage::Legacy;
 			if (!$result->isSuccess() || !$stage instanceof MigrationStage)

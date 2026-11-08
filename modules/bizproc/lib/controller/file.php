@@ -45,14 +45,20 @@ class File extends Base
 		return BFile::createByFileData($file);
 	}
 
-	public static function getPublicLink(int $fileId): string
+	/**
+	 * @param bool $absolute a link travelling out of the page - into a letter, a notification, the text of
+	 *   a task - carries the host of the `main/server_name` setting. A link consumed inside the page asks
+	 *   for false: that setting may name another host, and a relative link keeps the one the page was
+	 *   opened by.
+	 */
+	public static function getPublicLink(int $fileId, bool $absolute = true): string
 	{
 		return Main\Engine\UrlManager::getInstance()->create(
 			'bizproc.file.show',
 			[
 				'token' => static::generateToken($fileId),
 			],
-			true
+			$absolute
 		)->getUri();
 	}
 

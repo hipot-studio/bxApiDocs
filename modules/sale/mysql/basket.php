@@ -915,7 +915,11 @@ class CSaleBasket extends CAllSaleBasket
 				"DIMENSIONS" => array("FIELD" => "B.DIMENSIONS", "TYPE" => "string"),
 				"USER_ID" => array("FIELD" => "F.USER_ID", "TYPE" => "string", "FROM" => "LEFT JOIN b_sale_fuser F ON (F.ID = B.FUSER_ID)"),
 				"QUANTITY_ALL" => array("FIELD" => "SUM(B.QUANTITY)", "TYPE" => "double"),
-				"PRICE_ALL" => array("FIELD" => "SUM(B.QUANTITY*B.PRICE)", "TYPE" => "double"),
+				"PRICE_ALL" => array(
+					"FIELD" => "SUM(CASE WHEN B.SET_PARENT_ID > 0 AND COALESCE(B.TYPE, 0) = 0 "
+						. "THEN 0 ELSE B.QUANTITY*B.PRICE END)",
+					"TYPE" => "double"
+				),
 				"PR_COUNT" => array("FIELD" => "COUNT(B.ID)", "TYPE" => "int"),
 				"DATE_INSERT_MIN" => array("FIELD" => "MIN(B.DATE_INSERT)", "TYPE" => "datetime"),
 				"DATE_UPDATE_MAX" => array("FIELD" => "MAX(B.DATE_UPDATE)", "TYPE" => "datetime"),
@@ -949,11 +953,31 @@ class CSaleBasket extends CAllSaleBasket
 			}
 		}
 
+		$bundleParentJoin = '';
+		if (isset($arFilter['PRODUCT_ID']))
+		{
+			$matchingSql = CSaleOrder::PrepareSql($arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields);
+			// A matching parent suppresses child contributions; otherwise only the first matching child contributes.
+			$matchingBundleRow = "SELECT MIN(CASE WHEN B.ID = BP.ID THEN 0 ELSE B.ID END) "
+				. "FROM b_sale_basket B " . $matchingSql['FROM'] . " "
+				. "WHERE (" . $matchingSql['WHERE'] . ") "
+				. "AND B.FUSER_ID = BP.FUSER_ID AND B.LID = BP.LID "
+				. "AND (B.ID = BP.ID OR (B.SET_PARENT_ID = BP.ID AND COALESCE(B.TYPE, 0) = 0))";
+			$arFields['PRICE_ALL']['FIELD'] = "SUM(CASE "
+				. "WHEN B.SET_PARENT_ID > 0 AND COALESCE(B.TYPE, 0) = 0 THEN "
+				. "CASE WHEN B.ID = (" . $matchingBundleRow . ") "
+				. "THEN COALESCE(BP.QUANTITY*BP.PRICE, 0) ELSE 0 END "
+				. "ELSE B.QUANTITY*B.PRICE END)";
+			$bundleParentJoin = " LEFT JOIN b_sale_basket BP ON (BP.ID = B.SET_PARENT_ID "
+				. "AND BP.TYPE = " . CSaleBasket::TYPE_SET . ") ";
+		}
+
 		if (!empty($arFilterH))
 		{
 			$arSqlsH = CSaleOrder::PrepareSql($arFields, $arOrder, $arFilterH, false, $arSelectFields);
 		}
 		$arSqls = CSaleOrder::PrepareSql($arFields, $arOrder, $arFilter, $arGroupBy, $arSelectFields);
+		$arSqls['FROM'] .= $bundleParentJoin;
 
 		$arSqls["SELECT"] = str_replace("%%_DISTINCT_%%", "", $arSqls["SELECT"]);
 

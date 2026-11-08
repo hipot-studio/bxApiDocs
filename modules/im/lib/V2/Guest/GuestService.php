@@ -67,6 +67,17 @@ class GuestService
 		Chat\ExtendedType::Calendar->value,
 	];
 
+	/**
+	 * EXTERNAL_AUTH_ID values of the other guest contours, kept here rather than read from their modules
+	 * so this does not become a hard dependency {@see self::isGuestOfAnotherContour}. 'imconnector' is
+	 * left out knowingly: its visitor holds a live dialog with an operator, ours must not overwrite it.
+	 *
+	 * @see \Bitrix\Call\Rest\Auth::AUTH_TYPE - visitor of a videoconference, the only one so far
+	 */
+	private const FOREIGN_GUEST_AUTH_IDS = [
+		'call',
+	];
+
 	protected static ?self $instance = null;
 
 	/** @var array<string, GuestChatLink|null> per-request memo for getLinkByCode resolution */
@@ -103,13 +114,10 @@ class GuestService
 		// Same for a stale PHP session: deactivation is lazy, so a kicked/deleted guest may still
 		// be authorized here — must not resurrect as a returning guest.
 		$contextUserId = Locator::getContext()->getUserId();
-		if ($contextUserId > 0)
+		$contextUser = $contextUserId > 0 ? User::getInstance($contextUserId) : null;
+		if ($contextUser instanceof UserGuest && (!$contextUser->isExist() || !$contextUser->isActive()))
 		{
-			$contextUser = User::getInstance($contextUserId);
-			if ($contextUser instanceof UserGuest && (!$contextUser->isExist() || !$contextUser->isActive()))
-			{
-				AuthorizationService::getInstance()->invalidateCurrentGuestSession();
-			}
+			AuthorizationService::getInstance()->invalidateCurrentGuestSession();
 		}
 
 		$linkResult = $this->resolveGuestLink($code);
@@ -134,6 +142,22 @@ class GuestService
 			if ($link->isExpired())
 			{
 				return (new AuthResult())->addError(new SharingLinkError(SharingLinkError::EXPIRED));
+			}
+		}
+
+		// The link is valid and the guest is asking for the guest page itself: re-open the scope for a guest
+		// suspended by the scope exit, or they would be refused their own chat. A guest we cannot name yet
+		// carries no mark either - they are about to be created.
+		if ($this->ourAuthorizationFollows($token, $contextUser))
+		{
+			$suspendedId = $token === null
+				? ($contextUser instanceof UserGuest ? $contextUser->getId() : null)
+				: AuthenticationService::getInstance()->findUserByToken($token)
+			;
+
+			if ($suspendedId !== null)
+			{
+				AuthorizationService::getInstance()->allowGuestReentry($suspendedId);
 			}
 		}
 
@@ -453,8 +477,9 @@ class GuestService
 	}
 
 	/**
-	 * Whether the current request would result in creating a brand-new guest user.
-	 * True only when there is no authorized user and no auth token in the request.
+	 * Whether the current request would result in creating a brand-new guest user: no auth token, and
+	 * nobody authorized whose session survives the join {@see self::resolveUser}. A visitor of another
+	 * contour counts as nobody, or the guards that only run for newcomers would skip them.
 	 */
 	private function isNewGuestCandidate(?Token $token): bool
 	{
@@ -463,7 +488,7 @@ class GuestService
 			return false;
 		}
 
-		return Locator::getContext()->getUserId() <= 0;
+		return Locator::getContext()->getUserId() <= 0 || $this->currentSessionBelongsToAnotherContour();
 	}
 
 	/**
@@ -483,7 +508,24 @@ class GuestService
 					;
 			}
 
-			return (new AuthResult())->setJoinStatus(JoinStatus::PORTAL_USER);
+			if ($this->isPortalUser($user))
+			{
+				return (new AuthResult())->setJoinStatus(JoinStatus::PORTAL_USER);
+			}
+
+			// A visitor, not a portal user. A token of ours names our guest whoever holds the session right
+			// now, so it decides before the contour does: their own session is overwritten by our Authorize().
+			if ($token !== null)
+			{
+				return $this->authorizeReturningGuest($token);
+			}
+
+			// Without such a token the contour decides, and only a listed one registers a newcomer: nothing
+			// outside the guest branch applies the guest limits and permissions to a visitor of another.
+			if (!$this->isGuestOfAnotherContour($user))
+			{
+				return (new AuthResult())->addError(new AuthError(AuthError::FOREIGN_CONTOUR));
+			}
 		}
 
 		$authResult = $token !== null
@@ -502,6 +544,84 @@ class GuestService
 			->setUser($authResult->getUser())
 			->setToken($authResult->getToken())
 			->setJoinStatus($joinStatus)
+			;
+	}
+
+	/**
+	 * Whether the guest authorization of this module is what follows on this request. Clearing the exit
+	 * mark takes the lock of the general session until the render hands it back, so the branches that
+	 * answer before it - portal user, visitor of an unlisted contour - must not pay for it.
+	 */
+	private function ourAuthorizationFollows(?Token $token, ?User $contextUser): bool
+	{
+		if ($token !== null || $contextUser instanceof UserGuest)
+		{
+			return true;
+		}
+
+		return $contextUser === null || $this->isGuestOfAnotherContour($contextUser);
+	}
+
+	/**
+	 * Whether the session of the current request belongs to a contour of its own: neither our guest nor a
+	 * user of this portal. Public because the guest page refuses such a visitor itself
+	 * {@see Controller\Page::viewAction} instead of routing them through the portal root.
+	 */
+	public function currentSessionBelongsToAnotherContour(): bool
+	{
+		$userId = Locator::getContext()->getUserId();
+		if ($userId <= 0)
+		{
+			return false;
+		}
+
+		$user = User::getInstance($userId);
+
+		return !($user instanceof UserGuest) && !$this->isPortalUser($user);
+	}
+
+	/**
+	 * A person of this portal rather than a visitor of one of its public contours. Asked through
+	 * {@see User::isInternalType()} because the auth id of a portal user cannot be listed: an employee
+	 * carries none at all, a social one 'socservices' or the service id, an LDAP one 'LDAP#{serverId}'.
+	 */
+	private function isPortalUser(User $user): bool
+	{
+		return $user->isInternalType();
+	}
+
+	/**
+	 * A guest of another public contour, e.g. the visitor of an old videoconference. Asked only of a
+	 * visitor without a token of ours: only a listed contour may be registered as a new guest.
+	 */
+	private function isGuestOfAnotherContour(User $user): bool
+	{
+		return in_array($user->getExternalAuthId(), self::FOREIGN_GUEST_AUTH_IDS, true);
+	}
+
+	/**
+	 * Authorizes the guest the token belongs to while somebody else is authorized. authenticate() cannot:
+	 * for an authorized request it only verifies the token against the current user.
+	 */
+	private function authorizeReturningGuest(Token $token): AuthResult
+	{
+		$guestId = AuthenticationService::getInstance()->findUserByToken($token);
+		if ($guestId === null)
+		{
+			return (new AuthResult())->addError(new AuthError(AuthError::GUEST_NOT_FOUND));
+		}
+
+		$user = User::getInstance($guestId);
+		$authResult = AuthorizationService::getInstance()->authorize($user);
+		if (!$authResult->isSuccess())
+		{
+			return (new AuthResult())->addErrors($authResult->getErrors());
+		}
+
+		return (new AuthResult())
+			->setUser($user)
+			->setToken($token->getValue())
+			->setJoinStatus(JoinStatus::RETURNING_GUEST)
 			;
 	}
 

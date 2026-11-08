@@ -24,6 +24,7 @@ use Bitrix\Socialnetwork\Component\BlogPostEdit;
 use Bitrix\Socialnetwork\ComponentHelper;
 use Bitrix\Socialnetwork\Controller\Livefeed;
 use Bitrix\Disk\Uf\FileUserType;
+use Bitrix\Socialnetwork\Livefeed\ImportantPostCache;
 
 class Helper
 {
@@ -188,8 +189,12 @@ class Helper
 			}
 		}
 		elseif (
-			!Loader::includeModule('extranet')
-			|| \CExtranet::isIntranetUser()
+			// permission of the publishing user, not of AUTHOR_ID, same as in the DEST and SPERM branches
+			ComponentHelper::getAllowToAllDestination()
+			&& (
+				!Loader::includeModule('extranet')
+				|| \CExtranet::isIntranetUser()
+			)
 		)
 		{
 			$postFields['SOCNET_RIGHTS'] = [ 'UA' ];
@@ -863,10 +868,13 @@ class Helper
 			)
 			{
 				\CBlogUserOptions::setOption($result, 'BLOG_POST_IMPRTNT', 'Y', $currentUserId);
-
 				if (defined('BX_COMP_MANAGED_CACHE'))
 				{
-					$CACHE_MANAGER->clearByTag('blogpost_important_all');
+					$CACHE_MANAGER->clearByTag('BLOG_POST_IMPRTNT_USER_' . $currentUserId);
+				}
+				else
+				{
+					ImportantPostCache::clear($currentUserId);
 				}
 			}
 		}

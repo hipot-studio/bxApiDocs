@@ -24,6 +24,7 @@ class BizprocUserProcesses extends CBitrixComponent implements Errorable, Contro
 	protected const GRID_ID = 'bizproc_user_processes_v2';
 	protected const NAVIGATION_ID = 'page';
 	protected const FILTER_ID = self::GRID_ID . '_filter';
+	protected const ACTION_PERFORM_GROUP = 'perform_group';
 
 	private ErrorCollection $errorCollection;
 	private \Bitrix\Main\UI\Filter\Options $filterOptions;
@@ -36,7 +37,8 @@ class BizprocUserProcesses extends CBitrixComponent implements Errorable, Contro
 		'STATE_TITLE',
 		'MODIFIED',
 		'STARTED',
-		'STARTED_BY',
+		// the similarity hash of a task is built on the template of its process, so the row must load it
+		'WORKFLOW_TEMPLATE_ID',
 		'TEMPLATE.NAME',
 	];
 
@@ -527,6 +529,14 @@ class BizprocUserProcesses extends CBitrixComponent implements Errorable, Contro
 			$actions['delegate_to'] = Loc::getMessage('BIZPROC_USER_PROCESSES_ACTION_DELEGATE');
 		}
 
+		$isOwnTasksList = $this->getTargetUserId() === $this->getCurrentUserId();
+		if ($isOwnTasksList)
+		{
+			$actions[static::ACTION_PERFORM_GROUP] =
+				Loc::getMessage('BIZPROC_USER_PROCESSES_ACTION_PERFORM_GROUP')
+			;
+		}
+
 		$setStatusButtonItems = [];
 		foreach ($actions as $actionName => $actionTitle)
 		{
@@ -546,35 +556,50 @@ class BizprocUserProcesses extends CBitrixComponent implements Errorable, Contro
 			];
 		}
 
+		$panelItems = [
+			[
+				'TYPE' => \Bitrix\Main\Grid\Panel\Types::DROPDOWN,
+				'NAME' => static::GRID_ID . '_action_button',
+				'MULTIPLE' => 'N',
+				'ITEMS' => $setStatusButtonItems,
+			],
+			[
+				'TYPE' => \Bitrix\Main\Grid\Panel\Types::CUSTOM,
+				'NAME' => static::GRID_ID . '_delegate_to',
+				'VALUE' => "<div id = \"{$delegateToContainerId}\"></div>",
+			],
+		];
+
+		if ($isOwnTasksList)
+		{
+			$decisionContainerId = 'action-decision-control-container';
+			$this->arResult['viewData']['actionPanelDecisionWrapperId'] = $decisionContainerId;
+
+			// the client knows the decisions of a homogeneous selection, so it fills the container itself
+			$panelItems[] = [
+				'TYPE' => \Bitrix\Main\Grid\Panel\Types::CUSTOM,
+				'NAME' => static::GRID_ID . '_' . static::ACTION_PERFORM_GROUP,
+				'VALUE' => "<div id = \"{$decisionContainerId}\"></div>",
+			];
+		}
+
+		$panelItems[] = $snippet->getApplyButton([
+			'ONCHANGE' => [
+				[
+					'ACTION' => \Bitrix\Main\Grid\Panel\Actions::CALLBACK,
+					'DATA' => [
+						[
+							'JS' => 'BX.Bizproc.Component.UserProcesses.Instance.applyActionPanelValues()',
+						],
+					],
+				],
+			],
+		]);
+
 		$this->arResult['gridActions'] = [
 			'GROUPS' => [
 				[
-					'ITEMS' => [
-						// $snippet->getForAllCheckbox(),
-						[
-							'TYPE' => \Bitrix\Main\Grid\Panel\Types::DROPDOWN,
-							'NAME' => static::GRID_ID . '_action_button',
-							'MULTIPLE' => 'N',
-							'ITEMS' => $setStatusButtonItems,
-						],
-						[
-							'TYPE' => \Bitrix\Main\Grid\Panel\Types::CUSTOM,
-							'NAME' => static::GRID_ID . '_delegate_to',
-							'VALUE' => "<div id = \"{$delegateToContainerId}\"></div>",
-						],
-						$snippet->getApplyButton([
-							'ONCHANGE' => [
-								[
-									'ACTION' => \Bitrix\Main\Grid\Panel\Actions::CALLBACK,
-									'DATA' => [
-										[
-											'JS' => 'BX.Bizproc.Component.UserProcesses.Instance.applyActionPanelValues()',
-										],
-									],
-								],
-							],
-						]),
-					],
+					'ITEMS' => $panelItems,
 				],
 			],
 		];

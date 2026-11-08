@@ -18,6 +18,7 @@ use Bitrix\Vibecodeconnector\Internal\Model\Catalog\CatalogItemTable;
 #[Attribute(Attribute::TARGET_CLASS)]
 final class OptionalCatalogItemFields extends AbstractClassValidationAttribute implements ValidateByGroupInterface
 {
+	private const DESCRIPTION_MAX_LENGTH = 2000;
 	private const ICON_URL_MAX_LENGTH = 2000;
 
 	public function __construct(
@@ -35,6 +36,9 @@ final class OptionalCatalogItemFields extends AbstractClassValidationAttribute i
 	{
 		$result = new ValidationResult();
 
+		$this->validateNullableProperty($result, $object, 'description', [
+			new LengthValidator(max: self::DESCRIPTION_MAX_LENGTH),
+		]);
 		$this->validateNullableProperty($result, $object, 'editUrl', [
 			new UrlValidator(),
 			new LengthValidator(max: CatalogItemTable::MAX_URL_LENGTH),

@@ -31,6 +31,12 @@ class Manager
 	private array $tabList;
 	private Context $context;
 	private array $config;
+	private bool $shouldInitializeLegacyState;
+
+	public static function createManaged(?Context $context = null): self
+	{
+		return new self($context, false);
+	}
 
 	/**
 	 * Manager constructor.
@@ -39,8 +45,9 @@ class Manager
 	 * @throws LoaderException
 	 * @throws SystemException
 	 */
-	public function __construct($context = null)
+	public function __construct($context = null, bool $shouldInitializeLegacyState = true)
 	{
+		$this->shouldInitializeLegacyState = $shouldInitializeLegacyState;
 		Loader::includeModule("mobileapp");
 		if ($context == null)
 		{
@@ -107,16 +114,23 @@ class Manager
 			}
 		}
 
-		if ($savedConfig = $this->getUserPresetConfig())
+		if ($this->shouldInitializeLegacyState)
 		{
-			$this->config["presets"]["manual"] = $savedConfig;
-		}
-		else
-		{
-			$this->config["presets"]["manual"] = $this->getActiveTabs();
+			if ($savedConfig = $this->getUserPresetConfig())
+			{
+				$this->config["presets"]["manual"] = $savedConfig;
+			}
+			else
+			{
+				$this->config["presets"]["manual"] = $this->getActiveTabs();
+			}
+
+			$this->migratePresetsByVersion();
+
+			return;
 		}
 
-		$this->migratePresetsByVersion();
+		$this->config['presets']['manual'] = $this->config['defaultUserPreset'];
 	}
 
 	/**
@@ -169,6 +183,62 @@ class Manager
 	public function getTabInstance($id = null)
 	{
 		return $this->tabList[$id] ?? null;
+	}
+
+	public function replaceActiveTab(string $oldToolId, string $newToolId): bool
+	{
+		$config = $this->resolveReplacementConfig($this->getActiveTabs(), $oldToolId, $newToolId);
+		if ($config === null)
+		{
+			return false;
+		}
+
+		$this->setCustomConfig($config, true);
+
+		return true;
+	}
+
+	/**
+	 * The new tab takes over the sort value of the replaced one, so it lands in the same slot.
+	 * Null means the swap is not applicable: an unknown tool, a tool that is not active, or a
+	 * replacement that is already in the bottom navigation.
+	 *
+	 * @param array $activeTabs Tab key => sort value.
+	 * @return array|null
+	 */
+	public function resolveReplacementConfig(array $activeTabs, string $oldToolId, string $newToolId): ?array
+	{
+		$oldTabKey = $this->findTabKeyByToolId($oldToolId);
+		$newTabKey = $this->findTabKeyByToolId($newToolId);
+
+		if ($oldTabKey === null || $newTabKey === null)
+		{
+			return null;
+		}
+
+		if (!isset($activeTabs[$oldTabKey]) || isset($activeTabs[$newTabKey]))
+		{
+			return null;
+		}
+
+		$sort = $activeTabs[$oldTabKey];
+		unset($activeTabs[$oldTabKey]);
+		$activeTabs[$newTabKey] = $sort;
+
+		return $activeTabs;
+	}
+
+	private function findTabKeyByToolId(string $toolId): ?string
+	{
+		foreach ($this->tabList as $key => $tab)
+		{
+			if ($tab->getId() === $toolId)
+			{
+				return $key;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -237,7 +307,22 @@ class Manager
 
 	public function defaultConfig()
 	{
-		return $this->config["presets"]["default"];
+		return $this->config['presets']['default'] ?? $this->config['defaultUserPreset'];
+	}
+
+	public function getManagedFixedPresetConfig(): ?array
+	{
+		if ($this->context->isGuest)
+		{
+			return $this->config['defaultGuestPreset'];
+		}
+
+		if ($this->context->isCollaber)
+		{
+			return $this->config['defaultCollaberPreset'];
+		}
+
+		return null;
 	}
 
 	public function getPresetIdByWebPreset(?string $siteId): string
@@ -348,6 +433,11 @@ class Manager
 		if ($this->context->isCollaber)
 		{
 			return $this->config['defaultCollaberPreset'];
+		}
+
+		if (!$this->shouldInitializeLegacyState)
+		{
+			return $this->config['defaultUserPreset'];
 		}
 
 		$preset = $this->getPresetName();
@@ -564,7 +654,7 @@ class Manager
 		{
 			$currentPresetName = $this->getPresetName();
 
-			if ($this->config['presetLegacy'][$currentPresetName])
+			if (!empty($this->config['presetLegacy'][$currentPresetName]))
 			{
 				$this->setCustomConfig($this->config['presetLegacy'][$currentPresetName]);
 			}

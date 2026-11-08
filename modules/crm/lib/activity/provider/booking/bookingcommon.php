@@ -6,6 +6,7 @@ namespace Bitrix\Crm\Activity\Provider\Booking;
 
 use Bitrix\Crm\Dto\Booking\EntityFieldsInterface;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Timeline;
 
 class BookingCommon
@@ -79,8 +80,13 @@ class BookingCommon
 		foreach ($activity['BINDINGS'] as $binding)
 		{
 			$identifier = new ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']);
+			if (!Container::getInstance()->getTimelinePusher()->isDetailsPageChannelActive($identifier))
+			{
+				continue;
+			}
 
-			$activityController->sendPullEventOnAddScheduled($identifier, $activity);
+			$activity = $activityController->prepareScheduledData($activity, $identifier);
+			$activityController->sendPreparedPullEventOnAddScheduled($identifier, $activity);
 		}
 	}
 
@@ -91,8 +97,13 @@ class BookingCommon
 		foreach ($activity['BINDINGS'] as $binding)
 		{
 			$identifier = new ItemIdentifier((int)$binding['OWNER_TYPE_ID'], (int)$binding['OWNER_ID']);
+			if (!Container::getInstance()->getTimelinePusher()->isDetailsPageChannelActive($identifier))
+			{
+				continue;
+			}
 
-			$activityController->sendPullEventOnUpdateScheduled($identifier, $activity);
+			$activity = $activityController->prepareScheduledData($activity, $identifier);
+			$activityController->sendPreparedPullEventOnUpdateScheduled($identifier, $activity);
 		}
 	}
 

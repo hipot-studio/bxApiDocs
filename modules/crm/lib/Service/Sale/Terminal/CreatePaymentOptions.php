@@ -20,6 +20,8 @@ final class CreatePaymentOptions
 
 	private ?string $clientName = null;
 
+	private bool $checkOrderPermissions = false;
+
 	public static function createFromArray(array $options): self
 	{
 		$result = new self();
@@ -125,6 +127,18 @@ final class CreatePaymentOptions
 	public function setClientName(?string $clientName): CreatePaymentOptions
 	{
 		$this->clientName = $clientName;
+
+		return $this;
+	}
+
+	public function shouldCheckOrderPermissions(): bool
+	{
+		return $this->checkOrderPermissions;
+	}
+
+	public function setCheckOrderPermissions(bool $checkOrderPermissions): CreatePaymentOptions
+	{
+		$this->checkOrderPermissions = $checkOrderPermissions;
 
 		return $this;
 	}

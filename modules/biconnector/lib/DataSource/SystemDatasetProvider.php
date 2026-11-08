@@ -2,9 +2,11 @@
 
 namespace Bitrix\BIConnector\DataSource;
 
+use Bitrix\BIConnector\Access\Table\TableVisibilityService;
 use Bitrix\BIConnector\DataSourceConnector\Connector;
 use Bitrix\BIConnector\ExternalSource\Internal\ExternalDatasetTable;
 use Bitrix\BIConnector\ExternalSource\Type;
+use Bitrix\BIConnector\Integration\Crm\ProductRowAmounts;
 use Bitrix\BIConnector\Manager;
 use Bitrix\BIConnector\Service;
 
@@ -14,10 +16,16 @@ class SystemDatasetProvider
 
 	private ?Service $service;
 	private array $connectorCache = [];
+	private TableVisibilityService $visibility;
 
-	public function __construct()
+	/**
+	 * @param TableVisibilityService|null $visibility The answer of the rights axis; the one of the
+	 *                                               current user when omitted.
+	 */
+	public function __construct(?TableVisibilityService $visibility = null)
 	{
 		$this->service = $this->initializeService();
+		$this->visibility = $visibility ?? new TableVisibilityService();
 	}
 
 	protected function initializeService(): ?Service
@@ -54,13 +62,28 @@ class SystemDatasetProvider
 				continue;
 			}
 
+			if (!$this->visibility->isTableAllowed($name))
+			{
+				continue;
+			}
+
 			$fullDescription = $connector->rawInfo['TABLE_DESCRIPTION_FULL'] ?? '';
 			$shortDescription = $connector->rawInfo['TABLE_DESCRIPTION'] ?? '';
 			$description = $fullDescription !== '' ? $fullDescription : (is_array($shortDescription) ? '' : (string)$shortDescription);
 
+			// Human-name rule (see Internal\Services\Dataset\TableDescriptionProvider): a human label
+			// exists only when the short description is a non-empty string differing from the
+			// technical name. Without one the name column stays empty — the code has its own column.
+			$verboseName =
+				is_string($shortDescription) && $shortDescription !== '' && $shortDescription !== $name
+					? $shortDescription
+					: ''
+			;
+
 			$rows[] = [
 				'ID' => $name,
 				'NAME' => $name,
+				'VERBOSE_NAME' => $verboseName,
 				'TYPE' => Type::System->value,
 				'DESCRIPTION' => $description,
 				'CREATED_BY_ID' => 0,
@@ -116,19 +139,62 @@ class SystemDatasetProvider
 
 		$parameters = array_merge($connector->getPreviewParameters(), $parameters);
 		$parameters['limit'] = $limit;
+		$amountColumnIndexes = $this->getPreviewAmountColumnIndexes($name, $connector, $parameters);
 
 		$rows = [];
 		foreach ($connector->query($parameters, $limit) as $row)
 		{
+			foreach ($amountColumnIndexes as $index)
+			{
+				if (isset($row[$index]))
+				{
+					$row[$index] = ProductRowAmounts::formatPreviewAmount($row[$index]);
+				}
+			}
+
 			$rows[] = array_values($row);
 		}
 
 		return $rows;
 	}
 
+	private function getPreviewAmountColumnIndexes(string $name, Connector\Base $connector, array $parameters): array
+	{
+		$amountFields = ProductRowAmounts::getPreviewAmountFields($name);
+		if (empty($amountFields))
+		{
+			return [];
+		}
+
+		$schema = $connector->getFormattedData($parameters)['schema'] ?? [];
+		$indexes = [];
+		foreach ($schema as $index => $field)
+		{
+			if (in_array($field['ID'], $amountFields, true))
+			{
+				$indexes[] = $index;
+			}
+		}
+
+		return $indexes;
+	}
+
+	/**
+	 * The single funnel of the section to a connector of the catalog.
+	 *
+	 * The rights are asked before the memo of the request, never after: the answer "visible or not"
+	 * belongs to the person asking, while the memo holds the description of the table and outlives
+	 * every person within the hit. Asked after, a hit serving two people would hand the second the
+	 * decision taken for the first.
+	 */
 	private function getConnector(string $name): ?Connector\Base
 	{
 		if ($this->service === null)
+		{
+			return null;
+		}
+
+		if (!$this->visibility->isTableAllowed($name))
 		{
 			return null;
 		}
@@ -170,10 +236,26 @@ class SystemDatasetProvider
 			return $rows;
 		}
 
+		// The grid carries the technical name and the human one in two columns, so the quick search
+		// looks into both: finding a table by its label is the point of the name column.
 		return array_values(array_filter(
 			$rows,
-			static fn(array $row): bool => mb_stripos($row['NAME'] ?? '', $nameFilter) !== false,
+			static fn(array $row): bool => self::matchesName($row, $nameFilter),
 		));
+	}
+
+	private static function matchesName(array $row, string $nameFilter): bool
+	{
+		foreach (['NAME', 'VERBOSE_NAME'] as $field)
+		{
+			$value = (string)($row[$field] ?? '');
+			if ($value !== '' && mb_stripos($value, $nameFilter) !== false)
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -184,20 +266,20 @@ class SystemDatasetProvider
 	private function isExcludedByFilter(array $filter): bool
 	{
 		$allowedFields = ['NAME', 'TYPE', 'CREATED_BY_ID'];
+		$sqlWhere = new \CSQLWhere();
 
-		foreach (array_keys($filter) as $key)
+		foreach ($filter as $key => $value)
 		{
-			$fieldName = preg_replace('/^[!=<>%@~#\*]+/', '', $key);
-			if (!in_array($fieldName, $allowedFields, true))
+			$operation = $sqlWhere->MakeOperation($key);
+			if (!in_array($operation['FIELD'], $allowedFields, true))
 			{
 				return true;
 			}
-		}
 
-		// TYPE filter set but 'system' not included
-		if (!empty($filter['TYPE']) && !in_array(Type::System->value, (array)$filter['TYPE'], true))
-		{
-			return true;
+			if ($operation['FIELD'] === 'TYPE' && $this->isSystemTypeExcluded($operation['OPERATION'], $value))
+			{
+				return true;
+			}
 		}
 
 		// CREATED_BY_ID filter set but 0 (system creator) not included
@@ -207,6 +289,25 @@ class SystemDatasetProvider
 		}
 
 		return false;
+	}
+
+	private function isSystemTypeExcluded(string $operation, mixed $value): bool
+	{
+		$values = array_filter(array_map('strval', (array)$value), static fn(string $item): bool => $item !== '');
+		if ($values === [])
+		{
+			return false;
+		}
+
+		$hasSystemType = in_array(Type::System->value, $values, true);
+
+		return match ($operation)
+		{
+			'E', 'I' => !$hasSystemType,
+			'N', 'NI' => $hasSystemType,
+			// other comparisons cannot be evaluated on the in-memory rows, so system rows are excluded
+			default => true,
+		};
 	}
 
 	private function extractNameFilter(array $filter): string

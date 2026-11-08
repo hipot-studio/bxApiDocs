@@ -91,6 +91,17 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 					'partial' => true
 				]
 			),
+			'SOURCE_DESCRIPTION' => $this->createField(
+				'SOURCE_DESCRIPTION',
+				[
+					'data' => [
+						'additionalFilter' => [
+							'isEmpty',
+							'hasAnyValue',
+						],
+					],
+				]
+			),
 			'OBSERVER_IDS' => $this->createField(
 				'OBSERVER_IDS',
 				[
@@ -236,6 +247,12 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 			),
 			'IS_RETURN_CUSTOMER' => $this->createField(
 				'IS_RETURN_CUSTOMER',
+				[
+					'type' => 'checkbox'
+				]
+			),
+			'OPENED' => $this->createField(
+				'OPENED',
 				[
 					'type' => 'checkbox'
 				]
@@ -555,7 +572,7 @@ class LeadDataProvider extends EntityDataProvider implements FactoryOptionable
 		{
 			return array(
 				'params' => array('multiple' => 'Y'),
-				'items' => \CCrmStatus::GetStatusList('SOURCE')
+				'items' => SourceDataProvider::getListWithEmptyValue()
 			);
 		}
 		elseif($fieldID === 'STATUS_ID' || $fieldID === 'STATUS_ID_FROM_HISTORY' || $fieldID === 'STATUS_ID_FROM_SUPPOSED_HISTORY')

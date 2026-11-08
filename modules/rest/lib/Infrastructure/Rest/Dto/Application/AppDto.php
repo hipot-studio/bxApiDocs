@@ -62,6 +62,10 @@ class AppDto extends Dto
 	#[Filterable]
 	public bool $installed;
 
+	#[Title("Application install completion mode")]
+	#[Filterable]
+	public string $installCompletionMode;
+
 	#[Title("Date of creation")]
 	#[Filterable, Sortable]
 	#[Optional]

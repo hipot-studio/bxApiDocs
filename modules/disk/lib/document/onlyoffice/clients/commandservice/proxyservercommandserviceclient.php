@@ -8,6 +8,7 @@ use Bitrix\Disk\Document\OnlyOffice\Clients\CommandService\Commands\DropCommand;
 use Bitrix\Disk\Document\OnlyOffice\Clients\CommandService\Commands\MetaCommand;
 use Bitrix\Disk\Document\OnlyOffice\Cloud\BaseSender;
 use Bitrix\Disk\Document\OnlyOffice\Configuration;
+use Bitrix\Main\Error;
 use Bitrix\Main\Result;
 
 class ProxyServerCommandServiceClient extends BaseSender implements CommandServiceClientInterface
@@ -38,6 +39,14 @@ class ProxyServerCommandServiceClient extends BaseSender implements CommandServi
 			'clientId' => $this->clientId,
 			'command' => new DropCommand($documentKey, $userIds),
 		]);
+	}
+
+	/**
+	 * The document proxy carries renaming and dropping only, so the command is not sent at all.
+	 */
+	public function forceSave(string $documentKey): Result
+	{
+		return (new Result())->addError(new Error('The document proxy does not support force saving.'));
 	}
 
 }

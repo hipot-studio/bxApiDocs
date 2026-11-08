@@ -2,6 +2,8 @@
 
 namespace Bitrix\Main\UserField\Types;
 
+use Bitrix\Main\Result;
+
 abstract class BaseType
 {
 	public const
@@ -19,6 +21,19 @@ abstract class BaseType
 	protected const
 		USER_TYPE_ID = null,
 		RENDER_COMPONENT = null; // component name, sample bitrix:main.field.string
+
+	public static function onBeforeDeleteValues(
+		array $userField,
+		iterable $savedValuesFromServer,
+	): Result
+	{
+		return new Result();
+	}
+
+	public static function onBeforeDeleteField(array $userField): Result
+	{
+		return new Result();
+	}
 
 	/**
 	 * @return array

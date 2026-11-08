@@ -11,11 +11,13 @@ use Bitrix\Timeman\Form\Worktime\WorktimeRecordForm;
 use Bitrix\Timeman\Helper\EntityCodesHelper;
 use Bitrix\Timeman\Helper\TimeHelper;
 use Bitrix\Timeman\Helper\UserHelper;
+use Bitrix\Timeman\Integration\Intranet\Settings;
 use Bitrix\Timeman\Model\Worktime\EventLog\WorktimeEventTable;
 use Bitrix\Timeman\Repository\Worktime\WorktimeRepository;
 use Bitrix\Timeman\Service\DependencyManager;
 use Bitrix\Timeman\Service\Worktime\Violation\WorktimeViolation;
 use Bitrix\Timeman\Service\Worktime\Violation\WorktimeViolationParams;
+use Bitrix\Timeman\V2\Internal\Service\ReportTextNormalizerService;
 use CBXFeatures;
 use CTimeManReportDaily;
 
@@ -75,6 +77,13 @@ class WorktimeRecordReportComponent extends Timeman\Component\BaseComponent
 
 	public function executeComponent()
 	{
+		if (!$this->isToolAvailable())
+		{
+			$this->includeComponentTemplate('tool-disabled');
+
+			return;
+		}
+
 		$this->getApplication()->setTitle(htmlspecialcharsbx(Loc::getMessage('JS_CORE_TMR_TITLE')));
 		$this->arResult['isShiftplan'] = $this->getExtraInfo()['isShiftplan'] ?? null;
 		$record = null;
@@ -143,6 +152,11 @@ class WorktimeRecordReportComponent extends Timeman\Component\BaseComponent
 		$this->makeRelatedRecordsLinks($record);
 
 		$this->includeComponentTemplate();
+	}
+
+	private function isToolAvailable(): bool
+	{
+		return (new Settings())->isToolAvailable(Settings::TOOLS['worktime']);
 	}
 
 	private function showError($errorMessage)
@@ -667,7 +681,11 @@ class WorktimeRecordReportComponent extends Timeman\Component\BaseComponent
 				$this->arResult['WORKTIME_REPORT']['REPORT'] = $report->getReport();
 			}
 		}
-		$this->arResult['WORKTIME_REPORT']['REPORT'] = nl2br(htmlspecialcharsbx($this->arResult['WORKTIME_REPORT']['REPORT']));
+		// line breaks are produced once, by the template parser (NL2BR): normalize resolves the
+		// editor markup into plain newlines, so nl2br here would only double them
+		$this->arResult['WORKTIME_REPORT']['REPORT'] = htmlspecialcharsbx(
+			(new ReportTextNormalizerService())->normalize($this->arResult['WORKTIME_REPORT']['REPORT'])
+		);
 	}
 
 	private function initHints(Timeman\Model\Worktime\Record\WorktimeRecord $record)

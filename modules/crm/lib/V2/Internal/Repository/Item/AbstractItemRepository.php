@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Bitrix\Crm\V2\Internal\Repository\Item;
 
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Objectify\EntityObject;
 use Bitrix\Main\ORM\Query\Filter\Condition;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
@@ -69,7 +70,7 @@ abstract class AbstractItemRepository implements ItemRepositoryInterface
 		}
 
 		$query = $dataClass::query()
-			->setSelect($select)
+			->setSelect($this->appendOrderFieldsToSelect($select, $order))
 			->whereIn('ID', $ids)
 		;
 		if (!empty($order))
@@ -80,7 +81,7 @@ abstract class AbstractItemRepository implements ItemRepositoryInterface
 		return $query->fetchCollection()->getAll();
 	}
 
-	public function getCount(array|ConditionTree|null $filter = null): int
+	public function getCount(array|ConditionTree|null $filter = null, ?array $runtime = null): int
 	{
 		$dataClass = $this->getTableClass();
 		if ($dataClass === null)
@@ -88,7 +89,38 @@ abstract class AbstractItemRepository implements ItemRepositoryInterface
 			return 0;
 		}
 
-		return $dataClass::getCount($this->isEmptyFilter($filter) ? [] : $filter);
+		if (empty($runtime))
+		{
+			return $dataClass::getCount($this->isEmptyFilter($filter) ? [] : $filter);
+		}
+
+		$query = $dataClass::query()
+			->addSelect(new ExpressionField('COUNT', 'COUNT(DISTINCT %s)', 'ID'))
+		;
+		$this->applyFilter($query, $filter);
+		$this->applyRuntime($query, $runtime);
+		$row = $query->fetch();
+
+		return (int)($row['COUNT'] ?? 0);
+	}
+
+	public function createIdQuery(array|ConditionTree|null $filter = null, ?array $runtime = null): ?Query
+	{
+		$dataClass = $this->getTableClass();
+		if ($dataClass === null)
+		{
+			return null;
+		}
+
+		$query = $dataClass::query()->setSelect(['ID']);
+		$this->applyFilter($query, $filter);
+		$this->applyRuntime($query, $runtime);
+		if (!empty($runtime))
+		{
+			$query->setDistinct();
+		}
+
+		return $query;
 	}
 
 	public function ensureParentFieldReferences(int $entityTypeId): void
@@ -119,9 +151,9 @@ abstract class AbstractItemRepository implements ItemRepositoryInterface
 	): array
 	{
 		$select = ['ID'];
-		if (!empty($runtime))
+		if (!empty($order))
 		{
-			foreach (array_keys($order ?? []) as $orderField)
+			foreach (array_keys($order) as $orderField)
 			{
 				if (is_string($orderField) && $orderField !== 'ID')
 				{
@@ -130,7 +162,7 @@ abstract class AbstractItemRepository implements ItemRepositoryInterface
 			}
 		}
 
-		$query = $dataClass::query()->setSelect($select);
+		$query = $dataClass::query()->setSelect($this->appendOrderFieldsToSelect($select, $order));
 		$this->applyFilter($query, $filter);
 		$this->applyRuntime($query, $runtime);
 		if (!empty($runtime))
@@ -191,6 +223,20 @@ abstract class AbstractItemRepository implements ItemRepositoryInterface
 		}
 
 		return $query->fetchCollection()->getAll();
+	}
+
+	/** @param string[] $select @param array<string, string>|null $order @return string[] */
+	private function appendOrderFieldsToSelect(array $select, ?array $order): array
+	{
+		foreach (array_keys($order ?? []) as $orderField)
+		{
+			if (is_string($orderField) && !in_array($orderField, $select, true))
+			{
+				$select[] = $orderField;
+			}
+		}
+
+		return $select;
 	}
 
 	private function applyRuntime(\Bitrix\Main\ORM\Query\Query $query, ?array $runtime): void

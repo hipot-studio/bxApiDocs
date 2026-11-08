@@ -213,15 +213,46 @@ class GlobalField extends Base
 			return ['error' => ErrorMessage::ACCESS_DENIED->getError()->getMessage()];
 		}
 
-		return match ($mode)
+		$facade = match ($mode)
 		{
-			'variable' => ['list' => \Bitrix\Bizproc\Workflow\Type\GlobalVar::getAll($documentType)],
-			'constant' => ['list' => \Bitrix\Bizproc\Workflow\Type\GlobalConst::getAll($documentType)],
-			default => [
+			'variable' => \Bitrix\Bizproc\Workflow\Type\GlobalVar::class,
+			'constant' => \Bitrix\Bizproc\Workflow\Type\GlobalConst::class,
+			default => null,
+		};
+
+		if ($facade === null)
+		{
+			return [
 				'error' => \Bitrix\Main\Localization\Loc::getMessage(
 					'BIZPROC_CONTROLLER_GLOBALFIELD_MODE_NOT_DEFINED'
 				),
-			],
-		};
+			];
+		}
+
+		$userId = (int)($this->getCurrentUser()->getId());
+		if (!$facade::canUserRead($documentType, $userId))
+		{
+			return ['error' => ErrorMessage::ACCESS_DENIED->getError()->getMessage()];
+		}
+
+		return ['list' => static::withVisibilityNames($facade::getAll($documentType), $facade, $documentType)];
+	}
+
+	/**
+	 * A global value is named by its full signature `<visibility>: <name>` everywhere a caption is read
+	 * back into a reference ({@see \Bitrix\Bizproc\Automation\Helper::getGlobalsMap}), while the records
+	 * of the facade carry the code of the visibility only. Without the localized name of the visibility a
+	 * consumer of the action cannot tell two values of one name apart.
+	 */
+	private static function withVisibilityNames(array $list, string $facade, array $documentType): array
+	{
+		$visibilityNames = $facade::getVisibilityFullNames($documentType);
+
+		foreach ($list as $id => $property)
+		{
+			$list[$id]['VisibilityName'] = $visibilityNames[$property['Visibility'] ?? ''] ?? '';
+		}
+
+		return $list;
 	}
 }

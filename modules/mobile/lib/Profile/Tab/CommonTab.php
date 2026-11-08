@@ -22,6 +22,7 @@ use Bitrix\IntranetMobile\Provider\DepartmentProvider;
 use Bitrix\Tasks\Internals\Effective;
 use Bitrix\Tasks\Util\User as TasksUser;
 use Bitrix\IntranetMobile\Provider\InviteProvider;
+use Bitrix\StaffTrack\Public\Provider\EmployeeOfficeProvider;
 
 class CommonTab extends BaseProfileTab
 {
@@ -96,6 +97,7 @@ class CommonTab extends BaseProfileTab
 			'tags' => $tagsData['tags'],
 			'departments' => $this->getDepartmentData(),
 			'efficiency' => $this->getEfficiencyData(),
+			'office' => $this->getOfficeData(),
 			'commonFields' => $commonFields,
 			'currentTheme' => (new ThemeProvider($this->ownerId))->getCurrentTheme(),
 			'inviteSettings' => (new InviteProvider())->getInviteSettings(),
@@ -381,6 +383,34 @@ class CommonTab extends BaseProfileTab
 		$result['canUseTelephony'] = $this->getCanUseTelephony();
 
 		return $result;
+	}
+
+	private function getOfficeData(): ?array
+	{
+		$provider = $this->getEmployeeOfficeProvider();
+		if ($provider === null)
+		{
+			return null;
+		}
+
+		try
+		{
+			return $provider->getProfileCard($this->viewerId, $this->ownerId)->toArray();
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+	}
+
+	protected function getEmployeeOfficeProvider(): ?EmployeeOfficeProvider
+	{
+		if (!Loader::includeModule('stafftrack') || !class_exists(EmployeeOfficeProvider::class))
+		{
+			return null;
+		}
+
+		return new EmployeeOfficeProvider();
 	}
 
 	private function getAboutMeData(): array

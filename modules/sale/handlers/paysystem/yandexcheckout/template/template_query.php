@@ -16,7 +16,13 @@ $documentRoot = Application::getDocumentRoot();
 		require 'style.css';
 	?>
 </style>
-<div class="paysystem-yandex mb-4" id="paysystem-yandex">
+<div
+	class="paysystem-yandex mb-4"
+	id="paysystem-yandex"
+	tabindex="-1"
+	role="group"
+	aria-label="<?= htmlspecialcharsbx(Loc::getMessage('SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_FORM_ARIA')) ?>"
+>
 	<form id="paysystem-yandex-form">
 		<p class="widget-payment-checkout-info"><?= Loc::getMessage('SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_DESCRIPTION_MSGVER_1') ?></p>
 		<p class="widget-payment-checkout-info"><?= Loc::getMessage('SALE_HANDLERS_PAY_SYSTEM_YANDEX_CHECKOUT_DESCRIPTION_SUM_MSGVER_1', ['#SUM#' => SaleFormatCurrency($params['SUM'], $params['CURRENCY'])]) ?></p>

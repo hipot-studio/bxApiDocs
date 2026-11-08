@@ -21,6 +21,8 @@ use Bitrix\Main\Localization\Loc;
 use Bitrix\Rest;
 use Bitrix\Main;
 use Bitrix\Rest\Component\AppLayout;
+use Bitrix\Rest\Internal\Entity\Application\Embedding\Embedding;
+use Bitrix\Rest\Internal\Entity\CurrentUser;
 
 Main\Localization\Loc::loadMessages(__FILE__);
 Main\Localization\Loc::loadLanguageFile(__DIR__ . '/component.php');
@@ -73,6 +75,15 @@ class CAppLayoutComponent extends \CBitrixComponent
 		{
 			$this->checkParams();
 
+			$embedding = (new AppLayout\Embedding\EmbeddingResolver())->resolve(
+				(int)$this->arParams['CODE'],
+				(int)($this->arParams['PLACEMENT_ID'] ?? 0),
+			);
+			if ($embedding !== null)
+			{
+				return $this->executeEmbedding($embedding);
+			}
+
 			$fillers = [
 				AppLayout\Filler\AppBodyFiller::class,
 				AppLayout\Filler\AppPlacementFiller::class,
@@ -122,6 +133,53 @@ class CAppLayoutComponent extends \CBitrixComponent
 		}
 	}
 
+	private function executeEmbedding(Embedding $embedding): ?string
+	{
+		$userId = (int)(CurrentUser::getInstance()->getId() ?? 0);
+
+		$embeddingResolver = new AppLayout\Embedding\EmbeddingResolver();
+
+		$embeddingResolver->checkAccess($embedding, $userId, (string)$this->arParams['PLACEMENT']);
+
+		$placementOptions = $this->arParams['~PLACEMENT_OPTIONS'] ?? $this->arParams['PLACEMENT_OPTIONS'];
+		if ($placementOptions === '')
+		{
+			$placementOptions = null;
+		}
+
+		$open = $embeddingResolver->resolveOpen($embedding, $userId, $placementOptions);
+
+		$this->arResult['APP_SID'] = md5(uniqid(rand(), true));
+		$this->arResult['EMBEDDING_ID'] = (int)$embedding->getId();
+		$this->arResult['LEGACY_APP_ID'] = (int)$this->arParams['CODE'];
+		$this->arResult['EMBEDDING_TITLE'] = $embeddingResolver->resolveTitle($embedding);
+		$this->arResult['EMBEDDING_URL'] = $open->url;
+		$this->arResult['EMBEDDING_PAYLOAD'] = $open->payload;
+		$this->arResult['EMBEDDING_METHOD'] = $open->method;
+		$this->arResult['CURRENT_HOST'] = $this->getCurrentHost();
+		$this->arResult['CURRENT_HOST_SECURE'] = $this->request->isHttps();
+		$this->arResult['REST_PATH'] = Main\Config\Option::get('rest', 'server_path', '/rest');
+
+		$filler = new AppLayout\Filler\EmbeddingViewFiller($this->arParams, $this->arResult, $this->request);
+		$this->arResult = array_merge($this->arResult, $filler->run());
+
+		$this->IncludeComponentTemplate('embedding');
+
+		return $this->arResult['APP_SID'];
+	}
+
+	private function getCurrentHost(): string
+	{
+		$host = $this->request->getHttpHost();
+		$serverPort = Main\Context::getCurrent()->getServer()->getServerPort();
+		if ($serverPort != 80 && $serverPort != 443)
+		{
+			$host .= ':' . $serverPort;
+		}
+
+		return $host;
+	}
+
 	private function getErrorMessageFromException(\Exception $e): string
 	{
 		$result = match ($e::class)
@@ -135,6 +193,7 @@ class CAppLayoutComponent extends \CBitrixComponent
 				. '[' . $e->getMessage() . ']',
 			AppLayout\Exception\PlacementNotInstalledException::class => Loc::getMessage('REST_AL_ERROR_APP_PLACEMENT_NOT_INSTALLED'),
 			AppLayout\Exception\AppHandlerNotDefinedException::class => Loc::getMessage('REST_APP_HANDLER_NOT_DEFINED'),
+			AppLayout\Exception\EmbeddingUnavailableException::class => Loc::getMessage('REST_AL_ERROR_EMBEDDING_UNAVAILABLE'),
 			AppLayout\Exception\AppLayoutException::class => Loc::getMessage('REST_APP_LAYOUT_ERROR'),
 			default => Loc::getMessage('REST_APP_LAYOUT_UNKNOWN_ERROR') . '[' . $e->getMessage() . ']',
 		};

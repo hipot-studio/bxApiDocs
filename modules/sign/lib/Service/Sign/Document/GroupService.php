@@ -61,7 +61,7 @@ final class GroupService
 		}
 
 		$groupDocumentCount = $this->documentRepository->getCountByGroupId($groupId);
-		if ($groupDocumentCount > self::MAX_DOCUMENT_COUNT)
+		if ($groupDocumentCount >= self::MAX_DOCUMENT_COUNT)
 		{
 			return $result->addError(new Error('Group already has too many documents', 'MAX_DOCUMENT_COUNT_EXCEEDED'));
 		}
@@ -118,21 +118,18 @@ final class GroupService
 		return $this->documentRepository->update($document);
 	}
 
-	public function getDocumentList(int $groupId): DocumentCollection
+	public function getDocumentList(int $groupId, ?int $limit = null): DocumentCollection
 	{
 		if ($groupId < 1)
 		{
 			return new DocumentCollection();
 		}
 
-		return $this->documentRepository->listByGroupId($groupId, self::MAX_DOCUMENT_COUNT);
+		return $this->documentRepository->listByGroupId($groupId, $limit ?? self::MAX_DOCUMENT_COUNT);
 	}
 
-	public function getDraftDocumentList(int $groupId): DocumentCollection
+	public function filterDraft(DocumentCollection $documents): DocumentCollection
 	{
-		return $this
-			->getDocumentList($groupId)
-			->filter(fn(Document $document) => $this->documentService->canBeChanged($document))
-		;
+		return $documents->filter(fn(Document $document) => $this->documentService->canBeChanged($document));
 	}
 }

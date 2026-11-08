@@ -16,7 +16,7 @@ use Bitrix\Main\Result;
 
 final class DeleteAction extends RemoveAction
 {
-	public function __construct(private int $entityTypeId)
+	public function __construct(private int $entityTypeId, private string $gridId)
 	{
 	}
 
@@ -46,6 +46,7 @@ final class DeleteAction extends RemoveAction
 					'JS' =>
 						(new Event('BatchManager:executeDeletion'))
 							->addEntityTypeId($this->entityTypeId)
+							->addGridId($this->gridId)
 							->buildJsCallback()
 					,
 				]

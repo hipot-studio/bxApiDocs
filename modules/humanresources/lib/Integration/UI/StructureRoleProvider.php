@@ -29,10 +29,6 @@ class StructureRoleProvider extends BaseStructureProvider
 {
 	public const ENTITY_ID = 'structure-role';
 	private const TAB_ID_ROLES = 'structure-roles-tab';
-	private const IMAGE_ROLE_TEAM_OPTION = '/bitrix/js/humanresources/entity-selector/src/images/role-team-option.svg';
-	private const IMAGE_ROLE_DEPARTMENT_OPTION = '/bitrix/js/humanresources/entity-selector/src/images/role-department-option.svg';
-	private const IMAGE_ROLE_TEAM_OPTION_SELECTED = '/bitrix/js/humanresources/entity-selector/src/images/role-team-option-selected.svg';
-	private const IMAGE_ROLE_DEPARTMENT_OPTION_SELECTED = '/bitrix/js/humanresources/entity-selector/src/images/role-department-option-selected.svg';
 
 	protected function initProviderOptions(array $options = []): BaseProviderOptions
 	{
@@ -313,8 +309,8 @@ class StructureRoleProvider extends BaseStructureProvider
 		?bool $availableInRecentTab = true,
 	): Item
 	{
-		$tagAvatar = $node->isDepartment() ? self::IMAGE_ROLE_DEPARTMENT_OPTION_SELECTED : self::IMAGE_ROLE_TEAM_OPTION_SELECTED;
-		$avatar = $node->isDepartment() ? self::IMAGE_ROLE_DEPARTMENT_OPTION : self::IMAGE_ROLE_TEAM_OPTION;
+		$tagAvatar = $node->isDepartment() ? StructureRoleIcon::DEPARTMENT_SELECTED : StructureRoleIcon::TEAM_SELECTED;
+		$avatar = $node->isDepartment() ? StructureRoleIcon::DEPARTMENT : StructureRoleIcon::TEAM;
 		$titleWithName = Loc::getMessage($messageKeyWithName, ['#NODE_NAME#' => $node->name]);
 		$id = $customId ?? ($accessCodePrefix . $node->id);
 		$titleOnly = Loc::getMessage($messageKeyOnly);

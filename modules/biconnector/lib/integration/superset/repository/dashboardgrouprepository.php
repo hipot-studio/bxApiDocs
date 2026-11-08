@@ -13,8 +13,10 @@ use Bitrix\Main\ORM\Fields\ExpressionField;
 use Bitrix\Main\ORM\Query\Query;
 use Bitrix\BIConnector\Configuration\DashboardTariffConfigurator;
 use Bitrix\BIConnector\Superset\Dashboard\UrlParameter;
+use Bitrix\BIConnector\Superset\Filter\Provider\DashboardDataProvider;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\Entity\Base;
+use Bitrix\Main\DB\SqlExpression;
 
 final class DashboardGroupRepository extends DashboardRepository
 {
@@ -27,14 +29,26 @@ final class DashboardGroupRepository extends DashboardRepository
 	 * @param array $ormParams
 	 * @param bool $needLoadProxyData
 	 *
-	 * @return Dashboard[]
+	 * @return array<int, array<string, mixed>>
 	 */
-	public function getList(array $ormParams, bool $needLoadProxyData = false): array
+	public function getList(
+		array $ormParams,
+		bool $needLoadProxyData = false,
+		?DashboardGroupListOptions $listOptions = null,
+		?int $accessUserId = null
+	): array
 	{
+		$listOptions ??= DashboardGroupListOptions::createDefault();
+
+		$accessController = $accessUserId === null
+			? AccessController::getCurrent()
+			: new AccessController($accessUserId)
+		;
+
 		$visibleDashboardIds = array_key_exists('DASHBOARD_ID', $ormParams['filter'] ?? [])
 			? array_map('intval', (array)$ormParams['filter']['DASHBOARD_ID'])
 			: null;
-		$query = $this->prepareUnionQuery($ormParams);
+		$query = $this->prepareUnionQuery($ormParams, true, $listOptions);
 
 		$items = $query->exec();
 
@@ -58,7 +72,7 @@ final class DashboardGroupRepository extends DashboardRepository
 
 		if (!empty($dashboardIds))
 		{
-			$dashboards = $this->getDashboardRows($dashboardIds, $needLoadProxyData);
+			$dashboards = $this->getDashboardRows($dashboardIds, $needLoadProxyData, $accessController);
 			foreach ($dashboards as $dashboard)
 			{
 				$rows[$dashboard['ID'] . '_' . self::TYPE_DASHBOARD] = $dashboard;
@@ -67,7 +81,7 @@ final class DashboardGroupRepository extends DashboardRepository
 
 		if (!empty($groupIds))
 		{
-			$groups = $this->getGroupRows($groupIds, $visibleDashboardIds);
+			$groups = $this->getGroupRows($groupIds, $visibleDashboardIds, $accessController);
 			foreach ($groups as $group)
 			{
 				$rows[$group['ID'] . '_' . self::TYPE_GROUP] = $group;
@@ -77,12 +91,13 @@ final class DashboardGroupRepository extends DashboardRepository
 		return array_values($rows);
 	}
 
-	public function getCount(array $ormParams): int
+	public function getCount(array $ormParams, ?DashboardGroupListOptions $listOptions = null): int
 	{
+		$listOptions ??= DashboardGroupListOptions::createDefault();
 		unset($ormParams['order']);
 		$query =
 			$this
-				->prepareUnionQuery($ormParams, false)
+				->prepareUnionQuery($ormParams, false, $listOptions)
 				->countTotal(true)
 		;
 
@@ -146,13 +161,13 @@ final class DashboardGroupRepository extends DashboardRepository
 		return array_merge($row, $additionalOptions);
 	}
 
-	private function getDashboardRows(array $ids, bool $needLoadProxyData = false): array
+	private function getDashboardRows(array $ids, bool $needLoadProxyData, AccessController $accessController): array
 	{
 		$dashboardOrmParams = [
 			'filter' => ['ID' => $ids],
 		];
 
-		$allowedIds = AccessController::getCurrent()->getAllowedDashboardValue(
+		$allowedIds = $accessController->getAllowedDashboardValue(
 			ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
 		);
 		$allowedIds = array_map('intval', $allowedIds ?? []);
@@ -172,9 +187,9 @@ final class DashboardGroupRepository extends DashboardRepository
 		return $dashboardRows;
 	}
 
-	private function getGroupRows(array $ids, ?array $dashboardIds): array
+	private function getGroupRows(array $ids, ?array $dashboardIds, AccessController $accessController): array
 	{
-		$allowedIds = AccessController::getCurrent()->getAllowedGroupValue(
+		$allowedIds = $accessController->getAllowedGroupValue(
 			ActionDictionary::ACTION_BIC_DASHBOARD_VIEW,
 		);
 		$allowedIds = array_map('intval', $allowedIds ?? []);
@@ -196,10 +211,6 @@ final class DashboardGroupRepository extends DashboardRepository
 			"SOURCE_TITLE",
 			"APP_ID",
 			"CREATED_BY_ID",
-			"FILTER_PERIOD",
-			"DATE_FILTER_START",
-			"DATE_FILTER_END",
-			"INCLUDE_LAST_FILTER_DATE",
 			"IS_TARIFF_RESTRICTED",
 			"IS_AVAILABLE_DASHBOARD",
 			"SOURCE_DETAIL_URL",
@@ -277,8 +288,10 @@ final class DashboardGroupRepository extends DashboardRepository
 		return null;
 	}
 
-	private function prepareUnionQuery(array $ormParams, bool $applyUnionOrder = true): Query
+	private function prepareUnionQuery(array $ormParams, bool $applyUnionOrder = true, ?DashboardGroupListOptions $listOptions = null): Query
 	{
+		$listOptions ??= DashboardGroupListOptions::createDefault();
+
 		$queryDashboard = SupersetDashboardTable::query()
 			->addSelect(new ExpressionField('ENTITY_TYPE', "'" . self::TYPE_DASHBOARD . "'"))
 			->addSelect('ID')
@@ -291,7 +304,6 @@ final class DashboardGroupRepository extends DashboardRepository
 			'GROUPS',
 			'URL_PARAMS',
 			'CREATED_BY_ID',
-			'FILTER_PERIOD',
 		];
 
 		$queryGroup = SupersetDashboardGroupTable::query()
@@ -299,6 +311,8 @@ final class DashboardGroupRepository extends DashboardRepository
 			->addSelect('ID')
 			->registerRuntimeField(new ExpressionField('TITLE', 'NAME'))
 		;
+
+		$hasPinnedOrder = $applyUnionOrder && $this->registerPinnedOrderFields($queryDashboard, $queryGroup, $listOptions);
 
 		foreach ($emptyUnionFilterGroupFields as $unionField)
 		{
@@ -362,9 +376,33 @@ final class DashboardGroupRepository extends DashboardRepository
 
 			$queryDashboard->setFilter($dashboardFilter);
 
-			//** The group query is unuseful by group id or tag id filtering **/
-			if (isset($ormParams['filter']['GROUPS.ID']) || isset($ormParams['filter']['TAGS.ID']))
+			$this->applyDashboardListOptions(
+				$queryDashboard,
+				$listOptions,
+			);
+
+			$isScopeFilter = array_key_exists('=SCOPE.SCOPE_CODE', $ormParams['filter']);
+			$isShareBanFilter =
+				array_key_exists(DashboardDataProvider::SHARE_BANNED_ORM_KEY, $ormParams['filter'])
+				|| array_key_exists(DashboardDataProvider::SHARE_NOT_BANNED_ORM_KEY, $ormParams['filter'])
+			;
+
+			//** The group query is unuseful by group id, tag id, scope or share ban filtering **/
+			if (
+				isset($ormParams['filter']['GROUPS.ID'])
+				|| isset($ormParams['filter']['TAGS.ID'])
+				|| $isScopeFilter
+				|| $isShareBanFilter
+				|| $listOptions->targetDashboardId !== null
+			)
 			{
+				if ($isScopeFilter)
+				{
+					// SCOPE is a OneToMany relation: the =SCOPE.SCOPE_CODE join can duplicate dashboard rows.
+					// Replace the join with an ID IN (subquery) so pagination counts distinct dashboards.
+					$queryDashboard->disableDataDoubling();
+				}
+
 				if (!empty($ormParams['limit']) && (int)$ormParams['limit'] > 0)
 				{
 					$queryDashboard->setLimit((int)$ormParams['limit']);
@@ -431,11 +469,44 @@ final class DashboardGroupRepository extends DashboardRepository
 			$queryGroup->setFilter($groupFilter);
 		}
 
+		if (empty($ormParams['filter']))
+		{
+			$this->applyDashboardListOptions(
+				$queryDashboard,
+				$listOptions,
+			);
+
+			if ($listOptions->targetDashboardId !== null)
+			{
+				if (!empty($ormParams['limit']) && (int)$ormParams['limit'] > 0)
+				{
+					$queryDashboard->setLimit((int)$ormParams['limit']);
+				}
+
+				if (!empty($ormParams['offset']) && (int)$ormParams['offset'] > 0)
+				{
+					$queryDashboard->setOffset((int)$ormParams['offset']);
+				}
+
+				return $queryDashboard;
+			}
+		}
+
 		$queryGroup->unionAll($queryDashboard);
 
 		if ($applyUnionOrder)
 		{
-			$unionOrder = array_merge(['ENTITY_TYPE' => 'desc'], $ormParams['order'] ?? []);
+			$unionOrder = $ormParams['order'] ?? [];
+
+			if ($hasPinnedOrder)
+			{
+				$unionOrder = array_merge(['MOBILE_PIN_POSITION' => 'asc', 'ENTITY_TYPE' => 'desc'], $unionOrder);
+			}
+			else
+			{
+				$unionOrder = array_merge(['ENTITY_TYPE' => 'desc'], $unionOrder);
+			}
+
 			$queryGroup->setUnionOrder($unionOrder);
 		}
 
@@ -450,5 +521,89 @@ final class DashboardGroupRepository extends DashboardRepository
 		}
 
 		return $queryGroup;
+	}
+
+	private function applyDashboardListOptions(
+		Query $queryDashboard,
+		DashboardGroupListOptions $listOptions,
+	): void
+	{
+		if ($listOptions->mode === DashboardGroupListMode::RootWithPromotedDashboards)
+		{
+			if ($listOptions->dashboardIds === [])
+			{
+				$queryDashboard->where('ID', 0);
+			}
+			else
+			{
+				$queryDashboard->whereIn('ID', $listOptions->dashboardIds);
+			}
+		}
+		elseif ($listOptions->mode === DashboardGroupListMode::FolderWithExcludedDashboards && $listOptions->dashboardIds !== [])
+		{
+			$queryDashboard->whereNotIn('ID', $listOptions->dashboardIds);
+		}
+
+		if ($listOptions->targetDashboardId !== null)
+		{
+			$queryDashboard->where('ID', $listOptions->targetDashboardId);
+		}
+	}
+
+	private function registerPinnedOrderFields(
+		Query $queryDashboard,
+		Query $queryGroup,
+		DashboardGroupListOptions $listOptions,
+	): bool
+	{
+		if (
+			$listOptions->mode !== DashboardGroupListMode::RootWithPromotedDashboards
+			|| $listOptions->dashboardIds === []
+		)
+		{
+			return false;
+		}
+
+		$expressionParts = ['CASE %s'];
+		$buildFrom = ['ID'];
+
+		foreach ($listOptions->dashboardIds as $position => $dashboardId)
+		{
+			$expressionParts[] = 'WHEN %s THEN %s';
+
+			$buildFrom[] = static fn() => new SqlExpression('?i', $dashboardId);
+			$buildFrom[] = static fn() => new SqlExpression('?i', $position);
+		}
+
+		$fallbackPosition = count($listOptions->dashboardIds);
+
+		$expressionParts[] = 'ELSE %s END';
+		$buildFrom[] = static fn() => new SqlExpression('?i', $fallbackPosition);
+
+		$queryDashboard
+			->registerRuntimeField(
+				new ExpressionField(
+					'MOBILE_PIN_POSITION',
+					implode(' ', $expressionParts),
+					$buildFrom,
+				),
+			)
+			->addSelect('MOBILE_PIN_POSITION')
+		;
+
+		$queryGroup
+			->registerRuntimeField(
+				new ExpressionField(
+					'MOBILE_PIN_POSITION',
+					'%s',
+					[
+						static fn() => new SqlExpression('?i', $fallbackPosition),
+					],
+				),
+			)
+			->addSelect('MOBILE_PIN_POSITION')
+		;
+
+		return true;
 	}
 }

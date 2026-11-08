@@ -1,16 +1,17 @@
 <?php
-
 declare(strict_types=1);
 
 namespace Bitrix\Disk\Infrastructure\Controller\UnifiedLink\ActionFilter;
 
-use Bitrix\Disk\Controller\UnifiedLinkController;
+use Bitrix\Disk\BaseObject;
 use Bitrix\Disk\File;
+use Bitrix\Disk\Folder;
 use Bitrix\Disk\Infrastructure\Controller\UnifiedLink\Meta\ActionsMetadata;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
-use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkFileRenderer;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Render\UnifiedLinkRenderer;
 use Bitrix\Disk\Public\Service\UnifiedLink\UrlGenerator;
 use Bitrix\Disk\TypeFile;
+use Bitrix\Disk\UrlManager;
 use Bitrix\Main\ArgumentNullException;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Engine\ActionFilter\Base;
@@ -22,14 +23,15 @@ use Bitrix\Main\SystemException;
 use Bitrix\Main\Web\Uri;
 
 /**
- * Action filter to check access to files based on the action being executed.
- * Redirect to a specific URL if the access level of the file does not match the action's access level.
+ * Action filter to check access to objects based on the action being executed.
+ * Redirect to a specific URL if the access level of the object does not match the action's access level.
  */
 class UnifiedLinkAccessLevelRouter extends Base
 {
 	private bool $accessDenied = false;
 	private bool $needRedirect = false;
 	private string $urlToRedirect = '';
+	private ?BaseObject $baseObject = null;
 	private readonly ActionsMetadata $actionsMetaData;
 
 	public function __construct(
@@ -48,7 +50,7 @@ class UnifiedLinkAccessLevelRouter extends Base
 	public function onBeforeAction(Event $event): ?EventResult
 	{
 		$action = $this->getAction();
-		/** @var UnifiedLinkFileRenderer $service */
+		/** @var UnifiedLinkRenderer $service */
 		$service = $action->getArguments()['service'] ?? null;
 
 		if ($service === null)
@@ -56,20 +58,31 @@ class UnifiedLinkAccessLevelRouter extends Base
 			return null;
 		}
 
-		$fileAccessLevel = $service->getAccessLevel();
+		$baseObject = $service->resolveBaseObject();
+		$this->baseObject = $baseObject;
+
+		$accessLevel = $service->getAccessLevel();
 		$shouldRenderExternal = $service->shouldRenderExternal();
 
-		if ($fileAccessLevel === UnifiedLinkAccessLevel::Denied && !$shouldRenderExternal)
+		if ($accessLevel === UnifiedLinkAccessLevel::Denied && !$shouldRenderExternal)
 		{
 			return $this->setAccessDeniedResult();
 		}
 
-		$methodAccessLevel = $this->actionsMetaData->getAccessLevel($action->getName());
-		if ($methodAccessLevel !== null && $methodAccessLevel !== $fileAccessLevel)
+		if ($baseObject instanceof Folder && $action->getName() !== 'view')
 		{
-			$file = $service->resolveFile();
-			$urlToRedirect = $this->actionsMetaData->getUrl($fileAccessLevel, $file);
-			if (isset($urlToRedirect) && $this->shouldRedirect($fileAccessLevel, $file))
+			$redirectToView = (new UrlManager())->getUnifiedLink($baseObject);
+
+			return $this->setRedirectResult($redirectToView);
+		}
+
+		$methodAccessLevel = $this->actionsMetaData->getAccessLevel($action->getName());
+
+		if ($methodAccessLevel !== null && $methodAccessLevel !== $accessLevel)
+		{
+			$urlToRedirect = $this->actionsMetaData->getUrl($accessLevel, $baseObject);
+
+			if (isset($urlToRedirect) && $this->shouldRedirect($accessLevel, $baseObject))
 			{
 				$currentUri = new Uri($this->controller->getRequest()->getRequestUri());
 				$uriToRedirect = (string)$currentUri->withPath($urlToRedirect);
@@ -77,7 +90,7 @@ class UnifiedLinkAccessLevelRouter extends Base
 				return $this->setRedirectResult($uriToRedirect);
 			}
 
-			if ($methodAccessLevel->value > $fileAccessLevel->value && !$shouldRenderExternal)
+			if ($methodAccessLevel->value > $accessLevel->value && !$shouldRenderExternal)
 			{
 				return $this->setAccessDeniedResult();
 			}
@@ -97,7 +110,7 @@ class UnifiedLinkAccessLevelRouter extends Base
 		if ($this->accessDenied)
 		{
 			$response = $this->createResponse(403);
-			$response->setContent(UnifiedLinkFileRenderer::renderAccessDeniedPage());
+			$response->setContent(UnifiedLinkRenderer::renderAccessDeniedPageForBaseObject($this->baseObject));
 
 			$event->setParameter('result', $response);
 		}
@@ -118,7 +131,7 @@ class UnifiedLinkAccessLevelRouter extends Base
 		;
 	}
 
-	private function shouldRedirect(UnifiedLinkAccessLevel $fileAccessLevel, File $file): bool
+	private function shouldRedirect(UnifiedLinkAccessLevel $accessLevel, BaseObject $baseObject): bool
 	{
 		$request = $this->controller->getRequest();
 
@@ -127,22 +140,30 @@ class UnifiedLinkAccessLevelRouter extends Base
 			return false;
 		}
 
+		if (!$baseObject instanceof File)
+		{
+			return false;
+		}
+
 		// some files should always open without /edit in url
-		if ($fileAccessLevel === UnifiedLinkAccessLevel::Edit && in_array(strtolower($file->getExtension()), UrlGenerator::EXTENSIONS_TO_OPEN_WITHOUT_EDIT_SUFFIX))
+		if (
+			$accessLevel === UnifiedLinkAccessLevel::Edit
+			&& in_array(strtolower($baseObject->getExtension()), UrlGenerator::EXTENSIONS_TO_OPEN_WITHOUT_EDIT_SUFFIX)
+		)
 		{
 			return false;
 		}
 
-		// disable redirects to document editing to avoid exceeding editing limits
-		$isDocument = (int)$file->getTypeFile() === TypeFile::DOCUMENT;
-		if ($isDocument && $fileAccessLevel === UnifiedLinkAccessLevel::Edit)
+		// a document needs no redirect to editing: the mode it opens in is chosen by the renderer
+		$isDocument = (int)$baseObject->getTypeFile() === TypeFile::DOCUMENT;
+		if ($isDocument && $accessLevel === UnifiedLinkAccessLevel::Edit)
 		{
 			return false;
 		}
 
-		$actionName = $this->actionsMetaData->getActionName($fileAccessLevel);
+		$actionName = $this->actionsMetaData->getActionName($accessLevel);
 
-		return $this->actionsMetaData->isFileTypeAllowed($actionName, $file);
+		return $this->actionsMetaData->isFileTypeAllowed($actionName, $baseObject);
 	}
 
 	private function setAccessDeniedResult(): EventResult

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Bitrix\Mail\Internal\Service\SourceGeneration;
 
 use Bitrix\Mail\Helper;
+use Bitrix\Mail\Helper\MessageConversationStepper;
+use Bitrix\Mail\Internal\Repository\MessageConversationListRepository;
+use Bitrix\Mail\Internal\Service\Mailbox\SettingsWriteCoordinator;
 use Bitrix\Mail\Internals\MailboxSourceGenerationTable;
 use Bitrix\Mail\MailboxDirectory;
 use Bitrix\Mail\MailboxTable;
@@ -36,7 +39,7 @@ final class Switcher
 	}
 
 	/**
-	 * Activates the generation prepared by the operation.
+	 * Owns the transaction and activates the generation prepared by the operation.
 	 *
 	 * @param int $expectedActiveGenerationId The pointer the caller saw; POINTER_AS_STORED
 	 *                                        takes whatever the transaction reads.
@@ -130,7 +133,7 @@ final class Switcher
 		return $result;
 	}
 
-	/** @param array $heldLock The mailbox synchronization lease held by the caller. */
+	/** Joins the caller transaction; the caller owns commit, rollback and afterCommit. */
 	public function activateWithinTransaction(
 		int $mailboxId,
 		string $operationId,
@@ -170,6 +173,7 @@ final class Switcher
 	{
 		$this->invalidateGenerationCaches($mailboxId);
 		$this->counters->recount($mailboxId);
+		MessageConversationStepper::bind();
 	}
 
 	/**
@@ -275,15 +279,7 @@ final class Switcher
 			));
 		}
 
-		$snapshot = $this->fetchConnectionSnapshot($targetId);
-		if ($snapshot === null)
-		{
-			return $this->reject(self::ERROR_TARGET_UNKNOWN, sprintf(
-				'The connection snapshot of the generation %u is unreadable',
-				$targetId,
-			));
-		}
-
+		$snapshot = $this->decodeConnectionSnapshot($target);
 		if (!$this->compareAndSetPointer($connection, $mailboxId, $pointer, $targetId))
 		{
 			return $this->reject(self::ERROR_POINTER_CONFLICT, sprintf(
@@ -291,6 +287,8 @@ final class Switcher
 				$mailboxId,
 			));
 		}
+
+		(new MessageConversationListRepository())->setProjectionReady($mailboxId, false);
 
 		$this->archiveOtherActiveGenerations($connection, $mailboxId, $targetId);
 
@@ -349,19 +347,25 @@ final class Switcher
 		return $row ? (int)$row['ACTIVE_GENERATION_ID'] : 0;
 	}
 
-	/**
-	 * @return array|null ['ID' => int, 'STATUS' => string, 'REVISION' => int]
-	 */
 	private function lockTarget(Connection $connection, int $mailboxId, string $operationId): ?array
 	{
-		$row = $connection->query(sprintf(
-			"SELECT ID, STATUS, REVISION FROM %s WHERE MAILBOX_ID = %u AND OPERATION_ID = '%s' FOR UPDATE",
+		$rows = $connection->query(sprintf(
+			"SELECT %s FROM %s WHERE MAILBOX_ID = %u AND (OPERATION_ID = '%s' OR STATUS = '%s') ORDER BY ID FOR UPDATE",
+			implode(', ', array_merge(['ID', 'OPERATION_ID', 'STATUS', 'REVISION'], self::PROJECTED_FIELDS)),
 			MailboxSourceGenerationTable::getTableName(),
 			$mailboxId,
 			$connection->getSqlHelper()->forSql($operationId),
-		))->fetch();
+			MailboxSourceGenerationTable::STATUS_ACTIVE,
+		))->fetchAll();
+		foreach ($rows as $row)
+		{
+			if ((string)$row['OPERATION_ID'] === $operationId)
+			{
+				return $row;
+			}
+		}
 
-		return $row ?: null;
+		return null;
 	}
 
 	/**
@@ -378,6 +382,21 @@ final class Switcher
 		])->fetch();
 
 		return $row ?: null;
+	}
+
+	private function decodeConnectionSnapshot(array $row): array
+	{
+		$snapshot = [];
+		foreach (self::PROJECTED_FIELDS as $field)
+		{
+			$snapshot[$field] = SettingsWriteCoordinator::decodeStoredField(
+				MailboxSourceGenerationTable::class,
+				$field,
+				$row[$field],
+			);
+		}
+
+		return $snapshot;
 	}
 
 	private function compareAndSetPointer(Connection $connection, int $mailboxId, int $from, int $to): bool
@@ -472,8 +491,7 @@ final class Switcher
 
 		return $connection->getAffectedRowsCount() > 0
 			? ['acquired' => $now, 'previous' => $previous]
-			: null
-		;
+			: null;
 	}
 
 	/**
@@ -518,12 +536,12 @@ final class Switcher
 	 */
 	private function holdsMailbox(int $mailboxId, array $lock): bool
 	{
-		$current = (int)Application::getConnection()->queryScalar(sprintf(
-			'SELECT SYNC_LOCK FROM b_mail_mailbox WHERE ID = %u',
+		$row = Application::getConnection()->query(sprintf(
+			'SELECT SYNC_LOCK FROM b_mail_mailbox WHERE ID = %u FOR UPDATE',
 			$mailboxId,
-		));
+		))->fetch();
 
-		return $current === (int)$lock['acquired'];
+		return $row !== false && (int)$row['SYNC_LOCK'] === (int)$lock['acquired'];
 	}
 
 	public function unlockMailbox(int $mailboxId, array $lock): void

@@ -7,6 +7,7 @@ namespace Bitrix\Vibecodeconnector\Internal\Service\Endpoint;
 final class EndpointResolver
 {
 	private const PATH_MICROSERVICE = '/microservice';
+	private const PATH_EMBED_OPEN = '/embed/b24/open';
 	private const PATH_STATUS = '/status';
 	private const PATH_PUBLIC_KEY = '/static/public-key.pem';
 
@@ -17,6 +18,11 @@ final class EndpointResolver
 	public function microservice(): string
 	{
 		return $this->join(self::PATH_MICROSERVICE);
+	}
+
+	public function embedOpen(): string
+	{
+		return $this->join(self::PATH_EMBED_OPEN);
 	}
 
 	public function status(): string

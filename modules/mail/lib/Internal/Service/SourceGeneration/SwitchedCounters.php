@@ -108,8 +108,8 @@ final class SwitchedCounters
 			'=ENTITY_TYPE' => MailCounterTable::DIR,
 		];
 
-		$scope = GenerationScope::forMailbox($mailboxId);
-		if ($scope->getGenerationIds() !== null)
+		$scope = GenerationScope::servingMailbox($mailboxId);
+		if (!$scope->isUnfiltered())
 		{
 			/*
 				The folders are named in the query and not joined to it: ENTITY_ID of a counter is a

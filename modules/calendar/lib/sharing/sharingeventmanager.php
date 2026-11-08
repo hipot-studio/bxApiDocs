@@ -878,6 +878,11 @@ class SharingEventManager
 			'from' => $this->event->getStart()->toString(),
 			'to' => $this->event->getEnd()->toString(),
 			'name' => $this->event->getName(),
+			'fields' => [
+				'DATE_FROM' => $this->event->getStart()->toString(),
+				'TZ_FROM' => (string)$this->event->getStartTimeZone(),
+				'DT_SKIP_TIME' => $this->event->isFullDayEvent() ? 'Y' : 'N',
+			],
 			'isSharing' => true,
 		]);
 	}

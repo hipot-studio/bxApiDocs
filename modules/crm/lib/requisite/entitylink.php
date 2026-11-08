@@ -5,7 +5,10 @@ use Bitrix\Crm;
 use Bitrix\Crm\EntityBankDetail;
 use Bitrix\Crm\EntityRequisite;
 use Bitrix\Crm\Item;
-use Bitrix\Crm\Service;
+use Bitrix\Crm\V2\Internal\Access\Requisite\EntityLinkAccess;
+use Bitrix\Crm\V2\Internal\Service\Requisite\EntityClientSellerResolver;
+use Bitrix\Crm\V2\Internal\Service\Requisite\EntityLinkConsistencyChecker;
+use Bitrix\Crm\V2\Internal\Service\Requisite\EntityLinkService;
 use Bitrix\Main;
 use Bitrix\Main\Data\Cache;
 
@@ -15,26 +18,31 @@ use Bitrix\Main\Data\Cache;
  */
 class EntityLink
 {
-	const ERR_INVALID_ENTITY_TYPE                           = 201;
-	const ERR_INVALID_ENTITY_ID                             = 202;
-	const ERR_ENTITY_NOT_FOUND                              = 203;
-	const ERR_INVALID_REQUSIITE_ID                          = 204;
-	const ERR_INVALID_BANK_DETAIL_ID                        = 205;
-	const ERR_INVALID_MC_REQUSIITE_ID                       = 206;
-	const ERR_INVALID_MC_BANK_DETAIL_ID                     = 207;
-	const ERR_REQUISITE_NOT_FOUND                           = 208;
-	const ERR_REQUISITE_TIED_TO_ENTITY_WITHOUT_CLIENT       = 209;
-	const ERR_REQUISITE_NOT_ASSIGNED                        = 210;
-	const ERR_BANK_DETAIL_NOT_FOUND                         = 211;
-	const ERR_BANK_DETAIL_NOT_ASSIGNED_WO_REQUISITE         = 212;
-	const ERR_BANK_DETAIL_NOT_ASSIGNED                      = 213;
-	const ERR_MC_REQUISITE_TIED_TO_ENTITY_WITHOUT_MYCOMPANY = 214;
-	const ERR_MC_REQUISITE_NOT_FOUND                        = 215;
-	const ERR_MC_REQUISITE_NOT_ASSIGNED                     = 216;
-	const ERR_MC_BANK_DETAIL_NOT_ASSIGNED_WO_MC_REQUISITE   = 217;
-	const ERR_MC_BANK_DETAIL_NOT_FOUND                      = 218;
-	const ERR_MC_BANK_DETAIL_NOT_ASSIGNED                   = 219;
-	const ERR_ENTITY_CHECK_N_BUT_CLIENT_NOT_SPECIFIED       = 220;
+	const ERR_INVALID_ENTITY_TYPE = EntityLinkConsistencyChecker::ERR_INVALID_ENTITY_TYPE;
+	const ERR_INVALID_ENTITY_ID = EntityLinkConsistencyChecker::ERR_INVALID_ENTITY_ID;
+	const ERR_ENTITY_NOT_FOUND = EntityClientSellerResolver::ERR_ENTITY_NOT_FOUND;
+	const ERR_INVALID_REQUSIITE_ID = EntityLinkConsistencyChecker::ERR_INVALID_REQUISITE_ID;
+	const ERR_INVALID_BANK_DETAIL_ID = EntityLinkConsistencyChecker::ERR_INVALID_BANK_DETAIL_ID;
+	const ERR_INVALID_MC_REQUSIITE_ID = EntityLinkConsistencyChecker::ERR_INVALID_MC_REQUISITE_ID;
+	const ERR_INVALID_MC_BANK_DETAIL_ID = EntityLinkConsistencyChecker::ERR_INVALID_MC_BANK_DETAIL_ID;
+	const ERR_REQUISITE_NOT_FOUND = EntityLinkConsistencyChecker::ERR_REQUISITE_NOT_FOUND;
+	const ERR_REQUISITE_TIED_TO_ENTITY_WITHOUT_CLIENT =
+		EntityLinkConsistencyChecker::ERR_REQUISITE_TIED_TO_ENTITY_WITHOUT_CLIENT;
+	const ERR_REQUISITE_NOT_ASSIGNED = EntityLinkConsistencyChecker::ERR_REQUISITE_NOT_ASSIGNED;
+	const ERR_BANK_DETAIL_NOT_FOUND = EntityLinkConsistencyChecker::ERR_BANK_DETAIL_NOT_FOUND;
+	const ERR_BANK_DETAIL_NOT_ASSIGNED_WO_REQUISITE =
+		EntityLinkConsistencyChecker::ERR_BANK_DETAIL_NOT_ASSIGNED_WO_REQUISITE;
+	const ERR_BANK_DETAIL_NOT_ASSIGNED = EntityLinkConsistencyChecker::ERR_BANK_DETAIL_NOT_ASSIGNED;
+	const ERR_MC_REQUISITE_TIED_TO_ENTITY_WITHOUT_MYCOMPANY =
+		EntityLinkConsistencyChecker::ERR_MC_REQUISITE_TIED_TO_ENTITY_WITHOUT_MYCOMPANY;
+	const ERR_MC_REQUISITE_NOT_FOUND = EntityLinkConsistencyChecker::ERR_MC_REQUISITE_NOT_FOUND;
+	const ERR_MC_REQUISITE_NOT_ASSIGNED = EntityLinkConsistencyChecker::ERR_MC_REQUISITE_NOT_ASSIGNED;
+	const ERR_MC_BANK_DETAIL_NOT_ASSIGNED_WO_MC_REQUISITE =
+		EntityLinkConsistencyChecker::ERR_MC_BANK_DETAIL_NOT_ASSIGNED_WO_MC_REQUISITE;
+	const ERR_MC_BANK_DETAIL_NOT_FOUND = EntityLinkConsistencyChecker::ERR_MC_BANK_DETAIL_NOT_FOUND;
+	const ERR_MC_BANK_DETAIL_NOT_ASSIGNED = EntityLinkConsistencyChecker::ERR_MC_BANK_DETAIL_NOT_ASSIGNED;
+	const ERR_ENTITY_CHECK_N_BUT_CLIENT_NOT_SPECIFIED =
+		EntityLinkConsistencyChecker::ERR_ENTITY_CHECK_N_BUT_CLIENT_NOT_SPECIFIED;
 
 	const ENTITY_OPERATION_FIRST = 1;
 	const ENTITY_OPERATION_ADD = 1;
@@ -47,16 +55,31 @@ class EntityLink
 	protected const CACHE_ID_MY_COMPANY_FIRST = 'myCompanyFirst';
 
 	private static $FIELD_INFOS = null;
-	private static $parentEntityFieldMap = null;
+	private static ?EntityClientSellerResolver $clientSellerResolver = null;
+	private static ?EntityLinkConsistencyChecker $consistencyChecker = null;
+	private static ?EntityLinkAccess $access = null;
 
-	protected static ?Crm\Cache\RatedCache $byEntityCache = null;
+	private static function getClientSellerResolver(): EntityClientSellerResolver
+	{
+		return self::$clientSellerResolver ??= new EntityClientSellerResolver();
+	}
+
+	private static function getConsistencyChecker(): EntityLinkConsistencyChecker
+	{
+		return self::$consistencyChecker ??= new EntityLinkConsistencyChecker(
+			EntityLinkService::getInstance(),
+			self::getClientSellerResolver()
+		);
+	}
+
+	private static function getAccess(): EntityLinkAccess
+	{
+		return self::$access ??= new EntityLinkAccess();
+	}
 
 	protected static function clearByEntityCache()
 	{
-		if (static::$byEntityCache)
-		{
-			static::$byEntityCache->clear();
-		}
+		EntityLinkService::getInstance()->clearReadCache();
 	}
 
 	/**
@@ -68,39 +91,7 @@ class EntityLink
 	 */
 	public static function getByEntity($entityTypeId, $entityId)
 	{
-		$entityTypeId = (int)$entityTypeId;
-		$entityId = (int)$entityId;
-
-		if (!\CCrmOwnerType::IsDefined($entityTypeId) || $entityId <= 0)
-		{
-			return null;
-		}
-
-		if (static::$byEntityCache === null)
-		{
-			static::$byEntityCache = new Crm\Cache\RatedCache();
-		}
-
-		$cacheKey = $entityTypeId . '_' . $entityId;
-		$result = static::$byEntityCache->get($cacheKey);
-		if ($result !== null)
-		{
-			return $result;
-		}
-
-		$dbResult = LinkTable::getList(
-			array(
-				'filter' => array('=ENTITY_TYPE_ID' => $entityTypeId, '=ENTITY_ID' => $entityId),
-				'select' => array('REQUISITE_ID', 'BANK_DETAIL_ID', 'MC_REQUISITE_ID', 'MC_BANK_DETAIL_ID'),
-				'limit' => 1
-			)
-		);
-		$fields = $dbResult->fetch();
-
-		$fields = is_array($fields) ? $fields : [];
-		static::$byEntityCache->set($cacheKey, $fields);
-
-		return !empty($fields) ? $fields : null;
+		return EntityLinkService::getInstance()->getByEntity((int)$entityTypeId, (int)$entityId);
 	}
 
 	/**
@@ -149,372 +140,26 @@ class EntityLink
 
 	public static function getParentEntityFieldMap()
 	{
-		if (self::$parentEntityFieldMap === null)
-		{
-			self::$parentEntityFieldMap = [
-				\CCrmOwnerType::Deal => [
-					\CCrmOwnerType::Quote => 'QUOTE_ID'
-				],
-				\CCrmOwnerType::Quote => [
-					\CCrmOwnerType::Deal => 'DEAL_ID'
-				],
-				\CCrmOwnerType::Invoice => [
-					\CCrmOwnerType::Quote => 'UF_QUOTE_ID',
-					\CCrmOwnerType::Deal => 'UF_DEAL_ID'
-				],
-				\CCrmOwnerType::SmartInvoice => [
-					\CCrmOwnerType::Quote => Service\ParentFieldManager::getParentFieldName(\CCrmOwnerType::Quote),
-					\CCrmOwnerType::Deal => Service\ParentFieldManager::getParentFieldName(\CCrmOwnerType::Deal),
-				],
-			];
-		}
-
-		return self::$parentEntityFieldMap;
+		return self::getClientSellerResolver()->getParentEntityFieldMap();
 	}
 
 	public static function getEntityClientSellerInfo($entityTypeId, $entityId, $options = [])
 	{
-		$getParentEntityFields = (
-			is_array($options) && isset($options['GET_PARENT_ENTITY_FILEDS'])
-			&& ($options['GET_PARENT_ENTITY_FILEDS'] === 'Y' || $options['GET_PARENT_ENTITY_FILEDS'] === true)
-		);
-
-		$entityNotFound = false;
-		$result = array(
-			'CLIENT_ENTITY_TYPE_ID' => \CCrmOwnerType::Undefined,
-			'CLIENT_ENTITY_ID' => 0,
-			'MYCOMPANY_ID' => 0
-		);
-		$parentFieldMap = self::getParentEntityFieldMap();
-		$parentFileds = [];
-		if ($getParentEntityFields && is_array($parentFieldMap[$entityTypeId] ?? null))
-		{
-			$parentFileds = array_values($parentFieldMap[$entityTypeId]);
-		}
-		if ($entityTypeId === \CCrmOwnerType::Invoice)
-		{
-			$select = array('ID', 'UF_COMPANY_ID', 'UF_CONTACT_ID', 'UF_MYCOMPANY_ID');
-			$res = \CCrmInvoice::GetList(
-				array(),
-				array('ID' => $entityId, 'CHECK_PERMISSIONS' => 'N'),
-				false,
-				false,
-				array_merge($select, $parentFileds)
-			);
-			$row = $res->Fetch();
-			if (is_array($row))
-			{
-				if (isset($row['UF_COMPANY_ID']) && $row['UF_COMPANY_ID'] > 0)
-				{
-					$result['CLIENT_ENTITY_TYPE_ID'] = \CCrmOwnerType::Company;
-					$result['CLIENT_ENTITY_ID'] = (int)$row['UF_COMPANY_ID'];
-				}
-				else if (isset($row['UF_CONTACT_ID']) && $row['UF_CONTACT_ID'] > 0)
-				{
-					$result['CLIENT_ENTITY_TYPE_ID'] = \CCrmOwnerType::Contact;
-					$result['CLIENT_ENTITY_ID'] = (int)$row['UF_CONTACT_ID'];
-				}
-
-				if (isset($row['UF_MYCOMPANY_ID']) && $row['UF_MYCOMPANY_ID'] > 0)
-					$result['MYCOMPANY_ID'] = (int)$row['UF_MYCOMPANY_ID'];
-			}
-			else
-			{
-				$entityNotFound = true;
-			}
-		}
-		else
-		{
-			$factory = Service\Container::getInstance()->getFactory($entityTypeId);
-			if ($factory)
-			{
-				if (
-					!$getParentEntityFields
-					|| empty($parentFileds)
-					|| $entityTypeId != \CCrmOwnerType::SmartInvoice
-				)
-				{
-					[$result, $entityNotFound] = self::clientSellerInfoByOrm(
-						$factory,
-						$entityId,
-						$result,
-						$getParentEntityFields,
-						$parentFileds,
-						$entityNotFound
-					);
-				}
-				else
-				{
-					[$result, $entityNotFound] = self::clientSellerInfoByFactory(
-						$factory,
-						$entityId,
-						$result,
-						$getParentEntityFields,
-						$parentFileds,
-						$entityNotFound
-					);
-				}
-			}
-			else
-			{
-				$entityNotFound = true;
-			}
-		}
-
-		if ($entityNotFound)
-			throw new Main\SystemException('Entity is not found', self::ERR_ENTITY_NOT_FOUND);
-
-		return $result;
+		return self::getClientSellerResolver()->getClientSellerInfo($entityTypeId, $entityId, $options);
 	}
 
 	public static function checkConsistence($entityTypeId, $entityId,
 		$requisiteId, $bankDetailId, $mcRequisiteId, $mcBankDetailId, $options = null)
 	{
-		$enableEntityCheck = (!is_array($options) || !isset($options['ENTITY_CHECK'])
-			|| $options['ENTITY_CHECK'] === 'Y' || $options['ENTITY_CHECK'] === true);
-		$skipIsMyCompanyCheck = is_array($options) && isset($options['IS_MY_COMPANY_CHECK'])
-			&& $options['IS_MY_COMPANY_CHECK'] !== 'Y' && $options['IS_MY_COMPANY_CHECK'] !== true;
-
-		if (!$enableEntityCheck
-			&& (!is_array($options)
-				|| !is_array($options['CLIENT_SELLER_INFO'])
-				|| !isset($options['CLIENT_SELLER_INFO']['CLIENT_ENTITY_TYPE_ID'])
-				|| !isset($options['CLIENT_SELLER_INFO']['CLIENT_ENTITY_ID'])
-				|| !(\CCrmOwnerType::IsDefined($options['CLIENT_SELLER_INFO']['CLIENT_ENTITY_TYPE_ID'])
-					|| $options['CLIENT_SELLER_INFO']['CLIENT_ENTITY_TYPE_ID'] === \CCrmOwnerType::Undefined)
-				|| ($options['CLIENT_ENTITY_ID'] ?? null) < 0))
-		{
-			throw new Main\SystemException(
-				'The entity check is disabled, but client type and id are not specified.',
-				self::ERR_ENTITY_CHECK_N_BUT_CLIENT_NOT_SPECIFIED
-			);
-		}
-
-		$availableEntityTypeIds = static::getAvailableEntityTypeIds();
-
-		if ($enableEntityCheck && !isset($availableEntityTypeIds[$entityTypeId]))
-		{
-			throw new Main\SystemException(
-				'Entity type is not defined or invalid.',
-				self::ERR_INVALID_ENTITY_TYPE
-			);
-		}
-
-		if($enableEntityCheck && !(is_int($entityId) && $entityId > 0))
-		{
-			throw new Main\SystemException(
-				'Entity identifier is not defined or invalid.',
-				self::ERR_INVALID_ENTITY_ID
-			);
-		}
-
-		if(!is_int($requisiteId) || $requisiteId < 0)
-		{
-			throw new Main\SystemException(
-				'Requisite identifier is not defined or invalid.',
-				self::ERR_INVALID_REQUSIITE_ID
-			);
-		}
-
-		if(!is_int($bankDetailId) || $bankDetailId < 0)
-		{
-			throw new Main\SystemException(
-				'BankDetail identifier is not defined or invalid.',
-				self::ERR_INVALID_BANK_DETAIL_ID
-			);
-		}
-
-		if(!is_int($mcRequisiteId) || $mcRequisiteId < 0)
-		{
-			throw new Main\SystemException(
-				'Requisite identifier of your company is not defined or invalid.',
-				self::ERR_INVALID_MC_REQUSIITE_ID
-			);
-		}
-
-		if(!is_int($mcBankDetailId) || $mcBankDetailId < 0)
-		{
-			throw new Main\SystemException(
-				'BankDetail identifier of your company is not defined or invalid.',
-				self::ERR_INVALID_MC_BANK_DETAIL_ID
-			);
-		}
-
-		if (is_array($options) && is_array($options['CLIENT_SELLER_INFO']))
-		{
-			$clientSellerInfo = $options['CLIENT_SELLER_INFO'];
-		}
-		else
-		{
-			$clientSellerInfo = self::getEntityClientSellerInfo($entityTypeId, $entityId);
-		}
-
-		$requisite = new EntityRequisite();
-		$bankDetail = new EntityBankDetail();
-		$entityTypeName = null;
-
-		if ($requisiteId > 0)
-		{
-			if ($clientSellerInfo['CLIENT_ENTITY_TYPE_ID'] === \CCrmOwnerType::Undefined
-				|| $clientSellerInfo['CLIENT_ENTITY_ID'] <= 0)
-			{
-				if ($entityTypeName === null)
-				{
-					$entityTypeName = ucfirst(mb_strtolower(\CCrmOwnerType::ResolveName($entityTypeId)));
-				}
-				throw new Main\SystemException(
-					"Requisite with ID '$requisiteId' can not be tied to the $entityTypeName ".
-						"in which the client is not selected.",
-					self::ERR_REQUISITE_TIED_TO_ENTITY_WITHOUT_CLIENT
-				);
-			}
-
-			$res = $requisite->getList(
-				array(
-					'filter' => array('=ID' => $requisiteId),
-					'select' => array('ID', 'ENTITY_TYPE_ID', 'ENTITY_ID')
-				)
-			);
-			$row = $res->fetch();
-			unset($res);
-			if (!is_array($row))
-			{
-				throw new Main\SystemException(
-					"The Requisite with ID '$requisiteId' is not found.",
-					self::ERR_REQUISITE_NOT_FOUND
-				);
-			}
-			$rqEntityTypeId = isset($row['ENTITY_TYPE_ID']) ? (int)$row['ENTITY_TYPE_ID'] : 0;
-			$rqEntityId = isset($row['ENTITY_ID']) ? (int)$row['ENTITY_ID'] : 0;
-			$clientEntityTypeId = (int)$clientSellerInfo['CLIENT_ENTITY_TYPE_ID'];
-			$clientEntityId = (int)$clientSellerInfo['CLIENT_ENTITY_ID'];
-			if ($clientEntityTypeId !== $rqEntityTypeId || $clientEntityId !== $rqEntityId)
-			{
-				$clientEntityTypeName = ucfirst(mb_strtolower(\CCrmOwnerType::ResolveName($clientEntityTypeId)));
-				throw new Main\SystemException(
-					"The Requisite with ID '$requisiteId' is not assigned to $clientEntityTypeName ".
-						"with ID '$clientEntityId'.",
-					self::ERR_REQUISITE_NOT_ASSIGNED
-				);
-			}
-		}
-
-		if ($bankDetailId > 0)
-		{
-			if ($requisiteId <= 0)
-			{
-				throw new Main\SystemException(
-					"The BankDetail can not be assigned without Requisite.",
-					self::ERR_BANK_DETAIL_NOT_ASSIGNED_WO_REQUISITE
-				);
-			}
-
-			$res = $bankDetail->getList(
-				array(
-					'filter' => array('=ID' => $bankDetailId),
-					'select' => array('ID', 'ENTITY_TYPE_ID', 'ENTITY_ID')
-				)
-			);
-			$row = $res->fetch();
-			unset($res);
-			if (!is_array($row))
-			{
-				throw new Main\SystemException(
-					"The BankDetail with ID '$bankDetailId' is not found.",
-					self::ERR_BANK_DETAIL_NOT_FOUND
-				);
-			}
-			$bdEntityTypeId = isset($row['ENTITY_TYPE_ID']) ? (int)$row['ENTITY_TYPE_ID'] : 0;
-			$bdEntityId = isset($row['ENTITY_ID']) ? (int)$row['ENTITY_ID'] : 0;
-			if ($bdEntityTypeId !== \CCrmOwnerType::Requisite || $bdEntityId !== $requisiteId)
-			{
-				throw new Main\SystemException(
-					"The BankDetail with ID '$bankDetailId' is not assigned to Requisite with ID '$requisiteId'.",
-					self::ERR_BANK_DETAIL_NOT_ASSIGNED
-				);
-			}
-		}
-
-		if ($mcRequisiteId > 0)
-		{
-			if ($clientSellerInfo['MYCOMPANY_ID'] <= 0
-				|| (!$skipIsMyCompanyCheck && $clientSellerInfo['MYCOMPANY_ID'] > 0
-					&& !self::isMyCompany($clientSellerInfo['MYCOMPANY_ID'])))
-			{
-				if ($entityTypeName === null)
-				{
-					$entityTypeName = ucfirst(mb_strtolower(\CCrmOwnerType::ResolveName($entityTypeId)));
-				}
-				throw new Main\SystemException(
-					"Requisite of your company with ID '$requisiteId' can not be tied to the $entityTypeName ".
-					"in which your company is not selected.",
-					self::ERR_MC_REQUISITE_TIED_TO_ENTITY_WITHOUT_MYCOMPANY
-				);
-			}
-
-			$myCompanyId = (int)$clientSellerInfo['MYCOMPANY_ID'];
-			$res = $requisite->getList(
-				array(
-					'filter' => array('=ID' => $mcRequisiteId),
-					'select' => array('ID', 'ENTITY_TYPE_ID', 'ENTITY_ID')
-				)
-			);
-			$row = $res->fetch();
-			unset($res);
-			if (!is_array($row))
-			{
-				throw new Main\SystemException(
-					"The Requisite of your company with ID '$mcRequisiteId' is not found.",
-					self::ERR_MC_REQUISITE_NOT_FOUND
-				);
-			}
-			$rqEntityTypeId = isset($row['ENTITY_TYPE_ID']) ? (int)$row['ENTITY_TYPE_ID'] : 0;
-			$rqEntityId = isset($row['ENTITY_ID']) ? (int)$row['ENTITY_ID'] : 0;
-			if ($rqEntityTypeId !== \CCrmOwnerType::Company || $rqEntityId !== $myCompanyId)
-			{
-				throw new Main\SystemException(
-					"The Requisite with ID '$mcRequisiteId' is not assigned to your company with ID '$myCompanyId'.",
-					self::ERR_MC_REQUISITE_NOT_ASSIGNED
-				);
-			}
-		}
-
-		if ($mcBankDetailId > 0)
-		{
-			if ($mcRequisiteId <= 0)
-			{
-				throw new Main\SystemException(
-					"The BankDetail of your company can not be assigned without Requisite of your company.",
-					self::ERR_MC_BANK_DETAIL_NOT_ASSIGNED_WO_MC_REQUISITE
-				);
-			}
-
-			$res = $bankDetail->getList(
-				array(
-					'filter' => array('=ID' => $mcBankDetailId),
-					'select' => array('ID', 'ENTITY_TYPE_ID', 'ENTITY_ID')
-				)
-			);
-			$row = $res->fetch();
-			unset($res);
-			if (!is_array($row))
-			{
-				throw new Main\SystemException(
-					"The BankDetail of your company with ID '$mcBankDetailId' is not found.",
-					self::ERR_MC_BANK_DETAIL_NOT_FOUND
-				);
-			}
-			$bdEntityTypeId = isset($row['ENTITY_TYPE_ID']) ? (int)$row['ENTITY_TYPE_ID'] : 0;
-			$bdEntityId = isset($row['ENTITY_ID']) ? (int)$row['ENTITY_ID'] : 0;
-			if ($bdEntityTypeId !== \CCrmOwnerType::Requisite || $bdEntityId !== $mcRequisiteId)
-			{
-				throw new Main\SystemException(
-					"The BankDetail of your company with ID '$mcBankDetailId' is not assigned to ".
-						"Requisite of your company with ID '$mcRequisiteId'.",
-					self::ERR_MC_BANK_DETAIL_NOT_ASSIGNED
-				);
-			}
-		}
+		self::getConsistencyChecker()->check(
+			$entityTypeId,
+			$entityId,
+			$requisiteId,
+			$bankDetailId,
+			$mcRequisiteId,
+			$mcBankDetailId,
+			$options
+		);
 	}
 
 	/**
@@ -524,7 +169,7 @@ class EntityLink
 	 */
 	public static function getList($parameters)
 	{
-		return LinkTable::getList($parameters);
+		return EntityLinkService::getInstance()->getList($parameters);
 	}
 
 	/**
@@ -543,44 +188,14 @@ class EntityLink
 		$mcRequisiteId = 0, $mcBankDetailId = 0
 	)
 	{
-		$errMsgGreaterThanZero = 'Must be greater than zero';
-
-		$entityTypeId = (int)$entityTypeId;
-		if($entityTypeId <= 0)
-			throw new Main\ArgumentException($errMsgGreaterThanZero, 'entityTypeId');
-
-		$entityId = (int)$entityId;
-		if($entityId <= 0)
-			throw new Main\ArgumentException($errMsgGreaterThanZero, 'entityId');
-
-		$requisiteId = (int)$requisiteId;
-		if($requisiteId < 0)
-			throw new Main\ArgumentException($errMsgGreaterThanZero, 'requisiteId');
-
-		$bankDetailId = (int)$bankDetailId;
-		if($bankDetailId < 0)
-			throw new Main\ArgumentException($errMsgGreaterThanZero, 'bankDetailId');
-
-		$mcRequisiteId = (int)$mcRequisiteId;
-		if($mcRequisiteId < 0)
-			throw new Main\ArgumentException($errMsgGreaterThanZero, 'mcRequisiteId');
-
-		$mcBankDetailId = (int)$mcBankDetailId;
-		if($mcBankDetailId < 0)
-			throw new Main\ArgumentException($errMsgGreaterThanZero, 'mcBankDetailId');
-
-		LinkTable::upsert(
-			array(
-				'ENTITY_TYPE_ID' => $entityTypeId,
-				'ENTITY_ID' => $entityId,
-				'REQUISITE_ID' => $requisiteId,
-				'BANK_DETAIL_ID' => $bankDetailId,
-				'MC_REQUISITE_ID' => $mcRequisiteId,
-				'MC_BANK_DETAIL_ID' => $mcBankDetailId
-			)
+		EntityLinkService::getInstance()->register(
+			(int)$entityTypeId,
+			(int)$entityId,
+			(int)$requisiteId,
+			(int)$bankDetailId,
+			(int)$mcRequisiteId,
+			(int)$mcBankDetailId
 		);
-
-		static::clearByEntityCache();
 	}
 
 	/**
@@ -591,24 +206,7 @@ class EntityLink
 	 */
 	public static function unregister($entityTypeId, $entityId)
 	{
-		$errMsgGreaterThanZero = 'Must be greater than zero';
-
-		$entityTypeId = (int)$entityTypeId;
-		if($entityTypeId <= 0)
-			throw new Main\ArgumentException($errMsgGreaterThanZero, 'entityTypeId');
-
-		$entityId = (int)$entityId;
-		if($entityId <= 0)
-			throw new Main\ArgumentException($errMsgGreaterThanZero, 'entityId');
-
-		LinkTable::delete(
-			array(
-				'ENTITY_TYPE_ID' => $entityTypeId,
-				'ENTITY_ID' => $entityId
-			)
-		);
-
-		static::clearByEntityCache();
+		EntityLinkService::getInstance()->unregister((int)$entityTypeId, (int)$entityId);
 	}
 
 	/**
@@ -761,32 +359,7 @@ class EntityLink
 
 	public static function isMyCompany($companyId)
 	{
-		$result = false;
-
-		if ($companyId <= 0)
-		{
-			return $result;
-		}
-
-		$companyId = (int)$companyId;
-
-		$res = \CCrmCompany::GetListEx(
-			[],
-			[
-				'=ID' => $companyId,
-				'=IS_MY_COMPANY' => 'Y',
-				'CHECK_PERMISSIONS' => 'N'
-			],
-			false,
-			false,
-			['ID']
-		);
-		if (is_object($res) && $res->Fetch())
-		{
-			$result = true;
-		}
-
-		return $result;
+		return self::getConsistencyChecker()->isMyCompany((int)$companyId);
 	}
 
 	public static function getDefaultEntityRequisiteLink($parentEntityList, $entityTypeId, $entityId, $requisiteId = 0, $isMyCompany = false)
@@ -1787,22 +1360,7 @@ class EntityLink
 
 	public static function getAvailableEntityTypeIds(): array
 	{
-		$types = [
-			\CCrmOwnerType::Deal => \CCrmOwnerType::Deal,
-			\CCrmOwnerType::Invoice => \CCrmOwnerType::Invoice,
-			\CCrmOwnerType::Quote => \CCrmOwnerType::Quote,
-		];
-		$dynamicTypesMap = Service\Container::getInstance()->getDynamicTypesMap()->load([
-			'isLoadCategories' => false,
-			'isLoadStages' => false,
-		]);
-
-		foreach ($dynamicTypesMap->getTypesCollection() as $type)
-		{
-			$types[$type->getEntityTypeId()] = $type->getEntityTypeId();
-		}
-
-		return $types;
+		return EntityLinkService::getInstance()->getAvailableEntityTypeIds();
 	}
 
 	/**
@@ -1812,31 +1370,7 @@ class EntityLink
 	 */
 	public static function checkReadPermissionOwnerEntity($entityTypeID = 0, $entityID = 0)
 	{
-		if(!is_int($entityTypeID))
-		{
-			$entityTypeID = (int)$entityTypeID;
-		}
-
-		$userPermissions = Service\Container::getInstance()->getUserPermissions();
-
-		if(intval($entityTypeID) <= 0 && intval($entityID) <= 0)
-		{
-			foreach (static::getAvailableEntityTypeIds() as $entityTypeId)
-			{
-				if ($userPermissions->entityType()->canReadItems($entityTypeId))
-				{
-					return true;
-				}
-			}
-
-			return false;
-		}
-		if (intval($entityID) <= 0)
-		{
-			return $userPermissions->entityType()->canReadItems($entityTypeID);
-		}
-
-		return $userPermissions->item()->canRead($entityTypeID, $entityID);
+		return self::getAccess()->canReadOwnerEntity((int)$entityTypeID, (int)$entityID);
 	}
 
 	/**
@@ -1846,7 +1380,7 @@ class EntityLink
 	 */
 	public static function checkUpdatePermissionOwnerEntity($entityTypeID = 0, $entityID = 0)
 	{
-		return Service\Container::getInstance()->getUserPermissions()->item()->canUpdate((int)$entityTypeID, (int)$entityID);
+		return self::getAccess()->canUpdateOwnerEntity((int)$entityTypeID, (int)$entityID);
 	}
 
 	public static function moveDependencies(
@@ -1983,138 +1517,5 @@ class EntityLink
 			$mcRequisiteId,
 			$mcBankDetailId,
 		];
-	}
-
-	private static function clientSellerInfoByFactory(
-		Service\Factory $factory,
-		int $entityId,
-		array $result,
-		bool $getParentEntityFields,
-		array $parentFields,
-		bool $entityNotFound
-	): array
-	{
-		$item = $factory->getItem($entityId);
-		if ($item)
-		{
-			$companyId = $item->getCompanyId();
-			$contactId = $item->getContactId();
-			if ($companyId > 0)
-			{
-				$result['CLIENT_ENTITY_TYPE_ID'] = \CCrmOwnerType::Company;
-				$result['CLIENT_ENTITY_ID'] = $companyId;
-			}
-			elseif ($contactId > 0)
-			{
-				$result['CLIENT_ENTITY_TYPE_ID'] = \CCrmOwnerType::Contact;
-				$result['CLIENT_ENTITY_ID'] = $contactId;
-			}
-
-			if ($item->hasField(Crm\Item::FIELD_NAME_MYCOMPANY_ID))
-			{
-				$myCompanyId = $item->getMycompanyId();
-				if ($myCompanyId > 0)
-				{
-					$result['MYCOMPANY_ID'] = $myCompanyId;
-				}
-			}
-
-			if ($getParentEntityFields)
-			{
-				foreach ($parentFields as $fieldName)
-				{
-					if ($item->hasField($fieldName) && $item->get($fieldName) > 0)
-					{
-						$result[$fieldName] = $item->get($fieldName);
-					}
-				}
-			}
-		}
-		else
-		{
-			$entityNotFound = true;
-		}
-		return array($result, $entityNotFound);
-	}
-
-	private static function clientSellerInfoByOrm(
-		Service\Factory $factory,
-		int $entityId,
-		array $result,
-		bool $getParentEntityFields,
-		array $parentFields,
-		bool $entityNotFound
-	): array
-	{
-		$select = [
-			Item::FIELD_NAME_ID,
-		];
-
-		$companyIdFieldName = $factory->getEntityFieldNameByMap(Item::FIELD_NAME_COMPANY_ID);
-		if ($factory->isFieldExists($companyIdFieldName))
-		{
-			$select[] = $companyIdFieldName;
-		}
-
-		$contactIdFieldName = $factory->getEntityFieldNameByMap(Item::FIELD_NAME_CONTACT_ID);
-		if ($factory->isFieldExists($contactIdFieldName))
-		{
-			$select[] = $contactIdFieldName;
-		}
-
-		$myCompanyFieldName = $factory->getEntityFieldNameByMap(Item::FIELD_NAME_MYCOMPANY_ID);
-		if ($factory->isFieldExists($myCompanyFieldName))
-		{
-			$select[] = $myCompanyFieldName;
-		}
-
-		foreach ($parentFields as $parentField)
-		{
-			if ($factory->isFieldExists($parentField))
-			{
-				$select[] = $parentField;
-			}
-		}
-
-		$item = $factory->getDataClass()::query()
-			->setSelect($select)
-			->where('ID', $entityId)
-			->fetch();
-
-		if ($item)
-		{
-			$companyId = $item[$companyIdFieldName] ?? 0;
-			$contactId = $item[$contactIdFieldName] ?? 0;
-			if ($companyId > 0)
-			{
-				$result['CLIENT_ENTITY_TYPE_ID'] = \CCrmOwnerType::Company;
-				$result['CLIENT_ENTITY_ID'] = $companyId;
-			}
-			elseif ($contactId > 0)
-			{
-				$result['CLIENT_ENTITY_TYPE_ID'] = \CCrmOwnerType::Contact;
-				$result['CLIENT_ENTITY_ID'] = $contactId;
-			}
-
-			$myCompanyId = $item[$myCompanyFieldName] ?? 0;
-			if ($myCompanyId > 0)
-			{
-				$result['MYCOMPANY_ID'] = $myCompanyId;
-			}
-
-			if ($getParentEntityFields) {
-				foreach ($parentFields as $fieldName) {
-					if (isset($item[$fieldName]) && $item[$fieldName] > 0)
-					{
-						$result[$fieldName] = $item[$fieldName];
-					}
-				}
-			}
-		}
-		else {
-			$entityNotFound = true;
-		}
-
-		return array($result, $entityNotFound);
 	}
 }

@@ -3,7 +3,9 @@
 namespace Bitrix\Main\UserField\Internal;
 
 use Bitrix\Main\Application;
+use Bitrix\Main\DB\Connection;
 use Bitrix\Main\DB\MssqlConnection;
+use Bitrix\Main\DB\SqlExpression;
 use Bitrix\Main\DB\SqlQueryException;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ORM\Data\DataManager;
@@ -18,9 +20,10 @@ use Bitrix\Main\ORM\Fields\IntegerField;
 use Bitrix\Main\ORM\Fields\Relations\Reference;
 use Bitrix\Main\ORM\Fields\StringField;
 use Bitrix\Main\ORM\Fields\Validators\RegExpValidator;
-use Bitrix\Main\ORM\Query\Query;
 use Bitrix\Main\SystemException;
 use Bitrix\Main\Text\StringHelper;
+use Bitrix\Main\UserField\Types\BaseType;
+use Bitrix\Main\UserField\Types\FileType;
 
 /**
  * @deprecated
@@ -174,89 +177,36 @@ abstract class TypeDataManager extends DataManager
 
 		$userFieldManager = UserFieldHelper::getInstance()->getManager();
 
-		// get file fields
-		$fileFields = [];
 		/** @noinspection PhpMethodOrClassCallIsNotCaseSensitiveInspection */
 		$fields = $userFieldManager->getUserFields(static::getFactory()->getUserFieldEntityId($oldData['ID']));
-
 		foreach ($fields as $name => $field)
 		{
-			if ($field['USER_TYPE']['BASE_TYPE'] === 'file')
-			{
-				$fileFields[] = $name;
-			}
+			$field['USER_TYPE'] = $field['USER_TYPE'] ?? $userFieldManager->getUserType($field['USER_TYPE_ID']);
+			$fields[$name] = $field;
 		}
-
-		// delete files
-		if (!empty($fileFields))
-		{
-			$oldEntity = static::compileEntity($oldData);
-
-			$query = new Query($oldEntity);
-
-			// select file ids
-			$query->setSelect($fileFields);
-
-			// if they are not empty
-			$filter = array('LOGIC' => 'OR');
-
-			foreach ($fileFields as $fileField)
-			{
-				$filter['!'.$fileField] = false;
-			}
-
-			$query->setFilter($filter);
-
-			// go
-			$queryResult = $query->exec();
-
-			while ($row = $queryResult->fetch())
-			{
-				foreach ($fileFields as $fileField)
-				{
-					if (!empty($row[$fileField]))
-					{
-						if (is_array($row[$fileField]))
-						{
-							foreach ($row[$fileField] as $value)
-							{
-								\CFile::delete($value);
-							}
-						}
-						else
-						{
-							\CFile::delete($row[$fileField]);
-						}
-					}
-				}
-			}
-		}
-
 		$connection = Application::getConnection();
+		$cleanupResult = static::cleanupTypeBeforeDelete($oldData, $fields, $connection);
+		if ($cleanupResult->getErrors())
+		{
+			$result->setErrors($cleanupResult->getErrors());
+
+			return $result;
+		}
 
 		foreach ($fields as $field)
 		{
-			// delete from uf registry
-			if ($field['USER_TYPE']['BASE_TYPE'] === 'enum')
-			{
-				$enumField = new \CUserFieldEnum;
-				$enumField->DeleteFieldEnum($field['ID']);
-			}
-
 			$connection->query("DELETE FROM b_user_field_lang WHERE USER_FIELD_ID = ".$field['ID']);
 			$connection->query("DELETE FROM b_user_field WHERE ID = ".$field['ID']);
 
-			// if multiple - drop utm table
-			if ($field['MULTIPLE'] == 'Y')
+			if ($field['MULTIPLE'] === 'Y')
 			{
 				try
 				{
-					$utmTableName = static::getMultipleValueTableName($oldData, $field);
-					$connection->dropTable($utmTableName);
+					$connection->dropTable(static::getMultipleValueTableName($oldData, $field));
 				}
-				catch(SqlQueryException $e)
+				catch (SqlQueryException $exception)
 				{
-					$result->addError(new EntityError($e->getMessage()));
+					$result->addError(new EntityError($exception->getMessage()));
 				}
 			}
 		}
@@ -271,6 +221,179 @@ abstract class TypeDataManager extends DataManager
 		return $result;
 	}
 
+	protected static function cleanupTypeBeforeDelete(
+		array $typeData,
+		array $fields,
+		Connection $connection,
+	): EventResult
+	{
+		$result = static::cleanupTypeFieldsBeforeDelete($fields);
+		if ($result->getErrors())
+		{
+			return $result;
+		}
+
+		static::cleanupTypeValuesBeforeDelete($typeData, $fields, $connection, false);
+
+		return $result;
+	}
+
+	protected static function cleanupTypeValuesBeforeDelete(
+		array $typeData,
+		array $fields,
+		Connection $connection,
+		bool $stopOnError = true,
+	): EventResult
+	{
+		$result = new EventResult();
+
+		$fields = array_values($fields);
+		for ($index = 0, $fieldCount = count($fields); $index < $fieldCount; $index++)
+		{
+			$field = $fields[$index];
+			if (!UserFieldHelper::hasValuesDeleteHandler($field))
+			{
+				continue;
+			}
+
+			if (static::hasDefaultSingleFileValuesHandler($field))
+			{
+				$singleFileFields = [$field];
+				while (isset($fields[$index + 1]))
+				{
+					$nextField = $fields[$index + 1];
+					if (!UserFieldHelper::hasValuesDeleteHandler($nextField))
+					{
+						$index++;
+						continue;
+					}
+					if (!static::hasDefaultSingleFileValuesHandler($nextField))
+					{
+						break;
+					}
+
+					$singleFileFields[] = $nextField;
+					$index++;
+				}
+
+				$values = static::getSingleFileFieldValuesBeforeDelete($typeData, $singleFileFields, $connection);
+			}
+			else
+			{
+				$values = static::getUserFieldValuesBeforeDelete($typeData, $field, $connection);
+			}
+
+			$cleanupResult = UserFieldHelper::cleanupUserFieldValuesBeforeDelete(
+				$field,
+				$values,
+			);
+			foreach ($cleanupResult->getErrors() as $error)
+			{
+				$result->addError(new EntityError($error->getMessage(), $error->getCode()));
+			}
+
+			if ($stopOnError && $result->getErrors())
+			{
+				break;
+			}
+		}
+
+		return $result;
+	}
+
+	private static function hasDefaultSingleFileValuesHandler(array $field): bool
+	{
+		if ($field['MULTIPLE'] !== 'N' || ($field['USER_TYPE']['BASE_TYPE'] ?? null) !== 'file')
+		{
+			return false;
+		}
+
+		$className = $field['USER_TYPE']['CLASS_NAME'] ?? null;
+		if (!is_string($className) || !is_a($className, BaseType::class, true))
+		{
+			return true;
+		}
+
+		$handlerClass = (new \ReflectionMethod($className, 'onBeforeDeleteValues'))->getDeclaringClass()->getName();
+
+		return $handlerClass === BaseType::class || $handlerClass === FileType::class;
+	}
+
+	protected static function cleanupTypeFieldsBeforeDelete(array $fields): EventResult
+	{
+		$result = new EventResult();
+
+		foreach ($fields as $field)
+		{
+			$cleanupResult = UserFieldHelper::cleanupUserFieldDefinitionBeforeDelete($field);
+			foreach ($cleanupResult->getErrors() as $error)
+			{
+				$result->addError(new EntityError($error->getMessage(), $error->getCode()));
+			}
+
+			if ($result->getErrors())
+			{
+				break;
+			}
+		}
+
+		return $result;
+	}
+
+	protected static function getUserFieldValuesBeforeDelete(
+		array $typeData,
+		array $field,
+		Connection $connection,
+	): iterable
+	{
+		if ($field['MULTIPLE'] === 'Y')
+		{
+			$tableName = static::getMultipleValueTableName($typeData, $field);
+			$query = new SqlExpression('SELECT ?# AS ?# FROM ?#', 'VALUE', 'VALUE', $tableName);
+		}
+		else
+		{
+			$query = new SqlExpression(
+				'SELECT ?# AS ?# FROM ?#',
+				$field['FIELD_NAME'],
+				'VALUE',
+				$typeData['TABLE_NAME'],
+			);
+		}
+
+		$queryResult = $connection->query($query->compile());
+		while ($row = $queryResult->fetch())
+		{
+			yield $row['VALUE'];
+		}
+	}
+
+	protected static function getSingleFileFieldValuesBeforeDelete(
+		array $typeData,
+		array $fields,
+		Connection $connection,
+	): iterable
+	{
+		$columns = [];
+		foreach ($fields as $field)
+		{
+			$columns[] = (new SqlExpression('?#', $field['FIELD_NAME']))->compile();
+		}
+
+		$query = new SqlExpression(
+			'SELECT ' . implode(', ', $columns) . ' FROM ?#',
+			$typeData['TABLE_NAME'],
+		);
+		$queryResult = $connection->query($query->compile());
+		while ($row = $queryResult->fetch())
+		{
+			foreach ($fields as $field)
+			{
+				yield $row[$field['FIELD_NAME']];
+			}
+		}
+	}
+
 	/**
 	 * @param Event $event
 	 * @return EventResult
@@ -281,14 +404,15 @@ abstract class TypeDataManager extends DataManager
 	{
 		$id = $event->getParameter('id');
 		$oldData = static::getTemporaryStorage()->getData($id);
-		if(!$oldData)
+		if (!$oldData)
 		{
 			return new EventResult();
 		}
 
-		if(Application::getConnection()->isTableExists($oldData['TABLE_NAME']))
+		$connection = Application::getConnection();
+		if ($connection->isTableExists($oldData['TABLE_NAME']))
 		{
-			Application::getConnection()->dropTable($oldData['TABLE_NAME']);
+			$connection->dropTable($oldData['TABLE_NAME']);
 		}
 
 		return new EventResult();

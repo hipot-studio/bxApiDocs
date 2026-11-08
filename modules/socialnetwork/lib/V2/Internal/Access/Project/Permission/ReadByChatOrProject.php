@@ -15,29 +15,31 @@ class ReadByChatOrProject implements AttributeAccessInterface
 {
 	public function check(EntityInterface $entity, Context $context, array $parameters = []): bool
 	{
-		$projectId = $this->resolveProjectId($entity);
-		if (!$projectId)
+		$groupId = $this->resolveGroupId($entity);
+		if ($groupId <= 0)
 		{
 			return false;
 		}
 
-		return Container::getInstance()->getProjectAccessService()->canRead($context->getUserId(), $projectId);
+		// The group type picks the permissions: LegacyGroupAccessService sends collabs to the project ones
+		// and any other group type to the group ones, so a chat whose group is not a collab is still read
+		return Container::getInstance()->getLegacyGroupAccessService()->canRead($context->getUserId(), $groupId);
 	}
 
-	private function resolveProjectId(EntityInterface $entity): int
+	private function resolveGroupId(EntityInterface $entity): int
 	{
-		$projectId = (int)$entity->getId();
-		if ($projectId > 0)
+		$groupId = (int)$entity->getId();
+		if ($groupId > 0)
 		{
-			return $projectId;
+			return $groupId;
 		}
 
 		$chatId = property_exists($entity, 'chatId') ? (int)($entity->chatId) : 0;
-		if (!$chatId)
+		if ($chatId <= 0)
 		{
 			return 0;
 		}
 
-		return Container::getInstance()->getProjectChatResolver()->getProjectIdByChatId($chatId) ?? 0;
+		return Container::getInstance()->getProjectChatResolver()->getGroupIdByChatId($chatId) ?? 0;
 	}
 }

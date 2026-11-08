@@ -13,23 +13,24 @@ use Bitrix\Rest\V3\Exception\RestException;
  * The reason is carried into the message by a phrase of this surface, chosen by the code of the domain
  * error: the text of the domain error itself never reaches the public answer.
  *
- * This class stands for a write that failed on its own and reaches the exception log of the portal. A
- * refusal the caller caused is answered with {@see ClientDraftSaveFailedException} - same status, code and
- * text, kept out of the log. The agent cannot tell the two apart, and is not meant to.
+ * This class stands for a write that failed on its own and reaches the exception log of the portal. An
+ * expected refusal the caller can act on is answered with {@see ClientDraftSaveFailedException} - same
+ * status, code and text, kept out of the log. The agent cannot tell the two apart, and is not meant to.
  */
 class DraftSaveFailedException extends RestException
 {
 	use RussianMessageFallback;
 
 	/**
-	 * Reasons the caller is answered for. A code that is not here names no cause of the client, so the
-	 * refusal is treated as a failure of the write itself.
+	 * Expected refusal reasons the caller can act on. A code that is not here is treated as a failure of the
+	 * write itself.
 	 *
 	 * @var array<string, string> domain error code => phrase of the reason answered for it
 	 */
 	private const CLIENT_REASON_PHRASES = [
 		'ACCESS_DENIED' => 'BIZPROCDESIGNER_REST_EXCEPTION_DRAFT_SAVE_FAILED_ACCESS_DENIED',
 		'TEMPLATE_NOT_FOUND' => 'BIZPROCDESIGNER_REST_EXCEPTION_DRAFT_SAVE_FAILED_TEMPLATE_NOT_FOUND',
+		'TEMPLATE_DRAFT_CONFLICT' => 'BIZPROCDESIGNER_REST_EXCEPTION_DRAFT_SAVE_FAILED_TEMPLATE_DRAFT_CONFLICT',
 	];
 
 	private const REASON_NO_DRAFT_ID = 'BIZPROCDESIGNER_REST_EXCEPTION_DRAFT_SAVE_FAILED_NO_DRAFT_ID';

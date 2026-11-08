@@ -114,6 +114,11 @@ class CashboxService extends RestService
 			}
 		}
 
+		if (!empty($params['FIELDS']['SETTINGS']) && !is_array($params['FIELDS']['SETTINGS']))
+		{
+			throw new RestException('Parameter SETTINGS must be an array', self::ERROR_CHECK_FAILURE);
+		}
+
 		if (!self::hasAccessToCashbox($cashbox, $params['APP_ID']))
 		{
 			throw new AccessException();
@@ -227,9 +232,18 @@ class CashboxService extends RestService
 			$cashboxFields['OFD'] = self::getOfdHandlerClassByCode($cashboxFields['OFD']);
 		}
 
-		if ($cashboxFields['SETTINGS'])
+		if (empty($cashboxFields['SETTINGS']))
+		{
+			unset($cashboxFields['SETTINGS']);
+		}
+		else
 		{
 			$cashboxFields['SETTINGS'] = self::mergeCashboxSettings($params['ID'], $cashboxFields['SETTINGS']);
+
+			$cashbox = Manager::getObjectById($params['ID']);
+			$restHandlerCode = $cashbox->getValueFromSettings('REST', 'REST_CODE');
+
+			$cashboxFields['SETTINGS']['REST']['REST_CODE'] = $restHandlerCode;
 		}
 
 		$result = Manager::update($params['ID'], $cashboxFields);

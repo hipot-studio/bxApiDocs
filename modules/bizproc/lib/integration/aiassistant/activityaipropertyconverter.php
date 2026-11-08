@@ -124,7 +124,19 @@ class ActivityAiPropertyConverter
 			multiple: $fieldType->isMultiple(),
 			options: $this->makeSettingOptions($fieldType),
 			defaultValue: $this->makeDefaultValue($fieldType->getValue()),
+			allowSelection: $this->readAllowSelection($field),
 		);
+	}
+
+	/**
+	 * Read from the very property description the option list was built from: an activity may compute
+	 * `AllowSelection` from the same context that shapes its options, so a second lookup could answer for
+	 * another shape of the field. `FieldType` drops the key ({@see FieldType::normalizeProperty()}), which is
+	 * why the raw description is asked instead of the type object.
+	 */
+	private function readAllowSelection(array $field): bool
+	{
+		return \CBPHelper::getBool($field['AllowSelection'] ?? false);
 	}
 
 	private function makeMapSetting(string $name, array $field, array $documentType): ?Setting
@@ -135,6 +147,11 @@ class ActivityAiPropertyConverter
 			return null;
 		}
 
+		// No key mode is declared here: the children of a properties map are a snapshot of this portal - user
+		// fields included - rather than a contract of the activity, and closing the keys on them would hold every
+		// auto-described activity of every module to the fields one portal happens to have, well past the blocks
+		// BRIEF § 4.4 lists as tightened. An activity whose map really is a contract says so in its own
+		// `.ai.php`, which {@see ActivityAiDescriptionMerger::merge()} prefers over this one.
 		return new Setting(
 			name: $name,
 			description: $field[static::PROPERTY_FIELD_AI_DESCRIPTION] ?? static::DEFAULT_MAP_DESCRIPTION,
@@ -221,6 +238,22 @@ class ActivityAiPropertyConverter
 		}
 
 		return $collection;
+	}
+
+	/**
+	 * The setting type for a base type name, carrying the type's own description when it has one.
+	 *
+	 * The counterpart of {@see self::getSettingType()} for a hand-written `.ai.php`, which declares its
+	 * settings by base type name and has no FieldType instance to ask. Passing the bare string instead
+	 * silently opts the setting out of `typesDescription`: the map is collected from SettingType instances
+	 * only ({@see SettingCollection::getDescribedSettingTypesMap()}), so a manually described USER setting
+	 * would reach the agent without the explanation every mapped USER setting gets.
+	 */
+	public static function settingTypeOf(string $baseType): SettingType|string
+	{
+		$typeClass = FieldType::getBaseTypesMap()[$baseType] ?? null;
+
+		return ($typeClass !== null && class_exists($typeClass)) ? $typeClass::getAiSettingType() : $baseType;
 	}
 
 	public function getSettingType(FieldType $fieldType): SettingType|string

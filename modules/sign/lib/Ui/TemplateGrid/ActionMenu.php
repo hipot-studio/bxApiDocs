@@ -46,6 +46,25 @@ class ActionMenu
 			];
 		}
 
+		// Unfilled files are served without folders, so the button is not gated by the grouping feature
+		$actionButtons[] = [
+			'TYPE' => Panel\Types::BUTTON,
+			'ID' => 'sign-template-list-download-blank-button',
+			'TEXT' => Loc::getMessage('SIGN_TEMPLATE_LIST_PANEL_ACTION_DOWNLOAD'),
+			'ICON' => '/bitrix/js/ui/actionpanel/images/ui_icon_actionpanel_download.svg',
+			'ONCHANGE' => [
+				[
+					'ACTION' => Panel\Actions::CALLBACK,
+					'DATA' => [
+						[
+							'JS' => "templateGrid.downloadSelectedBlanks();"
+						]
+					]
+				]
+			]
+		];
+
+		// Deleting goes last in the panel: the destructive action must not sit next to the others
 		$actionButtons[] = [
 			'TYPE' => Panel\Types::BUTTON,
 			'ID' => 'sign-template-list-delete-button',

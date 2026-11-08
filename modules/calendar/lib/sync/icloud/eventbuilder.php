@@ -340,7 +340,7 @@ class EventBuilder
 			return;
 		}
 
-		if ($data['ATTENDEE'])
+		if ($data['ATTENDEE'] ?? null)
 		{
 			foreach ($data['ATTENDEE'] as $attendee)
 			{
@@ -354,7 +354,7 @@ class EventBuilder
 			}
 		}
 
-		if ($data['ATTACH'])
+		if ($data['ATTACH'] ?? null)
 		{
 			foreach ($data['ATTACH'] as $attachment)
 			{
@@ -368,7 +368,7 @@ class EventBuilder
 			}
 		}
 
-		if ($data['ORGANIZER'])
+		if ($data['ORGANIZER'] ?? null)
 		{
 			$value = $data['ORGANIZER']['VALUE'];
 			unset($data['ORGANIZER']['VALUE']);
@@ -379,7 +379,7 @@ class EventBuilder
 			];
 		}
 
-		if ($data['URL'])
+		if ($data['URL'] ?? null)
 		{
 			$content['URL'] = $data['URL'];
 		}

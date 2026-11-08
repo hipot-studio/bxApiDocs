@@ -7,6 +7,7 @@ namespace Bitrix\Socialnetwork\Collab\Integration\IM\Message;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Socialnetwork\Collab\Integration\IM\ActionMessageBuffer;
 use Bitrix\Socialnetwork\Collab\Integration\IM\ActionType;
 use Bitrix\Socialnetwork\Collab\Integration\Intranet\Invitation;
 use Bitrix\Socialnetwork\V2\Feature;
@@ -32,6 +33,16 @@ class AcceptUserActionMessage implements ActionMessageInterface
 		}
 
 		$this->addUsersToChat($this->collabId, $parameters, $this->senderId);
+
+		$this->sendAcceptUserAnalytics();
+
+		// Accepting a user is more than the sentence it puts in the chat: suppressing the announcement
+		// must leave the chat membership and the first initialization above it untouched.
+		if ($parameters[ActionMessageBuffer::WITHOUT_MESSAGE_PARAMETER] ?? false)
+		{
+			return 0;
+		}
+
 		$isNewProjectsOn = Feature::isNewProjectsOn();
 
 		$phraseCode = $isNewProjectsOn
@@ -45,8 +56,6 @@ class AcceptUserActionMessage implements ActionMessageInterface
 				'#SENDER_NAME#' => $this->getName($this->senderId, $this->senderId, $this->collabId),
 			],
 		);
-
-		$this->sendAcceptUserAnalytics();
 
 		return $this->sendMessage(
 			message: $message,

@@ -193,9 +193,9 @@ final class Template extends \Bitrix\Tasks\Item
 			{
 				$template['ACCOMPLICES'] = $members[$templateId]['ACCOMPLICES'];
 			}
-			if (isset($members[$templateId]['ACCOMPLICES']))
+			if (isset($members[$templateId]['AUDITORS']))
 			{
-				$template['ACCOMPLICES'] = $members[$templateId]['ACCOMPLICES'];
+				$template['AUDITORS'] = $members[$templateId]['AUDITORS'];
 			}
 
 			if (isset($tags[$templateId]))
@@ -294,6 +294,9 @@ final class Template extends \Bitrix\Tasks\Item
 	}
 
 	/**
+	 * Members are assigned through the item offset, and that path builds the collection out of the value
+	 * as is: a serialized string would be taken for a single member instead of being unpacked.
+	 *
 	 * @param array $parameters
 	 * @param array $ids
 	 * @return array
@@ -303,15 +306,21 @@ final class Template extends \Bitrix\Tasks\Item
 	 */
 	private static function findMembers(array $parameters, array $ids): array
 	{
-		if (
-			array_key_exists('select', $parameters)
-			&& is_array($parameters['select'])
-			&& !empty($parameters['select'])
-			&& !in_array('RESPONSIBLES', $parameters['select'])
-			&& !in_array('ACCOMPLICES', $parameters['select'])
-			&& !in_array('AUDITORS', $parameters['select'])
-			&& $parameters['select'][0] !== '*'
-		)
+		$memberTypes = [
+			TemplateMemberTable::MEMBER_TYPE_RESPONSIBLE => 'RESPONSIBLES',
+			TemplateMemberTable::MEMBER_TYPE_ACCOMPLICE => 'ACCOMPLICES',
+			TemplateMemberTable::MEMBER_TYPE_AUDITOR => 'AUDITORS',
+		];
+		$select = $parameters['select'] ?? [];
+		if (is_array($select) && !empty($select) && !in_array('*', $select, true))
+		{
+			$memberTypes = array_filter(
+				$memberTypes,
+				static fn(string $field): bool => in_array($field, $select, true),
+			);
+		}
+
+		if (empty($memberTypes))
 		{
 			return [];
 		}
@@ -319,14 +328,9 @@ final class Template extends \Bitrix\Tasks\Item
 		$res = TemplateMemberTable::getList([
 			'filter' => [
 				'@TEMPLATE_ID' => $ids,
+				'@TYPE' => array_keys($memberTypes),
 			]
 		]);
-
-		$memberTypes = [
-			TemplateMemberTable::MEMBER_TYPE_RESPONSIBLE => 'RESPONSIBLES',
-			TemplateMemberTable::MEMBER_TYPE_ACCOMPLICE => 'ACCOMPLICES',
-			TemplateMemberTable::MEMBER_TYPE_AUDITOR => 'AUDITORS',
-		];
 
 		$members = [];
 		while ($row = $res->fetch())
@@ -336,14 +340,6 @@ final class Template extends \Bitrix\Tasks\Item
 				continue;
 			}
 			$members[$row['TEMPLATE_ID']][$memberTypes[$row['TYPE']]][] = (int) $row['USER_ID'];
-		}
-
-		foreach ($members as $templateId => $templateMembers)
-		{
-			foreach ($templateMembers as $type => $users)
-			{
-				$members[$templateId][$type] = serialize($users);
-			}
 		}
 
 		return $members;

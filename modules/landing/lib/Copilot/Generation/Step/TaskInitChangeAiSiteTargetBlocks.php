@@ -155,7 +155,7 @@ class TaskInitChangeAiSiteTargetBlocks extends TaskStep
 			return;
 		}
 
-		$rightsBefore = Rights::isOn();
+		$rightsBefore = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 		try
 		{

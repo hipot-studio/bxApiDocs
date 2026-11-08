@@ -20,5 +20,11 @@ class Company implements Item
 		 * (global switch + allowlist). Source of truth for the "connect the new goskey" promo.
 		 */
 		public bool $goskeyLiteAvailable = false,
+		/**
+		 * CAP-01: whether the wizard may offer goskey as the representative's signing method.
+		 * Independent of the promo flag above: it reports the state of the representative branch on
+		 * the signing service, not the ability to connect the simplified goskey.
+		 */
+		public bool $goskeyRepresentativeSigningAvailable = false,
 	) {}
 }

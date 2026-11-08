@@ -5,6 +5,7 @@ namespace Bitrix\Crm\Integration\AI\Function\Deal\Dto\Category;
 use Bitrix\Crm\Dto\Dto;
 use Bitrix\Crm\Dto\Validator\StringField;
 use Bitrix\Crm\Dto\Validator\NotEmptyField;
+use Bitrix\Crm\Dto\Validator\RequiredField;
 
 final class CreateParameters extends Dto
 {
@@ -13,6 +14,7 @@ final class CreateParameters extends Dto
 	protected function getValidators(array $fields): array
 	{
 		return [
+			new RequiredField($this, 'name'),
 			new NotEmptyField($this, 'name'),
 			new StringField($this, 'name'),
 		];

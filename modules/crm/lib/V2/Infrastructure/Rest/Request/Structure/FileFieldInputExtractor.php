@@ -22,6 +22,10 @@ use ReflectionClass;
 
 final class FileFieldInputExtractor
 {
+	private const SYSTEM_FIELD_NAMES = [
+		'logo' => 'LOGO',
+		'photo' => 'PHOTO',
+	];
 	public const OPERATION_ADD = 'add';
 	public const OPERATION_UPDATE = 'update';
 
@@ -115,7 +119,10 @@ final class FileFieldInputExtractor
 		foreach ($fields as $restFieldName => $rawValue)
 		{
 			$handler = is_string($restFieldName)
-				? $this->systemFileFieldHandlerRegistry->getByRestField($entityType, $restFieldName)
+				? $this->systemFileFieldHandlerRegistry->get(
+					$entityType,
+					self::SYSTEM_FIELD_NAMES[$restFieldName] ?? '',
+				)
 				: null;
 			if ($handler === null)
 			{
@@ -131,6 +138,7 @@ final class FileFieldInputExtractor
 				$handler->isMultiple(),
 				$rawValue,
 				new FileFieldWriteRequest($handler->getFieldName(), $handler->isMultiple(), $value),
+				$restFieldName,
 			);
 			unset($fields[$restFieldName]);
 			$changed = true;

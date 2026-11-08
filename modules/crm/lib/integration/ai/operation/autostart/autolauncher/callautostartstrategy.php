@@ -11,6 +11,7 @@ use Bitrix\Crm\Copilot\CallAssessment\CriteriaLoader;
 use Bitrix\Crm\Copilot\CallAssessment\ItemFactory;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
+use Bitrix\Crm\Integration\AI\ErrorCode;
 use Bitrix\Crm\Integration\AI\JobRepository;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\CallAssessmentRuntimePolicy;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\FillFieldsSettings;
@@ -19,10 +20,14 @@ use Bitrix\Crm\Integration\AI\Operation\Autostart\Slider\AutomationScenarioRegis
 use Bitrix\Crm\Integration\AI\Operation\Autostart\Slider\GlobalFeatureReader;
 use Bitrix\Crm\Integration\AI\Operation\Scenario;
 use Bitrix\Crm\Integration\AI\Operation\ScoreCall;
+use Bitrix\Crm\Integration\AI\Operation\ScoreCallV2;
 use Bitrix\Crm\Integration\AI\Operation\TranscribeCallRecording;
 use Bitrix\Crm\Integration\AI\SuitableAudiosChecker;
 use Bitrix\Crm\ItemIdentifier;
+use Bitrix\Crm\Settings\CopilotSettings;
+use Bitrix\Crm\Timeline\AI\Controller;
 use Bitrix\Main\ObjectException;
+use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use CCrmOwnerType;
 
@@ -159,18 +164,74 @@ class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 				$storageTypeId,
 				max($storageElementIds),
 				$launchPlan['shouldStartCallAssessment'],
+				$launchPlan['fillFieldsEntityAllowed'],
 			);
 			if (!$launchResult->isSuccess())
 			{
-				$this->logger->error(
-					'{date}: Unable to autostart call scenario {scenario}: {errors}' . PHP_EOL,
-					[
-						'scenario' => $scenario,
-						'errors' => $launchResult->getErrorMessages(),
-					],
+				$this->handleLaunchError(
+					$launchResult,
+					$this->nextTarget,
+					$activityId,
+					$this->userId,
+					$scenario,
 				);
 			}
 		}
+	}
+
+	private function handleLaunchError(
+		Result $launchResult,
+		ItemIdentifier $target,
+		int $activityId,
+		int $userId,
+		string $scenario,
+	): void
+	{
+		$errorMessages = $launchResult->getErrorMessages();
+		$this->logger->error(
+			'{date}: Unable to autostart call scenario {scenario}: {errors}' . PHP_EOL,
+			[
+				'scenario' => $scenario,
+				'errors' => $errorMessages,
+			],
+		);
+
+		$callAssessmentLaunchError = null;
+		foreach ($launchResult->getErrors() as $error)
+		{
+			if ($error->getCode() === ErrorCode::CALL_ASSESSMENT_TRIGGER_LAUNCH_FAILED)
+			{
+				$callAssessmentLaunchError = $error;
+			}
+		}
+
+		if ($callAssessmentLaunchError === null)
+		{
+			return;
+		}
+
+		$this->notifyAboutCallAssessmentLaunchError(
+			$target,
+			$activityId,
+			[
+				'OPERATION_TYPE_ID' => ScoreCallV2::TYPE_ID,
+				'ENGINE_ID' => 0,
+				'SCENARIO' => $scenario,
+				'ERRORS' => [$callAssessmentLaunchError->getMessage()],
+				'ERROR_CODES' => [ErrorCode::CALL_ASSESSMENT_TRIGGER_LAUNCH_FAILED],
+			],
+			$userId,
+		);
+	}
+
+	protected function notifyAboutCallAssessmentLaunchError(
+		ItemIdentifier $target,
+		int $activityId,
+		array $settings,
+		int $userId,
+	): void
+	{
+		Controller::getInstance()->onLaunchError($target, $activityId, $settings, $userId);
 	}
 
 	/**
@@ -241,7 +302,7 @@ class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 	/**
 	 * @param callable(): ?CallAssessmentItem $callAssessmentItemProvider is called only where the assessment
 	 *        setting decides the plan, so a call with no active assessment scenario never looks it up.
-	 * @return array{scenario: string, shouldStartCallAssessment: bool}
+	 * @return array{scenario: string, shouldStartCallAssessment: bool, fillFieldsEntityAllowed: bool}
 	 */
 	private function detectLaunchPlanBySettings(
 		?FillFieldsSettings $fillFieldsSettings,
@@ -254,6 +315,7 @@ class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 		$shouldAnalyzeCommunicationStart = false;
 		$direction = (int)($this->activityFields['DIRECTION'] ?? 0);
 		$isFirstCallActivityWithFiles = null;
+		$fillFieldsEntityAllowed = true;
 		$isTranscriptionRuntimeReady = $this->isTranscriptionRuntimeReady();
 		$isTranscriptionActive = $fillFieldsSettings !== null
 			&& $this->scenarioOverrideResolver->isScenarioActive(
@@ -296,6 +358,9 @@ class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 			)
 		)
 		{
+			$entityTypeId = $this->nextTarget?->getEntityTypeId() ?? 0;
+			$fillFieldsEntityAllowed = CopilotSettings::getCurrent()->isFillFieldsEnabledFor($entityTypeId);
+
 			$shouldStartFillFieldsChain = !$this->scenarioOverrideResolver->isFirstOnlyMode(
 				$fillFieldsSettings,
 				AutomationScenarioRegistry::SCENARIO_FILL_FIELDS,
@@ -309,19 +374,33 @@ class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 
 			if ($shouldStartFillFieldsChain)
 			{
-				$shouldFillFieldsStart = self::shouldAutostartFillFields(
-					AIManager::isEnabledInGlobalSettings(),
-					AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize),
-					self::shouldAutostartCallDependentScenario(
-						$isTranscriptionRuntimeReady,
-						$isTranscriptionActive,
-						$this->scenarioOverrideResolver->isScenarioActive(
-							$fillFieldsSettings,
-							AutomationScenarioRegistry::SCENARIO_FILL_FIELDS,
-							AutomationScenarioRegistry::CHANNEL_CALL,
-							$direction,
-						),
+				$isFillFieldsAutostartRequested = self::shouldAutostartCallDependentScenario(
+					$isTranscriptionRuntimeReady,
+					$isTranscriptionActive,
+					$this->scenarioOverrideResolver->isScenarioActive(
+						$fillFieldsSettings,
+						AutomationScenarioRegistry::SCENARIO_FILL_FIELDS,
+						AutomationScenarioRegistry::CHANNEL_CALL,
+						$direction,
 					),
+				);
+				if (
+					!$fillFieldsEntityAllowed
+					&& $isFillFieldsAutostartRequested
+					&& AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize)
+					&& AIManager::isEnabledInGlobalSettings(GlobalSetting::FillItemFromCall)
+				)
+				{
+					$this->logger->debug(
+						'{date}: Fill fields autostart is disabled for entity type {entityTypeId}' . PHP_EOL,
+						['entityTypeId' => $entityTypeId],
+					);
+				}
+
+				$shouldFillFieldsStart = self::shouldAutostartFillFields(
+					AIManager::isFillFieldsEnabledForEntityType($entityTypeId),
+					AIManager::isEnabledInGlobalSettings(GlobalSetting::Summarize),
+					$isFillFieldsAutostartRequested,
 				);
 				$shouldAnalyzeCommunicationStart = AIManager::isEnabledInGlobalSettings(GlobalSetting::AnalyzeCommunication)
 					&& self::shouldAutostartCallDependentScenario(
@@ -450,6 +529,7 @@ class CallAutoStartStrategy extends BaseChannelAutoStartStrategy
 				$shouldTranscriptionOnlyStart,
 			),
 			'shouldStartCallAssessment' => AIManager::isCallScoringV2Enabled() && $shouldScoreCallStart,
+			'fillFieldsEntityAllowed' => $fillFieldsEntityAllowed,
 		];
 	}
 

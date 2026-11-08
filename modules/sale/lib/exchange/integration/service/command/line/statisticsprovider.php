@@ -9,8 +9,7 @@ use Bitrix\Sale\Exchange\Integration;
 class StatisticsProvider
 	implements Integration\Service\Command\IProxy
 {
-
-	static public function getProxy()
+	public static function getProxy()
 	{
 		return new Integration\Rest\RemoteProxies\Sale\StatisticsProvider();
 	}
@@ -20,7 +19,7 @@ class StatisticsProvider
 	 * @return mixed
 	 * @throws Integration\Exception\CommandLineException
 	 */
-	static public function add(array $fields)
+	public static function add(array $fields)
 	{
 		$proxy = static::getProxy();
 		$r = $proxy->add($fields);
@@ -36,7 +35,29 @@ class StatisticsProvider
 		return $result;
 	}
 
-	static public function getList($filter)
+	/**
+	 * @param $id
+	 * @param array $fields
+	 * @return mixed
+	 * @throws Integration\Exception\CommandLineException
+	 */
+	public static function update($id, array $fields)
+	{
+		$proxy = static::getProxy();
+		$r = $proxy->update($id, $fields);
+		if($r->isSuccess())
+		{
+			$result = $r->getData()['DATA']['result'];
+		}
+		else
+		{
+			throw new Integration\Exception\CommandLineException(implode(',', $r->getErrorMessages()));
+		}
+
+		return $result;
+	}
+
+	public static function getList($filter)
 	{
 		$proxy = static::getProxy();
 		$r = $proxy->getList([], $filter);
@@ -48,6 +69,7 @@ class StatisticsProvider
 		{
 			$result['error'] = $r->getErrorMessages();
 		}
+
 		return $result;
 	}
 

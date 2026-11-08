@@ -551,6 +551,27 @@ class Router
 		return Path::combine($this->getSiteFolder(), $root, $folder) . '/';
 	}
 
+	public function getSettingsHubUrl(): ?Uri
+	{
+		return $this->getUrlForTemplate('bitrix:crm.settings-hub');
+	}
+
+	public function getSettingsHubNavigationUrl(
+		string $navigationId,
+		array $queryParameters = [],
+	): Uri
+	{
+		if (preg_match('/^[a-z0-9-]+$/D', $navigationId) !== 1)
+		{
+			throw new ArgumentException('Navigation id is invalid.', 'navigationId');
+		}
+
+		$uri = new Uri(SITE_DIR . "crm/settings-hub/slider/{$navigationId}/");
+		$uri->addParams($queryParameters);
+
+		return $uri;
+	}
+
 	public function getExternalTypeListUrl(): Uri
 	{
 		return new Uri(SITE_DIR . 'automation/type/');
@@ -1389,33 +1410,119 @@ class Router
 
 	public function getItemListUrlInCurrentView(int $entityTypeId, int $categoryId = null): ?Uri
 	{
+		$methodMap = $this->getListViewUrlMethodMap();
+
 		$currentView = $this->getCurrentListView($entityTypeId);
 
-		$methodMap = [
-			static::LIST_VIEW_KANBAN => 'getKanbanUrl',
-			static::LIST_VIEW_LIST => 'getItemListUrl',
-			static::LIST_VIEW_CALENDAR => 'getCalendarUrl',
-			static::LIST_VIEW_ACTIVITY => 'getActivityUrl',
-			static::LIST_VIEW_DEADLINES => 'getDeadlinesUrl'
-		];
-
-		if (!isset($methodMap[$currentView]))
+		if (!isset($methodMap[$currentView]) || !$this->isListViewSupportedForType($entityTypeId, $currentView))
 		{
 			$currentView = $this->getDefaultListView($entityTypeId);
 		}
 
-		if (isset($methodMap[$currentView]))
+		if (!isset($methodMap[$currentView]) || !$this->isListViewSupportedForType($entityTypeId, $currentView))
 		{
-			$methodName = $methodMap[$currentView];
-
-			return $this->$methodName($entityTypeId, $categoryId);
+			$currentView = $this->getInitialDefaultListView($entityTypeId);
 		}
 
-		return null;
+		$url = $this->{$methodMap[$currentView]}($entityTypeId, $categoryId);
+		if ($url === null || $url->getUri() === '')
+		{
+			// e.g. CALENDAR is stored for a dynamic type: the view is supported, its url builder is not
+			$currentView = $this->getInitialDefaultListView($entityTypeId);
+			$url = $this->{$methodMap[$currentView]}($entityTypeId, $categoryId);
+		}
+
+		return $url;
+	}
+
+	/**
+	 * Returns the url of the view to move the user to when the requested one cannot be shown.
+	 *
+	 * Unlike getItemListUrlInCurrentView(), skips the views whose real availability the type
+	 * predicate does not cover - otherwise moving off deadlines could land on the activities gate.
+	 */
+	public function getFallbackItemListUrl(int $entityTypeId, ?int $categoryId = null): ?Uri
+	{
+		$methodMap = $this->getListViewUrlMethodMap();
+
+		$view = $this->getCurrentListView($entityTypeId);
+		if (!$this->isOpenableListView($entityTypeId, $view))
+		{
+			$view = $this->getInitialDefaultListView($entityTypeId);
+		}
+
+		$url = $this->{$methodMap[$view]}($entityTypeId, $categoryId);
+		if ($url === null || $url->getUri() === '')
+		{
+			$view = $this->getInitialDefaultListView($entityTypeId);
+			$url = $this->{$methodMap[$view]}($entityTypeId, $categoryId);
+		}
+
+		return $url;
+	}
+
+	protected function getListViewUrlMethodMap(): array
+	{
+		return [
+			static::LIST_VIEW_KANBAN => 'getKanbanUrl',
+			static::LIST_VIEW_LIST => 'getItemListUrl',
+			static::LIST_VIEW_CALENDAR => 'getCalendarUrl',
+			static::LIST_VIEW_ACTIVITY => 'getActivityUrl',
+			static::LIST_VIEW_DEADLINES => 'getDeadlinesUrl',
+		];
+	}
+
+	private function isListViewSupportedForType(int $entityTypeId, string $listView): bool
+	{
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+
+		return $factory === null || $factory->isListViewSupported($listView);
+	}
+
+	private function isOpenableListView(int $entityTypeId, string $listView): bool
+	{
+		$methodMap = $this->getListViewUrlMethodMap();
+		if (!isset($methodMap[$listView]))
+		{
+			return false;
+		}
+
+		if (!$this->isListViewSupportedForType($entityTypeId, $listView))
+		{
+			return false;
+		}
+
+		// a view the predicate calls supported can still send the user further on its own
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+
+		if ($listView === static::LIST_VIEW_KANBAN)
+		{
+			// must stay identical to the redirect of CrmItemKanbanComponent::executeComponent()
+			if ($factory !== null && !$factory->isStagesEnabled())
+			{
+				return false;
+			}
+		}
+
+		if ($listView === static::LIST_VIEW_ACTIVITY)
+		{
+			// must stay identical to the gate of CrmItemActivitiesComponent::executeComponent()
+			if ($factory instanceof Factory\Dynamic && !$factory->isCountersEnabled())
+			{
+				return false;
+			}
+		}
+
+		return true;
 	}
 
 	public function setCurrentListView(int $entityTypeId, string $view): Router
 	{
+		if (!$this->isListViewSupportedForType($entityTypeId, $view))
+		{
+			return $this;
+		}
+
 		$entityName = mb_strtolower(\CCrmOwnerType::ResolveName($entityTypeId));
 
 		// for example, 20190603
@@ -1719,6 +1826,11 @@ class Router
 
 			if ($viewType === static::LIST_VIEW_DEADLINES)
 			{
+				if (!$this->isListViewSupportedForType($entityTypeId, static::LIST_VIEW_DEADLINES))
+				{
+					return $this->getFallbackItemListUrl($entityTypeId, $categoryId);
+				}
+
 				return $this->getDeadlinesUrl($entityTypeId, $categoryId);
 			}
 

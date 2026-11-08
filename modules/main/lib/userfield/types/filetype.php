@@ -10,6 +10,7 @@ use CUserTypeManager;
 use Bitrix\Main\UserField\File\UiFileUploaderResultValidator;
 use Bitrix\Main\Application;
 use Bitrix\Main\ORM\Fields\IntegerField;
+use Bitrix\Main\Result;
 
 Loc::loadMessages(__FILE__);
 
@@ -27,6 +28,26 @@ class FileType extends BaseType
 		'list',
 		'adaptive',
 	];
+
+	public static function onBeforeDeleteValues(
+		array $userField,
+		iterable $savedValuesFromServer,
+	): Result
+	{
+		foreach ($savedValuesFromServer as $value)
+		{
+			$values = is_array($value) ? $value : [$value];
+			foreach ($values as $fileId)
+			{
+				if (is_numeric($fileId) && (int)$fileId > 0)
+				{
+					\CFile::Delete((int)$fileId);
+				}
+			}
+		}
+
+		return new Result();
+	}
 
 	/**
 	 * @return array

@@ -401,6 +401,11 @@ class CIMMessageParam
 		if ($paramName && $paramName <> '')
 		{
 			$filter['=PARAM_NAME'] = $paramName;
+			if ($paramName === IM\V2\Message\Params::FILE_ID)
+			{
+				// applyFileOrder() needs the order row, and the pick by name at the end of the method drops it again
+				$filter['=PARAM_NAME'] = [$paramName, IM\V2\Message\Params::FILE_ORDER];
+			}
 		}
 		$messageParameters = IM\Model\MessageParamTable::getList(array(
 			'select' => array('ID', 'MESSAGE_ID', 'PARAM_NAME', 'PARAM_VALUE', 'PARAM_JSON'),
@@ -437,6 +442,11 @@ class CIMMessageParam
 			}
 		}
 
+		foreach ($arResult as $id => $rawValues)
+		{
+			$arResult[$id] = self::applyFileOrder($rawValues);
+		}
+
 		if (is_array($messageId))
 		{
 			foreach ($messageId as $key)
@@ -455,6 +465,35 @@ class CIMMessageParam
 		}
 
 		return $arResult;
+	}
+
+	/**
+	 * Applies the chosen sequence of the attachments to FILE_ID while the order is still here: PrepareValues() drops
+	 * FILE_ORDER as unknown to GetDefault(), so this is the last point where the legacy readers can be ordered at all.
+	 * Only the sequence of the identifiers changes, and a message without the order row is left untouched.
+	 */
+	private static function applyFileOrder(array $rawValues): array
+	{
+		$fileIds = $rawValues[IM\V2\Message\Params::FILE_ID] ?? null;
+		$orderRows = $rawValues[IM\V2\Message\Params::FILE_ORDER] ?? null;
+		if (!is_array($fileIds) || !is_array($orderRows) || empty($orderRows))
+		{
+			return $rawValues;
+		}
+
+		// several rows of a scalar param are read as the last one, the way Params does it
+		$fileOrder = end($orderRows);
+		if (!is_array($fileOrder))
+		{
+			return $rawValues;
+		}
+
+		$rawValues[IM\V2\Message\Params::FILE_ID] = IM\V2\Message\Param\FileOrderRule::orderedFileIds(
+			array_map('intval', $fileIds),
+			array_map('intval', array_filter($fileOrder, 'is_numeric')),
+		);
+
+		return $rawValues;
 	}
 
 	public static function GetMessageIdByParam($paramName, $paramValue, $chatId = null)

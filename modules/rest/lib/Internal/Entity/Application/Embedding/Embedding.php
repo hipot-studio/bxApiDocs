@@ -23,6 +23,9 @@ class Embedding implements Main\Entity\EntityInterface
 		private ?string $additional = null,
 		private ?array $options = null,
 		private EmbeddingLanguageCollection $languages = new EmbeddingLanguageCollection(),
+		private ?string $moduleId = null,
+		private ?string $entityType = null,
+		private ?string $entityId = null,
 	)
 	{
 	}
@@ -189,4 +192,41 @@ class Embedding implements Main\Entity\EntityInterface
 
 		return $this;
 	}
+
+	public function getModuleId(): ?string
+	{
+		return $this->moduleId;
+	}
+
+	public function setModuleId(?string $moduleId): self
+	{
+		$this->moduleId = $moduleId;
+
+		return $this;
+	}
+
+	public function getEntityType(): ?string
+	{
+		return $this->entityType;
+	}
+
+	public function setEntityType(?string $entityType): self
+	{
+		$this->entityType = $entityType;
+
+		return $this;
+	}
+
+	public function getEntityId(): ?string
+	{
+		return $this->entityId;
+	}
+
+	public function setEntityId(?string $entityId): self
+	{
+		$this->entityId = $entityId;
+
+		return $this;
+	}
+
 }

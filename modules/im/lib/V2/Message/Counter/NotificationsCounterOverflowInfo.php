@@ -21,6 +21,8 @@ class NotificationsCounterOverflowInfo
 	{
 		$withOverFlow = [];
 		$withoutOverflow = [];
+		// each info describes a notification chat that belongs to exactly one user (its author),
+		// so the single relevant user is the first element of either list
 		foreach ($counterOverflowInfo as $info)
 		{
 			$userWithOverFlow = array_values($info->getUsersWithOverflow())[0] ?? null;

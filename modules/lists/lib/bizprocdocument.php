@@ -1,6 +1,8 @@
 <?php
 
 use Bitrix\Bizproc\Public\Entity\Document\DocumentComplexId;
+use Bitrix\Currency\CurrencyManager;
+use Bitrix\Currency\Integration\IblockMoneyProperty;
 use Bitrix\Iblock\PropertyEnumerationTable;
 use Bitrix\Iblock\PropertyTable;
 use Bitrix\Main\Loader;
@@ -139,7 +141,10 @@ class BizprocDocument extends CIBlockDocument
 
 		if (!empty($select))
 		{
-			$select = array_filter($select, fn($field) => !str_starts_with($field, 'PROPERTY_'));
+			$select = array_filter(
+				$select,
+				static fn($field) => is_scalar($field) && !str_starts_with((string)$field, 'PROPERTY_')
+			);
 			$select = array_merge(['ID', 'IBLOCK_ID'], $select);
 
 			if (in_array('CREATED_BY', $select) && !in_array('CREATED_USER_NAME', $select))
@@ -157,7 +162,12 @@ class BizprocDocument extends CIBlockDocument
 			'MODIFIED_BY_PRINTABLE' => 'USER_NAME',
 		];
 
-		$select = array_map(static fn($selectField) => $userNameFields[$selectField] ?? $selectField, $select);
+		$select = array_map(
+			static fn($selectField) => is_string($selectField) && isset($userNameFields[$selectField])
+				? $userNameFields[$selectField]
+				: $selectField,
+			$select
+		);
 
 		$queryElement = CIBlockElement::getList(
 			[],
@@ -312,7 +322,7 @@ class BizprocDocument extends CIBlockDocument
 					{
 						if ($property['VALUE']['TYPE'] == 'HTML')
 						{
-							$result['PROPERTY_' . $propertyId] = HTMLToTxt($property['VALUE']['TEXT']);
+							$result['PROPERTY_' . $propertyId] = html_entity_decode(HTMLToTxt($property['VALUE']['TEXT']));
 						}
 						else
 						{
@@ -326,7 +336,7 @@ class BizprocDocument extends CIBlockDocument
 						{
 							if ($htmlValue['TYPE'] == 'HTML')
 							{
-								$result['PROPERTY_' . $propertyId][] = HTMLToTxt($htmlValue['TEXT']);
+								$result['PROPERTY_' . $propertyId][] = html_entity_decode(HTMLToTxt($htmlValue['TEXT']));
 							}
 							else
 							{
@@ -1478,6 +1488,13 @@ class BizprocDocument extends CIBlockDocument
 					$value = ['VALUE' => $value];
 				}
 			}
+			elseif ($arDocumentFields[$key]['Type'] === 'S:Money')
+			{
+				foreach ($arFields[$key] as &$value)
+				{
+					$value = self::normalizeMoneyPropertyValue($value);
+				}
+			}
 
 			unset($value);
 
@@ -1560,6 +1577,53 @@ class BizprocDocument extends CIBlockDocument
 		{
 			CLists::rebuildSeachableContentForElement($arResult['IBLOCK_ID'], $documentId);
 		}
+	}
+
+	private static function normalizeMoneyPropertyValue(mixed $value): mixed
+	{
+		if (
+			!is_numeric($value)
+			|| !Loader::includeModule('currency')
+			|| (is_string($value) && mb_strpos($value, IblockMoneyProperty::SEPARATOR) !== false)
+			|| (
+				is_string($value)
+				&& preg_match('/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/D', $value) !== 1
+			)
+		)
+		{
+			return $value;
+		}
+
+		$currency = CurrencyManager::getBaseCurrency();
+		if ($currency === null || $currency === '')
+		{
+			return $value;
+		}
+
+		$currencyFormat = \CCurrencyLang::GetFormatDescription($currency);
+		$requiresCurrencyFormatting = (
+			$currencyFormat['DEC_POINT'] !== '.'
+			&& mb_strpos((string)$value, '.') !== false
+		);
+		$normalizedValue = IblockMoneyProperty::getUnitedValue($value, $currency);
+		if (
+			!$requiresCurrencyFormatting
+			&& IblockMoneyProperty::checkFields([], ['VALUE' => $normalizedValue]) === []
+		)
+		{
+			return $normalizedValue;
+		}
+
+		$currencyFormat['THOUSANDS_VARIANT'] = \Bitrix\Currency\CurrencyClassifier::SEPARATOR_EMPTY;
+		$currencyFormat['THOUSANDS_SEP'] = '';
+		$formattedValue = \CCurrencyLang::formatEditValue($value, $currencyFormat);
+		$formattedNormalizedValue = IblockMoneyProperty::getUnitedValue($formattedValue, $currency);
+		if (IblockMoneyProperty::checkFields([], ['VALUE' => $formattedNormalizedValue]) !== [])
+		{
+			return $value;
+		}
+
+		return $formattedNormalizedValue;
 	}
 
 	public static function onTaskChange($documentId, $taskId, $taskData, $status)
@@ -1805,7 +1869,7 @@ class BizprocDocument extends CIBlockDocument
 		if ($documentId == '')
 			return false;
 
-		if ((new \CBPWorkflowTemplateUser($userId))->isAdmin())
+		if ((new \CBPWorkflowTemplateUser((int)$userId))->isAdmin())
 		{
 			return true;
 		}
@@ -2009,7 +2073,7 @@ class BizprocDocument extends CIBlockDocument
 		if ($documentType == '')
 			return false;
 
-		if ((new \CBPWorkflowTemplateUser($userId))->isAdmin())
+		if ((new \CBPWorkflowTemplateUser((int)$userId))->isAdmin())
 		{
 			return true;
 		}
@@ -2587,6 +2651,7 @@ class BizprocDocument extends CIBlockDocument
 					{
 						if (Loader::includeModule("fileman"))
 						{
+							$value = \Bitrix\Lists\Field::normalizeHtmlEditorContent((string)$value);
 							$editor = new CHTMLEditor;
 							$res = array_merge(
 								array(

@@ -35,12 +35,14 @@ final class CheckIncomingJwt extends Base
 		{
 			try
 			{
-				$iss = ServiceLocator::getInstance()->get(IncomingJwtVerifier::class)->verify($jwt);
+				$payload = ServiceLocator::getInstance()->get(IncomingJwtVerifier::class)->verify($jwt);
 
 				$controller = $action->getController();
 				if ($controller instanceof IncomingServerAware)
 				{
-					$controller->setIncomingServerIss($iss);
+					$origin = $payload->origin ?? null;
+					$controller->setIncomingServerIss($payload->iss);
+					$controller->setIncomingOrigin(is_string($origin) && $origin !== '' ? $origin : null);
 				}
 			}
 			catch (\Throwable $e)

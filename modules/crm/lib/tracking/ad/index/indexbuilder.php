@@ -220,35 +220,45 @@ final class IndexBuilder extends Tracking\Ad\Builder
 	private function addChild($level, $code, $title = '--', $parentId = 0)
 	{
 		$title = $title ?: '--';
-		$row = Tracking\Internals\SourceChildTable::getRow([
+		$query = [
 			'select' => ['ID', 'TITLE'],
 			'filter' => [
 				'=SOURCE_ID' => $this->sourceId,
 				'=CODE' => $code,
 				'=PARENT_ID' => $parentId,
-
 			],
-		]);
-		if ($row)
+		];
+		$row = Tracking\Internals\SourceChildTable::getRow($query);
+		if (!$row)
 		{
-			if ($row['TITLE'] !== $title)
+			try
 			{
-				Tracking\Internals\SourceChildTable::update($row['ID'], ['TITLE' => $title]);
+				$result = Tracking\Internals\SourceChildTable::add([
+					'SOURCE_ID' => $this->sourceId,
+					'CODE' => $code,
+					'LEVEL' => $level,
+					'TITLE' => $title,
+					'PARENT_ID' => $parentId,
+				]);
+
+				return $result->getId();
 			}
-			return $row['ID'];
-		}
-		else
-		{
-			$result = Tracking\Internals\SourceChildTable::add([
-				'SOURCE_ID' => $this->sourceId,
-				'CODE' => $code,
-				'LEVEL' => $level,
-				'TITLE' => $title,
-				'PARENT_ID' => $parentId,
-			]);
-			return $result->getId();
+			catch (Main\DB\DuplicateEntryException $exception)
+			{
+				$row = Tracking\Internals\SourceChildTable::getRow($query);
+				if (!$row)
+				{
+					throw $exception;
+				}
+			}
 		}
 
+		if ($row['TITLE'] !== $title)
+		{
+			Tracking\Internals\SourceChildTable::update($row['ID'], ['TITLE' => $title]);
+		}
+
+		return $row['ID'];
 	}
 
 	private function getSequence()

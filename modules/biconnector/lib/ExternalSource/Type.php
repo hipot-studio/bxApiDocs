@@ -9,5 +9,6 @@ Enum Type: string
 	case Rest = 'rest';
 	case Mysql = 'mysql';
 	case Pgsql = 'pgsql';
+	case Clickhouse = 'clickhouse';
 	case System = 'system';
 }

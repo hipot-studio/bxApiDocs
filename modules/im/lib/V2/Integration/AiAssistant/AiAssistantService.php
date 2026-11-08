@@ -7,7 +7,7 @@ namespace Bitrix\Im\V2\Integration\AiAssistant;
 use Bitrix\AiAssistant\Config\Feature;
 use Bitrix\AiAssistant\Core\Service\Bot\BotManager;
 use Bitrix\Im\V2\Chat;
-use Bitrix\Main\Config\Option;
+use Bitrix\Im\V2\Promotion\Internals\PortalAge;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Loader;
 
@@ -74,24 +74,6 @@ class AiAssistantService
 
 	public function isBitrixGptAgentPromoAllowedByPortalAge(): bool
 	{
-		if (!Loader::includeModule('bitrix24'))
-		{
-			return false;
-		}
-
-		$portalCreateTime = (int)\CBitrix24::getCreateTime();
-		if ($portalCreateTime <= 0)
-		{
-			return false;
-		}
-
-		$promoLaunchDate = trim((string)Option::get('aiassistant', self::BITRIX_GPT_AGENT_PROMO_CUTOFF_DATE_OPTION));
-		$promoLaunchDateTime = \DateTimeImmutable::createFromFormat('!Y-m-d', $promoLaunchDate);
-		if ($promoLaunchDateTime === false || $promoLaunchDateTime->format('Y-m-d') !== $promoLaunchDate)
-		{
-			return false;
-		}
-
-		return $portalCreateTime < $promoLaunchDateTime->getTimestamp();
+		return PortalAge::isCreatedBeforeCutoffDate('aiassistant', self::BITRIX_GPT_AGENT_PROMO_CUTOFF_DATE_OPTION);
 	}
 }

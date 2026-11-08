@@ -41,6 +41,17 @@ class PrepareFields
 
 	public function __invoke(array $fields): array
 	{
+		// Fallback: record whether the client set a deadline BEFORE the
+		// prepare pipeline runs. PrepareDeadline (below) substitutes the user's
+		// default auto deadline into DEADLINE when none is given, after which a
+		// manually set and an automatically applied deadline are indistinguishable
+		// downstream. This pre-pipeline value is the FALLBACK source for the
+		// onboarding "days without a manual deadline" counter: it is carried to
+		// OnTaskAdd via RuntimeData (read in RunAddEvent) and used only when the
+		// caller did not send the explicit AddConfig::getManualDeadline() marker
+		// (mobile app, legacy CTaskItem, REST). The explicit marker takes priority.
+		$this->config->getRuntime()->setClientDeadlineProvided(!empty($fields['DEADLINE']));
+
 		try
 		{
 			$fields = $this->prepareFields($fields);

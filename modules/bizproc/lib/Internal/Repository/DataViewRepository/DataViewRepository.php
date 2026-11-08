@@ -82,33 +82,23 @@ class DataViewRepository implements DataViewRepositoryInterface
 		return array_map(static fn (array $row): int => (int)$row['STORAGE_TYPE_ID'], $rows);
 	}
 
-	public function getByStorageTypeIds(array $storageTypeIds): array
+	public function getOwnerTemplateIds(): array
 	{
-		$ids = array_values(array_unique(array_filter(
-			array_map(static fn ($id): int => (int)$id, $storageTypeIds),
-			static fn (int $id): bool => $id > 0,
-		)));
-
-		if ($ids === [])
-		{
-			return [];
-		}
-
-		$collection = StorageDataViewTable::query()
-			->setSelect(['*'])
-			->whereIn('STORAGE_TYPE_ID', $ids)
+		$rows = StorageDataViewTable::query()
+			->setSelect(['STORAGE_TYPE_ID', 'OWNER_TEMPLATE_ID'])
 			->setOrder(['ID' => 'ASC'])
-			->fetchCollection()
+			->fetchAll()
 		;
 
-		$views = [];
-		foreach ($collection as $ormModel)
+		$ownerTemplateIds = [];
+		foreach ($rows as $row)
 		{
-			$view = $this->mapper->convertFromOrm($ormModel);
-			$views[$view->getStorageTypeId()] = $view;
+			$ownerTemplateIds[(int)$row['STORAGE_TYPE_ID']] =
+				$row['OWNER_TEMPLATE_ID'] !== null ? (int)$row['OWNER_TEMPLATE_ID'] : null
+			;
 		}
 
-		return $views;
+		return $ownerTemplateIds;
 	}
 
 	public function save(DataView $dataView): DataView

@@ -25,20 +25,22 @@ class UserProvider
 		}
 
 		$userEntities = Main\UserTable::query()
-			->setSelect(['ID', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'PERSONAL_PHOTO', 'WORK_POSITION'])
+			->setSelect(['ID', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'EMAIL', 'PERSONAL_PHOTO', 'WORK_POSITION'])
 			->whereIn('ID', $userIds)
 			->fetchCollection()
 		;
 
 		$users = [];
-		$nameFormat = Main\Application::getInstance()->getContext()->getCulture()->getNameFormat();
+		$nameFormat = $this->getNameFormat();
 		foreach ($userEntities as $userEO)
 		{
+			// The position and the photo are optional columns of the record, while the item takes them as
+			// declared: an employee who filled in neither belongs in the list all the same.
 			$users[] = new User(
 				id: $userEO->getId(),
 				name: \CUser::FormatName($nameFormat, $userEO->collectValues(), false, false),
-				avatar: $this->getUserAvatar($userEO->getPersonalPhoto()),
-				workPosition: $userEO->getWorkPosition(),
+				avatar: $this->getUserAvatar((int)$userEO->getPersonalPhoto()),
+				workPosition: (string)$userEO->getWorkPosition(),
 			);
 		}
 
@@ -54,9 +56,18 @@ class UserProvider
 
 	protected function loadUser(int $userId): ?User
 	{
-		$nameFormat = Main\Application::getInstance()->getContext()->getCulture()->getNameFormat();
+		$nameFormat = $this->getNameFormat();
 		$userEO = Main\UserTable::query()
-			->setSelect(['ID', 'NAME', 'SECOND_NAME', 'LAST_NAME', 'PERSONAL_PHOTO', 'WORK_POSITION', 'UF_DEPARTMENT'])
+			->setSelect([
+				'ID',
+				'NAME',
+				'SECOND_NAME',
+				'LAST_NAME',
+				'EMAIL',
+				'PERSONAL_PHOTO',
+				'WORK_POSITION',
+				'UF_DEPARTMENT',
+			])
 			->where('ID', $userId)
 			->fetchObject()
 		;
@@ -71,12 +82,21 @@ class UserProvider
 		return new User(
 			id: $userEO->getId(),
 			name: \CUser::FormatName($nameFormat, $userEO->collectValues(), false, false),
-			avatar: $this->getUserAvatar($userEO->getPersonalPhoto()),
-			workPosition: $userEO->getWorkPosition(),
+			avatar: $this->getUserAvatar((int)$userEO->getPersonalPhoto()),
+			workPosition: (string)$userEO->getWorkPosition(),
 			hash: $this->getUserHash($userEO->getId()),
 			departments: $departments,
 			isAdmin: $this->isUserAdmin($userEO->getId()),
 		);
+	}
+
+	/**
+	 * The name of a person is written the way the culture of the portal writes it, and the mail of
+	 * the record takes part in that: a format that carries #EMAIL# is read from the same query.
+	 */
+	protected function getNameFormat(): string
+	{
+		return (string)Main\Application::getInstance()->getContext()->getCulture()->getNameFormat();
 	}
 
 	protected function getUserAvatar(int $imageId): string

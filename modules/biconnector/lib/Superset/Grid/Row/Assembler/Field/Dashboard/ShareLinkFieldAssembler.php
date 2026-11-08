@@ -4,9 +4,13 @@ namespace Bitrix\BIConnector\Superset\Grid\Row\Assembler\Field\Dashboard;
 
 use Bitrix\BIConnector\Access\AccessController;
 use Bitrix\BIConnector\Access\ActionDictionary;
-use Bitrix\BIConnector\Internal\Model\SupersetDashboardShareTable;
 use Bitrix\BIConnector\Integration\Superset\Model\SupersetDashboardTable;
 use Bitrix\BIConnector\Integration\Superset\Repository\DashboardGroupRepository;
+use Bitrix\BIConnector\Internal\Repository\SupersetDashboardShareBanRepository;
+use Bitrix\BIConnector\Internal\Services\Share\AuthorShareStateService;
+use Bitrix\BIConnector\Public\Features\PublicLinksControl;
+use Bitrix\Main\Config\Feature;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Main\Localization\Loc;
@@ -17,7 +21,12 @@ class ShareLinkFieldAssembler extends FieldAssembler
 	/** @var array<int, array|null> Dashboard ID => share data or null */
 	private array $shareDataMap = [];
 
+	/** @var array<int, true> */
+	private array $bannedDashboardIds = [];
+
 	private bool $canShare;
+	private bool $isBanApplied = false;
+	private bool $showBanOnHiddenCell = false;
 
 	public function __construct(array $columnIds)
 	{
@@ -52,26 +61,47 @@ class ShareLinkFieldAssembler extends FieldAssembler
 			return;
 		}
 
-		$currentUserId = (int)CurrentUser::get()->getId();
-		$shares = SupersetDashboardShareTable::getList([
-			'filter' => [
-				'=DASHBOARD_ID' => $dashboardIds,
-				'=CREATED_BY_ID' => $currentUserId,
-			],
-		])->fetchCollection();
+		$this->loadBanData($dashboardIds);
 
-		foreach ($shares as $share)
+		// The same state as on the detail page, so the popup opened from the list shows the admin switch-off too.
+		$this->shareDataMap = $this->getStateService()->getStates(
+			$dashboardIds,
+			(int)CurrentUser::get()->getId(),
+			$this->isControlEnabled(),
+		);
+	}
+
+	private function getStateService(): AuthorShareStateService
+	{
+		return ServiceLocator::getInstance()->get('biconnector.service.authorShareState');
+	}
+
+	/**
+	 * @param int[] $dashboardIds
+	 */
+	private function loadBanData(array $dashboardIds): void
+	{
+		$this->isBanApplied = $this->isControlEnabled();
+		if (!$this->isBanApplied)
 		{
-			$isActive = $share->getActive() === 'Y'
-				&& $share->getDateExpire()
-				&& $share->getDateExpire()->getTimestamp() >= time()
-			;
-			$this->shareDataMap[$share->getDashboardId()] = [
-				'isActive' => $isActive,
-				'password' => $share->getPassword(),
-				'dateExpireTimestamp' => $share->getDateExpire() ? $share->getDateExpire()->getTimestamp() : null,
-			];
+			return;
 		}
+
+		$this->showBanOnHiddenCell = $this->canControlShares();
+
+		/** @var SupersetDashboardShareBanRepository $banRepository */
+		$banRepository = ServiceLocator::getInstance()->get('biconnector.repository.shareBan');
+		$this->bannedDashboardIds = array_fill_keys($banRepository->getBannedDashboardIds($dashboardIds), true);
+	}
+
+	protected function isControlEnabled(): bool
+	{
+		return Feature::isEnabled(PublicLinksControl::class);
+	}
+
+	protected function canControlShares(): bool
+	{
+		return AccessController::getCurrent()->check(ActionDictionary::ACTION_BIC_SHARE_CONTROL);
 	}
 
 	protected function prepareRow(array $row): array
@@ -94,6 +124,12 @@ class ShareLinkFieldAssembler extends FieldAssembler
 			}
 
 			$dashboardId = (int)($row['data']['ID'] ?? 0);
+			$isBanned = isset($this->bannedDashboardIds[$dashboardId]);
+			if ($this->isBanApplied)
+			{
+				$row['data']['IS_SHARE_BANNED'] = $isBanned;
+			}
+
 			$status = $row['data']['STATUS'] ?? '';
 			$type = $row['data']['TYPE'] ?? '';
 
@@ -109,7 +145,14 @@ class ShareLinkFieldAssembler extends FieldAssembler
 
 			if ($isHidden)
 			{
-				$row['columns'][$columnId] = '';
+				$row['columns'][$columnId] = $isBanned && $this->showBanOnHiddenCell ? $this->renderBannedCell($dashboardId) : '';
+
+				continue;
+			}
+
+			if ($isBanned)
+			{
+				$row['columns'][$columnId] = $this->renderBannedCell($dashboardId);
 
 				continue;
 			}
@@ -122,6 +165,18 @@ class ShareLinkFieldAssembler extends FieldAssembler
 		}
 
 		return $row;
+	}
+
+	private function renderBannedCell(int $dashboardId): string
+	{
+		$text = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_SHARE_LINK_BANNED');
+		$hint = htmlspecialcharsbx(Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_SHARE_LINK_BANNED_HINT') ?? '');
+
+		return <<<HTML
+		<span class="dashboard-share-link dashboard-share-link--banned" data-dashboard-id="{$dashboardId}" data-banned="Y" data-hint="{$hint}" data-hint-no-icon>
+			{$text}
+		</span>
+		HTML;
 	}
 
 	private function renderCell(int $dashboardId, bool $isActive, ?array $shareData, string $type, string $title): string

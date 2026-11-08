@@ -1,5 +1,6 @@
 <?php
 
+use Bitrix\Bizproc\BaseType\ValueRule;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowDurationStatTable;
 use Bitrix\Bizproc\Workflow\Entity\WorkflowInstanceTable;
 use Bitrix\Bizproc\Internal\Repository\WorkflowTemplate\PilotVersionRepository;
@@ -8,7 +9,10 @@ use Bitrix\Bizproc\Internal\Service\Container as BizprocContainer;
 use Bitrix\Bizproc\Internal\Service\Pilot\PilotPresence;
 use Bitrix\Bizproc\Internal\Service\Pilot\RestrictedTemplateArea;
 use Bitrix\Bizproc\Internal\Service\Pilot\SettingsFreezeGate;
+use Bitrix\Bizproc\Internal\Service\ProcessData\ProcessDataPublicationValidator;
+use Bitrix\Bizproc\Internal\Service\Template\FirstPublicationWriter;
 use Bitrix\Bizproc\Internal\Service\WorkflowTemplate\AutoExecuteFilter;
+use Bitrix\Bizproc\Public\ProcessData\Service\ProcessDataMechanicsResolver;
 use Bitrix\Bizproc\Public\Provider\PilotVisibilityProvider;
 use Bitrix\Bizproc\Workflow\Template\Converter\NodesToTemplate;
 use Bitrix\Bizproc\Workflow\Template\Entity\WorkflowTemplateTable;
@@ -34,6 +38,8 @@ class CBPWorkflowTemplateLoader
 	protected static $typesStates = array();
 
 	private static $instance;
+
+	private const SETUP_TEMPLATE_ACTIVITY_TYPE = 'SetupTemplateActivity';
 
 	public const MAX_PARAMETERS_LENGTH = 65535;
 	public const MAX_VARIABLES_LENGTH = 65535;
@@ -341,19 +347,21 @@ class CBPWorkflowTemplateLoader
 								),
 							);
 						}
+
+						array_push($errors, ...$this->validateConstantValueRules($arFields, $id, $documentType));
+						array_push($errors, ...(new ProcessDataPublicationValidator())->collectErrors($arFields, $id));
 					}
 
-					if (count($errors) > 0)
-					{
-						$messages = array();
-						foreach ($errors as $v)
-						{
-							$messages[] = trim($v["message"]);
-						}
-						throw new CBPWorkflowTemplateValidationException(implode('.', $messages), $errors);
-					}
+					$this->throwOnValidationErrors($errors);
 				}
 			}
+		}
+		// The legacy dialogs of the parameters, the variables and the constants write one block and carry no
+		// scheme, so the check of the data elements stands on its own here: without it a rename made by such a
+		// dialog leaves the references of the template dangling.
+		elseif (!$systemImport && $validationRequired)
+		{
+			$this->throwOnValidationErrors((new ProcessDataPublicationValidator())->collectErrors($arFields, $id));
 		}
 
 		$enumValues = array_column(WorkflowTemplateType::cases(), 'value');
@@ -374,15 +382,438 @@ class CBPWorkflowTemplateLoader
 		unset($arFields["MODIFIED"]);
 	}
 
-	public static function add($fields, $systemImport = false)
+	/**
+	 * Refuses a value rule of a setup constant that cannot be honoured, before anything is written.
+	 *
+	 * @param int $id Id of the template on an update, 0 while it is being added.
+	 * @return list<array> Errors in the shape the validation of the tree collects.
+	 */
+	private function validateConstantValueRules(array $arFields, int $id, ?array $documentType): array
+	{
+		if (!is_array($arFields['TEMPLATE'] ?? null))
+		{
+			return [];
+		}
+
+		$setupActivities = [];
+		self::collectSetupTemplateActivities($arFields['TEMPLATE'], $setupActivities);
+		$newConstants = is_array($arFields['CONSTANTS'] ?? null) ? $arFields['CONSTANTS'] : null;
+		$constantsCarryRule = self::constantsCarryValueRule($newConstants ?? []);
+		if (!$setupActivities && !$constantsCarryRule)
+		{
+			return [];
+		}
+
+		// the contract of the rule and the messages of the refusals both live in the activity
+		if (!CBPActivity::includeActivityFile(self::SETUP_TEMPLATE_ACTIVITY_TYPE))
+		{
+			return [];
+		}
+
+		$declaredRules = [];
+		$ruleCarryingScreens = [];
+		$rulesUndecided = false;
+		foreach ($setupActivities as $setupActivity)
+		{
+			$rawBlocks = $setupActivity['Properties']['blocks'] ?? null;
+			if (!is_string($rawBlocks) && !is_array($rawBlocks))
+			{
+				continue;
+			}
+
+			$valueRules = \CBPSetupTemplateActivity::collectConstantValueRules($rawBlocks);
+			if ($valueRules === null)
+			{
+				// blocks the validation of the tree has already refused: this screen states no rule either way
+				$rulesUndecided = true;
+
+				continue;
+			}
+
+			if (!$valueRules)
+			{
+				continue;
+			}
+
+			$declaredRules += $valueRules;
+			$ruleCarryingScreens[] = [
+				'rawBlocks' => $rawBlocks,
+				'valueRules' => $valueRules,
+				'activityName' => (string)($setupActivity['Name'] ?? ''),
+			];
+		}
+
+		if (!$declaredRules && !$constantsCarryRule)
+		{
+			return [];
+		}
+
+		$storedConstants = $id > 0 ? self::getTemplateConstants($id) : [];
+		$constantNames = self::collectConstantNames($newConstants ?? [], $storedConstants);
+
+		$errors = [];
+		foreach ($ruleCarryingScreens as $screen)
+		{
+			if ($newConstants !== null)
+			{
+				array_push(
+					$errors,
+					...$this->collectValueRuleCarrierErrors(
+						$screen['valueRules'],
+						$newConstants,
+						$constantNames,
+						$screen['activityName'],
+					),
+				);
+			}
+
+			if ($documentType !== null)
+			{
+				array_push(
+					$errors,
+					...$this->collectValueRuleViolationErrors(
+						$screen['rawBlocks'],
+						$screen['valueRules'],
+						$newConstants,
+						$storedConstants,
+						$documentType,
+						$constantNames,
+						$screen['activityName'],
+					),
+				);
+			}
+		}
+
+		if ($newConstants !== null)
+		{
+			array_push(
+				$errors,
+				...$this->collectConstantsValueRuleErrors(
+					$newConstants,
+					$declaredRules,
+					$constantNames,
+					(bool)$setupActivities && !$rulesUndecided,
+				),
+			);
+		}
+
+		return $errors;
+	}
+
+	/**
+	 * @param list<array> $errors
+	 * @throws CBPWorkflowTemplateValidationException
+	 */
+	private function throwOnValidationErrors(array $errors): void
+	{
+		if (!$errors)
+		{
+			return;
+		}
+
+		$messages = [];
+		foreach ($errors as $error)
+		{
+			$messages[] = trim($error['message']);
+		}
+
+		throw new CBPWorkflowTemplateValidationException(implode('.', $messages), $errors);
+	}
+
+	/**
+	 * The rule as the constants of the template carry it, checked on its own contract and against the rules
+	 * the tree declares. The copy of a rule the tree does declare is compared with its source by
+	 * collectValueRuleCarrierErrors().
+	 *
+	 * @param array<string, array> $declaredRules Rules the start screens of the tree declare, keyed by code.
+	 * @param array<string, string> $constantNames
+	 * @param bool $declaredRulesAreKnown False while the rules of at least one start screen stay unknown, so a
+	 *     rule of the copy cannot be told from a rule declared by a screen the tree validation refused.
+	 * @return list<array>
+	 */
+	private function collectConstantsValueRuleErrors(
+		array $newConstants,
+		array $declaredRules,
+		array $constantNames,
+		bool $declaredRulesAreKnown,
+	): array
+	{
+		$errors = [];
+		foreach ($newConstants as $code => $constant)
+		{
+			$code = (string)$code;
+			if (!is_array($constant))
+			{
+				continue;
+			}
+
+			$rule = $constant['Settings'][ValueRule::SETTINGS_KEY] ?? null;
+			if (self::normalizeConstantValueRule($rule) === null)
+			{
+				continue;
+			}
+
+			$constantType = (string)($constant['Type'] ?? '');
+			if (!\CBPSetupTemplateActivity::isValidConstantValueRule($constantType, $rule))
+			{
+				$errors[] = [
+					'code' => 'ValueRuleInvalid',
+					'message' => Loc::getMessage(
+						'BIZPROC_CONSTANT_VALUE_RULE_INVALID',
+						['#name#' => $constantNames[$code] ?? $code],
+					),
+				];
+
+				continue;
+			}
+
+			if ($declaredRulesAreKnown && !isset($declaredRules[$code]))
+			{
+				$errors[] = [
+					'code' => 'ValueRuleCarriersDiffer',
+					'message' => Loc::getMessage(
+						'BIZPROC_CONSTANT_VALUE_RULE_CARRIERS_DIFFER',
+						['#name#' => $constantNames[$code] ?? $code],
+					),
+				];
+			}
+		}
+
+		return $errors;
+	}
+
+	/**
+	 * The rule in the copy has to state what its source states. A constant the wizard declares and the set of
+	 * constants does not carry at all is passed over: there is nothing to diverge.
+	 *
+	 * @param array<string, array> $valueRules Rules the tree declares, keyed by constant code.
+	 * @param array<string, string> $constantNames
+	 * @return list<array>
+	 */
+	private function collectValueRuleCarrierErrors(
+		array $valueRules,
+		array $newConstants,
+		array $constantNames,
+		string $activityName,
+	): array
+	{
+		$errors = [];
+		foreach ($valueRules as $code => $rule)
+		{
+			$copy = $newConstants[$code] ?? null;
+			if (!is_array($copy))
+			{
+				continue;
+			}
+
+			$copiedRule = $copy['Settings'][ValueRule::SETTINGS_KEY] ?? null;
+			if (self::normalizeConstantValueRule($copiedRule) === self::normalizeConstantValueRule($rule))
+			{
+				continue;
+			}
+
+			$errors[] = [
+				'code' => 'ValueRuleCarriersDiffer',
+				'message' => Loc::getMessage(
+					'BIZPROC_CONSTANT_VALUE_RULE_CARRIERS_DIFFER',
+					['#name#' => $constantNames[$code] ?? $code],
+				),
+				'activityName' => $activityName,
+			];
+		}
+
+		return $errors;
+	}
+
+	/**
+	 * A rule the value of its constant breaks. The value measured is the one this save writes; the value saved
+	 * before stands only for a constant the save does not carry, where it stays in force (Q-1: a value written
+	 * past the base type has never met any rule, whether the save changes the rule or not).
+	 *
+	 * @param array<string, array> $valueRules Rules the tree declares, keyed by constant code.
+	 * @param array|null $newConstants Constants of the template being saved, null when the save carries none.
+	 * @param array<string, string> $constantNames
+	 * @return list<array>
+	 */
+	private function collectValueRuleViolationErrors(
+		string|array $rawBlocks,
+		array $valueRules,
+		?array $newConstants,
+		array $storedConstants,
+		array $documentType,
+		array $constantNames,
+		string $activityName,
+	): array
+	{
+		$values = [];
+		foreach (array_keys($valueRules) as $code)
+		{
+			$constant = $newConstants[$code] ?? $storedConstants[$code] ?? null;
+			if (!is_array($constant) || CBPHelper::isEmptyValue($constant['Default'] ?? null))
+			{
+				continue;
+			}
+
+			$values[$code] = $constant['Default'];
+		}
+
+		if (!$values)
+		{
+			return [];
+		}
+
+		$blocks = \CBPSetupTemplateActivity::filterBlocksByConstantCodes($rawBlocks, array_keys($values));
+		if (!$blocks)
+		{
+			return [];
+		}
+
+		$errors = [];
+		$invalidCodes = \CBPSetupTemplateActivity::collectInvalidConstantCodes($documentType, $blocks, $values);
+		foreach ($invalidCodes as $code)
+		{
+			$errors[] = [
+				'code' => 'ValueRuleBrokenByStoredValue',
+				'message' => Loc::getMessage(
+					'BIZPROC_CONSTANT_VALUE_RULE_BROKEN_BY_STORED_VALUE',
+					['#name#' => $constantNames[$code] ?? $code],
+				),
+				'activityName' => $activityName,
+			];
+		}
+
+		return $errors;
+	}
+
+	/**
+	 * Every SetupTemplateActivity of a template tree: a template may carry more than one start screen.
+	 *
+	 * @param array $activities Activities of one level of the tree.
+	 * @param list<array> $setupActivities Accumulator, appended in place.
+	 */
+	private static function collectSetupTemplateActivities(array $activities, array &$setupActivities): void
+	{
+		$searcher = BizprocContainer::instance()->getActivitySearcherService();
+		$setupActivityCode = $searcher->normalizeActivityCode(self::SETUP_TEMPLATE_ACTIVITY_TYPE);
+
+		foreach ($activities as $activity)
+		{
+			if (!is_array($activity))
+			{
+				continue;
+			}
+
+			// the type is resolved to a class the same normalized way, so the case of the string means nothing
+			$type = $activity['Type'] ?? null;
+			if (is_string($type) && $searcher->normalizeActivityCode($type) === $setupActivityCode)
+			{
+				$setupActivities[] = $activity;
+			}
+
+			if (is_array($activity['Children'] ?? null))
+			{
+				self::collectSetupTemplateActivities($activity['Children'], $setupActivities);
+			}
+		}
+	}
+
+	/**
+	 * @return array<string, string> names of the constants by code, the set being saved winning
+	 */
+	private static function collectConstantNames(array $newConstants, array $storedConstants): array
+	{
+		$names = [];
+		foreach ([$storedConstants, $newConstants] as $constants)
+		{
+			foreach ($constants as $code => $constant)
+			{
+				$name = is_array($constant) ? ($constant['Name'] ?? null) : null;
+				if (is_string($name) && $name !== '')
+				{
+					$names[(string)$code] = $name;
+				}
+			}
+		}
+
+		return $names;
+	}
+
+	/**
+	 * Does any constant of the set carry a rule at all: the same test the checks of the copy apply, made
+	 * without the tree and without the constants saved before.
+	 */
+	private static function constantsCarryValueRule(array $constants): bool
+	{
+		foreach ($constants as $constant)
+		{
+			$rule = is_array($constant) ? ($constant['Settings'][ValueRule::SETTINGS_KEY] ?? null) : null;
+			if (self::normalizeConstantValueRule($rule) !== null)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Comparable form of a value rule, null for no rule at all: a bound means the same whether it arrives as
+	 * a number or as its decimal string after a round trip through a stored template.
+	 */
+	private static function normalizeConstantValueRule(mixed $rule): ?array
+	{
+		if (!is_array($rule) || !$rule)
+		{
+			return null;
+		}
+
+		$normalized = [];
+		foreach ($rule as $key => $value)
+		{
+			if (is_numeric($value))
+			{
+				$normalized[(string)$key] = (string)(int)$value;
+			}
+			else
+			{
+				$normalized[(string)$key] = is_scalar($value) ? (string)$value : $value;
+			}
+		}
+
+		ksort($normalized);
+
+		return $normalized;
+	}
+
+	/**
+	 * $actorId is the user the caller already authorized, and it wins over the global one: authorship decides
+	 * the "own templates" scope, so it must come from the same user the ACL was checked for. A caller that
+	 * checks rights for one user while the global holds another would otherwise hand the row to the wrong
+	 * owner. Callers with no request user of their own (install, import, conversion) pass nothing and keep
+	 * the global.
+	 *
+	 * $markFirstPublication says whether this creation is an act of publishing a process; null leaves the
+	 * answer to $systemImport. See {@see FirstPublicationWriter}.
+	 */
+	public static function add(
+		$fields,
+		$systemImport = false,
+		?int $actorId = null,
+		?bool $markFirstPublication = null,
+	)
 	{
 		$loader = CBPWorkflowTemplateLoader::GetLoader();
 		$templateType = $loader->getTemplateType($fields);
 		$loader->setShowInTimelineBeforeAdd($fields);
 		$loader->setTemplateType($fields, $templateType);
 
-		$fields['CREATED_BY'] = (int)CurrentUser::get()->getId();
-		$fields['UPDATED_BY'] = (int)CurrentUser::get()->getId();
+		$fields = (new FirstPublicationWriter())
+			->prepareForInsert($fields, (bool)$systemImport, $markFirstPublication)
+		;
+
+		$authorId = $loader->resolveActorId($actorId);
+		$fields['CREATED_BY'] = $authorId;
+		$fields['UPDATED_BY'] = $authorId;
 
 		$id = $loader->AddTemplate($fields, $systemImport);
 		$loader->addTemplateSettings($id, $fields);
@@ -416,6 +847,17 @@ class CBPWorkflowTemplateLoader
 		WorkflowTemplateSettingsTable::deleteSettingsByFilter(['=TEMPLATE_ID' => $templateId]);
 	}
 
+	/**
+	 * A non-positive $actorId is not a caller decision but the absence of one - an anonymous or system context
+	 * where CBPWorkflowTemplateUser resolves to 0 - so it falls back to the global instead of writing 0 into
+	 * authorship and making the row nobody's.
+	 */
+	private function resolveActorId(?int $actorId): int
+	{
+		return $actorId > 0 ? $actorId : (int)CurrentUser::get()->getId();
+	}
+
+	/** $actorId - see {@see self::add()}: the already authorized user wins over the global one. */
 	public static function update(
 		$id,
 		$fields,
@@ -423,11 +865,12 @@ class CBPWorkflowTemplateLoader
 		$validationRequired = true,
 		bool $deferCacheInvalidation = false,
 		bool $publishesCommonVersion = false,
+		?int $actorId = null,
 	)
 	{
 		$loader = CBPWorkflowTemplateLoader::GetLoader();
 		$templateType = $loader->getTemplateType($fields, $id);
-		$loader->setShowInTimelineBeforeUpdate($fields, $templateType);
+		$loader->setShowInTimelineBeforeUpdate($fields, $templateType, (int)$id);
 		$loader->setTemplateType($fields, $templateType);
 
 		if (isset($fields['TEMPLATE']) && !$systemImport)
@@ -435,7 +878,7 @@ class CBPWorkflowTemplateLoader
 			$fields['IS_MODIFIED'] = 'Y';
 		}
 
-		$fields['UPDATED_BY'] = (int)CurrentUser::get()->getId();
+		$fields['UPDATED_BY'] = $loader->resolveActorId($actorId);
 
 		$templateId = (int)$id;
 		if ($templateId <= 0)
@@ -453,6 +896,10 @@ class CBPWorkflowTemplateLoader
 			}
 
 			self::guardFrozenSettings($templateId, $fields, $publishesCommonVersion);
+
+			$fields = (new FirstPublicationWriter())
+				->prepareForUpdate($templateId, $fields, $publishesCommonVersion)
+			;
 
 			$returnId = $loader->UpdateTemplate($templateId, $fields, $systemImport, $validationRequired);
 			$loader->updateTemplateSettings($templateId, $fields);
@@ -614,25 +1061,42 @@ class CBPWorkflowTemplateLoader
 		return $templateType;
 	}
 
-	public function setShowInTimelineBeforeUpdate(array &$fields, ?string $templateType = null): void
+	public function setShowInTimelineBeforeUpdate(array &$fields, ?string $templateType, int $id): void
 	{
-		if (!$templateType)
+		if ($templateType !== WorkflowTemplateType::Robots->value)
 		{
 			return;
 		}
 
 		$isCrm = array_key_exists('DOCUMENT_TYPE', $fields) && $fields['DOCUMENT_TYPE'][0] === 'crm';
+		if (!$isCrm)
+		{
+			return;
+		}
 
-		$customRobotToRobot =
-			array_key_exists('TYPE', $fields)
-			&& $fields['TYPE'] !== WorkflowTemplateType::Robots->value
-			&& $templateType === WorkflowTemplateType::Robots->value
-		;
+		// The previous type is the stored one, never the requested one: a client save path does not send
+		// TYPE at all, and a requested value would let the client trigger or suppress this reset.
+		$previousType = $this->getStoredTemplateType($id);
 
-		if ($isCrm && $customRobotToRobot)
+		if ($previousType !== null && $previousType !== WorkflowTemplateType::Robots->value)
 		{
 			$fields['TEMPLATE_SETTINGS']['SHOW_IN_TIMELINE'] = 'N';
 		}
+	}
+
+	private function getStoredTemplateType(int $id): ?string
+	{
+		if ($id <= 0)
+		{
+			return null;
+		}
+
+		$row = WorkflowTemplateTable::getRow([
+			'select' => ['TYPE'],
+			'filter' => ['=ID' => $id],
+		]);
+
+		return $row['TYPE'] ?? null;
 	}
 
 	private function isRobot(int $autoExecute): bool
@@ -812,7 +1276,10 @@ class CBPWorkflowTemplateLoader
 			if ($instance)
 			{
 				$instance->setActivated($activated);
-				if ($documentContext)
+				// Not truthiness: an id of "0" is a document the author named, and dropping it here would
+				// leave the node working over the document of the process instead.
+				$hasDocumentContext = $documentContext !== null && $documentContext !== '';
+				if ($hasDocumentContext)
 				{
 					$instance->setDocumentContext($documentContext);
 				}
@@ -1382,6 +1849,7 @@ class CBPWorkflowTemplateLoader
 
 		$templateFields = $unpackResult->getTpl()->collectValues();
 		$templateFields['DOCUMENT_FIELDS'] = $unpackResult->getDocumentFields();
+		$templateFields['TEMPLATE_SETTINGS'] = $unpackResult->getTemplateSettings();
 
 		return self::importTemplateFromArray($id, $documentType, $autoExecute, $name, $description, $templateFields, $systemCode, $systemImport);
 	}
@@ -1429,10 +1897,18 @@ class CBPWorkflowTemplateLoader
 		if ($id <= 0)
 			$templateData['ACTIVE'] = 'Y';
 
+		$settingsForImport = (new ProcessDataMechanicsResolver())
+			->settingsForImport($templateFields, (int)$id)
+		;
+		if ($settingsForImport)
+		{
+			$templateData['TEMPLATE_SETTINGS'] = $settingsForImport;
+		}
+
 		if ($id > 0)
 			self::Update($id, $templateData, $systemImport);
 		else
-			$id = self::Add($templateData, $systemImport);
+			$id = self::Add($templateData, $systemImport, markFirstPublication: false);
 
 		if ($templateFields['DOCUMENT_FIELDS'] && is_array($templateFields['DOCUMENT_FIELDS']))
 		{

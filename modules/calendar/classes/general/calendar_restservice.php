@@ -11,10 +11,16 @@ use Bitrix\Calendar\Access\Model\TypeModel;
 use Bitrix\Calendar\Access\SectionAccessController;
 use Bitrix\Calendar\Access\TypeAccessController;
 use Bitrix\Calendar\Core\Event\Tools\Dictionary;
+use Bitrix\Calendar\Rooms\OccupancyCheckerException;
+use Bitrix\Calendar\Core\Event\EventSaveStateException;
+use Bitrix\Calendar\Rooms\OccupancyLockedException;
+use Bitrix\Calendar\Rooms\Manager;
+use Bitrix\Calendar\Rest\MachineDateFormatter;
 use Bitrix\Main\Loader;
 use Bitrix\Rest\RestException;
 use Bitrix\Calendar\Internals;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\Web\Uri;
 
 IncludeModuleLangFile(__FILE__);
 /**
@@ -152,12 +158,71 @@ final class CCalendarRestService extends IRestService
 	/*
 	 * Returns array of events
 	 *
+	 * Machine readable marks of the record come next to the existing localized strings:
+	 * TIMESTAMP_X_ISO - the moment the record was changed, in ISO-8601 with the offset of the portal
+	 * DATE_CREATE_ISO - the moment the record was created, the same semantics
+	 * The offset of both fields belongs to the portal and never to the caller: these are marks of the record and
+	 * 		are written by that very time. The key is there only for a mark that is not empty and could be parsed.
+	 * DATE_FROM_TS_UTC and DATE_TO_TS_UTC keep their legacy semantics: in spite of the names they carry the offset
+	 * 		of the server, so they cannot be read as UTC.
+	 *
 	 * @param array $params - incomoning params:
 	 * $params['type'] - (required) calendar type ('user'|'group')
 	 * $params['ownerId'] - owner id
 	 * $params['from'] - datetime, "from" limit, default value - 1 month before current date
 	 * $params['to'] - datetime, "to" limit, default value - 3 month after current date
 	 * $params['section'] - inline or array of sections
+	 * $params['modified_since'] - delta border by the moment of the record change:
+	 * 		1) optional; a string in extended ISO-8601, YYYY-MM-DDThh:mm:ss carrying an explicit timezone: an
+	 * 			offset ('2013-06-25T12:00:00+03:00') or Z ('2013-06-25T09:00:00Z'). Fractions of a
+	 * 			second are accepted and dropped;
+	 * 		2) the value is matched whole, and everything that is not one of the accepted forms is rejected
+	 * 			with status 400 and error = ERROR_ARGUMENT: a value of another type (false among them - a cast
+	 * 			would read it as no border at all and widen the answer to the whole window), a value without a
+	 * 			timezone, a bare timezone name, a relative form, anything trailing the moment, and a date that
+	 * 			does not exist ('2026-02-30T12:00:00Z' is refused, not rolled over into March). An accepted
+	 * 			border either becomes a condition of the query or gives an error;
+	 * 		3) an empty string means the same as no parameter at all - the whole window is read;
+	 * 		4) events changed not earlier than the border are returned and the border is inclusive: an event
+	 * 			changed exactly at the border comes back. The mark is stored with a precision of a second, so
+	 * 			the client gets the whole second of its cursor once again;
+	 * 		5) relation to the window is an intersection: a change made while the event was outside of the
+	 * 			requested window is already older than the cursor by the time the event drives into the window,
+	 * 			and it will not come;
+	 * 		6) in batch the status of the whole request stays successful, the error of the command arrives in
+	 * 			result_error under the key of the command;
+	 * 		7) a response to a request with the border is not served by the cache of the event list - it is
+	 * 			always built from the database, so there can be no stale data in it;
+	 * 		8) what the from-to window accepts: a value with an offset keeps the moment, and a value without an
+	 * 			offset is read as the time of the portal and not as UTC - the behaviour of the window is left
+	 * 			as it is;
+	 * 		9) the TIMESTAMP_X_ISO value of a response is passed back to modified_since as is, without any
+	 * 			conversion - the format we return and the format we accept are the same;
+	 * 		10) a deletion of an event arrives as a tombstone: the row comes with DELETED = 'Y' and the mark
+	 * 			of the moment it was deleted, and the client drops the event by its ID. Only a request
+	 * 			carrying the border sees tombstones - without it the answer holds living events alone, as it
+	 * 			always did. A tombstone lives under the same window as any other row, so a deletion of an
+	 * 			event lying outside of the requested window does not come;
+	 * 		11) what the delta still does not show: an event whose row is gone for good rather than marked
+	 * 			deleted - a deletion of the whole calendar it belonged to and a deletion of an event of a
+	 * 			meeting room - and a reply of an attendee, accepting or declining a meeting, which writes the
+	 * 			status of the attendee alone and does not move the mark of the record;
+	 * 		12) the price of a tombstone of a series: a deleted recurring series is expanded into instances
+	 * 			just as a living one, so one deletion of a series arrives as a record per instance of it
+	 * 			inside the window, all of them under a single ID. The answer has no ceiling of its own - its
+	 * 			size follows the number of deleted series in the window and the width of the window itself.
+	 * 			Measured on a portal of development (a section of 55 deleted rows, 5 of them masters of a
+	 * 			series, the default window, median of 7 runs): a read of living events is 7 records, 12.0 KB
+	 * 			and 6.1 ms, the same delta with tombstones is 130 records, 243.6 KB and 22.8 ms, and 118 of
+	 * 			its 123 tombstones are repetitions - one master alone gives 52 records. On a window of 365
+	 * 			days each way 40 records turn into 720 and the time goes from 12.7 to 73.1 ms. A client of
+	 * 			synchronization has to be ready for a deletion of a series arriving as many records under one
+	 * 			ID and to fold them into one deletion by itself;
+	 * 		13) the attendees of a tombstone are the ones of the moment of reading and not of the moment of
+	 * 			deletion: ATTENDEES_CODES is frozen by the deletion, while ATTENDEE_LIST is gathered from the
+	 * 			living rows of the parent as they are when the answer is built. So an attendee dropped from a
+	 * 			meeting by its organizer gets a tombstone of its own carrying the current attendees of that
+	 * 			meeting. The contents of the event itself stay frozen by the deletion.
 	 * @return array of events
 	 * @throws \Bitrix\Rest\RestException
 	 *
@@ -168,7 +233,8 @@ final class CCalendarRestService extends IRestService
 	 *		ownerId: '1',
 	 * 		from: '2013-06-20',
 	 * 		to: '2013-08-20',
-	 * 		section: [21, 44]
+	 * 		section: [21, 44],
+	 * 		modified_since: '2013-06-25T12:00:00+03:00'
 	 * });
 	 *
 	 */
@@ -223,6 +289,20 @@ final class CCalendarRestService extends IRestService
 			$to = CCalendar::Date(CCalendar::GetMaxTimestamp(), false);
 		}
 
+		$modifiedSince = null;
+		if (array_key_exists('modified_since', $params))
+		{
+			if ($params['modified_since'] === null)
+			{
+				throw new RestException(
+					Loc::getMessage('CAL_REST_PARAM_ERROR', ['#PARAM_NAME#' => 'modified_since']),
+					RestException::ERROR_ARGUMENT
+				);
+			}
+
+			$modifiedSince = self::parseModifiedSince($params['modified_since']);
+		}
+
 		$arSectionIds = [];
 
 		$sections = CCalendarSect::GetList([
@@ -263,9 +343,93 @@ final class CCalendarRestService extends IRestService
 			'toLimit' => $to,
 		];
 
+		if ($modifiedSince !== null)
+		{
+			$params['modifiedSince'] = $modifiedSince;
+		}
+
 		$arAttendees = [];
 
-		return CCalendar::GetEventList($params, $arAttendees);
+		$events = CCalendar::GetEventList($params, $arAttendees);
+		self::addMachineDatesToEach($events);
+
+		return $events;
+	}
+
+	/**
+	 * Casts the delta border of calendar.event.get to server time.
+	 *
+	 * The value has to be an extended ISO-8601 moment carrying an explicit timezone, and the accepted
+	 * forms are matched whole. A lenient reading moves the border without telling the caller: a bare
+	 * timezone name is read as the current moment, a value without a timezone as the wall time of the
+	 * portal, and a day past the length of its month rolls over into the next one.
+	 *
+	 * This is the only place where the border becomes an object: the filter layer takes it already cast
+	 * and cannot answer the caller, so a value it cannot use stops the call instead of narrowing it.
+	 *
+	 * @param mixed $value
+	 * @return \Bitrix\Main\Type\DateTime|null Null when there is no border.
+	 * @throws RestException
+	 */
+	private static function parseModifiedSince(mixed $value): ?\Bitrix\Main\Type\DateTime
+	{
+		if ($value === null)
+		{
+			return null;
+		}
+
+		$errorMessage = Loc::getMessage('CAL_REST_PARAM_ERROR', ['#PARAM_NAME#' => 'modified_since']);
+
+		// the parameter is a string, and casting to one would read false as the empty string, that is as
+		// "no border" - the one wrong answer a caller has no way of telling from a right one
+		if (!is_string($value))
+		{
+			throw new RestException($errorMessage, RestException::ERROR_ARGUMENT);
+		}
+
+		if ($value === '')
+		{
+			return null;
+		}
+
+		$moment = self::readBorderMoment($value);
+		if ($moment === null)
+		{
+			throw new RestException($errorMessage, RestException::ERROR_ARGUMENT);
+		}
+
+		return \Bitrix\Main\Type\DateTime::createFromTimestamp($moment->getTimestamp());
+	}
+
+	/**
+	 * Reads an accepted form of the delta border, or null when the value is none of them.
+	 *
+	 * The offset placeholder also takes 'Z', so the two formats cover every accepted form; the second one
+	 * is there for the callers whose clock prints fractions of a second. What makes
+	 * the reading strict is the question to the parser afterwards: createFromFormat() answers an object
+	 * for an impossible day too, and only reports the correction it had to make as a warning.
+	 */
+	private static function readBorderMoment(string $value): ?\DateTimeImmutable
+	{
+		// createFromFormat() raises a ValueError on a null byte, and the value comes from the caller
+		if (str_contains($value, "\0"))
+		{
+			return null;
+		}
+
+		foreach (['Y-m-d\TH:i:sP', 'Y-m-d\TH:i:s.uP'] as $format)
+		{
+			$moment = \DateTimeImmutable::createFromFormat($format, $value);
+			$errors = \DateTimeImmutable::getLastErrors();
+			$corrected = $errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0);
+
+			if ($moment !== false && !$corrected)
+			{
+				return $moment;
+			}
+		}
+
+		return null;
 	}
 
 	/**
@@ -290,6 +454,14 @@ final class CCalendarRestService extends IRestService
 
 	/*
 	 * Returns event by it id
+	 *
+	 * Machine readable marks of the record come next to the existing localized strings:
+	 * TIMESTAMP_X_ISO - the moment the record was changed, in ISO-8601 with the offset of the portal
+	 * DATE_CREATE_ISO - the moment the record was created, the same semantics
+	 * The offset of both fields belongs to the portal and never to the caller: these are marks of the record and
+	 * 		are written by that very time. The key is there only for a mark that is not empty and could be parsed.
+	 * DATE_FROM_TS_UTC and DATE_TO_TS_UTC keep their legacy semantics: in spite of the names they carry the offset
+	 * 		of the server, so they cannot be read as UTC.
 	 *
 	 * @param array $params - incomoning params:
 	 * $params['id'] - int, (required) calendar event id
@@ -321,9 +493,60 @@ final class CCalendarRestService extends IRestService
 		}
 
 		$event = CCalendarEvent::GetById($params['id']);
-		unset($event['ACTIVE'], $event['DT_FROM'], $event['DT_TO'], $event['TEXT_COLOR']);
+		if (!$event)
+		{
+			return null;
+		}
 
-		return $event ?: null;
+		unset($event['ACTIVE'], $event['DT_FROM'], $event['DT_TO'], $event['TEXT_COLOR']);
+		self::addMachineDates($event);
+
+		return $event;
+	}
+
+	/**
+	 * Adds machine readable copies of the record marks to an event of a response.
+	 *
+	 * The key appears only for a mark that is there and could be parsed, so a client can tell
+	 * "no field" from "a field with a valid moment in it".
+	 *
+	 * The event is taken by reference for the same reason the list is: a value parameter written to is
+	 * copied, and here that would cost one copy of every event of a response that has no limit.
+	 *
+	 * @param array $event
+	 * @return void
+	 */
+	private static function addMachineDates(array &$event): void
+	{
+		$timestampX = MachineDateFormatter::format($event['TIMESTAMP_X'] ?? null);
+		if ($timestampX !== null)
+		{
+			$event['TIMESTAMP_X_ISO'] = $timestampX;
+		}
+
+		$dateCreate = MachineDateFormatter::format($event['DATE_CREATE'] ?? null);
+		if ($dateCreate !== null)
+		{
+			$event['DATE_CREATE_ISO'] = $dateCreate;
+		}
+	}
+
+	/**
+	 * Adds machine readable copies of the record marks to every event of a response.
+	 *
+	 * The list is taken by reference on purpose: a second copy of a response that has no limit would
+	 * double the peak of the request.
+	 *
+	 * @param array $events
+	 * @return void
+	 */
+	private static function addMachineDatesToEach(array &$events): void
+	{
+		foreach ($events as &$event)
+		{
+			self::addMachineDates($event);
+		}
+		unset($event);
 	}
 
 	/*
@@ -408,6 +631,7 @@ final class CCalendarRestService extends IRestService
 	{
 		$userId = CCalendar::GetCurUserId();
 		$methodName = "calendar.event.add";
+		$occupancyCheckMode = self::getOccupancyCheckMode($params);
 
 		$skipTime = false;
 
@@ -704,6 +928,7 @@ final class CCalendarRestService extends IRestService
 		}
 
 		$saveParams['arFields'] = $arFields;
+		$saveParams['checkLocationOccupancy'] = $occupancyCheckMode;
 		if ($sectionId <= 0 || ($params['auto_detect_section'] ?? null) === 'Y')
 		{
 			$saveParams['autoDetectSection'] = true;
@@ -712,7 +937,22 @@ final class CCalendarRestService extends IRestService
 
 		CCalendar::GetAndClearErrors();
 
-		$newId = CCalendar::SaveEvent($saveParams);
+		try
+		{
+			$newId = CCalendar::SaveEvent($saveParams);
+		}
+		catch (OccupancyCheckerException $exception)
+		{
+			throw self::createOccupancyConflictRestException($exception);
+		}
+		catch (EventSaveStateException $exception)
+		{
+			throw new RestException($exception->getMessage(), $exception->getErrorCode());
+		}
+		catch (OccupancyLockedException $exception)
+		{
+			throw self::createOccupancyLockedRestException($exception);
+		}
 
 		if (!$newId)
 		{
@@ -803,6 +1043,7 @@ final class CCalendarRestService extends IRestService
 	{
 		$userId = CCalendar::GetCurUserId();
 		$methodName = "calendar.event.update";
+		$occupancyCheckMode = self::getOccupancyCheckMode($params);
 
 		$necessaryParams = [
 			'id',
@@ -1085,7 +1326,7 @@ final class CCalendarRestService extends IRestService
 				'LANGUAGE_ID' => CCalendar::getUserLanguageId($userId),
 			];
 
-			$saveParams['userId'] = $arFields['MEETING_HOST'];
+			$saveParams['userId'] = $userId;
 		}
 
 		if (
@@ -1142,7 +1383,30 @@ final class CCalendarRestService extends IRestService
 		}
 
 		$saveParams['arFields'] = $arFields;
-		$newId = CCalendar::SaveEvent($saveParams);
+		$saveParams['checkLocationOccupancy'] = $occupancyCheckMode;
+		try
+		{
+			$newId = CCalendar::SaveEvent($saveParams);
+		}
+		catch (OccupancyCheckerException $exception)
+		{
+			throw self::createOccupancyConflictRestException($exception);
+		}
+		catch (EventSaveStateException $exception)
+		{
+			if ($exception->getErrorCode() === EventSaveStateException::EVENT_NOT_AVAILABLE)
+			{
+				$newId = false;
+			}
+			else
+			{
+				throw new RestException($exception->getMessage(), $exception->getErrorCode());
+			}
+		}
+		catch (OccupancyLockedException $exception)
+		{
+			throw self::createOccupancyLockedRestException($exception);
+		}
 
 		if (!$newId)
 		{
@@ -1150,6 +1414,79 @@ final class CCalendarRestService extends IRestService
 		}
 
 		return $newId;
+	}
+
+	private static function getOccupancyCheckMode(array $params): string
+	{
+		if (!array_key_exists('doCheckOccupancy', $params))
+		{
+			return 'Y';
+		}
+
+		$mode = $params['doCheckOccupancy'];
+		if (!is_string($mode) || !in_array($mode, ['Y', 'N'], true))
+		{
+			throw new RestException(Loc::getMessage('CAL_REST_PARAM_ERROR', [
+				'#PARAM_NAME#' => 'doCheckOccupancy',
+			]));
+		}
+
+		return $mode;
+	}
+
+	private static function createOccupancyConflictRestException(OccupancyCheckerException $exception): RestException
+	{
+		if ($exception->isInvalidInterval())
+		{
+			return new RestException(
+				$exception->getMessage(),
+				OccupancyCheckerException::INVALID_INTERVAL_ERROR_CODE,
+				\CRestServer::STATUS_OK,
+			);
+		}
+
+		$occupancyData = $exception->getOccupancyData();
+		$dates = array_values(array_filter(
+			(array)($occupancyData['dates'] ?? []),
+			static fn($date): bool => is_string($date) && preg_match(
+				'/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/D',
+				$date,
+			) === 1,
+		));
+		if (!self::canExposeOccupancyDates($occupancyData))
+		{
+			$dates = [];
+		}
+
+		$restException = new RestException(
+			Loc::getMessage('CAL_REST_LOCATION_OCCUPANCY_CONFLICT'),
+			OccupancyCheckerException::ERROR_CODE,
+			\CRestServer::STATUS_OK,
+		);
+		$restException->setAdditional([
+			'additional' => [
+				'occupancy' => [
+					'dates' => $dates,
+					'truncated' => (bool)($occupancyData['truncated'] ?? false),
+				],
+			],
+		]);
+
+		return $restException;
+	}
+
+	private static function canExposeOccupancyDates(array $occupancyData): bool
+	{
+		return Manager::canExposeOccupancyDates($occupancyData);
+	}
+
+	private static function createOccupancyLockedRestException(OccupancyLockedException $exception): RestException
+	{
+		return new RestException(
+			Loc::getMessage('CAL_REST_LOCATION_OCCUPANCY_LOCKED') ?: $exception->getMessage(),
+			OccupancyLockedException::ERROR_CODE,
+			\CRestServer::STATUS_OK,
+		);
 	}
 
 	/*
@@ -1193,6 +1530,14 @@ final class CCalendarRestService extends IRestService
 
 	/*
 	 * Return array of bearest events for current user
+	 *
+	 * Machine readable marks of the record come next to the existing localized strings:
+	 * TIMESTAMP_X_ISO - the moment the record was changed, in ISO-8601 with the offset of the portal
+	 * DATE_CREATE_ISO - the moment the record was created, the same semantics
+	 * The offset of both fields belongs to the portal and never to the caller: these are marks of the record and
+	 * 		are written by that very time. The key is there only for a mark that is not empty and could be parsed.
+	 * DATE_FROM_TS_UTC and DATE_TO_TS_UTC keep their legacy semantics: in spite of the names they carry the offset
+	 * 		of the server, so they cannot be read as UTC.
 	 *
 	 * @param array $params - incomoning params:
 	 * $params['ownerId'] - owner id
@@ -1263,7 +1608,7 @@ final class CCalendarRestService extends IRestService
 
 				foreach ($arEvents as $i => $event)
 				{
-					$arEvents[$i]['~detailUrl'] = CHTTP::urlAddParams($params['detailUrl'], ['EVENT_ID' => $event['ID'], 'EVENT_DATE' => $event['DATE_FROM']]);
+					$arEvents[$i]['~detailUrl'] = (string)(new Uri($params['detailUrl']))->addParams(['EVENT_ID' => $event['ID'], 'EVENT_DATE' => $event['DATE_FROM']]);
 				}
 			}
 
@@ -1271,6 +1616,8 @@ final class CCalendarRestService extends IRestService
 			{
 				array_splice($arEvents, (int)$params['maxEventsCount']);
 			}
+
+			self::addMachineDatesToEach($arEvents);
 		}
 
 		return $arEvents;

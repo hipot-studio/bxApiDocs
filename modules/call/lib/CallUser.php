@@ -80,6 +80,14 @@ class CallUser
 	}
 
 	/**
+	 * Sync the in-memory state only — no DB write, no state-change event.
+	 */
+	public function setStateInMemory(string $state): void
+	{
+		$this->state = $state;
+	}
+
+	/**
 	 * Fire event when user state changes
 	 */
 	protected function fireStateChangeEvent($oldState, $newState)
@@ -138,6 +146,22 @@ class CallUser
 
 
 	/**
+	 * Returns true if the user has reached a terminal state from which no further
+	 * invite transitions are allowed (DECLINED or BUSY).
+	 *
+	 * These are absorbing states of the CallUser state machine: once reached, the
+	 * user cannot be transitioned back into the invite flow (e.g. to CALLING).
+	 *   - STATE_DECLINED: the user explicitly rejected the call
+	 *   - STATE_BUSY:     the user was already in another call
+	 *
+	 * @return bool
+	 */
+	public function isTerminalState(): bool
+	{
+		return in_array($this->state, [static::STATE_DECLINED, static::STATE_BUSY], true);
+	}
+
+	/**
 	 * Returns true if the user is an active participant of the call and false otherwise.
 	 *
 	 * @return bool
@@ -178,7 +202,7 @@ class CallUser
 		CallUserTable::merge($this->toArray());
 	}
 
-	public function toArray()
+	public function toArray(): array
 	{
 		return [
 			'USER_ID' => $this->userId,

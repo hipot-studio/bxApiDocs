@@ -18,6 +18,9 @@ final class CallAssessmentItem
 	private string $title;
 	private string $description;
 	private string $prompt;
+	private ?bool $isHintEnabled = null;
+	private bool $areHintFieldsProvided = false;
+	private bool $areHintFieldsValid = true;
 	private ?string $gist = null;
 	private array $clientTypeIds;
 	private ?CallType $callType = null;
@@ -43,6 +46,7 @@ final class CallAssessmentItem
 		$instance->title = $callAssessmentItem->getTitle();
 		$instance->description = $callAssessmentItem->getDescription();
 		$instance->prompt = $callAssessmentItem->getPrompt();
+		$instance->isHintEnabled = $callAssessmentItem->getIsHintEnabled();
 		$instance->gist = $callAssessmentItem->getGist();
 
 		$instance->clientTypeIds = [];
@@ -53,7 +57,8 @@ final class CallAssessmentItem
 			$instance->clientTypeIds[] = $clientType->getClientTypeId();
 		}
 
-		$instance->callType = CallType::from($callAssessmentItem->getCallType());
+		// a stored script may have no call direction yet, it must not break every list it is shown in
+		$instance->callType = CallType::tryFrom((int)$callAssessmentItem->getCallType());
 		$instance->autoCheckType = AutoCheckType::from($callAssessmentItem->getAutoCheckType());
 		$instance->availabilityType = AvailabilityType::from($callAssessmentItem->getAvailabilityType());
 		$instance->availabilityData = [];
@@ -84,11 +89,21 @@ final class CallAssessmentItem
 	public static function createFromArray(array $data): self
 	{
 		$instance = new self();
+		$hasPrompt = array_key_exists('prompt', $data);
+		$hasHintState = array_key_exists('isHintEnabled', $data);
+		$instance->areHintFieldsProvided = $hasPrompt && $hasHintState;
+		$instance->areHintFieldsValid = $hasPrompt === $hasHintState
+			&& (!$hasPrompt || (is_string($data['prompt']) && is_bool($data['isHintEnabled'])))
+		;
 
 		$instance->id = $data['id'] ?? null;
 		$instance->title = $data['title'] ?? '';
 		$instance->description = $data['description'] ?? '';
-		$instance->prompt = $data['prompt'] ?? '';
+		$instance->prompt = $hasPrompt && is_string($data['prompt']) ? $data['prompt'] : '';
+		$instance->isHintEnabled = $hasHintState && is_bool($data['isHintEnabled'])
+			? $data['isHintEnabled']
+			: null
+		;
 		$instance->gist = $data['gist'] ?? null;
 		$instance->clientTypeIds = $data['clientTypeIds'] ?? [];
 
@@ -128,11 +143,18 @@ final class CallAssessmentItem
 
 	public function toArray(): array
 	{
+		$isHintEnabled = (new HintStateResolver())->resolve(
+			$this->isHintEnabled,
+			$this->prompt,
+			$this->code,
+		);
 		$data = [
 			'id' => $this->id,
 			'title' => $this->title,
 			'description' => $this->description,
 			'prompt' => $this->prompt,
+			'isHintEnabled' => $isHintEnabled,
+			'hasHint' => $isHintEnabled && trim($this->prompt) !== '',
 			'gist' => $this->gist,
 			'clientTypeIds' => $this->clientTypeIds,
 			'callTypeId' => $this->callType?->value,
@@ -189,6 +211,28 @@ final class CallAssessmentItem
 	public function getPrompt(): string
 	{
 		return $this->prompt;
+	}
+
+	public function isHintEnabled(): ?bool
+	{
+		return $this->isHintEnabled;
+	}
+
+	public function setHintEnabled(?bool $isHintEnabled): self
+	{
+		$this->isHintEnabled = $isHintEnabled;
+
+		return $this;
+	}
+
+	public function areHintFieldsProvided(): bool
+	{
+		return $this->areHintFieldsProvided;
+	}
+
+	public function areHintFieldsValid(): bool
+	{
+		return $this->areHintFieldsValid;
 	}
 
 	public function getGist(): ?string

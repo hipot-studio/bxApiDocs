@@ -18,7 +18,7 @@ final class CloudSharedKeyProvisioner
 {
 	public function __construct(
 		private readonly CloudSharedKeyProvider $keyProvider = new CloudSharedKeyRefresher(),
-		private readonly CloudSharedKeyRefreshThrottle $throttle = new CloudSharedKeyRefreshThrottle(),
+		private readonly KeyRefreshThrottle $throttle = new KeyRefreshThrottle(),
 		private readonly CloudSharedKeyLog $log = new CloudSharedKeyLog(),
 	) {
 	}
@@ -30,8 +30,6 @@ final class CloudSharedKeyProvisioner
 	{
 		if (!$this->throttle->isAllowed())
 		{
-			$this->record(fn () => $this->log->recordThrottled($reason));
-
 			return '';
 		}
 

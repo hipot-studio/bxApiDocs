@@ -31,7 +31,7 @@ class CheckListTreeService
 			$id = $item['ID'] ?? 0;
 			$title = $item['TITLE'] ?? '';
 
-			$item['NODE_ID'] = $this->nodeIdGenerator->generate($title . $id);
+			$item['NODE_ID'] = $item['NODE_ID'] ?? $this->nodeIdGenerator->generate($title . $id);
 
 			return $item;
 		}, $items);

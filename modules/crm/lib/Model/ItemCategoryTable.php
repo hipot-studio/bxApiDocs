@@ -200,6 +200,11 @@ class ItemCategoryTable extends DataManager
 	{
 		$result = new EventResult();
 
+		\CCrmStatus::invalidateStageGroups();
+		// scenarios below resolve the new category through the types map; a map loaded earlier in this hit
+		// does not contain it yet
+		Container::getInstance()->getDynamicTypesMap()->invalidateCategoriesCache();
+
 		$object = $event->getParameter('object');
 		$scenarios = Container::getInstance()->getDirector()->getScenariosForNewCategory(
 			$object->getEntityTypeId(),
@@ -242,6 +247,7 @@ class ItemCategoryTable extends DataManager
 				(new PermissionEntityTypeHelper($entityTypeId))->getPermissionEntityTypeForCategory($id)
 			);
 			Container::getInstance()->getFactory($entityTypeId)->clearCategoriesCache();
+			Container::getInstance()->getDynamicTypesMap()->invalidateCategoriesCache();
 			unset(static::$categoryToEntityTypeRelations[$id]);
 
 			(new ItemCategoryUserField($entityTypeId))->deleteByCategoryId($id);

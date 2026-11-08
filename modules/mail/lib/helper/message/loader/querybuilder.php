@@ -754,7 +754,8 @@ class QueryBuilder
 	 */
 	public static function buildDefaultMessagesDetailsQuery(
 		array $itemIds,
-		array $filter
+		array $filter,
+		bool $withBindings = true,
 	): Query
 	{
 		self::extractIncludeBindings($filter);
@@ -763,6 +764,13 @@ class QueryBuilder
 		self::extractFavoriteUserId($filter);
 		self::extractUnanswered($filter);
 		self::extractClassificationCodes($filter);
+		if (!$withBindings)
+		{
+			unset(
+				$filter['=MESSAGE_ACCESS.ENTITY_TYPE'],
+				$filter['==MESSAGE_ACCESS.ENTITY_TYPE'],
+			);
+		}
 
 		$mailboxIds = self::extractMailboxIds($filter);
 		if ($mailboxIds === [])
@@ -770,7 +778,6 @@ class QueryBuilder
 			$mailboxIds = self::resolveMailboxIdsOfMessages($itemIds);
 		}
 
-		$sqlHelper = Application::getConnection()->getSqlHelper();
 		$query = MailMessageTable::query()
 			->setSelect([
 				'UID_ID' => 'MESSAGE_UID.ID',
@@ -790,9 +797,6 @@ class QueryBuilder
 				'HEADER',
 				'MAILBOX_ID',
 				'MAILBOX_EMAIL' =>'MAILBOX.EMAIL',
-				'BIND_ENTITY_TYPE' => 'MESSAGE_ACCESS.ENTITY_TYPE',
-				'BIND_ENTITY_ID' => 'MESSAGE_ACCESS.ENTITY_ID',
-				'BIND',
 			])
 			->registerRuntimeField(
 				'MESSAGE_UID',
@@ -807,17 +811,6 @@ class QueryBuilder
 				),
 			)
 			->registerRuntimeField(
-				'MESSAGE_ACCESS',
-				new Reference(
-					'MESSAGE_ACCESS',
-					MessageAccessTable::class,
-					[
-						'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
-						'=this.ID' => 'ref.MESSAGE_ID',
-					],
-				)
-			)
-			->registerRuntimeField(
 				new Reference(
 					'MAILBOX',
 					MailboxTable::class,
@@ -825,17 +818,6 @@ class QueryBuilder
 						'=this.MAILBOX_ID' => 'ref.ID',
 					],
 					['join_type' => 'INNER'],
-				)
-			)
-			->registerRuntimeField(
-				'BIND',
-				new ExpressionField(
-					'BIND',
-					$sqlHelper->getConcatFunction('%s', "'-'", '%s'),
-					[
-						'MESSAGE_ACCESS.ENTITY_TYPE',
-						'MESSAGE_ACCESS.ENTITY_ID',
-					]
 				)
 			)
 			->setFilter(array_merge(
@@ -849,24 +831,57 @@ class QueryBuilder
 			->addOrder('MSG_UID')
 		;
 
-		if (Main\Loader::includeModule('crm'))
+		if ($withBindings)
 		{
 			$query
-				->addSelect('MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_TYPE_ID', 'CRM_ACTIVITY_OWNER_TYPE_ID')
-				->addSelect('MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_ID', 'CRM_ACTIVITY_OWNER_ID')
-				->addSelect('CRM_ACTIVITY_OWNER')
+				->addSelect('MESSAGE_ACCESS.ENTITY_TYPE', 'BIND_ENTITY_TYPE')
+				->addSelect('MESSAGE_ACCESS.ENTITY_ID', 'BIND_ENTITY_ID')
+				->addSelect('BIND')
 				->registerRuntimeField(
-					'CRM_ACTIVITY_OWNER',
-					new ORM\Fields\ExpressionField(
-						'CRM_ACTIVITY_OWNER',
-						$sqlHelper->getConcatFunction('%s', "'-'", '%s'),
+					'MESSAGE_ACCESS',
+					new Reference(
+						'MESSAGE_ACCESS',
+						MessageAccessTable::class,
 						[
-							'MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_TYPE_ID',
-							'MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_ID',
+							'=this.MAILBOX_ID' => 'ref.MAILBOX_ID',
+							'=this.ID' => 'ref.MESSAGE_ID',
 						],
 					)
 				)
 			;
+
+			$sqlHelper = Application::getConnection()->getSqlHelper();
+			$query->registerRuntimeField(
+				'BIND',
+				new ExpressionField(
+					'BIND',
+					$sqlHelper->getConcatFunction('%s', "'-'", '%s'),
+					[
+						'MESSAGE_ACCESS.ENTITY_TYPE',
+						'MESSAGE_ACCESS.ENTITY_ID',
+					]
+				)
+			);
+
+			if (Main\Loader::includeModule('crm'))
+			{
+				$query
+					->addSelect('MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_TYPE_ID', 'CRM_ACTIVITY_OWNER_TYPE_ID')
+					->addSelect('MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_ID', 'CRM_ACTIVITY_OWNER_ID')
+					->addSelect('CRM_ACTIVITY_OWNER')
+					->registerRuntimeField(
+						'CRM_ACTIVITY_OWNER',
+						new ORM\Fields\ExpressionField(
+							'CRM_ACTIVITY_OWNER',
+							$sqlHelper->getConcatFunction('%s', "'-'", '%s'),
+							[
+								'MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_TYPE_ID',
+								'MESSAGE_ACCESS.CRM_ACTIVITY.OWNER_ID',
+							],
+						)
+					)
+				;
+			}
 		}
 
 		return $query;
@@ -882,24 +897,11 @@ class QueryBuilder
 		array $filter
 	): Query
 	{
-		$query = self::buildDefaultMessagesDetailsQuery($itemIds, $filter);
-		$sqlHelper = Application::getConnection()->getSqlHelper();
+		$query = self::buildDefaultMessagesDetailsQuery($itemIds, $filter, false);
 
 		$query
 			->addSelect('MESSAGE_UID.IS_OLD', 'IS_OLD')
 			->addSelect('MESSAGE_UID.DIR_MD5', 'DIR_MD5')
-			->addSelect('BIND')
-			->registerRuntimeField(
-				'BIND',
-				new ExpressionField(
-					'BIND',
-					$sqlHelper->getConcatFunction('%s', "'-'", '%s'),
-					[
-						'MESSAGE_ACCESS.ENTITY_TYPE',
-						'MESSAGE_ACCESS.ENTITY_ID',
-					]
-				)
-			)
 		;
 
 		return $query;

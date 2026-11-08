@@ -8,6 +8,7 @@ use Bitrix\Main\EventResult;
 use Bitrix\Tasks\Internals\Registry\TaskRegistry;
 use Bitrix\Tasks\Internals\Task\Event\View\OnTaskFirstViewEvent;
 use Bitrix\Tasks\Onboarding\Internal\Type;
+use Bitrix\Tasks\Onboarding\OnboardingFeature;
 
 final class ViewTaskEventListener extends AbstractEventListener
 {
@@ -17,6 +18,10 @@ final class ViewTaskEventListener extends AbstractEventListener
 
 		$taskId = $event->getTaskId();
 		$userId = $event->getUserId();
+		if (!OnboardingFeature::isAvailable())
+		{
+			return $eventResult;
+		}
 
 		$task = TaskRegistry::getInstance()->getObject($taskId);
 		if ($task === null)

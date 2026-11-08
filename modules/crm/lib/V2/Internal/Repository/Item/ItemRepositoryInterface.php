@@ -6,6 +6,7 @@ namespace Bitrix\Crm\V2\Internal\Repository\Item;
 
 use Bitrix\Main\ORM\Objectify\EntityObject;
 use Bitrix\Main\ORM\Query\Filter\ConditionTree;
+use Bitrix\Main\ORM\Query\Query;
 
 /**
  * Read-only access to a single CRM entity table. Implementations return raw ORM
@@ -50,7 +51,18 @@ interface ItemRepositoryInterface
 		?array $runtime = null,
 	): array;
 
-	public function getCount(array|ConditionTree|null $filter = null): int;
+	/**
+	 * @param array<string, \Bitrix\Main\ORM\Fields\Field>|null $runtime
+	 */
+	public function getCount(array|ConditionTree|null $filter = null, ?array $runtime = null): int;
+
+	/**
+	 * Builds an ID-only ORM query with the given already-resolved filter and runtime fields.
+	 * Returns null when the repository is unbound.
+	 *
+	 * @param array<string, \Bitrix\Main\ORM\Fields\Field>|null $runtime
+	 */
+	public function createIdQuery(array|ConditionTree|null $filter = null, ?array $runtime = null): ?Query;
 
 	/**
 	 * Registers the `PARENT_ID_<parentTypeId>` reference/expression fields on this repository's ORM

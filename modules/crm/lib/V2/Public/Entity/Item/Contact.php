@@ -9,12 +9,13 @@ use Bitrix\Crm\V2\Public\Entity\Item\Trait\HasCategoriesTrait;
 use Bitrix\Crm\V2\Public\Entity\Item\Trait\HasCompanyBindingsTrait;
 use Bitrix\Crm\V2\Public\Entity\Item\Trait\HasCompanyTrait;
 use Bitrix\Crm\V2\Public\Entity\Item\Trait\HasMultifieldsTrait;
+use Bitrix\Crm\V2\Public\Entity\Item\Interface\HasCategoriesInterface;
 use Bitrix\Crm\V2\Public\Entity\Item\Interface\HasCompanyInterface;
 use Bitrix\Crm\V2\Public\Entity\Item\Interface\HasMultifieldsInterface;
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Main\Type\Date;
 
-final class Contact extends Item implements HasMultifieldsInterface, HasCompanyInterface
+final class Contact extends Item implements HasMultifieldsInterface, HasCompanyInterface, HasCategoriesInterface
 {
 	public const honorific = 'honorific';
 	public const name = 'name';

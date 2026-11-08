@@ -24,14 +24,27 @@ class DbStorage implements StorageInterface
 	private const REQUEUE_CACHE_TTL = 600;
 	private const REQUEUE_THRESHOLD_SECONDS = 172800; // 2 days
 
+	private const IDLE_CACHE_PREFIX = 'main_messenger_idle_';
+	// With cache use_lock (or actual_data => false) clean() leaves the old value readable by other processes
+	// for up to 60 seconds, so there an idle mark may outlive save() by that long
+	private const IDLE_CACHE_TTL = 60;
+	private const IDLE_CACHE_TTL_SPREAD = 30;
+
 	private MessageRepository $repository;
 
 	private QueueConfigRegistry $queueRegistry;
 
 	private readonly string $lockKey;
 
+	private readonly string $idleCachePrefix;
+
 	/** @var array<string, bool> lock state per queue table */
 	private static array $locked = [];
+
+	/** @var array<string, bool> idle cache keys to clean once more after the sender's transaction is closed */
+	private static array $pendingIdleResets = [];
+
+	private static bool $idleResetJobScheduled = false;
 
 	public function __construct(Entity $tableEntity)
 	{
@@ -39,6 +52,7 @@ class DbStorage implements StorageInterface
 		$this->queueRegistry = ServiceLocator::getInstance()->get(QueueConfigRegistry::class);
 
 		$this->lockKey = self::LOCK_KEY_PREFIX . $tableEntity->getDBTableName();
+		$this->idleCachePrefix = self::IDLE_CACHE_PREFIX . $tableEntity->getDBTableName() . '_';
 
 		$this->requeueStaleMessages($tableEntity);
 	}
@@ -124,6 +138,13 @@ class DbStorage implements StorageInterface
 	 */
 	public function getReadyMessagesOfQueue(string $queueId, int $limit = 500): iterable
 	{
+		self::flushPendingIdleResets();
+
+		if (!$this->hasReadyMessages($queueId))
+		{
+			return [];
+		}
+
 		if (!$this->lock())
 		{
 			return [];
@@ -146,6 +167,44 @@ class DbStorage implements StorageInterface
 	public function save(MessageBox $messageBox): void
 	{
 		$this->repository->save($messageBox);
+
+		$this->resetIdleMark($this->idleCachePrefix . $messageBox->getQueueId());
+	}
+
+	private function resetIdleMark(string $cacheKey): void
+	{
+		$application = Application::getInstance();
+		$application->getManagedCache()->clean($cacheKey);
+
+		// Inside an outer transaction the clean comes before the commit, and a worker that does not see
+		// the message yet may mark the queue idle again. The second clean runs once the transaction is closed:
+		// at the end of the hit, or on the next queue check of a long-running CLI worker.
+		self::$pendingIdleResets[$cacheKey] = true;
+
+		if (!self::$idleResetJobScheduled)
+		{
+			self::$idleResetJobScheduled = true;
+			$application->addBackgroundJob(static function (): void {
+				self::$idleResetJobScheduled = false;
+				self::flushPendingIdleResets();
+			});
+		}
+	}
+
+	private static function flushPendingIdleResets(): void
+	{
+		if (!self::$pendingIdleResets)
+		{
+			return;
+		}
+
+		$cache = Application::getInstance()->getManagedCache();
+		foreach (array_keys(self::$pendingIdleResets) as $cacheKey)
+		{
+			$cache->clean($cacheKey);
+		}
+
+		self::$pendingIdleResets = [];
 	}
 
 	/**
@@ -154,6 +213,40 @@ class DbStorage implements StorageInterface
 	public function delete(MessageBox $messageBox): void
 	{
 		$this->repository->delete($messageBox);
+	}
+
+	/**
+	 * Checks the queue without the table lock. Only a queue without new messages is cached as idle:
+	 * delayed messages may become available outside the broker, so they are checked on every call.
+	 *
+	 * @throws SystemException
+	 */
+	private function hasReadyMessages(string $queueId): bool
+	{
+		$cache = Application::getInstance()->getManagedCache();
+		$cacheKey = $this->idleCachePrefix . $queueId;
+
+		// Bypasses the in-process copy so that a long-running CLI worker sees clean() from save() at once
+		if ((int)$cache->getImmediate(self::IDLE_CACHE_TTL + self::IDLE_CACHE_TTL_SPREAD, $cacheKey) >= time())
+		{
+			return false;
+		}
+
+		// Registers the read time: setImmediate() skips the write if save() cleans the key after this point
+		$cache->read(self::IDLE_CACHE_TTL + self::IDLE_CACHE_TTL_SPREAD, $cacheKey);
+
+		$nextAvailableAt = $this->repository->getNextAvailableAt($queueId);
+
+		if ($nextAvailableAt === null)
+		{
+			// A stable per-queue offset keeps the queues from being rechecked all on the same hit
+			$ttl = self::IDLE_CACHE_TTL + crc32($cacheKey) % self::IDLE_CACHE_TTL_SPREAD;
+			$cache->setImmediate($cacheKey, time() + $ttl);
+
+			return false;
+		}
+
+		return $nextAvailableAt->getTimestamp() <= time();
 	}
 
 	private function lock(): bool

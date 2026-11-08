@@ -8,4 +8,5 @@ enum Type: string
 {
 	case LinkButton = 'linkButton';
 	case EventButton = 'eventButton';
+	case RequestButton = 'requestButton';
 }

@@ -3,6 +3,7 @@
 use Bitrix\Bizproc\Starter\Template\Start\CollectRequest;
 use Bitrix\Bizproc\Starter\Template\Start\CollectorService;
 use Bitrix\Bizproc;
+use Bitrix\Crm\Integration\BizProc\TestRunEntity;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Settings\Mode;
 use Bitrix\Main\Analytics\AnalyticsEvent;
@@ -369,23 +370,19 @@ class CCrmBizProcHelper
 			return [];
 		}
 
+		$ids = [];
 		$session = Bizproc\Debugger\Session\Manager::getActiveSession();
 		$documentType = \CCrmBizProcHelper::ResolveDocumentType($entityTypeId);
-		if (!$session || !$documentType || !$session->isStartedInDocumentType($documentType))
+		if ($session && $documentType && $session->isStartedInDocumentType($documentType))
 		{
-			return [];
+			foreach ($session->getDocuments() as $document)
+			{
+				[, $entityId] = static::resolveEntityId($document->getParameterDocumentId());
+				$ids[] = $entityId;
+			}
 		}
 
-		$documents = $session->getDocuments();
-		$ids = [];
-
-		foreach ($documents as $document)
-		{
-			[$entityTypeId, $entityId] = static::resolveEntityId($document->getParameterDocumentId());
-			$ids[] = $entityId;
-		}
-
-		return $ids;
+		return array_values(array_unique([...$ids, ...TestRunEntity::getActiveIds($entityTypeId)]));
 	}
 
 	public static function isActiveDebugEntity(int $entityTypeId, int $entityId): bool

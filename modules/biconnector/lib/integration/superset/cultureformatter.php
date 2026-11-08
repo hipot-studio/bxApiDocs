@@ -33,21 +33,32 @@ final class CultureFormatter
 
 	public static function getLanguageCode(): string
 	{
-		$language = Option::get(self::OPTION_MODULE, self::LOCALIZATION_LANGUAGE_CODE_OPTION);
+		return self::resolveLanguageCode(Option::get(self::OPTION_MODULE, self::LOCALIZATION_LANGUAGE_CODE_OPTION));
+	}
 
-		if (empty($language))
+	/**
+	 * Resolves a stored language code: an empty one falls back to the portal language and is saved back.
+	 */
+	public static function resolveLanguageCode(string $storedLanguageCode): string
+	{
+		if (!empty($storedLanguageCode))
 		{
-			$language = self::getPortalLanguageCode();
-			self::setLanguageCode($language);
+			return $storedLanguageCode;
 		}
+
+		$language = self::getPortalLanguageCode();
+		self::setLanguageCode($language);
 
 		return $language;
 	}
 
-	public static function getLanguage(): String
+	public static function getLanguage(): string
 	{
-		$languageCode = self::getLanguageCode();
+		return self::getLanguageName(self::getLanguageCode());
+	}
 
+	public static function getLanguageName(string $languageCode): string
+	{
 		$languages = self::getLanguageList();
 
 		foreach ($languages as $code => $language)
@@ -82,6 +93,11 @@ final class CultureFormatter
 
 	public static function getLanguageList(): array
 	{
+		return self::normalizeLanguageList(self::readLanguageList());
+	}
+
+	private static function readLanguageList(): array
+	{
 		if (!Loader::includeModule('intranet'))
 		{
 			return [];
@@ -100,5 +116,21 @@ final class CultureFormatter
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Gives every entry a non-empty NAME: a language saved without a name is shown by its code.
+	 */
+	private static function normalizeLanguageList(array $languages): array
+	{
+		foreach ($languages as $code => $language)
+		{
+			if (empty($language['NAME']))
+			{
+				$languages[$code]['NAME'] = (string)$code;
+			}
+		}
+
+		return $languages;
 	}
 }

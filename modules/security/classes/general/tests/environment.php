@@ -1,13 +1,14 @@
-<?
+<?php
 /**
  * Bitrix Framework
  * @package bitrix
  * @subpackage security
- * @copyright 2001-2013 Bitrix
+ * @copyright 2001-2026 Bitrix
  */
 
 use Bitrix\Main\Config\Configuration;
 use Bitrix\Main\Session\SessionConfigurationResolver;
+use Bitrix\Main\Web\HttpClient;
 
 /**
  * Class CSecurityEnvironmentTest
@@ -244,7 +245,7 @@ HTACCESS;
 		$url = self::getCurrentSiteUrl();
 		$url .= $pPath;
 		$url .= "?".mt_rand(); //Prevent web-server cache
-		return @CHTTP::sGet($url);
+		return (new HttpClient())->get($url);
 	}
 
 	/**

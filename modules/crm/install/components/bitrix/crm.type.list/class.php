@@ -5,10 +5,14 @@ use Bitrix\Crm\AutomatedSolution\Entity\AutomatedSolutionTable;
 use Bitrix\Crm\Filter;
 use Bitrix\Crm\Restriction\RestrictionManager;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Crm\Service\Router;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationCallSite;
+use Bitrix\Crm\Service\UserPermissions\ConfigurationScope;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Type;
 use Bitrix\Main\UI\Filter\Options;
 use Bitrix\Main\UI\PageNavigation;
+use Bitrix\Main\Web\Uri;
 use Bitrix\UI\Buttons;
 use Bitrix\UI\Toolbar;
 
@@ -213,16 +217,34 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 					}
 				}
 
+				$entityTypeId = (int)$item['ENTITY_TYPE_ID'];
+				$testIdSuffix = htmlspecialcharsbx((string)$entityTypeId);
 				$eventData = \CUtil::PhpToJSObject([
 					'entityTypeId' => $item['ENTITY_TYPE_ID'],
 					'id' => $item['ID'],
 				]);
 				$isTypeSettingsRestricted = RestrictionManager::getDynamicTypesLimitRestriction()->isTypeSettingsRestricted($item['ENTITY_TYPE_ID']);
+				$typeDetailUrl = Container::getInstance()->getRouter()->getTypeDetailUrl($entityTypeId)->addParams([
+					'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::ELEMENT_GRID_ROW_CONTEXT_MENU,
+				]);
+				$typeDetailListUrl = $this->getTypeDetailSliderFallbackUrl($entityTypeId);
+				if ($typeDetailListUrl)
+				{
+					$typeDetailListUrl->addParams([
+						'openTypeDetailSlider' => 'Y',
+						'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::ELEMENT_GRID_ROW_CONTEXT_MENU,
+					]);
+				}
 				$editAction = [
 					'TEXT' => Loc::getMessage('CRM_COMMON_ACTION_EDIT'),
-					'HREF' => Container::getInstance()->getRouter()->getTypeDetailUrl($item['ENTITY_TYPE_ID'])->addParams([
-						'c_sub_section' => \Bitrix\Crm\Integration\Analytics\Dictionary::ELEMENT_GRID_ROW_CONTEXT_MENU,
-					]),
+					'HREF' => $typeDetailListUrl ?? $typeDetailUrl,
+					'ONCLICK' => 'BX.Crm.Router.Instance.openTypeDetail(' . $entityTypeId . ', null, {'
+						. 'c_sub_section: \''
+						. \CUtil::JSEscape(\Bitrix\Crm\Integration\Analytics\Dictionary::ELEMENT_GRID_ROW_CONTEXT_MENU)
+						. '\'}); return false;',
+					'dataset' => [
+						'testid' => 'crm-type-list-row-action-edit-' . $testIdSuffix,
+					],
 				];
 				$fieldsAction = null;
 				if (!$isTypeSettingsRestricted)
@@ -230,12 +252,18 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 					$fieldsAction = [
 						'TEXT' => Loc::getMessage('CRM_TYPE_TYPE_FIELDS_SETTINGS'),
 						'HREF' => Container::getInstance()->getRouter()->getUserFieldListUrl($item['ENTITY_TYPE_ID']),
+						'dataset' => [
+							'testid' => 'crm-type-list-row-action-fields-' . $testIdSuffix,
+						],
 					];
 				}
 
 				$deleteAction = [
 					'TEXT' => Loc::getMessage('CRM_COMMON_ACTION_DELETE'),
 					'ONCLICK' => "BX.Event.EventEmitter.emit('BX.Crm.TypeListComponent:onClickDelete', ".$eventData.")",
+					'dataset' => [
+						'testid' => 'crm-type-list-row-action-delete-' . $testIdSuffix,
+					],
 				];
 
 				if ($isLocked)
@@ -251,6 +279,23 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 					unset($deleteAction['HREF']);
 					$deleteAction['ONCLICK'] = $onClick;
 				}
+				else
+				{
+					// The promoter of a locked automated solution stands in for every action of the row
+					// whatever the rights say, so the rights are read only where a real action is offered.
+					if (!$this->canUpdateType($entityTypeId))
+					{
+						$editAction = null;
+					}
+					if ($fieldsAction !== null && !$this->canAccessFieldsOfType($entityTypeId))
+					{
+						$fieldsAction = null;
+					}
+					if (!$this->canDeleteType($entityTypeId))
+					{
+						$deleteAction = null;
+					}
+				}
 
 				$item['LAST_ACTIVITY_TIME'] = FormatDate($format, CCrmDateTimeHelper::getUserTime($this->getLastActivityTime($item)), $currentTime);
 				$item['CREATED_TIME'] = FormatDate($format, CCrmDateTimeHelper::getUserTime($item['CREATED_TIME']), $currentTime);
@@ -259,12 +304,18 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 				$grid['ROWS'][] = [
 					'id' => $item['ID'],
 					'data' => $item,
-					'columns' => $this->getItemColumn($item, $isLocked),
-					'actions' => [
-						$editAction,
-						$fieldsAction,
-						$deleteAction,
+					'attrs' => [
+						'data-testid' => 'crm-type-list-row-' . $testIdSuffix,
 					],
+					'columns' => $this->getItemColumn($item, $isLocked),
+					'actions' => array_values(array_filter(
+						[
+							$editAction,
+							$fieldsAction,
+							$deleteAction,
+						],
+						static fn (?array $action): bool => $action !== null,
+					)),
 				];
 			}
 		}
@@ -289,6 +340,33 @@ class CrmTypeListComponent extends Bitrix\Crm\Component\Base
 		$grid['USE_CHECKBOX_LIST_FOR_SETTINGS_POPUP'] = true;
 
 		return $grid;
+	}
+
+	protected function getTypeDetailSliderFallbackUrl(int $entityTypeId): ?Uri
+	{
+		$router = Container::getInstance()->getRouter();
+
+		if (!Container::getInstance()->getUserPermissions()->entityType()->canReadItems($entityTypeId))
+		{
+			return $router->getTypeListUrl()->addParams([
+				'entityTypeId' => $entityTypeId,
+			]);
+		}
+
+		$factory = Container::getInstance()->getFactory($entityTypeId);
+		if (
+			$router->getCurrentListView($entityTypeId) === Router::LIST_VIEW_KANBAN
+			&& ($factory === null || $factory->isStagesEnabled())
+		)
+		{
+			$url = $router->getKanbanUrl($entityTypeId);
+			if ($url !== null && $url->getUri() !== '')
+			{
+				return $url;
+			}
+		}
+
+		return $router->getItemListUrl($entityTypeId);
 	}
 
 	/**
@@ -434,22 +512,66 @@ HTML;
 
 	private function checkPermissions(): bool
 	{
-		$userPermissions = Container::getInstance()->getUserPermissions();
-
 		if ($this->filteredByAutomatedSolutionId === 0)
 		{
-			return $userPermissions->isCrmAdmin();
+			return $this->canManageTypesInContour(null);
 		}
 		if ($this->filteredByAutomatedSolutionId > 0)
 		{
-			return $userPermissions->automatedSolution()->isAutomatedSolutionAdmin($this->filteredByAutomatedSolutionId);
+			return $this->canManageTypesInContour($this->filteredByAutomatedSolutionId);
 		}
+
+		$userPermissions = Container::getInstance()->getUserPermissions();
 		if ($this->showAllFromAutomatedSolutions)
 		{
 			return $userPermissions->automatedSolution()->canEdit();
 		}
 
-		return $userPermissions->isCrmAdmin() && $userPermissions->automatedSolution()->canEdit(); // without filter must be both crm admin and automated solution admin
+		// without filter the list mixes the types of CRM with the types of every automated solution
+		return $this->canManageTypesInContour(null) && $userPermissions->automatedSolution()->canEdit();
+	}
+
+	private function canManageTypesInContour(?int $automatedSolutionId): bool
+	{
+		return Container::getInstance()->getUserPermissions()->configuration()->canManageDynamicTypes(
+			ConfigurationCallSite::DynamicTypePermissions,
+			ConfigurationScope::ofDynamicTypeTarget($automatedSolutionId),
+		);
+	}
+
+	/**
+	 * The edit action opens the type card, so it asks exactly what the card asks.
+	 */
+	private function canUpdateType(int $entityTypeId): bool
+	{
+		return Container::getInstance()->getUserPermissions()->dynamicType()->canUpdate($entityTypeId);
+	}
+
+	/**
+	 * The delete action calls the type controller, so it asks the right of the contour of the type at the
+	 * call site of that action.
+	 */
+	private function canDeleteType(int $entityTypeId): bool
+	{
+		return Container::getInstance()->getUserPermissions()->configuration()->canManageDynamicTypes(
+			ConfigurationCallSite::TypeControllerDelete,
+			ConfigurationScope::ofEntityType($entityTypeId),
+		);
+	}
+
+	/**
+	 * The user fields of the type are a capability of their own: the right to manage the types of the
+	 * contour does not open them and is not needed for them.
+	 */
+	private function canAccessFieldsOfType(int $entityTypeId): bool
+	{
+		$configuration = Container::getInstance()->getUserPermissions()->configuration();
+		$scope = ConfigurationScope::ofEntityType($entityTypeId);
+
+		return
+			$configuration->canManageFields(ConfigurationCallSite::FieldsSettingsMenu, $scope)
+			|| $configuration->canDeleteFields(ConfigurationCallSite::FieldsSettingsMenu, $scope)
+		;
 	}
 
 	private function getAutomatedSolutionIdFromFilter(): array

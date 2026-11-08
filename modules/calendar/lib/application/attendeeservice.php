@@ -10,6 +10,9 @@ use Bitrix\Calendar\Integration\HumanResources\TeamAccessService;
 use Bitrix\Calendar\Internals\Exception\AttendeeBusy;
 use Bitrix\Calendar\UserSettings;
 use Bitrix\Calendar\Util;
+use Bitrix\Main\Loader;
+use Bitrix\Socialnetwork\Integration\UI\EntitySelector\ProjectProvider;
+use Bitrix\Socialnetwork\UserToGroupTable;
 
 class AttendeeService
 {
@@ -19,6 +22,7 @@ class AttendeeService
 		if (is_array($attendeesEntityList))
 		{
 			$attendeesEntityList = $this->filterViewableTeams($attendeesEntityList, $userId);
+			$attendeesEntityList = $this->filterSelectableProjects($attendeesEntityList, $userId);
 			$codes = Util::convertEntitiesToCodes($attendeesEntityList);
 		}
 
@@ -32,14 +36,33 @@ class AttendeeService
 	 */
 	private function filterViewableTeams(array $attendeesEntityList, int $userId): array
 	{
-		$teamAccessService = null;
+		$teamNodeIds = [];
+		foreach ($attendeesEntityList as $entity)
+		{
+			if (is_array($entity) && ($entity['entityId'] ?? null) === 'structure-node')
+			{
+				$nodeId = (int)($entity['id'] ?? 0);
+				if ($nodeId > 0)
+				{
+					$teamNodeIds[$nodeId] = $nodeId;
+				}
+			}
+		}
+
+		$viewableTeamIndex = empty($teamNodeIds)
+			? []
+			: array_fill_keys(
+				(new TeamAccessService())->getViewableTeamIds(array_values($teamNodeIds), $userId),
+				true,
+			)
+		;
+
 		$filtered = [];
 		foreach ($attendeesEntityList as $entity)
 		{
 			if (is_array($entity) && ($entity['entityId'] ?? null) === 'structure-node')
 			{
-				$teamAccessService ??= new TeamAccessService();
-				if (!$teamAccessService->canViewTeam((int)($entity['id'] ?? 0), $userId))
+				if (!isset($viewableTeamIndex[(int)($entity['id'] ?? 0)]))
 				{
 					continue;
 				}
@@ -49,6 +72,141 @@ class AttendeeService
 		}
 
 		return $filtered;
+	}
+
+	public function getNotSelectableProjectAccessCodes(array|string $accessCodes, int $userId): array
+	{
+		if (is_string($accessCodes))
+		{
+			$accessCodes = explode(',', $accessCodes);
+		}
+
+		$projectIds = [];
+		foreach ($accessCodes as $code)
+		{
+			$projectId = $this->getProjectId($code);
+			if ($projectId !== null)
+			{
+				$projectIds[$projectId] = $projectId;
+			}
+		}
+
+		$selectableProjectIds = $this->getSelectableProjectIds($projectIds, $userId);
+		$notSelectableAccessCodes = [];
+		foreach ($accessCodes as $code)
+		{
+			$projectId = $this->getProjectId($code);
+			if ($projectId !== null && !isset($selectableProjectIds[$projectId]))
+			{
+				$notSelectableAccessCodes[] = $code;
+			}
+		}
+
+		return $notSelectableAccessCodes;
+	}
+
+	private function filterSelectableProjects(array $attendeesEntityList, int $userId): array
+	{
+		$projectIds = [];
+		foreach ($attendeesEntityList as $entity)
+		{
+			if (!is_array($entity) || !in_array($entity['entityId'] ?? null, ['project', 'project-roles'], true))
+			{
+				continue;
+			}
+
+			$projectId = $this->getProjectId($entity['id'] ?? null);
+			if ($projectId !== null)
+			{
+				$projectIds[$projectId] = $projectId;
+			}
+		}
+
+		$selectableProjectIds = $this->getSelectableProjectIds($projectIds, $userId);
+		$filtered = [];
+		foreach ($attendeesEntityList as $entity)
+		{
+			if (is_array($entity) && in_array($entity['entityId'] ?? null, ['project', 'project-roles'], true))
+			{
+				$projectId = $this->getProjectId($entity['id'] ?? null);
+				if ($projectId === null || !isset($selectableProjectIds[$projectId]))
+				{
+					continue;
+				}
+			}
+
+			$filtered[] = $entity;
+		}
+
+		return $filtered;
+	}
+
+	private function getSelectableProjectIds(array $projectIds, int $userId): array
+	{
+		if (empty($projectIds) || $userId <= 0 || !Loader::includeModule('socialnetwork'))
+		{
+			return [];
+		}
+
+		try
+		{
+			$projects = ProjectProvider::getProjects([
+				'projectId' => array_values($projectIds),
+				'currentUserId' => $userId,
+			]);
+			$selectableProjectIds = [];
+			foreach ($projects as $project)
+			{
+				$projectId = $project->getId();
+				$selectableProjectIds[$projectId] = $projectId;
+			}
+
+			if (empty($selectableProjectIds))
+			{
+				return [];
+			}
+
+			$memberProjectIds = [];
+			$membershipResult = UserToGroupTable::getList([
+				'select' => ['GROUP_ID'],
+				'filter' => [
+					'=USER_ID' => $userId,
+					'@GROUP_ID' => array_values($selectableProjectIds),
+					'<=ROLE' => UserToGroupTable::ROLE_USER,
+				],
+			]);
+			while ($membership = $membershipResult->fetch())
+			{
+				$projectId = (int)$membership['GROUP_ID'];
+				$memberProjectIds[$projectId] = $projectId;
+			}
+
+			return $memberProjectIds;
+		}
+		catch (\Throwable)
+		{
+			return [];
+		}
+	}
+
+	private function getProjectId(mixed $value): ?int
+	{
+		if (!is_int($value) && !is_string($value))
+		{
+			return null;
+		}
+
+		if (preg_match('/^SG([1-9][0-9]*)(?:_?[AEKMO])?$/', (string)$value, $matches) === 1)
+		{
+			return (int)$matches[1];
+		}
+
+		if (preg_match('/^([1-9][0-9]*)(?:_?[AEKMO])?$/', (string)$value, $matches) === 1)
+		{
+			return (int)$matches[1];
+		}
+
+		return null;
 	}
 
 	public function isMeeting(array $accessCodes, Section $section, int $userId): bool

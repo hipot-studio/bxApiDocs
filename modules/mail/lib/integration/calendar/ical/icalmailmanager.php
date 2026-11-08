@@ -102,6 +102,11 @@ class ICalMailManager
 
 	public static function handleCancel(Calendar $icalComponent, $userId)
 	{
+		if ($userId === null)
+		{
+			return false;
+		}
+
 		return IncomingInvitationCancelHandler::createWithComponent($userId, $icalComponent)
 			->handle();
 	}

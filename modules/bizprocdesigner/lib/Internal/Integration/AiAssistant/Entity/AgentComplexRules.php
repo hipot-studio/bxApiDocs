@@ -58,6 +58,34 @@ final class AgentComplexRules implements Arrayable
 		return $portIds;
 	}
 
+	/**
+	 * @return list<string> distinct auxiliary (tool) ports (aN) bound by `action` constructions via
+	 *         `auxPortId`, in first-seen order. They are additional source endpoints of the complex node
+	 *         (a link leaves the node from an aux port, e.g. an AI tool branch), kept apart from the
+	 *         `output` ports (oN) so the frontend port projection and geometry stay unchanged - only the
+	 *         connections validator treats them as valid source ports.
+	 */
+	public function getAuxPortIds(): array
+	{
+		$portIds = [];
+		foreach ($this->portRules as $rules)
+		{
+			foreach ($rules as $rule)
+			{
+				foreach ($rule->constructions as $construction)
+				{
+					$portId = $construction->getAuxPortId();
+					if ($portId !== null && !in_array($portId, $portIds, true))
+					{
+						$portIds[] = $portId;
+					}
+				}
+			}
+		}
+
+		return $portIds;
+	}
+
 	public function toArray(): array
 	{
 		$rules = [];

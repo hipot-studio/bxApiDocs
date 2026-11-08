@@ -2,8 +2,8 @@
 
 class CSearchSuggest
 {
-	var $_filter_md5 = '';
-	var $_phrase = '';
+	public $_filter_md5 = '';
+	public $_phrase = '';
 
 	public function __construct($strFilterMD5 = '', $phrase = '')
 	{
@@ -32,14 +32,14 @@ class CSearchSuggest
 		}
 	}
 
-	function SetResultCount($result_count)
+	public function SetResultCount($result_count)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		if (mb_strlen($this->_filter_md5) && mb_strlen($this->_phrase))
 		{
 			$result_count = intval($result_count);
-			$filter_md5 = $DB->ForSQL($this->_filter_md5);
-			$phrase = $DB->ForSQL($this->_phrase, 250);
+			$filter_md5 = $DB->ForSql($this->_filter_md5);
+			$phrase = $DB->ForSql($this->_phrase, 250);
 
 			$rsQueryStat = $DB->Query("
 				SELECT ID, FILTER_MD5, RATE, round((UNIX_TIMESTAMP(now()) - UNIX_TIMESTAMP(TIMESTAMP_X))/3600/24) DAYS, RESULT_COUNT
@@ -57,7 +57,7 @@ class CSearchSuggest
 					'FILTER_MD5' => $this->_filter_md5,
 					'PHRASE' => $this->_phrase,
 					'RATE' => 1.0,
-					'~TIMESTAMP_X' => $DB->CurrentTimeFunction(),
+					'~TIMESTAMP_X' => CDatabase::CurrentTimeFunction(),
 					'RESULT_COUNT' => $result_count,
 				]);
 			}
@@ -74,17 +74,16 @@ class CSearchSuggest
 				if ($arQueryStat['DAYS'] <= 0)
 				{
 					$rate = $arQueryStat['RATE'];
-					$bUpdate = $bUpdate || false;
 				}
 				elseif ($arQueryStat['DAYS'] >= $suggest_save_days)
 				{
 					$rate = 1.0;
-					$bUpdate = $bUpdate || true;
+					$bUpdate = true;
 				}
 				else
 				{
 					$rate = doubleval($arQueryStat['RATE']) + ($suggest_save_days - $arQueryStat['DAYS']) / $suggest_save_days;
-					$bUpdate = $bUpdate || true;
+					$bUpdate = true;
 				}
 
 				if ($bUpdate)
@@ -95,7 +94,7 @@ class CSearchSuggest
 						SET
 							RESULT_COUNT = ' . $result_count . ',
 							RATE = ' . $rate . ',
-							TIMESTAMP_X = ' . $DB->CurrentTimeFunction() . '
+							TIMESTAMP_X = ' . CDatabase::CurrentTimeFunction() . '
 						WHERE
 							ID = ' . $arQueryStat['ID'] . '
 					');
@@ -109,7 +108,7 @@ class CSearchSuggest
 		}
 	}
 
-	function GetList($nTopCount, $site_id = null)
+	public function GetList($nTopCount, $site_id = null)
 	{
 		$DB = CDatabase::GetModuleConnection('search');
 		if (!isset($site_id))
@@ -117,7 +116,7 @@ class CSearchSuggest
 			$site_id = SITE_ID;
 		}
 
-		if ($this->_phrase <> '')
+		if ($this->_phrase)
 		{
 			$nTopCount = intval($nTopCount);
 			if ($nTopCount <= 0)
@@ -125,12 +124,12 @@ class CSearchSuggest
 				$nTopCount = 10;
 			}
 
-			$phrase = $DB->ForSQL($this->_phrase);
-			$site_id = $DB->ForSQL($site_id);
+			$phrase = $DB->ForSql($this->_phrase);
+			$site_id = $DB->ForSql($site_id);
 
-			if ($this->_filter_md5 <> '')
+			if ($this->_filter_md5)
 			{
-				$filter_md5 = $DB->ForSQL($this->_filter_md5, 32);
+				$filter_md5 = $DB->ForSql($this->_filter_md5, 32);
 				return $DB->Query($DB->TopSql("
 					SELECT PHRASE, RESULT_COUNT CNT, RATE
 					FROM b_search_suggest

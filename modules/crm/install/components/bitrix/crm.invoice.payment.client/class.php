@@ -9,6 +9,11 @@ use Bitrix\Main,
 	Bitrix\Crm\Invoice\Invoice,
 	Bitrix\Main\Application;
 use Bitrix\Main\Web\Uri;
+use Bitrix\Crm\V2\Internal\Entity\PaySystem\ResolvedHandler;
+use Bitrix\Crm\V2\Internal\Integration\Sale\CheckedPaySystemServiceFactory;
+use Bitrix\Crm\V2\Internal\Service\PaySystem\CheckedBusinessValueContext;
+use Bitrix\Crm\V2\Internal\Service\PaySystem\HandlerCatalog;
+use Bitrix\Crm\V2\Internal\Service\PaySystem\PrintOperation;
 
 if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die();
 
@@ -182,19 +187,15 @@ class CrmInvoicePaymentClientComponent extends CBitrixComponent
 	 */
 	protected function fillPaySystemsArray($payment)
 	{
-		$paySystemList = Sale\PaySystem\Manager::getListWithRestrictions($payment);
-
-		$innerId = Sale\PaySystem\Manager::getInnerPaySystemId();
-		unset($paySystemList[$innerId]);
+		$paySystemList = $this->getAvailablePaySystemFields($payment);
+		$this->arResult['PAYSYSTEMS_LIST'] = [];
 
 		foreach ($paySystemList as $key => $paySystemElement)
 		{
-			if (
-				!in_array($paySystemElement['ACTION_FILE'], $this->arParams['EXCLUDED_ACTION_LIST']) &&
-				!preg_match('/quote(_\w+)*$/iu', $paySystemElement['ACTION_FILE'])
-			)
+			$created = $this->createCheckedService($paySystemElement, $payment);
+			if ($created->isSuccess())
 			{
-				$service = new Sale\PaySystem\Service($paySystemElement);
+				$service = $created->getData()['service'];
 				if (!$service->isTuned())
 					continue;
 
@@ -216,6 +217,68 @@ class CrmInvoicePaymentClientComponent extends CBitrixComponent
 		return;
 	}
 
+	protected function getAvailablePaySystemFields(Sale\Payment $payment): array
+	{
+		$list = Sale\PaySystem\Manager::getListWithRestrictions($payment);
+		unset($list[Sale\PaySystem\Manager::getInnerPaySystemId()]);
+		$catalog = new HandlerCatalog();
+		foreach ($list as $id => $fields)
+		{
+			$action = $fields['ACTION_FILE'] ?? null;
+			$entry = is_string($action)
+				? $catalog->find($action, HandlerCatalog::PURPOSE_METADATA, Application::getDocumentRoot())
+				: null
+			;
+			if (
+				$entry === null
+				|| $entry['className'] === null
+				|| in_array($action, $this->arParams['EXCLUDED_ACTION_LIST'], true)
+				|| in_array($entry['code'], $this->arParams['EXCLUDED_ACTION_LIST'], true)
+			)
+			{
+				unset($list[$id]);
+			}
+		}
+
+		return $list;
+	}
+
+	protected function createCheckedService(array $fields, Sale\Payment $payment): Main\Result
+	{
+		$action = $fields['ACTION_FILE'] ?? null;
+		$catalog = new HandlerCatalog();
+		$purpose = HandlerCatalog::PURPOSE_PAYMENT;
+		if (is_string($action))
+		{
+			if ($catalog->find($action, HandlerCatalog::PURPOSE_LEGACY_PRINT) !== null)
+			{
+				$purpose = HandlerCatalog::PURPOSE_LEGACY_PRINT;
+			}
+			elseif ($catalog->find($action, HandlerCatalog::PURPOSE_DOCUMENT_GENERATOR, Application::getDocumentRoot()) !== null)
+			{
+				$purpose = HandlerCatalog::PURPOSE_DOCUMENT_GENERATOR;
+			}
+		}
+
+		return (new CheckedPaySystemServiceFactory())->createFromFields($fields, $purpose, $payment);
+	}
+
+	protected function createSelectedService(Sale\Payment $payment, int $id): Main\Result
+	{
+		$fields = $this->getAvailablePaySystemFields($payment)[$id] ?? null;
+		if ($id <= 0 || !is_array($fields))
+		{
+			return (new Main\Result())->addError(new Main\Error(Loc::getMessage('CIPC_EMPTY_PAY_SYSTEM')));
+		}
+		$result = $this->createCheckedService($fields, $payment);
+		if ($result->isSuccess() && !$result->getData()['service']->isTuned())
+		{
+			return (new Main\Result())->addError(new Main\Error(Loc::getMessage('CIPC_EMPTY_PAY_SYSTEM')));
+		}
+
+		return $result;
+	}
+
 	/**
 	 * Return template of payment
 	 *
@@ -223,7 +286,7 @@ class CrmInvoicePaymentClientComponent extends CBitrixComponent
 	 * @param Sale\Payment $payment
 	 * @return string $billTemplate
 	 */
-	protected function getPaySystemTemplate($payment, $paySystemObject)
+	protected function getPaySystemTemplate($payment, $paySystemObject, ResolvedHandler $handler)
 	{
 		if ($paySystemObject->getField('ACTION_FILE') === 'invoicedocument'
 			&& $paySystemObject->getField('PS_MODE')
@@ -266,14 +329,51 @@ class CrmInvoicePaymentClientComponent extends CBitrixComponent
 			$paySystemObject->getContext()->setUrl($this->arParams['RETURN_URL']);
 		}
 
-		$paySystemBufferedOutput = $paySystemObject->initiatePay($payment, null, Sale\PaySystem\BaseServiceHandler::STRING);
+		$isPdf = array_key_exists('pdf', $_REQUEST);
+		$operation = $handler->getPurpose() === HandlerCatalog::PURPOSE_LEGACY_PRINT
+			? new PrintOperation('invoice', $isPdf ? 'pdf_download' : 'print', 'invoice_payment_client')
+			: null
+		;
+		if ($operation !== null)
+		{
+			try
+			{
+				$captured = $operation->run(static fn() => $operation->capture(
+					static fn() => $paySystemObject->initiatePay($payment, null, Sale\PaySystem\BaseServiceHandler::STRING),
+				));
+			}
+			catch (\Throwable)
+			{
+				return false;
+			}
+			$paySystemBufferedOutput = $captured['value'];
+		}
+		else
+		{
+			$paySystemBufferedOutput = $paySystemObject->initiatePay($payment, null, Sale\PaySystem\BaseServiceHandler::STRING);
+		}
 		if (!$paySystemBufferedOutput->isSuccess())
 		{
 			$this->errorCollection->add($paySystemBufferedOutput->getErrors());
 			return false;
 		}
 
-		return $paySystemBufferedOutput->getTemplate();
+		$template = $paySystemBufferedOutput->getTemplate();
+		if ($operation !== null)
+		{
+			if (
+				!is_string($template)
+				|| $template === ''
+				|| ($isPdf && (!str_starts_with($template, '%PDF-') || !str_contains($template, '%%EOF')))
+			)
+			{
+				return false;
+			}
+			$operation->markGenerated($handler->getCode());
+			$operation->complete();
+		}
+
+		return $template;
 	}
 
 	/**
@@ -322,27 +422,33 @@ class CrmInvoicePaymentClientComponent extends CBitrixComponent
 			return;
 		}
 
-		if ($this->arParams['IS_AJAX_PAY'] !== "Y")
+		$explicitSelection = array_key_exists('PAY_SYSTEM_ID', $this->arParams);
+		if ($explicitSelection)
 		{
-			if (array_key_exists('PAY_SYSTEM_ID', $this->arParams))
-			{
-				$service = Sale\PaySystem\Manager::getObjectById($this->arParams['PAY_SYSTEM_ID']);
-				if ($service !== null)
-				{
-					if ($this->arParams['RETURN_URL'])
-					{
-						$service->getContext()->setUrl($this->arParams['RETURN_URL']);
-					}
-
-					$result = $service->initiatePay($payment, null, Sale\PaySystem\BaseServiceHandler::STRING);
-					$result->getErrors();
-					$this->arResult['PAY_SYSTEM_TEMPLATE'] = $result->getTemplate();
-					return;
-				}
-			}
-
+			$created = $this->createSelectedService($payment, (int)$this->arParams['PAY_SYSTEM_ID']);
+		}
+		else
+		{
 			$this->fillPaySystemsArray($payment);
 			$this->paySystemShowTemplateId = $payment->getPaymentSystemId();
+			$fields = Sale\PaySystem\Manager::getById($payment->getPaymentSystemId());
+			$created = is_array($fields) ? $this->createCheckedService($fields, $payment) : null;
+		}
+		if ($created === null || !$created->isSuccess())
+		{
+			$this->errorCollection->setError(new Main\Error(Loc::getMessage('CIPC_EMPTY_PAY_SYSTEM')));
+			return;
+		}
+		$paySystemObject = $created->getData()['service'];
+		$handler = $created->getData()['handler'];
+		if ($explicitSelection && $this->arParams['IS_AJAX_PAY'] !== 'Y')
+		{
+			$this->arResult['PAY_SYSTEM_TEMPLATE'] = $this->getPaySystemTemplate($payment, $paySystemObject, $handler);
+			if ($this->arResult['PAY_SYSTEM_TEMPLATE'] === false)
+			{
+				$this->errorCollection->setError(new Main\Error(Loc::getMessage('CIPC_ERROR_PAYMENT_EXECUTION')));
+			}
+			return;
 		}
 
 		$this->arResult['CUSTOMIZATION'] = array();
@@ -357,15 +463,6 @@ class CrmInvoicePaymentClientComponent extends CBitrixComponent
 					CFile::GetPath($formData['BACKGROUND_IMAGE'])
 				);
 			}
-		}
-
-		$paySystemObject = Sale\PaySystem\Manager::getObjectById($this->paySystemShowTemplateId);
-
-		if (!$paySystemObject)
-		{
-			$this->errorCollection->clear();
-			$this->errorCollection->setError(new Main\Error(Loc::getMessage("CIPC_WRONG_LINK")));
-			return;
 		}
 
 		/** crutch for support crm entities */
@@ -398,7 +495,21 @@ class CrmInvoicePaymentClientComponent extends CBitrixComponent
 					'ORDER' => array('USER_ID' => $clientId),
 				)
 			);
-			CSalePaySystemAction::InitParamArrays($data, $invoice->getId(), '', $paymentData, array(), array(), REGISTRY_TYPE_CRM_INVOICE);
+			try
+			{
+				(new CheckedBusinessValueContext())->run(
+					$paySystemObject->getConsumerName(),
+					static fn() => $paySystemObject->getHandlerDescription(),
+					static fn() => CSalePaySystemAction::InitParamArrays(
+						$data, $invoice->getId(), '', $paymentData, [], [], REGISTRY_TYPE_CRM_INVOICE,
+					),
+				);
+			}
+			catch (\Throwable)
+			{
+				$this->errorCollection->setError(new Main\Error(Loc::getMessage('CIPC_ERROR_PAYMENT_EXECUTION')));
+				return;
+			}
 		}
 
 		if ($this->arParams['IS_AJAX_PAY'] !== "Y")
@@ -412,7 +523,7 @@ class CrmInvoicePaymentClientComponent extends CBitrixComponent
 			return;
 		}
 
-		$this->arResult['BILL_TEMPLATE'] = $this->getPaySystemTemplate($payment, $paySystemObject);
+		$this->arResult['BILL_TEMPLATE'] = $this->getPaySystemTemplate($payment, $paySystemObject, $handler);
 
 		if ($this->arResult['BILL_TEMPLATE'] !== false)
 		{

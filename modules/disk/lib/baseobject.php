@@ -2,6 +2,15 @@
 
 namespace Bitrix\Disk;
 
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkSupportService;
+use Bitrix\Disk\Internal\Enum\ExternalLinkScenario;
+use Bitrix\Disk\Internal\Enum\SharingMemberType;
+use Bitrix\Disk\Internal\Service\ExternalLink\ExternalLinkScenarioRegistry;
+use Bitrix\Disk\Internal\Service\ExternalLink\MailAttachmentLinkContract;
+use Bitrix\Disk\Internal\Service\Folder\MailAttachmentsFolderPredicate;
+use Bitrix\Disk\Internal\Service\Sync\Journal\ChangeType;
+use Bitrix\Disk\Internal\Service\Sync\Journal\JournalWriter;
+use Bitrix\Disk\Internal\Service\Sync\Journal\TombstoneReason;
 use Bitrix\Disk\Internal\Service\UnifiedLink\UniqueCodeBackfiller;
 use Bitrix\Disk\Internals\Entity\ModelSynchronizer;
 use Bitrix\Disk\Internals\Error\Error;
@@ -16,11 +25,14 @@ use Bitrix\Disk\Ui\Avatar;
 use Bitrix\Im\Model\ChatTable;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\DI\ServiceLocator;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Entity\AddResult;
 use Bitrix\Main\Entity\Result;
 use Bitrix\Main\Event;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
+use Bitrix\Main\ModuleManager;
+use Bitrix\Main\Security\Random;
 use Bitrix\Main\Text\Emoji;
 use Bitrix\Main\Type\Collection;
 use Bitrix\Main\Type\DateTime;
@@ -28,8 +40,8 @@ use Bitrix\Main\UserTable;
 
 abstract class BaseObject extends Internals\Model implements \JsonSerializable
 {
-	const ERROR_NON_UNIQUE_NAME               = 'DISK_OBJ_22000';
-	const ERROR_RESTORE_UNDER_LINK_WRONG_TYPE = 'DISK_OBJ_22001';
+	public const ERROR_NON_UNIQUE_NAME               = 'DISK_OBJ_22000';
+	public const ERROR_RESTORE_UNDER_LINK_WRONG_TYPE = 'DISK_OBJ_22001';
 
 	/** @var string */
 	protected $name;
@@ -90,6 +102,19 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	protected ?array $objectOptions = null;
 
 	/**
+	 * Whether an operation over a subtree reached this object rather than started on it. The journal of
+	 * changes takes one record on the root of such an operation, and the object a cascade merely reached
+	 * publishes nothing: a folder of ten thousand children would otherwise write ten thousand records
+	 * saying what the record of the root already says.
+	 *
+	 * Set by the cascade itself - {@see Folder::deleteTree()}, {@see Folder::restore()} - because the
+	 * root of an operation is known to the code running it and cannot be told from the state of a row.
+	 */
+	protected bool $journalCascadeChild = false;
+
+	private ?JournalWriter $journalWriter = null;
+
+	/**
 	 * Returns the fully qualified name of table class which belongs to current model.
 	 * @throws \Bitrix\Main\NotImplementedException
 	 * @return string
@@ -135,7 +160,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @param BaseObject $targetObject New destination object.
 	 * @return bool
 	 */
-	public function canMove(SecurityContext $securityContext, BaseObject $targetObject)
+	public function canMove(SecurityContext $securityContext, self $targetObject)
 	{
 		return $securityContext->canMove($this->id, $targetObject->getRealObjectId());
 	}
@@ -148,6 +173,16 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	public function canRead(SecurityContext $securityContext)
 	{
 		return $securityContext->canRead($this->id);
+	}
+
+	/**
+	 * Checks rights to download current object.
+	 * @param SecurityContext $securityContext Security context.
+	 * @return bool
+	 */
+	public function canDownload(SecurityContext $securityContext): bool
+	{
+		return $securityContext->canDownload($this->getRealObjectId());
 	}
 
 	/**
@@ -168,13 +203,12 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	public function canRestore(SecurityContext $securityContext)
 	{
 		return
-			$securityContext->canRestore($this->id) ||
-			(
-				$securityContext->canMarkDeleted($this->id) &&
-				$this->deletedBy == $securityContext->getUserId() &&
-				$this->deletedBy
-			)
-		;
+			$securityContext->canRestore($this->id)
+			|| (
+				$securityContext->canMarkDeleted($this->id)
+				&& $this->deletedBy == $securityContext->getUserId()
+				&& $this->deletedBy
+			);
 	}
 
 	/**
@@ -205,10 +239,9 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	public function canUpdateByCloudImport(SecurityContext $securityContext)
 	{
 		return
-				$this->getContentProvider() &&
-				$this->getCreatedBy() == $securityContext->getUserId() &&
-				$securityContext->canUpdate($this->id)
-		;
+				$this->getContentProvider()
+				&& $this->getCreatedBy() == $securityContext->getUserId()
+				&& $securityContext->canUpdate($this->id);
 	}
 
 	/**
@@ -333,7 +366,12 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			return $this;
 		}
 
-		if($this->isLoadedAttribute('realObject') && $this->realObject && $this->realObjectId === $this->realObject->getId())
+		// The id of a model loaded from the database is a string, the one of a model built in code is an int.
+		$isResolved = $this->isLoadedAttribute('realObject')
+			&& $this->realObject
+			&& (int)$this->realObjectId === (int)$this->realObject->getId()
+		;
+		if($isResolved)
 		{
 			return $this->realObject;
 		}
@@ -351,7 +389,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 */
 	public function getRealObjectId()
 	{
-		return $this->isLink()? $this->realObjectId : $this->id;
+		return $this->isLink() ? $this->realObjectId : $this->id;
 	}
 
 	/**
@@ -374,6 +412,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		{
 			$this->label = $this->getNameWithoutTrashCanSuffix();
 		}
+
 		return $this->label;
 	}
 
@@ -460,7 +499,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		{
 			return $this->storage;
 		}
-		$this->storage = Storage::loadById($this->storageId, array('ROOT_OBJECT'));
+		$this->storage = Storage::loadById($this->storageId, ['ROOT_OBJECT']);
 		$this->setAsLoadedAttribute('storage');
 
 		return $this->storage;
@@ -491,9 +530,8 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 */
 	public function getUpdateTime()
 	{
-		return $this->updateTime?: $this->createTime;
+		return $this->updateTime ?: $this->createTime;
 	}
-
 
 	/**
 	 * Returns sync time object.
@@ -529,7 +567,6 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		return $this->updateUser;
 	}
 
-
 	/**
 	 * Adds external link.
 	 * @param array $data Data to create new external link (@see ExternalLink).
@@ -542,13 +579,27 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 
 		$data['OBJECT_ID'] = $this->id;
 
-		$parent = $this->getParent();
-		if ($parent && SpecificFolder::isSpecificFolder($parent, [SpecificFolder::CODE_FOR_MAIL_ATTACHMENTS]))
+		// Only internal services assign a scenario, never the calling code.
+		unset($data['SCENARIO']);
+
+		$predicate = ServiceLocator::getInstance()->get(MailAttachmentsFolderPredicate::class);
+		$isInsideMailAttachmentsTree = $predicate->isInsideMailAttachmentsTree((int)$this->id);
+
+		if ($isInsideMailAttachmentsTree)
 		{
-			// Invariant: links to objects inside the mail attachments folder always keep
-			// their settings locked. The client-supplied CAN_EDIT_SETTINGS is ignored so the
+			// Invariant: links to objects anywhere inside the mail attachments folder tree always
+			// keep their settings locked. The client-supplied CAN_EDIT_SETTINGS is ignored so the
 			// flag cannot be reset on link re-creation or by passing an explicit value in the request.
 			$data['CAN_EDIT_SETTINGS'] = false;
+		}
+
+		$scenario = $this->resolveExternalLinkScenario($data, $isInsideMailAttachmentsTree);
+		if ($scenario === ExternalLinkScenario::MailAttachments)
+		{
+			// The object remembers that its public link is a service one, so a link re-created from the
+			// interface comes back as a service link and with the whole contract of it, not just with
+			// its name: the settings of the request cannot widen what the recipient of the letter gets.
+			$data = MailAttachmentLinkContract::applyTo($data);
 		}
 
 		$addResult = ExternalLink::add($data, $this->errorCollection);
@@ -563,24 +614,40 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	}
 
 	/**
+	 * The service nature of a link is bounded by three conditions at once: the object is marked as a
+	 * service one, the link being created is a manual one and the object still lies inside the mail
+	 * attachments folder tree. An automatic link and an object taken out of the tree get no scenario,
+	 * so they keep asking the portal policy as any regular link does.
+	 */
+	private function resolveExternalLinkScenario(array $data, bool $isInsideMailAttachmentsTree): ?ExternalLinkScenario
+	{
+		if (!$isInsideMailAttachmentsTree || (int)($data['TYPE'] ?? 0) !== ExternalLink::TYPE_MANUAL)
+		{
+			return null;
+		}
+
+		return ServiceLocator::getInstance()->get(ExternalLinkScenarioRegistry::class)->getFor($this);
+	}
+
+	/**
 	 * Returns external links by file.
 	 * @param array $parameters Parameters.
 	 * @return ExternalLink[]
 	 * @deprecated
 	 */
-	public function getExternalLinks(array $parameters = array())
+	public function getExternalLinks(array $parameters = [])
 	{
 		if (!isset($parameters['filter']))
 		{
-			$parameters['filter'] = array();
+			$parameters['filter'] = [];
 		}
 		$parameters['filter']['OBJECT_ID'] = $this->id;
 
 		if (!isset($parameters['order']))
 		{
-			$parameters['order'] = array(
+			$parameters['order'] = [
 				'CREATE_TIME' => 'DESC',
-			);
+			];
 		}
 
 		return ExternalLink::getModelList($parameters);
@@ -604,15 +671,15 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	{
 		if($this->lastCloudImport === null)
 		{
-			$lastCloudImport = Document\CloudImport\Entry::getModelList(array(
-				'filter' => array(
+			$lastCloudImport = Document\CloudImport\Entry::getModelList([
+				'filter' => [
 					'OBJECT_ID' => $this->getRealObjectId(),
-				),
-				'order' => array(
+				],
+				'order' => [
 					'ID' => 'DESC',
-				),
-			    'limit' => 1,
-			));
+				],
+				'limit' => 1,
+			]);
 			if(!$lastCloudImport)
 			{
 				return null;
@@ -679,11 +746,38 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 
 		Driver::getInstance()->getIndexManager()->changeName($this);
 		Driver::getInstance()->sendChangeStatusToSubscribers($this, 'quick');
+		$this->publishRenameToJournal();
 
 		$event = new Event(Driver::INTERNAL_MODULE_ID, 'onAfterRenameObject', [$this, $oldName, $newName]);
 		$event->send();
 
 		return true;
+	}
+
+	/**
+	 * A rename reported to the journal, which is kept over real objects.
+	 *
+	 * A link carries a name of its own and it is that name the client shows, while the object behind the
+	 * link keeps the one it had. What changed for the audience of that object is a place of it and not
+	 * its name, and it is published in the same shape the appearance and the disappearance of a link are.
+	 *
+	 * The author is the user of the request. The method is reached from a dozen callers that pass none
+	 * and the row of a rename carries no author of its own either; where there is no user - an agent, the
+	 * console - the record belongs to a background mechanism and says so by carrying no author (DTO-03).
+	 */
+	private function publishRenameToJournal(): void
+	{
+		$currentUserId = (int)CurrentUser::get()->getId();
+		$authorId = $currentUserId > 0 ? $currentUserId : null;
+
+		if ($this->isLink())
+		{
+			$this->publishToJournal(ChangeType::Updated, $authorId, ['places']);
+
+			return;
+		}
+
+		$this->publishToJournal(ChangeType::Renamed, $authorId, ['name']);
 	}
 
 	/**
@@ -707,7 +801,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 						'name' => $this->getName(),
 						'parentId' => (int)$this->getParentId(),
 					],
-				]
+				],
 			);
 			$objectEvent->sendToObjectChannel();
 		}
@@ -720,7 +814,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @param DateTime|null $datetime Datetime.
 	 * @return bool
 	 */
-	protected function changeParentUpdateTime(DateTime $datetime = null, $updatedBy = null)
+	protected function changeParentUpdateTime(?DateTime $datetime = null, $updatedBy = null)
 	{
 		$parent = $this->getParent();
 		if (!$parent)
@@ -729,7 +823,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		}
 
 		$data = [
-			'UPDATE_TIME' => $datetime ? : new DateTime(),
+			'UPDATE_TIME' => $datetime ?: new DateTime(),
 		];
 
 		if ($updatedBy)
@@ -745,11 +839,11 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @param DateTime|null $datetime Datetime.
 	 * @return bool
 	 */
-	protected function changeSelfUpdateTime(DateTime $datetime = null)
+	protected function changeSelfUpdateTime(?DateTime $datetime = null)
 	{
-		return $this->update(array(
-			'UPDATE_TIME' => $datetime?: new DateTime(),
-		));
+		return $this->update([
+			'UPDATE_TIME' => $datetime ?: new DateTime(),
+		]);
 	}
 
 	/**
@@ -759,7 +853,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 */
 	public function changeXmlId($newXmlId)
 	{
-		return $this->update(array('XML_ID' => $newXmlId));
+		return $this->update(['XML_ID' => $newXmlId]);
 	}
 
 	/**
@@ -769,7 +863,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 */
 	public function changeCode($newCode)
 	{
-		return $this->update(array('CODE' => $newCode));
+		return $this->update(['CODE' => $newCode]);
 	}
 
 	/**
@@ -780,6 +874,44 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @return BaseObject|null
 	 */
 	abstract public function copyTo(Folder $targetFolder, $updatedBy, $generateUniqueName = false);
+
+	/**
+	 * A write which carries a name is refused by the index over the pair of name and parent, so it means
+	 * a name already taken in the folder. The other unique index of the table guards the unique code and
+	 * keeps the generic error.
+	 */
+	protected function createDuplicateEntryError(array $data): Error
+	{
+		if (!array_key_exists('NAME', $data))
+		{
+			return parent::createDuplicateEntryError($data);
+		}
+
+		return new Error(
+			Loc::getMessage('DISK_OBJECT_MODEL_ERROR_NON_UNIQUE_NAME'),
+			self::ERROR_NON_UNIQUE_NAME
+		);
+	}
+
+	/**
+	 * Builds a name which is free in any folder, so the object can be parked under it while it travels
+	 * between folders.
+	 */
+	protected function generateUniqueTmpName(): string
+	{
+		$uniqueTmpName = $this->name;
+
+		$uniquePart = '_' . Random::getString(32);
+		$maxAllowedLength = 255 - mb_strlen($uniquePart);
+
+		if (mb_strlen($this->name) > $maxAllowedLength)
+		{
+			$uniqueTmpName = mb_substr($this->name, 0, $maxAllowedLength);
+		}
+		$uniqueTmpName .= $uniquePart;
+
+		return $uniqueTmpName;
+	}
 
 	/**
 	 * Moves object to another folder.
@@ -835,28 +967,17 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		}
 
 		$possibleNewName = $result->getName();
-		$needToRename = $possibleNewName != $this->name;
-
-		$this->name = $possibleNewName;
-
-		if($needToRename)
-		{
-			$successUpdate = $this->update(array(
-				'NAME' => $possibleNewName
-			));
-			if(!$successUpdate)
-			{
-				return null;
-			}
-		}
 
 		//simple move
 		if($realStorageIdSource == $realStorageIdTarget)
 		{
-			$object = $this->moveInSameStorage($folder, $movedBy);
+			$object = $this->moveInSameStorageUnderName($folder, $movedBy, $possibleNewName, $generateUniqueName);
 		}
 		else
 		{
+			// the cross-storage branch copies the object into the target folder under this name and trashes
+			// the original, so the row of the source folder keeps its own name and is never renamed here
+			$this->name = $possibleNewName;
 			$object = $this->moveInAnotherStorage($folder, $movedBy);
 		}
 
@@ -864,11 +985,109 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		{
 			$folder->changeSelfUpdateTime();
 
-			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterMoveObject", array($this));
+			// A move across storages keeps no identity to report a move of: it is a copy and a trashing
+			// of the source, and each of the two has already published a record of its own.
+			if ($object === $this)
+			{
+				$this->publishToJournal(ChangeType::Moved, $movedBy, ['places']);
+			}
+
+			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterMoveObject", [$this]);
 			$event->send();
 		}
 
 		return $object;
+	}
+
+	/**
+	 * Moves the object and only then gives it the name prepared for the target folder.
+	 * The prepared name is free in the target folder, but can be taken in the source one, and the unique index
+	 * of the object table covers the pair of name and parent, so renaming before the move breaks on a collision
+	 * which has nothing to do with the destination. While the object travels it wears a temporary name free
+	 * in any folder.
+	 * @return $this|null
+	 */
+	private function moveInSameStorageUnderName(
+		Folder $folder,
+		$movedBy,
+		string $preparedName,
+		bool $generateUniqueName
+	)
+	{
+		$originalName = $this->name;
+		$needToRename = $preparedName !== $originalName;
+
+		if ($needToRename && !$this->updateName($this->generateUniqueTmpName()))
+		{
+			return null;
+		}
+
+		$object = $this->moveInSameStorage($folder, $movedBy);
+		if ($object === null)
+		{
+			if ($needToRename)
+			{
+				$this->restoreNameAfterFailedMove($originalName);
+			}
+
+			return null;
+		}
+
+		if ($needToRename && !$this->renameAfterMove($originalName, $folder, $generateUniqueName))
+		{
+			return null;
+		}
+
+		return $object;
+	}
+
+	/**
+	 * Picks the final name in the folder the object already belongs to.
+	 */
+	private function renameAfterMove(string $desiredName, Folder $folder, bool $generateUniqueName): bool
+	{
+		$nameService = new ObjectNameService($desiredName, $folder->getRealObject()->getId(), $this->getType());
+		$nameService->excludeId($this->getId());
+		if ($generateUniqueName)
+		{
+			$nameService->requireUniqueName();
+		}
+
+		$result = $nameService->prepareName();
+		if (!$result->isSuccess())
+		{
+			$this->errorCollection->add($result->getErrors());
+
+			return false;
+		}
+
+		return $this->updateName($result->getName());
+	}
+
+	private function restoreNameAfterFailedMove(string $originalName): void
+	{
+		// update() resets the error collection, so the errors of the failed move have to outlive the rollback
+		$errors = $this->getErrors();
+		$this->updateName($originalName);
+
+		$this->errorCollection->clear();
+		$this->errorCollection->add($errors);
+	}
+
+	/**
+	 * Writes the name and keeps the model in sync: an update result carries no fields back, and the label
+	 * caches the name it was built from.
+	 */
+	private function updateName(string $name): bool
+	{
+		if (!$this->update(['NAME' => $name]))
+		{
+			return false;
+		}
+		$this->name = $name;
+		$this->label = null;
+
+		return true;
 	}
 
 	/**
@@ -883,6 +1102,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		$subscriberManager = $driver->getSubscriberManager();
 
 		$subscribersBeforeMove = $subscriberManager->collectSubscribersSmart($this);
+		$rightsCodesBeforeMove = $driver->getRightsManager()->captureCodesBeforeMove($this);
 
 		$realFolderId = $folder->getRealObject()->getId();
 		/** @var ObjectTable $tableClassName */
@@ -891,18 +1111,32 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		$moveResult = $tableClassName::move($this->id, $realFolderId);
 		if(!$moveResult->isSuccess())
 		{
-			$this->errorCollection->addFromResult($moveResult);
+			foreach($moveResult->getErrors() as $error)
+			{
+				if($error->getCode() === self::ERROR_NON_UNIQUE_NAME)
+				{
+					$this->errorCollection[] = new Error(
+						Loc::getMessage('DISK_OBJECT_MODEL_ERROR_NON_UNIQUE_NAME'),
+						self::ERROR_NON_UNIQUE_NAME
+					);
+
+					continue;
+				}
+
+				$this->errorCollection[] = new Error($error->getMessage());
+			}
+
 			return null;
 		}
 		$this->setAttributesFromResult($moveResult);
 
-		$driver->getRightsManager()->setAfterMove($this);
+		$driver->getRightsManager()->setAfterMove($this, $rightsCodesBeforeMove);
 
 		$subscribersAfterMove = $subscriberManager->collectSubscribersSmart($this);
 		$driver->getDeletedLogManager()->markAfterMove(
 			$this,
 			array_unique(array_diff($subscribersBeforeMove, $subscribersAfterMove)),
-			$movedBy
+			$movedBy,
 		);
 		//notify new subscribers (in DeletedLog we notify subscribers only missed access)
 		if($this instanceof Folder)
@@ -959,12 +1193,12 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @internal
 	 * @return static
 	 */
-	public static function buildFromArray(array $attributes, array &$aliases = null)
+	public static function buildFromArray(array $attributes, ?array &$aliases = null)
 	{
 		/** @var BaseObject $className */
 		$className = static::getClassNameModel($attributes);
 		/** @var BaseObject $model */
-		$model = new $className;
+		$model = new $className();
 
 		return $model->setAttributes($attributes, $aliases);
 	}
@@ -984,7 +1218,8 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		}
 		$className = static::getClassNameModel($data);
 		/** @var BaseObject $model */
-		$model = new $className;
+		$model = new $className();
+
 		return $model->setAttributesFromResult($result);
 	}
 
@@ -1005,12 +1240,14 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			{
 				return File::className();
 			}
+
 			return Folder::className();
 		}
 		if($row['TYPE'] == ObjectTable::TYPE_FILE)
 		{
 			return FileLink::className();
 		}
+
 		return FolderLink::className();
 	}
 
@@ -1021,13 +1258,13 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @throws \Bitrix\Main\NotImplementedException
 	 * @return static
 	 */
-	public static function load(array $filter, array $with = array())
+	public static function load(array $filter, array $with = [])
 	{
-		$objectData = static::getList(array(
+		$objectData = static::getList([
 			'with' => $with,
 			'filter'=> $filter,
 			'limit' => 1,
-		))->fetch();
+		])->fetch();
 
 		if(empty($objectData))
 		{
@@ -1037,6 +1274,18 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		$className = static::getClassNameModel($objectData);
 
 		return $className::buildFromArray($objectData);
+	}
+
+	/**
+	 * @param string $uniqueCode
+	 * @param array $with
+	 * @return File|null
+	 * @noinspection PhpDocMissingThrowsInspection
+	 */
+	public static function loadByUniqueCode(string $uniqueCode, array $with = []): ?static
+	{
+		/** @noinspection PhpUnhandledExceptionInspection */
+		return static::load(['=UNIQUE_CODE' => $uniqueCode], $with);
 	}
 
 	/**
@@ -1067,7 +1316,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		{
 			$this->errorCollection[] = new Error(
 				"It's not possible to restore object, which was deleted with TYPE_CHILD",
-				self::ERROR_RESTORE_UNDER_LINK_WRONG_TYPE
+				self::ERROR_RESTORE_UNDER_LINK_WRONG_TYPE,
 			);
 
 			return false;
@@ -1077,6 +1326,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		if (!$realObject)
 		{
 			$this->errorCollection[] = new Error('Could not find real object of link to restore it');
+
 			return false;
 		}
 
@@ -1108,9 +1358,9 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		}
 
 		//with status unreplied, declined (not approved)
-		SharingTable::deleteByFilter(array(
+		SharingTable::deleteByFilter([
 			'REAL_OBJECT_ID' => $this->id,
-		));
+		]);
 
 		if ($deletedType == ObjectTable::DELETED_TYPE_CHILD)
 		{
@@ -1145,6 +1395,9 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			'CODE' => null,
 			'NAME' => $nameAfterDelete,
 			'DELETED_TYPE' => $deletedType,
+			// trashing changes the object for a sync client the way restoreInternal() does, so it moves
+			// the sync mark too; written here because the ORM hook raises it only along with UPDATE_TIME
+			'SYNC_UPDATE_TIME' => new DateTime(),
 		];
 
 		$alreadyDeleted = $this->isDeleted();
@@ -1160,8 +1413,14 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			$driver = Driver::getInstance();
 			$driver->getDeletionNotifyManager()->put($this, $deletedBy);
 			$driver->getIndexManager()->dropIndexByModuleSearch($this);
+			$this->publishToJournal(
+				ChangeType::Trashed,
+				$deletedBy,
+				['name', 'places'],
+				isCascadeRoot: (int)$deletedType === ObjectTable::DELETED_TYPE_ROOT,
+			);
 
-			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterMarkDeletedObject", array($this, $deletedBy, $deletedType));
+			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterMarkDeletedObject", [$this, $deletedBy, $deletedType]);
 			$event->send();
 		}
 
@@ -1185,24 +1444,24 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		{
 			$userStorage->addFileLink(
 				$this,
-				array(
+				[
 					'CREATED_BY' => $deletedBy,
 					'DELETED_BY' => $deletedBy,
 					'DELETED_TYPE' => ObjectTable::DELETED_TYPE_ROOT,
 					'DELETE_TIME' => new DateTime(),
-				)
+				],
 			);
 		}
 		elseif ($this instanceof Folder)
 		{
 			$userStorage->addFolderLink(
 				$this,
-				array(
+				[
 					'CREATED_BY' => $deletedBy,
 					'DELETED_BY' => $deletedBy,
 					'DELETED_TYPE' => ObjectTable::DELETED_TYPE_ROOT,
 					'DELETE_TIME' => new DateTime(),
-				)
+				],
 			);
 		}
 	}
@@ -1231,22 +1490,22 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		/** @var ObjectTable $tableClassName */
 		$tableClassName = $this->getTableClassName();
 
-		$status = $this->update(array(
+		$status = $this->update([
 			'NAME' => $this->getNameWithoutTrashCanSuffix(),
 			'DELETED_TYPE' => $tableClassName::DELETED_TYPE_NONE,
 			'UPDATE_TIME' => new DateTime(),
 			'UPDATED_BY' => $restoredBy,
-		));
+		]);
 
 		if($status)
 		{
 			//we have to delete links which are in trashcan. It's special case. @see \Bitrix\Disk\BaseObject::markDeletedInternal.
-			$links = BaseObject::getModelList(array(
-				'filter' => array(
+			$links = BaseObject::getModelList([
+				'filter' => [
 					'REAL_OBJECT_ID' => $this->id,
 					'!=DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,
-				)
-			));
+				],
+			]);
 			foreach($links as $link)
 			{
 				if ($link instanceof FileLink)
@@ -1259,7 +1518,14 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 				}
 			}
 
-			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterRestoreObject", array($this, $restoredBy));
+			$this->publishToJournal(
+				ChangeType::Restored,
+				$restoredBy,
+				['name', 'places'],
+				isCascadeRoot: !$this->journalCascadeChild,
+			);
+
+			$event = new Event(Driver::INTERNAL_MODULE_ID, "onAfterRestoreObject", [$this, $restoredBy]);
 			$event->send();
 		}
 
@@ -1278,7 +1544,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			}
 
 			/** @var $parent Folder */
-			foreach ($parent->getChildren($fakeContext, array('filter' => array('!==DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE,))) as $childPotentialRoot)
+			foreach ($parent->getChildren($fakeContext, ['filter' => ['!==DELETED_TYPE' => ObjectTable::DELETED_TYPE_NONE]]) as $childPotentialRoot)
 			{
 				if($childPotentialRoot->getId() == $this->getId())
 				{
@@ -1308,6 +1574,58 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	}
 
 	/**
+	 * Reports a change of this object to the journal of changes read by disk.sync.changes.list.
+	 *
+	 * The call belongs where the operation already tells search, recents, the realtime channel and the
+	 * subscribers about itself: only there are the meaning of the operation and the root of its cascade
+	 * both known.
+	 *
+	 * @param string[]|null $changedFields the fields of the card
+	 *        {@see \Bitrix\Disk\Infrastructure\Rest\V3\Dto\Sync\ObjectCardDto} the operation is about,
+	 *        not every column its statement touched
+	 */
+	protected function publishToJournal(
+		ChangeType $changeType,
+		?int $authorId = null,
+		?array $changedFields = null,
+		bool $isCascadeRoot = true,
+	): void
+	{
+		$this->getJournalWriter()->publishObjectChange($this, $changeType, $authorId, $changedFields, $isCascadeRoot);
+	}
+
+	/**
+	 * The audience of the tombstone of this object, taken before the deletion tears down the rights and
+	 * the interaction set it is read from.
+	 *
+	 * @return string[]|null
+	 */
+	protected function captureTombstoneAudience(): ?array
+	{
+		return $this->getJournalWriter()->captureTombstoneAudience($this);
+	}
+
+	/**
+	 * Reports the disappearance of this object from the portal.
+	 *
+	 * A tombstone tells the client to forget the object, so the call belongs after the deletion has
+	 * succeeded and not before it. The audience is the one {@see captureTombstoneAudience()} took while
+	 * the object was still whole: read here it would be empty, and a record without a single code is not
+	 * published at all.
+	 *
+	 * @param string[]|null $audienceCodes
+	 */
+	protected function publishTombstoneToJournal(?int $authorId = null, ?array $audienceCodes = null): void
+	{
+		$this->getJournalWriter()->publishTombstone($this, TombstoneReason::Deleted, $authorId, $audienceCodes);
+	}
+
+	protected function getJournalWriter(): JournalWriter
+	{
+		return $this->journalWriter ??= new JournalWriter();
+	}
+
+	/**
 	 * Returns list parents of object.
 	 * @param SecurityContext $securityContext Security context.
 	 * @param array           $parameters Parameters.
@@ -1315,15 +1633,15 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 * @return array|Folder[]|File[]|FileLink[]|FolderLink[]
 	 * @throws \Bitrix\Main\ArgumentOutOfRangeException
 	 */
-	public function getParents(SecurityContext $securityContext, array $parameters = array(), $orderDepthLevel = SORT_ASC)
+	public function getParents(SecurityContext $securityContext, array $parameters = [], $orderDepthLevel = SORT_ASC)
 	{
 		if(!isset($parameters['filter']))
 		{
-			$parameters['filter'] = array();
+			$parameters['filter'] = [];
 		}
 		if(!isset($parameters['select']))
 		{
-			$parameters['select'] = array('*');
+			$parameters['select'] = ['*'];
 		}
 
 		if(!empty($parameters['filter']['MIXED_SHOW_DELETED']))
@@ -1331,23 +1649,23 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			unset($parameters['filter']['DELETED_TYPE'], $parameters['filter']['MIXED_SHOW_DELETED']);
 		}
 		elseif (
-			!array_key_exists('DELETED_TYPE', $parameters['filter']) &&
-			!array_key_exists('!DELETED_TYPE', $parameters['filter']) &&
-			!array_key_exists('!=DELETED_TYPE', $parameters['filter']) &&
-			!array_key_exists('!==DELETED_TYPE', $parameters['filter'])
+			!array_key_exists('DELETED_TYPE', $parameters['filter'])
+			&& !array_key_exists('!DELETED_TYPE', $parameters['filter'])
+			&& !array_key_exists('!=DELETED_TYPE', $parameters['filter'])
+			&& !array_key_exists('!==DELETED_TYPE', $parameters['filter'])
 		)
 		{
 			$parameters['filter']['DELETED_TYPE'] = ObjectTable::DELETED_TYPE_NONE;
 		}
 		$parameters['select']['DEPTH_LEVEL'] = 'PATH_PARENT.DEPTH_LEVEL';
-		$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck($securityContext, $parameters, array('ID', 'CREATED_BY'));
+		$parameters = Driver::getInstance()->getRightsManager()->addRightsCheck($securityContext, $parameters, ['ID', 'CREATED_BY']);
 
 		/** @var ObjectTable $tableClassName */
 		$tableClassName = $this->getTableClassName();
 		$data = $tableClassName::getAncestors($this->id, static::prepareGetListParameters($parameters))->fetchAll();
-		Collection::sortByColumn($data, array('DEPTH_LEVEL' => $orderDepthLevel));
+		Collection::sortByColumn($data, ['DEPTH_LEVEL' => $orderDepthLevel]);
 
-		$modelData = array();
+		$modelData = [];
 		foreach($data as $item)
 		{
 			$modelData[] = BaseObject::buildFromArray($item);
@@ -1428,7 +1746,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		/** @var ObjectTable $tableClassName */
 		$tableClassName = $this->getTableClassName();
 		//todo don't update object with REAL_OBJECT_ID == ID. Exlucde form update. It is not necessary.
-		$tableClassName::updateAttributesByFilter($attr, array('REAL_OBJECT_ID' => $this->id));
+		$tableClassName::updateAttributesByFilter($attr, ['REAL_OBJECT_ID' => $this->id]);
 
 		ModelSynchronizer::getInstance()->trigger($this, $attr);
 	}
@@ -1453,11 +1771,11 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 
 		$sharings = Sharing::getModelList([
 			'with' => ['LINK_OBJECT'],
-			'filter' => $filter
+			'filter' => $filter,
 		]);
 		foreach($sharings as $sharing)
 		{
-			$sharing->setAttributes(array('REAL_OBJECT' => $this));
+			$sharing->setAttributes(['REAL_OBJECT' => $this]);
 		}
 
 		return $sharings;
@@ -1471,15 +1789,15 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	public function getSharingsAsLink()
 	{
 		/** @var Sharing[] $sharings */
-		$sharings = Sharing::getModelList(array(
-			'filter' => array(
+		$sharings = Sharing::getModelList([
+			'filter' => [
 				'LINK_OBJECT_ID' => $this->id,
 				'LINK_STORAGE_ID' => $this->storageId,
-			)
-		));
+			],
+		]);
 		foreach($sharings as $sharing)
 		{
-			$sharing->setAttributes(array('LINK_OBJECT' => $this));
+			$sharing->setAttributes(['LINK_OBJECT' => $this]);
 		}
 		unset($sharing);
 
@@ -1497,12 +1815,12 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		$realObject = $this->getRealObject();
 		if(!$realObject)
 		{
-			return array();
+			return [];
 		}
 
 		$sharings = $realObject->getSharingsAsReal();
-		$members = array();
-		$membersToSharing = array();
+		$members = [];
+		$membersToSharing = [];
 		foreach($sharings as $sharing)
 		{
 			if($sharing->isToDepartmentChild())
@@ -1517,7 +1835,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 
 		$enabledSocialnetwork = Loader::includeModule('socialnetwork');
 
-		$entityList = array();
+		$entityList = [];
 		foreach(SharingTable::getListOfTypeValues() as $type)
 		{
 			if(empty($members[$type]))
@@ -1526,8 +1844,19 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			}
 			if($type == SharingTable::TYPE_TO_USER)
 			{
+				// UF_DEPARTMENT is the condition by which User::buildFromArray() resolves the model
+				// flags from the row; the values read are EXTERNAL_AUTH_ID and UF_USER_CRM_ENTITY
+				$select = array(
+					'ID', 'PERSONAL_PHOTO', 'NAME', 'LOGIN', 'LAST_NAME', 'SECOND_NAME',
+					'UF_DEPARTMENT', 'EXTERNAL_AUTH_ID',
+				);
+				if (ModuleManager::isModuleInstalled('crm'))
+				{
+					$select[] = 'UF_USER_CRM_ENTITY';
+				}
+
 				$query = UserTable::getList(array(
-					'select' => array('ID', 'PERSONAL_PHOTO', 'NAME', 'LOGIN', 'LAST_NAME', 'SECOND_NAME'),
+					'select' => $select,
 					'filter' => array('ID' => array_values($members[$type])),
 				));
 				while($userRow = $query->fetch())
@@ -1536,36 +1865,40 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 					$userModel = User::buildFromRow($userRow);
 					/** @var Sharing $sharing */
 					$sharing = $membersToSharing[$type . '|' . $userRow['ID']];
-					$entityList[] = array(
+					$entityList[] = [
 						'sharingId' => $sharing->getId(),
 						'entityId' => Sharing::CODE_USER . $userRow['ID'],
 						'name' => $userModel->getFormattedName(),
 						'right' => $sharing->getTaskName(),
 						'avatar' => $userModel->getAvatarSrc(),
+						'ownAvatar' => $userModel->getOwnAvatarSrc(),
 						'url' => $userModel->getDetailUrl(),
 						'type' => 'users',
-					);
+						'memberType' => SharingMemberType::forUser($userModel)?->value,
+					];
 				}
 			}
 			elseif($type == SharingTable::TYPE_TO_GROUP && $enabledSocialnetwork)
 			{
-				$query = \CSocNetGroup::getList(array(), array('ID' => array_values($members[$type])), false, false, array(
-						'ID',
-						'IMAGE_ID',
-						'NAME'
-					));
+				$query = \CSocNetGroup::getList([], ['ID' => array_values($members[$type])], false, false, [
+					'ID',
+					'IMAGE_ID',
+					'NAME',
+				]);
 				while($query && $groupRow = $query->fetch())
 				{
 					/** @var Sharing $sharing */
 					$sharing = $membersToSharing[$type . '|' . $groupRow['ID']];
-					$entityList[] = array(
+					$entityList[] = [
 						'sharingId' => $sharing->getId(),
 						'entityId' => Sharing::CODE_SOCNET_GROUP . $groupRow['ID'],
 						'name' => Emoji::decode($groupRow['NAME']),
 						'right' => $sharing->getTaskName(),
 						'avatar' => Avatar::getGroup($groupRow['IMAGE_ID']),
+						'ownAvatar' => Avatar::getSrc($groupRow['IMAGE_ID']) ?: null,
 						'type' => 'groups',
-					);
+						'memberType' => SharingMemberType::Group->value,
+					];
 				}
 			}
 			elseif($type == SharingTable::TYPE_TO_DEPARTMENT && $enabledSocialnetwork)
@@ -1580,14 +1913,16 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 					}
 					/** @var Sharing $sharing */
 					$sharing = $membersToSharing[$type . '|' . $departmentId];
-					$entityList[] = array(
+					$entityList[] = [
 						'sharingId' => $sharing->getId(),
 						'entityId' => Sharing::CODE_DEPARTMENT . $departmentId,
 						'name' => $structure['department']['DR' . $departmentId]['name'],
 						'right' => $sharing->getTaskName(),
 						'avatar' => Avatar::getDefaultGroup(),
+						'ownAvatar' => null,
 						'type' => 'department',
-					);
+						'memberType' => SharingMemberType::Department->value,
+					];
 				}
 				unset($departmentId);
 			}
@@ -1604,7 +1939,9 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 						'name' => $chat['title'],
 						'right' => $sharing->getTaskName(),
 						'avatar' => Avatar::getDefaultGroup(),
+						'ownAvatar' => null,
 						'type' => 'chat',
+						'memberType' => null,
 					];
 				}
 			}
@@ -1648,7 +1985,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		{
 			return $this->ttl;
 		}
-		$this->ttl = ObjectTtl::load(array('OBJECT_ID' => $this->id));
+		$this->ttl = ObjectTtl::load(['OBJECT_ID' => $this->id]);
 		$this->setAsLoadedAttribute('ttl');
 
 		return $this->ttl;
@@ -1681,11 +2018,11 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		}
 
 		return ObjectTtl::add(
-			array(
+			[
 				'OBJECT_ID' => $this->id,
 				'DEATH_TIME' => $deathTime,
-			),
-			$this->errorCollection
+			],
+			$this->errorCollection,
 		);
 	}
 
@@ -1700,7 +2037,8 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		{
 			$options = [
 				ObjectOptionsTable::NAME_ALLOW_DOWNLOAD_ON_READ => true,
-				ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ => true,
+				ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ => false,
+				ObjectOptionsTable::NAME_EXTERNAL_LINK_SCENARIO => null,
 			];
 
 			$items = ObjectOptionsTable::getList([
@@ -1744,6 +2082,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		$options = [
 			ObjectOptionsTable::NAME_ALLOW_DOWNLOAD_ON_READ,
 			ObjectOptionsTable::NAME_ALLOW_MANAGE_PUBLIC_ACCESS_ON_READ,
+			ObjectOptionsTable::NAME_EXTERNAL_LINK_SCENARIO,
 		];
 		if (!in_array($name, $options))
 		{
@@ -1765,6 +2104,8 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		}
 		$item->setValue(json_encode($value));
 		$item->save();
+		$this->objectOptions = null;
+
 		return $this;
 	}
 
@@ -1775,7 +2116,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 	 */
 	public static function getMapAttributes()
 	{
-		return array(
+		return [
 			'ID' => 'id',
 			'NAME' => 'name',
 			'CODE' => 'code',
@@ -1809,7 +2150,7 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 			'DELETE_USER' => 'deleteUser',
 			'HAS_SUBFOLDERS' => null,
 			'UNIQUE_CODE' => 'uniqueCode',
-		);
+		];
 	}
 
 	/**
@@ -1821,24 +2162,38 @@ abstract class BaseObject extends Internals\Model implements \JsonSerializable
 		$userClassName = User::className();
 		$fields = User::getFieldsForSelect();
 
-		return array(
-			'CREATE_USER' => array(
+		return [
+			'CREATE_USER' => [
 				'class' => $userClassName,
 				'select' => $fields,
-			),
-			'UPDATE_USER' => array(
+			],
+			'UPDATE_USER' => [
 				'class' => $userClassName,
 				'select' => $fields,
-			),
-			'DELETE_USER' => array(
+			],
+			'DELETE_USER' => [
 				'class' => $userClassName,
 				'select' => $fields,
-			),
+			],
 			'REAL_OBJECT' => BaseObject::className(),
 			'STORAGE' => Storage::className(),
 			'LOCK' => ObjectLock::className(),
 			'TTL' => ObjectTtl::className(),
-		);
+		];
+	}
+
+	public function supportsUnifiedLink(): bool
+	{
+		$realObject = $this->getRealObject();
+
+		if ($realObject === null)
+		{
+			return false;
+		}
+
+		$unifiedLinkSupportService = ServiceLocator::getInstance()->get(UnifiedLinkSupportService::class);
+
+		return $unifiedLinkSupportService->supports($realObject);
 	}
 
 	/**

@@ -4,6 +4,7 @@ namespace Bitrix\BIConnector\Superset\Updater;
 
 use Bitrix\BIConnector\Superset\Logger\Logger;
 use Bitrix\BIConnector\Superset\Updater\Versions\BaseVersion;
+use Bitrix\Main\Application;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Result;
 
@@ -12,7 +13,9 @@ use Bitrix\Main\Result;
  */
 final class ClientUpdater
 {
-	private const LAST_VERSION = 13;
+	private const LAST_VERSION = 14;
+
+	private const LOCK_KEY = 'biconnector_client_updater';
 
 	/**
 	 * Get current version value.
@@ -53,33 +56,50 @@ final class ClientUpdater
 	 */
 	public static function update(): Result
 	{
-		$result = new Result();
-		$version = self::getCurrentVersion();
-
-		while (!self::isActualVersion())
+		if (self::isActualVersion())
 		{
-			$version++;
-			$className = __NAMESPACE__ . "\Versions\Version{$version}";
-			if (class_exists($className) && is_subclass_of($className, BaseVersion::class))
+			return new Result();
+		}
+
+		if (!Application::getConnection()->lock(self::LOCK_KEY, 0))
+		{
+			return new Result();
+		}
+
+		try
+		{
+			$result = new Result();
+			$version = self::getCurrentVersion();
+
+			while (!self::isActualVersion())
 			{
-				$result = (new $className())->run();
-				if (!$result->isSuccess())
+				$version++;
+				$className = __NAMESPACE__ . "\Versions\Version{$version}";
+				if (class_exists($className) && is_subclass_of($className, BaseVersion::class))
 				{
-					break;
+					$result = (new $className())->run();
+					if (!$result->isSuccess())
+					{
+						break;
+					}
 				}
+
+				self::setCurrentVersion($version);
 			}
 
-			self::setCurrentVersion($version);
-		}
+			if (!$result->isSuccess())
+			{
+				$loggerFields = [
+					'message' => "Updater client error. Version {$version}",
+				];
+				Logger::logErrors($result->getErrors(), $loggerFields);
+			}
 
-		if (!$result->isSuccess())
+			return $result;
+		}
+		finally
 		{
-			$loggerFields = [
-				'message' => "Updater client error. Version {$version}",
-			];
-			Logger::logErrors($result->getErrors(), $loggerFields);
+			Application::getConnection()->unlock(self::LOCK_KEY);
 		}
-
-		return $result;
 	}
 }

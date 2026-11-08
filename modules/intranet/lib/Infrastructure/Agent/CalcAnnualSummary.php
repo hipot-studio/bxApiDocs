@@ -72,6 +72,7 @@ class CalcAnnualSummary extends Stepper
 		if (count($userIds) < $provider->getUserIdLimit())
 		{
 			$option['providerIndex']++;
+			$option['lastId'] = 0;
 		}
 
 		return self::CONTINUE_EXECUTION;
@@ -87,9 +88,9 @@ class CalcAnnualSummary extends Stepper
 		return UserTable::query()
 			->setSelect(['ID'])
 			->where('REAL_USER', 'expr', true)
-			->addFilter('ACTIVE', 'Y')
-			->addFilter('>ID', $lastId)
-			->addFilter('<DATE_REGISTER', new DateTime('2025-10-01', 'Y-m-d'))
+			->where('ACTIVE', true)
+			->where('ID', '>', $lastId)
+			->where('DATE_REGISTER', '<', new DateTime('2025-10-01', 'Y-m-d'))
 			->setLimit($step)
 			->addOrder('ID')
 			->fetchCollection()
@@ -124,14 +125,23 @@ class CalcAnnualSummary extends Stepper
 
 	private function getProviderById(string $id): ?SummaryProviderInterface
 	{
-		return $this->providers[$id];
+		return $this->providers[$id] ?? null;
 	}
 
-	private function findProviderToOption(array $option): ?SummaryProviderInterface
+	private function findProviderToOption(array &$option): ?SummaryProviderInterface
 	{
-		$providerIndex = $option['providerIndex'];
-		$providerId = $option['providerIdList'][$providerIndex] ?? null;
+		while (!empty($option['providerIdList'][$option['providerIndex']]))
+		{
+			$provider = $this->getProviderById($option['providerIdList'][$option['providerIndex']]);
+			if ($provider)
+			{
+				return $provider;
+			}
 
-		return $providerId ? $this->getProviderById($providerId) : null;
+			$option['providerIndex']++;
+			$option['lastId'] = 0;
+		}
+
+		return null;
 	}
 }

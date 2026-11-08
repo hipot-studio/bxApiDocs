@@ -9,6 +9,7 @@ use Bitrix\Crm\Copilot\CallAssessment\CriteriaLoader;
 use Bitrix\Crm\Copilot\CallAssessment\Entity\CopilotCallAssessmentTable;
 use Bitrix\Crm\Copilot\CallAssessment\EntitySelector\PullManager;
 use Bitrix\Crm\Copilot\CallAssessment\ItemFactory;
+use Bitrix\Crm\Copilot\CallAssessment\HintViewMode;
 use Bitrix\Crm\Integration\AI\AIManager;
 use Bitrix\Crm\Integration\AI\Enum\GlobalSetting;
 use Bitrix\Crm\Integration\AI\ErrorCode as AIErrorCode;
@@ -128,6 +129,10 @@ final class CallCardPlacement extends Controller
 			'callAssessment' => $assessment?->toArray() ?? [],
 			'hasAvailableSelectorItems' => $hasAvailableSelectorItems,
 			'isCallScoringV2Enabled' => $isV2Enabled,
+			'hintViewMode' => HintViewMode::getForUser(
+				HintViewMode::CALL_OPTION,
+				(int)$this->getCurrentUser()?->getId(),
+			),
 		];
 	}
 

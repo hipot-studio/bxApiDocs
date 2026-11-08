@@ -1082,7 +1082,7 @@ class SiteTable extends Entity\DataManager
 										'ACTIVE' => 'Y',
 										'DOMAIN' => $domainName
 									));
-									$domainId = $resDomain->getId();
+									$domainId = $resDomain->isSuccess() ? $resDomain->getId() : null;
 									if ($domainId)
 									{
 										SiteTable::$disableCallback = true;
@@ -1648,6 +1648,7 @@ class SiteTable extends Entity\DataManager
 			\Bitrix\Landing\Folder::deleteForSite($primary['ID']);
 			\Bitrix\Landing\Site\Cookies::removeAgreementsForSite($primary['ID']);
 			BindingTable::siteClear($primary['ID']);
+			Site\Scope\Group::resetRuntimeCache((int)$primary['ID']);
 
 			if (\Bitrix\Main\Loader::includeModule('ai'))
 			{

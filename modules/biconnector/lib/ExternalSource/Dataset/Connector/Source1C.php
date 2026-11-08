@@ -147,13 +147,15 @@ final class Source1C extends Base
 	 * @param array $sqlWhere Modified where.
 	 * @param array $dateRange Filters from input.
 	 * @param string $timeFilterColumn Column from input.
+	 * @param bool &$canBeFiltered Cleared when a period was asked for and could not be applied.
 	 *
 	 * @return array
 	 */
 	protected function applyDateFilter(
 		array $sqlWhere,
 		array $dateRange,
-		string $timeFilterColumn = ''
+		string $timeFilterColumn = '',
+		bool &$canBeFiltered = true
 	): array
 	{
 		$tableFields = $this->rawInfo['FIELDS'] ?? [];
@@ -181,6 +183,14 @@ final class Source1C extends Base
 
 		if (!$filterColumnName)
 		{
+			// A period that was asked for and cannot be applied must not be reported as applied: this
+			// dataset has no date column to apply it to, and the caller has to know that the answer is
+			// wider than the request.
+			if (isset($dateRange['startDate']) || isset($dateRange['endDate']))
+			{
+				$canBeFiltered = false;
+			}
+
 			return $sqlWhere;
 		}
 

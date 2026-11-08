@@ -42,6 +42,8 @@ final class Converter
 	private bool $isConvertedToMobile = false;
 	private bool $isConvertedToWeb = false;
 	private array $pendingFiles = [];
+	private array $fileFields = [];
+	private int $attemptUserId = 0;
 
 	public function __construct(array $properties, ?array $documentId, array $values = [])
 	{
@@ -72,6 +74,40 @@ final class Converter
 		}
 
 		return $this;
+	}
+
+	public function beginAttempt(int $userId): self
+	{
+		$this->attemptUserId = $userId;
+
+		return $this;
+	}
+
+	public function acceptAttempt(): void
+	{
+		foreach ($this->fileFields as $field)
+		{
+			$field->acceptAttempt();
+		}
+	}
+
+	public function completeAttempt(): void
+	{
+		foreach ($this->fileFields as $field)
+		{
+			$field->completeAttempt();
+		}
+	}
+
+	public function compensateAttempt(): \Bitrix\Main\Result
+	{
+		$result = new \Bitrix\Main\Result();
+		foreach ($this->fileFields as $field)
+		{
+			$result->addErrors($field->compensateAttempt()->getErrors());
+		}
+
+		return $result;
 	}
 
 	public function toMobile(): self
@@ -135,7 +171,16 @@ final class Converter
 
 		if (in_array($property['Type'], ['file', 'S:DiskFile'], true))
 		{
+			if ($this->attemptUserId > 0 && isset($this->fileFields[$id]))
+			{
+				return $this->fileFields[$id];
+			}
 			$field = new FileField($property, $value, $documentType);
+			if ($this->attemptUserId > 0)
+			{
+				$field->beginAttempt($this->attemptUserId);
+				$this->fileFields[$id] = $field;
+			}
 			if ($this->documentId !== null)
 			{
 				$field->setDocumentId($this->documentId);

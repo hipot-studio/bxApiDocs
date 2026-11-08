@@ -10,6 +10,7 @@ use Bitrix\Crm\V2\Internal\Repository\FieldMetadata\FieldMetadataSourceInterface
 use Bitrix\Crm\V2\Public\EntityType;
 use Bitrix\Rest\V3\Dto\DtoCollection;
 use Bitrix\Rest\V3\Dto\DtoField;
+use Bitrix\Rest\V3\Structure\Structure;
 
 /**
  * @internal
@@ -24,14 +25,14 @@ final class GeneratedDtoFieldMetadataSource implements FieldMetadataSourceInterf
 
 	public function getAll(EntityType $entityType): array
 	{
-		$dtoFields = $this->itemDtoGenerator->generate($entityType->getId())->fields;
+		$dtoFields = $this->getGeneratedDtoFields($entityType);
 
 		return $this->mapFields($dtoFields);
 	}
 
 	public function getByName(EntityType $entityType, string $name): ?FieldMetadata
 	{
-		$fields = $this->itemDtoGenerator->generate($entityType->getId())->fields;
+		$fields = $this->getGeneratedDtoFields($entityType);
 		$fieldTypes = $this->getFieldTypes($fields);
 
 		foreach ($fields as $dtoField)
@@ -45,6 +46,21 @@ final class GeneratedDtoFieldMetadataSource implements FieldMetadataSourceInterf
 		}
 
 		return null;
+	}
+
+	/**
+	 * @return DtoField[]
+	 */
+	private function getGeneratedDtoFields(EntityType $entityType): array
+	{
+		$generatedDto = $this->itemDtoGenerator->generate($entityType->getId());
+		$dtoClass = $generatedDto->getFQCN();
+		if (class_exists($dtoClass, false))
+		{
+			Structure::addDto($dtoClass::create());
+		}
+
+		return $generatedDto->fields;
 	}
 
 	/**

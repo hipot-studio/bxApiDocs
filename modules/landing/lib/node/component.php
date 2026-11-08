@@ -152,19 +152,38 @@ class Component extends \Bitrix\Landing\Node
 	}
 
 	/**
+	 * Decodes a string value encoded by the editor.
+	 * Html props keep the encoded form: their components decode it themselves.
+	 * @param mixed $value Prop value.
+	 * @param array $prop Prop of manifest.
+	 * @return mixed
+	 */
+	protected static function decodePropValue(mixed $value, array $prop): mixed
+	{
+		if (!is_string($value) || ($prop['ATTRIBUTE_TYPE'] ?? null) === 'html')
+		{
+			return $value;
+		}
+
+		return htmlspecialchars_decode($value, ENT_QUOTES);
+	}
+
+	/**
 	 * Save data for this node.
 	 * @param Block $block Block instance.
 	 * @param string $selector Selector.
 	 * @param array $data Data array.
+	 * @param array $additional Additional params; 'decodeValues' => false keeps string values as given.
 	 * @return void
 	 */
-	public static function saveNode(Block $block, $selector, array $data): void
+	public static function saveNode(Block $block, $selector, array $data, array $additional = []): void
 	{
 		if (empty($data))
 		{
 			return;
 		}
 
+		$decodeValues = ($additional['decodeValues'] ?? true) !== false;
 		$manifest = $block->getManifest();
 		if (isset ($manifest['nodes'][$selector]['extra']))
 		{
@@ -190,6 +209,10 @@ class Component extends \Bitrix\Landing\Node
 						$val,
 						$allowedProps[$code]
 					);
+					if ($decodeValues)
+					{
+						$updateProps[$code] = self::decodePropValue($updateProps[$code], $allowedProps[$code]);
+					}
 					if (self::checkPhpCode(array($code => $updateProps[$code])))
 					{
 						unset($updateProps[$code]);
@@ -845,12 +868,12 @@ class Component extends \Bitrix\Landing\Node
 							{
 								if (preg_match('/^#landing([\d]+)$/', $value, $matches))
 								{
-									$lansing = \Bitrix\Landing\Landing::createInstance($matches[1], [
+									$landing = \Bitrix\Landing\Landing::createInstance($matches[1], [
 										'skip_blocks' => true
 									]);
-									if ($lansing->exist())
+									if ($landing->exist())
 									{
-										$value = $lansing->getPublicUrl();
+										$value = $landing->getPublicUrl();
 									}
 								}
 								else if (preg_match('/^#catalog(Element|Section)([\d]+)$/', $value, $matches))

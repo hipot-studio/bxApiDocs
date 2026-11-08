@@ -157,9 +157,10 @@ class CopilotPopupItem implements PopupDataItem
 	{
 		$result = [];
 
-		$rolesData = $this->getMessages()->getCopilotRoles();
-
-		foreach ($rolesData as $messageId => $roleCode)
+		// Shared popup-DTO shape: {id, role} only. Per-user `vote` is injected later, on the
+		// synchronous per-user controller read path, by CopilotVoteEnricher — never here, so it
+		// cannot leak into broadcast pull/push payloads that reuse this DTO.
+		foreach ($this->getMessages()->getCopilotRoles() as $messageId => $roleCode)
 		{
 			$result[] = [
 				'id' => $messageId,

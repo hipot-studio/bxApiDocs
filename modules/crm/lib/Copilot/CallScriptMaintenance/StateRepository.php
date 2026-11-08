@@ -124,11 +124,17 @@ final class StateRepository
 			}
 		}
 
+		$criteriaIdsToReplace = $data['criteriaIdsToReplace'] ?? $data['basicCriteriaIds'] ?? [];
+
 		return [
 			'type' => $type,
 			'selectionIds' => $data['selectionIds'] ?? [],
 			'groupName' => $data['groupName'] ?? null,
 			'assessmentId' => $data['assessmentId'] ?? null,
+			'criteriaIdsToReplace' => array_values(array_filter(
+				array_map('intval', (array)$criteriaIdsToReplace),
+				static fn(int $id): bool => $id > 0,
+			)),
 		];
 	}
 }

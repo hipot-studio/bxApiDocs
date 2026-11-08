@@ -62,9 +62,7 @@ class ToolbarTable extends Data\DataManager
 				->configureSize(50)
 				->configureFormat('/^[a-zA-Z0-9_:-]+$/')
 				->addValidator(new LengthValidator(2, 50))
-				->addSaveDataModifier(function ($value) {
-					return mb_strtolower($value);
-				})
+				->addSaveDataModifier([ToolbarValueNormalizer::class, 'normalize'])
 			,
 			(new BooleanField('COLLAPSED'))
 				->configureValues(0, 1)

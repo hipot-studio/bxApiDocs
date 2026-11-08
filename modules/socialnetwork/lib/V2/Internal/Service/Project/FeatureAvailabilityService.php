@@ -18,6 +18,7 @@ class FeatureAvailabilityService
 		private readonly Integration\Wiki\Service\Project $wikiProjectService,
 		private readonly Integration\Rest\Service\Project $restProjectService,
 		private readonly Integration\Landing\Service\Project $landingProjectService,
+		private readonly Integration\Extranet\Service\ExtranetUserService $extranetUserService,
 	)
 	{
 	}
@@ -89,11 +90,14 @@ class FeatureAvailabilityService
 			FeatureDictionary::Marketplace->value => $this->restProjectService->isAvailable(),
 			FeatureDictionary::LandingKnowledge->value => $this->landingProjectService->canReadKnowledge($projectId),
 			FeatureDictionary::Note->value => (
-				$isCurrentUserModuleAdmin
-				|| \in_array(
-					\CSocNetUserToGroup::getUserRole($userId, $projectId),
-					\Bitrix\Socialnetwork\UserToGroupTable::getRolesMember(),
-					true,
+				!$this->extranetUserService->isCollaber($userId)
+				&& (
+					$isCurrentUserModuleAdmin
+					|| \in_array(
+						\CSocNetUserToGroup::getUserRole($userId, $projectId),
+						\Bitrix\Socialnetwork\UserToGroupTable::getRolesMember(),
+						true,
+					)
 				)
 			),
 			default => true,

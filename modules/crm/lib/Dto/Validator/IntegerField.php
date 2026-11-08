@@ -22,10 +22,14 @@ final class IntegerField extends Validator
 	public function validate(array $fields): Result
 	{
 		$result = new Result();
-		$value = $fields[$this->fieldToCheck] ?? null;
+		if (!array_key_exists($this->fieldToCheck, $fields))
+		{
+			return $result;
+		}
+
+		$value = $fields[$this->fieldToCheck];
 
 		if (
-			$value === null ||
 			is_int($value) === false ||
 			$this->isMoreThanMin($value) === false ||
 			$this->isLessThanMax($value) === false

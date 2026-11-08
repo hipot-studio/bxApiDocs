@@ -47,6 +47,14 @@ final class KanbanPreparer extends Base
 
 	protected function prepareFields(array $item = [], array $params = []): array
 	{
+		if ($params['isCompactView'] ?? false)
+		{
+			return $this->prepareFieldsFromDisplayValues(
+				($params['displayValues'] ?? []),
+				($params['fieldsCollection'] ?? null),
+			);
+		}
+
 		$preparedFields = [];
 
 		$fields = ($item['fields'] ?? []);

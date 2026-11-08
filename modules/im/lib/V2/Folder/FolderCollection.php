@@ -135,9 +135,10 @@ class FolderCollection extends Collection implements RestConvertible
 	 * {@see PersonalFolder::toRestFormat} reads from the shared map instead of resolving on its
 	 * own (prevents N+1). System folders have no composition and are skipped.
 	 *
-	 * Invariant: a collection is single-user (the only caller is `listAction → getByUser`), so the
-	 * context user against whom private companions are resolved is taken from the folders
-	 * themselves. Batch-resolving relies on this: a single context user is used for the whole map,
+	 * Invariant: a collection is single-user (its callers are `listAction → getByUser` and
+	 * `getSources → SourceList::toRestFormat`, and both build the collection for one user), so the
+	 * context user against whom private companions are resolved is taken from the folders themselves.
+	 * Batch-resolving relies on this: a single context user is used for the whole map,
 	 * and a private chat's companion is only unambiguous for a user who participates in it. If a
 	 * future caller ever mixes folders of different users, we bail out of batching (return null)
 	 * so each folder resolves its own chat ids against its own user in {@see PersonalFolder::toRestFormat}

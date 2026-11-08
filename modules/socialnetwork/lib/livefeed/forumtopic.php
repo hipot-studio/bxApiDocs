@@ -40,6 +40,7 @@ final class ForumTopic extends Provider
 		{
 			$res = MessageTable::getList(array(
 				'order' => array('ID' => 'ASC'),
+				'limit' => 1,
 				'filter' => array(
 					'TOPIC_ID' => $topicId,
 				),

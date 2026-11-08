@@ -5,6 +5,7 @@ namespace Bitrix\Sale\Exchange\Integration\Controller;
 
 
 use Bitrix\Main\Engine\Controller;
+use Bitrix\Main\Error;
 use Bitrix\Sale\Exchange\Integration;
 
 class Scenarios extends Controller
@@ -43,18 +44,53 @@ class Scenarios extends Controller
 
 	public function dealContactItemsGetAction($id)
 	{
-		return ['result' => (new Integration\Service\Scenarios\RefreshClientsDeal\Contact())
-			->itemsGet($id)];
+		try
+		{
+			return ['result' => $this->createRefreshClientsDealContact()->itemsGet($id)];
+		}
+		catch (Integration\Exception\BatchableException $exception)
+		{
+			return $this->handleDealContactException($exception);
+		}
 	}
 	public function dealContactUpdatesAction($id, array $items, array $contacts)
 	{
-		return ['result' => (new Integration\Service\Scenarios\RefreshClientsDeal\Contact())
-			->updates($id, $items, $contacts)];
+		try
+		{
+			return ['result' => $this->createRefreshClientsDealContact()->updates($id, $items, $contacts)];
+		}
+		catch (Integration\Exception\BatchableException $exception)
+		{
+			return $this->handleDealContactException($exception);
+		}
 	}
 	public function dealContactAddsAction($id, array $items)
 	{
-		return ['result' => (new Integration\Service\Scenarios\RefreshClientsDeal\Contact())
-			->adds($id, $items)];
+		try
+		{
+			return ['result' => $this->createRefreshClientsDealContact()->adds($id, $items)];
+		}
+		catch (Integration\Exception\BatchableException $exception)
+		{
+			return $this->handleDealContactException($exception);
+		}
+	}
+
+	private function handleDealContactException(Integration\Exception\BatchableException $exception): ?array
+	{
+		if ($exception->getCode() !== Integration\Rest\Cmd\Base::ERROR_TOKEN_NOT_FOUND)
+		{
+			throw $exception;
+		}
+
+		$this->addError(new Error($exception->getMessage(), 'INTEGRATION_NOT_CONFIGURED'));
+
+		return null;
+	}
+
+	protected function createRefreshClientsDealContact(): Integration\Service\Scenarios\RefreshClientsDeal\Contact
+	{
+		return new Integration\Service\Scenarios\RefreshClientsDeal\Contact();
 	}
 
 	protected function toArray(Integration\Service\Internal\Container\Collection $collection)

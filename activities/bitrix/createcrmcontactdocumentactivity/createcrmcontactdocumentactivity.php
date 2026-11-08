@@ -91,24 +91,21 @@ class CBPCreateCrmContactDocumentActivity extends CBPCreateDocumentActivity
 			return ['code' => 'NotLoaded', 'module'=> 'crm', 'message'=> GetMessage('BPCDA_MODULE_NOT_LOADED')];
 		}
 
-		$arErrors = [];
+		return parent::ValidateProperties($arTestProperties, $user);
+	}
 
-		$arDocumentFields = CCrmDocumentContact::GetDocumentFields('CONTACT');
-		$arTestFields = isset($arTestProperties['Fields']) && is_array($arTestProperties['Fields']) ? $arTestProperties['Fields'] : [];
-
-		$name = $arTestFields['NAME'] ?? '';
-		if ($name === '')
+	protected static function getEditableDocumentFields(array $documentType): array
+	{
+		$fields = parent::getEditableDocumentFields($documentType);
+		foreach (['NAME', 'LAST_NAME'] as $fieldName)
 		{
-			$arErrors[] = ['code' => 'NotExist', 'parameter' => 'NAME', 'message' => GetMessage('BPCDA_FIELD_NOT_FOUND', ['#NAME#' => $arDocumentFields['NAME']['Name']])];
+			if (isset($fields[$fieldName]))
+			{
+				$fields[$fieldName]['Required'] = false;
+			}
 		}
 
-		$lastName = $arTestFields['LAST_NAME'] ?? '';
-		if ($lastName === '')
-		{
-			$arErrors[] = ['code' => 'NotExist', 'parameter' => 'LAST_NAME', 'message' => GetMessage('BPCDA_FIELD_NOT_FOUND', ['#NAME#' => $arDocumentFields['LAST_NAME']['Name']])];
-		}
-
-		return array_merge($arErrors, parent::ValidateProperties($arTestProperties, $user));
+		return $fields;
 	}
 
 	public static function GetPropertiesDialog($documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters, $arWorkflowVariables, $arCurrentValues = null, $formName = "", $popupWindow = null)
@@ -133,5 +130,30 @@ class CBPCreateCrmContactDocumentActivity extends CBPCreateDocumentActivity
 		$documentType = \CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Contact);
 
 		return parent::GetPropertiesDialogValues($documentType, $activityName, $arWorkflowTemplate, $arWorkflowParameters, $arWorkflowVariables, $arCurrentValues, $arErrors);
+	}
+
+	public static function getTestRunDocumentFields(array $documentType): array
+	{
+		if (!CModule::IncludeModule('crm'))
+		{
+			return [];
+		}
+
+		return static::getEditableDocumentFields(\CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Contact));
+	}
+
+	public static function parseTestRunDocumentValues(array $documentType, array $formValues): array
+	{
+		if (!CModule::IncludeModule('crm'))
+		{
+			return [
+				'fields' => [],
+				'errors' => [
+					['code' => 'NotLoaded', 'message' => GetMessage('BPCDA_MODULE_NOT_LOADED') ?? ''],
+				],
+			];
+		}
+
+		return static::parseTestRunValues(\CCrmBizProcHelper::ResolveDocumentType(\CCrmOwnerType::Contact), $formValues);
 	}
 }

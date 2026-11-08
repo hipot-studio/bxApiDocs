@@ -4,14 +4,17 @@ namespace Bitrix\Intranet\Settings;
 
 use Bitrix\Disk\Driver;
 use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\UnifiedLink\Configuration;
 use Bitrix\Disk\Public\Command\ChangeDefaultViewerServiceCommand;
 use Bitrix\Im\V2\Chat;
 use Bitrix\Im\V2\Chat\ChatFactory;
+use Bitrix\Im\V2\Service\Locator;
 use Bitrix\Intranet\Service\ServiceContainer;
 use Bitrix\Intranet\Settings\Controls\Field;
 use Bitrix\Intranet\Settings\Controls\Section;
 use Bitrix\Intranet\Settings\Controls\Selector;
 use Bitrix\Intranet\Settings\Controls\Switcher;
+use Bitrix\Intranet\Settings\Controls\Text;
 use Bitrix\Main\Config\Option;
 use Bitrix\Intranet\Settings\Search\SearchEngine;
 use Bitrix\Main\Loader;
@@ -23,6 +26,8 @@ use Bitrix\Bitrix24\License\Order;
 class CommunicationSettings extends AbstractSettings
 {
 	public const TYPE = 'communication';
+	private const SECONDS_PER_MINUTE = 60;
+
 	private bool $isBitrix24;
 	private bool $isDiskConverted;
 	private array $diskLimitPerFile;
@@ -101,6 +106,15 @@ class CommunicationSettings extends AbstractSettings
 				'im',
 				'chat_with_guests_available',
 				$this->data['chat_with_guests_available'] !== 'N' ? 'Y' : 'N',
+			);
+		}
+
+		if (Loader::includeModule('im') && isset($this->data['video_note_download_available']))
+		{
+			\COption::SetOptionString(
+				'im',
+				'video_note_download_available',
+				$this->data['video_note_download_available'] !== 'N' ? 'Y' : 'N',
 			);
 		}
 
@@ -236,6 +250,20 @@ class CommunicationSettings extends AbstractSettings
 			}
 		}
 
+		if (
+			Loader::includeModule('disk')
+			&& array_key_exists(\Bitrix\Disk\Configuration::OPTION_SECONDS_TO_JOIN_VERSION, $this->data)
+		)
+		{
+			Option::set(
+				'disk',
+				\Bitrix\Disk\Configuration::OPTION_SECONDS_TO_JOIN_VERSION,
+				(string)static::convertVersionJoinMinutesToSeconds(
+					$this->data[\Bitrix\Disk\Configuration::OPTION_SECONDS_TO_JOIN_VERSION],
+				),
+			);
+		}
+
 		$allowedCodes = [];
 		$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
 		foreach ($documentHandlersManager->getHandlersForView() as $handler)
@@ -257,7 +285,22 @@ class CommunicationSettings extends AbstractSettings
 
 			if ($unifiedLinkDefaultAccessLevel !== null)
 			{
-				\Bitrix\Disk\Internal\Service\UnifiedLink\Configuration::setDefaultAccessLevel($unifiedLinkDefaultAccessLevel);
+				Configuration::setDefaultAccessLevel($unifiedLinkDefaultAccessLevel);
+			}
+		}
+
+		if (isset($this->data['unified_link_folder_default_access_level']))
+		{
+			$unifiedLinkFolderDefaultAccessLevel = UnifiedLinkAccessLevel::tryFrom(
+				value: $this->data['unified_link_folder_default_access_level'],
+			);
+
+			if (
+				$unifiedLinkFolderDefaultAccessLevel !== null
+				&& method_exists(Configuration::class, 'setFolderDefaultAccessLevel')
+			)
+			{
+				Configuration::setFolderDefaultAccessLevel($unifiedLinkFolderDefaultAccessLevel);
 			}
 		}
 
@@ -537,6 +580,19 @@ class CommunicationSettings extends AbstractSettings
 				],
 				helpDesk: 'redirect=detail&code=28188420',
 			);
+
+			if (method_exists(Locator::class, 'getVideoNoteDownloadPolicy'))
+			{
+				$data['video_note_download_available'] = new Switcher(
+					'settings-communication-field-video_note_download_available',
+					'video_note_download_available',
+					Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_VIDEO_NOTE_DOWNLOAD') ?? '',
+					Locator::getVideoNoteDownloadPolicy()->isPortalEnabled() ? 'Y' : 'N',
+					[
+						'on' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_ALLOW_VIDEO_NOTE_DOWNLOAD_ON') ?? '',
+					],
+				);
+			}
 		}
 
 		$data['url_preview_enable'] = new Switcher(
@@ -671,6 +727,15 @@ class CommunicationSettings extends AbstractSettings
 					&& Feature::isFeatureEnabled("disk_version_limit_per_file"),
 			);
 
+			$data['DISK_SECONDS_TO_JOIN_VERSION'] = new Text(
+				'settings-communication-field-disk_seconds_to_join_version',
+				\Bitrix\Disk\Configuration::OPTION_SECONDS_TO_JOIN_VERSION,
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SECONDS_TO_JOIN_VERSION'),
+				(string)static::getVersionJoinMinutes(),
+				[
+					'hintTitle' => Loc::getMessage('INTRANET_SETTINGS_FIELD_HINT_SECONDS_TO_JOIN_VERSION'),
+				],
+			);
 
 			$documentHandlersManager = Driver::getInstance()->getDocumentHandlersManager();
 			$optionList = [];
@@ -692,7 +757,7 @@ class CommunicationSettings extends AbstractSettings
 				$currentValue
 			);
 
-			$currentUnifiedLinkDefaultAccessLevel = \Bitrix\Disk\Internal\Service\UnifiedLink\Configuration::getDefaultAccessLevel()->value;
+			$currentUnifiedLinkDefaultAccessLevel = Configuration::getDefaultAccessLevel()->value;
 			$unifiedLinkAccessLevels = [];
 			foreach (UnifiedLinkAccessLevel::cases() as $unifiedLinkAccessLevel)
 			{
@@ -708,6 +773,34 @@ class CommunicationSettings extends AbstractSettings
 				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SELECT_UNIFIED_LINK_DEFAULT_ACCESS'),
 				$unifiedLinkAccessLevels,
 				$currentUnifiedLinkDefaultAccessLevel,
+			);
+
+			if (method_exists(Configuration::class, 'getFolderDefaultAccessLevel'))
+			{
+				$currentUnifiedLinkFolderDefaultAccessLevel = Configuration::getFolderDefaultAccessLevel()->value;
+			}
+			else
+			{
+				$currentUnifiedLinkFolderDefaultAccessLevel = UnifiedLinkAccessLevel::Denied->value;
+			}
+
+			$unifiedLinkFolderAccessLevels = [];
+
+			foreach (UnifiedLinkAccessLevel::cases() as $unifiedLinkAccessLevel)
+			{
+				$unifiedLinkFolderAccessLevels[] = [
+					'value' => $unifiedLinkAccessLevel->value,
+					'name' => $unifiedLinkAccessLevel->getTitle(),
+					'selected' => $unifiedLinkAccessLevel->value === $currentUnifiedLinkFolderDefaultAccessLevel,
+				];
+			}
+
+			$data['DISK_UNIFIED_LINK_FOLDER_DEFAULT_ACCESS_LEVEL'] = new Selector(
+				'settings-communication-field-disk_unified_link_folder_default_access_level',
+				'unified_link_folder_default_access_level',
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SELECT_UNIFIED_LINK_FOLDER_DEFAULT_ACCESS'),
+				$unifiedLinkFolderAccessLevels,
+				$currentUnifiedLinkFolderDefaultAccessLevel,
 			);
 		}
 
@@ -773,12 +866,41 @@ class CommunicationSettings extends AbstractSettings
 		return array_unique($rightsList);
 	}
 
+	private static function convertVersionJoinMinutesToSeconds(mixed $value): int
+	{
+		$minutes = trim((string)$value);
+
+		if ($minutes === '' || preg_match('/^\d+$/', $minutes) !== 1)
+		{
+			return \Bitrix\Disk\Configuration::DEFAULT_SECONDS_TO_JOIN_VERSION;
+		}
+
+		$minutes = (int)$minutes;
+		if ($minutes > intdiv(PHP_INT_MAX, self::SECONDS_PER_MINUTE))
+		{
+			return \Bitrix\Disk\Configuration::DEFAULT_SECONDS_TO_JOIN_VERSION;
+		}
+
+		return $minutes * self::SECONDS_PER_MINUTE;
+	}
+
+	private static function getVersionJoinMinutes(): int
+	{
+		return (int)ceil(\Bitrix\Disk\Configuration::getSecondsToJoinVersion() / self::SECONDS_PER_MINUTE);
+	}
+
 	public function find(string $query): array
 	{
 		$index = [];
 		if ($this->isBitrix24)
 		{
 			$index['general_chat_message_admin_rights'] = Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_ADMIN_MESSAGE');
+		}
+		if (Loader::includeModule('disk'))
+		{
+			$index[\Bitrix\Disk\Configuration::OPTION_SECONDS_TO_JOIN_VERSION] =
+				Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SECONDS_TO_JOIN_VERSION')
+			;
 		}
 
 		$searchEngine = SearchEngine::initWithDefaultFormatter($index + [
@@ -795,6 +917,7 @@ class CommunicationSettings extends AbstractSettings
 			'allow_post_general_channel' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_POST_GEN_CHANNEL') ?? '',
 			'general_chat_message_leave' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_LEAVE_MESSAGE'),
 			'chat_with_guests_available' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_CHAT_WITH_GUESTS'),
+			'video_note_download_available' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_VIDEO_NOTE_DOWNLOAD') ?? '',
 			'url_preview_enable' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_ALLOW_URL_PREVIEW'),
 			'default_viewer_service' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_SELECT_FILE_VIEWER'),
 			'disk_version_limit_per_file' => Loc::getMessage('INTRANET_SETTINGS_FIELD_LABEL_MAX_FILE_LIMIT'),

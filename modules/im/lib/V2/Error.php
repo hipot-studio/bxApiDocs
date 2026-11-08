@@ -25,10 +25,15 @@ class Error extends \Bitrix\Main\Error
 			$customData = isset($args[$inx]) && is_array($args[$inx]) ? $args[$inx] : [];
 		}
 
+		// Only scalars can be substituted into a phrase; a list-valued key (e.g. rejected ids) stays
+		// in customData for the client and never reaches strtr.
 		$replacements = [];
 		foreach ($customData as $key => $value)
 		{
-			$replacements["#{$key}#"] = $value;
+			if (is_scalar($value))
+			{
+				$replacements["#{$key}#"] = (string)$value;
+			}
 		}
 
 		if (!is_string($message))

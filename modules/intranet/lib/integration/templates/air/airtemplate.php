@@ -4,7 +4,6 @@ namespace Bitrix\Intranet\Integration\Templates\Air;
 
 use Bitrix\Intranet\Integration\Templates\Bitrix24\ThemePicker;
 use Bitrix\Intranet\Internal\Integration;
-use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\ModuleManager;
 use Bitrix\UI\Buttons;
@@ -222,11 +221,6 @@ final class AirTemplate
 			$bodyClasses .= ' im-bar-mode-off';
 		}
 
-		if (self::isRightPanelExpanded())
-		{
-			$bodyClasses .= ' --right-panel-expanded --right-panel-no-transition';
-		}
-
 		return $bodyClasses;
 	}
 
@@ -239,25 +233,6 @@ final class AirTemplate
 		$attributes[] = 'style="--air-right-panel-width: ' . $savedWidth . 'px"';
 
 		return implode(' ', $attributes);
-	}
-
-	public static function isRightPanelExpanded(): bool
-	{
-		$isRightPanelEnabled = \CUserOptions::GetOption('aiassistant', 'show_chat_in_right_panel', 'N') === 'Y';
-
-		if (Loader::includeModule('aiassistant'))
-		{
-			$feature = \Bitrix\AIAssistant\Config\Feature::getInstance();
-			if (method_exists($feature, 'isBitrixGptV2Available'))
-			{
-				$isRightPanelEnabled = $feature->isBitrixGptV2Available();
-			}
-		}
-
-		return (
-			\CUserOptions::GetOption('aiassistant', 'marta_is_open', 'N') === 'Y'
-			&& $isRightPanelEnabled
-		);
 	}
 
 	public static function getCompositeBodyClasses(): string

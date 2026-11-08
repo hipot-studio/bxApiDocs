@@ -12,7 +12,7 @@ final class RecurringItemGroupAction extends BaseItemGroupAction
 
 		if ($this->canUpdateItemsInCategory())
 		{
-			$actions[] = new SetOpenedChildAction($this->factory->getEntityTypeId());
+			$actions[] = new SetOpenedChildAction($this->factory->getEntityTypeId(), $this->getGridId());
 		}
 
 		return $actions;

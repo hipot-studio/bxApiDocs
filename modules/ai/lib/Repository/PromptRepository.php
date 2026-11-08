@@ -14,6 +14,11 @@ class PromptRepository extends BaseRepository
 {
 	public function getPromptsByRoleCodes(string $category, array $roleCodes, string $lang): array
 	{
+		if ($roleCodes === [])
+		{
+			return [];
+		}
+
 		return PromptTable::query()
 			->setSelect([
 				'ID',

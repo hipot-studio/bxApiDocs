@@ -7,6 +7,7 @@ use Bitrix\Crm\Component\EntityList\ClientFieldHelper;
 use Bitrix\Crm\Entity\EntityEditorConfigScope;
 use Bitrix\Crm\Field;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
+use Bitrix\Crm\Integration\Analytics\KanbanCreateOrigin;
 use Bitrix\Crm\Kanban\Entity\Deadlines;
 use Bitrix\Crm\Kanban\ViewMode;
 use Bitrix\Crm\Multifield\Assembler;
@@ -14,6 +15,7 @@ use Bitrix\Crm\Service;
 use Bitrix\Crm\Service\Container;
 use Bitrix\Crm\Service\EditorAdapter;
 use Bitrix\Crm\Service\ItemList\CountCache;
+use Bitrix\Crm\Service\ItemList\ItemPagePreloader;
 use Bitrix\Crm\Settings\RestSettings;
 use Bitrix\Main\Component\ParameterSigner;
 use Bitrix\Main\Engine\ActionFilter\Csrf;
@@ -451,6 +453,13 @@ class Item extends Base
 				{
 					$value = $this->prepareBooleanFieldValue($value);
 				}
+				elseif (
+					$field->isUserField()
+					&& $field->getType() === 'money'
+				)
+				{
+					$value = \CCrmUserType::NormalizeMoneyFieldValueForSave($value);
+				}
 				$item->set($fieldName, $value);
 			}
 		}
@@ -870,6 +879,46 @@ class Item extends Base
 		$editorConfig = $component->getEditorConfig();
 		$editorConfig['ENTITY_CONFIG'] = $component->getInlineEditorEntityConfig();
 
+		$hostColumnId = $params['HOST_COLUMN_FOR_QUICK_EDITOR_ID'] ?? null;
+		$actualCategoryId = (int)($editorConfig['CONTEXT']['CATEGORY_ID'] ?? 0);
+		$kanbanViewMode = $viewMode ?? ViewMode::MODE_STAGES;
+		if (
+			$id === 0
+			&& ($params['IS_EMBEDDED'] ?? 'Y') === 'Y'
+			&& ($editorConfig['IS_COPY_MODE'] ?? false) === false
+			&& is_string($hostColumnId)
+			&& $hostColumnId !== ''
+			&& $stageId === $hostColumnId
+			&& KanbanCreateOrigin::isValidColumn($entityTypeId, $actualCategoryId, $hostColumnId, $kanbanViewMode)
+		)
+		{
+			$origin = KanbanCreateOrigin::issue(
+				\CCrmSecurityHelper::GetCurrentUserID(),
+				$entityTypeId,
+				$actualCategoryId,
+				$hostColumnId,
+				$kanbanViewMode,
+			);
+			if ($origin !== null)
+			{
+				$editorConfig['CONTEXT']['PARAMS'] = array_merge(
+					(array)($editorConfig['CONTEXT']['PARAMS'] ?? []),
+					[
+						'VIEW_MODE' => $kanbanViewMode,
+						'KANBAN_CREATE_COLUMN_ID' => $hostColumnId,
+					],
+				);
+				foreach ($editorConfig['ENTITY_CONTROLLERS'] as &$controller)
+				{
+					if (($controller['type'] ?? null) === 'analytics_controller')
+					{
+						$controller['config']['kanbanCreateOrigin'] = $origin;
+					}
+				}
+				unset($controller);
+			}
+		}
+
 		if ($stageId)
 		{
 			$editorConfig['CONTEXT']['STAGE_ID'] = $stageId;
@@ -925,10 +974,7 @@ class Item extends Base
 			$editorConfig['ANALYTICS_CONFIG'] = $params['ANALYTICS_CONFIG'];
 		}
 
-		if (isset($params['POST_FORM_ANALYTICS_DATA']['data']) && is_array($params['POST_FORM_ANALYTICS_DATA']['data']))
-		{
-			$editorConfig['COMPONENT_AJAX_DATA']['POST_FORM_ANALYTICS'] = $params['POST_FORM_ANALYTICS_DATA']['data'];
-		}
+		$editorConfig = self::applyPostFormAnalyticsData($editorConfig, $params);
 
 		$disabledOptions = [
 			'ENABLE_SECTION_EDIT',
@@ -1004,6 +1050,30 @@ class Item extends Base
 		}
 
 		return new Component('bitrix:crm.entity.editor', '', $editorConfig);
+	}
+
+	private static function applyPostFormAnalyticsData(array $editorConfig, array $params): array
+	{
+		$postFormAnalytics = $params['POST_FORM_ANALYTICS_DATA']['data'] ?? null;
+		if (!is_array($postFormAnalytics))
+		{
+			return $editorConfig;
+		}
+
+		$editorConfig['COMPONENT_AJAX_DATA']['POST_FORM_ANALYTICS'] = $postFormAnalytics;
+		if (isset($editorConfig['ENTITY_CONTROLLERS']) && is_array($editorConfig['ENTITY_CONTROLLERS']))
+		{
+			foreach ($editorConfig['ENTITY_CONTROLLERS'] as &$controller)
+			{
+				if (($controller['type'] ?? null) === 'analytics_controller')
+				{
+					$controller['config']['postFormAnalytics'] = $postFormAnalytics;
+				}
+			}
+			unset($controller);
+		}
+
+		return $editorConfig;
 	}
 
 	/**
@@ -1329,6 +1399,16 @@ class Item extends Base
 		$result = [];
 
 		$isCheckSelect = (is_array($select) && !in_array('*', $select, true));
+		$isSelectAware = $select !== null;
+		// fm never survives the final intersection with an explicit select
+		$isSerializeSelectOnly = $isSelectAware && $isCheckSelect;
+		$isFmNeeded = $factory->isMultiFieldsEnabled() && !$isSerializeSelectOnly;
+
+		if ($isSelectAware)
+		{
+			(new ItemPagePreloader())->preload($factory, $items, $isCheckSelect ? $select : null, !$isCheckSelect);
+		}
+		$itemConverter = Container::getInstance()->getItemConverter();
 
 		if ($useOriginalUfNames)
 		{
@@ -1338,7 +1418,10 @@ class Item extends Base
 		foreach ($items as $item)
 		{
 			$itemId = $item->getId();
-			$result[$itemId] = $item->jsonSerialize();
+			$result[$itemId] = $isSerializeSelectOnly
+				? $itemConverter->toJsonForFields($item, $select)
+				: $item->jsonSerialize()
+			;
 
 			if ($useOriginalUfNames)
 			{
@@ -1352,7 +1435,7 @@ class Item extends Base
 				}
 			}
 
-			if ($factory->isMultiFieldsEnabled())
+			if ($isFmNeeded)
 			{
 				$result[$itemId]['fm'] = $this->getFm($item);
 			}

@@ -4,6 +4,9 @@ namespace Bitrix\Disk;
 
 use Bitrix\Disk\Access\AccessCodeEnum;
 use Bitrix\Disk\Document\TrackedObject;
+use Bitrix\Disk\Internal\Access\UnifiedLink\UnifiedLinkAccessLevel;
+use Bitrix\Disk\Internal\Service\UnifiedLink\UnifiedLinkAccessService;
+use Bitrix\Disk\Internal\Service\Sync\Access\RightsAccessPublisher;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Disk\Internals\Error\ErrorCollection;
 use Bitrix\Disk\Internals\Error\IErrorable;
@@ -17,6 +20,7 @@ use Bitrix\Disk\Security\SecurityContext;
 use Bitrix\Main\Application;
 use Bitrix\Main\ArgumentException;
 use Bitrix\Main\DB\MysqlCommonConnection;
+use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Entity\ExpressionField;
 use Bitrix\Main\Entity\Query;
 use Bitrix\Main\Event;
@@ -50,20 +54,41 @@ class RightsManager implements IErrorable
 	public const DOMAIN_SHARING = 'share';
 	public const DOMAIN_BIZPROC = 'bp';
 	public const DOMAIN_BASE    = null;
+	private const OBJECT_IDS_CHUNK_SIZE = 500;
+
 	private int $backgroundJobPriority = 10_000;
 
 	/** @var  ErrorCollection */
 	protected $errorCollection;
+	protected UnifiedLinkAccessService $unifiedLinkAccessService;
 	/** @var  array */
 	protected $accessTasks;
 	/** @var array  */
 	private $operationsByTask = [];
 	/** @var array<int, bool> */
 	private array $readableTaskIdMap = [];
+	private ?RightsAccessPublisher $accessPublisher = null;
+
+	private array $unifiedLinkAccessLevelToOperationsMap = [
+		UnifiedLinkAccessLevel::Read->value => [
+			self::OP_READ,
+		],
+		UnifiedLinkAccessLevel::Edit->value => [
+			self::OP_READ,
+			self::OP_ADD,
+			self::OP_EDIT,
+			self::OP_DELETE,
+			self::OP_START_BP,
+		],
+	];
+
+	/** @var array<string, array<int, UnifiedLinkAccessLevel>> */
+	private ?array $opToUnifiedLinkAccessLevelsMap = null;
 
 	public function __construct()
 	{
 		$this->errorCollection = new ErrorCollection();
+		$this->unifiedLinkAccessService = ServiceLocator::getInstance()->get(UnifiedLinkAccessService::class);
 	}
 
 	/**
@@ -75,6 +100,20 @@ class RightsManager implements IErrorable
 	 * @throws LoaderException
 	 */
 	public function set(BaseObject $object, array $rights)
+	{
+		return $this->setInternal($object, $rights, $this->getAccessPublisher()->captureCodes($object->getId()));
+	}
+
+	/**
+	 * @param array $rights
+	 * @param string[] $codesBeforeEdit Codes of the object as they stood before the edit began. They are
+	 *        a parameter and not read here, because a caller that tears the rows of the object down
+	 *        itself begins the edit earlier than this method: the codes of an object are those of the
+	 *        nearest ancestor carrying a readable right, and deleting its rows moves that ancestor.
+	 * @throws SystemException
+	 * @throws LoaderException
+	 */
+	private function setInternal(BaseObject $object, array $rights, array $codesBeforeEdit): bool
 	{
 		$this->checkUseInternalsRightsOnStorage($object, $rights);
 		$this->errorCollection->clear();
@@ -95,17 +134,25 @@ class RightsManager implements IErrorable
 		$rights = $this->uniqualizeRightsOnObject($rights);
 		$rights = $this->cleanWrongNegativeRights($object, $rights);
 
+		$accessPublisher = $this->getAccessPublisher();
+
 		$this->deleteInternal($object);
 		if(!$this->insertRightsInternal($object, $rights))
 		{
 			return false;
 		}
 
-		Application::getInstance()->addBackgroundJob(function () use ($object, $rights) {
+		Application::getInstance()->addBackgroundJob(function () use ($object, $rights, $accessPublisher, $codesBeforeEdit) {
 			$simpleBuilder = new SimpleReBuilder($object, $rights);
+			$setupSessionId = $simpleBuilder->getSetupSessionId();
+			$accessPublisher->rememberCapture($setupSessionId, $object->getId(), $codesBeforeEdit);
+
 			$simpleBuilder->run();
 
+			$accessPublisher->publishRecalculated($setupSessionId, $object->getId());
+
 			Driver::getInstance()->getIndexManager()->recalculateRights($object);
+			$this->clearStorageListCachesForRootObject($object);
 		}, [], --$this->backgroundJobPriority);
 
 		return true;
@@ -144,25 +191,51 @@ class RightsManager implements IErrorable
 			return false;
 		}
 
+		// Nothing is published to the journal of changes here. A new leaf has no audience of its own to
+		// lose: the object is being created, so the only codes such a record could carry are the ones it
+		// carries now, and those are exactly the readers the record of its creation already reaches.
 		$simpleBuilder = new SimpleReBuilder($object, $rights);
 		$simpleBuilder->runAsNewLeaf();
 
 		Driver::getInstance()->getIndexManager()->recalculateRights($object);
+		$this->clearStorageListCachesForRootObject($object);
 
 		return true;
 	}
 
 	/**
+	 * The codes of the object as the rights hold them now, to be handed to {@see setAfterMove()} once
+	 * the object has been moved.
+	 *
+	 * Called by the caller of the move and before the move: this is the last moment the audience of the
+	 * old place can be read at all. The move rewrites the tree of paths, and the codes of an object are
+	 * those of the nearest ancestor in it carrying a readable right of its own.
+	 *
+	 * @return string[]
+	 */
+	public function captureCodesBeforeMove(BaseObject $object): array
+	{
+		return $this->getAccessPublisher()->captureCodes($object->getId());
+	}
+
+	/**
 	 * Recalculate rights after move
 	 * @param \Bitrix\Disk\BaseObject|BaseObject $object
+	 * @param string[] $codesBeforeMove Codes of the object as {@see captureCodesBeforeMove()} read them
+	 *        while it still lay in its old place. Required rather than read here, and required rather
+	 *        than defaulted: read here they would already be the codes of the new place, and a reader
+	 *        who lost the object together with the move would be addressed by nothing at all - a caller
+	 *        that forgets them is better off failing than publishing to the wrong audience in silence.
 	 * @return bool
 	 */
-	public function setAfterMove(BaseObject $object)
+	public function setAfterMove(BaseObject $object, array $codesBeforeMove)
 	{
 		$this->errorCollection->clear();
 
 		$existsRights = $this->getSpecificRights($object);
 		$rights = $this->cleanWrongNegativeRights($object, $this->uniqualizeRightsOnObject($existsRights));
+
+		$accessPublisher = $this->getAccessPublisher();
 
 		$this->deleteInternal($object);
 		if(!$this->insertRightsInternal($object, $rights))
@@ -170,14 +243,35 @@ class RightsManager implements IErrorable
 			return false;
 		}
 
-		Application::getInstance()->addBackgroundJob(function () use ($object, $rights) {
+		Application::getInstance()->addBackgroundJob(function () use ($object, $rights, $accessPublisher, $codesBeforeMove) {
 			$simpleBuilder = new SimpleReBuilder($object, $rights);
+			$setupSessionId = $simpleBuilder->getSetupSessionId();
+			$accessPublisher->rememberCapture($setupSessionId, $object->getId(), $codesBeforeMove);
+
 			$simpleBuilder->run();
 
+			$accessPublisher->publishRecalculated($setupSessionId, $object->getId());
+
 			Driver::getInstance()->getIndexManager()->recalculateRights($object);
+			$this->clearStorageListCachesForRootObject($object);
 		}, [], --$this->backgroundJobPriority);
 
 		return true;
+	}
+
+	private function clearStorageListCachesForRootObject(BaseObject $object): void
+	{
+		if (!$object->isRoot())
+		{
+			return;
+		}
+
+		$object->getStorage()?->clearStorageListCaches();
+	}
+
+	private function getAccessPublisher(): RightsAccessPublisher
+	{
+		return $this->accessPublisher ??= new RightsAccessPublisher();
 	}
 
 	/**
@@ -259,12 +353,14 @@ class RightsManager implements IErrorable
 
 	public function delete(BaseObject $object)
 	{
+		$codesBeforeEdit = $this->getAccessPublisher()->captureCodes($object->getId());
+
 		if(!$this->deleteInternal($object))
 		{
 			return false;
 		}
 
-		return $this->set($object, []);
+		return $this->setInternal($object, [], $codesBeforeEdit);
 	}
 
 	public function deleteByDomain(BaseObject $object, $domain)
@@ -273,6 +369,9 @@ class RightsManager implements IErrorable
 		{
 			return false;
 		}
+
+		$codesBeforeEdit = $this->getAccessPublisher()->captureCodes($object->getId());
+
 		if(!$this->deleteInternal($object, $domain))
 		{
 			return false;
@@ -283,7 +382,7 @@ class RightsManager implements IErrorable
 			return true;
 		}
 
-		return $this->append($object, []);
+		return $this->setInternal($object, $this->getSpecificRights($object), $codesBeforeEdit);
 	}
 
 	public function append(BaseObject $object, array $rights)
@@ -762,11 +861,42 @@ class RightsManager implements IErrorable
 	 * @param $userId
 	 * @return array
 	 */
-	public function getUserOperationsByObject($objectId, $userId)
+	public function getUserOperationsByObject(
+		$objectId,
+		$userId,
+		bool $shouldCheckUnifiedLink = false,
+	)
 	{
-		return $this->reformatRightsToOperations(
+		$rights = $this->reformatRightsToOperations(
 			$this->getUserRightsByObject($objectId, $userId),
 		);
+
+		if ($shouldCheckUnifiedLink)
+		{
+			$baseObject = BaseObject::loadById($objectId);
+
+			if ($baseObject instanceof BaseObject)
+			{
+				$accessLevel = $this->unifiedLinkAccessService->check(
+					baseObject: $baseObject,
+					userId: $userId,
+				);
+
+				$unifiedLinkOperations = array_reduce(
+					array: $this->getOperationsByUnifiedLinkAccessLevel($accessLevel),
+					callback: function (array $res, string $operation) {
+						$res[$operation] = $operation;
+
+						return $res;
+					},
+					initial: [],
+				);
+
+				$rights = array_merge($rights, $unifiedLinkOperations);
+			}
+		}
+
+		return $rights;
 	}
 
 	public function getUserOperationsForChildren($parentId, $userId, array $restrictIds = [])
@@ -774,28 +904,68 @@ class RightsManager implements IErrorable
 		$parentId = (int)$parentId;
 		$userId = (int)$userId;
 
-		$rightsByObjectId = [];
 		if ($restrictIds)
 		{
 			$restrictIds[] = $parentId;
 		}
 
-		$needToLoadByLink = $this->appendChildRightsForChildren($parentId, $userId, $restrictIds, $rightsByObjectId);
-		if($needToLoadByLink)
-		{
-			$this->appendChildRightsForConnectedChildren($parentId, $userId, $restrictIds, $rightsByObjectId);
-		}
-		$this->appendChildCrRightsForChildren($parentId, $userId, $restrictIds, $rightsByObjectId);
-		$this->appendChildAuRightsForChildren($parentId, $userId, $restrictIds, $rightsByObjectId);
+		$objectCondition = "o.PARENT_ID = {$parentId}";
+		$restrictIds = array_filter(array_map('intval', $restrictIds));
 
-		$event = new Event('disk', 'OnPreloadUserRights', ['userId' => $userId, 'rightsByObjectId' => $rightsByObjectId]);
-		$event->send();
-
-		$eventResults = $event->getResults();
-		foreach ($eventResults as $eventResult)
+		if ($restrictIds)
 		{
-			$rightsByObjectId = $eventResult->getParameters();
+			$objectCondition .= ' AND o.ID IN (' . implode(',', $restrictIds) . ')';
 		}
+
+		return $this->getUserOperationsByObjectConditions([$objectCondition], $userId);
+	}
+
+	public function getUserOperationsForObjects(array $objectIds, $userId): array
+	{
+		$userId = (int)$userId;
+		$objectIds = array_values(array_unique(array_filter(array_map('intval', $objectIds))));
+
+		if (empty($objectIds))
+		{
+			return [];
+		}
+
+		$objectConditions = [];
+
+		foreach (array_chunk($objectIds, self::OBJECT_IDS_CHUNK_SIZE) as $chunk)
+		{
+			$objectConditions[] = 'o.ID IN (' . implode(',', $chunk) . ')';
+		}
+
+		return $this->getUserOperationsByObjectConditions($objectConditions, $userId);
+	}
+
+	/**
+	 * @param array<int, string> $objectConditions
+	 */
+	private function getUserOperationsByObjectConditions(array $objectConditions, int $userId): array
+	{
+		$rightsByObjectId = [];
+
+		$needToLoadByLink = $this->appendRightsForObjectConditions(
+			$objectConditions,
+			$userId,
+			$rightsByObjectId,
+		);
+
+		if ($needToLoadByLink)
+		{
+			$this->appendRightsForConnectedObjectConditions(
+				$objectConditions,
+				$userId,
+				$rightsByObjectId,
+			);
+		}
+
+		$this->appendCrRightsForObjectConditions($objectConditions, $userId, $rightsByObjectId);
+		$this->appendAuRightsForObjectConditions($objectConditions, $rightsByObjectId);
+
+		$rightsByObjectId = $this->dispatchPreloadUserRightsEvent($userId, $rightsByObjectId);
 
 		$operations = [];
 		foreach ($rightsByObjectId as $objectId => $rights)
@@ -806,122 +976,160 @@ class RightsManager implements IErrorable
 		return $operations;
 	}
 
-	private function appendChildRightsForChildren($parentId, $userId, array $restrictIds, array &$rightsByObjectId)
+	protected function dispatchPreloadUserRightsEvent(int $userId, array $rightsByObjectId): array
 	{
-		$restrictById = '';
-		$restrictIds = array_filter(array_map('intval', $restrictIds));
-		if ($restrictIds)
-		{
-			$restrictById = ' AND o.ID IN (' . implode(',', $restrictIds) . ')';
-		}
-
-		$query = Application::getConnection()->query("
-			SELECT op.NAME, r.TASK_ID, r.DOMAIN, r.NEGATIVE, o.REAL_OBJECT_ID O_REAL_OBJECT_ID, o.ID O_OBJECT_ID, r.ACCESS_CODE
-			FROM b_disk_right r
-				INNER JOIN b_disk_object_path p ON p.PARENT_ID = r.OBJECT_ID
-				INNER JOIN b_disk_object o ON p.OBJECT_ID = o.ID
-				INNER JOIN b_task_operation task_op ON r.TASK_ID = task_op.TASK_ID
-				INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
-				INNER JOIN b_user_access uaccess ON r.ACCESS_CODE = uaccess.ACCESS_CODE
-
-			WHERE o.PARENT_ID = {$parentId} AND uaccess.USER_ID = {$userId} {$restrictById}
-		",
+		$event = new Event(
+			'disk',
+			'OnPreloadUserRights',
+			[
+				'userId' => $userId,
+				'rightsByObjectId' => $rightsByObjectId,
+			],
 		);
 
-		$needToLoadByLink = false;
-		while ($row = $query->fetch())
-		{
-			$rightsByObjectId[$row['O_OBJECT_ID']][] = [
-				'ACCESS_CODE' => $row['ACCESS_CODE'],
-				'NAME' => $row['NAME'],
-				'TASK_ID' => $row['TASK_ID'],
-				'DOMAIN' => $row['DOMAIN'],
-				'NEGATIVE' => $row['NEGATIVE'],
-				'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
-				'OBJECT_ID' => $row['O_OBJECT_ID'],
-			];
+		$event->send();
 
-			if ($row['O_REAL_OBJECT_ID'] != $row['O_OBJECT_ID'])
+		$eventResults = $event->getResults();
+		foreach ($eventResults as $eventResult)
+		{
+			$rightsByObjectId = $eventResult->getParameters();
+		}
+
+		return $rightsByObjectId;
+	}
+
+	/**
+	 * @param array<int, string> $objectConditions
+	 */
+	private function appendRightsForObjectConditions(
+		array $objectConditions,
+		int $userId,
+		array &$rightsByObjectId,
+	): bool
+	{
+		$needToLoadByLink = false;
+
+		foreach ($objectConditions as $objectCondition)
+		{
+			$sql = "
+				SELECT
+					op.NAME,
+					r.TASK_ID,
+					r.DOMAIN,
+					r.NEGATIVE,
+					o.REAL_OBJECT_ID O_REAL_OBJECT_ID,
+					o.ID O_OBJECT_ID,
+					r.ACCESS_CODE
+				FROM b_disk_right r
+					INNER JOIN b_disk_object_path p ON p.PARENT_ID = r.OBJECT_ID
+					INNER JOIN b_disk_object o ON p.OBJECT_ID = o.ID
+					INNER JOIN b_task_operation task_op ON r.TASK_ID = task_op.TASK_ID
+					INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
+					INNER JOIN b_user_access uaccess ON r.ACCESS_CODE = uaccess.ACCESS_CODE
+
+				WHERE {$objectCondition} AND uaccess.USER_ID = {$userId}
+			";
+
+			foreach ($this->getRightsRows($sql) as $row)
 			{
-				$needToLoadByLink = true;
+				$rightsByObjectId[$row['O_OBJECT_ID']][] = [
+					'ACCESS_CODE' => $row['ACCESS_CODE'],
+					'NAME' => $row['NAME'],
+					'TASK_ID' => $row['TASK_ID'],
+					'DOMAIN' => $row['DOMAIN'],
+					'NEGATIVE' => $row['NEGATIVE'],
+					'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
+					'OBJECT_ID' => $row['O_OBJECT_ID'],
+				];
+
+				if ($row['O_REAL_OBJECT_ID'] != $row['O_OBJECT_ID'])
+				{
+					$needToLoadByLink = true;
+				}
 			}
 		}
 
 		return $needToLoadByLink;
 	}
 
-	private function appendChildRightsForConnectedChildren($parentId, $userId, array $restrictIds, &$rightsByObjectId)
+	/**
+	 * @param array<int, string> $objectConditions
+	 */
+	private function appendRightsForConnectedObjectConditions(
+		array $objectConditions,
+		int $userId,
+		array &$rightsByObjectId,
+	): void
 	{
-		$restrictById = '';
-		$restrictIds = array_filter(array_map('intval', $restrictIds));
-		if ($restrictIds)
+		foreach ($objectConditions as $objectCondition)
 		{
-			$restrictById = ' AND o.ID IN (' . implode(',', $restrictIds) . ')';
-		}
+			$sql = "
+				SELECT
+					op.NAME,
+					r.TASK_ID,
+					r.DOMAIN,
+					r.NEGATIVE,
+					o.REAL_OBJECT_ID O_REAL_OBJECT_ID,
+					o.ID O_OBJECT_ID,
+					r.ACCESS_CODE
+				FROM b_disk_right r
+					INNER JOIN b_disk_object_path p ON p.PARENT_ID = r.OBJECT_ID
+					INNER JOIN b_disk_object o ON p.OBJECT_ID = o.REAL_OBJECT_ID
+					INNER JOIN b_task_operation task_op ON r.TASK_ID = task_op.TASK_ID
+					INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
+					INNER JOIN b_user_access uaccess ON r.ACCESS_CODE = uaccess.ACCESS_CODE
 
-		$query = Application::getConnection()->query("
-			SELECT op.NAME, r.TASK_ID, r.DOMAIN, r.NEGATIVE, o.REAL_OBJECT_ID O_REAL_OBJECT_ID, o.ID O_OBJECT_ID, r.ACCESS_CODE
-			FROM b_disk_right r
-				INNER JOIN b_disk_object_path p ON p.PARENT_ID = r.OBJECT_ID
-				INNER JOIN b_disk_object o ON p.OBJECT_ID = o.REAL_OBJECT_ID
-				INNER JOIN b_task_operation task_op ON r.TASK_ID = task_op.TASK_ID
-				INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
-				INNER JOIN b_user_access uaccess ON r.ACCESS_CODE = uaccess.ACCESS_CODE
+				WHERE {$objectCondition}
+					AND uaccess.USER_ID = {$userId}
+					AND o.ID <> o.REAL_OBJECT_ID
+			";
 
-			WHERE o.PARENT_ID = {$parentId} AND uaccess.USER_ID = {$userId} AND o.ID <> o.REAL_OBJECT_ID {$restrictById}
-		",
-		);
-
-		while ($row = $query->fetch())
-		{
-			$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = [
-				'ACCESS_CODE' => $row['ACCESS_CODE'],
-				'NAME' => $row['NAME'],
-				'TASK_ID' => $row['TASK_ID'],
-				'DOMAIN' => $row['DOMAIN'],
-				'NEGATIVE' => $row['NEGATIVE'],
-				'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
-				'OBJECT_ID' => $row['O_OBJECT_ID'],
-			];
+			foreach ($this->getRightsRows($sql) as $row)
+			{
+				$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = [
+					'ACCESS_CODE' => $row['ACCESS_CODE'],
+					'NAME' => $row['NAME'],
+					'TASK_ID' => $row['TASK_ID'],
+					'DOMAIN' => $row['DOMAIN'],
+					'NEGATIVE' => $row['NEGATIVE'],
+					'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
+					'OBJECT_ID' => $row['O_OBJECT_ID'],
+				];
+			}
 		}
 	}
 
-	private function appendChildCrRightsForChildren($parentId, $userId, array $restrictIds, &$rightsByObjectId)
+	/**
+	 * @param array<int, string> $objectConditions
+	 */
+	private function appendCrRightsForObjectConditions(
+		array $objectConditions,
+		int $userId,
+		array &$rightsByObjectId,
+	): void
 	{
-		$restrictById = '';
-		$restrictIds = array_filter(array_map('intval', $restrictIds));
-		if ($restrictIds)
+		foreach ($objectConditions as $objectCondition)
 		{
-			$restrictById = ' AND o.ID IN (' . implode(',', $restrictIds) . ')';
-		}
+			$sql = "
+				SELECT
+					op.NAME,
+					r.TASK_ID,
+					r.DOMAIN,
+					r.NEGATIVE,
+					o.REAL_OBJECT_ID O_REAL_OBJECT_ID,
+					o.ID O_OBJECT_ID
+				FROM b_disk_right r
+					INNER JOIN b_disk_object_path p ON p.PARENT_ID = r.OBJECT_ID
+					INNER JOIN b_disk_object o ON p.OBJECT_ID = o.REAL_OBJECT_ID
+					INNER JOIN b_task_operation task_op ON r.TASK_ID = task_op.TASK_ID
+					INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
 
-		$query = Application::getConnection()->query("
-			SELECT op.NAME, r.TASK_ID, r.DOMAIN, r.NEGATIVE, o.REAL_OBJECT_ID O_REAL_OBJECT_ID, o.ID O_OBJECT_ID
-			FROM b_disk_right r
-				INNER JOIN b_disk_object_path p ON p.PARENT_ID = r.OBJECT_ID
-				INNER JOIN b_disk_object o ON p.OBJECT_ID = o.REAL_OBJECT_ID
-				INNER JOIN b_task_operation task_op ON r.TASK_ID = task_op.TASK_ID
-				INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
+				WHERE {$objectCondition} AND o.CREATED_BY = {$userId} AND r.ACCESS_CODE = 'CR'
+			";
 
-			WHERE o.PARENT_ID = {$parentId} AND o.CREATED_BY = {$userId} AND r.ACCESS_CODE = 'CR' {$restrictById}
-		",
-		);
-
-		while ($row = $query->fetch())
-		{
-			$rightsByObjectId[$row['O_OBJECT_ID']][] = [
-				'ACCESS_CODE' => 'CR',
-				'NAME' => $row['NAME'],
-				'TASK_ID' => $row['TASK_ID'],
-				'DOMAIN' => $row['DOMAIN'],
-				'NEGATIVE' => $row['NEGATIVE'],
-				'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
-				'OBJECT_ID' => $row['O_OBJECT_ID'],
-			];
-
-			if ($row['O_REAL_OBJECT_ID'] != $row['O_OBJECT_ID'])
+			foreach ($this->getRightsRows($sql) as $row)
 			{
-				$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = [
+				$rightsByObjectId[$row['O_OBJECT_ID']][] = [
 					'ACCESS_CODE' => 'CR',
 					'NAME' => $row['NAME'],
 					'TASK_ID' => $row['TASK_ID'],
@@ -930,46 +1138,53 @@ class RightsManager implements IErrorable
 					'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
 					'OBJECT_ID' => $row['O_OBJECT_ID'],
 				];
+
+				if ($row['O_REAL_OBJECT_ID'] != $row['O_OBJECT_ID'])
+				{
+					$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = [
+						'ACCESS_CODE' => 'CR',
+						'NAME' => $row['NAME'],
+						'TASK_ID' => $row['TASK_ID'],
+						'DOMAIN' => $row['DOMAIN'],
+						'NEGATIVE' => $row['NEGATIVE'],
+						'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
+						'OBJECT_ID' => $row['O_OBJECT_ID'],
+					];
+				}
 			}
 		}
 	}
 
-	private function appendChildAuRightsForChildren($parentId, $userId, array $restrictIds, &$rightsByObjectId)
+	/**
+	 * @param array<int, string> $objectConditions
+	 */
+	private function appendAuRightsForObjectConditions(
+		array $objectConditions,
+		array &$rightsByObjectId,
+	): void
 	{
-		$restrictById = '';
-		$restrictIds = array_filter(array_map('intval', $restrictIds));
-		if ($restrictIds)
+		foreach ($objectConditions as $objectCondition)
 		{
-			$restrictById = ' AND o.ID IN (' . implode(',', $restrictIds) . ')';
-		}
+			$sql = "
+				SELECT
+					op.NAME,
+					r.TASK_ID,
+					r.DOMAIN,
+					r.NEGATIVE,
+					o.REAL_OBJECT_ID O_REAL_OBJECT_ID,
+					o.ID O_OBJECT_ID
+				FROM b_disk_right r
+					INNER JOIN b_disk_object_path p ON p.PARENT_ID = r.OBJECT_ID
+					INNER JOIN b_disk_object o ON p.OBJECT_ID = o.ID
+					INNER JOIN b_task_operation task_op ON r.TASK_ID = task_op.TASK_ID
+					INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
 
-		$query = Application::getConnection()->query("
-			SELECT op.NAME, r.TASK_ID, r.DOMAIN, r.NEGATIVE, o.REAL_OBJECT_ID O_REAL_OBJECT_ID, o.ID O_OBJECT_ID
-			FROM b_disk_right r
-				INNER JOIN b_disk_object_path p ON p.PARENT_ID = r.OBJECT_ID
-				INNER JOIN b_disk_object o ON p.OBJECT_ID = o.ID
-				INNER JOIN b_task_operation task_op ON r.TASK_ID = task_op.TASK_ID
-				INNER JOIN b_operation op ON task_op.OPERATION_ID = op.ID
+				WHERE {$objectCondition} AND r.ACCESS_CODE = 'AU'
+			";
 
-			WHERE o.PARENT_ID = {$parentId} AND r.ACCESS_CODE = 'AU' {$restrictById}
-		",
-		);
-
-		while ($row = $query->fetch())
-		{
-			$rightsByObjectId[$row['O_OBJECT_ID']][] = [
-				'ACCESS_CODE' => 'AU',
-				'NAME' => $row['NAME'],
-				'TASK_ID' => $row['TASK_ID'],
-				'DOMAIN' => $row['DOMAIN'],
-				'NEGATIVE' => $row['NEGATIVE'],
-				'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
-				'OBJECT_ID' => $row['O_OBJECT_ID'],
-			];
-
-			if ($row['O_REAL_OBJECT_ID'] != $row['O_OBJECT_ID'])
+			foreach ($this->getRightsRows($sql) as $row)
 			{
-				$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = [
+				$rightsByObjectId[$row['O_OBJECT_ID']][] = [
 					'ACCESS_CODE' => 'AU',
 					'NAME' => $row['NAME'],
 					'TASK_ID' => $row['TASK_ID'],
@@ -978,7 +1193,30 @@ class RightsManager implements IErrorable
 					'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
 					'OBJECT_ID' => $row['O_OBJECT_ID'],
 				];
+
+				if ($row['O_REAL_OBJECT_ID'] != $row['O_OBJECT_ID'])
+				{
+					$rightsByObjectId[$row['O_REAL_OBJECT_ID']][] = [
+						'ACCESS_CODE' => 'AU',
+						'NAME' => $row['NAME'],
+						'TASK_ID' => $row['TASK_ID'],
+						'DOMAIN' => $row['DOMAIN'],
+						'NEGATIVE' => $row['NEGATIVE'],
+						'REAL_OBJECT_ID' => $row['O_REAL_OBJECT_ID'],
+						'OBJECT_ID' => $row['O_OBJECT_ID'],
+					];
+				}
 			}
+		}
+	}
+
+	protected function getRightsRows(string $sql): iterable
+	{
+		$query = Application::getConnection()->query($sql);
+
+		while ($row = $query->fetch())
+		{
+			yield $row;
 		}
 	}
 
@@ -1402,6 +1640,46 @@ class RightsManager implements IErrorable
 
 		return $parameters;
 	}
+
+	public function getUnifiedLinkAccessLevelsByOperation(string $operation): array
+	{
+		return $this->getOpToUnifiedLinkAccessLevelsMap()[$operation] ?? [];
+	}
+
+	public function getMinUnifiedLinkAccessLevelByOperation(string $operation): ?UnifiedLinkAccessLevel
+	{
+		$accessLevels = $this->getUnifiedLinkAccessLevelsByOperation($operation);
+
+		if (empty($accessLevels))
+		{
+			return null;
+		}
+
+		$minAccessLevel = min($accessLevels);
+
+		return UnifiedLinkAccessLevel::tryFrom($minAccessLevel);
+	}
+
+	public function getOperationsByUnifiedLinkAccessLevel(UnifiedLinkAccessLevel $accessLevel): array
+	{
+		return $this->unifiedLinkAccessLevelToOperationsMap[$accessLevel->value] ?? [];
+	}
+
+	protected function getOpToUnifiedLinkAccessLevelsMap(): array
+	{
+		if (is_null($this->opToUnifiedLinkAccessLevelsMap))
+		{
+			foreach ($this->unifiedLinkAccessLevelToOperationsMap as $accessLevelString => $accessLevelOperations)
+			{
+				foreach ($accessLevelOperations as $accessLevelOperation)
+				{
+					$this->opToUnifiedLinkAccessLevelsMap[$accessLevelOperation][] = $accessLevelString;
+				}
+			}
+		}
+
+		return $this->opToUnifiedLinkAccessLevelsMap;
+	}
 }
 
 final class SimpleReBuilder
@@ -1450,6 +1728,15 @@ final class SimpleReBuilder
 		$this->connection = Application::getConnection();
 		$this->sqlHelper = $this->connection->getSqlHelper();
 		$this->setupSession = SetupSession::register($this->object->getId());
+	}
+
+	/**
+	 * Id of the session which recalculates simple rights, or 0 when it could not be registered.
+	 * @return int
+	 */
+	public function getSetupSessionId()
+	{
+		return $this->setupSession ? (int)$this->setupSession->getId() : 0;
 	}
 
 	/**
@@ -1812,6 +2099,7 @@ final class SimpleReBuilder
 			if ($currentObjectId <= 0)
 			{
 				$currentObjectId = $rootFolderId;
+
 				break;
 			}
 		}

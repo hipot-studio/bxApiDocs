@@ -20,12 +20,14 @@ use Bitrix\Crm\Integration\AI\Model\EO_Queue;
 use Bitrix\Crm\Integration\AI\Model\QueueTable;
 use Bitrix\Crm\Integration\AI\Operation\AbstractOperation;
 use Bitrix\Crm\Integration\AI\Operation\Autostart\AutoLauncher;
+use Bitrix\Crm\Integration\AI\Operation\GenerateCallScriptFromDialog;
 use Bitrix\Crm\Integration\Analytics\Builder\AI\CallActivityWithAudioRecordingEvent;
 use Bitrix\Crm\Integration\Analytics\Dictionary;
 use Bitrix\Crm\Integration\VoxImplant;
 use Bitrix\Crm\Integration\VoxImplantManager;
 use Bitrix\Crm\ItemIdentifier;
 use Bitrix\Crm\Service\Container;
+use Bitrix\Main\Application;
 use Bitrix\Main\DI\ServiceLocator;
 use Bitrix\Main\Event;
 use Bitrix\Main\Localization\Loc;
@@ -296,7 +298,7 @@ final class EventHandler
 			return;
 		}
 
-		$job = QueueTable::query()->setSelect(['*'])->where('HASH', $hash)->fetchObject();
+		$job = self::findQueueJobForEvent($event, $hash);
 		if (!self::isJobProcessable($job))
 		{
 			return;
@@ -324,6 +326,7 @@ final class EventHandler
 					$result,
 					$scenarioName,
 					self::extractFillTargetFromEngineContext($event),
+					self::extractContextExtraFromEngineContext($event),
 				);
 			}
 		}
@@ -358,7 +361,7 @@ final class EventHandler
 			return;
 		}
 
-		$job = QueueTable::query()->setSelect(['*'])->where('HASH', $hash)->fetchObject();
+		$job = self::findQueueJobForEvent($event, $hash);
 		if (!self::isJobProcessable($job))
 		{
 			return;
@@ -581,6 +584,160 @@ final class EventHandler
 		return is_string($hash) && !empty($hash) ? $hash : null;
 	}
 
+	private static function findQueueJobForEvent(Event $event, string $hash): ?EO_Queue
+	{
+		$retryJob = self::resolveGenerateCallScriptRetryJob($event, $hash);
+		if ($retryJob !== false)
+		{
+			return $retryJob;
+		}
+
+		$job = QueueTable::query()->setSelect(['*'])->where('HASH', $hash)->fetchObject();
+
+		return self::isStaleGenerateCallScriptAttempt($event, $job) ? null : $job;
+	}
+
+	/**
+	 * @return EO_Queue|false|null False means that the event does not belong to a retry attempt.
+	 */
+	private static function resolveGenerateCallScriptRetryJob(Event $event, string $hash): EO_Queue|false|null
+	{
+		$engine = $event->getParameter('engine');
+		if (!$engine instanceof IEngine)
+		{
+			return false;
+		}
+
+		$context = $engine->getContext();
+		if ($context->getContextId() !== GenerateCallScriptFromDialog::CONTEXT_ID)
+		{
+			return false;
+		}
+
+		$parameters = $context->getParameters();
+		$additionalInfo = is_array($parameters) ? ($parameters['additionalInfo'] ?? null) : null;
+		if (
+			!is_array($additionalInfo)
+			|| (
+				!array_key_exists('jobId', $additionalInfo)
+				&& !array_key_exists('previousHash', $additionalInfo)
+			)
+		)
+		{
+			return false;
+		}
+
+		$jobId = $additionalInfo['jobId'] ?? null;
+		$previousHash = $additionalInfo['previousHash'] ?? null;
+		$attempt = $additionalInfo['callScriptAttempt'] ?? null;
+		$target = is_array($parameters) ? ($parameters['target'] ?? null) : null;
+		$entityTypeId = is_array($target) ? ($target['ENTITY_TYPE_ID'] ?? null) : null;
+		$entityId = is_array($target) ? ($target['ENTITY_ID'] ?? null) : null;
+		$userId = is_array($parameters) ? ($parameters['userId'] ?? null) : null;
+		$parentJobId = is_array($parameters) ? ($parameters['parentJobId'] ?? null) : null;
+		if (
+			!is_int($jobId)
+			|| $jobId <= 0
+			|| !is_string($previousHash)
+			|| $previousHash === ''
+			|| !is_int($attempt)
+			|| !is_int($entityTypeId)
+			|| !CCrmOwnerType::isCorrectEntityTypeId($entityTypeId)
+			|| !is_int($entityId)
+			|| $entityId <= 0
+			|| !is_int($userId)
+			|| (!is_int($parentJobId) && $parentJobId !== null)
+		)
+		{
+			return null;
+		}
+
+		$targetIdentifier = new ItemIdentifier($entityTypeId, $entityId);
+		$connection = Application::getConnection();
+		$lockName = GenerateCallScriptFromDialog::getEventLockNameForTarget($targetIdentifier);
+		while (!$connection->lock($lockName, 1))
+		{
+		}
+
+		try
+		{
+			$job = self::findJobOnPrimary($jobId);
+			if (
+				!$job
+				|| (int)$job->requireTypeId() !== GenerateCallScriptFromDialog::TYPE_ID
+				|| $job->requireEntityTypeId() !== $entityTypeId
+				|| $job->requireEntityId() !== $entityId
+				|| $job->requireUserId() !== $userId
+				|| $job->requireParentId() !== (int)$parentJobId
+				|| $job->requireExecutionStatus() !== QueueTable::EXECUTION_STATUS_PENDING
+				|| $attempt !== $job->requireRetryCount() + 1
+			)
+			{
+				return null;
+			}
+
+			if ($job->requireHash() === $previousHash)
+			{
+				$saveResult = QueueTable::update($jobId, ['HASH' => $hash]);
+				if (!$saveResult->isSuccess())
+				{
+					return null;
+				}
+
+				return self::findJobOnPrimary($jobId);
+			}
+
+			return $job->requireHash() === $hash ? $job : null;
+		}
+		finally
+		{
+			$connection->unlock($lockName);
+		}
+	}
+
+	private static function isStaleGenerateCallScriptAttempt(Event $event, ?EO_Queue $job): bool
+	{
+		if (!$job || (int)$job->requireTypeId() !== GenerateCallScriptFromDialog::TYPE_ID)
+		{
+			return false;
+		}
+
+		$engine = $event->getParameter('engine');
+		if (!$engine instanceof IEngine)
+		{
+			return false;
+		}
+
+		$context = $engine->getContext();
+		$parameters = $context->getParameters();
+		$attempt = is_array($parameters)
+			? ($parameters['additionalInfo']['callScriptAttempt'] ?? null)
+			: null;
+
+		return $context->getContextId() === GenerateCallScriptFromDialog::CONTEXT_ID
+			&& is_int($attempt)
+			&& $attempt !== $job->requireRetryCount() + 1;
+	}
+
+	private static function findJobOnPrimary(int $jobId): ?EO_Queue
+	{
+		$pool = Application::getInstance()->getConnectionPool();
+		$pool->useMasterOnly(true);
+		try
+		{
+			return QueueTable::query()
+				->setSelect(['*'])
+				->where('ID', $jobId)
+				->setLimit(1)
+				->fetchObject()
+			;
+		}
+		finally
+		{
+			$pool->useMasterOnly(false);
+		}
+	}
+
 	private static function getQueueJobExecuteResult(Event $event, EO_Queue $job): ?Result
 	{
 		$operationClass = ServiceLocator::getInstance()->get(OperationRegistry::class)->getByTypeId((int)$job->requireTypeId());
@@ -618,6 +775,23 @@ final class EventHandler
 		// Single source of truth for the read side lives on AbstractOperation, which reuses it in its
 		// error branches (onQueueJobExecute/onQueueJobFail) to badge the initiating entity (ERR-002/AC-030).
 		return AbstractOperation::extractFillTargetFromEngineContext($event);
+	}
+
+	private static function extractContextExtraFromEngineContext(Event $event): array
+	{
+		$engine = $event->getParameter('engine');
+		if (!($engine instanceof IEngine))
+		{
+			return [];
+		}
+
+		$additionalInfo = $engine->getContext()->getParameters()['additionalInfo'] ?? [];
+		if (!is_array($additionalInfo) || !array_key_exists('fillFieldsEntityAllowed', $additionalInfo))
+		{
+			return [];
+		}
+
+		return ['fillFieldsEntityAllowed' => (bool)$additionalInfo['fillFieldsEntityAllowed']];
 	}
 
 	private static function registerCallActivityWithAudioRecordingEvent(array $activityFields): void

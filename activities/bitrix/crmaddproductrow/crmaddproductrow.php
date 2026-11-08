@@ -12,8 +12,10 @@ use Bitrix\Sale\Basket;
 use Bitrix\Crm\Activity\Access\CatalogAccessChecker;
 use Bitrix\Bizproc\Activity\Mixins\ChecksResolvedTargetAccessTrait;
 use Bitrix\Main;
+use Bitrix\Bizproc\FieldType;
+use Bitrix\Crm\Integration\UI\EntitySelector\CatalogProductProvider;
 
-class CBPCrmAddProductRow extends CBPActivity
+class CBPCrmAddProductRow extends CBPActivity implements IBPConfigurableActivity
 {
 	use TargetDocumentResolverTrait;
 	use ChecksResolvedTargetAccessTrait;
@@ -66,7 +68,7 @@ class CBPCrmAddProductRow extends CBPActivity
 			{
 				$this->writeDebugInfo($this->getDebugInfo(
 					['ProductId' => $id],
-					['ProductId' => static::getPropertiesMap($this->getDocumentType())['ProductId']]
+					['ProductId' => self::getLegacyPropertiesMap($this->getDocumentType())['ProductId']]
 				));
 			}
 
@@ -157,12 +159,15 @@ class CBPCrmAddProductRow extends CBPActivity
 
 		if ($this->workflow->isDebug())
 		{
-			$this->writeDebugInfo($this->getDebugInfo([
-				'ProductId' => $row['PRODUCT_ID'],
-				'RowPriceAccount' => $price,
-				'RowQuantity' => $row['QUANTITY'],
-				'RowDiscountRate' => $row['DISCOUNT_RATE']
-			]));
+			$this->writeDebugInfo($this->getDebugInfo(
+				[
+					'ProductId' => $row['PRODUCT_ID'],
+					'RowPriceAccount' => $price,
+					'RowQuantity' => $row['QUANTITY'],
+					'RowDiscountRate' => $row['DISCOUNT_RATE'],
+				],
+				self::getLegacyPropertiesMap($this->getDocumentType())
+			));
 		}
 
 		if (!$addResult)
@@ -258,13 +263,29 @@ class CBPCrmAddProductRow extends CBPActivity
 		}
 		else
 		{
-			$dialog->setMap(static::getPropertiesMap($documentType));
+			$dialog->setMap(self::getLegacyPropertiesMap($documentType));
 		}
 
 		return $dialog;
 	}
 
 	protected static function getPropertiesMap(array $documentType, array $context = []): array
+	{
+		$map = self::getLegacyPropertiesMap($documentType);
+		$map['ProductId']['Type'] = FieldType::ENTITYSELECTOR;
+		$map['ProductId']['Settings'] = [
+			'entity' => [
+				'id' => CatalogProductProvider::ENTITY_ID,
+				'dynamicLoad' => true,
+				'dynamicSearch' => true,
+			],
+			'enableSearch' => true,
+		];
+
+		return $map;
+	}
+
+	private static function getLegacyPropertiesMap(array $documentType): array
 	{
 		$productSettings = [];
 		if (Main\Loader::includeModule('iblock') && Main\Loader::includeModule('catalog'))
@@ -331,7 +352,7 @@ class CBPCrmAddProductRow extends CBPActivity
 
 		$documentService = CBPRuntime::GetRuntime(true)->getDocumentService();
 
-		foreach (static::getPropertiesMap($documentType) as $key => $property)
+		foreach (self::getLegacyPropertiesMap($documentType) as $key => $property)
 		{
 			$properties[$key] = $documentService->GetFieldInputValue(
 				$documentType,

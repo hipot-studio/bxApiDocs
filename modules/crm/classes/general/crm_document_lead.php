@@ -1,6 +1,7 @@
 <?php
 
 use Bitrix\Crm;
+use Bitrix\Crm\V2\Internal\Integration\Bizproc\WorkflowDocument;
 
 if (!\Bitrix\Main\Loader::includeModule('bizproc'))
 {
@@ -438,85 +439,13 @@ class CCrmDocumentLead extends CCrmDocument
 		}
 
 		global $DB;
-		$arDocumentID = self::GetDocumentInfo($parentDocumentId);
-		if ($arDocumentID == false)
-		{
-			$arDocumentID['TYPE'] = $parentDocumentId;
-		}
-
-		$arDocumentFields = self::GetDocumentFields($arDocumentID['TYPE']);
-
-		$arKeys = array_keys($arFields);
-		foreach ($arKeys as $key)
-		{
-			if (!array_key_exists($key, $arDocumentFields))
-			{
-				//Fix for issue #40374
-				unset($arFields[$key]);
-				continue;
-			}
-
-			$fieldType = $arDocumentFields[$key]["Type"];
-			if (in_array($fieldType, array("phone", "email", "im", "web"), true))
-			{
-				CCrmDocument::PrepareEntityMultiFields($arFields, mb_strtoupper($fieldType));
-				continue;
-			}
-
-			$arFields[$key] = (is_array($arFields[$key]) && !CBPHelper::IsAssociativeArray($arFields[$key])) ? $arFields[$key] : array($arFields[$key]);
-			if ($fieldType == "user")
-			{
-				$arFields[$key] = \CBPHelper::extractUsers($arFields[$key], $arDocumentID['DOCUMENT_TYPE']);
-			}
-			elseif ($fieldType == "select" && mb_substr($key, 0, 3) == "UF_")
-			{
-				self::InternalizeEnumerationField('CRM_LEAD', $arFields, $key);
-			}
-			elseif ($fieldType == "file")
-			{
-				$arFileOptions = array('ENABLE_ID' => true);
-				foreach ($arFields[$key] as &$value)
-				{
-					//Issue #40380. Secure URLs and file IDs are allowed.
-					$file = false;
-					CCrmFileProxy::TryResolveFile($value, $file, $arFileOptions);
-					$value = $file;
-				}
-				unset($value);
-			}
-			elseif ($fieldType == "S:HTML")
-			{
-				foreach ($arFields[$key] as &$value)
-				{
-					$value = array("VALUE" => $value);
-				}
-				unset($value);
-			}
-
-			if (!$arDocumentFields[$key]["Multiple"] && is_array($arFields[$key]))
-			{
-				if (count($arFields[$key]) > 0)
-				{
-					$a = array_values($arFields[$key]);
-					$arFields[$key] = $a[0];
-				}
-				else
-				{
-					$arFields[$key] = null;
-				}
-			}
-		}
+		$arFields = (new WorkflowDocument())->castFields(\CCrmOwnerType::Lead, $arFields);
 
 		$useTransaction = static::shouldUseTransaction();
 
 		if ($useTransaction)
 		{
 			$DB->StartTransaction();
-		}
-
-		if(isset($arFields['COMMENTS']))
-		{
-			$arFields['COMMENTS'] = static::sanitizeCommentsValue($arFields['COMMENTS']);
 		}
 
 		$CCrmEntity = new CCrmLead(false);
@@ -795,5 +724,10 @@ class CCrmDocumentLead extends CCrmDocument
 		}
 
 		return Crm\Automation\Factory::createTarget(\CCrmOwnerType::Lead);
+	}
+
+	public static function createTestDocument(string $documentType, array $fields, int $createdById): ?string
+	{
+		return (new WorkflowDocument())->createTestDocument(\CCrmOwnerType::Lead, $fields, $createdById);
 	}
 }

@@ -34,6 +34,11 @@ class Session extends Dataset
 		return $this->getMessage('IMOPENLINES_SESSION_TABLE');
 	}
 
+	protected function getTableDescriptionFull(): string
+	{
+		return $this->getMessage('IMOPENLINES_SESSION_TABLE_DESCRIPTION_FULL', '');
+	}
+
 	/**
 	 * @return Result
 	 */

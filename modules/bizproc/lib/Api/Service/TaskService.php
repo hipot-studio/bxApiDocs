@@ -6,14 +6,20 @@ use Bitrix\Bizproc\Api\Data\TaskService\TasksToGet;
 use Bitrix\Bizproc\Api\Data\TaskService\TasksToBeDelegated;
 use Bitrix\Bizproc\Api\Request\TaskService\DelegateTasksRequest;
 use Bitrix\Bizproc\Api\Request\TaskService\DoInlineTasksRequest;
+use Bitrix\Bizproc\Api\Request\TaskService\DoTaskCollectionRequest;
 use Bitrix\Bizproc\Api\Request\TaskService\DoTaskRequest;
 use Bitrix\Bizproc\Api\Request\TaskService\GetUserTaskRequest;
 use Bitrix\Bizproc\Api\Request\TaskService\GetUserTaskListRequest;
 use Bitrix\Bizproc\Api\Request\TaskService\GetUserTaskByWorkflowIdRequest;
 use Bitrix\Bizproc\Api\Response;
 use Bitrix\Bizproc\Api\Response\TaskService\DelegateTasksResponse;
+use Bitrix\Bizproc\Api\Response\TaskService\DoTaskCollectionResponse;
+use Bitrix\Bizproc\Api\Response\TaskService\DoTaskResponse;
 use Bitrix\Bizproc\Api\Response\TaskService\GetUserTaskListResponse;
 use Bitrix\Bizproc\Api\Response\TaskService\GetUserTaskByWorkflowIdResponse;
+use Bitrix\Bizproc\BaseType;
+use Bitrix\Bizproc\FieldType;
+use Bitrix\Bizproc\Internal\Integration\UI\TaskFileUploaderContext;
 use Bitrix\Bizproc\Public\Service\Task\UnArchiveTaskService;
 use Bitrix\Bizproc\Result;
 use Bitrix\Bizproc\Internal\Model\TaskArchive\TaskArchiveTable;
@@ -25,9 +31,13 @@ use Bitrix\Main\Localization\Loc;
 
 class TaskService
 {
+	public const DO_TASK_COLLECTION_LIMIT = 50;
+
 	private const TASK_ALREADY_DONE_ERROR_CODE = 'TASK_ALREADY_DONE';
+	private const TASKS_LIMIT_EXCEEDED_ERROR_CODE = 'TASKS_LIMIT_EXCEEDED';
 	private const TASK_USER_NOT_MEMBER_ERROR_CODE = 'TASK_USER_NOT_MEMBER';
 	private const TASK_NOT_FOUND_ERROR_CODE = 'TASK_NOT_FOUND';
+	private const TASK_FILE_FIELD_NOT_SHARED_ERROR_CODE = 'TASK_FILE_FIELD_NOT_SHARED';
 
 	public function __construct(
 		private TaskAccessService $accessService
@@ -208,7 +218,13 @@ class TaskService
 		$task['ENTITY'] = $task['PARAMETERS']['DOCUMENT_ID'][1];
 		$task['DOCUMENT_ID'] = $task['PARAMETERS']['DOCUMENT_ID'][2];
 
-		if (!\CBPDocument::PostTaskForm($task, $request->userId, $request->taskRequest, $errors))
+		$isPosted = \CBPDocument::PostTaskForm($task, $request->userId, $request->taskRequest, $errors);
+
+		// the decision is over and the status of the task could have turned, so the row read while the
+		// values of its fields were being taken apart answers for it no more
+		TaskFileUploaderContext::forgetTask($request->taskId);
+
+		if (!$isPosted)
 		{
 			$error = reset($errors);
 			if ($task['MODULE_ID'] === 'rpa' && $error['code'] === \CBPRuntime::EXCEPTION_CODE_INSTANCE_TERMINATED)
@@ -235,6 +251,201 @@ class TaskService
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Runs tasks one by one and reports the outcome of every single task.
+	 * The batch is not transactional: a done task continues its workflow and cannot be rolled back,
+	 * so a batch larger than self::DO_TASK_COLLECTION_LIMIT is refused before the first task runs.
+	 * The limit counts the ids of the request, which are already normalized by the request itself:
+	 * repeated and discarded values do not spend it, and every task gets a single outcome record.
+	 */
+	public function doTaskCollection(DoTaskCollectionRequest $request): DoTaskCollectionResponse
+	{
+		$response = new DoTaskCollectionResponse();
+
+		if (count($request->taskIds) > self::DO_TASK_COLLECTION_LIMIT)
+		{
+			return $response->addError(
+				new Error(
+					Loc::getMessage(
+						'BIZPROC_LIB_API_TASK_SERVICE_DO_TASK_COLLECTION_ERROR_LIMIT_EXCEEDED',
+						['#LIMIT#' => self::DO_TASK_COLLECTION_LIMIT]
+					),
+					self::TASKS_LIMIT_EXCEEDED_ERROR_CODE
+				)
+			);
+		}
+
+		$checkAccessResult = $this->accessService->checkDoTasks($request->userId);
+		if (!$checkAccessResult->isSuccess())
+		{
+			return $response->addErrors($checkAccessResult->getErrors());
+		}
+
+		$tasks = $this->readTasksOfCollection($request->taskIds);
+
+		foreach ($request->taskIds as $taskId)
+		{
+			if ($this->carriesFileFieldValue($tasks[$taskId] ?? null, $request->taskRequest))
+			{
+				$response->addTaskResult(
+					$taskId,
+					DoTaskCollectionResponse::STATUS_ERROR,
+					[[
+						'message' => Loc::getMessage(
+							'BIZPROC_LIB_API_TASK_SERVICE_DO_TASK_COLLECTION_ERROR_FILE_FIELD'
+						),
+						'code' => self::TASK_FILE_FIELD_NOT_SHARED_ERROR_CODE,
+						'fieldId' => null,
+					]]
+				);
+
+				continue;
+			}
+
+			$doTaskResponse = $this->doTask(new DoTaskRequest($taskId, $request->userId, $request->taskRequest));
+			$status = $this->resolveDoTaskStatus($doTaskResponse, $request->userId);
+
+			$response->addTaskResult(
+				$taskId,
+				$status,
+				$status === DoTaskCollectionResponse::STATUS_ERROR
+					? $this->extractTaskErrors($doTaskResponse)
+					: []
+			);
+		}
+
+		return $response;
+	}
+
+	/**
+	 * The rows the check below is fed with, the whole set in one select instead of a select per task; the
+	 * set is capped by DO_TASK_COLLECTION_LIMIT. The `@` prefix of a filter is understood by
+	 * CBPHelper::prepareSql and unfolds into a condition over the primary key of the whole list.
+	 *
+	 * @param int[] $taskIds
+	 * @return array<int, array> the rows by the id of the task; a task that is gone leaves no row
+	 */
+	private function readTasksOfCollection(array $taskIds): array
+	{
+		if (!$taskIds)
+		{
+			return [];
+		}
+
+		$tasks = [];
+		$iterator = \CBPTaskService::getList(
+			arFilter: ['@ID' => $taskIds],
+			arSelectFields: ['ID', 'ACTIVITY', 'PARAMETERS']
+		);
+
+		while ($task = $iterator->fetch())
+		{
+			$tasks[(int)$task['ID']] = $task;
+		}
+
+		return $tasks;
+	}
+
+	/**
+	 * Whether the shared decision names a file field of this task. A group decision is one request applied
+	 * to every task of the set, so such a value would attach one file to all of them - and dropping it
+	 * silently would let the task go without the file nobody meant to leave out. The task is answered with
+	 * an error of its own instead; a task whose file field the decision says nothing about runs as it is.
+	 */
+	private function carriesFileFieldValue(?array $task, array $taskRequest): bool
+	{
+		// the document type of the fields is written to the parameters by the activity that asks for them
+		$documentType = is_array($task) ? ($task['PARAMETERS']['DOCUMENT_TYPE'] ?? null) : null;
+		if (!is_array($documentType))
+		{
+			return false;
+		}
+
+		$taskId = (int)($task['ID'] ?? 0);
+		if ($taskId <= 0)
+		{
+			return false;
+		}
+
+		$fields = TaskFileUploaderContext::getTaskFields($taskId, $task);
+		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
+		$decisionFields = is_array($taskRequest['fields'] ?? null) ? $taskRequest['fields'] : [];
+
+		foreach ($this->fillFieldsBaseType($documentService, $documentType, $fields) as $field)
+		{
+			if (($field['BaseType'] ?? null) !== FieldType::FILE)
+			{
+				continue;
+			}
+
+			// the code of the field addresses the value in the fields of a decision, the name of its control
+			// addresses the same value in a decision posted as a form
+			$code = $field['Id'] ?? null;
+			$controlName = $field['FieldId'] ?? null;
+
+			if (
+				(is_string($code) && array_key_exists($code, $decisionFields))
+				|| (is_string($controlName) && array_key_exists($controlName, $taskRequest))
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	private function resolveDoTaskStatus(DoTaskResponse $response, int $userId): string
+	{
+		if ($response->isSuccess())
+		{
+			return DoTaskCollectionResponse::STATUS_DONE;
+		}
+
+		$notFoundCodes = [
+			self::TASK_NOT_FOUND_ERROR_CODE,
+			self::TASK_ALREADY_DONE_ERROR_CODE,
+			self::TASK_USER_NOT_MEMBER_ERROR_CODE,
+		];
+		foreach ($response->getErrors() as $error)
+		{
+			if (in_array($error->getCode(), $notFoundCodes, true))
+			{
+				return DoTaskCollectionResponse::STATUS_NOT_FOUND;
+			}
+		}
+
+		// access may be revoked between the check above and this task
+		if (!$this->accessService->checkDoTasks($userId)->isSuccess())
+		{
+			return DoTaskCollectionResponse::STATUS_ACCESS_DENIED;
+		}
+
+		return DoTaskCollectionResponse::STATUS_ERROR;
+	}
+
+	/**
+	 * @return array<int, array{message: string, code: string|null, fieldId: string|null}>
+	 */
+	private function extractTaskErrors(DoTaskResponse $response): array
+	{
+		$errors = [];
+
+		foreach ($response->getErrors() as $error)
+		{
+			$code = $error->getCode();
+			$customData = $error->getCustomData();
+
+			$errors[] = [
+				'message' => (string)$error->getMessage(),
+				'code' => ($code === null || $code === 0 || $code === '') ? null : (string)$code,
+				'fieldId' => (is_string($customData) && $customData !== '') ? $customData : null,
+			];
+		}
+
+		return $errors;
 	}
 
 	public function doInlineTasks(DoInlineTasksRequest $request): Response\TaskService\DoInlineTaskResponse
@@ -383,6 +594,19 @@ class TaskService
 			return $response;
 		}
 
+		if (!isset($task['PARAMETERS']['DOCUMENT_ID']))
+		{
+			$documentId = \CBPStateService::getStateDocumentId($request->workflowId);
+			if ($documentId === false)
+			{
+				$response->setContent($renderer);
+
+				return $response;
+			}
+
+			$task['PARAMETERS']['DOCUMENT_ID'] = $documentId;
+		}
+
 		$task['saveVariables'] = $task['PARAMETERS']['SaveVariables'] ?? false;
 		$task['commentRequired'] = $task['PARAMETERS']['CommentRequired'] ?? 'N';
 		$controls = \CBPDocument::getTaskControls($task, $request->userId);
@@ -411,25 +635,60 @@ class TaskService
 				$task['ACTIVITY']
 			);
 		}
-		$response->setTask($task);
 
 		$documentService = \CBPRuntime::getRuntime()->getDocumentService();
 		$documentType = $documentService->getDocumentType($task['PARAMETERS']['DOCUMENT_ID']);
 		if (isset($task['FIELDS']) && is_array($task['FIELDS']))
 		{
-			foreach ($task['FIELDS'] as $parameter)
+			foreach ($task['FIELDS'] as $field)
 			{
-				$params['Field'] = $parameter['FieldId'] ?? $parameter['Id'];
-				$params['Value'] = $parameter['Default'] ?? null;
+				$params['Field'] = $field['FieldId'] ?? $field['Id'];
+				$params['Value'] = $field['Default'] ?? null;
 				$params['Als'] = false;
 				$params['RenderMode'] = 'public';
 
-				$renderer->addProperty($documentType, $parameter, $params);
+				$renderer->addProperty(
+					$documentType,
+					BaseType\File::fillTaskIdSetting($documentService, $documentType, $field, (int)$task['ID']),
+					$params
+				);
 			}
+
+			$task['FIELDS'] = $this->fillFieldsBaseType($documentService, $documentType, $task['FIELDS']);
 		}
+		$response->setTask($task);
 		$response->setContent($renderer);
 
 		return $response;
+	}
+
+	/**
+	 * The type of Bitrix\Bizproc\BaseType the control of a field is drawn by, so that an alias of a type
+	 * (S:DateTime of a list, UF:date of a custom field) is known to the client too. Done past the render,
+	 * so that the key does not reach getFieldInputControl() and leak into the markup.
+	 */
+	private function fillFieldsBaseType(
+		\CBPDocumentService $documentService,
+		array $documentType,
+		array $fields
+	): array
+	{
+		foreach ($fields as $index => $field)
+		{
+			// a field with no type is not resolved at all, as in CBPDocumentService::getFieldInputControl()
+			if ((string)($field['Type'] ?? '') === '')
+			{
+				continue;
+			}
+
+			$baseType = $documentService->getFieldTypeObject($documentType, $field)?->getBaseType();
+			if ($baseType !== null)
+			{
+				$fields[$index]['BaseType'] = $baseType;
+			}
+		}
+
+		return $fields;
 	}
 
 	private function addUserTaskNotFoundError(Result $response, int $taskId, int $userId): void

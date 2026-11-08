@@ -8,6 +8,7 @@ use Bitrix\Crm\Multifield;
 use Bitrix\Main\ArgumentTypeException;
 use Bitrix\Main\Error;
 use Bitrix\Main\ORM\Data\DataManager;
+use Bitrix\Main\ORM\Query\Result as QueryResult;
 use Bitrix\Main\Result;
 use CCrmFieldMulti;
 
@@ -63,73 +64,70 @@ class MultifieldStorage
 
 	private function fetch(ItemIdentifier $owner): Multifield\Collection
 	{
-		$result = $this->dataManager::fetchByOwner($owner);
-		$extraData = $this->fetchExtraData($owner);
+		$collections = $this->buildCollections($this->dataManager::fetchByOwner($owner));
 
-		$collection = new Multifield\Collection();
-		while ($row = $result->fetch())
-		{
-			$value = Multifield\Assembler::valueByDatabaseRow($row);
-			if (isset($extraData[$value->getId()]))
-			{
-				$value->setValueExtra((new Multifield\ValueExtra())->setCountryCode($extraData[$value->getId()]));
-			}
-
-			$collection->add($value);
-		}
-
-		return $collection;
+		// the rows are filtered by the owner, so there is at most one collection
+		return reset($collections) ?: new Multifield\Collection();
 	}
 
+	/**
+	 * @param int[] $ownerIds
+	 * @return Array<int, Multifield\Collection>
+	 */
 	private function fetchForMultipleOwners(int $entityTypeId, array $ownerIds): array
 	{
-		$result = $this->dataManager::fetchByMultipleOwners($entityTypeId, $ownerIds);
+		$collections = $this->buildCollections($this->dataManager::fetchByMultipleOwners($entityTypeId, $ownerIds));
 
-		$collections = [];
-		while ($row = $result->fetch())
+		foreach ($ownerIds as $ownerId)
 		{
-			$ownerId = Multifield\Assembler::extractOwnerId($row);
-			$owner = new ItemIdentifier($entityTypeId, $ownerId);
-			$extraData = $this->fetchExtraData($owner);
-
-			$collection = $collections[$ownerId] ?? null;
-			if (!$collection)
-			{
-				$collection = new Multifield\Collection();
-				$collections[$ownerId] = $collection;
-			}
-
-			$value = Multifield\Assembler::valueByDatabaseRow($row);
-			if (isset($extraData[$value->getId()]))
-			{
-				$value->setValueExtra((new Multifield\ValueExtra())->setCountryCode($extraData[$value->getId()]));
-			}
-
-			$collection->add($value);
+			$collections[$ownerId] ??= new Multifield\Collection();
 		}
 
 		return $collections;
 	}
 
-	private function fetchExtraData(ItemIdentifier $owner): array
+	/**
+	 * @return Array<int, Multifield\Collection> ownerId => collection
+	 */
+	private function buildCollections(QueryResult $rows): array
 	{
-		static $cache = [];
-
-		$cacheKey = $owner->getHash();
-		if (isset($cache[$cacheKey]))
+		$rowsByOwner = [];
+		$phoneIds = [];
+		while ($row = $rows->fetch())
 		{
-			return $cache[$cacheKey];
+			$ownerId = Multifield\Assembler::extractOwnerId($row) ?? 0;
+			$rowsByOwner[$ownerId][] = $row;
+			if (($row['TYPE_ID'] ?? null) === Multifield\Type\Phone::ID && (int)($row['ID'] ?? 0) > 0)
+			{
+				$phoneIds[] = (int)$row['ID'];
+			}
 		}
 
-		$phoneIds = $this->dataManager::fetchPhoneIdsByOwner($owner);
-		if (empty($phoneIds))
+		$countryCodes = empty($phoneIds) ? [] : $this->fetchPhoneCountryCodes($phoneIds);
+
+		$collections = [];
+		foreach ($rowsByOwner as $ownerId => $ownerRows)
 		{
-			return [];
+			$collection = new Multifield\Collection();
+			foreach ($ownerRows as $row)
+			{
+				$value = Multifield\Assembler::valueByDatabaseRow($row);
+				if (isset($countryCodes[$value->getId()]))
+				{
+					$value->setValueExtra((new Multifield\ValueExtra())->setCountryCode($countryCodes[$value->getId()]));
+				}
+
+				$collection->add($value);
+			}
+			$collections[$ownerId] = $collection;
 		}
 
-		$cache[$cacheKey] = CCrmFieldMulti::GetPhoneCountryList($phoneIds);
+		return $collections;
+	}
 
-		return $cache[$cacheKey];
+	protected function fetchPhoneCountryCodes(array $phoneIds): array
+	{
+		return CCrmFieldMulti::GetPhoneCountryList($phoneIds);
 	}
 
 	/**

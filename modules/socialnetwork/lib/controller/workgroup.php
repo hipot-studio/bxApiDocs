@@ -28,6 +28,7 @@ use Bitrix\Socialnetwork\Internals\EventService\EventDictionary;
 use Bitrix\Socialnetwork\Internals\EventService\Push\PushEventDictionary;
 use Bitrix\Socialnetwork\Internals\EventService\Service;
 use Bitrix\Socialnetwork\Item\Subscription;
+use Bitrix\Socialnetwork\Item\Workgroup\AccessManager;
 use Bitrix\Socialnetwork\Item\WorkgroupFavorites;
 use Bitrix\Socialnetwork\Provider\GroupProvider;
 use Bitrix\Socialnetwork\Space\MembersManager;
@@ -67,6 +68,18 @@ class Workgroup extends Base
 		if ($groupId <= 0)
 		{
 			$this->addEmptyGroupIdError();
+			return null;
+		}
+
+		if (
+			!Helper\Workgroup\Access::canView([
+				'groupId' => $groupId,
+				'checkAdminSession' => ($this->getScope() !== Controller::SCOPE_REST),
+			])
+		)
+		{
+			$this->addGroupNotFoundError();
+
 			return null;
 		}
 
@@ -256,12 +269,7 @@ class Workgroup extends Base
 			return $groupFields;
 		}
 
-		$this->addError(
-			new Error(
-				Loc::getMessage('SONET_CONTROLLER_WORKGROUP_NOT_FOUND'),
-				'SONET_CONTROLLER_WORKGROUP_NOT_FOUND'
-			)
-		);
+		$this->addGroupNotFoundError();
 
 		return null;
 	}
@@ -1000,6 +1008,16 @@ class Workgroup extends Base
 
 	public function disconnectDepartmentsAction(int $groupId, array $departmentIds)
 	{
+		if (!Helper\Workgroup\Access::canModify([
+			'groupId' => $groupId,
+			'checkAdminSession' => ($this->getScope() !== Controller::SCOPE_REST),
+		]))
+		{
+			$this->addEmptyGroupIdError();
+
+			return null;
+		}
+
 		foreach ($departmentIds as $id)
 		{
 			Helper\Workgroup::disconnectDepartment([
@@ -1177,6 +1195,7 @@ class Workgroup extends Base
 		$viewMode = $this->getRequest()->get('viewMode');
 		$groupImage = $this->getRequest()->getFile('groupImage');
 		$avatarColor = $this->getRequest()->get('avatarColor');
+		$avatarColor = is_string($avatarColor) ? $avatarColor : null;
 
 		if (!Helper\Workgroup\Access::canCreate())
 		{
@@ -1274,7 +1293,7 @@ class Workgroup extends Base
 		];
 	}
 
-	private function getColoredDefaultAvatar(string $color): string
+	private function getColoredDefaultAvatar(?string $color): string
 	{
 		if (in_array($color, Helper\Workgroup::getAvatarColors(), true))
 		{
@@ -1663,6 +1682,13 @@ class Workgroup extends Base
 	{
 		$chatId = '';
 
+		if (!$this->canCurrentUserViewGroup($groupId))
+		{
+			$this->addGroupNotFoundError();
+
+			return null;
+		}
+
 		if (!Loader::includeModule('im'))
 		{
 			return $chatId;
@@ -1688,6 +1714,39 @@ class Workgroup extends Base
 		}
 
 		return $chatId;
+	}
+
+	private function canCurrentUserViewGroup(int $groupId): bool
+	{
+		$group = WorkgroupTable::query()
+			->setSelect(['ID', 'VISIBLE'])
+			->where('ID', $groupId)
+			->fetchObject()
+		;
+		if ($group === null)
+		{
+			return false;
+		}
+
+		$currentUserId = (int)$this->getCurrentUser()->getId();
+		$currentUserRelation = UserToGroupTable::query()
+			->setSelect(['ID', 'ROLE', 'USER_ID', 'GROUP_ID'])
+			->where('GROUP_ID', $groupId)
+			->where('USER_ID', $currentUserId)
+			->fetchObject()
+		;
+
+		$accessManager = new AccessManager(
+			$group,
+			$currentUserRelation,
+			$currentUserRelation,
+			[],
+			[
+				'userId' => $currentUserId,
+			]
+		);
+
+		return $accessManager->canView();
 	}
 
 	public function setFeatureAction(int $groupId, array $feature): bool
@@ -1801,6 +1860,16 @@ class Workgroup extends Base
 			new Error(
 				Loc::getMessage('SONET_CONTROLLER_WORKGROUP_EMPTY'),
 				'SONET_CONTROLLER_WORKGROUP_EMPTY'
+			)
+		);
+	}
+
+	private function addGroupNotFoundError(): void
+	{
+		$this->addError(
+			new Error(
+				Loc::getMessage('SONET_CONTROLLER_WORKGROUP_NOT_FOUND'),
+				'SONET_CONTROLLER_WORKGROUP_NOT_FOUND'
 			)
 		);
 	}

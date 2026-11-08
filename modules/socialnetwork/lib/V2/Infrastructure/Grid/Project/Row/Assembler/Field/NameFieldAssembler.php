@@ -6,6 +6,7 @@ namespace Bitrix\Socialnetwork\V2\Infrastructure\Grid\Project\Row\Assembler\Fiel
 
 use Bitrix\Main\Grid\Row\FieldAssembler;
 use Bitrix\Socialnetwork\Item\Workgroup\Type;
+use Bitrix\Socialnetwork\V2\Infrastructure\Grid\Shared\Js\ProjectListControllerActionBuilder;
 use Bitrix\Socialnetwork\V2\Internal\Entity\Project\Avatar;
 
 class NameFieldAssembler extends FieldAssembler
@@ -30,9 +31,11 @@ class NameFieldAssembler extends FieldAssembler
 		$escapedName = htmlspecialcharsbx($name);
 		$picPath = htmlspecialcharsbx($avatar?->url ?? '');
 		$color = htmlspecialcharsbx((string)($data['COLOR'] ?? ''));
+		$entityId = (int)($data['ID'] ?? 0);
+		$onclickAttr = $this->buildOnclickAttribute($entityId, $type);
 		$nameNode = $viewUrl === ''
 			? '<span>' . $escapedName . '</span>'
-			: '<a href="' . htmlspecialcharsbx($viewUrl) . '" class="socialnetwork-project-list-name-link">'
+			: '<a href="' . htmlspecialcharsbx($viewUrl) . '" class="socialnetwork-project-list-name-link"' . $onclickAttr . '>'
 				. $escapedName
 				. '</a>';
 
@@ -53,6 +56,13 @@ class NameFieldAssembler extends FieldAssembler
 		}
 
 		return $row;
+	}
+
+	private function buildOnclickAttribute(int $entityId, ?string $entityType): string
+	{
+		$call = ProjectListControllerActionBuilder::buildNotifyOpenProjectAction($entityId, $entityType);
+
+		return $call === '' ? '' : ' onclick="' . htmlspecialcharsbx($call) . '"';
 	}
 
 	private function renderAvatar(

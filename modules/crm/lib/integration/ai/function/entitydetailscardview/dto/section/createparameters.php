@@ -21,6 +21,7 @@ class CreateParameters extends AbstractParameters
 			...parent::getValidators($fields),
 
 			new ObjectField($this, 'section'),
+			new RequiredField($this, 'section'),
 			new NotEmptyField($this, 'section'),
 		];
 	}

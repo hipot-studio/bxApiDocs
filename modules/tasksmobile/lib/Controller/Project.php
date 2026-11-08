@@ -16,11 +16,27 @@ use Bitrix\Socialnetwork\Component\WorkgroupList;
 use Bitrix\Socialnetwork\V2\Feature;
 use Bitrix\Tasks\Internals\Project\Provider;
 use Bitrix\Tasks\Internals\Project\Pull\PullDictionary;
+use Bitrix\TasksMobile\Cache\DeadlineCountersResetTrait;
 
 Loader::requireModule('socialnetwork');
 
 class Project extends Controller
 {
+	use DeadlineCountersResetTrait;
+
+	/**
+	 * Watching the list writes a row in b_pull_watch and nothing else, and the project screen asks for it on
+	 * every opening - a reset there would cost the board a recount for a subscription. Pinning stays out: it
+	 * writes a user option all the same, and the screens ask for it only when the user pins something.
+	 */
+	protected function getReadActionNames(): array
+	{
+		return [
+			'list',
+			'startWatchList',
+		];
+	}
+
 	/**
 	 * @throws SqlQueryException
 	 * @throws ObjectPropertyException

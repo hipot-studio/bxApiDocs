@@ -2,6 +2,7 @@
 
 namespace Bitrix\Disk\Rest\Service;
 
+use Bitrix\Disk\Integration\Bitrix24Manager;
 use Bitrix\Disk\Internals\Error\Error;
 use Bitrix\Rest\AccessException;
 use Bitrix\Rest\RestException;
@@ -99,6 +100,8 @@ final class Folder extends BaseObject
 			throw new AccessException;
 		}
 
+		$rights = $this->prepareRights($rights);
+
 		$subFolder = $folder->addSubFolder(array(
 			'NAME' => $data['NAME'],
 			'CREATED_BY' => $this->userId
@@ -154,6 +157,9 @@ final class Folder extends BaseObject
 	{
 		if($fileContent === null)
 		{
+			// The rights are checked before the upload url is given out, so a refusal does not wait for the file.
+			$rights = $this->prepareRights($rights);
+
 			return array(
 				'field' => self::FILE_FORM_FIELD,
 				'uploadUrl' => \CRestUtil::getUploadUrl(
@@ -178,6 +184,8 @@ final class Folder extends BaseObject
 		{
 			throw new AccessException;
 		}
+
+		$rights = $this->prepareRights($rights);
 
 		$fileData = \CRestUtil::saveFile($fileContent);
 		if(!$fileData)
@@ -210,6 +218,8 @@ final class Folder extends BaseObject
 			throw new AccessException;
 		}
 
+		$rights = $this->prepareRights($rights);
+
 		if(empty($_FILES[self::FILE_FORM_FIELD]))
 		{
 			$this->errorCollection[] = new Error("Error: required parameter " . self::FILE_FORM_FIELD, self::ERROR_REQUIRED_PARAMETER);
@@ -233,6 +243,11 @@ final class Folder extends BaseObject
 
 	protected function shareToUser($id, $userId, $taskName)
 	{
+		if (!Bitrix24Manager::isFeatureEnabled('disk_folder_sharing'))
+		{
+			throw new AccessException;
+		}
+
 		$userId = (int)$userId;
 		$folder = $this->getFolderById($id);
 		if (!$this->isDiskStorage($folder))

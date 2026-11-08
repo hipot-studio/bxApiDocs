@@ -10,6 +10,7 @@ use Bitrix\Landing\Copilot\Connector\AI\Prompt;
 use Bitrix\Landing\Copilot\Data\Site;
 use Bitrix\Landing\Copilot\Generation\Error;
 use Bitrix\Landing\Copilot\Generation\Log;
+use Bitrix\Landing\Copilot\Generation\GenerationTimeSliceException;
 use Bitrix\Landing\Copilot\Generation\Request;
 use Bitrix\Landing\Copilot\Generation\Scenario\ChangeAiSiteState;
 use Bitrix\Landing\Copilot\Generation\Type\Errors;
@@ -153,7 +154,7 @@ class RequestChangeAiSiteImages extends AbstractAiImageRequest
 	protected function applyResponses(): bool
 	{
 		$changed = false;
-		$rightsBefore = Rights::isOn();
+		$rightsBefore = Rights::isGlobalOn();
 		Rights::setGlobalOff();
 		try
 		{
@@ -360,7 +361,7 @@ class RequestChangeAiSiteImages extends AbstractAiImageRequest
 		$timer = $this->generation->getTimer();
 		if (!$timer->check())
 		{
-			throw new \RuntimeException("The maximum execution time has been reached, step {$this->stepId} was aborted");
+			throw new GenerationTimeSliceException("The maximum execution time has been reached, step {$this->stepId} was aborted");
 		}
 	}
 

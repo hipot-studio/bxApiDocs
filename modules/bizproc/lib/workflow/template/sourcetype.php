@@ -15,10 +15,13 @@ class SourceType
 	const Input = 'Input';
 	const CalcFunction = 'Function';
 
+	/** Parameters every template answers by itself: they stand in no block of the data of the process. */
+	public const BUILT_IN_PARAMETER_KEYS = ['TargetUser', 'TemplateActivatedBy'];
+
 	public static function isType($type)
 	{
 		$ref = new \ReflectionClass(__CLASS__);
-		$constants = array_flip($ref->getConstants());
+		$constants = array_flip(array_filter($ref->getConstants(), 'is_scalar'));
 
 		return (isset($constants[$type]));
 	}

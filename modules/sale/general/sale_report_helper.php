@@ -487,7 +487,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:8:"ORDER_ID";s:7:"compare";s:5:"EQUAL";s:5:"value";s:1:"0";s:10:"changeable";s:1:"0";}i:1;'.
 						'a:5:{s:4:"type";s:5:"field";s:4:"name";s:31:"FUSER.USER.UserGroup:USER.GROUP";s:7:"compare";'.
 						's:5:"EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";'.
-						'i:7;s:9:"sort_type";s:4:"DESC";s:5:"limit";N;}'
+						'i:7;s:9:"sort_type";s:4:"DESC";s:5:"limit";N;}',
+						['allowed_classes' => false]
 					)
 				),
 				array(
@@ -512,7 +513,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:7:"compare";s:8:"CONTAINS";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}i:4;'.
 						'a:5:{s:4:"type";s:5:"field";s:4:"name";s:33:"PRODUCT.GoodsSection:PRODUCT.SECT";'.
 						's:7:"compare";s:5:"EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}s:5:"LOGIC";'.
-						's:3:"AND";}}s:4:"sort";i:6;s:9:"sort_type";s:4:"DESC";s:5:"limit";N;}'
+						's:3:"AND";}}s:4:"sort";i:6;s:9:"sort_type";s:4:"DESC";s:5:"limit";N;}',
+						['allowed_classes' => false]
 					)
 				),
 				array(
@@ -541,7 +543,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:30:"SUMMARY_PRICE_IN_SITE_CURRENCY";s:7:"compare";s:13:"LESS_OR_EQUAL";s:5:"value";s:0:"";'.
 						's:10:"changeable";s:1:"1";}i:8;a:5:{s:4:"type";s:5:"field";s:4:"name";s:6:"ACTIVE";'.
 						's:7:"compare";s:5:"EQUAL";s:5:"value";s:4:"true";s:10:"changeable";s:1:"1";}s:5:"LOGIC";'.
-						's:3:"AND";}}s:4:"sort";i:1;s:9:"sort_type";s:3:"ASC";s:5:"limit";N;}'
+						's:3:"AND";}}s:4:"sort";i:1;s:9:"sort_type";s:3:"ASC";s:5:"limit";N;}',
+						['allowed_classes' => false]
 					)
 				),
 				array(
@@ -564,7 +567,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:5:"EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}i:2;a:5:{s:4:"type";'.
 						's:5:"field";s:4:"name";s:5:"PAYED";s:7:"compare";s:5:"EQUAL";s:5:"value";s:4:"true";'.
 						's:10:"changeable";s:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:5;s:9:"sort_type";'.
-						's:4:"DESC";s:5:"limit";N;}'
+						's:4:"DESC";s:5:"limit";N;}',
+						['allowed_classes' => false]
 					)
 				),
 				array(
@@ -585,7 +589,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 							's:5:"alias";s:8:"xxxxxxxx";s:4:"aggr";s:3:"SUM";}}s:6:"filter";a:1:{i:0;a:2:{i:0;'.
 							'a:5:{s:4:"type";s:5:"field";s:4:"name";s:20:"UserGroup:USER.GROUP";s:7:"compare";'.
 							's:5:"EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}s:5:"LOGIC";s:3:"AND";}}'.
-							's:4:"sort";i:11;s:9:"sort_type";s:4:"DESC";s:5:"limit";N;}'
+							's:4:"sort";i:11;s:9:"sort_type";s:4:"DESC";s:5:"limit";N;}',
+							['allowed_classes' => false]
 					)
 				),
 				array(
@@ -606,7 +611,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 							'a:1:{i:0;a:2:{i:0;a:5:{s:4:"type";s:5:"field";s:4:"name";'.
 							's:25:"USER.UserGroup:USER.GROUP";s:7:"compare";s:5:"EQUAL";s:5:"value";s:0:"";'.
 							's:10:"changeable";s:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:1;s:9:"sort_type";'.
-							's:4:"DESC";s:5:"limit";N;}'
+							's:4:"DESC";s:5:"limit";N;}',
+							['allowed_classes' => false]
 					)
 				),
 				array(
@@ -631,7 +637,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:5:"field";s:4:"name";s:22:"PRICE_IN_SITE_CURRENCY";s:7:"compare";s:13:"LESS_OR_EQUAL";'.
 						's:5:"value";s:0:"";s:10:"changeable";s:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:0;'.
 						's:9:"sort_type";s:3:"ASC";s:5:"limit";N;s:12:"red_neg_vals";b:0;s:13:"grouping_mode";b:0;'.
-						's:5:"chart";N;}'
+						's:5:"chart";N;}',
+						['allowed_classes' => false]
 					)
 				),
 				array(
@@ -657,7 +664,8 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:16:"GREATER_OR_EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}i:5;a:5:{s:4:"type";'.
 						's:5:"field";s:4:"name";s:6:"ACTIVE";s:7:"compare";s:5:"EQUAL";s:5:"value";s:4:"true";'.
 						's:10:"changeable";s:1:"0";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:7;s:9:"sort_type";s:4:"DESC";'.
-						's:5:"limit";N;}'
+						's:5:"limit";N;}',
+						['allowed_classes' => false]
 					)
 				)
 			),
@@ -683,7 +691,9 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:7:"compare";s:5:"EQUAL";s:5:"value";a:1:{i:0;s:0:"";}s:10:"changeable";'.
 						's:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:8;s:9:"sort_type";s:3:"ASC";'.
 						's:5:"limit";N;s:12:"red_neg_vals";b:1;s:13:"grouping_mode";b:1;s:5:"chart";'.
-						'N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}')
+						'N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}',
+						['allowed_classes' => false]
+					)
 				),
 				array(
 					'owner' => 'sale_SaleProduct',
@@ -701,7 +711,9 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:7:"compare";s:5:"EQUAL";s:5:"value";a:1:{i:0;s:0:"";}s:10:"changeable";'.
 						's:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:12;s:9:"sort_type";s:3:"ASC";'.
 						's:5:"limit";N;s:12:"red_neg_vals";b:1;s:13:"grouping_mode";b:1;s:11:"helper_spec";'.
-						'a:1:{s:5:"ucspt";b:1;}s:5:"chart";N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}')
+						'a:1:{s:5:"ucspt";b:1;}s:5:"chart";N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}',
+						['allowed_classes' => false]
+					)
 				),
 				array(
 					'owner' => 'sale_SaleBasket',
@@ -727,7 +739,9 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:6;s:9:"sort_type";s:3:"ASC";'.
 						's:5:"limit";N;s:12:"red_neg_vals";b:1;s:13:"grouping_mode";b:1;s:5:"chart";'.
 						'a:4:{s:7:"display";b:1;s:4:"type";s:3:"pie";s:8:"x_column";i:6;s:9:"y_columns";'.
-						'a:1:{i:0;i:10;}}s:6:"mobile";a:1:{s:7:"enabled";b:1;}}')
+						'a:1:{i:0;i:10;}}s:6:"mobile";a:1:{s:7:"enabled";b:1;}}',
+						['allowed_classes' => false]
+					)
 				),
 				array(
 					'owner' => 'sale_SaleBasket',
@@ -756,7 +770,9 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:5:"field";s:4:"name";s:31:"FUSER.USER.UserGroup:USER.GROUP";s:7:"compare";'.
 						's:5:"EQUAL";s:5:"value";s:0:"";s:10:"changeable";s:1:"1";}s:5:"LOGIC";s:3:"AND";'.
 						'}}s:4:"sort";i:6;s:9:"sort_type";s:3:"ASC";s:5:"limit";N;s:12:"red_neg_vals";'.
-						'b:1;s:13:"grouping_mode";b:1;s:5:"chart";N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}')
+						'b:1;s:13:"grouping_mode";b:1;s:5:"chart";N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}',
+						['allowed_classes' => false]
+					)
 				),
 				array(
 					'owner' => 'sale_SaleProduct',
@@ -775,7 +791,9 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:7:"compare";s:5:"EQUAL";s:5:"value";a:1:{i:0;s:0:"";}s:10:"changeable";'.
 						's:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:8;s:9:"sort_type";s:3:"ASC";'.
 						's:5:"limit";N;s:12:"red_neg_vals";b:1;s:13:"grouping_mode";b:1;s:5:"chart";'.
-						'N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}')
+						'N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}',
+						['allowed_classes' => false]
+					)
 				),
 				array(
 					'owner' => 'sale_SaleProduct',
@@ -793,7 +811,9 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:51:"IBLOCK.SectionElement:IBLOCK_ELEMENT.IBLOCK_SECTION";s:7:"compare";'.
 						's:5:"EQUAL";s:5:"value";a:1:{i:0;s:0:"";}s:10:"changeable";s:1:"1";}s:5:"LOGIC";'.
 						's:3:"AND";}}s:4:"sort";i:12;s:9:"sort_type";s:3:"ASC";s:5:"limit";N;s:12:"red_neg_vals";'.
-						'b:1;s:13:"grouping_mode";b:1;s:5:"chart";N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}')
+						'b:1;s:13:"grouping_mode";b:1;s:5:"chart";N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}',
+						['allowed_classes' => false]
+					)
 				)
 			),
 			'12.5.1' => array(
@@ -823,7 +843,9 @@ abstract class CBaseSaleReportHelper extends CReportHelper
 						's:7:"compare";s:5:"EQUAL";s:5:"value";a:1:{i:0;s:0:"";}s:10:"changeable";'.
 						's:1:"1";}s:5:"LOGIC";s:3:"AND";}}s:4:"sort";i:8;s:9:"sort_type";s:3:"ASC";'.
 						's:5:"limit";N;s:12:"red_neg_vals";b:1;s:13:"grouping_mode";b:1;s:5:"chart";'.
-						'N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}')
+						'N;s:6:"mobile";a:1:{s:7:"enabled";b:1;}}',
+						['allowed_classes' => false]
+					)
 				)
 			)
 		);

@@ -31,6 +31,21 @@ final class Flow extends Base
 	}
 
 	/**
+	 * The counters and the presets read as well, they are simply not on the session-closing list. The pull
+	 * subscription writes a row of its own in b_pull_watch and nothing else, while the flow screen asks for
+	 * it on every opening - a reset there would cost the board a recount for a subscription.
+	 */
+	protected function getReadActionNames(): array
+	{
+		return [
+			...$this->getQueryActionNames(),
+			'getCounters',
+			'getSearchBarPresets',
+			'subscribeUserToPull',
+		];
+	}
+
+	/**
 	 * @restMethod tasksmobile.Flow.loadItems
 	 * @param FlowRequestFilter $flowSearchParams
 	 * @param PageNavigation $pageNavigation

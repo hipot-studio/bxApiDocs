@@ -9,6 +9,40 @@ use Bitrix\Main\Localization\Loc;
 
 final class WorkflowTemplate
 {
+	/**
+	 * The only fields a client save path may write. Everything else is server-owned: authorship
+	 * (CREATED_BY, UPDATED_BY), provenance (SYSTEM_CODE, CREATE_SOURCE) and above all TYPE, which decides
+	 * which ACL owns the row - a client-set TYPE would move a live Nodes template out of the template ACL
+	 * and back onto the legacy document-type gate, while a client-set SYSTEM_CODE would pass the row off as
+	 * a catalogue one and skip the copy gate of
+	 * {@see \Bitrix\Bizproc\Internal\Service\AiAgentGrid\LaunchableTemplateResolver}. Unknown fields are
+	 * dropped rather than rejected, so clients that send the whole row back keep working.
+	 *
+	 * Dropping TYPE here only closes the direct route. TYPE is also derived from TEMPLATE and AUTO_EXECUTE,
+	 * which this very list makes writable, so a save that would take a Nodes row out of its ACL by the
+	 * derivation is refused as well - see
+	 * {@see \Bitrix\Bizproc\Api\Service\WorkflowTemplateService::takesTemplateOutOfNodes()}.
+	 *
+	 * The set is the union of what the legitimate producers actually send: the chart editor
+	 * ({@see \Bitrix\BizprocDesigner\Infrastructure\Controller\Diagram::prepareFields()}), the legacy
+	 * designer (component bizproc.workflow.edit) and the AI agent draft service. Install, import and
+	 * conversion paths write through the loader/ORM directly and never reach this class.
+	 */
+	private const WRITABLE_FIELDS = [
+		'NAME',
+		'DESCRIPTION',
+		'DOCUMENT_TYPE',
+		'TEMPLATE',
+		'TEMPLATE_SETTINGS',
+		'PARAMETERS',
+		'VARIABLES',
+		'CONSTANTS',
+		'AUTO_EXECUTE',
+		'SORT',
+		'IS_SYSTEM',
+		'TRACK_ON',
+	];
+
 	private int $templateId = 0;
 	private array $fields = [];
 
@@ -43,6 +77,8 @@ final class WorkflowTemplate
 	 */
 	private static function normalizeFields(array $fields, bool $checkRequired = true): array
 	{
+		$fields = array_intersect_key($fields, array_flip(self::WRITABLE_FIELDS));
+
 		$fields['VARIABLES'] = is_array($fields['VARIABLES'] ?? null) ? $fields['VARIABLES'] : [];
 		$fields['CONSTANTS'] = is_array($fields['CONSTANTS'] ?? null) ? $fields['CONSTANTS'] : [];
 

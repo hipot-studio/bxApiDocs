@@ -572,6 +572,36 @@ class Helper
 		return false;
 	}
 
+	/**
+	 * Names of the fields of a document type, keyed by field id.
+	 *
+	 * @return array<string, string>
+	 */
+	public static function getFieldNames(array $documentType): array
+	{
+		[$ids, $names] = static::getFieldsMap($documentType);
+
+		return array_combine($ids, $names);
+	}
+
+	/**
+	 * Names of the globals of one source type, keyed by global id: the name alone, without the
+	 * visibility {@see static::getGlobalsMap()} prefixes it with for the robot designer.
+	 *
+	 * @return array<string, string>
+	 */
+	public static function getGlobalNames(string $type, array $documentType): array
+	{
+		$globals = match ($type)
+		{
+			Bizproc\Workflow\Template\SourceType::GlobalConstant => static::getGlobalConstants($documentType),
+			Bizproc\Workflow\Template\SourceType::GlobalVariable => static::getGlobalVariables($documentType),
+			default => [],
+		};
+
+		return array_map(static fn(array $global): string => (string)$global['Name'], $globals);
+	}
+
 	protected static function getFieldsMap(array $documentType)
 	{
 		$key = implode('@', $documentType);

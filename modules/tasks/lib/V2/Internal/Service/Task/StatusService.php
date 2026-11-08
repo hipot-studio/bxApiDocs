@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Bitrix\Tasks\V2\Internal\Service\Task;
 
-use Bitrix\Tasks\V2\Internal\DI\Container;
 use Bitrix\Tasks\V2\Internal\Entity\Task;
 use Bitrix\Tasks\V2\Internal\Entity\Task\Status;
 use Bitrix\Tasks\V2\Internal\Entity\User;
@@ -34,18 +33,9 @@ class StatusService
 			status: Status::InProgress
 		);
 
-		$updatedTask = $this->updateTaskService->update($entity, $config);
-
-		if ($updatedTask->allowsTimeTracking)
-		{
-			Container::getInstance()->getTimeManagementService()->startTimer(
-				userId: $config->getUserId(),
-				taskId: $taskId,
-				canStart: true,
-			);
-		}
-
-		return $updatedTask;
+		// Update to IN_PROGRESS with the taker as responsible runs through UpdateService::update(), whose
+		// post-save auto-start (StartTimer) starts the responsible timer - the single source now.
+		return $this->updateTaskService->update($entity, $config);
 	}
 
 	public function renew(int $taskId, UpdateConfig $config): Task

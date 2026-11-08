@@ -25,4 +25,18 @@ class Category extends Converter
 
 		return $this->convertKeysToCamelCase($data);
 	}
+
+	public function toCategoryMenuJson(Entity\Category $category, int $counter): array
+	{
+		$data = $this->prepareData([
+			'ID' => $category->getId(),
+			'NAME' => $category->getName(),
+			'SORT' => $category->getSort(),
+			'ENTITY_TYPE_ID' => $category->getEntityTypeId(),
+			'IS_DEFAULT' => $category->getIsDefault(),
+			'COUNTER' => $counter,
+		]);
+
+		return $this->convertKeysToCamelCase($data);
+	}
 }

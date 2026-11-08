@@ -14,6 +14,7 @@ use Bitrix\Sign\Access\Service\SelectorSourceAccessService;
 use Bitrix\Sign\Attribute;
 use Bitrix\Sign\Debug\Logger;
 use Bitrix\Sign\FeatureResolver;
+use Bitrix\Sign\Helper\IterationHelper;
 use Bitrix\Sign\Item;
 use Bitrix\Sign\Item\Hr\EntitySelector\EntityCollection;
 use Bitrix\Sign\Item\Hr\NodeSync;
@@ -24,10 +25,13 @@ use Bitrix\Sign\Operation\Member\Validation\ValidateEntitySelectorMembers;
 use Bitrix\Sign\Result\Operation\Member\ValidateEntitySelectorMembersResult;
 use Bitrix\Sign\Service;
 use Bitrix\Sign\Type\Access\AccessibleItemType;
+use Bitrix\Sign\Type\Access\ItemIdentifierType;
 use Bitrix\Sign\Type\DocumentScenario;
 use Bitrix\Sign\Type\Member\EntityType;
 use Bitrix\Sign\Type\Member\Role;
+use Bitrix\Sign\Type\Member\SigningMethod;
 use Bitrix\Sign\Type\MemberStatus;
+use Bitrix\Sign\Type\ProviderCode;
 use Bitrix\Sign\Ui\Member\Stage;
 
 class Member extends \Bitrix\Sign\Engine\Controller
@@ -37,6 +41,12 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	 * call may touch. Guards against unbounded "select all" grid mass actions.
 	 */
 	private const MAX_ANNUL_BATCH_COUNT = 100;
+
+	/** Reading the stage of a member is available to whoever may read the document that owns it. */
+	private const LOAD_STAGE_ACCESS_ACTIONS = [
+		ActionDictionary::ACTION_B2E_DOCUMENT_READ,
+		ActionDictionary::ACTION_DOCUMENT_READ,
+	];
 
 	private Service\Sign\MemberService $memberService;
 	private Service\Sign\DocumentService $documentService;
@@ -117,6 +127,9 @@ class Member extends \Bitrix\Sign\Engine\Controller
 				'presetId' => $member->presetId,
 				'party' => $member->party,
 				'role' => $member->role,
+				// The wizard preselects the stored signing method when the setup is reopened.
+				'signingMethod' => $member->signingMethod,
+				'reminderType' => $member->reminder->type->value,
 			];
 		}
 
@@ -179,11 +192,13 @@ class Member extends \Bitrix\Sign\Engine\Controller
 			ActionDictionary::ACTION_DOCUMENT_EDIT,
 			AccessibleItemType::DOCUMENT,
 			'uid',
-	),
+			ItemIdentifierType::MEMBER_UID,
+		),
 		new Attribute\ActionAccess(
 			ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
 			AccessibleItemType::DOCUMENT,
-			'uid'
+			'uid',
+			ItemIdentifierType::MEMBER_UID,
 		)
 	)]
 	public function removeAction(string $uid)
@@ -404,13 +419,17 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		if (!$result->isSuccess())
 		{
 			$logger->error($result->getError()?->getMessage() ?? 'unknown error', ['errors' => $result->getErrors()]);
-			$this->addErrorByMessage('Error while getting unique signers count');
+			$this->addErrors($result->getErrors());
 
 			return [];
 		}
 
+		$data = $result->getData();
+
 		return [
-			'count' => $result->getData()['count'],
+			'count' => $data['count'],
+			'totalCount' => $data['totalCount'],
+			'excludedCount' => $data['excludedCount'],
 		];
 	}
 
@@ -449,8 +468,12 @@ class Member extends \Bitrix\Sign\Engine\Controller
 			return [];
 		}
 
+		$data = $result->getData();
+
 		return [
-			'count' => $result->getData()['count'],
+			'count' => $data['count'],
+			'totalCount' => $data['totalCount'],
+			'excludedCount' => $data['excludedCount'],
 		];
 	}
 
@@ -570,6 +593,16 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		$memberCollection = $result->members;
 		$departmentEntities = $result->departments;
 		$assigneeEntityType = $result->assigneeEntityType;
+		$memberCollection = $this->fillSigningMethods(
+			$memberCollection,
+			$members,
+			$assigneeEntityType,
+			$document,
+		);
+		if ($this->getErrors())
+		{
+			return [];
+		}
 
 		if (!$document->isTemplated())
 		{
@@ -578,7 +611,13 @@ class Member extends \Bitrix\Sign\Engine\Controller
 			);
 		}
 
-		$result = $this->memberService->setupB2eMembers($documentUid, $memberCollection, $representativeId, excludeRejected: $excludeRejected);
+		$result = $this->memberService->setupB2eMembers(
+			$documentUid,
+			$memberCollection,
+			$representativeId,
+			excludeRejected: $excludeRejected,
+			keepSavedReminderTypes: true,
+		);
 		if (!$result->isSuccess())
 		{
 			if ($result->getErrorCollection()->getErrorByCode('COMPANY_DOESNT_EXIST'))
@@ -617,6 +656,142 @@ class Member extends \Bitrix\Sign\Engine\Controller
 		return [];
 	}
 
+	private function fillSigningMethods(
+		\Bitrix\Sign\Item\MemberCollection $memberCollection,
+		array $members,
+		string $assigneeEntityType,
+		\Bitrix\Sign\Item\Document $document,
+	): \Bitrix\Sign\Item\MemberCollection
+	{
+		foreach ($members as $memberData)
+		{
+			if (($memberData['role'] ?? null) !== Role::ASSIGNEE)
+			{
+				continue;
+			}
+
+			$signingMethod = $memberData['signingMethod'] ?? null;
+			if (!is_string($signingMethod) || $signingMethod === '')
+			{
+				continue;
+			}
+
+			// The value goes straight to the member row and signsafe reads an unknown one as "no method
+			// chosen", which means ukep. Refusing is louder than storing a method nobody can honour.
+			if (!SigningMethod::isValid($signingMethod))
+			{
+				$this->addError(new Error('Invalid `signingMethod` value'));
+
+				continue;
+			}
+
+			if (
+				$signingMethod === SigningMethod::GOS_KEY
+				&& !$this->canAssigneeUseGoskey($assigneeEntityType, $document)
+			)
+			{
+				$this->addError(new Error(
+					Loc::getMessage('SIGN_CONTROLLER_MEMBER_DIRECTOR_SIGNING_NOT_ALLOWED'),
+					'SIGNING_METHOD_PERMISSION_REQUIRED',
+				));
+
+				continue;
+			}
+
+			$assignee = $memberCollection->findFirstByRole(Role::ASSIGNEE);
+			if ($assignee !== null)
+			{
+				$assignee->signingMethod = $signingMethod;
+			}
+		}
+
+		return $memberCollection;
+	}
+
+	/**
+	 * Goskey is the signing method of the company representative, so it requires a representative who
+	 * is a person. A representative given as a structure role is refused: a role is a position and
+	 * `$representativeId` holds the role id, so there is nobody to sign.
+	 *
+	 * The provider is checked here as well: the company is chosen on an earlier wizard step, which
+	 * stores its provider on the document, and only goskey-lite has a head-signing branch. The wizard
+	 * shows no control for the other providers, so the value can only arrive without it.
+	 *
+	 * Whether the branch is open for this portal is not asked here: the signing service owns that
+	 * rollout by client id and already answers it per company through
+	 * `goskey_representative_signing_available`, which is what hides the control in the wizard.
+	 */
+	private function canAssigneeUseGoskey(
+		string $assigneeEntityType,
+		\Bitrix\Sign\Item\Document $document,
+	): bool
+	{
+		return $assigneeEntityType === EntityType::COMPANY
+			&& $document->providerCode === ProviderCode::GOS_KEY_LITE
+		;
+	}
+
+	/**
+	 * The wizard asks this on the step where the representative and his signing method are chosen, so a
+	 * refusal names the person who caused it while he is still on the screen. The parties are stored by
+	 * another action, and it makes the same check: the answer here is advice for the wizard, not the
+	 * permission itself.
+	 */
+	#[Attribute\Access\LogicOr(
+		new Attribute\ActionAccess(ActionDictionary::ACTION_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'documentUid'),
+		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'documentUid')
+	)]
+	public function checkRepresentativeSigningMethodAction(
+		string $documentUid,
+		int $representativeId,
+		string $signingMethod,
+		string $representativeEntityType = EntityType::USER,
+	): array
+	{
+		if ($representativeId <= 0)
+		{
+			$this->addError(new Error("Invalid `representativeId` value"));
+
+			return [];
+		}
+
+		if (!SigningMethod::isValid($signingMethod))
+		{
+			$this->addError(new Error('Invalid `signingMethod` value'));
+
+			return [];
+		}
+
+		if ($signingMethod !== SigningMethod::GOS_KEY)
+		{
+			return [];
+		}
+
+		$document = $this->documentService->getByUid($documentUid);
+		if (!$document)
+		{
+			$this->addError(new Error(Loc::getMessage('SIGN_CONTROLLER_MEMBER_DOCUMENT_NOT_FOUND')));
+
+			return [];
+		}
+
+		// The assignee of a b2e document is the company itself, unless the representative is given as a
+		// structure role - the same mapping the parties go through on their way to being stored.
+		$assigneeEntityType = $representativeEntityType === EntityType::USER
+			? EntityType::COMPANY
+			: $representativeEntityType
+		;
+		if (!$this->canAssigneeUseGoskey($assigneeEntityType, $document))
+		{
+			$this->addError(new Error(
+				Loc::getMessage('SIGN_CONTROLLER_MEMBER_DIRECTOR_SIGNING_NOT_ALLOWED'),
+				'SIGNING_METHOD_PERMISSION_REQUIRED',
+			));
+		}
+
+		return [];
+	}
+
 	/**
 	 * @param string $documentUid
 	 * @return array
@@ -646,8 +821,18 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	 * @return array
 	 */
 	#[Attribute\Access\LogicOr(
-		new Attribute\ActionAccess(ActionDictionary::ACTION_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid'),
-		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid')
+		new Attribute\ActionAccess(
+			ActionDictionary::ACTION_DOCUMENT_EDIT,
+			AccessibleItemType::DOCUMENT,
+			'uid',
+			ItemIdentifierType::MEMBER_UID,
+		),
+		new Attribute\ActionAccess(
+			ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+			AccessibleItemType::DOCUMENT,
+			'uid',
+			ItemIdentifierType::MEMBER_UID,
+		)
 	)]
 	public function modifyCommunicationChannelAction(string $uid, string $channelType, string $channelValue): array
 	{
@@ -673,8 +858,18 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	 * @return array
 	 */
 	#[Attribute\Access\LogicOr(
-		new Attribute\ActionAccess(ActionDictionary::ACTION_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid'),
-		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid')
+		new Attribute\ActionAccess(
+			ActionDictionary::ACTION_DOCUMENT_EDIT,
+			AccessibleItemType::DOCUMENT,
+			'uid',
+			ItemIdentifierType::MEMBER_UID,
+		),
+		new Attribute\ActionAccess(
+			ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+			AccessibleItemType::DOCUMENT,
+			'uid',
+			ItemIdentifierType::MEMBER_UID,
+		)
 	)]
 	public function loadCommunicationsAction(
 		string $uid,
@@ -699,8 +894,18 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	}
 
 	#[Attribute\Access\LogicOr(
-		new Attribute\ActionAccess(ActionDictionary::ACTION_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid'),
-		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid')
+		new Attribute\ActionAccess(
+			ActionDictionary::ACTION_DOCUMENT_EDIT,
+			AccessibleItemType::DOCUMENT,
+			'uid',
+			ItemIdentifierType::MEMBER_UID,
+		),
+		new Attribute\ActionAccess(
+			ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+			AccessibleItemType::DOCUMENT,
+			'uid',
+			ItemIdentifierType::MEMBER_UID,
+		)
 	)]
 	public function loadAppliedCommunicationAction(
 		string $uid,
@@ -728,8 +933,18 @@ class Member extends \Bitrix\Sign\Engine\Controller
 	}
 
 	#[Attribute\Access\LogicOr(
-		new Attribute\ActionAccess(ActionDictionary::ACTION_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid'),
-		new Attribute\ActionAccess(ActionDictionary::ACTION_B2E_DOCUMENT_EDIT, AccessibleItemType::DOCUMENT, 'uid')
+		new Attribute\ActionAccess(
+			ActionDictionary::ACTION_DOCUMENT_EDIT,
+			AccessibleItemType::DOCUMENT,
+			'memberUid',
+			ItemIdentifierType::MEMBER_UID,
+		),
+		new Attribute\ActionAccess(
+			ActionDictionary::ACTION_B2E_DOCUMENT_EDIT,
+			AccessibleItemType::DOCUMENT,
+			'memberUid',
+			ItemIdentifierType::MEMBER_UID,
+		)
 	)]
 	public function saveStampAction(string $memberUid, string $fileId): array
 	{
@@ -746,38 +961,99 @@ class Member extends \Bitrix\Sign\Engine\Controller
 			return [];
 		}
 		$member = $this->memberService->getByUid($memberUid);
+		if ($member === null)
+		{
+			$pendingFiles->remove();
+			$this->addError(new Error('Member not found'));
+
+			return [];
+		}
+
 		$result = $this->memberService->saveStampFile($stampFileId, $member);
 		if (!$result->isSuccess())
 		{
+			// The upload is deliberately left pending for the cleanup agent instead of being removed
+			// here: by the time the service reports a failure the file may already be referenced by
+			// the requisite of the company, and deleting it would break that reference.
 			$this->addErrors($result->getErrors());
 
 			return [];
 		}
+
+		// The stamp is the uploaded file itself, no copy of it is made: left pending, it would be
+		// dropped by the uploader cleanup agent together with the stamp of the company.
+		$pendingFiles->makePersistent();
 		$savedFileId = (int)$result->getData()['fileId'];
 
 		return [
 			'id' => $savedFileId,
-			'srcUri' => \CFile::GetPath($stampFileId),
+			'srcUri' => \CFile::getPath($stampFileId),
 		];
 	}
 
-	public function loadStageAction($memberId): array
+	/**
+	 * The action resolves the document indirectly, by member id, so the coarse prefilters prove nothing
+	 * about it: the stage of a member row is handed out only after the resolved document is checked.
+	 *
+	 * An unresolvable member and a member the caller may not read answer the same way, so member ids
+	 * cannot be enumerated through the difference.
+	 */
+	public function loadStageAction(int $memberId): array
 	{
+		if ($memberId <= 0)
+		{
+			$this->addAccessDeniedError();
+
+			return [];
+		}
+
 		$container = Service\Container::instance();
 		$memberRepository = $container->getMemberRepository();
 		$member = $memberRepository->getById($memberId);
 		if ($member === null)
 		{
+			$this->addAccessDeniedError();
+
 			return [];
 		}
 
 		$document = $container->getDocumentRepository()->getById($member->documentId);
 		if ($document === null)
 		{
+			$this->addAccessDeniedError();
+
+			return [];
+		}
+
+		if (!$this->canLoadMemberStage($member, $document))
+		{
+			$this->addAccessDeniedError();
+
 			return [];
 		}
 
 		return Stage::createInstance($member, $document)->getInfo();
+	}
+
+	/**
+	 * Either branch alone is enough: a signer reads the stage of their own row without any grant on the
+	 * document, and whoever may read the document reads the stage of every member of it. Gating on the
+	 * document grant alone would close the ordinary B2E signer out of their own grid row.
+	 */
+	private function canLoadMemberStage(Item\Member $member, Item\Document $document): bool
+	{
+		$currentUserId = (int)CurrentUser::get()->getId();
+		if ($this->container->getSignMemberUserService()->checkAccessToMember($member, $currentUserId))
+		{
+			return true;
+		}
+
+		$accessController = $this->getAccessController();
+
+		return IterationHelper::any(
+			self::LOAD_STAGE_ACCESS_ACTIONS,
+			static fn(string $action): bool => $accessController->checkByItem($action, $document),
+		);
 	}
 
 	public function getAction(string $uid): array
@@ -1140,6 +1416,6 @@ class Member extends \Bitrix\Sign\Engine\Controller
 
 	private function getSyncMembersLockName(string $docUid): string
 	{
-		return "sign_sync_members_{$docUid}";
+		return 'sign_sync_members_' . $docUid;
 	}
 }

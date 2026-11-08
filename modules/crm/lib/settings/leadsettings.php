@@ -286,7 +286,6 @@ class LeadSettings
 		{
 			\CIntranetUtils::clearMenuCache();
 		}
-
 		return true;
 	}
 	/**

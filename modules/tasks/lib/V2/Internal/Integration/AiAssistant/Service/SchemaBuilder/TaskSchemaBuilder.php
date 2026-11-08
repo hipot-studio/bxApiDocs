@@ -57,6 +57,8 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 		return match ($action)
 		{
 			UpdateTaskTool::ACTION_NAME,
+			ClearTaskDeadlineTool::ACTION_NAME,
+			DetachTaskFromGroupTool::ACTION_NAME,
 			SetDailyTaskRecurrenceTool::ACTION_NAME,
 			SetMonthlyByMonthDaysTaskRecurrenceTool::ACTION_NAME,
 			SetMonthlyByWeekDaysTaskRecurrenceTool::ACTION_NAME,
@@ -98,7 +100,18 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			'deadlineDate' => [
 				'type' => ['string', 'null'],
 				'format' => 'date-time',
-				'description' => "Task deadline in '" . BaseSchemaBuilder::DATE_FORMAT . "' format",
+				'description' => 'Task deadline.'
+					. ' If omitted, the default deadline from the creator settings is applied automatically;'
+					. ' to create a task with no deadline at all, set "withoutDeadline" to true.'
+					. BaseSchemaBuilder::DATE_TIME_NOTE
+				,
+			],
+			'withoutDeadline' => [
+				'type' => ['boolean', 'null'],
+				'description' => 'Set to true only if the task must have no deadline at all.'
+					. ' Must not be combined with "deadlineDate". Default is false.'
+				,
+				'default' => false,
 			],
 			'groupId' => [
 				'type' => ['integer', 'null'],
@@ -176,9 +189,8 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 				'type' => ['string', 'null'],
 				'format' => 'date-time',
 				'description' =>
-					"New deadline in '" . BaseSchemaBuilder::DATE_FORMAT
-					. "' format. Null to leave unchanged. "
-					. 'To clear the deadline, use a dedicated tool.'
+					'New deadline. Null to leave unchanged. To clear the deadline, use a dedicated tool.'
+					. BaseSchemaBuilder::DATE_TIME_NOTE
 				,
 			],
 			'groupId' => [
@@ -251,18 +263,14 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 				'type' => ['string', 'null'],
 				'format' => 'date-time',
 				'description' =>
-					"The start of the deadline range in '"
-					. BaseSchemaBuilder::DATE_FORMAT
-					. "' format or null if not needed."
+					'The start of the deadline range, or null if not needed.' . BaseSchemaBuilder::DATE_TIME_NOTE
 				,
 			],
 			'deadlineTo' => [
 				'type' => ['string', 'null'],
 				'format' => 'date-time',
 				'description' =>
-					"The end of the deadline range in '"
-					. BaseSchemaBuilder::DATE_FORMAT
-					. "' format or null if not needed."
+					'The end of the deadline range, or null if not needed.' . BaseSchemaBuilder::DATE_TIME_NOTE
 				,
 			],
 			'groupId' => [
@@ -294,7 +302,7 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 			'tag' => [
 				'type' => ['string', 'null'],
 				'description' => 'Tag name to search for or null if not needed.',
-				'minimum' => 1,
+				'minLength' => 1,
 			],
 			'auditorId' => [
 				'type' => ['integer', 'null'],
@@ -477,9 +485,7 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 				'type' => ['string', 'null'],
 				'format' => 'date-time',
 				'description' =>
-					'Recurrence start date, in '
-					. BaseSchemaBuilder::DATE_FORMAT
-					. ' format. Default is save date.'
+					'Recurrence start date. Default is save date.' . BaseSchemaBuilder::DATE_TIME_NOTE
 				,
 			],
 			'repeatTill' => [
@@ -491,8 +497,7 @@ class TaskSchemaBuilder extends BaseSchemaBuilder
 				'type' => ['string', 'null'],
 				'format' => 'date-time',
 				'description' =>
-					"End date for recurrence if repeatTill is 'date', in '"
-					. BaseSchemaBuilder::DATE_FORMAT . "' format."
+					"End date for recurrence if repeatTill is 'date'." . BaseSchemaBuilder::DATE_TIME_NOTE
 				,
 			],
 			'times' => [

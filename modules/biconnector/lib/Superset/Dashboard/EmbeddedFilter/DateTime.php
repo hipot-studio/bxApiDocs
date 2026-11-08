@@ -24,107 +24,46 @@ class DateTime extends UrlFilter
 	public const PERIOD_CURRENT_MONTH = 'current_month';
 	public const PERIOD_CURRENT_WEEK = 'current_week';
 	public const PERIOD_CURRENT_YEAR = 'current_year';
+	public const PERIOD_PREVIOUS_WEEK = 'previous_week';
+	public const PERIOD_PREVIOUS_MONTH = 'previous_month';
+	public const PERIOD_PREVIOUS_YEAR = 'previous_year';
 
 	public const PERIOD_DEFAULT = 'default';
 	public const PERIOD_NONE = 'none';
 
-	private ?string $period;
-	private bool $hasDefaultPeriod = false;
-	private ?Date $from;
-	private ?Date $to;
+	/**
+	 * Superset time_range tokens matching the calendar periods of the global BI setting.
+	 * The backend dictionary (superset/utils/date_parser.py, TIME_RANGE_MAPPINGS) knows several spellings;
+	 * these are the ones the embedded date control of our Superset build names as a period.
+	 * Verify on a stand before changing them: the deployed build is what decides, not the source checkout.
+	 */
+	private const SUPERSET_TIME_RANGE_TOKENS = [
+		self::PERIOD_CURRENT_WEEK => 'current calendar week',
+		self::PERIOD_CURRENT_MONTH => 'current calendar month',
+		self::PERIOD_CURRENT_YEAR => 'current calendar year',
+		self::PERIOD_PREVIOUS_WEEK => 'previous calendar week',
+		self::PERIOD_PREVIOUS_MONTH => 'previous calendar month',
+		self::PERIOD_PREVIOUS_YEAR => 'previous calendar year',
+	];
+
+	private string $period;
+	private Date $from;
+	private Date $to;
 
 	public function __construct(Dashboard $dashboard, ?string $filterId = null)
 	{
 		parent::__construct($dashboard, $filterId);
 
-		$this->period = $dashboard->getOrmObject()->getFilterPeriod();
-		if (empty($this->period))
-		{
-			$this->hasDefaultPeriod = true;
-			$this->period = self::getDefaultPeriod();
-		}
+		$this->period = self::getDefaultPeriod();
 
 		if ($this->isRange())
 		{
-			$this->from = $dashboard->getOrmObject()->getDateFilterStart();
-			if ($this->from === null)
-			{
-				$this->from = self::getDefaultDateStart();
-			}
-
-			$this->to = $dashboard->getOrmObject()->getDateFilterEnd();
-			if ($this->to === null)
-			{
-				$this->to = self::getDefaultDateEnd();
-			}
-		}
-		elseif ($this->isCurrentRange())
-		{
-			$this->from = new Date();
-			$this->to = new Date();
-
-			$currentYear = (int)(new Date())->format('Y');
-			$currentMonth = (int)(new Date())->format('m');
-
-			if ($this->period === self::PERIOD_CURRENT_MONTH)
-			{
-				$nextMonth = ($currentMonth + 1) % 12;
-				$nextMonth = $nextMonth === 0 ? 12 : $nextMonth;
-				$nextYear = $nextMonth === 1 ? $currentYear + 1 : $currentYear;
-
-				$this->from->setDate($currentYear, $currentMonth, 1);
-				$this->to->setDate($nextYear, $nextMonth, 1)->add('-1 day');
-			}
-			elseif ($this->period === self::PERIOD_CURRENT_YEAR)
-			{
-				$this->from->setDate($currentYear, 1, 1);
-				$this->to->setDate($currentYear, 12, 31);
-			}
-			elseif ($this->period === self::PERIOD_CURRENT_WEEK)
-			{
-				$weekDay = (int)(new Date())->format('w');
-				$weekDay = $weekDay === 0 ? 7 : $weekDay;
-
-				$this->from->add('-' . ($weekDay - 1) . ' days');
-				$this->to->add('+' . (7 - $weekDay) . ' days');
-			}
-
-			$this->to->add('+1 day');
-		}
-		elseif ($this->isNone())
-		{
-			$this->from = null;
-			$this->to = null;
+			$this->from = self::getDefaultDateStart();
+			$this->to = self::getDefaultDateEnd();
 		}
 		else
 		{
-			$this->to = new Date();
-
-			$interval = '-1 year';
-
-			if ($this->period === self::PERIOD_LAST_7)
-			{
-				$interval = '-7 days';
-			}
-			elseif ($this->period === self::PERIOD_LAST_30)
-			{
-				$interval = '-30 days';
-			}
-			elseif ($this->period === self::PERIOD_LAST_90)
-			{
-				$interval = '-90 days';
-			}
-			elseif ($this->period === self::PERIOD_LAST_180)
-			{
-				$interval = '-180 days';
-			}
-			elseif ($this->period === self::PERIOD_LAST_365)
-			{
-				$interval = '-365 days';
-			}
-
-			$this->from = clone($this->to);
-			$this->from->add($interval);
+			$this->initCalendarPeriod();
 		}
 	}
 
@@ -133,9 +72,39 @@ class DateTime extends UrlFilter
 		return 'filter_time';
 	}
 
-	public function hasDefaultFilter(): bool
+	/**
+	 * Tells whether the dashboard itself resolves the period: its author has set a
+	 * default value for the time filter in the Superset builder. Such a dashboard is
+	 * left alone — neither the embedded url ({@see NativeFilterBuilder}) nor the assistant
+	 * ({@see \Bitrix\BIConnector\Internal\Integration\AiAssistant\Filter\AppliedFilters})
+	 * imposes the period of the global BI setting on it.
+	 *
+	 * @param array $nativeFilterConfig Native filter config of the dashboard, as Superset returns it.
+	 */
+	public static function isResolvedByDashboard(array $nativeFilterConfig): bool
 	{
-		return $this->hasDefaultPeriod;
+		foreach ($nativeFilterConfig as $filterConfig)
+		{
+			if (
+				is_array($filterConfig)
+				&& ($filterConfig['filterType'] ?? '') === self::getFilterType()
+				&& self::hasConfiguredDefault($filterConfig)
+			)
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * The same question about a single filter of the config.
+	 * The config comes from Superset, so scalars and missing keys must not break the check.
+	 */
+	public static function hasConfiguredDefault(array $filterConfig): bool
+	{
+		return !empty($filterConfig['defaultDataMask']['filterState']['value']);
 	}
 
 	private function isRange(): bool
@@ -143,45 +112,63 @@ class DateTime extends UrlFilter
 		return $this->period === self::PERIOD_RANGE;
 	}
 
-	private function isCurrentRange(): bool
+	/**
+	 * Fills the bounds of a calendar period: current or previous week, month, year.
+	 */
+	private function initCalendarPeriod(): void
 	{
-		return in_array($this->period, [
-			self::PERIOD_CURRENT_YEAR,
-			self::PERIOD_CURRENT_MONTH,
-			self::PERIOD_CURRENT_WEEK,
-		]);
+		$this->from = new Date();
+		$this->to = new Date();
+
+		match ($this->period)
+		{
+			self::PERIOD_CURRENT_WEEK => $this->initWeekBounds(0),
+			self::PERIOD_PREVIOUS_WEEK => $this->initWeekBounds(-1),
+			self::PERIOD_PREVIOUS_MONTH => $this->initMonthBounds(-1),
+			self::PERIOD_CURRENT_YEAR => $this->initYearBounds(0),
+			self::PERIOD_PREVIOUS_YEAR => $this->initYearBounds(-1),
+			default => $this->initMonthBounds(0),
+		};
+
+		$this->to->add('+1 day');
 	}
 
-	private function isNone(): bool
+	private function initWeekBounds(int $weekShift): void
 	{
-		return $this->period === self::PERIOD_NONE;
+		$weekDay = (int)$this->from->format('w');
+		$weekDay = $weekDay === 0 ? 7 : $weekDay;
+		$dayShift = $weekShift * 7;
+
+		$this->from->add(sprintf('%+d days', $dayShift - $weekDay + 1));
+		$this->to->add(sprintf('%+d days', $dayShift + 7 - $weekDay));
+	}
+
+	private function initMonthBounds(int $monthShift): void
+	{
+		$year = (int)$this->from->format('Y');
+		$month = (int)$this->from->format('m');
+
+		$this->from->setDate($year, $month, 1)->add(sprintf('%+d months', $monthShift));
+		$this->to->setDate($year, $month, 1)->add(sprintf('%+d months', $monthShift + 1))->add('-1 day');
+	}
+
+	private function initYearBounds(int $yearShift): void
+	{
+		$year = (int)$this->from->format('Y') + $yearShift;
+
+		$this->from->setDate($year, 1, 1);
+		$this->to->setDate($year, 12, 31);
 	}
 
 	public function getFormatted(): string
 	{
-		if ($this->isNone())
-		{
-			return '';
-		}
-
-		$from = clone($this->from);
-		$from = $from->format('Y-m-d');
-
-		$to = clone($this->to);
-		// add one day to include the end date for range filter
-		if ($this->isRange())
-		{
-			$to->add('+1 day');
-		}
-		$to = $to->format('Y-m-d');
-
 		$urlTemplateFilter = '
 			#FILTER_ID#:(
 				extraFormData:(
-					time_range:\'#DATE_FROM#+:+#DATE_TO#\'
+					time_range:\'#TIME_RANGE#\'
 				),
 				filterState:(
-					value:\'#DATE_FROM#+:+#DATE_TO#\'
+					value:\'#TIME_RANGE#\'
 				),
 				id:#FILTER_ID#,
 				ownState:()
@@ -191,10 +178,33 @@ class DateTime extends UrlFilter
 			$urlTemplateFilter,
 			[
 				'#FILTER_ID#' => $this->getCode(),
-				'#DATE_FROM#' => $from,
-				'#DATE_TO#' => $to,
+				// the filter is inlined into the iframe url query, where a space is a plus
+				'#TIME_RANGE#' => str_replace(' ', '+', $this->getTimeRange()),
 			]
 		);
+	}
+
+	/**
+	 * A calendar period travels to Superset as its own token instead of the computed pair of dates:
+	 * only a token makes the date control show the named period, a pair of dates reads as a custom range.
+	 * The bounds stay computed on the portal - they feed the assistant.
+	 */
+	private function getTimeRange(): string
+	{
+		$token = self::SUPERSET_TIME_RANGE_TOKENS[$this->period] ?? null;
+		if ($token !== null)
+		{
+			return $token;
+		}
+
+		$to = clone($this->to);
+		// add one day to include the end date for range filter
+		if ($this->isRange())
+		{
+			$to->add('+1 day');
+		}
+
+		return sprintf('%s : %s', $this->from->format('Y-m-d'), $to->format('Y-m-d'));
 	}
 
 	public function getPeriod(): string
@@ -209,12 +219,12 @@ class DateTime extends UrlFilter
 		return Loc::getMessage("BICONNECTOR_SUPERSET_EMBEDDED_FILTER_RANGE_{$name}") ?? '';
 	}
 
-	public function getDateEnd(): ?string
+	public function getDateEnd(): Date
 	{
 		return $this->to;
 	}
 
-	public function getDateStart(): ?string
+	public function getDateStart(): Date
 	{
 		return $this->from;
 	}
@@ -229,7 +239,7 @@ class DateTime extends UrlFilter
 
 	public static function getDefaultPeriod(): string
 	{
-		$defaultValue = self::PERIOD_LAST_30;
+		$defaultValue = self::PERIOD_CURRENT_MONTH;
 		$value = Option::get('biconnector', self::CONFIG_PERIOD_OPTION_NAME, $defaultValue);
 		if (self::isAvailablePeriod($value))
 		{
@@ -282,18 +292,15 @@ class DateTime extends UrlFilter
 		return in_array(
 			$period,
 			[
-				self::PERIOD_LAST_7,
-				self::PERIOD_LAST_30,
-				self::PERIOD_LAST_90,
-				self::PERIOD_LAST_180,
-				self::PERIOD_LAST_365,
 				self::PERIOD_RANGE,
 				self::PERIOD_CURRENT_WEEK,
 				self::PERIOD_CURRENT_MONTH,
 				self::PERIOD_CURRENT_YEAR,
-				self::PERIOD_NONE,
+				self::PERIOD_PREVIOUS_WEEK,
+				self::PERIOD_PREVIOUS_MONTH,
+				self::PERIOD_PREVIOUS_YEAR,
 			],
-		true
+			true
 		);
 	}
 }

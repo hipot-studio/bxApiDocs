@@ -3,6 +3,7 @@
 namespace Bitrix\Crm\Integration\Analytics\Builder\AI;
 
 use Bitrix\Crm\Activity\Provider\Call;
+use Bitrix\Crm\Activity\Provider\Email;
 use Bitrix\Crm\Activity\Provider\OpenLine;
 use Bitrix\Crm\Controller\ErrorCode;
 use Bitrix\Crm\Integration\Analytics\Builder\AbstractBuilder;
@@ -11,7 +12,7 @@ use Bitrix\Main\Result;
 use Bitrix\Main\Type\DateTime;
 use CCrmOwnerType;
 
-abstract class AIBaseEvent extends AbstractBuilder
+abstract class AIBaseEvent extends AbstractBuilder implements JobFinishEventContract
 {
 	private string $tool = Dictionary::TOOL_AI;
 	private string $category = Dictionary::CATEGORY_CRM_OPERATIONS;
@@ -151,10 +152,28 @@ abstract class AIBaseEvent extends AbstractBuilder
 		$map = [
 			Call::getId() => 'call',
 			OpenLine::getId() => 'chat',
+			Email::getId() => 'email',
 		];
 
 		$this->activityProvider = $map[$activityProvider] ?? null;
 
 		return $this;
 	}
+
+	// region JobFinishEventContract - target named entry points over the call named setters above
+	final public function setTargetTypeId(int $entityTypeId): self
+	{
+		return $this->setActivityOwnerTypeId($entityTypeId);
+	}
+
+	final public function setTargetId(int $targetId): self
+	{
+		return $this->setActivityId($targetId);
+	}
+
+	final public function setTargetProvider(string $provider): self
+	{
+		return $this->setActivityProvider($provider);
+	}
+	// endregion
 }

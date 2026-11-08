@@ -73,6 +73,13 @@ class BotWebhookPayloadBuilder
 		});
 	}
 
+	public function buildFormSubmit(array $arParams, array $arHandler): array
+	{
+		return $this->buildForSingleBot($arParams, $arHandler, static function (array $p): array {
+			return $p[3] ?? (new EventPayload())->formSubmit((int)$p[1], $p[2]);
+		});
+	}
+
 	public function buildCommandAdd(array $arParams, array $arHandler): array
 	{
 		$arParams = array_change_key_case($arParams, CASE_UPPER);

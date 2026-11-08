@@ -15,7 +15,7 @@ use Bitrix\Main\Localization\Loc;
  */
 class StatusFieldAssembler extends FieldAssembler
 {
-	private const DASHBOARD_STATUS_COMPUTED_NOT_FOUND = 'NOT_FOUND';
+	private const DASHBOARD_STATUS_COMPUTED_NOT_FOUND = 'NOT_FOUND_MSGVER_1';
 	private const DASHBOARD_STATUS_COMPUTED_NOT_AVAILABLE = 'NOT_AVAILABLE';
 	private const DASHBOARD_STATUS_COMPUTED_PROHIBITED = 'PROHIBITED';
 	private const DASHBOARD_STATUS_COMPUTED_NOT_LOAD = 'NOT_LOAD';
@@ -73,7 +73,7 @@ class StatusFieldAssembler extends FieldAssembler
 				$statusText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_LOAD');
 				return <<<HTML
 				<div class="dashboard-status-label-wrapper">
-					<span class="ui-label ui-label-primary ui-label-fill dashboard-status-label">
+					<span class="ui-label ui-label-primary dashboard-status-label">
 						<span class="ui-label-inner">$statusText</span>
 					</span>
 				</div>
@@ -81,10 +81,10 @@ class StatusFieldAssembler extends FieldAssembler
 
 			case SupersetDashboardTable::DASHBOARD_STATUS_READY:
 			case SupersetDashboardTable::DASHBOARD_STATUS_NOT_INSTALLED:
-				$statusText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_READY');
+				$statusText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_READY_MSGVER_1');
 				return <<<HTML
 				<div class="dashboard-status-label-wrapper">
-					<span class="ui-label ui-label-lightgreen ui-label-fill dashboard-status-label">
+					<span class="ui-label dashboard-status-label dashboard-status-label--ready">
 						<span class="ui-label-inner">$statusText</span>
 					</span>
 				</div>
@@ -94,7 +94,7 @@ class StatusFieldAssembler extends FieldAssembler
 				$statusText = Loc::getMessage('BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_DRAFT');
 				return <<<HTML
 				<div class="dashboard-status-label-wrapper">
-					<span class="ui-label ui-label-default ui-label-fill dashboard-status-label">
+					<span class="ui-label ui-label-default dashboard-status-label">
 						<span class="ui-label-inner">$statusText</span>
 					</span>
 				</div>
@@ -118,7 +118,7 @@ class StatusFieldAssembler extends FieldAssembler
 
 				return <<<HTML
 				<div class="dashboard-status-label-wrapper">
-					<span class="ui-label ui-label-fill dashboard-status-label dashboard-status-label-error ui-label-danger">
+					<span class="ui-label dashboard-status-label dashboard-status-label-error ui-label-danger">
 						<span class="ui-label-inner">$statusText</span>
 					</span>
 					$refreshBtn
@@ -142,12 +142,12 @@ class StatusFieldAssembler extends FieldAssembler
 				$statusText = Loc::getMessage("BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_{$status}");
 				if ($status === self::DASHBOARD_STATUS_COMPUTED_NOT_AVAILABLE)
 				{
-					$statusText = Loc::getMessage("BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_NOT_LOAD");
+					$statusText = Loc::getMessage("BICONNECTOR_SUPERSET_DASHBOARD_GRID_STATUS_NOT_LOAD_MSGVER_1");
 				}
 
 				return <<<HTML
 				<div class="dashboard-status-label-wrapper">
-					<span class="ui-label ui-label-fill dashboard-status-label ui-label-danger">
+					<span class="ui-label dashboard-status-label ui-label-danger">
 						<span class="ui-label-inner">$statusText</span>
 					</span>
 				</div>

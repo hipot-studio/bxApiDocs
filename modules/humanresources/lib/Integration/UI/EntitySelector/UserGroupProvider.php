@@ -2,6 +2,7 @@
 
 namespace Bitrix\HumanResources\Integration\UI\EntitySelector;
 
+use Bitrix\HumanResources\Integration\UI\StructureRoleIcon;
 use Bitrix\Main\Access\AccessCode;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\UI\Selector\UserGroups;
@@ -12,6 +13,8 @@ use Bitrix\UI\EntitySelector\Tab;
 
 class UserGroupProvider extends BaseProvider
 {
+	private const IMAGE_COMPANY = '/bitrix/js/humanresources/entity-selector/src/images/company.svg';
+
 	public function __construct()
 	{
 		parent::__construct();
@@ -40,7 +43,7 @@ class UserGroupProvider extends BaseProvider
 
 		foreach ($itemsToProcess as $id => $groupData)
 		{
-			$result[] = new Item(
+			$item = new Item(
 				[
 					'id' => $id,
 					'entityId' => 'user-groups',
@@ -48,6 +51,13 @@ class UserGroupProvider extends BaseProvider
 					'title' => $this->buildTitle($id, $groupData['name']),
 				],
 			);
+
+			$icon = $this->getItemIcon((string)$id);
+			$item->setAvatar($icon);
+			$item->getNodeOptions()->set('avatar', $icon);
+			$item->getTagOptions()->set('avatar', $this->getTagIcon((string)$id));
+
+			$result[] = $item;
 		}
 
 		return $result;
@@ -84,24 +94,32 @@ class UserGroupProvider extends BaseProvider
 		};
 	}
 
-	private function getCityIcon(): string
+	/**
+	 * Selected state is drawn on a colored tag background, so roles use the light icon variant
+	 * the same way StructureRoleProvider does.
+	 */
+	private function getTagIcon(string $id): string
 	{
-		$svg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-			<path fill-rule="evenodd" clip-rule="evenodd" d="M15.0369 10.3196C15.0369 10.2708 15.0428 10.2221 15.0543 10.1747C15.1327 9.85457 15.4504 9.65992 15.7639 9.73996L18.4943 10.437C18.7548 10.5035 18.9376 10.7425 18.9376 11.0167V16.5253H19.9127V18.517H4.31006V16.5253H5.28523V6.87877C5.28523 6.39044 5.63197 5.97415 6.10396 5.89582L12.9301 4.7629C12.9819 4.75432 13.0341 4.75 13.0865 4.75C13.6251 4.75 14.0618 5.19586 14.0618 5.74585V16.5253H15.0369V10.3196ZM9.35806 16.6811V13.4688H7.52246V16.6811H9.35806ZM12.1115 15.3044V13.4688H10.2759V15.3044H12.1115ZM18.0771 13.0098H16.2415V14.8454H18.0771V13.0098ZM12.1115 7.50293H10.2759V9.33853H12.1115V7.50293ZM9.35806 7.50293H7.52246V9.33853H9.35806V7.50293ZM12.1114 10.7157H10.2758V12.5513H12.1114V10.7157ZM9.35796 10.7157H7.52236V12.5513H9.35796V10.7157Z" fill="#ABB1B8"/>
-		</svg>'
-		;
-
-		return 'data:image/svg+xml;base64,' . base64_encode($svg);
+		return match ($this->getItemIcon($id))
+		{
+			StructureRoleIcon::TEAM => StructureRoleIcon::TEAM_SELECTED,
+			StructureRoleIcon::DEPARTMENT => StructureRoleIcon::DEPARTMENT_SELECTED,
+			default => self::IMAGE_COMPANY,
+		};
 	}
 
-	private function getSelectedCityIcon(): string
+	private function getItemIcon(string $id): string
 	{
-		$svg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-			<path fill-rule="evenodd" clip-rule="evenodd" d="M15.0369 10.3196C15.0369 10.2708 15.0428 10.2221 15.0543 10.1747C15.1327 9.85457 15.4504 9.65992 15.7639 9.73996L18.4943 10.437C18.7548 10.5035 18.9376 10.7425 18.9376 11.0167V16.5253H19.9127V18.517H4.31006V16.5253H5.28523V6.87877C5.28523 6.39044 5.63197 5.97415 6.10396 5.89582L12.9301 4.7629C12.9819 4.75432 13.0341 4.75 13.0865 4.75C13.6251 4.75 14.0618 5.19586 14.0618 5.74585V16.5253H15.0369V10.3196ZM9.35806 16.6811V13.4688H7.52246V16.6811H9.35806ZM12.1115 15.3044V13.4688H10.2759V15.3044H12.1115ZM18.0771 13.0098H16.2415V14.8454H18.0771V13.0098ZM12.1115 7.50293H10.2759V9.33853H12.1115V7.50293ZM9.35806 7.50293H7.52246V9.33853H9.35806V7.50293ZM12.1114 10.7157H10.2758V12.5513H12.1114V10.7157ZM9.35796 10.7157H7.52236V12.5513H9.35796V10.7157Z" fill="#FFFFFF"/>
-		</svg>'
-		;
-
-		return 'data:image/svg+xml;base64,' . base64_encode($svg);
+		return match ((new AccessCode($id))->getEntityType())
+		{
+			AccessCode::TYPE_ACCESS_TEAM_DIRECTOR,
+			AccessCode::TYPE_ACCESS_TEAM_EMPLOYEE,
+			AccessCode::TYPE_ACCESS_TEAM_DEPUTY => StructureRoleIcon::TEAM,
+			AccessCode::TYPE_ACCESS_DIRECTOR,
+			AccessCode::TYPE_ACCESS_EMPLOYEE,
+			AccessCode::TYPE_ACCESS_DEPUTY => StructureRoleIcon::DEPARTMENT,
+			default => self::IMAGE_COMPANY,
+		};
 	}
 
 	/**

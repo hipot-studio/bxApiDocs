@@ -12,6 +12,11 @@ class RunBizProc
 
 	public function __invoke(array $fields, TaskObject $taskBeforeUpdate): void
 	{
+		if ($this->config->isSkipTaskUpdateEvent())
+		{
+			return;
+		}
+
 		$runtime = $this->config->getRuntime();
 		if (!$this->config->isSkipBP())
 		{

@@ -112,6 +112,7 @@ class UniqueRequestFilter extends Base
 					|| $argument instanceof DTO\ProcessingStatusRequest
 					|| $argument instanceof DTO\CallUserRequest
 					|| $argument instanceof DTO\UserRequest
+					|| $argument instanceof DTO\PingTracksRequest
 				)
 				&& $argument->requestId !== ''
 			)

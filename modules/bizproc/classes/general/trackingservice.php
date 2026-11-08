@@ -376,12 +376,61 @@ class CBPTrackingService extends CBPRuntimeService
 		$executionResult,
 		$actionTitle = "",
 		$actionNote = "",
-		$modifiedBy = 0
+		$modifiedBy = 0,
+	): ?int
+	{
+		return $this->writeInternal(
+			$workflowId,
+			$type,
+			$actionName,
+			$executionStatus,
+			$executionResult,
+			$actionTitle,
+			$actionNote,
+			$modifiedBy,
+			false,
+		);
+	}
+
+	public function writeForced(
+		$workflowId,
+		$type,
+		$actionName,
+		$executionStatus,
+		$executionResult,
+		$actionTitle = "",
+		$actionNote = "",
+		$modifiedBy = 0,
+	): ?int
+	{
+		return $this->writeInternal(
+			$workflowId,
+			$type,
+			$actionName,
+			$executionStatus,
+			$executionResult,
+			$actionTitle,
+			$actionNote,
+			$modifiedBy,
+			true,
+		);
+	}
+
+	private function writeInternal(
+		$workflowId,
+		$type,
+		$actionName,
+		$executionStatus,
+		$executionResult,
+		$actionTitle,
+		$actionNote,
+		$modifiedBy,
+		bool $isForcedWrite,
 	): ?int
 	{
 		global $DB;
 
-		if (!$this->canWrite($type, $workflowId))
+		if (!$isForcedWrite && !$this->canWrite($type, $workflowId))
 		{
 			return null;
 		}
@@ -409,7 +458,7 @@ class CBPTrackingService extends CBPRuntimeService
 		);
 		$id = $DB->LastID();
 
-		if (self::getLogSizeLimit() && !$this->isForcedMode($workflowId))
+		if (self::getLogSizeLimit() && !$isForcedWrite && !$this->isForcedMode($workflowId))
 		{
 			$this->cutLogSizeDeferred($workflowId);
 		}

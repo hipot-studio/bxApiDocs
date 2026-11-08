@@ -21,12 +21,17 @@ namespace Bitrix\Mail\Internal\Service\SourceGeneration;
  * moves it to ReadyToSwitch, whose repeatable passes walk every folder of the new source
  * before the route of the delivery moves.
  *
- * ResettingImport is the one stage that goes backwards: a source that changed the epoch
- * of a folder is taking back its promise that the numbers of it mean the same letters, so
- * everything the import of the generation created is dropped and the import starts over
+ * Two stages go backwards. ResettingImport: a source that changed the epoch of a folder is
+ * taking back its promise that the numbers of it mean the same letters, so everything the
+ * import of the generation created is dropped and the import starts over
  * ({@see MigrationService::resetImportedData()}). It is a stage of its own because the
  * drop is bounded like every other pass and therefore may end unfinished: while it stands
  * here, the operation goes nowhere near the switch.
+ *
+ * And ReadyToSwitch back to TailAppend: the hand over found folders the user created on the
+ * old server after the snapshot was accepted, brought them into the new server and goes back
+ * to the tail for their letters ({@see LateFolderReconciler}). The stored authorization of the
+ * switch stays, and the returns are bounded by {@see LateFolderReconciler::MAX_FOLDER_RETURNS}.
  */
 enum MigrationStage: string
 {

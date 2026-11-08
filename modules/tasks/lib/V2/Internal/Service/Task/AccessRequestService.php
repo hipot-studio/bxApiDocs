@@ -84,4 +84,14 @@ class AccessRequestService
 	{
 		$this->taskAccessRequestRepository->clearByUserId($userId);
 	}
+
+	public function hasAccessRequest(int $userId, int $taskId): bool
+	{
+		return $this->taskAccessRequestRepository->isExists($userId, $taskId);
+	}
+
+	public function clearAccessRequest(int $userId, int $taskId): void
+	{
+		$this->taskAccessRequestRepository->clearByUserAndTaskId($userId, $taskId);
+	}
 }

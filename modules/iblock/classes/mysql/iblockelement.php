@@ -1481,6 +1481,13 @@ class CIBlockElement extends CAllIBlockElement
 			if($bWorkFlow)
 			{
 				$arFields["WF_PARENT_ELEMENT_ID"] = $ID;
+				foreach (["PREVIEW_TEXT", "PREVIEW_TEXT_TYPE", "DETAIL_TEXT", "DETAIL_TEXT_TYPE"] as $field)
+				{
+					if (!array_key_exists($field, $arFields))
+					{
+						$arFields[$field] = $ar_wf_element[$field];
+					}
+				}
 
 				if(array_key_exists("PREVIEW_PICTURE", $arFields))
 				{

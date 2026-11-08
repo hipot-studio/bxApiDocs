@@ -2,6 +2,7 @@
 
 namespace Bitrix\Crm\Component\EntityList\Grid\Panel\Action\Item\Group;
 
+use Bitrix\Crm\Component\EntityList\Grid\Panel\ApplyButton;
 use Bitrix\Crm\Component\EntityList\Grid\Panel\Event;
 use Bitrix\Crm\Service\Factory;
 use Bitrix\Crm\Service\UserPermissions;
@@ -9,7 +10,6 @@ use Bitrix\Main\Filter\Filter;
 use Bitrix\Main\Grid\Panel\Action\Group\GroupChildAction;
 use Bitrix\Main\Grid\Panel\Actions;
 use Bitrix\Main\Grid\Panel\DefaultValue;
-use Bitrix\Main\Grid\Panel\Snippet;
 use Bitrix\Main\Grid\Panel\Snippet\Onchange;
 use Bitrix\Main\Grid\Panel\Types;
 use Bitrix\Main\HttpRequest;
@@ -18,7 +18,7 @@ use Bitrix\Main\Result;
 
 class ObserversChildAction extends GroupChildAction
 {
-	public function __construct(private readonly int $entityTypeId)
+	public function __construct(private readonly int $entityTypeId, private readonly string $gridId)
 	{
 	}
 
@@ -61,7 +61,8 @@ class ObserversChildAction extends GroupChildAction
 			],
 		]);
 
-		$hiddenInputId = 'action_observers_by_id';
+		// the grid address keeps the id unique: a card shows several panels at once
+		$hiddenInputId = 'action_observers_by_id_' . $this->gridId;
 
 		$onchange->addAction([
 			'ACTION' => Actions::CREATE,
@@ -71,7 +72,7 @@ class ObserversChildAction extends GroupChildAction
 					'ID' => $hiddenInputId,
 					'NAME' => 'ACTION_OBSERVERS_BY_ID'
 				],
-				(new Snippet())->getApplyButton([
+				ApplyButton::forGrid($this->gridId, [
 					'ONCHANGE' => [
 						[
 							'ACTION' => Actions::CALLBACK,
@@ -80,6 +81,7 @@ class ObserversChildAction extends GroupChildAction
 									'JS' =>
 										(new Event('BatchManager:executeObservers'))
 											->addEntityTypeId($this->entityTypeId)
+											->addGridId($this->gridId)
 											->addValueElementId($hiddenInputId)
 											->buildJsCallback()
 									,
@@ -97,6 +99,7 @@ class ObserversChildAction extends GroupChildAction
 				[
 					'JS' =>
 						(new Event('renderUserTagMultipleSelector'))
+							->addGridId($this->gridId)
 							->addParam('targetElementId', $hiddenInputId)
 							->addParam('multipleSelect', true)
 							->buildJsCallback()

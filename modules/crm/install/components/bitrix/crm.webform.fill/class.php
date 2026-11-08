@@ -1,12 +1,17 @@
 <?
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Loader;
+use Bitrix\Main\UuidGenerator;
 use Bitrix\Main\UserConsent\Agreement;
 
 use Bitrix\Crm\WebForm;
 use Bitrix\Crm\WebForm\ReCaptcha;
 use Bitrix\Crm\WebForm\Form;
 use Bitrix\Crm\WebForm\Helper;
+use Bitrix\Crm\WebForm\Telemetry\Recorder;
+use Bitrix\Crm\WebForm\Telemetry\RecorderInterface;
+use Bitrix\Crm\WebForm\Telemetry\SourceContextSigner;
+use Bitrix\Crm\WebForm\Telemetry\SubmissionClassifier;
 use Bitrix\Crm\UI\Webpack;
 use Bitrix\Crm\SiteButton\Guest;
 
@@ -18,6 +23,8 @@ Loc::loadMessages(__FILE__);
 
 class CCrmWebFormFillComponent extends \CBitrixComponent
 {
+	private const TELEMETRY_SESSION_KEY = 'CRM_WEBFORM_TELEMETRY_ATTEMPTS';
+
 	protected $errors = array();
 	protected $formId = null;
 
@@ -146,7 +153,89 @@ class CCrmWebFormFillComponent extends \CBitrixComponent
 				'VISITED_PAGES' => $visitedPages,
 				'TRACE' => $trace
 			),
+			'TELEMETRY_CONTEXT' => array(
+				'attemptId' => $this->getTelemetryAttemptId(true),
+				'ensureAttempt' => true,
+				'source' => $this->getTelemetrySource(),
+				'userAgent' => \Bitrix\Main\Context::getCurrent()->getServer()->get('HTTP_USER_AGENT'),
+			),
 		);
+	}
+
+	protected function getTelemetryRecorder(): RecorderInterface
+	{
+		return new Recorder();
+	}
+
+	protected function getTelemetryAttemptId(bool $create = false): ?string
+	{
+		$attemptId = $_SESSION[self::TELEMETRY_SESSION_KEY][$this->formId] ?? null;
+		if ((!is_string($attemptId) || $attemptId === '') && $create)
+		{
+			$attemptId = UuidGenerator::generateV4();
+			$_SESSION[self::TELEMETRY_SESSION_KEY][$this->formId] = $attemptId;
+		}
+
+		return is_string($attemptId) && $attemptId !== '' ? $attemptId : null;
+	}
+
+	protected function startTelemetryAttempt(): void
+	{
+		$attemptId = $this->getTelemetryAttemptId(true);
+		if ($attemptId === null)
+		{
+			return;
+		}
+
+		$this->runTelemetrySafely(
+			function (RecorderInterface $recorder) use ($attemptId): void {
+				$userAgent = \Bitrix\Main\Context::getCurrent()->getServer()->get('HTTP_USER_AGENT');
+				$recorder->start($attemptId, (int)$this->formId, $this->getTelemetrySource(), $userAgent);
+			},
+		);
+	}
+
+	protected function markTelemetryError(string $errorType): void
+	{
+		$attemptId = $this->getTelemetryAttemptId(true);
+		if ($attemptId === null)
+		{
+			return;
+		}
+
+		$this->runTelemetrySafely(
+			function (RecorderInterface $recorder) use ($attemptId, $errorType): void {
+				$userAgent = \Bitrix\Main\Context::getCurrent()->getServer()->get('HTTP_USER_AGENT');
+				$recorder->start($attemptId, (int)$this->formId, $this->getTelemetrySource(), $userAgent);
+				$recorder->markError($attemptId, $errorType);
+			},
+		);
+	}
+
+	private function getTelemetrySource(): string
+	{
+		$signedContext = $this->request->get(SourceContextSigner::PARAMETER);
+		if (is_string($signedContext))
+		{
+			$source = (new SourceContextSigner())->verify($signedContext, (int)$this->formId);
+			if ($source !== null)
+			{
+				return $source;
+			}
+		}
+
+		return SubmissionClassifier::SOURCE_UNKNOWN;
+	}
+
+	private function runTelemetrySafely(callable $operation): void
+	{
+		try
+		{
+			$operation($this->getTelemetryRecorder());
+		}
+		catch (\Throwable)
+		{
+		}
 	}
 
 	public function processPost()
@@ -174,6 +263,7 @@ class CCrmWebFormFillComponent extends \CBitrixComponent
 					}
 					break;
 				case 'start':
+					$this->startTelemetryAttempt();
 					if(!$this->counterInSession($counter))
 					{
 						Form::incCounterStartFill($this->formId);
@@ -185,6 +275,7 @@ class CCrmWebFormFillComponent extends \CBitrixComponent
 		}
 		else if (!$this->processPostCaptcha())
 		{
+			$this->markTelemetryError('other');
 			$resultError = true;
 			$resultText = $this->errors[0];
 			$resultRedirectUrl = $this->arResult['FORM']['RESULT_FAILURE_URL'];
@@ -269,6 +360,7 @@ class CCrmWebFormFillComponent extends \CBitrixComponent
 				$resultId = $result->getId();
 				$resultRedirectUrl = $result->getUrl();
 				$gid = $this->processPostGuest($result);
+				unset($_SESSION[self::TELEMETRY_SESSION_KEY][$this->formId]);
 			}
 		}
 
@@ -569,13 +661,13 @@ class CCrmWebFormFillComponent extends \CBitrixComponent
 		$siteNameHttps = 'https:' . $siteName;
 		$this->arResult['CUSTOMIZATION']['OG_IMAGE'] = array(
 			array(
-				'PATH' => $siteNameHttp . $this->getPath() . '/templates/.default/images/rich_link_form_150_150.png',
-				'PATH_HTTPS' => $siteNameHttps . $this->getPath() . '/templates/.default/images/rich_link_form_150_150.png',
-				'TYPE' => 'image/png', 'WIDTH' => '150', 'HEIGHT' => '150'
+				'PATH' => $siteNameHttp . $this->getPath() . '/templates/.default/images/rich_link_form_150_150.webp',
+				'PATH_HTTPS' => $siteNameHttps . $this->getPath() . '/templates/.default/images/rich_link_form_150_150.webp',
+				'TYPE' => 'image/webp', 'WIDTH' => '150', 'HEIGHT' => '150'
 			),array(
-				'PATH' => $siteNameHttp . $this->getPath() . '/templates/.default/images/rich_link_form_150_100.png',
-				'PATH_HTTPS' => $siteNameHttps . $this->getPath() . '/templates/.default/images/rich_link_form_150_100.png',
-				'TYPE' => 'image/png', 'WIDTH' => '150', 'HEIGHT' => '100'
+				'PATH' => $siteNameHttp . $this->getPath() . '/templates/.default/images/rich_link_form_150_100.webp',
+				'PATH_HTTPS' => $siteNameHttps . $this->getPath() . '/templates/.default/images/rich_link_form_150_100.webp',
+				'TYPE' => 'image/webp', 'WIDTH' => '150', 'HEIGHT' => '100'
 			),
 		);
 

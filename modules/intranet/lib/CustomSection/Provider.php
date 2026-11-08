@@ -81,4 +81,9 @@ abstract class Provider
 	{
 		return [];
 	}
+
+	public function getPublicSystemPages(CustomSection $section, int $userId): array
+	{
+		return [];
+	}
 }

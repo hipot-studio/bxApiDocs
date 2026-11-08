@@ -4,10 +4,12 @@ declare(strict_types = 1);
 
 namespace Bitrix\Intranet\Internal\Integration\Security;
 
+use Bitrix\Intranet\Internal\Repository\MandatoryOtpAuditRepository;
 use Bitrix\Intranet\Repository\UserRepository;
 use Bitrix\Main\Analytics\AnalyticsEvent;
 use Bitrix\Main\ArgumentOutOfRangeException;
 use Bitrix\Main\ArgumentTypeException;
+use Bitrix\Main\Engine\CurrentUser;
 use Bitrix\Main\Loader;
 use Bitrix\Main\LoaderException;
 use Bitrix\Main\SystemException;
@@ -20,6 +22,7 @@ class OtpSettings
 	/** @var array<int, PersonalOtp> */
 	private static array $userOtpData = [];
 	private bool $isAvailable;
+	private MandatoryOtpAuditRepository $mandatoryOtpAuditRepository;
 
 	/**
 	 * @throws LoaderException
@@ -27,6 +30,7 @@ class OtpSettings
 	public function __construct()
 	{
 		$this->isAvailable = Loader::includeModule('security');
+		$this->mandatoryOtpAuditRepository = new MandatoryOtpAuditRepository();
 	}
 
 	public function isAvailable(): bool
@@ -155,15 +159,18 @@ class OtpSettings
 			return;
 		}
 
+		$wasMandatory = $this->isMandatoryUsing();
+
+		Otp::setMandatoryUsing($isMandatory);
+
 		if (Loader::includeModule('bitrix24'))
 		{
-			$otpRights = $this->getMandatoryRights();
-			$employeeGroup = 'G' . \CBitrix24::getEmployeeGroupId();
-			$adminGroup = 'G1';
-
 			if ($isMandatory)
 			{
-				Otp::setMandatoryUsing();
+				$otpRights = $this->getMandatoryRights();
+				$employeeGroup = 'G' . \CBitrix24::getEmployeeGroupId();
+				$adminGroup = 'G1';
+
 				if (!in_array($adminGroup, $otpRights, true))
 				{
 					$otpRights[] = $adminGroup;
@@ -173,19 +180,10 @@ class OtpSettings
 				{
 					$otpRights[] = $employeeGroup;
 				}
-			}
-			else
-			{
-				foreach ($otpRights as $key => $group)
-				{
-					if ($group === $adminGroup || $group === $employeeGroup)
-					{
-						unset($otpRights[$key]);
-					}
-				}
+
+				Otp::setMandatoryRights($otpRights);
 			}
 
-			Otp::setMandatoryRights($otpRights);
 			$event = $isMandatory ? '2fa_on_portal' : '2fa_off_portal';
 			$analyticEvent = new AnalyticsEvent($event, 'user_settings', 'security');
 			$analyticEvent->send();
@@ -199,10 +197,27 @@ class OtpSettings
 				(new Bitrix24\Public\Command\Otp\DisableNotificationsCommand())->run();
 			}
 		}
-		else
+
+		$this->saveMandatoryChangeTrace($wasMandatory);
+	}
+
+	private function saveMandatoryChangeTrace(bool $wasMandatory): void
+	{
+		$isMandatoryNow = $this->isMandatoryUsing();
+
+		if ($isMandatoryNow === $wasMandatory)
 		{
-			Otp::setMandatoryUsing($isMandatory);
+			return;
 		}
+
+		if ($isMandatoryNow)
+		{
+			$this->mandatoryOtpAuditRepository->clearDisabling();
+
+			return;
+		}
+
+		$this->mandatoryOtpAuditRepository->saveDisabling((int)CurrentUser::get()->getId(), time());
 	}
 
 	/**

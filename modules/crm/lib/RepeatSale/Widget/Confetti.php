@@ -15,7 +15,7 @@ final class Confetti
 {
 	private const SHOWED_STATISTICS_DATA_OPTION_NAME = 'repeat-sale-showed-statistics-confetti';
 	private const MAX_SHOWED_STATISTICS_COUNT = 3;
-	private const INTERVAL_SHOWED_STATISTICS = '-7 days';
+	private const INTERVAL_SHOWED_STATISTICS = '+7 days';
 
 	private ?array $showedStatisticsData = null;
 	private ?int $successItemsCount = null;
@@ -145,7 +145,7 @@ final class Confetti
 
 		$currentTimestamp = (new Date())->getTimestamp();
 
-		return $lastShowedTimestampWithOffset > $currentTimestamp;
+		return $lastShowedTimestampWithOffset <= $currentTimestamp;
 	}
 
 	private function getShowedStatisticsData(): array

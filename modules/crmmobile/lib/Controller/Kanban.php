@@ -52,6 +52,9 @@ class Kanban extends BaseController
 			'setSortType' => [
 				'class' => Action\SetSortTypeAction::class,
 			],
+			'setViewType' => [
+				'class' => Action\SetViewTypeAction::class,
+			],
 		];
 	}
 

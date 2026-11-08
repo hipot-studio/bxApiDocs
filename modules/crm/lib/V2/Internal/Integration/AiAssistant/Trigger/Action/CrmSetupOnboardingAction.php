@@ -56,7 +56,6 @@ final class CrmSetupOnboardingAction extends BaseAction
 		'crm_onboarding_first_steps' => 'CRM_ONBOARDING_TRIGGER_BUTTON_FIRST_STEPS',
 		'crm_onboarding_help_with_settings' => 'CRM_ONBOARDING_TRIGGER_BUTTON_HELP_WITH_SETTINGS',
 		'crm_onboarding_what_can_you_do' => 'CRM_ONBOARDING_TRIGGER_BUTTON_WHAT_CAN_YOU_DO',
-		'crm_onboarding_invite_colleagues' => 'CRM_ONBOARDING_TRIGGER_BUTTON_INVITE_COLLEAGUES',
 	];
 
 	public function __construct(

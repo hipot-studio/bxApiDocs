@@ -302,6 +302,11 @@ class CTasks
 		$handler = new Task($userId);
 		$handler->setByPassParams($arParams);
 
+		if (($arParams['USE_CONSISTENCY'] ?? false) === true)
+		{
+			$handler->useConsistency();
+		}
+
 		if (isset($arFields['META::EVENT_GUID']))
 		{
 			$handler->setEventGuid($arFields['META::EVENT_GUID']);
@@ -3764,9 +3769,9 @@ class CTasks
 						$scrumJoin = " INNER JOIN {$scrumEntityTableName} {$joinAlias}BTSE
 							ON {$joinAlias}BTSE.GROUP_ID = {$sourceAlias}.GROUP_ID
 						";
-						if (isset($filter['SCRUM_ENTITY_IDS']))
+						if (!empty($filter['SCRUM_ENTITY_IDS']) && is_array($filter['SCRUM_ENTITY_IDS']))
 						{
-							$entityIds = $filter['SCRUM_ENTITY_IDS'];
+							$entityIds = array_map('intval', $filter['SCRUM_ENTITY_IDS']);
 							$scrumJoin .= "AND {$joinAlias}BTSE.ID IN (" . implode(', ', $entityIds) . ")";
 						}
 

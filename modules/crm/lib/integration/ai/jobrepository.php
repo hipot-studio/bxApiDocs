@@ -457,7 +457,12 @@ class JobRepository
 	/**
 	 * @return \Generator<int, EO_Queue>
 	 */
-	private function iterateJobsForOwner(\Bitrix\Main\ORM\Query\Query $query, int $ownerTypeId, int $ownerId): \Generator
+	private function iterateJobsForOwner(
+		\Bitrix\Main\ORM\Query\Query $query,
+		int $ownerTypeId,
+		int $ownerId,
+		bool $allowUnknownOwner = true,
+	): \Generator
 	{
 		$offset = 0;
 		while ($offset < self::OWNER_SCOPED_JOB_SCAN_LIMIT)
@@ -476,7 +481,7 @@ class JobRepository
 
 			foreach ($jobs as $job)
 			{
-				if ($this->jobBelongsToOwner($job, $ownerTypeId, $ownerId))
+				if ($this->jobBelongsToOwner($job, $ownerTypeId, $ownerId, $allowUnknownOwner))
 				{
 					yield $job;
 				}
@@ -491,12 +496,17 @@ class JobRepository
 		}
 	}
 
-	private function jobBelongsToOwner(EO_Queue $job, int $ownerTypeId, int $ownerId): bool
+	private function jobBelongsToOwner(
+		EO_Queue $job,
+		int $ownerTypeId,
+		int $ownerId,
+		bool $allowUnknownOwner = true,
+	): bool
 	{
 		$storedOwner = $this->resolveJobOwner($job);
 		if ($storedOwner === null)
 		{
-			return true;
+			return $allowUnknownOwner;
 		}
 
 		return $storedOwner['ownerTypeId'] === $ownerTypeId && $storedOwner['ownerId'] === $ownerId;
@@ -793,6 +803,150 @@ class JobRepository
 		;
 	}
 
+	public function getContextAdditionalInfoByJobId(?int $jobId): array
+	{
+		if (!$jobId)
+		{
+			return [];
+		}
+
+		$job = QueueTable::query()
+			->setSelect(['HASH'])
+			->where('ID', $jobId)
+			->fetchObject()
+		;
+		$hash = $job?->getHash();
+		if (!$hash)
+		{
+			return [];
+		}
+
+		$row = AIQueueTable::query()
+			->setSelect(['CONTEXT'])
+			->where('HASH', $hash)
+			->setLimit(1)
+			->fetch()
+		;
+		$contextJson = $row['CONTEXT'] ?? null;
+		if (!is_string($contextJson) || $contextJson === '')
+		{
+			return [];
+		}
+
+		try
+		{
+			$context = Context::unpack($contextJson);
+		}
+		catch (\Throwable)
+		{
+			return [];
+		}
+
+		$additionalInfo = $context->getParameters()['additionalInfo'] ?? [];
+
+		return is_array($additionalInfo) ? $additionalInfo : [];
+	}
+
+	public function getCallAssessmentJobByActivity(int $activityId, int $assessmentSettingsId): ?EO_Queue
+	{
+		if ($activityId <= 0 || $assessmentSettingsId <= 0)
+		{
+			return null;
+		}
+
+		$jobs = QueueTable::query()
+			->setSelect(['ID', 'HASH', 'EXECUTION_STATUS', 'RETRY_COUNT'])
+			->where('ENTITY_TYPE_ID', CCrmOwnerType::Activity)
+			->where('ENTITY_ID', $activityId)
+			->where('TYPE_ID', ScoreCallV2::TYPE_ID)
+			->addOrder('ID', 'DESC')
+			->fetchCollection()
+		;
+		$hashes = [];
+		foreach ($jobs as $job)
+		{
+			$hash = (string)$job->getHash();
+			if ($hash !== '')
+			{
+				$hashes[] = $hash;
+			}
+		}
+
+		if (empty($hashes))
+		{
+			return null;
+		}
+
+		$assessmentSettingsIdByHash = [];
+		$rows = AIQueueTable::query()
+			->setSelect(['HASH', 'CONTEXT'])
+			->whereIn('HASH', array_values(array_unique($hashes)))
+			->fetchAll()
+		;
+		foreach ($rows as $row)
+		{
+			$hash = (string)($row['HASH'] ?? '');
+			if ($hash !== '')
+			{
+				$assessmentSettingsIdByHash[$hash] = $this->extractCallAssessmentSettingsIdFromContext(
+					$row['CONTEXT'] ?? null,
+				);
+			}
+		}
+
+		foreach ($jobs as $job)
+		{
+			if (($assessmentSettingsIdByHash[(string)$job->getHash()] ?? null) === $assessmentSettingsId)
+			{
+				return $job;
+			}
+		}
+
+		return null;
+	}
+
+	public function getCallAssessmentSettingsIdByJob(EO_Queue $job): ?int
+	{
+		$hash = (string)$job->getHash();
+		if ($hash === '')
+		{
+			return null;
+		}
+
+		$row = AIQueueTable::query()
+			->setSelect(['CONTEXT'])
+			->where('HASH', $hash)
+			->setLimit(1)
+			->fetch()
+		;
+
+		return $this->extractCallAssessmentSettingsIdFromContext($row['CONTEXT'] ?? null);
+	}
+
+	private function extractCallAssessmentSettingsIdFromContext(?string $contextJson): ?int
+	{
+		if (!is_string($contextJson) || $contextJson === '')
+		{
+			return null;
+		}
+
+		try
+		{
+			$context = Context::unpack($contextJson);
+		}
+		catch (\Throwable)
+		{
+			return null;
+		}
+
+		$assessmentSettingsId = $context->getParameters()['additionalInfo']['assessment_settings_id'] ?? null;
+
+		return is_numeric($assessmentSettingsId) && (int)$assessmentSettingsId > 0
+			? (int)$assessmentSettingsId
+			: null
+		;
+	}
+
 	public function isJobOfSameTypeAlreadyExistsForTarget(ItemIdentifier $target, int $jobTypeId): bool
 	{
 		if (!in_array($jobTypeId, AIManager::getAllOperationTypes(), true))
@@ -862,6 +1016,25 @@ class JobRepository
 		?int $ownerId = null,
 	): array
 	{
+		return $this->loadSummarizeTranscriptionData(
+			$activityId,
+			$fields,
+			$limit,
+			$ownerTypeId,
+			$ownerId,
+			true,
+		);
+	}
+
+	private function loadSummarizeTranscriptionData(
+		int $activityId,
+		array $fields,
+		int $limit,
+		?int $ownerTypeId,
+		?int $ownerId,
+		bool $allowUnknownOwner,
+	): array
+	{
 		if ($activityId <= 0)
 		{
 			return [];
@@ -869,12 +1042,13 @@ class JobRepository
 
 		$hasOwnerScope = (int)$ownerTypeId > 0 && (int)$ownerId > 0;
 		$cacheKey = sprintf(
-			'%d-%d-%s-%d-%d',
+			'%d-%d-%s-%d-%d-%d',
 			$activityId,
 			$limit,
 			implode(',', $fields),
 			(int)$ownerTypeId,
 			(int)$ownerId,
+			(int)$allowUnknownOwner,
 		);
 		if (array_key_exists($cacheKey, $this->summarizeTranscriptionDataCache))
 		{
@@ -894,7 +1068,12 @@ class JobRepository
 			$query->setOrder(['FINISHED_TIME' => 'DESC', 'ID' => 'DESC']);
 
 			$data = [];
-			foreach ($this->iterateJobsForOwner($query, (int)$ownerTypeId, (int)$ownerId) as $job)
+			foreach ($this->iterateJobsForOwner(
+				$query,
+				(int)$ownerTypeId,
+				(int)$ownerId,
+				$allowUnknownOwner,
+			) as $job)
 			{
 				$data[] = $job;
 				if (count($data) >= $limit)
@@ -906,7 +1085,7 @@ class JobRepository
 		else
 		{
 			$data = $query
-				->setOrder(['FINISHED_TIME' => 'DESC'])
+				->setOrder(['FINISHED_TIME' => 'DESC', 'ID' => 'DESC'])
 				->setLimit($limit)
 				->fetchCollection()
 				->getAll()
@@ -927,10 +1106,23 @@ class JobRepository
 	 *     languageId: ?string,
 	 * }>
 	 */
-	public function getSummarizeCallTranscriptionHistoryByActivity(int $activityId, int $limit = 10): array
+	public function getSummarizeCallTranscriptionHistoryByActivity(
+		int $activityId,
+		int $limit = 10,
+		?int $ownerTypeId = null,
+		?int $ownerId = null,
+	): array
 	{
 		$result = [];
-		$jobs = $this->getSummarizeTranscriptionData($activityId, ['*'], $limit);
+		$jobs = $this->loadSummarizeTranscriptionData(
+			$activityId,
+			['*'],
+			$limit,
+			$ownerTypeId,
+			$ownerId,
+			false,
+		);
+		$hasOwnerScope = (int)$ownerTypeId > 0 && (int)$ownerId > 0;
 
 		foreach ($jobs as $job)
 		{
@@ -941,7 +1133,11 @@ class JobRepository
 			}
 
 			$summaryResult = SummarizeCallTranscription::constructResult($job);
-			$this->summarizeCache[sprintf('%d-%d', $activityId, $jobId)] = clone $summaryResult;
+			$cacheKey = $hasOwnerScope
+				? sprintf('%d-%d-%d-%d', $activityId, $jobId, (int)$ownerTypeId, (int)$ownerId)
+				: sprintf('%d-%d', $activityId, $jobId)
+			;
+			$this->summarizeCache[$cacheKey] = clone $summaryResult;
 
 			if (!$summaryResult->isSuccess())
 			{
@@ -961,6 +1157,11 @@ class JobRepository
 				'createdAt' => $job->getFinishedTime()?->getTimestamp(),
 				'languageId' => $summaryResult->getLanguageId(),
 			];
+
+			if (count($result) >= $limit)
+			{
+				break;
+			}
 		}
 
 		return $result;

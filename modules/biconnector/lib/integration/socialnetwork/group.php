@@ -259,7 +259,7 @@ class Group
 
 		$messages = Loc::loadLanguageFile(__FILE__, $languageId);
 		$result['socialnetwork_group']['TABLE_DESCRIPTION'] = $messages['SN_BIC_GROUP_TABLE'] ?: 'socialnetwork_group';
-		$result['socialnetwork_group']['TABLE_DESCRIPTION_FULL'] = $messages['SN_BIC_GROUP_TABLE_DESCRIPTION_FULL'] ?? '';
+		$result['socialnetwork_group']['TABLE_DESCRIPTION_FULL'] = $messages['SN_BIC_GROUP_TABLE_DESCRIPTION_FULL_MSGVER_1'] ?? '';
 		foreach ($result['socialnetwork_group']['FIELDS'] as $fieldCode => &$fieldInfo)
 		{
 			if ($fieldCode === 'OPENED')

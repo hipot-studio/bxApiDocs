@@ -27,6 +27,15 @@ class ArraySetting extends Setting
 		{
 			Main\Config\Option::set('crm', $this->name, serialize($value));
 		}
+
+		$this->value = $value;
+	}
+
+	public function remove()
+	{
+		parent::remove();
+
+		$this->value = $this->default;
 	}
 
 	public function get()

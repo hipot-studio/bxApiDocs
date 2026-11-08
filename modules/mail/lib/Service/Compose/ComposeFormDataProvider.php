@@ -8,12 +8,15 @@ use Bitrix\Calendar;
 use Bitrix\Mail\Helper;
 use Bitrix\Mail\Integration\AI;
 use Bitrix\Mail\Integration\Crm;
+use Bitrix\Mail\Internal\Service\Mailbox\Avatar\AvatarService;
 use Bitrix\Mail\Message;
 use Bitrix\Main\Config\Option;
 use Bitrix\Main\Engine\CurrentUser;
+use Bitrix\Main\FileTable;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Localization\Loc;
 use Bitrix\Main\Mail\Sender;
+use Bitrix\Main\Mail\Sender\UserSenderDataProvider;
 
 /**
  * Initial data of the redesigned compose form (DTO-01).
@@ -72,17 +75,29 @@ class ComposeFormDataProvider
 
 	private Crm\CrmTemplateProvider $crmTemplateProvider;
 
+	private Crm\MailTemplateEditor $mailTemplateEditor;
+
+	private AvatarService $avatarService;
+
+	private SenderListProvider $senderListProvider;
+
 	public function __construct(
 		?SignatureListProvider $signatureListProvider = null,
 		?ReplyRecipientResolver $replyRecipientResolver = null,
 		?MessageQuoteBuilder $messageQuoteBuilder = null,
 		?Crm\CrmTemplateProvider $crmTemplateProvider = null,
+		?Crm\MailTemplateEditor $mailTemplateEditor = null,
+		?AvatarService $avatarService = null,
+		?SenderListProvider $senderListProvider = null,
 	)
 	{
 		$this->signatureListProvider = $signatureListProvider ?? new SignatureListProvider();
 		$this->replyRecipientResolver = $replyRecipientResolver ?? new ReplyRecipientResolver();
 		$this->messageQuoteBuilder = $messageQuoteBuilder ?? new MessageQuoteBuilder();
 		$this->crmTemplateProvider = $crmTemplateProvider ?? new Crm\CrmTemplateProvider();
+		$this->mailTemplateEditor = $mailTemplateEditor ?? new Crm\MailTemplateEditor();
+		$this->avatarService = $avatarService ?? new AvatarService();
+		$this->senderListProvider = $senderListProvider ?? new SenderListProvider();
 	}
 
 	/**
@@ -104,20 +119,22 @@ class ComposeFormDataProvider
 	 *     pathToHome?: string,
 	 *     draftId?: int,
 	 *     draftClientId?: string,
+	 *     scheduledMessage?: array<string, mixed>|null,
 	 * } $params The "reply all" request flag the component has read, ANALYTICS.SOURCE, the analytics
 	 *     element of the entry point and the two path templates of the router.
 	 */
 	public function getInitialData(array $message, array $params = []): array
 	{
-		$senders = array_values($this->loadSenders());
+		$senders = $this->applyMailboxAvatars($this->loadSenders());
 		$senderEmail = (string)($message['__email'] ?? '');
 		$mailboxId = (int)($message['MAILBOX_ID'] ?? 0);
 		$mailboxId = $mailboxId > 0 ? $mailboxId : null;
+		$userId = $this->getCurrentUserId();
 		$scenario = $this->resolveScenario($message, $params);
 		$parentMessageId = $this->resolveParentMessageId($message);
 		$carriedOver = $this->messageQuoteBuilder->build($message, $parentMessageId, $scenario);
 
-		return [
+		$data = [
 			'scenario' => $scenario,
 			'title' => $this->resolveTitle($scenario),
 			'messageId' => 0,
@@ -133,7 +150,7 @@ class ComposeFormDataProvider
 			'subject' => (string)($message['SUBJECT'] ?? ''),
 			'body' => [
 				'quote' => $carriedOver['quote'],
-				'quoteFolded' => $parentMessageId !== null,
+				'quoteFolded' => $parentMessageId !== null && self::isReplyScenario($scenario),
 			],
 			'attachments' => [
 				'files' => $carriedOver['files'],
@@ -153,8 +170,14 @@ class ComposeFormDataProvider
 			],
 			'features' => [
 				'unfinishedElements' => Helper\Config\Feature::isComposeUnfinishedElementsAvailable(),
+				'scheduledMessages' => Helper\Config\Feature::isScheduledMessageAvailable(),
+				'undoSend' => Helper\Config\Feature::isUndoSendAvailable(),
 				'templates' => Helper\Config\Feature::isComposeTemplatesAvailable(),
+				'saveTemplate' => Helper\Config\Feature::isComposeTemplatesAvailable()
+					&& $this->crmTemplateProvider->canCreatePersonal($userId),
+				'subjectGeneration' => $this->isSubjectGenerationAvailable(),
 			],
+			'authorTimezoneId' => $this->resolveAuthorTimezoneId(),
 			'draft' => [
 				'id' => max(0, (int)($params['draftId'] ?? 0)),
 				'revision' => 0,
@@ -162,6 +185,81 @@ class ComposeFormDataProvider
 			],
 			'paths' => $this->buildPaths($mailboxId, $params),
 		];
+
+		$scheduledMessage = $params['scheduledMessage'] ?? null;
+
+		return is_array($scheduledMessage)
+			? $this->applyScheduledMessage($data, $scheduledMessage, $senders)
+			: $data;
+	}
+
+	/** @param array<string, mixed> $scheduledMessage */
+	private function applyScheduledMessage(array $data, array $scheduledMessage, array $senders): array
+	{
+		$sender = (array)($scheduledMessage['SENDER'] ?? []);
+		$senderEmail = (string)($sender['email'] ?? '');
+		$recipients = (array)($scheduledMessage['RECIPIENTS'] ?? []);
+		$scheduledAt = $scheduledMessage['SCHEDULED_AT'] ?? null;
+
+		$data['mailbox']['id'] = (int)($scheduledMessage['MAILBOX_ID'] ?? 0);
+		$data['mailbox']['email'] = $senderEmail;
+		$data['selectedSender'] = $this->resolveSelectedSender($senderEmail, $senders);
+		$data['recipients'] = [
+			'to' => $this->toDialogItems((array)($recipients['to'] ?? []), false),
+			'cc' => $this->toDialogItems((array)($recipients['cc'] ?? []), false),
+			'bcc' => $this->toDialogItems((array)($recipients['bcc'] ?? []), false),
+		];
+		$data['subject'] = (string)($scheduledMessage['SUBJECT'] ?? '');
+		$data['send']['inReplyTo'] = isset($scheduledMessage['IN_REPLY_TO'])
+			? (string)$scheduledMessage['IN_REPLY_TO']
+			: null;
+		$data['body'] = [
+			'content' => (string)($scheduledMessage['BODY'] ?? ''),
+			'quote' => '',
+			'quoteFolded' => false,
+		];
+		$attachments = (array)($scheduledMessage['ATTACHMENTS'] ?? []);
+		$fileSizes = $this->loadFileSizes(array_map(
+			static fn(array $attachment): int => (int)($attachment['FILE_ID'] ?? 0),
+			$attachments,
+		));
+		$data['attachments'] = [
+			'files' => array_values(array_filter(array_map(
+				static function(array $attachment) use ($fileSizes): ?array {
+					$objectId = (int)($attachment['SOURCE_OBJECT_ID'] ?? 0);
+					if ($objectId <= 0)
+					{
+						return null;
+					}
+
+					$bytes = (int)($fileSizes[(int)($attachment['FILE_ID'] ?? 0)] ?? 0);
+
+					return [
+						'id' => 'n' . $objectId,
+						'name' => (string)($attachment['FILE_NAME'] ?? ''),
+						'size' => $bytes > 0 ? \CFile::formatSize($bytes) : '',
+						'bytes' => $bytes,
+					];
+				},
+				$attachments,
+			))),
+			'folded' => false,
+		];
+		$data['scheduledMessage'] = [
+			'id' => (int)($scheduledMessage['ID'] ?? 0),
+			'revision' => (int)($scheduledMessage['REVISION'] ?? 0),
+			'scheduledAt' => $scheduledAt instanceof \Bitrix\Main\Type\DateTime
+				? $scheduledAt->format(DATE_ATOM)
+				: '',
+			'timezoneId' => (string)($scheduledMessage['AUTHOR_TIMEZONE_ID'] ?? ''),
+			'attachments' => array_map(static fn(array $attachment): array => [
+				'id' => (int)($attachment['ID'] ?? 0),
+				'objectId' => ($objectId = (int)($attachment['SOURCE_OBJECT_ID'] ?? 0)) > 0 ? $objectId : null,
+				'fileId' => $objectId > 0 ? 'n' . $objectId : null,
+			], $attachments),
+		];
+
+		return $data;
 	}
 
 	/**
@@ -259,8 +357,7 @@ class ComposeFormDataProvider
 	{
 		return empty($recipients)
 			? []
-			: $this->loadPreselectedRecipients($recipients, $updateFromAddressBook)
-		;
+			: $this->loadPreselectedRecipients($recipients, $updateFromAddressBook);
 	}
 
 	/**
@@ -327,6 +424,38 @@ class ComposeFormDataProvider
 		return $this->toSelectedSender($senders[0]);
 	}
 
+	private function applyMailboxAvatars(array $senders): array
+	{
+		$mailboxIds = [];
+		foreach ($senders as $sender)
+		{
+			$mailboxId = (int)($sender['mailboxId'] ?? 0);
+			if ($mailboxId > 0)
+			{
+				$mailboxIds[] = $mailboxId;
+			}
+		}
+
+		$mailboxIds = array_values(array_unique($mailboxIds));
+		if ($mailboxIds === [])
+		{
+			return $senders;
+		}
+
+		$avatars = $this->loadMailboxAvatars($mailboxIds);
+		foreach ($senders as $index => $sender)
+		{
+			$mailboxId = (int)($sender['mailboxId'] ?? 0);
+			$avatarUrl = $avatars[$mailboxId]['url'] ?? null;
+			if ($mailboxId > 0 && $avatarUrl !== null)
+			{
+				$senders[$index]['avatar'] = $avatarUrl;
+			}
+		}
+
+		return $senders;
+	}
+
 	private function toSelectedSender(array $sender): ?string
 	{
 		$formated = (string)($sender['formated'] ?? '');
@@ -374,11 +503,28 @@ class ComposeFormDataProvider
 
 	private function buildPaths(?int $mailboxId, array $params): array
 	{
-		return [
+		$paths = [
 			'messageList' => $this->resolveMessageListPath($mailboxId, $params),
 			'home' => (string)($params['pathToHome'] ?? ''),
-			'templatesManage' => $this->resolveTemplatesManagePath(),
 		];
+
+		if ($this->mailTemplateEditor->isAvailable($this->getCurrentUserId()))
+		{
+			$siteId = $this->getSiteId();
+			$paths['templatesManage'] = Crm\MailTemplateEditor::getListUrl($siteId);
+			$paths['templatesCreate'] = Crm\MailTemplateEditor::getAddUrl($siteId);
+		}
+		else
+		{
+			$paths['templatesManage'] = $this->resolveTemplatesManagePath();
+		}
+
+		return $paths;
+	}
+
+	protected function getSiteId(): string
+	{
+		return defined('SITE_ID') ? (string)SITE_ID : '';
 	}
 
 	/**
@@ -496,9 +642,27 @@ class ComposeFormDataProvider
 		return AI\Settings::instance()->getMailCopilotParams(AI\Settings::MAIL_NEW_MESSAGE_CONTEXT_ID);
 	}
 
+	/**
+	 * Whether the subject generation button belongs in the subject line (DTO-01). Only the server
+	 * decides it; the form does not recompute it.
+	 *
+	 * The regular, non-CRM mode is the only one asked about: the new form is opened from the mail
+	 * route alone, and the CRM composer stays on the old one. A missing ai module or a switched off
+	 * portal setting answer false instead of breaking the build of the form.
+	 */
+	protected function isSubjectGenerationAvailable(): bool
+	{
+		return (new AI\SubjectAvailability())->isAvailable();
+	}
+
 	protected function loadSenders(): array
 	{
-		return Sender::prepareUserMailboxes();
+		return $this->senderListProvider->getSenders();
+	}
+
+	protected function loadMailboxAvatars(array $mailboxIds): array
+	{
+		return $this->avatarService->getDisplayData($mailboxIds);
 	}
 
 	/**
@@ -517,5 +681,54 @@ class ComposeFormDataProvider
 	protected function getCurrentUserId(): int
 	{
 		return (int)CurrentUser::get()->getId();
+	}
+
+	/**
+	 * Sizes of the files of the portal storage, by their identifiers, read in one query however many there are.
+	 *
+	 * The attachments of a scheduled letter carry no size of their own: the letter owns a copy of every file
+	 * (ScheduledMessageAttachmentService::copyForUser()), and the storage is where its size is kept. The copy is
+	 * asked for rather than the Disk object it was made from: the object can be gone by the time the letter is
+	 * changed, while the copy lives as long as the letter does.
+	 *
+	 * @param int[] $fileIds
+	 * @return array<int, int> File id => size in bytes. A file that is gone is left out.
+	 */
+	protected function loadFileSizes(array $fileIds): array
+	{
+		$fileIds = array_values(array_unique(array_filter($fileIds, static fn(int $fileId): bool => $fileId > 0)));
+
+		if ($fileIds === [])
+		{
+			return [];
+		}
+
+		$sizes = [];
+		$rows = FileTable::getList([
+			'select' => ['ID', 'FILE_SIZE'],
+			'filter' => ['@ID' => $fileIds],
+		]);
+
+		foreach ($rows as $row)
+		{
+			$sizes[(int)$row['ID']] = (int)$row['FILE_SIZE'];
+		}
+
+		return $sizes;
+	}
+
+	/**
+	 * Timezone a letter is scheduled in, as an IANA identifier: the moment of the send is counted in the
+	 * same zone every other date of the mail is drawn in. The zone of the profile is that source, and
+	 * \CTimeZone::getOffset() reads the very same field.
+	 *
+	 * A profile left on the automatic zone keeps none, and there is nothing to send: the form falls back
+	 * to the zone of the browser then, which is where the automatic mode takes it from as well.
+	 */
+	protected function resolveAuthorTimezoneId(): string
+	{
+		global $USER;
+
+		return is_object($USER) ? trim((string)$USER->GetParam('TIME_ZONE')) : '';
 	}
 }

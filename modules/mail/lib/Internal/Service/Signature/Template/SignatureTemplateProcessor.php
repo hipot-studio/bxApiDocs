@@ -20,12 +20,22 @@ final class SignatureTemplateProcessor
 
 	public function __construct(?SignatureTemplateProviderRegistry $registry = null)
 	{
-		$this->registry = $registry ?? new SignatureTemplateProviderRegistry([]);
+		$this->registry = $registry ?? SignatureTemplateProviderRegistry::createDefault();
 	}
 
-	public function canonicalize(string $html, int $version = self::CURRENT_VERSION): Result
+	public function canonicalize(
+		string $html,
+		SignatureTemplateCanonicalizationContext|int|null $context = null,
+		int $version = self::CURRENT_VERSION,
+	): Result
 	{
-		return $this->process('canonicalize', $html, $version);
+		if (is_int($context))
+		{
+			$version = $context;
+			$context = null;
+		}
+
+		return $this->process('canonicalize', $html, $version, canonicalizationContext: $context);
 	}
 
 	public function resolve(
@@ -42,6 +52,7 @@ final class SignatureTemplateProcessor
 		string $template,
 		int $version,
 		?SignatureTemplateContext $context = null,
+		?SignatureTemplateCanonicalizationContext $canonicalizationContext = null,
 	): Result
 	{
 		if ($version !== self::CURRENT_VERSION)
@@ -58,10 +69,16 @@ final class SignatureTemplateProcessor
 		{
 			try
 			{
-				$result = $operation === 'canonicalize'
-					? $provider->canonicalize($value)
-					: $provider->resolve($value, $context)
-				;
+				if ($operation === 'canonicalize')
+				{
+					$result = $provider instanceof ImageSignatureTemplateProvider
+						? $provider->canonicalize($value, $canonicalizationContext)
+						: $provider->canonicalize($value);
+				}
+				else
+				{
+					$result = $provider->resolve($value, $context);
+				}
 			}
 			catch (\Throwable $exception)
 			{
